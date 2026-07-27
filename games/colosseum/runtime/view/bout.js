@@ -28,6 +28,9 @@ import { damp, clamp } from "../core/util.js";
 const WEAPON_MESH = {
   gladius: makeGladius, spatha: makeGladius, sica: makeGladius,
   dimachaerus: makeGladius, trident: makeTrident, hasta: makeTrident,
+  // The practice sword reuses the gladius mesh — same shape, same length; the
+  // difference is that it is oak, which the vertex colours carry.
+  rudis: makeGladius,
 };
 
 export class BoutView {

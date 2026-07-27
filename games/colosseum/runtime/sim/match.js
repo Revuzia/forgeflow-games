@@ -113,9 +113,18 @@ export class Match {
   _makePlayer() {
     const lw = this.inv.loadout();
     const arm = this.inv.matchedArmatura();
+    // The paegniarius interval is a TRAINING bout — "Wooden Swords", blunted
+    // weapons, nobody dies. Both sides are issued a rudis, which is what the
+    // bout's own name and description have always said. Carrying your steel
+    // into it made the tutorial a 2:1 damage mismatch in the player's favour
+    // and taught nothing; before that it fielded a fully-armoured murmillo and
+    // taught despair. Neither is a first fight.
+    const training = this.def.type === "paegniarius";
+    const weapon = training ? "rudis" : lw.weapon;
+    const shield = training ? "none" : lw.shield;
     const f = new Fighter({
       id: "player", name: this.inv.name || "You", team: 0,
-      weapon: lw.weapon, shield: lw.shield, armour: lw.armour,
+      weapon, shield, armour: training ? [] : lw.armour,
       hp: arm ? arm.hp : 105,
       x: -14, z: 0, facing: Math.PI / 2,
     });

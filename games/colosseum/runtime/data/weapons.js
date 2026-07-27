@@ -30,6 +30,20 @@ export const WEAPONS = {
     price: 0, tier: 0,
     desc: "The legionary short sword. Fast, forgiving, murderous in close.",
   },
+  rudis: {
+    id: "rudis", name: "Rudis", kind: "sword", hands: 1,
+    // The wooden practice sword. Same shape and timing as a gladius so the
+    // tutorial teaches the real weapon's rhythm, but blunt: it bruises rather
+    // than opens, and it will not defeat armour.
+    reach: 1.30, damage: 13, weight: 1.1,
+    windup: 0.20, active: 0.11, recover: 0.30,
+    stamina: 10, poise: 12,
+    dirs: [DIR.HIGH, DIR.LEFT, DIR.RIGHT, DIR.THRUST],
+    // No pierce worth the name — a stick does not find a gap in a manica.
+    armourPierce: { [DIR.THRUST]: 0.10, [DIR.HIGH]: 0.05, [DIR.LEFT]: 0.05, [DIR.RIGHT]: 0.05 },
+    price: 0, tier: 0, issued: true,
+    desc: "A blunt oak sword, the weight of a gladius. What the ludus trains with, and what the summa rudis carries.",
+  },
   spatha: {
     id: "spatha", name: "Spatha", kind: "sword", hands: 1,
     reach: 1.62, damage: 32, weight: 1.8,
@@ -185,6 +199,18 @@ export const ARMATURAE = {
     weapon: "dimachaerus", shield: "none", armour: ["manica", "ocreae"],
     hp: 92, style: "aggressor",
     desc: "Two blades and no guard. Overwhelms, or is overwhelmed.",
+  },
+  paegniarius: {
+    id: "paegniarius", name: "Paegniarius",
+    // The midday clown-fighter: blunt stick, no shield, no armour, nobody dies.
+    // He exists so the FIRST bout is a fair duel. It used to field a full
+    // murmillo — scutum at 120 integrity plus galea, manica and ocreae —
+    // against a player who starts with a gladius, no shield and no armour at
+    // all. A same-skill player won 30% of the time, in a bout whose own
+    // description reads "Blunted weapons... Nobody dies. Learn the guard."
+    weapon: "rudis", shield: "none", armour: [],
+    hp: 96, style: "flanker",
+    desc: "Blunted wood and no armour. The interval act, and the only fair fight on the card.",
   },
   provocator: {
     id: "provocator", name: "Provocator",
