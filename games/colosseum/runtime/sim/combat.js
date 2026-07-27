@@ -29,7 +29,16 @@ export const PHASE = {
 // Tunables that shape the feel. Grouped so they can be swept in one place.
 export const FEEL = {
   // A blocked hit still costs stamina; block enough and your guard breaks.
-  blockStaminaCost: 0.55,
+  //
+  // 0.9 (was 0.55): retuned with the measured-motion swing cycles. At 1.5-2.25 s
+  // between blows the defender regenerates 6+ stamina per exchange even at the
+  // blocking penalty, so at 0.55 a held scutum absorbed ~20 gladius blows
+  // (30+ s) before breaking — turtling became sustainable again, which is the
+  // stalemate this economy exists to prevent. At 0.9 a held guard fails in ~8
+  // committed blows (~12 s of sustained pressure), while a TIMED block inside
+  // the parry window still costs nothing — holding is expensive, timing is
+  // free, which is the skill curve.
+  blockStaminaCost: 0.9,
   guardBreakStagger: 0.85,       // seconds
   // Landing a hit inside the enemy's WINDUP interrupts it — this is what makes
   // trading feel like fencing rather than two people mashing.
@@ -40,6 +49,11 @@ export const FEEL = {
   // and staggers the attacker instead.
   parryWindow: 0.16,
   parryStagger: 0.7,
+  // Steel meets steel: two committed attacks arriving together bind and both
+  // fighters rebound. See the clash block in _resolveSwing.
+  clashStagger: 0.32,
+  clashStamina: 6,
+  clashCooldown: 1.2,   // a pair that just bound resolves its next exchange
   dodgeIFrames: 0.28,
   dodgeDuration: 0.42,
   dodgeStamina: 22,
@@ -128,6 +142,7 @@ export class Fighter {
       ? Math.round(SHIELDS[shield].integrity * (this.gear ? this.gear.shieldIntegrity : 1))
       : 0;
     this.shieldBroken = false;
+    this.guardBroken = false;    // stamina-broken guard; mends at 25% stamina
 
     this.iframes = 0;
     this.hitStop = 0;
@@ -254,6 +269,10 @@ export class Combat {
     if (f.phase === PHASE.IDLE || f.phase === PHASE.RECOVER) {
       f.stamina = Math.min(f.maxStamina, f.stamina + regen * dt);
     }
+    // A broken guard mends when the arms do — see the guard-break branch in
+    // _applyHit. Blocking is gated on this flag, so until stamina recovers to a
+    // quarter of max the shield stays down and the fighter is honestly open.
+    if (f.guardBroken && f.stamina >= f.maxStamina * 0.25) f.guardBroken = false;
 
     // --- timers ----------------------------------------------------------
     f.iframes = Math.max(0, f.iframes - dt);
@@ -288,6 +307,7 @@ export class Combat {
 
     // --- intent ----------------------------------------------------------
     f.blocking = !!cmd.block && f.shieldId !== "none" && !f.shieldBroken &&
+                 !f.guardBroken &&
                  (f.phase === PHASE.IDLE || f.phase === PHASE.RECOVER);
     if (cmd.blockDir) f.blockDir = cmd.blockDir;
 
@@ -414,6 +434,71 @@ export class Combat {
   _resolveSwing(attacker, dt) {
     const w = attacker.weapon;
     const reach = w.reach * (1 + (attacker.isBeast ? 0 : 0));
+
+    // --- STEEL MEETS STEEL -------------------------------------------------
+    //
+    // Two committed attacks arriving together CLASH: both blades stop, both
+    // fighters rebound, nobody takes a wound. Without this, simultaneous
+    // swings passed through each other and both landed — two men occupying
+    // the same tempo traded clean hits, which never happens with real weapons:
+    // the blades meet first. This is also what puts the sword-on-sword CLANG
+    // and spark in the fight, which the game had only for shields.
+    //
+    // Deterministic — no rng. Conditions: both mid-attack (the other in
+    // ACTIVE, or past 60% of windup — a blade already travelling), mutually
+    // in range, and mutually facing. Beasts never clash; a lion has no blade
+    // to bind. The mutual STAGGER is the latch: both leave ACTIVE, so one
+    // clash resolves exactly once per pair of swings.
+    if (!attacker.isBeast) {
+      for (const other of this.fighters) {
+        if (other === attacker || !other.alive || other.isBeast) continue;
+        if (other.team === attacker.team) continue;
+        // A pair that just clashed does not clash again immediately — the next
+        // exchange RESOLVES. Without this cooldown two fighters with identical
+        // weapon timing phase-lock: swing together, bind, stagger the same
+        // duration, swing together again, forever. probe_match caught p3 Sine
+        // Missione stalled at 240 s with nobody able to land a blow.
+        if (this.time - (attacker._lastClashT ?? -9) < FEEL.clashCooldown) break;
+        if (this.time - (other._lastClashT ?? -9) < FEEL.clashCooldown) continue;
+        const mid = other.phase === PHASE.ACTIVE ||
+          (other.phase === PHASE.WINDUP && other.phaseT >= this._windup(other) * 0.6);
+        if (!mid) continue;
+        const dx = other.x - attacker.x, dz = other.z - attacker.z;
+        const dist = Math.hypot(dx, dz);
+        // The blades occupy the gap between the two — both must be able to
+        // reach it.
+        if (dist > Math.min(reach, other.weapon.reach) * 1.05) continue;
+        const aTo = Math.atan2(dx, dz), bTo = Math.atan2(-dx, -dz);
+        const aArc = w.arc !== undefined ? w.arc : (w.kind === "polearm" ? 0.35 : 0.62);
+        const ow = other.weapon;
+        const bArc = ow.arc !== undefined ? ow.arc : (ow.kind === "polearm" ? 0.35 : 0.62);
+        if (Math.abs(angleDelta(attacker.facing, aTo)) > aArc) continue;
+        if (Math.abs(angleDelta(other.facing, bTo)) > bArc) continue;
+
+        // Bind: the heavier weapon holds; a much lighter one is beaten aside.
+        const ratio = w.poise / Math.max(1, ow.poise);
+        const base = FEEL.clashStagger;
+        attacker.phase = PHASE.STAGGER; attacker.phaseT = 0;
+        other.phase = PHASE.STAGGER; other.phaseT = 0;
+        // Different rebound lengths, deterministically jittered from the match
+        // seed — identical staggers re-synchronise identical weapons into the
+        // same phase-locked bind the cooldown exists to break.
+        const jit = this.rng() * 0.12;
+        attacker.staggerT = base * (ratio < 0.67 ? 1.6 : 1) + jit;
+        other.staggerT = base * (ratio > 1.5 ? 1.6 : 1) + (0.12 - jit);
+        attacker._lastClashT = this.time;
+        other._lastClashT = this.time;
+        attacker.hitStop = FEEL.hitStopSeconds;
+        other.hitStop = FEEL.hitStopSeconds;
+        attacker.stamina = Math.max(0, attacker.stamina - FEEL.clashStamina);
+        other.stamina = Math.max(0, other.stamina - FEEL.clashStamina);
+        this.emit("clash", {
+          a: attacker.id, b: other.id,
+          x: attacker.x + dx * 0.5, z: attacker.z + dz * 0.5,
+        });
+        return;   // the swing ended on the other blade
+      }
+    }
     // A weapon may declare its own swing arc. Polearms thrust in a narrow
     // line; a long blade sweeps wide enough to take more than one man.
     const halfAngle = w.arc !== undefined ? w.arc : (w.kind === "polearm" ? 0.35 : 0.62);
@@ -534,16 +619,36 @@ export class Combat {
         target.phaseT = 0;
         target.staggerT = FEEL.guardBreakStagger;
         this.emit("shield_break", { id: target.id });
+        return;
       } else if (target.stamina <= 0) {
+        // GUARD BREAK IS A STATE, NOT A REPEATABLE EVENT.
+        //
+        // This branch used to pin stamina to exactly 0 and `return` with no
+        // damage. Pinned AT the trigger condition, the next blocked hit
+        // re-satisfied `stamina <= 0` and broke the guard again, forever —
+        // measured, 26% of all player swings resolved as zero-damage
+        // guard_breaks, the single most common outcome against a scutum. The
+        // defender could never climb out (block regen 0.35x never outpaced the
+        // cost) and the attacker's reward for breaking a guard was a wasted
+        // swing.
+        //
+        // Now: the guard STAYS broken until stamina recovers to 25% of max
+        // (the blocking gate checks `guardBroken`), and the breaking blow
+        // itself falls through to the damage path at half strength — breaking
+        // a man's guard is supposed to be the opening, not the anticlimax.
         target.stamina = 0;
+        target.guardBroken = true;
+        target.blocking = false;
         target.phase = PHASE.STAGGER;
         target.phaseT = 0;
         target.staggerT = FEEL.guardBreakStagger;
         this.emit("guard_break", { id: target.id });
+        damageScale *= 0.5;
+        // no return — the blow lands, reduced
       } else {
         this.emit("block", { attacker: attacker.id, target: target.id, dir, shieldHp: Math.max(0, Math.round(target.shieldHp)) });
+        return;
       }
-      return;
     }
 
     // --- zone ------------------------------------------------------------

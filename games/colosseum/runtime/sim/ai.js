@@ -230,6 +230,34 @@ export class Brain {
     // scales it by style, so an aggressor barely pauses and a spacer takes his
     // time, and the fight gets a pulse instead of a flat rate of damage.
     this._exchange = this._exchange || { swings: 0, breakT: 0 };
+    // Count BLOWS, not decision ticks.
+    //
+    // `swings++` used to run inside the attack case every tick the latched
+    // decision was live, and _claimAttackToken returns true immediately for an
+    // existing holder — so maxBurst 2-3 was reached in 33-50 ms and the
+    // "burst" broke off after ~0.4 actual swings: an exchange rhythm that
+    // never completed an exchange. A blow is a transition INTO windup, tracked
+    // here EVERY tick (not just while the attack decision is latched, or a
+    // stale previous-phase would double-count on re-entry). Gating on
+    // `swinging && canAttack()` instead over-corrects to 8-10 swings per
+    // burst, because RECOVER ticks also satisfy canAttack.
+    const enteredWindup = s.phase === PHASE.WINDUP && this._prevSelfPhase !== PHASE.WINDUP;
+    this._prevSelfPhase = s.phase;
+    if (enteredWindup) {
+      this._exchange.swings++;
+      const maxBurst = this.style.patience < 0.6 ? 3 : 2;
+      if (this._exchange.swings >= maxBurst) {
+        this._exchange.swings = 0;
+        // Rest between exchanges, scaled by style. Time-motion analysis of
+        // real striking sports puts one committed attack every ~2.9-3.4 s
+        // (elite boxing punch rate; Muay Thai high-intensity phases of
+        // 2.2 +/- 1.2 s alternating with longer lulls). With 1.5-2.25 s swing
+        // cycles, a 2-3 blow burst plus this 0.9-2.3 s break lands the overall
+        // rhythm in that measured band — circling, guard up, resetting the
+        // spacing, then pressing again.
+        this._exchange.breakT = 0.9 + this.style.patience * 1.4;
+      }
+    }
     if (this._exchange.breakT > 0) {
       this._exchange.breakT -= dt;
       // Hold the guard and keep distance while recovering the initiative.
@@ -242,17 +270,6 @@ export class Brain {
     switch (d.kind) {
       case "attack": {
         const swinging = dist <= reach * 0.95 && this._claimAttackToken(t);
-        if (swinging) {
-          // Count the blow, and break after a burst.
-          this._exchange.swings++;
-          const maxBurst = this.style.patience < 0.6 ? 3 : 2;
-          if (this._exchange.swings >= maxBurst) {
-            this._exchange.swings = 0;
-            // Patient styles rest longer. ~0.7 s for an aggressor, ~1.5 s for a
-            // spacer — long enough to read as a beat, short enough to stay a fight.
-            this._exchange.breakT = 0.55 + this.style.patience * 0.7;
-          }
-        }
         if (swinging) {
           cmd.attack = true;
           cmd.attackDir = d.dir;

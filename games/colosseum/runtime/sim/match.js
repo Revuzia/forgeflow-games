@@ -394,15 +394,51 @@ export class Match {
       return;
     }
 
+    // THE SUMMA RUDIS STOPS EVERY BOUT, not only catervarii.
+    //
+    // No other match type had ANY time limit, so a fight that reached
+    // equilibrium — two guards neither could break, or an exchange rhythm that
+    // never produced a kill — simply ran forever. probe_match caught p3 and
+    // then p1 stalled at its 240 s harness ceiling on specific seeds, and a
+    // player in that bout would be equally stuck. Historically a munus that
+    // dragged went to the editor's decision on the fighters' condition
+    // (stantes missi — both sent home standing); here the referee calls it on
+    // remaining condition: the side in better shape takes the verdict.
+    if (this.stateT - (this._engagementT || 0) > 150) {
+      const side = (team) => {
+        let hp = 0, max = 0;
+        for (const f of this.combat.fighters) {
+          if (f.team !== team || !f.alive) continue;
+          hp += f.hp; max += f.maxHp;
+        }
+        return max > 0 ? hp / max : 0;
+      };
+      let foesBest = 0;
+      const seen = new Set();
+      for (const f of this.combat.fighters) {
+        if (f.team === this.player.team || !f.alive || seen.has(f.team)) continue;
+        seen.add(f.team);
+        foesBest = Math.max(foesBest, side(f.team));
+      }
+      this._cue("summa_rudis", { reason: "time" });
+      this._decide(side(this.player.team) >= foesBest);
+      return;
+    }
+
     if (foesLeft === 0) {
       // Survival waves and the tertiarius surprise both reuse this hook.
       if (this.def.type === "survival" && this.wave + 1 < (this.def.waves || 1)) {
         this.wave++;
+        // Fresh opponents restart the summa rudis clock — the verdict rule
+        // bounds each ENGAGEMENT, not the whole gauntlet, or a multi-stage
+        // bout could be called before its later stages ever walked out.
+        this._engagementT = this.stateT;
         this._spawnWave();
         return;
       }
       if (this.def.tertiarius && !this._tertiariusSent) {
         this._tertiariusSent = true;
+        this._engagementT = this.stateT;   // same rule as waves
         this._cue("horn", { kind: "tertiarius" });
         const made = this._makeOpponent(this.def.tertiarius, 9, 1);
         made.fighter.x = 16; made.fighter.z = 0;

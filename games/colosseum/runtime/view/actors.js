@@ -613,6 +613,60 @@ export class Actor {
       _ikQ.multiply(_ikQA.setFromAxisAngle(_ikV.set(0, 0, 1), -10 * DEG));
       arm.mount.quaternion.slerp(_ikQB.copy(_ikPQ).invert().multiply(_ikQ), this._guardW);
     }
+
+    this._swordGuard(dt);
+  }
+
+  /**
+   * Hold the SWORD like a weapon, not like a torch.
+   *
+   * The sword mount never had any orientation solve — attachWeapon only
+   * branches on align:"shield", every sword call site passes only `palm`, so
+   * the blade inherited the RightHand bone's raw Meshy roll verbatim. Measured
+   * at the attach pose: the blade sat at elevation +39.5 deg on ALL EIGHT
+   * archetypes, a straight continuation of the forearm line — which is the
+   * "sword not held properly" silhouette.
+   *
+   * A STATIC rotation cannot fix it: swept, every fixed angle that levels the
+   * guard pushes slash2's strike frame outside the sim's own hit cone (tx=+30
+   * levels the guard at elev +13 but sends the strike to bearing -62 vs the
+   * cone's +/-35.5). So the solve fades exactly like the shield's: at guard the
+   * blade is held up-forward at ready; during attack clips the animation owns
+   * the arm entirely. `hit` deliberately stays POSED (unlike the shield's set)
+   * — releasing on every flinch made the sword flail through 56% of landed
+   * hits, since most hits do not interrupt the guard.
+   */
+  _swordGuard(dt) {
+    const sw = this._swordMount !== undefined ? this._swordMount : (this._swordMount = (() => {
+      let mount = null, hand = null;
+      this.model.traverse((o) => {
+        if (!mount && o.name === "weapon_mount" && o.parent && /^RightHand$/i.test(o.parent.name)) {
+          mount = o; hand = o.parent;
+        }
+      });
+      return mount ? { mount, hand } : null;
+    })());
+    if (!sw) return;
+
+    const RELEASE = { slash1: 1, slash2: 1, finisher: 1, stab: 1, cleave: 1, death: 1 };
+    const want = RELEASE[this.currentName] ? 0 : 1;
+    const k = clamp(dt / 0.18, 0, 1);
+    this._swordW = (this._swordW === undefined ? want : this._swordW + (want - this._swordW) * k);
+    if (this._swordW <= 0.01) return;
+
+    sw.hand.updateWorldMatrix(true, false);
+    sw.hand.matrixWorld.decompose(_ikA, _ikPQ, _ikB);
+    // At guard the blade points UP and slightly forward — the high ready of a
+    // sword-and-shield fighter: ~24 deg forward of vertical, in the fighter's
+    // own frame so it follows facing.
+    const s = Math.sin(this.visualFacing), c = Math.cos(this.visualFacing);
+    _ikU.set(s * 0.41, 0.91, c * 0.41).normalize();           // blade axis (+Y of the mesh)
+    _ikV.set(s, 0, c);                                        // edge toward the enemy
+    // Full basis: +Y along the blade axis, +Z as near the facing as possible.
+    _ikN.copy(_ikV).addScaledVector(_ikU, -_ikV.dot(_ikU)).normalize();
+    _ikT.crossVectors(_ikU, _ikN);
+    _ikQ.setFromRotationMatrix(_ikMat.makeBasis(_ikT, _ikU, _ikN));
+    sw.mount.quaternion.slerp(_ikQB.copy(_ikPQ).invert().multiply(_ikQ), this._swordW);
   }
 
   /**
@@ -845,6 +899,14 @@ export function attachWeapon(actor, mesh, {
 
   holder.add(mesh);
   target.add(holder);
+  // INVALIDATE THE POSE MEMOS. _guardPose and _swordGuard cache the resolved
+  // {bones, mount} on first use, and syncHeldGear destroys and rebuilds every
+  // weapon_mount when the loadout changes — after which the cached mount is a
+  // detached Group and the per-frame orientation solve writes into an orphan
+  // while the visible weapon keeps only its attach-time pose. Clearing here,
+  // at the single place mounts are created, covers every present and future
+  // call site.
+  if (actor) { actor._shieldArm = undefined; actor._swordMount = undefined; }
   return holder;
 }
 
@@ -921,15 +983,18 @@ export function makeGladius() {
   guard.translate(0, 0.118, 0);
   parts.push(paint(guard, BRASS));
 
-  // leaf blade — swells then points
-  const b1 = new THREE.CylinderGeometry(0.028, 0.021, 0.30, 6);
+  // Leaf blade — swells then points. Sized to the historical article: a
+  // gladius ran 65-85 cm overall with a 45-68 cm blade (Pompeii/Mainz types).
+  // This one is 0.55 m of blade over a 0.13 m grip-and-guard = 0.68 m overall,
+  // against a 1.8 m body. The previous 0.46 m blade read like a long knife.
+  const b1 = new THREE.CylinderGeometry(0.028, 0.021, 0.36, 6);
   b1.scale(1, 1, 0.34);
-  b1.translate(0, 0.28, 0);
+  b1.translate(0, 0.31, 0);
   parts.push(paint(b1, STEEL));
 
-  const b2 = new THREE.ConeGeometry(0.028, 0.16, 6);
+  const b2 = new THREE.ConeGeometry(0.028, 0.19, 6);
   b2.scale(1, 1, 0.34);
-  b2.translate(0, 0.50, 0);
+  b2.translate(0, 0.585, 0);
   parts.push(paint(b2, STEEL));
 
   return weld(parts);
@@ -1091,17 +1156,24 @@ function quadTri(pos, nor, a, b, c, d, n) {
 /** A trident for the retiarius. One draw call. */
 export function makeTrident() {
   const parts = [];
+  // GRIP A THIRD UP THE HAFT, NOT AT THE BUTT. The module contract puts the
+  // hand at the origin; this shaft used to span y 0..1.75 with prongs at 1.9,
+  // which meant the retiarius held the extreme butt end and the full 2.03 m of
+  // pole projected from his fist like a flag. A polearm is gripped where it
+  // balances: shaft now spans -0.55..+1.20, prongs at ~1.35, so ~0.55 m of
+  // haft trails behind the hand and the reach out front matches how the
+  // weapon is actually carried and thrust.
   const shaft = new THREE.CylinderGeometry(0.019, 0.022, 1.75, 8);
-  shaft.translate(0, 0.875, 0);
+  shaft.translate(0, 0.325, 0);
   parts.push(paint(shaft, WOOD));
 
   const head = new THREE.BoxGeometry(0.19, 0.04, 0.03);
-  head.translate(0, 1.76, 0);
+  head.translate(0, 1.21, 0);
   parts.push(paint(head, STEEL));
 
   for (const dx of [-0.075, 0, 0.075]) {
     const p = new THREE.ConeGeometry(0.017, 0.26, 6);
-    p.translate(dx, 1.9, 0);
+    p.translate(dx, 1.35, 0);
     parts.push(paint(p, STEEL));
   }
   return weld(parts);

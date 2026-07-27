@@ -410,6 +410,12 @@ function onCombatSound(e) {
       audio.play("parry", { ...at(e.target), gain: 0.9, rate: 1.15 });
       audio.crowdSurge(0.5, 0.1);
       break;
+    case "clash":
+      // Steel-on-steel bind — the block sample pitched down reads as blade
+      // weight rather than board thud.
+      audio.play("parry", { x: e.x, z: e.z, gain: 1.0, rate: 0.9 });
+      audio.crowdSurge(0.35, 0.1);
+      break;
     case "shield_break":
     case "guard_break":
       audio.play("shield_break", { ...at(e.id), gain: 1.0 });

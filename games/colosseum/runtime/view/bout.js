@@ -318,6 +318,25 @@ export class BoutView {
     this._swing.delete(f.id);
   }
 
+  /**
+   * The blade STOPS on impact instead of sweeping through.
+   *
+   * The sim already halts the exchange (stagger/hit-stop), but the view kept
+   * playing the swing clip to completion, so a blocked sword visibly passed
+   * through the shield and out the far side — the single clearest "no contact"
+   * tell in the whole fight. On any block, parry or blade-clash the attacker's
+   * swing is cut at the moment of contact and replaced with a short recoil
+   * (the hit clip driven fast), which reads as the weapon rebounding off what
+   * it struck.
+   */
+  _reboundSwing(rec) {
+    const a = rec.actor, f = rec.fighter;
+    if (!f.alive || !a.hasClip("hit")) return;
+    const dur = a.clipDuration("hit") || 1;
+    a.playOnce("hit", { timeScale: dur / 0.26, then: null, fade: 0.03 });
+    this._swing.delete(f.id);
+  }
+
   onEvent(e) {
     const { sand, crowd, vfx } = this.deps;
     const rec = e.target ? this.actors.get(e.target) : null;
@@ -360,12 +379,31 @@ export class BoutView {
       }
       case "block":
       case "parry": {
+        // Spark at the CONTACT, not at the defender's centre: midway between
+        // the two fighters at shield height is where the blade actually met
+        // the board.
+        const atkRec = e.attacker ? this.actors.get(e.attacker) : null;
         if (at && vfx) {
           const p = at.root.position.clone();
+          if (atkRec) p.lerp(atkRec.actor.root.position, 0.5);
           p.y = 1.15;
           vfx.sparks(p, e.type === "parry" ? 1.3 : 0.8);
         }
+        // The attacker's blade rebounds off the shield instead of passing
+        // through it.
+        if (atkRec) this._reboundSwing(atkRec);
         if (crowd && e.type === "parry") crowd.react(0.4);
+        break;
+      }
+      case "clash": {
+        // Steel on steel: both blades stop, both fighters recoil, sparks at
+        // the bind point. This is the sword-on-sword contact the sim now
+        // detects in _resolveSwing.
+        const ra = this.actors.get(e.a), rb = this.actors.get(e.b);
+        if (vfx) vfx.sparks(new THREE.Vector3(e.x, 1.25, e.z), 1.5);
+        if (ra) this._reboundSwing(ra);
+        if (rb) this._reboundSwing(rb);
+        if (crowd) crowd.react(0.35);
         break;
       }
       case "shield_break":

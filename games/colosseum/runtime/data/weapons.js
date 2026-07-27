@@ -17,12 +17,28 @@ export const DIR = { HIGH: "high", LEFT: "left", RIGHT: "right", THRUST: "thrust
  * Weapon classes. Reach and windup are the two numbers that decide how a
  * matchup feels: a trident out-ranges a gladius by 1.3 m, so the retiarius
  * wins the spacing game unless the murmillo closes.
+ *
+ * TIMING IS ANCHORED TO MEASURED HUMAN MOTION, not invented. The old table ran
+ * full swing cycles of 0.41-0.86 s — seven blows in three seconds, which is
+ * exactly the "rapid flailing" a real fight never shows. Re-derived 2026-07-27
+ * from the sourced analogues (no direct measurement of these weapons exists;
+ * ordering and ratios are evidence, absolutes tuned to a 1.5-2.5 s cycle band):
+ *   - boxing jab delivery 405 +/- 150 ms; hooks 586-657 ms (arcs beat lines)
+ *   - fencing lunge movement time 568 +/- 39 ms
+ *   - kendo men strike (8th-dan, VICON 250 Hz) 759 +/- 73 ms onset-to-impact
+ *   - instrumented two-hand spear thrust: 4.65 m/s mean impact velocity
+ *   - competition axe chop: ~15% of the cycle is the downswing, ~85% recovery
+ *   - real inter-attack interval in striking sports: one committed attack per
+ *     ~2.9-3.4 s (elite boxing punch rate; Muay Thai high-intensity phasing)
+ * Windup+active for each weapon sits on its analogue's measured delivery time;
+ * recovery carries the cycle's majority share, as in every measured swing.
  */
 export const WEAPONS = {
   gladius: {
     id: "gladius", name: "Gladius", kind: "sword", hands: 1,
     reach: 1.35, damage: 26, weight: 1.2,
-    windup: 0.20, active: 0.11, recover: 0.30,   // seconds
+    // Fencing-lunge class: windup+active 0.57 s ~= the measured 0.568 s lunge.
+    windup: 0.45, active: 0.12, recover: 0.95,   // 1.52 s cycle
     stamina: 12, poise: 14,
     dirs: [DIR.HIGH, DIR.LEFT, DIR.RIGHT, DIR.THRUST],
     // Thrusts beat armour; cuts are better against unarmoured flesh.
@@ -36,7 +52,8 @@ export const WEAPONS = {
     // tutorial teaches the real weapon's rhythm, but blunt: it bruises rather
     // than opens, and it will not defeat armour.
     reach: 1.30, damage: 13, weight: 1.1,
-    windup: 0.20, active: 0.11, recover: 0.30,
+    // Identical rhythm to the gladius — the rudis exists to train it.
+    windup: 0.45, active: 0.12, recover: 0.95,
     stamina: 10, poise: 12,
     dirs: [DIR.HIGH, DIR.LEFT, DIR.RIGHT, DIR.THRUST],
     // No pierce worth the name — a stick does not find a gap in a manica.
@@ -47,7 +64,8 @@ export const WEAPONS = {
   spatha: {
     id: "spatha", name: "Spatha", kind: "sword", hands: 1,
     reach: 1.62, damage: 32, weight: 1.8,
-    windup: 0.27, active: 0.13, recover: 0.38,
+    // Kendo men-strike class: windup+active 0.80 s vs measured 0.759 +/- 0.073.
+    windup: 0.62, active: 0.18, recover: 1.10,   // 1.90 s cycle
     stamina: 16, poise: 18,
     dirs: [DIR.HIGH, DIR.LEFT, DIR.RIGHT, DIR.THRUST],
     armourPierce: { [DIR.THRUST]: 0.45, [DIR.HIGH]: 0.25, [DIR.LEFT]: 0.25, [DIR.RIGHT]: 0.25 },
@@ -74,7 +92,8 @@ export const WEAPONS = {
   sica: {
     id: "sica", name: "Sica", kind: "curved", hands: 1,
     reach: 1.18, damage: 23, weight: 0.9,
-    windup: 0.16, active: 0.10, recover: 0.24,
+    // Hook-punch class: short-radius arc, windup+active 0.60 s vs 0.586 measured.
+    windup: 0.42, active: 0.18, recover: 0.95,   // 1.55 s cycle
     stamina: 9, poise: 10,
     dirs: [DIR.HIGH, DIR.LEFT, DIR.RIGHT],
     // The thraex's curved blade is made to reach AROUND a shield.
@@ -86,7 +105,8 @@ export const WEAPONS = {
   trident: {
     id: "trident", name: "Fuscina", kind: "polearm", hands: 2,
     reach: 2.65, damage: 30, weight: 2.4,
-    windup: 0.30, active: 0.14, recover: 0.42,
+    // Spear-thrust class (4.65 m/s measured) + the heaviest head in the set.
+    windup: 0.72, active: 0.26, recover: 1.27,   // 2.25 s cycle
     stamina: 15, poise: 22,
     dirs: [DIR.THRUST, DIR.HIGH, DIR.LEFT, DIR.RIGHT],
     armourPierce: { [DIR.THRUST]: 0.6, [DIR.HIGH]: 0.2, [DIR.LEFT]: 0.2, [DIR.RIGHT]: 0.2 },
@@ -96,7 +116,8 @@ export const WEAPONS = {
   hasta: {
     id: "hasta", name: "Hasta", kind: "polearm", hands: 2,
     reach: 2.35, damage: 27, weight: 2.0,
-    windup: 0.26, active: 0.12, recover: 0.36,
+    // Spear-thrust class: the point covers ~1 m at the measured 4.65 m/s.
+    windup: 0.58, active: 0.22, recover: 1.15,   // 1.95 s cycle
     stamina: 13, poise: 19,
     dirs: [DIR.THRUST, DIR.HIGH],
     armourPierce: { [DIR.THRUST]: 0.65, [DIR.HIGH]: 0.15 },
@@ -106,7 +127,9 @@ export const WEAPONS = {
   dimachaerus: {
     id: "dimachaerus", name: "Paired Blades", kind: "dual", hands: 2,
     reach: 1.25, damage: 17, weight: 1.6,
-    windup: 0.13, active: 0.09, recover: 0.19,
+    // Lightest blades in the set; comboBonus cuts recovery on follow-ups, so
+    // the in-burst rhythm is the fast edge of the band by design.
+    windup: 0.40, active: 0.12, recover: 0.78,   // 1.30 s cycle
     stamina: 8, poise: 8,
     dirs: [DIR.HIGH, DIR.LEFT, DIR.RIGHT, DIR.THRUST],
     // Two blades means a follow-up lands inside the enemy's recovery window.

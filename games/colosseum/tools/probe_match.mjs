@@ -117,12 +117,31 @@ ok((droles.ally || 0) === 1 && (droles.opponent || 0) === 2, "2v2 is one ally ag
 
 // --- 4. tertiarius and survival waves ----------------------------------------
 console.log("\n-- tertiarius + waves --");
+// This checks the SPAWNER, not the balance. It used to hope the brain-driven
+// player happened to win the first bout within 12 seeds — which broke the
+// moment combat timing became realistic, because a naked probe player rightly
+// loses to v4's kitted veteranus on every seed. Arrange the precondition
+// deterministically instead: wound the first opponent to a sliver once the
+// fight opens, so the player's next landed blow kills through the REAL
+// wound/death/foesLeft path and the hook fires or it doesn't.
 let sawTert = false;
-for (let s = 1; s <= 12 && !sawTert; s++) {
-  const rr = runMatch(LADDER.find((x) => x.type === "tertiarius"), { seed: s * 7 });
-  if (rr.m.spawned.some((x) => x.role === "tertiarius")) sawTert = true;
+{
+  const tdef = LADDER.find((x) => x.type === "tertiarius");
+  const inv = new Inventory(); inv.gold = 5000;
+  const m = new Match({ def: tdef, inventory: inv, seed: 7 });
+  m.start();
+  let pBrain = null, wounded = false;
+  for (let t = 0; t < 240 && !m.result; t += DT) {
+    if (!pBrain) pBrain = new Brain(m.player, { skill: "veteranus", style: "pressure", seed: 217, combat: m.combat });
+    if (!wounded && m.state === STATE.FIGHT) {
+      const foe = m.combat.fighters.find((f) => f.team !== m.player.team && f.alive);
+      if (foe) { foe.hp = 2; wounded = true; }
+    }
+    m.update(DT, pBrain.update(DT) || {});
+    if (m.spawned.some((x) => x.role === "tertiarius")) { sawTert = true; break; }
+  }
 }
-console.log(`  a fresh third fighter appeared after a win: ${sawTert}`);
+console.log(`  a fresh third fighter appeared after the first kill: ${sawTert}`);
 ok(sawTert, "the tertiarius walks out when the player wins the first bout");
 
 const surv = LADDER.find((x) => x.type === "survival");
