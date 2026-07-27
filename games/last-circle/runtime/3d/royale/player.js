@@ -15,6 +15,7 @@
 import * as THREE from "three";
 // ?v= must propagate to intra-runtime imports (FFG gotcha) → top-level await
 const { findArmBones, applyArmPose, measureLean, uprightTorso, twoBoneIK } = await import("./pose.js" + (new URL(import.meta.url).search || ""));
+const rigPipe = await import("./rig_pipeline.js" + (new URL(import.meta.url).search || ""));
 
 let K = null; // SIM shortcut set in init
 
@@ -25,6 +26,8 @@ export function init(W) {
   W.useConsumable = (a, id) => useConsumable(W, a, id);
   // net.js replays peers' emotes through the SAME path the local one uses, so a
   // remote wave looks identical to your own rather than being a second system
+  W.attachToBone = rigPipe.attachToBone;          // the ONLY sanctioned attach path
+  W.validateAttachments = rigPipe.validateAttachments;
   W.playRemoteEmote = (a, kind) => {
     if (!a || !a.clips || a.emoting) return;
     // SAME SHAPE as the local path ({t}), not a bare string: netRemote actors
@@ -238,6 +241,12 @@ export async function loadActorModels(W) {
     const rig = await W.kernel.loadCharacter(url);
     a.rig = rig;
     a.skin = url.split("/").pop().replace(/\.glb.*/, "");
+    // Audit the rig against the skeleton contract ONCE per skin per session —
+    // a rig that fails here is the root cause of every downstream "gear on the
+    // wrong bone / arms broken" symptom, so it must fail LOUDLY at load, not
+    // silently at the first firefight. (rig_pipeline.js owns the contract.)
+    W._rigAudit = W._rigAudit || {};
+    if (!W._rigAudit[a.skin]) W._rigAudit[a.skin] = rigPipe.inspectRig(rig.scene, a.skin);
     // PROCEDURAL VARIETY: 5 base rigs x a per-actor colour wash, so a lobby of
     // 50 does not read as ten clones of each skin.
     // This used to be `color.offsetHSL(hue, 0.02, +/-0.07)`, which is a no-op on
@@ -388,6 +397,9 @@ export async function loadActorModels(W) {
     }
     // show the starting pistol in hand (re-equip wires slotRef + mesh)
     if (W.equipSlot) W.equipSlot(a, a.inventory.active);
+    // one-shot attachment audit per actor: holder on a legal hand bone, scale
+    // compensation inverting the bone scale, weapon length inside its band
+    rigPipe.validateAttachments(a);
   }
 }
 
