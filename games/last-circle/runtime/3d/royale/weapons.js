@@ -546,7 +546,27 @@ function kill(W, i, p) {
 }
 
 function testSegment(W, p, ax, ay, az, bx, by, bz) {
-  // 1) actors (capsule vs segment, coarse: sample closest point)
+  // ── NEAREST-HIT ARBITRATION ────────────────────────────────────────────────
+  // This used to `return` on the FIRST actor whose capsule the segment touched,
+  // before the static world was tested at all. Two consequences, both bad:
+  //   1. COVER DID NOT STOP BULLETS. A sub-step runs up to 2.5 m, so any enemy
+  //      within that distance of the far side of a wall, crate, tree or shipping
+  //      container took full damage THROUGH it — with a hitmarker, a damage
+  //      number and a kill. Every close-quarters fight around cover was decided
+  //      wrongly, and the function's own header already claimed to resolve this.
+  //   2. It took the first actor in W.actors order, not the CLOSEST one, so a
+  //      round could pass through a teammate-adjacent body and register on
+  //      whoever happened to sit earlier in the array.
+  // Solve the world hit FIRST, keep the nearest actor candidate rather than the
+  // first, then let whichever is nearer along the segment win.
+  const _midX = (ax + bx) / 2, _midZ = (az + bz) / 2;
+  const _halfLen = Math.hypot(bx - ax, bz - az) / 2;
+  const _cols = W.map.queryColliders(_midX, _midZ, _halfLen + 0.6);
+  const sh = K.segmentColliders(ax, ay, az, bx, by, bz, _cols);
+  const worldT = sh ? sh.t : Infinity;
+
+  // 1) actors (capsule vs segment, coarse: sample closest point) — nearest wins
+  let hitT = Infinity, hitActor = null, hitPx = 0, hitPy = 0, hitPz = 0, hitDh = 0;
   for (const t of W.actors) {
     if (!t.alive || t.id === p.ownerId) continue;
     const feetY = t.pos.y, headY = t.pos.y + (t.swimming ? 0.9 : K.actorHeight(t));
@@ -559,6 +579,14 @@ function testSegment(W, p, ax, ay, az, bx, by, bz) {
     const px = ax + dx * u, pz = az + dz * u, py = ay + (by - ay) * u;
     const dh = Math.hypot(px - cx, pz - cz);
     if (dh < K.PLAYERK.radius + 0.12 && py > feetY - 0.05 && py < headY + 0.12) {
+      if (u < hitT) { hitT = u; hitActor = t; hitPx = px; hitPy = py; hitPz = pz; hitDh = dh; }
+    }
+  }
+  // the round only reaches the actor if no solid surface is nearer along the path
+  if (hitActor && hitT <= worldT) {
+    {
+      const t = hitActor, px = hitPx, py = hitPy, pz = hitPz, dh = hitDh;
+      const feetY = t.pos.y, headY = t.pos.y + (t.swimming ? 0.9 : K.actorHeight(t));
       if (p.splash) { explode(W, px, py, pz, p.weaponId, p.rarity, p.ownerId); p.dead = true; return true; }
       const distFromOrigin = Math.hypot(px - p.origin.x, py - p.origin.y, pz - p.origin.z);
       // The 2.5x head zone used to be the ENTIRE body cylinder above 0.8 height:
@@ -593,10 +621,8 @@ function testSegment(W, p, ax, ay, az, bx, by, bz) {
   // ramps (kind !== "box") were skipped entirely — cover did not stop bullets.
   // Query along the WHOLE segment, not just around the endpoint, or a wall
   // crossed mid-step is never even a candidate.
-  const midX = (ax + bx) / 2, midZ = (az + bz) / 2;
-  const halfLen = Math.hypot(bx - ax, bz - az) / 2;
-  const cols = W.map.queryColliders(midX, midZ, halfLen + 0.6);
-  const sh = K.segmentColliders(ax, ay, az, bx, by, bz, cols);
+  // (the query + swept solve were hoisted to the top so the actor test could be
+  // arbitrated against them; `sh` is already computed)
   if (sh) {
     const c = sh.c;
     // impact at the ENTRY point on the face, not the overshot endpoint
