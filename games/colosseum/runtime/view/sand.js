@@ -30,7 +30,21 @@ import { ARENA } from "../data/arena_spec.js";
  * Splats are drawn as additive quads through an orthographic camera.
  */
 class DamageLayer {
-  constructor(renderer, { size = 1024 } = {}) {
+  /**
+   * @param {number} size damage-layer resolution.
+   *
+   * 1024 was too coarse and it showed. The layer covers the whole 87 x 55 m
+   * harena, so 1024 is 8.5 cm per texel — a 0.5 m blood splat lands on about
+   * 6x6 texels and the shader's carefully-noised ragged edge gets rasterised
+   * into a handful of hard squares. In game the blood read as Minecraft
+   * blocks, which is the single most obvious visual defect at ground level and
+   * is invisible to every headless measurement.
+   *
+   * 2048 halves that to 4.2 cm and costs 16 MB of VRAM against roughly 15 ms
+   * of unused frame budget. 4096 would be 67 MB for a returning gain, so this
+   * is the right stop.
+   */
+  constructor(renderer, { size = 2048 } = {}) {
     this.renderer = renderer;
     this.size = size;
 
@@ -257,7 +271,7 @@ const SAND_ROUGH = /* glsl */ `
  * Build the sand material and its damage layer.
  * @returns {{material: THREE.Material, damage: DamageLayer}}
  */
-export function makeSand(renderer, { size = 1024, textures = true } = {}) {
+export function makeSand(renderer, { size = 2048, textures = true } = {}) {
   const damage = new DamageLayer(renderer, { size });
 
   const mat = new THREE.MeshStandardMaterial({
