@@ -154,6 +154,7 @@ export class VFX {
   }
 
   update(dt) {
+    this._updateArcs(dt);
     let n = 0;
     const col = this.mesh.instanceColor.array;
     // Face the camera. One quaternion read, reused for every particle.
@@ -201,7 +202,82 @@ export class VFX {
     }
   }
 
-  stats() { return { live: this.live, capacity: MAX, drawCalls: this.live > 0 ? 1 : 0 }; }
+  /**
+   * The cleave arc — a blade's path drawn as a ribbon through the swing.
+   *
+   * A cleaving weapon takes up to three men across a 132-degree sweep, and
+   * without a visual the player has no way to learn that: the second and third
+   * bodies simply fall over with nothing connecting them to the swing. The arc
+   * IS the tell, and it is the difference between a mechanic the player
+   * exploits deliberately and one they never notice.
+   *
+   * Built as a flat ring-segment on the ground plane at chest height, faded
+   * out over its life, drawn additively so it reads as motion rather than as
+   * an object. One mesh per swing, pooled, so a flurry costs one draw call.
+   */
+  cleaveArc(origin, facing, radius, halfAngle, life = 0.22) {
+    if (!this._arcPool) {
+      this._arcPool = [];
+      this._arcLive = [];
+    }
+    let m = this._arcPool.pop();
+    if (!m) {
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0xfff0d0, transparent: true, opacity: 0.5,
+        blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+      });
+      m = new THREE.Mesh(new THREE.BufferGeometry(), mat);
+      m.frustumCulled = false;
+    }
+    // Rebuild the wedge for this weapon's actual arc and reach, so a gladius
+    // flicks and a spatha sweeps — the shape carries the information.
+    const SEG = 18;
+    const pos = [];
+    const inner = radius * 0.30;
+    for (let i = 0; i < SEG; i++) {
+      const a0 = facing - halfAngle + (2 * halfAngle * i) / SEG;
+      const a1 = facing - halfAngle + (2 * halfAngle * (i + 1)) / SEG;
+      const s0 = Math.sin(a0), c0 = Math.cos(a0), s1 = Math.sin(a1), c1 = Math.cos(a1);
+      pos.push(s0 * inner, 0, c0 * inner, s1 * inner, 0, c1 * inner, s1 * radius, 0, c1 * radius);
+      pos.push(s0 * inner, 0, c0 * inner, s1 * radius, 0, c1 * radius, s0 * radius, 0, c0 * radius);
+    }
+    m.geometry.dispose();
+    m.geometry = new THREE.BufferGeometry();
+    m.geometry.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    m.position.set(origin.x, origin.y, origin.z);
+    m.material.opacity = 0.5;
+    this.scene.add(m);
+    this._arcLive.push({ mesh: m, t: 0, life });
+    return m;
+  }
+
+  /** Advance and retire cleave arcs. Called from update(). */
+  _updateArcs(dt) {
+    if (!this._arcLive || !this._arcLive.length) return;
+    for (let i = this._arcLive.length - 1; i >= 0; i--) {
+      const a = this._arcLive[i];
+      a.t += dt;
+      const k = a.t / a.life;
+      if (k >= 1) {
+        this.scene.remove(a.mesh);
+        this._arcPool.push(a.mesh);
+        this._arcLive.splice(i, 1);
+        continue;
+      }
+      // Fade and expand slightly — the blade's wake spreading as it passes.
+      a.mesh.material.opacity = 0.5 * (1 - k) * (1 - k);
+      const s = 1 + k * 0.12;
+      a.mesh.scale.set(s, 1, s);
+    }
+  }
+
+  stats() {
+    return {
+      live: this.live, capacity: MAX,
+      arcs: this._arcLive ? this._arcLive.length : 0,
+      drawCalls: (this.live > 0 ? 1 : 0) + (this._arcLive ? this._arcLive.length : 0),
+    };
+  }
 
   dispose() {
     this.mesh.geometry.dispose();

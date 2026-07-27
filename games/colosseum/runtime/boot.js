@@ -309,7 +309,12 @@ async function startMatch(matchId) {
         onCombatSound(e);
         // Two layers per impact: the lens moves (CombatCamera) and the image
         // bites (Post). Neither one alone reads as weight.
-        if (e.type === "hit") { combatCam.addShake(e.heavy ? 0.55 : 0.28); post.impact(e.heavy ? 1.0 : 0.45); }
+        if (e.type === "hit") {
+          combatCam.addShake(e.heavy ? 0.55 : 0.28); post.impact(e.heavy ? 1.0 : 0.45);
+          // Floating damage number over the body that took it.
+          hud.damage(new THREE.Vector3(e.x, 1.55, e.z), e.damage || 0,
+            { zone: e.zone, heavy: e.heavy, mine: e.attacker === "player" });
+        }
         else if (e.type === "death") { combatCam.addShake(0.8); post.impact(1.3, 0.42); }
         else if (e.type === "shield_break" || e.type === "guard_break") { combatCam.addShake(0.5); post.impact(0.85, 0.3); }
       },
@@ -608,7 +613,7 @@ function stepSim(dt) {
     bout.update(dt, simScale);
     if (match.state === "exit") bout.dragCorpses(dt, gates.entryPoint("libitinaria", 2.0));
     crowd.lookAt(new THREE.Vector3(p ? p.x : 0, 1, p ? p.z : 0));
-    hud.update(match.hudState(), dt);
+    hud.update(match.hudState(), dt, camera);
 
     // Audio follows the player and the crowd's visible mood, so what is heard
     // and what is seen cannot drift apart.

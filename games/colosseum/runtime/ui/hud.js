@@ -84,7 +84,73 @@ export class HUD {
   /**
    * @param {object} s the match's hudState()
    */
-  update(s, dt = 0) {
+  /**
+   * Floating damage numbers.
+   *
+   * The sim already computes a per-hit damage figure, a hit zone and whether
+   * the blow was heavy, and none of it ever reached the player — a hit was a
+   * health bar twitching somewhere in the corner. Numbers over the body are
+   * what let someone learn that a thrust beats armour and a cut does not, or
+   * that a galea is eating their head shots.
+   *
+   * DOM rather than sprites: text stays crisp at any resolution, costs zero
+   * draw calls, and needs no font atlas. The only cost is projecting a world
+   * point per number, which is one matrix multiply.
+   *
+   * @param {THREE.Vector3} world  where the blow landed
+   * @param {number} amount        damage dealt
+   * @param {object} opts { zone, heavy, mine } — `mine` colours the player's
+   *                       own damage differently from what is done TO them
+   */
+  damage(world, amount, { zone = null, heavy = false, mine = true } = {}) {
+    if (!this._dmgLayer) {
+      this._dmgLayer = document.createElement("div");
+      this._dmgLayer.style.cssText = "position:absolute;inset:0;pointer-events:none;overflow:hidden";
+      this.el.appendChild(this._dmgLayer);
+      this._dmg = [];
+    }
+    const d = document.createElement("div");
+    const n = Math.round(amount);
+    // The player's own damage reads gold; damage taken reads red, so a glance
+    // tells you which way the fight is going without reading a number.
+    const col = mine ? (heavy ? "#ffdf8a" : "#e8d5a8") : "#e0603c";
+    const size = heavy ? 30 : 21;
+    d.textContent = zone === "head" && heavy ? `${n}!` : `${n}`;
+    d.style.cssText = `position:absolute;font-family:Georgia,serif;font-weight:700;
+      font-size:${size}px;color:${col};text-shadow:0 2px 6px rgba(0,0,0,.9);
+      transform:translate(-50%,-50%);will-change:transform,opacity`;
+    this._dmgLayer.appendChild(d);
+    // A little lateral drift so stacked hits do not overlap into a smear.
+    this._dmg.push({ el: d, world: world.clone(), t: 0, life: 1.0,
+                     drift: (Math.random() - 0.5) * 46, rise: 46 + Math.random() * 22 });
+  }
+
+  /** Advance floating numbers. Needs the camera to project. */
+  _updateDamage(dt, camera) {
+    if (!this._dmg || !this._dmg.length || !camera) return;
+    const w = this.el.clientWidth, h = this.el.clientHeight;
+    for (let i = this._dmg.length - 1; i >= 0; i--) {
+      const n = this._dmg[i];
+      n.t += dt;
+      const k = n.t / n.life;
+      if (k >= 1) { n.el.remove(); this._dmg.splice(i, 1); continue; }
+      const p = n.world.clone().project(camera);
+      // Behind the camera — hide rather than draw it mirrored on screen.
+      if (p.z > 1) { n.el.style.display = "none"; continue; }
+      n.el.style.display = "";
+      const x = (p.x * 0.5 + 0.5) * w + n.drift * k;
+      const y = (-p.y * 0.5 + 0.5) * h - n.rise * k;
+      n.el.style.left = `${x}px`;
+      n.el.style.top = `${y}px`;
+      // Pop in, then fade out over the back half.
+      n.el.style.opacity = k < 0.12 ? String(k / 0.12) : String(1 - (k - 0.12) / 0.88);
+      const s = k < 0.12 ? 0.7 + 0.3 * (k / 0.12) : 1;
+      n.el.style.transform = `translate(-50%,-50%) scale(${s})`;
+    }
+  }
+
+  update(s, dt = 0, camera = null) {
+    this._updateDamage(dt, camera);
     if (!this.visible || !s) return;
 
     if (this._bannerT > 0) {

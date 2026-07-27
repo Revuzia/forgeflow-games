@@ -297,6 +297,16 @@ export class BoutView {
     const at = rec ? rec.actor : null;
 
     switch (e.type) {
+      case "swing": {
+        // Draw the blade's path. Only for weapons that actually sweep — a
+        // one-target weapon flicking an arc every swing would be visual noise,
+        // and the arc's job is to teach the player that THIS weapon reaches
+        // more than one man.
+        if (vfx && e.cleave > 1) {
+          vfx.cleaveArc(new THREE.Vector3(e.x, 1.15, e.z), e.facing, e.reach, e.arc);
+        }
+        break;
+      }
       case "hit": {
         // Blood goes into the persistent damage layer, so the arena keeps a
         // record of the fight rather than a puff that vanishes.

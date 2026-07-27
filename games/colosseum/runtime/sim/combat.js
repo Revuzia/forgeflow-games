@@ -300,7 +300,17 @@ export class Combat {
       f.phase = PHASE.WINDUP; f.phaseT = 0;
       f.attackDir = dir;
       f.stamina -= w.stamina;
-      this.emit("swing", { id: f.id, dir, weapon: f.weaponId });
+      // Carry the swing's geometry so the view can draw the actual arc this
+      // weapon sweeps rather than guessing one — a gladius flick and a spatha
+      // cleave look nothing alike and the shape is the tell.
+      const sw = f.weapon;
+      this.emit("swing", {
+        id: f.id, dir, weapon: f.weaponId,
+        x: f.x, z: f.z, facing: f.facing,
+        reach: sw.reach,
+        arc: sw.arc !== undefined ? sw.arc : (sw.kind === "polearm" ? 0.35 : 0.62),
+        cleave: sw.cleave || 1,
+      });
     }
 
     // --- movement --------------------------------------------------------
