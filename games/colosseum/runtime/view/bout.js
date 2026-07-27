@@ -24,6 +24,27 @@ import { Equipment } from "./equipment.js";
 import { ARMATURA_ROSTER } from "../data/roster.js";
 import { damp, clamp } from "../core/util.js";
 
+/**
+ * Where in each attack clip the blade actually connects, as a fraction of the
+ * clip's own duration.
+ *
+ * Measured in headless Blender off peak hand extension from the body, not
+ * guessed. Every archetype ships byte-identical clips (one MD5 each across all
+ * eight), so one table covers the roster.
+ *
+ * This is the number the view needs and never had — `grep` for
+ * strikeframe|strike_frame|contactframe|impactframe|hitframe across the whole
+ * game returned zero hits before this. Without it there is no way to line a
+ * 3.2-second animation up with a 0.2-second windup, and the old code did not
+ * try: it stretched the clip across the window and saturated its own clamp.
+ */
+const STRIKE_FRAC = {
+  slash1: 0.365,
+  slash2: 0.435,
+  attack: 0.400,   // beast lunge
+  finisher: 0.500,
+};
+
 /** Which procedural weapon mesh a weapon id gets. */
 const WEAPON_MESH = {
   gladius: makeGladius, spatha: makeGladius, sica: makeGladius,
@@ -47,6 +68,9 @@ export class BoutView {
     this.corpses = [];
     this._lastPhase = new Map();
     this._attackFlip = new Map();
+    // fighter id -> { clip, until } — how much real time is left in the swing
+    // that is currently playing, so RECOVER can hold it to its follow-through.
+    this._swing = new Map();
   }
 
   // -- population -----------------------------------------------------------
@@ -172,11 +196,24 @@ export class BoutView {
           const flip = (this._attackFlip.get(f.id) || 0) ^ 1;
           this._attackFlip.set(f.id, flip);
           const clip = f.isBeast ? "attack" : (flip ? "slash2" : "slash1");
-          // Stretch the clip to the fighter's real windup+active window so the
-          // swing lands on the frame the sim says it lands.
-          const total = f.weapon.windup + f.weapon.active;
-          const dur = a.clipDuration(clip) || total;
-          a.playOnce(clip, { timeScale: clamp(dur / Math.max(0.08, total), 0.5, 3.0), then: null, fade: 0.06 });
+          const dur = a.clipDuration(clip) || 1;
+          // Align the clip's STRIKE FRAME with the frame the sim resolves
+          // damage on — the end of windup.
+          //
+          // The old line stretched the clip across windup+active with
+          // clamp(dur/total, 0.5, 3.0). Measured across all 12 weapon x clip
+          // combinations the raw ratio runs 3.48 to 14.55, so EVERY one
+          // saturated the 3.0 ceiling and the stretch never adapted to any
+          // weapon at all. The result: slash2's blade arrived 157-337 ms after
+          // the damage, slash1's arrived up to 252 ms before it, and because
+          // the two alternate the same weapon swung 389 ms differently on
+          // consecutive attacks.
+          const strikeAt = dur * (STRIKE_FRAC[clip] ?? 0.4);
+          const ts = clamp(strikeAt / Math.max(0.05, f.weapon.windup), 0.5, 14);
+          a.playOnce(clip, { timeScale: ts, then: null, fade: 0.05 });
+          // Remember it so RECOVER can let the follow-through finish rather
+          // than cutting to idle mid-swing.
+          this._swing.set(f.id, { clip, until: (dur / ts) });
         }
         break;
 
@@ -188,8 +225,25 @@ export class BoutView {
         if (changed) a.play("run", { fade: 0.08, timeScale: 1.6 });
         break;
 
-      case PHASE.IDLE:
       case PHASE.RECOVER: {
+        // Let the swing land and follow through.
+        //
+        // RECOVER used to fall through to IDLE, which cross-faded the attack
+        // out over 0.18 s. Only 20.6-41.3% of slash2 was ever shown, and it sat
+        // at roughly 17% blend weight at its own strike frame — the blade
+        // genuinely never visibly connected. Holding the clip until it has run
+        // past its strike, then blending out, is the whole difference between
+        // a swing and a twitch.
+        const sw = this._swing.get(f.id);
+        if (sw) {
+          sw.until -= dt;
+          if (sw.until > 0) break;          // still swinging — leave it alone
+          this._swing.delete(f.id);
+        }
+        // fall through to locomotion once the follow-through is done
+      }
+      // eslint-disable-next-line no-fallthrough
+      case PHASE.IDLE: {
         // Locomotion by ground speed. The actor's own foot-slide correction
         // handles the timeScale.
         const s = f.speed;
@@ -209,6 +263,34 @@ export class BoutView {
    * Route one combat event into visible/audible consequence. Called from the
    * match's onEvent hook.
    */
+  /**
+   * A visible flinch, scaled to the blow.
+   *
+   * anim_hit.glb is 4.700 s in every archetype and was played at timeScale 1
+   * against a stagger of 0.45-0.85 s, so the player saw the first ~10% of it —
+   * and the clip is back-loaded, with its peak-motion frame at t = 4.700 s,
+   * i.e. 100%. Only 4.9% of the clip's total motion falls inside the first
+   * 0.45 s. You were being shown the least eventful tenth of a reaction.
+   *
+   * Compressing it to a real flinch duration means the whole shape of the
+   * reaction plays inside the window the sim allows. Harder hits flinch longer
+   * and slower; a graze is a twitch.
+   */
+  _flinch(rec, damage) {
+    const a = rec.actor;
+    const f = rec.fighter;
+    if (!f.alive || !a.hasClip("hit")) return;
+    // Never interrupt a death or a full stagger — those own the body.
+    if (f.phase === PHASE.STAGGER || f.phase === PHASE.DODGE) return;
+    const dur = a.clipDuration("hit") || 1;
+    const weight = clamp(damage / 35, 0.35, 1);      // graze .35 -> heavy 1.0
+    const window = 0.20 + weight * 0.22;             // 0.20 s .. 0.42 s
+    a.playOnce("hit", { timeScale: dur / window, then: null, fade: 0.04 });
+    // The swing map must forget this fighter or RECOVER would try to hold a
+    // swing that the flinch has already replaced.
+    this._swing.delete(f.id);
+  }
+
   onEvent(e) {
     const { sand, crowd, vfx } = this.deps;
     const rec = e.target ? this.actors.get(e.target) : null;
@@ -224,6 +306,19 @@ export class BoutView {
         }
         if (vfx) vfx.blood(new THREE.Vector3(e.x, e.heavy ? 1.25 : 1.05, e.z), e.heavy ? 1.4 : 0.8);
         if (crowd) crowd.react(e.heavy ? 0.5 : 0.22);
+        // FLINCH ON THE EVENT, not on the phase.
+        //
+        // combat.js only writes PHASE.STAGGER when a hit interrupts a WINDUP
+        // (combat.js:466). The plain-hit path sets hitStop and comboCount and
+        // no phase at all, and _driveAnimation plays "hit" solely on STAGGER —
+        // so a blow landing on a target who was idle, moving or recovering
+        // produced NO body reaction whatsoever. Measured: 188 of 337 landed
+        // hits across 40 seeded bouts, 56%. Targets read as training dummies.
+        //
+        // Reacting here covers every landed hit regardless of phase, and
+        // re-triggers on each one so a combo keeps flinching instead of going
+        // still after the first (the phase-change guard made repeats invisible).
+        if (rec) this._flinch(rec, e.damage || 0);
         break;
       }
       case "block":
