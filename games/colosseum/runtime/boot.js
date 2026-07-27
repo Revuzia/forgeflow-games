@@ -280,6 +280,9 @@ const combatCam = new CombatCamera(camera);
 
 let bout = null;        // BoutView
 let match = null;       // Match
+// Bumped by every startMatch. Deferred callbacks capture it so a timer armed by
+// one bout can never act on a later one — see the guard on the results timeout.
+let matchEpoch = 0;
 
 /**
  * Start one ladder entry.
@@ -289,6 +292,7 @@ let match = null;       // Match
  */
 async function startMatch(matchId) {
   endMatch();
+  const epoch = ++matchEpoch;
   const def = LADDER.find((m) => m.id === matchId) || LADDER[0];
 
   bout = new BoutView(scene, actorLibs, { sand: sandDamage, crowd, gates, hypogeum, vfx });
@@ -333,7 +337,18 @@ async function startMatch(matchId) {
         hud.banner(r.playerWon ? "VICTORIA" : "DEFEAT",
           `${r.purse} aurei${r.rankUp ? `  ·  ${r.rankUp.toUpperCase()}` : ""}`, 4.0);
         // Let the banner and the crowd land before the results card appears.
+        //
+        // GUARDED ON THE EPOCH. This timer used to call endMatch() unguarded,
+        // and endMatch() sets `match = null`. startMatch awaits
+        // ensureArmaturaBodies() before calling match.start(), so a timer armed
+        // by the PREVIOUS bout landing inside that await nulls the NEW match and
+        // the next line throws "Cannot read properties of null (reading
+        // 'start')". A ladder sweep hit it on 4 of 28 bouts — g4 The Net, v1 The
+        // Pursuer, v4 The Substitute and c1 Iron Gaul were simply unplayable —
+        // and a player starting their next fight within 3.2 s of a verdict hits
+        // exactly the same race.
         setTimeout(() => {
+          if (epoch !== matchEpoch) return;      // a newer bout already owns the sand
           endMatch();
           menu.showResult(r, def.name);
           audio.music("ludus", { fade: 2.0 });

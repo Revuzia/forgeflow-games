@@ -155,12 +155,31 @@ export class Brain {
     const threatened = t.phase === PHASE.WINDUP && dist <= t.weapon.reach * 1.15;
     if (threatened) {
       const roll = this.rng();
-      if (s.shieldId !== "none" && !s.shieldBroken && roll < this.skill.blockChance) {
+      const canBlock = s.shieldId !== "none" && !s.shieldBroken;
+      if (canBlock && roll < this.skill.blockChance) {
         cmd.block = true;
         cmd.blockDir = t.attackDir || DIR.HIGH;
         return cmd;
       }
-      if (roll < this.skill.blockChance + this.skill.dodgeChance && s.stamina > FEEL.dodgeStamina) {
+      // Dodge occupies its OWN probability band, [blockChance, +dodgeChance).
+      //
+      // Without the lower bound a SHIELDLESS fighter skips the block branch and
+      // then dodges on every roll below blockChance+dodgeChance — 0.80 for a
+      // veteranus instead of the 0.25 the table declares. The block band
+      // silently converted into extra dodging for exactly the fighters who
+      // cannot block: paegniarius ("blunt stick, no shield, no armour") and
+      // retiarius among them.
+      //
+      // Measured in the tutorial bout before this fix — phase occupancy over
+      // 4,402 fight frames:
+      //     enemy idle 74.1%  dodge 24.2%  windup 0.6%  active 0.6%
+      // An opponent that dodges a quarter of the fight and commits to an attack
+      // 0.6% of the time is not fighting, and the bout stalemated: foe stuck at
+      // 20 hp and player at 39 hp from t=30s to t=70s with no time limit to end
+      // it. That is the "combat seems completely broken" the player reported.
+      if (roll >= this.skill.blockChance &&
+          roll < this.skill.blockChance + this.skill.dodgeChance &&
+          s.stamina > FEEL.dodgeStamina) {
         cmd.dodge = true;
         // Sidestep rather than backpedal — retreating just invites the follow-up.
         cmd.moveX = Math.cos(face) * this.circleDir;
