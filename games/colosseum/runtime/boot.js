@@ -22,6 +22,7 @@ import { Inventory } from "./sim/inventory.js";
 import { Armoury } from "./ui/armoury.js";
 import { Match, STATE } from "./sim/match.js";
 import { BoutView, CombatCamera } from "./view/bout.js";
+import { Post } from "./view/post.js";
 import { VFX } from "./view/vfx.js";
 import { HUD } from "./ui/hud.js";
 import { Input } from "./core/input.js";
@@ -114,6 +115,12 @@ container.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(52, viewportSize().w / viewportSize().h, 0.25, 1200);
 
+// Post-processing. Constructed here so `post` exists for applyViewport below;
+// init() is async (the addon passes are fetched) and the game renders through
+// the plain path until it resolves, so a slow CDN delays polish, never play.
+const post = new Post(renderer, scene, camera, { quality: QUALITY });
+post.init().then((on) => console.log(`[post] ${on ? "enabled" : "off"} — ${JSON.stringify(post.stats())}`));
+
 function applyViewport() {
   const { w, h } = viewportSize();
   camera.aspect = w / h;
@@ -121,6 +128,13 @@ function applyViewport() {
   renderer.setSize(w, h, false);
   renderer.domElement.style.width = "100%";
   renderer.domElement.style.height = "100%";
+  // The composer owns its own render targets and does NOT track the renderer,
+  // so a resize that skips it leaves the game rendering at the old resolution
+  // and stretching the result.
+  if (typeof post !== "undefined" && post) {
+    const dpr = renderer.getPixelRatio();
+    post.resize(w * dpr, h * dpr);
+  }
 }
 applyViewport();
 window.addEventListener("resize", applyViewport);
@@ -287,9 +301,11 @@ async function startMatch(matchId) {
       onEvent: (e) => {
         bout.onEvent(e);
         onCombatSound(e);
-        if (e.type === "hit") combatCam.addShake(e.heavy ? 0.55 : 0.28);
-        else if (e.type === "death") combatCam.addShake(0.8);
-        else if (e.type === "shield_break" || e.type === "guard_break") combatCam.addShake(0.5);
+        // Two layers per impact: the lens moves (CombatCamera) and the image
+        // bites (Post). Neither one alone reads as weight.
+        if (e.type === "hit") { combatCam.addShake(e.heavy ? 0.55 : 0.28); post.impact(e.heavy ? 1.0 : 0.45); }
+        else if (e.type === "death") { combatCam.addShake(0.8); post.impact(1.3, 0.42); }
+        else if (e.type === "shield_break" || e.type === "guard_break") { combatCam.addShake(0.5); post.impact(0.85, 0.3); }
       },
       onCue: onMatchCue,
       onState: (s, m) => {
@@ -574,7 +590,9 @@ function stepSim(dt) {
         targetAngle = Math.atan2(f.x - p.x, f.z - p.z);
       }
     }
-    const cmd = input.command({ cameraYaw: combatCam.yaw, targetAngle });
+    // lookYaw, NOT yaw — see CombatCamera.lookYaw. `yaw` is where the camera
+    // sits; input must be rotated into where it looks.
+    const cmd = input.command({ cameraYaw: combatCam.lookYaw, targetAngle });
     match.update(dt, cmd);
     input.consume();
 
@@ -683,7 +701,12 @@ function frame(now) {
   }
 
   updateCamera(dt);
-  renderer.render(scene, camera);
+  // Haze tracks how churned the sand is. A long, bloody bout ends visibly
+  // dirtier than it started, and `clear()` between matches takes it back down
+  // with the stains. Capped well below 1 — this is atmosphere, not fog.
+  post.setDust(match ? Math.min(0.55, sandDamage.splats / 900) : 0);
+  post.update(dt);
+  post.render();
 
   // Demo choreography for the arena preview: periodic crowd swells and a wave.
   frames++;
@@ -710,7 +733,7 @@ requestAnimationFrame(frame);
 // ---------------------------------------------------------------------------
 window.__FFG3D__ = {
   renderer, scene, camera, colosseum, crowd, sky, gates, hypogeum, actors,
-  inventory, armoury, vfx, hud, input, combatCam, audio,
+  inventory, armoury, vfx, hud, input, combatCam, audio, post,
   get match() { return match; },
   get bout() { return bout; },
   quality: QUALITY,

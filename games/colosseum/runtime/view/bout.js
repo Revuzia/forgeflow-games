@@ -301,6 +301,21 @@ export class CombatCamera {
   addShake(amount) { this.shake = Math.min(1.4, this.shake + amount); }
 
   /**
+   * The direction the camera LOOKS — player toward foe. This is the frame that
+   * player input must be rotated into, and it is the OPPOSITE of `yaw`.
+   *
+   * Getting these two confused inverted the game's forward axis: boot.js fed
+   * `yaw` (which points from the foe out to the player, i.e. where the rig
+   * sits) into `input.command({cameraYaw})`, so W drove the player along
+   * foe->player — away from the man trying to kill them — and S walked them in.
+   *
+   * It also mirrored the attack system, because input.js derives thrust/cut by
+   * comparing the movement vector against this same angle: pushing toward the
+   * enemy registered as pushing away, so "forward = thrust" resolved backwards.
+   */
+  get lookYaw() { return this.yaw + Math.PI; }
+
+  /**
    * @param {THREE.Vector3|null} playerPos
    * @param {THREE.Vector3|null} foePos
    */
@@ -312,6 +327,8 @@ export class CombatCamera {
     if (foePos) {
       mid.add(foePos).multiplyScalar(0.5);
       sep = playerPos.distanceTo(foePos);
+      // `yaw` is where the camera SITS: the direction from the foe out to the
+      // player, so the rig lands behind the player's shoulder.
       this.yaw = damp(this.yaw, Math.atan2(playerPos.x - foePos.x, playerPos.z - foePos.z), 3.0, dt);
     }
 

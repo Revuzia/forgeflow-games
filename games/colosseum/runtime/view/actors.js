@@ -564,10 +564,39 @@ export function makeScutum({ w = 0.66, h = 1.02, curve = 0.16 } = {}) {
   boss.translate(0, 0, curve + 0.012);
   parts.push(paint(boss, BRASS));
 
-  // edge binding along the top and bottom rails
+  // Edge binding along the top and bottom rails.
+  //
+  // These were straight BoxGeometry bars translated to z = +curve*0.55. The
+  // board is an ARC sweeping z from -curve at the centre out toward 0 at the
+  // rims, so the rails sat entirely off the front of the shield and, being
+  // straight across a curved face, splayed at both ends. In game they read as
+  // loose planks floating beside the scutum.
+  //
+  // They now sweep the SAME arc the staves do, so they meet the board by
+  // construction — the identical fix the staves themselves already got.
+  const railH = 0.032, railT = 0.05;
   for (const sy of [-1, 1]) {
-    const rail = new THREE.BoxGeometry(w * 0.99, 0.032, 0.05);
-    rail.translate(0, sy * (h / 2 - 0.012), curve * 0.55);
+    const rp = [], rn = [];
+    const y0 = sy * (h / 2 - 0.012) - railH / 2;
+    const y1 = y0 + railH;
+    for (let i = 0; i < N; i++) {
+      const t0 = -half + (2 * half * i) / N;
+      const t1 = -half + (2 * half * (i + 1)) / N;
+      const [x0, z0] = at(t0);
+      const [x1, z1] = at(t1);
+      const nx = Math.sin((t0 + t1) / 2);
+      const nz = -Math.cos((t0 + t1) / 2);
+      // Proud of the board by railT along the local surface normal.
+      const ox = nx * railT, oz = nz * railT;
+      // outer face
+      quadTri(rp, rn, [x0 + ox, y0, z0 + oz], [x1 + ox, y0, z1 + oz], [x1 + ox, y1, z1 + oz], [x0 + ox, y1, z0 + oz], [nx, 0, nz]);
+      // top and bottom caps back to the board
+      quadTri(rp, rn, [x0, y1, z0], [x1, y1, z1], [x1 + ox, y1, z1 + oz], [x0 + ox, y1, z0 + oz], [0, sy, 0]);
+      quadTri(rp, rn, [x0 + ox, y0, z0 + oz], [x1 + ox, y0, z1 + oz], [x1, y0, z1], [x0, y0, z0], [0, -sy, 0]);
+    }
+    const rail = new THREE.BufferGeometry();
+    rail.setAttribute("position", new THREE.Float32BufferAttribute(rp, 3));
+    rail.setAttribute("normal", new THREE.Float32BufferAttribute(rn, 3));
     parts.push(paint(rail, BRASS));
   }
 
