@@ -172,9 +172,48 @@ export class Brain {
     // --- act on the latched decision --------------------------------------
     const reach = s.isBeast && s.beast ? s.beast.reach : s.weapon.reach;
 
+    // THE EXCHANGE RHYTHM.
+    //
+    // Measured before this: the worst 3-second burst a player took was 64
+    // damage against 115 health — 56% of a fighter, gone in three seconds —
+    // and weapons cycle a full swing every 0.41 to 0.86 s with nothing ever
+    // making anyone stop. A dimachaerus manages 3.1 swings a second, forever.
+    //
+    // That is a modern action-game tempo, and it is not how these fights went.
+    // A munus ran ten to fifteen minutes: fighters closed, traded a few blows,
+    // broke off, circled, caught their breath behind the shield, and went again.
+    // The summa rudis could and did pause the bout outright. The exchange, not
+    // the swing, is the unit of the fight.
+    //
+    // So a fighter now commits to a burst of a few blows and then MUST break —
+    // back off, guard up, reset the spacing — before pressing again. Patience
+    // scales it by style, so an aggressor barely pauses and a spacer takes his
+    // time, and the fight gets a pulse instead of a flat rate of damage.
+    this._exchange = this._exchange || { swings: 0, breakT: 0 };
+    if (this._exchange.breakT > 0) {
+      this._exchange.breakT -= dt;
+      // Hold the guard and keep distance while recovering the initiative.
+      cmd.moveX = -dz / dist * this.circleDir;
+      cmd.moveZ = dx / dist * this.circleDir;
+      if (s.shieldId !== "none" && !s.shieldBroken) { cmd.block = true; cmd.blockDir = DIR.HIGH; }
+      return cmd;
+    }
+
     switch (d.kind) {
       case "attack": {
-        if (dist <= reach * 0.95 && this._claimAttackToken(t)) {
+        const swinging = dist <= reach * 0.95 && this._claimAttackToken(t);
+        if (swinging) {
+          // Count the blow, and break after a burst.
+          this._exchange.swings++;
+          const maxBurst = this.style.patience < 0.6 ? 3 : 2;
+          if (this._exchange.swings >= maxBurst) {
+            this._exchange.swings = 0;
+            // Patient styles rest longer. ~0.7 s for an aggressor, ~1.5 s for a
+            // spacer — long enough to read as a beat, short enough to stay a fight.
+            this._exchange.breakT = 0.55 + this.style.patience * 0.7;
+          }
+        }
+        if (swinging) {
           cmd.attack = true;
           cmd.attackDir = d.dir;
           // A BEAST COMMITS. It does not strike from the edge of its reach and
