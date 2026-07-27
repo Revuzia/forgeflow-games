@@ -59,15 +59,75 @@ function prepScene(scene) {
     if (o.isLight) { kill.push(o); return; }
     if (o.isMesh || o.isSkinnedMesh) {
       o.castShadow = true;
-      o.receiveShadow = false;
+      // Characters must take shadow, not just cast it. With this off they
+      // never darken under the podium, under the velarium, or under each
+      // other, which is half of why they read as pasted onto the scene.
+      o.receiveShadow = true;
       // Skinned bounds are computed from the BIND pose, which for these rigs is
       // often degenerate — leaving frustum culling on makes characters vanish
       // at certain camera angles.
       o.frustumCulled = false;
+      repairMeshyMaterial(o.material);
     }
   });
   kill.forEach((l) => l.removeFromParent());
   return scene;
+}
+
+/**
+ * Repair the material Meshy exports. THIS is why the gladiators looked wrong.
+ *
+ * Dumped straight out of assets/chars/murmillo/base.glb:
+ *
+ *   { "pbrMetallicRoughness": { "baseColorTexture": { "index": 0 } },
+ *     "emissiveFactor": [1,1,1], "emissiveTexture": { "index": 0 }, ... }
+ *
+ * Two defects that compound into a fullbright character:
+ *
+ * 1. metallicFactor and roughnessFactor are ABSENT, and the glTF default for
+ *    both is 1.0. three's physical shader computes
+ *        diffuseColor = albedo * (1.0 - metalness)
+ *    so at metalness 1.0 the diffuse term is exactly ZERO. The DirectionalLight
+ *    and HemisphereLight contribute nothing at all to a body; only a
+ *    roughness-1 GGX lobe over a dim env map survives, and that is
+ *    directionless. No terminator, no form shading, no sense of a light source.
+ *
+ * 2. emissiveFactor is [1,1,1] with the SAME image as the albedo bound as the
+ *    emissive map — the base colour is re-added at full strength as
+ *    self-illumination. So the body cannot darken in shadow either, and it
+ *    feeds straight into the bloom threshold, which is why white tunics blow
+ *    out.
+ *
+ * Together: the one class of object in the arena that ignores the lighting,
+ * standing next to procedurally-built weapons that shade correctly. That
+ * contrast is the "these don't look right" everyone was pointing at, and it
+ * was never the rig — the skin weights measure fine (3.05-3.85 average bone
+ * influences through the shoulder and armpit, weights summing to 1.0, inverse
+ * bind matrices reproducing identity to 3.6e-5).
+ *
+ * Fixed here at load rather than by rewriting eight GLBs, because it is the
+ * EXPORTER's output that is wrong and every future generated body will arrive
+ * with the same defect. One repair on the way in covers all of them.
+ */
+function repairMeshyMaterial(mat) {
+  if (!mat) return;
+  for (const m of Array.isArray(mat) ? mat : [mat]) {
+    if (!m || m.userData.__meshyRepaired) continue;
+    // Skin, cloth and leather are dielectrics. Metal on these bodies is
+    // painted into the albedo, not a metalness channel.
+    if (m.metalness !== undefined) m.metalness = 0.0;
+    if (m.roughness !== undefined) m.roughness = 0.78;
+    // Kill the self-illumination.
+    if (m.emissive) m.emissive.setRGB(0, 0, 0);
+    if (m.emissiveMap) m.emissiveMap = null;
+    if (m.emissiveIntensity !== undefined) m.emissiveIntensity = 0;
+    // KHR_materials_specular came through as specularColorFactor [2,2,2],
+    // i.e. double-strength white specular on flesh.
+    if (m.specularIntensity !== undefined) m.specularIntensity = 1.0;
+    if (m.specularColor && m.specularColor.setRGB) m.specularColor.setRGB(1, 1, 1);
+    m.userData.__meshyRepaired = true;
+    m.needsUpdate = true;
+  }
 }
 
 /**
