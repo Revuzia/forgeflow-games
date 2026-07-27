@@ -130,6 +130,93 @@ function tiltDir(d, pitch) {
   return [d[0], d[1] * c + d[2] * s, d[2] * c - d[1] * s];
 }
 
+
+// ── TWO-BONE IK ─────────────────────────────────────────────────────────────
+// The left hand was posed from the same direction table as everything else and
+// simply landed wherever the numbers put it — measured 0.418 m off the foregrip
+// on a 0.62 m rifle, i.e. completely off the gun. A rifle with no support hand
+// reads as broken no matter how correctly the barrel points.
+//
+// The fix is the standard one: the WEAPON is the anchor, and the support arm is
+// solved onto it. Analytic two-bone IK (law of cosines) — the same formulation
+// ozz-animation's IKTwoBoneJob uses, whose defaults this borrows: reach clamped
+// to 0.99 of full extension so the elbow never locks straight, and the elbow
+// interior angle clamped to the AAOS elbow range (30-164 deg) so it can neither
+// hyperextend nor fold through itself.
+const IK = { reachClamp: 0.99, elbowMinDeg: 30, elbowMaxDeg: 164, eps: 1e-6 };
+const _ikA = new THREE.Vector3(), _ikB = new THREE.Vector3(), _ikC = new THREE.Vector3();
+const _ikAB = new THREE.Vector3(), _ikCB = new THREE.Vector3(), _ikAC = new THREE.Vector3();
+const _ikAT = new THREE.Vector3(), _ikAxis = new THREE.Vector3();
+const _ikQ = new THREE.Quaternion(), _ikPW = new THREE.Quaternion(), _ikBW = new THREE.Quaternion();
+
+/** Rotate a bone by a world-space quaternion, converting into its parent space. */
+function rotateBoneWorld(bone, worldQ) {
+  if (!bone || !bone.parent) return;
+  bone.getWorldQuaternion(_ikBW);
+  _ikQ.copy(worldQ).multiply(_ikBW);          // desired world orientation
+  bone.parent.getWorldQuaternion(_ikPW);
+  bone.quaternion.copy(_ikPW.invert().multiply(_ikQ));
+}
+
+/** Solve root->mid->tip so `tip` reaches `target` (a world Vector3).
+ *  Returns the residual distance from tip to target after solving. */
+export function twoBoneIK(root, mid, tip, target, blend) {
+  if (!root || !mid || !tip || !target || blend <= 0) return -1;
+  // (true, TRUE): parents for a correct world transform AND children, so the
+  // mid/tip positions we sample are this frame's, not last frame's.
+  root.updateWorldMatrix(true, true);
+  root.getWorldPosition(_ikA); mid.getWorldPosition(_ikB); tip.getWorldPosition(_ikC);
+  const lAB = _ikA.distanceTo(_ikB), lBC = _ikB.distanceTo(_ikC);
+  if (lAB < IK.eps || lBC < IK.eps) return -1;
+  // clamp the reach so the arm never snaps to a locked-straight pose
+  const maxReach = (lAB + lBC) * IK.reachClamp;
+  _ikAT.copy(target).sub(_ikA);
+  let lAT = _ikAT.length();
+  if (lAT < IK.eps) return -1;
+  if (lAT > maxReach) lAT = maxReach;
+  const minReach = Math.abs(lAB - lBC) + IK.eps;
+  if (lAT < minReach) lAT = minReach;
+
+  // current interior angles
+  _ikAB.copy(_ikB).sub(_ikA); _ikCB.copy(_ikC).sub(_ikB); _ikAC.copy(_ikC).sub(_ikA);
+  const cosCur = THREE.MathUtils.clamp(
+    (lAB * lAB + lBC * lBC - _ikAC.lengthSq()) / (2 * lAB * lBC), -1, 1);
+  // desired elbow interior angle from the law of cosines, clamped to AAOS range
+  let cosWant = THREE.MathUtils.clamp(
+    (lAB * lAB + lBC * lBC - lAT * lAT) / (2 * lAB * lBC), -1, 1);
+  const wantDeg = THREE.MathUtils.clamp(
+    Math.acos(cosWant) * 180 / Math.PI, IK.elbowMinDeg, IK.elbowMaxDeg);
+  const curDeg = Math.acos(cosCur) * 180 / Math.PI;
+
+  // bend axis = normal of the current arm plane; fall back to a stable axis if
+  // the arm is dead straight (cross product degenerate)
+  _ikAxis.crossVectors(_ikAB, _ikCB);
+  if (_ikAxis.lengthSq() < IK.eps) _ikAxis.crossVectors(_ikAB, _ikAT);
+  if (_ikAxis.lengthSq() < IK.eps) return -1;
+  _ikAxis.normalize();
+
+  // 1) bend the elbow to the desired interior angle
+  const dElbow = (wantDeg - curDeg) * Math.PI / 180;
+  if (Math.abs(dElbow) > IK.eps) {
+    _ikQ.setFromAxisAngle(_ikAxis, dElbow * blend);
+    rotateBoneWorld(mid, _ikQ);
+    root.updateWorldMatrix(true, true);
+    tip.getWorldPosition(_ikC);                 // tip moved — resample
+  }
+  // 2) swing the shoulder so the tip lands on the target
+  _ikAC.copy(_ikC).sub(_ikA);
+  _ikAT.copy(target).sub(_ikA);
+  if (_ikAC.lengthSq() > IK.eps && _ikAT.lengthSq() > IK.eps) {
+    _ikQ.setFromUnitVectors(_ikAC.normalize(), _ikAT.normalize());
+    if (blend < 1) _ikQ.slerp(_IDENT, 1 - blend);
+    rotateBoneWorld(root, _ikQ);
+    root.updateWorldMatrix(true, true);
+  }
+  tip.getWorldPosition(_ikC);
+  return _ikC.distanceTo(target);
+}
+const _IDENT = new THREE.Quaternion();
+
 /** ── AIM RIG ──────────────────────────────────────────────────────────────
  *  Replaces two hand-tuned spine gains with a sourced, clamped aim chain.
  *

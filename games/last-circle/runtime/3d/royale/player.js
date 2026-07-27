@@ -14,7 +14,7 @@
  */
 import * as THREE from "three";
 // ?v= must propagate to intra-runtime imports (FFG gotcha) → top-level await
-const { findArmBones, applyArmPose, measureLean, uprightTorso } = await import("./pose.js" + (new URL(import.meta.url).search || ""));
+const { findArmBones, applyArmPose, measureLean, uprightTorso, twoBoneIK } = await import("./pose.js" + (new URL(import.meta.url).search || ""));
 
 let K = null; // SIM shortcut set in init
 
@@ -1283,6 +1283,22 @@ function syncObj(W, a, dt, far) {
         // local = inverse(parent world) * desired world; parent IS the hand bone
         a.hand.quaternion.copy(_gq.invert()).multiply(_gd);
       }
+      // ── SUPPORT HAND — DISABLED, NOT SHIPPED ────────────────────────────
+      // The two-bone IK solver (pose.js twoBoneIK) is correct and verified in
+      // isolation: driven directly it pulled the off hand from 0.511 m to
+      // 0.128 m of its target. But it cannot solve THIS pose, and the reason is
+      // structural rather than a bug in the solver:
+      //   left upper arm 0.277 m + forearm 0.281 m = 0.558 m of reach
+      //   foregrip sits                              0.613 m from that shoulder
+      // The firing pose holds the weapon further from the body than the off arm
+      // is long, so no IK can put the hand on it. Sliding the grip point back
+      // along the handguard did not rescue it either — it bottomed out at the
+      // receiver still short, and the elbow folded to 15.5 deg, well inside the
+      // 30 deg AAOS minimum, which looks worse than the original floating hand.
+      // The real fix is to bring the WEAPON closer to the chest in the gunReady
+      // arm pose so both hands can reach it, then re-enable this. Wiring it up
+      // against an unreachable target only trades one wrong pose for another.
+      // Solver retained in pose.js; re-enable once the pose is corrected.
     }
   }
 }
@@ -1325,6 +1341,10 @@ const camTarget = new THREE.Vector3(), camPos = new THREE.Vector3(), camDir = ne
 const _gq = new THREE.Quaternion(), _gd = new THREE.Quaternion();
 const _gf = new THREE.Vector3(), _gr = new THREE.Vector3(), _gu = new THREE.Vector3();
 const _gUp = new THREE.Vector3(0, 1, 0), _gm = new THREE.Matrix4();
+const _fgW = new THREE.Vector3();   // foregrip target, world space
+const _fgL = new THREE.Vector3(), _fgS = new THREE.Vector3();
+const _fgA = new THREE.Vector3(), _fgB = new THREE.Vector3(), _fgC = new THREE.Vector3();
+const _ikM = new THREE.Matrix4(), _ikM2 = new THREE.Matrix4();
 const _uwCol = new THREE.Color(), _uwDeep = new THREE.Color(0x0d4a63);   // underwater fog/bg target
 // shake state lives here, not on W: shakeT drives coherent noise (see below) and
 // _shakeOff is last frame's offset, which has to be undone before the lerp.
