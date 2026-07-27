@@ -358,10 +358,18 @@ function onMsg(W, { from, t, d }) {
     // OUTSIDE the actor guard on purpose: the match clock rides the host's own
     // state packet, and a packet whose actor has not been created yet (or has
     // been removed) must still deliver the clock.
-    if (d.t != null && !S.net.isHost()) slewClock(W, d.t);
+    if (d.t != null && !S.net.isHost()) {
+      slewClock(W, d.t);
+      // Only the HOST's state packet carries the match clock, so this line
+      // doubles as host identification — the one fact the guest-side watchdog
+      // below needs and previously had nowhere to learn.
+      S.hostSlot = d.id;
+      S.hostSeen = performance.now();
+    }
     return;
   }
   if (t === "bots" && !S.net.isHost()) {
+    S.hostSeen = performance.now();          // bot snapshots only ever come from the host
     for (const b of d.list) {
       const a = W.actorById.get(b.id);
       if (a && a.netRemote) applyRemoteState(W, a, b);
@@ -413,6 +421,13 @@ function onMsg(W, { from, t, d }) {
       import("./bots.js" + (new URL(import.meta.url).search || "")).then((m) => m.attachBrain(W, a));
       send("takeover", { slot: a.id });
     }
+    // the HOST left mid-match: this bye used to be silently ignored by guests
+    // (the branch above is host-only), stranding them in a frozen world — all
+    // ~46 host-simulated bots stop at their last lerp target, the clock stops,
+    // and nothing on screen says why. A clean host exit now converts the match
+    // immediately instead of waiting for the 8s watchdog.
+    if (!S.net.isHost() && S.hostSlot && d.slot === S.hostSlot &&
+        (W.phase === "match" || W.phase === "drop")) hostLost(W);
     return;
   }
   if (t === "takeover") {
@@ -487,6 +502,28 @@ function slewClock(W, hostT) {
  *  stopped pausing offline matches for the rest of the page session.
  *  Called on MAIN MENU rather than inside endMatch, so a future REMATCH can
  *  still reuse the room. */
+/** The host is gone (clean bye, crash, or dead socket): convert the match to a
+ *  LOCAL CONTINUATION rather than stranding the guest in a frozen world. Every
+ *  client runs the full simulation — netRemote actors merely follow snapshots —
+ *  so recovery is: hand every remote actor a bot brain, drop the dead link, and
+ *  tell the player what happened. The match stays winnable; XP still counts. */
+export function hostLost(W) {
+  if (!S || S._hostLostRan) return;
+  S._hostLostRan = true;
+  let converted = 0;
+  for (const a of W.actors) {
+    if (a.netRemote && a !== W.player) {
+      a.netRemote = false; a.isBot = true;
+      import("./bots.js" + (new URL(import.meta.url).search || "")).then((m) => m.attachBrain(W, a));
+      converted++;
+    }
+  }
+  try { S.net && S.net.leave && S.net.leave(); } catch (e) {}
+  W.net = null;                                 // frame gates (hitstop etc.) read this
+  W.events.emit("hostLost", converted);
+  console.warn(`[net] host lost — converted ${converted} remote actors to bots, continuing offline`);
+}
+
 export function leave(W) {
   if (S) {
     try { S.net.leave(); } catch (e) {}
@@ -556,6 +593,18 @@ export function update(W, dt) {
     W._netStats.peers = Object.keys(S.lastSeen).length;
     W._netStats.dropped = S.droppedMsgs || 0;   // shed by the outbound budget, not lost in transit
   }
+  // guest: silent-HOST watchdog. The host-side guest watchdog below has existed
+  // all along, but nothing watched the other direction — a host tab closing,
+  // crashing, or losing its socket left guests in a dead match forever. The
+  // host feeds guests at 12Hz (state) + 10Hz (bots); 8s of silence is ~100
+  // missed packets, far past any transient. This also covers the channel-error
+  // path with no extra API surface: an errored socket delivers nothing, so the
+  // watchdog fires 8s later.
+  if (!S.net.isHost() && S.started && S.hostSeen &&
+      (W.phase === "match" || W.phase === "drop") &&
+      now - S.hostSeen > 8000) {
+    hostLost(W);
+  }
   // host: silent-guest watchdog — no state for 12s mid-match → bot takes over
   if (S.net.isHost() && S.lastSeen && (W.phase === "match" || W.phase === "drop")) {
     for (const id in S.lastSeen) {
@@ -566,7 +615,16 @@ export function update(W, dt) {
     }
   }
   // host: bot snapshots 10Hz (only bots near any human get full rate; far bots 2Hz)
-  if (S.net.isHost() && now - S.lastBots > 100) {
+  // The outbound budget cannot shed state/bots/hitYou/died (all CRITICAL), so
+  // at 4 humans a busy host is billed x3 receivers and can breach Supabase's
+  // 100 msg/s ceiling — which drops the connection, the exact failure the
+  // budget exists to prevent. Scale the bot-snapshot interval with the human
+  // count instead: 10Hz solo-guest, 8Hz at 3, 6.25Hz at 4. interpRemote already
+  // follows the actual snapshot cadence rather than a hardcoded rate, so guests
+  // adapt automatically.
+  const _humans = 1 + (S.lastSeen ? Object.keys(S.lastSeen).length : 0);
+  const _botsMs = _humans >= 4 ? 160 : _humans === 3 ? 125 : 100;
+  if (S.net.isHost() && now - S.lastBots > _botsMs) {
     S.lastBots = now;
     S.botsTick = (S.botsTick || 0) + 1;
     // "near a human" used to mean near W.player.pos — which on the host is the

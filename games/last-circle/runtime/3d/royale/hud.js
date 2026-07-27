@@ -2476,6 +2476,12 @@ function wireEvents(W) {
       pickupMsg("PICKED UP  " + String(data.id).toUpperCase() + " AMMO");
     }
   });
+  // host gone (tab closed, crash, dead socket): net.js converts the match to a
+  // local continuation — the announcement is the difference between "the game
+  // broke" and "the host left, keep playing"
+  W.events.on("hostLost", (converted) => {
+    announce("HOST LEFT", "MATCH CONTINUES OFFLINE — " + converted + " PLAYERS NOW BOT-CONTROLLED", "#ffb36a", 4200, ANN_PRIO.deploy);
+  });
   W.events.on("stormWarning", () => flashMsg("STORM SHRINKS IN 10 SECONDS"));
   W.events.on("stormClosing", () => flashMsg("THE STORM IS CLOSING"));
   W.events.on("playerStormState", (inStorm) => { if (R.stormTint) R.stormTint.style.opacity = inStorm ? "1" : "0"; });
