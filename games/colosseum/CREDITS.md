@@ -5,8 +5,17 @@
 Amphitheatre (`runtime/data/arena_spec.js`). No third-party geometry.
 
 ## Animated animals — Sketchfab, CC-BY 4.0
-**Attribution is required by licence.** These models ship in the build and this
-block must remain reachable from the in-game Credits screen.
+**Attribution is required by licence**, and the licence is only satisfied by
+attribution the player can actually reach. The two models that SHIP in the
+build — Tiger and Panther — are therefore named, with their authors, directly
+on the in-game Credits screen (`runtime/ui/menu.js`); pointing at this file was
+not enough, because this file is not part of the deployed payload.
+
+The remaining rows are evaluation history, kept so the audit trail survives:
+Lion and Leopard were rejected (the "leopard" is an anthropomorphic beast-man,
+and the lion ships 8 primitives with no attack or run clip), Cheetah has an
+animated bounding box that collapses to zero, and the Elephant was never
+staged. None of the four are in `assets/`.
 
 | Model | Author | Source |
 |---|---|---|
@@ -24,6 +33,13 @@ Full upstream manifest: `F:\AssetLibrary\luminascape_pending\animated_replacemen
 ## Characters
 Meshy auto-rigged humanoids from the ForgeFlow shared character set
 (generated in-house; see `reference_meshy_char_rig_calibration`).
+
+## Surfaces / PBR materials
+The `.webp` material sets under `assets/tex` are generated in-house by
+`pipeline/art/gen_pbr_materials.py`: an xAI base image per material, with the
+normal, roughness and AO maps derived locally with numpy/scipy. No third-party
+texture is shipped, so nothing here carries an attribution obligation — this
+entry exists so the absence is recorded rather than merely assumed.
 
 ## Audio
 - **Music** — the owner's own Suno generations (`F:\Music`). Tracks are selected

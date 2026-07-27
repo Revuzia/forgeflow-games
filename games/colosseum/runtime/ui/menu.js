@@ -339,7 +339,16 @@ export class Menu {
       <p>Music from the owner's own compositions. The cornu and the crowd are synthesised in
       WebAudio — no library holds a Roman war horn.</p>
       <div style="margin-top:10px;font-size:10px;letter-spacing:4px;color:${FAINT}">ASSETS</div>
-      <p>Animals: Sketchfab CC-BY (see CREDITS.md). Characters: Meshy. Engine: three.js, MIT.</p>`;
+      <p>Animals — <b style="color:${STONE}">Sketchfab, CC&nbsp;Attribution&nbsp;4.0</b>. Attribution is a
+      licence condition, so the authors of the models that actually ship in this build are named here
+      rather than in a file you cannot open:</p>
+      <ul style="margin:6px 0 6px 18px;padding:0">
+        <li><i>Tiger</i> — Blender Artist (<b style="color:${STONE}">moizmuhammad373</b>)</li>
+        <li><i>Panther &mdash; blue, animated</i> — <b style="color:${STONE}">nolanfa</b></li>
+      </ul>
+      <p style="font-size:11px">Licence: creativecommons.org/licenses/by/4.0/</p>
+      <p>Characters: Meshy auto-rigged humanoids, generated in-house. Surfaces: PBR material sets
+      generated in-house. Impacts and UI one-shots: Kenney, CC0. Engine: three.js r172, MIT.</p>`;
     this._shell("Credits", "COLOSSEUM: SANDS OF GLORY", body, { back: () => this.show(SCREEN.TITLE) });
   }
 
