@@ -70,7 +70,11 @@ export function createActor(W, opts) {
     aimErr: 0, lastShotT: -9, lastDamageT: -9, lastAttacker: null,
     healing: null,           // {id, tLeft}
     obj: new THREE.Group(), rig: null, nameTag: null, weaponMesh: null,
-    anim: "idle", mixerLOD: 0,
+    // was "idle": playAnim early-returns when the requested clip is already the
+    // current one, so the load-time playAnim(a,"idle") never reached rig.play and
+    // any actor that never changed state stood in the rig's REST pose (most
+    // visible on the practice dummies, which never move).
+    anim: null, mixerLOD: 0,
     kills: 0,
     brain: null,
     netRemote: false,        // true = driven by network peer
@@ -144,8 +148,17 @@ function stripRootMotion(clip) {
     if (!/(^|:|\|)(Hips|Root|Armature|mixamorig:?Hips)$/i.test(node)) continue;
     const v = tr.values;
     if (!v || v.length < 3) continue;
-    const x0 = v[0], z0 = v[2];
-    for (let i = 0; i < v.length; i += 3) { v[i] = x0; v[i + 2] = z0; }  // pin XZ, keep Y
+    const x0 = v[0], y0 = v[1], z0 = v[2];
+    // Keeping Y was right for the bob clips (swim +/-3-6 cm, walk/run/crouch
+    // 4-9 cm) but WRONG for jump: the engine already owns the vertical arc, and
+    // the clip bakes ~3.5 m of its own on top, so a 1.38 m jump launched the
+    // model two body-heights up with its feet a metre above the collider.
+    // Strip Y only where the engine drives height.
+    const flatY = /^(jump)$/i.test(clip.name || "");
+    for (let i = 0; i < v.length; i += 3) {
+      v[i] = x0; v[i + 2] = z0;
+      if (flatY) v[i + 1] = y0;
+    }
   }
   return clip;
 }
@@ -1513,7 +1526,14 @@ export function killActor(W, victim, killerId, weaponId) {
   }, 3000);
   // player death → spectate killer
   if (victim === W.player) {
-    victim.spectating = killerId || null;
+    // A storm death passes killerId null (storm.js only credits an attacker who
+    // hurt you in the last 8s), and updateCamera's spectate branch was gated on
+    // `spectating` being truthy — so the most common non-combat death in the
+    // genre pinned the camera to your own corpse for the rest of the match.
+    // Fall back to any survivor so the handover always happens.
+    victim.spectating = killerId
+      || (W.actors.find((x) => x.alive && x !== victim && !x.isDummy) || {}).id
+      || null;
     W.events.emit("playerDied", killerId, weaponId);
   }
 }

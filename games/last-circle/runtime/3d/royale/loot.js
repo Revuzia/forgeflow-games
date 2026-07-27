@@ -494,7 +494,13 @@ function give(W, a, data) {
   if (data.kind === "weapon") {
     const empty = inv.slots.findIndex((s) => !s);
     const guns = inv.slots.filter((s) => s && s.kind === "weapon").length;
-    const slot = { kind: "weapon", id: data.id, rarity: data.rarity || 0, mag: K.WEAPONS[data.id].mag };
+    // Every pickup used to grant a FULL magazine while dropping discarded the
+    // one you had — so with an empty gun and zero reserve you tapped E onto any
+    // floor gun and tapped E back for a free reload, indefinitely. Reserve ammo
+    // is the scarcest resource in the game; this made it irrelevant. Carry the
+    // magazine on the item and honour it coming back in.
+    const slot = { kind: "weapon", id: data.id, rarity: data.rarity || 0,
+                   mag: data.mag != null ? data.mag : K.WEAPONS[data.id].mag };
     // The 3-gun cap used to live ONLY in the human's walkover branch, so bots
     // filled all five slots with guns and could then never pick up a shield or
     // a heal for the rest of the match. An explicit E-swap still works below:
@@ -510,7 +516,7 @@ function give(W, a, data) {
     const tradeIdx = botWouldTradeUp(W, a, data);
     if (tradeIdx >= 0) {
       const old2 = inv.slots[tradeIdx];
-      dropItem(W, a, { kind: "weapon", id: old2.id, rarity: old2.rarity });
+      dropItem(W, a, { kind: "weapon", id: old2.id, rarity: old2.rarity, mag: old2.mag });
       inv.slots[tradeIdx] = slot;
       if (inv.active === tradeIdx) W.equipSlot(a, tradeIdx);
       return true;
@@ -531,7 +537,7 @@ function give(W, a, data) {
       // up a shield again. Refuse instead of quietly breaking the invariant.
       if ((!old || old.kind !== "weapon") && guns >= GUN_CAP) return false;
       if (old && old.kind === "weapon") {
-        dropItem(W, a, { kind: "weapon", id: old.id, rarity: old.rarity });
+        dropItem(W, a, { kind: "weapon", id: old.id, rarity: old.rarity, mag: old.mag });
       } else if (old && old.kind === "consumable") {
         dropItem(W, a, { kind: "consumable", id: old.id, count: old.count || 1 });
       }
@@ -560,7 +566,7 @@ function give(W, a, data) {
     // match, with the prompt still inviting the swap. Mirror the weapon path.
     if (data.swap) {
       const old = inv.slots[inv.active];
-      if (old && old.kind === "weapon") dropItem(W, a, { kind: "weapon", id: old.id, rarity: old.rarity });
+      if (old && old.kind === "weapon") dropItem(W, a, { kind: "weapon", id: old.id, rarity: old.rarity, mag: old.mag });
       else if (old && old.kind === "consumable") dropItem(W, a, { kind: "consumable", id: old.id, count: old.count || 1 });
       inv.slots[inv.active] = { kind: "consumable", id: data.id, count: Math.min(cs.stack, data.count || 1) };
       W.equipSlot(a, inv.active);
@@ -602,7 +608,7 @@ function deathDrop(W, victim) {
   for (let i = 0; i < inv.slots.length; i++) {
     const s = inv.slots[i];
     if (!s) continue;
-    if (s.kind === "weapon") drop({ kind: "weapon", id: s.id, rarity: s.rarity });
+    if (s.kind === "weapon") drop({ kind: "weapon", id: s.id, rarity: s.rarity, mag: s.mag });
     if (s.kind === "consumable" && s.count > 0) drop({ kind: "consumable", id: s.id, count: s.count });
     inv.slots[i] = null;
   }

@@ -522,6 +522,17 @@ export function showMenu(W, startMatch) {
   W.kernel.renderer.domElement.style.cursor = "";
   hideHUD();
   ensureAAAStyles();
+  // Dispose BEFORE clearing. Both disposeMapResources and disposeLootResources
+  // derive their work list by traversing these very groups, and Object3D.clear()
+  // only unparents — so clearing first made the next _startMatch's disposal walk
+  // an empty group and free nothing. Every match entered via MAIN MENU (one of
+  // the two post-match buttons) orphaned a whole map's geometry, materials and
+  // per-match textures. PLAY AGAIN was unaffected, which is why it survived
+  // casual testing.
+  try {
+    if (W.map && W._disposeMap) W._disposeMap(W);
+    if (W._disposeLoot) W._disposeLoot(W);
+  } catch (e) {}
   // clear any leftover match geometry so the cinematic diorama owns the frame
   if (W._groups) {
     for (const name of Object.keys(W._groups)) {

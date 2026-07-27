@@ -570,7 +570,7 @@ function testSegment(W, p, ax, ay, az, bx, by, bz) {
       // was; only the multiplier tightens, to a 0.4 m band in the top 14%.
       const isHead = py > feetY + (headY - feetY) * 0.86 && dh < 0.2;
       const dmg = K.hitDamage(p.weaponId, p.rarity, distFromOrigin, isHead);
-      if (t.netRemote) {
+      if (t.netRemote && !t.isDummy) {
         // remote-owned actor: its client (or the host, for bots) applies damage.
         // The owner id has to ride along: without it net.js stamped every hit as
         // `attacker: W.player.id`, so a host-simulated BOT's kill showed up on the
@@ -668,7 +668,7 @@ function explode(W, x, y, z, weaponId, rarity, ownerId, depth) {
     const k = K.splashScale(d, R + 0.8);
     if (k > 0) {
       const dmg = Math.round(K.hitDamage(weaponId, rarity, 0, false) * k);
-      if (t.netRemote) {
+      if (t.netRemote && !t.isDummy) {
         // remote-owned actor: its own client is authoritative over its HP — route
         // splash through the same path as direct hits so it isn't double-counted.
         // ownerId travels with it for the same attribution reason as the direct-hit

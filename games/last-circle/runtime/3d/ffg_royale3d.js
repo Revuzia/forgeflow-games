@@ -262,6 +262,12 @@ register3d("royale", async function (kernel, content) {
       return await _startMatch(opts || {});
     } finally { W._starting = false; }
   }
+  // hud.js's MAIN MENU path has to run the SAME disposal the match teardown
+  // does, but it cannot import maps.js/loot.js without creating a second
+  // uninitialized module copy — so hand it the functions instead of the modules.
+  W._disposeMap = disposeMapResources;
+  W._disposeLoot = (w) => (lootMod.disposeLootResources ? lootMod.disposeLootResources(w) : null);
+
   async function _startMatch(opts) {
     opts = opts || {};
     W.mapId = opts.mapId || W.mapId;
