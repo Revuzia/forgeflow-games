@@ -1272,6 +1272,7 @@ function interpRemote(W, a, dt) {
 
 // ── camera ───────────────────────────────────────────────────────────────────
 const camTarget = new THREE.Vector3(), camPos = new THREE.Vector3(), camDir = new THREE.Vector3();
+const _uwCol = new THREE.Color(), _uwDeep = new THREE.Color(0x0d4a63);   // underwater fog/bg target
 // shake state lives here, not on W: shakeT drives coherent noise (see below) and
 // _shakeOff is last frame's offset, which has to be undone before the lerp.
 let shakeT = 0;
@@ -1325,6 +1326,15 @@ function updateCamera(W, dt) {
     .addScaledVector(camDir, -dist)
     .add(tmpV.set(cy, 0, -sy).multiplyScalar(sh));
   camPos.y += firstPerson ? 0.05 : 0.25;
+  // Swim camera: the third-person rig lifted the eye to y ~0.37 over a y=0
+  // surface, so you always floated ABOVE the water and it read as a blank
+  // near-opaque sheet — "it wasn't really watching someone swim". Pull the
+  // camera down onto the waterline so the surface cuts across the screen, and
+  // looking down now dips it under (which arms the underwater treatment below).
+  if (focus.swimming && !firstPerson) {
+    const surf = W.map.water ? W.map.water.position.y : (W.map.waterY || 0);
+    camPos.y = Math.min(camPos.y, surf + 0.12) + Math.max(0, focus.pitch) * -1.4;
+  }
   // keep camera out of terrain/structures (skip in first-person — at the eye)
   if (!firstPerson) {
     const minY = W.map.heightAt(camPos.x, camPos.z) + 0.35;
@@ -1361,6 +1371,33 @@ function updateCamera(W, dt) {
     _shakeOff.set(nx * s, ny * s * 0.6, 0);
     cam.position.add(_shakeOff);
     roll = nx * s * 0.11;
+  }
+  // ── underwater treatment ────────────────────────────────────────────────
+  // updateCamera never once looked at waterY, so crossing the surface changed
+  // nothing: no fog, no tint, the single-sided water plane just disappeared, and
+  // you swam through a blank void. Detect submersion here (the camera position is
+  // final) with hysteresis — the swim camTarget sits ~0.15 m over a surface that
+  // bobs +/-0.12, so a bare `<` strobes the whole effect every few seconds.
+  const wy = W.map.waterY;
+  if (wy != null && wy > -900) {
+    const surf = W.map.water ? W.map.water.position.y : wy;
+    const was = !!W._underwater;
+    W._underwater = was ? cam.position.y < surf + 0.06 : cam.position.y < surf - 0.06;
+    // lerp a 0..1 amount so the waterline is a transition, not a pop
+    const tgt = W._underwater ? 1 : 0;
+    W._uw = (W._uw == null ? tgt : W._uw + (tgt - W._uw) * Math.min(1, dt * 4));
+    const fog = W.scene.fog, sf = W.map.fogSurface || { color: W.map.sky, density: 0.0018 };
+    if (fog && W._uw > 0.001) {
+      _uwCol.set(sf.color).lerp(_uwDeep, W._uw);
+      fog.color.copy(_uwCol);
+      fog.density = sf.density + (0.05 - sf.density) * W._uw;
+      if (W.scene.background && W.scene.background.isColor) W.scene.background.copy(_uwCol);
+    } else if (fog && W._uwWasOn) {
+      fog.color.set(sf.color); fog.density = sf.density;
+      if (W.scene.background && W.scene.background.isColor) W.scene.background.set(W.map.sky);
+    }
+    W._uwWasOn = W._uw > 0.001;
+    if (W.__audio && W.__audio.setUnderwater) W.__audio.setUnderwater(W._underwater);
   }
   cam.lookAt(camTarget.x + camDir.x * 8, camTarget.y + camDir.y * 8, camTarget.z + camDir.z * 8);
   if (roll) cam.rotateZ(roll);   // lookAt zeroes roll, so it has to go on after

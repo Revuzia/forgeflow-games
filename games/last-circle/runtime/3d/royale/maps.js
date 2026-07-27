@@ -303,6 +303,7 @@ export async function buildMap(W, mapId) {
   const waterY = K.water ? 0 : -999;
 
   const g = W.group("map");
+  let mapWater = null;   // exposed on the returned map so the camera can test submersion
   g.clear();
   // The match build blocks the main thread for ~1,934 ms warm (all GLBs cached) with
   // exactly one await in front of it, so the loading screen's shimmer bar and its
@@ -403,7 +404,11 @@ export async function buildMap(W, mapId) {
     // set anywhere in this game, so the 0.3 metal fraction was subtracted from the
     // diffuse and reflected pure black. 0.30/0.0 keeps a wide sheen under 1.0.
     const wmat = new THREE.MeshStandardMaterial({
-      color: mapId === "isla_viva" ? 0x2ec9d6 : 0x2f7d8a, transparent: true, opacity: 0.86, roughness: 0.30, metalness: 0.0,
+      // DoubleSide so the surface also exists as a ceiling seen from BELOW — the
+      // camera routinely dips under waterY while swimming, and a single-sided
+      // plane simply vanished, which is half of why underwater read as "blank".
+      color: mapId === "isla_viva" ? 0x2ec9d6 : 0x2f7d8a, transparent: true, opacity: 0.86,
+      roughness: 0.30, metalness: 0.0, side: THREE.DoubleSide,
     });
     let wN = null;
     try {
@@ -415,6 +420,7 @@ export async function buildMap(W, mapId) {
     water.position.y = waterY;
     water.name = "water";
     g.add(water);
+    mapWater = water;
     trackUpdater((dt, t) => {
       water.position.y = waterY + Math.sin(t * 0.7) * 0.12;
       if (wN) { wN.offset.x = t * 0.015; wN.offset.y = t * 0.011; }   // drifting ripples
@@ -1850,25 +1856,61 @@ export async function buildMap(W, mapId) {
     g.add(clutter);
     const _cm = new THREE.Matrix4(), _cq = new THREE.Quaternion(), _cs = new THREE.Vector3(), _cp = new THREE.Vector3();
     const _cy = new THREE.Vector3(0, 1, 0), _hide = new THREE.Matrix4().makeScale(1e-4, 1e-4, 1e-4);
-    let clT = 9, clX = 1e9, clZ = 1e9;
+    // The tufts used to be a golden-angle spiral bolted to the CAMERA: instance i
+    // always sat at (clX + cos(i*GA)*r, ...), so the offset depended only on i and
+    // every tuft was rigidly parented to the camera anchor. Re-snapping that
+    // anchor every 10 m teleported the ENTIRE field to new ground — the "grass
+    // switches so quickly and looks terrible" the owner saw. Nothing was
+    // world-anchored, so nothing held still.
+    //
+    // Now it is a WORLD-SPACE GRID HASH. Walk the fixed integer grid (CELL m) over
+    // the disc around the camera; a cell's jitter, yaw and scale come from
+    // hash2(cellX, cellZ) — so a tuft's world position, orientation and tint NEVER
+    // change as the camera moves. A rebuild only adds cells entering the ring and
+    // drops cells leaving it, and the rim scale-fade makes even that sub-pixel.
+    const CELL = 2.6;                                 // ~0.148 tufts/m^2, matches the old density
+    const FADE0 = 40;                                 // full size to here, shrink to 0 by CL_R
+    let clT = 9, clAX = 1e9, clAZ = 1e9;
     trackUpdater((dt) => {
       clT += dt;
       const cam = W.camera; if (!cam) return;
-      if (clT < 0.75) return;
-      if (Math.hypot(cam.position.x - clX, cam.position.z - clZ) < 10 && clT < 6) return;
-      clT = 0; clX = cam.position.x; clZ = cam.position.z;
-      const GA = 2.399963;                            // golden angle — even ring coverage, no clumping
-      for (let i = 0; i < CL_N; i++) {
-        const r = CL_R * Math.sqrt((i + 0.5) / CL_N), a = i * GA;
-        const x = clX + Math.cos(a) * r, z = clZ + Math.sin(a) * r;
-        const y = heightAt0(x, z);
-        if (y < waterY + 0.35 || Math.abs(x) > HALF - 4 || Math.abs(z) > HALF - 4) { clutter.setMatrixAt(i, _hide); continue; }
-        const s = 0.75 + ((i * 2654435761) % 1000) / 1000 * 0.7;
-        _cm.compose(_cp.set(x, y, z), _cq.setFromAxisAngle(_cy, (i * 1.7) % 6.283), _cs.set(s, s, s));
-        clutter.setMatrixAt(i, _cm);
-        const c = colorAt(mapId, y, x, z, seed);
-        clutter.instanceColor.setXYZ(i, c[0] * 0.82, c[1] * 0.82, c[2] * 0.82);   // darker than the ground it stands on = contact darkening
+      if (clT < 0.5) return;
+      // rebuild only when the camera has walked far enough that the ring content
+      // would actually change, or on a slow watchdog tick
+      if (Math.hypot(cam.position.x - clAX, cam.position.z - clAZ) < CELL && clT < 6) return;
+      clT = 0; clAX = cam.position.x; clAZ = cam.position.z;
+      const cx0 = Math.floor((clAX - CL_R) / CELL), cx1 = Math.ceil((clAX + CL_R) / CELL);
+      const cz0 = Math.floor((clAZ - CL_R) / CELL), cz1 = Math.ceil((clAZ + CL_R) / CELL);
+      const R2 = CL_R * CL_R;
+      let n = 0;
+      for (let ix = cx0; ix <= cx1 && n < CL_N; ix++) {
+        for (let iz = cz0; iz <= cz1 && n < CL_N; iz++) {
+          const h = hash2(ix, iz, seed);
+          const h2 = hash2(ix + 101, iz - 57, seed);
+          // jitter inside the cell so the grid never reads as a lattice
+          const x = (ix + 0.5 + (h - 0.5) * 0.9) * CELL;
+          const z = (iz + 0.5 + (h2 - 0.5) * 0.9) * CELL;
+          const dx = x - clAX, dz = z - clAZ, d2 = dx * dx + dz * dz;
+          if (d2 > R2) continue;                       // outside the disc
+          const y = heightAt0(x, z);
+          if (y < waterY + 0.35 || Math.abs(x) > HALF - 4 || Math.abs(z) > HALF - 4) continue;
+          // rim scale-fade: full to FADE0, smoothstep down to 0 by CL_R, so a tuft
+          // is sub-pixel at the instant it enters or leaves the ring — no visible pop
+          const d = Math.sqrt(d2);
+          let fade = 1;
+          if (d > FADE0) { const t = 1 - (d - FADE0) / (CL_R - FADE0); fade = t * t * (3 - 2 * t); }
+          const s = (0.75 + h * 0.7) * fade;
+          if (s < 0.02) continue;
+          _cm.compose(_cp.set(x, y, z), _cq.setFromAxisAngle(_cy, h2 * 6.283), _cs.set(s, s, s));
+          clutter.setMatrixAt(n, _cm);
+          const c = colorAt(mapId, y, x, z, seed);
+          clutter.instanceColor.setXYZ(n, c[0] * 0.82, c[1] * 0.82, c[2] * 0.82);   // contact darkening
+          n++;
+        }
       }
+      // InstancedMesh with frustumCulled=false honours a shrunken count, so hide
+      // the tail rather than paying to draw it
+      clutter.count = n;
       clutter.instanceMatrix.needsUpdate = true;
       clutter.instanceColor.needsUpdate = true;
     });
@@ -2025,7 +2067,9 @@ export async function buildMap(W, mapId) {
     lootPoints: lootAll, pois, portals,
     randomGroundPos, losBlocked,
     minimap: mm, themeColor: K.themeColor,
-    terrain,
+    terrain, water: mapWater, sky: K.sky,
+    // the look to restore to when the camera surfaces (underwater overrides it)
+    fogSurface: { color: K.sky, density: K.fog },
   };
 }
 

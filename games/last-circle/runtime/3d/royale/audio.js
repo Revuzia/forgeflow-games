@@ -25,9 +25,18 @@ let _lf = null, _lu = null;   // scratch forward/up vectors (THREE arrives with 
 let reloadTimers = [];    // outstanding reload-sequence timers, so a swap can kill them
 let _scoped = false;      // last scopeState — that event re-fires EVERY frame
 
+let uwFilter = null;
 export function init(W) {
   W_ = W;
   wire(W);
+  // player.js's updateCamera calls this on every submersion change
+  W.__audio = W.__audio || {};
+  W.__audio.setUnderwater = (on) => {
+    if (!uwFilter || !ctx) return;
+    // glide the cutoff so the waterline is a swoosh, not a click
+    uwFilter.frequency.setTargetAtTime(on ? 700 : 20000, ctx.currentTime, 0.08);
+  };
+  W.__audio.setVolumes = () => setVolumes(W);
 }
 
 // ── recorded one-shots (Kenney, CC0) ────────────────────────────────────────
@@ -145,7 +154,11 @@ function ensureCtx(W) {
   const lim = ctx.createDynamicsCompressor();
   lim.threshold.value = -6; lim.knee.value = 0; lim.ratio.value = 20;
   lim.attack.value = 0.003; lim.release.value = 0.12;
-  master.connect(lim); lim.connect(ctx.destination);
+  // Underwater muffle: a lowpass the whole master runs through. Open (20 kHz) on
+  // the surface, ~700 Hz when submerged, so going under actually SOUNDS like it.
+  uwFilter = ctx.createBiquadFilter();
+  uwFilter.type = "lowpass"; uwFilter.frequency.value = 20000; uwFilter.Q.value = 0.4;
+  master.connect(uwFilter); uwFilter.connect(lim); lim.connect(ctx.destination);
   sfxBus = ctx.createGain();
   sfxBus.gain.value = W.settings.sfxVol;
   sfxBus.connect(master);
