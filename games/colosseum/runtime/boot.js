@@ -600,6 +600,15 @@ function onCombatSound(e) {
     case "net_free":
       if (e.id === "player" && hud.clearPrompt) hud.clearPrompt();
       break;
+    case "weapon_drop":
+      audio.play("shield_break", { x: e.x, z: e.z, gain: 0.7, rate: 1.3 });
+      audio.crowdSurge(0.5, 0.1);
+      if (e.id === "player" && hud.prompt) hud.prompt("DISARMED — your blade is on the sand!", 3.0);
+      break;
+    case "weapon_pickup":
+      audio.play("click", { gain: 0.7, rate: 1.2 });
+      if (e.id === "player" && hud.clearPrompt) hud.clearPrompt();
+      break;
     case "bypass":
     case "maul":
       // A sica hooking the rim / a cat coming OVER the shield. These landed

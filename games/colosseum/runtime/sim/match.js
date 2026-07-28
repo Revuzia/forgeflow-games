@@ -66,8 +66,17 @@ const TRAITS = {
   unyielding: (f) => { f._traitDieHard = true; },
   // Commodus was never permitted to lose: the crowd is with HIM, and its
   // weight sits on everyone else's shoulders (hostile stamina regen -15%),
-  // while the emperor swings with imperial licence.
-  emperor: (f) => { f._traitAura = "emperor"; ensureMods(f).damage *= 1.1; ensureMods(f).parryWindow *= 1.2; },
+  // while the emperor swings with imperial licence. Verification measured
+  // the original aura-only build going 0-for-30 against parry-competent
+  // play — the longest, bloodiest fights on the card (45 s, 42 hp taken)
+  // that the player nevertheless never lost. The licence now also presses
+  // (shorter exchange breaks) and answers (a near-duelist riposte), so the
+  // parry-turtle rhythm that farmed him has to actually win exchanges.
+  emperor: (f) => {
+    f._traitAura = "emperor";
+    ensureMods(f).damage *= 1.1; ensureMods(f).parryWindow *= 1.2;
+    f._traitBreakScale = 0.6; f._traitRiposteCd = 1.1;
+  },
 };
 function applyTrait(f, trait) {
   if (trait && TRAITS[trait]) { TRAITS[trait](f); f.trait = trait; }
@@ -479,6 +488,17 @@ export class Match {
     // (stantes missi — both sent home standing); here the referee calls it on
     // remaining condition: the side in better shape takes the verdict.
     if (this.stateT - (this._engagementT || 0) > 150) {
+      // THE PIT HAS NO VERDICT. An endless bout that stalls (verified: one
+      // seed's mutual-passivity treadmill ran the clock and the referee
+      // ruled FOR the player — a "no card, no end" mode ending in VICTORIA)
+      // is answered the only way the Pit answers anything: the gate opens
+      // and more men walk out. The engagement clock resets with the wave.
+      if (this.def.endless) {
+        this._engagementT = this.stateT;
+        this.wave++;
+        this._spawnWave();
+        return;
+      }
       const side = (team) => {
         let hp = 0, max = 0;
         for (const f of this.combat.fighters) {

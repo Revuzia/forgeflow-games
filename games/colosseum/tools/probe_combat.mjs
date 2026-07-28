@@ -284,6 +284,43 @@ console.log("\n-- the net --");
   ok(R2.phase === PHASE.RECOVER, "a whiffed cast leaves the netman open");
 }
 
+// --- the disarm --------------------------------------------------------------
+console.log("\n-- the disarm --");
+{
+  // Force guard-breaks across seeds until the 35% disarm roll lands, then
+  // prove the whole loop: drop -> cannot attack -> scramble -> re-arm.
+  let dropped = null, cD = null, victim = null;
+  for (let seed = 1; seed <= 40 && !dropped; seed++) {
+    const c = new Combat({ seed });
+    const A = c.add(fromArmatura("murmillo", { team: 0, x: 0, z: 0, facing: 0 }));
+    const B = c.add(fromArmatura("thraex", { team: 1, x: 0, z: 1.2, facing: Math.PI }));
+    const ev = [];
+    c.onEvent = (e) => ev.push(e.type);
+    // The victim guards on empty stamina so the first blocked hit breaks it.
+    B.stamina = 1;
+    c.command(B, { block: true, blockDir: "high" });
+    c.command(A, { attack: true, attackDir: "high" });
+    for (let t = 0; t < 1.2; t += DT) {
+      c.command(B, { block: true, blockDir: "high" });
+      c.update(DT);
+      if (ev.includes("weapon_drop")) { dropped = ev; cD = c; victim = B; break; }
+    }
+  }
+  ok(!!dropped, "a guard-break can tear the blade loose (weapon_drop seen within 40 seeds)");
+  if (dropped && victim) {
+    ok(victim.disarmed && cD.groundItems.length === 1, "the blade lies on the sand; the fighter is disarmed");
+    ok(!victim.canAttack(), "a disarmed fighter cannot strike");
+    // Walk him onto the blade.
+    const gi = cD.groundItems[0];
+    for (let t = 0; t < 6 && victim.disarmed; t += DT) {
+      const dx = gi.x - victim.x, dz = gi.z - victim.z, d = Math.hypot(dx, dz) || 1;
+      cD.command(victim, { moveX: dx / d, moveZ: dz / d, face: Math.atan2(dx, dz) });
+      cD.update(DT);
+    }
+    ok(!victim.disarmed && cD.groundItems.length === 0, "standing over the blade re-arms him");
+  }
+}
+
 console.log(`\n-- verdict --`);
 console.log(`  ${checks} checks, ${fails} failed`);
 if (fails) { console.log("  COMBAT PROBE: FAIL"); process.exit(1); }

@@ -279,6 +279,20 @@ export class Brain {
     // --- act on the latched decision --------------------------------------
     const reach = s.isBeast && s.beast ? s.beast.reach : s.weapon.reach;
 
+    // DISARMED: nothing matters but the blade on the sand. Scramble to it
+    // with the guard up; combat.js re-arms automatically on arrival.
+    if (s.disarmed && this.combat && this.combat.groundItems) {
+      const gi = this.combat.groundItems.find((g) => g.owner === s.id);
+      if (gi) {
+        const gx = gi.x - s.x, gz = gi.z - s.z;
+        const gd = Math.hypot(gx, gz) || 1;
+        cmd.moveX = gx / gd; cmd.moveZ = gz / gd;
+        cmd.face = Math.atan2(gx, gz);
+        if (!s.isBeast && !s.shieldBroken && !s.guardBroken) { cmd.block = true; cmd.blockDir = DIR.HIGH; }
+        return cmd;
+      }
+    }
+
     // RIPOSTE — the guaranteed answer to a stopped blow. combat.js arms
     // _riposteT on every successful block and parry; inside that window the
     // AI counters IMMEDIATELY (bypassing the exchange break — this swing IS

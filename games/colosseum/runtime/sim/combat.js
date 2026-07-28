@@ -129,6 +129,14 @@ export const FEEL = {
   netCooldown: 8.0,
   netMissRecover: 1.4,     // total open time after a whiffed cast
   netHitRecover: 0.35,
+  // --- THE DISARM (audit #12 — combat that generates its own drama) --------
+  // A guard BREAK can tear the blade loose: it lands on the sand a stride or
+  // two away, the fighter scrambles for it under his shield, and the AI does
+  // the same. RTF's pick-up-anything chaos, in its minimal honest form.
+  disarmChance: 0.35,       // per guard_break
+  disarmFlyMin: 1.4,        // metres the blade travels
+  disarmFlyMax: 2.4,
+  disarmRecoverRadius: 0.85,
 };
 
 let _uid = 1;
@@ -211,6 +219,7 @@ export class Fighter {
     this.netT = 0;          // entangled time remaining
     this.netCd = 0;         // net cooldown (trident kits)
     this.netWindupT = 0;    // a cast in flight
+    this.disarmed = false;  // the blade is on the sand somewhere
   }
 
   get weapon() { return WEAPONS[this.weaponId]; }
@@ -240,6 +249,7 @@ export class Fighter {
     // out of 87% of his own whiffs ~0.3 s after net_miss because RECOVER
     // counts as actionable. Movement stays free; the blade does not.
     return this.canAct() && this.stamina >= FEEL.minAttackStamina &&
+      !this.disarmed &&
       !(this.phase === PHASE.RECOVER && (this._recoverPenalty || 0) > 0);
   }
 }
@@ -255,6 +265,7 @@ export class Combat {
     this.rng = mulberry32(seed);
     this.arena = arena;
     this.fighters = [];
+    this.groundItems = [];    // blades torn loose by guard-breaks
     this.time = 0;
     this.events = [];
     this.onEvent = onEvent;
@@ -361,6 +372,16 @@ export class Combat {
       if (f.netT === 0) this.emit("net_free", { id: f.id });
     }
 
+    // Standing over your own dropped blade picks it back up.
+    if (f.disarmed && f.alive && (f.phase === PHASE.IDLE || f.phase === PHASE.RECOVER)) {
+      const gi = this.groundItems.find((g) => g.owner === f.id);
+      if (gi && Math.hypot(gi.x - f.x, gi.z - f.z) <= FEEL.disarmRecoverRadius) {
+        this.groundItems.splice(this.groundItems.indexOf(gi), 1);
+        f.disarmed = false;
+        this.emit("weapon_pickup", { id: f.id, weaponId: gi.weaponId });
+      }
+    }
+
     // --- the net cast resolves on its own clock ---------------------------
     if (f.netWindupT > 0) {
       f.netWindupT -= dt;
@@ -457,7 +478,7 @@ export class Combat {
     // every other verb off while it winds), 8 s cooldown so each cast is a
     // commitment, resolution in _stepFighter's cast block above.
     if (cmd.net && !f.isBeast && f.weaponId === "trident" && f.canAct() &&
-        (f.netCd || 0) <= 0) {
+        !f.disarmed && (f.netCd || 0) <= 0) {
       f.netWindupT = FEEL.netWindup;
       f.netCd = FEEL.netCooldown;
       this.emit("net_throw", {
@@ -880,6 +901,18 @@ export class Combat {
         target.phaseT = 0;
         target.staggerT = FEEL.guardBreakStagger;
         this.emit("guard_break", { id: target.id });
+        // THE DISARM: sometimes the breaking blow tears the blade loose. It
+        // lands a stride or two away and the fighter cannot strike until he
+        // stands over it again — the scramble is the drama.
+        if (!target.isBeast && !target.disarmed && this.rng() < FEEL.disarmChance) {
+          const a = this.rng() * Math.PI * 2;
+          const fly = FEEL.disarmFlyMin + this.rng() * (FEEL.disarmFlyMax - FEEL.disarmFlyMin);
+          const c2 = clampToEllipse(target.x + Math.sin(a) * fly, target.z + Math.cos(a) * fly,
+            this.arena.playable.a, this.arena.playable.b);
+          this.groundItems.push({ id: `gi${_uid++}`, x: c2.x, z: c2.z, weaponId: target.weaponId, owner: target.id });
+          target.disarmed = true;
+          this.emit("weapon_drop", { id: target.id, x: c2.x, z: c2.z, weaponId: target.weaponId });
+        }
         damageScale *= 0.5;
         // no return — the blow lands, reduced
       } else {

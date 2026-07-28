@@ -276,6 +276,7 @@ export class BoutView {
     for (const id of [...this.actors.keys()]) this.despawn(id);
     this.corpses.length = 0;
     if (this._tilt) { this._tilt.removeFromParent(); this._tilt = null; }
+    if (this._ground) { for (const m of this._ground.values()) m.removeFromParent(); this._ground.clear(); }
   }
 
   // -- per-frame ------------------------------------------------------------
@@ -815,6 +816,32 @@ export class BoutView {
       }
       case "net_miss": {
         if (vfx) vfx.killTelegraph(`net_${e.id}`);
+        break;
+      }
+      case "weapon_drop": {
+        // The blade lies where it fell. The held mesh vanishes from the hand
+        // (the fighter is visibly empty-handed until he stands over it).
+        const mesh = makeWeapon(e.weaponId, WEAPON_MESH[e.weaponId] || makeGladius);
+        mesh.rotation.set(Math.PI / 2, 0, Math.random() * Math.PI * 2);
+        mesh.position.set(e.x, 0.06, e.z);
+        mesh.name = `ground_${e.id}`;
+        this.scene.add(mesh);
+        this._ground = this._ground || new Map();
+        this._ground.set(e.id, mesh);
+        const drec = this.actors.get(e.id);
+        if (drec) drec.actor.model.traverse((o) => {
+          if (o.name === "weapon_mount" && o.parent && /^RightHand$/i.test(o.parent.name)) o.visible = false;
+        });
+        if (sand) sand.splat(e.x, e.z, 0.5, "scuff", 0.5);
+        break;
+      }
+      case "weapon_pickup": {
+        const g = this._ground && this._ground.get(e.id);
+        if (g) { g.removeFromParent(); this._ground.delete(e.id); }
+        const prec = this.actors.get(e.id);
+        if (prec) prec.actor.model.traverse((o) => {
+          if (o.name === "weapon_mount" && o.parent && /^RightHand$/i.test(o.parent.name)) o.visible = true;
+        });
         break;
       }
       case "hit": {

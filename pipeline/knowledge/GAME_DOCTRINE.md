@@ -127,6 +127,36 @@ keep every line load-bearing.
   Re-run the same personas after every combat-layer change; verdicts that
   don't ROUND UP (a claim "beatable at ≥1/3" fails at 6/30 even though the
   build improved) are what keep fixes honest.
+- **A special move is a contract with counters on BOTH sides.** The net's
+  measured rails: the cast telegraphs like any attack AND commits the body
+  (same 0.35× turn damp as a swing — full-rate tracking mid-cast lets the
+  resolved cone drift off the painted one); the catch STRIPS the defensive
+  verb it exists to beat (a netted turtle kept blocking through 94/94 ticks
+  until the gate checked netT); and the whiff is a VERB LOCKOUT, not a slow
+  walk (RECOVER counted as actionable, so the caster counter-attacked out of
+  87% of his own "openings" 0.3 s after the miss).
+- **Data without a consumer is a lie waiting for an audit.** Champion `trait`
+  fields, `twoPhase` flags, unfielded generated bodies — every one shipped as
+  copy with no code reading it. When consuming such data, map each value to
+  sim modifiers and VERIFY each lands numerically (measured here: 0.4× breaks,
+  0.850× aura, 15.9% softer die-hard hits, 10/10 read-parries — every trait
+  exact to its spec).
+- **Feints work when commitment has a visible cost the AI also pays.** The
+  fooled-beat: a committed AI guard whose threat CANCELS hangs on the stale
+  line for one reaction-latency beat — reusing the existing skill latency as
+  the window means one knob scales it from tiro (0.42 s) to legend (0.07 s).
+  Measured: guarded-exchange hit rate 34.9% → 60.6% with the feint. Caveat:
+  vs full-coverage shields the stale line still plain-blocks — feints pay
+  most against direction-gated guards.
+- **An endless mode must never end by referee.** The stall-breaker verdict
+  that saves normal bouts WON an "endless" pit for a passive player (measured:
+  one seed, VICTORIA by decision). In endless, passivity is answered with the
+  next wave and a reset engagement clock, never a ruling.
+- **A final boss that never loses a measured bout is a pushover, whatever the
+  attrition numbers say.** Commodus dealt the most damage and the longest
+  fights on the card — and went 0-for-30 against parry-competent play. "Hard"
+  must include LOSSES at the persona tier that represents a good player, or
+  the crown fight is a ceremony.
 - **Fast closing speeds need SUB-TICK impact resolution** (joust: 22 m/s
   crosses a lance-reach in <2 ticks; solve the crossing instant inside the
   tick and resolve both sides there — never whoever-ticked-first).
