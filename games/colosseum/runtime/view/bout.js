@@ -263,6 +263,14 @@ export class BoutView {
       const f = rec.fighter;
       const a = rec.actor;
 
+      // CEREMONY BEATS ARE CHOREOGRAPHED, NOT IDLED THROUGH. The AAA audit's
+      // finding: 4.4 s of ENTRY, the salute, and the verdict were text
+      // banners over motionless bodies. boot feeds the match state in via
+      // `this.ceremony`; during those beats the view drives the bodies
+      // itself (walk-in from the gates, salute to the box, the victor's
+      // raised weapon) and hands back to the sim untouched at FIGHT.
+      if (this.ceremony && this._ceremonyDrive(rec, dt)) continue;
+
       // Position and facing come straight from the sim.
       a.pos.set(f.x, 0, f.z);
       a.facing = f.facing;
@@ -285,6 +293,66 @@ export class BoutView {
       const ts = (f.hitStop > 0 ? 0.04 : 1) * timeScale;
       a.update(dt * ts, f.speed);
     }
+  }
+
+  /**
+   * Drive one actor through a ceremony beat. Returns true if this actor was
+   * handled (the caller skips the sim-mirror path for this frame).
+   *
+   * ENTRY: walk in from the gate — the player's side through the Porta
+   * Triumphalis, the opposition through the far mouth — arriving settled on
+   * the sim's own marks a beat before the horn. SALUTE: face the editor's
+   * box and raise the guard once. VERDICT: the survivor turns to the box and
+   * raises the blade overhead (the slow cleave windup reads as triumph at
+   * every camera distance). Beasts and mounts keep their own language; the
+   * dead keep dying.
+   */
+  _ceremonyDrive(rec, dt) {
+    const c = this.ceremony;
+    const f = rec.fighter, a = rec.actor;
+    if (!c || rec.mounted || f.isBeast || !f.alive) return false;
+
+    // A virtual editor's box on the north rim — the salute's audience.
+    const boxFacing = Math.atan2(0 - f.x, 24 - f.z);
+
+    if (c.state === "entry") {
+      if (!rec._entry) {
+        const gate = f.team === 0 ? "triumphalis" : "libitinaria";
+        const gp = this.deps.gates ? this.deps.gates.entryPoint(gate, 2.2) : null;
+        rec._entry = { sx: gp ? gp.x : f.x, sz: gp ? gp.z : f.z };
+      }
+      const p = Math.min(1, Math.max(0, (c.t - 0.35) / 3.4));   // settle before the horn
+      const e = p * p * (3 - 2 * p);
+      const dx = f.x - rec._entry.sx, dz = f.z - rec._entry.sz;
+      a.pos.set(rec._entry.sx + dx * e, 0, rec._entry.sz + dz * e);
+      const walking = p > 0.01 && p < 0.99 && Math.hypot(dx, dz) > 0.5;
+      a.facing = walking ? Math.atan2(dx, dz) : f.facing;
+      a.locoDir = 1;
+      a.play(walking ? "walk" : "idle");
+      a.update(dt, walking ? 1.5 : 0);
+      return true;
+    }
+    if (c.state === "salute") {
+      a.pos.set(f.x, 0, f.z);
+      a.facing = boxFacing;
+      if (!rec._saluted) {
+        rec._saluted = true;
+        if (a.hasClip("parry")) a.playOnce("parry", { timeScale: 0.55 });
+      }
+      a.update(dt, 0);
+      return true;
+    }
+    if (c.state === "verdict") {
+      a.pos.set(f.x, 0, f.z);
+      a.facing = boxFacing;
+      if (!rec._triumphed) {
+        rec._triumphed = true;
+        if (a.hasClip("cleave")) a.playOnce("cleave", { timeScale: 0.42 });
+      }
+      a.update(dt, 0);
+      return true;
+    }
+    return false;
   }
 
   /**

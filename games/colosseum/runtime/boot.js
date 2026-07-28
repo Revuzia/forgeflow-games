@@ -944,6 +944,7 @@ function stepSim(dt) {
     // The sim scales its own step during a kill; the view has to move at the
     // same rate or bodies sprint through a slow-motion death.
     const simScale = match.combat.slowMo > 0 ? match.combat.slowMoScale : 1;
+    bout.ceremony = { state: match.state, t: match.stateT };
     bout.update(dt, simScale);
     if (match.state === "exit") bout.dragCorpses(dt, gates.entryPoint("libitinaria", 2.0));
     crowd.lookAt(new THREE.Vector3(p ? p.x : 0, 1, p ? p.z : 0));
@@ -1285,7 +1286,7 @@ window.__FFG3D__ = {
     /** Drive N sim steps with a synthetic player command (for verification). */
     fight: (n = 60, cmd = {}) => {
       if (!match) return null;
-      for (let i = 0; i < n; i++) { match.update(1 / 60, cmd); bout.update(1 / 60); vfx.update(1 / 60); }
+      for (let i = 0; i < n; i++) { match.update(1 / 60, cmd); bout.ceremony = { state: match.state, t: match.stateT }; bout.update(1 / 60); vfx.update(1 / 60); }
       return match.hudState();
     },
     /** Rig diagnostics — proves clips actually bound, not just that files loaded. */
