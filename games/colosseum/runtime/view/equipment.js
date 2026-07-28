@@ -22,6 +22,7 @@
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { hasProp, makeProp } from "./props.js";
 
 // One material for all metal armour, tinted per-vertex — keeps a fully kitted
 // gladiator at a handful of draw calls instead of a dozen.
@@ -574,7 +575,7 @@ export class Equipment {
       if (slot === "loincloth") fitted.length = hl * 2.1;
     }
 
-    const mesh = def.build(fitted);
+    const mesh = this._buildPiece(slot, def, fitted);
     const mount = attachToBone(model, def.bone, mesh, {
       offset: [def.offset[0], def.offset[1] * (L / 0.3), def.offset[2]],
       rot: def.rot,
@@ -583,8 +584,75 @@ export class Equipment {
     });
     restorePose();
     if (mount) { mount.userData.align = def.align; this.mounts.set(slot, mount); }
-    else mesh.geometry.dispose();
+    else if (mesh.geometry && !mesh.userData.sharedGeo) mesh.geometry.dispose();
     return mount;
+  }
+
+  /**
+   * Build the visual for a slot: the generated Meshy prop when its GLB is
+   * loaded, the procedural piece otherwise. The prop is fitted INTO the same
+   * authored envelope the procedural builder would have produced for this
+   * skeleton, so the tuned attach solves and offsets hold for both wardrobes.
+   */
+  _buildPiece(slot, def, fitted) {
+    if (slot === "helmet" && hasProp("galea_murmillo")) {
+      // The procedural galea (no crest) spans x ±0.175, y -0.145..0.155 at
+      // scale 1; `fitted.scale` carries the per-skeleton head fit. Width is
+      // the binding constraint (the head must fit inside), and the helmet's
+      // neckline anchors where the procedural rim sat. The per-skeleton head
+      // fit (fitted.scale) is applied by attachToBone on the mount, so the
+      // prop is fitted at scale 1 here exactly like the procedural build.
+      const prop = makeProp("galea_murmillo", { scaleToWidth: 0.36, minY: -0.15 });
+      if (prop) {
+        // The GLB carries the murmillo crest RIDGE; the coloured horsehair
+        // plume stays procedural so each armatura keeps its identity colour.
+        const plume = new THREE.CylinderGeometry(0.020, 0.034, 0.15, 8);
+        plume.scale(1, 1, 4.0);
+        plume.translate(0, 0.24, 0.006);
+        const pm = new THREE.Mesh(paint(plume, fitted.crestColor ?? CLOTH_RED), ARMOUR_MAT);
+        pm.castShadow = true;
+        const g = new THREE.Group();
+        g.name = "galea";
+        g.userData.sharedGeo = true;   // the prop inside shares geometry
+        g.add(prop, pm);
+        // attachWeapon-style consumers expect the piece pre-scaled; equip()
+        // passes fitted.scale into attachToBone, which scales the mount.
+        return g;
+      }
+    }
+    if (slot === "torso" && hasProp("lorica_musculata")) {
+      // Top-anchored at the shoulder line: the musculata's pteruges hang
+      // below the waist by design, so the binding constraints are chest
+      // width and where the shoulders sit — not total height.
+      //
+      // Width comes from the MEASURED shoulder span (LeftArm<->RightArm joint
+      // distance, rest pose — equip() holds the rest pose while this runs),
+      // not from the spine-derived radius: on the bulky Meshy bodies that
+      // radius fit the cuirass 0.28 m wide against a 0.45 m torso and the
+      // whole piece disappeared inside the chest.
+      const model = this.actor.model;
+      const lA = findBone(model, /^LeftArm$/i);
+      const rA = findBone(model, /^RightArm$/i);
+      const sp = findBone(model, /^Spine01$/i);
+      let span = 0, shoulderY = 0;
+      if (lA && rA && sp) {
+        lA.updateWorldMatrix(true, false); rA.updateWorldMatrix(true, false); sp.updateWorldMatrix(true, false);
+        const a = new THREE.Vector3().setFromMatrixPosition(lA.matrixWorld);
+        const b = new THREE.Vector3().setFromMatrixPosition(rA.matrixWorld);
+        const s = new THREE.Vector3().setFromMatrixPosition(sp.matrixWorld);
+        span = a.distanceTo(b);
+        shoulderY = (a.y + b.y) / 2 - s.y;
+      }
+      // maxY 1.55: the prop's bbox top is its shoulder STRAPS, which rise a
+      // strap's height above the chest shell — anchoring the bbox top at the
+      // arm joints put the pectoral sculpt at the navel (verified capture 32).
+      const prop = makeProp("lorica_musculata", {
+        scaleToWidth: span > 0.1 ? span * 1.30 : fitted.radius * 2.35,
+        maxY: shoulderY > 0.05 ? shoulderY * 1.55 : fitted.height * 1.04,
+      });
+      if (prop) { prop.name = "lorica"; return prop; }
+    }
+    return def.build(fitted);
   }
 
   /**
@@ -619,7 +687,9 @@ export class Equipment {
   unequip(slot) {
     const m = this.mounts.get(slot);
     if (!m) return false;
-    m.traverse((o) => { if (o.isMesh) o.geometry.dispose(); });
+    // Prop clones share their geometry with the template cache — disposing it
+    // would strip the mesh off every other fighter wearing the same piece.
+    m.traverse((o) => { if (o.isMesh && !o.userData.sharedGeo) o.geometry.dispose(); });
     m.removeFromParent();
     this.mounts.delete(slot);
     return true;
@@ -640,7 +710,14 @@ export class Equipment {
     if (has("galea")) this.equip("helmet", { crestColor });
     if (has("manica")) this.equip("armArmour");
     if (has("ocreae")) { this.equip("legArmourL"); this.equip("legArmourR"); }
-    if (has("lorica")) this.equip("torso");
+    if (has("lorica")) {
+      const m = this.equip("torso");
+      // The musculata prop carries its own pteruges skirt; the cloth
+      // subligaculum poking through it read as clipping (capture 32).
+      let isProp = false;
+      if (m) m.traverse((o) => { if (o.userData.sharedGeo) isProp = true; });
+      if (isProp) this.unequip("loincloth");
+    }
     return this.worn();
   }
 

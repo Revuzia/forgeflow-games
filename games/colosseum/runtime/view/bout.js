@@ -20,6 +20,7 @@
 import * as THREE from "three";
 import { PHASE } from "../sim/combat.js";
 import { Actor, attachWeapon, makeGladius, makeScutum, makeTrident, makeLance } from "./actors.js";
+import { makeWeapon } from "./props.js";
 import { Equipment } from "./equipment.js";
 import { ARMATURA_ROSTER } from "../data/roster.js";
 import { damp, clamp } from "../core/util.js";
@@ -192,7 +193,8 @@ export class BoutView {
       actor.equipment = eq;
 
       const maker = WEAPON_MESH[fighter.weaponId] || makeGladius;
-      attachWeapon(actor, maker(), { palm: 0.055 });
+      // Prop-backed blade when its GLB is streamed in, procedural otherwise.
+      attachWeapon(actor, makeWeapon(fighter.weaponId, maker), { palm: 0.055 });
       if (fighter.shieldId && fighter.shieldId !== "none") {
         const small = fighter.shieldId === "parmula";
         attachWeapon(actor, makeScutum(small ? { w: 0.46, h: 0.48, curve: 0.11 } : {}), {

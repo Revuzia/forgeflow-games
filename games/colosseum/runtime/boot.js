@@ -16,6 +16,7 @@ import { Sky } from "./view/sky.js";
 import { Hypogeum } from "./view/hypogeum.js";
 import { Gates } from "./view/gates.js";
 import { loadFighter, loadBeast, Actor, attachWeapon, makeGladius, makeScutum, makeTrident } from "./view/actors.js";
+import { preloadProps, makeWeapon } from "./view/props.js";
 import { clone as skeletonClone } from "three/addons/utils/SkeletonUtils.js";
 import { makeSand } from "./view/sand.js";
 import { Equipment } from "./view/equipment.js";
@@ -253,6 +254,24 @@ try {
 
   scene.add(actors.player.root);
 
+  // Run `fn` only after module evaluation completes. setTimeout(0) is NOT
+  // enough: a fast (local) asset load resolves its .then during a LATER
+  // top-level await, where macrotasks run while `match` is still in its
+  // temporal dead zone — and typeof can't probe a TDZ `let` either. The
+  // end-of-eval __FFG3D__ assignment is the deterministic "eval done" signal.
+  const afterBoot = (fn) => {
+    const go = () => (window.__FFG3D__ ? fn() : setTimeout(go, 100));
+    setTimeout(go, 0);
+  };
+
+  // Meshy equipment props stream in behind the title screen the same way the
+  // tiger does; when they land, the title fighter re-dresses in the real kit.
+  preloadProps().then(() => afterBoot(() => {
+    if (match || !actors.player || !actors.player.equipment) return;
+    actors.player.equipment.applyLoadout({ armour: inventory.armourList() });
+    syncHeldGear(inventory);
+  }));
+
   // Title-screen tiger streams in late and never blocks (see above).
   loadBeast("assets/beasts/tiger.glb").then((beastLib) => {
     actorLibs.beasts.tiger = beastLib;
@@ -267,10 +286,9 @@ try {
     actors.beast.pos.set(2, 0, 6);
     actors.beast.facing = -Math.PI * 0.5;
     actors.beast.play("idle");
-    // `match` is a let declared further down the module; this .then can fire
-    // during an earlier top-level await, inside its temporal dead zone.
-    // Deferring one macrotask lands after module evaluation completes.
-    setTimeout(() => { if (!match) scene.add(actors.beast.root); }, 0);
+    // `match` is a let declared further down the module — same TDZ hazard as
+    // the props above, same afterBoot gate.
+    afterBoot(() => { if (!match) scene.add(actors.beast.root); });
   }).catch((e) => console.warn("[boot] tiger stream-in failed:", e && e.message));
 } catch (e) {
   console.error("[boot] actor load failed:", e);
@@ -412,8 +430,10 @@ async function startMatch(matchId) {
   if (actors.beast) actors.beast.root.visible = false;
 
   // Load exactly the bodies this card calls for BEFORE anyone is spawned,
-  // otherwise the view silently falls back to the shared placeholder.
-  await ensureArmaturaBodies(match.requiredBodies());
+  // otherwise the view silently falls back to the shared placeholder. The
+  // Meshy equipment props ride along — ~1.1 MB once, instant ever after —
+  // so every bout actor gets the real galea/cuirass/blades, never a mix.
+  await Promise.all([ensureArmaturaBodies(match.requiredBodies()), preloadProps()]);
 
   // Beasts load per species, on demand. panther.glb is a REAL staged
   // quadruped (its own clips); species without a staged file fall back to the
@@ -738,11 +758,12 @@ function syncHeldGear(inv) {
   // Drop existing hand mounts.
   const kill = [];
   p.model.traverse((o) => { if (o.name === "weapon_mount") kill.push(o); });
-  kill.forEach((m) => { m.traverse((o) => { if (o.isMesh) o.geometry.dispose(); }); m.removeFromParent(); });
+  // Prop-weapon clones share geometry with the props.js template cache.
+  kill.forEach((m) => { m.traverse((o) => { if (o.isMesh && !o.userData.sharedGeo) o.geometry.dispose(); }); m.removeFromParent(); });
 
   const wid = inv.equipped.weapon;
   const maker = { gladius: makeGladius, spatha: makeGladius, sica: makeGladius, trident: makeTrident, hasta: makeTrident, dimachaerus: makeGladius }[wid] || makeGladius;
-  attachWeapon(p, maker(), { palm: 0.055 });
+  attachWeapon(p, makeWeapon(wid, maker), { palm: 0.055 });
   if (inv.equipped.shield && inv.equipped.shield !== "none") {
     attachWeapon(p, makeScutum(inv.equipped.shield === "parmula" ? { w: 0.44, h: 0.46, curve: 0.10 } : {}), {
       bone: /LeftHand|Hand_L|mixamorig.*LeftHand/i, palm: 0.04, align: "shield",
