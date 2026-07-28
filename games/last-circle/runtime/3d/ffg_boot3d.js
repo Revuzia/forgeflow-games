@@ -57,7 +57,11 @@ function desktopOnlyCard(onPlay) {
 // update becomes the reason a legitimate build refuses to run. "" is file://
 // (hostname is empty) and .pages.dev is every preview deploy; both are used by
 // this repo's own verification workflow, so neither may be dropped.
-const ALLOW = ["", "localhost", "127.0.0.1", "0.0.0.0", "[::1]", "forgeflowgames.com", "www.forgeflowgames.com"];
+// The exact workers.dev host is OUR OWN CDN — it is both the direct-play URL
+// and the src the portal's GamePlayer iframe loads (an iframe's hostname is
+// its own document's host, not the portal's). Exact match only: a ".workers.dev"
+// suffix would license every rehoster who proxies the files through a worker.
+const ALLOW = ["", "localhost", "127.0.0.1", "0.0.0.0", "[::1]", "forgeflowgames.com", "www.forgeflowgames.com", "forgeflow-games-cdn.isimcha85.workers.dev"];
 const SUFFIX = [".forgeflowgames.com", ".pages.dev", ".r2.dev", ".crazygames.com", ".crazygames.dev"];
 const hn = location.hostname;
 const siteOk = ALLOW.includes(hn) || SUFFIX.some((s) => hn.endsWith(s));
