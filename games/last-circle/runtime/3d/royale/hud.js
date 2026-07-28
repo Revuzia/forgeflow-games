@@ -512,6 +512,36 @@ export function showMenu(W, startMatch) {
   W.paused = false;
   if (!W.progress) W.progress = loadProgress();   // the locker needs your level
   W.daily = loadDaily();                          // unconditional — it re-validates against today
+  // CLOUD RESTORE (once per page): the save bridge was WRITE-ONLY — the game
+  // emitted forgeflow:save but never asked for it back, so cross-device
+  // careers never restored (progression refuter's top residual). Ask the
+  // portal shell for slot 1; accept the reply ONLY from the parent frame, and
+  // adopt the cloud career only when it is AHEAD of local (level, then xp) —
+  // a merge must never lose local progress. Guests/standalone no-op.
+  if (!W._cloudLoadAsked && window.parent && window.parent !== window) {
+    W._cloudLoadAsked = true;
+    try {
+      const reqId = "lcload1";
+      const onSaveLoaded = (me) => {
+        if (me.source !== window.parent) return;
+        const d = me.data;
+        if (!d || d.type !== "forgeflow:save_loaded" || d._reqId !== reqId) return;
+        window.removeEventListener("message", onSaveLoaded);
+        const cp = d.data && d.data.progress;
+        if (!cp || typeof cp.level !== "number") return;
+        const lp = W.progress;
+        const cloudAhead = cp.level > lp.level || (cp.level === lp.level && (cp.xp || 0) > (lp.xp || 0));
+        if (cloudAhead) {
+          W.progress = Object.assign({ level: 1, xp: 0, lastPlayedDay: null, dayStreak: 0 }, cp);
+          W.progress.career = newCareer(cp.career);
+          saveProgress(W.progress);
+          flashMsg("CAREER RESTORED FROM CLOUD");
+        }
+      };
+      window.addEventListener("message", onSaveLoaded);
+      window.parent.postMessage({ type: "forgeflow:load", slot: 1, _reqId: reqId }, "*");
+    } catch (e) {}
+  }
   // player.js reads lc_skin straight out of localStorage, so keep the stored
   // value honest here rather than teaching it about unlocks (and importing hud)
   try {
@@ -2596,9 +2626,9 @@ function wireEvents(W) {
   W.events.on("levelUp", (lvl) => {
     const won = MENU_SKINS.some((s) => s.unlockLevel === lvl);
     announce("LEVEL " + lvl, levelUpSub(lvl, W.progress && W.progress.career), "#ffd54a", won ? 3600 : 3000, ANN_PRIO.level);
-    // Exactly levels 3, 6 and 10 — no new detection logic. Guarded call site;
-    // W.hooks.achievement is not defined today, so this is inert (see the same
-    // note in showPostMatch).
+    // Exactly levels 3, 6 and 10 — no new detection logic. LIVE since
+    // 2026-07-28: W.hooks.achievement posts to the portal bridge
+    // (ffg_royale3d.js) and the registry holds the seeded rows.
     if (won && W.hooks && W.hooks.achievement) W.hooks.achievement("skin_level_" + lvl);
   });
   // Picking something up was silent apart from a blip — you could not tell a
