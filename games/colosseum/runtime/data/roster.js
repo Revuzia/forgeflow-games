@@ -358,8 +358,11 @@ export function buildLadder() {
         desc: "A punishment card. Survive it and the crowd will remember." });
   add({ id: "v3", rank: "veteranus", type: "venatio", name: "Numidian Lion", beasts: ["lion"], purse: 250,
         desc: "The signature beast of the games. Heavier than the tiger and far less patient." });
-  add({ id: "v4", rank: "veteranus", type: "tertiarius", name: "The Substitute", opponents: [{ armatura: "murmillo", skill: "veteranus" }], tertiarius: { armatura: "provocator", skill: "veteranus" }, purse: 300,
-        desc: "Win, and a fresh man you were never told about walks out of the gate." });
+  // The substitute is now the SCISSOR — the generated body sat shipped and
+  // unfielded (AAA audit #8). "A fresh man you were never told about" being
+  // the arena's strangest specialist is exactly the card's promise.
+  add({ id: "v4", rank: "veteranus", type: "tertiarius", name: "The Substitute", opponents: [{ armatura: "murmillo", skill: "veteranus" }], tertiarius: { armatura: "scissor", skill: "veteranus" }, purse: 300,
+        desc: "Win, and a fresh man you were never told about walks out of the gate — carrying a blade you have never seen." });
   add({ id: "v5", rank: "veteranus", type: "champion", name: "Spiculus", champion: "spiculus", purse: 380,
         desc: "Nero gave him palaces. He fights like a man with nothing to prove." });
 
@@ -425,6 +428,13 @@ export function buildLadder() {
         desc: "Offered the rudis four times. Refused it four times. He does not understand surrender." });
   add({ id: "l3", rank: "legend", type: "champion", name: "The Emperor", champion: "commodus", purse: 1600,
         desc: "He has never been permitted to lose. The crowd cheers because it must." });
+
+  // THE PIT — what exists after the emperor falls (AAA audit #10: "nothing
+  // after the final bout"). Endless survival: waves promote a skill band
+  // every third clear, the purse rides your kills, and the only score is how
+  // deep you stood. Unlocks by BEATING l3, not merely reaching legend rank.
+  add({ id: "pit", rank: "legend", type: "survival", name: "The Pit", waves: 999, endless: true, requires: "l3", purse: 400,
+        desc: "No card, no verdict, no end. The sand promotes every third wave. Stand as long as you can." });
 
   return L;
 }

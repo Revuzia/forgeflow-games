@@ -316,6 +316,11 @@ export class Combat {
     }
     this.time += dt;
 
+    // Which teams field a living aura-bearer this tick (emperor trait).
+    this._auraTeams = this._auraTeams || new Set();
+    this._auraTeams.clear();
+    for (const f of this.fighters) if (f.alive && f._traitAura) this._auraTeams.add(f.team);
+
     for (const f of this.fighters) this._stepFighter(f, dt);
     this._separate();
     return this.events;
@@ -331,7 +336,10 @@ export class Combat {
     const cmd = f._cmd || {};
 
     // --- stamina ---------------------------------------------------------
-    const regen = f.blocking ? f.mob.staminaRegen * 0.35 : f.mob.staminaRegen;
+    let regen = f.blocking ? f.mob.staminaRegen * 0.35 : f.mob.staminaRegen;
+    regen *= f._traitRegen || 1;                         // the iron pair
+    // The emperor's aura: the crowd's weight sits on his enemies' lungs.
+    if (this._auraTeams && this._auraTeams.size && !this._auraTeams.has(f.team)) regen *= 0.85;
     if (f.phase === PHASE.IDLE || f.phase === PHASE.RECOVER) {
       f.stamina = Math.min(f.maxStamina, f.stamina + regen * dt);
     }
@@ -826,7 +834,8 @@ export class Combat {
       // A weapon guard has no boards behind it: the stop costs more wind and
       // there is no shield to soak — but there is also no shieldHp to lose.
       const guardMult = weaponGuard ? FEEL.weaponGuardCostMult : (1 - sh.stability * 0.35);
-      const cost = w.damage * FEEL.blockStaminaCost * impact * dirMult * guardMult;
+      const cost = w.damage * FEEL.blockStaminaCost * impact * dirMult * guardMult *
+        (target._traitBlockCost || 1);                   // the iron pair
       target.stamina -= cost;
       if (!weaponGuard) target.shieldHp -= w.damage * (1 - sh.block);
       attacker.hitStop = FEEL.hitStopSeconds * 0.7;
@@ -834,7 +843,8 @@ export class Combat {
       // who swings into a read guard is the one who gets hit. Mismatched
       // catches (on the boards, not the read) earn nothing, and the cooldown
       // keeps counters from becoming an unanswerable wall.
-      if (dirMatched && (this.time - (target._riposteGrantT ?? -99)) > FEEL.riposteCooldown) {
+      if (dirMatched && (this.time - (target._riposteGrantT ?? -99)) >
+          (target._traitRiposteCd ?? FEEL.riposteCooldown)) {
         target._riposteT = FEEL.riposteWindow;
         target._riposteGrantT = this.time;
       }
@@ -904,6 +914,9 @@ export class Combat {
     if (attacker.comboCount > 0) dmg *= 1 + Math.min(0.35, attacker.comboCount * 0.09);
     // Small deterministic spread so identical exchanges are not identical.
     dmg *= 0.9 + this.rng() * 0.2;
+    // The die-hard (Flamma): below 30% hp the blows land softer on a man who
+    // has already survived thirty-four fights' worth of them.
+    if (target._traitDieHard && target.hp < target.maxHp * 0.3) dmg *= 0.85;
     dmg = Math.max(1, dmg);
 
     target.hp -= dmg;
@@ -927,7 +940,9 @@ export class Combat {
     if (FEEL.interruptOnWindup && target.phase === PHASE.WINDUP) {
       const wprog = target.phaseT / Math.max(0.01, this._windup(target));
       const immune = (target._poiseT || 0) > 0 ||
-        (this.time - (target._lastInterruptT ?? -99)) < FEEL.interruptImmunity;
+        (this.time - (target._lastInterruptT ?? -99)) < FEEL.interruptImmunity ||
+        // The die-hard stops flinching when the end is close.
+        (target._traitDieHard && target.hp < target.maxHp * 0.3);
       if (wprog < FEEL.interruptWindow && !immune) {
         target.phase = PHASE.STAGGER;
         target.phaseT = 0;

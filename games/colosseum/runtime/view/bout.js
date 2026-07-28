@@ -318,6 +318,8 @@ export class BoutView {
       a.pos.set(f.x, 0, f.z);
       a.facing = f.facing;
       a.speed = f.speed;
+      // The guard pose reads this: which line the shield actually covers.
+      a.blockDir = f.blocking ? f.blockDir : null;
 
       if (rec.mounted) { this._driveMounted(rec, dt); continue; }
       this._driveAnimation(rec, dt);

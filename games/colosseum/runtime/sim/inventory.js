@@ -90,6 +90,8 @@ export class Inventory {
     this.kills = 0;
     this.matchesPlayed = 0;
     this.completed = {};          // matchId -> true
+    this.records = {};            // matchId -> {w, l} — your history with each card
+    this.pitBest = 0;             // deepest wave stood in The Pit
     // Everyone starts with the bare minimum: a gladius and a loincloth.
     this.owned = { weapon: ["gladius"], shield: ["none"], armour: [] };
     this.equipped = { weapon: "gladius", shield: "none", helmet: null, arm: null, legs: null, torso: null };
@@ -315,6 +317,11 @@ export class Inventory {
     this.matchesPlayed++;
     if (won) this.wins++; else this.losses++;
     if (won && matchId) this.completed[matchId] = true;
+    // Your history with this card — recurring opponents remember you.
+    if (matchId) {
+      const r = (this.records[matchId] = this.records[matchId] || { w: 0, l: 0 });
+      if (won) r.w++; else r.l++;
+    }
 
     // A bout is exhausting, and it refreshes the training slots before the next.
     this.attrs.addMatchFatigue(won ? 20 : 28);
@@ -336,6 +343,7 @@ export class Inventory {
       name: this.name, gold: this.gold,
       wins: this.wins, losses: this.losses, kills: this.kills,
       matchesPlayed: this.matchesPlayed, completed: this.completed,
+      records: this.records, pitBest: this.pitBest,
       owned: this.owned, equipped: this.equipped,
       settings: this.settings, createdAt: this.createdAt,
       attrs: this.attrs.toJSON(),
@@ -359,6 +367,8 @@ export class Inventory {
     this.kills = migrated.kills | 0;
     this.matchesPlayed = migrated.matchesPlayed | 0;
     this.completed = migrated.completed || {};
+    this.records = migrated.records || {};
+    this.pitBest = migrated.pitBest | 0;
     this.settings = migrated.settings || {};
     this.createdAt = migrated.createdAt || null;
     this.attrs = new Attributes(migrated.attrs || null);

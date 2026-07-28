@@ -211,6 +211,15 @@ export class Brain {
     // tick — a block is a held stance, and issuing it on one tick would leave
     // the guard down when the blow actually lands.
     if (!threatened) {
+      // THE FEINT LANDS. If the AI had committed a guard to a swing that
+      // VANISHED (the player's attack-cancel — a feint), the guard HANGS on
+      // the stale line for one reaction-latency beat before the brain
+      // catches up. That beat is the outplay window the audit said defence
+      // never offered: bait the block high, cancel, cut low. Skill scales it
+      // naturally — a tiro hangs fooled for 0.42 s, a legend for 0.07.
+      if (this._reaction && this._reaction.kind === "block" && !(this._fooledT > 0)) {
+        this._fooledT = this.skill.latency;
+      }
       this._reaction = null;
     } else {
       const key = t.id + ":" + t.swingSeq;
@@ -244,6 +253,7 @@ export class Brain {
       if (r.kind === "block") {
         cmd.block = true;                       // HELD for the whole swing
         cmd.blockDir = t.attackDir || DIR.HIGH;
+        this._lastBlockDir = cmd.blockDir;      // the line the feint exploits
         return cmd;
       }
       if (r.kind === "dodge" && !r.fired && s.stamina > FEEL.dodgeStamina) {
@@ -252,6 +262,16 @@ export class Brain {
         // Sidestep rather than backpedal — retreating just invites the follow-up.
         cmd.moveX = Math.cos(face) * this.circleDir;
         cmd.moveZ = -Math.sin(face) * this.circleDir;
+        return cmd;
+      }
+    }
+
+    // The fooled beat: hold the STALE guard line the feint drew, then wake.
+    if (this._fooledT > 0) {
+      this._fooledT -= dt;
+      if (!s.isBeast && !s.shieldBroken && !s.guardBroken) {
+        cmd.block = true;
+        cmd.blockDir = this._lastBlockDir || DIR.HIGH;
         return cmd;
       }
     }
@@ -318,7 +338,7 @@ export class Brain {
         // cycles, a 2-3 blow burst plus this 0.9-2.3 s break lands the overall
         // rhythm in that measured band — circling, guard up, resetting the
         // spacing, then pressing again.
-        this._exchange.breakT = 0.9 + this.style.patience * 1.4;
+        this._exchange.breakT = (0.9 + this.style.patience * 1.4) * (s._traitBreakScale || 1);
       }
     }
     if (this._exchange.breakT > 0) {

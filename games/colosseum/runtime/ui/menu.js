@@ -212,7 +212,8 @@ export class Menu {
         ${attrRow("agility", "Agility")}${attrRow("skill", "Skill")}
       </div>`;
 
-    const nextMatch = this.ladder.find((m) => !inv.completed[m.id] && this._rankOk(m));
+    const nextMatch = this.ladder.find((m) => !inv.completed[m.id] && this._rankOk(m) &&
+      (!m.requires || !!inv.completed[m.requires]));
     body.appendChild(this._btn("Enter the Arena",
       nextMatch ? `Next: ${nextMatch.name}` : "No bouts remain at your rank", () => this.show(SCREEN.MATCHES),
       { accent: true, disabled: !nextMatch }));
@@ -241,7 +242,9 @@ export class Menu {
     const inv = this.inv;
     let lastRank = null;
     for (const m of this.ladder) {
-      const unlocked = this._rankOk(m);
+      // `requires` gates on BEATING a specific card (The Pit needs l3 won),
+      // on top of the rank gate.
+      const unlocked = this._rankOk(m) && (!m.requires || !!inv.completed[m.requires]);
       const done = !!inv.completed[m.id];
       if (m.rank !== lastRank) {
         lastRank = m.rank;
@@ -250,9 +253,13 @@ export class Menu {
         h.textContent = m.rank.toUpperCase();
         body.appendChild(h);
       }
+      // Your history with this card — a rival remembered is a rival.
+      const rec = inv.records && inv.records[m.id];
+      let recTxt = rec && (rec.w + rec.l) > 0 ? ` · you ${rec.w}–${rec.l}` : "";
+      if (m.endless && inv.pitBest > 0) recTxt = ` · deepest: wave ${inv.pitBest}`;
       body.appendChild(this._btn(
         `${done ? "✓ " : ""}${m.name}`,
-        `${m.type} · ${m.purse} aurei${done ? " · already won" : ""}${!unlocked ? " · locked" : ""}`,
+        `${m.type} · ${m.purse} aurei${recTxt}${done ? " · already won" : ""}${!unlocked ? " · locked" : ""}`,
         () => { this.hide(); if (this.hooks.onStartMatch) this.hooks.onStartMatch(m.id); },
         { disabled: !unlocked, accent: unlocked && !done }));
     }

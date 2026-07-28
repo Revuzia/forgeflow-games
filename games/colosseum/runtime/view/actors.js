@@ -641,7 +641,19 @@ export class Actor {
 
     // Fighter frame: +Z forward, +X his left (verified against the sim, which
     // defines facing = atan2(dx, dz)).
-    _ikGoal.set(0.14, 1.16, 0.34);
+    //
+    // THE GUARD LINE IS VISIBLE (audit #11: "no opponent guard stance is
+    // ever displayed"): the shield target shifts with blockDir — raised for
+    // a high guard, swung wide for the flank lines, dropped and forward
+    // against the thrust — so reading WHERE a guard sits (and aiming around
+    // it, or feinting it out of line) is played on the body, not the HUD.
+    // bout.js feeds actor.blockDir from the sim each frame.
+    const gd = this.blockDir;
+    if (gd === "high") _ikGoal.set(0.06, 1.42, 0.30);
+    else if (gd === "left") _ikGoal.set(0.34, 1.14, 0.30);
+    else if (gd === "right") _ikGoal.set(-0.16, 1.10, 0.32);
+    else if (gd === "thrust") _ikGoal.set(0.10, 0.98, 0.40);
+    else _ikGoal.set(0.14, 1.16, 0.34);
     this.root.localToWorld(_ikGoal);
     twoBoneIK(arm.upper, arm.fore, arm.hand, _ikGoal, this._guardW);
 

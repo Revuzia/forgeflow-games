@@ -38,6 +38,41 @@ export const STATE = {
 /** Beat lengths in seconds. */
 const BEAT = { entry: 4.4, salute: 2.2, verdict: 3.2, exit: 3.0 };
 
+// ---------------------------------------------------------------------------
+// CHAMPION TRAITS — the boss identity, finally consumed. The roster carried a
+// `trait` string on every named champion and NOTHING read it (the AAA audit's
+// #8: six marquee bouts collapsing to re-skinned duels). Each trait maps to
+// real sim modifiers the combat/AI layers already know how to honour, and
+// each is written from the champion's own attested blurb.
+// ---------------------------------------------------------------------------
+function ensureMods(f) {
+  return (f.mods = f.mods || { damage: 1, windup: 1, parryWindow: 1 });
+}
+const TRAITS = {
+  // Tetraites "fights like a man who knows he is already famous" — pressure
+  // that never lets up: barely rests between exchanges, hits a shade harder.
+  relentless: (f) => { ensureMods(f).damage *= 1.08; f._traitBreakScale = 0.4; },
+  // Spiculus "fights with the ease of a man with nothing left to prove" —
+  // the parry master: a wider timed-block window and a near-instant riposte.
+  duelist: (f) => { ensureMods(f).parryWindow *= 1.6; f._traitRiposteCd = 0.9; },
+  // Verus and Priscus "do not tire and do not yield" — the iron pair:
+  // deeper stamina, faster recovery, blocks that cost a third less.
+  iron: (f) => {
+    f.maxStamina = Math.round(f.maxStamina * 1.2); f.stamina = f.maxStamina;
+    f._traitRegen = 1.35; f._traitBlockCost = 0.7;
+  },
+  // Flamma survived thirty-four fights and refused the rudis four times —
+  // below 30% hp he stops flinching and hits do less: the die-hard.
+  unyielding: (f) => { f._traitDieHard = true; },
+  // Commodus was never permitted to lose: the crowd is with HIM, and its
+  // weight sits on everyone else's shoulders (hostile stamina regen -15%),
+  // while the emperor swings with imperial licence.
+  emperor: (f) => { f._traitAura = "emperor"; ensureMods(f).damage *= 1.1; ensureMods(f).parryWindow *= 1.2; },
+};
+function applyTrait(f, trait) {
+  if (trait && TRAITS[trait]) { TRAITS[trait](f); f.trait = trait; }
+}
+
 export class Match {
   /**
    * @param {object} opts
@@ -175,6 +210,7 @@ export class Match {
         f.champion = c;
         f.armaturaId = c.armatura;
         f.displayTitle = c.title;
+        applyTrait(f, c.trait);
         return { fighter: f, skill: c.skill, style: a.style };
       }
     }
@@ -519,11 +555,20 @@ export class Match {
       this._cue("interval", { wave: this.wave + 1 });
     }
     const pool = ["thraex", "murmillo", "hoplomachus", "dimachaerus"];
-    const n = 1 + Math.floor(this.wave / 2);
+    // Attacker count is capped by the token system anyway; 3 on the sand is
+    // pressure, more is a queue.
+    const n = Math.min(3, 1 + Math.floor(this.wave / 2));
+    // THE PIT (endless): the sand itself promotes. Skill climbs a band every
+    // three cleared waves, so depth — not the clock — is the difficulty curve
+    // and the deepest-wave record means something.
+    const PIT_BANDS = ["gregarius", "veteranus", "primus", "champion", "legend"];
+    const pitSkill = this.def.endless
+      ? PIT_BANDS[Math.min(PIT_BANDS.length - 1, Math.floor(this.wave / 3))]
+      : null;
     const fresh = [];
     for (let i = 0; i < n; i++) {
       const made = this._makeOpponent(
-        { armatura: pool[Math.floor(this.rng() * pool.length)], skill: this.def.opponents?.[0]?.skill || "gregarius" },
+        { armatura: pool[Math.floor(this.rng() * pool.length)], skill: pitSkill || this.def.opponents?.[0]?.skill || "gregarius" },
         i, 1
       );
       const f = this.combat.add(made.fighter);
@@ -572,12 +617,15 @@ export class Match {
       damageTaken: this._dmgTaken || 0,
       blocks: this._blocks || 0,
     });
+    // The Pit's score is DEPTH — record it before the save below.
+    if (this.def.endless) this.inv.pitBest = Math.max(this.inv.pitBest || 0, this.wave + 1);
     this.result = {
       ...v, flawless, kills: this.playerKills,
       purse: settled.purse, gold: settled.gold,
       rankUp: settled.rankUp ? settled.rankUp.name : null,
       rank: settled.rank.name,
       duration: +this.time.toFixed(1),
+      wave: this.wave + 1,
     };
     this.inv.save();
     this._setState(STATE.DONE);

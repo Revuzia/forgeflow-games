@@ -28,7 +28,7 @@ import { Post } from "./view/post.js";
 import { VFX } from "./view/vfx.js";
 import { HUD } from "./ui/hud.js";
 import { Input } from "./core/input.js";
-import { LADDER } from "./data/roster.js";
+import { LADDER, CHAMPIONS } from "./data/roster.js";
 import { Audio } from "./core/audio.js";
 import { Menu, SCREEN } from "./ui/menu.js";
 import { ARENA } from "./data/arena_spec.js";
@@ -393,7 +393,24 @@ async function startMatch(matchId) {
       onState: (s, m) => {
         if (s === STATE.ENTRY) { audio.crowdStart(); audio.music("prematch", { fade: 1.0 }); }
         else if (s === STATE.FIGHT) audio.music(def.type === "champion" ? "boss" : "combat", { fade: 1.6 });
-        if (s === STATE.SALUTE) hud.banner(def.name.toUpperCase(), def.desc || "", 2.6);
+        if (s === STATE.SALUTE) {
+          // A named champion gets his own card: name, epithet, and the trait
+          // line — the crowd already knows him; now the player does too.
+          const champ = def.champion && CHAMPIONS.find((c) => c.id === def.champion);
+          if (champ) {
+            const TRAIT_LINES = {
+              relentless: "He does not rest between exchanges.",
+              duelist: "Time your blows — he parries what he reads.",
+              iron: "He does not tire. His guard does not break.",
+              unyielding: "Wounded, he only hardens.",
+              emperor: "The crowd is his. Your lungs will feel it.",
+            };
+            hud.banner(champ.name.toUpperCase(),
+              `${champ.title} — ${TRAIT_LINES[champ.trait] || ""}`, 3.2);
+          } else {
+            hud.banner(def.name.toUpperCase(), def.desc || "", 2.6);
+          }
+        }
         else if (s === STATE.FIGHT) hud.banner("BEGIN", "", 1.1);
         else if (s === STATE.VERDICT) {
           const v = m.verdict || {};
