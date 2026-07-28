@@ -162,7 +162,12 @@ register3d("royale", async function (kernel, content) {
     // so the +/-55 m frustum could never reject one), and rasterisation is bounded by
     // the fixed map resolution. Texel density stays finer than the old medium tier —
     // medium 220 m/2048 = 10.7 cm, high 300 m/4096 = 7.3 cm — for 2-3x the radius.
-    const SHADOW_EXT = { low: 55, medium: 110, high: 160 };
+    // widened again 2026-07-27 (rescore held the visuals band partly on shadow
+    // radius): high 160->220 (440 m span / 4096 = 10.7 cm/texel — exactly the
+    // texel density medium shipped at, so quality precedent exists), medium
+    // 110->150. normalBias 0.05 below is the walk-up the earlier comment
+    // prescribed for wider extents.
+    const SHADOW_EXT = { low: 55, medium: 150, high: 220 };
     if (shadows && kernel.sun) {
       const ext = SHADOW_EXT[tier] || 55;
       const sc = kernel.sun.shadow.camera;
@@ -180,7 +185,7 @@ register3d("royale", async function (kernel, content) {
       // at the wider extents above one texel covers ~2x the ground, so 0.02 no
       // longer clears self-shadow acne on the terrain. Walk it back toward 0.03 if
       // contact shadows detach from wall bases (peter-panning) when facing the sun.
-      kernel.sun.shadow.normalBias = 0.04;
+      kernel.sun.shadow.normalBias = 0.05;   // one texel now covers ~1.4x the ground of the 160 m tune
       W._shadowExt = ext;
       if (!kernel.sun.target.parent) W.scene.add(kernel.sun.target);
       const sz = SHADOW[tier] || 2048;

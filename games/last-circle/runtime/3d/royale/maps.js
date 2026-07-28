@@ -806,17 +806,17 @@ export async function buildMap(W, mapId) {
       const HEAD_H = 1.50, HEAD_Y = fy + 3.25;      // spans fy+2.50..fy+4.00
       if (f === 0) {
         const dw = 1.8;
-        addBox(x - W2 / 2 - dw / 4, fy + FH / 2, z + W2, W2 - dw / 2, FH, T, color);
-        addBox(x + W2 / 2 + dw / 4, fy + FH / 2, z + W2, W2 - dw / 2, FH, T, color);
-        addBox(x, fy + FH - 0.5, z + W2, dw, 1, T, color);
-        addBox(x, fy + FH / 2, z - W2, fw, FH, T, color);
-        addBox(x - W2, fy + FH / 2, z, T, FH, fw, color);
-        addBox(x + W2, fy + FH / 2, z, T, FH, fw, color);
+        addBox(x - W2 / 2 - dw / 4, fy + FH / 2, z + W2, W2 - dw / 2, FH, T, color, { tex: "block" });
+        addBox(x + W2 / 2 + dw / 4, fy + FH / 2, z + W2, W2 - dw / 2, FH, T, color, { tex: "block" });
+        addBox(x, fy + FH - 0.5, z + W2, dw, 1, T, color, { tex: "block" });
+        addBox(x, fy + FH / 2, z - W2, fw, FH, T, color, { tex: "block" });
+        addBox(x - W2, fy + FH / 2, z, T, FH, fw, color, { tex: "block" });
+        addBox(x + W2, fy + FH / 2, z, T, FH, fw, color, { tex: "block" });
       } else {
-        addBox(x, SILL_Y, z + W2, fw, SILL_H, T, color); addBox(x, HEAD_Y, z + W2, fw, HEAD_H, T, color);
-        addBox(x, SILL_Y, z - W2, fw, SILL_H, T, color); addBox(x, HEAD_Y, z - W2, fw, HEAD_H, T, color);
-        addBox(x - W2, SILL_Y, z, T, SILL_H, fw, color); addBox(x - W2, HEAD_Y, z, T, HEAD_H, fw, color);
-        addBox(x + W2, SILL_Y, z, T, SILL_H, fw, color); addBox(x + W2, HEAD_Y, z, T, HEAD_H, fw, color);
+        addBox(x, SILL_Y, z + W2, fw, SILL_H, T, color, { tex: "block" }); addBox(x, HEAD_Y, z + W2, fw, HEAD_H, T, color, { tex: "block" });
+        addBox(x, SILL_Y, z - W2, fw, SILL_H, T, color, { tex: "block" }); addBox(x, HEAD_Y, z - W2, fw, HEAD_H, T, color, { tex: "block" });
+        addBox(x - W2, SILL_Y, z, T, SILL_H, fw, color, { tex: "block" }); addBox(x - W2, HEAD_Y, z, T, HEAD_H, fw, color, { tex: "block" });
+        addBox(x + W2, SILL_Y, z, T, SILL_H, fw, color, { tex: "block" }); addBox(x + W2, HEAD_Y, z, T, HEAD_H, fw, color, { tex: "block" });
       }
       // interior ramp to next floor
       if (f < floors - 1) addRamp(x + (f % 2 ? -fw / 4 : fw / 4), fy, z, 2.2, FH, fw * 0.7, f % 2 ? 3 : 2, shade(color, 0.7));
@@ -1334,8 +1334,8 @@ export async function buildMap(W, mapId) {
         const x = p.x + (rng() - 0.5) * p.r * 1.2, z = p.z + (rng() - 0.5) * p.r * 1.2;
         const y = heightAt0(x, z);
         const s = 3 + rng() * 3;
-        addBox(x, y + s / 2, z, s, s, s, C_STONE);
-        addBox(x, y + s + 0.8, z, s * 1.3, 1.6, s * 1.3, shade(C_STONE, 0.85));
+        addBox(x, y + s / 2, z, s, s, s, C_STONE, { tex: "block" });
+        addBox(x, y + s + 0.8, z, s * 1.3, 1.6, s * 1.3, shade(C_STONE, 0.85), { tex: "block" });
         if (i % 2 === 0) chest(x, y + s + 1.9, z, p.id);
         // The old ramp rose only to the CUBE top (height s) — but the cap sits
         // directly on that top, 1.6 m tall and 30% wider, so the ramp's last
