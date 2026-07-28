@@ -141,6 +141,14 @@ async function buildProtos(W) {
         });
         if (front > back) { m.rotation.y += Math.PI; m.updateMatrixWorld(true); }
       }
+      // MANUAL 180-degree overrides (owner playtest 2026-07-28, verified by
+      // side-view screenshots): the muzzle-thin/stock-dense heuristic picks
+      // WRONG when the fore-end out-clusters the stock — the AR's rail/mag
+      // block and the launcher's rear venturi bell both fooled it, so those
+      // two shipped stock-forward. Pistol/shotgun verified correct; judge by
+      // SCREENSHOT before adding to this table, never by the heuristic.
+      const WPN_FLIP = { ar: true, glauncher: true };
+      if (WPN_FLIP[id]) { m.rotation.y += Math.PI; m.updateMatrixWorld(true); }
       const size = bb.setFromObject(m).getSize(new THREE.Vector3());
       const s = WPN_LEN[id] / Math.max(size.x, size.y, size.z, 0.001);
       m.scale.setScalar(s);

@@ -2266,7 +2266,10 @@ function renderThumb(proto, cacheKey, tilt) {
   const c = bbox.getCenter(new THREE.Vector3());
   const span = bbox.getSize(new THREE.Vector3()).length();
   m.position.sub(c);
-  m.rotation.set(tilt != null ? tilt : 0.2, -Math.PI / 2 + 0.45, 0);   // 3/4 profile
+  // +PI/2: the proto barrel is +Z, and +90deg about Y maps +Z to +X = muzzle
+  // pointing screen-RIGHT — the FD/industry hotbar convention (owner report:
+  // every icon faced left; -PI/2 mapped the barrel to -X)
+  m.rotation.set(tilt != null ? tilt : 0.2, Math.PI / 2 - 0.45, 0);   // 3/4 profile
   iconCam.position.set(0, span * 0.12, span * 1.35);
   iconCam.lookAt(0, 0, 0);
   iconR.render(iconScene, iconCam);
