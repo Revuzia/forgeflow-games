@@ -234,7 +234,13 @@ export class Fighter {
   }
 
   canAttack() {
-    return this.canAct() && this.stamina >= FEEL.minAttackStamina;
+    // A PENALIZED recover is a verb lockout, not just slow feet: the whiffed
+    // net cast promises "total open time" and the dodged beast lunge promises
+    // a counter-window — verification measured the netman counter-attacking
+    // out of 87% of his own whiffs ~0.3 s after net_miss because RECOVER
+    // counts as actionable. Movement stays free; the blade does not.
+    return this.canAct() && this.stamina >= FEEL.minAttackStamina &&
+      !(this.phase === PHASE.RECOVER && (this._recoverPenalty || 0) > 0);
   }
 }
 
@@ -428,8 +434,12 @@ export class Combat {
     // shields to BOTH sides specifically to teach the guard, and the guard
     // verb being dead there locked novices out of the whole game (0/21 t1
     // wins, 70% of their deaths while holding the inert block).
+    // !(netT>0): the catch STRIPS the guard — verification caught a netted
+    // victim holding block through 94/94 entangled ticks and blocking the
+    // netman's follow-up for zero, which made the catch nearly free against
+    // exactly the turtling player the retiarius exists to punish.
     f.blocking = !!cmd.block && !f.isBeast && !f.shieldBroken &&
-                 !f.guardBroken &&
+                 !f.guardBroken && !(f.netT > 0) &&
                  (f.phase === PHASE.IDLE || f.phase === PHASE.RECOVER);
     if (cmd.blockDir) f.blockDir = cmd.blockDir;
 
@@ -559,6 +569,7 @@ export class Combat {
         let sp = f.currentSpeed();
         if (f.blocking) sp *= 0.45;                      // shield walk
         if (f.phase === PHASE.RECOVER) sp *= 0.6;
+        if (f.netWindupT > 0) sp *= 0.5;                 // casting is a commitment
         vx = (mx / len) * sp; vz = (mz / len) * sp;
       }
     }
@@ -573,7 +584,13 @@ export class Combat {
     // --- facing ----------------------------------------------------------
     if (cmd.face !== undefined && cmd.face !== null) {
       const d = angleDelta(f.facing, cmd.face);
-      const maxTurn = f.mob.turnRate * dt * (f.phase === PHASE.WINDUP ? 0.35 : 1);
+      // A net cast commits the body like a swing does: the same 0.35x turn
+      // damp applies while the mesh is in the air (verification measured a
+      // full-rate chasing caster tracking a dodging target through his own
+      // windup — radial retreat still beats it, but the cone the telegraph
+      // paints must be roughly the cone that resolves).
+      const committed = f.phase === PHASE.WINDUP || f.netWindupT > 0;
+      const maxTurn = f.mob.turnRate * dt * (committed ? 0.35 : 1);
       f.facing += clamp(d, -maxTurn, maxTurn);
     }
   }

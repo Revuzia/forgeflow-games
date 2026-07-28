@@ -513,9 +513,13 @@ export class Brain {
     const inRange = dist <= reach * 0.95;
     const closeish = dist <= reach * 1.7;
 
-    // OPPORTUNITY: the enemy is in recovery or stagger and cannot answer. A
-    // skilled AI punishes this almost every time; a poor one rarely notices.
-    const openWindow = t.phase === PHASE.RECOVER || t.phase === PHASE.STAGGER;
+    // OPPORTUNITY: the enemy is in recovery, stagger — or wrapped in a net —
+    // and cannot answer. A skilled AI punishes this almost every time; a poor
+    // one rarely notices. (netT: verification measured the netman converting
+    // only 4/15 of his own catches because nothing told him the window was
+    // open — the spacer sometimes RETREATED off his own successful cast.)
+    const openWindow = t.phase === PHASE.RECOVER || t.phase === PHASE.STAGGER ||
+      (t.netT || 0) > 0;
     const opportunity = openWindow && closeish ? sk.punish : 0;
 
     // Weights are tuned so that a bout CONVERGES. Every option that keeps
