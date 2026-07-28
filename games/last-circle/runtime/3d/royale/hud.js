@@ -1567,6 +1567,13 @@ export function showHUD(W) {
   R.scope = h("div", { position: "absolute", inset: "0", display: "none", background: "radial-gradient(circle at center, rgba(0,0,0,0) 26%, rgba(0,0,0,0.92) 27%)", pointerEvents: "none" }, null, L);
   const scLine = h("div", { position: "absolute", left: "50%", top: "50%", width: "40%", height: "1px", background: "rgba(255,255,255,0.5)", transform: "translate(-50%,-50%)" }, null, R.scope);
   h("div", { position: "absolute", left: "50%", top: "50%", width: "1px", height: "40%", background: "rgba(255,255,255,0.5)", transform: "translate(-50%,-50%)" }, null, R.scope);
+  // BREATH METER — the how-to card says "watch your lungs" and until this bar
+  // there was nothing to watch (sweep finding): a thin vertical gauge just
+  // right of the scope centre, cyan draining as you hold, red while WINDED.
+  // Lives inside R.scope so it exists exactly when the mechanic does.
+  const bWrap = h("div", { position: "absolute", left: "calc(50% + 120px)", top: "50%", width: "7px", height: "90px", transform: "translateY(-50%)", background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.25)", borderRadius: "4px", overflow: "hidden" }, null, R.scope);
+  h("div", { position: "absolute", left: "calc(50% + 132px)", top: "calc(50% - 58px)", fontSize: "11px", fontFamily: "Rajdhani, " + FONT, fontWeight: "700", letterSpacing: "1px", color: "rgba(255,255,255,0.65)", textShadow: "0 1px 3px #000" }, "BREATH", R.scope);
+  R.breathFill = h("div", { position: "absolute", left: "0", bottom: "0", width: "100%", height: "100%", background: "#7fd8ff", transition: "height .1s linear" }, null, bWrap);
   const bottomLeft = h("div", { position: "absolute", left: "18px", bottom: "16px", width: "300px" }, null, L);
   // hp/shield — Final Drop style: icon + bar with % inside
   const mkBar = (icon, color) => {
@@ -2489,6 +2496,15 @@ function wireEvents(W) {
   W.events.on("stormClosing", () => flashMsg("THE STORM IS CLOSING"));
   W.events.on("playerStormState", (inStorm) => { if (R.stormTint) R.stormTint.style.opacity = inStorm ? "1" : "0"; });
   W.events.on("scopeState", (on) => { if (R.scope) R.scope.style.display = on ? "block" : "none"; });
+  // breath gauge follows W._breathT/W._winded (weapons.js sway block) while
+  // the scope overlay is up — driven here rather than in update() so it costs
+  // nothing when unscoped
+  W.kernel.onUpdate(() => {
+    if (!R.breathFill || !R.scope || R.scope.style.display === "none") return;
+    const t = W._breathT == null ? 5 : W._breathT;
+    R.breathFill.style.height = Math.round((t / 5) * 100) + "%";
+    R.breathFill.style.background = W._winded ? "#ff6a6a" : "#7fd8ff";
+  });
   W.events.on("toggleBigMap", () => toggleBigMap(W));
   W.events.on("escPressed", () => {
     if (R.settings) { closeSettings(W); return; }   // close the topmost modal first
@@ -2692,6 +2708,11 @@ function showDeath(W, killerId, weaponId) {
   if (killer && killer.alive) h("div", { fontSize: "13px", opacity: "0.8", alignSelf: "center" }, "Spectating " + killer.name, row);
   const btn = h("button", Object.assign({}, BTN, { background: "#57b0ff", color: "#fff" }), "MATCH STATS", row);
   btn.onclick = () => W.endMatch(false);
+  // spectate cycling existed since the A/D handler shipped but was taught
+  // NOWHERE (sweep finding) — the one screen every spectator passes through
+  // is the place to say it
+  h("div", { fontSize: "12px", opacity: "0.55", marginTop: "8px", letterSpacing: "0.5px" },
+    "A / D — watch someone else", box);
 }
 
 /** The winning kill's banner + feed used to be destroyed in the frame they were
