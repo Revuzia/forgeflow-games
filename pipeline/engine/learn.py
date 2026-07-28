@@ -62,14 +62,43 @@ def ingest_gate_report(report_path, genre=None):
     return added
 
 
+DOCTRINE = Path(__file__).resolve().parent.parent / "knowledge" / "GAME_DOCTRINE.md"
+
+
+def doctrine_block():
+    """The curated cross-game doctrine's PROMPT CORE section.
+
+    GAME_DOCTRINE.md is the human/agent-readable body of everything the
+    catalogue has paid to learn (Meshy rigging, combat feel, rendering,
+    verification); its final `## PROMPT CORE` section is the compressed,
+    machine-injected form. Separated so the doctrine can grow without
+    bloating every build prompt.
+    """
+    try:
+        text = DOCTRINE.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    marker = "## PROMPT CORE"
+    # rfind: the doctrine's intro MENTIONS the marker in prose; the real
+    # section is the last occurrence.
+    i = text.rfind(marker)
+    if i < 0:
+        return ""
+    return text[i + len(marker):].strip()
+
+
 def prompt_block(genre):
     rules = relevant_rules(genre)
-    if not rules:
-        return ""
-    lines = ["LEARNED RULES (from past failures — obey strictly):"]
-    for i, r in enumerate(rules, 1):
-        lines.append(f"  {i}. {r}")
-    return "\n".join(lines)
+    parts = []
+    doctrine = doctrine_block()
+    if doctrine:
+        parts.append(doctrine)
+    if rules:
+        lines = ["LEARNED RULES (from past failures — obey strictly):"]
+        for i, r in enumerate(rules, 1):
+            lines.append(f"  {i}. {r}")
+        parts.append("\n".join(lines))
+    return "\n\n".join(parts)
 
 
 if __name__ == "__main__":
