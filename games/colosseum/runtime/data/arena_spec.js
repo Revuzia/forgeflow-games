@@ -141,7 +141,15 @@ export const ARENA = {
     morning:  { azimuth: 1.05, elevation: 0.42, sun: 0xffd9a8, ambient: 0x6f7d96, intensity: 2.6, fog: 0xcfc4ac, exposure: 1.05 },
     midday:   { azimuth: 0.30, elevation: 1.18, sun: 0xfff3dc, ambient: 0x8fa0b8, intensity: 3.2, fog: 0xd8cfba, exposure: 1.00 },
     afternoon:{ azimuth: -0.85, elevation: 0.62, sun: 0xffc98a, ambient: 0x7d86a0, intensity: 2.8, fog: 0xd2bfa0, exposure: 1.08 },
-    dusk:     { azimuth: -1.35, elevation: 0.20, sun: 0xff9b52, ambient: 0x4e4a68, intensity: 2.1, fog: 0xb08a68, exposure: 1.18 },
+    // DUSK IS AMBIENT-LIT BY GEOMETRY: a 48 m wall shadows ~145 m of floor at
+    // any believable dusk elevation (tan 0.32 ≈ 0.33), so no sun angle can
+    // rake the sand — verified twice by capture before doing the trig. The
+    // drama has to come from the EVENING AIR instead: a warm bright ambient
+    // (the torch-and-brazier hour) with the low sun painting only the cavea
+    // and the crowd. Ambient lifted 0x4e4a68 -> 0x8f6f66, exposure 1.18 ->
+    // 1.34, so champion-tier fighters read fully at dusk instead of as
+    // silhouettes.
+    dusk:     { azimuth: -1.35, elevation: 0.32, sun: 0xff9b52, ambient: 0x8f6f66, intensity: 2.3, fog: 0xb08a68, exposure: 1.34 },
   },
 };
 

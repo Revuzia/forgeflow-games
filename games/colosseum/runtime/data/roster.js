@@ -253,7 +253,7 @@ export const BEAST_ROSTER = [
   { id: "panther",   name: "Panther",   asset: "panther", profile: "panther", tier: 1, origin: "Africa",         note: "Fast, nervous, hit-and-run." },
   { id: "lion",      name: "Lion",      asset: null,      profile: "lion",    tier: 2, origin: "Numidia",        note: "The signature beast of the games. Asset needs a primitive merge and borrowed clips." },
   { id: "boar",      name: "Boar",      asset: null,      profile: "tiger",   tier: 1, origin: "Italy / Gaul",   note: "Common venatio quarry. Asset on F: needs a merge." },
-  { id: "bison",     name: "Aurochs",   asset: null,      profile: "lion",    tier: 2, origin: "Germania",       note: "Stands in for the aurochs — attested and enormous." },
+  { id: "bison",     name: "Aurochs",   asset: "bison",   profile: "bison",   tier: 2, origin: "Germania",       note: "A real staged body with its own charge — no longer a tiger wearing a bull's name." },
   { id: "crocodile", name: "Crocodile", asset: null,      profile: "panther", tier: 3, origin: "Aegyptus",       note: "Staged in flooded arenas. Asset needs a merge." },
 ];
 

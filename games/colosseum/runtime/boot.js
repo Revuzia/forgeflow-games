@@ -435,6 +435,30 @@ async function startMatch(matchId) {
   // so every bout actor gets the real galea/cuirass/blades, never a mix.
   await Promise.all([ensureArmaturaBodies(match.requiredBodies()), preloadProps()]);
 
+  // THE DAY IS THE CAREER'S CLOCK. Four authored lighting presets shipped
+  // while every bout ran hardcoded "afternoon" — arena_spec's own comment
+  // calls the moving sun the most cinematic thing in the scene. A tiro
+  // fights in the cool morning card; the marquee bouts own the dusk. The
+  // env-map re-bake keeps every metal honest under the new sky.
+  const TOD_BY_RANK = {
+    tiro: "morning", gregarius: "midday", veteranus: "afternoon",
+    primus: "afternoon", champion: "dusk", legend: "dusk",
+  };
+  const tod = TOD_BY_RANK[def.rank] || "afternoon";
+  if (sky.todKey !== tod) {
+    sky.setTimeOfDay(tod);
+    renderer.toneMappingExposure = sky.exposure();
+    try { sky.bakeEnvironment(renderer); } catch (e) { console.warn("[boot] env re-bake failed:", e && e.message); }
+    // The mid/far crowd impostors are UNLIT quads baked under afternoon
+    // light — at dusk they glowed like a stadium of lamps over a dark floor.
+    // MeshBasicMaterial.color multiplies the atlas, so a scalar per preset
+    // keeps the baked variety while following the sun down.
+    const dim = { morning: 0.92, midday: 1.0, afternoon: 1.0, dusk: 0.58 }[tod] ?? 1.0;
+    crowd.group.traverse((o) => {
+      if (o.material && o.material.isMeshBasicMaterial) o.material.color.setScalar(dim);
+    });
+  }
+
   // Beasts load per species, on demand. panther.glb is a REAL staged
   // quadruped (its own clips); species without a staged file fall back to the
   // tiger with a console warning instead of silently wearing stripes.

@@ -84,6 +84,21 @@ export const BEAST_PROFILES = {
     style: "beast",
     desc: "Heavier and less patient than a tiger. Comes straight down the middle.",
   },
+  // The AUROCHS (bestiary id "bison" — _makeBeast keys profiles by beast id).
+  // Not a cat: half a tonne of charging bull. Slow to wind, brutal to catch,
+  // nearly impossible to make retreat, with the longest commit range in the
+  // game — the fight is matador work: bait the charge, punish the long
+  // recover the dodge-grace mechanic stretches even further. Previously this
+  // bout quietly spawned lion stats inside a tiger body, which is exactly the
+  // advertised-but-not-shipped credibility hit the AAA audit ranked #5.
+  bison: {
+    id: "bison", name: "Aurochs",
+    hp: 260, damage: 41, reach: 1.7, speedMult: 1.02,
+    windup: 0.72, active: 0.20, recover: 1.35,
+    chargeRange: 9.5, stalkRange: 12.0, retreatHp: 0.08,
+    style: "beast",
+    desc: "Half a tonne of Germanic aurochs. It does not stalk — it charges.",
+  },
   panther: {
     id: "panther", name: "Panther",
     hp: 140, damage: 28, reach: 1.7, speedMult: 1.45,

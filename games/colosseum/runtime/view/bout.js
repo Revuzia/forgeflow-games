@@ -73,7 +73,15 @@ const STRIKE_FRAC = {
 const BEAST_CLIPS = {
   tiger: { idle: "Idle_Lie Prone", walk: "Walk", run: "Run", attack: "Attack", hit: "Howl", death: "Eat" },
   panther: { idle: "idle", walk: "walk regular", run: "run", attack: "jump regular", hit: "idle", death: "sits" },
+  // The aurochs — same animal pack as the warhorse, so the clip names match
+  // that convention. Headbutt IS the charge strike.
+  bison: { idle: "Idle", walk: "Walk", run: "Gallop", attack: "Attack_Headbutt", hit: "Idle_HitReact_Left", death: "Death" },
 };
+
+// Quadrupeds are sized by BODY LENGTH (nose to tail-base), per species. One
+// hardcoded 2.05 m made every animal tiger-sized — an aurochs at house-cat
+// scale is the opposite of the bout's promise.
+const BEAST_LENGTH = { tiger: 2.05, panther: 1.8, bison: 2.7 };
 
 // Scratch for _seatRider — per-frame, never allocated in the loop.
 const _tmpRight = new THREE.Vector3();
@@ -174,7 +182,7 @@ export class BoutView {
       const lib = this.libs.beasts && (this.libs.beasts[fighter.beast?.id] || this.libs.beasts.tiger);
       if (!lib) return null;
       actor = new Actor(lib, {
-        length: 2.05, name: fighter.id, restClip: "Idle",
+        length: BEAST_LENGTH[fighter.beast?.id] || 2.05, name: fighter.id, restClip: "Idle",
         clipMap: fighter._clipMap || BEAST_CLIPS.tiger,
       });
     } else {
@@ -676,6 +684,19 @@ export class BoutView {
         break;
       }
       case "death": {
+        // THE EXECUTION. anim_finisher.glb shipped in every character, sat in
+        // the clip tables and the strike-timing map, and was triggered by
+        // NOTHING — every kill in a 32-bout career was the same slow-mo over
+        // a generic swing (the AAA audit's best impact-per-lift finding).
+        // The killer, if standing over the kill, sells the blow the sim just
+        // resolved: playOnce falls back to idle when the clip is absent, and
+        // beasts keep their own kill language.
+        const killer = e.by && this.actors.get(e.by);
+        if (killer && !killer.mounted && killer.actor && !killer.fighter.isBeast &&
+            killer.fighter.alive && killer.actor.hasClip && killer.actor.hasClip("finisher")) {
+          const kd = Math.hypot(killer.fighter.x - e.x, killer.fighter.z - e.z);
+          if (kd < 2.6) killer.actor.playOnce("finisher", { fade: 0.06 });
+        }
         if (sand) {
           sand.splat(e.x, e.z, 1.05, "blood", 1.0);
           sand.splat(e.x, e.z, 1.5, "scuff", 0.5);
