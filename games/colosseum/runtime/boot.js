@@ -376,6 +376,8 @@ async function startMatch(matchId) {
 function endMatch() {
   if (bout) { bout.clear(); bout = null; }
   match = null;
+  paused = false;          // a dead match must never leave the sim frozen
+  _buf.attack = null; _buf.dodge = 0;
   combatCam.enabled = false;
   hud.hide();
   audio.crowdStop();
@@ -497,12 +499,72 @@ const menu = new Menu(document.getElementById("hud"), {
 // Returning from the armoury/blacksmith/training goes back to the hub.
 armoury.hooks.onClose = () => { if (!match) menu.show(SCREEN.HUB); };
 
+// ---------------------------------------------------------------------------
+// Pause
+// ---------------------------------------------------------------------------
+// ESC used to call endMatch() directly: the bout was destroyed with no
+// confirmation, no verdict, no purse, no recorded loss and no gear wear —
+// a free rewind of any losing fight, on the key every player presses in their
+// first session. There was also no pause of any kind: the fixed-step loop ran
+// unconditionally and window.__PAUSE__ (which the shell's pause button and the
+// fullscreen-exit handler in game_controls.js drive) was never assigned, so
+// both silently no-opped.
+let paused = false;
+// Buffered player intents — see the INPUT BUFFER block in stepSim.
+const _buf = { attack: null, dodge: 0 };
+
+function setPaused(on) {
+  paused = !!on;
+  if (paused) {
+    audio.music("menu", { fade: 0.6 });
+  } else if (match) {
+    audio.music(match.def.type === "champion" ? "boss" : "combat", { fade: 0.8 });
+  }
+}
+
+function pauseMatch() {
+  if (!match || paused) return;
+  setPaused(true);
+  menu.show(SCREEN.PAUSE);
+}
+
+menu.hooks.onResume = () => { setPaused(false); menu.hide(); };
+menu.hooks.onForfeit = () => {
+  // Route the forfeit through the SAME verdict path a defeat takes, so the
+  // loss, the purse and the wear are all real. _decide(false) moves the match
+  // to VERDICT; the normal beat flow then runs EXIT and _finish -> settle.
+  setPaused(false);
+  menu.hide();
+  if (match && !match.result) match._decide(false);
+};
+
+// The shell contract every sibling FFG game exposes (see aether-isles
+// runtime/ffg_shell.js): the portal pause button and the fullscreen-exit
+// auto-pause both drive this object.
+window.__PAUSE__ = {
+  pause: () => pauseMatch(),
+  resume: () => { if (paused) { setPaused(false); if (menu.screen === SCREEN.PAUSE) menu.hide(); } },
+  toggle: () => { paused ? window.__PAUSE__.resume() : pauseMatch(); },
+  get paused() { return paused; },
+};
+
 window.addEventListener("keydown", (e) => {
-  if (e.code === "Tab") { e.preventDefault(); if (!menu.screen || menu.screen === SCREEN.NONE) armoury.toggle(); }
+  if (e.code === "Tab") {
+    e.preventDefault();
+    // The armoury is a between-bouts screen. Opening it MID-BOUT left the sim
+    // running while shop clicks fired attacks into the live fight.
+    if (match && !paused) return;
+    if (!menu.screen || menu.screen === SCREEN.NONE) armoury.toggle();
+  }
   if (e.code === "Escape") {
     e.preventDefault();
     if (armoury.open) { armoury.hide(); return; }
-    if (match) { endMatch(); menu.show(SCREEN.HUB); return; }
+    if (match) {
+      if (!paused) pauseMatch();
+      else if (menu.screen === SCREEN.PAUSE) { setPaused(false); menu.hide(); }
+      // paused but deeper in a submenu (Settings): let the menu's Back handle it
+      return;
+    }
     menu.show(menu.screen === SCREEN.NONE ? SCREEN.HUB : SCREEN.NONE);
   }
 });
@@ -608,6 +670,10 @@ const cueLog = [];
  * This is also the multiplayer seam: a server tick calls exactly this.
  */
 function stepSim(dt) {
+  // Paused = frozen HERE, not just in the rAF accumulator — the verification
+  // harness's step() drives stepSim directly, and a pause that only the
+  // requestAnimationFrame path respects is a pause that cannot be tested.
+  if (paused) return;
   crowd.update(dt);
 
   // --- the live bout ------------------------------------------------------
@@ -626,7 +692,32 @@ function stepSim(dt) {
     // lookYaw, NOT yaw — see CombatCamera.lookYaw. `yaw` is where the camera
     // sits; input must be rotated into where it looks.
     const cmd = input.command({ cameraYaw: combatCam.lookYaw, targetAngle });
+
+    // INPUT BUFFER — a press during your own swing is a queued intent, not a
+    // dropped one. wasPressed() is edge-triggered and cleared every frame, and
+    // canAttack() is false through the whole 0.52-0.98 s windup+active window,
+    // so a combo input landing mid-swing simply vanished: the standard action-
+    // game buffer (Souls, DMC, God of War all ship one) holds the last press
+    // for 0.35 s and fires it on the first tick it becomes valid. The buffer
+    // clears when the sim ACCEPTS the action (phase edge), watched below.
+    const nowS = match.time;
+    if (p && p.alive) {
+      if (cmd.attack) _buf.attack = { t: nowS, dir: cmd.attackDir, heavy: cmd.heavy };
+      else if (_buf.attack && nowS - _buf.attack.t < 0.35 && p.canAttack()) {
+        cmd.attack = true; cmd.attackDir = _buf.attack.dir; cmd.heavy = _buf.attack.heavy;
+      } else if (_buf.attack && nowS - _buf.attack.t >= 0.35) _buf.attack = null;
+      if (cmd.dodge) _buf.dodge = nowS;
+      else if (_buf.dodge && nowS - _buf.dodge < 0.35 && p.canAct() && p.stamina >= 22) {
+        cmd.dodge = true;
+      } else if (_buf.dodge && nowS - _buf.dodge >= 0.35) _buf.dodge = 0;
+    }
+    const prevPhase = p ? p.phase : null;
     match.update(dt, cmd);
+    // Accepted? The phase edge is the receipt.
+    if (p) {
+      if (_buf.attack && p.phase === "windup" && prevPhase !== "windup") _buf.attack = null;
+      if (_buf.dodge && p.phase === "dodge" && prevPhase !== "dodge") _buf.dodge = 0;
+    }
     input.consume();
 
     // The sim scales its own step during a kill; the view has to move at the
@@ -730,7 +821,14 @@ function frame(now) {
 
   // Clamp so a tab-switch stall doesn't fast-forward the simulation.
   const dt = Math.min(rawMs / 1000, 0.1);
-  acc += dt;
+  // While paused the accumulator is DISCARDED, not banked — if it kept
+  // accumulating, resume would fast-forward up to five sim steps per frame
+  // until the debt drained, which reads as the fight lurching to catch up.
+  if (paused) {
+    acc = 0;
+  } else {
+    acc += dt;
+  }
   let steps = 0;
   while (acc >= FIXED_DT && steps < 5) {
     stepSim(FIXED_DT);

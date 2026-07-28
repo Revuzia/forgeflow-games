@@ -20,7 +20,8 @@ const FAINT = "#6f6047";
 
 export const SCREEN = {
   TITLE: "title", HUB: "hub", MATCHES: "matches",
-  SETTINGS: "settings", RESULTS: "results", CREDITS: "credits", NONE: "none",
+  SETTINGS: "settings", RESULTS: "results", CREDITS: "credits",
+  PAUSE: "pause", NONE: "none",
 };
 
 const css = {
@@ -89,6 +90,11 @@ export class Menu {
   }
 
   show(screen) {
+    // Remember where we came from, so Back can actually go back. This field
+    // was read by the Settings back button for months and assigned NOWHERE —
+    // which is why Settings->Back from the title landed in the Ludus Hub and
+    // silently resumed a career.
+    if (screen !== this.screen) this.screenBefore = this.screen;
     this.screen = screen;
     this.el.style.display = screen === SCREEN.NONE ? "none" : "block";
     if (screen === SCREEN.NONE) return;
@@ -99,7 +105,37 @@ export class Menu {
       [SCREEN.SETTINGS]: () => this._settings(),
       [SCREEN.RESULTS]: () => this._results(),
       [SCREEN.CREDITS]: () => this._credits(),
+      [SCREEN.PAUSE]: () => this._pause(),
     }[screen] || (() => {}))();
+  }
+
+  /**
+   * The pause overlay. Shown mid-bout; the sim is frozen underneath (boot.js
+   * gates the fixed-step loop on the paused flag).
+   *
+   * Forfeit is TWO clicks — the first arms it, the second confirms — because
+   * this button ends a live bout and records a real loss. It routes through
+   * hooks.onForfeit -> match._decide(false), the same verdict path a defeat
+   * takes, so the loss, the purse, and gear wear are all recorded. ESC used to
+   * silently destroy the match with none of that: a free rewind of any losing
+   * fight.
+   */
+  _pause() {
+    const body = document.createElement("div");
+    body.appendChild(this._btn("Resume", "Back to the sand", () => {
+      if (this.hooks.onResume) this.hooks.onResume();
+    }, { accent: true }));
+    body.appendChild(this._btn("Settings", "Audio, graphics, controls", () => this.show(SCREEN.SETTINGS)));
+    const forfeit = this._btn("Forfeit the Bout", "Submit to the editor — counts as a loss", () => {
+      if (!forfeit.dataset.armed) {
+        forfeit.dataset.armed = "1";
+        forfeit.querySelector("div").textContent = "Confirm — lay down your arms";
+        return;
+      }
+      if (this.hooks.onForfeit) this.hooks.onForfeit();
+    });
+    body.appendChild(forfeit);
+    this._shell("Paused", "THE CROWD WAITS", body);
   }
 
   hide() { this.show(SCREEN.NONE); }
@@ -314,7 +350,13 @@ export class Menu {
     body.appendChild(c);
 
     this._shell("Settings", "PREFERENCES", body,
-      { back: () => this.show(this.inv.matchesPlayed > 0 || this.screenBefore === SCREEN.HUB ? SCREEN.HUB : SCREEN.TITLE) });
+      // Back goes where you actually came from — mid-bout pause, title, or
+      // hub. The old expression ignored screenBefore (never assigned) and used
+      // matchesPlayed, so Settings->Back from the TITLE dumped a returning
+      // player into the Hub.
+      { back: () => this.show(
+          this.screenBefore === SCREEN.PAUSE ? SCREEN.PAUSE :
+          this.screenBefore === SCREEN.TITLE ? SCREEN.TITLE : SCREEN.HUB) });
   }
 
   _results() {

@@ -152,7 +152,14 @@ export class Brain {
 
     // --- reactive layer: block/dodge can fire between decisions -----------
     // A threat is an enemy in an ACTIVE or late-WINDUP attack that can reach.
-    const threatened = t.phase === PHASE.WINDUP && dist <= t.weapon.reach * 1.15;
+    // Never react while mid-own-swing: the sim's attack-cancel now lets a
+    // raised shield ABANDON a windup, and the reactive layer issuing block
+    // during the AI's own attacks turned every committed swing into a cancel —
+    // measured immediately by probe_combat, where the murmillo went 0-for-20
+    // against the tiger because it cancelled everything it started. Committing
+    // to the blow is the AI's character; the cancel is a tool for human hands.
+    const threatened = t.phase === PHASE.WINDUP && dist <= t.weapon.reach * 1.15 &&
+                       s.phase !== PHASE.WINDUP && s.phase !== PHASE.ACTIVE;
     // ONE REACTION, DECIDED ONCE PER INCOMING SWING, THEN HELD.
     //
     // This layer sits outside the `think <= 0` latency gate, so it re-rolled

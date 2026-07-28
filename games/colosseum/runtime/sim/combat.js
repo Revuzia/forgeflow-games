@@ -47,7 +47,16 @@ export const FEEL = {
   hitStopHeavy: 0.14,
   // A perfectly timed block (within this window of the hit) costs no stamina
   // and staggers the attacker instead.
-  parryWindow: 0.16,
+  //
+  // 0.25 (was 0.16): measured UNREACHABLE at 0.16. Four instrumented reactive-
+  // play configurations — including blocks timed into the sim's own final
+  // 0.13 s of windup — produced 0 parries in ~25 blocks, because the hit
+  // resolves on the first ACTIVE tick while command lag and the blocking
+  // phase-gate keep the guard down at that exact moment. 0.25 plus the
+  // attack-cancel below is what makes a deliberately-timed block a parry in
+  // practice. For Honor's parry windows are ~0.3 s; Sekiro's deflect ~0.17 s
+  // with zero command lag — a browser game at 60 Hz needs the honest end.
+  parryWindow: 0.25,
   parryStagger: 0.7,
   // Steel meets steel: two committed attacks arriving together bind and both
   // fighters rebound. See the clash block in _resolveSwing.
@@ -306,6 +315,19 @@ export class Combat {
     }
 
     // --- intent ----------------------------------------------------------
+    // ATTACK-CANCEL INTO GUARD. Raising the shield during your OWN windup
+    // abandons the swing — the stamina is already spent, that is the price —
+    // and the guard comes up this same tick. Without this, a fighter who
+    // started a swing was locked out of defence for the entire windup+active
+    // window, which is the measured reason a reactively-timed block could
+    // never parry: the counter-blow resolved while your guard was down and
+    // ungateable. Real swordplay abandons cuts into covers constantly.
+    if (cmd.block && f.phase === PHASE.WINDUP && !f.isBeast &&
+        f.shieldId !== "none" && !f.shieldBroken && !f.guardBroken) {
+      f.phase = PHASE.IDLE; f.phaseT = 0; f.attackDir = null; f._lungeTarget = null;
+      this.emit("cancel", { id: f.id });
+    }
+
     f.blocking = !!cmd.block && f.shieldId !== "none" && !f.shieldBroken &&
                  !f.guardBroken &&
                  (f.phase === PHASE.IDLE || f.phase === PHASE.RECOVER);
