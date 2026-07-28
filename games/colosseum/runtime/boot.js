@@ -265,6 +265,30 @@ try {
   window.__ACTOR_ERR__ = String(e && e.message || e);
 }
 
+// SHADER PRE-WARM, with a render target BOUND.
+//
+// Adopted from Claude-of-Duty's measured post-mortem: three.js compiles a
+// program per material x lighting x target-format VARIANT, and compiling
+// against the canvas alone keyed 25 of their 47 programs to a variant the
+// game never used — every first muzzle flash and first decal then hit a
+// 100-600 ms mid-combat compile. compileAsync with a scratch target bound
+// builds the variants the real frames will use, before frame 1. Async, so a
+// slow GPU delays readiness, never play.
+async function prewarmShaders() {
+  try {
+    const rt = new THREE.WebGLRenderTarget(64, 64, { samples: 0 });
+    renderer.setRenderTarget(rt);
+    await renderer.compileAsync(scene, camera);
+    renderer.setRenderTarget(null);
+    await renderer.compileAsync(scene, camera);   // the canvas variant too
+    rt.dispose();
+    console.log(`[boot] shaders pre-warmed — ${renderer.info.programs.length} programs`);
+  } catch (e) {
+    console.warn("[boot] shader pre-warm skipped:", e && e.message);
+  }
+}
+await prewarmShaders();
+
 setProgress(1.0, "Ready.");
 
 // ---------------------------------------------------------------------------
