@@ -1002,7 +1002,10 @@ export function showMenu(W, startMatch) {
   },
   mk("KeyW") + mk("KeyA") + mk("KeyS") + mk("KeyD") + " MOVE  ·  MOUSE AIM/FIRE  ·  RMB ADS  ·  " +
   mk("Space") + " JUMP / CHUTE  ·  " + mk("ShiftLeft") + " SPRINT (" + (W.settings && W.settings.sprintToggle ? "TOGGLE" : "HOLD") + ")  ·  " +
-  mk("KeyR") + " RELOAD  ·  " + mk("KeyE") + " LOOT  ·  " + mk("Digit1") + "–" + mk("Digit5") + " WEAPONS  ·  " + mk("KeyM") + " MAP",
+  mk("KeyR") + " RELOAD  ·  " + mk("KeyE") + " LOOT  ·  " + mk("Digit1") + "–" + mk("Digit5") + " WEAPONS  ·  " + mk("KeyM") + " MAP" +
+  // the two new verbs are invisible without this line — a feature nobody can
+  // discover is a feature that doesn't exist
+  "  ·  JUMP AT A LEDGE = CLIMB  ·  " + mk("ShiftLeft") + " WHILE SCOPED = HOLD BREATH",
   wrap);
 
   import("./audio.js" + (new URL(import.meta.url).search || "")).then((m) => m.startMenuMusic(W));
@@ -2901,6 +2904,8 @@ export function showHowToPlay(W) {
   kb(kx("Digit1") + " – " + kx("Digit5"), "Weapon and item slots");
   kb(kx("KeyM"), "Map");
   kb(kx("KeyB") + " / " + kx("KeyN"), "Emote — dance · cheer");
+  kb(kx("Space") + " at a ledge", "Climb — jump toward a low wall or rooftop edge and you'll pull up over it");
+  kb(kx("ShiftLeft") + " scoped", "Hold breath — steadies the sniper sway; watch your lungs, running dry leaves you shaky");
   kb("ESC", "Pause and settings");
   h("div", { fontSize: "12px", opacity: "0.7", marginTop: "6px", lineHeight: "1.5", fontFamily: "Rajdhani, " + FONT },
     "The reticle grows when your shots will scatter and tightens when they will not — standing still and crouching both help. Every key here can be rebound in Settings.", box);
