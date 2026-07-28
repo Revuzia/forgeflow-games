@@ -322,9 +322,51 @@ export async function buildMap(W, mapId) {
     for (const fn of W._mapUpdaters) { const idx = W.kernel._updaters.indexOf(fn); if (idx >= 0) W.kernel._updaters.splice(idx, 1); }
   }
   W._mapUpdaters = [];
+  // ── IBL — scene.environment from THIS map's palette ────────────────────────
+  // scene.environment was null for the game's whole life; four separate comments
+  // across hud/maps/player note the consequence (metalness surfaces lose their
+  // diffuse and gain no reflection in exchange). No HDR asset: a throwaway scene
+  // (vertex-gradient sky dome from K.zenith/K.sky + hot sun disc + ground bounce)
+  // goes through PMREM once per map build (~ms). Reflections agree with the world
+  // because they are literally built from the same palette the background uses.
+  // Intensity 0.5: the sun/hemi rig above stays the DOMINANT light — the env is
+  // fill and reflections, not a relight.
+  function buildEnvironment(W2, KK) {
+    const r = W2.kernel && W2.kernel.renderer;
+    if (!r) return;
+    const pmrem = new THREE.PMREMGenerator(r);
+    const es = new THREE.Scene();
+    const skyG = new THREE.SphereGeometry(50, 24, 16);
+    const posA = skyG.attributes.position, cols = new Float32Array(posA.count * 3);
+    const cz = new THREE.Color(KK.zenith), ch = new THREE.Color(KK.sky);
+    const cg = new THREE.Color(KK.sky).multiplyScalar(0.32);   // below-horizon bounce, same hue family
+    const c = new THREE.Color();
+    for (let i = 0; i < posA.count; i++) {
+      const y = posA.getY(i) / 50;
+      if (y >= 0) c.lerpColors(ch, cz, Math.min(1, y * 1.35));
+      else c.lerpColors(ch, cg, Math.min(1, -y * 2.4));
+      cols[i * 3] = c.r; cols[i * 3 + 1] = c.g; cols[i * 3 + 2] = c.b;
+    }
+    skyG.setAttribute("color", new THREE.BufferAttribute(cols, 3));
+    const sky = new THREE.Mesh(skyG, new THREE.MeshBasicMaterial({ side: THREE.BackSide, vertexColors: true }));
+    es.add(sky);
+    // sun disc positioned to agree with the shadow-casting sun's azimuth (kernel
+    // sun sits +x/+z-ish high) so speculars land on the lit side of objects
+    const sun = new THREE.Mesh(new THREE.PlaneGeometry(14, 14),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.93, 0.82).multiplyScalar(5) }));
+    sun.position.set(30, 34, 16); sun.lookAt(0, 0, 0);
+    es.add(sun);
+    if (W2._envRT) W2._envRT.dispose();
+    W2._envRT = pmrem.fromScene(es, 0.04);
+    W2.scene.environment = W2._envRT.texture;
+    W2.scene.environmentIntensity = 0.5;
+    pmrem.dispose(); skyG.dispose(); sky.material.dispose();
+    sun.geometry.dispose(); sun.material.dispose();
+  }
   const trackUpdater = (fn) => { W._mapUpdaters.push(fn); W.kernel.onUpdate(fn); };
   W.scene.background = new THREE.Color(K.sky);
   if (W.scene.fog) { W.scene.fog.color = new THREE.Color(K.sky); W.scene.fog.density = K.fog; }
+  buildEnvironment(W, K);
   // BRIGHT daytime match lighting. The render looked dim/muddy vs the bright, vibrant
   // Final Drop reference — a bright blue sky over dark green ground. Strong warm sun +
   // a much brighter, lighter-ground hemisphere fill so shadowed sides read as daylight

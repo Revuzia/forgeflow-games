@@ -670,11 +670,13 @@ function testSegment(W, p, ax, ay, az, bx, by, bz) {
         W.map.destroyProp(c);
         W.events.emit("propBreak", { x: cx, y: c.minY, z: cz, kind: c.prop });
       } else {
-        W.events.emit("impact", { x: hx, y: hy, z: hz }, "wood");
+        // nx/ny/nz: the entry-face normal rides along so fx can place a decal
+        // flush on the surface (fields are additive — older listeners read x/y/z)
+        W.events.emit("impact", { x: hx, y: hy, z: hz, nx: sh.nx, ny: sh.ny, nz: sh.nz }, "wood");
       }
       p.dead = true; return true;
     }
-    W.events.emit("impact", { x: hx, y: hy, z: hz }, "stone");
+    W.events.emit("impact", { x: hx, y: hy, z: hz, nx: sh.nx, ny: sh.ny, nz: sh.nz }, "stone");
     p.dead = true; return true;
   }
   // 3) terrain

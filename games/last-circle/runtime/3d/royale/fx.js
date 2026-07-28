@@ -99,6 +99,48 @@ const SHOT_FOV   = { pistol: 2, smg: 2, ar: 2.5, shotgun: 5, sniper: 5, glaunche
 // across every material in the scene on the first blast (a visible hitch on a
 // browser GPU) — at the match bloom of 0.14 an additive sprite reads as a flash
 // for free. loot.js builds its chest glow the same way.
+// Bullet decals: one InstancedMesh of camera-independent quads oriented to the
+// impact normal, ring-buffered. Instances park at scale 0 until used; a fresh
+// match clears the fx group, so re-adoption also re-parks every slot (old
+// map's holes must not reappear floating in the new map).
+const DECAL_N = 64;
+let decalMesh = null, decalCursor = 0;
+const _dM = new THREE.Matrix4(), _dQ = new THREE.Quaternion(), _dQ2 = new THREE.Quaternion();
+const _dN = new THREE.Vector3(), _dP = new THREE.Vector3(), _dS = new THREE.Vector3();
+const _dZ = new THREE.Vector3(0, 0, 1);
+function ensureDecals(W) {
+  if (decalMesh) {
+    if (!decalMesh.parent) {
+      _dM.makeScale(0, 0, 0);
+      for (let i = 0; i < DECAL_N; i++) decalMesh.setMatrixAt(i, _dM);
+      decalMesh.instanceMatrix.needsUpdate = true;
+      decalCursor = 0;
+      W.group("fx").add(decalMesh);
+    }
+    return;
+  }
+  const cv = document.createElement("canvas"); cv.width = cv.height = 64;
+  const c2 = cv.getContext("2d");
+  const gr = c2.createRadialGradient(32, 32, 3, 32, 32, 30);
+  gr.addColorStop(0, "rgba(18,14,10,0.9)");
+  gr.addColorStop(0.5, "rgba(24,19,14,0.45)");
+  gr.addColorStop(1, "rgba(24,19,14,0)");
+  c2.fillStyle = gr; c2.beginPath(); c2.arc(32, 32, 30, 0, 7); c2.fill();
+  const tex = new THREE.CanvasTexture(cv);
+  decalMesh = new THREE.InstancedMesh(
+    new THREE.PlaneGeometry(0.14, 0.14),
+    new THREE.MeshBasicMaterial({
+      map: tex, transparent: true, depthWrite: false,
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+    }),
+    DECAL_N);
+  decalMesh.frustumCulled = false;   // 64 quads scattered map-wide: one sphere would span the map anyway
+  _dM.makeScale(0, 0, 0);
+  for (let i = 0; i < DECAL_N; i++) decalMesh.setMatrixAt(i, _dM);
+  decalMesh.instanceMatrix.needsUpdate = true;
+  W.group("fx").add(decalMesh);
+}
+
 let flashTex = null, blastCursor = 0;
 const blasts = [];
 function ensureBlasts(W) {
@@ -215,6 +257,26 @@ function wireEvents(W) {
   W.events.on("impact", (pos, surface) => {
     const c = IMPACT_COLOR[surface] || 0x9a7f4f;
     burst({ x: pos.x, y: pos.y, z: pos.z, n: 5, color: c, speed: 3.5, size: 0.08, life: 0.4 });
+    // PERMANENCE: a bullet hole where the round actually landed. Before this,
+    // the world was bit-identical after a firefight — the roadmap's cited tell.
+    // Wood/stone only (weapons.js sends the entry-face normal for those; dirt
+    // is grass-covered and flesh is a body). 64-slot ring buffer, oldest
+    // overwritten — no per-frame cost, no timers.
+    if ((surface === "stone" || surface === "wood") && (pos.nx || pos.ny || pos.nz)) {
+      ensureDecals(W);
+      _dN.set(pos.nx, pos.ny, pos.nz).normalize();
+      _dQ.setFromUnitVectors(_dZ, _dN);
+      _dQ2.setFromAxisAngle(_dZ, Math.random() * Math.PI * 2);
+      _dQ.multiply(_dQ2);
+      const ds = 0.8 + Math.random() * 0.55;
+      _dS.set(ds, ds, ds);
+      // 12mm off the face — under polygonOffset alone, distant walls z-fight
+      _dP.set(pos.x + _dN.x * 0.012, pos.y + _dN.y * 0.012, pos.z + _dN.z * 0.012);
+      _dM.compose(_dP, _dQ, _dS);
+      decalMesh.setMatrixAt(decalCursor % DECAL_N, _dM);
+      decalCursor++;
+      decalMesh.instanceMatrix.needsUpdate = true;
+    }
   });
 
   W.events.on("explosion", (pos, R) => {
