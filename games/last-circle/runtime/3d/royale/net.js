@@ -481,6 +481,11 @@ function applyRemoteState(W, a, d) {
   a.input.ads = !!(f & 2);
   a.swimming = !!(f & 8);
   a.netChute = !!(f & 16);   // canopy vs freefall; player.js owns the mesh
+  // remotes never run stepActor, so these fields are only read by syncObj's
+  // anim branches (mantle tuck; hit flinch — whose decay runs in syncObj,
+  // which interpRemote calls). Refresh-while-set, decay after.
+  a.mantleT = (f & 32) ? 0.2 : null;
+  if (f & 64) a.hitReactT = Math.max(a.hitReactT || 0, 0.25);
   if (d.wp && (!a.weapon || a.weapon.id !== d.wp)) {
     a.weapon = { id: d.wp, rarity: 0, magAmmo: 0, state: (f & 4) ? "reloading" : "ready", cd: 0, reloadT: 0 };
     // remotes never pass through equipSlot, so without this their rendered gun
@@ -694,8 +699,12 @@ function pack(a) {
     yw: +a.yaw.toFixed(3), pt: +a.pitch.toFixed(2),
     hp: Math.round(a.hp), sh: Math.round(a.shield),
     gl: a.gliding ? 1 : 0, wp: a.weapon ? a.weapon.id : null,
+    // bits 32/64: mantle + hit-react — transient states, but 0.25-0.5 s spans
+    // 2-6 packets at 5-12 Hz so remotes catch them; older peers ignore
+    // unknown bits (sweep findings: both were invisible to other clients)
     f: (a.crouching ? 1 : 0) | (a.input.ads ? 2 : 0) |
        (a.weapon && a.weapon.state === "reloading" ? 4 : 0) |
-       (a.swimming ? 8 : 0) | (a.chute ? 16 : 0),
+       (a.swimming ? 8 : 0) | (a.chute ? 16 : 0) |
+       (a.mantleT != null ? 32 : 0) | (a.hitReactT > 0 ? 64 : 0),
   };
 }
