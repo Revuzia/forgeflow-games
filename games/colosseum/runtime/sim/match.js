@@ -23,6 +23,7 @@ import { Brain, BEAST_PROFILES } from "./ai.js";
 import { WEAPONS, ARMATURAE } from "../data/weapons.js";
 import { ARMATURA_ROSTER, CHAMPIONS, MUNUS, makeOpponent } from "../data/roster.js";
 import { mulberry32, clamp } from "../core/util.js";
+import { Joust } from "./joust.js";
 
 export const STATE = {
   IDLE: "idle",
@@ -95,6 +96,7 @@ export class Match {
     const ids = new Set();
     const arm = this.inv && this.inv.matchedArmatura();
     ids.add(arm ? arm.id : "murmillo");
+    if (d.type === "joust") ids.add("eques");
     for (const s of this._opponentSpecs()) {
       if (s.armatura) ids.add(s.armatura);
       if (s.champion) {
@@ -234,6 +236,25 @@ export class Match {
   start() {
     const d = this.def;
 
+    // THE JOUST IS ITS OWN SIM. Combat never runs during the mounted phase;
+    // sim/joust.js owns both riders with its own deterministic rng stream.
+    // The riders are fighter-shaped records, so the view spawns and drives
+    // them through the same pipeline as everyone else.
+    if (d.type === "joust") {
+      this.joust = new Joust({
+        seed: this.seed,
+        player: { name: this.inv ? this.inv.name : "You" },
+        opponent: { name: d.joust && d.joust.name, skill: d.joust ? d.joust.skill : 0.5 },
+        hooks: { onEvent: (e) => { if (this.hooks.onEvent) this.hooks.onEvent(e); } },
+      });
+      this.player = this.joust.riders.player;
+      this.spawned.push({ fighter: this.joust.riders.player, role: "player" });
+      this.spawned.push({ fighter: this.joust.riders.opponent, role: "opponent" });
+      this._setState(STATE.ENTRY);
+      if (this.hooks.onSpawn) this.hooks.onSpawn(this.spawned);
+      return this;
+    }
+
     this.player = this.combat.add(this._makePlayer());
     this.spawned.push({ fighter: this.player, role: "player" });
 
@@ -352,6 +373,20 @@ export class Match {
   }
 
   _runFight(dt, playerCmd) {
+    if (this.joust) {
+      // Translate the standard command shape into lance intent: holding
+      // attack couches; heavy aims high, pushing forward aims mid (the
+      // default), pulling back aims low.
+      const cmd = playerCmd || {};
+      const aim = cmd.heavy ? "high" : (cmd.moveZ < -0.35 ? "low" : "mid");
+      this.joust.update(dt, { aim, couch: !!cmd.attack || !!cmd.block });
+      if (this.joust.result && !this.result) {
+        this.crowdFavour = clamp(this.crowdFavour +
+          (this.joust.result.by === "unhorse" ? 0.25 : 0.1), 0, 1);
+        this._decide(this.joust.result.playerWon);
+      }
+      return;
+    }
     // Player
     if (this.player.alive) this.combat.command(this.player, playerCmd || {});
     // Everyone else
@@ -581,6 +616,21 @@ export class Match {
     const foe = foes.length
       ? foes.reduce((a, b) => (Math.hypot(a.x - p.x, a.z - p.z) < Math.hypot(b.x - p.x, b.z - p.z) ? a : b))
       : null;
+    if (this.joust) {
+      const o = this.joust.riders.opponent;
+      return {
+        state: this.state,
+        player: p ? { name: p.name, hp: Math.max(0, p.hp), maxHp: p.maxHp,
+          stamina: p.stamina, maxStamina: p.maxStamina,
+          shieldHp: 0, shieldBroken: false, phase: p.phase, combo: 0, alive: p.alive } : null,
+        foe: { name: o.name, title: "Eques", hp: Math.max(0, o.hp), maxHp: o.maxHp,
+          phase: o.phase, alive: o.alive, isBeast: false },
+        foesLeft: o.alive ? 1 : 0,
+        crowdFavour: this.crowdFavour,
+        wave: 1, waves: 1,
+        joust: this.joust.snapshot(),
+      };
+    }
     return {
       state: this.state,
       player: p ? {

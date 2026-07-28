@@ -1197,6 +1197,30 @@ function quadTri(pos, nor, a, b, c, d, n) {
 }
 
 /** A trident for the retiarius. One draw call. */
+/**
+ * Contus — the jousting lance. Grip at the origin per the weapon contract;
+ * ~2.6 m of tapered shaft ahead of the fist, ~0.5 m of counterweight behind,
+ * with a vamplate cone guarding the hand. Couched, the point rides ~3.2 m out,
+ * which is the sim's JOUST.lanceReach.
+ */
+export function makeLance() {
+  const parts = [];
+  const shaft = new THREE.CylinderGeometry(0.016, 0.034, 3.1, 8);
+  shaft.translate(0, 1.05, 0);            // spans -0.50 .. +2.60
+  parts.push(paint(shaft, WOOD));
+  const tip = new THREE.ConeGeometry(0.02, 0.18, 6);
+  tip.translate(0, 2.69, 0);
+  parts.push(paint(tip, STEEL));
+  // vamplate: the flared hand guard
+  const guard = new THREE.CylinderGeometry(0.11, 0.03, 0.16, 10, 1, true);
+  guard.translate(0, 0.22, 0);
+  parts.push(paint(guard, STEEL));
+  const butt = new THREE.SphereGeometry(0.045, 8, 6);
+  butt.translate(0, -0.5, 0);
+  parts.push(paint(butt, BRASS));
+  return weld(parts);
+}
+
 export function makeTrident() {
   const parts = [];
   // GRIP A THIRD UP THE HAFT, NOT AT THE BUTT. The module contract puts the

@@ -124,6 +124,20 @@ export const WEAPONS = {
     price: 300, tier: 2,
     desc: "A spear. One purpose, executed better than anything else can.",
   },
+  contus: {
+    id: "contus", name: "Contus", kind: "lance", hands: 1,
+    // The cavalry lance, couched for the tilt. Joust-only: issued with the
+    // mount, never shopped, and the joust sim owns its numbers (reach and
+    // timing live in sim/joust.js) — this entry exists so the HUD, armoury
+    // and loadout code can resolve the id like any other weapon.
+    reach: 3.2, damage: 34, weight: 2.8,
+    windup: 0.6, active: 0.2, recover: 1.3,
+    stamina: 14, poise: 24,
+    dirs: [DIR.THRUST],
+    armourPierce: { [DIR.THRUST]: 0.5 },
+    price: 0, tier: 0, issued: true,
+    desc: "A horseman's lance. Useless on foot; decisive at the gallop.",
+  },
   dimachaerus: {
     id: "dimachaerus", name: "Paired Blades", kind: "dual", hands: 2,
     reach: 1.25, damage: 17, weight: 1.6,

@@ -19,7 +19,7 @@
 
 import * as THREE from "three";
 import { PHASE } from "../sim/combat.js";
-import { Actor, attachWeapon, makeGladius, makeScutum, makeTrident } from "./actors.js";
+import { Actor, attachWeapon, makeGladius, makeScutum, makeTrident, makeLance } from "./actors.js";
 import { Equipment } from "./equipment.js";
 import { ARMATURA_ROSTER } from "../data/roster.js";
 import { damp, clamp } from "../core/util.js";
@@ -98,6 +98,49 @@ export class BoutView {
     if (this.actors.has(fighter.id)) return this.actors.get(fighter.id);
 
     let actor;
+    if (fighter.mounted && fighter.mountId) {
+      // A RIDER IS A COMPOSITE: the horse is the Actor the sim drives (pos,
+      // facing, gallop), and the rider's body sits in the saddle as a child of
+      // the horse's root, animated by its own mixer. The joust sim owns both
+      // riders; Combat never runs while they are mounted.
+      const mlib = this.libs.mounts && this.libs.mounts[fighter.mountId];
+      const rlib = (fighter.armaturaId && this.libs.armaturae && this.libs.armaturae[fighter.armaturaId])
+        || (this.libs.armaturae && this.libs.armaturae.eques) || this.libs.fighter;
+      if (!mlib || !rlib) return null;
+      actor = new Actor(mlib, {
+        length: 2.35, name: fighter.id + "_mount", restClip: "idle",
+        clipMap: { idle: "Idle", walk: "Walk", run: "Gallop", death: "Death", hit: "Idle_HitReact_Left" },
+      });
+      const rider = new Actor(rlib, { height: 1.82, name: fighter.id });
+      // Saddle: MEASURED off the live rig, not guessed. The warhorse's Back
+      // bone sits at local (0, 1.25, -0.58) with the neck base at (0, 1.16,
+      // +0.60), so the seat is the top of that line just behind the withers.
+      // The rider actor's origin is at his FEET and no seated clip exists, so
+      // he is sunk to put his hips at saddle height — legs clip the barrel at
+      // close range, which is the honest price of no riding pose yet (flagged),
+      // and reads correctly at gameplay distance. The first guess (height*0.72
+      // = y 1.43) floated him a forearm above the horse.
+      rider.root.position.set(0, 0.62, 0.08);
+      actor.root.add(rider.root);
+      rider.play("idle");
+      // The couched lance. A fixed pitch is tolerable here because the joust
+      // uses ONE rider body; the per-bone-roll solves stay off (the guard
+      // po se memos are nulled so _swordGuard/_guardPose skip these arms).
+      attachWeapon(rider, makeLance(), { palm: 0.05, rotation: [Math.PI / 2 - 0.10, 0, 0.10] });
+      attachWeapon(rider, makeScutum({ w: 0.46, h: 0.48, curve: 0.11 }), {
+        bone: /LeftHand|Hand_L/i, palm: 0.04, align: "shield",
+      });
+      rider._swordMount = null;
+      rider._shieldArm = null;
+      actor.pos.set(fighter.x, 0, fighter.z);
+      actor.facing = fighter.facing;
+      actor.visualFacing = fighter.facing;
+      actor.play("idle");
+      this.scene.add(actor.root);
+      const rec = { actor, rider, fighter, role, mounted: true };
+      this.actors.set(fighter.id, rec);
+      return rec;
+    }
     if (fighter.isBeast) {
       const lib = this.libs.beasts && (this.libs.beasts[fighter.beast?.id] || this.libs.beasts.tiger);
       if (!lib) return null;
@@ -174,6 +217,7 @@ export class BoutView {
       a.facing = f.facing;
       a.speed = f.speed;
 
+      if (rec.mounted) { this._driveMounted(rec, dt); continue; }
       this._driveAnimation(rec, dt);
       // A fighter in hit-stop is FROZEN in the sim (combat.js:218 returns
       // early with speed 0). Freezing the mixer too is what turns a hit from
@@ -355,6 +399,34 @@ export class BoutView {
   }
 
   /**
+   * Drive a horse-and-rider composite. The horse carries the locomotion —
+   * Gallop when the sim says run, Idle at the marks — and the rider's mixer
+   * ticks so he breathes in the saddle. On an unhorse the rider leaves the
+   * saddle for the sand and plays his death there; the horse runs on, which
+   * is what loose horses do.
+   */
+  _driveMounted(rec, dt) {
+    const f = rec.fighter, a = rec.actor;
+    a.pos.set(f.x, 0, f.z);
+    a.facing = f.facing;
+    if (!f.mounted && !rec.dismounted) {
+      // unhorsed THIS frame: rider to the ground, horse keeps going
+      rec.dismounted = true;
+      const w = new THREE.Vector3();
+      rec.rider.root.getWorldPosition(w);
+      a.root.remove(rec.rider.root);
+      this.scene.add(rec.rider.root);
+      rec.rider.root.position.set(f.x, 0, f.z);
+      rec.rider.playOnce("death", { then: null, fade: 0.1 });
+    }
+    if (f.alive || rec.dismounted) {
+      a.play(f.speed > 2 ? "run" : "idle");
+    }
+    a.update(dt, f.speed);
+    if (rec.rider && rec.rider.mixer) rec.rider.mixer.update(dt);
+  }
+
+  /**
    * The blade STOPS on impact instead of sweeping through.
    *
    * The sim already halts the exchange (stagger/hit-stop), but the view kept
@@ -429,6 +501,18 @@ export class BoutView {
         // through it.
         if (atkRec) this._reboundSwing(atkRec);
         if (crowd && e.type === "parry") crowd.react(0.4);
+        break;
+      }
+      case "joust_shield":
+      case "joust_body": {
+        if (vfx) vfx.sparks(new THREE.Vector3(e.x, 1.7, e.z), e.type === "joust_body" ? 1.6 : 1.0);
+        if (crowd) crowd.react(e.type === "joust_body" ? 0.5 : 0.3);
+        break;
+      }
+      case "joust_unhorse": {
+        if (vfx) { vfx.sparks(new THREE.Vector3(e.x, 1.5, e.z), 2.0); vfx.dust(new THREE.Vector3(e.x, 0.4, e.z), 1.6); }
+        if (sand) sand.splat(e.x, e.z, 1.1, "scuff", 0.8);
+        if (crowd) { crowd.react(1.0); crowd.startWave({ laps: 1, speed: 3.0, strength: 1 }); }
         break;
       }
       case "clash": {

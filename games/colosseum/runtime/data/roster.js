@@ -338,6 +338,9 @@ export function buildLadder() {
   add({ id: "g5", rank: "gregarius", type: "champion", name: "Tetraites", champion: "tetraites", purse: 240,
         desc: "His name is painted on cups sold as far as Britain." });
 
+  add({ id: "j1", rank: "gregarius", type: "joust", name: "The Opening Card", joust: { skill: 0.3, name: "Vespillo" }, purse: 150,
+        desc: "The equites open the day. Six passes down the tilt; keep the lance couched late." });
+
   // --- Veteranus: pressure ----------------------------------------------
   add({ id: "v1", rank: "veteranus", type: "single", name: "The Pursuer", opponents: [{ armatura: "secutor", skill: "veteranus" }], purse: 190,
         desc: "Smooth helm, two eye-holes, no intention of letting you breathe." });
@@ -350,6 +353,9 @@ export function buildLadder() {
   add({ id: "v5", rank: "veteranus", type: "champion", name: "Spiculus", champion: "spiculus", purse: 380,
         desc: "Nero gave him palaces. He fights like a man with nothing to prove." });
 
+  add({ id: "j2", rank: "veteranus", type: "joust", name: "Lances at Noon", joust: { skill: 0.55, name: "Celadus" }, purse: 260,
+        desc: "A veteran eques with a straight back and a patient couch." });
+
   // --- Primus Palus: spectacle ------------------------------------------
   add({ id: "p1", rank: "primus", type: "team", name: "Troupe Against Troupe", opponents: [{ armatura: "murmillo", skill: "primus" }, { armatura: "thraex", skill: "veteranus" }, { armatura: "hoplomachus", skill: "veteranus" }], allies: [{ armatura: "secutor", skill: "veteranus" }, { armatura: "dimachaerus", skill: "veteranus" }], purse: 420,
         desc: "The editor did not buy a duel. He bought a battle." });
@@ -359,6 +365,9 @@ export function buildLadder() {
         desc: "No reprieve. Augustus banned this. The crowd never forgave him." });
   add({ id: "p4", rank: "primus", type: "champion", name: "Verus", champion: "verus", purse: 560,
         desc: "Half of the most famous bout ever fought." });
+
+  add({ id: "j3", rank: "primus", type: "joust", name: "The Emperor's Eques", joust: { skill: 0.85, name: "Incitatus" }, purse: 420,
+        desc: "He has never been unhorsed. The crowd comes early just to watch him mount." });
 
   // --- Champion ----------------------------------------------------------
   add({ id: "c1", rank: "champion", type: "single", name: "Iron Gaul", opponents: [{ armatura: "crupellarius", skill: "champion" }], purse: 600,

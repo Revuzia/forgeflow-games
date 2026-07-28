@@ -191,7 +191,7 @@ const inventory = Inventory.restore();
 
 const actors = { player: null, beast: null };
 // Shared libraries the bout view clones combatants from.
-const actorLibs = { fighter: null, beasts: {}, armaturae: {} };
+const actorLibs = { fighter: null, beasts: {}, armaturae: {}, mounts: {} };
 
 /**
  * The eight generated armatura bodies. Loaded lazily and in parallel: a bout
@@ -365,6 +365,16 @@ async function startMatch(matchId) {
   // otherwise the view silently falls back to the shared placeholder.
   await ensureArmaturaBodies(match.requiredBodies());
 
+  // The joust needs its mount. Loaded on demand like the armatura bodies —
+  // 1 MB of warhorse has no business in the boot payload of a foot bout.
+  if (def.type === "joust" && !actorLibs.mounts.warhorse) {
+    try {
+      actorLibs.mounts.warhorse = await loadBeast("assets/mounts/warhorse.glb");
+    } catch (e) {
+      console.warn("[boot] warhorse failed to load:", e && e.message);
+    }
+  }
+
   match.start();
   combatCam.enabled = true;
   hud.show();
@@ -411,6 +421,24 @@ function onCombatSound(e) {
     case "parry":
       audio.play("parry", { ...at(e.target), gain: 0.9, rate: 1.15 });
       audio.crowdSurge(0.5, 0.1);
+      break;
+    case "pass_begin":
+      audio.horn("begin", 0.5);
+      audio.crowdSurge(0.3, 0.15);
+      break;
+    case "joust_shield":
+      audio.play("block", { x: e.x, z: e.z, gain: 0.95 });
+      audio.crowdSurge(0.4, 0.1);
+      break;
+    case "joust_body":
+      audio.play("hit", { x: e.x, z: e.z, gain: 1.0 });
+      audio.play("hurt", { x: e.x, z: e.z, gain: 0.7 });
+      audio.crowdSurge(0.6, 0.1);
+      break;
+    case "joust_unhorse":
+      audio.play("shield_break", { x: e.x, z: e.z, gain: 1.0 });
+      audio.play("death", { x: e.x, z: e.z, gain: 0.8 });
+      audio.crowdSurge(1.0, 0.08);
       break;
     case "clash":
       // Steel-on-steel bind — the block sample pitched down reads as blade
