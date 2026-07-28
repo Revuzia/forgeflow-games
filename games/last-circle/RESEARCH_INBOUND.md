@@ -45,3 +45,25 @@ mantle effort S). Both are engine-level, no assets.
 Near-term adds (cheap, high-value): shader pre-warm; sniper breath-hold;
 mantle. Visuals program: triplanar procedural surfaces alongside (or before)
 the xAI texture batch; CSM for shadow range. Tools bench: img2threejs trial.
+
+## Terrain chunking — scoped 2026-07-28 (baseline measured live)
+
+BASELINE (isla_viva, ground view): frame 1,468,758 tris / 380 calls; terrain
+180,000 tris = 12.3% of the frame, drawn IN FULL from every viewpoint (one
+301x301 mesh — Three culls per-mesh, so nothing ever rejects it).
+DE-RISKED: the mesh is PURELY VISUAL (maps.js's own comment: gameplay reads
+analytic heightAt0; nothing consumes map.terrain) — chunking cannot move a
+collision surface.
+
+PLAN (one focused pass, ~150-200 lines in the terrain build):
+- 8x8 grid of 200 m chunks; far LOD = CURRENT 5.33 m/vertex density (the
+  distant silhouette must not regress), near ring (3x3 around the camera
+  cell) = 2.67 m/vertex (2x silhouette quality where stairstep is visible).
+- Near-LOD geometries built LAZILY on first entry to the near ring, cached
+  per chunk (<= ~25 builds per match; memory bound ~5.7 MB total).
+- 0.5 m skirt on every chunk edge instead of T-junction stitching.
+- Expected: ground view ~145k terrain tris (culling wins), aerial ~180k
+  (same as today), near-field silhouette 2x, draw calls +63 (trivial).
+- Verify: baseline silhouette screenshot saved (terrain_baseline_silhouette),
+  compare after; frame-tri counts via renderer.info autoReset=false (NOTE:
+  with autoReset on, info reads only the composer's final fullscreen pass).
