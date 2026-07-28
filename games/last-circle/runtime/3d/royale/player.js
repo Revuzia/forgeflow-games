@@ -166,7 +166,7 @@ function stripRootMotion(clip) {
   return clip;
 }
 
-const MESHY_CLIPS = ["walk", "run", "death", "dance", "cheer", "jump", "swim", "crouch"];
+const MESHY_CLIPS = ["walk", "run", "death", "death2", "death3", "hit", "dance", "cheer", "jump", "swim", "crouch"];
 const _v3 = new THREE.Vector3();
 
 async function preloadMeshySkin(W, key, tick) {
@@ -418,7 +418,13 @@ function classifyClips(rig) {
     walk,
     swim: find([/^swim$/i]) || run,
     jump: find([/jump/i, /fall/i]),
-    death: find([/death|die|defeat/i]),
+    // exact-anchored so "death" never swallows the variants (Meshy library:
+    // 8 Dead, 183 Shot_and_Fall_Backward, 184 Shot_and_Fall_Forward, 177
+    // Gunshot_Reaction — merged clips are keyed by MESHY_CLIPS name)
+    death: find([/^death$/i, /death|die|defeat/i]),
+    death2: find([/^death2$/i]),
+    death3: find([/^death3$/i]),
+    hit: find([/^hit$/i]),
     shoot: find([/shoot|attack|punch|slash|hit/i]),
     dance: find([/^dance$/i, /dance/i]),
     cheer: find([/^cheer$/i, /cheer|wave|victory/i]),
@@ -1223,12 +1229,21 @@ function syncObj(W, a, dt, far) {
     // remote-emote relay was dead on arrival.
     if (!far && !a.emoting) {
       const gs = Math.hypot(a.vel.x, a.vel.z);
+      // decays HERE, not inside its clip branch — a victim that leaves the
+      // ground (bot jump-dodge) the instant it is shot must not bank the
+      // flinch and play it stale half a second later on landing
+      if (a.hitReactT > 0) a.hitReactT -= dt;
       // freefall: NEARLY-FROZEN mid-stride = limbs spread like a skydive
       // (0.35 looked like the character was jogging through the sky)
       if (a.gliding && !a.chute) playAnim(a, "run", { timeScale: 0.05 });
       else if (a.gliding) playAnim(a, "idle");
       else if (a.swimming) playAnim(a, "swim", { timeScale: gs > 4.5 ? 1.25 : 1 });
       else if (!a.onGround) playAnim(a, "jump", { once: true, startAt: JUMP_TAKEOFF_S });
+      else if (a.hitReactT > 0 && a.clips.hit) {
+        // held for its short window like an emote — playAnim re-selects loco
+        // every frame, so without the hold the flinch dies on the next frame
+        playAnim(a, "hit", { once: true });
+      }
       else if (a.crouching && a.clips.crouch) {
         // one clip covers both crouch stances: crouch-walk plays at a pace set
         // by ground speed, and standing still freezes it on a crouched pose
@@ -1652,6 +1667,17 @@ function hurtActor(W, victim, dmg, attackerId, weaponId, isHead) {
     };
   }
   W.events.emit("actorHurt", victim, { dmg: res.dealt, attackerId, weaponId, isHead, broke: res.broke, toShield: res.toShield });
+  // HIT REACT (Meshy 177 Gunshot_Reaction): a visible body flinch when a real
+  // hit lands. Gated to meaningful damage, a 1.2s cooldown so autofire doesn't
+  // stunlock the silhouette, and only while grounded and slow — a sprinter
+  // frozen mid-stride by a full-body clip reads worse than no flinch. The arm
+  // pose layer still owns the arms afterward, so an armed victim keeps the gun
+  // up while torso/legs stagger — exactly the layered read shipping BRs use.
+  if (!res.dead && res.dealt >= 10 && victim.onGround && !victim.swimming && !victim.gliding &&
+      W.t - (victim._hitReactAt || -9) > 1.2 && Math.hypot(victim.vel.x, victim.vel.z) < 4) {
+    victim._hitReactAt = W.t;
+    victim.hitReactT = 0.5;
+  }
   // Practice-range dummies absorb and reset rather than die — the hit feedback
   // (damage numbers, hitmarker) has already fired above, and a range you can
   // permanently delete in six seconds is not a range.
@@ -1684,7 +1710,13 @@ export function killActor(W, victim, killerId, weaponId) {
   // mid-stride statue instead of a death animation. update() skips dead actors,
   // so this is the only place that can un-freeze it.
   if (victim.rig && victim.rig.mixer) victim.rig.mixer.timeScale = 1;
-  if (victim.rig && victim.clips.death) { playAnim(victim, "death", { once: true }); }
+  if (victim.rig) {
+    // death VARIETY: random pick among whichever death clips this skin baked
+    // (183 fall-backward / 184 fall-forward joined the original 8 "Dead") —
+    // one identical crumple on all 50 actors was a top visible-quality tell
+    const dk = ["death", "death2", "death3"].filter((k) => victim.clips[k]);
+    if (dk.length) playAnim(victim, dk[(Math.random() * dk.length) | 0], { once: true });
+  }
   // "sink away" was a lie the code told: the group was unparented in ONE frame,
   // so the corpse popped out of existence. Hold the clamped death pose, then sink
   // it under the terrain and remove on completion. Actors are rebuilt from
