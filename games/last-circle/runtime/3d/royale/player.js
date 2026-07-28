@@ -946,6 +946,24 @@ function stepActor(W, a, dt, far) {
     }
   }
 
+  // ── MANTLE — modal, like emoting: a short scripted up-and-over ───────────
+  // (trigger lives in the airborne integrate below). Vertical-first arc:
+  // rise through the first 60% of the window, translate through the last —
+  // a straight lerp clips the capsule's chest through the ledge lip.
+  if (a.mantleT != null) {
+    a.mantleT -= dt;
+    const mk = 1 - Math.max(0, a.mantleT) / 0.45;
+    const up = Math.min(1, mk / 0.6), fwd = Math.max(0, (mk - 0.4) / 0.6);
+    const su = up * up * (3 - 2 * up), sf = fwd * fwd * (3 - 2 * fwd);
+    a.pos.y = a._mFrom.y + (a._mTo.y - a._mFrom.y) * su;
+    a.pos.x = a._mFrom.x + (a._mTo.x - a._mFrom.x) * sf;
+    a.pos.z = a._mFrom.z + (a._mTo.z - a._mFrom.z) * sf;
+    a.vel.set(0, 0, 0);
+    if (a.mantleT <= 0) { a.mantleT = null; a.onGround = true; }
+    a.obj.position.copy(a.pos);
+    return;
+  }
+
   // LAUNCH PORTALS: walk into a ring → flung back into the atmosphere, canopy
   // auto-opens on the way down (Final Drop-style island escape / rotation)
   if (!far && W.map.portals && !a._portalBoost && W.t - (a._portalT || 0) > 2.5) {
@@ -1087,10 +1105,33 @@ function stepActor(W, a, dt, far) {
     // integrate — X then Z with wall blocking, then Y with support
     const h = K.PLAYERK.height;
     if (!far) {
+      let hitWall = false;
       let nx = a.pos.x + a.vel.x * dt;
-      if (!blockedHoriz(W, nx, a.pos.z, a.pos.y, h)) a.pos.x = nx; else a.vel.x = 0;
+      if (!blockedHoriz(W, nx, a.pos.z, a.pos.y, h)) a.pos.x = nx; else { a.vel.x = 0; hitWall = true; }
       let nz = a.pos.z + a.vel.z * dt;
-      if (!blockedHoriz(W, a.pos.x, nz, a.pos.y, h)) a.pos.z = nz; else a.vel.z = 0;
+      if (!blockedHoriz(W, a.pos.x, nz, a.pos.y, h)) a.pos.z = nz; else { a.vel.z = 0; hitWall = true; }
+      // MANTLE trigger (research: ironhold ships it; the movement scorecard
+      // rated it the missing S-effort verb): airborne, pushing forward INTO a
+      // wall, and a ledge top within hand reach — above the 0.55 auto-step,
+      // below feet+2.35 (jump apex 1.38 + arm reach). Headroom probe: a
+      // support queried from ledge+2.2 that comes back ABOVE the ledge means
+      // a slab in the pull-up space; the capsule-fits check covers walls.
+      // Humans only — the bot aim/nav model doesn't need it and brains would
+      // trip it on every wall they rub.
+      if (hitWall && !a.onGround && !a.isBot && !a.netRemote && !a.gliding &&
+          !a.swimming && inp.mz > 0 && a.vel.y < 6) {
+        const mfx = -Math.sin(a.yaw), mfz = -Math.cos(a.yaw);
+        const max2 = a.pos.x + mfx * 0.75, maz2 = a.pos.z + mfz * 0.75;
+        const ledge = supportAt(W, max2, maz2, a.pos.y + 2.35);
+        if (ledge > a.pos.y + 0.6 && ledge <= a.pos.y + 2.35 &&
+            supportAt(W, max2, maz2, ledge + 2.2) <= ledge + 0.01 &&
+            !blockedHoriz(W, max2, maz2, ledge + 0.1, h)) {
+          a.mantleT = 0.45;
+          a._mFrom = a._mFrom || new THREE.Vector3(); a._mFrom.copy(a.pos);
+          a._mTo = a._mTo || new THREE.Vector3(); a._mTo.set(max2, ledge + 0.03, maz2);
+          W.events.emit("mantle", a);
+        }
+      }
     } else {
       // far bots: cheap move, terrain only
       a.pos.x += a.vel.x * dt; a.pos.z += a.vel.z * dt;
