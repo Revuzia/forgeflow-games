@@ -207,10 +207,36 @@ export class BoutView {
     switch (f.phase) {
       case PHASE.WINDUP:
         if (changed) {
-          // Alternate the two slash clips so a flurry does not look looped.
-          const flip = (this._attackFlip.get(f.id) || 0) ^ 1;
-          this._attackFlip.set(f.id, flip);
-          const clip = f.isBeast ? "attack" : (flip ? "slash2" : "slash1");
+          // CLIP CHOICE READS THE WEAPON AND THE DIRECTION.
+          //
+          // This line used to be `flip ? "slash2" : "slash1"` — f.weaponId and
+          // f.attackDir were never consulted, so a trident thrust, a spatha
+          // cleave, a sica hook and a gladius jab all rendered the identical
+          // alternating one-hand slash: the sim's whole directional layer had
+          // zero visual output. Only two authored attack clips exist, so the
+          // mapping spends them where they read strongest:
+          //   THRUST (and every polearm blow) -> slash1, whose motion is the
+          //     tighter, more linear of the pair — with the lunge underneath it
+          //     reads as a jab, not an arc. (No speed bias: the strike frame
+          //     must stay aligned with the sim's damage tick.)
+          //   HIGH heavies and cleaving weapons  -> slash2, the big arc.
+          //   LEFT/RIGHT cuts -> the matching-side clip of the pair.
+          // Authored per-weapon sets remain the real fix (audit rank 3); this
+          // makes the input visibly matter with the art that exists today.
+          const kind = f.weapon ? f.weapon.kind : "sword";
+          const dirName = f.attackDir;
+          let clip;
+          if (f.isBeast) clip = "attack";
+          else if (kind === "polearm" || dirName === "thrust") clip = "slash1";
+          else if (dirName === "high" || (f.weapon && f.weapon.cleave > 1)) clip = "slash2";
+          else if (dirName === "left") clip = "slash1";
+          else if (dirName === "right") clip = "slash2";
+          else {
+            // No direction (AI default): alternate so a flurry does not loop.
+            const flip = (this._attackFlip.get(f.id) || 0) ^ 1;
+            this._attackFlip.set(f.id, flip);
+            clip = flip ? "slash2" : "slash1";
+          }
           const dur = a.clipDuration(clip) || 1;
           // Align the clip's STRIKE FRAME with the frame the sim resolves
           // damage on — the end of windup.

@@ -480,6 +480,44 @@ export class Actor {
   }
 
   /** Cross-fade to a looping state. */
+  /**
+   * How far the CURRENT pose is from a clip's first frame, in summed radians
+   * over the quaternion tracks. A quaternion track's values[0..3] IS its t=0
+   * key, so this reads straight off the data with no mixer sampling.
+   *
+   * This is what adaptive crossfades scale on: the audit measured 0.22-0.89 m
+   * of per-bone displacement being covered by fixed 40-120 ms fades on every
+   * attack, hit and death — limbs teleporting at 3-5 m/s. A fade should take
+   * the time the pose gap needs, not the time the call site guessed.
+   */
+  _poseDistance(name) {
+    const a = this.actions[name];
+    if (!a) return 0;
+    const clip = a.getClip();
+    // AnimationClip carries no userData in this three build; cache per-actor.
+    this._t0Cache = this._t0Cache || new Map();
+    let t0 = this._t0Cache.get(name);
+    if (!t0) {
+      t0 = [];
+      this._t0Cache.set(name, t0);
+      for (const tr of clip.tracks) {
+        const m = /^(.*)\.quaternion$/.exec(tr.name);
+        if (!m) continue;
+        let bone = null;
+        this.model.traverse((o) => { if (!bone && o.isBone && o.name === m[1]) bone = o; });
+        if (bone) t0.push({ bone, q: new THREE.Quaternion(tr.values[0], tr.values[1], tr.values[2], tr.values[3]) });
+      }
+    }
+    let dist = 0;
+    for (const { bone, q } of t0) dist += bone.quaternion.angleTo(q);
+    return dist;
+  }
+
+  /** Fade long enough for the pose gap: ~60 ms floor, 20 ms per radian, 280 ms cap. */
+  _adaptiveFade(name, requested) {
+    return clamp(Math.max(requested, 0.06 + this._poseDistance(name) * 0.02), 0.05, 0.28);
+  }
+
   play(logical, { fade = 0.18, timeScale = 1 } = {}) {
     const name = this._resolve(logical);
     if (!name || name === this.currentName) {
@@ -487,12 +525,13 @@ export class Actor {
       return false;
     }
     const next = this.actions[name];
+    const f = this._adaptiveFade(name, fade);
     next.reset();
     next.setLoop(THREE.LoopRepeat, Infinity);
     next.clampWhenFinished = false;
     next.timeScale = timeScale;
-    next.fadeIn(fade);
-    if (this.current) this.current.fadeOut(fade);
+    next.fadeIn(f);
+    if (this.current) this.current.fadeOut(f);
     next.play();
     this.current = next;
     this.currentName = name;
@@ -504,12 +543,13 @@ export class Actor {
     const name = this._resolve(logical);
     if (!name) return false;
     const a = this.actions[name];
+    const f = this._adaptiveFade(name, fade);
     a.reset();
     a.setLoop(THREE.LoopOnce, 1);
     a.clampWhenFinished = true;
     a.timeScale = timeScale;
-    a.fadeIn(fade);
-    if (this.current && this.current !== a) this.current.fadeOut(fade);
+    a.fadeIn(f);
+    if (this.current && this.current !== a) this.current.fadeOut(f);
     a.play();
     this.current = a;
     this.currentName = name;
