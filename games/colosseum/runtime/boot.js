@@ -16,6 +16,7 @@ import { Sky } from "./view/sky.js";
 import { Hypogeum } from "./view/hypogeum.js";
 import { Gates } from "./view/gates.js";
 import { loadFighter, loadBeast, Actor, attachWeapon, makeGladius, makeScutum, makeTrident } from "./view/actors.js";
+import { clone as skeletonClone } from "three/addons/utils/SkeletonUtils.js";
 import { makeSand } from "./view/sand.js";
 import { Equipment } from "./view/equipment.js";
 import { Inventory } from "./sim/inventory.js";
@@ -263,6 +264,20 @@ try {
 } catch (e) {
   console.error("[boot] actor load failed:", e);
   window.__ACTOR_ERR__ = String(e && e.message || e);
+}
+
+// CROWD IMPOSTORS — bake the mid/far tiers' card atlas from the real fighter
+// body now that its library is loaded. Failure logs and leaves the geometric
+// crowd standing; the swap is all-or-nothing per tier.
+try {
+  if (actorLibs.fighter) {
+    const ok = crowd.bakeImpostors(renderer, actorLibs.fighter, {
+      makeBody: () => new Actor(actorLibs.fighter, { height: 1.75, name: "impostor_bake" }),
+    });
+    console.log(`[boot] crowd impostors ${ok ? "baked + swapped (mid/far)" : "SKIPPED"}`);
+  }
+} catch (e) {
+  console.warn("[boot] crowd impostor bake failed:", e && e.message);
 }
 
 // SHADER PRE-WARM, with a render target BOUND.

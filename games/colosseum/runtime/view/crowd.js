@@ -126,6 +126,66 @@ const CROWD_FRAG = /* glsl */ `
   gl_FragColor.rgb *= (1.0 + vStand * 0.22);
 `;
 
+/**
+ * Impostor material for the mid/far tiers: an UNLIT textured quad per person,
+ * billboarded in view space, sampling one column of the baked atlas by viewing
+ * angle and one row by wave state. Unlit (MeshBasicMaterial base) because the
+ * atlas is BAKED LIT — lighting a photograph of a lit body double-lights it.
+ * Keeps every crowd behaviour: the same CROWD_PARS/VERT drive idle bob,
+ * excitement bounce, the travelling wave (rise + row select) and the lean
+ * shear; per-instance colour still multiplies for palette variety and row-AO.
+ */
+function makeImpostorMaterial(atlas) {
+  const mat = new THREE.MeshBasicMaterial({
+    vertexColors: true, map: atlas, alphaTest: 0.35, side: THREE.DoubleSide,
+  });
+  mat.name = "crowd_impostor";
+  mat.userData.uniforms = {
+    uTime: { value: 0 },
+    uExcitement: { value: 0.25 },
+    uWavePos: { value: -1 },
+    uWaveWidth: { value: 0.5 },
+    uWaveStrength: { value: 0 },
+    uFocus: { value: new THREE.Vector3(0, 0, 0) },
+  };
+  mat.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, mat.userData.uniforms);
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\n" + CROWD_PARS + "\nvarying vec2 vAtlasUv;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\n" + CROWD_VERT + `
+  // --- atlas frame select ---------------------------------------------------
+  // Column: the viewing azimuth of THIS person from the camera, quantised to
+  // the 8 baked yaws. Row: standing (wave/excitement) switches to the arms-up
+  // bake. uv is the quad's 0..1 corner uv.
+  vec3 iwp = (instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+  vec3 mwp = (modelMatrix * vec4(iwp, 1.0)).xyz;
+  float viewAz = atan(cameraPosition.x - mwp.x, cameraPosition.z - mwp.z);
+  float faceAz = atan(-iwp.x, -iwp.z);            // they face the arena centre
+  float rel = viewAz - faceAz;
+  float col = floor(mod(rel + 3.14159265 + 0.3926991, 6.2831853) / 6.2831853 * 8.0);
+  float row = (vStand > 0.5) ? 1.0 : 0.0;
+  vAtlasUv = (uv + vec2(col, row)) / vec2(8.0, 2.0);
+`)
+      .replace("#include <project_vertex>", `
+  // Billboard: the instance's translation, then the (already wave-displaced)
+  // quad corner applied in VIEW space so every card faces the camera.
+  vec4 mvPosition = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+  mvPosition.xyz += vec3(transformed.x, transformed.y, 0.0);
+  gl_Position = projectionMatrix * mvPosition;
+`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying float vStand;\nvarying vec2 vAtlasUv;")
+      .replace("#include <map_fragment>", `
+  vec4 sampledDiffuseColor = texture2D(map, vAtlasUv);
+  diffuseColor *= sampledDiffuseColor;
+`)
+      .replace("#include <dithering_fragment>", "#include <dithering_fragment>\n" + CROWD_FRAG);
+    mat.userData.shader = shader;
+  };
+  mat.customProgramCacheKey = () => "colosseum_crowd_impostor_v1";
+  return mat;
+}
+
 function makeCrowdMaterial() {
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
   mat.name = "crowd";
@@ -368,13 +428,119 @@ export class Crowd {
       }
     }
 
-    const u = this.mat.userData.uniforms;
-    u.uTime.value = this._t;
-    u.uExcitement.value = this.excitement;
-    u.uWavePos.value = this.wave.active ? this.wave.pos : -1;
-    u.uWaveWidth.value = this.wave.width || 0.6;
-    u.uWaveStrength.value = this.wave.active ? this.wave.strength : 0;
-    u.uFocus.value.copy(this.focus);
+    const mats = this._impostorMat ? [this.mat, this._impostorMat] : [this.mat];
+    for (const m of mats) {
+      const u = m.userData.uniforms;
+      u.uTime.value = this._t;
+      u.uExcitement.value = this.excitement;
+      u.uWavePos.value = this.wave.active ? this.wave.pos : -1;
+      u.uWaveWidth.value = this.wave.width || 0.6;
+      u.uWaveStrength.value = this.wave.active ? this.wave.strength : 0;
+      u.uFocus.value.copy(this.focus);
+    }
+  }
+
+  /**
+   * Bake the impostor atlas from the REAL fighter body and swap the mid/far
+   * tiers to billboarded cards sampling it.
+   *
+   * The audit's finding: ~74% of the crowd rendered as vertex-coloured slabs
+   * with a nub head — the loudest "not a real game" signal on screen, and no
+   * amount of triangle budget at these instance counts fixes it. The industry
+   * answer at stadium scale (FIFA/NBA 2K lineage) is textured impostors:
+   * VARIETY AND SILHOUETTE come from a texture of a real body, not geometry.
+   *
+   * 8 yaw columns x 2 pose rows (seated-idle, arms-up) rendered once at load
+   * into a 1024x512 target from the actual Meshy gladiator body — so the crowd
+   * is made of the same humanity as the fighters. Near tier keeps its mesh.
+   * Called from boot AFTER the fighter library loads; failure leaves the
+   * geometric crowd in place (honest fallback, logged).
+   */
+  bakeImpostors(renderer, fighterLib, { makeBody = null } = {}) {
+    if (!fighterLib || !fighterLib.scene || this._impostorMat) return false;
+    if (!makeBody) return false;
+    const W = 1024, H = 512, COLS = 8, ROWS = 2;
+
+    // The body comes from a REAL Actor, not a raw scene clone. A raw clone
+    // renders in the glTF BIND pose, and on these Meshy rigs the bind pose is
+    // DEGENERATE — the same collapsed-joint mess Skeleton.pose() produced in
+    // the equipment work — so the first version of this bake photographed a
+    // crumpled blob and the cards came out empty. Actor normalises height
+    // under a RUNNING clip (its constructor steps the mixer), which is the
+    // only pose these rigs are trustworthy in.
+    const actorBody = makeBody();               // an Actor, ~1.75 m, idling
+    const body = actorBody.root;
+    const stage = new THREE.Scene();
+    stage.add(body);
+    stage.add(new THREE.AmbientLight(0xffffff, 0.85));
+    const sun = new THREE.DirectionalLight(0xfff2dd, 1.6);
+    sun.position.set(2, 4, 3);
+    stage.add(sun);
+
+    const rt = new THREE.WebGLRenderTarget(W, H, { samples: 0 });
+    rt.texture.colorSpace = THREE.SRGBColorSpace;
+    const cam = new THREE.OrthographicCamera(-0.55, 0.55, 1.95, -0.05, 0.1, 20);
+
+    const armsUp = () => {
+      // Crude but effective: throw both arms overhead for the wave row.
+      body.traverse((o) => {
+        if (o.isBone && /^(Left|Right)Arm$/.test(o.name)) {
+          o.rotation.z += o.name[0] === "L" ? 2.4 : -2.4;
+        }
+      });
+    };
+
+    const prevRT = renderer.getRenderTarget();
+    const prevClear = renderer.getClearAlpha();
+    const prevAuto = renderer.autoClear;
+    renderer.setRenderTarget(rt);
+    renderer.setClearColor(0x000000, 0);
+    renderer.clear();
+    // AUTOCLEAR OFF, SCISSOR PER CELL. render() auto-clears the whole target
+    // by default, so the first version of this loop erased every cell except
+    // the last — 15 of 16 atlas frames came out empty, alphaTest culled the
+    // cards sampling them, and the upper bowl went sparse. The capture caught
+    // it immediately.
+    renderer.autoClear = false;
+    renderer.setScissorTest(true);
+    cam.position.set(0, 0.95, 6);
+    cam.lookAt(0, 0.95, 0);
+    for (let row = 0; row < ROWS; row++) {
+      if (row === 1) armsUp();
+      for (let col = 0; col < COLS; col++) {
+        body.rotation.y = (col / COLS) * TAU;
+        const vx = (col / COLS) * W, vy = (row / ROWS) * H;
+        renderer.setViewport(vx, vy, W / COLS, H / ROWS);
+        renderer.setScissor(vx, vy, W / COLS, H / ROWS);
+        renderer.render(stage, cam);
+      }
+    }
+    renderer.setScissorTest(false);
+    renderer.autoClear = prevAuto;
+    renderer.setViewport(0, 0, renderer.domElement.width, renderer.domElement.height);
+    renderer.setRenderTarget(prevRT);
+    renderer.setClearColor(0x000000, prevClear);
+
+    // Swap the two cheap tiers onto cards.
+    this._impostorMat = makeImpostorMaterial(rt.texture);
+    let swapped = 0;
+    for (const tier of ["mid", "far"]) {
+      const inst = this.parts[tier];
+      if (!inst) continue;
+      const old = inst.geometry;
+      const quad = new THREE.PlaneGeometry(0.85, 1.9);
+      quad.translate(0, 0.95, 0);                    // feet at the seat point
+      for (const name of ["aPhase", "aScale", "aTheta", "aEager", "color"]) {
+        const attr = old.getAttribute(name);
+        if (attr) quad.setAttribute(name, attr);
+      }
+      inst.geometry = quad;
+      inst.material = this._impostorMat;
+      old.dispose();
+      swapped++;
+    }
+    this._atlas = rt;
+    return swapped === 2;
   }
 
   /**
