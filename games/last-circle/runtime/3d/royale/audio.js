@@ -47,14 +47,25 @@ export function init(W) {
 // domain, commercial use fine, no attribution required — assets/audio/sfx/,
 // 472 KB total), covering exactly the categories synthesis is worst at.
 //
-// Weapon reports are DELIBERATELY still synthesised: shot() already does
-// per-shot decorrelation, range-dependent filtering and a near-field crack
-// layer, and a single flat recorded bang would be a downgrade on all three.
+// Weapon reports were deliberately synthesised while the only alternative was
+// "a single flat recorded bang" — that objection is now answered properly:
+// 2-3 REAL takes per class (Free Firearm Sound Library, CC0, near-distance
+// "Prepared" masters — see assets/audio/sfx/FFSL-LICENSE.txt), and sample()'s
+// per-play ±6% rate + gain jitter decorrelates consecutive rounds the same way
+// shot() did. The synth path remains the verbatim fallback (owner: "synthesised
+// reports may be fine" — recorded preferred when sourceable, and it was).
+// glauncher keeps its synth thump: the library has no launcher and the synth
+// one reads correctly.
 //
 // Every call site keeps its synth path as a fallback, so a failed decode, a
 // blocked fetch or an old cache degrades to exactly today's behaviour rather
 // than to silence.
 const SFX = {
+  shot_pistol:  ["shot_pistol_0", "shot_pistol_1"],
+  shot_smg:     ["shot_smg_0", "shot_smg_1", "shot_smg_2"],
+  shot_ar:      ["shot_ar_0", "shot_ar_1", "shot_ar_2"],
+  shot_shotgun: ["shot_shotgun_0", "shot_shotgun_1"],
+  shot_sniper:  ["shot_sniper_0", "shot_sniper_1", "shot_sniper_2"],
   step_grass:    ["step_grass_000", "step_grass_001", "step_grass_002", "step_grass_003"],
   step_concrete: ["step_concrete_000", "step_concrete_001", "step_concrete_002", "step_concrete_003"],
   step_wood:     ["step_wood_000", "step_wood_001", "step_wood_002", "step_wood_003"],
@@ -508,8 +519,16 @@ function wire(W) {
 
   on("shotFired", (a, weaponId, eye) => {
     const def = W.SIM.WEAPONS[weaponId];
-    shot(def ? def.cls : "ar", a === W.player ? null : eye);
-    if (a === W.player) duckMusic();
+    const cls = def ? def.cls : "ar";
+    const own = a === W.player;
+    // recorded report first (multi-take round-robin + sample()'s rate jitter =
+    // decorrelation), synth shot() verbatim when the class has no recording
+    // (launcher) or the pack failed to decode. 260 m ceiling matches the synth
+    // path's audible range so bot-fight ambience is unchanged.
+    if (!(SFX["shot_" + cls] && sample("shot_" + cls, own ? null : eye, own ? 0.5 : 0.4, 260))) {
+      shot(cls, own ? null : eye);
+    }
+    if (own) duckMusic();
   });
   // reload = mechanical sequence, not beeps: mag release click → mag drop →
   // mag seat clunk (timed to the weapon's reloadS) → slide rack near the end.
