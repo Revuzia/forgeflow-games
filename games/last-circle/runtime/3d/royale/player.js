@@ -620,6 +620,9 @@ function installHumanInput(W) {
     if (e.code === "Digit5") inp.slot = 4;
     // [Q] drop the active weapon (loot.js W.dropActive — refuses the last gun)
     if (e.code === "KeyQ" && !ev.repeat && W.player.alive && W.dropActive) W.dropActive(W.player);
+    // [ENTER] squad chat — online rooms only (hud owns the input; the guard at
+    // the top of this handler ignores game keys while the input has focus)
+    if (e.code === "Enter" && !ev.repeat && W.net && W.chatOpen) { W.chatOpen(); return; }
     // While ADS, SHIFT is BREATH-HOLD (weapons.js sway block), not the sprint
     // latch — you can't sprint while aiming anyway, and without this gate a
     // scoped breath-hold silently armed a sprint you'd trigger on unscope.

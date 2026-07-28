@@ -1697,6 +1697,48 @@ export function showHUD(W) {
   // (Final Drop parity — their hotbar select shows rarity/name)
   R.wpnPop = h("div", { position: "absolute", left: "50%", bottom: "118px", transform: "translateX(-50%)", fontFamily: "Rajdhani, " + FONT, fontSize: "16px", fontWeight: "900", letterSpacing: "1.5px", textShadow: "0 2px 8px rgba(0,0,0,0.95)", opacity: "0", transition: "opacity .18s", pointerEvents: "none" }, "", L);
 
+  // ── MP TEXT CHAT (ENTER — Final Drop parity, owner screenshots) ──────────
+  // Log bottom-left above the bars; input opens on ENTER (online only).
+  // Messages ride the ev envelope (net.js "chat") — zero extra billed
+  // messages. textContent everywhere: peer names and message bodies are
+  // remote strings and must never touch innerHTML.
+  R.chatLog = h("div", { position: "absolute", left: "18px", bottom: "128px", display: "flex", flexDirection: "column", gap: "3px", maxWidth: "360px", fontFamily: "Rajdhani, " + FONT, fontSize: "13.5px", pointerEvents: "none" }, null, L);
+  const chatRow = h("div", { position: "absolute", left: "18px", bottom: "104px", display: "none", pointerEvents: "auto" }, null, L);
+  R.chatInput = document.createElement("input");
+  Object.assign(R.chatInput.style, { width: "300px", padding: "7px 10px", borderRadius: "8px", border: "1px solid rgba(140,190,255,0.5)", background: "rgba(6,12,20,0.85)", color: "#e6eefc", fontFamily: "Rajdhani, " + FONT, fontSize: "14px", outline: "none" });
+  R.chatInput.maxLength = 80; R.chatInput.placeholder = "message your squad…";
+  chatRow.appendChild(R.chatInput);
+  R.chatRow = chatRow;
+  W.pushChat = (name, text, own) => {
+    const row = h("div", { background: "rgba(6,10,16,0.55)", padding: "3px 9px", borderRadius: "7px", alignSelf: "flex-start", textShadow: "0 1px 3px rgba(0,0,0,0.9)" }, "", R.chatLog);
+    const nm = h("span", { fontWeight: "900", color: own ? "#9fd7ff" : "#ffd254" }, "", row);
+    nm.textContent = name + ":  ";
+    const tx = h("span", { opacity: "0.95" }, "", row);
+    tx.textContent = text;
+    while (R.chatLog.children.length > 5) R.chatLog.firstChild.remove();
+    setTimeout(() => { if (row.parentNode) row.remove(); }, 9000);
+  };
+  W.chatOpen = () => {
+    if (!W.net || R.chatRow.style.display !== "none") return;
+    R.chatRow.style.display = "block";
+    R.chatInput.value = "";
+    R.chatInput.focus();
+  };
+  const chatClose = () => { R.chatRow.style.display = "none"; R.chatInput.blur(); };
+  R.chatInput.addEventListener("keydown", (ce) => {
+    ce.stopPropagation();
+    if (ce.code === "Escape") { chatClose(); }
+    else if (ce.code === "Enter") {
+      const m = R.chatInput.value.trim();
+      if (m && W.sendChat && W.sendChat(m)) W.pushChat(W.player ? W.player.name : "you", m, true);
+      chatClose();
+    }
+  });
+  W.events.on("chatMsg", (id, m) => {
+    const a2 = W.actorById && W.actorById.get(id);
+    W.pushChat(a2 ? a2.name : "player", String(m).slice(0, 80), false);
+  });
+
   // world-anchored loot labels (Final Drop parity — owner screenshots show
   // named ground loot + a CHEST tag): a pool of 7 pills projected to the
   // items' screen positions each frame, rarity-coloured, distance-faded

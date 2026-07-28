@@ -82,6 +82,16 @@ export function init(W) {
   // relay above: only things simulated locally are broadcast.
   W.events.on("emote", (a, kind) => { if (S && a && !a.netRemote) qsend("emote", { id: a.id, k: kind }); });
   W.events.on("netDropItem", (d) => { if (S) qsend("drop", d); });
+  // squad chat: rate-limited, rides the ev envelope (one billed message = the
+  // state packet it boards). Returns true when accepted so hud can echo it.
+  W.sendChat = (m) => {
+    if (!S || !W.player) return false;
+    const now = performance.now();
+    if (now - (S._lastChatT || 0) < 1500) return false;
+    S._lastChatT = now;
+    qsend("chat", { id: W.player.id, m: String(m).slice(0, 80) });
+    return true;
+  };
   W.events.on("actorDied", (victim, killerId, weaponId) => {
     if (!S) return;
     // own death, or a host-simulated bot's death → tell everyone
@@ -416,6 +426,13 @@ function onMsg(W, { from, t, d }) {
   if (t === "emote") {
     const a = W.actorById.get(d.id);
     if (a && a.netRemote && a.alive) W.playRemoteEmote && W.playRemoteEmote(a, d.k);
+    return;
+  }
+  if (t === "chat") {
+    // squad text — hud renders it via textContent (remote strings never touch
+    // innerHTML). Rides the ev envelope; NOT in the fire/emote shed list, so
+    // the budget can't silently eat a message.
+    if (d.id !== undefined && typeof d.m === "string") W.events.emit("chatMsg", d.id, d.m.slice(0, 80));
     return;
   }
   if (t === "drop") { W.netSpawnItem && W.netSpawnItem(d); return; }
