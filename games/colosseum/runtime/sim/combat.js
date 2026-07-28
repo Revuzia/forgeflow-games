@@ -724,6 +724,9 @@ export class Combat {
       damage: +dmg.toFixed(1), hp: +Math.max(0, target.hp).toFixed(1),
       fromBehind, fromFlank, heavy,
       x: target.x, z: target.z,
+      // World bearing of the blow, attacker -> target: blood is cast AWAY from
+      // the blade, and the view stretches its splats along this line.
+      castDir: Math.atan2(target.x - attacker.x, target.z - attacker.z),
     });
 
     if (target.hp <= 0) this._kill(target, attacker);

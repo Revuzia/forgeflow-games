@@ -132,9 +132,16 @@ class DamageLayer {
    * @param {'blood'|'scuff'|'wet'} kind
    * @param {number} strength 0..1
    */
-  splat(x, z, radius, kind = "blood", strength = 1) {
+  splat(x, z, radius, kind = "blood", strength = 1, castDir = null) {
     const [u, v] = DamageLayer.uvFor(x, z);
     if (u < -0.05 || u > 1.05 || v < -0.05 || v > 1.05) return false;
+
+    // FLOOR THE RADIUS AT ~3 TEXELS. The damage layer maps ~87 m of arena to
+    // its texture, so a small stain shrank below one texel and rendered as a
+    // single hard square — the "confetti" read. Three texels is the smallest
+    // stamp whose soft edge survives sampling.
+    const texel = (ARENA.floor.a * 2) / this.rt.width;
+    radius = Math.max(radius, texel * 3);
 
     // Radius in texture space differs per axis because the arena is an ellipse
     // mapped to a square — a circular pool must become an ellipse in UV or it
@@ -149,7 +156,16 @@ class DamageLayer {
     this.splatMat.uniforms.uHardness.value = kind === "scuff" ? 0.15 : 0.45;
 
     this.quad.position.set(u, v, 0);
-    this.quad.scale.set(ru * 2, rv * 2, 1);
+    // Blood is CAST, not dropped: stretched ~2.2x along the blow's bearing so
+    // a stain records the direction of the hit that made it. atan2(x,z) world
+    // bearing maps to the damage layer's u=x, v=z chart as a plain 2D rotation.
+    if (castDir !== null && kind === "blood") {
+      this.quad.rotation.z = -castDir;
+      this.quad.scale.set(ru * 2 * 2.2, rv * 2 * 0.75, 1);
+    } else {
+      this.quad.rotation.z = 0;
+      this.quad.scale.set(ru * 2, rv * 2, 1);
+    }
 
     const prev = this.renderer.getRenderTarget();
     const prevAuto = this.renderer.autoClear;

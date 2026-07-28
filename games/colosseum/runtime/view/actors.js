@@ -535,7 +535,10 @@ export class Actor {
     // is what plants the feet.
     if (this.current && (this.currentName === "walk" || this.currentName === "run")) {
       const nominal = this.currentName === "run" ? 3.6 : 1.5;
-      this.current.timeScale = clamp(groundSpeed / nominal, 0.35, 2.2);
+      // locoDir: +1 forward, -1 backpedal (the view sets it from velocity vs
+      // facing). The clamp is magnitude-only, so without the sign carried here
+      // it would overwrite a reversed cycle back to forward every frame.
+      this.current.timeScale = (this.locoDir || 1) * clamp(groundSpeed / nominal, 0.35, 2.2);
     }
     this.mixer.update(dt);
     this._spineFlex();

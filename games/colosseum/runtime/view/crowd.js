@@ -206,7 +206,7 @@ export class Crowd {
         const y = tier.startY + r * tier.rise + tier.rise;
         const perim = ellipsePerimeter(a, b);
         const cap = Math.floor((perim / pitch) * tier.density);
-        rowsMeta.push({ a, b, y, cap, tierIndex: ti, tier });
+        rowsMeta.push({ a, b, y, cap, tierIndex: ti, tier, rowFrac: tier.rows > 1 ? r / (tier.rows - 1) : 0 });
         wanted += cap;
       }
     });
@@ -242,6 +242,7 @@ export class Crowd {
           z: row.b * Math.sin(t),
           theta: Math.atan2(Math.sin(t), Math.cos(t)),
           tierIndex: row.tierIndex,
+          rowFrac: row.rowFrac,
         });
       }
     }
@@ -292,9 +293,15 @@ export class Crowd {
       const c = palette[(rnd() * palette.length) | 0];
       // slight per-person value jitter so the palette doesn't band
       const j = 0.86 + rnd() * 0.28;
-      color[i * 3] = c.r * j;
-      color[i * 3 + 1] = c.g * j;
-      color[i * 3 + 2] = c.b * j;
+      // ROW AO: the back of every tier sits under the next tier's overhang, so
+      // spectators darken toward the rear of their section. Costs nothing (it
+      // rides the existing per-instance color) and breaks the uniform-
+      // brightness wall that made the crowd read as flat confetti — depth cues
+      // come from occlusion gradients, not from triangle count.
+      const ao = 1 - (s.rowFrac || 0) * 0.32 - (s.tierIndex >= 3 ? 0.06 : 0);
+      color[i * 3] = c.r * j * ao;
+      color[i * 3 + 1] = c.g * j * ao;
+      color[i * 3 + 2] = c.b * j * ao;
     });
 
     geo.setAttribute("aPhase", new THREE.InstancedBufferAttribute(phase, 1));

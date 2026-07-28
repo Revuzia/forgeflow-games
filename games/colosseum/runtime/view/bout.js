@@ -273,7 +273,17 @@ export class BoutView {
       case PHASE.IDLE: {
         // Locomotion by ground speed. The actor's own foot-slide correction
         // handles the timeScale.
+        //
+        // DIRECTION matters, not just magnitude: the sim's spacer/flanker AI
+        // backpedals and circles by design, and selecting on speed alone
+        // played the FORWARD walk while the body slid backwards — a fighter
+        // giving ground moonwalked, every bout. Until authored strafe clips
+        // exist, a backward mover plays the walk cycle REVERSED (the clip
+        // carries a Hips.position track, so timeScale -1 reverses the whole
+        // gait, feet planting in the direction of travel).
         const s = f.speed;
+        a.locoDir = (s > 0.25 &&
+          (f.vx * Math.sin(f.facing) + f.vz * Math.cos(f.facing)) < -0.1) ? -1 : 1;
         if (s > 2.4) a.play("run");
         else if (s > 0.25) a.play("walk");
         else if (f.blocking && a.hasClip("parry")) a.play("parry", { fade: 0.14 });
@@ -357,7 +367,7 @@ export class BoutView {
         // Blood goes into the persistent damage layer, so the arena keeps a
         // record of the fight rather than a puff that vanishes.
         if (sand) {
-          sand.splat(e.x, e.z, e.heavy ? 0.55 : 0.32, "blood", e.heavy ? 0.9 : 0.55);
+          sand.splat(e.x, e.z, e.heavy ? 0.55 : 0.32, "blood", e.heavy ? 0.9 : 0.55, e.castDir ?? null);
           sand.splat(e.x, e.z, 0.7, "scuff", 0.3);
         }
         if (vfx) vfx.blood(new THREE.Vector3(e.x, e.heavy ? 1.25 : 1.05, e.z), e.heavy ? 1.4 : 0.8);

@@ -27,17 +27,51 @@ import { TAU, ellipseArcPoints, ellipsePerimeter, mulberry32 } from "../core/uti
 // ---------------------------------------------------------------------------
 
 function makeMaterials(quality) {
+  // Wire the shipped PBR sets. These 12 webp files sat in assets/tex for a
+  // month referenced by NOTHING — the audit found the walls rendering as two
+  // flat colour stripes behind every fight while complete travertine and
+  // marble albedo/normal/AO/rough maps were already on disk. UVs are emitted
+  // by ellipseRing in metres/TILE, so repeat stays (1,1) here and every ring
+  // shares one world-scale grain. Vertex colours (the baked per-vertex AO and
+  // banding) multiply on top, same layering sand.js already uses.
+  // TextureLoader needs a DOM (it decodes through <img>); the headless probes
+  // import this module in node to measure geometry, so texture wiring is
+  // browser-only and the probes keep their flat-colour materials.
+  const hasDOM = typeof document !== "undefined";
+  const texLoad = hasDOM ? new THREE.TextureLoader() : null;
+  const t2 = (file, srgb) => {
+    const t = texLoad.load(`assets/tex/${file}`);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = 4;
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  };
+  const stoneMaps = (base) => (hasDOM ? {
+    map: t2(`${base}_albedo.webp`, true),
+    normalMap: t2(`${base}_normal.webp`, false),
+    normalScale: new THREE.Vector2(0.7, 0.7),
+    roughnessMap: t2(`${base}_rough.webp`, false),
+    aoMap: t2(`${base}_ao.webp`, false),
+    aoMapIntensity: 0.6,
+  } : {});
+  const trav = stoneMaps("wall_travertine");
+  const marb = stoneMaps("floor_marble");
+  // aoMap samples uv2 by default; these rings carry ONE uv set.
+  if (trav.aoMap) { trav.aoMap.channel = 0; marb.aoMap.channel = 0; }
+
   const travertine = new THREE.MeshStandardMaterial({
-    color: 0xc9b891, roughness: 0.94, metalness: 0.0, vertexColors: true,
-    name: "travertine",
+    // Base colours lighten toward neutral now that the albedo carries the
+    // stone tone — the old values would double-tint the map to mud.
+    color: 0xe8ddc4, roughness: 0.94, metalness: 0.0, vertexColors: true,
+    name: "travertine", ...trav,
   });
   const travertineDark = new THREE.MeshStandardMaterial({
-    color: 0x8f8068, roughness: 0.96, metalness: 0.0, vertexColors: true,
-    name: "travertine_shade",
+    color: 0xa89a80, roughness: 0.96, metalness: 0.0, vertexColors: true,
+    name: "travertine_shade", ...trav,
   });
   const marble = new THREE.MeshStandardMaterial({
-    color: 0xe6e0d0, roughness: 0.55, metalness: 0.0, vertexColors: true,
-    name: "marble",
+    color: 0xf2ede0, roughness: 0.55, metalness: 0.0, vertexColors: true,
+    name: "marble", ...marb,
   });
   const wood = new THREE.MeshStandardMaterial({
     color: 0x6d5236, roughness: 0.9, metalness: 0.0, name: "wood",
@@ -83,36 +117,58 @@ function tint(geo, hex, jitter = 0, rnd = Math.random) {
 function ellipseRing(innerA, innerB, outerA, outerB, y0, y1, segments) {
   const pos = [];
   const nor = [];
+  const uv = [];
   const seg = segments;
   const P = (a, b, t, y) => [a * Math.cos(t), y, b * Math.sin(t)];
+
+  // PARAMETRIC UVs, IN METRES OVER TILE SIZE. This helper used to write an
+  // all-zero uv attribute, which is why complete travertine and marble PBR
+  // sets sat on disk for a month wired to nothing: every sample landed on one
+  // texel and the maps read as flat colour, so they were never enabled. The
+  // sweep has a natural chart — u along the arc, v up the face (or across the
+  // run for the top) — and emitting it in metres/TILE means every ring shares
+  // one world-scale grain with no per-material repeat bookkeeping.
+  const TILE = 2.6;                                   // metres per texture tile
+  const perim = Math.PI * (3 * (outerA + outerB) -
+    Math.sqrt((3 * outerA + outerB) * (outerA + 3 * outerB)));   // Ramanujan
+  const run = Math.hypot(outerA - innerA, outerB - innerB) || 0.001;
 
   for (let i = 0; i < seg; i++) {
     const t0 = (i / seg) * TAU;
     const t1 = ((i + 1) / seg) * TAU;
+    const u0 = (i / seg) * perim / TILE;
+    const u1 = ((i + 1) / seg) * perim / TILE;
+    const vy0 = y0 / TILE, vy1 = y1 / TILE;
+    const vr = run / TILE;
 
     const i0 = P(innerA, innerB, t0, 0), i1 = P(innerA, innerB, t1, 0);
     const o0 = P(outerA, outerB, t0, 0), o1 = P(outerA, outerB, t1, 0);
 
-    // top face (y1)
-    quad(pos, nor, [i0[0], y1, i0[2]], [o0[0], y1, o0[2]], [o1[0], y1, o1[2]], [i1[0], y1, i1[2]], [0, 1, 0]);
-    // outer face
+    // top face (y1): u along the arc, v across the radial run
+    quad(pos, nor, [i0[0], y1, i0[2]], [o0[0], y1, o0[2]], [o1[0], y1, o1[2]], [i1[0], y1, i1[2]], [0, 1, 0],
+      uv, [u0, 0], [u0, vr], [u1, vr], [u1, 0]);
+    // outer face: u along the arc, v up the wall
     const on = [Math.cos(t0), 0, Math.sin(t0)];
-    quad(pos, nor, [o0[0], y0, o0[2]], [o1[0], y0, o1[2]], [o1[0], y1, o1[2]], [o0[0], y1, o0[2]], on);
+    quad(pos, nor, [o0[0], y0, o0[2]], [o1[0], y0, o1[2]], [o1[0], y1, o1[2]], [o0[0], y1, o0[2]], on,
+      uv, [u0, vy0], [u1, vy0], [u1, vy1], [u0, vy1]);
     // inner face (riser) — faces the arena
     const inn = [-Math.cos(t0), 0, -Math.sin(t0)];
-    quad(pos, nor, [i1[0], y0, i1[2]], [i0[0], y0, i0[2]], [i0[0], y1, i0[2]], [i1[0], y1, i1[2]], inn);
+    quad(pos, nor, [i1[0], y0, i1[2]], [i0[0], y0, i0[2]], [i0[0], y1, i0[2]], [i1[0], y1, i1[2]], inn,
+      uv, [u1, vy0], [u0, vy0], [u0, vy1], [u1, vy1]);
   }
 
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
-  g.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array((pos.length / 3) * 2), 2));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
   return g;
 }
 
-function quad(pos, nor, a, b, c, d, n) {
+function quad(pos, nor, a, b, c, d, n, uv = null, ua = null, ub = null, uc = null, ud = null) {
   pos.push(...a, ...b, ...c, ...a, ...c, ...d);
   for (let i = 0; i < 6; i++) nor.push(...n);
+  if (uv && ua) uv.push(...ua, ...ub, ...uc, ...ua, ...uc, ...ud);
+  else if (uv) uv.push(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 }
 
 /**
