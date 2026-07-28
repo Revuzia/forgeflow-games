@@ -289,6 +289,7 @@ register3d("royale", async function (kernel, content) {
     // fx.update on phase "menu"), so the NEXT match opened already shaking.
     W.camShake = 0; W.fovPunch = 0; W.hitstopT = 0;
     W._winHold = false; W._winOrbit = 0; W._winDist = 0;
+    W._reportedMatch = false;   // portal leaderboard bridge fires once per match
 
     // clear previous world.
     // DISPOSE BEFORE DROPPING THE ROSTER: every actor registers an
@@ -458,6 +459,23 @@ register3d("royale", async function (kernel, content) {
     // .eliminate already stamps the true time into the feed (sim/royale.js:502);
     // the winner never appears there, so the W.t fallback is right for a victory.
     const elim = W.match.feed.find((f) => f.victim === W.player.id);
+    // PORTAL BRIDGE (same convention as cosmic-coils): the game holds no
+    // auth/DB code — the forgeflowgames.com player shell listens for
+    // forgeflow:game_over (src/lib/gameBridge.ts:126) and upserts
+    // leaderboard_scores best-of-week for SIGNED-IN accounts; guests and
+    // standalone (window.parent === window) are harmless no-ops. Score:
+    // placement dominates, kills pay, a victory crowns —
+    // (50-placement)*100 + kills*200 + victory*1500, max ~14k.
+    if (!W._reportedMatch) {
+      W._reportedMatch = true;
+      try {
+        if (window.parent && window.parent !== window) {
+          const sc = (50 - Math.min(50, Math.max(1, placement))) * 100 +
+                     (W.match.kills[W.player.id] || 0) * 200 + (victory ? 1500 : 0);
+          window.parent.postMessage({ type: "forgeflow:game_over", score: sc }, "*");
+        }
+      } catch (e) {}
+    }
     return {
       victory,
       placement,
