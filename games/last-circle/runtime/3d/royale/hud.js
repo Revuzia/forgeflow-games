@@ -1693,6 +1693,10 @@ export function showHUD(W) {
   h("div", { position: "absolute", left: "50%", top: "12px", transform: "translateX(-50%)", width: "2px", height: "12px", background: "#ffd254", boxShadow: "0 0 4px rgba(0,0,0,0.9)" }, null, compBand);
   R.compassWrap = compWrap;
 
+  // weapon-switch popup: rarity-coloured name above the hotbar for a beat
+  // (Final Drop parity — their hotbar select shows rarity/name)
+  R.wpnPop = h("div", { position: "absolute", left: "50%", bottom: "118px", transform: "translateX(-50%)", fontFamily: "Rajdhani, " + FONT, fontSize: "16px", fontWeight: "900", letterSpacing: "1.5px", textShadow: "0 2px 8px rgba(0,0,0,0.95)", opacity: "0", transition: "opacity .18s", pointerEvents: "none" }, "", L);
+
   // interact hint + chest-open progress ring
   R.interact = h("div", { position: "absolute", left: "50%", top: "60%", transform: "translateX(-50%)", background: "rgba(0,0,0,0.55)", padding: "6px 14px", borderRadius: "8px", fontSize: "14px", display: "none" }, "", L);
   R.chestRing = h("div", { position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "58px", height: "58px", borderRadius: "50%", display: "none", background: "conic-gradient(#ffd254 0deg, rgba(255,255,255,0.15) 0deg)", WebkitMask: "radial-gradient(circle, transparent 22px, #000 23px)", mask: "radial-gradient(circle, transparent 22px, #000 23px)" }, null, L);
@@ -2060,7 +2064,18 @@ export function update(W, dt) {
   // moving. Without pointer lock it RIDES THE CURSOR (the reticle IS the mouse
   // — the OS arrow is hidden over the canvas during play).
   const wid = p.weapon ? p.weapon.id : null;
-  if (R._crossFor !== wid) paintCrosshair(W, wid);
+  if (R._crossFor !== wid) {
+    paintCrosshair(W, wid);
+    // rarity-coloured name flash on switch (weapons only, own view only)
+    if (R.wpnPop && wid && !wid.startsWith("consumable") && p === W.player && K.WEAPONS[wid]) {
+      const rr = p.weapon.rarity || 0;
+      R.wpnPop.textContent = (K.RARITY[rr] || "").toUpperCase() + "  ·  " + wid.toUpperCase();
+      R.wpnPop.style.color = K.RARITY_COLOR[K.RARITY[rr]] || "#dfe7f2";
+      R.wpnPop.style.opacity = "1";
+      R._wpnPopT = performance.now();
+    }
+  }
+  if (R._wpnPopT && performance.now() - R._wpnPopT > 1500) { R.wpnPop.style.opacity = "0"; R._wpnPopT = 0; }
   R.cross.style.display = (p.input.ads && wid && K.WEAPONS[wid] && K.WEAPONS[wid].scope) ? "none" : "block";
   const locked = W.pointerLocked && W.pointerLocked();
   const dom = W.kernel.renderer.domElement;
@@ -2956,6 +2971,7 @@ export function showHowToPlay(W) {
   kb(kx("KeyE"), "Loot — hold on a chest to open it");
   kb(kx("KeyR"), "Reload");
   kb(kx("Digit1") + " – " + kx("Digit5"), "Weapon and item slots");
+  kb("Q", "Drop your weapon — hand a gun to a squadmate (keeps its magazine)");
   kb(kx("KeyM"), "Map");
   kb(kx("KeyB") + " / " + kx("KeyN"), "Emote — dance · cheer");
   kb(kx("Space") + " at a ledge", "Climb — jump toward a low wall or rooftop edge and you'll pull up over it");

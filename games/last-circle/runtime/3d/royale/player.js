@@ -618,6 +618,8 @@ function installHumanInput(W) {
     if (e.code === "Digit3") inp.slot = 2;
     if (e.code === "Digit4") inp.slot = 3;
     if (e.code === "Digit5") inp.slot = 4;
+    // [Q] drop the active weapon (loot.js W.dropActive — refuses the last gun)
+    if (e.code === "KeyQ" && !ev.repeat && W.player.alive && W.dropActive) W.dropActive(W.player);
     // While ADS, SHIFT is BREATH-HOLD (weapons.js sway block), not the sprint
     // latch — you can't sprint while aiming anyway, and without this gate a
     // scoped breath-hold silently armed a sprint you'd trigger on unscope.

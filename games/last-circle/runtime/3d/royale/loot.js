@@ -66,6 +66,30 @@ export function init(W) {
   };
   W.netOpenChest = (id) => openChest(W, null, id);
   W.netSpawnItem = (d) => spawnItem(W, d.data, d.x, d.y, d.z, d.id);
+  // [Q] — drop the active weapon for a squadmate (Final Drop parity, owner
+  // screenshots). Refuses the LAST weapon: there is no melee in this game, so
+  // an armed player must stay armed. Mag rides the drop (data.mag) and the
+  // next weapon slot auto-equips.
+  W.dropActive = (a) => {
+    const inv = a.inventory;
+    const s = inv.slots[inv.active];
+    if (!s || s.kind !== "weapon") return false;
+    const others = inv.slots.filter((x, i) => x && x.kind === "weapon" && i !== inv.active);
+    if (!others.length) return false;
+    const data = { kind: "weapon", id: s.id, rarity: s.rarity || 0,
+                   mag: a.weapon && a.weapon.id === s.id ? a.weapon.magAmmo : s.mag };
+    inv.slots[inv.active] = null;
+    const nextIdx = inv.slots.findIndex((x) => x && x.kind === "weapon");
+    const did = dropItem(W, a, data, true);   // tossed forward, not at the feet
+    // the DROPPER can't walk it back over for 1.5 s (explicit E still works;
+    // squadmates unaffected) — without this the walkover radius reclaimed the
+    // drop the same frame whenever a slot was free
+    const ent = items.get(did);
+    if (ent) { ent.noWalkoverBy = a.id; ent.noWalkoverUntil = W.t + 1.5; }
+    if (nextIdx >= 0 && W.equipSlot) W.equipSlot(a, nextIdx);
+    W.events.emit("weaponDropped", a, data);
+    return true;
+  };
   W.lootSyncState = () => ({ taken: takenIds.slice(), opened: [...chests.values()].filter((c) => c.opened).map((c) => c.id) });
   W.debugChests = () => [...chests.values()]; // test hook (preview verification)
 }
@@ -578,12 +602,18 @@ function give(W, a, data) {
 }
 
 let swapN = 0;
-function dropItem(W, a, data) {
-  // weapon-swap drops are local-only events → mirror them explicitly online
+function dropItem(W, a, data, fwd) {
+  // weapon-swap drops are local-only events → mirror them explicitly online.
+  // fwd: the [Q] drop TOSSES the gun ~2 m ahead — dropped at the feet it sat
+  // inside the 1.5 m walkover radius and was reclaimed the same frame.
   const id = "sw:" + a.id + ":" + (swapN++);
-  const x = a.pos.x + (Math.random() - 0.5) * 1.4, y = a.pos.y + 0.2, z = a.pos.z + (Math.random() - 0.5) * 1.4;
+  let x, z;
+  if (fwd) { x = a.pos.x - Math.sin(a.yaw) * 2.0; z = a.pos.z - Math.cos(a.yaw) * 2.0; }
+  else { x = a.pos.x + (Math.random() - 0.5) * 1.4; z = a.pos.z + (Math.random() - 0.5) * 1.4; }
+  const y = a.pos.y + 0.2;
   spawnItem(W, data, x, y, z, id);
   if (W.net && !a.netRemote) W.events.emit("netDropItem", { data, x, y, z, id });
+  return id;
 }
 
 function hashId(s) { let h2 = 0; for (let i = 0; i < s.length; i++) h2 = (h2 * 31 + s.charCodeAt(i)) | 0; return h2 >>> 0; }
@@ -672,6 +702,9 @@ export function update(W, dt) {
     for (const n of near) {
       if (n.type !== "item" || n.d >= 1.5) continue;
       if (n.data.kind === "weapon" && gunCount() >= 3) continue;
+      // a [Q]-dropped gun ignores its dropper's walkover for a beat
+      const ent0 = items.get(n.id);
+      if (ent0 && ent0.noWalkoverBy === a.id && W.t < ent0.noWalkoverUntil) continue;
       pickup(W, a, n.id);
     }
     // nearby() sorts ascending by distance, so picking the nearest thing meant a
