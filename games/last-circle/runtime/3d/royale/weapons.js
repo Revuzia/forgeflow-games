@@ -256,6 +256,9 @@ export function reset(W) {
     POOL.push(p);
   }
   projectiles.length = 0;
+  // sway/breath state lives on W and outlived the match (sweep finding): a
+  // player who quit while WINDED started the next match still winded
+  W._swayP = 0; W._swayY = 0; W._breathT = null; W._winded = false;
 }
 
 export function update(W, dt) {
@@ -705,7 +708,12 @@ function testSegment(W, p, ax, ay, az, bx, by, bz) {
       } else {
         // nx/ny/nz: the entry-face normal rides along so fx can place a decal
         // flush on the surface (fields are additive — older listeners read x/y/z)
-        W.events.emit("impact", { x: hx, y: hy, z: hz, nx: sh.nx, ny: sh.ny, nz: sh.nz }, "wood");
+        // Surface by PROP KIND: cars/containers ring metal, rocks chip stone —
+        // audio.js has carried imp_metal since the Kenney pack landed with no
+        // emitter ever sending the surface (sweep finding).
+        const surf = (c.prop === "car" || c.prop === "container") ? "metal"
+                   : c.prop === "rocks" ? "stone" : "wood";
+        W.events.emit("impact", { x: hx, y: hy, z: hz, nx: sh.nx, ny: sh.ny, nz: sh.nz }, surf);
       }
       p.dead = true; return true;
     }

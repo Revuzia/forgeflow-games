@@ -753,8 +753,14 @@ function installHumanInput(W) {
     inp.fire = !!W._lmbDown;
     inp.ads = W.settings.adsToggle ? !!W._adsLatch : !!W._rmbDown;
   });
-  // ADS toggle latch: flip on the RMB press edge (hold mode ignores it)
-  dom.addEventListener("mousedown", (ev2) => { if (ev2.button === 2 && W.settings.adsToggle) W._adsLatch = !W._adsLatch; });
+  // ADS toggle latch: flip on the RMB press edge (hold mode ignores it).
+  // Same liveness guards as the main mousedown handler — without them a
+  // right-click on the menu/pause/death screen armed the latch and you
+  // spawned already toggled into ADS (sweep finding).
+  dom.addEventListener("mousedown", (ev2) => {
+    if (ev2.button === 2 && W.settings.adsToggle &&
+        W.player && W.player.alive && W.phase !== "menu" && !W.paused) W._adsLatch = !W._adsLatch;
+  });
   W.pointerLocked = () => document.pointerLockElement === dom;
   W.resetInputState = () => { for (const k in keys) keys[k] = false; W._lmbDown = false; W._rmbDown = false; W._sprintLatch = false; W._adsLatch = false; };
 }

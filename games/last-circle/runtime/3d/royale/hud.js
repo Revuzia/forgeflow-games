@@ -3056,7 +3056,9 @@ function showSettings(W) {
     save(W);
   });
   // Sprint and ADS were hold-only. Toggle is an accessibility need, not a taste.
-  [["Sprint (SHIFT)", "sprintToggle"], ["Aim down sights", "adsToggle"]].forEach((e) => {
+  // live binding in the label, not a hardcoded SHIFT — Sprint is rebindable
+  // four rows down and the label lied after a rebind (sweep finding)
+  [["Sprint (" + ((() => { const ph = physFor(W, "ShiftLeft"); return ph ? keyLabel(ph) : "SHIFT"; })()) + ")", "sprintToggle"], ["Aim down sights", "adsToggle"]].forEach((e) => {
     const row2 = h("div", { display: "flex", gap: "8px", alignItems: "center" }, null, box);
     h("div", { fontSize: "13px", opacity: "0.8", width: "160px" }, e[0], row2);
     [["HOLD", false], ["TOGGLE", true]].forEach((o) => {

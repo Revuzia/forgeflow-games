@@ -564,13 +564,19 @@ function wire(W) {
     // flagged them as "decoded but unreachable" while this sequence played
     // synth thumps over them. Each beat keeps its thump as the fallback.
     thump(2600, 0.03, 0.22 * k, p2, R);                                       // mag release click
+    // `!own && !a.alive` guards: enemy timers are untracked (reloadTimers only
+    // collects OWN handles), so an enemy killed mid-reload still played the
+    // mag-seat clunk and rack at their corpse (sweep finding)
     const t1 = setTimeout(() => {                                             // mag out / drop
+      if (!own && !a.alive) return;
       if (!sample("mag_out", p2, 0.3 * k, R)) thump(700, 0.06, 0.16 * k, p2, R);
     }, 110);
     const t2 = setTimeout(() => {                                             // mag seated
+      if (!own && !a.alive) return;
       if (!sample("mag_in", p2, 0.34 * k, R)) { thump(950, 0.05, 0.26 * k, p2, R); thump(420, 0.09, 0.2 * k, p2, R); }
     }, total * 0.55);
     const t3 = setTimeout(() => {                                             // slide rack
+      if (!own && !a.alive) return;
       if (sample("rack", p2, 0.34 * k, R)) return;
       thump(3000, 0.025, 0.24 * k, p2, R);
       const t4 = setTimeout(() => thump(1400, 0.05, 0.26 * k, p2, R), 70);
@@ -702,7 +708,13 @@ function wire(W) {
   on("playerStormState", (inStorm) => { if (inStorm) thump(200, 0.5, 0.25); });
   on("stormKill", () => {});
   on("supplyDropSpawned", () => { blip(880, 0.2, 0.16, "triangle"); setTimeout(() => blip(1100, 0.3, 0.14, "triangle"), 200); });
-  on("landed", (a) => { if (a === W.player) thump(500, 0.15, 0.25); });
+  // positional for enemies too — chuteDeployed already was, and an enemy
+  // touching down 40 m away is a read you want (sweep finding: the pair was
+  // inconsistent, own-only here vs positional deploy)
+  on("landed", (a) => {
+    const own = a === W.player;
+    thump(500, 0.15, own ? 0.25 : 0.14, own ? null : a.pos, 60);
+  });
   // this was a REGISTERED EMPTY HANDLER — player.js:944 emits "jump" on every
   // takeoff and nothing listened, so jumping made no sound at all. Same story
   // for ordinary landings: "landed" only fires on the parachute touchdown, so
@@ -719,7 +731,9 @@ function wire(W) {
     const k = Math.min(1, (speed || 4) / 14);
     thump(360 - k * 120, 0.10 + k * 0.06, 0.12 + k * 0.14, a === W.player ? null : a.pos, 40);
   });
-  on("uiClick", () => blip(900, 0.04, 0.12, "square"));
+  // recorded Kenney UI tick first (six clips sat decoded-but-unreachable —
+  // sweep finding); the synth blip stays as the fallback
+  on("uiClick", () => { if (!sample("ui_click", null, 0.3, 999)) blip(900, 0.04, 0.12, "square"); });
   on("countdownBeep", (final) => blip(final ? 1200 : 800, final ? 0.3 : 0.12, 0.2, "square"));
 }
 

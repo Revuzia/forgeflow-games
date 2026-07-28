@@ -472,7 +472,11 @@ register3d("royale", async function (kernel, content) {
         }, 180 + i * 420);
       }
     }
-    const showStats = () => hudMod.showPostMatch(W, buildPostMatch(victory, placement));
+    // clears its own handle FIRST: after the natural 2600 ms fire, _overT
+    // otherwise still holds the dead-but-truthy timer id, and a key pressed in
+    // the 2600-2700 ms window made skip() build the post-match panel TWICE
+    // (sweep finding)
+    const showStats = () => { W._overT = null; hudMod.showPostMatch(W, buildPostMatch(victory, placement)); };
     if (W._overT) clearTimeout(W._overT);
     W._overT = setTimeout(showStats, 2600);
     // any key/click skips the beat
