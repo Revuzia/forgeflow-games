@@ -274,6 +274,39 @@ export function update(W, dt) {
       a.input.yaw -= r;
       a.recoilYaw -= r;
     }
+    // ── SNIPER SWAY + BREATH-HOLD (player only) ─────────────────────────────
+    // Scoped snipers drift on layered sines; holding SHIFT while scoped
+    // steadies the aim against a 5 s breath meter, and running the meter dry
+    // leaves you WINDED (1.7x sway) until it refills past half. Applied
+    // DIFFERENTIALLY to input.yaw/pitch — only the frame-to-frame CHANGE in
+    // the sway signal lands on the aim, so it oscillates without permanently
+    // displacing the mouse aim, and because it lives on the same input the
+    // bullets, camera and reticle read, all three agree (crosshair-truth).
+    // Bots are exempt: their aim error model already covers this.
+    if (a === W.player) {
+      const swdef = a.weapon && K.WEAPONS[a.weapon.id];
+      const scoped = !!(swdef && swdef.scope && a.input.ads && (a._adsT || 0) >= (swdef.adsTimeS || 0));
+      let sp = 0, sy = 0;
+      if (W._breathT == null) W._breathT = 5;
+      if (scoped) {
+        const held = !!W._breathHeld && W._breathT > 0 && !W._winded;
+        W._breathT = held ? Math.max(0, W._breathT - dt) : Math.min(5, W._breathT + dt * 1.4);
+        if (W._breathT <= 0.001) W._winded = true;
+        else if (W._winded && W._breathT > 2.5) W._winded = false;
+        const amp = (held ? 0.05 : W._winded ? 1.7 : 1) * 0.004;
+        sp = amp * (Math.sin(W.t * 1.3 + 0.7) * 0.7 + Math.sin(W.t * 2.3) * 0.3);
+        sy = amp * (Math.sin(W.t * 0.9) * 0.6 + Math.sin(W.t * 1.7 + 1.3) * 0.4);
+      } else {
+        W._breathT = Math.min(5, W._breathT + dt * 1.4);
+        if (W._winded && W._breathT > 2.5) W._winded = false;
+      }
+      const dp = sp - (W._swayP || 0), dy = sy - (W._swayY || 0);
+      if (dp || dy) {
+        a.input.pitch = K.clamp(a.input.pitch + dp, -1.35, 1.35);
+        a.input.yaw += dy;
+      }
+      W._swayP = sp; W._swayY = sy;
+    }
     // VIEW-MODEL punch. refreshWeaponMesh (weapons.js:217) parents a static
     // proto.clone() to the hand and never touches it again, so the gun itself
     // never moved when it fired. Local units under a.hand are metres — the hand

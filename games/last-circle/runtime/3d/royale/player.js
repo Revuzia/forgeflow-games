@@ -618,7 +618,11 @@ function installHumanInput(W) {
     if (e.code === "Digit3") inp.slot = 2;
     if (e.code === "Digit4") inp.slot = 3;
     if (e.code === "Digit5") inp.slot = 4;
-    if (e.code === "ShiftLeft" && !ev.repeat && W.settings.sprintToggle) W._sprintLatch = !W._sprintLatch;
+    // While ADS, SHIFT is BREATH-HOLD (weapons.js sway block), not the sprint
+    // latch — you can't sprint while aiming anyway, and without this gate a
+    // scoped breath-hold silently armed a sprint you'd trigger on unscope.
+    if (e.code === "ShiftLeft" && !ev.repeat && W.settings.sprintToggle &&
+        !(W.player && W.player.input.ads)) W._sprintLatch = !W._sprintLatch;
     // Spectate cycling. On death you were pinned to your KILLER's camera with no
     // way to look at anyone else — including the friend still alive in your
     // room. A/D (or the arrows) now step through the survivors.
@@ -736,6 +740,8 @@ function installHumanInput(W) {
     inp.mx = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
     inp.mz = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
     const sprintHeld = !!keys.ShiftLeft;   // canon() folds ShiftRight into this
+    // breath-hold reads the RAW key while aiming (weapons.js sway block)
+    W._breathHeld = sprintHeld && !!inp.ads;
     // SHIFT toggles sprint on and off (owner direction). The latch drops when
     // you stop moving forward, so you never wander back into a fight still
     // sprinting from three minutes ago with no way to notice.
