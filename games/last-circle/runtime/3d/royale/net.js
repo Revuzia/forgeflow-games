@@ -12,14 +12,15 @@
  *
  * The world is DETERMINISTIC from the shared seed (terrain, POIs, loot spawns,
  * chest contents, storm plan), so only live state is relayed:
- *   - each human simulates their OWN actor and broadcasts state at 12/8/6 Hz
+ *   - each human simulates their OWN actor and broadcasts state at 12/8/5 Hz
  *     depending on how many humans are in the room
- *   - the HOST simulates all 49-minus-guests bots and broadcasts bot
- *     snapshots at 10Hz (guests render them as netRemote actors)
+ *   - the HOST simulates all 49-minus-guests bots; snapshots (10/8/6.25 Hz)
+ *     ride the host's state packet (guests render them as netRemote actors)
  *   - hits on a human are sent to the victim's client ("hitYou") — the victim
  *     applies damage to itself (client authority over own HP)
  *   - chest opens / item pickups / gunfire / emotes mirror as cosmetic events,
- *     batched into one "ev" envelope per 100 ms
+ *     batched and RIDING THE STATE PACKET (envelope merge — one billed message
+ *     per client per state tick carries state + evs + [host] bot snapshots)
  *   - eliminations mirror immediately (authoritative, never batched)
  *
  * JOIN = TAKE OVER A BOT SLOT: humans occupy slots s0..sK (sorted by peer id,
@@ -133,8 +134,9 @@ function send(t, d) {
 /** Queue a COSMETIC event instead of sending it now. Five separate relays
  *  (fire/emote/take/chest/drop) each used to be its own message the instant it
  *  happened; a single loot run could fire six sends in one frame. update()
- *  flushes the queue as one "ev" envelope per 100 ms, so a burst costs 10
- *  messages a second instead of however many things happened. */
+ *  flushes the queue INTO THE STATE PACKET (st.evs) on the state tick, so a
+ *  burst costs zero extra messages — the ride-along is free because messages,
+ *  not bytes, are the billed unit. */
 function qsend(t, d) {
   if (!S) return;
   if (!S.evQ) S.evQ = [];
@@ -366,6 +368,17 @@ function onMsg(W, { from, t, d }) {
       S.hostSlot = d.id;
       S.hostSeen = performance.now();
     }
+    // ENVELOPE MERGE (sender side in update()): bot snapshots and the batched
+    // ev list now ride the state packet — one billed message instead of three
+    // streams. The standalone "bots"/"ev" handlers below stay for cross-version
+    // rooms mid-deploy.
+    if (d.bots && !S.net.isHost()) {
+      for (const b of d.bots) {
+        const ba = W.actorById.get(b.id);
+        if (ba && ba.netRemote) applyRemoteState(W, ba, b);
+      }
+    }
+    if (d.evs) { for (const m of d.evs) if (m && m.t !== "ev") onMsg(W, { from, t: m.t, d: m.d }); }
     return;
   }
   if (t === "bots" && !S.net.isHost()) {
@@ -555,7 +568,42 @@ export function update(W, dt) {
   // constant has to follow the rate or a 6 Hz peer smears — player.js's
   // interpRemote reads W._netLerpK when it is set (default 10 ≈ 12 Hz).
   const H = Math.max(1, S.net.peerCount || 1);
-  const stateMs = H <= 2 ? 83 : H === 3 ? 125 : 166;
+  // 12/8/5 Hz. The 4-human floor moved 6 -> 5 as part of the ENVELOPE MERGE
+  // below: the state packet is now the ONLY periodic message a client sends —
+  // evs ride it, and on the host the bot snapshots ride it too. Messages are
+  // the billed unit (each send costs one per receiving subscriber), so the
+  // steady-state worst case is exactly the state term: 12·2·2=48 for a pair,
+  // 8·3·3=72 at three, 5·4·4=80 at four — under the 100 msg/s ceiling WITH
+  // everything aboard, where the old separate state+ev+bots streams could
+  // stack to ~300 msg/s in a 4-human fight and Supabase answers over-rate by
+  // dropping the connection.
+  const _humans = 1 + (S.lastSeen ? Object.keys(S.lastSeen).length : 0);
+  const _botsMs = _humans >= 4 ? 160 : _humans === 3 ? 125 : 100;
+  if (S.net.isHost() && now - S.lastBots > _botsMs) {
+    S.lastBots = now;
+    S.botsTick = (S.botsTick || 0) + 1;
+    // "near a human" used to mean near W.player.pos — which on the host is the
+    // HOST's own actor. A guest fighting a bot on the far side of the map got
+    // that bot at 2 Hz, i.e. a lerp target up to 500 ms stale, and their hit
+    // tests resolve against the rendered position. Measure from every live human
+    // instead: at most 7 extra distanceToSquared per bot.
+    const eyes = [W.player.pos];
+    for (const h of W.actors) if (h.netRemote && !h.isBot && h.alive) eyes.push(h.netTarget ? h.netTarget.pos : h.pos);
+    const list = [];
+    for (const a of W.actors) {
+      if (!a.isBot || !a.alive || a.netRemote) continue;
+      const far = eyes.every((p) => a.pos.distanceToSquared(p) > 300 * 300);
+      if (far && S.botsTick % 5 !== 0) continue;
+      list.push(pack(a));
+    }
+    // STAGED, not sent: the list rides the host's next state packet (see the
+    // envelope merge above). If two bot ticks elapse before a state tick —
+    // impossible at current rates, host state Hz >= bot Hz at every room size
+    // — the newer list simply replaces the staler one, which is what a
+    // snapshot protocol wants anyway.
+    if (list.length) S.pendingBots = list;
+  }
+  const stateMs = H <= 2 ? 83 : H === 3 ? 125 : 200;
   W._netLerpK = Math.max(4, 800 / stateMs);
   if (now - S.lastState > stateMs) {
     S.lastState = now;
@@ -566,25 +614,30 @@ export function update(W, dt) {
     // so across the 735 s of a standard match the clients drift apart without
     // limit and each one draws the storm somewhere else. Host stamps, guests slew.
     if (S.net.isHost()) st.t = +W.t.toFixed(2);
-    send("state", st);
-  }
-  // FLUSH the batched cosmetic events (see qsend), 10 Hz.
-  if (S.evQ && S.evQ.length && now - (S.lastEv || 0) >= 100) {
-    S.lastEv = now;
-    let list = S.evQ;
-    S.evQ = [];
-    if (sendBudgetLeft() <= 0) {
-      // Over budget. Shed the PURE-FX half and keep the world-state half: a
-      // missing tracer or emote is invisible a second later, but a missing
-      // "take"/"chest"/"drop" leaves a ghost item every other client can still
-      // see and try to pick up. This is the whole point of the budget — Supabase
-      // answers an over-rate connection by dropping it, so if something has to
-      // go it must be chosen here rather than by the socket dying mid-match.
-      const kept = list.filter((m) => m.t !== "fire" && m.t !== "emote");
-      S.droppedMsgs = (S.droppedMsgs || 0) + (list.length - kept.length);
-      list = kept;
+    // EVS RIDE THE STATE TICK (was a separate 10 Hz "ev" stream). Same
+    // over-budget shedding: drop the PURE-FX half (tracer/emote — invisible a
+    // second later), keep the world-state half (take/chest/drop — a missing
+    // one leaves a ghost item every other client can still try to pick up).
+    if (S.evQ && S.evQ.length) {
+      let list = S.evQ;
+      S.evQ = [];
+      if (sendBudgetLeft() <= 0) {
+        const kept = list.filter((m) => m.t !== "fire" && m.t !== "emote");
+        S.droppedMsgs = (S.droppedMsgs || 0) + (list.length - kept.length);
+        list = kept;
+      }
+      if (list.length) st.evs = list;
     }
-    if (list.length) send("ev", { list });
+    // HOST: bot snapshots ride the same packet when due (cadence unchanged —
+    // the attach below only fires when _botsMs has elapsed, and the host's
+    // state rate is always >= the bot rate at every room size). Chunking to 24
+    // was message-size prudence from the multi-stream era; one 46-bot list is
+    // ~3.7 KB, far under Realtime's payload limit, and one packet beats three.
+    if (S.net.isHost() && S.pendingBots) {
+      st.bots = S.pendingBots;
+      S.pendingBots = null;
+    }
+    send("state", st);
   }
   // link freshness for the HUD perf readout: age of the most recent state we
   // received from ANY peer. Not RTT — the HUD labels it SYNC, not ping.
@@ -628,29 +681,6 @@ export function update(W, dt) {
   // count instead: 10Hz solo-guest, 8Hz at 3, 6.25Hz at 4. interpRemote already
   // follows the actual snapshot cadence rather than a hardcoded rate, so guests
   // adapt automatically.
-  const _humans = 1 + (S.lastSeen ? Object.keys(S.lastSeen).length : 0);
-  const _botsMs = _humans >= 4 ? 160 : _humans === 3 ? 125 : 100;
-  if (S.net.isHost() && now - S.lastBots > _botsMs) {
-    S.lastBots = now;
-    S.botsTick = (S.botsTick || 0) + 1;
-    // "near a human" used to mean near W.player.pos — which on the host is the
-    // HOST's own actor. A guest fighting a bot on the far side of the map got
-    // that bot at 2 Hz, i.e. a lerp target up to 500 ms stale, and their hit
-    // tests resolve against the rendered position. Measure from every live human
-    // instead: at most 7 extra distanceToSquared per bot, and the worst case is
-    // only a higher outbound rate (the 24-per-message chunking below caps size).
-    const eyes = [W.player.pos];
-    for (const h of W.actors) if (h.netRemote && !h.isBot && h.alive) eyes.push(h.netTarget ? h.netTarget.pos : h.pos);
-    const list = [];
-    for (const a of W.actors) {
-      if (!a.isBot || !a.alive || a.netRemote) continue;
-      const far = eyes.every((p) => a.pos.distanceToSquared(p) > 300 * 300);
-      if (far && S.botsTick % 5 !== 0) continue;
-      list.push(pack(a));
-      if (list.length >= 24) { send("bots", { list }); list.length = 0; }
-    }
-    if (list.length) send("bots", { list });
-  }
 }
 
 /** Used for the local player AND (on the host) for every bot, so one packet
