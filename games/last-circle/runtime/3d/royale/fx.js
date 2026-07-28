@@ -409,6 +409,33 @@ let shakePrev = 0;
  *  owns the victory beat. */
 let fwCursor = 0;
 const FW_COLORS = [[0xffd54a, 0xfff2b0], [0x7ad0ff, 0xbfe8f5], [0x4ade80, 0xbdf5cf], [0xff7ab8, 0xffd0e6]];
+/** SHADER PRE-WARM. Lazy program compilation stalls the frame the first time
+ *  a material is actually drawn — the Claude-of-Duty writeup measured
+ *  728-1236 ms one-offs that median-fps stats hid completely, and our first
+ *  explosion/decal is exactly that shape. renderer.compile() only sees
+ *  VISIBLE objects (projectObject skips visible=false), so the blast pool is
+ *  toggled on at epsilon scale for the one compile pass. Called from
+ *  startMatch after the map + actor models exist, so every standard-material
+ *  program compiles here instead of mid-firefight. */
+export function prewarm(W) {
+  ensureBlasts(W);
+  ensureDecals(W);
+  const toggled = [];
+  for (const b of blasts) {
+    if (!b.sp.visible) {
+      b.sp.visible = b.ring.visible = true;
+      b.sp.scale.setScalar(1e-4); b.ring.scale.setScalar(1e-4);
+      toggled.push(b);
+    }
+  }
+  try {
+    if (W.kernel && W.kernel.renderer && W.kernel.renderer.compile) {
+      W.kernel.renderer.compile(W.scene, W.kernel.camera);
+    }
+  } catch (e) { /* prewarm is an optimization — never let it block a match */ }
+  for (const b of toggled) { b.sp.visible = b.ring.visible = false; }
+}
+
 export function fireworks(W, x, y, z) {
   burst({ x, y, z, n: 30, color: FW_COLORS[(fwCursor++) % FW_COLORS.length], speed: 9, up: 1.5, size: 0.16, life: 1.6, gravity: -4, drag: 0.6 });
 }

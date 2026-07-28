@@ -373,6 +373,9 @@ register3d("royale", async function (kernel, content) {
     // practice range dummies must exist BEFORE models load or they get no rig
     if (W.mode === "practice") playerMod.createPracticeRange(W);
     await playerMod.loadActorModels(W);
+    // SHADER PRE-WARM (see fx.js prewarm): compile every program now — map,
+    // skins, FX pools — instead of paying a first-draw stall mid-firefight.
+    if (fxMod.prewarm) fxMod.prewarm(W);
     W.hooks.loadingStop();          // last asset fetch of the match is done here
     // Re-apply the tier now that the map's textures and the actor GLBs are in
     // the scene. applyGraphics only ever ran at BOOT and on a Settings click, and

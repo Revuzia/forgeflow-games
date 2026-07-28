@@ -542,10 +542,19 @@ function wire(W) {
     const def = (W.SIM.WEAPONS[wpn.id] || {});
     const total = Math.max(0.8, (def.reloadS || 1.5)) * 1000;
     const p2 = own ? null : a.pos, R = 25, k = own ? 1 : 0.6;
+    // RECORDED FOLEY FIRST: mag_out/mag_in/rack were fetched and decoded
+    // since the Kenney pack landed but never had a call site — the rescore
+    // flagged them as "decoded but unreachable" while this sequence played
+    // synth thumps over them. Each beat keeps its thump as the fallback.
     thump(2600, 0.03, 0.22 * k, p2, R);                                       // mag release click
-    const t1 = setTimeout(() => thump(700, 0.06, 0.16 * k, p2, R), 110);      // mag out / drop
-    const t2 = setTimeout(() => { thump(950, 0.05, 0.26 * k, p2, R); thump(420, 0.09, 0.2 * k, p2, R); }, total * 0.55); // mag seated
+    const t1 = setTimeout(() => {                                             // mag out / drop
+      if (!sample("mag_out", p2, 0.3 * k, R)) thump(700, 0.06, 0.16 * k, p2, R);
+    }, 110);
+    const t2 = setTimeout(() => {                                             // mag seated
+      if (!sample("mag_in", p2, 0.34 * k, R)) { thump(950, 0.05, 0.26 * k, p2, R); thump(420, 0.09, 0.2 * k, p2, R); }
+    }, total * 0.55);
     const t3 = setTimeout(() => {                                             // slide rack
+      if (sample("rack", p2, 0.34 * k, R)) return;
       thump(3000, 0.025, 0.24 * k, p2, R);
       const t4 = setTimeout(() => thump(1400, 0.05, 0.26 * k, p2, R), 70);
       if (own) reloadTimers.push(t4);
