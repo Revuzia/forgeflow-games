@@ -444,42 +444,105 @@ export async function buildMap(W, mapId) {
 
   // ── terrain mesh (vertex-colored biome tint × tiled grain texture) ────────
   const aniso = W._texAniso || 4;
-  // 220 segments over 1600 m is 7.27 m per vertex — coarse enough that the grid
-  // stairstep is visible on the Isla Viva volcano silhouette from the air. 300 is
-  // 5.33 m/vertex for ~180k triangles on the SAME single draw call. The mesh is
-  // PURELY VISUAL: gameplay reads the analytic heightAt0 (returned as heightAt /
-  // groundAt) and nothing in runtime/ consumes map.terrain, so raising this cannot
-  // move a collision surface. Do NOT go past ~320 — the per-vertex loop calls
-  // heightAt0 + colorAt (both fbm) and geometry is ~44 bytes/vertex (301² ≈ 4.0 MB
-  // here vs 2.1 MB at 220).
-  const SEG = 300;
-  const terrGeo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
-  terrGeo.rotateX(-Math.PI / 2);
-  const pos = terrGeo.attributes.position;
-  const uv = terrGeo.attributes.uv;
-  const cols = new Float32Array(pos.count * 3);
-  const TILE = 8;                                   // meters per texture tile
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i), z = pos.getZ(i);
-    const h = heightAt0(x, z);
-    pos.setY(i, h);
-    const c = colorAt(mapId, h, x, z, seed);
-    cols[i * 3] = c[0]; cols[i * 3 + 1] = c[1]; cols[i * 3 + 2] = c[2];
-    uv.setXY(i, x / TILE, z / TILE);               // world-planar UV → texture tiles every 8m
-  }
-  terrGeo.setAttribute("color", new THREE.BufferAttribute(cols, 3));
-  uv.needsUpdate = true;
-  terrGeo.computeVertexNormals();
+  // CHUNKED TERRAIN (2026-07-28; plan + live baseline in RESEARCH_INBOUND.md).
+  // The single 301x301 mesh was 180k tris = 12.3% of the frame drawn from
+  // EVERY viewpoint — Three culls per-mesh, so one map-wide plane can never be
+  // rejected. 8x8 chunks of 200 m: FAR LOD keeps the old density (the distant
+  // silhouette must not regress) and a lazy 3x3 near ring around the camera
+  // rebuilds at 2x density for the close-up silhouette. Same-LOD neighbours
+  // sample identical edge coordinates (no cracks); near-LOD perimeters drop a
+  // 0.35 m skirt lip so near/far borders hide their step underground. Normals
+  // are ANALYTIC (central differences on heightAt0, fixed 2 m eps) so lighting
+  // is identical across chunks and LODs — computeVertexNormals per chunk would
+  // seam at every border. The mesh remains PURELY VISUAL: gameplay reads the
+  // analytic heightAt0 and nothing else consumes it.
+  const CHUNKS = 8, CSZ = SIZE / CHUNKS;
+  const FAR_SEG = 38, NEAR_SEG = 76;                 // ~5.3 / ~2.6 m per vertex
+  const TILE = 8;                                    // meters per texture tile
   const terrMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96, metalness: 0 });
   try {
     const gt = groundTex(aniso);
     terrMat.map = gt.map; terrMat.normalMap = gt.normal;
     terrMat.normalScale = new THREE.Vector2(0.55, 0.55);
   } catch (e) { /* canvas unavailable → flat vertex-color fallback */ }
-  const terrain = new THREE.Mesh(terrGeo, terrMat);
-  terrain.receiveShadow = true;
+  const _tn = new THREE.Vector3();
+  function buildChunk(ci, cj, seg, skirt) {
+    const cx0 = -SIZE / 2 + ci * CSZ, cz0 = -SIZE / 2 + cj * CSZ;
+    const pitch = CSZ / seg;
+    // heights sampled ONCE into an apron grid (one ring beyond the chunk on
+    // every side) — normals then come from central differences ON THE GRID,
+    // so no vertex costs more than one heightAt0. The first version sampled
+    // heightAt0 five times per vertex for analytic normals and turned the map
+    // build into a 15s hang. Neighbours' aprons sample the same world coords,
+    // so normals agree across chunk borders — no lighting seams.
+    const N = seg + 3;                               // apron grid dimension
+    const H = new Float32Array(N * N);
+    for (let gz = 0; gz < N; gz++) for (let gx = 0; gx < N; gx++) {
+      H[gz * N + gx] = heightAt0(cx0 + (gx - 1) * pitch, cz0 + (gz - 1) * pitch);
+    }
+    const geo = new THREE.PlaneGeometry(CSZ, CSZ, seg, seg);
+    geo.rotateX(-Math.PI / 2);
+    geo.translate(cx0 + CSZ / 2, 0, cz0 + CSZ / 2);
+    const posA = geo.attributes.position, uvA = geo.attributes.uv;
+    const cols = new Float32Array(posA.count * 3);
+    const nrm = new Float32Array(posA.count * 3);
+    for (let i = 0; i < posA.count; i++) {
+      const x = posA.getX(i), z = posA.getZ(i);
+      const gx = Math.round((x - cx0) / pitch) + 1, gz = Math.round((z - cz0) / pitch) + 1;
+      const h = H[gz * N + gx];
+      const edge = skirt && (gx === 1 || gx === N - 2 || gz === 1 || gz === N - 2);
+      posA.setY(i, edge ? h - 0.35 : h);
+      const c = colorAt(mapId, h, x, z, seed);
+      cols[i * 3] = c[0]; cols[i * 3 + 1] = c[1]; cols[i * 3 + 2] = c[2];
+      uvA.setXY(i, x / TILE, z / TILE);              // world-planar UV → tiles every 8m
+      _tn.set(H[gz * N + gx - 1] - H[gz * N + gx + 1], 2 * pitch, H[(gz - 1) * N + gx] - H[(gz + 1) * N + gx]).normalize();
+      nrm[i * 3] = _tn.x; nrm[i * 3 + 1] = _tn.y; nrm[i * 3 + 2] = _tn.z;
+    }
+    geo.setAttribute("color", new THREE.BufferAttribute(cols, 3));
+    geo.setAttribute("normal", new THREE.BufferAttribute(nrm, 3));
+    uvA.needsUpdate = true;
+    const mesh = new THREE.Mesh(geo, terrMat);
+    mesh.receiveShadow = true;
+    return mesh;
+  }
+  const terrain = new THREE.Group();
   terrain.name = "terrain";
+  const tChunks = [];
+  for (let cj = 0; cj < CHUNKS; cj++) for (let ci = 0; ci < CHUNKS; ci++) {
+    const farM = buildChunk(ci, cj, FAR_SEG, false);
+    terrain.add(farM);
+    tChunks.push({ ci, cj, far: farM, near: null });
+  }
   g.add(terrain);
+  // near-ring LOD swapper: ring follows the camera-focus cell; high-LOD chunks
+  // build LAZILY at most one per frame (a 77x77 fbm fill is a few ms — queued,
+  // never a burst), then swap by visibility flips only.
+  let _lodCi = -9, _lodCj = -9;
+  const _lodQueue = [];
+  trackUpdater(() => {
+    const f = W._camFocus || W.player;
+    if (!f || !f.pos) return;
+    const ci = Math.max(0, Math.min(CHUNKS - 1, Math.floor((f.pos.x + SIZE / 2) / CSZ)));
+    const cj = Math.max(0, Math.min(CHUNKS - 1, Math.floor((f.pos.z + SIZE / 2) / CSZ)));
+    if (ci !== _lodCi || cj !== _lodCj) {
+      _lodCi = ci; _lodCj = cj;
+      for (const c of tChunks) {
+        const ring = Math.abs(c.ci - ci) <= 1 && Math.abs(c.cj - cj) <= 1;
+        if (ring && !c.near && _lodQueue.indexOf(c) < 0) _lodQueue.push(c);
+        const useNear = ring && !!c.near;
+        c.far.visible = !useNear;
+        if (c.near) c.near.visible = useNear;
+      }
+    }
+    if (_lodQueue.length) {
+      const c = _lodQueue.shift();
+      c.near = buildChunk(c.ci, c.cj, NEAR_SEG, true);
+      terrain.add(c.near);
+      const ring = Math.abs(c.ci - _lodCi) <= 1 && Math.abs(c.cj - _lodCj) <= 1;
+      c.near.visible = ring;
+      if (ring) c.far.visible = false;
+    }
+  });
   await yieldPhase();                                // phase 1/3 done — let the loader paint
 
   // ── water ─────────────────────────────────────────────────────────────────
@@ -932,12 +995,21 @@ export async function buildMap(W, mapId) {
   // on curved ground. Ground-hugging geometry that samples heightAt0 directly
   // therefore buries itself in every ridge; sample the same bilinear surface the
   // terrain mesh actually draws.
-  const CELLW = SIZE / SEG;
+  // (chunked-terrain update: the drawn lattice is now PER-CHUNK — far chunks
+  // sample FAR_SEG cells across each 200 m chunk, so the bilinear surface must
+  // use that chunk-local lattice. Near-ring chunks draw at half pitch and sit
+  // strictly CLOSER to heightAt0 than this far-lattice estimate, so the error
+  // is bounded by the old global-grid behaviour.)
+  const CELLW = CSZ / FAR_SEG;
   function meshY(x, z) {
-    const gx = (x + HALF) / CELLW, gz = (z + HALF) / CELLW;
+    const ci = Math.max(0, Math.min(CHUNKS - 1, Math.floor((x + HALF) / CSZ)));
+    const cj = Math.max(0, Math.min(CHUNKS - 1, Math.floor((z + HALF) / CSZ)));
+    const cx0 = -HALF + ci * CSZ, cz0 = -HALF + cj * CSZ;
+    const gx = Math.max(0, Math.min(FAR_SEG - 1e-6, (x - cx0) / CELLW));
+    const gz = Math.max(0, Math.min(FAR_SEG - 1e-6, (z - cz0) / CELLW));
     const i0 = Math.floor(gx), j0 = Math.floor(gz);
     const fx = gx - i0, fz = gz - j0;
-    const x0 = i0 * CELLW - HALF, z0 = j0 * CELLW - HALF, x1 = x0 + CELLW, z1 = z0 + CELLW;
+    const x0 = cx0 + i0 * CELLW, z0 = cz0 + j0 * CELLW, x1 = x0 + CELLW, z1 = z0 + CELLW;
     const h00 = heightAt0(x0, z0), h10 = heightAt0(x1, z0), h01 = heightAt0(x0, z1), h11 = heightAt0(x1, z1);
     return (h00 + (h10 - h00) * fx) * (1 - fz) + (h01 + (h11 - h01) * fx) * fz;
   }
