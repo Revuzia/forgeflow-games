@@ -29,6 +29,7 @@
  * the host re-attaches a bot brain to that slot — the actor keeps fighting.
  */
 import { NetPlay } from "../../net/ffg_netplay.js";
+import { RTCMesh } from "../../net/ffg_rtc.js";
 
 const SUPABASE_URL = "https://wugoxdewcdxzfppgzohy.supabase.co";
 const SUPABASE_ANON_KEY =
@@ -117,7 +118,7 @@ function isAuthority(W) { return S && S.net.isHost(); }
 // the list because the ENVELOPE is not the right thing to drop — the flush in
 // update() thins its contents first, so shedding never silently strands a
 // pickup or a chest open inside a discarded envelope.
-const CRITICAL_MSG = { state: 1, bots: 1, hitYou: 1, died: 1, start: 1, hello: 1, bye: 1, takeover: 1, sync: 1, ev: 1 };
+const CRITICAL_MSG = { state: 1, bots: 1, hitYou: 1, died: 1, start: 1, hello: 1, bye: 1, takeover: 1, sync: 1, ev: 1, rtc: 1 };
 
 /** OUTBOUND BUDGET, in messages per rolling second. Supabase Realtime does not
  *  throttle a connection that exceeds its rate — it DISCONNECTS it, which
@@ -220,7 +221,7 @@ function openLobby(W, sel) {
     setTimeout(() => { inviteB.textContent = "COPY INVITE LINK"; }, 1600);
   };
   const closeB = mk("CANCEL", false);
-  closeB.onclick = () => { if (S) { S.net.leave(); S = null; W.net = null; } root.remove(); };
+  closeB.onclick = () => { if (S) { try { S.rtc && S.rtc.close(); } catch (e) {} S.net.leave(); S = null; W.net = null; } root.remove(); };
 
   // Who is actually in the room. S.peers has held every peer's chosen name since
   // the "hello" handler shipped, but it was read in exactly ONE place — building
@@ -265,6 +266,12 @@ function openLobby(W, sel) {
     S = { net, peers: {}, myName, started: false, lastState: 0, lastBots: 0, root };
     S.paintRoster = paintRoster;   // onMsg's "hello" handler repaints through this
     S.status = status;             // beginOnlineMatch reports a full room here
+    // P2P overlay (ffg_rtc.js): the state envelope prefers DataChannels;
+    // signaling + everything critical + the full fallback stay on Supabase.
+    // ensurePeer is called lazily the first time a peer's state arrives (both
+    // sides converge; the lower-id offerer rule breaks the tie).
+    S.rtc = new RTCMesh(net.id, (to, payload) => send("rtc", Object.assign({ to }, payload)));
+    S.rtc.onMessage = (m) => { if (m && m.t) onMsg(W, { from: m.from, t: m.t, d: m.d }); };
     W.net = S;
     net.on("msg", (m) => onMsg(W, m));
     net.on("peer", ({ count }) => {
@@ -364,7 +371,15 @@ function onMsg(W, { from, t, d }) {
     if (beginOnlineMatch(W, d) !== false && S && S.root) S.root.remove();
     return;
   }
+  if (t === "rtc") {
+    // P2P signaling relayed over the room channel — only the addressee acts
+    if (S.rtc && d && d.to === S.net.id && from) S.rtc.handleSignal(from, d);
+    return;
+  }
   if (t === "state") {
+    // lazy mesh negotiation: the first state we SEE from a peer starts the
+    // DataChannel handshake for that pair (both sides converge on it)
+    if (S.rtc && from) S.rtc.ensurePeer(from);
     const a = W.actorById.get(d.id);
     if (a && a.netRemote) { applyRemoteState(W, a, d); S.lastSeen = S.lastSeen || {}; S.lastSeen[d.id] = performance.now(); }
     // OUTSIDE the actor guard on purpose: the match clock rides the host's own
@@ -559,6 +574,7 @@ export function hostLost(W) {
       converted++;
     }
   }
+  try { S.rtc && S.rtc.close(); } catch (e) {}
   try { S.net && S.net.leave && S.net.leave(); } catch (e) {}
   W.net = null;                                 // frame gates (hitstop etc.) read this
   W.events.emit("hostLost", converted);
@@ -567,6 +583,7 @@ export function hostLost(W) {
 
 export function leave(W) {
   if (S) {
+    try { S.rtc && S.rtc.close(); } catch (e) {}
     try { S.net.leave(); } catch (e) {}
     S = null;
   }
@@ -659,7 +676,17 @@ export function update(W, dt) {
       st.bots = S.pendingBots;
       S.pendingBots = null;
     }
-    send("state", st);
+    // P2P FIRST: the envelope goes over DataChannels to every peer whose
+    // channel is open; ONE Supabase broadcast only if any peer lacks one
+    // (that peer filters by `from` exactly as before; a DC peer seeing the
+    // duplicate just re-applies the same snapshot — harmless by design).
+    // Any RTC failure therefore degrades to the exact pre-RTC behaviour.
+    let covered = false;
+    if (S.rtc) {
+      const r = S.rtc.sendState({ from: S.net.id, t: "state", d: st });
+      covered = r.allCovered;
+    }
+    if (!covered) send("state", st);
   }
   // link freshness for the HUD perf readout: age of the most recent state we
   // received from ANY peer. Not RTT — the HUD labels it SYNC, not ping.
