@@ -56,6 +56,10 @@ const STRIKE_FRAC = {
   // even opened; its true pass is 0.249.
   slash1: 0.414,
   slash2: 0.249,
+  // Authored clips: the strike frame is DESIGNED, not excavated — thrust
+  // punches level at f14/36, cleave passes the centreline at f22/43.
+  thrust: 0.39,
+  cleave: 0.51,
   attack: 0.400,   // beast lunge
   finisher: 0.500,
 };
@@ -281,6 +285,10 @@ export class BoutView {
           const dirName = f.attackDir;
           let clip;
           if (f.isBeast) clip = "attack";
+          // The AUTHORED verbs land first; the slash pair is the fallback for
+          // any archetype dir that lacks the new files.
+          else if ((kind === "polearm" || dirName === "thrust") && a.hasClip("thrust")) clip = "thrust";
+          else if ((dirName === "high" || (f.weapon && f.weapon.cleave > 1)) && a.hasClip("cleave")) clip = "cleave";
           else if (kind === "polearm" || dirName === "thrust") clip = "slash1";
           else if (dirName === "high" || (f.weapon && f.weapon.cleave > 1)) clip = "slash2";
           else if (dirName === "left") clip = "slash1";

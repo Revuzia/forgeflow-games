@@ -326,6 +326,9 @@ export function lowestSkinnedY(root, stride = 3) {
  */
 export async function loadFighter(dir, clipNames = [
   "idle", "slash1", "slash2", "parry", "hit", "death", "finisher",
+  // Authored 2026-07-27 in Blender (tools/author_clips.py) — the first clips
+  // designed for their verb rather than reused slashes.
+  "thrust", "cleave",
 ]) {
   const base = await load(`${dir}/base.glb`);
   const anims = [];
