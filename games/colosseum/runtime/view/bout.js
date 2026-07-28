@@ -18,10 +18,10 @@
 // classic bug where a visual effect quietly changes gameplay.
 
 import * as THREE from "three";
-import { PHASE } from "../sim/combat.js";
+import { PHASE, FEEL } from "../sim/combat.js";
 import { Actor, attachWeapon, makeGladius, makeScutum, makeTrident, makeLance } from "./actors.js";
 import { makeWeapon } from "./props.js";
-import { Equipment } from "./equipment.js";
+import { Equipment, findBone } from "./equipment.js";
 import { ARMATURA_ROSTER } from "../data/roster.js";
 import { damp, clamp } from "../core/util.js";
 
@@ -83,6 +83,32 @@ const BEAST_CLIPS = {
 // scale is the opposite of the bout's promise.
 const BEAST_LENGTH = { tiger: 2.05, panther: 1.8, bison: 2.7 };
 
+// ---------------------------------------------------------------------------
+// WOUNDS ON THE BODY. The sim has tracked four-zone wounds all along and the
+// fighter stayed pristine while a blood pool spread under him — the audit's
+// "clean bodies" gap, and the RTF feature veterans still cite. Each wound
+// level attaches one dark clotted patch to the zone's bone (the same
+// bone-attachment idea the armour uses), so damage accumulates VISIBLY and
+// reads at gameplay distance. Cleared with the actor at bout end.
+// ---------------------------------------------------------------------------
+const WOUND_ANCHORS = {
+  head: { bone: /^Head$/i, offsets: [[0.07, 0.02, 0.05], [-0.06, 0.05, 0.03], [0.02, 0.09, -0.05]] },
+  torso: { bone: /^Spine01$/i, offsets: [[0.09, 0.05, 0.1], [-0.1, -0.02, 0.09], [0.03, 0.1, -0.11]] },
+  arms: { bone: /^RightForeArm$/i, offsets: [[0.03, 0.1, 0.03], [-0.02, 0.18, -0.02], [0.03, 0.05, -0.03]] },
+  legs: { bone: /^RightUpLeg$/i, offsets: [[0.05, 0.15, 0.04], [-0.04, 0.28, 0.03], [0.04, 0.08, -0.05]] },
+};
+const WOUND_MAT = new THREE.MeshStandardMaterial({
+  color: 0x4a0d08, roughness: 0.55, metalness: 0.05, name: "wound",
+});
+
+function makeWoundPatch(scale = 1) {
+  const geo = new THREE.SphereGeometry(0.045 * scale, 7, 5);
+  geo.scale(1, 0.45, 1);
+  const m = new THREE.Mesh(geo, WOUND_MAT);
+  m.name = "wound_patch";
+  return m;
+}
+
 /** The rope dome an entangled fighter wears — one wireframe mesh, no cost. */
 function makeNetDome() {
   const geo = new THREE.SphereGeometry(0.95, 9, 5, 0, Math.PI * 2, 0, Math.PI * 0.55);
@@ -95,6 +121,10 @@ function makeNetDome() {
   m.position.y = 0.12;
   return m;
 }
+
+// Scratch for the exhaustion lean — per-frame, never allocated in the loop.
+const _leanQ = new THREE.Quaternion();
+const _leanRight = new THREE.Vector3();
 
 // Scratch for _seatRider — per-frame, never allocated in the loop.
 const _tmpRight = new THREE.Vector3();
@@ -320,6 +350,63 @@ export class BoutView {
       // settles a hair instead of hard-locking, which reads as a dropped frame.
       const ts = (f.hitStop > 0 ? 0.04 : 1) * timeScale;
       a.update(dt * ts, f.speed);
+
+      // Wounds accumulate on the body; exhaustion bends it. Both run AFTER
+      // the mixer has written this frame's pose.
+      this._syncWounds(rec);
+      this._exhaustLean(rec, dt);
+    }
+  }
+
+  /** Attach a clotted patch per wound level per zone — see WOUND_ANCHORS. */
+  _syncWounds(rec) {
+    const f = rec.fighter;
+    if (f.isBeast || !f.wounds) return;
+    rec._wounds = rec._wounds || { head: 0, torso: 0, arms: 0, legs: 0 };
+    for (const zone in WOUND_ANCHORS) {
+      const lvl = Math.min(3, f.wounds[zone] | 0);
+      while (rec._wounds[zone] < lvl) {
+        const n = rec._wounds[zone]++;
+        const spec = WOUND_ANCHORS[zone];
+        const bone = findBone(rec.actor.model, spec.bone);
+        if (!bone) { rec._wounds[zone] = lvl; break; }
+        bone.updateWorldMatrix(true, false);
+        _tmpQ.identity();
+        const s = new THREE.Vector3();
+        bone.matrixWorld.decompose(new THREE.Vector3(), _tmpQ, s);
+        const counter = s.x > 1e-4 ? 1 / s.x : 1;
+        const m = makeWoundPatch(1 + n * 0.35);
+        const o = spec.offsets[Math.min(n, spec.offsets.length - 1)];
+        m.position.set(o[0] * counter, o[1] * counter, o[2] * counter);
+        m.scale.setScalar(counter);
+        bone.add(m);
+      }
+    }
+  }
+
+  /**
+   * The gassed fighter BENDS — a small forward pitch plus a breathing sway,
+   * applied additively after the mixer so every rig keeps its own pose. The
+   * axis is the actor's world RIGHT expressed in the bone's frame (Meshy
+   * bone rolls are arbitrary, so a bone-local X pitch would tip a different
+   * way on every body). Suppressed mid-swing; eases in and out.
+   */
+  _exhaustLean(rec, dt) {
+    const f = rec.fighter;
+    if (f.isBeast || !f.alive || rec.mounted) return;
+    if (rec._spine === undefined) rec._spine = findBone(rec.actor.model, /^Spine02$/i) || null;
+    if (!rec._spine) return;
+    const gassed = f.stamina < FEEL.exhaustedThreshold &&
+      f.phase !== PHASE.WINDUP && f.phase !== PHASE.ACTIVE;
+    const target = gassed ? 0.12 : 0;
+    rec._lean = (rec._lean || 0) + (target - (rec._lean || 0)) * Math.min(1, dt * 2.5);
+    if (rec._lean > 0.004) {
+      const breathe = Math.sin(performance.now() * 0.005) * 0.025 * (rec._lean / 0.12);
+      _leanRight.set(Math.cos(rec.actor.facing), 0, -Math.sin(rec.actor.facing));
+      rec._spine.getWorldQuaternion(_tmpQ).invert();
+      _leanRight.applyQuaternion(_tmpQ).normalize();
+      _leanQ.setFromAxisAngle(_leanRight, rec._lean + breathe);
+      rec._spine.quaternion.multiply(_leanQ);
     }
   }
 
