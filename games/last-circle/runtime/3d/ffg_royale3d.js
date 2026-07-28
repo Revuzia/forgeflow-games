@@ -263,13 +263,29 @@ register3d("royale", async function (kernel, content) {
     if (!f) return;
     const ext = W._shadowExt || 55;
     const texels = (sun.shadow.mapSize && sun.shadow.mapSize.x) || 2048;
-    const step = (ext * 2) / texels;
     // Anchor the volume's HEIGHT to the terrain under the focus, not to the
     // focus itself. The glider drop starts at 240-270 m, and the sun offset is
     // only ~169 m long, so following the player's raw Y lifted the whole shadow
     // camera above the world and the entire descent — the part of the match you
     // spend looking straight down at the map — rendered with no shadows at all.
     const gy = W.map && W.map.groundAt ? W.map.groundAt(f.pos.x, f.pos.z) : 0;
+    // ALTITUDE-ADAPTIVE EXTENT: at ground level the tier extent covers
+    // everything a shadow can visibly resolve (beyond it, detail is
+    // sub-pixel), but the drop/glide looks straight DOWN from 250+ m and the
+    // world outside the disc read as shadowless — the one view where the
+    // benchmark's 700 m cascades actually showed. Widen with height above
+    // ground; texel density falls as you rise, which is perceptually correct
+    // from altitude, and the volume snaps back to the sharp tier extent on
+    // landing. The 8% hysteresis keeps updateProjectionMatrix off the
+    // per-frame path during level flight.
+    const agl = Math.max(0, f.pos.y - gy);
+    const wantExt = Math.min(620, ext + (agl > 40 ? (agl - 40) * 2.4 : 0));
+    const sc = sun.shadow.camera;
+    if (Math.abs(sc.right - wantExt) > wantExt * 0.08) {
+      sc.left = -wantExt; sc.right = wantExt; sc.top = wantExt; sc.bottom = -wantExt;
+      sc.updateProjectionMatrix();
+    }
+    const step = (sc.right * 2) / texels;
     _sunFocus.set(Math.round(f.pos.x / step) * step, Math.min(f.pos.y, gy + 8), Math.round(f.pos.z / step) * step);
     sun.target.position.copy(_sunFocus);
     sun.target.updateMatrixWorld();
