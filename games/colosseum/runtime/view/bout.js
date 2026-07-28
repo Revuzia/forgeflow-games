@@ -60,6 +60,12 @@ const STRIKE_FRAC = {
   finisher: 0.500,
 };
 
+// Scratch for _seatRider — per-frame, never allocated in the loop.
+const _tmpRight = new THREE.Vector3();
+const _tmpFwd = new THREE.Vector3();
+const _tmpQ = new THREE.Quaternion();
+const _tmpPQ = new THREE.Quaternion();
+
 /** Which procedural weapon mesh a weapon id gets. */
 const WEAPON_MESH = {
   gladius: makeGladius, spatha: makeGladius, sica: makeGladius,
@@ -120,7 +126,9 @@ export class BoutView {
       // close range, which is the honest price of no riding pose yet (flagged),
       // and reads correctly at gameplay distance. The first guess (height*0.72
       // = y 1.43) floated him a forearm above the horse.
-      rider.root.position.set(0, 0.62, 0.08);
+      // Seated: _seatRider folds the legs, so the root (at the feet-frame)
+      // sinks until the pelvis meets the saddle line at ~1.25.
+      rider.root.position.set(0, 0.34, 0.10);
       actor.root.add(rider.root);
       rider.play("idle");
       // The couched lance. A fixed pitch is tolerable here because the joust
@@ -139,6 +147,7 @@ export class BoutView {
       this.scene.add(actor.root);
       const rec = { actor, rider, fighter, role, mounted: true };
       this.actors.set(fighter.id, rec);
+      this._buildTilt();
       return rec;
     }
     if (fighter.isBeast) {
@@ -194,6 +203,7 @@ export class BoutView {
   clear() {
     for (const id of [...this.actors.keys()]) this.despawn(id);
     this.corpses.length = 0;
+    if (this._tilt) { this._tilt.removeFromParent(); this._tilt = null; }
   }
 
   // -- per-frame ------------------------------------------------------------
@@ -399,6 +409,74 @@ export class BoutView {
   }
 
   /**
+   * The tilt barrier — the long list fence the riders pass on opposite sides
+   * of. Real tilts were timber with a cloth drape; this one is posts, two
+   * rails and a hanging skirt, running the length of the lanes at z = 0.
+   * Built once when the first rider spawns, removed with the bout.
+   */
+  _buildTilt() {
+    if (this._tilt) return;
+    const g = new THREE.Group();
+    g.name = "tilt_barrier";
+    const wood = new THREE.MeshStandardMaterial({ color: 0x6d5236, roughness: 0.9 });
+    const cloth = new THREE.MeshStandardMaterial({ color: 0x8e2f22, roughness: 0.95, side: THREE.DoubleSide });
+    const len = 60;
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(len, 0.09, 0.14), wood);
+    rail.position.y = 1.15; g.add(rail);
+    const rail2 = new THREE.Mesh(new THREE.BoxGeometry(len, 0.07, 0.12), wood);
+    rail2.position.y = 0.55; g.add(rail2);
+    const skirt = new THREE.Mesh(new THREE.PlaneGeometry(len, 0.62), cloth);
+    skirt.rotation.y = Math.PI / 2 * 0; skirt.position.y = 0.84; g.add(skirt);
+    for (let x = -len / 2; x <= len / 2; x += 6) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.065, 1.25, 8), wood);
+      post.position.set(x, 0.62, 0);
+      g.add(post);
+    }
+    g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    this.scene.add(g);
+    this._tilt = g;
+  }
+
+  /**
+   * SEAT the rider — a procedural riding pose, since no seated clip exists.
+   *
+   * The shared idle clip leaves the legs straight, which read as a man
+   * standing on (or through) his horse. Each frame, AFTER the rider's mixer
+   * has written the clip pose, the thighs are folded forward ~78 deg about the
+   * horse's right axis, splayed ~16 deg outward so they straddle the barrel,
+   * and the shins folded back ~74 deg — the classic deep seat. World-axis
+   * rotations, same technique as _spineFlex, because these Meshy bones carry
+   * arbitrary local roll that per-bone Euler guesses cannot survive.
+   */
+  _seatRider(rec) {
+    const rider = rec.rider, horse = rec.actor;
+    let B = rec._seatBones;
+    if (B === undefined) {
+      const find = (n) => { let b = null; rider.model.traverse((o) => { if (!b && o.isBone && o.name === n) b = o; }); return b; };
+      B = rec._seatBones = {
+        lu: find("LeftUpLeg"), ru: find("RightUpLeg"),
+        ll: find("LeftLeg"), rl: find("RightLeg"),
+      };
+    }
+    if (!B.lu || !B.ru) return;
+    const yaw = horse.visualFacing;
+    _tmpRight.set(Math.cos(yaw), 0, -Math.sin(yaw));         // horse's right
+    _tmpFwd.set(Math.sin(yaw), 0, Math.cos(yaw));            // horse's forward
+    const rot = (bone, axis, rad) => {
+      if (!bone) return;
+      _tmpQ.setFromAxisAngle(axis, rad);
+      bone.parent.getWorldQuaternion(_tmpPQ);
+      bone.quaternion.premultiply(_tmpPQ.clone().invert().multiply(_tmpQ).multiply(_tmpPQ));
+      bone.updateMatrixWorld(true);
+    };
+    rider.model.updateMatrixWorld(true);
+    rot(B.lu, _tmpRight, -1.36); rot(B.lu, _tmpFwd, -0.28);
+    rot(B.ru, _tmpRight, -1.36); rot(B.ru, _tmpFwd, 0.28);
+    rot(B.ll, _tmpRight, 1.30);
+    rot(B.rl, _tmpRight, 1.30);
+  }
+
+  /**
    * Drive a horse-and-rider composite. The horse carries the locomotion —
    * Gallop when the sim says run, Idle at the marks — and the rider's mixer
    * ticks so he breathes in the saddle. On an unhorse the rider leaves the
@@ -423,7 +501,10 @@ export class BoutView {
       a.play(f.speed > 2 ? "run" : "idle");
     }
     a.update(dt, f.speed);
-    if (rec.rider && rec.rider.mixer) rec.rider.mixer.update(dt);
+    if (rec.rider && rec.rider.mixer) {
+      rec.rider.mixer.update(dt);
+      if (!rec.dismounted) this._seatRider(rec);
+    }
   }
 
   /**
