@@ -380,7 +380,7 @@ function stepWeapon(W, a, dt) {
   // (W._fireEdge, set on click, cleared on release/consume) so one click = one shot.
   const isAuto = def.cls === "smg" || def.cls === "ar";
   const wantFire = (a.isBot || isAuto) ? inp.fire : !!W._fireEdge;
-  if (wantFire && wpn.cd <= 0 && !a.gliding && !a.healing && !a.swimming) {
+  if (wantFire && wpn.cd <= 0 && !a.gliding && !a.healing && !a.swimming && a.mantleT == null) {
     if (def.mag > 0 && wpn.magAmmo <= 0) {
       // auto reload attempt
       if (a.inventory.ammo[def.ammo] > 0) { inp.reload = true; }

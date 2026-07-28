@@ -127,7 +127,20 @@ function sample(key, pos, gain, maxD, rate) {
   src.playbackRate.value = (rate || 1) * (0.94 + Math.random() * 0.12);
   const g = ctx.createGain();
   g.gain.value = (gain == null ? 0.5 : gain) * (0.9 + Math.random() * 0.2);
-  src.connect(g); g.connect(out);
+  // DISTANCE TIMBRE (sweep finding): air eats treble long before loudness, and
+  // the synth path already muffles with range (shot()'s df) — a recorded
+  // near-distance master playing full-bright at 250 m loses the positional
+  // information the synth had. Same curve: brightness 1.0 -> 0.12 at the cull
+  // radius, mapped onto a lowpass. Own/UI plays (__d null) skip the filter.
+  if (out.__d != null && out.__d > 8) {
+    const df = Math.max(0.12, 1 - out.__d / maxD);
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 600 + 17000 * df * df;
+    src.connect(g); g.connect(lp); lp.connect(out);
+  } else {
+    src.connect(g); g.connect(out);
+  }
   src.start();
   return true;
 }
@@ -525,7 +538,11 @@ function wire(W) {
     // decorrelation), synth shot() verbatim when the class has no recording
     // (launcher) or the pack failed to decode. 260 m ceiling matches the synth
     // path's audible range so bot-fight ambience is unchanged.
-    if (!(SFX["shot_" + cls] && sample("shot_" + cls, own ? null : eye, own ? 0.5 : 0.4, 260))) {
+    // per-class audible radius, NOT a flat 260: sample() reports "handled"
+    // when spatial() culls beyond maxD, so a flat ceiling silently re-created
+    // the exact "shot by a gun you never heard" bug AUDIBLE_M fixed for the
+    // synth path (sniper reaches 520 m, shotgun only 120) — sweep finding.
+    if (!(SFX["shot_" + cls] && sample("shot_" + cls, own ? null : eye, own ? 0.5 : 0.4, AUDIBLE_M[cls] || 260))) {
       shot(cls, own ? null : eye);
     }
     if (own) duckMusic();
@@ -691,6 +708,13 @@ function wire(W) {
   // for ordinary landings: "landed" only fires on the parachute touchdown, so
   // the thump below it was a once-per-match sound pretending to be a footfall.
   on("jump", (a) => { if (a === W.player) thump(300, 0.09, 0.16); });
+  // mantle: cloth scrape + a low effort thump (the emit shipped with no
+  // listener anywhere — sweep finding); positional for others at close range
+  on("mantle", (a) => {
+    const own = a === W.player, p2 = own ? null : a.pos;
+    if (!sample("cloth", p2, own ? 0.3 : 0.2, 18)) thump(900, 0.06, own ? 0.18 : 0.1, p2, 18);
+    thump(240, 0.1, own ? 0.2 : 0.12, p2, 18);
+  });
   on("touchdown", (a, speed) => {
     const k = Math.min(1, (speed || 4) / 14);
     thump(360 - k * 120, 0.10 + k * 0.06, 0.12 + k * 0.14, a === W.player ? null : a.pos, 40);

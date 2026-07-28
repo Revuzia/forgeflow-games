@@ -1023,7 +1023,11 @@ function stepActor(W, a, dt, far) {
   // chase has a natural rhythm instead of being a constant-speed conveyor.
   const SN = K.STAMINA;
   if (a.stamina == null) { a.stamina = SN.max; a._staRest = 0; a._exhaust = 0; }
-  const wantsSprint = inp.sprint && inp.mz > 0.5 && !(healingNow && K.HEAL.blocksSprint);
+  // !inp.ads: you can't actually sprint while aiming (speed picks the ADS cap
+  // below), but without the gate a scoped breath-hold — SHIFT while ADS —
+  // silently drained stamina at full sprint rate and left you exhaust-locked
+  // the moment you unscoped to escape (sweep finding).
+  const wantsSprint = inp.sprint && inp.mz > 0.5 && !inp.ads && !(healingNow && K.HEAL.blocksSprint);
   if (a._exhaust > 0) a._exhaust = Math.max(0, a._exhaust - dt);
   // you must clear minToStart to BEGIN, but only reach 0 to be forced to stop —
   // otherwise sprint flickers on and off around the threshold every frame
@@ -1285,6 +1289,11 @@ function syncObj(W, a, dt, far) {
       if (a.gliding && !a.chute) playAnim(a, "run", { timeScale: 0.05 });
       else if (a.gliding) playAnim(a, "idle");
       else if (a.swimming) playAnim(a, "swim", { timeScale: gs > 4.5 ? 1.25 : 1 });
+      else if (a.mantleT != null && a.clips.crouch) {
+        // pull-up reads as a tucked climb, not the frozen tail frame of the
+        // once-only jump clip (sweep finding)
+        playAnim(a, "crouch", { timeScale: 0 });
+      }
       else if (!a.onGround) playAnim(a, "jump", { once: true, startAt: JUMP_TAKEOFF_S });
       else if (a.hitReactT > 0 && a.clips.hit) {
         // held for its short window like an emote — playAnim re-selects loco
@@ -1757,6 +1766,9 @@ export function killActor(W, victim, killerId, weaponId) {
   // mid-stride statue instead of a death animation. update() skips dead actors,
   // so this is the only place that can un-freeze it.
   if (victim.rig && victim.rig.mixer) victim.rig.mixer.timeScale = 1;
+  // an actor killed mid-mantle must not freeze mid-air in the scripted arc —
+  // update() skips dead actors, so nothing else would ever clear the state
+  victim.mantleT = null;
   if (victim.rig) {
     // death VARIETY: random pick among whichever death clips this skin baked
     // (183 fall-backward / 184 fall-forward joined the original 8 "Dead") —

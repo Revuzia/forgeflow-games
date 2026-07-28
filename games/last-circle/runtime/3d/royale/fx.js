@@ -364,6 +364,11 @@ function wireEvents(W) {
             speed: 1.1 + k * 1.2, up: 0.35 + k * 0.5, size: 0.07 + k * 0.03, life: 0.3 + k * 0.2, gravity: -5, drag: 2.6 });
   });
   // takeoff — nothing was drawn here at all
+  W.events.on("mantle", (a) => {
+    // a puff of scuff dust at the hands as the pull-up starts (sweep finding:
+    // the emit had no FX listener)
+    burst({ x: a.pos.x, y: a.pos.y + 1.4, z: a.pos.z, n: 5, color: 0xbfae8f, speed: 1.8, up: 1.2, size: 0.07, life: 0.5, gravity: -3 });
+  });
   W.events.on("jump", (a) => {
     if (!nearCam(a.pos.x, a.pos.z, 34)) return;
     burst({ x: a.pos.x, y: a.pos.y + 0.04, z: a.pos.z, n: 3, color: 0x9a8562, speed: 1.0, up: 0.5, size: 0.06, life: 0.26, gravity: -5, drag: 3 });
@@ -422,6 +427,13 @@ export function prewarm(W) {
   ensureDecals(W);
   const toggled = [];
   for (const b of blasts) {
+    // ensureBlasts CREATES the pool but the sprites only join the scene on
+    // their first explosion (the lazy re-adopt in the handler) — an object not
+    // in the graph is invisible to renderer.compile no matter what its
+    // visibility flag says, which made the first version of this toggle a
+    // no-op (sweep finding). Adopt them here; the handler's parent check
+    // makes its own adopt idempotent.
+    if (!b.sp.parent) W.group("fx").add(b.sp, b.ring);
     if (!b.sp.visible) {
       b.sp.visible = b.ring.visible = true;
       b.sp.scale.setScalar(1e-4); b.ring.scale.setScalar(1e-4);
