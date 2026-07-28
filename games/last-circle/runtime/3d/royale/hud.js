@@ -1697,6 +1697,14 @@ export function showHUD(W) {
   // (Final Drop parity — their hotbar select shows rarity/name)
   R.wpnPop = h("div", { position: "absolute", left: "50%", bottom: "118px", transform: "translateX(-50%)", fontFamily: "Rajdhani, " + FONT, fontSize: "16px", fontWeight: "900", letterSpacing: "1.5px", textShadow: "0 2px 8px rgba(0,0,0,0.95)", opacity: "0", transition: "opacity .18s", pointerEvents: "none" }, "", L);
 
+  // world-anchored loot labels (Final Drop parity — owner screenshots show
+  // named ground loot + a CHEST tag): a pool of 7 pills projected to the
+  // items' screen positions each frame, rarity-coloured, distance-faded
+  R.lootLbls = [];
+  for (let i = 0; i < 7; i++) {
+    R.lootLbls.push(h("div", { position: "absolute", left: "0", top: "0", display: "none", fontFamily: "Rajdhani, " + FONT, fontSize: "12.5px", fontWeight: "800", letterSpacing: "0.8px", background: "rgba(6,10,16,0.55)", padding: "2px 9px", borderRadius: "7px", whiteSpace: "nowrap", pointerEvents: "none", textShadow: "0 1px 3px rgba(0,0,0,0.9)", willChange: "transform" }, "", L));
+  }
+
   // interact hint + chest-open progress ring
   R.interact = h("div", { position: "absolute", left: "50%", top: "60%", transform: "translateX(-50%)", background: "rgba(0,0,0,0.55)", padding: "6px 14px", borderRadius: "8px", fontSize: "14px", display: "none" }, "", L);
   R.chestRing = h("div", { position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "58px", height: "58px", borderRadius: "50%", display: "none", background: "conic-gradient(#ffd254 0deg, rgba(255,255,255,0.15) 0deg)", WebkitMask: "radial-gradient(circle, transparent 22px, #000 23px)", mask: "radial-gradient(circle, transparent 22px, #000 23px)" }, null, L);
@@ -2076,6 +2084,34 @@ export function update(W, dt) {
     }
   }
   if (R._wpnPopT && performance.now() - R._wpnPopT > 1500) { R.wpnPop.style.opacity = "0"; R._wpnPopT = 0; }
+  // loot labels: project nearby items/chests to screen (7 projections, cheap)
+  if (R.lootLbls) {
+    let li = 0;
+    if (p && p.alive && W.phase === "match" && W.nearbyLoot && W.kernel && W.kernel.camera) {
+      if (!R._lv) R._lv = new p.pos.constructor();
+      const near = W.nearbyLoot(p.pos, 9);
+      const cam = W.kernel.camera;
+      const sw = window.innerWidth, sh = window.innerHeight;
+      for (const n of near) {
+        if (li >= R.lootLbls.length) break;
+        R._lv.set(n.pos.x, n.pos.y + (n.type === "chest" ? 1.0 : 0.55), n.pos.z).project(cam);
+        if (R._lv.z > 1 || R._lv.x < -1 || R._lv.x > 1 || R._lv.y < -1 || R._lv.y > 1) continue;
+        const el = R.lootLbls[li++];
+        const isW = n.type === "item" && n.data.kind === "weapon";
+        const txt = n.type === "chest" ? "CHEST"
+                  : shortName(n.data) + (isW ? " · " + (K.RARITY[n.data.rarity || 0] || "").toUpperCase() : "");
+        if (el._t !== txt) {
+          el._t = txt; el.textContent = txt;
+          el.style.color = n.type === "chest" ? "#ffd254"
+                        : isW ? (K.RARITY_COLOR[K.RARITY[n.data.rarity || 0]] || "#dfe7f2") : "#8fd3a0";
+        }
+        el.style.transform = "translate(-50%,-100%) translate(" + ((R._lv.x * 0.5 + 0.5) * sw).toFixed(0) + "px," + ((-R._lv.y * 0.5 + 0.5) * sh).toFixed(0) + "px)";
+        el.style.opacity = (n.d < 3 ? 1 : Math.max(0.3, 1 - (n.d - 3) / 7)).toFixed(2);
+        if (el.style.display !== "block") el.style.display = "block";
+      }
+    }
+    for (; li < R.lootLbls.length; li++) if (R.lootLbls[li].style.display !== "none") R.lootLbls[li].style.display = "none";
+  }
   R.cross.style.display = (p.input.ads && wid && K.WEAPONS[wid] && K.WEAPONS[wid].scope) ? "none" : "block";
   const locked = W.pointerLocked && W.pointerLocked();
   const dom = W.kernel.renderer.domElement;
