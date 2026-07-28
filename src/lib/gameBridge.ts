@@ -88,17 +88,35 @@ export function destroyGameBridge() {
   playStartTime = null;
 }
 
+// The iframe the current message actually came from — remembered so replies
+// (forgeflow:save_loaded) go back to the REAL sender, not whatever iframe
+// happens to be first in the DOM.
+let gameFrame: HTMLIFrameElement | null = null;
+let gameFrameOrigin = "*";
+
 function handleGameMessage(event: MessageEvent) {
   if (!event.data || typeof event.data !== "object" || !event.data.type) return;
   if (!event.data.type.startsWith("forgeflow:")) return;
+  // SOURCE CHECK: only accept bridge messages from an iframe actually embedded
+  // in this page. Without this, any window able to postMessage here (an
+  // opened popup, an injected frame elsewhere) could submit scores, unlock
+  // achievements, or overwrite cloud saves for the signed-in user.
+  const frames = Array.from(document.querySelectorAll("iframe"));
+  const src = frames.find((f) => f.contentWindow === event.source);
+  if (!src) return;
+  gameFrame = src;
+  gameFrameOrigin = event.origin || "*";
 
   const { type, ...payload } = event.data;
+  // scores are validated as finite numbers, not truthiness — a legitimate
+  // score of exactly 0 was silently discarded before
+  const numScore = typeof payload.score === "number" && isFinite(payload.score) ? payload.score : null;
 
   switch (type) {
     case "forgeflow:score":
       // Game reports a score for the leaderboard
-      if (currentUserId && currentGameId && payload.score) {
-        submitScore(currentUserId, currentGameId, payload.score);
+      if (currentUserId && currentGameId && numScore != null) {
+        submitScore(currentUserId, currentGameId, numScore);
       }
       break;
 
@@ -118,15 +136,15 @@ function handleGameMessage(event: MessageEvent) {
       // achievements (by design). Games that want XP for "completed level N"
       // should declare it as an achievement (`level_5`, `world_1` etc.) and
       // grant it via ForgeFlow.unlockAchievement().
-      if (currentUserId && payload.score) {
-        submitScore(currentUserId, currentGameId!, payload.score);
+      if (currentUserId && numScore != null) {
+        submitScore(currentUserId, currentGameId!, numScore);
       }
       break;
 
     case "forgeflow:game_over":
-      // Game over — submit final score
-      if (currentUserId && payload.score) {
-        submitScore(currentUserId, currentGameId!, payload.score);
+      // Game over — submit final score (0 is legitimate)
+      if (currentUserId && numScore != null) {
+        submitScore(currentUserId, currentGameId!, numScore);
       }
       break;
 
@@ -143,13 +161,15 @@ function handleGameMessage(event: MessageEvent) {
       if (currentUserId && currentGameId) {
         const reqId = payload._reqId;
         loadGameData(currentUserId, currentGameId, payload.slot || 1).then(data => {
-          const iframe = document.querySelector("iframe");
-          if (iframe?.contentWindow) {
-            iframe.contentWindow.postMessage({
+          // reply to the frame the request actually CAME from, at its origin —
+          // the first-iframe-in-DOM + "*" pair could hand a save payload to
+          // the wrong embed
+          if (gameFrame?.contentWindow) {
+            gameFrame.contentWindow.postMessage({
               type: "forgeflow:save_loaded",
               data,
               _reqId: reqId,
-            }, "*");
+            }, gameFrameOrigin);
           }
         });
       }
