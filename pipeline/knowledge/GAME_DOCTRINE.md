@@ -92,6 +92,41 @@ keep every line load-bearing.
 - **Every bout ends.** A no-timeout fight WILL stall on some seed. Referee
   verdict on remaining condition after N seconds per ENGAGEMENT (reset on new
   spawns so multi-stage fights still play out).
+- **A timeout verdict must never reward passivity.** `>=` on an hp-fraction
+  comparison awards full-hp-vs-full-hp TIES to the player, so pure kiting beat
+  the hardest bouts (measured 3/3 zero-contact wins at ~163 s). Strict
+  advantage only, and zero-contact rules AGAINST the player.
+- **Poise, or spam interrupts everything.** With unconditional
+  hit-interrupts-windup, a masher stagger-cancelled every AI swing (68
+  interrupts/30 bouts; no enemy ever finished an attack) and beat timed play
+  at every tier below champion. Interrupts land only in the EARLY windup
+  (~first 45%) with ~1.6 s immunity after each.
+- **Blocks must PUNISH, not just absorb.** 44 blocks + 5 parries produced zero
+  counter-hits — so blocking never beat mashing. A direction-MATCHED block or
+  parry arms an AI riposte (immediate counter with poise). Cooldown it
+  (~2.2 s): granted on EVERY block, a same-skill attacker landed ZERO hits in
+  15 s — a wall, not a skill curve. Tune between those measured rails.
+- **Telegraph honesty extends to the DODGE.** If i-frames (0.28 s) expire
+  before a slow attack lands (0.62 s windup), reacting to the TELL is
+  punished and only frame-guessing the impact works (measured 6/30 vs 14/20
+  wins). Vs big lunging attackers, honour a dodge STARTED anywhere inside the
+  attacker's windup (grace scaled to that attacker's own windup) — and give a
+  dodged lunge extra recover, so evasion opens the counter-window instead of
+  merely not-losing.
+- **The tutorial opponent is a TEACHER, its own AI band.** Gate-on-win
+  tutorials with a normal-band opponent hard-wall novices (0/21 measured, with
+  the taught verb literally disabled by kit rules). Tutor band: long latency,
+  near-zero punish, meaningful blockChance (it DEMONSTRATES the verb), spacer
+  patience for wide openings — and make sure the taught verb WORKS with the
+  tutorial's issued kit (shieldless block was silently inert: ~1000 held
+  ticks, 0 blocking ticks).
+- **Acceptance-test feel with persona playtests.** Scripted personas driving
+  the REAL sim headlessly — rusher (never blocks), duelist (timed/directional),
+  novice (350–500 ms delayed inputs) on identical seeds — turn "does skill beat
+  spam?", "can a beginner learn?", "does kiting win?" into measured numbers.
+  Re-run the same personas after every combat-layer change; verdicts that
+  don't ROUND UP (a claim "beatable at ≥1/3" fails at 6/30 even though the
+  build improved) are what keep fixes honest.
 - **Fast closing speeds need SUB-TICK impact resolution** (joust: 22 m/s
   crosses a lance-reach in <2 ticks; solve the crossing instant inside the
   tick and resolve both sides there — never whoever-ticked-first).

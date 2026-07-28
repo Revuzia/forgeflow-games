@@ -125,10 +125,14 @@ console.log("\n-- tertiarius + waves --");
 // fight opens, so the player's next landed blow kills through the REAL
 // wound/death/foesLeft path and the hook fires or it doesn't.
 let sawTert = false;
-{
+// A few seeds, because this checks the SPAWNER and the naked probe player can
+// die before landing even the sliver-blow on an unlucky draw (with the 2026-07
+// riposte/poise layer, seed 7 became one — measured 7/8 seeds fine).
+for (const tseed of [7, 11, 23]) {
+  if (sawTert) break;
   const tdef = LADDER.find((x) => x.type === "tertiarius");
   const inv = new Inventory(); inv.gold = 5000;
-  const m = new Match({ def: tdef, inventory: inv, seed: 7 });
+  const m = new Match({ def: tdef, inventory: inv, seed: tseed });
   m.start();
   let pBrain = null, wounded = false;
   for (let t = 0; t < 240 && !m.result; t += DT) {

@@ -459,7 +459,13 @@ export class Match {
         foesBest = Math.max(foesBest, side(f.team));
       }
       this._cue("summa_rudis", { reason: "time" });
-      this._decide(side(this.player.team) >= foesBest);
+      // THE COWARD'S VERDICT. `>=` handed ties to the player, and both sides
+      // at full hp is a tie — so refusing to engage for 150 s beat the
+      // hardest bouts on the card (measured: 3/3 zero-contact c1 "wins",
+      // 0 swings from either side). The referee now rules for the player
+      // only on a STRICT advantage, and a bout with no contact at all goes
+      // against the man the crowd paid to watch fight.
+      this._decide(this._anyContact ? side(this.player.team) > foesBest + 1e-6 : false);
       return;
     }
 
@@ -581,6 +587,12 @@ export class Match {
   // -- combat event routing --------------------------------------------------
 
   _onCombatEvent(e) {
+    // Any exchange at all — hit, block, parry or bind — marks the bout as
+    // FOUGHT. The 150 s referee decision reads this: a bout with zero contact
+    // is ruled against the player (see the summa rudis branch).
+    if (e.type === "hit" || e.type === "block" || e.type === "parry" || e.type === "clash") {
+      this._anyContact = true;
+    }
     if (e.type === "hit") {
       // Tally what the smith will charge for. A shield that stopped a lot and
       // a blade that did a lot of work both come home needing attention.

@@ -327,7 +327,7 @@ export function buildLadder() {
   const add = (m) => { L.push({ ...m, index: L.length + 1, id: m.id || `match_${L.length + 1}` }); };
 
   // --- Tiro: learn the trade -------------------------------------------
-  add({ id: "t1", rank: "tiro", type: "paegniarius", name: "Wooden Swords", opponents: [{ armatura: "paegniarius", skill: "tiro" }], purse: 40, lethal: false,
+  add({ id: "t1", rank: "tiro", type: "paegniarius", name: "Wooden Swords", opponents: [{ armatura: "paegniarius", skill: "tutor" }], purse: 40, lethal: false,
         desc: "Blunted weapons in the midday interval. Nobody dies. Learn the guard." });
   add({ id: "t2", rank: "tiro", type: "single", name: "First Sand", opponents: [{ armatura: "thraex", skill: "tiro" }], purse: 60,
         desc: "A thraex, as tired and frightened as you are." });

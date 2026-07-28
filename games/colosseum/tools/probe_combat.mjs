@@ -244,7 +244,9 @@ ok(!escaped, "no fighter leaves the arena ellipse");
   ok(human.radius + human.radius < WEAPONS.gladius.reach, "two humans can reach each other");
 }
 ok(maxStam <= x1.maxStamina + 0.001 || maxStam <= x2.maxStamina + 0.001, "stamina never exceeds its maximum");
-ok(Object.keys(SKILL).length === 6, "six skill bands, one per rank");
+// Six rank bands plus the t1-only TUTOR band (2026-07-28: the teaching
+// opponent for Wooden Swords — see SKILL.tutor in ai.js).
+ok(Object.keys(SKILL).length === 7 && !!SKILL.tutor, "seven skill bands: six ranks + the t1 tutor");
 
 console.log(`\n-- verdict --`);
 console.log(`  ${checks} checks, ${fails} failed`);

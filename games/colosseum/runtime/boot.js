@@ -548,6 +548,20 @@ function onCombatSound(e) {
       audio.play("parry", { x: e.x, z: e.z, gain: 1.0, rate: 0.9 });
       audio.crowdSurge(0.35, 0.1);
       break;
+    case "bypass":
+    case "maul":
+      // A sica hooking the rim / a cat coming OVER the shield. These landed
+      // as damage-through-a-correct-block with zero feedback, which the
+      // playtest read as "block randomly fails" — the single legibility
+      // caveat on an otherwise-perfect telegraph audit. A scraping pitch-bent
+      // swing plus a HUD line names the mechanic the moment it first happens.
+      audio.play("swing", { ...at(e.target), gain: 0.8, rate: 0.55 });
+      audio.play("block", { ...at(e.target), gain: 0.4, rate: 1.5 });
+      if (e.target === "player" && hud.prompt) {
+        hud.prompt(e.type === "maul" ? "Over the rim — the beast climbs the shield!"
+          : "Hooked past the rim — the sica curls around a guard!", 2.6);
+      }
+      break;
     case "shield_break":
     case "guard_break":
       audio.play("shield_break", { ...at(e.id), gain: 1.0 });

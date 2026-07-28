@@ -48,15 +48,17 @@ export const FEEL = {
   // A perfectly timed block (within this window of the hit) costs no stamina
   // and staggers the attacker instead.
   //
-  // 0.25 (was 0.16): measured UNREACHABLE at 0.16. Four instrumented reactive-
-  // play configurations — including blocks timed into the sim's own final
-  // 0.13 s of windup — produced 0 parries in ~25 blocks, because the hit
-  // resolves on the first ACTIVE tick while command lag and the blocking
-  // phase-gate keep the guard down at that exact moment. 0.25 plus the
-  // attack-cancel below is what makes a deliberately-timed block a parry in
-  // practice. For Honor's parry windows are ~0.3 s; Sekiro's deflect ~0.17 s
-  // with zero command lag — a browser game at 60 Hz needs the honest end.
-  parryWindow: 0.25,
+  // 0.19 (was 0.25, was 0.16): 0.16 was measured UNREACHABLE — blocks timed
+  // into the final 0.13 s of windup produced 0 parries in ~25 blocks, because
+  // the hit resolves on the first ACTIVE tick while command lag keeps the
+  // guard down. 0.25 fixed that and then overshot: the persona playtest
+  // measured a deliberately-late guard converting 100% of guarded exchanges
+  // (73 parries, 0 plain blocks) and novices with 400 ms reaction delay
+  // harvesting 30 accidental parries — parry had become the default outcome
+  // of guarding rather than a timing achievement. 0.19 keeps the deliberate
+  // read comfortably inside every >=0.43 s telegraph while halving what a
+  // random late block scoops up; direction-matching gates the rest.
+  parryWindow: 0.19,
   parryStagger: 0.7,
   // Steel meets steel: two committed attacks arriving together bind and both
   // fighters rebound. See the clash block in _resolveSwing.
@@ -84,6 +86,34 @@ export const FEEL = {
   minAttackStamina: 6,
   exhaustedThreshold: 15,
   exhaustedSpeedMult: 0.62,
+  // --- skill-expression layer (persona-playtest fixes, 2026-07-28) ---------
+  // POISE: an interrupt only lands in the EARLY part of a windup, and a
+  // fighter who was just interrupted gets brief immunity. Measured without
+  // these: swing-spam interrupt-staggered every enemy windup (68 interrupts
+  // in 30 bouts) so no AI ever completed a swing against a masher — pure
+  // aggression beat timed play at every tier below champion.
+  interruptWindow: 0.45,      // fraction of windup during which a hit interrupts
+  interruptImmunity: 1.6,     // s of hyper-armour after being interrupted
+  // RIPOSTE: a DIRECTION-MATCHED block or a parry hands the defender a short
+  // window in which the AI counter-attacks with poise (see ai.js). This is
+  // what turns "the enemy blocked your spam" into "the enemy punished your
+  // spam" — 44 foe blocks + 5 parries previously produced ZERO consecutive
+  // return hits. The cooldown keeps it a THREAT rather than a metronome:
+  // granted on every block, a same-skill attacker measured ZERO landed hits
+  // in 15 s against one defender — a wall, not a skill curve.
+  riposteWindow: 0.9,
+  riposteCooldown: 2.2,
+  // WEAPON GUARD: blocking without a shield (blade/haft). Direction-matched
+  // ONLY — the blade has to actually be there — at a stamina premium, and
+  // parry-eligible. This is the verb t1 exists to teach; it was silently
+  // inert (~1000 held-block ticks -> 0 blocking ticks in the novice matrix)
+  // because blocking was hard-gated on carrying a shield.
+  weaponGuardCostMult: 1.6,
+  // A dodged beast lunge leaves the animal committed and open: extra recover
+  // time = the counter-window that makes timed defence a WIN CONDITION
+  // against the cats instead of a slower loss (perfect dodging measured
+  // 153/153 evades and still 0/6 vs the lion — evasion paid nothing).
+  beastDodgeRecoverPenalty: 0.55,
 };
 
 let _uid = 1;
@@ -289,6 +319,8 @@ export class Combat {
     f.comboWindow = Math.max(0, f.comboWindow - dt);
     if (f.comboWindow <= 0) f.comboCount = 0;
     if (f.blocking) f.blockHeldT += dt; else f.blockHeldT = 0;
+    if (f._riposteT) f._riposteT = Math.max(0, f._riposteT - dt);
+    if (f._poiseT) f._poiseT = Math.max(0, f._poiseT - dt);
 
     // --- phase machine ---------------------------------------------------
     f.phaseT += dt;
@@ -301,11 +333,16 @@ export class Combat {
         this._resolveSwing(f, dt);
         if (f.phaseT >= w.active) { f.phase = PHASE.RECOVER; f.phaseT = 0; }
         break;
-      case PHASE.RECOVER:
-        if (f.phaseT >= w.recover * (f.comboCount > 0 ? 1 - (w.comboBonus || 0) : 1)) {
-          f.phase = PHASE.IDLE; f.phaseT = 0; f.attackDir = null;
+      case PHASE.RECOVER: {
+        // _recoverPenalty: a beast whose lunge was DODGED is over-committed
+        // and stays open longer — the evader's counter-window (see _applyHit).
+        const rec = w.recover * (f.comboCount > 0 ? 1 - (w.comboBonus || 0) : 1) +
+          (f._recoverPenalty || 0);
+        if (f.phaseT >= rec) {
+          f.phase = PHASE.IDLE; f.phaseT = 0; f.attackDir = null; f._recoverPenalty = 0;
         }
         break;
+      }
       case PHASE.STAGGER:
         if (f.phaseT >= f.staggerT) { f.phase = PHASE.IDLE; f.phaseT = 0; }
         break;
@@ -324,12 +361,18 @@ export class Combat {
     // never parry: the counter-blow resolved while your guard was down and
     // ungateable. Real swordplay abandons cuts into covers constantly.
     if (cmd.block && f.phase === PHASE.WINDUP && !f.isBeast &&
-        f.shieldId !== "none" && !f.shieldBroken && !f.guardBroken) {
+        !f.shieldBroken && !f.guardBroken) {
       f.phase = PHASE.IDLE; f.phaseT = 0; f.attackDir = null; f._lungeTarget = null;
       this.emit("cancel", { id: f.id });
     }
 
-    f.blocking = !!cmd.block && f.shieldId !== "none" && !f.shieldBroken &&
+    // Blocking no longer requires a shield: a shieldless fighter raises a
+    // WEAPON GUARD (blade/haft), which only stops a blow whose direction it
+    // matches — see _applyHit. The t1 training bout issues rudis and no
+    // shields to BOTH sides specifically to teach the guard, and the guard
+    // verb being dead there locked novices out of the whole game (0/21 t1
+    // wins, 70% of their deaths while holding the inert block).
+    f.blocking = !!cmd.block && !f.isBeast && !f.shieldBroken &&
                  !f.guardBroken &&
                  (f.phase === PHASE.IDLE || f.phase === PHASE.RECOVER);
     if (cmd.blockDir) f.blockDir = cmd.blockDir;
@@ -337,6 +380,7 @@ export class Combat {
     if (cmd.dodge && f.canAct() && f.stamina >= FEEL.dodgeStamina) {
       f.phase = PHASE.DODGE; f.phaseT = 0;
       f.iframes = FEEL.dodgeIFrames;
+      f._lastDodgeT = this.time;      // beasts honour the whole sidestep
       f.stamina -= FEEL.dodgeStamina;
       const dx = cmd.moveX || -Math.sin(f.facing);
       const dz = cmd.moveZ || -Math.cos(f.facing);
@@ -585,7 +629,21 @@ export class Combat {
     const dir = attacker.attackDir;
 
     // --- dodge i-frames ---------------------------------------------------
-    if (target.iframes > 0) {
+    // Against a BEAST, a dodge that began any time inside the animal's OWN
+    // windup still evades — the sidestep's displacement beats a straight-line
+    // charge regardless of i-frame timing. Without this, reacting to the
+    // TELL was punished: 0.28 s of i-frames expire 0.43-0.53 s into the
+    // lion's 0.62 s windup, so tell-timed dodges won 6/30 while impact-timed
+    // ones won 14/20 — the telegraph taught a lie, which is the one thing it
+    // must never do. Scaled to each cat's windup so a panther stays a
+    // panther; sword blows keep honest i-frame timing.
+    const beastGrace = attacker.isBeast && attacker.beast &&
+      (this.time - (target._lastDodgeT ?? -99)) < attacker.beast.windup + 0.12;
+    if (target.iframes > 0 || beastGrace) {
+      // A dodged BEAST lunge leaves the animal over-committed: its recover
+      // stretches, and that stretch is the fighter's counter-window. Timed
+      // evasion becomes a way to WIN the exchange, not just to not-lose it.
+      if (attacker.isBeast) attacker._recoverPenalty = FEEL.beastDodgeRecoverPenalty;
       this.emit("dodged", { attacker: attacker.id, target: target.id });
       return;
     }
@@ -606,7 +664,15 @@ export class Combat {
     let parried = false;
 
     let dirMatched = false;
-    if (target.blocking && covers && facingIt && !target.shieldBroken) {
+    // A shieldless fighter can still GUARD — with the blade or haft. Unlike a
+    // shield (which has a coverage arc and stops mismatched blows at a
+    // premium), a weapon guard works ONLY when it matches the incoming
+    // direction: the steel is either in the way or it is not. This is the
+    // verb the t1 rudis bout teaches.
+    const hasShield = target.shieldId !== "none" && !target.shieldBroken;
+    const weaponGuard = target.blocking && !hasShield && !target.isBeast;
+    const guardEngages = hasShield ? covers : (weaponGuard && target.blockDir === dir);
+    if (target.blocking && guardEngages && facingIt) {
       // DIRECTION FINALLY MATTERS. blockDir was computed by input.js and
       // stored here for months with ZERO reads — the store page's headline
       // "directional weighted combat" was a placebo. Now it is the skill
@@ -653,6 +719,11 @@ export class Combat {
       attacker.phaseT = 0;
       attacker.staggerT = FEEL.parryStagger;
       attacker.hitStop = FEEL.hitStopSeconds;
+      // The defender has earned the initiative — ai.js turns this window
+      // into an immediate counter (with poise), so a read is a punish.
+      // A parry always earns it (it IS the read); no cooldown gate here.
+      target._riposteT = FEEL.riposteWindow;
+      target._riposteGrantT = this.time;
       this.emit("parry", { attacker: attacker.id, target: target.id, dir });
       return;
     }
@@ -663,12 +734,23 @@ export class Combat {
       const impact = attacker.isBeast ? FEEL.beastBlockCost : 1;
       // Matched guard direction blocks cheap; a mismatched catch pays 30% more.
       const dirMult = dirMatched ? 0.7 : 1.3;
-      const cost = w.damage * FEEL.blockStaminaCost * impact * dirMult * (1 - sh.stability * 0.35);
+      // A weapon guard has no boards behind it: the stop costs more wind and
+      // there is no shield to soak — but there is also no shieldHp to lose.
+      const guardMult = weaponGuard ? FEEL.weaponGuardCostMult : (1 - sh.stability * 0.35);
+      const cost = w.damage * FEEL.blockStaminaCost * impact * dirMult * guardMult;
       target.stamina -= cost;
-      target.shieldHp -= w.damage * (1 - sh.block);
+      if (!weaponGuard) target.shieldHp -= w.damage * (1 - sh.block);
       attacker.hitStop = FEEL.hitStopSeconds * 0.7;
+      // A MATCHED stop earns the counter-window a parry does — the spammer
+      // who swings into a read guard is the one who gets hit. Mismatched
+      // catches (on the boards, not the read) earn nothing, and the cooldown
+      // keeps counters from becoming an unanswerable wall.
+      if (dirMatched && (this.time - (target._riposteGrantT ?? -99)) > FEEL.riposteCooldown) {
+        target._riposteT = FEEL.riposteWindow;
+        target._riposteGrantT = this.time;
+      }
 
-      if (target.shieldHp <= 0 && !target.shieldBroken) {
+      if (!weaponGuard && target.shieldHp <= 0 && !target.shieldBroken) {
         target.shieldBroken = true;
         target.blocking = false;
         target.phase = PHASE.STAGGER;
@@ -739,12 +821,24 @@ export class Combat {
     target.wounds[zone] = Math.min(3, target.wounds[zone] + (dmg > 18 ? 1 : 0));
     target.lastHitBy = attacker.id;
 
-    // Interrupting a windup is what rewards reading an opponent.
+    // Interrupting a windup is what rewards reading an opponent — but only
+    // reading it EARLY. Poise rules (persona-playtest fix): past the early
+    // part of the windup the blow is committed and carries through the pain;
+    // a fighter interrupted moments ago has hyper-armour; and a riposte swing
+    // (ai.js sets _poiseT on issue) cannot be interrupted at all. Without
+    // these, mashing interrupt-staggered every windup in the game (68 in 30
+    // bouts) and no enemy ever finished a swing against a spammer.
     if (FEEL.interruptOnWindup && target.phase === PHASE.WINDUP) {
-      target.phase = PHASE.STAGGER;
-      target.phaseT = 0;
-      target.staggerT = 0.45;
-      this.emit("interrupt", { attacker: attacker.id, target: target.id });
+      const wprog = target.phaseT / Math.max(0.01, this._windup(target));
+      const immune = (target._poiseT || 0) > 0 ||
+        (this.time - (target._lastInterruptT ?? -99)) < FEEL.interruptImmunity;
+      if (wprog < FEEL.interruptWindow && !immune) {
+        target.phase = PHASE.STAGGER;
+        target.phaseT = 0;
+        target.staggerT = 0.45;
+        target._lastInterruptT = this.time;
+        this.emit("interrupt", { attacker: attacker.id, target: target.id });
+      }
     }
 
     const heavy = dmg > 30;

@@ -23,6 +23,18 @@ import { clamp, mulberry32, angleDelta } from "../core/util.js";
  * aggressive line when one exists.
  */
 export const SKILL = {
+  // The TUTOR band exists for exactly one bout: t1, Wooden Swords. The
+  // paegniarius is a teacher, not an opponent — long pauses between slow
+  // bursts leave room to practise offence, a healthy blockChance DEMONSTRATES
+  // the guard verb the bout is named for, and near-zero punish means honest
+  // mistakes are survivable. Persona playtest before this band existed: 0/21
+  // novice t1 wins (including a masher and a turtle control), with the bout
+  // swinging near-continuously (46% of novice swings clashed) — a hard wall
+  // in front of the entire progression, which gates on winning it.
+  // (latency 0.60->0.70, punish 0.05->0.03 after the verification replay put
+  // the novice win rate at exactly the 25% acceptance floor — margin bought
+  // with a slower, even less punishing teacher, not a weaker lesson.)
+  tutor:     { latency: 0.70, noise: 0.60, punish: 0.03, blockChance: 0.50, dodgeChance: 0.04, spacing: 0.35 },
   tiro:      { latency: 0.42, noise: 0.55, punish: 0.15, blockChance: 0.25, dodgeChance: 0.08, spacing: 0.5 },
   gregarius: { latency: 0.32, noise: 0.42, punish: 0.28, blockChance: 0.40, dodgeChance: 0.15, spacing: 0.65 },
   veteranus: { latency: 0.22, noise: 0.30, punish: 0.45, blockChance: 0.55, dodgeChance: 0.25, spacing: 0.8 },
@@ -60,8 +72,14 @@ export const BEAST_PROFILES = {
   },
   lion: {
     id: "lion", name: "Lion",
-    hp: 205, damage: 37, reach: 1.95, speedMult: 1.10,
-    windup: 0.54, active: 0.18, recover: 0.95,
+    // Retuned after the persona playtest proved the v3 matchup unwinnable by
+    // timed defence: 153/153 successful dodges still lost 0/6 across five
+    // timing settings, because the cadence outlasted the dodge stamina
+    // economy and evasion paid nothing. Slower windup (readable), longer
+    // recover (which the new dodge->recover penalty stretches further into a
+    // real counter-window), softer paw. Still the heaviest thing on the card.
+    hp: 205, damage: 34, reach: 1.95, speedMult: 1.10,
+    windup: 0.62, active: 0.18, recover: 1.18,
     chargeRange: 6.0, stalkRange: 8.5, retreatHp: 0.18,
     style: "beast",
     desc: "Heavier and less patient than a tiger. Comes straight down the middle.",
@@ -89,6 +107,10 @@ export class Brain {
     this.combat = combat;
     this.skill = SKILL[skill] || SKILL.gregarius;
     this.skillName = skill;
+    // The tutor teaches at a spacer's tempo regardless of the armatura's
+    // native style — patience 1.4 stretches the between-burst breaks to
+    // ~2.9 s, which is the room a first-time player learns in.
+    if (skill === "tutor") style = "spacer";
     this.style = STYLE[style || (self.isBeast ? "beast" : "pressure")] || STYLE.pressure;
     this.rng = mulberry32(seed);
 
@@ -179,7 +201,10 @@ export class Brain {
       const key = t.id + ":" + t.swingSeq;
       if (!this._reaction || this._reaction.key !== key) {
         const roll = this.rng();
-        const canBlock = s.shieldId !== "none" && !s.shieldBroken;
+        // The weapon guard exists now (combat.js): a shieldless human can
+        // block a matched direction — so the paegniarius DEMONSTRATES the
+        // guard t1 teaches, and the retiarius stops being pure dodge-bait.
+        const canBlock = !s.isBeast && !s.shieldBroken && !s.guardBroken;
         let kind = "none";
         if (canBlock && roll < this.skill.blockChance) {
           kind = "block";
@@ -218,6 +243,22 @@ export class Brain {
 
     // --- act on the latched decision --------------------------------------
     const reach = s.isBeast && s.beast ? s.beast.reach : s.weapon.reach;
+
+    // RIPOSTE — the guaranteed answer to a stopped blow. combat.js arms
+    // _riposteT on every successful block and parry; inside that window the
+    // AI counters IMMEDIATELY (bypassing the exchange break — this swing IS
+    // the exchange) and with poise, so the spammer cannot interrupt the
+    // punishment they earned. This is what makes a standing guard beat
+    // button-mashing: measured before, 44 blocks + 5 parries produced zero
+    // consecutive return hits and blockers beat the masher 2 bouts in 24.
+    if (!s.isBeast && (s._riposteT || 0) > 0 && dist <= reach * 0.98 && s.canAttack()) {
+      s._riposteT = 0;
+      s._poiseT = 0.9;                       // covers the counter's windup
+      if (this._exchange) this._exchange.breakT = 0;
+      cmd.attack = true;
+      cmd.attackDir = this._pickAttackDir(t);
+      return cmd;
+    }
 
     // THE EXCHANGE RHYTHM.
     //
@@ -268,9 +309,10 @@ export class Brain {
     if (this._exchange.breakT > 0) {
       this._exchange.breakT -= dt;
       // Hold the guard and keep distance while recovering the initiative.
+      // (Weapon guard counts — a shieldless fighter still covers a line.)
       cmd.moveX = -dz / dist * this.circleDir;
       cmd.moveZ = dx / dist * this.circleDir;
-      if (s.shieldId !== "none" && !s.shieldBroken) { cmd.block = true; cmd.blockDir = DIR.HIGH; }
+      if (!s.isBeast && !s.shieldBroken && !s.guardBroken) { cmd.block = true; cmd.blockDir = DIR.HIGH; }
       return cmd;
     }
 
@@ -337,7 +379,7 @@ export class Brain {
         break;
       }
       case "hold": {
-        if (s.shieldId !== "none" && !s.shieldBroken) cmd.block = true;
+        if (!s.isBeast && !s.shieldBroken && !s.guardBroken) cmd.block = true;
         break;
       }
       default: break;
@@ -487,9 +529,22 @@ export class Brain {
 
       hold:
         (t.phase === PHASE.WINDUP ? 0.8 : 0.1) *
-        (s.shieldId !== "none" && !s.shieldBroken ? 1 : 0.05) *
+        (!s.isBeast && !s.shieldBroken ? (s.shieldId !== "none" ? 1 : 0.7) : 0.05) *
         st.patience + noise() * 0.5,
     };
+
+    // TUTOR MERCY — a lanista's man drilling a tiro does not finish a
+    // struggling student. Below 45% student hp the tutor eases right off,
+    // giving the novice room to recover and land the winning stretch.
+    // Measured need: cadence tuning alone left the strict novice persona at
+    // 17.5-30% t1 wins (tutor out-landing them 6.8 to 3.6 per bout) against
+    // a >=30% acceptance floor; the early-bout lesson keeps its teeth because
+    // mercy only starts once the lesson has visibly landed.
+    if (this.skillName === "tutor" && t.hp / t.maxHp < 0.45) {
+      scores.attack *= 0.18;
+      scores.circle += 0.5;
+      scores.retreat += 0.4;
+    }
 
     if (s.isBeast) {
       // A healthy beast does not fence at range — it presses. Kiting is the
