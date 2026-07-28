@@ -96,10 +96,10 @@
   var START_LOADOUT = { weapon: "pistol", rarity: 0, ammo: { light: 36 } };
 
   var CONSUMABLES = {
-    bandage:     { heals: "hp", amount: 15, cap: 75, useS: 3, stack: 15 },
+    bandage:     { heals: "hp", amount: 15, cap: 75, useS: 4, stack: 15 },
     medkit:      { heals: "hp", amount: 100, cap: 100, useS: 8, stack: 3 },
     mini_shield: { heals: "shield", amount: 25, cap: 50, useS: 2, stack: 6 },
-    big_shield:  { heals: "shield", amount: 50, cap: 100, useS: 4, stack: 3 },
+    big_shield:  { heals: "shield", amount: 50, cap: 100, useS: 5, stack: 3 },
   };
 
   // arcade-BR speeds (owner: "not industry standard" at 8.4 — browser BRs
@@ -124,7 +124,7 @@
   // head means shots passing through a head the player can plainly see.
   // (A procedural leg-fold was tried first and rejected — captures showed the
   // character kneeling in mid-air; there is no IK here to plant the feet.)
-  var CROUCH = { speedMult: 0.45, heightMult: 0.86, eyeMult: 0.60, spreadMult: 0.62 };
+  var CROUCH = { speedMult: 0.72, heightMult: 0.86, eyeMult: 0.60, spreadMult: 0.62 };
   // Drinking/bandaging used to be COMPLETELY free — you could chug an 8s medkit
   // at full sprint while closing on someone, so the heal carried no cost and no
   // tell. Using one now slows you to a walk-shuffle and locks sprint out for the
