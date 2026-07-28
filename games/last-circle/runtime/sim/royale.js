@@ -50,7 +50,9 @@
 
   // damage = body damage at full effect; falloff -> linear to 40% floor
   var WEAPONS = {
-    pistol:   { cls: "pistol", damage: 24, headMult: 1.5, rpm: 400, mag: 16, reloadS: 1.3, ammo: "light", speed: 999, falloff: [25, 50], spreadDeg: 1.3, adsFov: 48 },
+    // headMult 2.0 = Fortnite's pistol-class multiplier (COMBAT_CALIBRATION.md);
+    // rewards precision on the spawn weapon without touching its body dps.
+    pistol:   { cls: "pistol", damage: 24, headMult: 2.0, rpm: 400, mag: 16, reloadS: 1.3, ammo: "light", speed: 999, falloff: [25, 50], spreadDeg: 1.3, adsFov: 48 },
     smg:      { cls: "smg", damage: 17, headMult: 1.5, rpm: 720, mag: 30, reloadS: 2.0, ammo: "light", speed: 999, falloff: [18, 40], spreadDeg: 2.2, adsFov: 47 },
     ar:       { cls: "ar", damage: 30, headMult: 1.5, rpm: 330, mag: 30, reloadS: 2.4, ammo: "medium", speed: 300, falloff: [60, 120], spreadDeg: 1.5, adsFov: 42 },
     // Shotgun was 10 dmg / 70 rpm / 4.0 s reload = 90 per blast, 105 DPS: the WORST

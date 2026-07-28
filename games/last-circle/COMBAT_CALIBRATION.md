@@ -94,11 +94,13 @@ Conservative — the TTK core (AR/SMG/pistol rpm+damage, shield model, sniper on
    Source: PUBG Ready Delay 400–500ms on all six weapon pages fetched (pubg.wiki.gg M416/AKM/UMP45/S1897/Kar98k/P1911); Fortnite added equip times to burst weapons for the same reason (gamerant.com equip-time coverage). Both benchmarks have this; we have zero. One constant, bots inherit it automatically.
 
 2. **Sniper ADS-in gate: instant → 0.5s** (new per-weapon `adsTimeS`: sniper 0.5; optionally ar 0.25, smg 0.2 later). Gate the 0.5x spread multiplier at royale.js:174 and the scope overlay on ADS progress.
+   **✅ APPLIED (commit 7d32ec8d): `adsTimeS: 0.5` on sniper; `a._adsT` accrual (player.js), spread bonus + scope camera + overlay + reticle all gate on it (weapons.js:483, player.js:1583, hud.js:2204).**
    Source: Warzone sniper ADS 520–650ms vs AR 240–280ms (charlieintel/dexerto, secondary); PUBG doesn't publish ADS times (confirmed absent on every page fetched). Minimum-scope version: sniper only — it's the weapon where instant full-accuracy zoom breaks the genre contract hardest.
 
 3. **Endgame storm pressure: convert late waits to shrink, total unchanged** (royale.js:285–288):
    phase 7 `wait 25, shrink 35` → `wait 10, shrink 50`; phase 8 `wait 20, shrink 45` → `wait 0, shrink 65`. Total stays 775s.
    Source: Fortnite circles 7–9 have 0s wait — continuously moving endgame storm (gaming-tools.com/fortnite/the-storm; fandom table via snippet). Preserves the owner's tuned match length while fixing the one structural rhythm divergence.
+   **✅ APPLIED (commit 7d32ec8d): standard phases 7/8 now `wait 10, shrink 50` / `wait 0, shrink 65`.**
 
 4. **OWNER-CALL pair (apply together or not at all): bandage useS 3 → 4, big_shield useS 4 → 5.**
    Source: bandage 4.0s in both PUBG (pubg.wiki.gg/wiki/Bandage) and Fortnite (gamepressure/progameguides); big shield 5.0s classic Fortnite. This makes all four consumables exact matches to a real game (medkit=PUBG 8s and mini shield=FN 2s already are). Skip both if the −1s browser-pace bias is wanted — it is at least internally consistent.
@@ -106,6 +108,8 @@ Conservative — the TTK core (AR/SMG/pistol rpm+damage, shield model, sniper on
 
 **Crouch RESOLVED 2026-07-28 (owner-approved): speedMult 0.45 → 0.72 (v160) — Fortnite/PUBG walk feel; spreadMult 0.62 accuracy bonus retained.**
 
-**Explicitly not adjusted (deliberate or in-band):** absolute movement speeds (+9% vs FN actual sprint, documented design), 2.0s chest hold (no genre precedent but deliberate risk/reward — owner keep/kill decision), final circle 9.4m hold (documented: closing to zero crowned corpses), shotgun whole-mag reload (authentic fix is a per-shell mechanic rework — flag for a future pass, not a constant tweak), pistol headMult 1.5 vs FN 2.0 (spawn-weapon balance, not low-risk), final storm dps 12 vs cap 10–11 (+9% on a compressed match).
+**Pistol headshot RESOLVED 2026-07-28 (owner-approved): headMult 1.5 → 2.0 (v161) — Fortnite pistol-class multiplier; 24 dmg → 48 on a headshot.**
+
+**Explicitly not adjusted (deliberate or in-band):** absolute movement speeds (+9% vs FN actual sprint, documented design), 2.0s chest hold (no genre precedent but deliberate risk/reward — owner keep/kill decision), final circle 9.4m hold (documented: closing to zero crowned corpses), shotgun whole-mag reload (authentic fix is a per-shell mechanic rework — flag for a future pass, not a constant tweak), final storm dps 12 vs cap 10–11 (+9% on a compressed match).
 
 **Sourcing caveat:** all PUBG/Fortnite numbers are wiki-tier secondary (pubg.wiki.gg fetched directly; fortnite.fandom blocked via WebFetch HTTP 402, reached via browser/search snippets, corroborated by pockettactics measured tests). PUBG M416 RPM conflicts across aggregators (638–882); no official Krafton/Epic patch-note tables were reachable this session.
