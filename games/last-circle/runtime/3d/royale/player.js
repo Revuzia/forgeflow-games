@@ -1783,6 +1783,13 @@ export function killActor(W, victim, killerId, weaponId) {
   const killer = killerId ? W.actorById.get(killerId) : null;
   if (killer) killer.kills++;
   W.match.eliminate(victim.id, killerId, weaponId, W.t);
+  // per-class kill tally feeding the career's 'favourite weapon' row (sweep
+  // finding: initialized in W.stats and rendered by the career panel, but no
+  // code path ever incremented it — the row was permanently unreachable)
+  if (killerId && W.player && killerId === W.player.id && weaponId && W.stats && W.stats.killsByCls) {
+    const kcls = (K.WEAPONS[weaponId] || {}).cls || weaponId;
+    W.stats.killsByCls[kcls] = (W.stats.killsByCls[kcls] || 0) + 1;
+  }
   W.events.emit("actorDied", victim, killerId, weaponId);
   // death anim then sink away
   // A bot killed past 250m had its mixer frozen at timeScale 0 by syncObj's
