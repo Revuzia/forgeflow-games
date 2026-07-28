@@ -102,7 +102,10 @@ Conservative — the TTK core (AR/SMG/pistol rpm+damage, shield model, sniper on
 
 4. **OWNER-CALL pair (apply together or not at all): bandage useS 3 → 4, big_shield useS 4 → 5.**
    Source: bandage 4.0s in both PUBG (pubg.wiki.gg/wiki/Bandage) and Fortnite (gamepressure/progameguides); big shield 5.0s classic Fortnite. This makes all four consumables exact matches to a real game (medkit=PUBG 8s and mini shield=FN 2s already are). Skip both if the −1s browser-pace bias is wanted — it is at least internally consistent.
+   **✅ APPLIED 2026-07-28 (owner-approved): bandage useS=4, big_shield useS=5 (v160). All four consumables now exact benchmark matches.**
 
-**Explicitly not adjusted (deliberate or in-band):** absolute movement speeds (+9% vs FN actual sprint, documented design), crouch 0.45x (Apex-band, balanced against spreadMult 0.62), 2.0s chest hold (no genre precedent but deliberate risk/reward — owner keep/kill decision), final circle 9.4m hold (documented: closing to zero crowned corpses), shotgun whole-mag reload (authentic fix is a per-shell mechanic rework — flag for a future pass, not a constant tweak), pistol headMult 1.5 vs FN 2.0 (spawn-weapon balance, not low-risk), final storm dps 12 vs cap 10–11 (+9% on a compressed match).
+**Crouch RESOLVED 2026-07-28 (owner-approved): speedMult 0.45 → 0.72 (v160) — Fortnite/PUBG walk feel; spreadMult 0.62 accuracy bonus retained.**
+
+**Explicitly not adjusted (deliberate or in-band):** absolute movement speeds (+9% vs FN actual sprint, documented design), 2.0s chest hold (no genre precedent but deliberate risk/reward — owner keep/kill decision), final circle 9.4m hold (documented: closing to zero crowned corpses), shotgun whole-mag reload (authentic fix is a per-shell mechanic rework — flag for a future pass, not a constant tweak), pistol headMult 1.5 vs FN 2.0 (spawn-weapon balance, not low-risk), final storm dps 12 vs cap 10–11 (+9% on a compressed match).
 
 **Sourcing caveat:** all PUBG/Fortnite numbers are wiki-tier secondary (pubg.wiki.gg fetched directly; fortnite.fandom blocked via WebFetch HTTP 402, reached via browser/search snippets, corroborated by pockettactics measured tests). PUBG M416 RPM conflicts across aggregators (638–882); no official Krafton/Epic patch-note tables were reachable this session.
