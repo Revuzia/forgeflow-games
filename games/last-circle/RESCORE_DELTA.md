@@ -1,5 +1,39 @@
 # Last Circle — Post-Parity-Program Delta Report
 
+## ⬆ 2026-07-27 UPDATE (v135) — adversarial rescore of the 5 below-parity dimensions
+
+One grounded scorer per dimension + one independent refuter per claimed
+movement; a movement lands only if it survives refutation. Full entries in
+`RESCORE_DIMENSIONS.json` (refuter-adjusted).
+
+**Score: 12 of 16 parity-or-ahead** (was 11).
+
+| Dimension | Was | Now | Outcome |
+|---|---|---|---|
+| audio | slightly_behind | **parity** | UPHELD (3D localisation + sampled coverage); its last decisive leftover — synthesised reports — closed same-day: 13 recorded CC0 weapon reports shipped v135, sample-first, synth fallback verbatim. |
+| visuals | slightly_behind | slightly_behind | Claimed parity REFUTED: IBL/decals/two-hand IK/death variety all real, but the decisive world criterion is untouched (box structures, 160 m single-ortho shadows vs 4-cascade 700 m, unchunked terrain). |
+| multiplayer | far_behind | far_behind | Claimed behind REFUTED: host-departure recovery, watchdogs, remote weapon/stance/death fidelity all real — 2–3 human rooms now deliver complete matches — but at 4 humans own-state alone is 96 of the 100 msg/s ceiling Supabase enforces by disconnect. |
+| progression-retention | slightly_behind | slightly_behind | No leaderboard, localStorage-only persistence, cosmetic track ends at L22. Daily loop + career layer solid. |
+| monetisation-readiness | far_behind | far_behind | **OWNER-GATED** — every gap (SDK, ads, portal bridge, analytics) deliberately deferred by owner decision. Not neglect; do not chase before the gate opens. |
+
+**What still gates PAR/PAR+ everywhere:** (1) MP transport — cheapest: batch
+state+bots into one envelope per tick (messages are the billed unit) and floor
+own-state at 4–5 Hz for 4-human rooms; real fix WebRTC mesh. (2) Visuals —
+shadow range + structure texture variety (the sanctioned ~$3 xAI texture batch
+attacks this directly); terrain chunking is the heavy item. (3) Progression —
+leaderboard on the existing FFG Supabase registry. (4) Monetisation — frozen
+until the owner opens the gate.
+
+**New leads from the scorers (not yet fixed):** 10 of 19 SFX rows decode but
+are unreachable (mag_out/mag_in/rack/cloth never reach sample() — reload still
+plays synth thumps over loaded Kenney foley; cheap win). Remote hit-react
+flinch isn't relayed to other clients (minor). Death-clip pick is random per
+client so two spectators can see different animations (cosmetic).
+
+---
+
+*(Prior report below — 2026-07-21 baseline, kept verbatim.)*
+
 **Re-score date:** 2026-07-21 · **Baseline:** `BENCHMARK_SCORECARD.md` @ 791b7806 · **Under test:** f5502ecb (HEAD, working tree clean) · **Benchmark:** Final Drop (CrazyGames)
 
 ---
