@@ -133,11 +133,14 @@ export function makeProp(name, { scaleToWidth = 0, scaleToLength = 0, minY = nul
  * +Y, pommel just below zero — so the fitted bbox bottom sits at -0.06*L.
  */
 const WEAPON_PROPS = {
-  gladius:     { prop: "gladius_ornate", length: 0.72 },
-  sica:        { prop: "gladius_ornate", length: 0.66 },
-  dimachaerus: { prop: "gladius_ornate", length: 0.72 },
-  rudis:       { prop: "gladius_ornate", length: 0.72 },
-  spatha:      { prop: "spatha_ornate",  length: 0.94 },
+  // Lengths bumped 2026-07-28 on direct player feedback: the ornate gladius
+  // at 0.72 m read smaller in-hand than the old procedural blade (the prop's
+  // bbox includes its pommel and guard, so more of its length is hilt).
+  gladius:     { prop: "gladius_ornate", length: 0.82 },
+  sica:        { prop: "gladius_ornate", length: 0.74 },
+  dimachaerus: { prop: "gladius_ornate", length: 0.82 },
+  rudis:       { prop: "gladius_ornate", length: 0.82 },
+  spatha:      { prop: "spatha_ornate",  length: 0.98 },
 };
 
 /** Prop-backed weapon mesh for a weapon id, else the procedural fallback. */

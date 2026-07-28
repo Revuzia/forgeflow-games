@@ -309,8 +309,11 @@ export class VFX {
         if (t.t >= t.activeT + 0.1) { t.state = "fade"; t.t = 0; }
       } else {
         u.uFlash.value = 0;
-        u.uOpacity.value = Math.max(0, 1 - t.t / 0.15);
-        if (t.t >= 0.15) {
+        // 0.15 -> 0.08 (2026-07-28): with both fighters telegraphing and
+        // clash-interrupted swings re-triggering, the slower fade stacked
+        // three or four dying fans on the sand at once (player screenshot).
+        u.uOpacity.value = Math.max(0, 1 - t.t / 0.08);
+        if (t.t >= 0.08) {
           this.scene.remove(t.m);
           t.m.geometry.dispose();
           t.m.material.dispose();

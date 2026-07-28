@@ -346,14 +346,22 @@ async function retargetOne(srcPath, targetScene, targetName) {
       }
     }
 
-    for (const { upLeg, leg, foot, sFoot } of legs) {
-      // HEIGHT-ONLY target: this body's posed ankle keeps its X/Z (the
-      // stance the locals give it) and takes its Y from the source's
-      // ground-relative ankle height — planted feet stay planted on every
-      // body, deliberate lifts survive, and lateral style is untouched.
-      const D = worldPos(foot, new THREE.Vector3());
-      const srcRelY = sFoot.getWorldPosition(_wp).y - srcFloorY;
-      D.y = tgtRestAnkleY.get(foot.name) + srcRelY * hipsRatio;
+    for (const { upLeg, leg, foot, sFoot, sUpLeg } of legs) {
+      // FOOT TARGET, third calibration (2026-07-28, player report "bodies
+      // not properly built"): X/Z come from the SOURCE's hip-socket->foot
+      // vector applied at this rig's (pelvis-leveled) socket — the authored
+      // stance WIDTH, which the height-only version quietly narrowed until
+      // legs crossed mid-strafe; Y stays ground-relative to this rig's own
+      // rest ankle height — the rule that measured feet level to 1-4 cm.
+      const socketW = worldPos(upLeg, new THREE.Vector3());
+      const sFootW = sFoot.getWorldPosition(new THREE.Vector3());
+      const srcVec = sFootW.clone()
+        .sub(sUpLeg.getWorldPosition(new THREE.Vector3())).multiplyScalar(hipsRatio);
+      const D = new THREE.Vector3(
+        socketW.x + srcVec.x,
+        tgtRestAnkleY.get(foot.name) + (sFootW.y - srcFloorY) * hipsRatio,
+        socketW.z + srcVec.z
+      );
       legIK(upLeg, leg, foot, D);
       if (process.env.RT_DEBUG) {
         const got = worldPos(foot, new THREE.Vector3());

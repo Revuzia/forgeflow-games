@@ -38,7 +38,7 @@ export const WEAPONS = {
     id: "gladius", name: "Gladius", kind: "sword", hands: 1,
     reach: 1.35, damage: 26, weight: 1.2,
     // Fencing-lunge class: windup+active 0.57 s ~= the measured 0.568 s lunge.
-    windup: 0.45, active: 0.12, recover: 0.95,   // 1.52 s cycle
+    windup: 0.39, active: 0.12, recover: 1.01,   // 1.52 s cycle — windup trimmed 2026-07-28 (player feedback: click-to-contact felt laggy with release-based charge input); delivery 0.51 s stays in the fencing-lunge band, recovery absorbs the difference
     stamina: 12, poise: 14,
     dirs: [DIR.HIGH, DIR.LEFT, DIR.RIGHT, DIR.THRUST],
     // Thrusts beat armour; cuts are better against unarmoured flesh.
@@ -53,7 +53,7 @@ export const WEAPONS = {
     // than opens, and it will not defeat armour.
     reach: 1.30, damage: 13, weight: 1.1,
     // Identical rhythm to the gladius — the rudis exists to train it.
-    windup: 0.45, active: 0.12, recover: 0.95,
+    windup: 0.39, active: 0.12, recover: 1.01,
     stamina: 10, poise: 12,
     dirs: [DIR.HIGH, DIR.LEFT, DIR.RIGHT, DIR.THRUST],
     // No pierce worth the name — a stick does not find a gap in a manica.
@@ -93,7 +93,7 @@ export const WEAPONS = {
     id: "sica", name: "Sica", kind: "curved", hands: 1,
     reach: 1.18, damage: 23, weight: 0.9,
     // Hook-punch class: short-radius arc, windup+active 0.60 s vs 0.586 measured.
-    windup: 0.42, active: 0.18, recover: 0.95,   // 1.55 s cycle
+    windup: 0.37, active: 0.18, recover: 1.00,   // 1.55 s cycle
     stamina: 9, poise: 10,
     dirs: [DIR.HIGH, DIR.LEFT, DIR.RIGHT],
     // The thraex's curved blade is made to reach AROUND a shield.
@@ -143,7 +143,7 @@ export const WEAPONS = {
     reach: 1.25, damage: 17, weight: 1.6,
     // Lightest blades in the set; comboBonus cuts recovery on follow-ups, so
     // the in-burst rhythm is the fast edge of the band by design.
-    windup: 0.40, active: 0.12, recover: 0.78,   // 1.30 s cycle
+    windup: 0.36, active: 0.12, recover: 0.82,   // 1.30 s cycle
     stamina: 8, poise: 8,
     dirs: [DIR.HIGH, DIR.LEFT, DIR.RIGHT, DIR.THRUST],
     // Two blades means a follow-up lands inside the enemy's recovery window.

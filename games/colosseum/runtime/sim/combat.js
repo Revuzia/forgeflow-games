@@ -114,6 +114,21 @@ export const FEEL = {
   // against the cats instead of a slower loss (perfect dodging measured
   // 153/153 evades and still 0/6 vs the lion — evasion paid nothing).
   beastDodgeRecoverPenalty: 0.55,
+  // --- THE NET (retiarius verb, AAA audit #5) -------------------------------
+  // The one mechanic the roster copy promised and never shipped — the
+  // secutor's own blurb describes dodging one. Trident kits carry it: a long,
+  // heavily-telegraphed cast; a catch strips the target's verbs (no attack,
+  // dodge or guard) and slows them — the netman's opening; a whiff leaves
+  // the caster wide open instead. Counterplay is honest on both sides:
+  // the cast draws the same ground telegraph as any attack, dodge i-frames
+  // evade it, and the cooldown makes every throw a commitment.
+  netWindup: 0.9,
+  netRange: 3.2,
+  netArc: 0.55,            // half-angle, radians
+  netDuration: 1.6,        // entangle
+  netCooldown: 8.0,
+  netMissRecover: 1.4,     // total open time after a whiffed cast
+  netHitRecover: 0.35,
 };
 
 let _uid = 1;
@@ -205,11 +220,13 @@ export class Fighter {
     // Leg wounds are the classic gladiatorial crippling blow.
     s *= 1 - clamp(this.wounds.legs * 0.22, 0, 0.55);
     if (this.isBeast && this.beast) s *= this.beast.speedMult || 1;
+    if (this.netT > 0) s *= 0.45;              // dragging the mesh
     return s;
   }
 
   canAct() {
     return this.alive && this.hitStop <= 0 &&
+      !(this.netT > 0) && !(this.netWindupT > 0) &&
       (this.phase === PHASE.IDLE || this.phase === PHASE.RECOVER);
   }
 

@@ -22,10 +22,15 @@ const DEFAULT_BINDS = {
   back: ["KeyS", "ArrowDown"],
   left: ["KeyA", "ArrowLeft"],
   right: ["KeyD", "ArrowRight"],
-  block: ["ShiftLeft", "ShiftRight"],
+  // MOUSE SCHEME (2026-07-28, direct player feedback): LEFT CLICK is the
+  // attack — tap for a light cut, HOLD past the charge threshold and release
+  // for the big committed overhead. RIGHT CLICK is the guard, where every
+  // action player expects it (Shift stays as the keyboard fallback). Mouse2
+  // used to fire the heavy directly, which read as "right click attacks".
+  block: ["ShiftLeft", "ShiftRight", "Mouse2"],
   dodge: ["Space"],
   attack: ["Mouse0", "KeyJ"],
-  heavy: ["Mouse2", "KeyK"],
+  heavy: ["MouseCharge", "KeyK"],
   // `armoury` and `pause` are declared so the rebinding store knows the key
   // names, but boot.js handles Tab and Escape as raw key events because they
   // must work while the sim is paused and emitting no commands.
@@ -69,10 +74,23 @@ export class Input {
     this._onMouseDown = (e) => {
       if (!this.enabled) return;
       const c = `Mouse${e.button}`;
+      // LMB is tap-vs-charge: the verb is decided on RELEASE (see mouseup),
+      // so button 0 only records when the press began. Everything else stays
+      // edge-on-down.
+      if (e.button === 0) { this._m0DownAt = performance.now(); this.down.add(c); return; }
       if (!this.down.has(c)) this.pressed.add(c);
       this.down.add(c);
     };
-    this._onMouseUp = (e) => { this.down.delete(`Mouse${e.button}`); };
+    this._onMouseUp = (e) => {
+      this.down.delete(`Mouse${e.button}`);
+      if (e.button === 0 && this._m0DownAt) {
+        const held = performance.now() - this._m0DownAt;
+        this._m0DownAt = 0;
+        // Tap = light attack. Held past the threshold = CHARGE: the heavy
+        // overhead, released when the player lets go.
+        this.pressed.add(held >= 300 ? "MouseCharge" : "Mouse0");
+      }
+    };
 
     // ------------------------------------------------------------------
     // TOUCH: the game was flatly unplayable on phones — zero touch input
@@ -134,11 +152,15 @@ export class Input {
       this.mouse.y = e.clientY;
     };
 
+    // RMB is the guard now — the browser context menu would eat every block.
+    this._onCtx = (e) => { if (this.enabled) e.preventDefault(); };
+
     window.addEventListener("keydown", this._onKeyDown);
     window.addEventListener("keyup", this._onKeyUp);
     window.addEventListener("blur", this._onBlur);
     window.addEventListener("mousedown", this._onMouseDown);
     window.addEventListener("mouseup", this._onMouseUp);
+    window.addEventListener("contextmenu", this._onCtx);
     window.addEventListener("mousemove", this._onMouseMove);
     window.addEventListener("touchstart", this._onTouchStart, { passive: false });
     window.addEventListener("touchmove", this._onTouchMove, { passive: false });
@@ -350,6 +372,7 @@ export class Input {
     window.removeEventListener("blur", this._onBlur);
     window.removeEventListener("mousedown", this._onMouseDown);
     window.removeEventListener("mouseup", this._onMouseUp);
+    window.removeEventListener("contextmenu", this._onCtx);
     window.removeEventListener("mousemove", this._onMouseMove);
   }
 }
