@@ -1671,6 +1671,28 @@ export function showHUD(W) {
   R._crossFor = null;
   R.hitmark = h("div", { position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%) rotate(45deg)", fontSize: "26px", color: "#fff", opacity: "0", transition: "opacity .18s" }, "✕", L);
 
+  // ── COMPASS HEADING STRIP (Final Drop parity — owner screenshots) ─────────
+  // Top-centre sliding ruler: degree number above, tick strip with cardinals
+  // below, centre notch marks the current bearing. North = -Z (the direction
+  // yaw 0 faces); turning right increases the heading, compass convention.
+  // Built once (720 deg of ticks so the wrap never shows a seam), moved with
+  // one transform per frame.
+  const COMP_PPD = 2.2;                 // px per degree
+  const compWrap = h("div", { position: "absolute", left: "50%", top: "6px", transform: "translateX(-50%)", width: "300px", textAlign: "center", pointerEvents: "none" }, null, L);
+  R.compassNum = h("div", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "17px", fontWeight: "900", letterSpacing: "1px", textShadow: "0 2px 8px rgba(0,0,0,0.9)" }, "0", compWrap);
+  const compBand = h("div", { position: "relative", width: "300px", height: "26px", overflow: "hidden", marginTop: "1px", WebkitMask: "linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent)", mask: "linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent)" }, null, compWrap);
+  R.compassRuler = h("div", { position: "absolute", left: "0", top: "0", height: "26px", width: (720 * COMP_PPD) + "px", willChange: "transform" }, null, compBand);
+  const CARD = { 0: "N", 45: "NE", 90: "E", 135: "SE", 180: "S", 225: "SW", 270: "W", 315: "NW" };
+  for (let d = 0; d < 720; d += 15) {
+    const deg = d % 360, card = CARD[deg];
+    const x = d * COMP_PPD;
+    h("div", { position: "absolute", left: x + "px", top: card ? "14px" : "17px", width: "2px", height: card ? "9px" : "6px", background: card ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.45)", boxShadow: "0 1px 3px rgba(0,0,0,0.8)" }, null, R.compassRuler);
+    if (card) h("div", { position: "absolute", left: (x - 14) + "px", top: "-1px", width: "30px", textAlign: "center", fontFamily: "Rajdhani, " + FONT, fontSize: "13px", fontWeight: "900", letterSpacing: "1px", textShadow: "0 1px 4px rgba(0,0,0,0.9)" }, card, R.compassRuler);
+    else if (deg % 45 !== 0 && deg % 30 === 0) h("div", { position: "absolute", left: (x - 14) + "px", top: "1px", width: "30px", textAlign: "center", fontFamily: "Rajdhani, " + FONT, fontSize: "11px", fontWeight: "700", opacity: "0.55", textShadow: "0 1px 3px rgba(0,0,0,0.9)" }, String(deg), R.compassRuler);
+  }
+  h("div", { position: "absolute", left: "50%", top: "12px", transform: "translateX(-50%)", width: "2px", height: "12px", background: "#ffd254", boxShadow: "0 0 4px rgba(0,0,0,0.9)" }, null, compBand);
+  R.compassWrap = compWrap;
+
   // interact hint + chest-open progress ring
   R.interact = h("div", { position: "absolute", left: "50%", top: "60%", transform: "translateX(-50%)", background: "rgba(0,0,0,0.55)", padding: "6px 14px", borderRadius: "8px", fontSize: "14px", display: "none" }, "", L);
   R.chestRing = h("div", { position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "58px", height: "58px", borderRadius: "50%", display: "none", background: "conic-gradient(#ffd254 0deg, rgba(255,255,255,0.15) 0deg)", WebkitMask: "radial-gradient(circle, transparent 22px, #000 23px)", mask: "radial-gradient(circle, transparent 22px, #000 23px)" }, null, L);
@@ -1790,6 +1812,17 @@ export function update(W, dt) {
   // which read HP 0% / shield 0% / empty inventory for the whole spectate phase.
   const p = W._camFocus || W.player;
   const C = R._hudCache;
+  // compass: slide the ruler so the viewed bearing sits under the notch.
+  // North = -Z (yaw 0); turning right increases heading. The 720-degree ruler
+  // plus the d<90 wrap keeps the visible 68-degree half-window inside the
+  // built strip at every heading — no seam, no rebuild.
+  if (R.compassRuler && p) {
+    const hdg = ((-p.yaw * 180 / Math.PI) % 360 + 360) % 360;
+    const dd = hdg < 90 ? hdg + 360 : hdg;
+    R.compassRuler.style.transform = "translateX(" + (150 - dd * 2.2).toFixed(1) + "px)";
+    const n = Math.round(hdg) % 360;
+    if (R._compN !== n) { R._compN = n; R.compassNum.textContent = String(n); }
+  }
 
   const hpPct = Math.max(0, Math.min(100, p.hp)) + "%";
   if (C.hp !== hpPct) {
