@@ -131,6 +131,54 @@ function structTex(aniso) {
     },
     (h) => 0.88 + h * 0.12, aniso, 4.2);                 // grain 0.88..1.0, brick faces bright
 }
+// ── kind textures (variety pass) ─────────────────────────────────────────────
+// One "struct" brick grain used to dress EVERY box in the world — roofs, piers,
+// stalls, towers — which is exactly the "shared procedural canvas textures"
+// finding the visuals refuter held the band on. Same _fieldTex machinery, four
+// genuinely different relief patterns; albedo stays near-white so batch colors
+// keep doing the tinting.
+function shingleTex(aniso) {
+  return _fieldTex("shingle", 256,
+    (u, v) => {                                          // overlapping rows, per-row column stagger
+      const R = 7, row = Math.floor(v * R), off = (row % 2) * 0.5;
+      const rv = 1 - (((v * R) % 1));                    // each row: high at its top edge, tapering
+      const col = ((u * 5 + off) % 1);
+      const gap = col > 0.94 ? 0.55 : 1;                 // vertical slits between shingles
+      return rv * 0.75 * gap + _tfbm(u * 22, v * 22, 31, 2) * 0.25;
+    },
+    (h) => 0.86 + h * 0.14, aniso, 3.6);
+}
+function plankTex(aniso) {
+  return _fieldTex("plank", 256,
+    (u, v) => {                                          // vertical boards, grain runs along v
+      const B = 6, board = Math.floor(u * B);
+      const edge = Math.abs(((u * B) % 1) - 0.5) > 0.44 ? 0.35 : 1;   // grooves between boards
+      const grain = _tfbm(u * 40 + board * 7, v * 6, 41 + board, 3);  // stretched grain, per-board phase
+      return edge * (0.55 + grain * 0.45);
+    },
+    (h) => 0.85 + h * 0.15, aniso, 3.8);
+}
+function metalTex(aniso) {
+  return _fieldTex("metal", 256,
+    (u, v) => {                                          // corrugation ridges + panel seams
+      const ridge = 0.5 + 0.5 * Math.sin(u * Math.PI * 2 * 9);
+      const seam = (Math.abs(((v * 2) % 1) - 0.5) > 0.47) ? 0.4 : 1;
+      return ridge * seam * 0.85 + _tfbm(u * 12, v * 12, 53, 2) * 0.15;
+    },
+    (h) => 0.9 + h * 0.1, aniso, 3.0);
+}
+function blockTex(aniso) {
+  return _fieldTex("block", 256,
+    (u, v) => {                                          // large cut stone, tighter mortar than struct
+      const R = 3.5, row = Math.floor(v * R), off = (row % 2) * 0.33, bu = u * 2 + off;
+      const mortar = (Math.abs(((v * R) % 1) - 0.5) > 0.45 || Math.abs(((bu % 1) + 1) % 1 - 0.5) > 0.47) ? 1 : 0;
+      const face = _tfbm(u * 10 + row * 3, v * 10, 61 + row, 3);
+      return (1 - mortar) * (0.5 + face * 0.5);
+    },
+    (h) => 0.87 + h * 0.13, aniso, 4.4);
+}
+const KIND_TEX = { shingle: shingleTex, plank: plankTex, metal: metalTex, block: blockTex };
+
 function waterNormalTex(aniso) {
   if (_texCache.waterN) return _texCache.waterN;
   const t = _fieldTex("water_f", 256,
@@ -593,7 +641,10 @@ export async function buildMap(W, mapId) {
     scaleBoxUV(geo, w, h, d, STRUCT_TILE);
     if (opts.rotY) geo.rotateY(opts.rotY);
     geo.translate(cx, cy, cz);
-    (batches[color] = batches[color] || []).push(geo);
+    // batch key carries the texture KIND (opts.tex: shingle/plank/metal/block;
+    // default "s" = the struct brick) — the merge loop below splits it back out
+    const bkey = color + "|" + (opts.tex || "s");
+    (batches[bkey] = batches[bkey] || []).push(geo);
     if (opts.collide !== false) {
       // AABB of the (possibly rotated) box — conservative
       const hw = opts.rotY ? (Math.abs(Math.cos(opts.rotY)) * w + Math.abs(Math.sin(opts.rotY)) * d) / 2 : w / 2;
@@ -627,7 +678,7 @@ export async function buildMap(W, mapId) {
     else if (dir === 1) geo.rotateY(-Math.PI / 2); // up-end → −X
     else if (dir === 3) geo.rotateY(Math.PI);    // up-end → −Z
     geo.translate(cx, cy + h / 2, cz);
-    (batches[color] = batches[color] || []).push(geo);
+    (batches[color + "|s"] = batches[color + "|s"] || []).push(geo);   // ramps keep the struct grain
     // collider footprint: run axis is X for dir 0/1, Z for dir 2/3
     const hx = (dir === 0 || dir === 1) ? d / 2 : w / 2;
     const hz = (dir === 0 || dir === 1) ? w / 2 : d / 2;
@@ -803,7 +854,7 @@ export async function buildMap(W, mapId) {
 
   function pier(x, z, len, rot, color, poi) {
     const y = waterY + 0.5;
-    addBox(x, y, z, 3, 0.3, len, color, { rotY: rot });
+    addBox(x, y, z, 3, 0.3, len, color, { rotY: rot, tex: "plank" });   // a dock reads as boards, not brick
     loot(x, y + 0.6, z, poi);
     if (rng() < 0.6) chest(x, y + 0.6, z + len * 0.35, poi);
   }
@@ -988,8 +1039,8 @@ export async function buildMap(W, mapId) {
     addBoxR(x, z, -pier, d / 2, y + H / 2, segW, H, T, wallC, rot);                 // front L of door
     addBoxR(x, z, pier, d / 2, y + H / 2, segW, H, T, wallC, rot);                  // front R of door
     addBoxR(x, z, 0, d / 2, y + H - 0.35, doorW, 0.7, T, wallC, rot);               // door lintel
-    addBoxR(x, z, 0, 0, y + H + 0.35, w + 0.7, 0.3, d + 0.7, roofC, rot);           // roof deck (overhangs)
-    addBoxR(x, z, 0, 0, y + H + 0.85, w * 0.5, 0.7, d + 0.5, shade(roofC, 0.88), rot); // ridge cap
+    addBoxR(x, z, 0, 0, y + H + 0.35, w + 0.7, 0.3, d + 0.7, roofC, rot, { tex: "shingle" });   // roof deck (overhangs)
+    addBoxR(x, z, 0, 0, y + H + 0.85, w * 0.5, 0.7, d + 0.5, shade(roofC, 0.88), rot, { tex: "shingle" }); // ridge cap
     loot(x, y + 0.5, z, poiId);
     if (rng() < 0.5) chest(x + (rng() - 0.5) * w * 0.4, y + 0.6, z + (rng() - 0.5) * d * 0.4, poiId);
   }
@@ -1710,8 +1761,10 @@ export async function buildMap(W, mapId) {
   // roughness 0.42 / metalness 0.6): scene.environment is still null everywhere in
   // this game, so a metal lobe would reflect pure black and look worse, not better.
   const EMIT = { "#ffe9a8": 0xffe9a8, "#fff2b0": 0xfff2b0 };
-  for (const color in batches) {
-    const merged = BufferGeometryUtils.mergeGeometries(batches[color], false);
+  for (const bkey in batches) {
+    const merged = BufferGeometryUtils.mergeGeometries(batches[bkey], false);
+    const bar = bkey.lastIndexOf("|");
+    const color = bkey.slice(0, bar), tkind = bkey.slice(bar + 1);
     const emit = EMIT[color];
     const mat = new THREE.MeshStandardMaterial({ color, roughness: emit ? 0.5 : 0.88, metalness: emit ? 0 : 0.04 });
     // 1.4 already clipped to white on screen, so the extra headroom costs nothing
@@ -1722,7 +1775,14 @@ export async function buildMap(W, mapId) {
     // a global raise blooms the Deepwood snow and the Savanna sand, which is exactly
     // the "bloom haze" that 0.14 was tuned to prevent.
     if (emit) { mat.emissive = new THREE.Color(emit); mat.emissiveIntensity = 2.8; mat.toneMapped = false; }
-    else if (_st) { mat.map = _st.map; mat.normalMap = _st.normal; mat.normalScale = new THREE.Vector2(0.5, 0.5); }
+    else {
+      // per-kind relief: shingle/plank/metal/block get their own pattern, "s"
+      // keeps the struct brick. Built through the same _texCache, so dispose
+      // treats them as shared, same as ground/struct.
+      let tx = null;
+      try { tx = KIND_TEX[tkind] ? KIND_TEX[tkind](aniso) : _st; } catch (e) { tx = _st; }
+      if (tx) { mat.map = tx.map; mat.normalMap = tx.normal; mat.normalScale = new THREE.Vector2(0.5, 0.5); }
+    }
     const mesh = new THREE.Mesh(merged, mat);
     mesh.castShadow = true; mesh.receiveShadow = true;
     g.add(mesh);
