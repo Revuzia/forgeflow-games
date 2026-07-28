@@ -108,13 +108,35 @@ register3d("royale", async function (kernel, content) {
   // clean call sites in this file — begin() is the exact moment the player takes
   // control, endMatch the exact moment they lose it. Naming them now costs six
   // lines; deriving the lifecycle again later costs a re-read of the whole match
-  // flow. Nothing is wired to them and nothing may be without owner sign-off —
-  // every real integration needs an account and sends data off-machine.
+  // flow. The FIRST-PARTY portal bridge (achievement/save below) is wired per
+  // the owner's progression directive; third-party integrations (SDKs, ad
+  // networks, trackers) stay unwired until the owner opens that gate — those
+  // need external accounts and send data off-machine.
   W.hooks = {
     loadingStart: () => {},
     loadingStop: () => {},
     gameplayStart: () => {},
     gameplayStop: () => {},
+    // FIRST-PARTY portal bridge (owner-directed progression work, 2026-07-27:
+    // "complete ... leaderboard progression"): postMessage to the
+    // forgeflowgames.com player shell, same convention as the game_over emit
+    // in endMatch — unlocks and cloud saves land in OUR registry for
+    // signed-in accounts; guests and standalone play are harmless no-ops.
+    // THIRD-PARTY SDKs/ads/trackers remain owner-gated and unwired.
+    achievement: (slug) => {
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: "forgeflow:achievement", achievementSlug: slug }, "*");
+        }
+      } catch (e) {}
+    },
+    save: (data) => {
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: "forgeflow:save", data, slot: 1 }, "*");
+        }
+      } catch (e) {}
+    },
   };
 
   // ── unified graphics authority ──────────────────────────────────────────────
