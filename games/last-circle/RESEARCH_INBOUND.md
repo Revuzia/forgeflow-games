@@ -67,3 +67,32 @@ PLAN (one focused pass, ~150-200 lines in the terrain build):
 - Verify: baseline silhouette screenshot saved (terrain_baseline_silhouette),
   compare after; frame-tri counts via renderer.info autoReset=false (NOTE:
   with autoReset on, info reads only the composer's final fullscreen pass).
+
+## WebRTC transport overlay — scoped 2026-07-28
+
+WHY even at 4 humans: the envelope merge fits the 100 msg/s ceiling (80 worst
+case), but the 2M msgs/month project quota still caps the WHOLE portfolio at
+~20 full-room LC matches/month. P2P DataChannels remove ceiling AND quota for
+the dominant traffic (the state envelope), plus cut latency (no relay hop).
+
+DESIGN (overlay, not replacement — Supabase stays for signaling + fallback):
+- runtime/net/ffg_rtc.js: RTCMesh — one RTCPeerConnection + ONE unreliable
+  DataChannel ({ordered:false, maxRetransmits:0}) per remote peer. 4 humans =
+  at most 3 connections per client.
+- SIGNALING rides the existing room channel: send("rtc", {to, kind:
+  offer|answer|ice, ...}); LC's onMsg forwards "rtc" addressed to this peer.
+  Deterministic offerer = lower peer id per pair (no glare). Google STUN only,
+  no TURN — NAT-blocked pairs simply stay on Supabase.
+- SPLIT: ONLY the merged state envelope (state+evs+bots) moves to the DC.
+  Critical low-rate messages (hitYou, died, start, bye, takeover, sync, chat)
+  STAY on Supabase — reliability semantics unchanged, and they are a rounding
+  error of the quota.
+- SEND RULE per tick: DC to every peer whose channel is open; ONE Supabase
+  broadcast IF any peer lacks an open DC (they filter by 'from' as today).
+  Any RTC failure = exactly today's behaviour, byte-identical.
+- VERIFICATION LIMIT (honest): single-client harness can exercise signaling
+  plumbing + fallback selection; a REAL P2P state exchange needs two clients —
+  loopback RTCPeerConnection pairs CAN be tested in one page (connect two
+  local PCs to each other) to prove the mesh class end-to-end.
+- Effort: ~150-line mesh + ~40-line net.js integration. Risk: LOW (pure
+  overlay; fallback is the current path).
