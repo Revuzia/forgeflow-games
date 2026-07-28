@@ -35,6 +35,12 @@ import { clamp, damp, TAU } from "./core/util.js";
 
 const container = document.getElementById("game-container");
 
+// Boot forensics: every uncaught error and rejection lands here, so a stalled
+// boot can be diagnosed from the console instead of guessed at.
+window.__BOOT_ERRORS__ = [];
+window.addEventListener("error", (e) => window.__BOOT_ERRORS__.push(String(e.message)));
+window.addEventListener("unhandledrejection", (e) => window.__BOOT_ERRORS__.push("rejection: " + String(e.reason && e.reason.message || e.reason)));
+
 // ---------------------------------------------------------------------------
 // Quality tier
 // ---------------------------------------------------------------------------
@@ -261,7 +267,10 @@ try {
     actors.beast.pos.set(2, 0, 6);
     actors.beast.facing = -Math.PI * 0.5;
     actors.beast.play("idle");
-    if (!match) scene.add(actors.beast.root);
+    // `match` is a let declared further down the module; this .then can fire
+    // during an earlier top-level await, inside its temporal dead zone.
+    // Deferring one macrotask lands after module evaluation completes.
+    setTimeout(() => { if (!match) scene.add(actors.beast.root); }, 0);
   }).catch((e) => console.warn("[boot] tiger stream-in failed:", e && e.message));
 } catch (e) {
   console.error("[boot] actor load failed:", e);
@@ -1035,6 +1044,7 @@ requestAnimationFrame(frame);
 // Verification hooks (FFG convention — 3D games are verified by evaluating
 // these, because WebGL screenshots hang the preview harness).
 // ---------------------------------------------------------------------------
+console.log("[boot] COMPLETE — __FFG3D__ assigned (v47)");
 window.__FFG3D__ = {
   renderer, scene, camera, colosseum, crowd, sky, gates, hypogeum, actors,
   inventory, armoury, vfx, hud, input, combatCam, audio, post,

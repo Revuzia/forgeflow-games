@@ -122,15 +122,31 @@ export class Sky {
     }
     if (this._envRT) this._envRT.dispose();
 
-    // Render the existing sky dome from the centre of the arena.
-    const cubeRT = new THREE.WebGLCubeRenderTarget(256);
+    // Render the ARENA from its own centre, not just the sky. The old bake
+    // hid EVERY mesh, so all metal in the game — helmets, blades, the boss on
+    // every scutum — reflected a bare sky gradient while standing inside an
+    // amphitheatre of stone and 18,000 people. Only the things that move or
+    // would self-reflect are excluded: actors, weapon mounts, crowd, vfx.
+    const cubeRT = new THREE.WebGLCubeRenderTarget(512);
     const cubeCam = new THREE.CubeCamera(1, 2000, cubeRT);
     const prevFog = this.scene.fog;
     this.scene.fog = null;                 // fog would grey out the whole probe
     const hidden = [];
+    const isDynamic = (o) => {
+      let p = o;
+      while (p) {
+        const n = p.name || "";
+        if (n === "crowd" || n === "weapon_mount" || n === "equip_mount" ||
+            p.isBone || n.endsWith("_mount") || n === "combat-vfx") return true;
+        // actor roots carry the fighter/beast names; skinned meshes are bodies
+        if (o.isSkinnedMesh) return true;
+        p = p.parent;
+      }
+      return false;
+    };
     this.scene.traverse((o) => {
-      if ((o.isMesh || o.isInstancedMesh) && o !== this.mesh && o.visible) {
-        hidden.push(o); o.visible = false;  // sky only — no self-reflection
+      if ((o.isMesh || o.isInstancedMesh) && o !== this.mesh && o.visible && isDynamic(o)) {
+        hidden.push(o); o.visible = false;
       }
     });
     cubeCam.position.set(0, 12, 0);
@@ -141,8 +157,8 @@ export class Sky {
     this._envRT = this._pmrem.fromCubemap(cubeRT.texture);
     cubeRT.dispose();
     this.scene.environment = this._envRT.texture;
-    // Keep it subtle: this is a fill, the sun is still the key light.
-    this.scene.environmentIntensity = 0.55;
+    // Slightly stronger now that the probe carries real architecture.
+    this.scene.environmentIntensity = 0.75;
     return this._envRT.texture;
   }
 

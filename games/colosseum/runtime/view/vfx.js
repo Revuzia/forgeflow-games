@@ -154,6 +154,7 @@ export class VFX {
   }
 
   update(dt) {
+    this._updateTelegraphs(dt);
     this._updateArcs(dt);
     let n = 0;
     const col = this.mesh.instanceColor.array;
@@ -215,6 +216,110 @@ export class VFX {
    * out over its life, drawn additively so it reads as motion rather than as
    * an object. One mesh per swing, pooled, so a flurry costs one draw call.
    */
+  /**
+   * GROUND ATTACK TELEGRAPH — the modern action-game contract: before any
+   * blow lands, its landing zone is drawn on the sand. The sector is built
+   * from the sim's OWN reach and half-angle, so the telegraph IS the hitbox —
+   * what the player learns from it is the truth. A border appears at commit;
+   * the interior fills radially across the windup and flashes at the active
+   * frames. Enemy telegraphs are blood-red, the player's own are gold.
+   *
+   * Keyed by fighter id; the caller (bout.js) re-anchors it every frame so a
+   * lunging attacker carries his zone with him, and kills it on interrupt.
+   */
+  telegraph(id, { x, z, facing, reach, arc, windupT = 0.45, activeT = 0.12, mine = false }) {
+    this._tele = this._tele || new Map();
+    this.killTelegraph(id);
+    const SEG = 26;
+    const inner = Math.min(0.35, reach * 0.2);
+    const pos = [], uv = [];
+    for (let i = 0; i < SEG; i++) {
+      const f0 = i / SEG, f1 = (i + 1) / SEG;
+      const a0 = -arc + 2 * arc * f0, a1 = -arc + 2 * arc * f1;
+      const s0 = Math.sin(a0), c0 = Math.cos(a0), s1 = Math.sin(a1), c1 = Math.cos(a1);
+      pos.push(s0 * inner, 0, c0 * inner, s1 * inner, 0, c1 * inner, s1 * reach, 0, c1 * reach);
+      pos.push(s0 * inner, 0, c0 * inner, s1 * reach, 0, c1 * reach, s0 * reach, 0, c0 * reach);
+      const r0 = inner / reach;
+      uv.push(f0, r0, f1, r0, f1, 1);
+      uv.push(f0, r0, f1, 1, f0, 1);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+    const mat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      uniforms: {
+        uProgress: { value: 0 },              // 0..1 across the windup
+        uFlash: { value: 0 },                 // active-frame pop
+        uColor: { value: new THREE.Color(mine ? 0xd8a63a : 0xd8402a) },
+        uOpacity: { value: 1 },
+      },
+      vertexShader: `varying vec2 vUv;
+        void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+      fragmentShader: `varying vec2 vUv; uniform float uProgress, uFlash, uOpacity; uniform vec3 uColor;
+        void main(){
+          // border: outer rim + angular edges, always on
+          float border = smoothstep(0.955, 0.985, vUv.y)
+                       + smoothstep(0.045, 0.015, vUv.x) + smoothstep(0.955, 0.985, vUv.x);
+          // fill sweeps outward with the windup, dimmer than the border
+          float fill = step(vUv.y, uProgress) * 0.28;
+          float a = clamp(border * 0.85 + fill, 0.0, 1.0) + uFlash * 0.5;
+          gl_FragColor = vec4(uColor * (1.0 + uFlash), a * uOpacity);
+        }`,
+    });
+    const m = new THREE.Mesh(geo, mat);
+    m.frustumCulled = false;
+    m.position.set(x, 0.03, z);
+    m.rotation.y = facing;
+    m.renderOrder = 4;
+    this.scene.add(m);
+    this._tele.set(id, { m, t: 0, windupT: Math.max(0.05, windupT), activeT, state: "windup" });
+  }
+
+  /** Re-anchor a live telegraph to its (moving) attacker. */
+  moveTelegraph(id, x, z, facing) {
+    const t = this._tele && this._tele.get(id);
+    if (t) { t.m.position.set(x, 0.03, z); t.m.rotation.y = facing; }
+  }
+
+  /** The swing resolved — flash, then fade. */
+  resolveTelegraph(id) {
+    const t = this._tele && this._tele.get(id);
+    if (t && t.state === "windup") { t.state = "flash"; t.t = 0; }
+  }
+
+  /** The swing died early (interrupt, cancel, clash) — fade fast, no flash. */
+  killTelegraph(id) {
+    const t = this._tele && this._tele.get(id);
+    if (t) { t.state = "fade"; t.t = 0; }
+  }
+
+  _updateTelegraphs(dt) {
+    if (!this._tele) return;
+    for (const [id, t] of this._tele) {
+      t.t += dt;
+      const u = t.m.material.uniforms;
+      if (t.state === "windup") {
+        u.uProgress.value = Math.min(1, t.t / t.windupT);
+        if (t.t >= t.windupT) { t.state = "flash"; t.t = 0; }
+      } else if (t.state === "flash") {
+        u.uProgress.value = 1;
+        u.uFlash.value = Math.max(0, 1 - t.t / Math.max(0.05, t.activeT));
+        if (t.t >= t.activeT + 0.1) { t.state = "fade"; t.t = 0; }
+      } else {
+        u.uFlash.value = 0;
+        u.uOpacity.value = Math.max(0, 1 - t.t / 0.15);
+        if (t.t >= 0.15) {
+          this.scene.remove(t.m);
+          t.m.geometry.dispose();
+          t.m.material.dispose();
+          this._tele.delete(id);
+        }
+      }
+    }
+  }
+
   cleaveArc(origin, facing, radius, halfAngle, life = 0.22) {
     if (!this._arcPool) {
       this._arcPool = [];

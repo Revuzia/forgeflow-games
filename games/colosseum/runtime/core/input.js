@@ -73,6 +73,60 @@ export class Input {
       this.down.add(c);
     };
     this._onMouseUp = (e) => { this.down.delete(`Mouse${e.button}`); };
+
+    // ------------------------------------------------------------------
+    // TOUCH: the game was flatly unplayable on phones — zero touch input
+    // existed. Industry-standard mobile melee mapping:
+    //   left half   = virtual stick (move)
+    //   right half  = tap: attack · hold >=220 ms: block · flick: dodge
+    // The stick is analog into moveX/moveZ; verbs feed the same edge/held
+    // sets the keyboard uses, so the sim sees one command shape.
+    // ------------------------------------------------------------------
+    this._touch = { stick: null, sx: 0, sy: 0, mx: 0, mz: 0,
+                    act: null, ax: 0, ay: 0, at: 0, holding: false,
+                    attack: false, dodge: false };
+    this._onTouchStart = (e) => {
+      if (!this.enabled) return;
+      for (const t of e.changedTouches) {
+        const half = t.clientX < window.innerWidth / 2;
+        const T = this._touch;
+        if (half && T.stick === null) {
+          T.stick = t.identifier; T.sx = t.clientX; T.sy = t.clientY;
+          this._stickUI(true, t.clientX, t.clientY);
+        } else if (!half && T.act === null) {
+          T.act = t.identifier; T.ax = t.clientX; T.ay = t.clientY;
+          T.at = performance.now(); T.holding = false;
+        }
+      }
+      if (e.cancelable) e.preventDefault();
+    };
+    this._onTouchMove = (e) => {
+      const T = this._touch;
+      for (const t of e.changedTouches) {
+        if (t.identifier === T.stick) {
+          const dx = (t.clientX - T.sx) / 52, dy = (t.clientY - T.sy) / 52;
+          const m = Math.hypot(dx, dy) || 1;
+          const k = Math.min(1, m);
+          T.mx = (dx / m) * k; T.mz = -(dy / m) * k;
+          this._stickUI(true, T.sx, T.sy, t.clientX, t.clientY);
+        }
+      }
+      if (e.cancelable) e.preventDefault();
+    };
+    this._onTouchEnd = (e) => {
+      const T = this._touch;
+      for (const t of e.changedTouches) {
+        if (t.identifier === T.stick) {
+          T.stick = null; T.mx = 0; T.mz = 0; this._stickUI(false);
+        } else if (t.identifier === T.act) {
+          const dt = performance.now() - T.at;
+          const dist = Math.hypot(t.clientX - T.ax, t.clientY - T.ay);
+          if (dist > 60) T.dodge = true;            // flick
+          else if (dt < 220 && !T.holding) T.attack = true;  // tap
+          T.act = null; T.holding = false;
+        }
+      }
+    };
     this._onMouseMove = (e) => {
       this.mouse.dx += e.movementX || 0;
       this.mouse.dy += e.movementY || 0;
@@ -86,6 +140,10 @@ export class Input {
     window.addEventListener("mousedown", this._onMouseDown);
     window.addEventListener("mouseup", this._onMouseUp);
     window.addEventListener("mousemove", this._onMouseMove);
+    window.addEventListener("touchstart", this._onTouchStart, { passive: false });
+    window.addEventListener("touchmove", this._onTouchMove, { passive: false });
+    window.addEventListener("touchend", this._onTouchEnd);
+    window.addEventListener("touchcancel", this._onTouchEnd);
     window.addEventListener("gamepadconnected", (e) => { this.gamepadIndex = e.gamepad.index; });
     window.addEventListener("gamepaddisconnected", () => { this.gamepadIndex = null; });
   }
@@ -152,6 +210,28 @@ export class Input {
    * @param {object} ctx { cameraYaw, targetAngle }
    * @returns {object} the same shape Brain.update() returns
    */
+  /** Faint stick indicator so a thumb knows where its anchor is. */
+  _stickUI(show, x = 0, y = 0, tx = null, ty = null) {
+    if (!this._stickEl) {
+      const mk = (size, alpha) => {
+        const d = document.createElement("div");
+        d.style.cssText = `position:fixed;width:${size}px;height:${size}px;border-radius:50%;` +
+          `border:2px solid rgba(232,220,192,${alpha});pointer-events:none;z-index:60;display:none;` +
+          `transform:translate(-50%,-50%)`;
+        document.body.appendChild(d);
+        return d;
+      };
+      this._stickEl = mk(104, 0.35);
+      this._nubEl = mk(44, 0.6);
+    }
+    this._stickEl.style.display = show ? "block" : "none";
+    this._nubEl.style.display = show ? "block" : "none";
+    if (show) {
+      this._stickEl.style.left = `${x}px`; this._stickEl.style.top = `${y}px`;
+      this._nubEl.style.left = `${tx ?? x}px`; this._nubEl.style.top = `${ty ?? y}px`;
+    }
+  }
+
   command({ cameraYaw = this.cameraYaw, targetAngle = null } = {}) {
     if (!this.enabled) return {};
     const pad = this._pad();
@@ -164,6 +244,11 @@ export class Input {
     if (this.isDown("back")) mz -= 1;
     const st = this._stick(pad);
     if (st && (st.x || st.y)) { mx += st.x; mz -= st.y; }
+    // virtual stick (touch)
+    const T = this._touch;
+    if (T && T.stick !== null) { mx += T.mx; mz += T.mz; }
+    // a right-side hold >=220 ms is a held guard
+    if (T && T.act !== null && !T.holding && performance.now() - T.at >= 220) T.holding = true;
 
     // STRAFE WAS MIRRORED: A walked right and D walked left.
     //
@@ -199,10 +284,12 @@ export class Input {
       this._padPrev[i] = now;
       return now && !was;
     };
-    const attack = this.wasPressed("attack") || padEdge(2);      // X / square
+    const attack = this.wasPressed("attack") || padEdge(2) || !!(T && T.attack);
     const heavy = this.wasPressed("heavy") || padEdge(3);        // Y / triangle
-    const block = this.isDown("block") || padHeld(6) || (pad && pad.buttons[6] && pad.buttons[6].value > 0.4);
-    const dodge = this.wasPressed("dodge") || padEdge(1);        // B / circle
+    const block = this.isDown("block") || padHeld(6) || (pad && pad.buttons[6] && pad.buttons[6].value > 0.4) ||
+                  !!(T && T.holding);
+    const dodge = this.wasPressed("dodge") || padEdge(1) || !!(T && T.dodge);
+    if (T) { T.attack = false; T.dodge = false; }   // one-shot touch verbs
 
     // --- attack direction from movement intent -----------------------------
     let attackDir = DIR.HIGH;

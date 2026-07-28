@@ -237,6 +237,18 @@ export class BoutView {
    *   invisible.
    */
   update(dt, timeScale = 1) {
+    if (this._pools && this._pools.length && this.deps.sand) {
+      const STAMPS = [[0.6, 0.55, 0.6], [1.4, 0.85, 0.5], [2.6, 1.15, 0.45]];
+      for (let i = this._pools.length - 1; i >= 0; i--) {
+        const p = this._pools[i];
+        p.t += dt;
+        if (p.next < STAMPS.length && p.t >= STAMPS[p.next][0]) {
+          const [, r, str] = STAMPS[p.next++];
+          this.deps.sand.splat(p.x, p.z, r, "blood", str);
+        }
+        if (p.next >= STAMPS.length) this._pools.splice(i, 1);
+      }
+    }
     for (const rec of this.actors.values()) {
       const f = rec.fighter;
       const a = rec.actor;
@@ -248,6 +260,14 @@ export class BoutView {
 
       if (rec.mounted) { this._driveMounted(rec, dt); continue; }
       this._driveAnimation(rec, dt);
+      // (pool stamps are advanced once per update(), outside this loop)
+      // Telegraphs ride their attacker (the lunge moves him during windup)
+      // and die the moment the swing does.
+      if (this.deps.vfx) {
+        if (f.phase === PHASE.WINDUP) this.deps.vfx.moveTelegraph(f.id, f.x, f.z, f.facing);
+        else if (f.phase === PHASE.ACTIVE) this.deps.vfx.resolveTelegraph(f.id);
+        else if (f.phase === PHASE.STAGGER || f.phase === PHASE.IDLE) this.deps.vfx.killTelegraph(f.id);
+      }
       // A fighter in hit-stop is FROZEN in the sim (combat.js:218 returns
       // early with speed 0). Freezing the mixer too is what turns a hit from
       // a number into a felt impact — 0.04 rather than 0 so the pose still
@@ -556,10 +576,21 @@ export class BoutView {
 
     switch (e.type) {
       case "swing": {
-        // Draw the blade's path. Only for weapons that actually sweep — a
-        // one-target weapon flicking an arc every swing would be visual noise,
-        // and the arc's job is to teach the player that THIS weapon reaches
-        // more than one man.
+        // GROUND TELEGRAPH: every committed attack draws its landing zone on
+        // the sand at the moment of commit — border first, fill sweeping out
+        // across the REAL windup, flash on the active frames. Built from the
+        // sim's own reach and half-angle, so a cleave shows its whole 132-deg
+        // fan, a thrust its narrow lane, and the player (and the enemy's
+        // victim) can read exactly where the blow will land and when.
+        if (vfx) {
+          vfx.telegraph(e.id, {
+            x: e.x, z: e.z, facing: e.facing,
+            reach: e.reach, arc: e.arc,
+            windupT: e.windupT, activeT: e.activeT,
+            mine: e.team === 0,
+          });
+        }
+        // The sweeping blade-path flourish stays for cleaving weapons.
         if (vfx && e.cleave > 1) {
           vfx.cleaveArc(new THREE.Vector3(e.x, 1.15, e.z), e.facing, e.reach, e.arc);
         }
@@ -647,6 +678,10 @@ export class BoutView {
           sand.splat(e.x, e.z, 1.05, "blood", 1.0);
           sand.splat(e.x, e.z, 1.5, "scuff", 0.5);
         }
+        // The pool: a body keeps bleeding. Three staged stamps of growing
+        // radius deepen additively into one dark spreading stain.
+        this._pools = this._pools || [];
+        this._pools.push({ x: e.x, z: e.z, t: 0, next: 0 });
         if (vfx) vfx.blood(new THREE.Vector3(e.x, 0.9, e.z), 2.2);
         if (crowd) { crowd.react(1.0); crowd.startWave({ laps: 1, speed: 3.2, strength: 1 }); }
         break;

@@ -52,7 +52,9 @@ const _ikMat = new THREE.Matrix4();
 // The decoder is fetched from the same CDN and version as the three importmap.
 const loader = new GLTFLoader();
 const draco = new DRACOLoader();
-draco.setDecoderPath("https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/libs/draco/");
+// SELF-HOSTED (was the jsdelivr CDN): a CDN outage or block used to take
+// every character in the game down with it. Mirrored at the same version.
+draco.setDecoderPath("assets/vendor/three/examples/jsm/libs/draco/");
 draco.setDecoderConfig({ type: "js" });   // js decoder: no wasm MIME/CORS surprises
 loader.setDRACOLoader(draco);
 

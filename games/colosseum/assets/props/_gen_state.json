@@ -1,0 +1,22 @@
+{
+ "galea_murmillo": {
+  "prev_id": "019fa6d6-b378-7430-b07c-8ace0ed9635a",
+  "ref_id": "019fa6d7-fc70-7b57-b3c9-8370046245c5",
+  "done": true
+ },
+ "lorica_musculata": {
+  "prev_id": "019fa6da-ca87-74b6-b8db-635969f085ef",
+  "ref_id": "019fa6dd-b467-7a22-8c75-88bd5431de02",
+  "done": true
+ },
+ "gladius_ornate": {
+  "prev_id": "019fa6e0-98ab-7615-a307-bf0944b144c8",
+  "ref_id": "019fa6e1-422a-7623-aca3-f56807ac23ea",
+  "done": true
+ },
+ "spatha_ornate": {
+  "prev_id": "019fa6e2-d894-7407-b7c1-933d99f2382b",
+  "ref_id": "019fa6e3-8159-768e-bcfa-f1f0fa5fbf7f",
+  "done": true
+ }
+}

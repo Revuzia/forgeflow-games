@@ -391,6 +391,13 @@ export class Combat {
         reach: sw.reach,
         arc: sw.arc !== undefined ? sw.arc : (sw.kind === "polearm" ? 0.35 : 0.62),
         cleave: sw.cleave || 1,
+        // The GROUND TELEGRAPH runs off this event: it needs the real windup
+        // (skill/wound-modified) and active window so its fill sweep lands
+        // exactly when the blow does. The telegraph IS the hitbox — same
+        // reach, same half-angle — so what the player learns is the truth.
+        windupT: this._windup(f),
+        activeT: sw.active,
+        team: f.team,
       });
     }
 

@@ -155,6 +155,20 @@ class DamageLayer {
     else c.set(0, strength * 0.4, strength, 1);
     this.splatMat.uniforms.uHardness.value = kind === "scuff" ? 0.15 : 0.45;
 
+    // BLOOD DEEPENS WHERE IT OVERLAPS. MaxEquation kept stains stable but
+    // meant twenty hits on one spot stayed twenty disjoint same-value dots —
+    // the audit's "confetti" finding. Blood now accumulates ADDITIVELY at
+    // ~40% strength per stamp (the byte render target clamps at full red, so
+    // three-to-four overlapping wounds saturate into one dark pool); scuffs
+    // keep Max so footwork never washes the arena grey.
+    if (kind === "blood") {
+      this.splatMat.blendEquation = THREE.AddEquation;
+      c.multiplyScalar(0.42);
+    } else {
+      this.splatMat.blendEquation = THREE.MaxEquation;
+    }
+    this.splatMat.needsUpdate = true;
+
     this.quad.position.set(u, v, 0);
     // Blood is CAST, not dropped: stretched ~2.2x along the blow's bearing so
     // a stain records the direction of the hit that made it. atan2(x,z) world
