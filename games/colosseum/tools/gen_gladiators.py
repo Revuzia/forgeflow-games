@@ -67,6 +67,17 @@ ROSTER = {
     "dimachaerus": "A Roman gladiator of the DIMACHAERUS type: bare muscular torso with NO shield and no body armour, wide leather belt over a black loincloth, segmented iron armguards on BOTH arms, low bronze greaves on both shins, bare feet, long dark hair tied back, whipcord-lean and fast-looking, many old scars. ",
     "provocator": "A Roman gladiator of the PROVOCATOR type: bare torso except for a rectangular bronze chest plate (cardiophylax) strapped across the chest, wide belt over a white loincloth, segmented armguard on the RIGHT arm, one greave on the LEFT shin, bare feet, short military haircut, clean-shaven, sturdy Roman soldier build. ",
     "crupellarius": "A Gaulish gladiator of the CRUPELLARIUS type: almost entirely encased in dull riveted iron plate armour covering torso, both arms and both legs, heavy and immobile looking, only the head bare showing a grim scarred face with matted fair hair, enormous and slow, dark tarnished metal. ",
+    # 2026-07-27 additions — the eques finally gets his own body (jousts have
+    # been borrowing the shared fighter), and the arena gets its first
+    # mythological SPECTACLE opponent. Historical note kept honest: minotaurs
+    # were never real combatants — but Rome staged mythological pageants and
+    # fatal charades in the arena, so the ludus billing "The Bull of Knossos"
+    # as a spectacle bout is period-plausible theatre. Humanoid frame is the
+    # point: Meshy's auto-rig is humanoid-only and the shared 24-bone names
+    # mean he inherits EVERY existing combat clip for free.
+    "eques": "A Roman gladiator of the EQUES type, a mounted cavalry fighter on foot: fitted white sleeveless tunic with a red leather cuirass over it, wide belt, bare muscular arms, snug riding trousers to mid-calf, low leather riding boots, athletic horseman's build, short dark hair, clean-shaven, upright proud posture. ",
+    "minotaur": "A massive MINOTAUR arena spectacle fighter: the head of a great horned bull with dark fur, on an enormous muscular HUMAN body standing upright on two human legs, thick dark fur over the shoulders fading to bronzed human skin on the torso and arms, wide studded leather belt over a ragged dark loincloth, heavy leather wraps on the forearms, human hands and human feet, hunched powerful shoulders, arena-scarred hide. ",
+    "scissor": "A Roman gladiator of the SCISSOR type: bare muscular torso under a short chainmail shirt (lorica hamata) reaching the hips, wide belt over a dark loincloth, a segmented iron armguard on the RIGHT arm, low greaves on both shins, bare feet, close-cropped hair, hard weathered face, compact powerful build. ",
 }
 
 MESHY = "https://api.meshy.ai"

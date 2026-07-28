@@ -64,6 +64,16 @@ const STRIKE_FRAC = {
   finisher: 0.500,
 };
 
+// Per-species beast clip vocabularies. The tiger map on a panther played
+// NOTHING (its clips are lowercase and differently named). The panther ships
+// no attack or death clip; its pounce ("jump regular") is the attack and
+// "sits" stands in for the death — flagged, not hidden: a real death clip is
+// an asset gap, and a seated collapse reads better than a T-posed statue.
+const BEAST_CLIPS = {
+  tiger: { idle: "Idle_Lie Prone", walk: "Walk", run: "Run", attack: "Attack", hit: "Howl", death: "Eat" },
+  panther: { idle: "idle", walk: "walk regular", run: "run", attack: "jump regular", hit: "idle", death: "sits" },
+};
+
 // Scratch for _seatRider — per-frame, never allocated in the loop.
 const _tmpRight = new THREE.Vector3();
 const _tmpFwd = new THREE.Vector3();
@@ -108,6 +118,11 @@ export class BoutView {
     if (this.actors.has(fighter.id)) return this.actors.get(fighter.id);
 
     let actor;
+    if (fighter.isBeast) {
+      // per-species clip vocabularies — staged files name their clips
+      // differently, and the tiger map on a panther plays nothing.
+      fighter._clipMap = BEAST_CLIPS[fighter.beast && fighter.beast.id] || BEAST_CLIPS.tiger;
+    }
     if (fighter.mounted && fighter.mountId) {
       // A RIDER IS A COMPOSITE: the horse is the Actor the sim drives (pos,
       // facing, gallop), and the rider's body sits in the saddle as a child of
@@ -159,7 +174,7 @@ export class BoutView {
       if (!lib) return null;
       actor = new Actor(lib, {
         length: 2.05, name: fighter.id, restClip: "Idle",
-        clipMap: { idle: "Idle_Lie Prone", walk: "Walk", run: "Run", attack: "Attack", hit: "Howl", death: "Eat" },
+        clipMap: fighter._clipMap || BEAST_CLIPS.tiger,
       });
     } else {
       // Each armatura has its OWN generated body — a retiarius is bare-chested

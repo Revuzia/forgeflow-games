@@ -289,6 +289,26 @@ export const ARMATURAE = {
     hp: 145, style: "pressure", bulk: 9.0,
     desc: "Gaulish, encased head to foot in iron. An immovable object that wins by outlasting.",
   },
+  eques: {
+    id: "eques", name: "Eques",
+    weapon: "hasta", shield: "parmula", armour: ["galea", "manica"],
+    hp: 105, style: "spacer",
+    desc: "The mounted opener, fighting on foot once the tilt is done. Light, upright, precise.",
+  },
+  scissor: {
+    id: "scissor", name: "Scissor",
+    weapon: "sica", shield: "none", armour: ["galea", "manica", "lorica"],
+    hp: 118, style: "pressure",
+    desc: "Chainmail and a curved blade. Closes and keeps closing.",
+  },
+  minotaur: {
+    id: "minotaur", name: "The Bull of Knossos",
+    weapon: "spatha", shield: "none", armour: [],
+    // A GIANT: nearly double a murmillo's pool, and bulk that reads in the
+    // separation solver. No shield, no armour — pageant theatre, real blade.
+    hp: 195, bulk: 6, style: "pressure",
+    desc: "The labyrinth's bull, staged for the mob. The mask is theatre; the spatha is not.",
+  },
 };
 
 /** Hit zones, with the vertical band each occupies as a fraction of height. */

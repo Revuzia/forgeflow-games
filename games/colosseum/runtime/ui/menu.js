@@ -382,6 +382,11 @@ export class Menu {
         background:rgba(58,42,20,.6);margin-bottom:16px">
         <div style="font-size:10px;letter-spacing:4px;color:${DIM}">YOU ARE RAISED TO</div>
         <div style="font-size:23px;color:${GOLD};letter-spacing:3px">${r.rankUp.toUpperCase()}</div></div>` : ""}`;
+    // Defeat begs a rematch; making the player climb through the hub to retry
+    // the bout they just lost is pure friction.
+    if (this.hooks.onRetry) {
+      body.appendChild(this._btn("Fight It Again", "Same card, fresh sand", () => this.hooks.onRetry(), {}));
+    }
     body.appendChild(this._btn("Return to the Ludus", "", () => this.show(SCREEN.HUB), { accent: true }));
     this._shell(r.matchName || "The Bout", "RESULT", body);
   }

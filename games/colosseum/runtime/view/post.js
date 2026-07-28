@@ -206,6 +206,13 @@ export class Post {
     if (this.bloom && this.bloom.resolution) this.bloom.resolution.set(w, h);
   }
 
+  /**
+   * Persistent low-health screen state. 0 = healthy, 1 = at death's door:
+   * the vignette closes in and colour drains. Being near death finally LOOKS
+   * like something beyond a 15 px bar in the corner.
+   */
+  setDanger(f) { this._danger = Math.max(0, Math.min(1, f)); }
+
   update(dt) {
     if (!this.grade) return;
     const u = this.grade.uniforms;
@@ -220,8 +227,10 @@ export class Post {
       else { const k = 1 - s.t / s.dur; punch = s.amp * k * k; }
     }
     // Bite the vignette in and lift contrast for the duration of the punch.
-    u.uVignette.value = 0.42 + punch * 0.30;
+    const danger = this._danger || 0;
+    u.uVignette.value = 0.42 + punch * 0.30 + danger * 0.26;
     u.uContrast.value = 1.055 + punch * 0.085;
+    u.uSaturation.value = 1.06 - danger * 0.30;
   }
 
   /** Draw one frame. Falls back to a plain render whenever post is off. */

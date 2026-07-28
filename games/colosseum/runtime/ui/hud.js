@@ -34,8 +34,26 @@ export class HUD {
         <div style="height:9px;margin-top:7px;background:#1c1209;border:1px solid rgba(142,47,34,.6)">
           <div id="hd-foehp" style="height:100%;width:100%;background:linear-gradient(90deg,#6e2016,${BLOOD});transition:width .12s"></div>
         </div>
+        <div style="height:5px;margin-top:4px;background:#141a0e;border:1px solid rgba(160,190,110,.3)">
+          <div id="hd-foestam" style="height:100%;width:100%;background:linear-gradient(90deg,#5d7a34,#93b84e);transition:width .1s"></div>
+        </div>
+        <div id="hd-foeshieldwrap" style="height:4px;margin-top:3px;background:#0f1418;border:1px solid rgba(150,170,190,.3);display:none">
+          <div id="hd-foeshield" style="height:100%;width:100%;background:linear-gradient(90deg,#4a5a6b,#8fa5bb);transition:width .12s"></div>
+        </div>
         <div id="hd-foesleft" style="font-size:10px;letter-spacing:2px;color:#8a7a5e;margin-top:5px"></div>
       </div>
+
+      <!-- guard compass: which line your shield covers / your attack goes -->
+      <div id="hd-guard" style="position:absolute;left:378px;bottom:34px;width:64px;height:64px;opacity:0;transition:opacity .35s">
+        <div data-g="high"   style="position:absolute;left:50%;top:0;transform:translateX(-50%);font-size:15px;color:#5c503a">&#9650;</div>
+        <div data-g="left"   style="position:absolute;left:0;top:50%;transform:translateY(-50%);font-size:15px;color:#5c503a">&#9664;</div>
+        <div data-g="right"  style="position:absolute;right:0;top:50%;transform:translateY(-50%);font-size:15px;color:#5c503a">&#9654;</div>
+        <div data-g="thrust" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:14px;color:#5c503a">&#10022;</div>
+      </div>
+
+      <!-- onboarding / instruction line -->
+      <div id="hd-prompt" style="position:absolute;bottom:110px;left:0;right:0;text-align:center;font-size:16px;
+        letter-spacing:2px;color:#e8dcc0;text-shadow:0 1px 6px #000;opacity:0;transition:opacity .3s"></div>
 
       <!-- player vitals -->
       <div id="hd-me" style="position:absolute;left:30px;bottom:28px;width:330px;opacity:0;transition:opacity .35s">
@@ -79,6 +97,25 @@ export class HUD {
     this.q("#hd-bannersub").textContent = sub;
     this.q("#hd-banner").style.opacity = "1";
     this._bannerT = seconds;
+  }
+
+  /** Onboarding/instruction line. seconds<=0 keeps it up until cleared. */
+  prompt(text, seconds = 0) {
+    const p = this.q("#hd-prompt");
+    p.textContent = text || "";
+    p.style.opacity = text ? "1" : "0";
+    this._promptT = seconds > 0 ? seconds : Infinity;
+  }
+  clearPrompt() { this.prompt(""); }
+
+  /** Refused-action feedback: the stamina bar flashes the cost it cannot pay. */
+  pulseStamina() {
+    const bar = this.q("#hd-stam");
+    bar.style.background = "linear-gradient(90deg,#8e2f22,#c4432c)";
+    clearTimeout(this._stamPulse);
+    this._stamPulse = setTimeout(() => {
+      bar.style.background = "linear-gradient(90deg,#5d7a34,#93b84e)";
+    }, 160);
   }
 
   /**
@@ -157,6 +194,10 @@ export class HUD {
       this._bannerT -= dt;
       if (this._bannerT <= 0) this.q("#hd-banner").style.opacity = "0";
     }
+    if (this._promptT !== undefined && this._promptT !== Infinity) {
+      this._promptT -= dt;
+      if (this._promptT <= 0) { this.clearPrompt(); this._promptT = undefined; }
+    }
 
     // --- player ---------------------------------------------------------
     const me = s.player;
@@ -193,8 +234,77 @@ export class HUD {
       this.q("#hd-foename").textContent = (foe.name || "").toUpperCase();
       this.q("#hd-foetitle").textContent = foe.title || "";
       this.q("#hd-foehp").style.width = `${Math.max(0, (foe.hp / foe.maxHp) * 100)}%`;
+      // The guard-break economy is the design centrepiece and it was
+      // INVISIBLE — the sim tracked foe stamina and shield integrity and the
+      // player saw neither, so breaking a guard felt like random luck.
+      if (foe.maxStamina) this.q("#hd-foestam").style.width = `${clampPct((foe.stamina / foe.maxStamina) * 100)}%`;
+      const fsw = this.q("#hd-foeshieldwrap");
+      if (foe.shieldFrac !== null && foe.shieldFrac !== undefined) {
+        fsw.style.display = "block";
+        this.q("#hd-foeshield").style.width = `${clampPct(foe.shieldFrac * 100)}%`;
+      } else fsw.style.display = "none";
       this.q("#hd-foesleft").textContent = s.foesLeft > 1 ? `${s.foesLeft} STILL STANDING` : "";
     } else foeEl.style.opacity = "0";
+
+    // --- guard compass ---------------------------------------------------
+    // Lights the direction your guard covers while blocking (steel-blue) and
+    // the line your attack is travelling while swinging (gold). Directional
+    // combat existed only in the sim until now; this is where the player
+    // finally SEES the system they are playing.
+    const guard = this.q("#hd-guard");
+    if (me && (me.blocking || me.attackDir)) {
+      guard.style.opacity = "1";
+      const active = me.blocking ? me.blockDir : me.attackDir;
+      const col = me.blocking ? "#8fa5bb" : "#e0b558";
+      for (const g of guard.children) {
+        g.style.color = g.dataset.g === active ? col : "#5c503a";
+        g.style.textShadow = g.dataset.g === active ? `0 0 8px ${col}` : "none";
+      }
+    } else guard.style.opacity = "0";
+
+    // --- attack telegraphs + off-screen threat markers -------------------
+    // Every hostile mid-windup shows WHERE the blow is coming from: a glyph
+    // over their head (amber in windup, red in the active frames), clamped to
+    // the screen edge as an arrow when they are outside the frustum. The sim
+    // emits swing geometry; nothing told the PLAYER. Screenshot 05 of the
+    // audit was a live free-for-all with zero opponents visible and no signal.
+    if (!this._teleLayer) {
+      this._teleLayer = document.createElement("div");
+      this._teleLayer.style.cssText = "position:absolute;inset:0;pointer-events:none;overflow:hidden";
+      this.el.appendChild(this._teleLayer);
+      this._teleEls = [];
+    }
+    const threats = (s.threats || []);
+    while (this._teleEls.length < threats.length) {
+      const d = document.createElement("div");
+      d.style.cssText = "position:absolute;font-size:22px;font-weight:900;transform:translate(-50%,-50%);text-shadow:0 0 8px #000";
+      this._teleLayer.appendChild(d);
+      this._teleEls.push(d);
+    }
+    const GLYPH = { high: "▲", left: "◀", right: "▶", thrust: "✦" };
+    for (let i = 0; i < this._teleEls.length; i++) {
+      const el = this._teleEls[i];
+      const t = threats[i];
+      if (!t || !camera) { el.style.display = "none"; continue; }
+      el.style.display = "block";
+      el.textContent = GLYPH[t.dir] || "!";
+      el.style.color = t.phase === "active" ? "#e04a2c" : "#e0b558";
+      el.style.opacity = String(0.55 + 0.45 * (t.frac || 0));
+      // project the head point
+      _v.set(t.x, 1.95, t.z).project(camera);
+      const w = this.el.clientWidth, h = this.el.clientHeight;
+      let x = (_v.x * 0.5 + 0.5) * w, y = (-_v.y * 0.5 + 0.5) * h;
+      const off = _v.z > 1 || x < 0 || x > w || y < 0 || y > h;
+      if (off) {
+        // behind or outside: clamp to the nearest edge, bigger and pulsing
+        if (_v.z > 1) { x = w - x; y = h - y; }   // behind camera: mirror
+        x = Math.max(26, Math.min(w - 26, x));
+        y = Math.max(26, Math.min(h - 26, y));
+        el.style.fontSize = "28px";
+      } else el.style.fontSize = "22px";
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+    }
 
     // --- crowd ----------------------------------------------------------
     this.q("#hd-crowdbar").style.width = `${clampPct(s.crowdFavour * 100)}%`;
@@ -205,5 +315,21 @@ export class HUD {
 
   dispose() { this.el.remove(); }
 }
+
+const _v = { x: 0, y: 0, z: 0, set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; },
+  project(cam) {
+    // minimal Vector3.project without importing three into the UI layer
+    const e = cam.matrixWorldInverse.elements, p = cam.projectionMatrix.elements;
+    const x = this.x, y = this.y, z = this.z;
+    let vx = e[0] * x + e[4] * y + e[8] * z + e[12];
+    let vy = e[1] * x + e[5] * y + e[9] * z + e[13];
+    let vz = e[2] * x + e[6] * y + e[10] * z + e[14];
+    const px = p[0] * vx + p[4] * vy + p[8] * vz + p[12];
+    const py = p[1] * vx + p[5] * vy + p[9] * vz + p[13];
+    const pz = p[2] * vx + p[6] * vy + p[10] * vz + p[14];
+    const pw = p[3] * vx + p[7] * vy + p[11] * vz + p[15];
+    this.x = px / pw; this.y = py / pw; this.z = pz / pw;
+    return this;
+  } };
 
 function clampPct(v) { return Math.max(0, Math.min(100, v)); }

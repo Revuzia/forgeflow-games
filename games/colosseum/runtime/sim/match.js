@@ -220,6 +220,9 @@ export class Match {
       hp: p.hp, x: 8 + index * 3, z: 2, facing: -Math.PI / 2,
       isBeast: true, beastProfile: p, height: 0.95,
     });
+    // The view keys mount/species lookups off beast.id; the profile never
+    // carried it, so every species fell into the tiger fallback.
+    f.beast = { ...p, id: beastId };
     // A beast swings with its own numbers, not a sword's.
     Object.defineProperty(f, "weapon", {
       value: {
@@ -638,12 +641,28 @@ export class Match {
         stamina: Math.max(0, p.stamina), maxStamina: p.maxStamina,
         shieldHp: p.shieldHp, shieldBroken: p.shieldBroken,
         phase: p.phase, combo: p.comboCount, alive: p.alive,
+        // the guard compass reads these
+        blocking: p.blocking, blockDir: p.blockDir || null,
+        attackDir: (p.phase === PHASE.WINDUP || p.phase === PHASE.ACTIVE) ? p.attackDir : null,
       } : null,
       foe: foe ? {
         name: foe.name, title: foe.displayTitle || "",
         hp: Math.max(0, foe.hp), maxHp: foe.maxHp,
         phase: foe.phase, alive: foe.alive, isBeast: foe.isBeast,
+        // the guard-break economy, finally visible
+        stamina: Math.max(0, foe.stamina), maxStamina: foe.maxStamina,
+        shieldFrac: (foe.shieldId && foe.shieldId !== "none" && foe.shieldHpMax)
+          ? Math.max(0, foe.shieldHp) / foe.shieldHpMax
+          : (foe.shieldId && foe.shieldId !== "none" && foe.shieldHp > 0 ? Math.min(1, foe.shieldHp / 100) : null),
       } : null,
+      // Every hostile mid-attack: the HUD draws a direction telegraph over
+      // their head and clamps it to the screen edge when off-frustum.
+      threats: foes.filter((f) => f.alive && (f.phase === PHASE.WINDUP || f.phase === PHASE.ACTIVE))
+        .map((f) => ({
+          x: f.x, z: f.z, dir: f.attackDir || "high", phase: f.phase,
+          frac: f.phase === PHASE.ACTIVE ? 1 :
+            Math.min(1, f.phaseT / Math.max(0.05, f.weapon ? f.weapon.windup : 0.4)),
+        })),
       foesLeft: foes.length,
       crowdFavour: this.crowdFavour,
       wave: this.wave + 1, waves: this.def.waves || 1,

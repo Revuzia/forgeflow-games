@@ -187,11 +187,22 @@ export class Input {
     const moveZ = mag > 1 ? wz / mag : wz;
 
     // --- buttons -----------------------------------------------------------
-    const padBtn = (i) => !!(pad && pad.buttons[i] && pad.buttons[i].pressed);
-    const attack = this.wasPressed("attack") || padBtn(2);       // X / square
-    const heavy = this.wasPressed("heavy") || padBtn(3);         // Y / triangle
-    const block = this.isDown("block") || padBtn(6) || (pad && pad.buttons[6] && pad.buttons[6].value > 0.4);
-    const dodge = this.wasPressed("dodge") || padBtn(1);         // B / circle
+    // GAMEPAD EDGES. buttons[i].pressed is HELD state — using it raw meant a
+    // held B chain-dodged the whole stamina bar in one press and a held X
+    // machine-gunned attack intents. One-shot verbs fire on the rising edge;
+    // block stays held because a guard IS a held stance.
+    this._padPrev = this._padPrev || {};
+    const padHeld = (i) => !!(pad && pad.buttons[i] && pad.buttons[i].pressed);
+    const padEdge = (i) => {
+      const now = padHeld(i);
+      const was = !!this._padPrev[i];
+      this._padPrev[i] = now;
+      return now && !was;
+    };
+    const attack = this.wasPressed("attack") || padEdge(2);      // X / square
+    const heavy = this.wasPressed("heavy") || padEdge(3);        // Y / triangle
+    const block = this.isDown("block") || padHeld(6) || (pad && pad.buttons[6] && pad.buttons[6].value > 0.4);
+    const dodge = this.wasPressed("dodge") || padEdge(1);        // B / circle
 
     // --- attack direction from movement intent -----------------------------
     let attackDir = DIR.HIGH;

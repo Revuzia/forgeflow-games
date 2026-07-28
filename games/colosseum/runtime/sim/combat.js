@@ -150,6 +150,7 @@ export class Fighter {
     this.shieldHp = SHIELDS[shield]
       ? Math.round(SHIELDS[shield].integrity * (this.gear ? this.gear.shieldIntegrity : 1))
       : 0;
+    this.shieldHpMax = this.shieldHp;   // for HUD integrity fractions
     this.shieldBroken = false;
     this.guardBroken = false;    // stamina-broken guard; mends at 25% stamina
 
@@ -344,6 +345,19 @@ export class Combat {
       f._dodgeVZ = (dz / len) * (f.mob.dodgeDistance / FEEL.dodgeDuration);
       this.emit("dodge", { id: f.id });
     }
+
+    // REFUSED-ACTION FEEDBACK. A press the stamina gate swallows must not be
+    // silent — indistinguishable from a miss, it taught players the controls
+    // were broken. One event; the shell pulses the bar and plays a dry click.
+    if (cmd.attack && f.isPlayer && f.alive && !f.canAttack() &&
+        (f.phase === PHASE.IDLE || f.phase === PHASE.RECOVER) &&
+        f.stamina < FEEL.minAttackStamina) {
+      if (!f._refusedCd || f._refusedCd <= 0) {
+        this.emit("refused", { id: f.id, what: "attack" });
+        f._refusedCd = 0.35;
+      }
+    }
+    if (f._refusedCd) f._refusedCd -= dt;
 
     if (cmd.attack && f.canAttack()) {
       const dir = cmd.attackDir && w.dirs.includes(cmd.attackDir) ? cmd.attackDir : w.dirs[0];
@@ -584,11 +598,22 @@ export class Combat {
     let blocked = false;
     let parried = false;
 
+    let dirMatched = false;
     if (target.blocking && covers && facingIt && !target.shieldBroken) {
+      // DIRECTION FINALLY MATTERS. blockDir was computed by input.js and
+      // stored here for months with ZERO reads — the store page's headline
+      // "directional weighted combat" was a placebo. Now it is the skill
+      // layer: a guard matched to the incoming direction blocks CHEAP and is
+      // parry-eligible; a mismatched guard still stops the blow but pays a
+      // premium and can never parry — you caught it on the boards, not the
+      // boss. (The AI's reactive layer reads the incoming attackDir, so its
+      // blocks are matched by construction; its skill table governs whether
+      // it blocks at all.)
+      dirMatched = target.blockDir === dir;
       // A block begun within the parry window is a PARRY: free, and it
       // staggers the attacker. Holding block forever gets you a plain block.
       const parryWin = FEEL.parryWindow * (target.mods ? target.mods.parryWindow : 1);
-      if (target.blockHeldT <= parryWin) {
+      if (dirMatched && target.blockHeldT <= parryWin) {
         parried = true;
       } else {
         blocked = true;
@@ -629,7 +654,9 @@ export class Combat {
       // Blocking a beast's charge costs far more than blocking a swing — the
       // shield holds, but your arms do not hold forever.
       const impact = attacker.isBeast ? FEEL.beastBlockCost : 1;
-      const cost = w.damage * FEEL.blockStaminaCost * impact * (1 - sh.stability * 0.35);
+      // Matched guard direction blocks cheap; a mismatched catch pays 30% more.
+      const dirMult = dirMatched ? 0.7 : 1.3;
+      const cost = w.damage * FEEL.blockStaminaCost * impact * dirMult * (1 - sh.stability * 0.35);
       target.stamina -= cost;
       target.shieldHp -= w.damage * (1 - sh.block);
       attacker.hitStop = FEEL.hitStopSeconds * 0.7;

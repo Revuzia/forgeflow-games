@@ -108,6 +108,14 @@ export const ARMATURA_ROSTER = {
     weakness: "Unhorsed, he is a lightly-armoured swordsman.",
     attested: "high",
   },
+  minotaur: {
+    id: "minotaur", name: "The Bull of Knossos", class: "spectacle",
+    loadout: { weapon: "spatha", shield: "none", armour: [] },
+    pairs: [], style: "pressure",
+    blurb: "A staged mythological pageant: a giant in a bull mask billed as the Minotaur, armed with a cleaving blade. The mob adores the theatre.",
+    weakness: "No shield, no armour — everything is committed to the blow.",
+    attested: "theatrical",
+  },
   scissor: {
     id: "scissor", name: "Scissor", class: "specialist",
     loadout: { weapon: "sica", shield: "none", armour: ["galea", "manica", "lorica"] },
@@ -296,6 +304,8 @@ export const MATCH_TYPES = {
   tertiarius: { id: "tertiarius", name: "Tertiarius",    desc: "Win, and a fresh unadvertised third fighter walks out to meet you." },
   survival:   { id: "survival",   name: "Sine Missione", desc: "Wave after wave, no reprieve. Officially banned under Augustus — which is why the crowd loves it." },
   venatio:    { id: "venatio",    name: "Venatio",       desc: "The beast hunt. They come up out of the hypogeum." },
+  joust:      { id: "joust",      name: "Eques Tilt",     desc: "Mounted openers. Lances at the gallop down the barrier; unhorse him or out-point him in six passes." },
+  spectacle:  { id: "spectacle",  name: "Myth Pageant",   desc: "The editor stages the old stories with living men. Tonight: the labyrinth's bull." },
   // Gladiators normally fought paired — ORDINARII. Sometimes they were sent in
   // as CATERVARII, "in tumultuous bodies", without science: several mutually
   // hostile parties on the sand at once, every man for his own side. It is the
@@ -368,6 +378,9 @@ export function buildLadder() {
 
   add({ id: "j3", rank: "primus", type: "joust", name: "The Emperor's Eques", joust: { skill: 0.85, name: "Incitatus" }, purse: 420,
         desc: "He has never been unhorsed. The crowd comes early just to watch him mount." });
+
+  add({ id: "m1", rank: "primus", type: "spectacle", name: "The Bull of Knossos", opponents: [{ armatura: "minotaur", skill: "primus" }], purse: 380,
+        desc: "A myth staged in sand and blood: a giant in the bull mask, billed as the Minotaur. The crowd knows it is theatre. The blade is not." });
 
   // --- Champion ----------------------------------------------------------
   add({ id: "c1", rank: "champion", type: "single", name: "Iron Gaul", opponents: [{ armatura: "crupellarius", skill: "champion" }], purse: 600,

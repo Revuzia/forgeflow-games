@@ -202,6 +202,10 @@ const actorLibs = { fighter: null, beasts: {}, armaturae: {}, mounts: {} };
 const ARMATURA_BODIES = [
   "murmillo", "secutor", "retiarius", "thraex",
   "hoplomachus", "dimachaerus", "provocator", "crupellarius",
+  // 2026-07-27: generated (20 credits each). The eques finally rides with his
+  // own body; the minotaur is the arena's first mythological SPECTACLE
+  // opponent — humanoid frame, identical 24-bone rig, inherits every clip.
+  "eques", "minotaur", "scissor",
 ];
 
 async function ensureArmaturaBodies(ids) {
@@ -217,19 +221,13 @@ async function ensureArmaturaBodies(ids) {
 }
 
 try {
-  const [fighterLib, beastLib] = await Promise.all([
-    loadFighter("assets/chars/murmillo"),
-    // TIGER, not leopard: leopard.glb and jaguar.glb are anthropomorphic
-    // beast-MEN despite their clip names, verified by rendering them. The
-    // tiger is a true quadruped, one draw call, and the only cat in the
-    // library shipping both an Attack and a Run clip.
-    loadBeast("assets/beasts/tiger.glb"),
-  ]);
+  // The fighter is the ONLY body the title screen needs. The tiger (4.4 MB —
+  // 58% of the old blocking payload) used to sit inside this await and gate
+  // first paint; it now streams in AFTER the title reveals, and bouts load
+  // their beasts on demand via ensureBeasts().
+  const fighterLib = await loadFighter("assets/chars/murmillo");
 
   actorLibs.fighter = fighterLib;
-  actorLibs.beasts.tiger = beastLib;
-  actorLibs.beasts.panther = beastLib;   // until panther is staged separately
-  actorLibs.beasts.lion = beastLib;
 
   actors.player = new Actor(fighterLib, { height: 1.82, name: "player" });
   actors.player.pos.set(-16, 0, 4);
@@ -249,18 +247,22 @@ try {
 
   scene.add(actors.player.root);
 
-  actors.beast = new Actor(beastLib, {
-    // Quadrupeds are sized by BODY LENGTH. A Bengal tiger is ~2.0 m nose to
-    // tail-base; sizing by "height" turns a big cat into a house cat.
-    length: 2.05,
-    name: "beast",
-    restClip: "Idle",
-    clipMap: { idle: "Idle_Lie Prone", walk: "Walk", run: "Run", attack: "Attack", howl: "Howl" },
-  });
-  actors.beast.pos.set(2, 0, 6);
-  actors.beast.facing = -Math.PI * 0.5;
-  actors.beast.play("idle");
-  scene.add(actors.beast.root);
+  // Title-screen tiger streams in late and never blocks (see above).
+  loadBeast("assets/beasts/tiger.glb").then((beastLib) => {
+    actorLibs.beasts.tiger = beastLib;
+    actors.beast = new Actor(beastLib, {
+      // Quadrupeds are sized by BODY LENGTH. A Bengal tiger is ~2.0 m nose to
+      // tail-base; sizing by "height" turns a big cat into a house cat.
+      length: 2.05,
+      name: "beast",
+      restClip: "Idle",
+      clipMap: { idle: "Idle_Lie Prone", walk: "Walk", run: "Run", attack: "Attack", howl: "Howl" },
+    });
+    actors.beast.pos.set(2, 0, 6);
+    actors.beast.facing = -Math.PI * 0.5;
+    actors.beast.play("idle");
+    if (!match) scene.add(actors.beast.root);
+  }).catch((e) => console.warn("[boot] tiger stream-in failed:", e && e.message));
 } catch (e) {
   console.error("[boot] actor load failed:", e);
   window.__ACTOR_ERR__ = String(e && e.message || e);
@@ -404,6 +406,27 @@ async function startMatch(matchId) {
   // otherwise the view silently falls back to the shared placeholder.
   await ensureArmaturaBodies(match.requiredBodies());
 
+  // Beasts load per species, on demand. panther.glb is a REAL staged
+  // quadruped (its own clips); species without a staged file fall back to the
+  // tiger with a console warning instead of silently wearing stripes.
+  for (const b of def.beasts || []) {
+    if (actorLibs.beasts[b]) continue;
+    try {
+      actorLibs.beasts[b] = await loadBeast(`assets/beasts/${b}.glb`);
+      console.log(`[boot] beast staged: ${b}`);
+    } catch (e) {
+      if (!actorLibs.beasts.tiger) {
+        try { actorLibs.beasts.tiger = await loadBeast("assets/beasts/tiger.glb"); } catch (e2) { /* logged below */ }
+      }
+      actorLibs.beasts[b] = actorLibs.beasts.tiger;
+      console.warn(`[boot] no staged model for beast '${b}' — tiger stand-in`);
+    }
+  }
+  // A venatio can begin before the title tiger stream-in finished.
+  if ((def.beasts || []).length && !actorLibs.beasts.tiger) {
+    try { actorLibs.beasts.tiger = await loadBeast("assets/beasts/tiger.glb"); } catch (e) { console.warn("[boot] tiger load failed"); }
+  }
+
   // The joust needs its mount. Loaded on demand like the armatura bodies —
   // 1 MB of warhorse has no business in the boot payload of a foot bout.
   if (def.type === "joust" && !actorLibs.mounts.warhorse) {
@@ -415,6 +438,10 @@ async function startMatch(matchId) {
   }
 
   match.start();
+  lastMatchId = def.id;
+  tutor = def.type === "paegniarius" ? makeTutor() : null;
+  // Everyone else gets one controls line during the entry ceremony dead time.
+  if (!tutor) hud.prompt("SHIFT hold = block · SPACE = dodge · push toward + click = THRUST", 6);
   combatCam.enabled = true;
   hud.show();
   camRig.auto = false;
@@ -439,6 +466,7 @@ function endMatch() {
  * neither can silently change the other.
  */
 function onCombatSound(e) {
+  if (tutor) tutor.onEvent(e);   // the tutorial listens to the same bus
   const at = (id) => {
     const f = match && match.combat.get(id);
     return f ? { x: f.x, z: f.z } : {};
@@ -453,6 +481,8 @@ function onCombatSound(e) {
       audio.play("hit", { x: e.x, z: e.z, gain: e.heavy ? 1.0 : 0.75 });
       audio.play("hurt", { x: e.x, z: e.z, gain: e.heavy ? 0.85 : 0.55 });
       audio.crowdSurge(e.heavy ? 0.55 : 0.25, 0.12);
+      // Being hit had no screen response at all — a bar twitched in a corner.
+      if (e.target === "player" && post) post.impact(e.heavy ? 0.9 : 0.55, 0.3);
       break;
     case "block":
       audio.play("block", { ...at(e.target), gain: 0.7 });
@@ -478,6 +508,10 @@ function onCombatSound(e) {
       audio.play("shield_break", { x: e.x, z: e.z, gain: 1.0 });
       audio.play("death", { x: e.x, z: e.z, gain: 0.8 });
       audio.crowdSurge(1.0, 0.08);
+      break;
+    case "refused":
+      audio.play("click", { gain: 0.5, rate: 0.7 });
+      hud.pulseStamina();
       break;
     case "clash":
       // Steel-on-steel bind — the block sample pitched down reads as blade
@@ -596,6 +630,58 @@ function pauseMatch() {
 }
 
 menu.hooks.onResume = () => { setPaused(false); menu.hide(); };
+// Defeat begs a rematch; the results screen offers the same card back.
+let lastMatchId = null;
+menu.hooks.onRetry = () => { if (lastMatchId) { menu.hide(); startMatch(lastMatchId); } };
+
+// ---------------------------------------------------------------------------
+// Onboarding — the tutorial bout TEACHES, driven by real events.
+//
+// The only controls documentation in the game was one italic paragraph inside
+// Settings. t1 is literally titled "Learn the guard" and spawned zero
+// instruction. This walks a new player through the four verbs against the
+// paegniarius, each step gated on the player actually DOING the thing.
+// ---------------------------------------------------------------------------
+let tutor = null;
+function makeTutor() {
+  return {
+    step: 0, moved: 0, blocks: 0, hits: 0, dodged: false, lastX: null, lastZ: null,
+    onEvent(e) {
+      if ((e.type === "block" || e.type === "parry") && e.target === "player") this.blocks++;
+      if (e.type === "hit" && e.attacker === "player") this.hits++;
+      if (e.type === "dodge" && e.id === "player") this.dodged = true;
+    },
+    tick(m) {
+      const p = m.player;
+      if (!p || !p.alive || m.state !== "fight") return;
+      if (this.lastX !== null) this.moved += Math.hypot(p.x - this.lastX, p.z - this.lastZ);
+      this.lastX = p.x; this.lastZ = p.z;
+      switch (this.step) {
+        case 0:
+          hud.prompt("W A S D — close with him");
+          if (this.moved > 4) this.step = 1;
+          break;
+        case 1:
+          hud.prompt(`HOLD SHIFT to block — take his blows on the guard  (${Math.min(3, this.blocks)}/3)`);
+          if (this.blocks >= 3) this.step = 2;
+          break;
+        case 2:
+          hud.prompt(`Push TOWARD him + CLICK = thrust · sideways = cut  (${Math.min(2, this.hits)}/2 landed)`);
+          if (this.hits >= 2) this.step = 3;
+          break;
+        case 3:
+          hud.prompt("SPACE — roll clear of a swing");
+          if (this.dodged) this.step = 4;
+          break;
+        case 4:
+          hud.prompt("Finish it.", 4);
+          this.step = 5;
+          break;
+        default: break;
+      }
+    },
+  };
+}
 menu.hooks.onForfeit = () => {
   // Route the forfeit through the SAME verdict path a defeat takes, so the
   // loss, the purse and the wear are all real. _decide(false) moves the match
@@ -794,6 +880,12 @@ function stepSim(dt) {
     if (match.state === "exit") bout.dragCorpses(dt, gates.entryPoint("libitinaria", 2.0));
     crowd.lookAt(new THREE.Vector3(p ? p.x : 0, 1, p ? p.z : 0));
     hud.update(match.hudState(), dt, camera);
+    if (tutor) tutor.tick(match);
+    // Low health closes the screen in — post.setDanger drives vignette+desat.
+    if (post && match.player) {
+      const hpF = match.player.maxHp ? Math.max(0, match.player.hp) / match.player.maxHp : 1;
+      post.setDanger(match.player.alive && hpF < 0.35 ? (1 - hpF / 0.35) : 0);
+    }
 
     // Audio follows the player and the crowd's visible mood, so what is heard
     // and what is seen cannot drift apart.
