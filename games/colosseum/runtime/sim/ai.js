@@ -397,6 +397,11 @@ export class Brain {
         if (!s.isBeast && !s.shieldBroken && !s.guardBroken) cmd.block = true;
         break;
       }
+      case "net": {
+        // One command; the sim's own cooldown makes repeats harmless.
+        cmd.net = true;
+        break;
+      }
       default: break;
     }
     return cmd;
@@ -546,6 +551,18 @@ export class Brain {
         (t.phase === PHASE.WINDUP ? 0.8 : 0.1) *
         (!s.isBeast && !s.shieldBroken ? (s.shieldId !== "none" ? 1 : 0.7) : 0.05) *
         st.patience + noise() * 0.5,
+
+      // THE NET. Only a trident kit off cooldown scores it at all. The band
+      // is the netman's dance distance — outside his own trident poke,
+      // inside the cast's reach — and an enemy stuck in recovery is exactly
+      // when the mesh flies. Scored through the same noisy table as
+      // everything else so low ranks throw it clumsily and champions throw
+      // it like a verdict.
+      net:
+        (!s.isBeast && s.weaponId === "trident" && (s.netCd || 0) <= 0 &&
+         (s.netT || 0) <= 0 ? 1 : 0) *
+        (dist >= 1.6 && dist <= 3.1 ? 1.25 : 0.1) *
+        (1 + opportunity * 2.0) + noise() * 0.6,
     };
 
     // TUTOR MERCY — a lanista's man drilling a tiro does not finish a

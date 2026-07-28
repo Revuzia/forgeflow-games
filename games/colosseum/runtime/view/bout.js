@@ -83,6 +83,19 @@ const BEAST_CLIPS = {
 // scale is the opposite of the bout's promise.
 const BEAST_LENGTH = { tiger: 2.05, panther: 1.8, bison: 2.7 };
 
+/** The rope dome an entangled fighter wears — one wireframe mesh, no cost. */
+function makeNetDome() {
+  const geo = new THREE.SphereGeometry(0.95, 9, 5, 0, Math.PI * 2, 0, Math.PI * 0.55);
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0x6b5636, wireframe: true, transparent: true, opacity: 0.55, depthWrite: false,
+  });
+  const m = new THREE.Mesh(geo, mat);
+  m.name = "net_dome";
+  m.scale.set(1, 1.75, 1);
+  m.position.y = 0.12;
+  return m;
+}
+
 // Scratch for _seatRider — per-frame, never allocated in the loop.
 const _tmpRight = new THREE.Vector3();
 const _tmpFwd = new THREE.Vector3();
@@ -285,6 +298,21 @@ export class BoutView {
         if (f.phase === PHASE.WINDUP) this.deps.vfx.moveTelegraph(f.id, f.x, f.z, f.facing);
         else if (f.phase === PHASE.ACTIVE) this.deps.vfx.resolveTelegraph(f.id);
         else if (f.phase === PHASE.STAGGER || f.phase === PHASE.IDLE) this.deps.vfx.killTelegraph(f.id);
+        // The net cast's cone rides its caster the same way a swing's does.
+        if (f.netWindupT > 0) this.deps.vfx.moveTelegraph(`net_${f.id}`, f.x, f.z, f.facing);
+      }
+      // ENTANGLED: a rope dome hangs on the body for the duration — the
+      // sim's netT is the truth (survives event loss), the slow spin sells
+      // the mesh settling.
+      if (f.netT > 0) {
+        if (!rec._netMesh) {
+          rec._netMesh = makeNetDome();
+          a.root.add(rec._netMesh);
+        }
+        rec._netMesh.rotation.y += dt * 0.5;
+      } else if (rec._netMesh) {
+        rec._netMesh.removeFromParent();
+        rec._netMesh = null;
       }
       // A fighter in hit-stop is FROZEN in the sim (combat.js:218 returns
       // early with speed 0). Freezing the mixer too is what turns a hit from
@@ -672,6 +700,32 @@ export class BoutView {
         if (vfx && e.cleave > 1) {
           vfx.cleaveArc(new THREE.Vector3(e.x, 1.15, e.z), e.facing, e.reach, e.arc);
         }
+        break;
+      }
+      case "net_throw": {
+        // The cast telegraphs exactly like a blow: its cone on the sand, red
+        // for a hostile netman, sweeping over the real windup. The telegraph
+        // rides the caster via the per-frame block below.
+        if (vfx) {
+          vfx.telegraph(`net_${e.id}`, {
+            x: e.x, z: e.z, facing: e.facing,
+            reach: e.reach, arc: e.arc,
+            windupT: e.windupT, activeT: 0.12,
+            mine: e.team === 0,
+          });
+        }
+        break;
+      }
+      case "net_hit": {
+        if (vfx) {
+          vfx.resolveTelegraph(`net_${e.attacker}`);
+          vfx.net(new THREE.Vector3(e.x, 1.0, e.z));
+        }
+        if (crowd) crowd.react(0.5);
+        break;
+      }
+      case "net_miss": {
+        if (vfx) vfx.killTelegraph(`net_${e.id}`);
         break;
       }
       case "hit": {

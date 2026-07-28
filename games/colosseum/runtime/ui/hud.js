@@ -67,6 +67,12 @@ export class HUD {
         <div id="hd-shieldwrap" style="height:6px;margin-top:5px;background:#0f1418;border:1px solid rgba(150,170,190,.3);display:none">
           <div id="hd-shield" style="height:100%;width:100%;background:linear-gradient(90deg,#4a5a6b,#8fa5bb);transition:width .12s"></div>
         </div>
+        <!-- the net pip: trident kits only. Q to cast; ring fills as it recharges -->
+        <div id="hd-netwrap" style="display:none;margin-top:6px;font-size:10px;letter-spacing:2px;color:#8a7a5e">
+          NET [Q] <span id="hd-net" style="display:inline-block;width:120px;height:5px;background:#0f1418;
+            border:1px solid rgba(150,170,190,.3);vertical-align:middle"><span id="hd-netfill"
+            style="display:block;height:100%;width:100%;background:linear-gradient(90deg,#6b5636,#a8925e)"></span></span>
+        </div>
         <div id="hd-combo" style="font-size:12px;color:${GOLD};margin-top:6px;height:15px"></div>
       </div>
 
@@ -224,6 +230,19 @@ export class HUD {
       } else shWrap.style.display = "none";
 
       this.q("#hd-combo").textContent = me.combo > 1 ? `${me.combo}× COMBO` : "";
+
+      // The net pip — only a trident kit shows it. The bar is the RECHARGE
+      // (full = ready), so the glance-read matches the stamina bar's grammar.
+      const nw = this.q("#hd-netwrap");
+      if (me.hasNet) {
+        nw.style.display = "block";
+        const frac = me.netCdMax ? 1 - Math.min(1, me.netCd / me.netCdMax) : 1;
+        const fill = this.q("#hd-netfill");
+        fill.style.width = `${frac * 100}%`;
+        fill.style.background = frac >= 1
+          ? "linear-gradient(90deg,#a8925e,#d8ad4e)"
+          : "linear-gradient(90deg,#6b5636,#a8925e)";
+      } else nw.style.display = "none";
     } else meEl.style.opacity = "0";
 
     // --- opponent -------------------------------------------------------

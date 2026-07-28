@@ -110,6 +110,26 @@ export class VFX {
     }
   }
 
+  /** The net lands — a burst of dust and rope-fibre at the catch point. */
+  net(origin) {
+    for (let i = 0; i < 16; i++) {
+      const p = this._take();
+      if (!p) return;
+      const a = Math.random() * Math.PI * 2;
+      Object.assign(p, {
+        alive: true, x: origin.x, y: origin.y, z: origin.z,
+        vx: Math.cos(a) * (0.6 + Math.random() * 1.4),
+        vy: 0.8 + Math.random() * 1.6,
+        vz: Math.sin(a) * (0.6 + Math.random() * 1.4),
+        life: 0, maxLife: 0.4 + Math.random() * 0.3,
+        size: 0.03 + Math.random() * 0.04,
+        grav: -9, drag: 1.2,
+        r: 0.42, g: 0.34, b: 0.21,
+        kind: "dust", stain: 0,
+      });
+    }
+  }
+
   /** Steel on steel. Fast, short-lived, no stain. */
   sparks(origin, strength = 1) {
     const n = Math.round(8 + strength * 14);

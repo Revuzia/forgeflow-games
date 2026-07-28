@@ -18,7 +18,7 @@
 // Those beats are what make it feel like an event instead of a skirmish, and
 // they cost almost nothing because the gate and lift systems already exist.
 
-import { Combat, Fighter, PHASE } from "./combat.js";
+import { Combat, Fighter, PHASE, FEEL } from "./combat.js";
 import { Brain, BEAST_PROFILES } from "./ai.js";
 import { WEAPONS, ARMATURAE } from "../data/weapons.js";
 import { ARMATURA_ROSTER, CHAMPIONS, MUNUS, makeOpponent } from "../data/roster.js";
@@ -656,6 +656,10 @@ export class Match {
         // the guard compass reads these
         blocking: p.blocking, blockDir: p.blockDir || null,
         attackDir: (p.phase === PHASE.WINDUP || p.phase === PHASE.ACTIVE) ? p.attackDir : null,
+        // the net pip: only rendered when the kit carries one
+        hasNet: p.weaponId === "trident",
+        netCd: p.netCd || 0, netCdMax: FEEL.netCooldown,
+        netted: (p.netT || 0) > 0,
       } : null,
       foe: foe ? {
         name: foe.name, title: foe.displayTitle || "",

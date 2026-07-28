@@ -36,6 +36,8 @@ const DEFAULT_BINDS = {
   // must work while the sim is paused and emitting no commands.
   armoury: ["Tab"],
   pause: ["Escape"],
+  // The retiarius's cast — only does anything with a trident kit equipped.
+  net: ["KeyQ"],
 };
 // Removed: `swap` (KeyQ) and `interact` (KeyE). Both were declared here and
 // read by nothing — command() never emitted them and no consumer looked. A
@@ -311,6 +313,7 @@ export class Input {
     const block = this.isDown("block") || padHeld(6) || (pad && pad.buttons[6] && pad.buttons[6].value > 0.4) ||
                   !!(T && T.holding);
     const dodge = this.wasPressed("dodge") || padEdge(1) || !!(T && T.dodge);
+    const net = this.wasPressed("net");
     if (T) { T.attack = false; T.dodge = false; }   // one-shot touch verbs
 
     // --- attack direction from movement intent -----------------------------
@@ -349,7 +352,7 @@ export class Input {
       face: targetAngle,          // the sim turns toward this
       attack: attack || heavy,
       attackDir, block, blockDir, dodge,
-      heavy,
+      heavy, net,
     };
   }
 

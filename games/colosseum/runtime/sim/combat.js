@@ -208,6 +208,9 @@ export class Fighter {
     this.wounds = { head: 0, torso: 0, arms: 0, legs: 0 };
     this.alive = true;
     this.speed = 0;         // scalar ground speed, for animation
+    this.netT = 0;          // entangled time remaining
+    this.netCd = 0;         // net cooldown (trident kits)
+    this.netWindupT = 0;    // a cast in flight
   }
 
   get weapon() { return WEAPONS[this.weaponId]; }
@@ -338,6 +341,42 @@ export class Combat {
     if (f.blocking) f.blockHeldT += dt; else f.blockHeldT = 0;
     if (f._riposteT) f._riposteT = Math.max(0, f._riposteT - dt);
     if (f._poiseT) f._poiseT = Math.max(0, f._poiseT - dt);
+    if (f.netCd) f.netCd = Math.max(0, f.netCd - dt);
+    if (f.netT) {
+      f.netT = Math.max(0, f.netT - dt);
+      if (f.netT === 0) this.emit("net_free", { id: f.id });
+    }
+
+    // --- the net cast resolves on its own clock ---------------------------
+    if (f.netWindupT > 0) {
+      f.netWindupT -= dt;
+      if (f.netWindupT <= 0) {
+        f.netWindupT = 0;
+        let caught = null, best = Infinity;
+        for (const t of this.fighters) {
+          if (t === f || !t.alive || t.team === f.team || t.iframes > 0) continue;
+          const dx = t.x - f.x, dz = t.z - f.z;
+          const d = Math.hypot(dx, dz);
+          if (d > FEEL.netRange) continue;
+          if (Math.abs(angleDelta(f.facing, Math.atan2(dx, dz))) > FEEL.netArc) continue;
+          if (d < best) { best = d; caught = t; }
+        }
+        if (caught) {
+          caught.netT = FEEL.netDuration;
+          caught.blocking = false;
+          this.emit("net_hit", { attacker: f.id, target: caught.id, x: caught.x, z: caught.z });
+          this.emit("netted", { id: caught.id });
+          f.phase = PHASE.RECOVER; f.phaseT = 0;
+          f._recoverPenalty = FEEL.netHitRecover;
+        } else {
+          this.emit("net_miss", { id: f.id, x: f.x, z: f.z });
+          // A whiffed cast is the retiarius's own opening — the weighted mesh
+          // has to be hauled back in.
+          f.phase = PHASE.RECOVER; f.phaseT = 0;
+          f._recoverPenalty = Math.max(0, FEEL.netMissRecover - f.weapon.recover);
+        }
+      }
+    }
 
     // --- phase machine ---------------------------------------------------
     f.phaseT += dt;
@@ -393,6 +432,22 @@ export class Combat {
                  !f.guardBroken &&
                  (f.phase === PHASE.IDLE || f.phase === PHASE.RECOVER);
     if (cmd.blockDir) f.blockDir = cmd.blockDir;
+
+    // THE NET CAST. Trident kits only — the retiarius's paired verb, and the
+    // one mechanic the roster copy always promised. Long telegraphed windup
+    // on its own clock (the fighter is two-handing the throw; canAct() gates
+    // every other verb off while it winds), 8 s cooldown so each cast is a
+    // commitment, resolution in _stepFighter's cast block above.
+    if (cmd.net && !f.isBeast && f.weaponId === "trident" && f.canAct() &&
+        (f.netCd || 0) <= 0) {
+      f.netWindupT = FEEL.netWindup;
+      f.netCd = FEEL.netCooldown;
+      this.emit("net_throw", {
+        id: f.id, x: f.x, z: f.z, facing: f.facing,
+        reach: FEEL.netRange, arc: FEEL.netArc,
+        windupT: FEEL.netWindup, team: f.team,
+      });
+    }
 
     if (cmd.dodge && f.canAct() && f.stamina >= FEEL.dodgeStamina) {
       f.phase = PHASE.DODGE; f.phaseT = 0;
@@ -837,6 +892,13 @@ export class Combat {
     target.hp -= dmg;
     target.wounds[zone] = Math.min(3, target.wounds[zone] + (dmg > 18 ? 1 : 0));
     target.lastHitBy = attacker.id;
+
+    // A blow lands mid-cast: the net drops. Reading the long windup and
+    // striking through it is the cast's honest counterplay.
+    if (target.netWindupT > 0) {
+      target.netWindupT = 0;
+      this.emit("net_miss", { id: target.id, x: target.x, z: target.z, cancelled: true });
+    }
 
     // Interrupting a windup is what rewards reading an opponent — but only
     // reading it EARLY. Poise rules (persona-playtest fix): past the early

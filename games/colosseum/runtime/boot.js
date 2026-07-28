@@ -572,6 +572,17 @@ function onCombatSound(e) {
       audio.play("parry", { x: e.x, z: e.z, gain: 1.0, rate: 0.9 });
       audio.crowdSurge(0.35, 0.1);
       break;
+    case "net_throw":
+      audio.play("swing", { ...at(e.id), gain: 0.7, rate: 0.55 });
+      break;
+    case "net_hit":
+      audio.play("block", { x: e.x, z: e.z, gain: 0.8, rate: 1.5 });
+      audio.crowdSurge(0.45, 0.1);
+      if (e.target === "player" && hud.prompt) hud.prompt("ENTANGLED — the mesh has you!", 1.8);
+      break;
+    case "net_free":
+      if (e.id === "player" && hud.clearPrompt) hud.clearPrompt();
+      break;
     case "bypass":
     case "maul":
       // A sica hooking the rim / a cat coming OVER the shield. These landed

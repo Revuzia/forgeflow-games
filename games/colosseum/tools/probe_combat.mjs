@@ -248,6 +248,42 @@ ok(maxStam <= x1.maxStamina + 0.001 || maxStam <= x2.maxStamina + 0.001, "stamin
 // opponent for Wooden Swords — see SKILL.tutor in ai.js).
 ok(Object.keys(SKILL).length === 7 && !!SKILL.tutor, "seven skill bands: six ranks + the t1 tutor");
 
+// --- the net (retiarius verb) ------------------------------------------------
+console.log("\n-- the net --");
+{
+  const c = new Combat({ seed: 5 });
+  const R = c.add(fromArmatura("retiarius", { team: 0, x: 0, z: 0, facing: 0 }));
+  const M = c.add(fromArmatura("murmillo", { team: 1, x: 0, z: 2.4, facing: Math.PI }));
+  const events = [];
+  c.onEvent = (e) => events.push(e.type);
+  c.command(R, { net: true });
+  c.update(DT);
+  ok(R.netWindupT > 0 && R.netCd > 0, "a cast winds up and starts the cooldown");
+  ok(events.includes("net_throw"), "the throw telegraphs (net_throw fired)");
+  for (let t = 0; t < FEEL.netWindup + 0.05; t += DT) c.update(DT);
+  ok(events.includes("net_hit") && M.netT > 0, "a target inside the cone is entangled");
+  ok(!M.canAct(), "an entangled fighter cannot act");
+  const preAtk = M.phase;
+  c.command(M, { attack: true, attackDir: "high" });
+  c.update(DT);
+  ok(M.phase === preAtk, "entangled attack presses are refused");
+  for (let t = 0; t < FEEL.netDuration; t += DT) c.update(DT);
+  ok(M.netT === 0 && events.includes("net_free"), "the mesh frees after its duration");
+
+  // A dodge's i-frames evade the cast entirely.
+  const c2 = new Combat({ seed: 6 });
+  const R2 = c2.add(fromArmatura("retiarius", { team: 0, x: 0, z: 0, facing: 0 }));
+  const M2 = c2.add(fromArmatura("murmillo", { team: 1, x: 0, z: 2.4, facing: Math.PI }));
+  const ev2 = [];
+  c2.onEvent = (e) => ev2.push(e.type);
+  c2.command(R2, { net: true });
+  c2.update(DT);
+  M2.iframes = 5;                    // held through the whole windup
+  for (let t = 0; t < FEEL.netWindup + 0.05; t += DT) c2.update(DT);
+  ok(ev2.includes("net_miss") && M2.netT === 0, "dodge i-frames evade the net (whiff)");
+  ok(R2.phase === PHASE.RECOVER, "a whiffed cast leaves the netman open");
+}
+
 console.log(`\n-- verdict --`);
 console.log(`  ${checks} checks, ${fails} failed`);
 if (fails) { console.log("  COMBAT PROBE: FAIL"); process.exit(1); }
