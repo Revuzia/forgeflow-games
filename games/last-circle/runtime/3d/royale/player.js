@@ -684,13 +684,19 @@ function installHumanInput(W) {
     if (e.button === 0 && W._suppressNextShot) { W._suppressNextShot = false; return; }
     if (e.button === 0) {
       W._lmbDown = true;
-      W._fireEdge = true;           // fresh click — semi-auto weapons fire on this EDGE only
+      W._fireEdge = performance.now();  // fresh click — semis consume it within the 300 ms buffer
       W.player.input.fire = true;   // never swallow the shot
     }
     if (e.button === 2) { W._rmbDown = true; W.player.input.ads = true; rmbDrag = document.pointerLockElement !== dom; }
   });
   window.addEventListener("mouseup", (e) => {
-    if (e.button === 0) { W._lmbDown = false; W._fireEdge = false; }
+    // mouseup does NOT clear the fire edge any more (owner playtest: "pressing
+    // mouse button doesn't actually fire ... it gets stuck") — a quick click
+    // during a weapon's cooldown window (0.4 s ready delay after a swap, or
+    // between semi shots) set the edge and erased it before the gun could
+    // fire. The edge is a TIMESTAMP now; weapons.js honours it for 300 ms
+    // (the standard input buffer) and consumes it on fire.
+    if (e.button === 0) { W._lmbDown = false; }
     if (e.button === 2) { W._rmbDown = false; rmbDrag = false; }
     if (!W.player) return;
     if (e.button === 0) W.player.input.fire = false;
@@ -1377,10 +1383,17 @@ function syncObj(W, a, dt, far) {
       // Only while a gun is actually up: emotes, death, swim and the glide poses
       // must keep the clip's own arms.
       if (a.hand && a.handBone && !a.emoting &&
-          (a._armMode === "gunReady" || a._armMode === "reload") && a._armW > 0.5) {
+          (a._armMode === "gunReady" || a._armMode === "reload" || a._armMode === "lowReady") && a._armW > 0.5) {
         a.handBone.updateWorldMatrix(true, false);          // fresh, not stale
         a.handBone.getWorldQuaternion(_gq);
-        const cp = Math.cos(a.pitch), sp = Math.sin(a.pitch);
+        // lowReady carries the muzzle DOWN at ~32 deg instead of tracking aim
+        // pitch — and, critically, extending barrel-aim to this mode kills the
+        // out-of-combat backward hold (owner playtest: "rifle still held
+        // backward"): the static HAND_AIM_ROT this mode used to fall back to
+        // was calibrated on one clip frame and pointed some skins' guns at
+        // their own chest.
+        const bpitch = a._armMode === "lowReady" ? -0.55 : a.pitch;
+        const cp = Math.cos(bpitch), sp = Math.sin(bpitch);
         _gf.set(-Math.sin(a.yaw) * cp, sp, -Math.cos(a.yaw) * cp).normalize();
         // explicit basis (not setFromUnitVectors) so the gun cannot roll: +Z is
         // the barrel, +Y stays world-up-ish, +X is right.

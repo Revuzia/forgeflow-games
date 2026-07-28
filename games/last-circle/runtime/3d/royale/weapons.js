@@ -382,21 +382,31 @@ function stepWeapon(W, a, dt) {
   // overwritten next frame → auto-cycle. Gate semi weapons on the mousedown EDGE
   // (W._fireEdge, set on click, cleared on release/consume) so one click = one shot.
   const isAuto = def.cls === "smg" || def.cls === "ar";
-  const wantFire = (a.isBot || isAuto) ? inp.fire : !!W._fireEdge;
+  // SEMI-AUTO INPUT, two paths (owner playtest: "pressing mouse button
+  // doesn't actually fire ... it gets stuck"):
+  //   1. click buffer — the edge is a timestamp honoured for 420 ms (covers
+  //      the 400 ms swap ready-delay), so a quick click inside a cooldown
+  //      fires the moment the gun is ready instead of being swallowed
+  //      (mouseup no longer erases the edge);
+  //   2. hold-to-fire — if the button is STILL DOWN when the cooldown ends,
+  //      fire (the modern-shooter standard; covers the sniper/pistol
+  //      between-shot cds that are longer than any sane click buffer).
+  const edgeLive = W._fireEdge && (performance.now() - W._fireEdge) < 420;
+  const wantFire = (a.isBot || isAuto) ? inp.fire : (!!edgeLive || !!inp.fire);
   if (wantFire && wpn.cd <= 0 && !a.gliding && !a.healing && !a.swimming && a.mantleT == null) {
     if (def.mag > 0 && wpn.magAmmo <= 0) {
       // auto reload attempt
       if (a.inventory.ammo[def.ammo] > 0) { inp.reload = true; }
       else W.events.emit("dryFire", a);
       wpn.cd = 0.25;
-      if (!a.isBot && !isAuto) W._fireEdge = false;   // the click is spent even on a dry trigger
+      if (!a.isBot && !isAuto) W._fireEdge = 0;   // the click is spent even on a dry trigger
       return;
     }
     fire(W, a, def);
     wpn.magAmmo--;
     if (wpn.slotRef) wpn.slotRef.mag = wpn.magAmmo;
     wpn.cd = 60 / def.rpm;
-    if (!a.isBot && !isAuto) W._fireEdge = false;      // one shot per click for semi weapons
+    if (!a.isBot && !isAuto) W._fireEdge = 0;      // one shot per click for semi weapons
   }
 }
 
@@ -488,6 +498,17 @@ function fire(W, a, def) {
       origin: { x: eye.x, y: eye.y, z: eye.z },
     });
   }
+  // VISIBLE ROUND for every LOCAL shot (owner playtest: "firing sniper i see
+  // no tracer"). The tracer dash listener existed with per-weapon colors and a
+  // cosmetic speed cap — but only net.js's REMOTE fire replay ever emitted it,
+  // so solo play had no bullet trails at all. One dash per trigger pull (base
+  // aim dir, not per pellet — a shotgun blast is one streak, matching the
+  // remote replay), launcher included: its dash trails the arcing shell.
+  W.events.emit("tracer", {
+    x: eye.x + _d.x * 0.6, y: eye.y + _d.y * 0.6 - 0.05, z: eye.z + _d.z * 0.6,
+    vx: _d.x * def.speed, vy: _d.y * def.speed, vz: _d.z * def.speed,
+    weaponId: a.weapon.id,
+  });
   // View-model punch, all actors — a bot's gun is on screen too. Was a flat 1
   // (= 5 cm setback) for every weapon, so a sniper and an SMG kicked the gun
   // identically. Per-class multiplier onto the SAME 0.05 m axis and 6/s decay:
@@ -543,7 +564,10 @@ function spawnProjectile(W, o) {
   p.whizzed = false;
   if (o.mesh && !p.m) {
     // grenade-launcher shell: visible arcing round with a hot tracer tint
-    p.m = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 6), new THREE.MeshStandardMaterial({ color: 0x3d5a3a, emissive: 0xff6622, emissiveIntensity: 0.4 }));
+    // 0.15 m + hot emissive: the 0.11/0.4 shell was invisible in flight
+    // (owner playtest: "grenade launcher shoots no grenade, at least i cant
+    // see it") — the bloom pass needs the emissive over its 0.72 threshold
+    p.m = new THREE.Mesh(new THREE.SphereGeometry(0.15, 6, 6), new THREE.MeshStandardMaterial({ color: 0x3d5a3a, emissive: 0xff6622, emissiveIntensity: 1.2 }));
   }
   // Only SHOW the mesh when THIS spawn is a mesh projectile. kill() removes p.m
   // from the scene but keeps it on the pooled object for the next grenade to
