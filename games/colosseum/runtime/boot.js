@@ -295,15 +295,37 @@ try {
   window.__ACTOR_ERR__ = String(e && e.message || e);
 }
 
-// CROWD IMPOSTORS — bake the mid/far tiers' card atlas from the real fighter
-// body now that its library is loaded. Failure logs and leaves the geometric
-// crowd standing; the swap is all-or-nothing per tier.
+// CROWD IMPOSTORS — photograph real people into the card atlas.
+//
+// The six civilians in assets/crowd/ are Meshy-generated Romans (three calm,
+// three cheering) and they exist for exactly one reason: an impostor card is
+// two triangles whatever it depicts, so detail in the SOURCE is free at
+// runtime. Baking them replaces both the one-gladiator-cloned-18,000-times
+// atlas and the geometric near tier. If they fail to load, the bake falls
+// back to the gladiator and the near tier keeps its mesh — the crowd is never
+// missing, only less varied.
+const CROWD_PEOPLE = [
+  { file: "plebs_m1", cheer: false },
+  { file: "matron_f1", cheer: false },
+  { file: "senator_m1", cheer: false },
+  { file: "plebs_m2_cheer", cheer: true },
+  { file: "woman_f2_cheer", cheer: true },
+  { file: "youth_m3_cheer", cheer: true },
+];
 try {
-  if (actorLibs.fighter) {
+  const loaded = await Promise.all(CROWD_PEOPLE.map((p) =>
+    loadBeast(`assets/crowd/${p.file}.glb`)
+      .then((g) => ({ scene: g.scene, cheer: p.cheer }))
+      .catch(() => null)));
+  const people = loaded.filter(Boolean);
+  if (actorLibs.fighter || people.length) {
     const ok = crowd.bakeImpostors(renderer, actorLibs.fighter, {
-      makeBody: () => new Actor(actorLibs.fighter, { height: 1.75, name: "impostor_bake" }),
+      makeBody: actorLibs.fighter
+        ? () => new Actor(actorLibs.fighter, { height: 1.75, name: "impostor_bake" })
+        : null,
+      people,
     });
-    console.log(`[boot] crowd impostors ${ok ? "baked + swapped (mid/far)" : "SKIPPED"}`);
+    console.log(`[boot] crowd impostors ${ok ? `baked from ${people.length} people` : "SKIPPED"}`);
   }
 } catch (e) {
   console.warn("[boot] crowd impostor bake failed:", e && e.message);
@@ -1051,6 +1073,85 @@ const perf = {
     return this.filled ? s / this.filled : 0;
   },
   fps() { const a = this.avg(); return a > 0 ? 1000 / a : 0; },
+  /** Mean of the LAST n samples — what "right now" actually feels like. */
+  recent(n = 30) {
+    const c = Math.min(n, this.filled);
+    if (!c) return 0;
+    let s = 0;
+    for (let i = 0; i < c; i++) s += this.samples[(this.idx - 1 - i + this.samples.length) % this.samples.length];
+    return s / c;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// F3 — the debug/perf overlay. A player who says "it runs badly" and a
+// developer who sees 140 fps in a capture are both right until somebody can
+// read the number on the machine that matters. FPS, frame time, draw calls,
+// triangles, resolution scale and quality tier, on the player's own screen.
+// ---------------------------------------------------------------------------
+const dbgEl = document.createElement("div");
+dbgEl.id = "hd-debug";
+dbgEl.style.cssText = `position:fixed;top:8px;left:8px;z-index:99;display:none;
+  font:11px/1.45 ui-monospace,Consolas,monospace;color:#9ef08a;text-shadow:0 1px 3px #000;
+  background:rgba(0,0,0,.55);padding:7px 10px;border:1px solid rgba(158,240,138,.25);
+  border-radius:3px;white-space:pre;pointer-events:none`;
+document.body.appendChild(dbgEl);
+let dbgOn = false;
+function updateDebug() {
+  const r = renderer.info.render, m = renderer.info.memory;
+  const cs = crowd && crowd.stats ? crowd.stats() : null;
+  dbgEl.textContent =
+    `${perf.fps().toFixed(0)} fps   ${perf.avg().toFixed(1)} ms (avg)\n` +
+    `now      ${perf.recent(30).toFixed(1)} ms\n` +
+    `draws    ${r.calls}   tris ${(r.triangles / 1000).toFixed(0)}k\n` +
+    `res      ${RES.cur.toFixed(2)}x  (cap ${RES.ceiling.toFixed(2)})\n` +
+    `quality  ${QUALITY}${post.enabled === false ? " · post off" : ""}\n` +
+    (cs ? `crowd    ${cs.count} · ${cs.sectors} sectors\n` : "") +
+    `geo      ${m.geometries}  tex ${m.textures}\n` +
+    `F3 to close`;
+}
+window.addEventListener("keydown", (e) => {
+  if (e.code === "F3") {
+    e.preventDefault();
+    dbgOn = !dbgOn;
+    dbgEl.style.display = dbgOn ? "block" : "none";
+    if (dbgOn) updateDebug();          // paint at once, not on the next tick
+  }
+});
+
+// ---------------------------------------------------------------------------
+// ADAPTIVE RESOLUTION. The quality tier picks a DPR ceiling at boot from
+// hardware guesses; this measures what the machine ACTUALLY delivers and
+// scales the render buffer between 55% and that ceiling to hold the target
+// frame time. Pixel-bound cost (post-processing, fill, the crowd's overdraw)
+// falls with the square of the scale, so this is the fastest lever there is —
+// and the one a player feels as "smooth" rather than "ugly".
+// ---------------------------------------------------------------------------
+const RES = {
+  target: 16.7,            // ms — 60 fps
+  ceiling: Math.min(window.devicePixelRatio || 1, DPR_CAP),
+  floor: Math.min(window.devicePixelRatio || 1, DPR_CAP) * 0.55,
+  cur: Math.min(window.devicePixelRatio || 1, DPR_CAP),
+  cooldown: 0,
+  apply(v) {
+    this.cur = Math.max(this.floor, Math.min(this.ceiling, v));
+    renderer.setPixelRatio(this.cur);
+    const w = window.innerWidth, h = window.innerHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    post.resize(w * this.cur, h * this.cur);
+  },
+  tick(dt) {
+    this.cooldown -= dt;
+    if (this.cooldown > 0 || perf.filled < 40) return;
+    const ms = perf.recent(30);
+    if (ms > this.target * 1.25 && this.cur > this.floor + 0.01) {
+      this.apply(this.cur * 0.85); this.cooldown = 1.2;
+    } else if (ms < this.target * 0.7 && this.cur < this.ceiling - 0.01) {
+      this.apply(Math.min(this.ceiling, this.cur * 1.08)); this.cooldown = 2.5;
+    }
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -1126,6 +1227,11 @@ function frame(now) {
     if (frames % 300 === 0) crowd.react(0.55);
     crowd.lookAt(camRig.target);
   }
+
+  // Hold the frame budget by scaling the render buffer (see RES above).
+  RES.tick(dt);
+
+  if (dbgOn && (frames & 7) === 0) updateDebug();
 
   // LATCHED, not `frames === 12`. An exact-equality check is skipped forever if
   // frames are ever batched or dropped (a stepped verification run, a stalled
