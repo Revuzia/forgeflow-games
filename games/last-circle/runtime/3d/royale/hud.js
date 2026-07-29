@@ -1625,21 +1625,8 @@ export function showHUD(W) {
   // Reload had NO progress UI at all — just the word "RELOADING…" — while both
   // healing and chest-opening show a bar. A 4-second shotgun reload with no
   // sense of how far along you are is the difference between pushing and dying.
-  // SHIFT is a TOGGLE (owner direction), so the latch state must be visible —
-  // with hold-to-sprint your finger is the indicator; with a toggle nothing tells
-  // you you are still sprinting into a fight with wide hipfire spread.
-  // Stamina has to be VISIBLE or its first appearance reads as the sprint
-  // randomly breaking. Sits directly under the sprint pip, fades out when full
-  // so it is not permanent clutter, and turns amber when you are nearly out.
-  R.staWrap = h("div", { position: "absolute", left: "50%", top: "69.5%", transform: "translateX(-50%)",
-    width: "132px", height: "5px", background: "rgba(0,0,0,0.45)", borderRadius: "3px",
-    overflow: "hidden", opacity: "0", transition: "opacity 180ms linear", pointerEvents: "none" }, null, L);
-  R.staBar = h("div", { width: "100%", height: "100%", background: "#8ef5c8", transition: "width 90ms linear" }, null, R.staWrap);
-
-  R.sprintPip = h("div", { position: "absolute", left: "50%", top: "66.5%", transform: "translateX(-50%)",
-    font: "700 11px ui-monospace,Menlo,Consolas,monospace", letterSpacing: "0.16em",
-    color: "#8ef5c8", textShadow: "0 1px 3px #000", opacity: "0", transition: "opacity 140ms linear",
-    pointerEvents: "none", whiteSpace: "nowrap" }, "▶ SPRINT", L);
+  // Stamina bar AND sprint pip removed by owner direction 2026-07-28: sprint is
+  // infinite and silent — no meter draining, no "▶ SPRINT" message on screen.
 
   // top 55%, not 62.5%: the interact hint (top 60%, opaque, ~29px tall, created
   // 53 lines later in the same z-index-free layer so it paints on top) covered
@@ -1934,33 +1921,7 @@ export function update(W, dt) {
     R.healFill.style.width = (100 * (1 - p.healing.tLeft / c.useS)) + "%";
   } else R.healBar.style.display = "none";
 
-  // stamina bar — hidden at full, amber when low, red while locked out
-  if (R.staWrap && p === W.player) {
-    const SN = K.STAMINA, st = p.stamina == null ? SN.max : p.stamina;
-    const pct = Math.max(0, Math.min(100, (st / SN.max) * 100));
-    const locked = (p._exhaust || 0) > 0;
-    const sig = Math.round(pct) + (locked ? "L" : "");
-    if (C.sta !== sig) {
-      R.staBar.style.width = pct + "%";
-      R.staBar.style.background = locked ? "#ff7a6a" : pct < 30 ? "#ffd166" : "#8ef5c8";
-      R.staWrap.style.opacity = (pct > 99 && !locked) ? "0" : "0.9";
-      C.sta = sig;
-    }
-  }
-
-  // sprint pip: show while the toggle is latched. Dim when latched but not
-  // actually sprinting (ADS, mid-air, walking backwards) so the pip never lies
-  // about the speed you are really moving at.
-  if (R.sprintPip) {
-    const latched = !!(W.settings && W.settings.sprintToggle) && !!W._sprintLatch && p === W.player && !p.dead;
-    const live = latched && !!p.sprinting;
-    const sig = latched ? (live ? 2 : 1) : 0;
-    if (C.sprint !== sig) {
-      R.sprintPip.style.opacity = sig === 2 ? "0.95" : sig === 1 ? "0.4" : "0";
-      R.sprintPip.style.color = sig === 2 ? "#8ef5c8" : "#cfe4da";
-      C.sprint = sig;
-    }
-  }
+  // (stamina bar + sprint pip removed 2026-07-28 — infinite, silent sprint)
 
   // reload progress
   if (R.reloadBar) {

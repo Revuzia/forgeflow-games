@@ -63,10 +63,29 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   ok(s1.damageAt(tShrunk, outX, st3.center.z) > 0, "storm: damages outside the circle");
   ok(s1.damageAt(tShrunk, st3.center.x, st3.center.z) === 0, "storm: safe inside the circle");
 
-  // quick mode is much shorter; standard is real-BR length (10-12 min of storm)
+  // quick mode is much shorter; standard is real-BR length. Bounds allow the
+  // outrunnable-edge shrink extension (worst seed: standard ~+25s, quick ~+51s).
   const q = new R.Storm({ seed: 42, mode: "quick", half: 800 });
-  ok(q.totalS < s1.totalS && q.totalS <= 260, "storm: quick mode timeline ≤ ~4 min of storm");
-  ok(s1.totalS >= 540 && s1.totalS <= 780, "storm: standard timeline 9-13 min (" + s1.totalS + "s)");
+  ok(q.totalS < s1.totalS && q.totalS <= 300, "storm: quick mode timeline ≤ ~5 min of storm");
+  ok(s1.totalS >= 540 && s1.totalS <= 820, "storm: standard timeline 9-13.5 min (" + s1.totalS + "s)");
+
+  // OUTRUNNABLE: for every phase of every mode across many seeds, the closing
+  // edge's worst-case speed (radius delta + center shift over the effective
+  // shrink) never exceeds sprint (8.0) — a caught player can always escape.
+  let edgeOk = true, worstEdge = 0;
+  for (let seed = 1; seed <= 40; seed++) {
+    for (const mode of ["standard", "quick"]) {
+      const s = new R.Storm({ seed, mode, half: 800 });
+      for (let i = 0; i < s.phases.length; i++) {
+        const a = s.circles[i], b = s.circles[i + 1];
+        const travel = (a.r - b.r) + Math.hypot(b.x - a.x, b.z - a.z);
+        const v = travel / (s.timeline[i].end - s.timeline[i].shrinkStart);
+        worstEdge = Math.max(worstEdge, v);
+        if (v > 8.0) edgeOk = false;
+      }
+    }
+  }
+  ok(edgeOk, "storm: closing edge always outrunnable at sprint (worst " + worstEdge.toFixed(2) + " m/s)");
 
   // practice = no storm
   const pr = new R.Storm({ seed: 42, mode: "practice", half: 800 });
@@ -272,23 +291,14 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   ok(R.MOVE.walk * R.HEAL.speedMult * R.CROUCH.speedMult > 0, "heal: crouch-healing stays positive");
 }
 
-// -- sprint stamina (owner direction 2026-07-22) ----------------------------
-// Sprint was endless, so 9.6 m/s was the game's real movement speed rather than
-// its burst speed. Stamina makes it a resource with a recovery cost.
+// -- sprint (owner direction 2026-07-28: INFINITE, meterless) ----------------
+// The 07-22 stamina meter was deliberately reversed: sprint never runs out,
+// nothing on screen says you are sprinting. Storm escape now depends only on
+// MOVE.sprint vs the (capped) storm edge speed.
 {
-  const S = R.STAMINA;
-  ok(S && S.max > 0, "stamina: STAMINA exported from the sim");
-  ok(S.drainPerS > 0 && S.regenPerS > 0, "stamina: drains and regenerates");
-  const sprintS = S.max / S.drainPerS;
-  ok(sprintS > 4 && sprintS < 12, "stamina: a full bar buys 4-12s of sprint (" + sprintS.toFixed(1) + "s)");
-  const refillS = S.max / S.regenPerS;
-  ok(refillS > 3, "stamina: refilling is slower than a single burst is long");
-  ok(S.minToStart > 0 && S.minToStart < S.max, "stamina: needs a floor to re-start, preventing stutter-sprint");
-  ok(S.regenDelayS > 0, "stamina: there is a rest beat before regen begins");
-  ok(S.exhaustedLockS > 0, "stamina: bottoming out forces a walk");
-  // sprint must still be a real gain over walking, or the resource is pointless
-  ok(R.MOVE.sprint > R.MOVE.walk * 1.2, "stamina: sprint is still meaningfully faster than walking");
-  ok(R.MOVE.sprint <= 9.0, "stamina: sprint speed reined in from the 9.6 that outran the camera");
+  ok(R.STAMINA === undefined, "sprint: STAMINA system fully removed from the sim");
+  ok(R.MOVE.sprint > R.MOVE.walk * 1.2, "sprint: still meaningfully faster than walking");
+  ok(R.MOVE.sprint <= 9.0, "sprint: speed reined in from the 9.6 that outran the camera");
 }
 
 console.log("\n" + passed + " passed, " + failed + " failed");

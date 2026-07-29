@@ -1035,29 +1035,12 @@ function stepActor(W, a, dt, far) {
   // pay the same scope-in the player does.
   a._adsT = inp.ads ? (a._adsT || 0) + dt : 0;
   const healingNow = !!a.healing;
-  // ── stamina ───────────────────────────────────────────────────────────────
-  // Applies to every actor, so bots pay the same price the player does and a
-  // chase has a natural rhythm instead of being a constant-speed conveyor.
-  const SN = K.STAMINA;
-  if (a.stamina == null) { a.stamina = SN.max; a._staRest = 0; a._exhaust = 0; }
-  // !inp.ads: you can't actually sprint while aiming (speed picks the ADS cap
-  // below), but without the gate a scoped breath-hold — SHIFT while ADS —
-  // silently drained stamina at full sprint rate and left you exhaust-locked
-  // the moment you unscoped to escape (sweep finding).
+  // ── sprint ────────────────────────────────────────────────────────────────
+  // INFINITE — the stamina meter (added 07-22) was removed by owner direction
+  // 2026-07-28: no drain, no exhaust lock, no bar. !inp.ads: you can't sprint
+  // while aiming (speed picks the ADS cap below).
   const wantsSprint = inp.sprint && inp.mz > 0.5 && !inp.ads && !(healingNow && K.HEAL.blocksSprint);
-  if (a._exhaust > 0) a._exhaust = Math.max(0, a._exhaust - dt);
-  // you must clear minToStart to BEGIN, but only reach 0 to be forced to stop —
-  // otherwise sprint flickers on and off around the threshold every frame
-  const canSprint = a._exhaust <= 0 && (a.sprinting ? a.stamina > 0 : a.stamina >= SN.minToStart);
-  const sprinting = wantsSprint && canSprint;
-  if (sprinting) {
-    a.stamina = Math.max(0, a.stamina - SN.drainPerS * dt);
-    a._staRest = SN.regenDelayS;
-    if (a.stamina <= 0) a._exhaust = SN.exhaustedLockS;   // forced walk, briefly
-  } else {
-    if (a._staRest > 0) a._staRest = Math.max(0, a._staRest - dt);
-    else a.stamina = Math.min(SN.max, a.stamina + SN.regenPerS * dt);
-  }
+  const sprinting = wantsSprint;
   const spd = a.swimming
     ? (sprinting ? K.MOVE.swimSprint : K.MOVE.swim)
     : inp.ads ? K.MOVE.ads : (sprinting && !a.inWater) ? K.MOVE.sprint : K.MOVE.walk;
@@ -1340,8 +1323,18 @@ function syncObj(W, a, dt, far) {
           // rigs. Replaced the old "RunFast" (action 16, ~53° "running bent over")
           // and its per-frame spine counter-rotation hack, both now removed.
           playAnim(a, "run", { timeScale: K.clamp(gs / 6.5, 0.9, 1.5) });
+        } else if (gs > 4.4 && !back) {
+          // JOG (owner playtest 2026-07-28: "the girl barely moves her legs" /
+          // "the guy runs side to side"): 6.0 m/s is a JOG, but it played the
+          // casual WALK cycle at 2x — tiny strides sliding over the ground, and
+          // sideways during a combat strafe, it read as a crab-walk. Decoded
+          // amplitudes proved every skin's clips are near-identical (upleg
+          // 65-75° run / 40-52° walk); the difference the owner saw was purely
+          // which CLIP was playing. The run cycle at reduced rate is what
+          // FN/Final Drop show at this speed. Walk stays for slow moves
+          // (ADS 3.8, wading 3.3, backwards).
+          playAnim(a, "run", { timeScale: K.clamp(gs / 8.0, 0.7, 1.1) });
         } else {
-          // WALK/JOG (~6 m/s): the upright walk clip, sped up by ground speed.
           playAnim(a, "walk", { timeScale: dirK * K.clamp(gs / 3.0, 0.85, 2.0) });
         }
       }

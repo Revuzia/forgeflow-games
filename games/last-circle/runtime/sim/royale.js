@@ -135,20 +135,9 @@
   // Sprint was ENDLESS, so there was never a reason not to hold it — which made
   // 9.6 m/s the game's real movement speed rather than its burst speed, and left
   // the camera permanently trailing a runner it could not catch. Stamina turns
-  // sprint back into a resource: ~7.5 s of continuous sprint, a beat of recovery
-  // before it refills, and a floor you must clear to start again so you cannot
-  // stutter-sprint on fumes. drainPerS/regenPerS are per SECOND.
-  var STAMINA = {
-    max: 100,
-    drainPerS: 13.5,      // 100 / 13.5 = 7.4 s of continuous sprint
-    regenPerS: 16.0,      // ~6.3 s from empty to full
-    regenDelayS: 1.1,     // pause after you stop sprinting before it refills
-    minToStart: 32,       // must have this much to BEGIN a sprint. Measured at
-                          // 15 the loop was: rest ~1.6s, sprint ~1.1s, bottom
-                          // out, repeat — stutter-sprinting on fumes. 32 buys
-                          // ~2.4s of sprint per rest, so recovery is a real beat.
-    exhaustedLockS: 1.4,  // forced walk after bottoming out
-  };
+  // Sprint stamina REMOVED by owner direction 2026-07-28 (it was itself an
+  // owner direction on 07-22 — the reversal is deliberate): sprint is infinite,
+  // no meter, no exhaust lock. MOVE.sprint alone governs the chase.
   /** Height of an actor's hit capsule. Only shrinks for an actor that actually
    *  HAS the crouch clip loaded — if a skin's clip failed to bake it still
    *  stands upright, and shrinking its capsule would reintroduce the lie. */
@@ -282,7 +271,7 @@
   // waits, one extra phase: ~13.5 min total on standard.
   var STORM_PHASES = {
     standard: [
-      { wait: 80, shrink: 80, radiusFrac: 0.78,  dps: 1 },
+      { wait: 60, shrink: 80, radiusFrac: 0.78,  dps: 1 },
       { wait: 60, shrink: 70, radiusFrac: 0.58,  dps: 1 },
       { wait: 50, shrink: 60, radiusFrac: 0.42,  dps: 2 },
       { wait: 45, shrink: 50, radiusFrac: 0.28,  dps: 3 },
@@ -363,7 +352,11 @@
     var prev = this.circles[0];
     for (var i = 0; i < this.phases.length; i++) {
       var r = this.phases[i].radiusFrac * this.half;
-      var maxOff = Math.max(0, prev.r - r) * 0.8;   // stay well inside
+      // 0.5 (was 0.8): the offset ADDS to how far the trailing edge sweeps, and
+      // at 0.8 a bad roll made the far side close at (1.8 x dR)/shrink — up to
+      // 10 m/s on standard phase 1 and 19 m/s on quick vs 8.0 sprint: a death
+      // with no counterplay. 0.5 keeps circles wandering without doubling the sweep.
+      var maxOff = Math.max(0, prev.r - r) * 0.5;   // stay well inside
       var ang = rng() * Math.PI * 2, off = rng() * maxOff;
       var cx = prev.x + Math.cos(ang) * off, cz = prev.z + Math.sin(ang) * off;
       // clamp inside map bounds
@@ -373,13 +366,25 @@
       this.circles.push(c);
       prev = c;
     }
+    // OUTRUNNABLE GUARANTEE: a sprinting player (8.0 m/s) caught at the far rim
+    // must be able to stay just ahead of the closing edge. The edge's worst-case
+    // travel this phase is (radius delta + center offset) — both known exactly
+    // here — so extend the shrink time until edge speed <= EDGE_MAX. Purely a
+    // function of (seed, mode, half), so host and clients still agree.
+    var EDGE_MAX = 6.4;   // m/s — 80% of sprint: escapable, but only just
+    this.shrinkS = [];
+    for (var m = 0; m < this.phases.length; m++) {
+      var ca = this.circles[m], cb = this.circles[m + 1];
+      var edgeTravel = (ca.r - cb.r) + Math.sqrt((cb.x - ca.x) * (cb.x - ca.x) + (cb.z - ca.z) * (cb.z - ca.z));
+      this.shrinkS.push(Math.max(this.phases[m].shrink, edgeTravel / EDGE_MAX));
+    }
     // Phase timeline: [waitEnd, shrinkEnd] pairs cumulative
     this.timeline = [];
     var t = 0;
     for (var j = 0; j < this.phases.length; j++) {
       var ph = this.phases[j];
-      this.timeline.push({ waitStart: t, shrinkStart: t + ph.wait, end: t + ph.wait + ph.shrink });
-      t += ph.wait + ph.shrink;
+      this.timeline.push({ waitStart: t, shrinkStart: t + ph.wait, end: t + ph.wait + this.shrinkS[j] });
+      t += ph.wait + this.shrinkS[j];
     }
     this.totalS = t;
   }
@@ -570,7 +575,7 @@
     mulberry32: mulberry32, clamp: clamp, dist2d: dist2d, lerp: lerp,
     RARITY: RARITY, RARITY_COLOR: RARITY_COLOR, RARITY_DMG_MULT: RARITY_DMG_MULT, RARITY_SPREAD_MULT: RARITY_SPREAD_MULT,
     WEAPONS: WEAPONS, WEAPON_IDS: WEAPON_IDS, WEAPON_NAMES: WEAPON_NAMES, weaponName: weaponName, gunScore: gunScore, AMMO: AMMO, CONSUMABLES: CONSUMABLES, START_LOADOUT: START_LOADOUT,
-    MOVE: MOVE, PLAYERK: PLAYERK, CROUCH: CROUCH, HEAL: HEAL, STAMINA: STAMINA, effectiveSpread: effectiveSpread,
+    MOVE: MOVE, PLAYERK: PLAYERK, CROUCH: CROUCH, HEAL: HEAL, effectiveSpread: effectiveSpread,
     actorHeight: actorHeight, actorEyeY: actorEyeY, moveBasis: moveBasis,
     segmentBox: segmentBox, rampTopAt: rampTopAt, segmentRamp: segmentRamp,
     segmentColliders: segmentColliders,

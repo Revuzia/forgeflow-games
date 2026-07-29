@@ -230,6 +230,10 @@ function think(W, b) {
   s.SUPPLY = bb.supply && W.t - bb.supply.t < 90
     ? (a.personality === "loot_goblin" ? 78 : 58) - Math.hypot(a.pos.x - bb.supply.x, a.pos.z - bb.supply.z) * 0.12
     : 0;
+  // ENDGAME HUNT (owner playtest: "at some point they just wander around
+  // aimlessly doing nothing"): ≤10 alive, nothing visible, safely inside the
+  // zone → actively seek the fight instead of pacing random 50m circles.
+  s.HUNT = endgame && !bb.target && !outsideNext && upgraded ? 46 : 0;
   s.WANDER = 12;
 
   // pick best
@@ -311,6 +315,20 @@ function onEnter(W, b, state) {
     bb.moveTo = bb.heard ? { x: bb.heard.x, z: bb.heard.z } : randNear(W, a, 60);
   } else if (state === "SUPPLY") {
     bb.moveTo = bb.supply ? { x: bb.supply.x, z: bb.supply.z } : randNear(W, a, 40);
+  } else if (state === "HUNT") {
+    // head for the NEAREST living enemy's rough area — ±22m of fuzz makes it a
+    // sixth sense for direction, not a wallhack; re-planned every arrival so it
+    // tracks a moving lobby. Endgame-only (see the score), where converging is
+    // exactly what the shrinking circle forces anyway.
+    let nearT = null, nd = 1e9;
+    for (const t2 of W.actors) {
+      if (t2 === a || !t2.alive) continue;
+      const d2 = Math.hypot(t2.pos.x - a.pos.x, t2.pos.z - a.pos.z);
+      if (d2 < nd) { nd = d2; nearT = t2; }
+    }
+    bb.moveTo = nearT
+      ? { x: nearT.pos.x + (Math.random() - 0.5) * 44, z: nearT.pos.z + (Math.random() - 0.5) * 44 }
+      : randNear(W, a, 50);
   } else if (state === "WANDER") {
     bb.moveTo = randNear(W, a, 50);
   } else if (state === "HEAL") {
@@ -421,11 +439,12 @@ function act(W, b, dt) {
 
   switch (b.state) {
     case "ENGAGE": actEngage(W, b, dt); break;
-    case "FLEE": actMove(W, b, dt, true); break;
+    case "FLEE": actMove(W, b, dt, true); fireOnTheMove(W, b, dt); break;
     case "HEAL": actHeal(W, b, dt); break;
     case "LOOT": actLoot(W, b, dt); break;
-    case "SUPPLY": actSupply(W, b, dt); break;
-    case "ROTATE": case "PUSH": case "WANDER": actMove(W, b, dt, b.state === "ROTATE"); break;
+    case "SUPPLY": actSupply(W, b, dt); fireOnTheMove(W, b, dt); break;
+    case "ROTATE": case "PUSH": case "WANDER": actMove(W, b, dt, b.state === "ROTATE"); fireOnTheMove(W, b, dt); break;
+    case "HUNT": actMove(W, b, dt, true); fireOnTheMove(W, b, dt); break;
     case "CAMP": actCamp(W, b, dt); break;
   }
 
@@ -455,9 +474,24 @@ function steerYaw(a, want, dt, speed) {
   a.input.yaw += d * Math.min(1, dt * (speed || 6));
 }
 
+/** Is a wall too tall to hop blocking the path `look` metres along `yaw`? */
+function wallAhead(W, a, yaw, look) {
+  const sup = supportAt(W, a.pos.x - Math.sin(yaw) * look, a.pos.z - Math.cos(yaw) * look, a.pos.y + 0.6);
+  return sup > a.pos.y + 2.2;
+}
+
 function moveToward(W, b, tx, tz, dt, sprint) {
-  const a = b.actor, inp = a.input;
-  const want = Math.atan2(-(tx - a.pos.x), -(tz - a.pos.z));
+  const a = b.actor, inp = a.input, bb = b.bb;
+  let want = Math.atan2(-(tx - a.pos.x), -(tz - a.pos.z));
+  // PROACTIVE wall steer (owner playtest: bots ground against buildings while
+  // fleeing the storm). Walls used to be discovered only by the stuck detector
+  // — AFTER seconds of running in place. Probe the path 3.2m out; if a wall too
+  // tall to hop is there, slide along it. The side is chosen ONCE and held until
+  // the way is clear, so the bot commits around the corner instead of dithering.
+  if (wallAhead(W, a, want, 3.2)) {
+    if (!bb.wallSide) bb.wallSide = !wallAhead(W, a, want + 0.9, 3.2) ? 1 : (!wallAhead(W, a, want - 0.9, 3.2) ? -1 : 1);
+    want += bb.wallSide * 1.05;
+  } else bb.wallSide = 0;
   steerYaw(a, want, dt, 7);
   inp.mz = 1;
   inp.sprint = !!sprint;
@@ -466,12 +500,52 @@ function moveToward(W, b, tx, tz, dt, sprint) {
   const aheadZ = a.pos.z - Math.cos(a.input.yaw) * 1.4;
   const sup = supportAt(W, aheadX, aheadZ, a.pos.y + 0.6);
   if (sup > a.pos.y + 0.55 && sup < a.pos.y + 2.2 && a.onGround) inp.jump = true;
-  if (b.bb.stuckT > 0.7) {
+  if (bb.stuckT > 0.7) {
     inp.jump = true;
-    inp.mx = Math.random() < 0.5 ? -1 : 1;
-    if (b.bb.stuckT > 2.2) { b.bb.moveTo = randNear(W, a, 25); b.bb.stuckT = 0; } // reroute
-  }
+    // COMMIT to one detour side — the old per-frame random ±1 jittered the bot
+    // left-right against the same wall face forever
+    if (!bb.detourDir) bb.detourDir = Math.random() < 0.5 ? -1 : 1;
+    inp.mx = bb.detourDir;
+    if (bb.stuckT > 2.2) {
+      // reroute AROUND the blocker while preserving progress — the old
+      // randNear(25) reroute abandoned a storm rotation outright and routinely
+      // re-planned straight back into the same wall
+      const dirA = want + bb.detourDir * 1.1;
+      bb.moveTo = { x: a.pos.x - Math.sin(dirA) * 26, z: a.pos.z - Math.cos(dirA) * 26 };
+      bb.stuckT = 0;
+    }
+  } else bb.detourDir = 0;
   return Math.hypot(tx - a.pos.x, tz - a.pos.z);
+}
+
+/** Fight WHILE running (owner playtest: bots "all just run instead of always
+ *  fighting while they run"). Movement states call this after setting their
+ *  move intent: with a live visible target in weapon range, the bot turns its
+ *  yaw to the enemy and fires — while the world-space move direction the state
+ *  chose is REPROJECTED into the new yaw frame, so the legs keep carrying it
+ *  where it was going. Aim error runs 1.5x: shooting on the run is rougher. */
+function fireOnTheMove(W, b, dt) {
+  const a = b.actor, bb = b.bb, inp = a.input;
+  const t = bb.target && W.actorById.get(bb.target);
+  if (!t || !t.alive || W.t - bb.targetSeenT > 0.4) return;
+  if (W.t - bb.acquireT < b.tierK.reactionMs / 1000) return;
+  const def = K.WEAPONS[a.weapon ? a.weapon.id : "pistol"] || K.WEAPONS.pistol;
+  if (a.weapon && (a.weapon.state === "reloading" || a.weapon.magAmmo === 0)) { inp.reload = true; return; }
+  const dist = Math.hypot(t.pos.x - a.pos.x, t.pos.z - a.pos.z);
+  if (dist > (def.falloff ? def.falloff[1] * 1.15 : 30)) return;
+  // capture the state's move intent as a WORLD direction before touching yaw
+  const b0 = K.moveBasis(inp.yaw);
+  const wx = b0.fx * inp.mz + b0.rx * inp.mx, wz = b0.fz * inp.mz + b0.rz * inp.mx;
+  const eye = eyePos(a);
+  const aimY = t.pos.y + K.actorHeight(t) * 0.64;
+  const err = (b.tierK.aimErrDeg * 1.5 * Math.PI) / 180;
+  bb.errPhase = (bb.errPhase || Math.random() * 9) + dt * 3.1;
+  steerYaw(a, Math.atan2(-(t.pos.x - eye.x), -(t.pos.z - eye.z)) + Math.sin(bb.errPhase) * err, dt, 10);
+  inp.pitch = K.clamp(Math.atan2(aimY - eye.y, dist) + Math.cos(bb.errPhase * 0.83) * err * 0.6, -1.3, 1.3);
+  const b1 = K.moveBasis(inp.yaw);
+  inp.mz = wx * b1.fx + wz * b1.fz;
+  inp.mx = wx * b1.rx + wz * b1.rz;
+  inp.fire = true;
 }
 
 function actMove(W, b, dt, sprint) {
