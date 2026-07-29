@@ -257,9 +257,17 @@ export class Menu {
       const rec = inv.records && inv.records[m.id];
       let recTxt = rec && (rec.w + rec.l) > 0 ? ` · you ${rec.w}–${rec.l}` : "";
       if (m.endless && inv.pitBest > 0) recTxt = ` · deepest: wave ${inv.pitBest}`;
+      // A bare "locked" tells the player nothing. Name the gate: the rank to
+      // reach, or the bout to beat.
+      let lockTxt = "";
+      if (!unlocked) {
+        lockTxt = !this._rankOk(m)
+          ? ` · locked — reach ${m.rank.charAt(0).toUpperCase() + m.rank.slice(1)}`
+          : ` · locked — win ${(this.ladder.find((x) => x.id === m.requires) || {}).name || m.requires}`;
+      }
       body.appendChild(this._btn(
         `${done ? "✓ " : ""}${m.name}`,
-        `${m.type} · ${m.purse} aurei${recTxt}${done ? " · already won" : ""}${!unlocked ? " · locked" : ""}`,
+        `${m.type} · ${m.purse} aurei${recTxt}${done ? " · already won" : ""}${lockTxt}`,
         () => { this.hide(); if (this.hooks.onStartMatch) this.hooks.onStartMatch(m.id); },
         { disabled: !unlocked, accent: unlocked && !done }));
     }

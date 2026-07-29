@@ -348,7 +348,11 @@ export function buildLadder() {
   add({ id: "g5", rank: "gregarius", type: "champion", name: "Tetraites", champion: "tetraites", purse: 240,
         desc: "His name is painted on cups sold as far as Britain." });
 
-  add({ id: "j1", rank: "gregarius", type: "joust", name: "The Opening Card", joust: { skill: 0.3, name: "Vespillo" }, purse: 150,
+  // TIRO, not gregarius: it is called The Opening Card because the mounted
+  // tilt is what OPENED a munus, and jousting is a whole second mode the
+  // player could previously not reach — or even see unlocked — until their
+  // second rank. A new gladiator gets to ride on day one.
+  add({ id: "j1", rank: "tiro", type: "joust", name: "The Opening Card", joust: { skill: 0.3, name: "Vespillo" }, purse: 150,
         desc: "The equites open the day. Six passes down the tilt; keep the lance couched late." });
 
   // --- Veteranus: pressure ----------------------------------------------
