@@ -249,7 +249,10 @@ export class VFX {
    */
   telegraph(id, { x, z, facing, reach, arc, windupT = 0.45, activeT = 0.12, mine = false }) {
     this._tele = this._tele || new Map();
-    this.killTelegraph(id);
+    // HARD removal, not a soft fade — see dropTelegraph. The map entry is
+    // about to be replaced, so anything still holding this id is unreachable
+    // the moment we return.
+    this.dropTelegraph(id);
     const SEG = 26;
     const inner = Math.min(0.35, reach * 0.2);
     const pos = [], uv = [];
@@ -313,6 +316,27 @@ export class VFX {
   killTelegraph(id) {
     const t = this._tele && this._tele.get(id);
     if (t) { t.state = "fade"; t.t = 0; }
+  }
+
+  /**
+   * Remove a telegraph from the world THIS INSTANT, mesh and all.
+   *
+   * THE LEAK THIS FIXES: telegraph() opened by calling killTelegraph(), which
+   * only marks the existing entry as fading, and then OVERWROTE the map entry
+   * with the new swing. The old mesh was no longer reachable from `_tele`, so
+   * _updateTelegraphs never advanced its fade and never removed it — it stayed
+   * on the sand at full opacity, forever, one per swing. A minute of fighting
+   * left a carpet of dead fans (player screenshot). Nothing caught it because
+   * `_tele.size` stays small: the leaked meshes are precisely the ones missing
+   * from the map. Count scene children, not map entries.
+   */
+  dropTelegraph(id) {
+    const t = this._tele && this._tele.get(id);
+    if (!t) return;
+    this.scene.remove(t.m);
+    t.m.geometry.dispose();
+    t.m.material.dispose();
+    this._tele.delete(id);
   }
 
   _updateTelegraphs(dt) {

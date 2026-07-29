@@ -489,6 +489,13 @@ export class BoutView {
       if (changed) {
         a.playOnce("death", { then: null, fade: 0.12 });
         this.corpses.push({ id: f.id, x: f.x, z: f.z, t: 0 });
+        // A man killed mid-windup keeps that phase forever, so his telegraph
+        // would be re-anchored every frame and never resolve — a fan left
+        // burning on the sand for the rest of the bout.
+        if (this.deps.vfx) {
+          this.deps.vfx.dropTelegraph(f.id);
+          this.deps.vfx.dropTelegraph(`net_${f.id}`);
+        }
       }
       return;
     }

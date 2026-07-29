@@ -594,6 +594,14 @@ export class Actor {
     this.root.rotation.y = this.visualFacing;
 
     this._guardPose(dt);
+    // THE SWORD POSE IS NOT THE SHIELD'S PASSENGER. _swordGuard used to be
+    // called from the last line of _guardPose, which returns early for anyone
+    // WITHOUT a shield — so every shieldless fighter (the t1 rudis bout, the
+    // retiarius, the dimachaerus) never had his blade posed at all and the
+    // weapon hung wherever the idle clip left the hand. Player-reported as
+    // "weapons are being held wrong"; it is its own limb, so it gets its own
+    // call.
+    this._swordGuard(dt);
     // Body armour is world-oriented by definition, so it is re-solved every
     // frame rather than inheriting the pelvis. Runs after root.rotation.y is
     // set, because the solve reads the body's forward off the root.
@@ -621,15 +629,24 @@ export class Actor {
    */
   _guardPose(dt) {
     const arm = this._shieldArm !== undefined ? this._shieldArm : (this._shieldArm = (() => {
-      // Only rigs actually carrying a shield get posed.
+      // EVERY fighter's off hand gets posed, shield or no shield.
+      //
+      // This used to bail unless a shield mount existed, and the consequence
+      // was the single worst-looking thing in the game: with no shield NOTHING
+      // drove the left arm, so it sat wherever the Meshy idle clip left it —
+      // straight out to the side, palm splayed. Reported as "our character
+      // seems completely broken" and "sometimes gets stuck in a T pose while
+      // fighting", and reproduced exactly by unequipping the scutum. A
+      // shieldless man does not hold his arm out; he carries it in, close to
+      // the ribs, ready to grab or fend. Same two-bone solve, different goal.
+      const find = (n) => { let b = null; this.model.traverse((o) => { if (!b && o.isBone && o.name === n) b = o; }); return b; };
+      const upper = find("LeftArm"), fore = find("LeftForeArm"), hand = find("LeftHand");
+      if (!upper || !fore || !hand) return null;
       let mount = null;
       this.model.traverse((o) => {
         if (!mount && o.name === "weapon_mount" && o.parent && /^LeftHand$/i.test(o.parent.name)) mount = o;
       });
-      if (!mount) return null;
-      const find = (n) => { let b = null; this.model.traverse((o) => { if (!b && o.isBone && o.name === n) b = o; }); return b; };
-      const upper = find("LeftArm"), fore = find("LeftForeArm"), hand = find("LeftHand");
-      return (upper && fore && hand) ? { upper, fore, hand, mount } : null;
+      return { upper, fore, hand, mount };      // mount may be null — free hand
     })());
     if (!arm) return;
 
@@ -649,7 +666,14 @@ export class Actor {
     // it, or feinting it out of line) is played on the body, not the HUD.
     // bout.js feeds actor.blockDir from the sim each frame.
     const gd = this.blockDir;
-    if (gd === "high") _ikGoal.set(0.06, 1.42, 0.30);
+    if (!arm.mount) {
+      // FREE HAND: tucked in at the ribs, elbow down, slightly forward — the
+      // off-hand carry of a man with no board to hide behind. Raising it a
+      // little when he guards reads as fending with the forearm.
+      if (gd) _ikGoal.set(0.24, 1.22, 0.26);
+      else _ikGoal.set(0.21, 1.02, 0.16);
+    }
+    else if (gd === "high") _ikGoal.set(0.06, 1.42, 0.30);
     else if (gd === "left") _ikGoal.set(0.34, 1.14, 0.30);
     else if (gd === "right") _ikGoal.set(-0.16, 1.10, 0.32);
     else if (gd === "thrust") _ikGoal.set(0.10, 0.98, 0.40);
@@ -673,8 +697,6 @@ export class Actor {
       _ikQ.multiply(_ikQA.setFromAxisAngle(_ikV.set(0, 0, 1), -10 * DEG));
       arm.mount.quaternion.slerp(_ikQB.copy(_ikPQ).invert().multiply(_ikQ), this._guardW);
     }
-
-    this._swordGuard(dt);
   }
 
   /**

@@ -169,7 +169,15 @@ function makeImpostorMaterial(atlas, { rows = 2, pairs = 1 } = {}) {
   float viewAz = atan(cameraPosition.x - mwp.x, cameraPosition.z - mwp.z);
   float faceAz = atan(-iwp.x, -iwp.z);            // they face the arena centre
   float rel = viewAz - faceAz;
-  float col = floor(mod(rel + 3.14159265 + 0.3926991, 6.2831853) / 6.2831853 * 8.0);
+  // HALF-TURN BUG: the +PI here made rel==0 — the camera standing exactly
+  // where the spectator is looking, i.e. the middle of the arena — sample
+  // column 4, which is the bake rotated 180 degrees: his BACK. The whole bowl
+  // sat with its back to the fight (player-reported; verified by a capture
+  // from the arena centre showing rows of heads from behind). Every subject
+  // is baked facing +Z at rotation 0 and the bake camera sits on +Z, so
+  // rel==0 must sample column 0. The 0.3926991 (PI/8) stays: it is the
+  // half-cell offset that rounds to the NEAREST of the eight yaws.
+  float col = floor(mod(rel + 0.3926991, 6.2831853) / 6.2831853 * 8.0);
   // WHICH PERSON: aVariant picks one of the calm rows; standing shifts to
   // that same person's cheering row (uPairs below).
   float baseRow = (uPairs > 1.0) ? mod(floor(aVariant), uPairs) : 0.0;
