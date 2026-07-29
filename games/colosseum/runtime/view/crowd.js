@@ -553,9 +553,13 @@ export class Crowd {
     const ROWS = useCivilians ? PAIRS * 2 : 2;
     // A person is twice as tall as wide, and the ortho frustum below is 1.1 x
     // 2.0 — the cell has to match that aspect or every spectator is squashed.
-    // Cell doubled to 256x512 (was 128x256): these cards now carry the whole
-    // near tier, where the camera gets within a few metres.
-    const CELL_W = 256, CELL_H = 512;
+    // Cell up to 256x512 (was 128x256), because these cards now carry the
+    // whole near tier. Capped so the atlas never exceeds 2048 on either axis
+    // no matter how many people get baked: a six-person sheet at full cell
+    // size would be 2048x3072 = 24 MB of VRAM for a crowd nobody inspects
+    // pixel by pixel.
+    const CELL_H = Math.min(512, Math.floor(2048 / ROWS / 2) * 2);
+    const CELL_W = CELL_H / 2;
     const W = COLS * CELL_W, H = ROWS * CELL_H;
 
     // The body comes from a REAL Actor, not a raw scene clone. A raw clone

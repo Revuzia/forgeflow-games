@@ -10,9 +10,23 @@
   "credits": 15
  },
  "senator_m1": {
-  "img_id": "019fabff-ad7b-7280-8b0b-a58e8be16ef4"
+  "img_id": "019fabff-ad7b-7280-8b0b-a58e8be16ef4",
+  "done": true,
+  "credits": 15
  },
  "plebs_m2_cheer": {
-  "img_id": "019fac01-1d2e-765e-8314-51d86c23f8b8"
+  "img_id": "019fac01-1d2e-765e-8314-51d86c23f8b8",
+  "done": true,
+  "credits": 15
+ },
+ "woman_f2_cheer": {
+  "img_id": "019fac02-61c0-7669-9c7b-a4f3457ab627",
+  "done": true,
+  "credits": 15
+ },
+ "youth_m3_cheer": {
+  "img_id": "019fac03-aa61-769a-8e32-b49ba8e4b44b",
+  "done": true,
+  "credits": 15
  }
 }
