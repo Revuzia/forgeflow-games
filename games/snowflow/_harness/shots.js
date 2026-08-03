@@ -16,6 +16,30 @@
  *  - pose()  runs once, synchronously, before the settle wait.
  *  - settle  seconds of real time to let TAA converge / sim advance.
  *  - hold()  optional, runs every 100ms during settle (for held inputs).
+ *  - walk    optional, seconds of real time to hold the pose's input before after().
+ *  - until() optional, and ONLY meaningful alongside `walk`: a predicate polled
+ *            during the walk that ends it early. `walk` then means "give up after
+ *            this long" rather than "walk for exactly this long".
+ *
+ * ---------------------------------------------------------------------------
+ * WHY `until` EXISTS — a wall-clock walk is not a reproducible walk.
+ *
+ * `CharacterController.update()` clamps its locomotion step at 1/30 s (port
+ * `src/character/controller.js:165`, reference `src/character/controller.js:115`
+ * — byte-identical). Under Playwright neither target renders anywhere near 30 FPS,
+ * so EVERY frame is clamped and the distance covered becomes proportional to the
+ * FRAME COUNT rather than to elapsed time: measured at a flat 0.0824-0.0830 m per
+ * frame in both builds, over 82-122 frames per 7-second walk.
+ *
+ * That makes a fixed-duration walk a measurement of frame rate. The reference is
+ * served remotely and the port locally, so the port ends 1-3.5 m further down the
+ * dune, its camera — 5.4 m behind and pitched down — frames a different and more
+ * shadowed piece of ground, and every frame statistic follows: sweeping the port's
+ * own walk distance from 6.1 m to 9.1 m moves mean_luma -2.45%, detail_energy
+ * -5.13% and shadow_blue_bias +32.2%, which is the entire "05-trail-berms
+ * divergence" the round-6 scoreboard attributed to the snow material. Ending the
+ * walk on DISTANCE instead removes the confound: both targets then stop at the
+ * same world position and agree to within 1.1% on every band.
  */
 
 // A fixed spot on the dune field with good macro relief in frame. Chosen once
@@ -119,7 +143,18 @@ export const SHOTS = [
             SF.rig.pitch = 0.46;
             SF.rig.distance = SF.rig.distanceTarget = 5.4;
         },
-        walk: 7.0,
+        // Stop the walk 6 m from spawn, not 7 seconds after it — see the note at
+        // the top of this file. 6 m is inside what both targets reach comfortably
+        // at harness frame rates and is far more trail than the framing shows, so
+        // the shot still tests exactly what it says it tests. `walk` is now the
+        // give-up timeout; it is generous because at 11 FPS 6 m takes ~6.6 s.
+        //
+        // `SPOT` is the spawn, so distance from the origin is distance walked.
+        until(SF) {
+            const p = SF.character.position;
+            return Math.hypot(p.x - SPOT.x, p.z - SPOT.z) >= 6.0;
+        },
+        walk: 25.0,
     },
     {
         name: "06-surf-wake",

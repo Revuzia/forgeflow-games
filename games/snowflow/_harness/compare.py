@@ -166,9 +166,15 @@ def reveal(verdicts_path: str) -> int:
         print(f"{shot.ljust(w)}  {outcome.ljust(9)}  {conf:<4}  {why}")
     n = len(rows)
     print(f"\nport wins {wins}/{n} · ties {ties}/{n} · reference wins {losses}/{n}")
-    # "Indistinguishable" is the target: a tie, or a low-confidence pick either way.
-    indist = ties + sum(1 for r in rows if r[2] < 0.6)
-    print(f"indistinguishable-or-better: {wins + indist}/{n}")
+    # "Indistinguishable or better" = the port won, OR the critic could not
+    # reliably tell them apart (a tie, or any pick made below 0.6 confidence).
+    #
+    # Count it per row, once. Summing `wins + ties + low-confidence` double-counts
+    # every row that is both a port win and a low-confidence pick, which is most
+    # of them once the port is close — that bug printed 26/14 on a 14-shot round.
+    ok = sum(1 for shot, outcome, conf, _ in rows
+             if outcome == "PORT WINS" or outcome == "TIE" or conf < 0.6)
+    print(f"indistinguishable-or-better: {ok}/{n}")
     return 0
 
 

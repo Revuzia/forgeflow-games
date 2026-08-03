@@ -95,14 +95,32 @@ def run_shot(page, shot: dict, settle_scale: float) -> None:
     page.evaluate("(n) => { const s = SHOTS.find(x=>x.name===n); s.pose(globalThis.SNOWFLOW); }", name)
 
     walk = float(shot.get("walk") or 0)
+    reached = not shot.get("hasUntil")
     if walk > 0:
+        # `walk` is a duration for shots without `until`, and a give-up timeout for
+        # shots with one. See the long note at the top of shots.js: the locomotion
+        # step is clamped at 1/30 s, so at harness frame rates a fixed-duration walk
+        # measures frame rate rather than reproducing a pose, and the two targets —
+        # one local, one remote — end metres apart.
+        has_until = bool(shot.get("hasUntil"))
+        # Poll `until` tightly. One round trip to a remotely hosted target costs
+        # far more than to a local one, so a slack poll interval turns into a
+        # different amount of overshoot on each — reintroducing, in miniature, the
+        # very framing difference `until` exists to remove.
+        interval = 25 if has_until else 100
         end = time.time() + walk
         while time.time() < end:
             page.evaluate(
                 "(n) => { const s = SHOTS.find(x=>x.name===n); if (s.hold) s.hold(globalThis.SNOWFLOW); }",
                 name,
             )
-            page.wait_for_timeout(100)
+            if has_until and page.evaluate(
+                "(n) => { const s = SHOTS.find(x=>x.name===n); return !!s.until(globalThis.SNOWFLOW); }",
+                name,
+            ):
+                reached = True
+                break
+            page.wait_for_timeout(interval)
 
     if shot.get("hasAfter"):
         page.evaluate("(n) => { const s = SHOTS.find(x=>x.name===n); s.after(globalThis.SNOWFLOW); }", name)
@@ -117,6 +135,25 @@ def run_shot(page, shot: dict, settle_scale: float) -> None:
         page.wait_for_timeout(100)
     # Re-hide: an overlay can be toggled back on by a stray key.
     page.evaluate("window.__sfChrome()")
+
+    # Where the shot actually ended up. Recorded because the one thing that made
+    # 05-trail-berms unreproducible for six rounds was invisible in the output:
+    # two frames can be captured by the same script from the same pose and still
+    # show different ground. A shot whose `endPos` differs between the two targets
+    # is not comparable, and this is where that shows.
+    state = page.evaluate("""() => {
+        const SF = globalThis.SNOWFLOW;
+        const p = SF.character.position;
+        return {endPos: [+p.x.toFixed(3), +p.y.toFixed(3), +p.z.toFixed(3)],
+                camYaw: +SF.rig.yaw.toFixed(4), camPitch: +SF.rig.pitch.toFixed(4),
+                camDist: +SF.rig.distance.toFixed(3)};
+    }""")
+    # An `until` that never fired means the walk was cut off by its timeout, and
+    # the frame is NOT comparable with one where it fired. Silence here is what
+    # let an unreproducible 05 be scored as a shading defect for six rounds, so
+    # it is surfaced in the manifest and on stdout instead.
+    state["untilReached"] = reached
+    return state
 
 
 def main() -> int:
@@ -155,7 +192,7 @@ def main() -> int:
         fresh()
         meta = page.evaluate(
             "SHOTS.map(s => ({name:s.name, desc:s.desc, tests:s.tests, settle:s.settle,"
-            " walk:s.walk||0, hasAfter:!!s.after, hasHold:!!s.hold}))"
+            " walk:s.walk||0, hasAfter:!!s.after, hasHold:!!s.hold, hasUntil:!!s.until}))"
         )
         todo = [m for m in meta if not want or m["name"] in want]
         if want and len(todo) != len(want):
@@ -166,14 +203,18 @@ def main() -> int:
             if i > 0 and not args.no_reload:
                 fresh()
             try:
-                run_shot(page, shot, args.settle_scale)
+                pose_state = run_shot(page, shot, args.settle_scale)
                 path = os.path.join(args.out, shot["name"] + ".png")
                 page.screenshot(path=path)
                 errs = page.evaluate("window.__sfErrors || []")
-                manifest.append({**shot, "file": os.path.basename(path), "pageErrors": errs})
+                manifest.append({**shot, "file": os.path.basename(path),
+                                 "pageErrors": errs, **pose_state})
                 ok += 1
                 print(f"  [{ok}/{len(todo)}] {shot['name']}"
-                      + (f"  !! {len(errs)} page errors" if errs else ""))
+                      + (f"  !! {len(errs)} page errors" if errs else "")
+                      + ("" if pose_state.get("untilReached", True)
+                         else "  !! until() NEVER FIRED — walk hit its timeout,"
+                              " this frame is not comparable"))
             except Exception as e:
                 failed.append(shot["name"])
                 print(f"  !! {shot['name']} FAILED: {e}", file=sys.stderr)

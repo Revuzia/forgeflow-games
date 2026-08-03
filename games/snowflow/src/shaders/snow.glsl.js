@@ -172,7 +172,9 @@ const FRAGMENT_SPELLS = /* glsl */ `
  * `terrain.spellLightsBound`.
  */
 const FRAGMENT_SPELLS_STUB = /* glsl */ `
-vec3 spellLighting(vec3 worldPos, vec3 N, vec3 V, float thickness) {
+vec3 spellLightingSnow(
+    vec3 world, vec3 N, vec3 V, float thickness, float strength, float radius
+) {
     return vec3(0.0);
 }
 `;
@@ -492,7 +494,18 @@ void main() {
     // albedo multiply the reference does inside the chunk is applied here
     // instead. If SPELLS folds a snow albedo into its own return, delete the
     // '* albedo' on this line — it is the only place the two conventions differ.
-    color += spellLighting(world, N, V, thickness) * albedo;
+    //
+    // The longer spellLightingSnow() form, not the §3.1 four-argument
+    // spellLighting(), because the reference folds the ROCK MASK into the spell's
+    // subsurface strength exactly as it does for the sun's:
+    //     snow.fragment.wgsl:473  uniforms.sssStrength * (1.0 - rockExposed)
+    // The four-argument form reads sssStrength raw from lib/shading's uniform
+    // block, which would leave a spell transmitting through bare rock at full
+    // strength — and at thickness 0 rock takes the WIDEST, BRIGHTEST lobe
+    // (mix(1.0, 0.30, thickness)), so it is the worst place to lose the mask.
+    color += spellLightingSnow(
+        world, N, V, thickness, sssStrength * (1.0 - rockExposed), sssRadius
+    ) * albedo;
 
     // --- glints ------------------------------------------------------------
     // Last among the lighting terms, and added as radiance rather than modulated
