@@ -71,6 +71,33 @@
  * @param {number} facing radians, CHARACTER's mesh yaw
  * @returns {number} radians, the brush's world-direction angle
  */
+/**
+ * OWNER DECISION PENDING — the print's long axis is not the direction of travel,
+ * in EITHER engine.
+ *
+ * `deformSim` builds the brush's long axis as `(cos yaw, sin yaw)`, but `facing`
+ * is a MESH yaw whose forward is `(sin f, cos f)`. Those two differ by a
+ * reflection about the 45-degree line, not a rotation — so the print aligns with
+ * travel only near f = PI/4 (+ n*PI/2) and lies PERPENDICULAR to it at every
+ * cardinal heading. Verified top-down at f = 0 in both builds (2026-08-03): the
+ * reference's prints lie across the path exactly as this port's do.
+ *
+ * So this is a faithful reproduction of an upstream bug, not a porting error, and
+ * `brushYaw()` below is provably equivalent to the reference's raw `facing` once
+ * the frame mirror is accounted for — axis-vs-travel matches the reference to the
+ * degree at every heading tested (0, PI/4, PI/2, 2.4, PI).
+ *
+ * It went unseen through six blind critic rounds because every walking shot in the
+ * battery uses heading 2.4 rad, which is 5 degrees off aligned. The owner spotted
+ * it by eye in the live window.
+ *
+ * Fixing it means DIVERGING from the reference — deliberately, and visibly, since
+ * a critic comparing the two would then prefer the port. The one-line change is to
+ * pass the travel-direction angle rather than the mesh yaw:
+ *     atan2(sin(facing), -cos(facing))   // port frame forward, as an XZ direction
+ * Left unfixed pending that call, because ARCHITECTURE.md forbids "improving" on
+ * the reference without an explicit decision.
+ */
 function brushYaw(facing) {
     return -facing;
 }
