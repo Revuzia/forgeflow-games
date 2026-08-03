@@ -64,6 +64,18 @@ BOOTSTRAP = r"""
   window.__sfErrors = [];
   addEventListener('error', e => window.__sfErrors.push(String(e.message)));
   addEventListener('unhandledrejection', e => window.__sfErrors.push('reject: ' + e.reason));
+
+  // Frame counter, for shots whose state advances with the SIMULATION rather
+  // than with distance travelled.
+  //
+  // Both engines clamp their step at 1/30 s, so under a harness that renders
+  // well below 30 FPS every frame is clamped and N frames is exactly N/30
+  // simulated seconds — identically on a local target and a remote one. Wall
+  // clock is not: it buys whatever frame count the machine happened to deliver.
+  // This rAF chain runs at the same cadence as the render loop, so counting it
+  // counts simulation steps.
+  window.__sfFrames = 0;
+  (function tick() { window.__sfFrames++; requestAnimationFrame(tick); })();
 })();
 """
 
@@ -95,8 +107,30 @@ def run_shot(page, shot: dict, settle_scale: float) -> None:
     page.evaluate("(n) => { const s = SHOTS.find(x=>x.name===n); s.pose(globalThis.SNOWFLOW); }", name)
 
     walk = float(shot.get("walk") or 0)
-    reached = not shot.get("hasUntil")
-    if walk > 0:
+    frames = int(shot.get("untilFrames") or 0)
+    reached = not (shot.get("hasUntil") or frames)
+
+    if frames > 0:
+        # Frame-count termination, for shots whose state advances with the
+        # simulation but which do not travel far enough for a distance
+        # predicate — a held spell, or a carve that turns more than it moves.
+        # Equal frames means equal simulated time in both engines (see the
+        # note on __sfFrames in BOOTSTRAP), which wall clock does not.
+        page.evaluate("window.__sfFrames = 0")
+        deadline = time.time() + max(walk, 30.0)  # give-up timeout, not a duration
+        while time.time() < deadline:
+            page.evaluate(
+                "(n) => { const s = SHOTS.find(x=>x.name===n); if (s.hold) s.hold(globalThis.SNOWFLOW); }",
+                name,
+            )
+            if page.evaluate("window.__sfFrames") >= frames:
+                reached = True
+                break
+            page.wait_for_timeout(25)
+        if not reached:
+            print(f"  !! {name}: only {page.evaluate('window.__sfFrames')}/{frames} frames "
+                  f"before timeout — frame NOT comparable", file=sys.stderr)
+    elif walk > 0:
         # `walk` is a duration for shots without `until`, and a give-up timeout for
         # shots with one. See the long note at the top of shots.js: the locomotion
         # step is clamped at 1/30 s, so at harness frame rates a fixed-duration walk
@@ -192,7 +226,8 @@ def main() -> int:
         fresh()
         meta = page.evaluate(
             "SHOTS.map(s => ({name:s.name, desc:s.desc, tests:s.tests, settle:s.settle,"
-            " walk:s.walk||0, hasAfter:!!s.after, hasHold:!!s.hold, hasUntil:!!s.until}))"
+            " walk:s.walk||0, untilFrames:s.untilFrames||0,"
+            " hasAfter:!!s.after, hasHold:!!s.hold, hasUntil:!!s.until}))"
         )
         todo = [m for m in meta if not want or m["name"] in want]
         if want and len(todo) != len(want):

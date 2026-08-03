@@ -168,7 +168,16 @@ export const SHOTS = [
             key("KeyW", true);
             key("KeyD", true);
         },
-        walk: 5.0,
+        // Frames, not seconds. A carve turns more than it translates — the
+        // recorded end positions are under a metre from spawn — so there is no
+        // distance for `until` to key on, but the wake's height and length are
+        // pure functions of simulated time. 150 clamped steps = 5.0 s of sim in
+        // both engines, where `walk: 5.0` bought whatever frame count the
+        // machine delivered (the local port outran the remote reference, which
+        // is the same confound that made 05 look like a renderer defect and is
+        // the likeliest cause of this shot's -10% detail_energy outlier).
+        untilFrames: 150,
+        walk: 40.0,
         after(SF) {
             // Frame the standing wall from the side. Surf stays pinned, so it
             // does not collapse before the shutter.
@@ -200,7 +209,12 @@ export const SHOTS = [
             pin(SF.input, "spellHeld2", true);
             SF.spells.holdRibbon(true);
         },
-        walk: 2.2,
+        // The ribbon precesses on the sim clock and the figure never moves, so
+        // frames are the only reproducible measure of how far the figure-eight
+        // has drawn. 66 clamped steps = 2.2 s of sim, matching the wall-clock
+        // duration this shot used to hold for.
+        untilFrames: 66,
+        walk: 30.0,
     },
     {
         name: "09-spell-bloom",

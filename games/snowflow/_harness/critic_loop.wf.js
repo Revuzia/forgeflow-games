@@ -10,6 +10,15 @@ export const meta = {
 }
 
 // ---------------------------------------------------------------- parameters
+//
+// COST NOTE, from the 2026-08-03 run: a full-battery round (reshoot 14 + pair 14
+// + 14 high-effort critics + score + repairs) costs ~3.4M subagent tokens, and
+// re-judging shots whose owning subsystems did not change carries no
+// information — rounds 1-3 of that run sat flat at 2/14 for 10M+ tokens. After
+// round 1, pass `shots` = the shots owned by the subsystems that were repaired,
+// PLUS two at-parity shots as regression controls (01-hero, 13-char-closeup).
+// The equivalent 6-shot round cost 1.43M and carried the same signal. Also stop
+// after two flat rounds and reassess the defect routing instead of re-running.
 const GAME = String.raw`C:\Users\TestRun\Claude Claw\forgeflow-games\games\snowflow`
 const HARNESS = `${GAME}\\_harness`
 const URL = 'http://localhost:8799/games/snowflow/index.html'
