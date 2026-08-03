@@ -90,7 +90,7 @@
 
 import * as THREE from "three";
 import { fail } from "../core/loading.js";
-import { mark } from "../core/perf.js";
+import { mark, gpuBegin, gpuEnd } from "../core/perf.js";
 import { makeRT } from "../core/gfx.js";
 import { shader } from "../core/glsl.js";
 import { CASCADE_DEPTH_FRAGMENT } from "../shaders/prepass.glsl.js";
@@ -148,6 +148,14 @@ const NDC = [
 
 /** Cascade clear colour: 1.0 is the far plane, so anything unwritten occludes nothing. */
 const CLEAR_FAR = new Float32Array([1, 1, 1, 1]);
+
+/**
+ * GPU profiler scope names (`S.debugProfile`), one per cascade. Pre-built
+ * literals rather than `"cascade" + c`, because the profiler is handed these
+ * every frame and a concatenation in the render loop is an allocation.
+ * Each is a 2048² pass, so its cost does NOT move with the output resolution.
+ */
+const SCOPE = ["shadow cascade 0", "shadow cascade 1", "shadow cascade 2"];
 
 export class ShadowSystem {
     /**
@@ -577,6 +585,7 @@ export class ShadowSystem {
                 entry.material.uniforms.lightViewProjection.value.copy(this.matrices[c]);
             }
 
+            gpuBegin(SCOPE[c]);
             r.setRenderTarget(this.targets[c]);
             // Depth through Three (it manages the write mask), colour through raw
             // GL: setClearColor takes a THREE.Color, which is colour-managed, and
@@ -584,6 +593,7 @@ export class ShadowSystem {
             r.clear(false, true, false);
             gl.clearBufferfv(gl.COLOR, 0, CLEAR_FAR);
             r.render(this.scenes[c], this.cameras[c]);
+            gpuEnd();
         }
 
         r.setRenderTarget(prevTarget);

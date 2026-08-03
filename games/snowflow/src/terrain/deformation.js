@@ -1,7 +1,9 @@
 /**
  * The terrain state buffer — persistent, additive snow deformation.
  *
- * Two RGBA16F targets ping-ponged by one full-screen pass per frame
+ * Two RGBA16F targets ping-ponged by one full-screen pass per frame — except on
+ * the frames where `_isIdentityStep` proves the pass would copy the buffer onto
+ * itself, which are skipped outright
  * (`shaders/deformSim.glsl.js`). The pass scrolls, relaxes and splats in a single
  * dispatch; there is no separate clear, no copy and no readback. WebGL2 has no
  * compute and no storage textures, and it does not need them here: the reference
@@ -121,6 +123,30 @@ export class DeformationField {
         this._brushCount = 0;
         this._brushDirty = false;
 
+        /**
+         * True once any brush has written a non-zero ice channel.
+         *
+         * Read by `post/postChain.js` to decide whether the screen-space
+         * reflection pass can be skipped outright. The prepass docblock
+         * (`shaders/prepass.glsl.js`) states that the specular mask is written
+         * non-zero by exactly two casters — the ice crystals and the terrain's
+         * own glaze — and the crystals cannot exist without a glaze first:
+         * `spells/crystallize.js` `trigger()` lays `ice = 1.0` here *before* it
+         * plants a single prism, deliberately, so that the ground has changed
+         * material by the time the first one is visible. So this flag is a
+         * superset of "the prepass mask can be non-zero anywhere", which is what
+         * makes it safe to gate a pass on.
+         *
+         * MONOTONE, deliberately. The ice channel is written as a max and decays
+         * only by leaving the deformation window, and nothing on the CPU knows
+         * when the last icy texel has scrolled out — so this latches on and
+         * never clears. The consequence is stated where it is consumed: the
+         * saving is real until the first glazing spell of the session and zero
+         * afterwards. Un-latching correctly would need a reduction of the ice
+         * channel read back to the CPU, which costs more than the pass it saves.
+         */
+        this.iceEverBrushed = false;
+
         // FloatType is not optional: row 0 carries absolute world X and Z, up to
         // +/-620 m, where a half float's ULP is 0.5 m — every brush would land
         // half a metre from where it was asked for.
@@ -171,6 +197,10 @@ export class DeformationField {
             },
             { MAX_BRUSHES: MAX_BRUSHES }
         );
+        // GPU profiler scope (`S.debugProfile`). This pass runs at
+        // `S.deformResolution`², not at the output resolution — which is the
+        // whole point of reading it next to the post chain.
+        this._pass.profileName = "deform sim (2048²)";
 
         // -------------------------------------------------------- ping-pong
         this._pp = null;
@@ -185,6 +215,26 @@ export class DeformationField {
          * spent in steps big enough to land on a different number.
          */
         this._relaxOwed = 0;
+
+        /**
+         * The two clamp caps the last EXECUTED pass wrote with. `_isIdentityStep`
+         * compares against these rather than against "the settings did not
+         * change", because the clamp is only idempotent while its bounds hold
+         * still: tighten `S.deformDepth` and the buffer really does have to be
+         * re-clamped, even on a frame with no brushes and no relaxation.
+         * NaN until the first step, so the first step can never be skipped.
+         */
+        this._lastMaxDepth = NaN;
+        this._lastMaxBerm = NaN;
+
+        /**
+         * Diagnostic counters for the skip below — how many frames actually
+         * dispatched the 2048² pass and how many proved they did not need to.
+         * Read by the overlay and by `_harness/abprobe.py`; nothing reads them
+         * inside the frame.
+         */
+        this.stepsRun = 0;
+        this.stepsSkipped = 0;
 
         this._warmed = false;
 
@@ -251,6 +301,10 @@ export class DeformationField {
         const halfPlus = this.size * 0.5 + radius * 2;
         if (Math.abs(x - this.center.x) > halfPlus) return;
         if (Math.abs(z - this.center.y) > halfPlus) return;
+
+        // Latched here rather than at the call sites: five spells and the
+        // character contact all reach `brush()`, and four of them glaze.
+        if (ice > 0) this.iceEverBrushed = true;
 
         const i = this._brushCount++;
         const d = this._brushData;
@@ -331,10 +385,59 @@ export class DeformationField {
         // Mirrored into the port's frame — see `core/bearing.js`.
         u.windAngle.value = bearingRad(S.windDirection);
 
-        this._step();
+        if (this._isIdentityStep(relaxDt)) {
+            this.stepsSkipped++;
+            // Nothing swapped, so `this.texture` is still the state every consumer
+            // is already bound to and `deformTex` needs no republishing. These two
+            // are not outputs of the pass — they track their settings — so they
+            // are refreshed on the skip path exactly as `_step` refreshes them.
+            this.uniforms.deformCenter.value.copy(this.center);
+            this.uniforms.deformDepthScale.value = S.deformDepth;
+        } else {
+            this._step();
+            this.stepsRun++;
+        }
 
         this._brushCount = 0;
         return this.texture;
+    }
+
+    /**
+     * Would this frame's pass write back exactly what it read?
+     *
+     * The 2048² dispatch is 4.2M texels and 7% of the frame, and it does not get
+     * cheaper when a weak GPU drops the output resolution — so the frames on
+     * which it provably cannot change a single texel are worth not dispatching.
+     * All four conditions are needed, and each maps to one block of
+     * `shaders/deformSim.glsl.js`:
+     *
+     *   relaxDt === 0     every relax term is an exact identity at dt = 0 (the
+     *                     shader gates the whole block on it for the same reason)
+     *   no brushes        the splat loop runs `brushCount` times and is skipped
+     *   centre unmoved    `wasInside` is then true for every texel, so no texel
+     *                     is cleared by the scroll's omission path
+     *   caps unmoved      the final `clamp` is idempotent only against the same
+     *                     bounds the previous pass already clamped to
+     *
+     * With all four, the fragment stage reduces to `outColor = texelFetch(prevTex,
+     * P, 0)` at exact texel centres — a bit-identical copy. Skipping it and NOT
+     * swapping the ping-pong leaves that same state in `this.texture`, so this is
+     * an equivalence and not an approximation: no trail behaviour changes, no
+     * decay rate changes, and a walking player (who moves the centre and writes
+     * brushes every frame) never takes this path at all.
+     *
+     * @param {number} relaxDt seconds of relaxation this dispatch would apply
+     * @returns {boolean}
+     */
+    _isIdentityStep(relaxDt) {
+        if (relaxDt !== 0) return false;
+        if (this._brushCount !== 0) return false;
+        if (this.center.x !== this._prevCenter.x) return false;
+        if (this.center.y !== this._prevCenter.y) return false;
+        const u = this._pass.uniforms;
+        if (u.maxDepth.value !== this._lastMaxDepth) return false;
+        if (u.maxBerm.value !== this._lastMaxBerm) return false;
+        return true;
     }
 
     /**
@@ -349,6 +452,10 @@ export class DeformationField {
         this._pass.uniforms.prevTex.value = this._pp.read.texture;
         this._pass.render(this._pp.write);
         this._pp.swap();
+
+        // The bounds this pass clamped to, for `_isIdentityStep`.
+        this._lastMaxDepth = this._pass.uniforms.maxDepth.value;
+        this._lastMaxBerm = this._pass.uniforms.maxBerm.value;
 
         this.texture = this._pp.read.texture; // post-swap: the one just written
         this.uniforms.deformTex.value = this.texture;

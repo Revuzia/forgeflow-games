@@ -177,117 +177,138 @@ void main() {
     bool wasInside = all(lessThanEqual(abs(world - prevCenter), vec2(size * 0.5)));
 
     if (wasInside) {
-        float t = 1.0 / res;
-
         // texelFetch with manual wrapping: identical to a REPEAT bilinear sample
         // at a texel centre, but exactly so, with no dependence on the sampler
         // landing where we think it does.
         int R = int(res);
         ivec2 P = ivec2(gl_FragCoord.xy);
         vec4 c  = texelFetch(prevTex, P, 0);
-        vec4 xl = texelFetch(prevTex, ivec2((P.x + R - 1) % R, P.y), 0);
-        vec4 xr = texelFetch(prevTex, ivec2((P.x + 1) % R,     P.y), 0);
-        vec4 zd = texelFetch(prevTex, ivec2(P.x, (P.y + R - 1) % R), 0);
-        vec4 zu = texelFetch(prevTex, ivec2(P.x, (P.y + 1) % R    ), 0);
 
         dep  = c.r;
         berm = c.g;
         comp = c.b;
         ice  = c.a;
 
-        // --- diffusion -------------------------------------------------------
-        // Explicit five-point Laplacian, so the coefficient has to stay under
-        // 0.25 or it goes unstable and the buffer rings.
+        // ---------------------------------------------------------- relax gate
+        // EVERY term below this line is an exact identity at dt = 0 — the header
+        // says so and the arithmetic bears it out: k = 0 so kDep/kBerm/kAdv are
+        // 0, \`mix(x, y, 0.0)\` is x, \`slump\` is 0, and \`exp(-0.0 * r / T)\` is
+        // exactly 1.0. So on a dt = 0 frame the block computed a value it already
+        // had, having paid for four wrapped texelFetches, one filtered tap and
+        // four exp() to do it.
         //
-        // These coefficients are PER SECOND and tiny on purpose. Diffusion
-        // spreads as sqrt(2*D*t), so over a minute the depression's rim softens
-        // by 0.69 texels (2.7 cm) and the berm's by 1.20 texels (4.7 cm).
+        // That is not a rare case, it is the common one: the relaxation is banked
+        // on the CPU and spent at 2.5 Hz (RELAX_STEP = 0.4 s in deformation.js),
+        // so at 30 fps eleven frames in twelve arrive here with dt = 0 and at
+        // 165 fps it is sixty-five in sixty-six. \`dt\` is a uniform, so this branch
+        // is coherent across every one of the 4.2M invocations — no divergence,
+        // and the neighbour fetches are never issued.
         //
-        // Loose piled snow slumps faster than a compacted trench floor, so the
-        // berm channel gets exactly three times the depression's rate. That 3:1
-        // ratio is the mechanism behind "a trail softens from its edges inward":
-        // the crest rounds off while the floor stays a floor.
-        //
-        // Only R and G diffuse. Compression and glaze do not creep sideways.
-        //
-        // k saturates at 1, so at the top of the refillRate slider (4) the
-        // effective diffusion is 2.4x base, not 4x — while the slump term below
-        // uses refillRate directly and does scale linearly. That asymmetry is
-        // shipped behaviour.
-        float k = clamp(refillRate * dt, 0.0, 1.0);
-        // The caps are never binding for the shipped constants (0.012 * 1 < 0.22);
-        // they are the stability guard for anyone who changes RELAX_STEP.
-        float kDep  = min(0.22, 0.004 * k);
-        float kBerm = min(0.22, 0.012 * k);
+        // The output is bit-identical either way. Do not "simplify" this back by
+        // deleting the branch and trusting the multiply-by-zero: the fetches are
+        // the cost, not the arithmetic.
+        if (dt > 0.0) {
+            float t = 1.0 / res;
 
-        float lapDep  = (xl.r + xr.r + zd.r + zu.r) - 4.0 * dep;
-        float lapBerm = (xl.g + xr.g + zd.g + zu.g) - 4.0 * berm;
-        dep  += lapDep  * kDep;
-        berm += lapBerm * kBerm;
+            vec4 xl = texelFetch(prevTex, ivec2((P.x + R - 1) % R, P.y), 0);
+            vec4 xr = texelFetch(prevTex, ivec2((P.x + 1) % R,     P.y), 0);
+            vec4 zd = texelFetch(prevTex, ivec2(P.x, (P.y + R - 1) % R), 0);
+            vec4 zu = texelFetch(prevTex, ivec2(P.x, (P.y + 1) % R    ), 0);
 
-        // --- wind infill ------------------------------------------------------
-        // Drift blows into the trench from upwind, so pull a little of the upwind
-        // neighbour's state across. Asymmetric on purpose: a trail filling evenly
-        // from both sides looks like a blur, filling from one side looks like
-        // weather.
-        //
-        // (sin, cos) — a COMPASS BEARING in world XZ, not a maths angle: X = sin,
-        // Z = cos. The FORMULA is the reference's, unchanged; the ANGLE fed into
-        // it is not. deformation.js passes bearingRad(S.windDirection) = PI - deg,
-        // the port's z-mirror of a Babylon bearing (see core/bearing.js). Since
-        // sin(PI - t) = sin t and cos(PI - t) = -cos t, that is exactly the
-        // z-negation the port applies to every world bearing, which is why this
-        // line still reads as written while naming the mirrored direction.
-        // TERRAIN's heightfield bake, the sastrugi shear and the spray all take
-        // the same bearingRad, so drift and ridges stay agreed — do not
-        // 'restore' a raw deg*PI/180 here without changing all four.
-        vec2 wdir = vec2(sin(windAngle), cos(windAngle));
-        // 1.6 texels — deliberately fractional, so this tap MUST be filtered.
-        vec2 upwind = uv - wdir * (t * 1.6);
-        vec4 uw = textureLod(prevTex, upwind, 0.0);
-        float kAdv = min(0.2, 0.002 * k);
-        dep  = mix(dep,  uw.r, kAdv * 0.6);
-        berm = mix(berm, uw.g, kAdv);
+            // --- diffusion -------------------------------------------------------
+            // Explicit five-point Laplacian, so the coefficient has to stay under
+            // 0.25 or it goes unstable and the buffer rings.
+            //
+            // These coefficients are PER SECOND and tiny on purpose. Diffusion
+            // spreads as sqrt(2*D*t), so over a minute the depression's rim softens
+            // by 0.69 texels (2.7 cm) and the berm's by 1.20 texels (4.7 cm).
+            //
+            // Loose piled snow slumps faster than a compacted trench floor, so the
+            // berm channel gets exactly three times the depression's rate. That 3:1
+            // ratio is the mechanism behind "a trail softens from its edges inward":
+            // the crest rounds off while the floor stays a floor.
+            //
+            // Only R and G diffuse. Compression and glaze do not creep sideways.
+            //
+            // k saturates at 1, so at the top of the refillRate slider (4) the
+            // effective diffusion is 2.4x base, not 4x — while the slump term below
+            // uses refillRate directly and does scale linearly. That asymmetry is
+            // shipped behaviour.
+            float k = clamp(refillRate * dt, 0.0, 1.0);
+            // The caps are never binding for the shipped constants (0.012 * 1 < 0.22);
+            // they are the stability guard for anyone who changes RELAX_STEP.
+            float kDep  = min(0.22, 0.004 * k);
+            float kBerm = min(0.22, 0.012 * k);
 
-        // --- slump ------------------------------------------------------------
-        // Piled mass falls back into the hole it came out of. Taking the min
-        // keeps it mass-conserving and means an isolated berm with no adjacent
-        // depression does not evaporate — it has to diffuse away instead. (The
-        // surf wake's two thrown-mass brushes write zero depression precisely so
-        // that they land in this case.)
-        //
-        // Per second, like the diffusion above — but off refillRate * dt directly
-        // rather than the clamped k, so it scales linearly to the slider's top.
-        float slump = min(berm, dep) * min(0.6, 0.002 * refillRate * dt);
-        dep  -= slump;
-        berm -= slump;
+            float lapDep  = (xl.r + xr.r + zd.r + zu.r) - 4.0 * dep;
+            float lapBerm = (xl.g + xr.g + zd.g + zu.g) - 4.0 * berm;
+            dep  += lapDep  * kDep;
+            berm += lapBerm * kBerm;
 
-        // --- decay ------------------------------------------------------------
-        // Time constants, seconds, at refillRate = 1.
-        //
-        // The reason dt is banked rather than per-frame lives here.
-        //
-        // A 400-second time constant is a per-frame multiply by 0.999985 at
-        // 165 FPS. Half float carries an 11-bit significand, so one ULP near 0.5
-        // is a relative 4.9e-4 — thirty times LARGER than the 1.5e-5 the decay is
-        // trying to subtract. Every store therefore lands between two
-        // representable values, and because the product is always slightly below
-        // the input it consistently resolves to the lower one: the buffer loses a
-        // full ULP per frame instead of the sliver it asked for.
-        //
-        // That is a decay of 2^-11 per frame — about 8% per second, a ten-second
-        // half-life, entirely independent of the constants written here and
-        // proportional to frame rate. Banking the time on the CPU and spending it
-        // in steps of ~0.4 s puts each multiply two ULPs clear of the noise floor,
-        // and the constants below then mean what they say.
-        float r = refillRate;
-        dep  *= exp(-dt * r / 400.0);
-        berm *= exp(-dt * r / 250.0);
-        comp *= exp(-dt * r / 300.0);
-        // Ice is the one thing here meant to feel permanent within a session — a
-        // spell that "permanently alters the surface" should not visibly melt
-        // while the player watches it.
-        ice  *= exp(-dt * r / 900.0);
+            // --- wind infill ------------------------------------------------------
+            // Drift blows into the trench from upwind, so pull a little of the upwind
+            // neighbour's state across. Asymmetric on purpose: a trail filling evenly
+            // from both sides looks like a blur, filling from one side looks like
+            // weather.
+            //
+            // (sin, cos) — a COMPASS BEARING in world XZ, not a maths angle: X = sin,
+            // Z = cos. The FORMULA is the reference's, unchanged; the ANGLE fed into
+            // it is not. deformation.js passes bearingRad(S.windDirection) = PI - deg,
+            // the port's z-mirror of a Babylon bearing (see core/bearing.js). Since
+            // sin(PI - t) = sin t and cos(PI - t) = -cos t, that is exactly the
+            // z-negation the port applies to every world bearing, which is why this
+            // line still reads as written while naming the mirrored direction.
+            // TERRAIN's heightfield bake, the sastrugi shear and the spray all take
+            // the same bearingRad, so drift and ridges stay agreed — do not
+            // 'restore' a raw deg*PI/180 here without changing all four.
+            vec2 wdir = vec2(sin(windAngle), cos(windAngle));
+            // 1.6 texels — deliberately fractional, so this tap MUST be filtered.
+            vec2 upwind = uv - wdir * (t * 1.6);
+            vec4 uw = textureLod(prevTex, upwind, 0.0);
+            float kAdv = min(0.2, 0.002 * k);
+            dep  = mix(dep,  uw.r, kAdv * 0.6);
+            berm = mix(berm, uw.g, kAdv);
+
+            // --- slump ------------------------------------------------------------
+            // Piled mass falls back into the hole it came out of. Taking the min
+            // keeps it mass-conserving and means an isolated berm with no adjacent
+            // depression does not evaporate — it has to diffuse away instead. (The
+            // surf wake's two thrown-mass brushes write zero depression precisely so
+            // that they land in this case.)
+            //
+            // Per second, like the diffusion above — but off refillRate * dt directly
+            // rather than the clamped k, so it scales linearly to the slider's top.
+            float slump = min(berm, dep) * min(0.6, 0.002 * refillRate * dt);
+            dep  -= slump;
+            berm -= slump;
+
+            // --- decay ------------------------------------------------------------
+            // Time constants, seconds, at refillRate = 1.
+            //
+            // The reason dt is banked rather than per-frame lives here.
+            //
+            // A 400-second time constant is a per-frame multiply by 0.999985 at
+            // 165 FPS. Half float carries an 11-bit significand, so one ULP near 0.5
+            // is a relative 4.9e-4 — thirty times LARGER than the 1.5e-5 the decay is
+            // trying to subtract. Every store therefore lands between two
+            // representable values, and because the product is always slightly below
+            // the input it consistently resolves to the lower one: the buffer loses a
+            // full ULP per frame instead of the sliver it asked for.
+            //
+            // That is a decay of 2^-11 per frame — about 8% per second, a ten-second
+            // half-life, entirely independent of the constants written here and
+            // proportional to frame rate. Banking the time on the CPU and spending it
+            // in steps of ~0.4 s puts each multiply two ULPs clear of the noise floor,
+            // and the constants below then mean what they say.
+            float r = refillRate;
+            dep  *= exp(-dt * r / 400.0);
+            berm *= exp(-dt * r / 250.0);
+            comp *= exp(-dt * r / 300.0);
+            // Ice is the one thing here meant to feel permanent within a session — a
+            // spell that "permanently alters the surface" should not visibly melt
+            // while the player watches it.
+            ice  *= exp(-dt * r / 900.0);
+        }   // end relax gate
     }
 
     // ------------------------------------------------------------------- splat

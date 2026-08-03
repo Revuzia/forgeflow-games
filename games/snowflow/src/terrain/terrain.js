@@ -314,9 +314,11 @@ export class Terrain {
         // centred on the player; the CPU frustum test is meaningless here.
         this.mesh.frustumCulled = false;
         this.mesh.matrixAutoUpdate = false;
-        // The reference's renderingGroupId 1, against the sky's 0. The sky sets
-        // renderOrder -1000, so any non-negative value orders correctly; 1 matches
-        // the mapping the wake and character specs use.
+        // The reference's renderingGroupId 1, against the sky's 0. 1 matches the
+        // mapping the wake and character specs use, and it must stay BELOW the
+        // sky's renderOrder: the sky is now drawn last in the opaque queue so
+        // that the depth this draw writes kills its far-range raymarch by
+        // early-Z. See the long note in render/sky.js.
         this.mesh.renderOrder = 1;
 
         // ----------------------------------------------------- depth casters

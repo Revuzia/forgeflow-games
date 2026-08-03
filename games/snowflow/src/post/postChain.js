@@ -33,6 +33,39 @@
  * `enabled` uniform and early-outs in its own shader, becoming a full-screen
  * copy. The overlay's toggles are conveniences; they must not change topology.
  *
+ * ## Bypass — the copies that are not drawn
+ *
+ * "Becomes a full-screen copy" is free on a GPU with bandwidth to spare and is
+ * not free here. Measured on the verification machine at 1280x720 (Iris Xe,
+ * ANGLE/D3D11), with `S.debugProfile` and `_harness/posttoggle.py`, a pass that
+ * is doing NOTHING still costs:
+ *
+ *   ssr      1.015 ms of its 1.039 ms   (shading: +0.023 ms)
+ *   dof      0.520 ms of its 1.487 ms   (shading: +0.967 ms)
+ *   bloom    0.415 ms for the pyramid   (composite does not read it when off)
+ *   shafts   0.024 ms at a quarter res
+ *
+ * — the read, the RGBA16F write and the dispatch, none of which a shader
+ * early-out can remove. So each of those passes is additionally SKIPPED
+ * ENTIRELY on the frames where its output is provably an identity copy of its
+ * input, and its consumer is re-pointed at that input for the frame. Two rules
+ * make this safe to keep doing:
+ *
+ *   1. THE TOPOLOGY IS UNCHANGED. Nothing is detached, no target is resized and
+ *      no material is rebuilt — only which texture a consumer's `uSource`
+ *      points at, decided per frame. `warmUp()` forces every pass to draw, so
+ *      the ANGLE backend still specialises all nine behind the boot screen and
+ *      the first frame that needs a skipped pass does not compile it.
+ *   2. THE OUTPUT IS BIT-IDENTICAL, not merely similar. A bypass is only taken
+ *      when the pass would write exactly what it read (a `textureLod` at the
+ *      matching texel of a same-format target is exact), or when the consumer's
+ *      own uniform already suppresses the read. Anything that would change a
+ *      pixel belongs behind a preset, not here.
+ *
+ * `ssr` is the one that pays at default settings: the reflection pass is gated
+ * on the prepass's specular mask, and that mask is zero everywhere until
+ * something glazes the ground — see `_iceOnScreen()`.
+ *
  * ## Jitter
  *
  * The temporal resolve needs the projection offset by a subpixel amount each
@@ -118,6 +151,10 @@ export class PostChain {
      *   `post.depthTexture` directly.
      * @param {any}    [deps.sky] needs `sunDir` (Vector3, toward the sun, world)
      *   and `sunRadiance` (Color or Vector3, linear, pre-multiplied by intensity)
+     * @param {any}    [deps.deform] the deformation field, read ONLY for its
+     *   `iceEverBrushed` flag, which is what lets the reflection pass be skipped
+     *   outright. Optional: absent, the chain assumes ice may exist and always
+     *   dispatches it — slower, never wrong.
      * @param {number} [deps.width]
      * @param {number} [deps.height]
      */
@@ -128,6 +165,7 @@ export class PostChain {
         /** @type {THREE.Texture|null} overrides the depthPass lookup when set */
         this.depthTexture = null;
         this.sky = deps.sky || null;
+        this.deform = deps.deform || null;
 
         /** Seconds, advanced by `update`. Frozen when `S.freezeTime` makes dt 0. */
         this.time = 0;
@@ -304,6 +342,20 @@ export class PostChain {
             this.bloomC, this.dof, this.composite, this.sharpen,
         ];
 
+        // Scope names for the GPU profiler (`S.debugProfile`, core/perf.js).
+        // Literals, and they carry the resolution the pass runs at, because "is
+        // the bloom pyramid actually running at a sixteenth?" is the first
+        // question anyone asks of this table.
+        this.ssr.profileName = "post ssr (full)";
+        this.taa.profileName = "post taa (full)";
+        this.shafts.profileName = "post shafts (1/4)";
+        this.bloomA.profileName = "post bloomA (1/4)";
+        this.bloomB.profileName = "post bloomB (1/16)";
+        this.bloomC.profileName = "post bloomC (1/16)";
+        this.dof.profileName = "post dof (full)";
+        this.composite.profileName = "post composite (full)";
+        this.sharpen.profileName = "post sharpen (full)";
+
         this._refreshTexelSizes();
     }
 
@@ -469,26 +521,74 @@ export class PostChain {
     // --------------------------------------------------------------- render
 
     /**
+     * True when a pixel of the prepass's specular mask could be non-zero, i.e.
+     * when the reflection pass has anything at all to do.
+     *
+     * `shaders/prepass.glsl.js` fixes the answer: the mask is written non-zero
+     * by exactly two casters, the ice crystals and the terrain's glaze, and the
+     * crystals cannot exist without a glaze — `spells/crystallize.js` lays the
+     * ice down before it plants a prism. So one CPU-side flag on the deformation
+     * field covers both, and it is a superset rather than an estimate.
+     *
+     * Conservative when the field was not supplied: an unknown answer is `true`.
+     * @returns {boolean}
+     */
+    _iceOnScreen() {
+        return this.deform ? this.deform.iceEverBrushed === true : true;
+    }
+
+    /**
      * Run the nine passes. Call after the beauty pass has rendered into
      * `post.sceneTarget`; the last pass lands on the default framebuffer.
+     *
+     * @param {boolean} [forceAll] draw every pass even where it would be
+     *   bypassed. Only `warmUp()` passes this: the D3D11 ANGLE backend defers
+     *   shader specialisation to the first real draw, so a pass that is skipped
+     *   at boot and first drawn when the player casts a spell is a
+     *   multi-hundred-millisecond freeze at exactly the wrong moment.
      * @returns {void}
      */
-    render() {
+    render(forceAll = false) {
         const k = this._k;
         const depth = this._depthTex();
         const hist = this.history[k];
         const prev = this.history[1 - k];
 
+        // ---- which passes are identity copies this frame --------------------
+        // Each condition is the exact complement of the early-out in the shader
+        // it stands for, or of the guard in the composite that consumes it. See
+        // the "Bypass" section of the file docblock; the thresholds below MUST
+        // stay in step with the `if`s in tonemap.glsl.js.
+        const bloomAmount = S.bloom ? S.bloomStrength : 0;
+        // The shafts pass writes `uSunColor * 0` on every pixel when the sun is
+        // behind the camera, and the composite ADDS its result — so suppressing
+        // the add is the same image, exactly, as adding zero.
+        const shaftAmount = S.showLightShafts && this._sunOnScreen ? 1 : 0;
+
+        const skipSsr = !forceAll && (!S.ssr || !this._iceOnScreen());
+        const skipShafts = !forceAll && shaftAmount === 0;
+        const skipBloom = !forceAll && !(bloomAmount > 0.0001);
+        const skipDof = !forceAll && !S.dof;
+
         // ---- 3. ssr -> RT_ssr (full) ---------------------------------------
-        const su = this.ssr.uniforms;
-        su.uSource.value = this.sceneTarget.texture;
-        su.uDepth.value = depth;
-        su.uEnabled.value = S.ssr ? 1 : 0;
-        this.ssr.render(this.rtSsr);
+        // Skipped whole on a matte frame. With `uEnabled` on but the mask zero
+        // the shader already does nothing per pixel (measured shading cost:
+        // +0.023 ms of 1.039 ms) — what is left is the full-resolution RGBA16F
+        // read and write, and only not dispatching removes those.
+        if (!skipSsr) {
+            const su = this.ssr.uniforms;
+            su.uSource.value = this.sceneTarget.texture;
+            su.uDepth.value = depth;
+            su.uEnabled.value = S.ssr ? 1 : 0;
+            this.ssr.render(this.rtSsr);
+        }
 
         // ---- 4. taa -> RT_history[k] (full) --------------------------------
         const tu = this.taa.uniforms;
-        tu.uSource.value = this.rtSsr.texture;
+        // Bypassed, the reflection pass's output IS the beauty buffer: its
+        // disabled path is `fragColor = vec4(src.rgb, src.a)` at the matching
+        // texel of a same-format target, which is exact.
+        tu.uSource.value = skipSsr ? this.sceneTarget.texture : this.rtSsr.texture;
         tu.uHistory.value = prev.texture;
         tu.uDepth.value = depth;
         tu.uHistoryValid.value = this._historyValid;
@@ -497,40 +597,54 @@ export class PostChain {
         this.taa.render(hist);
 
         // ---- 5. shafts -> RT_shafts (quarter) ------------------------------
-        const fu = this.shafts.uniforms;
-        fu.uDepth.value = depth;
-        fu.uSunOnScreen.value = this._sunOnScreen;
-        fu.uEnabled.value = S.showLightShafts ? 1 : 0;
-        fu.uStrength.value = S.shaftStrength;
-        fu.uAspect.value = this._w / this._h;
-        this.shafts.render(this.rtShafts);
+        // Skipped when the composite is not going to read the result: either the
+        // effect is off, or the sun is behind the camera and every pixel of it
+        // would be zero.
+        if (!skipShafts) {
+            const fu = this.shafts.uniforms;
+            fu.uDepth.value = depth;
+            fu.uSunOnScreen.value = this._sunOnScreen;
+            fu.uEnabled.value = S.showLightShafts ? 1 : 0;
+            fu.uStrength.value = S.shaftStrength;
+            fu.uAspect.value = this._w / this._h;
+            this.shafts.render(this.rtShafts);
+        }
 
         // ---- 6-8. bloom ----------------------------------------------------
-        this.bloomA.uniforms.uSource.value = hist.texture;
-        this.bloomA.render(this.rtBloom0);
+        // The whole pyramid, or none of it: the composite's own
+        // `if (uBloomAmount > 0.0001)` means a bloom of zero strength is three
+        // passes writing three targets nobody samples.
+        if (!skipBloom) {
+            this.bloomA.uniforms.uSource.value = hist.texture;
+            this.bloomA.render(this.rtBloom0);
 
-        this.bloomB.uniforms.uSource.value = this.rtBloom0.texture;
-        this.bloomB.render(this.rtBloom1);
+            this.bloomB.uniforms.uSource.value = this.rtBloom0.texture;
+            this.bloomB.render(this.rtBloom1);
 
-        this.bloomC.uniforms.uSource.value = this.rtBloom1.texture;
-        this.bloomC.render(this.rtBloom2);
+            this.bloomC.uniforms.uSource.value = this.rtBloom1.texture;
+            this.bloomC.render(this.rtBloom2);
+        }
 
         // ---- 9. dof -> RT_dof (full) ---------------------------------------
-        const du = this.dof.uniforms;
-        du.uScene.value = hist.texture;
-        du.uDepth.value = depth;
-        du.uEnabled.value = S.dof ? 1 : 0;
-        du.uFocusDist.value = this.focusDist;
-        // Scaled to the frame height, so the look does not change with
-        // resolution or with the resolution-scale slider. 0.0024 is 3.5 px at
-        // 1440p; against the pass's own 1.5 px early-out only pixels past
-        // roughly three hundred metres run a gather at all.
-        du.uMaxCoc.value = this._h * 0.0024;
-        this.dof.render(this.rtDof);
+        if (!skipDof) {
+            const du = this.dof.uniforms;
+            du.uScene.value = hist.texture;
+            du.uDepth.value = depth;
+            du.uEnabled.value = S.dof ? 1 : 0;
+            du.uFocusDist.value = this.focusDist;
+            // Scaled to the frame height, so the look does not change with
+            // resolution or with the resolution-scale slider. 0.0024 is 3.5 px
+            // at 1440p; against the pass's own 1.5 px early-out only pixels past
+            // roughly three hundred metres run a gather at all.
+            du.uMaxCoc.value = this._h * 0.0024;
+            this.dof.render(this.rtDof);
+        }
 
         // ---- 10. composite -> RT_composite (full, 8-bit) -------------------
         const cu = this.composite.uniforms;
-        cu.uSource.value = this.rtDof.texture;
+        // Bypassed, the depth-of-field pass's output IS the resolved frame — its
+        // disabled path is a copy of `uScene` at the matching texel.
+        cu.uSource.value = skipDof ? hist.texture : this.rtDof.texture;
         cu.uBloomNear.value = this.rtBloom0.texture;
         cu.uBloomFar.value = this.rtBloom2.texture;
         cu.uShafts.value = this.rtShafts.texture;
@@ -542,9 +656,12 @@ export class PostChain {
         // Same number the reference's grain hash sees, folded into [0, 2*pi).
         cu.uGrainPhase.value = (this.time * GRAIN_RATE) % TAU;
         cu.uSpeedStreak.value = S.windStreaks ? this.speedStreak * S.streakStrength : 0;
-        cu.uBloomAmount.value = S.bloom ? S.bloomStrength : 0;
+        cu.uBloomAmount.value = bloomAmount;
         // A binary: the artistic scale lives in S.shaftStrength, inside the pass.
-        cu.uShaftAmount.value = S.showLightShafts ? 1 : 0;
+        // Zero also when the sun is behind the camera, which is what allows the
+        // shafts pass to be skipped there — the target it would have written is
+        // all zeros, and suppressing the add is exactly adding zero.
+        cu.uShaftAmount.value = shaftAmount;
         this.composite.render(this.rtComposite);
 
         // ---- 11. sharpen -> default framebuffer ----------------------------
@@ -580,10 +697,16 @@ export class PostChain {
      *
      * Safe to call before any real content exists — `historyValid` is 0, so the
      * temporal resolve is a straight copy.
+     *
+     * `forceAll` is what keeps the per-frame bypasses (see the file docblock)
+     * from turning into a hitch later: nothing has glazed the ground at boot, so
+     * a plain `render()` here would skip the reflection pass — and the first
+     * Crystallise of the session would then be the first draw that specialises
+     * it.
      * @returns {void}
      */
     warmUp() {
-        this.render();
+        this.render(true);
     }
 
     /**

@@ -13,8 +13,11 @@
  * different id means the panel lands in the shot.
  */
 
-import { S, SCHEMA, set, applyPreset } from "../core/settings.js";
-import { stats, systemMs, FrameGraph, spikes, resetSpikes } from "../core/perf.js";
+import { S, SCHEMA, PRESETS, set, applyPreset, onChange } from "../core/settings.js";
+import {
+    stats, systemMs, FrameGraph, spikes, resetSpikes,
+    profileCount, profileNames, profileEma, profileTotal,
+} from "../core/perf.js";
 
 const CSS = `
 #overlay {
@@ -165,6 +168,22 @@ export class Overlay {
         /** @type {Map<string, HTMLElement>} */
         this.budgetRows = new Map();
 
+        // ------------------------------------------------------- GPU passes
+        // The GPU analogue of the block above, fed by the timer queries in
+        // `core/perf.js`. Empty and hidden until `S.debugProfile` is switched
+        // on, because a permanently blank section reads as a broken feature.
+        const gh = document.createElement("h2");
+        gh.textContent = "GPU passes";
+        gh.style.display = "none";
+        el.appendChild(gh);
+        this.gpuHead = gh;
+        const gpu = document.createElement("div");
+        gpu.className = "nums one budget";
+        el.appendChild(gpu);
+        this.gpuEl = gpu;
+        /** @type {HTMLElement[]} id-indexed, created as scopes are first seen. */
+        this.gpuRows = [];
+
         // --------------------------------------------------------- camera
         // Debug readout for framing a view and reproducing it later: everything
         // the pose line below needs, in the units the rig actually stores.
@@ -203,17 +222,26 @@ export class Overlay {
         el.appendChild(pr);
         /** @type {Record<string, HTMLButtonElement>} */
         this.presetBtns = {};
-        for (const name of ["ultra", "high", "balanced"]) {
+        // Enumerated from `PRESETS`, not from a literal list. The list was
+        // `["ultra", "high", "balanced"]`, so a rung added to the store had no
+        // button and looked unimplemented from the UI — the same class of
+        // silent divergence as a preset name that does not match the settings
+        // in force.
+        for (const name in PRESETS) {
             const b = document.createElement("button");
             b.textContent = name;
-            b.onclick = () => {
-                applyPreset(name);
-                this._syncPresets();
-                this._syncWidgets();
-            };
+            b.onclick = () => applyPreset(name);
             pr.appendChild(b);
             this.presetBtns[name] = b;
         }
+        // Subscribe rather than resync inside the click handler: the preset can
+        // now be applied from outside the DOM (`SNOWFLOW.applyPreset`, a
+        // harness, an embedder), and a panel that only repaints on its own
+        // clicks shows a stale rung for every one of those.
+        this._offPreset = onChange("preset", () => {
+            this._syncPresets();
+            this._syncWidgets();
+        });
         this._syncPresets();
 
         // -------------------------------------------------------- controls
@@ -401,8 +429,16 @@ export class Overlay {
         this._txt(r.p95, stats.p95.toFixed(2));
         this._txt(r.p99, stats.p99.toFixed(2));
         // A dash rather than 0.00 when the browser exposes no timer query: an
-        // unavailable number and a zero one are not the same claim.
-        this._txt(r.gpu, stats.gpuMs > 0 ? stats.gpuMs.toFixed(2) : "—");
+        // unavailable number and a zero one are not the same claim. The sigma
+        // marks the other claim change: while the profiler is on this is the sum
+        // of the timed scopes, not one whole-frame query, and the two are not
+        // interchangeable (see the profile block in core/perf.js).
+        this._txt(
+            r.gpu,
+            stats.gpuMs > 0
+                ? stats.gpuMs.toFixed(2) + (stats.gpuProfiled ? " Σ" : "")
+                : "—"
+        );
         this._txt(r.draws, String(stats.drawCalls));
         this._txt(r.tris, fmtK(stats.triangles));
         this._txt(r.spikes, String(spikes.count));
@@ -424,6 +460,36 @@ export class Overlay {
                 this.budgetRows.set(name, row);
             }
             this._txt(row, systemMs[name].toFixed(2));
+        }
+
+        this._updateGpuPasses();
+    }
+
+    /**
+     * The per-pass GPU breakdown. Rows appear in the order the scopes are first
+     * seen, which is frame order, so the block reads top to bottom as the frame
+     * executes. Each row is `ms  (share of the profiled total)`.
+     * @returns {void}
+     */
+    _updateGpuPasses() {
+        const n = stats.gpuProfiled ? profileCount() : 0;
+        this.gpuHead.style.display = n > 0 ? "" : "none";
+        if (n === 0) return;
+
+        const names = profileNames();
+        const ema = profileEma();
+        const total = profileTotal();
+
+        for (let i = 0; i < n; i++) {
+            let row = this.gpuRows[i];
+            if (!row) {
+                this._mkNum(this.gpuEl, "gpu_" + i, names[i]);
+                row = this.readouts["gpu_" + i];
+                this.gpuRows[i] = row;
+            }
+            const ms = ema[i];
+            const pct = total > 0 ? (ms / total) * 100 : 0;
+            this._txt(row, ms.toFixed(2) + "  " + pct.toFixed(0) + "%");
         }
     }
 

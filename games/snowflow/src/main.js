@@ -79,9 +79,11 @@
 import * as THREE from "three";
 
 import { registerShaders } from "./shaders/registry.js";
-import { S, onChange } from "./core/settings.js";
+import { S, SCHEMA, PRESETS, onChange, set, applyPreset } from "./core/settings.js";
 import {
-    sample, checkSpike, stats, mark, installDrawCounter, endFrameDraws,
+    sample, checkSpike, stats, systemMs, mark, installDrawCounter, endFrameDraws,
+    gpuBegin, gpuEnd, gpuBeginWide, gpuEndWide, profileDeep, profileScene,
+    profileSnapshot, profileReset,
 } from "./core/perf.js";
 import { initInput, pollInput, endFrame, input } from "./core/input.js";
 import { CameraRig } from "./core/camera.js";
@@ -184,6 +186,146 @@ async function boot() {
     onChange("resolutionScale", applySize);
     window.addEventListener("resize", applySize);
 
+    // ------------------------------------------------- dynamic resolution
+    //
+    // OFF unless `S.dynamicResolution` is set, and not reachable from any
+    // preset: a controller that moves the render resolution underneath a
+    // screenshot makes the comparison battery irreproducible.
+    //
+    // Everything below is shaped by one requirement — it must never visibly
+    // oscillate — and each part earns its place against that:
+    //
+    //   A DISCRETE LADDER, not a continuous scale. The controller moves an
+    //   index. A continuous corrector settles into a slow creep that is far more
+    //   visible than a step, because the eye tracks change, not absolute
+    //   sharpness. It also means "settled" is a fixed pixel grid rather than an
+    //   asymptote it never quite reaches.
+    //
+    //   FAST DOWN, SLOW UP. Dropping a rung is one bad window; climbing one
+    //   needs `DRS_RISE_WINDOWS` consecutive comfortable windows. The asymmetry
+    //   is the whole anti-oscillation argument: a scene that is marginal at rung
+    //   n+1 and comfortable at rung n would, under a symmetric rule, alternate
+    //   forever. Here it drops once and stays.
+    //
+    //   A WIDE, ASYMMETRIC DEAD BAND. Down at 1.15x budget, up only under
+    //   0.78x. The gap between the two thresholds is larger than the frame-time
+    //   change a single rung produces, which is what makes a limit cycle
+    //   impossible rather than merely unlikely.
+    //
+    //   THE WINDOW IS DISCARDED ON EVERY CHANGE. A resize reallocates six render
+    //   targets; that frame is a hitch, and feeding a hitch back into the
+    //   measurement is how a controller talks itself all the way to the bottom.
+    //
+    // Allocation (ARCHITECTURE §0.3): the ring and its sort scratch are built
+    // here, once. `Float32Array.prototype.sort` is in-place, so the per-frame
+    // path allocates nothing.
+    const DRS_LADDER = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
+    const DRS_WINDOW = 45;        // frames per decision at a healthy frame rate
+    // A window bounded in FRAMES alone is measured in seconds on exactly the
+    // machine that needs the controller: 45 frames is 0.75 s at 60 fps but 4.5 s
+    // at 10 fps, and four of those before a climb is 18 s — long enough to read
+    // as "the setting does nothing". So the window also closes on wall clock,
+    // provided enough samples have landed for a median to mean anything.
+    const DRS_WINDOW_MS = 1000;
+    const DRS_MIN_SAMPLES = 8;
+    const DRS_RISE_WINDOWS = 4;   // consecutive comfortable windows before a climb
+    const DRS_DOWN = 1.15;        // over budget by this much -> drop a rung
+    const DRS_UP = 0.78;          // under budget by this much -> a climb is allowed
+    const DRS_SETTLE = 8;         // frames ignored after a resize
+    const drsRing = new Float32Array(DRS_WINDOW);
+    const drsSort = new Float32Array(DRS_WINDOW);
+    let drsIndex = DRS_LADDER.length - 1;
+    let drsFill = 0;
+    let drsElapsed = 0;
+    let drsSettle = 0;
+    let drsGood = 0;
+    /** Set while the controller is writing, so its own write is not read as a manual one. */
+    let drsSelfWrite = false;
+
+    // A manual write — the overlay slider, a preset, a harness — is an override,
+    // not an error: the controller re-seats itself on the nearest rung and
+    // carries on from there rather than fighting the operator back to its own
+    // idea of the right scale on the next window.
+    onChange("resolutionScale", () => {
+        if (drsSelfWrite) return;
+        let best = 0;
+        for (let i = 1; i < DRS_LADDER.length; i++) {
+            if (Math.abs(DRS_LADDER[i] - S.resolutionScale) <
+                Math.abs(DRS_LADDER[best] - S.resolutionScale)) best = i;
+        }
+        drsIndex = best;
+        drsFill = 0;
+        drsElapsed = 0;
+        drsGood = 0;
+        drsSettle = DRS_SETTLE;
+    });
+
+    /**
+     * One frame of the dynamic-resolution controller.
+     * @param {number} dtMs this frame's wall time
+     * @returns {void}
+     */
+    function drsUpdate(dtMs) {
+        if (!S.dynamicResolution) {
+            // Keep the window empty while off, so switching it on mid-session
+            // decides on fresh frames rather than on whatever was in the ring.
+            drsFill = 0;
+            drsElapsed = 0;
+            drsGood = 0;
+            return;
+        }
+        if (drsSettle > 0) { drsSettle--; return; }
+
+        drsRing[drsFill++] = dtMs;
+        drsElapsed += dtMs;
+        const full = drsFill >= DRS_WINDOW ||
+            (drsElapsed >= DRS_WINDOW_MS && drsFill >= DRS_MIN_SAMPLES);
+        if (!full) return;
+        const n = drsFill;
+        drsFill = 0;
+        drsElapsed = 0;
+
+        // Median of the first `n` entries without taking a subarray view — that
+        // view would be a per-window allocation on the frame path. Padding the
+        // tail with +Infinity sorts it past every real sample, so index n>>1 is
+        // the median of exactly what was collected. `set`, `fill` and `sort` are
+        // all in-place.
+        drsSort.set(drsRing);
+        if (n < DRS_WINDOW) drsSort.fill(Infinity, n);
+        drsSort.sort();
+        const med = drsSort[n >> 1];
+        const budget = 1000 / Math.max(1, S.dynamicTargetFps);
+
+        let next = drsIndex;
+        if (med > budget * DRS_DOWN) {
+            // Jump straight to the rung whose pixel count could plausibly fit
+            // the budget instead of stepping down one at a time: at 4 fps a
+            // one-rung-per-window climb down takes twenty seconds, which is
+            // long enough to read as "the setting does nothing".
+            const want = Math.sqrt(budget / med);
+            while (next > 0 && DRS_LADDER[next] > DRS_LADDER[drsIndex] * want) next--;
+            if (next === drsIndex) next = Math.max(0, drsIndex - 1);
+            drsGood = 0;
+        } else if (med < budget * DRS_UP) {
+            // One rung at a time on the way up, and only after several
+            // consecutive comfortable windows.
+            if (++drsGood >= DRS_RISE_WINDOWS) {
+                next = Math.min(DRS_LADDER.length - 1, drsIndex + 1);
+                drsGood = 0;
+            }
+        } else {
+            drsGood = 0;
+        }
+
+        if (next !== drsIndex) {
+            drsIndex = next;
+            drsSelfWrite = true;
+            set("resolutionScale", DRS_LADDER[drsIndex]);
+            drsSelfWrite = false;
+            drsSettle = DRS_SETTLE;
+        }
+    }
+
     // ------------------------------------------------------------------- sky
     // First, and awaited: the terrain, character, wake, spray, water and crystal
     // materials all take the sky LUT and the SH coefficients as CONSTRUCTION
@@ -259,7 +401,10 @@ async function boot() {
     // The rig needs ground heights to keep the spring arm above the snow.
     rig.groundAt = (x, z) => terrain.heightAt(x, z);
 
-    post = new PostChain(renderer, rig.camera, { depthPass, sky });
+    // `deform` is read for one boolean — whether anything has ever glazed the
+    // ground — which is what lets the reflection pass be skipped outright on a
+    // matte frame. See postChain.js, "Bypass".
+    post = new PostChain(renderer, rig.camera, { depthPass, sky, deform });
     applySize(); // now that `post` exists, give it the real drawing-buffer size
 
     const overlay = new Overlay({ rig, character, renderer });
@@ -325,10 +470,20 @@ async function boot() {
         shadows.render();
         depthPass.render(rig.camera);
 
+        // GPU profiler (`S.debugProfile`). The cascades, the prepass and every
+        // post pass time themselves from inside; the beauty pass is one
+        // `renderer.render` over the whole scene, so the scope has to be opened
+        // out here. In deep mode the per-draw hooks split it instead, and a
+        // wrapping scope would nest — which TIME_ELAPSED_EXT does not allow.
+        const coarse = !profileDeep();
+        profileScene(scene); // no-op unless deep; keeps late meshes covered
+
         // Beauty into the HDR target the post chain reads. `autoClear` is on
         // here (and only here), so this is the frame's colour+depth clear.
+        if (coarse) gpuBegin("beauty (full)");
         renderer.setRenderTarget(post.sceneTarget);
         renderer.render(scene, rig.camera);
+        if (coarse) gpuEnd();
         renderer.setRenderTarget(null);
 
         post.render();
@@ -341,6 +496,12 @@ async function boot() {
         const now = performance.now();
         let dtMs = now - prev;
         prev = now;
+        // BEFORE the clamp. `MAX_FRAME_MS` exists so a hitch cannot teleport the
+        // integrator, but it also means `dtMs` saturates at 100 ms — and a
+        // controller fed the saturated value reads a 4 fps frame as 10 fps and
+        // concludes it is already within a 60 fps budget's reach. This machine
+        // renders ultra at 5-7 fps, so that is not a corner case here.
+        const rawMs = dtMs;
         if (dtMs > MAX_FRAME_MS) dtMs = MAX_FRAME_MS;
         const dt = S.freezeTime ? 0 : dtMs / 1000;
         time += dt;
@@ -381,6 +542,12 @@ async function boot() {
         spells.update(dt, rig.camera.position, rig.camera);
         const tSpells = performance.now();
 
+        // GPU profiler: on alternate frames one query spans everything below
+        // instead of the per-pass ones, so the table can be checked against
+        // itself. Opened here because `deform.update` is the frame's first GPU
+        // pass; closed immediately after `drawFrame()`, which is its last.
+        gpuBeginWide("FRAME (one query)");
+
         // The frame's first GPU pass: scroll + relax + splat, ping-ponged. Every
         // brush writer above has now run.
         deform.update(dt, character.position);
@@ -399,6 +566,7 @@ async function boot() {
         const tVfx = performance.now();
 
         drawFrame();
+        gpuEndWide();
         const tRender = performance.now();
 
         mark("cpu character", tChar - tFrame);
@@ -415,6 +583,10 @@ async function boot() {
 
         sample(dtMs);
         checkSpike(dtMs);
+        // After `sample`, so the overlay's graph shows the frame that produced a
+        // rung change on the same tick the change is made; no-op unless
+        // `S.dynamicResolution` is on.
+        drsUpdate(rawMs);
         overlay.update(dtMs, renderer);
 
         endFrame();
@@ -430,7 +602,32 @@ async function boot() {
     globalThis.SNOWFLOW = {
         renderer, scene, rig, character, figure, contact, spray, wake, spells,
         overlay, terrain, sky, shadows, post, depthPass,
+        // The deformation field, alongside the other subsystems it sits between.
+        // `_harness/probe_deform_skip.py` reads its `stepsRun`/`stepsSkipped`
+        // counters and reads the state buffer back through `texture`, which is
+        // the only way to show that the identity-step skip changes no snow.
+        deform,
         S, input, perfStats: stats,
+        // The write half of the settings store. `S` alone is read-only in
+        // practice: most of its keys are sampled next frame and a bare write is
+        // fine, but the structural ones only mean anything on the `onChange`
+        // edge, and nothing outside the module could reach that edge before
+        // these two were exported here. That is precisely how
+        // `S.resolutionScale = 0.5` came to be a lever that reported success,
+        // read back correctly and resized nothing — through a whole performance
+        // sweep. `settings.js` now also routes those keys' accessors into
+        // `set`, so both spellings work; these are the explicit surface.
+        set, applyPreset, PRESETS, SCHEMA,
+        // The CPU-side per-system marks the overlay's "Frame budget" block
+        // shows. Exposed so a profiling run can put the CPU and GPU halves of
+        // the same window side by side — a GPU scope that spans a CPU gap
+        // measures the gap too, and this is what identifies it.
+        perfSystems: systemMs,
+        // Per-pass GPU profile (`S.debugProfile`). `perfProfile()` returns the
+        // running mean per scope since `perfProfileReset()`; both are debug
+        // entry points and neither is called from the frame.
+        perfProfile: profileSnapshot,
+        perfProfileReset: profileReset,
     };
 
     await loading.done();

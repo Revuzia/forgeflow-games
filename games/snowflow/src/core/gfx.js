@@ -18,6 +18,7 @@
 
 import * as THREE from "three";
 import { shader } from "./glsl.js";
+import { gpuBegin, gpuEnd } from "./perf.js";
 
 // ---------------------------------------------------------------------- caps
 
@@ -274,6 +275,15 @@ export class FullScreenPass {
 
         // Never referenced by the shader — `renderer.render` just requires one.
         this._camera = new THREE.Camera();
+
+        /**
+         * Scope name for the GPU profiler (`S.debugProfile`). Every fullscreen
+         * pass in the frame is one of these, so setting it is what makes the
+         * post chain and the deformation sim show up by name rather than as one
+         * undifferentiated "fullscreen" row. Assign a STRING LITERAL — it is a
+         * map key read every frame while profiling.
+         */
+        this.profileName = "fullscreen";
     }
 
     /** @returns {Record<string, {value:any}>} */
@@ -298,8 +308,10 @@ export class FullScreenPass {
         // actively wrong.
         r.autoClear = false;
 
+        gpuBegin(this.profileName);
         r.setRenderTarget(target);
         r.render(this._scene, this._camera);
+        gpuEnd();
 
         r.setRenderTarget(prevTarget);
         r.autoClear = prevAutoClear;

@@ -7,6 +7,20 @@
  * (rebuilding a render target, re-freezing a material) rather than just being
  * sampled next frame.
  *
+ * THE ONE EXCEPTION, and why it exists. Three keys — `resolutionScale`,
+ * `deformResolution` and `preset` — are STRUCTURAL: the value alone means
+ * nothing until something reallocates a render target or resizes the drawing
+ * buffer, and that only happens on the `onChange` edge. A plain data property
+ * lets `S.resolutionScale = 0.5` succeed, read back as 0.5, and change
+ * absolutely nothing — a lever that lies. That is not hypothetical: it shipped,
+ * and it went unnoticed through a whole performance sweep because every readback
+ * agreed with the write. Those three are accessor properties that route the
+ * write through `set()`, so the edge always fires. They are read once per resize
+ * and once per overlay repaint, never in the render loop (verified: the only
+ * reads are `main.js` `applySize`, `deformation.js` construction + its own
+ * `onChange`, and `overlay.js` `_syncPresets`), so the accessor is not on any
+ * hot path. Every other key stays a plain data property.
+ *
  * Ported verbatim from the WebGPU reference. These numbers *are* the art
  * direction — the exposure/contrast pair, the sun elevation, the wind bearing's
  * offset from the sun bearing — and they were measured against the reference's
@@ -19,6 +33,16 @@ export const S = {
     // ---------------------------------------------------------------- quality
     preset: "ultra",
     resolutionScale: 1.0,
+    /**
+     * Dynamic resolution. OFF by default and deliberately not part of any
+     * preset: a controller that moves the render resolution underneath a
+     * screenshot makes the comparison battery irreproducible, and the battery is
+     * what this port is judged by. It is a runtime convenience for a machine
+     * whose spare GPU time varies, not a quality rung.
+     */
+    dynamicResolution: false,
+    /** Frame rate `dynamicResolution` aims at. Only read while that is on. */
+    dynamicTargetFps: 60,
 
     // ------------------------------------------------------------------- sun
     sunAzimuth: 118, // degrees, compass bearing of the sun
@@ -115,6 +139,21 @@ export const S = {
 
     // ----------------------------------------------------------------- debug
     debugView: "beauty", // beauty | deform | normals | depth | cascades | footprint | fineNormals
+    /**
+     * Per-pass GPU timing through `EXT_disjoint_timer_query_webgl2`, surfaced in
+     * the overlay's "GPU passes" block. Off by default and genuinely free when
+     * off — see the profile section of `core/perf.js`. While it is on,
+     * `stats.gpuMs` is the sum of the timed scopes rather than one whole-frame
+     * query, because that extension's timer does not nest.
+     */
+    debugProfile: false,
+    /**
+     * Splits the single `beauty` scope into one scope per draw — sky, terrain,
+     * character body, cloth, fur, wake, spray, crystals, water. Implies
+     * `debugProfile`. More queries per frame, so read it as a breakdown of the
+     * beauty pass rather than as an absolute frame cost.
+     */
+    debugProfileDeep: false,
 };
 
 /**
@@ -211,6 +250,10 @@ export const SCHEMA = [
             { k: "wireframe", l: "Wireframe", t: "b" },
             { k: "freezeTime", l: "Freeze time", t: "b" },
             { k: "resolutionScale", l: "Resolution", t: "f", min: 0.5, max: 1.5, step: 0.05 },
+            { k: "dynamicResolution", l: "Dynamic res", t: "b" },
+            { k: "dynamicTargetFps", l: "· target fps", t: "f", min: 20, max: 144, step: 1 },
+            { k: "debugProfile", l: "GPU profile", t: "b" },
+            { k: "debugProfileDeep", l: "· per-draw", t: "b" },
             {
                 k: "debugView", l: "Debug view", t: "e",
                 opts: ["beauty", "deform", "normals", "depth", "cascades", "footprint",
@@ -236,6 +279,45 @@ export const PRESETS = {
     balanced: {
         deformResolution: 1024, resolutionScale: 0.85,
         ssr: false, dof: false,
+    },
+    /**
+     * PORT-ONLY. The reference has no fourth rung; this one is not transcribed
+     * from it and §0.4 therefore does not apply — it is new data, not a re-tune
+     * of the three above, which stay verbatim.
+     *
+     * Every key here is an existing schema toggle switched off, chosen by
+     * MEASURED cost on the verification machine (Intel Iris Xe, ANGLE/D3D11,
+     * 1280x720) rather than by which effects sound expensive:
+     *
+     *   showMountains      8.27 ms   the far-range raymarch, 93% of the sky draw.
+     *                                By far the biggest single toggle in the
+     *                                build, and the reason this preset exists.
+     *   resolutionScale    the frame is fill-bound: quartering the pixels
+     *                      measured a 3.3x speedup on the beauty pass.
+     *   deformResolution   the sim is 4.15 ms at 2048² and does NOT scale with
+     *                      output pixels, so a resolution drop alone cannot
+     *                      touch it; 512² is 1/16 the texels.
+     *   dof                1.29 ms   ssr 0.87 ms   bloom 0.36 ms
+     *   sharpen            0.31 ms   showLightShafts 0.15 ms
+     *
+     * TAA and grain stay ON deliberately. TAA is 1.76 ms at full res and under
+     * 0.5 ms at half, and at `resolutionScale` 0.5 it is the only thing holding
+     * the edges together — switching it off here would buy a fraction of a
+     * millisecond and cost more image than everything else in this list
+     * combined.
+     *
+     * WHAT IT COSTS TO LOOK AT: no distant mountain range on the horizon, no
+     * god rays past the dune crests, half-resolution image (soft, and the
+     * sastrugi detail the port is judged on is materially reduced), no ice
+     * reflections, no depth of field, no bloom on the glints, and footprints /
+     * carve berms quantised to a 512² field so their edges are visibly coarser.
+     * This is a different-looking demo, not a cheaper-looking one. Nothing here
+     * touches the default: `S.preset` boots at "ultra".
+     */
+    performance: {
+        deformResolution: 512, resolutionScale: 0.5,
+        ssr: false, dof: false, bloom: false, sharpen: false,
+        showMountains: false, showLightShafts: false, windStreaks: false,
     },
 };
 
@@ -297,17 +379,52 @@ export function onChange(keys, fn) {
 }
 
 /**
+ * Backing store for the routed keys (see the file header). A `Map` and not a
+ * second object literal so `_route` cannot accidentally be given a key that is
+ * also still a data property on `S` — membership here IS the routing flag, and
+ * `set` reads it to decide which store to write.
+ * @type {Map<string, number|boolean|string>}
+ */
+const routed = new Map();
+
+/**
+ * Notify a key's subscribers. Split out of `set` because `applyPreset` fires
+ * the `preset` edge itself, after the whole batch has landed.
+ * @param {string} k
+ * @param {number|boolean|string} v
+ * @returns {void}
+ */
+function notify(k, v) {
+    const subs = listeners.get(k);
+    if (subs) for (const fn of subs) fn(v, k);
+}
+
+/**
  * Write a settings value and notify subscribers. Never called from the render
- * loop — only from the overlay and preset application.
+ * loop — only from the overlay, preset application and debug entry points.
+ *
+ * `preset` is not a value, it is a command: writing it applies the preset. That
+ * is the only reading under which `S.preset` can be trusted to describe the
+ * settings actually in force, which the shot battery's reproducibility depends
+ * on.
+ *
  * @param {string} k
  * @param {number|boolean|string} v
  * @returns {void}
  */
 export function set(k, v) {
-    if (S[k] === v) return;
-    S[k] = v;
-    const set_ = listeners.get(k);
-    if (set_) for (const fn of set_) fn(v, k);
+    if (k === "preset") {
+        applyPreset(/** @type {keyof typeof PRESETS} */ (v));
+        return;
+    }
+    if (routed.has(k)) {
+        if (routed.get(k) === v) return;
+        routed.set(k, v); // NOT `S[k] = v` — that re-enters the accessor
+    } else {
+        if (S[k] === v) return;
+        S[k] = v;
+    }
+    notify(k, v);
 }
 
 /**
@@ -325,9 +442,37 @@ export function set(k, v) {
 export function applyPreset(name) {
     const p = PRESETS[name];
     if (!p) return;
-    S.preset = name;
+    // No "already on this preset" early-out: re-applying is how an operator
+    // discards hand-tweaked sliders and gets back to a known rung. `set` no-ops
+    // per key, so the keys that really did not move rebuild nothing.
+    //
+    // The label goes straight into the backing store, past its own accessor:
+    // going through `set` would land back in here and recurse.
+    routed.set("preset", name);
     for (let i = 0; i < PRESET_KEYS.length; i++) {
         const k = PRESET_KEYS[i];
         set(k, k in p ? p[k] : PRESET_BASELINE[k]);
     }
+    // Last, so a `preset` subscriber (the overlay's button highlight and widget
+    // resync) reads the finished state rather than a half-applied one.
+    notify("preset", name);
+}
+
+/**
+ * Install the accessors for the structural keys. Runs once, at module load,
+ * AFTER `PRESET_BASELINE` has been captured — the baseline reads `S[k]` and must
+ * see the authored literal, not an accessor over an unseeded store.
+ *
+ * `enumerable` and `configurable` stay true so `S` still behaves exactly like
+ * the plain object it is documented as: `for...in`, `Object.assign` and
+ * `JSON.stringify` are unchanged.
+ */
+for (const k of ["resolutionScale", "deformResolution", "preset"]) {
+    routed.set(k, S[k]);
+    Object.defineProperty(S, k, {
+        enumerable: true,
+        configurable: true,
+        get: () => routed.get(k),
+        set: (v) => set(k, v),
+    });
 }

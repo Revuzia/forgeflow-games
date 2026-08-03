@@ -214,6 +214,10 @@ export class Sky {
             uGroundBounce: { value: this.groundBounce },
         };
         this._bake = new FullScreenPass(renderer, skyBakeFrag, this._bakeUniforms);
+        // GPU profiler scope. Only runs when the sun moves, so a non-zero row
+        // here during a steady measurement means something is re-baking the LUT
+        // every frame — which is a bug, not a cost.
+        this._bake.profileName = "sky LUT bake";
 
         // -------------------------------------------------------- mip probe
         this._probeRT = makeRT(1, 1, {
@@ -275,10 +279,30 @@ export class Sky {
 
         this.mesh = new THREE.Mesh(geo, this.material);
         this.mesh.name = "sky";
-        // The reference relies on renderingGroupId = 0 against the terrain's 1.
-        // Three has no groups, so this is the equivalent: first in the beauty
-        // pass, before anything opaque.
-        this.mesh.renderOrder = -1000;
+        // LAST in the opaque queue, not first.
+        //
+        // The reference relies on renderingGroupId = 0 against the terrain's 1,
+        // i.e. sky first; Three has no groups, so this used to be renderOrder
+        // -1000. Drawn first, the far-range raymarch runs on every pixel in the
+        // band dir.y in (-0.05, 0.230) — and on this camera that band is mostly
+        // BELOW the horizon, where the clipmap paints over it a few draws later.
+        // The march was shading pixels that no longer exist by the end of the
+        // pass.
+        //
+        // Drawn last, the depth test does that rejection for free and before the
+        // fragment shader runs: the vertex stage clamps the box to z/w =
+        // 0.999999, so every pixel the terrain, the character or the wake has
+        // already written fails LEQUAL and is killed by early-Z. Nothing about
+        // the output moves — the sky was being overwritten by those same draws
+        // anyway, this only stops it being computed first. It is safe precisely
+        // because every other material in the opaque queue writes depth where it
+        // writes colour (the three transparent ones — water, crystals, spray —
+        // are in Three's transparent list and still draw after this).
+        //
+        // The one thing this does spend: the beauty target's colour clear is now
+        // load-bearing. With the sky first it was arguably redundant, since the
+        // sky covers the frame; it is not redundant now.
+        this.mesh.renderOrder = 1000;
         // Clip-space is decided in the vertex shader; the CPU frustum test would
         // cull the box the moment the camera leaves the origin.
         this.mesh.frustumCulled = false;

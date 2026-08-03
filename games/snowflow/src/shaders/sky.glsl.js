@@ -2,9 +2,16 @@
  * The skybox — LUT lookup, raymarched far range, solar disc, aureole, cirrus.
  *
  * Port of `src/shaders/sky.vertex.wgsl`, `src/shaders/sky.fragment.wgsl` and
- * `src/shaders/lib/ridge.wgsl`. Drawn first, before the terrain, depth-write off
- * and clamped to the far plane, so it fills exactly whatever the rest of the
- * scene does not.
+ * `src/shaders/lib/ridge.wgsl`. Depth-write off and clamped to the far plane, so
+ * it fills exactly whatever the rest of the scene does not.
+ *
+ * Drawn LAST in the opaque queue, not first as the reference draws it — the
+ * output is the same either way (this never writes depth and everything opaque
+ * is in front of it), but drawing it last lets the depth test kill the far-range
+ * raymarch on every pixel the terrain already covers. Measured at 2.67 ms off a
+ * 9.88 ms skybox draw at 1280x720, and 2.96 ms off 10.16 ms in an independent
+ * session (`_harness/skyorder_ab.py`, which toggles the order at runtime and
+ * interleaves the arms). See the note in `src/render/sky.js`.
  *
  * ---------------------------------------------------------------------------
  * WHY THE NOISE IS PRIVATE HERE

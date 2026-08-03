@@ -76,7 +76,7 @@
 
 import * as THREE from "three";
 import { fail } from "../core/loading.js";
-import { mark } from "../core/perf.js";
+import { mark, gpuBegin, gpuEnd } from "../core/perf.js";
 import { makeRT } from "../core/gfx.js";
 import { shader } from "../core/glsl.js";
 import { PREPASS_FRAGMENT } from "../shaders/prepass.glsl.js";
@@ -262,6 +262,7 @@ export class DepthPass {
         const prevAutoClear = r.autoClear;
         r.autoClear = false;
 
+        gpuBegin("depth prepass (full)");
         r.setRenderTarget(this.target);
         // Depth through Three (it owns the write mask); colour through raw GL,
         // because setClearColor takes a colour-managed THREE.Color whose channels
@@ -269,6 +270,7 @@ export class DepthPass {
         r.clear(false, true, false);
         gl.clearBufferfv(gl.COLOR, 0, CLEAR_PREPASS);
         r.render(this.scene, camera);
+        gpuEnd();
 
         r.setRenderTarget(prevTarget);
         r.autoClear = prevAutoClear;
