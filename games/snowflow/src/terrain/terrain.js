@@ -338,6 +338,30 @@ export class Terrain {
         this.depthPass.registerCaster(this.mesh, this.prepassMaterial);
 
         // ------------------------------------------------------------- state
+        //
+        // QUIRK-3, deliberately fixed rather than reproduced. The reference bakes
+        // the 4096-square macro heightfield exactly once (its terrain.js:200 is the
+        // only `bake()` call site) and subscribes to only four settings in total —
+        // resolutionScale, showTerrain, showCharacter, showWake (main.js:76,122,
+        // 133,144). Nothing re-bakes. So in the reference the overlay's Dune-height
+        // slider is entirely DEAD, and Wind-dir moves only the fine sastrugi layer,
+        // which is a per-frame uniform rather than baked data.
+        //
+        // Measured through the real overlay widget, not through S — the two paths
+        // differ, because a direct `S.<key> =` write bypasses `set()` and every
+        // subscriber (_shots/sweep/SWEEP.md, "The UI path is not the S path"):
+        //
+        //   Dune height 0.4 -> 1.8   port changes 75.80% of the frame; reference
+        //                            0.04%, i.e. pixel-identical
+        //   Wind dir    0 -> 150     port 73.91%; reference 52.72%
+        //
+        // Kept live because the overlay is documented as exposing every art
+        // parameter as a working control, and a slider that silently does nothing
+        // is worse than one that costs a re-bake. This cannot affect any
+        // comparison shot: every shot in the battery runs at defaults, and the
+        // re-bake only fires on a change. Flagged here because it is the port
+        // doing MORE than the reference, which is the direction of departure that
+        // otherwise goes unnoticed.
         this._rebakeDue = false;
         this._unsub = onChange(
             ["windDirection", "macroHeightScale"],
