@@ -192,10 +192,11 @@ export class SprayField {
          * `character/character.js` own theirs: the spray is then correct whatever
          * order the integrator's `updateGlobals()` runs in. `uSunDir` and
          * `uSunColor` hold live references into `sky`, so they never need
-         * copying. `uCameraPos` is written by `update()`; **`uViewProj` is not**
-         * — the integrator must write the beauty pass's jittered matrix into
-         * `spray.globals.uViewProj.value`, or pass a shared block as
-         * `deps.globals`.
+         * copying. `uCameraPos` **and `uViewProj`** are both written by
+         * `update()` off the beauty camera it is handed, exactly as
+         * `terrain/terrain.js`, `character/character.js` and `render/sky.js`
+         * write theirs — see the note in `update()`. Handing in a shared block
+         * as `deps.globals` still works: the write is the same matrix.
          */
         this.globals = (deps && deps.globals) || {
             uSunDir: { value: sky.sunDir },
@@ -337,6 +338,20 @@ export class SprayField {
         this._uCamRight.value.copy(_right);
         this._uCamUp.value.copy(_up);
         this.globals.uCameraPos.value.copy(_camPos);
+        // The beauty pass's JITTERED view-projection. `post.update()` writes the
+        // TAA jitter straight into `camera.projectionMatrix` (postChain.js, "the
+        // beauty pass must rasterise through camera.projectionMatrix"), and this
+        // runs after it, so the product is the matrix the rest of the frame uses.
+        //
+        // This has to happen HERE and not in the integrator: the spray owns this
+        // globals block, and a block whose `uViewProj` nobody writes stays the
+        // identity — which multiplies every billboard's world position straight
+        // into clip space, puts all 5120 quads outside the clip volume, and
+        // renders exactly nothing while the pool reports thousands of live
+        // grains. Writes in place; no allocation.
+        this.globals.uViewProj.value.multiplyMatrices(
+            camera.projectionMatrix, camera.matrixWorldInverse
+        );
 
         // Clamped so a frame hitch cannot fling every live grain through the
         // ground in one step.

@@ -147,10 +147,13 @@ export class Heightfield {
      * @returns {void}
      */
     bake() {
-        // Mirrored into the port's frame (`core/bearing.js`). windMat rotates the
-        // sample domain by this angle, so mirroring it here is what keeps the
-        // sastrugi ridges at the reference's 76 degrees to the sun rather than
-        // raked along it — the bake and the clipmap must pass the same value.
+        // Mirrored into the port's frame (`core/bearing.js`), the same value
+        // `Terrain` pushes to the clipmap — the bake and the five vertex
+        // programs must agree or the drawn surface is not the baked one.
+        // `lib/terrain` inverts this back to the reference bearing and mirrors
+        // the sample point with it, which is what puts the landform in the same
+        // z-mirrored frame as the camera, the sun and the character; see the
+        // handedness header there.
         const windAngle = bearingRad(S.windDirection);
 
         this._heightPass.uniforms.windAngle.value = windAngle;

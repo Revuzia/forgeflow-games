@@ -48,6 +48,32 @@ uniform float uContrast;
 uniform float uMode;          // 0 = AgX, 1 = ACES, 2 = none
 uniform float uGrainAmount;
 uniform float uTime;
+/**
+ * The grain hash's time term, ALREADY REDUCED modulo 2*pi on the CPU.
+ *
+ * The reference writes the grain as one expression:
+ *
+ *   fract(sin(dot(vUV*vec2(1920,1080) + vec2(t*91.7, t*43.3),
+ *                 vec2(12.9898, 78.233))) * 43758.5453)
+ *
+ * The time terms only ever enter that dot product as the scalar
+ * t*(91.7*12.9898 + 43.3*78.233) = t*4578.65356, so folding them to their
+ * 2*pi-equivalent leaves sin() — and therefore every pixel of grain — exactly
+ * where it was. It is an algebraic identity on the reference's own constants,
+ * not a retune.
+ *
+ * It is also mandatory here. WebGPU's sin() survives a large argument; GLSL ES
+ * on the ANGLE/D3D11 backend this port is verified against does not. The
+ * spatial term alone reaches 1920*12.9898 + 1080*78.233 = 109432, and once the
+ * accumulated time pushes the argument past 2^17 the float32 ulp doubles to
+ * 1/64 — larger than the 2*pi/43758.5453 = 1.4e-4 step the fract() needs to
+ * decorrelate neighbouring pixels. The hash then collapses onto a lattice and
+ * the "grain" becomes a fixed ~2.4 px diagonal weave stamped over the whole
+ * frame, sky included. Measured: at post.time 3.3 s the frame is clean, at
+ * 5.4 s the diagonal peak in a pure-sky FFT is 16x its previous magnitude.
+ * Reduced this way the argument never leaves the range it has at t = 0.
+ */
+uniform float uGrainPhase;
 uniform float uVignette;
 /// 0 = standing still, 1 = flat out on a surf run. Drives the speed streaks.
 uniform float uSpeedStreak;
@@ -161,10 +187,12 @@ void main() {
     // 11. Grain, after the encode so it reads evenly across the range instead of
     // vanishing in the shadows. The (1920,1080) basis is fixed, so the grain
     // cell size is the same on screen at any render resolution.
+    //
+    // The time term arrives pre-folded in uGrainPhase — see its declaration.
+    // Same hash, same pixels; only the float32 headroom differs.
     if (uGrainAmount > 0.0001) {
-        float n = fract(sin(dot(vUv * vec2(1920.0, 1080.0)
-                + vec2(uTime * 91.7, uTime * 43.3),
-                vec2(12.9898, 78.233))) * 43758.5453);
+        float n = fract(sin(dot(vUv * vec2(1920.0, 1080.0), vec2(12.9898, 78.233))
+                + uGrainPhase) * 43758.5453);
         outCol += (n - 0.5) * uGrainAmount;
     }
 

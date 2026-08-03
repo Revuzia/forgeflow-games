@@ -39,30 +39,66 @@
  *
  * ---------------------------------------------------------------------------
  * HANDEDNESS (ARCHITECTURE.md §6). This file is where the one world-space
- * convention in the terrain lives, and it is deliberately NOT converted.
+ * convention in the terrain lives, and it is converted ONCE, at the five public
+ * entry points, by `refXZ` / `refWind` below.
  *
- * Every 'vec2 p' here is world (x, z) in Three's right-handed Y-up frame, and
- * every formula is transcribed byte-identically from the left-handed Babylon
- * reference. That is the ruling in _spec/terrain.md §13.1 — "Do not mirror any
- * axis" — and it is the same choice `render/sky.js` made (PORT-11), so the sky,
- * the wind and the terrain agree with each other. The consequence, accepted and
- * stated: the world is a mirror image in Z relative to the reference
- * screenshots, and the *relative* geometry that the look depends on — the 70-80
- * degree separation between `S.windDirection` (42) and `S.sunAzimuth` (118),
- * which is what stops the sun raking down every sastrugi ridge and flattening
- * the fine structure — is preserved exactly, because both bearings are mirrored
- * together.
+ * The port's world is the reference's world mirrored in z: `core/camera.js`
+ * negates z to turn Babylon's left-handed frame into Three's right-handed one,
+ * and `core/bearing.js` mirrors every compass bearing (t -> PI - t) to follow.
+ * A landform living in that frame must therefore satisfy
  *
- * `windMat` rotates the SAMPLE DOMAIN, not the world, and takes no cross
- * product, so there is no chirality inside it to get wrong. The one line in the
- * whole chunk that touches a world direction is the gradient it returns, and
- * that is consumed by `normalFromGradient(d) = normalize(vec3(-d.x, 1, -d.y))`
- * in `lib/shading`, which is the gradient-to-normal identity for a height
- * function y = H(x, z) and holds in either handedness.
+ *     H_port(x, z) == H_ref(x, -z)
+ *
+ * or the port draws a *different realisation* of the same statistics — same
+ * dune wavelength and relief, different dunes — and no camera pose can be made
+ * to match the reference's shot battery.
+ *
+ * Mirroring the bearing alone does NOT achieve that, which is the bug this
+ * conversion fixes. With `M = diag(1, -1)` and `windMat` as written below,
+ *
+ *     windMat(w) * (M p)  ==  diag(-1, 1) * (windMat(PI - w) * p)
+ *
+ * so feeding the mirrored bearing and the un-mirrored point samples the noise
+ * domain reflected in its own x axis — a valid noise field, but not this one.
+ * Measured before the fix: `terrain.heightAt` over a 121 m grid at the shot
+ * battery's spawn agreed with the deployed reference only at the origin (where
+ * every domain transform is a fixed point), and was up to 14.5 m out elsewhere;
+ * shot 14 lost the entire near dune the reference frames the character against.
+ *
+ * So the entry points convert to the reference frame — `p -> (p.x, -p.y)` and
+ * `w -> PI - w`, the inverse of `bearingRad` — every formula below is then the
+ * reference's byte for byte in the reference's own frame, and the two fine
+ * layers negate dH/dz on the way out (chain rule through the mirror). Callers
+ * keep passing world XZ and `bearingRad(S.windDirection)`; nothing outside this
+ * chunk changes.
+ *
+ * `windMat` itself rotates the SAMPLE DOMAIN, not the world, and takes no cross
+ * product, so there is no chirality inside it to get wrong. The gradients this
+ * chunk returns are consumed by `normalFromGradient(d) =
+ * normalize(vec3(-d.x, 1, -d.y))` in `lib/shading`, the gradient-to-normal
+ * identity for a height function y = H(x, z), which holds in either handedness.
+ *
+ * NOTE ON _spec/terrain.md §13.1 "Do not mirror any axis": that instruction is
+ * about not mirroring the terrain *relative to the rest of the port* — flipping
+ * z here alone would reverse the lee-face asymmetry against the sun. It is
+ * obeyed: the sun, the wind bearing, the camera and the character are ALL in
+ * the mirrored frame already, and this change is what moves the landform into
+ * the same frame as them. The 76-degree wind/sun separation is untouched.
  */
 
 export default /* glsl */`
 #include "lib/noise"
+
+// ------------------------------------------------------------- frame convert
+//
+// Port world XZ -> the reference's world XZ, and the port's mirrored bearing
+// back to the reference's compass bearing. Applied at every public entry point
+// and nowhere else; see the header for the derivation and the measurement.
+// 'refWind' is the exact inverse of core/bearing.js's 'bearingRad'.
+
+vec2 refXZ(vec2 p) { return vec2(p.x, -p.y); }
+
+float refWind(float w) { return PI - w; }
 
 // ---------------------------------------------------------------- anisotropy
 
@@ -85,7 +121,10 @@ mat2 windMat(float angle, float sx, float sy, float scale) {
 /// Broad + medium landform. Returns metres.
 /// 'w' is the wind bearing in radians, 'amp' a global height multiplier
 /// (S.macroHeightScale).
-float terrainMacro(vec2 p, float w, float amp) {
+float terrainMacro(vec2 pPort, float wPort, float amp) {
+    vec2  p = refXZ(pPort);
+    float w = refWind(wPort);
+
     // --- broad dunes -------------------------------------------------------
     // Compressed along the wind (sx = 2.1 against sy = 1.0), so the ridge lines
     // run ACROSS it. Derivative damping keeps crests smooth and lets detail pool
@@ -121,6 +160,10 @@ float terrainMacro(vec2 p, float w, float amp) {
 
 /// Analytic macro derivative, by central difference at a 0.35 m step.
 ///
+/// Takes and returns PORT-frame quantities: the mirror lives inside
+/// terrainMacro(), so differencing it along the port's own z already yields
+/// dH_port/dz with the chain-rule sign folded in. Do not convert here as well.
+///
 /// ONLY the bake would use this, and in fact nothing does at runtime: the
 /// gradient the material shades with is read from the aux texture, which
 /// differentiates the *baked* height instead. Kept so the two can be diffed —
@@ -138,7 +181,10 @@ vec2 terrainMacroD(vec2 p, float w, float amp) {
 /// Sparse exposed rock. Jittered 165 m grid, one outcrop per cell, roughly two
 /// thirds of them culled so the field stays "just snow and the player".
 /// Returns vec2(height contribution in metres, rock mask 0..1).
-vec2 rockField(vec2 p, float w) {
+vec2 rockField(vec2 pPort, float wPort) {
+    vec2  p = refXZ(pPort);
+    float w = refWind(wPort);
+
     float cell = 165.0;
     vec2 gi = floor(p / cell);
 
@@ -181,6 +227,10 @@ vec2 rockField(vec2 p, float w) {
 /// Local departure of the wind from its prevailing bearing, in radians, and the
 /// local anisotropy of the sastrugi.
 ///
+/// INTERNAL FRAME: 'p' is REFERENCE-frame world XZ, not port-frame — its two
+/// callers have already converted. Calling it with a raw world position would
+/// mirror the veer field against the sastrugi it is supposed to steer.
+///
 /// One global bearing gives every ridge in the field the same direction and the
 /// same aspect ratio, and the result reads as corduroy — a woven texture laid
 /// over the landform rather than snow carved by weather. Real sastrugi does not
@@ -211,7 +261,10 @@ vec2 windLocal(vec2 p) {
 /// baked curvature channel: wind scours crests into hard sastrugi and leaves
 /// hollows smooth, so the two fine layers are cross-faded by it rather than
 /// applied uniformly — and with OPPOSITE polarity, which is criterion 9.
-vec3 terrainFine(vec2 p, float w, float exposure, float amp) {
+vec3 terrainFine(vec2 pPort, float wPort, float exposure, float amp) {
+    vec2  p = refXZ(pPort);
+    float w = refWind(wPort);
+
     float h = 0.0;
     vec2 d = vec2(0.0);
 
@@ -254,7 +307,9 @@ vec3 terrainFine(vec2 p, float w, float exposure, float amp) {
     h += gr.x * grAmp;
     d += (gr.yz * m5) * grAmp;
 
-    return vec3(h, d);
+    // dH/dz flips sign back through the mirror: z_ref = -z_port. The height
+    // itself is a scalar and is unaffected.
+    return vec3(h, d.x, -d.y);
 }
 
 /// Footprint-filtered fine layer, for the FRAGMENT stage.
@@ -270,7 +325,10 @@ vec3 terrainFine(vec2 p, float w, float exposure, float amp) {
 /// natural layers, fading out at grazing incidence is deliberate and correct.
 /// (The carved-snow gradient in the snow fragment uses the narrow axis instead,
 /// for the opposite and equally deliberate reason — see the note there.)
-vec3 terrainFineFiltered(vec2 p, float w, float exposure, float amp, float fp) {
+vec3 terrainFineFiltered(vec2 pPort, float wPort, float exposure, float amp, float fp) {
+    vec2  p = refXZ(pPort);
+    float w = refWind(wPort);
+
     float h = 0.0;
     vec2 d = vec2(0.0);
 
@@ -310,6 +368,7 @@ vec3 terrainFineFiltered(vec2 p, float w, float exposure, float amp, float fp) {
         d += (gr.yz * m5) * a;
     }
 
-    return vec3(h, d);
+    // dH/dz flips sign back through the mirror; see terrainFine.
+    return vec3(h, d.x, -d.y);
 }
 `;

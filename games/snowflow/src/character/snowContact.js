@@ -24,22 +24,56 @@
  * Zero allocation: brushes are pushed straight into the field's staging array.
  *
  * ---------------------------------------------------------------------------
- * Handedness (ARCHITECTURE §6). The character's yaw convention is transcribed
- * from the reference and is the one thing in this file that can silently flip:
+ * Handedness (ARCHITECTURE §6, `core/bearing.js`). The port negates world **z**
+ * against the reference's left-handed frame, so every direction built from the
+ * character's `facing` is the reference's formula with its z term negated:
  *
- *     forward = ( sin(facing),  cos(facing) )   in world XZ
- *     lateral = ( cos(facing), -sin(facing) )   in world XZ, +ve to one side
+ *     PORT FRAME: forward = ( sin(facing), -cos(facing) )   in world XZ
+ *                 right   = ( cos(facing),  sin(facing) )   +ve to the right
  *
- * These two are orthogonal under either handedness, and every quantity here is a
- * plain world-XZ 2-vector — no cross products, no bases. What handedness decides
- * is which *physical* side `lateral` points to, and therefore which berm the
- * carve loads. That is settled by CHARACTER's `facing`, not here: if the figure's
- * mesh faces `(sin, cos)` in Three's right-handed Y-up world, as the reference's
- * does in Babylon's left-handed one, the wake's heavy wall lands on the outside
- * of the turn. If CHARACTER adopts Three's more usual `(-sin, -cos)` forward, the
- * two berms swap sides and acceptance criterion 4 fails — visibly, as a right
- * turn piling snow on the inside.
+ * That is what CHARACTER actually publishes — `controller.js` ("PORT FRAME:
+ * right = (cos f, 0, sin f)" / "forward = (sin f, 0, -cos f)"), `figure.js` and
+ * `vfx/surfWake.js` all build their bases exactly this way. This file used to
+ * carry the reference's un-mirrored `forward = (sin, cos)` / `lateral =
+ * (cos, -sin)` instead, which is the failure the reference's own comment warns
+ * about: the wake mesh and the mark it leaves resolved their sides from opposite
+ * signs, so a right turn piled its heavy wall on the wrong side of the trench
+ * (acceptance criterion 4) and the boot kick threw its spray across the trail
+ * rather than behind the heel.
+ *
+ * The brush shader's yaw is mirrored the same way, and it is the one conversion
+ * that is not simply "negate the cosine" — see `brushYaw()` below.
  */
+
+/**
+ * CHARACTER's mesh yaw -> the deformation brush's world-direction angle.
+ *
+ * `deformSim` rotates a brush by building its LONG axis as `(cos yaw, sin yaw)`
+ * in world XZ — an atan2(z, x) direction angle, not a mesh yaw. The reference
+ * hands `facing` straight in, so in the reference the print's long axis is the
+ * world direction `(cos f, sin f)`. Mirroring z sends that to `(cos f, -sin f)`,
+ * and `(cos y, sin y) = (cos f, -sin f)` exactly when `y = -f`.
+ *
+ * Passing `facing` raw into the port's mirrored world is not a small error: the
+ * port's forward is `(sin f, -cos f)`, whose dot with `(cos f, sin f)` is
+ * identically **zero at every heading**, so every mark — boot print, walking
+ * scuff and the surf groove — was stamped exactly crosswise to travel. A boot
+ * print laid across the path is only 0.20 m long in the direction of travel
+ * instead of 0.34 m, so consecutive prints stop touching and the trail reads as
+ * a chain of separate gashes; the surf groove is worse, 0.6 m along travel
+ * instead of 1.56 m, which is shorter than the distance the board covers in one
+ * frame and turns a continuous carve into a row of periodic scallops.
+ *
+ * Spell brushes are unaffected and must not be routed through this: they build
+ * their yaw as `atan2(dz, dx)` from a direction that is already in port space,
+ * which is the angle the shader wants.
+ *
+ * @param {number} facing radians, CHARACTER's mesh yaw
+ * @returns {number} radians, the brush's world-direction angle
+ */
+function brushYaw(facing) {
+    return -facing;
+}
 
 /**
  * Boot geometry, metres. `WIDTH` is the short-axis radius, so the print is 20 cm
@@ -150,7 +184,7 @@ export class SnowContact {
                 0.10 + 0.08 * impact,
                 0.9,                    // compression: trodden snow is dense
                 0,                      // no ice
-                ch.facing,
+                brushYaw(ch.facing),
                 BOOT_ELONG,
                 1.0                     // full rim roughness — boots tear edges
             );
@@ -179,9 +213,11 @@ export class SnowContact {
         const ch = this.character;
         if (ch.speed < 0.4) return;
 
-        // Forward in world XZ — see the handedness note at the top of the file.
+        // Forward in world XZ — PORT FRAME, see the handedness note at the top of
+        // the file. The reference, being left-handed, writes (sin f, cos f); with
+        // that sign here the kick left the heel sideways instead of behind it.
         const fx = Math.sin(ch.facing);
-        const fz = Math.cos(ch.facing);
+        const fz = -Math.cos(ch.facing);
         // Many small grains rather than a few large ones. The size at which a
         // puff stops reading as powder and starts reading as a cotton ball is
         // somewhere around five centimetres, and it is a hard threshold.
@@ -240,7 +276,7 @@ export class SnowContact {
             0.22 * k * w,
             0.8 * k * w,
             0,
-            ch.facing,
+            brushYaw(ch.facing),
             1.5,
             0.85
         );
@@ -273,12 +309,15 @@ export class SnowContact {
         // is what makes a fast run's scar read as bigger rather than just longer.
         const fast = Math.min(1, Math.max(0, ch.speed - 6) / 12);
 
-        const yaw = ch.facing;
-        // The LATERAL axis, world XZ — orthogonal to forward = (sin, cos). See
-        // the handedness note at the top of the file: this is the line that
-        // decides which side of the turn takes the heavy wall.
-        const rx = Math.cos(yaw);
-        const rz = -Math.sin(yaw);
+        // The brush's world-direction angle, not the mesh yaw — see brushYaw().
+        const yaw = brushYaw(ch.facing);
+        // The character's RIGHT axis, world XZ — PORT FRAME (cos f, sin f), the
+        // same basis `vfx/surfWake.js` stores for the airborne wave, so the wall
+        // and the mark it leaves resolve their sides from one sign. See the
+        // handedness note at the top of the file: this is the line that decides
+        // which side of the turn takes the heavy wall.
+        const rx = Math.cos(ch.facing);
+        const rz = Math.sin(ch.facing);
 
         // --- the groove ------------------------------------------------------
         // The board rides the inside edge in a turn, so the trench offsets

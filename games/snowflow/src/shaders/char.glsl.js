@@ -430,13 +430,16 @@ ${spells ? `
     // 13-degree sun is behind the figure for most of this demo's framing, and a
     // robe lit only by sky ambient is a silhouette.
     //
-    // The reference calls spellLightingSurface(world, N, V, albedo, f0,
-    // roughness, wrap = 0.35, ...), which returns a fully shaded contribution.
-    // ARCHITECTURE.md §3.1 publishes the narrower spellLighting(worldPos, N, V,
-    // thickness), so that is what is called here and the albedo / Lambert factor
-    // is applied outside it. If SPELLS ships the wider signature, this is the
-    // line to change.
-    color += spellLighting(world, N, V, 1.0) * albedo * INV_PI * ao;
+    // This is FABRIC, so it takes the non-snow response: wrapped diffuse at the
+    // caller's own wrap plus a GGX lobe, and NO transmission. The snow form
+    // (spellLighting) wraps at 0.66 and adds snowSubsurface() on top, which on a
+    // dark garment is a broad albedo-swamping veil that lifts the robe to the
+    // value of the field behind it and flattens every fold — the exact failure
+    // the sheen term two blocks up is already gated against. Its GGX lobe is
+    // also what puts the fold highlights back when the sun is behind the figure.
+    if (spellLightCount > 0.5) {
+        color += spellLightingSurface(world, N, V, albedo, vec3(0.035), roughness, 0.35) * ao;
+    }
 ` : ""}
     // ------------------------------------------------------- aerial perspective
     // The identical call the snow makes, on the finished colour, last.

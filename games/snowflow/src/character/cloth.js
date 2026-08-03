@@ -398,6 +398,13 @@ export function makePanels() {
 /** Constraint relaxation iterations. Six is where the robe stops looking rubbery. */
 const ITERATIONS = 6;
 
+/**
+ * Substep ceiling for the catch-up loop below. Eight substeps of 1/60 covers a
+ * 133 ms frame; past that the garment deliberately falls behind rather than
+ * letting one long hitch turn into an unbounded solve.
+ */
+const MAX_SUBSTEPS = 8;
+
 /** Capsule table: [boneA, boneB, radius, mask]. Rebuilt from joints each frame. */
 const CAPSULES = [
     [B_ROOT, B_NECK, 0.175, C_TORSO],
@@ -430,14 +437,58 @@ export class ClothSolver {
      * @returns {void}
      */
     update(dt, fig, ch) {
+        // A zero-length step is not a small step — it is no step, and this
+        // integrator cannot express that. Verlet carries velocity as the raw
+        // displacement `(pos - prev)`, and the damping factor is `0.90^(h*60)`,
+        // which at h = 0 is exactly 1: the acceleration term vanishes but the
+        // inertia term does not, so under `S.freezeTime` every free particle
+        // coasts undamped, one frame's worth of displacement per frame, forever,
+        // with the six distance iterations re-solving around it. Measured: the
+        // garment is the brightest residual in a frozen-frame difference, still
+        // moving many seconds after the freeze. Returning here is the only step
+        // size that means "nothing happened" — the skeleton is frozen too, so the
+        // kinematic targets, the wind phase and `_t` would all be unchanged
+        // anyway.
+        //
+        // Keyed on `S.freezeTime` rather than on `dt <= 0` for the same reason
+        // `post/postChain.js` is: the boot calls `figure.update(0)` once before
+        // the warm-up frames, and that call has always run one zero-length solve.
+        // It is a no-op at the bind pose (pos == prev, so there is no inertia to
+        // carry) but it is the pre-existing boot path, and this fix has no
+        // business touching it.
+        if (S.freezeTime) return;
+
         // Two sub-steps at 30 Hz and below. Verlet with hard pins is stable, but
         // collision runs once per substep at the END, and a long step lets the
         // hem overshoot through the legs before the collision pass sees it.
+        //
+        // _spec/cloth-fur.md §4.2, verbatim. The substep SIZE is the reference's
+        // and stays the reference's at every frame rate.
         let h = Math.min(dt, 1 / 30);
         let steps = 1;
         if (h > 1 / 55) { steps = 2; h *= 0.5; }
+
+        // PORT-ONLY, and the one place this solver knowingly leaves the spec
+        // block above. §4.2's table clamps TOTAL SIMULATED TIME to 1/30 s once
+        // dt >= 1/30 — which is invisible on the reference's RTX 5070 Ti, where
+        // dt is ~6 ms and the clamp never fires. On the verification GPU
+        // (ARCHITECTURE.md §4.1, Iris Xe) the frame is 100 ms, so the clamp fires
+        // EVERY frame and the garment advances 33 ms of its own time while the
+        // world advances 100 ms. The waistband is welded, so at a 15 m/s carve it
+        // teleports 1.5 m per frame while the free rows integrate a third of
+        // that: ring links reached 6.3x rest length and the robe rendered as a
+        // shredded pale fan (measured in _shots/port/06-surf-wake.png).
+        //
+        // The fix keeps every constant and adds substeps of the SAME size until
+        // simulated time covers dt, which is exactly what the reference gets by
+        // running its own loop more often per second. dt <= 1/30 is untouched, so
+        // on hardware that can hit 30 fps this is bit-identical to the block
+        // above. Damping stays frame-rate independent either way: 0.90^(h*60) per
+        // substep compounds to the same value over the same wall-clock second.
+        if (dt > 1 / 30) steps = Math.min(MAX_SUBSTEPS, Math.ceil(dt / h));
+
         // Advanced by the FULL dt, once, before the substep loop — so wind and
-        // turbulence sample the same `_t` in both substeps of a frame.
+        // turbulence sample the same `_t` in every substep of a frame.
         this._t += dt;
 
         // ---- apparent wind ------------------------------------------------

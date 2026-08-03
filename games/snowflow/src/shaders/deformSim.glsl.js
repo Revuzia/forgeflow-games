@@ -232,12 +232,15 @@ void main() {
         // weather.
         //
         // (sin, cos) — a COMPASS BEARING in world XZ, not a maths angle: X = sin,
-        // Z = cos. Transcribed as written from the reference. This is a plain
-        // world-XZ 2-vector with no basis attached, so it names the same world
-        // direction under Babylon's left-handed and Three's right-handed
-        // conventions alike; only the visual *sense* of increasing windAngle
-        // differs, and TERRAIN's sastrugi shear transcribes the same mapping, so
-        // drift and ridges stay agreed.
+        // Z = cos. The FORMULA is the reference's, unchanged; the ANGLE fed into
+        // it is not. deformation.js passes bearingRad(S.windDirection) = PI - deg,
+        // the port's z-mirror of a Babylon bearing (see core/bearing.js). Since
+        // sin(PI - t) = sin t and cos(PI - t) = -cos t, that is exactly the
+        // z-negation the port applies to every world bearing, which is why this
+        // line still reads as written while naming the mirrored direction.
+        // TERRAIN's heightfield bake, the sastrugi shear and the spray all take
+        // the same bearingRad, so drift and ridges stay agreed — do not
+        // 'restore' a raw deg*PI/180 here without changing all four.
         vec2 wdir = vec2(sin(windAngle), cos(windAngle));
         // 1.6 texels — deliberately fractional, so this tap MUST be filtered.
         vec2 upwind = uv - wdir * (t * 1.6);

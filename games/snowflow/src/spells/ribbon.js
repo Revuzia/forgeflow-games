@@ -55,6 +55,41 @@ const THROW_STEER = 5.5;
 const RADIUS = 0.205;
 
 /**
+ * The step the head integrators run at, seconds.
+ *
+ * NOT a new number: `_spec/spells.md` §9.5 and §9.7 both write the head's
+ * integration as `h = min(dt, 1/60)`, so 1/60 s IS the reference's step and the
+ * clamp is only ever exercised below 60 fps. What the reference does with the
+ * remainder is nothing — it integrates one 1/60 s step and throws the rest of
+ * the frame away, which is invisible on the machine it was profiled on (an RTX
+ * 5070 Ti, comfortably above 60 fps, where `min(dt, 1/60) == dt`) and severe on
+ * the harness GPU, measured at 13-17 fps.
+ *
+ * The consequence is not a slow ribbon, it is a THIN one. The Lissajous target
+ * advances by the full `dt` while the spring advances by 1/60 s, so at 17 fps
+ * the tip is permanently a quarter of a cycle behind its target and sprinting to
+ * catch up: measured `max|_v|` = 22.25 m/s against the 5-9 m/s the target
+ * actually moves at. `stretch = clampRange(1.35 - _spd*0.055, 0.55, 1.35)` then
+ * pins to its 0.55 floor, and the body renders at 0.155 m instead of ~0.19 m —
+ * the reference's ribbon is visibly fatter in `_shots/ref/08-spell-ribbon.png`
+ * for exactly this reason.
+ *
+ * So the frame's `dt` is consumed in steps of at most 1/60 s, which leaves the
+ * 60 fps result bit-identical (one step, `h == dt`) and makes every lower frame
+ * rate converge to it instead of diverging from it. No constant in §9.5 or §9.7
+ * changes, and neither `_driveTip` nor `_retire` is touched — they still read
+ * `h = min(dt, 1/60)`, which is now always a no-op.
+ */
+const SUB_DT = 1 / 60;
+/**
+ * Most substeps one frame may run. A hitch guard, not a tunable: past this the
+ * catch-up costs more than the fidelity it buys, and dropping the excess is what
+ * every fixed-step loop does. Twelve steps is 0.2 s, four times the harness
+ * frame time.
+ */
+const SUB_MAX = 12;
+
+/**
  * How much wider the section is than it is thick.
  *
  * A body of bent water is not a hose. It is a *ribbon* — flattened, twisting as
@@ -216,8 +251,18 @@ export class Ribbon {
                 : 0;
         this.blend = expDamp(this.blend, want, this.held ? 5.5 : 3.4, dt);
 
-        if (this.held) this._driveTip(dt);
-        else this._retire(dt);
+        // The head is integrated in steps of at most SUB_DT, consuming the whole
+        // frame with no remainder. At or above 60 fps that is a SINGLE call with
+        // h == dt — the reference's line, unchanged, with no stutter introduced
+        // at high frame rates. Below it, the spring and the Lissajous it chases
+        // advance together instead of drifting a quarter cycle apart.
+        let owed = dt;
+        for (let n = 0; n < SUB_MAX && owed > 1e-6; n++) {
+            const h = owed > SUB_DT ? SUB_DT : owed;
+            owed -= h;
+            if (this.held) this._driveTip(h);
+            else this._retire(h);
+        }
 
         if (!this.held && (this._count < 3 || this.blend < 0.02)) {
             this._end();

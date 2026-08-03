@@ -80,6 +80,21 @@ import sharpenFrag from "../shaders/post/sharpen.glsl.js";
 const TONEMAP_MODES = { agx: 0, aces: 1, none: 2 };
 
 /**
+ * How fast the composite's film-grain hash advances, in radians of sine
+ * argument per second.
+ *
+ * The reference feeds time into the grain as `vec2(t*91.7, t*43.3)` dotted with
+ * `vec2(12.9898, 78.233)`, so the whole of its contribution is this one scalar.
+ * Folding it modulo 2*pi here — in JS doubles, where 20 s of accumulated time is
+ * still exact — is what keeps the shader's sine argument inside the float32
+ * range GLSL ES can hash reliably on the ANGLE/D3D11 backend. See the
+ * `uGrainPhase` comment in `shaders/post/tonemap.glsl.js` for why the port needs
+ * that and the reference does not.
+ */
+const GRAIN_RATE = 91.7 * 12.9898 + 43.3 * 78.233;
+const TAU = Math.PI * 2;
+
+/**
  * Halton(2,3). Eight subpixel positions, low-discrepancy so the accumulated
  * sample pattern is even at every prefix length rather than only after all eight
  * — which matters because the history is continuously being partially rejected
@@ -270,6 +285,7 @@ export class PostChain {
             uMode: { value: 0 },
             uGrainAmount: { value: 0 },
             uTime: { value: 0 },
+            uGrainPhase: { value: 0 },
             // Not a slider in the reference either — hard-coded on the CPU.
             uVignette: { value: 0.22 },
             uSpeedStreak: { value: 0 },
@@ -415,9 +431,39 @@ export class PostChain {
         // Flipped here, before the frame renders: history[k] is this frame's
         // destination (taa writes it; bloomA and dof read it afterwards) and
         // history[1-k] is last frame's resolved image.
-        this._k = 1 - this._k;
-
-        this._frame++;
+        //
+        // Both advances are gated on the clock running. The Halton phase and the
+        // ping-pong parity are the only per-frame state in this class that does
+        // not read the clock, so under `S.freezeTime` they would
+        // keep running: the resolve would cycle through eight subpixel offsets
+        // forever and a "frozen" frame would still churn by ~1.5/255 mean, with
+        // the shutter landing on an arbitrary phase of that cycle — which is the
+        // determinism the freeze exists to buy. Held, the resolve reaches a fixed
+        // point on the first frozen frame (the history it reads is never
+        // rewritten and its input never changes) and it reaches it holding the
+        // multi-phase accumulation the last running frames built, so the frozen
+        // image is as anti-aliased as the moving one. Simply pinning the jitter
+        // and letting the parity run would instead converge to a single offset
+        // and visibly coarsen the snow grain.
+        //
+        // Caveat, deliberate: the history is stale while frozen, so moving the
+        // camera AFTER freezing leaves the resolve blended against a pre-move
+        // frame. Pose first, then freeze — which is the order `_harness/shots.js`
+        // uses (pose -> settle -> shutter).
+        //
+        // The condition is `S.freezeTime` and not `dt > 0` on purpose. The boot
+        // sequence calls `update(0, ...)` once to warm the chain up (`main.js`,
+        // just before `warmUp()`), and that call has always advanced the phase;
+        // gating on dt would swallow it and shift the Halton index at the shutter
+        // by one for the whole run. Measured on `01-hero`, whose frame count at
+        // the shutter is deterministic: that shift moves `mean_luma` by +0.0012
+        // where two runs of identical code differ by 0.00001. So every frame the
+        // port actually runs, and the boot, are bit-identical to before; only the
+        // frozen frames change.
+        if (!S.freezeTime) {
+            this._k = 1 - this._k;
+            this._frame++;
+        }
     }
 
     // --------------------------------------------------------------- render
@@ -493,6 +539,8 @@ export class PostChain {
         cu.uMode.value = TONEMAP_MODES[S.tonemap] ?? 0;
         cu.uGrainAmount.value = S.grain ? S.grainStrength : 0;
         cu.uTime.value = this.time;
+        // Same number the reference's grain hash sees, folded into [0, 2*pi).
+        cu.uGrainPhase.value = (this.time * GRAIN_RATE) % TAU;
         cu.uSpeedStreak.value = S.windStreaks ? this.speedStreak * S.streakStrength : 0;
         cu.uBloomAmount.value = S.bloom ? S.bloomStrength : 0;
         // A binary: the artistic scale lives in S.shaftStrength, inside the pass.

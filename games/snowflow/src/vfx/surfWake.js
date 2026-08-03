@@ -255,10 +255,11 @@ export class SurfWake {
          * `lib/common`'s shared globals (ARCHITECTURE.md §3), owned here for the
          * same reason `render/sky.js`, `terrain/terrain.js` and
          * `character/character.js` own theirs. `uSunDir` / `uSunColor` hold live
-         * references into `sky`. `uCameraPos` is written by `update()`;
-         * **`uViewProj` is not** — the integrator must write the beauty pass's
-         * jittered matrix into `wake.globals.uViewProj.value`, or hand in one
-         * shared block as `deps.globals`.
+         * references into `sky`. `uCameraPos` **and `uViewProj`** are both
+         * written by `update()` off the beauty camera it is handed, exactly as
+         * `terrain/terrain.js`, `character/character.js` and `render/sky.js`
+         * write theirs — see the note in `update()`. Handing in a shared block
+         * as `deps.globals` still works: the write is the same matrix.
          */
         this.globals = (deps && deps.globals) || {
             uSunDir: { value: sky.sunDir },
@@ -411,6 +412,20 @@ export class SurfWake {
         if (camera && camera.isCamera === true) {
             _camPos.setFromMatrixPosition(camera.matrixWorld);
             this.globals.uCameraPos.value.copy(_camPos);
+            // The beauty pass's JITTERED view-projection. `post.update()` writes
+            // the TAA jitter straight into `camera.projectionMatrix`, and this
+            // runs after it, so the product is the matrix the rest of the frame
+            // rasterises through.
+            //
+            // This has to happen HERE and not in the integrator: the wake owns
+            // this globals block, and a block whose `uViewProj` nobody writes
+            // stays the identity — which sends `wakePoint`'s world-space output
+            // straight to clip space and puts the whole lattice outside the clip
+            // volume, so the wave renders nothing at all however healthy the
+            // spine looks on the CPU. Writes in place; no allocation.
+            this.globals.uViewProj.value.multiplyMatrices(
+                camera.projectionMatrix, camera.matrixWorldInverse
+            );
         }
 
         this._clock += dt;

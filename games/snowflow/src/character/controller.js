@@ -192,8 +192,31 @@ export class CharacterController {
         this.speed = Math.hypot(this.velocity.x, this.velocity.z);
         this.speed01 = clamp(this.speed / SURF_MAX, 0, 1);
 
-        this.acceleration.x = (this.velocity.x - this.prevVelocity.x) / h;
-        this.acceleration.z = (this.velocity.z - this.prevVelocity.z) / h;
+        // `S.freezeTime` makes dt — and therefore h — exactly 0, and with the
+        // step frozen the velocity delta is exactly 0 too, so this division is
+        // 0/0 = NaN on the freeze frame. The NaN is not local: it reaches
+        // `lean` and `carve` through `leanWant` below (expDamp cannot repair it
+        // — `target + (cur - target) * 1` is NaN when the target is), then
+        // `rig.roll` and the camera quaternion, and the whole frame stops
+        // rasterising. It is also STICKY — unfreezing never clears it, because
+        // every consumer now damps toward a value that is already NaN.
+        //
+        // Over a zero-length step the acceleration is undefined, and the value
+        // that makes freezing a no-op is the one the last real step measured:
+        // `figure` and the fur droop read `acceleration` directly, undamped, so
+        // zeroing it would visibly change the pose at the instant of the freeze.
+        // Holding it means the frozen frame is the running frame.
+        //
+        // The WebGPU reference has the identical division (reference
+        // `src/character/controller.js:142-143`) and the identical failure —
+        // measured on https://snowflow-lilac.vercel.app/, where setting
+        // `S.freezeTime` drops the frame to a mean of 1.5/255 with
+        // `character.acceleration` reading NaN. This is a port-side fix to a
+        // shared defect, not a divergence from a working reference behaviour.
+        if (h > 0) {
+            this.acceleration.x = (this.velocity.x - this.prevVelocity.x) / h;
+            this.acceleration.z = (this.velocity.z - this.prevVelocity.z) / h;
+        }
 
         // Lateral acceleration -> lean. Project accel onto the character's right.
         // PORT FRAME: right = (cos f, 0, sin f).

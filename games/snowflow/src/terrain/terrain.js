@@ -78,6 +78,29 @@ const DETAIL_RES = 1024;
 const GRAIN_SCALE = 0.013;
 
 /**
+ * Anisotropic filtering taps on the snow grain map.
+ *
+ * 4 is not a taste call: it is Babylon's `BaseTexture.DEFAULT_ANISOTROPIC_
+ * FILTERING_LEVEL`, which is what the reference's `detailTex` runs at — probed
+ * live on the deployed reference, `terrain.detailTex.anisotropicFilteringLevel`
+ * = 4, against Three's `Texture.DEFAULT_ANISOTROPY` = 1 that this port silently
+ * inherited. It is the single largest filtering divergence in the subsystem.
+ *
+ * Why it matters more here than on a normal material: all three detail scales
+ * are the SAME 1024-square tile sampled through `textureGrad`, and the snow is
+ * almost always seen at a grazing angle, where a pixel's world footprint is a
+ * long thin sliver. Isotropic trilinear has to pick a mip for the LONG axis, so
+ * it blurs away structure the short axis still resolves perfectly — the grain
+ * flattens toward the horizon and the ripple field dissolves into a plastic
+ * sheet, which is exactly the "detail does not survive past the near field"
+ * failure. It also lets the tile beat against the pixel grid on steep faces.
+ *
+ * ARCHITECTURE.md §4.1 records `EXT_texture_filter_anisotropic` as present on
+ * the verification GPU, so this costs nothing but bandwidth.
+ */
+const DETAIL_ANISOTROPY = 4;
+
+/**
  * Shadow receiver tuning for snow, from _spec/shadows.md §6.5. The bias is in
  * metres and can stay this small because snow has no thin geometry to peter-pan,
  * which is what keeps contact shadows attached.
@@ -188,6 +211,7 @@ export class Terrain {
             wrapS: THREE.RepeatWrapping,
             wrapT: THREE.RepeatWrapping,
             generateMipmaps: true,
+            anisotropy: DETAIL_ANISOTROPY,
             name: "detailTex",
         });
         this._detailPass = new FullScreenPass(renderer, detailBakeFrag, {
