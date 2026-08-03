@@ -63,6 +63,20 @@ POSE = """() => {
   SF.rig.distance = 6.2; SF.rig.distanceTarget = 6.2;
 }"""
 
+# An alternate pose for keys the 01-hero framing cannot see. 12-far-range from
+# shots.js: the horizon framing the raymarched range actually appears in. A key
+# that is inert at 01-hero on BOTH targets is re-shot here before being called
+# inert, because "the pose does not show it" and "the setting does nothing" are
+# different findings.
+POSE_FAR = """() => {
+  const SF = globalThis.SNOWFLOW;
+  const p = SF.character.position;
+  p.x = 0; p.z = 0; p.y = SF.terrain.heightAt(0, 0);
+  SF.character.velocity.x = 0; SF.character.velocity.y = 0; SF.character.velocity.z = 0;
+  SF.rig.yaw = 2.9; SF.rig.pitch = -0.10;
+  SF.rig.distance = 9.5; SF.rig.distanceTarget = 9.5;
+}"""
+
 # key -> list of values. Order matters only for the report.
 SWEEP = [
     ("sunElevation",         [3, 8, 13, 25, 40]),
@@ -122,11 +136,36 @@ def walk_trail(page):
     }""")
 
 
-def capture(page, url, key, value, target, settle, use_hook):
+def capture(page, url, key, value, target, settle, use_hook, freeze=False, far=False):
     page.goto(url, wait_until="load", timeout=120_000)
     wait_ready(page)
     page.wait_for_timeout(1500)
     page.evaluate("window.__sfChrome()")
+
+    # STATIC-CONTROL MODE — what makes a pixel diff mean anything.
+    #
+    # At defaults, two captures of the SAME build at the SAME settings differ by
+    # mean|d| 0.009-0.014 across 50-62% of the frame. That is larger than the
+    # change a subtle slider makes, so "dead slider" and "live slider" are
+    # indistinguishable. Almost all of it is the FILM GRAIN: a per-frame hash on
+    # the clock at amplitude 0.022, i.e. +/-2.8/255 on every pixel. TAA's jitter
+    # and history blend account for most of the rest. The character's idle, the
+    # obvious suspect, turns out to contribute almost nothing at this framing.
+    #
+    # Zeroing those two drops the identity noise to 0.13-0.52% of pixels on both
+    # targets (measured), which is ~100x below what any responding key moves.
+    #
+    # NOT `freezeTime`, which is the obvious lever and is wrong twice over: it
+    # stops the clock wherever the capture happened to reach, so the phase still
+    # varies with page-load timing (measured 0.0136 between two frozen captures
+    # at identical settings) — AND it renders the REFERENCE black (mean luma
+    # 0.006 against the port's 0.520 under the same write). See SWEEP.md.
+    if freeze:
+        page.evaluate("""() => {
+          const S = globalThis.SNOWFLOW.S;
+          S.grainStrength = 0;  // per-frame hash on the clock
+          S.taa = false;        // per-frame jitter + history blend
+        }""")
 
     err = None
     if key is not None:
@@ -145,7 +184,7 @@ def capture(page, url, key, value, target, settle, use_hook):
               if (SF.sky && SF.sky._markDirty) { SF.sky._markDirty(); SF.sky._rebakeAt = 0; }
             }""")
 
-    page.evaluate(POSE)
+    page.evaluate(POSE_FAR if far else POSE)
     if key in NEEDS_TRAIL:
         walk_trail(page)
     end = time.time() + settle
@@ -154,7 +193,7 @@ def capture(page, url, key, value, target, settle, use_hook):
     page.evaluate("window.__sfChrome()")
 
     tag = "default" if key is None else f"{key}_{value}"
-    suffix = "_hook" if use_hook else ""
+    suffix = ("_hook" if use_hook else "") + ("_far" if far else "")
     path = os.path.join(OUT, f"{tag}{suffix}_{target}.png")
     page.screenshot(path=path)
     errs = page.evaluate("window.__sfErrors || []")
@@ -167,6 +206,10 @@ def main():
     ap.add_argument("--target", required=True, choices=["port", "ref"])
     ap.add_argument("--url", required=True)
     ap.add_argument("--settle", type=float, default=4.0)
+    ap.add_argument("--freeze", action="store_true",
+                    help="set S.freezeTime before posing, so frames are deterministic")
+    ap.add_argument("--far", action="store_true",
+                    help="use the 12-far-range pose instead of 01-hero")
     ap.add_argument("--hook", action="store_true",
                     help="stage-2 probe: also raise the port's internal rebake flags")
     ap.add_argument("--only", default="", help="comma-separated subset of keys")
@@ -188,7 +231,8 @@ def main():
         page.add_init_script(BOOTSTRAP)
         for i, (k, v) in enumerate(plan):
             try:
-                r = capture(page, args.url, k, v, args.target, args.settle, args.hook)
+                r = capture(page, args.url, k, v, args.target, args.settle, args.hook,
+                            args.freeze, args.far)
                 rows.append(r)
                 print(f"  [{i+1}/{len(plan)}] {r['file']}"
                       + (f"  !! {r['pageErrors']}" if r["pageErrors"] else ""))
