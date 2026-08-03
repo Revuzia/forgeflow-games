@@ -13,8 +13,17 @@ saves one screenshot. Seconds, not minutes; use this while iterating and save
 import argparse, json, os, sys, time
 from playwright.sync_api import sync_playwright
 
+# Windows consoles default to cp1252 and cannot encode this script's output; force
+# utf-8 before anything writes, or a print raises and masks the real result.
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_URL = "http://localhost:8788/games/snowflow/index.html"
+DEFAULT_URL = "http://localhost:8799/games/snowflow/index.html"
 
 FLAGS = ["--ignore-gpu-blocklist", "--use-angle=d3d11", "--disable-gpu-sandbox",
          "--enable-gpu-rasterization", "--disable-features=CalculateNativeWinOcclusion"]

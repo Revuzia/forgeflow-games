@@ -190,7 +190,7 @@ vec3 snFbmd(vec2 p0, int octaves, float lacunarity, float gain) {
 
 /// Ridged noise with derivatives — sharp crests, smooth valleys. Built as
 /// 1 - |n|, whose derivative is -sign(n) * dn; squared to sharpen the crest, and
-/// `prev` couples octaves so ridges align rather than interfering.
+/// prev couples octaves so ridges align rather than interfering.
 vec3 snRidgedd(vec2 p0, int octaves, float lacunarity, float gain) {
     vec2 p = p0;
     float amp = 0.5;
@@ -229,7 +229,7 @@ vec3 snRidgedd(vec2 p0, int octaves, float lacunarity, float gain) {
 // it passes strength = snowMask and radius = 1.0, and the snow mask is the whole
 // point of the term on a range that is part rock. Rather than invent a
 // convention for a chunk another subsystem owns, both functions are transcribed
-// here under an `sn` prefix. Same formulas, same constants; if lib/shading ever
+// here under an sn prefix. Same formulas, same constants; if lib/shading ever
 // publishes the seven-argument form, delete these and include it.
 // ===========================================================================
 
@@ -493,7 +493,7 @@ RidgeHit ridgeMarch(vec3 camPos, vec3 dir, float amp) {
 /// a massif is in the shade of the one in front of it.
 ///
 /// ridgeDrop is deliberately NOT applied here, unlike in ridgeMarch, while the
-/// `height` passed in *is* drop-corrected. Over the 7.4 km this reaches the drop
+/// height passed in *is* drop-corrected. Over the 7.4 km this reaches the drop
 /// is 4.3 m, negligible against 2 km peaks; the omission is reproduced as
 /// written.
 float ridgeShadow(vec2 pos, float height, vec3 sunDir, float amp) {
@@ -568,7 +568,7 @@ vec3 shadeRidge(RidgeHit hit, vec3 dir) {
     // physically-real atmosphere integrated over the true kilometres gives the
     // frame two atmospheres, and the seam lands exactly where the eye is looking.
     //
-    // Inlined rather than applyAerial() so `dir` — the skybox ray — is the view
+    // Inlined rather than applyAerial() so dir — the skybox ray — is the view
     // direction; the result is arithmetically identical.
     vec3 hitPos = vec3(hit.pos.x, hit.height, hit.pos.y);
     float t = aerialTransmittance(uCameraPos, hitPos, uFog.x, uFog.y, uFog.z);

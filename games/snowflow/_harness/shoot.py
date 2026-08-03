@@ -7,7 +7,7 @@ battery in `shots.js` and writes matched PNGs, so a critic can compare them
 frame for frame.
 
     python shoot.py --url https://snowflow-lilac.vercel.app/ --out shots/ref
-    python shoot.py --url http://localhost:8788/games/snowflow/index.html --out shots/port
+    python shoot.py --url http://localhost:8799/games/snowflow/index.html --out shots/port
     python shoot.py ... --shots 01-hero,04-backlit-sss     # subset while iterating
 
 Both targets must expose the same `globalThis.SNOWFLOW` surface (see shots.js).
@@ -15,6 +15,15 @@ Exit code is 0 only if every requested shot was captured.
 """
 import argparse, json, os, re, sys, time
 from playwright.sync_api import sync_playwright
+
+# Windows consoles default to cp1252 and cannot encode this script's output; force
+# utf-8 before anything writes, or a print raises and masks the real result.
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 

@@ -263,7 +263,7 @@ vec3 aerialNearSky(vec3 viewDir) {
 /// QUIRK-2, reproduced: the parameter is named sunColor but every reference call
 /// site passes sunRadiance — (16.9, 12.9, 6.5) at defaults, not the normalised
 /// (1.0, 0.764, 0.385). Passing the normalised hue makes sun-facing haze ~23x
-/// too dim. `aerial()` below therefore passes uSunColor, which this project
+/// too dim. aerial() below therefore passes uSunColor, which this project
 /// defines as the premultiplied radiance.
 vec3 aerialInscatterSky(vec3 viewDir, vec3 sunDir, vec3 sunColor, float ext) {
     // Mip 0 and no tilt: this has to match the skybox's own lookup exactly, or

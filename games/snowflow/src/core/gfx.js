@@ -22,20 +22,53 @@ import { shader } from "./glsl.js";
 // ---------------------------------------------------------------------- caps
 
 /**
- * Probe the extensions the port cannot run without.
+ * The capabilities whose absence stops the port dead, and nothing else.
  *
  * `EXT_color_buffer_float` makes RGBA16F/RG32F colour-renderable — every HDR
- * target and the heightfield bake depend on it. `OES_texture_float_linear` is
- * what allows `LinearFilter` on the FloatType heightfield; without it the
- * terrain samples nearest and the ground steps visibly at grazing angles.
- * Neither is core in WebGL2, and `index.html` runs the same probe before any
- * module loads so the failure is a panel rather than a stack trace.
+ * target and the heightfield bake render into one, so without it there is
+ * literally nothing to draw into and the first `setRenderTarget` throws.
+ *
+ * This list is duplicated, deliberately, by the inline gate in `index.html`
+ * (`noWebGL2 || noFloatRT`). It cannot be shared: that gate has to run *before*
+ * the module graph loads, because on a browser without WebGL2 every line of the
+ * renderer throws and the player gets a stack trace instead of the `#nogpu`
+ * panel. The two lists must be edited together.
+ */
+const FATAL_CAPS = ["WebGL2", "EXT_color_buffer_float"];
+
+/**
+ * @typedef {Object} Caps
+ * @property {boolean}  ok       **branch on this.** True when the port can run.
+ *                               Equivalent to `fatal.length === 0` — a degraded
+ *                               but renderable GPU reports `ok: true`.
+ * @property {string[]} fatal    the missing capabilities that make `ok` false;
+ *                               empty when `ok` is true. Name these in `#nogpu`.
+ * @property {string[]} missing  everything absent, fatal or not — for reporting
+ *                               only. Non-empty with `ok: true` means "runs, but
+ *                               degraded"; never gate the boot on this.
+ */
+
+/**
+ * Probe the WebGL2 capabilities the port depends on.
+ *
+ * Two tiers, and the distinction is the point. `EXT_color_buffer_float` is
+ * fatal (see `FATAL_CAPS`). `OES_texture_float_linear` is **not**: it is what
+ * allows `LinearFilter` on the FloatType heightfield, and without it the terrain
+ * samples nearest and the ground steps visibly at grazing angles — worse pixels,
+ * not no pixels. It is recorded in `missing` so the panel and the perf overlay
+ * can name it, and the scene still resolves.
+ *
+ * `index.html` runs a probe of the same two tiers before any module loads, so
+ * the hard failure is a panel rather than a stack trace; this one re-runs it
+ * against the renderer's real context. The two agree on which capabilities are
+ * fatal, but this one is the richer report — the inline copy cannot import
+ * anything.
  *
  * Note `renderer.capabilities.isWebGL2` is gone in r16x+ (Three dropped WebGL1),
  * so the context type is checked directly.
  *
  * @param {THREE.WebGLRenderer} renderer
- * @returns {{ok: boolean, missing: string[]}}
+ * @returns {Caps}
  */
 export function checkCaps(renderer) {
     /** @type {string[]} */
@@ -53,7 +86,9 @@ export function checkCaps(renderer) {
         if (!gl.getExtension("OES_texture_float_linear")) missing.push("OES_texture_float_linear");
     }
 
-    return { ok: missing.length === 0, missing };
+    const fatal = missing.filter((m) => FATAL_CAPS.indexOf(m) >= 0);
+
+    return { ok: fatal.length === 0, fatal, missing };
 }
 
 // ------------------------------------------------------------- render targets

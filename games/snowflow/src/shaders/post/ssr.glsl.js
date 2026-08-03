@@ -83,7 +83,7 @@ vec4 reflectionAt(vec2 uv, vec2 pix, float z, float mask) {
     vec3 V = normalize(P);           // the camera sits at the view-space origin
     vec3 R = reflect(V, N);
     // A ray heading back toward the eye has nothing on screen to find. In Three
-    // "forward" is -z, so the reference's `R.z < 0.02` becomes `-R.z < 0.02`.
+    // "forward" is -z, so the reference's (R.z < 0.02) becomes (-R.z < 0.02).
     if (-R.z < 0.02) { return miss; }
 
     // Step length set so the ray crosses roughly one pixel per step near the

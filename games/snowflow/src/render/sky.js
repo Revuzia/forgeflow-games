@@ -152,6 +152,9 @@ export class Sky {
          */
         this._rowZeroIsZenith = null;
         this._mipsVerified = false;
+        /** Last baked sun scale / warmth, so a direct write to S is caught too. */
+        this._lastScale = NaN;
+        this._lastWarm = NaN;
 
         // ------------------------------------------------------------- LUTs
         // RGBA16F with a full mip chain. Mip 6 is 8x4, which is the coarsest
@@ -328,6 +331,18 @@ export class Sky {
         }
 
         this.sunScale = S.sunIntensity * SUN_SCALE_BASE;
+
+        // The intensity and warmth sliders change the *baked* sky as well as the
+        // beam, and they are caught here rather than only through onChange
+        // because onChange fires from settings.set() alone — a direct write to S
+        // (which is how the harness and any preset applied by hand mutate it)
+        // would otherwise leave the LUT on the old scale while sunRadiance moved,
+        // reintroducing QUIRK-1 through the back door. Two float compares.
+        if (this._lastScale !== this.sunScale || this._lastWarm !== S.sunTempWarm) {
+            this._lastScale = this.sunScale;
+            this._lastWarm = S.sunTempWarm;
+            this._markDirty();
+        }
 
         // Direct sunlight reddens as it grazes: the lower the sun, the longer
         // the path through the atmosphere and the more of the blue end is

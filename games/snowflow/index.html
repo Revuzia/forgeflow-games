@@ -248,14 +248,23 @@
         if (lose) lose.loseContext();
     }
 
-    // gfx.checkCaps() re-runs this against the real renderer; this copy exists
-    // only so the gate can fire before any module load.
-    window.__SNOWFLOW_CAPS__ = { ok: missing.length === 0, missing: missing };
-
+    // Which capabilities are FATAL, single-sourced with gfx.js's FATAL_CAPS.
+    // The two lists are duplicated on purpose and must be edited together: this
+    // gate has to run before the module graph loads, so it cannot import them.
     var noWebGL2 = missing.indexOf("WebGL2") >= 0;
     var noFloatRT = missing.indexOf("EXT_color_buffer_float") >= 0;
+    var fatal = [];
+    if (noWebGL2) fatal.push("WebGL2");
+    if (noFloatRT) fatal.push("EXT_color_buffer_float");
 
-    if (noWebGL2 || noFloatRT) {
+    // Same shape and same meaning as gfx.checkCaps()'s return value: `ok` is
+    // "can run" (so a missing OES_texture_float_linear leaves ok true and shows
+    // up only in `missing`), `fatal` is why it cannot. gfx.checkCaps() re-runs
+    // the probe against the real renderer and is the richer report; this copy
+    // exists only so the gate can fire before any module load.
+    window.__SNOWFLOW_CAPS__ = { ok: fatal.length === 0, fatal: fatal, missing: missing };
+
+    if (fatal.length) {
         var boot = document.getElementById("boot");
         if (boot) boot.remove();
 

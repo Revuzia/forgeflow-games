@@ -101,6 +101,26 @@ float hash11(float p) { ... }
 `;
 ```
 
+**Never put an unescaped backtick inside that literal.** It ends the template string
+mid-shader, so the module becomes a JS syntax error — and the reported error is a stray
+identifier tens of lines further down, blaming whoever imported the file rather than the
+file itself. Because `registry.js` imports the shared chunks, one such module takes down
+`registerShaders()` and with it every `#include` in the port. This has bitten six files
+across three owners, every time because the author reached for the backtick-quoting habit
+that is correct in the JSDoc *above* the literal and fatal *inside* it. Inside the shader,
+quote identifiers with 'single quotes' or (parentheses). If you genuinely need a backtick,
+escape it: `` \` ``.
+
+Guard, ~200 ms, no server or GPU — run it before you commit:
+
+```bash
+node games/snowflow/_tools/shadercheck.mjs
+```
+
+It imports every `src/shaders/**/*.glsl.js`, names the offending file, and prints the
+suspect backtick line. `_harness/modulecheck.py` also catches these, but only
+transitively and only once an importer exists.
+
 ---
 
 ## 2. The `SNOWFLOW` global — required, do not change
@@ -127,6 +147,7 @@ Required behaviour of the members the harness touches:
 | `character.position` | `THREE.Vector3`, feet position, writable |
 | `character.velocity` | `THREE.Vector3`, writable |
 | `character.surfActive` | bool, set from `input.surf` each frame |
+| `character.yaw` | radians, the figure's facing; readable and writable |
 | `terrain.heightAt(x, z)` | metres, CPU-side, samples the *same* surface that is drawn |
 | `spells.cast(n)` | n = 1..5, fires that spell immediately |
 | `spells.holdRibbon(b)` | begins / ends the held cast |
@@ -147,9 +168,20 @@ register(name, source)   // add a chunk
 resolve(source)          // expand every  #include "name"  recursively, once, cached
 ```
 
-Includes are textual, resolved once at material construction. Cycles throw. Every chunk
-is registered at module load by `shaders/registry.js`, which the owner of each chunk
-extends.
+Includes are textual, resolved once at material construction. Cycles throw. Every shared
+chunk is registered by `shaders/registry.js`.
+
+**`registry.js` is the one shared-write exception to §1.** It is FOUNDATION's file, but each
+chunk owner adds their own registration to it. It ships with a commented-out import line and
+a matching `CHUNKS` entry for every chunk in the table below, tagged with its owner, so
+registering yours means deleting two slashes. Rules, because builders edit it concurrently:
+
+- Uncomment **only your own two lines**. Never rewrite the import block or the `CHUNKS`
+  object wholesale — another builder is editing the file between your read and your write,
+  and a block replacement silently deletes their registration.
+- If an edit fails because the text moved, re-read and redo just that one line.
+- Registering a name twice throws at boot, so a collision fails loudly rather than
+  resolving to whichever import happened to run last.
 
 **Shared includes and their owners** — everyone reads these, only the owner writes:
 
@@ -289,6 +321,25 @@ This GPU is far weaker than the RTX 5070 Ti the reference was profiled on. **Fra
 not an acceptance criterion here — fidelity is.** Do not cut quality for speed. Do keep the
 `preset` machinery working so quality can be scaled deliberately rather than by accident.
 
+### 4.2 Foundation gotchas the builders must know
+
+Measured by FOUNDATION on this machine, not assumed:
+
+- **`installDrawCounter()` sets `renderer.info.autoReset = false`.** The integrator must call
+  `endFrameDraws()` exactly once per frame, or the counters grow without bound.
+- **`FullScreenPass.render()` forces `renderer.autoClear = false`** for its own draw and
+  restores it after. The triangle covers every pixel with depth test and blending off, so the
+  clear is pure bandwidth — and on an accumulation target it is actively wrong.
+- **`shader()` emits the `precision` lines before your source**, so a stage using it cannot
+  carry its own `#extension` directive. Nothing this port needs requires one in ES 3.00.
+- **`readbackFloat()` always returns RGBA — 4 floats per texel**, because WebGL2's readback
+  format is fixed. Reading a 4096² target therefore costs 268 MB. Read once and stride down
+  to the mirror you actually want immediately; do not hold the full buffer.
+- `EXT_disjoint_timer_query_webgl2` **is** present here, so `stats.gpuMs` is a real GPU
+  number rather than presentation cadence.
+- `S.fogStart` and `S.deformResolution` exist in `S` with no `SCHEMA` widget. That is exactly
+  how the reference is — it is not a porting omission, do not "fix" it.
+
 ---
 
 ## 5. The custom-caster pattern (critical)
@@ -353,16 +404,33 @@ You are done when **all** of these hold:
 
 ## 8. How to see your work
 
+The dev server runs on **port 8799**, not 8788 — 8788 is occupied by an unrelated project on
+this machine and serves a different site, so a request there returns someone else's page or a
+404. All three harness scripts already default to 8799; pass no `--url` and you get it right.
+
 ```bash
-# serve (from the repo root, port 8788, no-cache)
-python forgeflow-games/serve_nocache.py 8788
-
-# shoot the port
-python games/snowflow/_harness/shoot.py \
-    --url http://localhost:8788/games/snowflow/index.html \
-    --out games/snowflow/_shots/port --shots 01-hero
-
-# the matched reference frames are already in games/snowflow/_shots/ref/
+# serve, if it is not already up (repo root, no-cache)
+python forgeflow-games/serve_nocache.py 8799
 ```
 
-Look at the PNGs. Compare them to `_shots/ref/`. If yours is worse, it is not done.
+Three checks, cheapest first. Use them in this order — each one rules out a class of failure
+that would otherwise waste a full run of the next.
+
+```bash
+cd games/snowflow/_harness
+
+# 1. seconds, no GPU context. Catches a broken import, a duplicate chunk
+#    registration, and an #include naming a chunk nobody wrote.
+python modulecheck.py
+
+# 2. one page load. Catches shader compile/link failures, uncaught errors, and
+#    "boots but draws nothing". Saves _shots/bootcheck.png — LOOK AT IT.
+python bootcheck.py
+
+# 3. minutes. The full 14-shot battery, reloading per shot.
+python shoot.py --out ../_shots/port                # all shots
+python shoot.py --out ../_shots/port --shots 01-hero  # one, while iterating
+```
+
+Then look at the PNGs in `_shots/port/` beside `_shots/ref/`. If yours is worse, it is not
+done. `RESULT: OK` from bootcheck means no errors — it does **not** mean the frame is right.

@@ -21,6 +21,15 @@ import argparse, hashlib, json, os, random, sys
 import numpy as np
 from PIL import Image
 
+# Windows consoles default to cp1252 and cannot encode this script's output; force
+# utf-8 before anything writes, or a print raises and masks the real result.
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 SHOTS = os.path.join(HERE, "..", "_shots")
 

@@ -12,7 +12,7 @@ export const meta = {
 // ---------------------------------------------------------------- parameters
 const GAME = String.raw`C:\Users\TestRun\Claude Claw\forgeflow-games\games\snowflow`
 const HARNESS = `${GAME}\\_harness`
-const URL = 'http://localhost:8788/games/snowflow/index.html'
+const URL = 'http://localhost:8799/games/snowflow/index.html'
 
 const A = args || {}
 const MAX_ROUNDS = A.rounds || 4
@@ -136,7 +136,7 @@ for (let round = START_ROUND; round < START_ROUND + MAX_ROUNDS; round++) {
 1. Confirm the dev server is serving the game:
      curl -s -o /dev/null -w "%{http_code}" ${URL}
    If it is not 200, start it (background, from the repo root):
-     python "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\serve_nocache.py" 8788
+     python "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\serve_nocache.py" 8799
 
 2. Shoot the port:
      cd "${HARNESS}"

@@ -99,18 +99,19 @@ in float vMask;
 `;
 
 /**
- * The two lines every prepass vertex stage ends with, given a clip-space
- * position and a mask. Written as a function rather than a snippet so the
- * `clip.w` -> `vViewZ` identity is stated in exactly one place.
+ * The three lines every prepass vertex stage ends with, given a clip-space
+ * position and a mask. A function rather than a snippet so the `clip.w` ->
+ * `vViewZ` identity is stated in exactly one place.
  *
- * Usage in a vertex stage:
+ * Concatenate it AFTER `PREPASS_VS_VARYINGS`, which declares what it writes:
  *
- *     #include nothing — this is a string, concatenate it
- *     ...
- *     void main() {
- *         vec3 world = <however this caster places its vertex>;
- *         prepassEmit(uViewProj * vec4(world, 1.0), 0.0);
- *     }
+ *     const vs = PREPASS_VS_VARYINGS + PREPASS_EMIT + `
+ *         in vec3 position;
+ *         uniform mat4 viewProjection;
+ *         void main() {
+ *             vec3 world = <however this caster places its vertex>;
+ *             prepassEmit(viewProjection * vec4(world, 1.0), 0.0);
+ *         }`;
  *
  * @type {string}
  */

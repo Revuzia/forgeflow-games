@@ -13,7 +13,7 @@ export const meta = {
 const GAME = String.raw`C:\Users\TestRun\Claude Claw\forgeflow-games\games\snowflow`
 const REF = String.raw`C:\Users\TestRun\AppData\Local\Temp\claude\C--Users-TestRun-Claude-Claw\7a2e6b97-6e7f-44b3-82c7-2af10752e605\scratchpad\snowflow_demo`
 const HARNESS = `${GAME}\\_harness`
-const URL = 'http://localhost:8788/games/snowflow/index.html'
+const URL = 'http://localhost:8799/games/snowflow/index.html'
 
 const COMMON = `
 PROJECT — a Three.js r172 / WebGL2 / hand-written GLSL ES 3.00 port of the SNOWFLOW WebGPU
@@ -489,7 +489,7 @@ triangles, and saves a screenshot to ${GAME}\\_shots\\bootcheck.png. LOOK at tha
 "no errors" is not the same as "renders something". Keep going until it prints RESULT: OK and
 the screenshot shows snow, a sky and a figure.
 
-If the server is not up: python "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\serve_nocache.py" 8788
+If the server is not up: python "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\serve_nocache.py" 8799
 
 Report with total fidelity: the final bootcheck output verbatim, what you see in the
 screenshot, every cross-owner edit you made and why, and every system that is still broken or

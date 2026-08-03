@@ -291,7 +291,7 @@ float sampleCascadeTex(
     vec2  uv = ndc.xy * 0.5 + 0.5;
 
     return pcssShadow(tex, uv, receiverDepth, shadowTexel, depthRange, orthoWidth,
-                      softness, noiseRot, shadowBias, planeNdcPerUV);
+                      softness, noiseRot, biasWorld, planeNdcPerUV);
 }
 
 /**

@@ -117,10 +117,10 @@ vec3 resolveTaa(vec2 uv) {
     // that lands on the far side of a berm crest.
     float z = textureLod(uDepth, uv, 0.0).r;
     vec2 ndc = uv * 2.0 - 1.0 - uJitterNdc;
-    // -1.0, not the reference's +1.0: Three's view space looks down -z. `z`
-    // itself is still the positive distance the prepass stored, and min() clamps
-    // sky pixels to 9000 m so they reproject through a finite point rather than
-    // through infinity.
+    // -1.0, not the reference's +1.0: Three's view space looks down -z. The
+    // depth itself is still the positive distance the prepass stored, and min()
+    // clamps sky pixels to 9000 m so they reproject through a finite point
+    // rather than through infinity.
     vec3 view = vec3(ndc.x * uProjInfo.x, ndc.y * uProjInfo.y, -1.0) * min(z, POST_FAR);
     vec4 world = uInvView * vec4(view, 1.0);
 

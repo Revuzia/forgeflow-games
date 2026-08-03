@@ -68,7 +68,7 @@ float cocOf(float z, float focus) {
     float far = smoothstep(FAR_START, FAR_FULL, z);
     // The near side stays keyed to the focal distance, because that is the right
     // anchor for it: the near limit is a property of the subject distance. A
-    // descending smoothstep, so `near` is 1 at z <= focus*0.16 and 0 at
+    // descending smoothstep, so "near" is 1 at z <= focus*0.16 and 0 at
     // z >= focus*0.55.
     float near = smoothstep(focus * 0.55, focus * 0.16, z);
     return far - near;

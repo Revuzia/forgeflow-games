@@ -30,18 +30,18 @@ import deform from "./lib/deform.glsl.js";       // [DEFORM]
 // deleting two slashes and creating the file, and so a missing chunk fails at
 // module load with a clear name rather than deep inside a shader compile.
 //
-//   import noise        from "./lib/noise.glsl.js";        // [TERRAIN]
-//   import terrain      from "./lib/terrain.glsl.js";      // [TERRAIN]
-//   import clipmap      from "./lib/clipmap.glsl.js";      // [TERRAIN]
+import noise from "./lib/noise.glsl.js";                    // [TERRAIN]
+import terrain from "./lib/terrain.glsl.js";                // [TERRAIN]
+import clipmap from "./lib/clipmap.glsl.js";                // [TERRAIN]
 //   import deform       from "./lib/deform.glsl.js";       // [DEFORM]
 import shadowLookup from "./lib/shadowLookup.glsl.js";     // [SHADOWS]
 import atmosphere from "./lib/atmosphere.glsl.js";   // [SKY]
-//   import shading      from "./lib/shading.glsl.js";      // [SNOW-SHADING]
+import shading from "./lib/shading.glsl.js";                // [SNOW-SHADING]
 //   import spellLights  from "./lib/spellLights.glsl.js";  // [SPELLS]
 //   import water        from "./lib/water.glsl.js";        // [SPELLS]
 //   import crystal      from "./lib/crystal.glsl.js";      // [SPELLS]
 //   import wake         from "./lib/wake.glsl.js";         // [WAKE]
-//   import charSkin     from "./lib/charSkin.glsl.js";     // [CHARACTER]
+import charSkin from "./lib/charSkin.glsl.js";             // [CHARACTER]
 import postCommon from "./lib/postCommon.glsl.js";         // [POST-CORE]
 //
 // ...and the matching CHUNKS entries:
@@ -78,6 +78,22 @@ const CHUNKS = {
     // shared uniform block from ARCHITECTURE.md §3. [FOUNDATION]
     "lib/common": common,
 
+    // Hashes, gradient noise with exact analytic derivatives, damped/ridged fBm,
+    // shaping helpers. The bake and the runtime must evaluate byte-identical
+    // functions or the character floats. [TERRAIN]
+    "lib/noise": noise,
+    // windMat + the landform: terrainMacro / rockField / windLocal /
+    // terrainFine(Filtered). Anisotropic about one prevailing wind. [TERRAIN]
+    "lib/terrain": terrain,
+    // Ring placement + CDLOD morph + the bicubic height fetch, and the single
+    // clipmapSurface() call the beauty, cascade and prepass vertex stages share
+    // so they cannot drift. Vertex stages only. [TERRAIN]
+    "lib/clipmap": clipmap,
+    // The snow BRDF: wrapped diffuse, the back-scatter subsurface term with its
+    // depth-dependent blue tint, GGX, procedural grazing-gated glints, RNM normal
+    // blending. Declares the sss/glint uniform block. [SNOW-SHADING]
+    "lib/shading": shading,
+
     // Equirect sky-LUT sampling, SH irradiance (ambient slider folded in),
     // mip specular probe, and the one aerial perspective every hazed surface
     // in the frame shares. Declares the atmosphere uniform block — get it from
@@ -85,6 +101,12 @@ const CHUNKS = {
     "lib/atmosphere": atmosphere,
     // Tonemap curves, exposure, position rebuild, sampling helpers. [POST-CORE]
     "lib/postCommon": postCommon,
+
+    // Bone-matrix fetch + two-influence LBS from the 48x64 transform texture,
+    // and the Catmull-Rom cloth reconstruction. Declares `charTex`. Included by
+    // all seven character vertex programs so beauty, depth and both cascades
+    // place a vertex at literally the same world position. [CHARACTER-CLOTH]
+    "lib/charSkin": charSkin,
 
     // Toroidal read side of the terrain state buffer: deformSample / deformHeight
     // / deformGradient, plus deformDisplace(), the single gated-displacement call

@@ -220,7 +220,16 @@ export const SCHEMA = [
     },
 ];
 
-/** Quality presets. Only the keys that differ from `ultra` need listing. */
+/**
+ * Quality presets. Only the keys that differ from `ultra` need listing — `ultra`
+ * *is* the authored default of `S`, which is why it is empty.
+ *
+ * Transcribed verbatim from the reference (`src/core/settings.js`) and
+ * `_spec/post-core.md` §13.3, including the fact that `high` currently restates
+ * the `ultra` values rather than sitting between `ultra` and `balanced`. That is
+ * the reference's data and ARCHITECTURE §0.4 forbids re-tuning it here; it is
+ * reported rather than changed.
+ */
 export const PRESETS = {
     ultra: {},
     high: { deformResolution: 2048, resolutionScale: 1.0, ssr: true, dof: true },
@@ -229,6 +238,39 @@ export const PRESETS = {
         ssr: false, dof: false,
     },
 };
+
+/**
+ * The union of every key any preset touches, resolved once at module load.
+ *
+ * Presets are *differential* data but must behave *totally*: applying `balanced`
+ * and then `ultra` has to land back on the ultra values. Iterating only the named
+ * preset's own keys cannot do that — `PRESETS.ultra` is `{}`, so it would restore
+ * nothing and `S.preset` would read "ultra" over balanced settings. A silent
+ * label-vs-state divergence like that makes the shot battery irreproducible,
+ * which is exactly the "scaled by accident" ARCHITECTURE §4.1 rules out.
+ *
+ * Deliberately the union and not every key in `S`: clicking a preset must not
+ * also reset the exposure slider or `debugView` that the operator just set.
+ */
+const PRESET_KEYS = (() => {
+    /** @type {Set<string>} */
+    const keys = new Set();
+    for (const name in PRESETS) for (const k in PRESETS[name]) keys.add(k);
+    return Array.from(keys);
+})();
+
+/**
+ * Boot values of those keys — the `ultra` baseline, captured before anything can
+ * write to `S`. Read from `S` rather than duplicated as a literal so the two can
+ * never drift.
+ * @type {Record<string, number|boolean|string>}
+ */
+const PRESET_BASELINE = (() => {
+    /** @type {Record<string, number|boolean|string>} */
+    const b = {};
+    for (let i = 0; i < PRESET_KEYS.length; i++) b[PRESET_KEYS[i]] = S[PRESET_KEYS[i]];
+    return b;
+})();
 
 /** @type {Map<string, Set<(v:any, k:string) => void>>} */
 const listeners = new Map();
@@ -269,6 +311,14 @@ export function set(k, v) {
 }
 
 /**
+ * Apply a quality preset. Total, not differential: every key any preset touches
+ * is written on every call — from the preset if it names it, otherwise from the
+ * boot baseline — so stepping down and back up is lossless and `S.preset` always
+ * describes the settings actually in force.
+ *
+ * `set()` no-ops on an identical write, so the keys that did not really change
+ * fire no listeners and rebuild no render targets.
+ *
  * @param {keyof typeof PRESETS} name
  * @returns {void}
  */
@@ -276,5 +326,8 @@ export function applyPreset(name) {
     const p = PRESETS[name];
     if (!p) return;
     S.preset = name;
-    for (const k in p) set(k, p[k]);
+    for (let i = 0; i < PRESET_KEYS.length; i++) {
+        const k = PRESET_KEYS[i];
+        set(k, k in p ? p[k] : PRESET_BASELINE[k]);
+    }
 }
