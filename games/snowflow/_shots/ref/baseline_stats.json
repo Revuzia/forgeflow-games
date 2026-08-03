@@ -1,0 +1,212 @@
+{
+  "01-hero": {
+    "mean_luma": 0.52504,
+    "std_luma": 0.15302,
+    "p01": 0.24252,
+    "p99": 0.91031,
+    "clipped_white_pct": 0.0,
+    "crushed_black_pct": 0.022,
+    "detail_energy": 0.035417,
+    "mean_rgb": [
+      0.51291,
+      0.5291,
+      0.52057
+    ],
+    "shadow_blue_bias": 0.1006
+  },
+  "02-snow-grazing": {
+    "mean_luma": 0.50366,
+    "std_luma": 0.15783,
+    "p01": 0.03591,
+    "p99": 0.91338,
+    "clipped_white_pct": 0.0725,
+    "crushed_black_pct": 0.0894,
+    "detail_energy": 0.034064,
+    "mean_rgb": [
+      0.48618,
+      0.50849,
+      0.50729
+    ],
+    "shadow_blue_bias": 0.11316
+  },
+  "03-shadow-penumbra": {
+    "mean_luma": 0.47992,
+    "std_luma": 0.05024,
+    "p01": 0.33958,
+    "p99": 0.55233,
+    "clipped_white_pct": 0.0,
+    "crushed_black_pct": 0.0,
+    "detail_energy": 0.027015,
+    "mean_rgb": [
+      0.47734,
+      0.48211,
+      0.4659
+    ],
+    "shadow_blue_bias": 0.02494
+  },
+  "04-backlit-sss": {
+    "mean_luma": 0.51448,
+    "std_luma": 0.15154,
+    "p01": 0.25008,
+    "p99": 0.91703,
+    "clipped_white_pct": 0.0876,
+    "crushed_black_pct": 0.0021,
+    "detail_energy": 0.03549,
+    "mean_rgb": [
+      0.4987,
+      0.51907,
+      0.51555
+    ],
+    "shadow_blue_bias": 0.10469
+  },
+  "05-trail-berms": {
+    "mean_luma": 0.45149,
+    "std_luma": 0.06929,
+    "p01": 0.24811,
+    "p99": 0.54649,
+    "clipped_white_pct": 0.0,
+    "crushed_black_pct": 0.0011,
+    "detail_energy": 0.029806,
+    "mean_rgb": [
+      0.44278,
+      0.45431,
+      0.44928
+    ],
+    "shadow_blue_bias": 0.07151
+  },
+  "06-surf-wake": {
+    "mean_luma": 0.47171,
+    "std_luma": 0.12917,
+    "p01": 0.25704,
+    "p99": 0.83947,
+    "clipped_white_pct": 0.0,
+    "crushed_black_pct": 0.0992,
+    "detail_energy": 0.035732,
+    "mean_rgb": [
+      0.45374,
+      0.47643,
+      0.47792
+    ],
+    "shadow_blue_bias": 0.10365
+  },
+  "07-spell-sweep": {
+    "mean_luma": 0.52383,
+    "std_luma": 0.14478,
+    "p01": 0.25704,
+    "p99": 0.891,
+    "clipped_white_pct": 0.0,
+    "crushed_black_pct": 0.0591,
+    "detail_energy": 0.037033,
+    "mean_rgb": [
+      0.51591,
+      0.52708,
+      0.515
+    ],
+    "shadow_blue_bias": 0.08293
+  },
+  "08-spell-ribbon": {
+    "mean_luma": 0.5267,
+    "std_luma": 0.14768,
+    "p01": 0.25317,
+    "p99": 0.90694,
+    "clipped_white_pct": 0.0,
+    "crushed_black_pct": 0.0279,
+    "detail_energy": 0.035938,
+    "mean_rgb": [
+      0.51683,
+      0.53038,
+      0.51937
+    ],
+    "shadow_blue_bias": 0.08973
+  },
+  "09-spell-bloom": {
+    "mean_luma": 0.52747,
+    "std_luma": 0.1376,
+    "p01": 0.26605,
+    "p99": 0.88624,
+    "clipped_white_pct": 0.0,
+    "crushed_black_pct": 0.0059,
+    "detail_energy": 0.036172,
+    "mean_rgb": [
+      0.52094,
+      0.53049,
+      0.51673
+    ],
+    "shadow_blue_bias": 0.07274
+  },
+  "10-spell-crystallize": {
+    "mean_luma": 0.52058,
+    "std_luma": 0.14915,
+    "p01": 0.25063,
+    "p99": 0.89801,
+    "clipped_white_pct": 0.0,
+    "crushed_black_pct": 0.0293,
+    "detail_energy": 0.037003,
+    "mean_rgb": [
+      0.50988,
+      0.52431,
+      0.51524
+    ],
+    "shadow_blue_bias": 0.09245
+  },
+  "11-spell-vortex": {
+    "mean_luma": 0.53233,
+    "std_luma": 0.15221,
+    "p01": 0.25092,
+    "p99": 0.90946,
+    "clipped_white_pct": 0.0,
+    "crushed_black_pct": 0.002,
+    "detail_energy": 0.034477,
+    "mean_rgb": [
+      0.521,
+      0.53632,
+      0.52622
+    ],
+    "shadow_blue_bias": 0.0975
+  },
+  "12-far-range": {
+    "mean_luma": 0.46828,
+    "std_luma": 0.13927,
+    "p01": 0.25431,
+    "p99": 0.85095,
+    "clipped_white_pct": 0.0,
+    "crushed_black_pct": 0.0502,
+    "detail_energy": 0.022767,
+    "mean_rgb": [
+      0.43313,
+      0.47623,
+      0.49299
+    ],
+    "shadow_blue_bias": 0.17844
+  },
+  "13-char-closeup": {
+    "mean_luma": 0.42731,
+    "std_luma": 0.11619,
+    "p01": 0.01012,
+    "p99": 0.62231,
+    "clipped_white_pct": 0.0,
+    "crushed_black_pct": 0.5177,
+    "detail_energy": 0.043374,
+    "mean_rgb": [
+      0.40658,
+      0.43234,
+      0.43854
+    ],
+    "shadow_blue_bias": 0.12099
+  },
+  "14-sky-sun": {
+    "mean_luma": 0.45979,
+    "std_luma": 0.16195,
+    "p01": 0.23021,
+    "p99": 0.91001,
+    "clipped_white_pct": 0.0768,
+    "crushed_black_pct": 0.0,
+    "detail_energy": 0.02581,
+    "mean_rgb": [
+      0.42578,
+      0.46699,
+      0.48858
+    ],
+    "shadow_blue_bias": 0.18047
+  }
+}

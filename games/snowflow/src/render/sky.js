@@ -55,6 +55,7 @@
 
 import * as THREE from "three";
 import { S, onChange } from "../core/settings.js";
+import { bearingRad } from "../core/bearing.js";
 import { makeRT, FullScreenPass } from "../core/gfx.js";
 import { fail } from "../core/loading.js";
 import skyBakeFrag from "../shaders/skyBake.glsl.js";
@@ -309,14 +310,17 @@ export class Sky {
      * @returns {void}
      */
     syncFromSettings() {
-        // Transcribed verbatim from the reference (PORT-11): azimuth 0 = +Z,
-        // 90 = +X. The reference frame is Babylon/left-handed and this is
-        // Three/right-handed, so applying the formula unchanged mirrors the
-        // world in Z relative to the reference — which is correct as long as the
-        // terrain, the wind bearing and the character do the same, because every
-        // one of them consumes this same convention. Negating Z here alone would
-        // invert the 70-80 degree sun/wind separation the sastrugi depend on.
-        const az = (S.sunAzimuth * Math.PI) / 180;
+        // Azimuth 0 = +Z, 90 = +X. PORT-11 originally applied the reference
+        // formula unchanged, on the argument that it was correct as long as the
+        // terrain, the wind and the character used the same convention — but the
+        // camera and the character do NOT: they are z-mirrored (see
+        // `core/bearing.js`). That left the sun 53.9 degrees off the camera
+        // forward at shot 14's pose, where the reference has it dead centre, and
+        // pushed the sun disc clean out of frame in every shot. `bearingRad`
+        // mirrors it into the camera's frame; because sin(PI-a) = sin(a) and
+        // cos(PI-a) = -cos(a), the formula below is otherwise untouched, and the
+        // sun/wind separation survives because the wind is mirrored with it.
+        const az = bearingRad(S.sunAzimuth);
         const el = (S.sunElevation * Math.PI) / 180;
         const ce = Math.cos(el);
         _dir.set(Math.sin(az) * ce, Math.sin(el), Math.cos(az) * ce);
@@ -630,7 +634,9 @@ export class Sky {
     render(camera, time) {
         const u = this._skyUniforms;
 
-        const a = (S.windDirection * Math.PI) / 180;
+        // Mirrored with the sun — see `core/bearing.js`. The formula is the
+        // reference's; only the angle is converted into the port's frame.
+        const a = bearingRad(S.windDirection);
         u.uWindDir.value.set(Math.sin(a), Math.cos(a));
 
         u.uCameraPos.value.copy(camera.position);

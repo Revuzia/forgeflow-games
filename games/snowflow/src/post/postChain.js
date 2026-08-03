@@ -309,6 +309,22 @@ export class PostChain {
         );
     }
 
+    /**
+     * This frame's projection matrix WITHOUT the temporal jitter, latched by
+     * `update()` before the offset is written into it.
+     *
+     * Exists for the shadow refit, which documents (`render/shadows.js`,
+     * `update()`) that it would rather be handed the clean projection: the
+     * jitter is sub-pixel and harmless to the fit itself, but it feeds noise
+     * into the cascade radius that the relative quantisation there exists to
+     * reject. Read-only by contract — the returned matrix is the live one this
+     * class reuses every frame, so copy it if you intend to keep it.
+     * @returns {THREE.Matrix4}
+     */
+    get projectionUnjittered() {
+        return this._projUnjit;
+    }
+
     // --------------------------------------------------------------- update
 
     /**

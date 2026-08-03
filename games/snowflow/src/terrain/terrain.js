@@ -55,6 +55,7 @@
 import * as THREE from "three";
 
 import { S, onChange } from "../core/settings.js";
+import { bearingRad } from "../core/bearing.js";
 import { resolve, shader } from "../core/glsl.js";
 import { makeRT, FullScreenPass } from "../core/gfx.js";
 import { nextFrame } from "../core/loading.js";
@@ -83,8 +84,6 @@ const GRAIN_SCALE = 0.013;
  */
 const SHADOW_SOFTNESS = 1.8;
 const SHADOW_BIAS = 0.022;
-
-const DEG = Math.PI / 180;
 
 /** `S.debugView` -> the `debugMode` uniform. Order matches the snow fragment. */
 const DEBUG_MODES = {
@@ -218,7 +217,8 @@ export class Terrain {
             lodCenter: { value: new THREE.Vector2() },
             baseSpacing: { value: BASE_SPACING },
             gridHalfN: { value: GRID_HALF_N },
-            windAngle: { value: S.windDirection * DEG },
+            // Must match the heightfield bake exactly — see `core/bearing.js`.
+            windAngle: { value: bearingRad(S.windDirection) },
             sastrugiAmp: { value: S.sastrugiStrength },
         };
 
@@ -393,7 +393,7 @@ export class Terrain {
         const c = this.clipUniforms;
         // No extra snapping here; placeClipmapVertex snaps per ring already.
         c.lodCenter.value.set(focus.x, focus.z);
-        c.windAngle.value = S.windDirection * DEG;
+        c.windAngle.value = bearingRad(S.windDirection);
         c.sastrugiAmp.value = S.sastrugiStrength;
 
         const sh = this.shadingUniforms;

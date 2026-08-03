@@ -34,6 +34,7 @@ import * as THREE from "three";
 import { makeRT, FullScreenPass } from "../core/gfx.js";
 import { fail } from "../core/loading.js";
 import { S } from "../core/settings.js";
+import { bearingRad } from "../core/bearing.js";
 import heightBakeFrag from "../shaders/heightBake.glsl.js";
 import auxBakeFrag from "../shaders/auxBake.glsl.js";
 
@@ -146,7 +147,11 @@ export class Heightfield {
      * @returns {void}
      */
     bake() {
-        const windAngle = (S.windDirection * Math.PI) / 180;
+        // Mirrored into the port's frame (`core/bearing.js`). windMat rotates the
+        // sample domain by this angle, so mirroring it here is what keeps the
+        // sastrugi ridges at the reference's 76 degrees to the sun rather than
+        // raked along it — the bake and the clipmap must pass the same value.
+        const windAngle = bearingRad(S.windDirection);
 
         this._heightPass.uniforms.windAngle.value = windAngle;
         this._heightPass.uniforms.heightAmp.value = S.macroHeightScale;

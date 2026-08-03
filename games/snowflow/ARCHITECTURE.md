@@ -400,6 +400,26 @@ You are done when **all** of these hold:
 
 "It compiles" and "no errors" are **not** done. Done is the observed pixels.
 
+### 7.1 Objective targets, measured off the reference
+
+Measured from `_shots/ref/*.png`; the full table is `_shots/ref/baseline_stats.json`. These
+do not replace looking at the image — they catch the failures that are easy to rationalise
+away by eye, and they are cheap to check.
+
+| Statistic | Reference range | What a miss means |
+|---|---|---|
+| `mean_luma` | 0.43 – 0.53 | overall exposure. Outside this, `S.exposure` or the tonemap is wrong, not the lighting. |
+| `detail_energy` | 0.023 – 0.043 | mean \|gradient\|: how much fine surface structure survives. **Materially low = the sastrugi, ripples or the three tiled detail scales are missing or washed out.** This is the single most diagnostic number in the table. |
+| `shadow_blue_bias` | +0.02 – +0.18 | B−R in the darkest quartile. Always **positive** — shadowed snow is blue. Near zero or negative means the subsurface tint or the SH ambient is not reaching the shadows, i.e. the shading has collapsed toward plain N·L. |
+| `clipped_white_pct` | 0.00 – 0.09 | highlights are rolled off, essentially never clipped. Anything above ~0.5 means the AgX shoulder is not being reached properly and lit slopes are resolving to flat white. |
+| `crushed_black_pct` | ≈ 0.02 | shadows keep colour rather than going to black. |
+
+Per-shot extremes worth knowing: `13-char-closeup` has the highest detail energy (0.0434 —
+it is nearly all near-field snow grain), while `12-far-range` (0.0228) and `14-sky-sun`
+(0.0258) are the lowest because most of the frame is sky and haze. Those two also carry the
+strongest blue bias (~0.18). Compare like for like — a shot against its own baseline row,
+never against the table's overall range.
+
 ---
 
 ## 8. How to see your work

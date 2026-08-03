@@ -138,6 +138,25 @@ export class CharacterController {
     }
 
     /**
+     * ARCHITECTURE.md §2 names this member `yaw` — "radians, the figure's
+     * facing; readable and writable" — and the comparison harness poses the
+     * character through `SNOWFLOW.character`. Internally the field is `facing`,
+     * which is the reference's name and the one every consumer in this port
+     * already reads, so the contract is satisfied with an alias rather than by
+     * renaming and touching five files. Deliberately not wrapped, exactly like
+     * `facing`: a pose that writes 3*PI must not snap the figure round the
+     * short way on the next `angleDamp`.
+     * @returns {number}
+     */
+    get yaw() {
+        return this.facing;
+    }
+
+    set yaw(v) {
+        this.facing = v;
+    }
+
+    /**
      * @param {number} dt
      * @param {import("../core/camera.js").CameraRig} rig
      * @returns {void}

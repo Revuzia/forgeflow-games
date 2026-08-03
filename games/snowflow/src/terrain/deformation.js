@@ -73,6 +73,7 @@
 import * as THREE from "three";
 
 import { S, onChange } from "../core/settings.js";
+import { bearingRad } from "../core/bearing.js";
 import { FullScreenPass, makePingPong } from "../core/gfx.js";
 import deformSimSource from "../shaders/deformSim.glsl.js";
 
@@ -327,7 +328,8 @@ export class DeformationField {
         u.refillRate.value = S.refillRate;
         u.maxDepth.value = 0.55 * S.deformDepth;
         u.maxBerm.value = 0.34 * S.deformBerm;
-        u.windAngle.value = (S.windDirection * Math.PI) / 180;
+        // Mirrored into the port's frame — see `core/bearing.js`.
+        u.windAngle.value = bearingRad(S.windDirection);
 
         this._step();
 

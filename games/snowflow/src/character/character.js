@@ -54,6 +54,7 @@ import { Figure, BONE_COUNT } from "./figure.js";
 import { makePanels, ClothSolver } from "./cloth.js";
 import { buildBody, buildFur, buildClothMesh } from "./build.js";
 import { S, onChange } from "../core/settings.js";
+import { bearingRad } from "../core/bearing.js";
 import { shader, resolve } from "../core/glsl.js";
 import { fail } from "../core/loading.js";
 import {
@@ -495,15 +496,17 @@ export class Character {
         // (30 mm at 19 m/s) is most of a 48 mm hood strand, so the fur visibly
         // sweeps back by most of its own length.
         const ch = this.controller;
-        const a = (S.windDirection * Math.PI) / 180;
+        // PORT FRAME: `bearingRad` already mirrors the bearing into the port's
+        // frame (`core/bearing.js`), so the cosine is used as written rather than
+        // hand-negated here — the hand-negation this replaces was correct but
+        // duplicated the invariant, which is how the sun drifted out of frame.
+        // `ch.velocity` and `ch.acceleration` are already in the port frame.
+        const a = bearingRad(S.windDirection);
         const ws = 0.6 * S.windStrength;   // note: NOT the cloth solver's 3.2
-        // PORT FRAME: bearing a = 0 blows toward the reference's +z, i.e. the
-        // port's -z, so the cosine term is negated. `ch.velocity` and
-        // `ch.acceleration` are already in the port frame.
         this._uFurDroop.value.set(
             Math.sin(a) * ws * 0.006 - ch.velocity.x * 0.0016 - ch.acceleration.x * 0.00018,
             -0.018,
-            -Math.cos(a) * ws * 0.006 - ch.velocity.z * 0.0016 - ch.acceleration.z * 0.00018
+            Math.cos(a) * ws * 0.006 - ch.velocity.z * 0.0016 - ch.acceleration.z * 0.00018
         );
     }
 

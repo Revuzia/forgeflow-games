@@ -37,10 +37,10 @@ import clipmap from "./lib/clipmap.glsl.js";                // [TERRAIN]
 import shadowLookup from "./lib/shadowLookup.glsl.js";     // [SHADOWS]
 import atmosphere from "./lib/atmosphere.glsl.js";   // [SKY]
 import shading from "./lib/shading.glsl.js";                // [SNOW-SHADING]
-//   import spellLights  from "./lib/spellLights.glsl.js";  // [SPELLS]
-//   import water        from "./lib/water.glsl.js";        // [SPELLS]
-//   import crystal      from "./lib/crystal.glsl.js";      // [SPELLS]
-//   import wake         from "./lib/wake.glsl.js";         // [WAKE]
+import spellLights from "./lib/spellLights.glsl.js";       // [SPELLS]
+import water from "./lib/water.glsl.js";                   // [SPELLS]
+import crystal from "./lib/crystal.glsl.js";               // [SPELLS]
+import wake from "./lib/wake.glsl.js";                     // [WAKE]
 import charSkin from "./lib/charSkin.glsl.js";             // [CHARACTER]
 import postCommon from "./lib/postCommon.glsl.js";         // [POST-CORE]
 //
@@ -74,6 +74,19 @@ import postCommon from "./lib/postCommon.glsl.js";         // [POST-CORE]
 
 /** @type {Record<string, string>} */
 const CHUNKS = {
+    // The 4-slot pooled dynamic light block and its evaluation: spellLighting()
+    // per ARCHITECTURE.md §3.1, plus spellLightingSurface/Particle. Declares the
+    // spellLightPos/Col/Count uniforms. EVERY lit surface includes this, and it
+    // returns black with nothing cast. [SPELLS]
+    "lib/spellLights": spellLights,
+    // The swept water surface: Catmull-Rom spine + analytic tangent, the
+    // band-limited relief field, and waterPoint() for both profiles. Carries its
+    // own copy of the wake's section integral — see the note in the file. [SPELLS]
+    "lib/water": water,
+    // crystalLocal / crystalPoint: the hex prism and its two growth curves,
+    // shared by the beauty, both cascade and the prepass vertex stages. [SPELLS]
+    "lib/crystal": crystal,
+
     // Constants, saturate/remap/expDamp, sRGB transfer pair, luminance, and the
     // shared uniform block from ARCHITECTURE.md §3. [FOUNDATION]
     "lib/common": common,
@@ -119,6 +132,13 @@ const CHUNKS = {
     // shadowMapDelta() diagnostic. Declares the whole shadow uniform block —
     // get it from shadows.receiverUniforms(). Fragment stages only. [SHADOWS]
     "lib/shadowLookup": shadowLookup,
+
+    // The swept breaking-wave surface: wakeSection / wakeScalars / wakeSpine /
+    // wakePoint / wakeEroded, plus the wake uniform block. Included by the
+    // beauty, both cascade and the prepass VERTEX stages and by all three of
+    // their fragment stages, so the shadow and the prepass occlusion are the
+    // shape of the thing actually being drawn. [WAKE]
+    "lib/wake": wake,
 };
 
 let registered = false;

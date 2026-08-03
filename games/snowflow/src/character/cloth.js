@@ -67,6 +67,7 @@
  */
 
 import { S } from "../core/settings.js";
+import { bearingRad } from "../core/bearing.js";
 import {
     B_ROOT, B_CHEST, B_NECK,
     B_UPPER_L, B_FORE_L, B_HAND_L,
@@ -445,15 +446,16 @@ export class ClothSolver {
         // robe is never dead still. Subtracting the character's own velocity is
         // what makes it *apparent* wind, and is the single line that lays the
         // robe out flat behind a surf run.
-        const a = (S.windDirection * Math.PI) / 180;
+        // PORT FRAME: `bearingRad` mirrors the bearing into the port's frame
+        // (`core/bearing.js`), so the cosine is used as written instead of being
+        // hand-negated here. `ch.velocity` is already in the port frame and is
+        // subtracted as-is.
+        const a = bearingRad(S.windDirection);
         const ws = 3.2 * S.windStrength;
         const gust = 1 + 0.35 * Math.sin(this._t * 0.7) + 0.18 * Math.sin(this._t * 2.3 + 1.1);
-        // PORT FRAME: bearing a = 0 blows toward the reference's +z, which is the
-        // port's -z, hence the minus on the z component. `ch.velocity` is already
-        // in the port frame and is subtracted as-is.
         this._wind[0] = Math.sin(a) * ws * gust - ch.velocity.x;
         this._wind[1] = 0.35 * Math.sin(this._t * 1.9);
-        this._wind[2] = -Math.cos(a) * ws * gust - ch.velocity.z;
+        this._wind[2] = Math.cos(a) * ws * gust - ch.velocity.z;
 
         for (let s = 0; s < steps; s++) {
             for (let i = 0; i < this.panels.length; i++) {
