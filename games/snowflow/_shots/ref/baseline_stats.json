@@ -60,19 +60,19 @@
     "shadow_blue_bias": 0.10469
   },
   "05-trail-berms": {
-    "mean_luma": 0.45149,
-    "std_luma": 0.06929,
-    "p01": 0.24811,
-    "p99": 0.54649,
+    "mean_luma": 0.46247,
+    "std_luma": 0.06444,
+    "p01": 0.26473,
+    "p99": 0.55316,
     "clipped_white_pct": 0.0,
-    "crushed_black_pct": 0.0011,
-    "detail_energy": 0.029806,
+    "crushed_black_pct": 0.0178,
+    "detail_energy": 0.03282,
     "mean_rgb": [
-      0.44278,
-      0.45431,
-      0.44928
+      0.45686,
+      0.46491,
+      0.45482
     ],
-    "shadow_blue_bias": 0.07151
+    "shadow_blue_bias": 0.05635
   },
   "06-surf-wake": {
     "mean_luma": 0.47171,
