@@ -326,21 +326,35 @@ register3d("openseas", async function (kernel, content) {
   // Meshy characters ship as a small BASE glb (mesh+skeleton+idle, 512 tex) + tiny CLIP-ONLY glbs (skeleton stripped;
   // just the animation, targeting the same bone names). We append each clip into the base gltf's .animations so the
   // existing makeCharacterRole (mixer + name-based clip pick) drives them exactly like the multi-clip Quaternius files.
-  const MESHY_CLIPS = ["walk", "run", "attack", "ranged", "death"];   // idle is baked into the base glb; "ranged" only exists for the gunner (skipped if absent)
+  // idle is baked into the base glb. hit/jump are captain Mixamo extras (crew may omit).
+  const MESHY_CLIPS = ["walk", "run", "attack", "ranged", "death", "hit", "jump"];
   const MESHY_CREW = ["gunner", "swashbuckler", "bosun"];   // hired pirate crew models, rotated per crew member for variety
   const _MESHY_VER = (import.meta.url.match(/[?&]v=(\w+)/) || [])[1] || "";   // cache-bust the character GLBs with the same ?v= as the module (so a bumped version reloads them)
   const _meshyURL = (p) => new URL(`assets/props/meshy/${p}` + (_MESHY_VER ? `?v=${_MESHY_VER}` : ""), document.baseURI).href;
   async function loadMeshyChar(loader, key) {
     const base = await loader.loadAsync(_meshyURL(`${key}.glb`));
     for (const clip of MESHY_CLIPS) {
-      try { const g = await loader.loadAsync(_meshyURL(`${key}_${clip}.glb`)); if (g.animations && g.animations[0]) base.animations.push(g.animations[0]); }
-      catch (e) { /* clip absent for this role (e.g. no 'ranged' except the gunner) — fine */ }
+      try {
+        const g = await loader.loadAsync(_meshyURL(`${key}_${clip}.glb`));
+        if (g.animations && g.animations[0]) {
+          g.animations[0].name = clip;   // stable names for clipFor pickers
+          base.animations.push(g.animations[0]);
+        }
+      } catch (e) { /* clip absent for this role — fine */ }
     }
     return base;
   }
   let _gunGltf = null;    // the hero's OLD GUN (flintlock pistol) — attached to the hand, replaces the bow
   async function preloadChar() {
     const loader = new GLTFLoader();
+    // Captain base is Draco-compressed — same decoder path as kernel.
+    try {
+      const { DRACOLoader } = await import("three/addons/loaders/DRACOLoader.js");
+      const draco = new DRACOLoader();
+      draco.setDecoderPath("assets/vendor/three/examples/jsm/libs/draco/");
+      draco.setDecoderConfig({ type: "js" });
+      loader.setDRACOLoader(draco);
+    } catch (e) { console.warn("[char] DRACOLoader unavailable", e && e.message); }
     await Promise.all(Object.keys(CHAR_URLS).map(async (role) => {
       try { _charGltf[role] = await loader.loadAsync(new URL(CHAR_URLS[role], document.baseURI).href); }
       catch (e) { console.warn("[char] load failed", role, e && e.message); _charGltf[role] = null; }   // falls back to hero role
@@ -437,9 +451,11 @@ register3d("openseas", async function (kernel, content) {
     const clipFor = {
       idle: pick(/\|idle\|/i) || pick(/^idle$/i) || pick(/^idle_weapon$/i) || clips[0],
       run: pick(/confident_walk|runfast/i) || pick(/^run$/i) || pick(/^walk$/i) || pick(/\brun\b/i) || clips[0],
-      attack: pick(/sword_slash|right_hand_sword/i) || pick(/dagger[_ ]?attack|sword[_ ]?attack|staff[_ ]?attack|slash/i) || pick(/^punch$/i) || pick(/^spell1$/i),
-      ranged: pick(/quick_draw|shooting|archery/i) || pick(/bow[_ ]?shoot/i) || pick(/^spell[12]$/i) || pick(/staff[_ ]?attack/i) || pick(/bow/i),
-      death: pick(/\|dead\||death|die/i),
+      attack: pick(/sword_slash|right_hand_sword/i) || pick(/dagger[_ ]?attack|sword[_ ]?attack|staff[_ ]?attack|slash/i) || pick(/^attack$/i) || pick(/^punch$/i) || pick(/^spell1$/i),
+      ranged: pick(/quick_draw|shooting|archery/i) || pick(/^ranged$/i) || pick(/bow[_ ]?shoot/i) || pick(/^spell[12]$/i) || pick(/staff[_ ]?attack/i) || pick(/bow/i),
+      death: pick(/\|dead\||death|die/i) || pick(/^death$/i),
+      hit: pick(/^hit$/i) || pick(/hit|hurt|react/i),
+      jump: pick(/^jump$/i) || pick(/jump/i),
     };
     const actions = {};
     for (const k in clipFor) if (clipFor[k]) actions[k] = mixer.clipAction(clipFor[k]);
@@ -834,16 +850,20 @@ register3d("openseas", async function (kernel, content) {
     return new THREE.Vector3(aim.x + r * ce * Math.sin(az), aim.y + r * Math.sin(el), aim.z + r * ce * Math.cos(az));
   }
   function resetLook() { _lookYaw = 0; _lookPitch = 0; }
+  // On release of right-mouse, EASE the free-look offset back to the chase view (keeps the player centered/behind).
+  function decayLook(dt) { if (_looking) return; const k = Math.max(0, 1 - dt * 5); _lookYaw *= k; _lookPitch *= k; if (Math.abs(_lookYaw) < 0.002) _lookYaw = 0; if (Math.abs(_lookPitch) < 0.002) _lookPitch = 0; }
   // ── Camera zoom transition: the boat cam is ship-scale (an island looks small on the horizon); DOCK smoothly
   // ZOOMS to the tight character cam (dolly 58->32, FOV 50->42) so the island feels MUCH bigger as you go
   // "into" it on foot; leaving reverses it. camMode drives which cam runs. ─────────────────────────────────
   let camMode = "sail", camT = 0, _lastAshoreIsle = null;   // "sail" | "zoomIn" | "ashore" | "zoomOut"
   const ZOOM_DUR = 1.0, FOV_SAIL = 50, FOV_HERO = 42;
   let _camZoom = 1;   // mouse-WHEEL zoom multiplier on the chase distance (1 = default; <1 closer, >1 farther)
-  function shipCamPoints() { const f = fwd(player.yaw), z = _camZoom, aim = new THREE.Vector3(player.x + f.x * 20, 6, player.z + f.z * 20), pos = new THREE.Vector3(player.x - f.x * 58 * z, 42 * z, player.z - f.z * 58 * z); return { pos: orbitOffset(pos, aim), aim }; }
-  function heroCamPoints() { const is = ashoreIsle || _lastAshoreIsle, f = fwd(hero.yaw), z = _camZoom, gy = is ? groundYOn(is, hero.x, hero.z) : 0, aim = new THREE.Vector3(hero.x + f.x * 18, gy + 9, hero.z + f.z * 18), pos = new THREE.Vector3(hero.x - f.x * 32 * z, gy + 21 * z, hero.z - f.z * 32 * z); return { pos: orbitOffset(pos, aim), aim }; }
+  // aim only a SHORT distance ahead so the player sits near screen-CENTER (a big look-ahead threw them to the far corner)
+  function shipCamPoints() { const f = fwd(player.yaw), z = _camZoom, aim = new THREE.Vector3(player.x + f.x * 6, 6, player.z + f.z * 6), pos = new THREE.Vector3(player.x - f.x * 58 * z, 42 * z, player.z - f.z * 58 * z); return { pos: orbitOffset(pos, aim), aim }; }
+  function heroCamPoints() { const is = ashoreIsle || _lastAshoreIsle, f = fwd(hero.yaw), z = _camZoom, gy = is ? groundYOn(is, hero.x, hero.z) : 0, aim = new THREE.Vector3(hero.x + f.x * 4, gy + 9, hero.z + f.z * 4), pos = new THREE.Vector3(hero.x - f.x * 32 * z, gy + 21 * z, hero.z - f.z * 32 * z); return { pos: orbitOffset(pos, aim), aim }; }
   function blendCam(dt, to) {
     if (_freeCam) return;
+    decayLook(dt);
     camT = Math.min(1, camT + dt / ZOOM_DUR);
     const k = camT * camT * (3 - 2 * camT), kk = to === "hero" ? k : 1 - k;   // smoothstep; easing lives in camT (no double-smoothing)
     const s = shipCamPoints(), h = heroCamPoints();
@@ -853,6 +873,7 @@ register3d("openseas", async function (kernel, content) {
   }
   function updateCamera(dt) {
     if (_freeCam) return;
+    decayLook(dt);
     const p = shipCamPoints();
     kernel.camera.position.lerp(p.pos, Math.min(1, dt * 3.2));
     camAim.lerp(p.aim, Math.min(1, dt * 4)); kernel.camera.lookAt(camAim);
@@ -938,6 +959,7 @@ register3d("openseas", async function (kernel, content) {
   }
   function updateHeroCamera(dt) {
     if (_freeCam || !ashoreIsle) return;
+    decayLook(dt);
     const p = heroCamPoints();
     kernel.camera.position.lerp(p.pos, Math.min(1, dt * 4));
     camAim.lerp(p.aim, Math.min(1, dt * 5)); kernel.camera.lookAt(camAim);
@@ -1289,7 +1311,7 @@ register3d("openseas", async function (kernel, content) {
   // pass in stepNPC), but in a melee they clash. Your RAM power scales UP and the damage you take scales DOWN with the HULL
   // upgrade, so "attack by hitting with your ship" is a real, upgrade-driven tactic. A short per-ship cooldown stops a scrape
   // from draining HP every frame; an overlap always shoves the hulls apart so they can't pass through each other.
-  const SHIP_COLL_R = 25, RAM_BASE = 11, RAM_CD = 0.7;
+  const SHIP_COLL_R = 12, RAM_BASE = 11, RAM_CD = 0.7;   // DR = 2*R = 24 (hull lengths are 16..30) — ram/collide only on near-contact, not from far off
   function _shipVel(s) { return { x: Math.sin(s.yaw) * (s.speed || 0), z: Math.cos(s.yaw) * (s.speed || 0) }; }
   function stepCollisions(dt) {
     if (mode !== "sail" || !gameStarted) return;   // never ram the FROZEN player behind the title/attract screen (that damage would carry into the game)
@@ -1719,6 +1741,7 @@ register3d("openseas", async function (kernel, content) {
   function foeHit(tgt, res, is) {   // land a foe's hit on whichever party member it aimed at; return true if the WHOLE party wiped
     if (tgt.isHero) {
       hero.hp -= res.dmg; burst(hero.x, groundYOn(is, hero.x, hero.z) + 3, true, res.crit); sfxAt("hit", hero.x, hero.z, res.crit ? 0.9 : 0.7);
+      if (hero.play) { hero.play("hit", { once: true }); hero.animT = 0.45; }
       if (hero.hp <= 0) { banner("💀 Away party overwhelmed — back to the ship!"); leaveIsland(); return true; }
     } else if (tgt.crew) {
       const c = tgt.crew; c.hp -= res.dmg; burst(c.x, groundYOn(is, c.x, c.z) + 3, true, res.crit); sfxAt("hit", c.x, c.z, 0.6);

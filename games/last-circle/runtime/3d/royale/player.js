@@ -119,15 +119,10 @@ const HAND_AIM_ROT = {
   juggernaut: [-1.094, -0.444, -0.676],
   viper:      [-1.338,  0.023, -0.788],
 };
-// armed clips (Alert / Walk_Forward_While_Shooting / Run_and_Shoot) retarget
-// badly on these rigs — arms folded over the face ("broken bone" screenshots).
-// Arms are posed at runtime (pose.js); locomotion + jump/swim clips load.
-// Meshy "Basic_Jump" is 5.93s and the hips do not leave the ground until
-// t=1.73s (decoded from soldier_jump.glb: baseline Y 94.7 flat to 1.73, peak
-// 253.0 at 2.07). Game airtime is 2*jumpV/|gravity| = 2*7.8/22 = 0.709s, so
-// playing from t=0 showed ONE HUNDRED PERCENT standing lead-in — the character
-// never visibly left the ground. Seek to just before takeoff instead.
-const JUMP_TAKEOFF_S = 1.70;
+// Mixamo pistol/rifle/fall clips load alongside loco. When present they own the
+// arms for that weapon family; pose.js is the fallback if a clip is missing.
+// Mixamo jump starts at takeoff (no multi-second Meshy lead-in).
+const JUMP_TAKEOFF_S = 0.05;
 /** Meshy bakes ROOT TRANSLATION into its clips: Swim_Forward carries ~2.3 m of
  *  forward travel on the Hips position track, and the sprint clip carries its
  *  own stride displacement. The game drives position itself from the sim, so
@@ -166,8 +161,23 @@ function stripRootMotion(clip) {
   return clip;
 }
 
-const MESHY_CLIPS = ["walk", "run", "death", "death2", "death3", "hit", "dance", "cheer", "jump", "swim", "crouch"];
+// Base loco + combat set, then Mixamo BR weapon holds + freefall.
+// File names on disk: assets/chars/meshy/{skin}_{clip}.glb
+const MESHY_CLIPS = [
+  "walk", "run", "death", "death2", "death3", "hit", "dance", "cheer", "jump", "swim", "crouch",
+  "fall",
+  "pistol_idle", "pistol_walk", "pistol_run",
+  "rifle_idle", "rifle_walk", "rifle_run", "rifle_reload", "rifle_crouch",
+];
 const _v3 = new THREE.Vector3();
+
+/** "pistol" | "rifle" | null — SMG/AR/shotgun/sniper/GL all use the rifle set. */
+function gunFamily(a) {
+  if (!a.weapon || !a.weapon.id || String(a.weapon.id).startsWith("consumable")) return null;
+  const def = K.WEAPONS && K.WEAPONS[a.weapon.id];
+  if (!def) return null;
+  return def.cls === "pistol" ? "pistol" : "rifle";
+}
 
 async function preloadMeshySkin(W, key, tick) {
   const url = W.assetBase + "assets/chars/meshy/" + key + ".glb";
@@ -417,10 +427,10 @@ function classifyClips(rig) {
     run,
     walk,
     swim: find([/^swim$/i]) || run,
-    jump: find([/jump/i, /fall/i]),
-    // exact-anchored so "death" never swallows the variants (Meshy library:
-    // 8 Dead, 183 Shot_and_Fall_Backward, 184 Shot_and_Fall_Forward, 177
-    // Gunshot_Reaction — merged clips are keyed by MESHY_CLIPS name)
+    // freefall is its own clip; jump must not steal it
+    jump: find([/^jump$/i, /jump/i]),
+    fall: find([/^fall$/i, /falling/i]),
+    // exact-anchored so "death" never swallows the variants
     death: find([/^death$/i, /death|die|defeat/i]),
     death2: find([/^death2$/i]),
     death3: find([/^death3$/i]),
@@ -428,10 +438,15 @@ function classifyClips(rig) {
     shoot: find([/shoot|attack|punch|slash|hit/i]),
     dance: find([/^dance$/i, /dance/i]),
     cheer: find([/^cheer$/i, /cheer|wave|victory/i]),
-    // Meshy action 524 "Cautious_Crouch_Walk_Forward". Falls back to walk so a
-    // skin whose crouch clip failed to bake still animates (and actorHeight()
-    // keeps its capsule honest via hasCrouchClip below).
     crouch: find([/^crouch$/i, /crouch/i]),
+    pistol_idle: find([/^pistol_idle$/i]),
+    pistol_walk: find([/^pistol_walk$/i]),
+    pistol_run: find([/^pistol_run$/i]),
+    rifle_idle: find([/^rifle_idle$/i]),
+    rifle_walk: find([/^rifle_walk$/i]),
+    rifle_run: find([/^rifle_run$/i]),
+    rifle_reload: find([/^rifle_reload$/i]),
+    rifle_crouch: find([/^rifle_crouch$/i]),
   };
 }
 
@@ -1284,55 +1299,54 @@ function syncObj(W, a, dt, far) {
       // ground (bot jump-dodge) the instant it is shot must not bank the
       // flinch and play it stale half a second later on landing
       if (a.hitReactT > 0) a.hitReactT -= dt;
-      // freefall: NEARLY-FROZEN mid-stride = limbs spread like a skydive
-      // (0.35 looked like the character was jogging through the sky)
-      if (a.gliding && !a.chute) playAnim(a, "run", { timeScale: 0.05 });
+      // freefall: Mixamo falling-idle when present; else frozen run + skydive pose
+      const fam = gunFamily(a);
+      const useMixamoGun = !!(fam && a.clips[fam + "_idle"]);
+      if (a.gliding && !a.chute) {
+        if (a.clips.fall) playAnim(a, "fall", { timeScale: 1 });
+        else playAnim(a, "run", { timeScale: 0.05 });
+      }
       else if (a.gliding) playAnim(a, "idle");
       else if (a.swimming) playAnim(a, "swim", { timeScale: gs > 4.5 ? 1.25 : 1 });
       else if (a.mantleT != null && a.clips.crouch) {
-        // pull-up reads as a tucked climb, not the frozen tail frame of the
-        // once-only jump clip (sweep finding)
         playAnim(a, "crouch", { timeScale: 0 });
       }
       else if (!a.onGround) playAnim(a, "jump", { once: true, startAt: JUMP_TAKEOFF_S });
       else if (a.hitReactT > 0 && a.clips.hit) {
-        // held for its short window like an emote — playAnim re-selects loco
-        // every frame, so without the hold the flinch dies on the next frame
         playAnim(a, "hit", { once: true });
       }
-      else if (a.crouching && a.clips.crouch) {
-        // one clip covers both crouch stances: crouch-walk plays at a pace set
-        // by ground speed, and standing still freezes it on a crouched pose
-        // rather than marching in place
+      else if (useMixamoGun && a.weapon && a.weapon.state === "reloading" && a.clips.rifle_reload) {
+        playAnim(a, "rifle_reload", { once: true });
+      }
+      else if (useMixamoGun && a.crouching && fam === "rifle" && a.clips.rifle_crouch) {
+        playAnim(a, "rifle_crouch", { timeScale: gs > 0.7 ? K.clamp(gs / 2.7, 0.55, 1.4) : 0 });
+      }
+      else if (a.crouching && a.clips.crouch && !(useMixamoGun && fam === "rifle" && a.clips.rifle_crouch)) {
         playAnim(a, "crouch", { timeScale: gs > 0.7 ? K.clamp(gs / 2.7, 0.55, 1.4) : 0 });
       }
-      else if (gs > 0.7) {
-        // BACKPEDALING plays the stride in REVERSE (no moonwalking).
+      else if (useMixamoGun && gs > 0.7) {
         const back = (a.vel.x * -Math.sin(a._bodyYaw - Math.PI) + a.vel.z * -Math.cos(a._bodyYaw - Math.PI)) < -0.5;
         const dirK = back ? -0.9 : 1;
-        // Was `gs > 7`, chosen when sprint was 9.6 m/s. Sprint is 8.0 now, so a
-        // 7.0 gate leaves 1.0 m/s of headroom against an exponential approach —
-        // a slope, a wall graze that zeroes one velocity axis, wading (x0.55), a
-        // bot's constant re-aim, or the new stamina exhaust lock all drop under
-        // it and swap the run cycle back to a walk mid-stride. Drive the run
-        // clip off the authoritative sprint FLAG instead, with a floor that
-        // still keeps it off during the initial accel ramp.
+        const runKey = fam + "_run";
+        const walkKey = fam + "_walk";
+        if ((a.sprinting && gs > 5.5 && !back) || (gs > 4.4 && !back)) {
+          if (a.clips[runKey]) playAnim(a, runKey, { timeScale: K.clamp(gs / 6.5, 0.85, 1.5) });
+          else playAnim(a, "run", { timeScale: K.clamp(gs / 6.5, 0.9, 1.5) });
+        } else if (a.clips[walkKey]) {
+          playAnim(a, walkKey, { timeScale: dirK * K.clamp(gs / 3.0, 0.85, 2.0) });
+        } else {
+          playAnim(a, "walk", { timeScale: dirK * K.clamp(gs / 3.0, 0.85, 2.0) });
+        }
+      }
+      else if (useMixamoGun) {
+        playAnim(a, fam + "_idle");
+      }
+      else if (gs > 0.7) {
+        const back = (a.vel.x * -Math.sin(a._bodyYaw - Math.PI) + a.vel.z * -Math.cos(a._bodyYaw - Math.PI)) < -0.5;
+        const dirK = back ? -0.9 : 1;
         if (a.sprinting && gs > 5.5 && !back) {
-          // SPRINT (Shift toggle, 8.0 m/s): a proper UPRIGHT Meshy run — action 510
-          // "Standard_Forward_Charge", measured ~3-12° athletic lean across the 5
-          // rigs. Replaced the old "RunFast" (action 16, ~53° "running bent over")
-          // and its per-frame spine counter-rotation hack, both now removed.
           playAnim(a, "run", { timeScale: K.clamp(gs / 6.5, 0.9, 1.5) });
         } else if (gs > 4.4 && !back) {
-          // JOG (owner playtest 2026-07-28: "the girl barely moves her legs" /
-          // "the guy runs side to side"): 6.0 m/s is a JOG, but it played the
-          // casual WALK cycle at 2x — tiny strides sliding over the ground, and
-          // sideways during a combat strafe, it read as a crab-walk. Decoded
-          // amplitudes proved every skin's clips are near-identical (upleg
-          // 65-75° run / 40-52° walk); the difference the owner saw was purely
-          // which CLIP was playing. The run cycle at reduced rate is what
-          // FN/Final Drop show at this speed. Walk stays for slow moves
-          // (ADS 3.8, wading 3.3, backwards).
           playAnim(a, "run", { timeScale: K.clamp(gs / 8.0, 0.7, 1.1) });
         } else {
           playAnim(a, "walk", { timeScale: dirK * K.clamp(gs / 3.0, 0.85, 2.0) });
@@ -1340,17 +1354,19 @@ function syncObj(W, a, dt, far) {
       }
       else { playAnim(a, "idle"); }
 
-      // ── ARM-POSE LAYER (pose.js) — after the mixer, before render ────────
-      // clips own legs/torso; arms are steered per state so they always read
-      // right (Meshy retargets folded arms over the face — owner screenshots)
+      // ── ARM-POSE LAYER (pose.js) ──────────────────────────────────────────
+      // Skip when Mixamo gun/fall clips already own the arms (better than the
+      // old Meshy retargets that folded over the face). Gun SOCKET + barrel aim
+      // still run below so the mesh aligns to the hand.
       let mode = null;
       const armed = a.weapon && !a.weapon.id.startsWith("consumable");
-      if (!a.alive || a.emoting) mode = null;
+      const mixamoOwnsArms = useMixamoGun || (a.gliding && !a.chute && a.clips.fall);
+      if (!a.alive || a.emoting || mixamoOwnsArms) mode = null;
       else if (a.gliding && !a.chute) mode = "skydive";
       else if (a.gliding) mode = "hang";
       else if (a.swimming) mode = null;
       else if (armed && a.weapon.state === "reloading") mode = "reload";
-      else if (armed && !combat) mode = "lowReady";   // out of combat: relaxed carry (combat = ADS or fired <1.5s ago)
+      else if (armed && !combat) mode = "lowReady";
       else if (armed) mode = "gunReady";
       else mode = "relax";
       // straighten a slouched rig BEFORE the arm layer (arms hang off the
@@ -1379,9 +1395,11 @@ function syncObj(W, a, dt, far) {
       // result is verified by screenshot, not by a cross-frame numeric probe.
       //
       // Only while a gun is actually up: emotes, death, swim and the glide poses
-      // must keep the clip's own arms.
-      if (a.hand && a.handBone && !a.emoting &&
-          (a._armMode === "gunReady" || a._armMode === "reload" || a._armMode === "lowReady") && a._armW > 0.5) {
+      // must keep the clip's own arms. Mixamo pistol/rifle clips also need the
+      // socket aimed — arms come from the clip, barrel from this weld.
+      const poseAim = (a._armMode === "gunReady" || a._armMode === "reload" || a._armMode === "lowReady") && a._armW > 0.5;
+      const mixamoAim = useMixamoGun && armed && !a.gliding && !a.swimming && a.onGround;
+      if (a.hand && a.handBone && !a.emoting && (poseAim || mixamoAim)) {
         a.handBone.updateWorldMatrix(true, false);          // fresh, not stale
         a.handBone.getWorldQuaternion(_gq);
         // lowReady carries the muzzle DOWN at ~32 deg instead of tracking aim
@@ -1390,7 +1408,8 @@ function syncObj(W, a, dt, far) {
         // backward"): the static HAND_AIM_ROT this mode used to fall back to
         // was calibrated on one clip frame and pointed some skins' guns at
         // their own chest.
-        const bpitch = a._armMode === "lowReady" ? -0.55 : a.pitch;
+        // Mixamo armed: always track pitch (clips already hold the weapon up).
+        const bpitch = (!mixamoAim && a._armMode === "lowReady") ? -0.55 : a.pitch;
         const cp = Math.cos(bpitch), sp = Math.sin(bpitch);
         _gf.set(-Math.sin(a.yaw) * cp, sp, -Math.cos(a.yaw) * cp).normalize();
         // explicit basis (not setFromUnitVectors) so the gun cannot roll: +Z is

@@ -10,12 +10,18 @@
  */
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { clone as skeletonClone } from "three/addons/utils/SkeletonUtils.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+
+// Character bases ship Draco-compressed; decoder is self-hosted (no CDN dependency).
+const _pcDraco = new DRACOLoader();
+_pcDraco.setDecoderPath("assets/vendor/three/examples/jsm/libs/draco/");
+_pcDraco.setDecoderConfig({ type: "js" });
 
 export const genres3d = {};
 export function register3d(name, builder) { genres3d[name] = builder; }
@@ -76,6 +82,7 @@ export class Kernel3D {
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
     this.loader = new GLTFLoader();
+    this.loader.setDRACOLoader(_pcDraco);
     this._gltfCache = {};
     this._charCache = {};
     this._mixers = [];

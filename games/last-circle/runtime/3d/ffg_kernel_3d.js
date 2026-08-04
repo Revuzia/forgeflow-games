@@ -10,12 +10,20 @@
  */
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { clone as skeletonClone } from "three/addons/utils/SkeletonUtils.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+
+// Shared once per module: character bases are Draco-compressed (mesh only;
+// textures stay 512 JPEG). Without this, GLTFLoader throws
+// "No DRACOLoader instance provided" and every skin fails to load.
+const _lcDraco = new DRACOLoader();
+_lcDraco.setDecoderPath("assets/vendor/three/examples/jsm/libs/draco/");
+_lcDraco.setDecoderConfig({ type: "js" });
 
 export const genres3d = {};
 export function register3d(name, builder) { genres3d[name] = builder; }
@@ -83,6 +91,7 @@ export class Kernel3D {
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
     this.loader = new GLTFLoader();
+    this.loader.setDRACOLoader(_lcDraco);
     this._gltfCache = {};
     this._charCache = {};
     // Parked PROMISES for URLs still loading — see loadGLTF for why the result
