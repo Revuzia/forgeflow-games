@@ -98,7 +98,10 @@ const DEG = Math.PI / 180;
  * winning. The number that matters is the walk, which is where a player spends
  * their time and where the old mix put the footfall just +1.6 dB clear.
  */
-const LEVEL_STEP = 0.58;    // one footfall
+// Halved from 0.58 by owner direction 2026-08-04 ("too loud, like HALF") — the
+// measured +5.9 dB-over-bed figure was calibrated, but calibrated to a mix the
+// owner found step-heavy in play. Their ear outranks the meter here.
+const LEVEL_STEP = 0.29;    // one footfall
 const LEVEL_LAND = 0.88;    // the body hitting snow
 const LEVEL_CRUST = 0.57;   // the crust breaking under it, layered over the body
 const LEVEL_WHOOSH = 0.12;  // the air moving past a body leaving the ground
