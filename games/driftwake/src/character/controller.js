@@ -64,6 +64,16 @@ const WALK_DECEL = 30;
  */
 const JUMP_VEL = 5.0;
 const GRAVITY = 20.0;
+/**
+ * Surf ollie impulse, as a multiplier on JUMP_VEL — OWNER DECISION 2026-08-04.
+ * At 1.35 the take-off velocity is 6.75 m/s: apex 1.14 m against the walk
+ * jump's 0.63 m, hang 0.675 s against 0.50 s. The arc reads bigger than the
+ * multiplier suggests because the carve's full horizontal velocity (up to
+ * 19.5 m/s) is carried through the air — see `_surfAirStep`. Scaled by the
+ * eased surf blend at take-off so a jump taken mid-transition gets an
+ * intermediate boost rather than a step at the 0.5 threshold.
+ */
+const OLLIE_MULT = 1.35;
 /** Releasing SPACE early clips the remaining rise — a variable-height hop. */
 const JUMP_CUT = 0.45;
 /**
@@ -218,16 +228,12 @@ export class CharacterController {
         // before anything can set it this frame.
         this.landed = false;
 
-        // TAKE-OFF. Ground only, and not off the board.
-        //
-        // DELIBERATE DECISION — no surf ollie. Surfing is a momentum mode whose
-        // whole read is the board staying welded to the snow, and the wake mesh,
-        // the groove and the berms are all continuous systems with no concept of
-        // an interruption. A jump out of a carve would need all three to break
-        // and re-form cleanly, which is a wake problem, not a jump problem. Surf
-        // is therefore a hard block rather than an unhandled case.
-        if (input.jumpPressed && !this.airborne && this.surf <= 0.5) {
-            this.vertVel = JUMP_VEL;
+        // TAKE-OFF. Ground only. Off the board it is a SURF OLLIE — higher and
+        // faster than the walk jump, carrying the carve's horizontal velocity
+        // through the air. (Owner decision 2026-08-04, reversing the earlier
+        // hard block on jumping out of a carve.)
+        if (input.jumpPressed && !this.airborne) {
+            this.vertVel = JUMP_VEL * (1 + (OLLIE_MULT - 1) * this.surf);
             this.airborne = true;
             this.airTime = 0;
             this._jumpCut = false;
@@ -236,10 +242,15 @@ export class CharacterController {
         rig.getFlatForward(_fwd);
         rig.getFlatRight(_right);
 
-        // Airborne, the board has nothing to push against, so surf never drives
-        // the step — `_walkStep` runs instead and scales itself by AIR_CONTROL.
-        if (this.surf > 0.5 && !this.airborne) this._surfStep(h, rig);
-        else this._walkStep(h);
+        // Airborne on the board (the ollie), `_surfAirStep` carries the carve's
+        // momentum untouched; airborne off it, `_walkStep` runs and scales
+        // itself by AIR_CONTROL.
+        if (this.surf > 0.5) {
+            if (this.airborne) this._surfAirStep(h, rig);
+            else this._surfStep(h, rig);
+        } else {
+            this._walkStep(h);
+        }
 
         // ---------------------------------------------------- integrate + snap
         this.position.x += this.velocity.x * h;
@@ -420,6 +431,27 @@ export class CharacterController {
             this.velocity.x *= k;
             this.velocity.z *= k;
         }
+    }
+
+    /**
+     * The ollie's flight — airborne with the board still under the feet.
+     *
+     * The horizontal velocity vector is deliberately NOT touched: no thrust
+     * (nothing to push against), no lateral grip (no edge in the snow), no
+     * drag — the carve's speed at take-off is the speed at landing, which is
+     * what "continues the effect" means. The only authority left is a sliver
+     * of the surf turn rate (AIR_CONTROL, the same fraction the walk jump
+     * uses) so the arc is committed rather than steerable. Landing with RMB
+     * still held drops straight back into `_surfStep`, whose grip then
+     * resolves any facing/velocity mismatch the air turn built up — the same
+     * drift mechanic an overcooked grounded carve already uses.
+     */
+    _surfAirStep(h, rig) {
+        const steer = clamp(
+            input.moveX * 0.85 + angleDelta(this.facing, rig.yaw) * 1.25,
+            -1, 1
+        );
+        this.facing += steer * SURF_TURN * AIR_CONTROL * h;
     }
 
     /**

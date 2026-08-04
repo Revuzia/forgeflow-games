@@ -511,7 +511,21 @@ export class SurfWake {
         // Speed sets how much snow there is to throw; the surf blend eases the
         // whole thing in and out so entering and leaving are never a switch.
         // Full strength at >= 11.2 m/s.
-        this._strength[i] = ch.surf * clamp01((ch.speed - 2.2) / 9.0);
+        //
+        // AIRBORNE (the surf ollie, owner decision 2026-08-04) the strength is
+        // ZERO: the tracker keeps FOLLOWING — samples keep committing every
+        // 30 cm along the flight path, so the ring never bridges take-off to
+        // landing with one giant segment — while the WRITER is gated, because a
+        // zero-strength sample resolves to zero amplitude and `wakePoint`
+        // collapses it onto its spine 0.10 m BELOW the ground height (the flat
+        // sink term), i.e. buried. The pre-jump wall lives out its 0.88 s
+        // collapse where it was laid; a fresh wall builds from the landing
+        // point the moment grounded samples resume. This is the same
+        // tracker-follows/writer-gates split `snowContact.js` documents for its
+        // `_prevX`/`_prevZ` trap.
+        this._strength[i] = ch.airborne
+            ? 0
+            : ch.surf * clamp01((ch.speed - 2.2) / 9.0);
         this._carve[i] = ch.carve;
 
         if (this._count === 0) {
@@ -633,6 +647,15 @@ export class SurfWake {
         const n = this._count;
         if (n < 3 || ch.surf < 0.15 || ch.speed < 3.0) {
             this._plumeOwed = 0;
+            return;
+        }
+        // Airborne (the ollie) nothing is being displaced, so nothing sheds.
+        // Both owed odometers reset rather than accrue: letting them run would
+        // dump the whole flight's worth of grains in a burst on the landing
+        // frame, over ground the board never touched.
+        if (ch.airborne) {
+            this._plumeOwed = 0;
+            this._driftOwed = 0;
             return;
         }
 
@@ -787,6 +810,10 @@ export class SurfWake {
                 const t = jf - j;
                 const i = this._col[j];
                 const i2 = this._col[j2];
+                // A zero-strength column is the airborne gap (see `_writeHead`):
+                // no trench was cut there, so nothing smokes over it. The lip
+                // plume needs no such check — its amplitude gate already skips.
+                if (this._strength[i] <= 0.001 && this._strength[i2] <= 0.001) continue;
                 const rx = this._rx[i] + (this._rx[i2] - this._rx[i]) * t;
                 const rz = this._rz[i] + (this._rz[i2] - this._rz[i]) * t;
                 const lat = (rand01() - 0.5) * 1.6;   // +/- 0.8 m either side

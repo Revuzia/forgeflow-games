@@ -396,6 +396,9 @@ class AudioSystem {
         const yaw = rig ? rig.yaw : 0;
         const speed01 = character ? character.speed01 : 0;
         const surfBlend = character ? character.surf : 0;
+        // Hoisted above the beds: the surf bed keys on it. The jump/landing
+        // edge logic further down still reads this same value.
+        const airborne = character ? character.airborne === true : false;
 
         // ------------------------------------------------------------- beds
         //
@@ -406,7 +409,13 @@ class AudioSystem {
         // Positive is therefore to the right, which is what StereoPanner wants.
         const windPan = Math.sin(S.windDirection * DEG - yaw);
         this.wind.drive(now, t, S.windStrength, speed01, surfBlend, windPan, sfx);
-        this.surf.drive(now, surfBlend, speed01, character ? character.carve : 0, sfx);
+        // The surf bed is GROUND CONTACT noise, so it gaps for the whole of an
+        // ollie and resumes on landing: the bed keys on (surf && !airborne),
+        // and its own 90 ms Smoothed turns the hard key into a short fade at
+        // each end. The WIND bed above deliberately keeps the raw blend — air
+        // rushing past a body in flight is the one thing that should not stop.
+        this.surf.drive(now, airborne ? 0 : surfBlend, speed01,
+            character ? character.carve : 0, sfx);
 
         // Facing relative to the camera, used to place body-local one-shots in
         // the stereo field. Same identity as above.
@@ -459,8 +468,8 @@ class AudioSystem {
         // [JUMP] is adding `landed` / `landImpact` this phase. Both spellings are
         // handled: the explicit one-frame flags when they exist, and an edge on
         // `airborne` when they do not, so this file is correct either side of
-        // that landing and needs no second visit.
-        const airborne = character ? character.airborne === true : false;
+        // that landing and needs no second visit. (`airborne` itself is hoisted
+        // above the beds — the surf bed gaps on it.)
         if (character) {
             const tookOff = character.jumped === true || (airborne && !this._prevAirborne);
             const landed = character.landed === true || (!airborne && this._prevAirborne);

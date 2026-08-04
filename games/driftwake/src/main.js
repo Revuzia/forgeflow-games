@@ -748,6 +748,7 @@ async function boot() {
                 { h: "Move", p: "<b>WASD</b> to move · <b>mouse</b> to look · <b>SHIFT</b> to sprint · <b>wheel</b> to zoom. Click the scene to capture the pointer." },
                 { h: "Jump", p: "<b>SPACE</b>. Let go early to cut the rise short. A hard landing punches a crater and throws powder." },
                 { h: "Snow-surf", p: "Hold the <b>RIGHT MOUSE BUTTON</b> and the walk becomes a carve. A breaking wave builds off your inside edge and throws nearly all of the snow to the outside of the turn — the harder you turn, the further the lip hangs back over its own face." },
+                { h: "Ollie", p: "Tap <b>SPACE</b> mid-carve for a surf ollie — nearly twice the height, carrying your full speed through the air. The wake gaps under you and, if you keep holding <b>RMB</b>, you land straight back into the carve." },
                 { h: "Spells", p: "<b>1</b>–<b>5</b> bend water over the field: a ploughing crescent, a drawn ribbon, a targeted eruption, a spiral of hexagonal ice, and three helices that lift the snow around you. <b>2 is a held cast</b> — keep the key down and steer it." },
                 { h: "Panels", p: "<b>F1</b> settings · <b>F3</b> debug · <b>Esc</b> pause. The settings panel is live: every slider in it moves the running scene, including the sun." },
             ],

@@ -268,6 +268,35 @@ export class SnowContact {
         const ch = this.character;
         const imp = ch.landImpact; // 0..1, from the descent rate at touchdown
 
+        // SURF-OLLIE touchdown (owner decision 2026-08-04): the board arrives
+        // at carve speed, so this is a board slap, not a two-boot stamp —
+        // wider and deeper than the walk-jump crater and ELONGATED along
+        // travel through the same brush-yaw path the groove uses. The groove
+        // writer resumes from this same point next frame (`_prevX`/`_prevZ`
+        // kept following through the flight), so this brush is the hinge
+        // between the airborne gap and the fresh trench.
+        if (ch.surf > 0.5) {
+            const spd = ch.speed01; // speed / SURF_MAX, off the controller
+            this.field.brush(
+                ch.position.x, ch.position.z,
+                SURF_WIDTH * (1.3 + 0.6 * imp),
+                0.30 + 0.30 * imp + 0.14 * spd,
+                0.16 + 0.18 * imp,
+                1.0,   // fully packed — the whole body's weight through the board
+                0,     // no ice
+                brushYaw(ch.facing),
+                SURF_ELONG,
+                0.7    // board edges tear less than boots, more than a carve
+            );
+            // Burst scaled by impact AND speed: a fast landing throws a sheet.
+            // `true` = radial, no minimum-speed gate (matches the walk landing).
+            this._kick(
+                ch.position.x, ch.position.y, ch.position.z,
+                (0.85 + 0.5 * imp) * (0.7 + 0.8 * spd), true
+            );
+            return;
+        }
+
         this.field.brush(
             ch.position.x, ch.position.z,
             // Wider than a boot: this is the whole stance, plus the collapse of

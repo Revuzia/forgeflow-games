@@ -444,6 +444,14 @@ export class Figure {
         const crouch = 0.035 * run + surf * (0.13 + 0.05 * ch.speed01);
         this.hipY = damp(this.hipY, HIP_HEIGHT - crouch, 9, h);
 
+        // SURF-OLLIE LANDING (owner decision 2026-08-04): a compression dip,
+        // as an impulse the damp above then recovers from over ~0.25 s — the
+        // knees taking the arrival, which is what sells the touchdown. Applied
+        // AFTER the damp so the full dip survives into this frame's pose, and
+        // scaled by the surf blend so the walk-jump landing — and every
+        // grounded frame in the battery baseline — is bit-identical to before.
+        if (ch.landed) this.hipY -= ch.landImpact * 0.18 * surf;
+
         // The figure settles into the snow it is standing on. Reading the real
         // depth would mean a GPU readback; this is the same number the contact
         // brushes write, held on the CPU.
@@ -627,17 +635,44 @@ export class Figure {
                 // is nothing left to snap to and nothing to slide to catch up.
                 const gy = this.terrain.heightAt(nx, nz) - this.sink * 0.7;
 
+                let wxT = tx + (nx - tx) * near;
+                let wyT = ty + (gy - ty) * near;
+                let wzT = tz + (nz - tz) * near;
+
+                // SURF OLLIE (owner decision 2026-08-04): airborne on the board
+                // the feet HOLD the board stance instead of melting into the
+                // walk-jump tuck. These are the SAME lateral/along expressions
+                // the grounded board blend below uses, lifted by `airHeight` —
+                // so at touchdown (airHeight -> 0) the target IS the grounded
+                // board placement and the landing has nothing to snap to.
+                // Blended by `surf` exactly as the grounded override is, so a
+                // walk jump (surf ~ 0) is untouched.
+                if (surf > 0.001) {
+                    const blat = f === 0 ? -0.17 : 0.17;
+                    const balong = f === 0 ? 0.11 : -0.11;
+                    const sx = ch.position.x + fwdX * balong + rgtX * blat;
+                    const sz = ch.position.z + fwdZ * balong + rgtZ * blat;
+                    const sy = this.terrain.heightAt(sx, sz) - this.sink + ch.airHeight;
+                    wxT += (sx - wxT) * surf;
+                    wyT += (sy - wyT) * surf;
+                    wzT += (sz - wzT) * surf;
+                }
+
                 // Damped rather than assigned, so TAKE-OFF is smooth too: the
                 // foot leaves from wherever the stride had it, instead of
                 // teleporting onto the tuck curve on the first airborne frame.
                 const o = f * 3;
-                this.footPos[o] = damp(this.footPos[o], tx + (nx - tx) * near, TUCK_RATE, h);
-                this.footPos[o + 1] = damp(this.footPos[o + 1], ty + (gy - ty) * near, TUCK_RATE, h);
-                this.footPos[o + 2] = damp(this.footPos[o + 2], tz + (nz - tz) * near, TUCK_RATE, h);
-                // Weightless: the cloth and fur solvers read this, and a foot
-                // carrying load in mid-air stiffens the garments against a
-                // ground contact that is not happening.
-                this.footWeight[f] = damp(this.footWeight[f], 0, 22, h);
+                this.footPos[o] = damp(this.footPos[o], wxT, TUCK_RATE, h);
+                this.footPos[o + 1] = damp(this.footPos[o + 1], wyT, TUCK_RATE, h);
+                this.footPos[o + 2] = damp(this.footPos[o + 2], wzT, TUCK_RATE, h);
+                // Weightless off the board (the cloth and fur solvers read
+                // this, and a foot carrying load in mid-air stiffens the
+                // garments against a ground contact that is not happening) —
+                // but surfing, the board is still underfoot: the weight target
+                // is the surf blend itself, so the ollie keeps the feet flat
+                // on the deck instead of rolling toe-down into the swing pose.
+                // At surf 0 this is the original 0 target, bit for bit.
+                this.footWeight[f] = damp(this.footWeight[f], surf, 22, h);
 
                 // Leave the machine in SWING, so the first grounded frame is a
                 // genuine stance transition and fires exactly one touchdown.
