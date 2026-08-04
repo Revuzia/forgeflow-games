@@ -76,17 +76,26 @@ the spells, the jump, and the three beds (wind, surf, ribbon stream) — with re
 from the Sonniss GDC 2024 bundle. Everything you can **see** is still generated on the GPU
 at load.
 
-### Nothing visual is an asset file
+### Almost nothing visual is an asset file
 
 As in the original:
 
 - the sky is an atmosphere integral, not a captured HDRI
 - the terrain and the snow grain are noise, evaluated with analytic derivatives
-- the character is lofted at load from a table of bone offsets — no rig file, no animation
-  clips, no authored mesh
+- the procedural figure is lofted at load from a table of bone offsets — no rig file, no
+  animation clips, no authored mesh — and it still simulates every frame (footprints and
+  step audio key off it)
 - the fabric weave and the fur strands are evaluated in the fragment shader
 
-No image files, no glTF, no fonts beyond the system stack.
+**The one visual asset (added 2026-08-04):** `assets/char/driftwake_char_web.glb`
+(834 KiB) — the rigged hero character that renders in the figure's place by default
+(`S.meshCharacter` toggles back). Meshy-generated model and textures (owner's account),
+41-bone Mixamo rig and clips, Draco-compressed with WebP maps. Its `GLTFLoader` /
+`DRACOLoader` and the Draco decoder are vendored from the same Three r172 release under
+`assets/vendor/three/`. It ships with a custom skinned `RawShaderMaterial` — the scene
+has no Three lights, so it is relit by the port's own sun/sky/shadow/spell-light stack.
+
+No other image files, no fonts beyond the system stack.
 
 ### Audio files that do ship
 

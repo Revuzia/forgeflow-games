@@ -42,6 +42,7 @@ import water from "./lib/water.glsl.js";                   // [SPELLS]
 import crystal from "./lib/crystal.glsl.js";               // [SPELLS]
 import wake from "./lib/wake.glsl.js";                     // [WAKE]
 import charSkin from "./lib/charSkin.glsl.js";             // [CHARACTER]
+import meshSkin from "./lib/meshSkin.glsl.js";             // [CHARACTER]
 import postCommon from "./lib/postCommon.glsl.js";         // [POST-CORE]
 //
 // ...and the matching CHUNKS entries:
@@ -120,6 +121,13 @@ const CHUNKS = {
     // all seven character vertex programs so beauty, depth and both cascades
     // place a vertex at literally the same world position. [CHARACTER-CLOTH]
     "lib/charSkin": charSkin,
+
+    // Four-influence LBS for the GLB mesh character, reading Three's own
+    // renderer-managed square boneTexture layout (a different rig and a
+    // different texture from lib/charSkin's 48x64 charTex). Included by the
+    // mesh rider's beauty, both cascade and prepass vertex programs so all
+    // four place a vertex at the same world position. [CHARACTER]
+    "lib/meshSkin": meshSkin,
 
     // Toroidal read side of the terrain state buffer: deformSample / deformHeight
     // / deformGradient, plus deformDisplace(), the single gated-displacement call

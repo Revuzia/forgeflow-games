@@ -132,6 +132,13 @@ export const S = {
     // --------------------------------------------------------------- systems
     showTerrain: true,
     showCharacter: true,
+    /**
+     * Which body renders: true = the rigged GLB rider (meshChar), false = the
+     * procedural figure. The figure SIMULATES either way — snowContact stamps
+     * from its solved plants and audio keys off the controller — so this only
+     * swaps the visual. PORT-ONLY key; the reference has one character.
+     */
+    meshCharacter: true,
     showWake: true,
     showLightShafts: true,
     wireframe: false,
@@ -247,6 +254,7 @@ export const SCHEMA = [
         items: [
             { k: "showTerrain", l: "Terrain", t: "b" },
             { k: "showCharacter", l: "Character", t: "b" },
+            { k: "meshCharacter", l: "Rider mesh", t: "b" },
             { k: "wireframe", l: "Wireframe", t: "b" },
             { k: "freezeTime", l: "Freeze time", t: "b" },
             { k: "resolutionScale", l: "Resolution", t: "f", min: 0.5, max: 1.5, step: 0.05 },

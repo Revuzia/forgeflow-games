@@ -97,6 +97,7 @@ import { DeformationField } from "./terrain/deformation.js";
 import { Terrain } from "./terrain/terrain.js";
 import { CharacterController } from "./character/controller.js";
 import { Character } from "./character/character.js";
+import { MeshCharacter } from "./character/meshChar.js";
 import { SnowContact } from "./character/snowContact.js";
 import { SprayField } from "./vfx/particles.js";
 import { SurfWake } from "./vfx/surfWake.js";
@@ -400,6 +401,32 @@ async function boot() {
     );
     spells.registerPrepass(depthPass);
 
+    // The rigged GLB rider — the figure's visual replacement. Loaded and
+    // registered here, before the warm-up, so its four pipelines compile
+    // behind the boot screen with everyone else's. The procedural figure
+    // KEEPS SIMULATING whichever body is visible (snowContact stamps from its
+    // solved plants; audio keys off the controller); `S.meshCharacter` only
+    // decides which of the two renders — see the wiring below the overlay.
+    await loading.phase("fitting the rider", 0.74);
+    const meshChar = new MeshCharacter(scene, terrain, sky, shadows, character);
+    await meshChar.load();
+    meshChar.registerShadows();
+    meshChar.registerPrepass(depthPass);
+    // Another lit surface for the pooled spell lights; must precede the
+    // warm-up so the boxes are installed before the program first builds.
+    spells.addConsumers(meshChar.material);
+
+    // Which body renders. Both listeners fire on `showCharacter` — the
+    // figure's own (registered in its constructor) and this one; this one is
+    // registered later, so it runs after and owns the final state.
+    const applyBodyVisibility = () => {
+        const show = S.showCharacter !== false;
+        figure.setVisible(show && !S.meshCharacter);
+        meshChar.setVisible(show && !!S.meshCharacter);
+    };
+    applyBodyVisibility();
+    onChange(["showCharacter", "meshCharacter"], applyBodyVisibility);
+
     // The rig needs ground heights to keep the spring arm above the snow.
     rig.groundAt = (x, z) => terrain.heightAt(x, z);
 
@@ -429,6 +456,8 @@ async function boot() {
     terrain.update(rig.camera, character.position, 0);
     figure.update(0);
     figure.sync(rig.camera);
+    meshChar.update(0);
+    meshChar.sync(rig.camera);
 
     // Stand real geometry up in the systems that are empty at rest, so the warm
     // draws rasterise something. Each is undone after the warm frames.
@@ -440,7 +469,8 @@ async function boot() {
     // One compile-and-draw over the whole beauty scene. The spell meshes are
     // forced visible for the duration and put back exactly as they were.
     await warmUp(renderer, scene, rig.camera, [
-        ...spells.warmUpMeshes, ...figure.warmUpMeshes(), wake.mesh, spray.mesh,
+        ...spells.warmUpMeshes, ...figure.warmUpMeshes(), ...meshChar.warmUpMeshes(),
+        wake.mesh, spray.mesh,
     ]);
     await shadows.warmUp();
     await depthPass.warmUp(rig.camera);
@@ -526,6 +556,10 @@ async function boot() {
         // at the boot's actual planted position, which only exists once the
         // figure has been solved.
         figure.update(dt);
+        // The mesh rider's mixer + pose layer. After the controller, so it
+        // reads this frame's motion; before the shadow render, because its
+        // skeleton texture is consumed first by the cascades.
+        meshChar.update(dt);
         contact.update(dt);
         const tChar = performance.now();
 
@@ -566,6 +600,7 @@ async function boot() {
         // After the shadow refit, so the figure's uniforms carry this frame's
         // cascade matrices rather than last frame's.
         figure.sync(rig.camera);
+        meshChar.sync(rig.camera);
         // Before the spray: the grains the wake sheds have to be in the pool
         // before the pool is uploaded.
         wake.update(dt, rig.camera);
@@ -867,6 +902,10 @@ async function boot() {
         // counters and reads the state buffer back through `texture`, which is
         // the only way to show that the identity-step skip changes no snow.
         deform,
+        // The rigged GLB rider (`S.meshCharacter` picks it over `figure`'s
+        // render; both simulate). Not in the §2 contract — the reference has
+        // one character — exposed the way `deform` and `crosshair` are.
+        meshChar,
         S, input, perfStats: stats,
         // The write half of the settings store. `S` alone is read-only in
         // practice: most of its keys are sampled next frame and a bare write is

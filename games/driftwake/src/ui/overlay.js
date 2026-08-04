@@ -58,7 +58,7 @@ import {
  * developer's isolation switch.
  */
 const DEBUG_KEYS = new Set([
-    "showTerrain", "showCharacter", "wireframe", "freezeTime",
+    "showTerrain", "showCharacter", "meshCharacter", "wireframe", "freezeTime",
     "debugProfile", "debugProfileDeep", "debugView",
 ]);
 
