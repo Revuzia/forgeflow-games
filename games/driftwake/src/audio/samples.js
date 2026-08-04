@@ -1,12 +1,17 @@
 /**
- * DRIFTWAKE — sample playback.
+ * DRIFTWAKE — sample loading and one-shot playback.
  *
- * The one place in this subsystem that plays a recording rather than synthesising
- * one. Everything else in `voices.js` stays synthetic; this file exists because
- * two sounds — a boot breaking snow crust, and a body landing in it — are things
- * a filtered-noise burst approximates and a microphone simply has.
+ * The one place in this subsystem that DECODES a recording. Two consumers:
+ * the one-shots (footsteps, landings, jump whoosh, the spell cracks and
+ * splashes) play through this bank's pooled player via `play()`; the loop
+ * beds (wind, surf slide, ribbon stream) only take their decoded buffer via
+ * `bufferOrNull()` and own their looping source in voices.js, so a bed's loop
+ * lives on its Smoothed-gain schedule, not on this one-shot pool. Every
+ * consumer keeps a synthesised fallback in voices.js for the buffers that
+ * never arrive.
  *
- * The assets are Kenney's CC0 "Impact Sounds", vendored under `assets/audio/`.
+ * The assets are Kenney's CC0 "Impact Sounds" plus cuts from the Sonniss GDC
+ * 2024 bundle, vendored under `assets/audio/` — see FILES below and CREDITS.md.
  *
  * ---------------------------------------------------------------------------
  * WHAT IS POOLED AND WHAT IS NOT — the one allocation, and why it is unavoidable
@@ -60,6 +65,11 @@
 /**
  * The vendored set. Resolved against this module's own URL so the paths survive
  * the game being served from a sub-path, which is how it is deployed.
+ *
+ * Two provenances now, and CREDITS.md is the authority on both: the footsteps
+ * and impacts are Kenney CC0; everything below the comment line is cut from the
+ * Sonniss GDC 2024 bundle (royalty-free, embedding permitted, no attribution
+ * required — credited anyway).
  */
 const FILES = {
     step0: "footstep_snow_0.ogg",
@@ -71,6 +81,23 @@ const FILES = {
     heavy1: "impact_heavy_1.ogg",
     medium0: "impact_medium_0.ogg",
     medium1: "impact_medium_1.ogg",
+    // ---- Sonniss GDC 2024 one-shots ------------------------------------
+    crack0: "spell_crystal_crack_0.ogg",
+    crack1: "spell_crystal_crack_1.ogg",
+    crack2: "spell_crystal_crack_2.ogg",
+    shimmer: "spell_crystal_shimmer.ogg",
+    sweep: "spell_sweep_surge.ogg",
+    bloom: "spell_bloom_splash.ogg",
+    vortex: "spell_vortex_whoosh.ogg",
+    whoosh: "jump_whoosh.ogg",
+    // ---- Sonniss GDC 2024 loop beds ------------------------------------
+    // Decoded like the one-shots but PLAYED nothing like them: `play()` never
+    // fires these. The beds in voices.js take the decoded buffer via
+    // `bufferOrNull()` and own their looping source, so the loop lives on the
+    // bed's Smoothed-gain schedule, not on this bank's one-shot pool.
+    windloop: "wind_loop.ogg",
+    ribbonloop: "spell_ribbon_stream.ogg",
+    surfloop: "surf_slide_loop.ogg",
 };
 
 /** How many footstep variants exist, for the round-robin. */
@@ -113,6 +140,8 @@ export class SampleBank {
         // Counters, for the debug surface and for the harness to assert against.
         this.loaded = 0;
         this.failed = 0;
+        /** @type {Set<string>} names whose fetch or decode failed for good */
+        this._failedNames = new Set();
         /** @type {string|null} first load failure, whatever it was */
         this.error = null;
     }
@@ -206,7 +235,29 @@ export class SampleBank {
      */
     _fail(name, err) {
         this.failed++;
+        this._failedNames.add(name);
         if (!this.error) this.error = name + ": " + (err && err.message ? err.message : String(err));
+    }
+
+    /**
+     * A decoded buffer, or null. How the beds in voices.js collect their loop
+     * material — they own the looping source; this bank only decodes.
+     * @param {string} name
+     * @returns {AudioBuffer|null}
+     */
+    bufferOrNull(name) {
+        return this.buffers.get(name) || null;
+    }
+
+    /**
+     * True once `name` has either decoded or definitively failed — i.e. there is
+     * no point polling it again. What lets audio.js's loop-attach poll terminate
+     * instead of testing a dead fetch every frame forever.
+     * @param {string} name
+     * @returns {boolean}
+     */
+    settled(name) {
+        return this.buffers.has(name) || this._failedNames.has(name);
     }
 
     /** True once at least one buffer is playable. @returns {boolean} */

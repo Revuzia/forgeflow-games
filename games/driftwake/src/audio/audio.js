@@ -101,6 +101,10 @@ const DEG = Math.PI / 180;
 const LEVEL_STEP = 0.58;    // one footfall
 const LEVEL_LAND = 0.88;    // the body hitting snow
 const LEVEL_CRUST = 0.57;   // the crust breaking under it, layered over the body
+const LEVEL_WHOOSH = 0.12;  // the air moving past a body leaving the ground
+
+/** The recorded loop beds and the voice that adopts each when it decodes. */
+const LOOP_NAMES = ["windloop", "surfloop", "ribbonloop"];
 
 /** Gesture events any one of which is enough to start a context. */
 const GESTURES = ["pointerdown", "mousedown", "keydown", "touchstart"];
@@ -152,6 +156,17 @@ class AudioSystem {
         // Per spell key 1,3,4,5 -> slots 0..3: last frame's `active` and `t`.
         this._spellActive = [false, false, false, false];
         this._spellT = [0, 0, 0, 0];
+
+        /**
+         * Loop-bed adoption state, one flag per LOOP_NAMES entry. The beds
+         * start on generated noise and swap to the recorded loops when each
+         * decode SETTLES (decoded or failed for good — samples.js). Polled
+         * from `update()` while any are outstanding; `_loopsPending` hits
+         * zero within a second or two of unlock and the check is one integer
+         * compare forever after. Fixed fields, no allocation.
+         */
+        this._loopDone = [false, false, false];
+        this._loopsPending = LOOP_NAMES.length;
 
         /** @type {WindBed|null} */ this.wind = null;
         /** @type {SurfBed|null} */ this.surf = null;
@@ -290,7 +305,7 @@ class AudioSystem {
         this.surf = new SurfBed(ctx, white, pink, this.master);
         this.crunch = new CrunchPool(ctx, white, this.master, 4);
         this.thump = new ThumpPool(ctx, this.master, 2);
-        this.spellVoices = new SpellVoices(ctx, white, this.master);
+        this.spellVoices = new SpellVoices(ctx, white, this.master, this.samples);
 
         // Decode whatever `prefetch()` has landed and build the pooled output
         // stage. Not awaited: `attach` returns immediately and the decodes
@@ -393,6 +408,11 @@ class AudioSystem {
         const t = this._time;
         const sfx = sfxVolume();
 
+        // Adopt the recorded loop beds as their decodes settle. `settled` is
+        // what makes this poll terminate: a 404'd loop settles as failed, the
+        // bed keeps its generated noise forever, and the check stops.
+        if (this._loopsPending > 0) this._adoptLoops();
+
         const yaw = rig ? rig.yaw : 0;
         const speed01 = character ? character.speed01 : 0;
         const surfBlend = character ? character.surf : 0;
@@ -475,9 +495,15 @@ class AudioSystem {
             const landed = character.landed === true || (!airborne && this._prevAirborne);
 
             if (tookOff) {
-                // Take-off is the crust letting go: brighter, shorter, no second
-                // grain — the foot leaves, it does not settle.
+                // Take-off is two events now: the crust letting go underfoot
+                // (brighter, shorter, no second grain — the foot leaves, it
+                // does not settle) and the air moving past the body, which is
+                // a recording. The whoosh rides a little faster the faster the
+                // player was moving; if it has not decoded, the crunch alone
+                // is the take-off, exactly as before.
                 this.crunch.fire(now, 1450, 0.95, 1.05, 0.32 * sfx, 0.10, 0, facePan * 0.2);
+                this.samples.play("whoosh", now, LEVEL_WHOOSH * sfx,
+                    1.0 + 0.25 * speed01, facePan * 0.2, 0.06);
             }
             if (landed) {
                 const imp = clamp(
@@ -564,6 +590,26 @@ class AudioSystem {
             this._spellEdge(1, 3, spells.bloom, now, sfx, facePan);
             this._spellEdge(2, 4, spells.crystallize, now, sfx, facePan);
             this._spellEdge(3, 5, spells.vortex, now, sfx, facePan);
+        }
+    }
+
+    /**
+     * Swap each bed onto its recorded loop once the decode has settled.
+     * Runs a few times at most (LOOP_NAMES.length successes), never allocates
+     * on the failure path, and stops being called once `_loopsPending` is 0.
+     * @returns {void}
+     */
+    _adoptLoops() {
+        const s = this.samples;
+        for (let i = 0; i < LOOP_NAMES.length; i++) {
+            if (this._loopDone[i] || !s.settled(LOOP_NAMES[i])) continue;
+            this._loopDone[i] = true;
+            this._loopsPending--;
+            const buf = s.bufferOrNull(LOOP_NAMES[i]);
+            if (!buf) continue; // failed fetch/decode: the synth bed stays
+            if (i === 0) this.wind.adopt(buf);
+            else if (i === 1) this.surf.adopt(buf);
+            else this.spellVoices.adoptRibbon(buf);
         }
     }
 

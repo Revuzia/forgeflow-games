@@ -11,14 +11,17 @@
  *     This is no longer true of the SUBSYSTEM, and the distinction matters. The
  *     build originally shipped zero asset files and the audio held that line on
  *     principle; the owner then judged that real recordings beat synthetic
- *     purity for the discrete impacts, which was the right call. `samples.js`
- *     now plays ten vendored files — five Kenney CC0 snow footsteps, four
- *     impacts, and one music bed — and `voices.js` keeps its synthesised
- *     versions as the fallback when a fetch or decode fails. So: the primitives
- *     below are still pure, the wind bed and the surf hiss and the five spell
- *     voices are still pure, and the footsteps and landings are recordings.
- *     `CREDITS.md` is the authority on exactly what ships and under what
- *     licence — believe it over any docblock, including this one.
+ *     purity, which was the right call. `samples.js` now decodes twenty
+ *     vendored files — five Kenney CC0 snow footsteps and four impacts, plus
+ *     eleven Sonniss GDC 2024 cuts: the spell one-shots (glass/ice cracks,
+ *     water surge, eruption, whorl, jump whoosh) and the three loop beds
+ *     (wind, surf slide, ribbon stream) the voices adopt into their existing
+ *     filter chains. `voices.js` keeps every synthesised version as the
+ *     fallback when a fetch or decode fails. So: the primitives below are
+ *     still pure, and every shipped sound is a recording arriving through a
+ *     graph these primitives shape. `CREDITS.md` is the authority on exactly
+ *     what ships and under what licence — believe it over any docblock,
+ *     including this one.
  *
  *  2. A FIXED POOL, NOT ONE-SHOT NODES. The idiomatic Web Audio one-shot builds
  *     an OscillatorNode per trigger and throws it away. That is an allocation

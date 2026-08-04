@@ -30,9 +30,39 @@
  *   SPELLS   one voice each, deliberately not interchangeable. Sweep, Ribbon and
  *            Bloom are the water family and share a band-passed-noise-over-a-low-
  *            sine construction so they read as three uses of one element.
- *            Crystallise is the odd one out on purpose: three INHARMONIC
- *            partials, a struck bell, nothing else in the mix does that.
- *            Vortex is a rising resonant band — a whistle that arrives.
+ *            Crystallise WAS the odd one out — three inharmonic partials, a
+ *            struck bell. The owner heard it and said GLASS BREAKING, not a
+ *            bell: growing ice spikes are a fracture, not an instrument. The
+ *            voice therefore plays recorded glass/ice cracks (Sonniss GDC 2024,
+ *            via the shared SampleBank) staggered across the ~1.6 s golden-
+ *            spiral growth, with a faint ice-crackle shimmer under them. The
+ *            bell synth below is UNREACHABLE while those buffers are decoded —
+ *            it survives only as the fallback for a failed fetch.
+ *            Vortex is a rising airy whorl — recorded wind gust when decoded,
+ *            rising resonant band as the fallback. Sweep and Bloom follow the
+ *            same recording-first, synth-fallback pattern.
+ *
+ * ---------------------------------------------------------------------------
+ * RECORDINGS, AND WHERE THEY PLUG IN
+ *
+ * Two plumbing patterns, matching the two kinds of sound:
+ *
+ *   ONE-SHOTS (the spells) go through the SampleBank's pooled player exactly
+ *   like footsteps do: `bank.play()` at fire time, false -> synth fallback.
+ *
+ *   BEDS (wind, surf hiss, ribbon stream) each own a looping source built at
+ *   construction from generated noise. `adopt(buffer)` — called once, by
+ *   audio.js, when the recording's decode settles — starts a new looping
+ *   source on the RECORDED buffer into the SAME filter, then stops the noise
+ *   source. Every Smoothed gain/frequency schedule, i.e. the entire measured
+ *   envelope, survives untouched: only the raw material under the filters
+ *   changes. The per-layer `mk` makeup factors exist because a real recording
+ *   is not spectrally flat — a bandpass at 2.2 kHz takes far less energy from
+ *   recorded wind than from white noise, and the makeups (set by MEASURING
+ *   each layer through _harness/windprobe.py --real) put each layer back at
+ *   the level the mix was tuned to. `adopt` allocates a handful of nodes ONCE
+ *   per page life, off the frame path — the same exemption samples.js already
+ *   documents for its per-trigger source.
  *
  * All levels are pre-master and pre-`FFG.sfxVolume`; the caller multiplies.
  *
@@ -109,25 +139,37 @@ export class WindBed {
      * @param {AudioNode} dest
      */
     constructor(ctx, white, pink, dest) {
+        this.ctx = ctx;
         this.pan = panner(ctx, dest);
 
         this.gLow = gain(ctx, 0, this.pan);
         this.fLow = filter(ctx, "lowpass", 260, 0.5, this.gLow);
-        looper(ctx, pink, 1.0, this.fLow);
+        this.srcLow = looper(ctx, pink, 1.0, this.fLow);
 
         // Q starts at the standstill value, not the old fixed 0.85: the bed is
         // driven from the first frame after unlock, and starting wide would open
         // the page with one audible swoop of exactly the hiss this is removing.
         this.gMid = gain(ctx, 0, this.pan);
         this.fMid = filter(ctx, "bandpass", 520, 2.2, this.gMid);
-        looper(ctx, white, 0.83, this.fMid);
+        this.srcMid = looper(ctx, white, 0.83, this.fMid);
 
         // The top layer is the one that sells speed. It is nearly shut at a
         // stand — a demo that whistles while you are standing still on a calm
         // day is a demo whose wind is a texture rather than a wind.
         this.gTop = gain(ctx, 0, this.pan);
         this.fTop = filter(ctx, "bandpass", 2200, 1.4, this.gTop);
-        looper(ctx, white, 1.19, this.fTop);
+        this.srcTop = looper(ctx, white, 1.19, this.fTop);
+
+        // Per-layer makeup, 1.0 while the source is generated noise. `adopt`
+        // swaps in the measured constants for the recorded wind — see the file
+        // docblock and the numbers above the constants in `adopt`. Two values
+        // per layer, rest and sprint, interpolated on speed in `drive()`: the
+        // mid band's centre frequency climbs 600 Hz with speed, into a region
+        // where the recording is weaker than white noise by a growing margin,
+        // so no single constant holds both ends of the envelope.
+        this.mkLow0 = 1.0; this.mkLow1 = 1.0;
+        this.mkMid0 = 1.0; this.mkMid1 = 1.0;
+        this.mkTop0 = 1.0; this.mkTop1 = 1.0;
 
         // The gain epsilons are small because the levels are. `Smoothed` skips a
         // write when the change is under epsilon, and the gust is a slow ripple:
@@ -148,6 +190,42 @@ export class WindBed {
         this.sPan = new Smoothed(this.pan.pan, 0.30, 0.02);
 
         this.level = 0;
+    }
+
+    /**
+     * Swap the generated-noise sources for a real wind recording. Called once,
+     * by audio.js, when `wind_loop.ogg` has decoded; never on the frame path.
+     *
+     * The three layers keep their own loopers at the constructor's three rates
+     * so they stay decorrelated, each into its EXISTING filter — the Smoothed
+     * schedules on the gains and frequencies are untouched, which is what
+     * keeps the measured rest/sprint envelope.
+     *
+     * The makeups are set by measurement (`_harness/spellprobe.py calib`,
+     * 2026-08-04): per layer, the A-weighted level of the adopted bed at
+     * makeup 1 against the same layer on generated noise, at rest and at
+     * sprint. The recording's energy is concentrated low, so the bandpasses
+     * take much less from it than they took from white noise — the mid
+     * arrives 17.8 dB down at rest and 22.9 dB down at sprint (its centre
+     * climbs into ever-weaker recorded content, hence the rest/sprint pair),
+     * the top ~25.5 dB down, the pink-fed low ~8 dB down. These constants put
+     * each layer back on the envelope the mix was tuned to.
+     * @param {AudioBuffer} buffer
+     * @returns {void}
+     */
+    adopt(buffer) {
+        const ctx = this.ctx;
+        const old = [this.srcLow, this.srcMid, this.srcTop];
+        this.srcLow = looper(ctx, buffer, 1.0, this.fLow);
+        this.srcMid = looper(ctx, buffer, 0.83, this.fMid);
+        this.srcTop = looper(ctx, buffer, 1.19, this.fTop);
+        for (let i = 0; i < old.length; i++) {
+            old[i].stop();
+            old[i].disconnect();
+        }
+        this.mkLow0 = 2.44; this.mkLow1 = 2.75;
+        this.mkMid0 = 7.77; this.mkMid1 = 14.04;
+        this.mkTop0 = 18.86; this.mkTop1 = 19.09;
     }
 
     /**
@@ -174,9 +252,12 @@ export class WindBed {
         // deliberately almost nothing; the third dominates, which is what makes
         // the bed answer the player. See the class docblock for the measurements
         // these were set from — they are not eyeballed.
-        const low = (0.010 + 0.020 * w + 0.150 * sp) * gust * sfx;
-        const mid = (0.004 + 0.008 * w + 0.115 * sp) * gust * sfx;
-        const top = (0.0005 + 0.0015 * w + 0.055 * sp * sp + 0.030 * surf * sp) * sfx;
+        const low = (0.010 + 0.020 * w + 0.150 * sp) * gust * sfx
+            * (this.mkLow0 + (this.mkLow1 - this.mkLow0) * sp);
+        const mid = (0.004 + 0.008 * w + 0.115 * sp) * gust * sfx
+            * (this.mkMid0 + (this.mkMid1 - this.mkMid0) * sp);
+        const top = (0.0005 + 0.0015 * w + 0.055 * sp * sp + 0.030 * surf * sp) * sfx
+            * (this.mkTop0 + (this.mkTop1 - this.mkTop0) * sp);
 
         this.sLow.write(low, now);
         this.sMid.write(mid, now);
@@ -220,11 +301,12 @@ export class SurfBed {
      * @param {AudioNode} dest
      */
     constructor(ctx, white, pink, dest) {
+        this.ctx = ctx;
         this.pan = panner(ctx, dest);
 
         this.gHiss = gain(ctx, 0, this.pan);
         this.fHiss = filter(ctx, "bandpass", 1600, 0.9, this.gHiss);
-        looper(ctx, white, 1.07, this.fHiss);
+        this.srcHiss = looper(ctx, white, 1.07, this.fHiss);
 
         this.gBody = gain(ctx, 0, this.pan);
         this.fBody = filter(ctx, "lowpass", 140, 0.9, this.gBody);
@@ -237,7 +319,38 @@ export class SurfBed {
         this.sBodyF = new Smoothed(this.fBody.frequency, 0.14, 8);
         this.sPan = new Smoothed(this.pan.pan, 0.12, 0.02);
 
+        /** Written only after `adopt` — playbackRate on the recorded slide. */
+        this.sRate = null;
+        this.mkHiss = 1.0;
+
         this.level = 0;
+    }
+
+    /**
+     * Swap the white-noise hiss for the recorded board-on-snow slide loop.
+     * Called once, off the frame path, when `surf_slide_loop.ogg` decodes.
+     * The pink-noise low body STAYS — the recording carries the scrape and
+     * grain, the body carries the weight, same division as before.
+     *
+     * playbackRate becomes the speed knob the synth never had: a faster carve
+     * is a faster, brighter slide, driven through a Smoothed in `drive()` so
+     * it costs writes only when speed actually changes. The carve resonance
+     * (frequency + Q on the SAME bandpass) is untouched.
+     *
+     * mkHiss is measured (`_harness/spellprobe.py calib`, 2026-08-04): the
+     * slide recording through the hiss bandpass arrives 10.9 dB quieter than
+     * white noise did (10.5 dB in a hard carve — near-constant, so one
+     * number), and the makeup restores the tuned carve-swell level.
+     * @param {AudioBuffer} buffer
+     * @returns {void}
+     */
+    adopt(buffer) {
+        const old = this.srcHiss;
+        this.srcHiss = looper(this.ctx, buffer, 1.0, this.fHiss);
+        old.stop();
+        old.disconnect();
+        this.sRate = new Smoothed(this.srcHiss.playbackRate, 0.12, 0.01);
+        this.mkHiss = 3.45;
     }
 
     /**
@@ -262,8 +375,12 @@ export class SurfBed {
         // MEASURED on the master bus with the bed isolated — at Q 0.8 a hard
         // carve with the base coefficients came out QUIETER than no carve at
         // all, which is the exact opposite of the swell this is for.
-        this.sHiss.write(v * (0.26 + 0.55 * load), now);
+        this.sHiss.write(v * (0.26 + 0.55 * load) * this.mkHiss, now);
         this.sBody.write(v * (0.13 + 0.09 * load), now);
+        // The recorded slide tracks speed with pitch as well as gain: a slow
+        // drift is a low soft scrape, a full sprint is up near the recording's
+        // native rate. Range set to stay inside natural board-on-snow reading.
+        if (this.sRate) this.sRate.write(0.72 + 0.42 * sp + 0.10 * load, now);
         this.sHissF.write(1500 + 2000 * sp + 900 * load, now);
         // Q is the carve: a loaded edge is a narrower, more focused spray note.
         // Deliberately a modest sweep. Q 4+ sounded right in isolation but
@@ -415,19 +532,45 @@ export class ThumpPool {
 // -------------------------------------------------------------------- spells
 
 /**
+ * Recorded-spell levels, pre-master and pre-`FFG.sfxVolume`, applied through
+ * the SampleBank's pooled player. NOT comparable to the synth peaks below them
+ * — the synth voices pay ~12 dB of bandpass insertion loss and these do not
+ * (see the LEVEL_* block in audio.js for the full argument). Set by measuring
+ * each recording through the master-chain replica against the bed at the speed
+ * it plays over (`_harness/spellprobe.py`).
+ */
+const SMP_CRACK0 = 0.42;   // first fracture, the cast lands
+const SMP_CRACK1 = 0.34;   // main break as the cluster grows
+const SMP_CRACK2 = 0.30;   // debris scatter at full spiral
+const SMP_SHIMMER = 0.055; // faint ice-crackle under the growth
+const SMP_SWEEP = 0.50;    // surge swell
+const SMP_BLOOM = 0.55;    // eruption + fallout
+const SMP_VORTEX = 0.60;   // rising whorl
+
+/** Where each crack lands across the ~1.6 s golden-spiral growth, seconds. */
+const CRACK_AT_1 = 0.42;
+const CRACK_AT_2 = 0.95;
+
+/**
  * The five spell voices.
  *
  * Each is a fixed little graph, retriggerable, sharing one panner-per-voice so
- * a cast sits where the character is facing rather than dead centre.
+ * a cast sits where the character is facing rather than dead centre. The
+ * one-shot spells play recordings through the shared SampleBank when decoded;
+ * every synth graph below survives as the fallback (samples.js: `play()`
+ * returns false until a buffer is ready, and forever if its fetch failed).
  */
 export class SpellVoices {
     /**
      * @param {AudioContext} ctx
      * @param {AudioBuffer} white
      * @param {AudioNode} dest
+     * @param {import("./samples.js").SampleBank|null} [bank]
      */
-    constructor(ctx, white, dest) {
+    constructor(ctx, white, dest, bank) {
         this.ctx = ctx;
+        this.bank = bank || null;
+        this.ribReal = false;
 
         // ---- 1 Sweep: a crescent of water thrown along the ground -----------
         // A band that collapses from a spray to a rush, over a low sine that
@@ -449,7 +592,7 @@ export class SpellVoices {
         const ribPan = panner(ctx, dest);
         this.ribN = gain(ctx, 0, ribPan);
         this.ribF = filter(ctx, "bandpass", 820, 3.6, this.ribN);
-        looper(ctx, white, 0.93, this.ribF);
+        this.ribSrc = looper(ctx, white, 0.93, this.ribF);
         this.ribO = gain(ctx, 0, ribPan);
         this.ribLp = filter(ctx, "lowpass", 320, 0.9, this.ribO);
         this.ribOsc = osc(ctx, "triangle", 108, this.ribLp);
@@ -510,7 +653,30 @@ export class SpellVoices {
     }
 
     /**
-     * Fire a one-shot spell.
+     * Swap the ribbon's white-noise band for the recorded stream loop. Called
+     * once, off the frame path, when `spell_ribbon_stream.ogg` decodes. The
+     * hold/release envelopes and the per-frame wobble on `ribF.frequency` are
+     * untouched — the wobble now bends real water. The band WIDENS on adopt:
+     * Q 3.6 was tuned to carve a watery voice out of flat noise; a recording
+     * that already IS water needs only shaping, and through Q 3.6 it reads as
+     * a whistle, not a stream.
+     * @param {AudioBuffer} buffer
+     * @returns {void}
+     */
+    adoptRibbon(buffer) {
+        const old = this.ribSrc;
+        this.ribSrc = looper(this.ctx, buffer, 1.0, this.ribF);
+        old.stop();
+        old.disconnect();
+        this.ribF.Q.value = 1.15;
+        this.ribReal = true;
+    }
+
+    /**
+     * Fire a one-shot spell. Recording first, synth as the fallback — never
+     * both: doubling a recording with the synth that imitated it puts two
+     * uncorrelated sources in one band, the same mud audio.js documents for
+     * the landing thump.
      * @param {number} key 1, 3, 4 or 5 — key 2 (Ribbon) is a hold, see `hold`
      * @param {number} now
      * @param {number} sfx
@@ -518,7 +684,12 @@ export class SpellVoices {
      * @returns {void}
      */
     fire(key, now, sfx, pan) {
+        const bank = this.bank;
         if (key === 1) {
+            if (bank && bank.play("sweep", now, SMP_SWEEP * sfx, 1.04, clamp(pan, -1, 1), 0.05)) {
+                this.until[0] = now + 2.3;
+                return;
+            }
             this.sweepPan.pan.setValueAtTime(clamp(pan, -1, 1), now);
             glide(this.sweepF.frequency, now, 2800, 380, 0.5);
             glide(this.sweepOsc.frequency, now, 205, 78, 0.42);
@@ -528,6 +699,10 @@ export class SpellVoices {
             return;
         }
         if (key === 3) {
+            if (bank && bank.play("bloom", now, SMP_BLOOM * sfx, 1.0, clamp(pan, -1, 1) * 0.6, 0.05)) {
+                this.until[2] = now + 2.8;
+                return;
+            }
             this.bloomPan.pan.setValueAtTime(clamp(pan, -1, 1) * 0.6, now);
             arc(this.bloomF.frequency, now, 380, 2700, 620, 0.16, 0.72);
             glide(this.bloomOsc.frequency, now, 430, 112, 0.55);
@@ -537,6 +712,25 @@ export class SpellVoices {
             return;
         }
         if (key === 4) {
+            // GLASS BREAKING, not a bell (owner's words). Three recorded
+            // fractures staggered as the prism clusters land across the
+            // ~1.6 s golden-spiral growth, a faint ice-crackle shimmer under
+            // them. The recordings are broadband transients — spectral
+            // flatness ~0.2-0.37 against the bell's 0.0000 — which is the
+            // measured difference between a crack and a chime. The pitch
+            // wander per cast comes from the bank's deterministic
+            // scheduling-time jitter, so repeated casts are not one sample
+            // on repeat. The bell below is unreachable while crack0 is
+            // decoded; it remains only as the fetch-failure fallback.
+            if (bank && bank.has("crack0")) {
+                const p = clamp(pan, -1, 1) * 0.5;
+                bank.play("crack0", now, SMP_CRACK0 * sfx, 1.0, p, 0.08);
+                bank.play("shimmer", now + 0.08, SMP_SHIMMER * sfx, 1.0, p, 0.04);
+                bank.play("crack1", now + CRACK_AT_1, SMP_CRACK1 * sfx, 0.96, p * 0.6, 0.08);
+                bank.play("crack2", now + CRACK_AT_2, SMP_CRACK2 * sfx, 1.0, p * 1.3, 0.08);
+                this.until[3] = now + CRACK_AT_2 + 1.4;
+                return;
+            }
             this.cryPan.pan.setValueAtTime(clamp(pan, -1, 1) * 0.5, now);
             // Detuned a few cents per cast so repeated crystallising is a chime
             // rather than a stuck sample. Deterministic: derived from the
@@ -553,6 +747,10 @@ export class SpellVoices {
             return;
         }
         if (key === 5) {
+            if (bank && bank.play("vortex", now, SMP_VORTEX * sfx, 1.06, 0, 0.05)) {
+                this.until[4] = now + 3.1;
+                return;
+            }
             this.vorPan.pan.setValueAtTime(0, now);
             glide(this.vorF.frequency, now, 240, 2300, 0.92);
             glide(this.vorOsc.frequency, now, 128, 545, 0.92);
@@ -573,8 +771,15 @@ export class SpellVoices {
         if (held === this.ribHeld) return;
         this.ribHeld = held;
         if (held) {
-            holdEnv(this.ribN.gain, now, 0.34 * sfx, 0.14);
-            holdEnv(this.ribO.gain, now, 0.085 * sfx, 0.18);
+            // Two operating points, both measured (spellprobe.py calib,
+            // 2026-08-04): the recorded stream through the widened band still
+            // arrives ~5 dB under white noise through Q 3.6, so its held level
+            // rises to put the real ribbon at the A-weighted level the synth
+            // was tuned to; and the stream carries its own low body, so the
+            // triangle underlay drops to a shadow of itself rather than
+            // humming against real water.
+            holdEnv(this.ribN.gain, now, (this.ribReal ? 0.46 : 0.34) * sfx, 0.14);
+            holdEnv(this.ribO.gain, now, (this.ribReal ? 0.030 : 0.085) * sfx, 0.18);
             this.ribUntil = Infinity;
         } else {
             const a = releaseEnv(this.ribN.gain, now, 0.34);

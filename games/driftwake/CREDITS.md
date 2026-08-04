@@ -34,9 +34,12 @@ Additions made here, none of which exist upstream:
 
 - **Jump** — `SPACE`, with an early-release rise cut, a landing crater brush and a landing
   spray burst.
-- **An audio subsystem** — a synthesised wind bed, surf hiss, boot crunch, landing thump and
-  a voice per spell (`src/audio/voices.js`), plus **recorded** footsteps and landings played
-  from nine vendored `.ogg` files (`src/audio/samples.js`). See **Assets** below.
+- **An audio subsystem** — a wind bed, surf hiss, boot crunch, landing thump and a voice per
+  spell (`src/audio/voices.js`), each with a fully synthesised fallback, fed at runtime by
+  **twenty vendored recordings** (`src/audio/samples.js`): Kenney footsteps and impacts, and
+  Sonniss GDC 2024 cuts for the spell one-shots (glass/ice fractures for Crystallise, water
+  surge, eruption, rising whorl, jump whoosh) and the three loop beds the voices adopt into
+  their filter chains (wind, board-on-snow slide, stream). See **Assets** below.
 - **A music bed** — a recorded 60 s loop, `assets/audio/music/hollow-wave.mp3`, wired through
   the FFG shell. `runtime/music.js`, a standing Web Audio graph that synthesises a bed live,
   remains in the tree as the fallback if that file fails to load or decode.
@@ -59,15 +62,19 @@ Additions made here, none of which exist upstream:
 | **three.js** r172 — https://threejs.org | MIT · vendored at `assets/vendor/three/` |
 
 No other third-party **code**. There is no build step and no bundler. Third-party **content**
-— nine CC0 sound effects from Kenney — is covered under **Assets** below.
+— nine CC0 sound effects from Kenney and eleven recordings cut from the Sonniss
+#GameAudioGDC 2024 bundle — is covered under **Assets** below.
 
 ## Assets
 
-**Ten audio files, and nothing else.** This section previously read "There are none", and
-said that both the sound effects and the music were synthesised at runtime. That stopped
+**Twenty-one audio files, and nothing else.** This section previously read "There are none",
+and said that both the sound effects and the music were synthesised at runtime. That stopped
 being true on 2026-08-03, when the no-asset-files constraint was lifted on purpose: a
 microphone simply *has* a boot breaking snow crust, and a filtered-noise burst only
-approximates one. Everything you can **see** is still generated on the GPU at load.
+approximates one. On 2026-08-04 the same judgement was extended to the rest of the mix —
+the spells, the jump, and the three beds (wind, surf, ribbon stream) — with recordings cut
+from the Sonniss GDC 2024 bundle. Everything you can **see** is still generated on the GPU
+at load.
 
 ### Nothing visual is an asset file
 
@@ -83,7 +90,9 @@ No image files, no glTF, no fonts beyond the system stack.
 
 ### Audio files that do ship
 
-Ten files under `assets/audio/`, **519,089 bytes (507 KiB)** in total.
+Twenty-one files under `assets/audio/`, **948,666 bytes (926 KiB)** in total: nine Kenney
+sound effects (38,382 B), eleven Sonniss GDC 2024 cuts (429,577 B), one music track
+(480,707 B).
 
 #### Sound effects — Kenney, CC0
 
@@ -108,10 +117,43 @@ the useful transient: the footsteps from 44.1 kHz stereo to 22.05 kHz mono, the 
 16 kHz mono. A footstep goes from 7,880 bytes to 4,477 — 43 % off, at a bandwidth nobody can
 miss on a 0.2 s snow crunch.
 
-`src/audio/samples.js` plays these, and only these. Every other sound in the game — the wind
-bed, the surf hiss, the crunch and thump used when a sample has not loaded, and the voice per
-spell — is still synthesised through Web Audio with no file behind it (`src/audio/voices.js`,
-`src/audio/graph.js`).
+#### Sound effects — Sonniss #GameAudioGDC 2024 bundle
+
+Eleven files, **429,577 bytes**, cut from the **Sonniss #GameAudioGDC bundle (GDC 2024)** —
+<https://sonniss.com/gameaudiogdc>. Licence (captured verbatim in the bundle's
+`LICENSE.txt` from <https://sonniss.com/gdc-bundle-license/>): worldwide, non-exclusive,
+**royalty-free**, unlimited commercial projects, **modification allowed, no attribution
+required** — credited anyway, per source below. Redistributing the sounds *as sounds* is
+prohibited; shipping them embedded in a game is explicitly permitted, which is what these
+are. The licence also expressly prohibits AI training on the recordings; none was done and
+none is licensed onward.
+
+| shipped as | plays as | cut from (pack / recording) |
+|---|---|---|
+| `spell_crystal_crack_0.ogg` | Crystallise, first fracture | Sonic Bat — Videogame Foley Essentials Vol. II / `SBvfe2_Glass 114` |
+| `spell_crystal_crack_1.ogg` | Crystallise, main break | Mechanical Wave — Glass / `GLASBrk_Glass Break Hit_04` |
+| `spell_crystal_crack_2.ogg` | Crystallise, debris scatter | BluezoneCorp — Alien Tripod / `BC0292_alien_tripod_debris_glass_falling_003` |
+| `spell_crystal_shimmer.ogg` | Crystallise, crackle under the growth | Mechanical Wave — Sound Effects Collection / `ICEMisc_Ice Sizzle_05` |
+| `spell_sweep_surge.ogg` | Sweep | Rescopic Sound — Distinct Whooshes / `WHSH_Watery-Whoosh FIzzy Fast 03` |
+| `spell_bloom_splash.ogg` | Bloom | BluezoneCorp — Designed Water / `BC0298_designed_water_impact_006` |
+| `spell_vortex_whoosh.ogg` | Vortex | Rescopic Sound — Distinct Whooshes / `WHSH_Airy-Whoosh Wind Gust 11` |
+| `jump_whoosh.ogg` | Ollie / jump | Rescopic Sound — Distinct Whooshes / `WHSH_Pure SciFi-Whoosh Fast 03` |
+| `wind_loop.ogg` | wind bed (all three layers) | Systematic Sound — Rural Countryside 01 / `AMBRurl_Meadow Open Plane Windy Deep Rumble` |
+| `surf_slide_loop.ogg` | surf hiss layer | Wavemotion — Ski Ride / `SPRTWntr-EXT_Skiing On Soft Snow 01` |
+| `spell_ribbon_stream.ogg` | Ribbon (held cast) | Pole Position — Winter Forest Stream / `Stream - STRONG - Medium Speed - Flow - Gush` |
+
+As with the Kenney set, nothing ships as supplied: every cut is mono, trimmed to the useful
+segment, downsampled to what its content carries (22.05 kHz for the wind, 32 kHz for the
+low-heavy whooshes and water, 44.1 kHz for the HF-critical glass and slide), peak-normalised
+to −3.5 dBFS before Vorbis encoding (the encoder overshoots), and — for the three loops —
+given a baked equal-power tail-over-head crossfade, with the wrap verified click-free on the
+**decoded** ogg (wrap step ≤ the material's own 99th-percentile sample step).
+
+`src/audio/samples.js` decodes these and plays the one-shots; the loop beds hand their
+decoded buffer to `src/audio/voices.js`, which swaps it under its existing filter chains.
+Every voice keeps its synthesised construction as the live fallback for a failed fetch or
+decode (`src/audio/voices.js`, `src/audio/graph.js`), so the game is never silent while it
+loads and never depends on an asset arriving.
 
 #### Music — the owner's own work
 

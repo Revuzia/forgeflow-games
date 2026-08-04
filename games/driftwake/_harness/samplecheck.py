@@ -8,13 +8,15 @@ footfall reaches them, and whether the page Mute button still reaches THEM. Thos
 are all things that can only be observed in the real page.
 
 Checks, in order:
-  1. all nine assets return 200 from the URL the module resolves (network log)
-  2. after unlock, SNOWFLOW.audio.sampleStatus reports 9/9 decoded
+  1. all twenty assets return 200 from the URL the module resolves (network log)
+  2. after unlock, SNOWFLOW.audio.sampleStatus reports 20/20 decoded
   3. a real footfall — driven by walking the character, not by calling play() —
      lights up SNOWFLOW.audio.samples.live
   4. the pooled graph does not grow: node count is identical after 40 triggers
-  5. Mute reaches the samples (the shared AudioContext suspends)
-  6. no console errors
+  5. casting spell 4 (Crystallise) fires the recorded cracks — the sample pool
+     lights up on the cast, i.e. the bell path is not being taken
+  6. Mute reaches the samples (the shared AudioContext suspends)
+  7. no console errors
 
     python samplecheck.py
 """
@@ -70,8 +72,8 @@ def main():
             print(f"   {audio_reqs[k]}  {k}")
             if audio_reqs[k] != 200:
                 fails.append(f"{k} returned {audio_reqs[k]}")
-        if len(audio_reqs) != 9:
-            fails.append(f"expected 9 assets, saw {len(audio_reqs)}")
+        if len(audio_reqs) != 20:
+            fails.append(f"expected 20 assets, saw {len(audio_reqs)}")
 
         # --- 2 they decode --------------------------------------------------
         pg.mouse.click(640, 400)          # the unlock gesture
@@ -79,8 +81,8 @@ def main():
         st = pg.evaluate("() => SNOWFLOW.audio.sampleStatus")
         ctx = pg.evaluate("() => SNOWFLOW.audio.state")
         print(f"\n2. DECODE   sampleStatus = {st!r}   ctx = {ctx!r}")
-        if "9/9" not in st:
-            fails.append(f"sampleStatus is {st!r}, expected 9/9 loaded")
+        if "20/20" not in st:
+            fails.append(f"sampleStatus is {st!r}, expected 20/20 loaded")
 
         # --- 3 a real footfall reaches them ---------------------------------
         # Walk. The point is to drive the SHIPPED path — controller sets
@@ -123,8 +125,28 @@ def main():
         if after != before:
             fails.append(f"voice pool grew from {before} to {after}")
 
-        # --- 5 mute reaches the samples -------------------------------------
-        print("\n5. MUTE")
+        # --- 5 spell 4 takes the recorded path -------------------------------
+        # The cast goes through the shipped edge detector (spells.cast -> the
+        # spell's own state -> audio.update's _spellEdge), not by calling the
+        # voice directly. If the cracks decoded, SpellVoices.fire(4) plays them
+        # through the sample pool and the bell path is unreachable — so the
+        # pool lighting up ON THE CAST is the observable difference between
+        # "glass breaking" and "bell".
+        print("\n5. SPELL 4 (Crystallise) FIRES THE RECORDED CRACKS")
+        pg.evaluate("() => { SNOWFLOW.spells.cast(4); }")
+        best4 = 0
+        end = time.time() + 2.5
+        while time.time() < end:
+            v = pg.evaluate("() => SNOWFLOW.audio.samples.live")
+            if v > best4: best4 = v
+            pg.wait_for_timeout(40)
+        print(f"   samples.live peaked at {best4} across the cast")
+        if best4 < 1:
+            fails.append("casting spell 4 never lit the sample pool — the "
+                         "bell path is still being taken")
+
+        # --- 6 mute reaches the samples -------------------------------------
+        print("\n6. MUTE")
         pg.evaluate("() => { SNOWFLOW.audio.muted = true; }")
         pg.wait_for_timeout(400)
         mg = pg.evaluate("() => SNOWFLOW.audio.master.gain.value")
@@ -134,10 +156,10 @@ def main():
             fails.append(f"mute left master gain at {mg}")
         pg.evaluate("() => { SNOWFLOW.audio.muted = false; }")
 
-        # --- 6 no errors ------------------------------------------------------
+        # --- 7 no errors ------------------------------------------------------
         errs = pg.evaluate("() => window.__errs")
         cerr = [t for k, t in console if k == "error"]
-        print(f"\n6. ERRORS   window {len(errs)}   console {len(cerr)}")
+        print(f"\n7. ERRORS   window {len(errs)}   console {len(cerr)}")
         for e in (errs + cerr)[:8]:
             print("   " + str(e))
             fails.append("error: " + str(e))
