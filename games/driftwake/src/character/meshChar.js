@@ -114,7 +114,11 @@ const CHAR_CASCADES = 2;
 /** The clips the state machine drives. The GLB also ships `stoprun` and
  *  `turnleft`, currently unused, plus a stray Mixamo export stub skipped by
  *  this exact-name lookup. */
-const CLIP_NAMES = ["idle", "walk", "run", "jump", "fall", "land", "roll"];
+// "skate" (Mixamo Skateboarding, In Place) is the surf BASE — a side-on board
+// stance with authored weight shift; the procedural carve layer poses on top of
+// it. It is OPTIONAL: an older GLB without it falls back to the idle base, so
+// the asset and the code can ship independently.
+const CLIP_NAMES = ["idle", "walk", "run", "jump", "fall", "land", "roll", "skate"];
 
 /** State ids — indices into the weight-target table. */
 const ST_IDLE = 0, ST_WALK = 1, ST_RUN = 2, ST_JUMP = 3, ST_FALL = 4,
@@ -226,14 +230,15 @@ export class MeshCharacter {
         /** Per-state weight targets, [state][clip index]. SURF idles under the
          *  pose layer. Built once; rows are reused, never reallocated. */
         this._stateWeights = [
-            [1, 0, 0, 0, 0, 0, 0], // idle
-            [0, 1, 0, 0, 0, 0, 0], // walk
-            [0, 0, 1, 0, 0, 0, 0], // run
-            [0, 0, 0, 1, 0, 0, 0], // jump
-            [0, 0, 0, 0, 1, 0, 0], // fall
-            [0, 0, 0, 0, 0, 1, 0], // land
-            [0, 0, 0, 0, 0, 0, 1], // roll
-            [1, 0, 0, 0, 0, 0, 0], // surf (idle base)
+            [1, 0, 0, 0, 0, 0, 0, 0], // idle
+            [0, 1, 0, 0, 0, 0, 0, 0], // walk
+            [0, 0, 1, 0, 0, 0, 0, 0], // run
+            [0, 0, 0, 1, 0, 0, 0, 0], // jump
+            [0, 0, 0, 0, 1, 0, 0, 0], // fall
+            [0, 0, 0, 0, 0, 1, 0, 0], // land
+            [0, 0, 0, 0, 0, 0, 1, 0], // roll
+            [0, 0, 0, 0, 0, 0, 0, 1], // surf (skate base; demoted to idle
+                                      // at load if the GLB lacks the clip)
         ];
 
         /** @type {Record<string, THREE.Bone>} pose-layer bones, cached at load. */
@@ -353,7 +358,15 @@ export class MeshCharacter {
         this.mixer = new THREE.AnimationMixer(gltf.scene);
         for (let i = 0; i < CLIP_NAMES.length; i++) {
             const clip = THREE.AnimationClip.findByName(gltf.animations, CLIP_NAMES[i]);
-            if (!clip) throw new Error("mesh character: clip missing: " + CLIP_NAMES[i]);
+            if (!clip) {
+                if (CLIP_NAMES[i] === "skate") {
+                    // Optional clip absent: surf rides the idle base instead.
+                    this._stateWeights[7] = this._stateWeights[0];
+                    this._acts.push(this._acts[0]);
+                    continue;
+                }
+                throw new Error("mesh character: clip missing: " + CLIP_NAMES[i]);
+            }
             const a = this.mixer.clipAction(clip);
             if (CLIP_NAMES[i] === "jump" || CLIP_NAMES[i] === "land" ||
                 CLIP_NAMES[i] === "roll") {

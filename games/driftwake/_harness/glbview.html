@@ -1,0 +1,58 @@
+<!doctype html>
+<!-- Minimal GLB turnaround viewer for asset checks. ?glb=<url>&yaw=<deg> -->
+<meta charset="utf-8">
+<style>body{margin:0;background:#202830}</style>
+<canvas id="c" width="700" height="700"></canvas>
+<script type="importmap">
+{ "imports": { "three": "../assets/vendor/three/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from "three";
+// GLTFLoader lives in examples/jsm which is not vendored — a tiny inline
+// parser would be silly; instead fetch the vendored addons build if present,
+// else use a CDN-free fallback: we vendored only core, so import the loader
+// from three's addons path only if it exists. Simplest robust path: use
+// THREE.FileLoader + GLTF via dynamic import attempt, else message.
+let GLTFLoader;
+try {
+  ({ GLTFLoader } = await import("../assets/vendor/three/examples/jsm/loaders/GLTFLoader.js"));
+} catch (e) {
+  document.title = "NO-LOADER";
+  throw e;
+}
+const params = new URLSearchParams(location.search);
+const url = params.get("glb");
+const yaw = parseFloat(params.get("yaw") || "0") * Math.PI / 180;
+
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById("c"), antialias: true });
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x202830);
+const cam = new THREE.PerspectiveCamera(35, 1, 0.01, 100);
+scene.add(new THREE.HemisphereLight(0xdde6f0, 0x33383f, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(2, 4, 3); scene.add(sun);
+
+new GLTFLoader().load(url, (g) => {
+  // Optional: pose an animation clip at a given time. ?clip=walk&t=0.5
+  const clipName = params.get("clip");
+  if (clipName && g.animations && g.animations.length) {
+    const clip = g.animations.find(c => c.name === clipName) || g.animations[0];
+    const mixer = new THREE.AnimationMixer(g.scene);
+    mixer.clipAction(clip).play();
+    mixer.update(parseFloat(params.get("t") || "0.5"));
+    document.title = "CLIP:" + clip.name;
+  }
+  const root = g.scene;
+  const box = new THREE.Box3().setFromObject(root);
+  const size = box.getSize(new THREE.Vector3());
+  const ctr = box.getCenter(new THREE.Vector3());
+  root.position.sub(ctr);                     // centre at origin
+  const wrap = new THREE.Group();
+  wrap.add(root); wrap.rotation.y = yaw;      // requested turnaround angle
+  scene.add(wrap);
+  const d = Math.max(size.x, size.y, size.z) * 1.35;
+  cam.position.set(0, size.y * 0.08, d);      // camera on +Z looking at -Z
+  cam.lookAt(0, 0, 0);
+  renderer.render(scene, cam);
+  document.title = "RENDERED";
+});
+</script>
