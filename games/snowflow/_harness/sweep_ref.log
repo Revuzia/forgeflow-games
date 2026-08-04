@@ -1,0 +1,44 @@
+  [1/36] default_ref.png
+  [2/36] sunElevation_3_ref.png
+  [3/36] sunElevation_8_ref.png
+  [4/36] sunElevation_13_ref.png
+  [5/36] sunElevation_25_ref.png
+  [6/36] sunElevation_40_ref.png
+  [7/36] sunAzimuth_40_ref.png
+  [8/36] sunAzimuth_118_ref.png
+  [9/36] sunAzimuth_250_ref.png
+  [10/36] windDirection_0_ref.png
+  [11/36] windDirection_42_ref.png
+  [12/36] windDirection_150_ref.png
+  [13/36] sssStrength_0.3_ref.png
+  [14/36] sssStrength_2.0_ref.png
+  [15/36] sssRadius_0.3_ref.png
+  [16/36] sssRadius_2.0_ref.png
+  [17/36] detailNormalStrength_0_ref.png
+  [18/36] detailNormalStrength_2.0_ref.png
+  [19/36] macroHeightScale_0.4_ref.png
+  [20/36] macroHeightScale_1.8_ref.png
+  [21/36] sastrugiStrength_0.4_ref.png
+  [22/36] sastrugiStrength_1.8_ref.png
+  [23/36] deformDepth_0.3_ref.png
+  [24/36] deformDepth_2.5_ref.png
+  [25/36] deformBerm_0.3_ref.png
+  [26/36] deformBerm_2.5_ref.png
+  [27/36] exposure_0.05_ref.png
+  [28/36] exposure_0.105_ref.png
+  [29/36] exposure_0.3_ref.png
+  [30/36] tonemap_agx_ref.png
+  [31/36] tonemap_aces_ref.png
+  [32/36] tonemap_none_ref.png
+  [33/36] fogDensity_0_ref.png
+  [34/36] fogDensity_0.02_ref.png
+  [35/36] mountainHeight_0_ref.png
+  [36/36] mountainHeight_2400_ref.png
+
+36/36 -> C:\Users\TestRun\Claude Claw\forgeflow-games\games\snowflow\_harness\..\_shots\sweep
+  [1/4] macroHeightScale_0.4_far_ref.png
+  [2/4] macroHeightScale_1.8_far_ref.png
+  [3/4] mountainHeight_0_far_ref.png
+  [4/4] mountainHeight_2400_far_ref.png
+
+4/4 -> C:\Users\TestRun\Claude Claw\forgeflow-games\games\snowflow\_harness\..\_shots\sweep

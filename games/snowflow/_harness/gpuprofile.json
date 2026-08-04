@@ -1,0 +1,96 @@
+{
+  "1280x720 (canvas 1280x720)/coarse": {
+    "sum_of_passes_ms": 85.472,
+    "frame_one_query_ms": 113.946,
+    "passes": {
+      "beauty (full)": 47.303,
+      "shadow cascade 0": 10.886,
+      "depth prepass (full)": 7.005,
+      "shadow cascade 2": 5.546,
+      "shadow cascade 1": 4.259,
+      "deform sim (2048\u00b2)": 4.14,
+      "post taa (full)": 1.984,
+      "post dof (full)": 1.437,
+      "post ssr (full)": 1.048,
+      "post composite (full)": 0.878,
+      "post sharpen (full)": 0.394,
+      "post bloomA (1/4)": 0.388,
+      "post shafts (1/4)": 0.172,
+      "post bloomB (1/16)": 0.018,
+      "post bloomC (1/16)": 0.012
+    }
+  },
+  "1280x720 (canvas 1280x720)/deep": {
+    "sum_of_passes_ms": 75.851,
+    "frame_one_query_ms": 120.534,
+    "passes": {
+      "draw terrain": 30.449,
+      "shadow cascade 0": 13.083,
+      "draw sky": 8.834,
+      "depth prepass (full)": 7.204,
+      "deform sim (2048\u00b2)": 4.057,
+      "shadow cascade 1": 3.308,
+      "shadow cascade 2": 2.448,
+      "post taa (full)": 1.848,
+      "post dof (full)": 1.444,
+      "post ssr (full)": 1.038,
+      "post composite (full)": 0.845,
+      "post bloomA (1/4)": 0.365,
+      "post sharpen (full)": 0.327,
+      "post shafts (1/4)": 0.164,
+      "draw charCloth": 0.124,
+      "draw charFur": 0.111,
+      "draw charBody": 0.098,
+      "draw spray": 0.074,
+      "post bloomB (1/16)": 0.018,
+      "post bloomC (1/16)": 0.011
+    }
+  },
+  "640x360 (canvas 640x360)/coarse": {
+    "sum_of_passes_ms": 56.278,
+    "frame_one_query_ms": 75.848,
+    "passes": {
+      "beauty (full)": 26.671,
+      "shadow cascade 2": 8.729,
+      "shadow cascade 0": 7.67,
+      "shadow cascade 1": 4.562,
+      "deform sim (2048\u00b2)": 3.945,
+      "depth prepass (full)": 3.406,
+      "post taa (full)": 0.515,
+      "post ssr (full)": 0.244,
+      "post composite (full)": 0.193,
+      "post dof (full)": 0.146,
+      "post bloomA (1/4)": 0.076,
+      "post sharpen (full)": 0.073,
+      "post shafts (1/4)": 0.033,
+      "post bloomB (1/16)": 0.008,
+      "post bloomC (1/16)": 0.008
+    }
+  },
+  "640x360 (canvas 640x360)/deep": {
+    "sum_of_passes_ms": 50.094,
+    "frame_one_query_ms": 78.765,
+    "passes": {
+      "draw terrain": 16.175,
+      "shadow cascade 1": 8.675,
+      "shadow cascade 0": 6.351,
+      "depth prepass (full)": 6.182,
+      "shadow cascade 2": 4.53,
+      "deform sim (2048\u00b2)": 4.283,
+      "draw sky": 2.397,
+      "post taa (full)": 0.458,
+      "post ssr (full)": 0.272,
+      "post composite (full)": 0.172,
+      "post dof (full)": 0.139,
+      "post bloomA (1/4)": 0.078,
+      "post sharpen (full)": 0.076,
+      "draw spray": 0.072,
+      "draw charCloth": 0.07,
+      "draw charFur": 0.06,
+      "draw charBody": 0.059,
+      "post shafts (1/4)": 0.031,
+      "post bloomC (1/16)": 0.008,
+      "post bloomB (1/16)": 0.008
+    }
+  }
+}

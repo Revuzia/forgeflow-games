@@ -130,6 +130,26 @@ const FORE_LEN = 0.26;
 /** Pelvis height above the feet in the bind pose. */
 const HIP_HEIGHT = 0.95;
 
+/**
+ * Airborne leg tuck.
+ *
+ * `TUCK_DROP` is how far the ankle hangs below the hips at full tuck — well
+ * inside the 0.81 m the leg can actually reach, so the knee is visibly bent
+ * rather than dangling straight.
+ *
+ * `TUCK_HEIGHT` is the height at which the legs are fully tucked. Because it is
+ * read off HEIGHT rather than off a timer, the extension is symmetric for free:
+ * the legs are extended at take-off (a push-off), tuck through the middle of the
+ * arc, and extend again into the landing — and, more importantly, the tuck blend
+ * is exactly 0 at both ends of the flight, so the pose is continuous with the
+ * stance machine at take-off AND at touchdown without either end being a special
+ * case. The jump's apex is 0.63 m, so at 0.45 the tuck reaches full.
+ */
+const TUCK_DROP = 0.46;
+const TUCK_HEIGHT = 0.45;
+/** How fast the airborne foot chases its target. See `_updateFeet`. */
+const TUCK_RATE = 14;
+
 // --------------------------------------------------- flat-array 4x4 transforms
 //
 // Layout: column-major, 16 floats per matrix. Elements 0-2 are the X axis, 4-6
@@ -427,14 +447,26 @@ export class Figure {
         // The figure settles into the snow it is standing on. Reading the real
         // depth would mean a GPU readback; this is the same number the contact
         // brushes write, held on the CPU.
-        this.sink = damp(this.sink, 0.045 + surf * 0.055, 4, h);
+        //
+        // Airborne there is no snow to settle into, so the target is 0 — and the
+        // slow rate (0.25 s) means the recovery after a landing reads as the
+        // body settling into the snow it just punched.
+        this.sink = damp(this.sink, ch.airborne ? 0 : 0.045 + surf * 0.055, 4, h);
 
         // ------------------------------------------------------------- spine
         const gx = ch.position.x;
         const gz = ch.position.z;
         const groundY = this.terrain.heightAt(gx, gz);
 
-        const rootY = groundY - this.sink + this.hipY + this.bob;
+        // `airHeight` is the ONLY term that lifts the body off the terrain, and
+        // it is exactly 0 whenever the character is grounded — so every grounded
+        // frame produces a bit-identical root to the one it produced before jump
+        // existed. The root is derived from `heightAt` rather than from
+        // `ch.position.y` deliberately: `position.y` is exponentially damped
+        // toward the ground while walking, and swapping it in here would feed
+        // that smoothing into the pose and shift every grounded frame in the
+        // comparison battery.
+        const rootY = groundY - this.sink + this.hipY + this.bob + ch.airHeight;
 
         composeBasis(ch.facing, this.pitch, this.roll);
         const rX = _axes[0], rY = _axes[1], rZ = _axes[2];
@@ -547,6 +579,26 @@ export class Figure {
         // character is walking.
         const moving = speed > 0.2 && ch.stepping;
 
+        // ===================================================================
+        // AIRBORNE
+        // ===================================================================
+        // Note what `moving` is at this moment: the controller drops `stepping`
+        // the instant it leaves the ground, so `moving` is false, so `stance`
+        // below computes TRUE for both feet — and the stance path would then
+        // raise `touchdown` on the transition and damp both plants along the
+        // ground under the hips. That is precisely the mid-flight stamp this
+        // system must not produce. The airborne branch below `continue`s past
+        // the whole state machine rather than trying to teach it about flight.
+        const air = ch.airborne;
+        // Hips in world Y, so the tuck hangs off the body rather than off the
+        // terrain. `bob` is omitted: the gait is stopped, so it is already ~0.
+        const bodyY = air
+            ? this.terrain.heightAt(ch.position.x, ch.position.z)
+                - this.sink + this.hipY + ch.airHeight
+            : 0;
+        // 0 at full tuck, 1 at the deck — see TUCK_HEIGHT.
+        const near = air ? clamp(1 - ch.airHeight / TUCK_HEIGHT, 0, 1) : 0;
+
         for (let f = 0; f < 2; f++) {
             const side = f === 0 ? -0.105 : 0.105;
             // Left foot leads; the right is half a cycle behind.
@@ -558,6 +610,40 @@ export class Figure {
             // body will actually be when it gets there.
             const nx = ch.position.x + fwdX * half + rgtX * side;
             const nz = ch.position.z + fwdZ * half + rgtZ * side;
+
+            if (air) {
+                // No plant, no touchdown, no gait — for the whole flight.
+                this.touchdown[f] = false;
+
+                // Tucked: drawn up under the hips, marginally forward.
+                const tx = ch.position.x + rgtX * side + fwdX * 0.06;
+                const tz = ch.position.z + rgtZ * side + fwdZ * 0.06;
+                const ty = bodyY - TUCK_DROP;
+                // Extended: the landing target. These three are character-for-
+                // character the expressions the TOUCHDOWN branch writes into
+                // `plant`, which is what makes the re-entry seamless — as
+                // `near` reaches 1 the foot is already standing exactly where
+                // the stance machine is about to declare it planted, so there
+                // is nothing left to snap to and nothing to slide to catch up.
+                const gy = this.terrain.heightAt(nx, nz) - this.sink * 0.7;
+
+                // Damped rather than assigned, so TAKE-OFF is smooth too: the
+                // foot leaves from wherever the stride had it, instead of
+                // teleporting onto the tuck curve on the first airborne frame.
+                const o = f * 3;
+                this.footPos[o] = damp(this.footPos[o], tx + (nx - tx) * near, TUCK_RATE, h);
+                this.footPos[o + 1] = damp(this.footPos[o + 1], ty + (gy - ty) * near, TUCK_RATE, h);
+                this.footPos[o + 2] = damp(this.footPos[o + 2], tz + (nz - tz) * near, TUCK_RATE, h);
+                // Weightless: the cloth and fur solvers read this, and a foot
+                // carrying load in mid-air stiffens the garments against a
+                // ground contact that is not happening.
+                this.footWeight[f] = damp(this.footWeight[f], 0, 22, h);
+
+                // Leave the machine in SWING, so the first grounded frame is a
+                // genuine stance transition and fires exactly one touchdown.
+                this._wasStance[f] = false;
+                continue;
+            }
 
             if (stance) {
                 if (!this._wasStance[f]) {
@@ -614,7 +700,10 @@ export class Figure {
         // for lateral stability and staggered along it. Blended in, never
         // snapped. (The blend is a per-frame lerp by `surf` rather than a rate —
         // mildly frame-rate dependent by construction; reproduced as written.)
-        if (surf > 0.001) {
+        // `!air` because a jump taken as the surf blend is still bleeding out
+        // would otherwise drag both feet back onto a board that is no longer
+        // under them.
+        if (surf > 0.001 && !air) {
             for (let f = 0; f < 2; f++) {
                 const lateral = f === 0 ? -0.17 : 0.17;
                 const along = f === 0 ? 0.11 : -0.11;

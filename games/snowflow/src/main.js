@@ -103,6 +103,7 @@ import { SurfWake } from "./vfx/surfWake.js";
 import { SpellSystem } from "./spells/spellSystem.js";
 import { PostChain } from "./post/postChain.js";
 import { Overlay } from "./ui/overlay.js";
+import { audio } from "./audio/audio.js";
 
 // ------------------------------------------------------- module-scope scratch
 const _vel = new THREE.Vector3();
@@ -589,8 +590,251 @@ async function boot() {
         drsUpdate(rawMs);
         overlay.update(dtMs, renderer);
 
+        // Last, and after every `mark()`: the wind bed, the footfalls, the surf
+        // hiss and the spell voices are all read off state that is final for the
+        // frame, and running here keeps the subsystem out of the CPU marks it
+        // would otherwise be attributed to. It is a no-op until the first user
+        // gesture creates an AudioContext, so nothing in the shot battery — which
+        // dispatches no gesture — ever reaches past the first line of it.
+        audio.update(dt, character, spells, rig);
+
         endFrame();
     }
+
+    /**
+     * Build the standard FFG shell (`runtime/ffg_shell.js`) and hand the page to
+     * it: title menu, How-to-Play, Settings, Esc pause with Resume/Restart.
+     *
+     * Everything below is wiring. The shell owns no gameplay and this function
+     * owns no tuning — the four quality rungs it offers are `PRESETS`, and the
+     * pause is `S.freezeTime`, both of which already exist.
+     * @returns {void}
+     */
+    function startShell() {
+        const FFG = globalThis.FFG;
+        if (!FFG || !FFG.Shell) {
+            // The shell IS the product's front door now, so a missing one is a
+            // boot failure and gets said out loud rather than leaving the player
+            // staring at a frozen frame with no way into it.
+            loading.fail("The game shell failed to load (runtime/ffg_shell.js).");
+            return;
+        }
+
+        // The shell's QUALITY rungs are this build's presets, verbatim — no
+        // mapping table, so the button the player pressed is the preset that
+        // runs and the highlighted one is the preset that is running.
+        FFG.applyQuality = (q) => applyPreset(q);
+
+        // ── Music ───────────────────────────────────────────────────────────
+        //
+        // The bed is a real recording: `assets/audio/music/hollow-wave.mp3`, a
+        // 60 s seamless loop cut from the owner's own "Hollow Wave" (Atrium
+        // Frost / Zenith Echo). It was picked by measurement, not taste — of the
+        // seven candidates it puts by far the least energy in 1–4 kHz (0.72 %;
+        // the next best is 2.7x that), which is exactly the band the wind bed in
+        // `src/audio/` already occupies, and it has the flattest minute in the
+        // set (95th–5th percentile level spread of 3.1 dB).
+        //
+        // Handing the shell a `music` URL is the whole point: it then owns the
+        // element, the `loop` flag, the MUSIC slider and — because it builds the
+        // element with the `Audio` constructor that `game_controls.js` wrapped —
+        // the page Mute button too. None of that is re-implemented here.
+        const MUSIC_URL = "./assets/audio/music/hollow-wave.mp3";
+
+        // `runtime/music.js` stays in the tree as the FALLBACK, and as nothing
+        // else. Constructing it is free — it opens no AudioContext and builds no
+        // graph until `start()` — and `start()` is reachable from exactly one
+        // place, `useSynthBed()`, which tears the failed element down before it
+        // fires. Two music systems playing at once is two soundtracks, so the
+        // choice is made once and `bedLive` makes it unrepeatable.
+        const bed = FFG.MusicBed ? new FFG.MusicBed() : null;
+        let bedLive = false;
+        let musicArmed = false;
+        /** @type {string|null} Why the file was abandoned, if it was. */
+        let bedReason = null;
+
+        /**
+         * Abandon the file and run the synthesised bed instead.
+         * @param {string} why Recorded for `FFG.musicStatus()`.
+         * @returns {void}
+         */
+        function useSynthBed(why) {
+            if (bedLive) return;
+            bedLive = true;
+            bedReason = why;
+            // Stop the element FIRST. A stalled or half-decoded element that
+            // recovers later is the one way this ends up with two beds running;
+            // `_stopMusic()` pauses it and drops the shell's reference, so the
+            // MUSIC slider and the mute handler hand over to the synth cleanly.
+            try { shell._stopMusic(); } catch (e) { /* nothing to stop */ }
+            if (bed) { bed.setVolume(shell.musicVolume); bed.start(); }
+        }
+
+        /**
+         * Decide, once, whether the file is actually playing. Called from the
+         * PLAY handler, which the shell invokes immediately AFTER its own
+         * `_playMusic()` — so by now the element either exists or never will.
+         * @returns {void}
+         */
+        function armMusic() {
+            if (musicArmed) return;
+            musicArmed = true;
+            const a = shell._music;
+            if (!a) { useSynthBed("shell created no audio element"); return; }
+            // A 404 or an undecodable file can already have failed by now.
+            if (a.error) { useSynthBed("media error " + a.error.code); return; }
+            a.addEventListener("error", () => {
+                useSynthBed("media error " + (a.error ? a.error.code : "unknown"));
+            });
+            // Belt and braces for the failure with no event: a stalled element
+            // never fires `error` and never reports `paused`, so the honest
+            // signal is that it has not decoded a single frame. Six seconds is
+            // long after a same-origin 470 kB file should have started.
+            setTimeout(() => {
+                if (a.readyState < 2 /* HAVE_CURRENT_DATA */) {
+                    useSynthBed("nothing decoded after 6 s (readyState " + a.readyState + ")");
+                }
+            }, 6000);
+        }
+
+        // Published next to `FFG.shell` (which the shell sets itself). `FFG.music`
+        // stays the MusicBed instance so the existing audio probes keep reading
+        // `.ctx` / `.status()`; `FFG.musicStatus()` is the one that answers the
+        // question that now matters — WHICH of the two is making the sound.
+        FFG.music = bed;
+        FFG.musicStatus = () => ({
+            source: bedLive ? "synth-fallback" : "file",
+            url: MUSIC_URL,
+            reason: bedReason,
+            element: shell._music
+                ? { paused: shell._music.paused, readyState: shell._music.readyState,
+                    currentTime: shell._music.currentTime, loop: shell._music.loop,
+                    volume: shell._music.volume, muted: shell._music.muted }
+                : null,
+            bed: bed ? bed.status() : "absent",
+        });
+
+        const hint = document.getElementById("hint");
+        /** @type {ReturnType<typeof setTimeout>|null} */
+        let hintTimer = null;
+
+        /**
+         * Pointer lock is what frees the right button for snow-surf, and PLAY
+         * and RESUME are both real clicks, so both may ask for it. A refusal is
+         * not an error: Chrome enforces a short cooldown after the player exits
+         * a lock with Esc, and `core/input.js` re-locks on the next canvas click
+         * regardless.
+         * @returns {void}
+         */
+        function lockPointer() {
+            try {
+                const p = /** @type {any} */ (canvas.requestPointerLock());
+                if (p && p.catch) p.catch(() => {});
+            } catch (e) { /* see above */ }
+        }
+
+        const shell = new FFG.Shell({
+            parent: document.body,
+            title: "DRIFTWAKE",
+            tagline: "Carve a breaking wake through wind-driven snow",
+            music: MUSIC_URL,
+            // Difficulty is deliberately absent. There is nothing to be harder
+            // or easier at, and a control that changes nothing is worse than no
+            // control.
+            qualities: ["performance", "balanced", "high", "ultra"],
+            defaultQuality: S.preset,
+            howTo: [
+                { h: "The field", p: "An open plain of wind-carved snow under a sun ten degrees above the horizon. Everywhere you step the snow remembers: boots leave trenches with raised berms, and those berms slump, drift in from upwind and soften over about a minute." },
+                { h: "Move", p: "<b>WASD</b> to move · <b>mouse</b> to look · <b>SHIFT</b> to sprint · <b>wheel</b> to zoom. Click the scene to capture the pointer." },
+                { h: "Jump", p: "<b>SPACE</b>. Let go early to cut the rise short. A hard landing punches a crater and throws powder." },
+                { h: "Snow-surf", p: "Hold the <b>RIGHT MOUSE BUTTON</b> and the walk becomes a carve. A breaking wave builds off your inside edge and throws nearly all of the snow to the outside of the turn — the harder you turn, the further the lip hangs back over its own face." },
+                { h: "Spells", p: "<b>1</b>–<b>5</b> bend water over the field: a ploughing crescent, a drawn ribbon, a targeted eruption, a spiral of hexagonal ice, and three helices that lift the snow around you. <b>2 is a held cast</b> — keep the key down and steer it." },
+                { h: "Panels", p: "<b>F1</b> settings · <b>F3</b> debug · <b>Esc</b> pause. The settings panel is live: every slider in it moves the running scene, including the sun." },
+            ],
+            onPlay: () => {
+                S.freezeTime = false;
+                armMusic();
+                if (hint) {
+                    hint.classList.add("show");
+                    if (hintTimer) clearTimeout(hintTimer);
+                    hintTimer = setTimeout(() => hint.classList.remove("show"), 6000);
+                }
+                lockPointer();
+            },
+            // A real freeze, not a hidden HUD: `dt` becomes exactly 0, so the
+            // paused frame is pixel-stable rather than slowly drifting.
+            //
+            // Releasing the pointer is not decoration. While the lock is held
+            // the cursor does not exist and every click is delivered to the
+            // canvas rather than hit-tested against the DOM, so a pause menu
+            // under a live lock is a menu whose buttons cannot be pressed. The
+            // browser usually drops the lock itself when Esc is pressed — but
+            // NOT in fullscreen, where `game_controls.js` takes a Keyboard Lock
+            // on Escape precisely so the tap reaches the game instead of the
+            // browser. Measured: pausing without this leaves RESUME dead.
+            onPause: () => {
+                S.freezeTime = true;
+                try { document.exitPointerLock(); } catch (e) { /* nothing held it */ }
+            },
+            onResume: () => {
+                S.freezeTime = false;
+                lockPointer();
+            },
+            // The shell already drives its own element's `.volume`; this is the
+            // hook for the procedural case. Forwarded unconditionally so the
+            // synth carries the player's setting even while it is only standing
+            // by — if it ever does take over, it opens at the right level.
+            onMusicVolume: (v) => { if (bed) bed.setVolume(v); },
+        });
+
+        // Whatever rung the player chose last session, applied before the menu
+        // is drawn. A no-op on a first visit: `defaultQuality` above is the
+        // preset already running.
+        if (shell.quality !== S.preset && PRESETS[shell.quality]) applyPreset(shell.quality);
+        if (bed) bed.setVolume(shell.musicVolume);
+
+        // Esc while the pointer is locked is consumed by the browser to release
+        // the lock — the keydown never reaches the shell's own Escape handler,
+        // so binding pause to the key alone gives a pause button that works only
+        // when the game is not being played. Losing the lock IS the gesture.
+        document.addEventListener("pointerlockchange", () => {
+            if (document.pointerLockElement !== canvas && shell.phase === "playing") {
+                shell.pause();
+            }
+        });
+
+        shell.start();
+    }
+
+    // ------------------------------------------------------- shell handover
+    //
+    // The player gets a title menu and the game does not begin until PLAY, so
+    // the frame loop starts FROZEN: `S.freezeTime` makes `dt` exactly 0, which
+    // draws the scene as a still (that is what makes it the menu's backdrop)
+    // while nothing behind it simulates. `onPlay` clears it.
+    //
+    // WHY AUTOMATION IS EXEMPT. Every harness script — `shoot.py`,
+    // `jumpshot.py`, `perfprobe.py`, `sweep.py` and the rest — drives the page
+    // with Playwright and none of them dispatches a click, because a real
+    // gesture is the one thing a shot battery must not introduce (it would
+    // unlock the audio context mid-shot). A menu they cannot dismiss would
+    // freeze the simulation under all fourteen comparison shots and every one
+    // of them would come out a motionless idle stand. `navigator.webdriver` is
+    // the browser's own statement that it is under automation, so the whole
+    // harness surface keeps its pre-shell behaviour byte for byte without a
+    // single harness file changing. `?menu=1` forces the menu back on under
+    // automation, which is how the shell itself is verified.
+    const AUTOPLAY = (() => {
+        try {
+            const q = new URLSearchParams(location.search);
+            if (q.has("menu")) return false;
+            if (q.has("autoplay")) return true;
+            return !!navigator.webdriver;
+        } catch (e) {
+            return false;
+        }
+    })();
+    if (!AUTOPLAY) S.freezeTime = true;
 
     requestAnimationFrame(frame);
 
@@ -630,7 +874,18 @@ async function boot() {
         perfProfileReset: profileReset,
     };
 
+    // The product is DRIFTWAKE; the contract is `SNOWFLOW`. An ALIAS, not a
+    // rename and not a wrapper: it is the same object, so `DRIFTWAKE.S === S`
+    // and anything written through one is visible through the other. The
+    // harness, the whole blind-comparison history and the shared shot battery
+    // that drives this build and the WebGPU reference from one file all pin the
+    // old name, and it stays exactly as it is.
+    globalThis.DRIFTWAKE = globalThis.SNOWFLOW;
+
     await loading.done();
+
+    // ---------------------------------------------------------- the FFG shell
+    if (!AUTOPLAY) startShell();
     // The boot itself is one long hitch by construction; let a second of real
     // frames go by before the spike counter means anything.
     setTimeout(() => overlay.resetSpikes(), 800);

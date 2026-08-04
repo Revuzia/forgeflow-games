@@ -3,7 +3,17 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>SNOWFLOW</title>
+<title>DRIFTWAKE</title>
+
+<!--
+  Tab icon: two drift crests in the boot screen's own palette, inline as a data
+  URI. It stays inline because an .ico is a second request for sixteen pixels,
+  and this also silences the 404 the browser's automatic `/favicon.ico` request
+  logs on every load. (The build DOES ship asset files now — the music bed at
+  `assets/audio/music/` and the SFX — so this is no longer the purity argument
+  it was written as; it is just the cheaper option.)
+-->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23070b12'/%3E%3Cpath d='M3 21c4-6 8-6 12 0s8 6 12 0' stroke='%238fc4e8' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3Cpath d='M3 12c4-5 8-5 12 0s8 5 12 0' stroke='%23dbe6f2' stroke-width='2' fill='none' stroke-linecap='round' opacity='.55'/%3E%3C/svg%3E" />
 
 <!--
   Three r172 is vendored, not fetched. `three.module.js` imports its sibling
@@ -174,6 +184,14 @@
         bottom: 38px;
         z-index: 50;
         transform: translateX(-50%);
+        /* `left: 50%` leaves shrink-to-fit only the right half of the viewport to
+           size against, so an auto-width hint wraps at half the window however
+           much room the centred line actually needs. max-content takes the real
+           width and lets the transform centre it; the vw cap puts the wrap back
+           on a genuinely narrow window, centred rather than orphaned. */
+        width: max-content;
+        max-width: 94vw;
+        text-align: center;
         font-size: 10px;
         letter-spacing: 0.24em;
         text-transform: uppercase;
@@ -190,12 +208,12 @@
 <body>
     <canvas id="view" tabindex="0"></canvas>
 
-    <div id="hint">click to look &nbsp;·&nbsp; wasd to move &nbsp;·&nbsp; f1 for settings</div>
+    <div id="hint">wasd move &nbsp;·&nbsp; mouse look &nbsp;·&nbsp; rmb surf &nbsp;·&nbsp; space jump &nbsp;·&nbsp; 1-5 spells &nbsp;·&nbsp; f1 settings &nbsp;·&nbsp; f3 debug &nbsp;·&nbsp; esc pause</div>
 
     <div id="boot">
         <div class="boot-inner">
-            <div class="wordmark">SNOWFLOW</div>
-            <div class="tagline">a study in snow</div>
+            <div class="wordmark">DRIFTWAKE</div>
+            <div class="tagline">carve the drift</div>
             <div class="bar"><div class="bar-fill" id="boot-bar"></div></div>
             <div class="phase" id="boot-phase">initialising</div>
         </div>
@@ -204,10 +222,29 @@
     <div id="nogpu">
         <div>
             <b>WebGL2 is not available in this browser.</b><br />
-            SNOWFLOW requires WebGL2 with floating-point render targets.
+            DRIFTWAKE requires WebGL2 with floating-point render targets.
             Try a recent Chrome, Edge or Firefox on a desktop GPU.
         </div>
     </div>
+
+<!--
+  The FFG page furniture, as classic parser-inserted scripts so their execution
+  order is guaranteed and all three are up before a single game module loads.
+
+  ORDER IS LOAD-BEARING. `game_controls.js` wraps the `Audio` and `AudioContext`
+  constructors at load time — that wrap is the entire mechanism behind the
+  page-level Mute button, and any context created before it runs is a context
+  Mute cannot reach. `src/audio/audio.js` and `runtime/music.js` both construct
+  theirs at unlock time through `globalThis.AudioContext` precisely so they land
+  on the wrapped one.
+
+  They are NOT injected from the capability gate below: a dynamically inserted
+  script is async by default, and the ordering between a late classic script and
+  the injected `main.js` module is not something worth relying on.
+-->
+<script src="./game_controls.js"></script>
+<script src="./runtime/ffg_shell.js"></script>
+<script src="./runtime/music.js"></script>
 
 <script>
 /*
@@ -267,6 +304,11 @@
     if (fatal.length) {
         var boot = document.getElementById("boot");
         if (boot) boot.remove();
+
+        // No game, so no game furniture: Fullscreen / Mute / Pause over a
+        // hard-failure panel are three controls with nothing behind them.
+        var ctl = document.getElementById("__ff_controls__");
+        if (ctl) ctl.remove();
 
         var panel = document.getElementById("nogpu");
         if (panel) {

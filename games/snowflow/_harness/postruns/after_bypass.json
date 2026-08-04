@@ -1,0 +1,78 @@
+{
+  "frame_ms": 15.8,
+  "sum_ms": 156.373,
+  "frames_min": 15.8,
+  "rows": {
+    "post bloomA (1/4)": {
+      "ms": 0.429,
+      "lo": 0.409,
+      "hi": 0.675
+    },
+    "FRAME (one query)": {
+      "ms": 201.224,
+      "lo": 201.224,
+      "hi": 257.732
+    },
+    "shadow cascade 2": {
+      "ms": 7.542,
+      "lo": 4.133,
+      "hi": 15.245
+    },
+    "post shafts (1/4)": {
+      "ms": 0.216,
+      "lo": 0.189,
+      "hi": 0.305
+    },
+    "post composite (full)": {
+      "ms": 1.001,
+      "lo": 1.001,
+      "hi": 1.348
+    },
+    "post taa (full)": {
+      "ms": 2.048,
+      "lo": 2.048,
+      "hi": 2.926
+    },
+    "post bloomB (1/16)": {
+      "ms": 0.02,
+      "lo": 0.02,
+      "hi": 0.026
+    },
+    "post bloomC (1/16)": {
+      "ms": 0.012,
+      "lo": 0.011,
+      "hi": 0.017
+    },
+    "shadow cascade 0": {
+      "ms": 6.91,
+      "lo": 6.91,
+      "hi": 11.946
+    },
+    "post dof (full)": {
+      "ms": 1.526,
+      "lo": 1.526,
+      "hi": 2.254
+    },
+    "beauty (full)": {
+      "ms": 110.598,
+      "lo": 110.598,
+      "hi": 130.778
+    },
+    "depth prepass (full)": {
+      "ms": 2.685,
+      "lo": 2.685,
+      "hi": 34.286
+    },
+    "post sharpen (full)": {
+      "ms": 0.343,
+      "lo": 0.343,
+      "hi": 0.654
+    },
+    "shadow cascade 1": {
+      "ms": 23.044,
+      "lo": 20.418,
+      "hi": 23.989
+    }
+  },
+  "canvas": "1280x720"
+}

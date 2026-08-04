@@ -17,6 +17,15 @@
  *     the pin silently does nothing, and every surf/ribbon shot in the battery
  *     comes out as a plain idle stand.
  *
+ *  1b. `jump` follows the same held-property rules as `surf`, and `jumpPressed`
+ *     is a per-frame EDGE cleared by `endFrame()` alongside `spellPressed`.
+ *     The controller consumes the edge and never writes back to this object —
+ *     a pinned property is a getter, and assigning to one throws in a module's
+ *     strict mode. Drive jump from the harness with a real `KeyboardEvent` for
+ *     `Space` (which is what `_harness/shots.js` `key()` already dispatches);
+ *     pinning `jump` on will NOT produce repeated hops, because the controller
+ *     triggers on the edge rather than on the held level.
+ *
  *  2. The reference clears `input.surf` in a document-level `mouseup` with no
  *     pointer-lock guard, while `mousedown` *is* guarded. That asymmetry is a
  *     real bug, not a stylistic quirk: press the right button before clicking
@@ -44,6 +53,17 @@ export const input = {
     surf: false,
     sprint: false, // shift
 
+    /**
+     * @type {boolean} SPACE held. Plain data property — see contract 1/1b.
+     * Held level, used only to CUT a rise short when the key is released early.
+     */
+    jump: false,
+    /**
+     * @type {boolean} SPACE went down this frame. Edge, cleared by `endFrame()`.
+     * This is what starts a jump; the controller reads it and never writes it.
+     */
+    jumpPressed: false,
+
     /** @type {number} 0 = none, else 1..5 — set on keydown, cleared each frame */
     spellPressed: 0,
     /** @type {boolean} spell 2 (Ribbon) is a held cast. Plain data property — see contract 1. */
@@ -61,7 +81,7 @@ let onToggleOverlay = null;
 
 /**
  * @param {HTMLCanvasElement} canvas
- * @param {{ onToggleOverlay?: () => void }} [hooks]
+ * @param {{ onToggleOverlay?: (code?: string) => void }} [hooks]
  * @returns {void}
  */
 export function initInput(canvas, hooks) {
@@ -77,6 +97,7 @@ export function initInput(canvas, hooks) {
             // Drop held state so the character doesn't run off while unfocused.
             for (const k in keys) keys[k] = false;
             input.surf = false;
+            input.jump = false;
             input.spellHeld2 = false;
         }
     });
@@ -113,14 +134,31 @@ export function initInput(canvas, hooks) {
     );
 
     window.addEventListener("keydown", (e) => {
-        // Overlay toggle works whether or not the pointer is locked.
-        if (e.code === "F1" || e.code === "Backquote") {
+        // Panel keys work whether or not the pointer is locked. F1 = settings,
+        // F3 = debug, backtick = whichever panel was open last. `ui/overlay.js`
+        // handles these itself in CAPTURE phase because only it knows which key
+        // selects which panel; the hook fires afterwards as the integrator's
+        // undirected fallback and is debounced into the same press there.
+        if (e.code === "F1" || e.code === "F3" || e.code === "Backquote") {
             e.preventDefault();
-            onToggleOverlay?.();
+            onToggleOverlay?.(e.code);
             return;
         }
+        // Unconditionally, and before the repeat guard: an unlocked page scrolls
+        // under the canvas on SPACE, and auto-repeat scrolls it continuously.
+        if (e.code === "Space") e.preventDefault();
+
         if (e.repeat) return;
         keys[e.code] = true;
+
+        // SPACE = JUMP. Snow-surf stays on the right mouse button alone; SPACE
+        // is deliberately NOT a second surf binding.
+        if (e.code === "Space") {
+            input.jump = true;
+            // The repeat guard above is what keeps a held key from re-firing the
+            // edge — holding SPACE gives one jump, not a stream of them.
+            input.jumpPressed = true;
+        }
 
         const n = SPELL_KEYS[e.code];
         if (n) {
@@ -131,12 +169,14 @@ export function initInput(canvas, hooks) {
 
     window.addEventListener("keyup", (e) => {
         keys[e.code] = false;
+        if (e.code === "Space") input.jump = false;
         if (SPELL_KEYS[e.code] === 2) input.spellHeld2 = false;
     });
 
     window.addEventListener("blur", () => {
         for (const k in keys) keys[k] = false;
         input.surf = false;
+        input.jump = false;
         input.spellHeld2 = false;
     });
 }
@@ -176,8 +216,8 @@ export function pollInput() {
 /**
  * Clear per-frame accumulators. Called at the very end of the frame.
  *
- * Note what is *not* cleared: `surf` and `spellHeld2` are level-triggered held
- * state, not per-frame edges. Clearing them here would fight the harness pin.
+ * Note what is *not* cleared: `surf`, `jump` and `spellHeld2` are level-triggered
+ * held state, not per-frame edges. Clearing them here would fight the harness pin.
  * @returns {void}
  */
 export function endFrame() {
@@ -185,6 +225,7 @@ export function endFrame() {
     input.lookY = 0;
     input.zoomDelta = 0;
     input.spellPressed = 0;
+    input.jumpPressed = false;
 }
 
 /**

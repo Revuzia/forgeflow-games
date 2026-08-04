@@ -1,16 +1,46 @@
 /**
- * Settings + performance overlay. Hidden by default, toggled with F1 / backtick.
+ * The two on-screen panels: SETTINGS on F1, DEBUG on F3.
  *
- * The only UI in the demo. Built once from `SCHEMA` — so a settings key that
- * exists but has no widget is a bug in `settings.js`, not here — and the
- * readouts refresh on a 4 Hz timer rather than per frame, because formatting
- * numbers into strings ninety times a second is steady garbage for no benefit.
- * The frame graph redraws at 20 Hz (fast enough to watch a hitch appear) and the
- * camera block at 10 Hz (at 4 Hz you cannot tell which way you nudged the rig).
+ * One panel used to carry everything — 49 art sliders, the frame graph, the CPU
+ * and GPU breakdowns, every system toggle and eleven debug views. That is a
+ * developer console wearing a settings menu's clothes, so it is split the way
+ * shipping games split it:
  *
- * The root element's id is `overlay`, not the reference's `ov`: the comparison
- * harness hides `#boot`, `#hint` and `#overlay` before every screenshot, so a
- * different id means the panel lands in the shot.
+ *   F1  SETTINGS  player-facing. Quality preset, resolution, audio, and the art
+ *                 parameters, grouped, in the panel's own visual language.
+ *   F3  DEBUG     developer-facing. Frame graph, percentiles, draws/tris, the
+ *                 per-system CPU breakdown, the per-pass GPU profile, live
+ *                 character and camera state, and the debug views. Compact,
+ *                 monospaced, top-left, dark plate under the text so it stays
+ *                 readable over lit snow — the register everyone already knows
+ *                 from Minecraft's F3.
+ *   `             toggles whichever panel was open last, so the muscle memory
+ *                 from the single-panel build still works.
+ *
+ * BOTH PANELS ARE CHILDREN OF `#overlay`, and that is load-bearing, not tidiness.
+ * The comparison harness hides `#boot`, `#hint` and `#overlay` before every
+ * screenshot (`shoot.py`: `e.style.display = 'none'`). A panel mounted anywhere
+ * else lands in the shot and contaminates the blind comparison the whole port is
+ * judged on. `#overlay` is therefore a bare, click-through container — it has no
+ * appearance of its own, it only positions the two panels and carries the hide.
+ *
+ * Two more selectors the harness reaches through, which is why the widget markup
+ * below is unchanged: `#overlay .row` holding a `<label>`, an `input[type=range]`
+ * and a `.val` (`pathcheck.py` drives the row labelled "Resolution";
+ * `probe_ui_slider.py` drives any row by its label text), and
+ * `#overlay .presets button` carrying one button per entry in `PRESETS`.
+ *
+ * Both panels are built at construction and stay in the DOM whether or not they
+ * are shown, because those probes drive the widgets while the overlay is hidden.
+ *
+ * Everything is built from `SCHEMA` — a settings key with no widget is a bug in
+ * `settings.js`, not here — and a group that `SCHEMA` grows later (Audio, say)
+ * appears in the settings panel with no change needed here.
+ *
+ * Refresh rates: readouts 4 Hz, frame graph 20 Hz (fast enough to watch a hitch
+ * appear), live state 10 Hz (at 4 Hz you cannot tell which way you nudged the
+ * rig). All of it is skipped entirely unless the debug panel is open, and the
+ * settings panel costs nothing per frame at all.
  */
 
 import { S, SCHEMA, PRESETS, set, applyPreset, onChange } from "../core/settings.js";
@@ -19,11 +49,42 @@ import {
     profileCount, profileNames, profileEma, profileTotal,
 } from "../core/perf.js";
 
+/**
+ * Keys that belong to the DEBUG panel rather than SETTINGS. Everything else in
+ * `SCHEMA` is player-facing and lands on F1. Routing by key and not by group
+ * because `SCHEMA`'s "Systems" group mixes the two: the resolution controls are
+ * a player's quality lever, while the visibility toggles next to them are a
+ * developer's isolation switch.
+ */
+const DEBUG_KEYS = new Set([
+    "showTerrain", "showCharacter", "wireframe", "freezeTime",
+    "debugProfile", "debugProfileDeep", "debugView",
+]);
+
+/**
+ * Group headings reworded for the player-facing panel. "Systems" is what is left
+ * of that group once the debug switches move out — resolution scale and the
+ * dynamic-resolution controller — and "Display" is what those actually are.
+ */
+const GROUP_LABEL = { Systems: "Display" };
+
 const CSS = `
+/* The container. No appearance, no hit area — it exists to position the panels
+   and to be the single element the harness hides. */
 #overlay {
-  position: fixed; top: 0; right: 0; bottom: 0; z-index: 80;
-  width: 336px; display: none;
+  position: fixed; inset: 0; z-index: 80; display: none;
+  pointer-events: none;
   font: 400 11px/1.5 ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+}
+#overlay.show { display: block; }
+#overlay .panel { display: none; pointer-events: auto; }
+#overlay .panel.show { display: block; }
+
+/* --------------------------------------------------------------- settings */
+
+#ov-set {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  width: 336px;
   color: #cddaea;
   background: rgba(8, 12, 19, 0.86);
   backdrop-filter: blur(18px) saturate(1.2);
@@ -31,9 +92,28 @@ const CSS = `
   overflow-y: auto; overscroll-behavior: contain;
   padding: 14px 16px 40px;
 }
-#overlay.show { display: block; }
-#overlay::-webkit-scrollbar { width: 8px; }
-#overlay::-webkit-scrollbar-thumb { background: rgba(143,196,232,0.16); border-radius: 4px; }
+
+/* ------------------------------------------------------------------ debug */
+
+/* Top-left, narrow, and plated: over sunlit snow, light text with no backing is
+   unreadable, and a full-width panel would cover the thing being debugged. */
+#ov-dbg {
+  position: absolute; top: 10px; left: 10px;
+  width: 272px; max-height: calc(100vh - 20px);
+  color: #dde8f2;
+  background: rgba(5, 9, 15, 0.72);
+  border: 1px solid rgba(143, 196, 232, 0.13);
+  border-radius: 3px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: 9px 11px 12px;
+  line-height: 1.42;
+}
+
+#overlay .panel::-webkit-scrollbar { width: 8px; }
+#overlay .panel::-webkit-scrollbar-thumb { background: rgba(143,196,232,0.16); border-radius: 4px; }
+
+/* ---------------------------------------------------------------- shared */
 
 #overlay h2 {
   font-size: 10px; font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase;
@@ -41,6 +121,12 @@ const CSS = `
   border-bottom: 1px solid rgba(143, 196, 232, 0.10);
 }
 #overlay h2:first-child { margin-top: 0; }
+/* The debug panel is a dense readout, not a document: its headings are separators
+   between blocks, so they are tighter and carry no rule. */
+#ov-dbg h2 {
+  font-size: 9px; letter-spacing: 0.18em; color: #62788c;
+  margin: 9px 0 3px; padding-bottom: 0; border-bottom: 0;
+}
 
 #overlay .hdr {
   display: flex; align-items: baseline; justify-content: space-between;
@@ -48,9 +134,11 @@ const CSS = `
 }
 #overlay .hdr b { font-size: 11px; font-weight: 600; letter-spacing: 0.3em; color: #e6eff8; }
 #overlay .hdr i { font-style: normal; font-size: 9px; letter-spacing: 0.14em; color: #55677a; }
+#ov-dbg .hdr { margin-bottom: 7px; }
+#ov-dbg .hdr b { letter-spacing: 0.22em; }
 
-#overlay canvas { width: 100%; height: 66px; display: block;
-  background: rgba(0,0,0,0.32); border: 1px solid rgba(143,196,232,0.10); border-radius: 3px; }
+#overlay canvas { width: 100%; height: 44px; display: block;
+  background: rgba(0,0,0,0.34); border: 1px solid rgba(143,196,232,0.10); border-radius: 2px; }
 
 #overlay .nums { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; margin-top: 8px; }
 #overlay .num { display: flex; justify-content: space-between; }
@@ -58,10 +146,17 @@ const CSS = `
 #overlay .num span:last-child { font-variant-numeric: tabular-nums; color: #dbe6f2; }
 #overlay .num.warn span:last-child { color: #e8b04f; }
 #overlay .num.bad  span:last-child { color: #e8734f; }
+#ov-dbg .nums { gap: 0 10px; margin-top: 6px; }
+/* System and pass names are long ("cpu wake+spray", "post composite (full)") and
+   this panel is narrow on purpose. Two columns wrapped them onto second lines and
+   broke the number alignment, which is the one thing a readout has to keep. */
+#ov-dbg .budget { grid-template-columns: 1fr; gap: 0; }
 
 #overlay .row { display: flex; align-items: center; gap: 8px; margin: 5px 0; }
 #overlay .row > label { flex: 0 0 108px; color: #8fa3b8; cursor: default; }
 #overlay .row > .val { flex: 0 0 46px; text-align: right; font-variant-numeric: tabular-nums; color: #dbe6f2; }
+#ov-dbg .row { margin: 3px 0; gap: 6px; }
+#ov-dbg .row > label { flex: 0 0 84px; }
 
 #overlay input[type=range] { flex: 1; -webkit-appearance: none; appearance: none;
   height: 2px; background: rgba(143,196,232,0.18); border-radius: 2px; outline: none; }
@@ -83,11 +178,13 @@ const CSS = `
   border: 1px solid rgba(143,196,232,0.16); border-radius: 3px; padding: 2px 5px;
   font: inherit; outline: none; cursor: pointer; }
 
-#overlay .presets { display: flex; gap: 6px; margin-top: 4px; }
-#overlay .presets button { flex: 1; background: rgba(143,196,232,0.07); color: #8fa3b8;
+#overlay .presets, #overlay .btns { display: flex; gap: 6px; margin-top: 4px; }
+#overlay .presets button, #overlay .btns button {
+  flex: 1; background: rgba(143,196,232,0.07); color: #8fa3b8;
   border: 1px solid rgba(143,196,232,0.14); border-radius: 3px; padding: 5px 0;
   font: inherit; letter-spacing: 0.08em; cursor: pointer; transition: all 140ms ease; }
-#overlay .presets button:hover { background: rgba(143,196,232,0.14); color: #dbe6f2; }
+#overlay .presets button:hover, #overlay .btns button:hover {
+  background: rgba(143,196,232,0.14); color: #dbe6f2; }
 #overlay .presets button.on { background: rgba(143,196,232,0.22); color: #eaf4ff;
   border-color: rgba(143,196,232,0.4); }
 
@@ -102,6 +199,10 @@ const CSS = `
   background: rgba(0,0,0,0.34); border: 1px solid rgba(143,196,232,0.10);
   color: #7f93a8; font-size: 10px; line-height: 1.45; word-break: break-all;
   user-select: text; cursor: text; }
+
+/* The one line of prose in the settings panel: what the other key does. */
+#ov-set .foot { margin-top: 22px; font-size: 9px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: #4d5e70; }
 `;
 
 export class Overlay {
@@ -120,134 +221,34 @@ export class Overlay {
         document.body.appendChild(el);
         this.el = el;
 
-        this.visible = false;
-
         this.rig = refs?.rig ?? null;
         this.character = refs?.character ?? null;
         this.renderer = refs?.renderer ?? null;
 
-        // --------------------------------------------------------- header
-        const hdr = document.createElement("div");
-        hdr.className = "hdr";
-        hdr.innerHTML = "<b>SNOWFLOW</b><i>F1 to close</i>";
-        el.appendChild(hdr);
-
-        // ----------------------------------------------------- frame graph
-        const cv = document.createElement("canvas");
-        cv.width = 304;
-        cv.height = 66;
-        el.appendChild(cv);
-        this.graph = new FrameGraph(cv);
-
-        // --------------------------------------------------------- numbers
-        const nums = document.createElement("div");
-        nums.className = "nums";
-        el.appendChild(nums);
-
         /** @type {Record<string, HTMLElement>} */
         this.readouts = {};
-        this._mkNum(nums, "fps", "fps");
-        this._mkNum(nums, "fpsLow", "1% low");
-        this._mkNum(nums, "median", "median");
-        this._mkNum(nums, "p95", "95th");
-        this._mkNum(nums, "p99", "99th");
-        this._mkNum(nums, "gpu", "gpu ms");
-        this._mkNum(nums, "draws", "draws");
-        this._mkNum(nums, "tris", "tris");
-        this._mkNum(nums, "spikes", "spikes");
-        this._mkNum(nums, "res", "res");
-
-        // ---------------------------------------------------- frame budget
-        const bh = document.createElement("h2");
-        bh.textContent = "Frame budget";
-        el.appendChild(bh);
-        const budget = document.createElement("div");
-        budget.className = "nums budget";
-        el.appendChild(budget);
-        this.budgetEl = budget;
-        /** @type {Map<string, HTMLElement>} */
-        this.budgetRows = new Map();
-
-        // ------------------------------------------------------- GPU passes
-        // The GPU analogue of the block above, fed by the timer queries in
-        // `core/perf.js`. Empty and hidden until `S.debugProfile` is switched
-        // on, because a permanently blank section reads as a broken feature.
-        const gh = document.createElement("h2");
-        gh.textContent = "GPU passes";
-        gh.style.display = "none";
-        el.appendChild(gh);
-        this.gpuHead = gh;
-        const gpu = document.createElement("div");
-        gpu.className = "nums one budget";
-        el.appendChild(gpu);
-        this.gpuEl = gpu;
-        /** @type {HTMLElement[]} id-indexed, created as scopes are first seen. */
-        this.gpuRows = [];
-
-        // --------------------------------------------------------- camera
-        // Debug readout for framing a view and reproducing it later: everything
-        // the pose line below needs, in the units the rig actually stores.
-        const ch = document.createElement("h2");
-        ch.textContent = "Camera";
-        el.appendChild(ch);
-        const cam = document.createElement("div");
-        cam.className = "nums one cam";
-        el.appendChild(cam);
-        this._mkNum(cam, "camPos", "eye");
-        this._mkNum(cam, "camAng", "yaw / pitch");
-        this._mkNum(cam, "camArm", "arm / fov");
-        this._mkNum(cam, "chrPos", "player");
-        this._mkNum(cam, "chrMot", "speed / facing");
-
-        const pose = document.createElement("div");
-        pose.className = "pose";
-        pose.textContent = "—";
-        el.appendChild(pose);
-        this.poseEl = pose;
-
-        const pb = document.createElement("div");
-        pb.className = "presets";
-        el.appendChild(pb);
-        const copy = document.createElement("button");
-        copy.textContent = "copy pose";
-        copy.onclick = () => this._copyPose(copy);
-        pb.appendChild(copy);
-
-        // -------------------------------------------------------- presets
-        const ph = document.createElement("h2");
-        ph.textContent = "Quality";
-        el.appendChild(ph);
-        const pr = document.createElement("div");
-        pr.className = "presets";
-        el.appendChild(pr);
-        /** @type {Record<string, HTMLButtonElement>} */
-        this.presetBtns = {};
-        // Enumerated from `PRESETS`, not from a literal list. The list was
-        // `["ultra", "high", "balanced"]`, so a rung added to the store had no
-        // button and looked unimplemented from the UI — the same class of
-        // silent divergence as a preset name that does not match the settings
-        // in force.
-        for (const name in PRESETS) {
-            const b = document.createElement("button");
-            b.textContent = name;
-            b.onclick = () => applyPreset(name);
-            pr.appendChild(b);
-            this.presetBtns[name] = b;
-        }
-        // Subscribe rather than resync inside the click handler: the preset can
-        // now be applied from outside the DOM (`SNOWFLOW.applyPreset`, a
-        // harness, an embedder), and a panel that only repaints on its own
-        // clicks shows a stale rung for every one of those.
-        this._offPreset = onChange("preset", () => {
-            this._syncPresets();
-            this._syncWidgets();
-        });
-        this._syncPresets();
-
-        // -------------------------------------------------------- controls
         /** @type {Array<{k:string, sync:() => void}>} */
         this.widgets = [];
-        for (let g = 0; g < SCHEMA.length; g++) this._mkGroup(SCHEMA[g]);
+
+        const setEl = document.createElement("div");
+        setEl.id = "ov-set";
+        setEl.className = "panel";
+        el.appendChild(setEl);
+        this.setEl = setEl;
+
+        const dbgEl = document.createElement("div");
+        dbgEl.id = "ov-dbg";
+        dbgEl.className = "panel";
+        el.appendChild(dbgEl);
+        this.dbgEl = dbgEl;
+
+        this.setOpen = false;
+        this.dbgOpen = false;
+        /** Which panel the backtick reopens. @type {"settings"|"debug"} */
+        this._last = "settings";
+
+        this._buildSettings(setEl);
+        this._buildDebug(dbgEl);
 
         this._acc = 0;
         this._graphAcc = 0;
@@ -255,15 +256,20 @@ export class Overlay {
         this._pose = "";
         this._lastKeyToggle = 0;
 
-        // Bound once so it can be handed to `initInput({ onToggleOverlay })` as
-        // well as being wired to the window directly — see toggleFromKey.
         this.toggleFromKey = this.toggleFromKey.bind(this);
+        // CAPTURE phase, deliberately. `input.js` also listens for these keys and
+        // calls whatever the integrator handed to `initInput({ onToggleOverlay })`
+        // — today `() => overlay.toggle()`, which cannot know WHICH key was
+        // pressed. Handling the press here first means F1 and F3 select their own
+        // panel, and the hook's undirected call arrives inside the dead time in
+        // `toggle()` and collapses into it. Capture rather than bubble so the
+        // ordering holds however the integrator orders construction.
         window.addEventListener("keydown", (e) => {
-            if (e.code === "F1" || e.code === "Backquote") {
+            if (e.code === "F1" || e.code === "F3" || e.code === "Backquote") {
                 e.preventDefault();
-                this.toggleFromKey();
+                this.toggleFromKey(e.code);
             }
-        });
+        }, true);
     }
 
     /**
@@ -275,6 +281,162 @@ export class Overlay {
         if (refs.rig) this.rig = refs.rig;
         if (refs.character) this.character = refs.character;
         if (refs.renderer) this.renderer = refs.renderer;
+    }
+
+    /** True while either panel is showing. @returns {boolean} */
+    get visible() {
+        return this.setOpen || this.dbgOpen;
+    }
+
+    // ------------------------------------------------------------- building
+
+    /** @param {HTMLElement} root */
+    _buildSettings(root) {
+        const hdr = document.createElement("div");
+        hdr.className = "hdr";
+        hdr.innerHTML = "<b>DRIFTWAKE</b><i>F1 to close</i>";
+        root.appendChild(hdr);
+
+        // Quality first: it is the one control that moves everything else, and a
+        // player who opens this panel at 8 fps is looking for exactly this.
+        this._mkHead(root, "Quality");
+        const pr = document.createElement("div");
+        pr.className = "presets";
+        root.appendChild(pr);
+        /** @type {Record<string, HTMLButtonElement>} */
+        this.presetBtns = {};
+        // Enumerated from `PRESETS`, not from a literal list. The list was
+        // `["ultra", "high", "balanced"]`, so a rung added to the store had no
+        // button and looked unimplemented from the UI — the same class of silent
+        // divergence as a preset name that does not match the settings in force.
+        for (const name in PRESETS) {
+            const b = document.createElement("button");
+            b.textContent = name;
+            b.onclick = () => applyPreset(name);
+            pr.appendChild(b);
+            this.presetBtns[name] = b;
+        }
+        // Subscribe rather than resync inside the click handler: the preset can
+        // be applied from outside the DOM (`SNOWFLOW.applyPreset`, a harness, an
+        // embedder), and a panel that only repaints on its own clicks shows a
+        // stale rung for every one of those.
+        this._offPreset = onChange("preset", () => {
+            this._syncPresets();
+            this._syncWidgets();
+        });
+        this._syncPresets();
+
+        for (const g of settingsGroups()) {
+            this._mkHead(root, g.label);
+            for (let i = 0; i < g.items.length; i++) this._mkRow(root, g.items[i]);
+        }
+
+        const foot = document.createElement("div");
+        foot.className = "foot";
+        foot.textContent = "F3 · debug";
+        root.appendChild(foot);
+    }
+
+    /** @param {HTMLElement} root */
+    _buildDebug(root) {
+        const hdr = document.createElement("div");
+        hdr.className = "hdr";
+        hdr.innerHTML = "<b>DRIFTWAKE</b><i>F3 to close</i>";
+        root.appendChild(hdr);
+
+        const cv = document.createElement("canvas");
+        cv.width = 248;
+        cv.height = 44;
+        root.appendChild(cv);
+        this.graph = new FrameGraph(cv);
+
+        const nums = document.createElement("div");
+        nums.className = "nums";
+        root.appendChild(nums);
+        this._mkNum(nums, "fps", "fps");
+        this._mkNum(nums, "fpsLow", "1% low");
+        this._mkNum(nums, "median", "median");
+        this._mkNum(nums, "p95", "95th");
+        this._mkNum(nums, "p99", "99th");
+        this._mkNum(nums, "gpu", "gpu ms");
+        this._mkNum(nums, "draws", "draws");
+        this._mkNum(nums, "tris", "tris");
+        this._mkNum(nums, "spikes", "spikes");
+        this._mkNum(nums, "res", "res");
+
+        // ------------------------------------------------------------ state
+        // Above the two breakdowns deliberately. This is the block that is read
+        // while actually playing, and the CPU and GPU tables are twenty-odd rows
+        // that would push it off the bottom of the screen the moment the
+        // profiler is switched on.
+        //
+        // Everything needed to describe, and later reproduce, the exact moment
+        // on screen: where the player is, what they are doing, where the camera
+        // is looking, in the units the systems actually store.
+        this._mkHead(root, "player");
+        const chr = document.createElement("div");
+        chr.className = "nums one cam";
+        root.appendChild(chr);
+        this._mkNum(chr, "chrPos", "xyz");
+        this._mkNum(chr, "chrMot", "speed / facing");
+        this._mkNum(chr, "chrAct", "surf / air");
+
+        this._mkHead(root, "camera");
+        const cam = document.createElement("div");
+        cam.className = "nums one cam";
+        root.appendChild(cam);
+        this._mkNum(cam, "camPos", "eye");
+        this._mkNum(cam, "camAng", "yaw / pitch");
+        this._mkNum(cam, "camArm", "arm / fov");
+
+        const pose = document.createElement("div");
+        pose.className = "pose";
+        pose.textContent = "—";
+        root.appendChild(pose);
+        this.poseEl = pose;
+
+        const pb = document.createElement("div");
+        pb.className = "btns";
+        root.appendChild(pb);
+        const copy = document.createElement("button");
+        copy.textContent = "copy pose";
+        copy.onclick = () => this._copyPose(copy);
+        pb.appendChild(copy);
+
+        // ---------------------------------------------------- CPU breakdown
+        this._mkHead(root, "cpu ms");
+        const budget = document.createElement("div");
+        budget.className = "nums budget";
+        root.appendChild(budget);
+        this.budgetEl = budget;
+        /** @type {Map<string, HTMLElement>} */
+        this.budgetRows = new Map();
+
+        // ------------------------------------------------------- GPU passes
+        // The GPU analogue of the block above, fed by the timer queries in
+        // `core/perf.js`. Empty and hidden until `S.debugProfile` is switched on,
+        // because a permanently blank section reads as a broken feature.
+        const gh = this._mkHead(root, "gpu passes");
+        gh.style.display = "none";
+        this.gpuHead = gh;
+        const gpu = document.createElement("div");
+        gpu.className = "nums one budget";
+        root.appendChild(gpu);
+        this.gpuEl = gpu;
+        /** @type {HTMLElement[]} id-indexed, created as scopes are first seen. */
+        this.gpuRows = [];
+
+        // ----------------------------------------------------------- switches
+        this._mkHead(root, "views");
+        for (const it of debugItems()) this._mkRow(root, it);
+    }
+
+    /** @param {HTMLElement} parent @param {string} text @returns {HTMLElement} */
+    _mkHead(parent, text) {
+        const h = document.createElement("h2");
+        h.textContent = text;
+        parent.appendChild(h);
+        return h;
     }
 
     _mkNum(parent, key, label) {
@@ -291,75 +453,74 @@ export class Overlay {
         this.readouts[key + "_row"] = d;
     }
 
-    _mkGroup(group) {
-        const h = document.createElement("h2");
-        h.textContent = group.group;
-        this.el.appendChild(h);
+    /**
+     * One `SCHEMA` item as a widget row. The markup is fixed by the harness —
+     * `.row` > `<label>` + control (+ `.val` for a slider) — see the file header.
+     * @param {HTMLElement} parent
+     * @param {{k:string,l:string,t:string,min?:number,max?:number,step?:number,opts?:string[]}} it
+     */
+    _mkRow(parent, it) {
+        const row = document.createElement("div");
+        row.className = "row";
+        const lab = document.createElement("label");
+        lab.textContent = it.l;
+        row.appendChild(lab);
 
-        for (let i = 0; i < group.items.length; i++) {
-            const it = group.items[i];
-            const row = document.createElement("div");
-            row.className = "row";
-            const lab = document.createElement("label");
-            lab.textContent = it.l;
-            row.appendChild(lab);
-
-            if (it.t === "f") {
-                const r = document.createElement("input");
-                r.type = "range";
-                r.min = String(it.min);
-                r.max = String(it.max);
-                r.step = String(it.step);
-                r.value = String(S[it.k]);
-                const v = document.createElement("span");
-                v.className = "val";
-                v.textContent = fmtNum(S[it.k], it.step);
-                r.oninput = () => {
-                    const n = parseFloat(r.value);
-                    set(it.k, n);
-                    v.textContent = fmtNum(n, it.step);
-                };
-                row.appendChild(r);
-                row.appendChild(v);
-                this.widgets.push({
-                    k: it.k,
-                    sync: () => {
-                        r.value = String(S[it.k]);
-                        v.textContent = fmtNum(S[it.k], it.step);
-                    },
-                });
-            } else if (it.t === "b") {
-                const wrap = document.createElement("div");
-                wrap.className = "tog";
-                const sw = document.createElement("div");
-                sw.className = "sw" + (S[it.k] ? " on" : "");
-                sw.onclick = () => {
-                    const n = !S[it.k];
-                    set(it.k, n);
-                    sw.classList.toggle("on", n);
-                };
-                wrap.appendChild(sw);
-                row.appendChild(wrap);
-                this.widgets.push({
-                    k: it.k,
-                    sync: () => sw.classList.toggle("on", !!S[it.k]),
-                });
-            } else if (it.t === "e") {
-                const sel = document.createElement("select");
-                for (let o = 0; o < it.opts.length; o++) {
-                    const op = document.createElement("option");
-                    op.value = it.opts[o];
-                    op.textContent = it.opts[o];
-                    sel.appendChild(op);
-                }
-                sel.value = String(S[it.k]);
-                sel.onchange = () => set(it.k, sel.value);
-                row.appendChild(sel);
-                this.widgets.push({ k: it.k, sync: () => (sel.value = String(S[it.k])) });
+        if (it.t === "f") {
+            const r = document.createElement("input");
+            r.type = "range";
+            r.min = String(it.min);
+            r.max = String(it.max);
+            r.step = String(it.step);
+            r.value = String(S[it.k]);
+            const v = document.createElement("span");
+            v.className = "val";
+            v.textContent = fmtNum(S[it.k], it.step);
+            r.oninput = () => {
+                const n = parseFloat(r.value);
+                set(it.k, n);
+                v.textContent = fmtNum(n, it.step);
+            };
+            row.appendChild(r);
+            row.appendChild(v);
+            this.widgets.push({
+                k: it.k,
+                sync: () => {
+                    r.value = String(S[it.k]);
+                    v.textContent = fmtNum(S[it.k], it.step);
+                },
+            });
+        } else if (it.t === "b") {
+            const wrap = document.createElement("div");
+            wrap.className = "tog";
+            const sw = document.createElement("div");
+            sw.className = "sw" + (S[it.k] ? " on" : "");
+            sw.onclick = () => {
+                const n = !S[it.k];
+                set(it.k, n);
+                sw.classList.toggle("on", n);
+            };
+            wrap.appendChild(sw);
+            row.appendChild(wrap);
+            this.widgets.push({
+                k: it.k,
+                sync: () => sw.classList.toggle("on", !!S[it.k]),
+            });
+        } else if (it.t === "e") {
+            const sel = document.createElement("select");
+            for (let o = 0; o < it.opts.length; o++) {
+                const op = document.createElement("option");
+                op.value = it.opts[o];
+                op.textContent = it.opts[o];
+                sel.appendChild(op);
             }
-
-            this.el.appendChild(row);
+            sel.value = String(S[it.k]);
+            sel.onchange = () => set(it.k, sel.value);
+            row.appendChild(sel);
+            this.widgets.push({ k: it.k, sync: () => (sel.value = String(S[it.k])) });
         }
+
+        parent.appendChild(row);
     }
 
     _syncPresets() {
@@ -372,30 +533,84 @@ export class Overlay {
         for (let i = 0; i < this.widgets.length; i++) this.widgets[i].sync();
     }
 
-    /** @returns {void} */
-    toggle() {
-        this.visible = !this.visible;
+    // -------------------------------------------------------------- panels
+
+    /**
+     * Show or hide one panel. The undirected, programmatic entry point.
+     * @param {"settings"|"debug"} name
+     * @param {boolean} on
+     * @returns {void}
+     */
+    setPanel(name, on) {
+        const dbg = name === "debug";
+        const el = dbg ? this.dbgEl : this.setEl;
+        if (dbg) this.dbgOpen = on;
+        else this.setOpen = on;
+        el.classList.toggle("show", on);
+
+        if (on) {
+            this._last = name;
+            this._syncWidgets();
+            // Repaint on the next frame rather than after a quarter second of
+            // dashes — the throttles below are for steady state, not for opening.
+            this._acc = 1e6;
+            this._graphAcc = 1e6;
+            this._camAcc = 1e6;
+        }
+        // The container carries the hide, so it shows only while something is in it.
         this.el.classList.toggle("show", this.visible);
-        if (this.visible) this._syncWidgets();
     }
 
     /**
-     * Toggle from a key press, debounced.
+     * @param {"settings"|"debug"} name
+     * @returns {boolean}
+     */
+    isOpen(name) {
+        return name === "debug" ? this.dbgOpen : this.setOpen;
+    }
+
+    /**
+     * Toggle a panel. Named argument = programmatic, and always acts.
      *
-     * `input.js` already listens for F1/backtick and calls whatever was handed
-     * to `initInput({ onToggleOverlay })`, and this class listens too so the
-     * panel works even if the integrator forgets to wire the hook. Both paths
-     * fire from the same physical key press within the same task, so a short
-     * dead time collapses the pair into one toggle. `toggle()` itself stays
-     * undebounced for programmatic use.
+     * NO ARGUMENT is the legacy hook path: `initInput({ onToggleOverlay })` is
+     * handed `() => overlay.toggle()` by the integrator, and it fires for the
+     * same physical key press this class already handled in capture phase. It
+     * cannot say which key, so it is debounced into the press it belongs to.
+     * Without that dead time the two paths cancel and the key does nothing at
+     * all — which is exactly what F1 did before this split: measured, one press,
+     * `toggle()` entered twice, panel back where it started.
+     *
+     * @param {"settings"|"debug"} [which]
      * @returns {void}
      */
-    toggleFromKey() {
+    toggle(which) {
+        if (which === undefined) {
+            const now = performance.now();
+            if (now - this._lastKeyToggle < 50) return;
+            this._lastKeyToggle = now;
+            which = this._last;
+        }
+        this.setPanel(which, !this.isOpen(which));
+    }
+
+    /**
+     * Toggle from a key press, debounced against the hook path above.
+     *
+     * Backtick has no panel of its own: it reopens whatever was open last, which
+     * is what keeps the single-panel build's muscle memory working.
+     *
+     * @param {string} [code] a `KeyboardEvent.code`
+     * @returns {void}
+     */
+    toggleFromKey(code) {
         const now = performance.now();
         if (now - this._lastKeyToggle < 50) return;
         this._lastKeyToggle = now;
-        this.toggle();
+        const which = code === "F1" ? "settings" : code === "F3" ? "debug" : this._last;
+        this.setPanel(which, !this.isOpen(which));
     }
+
+    // -------------------------------------------------------------- update
 
     /**
      * @param {number} dtMs wall-clock frame time
@@ -404,7 +619,9 @@ export class Overlay {
      */
     update(dtMs, renderer) {
         if (renderer) this.renderer = renderer;
-        if (!this.visible) return;
+        // The settings panel has no live readouts, so an open settings panel
+        // costs exactly nothing per frame.
+        if (!this.dbgOpen) return;
 
         this._graphAcc += dtMs;
         if (this._graphAcc >= 50) {
@@ -415,7 +632,7 @@ export class Overlay {
         this._camAcc += dtMs;
         if (this._camAcc >= 100) {
             this._camAcc = 0;
-            this._updateCamera();
+            this._updateState();
         }
 
         this._acc += dtMs;
@@ -473,7 +690,13 @@ export class Overlay {
      */
     _updateGpuPasses() {
         const n = stats.gpuProfiled ? profileCount() : 0;
+        // Hide the ROWS with the heading, not just the heading. The rows are
+        // built once and only mutated, so switching the profiler off used to
+        // leave the last measurement on screen under no heading at all — a stale
+        // table that reads as a live one, which is the worst thing a readout can
+        // do. They repopulate from the EMAs the moment it is switched back on.
         this.gpuHead.style.display = n > 0 ? "" : "none";
+        this.gpuEl.style.display = n > 0 ? "" : "none";
         if (n === 0) return;
 
         const names = profileNames();
@@ -493,12 +716,44 @@ export class Overlay {
         }
     }
 
-    // ------------------------------------------------------------- camera
-    _updateCamera() {
-        const rig = this.rig;
+    // ---------------------------------------------------- character + camera
+    _updateState() {
         const r = this.readouts;
+
+        const c = this.character;
+        if (c && c.position) {
+            const q = c.position;
+            this._txt(r.chrPos, fmt2(q.x) + "  " + fmt2(q.y) + "  " + fmt2(q.z));
+            const speed = typeof c.speed === "number" ? c.speed : 0;
+            const facing = typeof c.facing === "number" ? c.facing : 0;
+            this._txt(
+                r.chrMot,
+                speed.toFixed(2) + " m/s  " + wrapDeg(facing * RAD).toFixed(0) + "°"
+            );
+            // `airborne` / `airTime` / `airHeight` are the jump controller's, and
+            // this panel is read on builds that predate it as well as after.
+            // Absent reads as a dash — "not reported" and "on the ground" are
+            // different claims, and the second would be a lie on a build that
+            // cannot jump at all.
+            const surf = typeof c.surf === "number" ? c.surf : 0;
+            const air =
+                typeof c.airTime === "number" && typeof c.airborne === "boolean"
+                    ? (c.airborne
+                        ? "air " + c.airTime.toFixed(2) + "s" +
+                          (typeof c.airHeight === "number" ? " " + c.airHeight.toFixed(2) + "m" : "")
+                        : "ground")
+                    : "—";
+            this._txt(r.chrAct, surf.toFixed(2) + "  " + air);
+        } else {
+            this._txt(r.chrPos, "—");
+            this._txt(r.chrMot, "—");
+            this._txt(r.chrAct, "—");
+        }
+
+        const rig = this.rig;
         if (!rig) {
             this._txt(r.camPos, "no rig");
+            this._txt(this.poseEl, "—");
             return;
         }
 
@@ -515,28 +770,17 @@ export class Overlay {
             rig.distance.toFixed(2) + " m  " + (rig.fov * RAD).toFixed(1) + "° v"
         );
 
-        const c = this.character;
-        if (c && c.position) {
-            const q = c.position;
-            this._txt(r.chrPos, fmt2(q.x) + "  " + fmt2(q.y) + "  " + fmt2(q.z));
-            const speed = typeof c.speed === "number" ? c.speed : 0;
-            const facing = typeof c.facing === "number" ? c.facing : 0;
-            const surf = typeof c.surf === "number" ? c.surf : 0;
-            this._txt(
-                r.chrMot,
-                speed.toFixed(2) + " m/s  " + wrapDeg(facing * RAD).toFixed(0) + "°" +
-                (surf > 0.01 ? "  surf " + surf.toFixed(2) : "")
-            );
-        } else {
-            this._txt(r.chrPos, "—");
-            this._txt(r.chrMot, "—");
-        }
-
         this._pose = this._poseScript();
         this._txt(this.poseEl, this._pose);
     }
 
-    /** A one-liner that reproduces the current pose. Paste it into the console. */
+    /**
+     * A one-liner that reproduces the current pose. Paste it into the console.
+     *
+     * It writes `SNOWFLOW`, not `DRIFTWAKE`: that global is the contract the
+     * comparison harness drives BOTH this build and the WebGPU reference
+     * through, so the line has to be paste-able into either one.
+     */
     _poseScript() {
         const rig = this.rig;
         if (!rig) return "—";
@@ -594,6 +838,42 @@ export class Overlay {
     resetSpikes() {
         resetSpikes();
     }
+}
+
+/**
+ * `SCHEMA`, minus the debug keys, as the settings panel's groups. A group that
+ * loses every item disappears rather than leaving an empty heading, and an Audio
+ * group — which `SCHEMA` does not have yet — is pulled up next to Quality where
+ * a player expects it rather than landing wherever it was appended.
+ * @returns {{label:string, items:any[]}[]}
+ */
+function settingsGroups() {
+    const out = [];
+    for (let g = 0; g < SCHEMA.length; g++) {
+        const items = SCHEMA[g].items.filter((it) => !DEBUG_KEYS.has(it.k));
+        if (items.length) out.push({ label: GROUP_LABEL[SCHEMA[g].group] || SCHEMA[g].group, items });
+    }
+    const ai = out.findIndex((g) => g.label.toLowerCase().startsWith("audio"));
+    if (ai > 0) out.unshift(out.splice(ai, 1)[0]);
+    return out;
+}
+
+/**
+ * The debug keys, in `SCHEMA` order. Read out of `SCHEMA` rather than declared
+ * here so a debug toggle keeps its authored label, range and options in one
+ * place — and so a key named in `DEBUG_KEYS` that `SCHEMA` drops simply stops
+ * appearing instead of throwing.
+ * @returns {any[]}
+ */
+function debugItems() {
+    const out = [];
+    for (let g = 0; g < SCHEMA.length; g++) {
+        const items = SCHEMA[g].items;
+        for (let i = 0; i < items.length; i++) {
+            if (DEBUG_KEYS.has(items[i].k)) out.push(items[i]);
+        }
+    }
+    return out;
 }
 
 const RAD = 180 / Math.PI;

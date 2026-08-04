@@ -1,0 +1,77 @@
+{
+  "canvas": "1280x720",
+  "sky_draw_ms": {
+    "first/range": 9.875,
+    "first/plain": 0.993,
+    "last/range": 7.207,
+    "last/plain": 0.596
+  },
+  "terrain_control_ms": {
+    "first/range": 39.133,
+    "first/plain": 37.935,
+    "last/range": 47.516,
+    "last/plain": 50.396
+  },
+  "raymarch_ms_sky_first": 8.883,
+  "raymarch_ms_sky_last": 6.611,
+  "order_saving_ms_total": 2.669,
+  "order_saving_ms_base": 0.397,
+  "samples": {
+    "first/range": {
+      "sky": [
+        21.88,
+        9.875,
+        15.54,
+        14.713
+      ],
+      "ter": [
+        59.829,
+        39.133,
+        51.307,
+        49.883
+      ]
+    },
+    "first/plain": {
+      "sky": [
+        0.993,
+        1.142,
+        1.214,
+        1.011
+      ],
+      "ter": [
+        72.279,
+        37.935,
+        67.507,
+        63.385
+      ]
+    },
+    "last/range": {
+      "sky": [
+        7.207,
+        8.326,
+        7.472,
+        7.898
+      ],
+      "ter": [
+        55.136,
+        56.172,
+        63.521,
+        47.516
+      ]
+    },
+    "last/plain": {
+      "sky": [
+        0.596,
+        0.66,
+        0.621,
+        0.601
+      ],
+      "ter": [
+        50.396,
+        58.458,
+        59.247,
+        55.135
+      ]
+    }
+  }
+}

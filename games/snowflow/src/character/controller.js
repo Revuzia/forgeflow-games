@@ -54,6 +54,27 @@ const RUN_SPEED = 5.4;
 const WALK_ACCEL = 26;
 const WALK_DECEL = 30;
 
+/**
+ * Jump. Tuned as a pair, because only the pair is meaningful: the apex is
+ * `JUMP_VEL^2 / (2*GRAVITY)` = 0.63 m and the hang time is `2*JUMP_VEL/GRAVITY`
+ * = 0.50 s. That is a deliberate, readable hop — high enough that the trail
+ * clearly stops and restarts, short enough that it never reads as floating.
+ * Gravity is well above the real 9.81: a physically-scaled jump of this height
+ * hangs for 0.72 s and feels like the moon.
+ */
+const JUMP_VEL = 5.0;
+const GRAVITY = 20.0;
+/** Releasing SPACE early clips the remaining rise — a variable-height hop. */
+const JUMP_CUT = 0.45;
+/**
+ * Fraction of ground acceleration available in the air. Deliberately small: at
+ * 1.0 the character steers mid-flight like a camera, which is the single
+ * fastest way to make a jump feel weightless.
+ */
+const AIR_CONTROL = 0.24;
+/** Descent rate, m/s, that reads as a full-strength landing. */
+const LAND_REF = 7.0;
+
 const SURF_MAX = 19.5;
 const SURF_THRUST = 11.0;
 const SURF_DRAG = 0.42;
@@ -131,6 +152,26 @@ export class CharacterController {
         /** Impact strength, scales spray and deformation depth. */
         this.footImpact = 0;
 
+        // -------------------------------------------------------------- jump
+        /** True from the take-off frame until the landing frame, inclusive of neither end's ambiguity. */
+        this.airborne = false;
+        /** Seconds since take-off. 0 while grounded. */
+        this.airTime = 0;
+        /** Vertical velocity, m/s, +ve up. 0 while grounded. */
+        this.vertVel = 0;
+        /**
+         * Height above the ground surface, metres. **Exactly** 0 while grounded,
+         * which is what lets `figure.js` add it to a terrain-derived root height
+         * without perturbing the grounded pose by so much as a float ulp.
+         */
+        this.airHeight = 0;
+        /** True for exactly one frame, on the frame the character touches down. */
+        this.landed = false;
+        /** 0..1 from the descent rate at touchdown. Latched at each landing. */
+        this.landImpact = 0;
+        /** Latches the release-cut so a rise can only be clipped once. */
+        this._jumpCut = false;
+
         this.groundY = 0;
         this.groundNormal = new THREE.Vector3(0, 1, 0);
 
@@ -173,10 +214,31 @@ export class CharacterController {
         // switches, and the two directions are deliberately different rates.
         this.surf = expDamp(this.surf, this.surfActive ? 1 : 0, this.surfActive ? 2.6 : 3.4, h);
 
+        // One-frame edge; every consumer gates on it, so it must be cleared
+        // before anything can set it this frame.
+        this.landed = false;
+
+        // TAKE-OFF. Ground only, and not off the board.
+        //
+        // DELIBERATE DECISION — no surf ollie. Surfing is a momentum mode whose
+        // whole read is the board staying welded to the snow, and the wake mesh,
+        // the groove and the berms are all continuous systems with no concept of
+        // an interruption. A jump out of a carve would need all three to break
+        // and re-form cleanly, which is a wake problem, not a jump problem. Surf
+        // is therefore a hard block rather than an unhandled case.
+        if (input.jumpPressed && !this.airborne && this.surf <= 0.5) {
+            this.vertVel = JUMP_VEL;
+            this.airborne = true;
+            this.airTime = 0;
+            this._jumpCut = false;
+        }
+
         rig.getFlatForward(_fwd);
         rig.getFlatRight(_right);
 
-        if (this.surf > 0.5) this._surfStep(h, rig);
+        // Airborne, the board has nothing to push against, so surf never drives
+        // the step — `_walkStep` runs instead and scales itself by AIR_CONTROL.
+        if (this.surf > 0.5 && !this.airborne) this._surfStep(h, rig);
         else this._walkStep(h);
 
         // ---------------------------------------------------- integrate + snap
@@ -185,8 +247,42 @@ export class CharacterController {
 
         this.groundY = this.terrain.heightAt(this.position.x, this.position.z);
         this.terrain.normalAt(this.position.x, this.position.z, this.groundNormal);
-        // Snap with a little softness, so micro-ripples do not jitter the rig.
-        this.position.y = expDamp(this.position.y, this.groundY, 26, h);
+
+        if (this.airborne) {
+            // Variable height: releasing SPACE on the way up clips the rest of
+            // the rise. Latched, so it can only ever cost one multiplication.
+            if (!input.jump && this.vertVel > 0 && !this._jumpCut) {
+                this.vertVel *= JUMP_CUT;
+                this._jumpCut = true;
+            }
+
+            this.vertVel -= GRAVITY * h;
+            this.airHeight += this.vertVel * h;
+            this.airTime += h;
+
+            // The descent test is `vertVel <= 0`, not just `airHeight <= 0`.
+            // With `S.freezeTime` the step `h` is exactly 0, so `airHeight` never
+            // leaves 0 on the take-off frame — without the velocity term the
+            // character would "land" the instant it jumped, every frozen frame,
+            // firing a landing brush and a spray burst on each one.
+            if (this.airHeight <= 0 && this.vertVel <= 0) {
+                this.airHeight = 0;
+                this.landed = true;
+                this.landImpact = clamp(-this.vertVel / LAND_REF, 0, 1);
+                this.airborne = false;
+                this.vertVel = 0;
+                this.airTime = 0;
+                this._jumpCut = false;
+                this.position.y = this.groundY;
+            } else {
+                // Exact, not damped: the arc is the point, and smoothing it
+                // would cost apex height and blur the take-off.
+                this.position.y = this.groundY + this.airHeight;
+            }
+        } else {
+            // Snap with a little softness, so micro-ripples do not jitter the rig.
+            this.position.y = expDamp(this.position.y, this.groundY, 26, h);
+        }
 
         // --------------------------------------------------------- bookkeeping
         this.speed = Math.hypot(this.velocity.x, this.velocity.z);
@@ -234,6 +330,8 @@ export class CharacterController {
 
     _walkStep(h) {
         const maxSpeed = input.sprint ? RUN_SPEED : WALK_SPEED;
+        // Exactly 1 on the ground, so every grounded number below is unchanged.
+        const air = this.airborne ? AIR_CONTROL : 1;
 
         _wish.set(
             _fwd.x * input.moveZ + _right.x * input.moveX,
@@ -246,16 +344,20 @@ export class CharacterController {
             _wish.x = (_wish.x / wishLen) * maxSpeed;
             _wish.z = (_wish.z / wishLen) * maxSpeed;
 
-            const a = WALK_ACCEL * h;
+            const a = WALK_ACCEL * air * h;
             this.velocity.x += clamp(_wish.x - this.velocity.x, -a, a);
             this.velocity.z += clamp(_wish.z - this.velocity.z, -a, a);
 
-            // Face the direction of travel, eased.
+            // Face the direction of travel, eased. Slower in the air, where a
+            // body has nothing to turn against — an 11/s yaw mid-flight lets the
+            // player pirouette on the way up.
             // PORT FRAME: the inverse of forward = (sin f, 0, -cos f).
             const want = Math.atan2(_wish.x, -_wish.z);
-            this.facing = angleDamp(this.facing, want, 11, h);
+            this.facing = angleDamp(this.facing, want, this.airborne ? 3.2 : 11, h);
         } else {
-            const d = WALK_DECEL * h;
+            // Air drag, not braking: releasing the stick mid-flight should not
+            // stop the character dead over the take-off point.
+            const d = WALK_DECEL * air * h;
             const s = Math.hypot(this.velocity.x, this.velocity.z);
             if (s > 0.0001) {
                 const k = Math.max(0, s - d) / s;
@@ -334,7 +436,11 @@ export class CharacterController {
         // travelling at nineteen metres a second. A distance-driven gait answered
         // that with a twelve-hertz cadence and the legs blurred. A sprint is the
         // fastest anyone walks; above it, glide.
-        this.stepping = this.surf <= 0.5 && this.speed <= RUN_SPEED * 1.2;
+        // Airborne there is no gait at all — nothing to step on. This is the ONE
+        // flag the figure and the contact system both read, so gating it here
+        // gates the pose and the footprints from a single decision.
+        this.stepping =
+            !this.airborne && this.surf <= 0.5 && this.speed <= RUN_SPEED * 1.2;
         if (!this.stepping) {
             this.gaitPhase = 0;
             return;
