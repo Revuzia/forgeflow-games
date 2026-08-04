@@ -219,6 +219,14 @@ export class MeshCharacter {
 
         // ---- state machine ---------------------------------------------------
         this._state = ST_IDLE;
+        /** True while the current airborne arc began from a carve — decides the
+         *  landing per the owner's rules (2026-08-04): plain jumps never roll;
+         *  a surf jump lands hard, and rolls only if the board was released. */
+        this._tookOffSurfing = false;
+        this._wasAirborne = false;
+        /** Eased grounded factor gating the procedural surf pose: in the air
+         *  the JUMP/FALL clips own the body, so the pose layer fades out. */
+        this._groundPose = 1;
         this._stateT = 0;
         this._rollHold = 1.0;      // refined from the clip duration at load
         /** @type {THREE.AnimationAction[]} indexed like CLIP_NAMES. */
@@ -482,7 +490,11 @@ export class MeshCharacter {
         this._step(dt, ch);
         this.mixer.update(dt);
 
-        const s = ch.surf;
+        // The pose layer rides only the GROUNDED part of a carve; airborne the
+        // jump/fall clips own the body and the layer eases out in ~80 ms.
+        this._groundPose += ((ch.airborne ? 0 : 1) - this._groundPose) *
+            Math.min(1, dt * 12);
+        const s = ch.surf * this._groundPose;
         if (s > 0.001) this._applySurfPose(s, ch);
 
         // ---- root: position, facing, lean -----------------------------------
@@ -532,17 +544,20 @@ export class MeshCharacter {
         let next;
         // One-shots hold their window — unless the ground disappears under
         // them (an immediate re-jump) or the board comes back (carve resumes).
-        if (this._state === ST_LAND && this._stateT < LAND_HOLD &&
-            !ch.airborne && ch.surf <= 0.5) {
+        if (this._state === ST_LAND &&
+            this._stateT < (ch.surf > 0.5 ? Math.min(LAND_HOLD, 0.22) : LAND_HOLD) &&
+            !ch.airborne) {
             next = ST_LAND;
         } else if (this._state === ST_ROLL && this._stateT < this._rollHold &&
-            !ch.airborne && ch.surf <= 0.5) {
+            !ch.airborne) {
             next = ST_ROLL;
-        } else if (ch.surf > 0.5) {
-            // Surfing owns the body, airborne or not: the ollie keeps the surf
-            // stance (held by the pose layer), never the jump/fall clips.
+        } else if (ch.surf > 0.5 && !ch.airborne) {
+            // Surfing owns the body ON THE GROUND. In the air the jump/fall
+            // clips play even mid-carve — owner decision 2026-08-04, reversing
+            // the earlier held-tuck ollie.
             next = ST_SURF;
         } else if (ch.airborne) {
+            if (!this._wasAirborne) this._tookOffSurfing = ch.surf > 0.3;
             next = ch.vertVel > 0 ? ST_JUMP : ST_FALL;
         } else if (ch.speed < 0.3) {
             next = ST_IDLE;
@@ -553,9 +568,18 @@ export class MeshCharacter {
         }
 
         // Landing edge outranks the locomotion pick — once, on the frame.
-        if (ch.landed && ch.surf <= 0.5) {
-            next = ch.landImpact > 0.6 ? ST_ROLL : ST_LAND;
+        // Owner rules: a plain jump always LANDs (never rolls). A surf jump is
+        // the hard landing — board still held resumes the carve through a short
+        // absorb; board released rolls on a heavy impact.
+        if (ch.landed) {
+            if (this._tookOffSurfing) {
+                next = (ch.surf <= 0.5 && ch.landImpact > 0.6) ? ST_ROLL : ST_LAND;
+            } else {
+                next = ST_LAND;
+            }
+            this._tookOffSurfing = false;
         }
+        this._wasAirborne = ch.airborne;
 
         if (next !== this._state) {
             this._state = next;
