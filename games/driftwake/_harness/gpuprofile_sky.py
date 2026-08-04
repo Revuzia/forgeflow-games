@@ -34,7 +34,7 @@ POSE = """() => {
     SF.rig.yaw = 2.4; SF.rig.pitch = 0.17;
     SF.rig.distance = SF.rig.distanceTarget = 6.2;
     SF.S.debugProfile = true; SF.S.debugProfileDeep = true;
-    for (const s of ['#boot','#hint','#overlay'])
+    for (const s of ['#boot','#hint','#overlay','#crosshair'])
         document.querySelectorAll(s).forEach(e => e.style.display='none');
 }"""
 

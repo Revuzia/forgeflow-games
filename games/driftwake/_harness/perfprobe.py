@@ -59,7 +59,7 @@ def probe(pg, seconds, label, scale=None, preset=None):
         SF.rig.distance = SF.rig.distanceTarget = 6.2;
         if (cfg.scale != null) SF.S.resolutionScale = cfg.scale;
         if (cfg.preset != null) SF.S.preset = cfg.preset;
-        for (const s of ['#boot','#hint','#overlay'])
+        for (const s of ['#boot','#hint','#overlay','#crosshair'])
             document.querySelectorAll(s).forEach(e => e.style.display='none');
     }""", {"scale": scale, "preset": preset})
     pg.wait_for_timeout(2500)              # let it settle at the new config

@@ -51,7 +51,17 @@ export const input = {
 
     /** @type {boolean} RMB held. Plain data property — see contract 1 above. */
     surf: false,
-    sprint: false, // shift
+    /**
+     * @type {boolean} Run is ON. Shift is a TOGGLE, not a hold (owner decision
+     * 2026-08-04: "click shift should enable run and click again should
+     * disable"): the keydown EDGE flips `sprintOn` (auto-repeat is already
+     * swallowed by the repeat guard below) and keyup does nothing. Consumers
+     * keep reading `sprint`, which `pollInput()` copies from the latch every
+     * frame — only the SOURCE changed, not the meaning. The latch clears on
+     * pointer-unlock and window blur exactly like the held state does.
+     */
+    sprintOn: false,
+    sprint: false, // resolved from `sprintOn` each `pollInput()`
 
     /**
      * @type {boolean} SPACE held. Plain data property — see contract 1/1b.
@@ -99,6 +109,7 @@ export function initInput(canvas, hooks) {
             input.surf = false;
             input.jump = false;
             input.spellHeld2 = false;
+            input.sprintOn = false;
         }
     });
 
@@ -151,6 +162,13 @@ export function initInput(canvas, hooks) {
         if (e.repeat) return;
         keys[e.code] = true;
 
+        // SHIFT toggles run. On the press edge only — the repeat guard above
+        // is what keeps a held Shift from strobing the latch — and keyup
+        // deliberately does nothing. Both Shift keys flip the same latch.
+        if (e.code === "ShiftLeft" || e.code === "ShiftRight") {
+            input.sprintOn = !input.sprintOn;
+        }
+
         // SPACE = JUMP. Snow-surf stays on the right mouse button alone; SPACE
         // is deliberately NOT a second surf binding.
         if (e.code === "Space") {
@@ -178,6 +196,7 @@ export function initInput(canvas, hooks) {
         input.surf = false;
         input.jump = false;
         input.spellHeld2 = false;
+        input.sprintOn = false;
     });
 }
 
@@ -210,7 +229,9 @@ export function pollInput() {
     input.moveX = x;
     input.moveZ = z;
     input.moving = len > 0.001;
-    input.sprint = !!(keys.ShiftLeft || keys.ShiftRight);
+    // From the latch, not the held keys — Shift is a toggle (see `sprintOn`).
+    // Copied every frame so every consumer's `input.sprint` read is unchanged.
+    input.sprint = input.sprintOn;
 }
 
 /**

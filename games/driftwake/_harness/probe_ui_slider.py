@@ -37,7 +37,7 @@ BOOT = r"""
     return !(b && !b.classList.contains('gone'));
   };
   window.__sfChrome = () => {
-    for (const s of ['#boot','#hint','#overlay','.overlay','#perf'])
+    for (const s of ['#boot','#hint','#overlay','#crosshair','.overlay','#perf'])
       document.querySelectorAll(s).forEach(e => { e.style.display='none'; });
   };
 })();

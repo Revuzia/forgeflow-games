@@ -46,7 +46,7 @@ FLAGS = ["--ignore-gpu-blocklist", "--use-angle=d3d11", "--disable-gpu-sandbox",
 HEADING = 2.4  # the battery's walking heading, so the ground matches other shots
 
 HIDE = """() => {
-  for (const sel of ['#boot', '#hint', '#overlay', '.overlay', '#perf']) {
+  for (const sel of ['#boot', '#hint', '#overlay', '#crosshair', '.overlay', '#perf']) {
     document.querySelectorAll(sel).forEach(e => { e.style.display = 'none'; });
   }
 }"""

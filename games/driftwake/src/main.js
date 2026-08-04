@@ -103,6 +103,7 @@ import { SurfWake } from "./vfx/surfWake.js";
 import { SpellSystem } from "./spells/spellSystem.js";
 import { PostChain } from "./post/postChain.js";
 import { Overlay } from "./ui/overlay.js";
+import { Crosshair } from "./ui/crosshair.js";
 import { audio } from "./audio/audio.js";
 
 // ------------------------------------------------------- module-scope scratch
@@ -409,6 +410,11 @@ async function boot() {
     applySize(); // now that `post` exists, give it the real drawing-buffer size
 
     const overlay = new Overlay({ rig, character, renderer });
+    // The aim reticle. Spells aim along the rig's forward, so screen centre is
+    // the aim point whenever the pointer is locked; the crosshair polls its
+    // visibility and cast state per frame in `frame()` below. DOM only — it
+    // adds nothing to any render pass.
+    const crosshair = new Crosshair({ overlay, spells });
     initInput(canvas, { onToggleOverlay: () => overlay.toggle() });
 
     // ------------------------------------------------------------- warm-up
@@ -589,6 +595,9 @@ async function boot() {
         // `S.dynamicResolution` is on.
         drsUpdate(rawMs);
         overlay.update(dtMs, renderer);
+        // Before `endFrame()`: the cast pulse reads the `spellPressed` edge,
+        // which `endFrame()` clears.
+        crosshair.update();
 
         // Last, and after every `mark()`: the wind bed, the footfalls, the surf
         // hiss and the spell voices are all read off state that is final for the
@@ -745,7 +754,7 @@ async function boot() {
             defaultQuality: S.preset,
             howTo: [
                 { h: "The field", p: "An open plain of wind-carved snow under a sun ten degrees above the horizon. Everywhere you step the snow remembers: boots leave trenches with raised berms, and those berms slump, drift in from upwind and soften over about a minute." },
-                { h: "Move", p: "<b>WASD</b> to move · <b>mouse</b> to look · <b>SHIFT</b> to sprint · <b>wheel</b> to zoom. Click the scene to capture the pointer." },
+                { h: "Move", p: "<b>WASD</b> to move · <b>mouse</b> to look · <b>SHIFT</b> toggles run (tap again to walk) · <b>wheel</b> to zoom. Click the scene to capture the pointer." },
                 { h: "Jump", p: "<b>SPACE</b>. Let go early to cut the rise short. A hard landing punches a crater and throws powder." },
                 { h: "Snow-surf", p: "Hold the <b>RIGHT MOUSE BUTTON</b> and the walk becomes a carve. A breaking wave builds off your inside edge and throws nearly all of the snow to the outside of the turn — the harder you turn, the further the lip hangs back over its own face." },
                 { h: "Ollie", p: "Tap <b>SPACE</b> mid-carve for a surf ollie — nearly twice the height, carrying your full speed through the air. The wake gaps under you and, if you keep holding <b>RMB</b>, you land straight back into the carve." },
@@ -847,6 +856,12 @@ async function boot() {
     globalThis.SNOWFLOW = {
         renderer, scene, rig, character, figure, contact, spray, wake, spells,
         overlay, terrain, sky, shadows, post, depthPass,
+        // The aim reticle. Not in the §2 contract (the reference has none); it
+        // is exposed the way `deform` is — so a probe can read its state
+        // without reaching into the DOM. `#crosshair` is chrome-hidden by
+        // `_harness/shoot.py`, and only shows under `input.locked` anyway,
+        // which automation can never produce.
+        crosshair,
         // The deformation field, alongside the other subsystems it sits between.
         // `_harness/probe_deform_skip.py` reads its `stepsRun`/`stepsSkipped`
         // counters and reads the state buffer back through `texture`, which is

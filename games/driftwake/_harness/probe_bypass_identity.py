@@ -39,7 +39,7 @@ FLAGS = ["--enable-unsafe-webgpu", "--ignore-gpu-blocklist", "--use-angle=d3d11"
          "--disable-gpu-sandbox", "--enable-gpu-rasterization",
          "--disable-features=CalculateNativeWinOcclusion"]
 
-CHROME = """() => { for (const s of ['#boot','#hint','#overlay','.overlay','#perf'])
+CHROME = """() => { for (const s of ['#boot','#hint','#overlay','#crosshair','.overlay','#perf'])
     document.querySelectorAll(s).forEach(e => e.style.display='none'); }"""
 
 # Dispatch every pass and bind every consumer to its real target — the graph as

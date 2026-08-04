@@ -44,6 +44,7 @@
  */
 
 import { S, SCHEMA, PRESETS, set, applyPreset, onChange } from "../core/settings.js";
+import { input } from "../core/input.js";
 import {
     stats, systemMs, FrameGraph, spikes, resetSpikes,
     profileCount, profileNames, profileEma, profileTotal,
@@ -380,6 +381,7 @@ export class Overlay {
         this._mkNum(chr, "chrPos", "xyz");
         this._mkNum(chr, "chrMot", "speed / facing");
         this._mkNum(chr, "chrAct", "surf / air");
+        this._mkNum(chr, "chrRun", "run");
 
         this._mkHead(root, "camera");
         const cam = document.createElement("div");
@@ -749,6 +751,9 @@ export class Overlay {
             this._txt(r.chrMot, "—");
             this._txt(r.chrAct, "—");
         }
+        // The Shift toggle's latch, straight from the source. Shown whether or
+        // not a character is attached — the latch is input state, not pose.
+        this._txt(r.chrRun, input.sprintOn ? "on" : "off");
 
         const rig = this.rig;
         if (!rig) {

@@ -50,7 +50,7 @@ POSE = """() => {
     SF.character.position.y = SF.terrain.heightAt(0, 0);
     SF.rig.yaw = 2.4; SF.rig.pitch = 0.17;
     SF.rig.distance = SF.rig.distanceTarget = 6.2;
-    for (const s of ['#boot','#hint','#overlay'])
+    for (const s of ['#boot','#hint','#overlay','#crosshair'])
         document.querySelectorAll(s).forEach(e => e.style.display='none');
 }"""
 

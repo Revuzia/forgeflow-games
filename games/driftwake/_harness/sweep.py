@@ -43,7 +43,7 @@ BOOTSTRAP = r"""
     return true;
   };
   window.__sfChrome = () => {
-    for (const sel of ['#boot', '#hint', '#overlay', '.overlay', '#perf']) {
+    for (const sel of ['#boot', '#hint', '#overlay', '#crosshair', '.overlay', '#perf']) {
       document.querySelectorAll(sel).forEach(e => { e.style.display = 'none'; });
     }
   };
