@@ -94,7 +94,7 @@ import {
 // with max-age=86400, so an in-place swap leaves players on yesterday's file
 // for up to a day (the 2026-08-04 folded-arm fix was invisible through the
 // browser cache). The query string changes the cache key — bump = fresh fetch.
-const CHAR_GLB_V = "ws1";
+const CHAR_GLB_V = "ws2";
 const GLB_URL = "./assets/char/driftwake_char_web.glb?v=" + CHAR_GLB_V;
 const DRACO_PATH = "./assets/vendor/three/examples/jsm/libs/draco/gltf/";
 
@@ -121,13 +121,33 @@ const CHAR_CASCADES = 2;
  *  this exact-name lookup. */
 // "skate" (Mixamo Skateboarding, In Place) is the surf BASE — a side-on board
 // stance with authored weight shift; the procedural carve layer poses on top of
-// it. It is OPTIONAL: an older GLB without it falls back to the idle base, so
-// the asset and the code can ship independently.
-const CLIP_NAMES = ["idle", "walk", "run", "jump", "fall", "land", "roll", "skate"];
+// it. "lookaround"/"weightshift" are the idle variations (owner ask
+// 2026-08-04): occasional one-shots blended over the base idle. All three are
+// OPTIONAL: an older GLB without them still loads — surf falls back to the
+// idle base and the variation scheduler simply never arms — so the asset and
+// the code can ship independently.
+const CLIP_NAMES = ["idle", "walk", "run", "jump", "fall", "land", "roll",
+                    "skate", "lookaround", "weightshift"];
+const OPTIONAL_CLIPS = new Set(["skate", "lookaround", "weightshift"]);
 
 /** State ids — indices into the weight-target table. */
 const ST_IDLE = 0, ST_WALK = 1, ST_RUN = 2, ST_JUMP = 3, ST_FALL = 4,
       ST_LAND = 5, ST_ROLL = 6, ST_SURF = 7;
+/** Clip-only indices (not states): the idle variations. */
+const CL_LOOK = 8, CL_SHIFT = 9;
+
+/**
+ * Foot-plant phases of the locomotion clips, measured off the shipped GLB by
+ * `_harness/footphase.html` (toe-base height-dwell centres, 2026-08-04):
+ * walk 1.067 s — left 0.550 / right 0.054; run 0.667 s — left 0.358 /
+ * right 0.887. These, scaled by the action's live timeScale, are the ONLY
+ * footstep clock while the mesh is the active body: the sound fires when the
+ * visible foot plants, by construction. Re-measure if the clips change.
+ */
+const PLANT_PHASES = {
+    [ST_WALK]: [0.550, 0.054],   // [left, right]
+    [ST_RUN]: [0.358, 0.887],
+};
 
 /** Seconds the landing absorb holds before locomotion resumes. */
 const LAND_HOLD = 0.35;
@@ -241,18 +261,38 @@ export class MeshCharacter {
         this._fade = FADE;
 
         /** Per-state weight targets, [state][clip index]. SURF idles under the
-         *  pose layer. Built once; rows are reused, never reallocated. */
+         *  pose layer. Columns 8-9 (idle variations) stay 0 in every row: the
+         *  variation blend is a sublayer of the idle slot, applied after the
+         *  ramp. Built once; rows are reused, never reallocated. */
         this._stateWeights = [
-            [1, 0, 0, 0, 0, 0, 0, 0], // idle
-            [0, 1, 0, 0, 0, 0, 0, 0], // walk
-            [0, 0, 1, 0, 0, 0, 0, 0], // run
-            [0, 0, 0, 1, 0, 0, 0, 0], // jump
-            [0, 0, 0, 0, 1, 0, 0, 0], // fall
-            [0, 0, 0, 0, 0, 1, 0, 0], // land
-            [0, 0, 0, 0, 0, 0, 1, 0], // roll
-            [0, 0, 0, 0, 0, 0, 0, 1], // surf (skate base; demoted to idle
-                                      // at load if the GLB lacks the clip)
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0], // idle
+            [0, 1, 0, 0, 0, 0, 0, 0, 0, 0], // walk
+            [0, 0, 1, 0, 0, 0, 0, 0, 0, 0], // run
+            [0, 0, 0, 1, 0, 0, 0, 0, 0, 0], // jump
+            [0, 0, 0, 0, 1, 0, 0, 0, 0, 0], // fall
+            [0, 0, 0, 0, 0, 1, 0, 0, 0, 0], // land
+            [0, 0, 0, 0, 0, 0, 1, 0, 0, 0], // roll
+            [0, 0, 0, 0, 0, 0, 0, 1, 0, 0], // surf (skate base; demoted to
+                                            // idle at load if the clip is absent)
         ];
+
+        // ---- clip-locked footfalls ------------------------------------------
+        /** Previous locomotion clip phase, for plant-crossing detection. */
+        this._gaitPrevPhase = 0;
+        this._gaitPrevState = -1;
+        /** Diagnostic: footfalls emitted since load (F3 / harness). */
+        this.footfallCount = 0;
+
+        // ---- idle variation scheduler ---------------------------------------
+        /** Active variation clip index, or -1. */
+        this._idleVar = -1;
+        /** Variation blend 0..1 over the base idle. */
+        this._idleVarW = 0;
+        /** Seconds of idle remaining until the next variation arms. */
+        this._idleVarT = 7;
+        /** Deterministic sequence counter (no Math.random: the render
+         *  harnesses depend on repeatable frames). */
+        this._idleVarSeq = 0;
 
         /** @type {Record<string, THREE.Bone>} pose-layer bones, cached at load. */
         this._bones = {};
@@ -374,8 +414,17 @@ export class MeshCharacter {
             if (!clip) {
                 if (CLIP_NAMES[i] === "skate") {
                     // Optional clip absent: surf rides the idle base instead.
+                    // (Weight aliasing is safe only because row 7's own column
+                    // stays untouched — the ramp's null-guard skips holes, and
+                    // the idle column drives the shared action.)
                     this._stateWeights[7] = this._stateWeights[0];
                     this._acts.push(this._acts[0]);
+                    continue;
+                }
+                if (OPTIONAL_CLIPS.has(CLIP_NAMES[i])) {
+                    // Idle variation absent: hole in the table, scheduler
+                    // never arms (see _idleVariations' null check).
+                    this._acts.push(null);
                     continue;
                 }
                 throw new Error("mesh character: clip missing: " + CLIP_NAMES[i]);
@@ -385,6 +434,11 @@ export class MeshCharacter {
                 CLIP_NAMES[i] === "roll") {
                 a.setLoop(THREE.LoopOnce, 1);
                 a.clampWhenFinished = true;
+            }
+            if (CLIP_NAMES[i] === "lookaround" || CLIP_NAMES[i] === "weightshift") {
+                // One-shots that hand the body back to the base idle.
+                a.setLoop(THREE.LoopOnce, 1);
+                a.clampWhenFinished = false;
             }
             a.play(); // scheduled for ever; weights do the talking
             a.setEffectiveWeight(0);
@@ -410,6 +464,15 @@ export class MeshCharacter {
             if (!bone) throw new Error("mesh character: bone missing: " + n);
             this._bones[n] = bone;
         }
+        // Foot bones for the clip-locked footfall positions (world-space read
+        // on plant frames only). Fail soft: without them the emission falls
+        // back to the body-centre side offset, same as the legacy path.
+        this._feet = [
+            skeleton.getBoneByName(prefix + "LeftFoot") ||
+                skeleton.bones.find((b) => b.name.endsWith("LeftFoot")) || null,
+            skeleton.getBoneByName(prefix + "RightFoot") ||
+                skeleton.bones.find((b) => b.name.endsWith("RightFoot")) || null,
+        ];
 
         // ---- calibration: settle into idle frame 0, then measure -------------
         this.mixer.update(0);
@@ -519,6 +582,70 @@ export class MeshCharacter {
         // The shadow cascades are this frame's first consumers and their proxy
         // scenes contain no SkinnedMesh, so the renderer will not do this.
         this.mesh.skeleton.update();
+
+        // After the matrix update: plant frames read foot bones in world space.
+        this._emitFootfalls(ch);
+    }
+
+    /**
+     * Clip-locked footstep events. While this mesh is the active body
+     * (`controller.clipGait`), the walk/run clips' measured plant phases are
+     * the ONLY footstep clock: the controller's own distance-driven gait is
+     * silenced and this writes the same `footfall / footIndex / footImpact /
+     * footPos` contract, so audio (audio.js footsteps) and footprints
+     * (snowContact's no-figure branch) consume real foot timing and real bone
+     * positions with zero changes of their own. The impact formula is kept
+     * IDENTICAL to the controller's (0.35 + speed/RUN_SPEED): the step-vs-wind
+     * loudness calibration in audio.js was measured against it.
+     * @param {import("./controller.js").CharacterController} ch
+     */
+    _emitFootfalls(ch) {
+        if (!ch.clipGait) return;
+        const st = this._state;
+        const plants = PLANT_PHASES[st];
+        // Not in stepped locomotion (idle/surf/air/glide/land/roll): no clock.
+        // The dominance gate keeps half-faded walk from double-firing against
+        // an incoming one-shot; the stepping gate mirrors the legacy path.
+        if (!plants || !ch.stepping || this._weights[st] < 0.5) {
+            this._gaitPrevState = -1;
+            return;
+        }
+        const act = this._acts[st];
+        const dur = act.getClip().duration;
+        const phase = (act.time % dur) / dur;
+        if (this._gaitPrevState !== st) {
+            // Fresh entry: prime the edge detector, never fire on the seam.
+            this._gaitPrevState = st;
+            this._gaitPrevPhase = phase;
+            return;
+        }
+        const prev = this._gaitPrevPhase;
+        this._gaitPrevPhase = phase;
+        if (phase === prev) return;
+
+        for (let f = 0; f < 2; f++) {
+            const p = plants[f];
+            const crossed = prev < phase
+                ? (p > prev && p <= phase)
+                : (p > prev || p <= phase);   // wrapped past the loop seam
+            if (!crossed) continue;
+            ch.footfall = true;
+            ch.footIndex = f;                 // 0 = left, matches the legacy side
+            ch.footImpact = clamp(0.35 + ch.speed / 5.4, 0, 1.3);
+            this.footfallCount++;
+            const bone = this._feet[f];
+            if (bone) {
+                bone.getWorldPosition(ch.footPos);
+            } else {
+                // Legacy body-centre fallback, same numbers as the controller.
+                const side = f === 0 ? -0.17 : 0.17;
+                ch.footPos.set(
+                    ch.position.x + Math.cos(ch.facing) * side,
+                    ch.position.y,
+                    ch.position.z + Math.sin(ch.facing) * side
+                );
+            }
+        }
     }
 
     /**
@@ -564,6 +691,15 @@ export class MeshCharacter {
         } else if (ch.airborne) {
             if (!this._wasAirborne) this._tookOffSurfing = ch.surf > 0.3;
             next = ch.vertVel > 0 ? ST_JUMP : ST_FALL;
+        } else if (!ch.stepping) {
+            // Grounded, board released, but still above sprint speed: the surf
+            // run-out. The controller's gait calls this a glide (its comment:
+            // "a sprint is the fastest anyone walks; above it, glide") and
+            // emits no footfalls — so the body must not pump the run clip
+            // either, or the feet pound silently. The braced board stance,
+            // sans lean (the pose layer's amplitude rides `surf`, already
+            // near zero here), reads as sliding on the boots.
+            next = ST_SURF;
         } else if (ch.speed < 0.3) {
             next = ST_IDLE;
         } else if (ch.speed < 4.2) {
@@ -595,18 +731,32 @@ export class MeshCharacter {
             // One-shots restart from their first frame on entry.
             if (next === ST_JUMP) this._acts[ST_JUMP].reset();
             else if (next === ST_LAND) this._acts[ST_LAND].reset();
-            else if (next === ST_ROLL) this._acts[ST_ROLL].reset();
+            else if (next === ST_ROLL) {
+                this._acts[ST_ROLL].reset();
+                // One-frame flag for the audio layer: the roll is a second
+                // body contact after the landing thud, and it was silent.
+                ch.rolled = true;
+            }
             const w = this._stateWeights[next];
             for (let i = 0; i < this._targets.length; i++) this._targets[i] = w[i];
         }
 
         // Locomotion cadence follows ground speed, so the feet track the snow.
+        // Reference speeds (timeScale 1): measured no-slide speed is
+        // step_len × SCALE × 2 / duration — walk 1.12 m × 0.92 × 2 / 1.067 s
+        // ≈ 2.0 m/s (the 1.9 divisor is within 5%); run 1.40 m × 0.92 × 2 /
+        // 0.667 s ≈ 3.9 m/s, so the 5.4 divisor under-drives the run clip
+        // ~28% and fast feet slide a little. Kept deliberately: the cadence
+        // is what the player has been seeing, and footstep audio now locks to
+        // the CLIP, not to ground distance — sync holds either way. If SCALE
+        // changes, re-derive both (see PLANT_PHASES note).
         this._acts[ST_WALK].setEffectiveTimeScale(clamp(ch.speed / 1.9, 0.4, 2.2));
         this._acts[ST_RUN].setEffectiveTimeScale(clamp(ch.speed / 5.4, 0.5, 1.5));
 
         // Manual crossfade: linear ramps toward the target row.
         const step = dt / Math.max(1e-3, this._fade);
         for (let i = 0; i < this._acts.length; i++) {
+            if (!this._acts[i]) continue;   // optional clip absent from GLB
             const w = this._weights[i];
             const t = this._targets[i];
             const nw = w < t ? Math.min(t, w + step) : Math.max(t, w - step);
@@ -615,6 +765,55 @@ export class MeshCharacter {
                 this._acts[i].setEffectiveWeight(nw);
             }
         }
+
+        this._idleVariations(dt);
+    }
+
+    /**
+     * Occasional head-turn / weight-shift over the base idle (owner ask
+     * 2026-08-04). A sublayer of the idle SLOT: the variation and the base
+     * split the idle clip's ramped weight, so every state transition already
+     * fades the pair correctly. Deterministic cadence — the render harnesses
+     * need repeatable frames, so no Math.random.
+     * @param {number} dt
+     */
+    _idleVariations(dt) {
+        const iw = this._weights[ST_IDLE];
+        if (this._idleVar < 0) {
+            if (this._state !== ST_IDLE || iw < 0.95) return;
+            this._idleVarT -= dt;
+            if (this._idleVarT > 0) return;
+            // Arm: alternate look/shift; skip if the GLB lacks the clip.
+            const pick = (this._idleVarSeq % 2 === 0) ? CL_LOOK : CL_SHIFT;
+            const act = this._acts[pick] === this._acts[ST_IDLE] ? null : this._acts[pick];
+            this._idleVarSeq++;
+            // 9 / 12.5 / 16 s between variations, cycling.
+            this._idleVarT = 9 + 3.5 * (this._idleVarSeq % 3);
+            if (!act) return;
+            this._idleVar = pick;
+            this._idleVarW = 0;
+            act.reset().play();
+            return;
+        }
+
+        const act = this._acts[this._idleVar];
+        const dur = act.getClip().duration;
+        // Leave the sublayer when the one-shot ends or anything but a
+        // full-weight idle takes over; 0.35 s ramps both ways.
+        const wantOut = this._state !== ST_IDLE || act.time >= dur - 0.45;
+        const target = wantOut ? 0 : 1;
+        const r = dt / 0.35;
+        this._idleVarW += clamp(target - this._idleVarW, -r, r);
+        if (wantOut && this._idleVarW <= 0.001) {
+            act.stop();
+            this._idleVar = -1;
+            this._idleVarW = 0;
+            this._acts[ST_IDLE].setEffectiveWeight(this._weights[ST_IDLE]);
+            return;
+        }
+        const v = this._idleVarW;
+        this._acts[ST_IDLE].setEffectiveWeight(iw * (1 - v));
+        act.setEffectiveWeight(iw * v);
     }
 
     // ------------------------------------------------------ surf pose layer

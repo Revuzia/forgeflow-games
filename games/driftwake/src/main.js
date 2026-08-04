@@ -416,13 +416,22 @@ async function boot() {
     // warm-up so the boxes are installed before the program first builds.
     spells.addConsumers(meshChar.material);
 
-    // Which body renders. Both listeners fire on `showCharacter` — the
-    // figure's own (registered in its constructor) and this one; this one is
-    // registered later, so it runs after and owns the final state.
+    // Which body renders — and which body OWNS the gait. The active body is
+    // the footstep authority: mesh on → the clips' measured plant phases emit
+    // the footfalls (meshChar._emitFootfalls) and the footprints stamp at the
+    // mesh's actual foot bones through snowContact's no-figure branch; mesh
+    // off → the procedural figure's solved plants and the controller's
+    // distance clock, exactly as before the rider existed. Both listeners
+    // fire on `showCharacter` — the figure's own (registered in its
+    // constructor) and this one; this one is registered later, so it runs
+    // after and owns the final state.
     const applyBodyVisibility = () => {
         const show = S.showCharacter !== false;
-        figure.setVisible(show && !S.meshCharacter);
-        meshChar.setVisible(show && !!S.meshCharacter);
+        const meshOn = !!S.meshCharacter;
+        figure.setVisible(show && !meshOn);
+        meshChar.setVisible(show && meshOn);
+        character.clipGait = meshOn;
+        contact.figure = meshOn ? null : figure.figure;
     };
     applyBodyVisibility();
     onChange(["showCharacter", "meshCharacter"], applyBodyVisibility);

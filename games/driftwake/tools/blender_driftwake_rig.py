@@ -24,7 +24,13 @@ CLIPS = [
     # (probed 2026-08-04) — name-merging those actions bends the arms across
     # the chest. With-skin clips probed 0.000 on every bone. The rest
     # assertion in the clip loop makes this unskippable.
-    ("idle",      r"..\WithSkin\breathing_idle_ws65.fbx"),
+    # Base idle = Mixamo "Standing Idle": measured stillest of four candidates
+    # (head lateral amp 0.003 m vs Breathing Idle's 0.100 m — the owner called
+    # the sway out on 2026-08-04) and the cleanest robe hang. lookaround /
+    # weightshift are the occasional idle variations meshChar.js schedules.
+    ("idle",        r"..\WithSkin\standing_idle_ws65.fbx"),
+    ("lookaround",  r"..\WithSkin\looking_around_ws65.fbx"),
+    ("weightshift", r"..\WithSkin\weight_shift_ws65.fbx"),
     ("walk",      r"..\WithSkin\walking_ws75.fbx"),
     ("run",       r"..\WithSkin\running_ws75.fbx"),
     ("jump",      r"..\WithSkin\jumping_up_ws70.fbx"),

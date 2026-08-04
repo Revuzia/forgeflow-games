@@ -161,6 +161,17 @@ export class CharacterController {
         this.footPos = new THREE.Vector3();
         /** Impact strength, scales spray and deformation depth. */
         this.footImpact = 0;
+        /**
+         * True while the mesh rider owns the footstep clock (main.js sets it
+         * with `S.meshCharacter`). The distance-driven gait below then stops
+         * emitting footfalls — meshChar.js writes the same footfall contract
+         * from its clips' measured plant phases instead, so the sound and the
+         * prints follow the feet the player actually sees.
+         */
+        this.clipGait = false;
+        /** One frame true when the mesh body starts a landing roll —
+         *  meshChar.js raises it; the audio layer voices the second contact. */
+        this.rolled = false;
 
         // -------------------------------------------------------------- jump
         /** True from the take-off frame until the landing frame, inclusive of neither end's ambiguity. */
@@ -461,6 +472,7 @@ export class CharacterController {
      */
     _gait(h) {
         this.footfall = false;
+        this.rolled = false;
 
         // Feet stay on the board while surfing — and for the run-out afterwards.
         // The surf blend eases to zero in a fifth of a second, but the momentum
@@ -474,6 +486,15 @@ export class CharacterController {
         this.stepping =
             !this.airborne && this.surf <= 0.5 && this.speed <= RUN_SPEED * 1.2;
         if (!this.stepping) {
+            this.gaitPhase = 0;
+            return;
+        }
+
+        // The mesh rider owns the footstep clock: its clips' measured plant
+        // phases emit the footfall events (meshChar._emitFootfalls), so the
+        // distance-driven clock below would double-fire every step. `stepping`
+        // above stays live — it is the shared is-the-gait-running gate.
+        if (this.clipGait) {
             this.gaitPhase = 0;
             return;
         }

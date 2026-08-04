@@ -573,6 +573,25 @@ class AudioSystem {
                     this.thump.fire(now, 78, 44, 0.17 * lf * sfx, 0.20 + 0.06 * imp);
                 }
             }
+            // The landing roll is a SECOND body contact — shoulder and back
+            // taking the ground a beat after the boots — and it was silent
+            // (gait-coupling audit, 2026-08-04). Voiced as the lighter impact
+            // pair at reduced level with a slow crust layer: same material
+            // truth as a landing, less mass arriving at once. `rolled` is a
+            // one-frame flag raised by meshChar on roll entry.
+            if (character.rolled) {
+                const pan = facePan * 0.2;
+                const rf = 0.62;   // fixed: a roll spreads the energy it has
+                if (this.samples.play(
+                    "medium" + (this._impactAlt ? 1 : 0), now,
+                    LEVEL_LAND * rf * sfx, 0.90, pan, 0.07)) {
+                    this._impactAlt = !this._impactAlt;
+                    this.samples.step(now, LEVEL_CRUST * rf * sfx, 0.62, pan);
+                } else {
+                    this.crunch.fire(now, 480, 0.6, 0.6, 0.42 * rf * sfx,
+                        0.30, 0.05, pan);
+                }
+            }
             this._prevAirborne = airborne;
         }
 

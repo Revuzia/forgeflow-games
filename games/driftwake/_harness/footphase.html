@@ -1,0 +1,88 @@
+<!doctype html>
+<!-- Clip gait analysis on the FINAL GLB: plant phases, stride, sway.
+     ?glb=<url>  — results as JSON in #out; title=PHASES-DONE when ready. -->
+<meta charset="utf-8">
+<pre id="out">working…</pre>
+<script type="importmap">
+{ "imports": { "three": "../assets/vendor/three/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from "three";
+const { GLTFLoader } = await import("../assets/vendor/three/examples/jsm/loaders/GLTFLoader.js");
+const { DRACOLoader } = await import("../assets/vendor/three/examples/jsm/loaders/DRACOLoader.js");
+
+const url = new URLSearchParams(location.search).get("glb");
+const loader = new GLTFLoader();
+const draco = new DRACOLoader();
+draco.setDecoderPath("../assets/vendor/three/examples/jsm/libs/draco/gltf/");
+loader.setDRACOLoader(draco);
+
+const g = await loader.loadAsync(url);
+const root = g.scene;
+const mixer = new THREE.AnimationMixer(root);
+const bone = (n) => root.getObjectByName(n);
+const B = {
+  hips: bone("mixamorigHips") || bone("mixamorig:Hips"),
+  lf: bone("mixamorigLeftFoot") || bone("mixamorig:LeftFoot"),
+  rf: bone("mixamorigRightFoot") || bone("mixamorig:RightFoot"),
+  lt: bone("mixamorigLeftToeBase") || bone("mixamorig:LeftToeBase"),
+  rt: bone("mixamorigRightToeBase") || bone("mixamorig:RightToeBase"),
+  head: bone("mixamorigHead") || bone("mixamorig:Head"),
+};
+const v = new THREE.Vector3();
+const res = { bones: Object.fromEntries(Object.entries(B).map(([k, b]) => [k, b ? b.name : null])) };
+
+for (const clip of g.animations) {
+  const act = mixer.clipAction(clip);
+  mixer.stopAllAction();
+  act.reset().play();
+  const N = 240, rows = [];
+  for (let i = 0; i < N; i++) {
+    mixer.setTime((i / N) * clip.duration);
+    root.updateMatrixWorld(true);
+    const r = {};
+    for (const [k, b] of Object.entries(B)) {
+      if (!b) continue;
+      b.getWorldPosition(v);
+      r[k] = [v.x, v.y, v.z];
+    }
+    rows.push(r);
+  }
+  const amp = (k, ax) => {
+    const vals = rows.map(r => r[k][ax]);
+    return +(Math.max(...vals) - Math.min(...vals)).toFixed(4);
+  };
+  const entry = {
+    duration: +clip.duration.toFixed(3),
+    hips_sway_x: amp("hips", 0), hips_sway_z: amp("hips", 2),
+    head_amp_x: amp("head", 0), head_amp_z: amp("head", 2),
+  };
+  if (clip.name === "walk" || clip.name === "run") {
+    for (const [foot, k] of [["left", "lt"], ["right", "rt"]]) {
+      const hs = rows.map(r => r[k][1]);
+      const lo = Math.min(...hs), hi = Math.max(...hs);
+      const th = lo + 0.15 * (hi - lo);
+      // plant = centre of each contiguous low-dwell run (wrap-aware)
+      const low = hs.map(h => h <= th);
+      const runs = [];
+      let s = null;
+      for (let i = 0; i < N; i++) {
+        if (low[i] && s === null) s = i;
+        if (!low[i] && s !== null) { runs.push([s, i - 1]); s = null; }
+      }
+      if (s !== null) {
+        if (runs.length && runs[0][0] === 0) runs[0][0] = s - N; // wrap join
+        else runs.push([s, N - 1]);
+      }
+      entry[foot + "_plants"] = runs.map(([a, b]) => +((((a + b) / 2 + N) % N) / N).toFixed(3));
+      entry[foot + "_lift"] = +(hi - lo).toFixed(4);
+      // step length: forward (z) travel range of the foot relative to hips
+      const rel = rows.map(r => r[k][2] - r.hips[2]);
+      entry[foot + "_step_len"] = +(Math.max(...rel) - Math.min(...rel)).toFixed(4);
+    }
+  }
+  res[clip.name] = entry;
+}
+document.getElementById("out").textContent = JSON.stringify(res, null, 1);
+document.title = "PHASES-DONE";
+</script>
