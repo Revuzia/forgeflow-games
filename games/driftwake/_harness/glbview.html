@@ -13,9 +13,10 @@ import * as THREE from "three";
 // else use a CDN-free fallback: we vendored only core, so import the loader
 // from three's addons path only if it exists. Simplest robust path: use
 // THREE.FileLoader + GLTF via dynamic import attempt, else message.
-let GLTFLoader;
+let GLTFLoader, DRACOLoader;
 try {
   ({ GLTFLoader } = await import("../assets/vendor/three/examples/jsm/loaders/GLTFLoader.js"));
+  ({ DRACOLoader } = await import("../assets/vendor/three/examples/jsm/loaders/DRACOLoader.js"));
 } catch (e) {
   document.title = "NO-LOADER";
   throw e;
@@ -31,7 +32,11 @@ const cam = new THREE.PerspectiveCamera(35, 1, 0.01, 100);
 scene.add(new THREE.HemisphereLight(0xdde6f0, 0x33383f, 1.1));
 const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(2, 4, 3); scene.add(sun);
 
-new GLTFLoader().load(url, (g) => {
+const loader = new GLTFLoader();
+const draco = new DRACOLoader();
+draco.setDecoderPath("../assets/vendor/three/examples/jsm/libs/draco/gltf/");
+loader.setDRACOLoader(draco);
+loader.load(url, (g) => {
   // Optional: pose an animation clip at a given time. ?clip=walk&t=0.5
   const clipName = params.get("clip");
   if (clipName && g.animations && g.animations.length) {
