@@ -476,6 +476,16 @@ class AudioSystem {
                     0.25, 1.6
                 );
                 const pan = facePan * 0.2;
+                // Level does NOT scale straight off `imp`. Measured in the live
+                // page: an ordinary standing jump lands with `landImpact` 0.25 to
+                // 0.28, not somewhere near 1 — the big values need a real drop off
+                // terrain. Scaling level linearly therefore put the COMMONEST
+                // landing 12 dB down, i.e. under the walking wind bed and
+                // effectively silent, while reserving the whole top of the range
+                // for an event most players never trigger. This maps the useful
+                // part of the range onto a 4.6 dB spread instead: every landing is
+                // audible, a hard one is clearly harder.
+                const lf = 0.45 + 0.55 * imp;
 
                 // A landing in snow is two events, and the recordings split along
                 // exactly that line: Kenney's impactSoft files measured 100% of
@@ -487,18 +497,21 @@ class AudioSystem {
                 //
                 // Two impact files per weight, alternated, so a run of landings
                 // is not one sample on repeat.
-                // 0.55, not 1.0: `controller.js` clamps `landImpact` to 0..1
-                // (line 271), so a threshold up near the top of the range would
-                // leave every ordinary jump landing on the light sample.
-                const heavy = imp >= 0.55;
+                //
+                // The threshold is 0.45, sat between the measured standing-jump
+                // value (~0.26) and the 1.0 `controller.js` clamps to (271): an
+                // ordinary jump stays on the lighter sample, anything with a drop
+                // behind it gets the heavy one. A threshold near the top of the
+                // range would have made the two heavy files dead weight.
+                const heavy = imp >= 0.45;
                 const name = (heavy ? "heavy" : "medium") + (this._impactAlt ? 1 : 0);
                 this._impactAlt = !this._impactAlt;
 
-                if (this.samples.play(name, now, LEVEL_LAND * imp * sfx,
+                if (this.samples.play(name, now, LEVEL_LAND * lf * sfx,
                     heavy ? 1.04 - 0.14 * imp : 1.16 - 0.16 * imp, pan, 0.07)) {
                     // The crust, over the body. Slowed well down: the same boot,
                     // arriving with a whole body behind it.
-                    this.samples.step(now, LEVEL_CRUST * imp * sfx, 0.74, pan);
+                    this.samples.step(now, LEVEL_CRUST * lf * sfx, 0.74, pan);
                     // NO `thump` here on purpose. The synthesised thump is a
                     // 78 -> 44 Hz sine, which is the same octave the impactSoft
                     // recording already occupies; firing both put two uncorrelated
@@ -509,13 +522,17 @@ class AudioSystem {
                     // A landing is a heavier footstep — same synth, lower band,
                     // slower grain, longer tail — plus the low end a footstep has
                     // no business having.
+                    // `lf`, not `imp`, for the same reason as the sample path
+                    // above — and it matters more here, because this branch is
+                    // what a player gets permanently if the assets ever fail to
+                    // load, not just for the first second.
                     this.crunch.fire(
-                        now, 560 + 180 * imp, 0.6, 0.68, 0.60 * imp * sfx,
+                        now, 560 + 180 * imp, 0.6, 0.68, 0.60 * lf * sfx,
                         0.26 + 0.08 * imp, 0.042, pan
                     );
                     // The thump is a bare sine, so it loses almost nothing to a
                     // filter and its number is NOT scaled like the crunch above it.
-                    this.thump.fire(now, 78, 44, 0.17 * imp * sfx, 0.20 + 0.06 * imp);
+                    this.thump.fire(now, 78, 44, 0.17 * lf * sfx, 0.20 + 0.06 * imp);
                 }
             }
             this._prevAirborne = airborne;
