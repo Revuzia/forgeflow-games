@@ -301,6 +301,15 @@ export class MeshCharacter {
         /** Which cast clip the current/last ST_CAST plays, and its hold. */
         this._castClip = CL_CAST;
         this._castHold = 1.15;
+        /** Additive twins of the cast acts (upper-body-over-locomotion:
+         *  casting while walking/running plays the cast as a DELTA over the
+         *  stride — industry-standard moving cast). Indexed like _acts;
+         *  null where absent. Built at load. */
+        this._castAdd = [];
+        /** Seconds spent continuously in ST_IDLE — the water weave is an
+         *  EARNED flourish (owner 2026-08-05: only after ~10 s of idling,
+         *  never while surfing). */
+        this._idleT = 0;
 
         // ---- clip-locked footfalls ------------------------------------------
         /** Previous locomotion clip phase, for plant-crossing detection. */
@@ -479,6 +488,19 @@ export class MeshCharacter {
                 a.setLoop(THREE.LoopOnce, 1);
                 a.clampWhenFinished = true;
                 a.setEffectiveTimeScale(CAST_RATE[i] || 1.3);
+                // The additive twin: the same motion as a DELTA from its own
+                // first frame, layered over walk/run at full weight when the
+                // player casts on the move — legs keep the stride, arms cast.
+                const addClip = THREE.AnimationUtils.makeClipAdditive(
+                    clip.clone());
+                addClip.name = clip.name + "_add";
+                addClip.blendMode = THREE.AdditiveAnimationBlendMode;
+                const aa = this.mixer.clipAction(addClip);
+                aa.setLoop(THREE.LoopOnce, 1);
+                aa.clampWhenFinished = false;
+                aa.setEffectiveTimeScale(CAST_RATE[i] || 1.3);
+                aa.setEffectiveWeight(1);
+                this._castAdd[i] = aa;
             }
             a.play(); // scheduled for ever; weights do the talking
             a.setEffectiveWeight(0);
@@ -634,16 +656,15 @@ export class MeshCharacter {
         // After the matrix update: plant frames read foot bones in world space.
         this._emitFootfalls(ch);
 
-        // The water-play FX gate (spellSystem reads it): the hand-wave idle,
-        // the carve (owner 2026-08-05: he sways the water while surfing),
-        // and the cast itself all keep water live in the palms.
-        const castW = this._acts[this._castClip]
-            ? this._weights[this._castClip] : 0;
-        ch.idleFx = Math.max(
-            (this._state === ST_IDLE && !ch.airborne) ? this._weights[ST_IDLE] : 0,
-            (ch.surf > 0.5 && !ch.airborne) ? 0.8 : 0,
-            castW
-        );
+        // The water-play FX gate (spellSystem reads it). Owner 2026-08-05
+        // (second pass): an EARNED idle flourish only — ten seconds of
+        // standing still before the water appears, a 2 s ramp-in, and it
+        // dies with the first step. Never during surf, never during casts.
+        if (this._state === ST_IDLE && !ch.airborne) this._idleT += dt;
+        else this._idleT = 0;
+        ch.idleFx = this._idleT > 10
+            ? Math.min(1, (this._idleT - 10) / 2) * this._weights[ST_IDLE]
+            : 0;
     }
 
     /**
@@ -776,6 +797,7 @@ export class MeshCharacter {
         } else if (ch.castWave && !ch.airborne &&
             (ch.surf > 0.5 || ch.speed < 0.6) &&
             (this._acts[CAST_BY_KEY[ch.castWave] ?? -1] || this._acts[CL_CAST])) {
+            // Stationary or carving: the cast owns the whole body.
             const pref = CAST_BY_KEY[ch.castWave] ?? CL_CAST;
             const clip = this._acts[pref] ? pref : CL_CAST;
             this._castClip = clip;
@@ -787,6 +809,17 @@ export class MeshCharacter {
             row.fill(0);
             row[clip] = 1;
             next = ST_CAST;
+        } else if (ch.castWave && !ch.airborne &&
+            this._castAdd[CAST_BY_KEY[ch.castWave] ?? CL_CAST]) {
+            // Walking or running (owner 2026-08-05, industry standard): the
+            // cast plays as an ADDITIVE layer over the stride — the mixer
+            // keeps walk/run at full weight (legs, footfalls, prints all
+            // continue) and the delta drives the arms through the throw.
+            const pref = CAST_BY_KEY[ch.castWave] ?? CL_CAST;
+            const aa = this._castAdd[this._castAdd[pref] ? pref : CL_CAST];
+            if (aa) aa.reset().play();
+            // no state change — fall through keeps current locomotion pick
+            next = ch.speed < 4.2 ? ST_WALK : ST_RUN;
         } else if (ch.surf > 0.5 && !ch.airborne) {
             // Surfing owns the body ON THE GROUND. In the air the jump/fall
             // clips play even mid-carve — owner decision 2026-08-04, reversing
