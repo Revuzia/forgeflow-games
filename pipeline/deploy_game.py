@@ -59,13 +59,18 @@ R2_PUBLIC_URL = "https://forgeflow-games.pages.dev"  # Will be updated once R2 c
 # Directories inside a game folder that are development-only and must never be
 # uploaded to the public CDN. Matched against the FIRST path segment, so a
 # legitimate runtime path like "assets/tools_ui.png" is unaffected.
-DEV_ONLY_DIRS = {"tools", "_src", "__pycache__", ".git"}
+DEV_ONLY_DIRS = {"tools", "_src", "__pycache__", ".git", ".grok"}
 # Individual dev artefacts that can sit at a game's root.
 DEV_ONLY_NAMES = {".gitignore", ".DS_Store", "Thumbs.db"}
+# Backup suffixes left by asset-migration passes (e.g. *.pre_draco.bak,
+# *.pre_mixamo.bak, *.openhands.bak) — never ship these to the CDN.
+DEV_ONLY_SUFFIXES = {".bak"}
 
 
 def _is_dev_only(relative):
     """True if this game-relative path is a dev artefact, not a shipped file."""
+    if relative.suffix.lower() in DEV_ONLY_SUFFIXES:
+        return True
     parts = relative.parts
     if parts and parts[0] in DEV_ONLY_DIRS:
         return True
