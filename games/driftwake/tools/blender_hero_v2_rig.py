@@ -52,6 +52,12 @@ CLIPS = [
     # palms). "cast" = "Standing 2H Magic Attack 01", the spell-1 wave cast.
     ("idle",        r"Pro_Magic_Pack\Standing Idle 03.fbx"),
     ("cast",        r"Pro_Magic_Pack\Standing 2H Magic Attack 01.fbx"),
+    # Per-spell casts (owner 2026-08-05: "spells 3 4 and 5 have NO
+    # animations"): 3 = Bloom, one-hand throw; 4 = Crystallize, two-hand
+    # area slam; 5 = Vortex, sustained two-hand channel.
+    ("cast3",       r"Pro_Magic_Pack\Standing 1H Magic Attack 01.fbx"),
+    ("cast4",       r"Pro_Magic_Pack\Standing 2H Magic Area Attack 01.fbx"),
+    ("cast5",       r"Pro_Magic_Pack\Standing 2H Cast Spell 01.fbx"),
     ("lookaround",  r"WithSkin\looking_around_ws65.fbx"),
     ("weightshift", r"WithSkin\weight_shift_ws65.fbx"),
     # Magic Locomotion pack, DEFAULT arm-space: the WithSkin ws75 exports were

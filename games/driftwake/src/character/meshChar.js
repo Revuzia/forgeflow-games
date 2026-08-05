@@ -98,7 +98,7 @@ import {
 // with max-age=86400, so an in-place swap leaves players on yesterday's file
 // for up to a day (the 2026-08-04 folded-arm fix was invisible through the
 // browser cache). The query string changes the cache key — bump = fresh fetch.
-const CHAR_GLB_V = "hero2a";
+const CHAR_GLB_V = "hero2b";
 const GLB_URL = "./assets/char/driftwake_char_web.glb?v=" + CHAR_GLB_V;
 const DRACO_PATH = "./assets/vendor/three/examples/jsm/libs/draco/gltf/";
 
@@ -129,14 +129,26 @@ const CHAR_CASCADES = 2;
 // idle base and the variation scheduler simply never arms — so the asset and
 // the code can ship independently.
 const CLIP_NAMES = ["idle", "walk", "run", "jump", "fall", "land", "roll",
-                    "skate", "lookaround", "weightshift", "cast"];
-const OPTIONAL_CLIPS = new Set(["skate", "lookaround", "weightshift", "cast"]);
+                    "skate", "lookaround", "weightshift", "cast",
+                    "cast3", "cast4", "cast5"];
+const OPTIONAL_CLIPS = new Set(["skate", "lookaround", "weightshift", "cast",
+                                "cast3", "cast4", "cast5"]);
 
 /** State ids — indices into the weight-target table. */
 const ST_IDLE = 0, ST_WALK = 1, ST_RUN = 2, ST_JUMP = 3, ST_FALL = 4,
       ST_LAND = 5, ST_ROLL = 6, ST_SURF = 7, ST_CAST = 8;
-/** Clip-only indices (not states): the idle variations, the cast one-shot. */
-const CL_LOOK = 8, CL_SHIFT = 9, CL_CAST = 10;
+/** Clip-only indices (not states): the idle variations, the cast one-shots. */
+const CL_LOOK = 8, CL_SHIFT = 9, CL_CAST = 10, CL_CAST3 = 11, CL_CAST4 = 12,
+      CL_CAST5 = 13;
+
+/** Which cast clip answers which spell key (2 is the ribbon hold — the
+ *  procedural cast pose covers it). Play rates chosen so each clip's strike
+ *  lands inside a snappy window; spellSystem's STRIKE_DELAY values are the
+ *  measured strike times divided by these rates — re-measure both together
+ *  (tools note in _harness/footphase.html). */
+const CAST_BY_KEY = { 1: CL_CAST, 3: CL_CAST3, 4: CL_CAST4, 5: CL_CAST5 };
+const CAST_RATE = { [CL_CAST]: 1.35, [CL_CAST3]: 1.25, [CL_CAST4]: 1.35,
+                    [CL_CAST5]: 1.3 };
 
 /**
  * Foot-plant phases of the locomotion clips, measured off the shipped GLB by
@@ -272,18 +284,23 @@ export class MeshCharacter {
          *  variation blend is a sublayer of the idle slot, applied after the
          *  ramp. Built once; rows are reused, never reallocated. */
         this._stateWeights = [
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], // idle
-            [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0], // walk
-            [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0], // run
-            [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0], // jump
-            [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0], // fall
-            [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0], // land
-            [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0], // roll
-            [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0], // surf (skate base; demoted to
-                                               // idle at load if absent)
-            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // cast (spell-1 one-shot;
-                                               // demoted to idle if absent)
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], // idle
+            [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], // walk
+            [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], // run
+            [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], // jump
+            [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0], // fall
+            [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0], // land
+            [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0], // roll
+            [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0], // surf (skate base;
+                                                        // idle if absent)
+            // cast — the ONE mutable row: _step re-points its single 1 to the
+            // clip CAST_BY_KEY picks on every cast entry.
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
         ];
+
+        /** Which cast clip the current/last ST_CAST plays, and its hold. */
+        this._castClip = CL_CAST;
+        this._castHold = 1.15;
 
         // ---- clip-locked footfalls ------------------------------------------
         /** Previous locomotion clip phase, for plant-crossing detection. */
@@ -432,11 +449,9 @@ export class MeshCharacter {
                 }
                 if (OPTIONAL_CLIPS.has(CLIP_NAMES[i])) {
                     // Optional clip absent: hole in the table — the idle
-                    // variation scheduler never arms (null check), and a
-                    // missing cast demotes its state to the idle base.
-                    if (CLIP_NAMES[i] === "cast") {
-                        this._stateWeights[ST_CAST] = this._stateWeights[ST_IDLE];
-                    }
+                    // variation scheduler never arms (null check), and cast
+                    // entry requires its act to exist, so a missing cast
+                    // simply never triggers.
                     this._acts.push(null);
                     continue;
                 }
@@ -450,15 +465,20 @@ export class MeshCharacter {
             }
             if (CLIP_NAMES[i] === "lookaround" || CLIP_NAMES[i] === "weightshift") {
                 // One-shots that hand the body back to the base idle.
-                a.setLoop(THREE.LoopOnce, 1);
-                a.clampWhenFinished = false;
-            }
-            if (CLIP_NAMES[i] === "cast") {
-                // The 2.7 s Magic Attack sped to fit the CAST_HOLD window:
-                // wind-up and release read, the slow recover is cut.
+                // clampWhenFinished MUST be true: an unclamped LoopOnce
+                // DISABLES itself at its last frame, and if that lands while
+                // the variation sublayer is still mid-fade the mixer's total
+                // weight dips and the body blends toward BIND POSE — the
+                // T-pose flashes the owner screenshotted on 2026-08-05.
                 a.setLoop(THREE.LoopOnce, 1);
                 a.clampWhenFinished = true;
-                a.setEffectiveTimeScale(1.35);
+            }
+            if (CLIP_NAMES[i].startsWith("cast")) {
+                // Cast one-shots, sped so each strike lands inside a snappy
+                // window; rates paired with spellSystem's STRIKE_DELAY.
+                a.setLoop(THREE.LoopOnce, 1);
+                a.clampWhenFinished = true;
+                a.setEffectiveTimeScale(CAST_RATE[i] || 1.3);
             }
             a.play(); // scheduled for ever; weights do the talking
             a.setEffectiveWeight(0);
@@ -614,10 +634,16 @@ export class MeshCharacter {
         // After the matrix update: plant frames read foot bones in world space.
         this._emitFootfalls(ch);
 
-        // The idle water-play FX gate (spellSystem reads it): full while the
-        // hand-wave idle owns the body, zero everywhere else.
-        ch.idleFx = (this._state === ST_IDLE && !ch.airborne)
-            ? this._weights[ST_IDLE] : 0;
+        // The water-play FX gate (spellSystem reads it): the hand-wave idle,
+        // the carve (owner 2026-08-05: he sways the water while surfing),
+        // and the cast itself all keep water live in the palms.
+        const castW = this._acts[this._castClip]
+            ? this._weights[this._castClip] : 0;
+        ch.idleFx = Math.max(
+            (this._state === ST_IDLE && !ch.airborne) ? this._weights[ST_IDLE] : 0,
+            (ch.surf > 0.5 && !ch.airborne) ? 0.8 : 0,
+            castW
+        );
     }
 
     /**
@@ -739,14 +765,27 @@ export class MeshCharacter {
         } else if (this._state === ST_ROLL && this._stateT < this._rollHold &&
             !ch.airborne) {
             next = ST_ROLL;
-        } else if (this._state === ST_CAST && this._stateT < CAST_HOLD &&
-            !ch.airborne && ch.speed < 0.6 && ch.surf <= 0.5) {
-            // The spell-1 cast owns the body for its window; moving, jumping
-            // or the board hands it straight back to locomotion.
+        } else if (this._state === ST_CAST && this._stateT < this._castHold &&
+            !ch.airborne && (ch.surf > 0.5 || ch.speed < 0.6)) {
+            // A cast owns the body for its clip's window. On foot, moving or
+            // jumping cancels; ON THE BOARD it rides the carve to completion
+            // (owner ask 2026-08-05: cast while surfing) — the surf pose
+            // layer keeps legs and lean, and fades its ARM terms out under
+            // the cast weight (see _applySurfPose).
             next = ST_CAST;
-        } else if (ch.castWave && !ch.airborne && ch.surf <= 0.5 &&
-            this._acts[CL_CAST]) {
-            ch.castWave = false;   // consumed (set after our update last frame)
+        } else if (ch.castWave && !ch.airborne &&
+            (ch.surf > 0.5 || ch.speed < 0.6) &&
+            (this._acts[CAST_BY_KEY[ch.castWave] ?? -1] || this._acts[CL_CAST])) {
+            const pref = CAST_BY_KEY[ch.castWave] ?? CL_CAST;
+            const clip = this._acts[pref] ? pref : CL_CAST;
+            this._castClip = clip;
+            this._castHold = Math.min(
+                this._acts[clip].getClip().duration * 0.92 /
+                    (CAST_RATE[clip] || 1.3) - 0.1,
+                1.6);
+            const row = this._stateWeights[ST_CAST];
+            row.fill(0);
+            row[clip] = 1;
             next = ST_CAST;
         } else if (ch.surf > 0.5 && !ch.airborne) {
             // Surfing owns the body ON THE GROUND. In the air the jump/fall
@@ -784,6 +823,9 @@ export class MeshCharacter {
             this._tookOffSurfing = false;
         }
         this._wasAirborne = ch.airborne;
+        // One-frame flag, read above: always spent by the end of the step
+        // (also covers a GLB with no cast clips, where no branch consumes it).
+        ch.castWave = 0;
 
         if (next !== this._state) {
             this._state = next;
@@ -794,8 +836,8 @@ export class MeshCharacter {
             // One-shots restart from their first frame on entry.
             if (next === ST_JUMP) this._acts[ST_JUMP].reset();
             else if (next === ST_LAND) this._acts[ST_LAND].reset();
-            else if (next === ST_CAST && this._acts[CL_CAST]) {
-                this._acts[CL_CAST].reset();
+            else if (next === ST_CAST && this._acts[this._castClip]) {
+                this._acts[this._castClip].reset();
             }
             else if (next === ST_ROLL) {
                 this._acts[ST_ROLL].reset();
@@ -931,13 +973,19 @@ export class MeshCharacter {
         addRot(b.RightLeg, crouch * 1.25, 0, 0);
 
         // Balance arms: out to the sides, the trailing (right) arm higher, and
-        // a small counter-rotation against the carve.
-        const aOut = P.armOut * s;
-        const aCounter = carve * P.armCounter * s;
+        // a small counter-rotation against the carve. While a CAST is playing
+        // on the board (owner 2026-08-05) the clip owns the arms — these
+        // terms fade out under the cast weight so the two never wrestle; the
+        // legs, crouch and lean above stay fully carved.
+        const castW = this._acts[this._castClip]
+            ? this._weights[this._castClip] : 0;
+        const armS = s * (1 - castW);
+        const aOut = P.armOut * armS;
+        const aCounter = carve * P.armCounter * armS;
         addRot(b.LeftArm, 0, aCounter, -aOut * 0.8);
-        addRot(b.RightArm, 0, aCounter, aOut * 0.8 + P.armRearLift * s);
-        addRot(b.LeftForeArm, 0, 0, -P.armForeBend * s);
-        addRot(b.RightForeArm, 0, 0, P.armForeBend * s);
+        addRot(b.RightArm, 0, aCounter, aOut * 0.8 + P.armRearLift * armS);
+        addRot(b.LeftForeArm, 0, 0, -P.armForeBend * armS);
+        addRot(b.RightForeArm, 0, 0, P.armForeBend * armS);
     }
 
     /**

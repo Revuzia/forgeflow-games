@@ -34,6 +34,7 @@ import { Ribbon } from "./ribbon.js";
 import { Bloom } from "./bloom.js";
 import { Crystallize } from "./crystallize.js";
 import { Vortex } from "./vortex.js";
+import { HandWeave } from "./handWeave.js";
 import { aimPoint, expDamp } from "./bending.js";
 
 /**
@@ -60,6 +61,18 @@ import { aimPoint, expDamp } from "./bending.js";
 
 const _aim = new Float32Array(3);
 const _viewProj = new THREE.Matrix4();
+
+/**
+ * Seconds from keypress to the cast clip's HAND STRIKE, per spell key —
+ * measured on the hero_v2 GLB (peak combined hand speed, 2026-08-05) and
+ * divided by meshChar's CAST_RATE for that clip:
+ *   1: 2H Magic Attack   1.155 s / 1.35 = 0.86
+ *   3: 1H Magic Attack   0.763 s / 1.25 = 0.61
+ *   4: 2H Area Attack    1.285 s / 1.35 = 0.95
+ *   5: 2H Cast Spell     1.273 s / 1.30 = 0.98
+ * Re-measure BOTH together if the clips or rates change.
+ */
+const STRIKE_DELAY = { 1: 0.86, 3: 0.61, 4: 0.95, 5: 0.98 };
 
 export class SpellSystem {
     /**
@@ -146,9 +159,10 @@ export class SpellSystem {
         this.castBlend = 0;
         this._lastCast = -99;
         this._time = 0;
-        /** Idle water-play emission accumulator + hand alternator. */
-        this._idleFxOwed = 0;
-        this._idleFxAlt = false;
+        /** The idle palm-to-palm water strand (spell-2 renderer). */
+        this.handWeave = new HandWeave(this.ctx);
+        /** The one scheduled cast (key 0 = none) — see _schedule/_drainPending. */
+        this._pending = { key: 0, t: 0, a0: 0, a1: 0, a2: 0 };
         /** Console override for the Ribbon hold. */
         this.debugRibbon = false;
 
@@ -253,6 +267,7 @@ export class SpellSystem {
 
         if (S.showSpells !== false) this._dispatch();
         else this._cancelAll();
+        this._drainPending();
 
         for (let i = 0; i < this.spells.length; i++) this.spells[i].update(dt);
 
@@ -268,35 +283,12 @@ export class SpellSystem {
         ch.castAimZ = this.aim.z;
 
         // --- idle water play --------------------------------------------------
-        // The hand-wave idle (Standing Idle 03) reads as the rider toying with
-        // water in the palms (owner ask 2026-08-05, "like spell 2"): a thin
-        // swirl of droplets orbiting each hand, gated by meshChar's idle
-        // blend so it fades with the first step and never shows mid-spell.
-        const ifx = (ch.idleFx || 0) * (this.castBlend > 0.4 ? 0 : 1);
-        if (ifx > 0.3 && ctx.spray) {
-            this._idleFxOwed += dt * 46 * ifx * ctx.sprayScale;
-            while (this._idleFxOwed >= 1) {
-                this._idleFxOwed -= 1;
-                const hand = this._idleFxAlt ? 1 : 0;
-                this._idleFxAlt = !this._idleFxAlt;
-                this._handPosition(hand, _aim, 0);
-                const th = this._time * 5.2 + hand * Math.PI;
-                const r = 0.10 + 0.05 * Math.sin(this._time * 2.3 + hand);
-                ctx.spray.emit(
-                    _aim[0] + Math.cos(th) * r,
-                    _aim[1] + 0.04 + 0.05 * Math.sin(th * 2),
-                    _aim[2] + Math.sin(th) * r,
-                    // Tangential drift: the swirl reads as held water, not a leak.
-                    -Math.sin(th) * 0.55,
-                    0.22 + 0.18 * Math.sin(th * 3),
-                    Math.cos(th) * 0.55,
-                    0.014 + 0.016 * ((th * 7.13) % 1),
-                    0.35 + 0.3 * ((th * 3.71) % 1),
-                    1,      // water droplet
-                    0.85    // high drag: it hangs, it does not spray away
-                );
-            }
-        }
+        // The rider toying with a live strand of water between the palms
+        // (owner ask 2026-08-05, "like spell 2" — the first droplet pass read
+        // as snow). Spell 2's own tube renderer; ribbon-held suppresses it so
+        // the two never fight over the hands.
+        const ifx = (ch.idleFx || 0) * (this.ribbon.held ? 0 : 1);
+        this.handWeave.update(dt, ifx);
 
         // Everything that answers a spell light, after the LAST declaration and
         // before anything renders.
@@ -319,8 +311,16 @@ export class SpellSystem {
     }
 
     /**
-     * Fire one spell, by key. `SNOWFLOW.spells.cast(n)` is the console and harness
-     * handle, which is why this is separated from the input poll.
+     * Cast one spell, by key. `SNOWFLOW.spells.cast(n)` is the console and
+     * harness handle, which is why this is separated from the input poll.
+     *
+     * TIMING (owner 2026-08-05: "animation goes a little BEFORE the spell —
+     * they should be same time"): the keypress starts the character's cast
+     * clip and CAPTURES the aim, but the spell itself fires when the clip's
+     * hands strike — STRIKE_DELAY below, measured per clip as the peak-hand-
+     * speed moment divided by the clip's play rate (meshChar CAST_RATE).
+     * Aim is captured at the press because that is the player's intent; the
+     * strike releases what they aimed.
      * @param {number} key 1..5
      */
     cast(key) {
@@ -333,16 +333,16 @@ export class SpellSystem {
         }
 
         this._lastCast = this._time;
+        // The rider winds up NOW; the flag carries the key so meshChar picks
+        // the right clip (1 = 2H attack, 3 = 1H throw, 4 = area slam,
+        // 5 = channel). Consumed in meshChar._step.
+        ctx.controller.castWave = key;
 
         if (key === 1) {
             // FLAT aim: the crescent runs along the ground, so a camera pointed at
-            // the sky must not launch it into the air.
+            // the sky must not launch it into the air. Captured at press.
             const fl = Math.hypot(this.aim.x, this.aim.z) || 1;
-            this.sweep.trigger(this.aim.x / fl, this.aim.z / fl);
-            // The mesh rider answers with the 2H Magic Attack (owner ask
-            // 2026-08-05); one-frame flag, consumed by meshChar._step.
-            ctx.controller.castWave = true;
-            rig.addTrauma(0.12);
+            this._schedule(key, this.aim.x / fl, 0, this.aim.z / fl);
             return;
         }
 
@@ -365,12 +365,42 @@ export class SpellSystem {
                 this.aim.x, this.aim.y, this.aim.z,
                 22, 13
             );
-            if (key === 3) this.bloom.trigger(_aim[0], _aim[1], _aim[2]);
-            else this.crystallize.trigger(_aim[0], _aim[1], _aim[2]);
+            this._schedule(key, _aim[0], _aim[1], _aim[2]);
             return;
         }
 
         if (key === 5) {
+            this._schedule(key, 0, 0, 0);
+        }
+    }
+
+    /**
+     * Queue a spell to fire at its clip's strike moment. Slots, not an
+     * array: casts are rare edges and the drain is allocation-free.
+     * @param {number} key @param {number} a0 @param {number} a1 @param {number} a2
+     */
+    _schedule(key, a0, a1, a2) {
+        const p = this._pending;
+        p.key = key;
+        p.t = this._time + (STRIKE_DELAY[key] || 0);
+        p.a0 = a0; p.a1 = a1; p.a2 = a2;
+    }
+
+    /** Fire whatever scheduled cast has reached its strike moment. */
+    _drainPending() {
+        const p = this._pending;
+        if (!p.key || this._time < p.t) return;
+        const key = p.key;
+        p.key = 0;
+        const rig = this.ctx.rig;
+        if (key === 1) {
+            this.sweep.trigger(p.a0, p.a2);
+            rig.addTrauma(0.12);
+        } else if (key === 3) {
+            this.bloom.trigger(p.a0, p.a1, p.a2);
+        } else if (key === 4) {
+            this.crystallize.trigger(p.a0, p.a1, p.a2);
+        } else if (key === 5) {
             this.vortex.trigger();
             rig.addTrauma(0.10);
         }
