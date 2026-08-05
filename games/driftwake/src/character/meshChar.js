@@ -98,7 +98,7 @@ import {
 // with max-age=86400, so an in-place swap leaves players on yesterday's file
 // for up to a day (the 2026-08-04 folded-arm fix was invisible through the
 // browser cache). The query string changes the cache key — bump = fresh fetch.
-const CHAR_GLB_V = "hero2b";
+const CHAR_GLB_V = "hero2c";
 const GLB_URL = "./assets/char/driftwake_char_web.glb?v=" + CHAR_GLB_V;
 const DRACO_PATH = "./assets/vendor/three/examples/jsm/libs/draco/gltf/";
 
@@ -495,6 +495,14 @@ export class MeshCharacter {
                     clip.clone());
                 addClip.name = clip.name + "_add";
                 addClip.blendMode = THREE.AdditiveAnimationBlendMode;
+                // UPPER-BODY MASK: the delta must never touch hips or legs —
+                // an additive leg delta over a live stride splays the walk
+                // into scissor-kicks (owner screenshot 2026-08-05). Torso,
+                // shoulders, arms and head carry the cast; the stride owns
+                // everything below the waist.
+                addClip.tracks = addClip.tracks.filter((tr) => !(
+                    /Hips|UpLeg|LeftLeg|RightLeg|Foot|Toe/.test(tr.name)
+                ));
                 const aa = this.mixer.clipAction(addClip);
                 aa.setLoop(THREE.LoopOnce, 1);
                 aa.clampWhenFinished = false;

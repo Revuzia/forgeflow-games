@@ -66,13 +66,13 @@ const _viewProj = new THREE.Matrix4();
  * Seconds from keypress to the cast clip's HAND STRIKE, per spell key —
  * measured on the hero_v2 GLB (peak combined hand speed, 2026-08-05) and
  * divided by meshChar's CAST_RATE for that clip:
- *   1: 2H Magic Attack   1.155 s / 1.35 = 0.86
- *   3: 1H Magic Attack   0.763 s / 1.25 = 0.61
+ *   1: 2H Magic Attack 04   0.955 s / 1.35 = 0.71
+ *   3: 1H Magic Attack 03   0.824 s / 1.25 = 0.66
  *   4: 2H Area Attack    1.285 s / 1.35 = 0.95
  *   5: 2H Cast Spell     1.273 s / 1.30 = 0.98
  * Re-measure BOTH together if the clips or rates change.
  */
-const STRIKE_DELAY = { 1: 0.86, 3: 0.61, 4: 0.95, 5: 0.98 };
+const STRIKE_DELAY = { 1: 0.71, 3: 0.66, 4: 0.95, 5: 0.98 };
 
 export class SpellSystem {
     /**

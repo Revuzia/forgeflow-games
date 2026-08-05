@@ -51,11 +51,13 @@ CLIPS = [
     # the hand-wave stance — in-game it gets water-manipulation FX in the
     # palms). "cast" = "Standing 2H Magic Attack 01", the spell-1 wave cast.
     ("idle",        r"Pro_Magic_Pack\Standing Idle 03.fbx"),
-    ("cast",        r"Pro_Magic_Pack\Standing 2H Magic Attack 01.fbx"),
+    # 2H 04 = a stable two-hand forward PUSH — auditioned all five 2H
+    # attacks 2026-08-05 after the owner flagged 01's cross-body twist.
+    ("cast",        r"Pro_Magic_Pack\Standing 2H Magic Attack 04.fbx"),
     # Per-spell casts (owner 2026-08-05: "spells 3 4 and 5 have NO
     # animations"): 3 = Bloom, one-hand throw; 4 = Crystallize, two-hand
     # area slam; 5 = Vortex, sustained two-hand channel.
-    ("cast3",       r"Pro_Magic_Pack\Standing 1H Magic Attack 01.fbx"),
+    ("cast3",       r"Pro_Magic_Pack\Standing 1H Magic Attack 03.fbx"),
     ("cast4",       r"Pro_Magic_Pack\Standing 2H Magic Area Attack 01.fbx"),
     ("cast5",       r"Pro_Magic_Pack\Standing 2H Cast Spell 01.fbx"),
     ("lookaround",  r"WithSkin\looking_around_ws65.fbx"),
