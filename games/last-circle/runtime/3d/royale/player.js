@@ -138,12 +138,24 @@ const JUMP_TAKEOFF_S = 0.05;
  *  generator. */
 function stripRootMotion(clip) {
   if (!clip || !clip.tracks) return clip;
+  // NON-ROOT translation/scale tracks are DROPPED entirely. They encode the
+  // SOURCE skeleton's bone lengths — the Mixamo gun/fall set bakes all 65 bone
+  // translations in X-Bot units, which stretched our rigs ~9m tall the moment
+  // those clips actually played (owner: "can't see the main character at all";
+  // the pistol floated at ankle height on the collapsed hand bone). Rotations
+  // carry the animation; the rig keeps its own proportions.
+  const isRoot = (node) => /(^|:|\|)(Hips|Root|Armature|mixamorig:?Hips)$/i.test(node);
+  clip.tracks = clip.tracks.filter((tr) => {
+    const m = /\.(position|scale)$/.exec(tr.name || "");
+    if (!m) return true;
+    return isRoot(tr.name.slice(0, -m[0].length));
+  });
   for (const tr of clip.tracks) {
     if (!/\.position$/.test(tr.name || "")) continue;
     const node = tr.name.replace(/\.position$/, "");
-    // only the ROOT drives the body through the world; other bones' translation
-    // is legitimate skeletal animation and must be left alone
-    if (!/(^|:|\|)(Hips|Root|Armature|mixamorig:?Hips)$/i.test(node)) continue;
+    // only the ROOT drives the body through the world (non-root position
+    // tracks were already dropped above)
+    if (!isRoot(node)) continue;
     const v = tr.values;
     if (!v || v.length < 3) continue;
     const x0 = v[0], y0 = v[1], z0 = v[2];
@@ -156,6 +168,18 @@ function stripRootMotion(clip) {
     for (let i = 0; i < v.length; i += 3) {
       v[i] = x0; v[i + 2] = z0;
       if (flatY) v[i + 1] = y0;
+    }
+    // FOREIGN-UNIT GUARD: a root track authored in centimetres (or bone-local
+    // micro-units) would put the body 100x off. The proven standing root height
+    // across the working set is ~0.99m — rescale any implausible mean into it.
+    if (!flatY) {
+      let s = 0;
+      for (let i = 1; i < v.length; i += 3) s += v[i];
+      const mean = s / (v.length / 3);
+      if (mean > 3 || (mean > 1e-6 && mean < 0.2)) {
+        const f = 0.99 / mean;
+        for (let i = 1; i < v.length; i += 3) v[i] *= f;
+      }
     }
   }
   return clip;
