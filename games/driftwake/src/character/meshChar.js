@@ -98,21 +98,19 @@ import {
 // with max-age=86400, so an in-place swap leaves players on yesterday's file
 // for up to a day (the 2026-08-04 folded-arm fix was invisible through the
 // browser cache). The query string changes the cache key — bump = fresh fetch.
-const CHAR_GLB_V = "ws6";
+const CHAR_GLB_V = "hero2a";
 const GLB_URL = "./assets/char/driftwake_char_web.glb?v=" + CHAR_GLB_V;
 const DRACO_PATH = "./assets/vendor/three/examples/jsm/libs/draco/gltf/";
 
 /**
- * Native height 2.0 m. 0.85 was the first guess against the figure's ~1.7 m,
- * but MEASURED in the 13-char-closeup framing (same spot, same 2.6 m camera,
- * one variable changed) the rider rendered ~395 px against the figure's
- * ~450 px — the idle clip hunches ~5% and the figure's fur hood adds visual
- * height. 0.92 lands the two silhouettes within ~5% of each other on screen,
- * which is what "similar screen height" verifies. The foot offset and the
- * pelvis-drop unit are calibrated AFTER this scale is applied, so they track
- * any change here automatically.
+ * hero_v2 native height 1.901 m (probed). The silhouette target carried over
+ * from the original calibration is ~1.84 m on screen (old rig 2.0 m x 0.92,
+ * measured against the procedural figure in the 13-char-closeup framing), so
+ * 1.84 / 1.901 = 0.97. The foot offset and the pelvis-drop unit are
+ * calibrated AFTER this scale is applied, so they track any change here
+ * automatically.
  */
-const SCALE = 0.92;
+const SCALE = 0.97;
 
 /** Same receiver params as the procedural figure (_spec/shadows.md §6.5). */
 const SHADOW_SOFTNESS = 1.4;
@@ -131,27 +129,32 @@ const CHAR_CASCADES = 2;
 // idle base and the variation scheduler simply never arms — so the asset and
 // the code can ship independently.
 const CLIP_NAMES = ["idle", "walk", "run", "jump", "fall", "land", "roll",
-                    "skate", "lookaround", "weightshift"];
-const OPTIONAL_CLIPS = new Set(["skate", "lookaround", "weightshift"]);
+                    "skate", "lookaround", "weightshift", "cast"];
+const OPTIONAL_CLIPS = new Set(["skate", "lookaround", "weightshift", "cast"]);
 
 /** State ids — indices into the weight-target table. */
 const ST_IDLE = 0, ST_WALK = 1, ST_RUN = 2, ST_JUMP = 3, ST_FALL = 4,
-      ST_LAND = 5, ST_ROLL = 6, ST_SURF = 7;
-/** Clip-only indices (not states): the idle variations. */
-const CL_LOOK = 8, CL_SHIFT = 9;
+      ST_LAND = 5, ST_ROLL = 6, ST_SURF = 7, ST_CAST = 8;
+/** Clip-only indices (not states): the idle variations, the cast one-shot. */
+const CL_LOOK = 8, CL_SHIFT = 9, CL_CAST = 10;
 
 /**
  * Foot-plant phases of the locomotion clips, measured off the shipped GLB by
- * `_harness/footphase.html` (toe-base height-dwell centres, 2026-08-04):
- * walk 1.067 s — left 0.550 / right 0.054; run 0.667 s — left 0.358 /
- * right 0.887. These, scaled by the action's live timeScale, are the ONLY
- * footstep clock while the mesh is the active body: the sound fires when the
- * visible foot plants, by construction. Re-measure if the clips change.
+ * `_harness/footphase.html` (toe-base height-dwell centres, 2026-08-05,
+ * hero_v2 / Magic Locomotion clips): walk 1.167 s — left 0.519 / right
+ * 0.985; run 0.767 s — left 0.517 / right 0.035. These, scaled by the
+ * action's live timeScale, are the ONLY footstep clock while the mesh is the
+ * active body: the sound fires when the visible foot plants, by
+ * construction. Re-measure if the clips change.
  */
 const PLANT_PHASES = {
-    [ST_WALK]: [0.550, 0.054],   // [left, right]
-    [ST_RUN]: [0.358, 0.887],
+    [ST_WALK]: [0.519, 0.985],   // [left, right]
+    [ST_RUN]: [0.517, 0.035],
 };
+
+/** Seconds the spell-1 cast one-shot owns the body before locomotion
+ *  resumes; movement, jumping or the board cancel it early. */
+const CAST_HOLD = 1.15;
 
 /** Seconds the landing absorb holds before locomotion resumes. */
 const LAND_HOLD = 0.35;
@@ -269,15 +272,17 @@ export class MeshCharacter {
          *  variation blend is a sublayer of the idle slot, applied after the
          *  ramp. Built once; rows are reused, never reallocated. */
         this._stateWeights = [
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0], // idle
-            [0, 1, 0, 0, 0, 0, 0, 0, 0, 0], // walk
-            [0, 0, 1, 0, 0, 0, 0, 0, 0, 0], // run
-            [0, 0, 0, 1, 0, 0, 0, 0, 0, 0], // jump
-            [0, 0, 0, 0, 1, 0, 0, 0, 0, 0], // fall
-            [0, 0, 0, 0, 0, 1, 0, 0, 0, 0], // land
-            [0, 0, 0, 0, 0, 0, 1, 0, 0, 0], // roll
-            [0, 0, 0, 0, 0, 0, 0, 1, 0, 0], // surf (skate base; demoted to
-                                            // idle at load if the clip is absent)
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], // idle
+            [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0], // walk
+            [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0], // run
+            [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0], // jump
+            [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0], // fall
+            [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0], // land
+            [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0], // roll
+            [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0], // surf (skate base; demoted to
+                                               // idle at load if absent)
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], // cast (spell-1 one-shot;
+                                               // demoted to idle if absent)
         ];
 
         // ---- clip-locked footfalls ------------------------------------------
@@ -426,8 +431,12 @@ export class MeshCharacter {
                     continue;
                 }
                 if (OPTIONAL_CLIPS.has(CLIP_NAMES[i])) {
-                    // Idle variation absent: hole in the table, scheduler
-                    // never arms (see _idleVariations' null check).
+                    // Optional clip absent: hole in the table — the idle
+                    // variation scheduler never arms (null check), and a
+                    // missing cast demotes its state to the idle base.
+                    if (CLIP_NAMES[i] === "cast") {
+                        this._stateWeights[ST_CAST] = this._stateWeights[ST_IDLE];
+                    }
                     this._acts.push(null);
                     continue;
                 }
@@ -443,6 +452,13 @@ export class MeshCharacter {
                 // One-shots that hand the body back to the base idle.
                 a.setLoop(THREE.LoopOnce, 1);
                 a.clampWhenFinished = false;
+            }
+            if (CLIP_NAMES[i] === "cast") {
+                // The 2.7 s Magic Attack sped to fit the CAST_HOLD window:
+                // wind-up and release read, the slow recover is cut.
+                a.setLoop(THREE.LoopOnce, 1);
+                a.clampWhenFinished = true;
+                a.setEffectiveTimeScale(1.35);
             }
             a.play(); // scheduled for ever; weights do the talking
             a.setEffectiveWeight(0);
@@ -476,6 +492,14 @@ export class MeshCharacter {
                 skeleton.bones.find((b) => b.name.endsWith("LeftFoot")) || null,
             skeleton.getBoneByName(prefix + "RightFoot") ||
                 skeleton.bones.find((b) => b.name.endsWith("RightFoot")) || null,
+        ];
+        // Hand bones: the spell system reads the ACTIVE body's palms through
+        // handPosition() below — ribbon swirl and idle water FX track them.
+        this._hands = [
+            skeleton.getBoneByName(prefix + "LeftHand") ||
+                skeleton.bones.find((b) => b.name.endsWith("LeftHand")) || null,
+            skeleton.getBoneByName(prefix + "RightHand") ||
+                skeleton.bones.find((b) => b.name.endsWith("RightHand")) || null,
         ];
 
         // ---- calibration: settle into idle frame 0, then measure -------------
@@ -589,6 +613,11 @@ export class MeshCharacter {
 
         // After the matrix update: plant frames read foot bones in world space.
         this._emitFootfalls(ch);
+
+        // The idle water-play FX gate (spellSystem reads it): full while the
+        // hand-wave idle owns the body, zero everywhere else.
+        ch.idleFx = (this._state === ST_IDLE && !ch.airborne)
+            ? this._weights[ST_IDLE] : 0;
     }
 
     /**
@@ -667,6 +696,29 @@ export class MeshCharacter {
         );
     }
 
+    /**
+     * Palm world position — `figure.handPosition`-compatible (0 = left,
+     * 1 = right), so `main.js` can hand the spell system whichever body is
+     * active. Bone matrices are fresh: update() runs before the spells.
+     * @param {number} which
+     * @param {Float32Array} out
+     * @param {number} off
+     * @returns {void}
+     */
+    handPosition(which, out, off) {
+        const b = this._hands ? this._hands[which === 0 ? 0 : 1] : null;
+        if (!b) {
+            out[off] = this.root.position.x;
+            out[off + 1] = this.root.position.y + 1.25;
+            out[off + 2] = this.root.position.z;
+            return;
+        }
+        b.getWorldPosition(_v);
+        out[off] = _v.x;
+        out[off + 1] = _v.y;
+        out[off + 2] = _v.z;
+    }
+
     // ------------------------------------------------------- state machine
 
     /**
@@ -687,6 +739,15 @@ export class MeshCharacter {
         } else if (this._state === ST_ROLL && this._stateT < this._rollHold &&
             !ch.airborne) {
             next = ST_ROLL;
+        } else if (this._state === ST_CAST && this._stateT < CAST_HOLD &&
+            !ch.airborne && ch.speed < 0.6 && ch.surf <= 0.5) {
+            // The spell-1 cast owns the body for its window; moving, jumping
+            // or the board hands it straight back to locomotion.
+            next = ST_CAST;
+        } else if (ch.castWave && !ch.airborne && ch.surf <= 0.5 &&
+            this._acts[CL_CAST]) {
+            ch.castWave = false;   // consumed (set after our update last frame)
+            next = ST_CAST;
         } else if (ch.surf > 0.5 && !ch.airborne) {
             // Surfing owns the body ON THE GROUND. In the air the jump/fall
             // clips play even mid-carve — owner decision 2026-08-04, reversing
@@ -733,6 +794,9 @@ export class MeshCharacter {
             // One-shots restart from their first frame on entry.
             if (next === ST_JUMP) this._acts[ST_JUMP].reset();
             else if (next === ST_LAND) this._acts[ST_LAND].reset();
+            else if (next === ST_CAST && this._acts[CL_CAST]) {
+                this._acts[CL_CAST].reset();
+            }
             else if (next === ST_ROLL) {
                 this._acts[ST_ROLL].reset();
                 // One-frame flag for the audio layer: the roll is a second
@@ -744,16 +808,17 @@ export class MeshCharacter {
         }
 
         // Locomotion cadence follows ground speed, so the feet track the snow.
-        // Reference speeds (timeScale 1): measured no-slide speed is
-        // step_len × SCALE × 2 / duration — walk 1.12 m × 0.92 × 2 / 1.067 s
-        // ≈ 2.0 m/s (the 1.9 divisor is within 5%); run 1.40 m × 0.92 × 2 /
-        // 0.667 s ≈ 3.9 m/s, so the 5.4 divisor under-drives the run clip
-        // ~28% and fast feet slide a little. Kept deliberately: the cadence
-        // is what the player has been seeing, and footstep audio now locks to
-        // the CLIP, not to ground distance — sync holds either way. If SCALE
-        // changes, re-derive both (see PLANT_PHASES note).
-        this._acts[ST_WALK].setEffectiveTimeScale(clamp(ch.speed / 1.9, 0.4, 2.2));
-        this._acts[ST_RUN].setEffectiveTimeScale(clamp(ch.speed / 5.4, 0.5, 1.5));
+        // Reference speeds (timeScale 1) re-derived for hero_v2's Magic
+        // Locomotion clips: no-slide speed = step_len × SCALE × 2 / duration —
+        // walk 1.09 m × 0.97 × 2 / 1.167 s ≈ 1.81 m/s → divisor 1.8; run
+        // 1.23 m × 0.97 × 2 / 0.767 s ≈ 3.11 m/s. The run divisor sits at
+        // 4.2 (not 3.11): fully honest cadence needs timeScale 1.74 at
+        // sprint, past where the clip stays readable — 4.2 trades a little
+        // foot slide at top speed for a stride that still looks human.
+        // Footstep audio locks to the CLIP either way (PLANT_PHASES), so
+        // heard and seen steps stay identical by construction.
+        this._acts[ST_WALK].setEffectiveTimeScale(clamp(ch.speed / 1.8, 0.4, 2.2));
+        this._acts[ST_RUN].setEffectiveTimeScale(clamp(ch.speed / 4.2, 0.5, 1.6));
 
         // Manual crossfade: linear ramps toward the target row.
         const step = dt / Math.max(1e-3, this._fade);

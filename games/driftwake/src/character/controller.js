@@ -172,6 +172,11 @@ export class CharacterController {
         /** One frame true when the mesh body starts a landing roll —
          *  meshChar.js raises it; the audio layer voices the second contact. */
         this.rolled = false;
+        /** One frame true when spell 1 fires — meshChar plays the 2H cast. */
+        this.castWave = false;
+        /** Idle hand-wave blend 0..1, written by meshChar — gates the water
+         *  play FX the spell system emits in the palms. */
+        this.idleFx = 0;
 
         // -------------------------------------------------------------- jump
         /** True from the take-off frame until the landing frame, inclusive of neither end's ambiguity. */
@@ -473,6 +478,11 @@ export class CharacterController {
     _gait(h) {
         this.footfall = false;
         this.rolled = false;
+        // `castWave` is set by the spell system AFTER meshChar's update in
+        // the frame, so the mesh consumes-and-clears it a frame later in
+        // _step; clearing it here would eat it before it was ever seen.
+        // Only the legacy path (no mesh gait) clears it unconsumed.
+        if (!this.clipGait) this.castWave = false;
 
         // Feet stay on the board while surfing — and for the run-out afterwards.
         // The surf blend eases to zero in a fifth of a second, but the momentum

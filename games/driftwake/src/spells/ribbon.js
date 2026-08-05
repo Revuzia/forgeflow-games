@@ -23,7 +23,7 @@
  */
 
 import { PROFILE_TUBE, STRAND_COLS } from "./waterBody.js";
-import { clamp01, clampRange, smooth01, expDamp, transport, rand } from "./bending.js";
+import { aimPoint, clamp01, clampRange, smooth01, expDamp, transport, rand } from "./bending.js";
 
 /** Live spine samples. Capped by the strand table's width. */
 const SAMPLES = 46;
@@ -151,6 +151,8 @@ export class Ribbon {
         this._splashed = false;
         this._throwT = 0;
         this._tx = 0; this._ty = 0; this._tz = 1;
+        /** Crosshair terrain point the thrown head converges on. */
+        this._targ = new Float32Array(3);
     }
 
     /** Called on the frame the key goes down. */
@@ -183,14 +185,28 @@ export class Ribbon {
         this._splashed = false;
         this._throwT = 0;
 
-        const f = this.ctx.rig.forward;
-        // Slightly ABOVE the aim: a thrown body has to arc, and starting it dead
-        // flat means it only ever falls.
-        this._tx = f.x;
-        this._ty = f.y + 0.18;
-        this._tz = f.z;
+        // The throw goes to the CROSSHAIR'S POINT, not down a direction
+        // (owner report 2026-08-05: direction-steered throws landed "everywhere
+        // except the cursor", high misses mostly, because the head starts at
+        // whatever part of the figure-eight it was in and a fixed +0.18 lift
+        // never comes back down). Same eye-ray targeting as Bloom/Crystallize,
+        // longer leash — a throw is allowed to reach the next ridge.
+        const rig = this.ctx.rig;
+        const eye = rig.camera.position;
+        const f = rig.forward;
+        aimPoint(this._targ, this.ctx.terrain,
+            eye.x, eye.y, eye.z, f.x, f.y, f.z, 40, 18);
+
+        // Initial heading: at the target, lifted for the arc. The per-frame
+        // steering in _retire() re-aims at the point and tightens, so the lift
+        // shapes the flight without costing the landing.
+        this._tx = this._targ[0] - this.tipX;
+        this._ty = this._targ[1] - this.tipY;
+        this._tz = this._targ[2] - this.tipZ;
         const l = Math.hypot(this._tx, this._ty, this._tz) || 1;
-        this._tx /= l; this._ty /= l; this._tz /= l;
+        this._tx /= l; this._ty = this._ty / l + 0.15; this._tz /= l;
+        const l2 = Math.hypot(this._tx, this._ty, this._tz) || 1;
+        this._tx /= l2; this._ty /= l2; this._tz /= l2;
 
         this._burst();
     }
@@ -383,11 +399,25 @@ export class Ribbon {
             this._throwT += dt;
             const h = Math.min(dt, 1 / 60);
 
-            // ---- steer onto the aim ---------------------------------------
-            // The velocity DIRECTION turns toward the aim rather than being
-            // replaced by it, so the head *curves* out of whatever part of the
-            // figure-eight it was in. Frame-rate independent.
-            const k = 1 - Math.exp(-THROW_STEER * h);
+            // ---- steer onto the TARGET POINT ------------------------------
+            // Re-aimed every frame at the crosshair's terrain point, with an
+            // arc lift that decays over the flight and steering that TIGHTENS
+            // (proportional navigation, roughly): early flight keeps the
+            // thrown-arc read, late flight locks onto the point — which is
+            // what makes the landing spot the crosshair instead of "wherever
+            // the swirl was pointing". Frame-rate independent.
+            let ax = this._targ[0] - this.tipX;
+            let ay = this._targ[1] - this.tipY;
+            let az = this._targ[2] - this.tipZ;
+            const al = Math.hypot(ax, ay, az) || 1;
+            ax /= al;
+            ay = ay / al + 0.35 * Math.exp(-this._throwT * 2.2);
+            az /= al;
+            const al2 = Math.hypot(ax, ay, az) || 1;
+            this._tx = ax / al2; this._ty = ay / al2; this._tz = az / al2;
+
+            const steer = THROW_STEER * (1 + this._throwT * 2.5);
+            const k = 1 - Math.exp(-steer * h);
             const sp = Math.hypot(this._vx, this._vy, this._vz);
             this._vx += (this._tx * sp - this._vx) * k;
             this._vy += (this._ty * sp - this._vy) * k;
@@ -427,7 +457,19 @@ export class Ribbon {
             // reading it must not have. It bursts instead: the head stops dead
             // where it hit, and the rest of the body pours into that point.
             const g = this.ctx.terrain.heightAt(this.tipX, this.tipZ) + 0.05;
-            if (!this._splashed && this.tipY < g) {
+            // Proximity splash: within an arm's reach of the target point the
+            // head is snapped onto it and burst — the guarantee behind "it
+            // always hits the cursor". The ground test stays as the catch-all
+            // for flights interrupted by terrain on the way.
+            const ddx = this._targ[0] - this.tipX;
+            const ddy = this._targ[1] - this.tipY;
+            const ddz = this._targ[2] - this.tipZ;
+            if (!this._splashed && ddx * ddx + ddy * ddy + ddz * ddz < 0.36) {
+                this.tipX = this._targ[0];
+                this.tipY = Math.max(this._targ[1], g);
+                this.tipZ = this._targ[2];
+                this._splash();
+            } else if (!this._splashed && this.tipY < g) {
                 this.tipY = g;
                 this._splash();
             }

@@ -432,6 +432,10 @@ async function boot() {
         meshChar.setVisible(show && meshOn);
         character.clipGait = meshOn;
         contact.figure = meshOn ? null : figure.figure;
+        // The spell system reads the ACTIVE body's palms: ribbon swirl, cast
+        // origins and the idle water play all track the hands the player
+        // sees. meshChar.handPosition is figure.handPosition-compatible.
+        spells.ctx.figure = meshOn ? meshChar : figure.figure;
     };
     applyBodyVisibility();
     onChange(["showCharacter", "meshCharacter"], applyBodyVisibility);

@@ -45,42 +45,69 @@ const CSS = `
 #crosshair.show { opacity: 0.82; }
 #crosshair.show.active { opacity: 1; }
 
-/* The dot. A faint dark halo on everything so the hairlines read on bright
-   snow and in shadow alike. Sized in whole px and centred with -px/2 margins
-   off the 0x0 anchor, so the browser lands it subpixel-centred on any
-   viewport parity. */
-#crosshair .ch-dot {
+/* The core: a small frost diamond. Gradient catches the ice identity; the
+   dark halo keeps it readable on bright snow and in shadow alike. Centred
+   with -px/2 margins off the 0x0 anchor for subpixel parity. */
+#crosshair .ch-core {
   position: absolute; left: 0; top: 0;
-  width: 3px; height: 3px; margin: -1.5px 0 0 -1.5px;
-  border-radius: 50%;
-  background: var(--frost, #dbe6f2);
-  box-shadow: 0 0 2px rgba(0, 0, 0, 0.9), 0 0 1px rgba(0, 0, 0, 0.9);
-  transition: background 140ms ease;
+  width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px;
+  transform: rotate(45deg);
+  background: linear-gradient(135deg, #f2f8ff, var(--frost, #c9e2f5));
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.9), 0 0 7px rgba(150, 210, 255, 0.35);
+  transition: background 140ms ease, box-shadow 140ms ease;
 }
 
-/* Four hairline ticks, one element rotated into each cardinal. The rotate
-   spins the tick about its own centre (which sits on the anchor), then the
-   translateY pushes it out along the rotated axis — so one transform pair
+/* Four ice shards, one element rotated into each cardinal, tips toward the
+   centre. The rotate spins the shard about its own centre (on the anchor),
+   the translateY pushes it out along the rotated axis — one transform pair
    serves all four, and the active spread only changes the push. */
 #crosshair .ch-tick {
   position: absolute; left: 0; top: 0;
-  width: 1px; height: 5px; margin: -2.5px 0 0 -0.5px;
-  background: var(--frost, #dbe6f2);
-  box-shadow: 0 0 2px rgba(0, 0, 0, 0.9);
+  width: 3px; height: 8px; margin: -4px 0 0 -1.5px;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  background: linear-gradient(180deg, var(--frost, #dbe6f2), rgba(219, 230, 242, 0.35));
+  filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.85));
   transition: transform 140ms cubic-bezier(0.4, 0, 0.2, 1), background 140ms ease;
 }
-#crosshair .ch-n { transform: rotate(0deg)   translateY(-6px); }
-#crosshair .ch-e { transform: rotate(90deg)  translateY(-6px); }
-#crosshair .ch-s { transform: rotate(180deg) translateY(-6px); }
-#crosshair .ch-w { transform: rotate(270deg) translateY(-6px); }
+#crosshair .ch-n { transform: rotate(180deg) translateY(-9px); }
+#crosshair .ch-e { transform: rotate(270deg) translateY(-9px); }
+#crosshair .ch-s { transform: rotate(0deg)   translateY(-9px); }
+#crosshair .ch-w { transform: rotate(90deg)  translateY(-9px); }
 
-#crosshair.active .ch-n { transform: rotate(0deg)   translateY(-8px); }
-#crosshair.active .ch-e { transform: rotate(90deg)  translateY(-8px); }
-#crosshair.active .ch-s { transform: rotate(180deg) translateY(-8px); }
-#crosshair.active .ch-w { transform: rotate(270deg) translateY(-8px); }
+#crosshair.active .ch-n { transform: rotate(180deg) translateY(-12px); }
+#crosshair.active .ch-e { transform: rotate(270deg) translateY(-12px); }
+#crosshair.active .ch-s { transform: rotate(0deg)   translateY(-12px); }
+#crosshair.active .ch-w { transform: rotate(90deg)  translateY(-12px); }
 
-#crosshair.active .ch-dot,
-#crosshair.active .ch-tick { background: var(--accent, #8fc4e8); }
+#crosshair.active .ch-core {
+  background: linear-gradient(135deg, #eafaff, var(--accent, #9fd8f5));
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.9), 0 0 10px rgba(160, 225, 255, 0.65);
+}
+#crosshair.active .ch-tick {
+  background: linear-gradient(180deg, var(--accent, #9fd8f5), rgba(159, 216, 245, 0.3));
+}
+
+/* The charge ring: two thin opposing arcs that fade in while a spell is
+   live and SPIN while the ribbon is held — water gathering in the hand has
+   a visible clock on screen. Border-arc trick: a circle with two transparent
+   sides is two arcs, one element, no SVG. */
+#crosshair .ch-ring {
+  position: absolute; left: 0; top: 0;
+  width: 26px; height: 26px; margin: -13px 0 0 -13px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  border-top-color: rgba(174, 232, 255, 0.85);
+  border-bottom-color: rgba(174, 232, 255, 0.55);
+  filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.7));
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+#crosshair.active .ch-ring { opacity: 0.6; }
+@keyframes ch-spin { to { transform: rotate(360deg); } }
+#crosshair.charging .ch-ring {
+  opacity: 0.9;
+  animation: ch-spin 1.6s linear infinite;
+}
 
 /* The container is a 0x0 box whose transform-origin is the anchor itself, so
    a scale here scales every child's offset about screen centre. */
@@ -107,7 +134,8 @@ export class Crosshair {
         const el = document.createElement("div");
         el.id = "crosshair";
         el.innerHTML =
-            '<div class="ch-dot"></div>' +
+            '<div class="ch-ring"></div>' +
+            '<div class="ch-core"></div>' +
             '<div class="ch-tick ch-n"></div>' +
             '<div class="ch-tick ch-e"></div>' +
             '<div class="ch-tick ch-s"></div>' +
@@ -121,6 +149,7 @@ export class Crosshair {
         /** Cached DOM state, so steady frames write nothing. */
         this._show = false;
         this._active = false;
+        this._charging = false;
         /** `performance.now()` deadline of the running pulse; 0 = none. */
         this._pulseUntil = 0;
     }
@@ -160,6 +189,12 @@ export class Crosshair {
         if (active !== this._active) {
             this._active = active;
             this.el.classList.toggle("active", active);
+        }
+        // The charge ring spins only while the ribbon is actually held.
+        const charging = !!(sp && sp.ribbon.held);
+        if (charging !== this._charging) {
+            this._charging = charging;
+            this.el.classList.toggle("charging", charging);
         }
 
         // Cast pulse. `spellPressed` is a one-frame edge (main.js runs this

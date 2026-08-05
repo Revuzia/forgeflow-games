@@ -146,6 +146,9 @@ export class SpellSystem {
         this.castBlend = 0;
         this._lastCast = -99;
         this._time = 0;
+        /** Idle water-play emission accumulator + hand alternator. */
+        this._idleFxOwed = 0;
+        this._idleFxAlt = false;
         /** Console override for the Ribbon hold. */
         this.debugRibbon = false;
 
@@ -264,6 +267,37 @@ export class SpellSystem {
         ch.castAimY = this.aim.y;
         ch.castAimZ = this.aim.z;
 
+        // --- idle water play --------------------------------------------------
+        // The hand-wave idle (Standing Idle 03) reads as the rider toying with
+        // water in the palms (owner ask 2026-08-05, "like spell 2"): a thin
+        // swirl of droplets orbiting each hand, gated by meshChar's idle
+        // blend so it fades with the first step and never shows mid-spell.
+        const ifx = (ch.idleFx || 0) * (this.castBlend > 0.4 ? 0 : 1);
+        if (ifx > 0.3 && ctx.spray) {
+            this._idleFxOwed += dt * 46 * ifx * ctx.sprayScale;
+            while (this._idleFxOwed >= 1) {
+                this._idleFxOwed -= 1;
+                const hand = this._idleFxAlt ? 1 : 0;
+                this._idleFxAlt = !this._idleFxAlt;
+                this._handPosition(hand, _aim, 0);
+                const th = this._time * 5.2 + hand * Math.PI;
+                const r = 0.10 + 0.05 * Math.sin(this._time * 2.3 + hand);
+                ctx.spray.emit(
+                    _aim[0] + Math.cos(th) * r,
+                    _aim[1] + 0.04 + 0.05 * Math.sin(th * 2),
+                    _aim[2] + Math.sin(th) * r,
+                    // Tangential drift: the swirl reads as held water, not a leak.
+                    -Math.sin(th) * 0.55,
+                    0.22 + 0.18 * Math.sin(th * 3),
+                    Math.cos(th) * 0.55,
+                    0.014 + 0.016 * ((th * 7.13) % 1),
+                    0.35 + 0.3 * ((th * 3.71) % 1),
+                    1,      // water droplet
+                    0.85    // high drag: it hangs, it does not spray away
+                );
+            }
+        }
+
         // Everything that answers a spell light, after the LAST declaration and
         // before anything renders.
         this.lights.commit();
@@ -305,6 +339,9 @@ export class SpellSystem {
             // the sky must not launch it into the air.
             const fl = Math.hypot(this.aim.x, this.aim.z) || 1;
             this.sweep.trigger(this.aim.x / fl, this.aim.z / fl);
+            // The mesh rider answers with the 2H Magic Attack (owner ask
+            // 2026-08-05); one-frame flag, consumed by meshChar._step.
+            ctx.controller.castWave = true;
             rig.addTrauma(0.12);
             return;
         }

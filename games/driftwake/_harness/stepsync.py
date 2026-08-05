@@ -21,7 +21,7 @@ for _s in (sys.stdout, sys.stderr):
 
 FLAGS = ["--ignore-gpu-blocklist", "--use-angle=d3d11", "--disable-gpu-sandbox",
          "--enable-gpu-rasterization", "--disable-features=CalculateNativeWinOcclusion"]
-WALK_DUR, RUN_DUR = 1.067, 0.667
+WALK_DUR, RUN_DUR = 1.167, 0.767  # hero_v2 Magic Locomotion clips
 
 SAMPLE_JS = """() => {
     const SF = globalThis.SNOWFLOW;
