@@ -64,6 +64,83 @@ char_arm.name = "DriftwakeRig"
 char_arm.scale = (1.0, 1.0, 1.0)
 log("character:", char_arm.name, "meshes:", [m.name for m in char_meshes],
     "bones:", len(char_arm.data.bones))
+bpy.context.view_layer.update()
+
+# ------------------------------------------------- robe skirt weight repair
+# The auto-rig skinned the robe's between-legs panel to BOTH legs with no
+# pelvis anchor (probed 2026-08-04: 54% of the centre-strip verts at knee
+# height split across the two leg chains; mean Hips weight 0.012). Any leg
+# stagger shears that panel into a boxy fold — the "swollen leg" the owner
+# boxed. Repair: for that strip only, symmetrise the two legs' pull and give
+# a share to Hips, fading out toward the leg centrelines and the belt. The
+# panel then drapes from the pelvis and follows the legs' AVERAGE — it can
+# no longer be torn apart. Mesh coords here: origin mid-height, feet z=-1,
+# belt z~0.0, knees z~-0.5, leg centres x~±0.095.
+L_CHAIN = ["mixamorig:LeftUpLeg", "mixamorig:LeftLeg",
+           "mixamorig:LeftFoot", "mixamorig:LeftToeBase"]
+R_CHAIN = ["mixamorig:RightUpLeg", "mixamorig:RightLeg",
+           "mixamorig:RightFoot", "mixamorig:RightToeBase"]
+
+def fix_skirt_weights(mesh_obj):
+    me = mesh_obj.data
+    vg = mesh_obj.vertex_groups
+    gidx = {g.name: g.index for g in vg}
+    l_ids = [gidx[n] for n in L_CHAIN if n in gidx]
+    r_ids = [gidx[n] for n in R_CHAIN if n in gidx]
+    hips = vg.get("mixamorig:Hips")
+    if hips is None or not l_ids or not r_ids:
+        log("skirt fix: chains missing, skipped")
+        return
+    mw = mesh_obj.matrix_world
+    touched = 0
+    for v in me.vertices:
+        co = mw @ v.co
+        x, z = co.x, co.z
+        if z > -0.05 or abs(x) > 0.15:
+            continue
+        # Falloffs: full inside |x|<=0.06, gone by 0.15; full below z=-0.25,
+        # gone by the belt. 0.85 cap keeps a little natural asymmetry.
+        tx = 1.0 if abs(x) <= 0.06 else max(0.0, (0.15 - abs(x)) / 0.09)
+        tz = 1.0 if z <= -0.25 else max(0.0, (z + 0.05) / -0.20)
+        t = 0.85 * tx * tz
+        if t <= 0.0:
+            continue
+        wL = {g.group: g.weight for g in v.groups if g.group in l_ids}
+        wR = {g.group: g.weight for g in v.groups if g.group in r_ids}
+        sL, sR = sum(wL.values()), sum(wR.values())
+        S = sL + sR
+        if S < 0.2:
+            continue     # not leg-driven cloth (belt, pouch, etc.)
+        touched += 1
+        # Equal halves of a reduced leg total; the remainder anchors to Hips.
+        legTotal = S * (1.0 - 0.45 * t)
+        tgtL = sL + (legTotal / 2 - sL) * t
+        tgtR = sR + (legTotal / 2 - sR) * t
+        hipsAdd = S - tgtL - tgtR
+        # Distribute each side over its chain: own shape if it has one, the
+        # mirrored side's shape otherwise (bone-for-bone, same order).
+        for ids, mirror, tot, own in ((l_ids, r_ids, tgtL, wL),
+                                      (r_ids, l_ids, tgtR, wR)):
+            shape = own if sum(own.values()) > 1e-6 else \
+                {ids[mirror.index(k)]: w for k, w in
+                 (wR if ids is l_ids else wL).items() if k in mirror}
+            ssum = sum(shape.values())
+            if ssum <= 1e-6:
+                shape = {ids[0]: 1.0}
+                ssum = 1.0
+            for gi in ids:
+                w = tot * shape.get(gi, 0.0) / ssum
+                vg[gi].add([v.index], w, "REPLACE")
+        cur = 0.0
+        for g in v.groups:
+            if g.group == hips.index:
+                cur = g.weight
+                break
+        hips.add([v.index], cur + hipsAdd, "REPLACE")
+    log(f"skirt fix: rebalanced {touched} verts")
+
+for m in char_meshes:
+    fix_skirt_weights(m)
 
 # ---------------------------------------------------------------- material
 mat = bpy.data.materials.new("DriftwakeChar")
