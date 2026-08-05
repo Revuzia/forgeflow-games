@@ -417,7 +417,11 @@ export async function loadActorModels(W) {
     // fallback "FistR"). Bone world scale varies wildly between rig families
     // (Meshy ~0.065 vs Quaternius ~5.5) — compensate so guns keep world size.
     let fist = null;
-    rig.scene.traverse((o) => { if (o.isBone && /^RightHand$|^FistR$/i.test(o.name) && !fist) fist = o; });
+    // Mixamo re-rig (2026-08): bones are now "mixamorig:RightHand" (THREE
+    // sanitizes the colon away -> "mixamorigRightHand"). The old exact-name
+    // match silently fell back to the static chest socket for EVERY skin —
+    // guns floated at the sternum instead of riding the hand (owner report).
+    rig.scene.traverse((o) => { if (o.isBone && /^(mixamorig:?)?RightHand$|^FistR$/i.test(o.name) && !fist) fist = o; });
     a.hand = new THREE.Group();
     a.handBone = fist;   // for per-frame barrel aiming (rig hand orientations differ)
     if (fist) {
@@ -980,6 +984,13 @@ function stepActor(W, a, dt, far) {
     syncObj(W, a, dt, far);
     return;
   }
+
+  // CHUTE SAFETY NET: whatever exotic path ended a glide without the normal
+  // landing branch (roof clip, mantle interrupt, a mid-toggle race), a canopy
+  // must never survive on a grounded actor (owner: "the parachute is still
+  // stuck on him as im on the ground"). netRemote chutes are driven by stance
+  // bits — leave those to the net layer.
+  if (a.chute && !a.gliding && a.onGround && !a.netRemote) removeChute(a);
 
   // EMOTES: dance/cheer on the spot (B / N). Starts only grounded + safe;
   // any human input cancels; bots ride the timer (or cancel when shot).
