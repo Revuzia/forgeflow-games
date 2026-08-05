@@ -90,7 +90,17 @@ export class Kernel3D {
     this.clock = new THREE.Clock();
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
-    this.loader = new GLTFLoader();
+    // BROWSER-CACHE BUST: GLBs are fetched lazily (after page load), so even a
+    // hard refresh serves them from the browser's HTTP cache — asset updates
+    // never reached returning players (owner saw week-old emote clips). Append
+    // this module's own ?v= build tag to every relative asset URL: new build →
+    // new URL → fresh fetch. The CDN worker ignores query strings, so its own
+    // cache is unaffected.
+    const buildV = (new URL(import.meta.url).search || "").replace(/^\?/, "");
+    const mgr = new THREE.LoadingManager();
+    if (buildV) mgr.setURLModifier((u) => /^(data:|blob:|https?:)/.test(u) ? u : u + (u.includes("?") ? "&" : "?") + buildV);
+    this.loadingManager = mgr;
+    this.loader = new GLTFLoader(mgr);
     this.loader.setDRACOLoader(_lcDraco);
     this._gltfCache = {};
     this._charCache = {};

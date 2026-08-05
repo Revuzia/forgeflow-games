@@ -164,6 +164,8 @@ function stripRootMotion(clip) {
 // Base loco + combat set, then Mixamo BR weapon holds + freefall.
 // File names on disk: assets/chars/meshy/{skin}_{clip}.glb
 const MESHY_CLIPS = [
+  "idle",   // real Mixamo breathing idle — the BASE GLB's baked animations[0]
+            // is a 0-duration frozen frame (see the rename below), not an idle
   "walk", "run", "death", "death2", "death3", "hit", "dance", "cheer", "jump", "swim", "crouch",
   "fall",
   "pistol_idle", "pistol_walk", "pistol_run",
@@ -187,7 +189,14 @@ async function preloadMeshySkin(W, key, tick) {
   const cached = W.kernel._charCache[url];
   if (cached && !cached.__lcMerged) {
     cached.__lcMerged = true;
-    if (cached.animations && cached.animations[0]) cached.animations[0].name = "idle";
+    if (cached.animations && cached.animations[0]) {
+      // The Mixamo-rigged bases bake a 0-DURATION placeholder frame as
+      // animations[0] ("mixamo.com") — calling that "idle" made every unarmed
+      // actor a frozen statue (practice dummies T-posed). The real breathing
+      // idle ships as <skin>_idle.glb via MESHY_CLIPS; park the baked frame
+      // under a name nothing selects.
+      cached.animations[0].name = cached.animations[0].duration > 0.1 ? "idle" : "baked";
+    }
     // These 8 clip GLBs were fetched with an `await` INSIDE the loop, and this
     // runs once per skin: 8 round trips deep, five times over, sitting directly
     // on the path to the drop. They do not depend on each other — same bytes,

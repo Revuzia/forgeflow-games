@@ -969,29 +969,32 @@ export function showMenu(W, startMatch) {
       // neutral T-pose. The later play() calls crossfade off this one normally.
       if (rig.animations && rig.animations[0]) rig.play(rig.animations[0].name);
       pvBones = poseMod ? poseMod.findArmBones(rig.scene) : null;
-      let cheerClip = null, danceClip = null;
-      for (const c of ["cheer", "dance"]) {
+      // OWNER 2026-07-28 ("they should be doing emojis, or standing, or posing
+      // like they are shooting"): locker flow = rifle-ready pose, then cheer,
+      // then dance on loop. All three are Mixamo clips (Mixamo-only directive).
+      const menuClips = {};
+      for (const c of ["rifle_idle", "cheer", "dance"]) {
         try {
           const g = await W.kernel.loader.loadAsync(W.assetBase + "assets/chars/meshy/" + meta.key + "_" + c + ".glb");
           if (g.animations && g.animations[0]) {
             g.animations[0].name = c + "_menu";
             rig.actions[c + "_menu"] = rig.mixer.clipAction(g.animations[0]);
-            if (c === "cheer") cheerClip = g.animations[0]; else danceClip = g.animations[0];
+            menuClips[c] = g.animations[0];
           }
         } catch (e) {}
       }
       if (pvRig !== rig) return;
-      if (cheerClip) {
-        rig.play("cheer_menu", { once: true });
-        pvIdleRelax = false;
-        setTimeout(() => { if (pvRig === rig && danceClip) rig.play("dance_menu"); }, Math.max(400, cheerClip.duration * 1000 - 250));
-      } else if (danceClip) {
-        rig.play("dance_menu");
-        pvIdleRelax = false;
-      } else {
-        const first = rig.animations[0];
-        if (first) rig.play(first.name);
-        pvIdleRelax = true;
+      pvIdleRelax = !menuClips.rifle_idle && !menuClips.cheer && !menuClips.dance;
+      if (menuClips.rifle_idle) rig.play("rifle_idle_menu");
+      const tCheer = menuClips.rifle_idle ? 2400 : 0;
+      if (menuClips.cheer) {
+        setTimeout(() => {
+          if (pvRig !== rig) return;
+          rig.play("cheer_menu", { once: true });
+          if (menuClips.dance) setTimeout(() => { if (pvRig === rig) rig.play("dance_menu"); }, Math.max(400, menuClips.cheer.duration * 1000 - 250));
+        }, tCheer);
+      } else if (menuClips.dance) {
+        setTimeout(() => { if (pvRig === rig) rig.play("dance_menu"); }, tCheer);
       }
     } catch (e) { /* still baking */ }
   }
