@@ -55,8 +55,15 @@ loader.load(url, (g) => {
   wrap.add(root); wrap.rotation.y = yaw;      // requested turnaround angle
   scene.add(wrap);
   const d = Math.max(size.x, size.y, size.z) * 1.35;
+  // Far plane follows the model: a cm-unit asset (~190 units tall) sits well
+  // beyond the default 100 and renders as an empty frame, which reads as
+  // "broken asset" when it is only "wrong units" (seen 2026-08-05).
+  cam.near = Math.max(0.001, d / 5000);
+  cam.far = d * 20;
+  cam.updateProjectionMatrix();
   cam.position.set(0, size.y * 0.08, d);      // camera on +Z looking at -Z
   cam.lookAt(0, 0, 0);
+  document.title = "RENDERED size=" + size.y.toFixed(2);
   renderer.render(scene, cam);
   document.title = "RENDERED";
 });

@@ -98,7 +98,7 @@ import {
 // with max-age=86400, so an in-place swap leaves players on yesterday's file
 // for up to a day (the 2026-08-04 folded-arm fix was invisible through the
 // browser cache). The query string changes the cache key — bump = fresh fetch.
-const CHAR_GLB_V = "ws4";
+const CHAR_GLB_V = "ws6";
 const GLB_URL = "./assets/char/driftwake_char_web.glb?v=" + CHAR_GLB_V;
 const DRACO_PATH = "./assets/vendor/three/examples/jsm/libs/draco/gltf/";
 

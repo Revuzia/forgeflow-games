@@ -19,7 +19,7 @@ with sync_playwright() as pw:
     pg = b.new_page(viewport={"width": 760, "height": 760})
     pg.goto(f"{BASE}?{a.qs}")
     pg.wait_for_function(
-        "document.title === 'RENDERED' || document.title.startsWith('CLIP:')",
+        "document.title.startsWith('RENDERED') || document.title.startsWith('CLIP:')",
         timeout=a.wait * 1000)
     pg.wait_for_timeout(300)
     out = os.path.abspath(os.path.join(os.getcwd(), a.out))
