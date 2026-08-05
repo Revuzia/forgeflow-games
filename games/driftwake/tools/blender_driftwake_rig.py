@@ -139,8 +139,113 @@ def fix_skirt_weights(mesh_obj):
         hips.add([v.index], cur + hipsAdd, "REPLACE")
     log(f"skirt fix: rebalanced {touched} verts")
 
+def smooth_deform_weights(mesh_obj, zmax=-0.30, factor=0.5, iters=3):
+    """Laplacian-smooth the deform weights of the lower skirt/hem.
+
+    The tattered hem tears into shards mid-stride ("texture drag", owner
+    2026-08-05): adjacent cloth verts carry sharply different leg/foot
+    weights, so one vert follows the swing leg while its neighbour stays —
+    the face between them stretches into a spike. Averaging each vert's
+    weights with its topological neighbours removes the discontinuity.
+    Body areas are near-uniform already, so this is a no-op there, and the
+    boots are a separate shell — smoothing cannot bleed across shells.
+    """
+    me = mesh_obj.data
+    vg = mesh_obj.vertex_groups
+    names = [g.name for g in vg]
+    mw = mesh_obj.matrix_world
+    sel = set(v.index for v in me.vertices if (mw @ v.co).z <= zmax)
+    if not sel:
+        log("weight smooth: no verts in band")
+        return
+    adj = {i: set() for i in sel}
+    for e in me.edges:
+        a, b = e.vertices
+        if a in adj and b in sel: adj[a].add(b)
+        if b in adj and a in sel: adj[b].add(a)
+    # weights[v] = {group_index: w}
+    weights = {}
+    for i in sel:
+        weights[i] = {g.group: g.weight for g in me.vertices[i].groups}
+    for _ in range(iters):
+        nxt = {}
+        for i in sel:
+            nb = adj[i]
+            if not nb:
+                nxt[i] = weights[i]
+                continue
+            acc = {}
+            for j in nb:
+                for gi, w in weights[j].items():
+                    acc[gi] = acc.get(gi, 0.0) + w
+            inv = 1.0 / len(nb)
+            merged = {}
+            for gi in set(weights[i]) | set(acc):
+                merged[gi] = (1 - factor) * weights[i].get(gi, 0.0) + \
+                    factor * acc.get(gi, 0.0) * inv
+            s = sum(merged.values())
+            if s > 1e-6:
+                merged = {gi: w / s for gi, w in merged.items() if w > 0.004}
+            nxt[i] = merged
+        weights = nxt
+    for i, ws in weights.items():
+        for g in list(me.vertices[i].groups):
+            if g.group not in ws:
+                vg[g.group].remove([i])
+        for gi, w in ws.items():
+            vg[gi].add([i], w, "REPLACE")
+    log(f"weight smooth: {len(sel)} verts, {iters} iterations")
+
+def decouple_hem_from_feet(mesh_obj):
+    """Hem cloth must not ride the FOOT bones.
+
+    Tatter points skinned partly to Foot/ToeBase flick with every toe lift —
+    the residual "texture drag" after smoothing. Cloth is anything at
+    horizontal radius > 0.11 from both leg axes (legs stand at x = ±0.095,
+    y = 0 in the T-pose; boot shafts stay inside r ~0.085). For those verts,
+    each side's Foot/ToeBase weight moves up to the same side's shin
+    (mixamorig:*Leg) — the tatters keep following the leg, but stop
+    mirroring the foot's pitch. Boot geometry is untouched.
+    """
+    me = mesh_obj.data
+    vg = mesh_obj.vertex_groups
+    gidx = {g.name: g.index for g in vg}
+    moves = []
+    for side in ("Left", "Right"):
+        src = [gidx.get(f"mixamorig:{side}Foot"), gidx.get(f"mixamorig:{side}ToeBase")]
+        dst = gidx.get(f"mixamorig:{side}Leg")
+        if dst is not None:
+            moves.append(([s for s in src if s is not None], dst))
+    mw = mesh_obj.matrix_world
+    touched = 0
+    for v in me.vertices:
+        co = mw @ v.co
+        if co.z > -0.35:
+            continue
+        dl = ((co.x - 0.095) ** 2 + co.y ** 2) ** 0.5
+        dr = ((co.x + 0.095) ** 2 + co.y ** 2) ** 0.5
+        if min(dl, dr) <= 0.11:
+            continue                      # boot/leg surface — leave it
+        w = {g.group: g.weight for g in v.groups}
+        hit = False
+        for srcs, dst in moves:
+            take = sum(w.get(s, 0.0) for s in srcs)
+            if take <= 1e-4:
+                continue
+            hit = True
+            for s in srcs:
+                if s in w:
+                    vg[s].remove([v.index])
+            vg[dst].add([v.index], w.get(dst, 0.0) + take, "REPLACE")
+            w[dst] = w.get(dst, 0.0) + take
+        if hit:
+            touched += 1
+    log(f"hem-foot decouple: {touched} verts")
+
 for m in char_meshes:
     fix_skirt_weights(m)
+    decouple_hem_from_feet(m)
+    smooth_deform_weights(m)
 
 # ---------------------------------------------------------------- material
 mat = bpy.data.materials.new("DriftwakeChar")

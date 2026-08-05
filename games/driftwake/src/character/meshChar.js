@@ -12,12 +12,14 @@
  * shadow path).
  *
  * What this deliberately does NOT own: simulation. `SNOWFLOW.character` is
- * still the controller, `SNOWFLOW.figure` is still the procedural figure, and
- * the figure keeps SIMULATING even while hidden — `snowContact` stamps
- * footprints from its solved plants, and the audio keys off
- * `controller.footfall`. Only renders are toggled: `S.meshCharacter` picks
- * which of the two bodies is visible (wired in `main.js`), and the toggle is
- * one click in the settings panel either way.
+ * still the controller and `SNOWFLOW.figure` keeps simulating while hidden
+ * (spells read its hands). But since 2026-08-04 the ACTIVE body owns the
+ * GAIT: while `S.meshCharacter` is on, this file emits the footfall contract
+ * from its clips' measured plant phases (`_emitFootfalls`) and snowContact
+ * stamps from `controller.footPos` via its no-figure branch — the
+ * controller's distance clock and the figure's plants stand down (wired in
+ * `main.js` applyBodyVisibility; the settings toggle restores the legacy
+ * path wholesale).
  *
  * ---------------------------------------------------------------------------
  * THE STATE MACHINE — polled, not subscribed
@@ -32,8 +34,10 @@
  *   grounded, speed >= 4.2  run         timeScale ~ speed / 5.4
  *   airborne, vertVel > 0   jump        (LoopOnce, clamped)
  *   airborne, vertVel <= 0  fall
- *   landed edge             land ~0.35 s, then locomotion;
- *                           landImpact > 0.6 -> roll instead
+ *   landed edge             ROLL, always (owner rule 2026-08-05) — unless
+ *                           the carve is held through touchdown (surf > 0.5),
+ *                           which resumes the surf instead
+ *   grounded, !stepping     SURF stance as a braced slide (post-surf run-out)
  *   surf > 0.5              SURF: idle base + the procedural pose layer below
  *
  * Crossfades are manual weight ramps (0.12-0.25 s): every action is `.play()`ed
@@ -94,7 +98,7 @@ import {
 // with max-age=86400, so an in-place swap leaves players on yesterday's file
 // for up to a day (the 2026-08-04 folded-arm fix was invisible through the
 // browser cache). The query string changes the cache key — bump = fresh fetch.
-const CHAR_GLB_V = "ws3";
+const CHAR_GLB_V = "ws4";
 const GLB_URL = "./assets/char/driftwake_char_web.glb?v=" + CHAR_GLB_V;
 const DRACO_PATH = "./assets/vendor/three/examples/jsm/libs/draco/gltf/";
 
@@ -709,15 +713,13 @@ export class MeshCharacter {
         }
 
         // Landing edge outranks the locomotion pick — once, on the frame.
-        // Owner rules: a plain jump always LANDs (never rolls). A surf jump is
-        // the hard landing — board still held resumes the carve through a short
-        // absorb; board released rolls on a heavy impact.
+        // Owner rule 2026-08-05: EVERY landing goes into the roll. The one
+        // exception stands from the earlier ollie rule: a carve held through
+        // touchdown (board still engaged, surf > 0.5) resumes the surf — a
+        // roll there would break the carve the player is deliberately
+        // holding. The LAND clip is now unused but stays in the GLB.
         if (ch.landed) {
-            if (this._tookOffSurfing) {
-                next = (ch.surf <= 0.5 && ch.landImpact > 0.6) ? ST_ROLL : ST_LAND;
-            } else {
-                next = ST_LAND;
-            }
+            next = ch.surf > 0.5 ? ST_SURF : ST_ROLL;
             this._tookOffSurfing = false;
         }
         this._wasAirborne = ch.airborne;
