@@ -110,6 +110,7 @@ import { Hud } from "./ui/hud.js";
 import { DamageableRegistry } from "./combat/damageable.js";
 import * as combatData from "./combat/combatData.js";
 import { SpellHits } from "./combat/spellHits.js";
+import { Targeting } from "./combat/targeting.js";
 import { TrainingDummies } from "./combat/dummies.js";
 import { Enemies } from "./combat/enemies.js";
 import { EnemyVis } from "./combat/enemyVis.js";
@@ -490,6 +491,8 @@ async function boot() {
     enemies.attachVis(enemyVis);
     spells.addConsumers(enemyVis.material);
     const encounters = new Encounters(enemies, registry, character, combatData, minimap);
+    // TAB target cycle (owner 2026-08-06): nearest -> next -> ... -> none.
+    const targeting = new Targeting(registry, character);
     const progression = new Progression(character, registry, null);
     // Two consumers, two channels: the UNLOCK set gates casts in the spell
     // system; the per-level damage multiplier scales hits in the damage
@@ -502,6 +505,8 @@ async function boot() {
     floaters.attach({ overlay });
     const enemyBars = new EnemyBars(registry, rig);
     enemyBars.attach({ overlay });
+    enemyBars.targeting = targeting;
+    minimap.targeting = targeting;
     const xpHud = new XpHud({ overlay, progression });
     initInput(canvas, { onToggleOverlay: () => overlay.toggle() });
 
@@ -649,6 +654,9 @@ async function boot() {
         dummies.update(dt);
         enemies.update(dt);
         encounters.update(dt);
+        // After the bodies moved: the cycle sorts by CURRENT distance and
+        // drops a target that died or left range this frame.
+        targeting.update(dt);
         progression.update(dt);
         const tSpells = performance.now();
 
@@ -978,7 +986,8 @@ async function boot() {
         spellbar,
         hud, minimap,
         // The battle stack, for probes and the test harness.
-        combat: { registry, spellHits, dummies, enemies, encounters, data: combatData },
+        combat: { registry, spellHits, dummies, enemies, encounters, targeting,
+            data: combatData },
         progression, floaters, enemyBars, xpHud,
         // The deformation field, alongside the other subsystems it sits between.
         // `_harness/probe_deform_skip.py` reads its `stepsRun`/`stepsSkipped`

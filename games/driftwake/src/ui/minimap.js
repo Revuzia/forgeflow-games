@@ -84,6 +84,9 @@ export class Minimap {
          * @type {{x: number, z: number, kind: string}[]}
          */
         this.blips = [];
+        /** @type {{targetId:number}|null} set by main.js — TAB selection, so
+         *  the selected body's pip is unmistakable on the map. */
+        this.targeting = null;
 
         this.overlay = null;
         this._show = false;
@@ -161,13 +164,22 @@ export class Minimap {
         ];
 
         // Blips first, wedge on top.
+        const tgtId = this.targeting ? this.targeting.targetId : -1;
         for (const b of this.blips) {
             const [x, y] = toPx(b.x, b.z);
             if (x < 6 || y < 6 || x > S2 - 6 || y > S2 - 6) continue;
+            const isTgt = tgtId >= 0 && b.id === tgtId;
             g.fillStyle = b.kind === "boss" ? "rgba(255,140,90,0.95)" : "rgba(255,90,70,0.9)";
             g.beginPath();
             g.arc(x, y, b.kind === "boss" ? 7 : 4.5, 0, Math.PI * 2);
             g.fill();
+            if (isTgt) {
+                g.strokeStyle = "rgba(200, 242, 255, 0.95)";
+                g.lineWidth = 2.5;
+                g.beginPath();
+                g.arc(x, y, 8, 0, Math.PI * 2);
+                g.stroke();
+            }
         }
 
         // The rider: a frost wedge pointing along facing. PORT FRAME: forward

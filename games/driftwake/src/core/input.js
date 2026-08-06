@@ -76,6 +76,9 @@ export const input = {
 
     /** @type {number} 0 = none, else 1..5 — set on keydown, cleared each frame */
     spellPressed: 0,
+    /** One-frame edge: TAB pressed — the target-cycle step (combat/targeting).
+     *  Plain data property cleared by endFrame(), like `spellPressed`. */
+    targetCycle: false,
     /** @type {boolean} spell 2 (Ribbon) is a held cast. Plain data property — see contract 1. */
     spellHeld2: false,
 
@@ -162,6 +165,12 @@ export function initInput(canvas, hooks) {
         // Unconditionally, and before the repeat guard: an unlocked page scrolls
         // under the canvas on SPACE, and auto-repeat scrolls it continuously.
         if (e.code === "Space") e.preventDefault();
+        // TAB is the target cycle: always preventDefault, or the browser
+        // walks focus out of the canvas and the next keystroke is lost.
+        if (e.code === "Tab") {
+            e.preventDefault();
+            if (!e.repeat) input.targetCycle = true;
+        }
 
         if (e.repeat) return;
         keys[e.code] = true;
@@ -252,6 +261,7 @@ export function endFrame() {
     input.zoomDelta = 0;
     input.spellPressed = 0;
     input.jumpPressed = false;
+    input.targetCycle = false;
 }
 
 /**

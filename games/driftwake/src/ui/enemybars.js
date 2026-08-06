@@ -70,6 +70,31 @@ const CSS = `
   will-change: transform;
 }
 #enemybars .eb.on { opacity: 1; }
+/* The TAB-selected body: brighter frame, a frost outline and a caret above
+   it, and its bar never lingers out (targeting owns the lifetime). */
+#enemybars .eb.tgt {
+  border-color: rgba(190, 240, 255, 0.95);
+  box-shadow: 0 0 8px rgba(150, 220, 255, 0.55), inset 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+#enemybars .eb.tgt::before {
+  content: "";
+  position: absolute; left: 50%; top: -7px;
+  margin-left: -4px;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid rgba(200, 242, 255, 0.95);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
+}
+#enemybars .eb-name {
+  position: absolute; left: 50%; top: 9px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font: 600 10px/1 "Segoe UI", system-ui, sans-serif;
+  color: rgba(226, 244, 255, 0.95);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  display: none;
+}
+#enemybars .eb.tgt .eb-name { display: block; }
 #enemybars .eb .eb-fill {
   position: absolute; inset: 1px;
   border-radius: 3px;
@@ -163,12 +188,20 @@ export class EnemyBars {
         this._bar = new Array(POOL);
         /** @type {HTMLDivElement[]} their fills. */
         this._fillEl = new Array(POOL);
+        /** @type {HTMLElement[]} name labels (shown on the TAB target only). */
+        this._nameEl = new Array(POOL);
+        /** Pool index currently wearing the target frame; -1 = none. */
+        this._tgtSlot = -1;
         for (let i = 0; i < POOL; i++) {
             const b = document.createElement("div");
             b.className = "eb";
             const f = document.createElement("div");
             f.className = "eb-fill";
             b.appendChild(f);
+            const nm = document.createElement("span");
+            nm.className = "eb-name";
+            b.appendChild(nm);
+            this._nameEl[i] = nm;
             el.appendChild(b);
             this._bar[i] = b;
             this._fillEl[i] = f;
@@ -187,6 +220,8 @@ export class EnemyBars {
         this._bossHpFill = boss.querySelector(".boss-hp .eb-fill");
         this._bossStFill = boss.querySelector(".boss-stance .eb-fill");
 
+        /** @type {{targetId:number}|null} set by main.js — the TAB selection. */
+        this.targeting = null;
         /** Registry id each pool slot tracks; -1 = free. */
         this._id = new Int32Array(POOL).fill(-1);
         /** `registry.time` of the target's last damage event. */
@@ -248,6 +283,11 @@ export class EnemyBars {
             this._touch(id, reg.time);
         }
 
+        // ---- 1b. The TAB target always owns a bar, damaged or not, and
+        //      never lingers out while it stays selected.
+        const tgtId = this.targeting ? this.targeting.targetId : -1;
+        if (tgtId >= 0 && reg.slot(tgtId) >= 0) this._touch(tgtId, reg.time);
+
         // ---- 2. Overhead bar upkeep -------------------------------------
         const cam = this.rig.camera;
         const v = this._v;
@@ -256,9 +296,19 @@ export class EnemyBars {
             const id = this._id[i];
             if (id < 0) continue;
             const slot = reg.slot(id);
-            if (slot < 0 || reg.time - this._lastHit[i] > LINGER_S) {
+            const isTgt = id === tgtId;
+            if (slot < 0 || (!isTgt && reg.time - this._lastHit[i] > LINGER_S)) {
                 this._release(i);
                 continue;
+            }
+            if (isTgt !== (this._tgtSlot === i)) {
+                this._bar[i].classList.toggle("tgt", isTgt);
+                if (isTgt) {
+                    this._tgtSlot = i;
+                    this._nameEl[i].textContent = reg.name[slot] || "";
+                } else if (this._tgtSlot === i) {
+                    this._tgtSlot = -1;
+                }
             }
             // Anchor just above the capsule's crown.
             v.set(reg.x[slot], reg.y[slot] + reg.height[slot] + 0.35, reg.z[slot])
@@ -342,6 +392,10 @@ export class EnemyBars {
     /** Free a pool slot and hide its bar. @param {number} i @returns {void} */
     _release(i) {
         this._id[i] = -1;
+        if (this._tgtSlot === i) {
+            this._bar[i].classList.remove("tgt");
+            this._tgtSlot = -1;
+        }
         this._setOn(i, false);
     }
 

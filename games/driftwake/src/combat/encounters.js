@@ -581,6 +581,7 @@ export class Encounters {
             b.x = reg.x[i];
             b.z = reg.z[i];
             b.kind = k;
+            b.id = reg.idOf[i];      // minimap rings the TAB target's pip
             arr[n] = b;
             n++;
         }
