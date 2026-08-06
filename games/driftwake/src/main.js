@@ -865,7 +865,7 @@ async function boot() {
         const shell = new FFG.Shell({
             parent: document.body,
             title: "DRIFTWAKE",
-            tagline: "Carve a breaking wake through wind-driven snow",
+            tagline: "Carve a wake through three drifting realms",
             // The title plate: xAI key art, fully covering the canvas so the
             // world is never on screen before PLAY/CONTINUE (owner 2026-08-06).
             menuImage: "./assets/ui/keyart.jpg",
@@ -894,12 +894,13 @@ async function boot() {
             qualities: ["performance", "balanced", "high", "ultra"],
             defaultQuality: S.preset,
             howTo: [
-                { h: "The field", p: "An open plain of wind-carved snow under a sun ten degrees above the horizon. Everywhere you step the snow remembers: boots leave trenches with raised berms, and those berms slump, drift in from upwind and soften over about a minute." },
+                { h: "The field", p: "The COLD realm: an open plain of wind-carved snow under a sun ten degrees above the horizon. Sand and ash realms follow. Everywhere you step the snow remembers: boots leave trenches with raised berms, and those berms slump, drift in from upwind and soften over about a minute." },
                 { h: "Move", p: "<b>WASD</b> to move · <b>mouse</b> to look · <b>SHIFT</b> toggles run (tap again to walk) · <b>wheel</b> to zoom. Click the scene to capture the pointer." },
                 { h: "Jump", p: "<b>SPACE</b>. Let go early to cut the rise short. A hard landing punches a crater and throws powder." },
                 { h: "Snow-surf", p: "Hold the <b>RIGHT MOUSE BUTTON</b> and the walk becomes a carve. A breaking wave builds off your inside edge and throws nearly all of the snow to the outside of the turn — the harder you turn, the further the lip hangs back over its own face." },
                 { h: "Ollie", p: "Tap <b>SPACE</b> mid-carve for a surf ollie — nearly twice the height, carrying your full speed through the air. The wake gaps under you and, if you keep holding <b>RMB</b>, you land straight back into the carve." },
-                { h: "Spells", p: "<b>1</b>–<b>5</b> bend water over the field: a ploughing crescent, a drawn ribbon, a targeted eruption, a spiral of hexagonal ice, and three helices that lift the snow around you. <b>2 is a held cast</b> — keep the key down and steer it." },
+                { h: "Spells", p: "<b>LMB (hold)</b> draws a stream of living water — steer it, release to throw. <b>1</b> a ploughing crescent that shoves what it hits · <b>2</b> a targeted eruption · <b>3</b> a spiral of hexagonal ice that stuns · <b>4</b> three helices that lift everything around you. Each realm you cross adds its own element to the kit." },
+                { h: "Fighting", p: "<b>TAB</b> targets the nearest enemy and cycles outward; one more press past the last drops the target. Spells cost mana and run their own cooldowns — the stream is free but drinks while held." },
                 { h: "Panels", p: "<b>F1</b> settings · <b>F3</b> debug · <b>Esc</b> pause. The settings panel is live: every slider in it moves the running scene, including the sun." },
             ],
             onPlay: () => {
