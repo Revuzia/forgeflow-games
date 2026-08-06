@@ -865,7 +865,7 @@ async function boot() {
         const shell = new FFG.Shell({
             parent: document.body,
             title: "DRIFTWAKE",
-            tagline: "Carve a wake through three drifting realms",
+            tagline: "Carve your wake across a world of drifting realms",
             // The title plate: xAI key art, fully covering the canvas so the
             // world is never on screen before PLAY/CONTINUE (owner 2026-08-06).
             menuImage: "./assets/ui/keyart.jpg",
