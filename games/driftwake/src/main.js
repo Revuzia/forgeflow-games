@@ -106,6 +106,8 @@ import { PostChain } from "./post/postChain.js";
 import { Overlay } from "./ui/overlay.js";
 import { Crosshair } from "./ui/crosshair.js";
 import { SpellBar } from "./ui/spellbar.js";
+import { Hud } from "./ui/hud.js";
+import { Minimap } from "./ui/minimap.js";
 import { audio } from "./audio/audio.js";
 
 // ------------------------------------------------------- module-scope scratch
@@ -458,6 +460,12 @@ async function boot() {
     const crosshair = new Crosshair({ overlay, spells });
     // The spell toolbar shares the reticle's visibility rules and identity.
     const spellbar = new SpellBar({ overlay, spells });
+    // Battle-prep HUD: health/mana top-left, terrain minimap bottom-left.
+    const hud = new Hud(character);
+    hud.attach({ overlay });
+    spells.hud = hud;
+    const minimap = new Minimap(character, terrain);
+    minimap.attach({ overlay });
     initInput(canvas, { onToggleOverlay: () => overlay.toggle() });
 
     // ------------------------------------------------------------- warm-up
@@ -650,6 +658,8 @@ async function boot() {
         // which `endFrame()` clears.
         crosshair.update();
         spellbar.update();
+        hud.update();
+        minimap.update();
 
         // Last, and after every `mark()`: the wind bed, the footfalls, the surf
         // hiss and the spell voices are all read off state that is final for the
@@ -916,6 +926,7 @@ async function boot() {
         crosshair,
         // The spell toolbar, exposed the same way for the same probes.
         spellbar,
+        hud, minimap,
         // The deformation field, alongside the other subsystems it sits between.
         // `_harness/probe_deform_skip.py` reads its `stepsRun`/`stepsSkipped`
         // counters and reads the state buffer back through `texture`, which is

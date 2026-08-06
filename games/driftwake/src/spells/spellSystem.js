@@ -74,6 +74,14 @@ const _viewProj = new THREE.Matrix4();
  */
 const STRIKE_DELAY = { 1: 0.71, 3: 0.66, 4: 0.95, 5: 0.98 };
 
+/**
+ * Mana costs (battle prep, owner 2026-08-05). PLACEHOLDERS pending the
+ * combat design doc — the shape matters now (casts gate on mana, the HUD
+ * shows the spend, the ribbon drains per second), the numbers come later.
+ */
+const MANA_COST = { 1: 12, 3: 14, 4: 16, 5: 26 };
+const RIBBON_DRAIN = 7;   // per second while the stream is held
+
 export class SpellSystem {
     /**
      * @param {THREE.Scene} scene
@@ -165,6 +173,8 @@ export class SpellSystem {
         this._pending = { key: 0, t: 0, a0: 0, a1: 0, a2: 0 };
         /** Console override for the Ribbon hold. */
         this.debugRibbon = false;
+        /** @type {{flashMana(): void}|null} set by main.js — deny feedback. */
+        this.hud = null;
 
         this._camera = rig && rig.camera ? rig.camera : null;
     }
@@ -290,6 +300,12 @@ export class SpellSystem {
         const ifx = (ch.idleFx || 0) * (this.ribbon.held ? 0 : 1);
         this.handWeave.update(dt, ifx);
 
+        // The stream pays as it flows: drain while held, release on empty.
+        if (this.ribbon.held) {
+            ch.mana = Math.max(0, ch.mana - RIBBON_DRAIN * dt);
+            if (ch.mana <= 0) this.holdRibbon(false);
+        }
+
         // Everything that answers a spell light, after the LAST declaration and
         // before anything renders.
         this.lights.commit();
@@ -331,6 +347,16 @@ export class SpellSystem {
             this.holdRibbon(true);
             return;
         }
+
+        // Mana gate (battle prep): a cast the pool cannot pay never starts —
+        // no wind-up, no scheduled fire — and the HUD's mana bar flashes.
+        const cost = MANA_COST[key] || 0;
+        const c = ctx.controller;
+        if (c.mana < cost) {
+            if (this.hud) this.hud.flashMana();
+            return;
+        }
+        c.mana -= cost;
 
         this._lastCast = this._time;
         // The rider winds up NOW; the flag carries the key so meshChar picks

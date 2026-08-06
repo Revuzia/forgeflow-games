@@ -153,6 +153,20 @@ export class CharacterController {
          * footprints.
          */
         this.stepping = true;
+
+        // ---------------------------------------------- combat resources
+        /**
+         * Health and mana (owner 2026-08-05, battle prep). The pools, regen
+         * and every spell's cost are PLACEHOLDERS pending the combat design
+         * doc — the HUD reads these, the spell system gates casts on mana,
+         * and nothing damages the player until enemies exist.
+         */
+        this.health = 100;
+        this.healthMax = 100;
+        this.mana = 100;
+        this.manaMax = 100;
+        /** Mana per second. */
+        this.manaRegen = 9;
         /** Set true for exactly one frame when a foot plants. */
         this.footfall = false;
         /** 0 = left foot, 1 = right foot — which foot just planted. */
@@ -230,6 +244,10 @@ export class CharacterController {
      */
     update(dt, rig) {
         const h = Math.min(dt, 1 / 30);
+
+        // Mana ticks back on the integration step (placeholder rate — see the
+        // combat-resources block in the constructor).
+        this.mana = Math.min(this.manaMax, this.mana + this.manaRegen * h);
 
         this.prevVelocity.copy(this.velocity);
         // Re-read every frame: the harness pins `input.surf` with a getter and a
