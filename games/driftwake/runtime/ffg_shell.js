@@ -85,6 +85,16 @@
     var bg = this.o.menuImage
       ? "background:linear-gradient(rgba(6,14,26,.55),rgba(6,14,26,.78)),url('" + this.o.menuImage + "') center/cover no-repeat;"
       : "background:radial-gradient(ellipse at center,rgba(6,14,26,0.32) 0%,rgba(5,11,20,0.82) 100%);";
+    // TITLE PLATE (opt-in via menuOpaque): the menu screen covers the canvas
+    // completely, so the world is never on screen before the player has asked
+    // for it. Pause/end keep the translucent backdrop so the frozen scene
+    // still reads behind them.
+    this._bgOther = bg.replace(/^background:/, "");
+    this._bgMenu = this.o.menuImage && this.o.menuOpaque
+      ? "radial-gradient(ellipse 58% 62% at 50% 54%,rgba(4,9,17,.66) 0%,rgba(4,9,17,.20) 72%,rgba(4,9,17,0) 100%)," +
+        "linear-gradient(rgba(4,9,17,.10) 0%,rgba(4,9,17,.20) 55%,rgba(4,9,17,.52) 100%)," +
+        "url('" + this.o.menuImage + "') center/cover no-repeat, #05090f"
+      : this._bgOther;
     this.ov = el("div",
       "position:absolute;inset:0;display:none;align-items:center;justify-content:center;" +
       "flex-direction:column;gap:14px;z-index:60;" + bg +
@@ -103,7 +113,11 @@
     var b = el("button", "font:bold 15px 'Segoe UI',system-ui,monospace;padding:11px 26px;cursor:pointer;" +
       "min-width:200px;letter-spacing:1px;border-radius:7px;transition:transform .08s,box-shadow .12s;" +
       (primary
-        ? "color:#062018;background:linear-gradient(#9dffb6,#4fe084);border:1px solid #7CFC9A;box-shadow:0 4px 18px rgba(80,224,132,.35)"
+        ? (this.o.accent
+            ? "color:" + this.o.accent.ink + ";background:linear-gradient(" + this.o.accent.hi + "," +
+              this.o.accent.lo + ");border:1px solid " + this.o.accent.edge +
+              ";box-shadow:0 4px 20px " + this.o.accent.glow
+            : "color:#062018;background:linear-gradient(#9dffb6,#4fe084);border:1px solid #7CFC9A;box-shadow:0 4px 18px rgba(80,224,132,.35)")
         : "color:#dfeaff;background:rgba(28,49,72,.85);border:1px solid #3a6c8c"), label);
     b.onmouseenter = function () { b.style.transform = "translateY(-1px)"; };
     b.onmouseleave = function () { b.style.transform = "none"; };
@@ -124,18 +138,43 @@
   Shell.prototype.menu = function () {
     this.phase = "menu"; this.ov.dataset.ended = ""; this.ov.innerHTML = "";
     var self = this;
+    if (this._bgMenu) this.ov.style.background = this._bgMenu;
     this.ov.appendChild(el("div", "text-align:center", '<div style="font-size:clamp(46px,8vw,88px);font-weight:900;letter-spacing:10px;' +
       "font-family:Georgia,'Times New Roman',serif;" +
       'background:linear-gradient(180deg,#fff0c8 0%,#f0c065 55%,#c98a32 100%);-webkit-background-clip:text;background-clip:text;color:transparent;' +
       'text-shadow:0 4px 26px rgba(0,0,0,.65),0 0 46px rgba(224,162,60,.28);padding:0 8px">' +
       (this.o.title || "FFG GAME").toUpperCase() + '</div>' +
       (this.o.tagline ? '<div style="font-size:16px;opacity:.88;margin-top:10px;letter-spacing:2px;color:#dfe8f4;text-shadow:0 2px 10px #000">' + this.o.tagline + '</div>' : "")));
-    // PLAY first (top of the menu), difficulty selector beneath it.
+    // CONTINUE first when a run is saved (it is the button a returning
+    // player wants under the cursor); PLAY starts a NEW run beneath it.
     this.ov.appendChild(el("div", "height:8px"));
-    this.ov.appendChild(this._btn("▶  PLAY", function () {
+    var canCont = false;
+    try { canCont = !!(this.o.canContinue && this.o.canContinue()); } catch (e) {}
+    if (canCont) {
+      this.ov.appendChild(this._btn("↺  CONTINUE", function () {
+        self.hide(); self.phase = "playing"; self._playMusic();
+        if (self.o.onContinue) self.o.onContinue(self.difficulty);
+      }, true));
+      this.ov.appendChild(el("div", "height:8px"));
+      if (this.o.continueNote) {
+        this.ov.appendChild(el("div",
+          "font-size:12px;opacity:.75;letter-spacing:1px;margin:-4px 0 6px;color:#cfe0f2",
+          this.o.continueNote()));
+      }
+    }
+    this.ov.appendChild(this._btn(canCont ? "▶  NEW RUN" : "▶  PLAY", function () {
+      if (canCont && !self._newConfirmed) {
+        // A saved run exists: make the overwrite deliberate.
+        self._newConfirmed = true;
+        var warn = el("div", "font-size:12px;letter-spacing:1px;margin-top:8px;color:#ffc9a8",
+          "This replaces your saved run — press again to confirm");
+        self.ov.appendChild(warn);
+        return;
+      }
+      self._newConfirmed = false;
       self.hide(); self.phase = "playing"; self._playMusic();
       if (self.o.onPlay) self.o.onPlay(self.difficulty);
-    }, true));
+    }, !canCont));
     var diffs = this.o.difficulties || [];
     if (diffs.length) {
       this.ov.appendChild(el("div", "font-size:12px;opacity:.7;margin-top:14px;letter-spacing:2px", "DIFFICULTY"));
@@ -245,6 +284,7 @@
   Shell.prototype.pause = function () {
     if (this.phase !== "playing") return;
     this.phase = "paused"; this.ov.innerHTML = "";
+    if (this._bgOther) this.ov.style.background = this._bgOther;
     var self = this;
     this.ov.appendChild(el("div", "font-size:42px;font-weight:800;letter-spacing:3px", "PAUSED"));
     this.ov.appendChild(this._btn("RESUME", function () { self.resume(); }, true));
@@ -272,6 +312,7 @@
   Shell.prototype.end = function (victory, subtitle) {
     if (this.ov.dataset.ended === "1") return;
     this.ov.dataset.ended = "1"; this.phase = "ended"; this.ov.innerHTML = "";
+    if (this._bgOther) this.ov.style.background = this._bgOther;
     this.ov.appendChild(el("div", "", '<div style="font-size:62px;font-weight:800;letter-spacing:4px;color:' +
       (victory ? "#7CFC9A" : "#ff5a5a") + ';text-shadow:0 3px 22px rgba(0,0,0,.7)">' + (victory ? "VICTORY" : "DEFEAT") + '</div>' +
       (subtitle ? '<div style="font-size:15px;opacity:.88;margin-top:10px">' + subtitle + '</div>' : "")));

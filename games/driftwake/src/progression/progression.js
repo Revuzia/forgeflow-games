@@ -353,6 +353,76 @@ export class Progression {
         return UNLOCK_LEVEL[id] || 1;
     }
 
+    /**
+     * Is there a saved run to continue? Read-only — the title screen asks
+     * this before drawing CONTINUE.
+     * @returns {boolean}
+     */
+    hasSave() {
+        try {
+            const raw = localStorage.getItem(SAVE_KEY);
+            if (!raw) return false;
+            const b = JSON.parse(raw);
+            return !!b && typeof b.level === "number";
+        } catch (e) {
+            return false;
+        }
+    }
+
+    /** One-line summary of the save, for the CONTINUE caption.
+     *  @returns {string} */
+    saveSummary() {
+        try {
+            const b = JSON.parse(localStorage.getItem(SAVE_KEY) || "null");
+            if (!b || typeof b.level !== "number") return "";
+            const deaths = b.deaths || 0;
+            return "Level " + b.level + (deaths ? "  ·  " + deaths +
+                (deaths === 1 ? " death" : " deaths") : "");
+        } catch (e) {
+            return "";
+        }
+    }
+
+    /**
+     * Start a NEW run: wipe the saved blob and reset every persisted field to
+     * a level-1 character, then re-apply the level-1 pools to the controller.
+     * The title screen's PLAY calls this (its confirm gate is the shell's).
+     * @returns {void}
+     */
+    newGame() {
+        try {
+            localStorage.removeItem(SAVE_KEY);
+        } catch (e) { /* storage denied: the reset below still holds */ }
+        this.level = 1;
+        this.xp = 0;
+        this.driftmarks = 0;
+        this.deaths = 0;
+        this.restedBank = 0;
+        this.lastSeenTs = Date.now();
+        this.boons = [];
+        this.bossesKilled = [];
+        this.realmsUnlocked = ["cold"];
+        this.objectiveState = {};
+        this.lastShrineId = "cold_spawn";   // §8.1 default, never null
+        this._dummyFirstBlood = false;
+        this.unlocked.clear();
+        this._refreshNeed();
+        this._unlockCheck();
+        this._applyLevelStats(true);
+        this.save();
+    }
+
+    /**
+     * Resume the saved run. The blob was already read at construction, so
+     * this re-applies it (a NEW RUN may have overwritten live state) and
+     * hands the player back their pools.
+     * @returns {void}
+     */
+    continueRun() {
+        this.load();
+        this._applyLevelStats(true);
+    }
+
     save() {
         this.lastSeenTs = Date.now();
         const blob = {

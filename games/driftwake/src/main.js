@@ -866,6 +866,27 @@ async function boot() {
             parent: document.body,
             title: "DRIFTWAKE",
             tagline: "Carve a breaking wake through wind-driven snow",
+            // The title plate: xAI key art, fully covering the canvas so the
+            // world is never on screen before PLAY/CONTINUE (owner 2026-08-06).
+            menuImage: "./assets/ui/keyart.jpg",
+            menuOpaque: true,
+            // Frost, not the arcade green: the primary button wears the
+            // realm's own colour (the crosshair/HUD accent).
+            accent: { ink: "#04141d", hi: "#cdefff", lo: "#6cc3ea",
+                edge: "#a8dcf5", glow: "rgba(120,205,245,.40)" },
+            canContinue: () => progression.hasSave(),
+            continueNote: () => progression.saveSummary(),
+            onContinue: () => {
+                progression.continueRun();
+                S.freezeTime = false;
+                armMusic();
+                if (hint) {
+                    hint.classList.add("show");
+                    if (hintTimer) clearTimeout(hintTimer);
+                    hintTimer = setTimeout(() => hint.classList.remove("show"), 6000);
+                }
+                lockPointer();
+            },
             music: MUSIC_URL,
             // Difficulty is deliberately absent. There is nothing to be harder
             // or easier at, and a control that changes nothing is worse than no
@@ -882,6 +903,9 @@ async function boot() {
                 { h: "Panels", p: "<b>F1</b> settings · <b>F3</b> debug · <b>Esc</b> pause. The settings panel is live: every slider in it moves the running scene, including the sun." },
             ],
             onPlay: () => {
+                // PLAY is a NEW RUN: wipe the save and reset to level 1. The
+                // shell already made the overwrite deliberate when a run existed.
+                progression.newGame();
                 S.freezeTime = false;
                 armMusic();
                 if (hint) {
