@@ -18,7 +18,7 @@ import { input } from "../core/input.js";
 const CSS = `
 #hud {
   position: fixed; left: 18px; top: 16px;
-  width: 208px;
+  width: 276px;
   z-index: 55;
   pointer-events: none;
   opacity: 0;
@@ -28,9 +28,9 @@ const CSS = `
 
 .hud-bar {
   position: relative;
-  height: 13px;
-  border-radius: 7px;
-  margin-bottom: 7px;
+  height: 19px;
+  border-radius: 9px;
+  margin-bottom: 8px;
   background: linear-gradient(180deg, rgba(10, 16, 22, 0.62), rgba(6, 10, 15, 0.75));
   border: 1px solid rgba(160, 205, 235, 0.26);
   box-shadow: 0 1px 5px rgba(0, 0, 0, 0.45), inset 0 1px 3px rgba(0, 0, 0, 0.5);
@@ -38,7 +38,7 @@ const CSS = `
 }
 .hud-fill {
   position: absolute; inset: 1px;
-  border-radius: 6px;
+  border-radius: 8px;
   transform-origin: left center;
   transition: transform 120ms ease-out;
 }
@@ -50,6 +50,15 @@ const CSS = `
   background: linear-gradient(180deg, #a8dcf5, #5d9fc7 60%, #3d7396);
   box-shadow: inset 0 1px 2px rgba(220, 245, 255, 0.4);
 }
+.hud-val {
+  position: absolute; right: 9px; top: 50%;
+  transform: translateY(-50%);
+  font: 600 11px/1 "Segoe UI", system-ui, sans-serif;
+  letter-spacing: 0.03em;
+  color: rgba(240, 248, 253, 0.94);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95);
+}
+
 /* A thin frost sheen along the top of each bar sells the glass. */
 .hud-bar::after {
   content: "";
@@ -75,8 +84,10 @@ export class Hud {
         const el = document.createElement("div");
         el.id = "hud";
         el.innerHTML =
-            '<div class="hud-bar hud-health"><div class="hud-fill"></div></div>' +
-            '<div class="hud-bar hud-mana"><div class="hud-fill"></div></div>';
+            '<div class="hud-bar hud-health"><div class="hud-fill"></div>' +
+            '<span class="hud-val"></span></div>' +
+            '<div class="hud-bar hud-mana"><div class="hud-fill"></div>' +
+            '<span class="hud-val"></span></div>';
         document.body.appendChild(el);
         this.el = el;
         this.controller = controller;
@@ -84,6 +95,10 @@ export class Hud {
         this._healthFill = el.querySelector(".hud-health .hud-fill");
         this._manaFill = el.querySelector(".hud-mana .hud-fill");
         this._manaBar = el.querySelector(".hud-mana");
+        this._healthVal = el.querySelector(".hud-health .hud-val");
+        this._manaVal = el.querySelector(".hud-mana .hud-val");
+        this._hTxt = "";
+        this._mTxt = "";
 
         this.overlay = null;
         this._show = false;
@@ -126,6 +141,17 @@ export class Hud {
         if (m !== this._m) {
             this._m = m;
             this._manaFill.style.transform = `scaleX(${m.toFixed(4)})`;
+        }
+        // Numeric readouts, written only when the ROUNDED value moves.
+        const hTxt = `${Math.round(c.health)} / ${c.healthMax}`;
+        if (hTxt !== this._hTxt) {
+            this._hTxt = hTxt;
+            this._healthVal.textContent = hTxt;
+        }
+        const mTxt = `${Math.round(c.mana)} / ${c.manaMax}`;
+        if (mTxt !== this._mTxt) {
+            this._mTxt = mTxt;
+            this._manaVal.textContent = mTxt;
         }
         if (this._denyUntil && performance.now() >= this._denyUntil) {
             this._denyUntil = 0;

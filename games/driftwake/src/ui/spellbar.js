@@ -99,6 +99,32 @@ const CSS = `
 }
 .sb-slot.held svg { stroke: var(--accent, #9fd8f5); opacity: 1; }
 
+/* Cooldown: a clockwise conic wipe of frost-dark glass over the slot,
+   driven by the --cd custom property (remaining fraction), with the
+   remaining seconds printed while it runs. */
+.sb-cd {
+  position: absolute; inset: 0;
+  border-radius: 8px;
+  background: conic-gradient(rgba(5, 9, 14, 0.82) calc(var(--cd, 0) * 1turn),
+              transparent calc(var(--cd, 0) * 1turn));
+  opacity: 0;
+  transition: opacity 140ms ease;
+  pointer-events: none;
+}
+.sb-slot.cooling .sb-cd { opacity: 1; }
+.sb-slot.cooling svg { opacity: 0.45; }
+.sb-cds {
+  position: absolute; left: 0; right: 0; top: 50%;
+  transform: translateY(-52%);
+  text-align: center;
+  font: 700 13px/1 "Segoe UI", system-ui, sans-serif;
+  color: #e9f5fd;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+.sb-slot.cooling .sb-cds { opacity: 1; }
+
 /* Cast flash: one sharp frost pop on the slot that fired. */
 @keyframes sb-cast {
   0%   { border-color: rgba(234, 250, 255, 0.95); transform: scale(1.12);
@@ -124,6 +150,7 @@ export class SpellBar {
         el.innerHTML = SLOTS.map((s) =>
             `<div class="sb-slot" data-spell="${s.id}">` +
             `<svg viewBox="0 0 24 24" aria-hidden="true">${s.glyph}</svg>` +
+            `<div class="sb-cd"></div><span class="sb-cds"></span>` +
             `<span class="sb-bind">${s.bind}</span></div>`
         ).join("");
         document.body.appendChild(el);
@@ -142,6 +169,9 @@ export class SpellBar {
         this._held = false;
         /** Deadline of the running flash per spell id; 0 = none. */
         this._flashUntil = { 1: 0, 3: 0, 4: 0, 5: 0 };
+        /** Cached cooldown fraction + seconds text per spell id. */
+        this._cdFrac = { 1: -1, 3: -1, 4: -1, 5: -1 };
+        this._cdText = { 1: "", 3: "", 4: "", 5: "" };
     }
 
     /** @param {{ overlay?: any, spells?: any }} refs @returns {void} */
@@ -167,6 +197,28 @@ export class SpellBar {
         if (held !== this._held) {
             this._held = held;
             this._slot[2].classList.toggle("held", held);
+        }
+
+        // Cooldown wipes: fraction to 2 decimal places (sub-percent writes
+        // are invisible), countdown in whole seconds.
+        const sp = this.spells;
+        if (sp && sp.cooldownFrac) {
+            for (const idStr of ["1", "3", "4", "5"]) {
+                const id = +idStr;
+                const slot = this._slot[id];
+                if (!slot) continue;
+                const f = Math.round(sp.cooldownFrac(id) * 100) / 100;
+                if (f !== this._cdFrac[id]) {
+                    this._cdFrac[id] = f;
+                    slot.style.setProperty("--cd", f);
+                    slot.classList.toggle("cooling", f > 0);
+                }
+                const txt = f > 0 ? String(Math.ceil(sp.cooldownLeft(id))) : "";
+                if (txt !== this._cdText[id]) {
+                    this._cdText[id] = txt;
+                    slot.querySelector(".sb-cds").textContent = txt;
+                }
+            }
         }
 
         // Cast flash on the edge. `spellPressed` carries the INTERNAL id and

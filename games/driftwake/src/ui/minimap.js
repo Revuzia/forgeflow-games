@@ -16,9 +16,9 @@
 import { input } from "../core/input.js";
 
 /** On-screen size, CSS px. */
-const SIZE = 148;
+const SIZE = 178;
 /** World metres from centre to edge. */
-const RANGE = 95;
+const RANGE = 105;
 /** Terrain grid resolution (samples per side) and refresh cadence. */
 const GRID = 44;
 const REDRAW_MS = 200;
@@ -31,7 +31,7 @@ const CSS = `
   pointer-events: none;
   opacity: 0;
   transition: opacity 200ms ease;
-  border-radius: 12px;
+  border-radius: 50%;
   overflow: hidden;
   border: 1px solid rgba(160, 205, 235, 0.26);
   box-shadow: 0 1px 6px rgba(0, 0, 0, 0.45), inset 0 0 14px rgba(120, 180, 220, 0.06);
@@ -40,7 +40,7 @@ const CSS = `
 #minimap.show { opacity: 0.92; }
 #minimap canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 #minimap .mm-n {
-  position: absolute; top: 3px; left: 50%; transform: translateX(-50%);
+  position: absolute; top: 7px; left: 50%; transform: translateX(-50%);
   font: 600 9px/1 "Segoe UI", system-ui, sans-serif;
   color: rgba(205, 228, 244, 0.8);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);

@@ -82,6 +82,13 @@ const STRIKE_DELAY = { 1: 0.71, 3: 0.66, 4: 0.95, 5: 0.98 };
 const MANA_COST = { 1: 12, 3: 14, 4: 16, 5: 26 };
 const RIBBON_DRAIN = 7;   // per second while the stream is held
 
+/**
+ * Cooldowns, seconds — the combat design doc's numbers (wave 4, mini-vortex
+ * 6, spikes 10, great vortex 14). The stream (LMB) has none: it is the
+ * mana-drained channel. The toolbar renders these as radial wipes.
+ */
+const COOLDOWN = { 1: 4, 3: 6, 4: 10, 5: 14 };
+
 export class SpellSystem {
     /**
      * @param {THREE.Scene} scene
@@ -175,6 +182,8 @@ export class SpellSystem {
         this.debugRibbon = false;
         /** @type {{flashMana(): void}|null} set by main.js — deny feedback. */
         this.hud = null;
+        /** Cooldown expiry per spell key, in `_time` seconds. */
+        this._cdUntil = { 1: 0, 3: 0, 4: 0, 5: 0 };
 
         this._camera = rig && rig.camera ? rig.camera : null;
     }
@@ -348,8 +357,10 @@ export class SpellSystem {
             return;
         }
 
-        // Mana gate (battle prep): a cast the pool cannot pay never starts —
-        // no wind-up, no scheduled fire — and the HUD's mana bar flashes.
+        // Cooldown gate first (a cooling spell costs nothing to ask for),
+        // then the mana gate: a cast the pool cannot pay never starts — no
+        // wind-up, no scheduled fire — and the HUD's mana bar flashes.
+        if (this._time < (this._cdUntil[key] || 0)) return;
         const cost = MANA_COST[key] || 0;
         const c = ctx.controller;
         if (c.mana < cost) {
@@ -357,6 +368,7 @@ export class SpellSystem {
             return;
         }
         c.mana -= cost;
+        this._cdUntil[key] = this._time + (COOLDOWN[key] || 0);
 
         this._lastCast = this._time;
         // The rider winds up NOW; the flag carries the key so meshChar picks
@@ -430,6 +442,25 @@ export class SpellSystem {
             this.vortex.trigger();
             rig.addTrauma(0.10);
         }
+    }
+
+    /**
+     * Remaining cooldown for a spell key, as {frac 0..1, secs}. frac 1 =
+     * just cast, 0 = ready. The toolbar polls this per frame.
+     * @param {number} key
+     * @returns {number} remaining fraction of the full cooldown
+     */
+    cooldownFrac(key) {
+        const total = COOLDOWN[key];
+        if (!total) return 0;
+        const left = (this._cdUntil[key] || 0) - this._time;
+        return left <= 0 ? 0 : Math.min(1, left / total);
+    }
+
+    /** Remaining cooldown seconds for a key (0 when ready). @param {number} key */
+    cooldownLeft(key) {
+        const left = (this._cdUntil[key] || 0) - this._time;
+        return left <= 0 ? 0 : left;
     }
 
     /** @param {boolean} held */
