@@ -107,6 +107,17 @@ import { Overlay } from "./ui/overlay.js";
 import { Crosshair } from "./ui/crosshair.js";
 import { SpellBar } from "./ui/spellbar.js";
 import { Hud } from "./ui/hud.js";
+import { DamageableRegistry } from "./combat/damageable.js";
+import * as combatData from "./combat/combatData.js";
+import { SpellHits } from "./combat/spellHits.js";
+import { TrainingDummies } from "./combat/dummies.js";
+import { Enemies } from "./combat/enemies.js";
+import { EnemyVis } from "./combat/enemyVis.js";
+import { Encounters } from "./combat/encounters.js";
+import { Floaters } from "./ui/floaters.js";
+import { EnemyBars } from "./ui/enemybars.js";
+import { Progression } from "./progression/progression.js";
+import { XpHud } from "./progression/xphud.js";
 import { Minimap } from "./ui/minimap.js";
 import { audio } from "./audio/audio.js";
 
@@ -466,6 +477,26 @@ async function boot() {
     spells.hud = hud;
     const minimap = new Minimap(character, terrain);
     minimap.attach({ overlay });
+
+    // ------------------------------------------------------------- combat
+    // The battle stack (_spec/COMBAT_DESIGN §9): registry -> damage pass ->
+    // bodies -> director -> presentation. Constructed AFTER the systems it
+    // reads (spells, terrain, rig), BEFORE the frame loop closes over it.
+    const registry = new DamageableRegistry();
+    const spellHits = new SpellHits(spells, registry, character, combatData.combatData);
+    const dummies = new TrainingDummies(registry, terrain, spells.crystals, combatData);
+    const enemies = new Enemies(scene, terrain, registry, character, combatData, spray);
+    const enemyVis = new EnemyVis(scene, sky, shadows, spells.lights, spells.globals);
+    enemies.attachVis(enemyVis);
+    spells.addConsumers(enemyVis.material);
+    const encounters = new Encounters(enemies, registry, character, combatData, minimap);
+    const progression = new Progression(character, registry, null);
+    progression.attach({ spells, hud });
+    const floaters = new Floaters(registry, rig);
+    floaters.attach({ overlay });
+    const enemyBars = new EnemyBars(registry, rig);
+    enemyBars.attach({ overlay });
+    const xpHud = new XpHud({ overlay, progression });
     initInput(canvas, { onToggleOverlay: () => overlay.toggle() });
 
     // ------------------------------------------------------------- warm-up
@@ -605,6 +636,14 @@ async function boot() {
         // cascade matrices; before the deformation step, so the brushes every
         // spell writes are in the staging array when the simulation pass runs.
         spells.update(dt, rig.camera.position, rig.camera);
+        // Combat: registry clock, then the damage pass over THIS frame's
+        // spell state, then bodies/director (they read the fresh CC state).
+        registry.update(dt);
+        spellHits.update(dt);
+        dummies.update(dt);
+        enemies.update(dt);
+        encounters.update(dt);
+        progression.update(dt);
         const tSpells = performance.now();
 
         // GPU profiler: on alternate frames one query spans everything below
@@ -660,6 +699,11 @@ async function boot() {
         spellbar.update();
         hud.update();
         minimap.update();
+        floaters.update();
+        enemyBars.update();
+        xpHud.update();
+        // Event ring drains ABOVE (floaters/xp read it); clear it last.
+        registry.endFrame();
 
         // Last, and after every `mark()`: the wind bed, the footfalls, the surf
         // hiss and the spell voices are all read off state that is final for the
@@ -927,6 +971,9 @@ async function boot() {
         // The spell toolbar, exposed the same way for the same probes.
         spellbar,
         hud, minimap,
+        // The battle stack, for probes and the test harness.
+        combat: { registry, spellHits, dummies, enemies, encounters, data: combatData },
+        progression, floaters, enemyBars, xpHud,
         // The deformation field, alongside the other subsystems it sits between.
         // `_harness/probe_deform_skip.py` reads its `stepsRun`/`stepsSkipped`
         // counters and reads the state buffer back through `texture`, which is
