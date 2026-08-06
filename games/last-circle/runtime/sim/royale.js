@@ -50,9 +50,14 @@
 
   // damage = body damage at full effect; falloff -> linear to 40% floor
   var WEAPONS = {
-    // headMult 2.0 = Fortnite's pistol-class multiplier (COMBAT_CALIBRATION.md);
-    // rewards precision on the spawn weapon without touching its body dps.
-    pistol:   { cls: "pistol", damage: 24, headMult: 2.0, rpm: 400, mag: 16, reloadS: 1.3, ammo: "light", speed: 999, falloff: [25, 50], spreadDeg: 1.3, adsFov: 48 },
+    // SIDEARM balance (owner: "PISTOL deals too much" + CoD/FN research):
+    // 24 dmg @ 400rpm was 160 DPS — 97% of the AR — with the BEST hitscan head
+    // multiplier and 50m reach. FN tolerates pistol≈AR DPS only because bloom
+    // taxes it past ~25m; our first-shot accuracy is a laser, so the pistol
+    // must pay in the COD way instead: ~80% of AR DPS (20 dmg → 133), hard
+    // range falloff (18/38m — CoD sidearm band), head 1.75 (between BO's 1.4
+    // and FN's 2.0). Ladder: SMG 204 close > AR 165 mid > pistol 133 backup.
+    pistol:   { cls: "pistol", damage: 20, headMult: 1.75, rpm: 400, mag: 16, reloadS: 1.3, ammo: "light", speed: 999, falloff: [18, 38], spreadDeg: 1.3, adsFov: 48 },
     smg:      { cls: "smg", damage: 17, headMult: 1.5, rpm: 720, mag: 30, reloadS: 2.0, ammo: "light", speed: 999, falloff: [18, 40], spreadDeg: 2.2, adsFov: 47 },
     ar:       { cls: "ar", damage: 30, headMult: 1.5, rpm: 330, mag: 30, reloadS: 2.4, ammo: "medium", speed: 300, falloff: [60, 120], spreadDeg: 1.5, adsFov: 42 },
     // Shotgun was 10 dmg / 70 rpm / 4.0 s reload = 90 per blast, 105 DPS: the WORST

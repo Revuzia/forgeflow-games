@@ -944,7 +944,11 @@ function actEngage(W, b, dt) {
   inp.crouch = seen && dist > 30 && Math.abs(inp.mz) < 0.1 && a.tier >= 3;
   if (reacted && canSee && inRange) {
     if (def.cls === "ar" || def.cls === "smg" || def.cls === "pistol") {
-      if (bb.burstLeft <= 0 && bb.burstPause <= 0) { bb.burstLeft = def.cls === "ar" ? 4 : 8; bb.aimHigh = Math.random() < (HEAD_CHANCE[a.tier - 1] || 0); }
+      // burst sizes per class: AR 4, SMG 8 — and pistols 3, they are SEMI-AUTO
+      // sidearms, not machine pistols (they used to fall into the SMG bucket
+      // and mag-dump 8 rounds at 400rpm — the "killed by AFKAndy (Pistol)"
+      // spectate reports)
+      if (bb.burstLeft <= 0 && bb.burstPause <= 0) { bb.burstLeft = def.cls === "ar" ? 4 : (def.cls === "pistol" ? 3 : 8); bb.aimHigh = Math.random() < (HEAD_CHANCE[a.tier - 1] || 0); }
       if (bb.burstLeft > 0) {
         inp.fire = true;
         bb.burstLeft -= dt * (def.rpm / 60);

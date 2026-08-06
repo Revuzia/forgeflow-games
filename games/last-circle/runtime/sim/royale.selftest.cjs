@@ -96,6 +96,15 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
 {
   ok(R.hitDamage("ar", 0, 10, false) === 30, "damage: AR body at close range = 30");
   ok(R.hitDamage("ar", 0, 10, true) === 45, "damage: AR headshot ×1.5");
+  // SIDEARM LADDER (owner 2026-07-28 + CoD/FN research): the spawn pistol must
+  // never rival the AR — ~80% of its DPS, tighter falloff, milder head bonus.
+  {
+    const dps = (id) => R.WEAPONS[id].damage * (R.WEAPONS[id].pellets || 1) * R.WEAPONS[id].rpm / 60;
+    ok(dps("pistol") <= dps("ar") * 0.85, "ladder: pistol DPS ≤ 85% of AR (" + dps("pistol").toFixed(0) + " vs " + dps("ar").toFixed(0) + ")");
+    ok(dps("smg") > dps("ar"), "ladder: SMG out-DPSes AR up close");
+    ok(R.WEAPONS.pistol.falloff[1] < R.WEAPONS.ar.falloff[0], "ladder: pistol reach ends before AR falloff even begins");
+    ok(R.WEAPONS.pistol.headMult <= 1.75, "ladder: pistol head bonus ≤ 1.75 (laser first-shot accuracy pays the FN 2.0 back)");
+  }
   ok(R.hitDamage("ar", 4, 10, false) === Math.round(30 * 1.32), "damage: legendary AR +32%");
   const far = R.hitDamage("ar", 0, 120, false);
   ok(far === Math.round(30 * 0.4), "damage: AR at max falloff = 40% floor");
