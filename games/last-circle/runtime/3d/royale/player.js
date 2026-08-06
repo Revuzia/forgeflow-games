@@ -191,8 +191,9 @@ const MESHY_CLIPS = [
   "idle",   // real Mixamo breathing idle — the BASE GLB's baked animations[0]
             // is a 0-duration frozen frame (see the rename below), not an idle
   "walk", "run", "death", "death2", "death3", "hit", "dance", "cheer", "jump", "swim", "crouch",
-  "fall",
-  "pistol_idle", "pistol_walk", "pistol_run",
+  // fall + pistol_* clips deliberately NOT loaded: freefall reverted to the
+  // original frozen-run + skydive pose (owner: "falling isnt FREEFALL"), and
+  // pistols use the procedural pose system (see gunFamily).
   "rifle_idle", "rifle_walk", "rifle_run", "rifle_reload", "rifle_crouch",
 ];
 const _v3 = new THREE.Vector3();
@@ -202,7 +203,12 @@ function gunFamily(a) {
   if (!a.weapon || !a.weapon.id || String(a.weapon.id).startsWith("consumable")) return null;
   const def = K.WEAPONS && K.WEAPONS[a.weapon.id];
   if (!def) return null;
-  return def.cls === "pistol" ? "pistol" : "rifle";
+  // PISTOLS use the procedural pose system, NOT the Mixamo hold set: the
+  // Mixamo pistol clips carry the gun at FACE height (owner: "why is he
+  // holding it up HIGH... note the way he holds the pistol") — the pose layer
+  // gives the natural low carry with a plain arm-swing run, and the barrel
+  // weld still aims the gun exactly. Long guns keep the Mixamo rifle set.
+  return def.cls === "pistol" ? null : "rifle";
 }
 
 async function preloadMeshySkin(W, key, tick) {
@@ -1368,8 +1374,11 @@ function syncObj(W, a, dt, far) {
       const fam = gunFamily(a);
       const useMixamoGun = !!(fam && a.clips[fam + "_idle"]);
       if (a.gliding && !a.chute) {
-        if (a.clips.fall) playAnim(a, "fall", { timeScale: 1 });
-        else playAnim(a, "run", { timeScale: 0.05 });
+        // ORIGINAL freefall (owner: "falling isnt FREEFALL, check animation on
+        // the original fall"): frozen run + the skydive arm pose reads as a
+        // proper belly-down dive; the Mixamo "falling idle" clip was a feet-
+        // down flail and is no longer loaded.
+        playAnim(a, "run", { timeScale: 0.05 });
       }
       else if (a.gliding) playAnim(a, "idle");
       else if (a.swimming) playAnim(a, "swim", { timeScale: gs > 4.5 ? 1.25 : 1 });
@@ -1443,7 +1452,7 @@ function syncObj(W, a, dt, far) {
       // still run below so the mesh aligns to the hand.
       let mode = null;
       const armed = a.weapon && !a.weapon.id.startsWith("consumable");
-      const mixamoOwnsArms = useMixamoGun || (a.gliding && !a.chute && a.clips.fall);
+      const mixamoOwnsArms = useMixamoGun;   // freefall skydive pose is back (fall clip unloaded)
       if (!a.alive || a.emoting || mixamoOwnsArms) mode = null;
       else if (a.gliding && !a.chute) mode = "skydive";
       else if (a.gliding) mode = "hang";
