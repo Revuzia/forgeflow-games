@@ -940,7 +940,13 @@ export function update(W, dt) {
     // with their own materials, so a proxy would ADD draw calls to a frame that
     // is draw-call bound. The local player is ~4 m from the camera, so their own
     // weapon is always inside the radius.
-    if (a.weaponMesh) a.weaponMesh.visible = d2 < wl2;
+    // && !emoting: HOLSTER DURING EMOTES (genre standard) — the weld
+    // disengages while an emote clip owns the arms, which left the gun on the
+    // stale static grip: spectators saw kill-taunting bots "holding the gun
+    // backwards" (owner screenshots x2). This line is the ONE authority on
+    // weapon visibility per frame — a separate toggle elsewhere just lost the
+    // write race against it.
+    if (a.weaponMesh) a.weaponMesh.visible = d2 < wl2 && !a.emoting;
     if (!a.nameTag) continue;
     // Peers stay tagged out to 250 m — the game's own gunfire-audible radius
     // (hud.js: `if (d < 12 || d > 250) return;` on the direction chevrons), so a

@@ -149,6 +149,20 @@ async function buildProtos(W) {
       // SCREENSHOT before adding to this table, never by the heuristic.
       const WPN_FLIP = { ar: true, glauncher: true };
       if (WPN_FLIP[id]) { m.rotation.y += Math.PI; m.updateMatrixWorld(true); }
+      // RETEXTURE (owner: "the pistol looks pink it should be black"): Meshy's
+      // pistol texture came out salmon. Multiply the map toward gunmetal —
+      // shading detail survives, the hue dies. Applied to the PROTO, so every
+      // clone (hands, ground loot, hotbar icon) inherits it.
+      if (id === "pistol") {
+        m.traverse((o) => {
+          if (!o.isMesh || !o.material) return;
+          for (const mm of (Array.isArray(o.material) ? o.material : [o.material])) {
+            mm.color.setHex(0x23262b);
+            if (mm.metalness != null) mm.metalness = Math.max(mm.metalness, 0.5);
+            if (mm.roughness != null) mm.roughness = Math.min(mm.roughness, 0.55);
+          }
+        });
+      }
       const size = bb.setFromObject(m).getSize(new THREE.Vector3());
       const s = WPN_LEN[id] / Math.max(size.x, size.y, size.z, 0.001);
       m.scale.setScalar(s);
@@ -400,7 +414,11 @@ function stepWeapon(W, a, dt) {
   //      fire (the modern-shooter standard; covers the sniper/pistol
   //      between-shot cds that are longer than any sane click buffer).
   const edgeLive = W._fireEdge && (performance.now() - W._fireEdge) < 420;
-  const wantFire = (a.isBot || isAuto) ? inp.fire : (!!edgeLive || !!inp.fire);
+  // Semi-autos fire on CLICK EDGES ONLY (owner: "pistol fires like automatic
+  // weapon, thats impossible"). The old `|| inp.fire` hold-to-fire fallback
+  // made a held button cycle the pistol at its full 400 rpm; the 420ms edge
+  // buffer alone already fixes the swallowed-click problem it was added for.
+  const wantFire = (a.isBot || isAuto) ? inp.fire : !!edgeLive;
   if (wantFire && wpn.cd <= 0 && !a.gliding && !a.healing && !a.swimming && a.mantleT == null) {
     if (def.mag > 0 && wpn.magAmmo <= 0) {
       // auto reload attempt

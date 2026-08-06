@@ -178,6 +178,10 @@ function think(W, b) {
     return c.heals === "hp" ? a.hp < c.cap : a.shield < c.cap;
   };
   const heals = a.inventory.slots.some((s2) => s2 && s2.kind === "consumable" && s2.count > 0 && usable(s2.id));
+  // A bot with NOTHING LEFT TO SHOOT must go find ammo/weapons, not dance
+  // around a fight it cannot win (owner: "two bots ran and jumped around
+  // because they had no bullets rather than looking for chests").
+  const hasFirepower = a.inventory.slots.some((s2) => s2 && s2.kind === "weapon" && slotAmmo(a, s2) > 0);
 
   // hard overrides
   if (inStorm) { b.state = "ROTATE"; bb.moveTo = { x: st.center.x, z: st.center.z }; return; }
@@ -196,7 +200,7 @@ function think(W, b) {
   const tDist = tRef ? Math.hypot(tRef.x - a.pos.x, tRef.z - a.pos.z) : 999;
   const engageBase = liveTarget ? ((!upgraded && tDist > 35) ? 55 : (tDist < 40 ? 88 : 80)) : 42;
   s.ENGAGE = bb.target
-    ? engageBase + (a.personality === "rusher" ? 15 : 0) + (endgame ? 20 : 0) + (lastFew ? 25 : 0)
+    ? (hasFirepower ? engageBase + (a.personality === "rusher" ? 15 : 0) + (endgame ? 20 : 0) + (lastFew ? 25 : 0) : 8)
     : 0;
   // FLEE used to also require `heals`, so a bot at 15 HP with an empty inventory
   // scored 0 here — the exact case where running is most obviously right — and
@@ -207,6 +211,10 @@ function think(W, b) {
   const healOk = heals && !(bb.healBlockedUntil > W.t);
   s.HEAL = (a.hp < 45 || (a.shield < 30 && a.hp < 80)) && healOk && !bb.target ? 75 : (a.hp < 60 && healOk && W.t - a.lastDamageT > 6 ? 45 : 0);
   s.LOOT = !upgraded ? 64 : (W.t < 120 ? 35 : 20) + (a.personality === "loot_goblin" ? 25 : 0);
+  if (!hasFirepower) {
+    s.LOOT = Math.max(s.LOOT, 78);                              // ammo hunt beats everything but a pressing storm
+    if (bb.target) s.FLEE = Math.max(s.FLEE || 0, 84);          // and break contact while dry
+  }
   // BATTLE-ROYALE PRIORITY MODEL (owner: "run from storms but FIGHT once
   // safe"): rotation urgency = how far past safety you are vs time left.
   // Only a genuinely pressing storm outranks a live fight — otherwise bots
@@ -354,6 +362,8 @@ function onEnter(W, b, state) {
 
 function pickLoot(W, a, near) {
   const upgraded = a.inventory.slots.some((s, i) => s && s.kind === "weapon" && !(i === 0 && s.id === "pistol" && s.rarity === 0));
+  // out of ammo everywhere → ammo boxes and chests ARE the priority
+  const dry = !a.inventory.slots.some((s) => s && s.kind === "weapon" && slotAmmo(a, s) > 0);
   let best = null, bs = -1;
   for (const n of near) {
     let score = 0;
@@ -361,10 +371,10 @@ function pickLoot(W, a, near) {
     // re-selecting the same weapon, walking to it, being refused, and re-planning
     // to it again — a twitch loop in the open, next to loot it could not take.
     if (n.type === "item" && W.wouldAcceptItem && !W.wouldAcceptItem(a, n.data)) continue;
-    if (n.type === "chest") score = upgraded ? 55 : 72;
-    else if (n.data.kind === "weapon") score = upgraded ? 30 + n.data.rarity * 8 : 66 + n.data.rarity * 6;
+    if (n.type === "chest") score = dry ? 82 : (upgraded ? 55 : 72);
+    else if (n.data.kind === "weapon") score = dry ? 76 + n.data.rarity * 4 : (upgraded ? 30 + n.data.rarity * 8 : 66 + n.data.rarity * 6);
     else if (n.data.kind === "consumable") score = n.data.id.includes("shield") ? 45 : 34;
-    else if (n.data.kind === "ammo") score = 38;
+    else if (n.data.kind === "ammo") score = dry ? 80 : 38;
     score -= n.d * 0.4;
     if (score > bs) { bs = score; best = n; }
   }
@@ -503,7 +513,7 @@ function wallAhead(W, a, yaw, look) {
 // deep water. Maps are mostly open, so a path is computed only when the wall
 // probe or the stuck detector says the direct line failed — and at most once
 // per bot per 2.5s.
-const CELL = 2, GRID_R = 16;   // 16 cells → up to a 64x64m window
+const CELL = 1.5, GRID_R = 21;   // 1.5m cells resolve DOORWAYS (2m missed them); ~63m window
 function cellBlocked(W, x, z) {
   const g = W.map.heightAt(x, z);
   if (g < W.map.waterY + 0.3) return true;
@@ -611,19 +621,33 @@ function moveToward(W, b, tx, tz, dt, sprint) {
   const sup = supportAt(W, aheadX, aheadZ, a.pos.y + 0.6);
   if (sup > a.pos.y + 0.55 && sup < a.pos.y + 2.2 && a.onGround) inp.jump = true;
   if (bb.stuckT > 0.7) {
-    inp.jump = true;
+    // jump at most once every 0.9s — the old EVERY-FRAME jump while stuck
+    // read as a bot pogo-ing in place inside a house for a minute straight
+    // (owner witnessed it). One hop per second is a real "try to get over it".
+    if ((bb.nextJumpT || 0) <= W.t) { inp.jump = true; bb.nextJumpT = W.t + 0.9; }
     // COMMIT to one detour side — the old per-frame random ±1 jittered the bot
     // left-right against the same wall face forever
     if (!bb.detourDir) bb.detourDir = Math.random() < 0.5 ? -1 : 1;
     inp.mx = bb.detourDir;
     if (bb.stuckT > 2.2) {
-      // hard-stuck: ask A* for a real route around the blocker; only when no
-      // path exists (or the cooldown holds) fall back to the blind detour that
-      // preserves rough progress toward the target
+      // hard-stuck: ask A* for a real route around the blocker. If no path
+      // exists (trapped in a blocked pocket — indoors against a wall), walk to
+      // the NEAREST OPEN CELL first; the blind detour is the last resort.
       requestPath(W, b, tx, tz);
       if (!bb.path) {
-        const dirA = want + bb.detourDir * 1.1;
-        bb.moveTo = { x: a.pos.x - Math.sin(dirA) * 26, z: a.pos.z - Math.cos(dirA) * 26 };
+        let esc = null;
+        for (let r = 1; r <= 6 && !esc; r++) {
+          for (let s = 0; s < 12 && !esc; s++) {
+            const th = (s / 12) * Math.PI * 2;
+            const ex = a.pos.x + Math.cos(th) * r * CELL, ez = a.pos.z + Math.sin(th) * r * CELL;
+            if (!cellBlocked(W, ex, ez)) esc = { x: ex, z: ez };
+          }
+        }
+        if (esc) bb.moveTo = esc;
+        else {
+          const dirA = want + bb.detourDir * 1.1;
+          bb.moveTo = { x: a.pos.x - Math.sin(dirA) * 26, z: a.pos.z - Math.cos(dirA) * 26 };
+        }
       }
       bb.stuckT = 0;
     }
