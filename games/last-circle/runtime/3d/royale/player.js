@@ -815,18 +815,25 @@ function installHumanInput(W) {
   W.kernel.onUpdate((dt) => {
     if (!W.player || !W.player.alive || W.phase === "menu" || W.paused) return;
     const inp = W.player.input;
-    // UNLOCKED LOOK-AROUND (owner: "mouse look should allow LOOK AROUND"):
-    // without pointer lock the camera used to be frozen behind the player —
-    // only RMB-drag turned it. Push the cursor past the soft screen edge and
-    // the view now turns that way, faster the further you push. Pointer lock
-    // (any click) remains the primary, full-precision look.
+    // UNLOCKED LOOK-AROUND (owner: "mouse move is NOT smooth... it should
+    // follow the cursor"): proportional cursor-follow, the way browser TPS do
+    // it — the camera turns toward wherever the cursor sits, rate scaling
+    // smoothly (smoothstep) from a small dead-zone at center to full speed at
+    // the edge, with a critically-damped rate filter so there is no step or
+    // jerk when the cursor crosses the zone. Pointer lock (any click) remains
+    // the primary raw-delta look, zero added latency.
     if (document.pointerLockElement !== dom && W.mouseNDC && !rmbDrag) {
-      const dz = 0.55, n = W.mouseNDC, d = dt || 0.016;
-      const ex = Math.abs(n.x) > dz ? Math.sign(n.x) * (Math.abs(n.x) - dz) / (1 - dz) : 0;
-      const ey = Math.abs(n.y) > dz ? Math.sign(n.y) * (Math.abs(n.y) - dz) / (1 - dz) : 0;
-      if (ex) inp.yaw -= ex * d * 2.8;
-      if (ey) inp.pitch = K.clamp(inp.pitch + ey * d * 1.9, -1.35, 1.35);
-    }
+      const d = dt || 0.016, n = W.mouseNDC, dz = 0.12;
+      const shape = (v) => {
+        const s = Math.min(1, Math.max(0, (Math.abs(v) - dz) / (1 - dz)));
+        return Math.sign(v) * s * s * (3 - 2 * s);
+      };
+      const wantYawR = -shape(n.x) * 3.2, wantPitchR = shape(n.y) * 2.2;
+      W._lookYawR = (W._lookYawR || 0) + (wantYawR - (W._lookYawR || 0)) * Math.min(1, d * 12);
+      W._lookPitchR = (W._lookPitchR || 0) + (wantPitchR - (W._lookPitchR || 0)) * Math.min(1, d * 12);
+      inp.yaw += W._lookYawR * d;
+      inp.pitch = K.clamp(inp.pitch + W._lookPitchR * d, -1.35, 1.35);
+    } else { W._lookYawR = 0; W._lookPitchR = 0; }
     inp.mx = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
     inp.mz = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
     const sprintHeld = !!keys.ShiftLeft;   // canon() folds ShiftRight into this
@@ -1462,17 +1469,23 @@ function syncObj(W, a, dt, far) {
       else if (armed) mode = "gunReady";
       else mode = "relax";
       // AIM OFFSET (industry-standard upper-body layer): additively lean the
-      // spine toward the aim pitch AFTER the clip pose, so the hands — and the
-      // gun welded to them — track where the camera looks at every pitch and
-      // facing, instead of the clip's flat-ahead hold. Split across Spine1+2
-      // like a real aim-offset so the bend reads organic, not hinged.
+      // spine toward the aim pitch AND twist it toward the aim yaw AFTER the
+      // clip pose. Lower body faces movement (_bodyYaw), upper body twists
+      // toward the camera (clamped like every AAA third-person rig) — and the
+      // gun welds to the TWISTED chest below, so hands, weapon and aim always
+      // agree (owner: "at this angle the gun is backwards").
+      const bodyFwdYaw = a._bodyYaw != null ? a._bodyYaw - Math.PI : a.yaw;
+      let aimDelta = a.yaw - bodyFwdYaw;
+      while (aimDelta > Math.PI) aimDelta -= Math.PI * 2;
+      while (aimDelta < -Math.PI) aimDelta += Math.PI * 2;
+      const twist = K.clamp(aimDelta, -0.6, 0.6);
       if (a.armBones && useMixamoGun && armed && a.onGround && !a.gliding && !a.swimming && !a.emoting && a.alive) {
         // negative: +rotation.x on these spines bends FORWARD, and looking UP
         // (pitch > 0) must arch the torso BACK (verified by pitch-sweep probe)
         const lean = K.clamp(a.pitch, -1.1, 1.1) * -0.30;
-        if (a.armBones.spine1) a.armBones.spine1.rotation.x += lean * 0.5;
-        if (a.armBones.spine2) a.armBones.spine2.rotation.x += lean * 0.5;
-        else if (a.armBones.spine && !a.armBones.spine1) a.armBones.spine.rotation.x += lean;
+        if (a.armBones.spine1) { a.armBones.spine1.rotation.x += lean * 0.5; a.armBones.spine1.rotation.y += twist * 0.5; }
+        if (a.armBones.spine2) { a.armBones.spine2.rotation.x += lean * 0.5; a.armBones.spine2.rotation.y += twist * 0.5; }
+        else if (a.armBones.spine && !a.armBones.spine1) { a.armBones.spine.rotation.x += lean; a.armBones.spine.rotation.y += twist; }
       }
       // straighten a slouched rig BEFORE the arm layer (arms hang off the
       // spine, so upright must happen first) — skip mid-air/emote where the
@@ -1516,7 +1529,12 @@ function syncObj(W, a, dt, far) {
         // Mixamo armed: always track pitch (clips already hold the weapon up).
         const bpitch = (!mixamoAim && a._armMode === "lowReady") ? -0.55 : a.pitch;
         const cp = Math.cos(bpitch), sp = Math.sin(bpitch);
-        _gf.set(-Math.sin(a.yaw) * cp, sp, -Math.cos(a.yaw) * cp).normalize();
+        // barrel follows the TWISTED CHEST, not the raw camera yaw: when the
+        // body runs at an angle to the aim, welding to camera yaw pointed the
+        // gun sideways/backwards out of the hands. Shots still originate from
+        // the crosshair raycast — this weld is purely the visual.
+        const gunYaw = bodyFwdYaw + twist;
+        _gf.set(-Math.sin(gunYaw) * cp, sp, -Math.cos(gunYaw) * cp).normalize();
         // explicit basis (not setFromUnitVectors) so the gun cannot roll: +Z is
         // the barrel, +Y stays world-up-ish, +X is right.
         _gr.crossVectors(_gUp, _gf);
