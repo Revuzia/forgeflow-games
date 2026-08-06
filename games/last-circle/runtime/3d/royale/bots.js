@@ -474,23 +474,133 @@ function steerYaw(a, want, dt, speed) {
   a.input.yaw += d * Math.min(1, dt * (speed || 6));
 }
 
+/** Does a collider WALL block the walk band at (x,z) for someone at height y?
+ *  NOT supportAt: that returns walkable surfaces at-or-below y+STEP_UP by
+ *  definition, so "supportAt > y+2.2" was mathematically impossible and the
+ *  old probe NEVER fired (found by scanning a whole map for hits: zero).
+ *  A wall blocks when its box spans the hop-to-headroom band. Ramps are
+ *  walkable by design and never block. */
+function obstacleAt(W, x, z, y) {
+  const cols = W.map.queryColliders(x, z, 0.6);
+  for (const c of cols) {
+    if (c.kind === "ramp") continue;
+    if (x < c.minX - 0.3 || x > c.maxX + 0.3 || z < c.minZ - 0.3 || z > c.maxZ + 0.3) continue;
+    if (c.minY < y + 2.0 && c.maxY > y + 0.55) return true;
+  }
+  return false;
+}
+
 /** Is a wall too tall to hop blocking the path `look` metres along `yaw`? */
 function wallAhead(W, a, yaw, look) {
-  const sup = supportAt(W, a.pos.x - Math.sin(yaw) * look, a.pos.z - Math.cos(yaw) * look, a.pos.y + 0.6);
-  return sup > a.pos.y + 2.2;
+  return obstacleAt(W, a.pos.x - Math.sin(yaw) * look, a.pos.z - Math.cos(yaw) * look, a.pos.y);
+}
+
+// ── PATHFINDING — A* over a lazy local walk-grid ─────────────────────────────
+// Industry-standard fallback for when straight-line steering is defeated: an
+// 8-connected A* (no corner cutting) over a small walkability window built
+// around start→goal, then string-pulled so bots walk smooth diagonals, not
+// grid staircases. Cells are 2m; blocked = a structure too tall to hop or
+// deep water. Maps are mostly open, so a path is computed only when the wall
+// probe or the stuck detector says the direct line failed — and at most once
+// per bot per 2.5s.
+const CELL = 2, GRID_R = 16;   // 16 cells → up to a 64x64m window
+function cellBlocked(W, x, z) {
+  const g = W.map.heightAt(x, z);
+  if (g < W.map.waterY + 0.3) return true;
+  return obstacleAt(W, x, z, g);
+}
+function findPath(W, sx, sz, tx, tz) {
+  const cx = (sx + tx) / 2, cz = (sz + tz) / 2;
+  const R = Math.min(GRID_R, Math.ceil((Math.max(Math.abs(tx - sx), Math.abs(tz - sz)) / 2 + CELL * 4) / CELL));
+  const N = R * 2 + 1;
+  const idx = (ix, iz) => iz * N + ix;
+  const toWx = (ix) => cx + (ix - R) * CELL, toWz = (iz) => cz + (iz - R) * CELL;
+  const blocked = new Uint8Array(N * N);
+  for (let iz = 0; iz < N; iz++) for (let ix = 0; ix < N; ix++) blocked[idx(ix, iz)] = cellBlocked(W, toWx(ix), toWz(iz)) ? 1 : 0;
+  const cl = (v) => Math.max(0, Math.min(N - 1, v));
+  const S = { x: cl(Math.round((sx - cx) / CELL) + R), z: cl(Math.round((sz - cz) / CELL) + R) };
+  const T = { x: cl(Math.round((tx - cx) / CELL) + R), z: cl(Math.round((tz - cz) / CELL) + R) };
+  blocked[idx(S.x, S.z)] = 0;
+  if (blocked[idx(T.x, T.z)]) {
+    let done = false;
+    for (let r = 1; r < 6 && !done; r++) for (let dz = -r; dz <= r && !done; dz++) for (let dx = -r; dx <= r && !done; dx++) {
+      const nx = T.x + dx, nz = T.z + dz;
+      if (nx >= 0 && nz >= 0 && nx < N && nz < N && !blocked[idx(nx, nz)]) { T.x = nx; T.z = nz; done = true; }
+    }
+    if (!done) return null;
+  }
+  const open = [[0, S.x, S.z]];
+  const gS = new Float32Array(N * N).fill(Infinity);
+  const from = new Int32Array(N * N).fill(-1);
+  gS[idx(S.x, S.z)] = 0;
+  let found = false, guard = 0;
+  while (open.length && guard++ < 4000) {
+    let bi = 0;
+    for (let i = 1; i < open.length; i++) if (open[i][0] < open[bi][0]) bi = i;
+    const cur = open.splice(bi, 1)[0], x = cur[1], z = cur[2];
+    if (x === T.x && z === T.z) { found = true; break; }
+    const g0 = gS[idx(x, z)];
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+      if (!dx && !dz) continue;
+      const nx = x + dx, nz = z + dz;
+      if (nx < 0 || nz < 0 || nx >= N || nz >= N || blocked[idx(nx, nz)]) continue;
+      if (dx && dz && (blocked[idx(x + dx, z)] || blocked[idx(x, z + dz)])) continue;
+      const ng = g0 + Math.hypot(dx, dz);
+      if (ng < gS[idx(nx, nz)]) {
+        gS[idx(nx, nz)] = ng;
+        from[idx(nx, nz)] = idx(x, z);
+        open.push([ng + Math.hypot(nx - T.x, nz - T.z), nx, nz]);
+      }
+    }
+  }
+  if (!found) return null;
+  const path = [];
+  let cur = idx(T.x, T.z);
+  while (cur >= 0 && cur !== idx(S.x, S.z)) { path.push({ x: toWx(cur % N), z: toWz(Math.floor(cur / N)) }); cur = from[cur]; }
+  path.reverse();
+  // string-pull: keep a waypoint only where the straight line past it breaks
+  const pulled = [];
+  let anchor = { x: sx, z: sz };
+  for (let i = 0; i < path.length; i++) {
+    const nxt = path[i + 1];
+    if (!nxt) { pulled.push(path[i]); break; }
+    const steps = Math.ceil(Math.hypot(nxt.x - anchor.x, nxt.z - anchor.z) / CELL);
+    let clear = true;
+    for (let s = 1; s <= steps; s++) {
+      if (cellBlocked(W, anchor.x + (nxt.x - anchor.x) * s / steps, anchor.z + (nxt.z - anchor.z) * s / steps)) { clear = false; break; }
+    }
+    if (!clear) { pulled.push(path[i]); anchor = path[i]; }
+  }
+  return pulled.length ? pulled : null;
+}
+function requestPath(W, b, tx, tz) {
+  const bb = b.bb;
+  if ((bb.nextPathT || 0) > W.t) return;
+  bb.nextPathT = W.t + 2.5;
+  bb.path = findPath(W, b.actor.pos.x, b.actor.pos.z, tx, tz);
+  bb.pathGoal = bb.path ? { x: tx, z: tz } : null;
 }
 
 function moveToward(W, b, tx, tz, dt, sprint) {
   const a = b.actor, inp = a.input, bb = b.bb;
-  let want = Math.atan2(-(tx - a.pos.x), -(tz - a.pos.z));
+  // PATH FOLLOW: an active A* waypoint chain overrides the direct line.
+  // Drop the plan when the caller's goal has moved well away from the one the
+  // path was computed for (a re-planned rotation, a moving target).
+  if (bb.path && bb.pathGoal && Math.hypot(tx - bb.pathGoal.x, tz - bb.pathGoal.z) > 8) { bb.path = null; bb.pathGoal = null; }
+  if (bb.path && bb.path.length && Math.hypot(bb.path[0].x - a.pos.x, bb.path[0].z - a.pos.z) < 2.2) bb.path.shift();
+  if (bb.path && !bb.path.length) { bb.path = null; bb.pathGoal = null; }
+  const gx = bb.path ? bb.path[0].x : tx, gz = bb.path ? bb.path[0].z : tz;
+  let want = Math.atan2(-(gx - a.pos.x), -(gz - a.pos.z));
   // PROACTIVE wall steer (owner playtest: bots ground against buildings while
   // fleeing the storm). Walls used to be discovered only by the stuck detector
   // — AFTER seconds of running in place. Probe the path 3.2m out; if a wall too
-  // tall to hop is there, slide along it. The side is chosen ONCE and held until
-  // the way is clear, so the bot commits around the corner instead of dithering.
+  // tall to hop is there, request an A* path around it, and slide along the
+  // wall while (or if) the path isn't available. The slide side is chosen ONCE
+  // and held, so the bot commits around the corner instead of dithering.
   if (wallAhead(W, a, want, 3.2)) {
+    if (!bb.path) requestPath(W, b, tx, tz);
     if (!bb.wallSide) bb.wallSide = !wallAhead(W, a, want + 0.9, 3.2) ? 1 : (!wallAhead(W, a, want - 0.9, 3.2) ? -1 : 1);
-    want += bb.wallSide * 1.05;
+    if (!bb.path) want += bb.wallSide * 1.05;
   } else bb.wallSide = 0;
   steerYaw(a, want, dt, 7);
   inp.mz = 1;
@@ -507,11 +617,14 @@ function moveToward(W, b, tx, tz, dt, sprint) {
     if (!bb.detourDir) bb.detourDir = Math.random() < 0.5 ? -1 : 1;
     inp.mx = bb.detourDir;
     if (bb.stuckT > 2.2) {
-      // reroute AROUND the blocker while preserving progress — the old
-      // randNear(25) reroute abandoned a storm rotation outright and routinely
-      // re-planned straight back into the same wall
-      const dirA = want + bb.detourDir * 1.1;
-      bb.moveTo = { x: a.pos.x - Math.sin(dirA) * 26, z: a.pos.z - Math.cos(dirA) * 26 };
+      // hard-stuck: ask A* for a real route around the blocker; only when no
+      // path exists (or the cooldown holds) fall back to the blind detour that
+      // preserves rough progress toward the target
+      requestPath(W, b, tx, tz);
+      if (!bb.path) {
+        const dirA = want + bb.detourDir * 1.1;
+        bb.moveTo = { x: a.pos.x - Math.sin(dirA) * 26, z: a.pos.z - Math.cos(dirA) * 26 };
+      }
       bb.stuckT = 0;
     }
   } else bb.detourDir = 0;

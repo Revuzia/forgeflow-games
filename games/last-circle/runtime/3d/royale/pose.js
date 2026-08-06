@@ -16,7 +16,12 @@ export function findArmBones(root) {
   const b = {};
   root.traverse((o) => {
     if (!o.isBone) return;
-    switch (o.name) {
+    // The Mixamo re-rig prefixed every bone (mixamorig:RightArm — THREE strips
+    // the colon). The old exact-name switch matched NOTHING on the new rigs,
+    // which silently no-opped the entire pose layer: arm poses, support-hand
+    // IK, uprightTorso, foregrip. Normalize the prefix away before matching.
+    const nm = o.name.replace(/^mixamorig:?/i, "");
+    switch (nm) {
       case "RightArm": b.rArm = o; break;
       case "RightForeArm": b.rFore = o; break;
       case "RightHand": b.rHand = o; break;
@@ -29,8 +34,8 @@ export function findArmBones(root) {
       case "LeftUpLeg": b.lUpLeg = o; break;
       case "LeftLeg": b.lLeg = o; break;
       case "LeftFoot": b.lFoot = o; break;
-      case "Spine01": b.spine1 = o; break;
-      case "Spine02": b.spine2 = o; break;
+      case "Spine01": case "Spine1": b.spine1 = o; break;
+      case "Spine02": case "Spine2": b.spine2 = o; break;
       case "Spine": b.spine = o; break;
       case "Hips": b.hips = o; break;
       case "neck": case "Neck": b.neck = o; break;

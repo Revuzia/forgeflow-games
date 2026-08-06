@@ -246,6 +246,15 @@ async function preloadMeshySkin(W, key, tick) {
         cached.animations.push(g.animations[0]);
       }
     }
+    // SPLIT-BODY RELOAD (industry-standard layered clip): the full-body reload
+    // froze the legs, so reloading on the move SLID across the ground (owner
+    // report). Derive an upper-body-only variant — the state machine overlays
+    // it on walk/run so the legs keep their stride while the arms swap the mag.
+    const rl = cached.animations.find((c) => c.name === "rifle_reload");
+    if (rl && !cached.animations.some((c) => c.name === "rifle_reload_upper")) {
+      const tracks = rl.tracks.filter((t) => /Spine|Neck|Head|Shoulder|Arm|ForeArm|Hand/.test(t.name));
+      if (tracks.length) cached.animations.push(new THREE.AnimationClip("rifle_reload_upper", rl.duration, tracks));
+    }
   } else if (tick) tick(MESHY_CLIPS.length);   // warm cache: those files are already done, say so
   // The warm-up clone exists only to populate the gltf cache, but
   // kernel.loadCharacter registers ITS mixer in the per-frame update list too.
@@ -797,9 +806,21 @@ function installHumanInput(W) {
   // continuous axes each frame — the human input struct is rebuilt EVERY
   // frame exclusively from live key/button state, so nothing (stale brain,
   // missed keyup, replayed event) can hold a phantom move or trigger
-  W.kernel.onUpdate(() => {
+  W.kernel.onUpdate((dt) => {
     if (!W.player || !W.player.alive || W.phase === "menu" || W.paused) return;
     const inp = W.player.input;
+    // UNLOCKED LOOK-AROUND (owner: "mouse look should allow LOOK AROUND"):
+    // without pointer lock the camera used to be frozen behind the player —
+    // only RMB-drag turned it. Push the cursor past the soft screen edge and
+    // the view now turns that way, faster the further you push. Pointer lock
+    // (any click) remains the primary, full-precision look.
+    if (document.pointerLockElement !== dom && W.mouseNDC && !rmbDrag) {
+      const dz = 0.55, n = W.mouseNDC, d = dt || 0.016;
+      const ex = Math.abs(n.x) > dz ? Math.sign(n.x) * (Math.abs(n.x) - dz) / (1 - dz) : 0;
+      const ey = Math.abs(n.y) > dz ? Math.sign(n.y) * (Math.abs(n.y) - dz) / (1 - dz) : 0;
+      if (ex) inp.yaw -= ex * d * 2.8;
+      if (ey) inp.pitch = K.clamp(inp.pitch + ey * d * 1.9, -1.35, 1.35);
+    }
     inp.mx = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
     inp.mz = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
     const sprintHeld = !!keys.ShiftLeft;   // canon() folds ShiftRight into this
@@ -1359,7 +1380,11 @@ function syncObj(W, a, dt, far) {
       else if (a.hitReactT > 0 && a.clips.hit) {
         playAnim(a, "hit", { once: true });
       }
-      else if (useMixamoGun && a.weapon && a.weapon.state === "reloading" && a.clips.rifle_reload) {
+      else if (useMixamoGun && a.weapon && a.weapon.state === "reloading" && a.clips.rifle_reload && gs <= 0.7) {
+        // standing still: the full-body reload clip owns everything.
+        // MOVING reloads fall through to the locomotion branch below — legs
+        // keep walking/running and the upper-body overlay (managed after this
+        // chain) swaps the mag.
         playAnim(a, "rifle_reload", { once: true });
       }
       else if (useMixamoGun && a.crouching && fam === "rifle" && a.clips.rifle_crouch) {
@@ -1398,6 +1423,20 @@ function syncObj(W, a, dt, far) {
       }
       else { playAnim(a, "idle"); }
 
+      // moving reload overlay: upper-body reload layered over the locomotion
+      // clip playing above (disjoint track sets — the mixer blends them clean)
+      const wantOv = useMixamoGun && a.weapon && a.weapon.state === "reloading" && gs > 0.7 && a.rig.actions.rifle_reload_upper;
+      if (wantOv && !a._ovReload) {
+        const ov = a.rig.actions.rifle_reload_upper;
+        ov.reset(); ov.setLoop(THREE.LoopOnce, 1); ov.clampWhenFinished = true;
+        ov.setEffectiveWeight(1); ov.fadeIn(0.08); ov.play();
+        a._ovReload = true;
+      } else if (!wantOv && a._ovReload) {
+        const ov = a.rig.actions.rifle_reload_upper;
+        if (ov) ov.fadeOut(0.12);
+        a._ovReload = false;
+      }
+
       // ── ARM-POSE LAYER (pose.js) ──────────────────────────────────────────
       // Skip when Mixamo gun/fall clips already own the arms (better than the
       // old Meshy retargets that folded over the face). Gun SOCKET + barrel aim
@@ -1413,6 +1452,19 @@ function syncObj(W, a, dt, far) {
       else if (armed && !combat) mode = "lowReady";
       else if (armed) mode = "gunReady";
       else mode = "relax";
+      // AIM OFFSET (industry-standard upper-body layer): additively lean the
+      // spine toward the aim pitch AFTER the clip pose, so the hands — and the
+      // gun welded to them — track where the camera looks at every pitch and
+      // facing, instead of the clip's flat-ahead hold. Split across Spine1+2
+      // like a real aim-offset so the bend reads organic, not hinged.
+      if (a.armBones && useMixamoGun && armed && a.onGround && !a.gliding && !a.swimming && !a.emoting && a.alive) {
+        // negative: +rotation.x on these spines bends FORWARD, and looking UP
+        // (pitch > 0) must arch the torso BACK (verified by pitch-sweep probe)
+        const lean = K.clamp(a.pitch, -1.1, 1.1) * -0.30;
+        if (a.armBones.spine1) a.armBones.spine1.rotation.x += lean * 0.5;
+        if (a.armBones.spine2) a.armBones.spine2.rotation.x += lean * 0.5;
+        else if (a.armBones.spine && !a.armBones.spine1) a.armBones.spine.rotation.x += lean;
+      }
       // straighten a slouched rig BEFORE the arm layer (arms hang off the
       // spine, so upright must happen first) — skip mid-air/emote where the
       // clip owns the whole body
