@@ -79,8 +79,8 @@ const STRIKE_DELAY = { 1: 0.71, 3: 0.66, 4: 0.95, 5: 0.98 };
  * combat design doc — the shape matters now (casts gate on mana, the HUD
  * shows the spend, the ribbon drains per second), the numbers come later.
  */
-const MANA_COST = { 1: 12, 3: 14, 4: 16, 5: 26 };
-const RIBBON_DRAIN = 7;   // per second while the stream is held
+const MANA_COST = { 1: 15, 3: 25, 4: 30, 5: 45 };   // spec §1.1, QA-verified
+const RIBBON_DRAIN = 0;   // §1.1: the Bolt/stream is the resource-neutral filler
 
 /**
  * Cooldowns, seconds — the combat design doc's numbers (wave 4, mini-vortex
@@ -352,6 +352,11 @@ export class SpellSystem {
         const ctx = this.ctx;
         const rig = ctx.rig;
 
+        // Spell unlock gate (progression §7): a locked key does nothing at
+        // all — no wind-up, no spend. `unlocked` is progression's live Set
+        // of INTERNAL ids, pushed once at attach (identity is stable).
+        if (this.unlocked && !this.unlocked.has(key)) return;
+
         if (key === 2) {
             this.holdRibbon(true);
             return;
@@ -465,6 +470,7 @@ export class SpellSystem {
 
     /** @param {boolean} held */
     holdRibbon(held) {
+        if (held && this.unlocked && !this.unlocked.has(2)) return;
         if (held) {
             if (!this.ribbon.held) {
                 this.ribbon.trigger();

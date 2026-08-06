@@ -148,7 +148,17 @@ export const ARCH_STALKER = 2;
 export const ARCH_BRUTE = 3;
 
 /** Spawn keys, in archetype order. */
-export const COLD_KEYS = ["rime_imp", "hoarfrost_sprite", "frost_stalker", "glacier_brute"];
+export const COLD_KEYS = ["rimeImp", "hoarfrostSprite", "frostStalker", "glacierBrute"];
+/** Accepts legacy snake_case and maps the not-yet-built Cold roster onto the
+ *  nearest built archetype so the encounter tables never forfeit a unit. */
+export const KEY_ALIAS = {
+    rime_imp: "rimeImp", hoarfrostSprite: "hoarfrostSprite",
+    frostStalker: "frostStalker", glacierBrute: "glacierBrute",
+    rimeboundCultist: "hoarfrostSprite", iceCultist: "hoarfrostSprite",
+    hailPlateGuard: "glacierBrute", frostGolem: "glacierBrute",
+    glassRevenant: "frostStalker", blizzardAssassin: "frostStalker",
+    rimeSkierRaider: "frostStalker", moraineColossus: "glacierBrute",
+};
 
 /**
  * The Cold data slice — COMBAT_DESIGN.md §2.1, L10 snapshots, quoted verbatim.
@@ -162,7 +172,7 @@ export const COLD_KEYS = ["rime_imp", "hoarfrost_sprite", "frost_stalker", "glac
  * poise there, which is exactly the §3.4 stance-break opener).
  */
 export const COLD_DATA = {
-    rime_imp: {         // §2.1 #1 — swarm-melee
+    rimeImp: {         // §2.1 #1 — swarm-melee
         name: "Rime Imp", arch: ARCH_IMP, tier: TIER.FODDER,
         hp: 24, poise: 10, speed: 6.2, perception: 25,
         atkRange: 1.2, dmg: 4, telegraphMs: 500, ring: 0,
@@ -170,7 +180,7 @@ export const COLD_DATA = {
         leash: 40, cooldown: IMP_CD_S,
         radius: 0.35, height: 0.9, hyperArmor: false,
     },
-    hoarfrost_sprite: { // §2.1 #4 — ranged-caster
+    hoarfrostSprite: { // §2.1 #4 — ranged-caster
         name: "Hoarfrost Sprite", arch: ARCH_SPRITE, tier: TIER.FODDER,
         hp: 28, poise: 10, speed: 4.5, perception: 30,
         castRange: 25, dmg: 5, volley: 3, projSpeed: 12, telegraphMs: 600,
@@ -178,7 +188,7 @@ export const COLD_DATA = {
         alertRadius: 12, leash: 40, cooldown: SPRITE_CD_S,
         radius: 0.35, height: 1.6, hyperArmor: false,
     },
-    frost_stalker: {    // §2.1 #3 — ambusher / pursuer
+    frostStalker: {    // §2.1 #3 — ambusher / pursuer
         name: "Frost Stalker", arch: ARCH_STALKER, tier: TIER.LIGHT,
         hp: 50, poise: 20, speed: 7.0, subSpeed: 13, perception: 15,
         trigger: 8,         // erupts when the player closes within 8 m
@@ -188,7 +198,7 @@ export const COLD_DATA = {
         cooldown: 0,
         radius: 0.45, height: 0.8, hyperArmor: false,
     },
-    glacier_brute: {    // §2.1 #2 — tank
+    glacierBrute: {    // §2.1 #2 — tank
         name: "Glacier Brute", arch: ARCH_BRUTE, tier: TIER.ELITE,
         hp: 520, poise: 120, speed: 3.2, perception: 18,
         atkRange: 2.5, dmg: 22, telegraphMs: 1200,
@@ -303,6 +313,7 @@ export class Enemies {
      * @returns {number} registry id, or -1 if the pool or registry is full
      */
     spawn(key, x, z, level) {
+        key = KEY_ALIAS[key] || key;
         const k = typeof key === "number" ? key : COLD_KEYS.indexOf(key);
         if (k < 0 || k >= this._rows.length) return -1;
         let i = -1;
@@ -386,10 +397,55 @@ export class Enemies {
             if (this.alive[i]) this._brain(i, dt);
         }
         this._separate();
+        this._aggroOnDamage();
         if (this.vis) this.vis.update(dt);
     }
 
+    /**
+     * A hit is an alarm (spec §4.1): an idle/returning enemy that takes
+     * damage enters combat regardless of range and raises the pack — the
+     * 31-40 m bolt-sniping exploit dies here. Drains the registry's hit
+     * events (type 0) for ids in this pool.
+     * @returns {void}
+     */
+    _aggroOnDamage() {
+        const reg = this.registry;
+        for (let e = 0; e < reg.eventCount; e++) {
+            if (reg.evType[e] !== 0 || reg.evKind[e] === "dummy") continue;
+            const id = reg.evId[e];
+            for (let i = 0; i < ENEMY_MAX; i++) {
+                if (!this.alive[i] || this.id[i] !== id) continue;
+                if (this.state[i] === ST_IDLE || this.state[i] === ST_RETURN) {
+                    this.state[i] = ST_COMBAT;
+                    this.stateT[i] = 0;
+                    this.leashT[i] = 0;
+                    this._propagate(i);
+                }
+                break;
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ brains
+
+    /**
+     * Silent removal — the encounter director's despawn contract: no kill
+     * event, no shatter, no XP. Frees tokens, the registry slot and the
+     * visual.
+     * @param {number} id registry id
+     * @returns {void}
+     */
+    despawn(id) {
+        for (let i = 0; i < ENEMY_MAX; i++) {
+            if (!this.alive[i] || this.id[i] !== id) continue;
+            this._releaseTokens(i);
+            this.volleyLeft[i] = 0;
+            this.registry.remove(id);
+            if (this.vis) this.vis.free(i);
+            this.alive[i] = 0;
+            return;
+        }
+    }
 
     /** @param {number} i @param {number} dt */
     _brain(i, dt) {
@@ -397,6 +453,8 @@ export class Enemies {
         const id = this.id[i];
         const s = reg.slot(id);
         if (s < 0) {                       // removed under us — free the body
+            this._releaseTokens(i);
+            this.volleyLeft[i] = 0;
             if (this.vis) this.vis.free(i);
             this.alive[i] = 0;
             return;
@@ -816,6 +874,8 @@ export class Enemies {
     /** Damage the player, honouring the 0.5 s i-frame window. */
     _hurtPlayer(dmg) {
         if (this._time < this._pIFrameUntil) return;
+        if (this.progression && this.progression.isInvulnerable &&
+            this.progression.isInvulnerable()) return;
         const c = this.controller;
         c.health = Math.max(0, c.health - dmg);
         this._pIFrameUntil = this._time + PLAYER_IFRAME_S;

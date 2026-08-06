@@ -38,11 +38,28 @@ const EVT_MAX = 128;
 export const TIER = { FODDER: 0, LIGHT: 1, MEDIUM: 2, HEAVY: 3, ELITE: 4, BOSS: 5 };
 
 /** §5.2 CC matrix: knockback fraction, stun multiplier, liftable. */
-const KB_FRAC = [1.0, 1.0, 0.7, 0.3, 0.0, 0.0];
-const STUN_MULT = [1.0, 1.0, 1.0, 0.75, 0.0, 0.0];
-const LIFTABLE = [true, true, false, false, false, false];
-/** Stun converts to bonus poise damage at tiers that resist it (×1.5). */
-const STUN_TO_POISE = [0, 0, 0, 0, 1.5, 1.5];
+const KB_FRAC = [1.0, 0.7, 0.7, 0.3, 0.3, 0.0];
+const STUN_MULT = [1.0, 1.0, 1.0, 0.5, 0.5, 0.0];
+const LIFTABLE = [true, true, true, false, false, false];
+/** BOSS only: stun converts to stance damage INSTEAD of stunning (§5.2's
+ *  '60 stance dmg instead' — the conversion REPLACES the hit's poise). */
+const STUN_TO_POISE = [0, 0, 0, 0, 0, 1.5];
+/** Chill effectiveness per tier (§5.2 slow row: elite 70%, boss 50%). */
+const CHILL_EFF = [1, 1, 1, 1, 0.7, 0.5];
+/** Stance-break vulnerability windows, s (§5.1; boss mid of 3-5). */
+const BREAK_DUR = [1.2, 1.2, 1.5, 2.0, 2.5, 4.0];
+/** Damage taken multiplier during a break (§5.1: ×1.5, boss ×1.75). */
+const BREAK_MULT = [1.2, 1.2, 1.3, 1.5, 1.5, 1.75];
+/** Poise refill after this long unhit, s (§5.1; boss uses the Sekiro drain). */
+const POISE_REGEN_S = [4, 5, 5, 6, 8, 0];
+/** Boss stance: drains 20/s toward FULL only after 3 s without poise damage. */
+const BOSS_STANCE_DRAIN = 20, BOSS_STANCE_IDLE_S = 3;
+/** §5.3 diminishing returns: same CC category inside a 15 s window pays
+ *  100% -> 50% -> 25% -> immune; the suppressed application emits a
+ *  'resist'/'immune' event so the floater layer can say so. */
+const DR_WINDOW_S = 15;
+const DR_SCALE = [1, 0.5, 0.25, 0];
+const CC_CAT = { stun: 0, knockback: 1, lift: 2, slow: 3 };
 
 export class DamageableRegistry {
     constructor() {
@@ -69,6 +86,12 @@ export class DamageableRegistry {
         this.chill = new Uint8Array(MAX);
         this.chillAt = new Float32Array(MAX);
         this.brittleUntil = new Float32Array(MAX);
+        /** Stance-break vulnerability window (§5.1) + poise-regen clock. */
+        this.breakUntil = new Float32Array(MAX);
+        this.lastPoiseHitAt = new Float32Array(MAX);
+        /** §5.3 DR: per-category application count + window start. */
+        this._drCount = new Uint8Array(MAX * 4);
+        this._drStart = new Float32Array(MAX * 4);
         /** Knockback impulse accumulated this frame; bodies consume it. */
         this.kbX = new Float32Array(MAX);
         this.kbZ = new Float32Array(MAX);
@@ -94,6 +117,9 @@ export class DamageableRegistry {
         this.evTier = new Uint8Array(EVT_MAX);
         /** @type {(string|null)[]} */
         this.evTag = new Array(EVT_MAX).fill(null);
+        /** @type {(string|null)[]} kind of the body at emit time — lets XP
+         *  drop dummy kills even after the slot is removed (QA exploit). */
+        this.evKind = new Array(EVT_MAX).fill(null);
 
         /** Game time, advanced by update(). */
         this.time = 0;
@@ -118,6 +144,11 @@ export class DamageableRegistry {
         this.stunUntil[i] = this.staggerUntil[i] = this.slowUntil[i] = 0;
         this.slowFrac[i] = 0;
         this.chill[i] = 0; this.chillAt[i] = 0; this.brittleUntil[i] = 0;
+        this.breakUntil[i] = 0; this.lastPoiseHitAt[i] = -99;
+        for (let c = 0; c < 4; c++) {
+            this._drCount[i * 4 + c] = 0;
+            this._drStart[i * 4 + c] = 0;
+        }
         this.kbX[i] = this.kbZ[i] = 0;
         this.lifted[i] = 0;
         this.name[i] = d.name || null;
@@ -153,8 +184,13 @@ export class DamageableRegistry {
                 this.height, this.hp, this.hpMax, this.tier, this.level,
                 this.poise, this.poiseMax, this.stunUntil, this.staggerUntil,
                 this.slowUntil, this.slowFrac, this.chill, this.chillAt,
-                this.brittleUntil, this.kbX, this.kbZ, this.lifted, this.idOf];
+                this.brittleUntil, this.breakUntil, this.lastPoiseHitAt,
+                this.kbX, this.kbZ, this.lifted, this.idOf];
             for (const c of cols) c[i] = c[last];
+            for (let c = 0; c < 4; c++) {
+                this._drCount[i * 4 + c] = this._drCount[last * 4 + c];
+                this._drStart[i * 4 + c] = this._drStart[last * 4 + c];
+            }
             this.name[i] = this.name[last];
             this.kind[i] = this.kind[last];
             this._slotOf.set(this.idOf[i], i);
@@ -183,6 +219,8 @@ export class DamageableRegistry {
         let dmg = amount;
         // Brittle: +20% damage taken (§1.1 Chill/Brittle).
         if (this.time < this.brittleUntil[i]) dmg *= 1.2;
+        // Stance-break vulnerability (§5.1): broken bodies take extra.
+        if (this.time < this.breakUntil[i]) dmg *= BREAK_MULT[t];
         this.hp[i] -= dmg;
         this._event(0, i, dmg, o && o.tag);
 
@@ -198,36 +236,47 @@ export class DamageableRegistry {
             }
         }
 
-        // Poise, with stun-conversion for CC-immune tiers.
+        // Poise. On a stun-converting tier (boss), the conversion REPLACES
+        // the hit's own poise — §5.2 boss row is '60 stance dmg instead',
+        // total, not additive (QA finding: 105 before this rule).
         let poiseDmg = (o && o.poise) || 0;
         if (o && o.cc === "stun" && STUN_TO_POISE[t] > 0) {
-            poiseDmg += ((o.ccMag ?? 0) || 30) * STUN_TO_POISE[t];
+            poiseDmg = ((o.ccMag ?? 0) || 40) * STUN_TO_POISE[t];
         }
         if (poiseDmg > 0 && this.poiseMax[i] > 0) {
             this.poise[i] -= poiseDmg;
+            this.lastPoiseHitAt[i] = this.time;
             if (this.poise[i] <= 0) {
                 this.poise[i] = this.poiseMax[i];
-                this.staggerUntil[i] = Math.max(this.staggerUntil[i], this.time + 1.2);
+                // Tiered vulnerability window (§5.1), not a flat 1.2 s.
+                this.breakUntil[i] = this.time + BREAK_DUR[t];
+                this.staggerUntil[i] = Math.max(
+                    this.staggerUntil[i], this.time + BREAK_DUR[t]);
                 this._event(2, i, poiseDmg, "poisebreak");
             }
         }
 
-        // CC through the matrix.
+        // CC through the matrix, scaled by §5.3 diminishing returns: the
+        // same category on the same target inside 15 s pays 100/50/25/0%,
+        // and a suppressed application says so on screen.
         if (o && o.cc) {
-            const dur = o.ccDur || 0;
-            if (o.cc === "stun" && STUN_MULT[t] > 0) {
+            const dr = this._drScale(i, o.cc);
+            const dur = (o.ccDur || 0) * dr;
+            if (dr <= 0) {
+                this._event(3, i, 0, "immune");
+            } else if (o.cc === "stun" && STUN_MULT[t] > 0) {
                 this.stunUntil[i] = Math.max(this.stunUntil[i], this.time + dur * STUN_MULT[t]);
-                this._event(3, i, dur, "stun");
+                this._event(3, i, dur, dr < 1 ? "resist" : "stun");
             } else if (o.cc === "knockback" && KB_FRAC[t] > 0) {
-                const m = ((o.ccMag ?? 4) || 4) * KB_FRAC[t];
+                const m = ((o.ccMag ?? 4) || 4) * KB_FRAC[t] * dr;
                 this.kbX[i] += (o.dirX || 0) * m;
                 this.kbZ[i] += (o.dirZ || 0) * m;
-                this.staggerUntil[i] = Math.max(this.staggerUntil[i], this.time + 0.4);
+                this.staggerUntil[i] = Math.max(this.staggerUntil[i], this.time + 0.4 * dr);
             } else if (o.cc === "lift" && LIFTABLE[t]) {
                 this.lifted[i] = 1;
             } else if (o.cc === "slow") {
                 this.slowUntil[i] = Math.max(this.slowUntil[i], this.time + dur);
-                this.slowFrac[i] = Math.max(this.slowFrac[i], (o.ccMag ?? 0.4) || 0.4);
+                this.slowFrac[i] = Math.max(this.slowFrac[i], ((o.ccMag ?? 0.4) || 0.4) * dr);
             }
         }
 
@@ -238,12 +287,32 @@ export class DamageableRegistry {
         return dmg;
     }
 
+    /**
+     * §5.3 DR: consume one application of a CC category on a slot — the
+     * scale for THIS application (1 / 0.5 / 0.25 / 0), counted inside a
+     * rolling 15 s window.
+     */
+    _drScale(i, cat) {
+        const c = CC_CAT[cat];
+        if (c === undefined) return 1;
+        const k = i * 4 + c;
+        if (this.time - this._drStart[k] > DR_WINDOW_S) {
+            this._drStart[k] = this.time;
+            this._drCount[k] = 0;
+        }
+        const n = Math.min(this._drCount[k], 3);
+        this._drCount[k] = n + 1;
+        return DR_SCALE[n];
+    }
+
     /** Effective move-speed multiplier for a body (chill + slow + stagger). */
     speedMult(id) {
         const i = this.slot(id);
         if (i < 0) return 1;
         let m = 1;
-        if (this.time - this.chillAt[i] <= 3) m *= 1 - 0.06 * this.chill[i];
+        if (this.time - this.chillAt[i] <= 3) {
+            m *= 1 - 0.06 * this.chill[i] * CHILL_EFF[this.tier[i]];
+        }
         if (this.time < this.slowUntil[i]) m *= 1 - this.slowFrac[i];
         if (this.time < this.stunUntil[i] || this.lifted[i]) m = 0;
         return m;
@@ -315,7 +384,10 @@ export class DamageableRegistry {
     }
 
     _event(type, slot, amount, tag) {
+        // The last 8 slots are reserved for KILLS: XP is exclusively
+        // event-driven, so a hit-flood must never drop a kill (QA perf).
         if (this.eventCount >= EVT_MAX) return;
+        if (type !== 1 && this.eventCount >= EVT_MAX - 8) return;
         const e = this.eventCount++;
         this.evType[e] = type;
         this.evId[e] = this.idOf[slot];
@@ -325,16 +397,38 @@ export class DamageableRegistry {
         this.evZ[e] = this.z[slot];
         this.evTier[e] = this.tier[slot];
         this.evTag[e] = tag || null;
+        this.evKind[e] = this.kind[slot];
     }
 
-    /** Advance time; expire lift when nothing renews it. @param {number} dt */
+    /**
+     * Advance time and run poise recovery (§5.1): tiers refill after their
+     * unhit window; the boss stance meter climbs 20/s toward FULL only
+     * after 3 s without poise damage (Sekiro model).
+     * @param {number} dt
+     */
     update(dt) {
         this.time += dt;
+        for (let i = 0; i < this.count; i++) {
+            if (this.poise[i] >= this.poiseMax[i] || this.poiseMax[i] <= 0) continue;
+            const idle = this.time - this.lastPoiseHitAt[i];
+            const t = this.tier[i];
+            if (t === TIER.BOSS) {
+                if (idle >= BOSS_STANCE_IDLE_S) {
+                    this.poise[i] = Math.min(this.poiseMax[i],
+                        this.poise[i] + BOSS_STANCE_DRAIN * dt);
+                }
+            } else if (POISE_REGEN_S[t] > 0 && idle >= POISE_REGEN_S[t]) {
+                this.poise[i] = this.poiseMax[i];
+            }
+        }
     }
 
     /** Clear the event ring — main.js calls this LAST in the frame. */
     endFrame() {
-        for (let e = 0; e < this.eventCount; e++) this.evTag[e] = null;
+        for (let e = 0; e < this.eventCount; e++) {
+            this.evTag[e] = null;
+            this.evKind[e] = null;
+        }
         this.eventCount = 0;
     }
 }

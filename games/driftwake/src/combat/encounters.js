@@ -313,7 +313,8 @@ export class Encounters {
         if (dx * dx + dz * dz < EXCLUDE_SQ) return -1;
         const lv = (typeof level === "number" && level >= 1)
             ? Math.round(level)
-            : this.data.enemyLevelFor(key, this._level());
+            // realm, not the unit key — bands are per-realm (QA #17).
+            : this.data.enemyLevelFor(this.realm, this._level());
         const id = this.enemies.spawn(key, x, z, lv);
         return (typeof id === "number" && id > 0) ? id : -1;
     }

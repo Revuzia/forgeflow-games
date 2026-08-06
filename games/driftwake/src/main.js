@@ -491,7 +491,13 @@ async function boot() {
     spells.addConsumers(enemyVis.material);
     const encounters = new Encounters(enemies, registry, character, combatData, minimap);
     const progression = new Progression(character, registry, null);
-    progression.attach({ spells, hud });
+    // Two consumers, two channels: the UNLOCK set gates casts in the spell
+    // system; the per-level damage multiplier scales hits in the damage
+    // pass (QA: attaching only spellSystem left player damage flat forever).
+    progression.attach({ spells: spellHits, hud });
+    spells.unlocked = progression.unlocked;
+    spellbar.progression = progression;
+    enemies.progression = progression;
     const floaters = new Floaters(registry, rig);
     floaters.attach({ overlay });
     const enemyBars = new EnemyBars(registry, rig);

@@ -273,7 +273,19 @@ export class Progression {
         if (r) {
             const n = r.eventCount;
             for (let e = 0; e < n; e++) {
-                if (r.evType[e] === 1) this._onKill(r.evId[e], r.evTier[e]);
+                if (r.evType[e] !== 1) continue;
+                // Training dummies pay NO kill XP — the respawning totems
+                // were an infinite farm (QA exploit #1). One-time 20 XP
+                // first-blood grant, then silence. evKind is stamped at
+                // emit time, so this survives slot removal.
+                if (r.evKind[e] === "dummy") {
+                    if (!this._dummyFirstBlood) {
+                        this._dummyFirstBlood = true;
+                        this.addXP(20, "first-blood");
+                    }
+                    continue;
+                }
+                this._onKill(r.evId[e], r.evTier[e]);
             }
         }
 
@@ -336,6 +348,11 @@ export class Progression {
 
     /** Persist the v2 blob. Event-scoped — never on the steady frame path.
      *  @returns {void} */
+    /** Unlock level for an internal spell id (spellbar lock badges). */
+    unlockLevelOf(id) {
+        return UNLOCK_LEVEL[id] || 1;
+    }
+
     save() {
         this.lastSeenTs = Date.now();
         const blob = {

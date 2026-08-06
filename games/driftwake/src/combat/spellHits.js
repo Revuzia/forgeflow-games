@@ -111,6 +111,10 @@ export class SpellHits {
         this._qArc = 0;
         /** @type {(slot:number, id:number, d:number)=>void} */
         this._waveCb = (slot, id, d) => this._waveHit(slot, id);
+        /** @type {(slot:number, id:number, d:number)=>void} */
+        this._waveBirthCb = (slot, id, d) => this._waveBirthHit(slot, id);
+        this._waveBirth = false;
+        this._qPx = 0; this._qPz = 0;
         /** @type {(slot:number, id:number, d2:number)=>void} */
         this._burstCb = (slot, id, d2) => this._bloomBurstHit(slot, id, d2);
         /** @type {(slot:number, id:number, d2:number)=>void} */
@@ -291,19 +295,29 @@ export class SpellHits {
 
         // New cast = activation edge or the spell's clock rewinding (a recast
         // RESTARTS the same object). Either clears the hit latch.
-        if (sw.active && (!this._sweepActive || sw.t < this._sweepT)) {
+        const newCast = sw.active && (!this._sweepActive || sw.t < this._sweepT);
+        if (newCast) {
             this._waveN = 0;
         }
         this._sweepActive = sw.active;
         this._sweepT = sw.active ? sw.t : Infinity;
         if (!sw.active) return;
+        this._waveBirth = newCast ? true : this._waveBirth;
 
         // The envelope, exactly as sweep.update computes it — the crest that
         // is drawn is the crest that hits.
         const life01 = sw.t / D.life;
         const rise = smooth01(sw.t / 0.26);
         const fall = 1 - clamp01((life01 - 0.55) / 0.45);
-        const env = rise * fall * fall;
+        let env = rise * fall * fall;
+        // BIRTH SWELL (QA battery C): a point-blank enemy is crossed by the
+        // newborn crest while the rise envelope is still ~0 — it was gated
+        // to zero damage and then left behind the traveling annulus forever,
+        // so melee-range waves whiffed. The wave is the kit's space-maker
+        // (§0 pillar 1: face-tanking must be punishable BY the player too):
+        // during the first 0.30 s the effective envelope floors at 0.45, so
+        // a shove at the feet lands as a real hit instead of a phantom.
+        if (sw.t < 0.30) env = Math.max(env, 0.45);
         if (env < D.envGate) return;       // §9.3: same gate as _plough
 
         // Crescent geometry, mirrored from sweep.update: circle centre one
@@ -324,6 +338,34 @@ export class SpellHits {
             D.curve - D.thick, D.curve + D.thick, arc,
             this._waveCb
         );
+
+        // BIRTH PASS (QA battery C, second finding): the crest is born at
+        // reach 1.4 and only travels OUT — an enemy inside that radius at
+        // the strike is behind the crescent forever and could never be hit.
+        // One extra sweep on the first active frame covers the birth swell:
+        // everything from the arc's centre out to the newborn crest, trimmed
+        // to bodies actually in FRONT of the caster.
+        if (this._waveBirth) {
+            this._waveBirth = false;
+            this._qPx = sw.ox; this._qPz = sw.oz;
+            this.registry.forEachInCone(
+                kx, kz, sw.dx, sw.dz,
+                0, D.curve + D.thick, arc,
+                this._waveBirthCb
+            );
+        }
+    }
+
+    /** Birth-swell hit: same as _waveHit but requires the body to be ahead
+     *  of the CASTER (the cone centre sits 4.1 m behind the origin, so its
+     *  wedge alone would reach bodies behind the player's back).
+     *  @param {number} slot @param {number} id */
+    _waveBirthHit(slot, id) {
+        const reg = this.registry;
+        const ex = reg.x[slot] - this._qPx;
+        const ez = reg.z[slot] - this._qPz;
+        if (ex * this._qDx + ez * this._qDz < -0.2) return;
+        this._waveHit(slot, id);
     }
 
     /** @param {number} slot @param {number} id */
@@ -418,7 +460,10 @@ export class SpellHits {
             }
             this._cOwed[i] += dt;
             if (this._cOwed[i] < 1 / this.data.vortex.tickHz) continue;
-            const k = Math.min(this._cOwed[i], this.data.vortex.tickCap);
+            // Catch-up clamp: 0.25 s of owed ticks, NOT one tick-interval —
+            // at 7-15 fps the old 0.05 cap silently halved vortex damage
+            // (QA battery A measured 8.1 of the designed 15 DPS).
+            const k = Math.min(this._cOwed[i], 0.25);
             this._cOwed[i] = 0;
             reg.damage(reg.idOf[i], D.columnDps * k * this.damageMult, {
                 tag: "bloom",
@@ -554,7 +599,9 @@ export class SpellHits {
             }
             this._vOwed[i] += dt;
             if (this._vOwed[i] < 1 / D.tickHz) continue;
-            const k = Math.min(this._vOwed[i], D.tickCap);
+            // 0.25 s catch-up, not one tick-interval: the 0.05 cap halved
+            // vortex damage below ~20 fps (QA battery A: 8.1 of 15 DPS).
+            const k = Math.min(this._vOwed[i], 0.25);
             this._vOwed[i] = 0;
 
             const liftable = reg.tier[i] <= TIER.LIGHT;

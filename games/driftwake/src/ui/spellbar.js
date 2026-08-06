@@ -125,6 +125,20 @@ const CSS = `
 }
 .sb-slot.cooling .sb-cds { opacity: 1; }
 
+/* Locked (progression §7): dark, keybind swapped for the unlock level. */
+.sb-slot.locked { opacity: 0.42; }
+.sb-slot.locked svg { opacity: 0.35; }
+.sb-lock {
+  position: absolute; left: 0; right: 0; top: 50%;
+  transform: translateY(-52%);
+  text-align: center;
+  font: 700 10px/1 "Segoe UI", system-ui, sans-serif;
+  color: rgba(210, 232, 246, 0.85);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  display: none;
+}
+.sb-slot.locked .sb-lock { display: block; }
+
 /* Cast flash: one sharp frost pop on the slot that fired. */
 @keyframes sb-cast {
   0%   { border-color: rgba(234, 250, 255, 0.95); transform: scale(1.12);
@@ -151,6 +165,7 @@ export class SpellBar {
             `<div class="sb-slot" data-spell="${s.id}">` +
             `<svg viewBox="0 0 24 24" aria-hidden="true">${s.glyph}</svg>` +
             `<div class="sb-cd"></div><span class="sb-cds"></span>` +
+            `<span class="sb-lock"></span>` +
             `<span class="sb-bind">${s.bind}</span></div>`
         ).join("");
         document.body.appendChild(el);
@@ -172,6 +187,9 @@ export class SpellBar {
         /** Cached cooldown fraction + seconds text per spell id. */
         this._cdFrac = { 1: -1, 3: -1, 4: -1, 5: -1 };
         this._cdText = { 1: "", 3: "", 4: "", 5: "" };
+        /** @type {{unlocked: Set<number>, unlockLevelOf?: (id:number)=>number}|null} */
+        this.progression = null;
+        this._lockState = { 1: null, 2: null, 3: null, 4: null, 5: null };
     }
 
     /** @param {{ overlay?: any, spells?: any }} refs @returns {void} */
@@ -197,6 +215,23 @@ export class SpellBar {
         if (held !== this._held) {
             this._held = held;
             this._slot[2].classList.toggle("held", held);
+        }
+
+        // Lock states (progression §7): cached; a ding re-renders at most 5.
+        const prog = this.progression;
+        if (prog && prog.unlocked) {
+            for (const idStr in this._slot) {
+                const id = +idStr;
+                const locked = !prog.unlocked.has(id);
+                if (locked === this._lockState[id]) continue;
+                this._lockState[id] = locked;
+                const slot = this._slot[id];
+                slot.classList.toggle("locked", locked);
+                if (locked) {
+                    const lv = prog.unlockLevelOf ? prog.unlockLevelOf(id) : "";
+                    slot.querySelector(".sb-lock").textContent = "L" + lv;
+                }
+            }
         }
 
         // Cooldown wipes: fraction to 2 decimal places (sub-percent writes
