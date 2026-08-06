@@ -446,13 +446,11 @@ const _camDir = new THREE.Vector3(), _camPt = new THREE.Vector3();
  * shots land EXACTLY where the reticle points — slopes, shoulders, parallax
  * all accounted for. (The old fixed-120m convergence missed uphill targets.) */
 function crosshairPoint(W, shooter, out) {
-  // aim ray: through the OS cursor when pointer lock is off (the reticle IS
-  // the cursor), through screen center when locked
-  if (W.mouseNDC && !(W.pointerLocked && W.pointerLocked())) {
-    _camDir.set(W.mouseNDC.x, W.mouseNDC.y, 0.5).unproject(W.camera).sub(W.camera.position).normalize();
-  } else {
-    W.camera.getWorldDirection(_camDir);
-  }
+  // aim ray: ALWAYS through screen center (owner: "make sure cursor always
+  // stays CENTERED"). The reticle is pinned center-screen in every mode now;
+  // unlocked mouse pans the camera (cursor-follow) instead of moving the aim
+  // point around the screen — the AAA model.
+  W.camera.getWorldDirection(_camDir);
   const o = W.camera.position;
   const FAR = 300;
   let bestT = FAR;

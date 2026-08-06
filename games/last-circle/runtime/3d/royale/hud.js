@@ -2153,11 +2153,10 @@ export function update(W, dt) {
   const dom = W.kernel.renderer.domElement;
   const wantCursor = p.alive && !W.paused ? "none" : "";
   if (dom.style.cursor !== wantCursor) dom.style.cursor = wantCursor;
-  if (!locked && W.mousePx) {
-    if (R.cross.style.left !== "0px") { R.cross.style.left = "0px"; R.cross.style.top = "0px"; }
-    R.cross.style.transform = `translate(${W.mousePx.x - 28}px, ${W.mousePx.y - 28}px) scale(${C.bloom || 1})`;
-    R._crossAtCursor = true;
-  } else if (R._crossAtCursor) {
+  // Reticle pinned to SCREEN CENTER in every mode (owner: "cursor always
+  // stays CENTERED") — shots aim through center (weapons.js crosshairPoint),
+  // and the unlocked mouse pans the camera instead of dragging the reticle.
+  if (R._crossAtCursor) {
     R._crossAtCursor = false;
     R.cross.style.left = "50%"; R.cross.style.top = "50%";
     R.cross.style.transform = `translate(-50%,-50%) scale(${C.bloom || 1})`;
