@@ -57,7 +57,7 @@ BOOTSTRAP = r"""
   };
   // Chrome them out: we are comparing rendered frames, not HUDs.
   window.__sfChrome = () => {
-    for (const sel of ['#boot', '#hint', '#overlay', '#crosshair', '.overlay', '#perf']) {
+    for (const sel of ['#boot', '#hint', '#overlay', '#crosshair', '#spellbar', '.overlay', '#perf']) {
       document.querySelectorAll(sel).forEach(e => { e.style.display = 'none'; });
     }
   };

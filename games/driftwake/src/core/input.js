@@ -124,6 +124,9 @@ export function initInput(canvas, hooks) {
     document.addEventListener("mousedown", (e) => {
         if (!input.locked) return;
         if (e.button === 2) input.surf = true;
+        // LMB = the Ribbon hold (owner remap 2026-08-05). Same plain-property
+        // write the key used to make, so harness pins keep working.
+        if (e.button === 0) input.spellHeld2 = true;
     });
 
     document.addEventListener("mouseup", (e) => {
@@ -132,6 +135,7 @@ export function initInput(canvas, hooks) {
         // cancels a surf, and unlock/blur already clear the flag anyway.
         if (!input.locked) return;
         if (e.button === 2) input.surf = false;
+        if (e.button === 0) input.spellHeld2 = false;
     });
 
     document.addEventListener(
@@ -179,16 +183,12 @@ export function initInput(canvas, hooks) {
         }
 
         const n = SPELL_KEYS[e.code];
-        if (n) {
-            input.spellPressed = n;
-            if (n === 2) input.spellHeld2 = true;
-        }
+        if (n) input.spellPressed = n;
     });
 
     window.addEventListener("keyup", (e) => {
         keys[e.code] = false;
         if (e.code === "Space") input.jump = false;
-        if (SPELL_KEYS[e.code] === 2) input.spellHeld2 = false;
     });
 
     window.addEventListener("blur", () => {
@@ -200,12 +200,17 @@ export function initInput(canvas, hooks) {
     });
 }
 
+/**
+ * Key -> INTERNAL spell id (owner remap 2026-08-05): the Ribbon (internal 2)
+ * moved to LMB-hold, and the remaining spells shifted down one key. The
+ * internal ids never change — sweep 1, ribbon 2, bloom 3, crystallize 4,
+ * vortex 5 — only this table and the LMB handlers below decide bindings.
+ */
 const SPELL_KEYS = {
-    Digit1: 1,
-    Digit2: 2,
-    Digit3: 3,
-    Digit4: 4,
-    Digit5: 5,
+    Digit1: 1,   // wave
+    Digit2: 3,   // bloom
+    Digit3: 4,   // crystal spikes
+    Digit4: 5,   // vortex
 };
 
 /**
