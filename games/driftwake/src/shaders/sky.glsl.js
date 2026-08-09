@@ -62,6 +62,8 @@
  * WebGPU: NDC z there is [0, 1] and here it is [-1, 1], and either way z/w just
  * inside 1.0 lands just inside the far plane.
  */
+import { SKY_REALM_BLOCK } from "./lib/ground.glsl.js";
+
 export const vertex = /* glsl */`
 #include "lib/common"
 
@@ -105,6 +107,7 @@ uniform vec2  uWindDir;
 uniform float uCloudAmount;
 /// Peak height of the far range, metres. Zero switches it off entirely.
 uniform float uRidgeAmp;
+` + SKY_REALM_BLOCK + /* glsl */ `
 
 // ===========================================================================
 // Noise — transcribed from src/shaders/lib/noise.wgsl. See the file header for
@@ -261,9 +264,9 @@ vec3 snSnowSubsurface(
     vec3 N, vec3 L, vec3 V, vec3 lightColor,
     float thickness, float strength, float radius
 ) {
-    vec3 shallowTint = vec3(0.94, 0.965, 1.0);
-    vec3 deepTint    = vec3(0.55, 0.72, 1.0);
-    vec3 tint = mix(shallowTint, deepTint, clamp(thickness * radius, 0.0, 1.0));
+    // The realm's pair, not snow's. Leaving these literal would put a blue
+    // hollow on an ash massif, and it would read as a bug because it is one.
+    vec3 tint = mix(uSssShallow, uSssDeep, clamp(thickness * radius, 0.0, 1.0));
 
     float back = snBackScatter(
         N, L, V, 0.28 * radius,
@@ -535,11 +538,11 @@ vec3 shadeRidge(RidgeHit hit, vec3 dir) {
     // visible band and turned the horizon into a dark smear. Rock is here for
     // the *break* it gives a white massif, not as a ground cover.
     float steep = 1.0 - N.y;
-    float snowMask = clamp(1.0 - smoothstep(0.46, 0.80, steep), 0.0, 1.0);
+    float snowMask = clamp(
+        1.0 - smoothstep(uFarSnowGate.x, uFarSnowGate.y, steep), 0.0, 1.0
+    );
 
-    vec3 rock = vec3(0.052, 0.055, 0.066);
-    vec3 snow = vec3(0.855, 0.885, 0.945);
-    vec3 albedo = mix(rock, snow, snowMask);
+    vec3 albedo = mix(uFarRockAlbedo, uFarSnowAlbedo, snowMask);
 
     float shadow = ridgeShadow(hit.pos, hit.height, L, uRidgeAmp);
 
@@ -657,7 +660,7 @@ void main() {
 
         // Lit from below-ish by a low sun, so the underside catches warmth.
         float sunLit = pow(max(0.0, mu * 0.5 + 0.5), 3.0);
-        vec3 cloudCol = mix(vec3(0.52, 0.60, 0.74), uSunTint * 1.35, sunLit * 0.75);
+        vec3 cloudCol = mix(uCirrusColor, uSunTint * 1.35, sunLit * 0.75);
         col = mix(col, cloudCol * (0.55 + uSunScale * 0.06), cloud * 0.62);
     }
 

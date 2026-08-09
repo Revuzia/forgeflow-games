@@ -543,6 +543,14 @@ async function boot() {
         encounters.realm = token;
         weather.setRealm(token);
         if (spells.setRealm) spells.setRealm(token);
+        // The ground and the sky. A plain realm row, never the module: both
+        // classes stay constructible by tools that have no realm data. The sky
+        // is re-solved rather than debounced, so the first frame of the new
+        // realm is already lit by the new LUT and the SH the terrain reads has
+        // the new ground bounce in it.
+        terrain.applyRealm(realms.realm(token));
+        sky.applyRealm(realms.realm(token));
+        await sky.solve();
         return token;
     }
     const encounters = new Encounters(enemies, registry, character, combatData, minimap);

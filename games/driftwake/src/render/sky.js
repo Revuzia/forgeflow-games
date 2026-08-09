@@ -75,8 +75,107 @@ const SH_H = 32;
  */
 const SUN_SCALE_BASE = 5.5;
 
-/** Fresh snow reflects most of what hits it, slightly more at the blue end. */
+/**
+ * Fresh snow reflects most of what hits it, slightly more at the blue end.
+ *
+ * This is the DEFAULT of `this.groundAlbedo`, which `applyRealm()` replaces.
+ * It is not cosmetic: `_updateGroundBounce()` computes L = albedo * E / PI and
+ * the solve iterates it three times, so the bounce compounds by roughly
+ * albedo-cubed — Cold's mean 0.867 lands at 0.652, and an ash mean of 0.071
+ * lands at 0.00036. That factor of ~1800 in how much the ground lights the sky
+ * is the mechanism that makes an ash plain feel like a pit rather than a bright
+ * field, and Cold's blue-weighted bounce is the single largest source of blue
+ * anywhere in the frame.
+ */
 const SNOW_ALBEDO = [0.83, 0.86, 0.91];
+
+/** Cold's sun, for the realm multipliers. `settings.js:53, 55, 72`. */
+const COLD_SUN_INTENSITY = 4.2;
+const COLD_AMBIENT = 1.0;
+const COLD_MOUNTAIN_H = 2150;
+
+/**
+ * The per-realm ATMOSPHERE GRADE, applied to the baked LUT.
+ *
+ * ⚑ WHAT THIS IS AND WHAT IT IS NOT. The physically right lever is the bake's
+ * own scattering constants — BETA_M, MIE_G, BETA_R, H_MIE, MS_BOOST — which live
+ * in `shaders/skyBake.glsl.js` and belong to another owner. This is the lever
+ * available here: one extra fullscreen pass over the freshly baked LUT that
+ * desaturates the Rayleigh blue away, tints what is left, and pushes a warm band
+ * across the horizon rows in place of the forward-scattering aureole a real Mie
+ * coefficient would produce.
+ *
+ * It is applied to BOTH LUTs, so it reaches everything: the skybox samples the
+ * 512x256, the SH projection reads the 64x32, and the SH is what lights the
+ * terrain, the character and every particle. It is a grade, and it is labelled
+ * one — but it is a grade on the SOURCE of the light rather than on the finished
+ * frame, which is why the ambient, the specular probe and the aerial inscatter
+ * all follow it instead of only the dome.
+ *
+ *   desat   pull toward luminance, i.e. kill the blue dome     [call]
+ *   band    half-width of the horizon band, in LUT v units     [call]
+ *   amount  how far the band is pushed to `horizon`            [call]
+ *   gain    overall multiplier                                 [call]
+ *
+ * COLD IS THE IDENTITY: desat 0, tint (1,1,1), amount 0, gain 1, so
+ * `_gradeActive` stays false and the extra pass is never allocated or run.
+ */
+const SKY_GRADE = {
+    cold: { tint: [1, 1, 1], horizon: [1, 1, 1], desat: 0, band: 0.25, amount: 0, gain: 1 },
+    sand: {
+        tint: [1.28, 1.02, 0.64], horizon: [1.36, 1.08, 0.70],
+        desat: 0.66, band: 0.44, amount: 0.55, gain: 1.05,
+    },
+    ash: {
+        tint: [1.05, 0.50, 0.32], horizon: [1.24, 0.44, 0.22],
+        desat: 0.82, band: 0.52, amount: 0.62, gain: 0.55,
+    },
+};
+
+/**
+ * The grade pass. `texelFetch`, not `texture`, so there is no filtering between
+ * the bake and the grade and Cold's identity path is bit-exact.
+ */
+const GRADE_FRAG = /* glsl */`
+in vec2 vUv;
+layout(location = 0) out vec4 outColor;
+uniform sampler2D uSrc;
+uniform vec3 uGradeTint;
+uniform vec3 uHorizonTint;
+/// x desaturate, y horizon band half-width, z horizon amount, w gain.
+uniform vec4 uGradeParams;
+void main() {
+    vec4 s = texelFetch(uSrc, ivec2(gl_FragCoord.xy), 0);
+    vec3 c = s.rgb;
+    float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    vec3 g = mix(c, vec3(lum), uGradeParams.x) * uGradeTint;
+    float band = 1.0 - smoothstep(0.0, max(uGradeParams.y, 1e-4), abs(vUv.y - 0.5));
+    g = mix(g, vec3(lum) * uHorizonTint, band * uGradeParams.z);
+    outColor = vec4(g * uGradeParams.w, s.a);
+}
+`;
+
+/** @param {any} v @param {number} d @returns {number} */
+function num(v, d) {
+    return typeof v === "number" && isFinite(v) ? v : d;
+}
+
+/** @param {any} a @param {number} i @param {number} d @returns {number} */
+function at(a, i, d) {
+    return Array.isArray(a) ? num(a[i], d) : d;
+}
+
+/**
+ * Write a 3-array into a Vector3 uniform, leaving it standing if the row does
+ * not carry the key — never zeroing it.
+ * @param {{value: THREE.Vector3}} u @param {any} a @returns {void}
+ */
+function setV3(u, a) {
+    if (Array.isArray(a) && a.length >= 3
+        && isFinite(a[0]) && isFinite(a[1]) && isFinite(a[2])) {
+        u.value.set(a[0], a[1], a[2]);
+    }
+}
 
 /**
  * Milliseconds a sun change waits before the LUT is re-solved. Ours, not the
@@ -156,6 +255,36 @@ export class Sky {
         /** Last baked sun scale / warmth, so a direct write to S is caught too. */
         this._lastScale = NaN;
         this._lastWarm = NaN;
+
+        // ------------------------------------------------------------ realm
+        /** Realm token last applied. Read by probes. */
+        this.realmName = "cold";
+        /**
+         * Ground albedo feeding `_updateGroundBounce()`. A COPY, so a realm row
+         * handed in cannot be mutated from here.
+         */
+        this.groundAlbedo = SNOW_ALBEDO.slice();
+        /**
+         * Realm multipliers on the four settings the sky reads. Multipliers, not
+         * overrides, so the overlay's sun/ambient/mountain sliders keep working
+         * and a realm still lands on its contract number at the default.
+         */
+        this._sunScaleMul = 1;
+        this._ambientMul = 1;
+        this._ridgeMul = 1;
+        /** Realm hue on the beam and the disc. Applied to BOTH so they agree. */
+        this._sunTintMul = new THREE.Vector3(1, 1, 1);
+        /** True once a realm asks for a non-identity LUT grade. */
+        this._gradeActive = false;
+        this._gradeRT = null;
+        this._gradeSH = null;
+        this._grade = null;
+        this._gradeUniforms = {
+            uSrc: { value: null },
+            uGradeTint: { value: new THREE.Vector3(1, 1, 1) },
+            uHorizonTint: { value: new THREE.Vector3(1, 1, 1) },
+            uGradeParams: { value: new THREE.Vector4(0, 0.25, 0, 1) },
+        };
 
         // ------------------------------------------------------------- LUTs
         // RGBA16F with a full mip chain. Mip 6 is 8x4, which is the coarsest
@@ -258,9 +387,19 @@ export class Sky {
             uSunTint: { value: this.sunColor },
             uSunScale: { value: this.sunScale },
             uWindDir: { value: new THREE.Vector2(0, 1) },
-            // Hard-coded in the reference's render(), not a setting.
+            // Was hard-coded in the reference's render(); now realm data, so
+            // Sand can have almost no cirrus and Ash a soot ceiling.
             uCloudAmount: { value: 0.55 },
             uRidgeAmp: { value: 0 },
+
+            // ---- lib/ground's SKY_REALM_BLOCK, seeded with the literals it
+            // replaced in sky.glsl.js. Cold by construction.
+            uFarRockAlbedo: { value: new THREE.Vector3(0.052, 0.055, 0.066) },
+            uFarSnowAlbedo: { value: new THREE.Vector3(0.855, 0.885, 0.945) },
+            uFarSnowGate: { value: new THREE.Vector2(0.46, 0.80) },
+            uSssShallow: { value: new THREE.Vector3(0.94, 0.965, 1.0) },
+            uSssDeep: { value: new THREE.Vector3(0.55, 0.72, 1.0) },
+            uCirrusColor: { value: new THREE.Vector3(0.52, 0.60, 0.74) },
         };
 
         this.material = new THREE.RawShaderMaterial({
@@ -358,7 +497,12 @@ export class Sky {
             this._markDirty();
         }
 
-        this.sunScale = S.sunIntensity * SUN_SCALE_BASE;
+        // ONE scale for the sun and the baked sky, realm included. The realm
+        // multiplier goes in HERE rather than on sunRadiance downstream: a
+        // separate downstream multiplier is exactly what the file header forbids,
+        // because it makes the sun/sky ratio — the whole warm-light / cool-shadow
+        // look — arbitrary.
+        this.sunScale = S.sunIntensity * SUN_SCALE_BASE * this._sunScaleMul;
 
         // The intensity and warmth sliders change the *baked* sky as well as the
         // beam, and they are caught here rather than only through onChange
@@ -395,10 +539,14 @@ export class Sky {
         const g = Math.exp(-(0.108 * warm + 0.0252) * airMass);
         const b = Math.exp(-(0.265 * warm + 0.0252) * airMass);
 
-        this.sunRadiance.set(r * this.sunScale, g * this.sunScale, b * this.sunScale);
+        // The realm hue, on the beam AND on the disc tint, so the two agree.
+        const tm = this._sunTintMul;
+        const rr = r * tm.x, rg = g * tm.y, rb = b * tm.z;
 
-        const m = Math.max(r, Math.max(g, b)) || 1;
-        this.sunColor.set(r / m, g / m, b / m);
+        this.sunRadiance.set(rr * this.sunScale, rg * this.sunScale, rb * this.sunScale);
+
+        const m = Math.max(rr, Math.max(rg, rb)) || 1;
+        this.sunColor.set(rr / m, rg / m, rb / m);
     }
 
     /**
@@ -410,7 +558,7 @@ export class Sky {
     update() {
         this.syncFromSettings();
 
-        this.uniforms.uAmbientIntensity.value = S.ambientIntensity;
+        this.uniforms.uAmbientIntensity.value = S.ambientIntensity * this._ambientMul;
         this.uniforms.uFog.value.set(
             S.fogDensity, S.fogHeightFalloff, S.fogStart, S.aerialStrength
         );
@@ -476,8 +624,117 @@ export class Sky {
         // uploading the raw slider instead makes the sky 5.5x too dim against a
         // sun that is not.
         this._bakeUniforms.uSunScale.value = this.sunScale;
-        this._bake.render(this.lut);
-        this._bake.render(this.shLut);
+
+        if (!this._gradeActive) {
+            this._bake.render(this.lut);
+            this._bake.render(this.shLut);
+            return;
+        }
+
+        // Realm atmosphere: bake into a scratch target and grade into the real
+        // one. Both LUTs, so the SH projection reads the SAME atmosphere the
+        // skybox samples — grading only the big one would light the world in
+        // Cold's blue under a Sand dome.
+        this._ensureGradeTargets();
+        this._bake.render(this._gradeRT);
+        this._gradeUniforms.uSrc.value = this._gradeRT.texture;
+        this._grade.render(this.lut);
+        this._bake.render(this._gradeSH);
+        this._gradeUniforms.uSrc.value = this._gradeSH.texture;
+        this._grade.render(this.shLut);
+    }
+
+    /** Allocate the grade scratch targets. Lazy: Cold never pays for them. */
+    _ensureGradeTargets() {
+        if (this._grade) return;
+        this._gradeRT = makeRT(LUT_W, LUT_H, {
+            type: THREE.HalfFloatType,
+            format: THREE.RGBAFormat,
+            minFilter: THREE.NearestFilter,
+            magFilter: THREE.NearestFilter,
+            generateMipmaps: false,
+            name: "skyLUTraw",
+        });
+        this._gradeSH = makeRT(SH_W, SH_H, {
+            type: THREE.FloatType,
+            format: THREE.RGBAFormat,
+            minFilter: THREE.NearestFilter,
+            magFilter: THREE.NearestFilter,
+            generateMipmaps: false,
+            name: "skySHraw",
+        });
+        this._grade = new FullScreenPass(this.renderer, GRADE_FRAG, this._gradeUniforms);
+        this._grade.profileName = "sky realm grade";
+    }
+
+    /**
+     * Give the sky a realm.
+     *
+     * Takes a PLAIN OBJECT — one row of `src/world/realms.js` REALMS — so `Sky`
+     * stays constructible with no realm module present. Every field is optional
+     * and a missing one leaves the current value standing.
+     *
+     * DOES NOT re-bake. The caller decides: `await sky.solve()` inside a loading
+     * phase (so the first frame of the new realm is already lit by the new LUT),
+     * or `_markDirty()` for the debounced path. The debounce is untouched.
+     *
+     * @param {Object} [block] { token, sky: {...}, ground: {...} }
+     * @returns {void}
+     */
+    applyRealm(block) {
+        const b = block || {};
+        const sk = b.sky || {};
+        const gd = b.ground || {};
+        const u = this._skyUniforms;
+
+        const token = typeof b.token === "string" ? b.token : this.realmName;
+        this.realmName = token;
+
+        // The bounce solve. The single most consequential number here.
+        if (Array.isArray(sk.groundAlbedo) && sk.groundAlbedo.length >= 3) {
+            this.groundAlbedo = [
+                num(sk.groundAlbedo[0], SNOW_ALBEDO[0]),
+                num(sk.groundAlbedo[1], SNOW_ALBEDO[1]),
+                num(sk.groundAlbedo[2], SNOW_ALBEDO[2]),
+            ];
+        }
+
+        setV3(u.uFarRockAlbedo, sk.farRockAlbedo);
+        setV3(u.uFarSnowAlbedo, sk.farSnowAlbedo);
+        setV3(u.uCirrusColor, sk.cirrusColor);
+        // The far range's subsurface pair tracks the ground's, so a massif and
+        // the field in front of it are made of the same stuff.
+        setV3(u.uSssShallow, gd.sssShallow);
+        setV3(u.uSssDeep, gd.sssDeep);
+        u.uFarSnowGate.value.set(at(sk.farSnowLineGate, 0, u.uFarSnowGate.value.x),
+                                 at(sk.farSnowLineGate, 1, u.uFarSnowGate.value.y));
+        u.uCloudAmount.value = num(sk.cloudAmount, u.uCloudAmount.value);
+
+        this._sunScaleMul = num(sk.sunIntensity, COLD_SUN_INTENSITY) / COLD_SUN_INTENSITY;
+        this._ambientMul = num(sk.ambientIntensity, COLD_AMBIENT) / COLD_AMBIENT;
+        this._ridgeMul = sk.showMountains === false
+            ? 0
+            : num(sk.mountainHeight, COLD_MOUNTAIN_H) / COLD_MOUNTAIN_H;
+
+        // ---- the atmosphere grade -------------------------------------------
+        const G = SKY_GRADE[token] || SKY_GRADE.cold;
+        this._gradeUniforms.uGradeTint.value.set(G.tint[0], G.tint[1], G.tint[2]);
+        this._gradeUniforms.uHorizonTint.value.set(
+            G.horizon[0], G.horizon[1], G.horizon[2]
+        );
+        this._gradeUniforms.uGradeParams.value.set(G.desat, G.band, G.amount, G.gain);
+        this._gradeActive =
+            G.desat !== 0 || G.amount !== 0 || G.gain !== 1
+            || G.tint[0] !== 1 || G.tint[1] !== 1 || G.tint[2] !== 1;
+
+        // The beam's hue follows the dome's: the grade is a scattering stand-in,
+        // and a warm dome over a neutral sun reads as a colour filter rather than
+        // as an atmosphere.
+        this._sunTintMul.set(
+            0.5 + 0.5 * G.tint[0], 0.5 + 0.5 * G.tint[1], 0.5 + 0.5 * G.tint[2]
+        );
+
+        this._dirty = true;
     }
 
     /** Radiance leaving the snow, from everything currently landing on it. */
@@ -495,11 +752,8 @@ export class Sky {
         // slightly cooler than the light going down onto it — and it compounds
         // over the three iterations.
         const k = 1 / Math.PI;
-        this.groundBounce.set(
-            SNOW_ALBEDO[0] * er * k,
-            SNOW_ALBEDO[1] * eg * k,
-            SNOW_ALBEDO[2] * eb * k
-        );
+        const a = this.groundAlbedo;
+        this.groundBounce.set(a[0] * er * k, a[1] * eg * k, a[2] * eb * k);
     }
 
     /**
@@ -676,7 +930,7 @@ export class Sky {
 
         // The far range. Lit by the same radiance and the same SH the snow is,
         // and hazed by the field's own fog, so the two meet at one colour.
-        u.uRidgeAmp.value = S.showMountains ? S.mountainHeight : 0;
+        u.uRidgeAmp.value = S.showMountains ? S.mountainHeight * this._ridgeMul : 0;
 
         // uSunDir / uSunColor / uSunTint hold live references to sunDir,
         // sunRadiance and sunColor, so syncFromSettings has already updated
@@ -691,6 +945,9 @@ export class Sky {
         this._probeRT.dispose();
         this._bake.dispose();
         this._probe.dispose();
+        if (this._grade) this._grade.dispose();
+        if (this._gradeRT) this._gradeRT.dispose();
+        if (this._gradeSH) this._gradeSH.dispose();
         this.material.dispose();
         this.mesh.geometry.dispose();
         if (this.mesh.parent) this.mesh.parent.remove(this.mesh);

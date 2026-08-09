@@ -78,6 +78,66 @@ const DETAIL_RES = 1024;
 const GRAIN_SCALE = 0.013;
 
 /**
+ * COLD, as the game ships — the reference point every realm multiplier is taken
+ * against, so a realm row that repeats Cold's number produces a multiplier of
+ * exactly 1.0 and the frame is byte-identical.
+ *
+ * These four are LIVE OVERLAY SLIDERS (`S.sssStrength`, `S.sssRadius`,
+ * `S.glintIntensity`, `S.glintGrazing`), which is why the realm multiplies them
+ * rather than overwriting them: an override would leave four dead sliders, and
+ * "a lever that lies" is the exact failure `core/settings.js` was written to
+ * prevent.
+ */
+const COLD = {
+    sssStrength: 1.0,       // settings.js:79
+    sssRadius: 1.0,         // settings.js:80
+    glintIntensity: 0.55,   // settings.js:77
+    glintGrazing: 0.72,     // settings.js:78
+    fineAmplitude: 0.125,   // lib/terrain.glsl.js:282
+};
+
+/**
+ * How much of lib/terrain's SASTRUGI survives in each realm, by fine mode.
+ *
+ * The sastrugi layer is not colour, it is shape: a corduroy of ridges streaking
+ * along the wind. A sand or ash realm that left it at full amplitude would read
+ * as recoloured snow however the albedo is graded, because the silhouette and
+ * the normal field would still be snow's. This multiplier goes into the
+ * `sastrugiAmp` CLIPMAP uniform, which both fine twins read — the vertex
+ * displacement and the fragment normal — so the two never describe different
+ * ground. The realm's own layer (`realmFine` in `lib/ground`) is then added on
+ * top with its amplitude pre-divided by this number, so the realm's contract
+ * amplitude lands exactly at the slider's default.
+ *
+ * Index = `fine.mode`: 0 sastrugi, 1 dune ripples, 2 crust cracks.
+ */
+const SASTRUGI_RESIDUE = [1.0, 0.30, 0.22];
+
+/** @param {any} v @param {number} d @returns {number} */
+function num(v, d) {
+    return typeof v === "number" && isFinite(v) ? v : d;
+}
+
+/** @param {any} a @param {number} i @param {number} d @returns {number} */
+function at(a, i, d) {
+    return Array.isArray(a) ? num(a[i], d) : d;
+}
+
+/**
+ * Write a 3-array into a Vector3 uniform, leaving it untouched if the row does
+ * not carry the key. A realm row missing a field must degrade to the current
+ * value, never to zero: a zeroed albedo is a black terrain, and that is exactly
+ * the failure a previous attempt at this shipped.
+ * @param {{value: THREE.Vector3}} u @param {any} a @returns {void}
+ */
+function setV3(u, a) {
+    if (Array.isArray(a) && a.length >= 3
+        && isFinite(a[0]) && isFinite(a[1]) && isFinite(a[2])) {
+        u.value.set(a[0], a[1], a[2]);
+    }
+}
+
+/**
  * Anisotropic filtering taps on the snow grain map.
  *
  * 4 is not a taste call: it is Babylon's `BaseTexture.DEFAULT_ANISOTROPIC_
@@ -246,6 +306,69 @@ export class Terrain {
             sastrugiAmp: { value: S.sastrugiStrength },
         };
 
+        /**
+         * `lib/ground`'s block — THE REALM SURFACE.
+         *
+         * Every entry is seeded with the exact literal it replaced in
+         * `snow.glsl.js`, quoted at the line, so the constructed state is Cold
+         * and the frame is byte-identical to the one before this block existed.
+         * `applyRealm()` is the only writer.
+         *
+         * Shared BY REFERENCE with the snow material, exactly as `sky.uniforms`
+         * and `deform.uniforms` are, so one write per swap reaches the program.
+         * @type {Record<string, {value:any}>}
+         */
+        this.realmUniforms = {
+            uGroundAlbedo: { value: new THREE.Vector3(0.855, 0.885, 0.945) }, // :342
+            uCompressCol: { value: new THREE.Vector3(0.62, 0.665, 0.755) },   // :348
+            uIceCol: { value: new THREE.Vector3(0.42, 0.56, 0.70) },          // :353
+            uLooseCol: { value: new THREE.Vector3(0.895, 0.920, 0.965) },     // :391
+            uRockColA: { value: new THREE.Vector3(0.055, 0.058, 0.068) },     // :363
+            uRockColB: { value: new THREE.Vector3(0.115, 0.112, 0.118) },     // :363
+            // shading.glsl.js:212-213, lifted out of the function body.
+            uSssShallow: { value: new THREE.Vector3(0.94, 0.965, 1.0) },
+            uSssDeep: { value: new THREE.Vector3(0.55, 0.72, 1.0) },
+            uCaveTint: { value: new THREE.Vector3(0.55, 0.72, 1.0) },         // :541
+            // Implicit in Cold: the glint term was multiplied by nothing.
+            uGlintTint: { value: new THREE.Vector3(1.0, 1.0, 1.0) },
+            // x roughness :343, y f0 :344, z thickness :345, w ice f0 :355
+            uSurfaceParams: { value: new THREE.Vector4(0.62, 0.028, 1.0, 0.045) },
+            // x compressed rough :349, y compressed thick :350,
+            // z ice rough :354, w ice thick :356
+            uCompressParams: { value: new THREE.Vector4(0.34, 0.35, 0.07, 0.15) },
+            // x rock gate lo :360, y rock gate hi :360, z loose rough :392,
+            // w sky bounce coefficient :473
+            uRockParams: { value: new THREE.Vector4(0.32, 0.66, 0.78, 0.28) },
+            // x wrap loose :434, y wrap compressed :434, z glint intensity
+            // multiplier, w glint grazing multiplier — the last two are 1 in Cold
+            // so the sliders read through untouched.
+            uWrapGlint: { value: new THREE.Vector4(0.62, 0.15, 1.0, 1.0) },
+            // x facet cull (shading.glsl.js:266), y tilt base, z tilt jitter
+            // (:277), w EMISSIVE — 0 keeps the glint on its specular path.
+            uGlintFacet: { value: new THREE.Vector4(0.62, 0.10, 0.26, 0.0) },
+            uGlintCells: { value: new THREE.Vector2(0.052, 0.185) },   // :323,329
+            uGlintSharp: { value: new THREE.Vector2(780.0, 1500.0) },  // :326,332
+            uSssMul: { value: new THREE.Vector2(1.0, 1.0) },
+            uDetailScales: { value: new THREE.Vector3(7.5, 1.7, 0.31) }, // :310,315,320
+            uFineMode: { value: 0 },
+            // x amplitude, y scour freq, z frag fade lo, w frag fade hi —
+            // lib/terrain.glsl.js:282, :281, :339. Unread while uFineMode is 0.
+            uFineA: { value: new THREE.Vector4(0.125, 0.021, 0.35, 1.6) },
+            // x primary wavelength :279, y ripple amp :297, z ripple
+            // wavelength :295, w exposure-fade low end :282.
+            uFineB: { value: new THREE.Vector4(2.3, 0.024, 0.42, 0.45) },
+        };
+
+        /**
+         * Realm state that is not a uniform: the sastrugi residue folded into
+         * `sastrugiAmp` each frame, and the grain-map tiling rate, which is a
+         * BAKE input rather than a shading one.
+         */
+        this._sastrugiMul = 1.0;
+        this._grainScale = GRAIN_SCALE;
+        /** Realm token last applied. Read by probes. */
+        this.realmName = "cold";
+
         /** `lib/shading`'s block — offered to every lit surface in the scene. */
         this.shadingUniforms = {
             sssStrength: { value: S.sssStrength },
@@ -295,6 +418,7 @@ export class Terrain {
             fragmentShader: shader(fragment(this.spellLightsBound)),
             uniforms: Object.assign(
                 {}, vsUniforms, this._frag, this.shadingUniforms,
+                this.realmUniforms,
                 this.sky.uniforms,
                 this.shadows.receiverUniforms(SHADOW_SOFTNESS, SHADOW_BIAS),
                 deps.spellUniforms || {}
@@ -394,6 +518,112 @@ export class Terrain {
         this._applyHeightBounds();
     }
 
+    /**
+     * Give the ground a realm.
+     *
+     * Takes a PLAIN OBJECT, never a module import: `Terrain` has to stay
+     * constructible by tools and probes that have no realm module, and a static
+     * import here would put all three realms' data on the boot path. The shape
+     * is one row of `src/world/realms.js` REALMS — `{ ground, grain, glint,
+     * fine }` — and every field is optional: a missing key leaves the current
+     * value standing rather than writing a zero. A zeroed albedo is a black
+     * terrain, which is precisely how an earlier attempt at this shipped huge
+     * black patches across Cold.
+     *
+     * COST: one pass over ~22 uniforms, plus ONE 1024-square grain re-bake if
+     * and only if the tiling rate actually moved. No geometry, no heightfield,
+     * no allocation.
+     *
+     * @param {Object} [block] a realm row: { token, ground, grain, glint, fine }
+     * @returns {void}
+     */
+    applyRealm(block) {
+        const b = block || {};
+        const u = this.realmUniforms;
+        const g = b.ground || {};
+        const gr = b.grain || {};
+        const gl = b.glint || {};
+        const fn = b.fine || {};
+
+        if (typeof b.token === "string") this.realmName = b.token;
+
+        setV3(u.uGroundAlbedo, g.albedo);
+        setV3(u.uCompressCol, g.compressCol);
+        setV3(u.uIceCol, g.iceCol);
+        setV3(u.uLooseCol, g.looseCol);
+        setV3(u.uRockColA, g.rockColA);
+        setV3(u.uRockColB, g.rockColB);
+        setV3(u.uSssShallow, g.sssShallow);
+        setV3(u.uSssDeep, g.sssDeep);
+        setV3(u.uCaveTint, g.caveTint);
+        setV3(u.uGlintTint, gl.tint);
+
+        const sp = u.uSurfaceParams.value;
+        sp.set(num(g.roughness, sp.x), num(g.f0, sp.y),
+               num(g.thickness, sp.z), num(g.iceF0, sp.w));
+
+        const cp = u.uCompressParams.value;
+        cp.set(num(g.compressRough, cp.x), num(g.compressThick, cp.y),
+               num(g.iceRough, cp.z), num(g.iceThick, cp.w));
+
+        const rp = u.uRockParams.value;
+        rp.set(at(g.rockGate, 0, rp.x), at(g.rockGate, 1, rp.y),
+               num(g.looseRough, rp.z), num(g.bounceCoef, rp.w));
+
+        // The two glint knobs are MULTIPLIERS on the live sliders, so the realm
+        // lands on its contract number at the default slider position and the
+        // slider still works everywhere else.
+        const wg = u.uWrapGlint.value;
+        wg.set(at(g.wrapAmount, 0, wg.x), at(g.wrapAmount, 1, wg.y),
+               num(gl.intensity, COLD.glintIntensity) / COLD.glintIntensity,
+               num(gl.grazing, COLD.glintGrazing) / COLD.glintGrazing);
+
+        const gf = u.uGlintFacet.value;
+        gf.set(num(gl.facetCull, gf.x), at(gl.facetTilt, 0, gf.y),
+               at(gl.facetTilt, 1, gf.z), num(gl.emissive, 0));
+
+        u.uGlintCells.value.set(at(gl.cells, 0, u.uGlintCells.value.x),
+                                at(gl.cells, 1, u.uGlintCells.value.y));
+        u.uGlintSharp.value.set(at(gl.sharpness, 0, u.uGlintSharp.value.x),
+                                at(gl.sharpness, 1, u.uGlintSharp.value.y));
+
+        u.uSssMul.value.set(
+            num(g.sssStrength, COLD.sssStrength) / COLD.sssStrength,
+            num(g.sssRadius, COLD.sssRadius) / COLD.sssRadius
+        );
+
+        const ds = u.uDetailScales.value;
+        ds.set(at(gr.detailScales, 0, ds.x), at(gr.detailScales, 1, ds.y),
+               at(gr.detailScales, 2, ds.z));
+
+        // ---- micro-relief ---------------------------------------------------
+        const mode = Math.max(0, Math.min(2, Math.round(num(fn.mode, 0))));
+        u.uFineMode.value = mode;
+        this._sastrugiMul = SASTRUGI_RESIDUE[mode];
+
+        const fa = u.uFineA.value;
+        // Pre-divided by the residue, so `amplitude * sastrugiAmp` lands on the
+        // realm's contract amplitude at S.sastrugiStrength = 1.
+        fa.set(num(fn.amplitude, COLD.fineAmplitude) / this._sastrugiMul,
+               num(fn.scourFreq, fa.y),
+               at(fn.fragFade, 0, fa.z), at(fn.fragFade, 1, fa.w));
+
+        const fb = u.uFineB.value;
+        fb.set(num(fn.primaryScale, fb.x), num(fn.rippleAmp, fb.y),
+               num(fn.rippleScale, fb.z), at(fn.exposureFade, 0, fb.w));
+
+        // ---- grain map ------------------------------------------------------
+        // A BAKE input, not a shading one: changing it means re-rendering the
+        // 1024-square tile. Guarded on an actual change so a redundant
+        // applyRealm() costs nothing.
+        const gs = num(gr.grainScale, this._grainScale);
+        if (gs !== this._grainScale) {
+            this._grainScale = gs;
+            this._detailPass.material.uniforms.grainScale.value = gs;
+            this._detailPass.render(this.detailRT);
+        }
+    }
+
     /** Push the measured relief to the cascade fitter, with margin. */
     _applyHeightBounds() {
         // A margin at both ends covers carved berms and anything standing on the
@@ -444,7 +674,9 @@ export class Terrain {
         // No extra snapping here; placeClipmapVertex snaps per ring already.
         c.lodCenter.value.set(focus.x, focus.z);
         c.windAngle.value = bearingRad(S.windDirection);
-        c.sastrugiAmp.value = S.sastrugiStrength;
+        // The realm's sastrugi residue, folded into the slider rather than
+        // replacing it. One uniform, read by both fine twins.
+        c.sastrugiAmp.value = S.sastrugiStrength * this._sastrugiMul;
 
         const sh = this.shadingUniforms;
         sh.sssStrength.value = S.sssStrength;

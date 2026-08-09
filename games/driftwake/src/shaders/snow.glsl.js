@@ -56,6 +56,7 @@
  */
 
 import { PREPASS_VS_VARYINGS, PREPASS_EMIT } from "./prepass.glsl.js";
+import { GROUND_BLOCK } from "./lib/ground.glsl.js";
 
 // ---------------------------------------------------------------------------
 // Vertex stages
@@ -185,6 +186,7 @@ const FRAGMENT_BODY = /* glsl */ `
 // reference orders it: the cascade lookup needs nothing from here but is a large
 // chunk and reads better last.
 #include "lib/shadowLookup"
+` + GROUND_BLOCK + /* glsl */ `
 
 in vec4 vWorld;       // xyz world position, w distance to the camera
 in vec2 vHeightUV;
@@ -270,6 +272,11 @@ void main() {
     float exposure = aux.w;
 
     vec3 fine = terrainFineFiltered(world.xz, windAngle, exposure, sastrugiAmp, footprint);
+    // The realm's own micro-relief, on top of what is left of the sastrugi after
+    // the realm's sastrugi multiplier has scaled it down. Identically zero in
+    // Cold (uFineMode 0), so the default surface is lib/terrain's field and
+    // nothing else. See lib/ground for why this layer is fragment-only.
+    fine += realmFine(world.xz, windAngle, exposure, sastrugiAmp, footprint);
     grad += fine.yz;
 
     // ------------------------------------------------------------ deformation
@@ -301,23 +308,31 @@ void main() {
     // ---------------------------------------------------------- detail normals
     // Three tiling scales, each faded by footprint so the finest only exists when
     // it is actually resolvable, and cross-faded so no scale ever pops in.
+    // Each layer's fade thresholds are rescaled by the ratio of Cold's tiling
+    // rate to the realm's, so a finer grain fades at a proportionally smaller
+    // footprint and the filtering behaves identically. In Cold every ratio is
+    // exactly 1.0 (7.5/7.5 and so on), so the thresholds are the shipped ones.
+    float sA = 7.5 / uDetailScales.x;
+    float sB = 1.7 / uDetailScales.y;
+    float sC = 0.31 / uDetailScales.z;
+
     float steep = smoothstep(0.55, 0.9, 1.0 - N.y);
     if (detailStrength > 0.001) {
         vec3 acc = vec3(0.0, 0.0, 1.0);
 
-        float fA = 1.0 - smoothstep(0.004, 0.02, footprint);
+        float fA = 1.0 - smoothstep(0.004 * sA, 0.02 * sA, footprint);
         if (fA > 0.001) {
-            vec3 d = detailNormal(world, N, 7.5, steep, ddxW, ddyW);
+            vec3 d = detailNormal(world, N, uDetailScales.x, steep, ddxW, ddyW);
             acc = blendNormalRNM(acc, mix(vec3(0.0, 0.0, 1.0), d, fA));
         }
-        float fB = 1.0 - smoothstep(0.02, 0.12, footprint);
+        float fB = 1.0 - smoothstep(0.02 * sB, 0.12 * sB, footprint);
         if (fB > 0.001) {
-            vec3 d = detailNormal(world, N, 1.7, steep, ddxW, ddyW);
+            vec3 d = detailNormal(world, N, uDetailScales.y, steep, ddxW, ddyW);
             acc = blendNormalRNM(acc, mix(vec3(0.0, 0.0, 1.0), d, fB * 0.85));
         }
-        float fC = 1.0 - smoothstep(0.1, 0.7, footprint);
+        float fC = 1.0 - smoothstep(0.1 * sC, 0.7 * sC, footprint);
         if (fC > 0.001) {
-            vec3 d = detailNormal(world, N, 0.31, steep, ddxW, ddyW);
+            vec3 d = detailNormal(world, N, uDetailScales.z, steep, ddxW, ddyW);
             acc = blendNormalRNM(acc, mix(vec3(0.0, 0.0, 1.0), d, fC * 0.6));
         }
 
@@ -332,35 +347,38 @@ void main() {
     }
 
     float cavity = textureGrad(
-        detailTex, world.xz * 1.7, ddxW.xz * 1.7, ddyW.xz * 1.7
+        detailTex, world.xz * uDetailScales.y,
+        ddxW.xz * uDetailScales.y, ddyW.xz * uDetailScales.y
     ).z;
 
     // ------------------------------------------------------------- material
     // Snow albedo sits in a narrow, high, slightly blue band. It is never 1.0:
     // pushing albedo to white is what produces the blown-out clipped highlights
     // that read as "untextured white blob" rather than as snow.
-    vec3  albedo = vec3(0.855, 0.885, 0.945);
-    float roughness = 0.62;
-    vec3  f0 = vec3(0.028);
-    float thickness = 1.0;   // 1 = deep drift, 0 = thin crust
+    vec3  albedo = uGroundAlbedo;
+    float roughness = uSurfaceParams.x;
+    vec3  f0 = vec3(uSurfaceParams.y);
+    float thickness = uSurfaceParams.z;   // 1 = deep drift, 0 = thin crust
 
     // Compressed snow: denser, darker, tighter specular, scatters less.
-    albedo = mix(albedo, vec3(0.62, 0.665, 0.755), compression * 0.85);
-    roughness = mix(roughness, 0.34, compression);
-    thickness = mix(thickness, 0.35, compression);
+    albedo = mix(albedo, uCompressCol, compression * 0.85);
+    roughness = mix(roughness, uCompressParams.x, compression);
+    thickness = mix(thickness, uCompressParams.y, compression);
 
-    // Refrozen ice: smooth and genuinely reflective.
-    albedo = mix(albedo, vec3(0.42, 0.56, 0.70), iceAmount * 0.8);
-    roughness = mix(roughness, 0.07, iceAmount);
-    f0 = mix(f0, vec3(0.045), iceAmount);
-    thickness = mix(thickness, 0.15, iceAmount);
+    // Refrozen ice: smooth and genuinely reflective. Repurposed per realm —
+    // fulgurite in sand, cooled slag in ash — never removed, because the SSR
+    // pass is gated on the same channel.
+    albedo = mix(albedo, uIceCol, iceAmount * 0.8);
+    roughness = mix(roughness, uCompressParams.z, iceAmount);
+    f0 = mix(f0, vec3(uSurfaceParams.w), iceAmount);
+    thickness = mix(thickness, uCompressParams.w, iceAmount);
 
     // Exposed rock. Snow keeps its grip on the flatter faces, so the mask is
     // gated by slope rather than applied flat.
-    float rockExposed = rockMask * smoothstep(0.32, 0.66, 1.0 - N.y);
+    float rockExposed = rockMask * smoothstep(uRockParams.x, uRockParams.y, 1.0 - N.y);
     if (rockExposed > 0.001) {
         float rn = noise2(world.xz * 2.3) * 0.5 + 0.5;
-        vec3 rockCol = mix(vec3(0.055, 0.058, 0.068), vec3(0.115, 0.112, 0.118), rn);
+        vec3 rockCol = mix(uRockColA, uRockColB, rn);
         albedo = mix(albedo, rockCol, rockExposed);
         roughness = mix(roughness, 0.85, rockExposed);
         thickness = mix(thickness, 0.0, rockExposed);
@@ -388,8 +406,8 @@ void main() {
     //     the sky out of it.
     if (deformBerm > 0.002) {
         float loose = clamp(deformBerm * 5.0, 0.0, 1.0);
-        albedo = mix(albedo, vec3(0.895, 0.920, 0.965), loose * 0.55);
-        roughness = mix(roughness, 0.78, loose * 0.7);
+        albedo = mix(albedo, uLooseCol, loose * 0.55);
+        roughness = mix(roughness, uRockParams.z, loose * 0.7);
         thickness = mix(thickness, 1.0, loose * 0.6);
         // Broken snow has crystal faces pointing everywhere, which is where the
         // chunky granular read at a trail edge actually comes from.
@@ -431,15 +449,21 @@ void main() {
     // Snow's mean free path is millimetres, so light wraps well past the
     // geometric terminator. This is why snow shadow edges are soft even where the
     // shadow map is pin sharp.
-    float wrapAmount = mix(0.62, 0.15, max(compression, rockExposed));
+    // Sand and ash have hard terminators: their mean free path is not
+    // millimetres, so the realm drops this pair toward Lambert.
+    float wrapAmount = mix(uWrapGlint.x, uWrapGlint.y, max(compression, rockExposed));
     float diff = wrapDiffuse(NdotL, wrapAmount);
     vec3 direct = albedo * INV_PI * sunRadiance * diff * shadow;
 
     // --- subsurface --------------------------------------------------------
-    // THE signature term. Reference argument order (N, L, V, ...).
-    vec3 sss = snowSubsurface(
+    // THE signature term, and the single biggest not-snow lever: the realm
+    // scales its strength and radius and swaps the shallow/deep tint pair.
+    // Reference argument order (N, L, V, ...).
+    float sssS = sssStrength * uSssMul.x;
+    float sssR = sssRadius * uSssMul.y;
+    vec3 sss = realmSubsurface(
         N, L, V, sunRadiance, thickness,
-        sssStrength * (1.0 - rockExposed), sssRadius
+        sssS * (1.0 - rockExposed), sssR
     );
     // Only partly shadowed: scattered light arrives through the snow, so a
     // shadowed drift lip still glows. Killing this with the shadow term is what
@@ -470,7 +494,7 @@ void main() {
     // more a surface faces down, the more bounce it receives — and the term is
     // tinted by the receiving surface's own albedo, a crude colour bleed.
     float bounceUp = clamp(-N.y * 0.5 + 0.5, 0.0, 1.0);
-    irradiance += skyIrradiance(vec3(0.0, 1.0, 0.0)) * 0.28 * bounceUp * albedo;
+    irradiance += skyIrradiance(vec3(0.0, 1.0, 0.0)) * uRockParams.w * bounceUp * albedo;
 
     vec3 ambient = albedo * INV_PI * irradiance;
 
@@ -504,18 +528,30 @@ void main() {
     // strength — and at thickness 0 rock takes the WIDEST, BRIGHTEST lobe
     // (mix(1.0, 0.30, thickness)), so it is the worst place to lose the mask.
     color += spellLightingSnow(
-        world, N, V, thickness, sssStrength * (1.0 - rockExposed), sssRadius
+        world, N, V, thickness, sssS * (1.0 - rockExposed), sssR
     ) * albedo;
 
     // --- glints ------------------------------------------------------------
     // Last among the lighting terms, and added as radiance rather than modulated
     // into the BRDF, because a glint is a specular highlight from a crystal facet
     // that the shading normal does not represent.
-    if (glintIntensity > 0.001 && rockExposed < 0.5) {
-        float g = snowGlints(
-            world.xz, N, V, L, footprint, glintIntensity, glintGrazing
+    //
+    // The realm decides WHAT kind of glint: Cold's is specular off a crystal
+    // facet, sand's is a wider, rarer, gold mica cleavage plane, and ash's is
+    // EMISSIVE — no sunRadiance and no shadow, because a cinder in the shade
+    // still glows. That last one is what stops it reading as glitter on black
+    // sand, and it needs no structural change because the term was already
+    // added as radiance rather than modulated into the BRDF.
+    float glintI = glintIntensity * uWrapGlint.z;
+    if (glintI > 0.001 && rockExposed < 0.5) {
+        float g = realmGlints(
+            world.xz, N, V, L, footprint, glintI,
+            clamp(glintGrazing * uWrapGlint.w, 0.0, 1.0)
         );
-        color += sunRadiance * g * shadow * (1.0 - iceAmount * 0.6) * 0.55;
+        vec3 glintLight = (uGlintFacet.w > 0.0)
+            ? uGlintTint * uGlintFacet.w
+            : sunRadiance * uGlintTint * shadow;
+        color += glintLight * g * (1.0 - iceAmount * 0.6) * 0.55;
     }
 
     // ---- occlusion, applied last and to everything -------------------------
@@ -538,7 +574,7 @@ void main() {
     //     blue and not grey. The tint is the same deepTint the subsurface term
     //     uses, and tying it to the darkening rather than to deformDepth means the
     //     two can never drift apart.
-    vec3 caveTint = mix(vec3(1.0), vec3(0.55, 0.72, 1.0), (1.0 - ao) * 0.95);
+    vec3 caveTint = mix(vec3(1.0), uCaveTint, (1.0 - ao) * 0.95);
     color *= ao * caveTint;
 
     // ------------------------------------------------------- aerial perspective
