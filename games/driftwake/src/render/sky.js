@@ -124,13 +124,42 @@ const SKY_GRADE = {
     cold: { tint: [1, 1, 1], horizon: [1, 1, 1], desat: 0, band: 0.25, amount: 0, gain: 1 },
     sand: {
         tint: [1.28, 1.02, 0.64], horizon: [1.36, 1.08, 0.70],
-        desat: 0.66, band: 0.44, amount: 0.55, gain: 1.05,
+        desat: 0.66, band: 0.44, amount: 0.55, gain: 1.00,
     },
     ash: {
-        tint: [1.05, 0.50, 0.32], horizon: [1.24, 0.44, 0.22],
-        desat: 0.82, band: 0.52, amount: 0.62, gain: 0.55,
+        tint: [0.86, 0.38, 0.23], horizon: [1.02, 0.36, 0.17],
+        desat: 0.86, band: 0.50, amount: 0.62, gain: 0.40,
     },
 };
+
+/**
+ * BEAM EXTINCTION — the stand-in for the Mie the bake does not carry.
+ *
+ * `realms.js` gives Sand and Ash a HIGHER `sky.sunIntensity` than Cold (5.4 and
+ * 5.6 against 4.2) and the contract says why: those are PRE-EXTINCTION numbers,
+ * chosen because a realm with heavy aerosol eats most of its own beam. That
+ * extinction lives in `skyBake.glsl.js`'s BETA_M / H_MIE, which this file does
+ * not own — so taking the raw intensity ratio and nothing else makes Ash BRIGHTER
+ * than Cold, which is the exact opposite of the intent.
+ *
+ * These numbers put the missing half back. Physically the aerosol optical depth
+ * is roughly BETA_M x H_MIE, and the beam crosses it at the sun's air mass:
+ *
+ *   cold  21e-6 x 1200 = 0.0252, air mass 4.3 at 13.0 deg -> exp(-0.108) = 0.897
+ *   sand  73e-6 x  900 = 0.0657, air mass 2.65 at 22.0 deg -> exp(-0.174) = 0.840
+ *   ash  133e-6 x 2600 = 0.346,  air mass 5.6 at  9.5 deg -> exp(-1.94)  = 0.144
+ *
+ * relative to Cold: sand 0.936, ash 0.161. [derived]
+ *
+ * Ash is TEMPERED to 0.45 rather than taken at 0.161, and the reason is written
+ * down rather than hidden: the contract pays for the full extinction by raising
+ * `S.exposure` from 0.105 to 0.300, and `core/settings.js` is another owner's
+ * file. At Cold's exposure the physical number renders an all-but-black frame.
+ * 0.45 is the largest value that still reads as a dim realm at the exposure this
+ * build actually runs. WHEN THE BAKE GAINS ITS UNIFORMS AND EXPOSURE BECOMES
+ * REALM DATA, THIS TABLE SHOULD BE DELETED, not re-tuned. [call]
+ */
+const BEAM_EXTINCTION = { cold: 1.0, sand: 0.94, ash: 0.45 };
 
 /**
  * The grade pass. `texelFetch`, not `texture`, so there is no filtering between
@@ -710,7 +739,11 @@ export class Sky {
                                  at(sk.farSnowLineGate, 1, u.uFarSnowGate.value.y));
         u.uCloudAmount.value = num(sk.cloudAmount, u.uCloudAmount.value);
 
-        this._sunScaleMul = num(sk.sunIntensity, COLD_SUN_INTENSITY) / COLD_SUN_INTENSITY;
+        // The contract's intensity is PRE-extinction; the bake carries none, so
+        // the missing aerosol is folded in here. See BEAM_EXTINCTION.
+        this._sunScaleMul =
+            (num(sk.sunIntensity, COLD_SUN_INTENSITY) / COLD_SUN_INTENSITY)
+            * num(BEAM_EXTINCTION[token], 1);
         this._ambientMul = num(sk.ambientIntensity, COLD_AMBIENT) / COLD_AMBIENT;
         this._ridgeMul = sk.showMountains === false
             ? 0

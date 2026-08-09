@@ -164,6 +164,15 @@ float realmGlintOctave(
     float tilt = uGlintFacet.y + r2.y * uGlintFacet.z;
     vec3 facet = normalize(N + (T * cos(ang) + B * sin(ang)) * tilt);
 
+    // The half-vector term is what makes a glint SPECULAR: it fires only when a
+    // facet happens to bisect eye and sun, which is why snow sparkles and does
+    // not glow. An ember is not a facet, it is a small hot thing, so the
+    // emissive branch drops the term entirely and keeps the disc alone,
+    // modulated by a per-cell brightness hash so the specks are not all the same
+    // temperature. Without this the cinders inherit snow's pow(nh, 90) gate and
+    // are, in practice, invisible.
+    if (uGlintFacet.w > 0.0) { return disc * (0.25 + 0.75 * r.x); }
+
     float nh = clamp(dot(facet, H), 0.0, 1.0);
     return disc * pow(nh, sharpness);
 }

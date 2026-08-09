@@ -542,16 +542,26 @@ void main() {
     // still glows. That last one is what stops it reading as glitter on black
     // sand, and it needs no structural change because the term was already
     // added as radiance rather than modulated into the BRDF.
-    float glintI = glintIntensity * uWrapGlint.z;
+    //
+    // The two branches are scaled DIFFERENTLY and the reason is physical rather
+    // than a tuning taste. A specular glint is a fraction (0.55) of the sun's
+    // radiance and dies in shadow, and the realm's intensity multiplier dims
+    // that highlight. An ember's radiance is its own: glint.emissive in the
+    // realm row is already the absolute number, so neither the 0.55 snow scale
+    // nor the sun-highlight multiplier applies to it — what is left is the
+    // slider and the coverage the octaves return. Scaling the ember by both
+    // leaves it about a fifth of a stop above the ground, which is invisible.
+    float emissive = uGlintFacet.w;
+    float glintI = (emissive > 0.0) ? glintIntensity : glintIntensity * uWrapGlint.z;
     if (glintI > 0.001 && rockExposed < 0.5) {
         float g = realmGlints(
             world.xz, N, V, L, footprint, glintI,
             clamp(glintGrazing * uWrapGlint.w, 0.0, 1.0)
         );
-        vec3 glintLight = (uGlintFacet.w > 0.0)
-            ? uGlintTint * uGlintFacet.w
-            : sunRadiance * uGlintTint * shadow;
-        color += glintLight * g * (1.0 - iceAmount * 0.6) * 0.55;
+        float ice = 1.0 - iceAmount * 0.6;
+        color += (emissive > 0.0)
+            ? uGlintTint * emissive * g * ice
+            : sunRadiance * uGlintTint * g * shadow * ice * 0.55;
     }
 
     // ---- occlusion, applied last and to everything -------------------------
