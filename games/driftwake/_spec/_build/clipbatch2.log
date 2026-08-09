@@ -1,0 +1,8 @@
+roster: 30 enemies, 15 roles
+[clips] 29 to build, 1 unchanged, 0 unresolvable
+[clips] blender rc=0 in 357s
+[clips] built=29 unchanged=1 failed=0
+  ash   10/10 bodies  clips 2.786 MiB  (mesh 2.748 + clips = 5.534 MiB)  OVER BUDGET
+  cold  10/10 bodies  clips 3.200 MiB  (mesh 2.961 + clips = 6.161 MiB)  OVER BUDGET
+  sand  10/10 bodies  clips 2.977 MiB  (mesh 2.731 + clips = 5.708 MiB)  OVER BUDGET
+  total clips 8.963 MiB

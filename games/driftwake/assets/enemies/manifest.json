@@ -1,0 +1,3112 @@
+{
+ "generatedBy": "tools/build_enemy_assets.py",
+ "note": "Bodies are BIND POSE ONLY (one keyframe at t=0). Motion comes from <slug>_anims.glb, retargeted per body -- clips are NEVER shared between bodies, see blender_retarget.py.",
+ "realmBudgetMiB": 3.0,
+ "count": 30,
+ "totalMeshBytes": 8849200,
+ "realms": {
+  "cold": {
+   "slugs": [
+    "01_cold_rime_imp",
+    "02_cold_glacier_brute",
+    "03_cold_frost_stalker",
+    "31_v2_cold_rime_imp",
+    "32_v2_cold_glacier_brute",
+    "34_v2_cold_ice_cultist",
+    "39_v2_cold_blizzard_assassin",
+    "61_v3_cold_frost_golem",
+    "65_v3_cold_rime_skier_raider",
+    "68_v3_cold_hail_plate_guard"
+   ],
+   "meshBytes": 3104664,
+   "meshMiB": 2.961,
+   "overBudget": true,
+   "clipBytes": 3355268,
+   "clipMiB": 3.2,
+   "totalMiB": 6.161
+  },
+  "sand": {
+   "slugs": [
+    "11_sand_dune_imp",
+    "12_sand_dune_brute",
+    "13_sand_dust_stalker",
+    "16_sand_dust_mage",
+    "43_v2_sand_dust_stalker",
+    "48_v2_sand_dune_sentinel",
+    "50_v2_sand_dune_warden",
+    "73_v3_sand_mummy",
+    "75_v3_sand_bleached_bone_knight",
+    "77_v3_sand_windscour_bandit"
+   ],
+   "meshBytes": 2863232,
+   "meshMiB": 2.731,
+   "overBudget": true,
+   "clipBytes": 3121980,
+   "clipMiB": 2.977,
+   "totalMiB": 5.708
+  },
+  "ash": {
+   "slugs": [
+    "21_ash_cinder_imp",
+    "22_ash_slag_brute",
+    "25_ash_scorch_raider",
+    "26_ash_smoke_mage",
+    "28_ash_cinder_sentinel",
+    "29_ash_soot_assassin",
+    "53_v2_ash_soot_stalker",
+    "60_v2_ash_scorch_warden",
+    "86_v3_ash_volcanic_plate_knight",
+    "88_v3_ash_furnace_guardian"
+   ],
+   "meshBytes": 2881304,
+   "meshMiB": 2.748,
+   "overBudget": true,
+   "clipBytes": 2921184,
+   "clipMiB": 2.786,
+   "totalMiB": 5.534
+  }
+ },
+ "enemies": {
+  "01_cold_rime_imp": {
+   "mesh": "01_cold_rime_imp.glb",
+   "bytes": 326428,
+   "sha256": "18de8ff14b89dc3a",
+   "realm": "cold",
+   "name": "Rime Imp",
+   "role": "swarm",
+   "animRole": "swarm",
+   "combatKey": "rimeImp",
+   "joints": 46,
+   "engineScale": 1.4101,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.68354,
+   "textureBytes": 100490,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "rake_flurry",
+    "pounce",
+    "spit",
+    "roar"
+   ],
+   "anims": {
+    "file": "01_cold_rime_imp_anims.glb",
+    "bytes": 470704,
+    "fps": 24,
+    "inputSig": "e3500efe8600d055",
+    "rigBones": 46,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 68040,
+      "bonesAnimated": 46,
+      "channels": 47,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 17336,
+      "bonesAnimated": 46,
+      "channels": 47,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 13032,
+      "bonesAnimated": 46,
+      "channels": 47,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 11832,
+      "bonesAnimated": 46,
+      "channels": 47,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 32872,
+      "bonesAnimated": 46,
+      "channels": 47,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "rake_flurry",
+      "durationS": 1.5,
+      "bytes": 14392,
+      "bonesAnimated": 46,
+      "channels": 47,
+      "src": "anim_slash1.glb"
+     },
+     {
+      "name": "pounce",
+      "durationS": 3.7083,
+      "bytes": 67680,
+      "bonesAnimated": 46,
+      "channels": 47,
+      "src": "mutant jump attack.fbx"
+     },
+     {
+      "name": "spit",
+      "durationS": 2.3333,
+      "bytes": 41992,
+      "bonesAnimated": 46,
+      "channels": 47,
+      "src": "Standing 1H Magic Attack 01.fbx"
+     },
+     {
+      "name": "roar",
+      "durationS": 5.375,
+      "bytes": 95720,
+      "bonesAnimated": 46,
+      "channels": 47,
+      "src": "mutant roaring.fbx"
+     }
+    ]
+   }
+  },
+  "02_cold_glacier_brute": {
+   "mesh": "02_cold_glacier_brute.glb",
+   "bytes": 324532,
+   "sha256": "a3ac58265fdfd6de",
+   "realm": "cold",
+   "name": "Glacier Brute",
+   "role": "brute",
+   "animRole": "brute",
+   "combatKey": "glacierBrute",
+   "joints": 52,
+   "engineScale": 1.5025,
+   "rosterSizeScale": 1.45,
+   "aabbHeightM": 1.70975,
+   "textureBytes": 90299,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "overhead_smash",
+    "sweep",
+    "charge",
+    "finisher"
+   ],
+   "anims": {
+    "file": "02_cold_glacier_brute_anims.glb",
+    "bytes": 389340,
+    "fps": 24,
+    "inputSig": "e2baf7c896ceeddf",
+    "rigBones": 52,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 68232,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 19736,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 14760,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 13464,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 35752,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "overhead_smash",
+      "durationS": 2.2917,
+      "bytes": 34536,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "standing melee attack downward.fbx"
+     },
+     {
+      "name": "sweep",
+      "durationS": 2.4167,
+      "bytes": 35448,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "standing melee attack horizontal.fbx"
+     },
+     {
+      "name": "charge",
+      "durationS": 0.75,
+      "bytes": 7960,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "great sword run.fbx"
+     },
+     {
+      "name": "finisher",
+      "durationS": 1.8333,
+      "bytes": 38160,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_finisher.glb"
+     }
+    ]
+   }
+  },
+  "03_cold_frost_stalker": {
+   "mesh": "03_cold_frost_stalker.glb",
+   "bytes": 295420,
+   "sha256": "86c8838ee1ebd0c6",
+   "realm": "cold",
+   "name": "Frost Stalker",
+   "role": "stalker",
+   "animRole": "stalker",
+   "combatKey": "frostStalker",
+   "joints": 28,
+   "engineScale": 0.9804,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.89823,
+   "textureBytes": 90281,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "crouch",
+    "leap",
+    "rake"
+   ],
+   "anims": {
+    "file": "03_cold_frost_stalker_anims.glb",
+    "bytes": 252020,
+    "fps": 24,
+    "inputSig": "c5de096f1422999b",
+    "rigBones": 28,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 67464,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 11600,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 8352,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 7416,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 24232,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "crouch",
+      "durationS": 2.125,
+      "bytes": 16936,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_crouch.glb"
+     },
+     {
+      "name": "leap",
+      "durationS": 3.7083,
+      "bytes": 41760,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "mutant jump attack.fbx"
+     },
+     {
+      "name": "rake",
+      "durationS": 1.5,
+      "bytes": 13816,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_slash1.glb"
+     }
+    ]
+   }
+  },
+  "11_sand_dune_imp": {
+   "mesh": "11_sand_dune_imp.glb",
+   "bytes": 288348,
+   "sha256": "8299159b5e8075a5",
+   "realm": "sand",
+   "name": "Dune Imp",
+   "role": "swarm",
+   "animRole": "swarm",
+   "combatKey": "duneImp",
+   "joints": 52,
+   "engineScale": 1.2109,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.73746,
+   "textureBytes": 73158,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "rake_flurry",
+    "pounce",
+    "spit",
+    "roar"
+   ],
+   "anims": {
+    "file": "11_sand_dune_imp_anims.glb",
+    "bytes": 520104,
+    "fps": 24,
+    "inputSig": "05c0c141797af119",
+    "rigBones": 52,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 68232,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 19736,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 14760,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 13464,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 35752,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "rake_flurry",
+      "durationS": 1.5,
+      "bytes": 14584,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_slash1.glb"
+     },
+     {
+      "name": "pounce",
+      "durationS": 3.7083,
+      "bytes": 76320,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "mutant jump attack.fbx"
+     },
+     {
+      "name": "spit",
+      "durationS": 2.3333,
+      "bytes": 47464,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "Standing 1H Magic Attack 01.fbx"
+     },
+     {
+      "name": "roar",
+      "durationS": 5.375,
+      "bytes": 108200,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "mutant roaring.fbx"
+     }
+    ]
+   }
+  },
+  "12_sand_dune_brute": {
+   "mesh": "12_sand_dune_brute.glb",
+   "bytes": 302084,
+   "sha256": "14ca164a6066c7e5",
+   "realm": "sand",
+   "name": "Dune Brute",
+   "role": "brute",
+   "animRole": "brute",
+   "combatKey": "duneBrute",
+   "joints": 34,
+   "engineScale": 1.1092,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.66229,
+   "textureBytes": 80435,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "overhead_smash",
+    "sweep",
+    "charge",
+    "finisher"
+   ],
+   "anims": {
+    "file": "12_sand_dune_brute_anims.glb",
+    "bytes": 292508,
+    "fps": 24,
+    "inputSig": "4bde23f8e17fea02",
+    "rigBones": 34,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 67656,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 13272,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 9576,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 8568,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 27112,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "overhead_smash",
+      "durationS": 2.2917,
+      "bytes": 26184,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "standing melee attack downward.fbx"
+     },
+     {
+      "name": "sweep",
+      "durationS": 2.4167,
+      "bytes": 26664,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "standing melee attack horizontal.fbx"
+     },
+     {
+      "name": "charge",
+      "durationS": 0.75,
+      "bytes": 7384,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "great sword run.fbx"
+     },
+     {
+      "name": "finisher",
+      "durationS": 1.8333,
+      "bytes": 25200,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_finisher.glb"
+     }
+    ]
+   }
+  },
+  "13_sand_dust_stalker": {
+   "mesh": "13_sand_dust_stalker.glb",
+   "bytes": 275672,
+   "sha256": "912be97af1f69d57",
+   "realm": "sand",
+   "name": "Dust Stalker",
+   "role": "stalker",
+   "animRole": "stalker",
+   "combatKey": "dustStalker",
+   "joints": 34,
+   "engineScale": 0.98,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.89883,
+   "textureBytes": 65401,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "crouch",
+    "leap",
+    "rake"
+   ],
+   "anims": {
+    "file": "13_sand_dust_stalker_anims.glb",
+    "bytes": 280560,
+    "fps": 24,
+    "inputSig": "4a352a2fb94fa40c",
+    "rigBones": 34,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 67656,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 13272,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 9576,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 8568,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 27112,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "crouch",
+      "durationS": 2.125,
+      "bytes": 17128,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_crouch.glb"
+     },
+     {
+      "name": "leap",
+      "durationS": 3.7083,
+      "bytes": 50400,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "mutant jump attack.fbx"
+     },
+     {
+      "name": "rake",
+      "durationS": 1.5,
+      "bytes": 14008,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_slash1.glb"
+     }
+    ]
+   }
+  },
+  "16_sand_dust_mage": {
+   "mesh": "16_sand_dust_mage.glb",
+   "bytes": 247328,
+   "sha256": "9bcb6b2037359912",
+   "realm": "sand",
+   "name": "Dust Mage",
+   "role": "mage",
+   "animRole": "mage",
+   "combatKey": "dustMage",
+   "joints": 34,
+   "engineScale": 0.9766,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.89831,
+   "textureBytes": 50162,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "cast_bolt",
+    "cast_zone",
+    "heavy_lance"
+   ],
+   "anims": {
+    "file": "16_sand_dust_mage_anims.glb",
+    "bytes": 295528,
+    "fps": 24,
+    "inputSig": "add8b35b6e965001",
+    "rigBones": 34,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 67656,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 13272,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 9576,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 8568,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 27112,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "cast_bolt",
+      "durationS": 2.25,
+      "bytes": 30800,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_cast1.glb"
+     },
+     {
+      "name": "cast_zone",
+      "durationS": 2.1667,
+      "bytes": 29680,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_cast2.glb"
+     },
+     {
+      "name": "heavy_lance",
+      "durationS": 2.6667,
+      "bytes": 36400,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "Standing 2H Magic Attack 01.fbx"
+     }
+    ]
+   }
+  },
+  "21_ash_cinder_imp": {
+   "mesh": "21_ash_cinder_imp.glb",
+   "bytes": 308696,
+   "sha256": "dbff102cf9f21c64",
+   "realm": "ash",
+   "name": "Cinder Imp",
+   "role": "swarm",
+   "animRole": "swarm",
+   "combatKey": "cinderImp",
+   "joints": 34,
+   "engineScale": 1.332,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.76962,
+   "textureBytes": 95151,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "rake_flurry",
+    "pounce",
+    "spit",
+    "roar"
+   ],
+   "anims": {
+    "file": "21_ash_cinder_imp_anims.glb",
+    "bytes": 373360,
+    "fps": 24,
+    "inputSig": "72210e874afa88c2",
+    "rigBones": 34,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 67656,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 13272,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 9576,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 8568,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 27112,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "rake_flurry",
+      "durationS": 1.5,
+      "bytes": 14008,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_slash1.glb"
+     },
+     {
+      "name": "pounce",
+      "durationS": 3.7083,
+      "bytes": 50400,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "mutant jump attack.fbx"
+     },
+     {
+      "name": "spit",
+      "durationS": 2.3333,
+      "bytes": 31048,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "Standing 1H Magic Attack 01.fbx"
+     },
+     {
+      "name": "roar",
+      "durationS": 5.375,
+      "bytes": 70760,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "mutant roaring.fbx"
+     }
+    ]
+   }
+  },
+  "22_ash_slag_brute": {
+   "mesh": "22_ash_slag_brute.glb",
+   "bytes": 322996,
+   "sha256": "3ba19ef5ecfe9bbc",
+   "realm": "ash",
+   "name": "Slag Brute",
+   "role": "brute",
+   "animRole": "brute",
+   "combatKey": "slagBrute",
+   "joints": 34,
+   "engineScale": 1.1603,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.58415,
+   "textureBytes": 96907,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "overhead_smash",
+    "sweep",
+    "charge",
+    "finisher"
+   ],
+   "anims": {
+    "file": "22_ash_slag_brute_anims.glb",
+    "bytes": 292276,
+    "fps": 24,
+    "inputSig": "a261b43747772f3f",
+    "rigBones": 34,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 67656,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 13272,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 9576,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 8568,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 27112,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "overhead_smash",
+      "durationS": 2.2917,
+      "bytes": 26184,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "standing melee attack downward.fbx"
+     },
+     {
+      "name": "sweep",
+      "durationS": 2.4167,
+      "bytes": 26664,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "standing melee attack horizontal.fbx"
+     },
+     {
+      "name": "charge",
+      "durationS": 0.75,
+      "bytes": 7384,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "great sword run.fbx"
+     },
+     {
+      "name": "finisher",
+      "durationS": 1.8333,
+      "bytes": 25200,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_finisher.glb"
+     }
+    ]
+   }
+  },
+  "25_ash_scorch_raider": {
+   "mesh": "25_ash_scorch_raider.glb",
+   "bytes": 273612,
+   "sha256": "6dc3247b50469915",
+   "realm": "ash",
+   "name": "Scorch Raider",
+   "role": "raider",
+   "animRole": "raider",
+   "combatKey": "scorchRaider",
+   "joints": 28,
+   "engineScale": 0.9917,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.89863,
+   "textureBytes": 63511,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "combo",
+    "lunge",
+    "throw"
+   ],
+   "anims": {
+    "file": "25_ash_scorch_raider_anims.glb",
+    "bytes": 276540,
+    "fps": 24,
+    "inputSig": "c63819c19d9f7867",
+    "rigBones": 28,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 67464,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 11600,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 8352,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 7416,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 24232,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "combo",
+      "durationS": 4.6667,
+      "bytes": 47112,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "standing melee combo attack ver. 1.fbx"
+     },
+     {
+      "name": "lunge",
+      "durationS": 1.5,
+      "bytes": 13816,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_slash1.glb"
+     },
+     {
+      "name": "throw",
+      "durationS": 3.2083,
+      "bytes": 36192,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "toss grenade.fbx"
+     }
+    ]
+   }
+  },
+  "26_ash_smoke_mage": {
+   "mesh": "26_ash_smoke_mage.glb",
+   "bytes": 285292,
+   "sha256": "72d3d436915aaf2c",
+   "realm": "ash",
+   "name": "Smoke Mage",
+   "role": "mage",
+   "animRole": "mage",
+   "combatKey": "smokeMage",
+   "joints": 34,
+   "engineScale": 1.0089,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.86678,
+   "textureBytes": 61947,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "cast_bolt",
+    "cast_zone",
+    "heavy_lance"
+   ],
+   "anims": {
+    "file": "26_ash_smoke_mage_anims.glb",
+    "bytes": 295448,
+    "fps": 24,
+    "inputSig": "75d4a5b14126dba5",
+    "rigBones": 34,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 67656,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 13272,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 9576,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 8568,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 27112,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "cast_bolt",
+      "durationS": 2.25,
+      "bytes": 30800,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_cast1.glb"
+     },
+     {
+      "name": "cast_zone",
+      "durationS": 2.1667,
+      "bytes": 29680,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_cast2.glb"
+     },
+     {
+      "name": "heavy_lance",
+      "durationS": 2.6667,
+      "bytes": 36400,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "Standing 2H Magic Attack 01.fbx"
+     }
+    ]
+   }
+  },
+  "28_ash_cinder_sentinel": {
+   "mesh": "28_ash_cinder_sentinel.glb",
+   "bytes": 283408,
+   "sha256": "82d8fc5b6813266f",
+   "realm": "ash",
+   "name": "Cinder Sentinel",
+   "role": "sentinel",
+   "animRole": "sentinel",
+   "combatKey": "cinderSentinel",
+   "joints": 34,
+   "engineScale": 0.9911,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.88411,
+   "textureBytes": 62402,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "block",
+    "thrust",
+    "slash",
+    "bash"
+   ],
+   "anims": {
+    "file": "28_ash_cinder_sentinel_anims.glb",
+    "bytes": 267428,
+    "fps": 24,
+    "inputSig": "57ed7652c8bbed74",
+    "rigBones": 34,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 67656,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 13272,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 9576,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 8568,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 27112,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "block",
+      "durationS": 0.5417,
+      "bytes": 5544,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_block.glb"
+     },
+     {
+      "name": "thrust",
+      "durationS": 2.3333,
+      "bytes": 26648,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "sword and shield attack.fbx"
+     },
+     {
+      "name": "slash",
+      "durationS": 1.5,
+      "bytes": 14008,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_slash1.glb"
+     },
+     {
+      "name": "bash",
+      "durationS": 1.2083,
+      "bytes": 14120,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "sword and shield kick.fbx"
+     }
+    ]
+   }
+  },
+  "29_ash_soot_assassin": {
+   "mesh": "29_ash_soot_assassin.glb",
+   "bytes": 253104,
+   "sha256": "e0af68d2878e4624",
+   "realm": "ash",
+   "name": "Soot Assassin",
+   "role": "assassin",
+   "animRole": "assassin",
+   "combatKey": "sootAssassin",
+   "joints": 28,
+   "engineScale": 0.9805,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.89902,
+   "textureBytes": 48867,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "stealth",
+    "dash_slash",
+    "backstab",
+    "vanish"
+   ],
+   "anims": {
+    "file": "29_ash_soot_assassin_anims.glb",
+    "bytes": 253352,
+    "fps": 24,
+    "inputSig": "b96ded33cfc2c2ce",
+    "rigBones": 28,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 67464,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 11600,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 8352,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 7416,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 24232,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "stealth",
+      "durationS": 2.125,
+      "bytes": 16936,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_crouch.glb"
+     },
+     {
+      "name": "dash_slash",
+      "durationS": 1.5,
+      "bytes": 13816,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_slash1.glb"
+     },
+     {
+      "name": "backstab",
+      "durationS": 1.8333,
+      "bytes": 20880,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_finisher.glb"
+     },
+     {
+      "name": "vanish",
+      "durationS": 1.4583,
+      "bytes": 15624,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_dodge.glb"
+     }
+    ]
+   }
+  },
+  "31_v2_cold_rime_imp": {
+   "mesh": "31_v2_cold_rime_imp.glb",
+   "bytes": 305788,
+   "sha256": "2c5a7a40d7c63370",
+   "realm": "cold",
+   "name": "Rime Imp v2",
+   "role": "swarm",
+   "animRole": "swarm",
+   "combatKey": "rimeImp",
+   "joints": 52,
+   "engineScale": 1.1927,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.89386,
+   "textureBytes": 87335,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "rake_flurry",
+    "pounce",
+    "spit",
+    "roar"
+   ],
+   "anims": {
+    "file": "31_v2_cold_rime_imp_anims.glb",
+    "bytes": 519812,
+    "fps": 24,
+    "inputSig": "4919964a09a8ac87",
+    "rigBones": 52,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 68232,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 19736,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 14760,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 13464,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 35752,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "rake_flurry",
+      "durationS": 1.5,
+      "bytes": 14584,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_slash1.glb"
+     },
+     {
+      "name": "pounce",
+      "durationS": 3.7083,
+      "bytes": 76320,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "mutant jump attack.fbx"
+     },
+     {
+      "name": "spit",
+      "durationS": 2.3333,
+      "bytes": 47464,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "Standing 1H Magic Attack 01.fbx"
+     },
+     {
+      "name": "roar",
+      "durationS": 5.375,
+      "bytes": 108200,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "mutant roaring.fbx"
+     }
+    ]
+   }
+  },
+  "32_v2_cold_glacier_brute": {
+   "mesh": "32_v2_cold_glacier_brute.glb",
+   "bytes": 319568,
+   "sha256": "4970845c601d01e3",
+   "realm": "cold",
+   "name": "Glacier Brute v2",
+   "role": "brute",
+   "animRole": "brute",
+   "combatKey": "glacierBrute",
+   "joints": 28,
+   "engineScale": 1.518,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.31368,
+   "textureBytes": 104276,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "overhead_smash",
+    "sweep",
+    "charge",
+    "finisher"
+   ],
+   "anims": {
+    "file": "32_v2_cold_glacier_brute_anims.glb",
+    "bytes": 262028,
+    "fps": 24,
+    "inputSig": "7d490e89a0cebb47",
+    "rigBones": 28,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 67464,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 11600,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 8352,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 7416,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 24232,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "overhead_smash",
+      "durationS": 2.2917,
+      "bytes": 23400,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "standing melee attack downward.fbx"
+     },
+     {
+      "name": "sweep",
+      "durationS": 2.4167,
+      "bytes": 24648,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "standing melee attack horizontal.fbx"
+     },
+     {
+      "name": "charge",
+      "durationS": 0.75,
+      "bytes": 7192,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "great sword run.fbx"
+     },
+     {
+      "name": "finisher",
+      "durationS": 1.8333,
+      "bytes": 20880,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_finisher.glb"
+     }
+    ]
+   }
+  },
+  "34_v2_cold_ice_cultist": {
+   "mesh": "34_v2_cold_ice_cultist.glb",
+   "bytes": 328328,
+   "sha256": "dec1c7ec9ccf7386",
+   "realm": "cold",
+   "name": "Ice Cultist",
+   "role": "cultist",
+   "animRole": "cultist",
+   "combatKey": "rimeboundCultist",
+   "joints": 34,
+   "engineScale": 1.0046,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.87803,
+   "textureBytes": 111602,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "cast_bolt",
+    "cast_snare",
+    "channel"
+   ],
+   "anims": {
+    "file": "34_v2_cold_ice_cultist_anims.glb",
+    "bytes": 288352,
+    "fps": 24,
+    "inputSig": "461e8f79463a3f1a",
+    "rigBones": 34,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 67656,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 13272,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 9576,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 8568,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 27112,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "cast_bolt",
+      "durationS": 2.25,
+      "bytes": 30800,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_cast1.glb"
+     },
+     {
+      "name": "cast_snare",
+      "durationS": 2.1667,
+      "bytes": 29680,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_cast2.glb"
+     },
+     {
+      "name": "channel",
+      "durationS": 2.1667,
+      "bytes": 29468,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "Standing 2H Cast Spell 01.fbx"
+     }
+    ]
+   }
+  },
+  "39_v2_cold_blizzard_assassin": {
+   "mesh": "39_v2_cold_blizzard_assassin.glb",
+   "bytes": 268672,
+   "sha256": "972870ea74132b73",
+   "realm": "cold",
+   "name": "Blizzard Assassin",
+   "role": "assassin",
+   "animRole": "assassin",
+   "combatKey": "blizzardAssassin",
+   "joints": 34,
+   "engineScale": 0.984,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.89866,
+   "textureBytes": 78483,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "stealth",
+    "dash_slash",
+    "backstab",
+    "vanish"
+   ],
+   "anims": {
+    "file": "39_v2_cold_blizzard_assassin_anims.glb",
+    "bytes": 280464,
+    "fps": 24,
+    "inputSig": "443cce82d5d4c876",
+    "rigBones": 34,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 67656,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 13272,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 9576,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 8568,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 27112,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "stealth",
+      "durationS": 2.125,
+      "bytes": 17128,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_crouch.glb"
+     },
+     {
+      "name": "dash_slash",
+      "durationS": 1.5,
+      "bytes": 14008,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_slash1.glb"
+     },
+     {
+      "name": "backstab",
+      "durationS": 1.8333,
+      "bytes": 25200,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_finisher.glb"
+     },
+     {
+      "name": "vanish",
+      "durationS": 1.4583,
+      "bytes": 17448,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_dodge.glb"
+     }
+    ]
+   }
+  },
+  "43_v2_sand_dust_stalker": {
+   "mesh": "43_v2_sand_dust_stalker.glb",
+   "bytes": 260704,
+   "sha256": "ddeb8664a0f7b2aa",
+   "realm": "sand",
+   "name": "Dust Stalker v2",
+   "role": "stalker",
+   "animRole": "stalker",
+   "combatKey": "dustStalker",
+   "joints": 28,
+   "engineScale": 0.9911,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.89916,
+   "textureBytes": 66975,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "crouch",
+    "leap",
+    "rake"
+   ],
+   "anims": {
+    "file": "43_v2_sand_dust_stalker_anims.glb",
+    "bytes": 251776,
+    "fps": 24,
+    "inputSig": "d2ee1396de468680",
+    "rigBones": 28,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 67464,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 11600,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 8352,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 7416,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 24232,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "crouch",
+      "durationS": 2.125,
+      "bytes": 16936,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_crouch.glb"
+     },
+     {
+      "name": "leap",
+      "durationS": 3.7083,
+      "bytes": 41760,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "mutant jump attack.fbx"
+     },
+     {
+      "name": "rake",
+      "durationS": 1.5,
+      "bytes": 13816,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_slash1.glb"
+     }
+    ]
+   }
+  },
+  "48_v2_sand_dune_sentinel": {
+   "mesh": "48_v2_sand_dune_sentinel.glb",
+   "bytes": 302680,
+   "sha256": "be6bce714f8602f1",
+   "realm": "sand",
+   "name": "Dune Sentinel",
+   "role": "sentinel",
+   "animRole": "sentinel",
+   "combatKey": "duneSentinel",
+   "joints": 34,
+   "engineScale": 1.0325,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.8986,
+   "textureBytes": 79695,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "block",
+    "thrust",
+    "slash",
+    "bash"
+   ],
+   "anims": {
+    "file": "48_v2_sand_dune_sentinel_anims.glb",
+    "bytes": 267524,
+    "fps": 24,
+    "inputSig": "d8ee2f0f1f201486",
+    "rigBones": 34,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 67656,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 13272,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 9576,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 8568,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 27112,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "block",
+      "durationS": 0.5417,
+      "bytes": 5544,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_block.glb"
+     },
+     {
+      "name": "thrust",
+      "durationS": 2.3333,
+      "bytes": 26648,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "sword and shield attack.fbx"
+     },
+     {
+      "name": "slash",
+      "durationS": 1.5,
+      "bytes": 14008,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_slash1.glb"
+     },
+     {
+      "name": "bash",
+      "durationS": 1.2083,
+      "bytes": 14120,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "sword and shield kick.fbx"
+     }
+    ]
+   }
+  },
+  "50_v2_sand_dune_warden": {
+   "mesh": "50_v2_sand_dune_warden.glb",
+   "bytes": 308672,
+   "sha256": "b46bfe81e20b385a",
+   "realm": "sand",
+   "name": "Dune Warden",
+   "role": "warden",
+   "animRole": "boss",
+   "combatKey": "duneWarden",
+   "joints": 28,
+   "engineScale": 0.997,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.89869,
+   "textureBytes": 97408,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "heavy_combo",
+    "ranged"
+   ],
+   "anims": {
+    "file": "50_v2_sand_dune_warden_anims.glb",
+    "bytes": 210144,
+    "fps": 24,
+    "inputSig": "776c10895880caf9",
+    "rigBones": 28,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 67464,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 11600,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 8352,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 7416,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.4167,
+      "bytes": 24648,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "two handed sword death.fbx"
+     },
+     {
+      "name": "heavy_combo",
+      "durationS": 1.2917,
+      "bytes": 12456,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "great sword slash.fbx"
+     },
+     {
+      "name": "ranged",
+      "durationS": 2.1667,
+      "bytes": 24592,
+      "bonesAnimated": 28,
+      "channels": 29,
+      "src": "anim_cast2.glb"
+     }
+    ]
+   }
+  },
+  "53_v2_ash_soot_stalker": {
+   "mesh": "53_v2_ash_soot_stalker.glb",
+   "bytes": 256812,
+   "sha256": "20fd80a10515c48b",
+   "realm": "ash",
+   "name": "Soot Stalker",
+   "role": "stalker",
+   "animRole": "stalker",
+   "combatKey": "sootStalker",
+   "joints": 34,
+   "engineScale": 0.9905,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.89823,
+   "textureBytes": 56416,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "crouch",
+    "leap",
+    "rake"
+   ],
+   "anims": {
+    "file": "53_v2_ash_soot_stalker_anims.glb",
+    "bytes": 280548,
+    "fps": 24,
+    "inputSig": "00dd98ddf5108b9e",
+    "rigBones": 34,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 67656,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 13272,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 9576,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 8568,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 27112,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "crouch",
+      "durationS": 2.125,
+      "bytes": 17128,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_crouch.glb"
+     },
+     {
+      "name": "leap",
+      "durationS": 3.7083,
+      "bytes": 50400,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "mutant jump attack.fbx"
+     },
+     {
+      "name": "rake",
+      "durationS": 1.5,
+      "bytes": 14008,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_slash1.glb"
+     }
+    ]
+   }
+  },
+  "60_v2_ash_scorch_warden": {
+   "mesh": "60_v2_ash_scorch_warden.glb",
+   "bytes": 304772,
+   "sha256": "38e0a27b7c8f7383",
+   "realm": "ash",
+   "name": "Scorch Warden",
+   "role": "warden",
+   "animRole": "warden",
+   "combatKey": "scorchWarden",
+   "joints": 52,
+   "engineScale": 1.1051,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.73598,
+   "textureBytes": 72255,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "sweep",
+    "slam",
+    "aura_cast"
+   ],
+   "anims": {
+    "file": "60_v2_ash_scorch_warden_anims.glb",
+    "bytes": 332716,
+    "fps": 24,
+    "inputSig": "c3bcd8cbab67ebe9",
+    "rigBones": 52,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 68232,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 19736,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 14760,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 13464,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 35752,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "sweep",
+      "durationS": 1.2917,
+      "bytes": 14664,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "great sword slash.fbx"
+     },
+     {
+      "name": "slam",
+      "durationS": 1.2083,
+      "bytes": 12008,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "great sword attack.fbx"
+     },
+     {
+      "name": "aura_cast",
+      "durationS": 2.1667,
+      "bytes": 44944,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_cast2.glb"
+     }
+    ]
+   }
+  },
+  "61_v3_cold_frost_golem": {
+   "mesh": "61_v3_cold_frost_golem.glb",
+   "bytes": 280732,
+   "sha256": "6fb1ae237118dfc0",
+   "realm": "cold",
+   "name": "Frost Golem",
+   "role": "golem",
+   "animRole": "golem",
+   "combatKey": "packIceGolem",
+   "joints": 34,
+   "engineScale": 2.1991,
+   "rosterSizeScale": 2.2,
+   "aabbHeightM": 1.85955,
+   "textureBytes": 68483,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "punch",
+    "pound",
+    "swat"
+   ],
+   "anims": {
+    "file": "61_v3_cold_frost_golem_anims.glb",
+    "bytes": 291300,
+    "fps": 24,
+    "inputSig": "1fa6b1ad18645001",
+    "rigBones": 34,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 67656,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 13272,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 9576,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 8568,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 27112,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "punch",
+      "durationS": 1.125,
+      "bytes": 14440,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "mutant punch.fbx"
+     },
+     {
+      "name": "pound",
+      "durationS": 3.7083,
+      "bytes": 50400,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "mutant jump attack.fbx"
+     },
+     {
+      "name": "swat",
+      "durationS": 2.4167,
+      "bytes": 27576,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "mutant swiping.fbx"
+     }
+    ]
+   }
+  },
+  "65_v3_cold_rime_skier_raider": {
+   "mesh": "65_v3_cold_rime_skier_raider.glb",
+   "bytes": 317068,
+   "sha256": "cffd5e7cd1fdd9ee",
+   "realm": "cold",
+   "name": "Rime Skier Raider",
+   "role": "raider",
+   "animRole": "raider",
+   "combatKey": null,
+   "joints": 34,
+   "engineScale": 1.1714,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.68026,
+   "textureBytes": 86410,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "combo",
+    "lunge",
+    "throw"
+   ],
+   "anims": {
+    "file": "65_v3_cold_rime_skier_raider_anims.glb",
+    "bytes": 308240,
+    "fps": 24,
+    "inputSig": "f62a118f974fe546",
+    "rigBones": 34,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 67656,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 13272,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 9576,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 8568,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 27112,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "combo",
+      "durationS": 4.6667,
+      "bytes": 52632,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "standing melee combo attack ver. 1.fbx"
+     },
+     {
+      "name": "lunge",
+      "durationS": 1.5,
+      "bytes": 14008,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_slash1.glb"
+     },
+     {
+      "name": "throw",
+      "durationS": 3.2083,
+      "bytes": 42472,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "toss grenade.fbx"
+     }
+    ]
+   }
+  },
+  "68_v3_cold_hail_plate_guard": {
+   "mesh": "68_v3_cold_hail_plate_guard.glb",
+   "bytes": 338128,
+   "sha256": "93041932364dc880",
+   "realm": "cold",
+   "name": "Hail Plate Guard",
+   "role": "knight",
+   "animRole": "knight",
+   "combatKey": "hailPlateGuard",
+   "joints": 46,
+   "engineScale": 1.1949,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.39657,
+   "textureBytes": 101389,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "slash_combo",
+    "shield_slam",
+    "guard"
+   ],
+   "anims": {
+    "file": "68_v3_cold_hail_plate_guard_anims.glb",
+    "bytes": 293008,
+    "fps": 24,
+    "inputSig": "513875cc2b856688",
+    "rigBones": 46,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 68040,
+      "bonesAnimated": 46,
+      "channels": 47,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 17336,
+      "bonesAnimated": 46,
+      "channels": 47,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 13032,
+      "bonesAnimated": 46,
+      "channels": 47,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 11832,
+      "bonesAnimated": 46,
+      "channels": 47,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 32872,
+      "bonesAnimated": 46,
+      "channels": 47,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "slash_combo",
+      "durationS": 1.5,
+      "bytes": 14392,
+      "bonesAnimated": 46,
+      "channels": 47,
+      "src": "sword and shield slash.fbx"
+     },
+     {
+      "name": "shield_slam",
+      "durationS": 2.3333,
+      "bytes": 32312,
+      "bonesAnimated": 46,
+      "channels": 47,
+      "src": "sword and shield attack.fbx"
+     },
+     {
+      "name": "guard",
+      "durationS": 0.5417,
+      "bytes": 5928,
+      "bonesAnimated": 46,
+      "channels": 47,
+      "src": "anim_block.glb"
+     }
+    ]
+   }
+  },
+  "73_v3_sand_mummy": {
+   "mesh": "73_v3_sand_mummy.glb",
+   "bytes": 263080,
+   "sha256": "c524677298c1277d",
+   "realm": "sand",
+   "name": "Sand Mummy",
+   "role": "mummy",
+   "animRole": "mummy",
+   "combatKey": null,
+   "joints": 34,
+   "engineScale": 0.9867,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.89857,
+   "textureBytes": 74064,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "grab_wrap",
+    "curse_cast",
+    "spit",
+    "shambling"
+   ],
+   "anims": {
+    "file": "73_v3_sand_mummy_anims.glb",
+    "bytes": 395260,
+    "fps": 24,
+    "inputSig": "85c4a490815cd470",
+    "rigBones": 34,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 67656,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 13272,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 9576,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 8568,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 27112,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "grab_wrap",
+      "durationS": 6.625,
+      "bytes": 89600,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "zombie biting.fbx"
+     },
+     {
+      "name": "curse_cast",
+      "durationS": 2.25,
+      "bytes": 30800,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_cast1.glb"
+     },
+     {
+      "name": "spit",
+      "durationS": 2.5,
+      "bytes": 31336,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "zombie attack.fbx"
+     },
+     {
+      "name": "shambling",
+      "durationS": 4.0417,
+      "bytes": 36456,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "zombie walk.fbx"
+     }
+    ]
+   }
+  },
+  "75_v3_sand_bleached_bone_knight": {
+   "mesh": "75_v3_sand_bleached_bone_knight.glb",
+   "bytes": 315344,
+   "sha256": "779d3ba929ce1b2b",
+   "realm": "sand",
+   "name": "Bone Knight",
+   "role": "knight",
+   "animRole": "knight",
+   "combatKey": null,
+   "joints": 34,
+   "engineScale": 0.9915,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.85197,
+   "textureBytes": 92907,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "slash_combo",
+    "shield_slam",
+    "guard"
+   ],
+   "anims": {
+    "file": "75_v3_sand_bleached_bone_knight_anims.glb",
+    "bytes": 245300,
+    "fps": 24,
+    "inputSig": "cd3d5587a4b9e9dc",
+    "rigBones": 34,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 67656,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 13272,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 9576,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 8568,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 27112,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "slash_combo",
+      "durationS": 1.5,
+      "bytes": 14008,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "sword and shield slash.fbx"
+     },
+     {
+      "name": "shield_slam",
+      "durationS": 2.3333,
+      "bytes": 26648,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "sword and shield attack.fbx"
+     },
+     {
+      "name": "guard",
+      "durationS": 0.5417,
+      "bytes": 5544,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_block.glb"
+     }
+    ]
+   }
+  },
+  "77_v3_sand_windscour_bandit": {
+   "mesh": "77_v3_sand_windscour_bandit.glb",
+   "bytes": 299320,
+   "sha256": "c6e1e62cd2ab61c7",
+   "realm": "sand",
+   "name": "Windscour Bandit",
+   "role": "bandit",
+   "animRole": "bandit",
+   "combatKey": "windscourBandit",
+   "joints": 52,
+   "engineScale": 0.9899,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.89794,
+   "textureBytes": 80922,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "slash",
+    "kick",
+    "throw"
+   ],
+   "anims": {
+    "file": "77_v3_sand_windscour_bandit_anims.glb",
+    "bytes": 363276,
+    "fps": 24,
+    "inputSig": "fe81767f6fc2fa83",
+    "rigBones": 52,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 68232,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 19736,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 14760,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 13464,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 35752,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "slash",
+      "durationS": 1.5,
+      "bytes": 14584,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "anim_slash1.glb"
+     },
+     {
+      "name": "kick",
+      "durationS": 1.875,
+      "bytes": 28456,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "standing melee attack kick ver. 1.fbx"
+     },
+     {
+      "name": "throw",
+      "durationS": 3.2083,
+      "bytes": 58856,
+      "bonesAnimated": 52,
+      "channels": 53,
+      "src": "toss grenade.fbx"
+     }
+    ]
+   }
+  },
+  "86_v3_ash_volcanic_plate_knight": {
+   "mesh": "86_v3_ash_volcanic_plate_knight.glb",
+   "bytes": 290060,
+   "sha256": "963cc948f742f1ad",
+   "realm": "ash",
+   "name": "Volcanic Plate Knight",
+   "role": "knight",
+   "animRole": "boss",
+   "combatKey": "volcanicPlateKnight",
+   "joints": 34,
+   "engineScale": 1.1827,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.49822,
+   "textureBytes": 65795,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "heavy_combo",
+    "ranged"
+   ],
+   "anims": {
+    "file": "86_v3_ash_volcanic_plate_knight_anims.glb",
+    "bytes": 233444,
+    "fps": 24,
+    "inputSig": "e530da3e3fd29fa7",
+    "rigBones": 34,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 67656,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 13272,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 9576,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 8568,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.4167,
+      "bytes": 27576,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "two handed sword death.fbx"
+     },
+     {
+      "name": "heavy_combo",
+      "durationS": 1.2917,
+      "bytes": 12648,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "great sword slash.fbx"
+     },
+     {
+      "name": "ranged",
+      "durationS": 2.1667,
+      "bytes": 29680,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_cast2.glb"
+     }
+    ]
+   }
+  },
+  "88_v3_ash_furnace_guardian": {
+   "mesh": "88_v3_ash_furnace_guardian.glb",
+   "bytes": 302552,
+   "sha256": "784b07ad7f73887b",
+   "realm": "ash",
+   "name": "Furnace Guardian",
+   "role": "guardian",
+   "animRole": "guardian",
+   "combatKey": "furnaceGuardian",
+   "joints": 34,
+   "engineScale": 1.2867,
+   "rosterSizeScale": 1.0,
+   "aabbHeightM": 1.55954,
+   "textureBytes": 75529,
+   "clipSlots": [
+    "idle",
+    "walk",
+    "run",
+    "hit",
+    "death",
+    "smash",
+    "breath_cast",
+    "grapple"
+   ],
+   "anims": {
+    "file": "88_v3_ash_furnace_guardian_anims.glb",
+    "bytes": 316072,
+    "fps": 24,
+    "inputSig": "5c26da1216e36e1b",
+    "rigBones": 34,
+    "clips": [
+     {
+      "name": "idle",
+      "durationS": 8.2917,
+      "bytes": 67656,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_idle.glb"
+     },
+     {
+      "name": "walk",
+      "durationS": 1.0,
+      "bytes": 13272,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_walk.glb"
+     },
+     {
+      "name": "run",
+      "durationS": 0.7083,
+      "bytes": 9576,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_run.glb"
+     },
+     {
+      "name": "hit",
+      "durationS": 0.6667,
+      "bytes": 8568,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_hit.glb"
+     },
+     {
+      "name": "death",
+      "durationS": 2.375,
+      "bytes": 27112,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_death.glb"
+     },
+     {
+      "name": "smash",
+      "durationS": 4.6667,
+      "bytes": 52632,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "standing melee combo attack ver. 1.fbx"
+     },
+     {
+      "name": "breath_cast",
+      "durationS": 2.1667,
+      "bytes": 29680,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "anim_cast2.glb"
+     },
+     {
+      "name": "grapple",
+      "durationS": 3.1667,
+      "bytes": 34728,
+      "bonesAnimated": 34,
+      "channels": 35,
+      "src": "standing melee attack backhand.fbx"
+     }
+    ]
+   }
+  }
+ },
+ "clipBudgetMiB": 2.5,
+ "totalClipBytes": 9398432
+}

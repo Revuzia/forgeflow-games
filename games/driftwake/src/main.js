@@ -113,7 +113,7 @@ import { SpellHits } from "./combat/spellHits.js";
 import { Targeting } from "./combat/targeting.js";
 import { TrainingDummies } from "./combat/dummies.js";
 import { Enemies } from "./combat/enemies.js";
-import { EnemyVis } from "./combat/enemyVis.js";
+import { MeshEnemies } from "./combat/meshEnemies.js";
 import { Encounters } from "./combat/encounters.js";
 import { Floaters } from "./ui/floaters.js";
 import { EnemyBars } from "./ui/enemybars.js";
@@ -487,7 +487,19 @@ async function boot() {
     const spellHits = new SpellHits(spells, registry, character, combatData.combatData);
     const dummies = new TrainingDummies(registry, terrain, spells.crystals, combatData);
     const enemies = new Enemies(scene, terrain, registry, character, combatData, spray);
-    const enemyVis = new EnemyVis(scene, sky, shadows, spells.lights, spells.globals);
+    // The bodies are the thirty rigged Meshy enemies, not the four placeholder
+    // shard constructs `EnemyVis` drew. Same API surface — spawn/free/drive/
+    // driveBolt/update/material — so nothing above this line changes.
+    //
+    // ONE body type is awaited here and the rest stream in behind it. Blocking
+    // the boot on all ten of a realm's bodies would add ~6 MB to the critical
+    // path for meshes the player cannot meet until the first pack spawns; not
+    // blocking on ANY would let the first encounter arrive before its mesh and
+    // pop in. `load()` therefore resolves once the realm's first spawnable
+    // (the swarm unit, which is what the level-1 gate opens with) is resident.
+    const enemyVis = new MeshEnemies(scene, sky, shadows, spells.lights, spells.globals);
+    await loading.phase("waking the drift", 0.78);
+    await enemyVis.load("cold");
     enemies.attachVis(enemyVis);
     spells.addConsumers(enemyVis.material);
     const encounters = new Encounters(enemies, registry, character, combatData, minimap);

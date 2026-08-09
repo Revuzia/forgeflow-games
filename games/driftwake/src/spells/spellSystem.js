@@ -34,6 +34,7 @@ import { Ribbon } from "./ribbon.js";
 import { Bloom } from "./bloom.js";
 import { Crystallize } from "./crystallize.js";
 import { Vortex } from "./vortex.js";
+import { Dart } from "./dart.js";
 import { HandWeave } from "./handWeave.js";
 import { aimPoint, expDamp } from "./bending.js";
 
@@ -72,14 +73,175 @@ const _viewProj = new THREE.Matrix4();
  *   5: 2H Cast Spell     1.273 s / 1.30 = 0.98
  * Re-measure BOTH together if the clips or rates change.
  */
-const STRIKE_DELAY = { 1: 0.71, 3: 0.66, 4: 0.95, 5: 0.98 };
+const STRIKE_DELAY = { 1: 0.71, 3: 0.66, 4: 0.95, 5: 0.98, 6: 0 };
+
+/**
+ * The primary bolt — internal id 6, the ONE new engine id (1..5 are taken and
+ * are never renumbered). `progression.js`'s UNLOCK_LEVEL and its save-load
+ * guard both stop at 5; the bolt is the level-1 filler that is never locked, so
+ * `cast()` exempts it from the unlock gate rather than waiting for that file.
+ */
+export const BOLT_KEY = 6;
+
+/**
+ * The bolt's engine numbers, transcribed from `combat/combatData.js`
+ * SPELLS.LMB the same way STRIKE_DELAY / MANA_COST / COOLDOWN are transcribed —
+ * this module owns no combat import, and the two tables are kept in step by
+ * hand exactly as the docblock in combatData.js says.
+ *
+ *   fireCycleS  0.45  -> 12 damage / 0.45 s = 26.7 DPS planted
+ *   speed       21 m/s, range 40 m aim leash / 18 m fallback
+ *
+ * Damage, splash, poise and the anti-kite falloff are NOT here: they belong to
+ * `combat/spellHits.js`, which reads them out of `combatData.bolt`.
+ */
+const BOLT_CYCLE = 0.45;
+const BOLT_SPEED = 21;
+const BOLT_RANGE = 40;
+const BOLT_FALLBACK = 18;
+
+/**
+ * THE REALM PALETTE — the eighteen identities, as three frozen rows.
+ *
+ * The governing rule (owner directive 4): the mechanic is constant across
+ * realms; the fiction and the FX change. Nothing in this table is a gameplay
+ * number. Every damage, radius, duration, cooldown and mana cost lives in
+ * `combatData.js` and is realm-invariant.
+ *
+ * Two kinds of entry, and the split is what makes the swap cost nothing:
+ *
+ *   uniform    `absorb`..`surface` are written into `realmUniforms` — preallocated
+ *              `{value}` boxes the materials already share. A swap writes numbers
+ *              into boxes the linked programs sample at draw time. No material is
+ *              rebuilt, no program is compiled, no draw call is added.
+ *   CPU        `milk`, `light`, `spray`, `ice`, `bolt` and the three per-realm
+ *              behaviour flags are read by the spells themselves each frame, out
+ *              of `ctx.realm`. They feed arguments those spells ALREADY pass —
+ *              `water.setParams`'s milkiness, `lights.add`'s rgb, `spray.emit`'s
+ *              kind/drag/life, `deform.brush`'s ice channel — so they are free
+ *              in the same sense: data that was being uploaded anyway.
+ *
+ * COLD IS THE SHIPPED LOOK, EXACTLY. Every cold number below is quoted from the
+ * file that held it before this table existed, so `setRealm("cold")` reproduces
+ * the build byte for byte: milk from sweep.js:193 / ribbon.js:702 / bloom.js:180
+ * / vortex.js:193, light multipliers of 1, ice 1, spray identity.
+ */
+export const REALM_PALETTE = {
+    cold: Object.freeze({
+        key: "cold",
+        status: "Chill", statusMax: "Brittle",
+        names: Object.freeze({
+            lmb: "Rime Lance", stream: "Rime Ribbon", wave: "Frost Wave",
+            bloom: "Powder Bloom", spikes: "Crystal Spikes",
+            vortex: "Great Vortex",
+        }),
+        // --- uniform block ------------------------------------------------
+        absorb: [3.40, 0.72, 0.34],        // water.glsl.js:185 WATER_ABSORB
+        scatter0: [0.40, 0.80, 1.00],      // water.glsl.js:309 lo
+        scatter1: [0.72, 0.94, 1.00],      // water.glsl.js:309 hi
+        body: [0.86, 0.90, 0.96],          // water.glsl.js:329 slushAlbedo
+        foam: [0.93, 0.955, 0.99],         // water.glsl.js:348 foamAlbedo
+        grain: [0.92, 0.94, 0.98],         // spray.glsl.js:192
+        litTint: [0.35, 0.62, 0.78],       // water.glsl.js:404
+        emissive: [0, 0, 0],               // ice does not emit
+        surface: [0.07, 1.0, 2.0, 0.0],    // rough, translucency, emisPow, opacity+
+        // --- CPU side ------------------------------------------------------
+        milk: Object.freeze({ sweep: 0.48, ribbon: 0.14, bloom: 0.42, vortex: 0.88 }),
+        light: Object.freeze({ r: 1, g: 1, b: 1, mult: 1 }),
+        spray: Object.freeze({
+            clodBias: 0, grainDragMul: 1, dustDragMul: 1,
+            lifeMul: 1, sizeMul: 1,
+        }),
+        ice: 1,                            // the glaze channel, full
+        bolt: Object.freeze({
+            len: 0.62, wid: 0.11,
+            trailKind: 0, trailDrag: 4.0, trailLife: 0.33, trailSize: 1,
+            flashR: 0.52, flashG: 0.80, flashB: 1.0, flashK: 9,
+        }),
+        streamCone: false,                 // slot 1 stays a rope
+        waveThrowM: 0,                     // slot 2 is born at the feet
+        spikeCrater: false,                // slot 4 grows, it does not detonate
+    }),
+
+    sand: Object.freeze({
+        key: "sand",
+        status: "Abrade", statusMax: "Scoured",
+        names: Object.freeze({
+            lmb: "Fulgurite Dart", stream: "Scourging Ribbon", wave: "Dune Surge",
+            bloom: "Blowout", spikes: "Sand Explosion", vortex: "Sand Tornado",
+        }),
+        // Blue is absorbed hardest, which is what makes a metre of it ochre.
+        absorb: [1.10, 1.45, 2.35],
+        scatter0: [0.86, 0.66, 0.36],
+        scatter1: [0.96, 0.88, 0.68],
+        body: [0.82, 0.68, 0.44],          // tan-ochre grit
+        foam: [0.93, 0.85, 0.66],          // the airborne veil off the lip
+        grain: [0.88, 0.76, 0.54],
+        litTint: [0.78, 0.62, 0.34],
+        emissive: [0, 0, 0],               // sand does not glow either
+        surface: [0.34, 0.45, 2.6, 0.25],  // rougher, half-transmissive glass
+        // Dry sand transmits nothing, so every body is far more opaque.
+        milk: Object.freeze({ sweep: 0.88, ribbon: 0.62, bloom: 0.62, vortex: 0.92 }),
+        // The cold cyan (~0.45, 0.77, 1.0) times this lands on warm ochre, and
+        // sand does not glow, so the intensity comes DOWN.
+        light: Object.freeze({ r: 2.22, g: 0.94, b: 0.34, mult: 0.85 }),
+        spray: Object.freeze({
+            clodBias: 0.45,                // grit is hard-edged, not powder
+            grainDragMul: 0.55,            // and it falls rather than hanging
+            dustDragMul: 1.25,             // but the fine fallout hangs LONGER
+            lifeMul: 0.95, sizeMul: 0.95,
+        }),
+        ice: 0.55,                         // it sinters to glass, not to ice
+        bolt: Object.freeze({
+            len: 0.62, wid: 0.115,
+            trailKind: 1, trailDrag: 1.6, trailLife: 0.30, trailSize: 1.1,
+            flashR: 0.95, flashG: 0.72, flashB: 0.36, flashK: 8,
+        }),
+        streamCone: false,
+        waveThrowM: 0,                     // "the wave is still fine for sand"
+        spikeCrater: true,                 // SAND EXPLOSION — a real crater
+    }),
+
+    ash: Object.freeze({
+        key: "ash",
+        status: "Scorch", statusMax: "Cracked",
+        names: Object.freeze({
+            lmb: "Cinder Spike", stream: "Fire Cone", wave: "Fireball",
+            bloom: "Fumarole", spikes: "Basalt Columns", vortex: "Firestorm",
+        }),
+        absorb: [0.85, 1.90, 3.40],
+        scatter0: [0.55, 0.24, 0.10],
+        scatter1: [0.95, 0.55, 0.22],
+        body: [0.16, 0.15, 0.15],          // charcoal crust
+        foam: [1.00, 0.46, 0.14],          // the incandescent tear-line
+        grain: [0.28, 0.22, 0.20],         // soot, with embers among it
+        litTint: [0.85, 0.40, 0.16],
+        emissive: [1.35, 0.42, 0.10],      // THE row that is non-zero
+        surface: [0.52, 0.05, 1.5, 0.40],  // rough, opaque, emissive in the cracks
+        milk: Object.freeze({ sweep: 0.80, ribbon: 0.72, bloom: 0.66, vortex: 0.90 }),
+        light: Object.freeze({ r: 2.22, g: 0.55, b: 0.14, mult: 1.45 }),
+        spray: Object.freeze({
+            clodBias: 0.55, grainDragMul: 0.35, dustDragMul: 1.05,
+            lifeMul: 1.25, sizeMul: 0.9,
+        }),
+        ice: 0,                            // fire scorches; it does not glaze
+        bolt: Object.freeze({
+            len: 0.60, wid: 0.13,
+            trailKind: 1, trailDrag: 0.7, trailLife: 0.42, trailSize: 1.25,
+            flashR: 1.0, flashG: 0.52, flashB: 0.18, flashK: 13,
+        }),
+        streamCone: true,                  // FIRE CONE from the hands
+        waveThrowM: 5.0,                   // FIREBALL: thrown, then detonates
+        spikeCrater: false,                // basalt columns still GROW
+    }),
+};
 
 /**
  * Mana costs (battle prep, owner 2026-08-05). PLACEHOLDERS pending the
  * combat design doc — the shape matters now (casts gate on mana, the HUD
  * shows the spend, the ribbon drains per second), the numbers come later.
  */
-const MANA_COST = { 1: 15, 3: 25, 4: 30, 5: 45 };   // spec §1.1, QA-verified
+const MANA_COST = { 1: 15, 3: 25, 4: 30, 5: 45, 6: 0 };   // spec §1.1, QA-verified
 const RIBBON_DRAIN = 0;   // §1.1: the Bolt/stream is the resource-neutral filler
 
 /**
@@ -87,7 +249,7 @@ const RIBBON_DRAIN = 0;   // §1.1: the Bolt/stream is the resource-neutral fill
  * 6, spikes 10, great vortex 14). The stream (LMB) has none: it is the
  * mana-drained channel. The toolbar renders these as radial wipes.
  */
-const COOLDOWN = { 1: 4, 3: 6, 4: 10, 5: 14 };
+const COOLDOWN = { 1: 4, 3: 6, 4: 10, 5: 14, 6: 0 };
 
 export class SpellSystem {
     /**

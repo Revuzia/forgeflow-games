@@ -266,6 +266,24 @@ export const ENEMIES = [
         telegraphMs: [800, 700, 1100],
         special: "Hailstone Bulwark: planted — immune to KB AND fling; frontal bolts ricochet as hail chips (3 dmg to player <4 m). Breaks from behind or Spike-stun" },
 
+    // MESH-ANCHORED ROW (added 2026-08-07). `65_v3_cold_rime_skier_raider` shipped
+    // as a rigged body with no §2.1 row behind it. Numbers are the roster board's
+    // own stat line (hp 70 · spd 7.2 · perc 28 · atkR 1.8 · gap 12 · poise 25 ·
+    // burst 14), which sits inside the LIGHT band [40,75] HP / [4,18] dmg, so no
+    // invention was needed. Cost 2 = the skirmisher budget, same as scorchRaider.
+    // Ash/Sand read: retexture this mesh to serve `scourScout`, which has a row
+    // but no body of its own.
+    { key: "rimeSkierRaider", name: "Rime Skier Raider", realm: "cold",
+        archetype: "skirmisher-pursuer",
+        tier: TIER.LIGHT, cost: 2, hp: 70, speed: 7.2, burstSpeed: 14,
+        perceptionM: 28, attackRangeM: 1.8, gapCloserM: 12, poiseMax: 25,
+        damages: [
+            { name: "slideCharge", dmg: 14, note: "downhill; ducks a high Wave" },
+            { name: "spearPoke", dmg: 9 },
+            { name: "snowSpray", dmg: 6, note: "1 s aim-blur" }],
+        telegraphMs: [550, 600, 650],
+        special: "Alpine skis: closes on the surf line at 14 m/s and disengages up-slope — Cold's anti-kite answer. Spear reach beats a standing Bolt trade; punish the slide, not the poke" },
+
     // -------- Sand (realm 2, band 8–20) --------
     { key: "duneImp", name: "Dune Imp", realm: "sand", archetype: "swarm-melee",
         tier: TIER.FODDER, cost: 1, hp: 30, speed: 6.2, perceptionM: 18,
@@ -370,6 +388,39 @@ export const ENEMIES = [
             { name: "bootShove", dmg: 6, note: "+KB; flank rush +30% dmg from off-camera" }],
         telegraphMs: [600, 550, 500],
         special: "Pack Doctrine: never alone — 3–5 strong, one circling off-camera, one blinding frontally. Great Vortex is the designed wipe" },
+
+    // MESH-ANCHORED ROW (added 2026-08-07). `73_v3_sand_mummy` shipped rigged with
+    // no §2.1 row. Roster stat line (hp 110 · spd 2.4 · perc 16 · atkR 2.0 ·
+    // poise 40) lands in the MEDIUM band [80,110] HP / [6,14] dmg. Slow enough
+    // that a kiting player never has to fight it — the grab is the whole threat,
+    // so the wrap is a CC-token grab and the decay is what punishes standing still.
+    // Absorbs the buried-ambush role the meshless `scorpionHusk` row was carrying.
+    { key: "sandMummy", name: "Sand Mummy", realm: "sand", archetype: "grappler-undead",
+        tier: TIER.MEDIUM, cost: 3, hp: 110, speed: 2.4, perceptionM: 16,
+        attackRangeM: 2.0, gapCloserM: 0, poiseMax: 40,
+        damages: [
+            { name: "wrapSnare", dmg: 14, note: "+root 1.2 s; break with Wave (CC token)" },
+            { name: "decayCurse", dmg: 3, note: "per s × 6 s; stacks to 3, −15% heal per stack" },
+            { name: "sandSpit", dmg: 8, note: "1 s aim-blur; the only thing it does at range" }],
+        telegraphMs: [700, 900, 600],
+        special: "Buried until the player is inside 10 m, then rises mid-pack. Never chases — it holds ground and taxes hesitation. Spike-stun mid-wrap frees the grab immediately" },
+
+    // MESH-ANCHORED ROW (added 2026-08-07). `75_v3_sand_bleached_bone_knight`
+    // shipped rigged with no §2.1 row. Roster stat line (hp 320 · spd 2.8 ·
+    // perc 28 · atkR 2.2 · gap 4 · poise 110) is the HEAVY band [260,480] HP /
+    // [12,28] dmg — the same shape as hailPlateGuard, which is the intent: Sand's
+    // frontline wall. Also the stand-in body for the meshless `hourglassAutomaton`
+    // row (its own meshNote proposes exactly that).
+    { key: "boneKnight", name: "Bleached Bone Knight", realm: "sand",
+        archetype: "warden-tank",
+        tier: TIER.HEAVY, cost: 5, hp: 320, speed: 2.8, perceptionM: 28,
+        attackRangeM: 2.2, gapCloserM: 4, poiseMax: 110,
+        damages: [
+            { name: "slashCombo", dmg: 12, hits: 2, note: "second swing tracks a sidestep" },
+            { name: "shieldSlam", dmg: 20, note: "+stagger; 2 m ring" },
+            { name: "boneShard", dmg: 10, note: "short 12 m throw — anti-camp only" }],
+        telegraphMs: [800, 1000, 700], red: [1],
+        special: "Bleached plate sheds chip damage: −30% from Bolt splash, full damage from Spikes and Wave. Guards the mage line; kill the knight last unless you can stance-break it" },
 
     // -------- Ash (realm 3, band 18–30) --------
     { key: "cinderImp", name: "Cinder Imp", realm: "ash", archetype: "swarm-melee",
