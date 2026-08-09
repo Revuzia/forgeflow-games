@@ -52,9 +52,35 @@ def measure(path, x, y, w, h, hp=9):
     return dict(ridge_deg=ridge, coherence=coh, energy=float(np.sqrt(tr / hi.size)))
 
 
+def correlate(pa, pb, x, y, w, h, hp=9):
+    """Normalised cross-correlation of two crops' high-passed relief.
+
+    The decisive test for "recoloured snow". Orientation alone cannot separate
+    'the same pattern, retinted' from 'a different pattern that happens to run
+    the same way'. Correlation can: the camera, the terrain bake and the frame
+    are identical between two realm shots, so if the micro-relief were genuinely
+    re-authored the high-passed residuals would decorrelate toward 0. A value
+    near 1 means the two frames carry literally the same surface structure.
+    """
+    def hi(p):
+        a = np.asarray(Image.open(p).convert("RGB").crop((x, y, x + w, y + h)),
+                       dtype=np.float64) / 255.0
+        lum = 0.2126 * a[..., 0] + 0.7152 * a[..., 1] + 0.0722 * a[..., 2]
+        r = lum - boxblur(lum, hp)
+        return (r - r.mean()) / (r.std() + 1e-12)
+    a, b = hi(pa), hi(pb)
+    return float((a * b).mean())
+
+
 if __name__ == "__main__":
-    p = sys.argv[1]
-    x, y, w, h = (int(v) for v in sys.argv[2:6])
-    r = measure(p, x, y, w, h)
-    print(f"{p} [{x},{y} {w}x{h}]  ridge={r['ridge_deg']:6.1f} deg   "
-          f"coherence={r['coherence']:.4f}   relief_energy={r['energy']:.5f}")
+    if sys.argv[1] == "--pair":
+        pa, pb = sys.argv[2], sys.argv[3]
+        x, y, w, h = (int(v) for v in sys.argv[4:8])
+        print(f"corr({pa}, {pb}) [{x},{y} {w}x{h}] = "
+              f"{correlate(pa, pb, x, y, w, h):+.4f}")
+    else:
+        p = sys.argv[1]
+        x, y, w, h = (int(v) for v in sys.argv[2:6])
+        r = measure(p, x, y, w, h)
+        print(f"{p} [{x},{y} {w}x{h}]  ridge={r['ridge_deg']:6.1f} deg   "
+              f"coherence={r['coherence']:.4f}   relief_energy={r['energy']:.5f}")
