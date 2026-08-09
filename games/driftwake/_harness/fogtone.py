@@ -160,9 +160,42 @@ def main():
             print(f"\n=== {realm.upper()} ===")
             print(json.dumps(st, indent=1))
 
+        # ---- COLD MUST COME BACK UNCHANGED ----------------------------------
+        # The realm machinery is only safe if a round trip is the identity. Cold
+        # is shot before any swap has happened (nothing has called
+        # applyRealmGrade at that point) and again after cold->sand->ash->cold,
+        # at the same pinned pose with the clock frozen; the two frames are
+        # differenced. This is the same |dLuma| metric the wave-6 QA pass used,
+        # where 0.00051 was the control (a realm re-entered without changing).
+        pg.evaluate("() => { globalThis.SNOWFLOW.S.freezeTime = false; }")
+        pg.evaluate("() => globalThis.SNOWFLOW.enterRealm('cold')")
+        frames(150)
+        pg.evaluate("() => { globalThis.SNOWFLOW.S.freezeTime = true; }")
+        frames(4)
+        pg.evaluate(RESTORE, pose)
+        frames(4)
+        pg.evaluate(RESTORE, pose)
+        frames(2)
+        pg.screenshot(path="_shots/fogtone_cold_return.png")
+        ret = pg.evaluate(STATE)
+        ret["pixels"] = measure("_shots/fogtone_cold_return.png")
+        results["cold_return"] = ret
+        a = np.asarray(Image.open("_shots/fogtone_cold.png").convert("RGB"),
+                       dtype=np.float64) / 255.0
+        b = np.asarray(Image.open("_shots/fogtone_cold_return.png").convert("RGB"),
+                       dtype=np.float64) / 255.0
+        w = np.array([0.2126, 0.7152, 0.0722])
+        d = np.abs((a * w).sum(2) - (b * w).sum(2))
+        print("\n=== COLD ROUND TRIP (cold -> sand -> ash -> cold) ===")
+        print(f" max |dLuma| {d.max():.5f}   mean |dLuma| {d.mean():.5f}")
+        print(" S back to  " + json.dumps(ret["S"]))
+        print(" uFog back to " + json.dumps(ret["uFog"]))
+        results["coldRoundTrip"] = {"maxDLuma": round(float(d.max()), 5),
+                                    "meanDLuma": round(float(d.mean()), 5)}
+
         # ---- the panel is still a live control ------------------------------
-        # Drag exposure +20% in ash, swap to cold, and the drag must survive as a
-        # RATIO of cold's base -- not as ash's absolute number, and not lost.
+        # Drag exposure +20% in cold, swap to sand, and the drag must survive as
+        # a RATIO of sand's base -- not as cold's absolute number, and not lost.
         pg.evaluate("() => { globalThis.SNOWFLOW.S.freezeTime = false; }")
         drag = pg.evaluate("""async () => {
           const st = await import('/games/driftwake/src/core/settings.js');
@@ -173,7 +206,7 @@ def main():
                    offset: +st.realmGradeState().offset.exposure.toFixed(4),
                    dragged: S.exposure };
         }""")
-        pg.evaluate("() => globalThis.SNOWFLOW.enterRealm('cold')")
+        pg.evaluate("() => globalThis.SNOWFLOW.enterRealm('sand')")
         frames(120)
         after = pg.evaluate("""async () => {
           const st = await import('/games/driftwake/src/core/settings.js');
@@ -184,15 +217,20 @@ def main():
                    fogOffset: +g.offset.fogDensity.toFixed(4) };
         }""")
         print("\n=== SLIDER OFFSET SURVIVES A SWAP ===")
-        print(" dragged in ash:", json.dumps(drag))
-        print(" back in cold  :", json.dumps(after))
-        print(f" expected cold exposure = base {after['base']} x offset "
+        print(" dragged in cold:", json.dumps(drag))
+        print(" then in sand   :", json.dumps(after))
+        print(f" expected sand exposure = base {after['base']} x offset "
               f"{after['offset']} = {round(after['base'] * after['offset'], 6)}")
+        results["sliderOffset"] = {"dragged": drag, "afterSwap": after}
 
         print(f"\nerrors {len(errors)}")
         for e in errors[:8]:
             print("  ", e)
         br.close()
+
+    with open("_shots/fogtone.json", "w", encoding="utf-8") as fh:
+        json.dump(results, fh, indent=1)
+    print("\nfull results -> _shots/fogtone.json")
 
     print("\n--- TABLE ---")
     print(f"{'realm':<6}{'uFog.x':>10}{'uFog.y':>10}{'expo':>8}{'contr':>7}"

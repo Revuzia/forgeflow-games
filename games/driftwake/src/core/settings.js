@@ -545,26 +545,53 @@ export const REALM_GRADE_KEYS = [
 ];
 
 /**
- * Slider bounds for the graded keys, read out of `SCHEMA` rather than
- * duplicated, so the two cannot drift. `fogStart` has no widget and therefore no
- * entry — it is unclamped, which is correct: nothing can type a value into it.
- * @type {Record<string, [number, number]>}
+ * The graded keys' WIDGET GRID — min, max, step and the step's decimal places —
+ * read out of `SCHEMA` rather than duplicated, so the two cannot drift.
+ * `fogStart` has no widget and therefore no entry: it is unclamped and
+ * unsnapped, which is correct, because nothing can type a value into it.
+ * @type {Record<string, {min:number, max:number, step:number, dp:number}>}
  */
-const GRADE_BOUNDS = (() => {
-    /** @type {Record<string, [number, number]>} */
+const GRADE_GRID = (() => {
+    /** @type {Record<string, {min:number, max:number, step:number, dp:number}>} */
     const b = {};
     for (let g = 0; g < SCHEMA.length; g++) {
         const items = SCHEMA[g].items;
         for (let i = 0; i < items.length; i++) {
             const it = items[i];
-            if (it.t === "f" && REALM_GRADE_KEYS.indexOf(it.k) >= 0
-                && typeof it.min === "number" && typeof it.max === "number") {
-                b[it.k] = [it.min, it.max];
-            }
+            if (it.t !== "f" || REALM_GRADE_KEYS.indexOf(it.k) < 0) continue;
+            if (typeof it.min !== "number" || typeof it.max !== "number"
+                || typeof it.step !== "number" || it.step <= 0) continue;
+            const s = String(it.step);
+            const dot = s.indexOf(".");
+            b[it.k] = {
+                min: it.min, max: it.max, step: it.step,
+                dp: dot < 0 ? 0 : s.length - dot - 1,
+            };
         }
     }
     return b;
 })();
+
+/**
+ * Put a value on the grid `<input type=range>` can actually represent.
+ *
+ * MEASURED, not theoretical: an offset write of `0.105 x 1.2 = 0.126` left the
+ * exposure THUMB sitting at 0.125 — the range input snaps to `min + n*step` and
+ * exposure's step is 0.005 — while `S` and the readout both said 0.126. A
+ * control whose handle disagrees with the value it controls is the same class of
+ * defect as the structural keys in this file's header, so the value lands on the
+ * grid instead. The `toFixed` is not cosmetic: `0.01 + 23*0.005` is
+ * 0.12500000000000003 in binary floating point, which is off the grid again.
+ *
+ * @param {string} k
+ * @param {number} v
+ * @returns {number}
+ */
+function snapToWidget(k, v) {
+    const g = GRADE_GRID[k];
+    if (!g) return v;
+    return +(g.min + Math.round((v - g.min) / g.step) * g.step).toFixed(g.dp);
+}
 
 /**
  * THE REALM BASE — what the realm says the key is worth. Seeded from the
@@ -652,9 +679,22 @@ export function applyRealmGrade(patch) {
             const base = patch[k];
             if (typeof base !== "number" || !isFinite(base)) continue;
             gradeBase[k] = base;
-            let v = base * gradeOffset[k];
-            const bd = GRADE_BOUNDS[k];
-            if (bd) v = Math.min(bd[1], Math.max(bd[0], v));
+            let v = base;
+            if (gradeOffset[k] !== 1) {
+                // Only an OFFSET value is snapped and clamped. At offset 1 the
+                // realm's own literal is written through untouched, bit for bit
+                // — every authored base is already on its widget's grid, and
+                // "already on the grid" is not the same promise as "survives a
+                // round trip through it". Cold's boot values have to be the
+                // authored numbers exactly, or the shot battery moves.
+                //
+                // The OFFSET itself is never re-derived from the snapped result
+                // (`inGradeApply` suppresses `noteGradeEdit`), so a value cannot
+                // creep toward the grid over repeated swaps: 1.2 stays 1.2.
+                const g = GRADE_GRID[k];
+                v = snapToWidget(k, base * gradeOffset[k]);
+                if (g) v = Math.min(g.max, Math.max(g.min, v));
+            }
             set(k, v);
             out[k] = v;
         }
