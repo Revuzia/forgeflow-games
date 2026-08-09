@@ -74,16 +74,55 @@ export const input = {
      */
     jumpPressed: false,
 
-    /** @type {number} 0 = none, else 1..5 — set on keydown, cleared each frame */
+    /** @type {number} 0 = none, else 1..6 — set on keydown, cleared each frame.
+     *  6 is the primary bolt and is set by the LEFT MOUSE BUTTON, not a key. */
     spellPressed: 0,
     /** One-frame edge: TAB pressed — the target-cycle step (combat/targeting).
      *  Plain data property cleared by endFrame(), like `spellPressed`. */
     targetCycle: false,
-    /** @type {boolean} spell 2 (Ribbon) is a held cast. Plain data property — see contract 1. */
+    /**
+     * @type {boolean} the held STREAM channel (internal spell id 2, the Ribbon).
+     *
+     * THE NAME IS DELIBERATELY UNCHANGED. It is `spellHeld2` because the flag
+     * carries INTERNAL spell id 2, which is the Ribbon and always has been —
+     * only the thing that WRITES it moved, from LMB (owner remap 2026-08-05)
+     * to Digit1 (owner remap 2026-08-08). Every harness pin, every
+     * `Object.defineProperty` in `_harness/`, and contract 1 above keep working
+     * untouched. `spellHeld1` is an alias for the new bind's spelling; both
+     * names address the same slot (see `aliasHeld` at the bottom of this file).
+     * Plain data property — see contract 1.
+     */
     spellHeld2: false,
+    /**
+     * @type {boolean} LMB is down — the primary bolt auto-repeats while it is.
+     *
+     * Same contract-1 rules as `surf` / `spellHeld2`: a plain, writable,
+     * configurable data property, re-read from `input` every frame, never
+     * cached in a module local, so the harness can pin it with
+     * `Object.defineProperty` in lieu of a pointer-lock gesture it cannot
+     * forge. `spellSystem._dispatch()` is the only consumer.
+     */
+    boltHeld: false,
 
     locked: false,
 };
+
+/**
+ * `spellHeld1` — the NEW bind's spelling of the held stream.
+ *
+ * The flag itself keeps the name `spellHeld2` (it carries INTERNAL id 2, and
+ * every harness pin in `_harness/` addresses it by that name — contract 1).
+ * This alias exists so code written against the player-facing bind reads
+ * naturally, and it is an ACCESSOR ON THE ALIAS ONLY: `spellHeld2` stays the
+ * plain, writable, configurable data property contract 1 requires, so pinning
+ * it still works and the alias correctly reports the pinned value.
+ */
+Object.defineProperty(input, "spellHeld1", {
+    get() { return input.spellHeld2; },
+    set(v) { input.spellHeld2 = !!v; },
+    configurable: true,
+    enumerable: false,
+});
 
 const keys = Object.create(null);
 
@@ -112,6 +151,7 @@ export function initInput(canvas, hooks) {
             input.surf = false;
             input.jump = false;
             input.spellHeld2 = false;
+            input.boltHeld = false;
             input.sprintOn = false;
         }
     });
@@ -125,11 +165,19 @@ export function initInput(canvas, hooks) {
     canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 
     document.addEventListener("mousedown", (e) => {
+        // LOAD-BEARING, not cosmetic (it was cosmetic before this remap): LMB
+        // is also the pointer-lock gesture, so without this guard the very
+        // click that acquires the lock would also fire a bolt.
         if (!input.locked) return;
         if (e.button === 2) input.surf = true;
-        // LMB = the Ribbon hold (owner remap 2026-08-05). Same plain-property
-        // write the key used to make, so harness pins keep working.
-        if (e.button === 0) input.spellHeld2 = true;
+        // LMB = the PRIMARY BOLT (owner remap 2026-08-08), internal id 6.
+        // Press fires one immediately through the `spellPressed` edge — which
+        // is also what the spellbar flash and the crosshair cast pulse read —
+        // and `boltHeld` keeps it repeating on the 0.45 s fire cycle.
+        if (e.button === 0) {
+            input.boltHeld = true;
+            input.spellPressed = 6;
+        }
     });
 
     document.addEventListener("mouseup", (e) => {
@@ -138,7 +186,7 @@ export function initInput(canvas, hooks) {
         // cancels a surf, and unlock/blur already clear the flag anyway.
         if (!input.locked) return;
         if (e.button === 2) input.surf = false;
-        if (e.button === 0) input.spellHeld2 = false;
+        if (e.button === 0) input.boltHeld = false;
     });
 
     document.addEventListener(
@@ -191,6 +239,17 @@ export function initInput(canvas, hooks) {
             input.jumpPressed = true;
         }
 
+        // DIGIT1 IS THE HELD STREAM, and it is deliberately NOT in SPELL_KEYS.
+        // `spellSystem._dispatch()` polls the hold and then edge-fires
+        // `input.spellPressed`, excluding the ribbon with a literal `key !== 2`
+        // guard. Routing Digit1 through SPELL_KEYS would be swallowed by that
+        // guard for casting purposes but would still set `spellPressed` every
+        // frame the key auto-repeats, and `spellbar.js` + `crosshair.js` both
+        // read `spellPressed` directly — so a hold would strobe a cast flash.
+        // A dedicated keydown/keyup pair writes the held flag instead, exactly
+        // as the mouse handlers used to, so contract 1's pin still works.
+        if (e.code === "Digit1") input.spellHeld2 = true;
+
         const n = SPELL_KEYS[e.code];
         if (n) input.spellPressed = n;
     });
@@ -198,6 +257,7 @@ export function initInput(canvas, hooks) {
     window.addEventListener("keyup", (e) => {
         keys[e.code] = false;
         if (e.code === "Space") input.jump = false;
+        if (e.code === "Digit1") input.spellHeld2 = false;
     });
 
     window.addEventListener("blur", () => {
@@ -205,21 +265,33 @@ export function initInput(canvas, hooks) {
         input.surf = false;
         input.jump = false;
         input.spellHeld2 = false;
+        input.boltHeld = false;
         input.sprintOn = false;
     });
 }
 
 /**
- * Key -> INTERNAL spell id (owner remap 2026-08-05): the Ribbon (internal 2)
- * moved to LMB-hold, and the remaining spells shifted down one key. The
- * internal ids never change — sweep 1, ribbon 2, bloom 3, crystallize 4,
- * vortex 5 — only this table and the LMB handlers below decide bindings.
+ * Key -> INTERNAL spell id (owner remap 2026-08-08): the primary BOLT takes
+ * LMB (internal id 6, handled by the mouse handlers above, never here), the
+ * Ribbon's held stream moves off LMB onto Digit1 (handled by its own
+ * keydown/keyup pair above, also never here), and the four cast spells shift
+ * one key UP so the bar reads 1..5 left to right.
+ *
+ * The internal ids never change — sweep 1, ribbon 2, bloom 3, crystallize 4,
+ * vortex 5, bolt 6. Only this table and the handlers above decide bindings.
+ *
+ *   LMB -> 6 bolt      (mousedown, + auto-repeat off `boltHeld`)
+ *   1   -> 2 stream    (keydown/keyup pair, held)
+ *   2   -> 1 wave
+ *   3   -> 3 bloom
+ *   4   -> 4 spikes
+ *   5   -> 5 vortex
  */
 const SPELL_KEYS = {
-    Digit1: 1,   // wave
-    Digit2: 3,   // bloom
-    Digit3: 4,   // crystal spikes
-    Digit4: 5,   // vortex
+    Digit2: 1,   // wave / crescent
+    Digit3: 3,   // bloom / eruption
+    Digit4: 4,   // crystal spikes / stance-break disc
+    Digit5: 5,   // vortex / helices
 };
 
 /**
@@ -251,8 +323,9 @@ export function pollInput() {
 /**
  * Clear per-frame accumulators. Called at the very end of the frame.
  *
- * Note what is *not* cleared: `surf`, `jump` and `spellHeld2` are level-triggered
- * held state, not per-frame edges. Clearing them here would fight the harness pin.
+ * Note what is *not* cleared: `surf`, `jump`, `spellHeld2` and `boltHeld` are
+ * level-triggered held state, not per-frame edges. Clearing them here would
+ * fight the harness pin.
  * @returns {void}
  */
 export function endFrame() {

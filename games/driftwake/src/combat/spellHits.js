@@ -31,6 +31,7 @@
  */
 
 import { clamp01, smooth01, bell, rand } from "../spells/bending.js";
+import { BOLT_MAX } from "../spells/dart.js";
 import { TIER } from "./damageable.js";
 import { combatData } from "./combatData.js";
 
@@ -86,18 +87,32 @@ export class SpellHits {
         this._vorActive = false;
         this._vorHolding = false;
 
-        // ---- bolt (ribbon thrown) state ------------------------------------
-        this._ribThrown = false;
-        this._ribSplashed = false;
-        this._boltSpent = false;
+        // ---- bolt pool state, one entry per slot ----------------------------
+        // Parallel to `spells.bolt`'s SoA. Everything the old single-throw
+        // implementation kept as one scalar is now per PROJECTILE: with up to
+        // twelve in the air at once, a shared latch would let one bolt's hit
+        // silence the other eleven.
+        /** The `gen` counter this entry was captured against. `dart.fire()`
+         *  bumps `gen[i]` on every shot, so a mismatch is how "a new
+         *  projectile in a recycled slot" is told from "the same projectile,
+         *  next frame" — which is what makes the anti-kite capture
+         *  per-projectile rather than per-slot. */
+        this._bGen = new Int32Array(BOLT_MAX).fill(-1);
+        /** Captured AT SPAWN (§1.1 moved in timing, not in substance): was the
+         *  player above the 12 m/s gate within the last 0.4 s when this bolt
+         *  left the hand. There is no release frame to read it on any more. */
+        this._bMoving = new Uint8Array(BOLT_MAX);
+        /** One direct hit per projectile. */
+        this._bSpent = new Uint8Array(BOLT_MAX);
+        /** One splash per projectile. */
+        this._bSplashed = new Uint8Array(BOLT_MAX);
+        /** Who took the direct hit — excluded from that bolt's own splash. */
+        this._bHitId = new Int32Array(BOLT_MAX).fill(-1);
+        /** Scratch: the id the splash callback must skip, for the bolt whose
+         *  `forEachInSphere` is running right now. */
         this._boltHitId = -1;
-        /** True when the release happened inside the >12 m/s falloff window. */
-        this._boltMoving = false;
         /** Registry-time until which the falloff applies (§1.1: gate + 0.4 s). */
         this._fastUntil = -1;
-        this._prevTipX = 0;
-        this._prevTipY = 0;
-        this._prevTipZ = 0;
 
         // ---- whip tick timer -----------------------------------------------
         this._whipOwed = 0;
@@ -141,68 +156,98 @@ export class SpellHits {
     }
 
     // =====================================================================
-    // LMB — Frost Bolt (ribbon thrown head) + splash
+    // LMB — the primary bolt pool (engine key 6) + splash
     // =====================================================================
 
+    /**
+     * Every live projectile in `spells.bolt`, resolved against the registry.
+     *
+     * ONE SWEPT SEGMENT PER SLOT PER FRAME, and that is the §9.3
+     * anti-tunnelling rule, kept verbatim from the single-throw version it
+     * replaces: `segmentHit` is a true segment-vs-capsule test, and at 21 m/s
+     * and 13 fps a bolt moves ~1.6 m per frame, so a point test at the head
+     * would step straight over a body. `dart.js` seeds `px/py/pz` to the
+     * muzzle on spawn, so a bolt's first test is a point test at the hand
+     * rather than a sweep from the origin.
+     *
+     * ONLY OWN-ID-0 BOLTS DAMAGE. A carrier head (`own === 1` — the Ash
+     * fireball's travel phase) draws and trails but never hits: its payload is
+     * the crescent it detonates into, and the crescent runs its own §1.1 test.
+     * Damaging both would double-charge the Ash player for one cast.
+     */
     _bolt() {
-        const rib = this.spells.ribbon;
+        const pool = this.spells.bolt;
+        if (!pool) return;
         const reg = this.registry;
         const D = this.data.bolt;
 
-        if (rib.active && rib.thrown && !this._ribThrown) {
-            // Release frame: capture the falloff state (§1.1 — read at
-            // release, not per hit) and seed the swept segment at the tip.
-            this._ribThrown = true;
-            this._ribSplashed = false;
-            this._boltSpent = false;
-            this._boltHitId = -1;
-            this._boltMoving = reg.time < this._fastUntil;
-            this._prevTipX = rib.tipX;
-            this._prevTipY = rib.tipY;
-            this._prevTipZ = rib.tipZ;
-            return;
-        }
-        if (!(rib.active && rib.thrown)) {
-            this._ribThrown = false;
-            return;
-        }
+        for (let i = 0; i < BOLT_MAX; i++) {
+            const alive = pool.alive[i];
+            const impact = pool.impact[i];
+            if (!alive && !impact) continue;
 
-        // One swept segment over the whole frame's travel. segmentHit is a
-        // true segment-vs-capsule test, so this IS the §9.3 anti-tunnelling
-        // rule: at 21 m/s and 13 fps the head moves ~1.6 m per frame and the
-        // sweep covers all of it — point tests would tunnel, this cannot.
-        if (!this._boltSpent && !rib._splashed) {
-            const id = reg.segmentHit(
-                this._prevTipX, this._prevTipY, this._prevTipZ,
-                rib.tipX, rib.tipY, rib.tipZ,
-                D.padRadius
-            );
-            if (id >= 0) {
-                const base = this._boltMoving ? D.damageMoving : D.damage;
-                const dmg = base * (1 + (rand() * 2 - 1) * D.variance)
-                          * this.damageMult;
-                reg.damage(id, dmg, {
-                    poise: D.poise,
-                    // §1.1: no Chill stack above the speed gate.
-                    chill: D.chill && !this._boltMoving,
-                    tag: "bolt",
-                });
-                this._boltSpent = true;    // one direct hit per throw
-                this._boltHitId = id;
+            // New projectile in this slot? Capture the anti-kite state now,
+            // once, for this shot only.
+            if (pool.gen[i] !== this._bGen[i]) {
+                this._bGen[i] = pool.gen[i];
+                this._bMoving[i] = reg.time < this._fastUntil ? 1 : 0;
+                this._bSpent[i] = 0;
+                this._bSplashed[i] = 0;
+                this._bHitId[i] = -1;
             }
-        }
-        this._prevTipX = rib.tipX;
-        this._prevTipY = rib.tipY;
-        this._prevTipZ = rib.tipZ;
 
-        // Splash fires ONCE, on the frame the ribbon's own impact fires —
-        // 4 damage to adjacent targets only (§1.1), the direct hit excluded.
-        if (rib._splashed && !this._ribSplashed) {
-            this._ribSplashed = true;
-            reg.forEachInSphere(
-                rib.tipX, rib.tipY, rib.tipZ, D.splashRadius, this._splashCb
-            );
+            if (pool.own[i] === 1) continue;     // carrier: draws, never hits
+
+            if (alive && !this._bSpent[i]) {
+                const id = reg.segmentHit(
+                    pool.px[i], pool.py[i], pool.pz[i],
+                    pool.x[i], pool.y[i], pool.z[i],
+                    D.padRadius
+                );
+                if (id >= 0) {
+                    const moving = this._bMoving[i] === 1;
+                    const base = moving ? D.damageMoving : D.damage;
+                    const dmg = base * (1 + (rand() * 2 - 1) * D.variance)
+                              * this.damageMult;
+                    reg.damage(id, dmg, {
+                        poise: D.poise,
+                        // §1.1: no Chill stack above the speed gate.
+                        chill: D.chill && !moving,
+                        tag: "bolt",
+                    });
+                    this._bSpent[i] = 1;         // one direct hit per bolt
+                    this._bHitId[i] = id;
+                    // Terminate the projectile HERE, at the body it hit, so
+                    // the damage and the impact FX are one event and the bolt
+                    // is never seen flying on through what it killed. This is
+                    // the single write from the damage pass into the pool.
+                    pool.hitAt(i);
+                    this._splash(i);
+                    continue;
+                }
+            }
+
+            // Ground or leash termination — `dart.update()` sets `impact` for
+            // exactly one frame and clears it at the top of the next, so this
+            // read needs no latch of its own beyond the per-shot one.
+            if (impact && !this._bSplashed[i]) this._splash(i);
         }
+    }
+
+    /**
+     * 4 damage to adjacent targets only (§1.1), the direct hit excluded.
+     * Fires ONCE per projectile, on the frame it terminates — whether that
+     * was a body, the ground or the end of its leash.
+     * @param {number} i pool slot
+     */
+    _splash(i) {
+        const pool = this.spells.bolt;
+        const D = this.data.bolt;
+        this._bSplashed[i] = 1;
+        this._boltHitId = this._bHitId[i];
+        this.registry.forEachInSphere(
+            pool.x[i], pool.y[i], pool.z[i], D.splashRadius, this._splashCb
+        );
     }
 
     /** @param {number} id */
@@ -214,7 +259,7 @@ export class SpellHits {
     }
 
     // =====================================================================
-    // Hold-LMB — held-whip capsule ticks
+    // KEY 1 — the held stream's whip capsule ticks
     // =====================================================================
 
     /**

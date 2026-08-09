@@ -15,10 +15,39 @@
  * The channel is not a decal chased after the fact. Each frame the live crest
  * writes brushes into the terrain state buffer at the position the mesh is
  * actually drawing, so the mark and the wave cannot disagree.
+ *
+ * THE THREE REALMS. Cold "Frost Wave", Sand "Dune Surge", Ash "FIREBALL". The
+ * first two are pure reskins — milkiness, light colour and spray treatment,
+ * all of them arguments this file was already passing. Ash is the ONE place in
+ * the whole kit where the presentation needed a mechanic-preserving detour:
+ * the owner asked for a thrown fireball, and a plain projectile would delete
+ * this spell's actual combat job, which is the kit's knockback tool
+ * (`cc: {type:"knockback", dur:0.4, mag:4}`). So the Ash cast THROWS A CARRIER
+ * HEAD through the bolt pool and detonates THIS SAME CRESCENT where it lands:
+ * the travel reads as a fireball, and the blast keeps the crescent's
+ * knockback, its bell-tapered arc damage and its poise, unaltered. Every
+ * number below is realm-invariant (owner directive 4).
  */
 
 import { PROFILE_SHEET } from "./waterBody.js";
 import { clamp01, smooth01, bell, rand } from "./bending.js";
+
+/**
+ * Muzzle scratch for the Ash throw. Module scope: a cast is a rare edge, but
+ * this file allocates nothing per frame and will not start now.
+ */
+const _hand = new Float32Array(3);
+
+/**
+ * The Ash carrier's flight, m/s. FASTER than the bolt's 21 so the detour costs
+ * as little of the spell's feel as possible: 5 m at 24 m/s is 0.21 s on top of
+ * the 0.71 s strike delay. FLAGGED FOR THE OWNER — this is the one place the
+ * realm swap changes when the damage lands, and the contract says to say so
+ * rather than silently drop the knockback or silently absorb the delay.
+ */
+const THROW_SPEED = 24;
+/** Hard backstop: detonate anyway if the carrier has not landed by here. */
+const THROW_TIMEOUT = 1.2;
 
 /** Spine samples across the crescent. */
 const COLS = 48;
@@ -64,6 +93,17 @@ export class Sweep {
         this.reach = 0;
         this._brushOwed = 0;
         this._sprayOwed = 0;
+
+        // ---- Ash fireball carrier ------------------------------------------
+        /** Bolt-pool slot the carrier is riding, or -1 when nothing is in
+         *  flight. `active` stays FALSE for the whole flight, so `spellHits`
+         *  runs no test until the crescent actually exists. */
+        this._pendSlot = -1;
+        /** The pool's `gen` at launch — a recycled slot is not our carrier. */
+        this._pendGen = -1;
+        this._pendT = 0;
+        this._pendAx = 0;
+        this._pendAz = 1;
     }
 
     /**
@@ -73,19 +113,42 @@ export class Sweep {
      */
     trigger(ax, az) {
         const ctx = this.ctx;
-        const ch = ctx.controller;
+        const fl = Math.hypot(ax, az) || 1;
+        const nx = ax / fl;
+        const nz = az / fl;
 
+        // ASH: throw first, detonate on landing. Falls through to the direct
+        // cast if the throw could not be launched (pool full), because a spell
+        // that silently does nothing is worse than one that skips its travel.
+        if (ctx.realm.waveThrowM > 0 && this._pendSlot < 0 && ctx.bolt) {
+            if (this._throw(nx, nz)) return;
+        }
+
+        const ch = ctx.controller;
+        this._ignite(
+            ch.position.x + nx * 1.1, ch.position.z + nz * 1.1, nx, nz
+        );
+    }
+
+    /**
+     * Light the crescent at a point. The whole of `trigger`'s old body, with
+     * the origin passed in rather than derived — which is the entire mechanism
+     * behind the Ash fireball: the blast is not a new effect, it is this one,
+     * born where the carrier landed instead of at the caster's feet.
+     * @param {number} ox @param {number} oz @param {number} nx @param {number} nz
+     */
+    _ignite(ox, oz, nx, nz) {
+        const ctx = this.ctx;
         // A recast RESTARTS rather than stacking: two crescents from the same
         // point are one crescent with a seam in it.
         if (this.strand < 0) this.strand = ctx.water.acquire();
         if (this.strand < 0) return;
 
-        const fl = Math.hypot(ax, az) || 1;
-        this.dx = ax / fl;
-        this.dz = az / fl;
+        this.dx = nx;
+        this.dz = nz;
         // Born a little ahead of the feet, so the player is never inside it.
-        this.ox = ch.position.x + this.dx * 1.1;
-        this.oz = ch.position.z + this.dz * 1.1;
+        this.ox = ox;
+        this.oz = oz;
         this.t = 0;
         this.reach = 1.4;
         this._brushOwed = 0;
@@ -93,8 +156,70 @@ export class Sweep {
         this.active = true;
     }
 
+    /**
+     * Launch the Ash carrier: a fat, short-leashed bolt aimed to meet the
+     * ground at `realm.waveThrowM`.
+     *
+     * `own = 1` marks it a CARRIER — `spellHits._bolt()` skips those entirely,
+     * so the travel phase deals no damage and the Ash player is not charged
+     * twice for one cast. It also makes `dart._terminate` skip the bolt's own
+     * ground brush and camera trauma: the landing IS the crescent's cast, and
+     * the crescent writes its own ground.
+     * @param {number} nx @param {number} nz unit flat heading
+     * @returns {boolean} true if a carrier is now in flight
+     */
+    _throw(nx, nz) {
+        const ctx = this.ctx;
+        const reach = ctx.realm.waveThrowM;
+        ctx.handPosition(1, _hand, 0);
+
+        // Aim to MEET the ground at `reach` metres out. There is no gravity in
+        // the bolt pool (a ballistic primary is a different weapon), so the
+        // arc has to be in the heading.
+        const gy = ctx.terrain.heightAt(_hand[0] + nx * reach, _hand[2] + nz * reach);
+        const dy = (gy + 0.05 - _hand[1]) / reach;
+        const l = Math.hypot(nx, dy, nz) || 1;
+
+        const slot = ctx.bolt.fire(
+            _hand[0], _hand[1], _hand[2],
+            nx / l, dy / l, nz / l,
+            THROW_SPEED, reach * 1.6, 1, 2.2
+        );
+        if (slot < 0) return false;
+
+        this._pendSlot = slot;
+        this._pendGen = ctx.bolt.gen[slot];
+        this._pendT = 0;
+        this._pendAx = nx;
+        this._pendAz = nz;
+        return true;
+    }
+
+    /**
+     * Poll the carrier. Detonates on the frame it dies — by ground contact, by
+     * leash, or by the timeout backstop — at wherever it got to.
+     * @param {number} dt
+     */
+    _pollThrow(dt) {
+        const ctx = this.ctx;
+        const b = ctx.bolt;
+        const i = this._pendSlot;
+        this._pendT += dt;
+
+        const gone = !b || b.gen[i] !== this._pendGen || !b.alive[i];
+        if (!gone && this._pendT < THROW_TIMEOUT) return;
+
+        this._pendSlot = -1;
+        const x = b ? b.x[i] : ctx.controller.position.x;
+        const z = b ? b.z[i] : ctx.controller.position.z;
+        this._ignite(x, z, this._pendAx, this._pendAz);
+    }
+
     /** @param {number} dt */
     update(dt) {
+        // BEFORE the active gate: a carrier in flight is a cast that has not
+        // become a crescent yet, and the crescent is what sets `active`.
+        if (this._pendSlot >= 0) this._pollThrow(dt);
         if (!this.active) return;
         const ctx = this.ctx;
         const water = ctx.water;
@@ -187,16 +312,23 @@ export class Sweep {
         }
 
         // Slush: mostly water, with enough entrained snow to be opaque at the
-        // crest. Below about 0.4 it stops reading as slush and starts reading as a
-        // glass sculpture; above about 0.6 the water disappears entirely and it is
-        // just a snow berm that happens to be moving.
-        water.setParams(s, PROFILE_SHEET, 0.48, clamp01(env * 1.4), COLS);
+        // crest. Cold is 0.48 — below about 0.4 it stops reading as slush and
+        // starts reading as a glass sculpture; above about 0.6 the water
+        // disappears entirely and it is just a snow berm that happens to be
+        // moving. Sand (0.88) and Ash (0.80) deliberately live in that upper
+        // band, because a dry-sand slipface and a pyroclastic front transmit
+        // essentially nothing and SHOULD read as moving walls of material.
+        const R = ctx.realm;
+        water.setParams(s, PROFILE_SHEET, R.milk.sweep, clamp01(env * 1.4), COLS);
 
         // Light rides the middle of the crest, LOW, so it grazes the channel it is
-        // cutting rather than lighting it from above.
+        // cutting rather than lighting it from above. The realm multiplies the
+        // rgb and the intensity: sand does not glow (x0.85), a pyroclastic
+        // front is the brightest thing in the frame (x1.45).
+        const L = R.light;
         ctx.lights.add(
             px, py + height * 0.55, pz,
-            9.5, 0.42, 0.74, 1.0, 13.0 * env
+            9.5, 0.42 * L.r, 0.74 * L.g, 1.0 * L.b, 13.0 * env * L.mult
         );
 
         this._plough(travelled, env);
@@ -257,7 +389,11 @@ export class Sweep {
                 0.95 * k * env * w,   // channel
                 0.62 * k * env * w,   // berms at the rim
                 0.55 * k * env * w,   // slush packs what it runs over
-                0.16 * k * env * w,   // and refreezes a little of it
+                // ...and refreezes a little of it. The ICE channel is the one
+                // brush argument that is genuinely realm-dependent: cold
+                // glazes (1), sand sinters to glass (0.55), fire scorches and
+                // glazes nothing at all (0).
+                0.16 * k * env * w * this.ctx.realm.ice,
                 yaw,
                 2.2,
                 0.9
@@ -304,19 +440,33 @@ export class Sweep {
             const y = terrain.heightAt(x, z) + amp * (0.55 + 0.6 * rand());
 
             const out = 1.4 + rand() * 3.2;
-            const clod = rand() < 0.2 ? 1 : 0;
+            // The realm decides how much of the veil is HARD-EDGED. Cold water
+            // throws mostly droplets; grit and cinder are clods, which is what
+            // makes the sand crest read as an airborne veil torn off the lip
+            // and the ash crest as a shower of embers.
+            const S = ctx.realm.spray;
+            const clod = rand() < 0.2 + S.clodBias ? 1 : 0;
             sp.emit(
                 x, y, z,
                 rx * out + (rand() - 0.5) * 1.4,
                 1.5 + rand() * 3.2 + amp * 1.6,   // a taller crest throws higher
                 rz * out + (rand() - 0.5) * 1.4,
-                clod ? 0.022 + rand() * 0.024 : 0.050 + rand() * 0.075,
-                clod ? 0.6 + rand() * 0.5 : 0.55 + rand() * 0.7,
+                (clod ? 0.022 + rand() * 0.024 : 0.050 + rand() * 0.075) * S.sizeMul,
+                (clod ? 0.6 + rand() * 0.5 : 0.55 + rand() * 0.7) * S.lifeMul,
                 clod,
-                clod ? 0.8 : 1.6 + rand() * 1.4
+                (clod ? 0.8 : 1.6 + rand() * 1.4) * S.grainDragMul
             );
         }
     }
+
+    /**
+     * Realm swap, per-object side. Nothing to migrate: every realm read in
+     * this file is a LIVE read of `ctx.realm` in the frame that uses it, so a
+     * crescent mid-flight re-skins on the next frame with no state to carry.
+     * Present so `SpellSystem._writeRealm`'s uniform fan-out finds a hook here
+     * if one is ever needed.
+     */
+    setRealm() {}
 
     _end() {
         this.active = false;
@@ -327,6 +477,11 @@ export class Sweep {
     }
 
     cancel() {
+        // A carrier in flight is part of this cast and dies with it (§9.2:
+        // a cancelled spell takes its volumes with it). The bolt pool's own
+        // `cancel()` drops the projectile; this just forgets it, so the poll
+        // does not detonate a crescent for a spell the player switched off.
+        this._pendSlot = -1;
         this._end();
     }
 }

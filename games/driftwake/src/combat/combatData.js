@@ -8,11 +8,28 @@
  * 1.07^(L−10) — use scaleHP()/scaleDmg(). Behavior fields (telegraphs,
  * perception, speed, poise, ranges) are level-invariant and never scale.
  *
- * Key mapping (combat §0): SPELLS are keyed by the OWNER binds
- * (LMB/1/2/3/4); each row carries `engineKey` (spellSystem's 1..5) and
- * `strikeDelay` mirroring spellSystem's STRIKE_DELAY table verbatim
- * ({1:0.71, 3:0.66, 4:0.95, 5:0.98}; Bolt = engine key 2, no delay —
- * fires on release, tap auto-releases after 0.15 s wind).
+ * Key mapping (combat §0, owner remap 2026-08-08): SPELLS are keyed by the
+ * OWNER binds (LMB/1/2/3/4/5); each row carries `engineKey` (spellSystem's
+ * internal ids, which are stable and never renumbered) and `strikeDelay`
+ * mirroring spellSystem's STRIKE_DELAY table verbatim
+ * ({1:0.71, 3:0.66, 4:0.95, 5:0.98, 6:0}).
+ *
+ *   LMB -> engine 6   the primary BOLT. No strike delay: it spawns at the
+ *                     hand on the press frame, because the muzzle IS the hand
+ *                     and there is nothing to wait for. Hold to auto-repeat
+ *                     on the 0.45 s fire cycle; the old `tapWindS` release
+ *                     model died with the ribbon-thrown-head implementation.
+ *   1   -> engine 2   the held STREAM (Ribbon). Whip damage only — see the
+ *                     note on its `whip` block about the throw.
+ *   2   -> engine 1   the ploughing crescent (Sweep).
+ *   3   -> engine 3   the targeted eruption (Bloom).
+ *   4   -> engine 4   the stance-break spike disc (Crystallize).
+ *   5   -> engine 5   the three lifting helices (Vortex).
+ *
+ * REALM INVARIANCE (owner directive 4): every number in this file is the same
+ * in Cold, Sand and Ash. A realm swap writes uniforms and renames strings; it
+ * never writes a gameplay number. `spellSystem.REALM_PALETTE` holds the
+ * fiction, and contains no damage, radius, duration, cooldown or mana value.
  *
  * Tier ids come from damageable.js's exported TIER — the registry's CC
  * matrix indexes with the same numbers, so rows feed register() directly.
@@ -51,25 +68,57 @@ export const PLAYER = {
  * ------------------------------------------------------------------ */
 
 export const SPELLS = {
-    /** Frost Bolt — Ribbon thrown phase (engine key 2). */
+    /**
+     * The primary BOLT — a real pooled projectile (engine key 6, `spells/dart.js`).
+     *
+     * Cold "Rime Lance" / Sand "Fulgurite Dart" / Ash "Cinder Spike" — one
+     * mechanic, three fictions. Fires on the press frame with NO strike delay
+     * and auto-repeats on `fireCycleS` while LMB is held; there is no tap wind
+     * and no release, because the bolt is no longer the ribbon's thrown head.
+     */
     LMB: {
-        name: "Frost Bolt", engineKey: 2, strikeDelay: 0,
-        tapWindS: 0.15,             // tap auto-release wind
+        name: "Frost Bolt", engineKey: 6, strikeDelay: 0,
         dmg: 12, varancePct: 10,    // ±10% max, no crits (§5.3 invariant 3)
-        fireCycleS: 0.45,           // 26.7 DPS planted
+        fireCycleS: 0.45,           // 26.7 DPS planted, 15.6 kiting
         projectileSpeedMS: 21, rangeM: 40, fallbackM: 18, tipSnapM: 0.6,
-        /** Anti-kite tax (§1.1): above 12 m/s at release. */
+        /** Anti-kite tax (§1.1): above 12 m/s AT SPAWN. Captured per
+         *  projectile when it leaves the hand, not on a release frame — the
+         *  release model is gone. Semantics are identical: "was the player
+         *  above 12 m/s within the last 0.4 s when this bolt was fired". */
         falloff: { speedThresholdMS: 12, reducedDmg: 7, restoreDelayS: 0.4,
             chillSuppressed: true },
         cc: null,
         chill: { stacks: 1, maxStacks: 5, slowPctPerStack: 6, refreshS: 3,
             brittle: { dmgTakenMult: 1.2, durS: 4 } },
         splash: { dmg: 4, rMinM: 0.6, rMaxM: 1.2 },
-        whip: { dmgPerTick: 6, ticksPerS: 4, nudgeM: 1 },
         poise: 10, mana: 0, cooldown: 0,
     },
-    /** Frost Wave — Sweep (engine key 1). */
+    /**
+     * The held STREAM — Ribbon (engine key 2), moved off LMB onto key 1.
+     *
+     * Cold "Rime Ribbon" / Sand "Scourging Ribbon" / Ash "Fire Cone". The whip
+     * channel is now the WHOLE damage profile of this key: 6 per tick at 4 Hz
+     * plus a 1 m nudge to everything the live spine touches at 0.205 m.
+     *
+     * THE THROW IS VISUAL ONLY. Releasing the key still throws the body, still
+     * splashes and still brushes the ground — but no §1.1 row covers a thrown
+     * ribbon now that engine key 6 owns the bolt, and giving it damage would
+     * let the stream silently out-damage the primary it just handed its job
+     * to. Recommendation recorded, per SPELL_REALM_CONTRACT §4.9 item 3; if the
+     * owner wants the throw to hurt, it needs its own §1.1 row.
+     */
     1: {
+        name: "Water Stream", engineKey: 2, strikeDelay: 0,
+        whip: { dmgPerTick: 6, ticksPerS: 4, nudgeM: 1, radiusM: 0.205 },
+        throwDamage: null,          // gate: visual-only until the owner rules
+        cc: { type: "knockback", dur: 0, mag: 1 },   // the per-tick nudge
+        poise: 0, mana: 0, cooldown: 0,             // the resource-neutral channel
+    },
+    /** Frost Wave — Sweep (engine key 1). Cold "Frost Wave" / Sand "Dune
+     *  Surge" / Ash "FIREBALL" — the Ash fiction is a thrown ball that
+     *  detonates into this same crescent, so the knockback, the bell-tapered
+     *  arc damage and the poise below are unchanged in all three realms. */
+    2: {
         name: "Frost Wave", engineKey: 1, strikeDelay: 0.71,
         dmg: 20,                    // arc center, bell-tapered to 0 at horns, ×env
         falloff: { rule: "bell(u) to 0 at horns; ×env; one hit per enemy per cast" },
@@ -77,8 +126,9 @@ export const SPELLS = {
         poise: 25, mana: 15, cooldown: 4,
         reachM: 13.6, lifeS: 2.4,
     },
-    /** Mini-Vortex — Bloom (engine key 3). */
-    2: {
+    /** Mini-Vortex — Bloom (engine key 3). Cold "Powder Bloom" / Sand
+     *  "Blowout" / Ash "Fumarole". The anti-stealth reveal key in every realm. */
+    3: {
         name: "Mini-Vortex", engineKey: 3, strikeDelay: 0.66,
         dmg: 35, dmgRim: 18,        // linear falloff center→rim
         falloff: { innerFullFrac: 0.4, rule: "100% inside inner 40% of radius, linear 35→18 to rim" },
@@ -89,8 +139,12 @@ export const SPELLS = {
         revealStunS: 1.5,           // submerged/stealthed ripped out stunned
         poise: 30, mana: 25, cooldown: 6,
     },
-    /** Crystal Spikes — Crystallize (engine key 4). */
-    3: {
+    /** Crystal Spikes — Crystallize (engine key 4). Cold "Crystal Spikes" /
+     *  Sand "SAND EXPLOSION" / Ash "Basalt Columns". The Sand fiction is a
+     *  detonation that writes a real crater through `deform.brush`, but the
+     *  expanding disc, its radii, the 30 damage, the 1.5 s stun and the 60
+     *  poise below are identical in all three realms. */
+    4: {
         name: "Crystal Spikes", engineKey: 4, strikeDelay: 0.95,
         dmg: 30,                    // one-shot per enemy caught by the disc
         falloff: { rule: "none — disc r 0.18→2.23 m over 0.85 s, per-prism test" },
@@ -102,8 +156,9 @@ export const SPELLS = {
             flingImpactDmg: 15, flingImpactStunS: 1 },
         mana: 30, cooldown: 10,
     },
-    /** Great Vortex — Vortex (engine key 5). */
-    4: {
+    /** Great Vortex — Vortex (engine key 5). Cold "Great Vortex" / Sand
+     *  "SAND TORNADO" / Ash "Firestorm". */
+    5: {
         name: "Great Vortex", engineKey: 5, strikeDelay: 0.98,
         dmg: 15,                    // DPS inside ring, ×env (~55 over a full hold)
         totalApproxDmg: 55, flingImpactDmg: 20,
@@ -118,12 +173,22 @@ export const SPELLS = {
     },
 };
 
-/** Spell unlock levels (progression §7), keyed like SPELLS. */
-export const UNLOCKS = { LMB: 1, 1: 1, 2: 2, 3: 4, 4: 6 };
+/**
+ * Spell unlock levels (progression §7), keyed like SPELLS — i.e. by the OWNER
+ * bind, re-keyed for the 2026-08-08 remap. Bolt and Stream are both level 1
+ * (COMBAT_DESIGN §0: "Bolt + Wave at L1"), so the player is never without a
+ * primary; the four cast spells keep the levels they had, shifted one bind up.
+ * The bolt is additionally exempted from the runtime unlock GATE in
+ * `spellSystem.cast()` and from the greyed-slot render in `ui/spellbar.js`,
+ * because `progression.js`'s own UNLOCK_LEVEL and save-load guard stop at
+ * engine id 5 and would otherwise leave engine id 6 permanently locked.
+ */
+export const UNLOCKS = { LMB: 1, 1: 1, 2: 1, 3: 2, 4: 4, 5: 6 };
 
 /** Augment unlock levels (progression §7): L9 Bolt, 12 Wave, 15 Spikes,
- *  20 Mini-Vortex, 25 Great Vortex. */
-export const AUGMENTS = { LMB: 9, 1: 12, 3: 15, 2: 20, 4: 25 };
+ *  20 Mini-Vortex, 25 Great Vortex — re-keyed to the new binds. The Stream
+ *  has no augment row of its own; it shares the Bolt's L9 unlock. */
+export const AUGMENTS = { LMB: 9, 1: 9, 2: 12, 4: 15, 3: 20, 5: 25 };
 
 /* ------------------------------------------------------------------ *
  * TIER table — combat §2.0 bands, §5.1 poise, §6.1 costs;
@@ -777,8 +842,13 @@ export function enemyLevelFor(realm, playerL, roll, kind) {
  */
 export const combatData = {
     /**
-     * LMB — Frost Bolt (Ribbon thrown phase). COMBAT_DESIGN §1.1 Bolt row,
+     * LMB — the primary BOLT, engine key 6 (`spells/dart.js`'s twelve-slot
+     * pool, no longer the Ribbon's thrown head). COMBAT_DESIGN §1.1 Bolt row,
      * poise §5.1, hook §9.3.
+     *
+     * REALM-INVARIANT. Cold Rime Lance, Sand Fulgurite Dart and Ash Cinder
+     * Spike all read exactly these numbers; only the material, the trail and
+     * the impact flash differ, and those live in `REALM_PALETTE.*.bolt`.
      */
     bolt: {
         damage: 12,          // per hit, planted
@@ -793,7 +863,11 @@ export const combatData = {
         padRadius: 0.205,    // projectile radius = ribbon tube RADIUS (§1.1 quotes 0.205 m)
     },
 
-    /** Hold-LMB — held-whip mode. COMBAT_DESIGN §1.1 Bolt row, last line. */
+    /**
+     * KEY 1 — the held stream's whip. COMBAT_DESIGN §1.1 Bolt row, last line.
+     * After the 2026-08-08 remap this is the ENTIRE damage profile of key 1:
+     * the throw on release is visual only (see SPELLS[1]'s note).
+     */
     whip: {
         damage: 6,           // per tick
         tickRate: 4,         // ticks per second

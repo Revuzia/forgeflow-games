@@ -101,9 +101,13 @@ export class Vortex {
         this._strip(dt, env);
         this._grains(dt, env);
 
+        // Cold cyan / Sand warm-and-dim (x0.85 — dust does not glow) / Ash the
+        // brightest of the three (x1.45), because a firestorm's leading edge
+        // IS the light source. One call, three realms, no branch.
+        const L = ctx.realm.light;
         ctx.lights.add(
             this.x, ctx.terrain.heightAt(this.x, this.z) + 1.3, this.z,
-            9.0, 0.46, 0.74, 1.0, 9.0 * env
+            9.0, 0.46 * L.r, 0.74 * L.g, 1.0 * L.b, 9.0 * env * L.mult
         );
     }
 
@@ -190,7 +194,13 @@ export class Vortex {
             // rotating volume. Milk 0.88 also removes 88% of the specular surface
             // in the water fragment stage, or it comes out looking like moulded
             // plastic — opaque, which is right, and polished, which is not.
-            water.setParams(s, PROFILE_TUBE, 0.88, clamp01(env * 1.3), COLS);
+            // Cold 0.88. Sand goes to 0.92 (a haboob occludes harder than
+            // lifted snow) and Ash to 0.90 — all three stay in the band where
+            // the far side of the column shows faintly through the near side,
+            // which is most of what makes it read as a rotating volume.
+            water.setParams(
+                s, PROFILE_TUBE, ctx.realm.milk.vortex, clamp01(env * 1.3), COLS
+            );
         }
     }
 
@@ -269,6 +279,7 @@ export class Vortex {
         if (count > 260) count = 260;
 
         const groundY = ctx.terrain.heightAt(this.x, this.z);
+        const S = ctx.realm.spray;
 
         for (let k = 0; k < count; k++) {
             // Weighted toward the bottom, where the snow is being picked up.
@@ -297,12 +308,15 @@ export class Vortex {
                 vx + cs * (rand() - 0.6) * 1.2,
                 1.4 + rand() * 3.4 + (1 - h) * 2.5,  // born low, thrown highest
                 vz + sn * (rand() - 0.6) * 1.2,
-                0.028 + rand() * 0.062,
-                0.30 + rand() * 0.26,                // SHORT
-                0,
+                (0.028 + rand() * 0.062) * S.sizeMul,
+                // SHORT in Cold. Sand grit lives a shade less, Ash embers 25%
+                // longer — which is what makes the ash column streak past its
+                // own top instead of stopping at it.
+                (0.30 + rand() * 0.26) * S.lifeMul,
+                S.clodBias > 0.4 ? 1 : 0,
                 // LOW drag: it holds the launch velocity for the whole of its life,
                 // which is what keeps it on the spiral.
-                0.9
+                0.9 * S.grainDragMul
             );
         }
     }
@@ -316,6 +330,9 @@ export class Vortex {
             }
         }
     }
+
+    /** Every realm read here is live off `ctx.realm`; nothing to migrate. */
+    setRealm() {}
 
     cancel() {
         this._end();

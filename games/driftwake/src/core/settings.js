@@ -97,6 +97,37 @@ export const S = {
     windStreaks: true,
     streakStrength: 1.0,
 
+    // --------------------------------------------------------------- weather
+    /** Master toggle for the realm weather sheet (blizzard / sandstorm /
+     *  ember-fall). Off hides one mesh and skips one update; the fog boost is
+     *  handed back to the sky on the same edge. */
+    showWeather: true,
+    /**
+     * Live particles in the weather sheet. Geometry is allocated once at 4096
+     * and this moves a draw range, so it is free to change at any moment and
+     * costs no reallocation — which is why it needs no accessor routing the way
+     * `resolutionScale` / `deformResolution` do.
+     *
+     * 3072 is 6,144 triangles, +0.34% of the 1,799,120-triangle Cold baseline,
+     * for +1 draw call. At or below 640 the system drops to its lean rung and
+     * takes all four of REALM_CONTRACT §4.3's degradations at once: half the
+     * velocity-stretch clamp, no ember-glow layer, half the realm's fog boost,
+     * and no dust devils. One gated key, four consequences — deliberately, so
+     * the rung cannot fall out of step with itself.
+     */
+    weatherParticles: 3072,
+    /**
+     * Whether weather particles read the shadow cascades.
+     *
+     * The look it buys is real — snow inside the rider's own shadow going dark
+     * rather than self-illuminated, the same argument `spray.glsl.js:18-20`
+     * makes for the plume — but it is a PCSS lookup across weather's whole
+     * overdraw budget (~0.36 screens at 1280x720), which is by a wide margin the
+     * most expensive thing the system can be asked to do. Off below `high`, and
+     * the ONE knob to reach for first if weather ever measures above 0.6 ms.
+     */
+    weatherShadows: true,
+
     // ---------------------------------------------------------------- spells
     /** Master toggle. Off cancels everything in flight and hides both meshes. */
     showSpells: true,
@@ -224,6 +255,14 @@ export const SCHEMA = [
         ],
     },
     {
+        group: "Weather",
+        items: [
+            { k: "showWeather", l: "Weather", t: "b" },
+            { k: "weatherParticles", l: "Particles", t: "f", min: 0, max: 4096, step: 128 },
+            { k: "weatherShadows", l: "Shadowed", t: "b" },
+        ],
+    },
+    {
         group: "Spells",
         items: [
             { k: "showSpells", l: "Spells", t: "b" },
@@ -287,6 +326,13 @@ export const PRESETS = {
     balanced: {
         deformResolution: 1024, resolutionScale: 0.85,
         ssr: false, dof: false,
+        // Half the sheet, and the cascade lookup off. 1536 particles is 3,072
+        // triangles (+0.17% of baseline) and still one draw call. `ultra` and
+        // `high` are absent from this key on purpose: PRESET_KEYS is the union
+        // of every key any preset touches and PRESET_BASELINE captures the boot
+        // value, so stepping down to `balanced` and back to `ultra` lands on
+        // 3072 / true again without either preset naming them.
+        weatherParticles: 1536, weatherShadows: false,
     },
     /**
      * PORT-ONLY. The reference has no fourth rung; this one is not transcribed
@@ -326,6 +372,13 @@ export const PRESETS = {
         deformResolution: 512, resolutionScale: 0.5,
         ssr: false, dof: false, bloom: false, sharpen: false,
         showMountains: false, showLightShafts: false, windStreaks: false,
+        // 512 particles = 1,024 triangles, +0.06% of baseline, still one draw.
+        // Below the 640 lean threshold, so this same line also halves the
+        // stretch clamp, drops the ember-glow layer, halves the realm fog boost
+        // and switches the dust devils off. Combined with resolutionScale 0.5 —
+        // a quarter of the fragments per particle — weather's fill cost here is
+        // 1/24th of `ultra`'s (6x fewer particles x 4x fewer pixels each).
+        weatherParticles: 512, weatherShadows: false,
     },
 };
 

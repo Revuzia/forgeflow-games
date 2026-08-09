@@ -54,6 +54,8 @@ import { aimPoint, expDamp } from "./bending.js";
  *   water: WaterBody,
  *   crystals: CrystalField,
  *   lights: SpellLights,
+ *   bolt: Dart,
+ *   realm: typeof REALM_PALETTE.cold,
  *   time: number,
  *   sprayScale: number,
  *   handPosition: (which:number, out:Float32Array, off:number) => void,
@@ -61,6 +63,8 @@ import { aimPoint, expDamp } from "./bending.js";
  */
 
 const _aim = new Float32Array(3);
+/** The muzzle. Preallocated: `cast(6)` runs 2.2 times a second. */
+const _hand = new Float32Array(3);
 const _viewProj = new THREE.Matrix4();
 
 /**
@@ -291,6 +295,46 @@ export class SpellSystem {
          */
         this.spellUniforms = this.lights.uniforms;
 
+        /**
+         * THE REALM PALETTE BLOCK — the GPU half of the eighteen identities.
+         *
+         * Preallocated `{value}` boxes, shared by reference into every spell
+         * material that reads them. `setRealm()` writes numbers INTO these
+         * vectors; it never replaces a box, never rebuilds a material and
+         * never touches a `#define`. Three keeps a `{value}` box per uniform
+         * and samples it at draw time (the contract `spellLights.js:14-28`
+         * already documents and relies on), so a realm crossing compiles
+         * nothing and adds no draw call — provable by reading
+         * `renderer.info.programs.length` across a swap.
+         *
+         * Consumed today by `dart.js`'s material, which declares exactly
+         * `uRealmAbsorb / uRealmBody / uRealmEmissive / uRealmLitTint /
+         * uRealmSurface` (`shaders/dart.glsl.js:155-159`). The remaining four
+         * boxes are populated and correct but not yet SAMPLED: `water.glsl.js`
+         * and `crystal.glsl.js` still hold their palette as compile-time
+         * constants, and promoting those is a one-time source edit in files
+         * this module does not own. Until that lands, the water-bodied spells
+         * take their realm identity through the CPU half below — milkiness,
+         * light colour, spray kind/drag/life, deform ice — which is the larger
+         * part of the read anyway and costs nothing extra either.
+         * @type {Record<string, {value:any}>}
+         */
+        this.realmUniforms = {
+            uRealmAbsorb: { value: new THREE.Vector3() },
+            uRealmScatter0: { value: new THREE.Vector3() },
+            uRealmScatter1: { value: new THREE.Vector3() },
+            uRealmBody: { value: new THREE.Vector3() },
+            uRealmFoam: { value: new THREE.Vector3() },
+            uRealmGrain: { value: new THREE.Vector3() },
+            uRealmLitTint: { value: new THREE.Vector3() },
+            uRealmEmissive: { value: new THREE.Vector3() },
+            /** (roughness, translucency 0..1, emissiveMaskPow, opacity bias) */
+            uRealmSurface: { value: new THREE.Vector4() },
+        };
+
+        /** @type {"cold"|"sand"|"ash"} */
+        this.realm = "cold";
+
         this.water = new WaterBody(scene, sky, shadows, this.lights, this.globals);
         this.crystals = new CrystalField(scene, sky, shadows, this.lights, this.globals);
 
@@ -305,10 +349,27 @@ export class SpellSystem {
             water: this.water,
             crystals: this.crystals,
             lights: this.lights,
+            // Filled in immediately below — the spells hold the ctx by
+            // reference, so assigning after construction is fine and keeps
+            // the Dart's own ctx.realm read (dart.js:213) from ever seeing
+            // undefined.
+            bolt: null,
+            realm: REALM_PALETTE.cold,
             time: 0,
             sprayScale: 1,
             handPosition: (which, out, off) => this._handPosition(which, out, off),
         };
+
+        /**
+         * The primary bolt (internal id 6). Constructed BEFORE the other
+         * spells because two of them reach for it: the Ash Sweep throws a
+         * carrier head through this pool, and `spellHits` walks it directly.
+         */
+        this.bolt = new Dart(
+            this.ctx, scene, sky, shadows, this.lights,
+            this.globals, this.realmUniforms
+        );
+        this.ctx.bolt = this.bolt;
 
         this.sweep = new Sweep(this.ctx);
         this.ribbon = new Ribbon(this.ctx);
@@ -316,7 +377,15 @@ export class SpellSystem {
         this.crystallize = new Crystallize(this.ctx);
         this.vortex = new Vortex(this.ctx);
 
-        this.spells = [this.sweep, this.ribbon, this.bloom, this.crystallize, this.vortex];
+        /**
+         * THE SPELL ARRAY. The bolt has to be in here or `_cancelAll()` and
+         * `activeCount` skip it — a cancelled spell must take its volumes with
+         * it (spellHits §9.2), and a pool of live projectiles is a volume.
+         */
+        this.spells = [
+            this.sweep, this.ribbon, this.bloom, this.crystallize,
+            this.vortex, this.bolt,
+        ];
 
         /**
          * Materials outside the spell system that shade with the spell lights.
@@ -342,12 +411,32 @@ export class SpellSystem {
         this._pending = { key: 0, t: 0, a0: 0, a1: 0, a2: 0 };
         /** Console override for the Ribbon hold. */
         this.debugRibbon = false;
+        /** Console/harness override for the LMB bolt hold — the harness cannot
+         *  forge pointer lock, so it cannot dispatch a real `mousedown`. */
+        this.debugBolt = false;
         /** @type {{flashMana(): void}|null} set by main.js — deny feedback. */
         this.hud = null;
-        /** Cooldown expiry per spell key, in `_time` seconds. */
-        this._cdUntil = { 1: 0, 3: 0, 4: 0, 5: 0 };
+        /**
+         * Cooldown expiry per spell key, in `_time` seconds. Key 6 is present
+         * and permanently 0 — harmless, because `cooldownFrac` early-outs on
+         * `!COOLDOWN[key]` before it ever reads this, so the toolbar never
+         * renders a wipe on the primary.
+         */
+        this._cdUntil = { 1: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+        /**
+         * The bolt's next legal fire time, in `_time` seconds. NOT a cooldown:
+         * it is the 0.45 s FIRE CYCLE, which is a rate limit on a spell whose
+         * cooldown is zero, and it is deliberately kept out of `_cdUntil` /
+         * `COOLDOWN` so nothing renders it as a cooling spell.
+         */
+        this._boltNext = 0;
 
         this._camera = rig && rig.camera ? rig.camera : null;
+
+        // Cold is the shipped look, and `setRealm` early-outs on an unchanged
+        // realm — so seed the uniform block explicitly here rather than
+        // relying on a swap that will never happen in a Cold-only build.
+        this._writeRealm(REALM_PALETTE.cold);
     }
 
     /**
@@ -379,9 +468,9 @@ export class SpellSystem {
         this._camera = camera || null;
     }
 
-    /** The two meshes `gfx.warmUp()` must force a draw through. */
+    /** The three meshes `gfx.warmUp()` must force a draw through. */
     get warmUpMeshes() {
-        return [this.water.mesh, this.crystals.mesh];
+        return [this.water.mesh, this.crystals.mesh, this.bolt.mesh];
     }
 
     /**
@@ -492,9 +581,20 @@ export class SpellSystem {
         // Ribbon is a hold, so it is POLLED rather than edge-triggered.
         // `debugRibbon` lets the console hold it without synthesising a key event
         // — the poll would otherwise release it on the very next frame.
+        // The WRITER of `spellHeld2` moved from LMB to Digit1 with the
+        // 2026-08-08 remap; this read is unchanged, and so is the flag's name,
+        // because it carries INTERNAL id 2 and every harness pin uses it.
         this.holdRibbon(input.spellHeld2 || this.debugRibbon);
         const key = input.spellPressed;
         if (key && key !== 2) this.cast(key);
+
+        // THE BOLT AUTO-REPEATS. LMB down fires one immediately through the
+        // `spellPressed` edge above (input.js writes 6 on mousedown); holding
+        // it fires another every `BOLT_CYCLE`. Polled, not edge-triggered, for
+        // exactly the reason the ribbon is: an edge only arrives once.
+        // `cast()` owns the rate limit, so a spammed edge cannot beat the
+        // cycle and this call cannot double-fire on the press frame.
+        if (input.boltHeld || this.debugBolt) this.cast(BOLT_KEY);
     }
 
     /**
@@ -508,7 +608,16 @@ export class SpellSystem {
      * speed moment divided by the clip's play rate (meshChar CAST_RATE).
      * Aim is captured at the press because that is the player's intent; the
      * strike releases what they aimed.
-     * @param {number} key 1..5
+     *
+     * THE BOLT (key 6) IS THE ONE EXCEPTION TO THE STRIKE DELAY, and it is not
+     * an oversight. `STRIKE_DELAY[6]` is 0 because the muzzle IS the hand:
+     * there is no travel from a wind-up pose to a release point to wait for.
+     * More concretely, the shortest cast clip's measured strike is 0.66 s
+     * (CL_CAST3 at rate 1.25) and the fire cycle is 0.45 s, so a scheduled
+     * bolt would fall permanently behind its own stream. It therefore bypasses
+     * `_schedule` entirely rather than sharing the single `_pending` slot with
+     * a Vortex wind-up.
+     * @param {number} key 1..6
      */
     cast(key) {
         const ctx = this.ctx;
@@ -517,10 +626,34 @@ export class SpellSystem {
         // Spell unlock gate (progression §7): a locked key does nothing at
         // all — no wind-up, no spend. `unlocked` is progression's live Set
         // of INTERNAL ids, pushed once at attach (identity is stable).
-        if (this.unlocked && !this.unlocked.has(key)) return;
+        //
+        // The BOLT is exempt. It is the level-1 filler that is never locked
+        // (COMBAT_DESIGN §0), and `progression.js`'s UNLOCK_LEVEL table and
+        // its save-load guard both stop at id 5 — so `unlocked` will not
+        // contain 6 and an unexempted gate would disable the primary attack
+        // for the whole game. `ui/spellbar.js` exempts it identically.
+        if (key !== BOLT_KEY && this.unlocked && !this.unlocked.has(key)) return;
 
         if (key === 2) {
             this.holdRibbon(true);
+            return;
+        }
+
+        if (key === BOLT_KEY) {
+            // The fire-cycle rate limit, checked before anything is spent or
+            // animated, so a held button and a spammed edge produce the same
+            // 2.2 shots a second.
+            if (this._time < this._boltNext) return;
+            this._boltNext = this._time + BOLT_CYCLE;
+            this._lastCast = this._time;
+            // Reuse the one-handed magic clip (engine key 3 -> CL_CAST3).
+            // meshChar has no row for key 6 yet; writing 6 would fall through
+            // its `?? CL_CAST` default onto the TWO-handed clip, which owns
+            // the whole body while standing and would re-trigger 2.2 times a
+            // second. See the report for the one-line meshChar addition that
+            // replaces this with a proper additive-layer row.
+            ctx.controller.castWave = 3;
+            this._fireBolt();
             return;
         }
 
@@ -580,6 +713,56 @@ export class SpellSystem {
     }
 
     /**
+     * Spawn one bolt at the hand, heading at the crosshair's point.
+     *
+     * The aim is an EYE RAY against the terrain, capped at the bolt's own 40 m
+     * leash with an 18 m fallback (`combatData.js` SPELLS.LMB), so what the
+     * bolt flies at is exactly what is under the centre of the screen — the
+     * same targeting rule Bloom and Crystallize use, with a longer cap because
+     * a projectile is allowed to reach the next ridge.
+     *
+     * The muzzle is the RIGHT HAND, through the same `_handPosition` the
+     * Ribbon uses, so the bolt leaves the character rather than the camera.
+     * Allocation: none — `_aim` and `_hand` are module-scope scratch.
+     * @param {number} [own] 0 = damaging primary, 1 = a carrier that only draws
+     * @param {number} [sizeMul] multiplies the realm's bolt length and width
+     * @param {number} [range] metres of leash; defaults to the bolt's own
+     * @returns {number} the pool slot, or -1 when the pool is full
+     */
+    _fireBolt(own, sizeMul, range) {
+        const ctx = this.ctx;
+        const eye = ctx.rig.camera.position;
+        aimPoint(
+            _aim, ctx.terrain,
+            eye.x, eye.y, eye.z,
+            this.aim.x, this.aim.y, this.aim.z,
+            BOLT_RANGE, BOLT_FALLBACK
+        );
+        this._handPosition(1, _hand, 0);
+
+        let dx = _aim[0] - _hand[0];
+        let dy = _aim[1] - _hand[1];
+        let dz = _aim[2] - _hand[2];
+        const l = Math.hypot(dx, dy, dz);
+        if (l < 1e-4) {
+            // Degenerate only if the aim point landed inside the hand. Fall
+            // back to the flat facing rather than firing a zero-length bolt,
+            // which would terminate on the ground on its first frame.
+            dx = this.aim.x; dy = 0; dz = this.aim.z;
+            const fl = Math.hypot(dx, dz) || 1;
+            dx /= fl; dz /= fl;
+        } else {
+            dx /= l; dy /= l; dz /= l;
+        }
+
+        return this.bolt.fire(
+            _hand[0], _hand[1], _hand[2],
+            dx, dy, dz,
+            BOLT_SPEED, range || BOLT_RANGE, own || 0, sizeMul || 1
+        );
+    }
+
+    /**
      * Queue a spell to fire at its clip's strike moment. Slots, not an
      * array: casts are rare edges and the drain is allocation-free.
      * @param {number} key @param {number} a0 @param {number} a1 @param {number} a2
@@ -630,6 +813,70 @@ export class SpellSystem {
         return left <= 0 ? 0 : left;
     }
 
+    /**
+     * THE REALM SWAP — the eighteen identities, in one call.
+     *
+     * Costs, and all three are assertable from a probe:
+     *   programs compiled   ZERO. Every target is a preallocated `{value}` box
+     *                       the linked programs already sample at draw time.
+     *   draw calls added    ZERO. Nothing is created, hidden or shown here.
+     *   allocation          ZERO. Every destination is a preallocated
+     *                       Vector3/Vector4 written through `.set()`, and every
+     *                       source is a frozen module-scope literal.
+     *
+     * What actually changes is split in two, and the split is the whole trick:
+     * the GPU half is the uniform block, and the CPU half is a swapped
+     * reference on `ctx.realm` that the six spells read every frame for
+     * arguments they were passing anyway — `water.setParams`'s milkiness,
+     * `lights.add`'s rgb, `spray.emit`'s kind/drag/life, `deform.brush`'s ice
+     * channel. Nothing in the palette is a gameplay number (owner directive 4:
+     * the mechanic is constant, the fiction changes), which is exactly what a
+     * probe asserts by casting the same spell in all three realms against a
+     * pinned dummy and comparing damage, poise, CC type and CC duration.
+     *
+     * @param {"cold"|"sand"|"ash"} name
+     * @returns {boolean} true if the realm changed
+     */
+    setRealm(name) {
+        const p = REALM_PALETTE[name];
+        if (!p || name === this.realm) return false;
+        this.realm = name;
+        this._writeRealm(p);
+        return true;
+    }
+
+    /**
+     * Write one palette row into the uniform block and fan it out.
+     * Separated from `setRealm` only so the constructor can seed Cold without
+     * tripping the "already in this realm" early-out.
+     * @param {typeof REALM_PALETTE.cold} p
+     */
+    _writeRealm(p) {
+        const u = this.realmUniforms;
+        u.uRealmAbsorb.value.set(p.absorb[0], p.absorb[1], p.absorb[2]);
+        u.uRealmScatter0.value.set(p.scatter0[0], p.scatter0[1], p.scatter0[2]);
+        u.uRealmScatter1.value.set(p.scatter1[0], p.scatter1[1], p.scatter1[2]);
+        u.uRealmBody.value.set(p.body[0], p.body[1], p.body[2]);
+        u.uRealmFoam.value.set(p.foam[0], p.foam[1], p.foam[2]);
+        u.uRealmGrain.value.set(p.grain[0], p.grain[1], p.grain[2]);
+        u.uRealmLitTint.value.set(p.litTint[0], p.litTint[1], p.litTint[2]);
+        u.uRealmEmissive.value.set(p.emissive[0], p.emissive[1], p.emissive[2]);
+        u.uRealmSurface.value.set(
+            p.surface[0], p.surface[1], p.surface[2], p.surface[3]
+        );
+
+        // The CPU half: one reference swap, and every spell picks it up on its
+        // next frame because they all read `ctx.realm` rather than caching it.
+        this.ctx.realm = p;
+        // Two spells carry per-object state that a swap has to reach —
+        // the bolt pool's per-slot geometry, and any spell holding a
+        // realm-derived value across frames. Everything else is a live read.
+        for (let i = 0; i < this.spells.length; i++) {
+            const s = this.spells[i];
+            if (s.setRealm) s.setRealm(p);
+        }
+    }
+
     /** @param {boolean} held */
     holdRibbon(held) {
         if (held && this.unlocked && !this.unlocked.has(2)) return;
@@ -668,7 +915,8 @@ export class SpellSystem {
     }
 
     get triangles() {
-        return this.water.triangles + this.crystals.triangles;
+        return this.water.triangles + this.crystals.triangles
+             + this.bolt.triangles;
     }
 
     /**
@@ -687,6 +935,11 @@ export class SpellSystem {
     warmUp(x, y, z) {
         this.water.warmUp(x, y, z);
         this.crystals.warmUp(x, y, z);
+        // The bolt pays the same price if it is skipped: the blend/depth/
+        // target-format combination only binds when a triangle actually goes
+        // through it, and without this the first LMB press pays for the
+        // pipeline specialisation.
+        this.bolt.warmUp(x, y, z);
     }
 
     /**
@@ -696,10 +949,12 @@ export class SpellSystem {
     finishWarmUp() {
         this.water.finishWarmUp();
         this.crystals.finishWarmUp();
+        this.bolt.finishWarmUp();
     }
 
     dispose() {
         this.water.dispose();
         this.crystals.dispose();
+        this.bolt.dispose();
     }
 }

@@ -1,7 +1,7 @@
 /**
- * The spell toolbar — five slots along the bottom edge, one per spell, with
- * live keybinds (owner remap 2026-08-05: LMB holds the Stream, keys 1-4 are
- * Wave / Bloom / Spikes / Vortex).
+ * The spell toolbar — six slots along the bottom edge, one per spell, with
+ * live keybinds (owner remap 2026-08-08: LMB is the primary BOLT, key 1 holds
+ * the Stream, keys 2-5 are Wave / Bloom / Spikes / Vortex).
  *
  * Same construction rules as `ui/crosshair.js`, and deliberately the same
  * frost identity: DOM + CSS only, nothing in the render path; POLLED, not
@@ -29,20 +29,26 @@ const FLASH_MS = 340;
  * `bind` is the label the player reads. Glyphs are inline SVG strokes.
  */
 const SLOTS = [
-    { id: 2, bind: "LMB", name: "stream",
+    // The primary bolt (internal id 6). Cooldown 0 and mana 0, so it is
+    // deliberately absent from the cooldown-wipe loop below — a wipe on a
+    // spell that never cools would strobe at 2.2 Hz forever.
+    { id: 6, bind: "LMB", name: "bolt",
+      glyph: '<path d="M12 2.6l3.1 6.2v8.4L12 21.4l-3.1-4.2V8.8z"/>' +
+             '<path d="M8.9 8.8h6.2"/>' },
+    { id: 2, bind: "1", name: "stream",
       glyph: '<path d="M4 9c3-2.6 5 2.6 8 0s5 2.6 8 0"/>' +
              '<path d="M4 14c3-2.6 5 2.6 8 0s5 2.6 8 0"/>' +
              '<path d="M6.5 19c2.2-2 3.8 2 6.5 0s3.4 1.4 4.5.6"/>' },
-    { id: 1, bind: "1", name: "wave",
+    { id: 1, bind: "2", name: "wave",
       glyph: '<path d="M3 16C6 8 12 5 21 7c-5 1-8 4-9.5 9"/>' +
              '<path d="M5 19.5c4-1.8 8-2 12-.8"/>' },
-    { id: 3, bind: "2", name: "bloom",
+    { id: 3, bind: "3", name: "bloom",
       glyph: '<circle cx="12" cy="12" r="3.2"/>' +
              '<path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3' +
              'M6 6l2.1 2.1M15.9 15.9L18 18M18 6l-2.1 2.1M8.1 15.9L6 18"/>' },
-    { id: 4, bind: "3", name: "spikes",
+    { id: 4, bind: "4", name: "spikes",
       glyph: '<path d="M5 20L8 8l2.6 8L14 4l2.8 10L19 12l1 8z"/>' },
-    { id: 5, bind: "4", name: "vortex",
+    { id: 5, bind: "5", name: "vortex",
       glyph: '<path d="M12 12c0-1.8 2.6-2 3.6-.6 1.3 1.8-.2 4.6-2.6 5' +
              '-3.4.6-6.3-2.4-6-6C7.4 6 11.6 3.8 15.4 5.4c2.9 1.2 4.6 4 4.3 7"/>' },
 ];
@@ -182,14 +188,16 @@ export class SpellBar {
 
         this._show = false;
         this._held = false;
-        /** Deadline of the running flash per spell id; 0 = none. */
-        this._flashUntil = { 1: 0, 3: 0, 4: 0, 5: 0 };
-        /** Cached cooldown fraction + seconds text per spell id. */
+        /** Deadline of the running flash per spell id; 0 = none. The bolt (6)
+         *  is here — it IS a cast edge. The stream (2) is not — it is a hold. */
+        this._flashUntil = { 1: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+        /** Cached cooldown fraction + seconds text per spell id. NO 6: the
+         *  bolt's cooldown is 0 (combatData SPELLS.LMB) and must never wipe. */
         this._cdFrac = { 1: -1, 3: -1, 4: -1, 5: -1 };
         this._cdText = { 1: "", 3: "", 4: "", 5: "" };
         /** @type {{unlocked: Set<number>, unlockLevelOf?: (id:number)=>number}|null} */
         this.progression = null;
-        this._lockState = { 1: null, 2: null, 3: null, 4: null, 5: null };
+        this._lockState = { 1: null, 2: null, 3: null, 4: null, 5: null, 6: null };
     }
 
     /** @param {{ overlay?: any, spells?: any }} refs @returns {void} */
@@ -222,7 +230,14 @@ export class SpellBar {
         if (prog && prog.unlocked) {
             for (const idStr in this._slot) {
                 const id = +idStr;
-                const locked = !prog.unlocked.has(id);
+                // The bolt is NEVER locked. It is the level-1 resource-neutral
+                // filler (COMBAT_DESIGN §0 "Bolt + Wave at L1"), and
+                // `progression.js`'s UNLOCK_LEVEL / save-load guard both stop
+                // at id 5 — so its `unlocked` Set will not contain 6 and a
+                // bare `has()` would render the primary attack greyed out
+                // forever. `spellSystem.cast()` exempts id 6 from the same
+                // gate for the same reason; see the note in its docblock.
+                const locked = id === 6 ? false : !prog.unlocked.has(id);
                 if (locked === this._lockState[id]) continue;
                 this._lockState[id] = locked;
                 const slot = this._slot[id];

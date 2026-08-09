@@ -177,21 +177,32 @@ export class Bloom {
             px = x; py = y; pz = z;
         }
 
-        water.setParams(s, PROFILE_TUBE, 0.42, clamp01(env * 1.5), COLS);
+        // Cold 0.42 — a column of powder and water you can see into. Sand and
+        // Ash are 0.62 / 0.66: a grit jet and a smoke column occlude far
+        // harder, which is what turns the same integral into a blowout and a
+        // fumarole rather than a tinted snow bloom.
+        const R = ctx.realm;
+        water.setParams(s, PROFILE_TUBE, R.milk.bloom, clamp01(env * 1.5), COLS);
 
         // TWO lights: one down in the crater, one riding the head at 92% of its
         // height. The crater one is what actually lights the rim and the fallout
         // around the base, and it is the reason the effect reads as a hole full of
         // light rather than a bright column standing on dark ground.
+        //
+        // IN ASH THAT STOPS BEING A LIGHTING TRICK AND BECOMES THE VENT. Held
+        // orange at 1.45x, the crater light is what makes the hole read as
+        // OPEN rather than shadowed — a fumarole with an incandescent throat.
+        // Same two calls, same two slots; only the rgb and the gain move.
+        const L = R.light;
         ctx.lights.add(
             this.x, this.y + 0.35, this.z,
-            11.0, 0.44, 0.78, 1.0, 22.0 * env
+            11.0, 0.44 * L.r, 0.78 * L.g, 1.0 * L.b, 22.0 * env * L.mult
         );
         ctx.lights.add(
             this.x + this._leanX * top * 0.5,
             this.y + top * 0.92,
             this.z + this._leanZ * top * 0.5,
-            7.5, 0.55, 0.82, 1.0, 9.0 * env
+            7.5, 0.55 * L.r, 0.82 * L.g, 1.0 * L.b, 9.0 * env * L.mult
         );
     }
 
@@ -206,7 +217,7 @@ export class Bloom {
                 0.52,   // depression
                 0.40,   // rim — the mass has to go somewhere and this is where
                 0.72,   // packed by the blast
-                0.30,   // and partly glazed
+                0.30 * ctx.realm.ice,   // and partly glazed — cold only
                 rand() * Math.PI,
                 1.15,   // very slightly oval, so it is not a stamped circle
                 1.0
@@ -233,6 +244,7 @@ export class Bloom {
         const sp = ctx.spray;
         if (!sp) return;
         const n = (430 * ctx.sprayScale) | 0;
+        const S = ctx.realm.spray;
 
         for (let k = 0; k < n; k++) {
             const a = rand() * Math.PI * 2;
@@ -240,7 +252,9 @@ export class Bloom {
             const r = 0.35 + Math.sqrt(rand()) * 1.25;
             const up = 5.5 + rand() * 8.5;
             const out = 1.6 + rand() * 5.0;
-            const clod = rand() < 0.26 ? 1 : 0;
+            // SAND raises the clod share: the blowout throws bleached-bronze
+            // glass shards that tumble and catch the sun, not powder.
+            const clod = rand() < 0.26 + S.clodBias ? 1 : 0;
 
             sp.emit(
                 this.x + Math.cos(a) * r,
@@ -249,11 +263,11 @@ export class Bloom {
                 Math.cos(a) * out,
                 up * (clod ? 0.7 : 1.0),
                 Math.sin(a) * out,
-                clod ? 0.028 + rand() * 0.038 : 0.075 + rand() * 0.115,
-                clod ? 1.1 + rand() * 0.8 : 1.4 + rand() * 1.5,
+                (clod ? 0.028 + rand() * 0.038 : 0.075 + rand() * 0.115) * S.sizeMul,
+                (clod ? 1.1 + rand() * 0.8 : 1.4 + rand() * 1.5) * S.lifeMul,
                 clod,
                 // BALLISTIC, or it never leaves the crater.
-                clod ? 0.65 : 1.1 + rand() * 0.8
+                (clod ? 0.65 : 1.1 + rand() * 0.8) * S.grainDragMul
             );
         }
     }
@@ -284,6 +298,7 @@ export class Bloom {
         this._curtainOwed -= count;
         if (count > 60) count = 60;
 
+        const S = ctx.realm.spray;
         for (let i = 0; i < count; i++) {
             const a = rand() * Math.PI * 2;
             const r = Math.sqrt(rand()) * 3.6;   // uniform over a 3.6 m disc
@@ -294,11 +309,15 @@ export class Bloom {
                 (rand() - 0.5) * 0.9,
                 0.2 + rand() * 1.1,
                 (rand() - 0.5) * 0.9,
-                0.028 + rand() * 0.055,
-                1.6 + rand() * 1.9,
+                (0.028 + rand() * 0.055) * S.sizeMul,
+                (1.6 + rand() * 1.9) * S.lifeMul,
                 0,
-                // HIGH drag: this is meant to hang and settle, not to fly.
-                4.6
+                // HIGH drag: this is meant to hang and settle, not to fly. 4.6
+                // is already the highest drag in the project, and the SAND
+                // blowout pushes it higher still (x1.25) — a desert blowout's
+                // fallout hangs longer than a snow bloom's, which is the one
+                // thing that separates the two silhouettes at a distance.
+                4.6 * S.dustDragMul
             );
         }
     }
@@ -310,6 +329,9 @@ export class Bloom {
             this.strand = -1;
         }
     }
+
+    /** Every realm read here is live off `ctx.realm`; nothing to migrate. */
+    setRealm() {}
 
     cancel() {
         this._end();

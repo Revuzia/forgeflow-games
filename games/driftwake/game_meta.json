@@ -5,7 +5,7 @@
   "genre": "simulation",
   "sub_genre": "snow-sandbox",
   "difficulty": "easy",
-  "controls_keyboard": "WASD move (camera-relative) · mouse look · click to capture the pointer · SHIFT sprint · wheel zoom · hold RIGHT MOUSE to snow-surf · SPACE jump · 1-5 cast the five spells (2 is a held cast) · F1 settings · F3 debug · Esc pause",
+  "controls_keyboard": "WASD move (camera-relative) · mouse look · click to capture the pointer · SHIFT sprint · wheel zoom · hold RIGHT MOUSE to snow-surf · SPACE jump · LEFT MOUSE fires the primary bolt (hold to repeat) · 1-5 cast the five spells (1 is a held cast) · F1 settings · F3 debug · Esc pause",
   "tags": [
     "snow",
     "sandbox",

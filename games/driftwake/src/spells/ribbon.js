@@ -667,14 +667,38 @@ export class Ribbon {
             // Thickness from the speed the tip had when THIS sample was laid — slow
             // means bunched, fast means stretched thin.
             const stretch = clampRange(1.35 - this._spd[i] * 0.055, 0.55, 1.35);
-            const rad = RADIUS * profile * stretch * this.blend;
+
+            // ASH — THE FIRE CONE FROM THE HANDS.
+            //
+            // The Ribbon is already a HELD CHANNEL originating at the right
+            // hand, which is the same input contract and the same per-tick
+            // damage shape a cone needs — so the cone is not a new spell, it
+            // is this spine with the section opened out. `cone` swaps the
+            // rope's taper for a WIDENING one: near the hand (u -> 1, the tail
+            // end of the recorded spine) it stays tight, and out along the
+            // body it broadens, which is the silhouette of a plume leaving the
+            // palms. `flare` is the extra section aspect on top, so the
+            // ellipse spreads sideways as well as thickening — a cone of
+            // flame rather than a fat rope.
+            //
+            // HONEST LIMIT, stated rather than glossed: the HEAD is still
+            // driven by the figure-eight spring, so this is a cone-shaped
+            // VOLUME on a swinging spine, not a fixed forward-facing cone
+            // locked to the aim. Making it aim-locked is a change to the head
+            // driver (`_steer`), which is a bigger edit than a reskin and is
+            // reported rather than smuggled in.
+            const cone = ctx.realm.streamCone ? 1 : 0;
+            const coneProfile = smooth01(u / 0.06) * (0.32 + 1.55 * u * (1 - u * 0.55));
+            const rad = RADIUS * (profile + (coneProfile - profile) * cone)
+                      * (stretch + (1 - stretch) * cone * 0.75) * this.blend;
 
             // Section aspect. Flattened where it is skimming the snow, ON TOP of
             // the ribbon's own ellipse: water running over a surface spreads across
             // it rather than staying round. 1 at 6 cm of clearance, 0 at 41 cm.
             const clear = y - ctx.terrain.heightAt(x, z);
             const ground = 1 - clamp01((clear - 0.06) / 0.35);
-            const flat = SECTION_ASPECT * (1 - 0.72 * ground);
+            const flat = SECTION_ASPECT * (1 - 0.72 * ground)
+                       * (1 + cone * 0.55 * u);
 
             // Foam at the head, where it is tearing through the air; again wherever
             // it is dragging on the ground; and again wherever the body is
@@ -699,7 +723,14 @@ export class Ribbon {
         }
 
         // Milkiness 0.14 — nearly clear water.
-        water.setParams(s, PROFILE_TUBE, 0.14, clamp01(this.blend * 1.3), n);
+        // Cold 0.14 — nearly clear water. Sand 0.62: a rope of streaming grit
+        // is nearly opaque. Ash 0.72: a whip of slag with a charcoal crust,
+        // and the crust cracks exactly where the body is stretched thin, which
+        // the `stretch` term above already computes for free — the crack mask
+        // is 1 - stretch, and it lands along the arc a fast swing just drew.
+        water.setParams(
+            s, PROFILE_TUBE, ctx.realm.milk.ribbon, clamp01(this.blend * 1.3), n
+        );
     }
 
     // NO LIGHT, unlike the other four spells, and that is a decision. Those are
