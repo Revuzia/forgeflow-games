@@ -114,6 +114,8 @@ import { Targeting } from "./combat/targeting.js";
 import { TrainingDummies } from "./combat/dummies.js";
 import { Enemies } from "./combat/enemies.js";
 import { MeshEnemies } from "./combat/meshEnemies.js";
+import { WeatherField } from "./vfx/weather.js";
+import * as realms from "./world/realms.js";
 import { Encounters } from "./combat/encounters.js";
 import { Floaters } from "./ui/floaters.js";
 import { EnemyBars } from "./ui/enemybars.js";
@@ -502,6 +504,47 @@ async function boot() {
     await enemyVis.load("cold");
     enemies.attachVis(enemyVis);
     spells.addConsumers(enemyVis.material);
+
+    // ------------------------------------------------------------- weather
+    // Shares `spray.globals`, so weather rides the SAME jittered view-projection
+    // the wake plume does — two particle systems resolving against different
+    // sub-pixel offsets separate visibly in a turn. `groundRef` is the character
+    // because dust devils plant on the ground under the player, not under the
+    // camera.
+    const weather = new WeatherField(scene, sky, shadows, realms.DEFAULT_REALM, {
+        globals: spray.globals,
+        spellUniforms: spells.spellUniforms,
+        groundRef: character,
+    });
+
+    /**
+     * Enter a realm: ONE call, so a realm can never be half-applied.
+     *
+     * Order matters. The bodies are fetched FIRST and awaited, because
+     * `meshEnemies.load()` is the only step that touches the network — letting
+     * the look change before the bodies exist would show the player a sand world
+     * populated by cold enemies. Everything after it is a synchronous parameter
+     * write.
+     *
+     * Terrain and Sky are deliberately absent: their realm surface does not exist
+     * yet (the ground/sky variants are still to be built), so Sand and Ash
+     * currently change weather, spells and roster over the Cold ground rather
+     * than pretending to be finished. That is a visible, honest partial state.
+     * @param {"cold"|"sand"|"ash"} name
+     */
+    async function enterRealm(name) {
+        // The TOKEN, never `realm().name`. The row's `name` is the display
+        // string ("Sand"); every keyed lookup downstream — BY_REALM in the
+        // renderer, the encounter tables, the weather rows — is lowercase, and
+        // passing the display name throws "no bodies for realm Sand" from
+        // inside an async that nothing was awaiting.
+        const token = realms.realmToken(name);
+        await enemyVis.load(token);
+        encounters.realm = token;
+        weather.setRealm(token);
+        if (spells.setRealm) spells.setRealm(token);
+        return token;
+    }
     const encounters = new Encounters(enemies, registry, character, combatData, minimap);
     // TAB target cycle (owner 2026-08-06): nearest -> next -> ... -> none.
     const targeting = new Targeting(registry, character);
@@ -666,6 +709,12 @@ async function boot() {
         dummies.update(dt);
         enemies.update(dt);
         encounters.update(dt);
+        // AFTER sky.update() rebuilt uFog from S this frame, and before
+        // drawFrame() reads it: weather multiplies the realm's fog boost into
+        // the live uniform, so the boost lands without compounding across
+        // frames. Also after the rig moved, so its billboards face this frame's
+        // camera rather than last frame's.
+        weather.update(dt, rig.camera);
         // After the bodies moved: the cycle sorts by CURRENT distance and
         // drops a target that died or left range this frame.
         targeting.update(dt);
@@ -1023,6 +1072,9 @@ async function boot() {
         spellbar,
         hud, minimap,
         // The battle stack, for probes and the test harness.
+        // The realm layer, exposed so a probe can drive a realm change the same
+        // way the game will. `enterRealm` is async — it awaits the body fetch.
+        weather, realms, enterRealm,
         combat: { registry, spellHits, dummies, enemies, encounters, targeting,
             data: combatData },
         progression, floaters, enemyBars, xpHud,
