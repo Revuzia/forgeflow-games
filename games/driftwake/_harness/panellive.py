@@ -128,7 +128,48 @@ def main():
               f"{c['S']['exposure']}, want 0.105 x 1.2 = 0.126 snapped to 0.125)")
         print(f"  widget agrees with S      {ok_sync}   (slider "
               f"{c['Exposure']['slider']} vs S {c['S']['exposure']})")
-        print(f"  errors {len(errors)}")
+        # ---- the quality rungs still own what they owned ---------------------
+        # A realm writes seven keys; a preset writes eleven; the two sets are
+        # disjoint by construction, and the fog BOOST is where they meet. The
+        # `performance` rung drops weatherParticles to 512, which is under the
+        # 640 lean threshold, and the lean rung halves the realm's boost:
+        # 1 + (1.90-1)*0.5 = 1.45 in cold. That has to still reach uFog now that
+        # weather no longer writes the uniform itself.
+        PRESET = """(name) => {
+          const SF = globalThis.SNOWFLOW;
+          if (name) SF.applyPreset(name);
+          return { preset: SF.S.preset,
+                   boost: [SF.sky.fogBoost.density, SF.sky.fogBoost.falloff],
+                   uFogX: +SF.sky.uniforms.uFog.value.x.toFixed(6),
+                   particles: SF.S.weatherParticles,
+                   graded: { fogDensity: SF.S.fogDensity,
+                             fogHeightFalloff: SF.S.fogHeightFalloff,
+                             exposure: SF.S.exposure, contrast: SF.S.contrast,
+                             bloomStrength: SF.S.bloomStrength,
+                             bloom: SF.S.bloom } };
+        }"""
+        print("\n--- quality rungs (cold) ---")
+        before = pg.evaluate(PRESET, None)
+        print(" ultra       " + json.dumps(before))
+        pg.evaluate(PRESET, "performance")
+        frames(30)
+        perf = pg.evaluate(PRESET, None)
+        print(" performance " + json.dumps(perf))
+        pg.evaluate(PRESET, "ultra")
+        frames(30)
+        back = pg.evaluate(PRESET, None)
+        print(" ultra again " + json.dumps(back))
+        print(f"  lean rung halves the boost   "
+              f"{abs(perf['boost'][0] - 1.45) < 1e-9}   (1 + (1.90-1)*0.5 = 1.45)")
+        print(f"  and it reaches uFog          "
+              f"{abs(perf['uFogX'] - 0.0072 * 1.45) < 1e-6}   "
+              f"(0.0072 x 1.45 = {round(0.0072 * 1.45, 6)}, got {perf['uFogX']})")
+        print(f"  preset leaves the grade be   "
+              f"{perf['graded']['exposure'] == before['graded']['exposure'] and perf['graded']['fogDensity'] == before['graded']['fogDensity']}")
+        print(f"  and steps back losslessly    "
+              f"{back['boost'] == before['boost'] and back['graded'] == before['graded']}")
+
+        print(f"\n  errors {len(errors)}")
         for e in errors[:8]:
             print("  ", e)
         br.close()
