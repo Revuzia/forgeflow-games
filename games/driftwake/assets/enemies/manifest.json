@@ -20,10 +20,10 @@
    ],
    "meshBytes": 3104664,
    "meshMiB": 2.961,
-   "overBudget": true,
-   "clipBytes": 3355268,
-   "clipMiB": 3.2,
-   "totalMiB": 6.161
+   "overBudget": false,
+   "clipBytes": 2206972,
+   "clipMiB": 2.105,
+   "totalMiB": 5.066
   },
   "sand": {
    "slugs": [
@@ -40,10 +40,10 @@
    ],
    "meshBytes": 2863232,
    "meshMiB": 2.731,
-   "overBudget": true,
-   "clipBytes": 3121980,
-   "clipMiB": 2.977,
-   "totalMiB": 5.708
+   "overBudget": false,
+   "clipBytes": 2050908,
+   "clipMiB": 1.956,
+   "totalMiB": 4.686
   },
   "ash": {
    "slugs": [
@@ -60,10 +60,10 @@
    ],
    "meshBytes": 2881304,
    "meshMiB": 2.748,
-   "overBudget": true,
-   "clipBytes": 2921184,
-   "clipMiB": 2.786,
-   "totalMiB": 5.534
+   "overBudget": false,
+   "clipBytes": 1921544,
+   "clipMiB": 1.833,
+   "totalMiB": 4.58
   }
  },
  "enemies": {
@@ -94,7 +94,7 @@
    ],
    "anims": {
     "file": "01_cold_rime_imp_anims.glb",
-    "bytes": 470704,
+    "bytes": 301144,
     "fps": 24,
     "inputSig": "e3500efe8600d055",
     "rigBones": 46,
@@ -102,7 +102,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 68040,
+      "bytes": 35624,
       "bonesAnimated": 46,
       "channels": 47,
       "src": "anim_idle.glb"
@@ -110,7 +110,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 17336,
+      "bytes": 8872,
       "bonesAnimated": 46,
       "channels": 47,
       "src": "anim_walk.glb"
@@ -118,7 +118,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 13032,
+      "bytes": 6664,
       "bonesAnimated": 46,
       "channels": 47,
       "src": "anim_run.glb"
@@ -126,7 +126,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 11832,
+      "bytes": 6056,
       "bonesAnimated": 46,
       "channels": 47,
       "src": "anim_hit.glb"
@@ -134,7 +134,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 32872,
+      "bytes": 16904,
       "bonesAnimated": 46,
       "channels": 47,
       "src": "anim_death.glb"
@@ -142,7 +142,7 @@
      {
       "name": "rake_flurry",
       "durationS": 1.5,
-      "bytes": 14392,
+      "bytes": 7448,
       "bonesAnimated": 46,
       "channels": 47,
       "src": "anim_slash1.glb"
@@ -150,7 +150,7 @@
      {
       "name": "pounce",
       "durationS": 3.7083,
-      "bytes": 67680,
+      "bytes": 34560,
       "bonesAnimated": 46,
       "channels": 47,
       "src": "mutant jump attack.fbx"
@@ -158,7 +158,7 @@
      {
       "name": "spit",
       "durationS": 2.3333,
-      "bytes": 41992,
+      "bytes": 21456,
       "bonesAnimated": 46,
       "channels": 47,
       "src": "Standing 1H Magic Attack 01.fbx"
@@ -166,7 +166,7 @@
      {
       "name": "roar",
       "durationS": 5.375,
-      "bytes": 95720,
+      "bytes": 48904,
       "bonesAnimated": 46,
       "channels": 47,
       "src": "mutant roaring.fbx"
@@ -201,7 +201,7 @@
    ],
    "anims": {
     "file": "02_cold_glacier_brute_anims.glb",
-    "bytes": 389340,
+    "bytes": 265360,
     "fps": 24,
     "inputSig": "e2baf7c896ceeddf",
     "rigBones": 52,
@@ -209,7 +209,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 68232,
+      "bytes": 35720,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_idle.glb"
@@ -217,7 +217,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 19736,
+      "bytes": 10072,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_walk.glb"
@@ -225,7 +225,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 14760,
+      "bytes": 7528,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_run.glb"
@@ -233,7 +233,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 13464,
+      "bytes": 6872,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_hit.glb"
@@ -241,7 +241,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 35752,
+      "bytes": 18344,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_death.glb"
@@ -249,7 +249,7 @@
      {
       "name": "overhead_smash",
       "durationS": 2.2917,
-      "bytes": 34536,
+      "bytes": 17720,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "standing melee attack downward.fbx"
@@ -257,7 +257,7 @@
      {
       "name": "sweep",
       "durationS": 2.4167,
-      "bytes": 35448,
+      "bytes": 17960,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "standing melee attack horizontal.fbx"
@@ -265,7 +265,7 @@
      {
       "name": "charge",
       "durationS": 0.75,
-      "bytes": 7960,
+      "bytes": 4136,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "great sword run.fbx"
@@ -273,7 +273,7 @@
      {
       "name": "finisher",
       "durationS": 1.8333,
-      "bytes": 38160,
+      "bytes": 19440,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_finisher.glb"
@@ -307,7 +307,7 @@
    ],
    "anims": {
     "file": "03_cold_frost_stalker_anims.glb",
-    "bytes": 252020,
+    "bytes": 163636,
     "fps": 24,
     "inputSig": "c5de096f1422999b",
     "rigBones": 28,
@@ -315,7 +315,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 67464,
+      "bytes": 35336,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_idle.glb"
@@ -323,7 +323,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 11600,
+      "bytes": 5800,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_walk.glb"
@@ -331,7 +331,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 8352,
+      "bytes": 4320,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_run.glb"
@@ -339,7 +339,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 7416,
+      "bytes": 3848,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_hit.glb"
@@ -347,7 +347,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 24232,
+      "bytes": 12584,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_death.glb"
@@ -355,7 +355,7 @@
      {
       "name": "crouch",
       "durationS": 2.125,
-      "bytes": 16936,
+      "bytes": 8888,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_crouch.glb"
@@ -363,7 +363,7 @@
      {
       "name": "leap",
       "durationS": 3.7083,
-      "bytes": 41760,
+      "bytes": 21600,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "mutant jump attack.fbx"
@@ -371,7 +371,7 @@
      {
       "name": "rake",
       "durationS": 1.5,
-      "bytes": 13816,
+      "bytes": 7192,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_slash1.glb"
@@ -406,7 +406,7 @@
    ],
    "anims": {
     "file": "11_sand_dune_imp_anims.glb",
-    "bytes": 520104,
+    "bytes": 333672,
     "fps": 24,
     "inputSig": "05c0c141797af119",
     "rigBones": 52,
@@ -414,7 +414,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 68232,
+      "bytes": 35720,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_idle.glb"
@@ -422,7 +422,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 19736,
+      "bytes": 10072,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_walk.glb"
@@ -430,7 +430,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 14760,
+      "bytes": 7528,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_run.glb"
@@ -438,7 +438,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 13464,
+      "bytes": 6872,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_hit.glb"
@@ -446,7 +446,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 35752,
+      "bytes": 18344,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_death.glb"
@@ -454,7 +454,7 @@
      {
       "name": "rake_flurry",
       "durationS": 1.5,
-      "bytes": 14584,
+      "bytes": 7544,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_slash1.glb"
@@ -462,7 +462,7 @@
      {
       "name": "pounce",
       "durationS": 3.7083,
-      "bytes": 76320,
+      "bytes": 38880,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "mutant jump attack.fbx"
@@ -470,7 +470,7 @@
      {
       "name": "spit",
       "durationS": 2.3333,
-      "bytes": 47464,
+      "bytes": 24192,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "Standing 1H Magic Attack 01.fbx"
@@ -478,7 +478,7 @@
      {
       "name": "roar",
       "durationS": 5.375,
-      "bytes": 108200,
+      "bytes": 55144,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "mutant roaring.fbx"
@@ -513,7 +513,7 @@
    ],
    "anims": {
     "file": "12_sand_dune_brute_anims.glb",
-    "bytes": 292508,
+    "bytes": 195184,
     "fps": 24,
     "inputSig": "4bde23f8e17fea02",
     "rigBones": 34,
@@ -521,7 +521,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 67656,
+      "bytes": 35432,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -529,7 +529,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 13272,
+      "bytes": 6840,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_walk.glb"
@@ -537,7 +537,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 9576,
+      "bytes": 4936,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_run.glb"
@@ -545,7 +545,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 8568,
+      "bytes": 4424,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_hit.glb"
@@ -553,7 +553,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 27112,
+      "bytes": 14024,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_death.glb"
@@ -561,7 +561,7 @@
      {
       "name": "overhead_smash",
       "durationS": 2.2917,
-      "bytes": 26184,
+      "bytes": 13544,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "standing melee attack downward.fbx"
@@ -569,7 +569,7 @@
      {
       "name": "sweep",
       "durationS": 2.4167,
-      "bytes": 26664,
+      "bytes": 13712,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "standing melee attack horizontal.fbx"
@@ -577,7 +577,7 @@
      {
       "name": "charge",
       "durationS": 0.75,
-      "bytes": 7384,
+      "bytes": 3848,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "great sword run.fbx"
@@ -585,7 +585,7 @@
      {
       "name": "finisher",
       "durationS": 1.8333,
-      "bytes": 25200,
+      "bytes": 12960,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_finisher.glb"
@@ -619,7 +619,7 @@
    ],
    "anims": {
     "file": "13_sand_dust_stalker_anims.glb",
-    "bytes": 280560,
+    "bytes": 185016,
     "fps": 24,
     "inputSig": "4a352a2fb94fa40c",
     "rigBones": 34,
@@ -627,7 +627,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 67656,
+      "bytes": 35432,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -635,7 +635,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 13272,
+      "bytes": 6840,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_walk.glb"
@@ -643,7 +643,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 9576,
+      "bytes": 4936,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_run.glb"
@@ -651,7 +651,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 8568,
+      "bytes": 4424,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_hit.glb"
@@ -659,7 +659,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 27112,
+      "bytes": 14024,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_death.glb"
@@ -667,7 +667,7 @@
      {
       "name": "crouch",
       "durationS": 2.125,
-      "bytes": 17128,
+      "bytes": 8984,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_crouch.glb"
@@ -675,7 +675,7 @@
      {
       "name": "leap",
       "durationS": 3.7083,
-      "bytes": 50400,
+      "bytes": 25920,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "mutant jump attack.fbx"
@@ -683,7 +683,7 @@
      {
       "name": "rake",
       "durationS": 1.5,
-      "bytes": 14008,
+      "bytes": 7256,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_slash1.glb"
@@ -717,7 +717,7 @@
    ],
    "anims": {
     "file": "16_sand_dust_mage_anims.glb",
-    "bytes": 295528,
+    "bytes": 192688,
     "fps": 24,
     "inputSig": "add8b35b6e965001",
     "rigBones": 34,
@@ -725,7 +725,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 67656,
+      "bytes": 35432,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -733,7 +733,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 13272,
+      "bytes": 6840,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_walk.glb"
@@ -741,7 +741,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 9576,
+      "bytes": 4936,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_run.glb"
@@ -749,7 +749,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 8568,
+      "bytes": 4424,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_hit.glb"
@@ -757,7 +757,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 27112,
+      "bytes": 14024,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_death.glb"
@@ -765,7 +765,7 @@
      {
       "name": "cast_bolt",
       "durationS": 2.25,
-      "bytes": 30800,
+      "bytes": 15840,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_cast1.glb"
@@ -773,7 +773,7 @@
      {
       "name": "cast_zone",
       "durationS": 2.1667,
-      "bytes": 29680,
+      "bytes": 15264,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_cast2.glb"
@@ -781,7 +781,7 @@
      {
       "name": "heavy_lance",
       "durationS": 2.6667,
-      "bytes": 36400,
+      "bytes": 18720,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "Standing 2H Magic Attack 01.fbx"
@@ -816,7 +816,7 @@
    ],
    "anims": {
     "file": "21_ash_cinder_imp_anims.glb",
-    "bytes": 373360,
+    "bytes": 237172,
     "fps": 24,
     "inputSig": "72210e874afa88c2",
     "rigBones": 34,
@@ -824,7 +824,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 67656,
+      "bytes": 35432,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -832,7 +832,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 13272,
+      "bytes": 6840,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_walk.glb"
@@ -840,7 +840,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 9576,
+      "bytes": 4936,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_run.glb"
@@ -848,7 +848,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 8568,
+      "bytes": 4424,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_hit.glb"
@@ -856,7 +856,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 27112,
+      "bytes": 14024,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_death.glb"
@@ -864,7 +864,7 @@
      {
       "name": "rake_flurry",
       "durationS": 1.5,
-      "bytes": 14008,
+      "bytes": 7256,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_slash1.glb"
@@ -872,7 +872,7 @@
      {
       "name": "pounce",
       "durationS": 3.7083,
-      "bytes": 50400,
+      "bytes": 25920,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "mutant jump attack.fbx"
@@ -880,7 +880,7 @@
      {
       "name": "spit",
       "durationS": 2.3333,
-      "bytes": 31048,
+      "bytes": 15984,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "Standing 1H Magic Attack 01.fbx"
@@ -888,7 +888,7 @@
      {
       "name": "roar",
       "durationS": 5.375,
-      "bytes": 70760,
+      "bytes": 36424,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "mutant roaring.fbx"
@@ -923,7 +923,7 @@
    ],
    "anims": {
     "file": "22_ash_slag_brute_anims.glb",
-    "bytes": 292276,
+    "bytes": 195096,
     "fps": 24,
     "inputSig": "a261b43747772f3f",
     "rigBones": 34,
@@ -931,7 +931,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 67656,
+      "bytes": 35432,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -939,7 +939,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 13272,
+      "bytes": 6840,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_walk.glb"
@@ -947,7 +947,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 9576,
+      "bytes": 4936,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_run.glb"
@@ -955,7 +955,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 8568,
+      "bytes": 4424,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_hit.glb"
@@ -963,7 +963,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 27112,
+      "bytes": 14024,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_death.glb"
@@ -971,7 +971,7 @@
      {
       "name": "overhead_smash",
       "durationS": 2.2917,
-      "bytes": 26184,
+      "bytes": 13544,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "standing melee attack downward.fbx"
@@ -979,7 +979,7 @@
      {
       "name": "sweep",
       "durationS": 2.4167,
-      "bytes": 26664,
+      "bytes": 13728,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "standing melee attack horizontal.fbx"
@@ -987,7 +987,7 @@
      {
       "name": "charge",
       "durationS": 0.75,
-      "bytes": 7384,
+      "bytes": 3848,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "great sword run.fbx"
@@ -995,7 +995,7 @@
      {
       "name": "finisher",
       "durationS": 1.8333,
-      "bytes": 25200,
+      "bytes": 12960,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_finisher.glb"
@@ -1029,7 +1029,7 @@
    ],
    "anims": {
     "file": "25_ash_scorch_raider_anims.glb",
-    "bytes": 276540,
+    "bytes": 176568,
     "fps": 24,
     "inputSig": "c63819c19d9f7867",
     "rigBones": 28,
@@ -1037,7 +1037,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 67464,
+      "bytes": 35336,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_idle.glb"
@@ -1045,7 +1045,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 11600,
+      "bytes": 6000,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_walk.glb"
@@ -1053,7 +1053,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 8352,
+      "bytes": 4320,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_run.glb"
@@ -1061,7 +1061,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 7416,
+      "bytes": 3848,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_hit.glb"
@@ -1069,7 +1069,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 24232,
+      "bytes": 12584,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_death.glb"
@@ -1077,7 +1077,7 @@
      {
       "name": "combo",
       "durationS": 4.6667,
-      "bytes": 47112,
+      "bytes": 24464,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "standing melee combo attack ver. 1.fbx"
@@ -1085,7 +1085,7 @@
      {
       "name": "lunge",
       "durationS": 1.5,
-      "bytes": 13816,
+      "bytes": 7192,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_slash1.glb"
@@ -1093,7 +1093,7 @@
      {
       "name": "throw",
       "durationS": 3.2083,
-      "bytes": 36192,
+      "bytes": 18720,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "toss grenade.fbx"
@@ -1127,7 +1127,7 @@
    ],
    "anims": {
     "file": "26_ash_smoke_mage_anims.glb",
-    "bytes": 295448,
+    "bytes": 192608,
     "fps": 24,
     "inputSig": "75d4a5b14126dba5",
     "rigBones": 34,
@@ -1135,7 +1135,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 67656,
+      "bytes": 35432,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -1143,7 +1143,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 13272,
+      "bytes": 6840,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_walk.glb"
@@ -1151,7 +1151,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 9576,
+      "bytes": 4936,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_run.glb"
@@ -1159,7 +1159,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 8568,
+      "bytes": 4424,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_hit.glb"
@@ -1167,7 +1167,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 27112,
+      "bytes": 14024,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_death.glb"
@@ -1175,7 +1175,7 @@
      {
       "name": "cast_bolt",
       "durationS": 2.25,
-      "bytes": 30800,
+      "bytes": 15840,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_cast1.glb"
@@ -1183,7 +1183,7 @@
      {
       "name": "cast_zone",
       "durationS": 2.1667,
-      "bytes": 29680,
+      "bytes": 15264,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_cast2.glb"
@@ -1191,7 +1191,7 @@
      {
       "name": "heavy_lance",
       "durationS": 2.6667,
-      "bytes": 36400,
+      "bytes": 18720,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "Standing 2H Magic Attack 01.fbx"
@@ -1226,7 +1226,7 @@
    ],
    "anims": {
     "file": "28_ash_cinder_sentinel_anims.glb",
-    "bytes": 267428,
+    "bytes": 180848,
     "fps": 24,
     "inputSig": "57ed7652c8bbed74",
     "rigBones": 34,
@@ -1234,7 +1234,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 67656,
+      "bytes": 35432,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -1242,7 +1242,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 13272,
+      "bytes": 6840,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_walk.glb"
@@ -1250,7 +1250,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 9576,
+      "bytes": 4936,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_run.glb"
@@ -1258,7 +1258,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 8568,
+      "bytes": 4424,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_hit.glb"
@@ -1266,7 +1266,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 27112,
+      "bytes": 14024,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_death.glb"
@@ -1274,7 +1274,7 @@
      {
       "name": "block",
       "durationS": 0.5417,
-      "bytes": 5544,
+      "bytes": 2840,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_block.glb"
@@ -1282,7 +1282,7 @@
      {
       "name": "thrust",
       "durationS": 2.3333,
-      "bytes": 26648,
+      "bytes": 13784,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "sword and shield attack.fbx"
@@ -1290,7 +1290,7 @@
      {
       "name": "slash",
       "durationS": 1.5,
-      "bytes": 14008,
+      "bytes": 7176,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_slash1.glb"
@@ -1298,7 +1298,7 @@
      {
       "name": "bash",
       "durationS": 1.2083,
-      "bytes": 14120,
+      "bytes": 7224,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "sword and shield kick.fbx"
@@ -1333,7 +1333,7 @@
    ],
    "anims": {
     "file": "29_ash_soot_assassin_anims.glb",
-    "bytes": 253352,
+    "bytes": 167880,
     "fps": 24,
     "inputSig": "b96ded33cfc2c2ce",
     "rigBones": 28,
@@ -1341,7 +1341,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 67464,
+      "bytes": 35336,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_idle.glb"
@@ -1349,7 +1349,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 11600,
+      "bytes": 5800,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_walk.glb"
@@ -1357,7 +1357,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 8352,
+      "bytes": 4320,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_run.glb"
@@ -1365,7 +1365,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 7416,
+      "bytes": 3848,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_hit.glb"
@@ -1373,7 +1373,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 24232,
+      "bytes": 12584,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_death.glb"
@@ -1381,7 +1381,7 @@
      {
       "name": "stealth",
       "durationS": 2.125,
-      "bytes": 16936,
+      "bytes": 8888,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_crouch.glb"
@@ -1389,7 +1389,7 @@
      {
       "name": "dash_slash",
       "durationS": 1.5,
-      "bytes": 13816,
+      "bytes": 7192,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_slash1.glb"
@@ -1397,7 +1397,7 @@
      {
       "name": "backstab",
       "durationS": 1.8333,
-      "bytes": 20880,
+      "bytes": 10800,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_finisher.glb"
@@ -1405,7 +1405,7 @@
      {
       "name": "vanish",
       "durationS": 1.4583,
-      "bytes": 15624,
+      "bytes": 8088,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_dodge.glb"
@@ -1440,7 +1440,7 @@
    ],
    "anims": {
     "file": "31_v2_cold_rime_imp_anims.glb",
-    "bytes": 519812,
+    "bytes": 333384,
     "fps": 24,
     "inputSig": "4919964a09a8ac87",
     "rigBones": 52,
@@ -1448,7 +1448,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 68232,
+      "bytes": 35720,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_idle.glb"
@@ -1456,7 +1456,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 19736,
+      "bytes": 10072,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_walk.glb"
@@ -1464,7 +1464,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 14760,
+      "bytes": 7528,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_run.glb"
@@ -1472,7 +1472,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 13464,
+      "bytes": 6872,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_hit.glb"
@@ -1480,7 +1480,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 35752,
+      "bytes": 18344,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_death.glb"
@@ -1488,7 +1488,7 @@
      {
       "name": "rake_flurry",
       "durationS": 1.5,
-      "bytes": 14584,
+      "bytes": 7544,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_slash1.glb"
@@ -1496,7 +1496,7 @@
      {
       "name": "pounce",
       "durationS": 3.7083,
-      "bytes": 76320,
+      "bytes": 38880,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "mutant jump attack.fbx"
@@ -1504,7 +1504,7 @@
      {
       "name": "spit",
       "durationS": 2.3333,
-      "bytes": 47464,
+      "bytes": 24192,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "Standing 1H Magic Attack 01.fbx"
@@ -1512,7 +1512,7 @@
      {
       "name": "roar",
       "durationS": 5.375,
-      "bytes": 108200,
+      "bytes": 55144,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "mutant roaring.fbx"
@@ -1547,7 +1547,7 @@
    ],
    "anims": {
     "file": "32_v2_cold_glacier_brute_anims.glb",
-    "bytes": 262028,
+    "bytes": 172056,
     "fps": 24,
     "inputSig": "7d490e89a0cebb47",
     "rigBones": 28,
@@ -1555,7 +1555,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 67464,
+      "bytes": 35336,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_idle.glb"
@@ -1563,7 +1563,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 11600,
+      "bytes": 5800,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_walk.glb"
@@ -1571,7 +1571,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 8352,
+      "bytes": 4320,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_run.glb"
@@ -1579,7 +1579,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 7416,
+      "bytes": 3848,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_hit.glb"
@@ -1587,7 +1587,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 24232,
+      "bytes": 12584,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_death.glb"
@@ -1595,7 +1595,7 @@
      {
       "name": "overhead_smash",
       "durationS": 2.2917,
-      "bytes": 23400,
+      "bytes": 12152,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "standing melee attack downward.fbx"
@@ -1603,7 +1603,7 @@
      {
       "name": "sweep",
       "durationS": 2.4167,
-      "bytes": 24648,
+      "bytes": 12752,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "standing melee attack horizontal.fbx"
@@ -1611,7 +1611,7 @@
      {
       "name": "charge",
       "durationS": 0.75,
-      "bytes": 7192,
+      "bytes": 3752,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "great sword run.fbx"
@@ -1619,7 +1619,7 @@
      {
       "name": "finisher",
       "durationS": 1.8333,
-      "bytes": 20880,
+      "bytes": 10800,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_finisher.glb"
@@ -1653,7 +1653,7 @@
    ],
    "anims": {
     "file": "34_v2_cold_ice_cultist_anims.glb",
-    "bytes": 288352,
+    "bytes": 188812,
     "fps": 24,
     "inputSig": "461e8f79463a3f1a",
     "rigBones": 34,
@@ -1661,7 +1661,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 67656,
+      "bytes": 35432,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -1669,7 +1669,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 13272,
+      "bytes": 6840,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_walk.glb"
@@ -1677,7 +1677,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 9576,
+      "bytes": 4936,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_run.glb"
@@ -1685,7 +1685,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 8568,
+      "bytes": 4424,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_hit.glb"
@@ -1693,7 +1693,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 27112,
+      "bytes": 14024,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_death.glb"
@@ -1701,7 +1701,7 @@
      {
       "name": "cast_bolt",
       "durationS": 2.25,
-      "bytes": 30800,
+      "bytes": 15840,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_cast1.glb"
@@ -1709,7 +1709,7 @@
      {
       "name": "cast_snare",
       "durationS": 2.1667,
-      "bytes": 29680,
+      "bytes": 15264,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_cast2.glb"
@@ -1717,7 +1717,7 @@
      {
       "name": "channel",
       "durationS": 2.1667,
-      "bytes": 29468,
+      "bytes": 15052,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "Standing 2H Cast Spell 01.fbx"
@@ -1752,7 +1752,7 @@
    ],
    "anims": {
     "file": "39_v2_cold_blizzard_assassin_anims.glb",
-    "bytes": 280464,
+    "bytes": 188896,
     "fps": 24,
     "inputSig": "443cce82d5d4c876",
     "rigBones": 34,
@@ -1760,7 +1760,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 67656,
+      "bytes": 35432,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -1768,7 +1768,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 13272,
+      "bytes": 6840,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_walk.glb"
@@ -1776,7 +1776,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 9576,
+      "bytes": 4936,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_run.glb"
@@ -1784,7 +1784,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 8568,
+      "bytes": 4424,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_hit.glb"
@@ -1792,7 +1792,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 27112,
+      "bytes": 14024,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_death.glb"
@@ -1800,7 +1800,7 @@
      {
       "name": "stealth",
       "durationS": 2.125,
-      "bytes": 17128,
+      "bytes": 8984,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_crouch.glb"
@@ -1808,7 +1808,7 @@
      {
       "name": "dash_slash",
       "durationS": 1.5,
-      "bytes": 14008,
+      "bytes": 7256,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_slash1.glb"
@@ -1816,7 +1816,7 @@
      {
       "name": "backstab",
       "durationS": 1.8333,
-      "bytes": 25200,
+      "bytes": 12960,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_finisher.glb"
@@ -1824,7 +1824,7 @@
      {
       "name": "vanish",
       "durationS": 1.4583,
-      "bytes": 17448,
+      "bytes": 8728,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_dodge.glb"
@@ -1858,7 +1858,7 @@
    ],
    "anims": {
     "file": "43_v2_sand_dust_stalker_anims.glb",
-    "bytes": 251776,
+    "bytes": 163392,
     "fps": 24,
     "inputSig": "d2ee1396de468680",
     "rigBones": 28,
@@ -1866,7 +1866,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 67464,
+      "bytes": 35336,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_idle.glb"
@@ -1874,7 +1874,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 11600,
+      "bytes": 5800,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_walk.glb"
@@ -1882,7 +1882,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 8352,
+      "bytes": 4320,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_run.glb"
@@ -1890,7 +1890,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 7416,
+      "bytes": 3848,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_hit.glb"
@@ -1898,7 +1898,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 24232,
+      "bytes": 12584,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_death.glb"
@@ -1906,7 +1906,7 @@
      {
       "name": "crouch",
       "durationS": 2.125,
-      "bytes": 16936,
+      "bytes": 8888,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_crouch.glb"
@@ -1914,7 +1914,7 @@
      {
       "name": "leap",
       "durationS": 3.7083,
-      "bytes": 41760,
+      "bytes": 21600,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "mutant jump attack.fbx"
@@ -1922,7 +1922,7 @@
      {
       "name": "rake",
       "durationS": 1.5,
-      "bytes": 13816,
+      "bytes": 7192,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_slash1.glb"
@@ -1957,7 +1957,7 @@
    ],
    "anims": {
     "file": "48_v2_sand_dune_sentinel_anims.glb",
-    "bytes": 267524,
+    "bytes": 181088,
     "fps": 24,
     "inputSig": "d8ee2f0f1f201486",
     "rigBones": 34,
@@ -1965,7 +1965,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 67656,
+      "bytes": 35432,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -1973,7 +1973,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 13272,
+      "bytes": 6840,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_walk.glb"
@@ -1981,7 +1981,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 9576,
+      "bytes": 4936,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_run.glb"
@@ -1989,7 +1989,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 8568,
+      "bytes": 4424,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_hit.glb"
@@ -1997,7 +1997,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 27112,
+      "bytes": 14024,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_death.glb"
@@ -2005,7 +2005,7 @@
      {
       "name": "block",
       "durationS": 0.5417,
-      "bytes": 5544,
+      "bytes": 2840,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_block.glb"
@@ -2013,7 +2013,7 @@
      {
       "name": "thrust",
       "durationS": 2.3333,
-      "bytes": 26648,
+      "bytes": 13784,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "sword and shield attack.fbx"
@@ -2021,7 +2021,7 @@
      {
       "name": "slash",
       "durationS": 1.5,
-      "bytes": 14008,
+      "bytes": 7192,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_slash1.glb"
@@ -2029,7 +2029,7 @@
      {
       "name": "bash",
       "durationS": 1.2083,
-      "bytes": 14120,
+      "bytes": 7224,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "sword and shield kick.fbx"
@@ -2062,7 +2062,7 @@
    ],
    "anims": {
     "file": "50_v2_sand_dune_warden_anims.glb",
-    "bytes": 210144,
+    "bytes": 138132,
     "fps": 24,
     "inputSig": "776c10895880caf9",
     "rigBones": 28,
@@ -2070,7 +2070,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 67464,
+      "bytes": 35336,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_idle.glb"
@@ -2078,7 +2078,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 11600,
+      "bytes": 6000,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_walk.glb"
@@ -2086,7 +2086,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 8352,
+      "bytes": 4320,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_run.glb"
@@ -2094,7 +2094,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 7416,
+      "bytes": 3848,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_hit.glb"
@@ -2102,7 +2102,7 @@
      {
       "name": "death",
       "durationS": 2.4167,
-      "bytes": 24648,
+      "bytes": 12800,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "two handed sword death.fbx"
@@ -2110,7 +2110,7 @@
      {
       "name": "heavy_combo",
       "durationS": 1.2917,
-      "bytes": 12456,
+      "bytes": 6440,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "great sword slash.fbx"
@@ -2118,7 +2118,7 @@
      {
       "name": "ranged",
       "durationS": 2.1667,
-      "bytes": 24592,
+      "bytes": 12720,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_cast2.glb"
@@ -2152,7 +2152,7 @@
    ],
    "anims": {
     "file": "53_v2_ash_soot_stalker_anims.glb",
-    "bytes": 280548,
+    "bytes": 185004,
     "fps": 24,
     "inputSig": "00dd98ddf5108b9e",
     "rigBones": 34,
@@ -2160,7 +2160,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 67656,
+      "bytes": 35432,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -2168,7 +2168,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 13272,
+      "bytes": 6840,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_walk.glb"
@@ -2176,7 +2176,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 9576,
+      "bytes": 4936,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_run.glb"
@@ -2184,7 +2184,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 8568,
+      "bytes": 4424,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_hit.glb"
@@ -2192,7 +2192,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 27112,
+      "bytes": 14024,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_death.glb"
@@ -2200,7 +2200,7 @@
      {
       "name": "crouch",
       "durationS": 2.125,
-      "bytes": 17128,
+      "bytes": 8984,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_crouch.glb"
@@ -2208,7 +2208,7 @@
      {
       "name": "leap",
       "durationS": 3.7083,
-      "bytes": 50400,
+      "bytes": 25920,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "mutant jump attack.fbx"
@@ -2216,7 +2216,7 @@
      {
       "name": "rake",
       "durationS": 1.5,
-      "bytes": 14008,
+      "bytes": 7256,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_slash1.glb"
@@ -2250,7 +2250,7 @@
    ],
    "anims": {
     "file": "60_v2_ash_scorch_warden_anims.glb",
-    "bytes": 332716,
+    "bytes": 228016,
     "fps": 24,
     "inputSig": "c3bcd8cbab67ebe9",
     "rigBones": 52,
@@ -2258,7 +2258,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 68232,
+      "bytes": 35720,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_idle.glb"
@@ -2266,7 +2266,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 19736,
+      "bytes": 10072,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_walk.glb"
@@ -2274,7 +2274,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 14760,
+      "bytes": 7528,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_run.glb"
@@ -2282,7 +2282,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 13464,
+      "bytes": 6872,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_hit.glb"
@@ -2290,7 +2290,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 35752,
+      "bytes": 18344,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_death.glb"
@@ -2298,7 +2298,7 @@
      {
       "name": "sweep",
       "durationS": 1.2917,
-      "bytes": 14664,
+      "bytes": 7592,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "great sword slash.fbx"
@@ -2306,7 +2306,7 @@
      {
       "name": "slam",
       "durationS": 1.2083,
-      "bytes": 12008,
+      "bytes": 5848,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "great sword attack.fbx"
@@ -2314,7 +2314,7 @@
      {
       "name": "aura_cast",
       "durationS": 2.1667,
-      "bytes": 44944,
+      "bytes": 22896,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_cast2.glb"
@@ -2348,7 +2348,7 @@
    ],
    "anims": {
     "file": "61_v3_cold_frost_golem_anims.glb",
-    "bytes": 291300,
+    "bytes": 190740,
     "fps": 24,
     "inputSig": "1fa6b1ad18645001",
     "rigBones": 34,
@@ -2356,7 +2356,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 67656,
+      "bytes": 35432,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -2364,7 +2364,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 13272,
+      "bytes": 6840,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_walk.glb"
@@ -2372,7 +2372,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 9576,
+      "bytes": 4936,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_run.glb"
@@ -2380,7 +2380,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 8568,
+      "bytes": 4424,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_hit.glb"
@@ -2388,7 +2388,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 27112,
+      "bytes": 14024,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_death.glb"
@@ -2396,7 +2396,7 @@
      {
       "name": "punch",
       "durationS": 1.125,
-      "bytes": 14440,
+      "bytes": 7448,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "mutant punch.fbx"
@@ -2404,7 +2404,7 @@
      {
       "name": "pound",
       "durationS": 3.7083,
-      "bytes": 50400,
+      "bytes": 25920,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "mutant jump attack.fbx"
@@ -2412,7 +2412,7 @@
      {
       "name": "swat",
       "durationS": 2.4167,
-      "bytes": 27576,
+      "bytes": 14264,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "mutant swiping.fbx"
@@ -2446,7 +2446,7 @@
    ],
    "anims": {
     "file": "65_v3_cold_rime_skier_raider_anims.glb",
-    "bytes": 308240,
+    "bytes": 199280,
     "fps": 24,
     "inputSig": "f62a118f974fe546",
     "rigBones": 34,
@@ -2454,7 +2454,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 67656,
+      "bytes": 35432,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -2462,7 +2462,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 13272,
+      "bytes": 6840,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_walk.glb"
@@ -2470,7 +2470,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 9576,
+      "bytes": 4936,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_run.glb"
@@ -2478,7 +2478,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 8568,
+      "bytes": 4424,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_hit.glb"
@@ -2486,7 +2486,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 27112,
+      "bytes": 14024,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_death.glb"
@@ -2494,7 +2494,7 @@
      {
       "name": "combo",
       "durationS": 4.6667,
-      "bytes": 52632,
+      "bytes": 27224,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "standing melee combo attack ver. 1.fbx"
@@ -2502,7 +2502,7 @@
      {
       "name": "lunge",
       "durationS": 1.5,
-      "bytes": 14008,
+      "bytes": 7256,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_slash1.glb"
@@ -2510,7 +2510,7 @@
      {
       "name": "throw",
       "durationS": 3.2083,
-      "bytes": 42472,
+      "bytes": 21864,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "toss grenade.fbx"
@@ -2544,7 +2544,7 @@
    ],
    "anims": {
     "file": "68_v3_cold_hail_plate_guard_anims.glb",
-    "bytes": 293008,
+    "bytes": 203664,
     "fps": 24,
     "inputSig": "513875cc2b856688",
     "rigBones": 46,
@@ -2552,7 +2552,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 68040,
+      "bytes": 35624,
       "bonesAnimated": 46,
       "channels": 47,
       "src": "anim_idle.glb"
@@ -2560,7 +2560,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 17336,
+      "bytes": 8872,
       "bonesAnimated": 46,
       "channels": 47,
       "src": "anim_walk.glb"
@@ -2568,7 +2568,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 13032,
+      "bytes": 6664,
       "bonesAnimated": 46,
       "channels": 47,
       "src": "anim_run.glb"
@@ -2576,7 +2576,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 11832,
+      "bytes": 6056,
       "bonesAnimated": 46,
       "channels": 47,
       "src": "anim_hit.glb"
@@ -2584,7 +2584,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 32872,
+      "bytes": 16904,
       "bonesAnimated": 46,
       "channels": 47,
       "src": "anim_death.glb"
@@ -2592,7 +2592,7 @@
      {
       "name": "slash_combo",
       "durationS": 1.5,
-      "bytes": 14392,
+      "bytes": 7496,
       "bonesAnimated": 46,
       "channels": 47,
       "src": "sword and shield slash.fbx"
@@ -2600,7 +2600,7 @@
      {
       "name": "shield_slam",
       "durationS": 2.3333,
-      "bytes": 32312,
+      "bytes": 16520,
       "bonesAnimated": 46,
       "channels": 47,
       "src": "sword and shield attack.fbx"
@@ -2608,7 +2608,7 @@
      {
       "name": "guard",
       "durationS": 0.5417,
-      "bytes": 5928,
+      "bytes": 3032,
       "bonesAnimated": 46,
       "channels": 47,
       "src": "anim_block.glb"
@@ -2643,7 +2643,7 @@
    ],
    "anims": {
     "file": "73_v3_sand_mummy_anims.glb",
-    "bytes": 395260,
+    "bytes": 248616,
     "fps": 24,
     "inputSig": "85c4a490815cd470",
     "rigBones": 34,
@@ -2651,7 +2651,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 67656,
+      "bytes": 35432,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -2659,7 +2659,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 13272,
+      "bytes": 6840,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_walk.glb"
@@ -2667,7 +2667,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 9576,
+      "bytes": 4936,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_run.glb"
@@ -2675,7 +2675,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 8568,
+      "bytes": 4424,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_hit.glb"
@@ -2683,7 +2683,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 27112,
+      "bytes": 14024,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_death.glb"
@@ -2691,7 +2691,7 @@
      {
       "name": "grab_wrap",
       "durationS": 6.625,
-      "bytes": 89600,
+      "bytes": 46080,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "zombie biting.fbx"
@@ -2699,7 +2699,7 @@
      {
       "name": "curse_cast",
       "durationS": 2.25,
-      "bytes": 30800,
+      "bytes": 15840,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_cast1.glb"
@@ -2707,7 +2707,7 @@
      {
       "name": "spit",
       "durationS": 2.5,
-      "bytes": 31336,
+      "bytes": 16160,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "zombie attack.fbx"
@@ -2715,7 +2715,7 @@
      {
       "name": "shambling",
       "durationS": 4.0417,
-      "bytes": 36456,
+      "bytes": 18968,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "zombie walk.fbx"
@@ -2749,7 +2749,7 @@
    ],
    "anims": {
     "file": "75_v3_sand_bleached_bone_knight_anims.glb",
-    "bytes": 245300,
+    "bytes": 166128,
     "fps": 24,
     "inputSig": "cd3d5587a4b9e9dc",
     "rigBones": 34,
@@ -2757,7 +2757,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 67656,
+      "bytes": 35432,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -2765,7 +2765,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 13272,
+      "bytes": 6840,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_walk.glb"
@@ -2773,7 +2773,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 9576,
+      "bytes": 4936,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_run.glb"
@@ -2781,7 +2781,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 8568,
+      "bytes": 4424,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_hit.glb"
@@ -2789,7 +2789,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 27112,
+      "bytes": 14024,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_death.glb"
@@ -2797,7 +2797,7 @@
      {
       "name": "slash_combo",
       "durationS": 1.5,
-      "bytes": 14008,
+      "bytes": 7304,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "sword and shield slash.fbx"
@@ -2805,7 +2805,7 @@
      {
       "name": "shield_slam",
       "durationS": 2.3333,
-      "bytes": 26648,
+      "bytes": 13704,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "sword and shield attack.fbx"
@@ -2813,7 +2813,7 @@
      {
       "name": "guard",
       "durationS": 0.5417,
-      "bytes": 5544,
+      "bytes": 2840,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_block.glb"
@@ -2847,7 +2847,7 @@
    ],
    "anims": {
     "file": "77_v3_sand_windscour_bandit_anims.glb",
-    "bytes": 363276,
+    "bytes": 246992,
     "fps": 24,
     "inputSig": "fe81767f6fc2fa83",
     "rigBones": 52,
@@ -2855,7 +2855,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 68232,
+      "bytes": 35720,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_idle.glb"
@@ -2863,7 +2863,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 19736,
+      "bytes": 10072,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_walk.glb"
@@ -2871,7 +2871,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 14760,
+      "bytes": 7528,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_run.glb"
@@ -2879,7 +2879,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 13464,
+      "bytes": 6872,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_hit.glb"
@@ -2887,7 +2887,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 35752,
+      "bytes": 18344,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_death.glb"
@@ -2895,7 +2895,7 @@
      {
       "name": "slash",
       "durationS": 1.5,
-      "bytes": 14584,
+      "bytes": 7544,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_slash1.glb"
@@ -2903,7 +2903,7 @@
      {
       "name": "kick",
       "durationS": 1.875,
-      "bytes": 28456,
+      "bytes": 14600,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "standing melee attack kick ver. 1.fbx"
@@ -2911,7 +2911,7 @@
      {
       "name": "throw",
       "durationS": 3.2083,
-      "bytes": 58856,
+      "bytes": 30056,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "toss grenade.fbx"
@@ -2944,7 +2944,7 @@
    ],
    "anims": {
     "file": "86_v3_ash_volcanic_plate_knight_anims.glb",
-    "bytes": 233444,
+    "bytes": 155508,
     "fps": 24,
     "inputSig": "e530da3e3fd29fa7",
     "rigBones": 34,
@@ -2952,7 +2952,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 67656,
+      "bytes": 35432,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -2960,7 +2960,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 13272,
+      "bytes": 6840,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_walk.glb"
@@ -2968,7 +2968,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 9576,
+      "bytes": 4936,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_run.glb"
@@ -2976,7 +2976,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 8568,
+      "bytes": 4424,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_hit.glb"
@@ -2984,7 +2984,7 @@
      {
       "name": "death",
       "durationS": 2.4167,
-      "bytes": 27576,
+      "bytes": 14264,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "two handed sword death.fbx"
@@ -2992,7 +2992,7 @@
      {
       "name": "heavy_combo",
       "durationS": 1.2917,
-      "bytes": 12648,
+      "bytes": 6488,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "great sword slash.fbx"
@@ -3000,7 +3000,7 @@
      {
       "name": "ranged",
       "durationS": 2.1667,
-      "bytes": 29680,
+      "bytes": 15264,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_cast2.glb"
@@ -3034,7 +3034,7 @@
    ],
    "anims": {
     "file": "88_v3_ash_furnace_guardian_anims.glb",
-    "bytes": 316072,
+    "bytes": 202844,
     "fps": 24,
     "inputSig": "5c26da1216e36e1b",
     "rigBones": 34,
@@ -3042,7 +3042,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 67656,
+      "bytes": 35432,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -3050,7 +3050,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 13272,
+      "bytes": 6840,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_walk.glb"
@@ -3058,7 +3058,7 @@
      {
       "name": "run",
       "durationS": 0.7083,
-      "bytes": 9576,
+      "bytes": 4936,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_run.glb"
@@ -3066,7 +3066,7 @@
      {
       "name": "hit",
       "durationS": 0.6667,
-      "bytes": 8568,
+      "bytes": 4424,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_hit.glb"
@@ -3074,7 +3074,7 @@
      {
       "name": "death",
       "durationS": 2.375,
-      "bytes": 27112,
+      "bytes": 14024,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_death.glb"
@@ -3082,7 +3082,7 @@
      {
       "name": "smash",
       "durationS": 4.6667,
-      "bytes": 52632,
+      "bytes": 27224,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "standing melee combo attack ver. 1.fbx"
@@ -3090,7 +3090,7 @@
      {
       "name": "breath_cast",
       "durationS": 2.1667,
-      "bytes": 29680,
+      "bytes": 15264,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_cast2.glb"
@@ -3098,7 +3098,7 @@
      {
       "name": "grapple",
       "durationS": 3.1667,
-      "bytes": 34728,
+      "bytes": 17888,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "standing melee attack backhand.fbx"
@@ -3108,5 +3108,5 @@
   }
  },
  "clipBudgetMiB": 2.5,
- "totalClipBytes": 9398432
+ "totalClipBytes": 6179424
 }

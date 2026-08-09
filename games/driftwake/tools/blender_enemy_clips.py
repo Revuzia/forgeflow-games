@@ -449,11 +449,43 @@ def merge_clip_glbs(parts, out_path):
     out_bvs, out_accs, out_anims, stats = [], [], [], []
     dedupe = {}
 
-    def put_accessor(doc, blob, idx, is_input):
+    def quantize_rot(raw):
+        """FLOAT VEC4 quaternions -> normalized signed 16-bit. Halves the bytes.
+
+        This is the glTF-sanctioned encoding for animation sampler output (the
+        spec allows normalized byte/short for rotations precisely because a unit
+        quaternion never leaves [-1,1]), it is what `gltf-transform quantize`
+        emits, and three.js's GLTFLoader dequantizes it on load through
+        getNormalizedComponentScale -- so nothing downstream needs to know.
+
+        Error budget: one component step is 1/32767, and the worst-case angular
+        error of a unit quaternion perturbed by half a step is about 0.006 deg.
+        For scale, the finger tracks this project fought to KEEP swing 26.8 deg,
+        so the quantisation error is roughly a thousandth of the smallest motion
+        anyone argued was worth preserving. Rotation output is the bulk of a
+        bundle, so this is ~2x on the whole clip payload for that.
+
+        DELIBERATELY NOT APPLIED TO THE INPUT (time) OR TO TRANSLATION. Time is
+        a shared, deduplicated, monotonically increasing ramp -- quantising it
+        risks two keys landing on the same instant. Translation is Hips-only,
+        a handful of values, and it places the body vertically: it stays float.
+        """
+        n = len(raw) // 4
+        vals = struct.unpack("<%df" % n, raw)
+        out = bytearray()
+        for v in vals:
+            q = int(round(max(-1.0, min(1.0, v)) * 32767.0))
+            out += struct.pack("<h", max(-32767, min(32767, q)))
+        return bytes(out)
+
+    def put_accessor(doc, blob, idx, is_input, quant=False):
         acc = doc["accessors"][idx]
         raw = bytes(_accessor_bytes(doc, blob, idx))
-        key = (acc["componentType"], acc["count"], acc["type"],
-               bool(acc.get("normalized")), raw)
+        ctype, normalized = acc["componentType"], bool(acc.get("normalized"))
+        if quant and ctype == 5126 and acc["type"] == "VEC4" and not normalized:
+            raw = quantize_rot(raw)
+            ctype, normalized = 5122, True     # SHORT, normalized
+        key = (ctype, acc["count"], acc["type"], normalized, raw)
         if key in dedupe:
             return dedupe[key], 0
         while len(out_bin) % 4:
@@ -461,9 +493,9 @@ def merge_clip_glbs(parts, out_path):
         off = len(out_bin)
         out_bin.extend(raw)
         out_bvs.append({"buffer": 0, "byteOffset": off, "byteLength": len(raw)})
-        new = {"bufferView": len(out_bvs) - 1, "componentType": acc["componentType"],
+        new = {"bufferView": len(out_bvs) - 1, "componentType": ctype,
                "count": acc["count"], "type": acc["type"]}
-        if acc.get("normalized"):
+        if normalized:
             new["normalized"] = True
         # min/max are MANDATORY on an animation sampler's input and pointless on
         # its output. Blender writes both; carrying the output pair costs ~120
@@ -487,9 +519,15 @@ def merge_clip_glbs(parts, out_path):
         anim = doc["animations"][0]
         added, dur = 0, 0.0
         samplers = []
-        for s in anim["samplers"]:
+        # Which samplers a ROTATION channel drives. A sampler carries no path of
+        # its own -- only the channel knows -- so quantisation has to be decided
+        # here, from the channel side, before any accessor is written.
+        rot_samplers = {c["sampler"] for c in anim["channels"]
+                        if c["target"]["path"] == "rotation"}
+        for si, s in enumerate(anim["samplers"]):
             i_idx, n1 = put_accessor(doc, blob, s["input"], True)
-            o_idx, n2 = put_accessor(doc, blob, s["output"], False)
+            o_idx, n2 = put_accessor(doc, blob, s["output"], False,
+                                     quant=(si in rot_samplers))
             added += n1 + n2
             dur = max(dur, float(doc["accessors"][s["input"]].get("max", [0.0])[0]))
             samplers.append({"input": i_idx, "output": o_idx,
