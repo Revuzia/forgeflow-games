@@ -79,7 +79,9 @@
 import * as THREE from "three";
 
 import { registerShaders } from "./shaders/registry.js";
-import { S, SCHEMA, PRESETS, onChange, set, applyPreset } from "./core/settings.js";
+import {
+    S, SCHEMA, PRESETS, onChange, set, applyPreset, applyRealmGrade,
+} from "./core/settings.js";
 import {
     sample, checkSpike, stats, systemMs, mark, installDrawCounter, endFrameDraws,
     gpuBegin, gpuEnd, gpuBeginWide, gpuEndWide, profileDeep, profileScene,
@@ -543,6 +545,23 @@ async function boot() {
         encounters.realm = token;
         weather.setRealm(token);
         if (spells.setRealm) spells.setRealm(token);
+        // REALM_CONTRACT §1c fog + §1f tone, into `S`. Class A: every one of the
+        // seven keys is already re-read per frame (sky.js `update()` builds uFog
+        // from them, postChain.js `_updateComposite()` reads the tone triple), so
+        // this is seven writes and no reallocation. `applyRealmGrade` picks ONLY
+        // those seven out of the patch — the sun / ambient / mountain / wind keys
+        // `realmSettings()` also carries are applied as ratios against Cold by
+        // `sky.applyRealm()` and `terrain.applyRealm()` below, and writing them
+        // here as well would apply each realm's sun twice.
+        applyRealmGrade(realms.realmSettings(token));
+        // The panel is a live control and seven of its sliders just moved under
+        // it. `ui/overlay.js` resyncs its widgets only on the `preset` edge, so
+        // without this it keeps displaying Cold's fog and exposure over Ash's —
+        // a readback that disagrees with the setting in force is exactly the
+        // "lever that lies" the settings header exists to prevent. RECOMMENDED,
+        // for the ui/* owner: a public `Overlay.sync()` subscribed to the graded
+        // keys retires this reach-in.
+        if (overlay && overlay._syncWidgets) overlay._syncWidgets();
         // The ground and the sky. A plain realm row, never the module: both
         // classes stay constructible by tools that have no realm data. The sky
         // is re-solved rather than debounced, so the first frame of the new

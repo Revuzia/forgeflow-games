@@ -302,30 +302,19 @@ export class WeatherField {
         this.realmName = "cold";
 
         /**
-         * Multiplicative fog boost the realm owns, in the shape REALM_CONTRACT
+         * Multiplicative fog boost the STORM owns, in the shape REALM_CONTRACT
          * §3.2 asks `Sky.update()` to fold in: `{density, falloff}`, defaulting
          * to 1/1 so it is a no-op until a realm sets it.
-         */
-        this.fogBoost = { density: 1, falloff: 1 };
-
-        /**
-         * Drive `sky.uniforms.uFog` directly from `update()`.
          *
-         * The RIGHT home for this is `render/sky.js:414-416` — one line, folding
-         * `realm.fogBoost` into the four-component write — and that is what
-         * REALM_CONTRACT §3.2 specifies. This module may not edit that file, so
-         * it does the same multiply in place instead: `sky.update()` runs at
-         * main.js:652 and rebuilds `uFog` from `S` every frame, this runs after
-         * it and before `drawFrame()`, and the GPU reads the uniform at draw
-         * time. So the boost lands, it cannot compound across frames (the base
-         * is re-read from `S` each time), and the overlay's fog sliders keep
-         * working as overrides.
-         *
-         * IT IS A STOPGAP AND IT IS FLAGGED AS ONE. When the integrator applies
-         * the sky.js change, set `weather.driveFog = false` in the same commit
-         * or the boost is applied twice.
+         * BY REFERENCE off the sky when there is one, so `_applyQuality()`'s
+         * writes land in the object `Sky.update()` actually reads. The previous
+         * arrangement — a private copy here, plus a `driveFog` flag that rewrote
+         * `sky.uniforms.uFog` from `S` every frame AFTER `sky.update()` had — was
+         * a flagged stopgap that also made every realm's fog unobservable: the
+         * per-frame rewrite clobbered it. `Sky` owns the uniform now, this owns
+         * the multiplier, and the stopgap is deleted rather than disabled.
          */
-        this.driveFog = true;
+        this.fogBoost = (sky && sky.fogBoost) ? sky.fogBoost : { density: 1, falloff: 1 };
 
         /** Published so `audio/audio.js` can pass `S.windStrength * gust` into
          *  the wind bed — a one-line change, and it is what makes a storm
@@ -695,8 +684,8 @@ export class WeatherField {
      * MUST run after `spray.update()` when it was handed `spray.globals`: the
      * spray writes `uViewProj` and `uCameraPos` into that block, and reading a
      * stale view-projection puts every quad a frame behind the camera at
-     * 19.5 m/s. It must also run after `sky.update()` while `driveFog` is on —
-     * see the note on that field.
+     * 19.5 m/s. It no longer has to run after `sky.update()`: the fog boost is a
+     * plain field `Sky.update()` reads, not a uniform this writes.
      *
      * Cost: no loop over particles, no upload. About a dozen uniform writes,
      * plus three more per active dust devil.
@@ -795,15 +784,8 @@ export class WeatherField {
             this._updateDevils(h, wx, wz, gy);
         }
 
-        // ---- fog --------------------------------------------------------------
-        if (this.driveFog && this.sky && this.sky.uniforms && this.sky.uniforms.uFog) {
-            this.sky.uniforms.uFog.value.set(
-                S.fogDensity * this.fogBoost.density,
-                S.fogHeightFalloff * this.fogBoost.falloff,
-                S.fogStart,
-                S.aerialStrength
-            );
-        }
+        // No fog write here. `this.fogBoost` IS `sky.fogBoost` (constructor), and
+        // `Sky.update()` folds it into `uFog` off the realm base every frame.
     }
 
     // ---------------------------------------------------------------- lifecycle
@@ -838,23 +820,24 @@ export class WeatherField {
     }
 
     /**
-     * Hand the fog back to the sky untouched. Call before disabling the system
-     * or the last boost sticks until the next `sky.update()`.
+     * Hand the fog back to the realm untouched. Call before disabling the
+     * system, or the last storm's boost stays multiplied into every frame.
+     *
+     * Resets the BOOST, not the uniform: `Sky.update()` rebuilds `uFog` from the
+     * realm base next frame, so putting 1/1 back here is the whole release. The
+     * realm's own fog survives it, which is the point — a disabled weather field
+     * must not flatten Ash's smoke back to Cold's haze.
      * @returns {void}
      */
     releaseFog() {
-        if (this.sky && this.sky.uniforms && this.sky.uniforms.uFog) {
-            this.sky.uniforms.uFog.value.set(
-                S.fogDensity, S.fogHeightFalloff, S.fogStart, S.aerialStrength
-            );
-        }
+        this.fogBoost.density = 1;
+        this.fogBoost.falloff = 1;
     }
 
     /** @returns {void} */
     dispose() {
         for (let i = 0; i < this._unsub.length; i++) this._unsub[i]();
         this._unsub.length = 0;
-        this.driveFog = false;
         this.releaseFog();
         if (this.scene) this.scene.remove(this.mesh);
         this.geometry.dispose();

@@ -485,6 +485,10 @@ export function set(k, v) {
         if (S[k] === v) return;
         S[k] = v;
     }
+    // A hand write to a realm-graded key redefines the operator's offset from
+    // the realm base. See `applyRealmGrade`. No-ops for every other key, and the
+    // unchanged-value early-outs above mean an idempotent write cannot move it.
+    noteGradeEdit(k, v);
     notify(k, v);
 }
 
@@ -517,6 +521,160 @@ export function applyPreset(name) {
     // Last, so a `preset` subscriber (the overlay's button highlight and widget
     // resync) reads the finished state rather than a half-applied one.
     notify("preset", name);
+}
+
+/* --------------------------------------------------------------- realm grade */
+
+/**
+ * The `S` keys a REALM owns: REALM_CONTRACT §1c's fog vec4 and §1f's tone
+ * triple. Both blocks are Class A in §2.1 — already re-read every frame by
+ * `sky.js` `update()` and `postChain.js` `_updateComposite()` — so a realm swap
+ * is a plain write here with no reallocation behind it.
+ *
+ * Deliberately NOT the whole of `realms.js` `realmSettings()`. That patch also
+ * carries `sunIntensity`, `ambientIntensity`, `mountainHeight`, the wind pair and
+ * the snow group, every one of which is ALREADY applied as a ratio against Cold
+ * by `Sky.applyRealm()` / `Terrain.applyRealm()`; writing them here as well would
+ * apply each realm's sun twice. `applyRealmGrade` therefore takes an arbitrary
+ * patch object and picks only these seven out of it, so realms.js may keep
+ * returning the full row without this becoming a double-application.
+ */
+export const REALM_GRADE_KEYS = [
+    "fogDensity", "fogHeightFalloff", "fogStart", "aerialStrength",
+    "exposure", "contrast", "bloomStrength",
+];
+
+/**
+ * Slider bounds for the graded keys, read out of `SCHEMA` rather than
+ * duplicated, so the two cannot drift. `fogStart` has no widget and therefore no
+ * entry — it is unclamped, which is correct: nothing can type a value into it.
+ * @type {Record<string, [number, number]>}
+ */
+const GRADE_BOUNDS = (() => {
+    /** @type {Record<string, [number, number]>} */
+    const b = {};
+    for (let g = 0; g < SCHEMA.length; g++) {
+        const items = SCHEMA[g].items;
+        for (let i = 0; i < items.length; i++) {
+            const it = items[i];
+            if (it.t === "f" && REALM_GRADE_KEYS.indexOf(it.k) >= 0
+                && typeof it.min === "number" && typeof it.max === "number") {
+                b[it.k] = [it.min, it.max];
+            }
+        }
+    }
+    return b;
+})();
+
+/**
+ * THE REALM BASE — what the realm says the key is worth. Seeded from the
+ * authored literals above, which ARE Cold's values (`realms.js` cold row cites
+ * these same line numbers), so Cold at boot is bit-exact unchanged: base ==
+ * literal, offset == 1, and `applyRealmGrade({...cold})` writes each key its own
+ * current value, which `set()` no-ops on.
+ * @type {Record<string, number>}
+ */
+const gradeBase = {};
+
+/**
+ * THE OPERATOR'S OFFSET, as a RATIO of the base in force when they moved the
+ * slider. This is the answer to "a realm write must not fight the user":
+ *
+ *   - the panel stays a live control. `set("exposure", v)` still writes `S`
+ *     immediately and still fires `onChange` — nothing here intercepts or
+ *     rejects it. What it additionally does is record WHAT the operator asked
+ *     for RELATIVE to the realm: dragging Cold's 0.105 to 0.126 means "+20%".
+ *   - a realm swap re-bases rather than overwrites: Sand's 0.170 base with a
+ *     1.2 offset lands 0.204, so the operator's intent survives the swap
+ *     instead of being silently discarded by it.
+ *   - untouched sliders hold offset 1 and therefore land exactly on the realm's
+ *     authored number, which is what makes the shot battery reproducible.
+ *
+ * Ratio and not delta because every key here is a scale (a density, an
+ * exposure, a contrast slope); +0.02 means something different at 0.0072 than
+ * at 0.0155, ×1.2 does not.
+ * @type {Record<string, number>}
+ */
+const gradeOffset = {};
+
+for (let i = 0; i < REALM_GRADE_KEYS.length; i++) {
+    const k = REALM_GRADE_KEYS[i];
+    gradeBase[k] = /** @type {number} */ (S[k]);
+    gradeOffset[k] = 1;
+}
+
+/** True only inside `applyRealmGrade`, so its own writes do not re-derive the
+ *  offset from the value they just computed from it. Without this a clamped
+ *  write would quietly redefine the operator's intent as the clamp. */
+let inGradeApply = false;
+
+/**
+ * Record a hand edit to a graded key as an offset from the realm base.
+ * @param {string} k
+ * @param {number|boolean|string} v
+ * @returns {void}
+ */
+function noteGradeEdit(k, v) {
+    if (inGradeApply) return;
+    if (!(k in gradeBase) || typeof v !== "number") return;
+    const base = gradeBase[k];
+    gradeOffset[k] = base !== 0 ? v / base : 1;
+}
+
+/**
+ * Re-base the graded keys onto a realm.
+ *
+ * Takes the flat patch `realms.js` `realmSettings()` returns (or any object with
+ * the same key names) and applies ONLY `REALM_GRADE_KEYS` from it, through
+ * `set()` so every `onChange` edge fires exactly as it does for a slider drag.
+ * Keys the patch omits, or gives a non-finite value, keep the base they have.
+ *
+ * PRESETS are untouched by this and untouched BY this: not one of these seven
+ * keys is in `PRESET_KEYS` (the union of every key any preset names), so
+ * clicking a rung neither resets a realm's fog nor is reset by a realm swap. The
+ * preset's authority over this data stays where it already is and where it can
+ * be measured — `performance` switching `bloom` off zeroes the bloom amount in
+ * `postChain.js:562` whatever `bloomStrength` says, and the lean weather rung
+ * halves the realm's fog BOOST in `weather.js`, which multiplies the base
+ * written here rather than replacing it.
+ *
+ * @param {Record<string, number|boolean|string>} [patch]
+ * @returns {Record<string, number>|null} what actually landed in `S`
+ */
+export function applyRealmGrade(patch) {
+    if (!patch) return null;
+    /** @type {Record<string, number>} */
+    const out = {};
+    inGradeApply = true;
+    try {
+        for (let i = 0; i < REALM_GRADE_KEYS.length; i++) {
+            const k = REALM_GRADE_KEYS[i];
+            const base = patch[k];
+            if (typeof base !== "number" || !isFinite(base)) continue;
+            gradeBase[k] = base;
+            let v = base * gradeOffset[k];
+            const bd = GRADE_BOUNDS[k];
+            if (bd) v = Math.min(bd[1], Math.max(bd[0], v));
+            set(k, v);
+            out[k] = v;
+        }
+    } finally {
+        inGradeApply = false;
+    }
+    return out;
+}
+
+/**
+ * The base/offset pair, copied. Exists so a probe can prove the two halves of
+ * the model rather than inferring them from `S` — `S.exposure` alone cannot
+ * distinguish "the realm said 0.170" from "the operator dragged it there".
+ * @returns {{base: Record<string, number>, offset: Record<string, number>}}
+ */
+export function realmGradeState() {
+    return {
+        base: Object.assign({}, gradeBase),
+        offset: Object.assign({}, gradeOffset),
+    };
 }
 
 /**

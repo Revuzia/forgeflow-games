@@ -157,6 +157,26 @@ export const REALMS = {
             betaRayleigh: [5.8e-6, 13.5e-6, 33.1e-6], // skyBake.glsl.js:51
             hMie: 1200,                               // skyBake.glsl.js:46 — aerosol scale height, m
             msBoost: 1.5,                             // skyBake.glsl.js:58
+            /**
+             * BEAM EXTINCTION, relative to Cold — the aerosol the bake does not
+             * carry yet, folded onto the beam by `sky.js` `applyRealm()`.
+             *
+             * `sunIntensity` above is a PRE-extinction number: a realm with heavy
+             * aerosol is given a stronger sun precisely because it eats most of
+             * its own beam. Until `betaMie` / `hMie` are real bake uniforms
+             * (§6 Builder B) nothing eats it, and the ratio alone would make Ash
+             * the BRIGHTEST realm. This is that missing factor, from the optical
+             * depth beta_M x H_Mie crossed at the sun's air mass:
+             *
+             *   cold  21e-6 x 1200 = 0.0252, air mass 4.30 at 13.0 deg -> 0.897
+             *   sand  73e-6 x  900 = 0.0657, air mass 2.65 at 22.0 deg -> 0.840
+             *   ash  133e-6 x 2600 = 0.346,  air mass 5.60 at  9.5 deg -> 0.144
+             *
+             * relative to Cold: 1.0 / 0.936 / 0.161. [derived] Cold is the
+             * identity by construction. DELETE this field the day the bake takes
+             * betaMie/hMie as uniforms — it exists only because it does not.
+             */
+            beamExtinction: 1.0,
             grazeTint: [0.97, 1.0, 1.06],             // skyBake.glsl.js:252
             /** Feeds `_updateGroundBounce()` (sky.js:498-502) → the nadir rows of
              *  the LUT → skyIrradiance everywhere. Cold's blue-weighted bounce is
@@ -437,6 +457,11 @@ export const REALMS = {
              *  scale height than Cold's 1200 m. Ash goes the other way. */
             hMie: 900,
             msBoost: 1.5,
+            /** [derived] exp(-0.0657 x 2.65) / cold's 0.897 = 0.936 — see the
+             *  cold row. Sand's higher sun (air mass 2.65 against 4.30) very
+             *  nearly pays for its own thicker aerosol, so the beam barely
+             *  dims and the realm reads BRIGHT and hazy rather than dark. */
+            beamExtinction: 0.936,
             grazeTint: [1.06, 1.00, 0.90],
             /** [derived] mean 0.437; the bounce solve compounds by ~albedo³
              *  (sky.js:448-452, 497-502), so 0.0835 against Cold's 0.652. */
@@ -659,6 +684,16 @@ export const REALMS = {
             /** Multiple scattering is what fills Cold's shadows blue
              *  (skyBake.glsl.js:189-205). Ash wants dark shadows. */
             msBoost: 1.15,
+            /**
+             * [derived] mean betaMie 133e-6 x hMie 2600 = 0.346 optical depth,
+             * crossed at air mass 5.60 (9.5 deg) -> exp(-1.94) = 0.144, which is
+             * 0.161 of Cold's 0.897. THE PHYSICAL NUMBER, not a tempered one:
+             * `sky.js` used to run Ash at 0.45 because `S.exposure` was Cold's
+             * 0.105 everywhere and 0.161 rendered near-black. `vfx.exposure`
+             * 0.300 below is what pays for it now — 2.86x Cold's, against a beam
+             * 6.2x weaker. Ash is lit by what glows in it, not by its sun.
+             */
+            beamExtinction: 0.161,
             grazeTint: [1.02, 0.96, 0.92],
             /** [derived] mean 0.071; the bounce solve compounds by ~albedo³, so
              *  0.00036 against Cold's 0.652 — a factor of ~1800 in how much the

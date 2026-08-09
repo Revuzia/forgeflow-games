@@ -142,24 +142,17 @@ const SKY_GRADE = {
  * not own — so taking the raw intensity ratio and nothing else makes Ash BRIGHTER
  * than Cold, which is the exact opposite of the intent.
  *
- * These numbers put the missing half back. Physically the aerosol optical depth
- * is roughly BETA_M x H_MIE, and the beam crosses it at the sun's air mass:
+ * THE TEMPERED TABLE THAT USED TO LIVE HERE IS DELETED, not re-tuned, exactly as
+ * its own note asked. It read `{cold: 1.0, sand: 0.94, ash: 0.45}` and Ash's 0.45
+ * was three times the derived 0.161 for one reason: `S.exposure` was Cold's 0.105
+ * in every realm, and at that exposure the physical number renders an all-but-
+ * black frame. Exposure is realm data now (`settings.js` `applyRealmGrade`,
+ * `realms.js` `vfx.exposure` — Ash 0.300, 2.86x Cold's), so the realm can be lit
+ * correctly and dimmed honestly instead of being faked bright.
  *
- *   cold  21e-6 x 1200 = 0.0252, air mass 4.3 at 13.0 deg -> exp(-0.108) = 0.897
- *   sand  73e-6 x  900 = 0.0657, air mass 2.65 at 22.0 deg -> exp(-0.174) = 0.840
- *   ash  133e-6 x 2600 = 0.346,  air mass 5.6 at  9.5 deg -> exp(-1.94)  = 0.144
- *
- * relative to Cold: sand 0.936, ash 0.161. [derived]
- *
- * Ash is TEMPERED to 0.45 rather than taken at 0.161, and the reason is written
- * down rather than hidden: the contract pays for the full extinction by raising
- * `S.exposure` from 0.105 to 0.300, and `core/settings.js` is another owner's
- * file. At Cold's exposure the physical number renders an all-but-black frame.
- * 0.45 is the largest value that still reads as a dim realm at the exposure this
- * build actually runs. WHEN THE BAKE GAINS ITS UNIFORMS AND EXPOSURE BECOMES
- * REALM DATA, THIS TABLE SHOULD BE DELETED, not re-tuned. [call]
+ * The value itself moved to the realm row as `sky.beamExtinction`, where the
+ * derivation sits next to the `sunIntensity` it corrects. Missing = 1.
  */
-const BEAM_EXTINCTION = { cold: 1.0, sand: 0.94, ash: 0.45 };
 
 /**
  * The grade pass. `texelFetch`, not `texture`, so there is no filtering between
@@ -301,8 +294,32 @@ export class Sky {
         this._sunScaleMul = 1;
         this._ambientMul = 1;
         this._ridgeMul = 1;
+        /** The realm row's `sky.beamExtinction`, kept separately from the product
+         *  above so a probe can read the aerosol term back on its own. */
+        this._beamExtinction = 1;
         /** Realm hue on the beam and the disc. Applied to BOTH so they agree. */
         this._sunTintMul = new THREE.Vector3(1, 1, 1);
+        /**
+         * THE STORM'S MULTIPLIER ON THE FOG — REALM_CONTRACT §3.2's `fogBoost`,
+         * folded into the `uFog` write in `update()` below.
+         *
+         * The REALM's fog is not here. It arrives as `S.fogDensity` /
+         * `S.fogHeightFalloff` / `S.fogStart` / `S.aerialStrength`, re-based per
+         * realm by `settings.js` `applyRealmGrade()`, which is what makes the
+         * §1c INVERSION land: Sand's 0.070 falloff pools the dust in the hollows,
+         * Ash's 0.026 hangs the smoke up the whole column, against Cold's 0.045.
+         * This object is the weather layer ON TOP of that, and it is owned here
+         * rather than in `weather.js` for one measured reason: `WeatherField`
+         * used to write `uFog` itself, every frame, AFTER `sky.update()` had
+         * rebuilt it from `S` (`weather.js`, `driveFog`, now deleted). Any realm
+         * fog written anywhere was overwritten before it could be sampled. One
+         * owner for the uniform, one multiplier hanging off it.
+         *
+         * Defaults 1/1, so a build with no weather in it renders the realm's fog
+         * exactly and the overlay's fog sliders keep working as overrides.
+         * @type {{density:number, falloff:number}}
+         */
+        this.fogBoost = { density: 1, falloff: 1 };
         /** True once a realm asks for a non-identity LUT grade. */
         this._gradeActive = false;
         this._gradeRT = null;
@@ -588,8 +605,14 @@ export class Sky {
         this.syncFromSettings();
 
         this.uniforms.uAmbientIntensity.value = S.ambientIntensity * this._ambientMul;
+        // Realm base (S, re-based by applyRealmGrade) x storm boost. REALM_CONTRACT
+        // §3.2: the boost cannot compound across frames because the base is
+        // re-read from S every time, and a slider drag still overrides both.
         this.uniforms.uFog.value.set(
-            S.fogDensity, S.fogHeightFalloff, S.fogStart, S.aerialStrength
+            S.fogDensity * this.fogBoost.density,
+            S.fogHeightFalloff * this.fogBoost.falloff,
+            S.fogStart,
+            S.aerialStrength
         );
 
         if (!this._dirty || this._solving) return false;
@@ -740,10 +763,12 @@ export class Sky {
         u.uCloudAmount.value = num(sk.cloudAmount, u.uCloudAmount.value);
 
         // The contract's intensity is PRE-extinction; the bake carries none, so
-        // the missing aerosol is folded in here. See BEAM_EXTINCTION.
+        // the missing aerosol is folded in here, from the realm row. See the
+        // BEAM EXTINCTION note above for why the local table is gone.
+        this._beamExtinction = num(sk.beamExtinction, 1);
         this._sunScaleMul =
             (num(sk.sunIntensity, COLD_SUN_INTENSITY) / COLD_SUN_INTENSITY)
-            * num(BEAM_EXTINCTION[token], 1);
+            * this._beamExtinction;
         this._ambientMul = num(sk.ambientIntensity, COLD_AMBIENT) / COLD_AMBIENT;
         this._ridgeMul = sk.showMountains === false
             ? 0
