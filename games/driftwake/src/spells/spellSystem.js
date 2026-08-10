@@ -307,16 +307,29 @@ export class SpellSystem {
          * nothing and adds no draw call — provable by reading
          * `renderer.info.programs.length` across a swap.
          *
-         * Consumed today by `dart.js`'s material, which declares exactly
-         * `uRealmAbsorb / uRealmBody / uRealmEmissive / uRealmLitTint /
-         * uRealmSurface` (`shaders/dart.glsl.js:155-159`). The remaining four
-         * boxes are populated and correct but not yet SAMPLED: `water.glsl.js`
-         * and `crystal.glsl.js` still hold their palette as compile-time
-         * constants, and promoting those is a one-time source edit in files
-         * this module does not own. Until that lands, the water-bodied spells
-         * take their realm identity through the CPU half below — milkiness,
-         * light colour, spray kind/drag/life, deform ice — which is the larger
-         * part of the read anyway and costs nothing extra either.
+         * Consumed by `dart.js`'s material, which declares `uRealmAbsorb /
+         * uRealmBody / uRealmEmissive / uRealmLitTint / uRealmSurface`
+         * (`shaders/dart.glsl.js:155-159`), and — since the promotion — by
+         * `waterBody.js`'s, which declares all of those but `uRealmSurface`
+         * plus `uRealmScatter0/1` and `uRealmFoam`.
+         *
+         * That second consumer is the one that mattered. While `water.glsl.js`
+         * held its palette as compile-time constants, EVERY water-bodied spell
+         * — the stream, the wave, the bloom and the vortex, four of the six
+         * slots — rendered as ice in all three realms, and the CPU half below
+         * (milkiness, light colour, spray, deform ice) only ever changed how
+         * MUCH ice. `_harness/spellrealm_truth.py` measured it as a chromatic
+         * inversion: in Sand the casts added blue-dominant light over ochre
+         * dunes, which no ochre material can do.
+         *
+         * STILL A COMPILE-TIME CONSTANT, and deliberately: `crystal.glsl.js`.
+         * Its palette is shared with `combat/dummies.js`, which builds its own
+         * material and would not supply a promoted uniform — and an undeclared
+         * uniform reads zero, which is precisely how a shader once shipped with
+         * a black albedo. Promoting it requires the dummies' material to pass
+         * this block in the same commit. Slot 4's crystals therefore keep
+         * Cold's body colour in every realm; its spray, light, and the Sand
+         * crater below do vary.
          * @type {Record<string, {value:any}>}
          */
         this.realmUniforms = {
@@ -335,7 +348,8 @@ export class SpellSystem {
         /** @type {"cold"|"sand"|"ash"} */
         this.realm = "cold";
 
-        this.water = new WaterBody(scene, sky, shadows, this.lights, this.globals);
+        this.water = new WaterBody(scene, sky, shadows, this.lights, this.globals,
+            this.realmUniforms);
         this.crystals = new CrystalField(scene, sky, shadows, this.lights, this.globals);
 
         /** @type {SpellContext} */

@@ -88,8 +88,15 @@ export class WaterBody {
      * @param {import("../render/shadows.js").ShadowSystem} shadows
      * @param {import("./spellLights.js").SpellLights} lights
      * @param {Record<string, {value:any}>} globals `lib/common`'s shared block
+     * @param {Record<string, {value:any}>} [realm] the REALM PALETTE block --
+     *   `SpellSystem.realmUniforms`. Shared BY REFERENCE, never copied: a realm
+     *   crossing writes numbers into these same boxes and this material samples
+     *   them on its next draw, so the swap rebuilds no material and compiles no
+     *   program. Every water-bodied spell (stream, wave, bloom, vortex) renders
+     *   through here, which is why omitting it left the whole set ice-coloured
+     *   in all three realms.
      */
-    constructor(scene, sky, shadows, lights, globals) {
+    constructor(scene, sky, shadows, lights, globals, realm) {
         this.scene = scene;
         this.sky = sky;
         this.shadows = shadows;
@@ -147,7 +154,13 @@ export class WaterBody {
                 {}, globals, this._own, this._shading,
                 sky.uniforms,
                 shadows.receiverUniforms(SHADOW_SOFTNESS, SHADOW_BIAS),
-                lights.uniforms
+                lights.uniforms,
+                // The realm block LAST so it is unambiguous that nothing above
+                // shadows it. The fragment declares seven of these and a
+                // uniform the material does not supply silently reads zero --
+                // which is how a shader once shipped with a black albedo -- so
+                // this merge is what keeps water.glsl.js's palette alive.
+                realm || {}
             ),
             // A transparent body seen from BOTH sides — looking through the near
             // wall at the far one is most of what makes it read as a volume.

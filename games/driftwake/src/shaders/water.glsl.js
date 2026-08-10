@@ -172,17 +172,49 @@ uniform float waterTime;
 /// this water read", which is the single most-tuned number in the material.
 uniform float waterDepthTint;
 
+/**
+ * THE REALM PALETTE, as uniforms rather than as the constants that used to sit
+ * further down this file.
+ *
+ * Every water-bodied spell -- the stream, the wave, the bloom and the vortex --
+ * renders through this one material, so while these were compile-time vec3s the
+ * whole spell set was ICE in all three realms. A probe caught it as a chromatic
+ * inversion rather than as an opinion: in Sand, where the palette calls for
+ * ochre grit, the cast was adding BLUE-dominant light over the dunes
+ * (add RGB 34/52/66 on slot 1), which is only possible if the body is still
+ * lit as glacial melt.
+ *
+ * These are written by spells/spellSystem.js _writeRealm into the shared
+ * realmUniforms boxes and reach this material through waterBody.js's uniform
+ * merge. They are UNIFORMS, deliberately: no preprocessor define, no variant
+ * and no material rebuild, so crossing a realm rebinds numbers and compiles
+ * nothing. Cold's values reproduce this file's previous constants exactly, so
+ * the shipped look is unchanged by the promotion itself.
+ *
+ * NO BACKTICKS ANYWHERE IN THIS FILE'S COMMENTS. The stages are JS template
+ * literals; one backtick in a GLSL comment ends the literal and takes the
+ * module down with an Uncaught SyntaxError. It has happened twice here.
+ */
+uniform vec3 uRealmAbsorb;      // absorption per metre of path through the body
+uniform vec3 uRealmScatter0;    // in-scatter tint at depth
+uniform vec3 uRealmScatter1;    // in-scatter tint at the thin edges
+uniform vec3 uRealmBody;        // the opaque population inside (was slushAlbedo)
+uniform vec3 uRealmFoam;        // the tearing leading edge (was foamAlbedo)
+uniform vec3 uRealmLitTint;     // albedo the spell-light pool shades against
+uniform vec3 uRealmEmissive;    // light the material emits; ZERO in cold + sand
+
 layout(location = 0) out vec4 outColor;
 
-/**
- * Absorption per metre of path, exaggerated well past real water.
- *
- * Clear water absorbs about 0.45/m in red and 0.05/m in blue, which over the ten
- * to forty centimetres a spell body is actually thick produces a tint of a few
- * percent — invisible. These coefficients put the same tint at a tenth of the
- * path length: glacial melt full of entrained snow, not a swimming pool.
+/*
+ * Absorption per metre of path is uRealmAbsorb, declared above. It was a
+ * constant here -- vec3(3.40, 0.72, 0.34), which is exactly Cold's row in
+ * REALM_PALETTE -- and the note that went with it still explains the
+ * magnitude: clear water absorbs about 0.45/m in red and 0.05/m in blue, which
+ * over the ten to forty centimetres a spell body is actually thick produces a
+ * tint of a few percent, i.e. invisible. These coefficients put the same tint
+ * at a tenth of the path length: glacial melt full of entrained snow, not a
+ * swimming pool. Sand and Ash keep that exaggeration and move the hue.
  */
-const vec3 WATER_ABSORB = vec3(3.40, 0.72, 0.34);
 
 void main() {
     float vAlpha = vMilkAlpha.y;
@@ -266,7 +298,7 @@ void main() {
         vRadius * (1.25 + 1.9 * (1.0 - NdotV)) * waterDepthTint,
         0.01, 3.0
     );
-    vec3 transmit = exp(-WATER_ABSORB * path);
+    vec3 transmit = exp(-uRealmAbsorb * path);
 
     // ---- refraction, with dispersion ---------------------------------------
     // Three indices, one channel taken from each fetch. The spread is small —
@@ -306,8 +338,7 @@ void main() {
     // several times brighter than sunlit snow, clipped to flat white along its
     // whole length, and let no tinting underneath show through.
     float inScatter = backScatter(N, L, V, 0.55, 2.6, 1.0);
-    vec3 scatterTint = mix(vec3(0.40, 0.80, 1.0), vec3(0.72, 0.94, 1.0),
-                           exp(-path * 1.6));
+    vec3 scatterTint = mix(uRealmScatter0, uRealmScatter1, exp(-path * 1.6));
     color += sun * INV_PI * scatterTint * inScatter
            * (0.55 + 1.3 * vMilk) * sssStrength
            * mix(0.30, 1.0, shadow);
@@ -326,7 +357,7 @@ void main() {
     // transparency rather than tinting it, and the two coexist the way real slush
     // does. Note the 0.85 mix cap: even at milk 1 the refraction survives at 15%.
     if (vMilk > 0.002) {
-        vec3 slushAlbedo = vec3(0.86, 0.90, 0.96);
+        vec3 slushAlbedo = uRealmBody;
         float d = wrapDiffuse(NdotL, 0.62);
         vec3 slush = slushAlbedo * INV_PI * sun * d * shadow;
         slush += slushAlbedo * INV_PI * skyIrradiance(N);
@@ -345,7 +376,7 @@ void main() {
         float fn2 = noise2(fp * 22.0 + vec2(t * 1.7, -t * 1.1)) * 0.5 + 0.5;
         float fn3 = noise2(fp * 61.0 - vec2(t * 3.3, t * 2.1)) * 0.5 + 0.5;
         foam = clamp(foam * (0.35 + 1.5 * fn2 * (0.5 + 0.7 * fn3)), 0.0, 1.0);
-        vec3 foamAlbedo = vec3(0.93, 0.955, 0.99);
+        vec3 foamAlbedo = uRealmFoam;
         vec3 fc = foamAlbedo * INV_PI * sun * wrapDiffuse(NdotL, 0.72) * shadow;
         fc += foamAlbedo * INV_PI * skyIrradiance(N);
         fc += snowSubsurface(N, L, V, sun, 0.25, sssStrength, 1.4)
@@ -401,10 +432,22 @@ void main() {
     // from inside instead of being a dark shape against a lit crater.
     if (spellLightCount > 0.5) {
         color += spellLightingSurface(
-            world, N, V, mix(vec3(0.35, 0.62, 0.78), vec3(0.9), vMilk),
+            world, N, V, mix(uRealmLitTint, vec3(0.9), vMilk),
             vec3(0.02), 0.12, 0.55
         );
     }
+
+    // ---- realm emission -----------------------------------------------------
+    // What makes Ash's bodies FIRE rather than white water that happens to sit
+    // in a lava field. uRealmEmissive is exactly (0,0,0) in both Cold and
+    // Sand -- REALM_PALETTE calls it "the row that is non-zero" only for Ash --
+    // so this term contributes nothing whatsoever in two of the three realms
+    // and cannot regress the shipped Cold look.
+    //
+    // Weighted toward the milky interior and hottest along the tearing edge:
+    // that is where a real combustion front is brightest, and it keeps the
+    // thin transparent rim from blooming into a flat orange halo.
+    color += uRealmEmissive * (0.30 + 0.70 * foam) * mix(0.5, 1.0, vMilk);
 
     // ---- opacity ------------------------------------------------------------
     //
