@@ -1176,6 +1176,14 @@ export class MeshEnemies {
      * @returns {void}
      */
     spawn(i, key, x, y, z) {
+        // Re-spawning a slot that still holds a body RELEASES it first.
+        // Without this the old instance is orphaned — live=1, visible=true,
+        // never returned to the type pool — and stands frozen at its
+        // fresh-bind pose forever: a T-posed statue in the field. The AI
+        // never double-spawns, but probes and future callers can
+        // (2026-08-10: three "enemies are in T-pose" reports traced to
+        // exactly these orphans, manufactured by a harness).
+        if (this._slotInst[i]) this.free(i);
         this.used[i] = 1;
         this.key[i] = typeof key === "number" ? key : 0;
         this.x[i] = x; this.y[i] = y; this.z[i] = z;

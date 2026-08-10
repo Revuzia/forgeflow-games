@@ -72,8 +72,11 @@ def main():
                               v = SF.combat.enemies.vis;
                         const x = c.position.x, z = c.position.z - 5.0;
                         const y = SF.terrain.heightAt(x, z);
-                        v.spawn({SLOT}, '{key}', x, y, z);
+                        // stop + free BEFORE the next spawn -- spawning over a
+                        // live slot used to orphan the old instance at its
+                        // bind pose (the fake "T-pose" this probe then shot).
                         if (window.__drvStop) window.__drvStop();
+                        v.spawn({SLOT}, '{key}', x, y, z);
                         let on = true;
                         window.__drvStop = () => {{ on = false; v.free({SLOT}); }};
                         const drv = () => {{
