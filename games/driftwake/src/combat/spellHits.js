@@ -387,35 +387,78 @@ export class SpellHits {
         // BIRTH PASS (QA battery C, second finding): the crest is born at
         // reach 1.4 and only travels OUT — an enemy inside that radius at
         // the strike is behind the crescent forever and could never be hit.
-        // One extra sweep on the first active frame covers the birth swell:
-        // everything from the arc's centre out to the newborn crest, trimmed
-        // to bodies actually in FRONT of the caster.
+        // One extra sweep on the first active frame covers the birth swell.
+        //
+        // ANCHORED ON THE CASTER, not the ignite origin (live-fix
+        // gap_fireball.py): for the cold feet-born cast the two differ by
+        // 1.1 m and the origin anchor left a 0-0.9 m dead ring; for the Ash
+        // THROWN cast the origin is `waveThrowM` out and the origin anchor
+        // turned the whole caster->landing corridor (~7 m) into a dead zone
+        // — a body 0.4 m behind the landing could never be hit by anything.
+        // The swell covers everything from the caster to the newborn crest,
+        // in front of the caster, which is exactly what a feet-born cast
+        // sweeps — the realm-invariant reading of owner directive 4.
         if (this._waveBirth) {
             this._waveBirth = false;
-            this._qPx = sw.ox; this._qPz = sw.oz;
+            const ch = this.controller.position;
+            this._qPx = ch.x; this._qPz = ch.z;
+            const originD = Math.hypot(sw.ox - ch.x, sw.oz - ch.z);
             this.registry.forEachInCone(
-                kx, kz, sw.dx, sw.dz,
-                0, D.curve + D.thick, arc,
+                ch.x, ch.z, sw.dx, sw.dz,
+                0, originD + sw.reach + D.thick, arc,
                 this._waveBirthCb
             );
         }
     }
 
-    /** Birth-swell hit: same as _waveHit but requires the body to be ahead
-     *  of the CASTER (the cone centre sits 4.1 m behind the origin, so its
-     *  wedge alone would reach bodies behind the player's back).
+    /** Birth-swell hit: same damage/CC as _waveHit, but the geometry is the
+     *  CAST CORRIDOR — the body must be ahead of the CASTER, and the bell
+     *  taper is the lateral offset from the cast axis mapped onto the
+     *  newborn crescent's half-span. For the feet-born cast this matches
+     *  the arc parametrisation (centre ~3 m behind the caster, so axis
+     *  offset and arc angle agree); for the thrown cast the arc centre sits
+     *  AHEAD of the caster and the arc parametrisation would put corridor
+     *  bodies on the horns (bell 0) — the axis form is the one that is the
+     *  same spell in every realm. Knockback pushes away from the CASTER,
+     *  which is also what the old centre-radial did in cold (centre behind
+     *  the caster) — not away from a landing point behind the target.
      *  @param {number} slot @param {number} id */
     _waveBirthHit(slot, id) {
         const reg = this.registry;
+        const D = this.data.wave;
         const ex = reg.x[slot] - this._qPx;
         const ez = reg.z[slot] - this._qPz;
         if (ex * this._qDx + ez * this._qDz < -0.2) return;
-        this._waveHit(slot, id);
+        const halfSpan = D.curve * Math.sin(this._qArc);
+        const lat = ex * this._qWx + ez * this._qWz;
+        const w = bell(clamp01(0.5 + lat / (2 * halfSpan)));
+        this._waveApply(slot, id, w, this._qPx, this._qPz);
     }
 
     /** @param {number} slot @param {number} id */
     _waveHit(slot, id) {
+        const reg = this.registry;
+
+        // Angular position on the arc -> the bell taper (§1.1: damage matches
+        // bell(u), 20 at centre, 0 at the horns).
+        const dx = reg.x[slot] - this._qKx;
+        const dz = reg.z[slot] - this._qKz;
+        const along = dx * this._qDx + dz * this._qDz;
+        const lateral = dx * this._qWx + dz * this._qWz;
+        const th = Math.atan2(lateral, along);
+        const u = clamp01(th / (2 * this._qArc) + 0.5);
+        this._waveApply(slot, id, bell(u), this._qKx, this._qKz);
+    }
+
+    /** The wave's damage+CC, shared by the travelling-crest and birth-swell
+     *  geometries. `cx/cz` is the radial origin the knockback pushes away
+     *  from: the arc centre for the travelling crest, the caster for the
+     *  birth swell.
+     *  @param {number} slot @param {number} id @param {number} w bell taper
+     *  @param {number} cx @param {number} cz */
+    _waveApply(slot, id, w, cx, cz) {
         if (this._has(this._waveIds, this._waveN, id)) return;
+        if (w <= 1e-3) return;             // a horn graze is a miss, not a latch
         const reg = this.registry;
         const D = this.data.wave;
 
@@ -427,17 +470,8 @@ export class SpellHits {
             this.spells.ctx.terrain.heightAt(ex, ez) - D.sink;
         if (reg.y[slot] > crestBase + D.peak * this._qEnv) return;
 
-        // Angular position on the arc -> the bell taper (§1.1: damage matches
-        // bell(u), 20 at centre, 0 at the horns).
-        const dx = ex - this._qKx;
-        const dz = ez - this._qKz;
-        const along = dx * this._qDx + dz * this._qDz;
-        const lateral = dx * this._qWx + dz * this._qWz;
-        const th = Math.atan2(lateral, along);
-        const u = clamp01(th / (2 * this._qArc) + 0.5);
-        const w = bell(u);
-        if (w <= 1e-3) return;             // a horn graze is a miss, not a latch
-
+        const dx = ex - cx;
+        const dz = ez - cz;
         const d = Math.hypot(dx, dz) || 1;
         const dmg = D.damage * w * this._qEnv * this.damageMult;
         reg.damage(id, dmg, {
