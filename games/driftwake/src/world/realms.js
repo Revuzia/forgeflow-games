@@ -660,9 +660,11 @@ export const REALMS = {
             /** Higher pre-extinction, because Ash's beam is eaten by Mie below. */
             sunIntensity: 5.6,
             sunTempWarm: 1.0,
-            /** Ash's near-black ground bounces almost nothing. Do NOT compensate
-             *  by raising this back — raise `vfx.exposure` instead. */
-            ambientIntensity: 0.80,
+            /** Ash's near-black ground bounces almost nothing. Raised 0.80 →
+             *  1.15 with the exposure (owner 2026-08-10: the shadow floor sat
+             *  at pure black); the ambient is realm-tinted, so the lift stays
+             *  sooty rather than turning the hollows blue. */
+            ambientIntensity: 1.15,
             ambientBlue: 1.0,
             /** The far range is buried in smoke at fogDensity 0.0155 anyway, and
              *  switching it off buys back the 8.27 ms the raymarch costs
@@ -862,7 +864,12 @@ export const REALMS = {
              *  Ash takes 0.300 and makes the difference up through the emissive
              *  ember specks (glint.emissive 3.4), bloom 0.34 and shafts 0.55: the
              *  ash realm is lit by what glows in it, not by the sun. */
-            exposure: 0.300,
+            /** 0.300 shipped near-unplayable (owner 2026-08-10): the ember
+             *  dots carried the frame alone. 0.44 against the physical
+             *  beamExtinction 0.161 keeps "lit by what glows in it" while the
+             *  ground relief actually reads. Tuned WITH sky.js SKY_GRADE.ash
+             *  gain 0.52 and ambientIntensity 1.15. */
+            exposure: 0.44,
             contrast: 1.22,
             bloomStrength: 0.34,
         },

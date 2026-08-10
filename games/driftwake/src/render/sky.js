@@ -128,7 +128,12 @@ const SKY_GRADE = {
     },
     ash: {
         tint: [0.86, 0.38, 0.23], horizon: [1.02, 0.36, 0.17],
-        desat: 0.86, band: 0.50, amount: 0.62, gain: 0.40,
+        // gain 0.40 shipped a foreground that read as pure black with ember
+        // dots (owner 2026-08-10: "almost impossible to play"). 0.52 keeps the
+        // soot ceiling and the pit mood but leaves enough dome light for the
+        // terrain relief to silhouette. Tuned WITH realms.js ash
+        // `vfx.exposure` and `ambientIntensity` — move the three together.
+        desat: 0.86, band: 0.50, amount: 0.62, gain: 0.52,
     },
 };
 

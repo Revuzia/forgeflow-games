@@ -59,7 +59,7 @@ export const ENEMY_MAX = 24;
  *  imp/mummy spit, bone shard, boss sand-slash, guardian slag-spit) and the
  *  §4.2 ranged-token cap of 2 concurrent casters × up to 4 bolts in flight per
  *  volley × the 3 s TTL overlaps past 16. */
-const BOLT_MAX = 32;
+export const BOLT_MAX = 32;
 
 // ------------------------------------------------------------- spec constants
 /** §4.2 — shared per-encounter pool: 2 melee + 2 ranged tokens. */
@@ -1599,9 +1599,16 @@ export class Enemies {
 
         if (dist <= u.engage && this._meleeFree > 0 && !staggered &&
             this.cd[i] <= 0 && slotFree && (committed || dist <= u.reach + MELEE_PAD)) {
-            this._stealthFreeAt = this._time + 1e9;   // held until this one recovers
-            this._takeMelee(i);
-            this._tryAttack(i, u, dist, true);
+            // Commit the stealth slot and the token ONLY if an attack actually
+            // started. The old order burned both first — and a whiff (every
+            // range band closed at this exact dist) locked `_stealthFreeAt` at
+            // +1e9 with no attack to ever release it, killing the whole
+            // stalker/assassin role for the rest of the session (qa_enemy_aaa
+            // 2026-08-10: divers reached 0 m and never struck).
+            if (this._tryAttack(i, u, dist, true)) {
+                this._stealthFreeAt = this._time + 1e9;   // held until this one recovers
+                if (this.token[i] !== 2) this._takeMelee(i);
+            }
             return;
         }
 
@@ -1663,10 +1670,16 @@ export class Enemies {
 
         if (dist <= u.engage && this._meleeFree > 0 &&
             this._time >= this._stealthFreeAt) {
-            // The eruption is a stealth opener and pays its token (rule 7).
-            this._stealthFreeAt = this._time + 1e9;
-            this._takeMelee(i);
-            this._tryAttack(i, u, dist, true);
+            // The eruption is a stealth opener and pays its token (rule 7) —
+            // but only an attack that STARTED pays. A whiff here (the leap's
+            // gap band can exclude the exact trigger distance) used to burn
+            // the slot at +1e9 with nothing to release it; the diver then
+            // circled under the player forever. Left un-burned, the gate
+            // retries every frame as dist closes until the rake lands.
+            if (this._tryAttack(i, u, dist, true)) {
+                this._stealthFreeAt = this._time + 1e9;
+                if (this.token[i] !== 2) this._takeMelee(i);
+            }
         }
     }
 

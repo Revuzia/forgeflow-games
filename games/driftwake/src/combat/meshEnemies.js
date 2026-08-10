@@ -194,12 +194,14 @@ import {
 // the body `slug` this renderer needs. Importing the dead name link-errors the
 // whole module graph, which only stayed invisible while nothing imported this
 // file yet.
-import { UNITS } from "./enemies.js";
+import { UNITS, BOLT_MAX } from "./enemies.js";
 import { ROSTER, BY_REALM, bodyForKey, clipSlotsFor, KEY_BY_SLUG } from "./roster.js";
 
-/** Pool sizes — must cover enemies.js (ENEMY_MAX 24, bolt pool 16). */
+/** Slot pool — must cover enemies.js ENEMY_MAX (24). The bolt pool size is
+ * IMPORTED from enemies.js rather than restated: the two pools index each
+ * other one-to-one, and a restated `16` here against a raised `32` there made
+ * `Enemies.clear()` throw on bolt 16 (audit 2026-08-10, observed live). */
 const SLOT_MAX = 24;
-const BOLT_MAX = 16;
 
 /**
  * Asset locations. `ENEMY_GLB_V` MUST be bumped on every asset rebuild, for the
@@ -663,6 +665,11 @@ export class MeshEnemies {
      */
     async load(realm, priority) {
         this.realm = realm;
+        // A realm switch starts a fresh background walk: the old `streaming`
+        // promise belongs to the old realm's slug list, and holding on to it
+        // made stream() a boot-only one-shot (audit 2026-08-10 — the other
+        // nine bodies of every later realm never loaded).
+        this.streaming = null;
         const res = await fetch(MANIFEST_URL);
         if (!res.ok) throw new Error("meshEnemies: manifest " + res.status);
         this.manifest = await res.json();
@@ -683,9 +690,14 @@ export class MeshEnemies {
      */
     stream() {
         if (this.streaming) return this.streaming;
+        // Pin the realm at walk start: `enterRealm` can retarget `this.realm`
+        // mid-walk, and finishing the OLD list against the NEW realm both
+        // wastes decodes and races `load()`'s own fetch.
+        const token = this.realm;
         this.streaming = (async () => {
-            const slugs = BY_REALM[this.realm] || [];
+            const slugs = BY_REALM[token] || [];
             for (let i = 0; i < slugs.length; i++) {
+                if (this.realm !== token) return;   // realm switched: stand down
                 if (this._types.has(slugs[i])) continue;
                 try {
                     await this._loadType(slugs[i]);
@@ -694,10 +706,11 @@ export class MeshEnemies {
                 }
                 await this._yield();
             }
-            // The last body of the realm has landed: the decoder worker has no
-            // more work, so stop paying for it. A later realm switch rebuilds it.
-            this._draco.dispose();
-            this._draco = null;
+            // The DRACOLoader is deliberately KEPT: realm switches re-enter
+            // this walk, and `_loadType` still routes through `this._gltf`,
+            // which holds the decoder. Disposing it here (as this build once
+            // did) crashed the second realm's stream and left `_gltf` holding
+            // a disposed instance. It is released in dispose(), once.
         })();
         return this.streaming;
     }
@@ -1002,6 +1015,14 @@ export class MeshEnemies {
             seq: 0,
             /** True once `lunge` released the scrubbed windup. */
             striking: false,
+            /** Death-entry edge. The CL_DEATH action is a LoopOnce that was
+             *  `.play()`ed at build like every action (§3), so it runs to its
+             *  final frame at weight 0 within seconds of the build and CLAMPS.
+             *  Ramping weight onto that finished action shows a static corpse
+             *  pose instead of the fall — on the FIRST death, and again on
+             *  every pooled reuse. This flag is how `_clips` knows to
+             *  `reset()` it exactly once, on the frame death begins. */
+            dying: false,
             /** Rung 1 (26-95 m) steps on alternate frames; this is its parity. */
             parity: this._insts.length & 1,
         };
@@ -1181,6 +1202,23 @@ export class MeshEnemies {
     }
 
     /**
+     * The roster-aware spawn `enemies.js` PREFERS (enemies.js:844: it probes
+     * for this method and only falls back to `spawn(i, u.legacyArch, ...)` —
+     * the 0..3 placeholder bucket — when it is absent). Absent was the state
+     * the 30-body port shipped in, so every live enemy rendered as one of the
+     * first four roster identities (audit 2026-08-10, fatal). The record's
+     * combat key routes through the same `_bodyFor` resolution `spawn()`
+     * uses, so MESH_REUSE dress-ups keep their tint and scale.
+     * @param {number} i pool slot
+     * @param {{key:string}} u the UNITS identity record
+     * @param {number} x @param {number} y @param {number} z
+     * @returns {void}
+     */
+    spawnUnit(i, u, x, y, z) {
+        this.spawn(i, u && u.key ? u.key : 0, x, y, z);
+    }
+
+    /**
      * Attach a resident body type to a slot that already wants it.
      * @param {number} i
      * @param {{slug:string, scale:number, tint:string|null}} body
@@ -1211,6 +1249,7 @@ export class MeshEnemies {
         inst.state[1] = 0;
         inst.atk = -1;
         inst.striking = false;
+        inst.dying = false;
 
         if (inst.mixer) {
             inst.targets.fill(0);
@@ -1451,10 +1490,18 @@ export class MeshEnemies {
         if (dissolve > 0) {
             // Death owns the body outright, and enters fast — a corpse that
             // crossfades slowly out of a run looks like it changed its mind.
+            if (!inst.dying) {
+                // The death EDGE: restart the one-shot from frame 0. Without
+                // this the action is already finished-and-clamped (see the
+                // `dying` field note) and the ramp shows the final pose only.
+                inst.dying = true;
+                if (acts[CL_DEATH]) acts[CL_DEATH].reset();
+            }
             if (acts[CL_DEATH]) t[CL_DEATH] = 1;
             fade = FADE_DEATH;
             if (inst.atk >= 0) { inst.atk = -1; inst.striking = false; }
         } else {
+            inst.dying = false;
             // ---- locomotion: a continuous two-way blend ---------------------
             const s = this.speed01[i];
             let wIdle = 0, wWalk = 0, wRun = 0;

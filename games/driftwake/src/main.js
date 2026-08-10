@@ -113,7 +113,7 @@ import { DamageableRegistry } from "./combat/damageable.js";
 import * as combatData from "./combat/combatData.js";
 import { SpellHits } from "./combat/spellHits.js";
 import { Targeting } from "./combat/targeting.js";
-import { TrainingDummies } from "./combat/dummies.js";
+import { SpawnShrine } from "./world/shrine.js";
 import { Enemies } from "./combat/enemies.js";
 import { MeshEnemies } from "./combat/meshEnemies.js";
 import { WeatherField } from "./vfx/weather.js";
@@ -489,7 +489,12 @@ async function boot() {
     // reads (spells, terrain, rig), BEFORE the frame loop closes over it.
     const registry = new DamageableRegistry();
     const spellHits = new SpellHits(spells, registry, character, combatData.combatData);
-    const dummies = new TrainingDummies(registry, terrain, spells.crystals, combatData);
+    // The spawn shrine — the crystal monument every run starts at (owner
+    // 2026-08-10). Set dressing only; it replaced the training-dummy arc
+    // (removed the same day — real enemies are the only targets now).
+    // Placed 7.5 m along the BOOT camera bearing (rig.yaw starts 2.4), so
+    // the monument stands in the opening frame.
+    const shrine = new SpawnShrine(terrain, spells.crystals, 5.0, 5.5);
     const enemies = new Enemies(scene, terrain, registry, character, combatData, spray);
     // The bodies are the thirty rigged Meshy enemies, not the four placeholder
     // shard constructs `EnemyVis` drew. Same API surface — spawn/free/drive/
@@ -502,6 +507,12 @@ async function boot() {
     // pop in. `load()` therefore resolves once the realm's first spawnable
     // (the swarm unit, which is what the level-1 gate opens with) is resident.
     const enemyVis = new MeshEnemies(scene, sky, shadows, spells.lights, spells.globals);
+    // BEFORE any body loads (its own contract): instances built later join
+    // the prepass as they are born. Never being called was one of the two
+    // fatal wiring gaps of the 30-body port (audit 2026-08-10) — enemies
+    // were absent from the depth prepass and TAA smeared them against the
+    // terrain behind.
+    enemyVis.registerPrepass(depthPass);
     await loading.phase("waking the drift", 0.78);
     await enemyVis.load("cold");
     enemies.attachVis(enemyVis);
@@ -534,6 +545,10 @@ async function boot() {
      * than pretending to be finished. That is a visible, honest partial state.
      * @param {"cold"|"sand"|"ash"} name
      */
+    /** The realm currently in force — the token, for save blobs and the
+     *  CONTINUE restore. `realm().name` is a display string. */
+    let realmToken = "cold";
+
     async function enterRealm(name) {
         // The TOKEN, never `realm().name`. The row's `name` is the display
         // string ("Sand"); every keyed lookup downstream — BY_REALM in the
@@ -541,7 +556,16 @@ async function boot() {
         // passing the display name throws "no bodies for realm Sand" from
         // inside an async that nothing was awaiting.
         const token = realms.realmToken(name);
+        // The OLD realm's field does not follow (audit 2026-08-10: ten cold
+        // units stood in the sand until killed). Director bookkeeping first
+        // — its despawns are id-keyed — then the runtime sweep.
+        encounters.onRealmChange();
+        enemies.clear();
         await enemyVis.load(token);
+        // The other nine bodies of the realm walk in behind the priority one
+        // — stream() was never called anywhere before the audit, which is
+        // why only one body type per realm ever existed in production.
+        enemyVis.stream();
         encounters.realm = token;
         weather.setRealm(token);
         if (spells.setRealm) spells.setRealm(token);
@@ -570,9 +594,11 @@ async function boot() {
         terrain.applyRealm(realms.realm(token));
         sky.applyRealm(realms.realm(token));
         await sky.solve();
+        realmToken = token;
         return token;
     }
     const encounters = new Encounters(enemies, registry, character, combatData, minimap);
+    encounters.shrine = shrine;   // the 25 m spawn exclusion anchor
     // TAB target cycle (owner 2026-08-06): nearest -> next -> ... -> none.
     const targeting = new Targeting(registry, character);
     const progression = new Progression(character, registry, null);
@@ -580,6 +606,15 @@ async function boot() {
     // system; the per-level damage multiplier scales hits in the damage
     // pass (QA: attaching only spellSystem left player damage flat forever).
     progression.attach({ spells: spellHits, hud });
+    // Auto-save position (owner 2026-08-10): every save — ding, boss flag,
+    // the 10 s heartbeat below — carries the exact stand, so CONTINUE
+    // resumes where the game last ended rather than at the spawn.
+    progression._posFor = () => ({
+        x: character.position.x, z: character.position.z,
+        facing: character.facing || 0, realm: realmToken,
+    });
+    let autosaveT = 0;
+    window.addEventListener("beforeunload", () => progression.save());
     spells.unlocked = progression.unlocked;
     spellbar.progression = progression;
     enemies.progression = progression;
@@ -733,7 +768,7 @@ async function boot() {
         // spell state, then bodies/director (they read the fresh CC state).
         registry.update(dt);
         spellHits.update(dt);
-        dummies.update(dt);
+        shrine.update(dt);
         enemies.update(dt);
         encounters.update(dt);
         // AFTER sky.update() rebuilt uFog from S this frame, and before
@@ -746,6 +781,14 @@ async function boot() {
         // drops a target that died or left range this frame.
         targeting.update(dt);
         progression.update(dt);
+        // The autosave heartbeat: a crash or tab close costs at most ten
+        // seconds of stand. Event saves (dings, boss flags) still fire on
+        // their own edges; this one exists for the position ride-along.
+        autosaveT += dt;
+        if (autosaveT >= 10) {
+            autosaveT = 0;
+            progression.save();
+        }
         const tSpells = performance.now();
 
         // GPU profiler: on alternate frames one query spans everything below
@@ -966,6 +1009,25 @@ async function boot() {
             continueNote: () => progression.saveSummary(),
             onContinue: () => {
                 progression.continueRun();
+                // Resume the exact stand (v3 `pos`). Realm first — a
+                // position means nothing on the wrong ground — then the
+                // teleport. A v1/v2 save has no pos and resumes at the
+                // shrine spawn, which is also the failure fallback.
+                const sp = progression.savedPos;
+                if (sp) {
+                    const place = () => {
+                        character.position.set(
+                            sp.x, terrain.heightAt(sp.x, sp.z), sp.z);
+                        if (character.velocity) character.velocity.set(0, 0, 0);
+                        character.facing = sp.facing;
+                        rig.yaw = sp.facing;
+                    };
+                    if (sp.realm && sp.realm !== realmToken) {
+                        enterRealm(sp.realm).then(place, place);
+                    } else {
+                        place();
+                    }
+                }
                 S.freezeTime = false;
                 armMusic();
                 if (hint) {
@@ -987,8 +1049,8 @@ async function boot() {
                 { h: "Jump", p: "<b>SPACE</b>. Let go early to cut the rise short. A hard landing punches a crater and throws powder." },
                 { h: "Snow-surf", p: "Hold the <b>RIGHT MOUSE BUTTON</b> and the walk becomes a carve. A breaking wave builds off your inside edge and throws nearly all of the snow to the outside of the turn — the harder you turn, the further the lip hangs back over its own face." },
                 { h: "Ollie", p: "Tap <b>SPACE</b> mid-carve for a surf ollie — nearly twice the height, carrying your full speed through the air. The wake gaps under you and, if you keep holding <b>RMB</b>, you land straight back into the carve." },
-                { h: "Spells", p: "<b>LMB (hold)</b> draws a stream of living water — steer it, release to throw. <b>1</b> a ploughing crescent that shoves what it hits · <b>2</b> a targeted eruption · <b>3</b> a spiral of hexagonal ice that stuns · <b>4</b> three helices that lift everything around you. Each realm you cross adds its own element to the kit." },
-                { h: "Fighting", p: "<b>TAB</b> targets the nearest enemy and cycles outward; one more press past the last drops the target. Spells cost mana and run their own cooldowns — the stream is free but drinks while held." },
+                { h: "Spells", p: "<b>LMB</b> hurls a water dart — hold to keep throwing; it costs nothing. <b>1</b> (hold) draws a stream of living water onto whatever you face. <b>2</b> a ploughing crescent that shoves what it hits · <b>3</b> a targeted eruption · <b>4</b> a spiral of hexagonal ice that stuns · <b>5</b> three helices that lift everything around you. Spells unlock as you level, and every realm re-elements the whole kit — fire in ash, sand in sand." },
+                { h: "Fighting", p: "<b>TAB</b> targets the nearest enemy and cycles outward; one more press past the last drops the target. Spells cost mana and run their own cooldowns — the dart and the stream are free. Fell a whole pack and that ground stays quiet for a while." },
                 { h: "Panels", p: "<b>F1</b> settings · <b>F3</b> debug · <b>Esc</b> pause. The settings panel is live: every slider in it moves the running scene, including the sun." },
             ],
             onPlay: () => {
@@ -1016,6 +1078,7 @@ async function boot() {
             // on Escape precisely so the tap reaches the game instead of the
             // browser. Measured: pausing without this leaves RESUME dead.
             onPause: () => {
+                progression.save();   // pausing is a save point
                 S.freezeTime = true;
                 try { document.exitPointerLock(); } catch (e) { /* nothing held it */ }
             },
@@ -1102,8 +1165,12 @@ async function boot() {
         // The realm layer, exposed so a probe can drive a realm change the same
         // way the game will. `enterRealm` is async — it awaits the body fetch.
         weather, realms, enterRealm,
-        combat: { registry, spellHits, dummies, enemies, encounters, targeting,
+        combat: { registry, spellHits, enemies, encounters, targeting,
             data: combatData },
+        // The spawn monument (world/shrine.js) — set dressing, exposed for
+        // probes the way `deform` is. The training dummies it replaced are
+        // gone from this surface deliberately: harnesses spawn real enemies.
+        shrine,
         progression, floaters, enemyBars, xpHud,
         // The deformation field, alongside the other subsystems it sits between.
         // `_harness/probe_deform_skip.py` reads its `stepsRun`/`stepsSkipped`
@@ -1146,6 +1213,11 @@ async function boot() {
     globalThis.DRIFTWAKE = globalThis.SNOWFLOW;
 
     await loading.done();
+
+    // The boot blocked on ONE body per meshEnemies §4; the other nine of
+    // the realm stream in now that the screen is up. (Fatal audit gap: this
+    // call existed nowhere, so 26 of 30 bodies could never load.)
+    enemyVis.stream();
 
     // ---------------------------------------------------------- the FFG shell
     if (!AUTOPLAY) startShell();

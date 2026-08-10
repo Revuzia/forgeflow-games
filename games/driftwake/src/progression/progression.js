@@ -48,7 +48,7 @@ import { TIER } from "../combat/damageable.js";
 /** The one localStorage key. */
 export const SAVE_KEY = "driftwake_save";
 /** Current save schema. v1 blobs load with defaulted new fields. */
-export const SCHEMA_VER = 2;
+export const SCHEMA_VER = 3;   // v3 adds `pos` (auto-save position, owner 2026-08-10)
 
 /**
  * Spell unlock levels by INTERNAL spell id (§7 mapped through the owner
@@ -165,6 +165,17 @@ export class Progression {
          * @type {Set<number>}
          */
         this.unlocked = new Set();
+
+        /** Where the run last stood: {x, z, facing, realm} or null. Written
+         *  into every save via `_posFor` (main.js wires it to the live
+         *  controller) and read back by the CONTINUE flow so a run resumes
+         *  exactly where it ended — not at the spawn (owner 2026-08-10).
+         *  v1/v2 blobs have no `pos`; null falls back to the shrine spawn.
+         *  @type {{x:number, z:number, facing:number, realm:string}|null} */
+        this.savedPos = null;
+        /** Live position provider, set by main.js. Null in bare harnesses.
+         *  @type {(() => {x:number, z:number, facing:number, realm:string})|null} */
+        this._posFor = null;
         /** @type {string[]} shrine boon picks (§8.3; P3.3 populates). */
         this.boons = [];
         /** @type {string[]} */
@@ -404,6 +415,7 @@ export class Progression {
         this.realmsUnlocked = ["cold"];
         this.objectiveState = {};
         this.lastShrineId = "cold_spawn";   // §8.1 default, never null
+        this.savedPos = null;                // a new run starts at the shrine
         this._dummyFirstBlood = false;
         this.unlocked.clear();
         this._refreshNeed();
@@ -439,6 +451,10 @@ export class Progression {
             lastSeenTs: this.lastSeenTs,
             objectiveState: this.objectiveState,
             deaths: this.deaths,
+            // v3: the exact stand the run ended on. Provider over stored
+            // state so every save — level ding, boss flag, autosave tick —
+            // carries the CURRENT position without a second call site.
+            pos: this._posFor ? this._posFor() : this.savedPos,
         };
         try {
             localStorage.setItem(SAVE_KEY, JSON.stringify(blob));
@@ -483,6 +499,14 @@ export class Progression {
             ? b.lastShrineId : "cold_spawn";
         this.objectiveState = (b.objectiveState && typeof b.objectiveState === "object")
             ? b.objectiveState : {};
+        // v3 pos — all four fields or nothing; a partial blob resumes at the
+        // shrine rather than at (0, NaN).
+        const bp = b.pos;
+        this.savedPos = (bp && typeof bp === "object" &&
+            Number.isFinite(+bp.x) && Number.isFinite(+bp.z) &&
+            Number.isFinite(+bp.facing) && typeof bp.realm === "string")
+            ? { x: +bp.x, z: +bp.z, facing: +bp.facing, realm: bp.realm }
+            : null;
 
         this._refreshNeed();
 

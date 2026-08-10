@@ -135,13 +135,14 @@ export class Targeting {
         return dx * dx + dz * dz;
     }
 
-    /** Targetable = a live enemy or boss inside RANGE_M. Dummies included:
-     *  they are practice bodies and the player expects TAB to find them. */
+    /** Targetable = a live enemy or boss inside RANGE_M. The training dummies
+     *  were removed (owner 2026-08-10 — real enemies only), so "dummy" no
+     *  longer cycles even if some registrant still claims the kind. */
     _targetable(slot) {
         const reg = this.registry;
         if (reg.hp[slot] <= 0) return false;
         const k = reg.kind[slot];
-        if (k !== "enemy" && k !== "boss" && k !== "dummy") return false;
+        if (k !== "enemy" && k !== "boss") return false;
         return this._dist2To(slot) <= RANGE_M * RANGE_M;
     }
 

@@ -45,7 +45,7 @@
  *     frame minimap.js documents).
  *   minimap — ui/minimap.js: `.blips` array of {x, z, kind}. This file OWNS
  *     that array and rebuilds it every unfrozen frame from the live registry
- *     (kind "enemy" | "boss"; dummies excluded) — other writers must go
+ *     (kind "enemy" | "boss") — other writers must go
  *     through the director or claim their own kinds here.
  *
  * Player level: polled from `SNOWFLOW.progress.level` when the progression
@@ -62,7 +62,7 @@
  *
  * SPEC NUMBERS (owner directive + docs — do not retune here):
  *   spawn 55–80 m ahead · despawn > 120 m · never inside 25 m of the player
- *   or the spawn-shrine dummy arc · cleared area locked 90 s (radius 40 m,
+ *   or the spawn shrine · cleared area locked 90 s (radius 40 m,
  *   the §4.3 ambient leash-anchor radius) · per-unit stagger 0.5–2 s (§6.1)
  *   · 3–5 s breather between packs (§6.1) · alive cap Cold 6 / Sand 8 /
  *   Ash 8 (§8.2). Placement details the docs do NOT define (scatter ring,
@@ -78,7 +78,7 @@ const SPAWN_MIN = 55;
 const SPAWN_MAX = 80;
 /** Owner directive: members beyond 120 m of the player despawn silently. */
 const DESPAWN_SQ = 120 * 120;
-/** Owner directive: nothing spawns inside 25 m of the player or dummy arc. */
+/** Owner directive: nothing spawns inside 25 m of the player or shrine. */
 const EXCLUDE_M = 25;
 const EXCLUDE_SQ = EXCLUDE_M * EXCLUDE_M;
 /** Owner directive: a cleared area stays empty for 90 s. */
@@ -108,9 +108,9 @@ const RETRY_S = 0.5;
 /** Blocked spawn points get pushed out to 30 m from the player (impl —
  *  25 m exclusion + 5 m so a step toward it cannot re-violate instantly). */
 const PUSH_OUT_M = 30;
-/** Anchor-vs-dummy margin: 25 m arc + the 6 m scatter ring, so no member
- *  point can ever land inside the dummy exclusion (derived, not tuned). */
-const DUMMY_MARGIN = EXCLUDE_M + SCATTER_MAX;
+/** Anchor-vs-shrine margin: 25 m exclusion + the 6 m scatter ring, so no
+ *  member point can ever land at the spawn shrine (derived, not tuned). */
+const SHRINE_MARGIN = EXCLUDE_M + SCATTER_MAX;
 /** Queue/member slots. Largest §6.2 pack is 6 units; 8 covers Sand/Ash. */
 const MAX_PACK = 8;
 /** Blip pool size. Registry MAX is 96 but live enemies are capped at 8. */
@@ -218,6 +218,11 @@ export class Encounters {
         /** Anchor scratch (out-params of _findAnchor; no per-call objects). */
         this._ax = 0;
         this._az = 0;
+
+        /** The spawn shrine (world/shrine.js), for the 25 m spawn exclusion.
+         *  Wired by main.js after construction; null is a valid state.
+         *  @type {{x:number, z:number}|null} */
+        this.shrine = null;
     }
 
     /**
@@ -280,7 +285,7 @@ export class Encounters {
     /**
      * Force-spawn a named §6.2 pack ahead of travel. Replaces the active
      * pack (silent despawn, no cleared-area record), bypasses level gates
-     * and cleared-area locks, still honours the 25 m player/dummy
+     * and cleared-area locks, still honours the 25 m player/shrine
      * exclusions. Test/console API — never called by the frame.
      * @param {string} name pack name, case-insensitive ("The Hunt")
      * @returns {boolean} true if the pack was queued
@@ -385,7 +390,7 @@ export class Encounters {
                 x = px + dx * s;
                 z = pz + dz * s;
             }
-            if (this._dummyNear(x, z, EXCLUDE_M)) {
+            if (this._shrineNear(x, z, EXCLUDE_M)) {
                 this._qAt[i] = this.time + RETRY_S;
                 break;
             }
@@ -394,6 +399,16 @@ export class Encounters {
             if (this._live >= cap) continue; // §8.2 cap: unit is forfeit
 
             const key = /** @type {string} */ (this._qKey[i]);
+            // MESH_ENEMY_CONTRACT §5.8.4: never spawn a unit whose body has
+            // not streamed in — it would stand invisible until the GLB lands.
+            // Requeue with the standard retry; stream() delivers within a few
+            // seconds of a realm entering.
+            const vis = this.enemies.vis;
+            if (vis && vis.ready && !vis.ready(key)) {
+                this._qNext--;   // undo the take; this entry fires next pass
+                this._qAt[i] = this.time + RETRY_S;
+                break;
+            }
             // Band scaling keys off the REALM, not the unit — passing the
             // unit key here read SCALING.bands["rime_imp"] and crashed boot.
             const lv = this.data.enemyLevelFor(this.realm, this._level());
@@ -441,7 +456,7 @@ export class Encounters {
     /**
      * Find a pack anchor 55–80 m along the travel direction (velocity when
      * moving, facing when planted), jittering the bearing across PLACE_TRIES
-     * candidates. Rejects candidates near the dummy arc (with the scatter
+     * candidates. Rejects candidates near the spawn shrine (with the scatter
      * margin) and — unless `ignoreAreas` — inside a live cleared area.
      * Result in `_ax/_az`.
      * @param {boolean} ignoreAreas test-API path skips the 90 s locks
@@ -466,7 +481,7 @@ export class Encounters {
             const ax = c.position.x + dx * dist;
             const az = c.position.z + dz * dist;
             if (!ignoreAreas && this._areaBlocked(ax, az)) continue;
-            if (this._dummyNear(ax, az, DUMMY_MARGIN)) continue;
+            if (this._shrineNear(ax, az, SHRINE_MARGIN)) continue;
             this._ax = ax;
             this._az = az;
             return true;
@@ -527,20 +542,18 @@ export class Encounters {
         this._areaHead = (i + 1) % MAX_AREAS;
     }
 
-    /** Any registered training dummy within r metres of (x, z)? The dummy
-     *  arc is read live off the registry (kind "dummy") — no hardcoded
-     *  shrine coordinates to drift. Spawn-edge only, never per steady frame.
+    /** Is (x, z) within r metres of the spawn shrine? `this.shrine` is the
+     *  world/shrine.js formation main.js wires in (null in bare-harness
+     *  boots, in which case nothing is excluded). The training-dummy arc this
+     *  scan used to protect was removed 2026-08-10 (owner: real enemies
+     *  only). Spawn-edge only, never per steady frame.
      * @param {number} x @param {number} z @param {number} r
      * @returns {boolean} */
-    _dummyNear(x, z, r) {
-        const reg = this.registry;
-        const r2 = r * r;
-        for (let i = 0; i < reg.count; i++) {
-            if (reg.kind[i] !== "dummy") continue;
-            const dx = reg.x[i] - x, dz = reg.z[i] - z;
-            if (dx * dx + dz * dz < r2) return true;
-        }
-        return false;
+    _shrineNear(x, z, r) {
+        const sh = this.shrine;
+        if (!sh) return false;
+        const dx = sh.x - x, dz = sh.z - z;
+        return dx * dx + dz * dz < r * r;
     }
 
     /** Despawn every tracked member and cancel the queue. No cleared-area
@@ -560,6 +573,20 @@ export class Encounters {
         this._qNext = 0;
         this._packActive = false;
         this.packName = null;
+    }
+
+    /**
+     * Realm switch (main.enterRealm): drop every tracked member and the
+     * queue so the new realm opens with a clean field, a cleared pack name
+     * (audit 2026-08-10: sand still reported cold's "Ritual Circle") and a
+     * short breather before the first roam of the new table. The runtime's
+     * own clear() sweeps untracked spawns; this is the director's half.
+     * @returns {void}
+     */
+    onRealmChange() {
+        this._clearAll();
+        this._nextSpawnAt = this.time + 4;
+        this._rebuildBlips();
     }
 
     /**
