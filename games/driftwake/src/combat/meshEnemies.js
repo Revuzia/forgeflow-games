@@ -1040,6 +1040,23 @@ export class MeshEnemies {
                 const clip = THREE.AnimationClip.findByName(
                     type.clips, type.clipNames[i]);
                 if (!clip) { inst.acts.push(null); continue; }
+                // The boss ROLE_KIT names its third attack "death" (roster.js:
+                // ~93 documents the board's two-handed death-BLOW intent), but
+                // the GLB carries ONE clip of that name — the actual death —
+                // and mixer.clipAction returns the SAME action for the same
+                // clip, so the attack slot would alias the death action: the
+                // boss scrubs its own death as a telegraph and lies down
+                // mid-fight (qa_tpose_live finding, 2026-08-10). An attack
+                // slot that resolves to the death clip is dropped instead;
+                // the picker skips nulls and the boss keeps its real attacks.
+                // ROLE_KIT itself stays untouched — the list must keep
+                // matching manifest.json (roster.js:70-72).
+                if (i >= CL_ATTACK0 &&
+                    clip === THREE.AnimationClip.findByName(
+                        type.clips, type.clipNames[CL_DEATH])) {
+                    inst.acts.push(null);
+                    continue;
+                }
                 const a = inst.mixer.clipAction(clip);
                 if (i >= CL_ATTACK0 || i === CL_DEATH) {
                     a.setLoop(THREE.LoopOnce, 1);

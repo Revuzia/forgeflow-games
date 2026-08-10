@@ -30,8 +30,9 @@ with sync_playwright() as p:
     ready(pg); pg.wait_for_timeout(2500)
 
     # --- fresh visitor: no save -> only PLAY, no CONTINUE
-    pg.evaluate("localStorage.clear()")
-    pg.reload(wait_until="load"); ready(pg); pg.wait_for_timeout(2500)
+    # NOTE: the launch's ephemeral profile IS a fresh visitor. Do NOT
+    # localStorage.clear()+reload here — main.js saves on beforeunload, so a
+    # reload writes a level-1 blob back BEFORE the fresh check (false FAIL).
     m = pg.evaluate("""(() => {
         const ov = document.querySelector('.ffg-ov') || document.querySelector('[style*="z-index:60"]') ||
                    [...document.querySelectorAll('div')].find(d => d.textContent.includes('DRIFTWAKE') && d.querySelector('button'));
@@ -67,7 +68,7 @@ with sync_playwright() as p:
 
     # --- reload: CONTINUE appears and restores that level
     pg.reload(wait_until="load"); ready(pg); pg.wait_for_timeout(2500)
-    m2 = pg.evaluate("""(() => ({buttons: [...document.querySelectorAll('button')].map(b => b.textContent.trim()),
+    m2 = pg.evaluate(r"""(() => ({buttons: [...document.querySelectorAll('button')].map(b => b.textContent.trim()),
         note: [...document.querySelectorAll('div')].map(d => d.textContent).find(t => /^Level \d/.test(t || '')) || ''}))()""")
     hasCont = any('CONTINUE' in b for b in m2["buttons"])
     print(("PASS " if hasCont else "FAIL ") + f"CONTINUE offered after a save -> {m2['buttons']} note='{m2['note']}'")

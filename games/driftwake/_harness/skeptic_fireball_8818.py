@@ -29,7 +29,7 @@ from pathlib import Path
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 ROOT = Path(__file__).resolve().parents[3]
-PORT = 8802
+PORT = 8818
 GAME_URL = f"http://localhost:{PORT}/games/driftwake/index.html?autoplay"
 SHOTS = Path(__file__).resolve().parents[1] / "_shots"
 FLAGS = ["--ignore-gpu-blocklist", "--use-angle=d3d11", "--disable-gpu-sandbox",
@@ -60,22 +60,6 @@ INSTALL_JS = """() => {
         SF.combat.encounters._clearAll();
         SF.combat.enemies.clear();
     };
-    // CASE ISOLATION (skeptic 2026-08-10): a crescent from the previous case
-    // can still be in flight or burning when the next case spawns its enemy,
-    // hitting it at the wrong bell phase and latching the dedup — results
-    // then depend on case ORDER. Drain the sweep to fully idle (no pending
-    // carrier, no active crescent) in GAME time before every case.
-    window.__drain = () => new Promise((res) => {
-        const sw = SF.spells.sweep;
-        const t0 = reg.time;
-        const tick = () => {
-            const busy = (sw._pendSlot >= 0) || sw.active;
-            if (!busy && reg.time - t0 >= 0.5) return res(true);
-            if (reg.time - t0 > 10) return res(false);   // report, never hang
-            requestAnimationFrame(tick);
-        };
-        tick();
-    });
     return true;
 }"""
 
@@ -206,9 +190,6 @@ ENTER_REALM_JS = """async (name) => {
 
 
 def run_case(pg, label, key, level, dist, shots=False):
-    drained = pg.evaluate("() => window.__drain()")
-    if not drained:
-        print(f"[{label}] WARN sweep did not drain in 10 s game time")
     setup = pg.evaluate(SETUP_JS, {"key": key, "level": level, "dist": dist})
     if "err" in setup:
         print(f"[{label}] SETUP-FAIL {json.dumps(setup)}")
