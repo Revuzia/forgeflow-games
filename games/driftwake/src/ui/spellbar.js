@@ -28,6 +28,14 @@ const FLASH_MS = 340;
  * Slot order on screen. `id` is the INTERNAL spell id (never remapped);
  * `bind` is the label the player reads. Glyphs are inline SVG strokes.
  */
+/**
+ * Realm-palette name key per internal spell id — the slot tooltips take the
+ * live realm's fiction names (`REALM_PALETTE.*.names`), so cold's LMB reads
+ * "Rime Arc" (the frost-arc redesign) while sand's reads "Fulgurite Dart".
+ */
+const NAME_KEY = { 6: "lmb", 2: "stream", 1: "wave", 3: "bloom",
+                   4: "spikes", 5: "vortex" };
+
 const SLOTS = [
     // The primary bolt (internal id 6). Cooldown 0 and mana 0, so it is
     // deliberately absent from the cooldown-wipe loop below — a wipe on a
@@ -198,6 +206,9 @@ export class SpellBar {
         /** @type {{unlocked: Set<number>, unlockLevelOf?: (id:number)=>number}|null} */
         this.progression = null;
         this._lockState = { 1: null, 2: null, 3: null, 4: null, 5: null, 6: null };
+        /** Last realm `names` row applied to the slot tooltips. The rows are
+         *  frozen per realm, so a reference compare is the whole cache. */
+        this._names = null;
     }
 
     /** @param {{ overlay?: any, spells?: any }} refs @returns {void} */
@@ -215,6 +226,19 @@ export class SpellBar {
         if (show !== this._show) {
             this._show = show;
             this.el.classList.toggle("show", show);
+        }
+
+        // Tooltips carry the live realm's spell names (fiction layer only —
+        // REALM_PALETTE.*.names). Rows are frozen, so this writes the DOM
+        // exactly once per realm swap and allocates nothing on steady frames.
+        const names = this.spells && this.spells.ctx && this.spells.ctx.realm
+            ? this.spells.ctx.realm.names : null;
+        if (names && names !== this._names) {
+            this._names = names;
+            for (const idStr in this._slot) {
+                const nm = names[NAME_KEY[+idStr]];
+                if (nm) this._slot[+idStr].title = nm;
+            }
         }
 
         // Stream slot mirrors the ribbon hold (LMB), not the raw input, so

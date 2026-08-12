@@ -8,20 +8,27 @@ the driftwake hero_v2 rig's upper arms sit 0.51 (matrix_local maxdiff) away
 from the old character's, and 0.23 from Mixamo's generic mannequin. That is
 the same defect class as the 2026-08-04 folded-arm bug.
 
-THE MATH (rotations only; all matrices are armature-space 3x3)
+THE MATH (rotations only; TRUE world-space 3x3, object transforms folded in)
 The invariant worth preserving is the WORLD-SPACE DELTA FROM REST — how far
-the bone has swung away from its own bind pose — not the raw local rotation:
+the bone has swung away from its own bind pose — not the raw local rotation.
+With M_s / M_t the two armature OBJECTS' normalized world 3x3s (different
+importers park rigs in different bases — the 2026-08-11 leg-fold audit —
+so armature space is NOT a shared frame; both rigs are stood up to world +Z
+by `blender_enemy_clips._stand_up` before this runs):
 
-    D(n)  = W_src(n,t) @ R_rest_src(n)^-1          per-bone world delta
-    W_tgt(n,t) = D(n) @ R_rest_tgt(n)              same swing, target's rest
+    D(n)  = M_s @ W_src(n,t) @ R_rest_src(n)^-1 @ M_s^-1    world delta
+    W_tgt_world(n,t) = D(n) @ [M_t @ R_rest_tgt(n)]         same swing
 
-Blender composes W(n) = W(p) @ [R_rest(p)^-1 @ R_rest(n)] @ B(n), so the
-basis rotation that produces the wanted world orientation solves to
+Blender composes W(n) = W(p) @ [R_rest(p)^-1 @ R_rest(n)] @ B(n) in
+armature space, so the basis rotation that produces the wanted world
+orientation solves to
 
-    B(n) = R_rest_tgt(n)^-1 @ D(p)^-1 @ D(n) @ R_rest_tgt(n)     (D(root)=I)
+    B(n) = R_rest_tgt(n)^-1 @ M_t^-1 @ D(p)^-1 @ D(n) @ M_t @ R_rest_tgt(n)
 
-which is closed-form — no per-bone depsgraph round-trip, so a 300-frame clip
-retargets in one pass instead of 12k scene updates.
+with D(root's parent) = I. Closed-form — no per-bone depsgraph round-trip,
+so a 300-frame clip retargets in one pass instead of 12k scene updates.
+When M_s = M_t (the identity_test case) this reduces exactly to the old
+armature-space form.
 
 Hips translation is transferred as a UNIT-FREE ratio: the source's vertical
 displacement from its own rest, expressed in source hip-heights, re-applied
@@ -90,6 +97,17 @@ def retarget_action(src_arm, tgt_arm, clip_name, frame_start=None, frame_end=Non
     parent_of = {n: (tgt_arm.data.bones[n].parent.name
                      if tgt_arm.data.bones[n].parent else None) for n in shared}
 
+    # The two armature objects' world rotations. Folding these in is what
+    # makes D a TRUE world delta: pose.bones[].matrix is ARMATURE space, and
+    # the importers do not agree on what armature space means (glTF: Z-up by
+    # conjugation; Mixamo FBX: rig standing along +Y unless stood up).
+    # normalized() strips import scale (FBX ships 0.01) without touching
+    # orientation.
+    m_s = src_arm.matrix_world.to_3x3().normalized()
+    m_s_inv = m_s.inverted()
+    m_t = tgt_arm.matrix_world.to_3x3().normalized()
+    m_t_inv = m_t.inverted()
+
     hips = "mixamorig:Hips"
     ratio = _hip_height(tgt_arm) / _hip_height(src_arm)
     # World-space plumbing for the Hips transfer: vertical means WORLD Z.
@@ -132,17 +150,17 @@ def retarget_action(src_arm, tgt_arm, clip_name, frame_start=None, frame_end=Non
     for f in range(f0, f1 + 1):
         scn.frame_set(f)
         deps.update()
-        # per-bone world delta from the SOURCE
+        # per-bone world delta from the SOURCE (true world space, see header)
         D = {}
         for n in shared:
             Ws = src_arm.pose.bones[n].matrix.to_3x3()
             # normalise: only orientation carries over, never scale
             Ws = Ws.normalized()
-            D[n] = Ws @ rest_s[n].inverted()
+            D[n] = m_s @ Ws @ rest_s[n].inverted() @ m_s_inv
         for n in shared:
             p = parent_of[n]
             Dp_inv = D[p].inverted() if (p in D) else Matrix.Identity(3)
-            B = rest_t_inv[n] @ Dp_inv @ D[n] @ rest_t[n]
+            B = rest_t_inv[n] @ m_t_inv @ Dp_inv @ D[n] @ m_t @ rest_t[n]
             pb = tgt_arm.pose.bones[n]
             pb.rotation_quaternion = B.to_quaternion()
             pb.keyframe_insert("rotation_quaternion", frame=f, group=n)

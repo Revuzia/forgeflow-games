@@ -90,6 +90,13 @@ export class Dart {
         this.gen = new Int32Array(BOLT_MAX);
         /** 0 = a damaging primary bolt, 1 = a carrier head that only draws. */
         this.own = new Uint8Array(BOLT_MAX);
+        /**
+         * The `sizeMul` the slot was fired with — 1 for a plain bolt, 0.85 for
+         * a Frost Arc fan dart, 2.2 for the Ash fireball's head. Retained
+         * because `own` alone no longer says how big the landing is (the arc
+         * fan made carriers common), and the shockwave ring scales off this.
+         */
+        this.size = new Float32Array(BOLT_MAX);
         /** Set for exactly ONE frame, on the frame a slot terminates. */
         this.impact = new Uint8Array(BOLT_MAX);
         /** Set by the damage pass once a slot has spent its one direct hit. */
@@ -204,6 +211,7 @@ export class Dart {
         this.age[i] = 0;
         this.alive[i] = 1;
         this.own[i] = own | 0;
+        this.size[i] = sizeMul || 1;
         this.impact[i] = 0;
         this.spent[i] = 0;
         this._flash[i] = 0;

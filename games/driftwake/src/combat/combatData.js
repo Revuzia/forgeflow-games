@@ -861,6 +861,32 @@ export const combatData = {
         splashDamage: 4,     // §1.1 on-hit splash, adjacent targets only
         splashRadius: 1.2,   // §1.1 "micro-AoE 0.6–1.2 m" — outer bound used
         padRadius: 0.205,    // projectile radius = ribbon tube RADIUS (§1.1 quotes 0.205 m)
+
+        /**
+         * COLD LMB — the FROST ARC (owner redesign 2026-08-11).
+         *
+         * QA (`_harness/qa_dart.py`, this date) confirmed the owner's report:
+         * five darts at EXACT chest aim landed 1.84 hp of a possible ~60 —
+         * the hand-muzzle vs eye-ray parallax whiffs even a perfect aim at
+         * 6 m. In the cold realm the LMB is therefore a forgiving frontal
+         * ARC: every body inside the cone takes the dart's own per-hit
+         * damage/poise/chill (the three numbers above), plus the chill-slow
+         * below, and the ground along the arc is glazed to ice.
+         *
+         * The arc REPLACES the projectile in cold only; sand and ash keep
+         * the dart (`REALM_PALETTE.*.boltArc`). Volume resolved by
+         * `spellHits._frostArc()` via `forEachInCone`; the anti-kite
+         * speed-falloff row does not apply — the arc's range IS the tax.
+         * Divergence from COMBAT_DESIGN §1.1's realm-invariant Bolt row is
+         * deliberate and owner-directed; the spec addendum is pending.
+         */
+        arc: {
+            halfAngle: 1.05, // rad (~60°) — forgiving frontal cone half-angle
+            reach: 8,        // m
+            slowFrac: 0.40,  // 40% chill-slow via the registry's "slow" channel
+            slowDur: 2.5,    // s — tier/DR scaling is the registry's job (§5.3)
+            heightGate: 2.5, // m above the body's OWN ground: airborne sails over
+        },
     },
 
     /**

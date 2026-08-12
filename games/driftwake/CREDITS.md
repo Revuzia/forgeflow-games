@@ -54,6 +54,16 @@ Additions made here, none of which exist upstream:
   (`src/character/controller.js`); this build guards it, which is what makes the pause menu
   hold a pixel-stable frame.
 - **The comparison harness** (`_harness/`) and the specification documents in `_spec/`.
+- **Impact shockwave rings** (`src/vfx/shockwave.js`, `src/shaders/shockwave.glsl.js`) —
+  an expanding ground ring under bolt impacts and the Ash fireball detonation. The ring's
+  animation curves (radius on `pow(age, 0.55)`, band `smoothstep(width, 0, abs(d - radius))`,
+  brightness dying with `1 - age`) are adapted from the SHOCKWAVE decal in
+  **LinearAbiltyCastingThreeJS** (`src/effects/GroundDecals.js`) —
+  https://github.com/achrefelouafi/LinearAbiltyCastingThreeJS,
+  Copyright (c) 2026 **mohamedachrefelouafi**, **MIT Licence**. The implementation here is
+  written from scratch for this port's stack (RawShaderMaterial, GLSL ES 3.00, pooled
+  single-draw quads, no per-frame allocation); the licence and this notice cover the
+  adapted technique.
 
 ## Third-party runtime dependencies
 

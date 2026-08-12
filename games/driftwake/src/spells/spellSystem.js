@@ -36,6 +36,7 @@ import { Crystallize } from "./crystallize.js";
 import { Vortex } from "./vortex.js";
 import { Dart } from "./dart.js";
 import { HandWeave } from "./handWeave.js";
+import { ShockwaveRings } from "../vfx/shockwave.js";
 import { aimPoint, expDamp } from "./bending.js";
 
 /**
@@ -105,6 +106,18 @@ const BOLT_RANGE = 40;
 const BOLT_FALLBACK = 18;
 
 /**
+ * The cold FROST ARC's geometry, transcribed from `combatData.bolt.arc` the
+ * same way BOLT_CYCLE is transcribed from SPELLS.LMB — this module owns no
+ * combat import, and the two tables are kept in step by hand. The DAMAGE
+ * volume is resolved in `combat/spellHits.js` against `combatData.bolt.arc`;
+ * these two only shape the visual fan and the ground glaze.
+ */
+const ARC_HALF = 1.05;   // rad — combatData.bolt.arc.halfAngle
+const ARC_REACH = 8;     // m   — combatData.bolt.arc.reach
+/** Carrier darts per arc cast — visual only (`own = 1` never damages). */
+const ARC_FAN = 5;
+
+/**
  * THE REALM PALETTE — the eighteen identities, as three frozen rows.
  *
  * The governing rule (owner directive 4): the mechanic is constant across
@@ -135,7 +148,7 @@ export const REALM_PALETTE = {
         key: "cold",
         status: "Chill", statusMax: "Brittle",
         names: Object.freeze({
-            lmb: "Rime Lance", stream: "Rime Ribbon", wave: "Frost Wave",
+            lmb: "Rime Arc", stream: "Rime Ribbon", wave: "Frost Wave",
             bloom: "Powder Bloom", spikes: "Crystal Spikes",
             vortex: "Great Vortex",
         }),
@@ -165,6 +178,11 @@ export const REALM_PALETTE = {
         streamCone: false,                 // slot 1 stays a rope
         waveThrowM: 0,                     // slot 2 is born at the feet
         spikeCrater: false,                // slot 4 grows, it does not detonate
+        /** COLD LMB = the FROST ARC (owner redesign 2026-08-11): a forgiving
+         *  frontal cone that hits everything in front, chill-slows it and
+         *  glazes the ground — not a projectile. The ONE deliberate gameplay
+         *  divergence in this table; numbers in `combatData.bolt.arc`. */
+        boltArc: true,
     }),
 
     sand: Object.freeze({
@@ -204,6 +222,7 @@ export const REALM_PALETTE = {
         streamCone: false,
         waveThrowM: 0,                     // "the wave is still fine for sand"
         spikeCrater: true,                 // SAND EXPLOSION — a real crater
+        boltArc: false,                    // sand keeps the Fulgurite DART
     }),
 
     ash: Object.freeze({
@@ -237,6 +256,7 @@ export const REALM_PALETTE = {
         streamCone: true,                  // FIRE CONE from the hands
         waveThrowM: 5.0,                   // FIREBALL: thrown, then detonates
         spikeCrater: false,                // basalt columns still GROW
+        boltArc: false,                    // ash keeps the Cinder Spike DART
     }),
 };
 
@@ -385,6 +405,14 @@ export class SpellSystem {
         );
         this.ctx.bolt = this.bolt;
 
+        /**
+         * The impact shockwave rings (vfx/shockwave.js) — visual only, spawned
+         * by polling the bolt pool's one-frame impact flags after the spells
+         * have updated. Owned here because this is the file that knows the
+         * update order those flags depend on.
+         */
+        this.shockwave = new ShockwaveRings(scene, this.globals);
+
         this.sweep = new Sweep(this.ctx);
         this.ribbon = new Ribbon(this.ctx);
         this.bloom = new Bloom(this.ctx);
@@ -445,6 +473,17 @@ export class SpellSystem {
          */
         this._boltNext = 0;
 
+        /**
+         * FROST ARC cast edge (cold LMB). `arcGen` bumps once per arc cast;
+         * `combat/spellHits.js` polls it and resolves the cone against the
+         * registry the same frame (main.js order: spells -> registry ->
+         * spellHits). Origin, ground height and flat direction are captured
+         * at the cast — the aim can move on before the pass runs.
+         */
+        this.arcGen = 0;
+        this.arcX = 0; this.arcZ = 0; this.arcY = 0;
+        this.arcDirX = 0; this.arcDirZ = 1;
+
         this._camera = rig && rig.camera ? rig.camera : null;
 
         // Cold is the shipped look, and `setRealm` early-outs on an unchanged
@@ -484,7 +523,10 @@ export class SpellSystem {
 
     /** The three meshes `gfx.warmUp()` must force a draw through. */
     get warmUpMeshes() {
-        return [this.water.mesh, this.crystals.mesh, this.bolt.mesh];
+        return [
+            this.water.mesh, this.crystals.mesh, this.bolt.mesh,
+            this.shockwave.mesh,
+        ];
     }
 
     /**
@@ -554,6 +596,11 @@ export class SpellSystem {
         this._drainPending();
 
         for (let i = 0; i < this.spells.length; i++) this.spells[i].update(dt);
+
+        // After the bolt has updated (its impact flags are fresh for exactly
+        // this frame), before anything renders. Reading the flags consumes
+        // nothing — dart.js clears them itself next frame.
+        this.shockwave.update(dt, this.bolt, ctx);
 
         // The casting stance eases in while anything is up and out again after.
         // Nothing about it is a switch.
@@ -667,7 +714,10 @@ export class SpellSystem {
             // second. See the report for the one-line meshChar addition that
             // replaces this with a proper additive-layer row.
             ctx.controller.castWave = 3;
-            this._fireBolt();
+            // COLD: the LMB is the FROST ARC, not a projectile (owner
+            // redesign 2026-08-11; `REALM_PALETTE.cold.boltArc`).
+            if (ctx.realm.boltArc) this._fireArc();
+            else this._fireBolt();
             return;
         }
 
@@ -774,6 +824,81 @@ export class SpellSystem {
             dx, dy, dz,
             BOLT_SPEED, range || BOLT_RANGE, own || 0, sizeMul || 1
         );
+    }
+
+    /**
+     * The cold FROST ARC (owner redesign 2026-08-11): one forgiving frontal
+     * cone instead of a projectile that whiffed at exact aim (QA
+     * `_harness/qa_dart.py`: 1.84 hp landed of ~60 over five dead-on casts).
+     *
+     * Three things happen on the cast edge, all through existing machinery:
+     *
+     *   HIT VOLUME  recorded here (`arcGen`/`arcX..DirZ`), resolved by
+     *               `spellHits._frostArc()` via the registry's own
+     *               `forEachInCone` — the wave's precedent. Damage, chill and
+     *               the 40% slow live in `combatData.bolt.arc`.
+     *   VISUAL      a fan of ARC_FAN carrier darts (`own = 1` — they draw,
+     *               trail, flash and burst, never damage; dart.js docblock).
+     *               The existing pool: at 8 m reach a fan is gone in 0.38 s,
+     *               so two casts in flight is 10 of the 12 slots, no steal.
+     *   GROUND      an ice-glaze sector painted along the arc through the
+     *               deform ice channel — crystallize's own brush recipe,
+     *               thinned (15 brushes, well under the 96/frame cap). SSR
+     *               picks the glaze up as the frozen-ground read.
+     *
+     * The aim is FLATTENED like the wave's: the arc is a ground fan and a
+     * sky-pointed camera must not lift the hit cone. Allocation: none —
+     * scalars and the module scratch only.
+     */
+    _fireArc() {
+        const ctx = this.ctx;
+        const ch = ctx.controller;
+        let ax = this.aim.x, az = this.aim.z;
+        const fl = Math.hypot(ax, az) || 1;
+        ax /= fl; az /= fl;
+
+        this.arcX = ch.position.x;
+        this.arcZ = ch.position.z;
+        this.arcY = ch.position.y;
+        this.arcDirX = ax; this.arcDirZ = az;
+        this.arcGen = (this.arcGen + 1) | 0;
+
+        // The visual fan, spread over the inner 80% of the cone. A slight
+        // droop lands the tips near the glaze they painted.
+        this._handPosition(1, _hand, 0);
+        for (let k = 0; k < ARC_FAN; k++) {
+            const off = (k / (ARC_FAN - 1) - 0.5) * 2 * ARC_HALF * 0.8;
+            const c = Math.cos(off), s = Math.sin(off);
+            this.bolt.fire(
+                _hand[0], _hand[1], _hand[2],
+                ax * c - az * s, -0.06, ax * s + az * c,
+                BOLT_SPEED, ARC_REACH, 1, 0.85
+            );
+        }
+
+        // The ground freeze: three rings of elongated glaze brushes fanned
+        // across the sector. `ice` is realm-scaled exactly like crystallize's
+        // (cold glazes fully; the flag is cold-only today, but the scale
+        // keeps the recipe realm-correct if that ever changes).
+        const f = ctx.deform;
+        if (f) {
+            const R = ctx.realm;
+            for (let ring = 0; ring < 3; ring++) {
+                const r = 2.0 + ring * 2.3;            // 2.0 / 4.3 / 6.6 m
+                const n = 3 + ring * 2;                // 3 / 5 / 7 brushes
+                for (let k = 0; k < n; k++) {
+                    const a = (k / (n - 1) - 0.5) * 2 * ARC_HALF * 0.85;
+                    const c = Math.cos(a), s = Math.sin(a);
+                    const dx = ax * c - az * s;
+                    const dz = ax * s + az * c;
+                    f.brush(
+                        this.arcX + dx * r, this.arcZ + dz * r,
+                        1.15, 0.03, 0.02, 0.6, 0.9 * R.ice,
+                        Math.atan2(dz, dx), 1.7, 0.7
+                    );
+                }
+            }
+        }
     }
 
     /**

@@ -157,15 +157,23 @@ def rest_world_gltf(path):
 
     for i, n in enumerate(nodes):
         if n.get("name"):
-            # NO YUP2ZUP. This rest feeds blender_retarget's world-space delta
-            # D(n) = W_src(n,t) @ R_rest_src(n)^-1. A left-multiplied axis
-            # conversion appears in BOTH terms, so for any bone with a parent it
-            # cancels by conjugation -- but the retarget forces D(root) = I, so on
-            # the ROOT it does not, and the whole body arrives 90 deg about X:
-            # measured, our idle Hips rot[0] was 93.8 deg against the source's 7.0.
-            # The target body armature carries no such conversion, so the source
-            # must not either.
-            out[n["name"]] = world(i)
+            # CONJUGATED into Blender's basis: W_bl = C @ W_gltf @ C^-1 with
+            # C = +90 deg X. That is what the glTF IMPORTER does to every
+            # object it creates (measured 2026-08-11, _harness/
+            # blender_diag_bridge.py: the imported Hips empty carries its
+            # translation on Z where the raw node has it on Y, with the local
+            # axes permuted to match) -- and the empties drive the bake via
+            # COPY_TRANSFORMS, so the rebuilt REST must live in the SAME
+            # basis or D = W_bake @ R_rest^-1 picks up C R C^-1 R^-1 per
+            # bone. That term is ~0 for bones whose rest is near identity
+            # (Hips, Spine -- which is why the earlier "NO YUP2ZUP" version
+            # validated on a Hips-pitch probe and shipped) and ~180 deg about
+            # X for the UpLegs (rest ~180 deg about Z): every family-A clip
+            # folded the legs up through the torso. The 2026-08-07 comment
+            # that used to sit here modelled the importer as a LEFT-multiply;
+            # it is a conjugation, and the two models disagree exactly on the
+            # bones that broke.
+            out[n["name"]] = YUP2ZUP @ world(i) @ YUP2ZUP.inverted()
     return out
 
 
@@ -328,6 +336,51 @@ def reset_pose(arm):
 
 
 # ---------------------------------------------------------------- source clips
+def _stand_up(arm, label):
+    """Rotate the armature OBJECT so the rig stands along Blender world +Z.
+
+    MEASURED, not assumed, because the three source families and the target
+    bodies arrive through three different importers with three different axis
+    conventions (glTF empties: conjugated Z-up; Mixamo FBX: Y-up standing in
+    world; skinned glTF armature: importer's choice). `blender_retarget`
+    computes its delta in WORLD space and transfers it between rigs, and its
+    Hips plumbing filters "vertical" as world Z -- both are only meaningful
+    when every rig agrees which way is up. Up is read from the REST
+    Hips->Head direction (translations, deliberately NOT bone axes: under
+    the importer's conjugation a node's local axes permute, so axes lie
+    about "up" while positions cannot).
+
+    Idempotent: an already-Z-up rig is measured and left alone. A rig that is
+    upright in neither basis fails loudly rather than retargeting garbage.
+    """
+    hips = arm.data.bones.get("mixamorig:Hips")
+    head = arm.data.bones.get("mixamorig:Head")
+    if hips is None or head is None:
+        raise RuntimeError(label + ": no mixamorig:Hips/Head to measure up")
+
+    def up():
+        wm = arm.matrix_world
+        u = (wm @ head.matrix_local.translation
+             - wm @ hips.matrix_local.translation)
+        u.normalize()
+        return u
+
+    u = up()
+    if u.z > 0.7:
+        return arm
+    if u.y > 0.7:
+        arm.matrix_world = (Matrix.Rotation(math.radians(90.0), 4, "X")
+                            @ arm.matrix_world)
+        bpy.context.view_layer.update()
+        u = up()
+        log("%s: Y-up source stood up (+90 deg X); up now (%.2f, %.2f, %.2f)"
+            % (label, u.x, u.y, u.z))
+    if u.z <= 0.7:
+        raise RuntimeError("%s: rig not upright after stand-up, up=(%.2f, "
+                           "%.2f, %.2f)" % (label, u.x, u.y, u.z))
+    return arm
+
+
 def _build_family_a_armature(path, name):
     """Rebuild the missing armature for a 0-skin FBX2glTF clip and bake the
     empties' motion onto it. See the module docstring for why this is sound."""
@@ -408,7 +461,7 @@ def load_source(path, name):
         arm.name = name
         retime_action(arm.animation_data.action, OUT_FPS / float(src_fps))
         scn.render.fps = OUT_FPS
-        return arm
+        return _stand_up(arm, name + " (fbx)")
 
     scn.render.fps = OUT_FPS
     doc, _ = glb_chunks(path)
@@ -419,8 +472,8 @@ def load_source(path, name):
         arm = next(o for o in imported if o.type == "ARMATURE")
         purge_objects([o for o in imported if o is not arm])
         arm.name = name
-        return arm
-    return _build_family_a_armature(path, name)
+        return _stand_up(arm, name + " (family B)")
+    return _stand_up(_build_family_a_armature(path, name), name + " (family A)")
 
 
 # --------------------------------------------------------------- glTF merging
@@ -611,7 +664,7 @@ def load_body(path, name="TGT"):
     if arm.animation_data:
         arm.animation_data_clear()
     reset_pose(arm)
-    return arm
+    return _stand_up(arm, name + " (body)")
 
 
 def build_body(body, tmpdir, sources):
@@ -682,31 +735,32 @@ def selftest():
     ok, worst, who = RT.identity_test(arm)
     log("identity_test: ok=%s worst=%.3e bone=%s tolerance=1e-04" % (ok, worst, who))
 
-    def norm3(m):
-        r = m.to_3x3()
-        for i in range(3):
-            r[i].normalize()
-        return r
-
-    mine = {b.name: (norm3(arm.matrix_world @ b.matrix_local),
-                     (arm.matrix_world @ b.matrix_local).translation)
+    # Rest-pose agreement is checked on WORLD HEAD POSITIONS only. Joint
+    # positions pin a rest pose completely up to per-bone roll, and roll is a
+    # right-multiplied constant the retarget invariant is immune to (module
+    # docstring) — while comparing 3x3 bases across importers just measures
+    # each importer's axis convention (glTF conjugated Z-up vs FBX Y-up
+    # internal), which legitimately differs by ~90 deg since the 2026-08-11
+    # basis fix. The old 3x3 maxdiff check read 1.407 on a CORRECT rest for
+    # exactly that reason.
+    mine = {b.name: (arm.matrix_world @ b.matrix_local).translation
             for b in arm.data.bones}
+    pos_ok = True
     for label, path in (("mutant roaring.fbx", _SELFTEST_FBX),
                         ("anim_crouch.glb (family B)", _SELFTEST_B)):
         ref = load_source(path, "SELFTEST_REF")
-        wo = wp = 0.0
+        wp = 0.0
         for b in ref.data.bones:
             if b.name not in mine:
                 continue
-            r = norm3(ref.matrix_world @ b.matrix_local)
             p = (ref.matrix_world @ b.matrix_local).translation
-            wo = max(wo, max(abs(r[i][j] - mine[b.name][0][i][j])
-                             for i in range(3) for j in range(3)))
-            wp = max(wp, (p - mine[b.name][1]).length)
-        log("family-A rest vs %-26s 3x3 maxdiff=%.5f  head delta=%.6f m"
-            % (label, wo, wp))
+            wp = max(wp, (p - mine[b.name]).length)
+        log("family-A rest vs %-26s head delta=%.6f m (tolerance 0.01)"
+            % (label, wp))
+        if wp > 0.01:
+            pos_ok = False
         purge_objects([ref])
-    return 0 if ok else 3
+    return 0 if (ok and pos_ok) else 3
 
 
 # ------------------------------------------------------------------------ main

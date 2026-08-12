@@ -85,7 +85,13 @@ const AIR_CONTROL = 0.24;
 /** Descent rate, m/s, that reads as a full-strength landing. */
 const LAND_REF = 7.0;
 
-const SURF_MAX = 19.5;
+/**
+ * Surf top speed — OWNER DIRECTIVE 2026-08-11: "SURFING is too fast, slow it
+ * by 30%." Was 19.5; 19.5 * 0.7 = 13.65. The thrust/drag equilibrium (~34.7
+ * m/s) sits well above both values, so this hard cap IS the steady-state top
+ * speed on flat ground and the x0.7 lands exactly on the measured speed.
+ */
+const SURF_MAX = 13.65;
 const SURF_THRUST = 11.0;
 const SURF_DRAG = 0.42;
 const SURF_TURN = 2.35; // rad/s at full steer

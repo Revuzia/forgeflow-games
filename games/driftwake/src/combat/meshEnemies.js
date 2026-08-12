@@ -209,7 +209,7 @@ const SLOT_MAX = 24;
  * max-age=86400, so an in-place swap leaves players on yesterday's body for up
  * to a day. The query string changes the cache key.
  */
-const ENEMY_GLB_V = "e1";
+const ENEMY_GLB_V = "e2";   // e2: 2026-08-11 clip-basis rebuild (leg-fold fix)
 const ENEMY_DIR = "./assets/enemies/";
 const MANIFEST_URL = ENEMY_DIR + "manifest.json?v=" + ENEMY_GLB_V;
 const DRACO_PATH = "./assets/vendor/three/examples/jsm/libs/draco/gltf/";
@@ -806,6 +806,22 @@ export class MeshEnemies {
         type.protoMesh = mesh;
         type.yawFront = this._measureFront(mesh);
 
+        // FOOT ORIGIN. Meshy auto-rigged bodies do NOT share an origin
+        // convention: some sit at the hips/centre, some below the feet. The
+        // AI plants the ROOT at terrain height, so a hip-origined body stands
+        // buried to the chest. This was HALF of the owner's thrice-reported
+        // "enemies run in T-pose" (2026-08-10/11); the other half was the
+        // clip bundles themselves — every family-A retarget was baked in a
+        // mismatched basis, folding the legs up through the torso and
+        // splaying the arms (root cause + fix: tools/blender_enemy_clips.py
+        // rest_world_gltf conjugation + tools/blender_retarget.py world-space
+        // delta, forensics in _harness/qa_boneforensic.py — asset rebuild e2).
+        // Measured per body from the BIND-pose bounds in proto-root space;
+        // `_bind` scales it into world with the instance.
+        gltf.scene.updateMatrixWorld(true);
+        const bb = new THREE.Box3().setFromObject(gltf.scene);
+        type.bindMinY = Number.isFinite(bb.min.y) ? bb.min.y : 0;
+
         // ---- clips ------------------------------------------------------------
         // `anims: null` is how the manifest says a body is BIND-POSE ONLY
         // (roster.js:43-45). That is not an error: the body loads, gets no
@@ -1009,6 +1025,9 @@ export class MeshEnemies {
             tint: new Float32Array([1, 1, 1, 0]),
             live: 1,
             slot: -1,
+            /** World-metre lift that puts the body's FEET at the driven y
+             *  (cancels the GLB's own origin offset). Set in _bind. */
+            footLift: 0,
             /** Attack slot currently scrubbed, or -1. */
             atk: -1,
             /** Deterministic attack picker (never Math.random). */
@@ -1261,6 +1280,10 @@ export class MeshEnemies {
         // applied verbatim; `body.scale` on top is only the MESH_REUSE dress-up
         // factor, which is 1 for a body wearing itself.
         inst.root.scale.setScalar(type.unit.engineScale * body.scale);
+        // Feet on the ground: cancel the body's own origin offset (see
+        // `bindMinY` in _loadType). Negative bindMinY (hip origin) lifts the
+        // root; positive (origin below the feet) lowers it. World metres.
+        inst.footLift = -type.bindMinY * type.unit.engineScale * body.scale;
 
         const tint = body.tint ? TINT[body.tint] : null;
         if (tint) {
@@ -1289,7 +1312,7 @@ export class MeshEnemies {
             }
         }
 
-        inst.root.position.set(this.x[i], this.y[i], this.z[i]);
+        inst.root.position.set(this.x[i], this.y[i] + inst.footLift, this.z[i]);
         inst.root.rotation.y = type.yawFront;
         inst.root.visible = true;
         inst.mesh.visible = true;
@@ -1417,7 +1440,7 @@ export class MeshEnemies {
             const root = inst.root;
             root.position.set(
                 this.x[i] + fx * lungeM,
-                this.y[i] - sink - dSink,
+                this.y[i] - sink - dSink + (inst.footLift || 0),
                 this.z[i] + fz * lungeM
             );
             // Port frame: forward at facing f is (sin f, 0, −cos f), and

@@ -21,9 +21,9 @@
    "meshBytes": 3104664,
    "meshMiB": 2.961,
    "overBudget": false,
-   "clipBytes": 2206972,
-   "clipMiB": 2.105,
-   "totalMiB": 5.066
+   "clipBytes": 2182004,
+   "clipMiB": 2.081,
+   "totalMiB": 5.042
   },
   "sand": {
    "slugs": [
@@ -41,9 +41,9 @@
    "meshBytes": 2863232,
    "meshMiB": 2.731,
    "overBudget": false,
-   "clipBytes": 2050908,
-   "clipMiB": 1.956,
-   "totalMiB": 4.686
+   "clipBytes": 2024632,
+   "clipMiB": 1.931,
+   "totalMiB": 4.661
   },
   "ash": {
    "slugs": [
@@ -61,9 +61,9 @@
    "meshBytes": 2881304,
    "meshMiB": 2.748,
    "overBudget": false,
-   "clipBytes": 1921544,
-   "clipMiB": 1.833,
-   "totalMiB": 4.58
+   "clipBytes": 1893808,
+   "clipMiB": 1.806,
+   "totalMiB": 4.554
   }
  },
  "enemies": {
@@ -94,7 +94,7 @@
    ],
    "anims": {
     "file": "01_cold_rime_imp_anims.glb",
-    "bytes": 301144,
+    "bytes": 298728,
     "fps": 24,
     "inputSig": "e3500efe8600d055",
     "rigBones": 46,
@@ -102,7 +102,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35624,
+      "bytes": 33248,
       "bonesAnimated": 46,
       "channels": 47,
       "src": "anim_idle.glb"
@@ -201,7 +201,7 @@
    ],
    "anims": {
     "file": "02_cold_glacier_brute_anims.glb",
-    "bytes": 265360,
+    "bytes": 262928,
     "fps": 24,
     "inputSig": "e2baf7c896ceeddf",
     "rigBones": 52,
@@ -209,7 +209,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35720,
+      "bytes": 33344,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_idle.glb"
@@ -307,7 +307,7 @@
    ],
    "anims": {
     "file": "03_cold_frost_stalker_anims.glb",
-    "bytes": 163636,
+    "bytes": 161568,
     "fps": 24,
     "inputSig": "c5de096f1422999b",
     "rigBones": 28,
@@ -315,7 +315,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35336,
+      "bytes": 32960,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_idle.glb"
@@ -323,7 +323,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 5800,
+      "bytes": 6000,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_walk.glb"
@@ -406,7 +406,7 @@
    ],
    "anims": {
     "file": "11_sand_dune_imp_anims.glb",
-    "bytes": 333672,
+    "bytes": 331252,
     "fps": 24,
     "inputSig": "05c0c141797af119",
     "rigBones": 52,
@@ -414,7 +414,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35720,
+      "bytes": 33344,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_idle.glb"
@@ -513,7 +513,7 @@
    ],
    "anims": {
     "file": "12_sand_dune_brute_anims.glb",
-    "bytes": 195184,
+    "bytes": 192780,
     "fps": 24,
     "inputSig": "4bde23f8e17fea02",
     "rigBones": 34,
@@ -521,7 +521,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35432,
+      "bytes": 33056,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -619,7 +619,7 @@
    ],
    "anims": {
     "file": "13_sand_dust_stalker_anims.glb",
-    "bytes": 185016,
+    "bytes": 182612,
     "fps": 24,
     "inputSig": "4a352a2fb94fa40c",
     "rigBones": 34,
@@ -627,7 +627,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35432,
+      "bytes": 33056,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -717,7 +717,7 @@
    ],
    "anims": {
     "file": "16_sand_dust_mage_anims.glb",
-    "bytes": 192688,
+    "bytes": 190284,
     "fps": 24,
     "inputSig": "add8b35b6e965001",
     "rigBones": 34,
@@ -725,7 +725,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35432,
+      "bytes": 33056,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -816,7 +816,7 @@
    ],
    "anims": {
     "file": "21_ash_cinder_imp_anims.glb",
-    "bytes": 237172,
+    "bytes": 234764,
     "fps": 24,
     "inputSig": "72210e874afa88c2",
     "rigBones": 34,
@@ -824,7 +824,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35432,
+      "bytes": 33056,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -923,7 +923,7 @@
    ],
    "anims": {
     "file": "22_ash_slag_brute_anims.glb",
-    "bytes": 195096,
+    "bytes": 192544,
     "fps": 24,
     "inputSig": "a261b43747772f3f",
     "rigBones": 34,
@@ -931,7 +931,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35432,
+      "bytes": 33056,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -979,7 +979,7 @@
      {
       "name": "sweep",
       "durationS": 2.4167,
-      "bytes": 13728,
+      "bytes": 13712,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "standing melee attack horizontal.fbx"
@@ -1029,7 +1029,7 @@
    ],
    "anims": {
     "file": "25_ash_scorch_raider_anims.glb",
-    "bytes": 176568,
+    "bytes": 173836,
     "fps": 24,
     "inputSig": "c63819c19d9f7867",
     "rigBones": 28,
@@ -1037,7 +1037,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35336,
+      "bytes": 32960,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_idle.glb"
@@ -1045,7 +1045,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 6000,
+      "bytes": 5800,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_walk.glb"
@@ -1127,7 +1127,7 @@
    ],
    "anims": {
     "file": "26_ash_smoke_mage_anims.glb",
-    "bytes": 192608,
+    "bytes": 190204,
     "fps": 24,
     "inputSig": "75d4a5b14126dba5",
     "rigBones": 34,
@@ -1135,7 +1135,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35432,
+      "bytes": 33056,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -1226,7 +1226,7 @@
    ],
    "anims": {
     "file": "28_ash_cinder_sentinel_anims.glb",
-    "bytes": 180848,
+    "bytes": 177432,
     "fps": 24,
     "inputSig": "57ed7652c8bbed74",
     "rigBones": 34,
@@ -1234,7 +1234,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35432,
+      "bytes": 33056,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -1282,7 +1282,7 @@
      {
       "name": "thrust",
       "durationS": 2.3333,
-      "bytes": 13784,
+      "bytes": 13704,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "sword and shield attack.fbx"
@@ -1290,7 +1290,7 @@
      {
       "name": "slash",
       "durationS": 1.5,
-      "bytes": 7176,
+      "bytes": 7160,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_slash1.glb"
@@ -1298,7 +1298,7 @@
      {
       "name": "bash",
       "durationS": 1.2083,
-      "bytes": 7224,
+      "bytes": 7208,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "sword and shield kick.fbx"
@@ -1333,7 +1333,7 @@
    ],
    "anims": {
     "file": "29_ash_soot_assassin_anims.glb",
-    "bytes": 167880,
+    "bytes": 165488,
     "fps": 24,
     "inputSig": "b96ded33cfc2c2ce",
     "rigBones": 28,
@@ -1341,7 +1341,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35336,
+      "bytes": 32960,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_idle.glb"
@@ -1440,7 +1440,7 @@
    ],
    "anims": {
     "file": "31_v2_cold_rime_imp_anims.glb",
-    "bytes": 333384,
+    "bytes": 330960,
     "fps": 24,
     "inputSig": "4919964a09a8ac87",
     "rigBones": 52,
@@ -1448,7 +1448,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35720,
+      "bytes": 33344,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_idle.glb"
@@ -1547,7 +1547,7 @@
    ],
    "anims": {
     "file": "32_v2_cold_glacier_brute_anims.glb",
-    "bytes": 172056,
+    "bytes": 169660,
     "fps": 24,
     "inputSig": "7d490e89a0cebb47",
     "rigBones": 28,
@@ -1555,7 +1555,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35336,
+      "bytes": 32960,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_idle.glb"
@@ -1653,7 +1653,7 @@
    ],
    "anims": {
     "file": "34_v2_cold_ice_cultist_anims.glb",
-    "bytes": 188812,
+    "bytes": 186412,
     "fps": 24,
     "inputSig": "461e8f79463a3f1a",
     "rigBones": 34,
@@ -1661,7 +1661,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35432,
+      "bytes": 33056,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -1752,7 +1752,7 @@
    ],
    "anims": {
     "file": "39_v2_cold_blizzard_assassin_anims.glb",
-    "bytes": 188896,
+    "bytes": 186760,
     "fps": 24,
     "inputSig": "443cce82d5d4c876",
     "rigBones": 34,
@@ -1760,7 +1760,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35432,
+      "bytes": 33056,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -1824,7 +1824,7 @@
      {
       "name": "vanish",
       "durationS": 1.4583,
-      "bytes": 8728,
+      "bytes": 9000,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_dodge.glb"
@@ -1858,7 +1858,7 @@
    ],
    "anims": {
     "file": "43_v2_sand_dust_stalker_anims.glb",
-    "bytes": 163392,
+    "bytes": 160996,
     "fps": 24,
     "inputSig": "d2ee1396de468680",
     "rigBones": 28,
@@ -1866,7 +1866,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35336,
+      "bytes": 32960,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_idle.glb"
@@ -1957,7 +1957,7 @@
    ],
    "anims": {
     "file": "48_v2_sand_dune_sentinel_anims.glb",
-    "bytes": 181088,
+    "bytes": 177820,
     "fps": 24,
     "inputSig": "d8ee2f0f1f201486",
     "rigBones": 34,
@@ -1965,7 +1965,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35432,
+      "bytes": 33056,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -2005,7 +2005,7 @@
      {
       "name": "block",
       "durationS": 0.5417,
-      "bytes": 2840,
+      "bytes": 2856,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_block.glb"
@@ -2013,7 +2013,7 @@
      {
       "name": "thrust",
       "durationS": 2.3333,
-      "bytes": 13784,
+      "bytes": 13720,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "sword and shield attack.fbx"
@@ -2021,7 +2021,7 @@
      {
       "name": "slash",
       "durationS": 1.5,
-      "bytes": 7192,
+      "bytes": 7160,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_slash1.glb"
@@ -2029,7 +2029,7 @@
      {
       "name": "bash",
       "durationS": 1.2083,
-      "bytes": 7224,
+      "bytes": 7208,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "sword and shield kick.fbx"
@@ -2062,7 +2062,7 @@
    ],
    "anims": {
     "file": "50_v2_sand_dune_warden_anims.glb",
-    "bytes": 138132,
+    "bytes": 135404,
     "fps": 24,
     "inputSig": "776c10895880caf9",
     "rigBones": 28,
@@ -2070,7 +2070,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35336,
+      "bytes": 32960,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_idle.glb"
@@ -2078,7 +2078,7 @@
      {
       "name": "walk",
       "durationS": 1.0,
-      "bytes": 6000,
+      "bytes": 5800,
       "bonesAnimated": 28,
       "channels": 29,
       "src": "anim_walk.glb"
@@ -2152,7 +2152,7 @@
    ],
    "anims": {
     "file": "53_v2_ash_soot_stalker_anims.glb",
-    "bytes": 185004,
+    "bytes": 182600,
     "fps": 24,
     "inputSig": "00dd98ddf5108b9e",
     "rigBones": 34,
@@ -2160,7 +2160,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35432,
+      "bytes": 33056,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -2250,7 +2250,7 @@
    ],
    "anims": {
     "file": "60_v2_ash_scorch_warden_anims.glb",
-    "bytes": 228016,
+    "bytes": 223392,
     "fps": 24,
     "inputSig": "c3bcd8cbab67ebe9",
     "rigBones": 52,
@@ -2258,7 +2258,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35720,
+      "bytes": 33344,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_idle.glb"
@@ -2298,7 +2298,7 @@
      {
       "name": "sweep",
       "durationS": 1.2917,
-      "bytes": 7592,
+      "bytes": 7352,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "great sword slash.fbx"
@@ -2348,7 +2348,7 @@
    ],
    "anims": {
     "file": "61_v3_cold_frost_golem_anims.glb",
-    "bytes": 190740,
+    "bytes": 188332,
     "fps": 24,
     "inputSig": "1fa6b1ad18645001",
     "rigBones": 34,
@@ -2356,7 +2356,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35432,
+      "bytes": 33056,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -2446,7 +2446,7 @@
    ],
    "anims": {
     "file": "65_v3_cold_rime_skier_raider_anims.glb",
-    "bytes": 199280,
+    "bytes": 196876,
     "fps": 24,
     "inputSig": "f62a118f974fe546",
     "rigBones": 34,
@@ -2454,7 +2454,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35432,
+      "bytes": 33056,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -2544,7 +2544,7 @@
    ],
    "anims": {
     "file": "68_v3_cold_hail_plate_guard_anims.glb",
-    "bytes": 203664,
+    "bytes": 199780,
     "fps": 24,
     "inputSig": "513875cc2b856688",
     "rigBones": 46,
@@ -2552,7 +2552,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35624,
+      "bytes": 33248,
       "bonesAnimated": 46,
       "channels": 47,
       "src": "anim_idle.glb"
@@ -2592,7 +2592,7 @@
      {
       "name": "slash_combo",
       "durationS": 1.5,
-      "bytes": 7496,
+      "bytes": 7448,
       "bonesAnimated": 46,
       "channels": 47,
       "src": "sword and shield slash.fbx"
@@ -2608,7 +2608,7 @@
      {
       "name": "guard",
       "durationS": 0.5417,
-      "bytes": 3032,
+      "bytes": 2920,
       "bonesAnimated": 46,
       "channels": 47,
       "src": "anim_block.glb"
@@ -2643,7 +2643,7 @@
    ],
    "anims": {
     "file": "73_v3_sand_mummy_anims.glb",
-    "bytes": 248616,
+    "bytes": 246216,
     "fps": 24,
     "inputSig": "85c4a490815cd470",
     "rigBones": 34,
@@ -2651,7 +2651,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35432,
+      "bytes": 33056,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -2749,7 +2749,7 @@
    ],
    "anims": {
     "file": "75_v3_sand_bleached_bone_knight_anims.glb",
-    "bytes": 166128,
+    "bytes": 162556,
     "fps": 24,
     "inputSig": "cd3d5587a4b9e9dc",
     "rigBones": 34,
@@ -2757,7 +2757,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35432,
+      "bytes": 33056,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -2797,7 +2797,7 @@
      {
       "name": "slash_combo",
       "durationS": 1.5,
-      "bytes": 7304,
+      "bytes": 7256,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "sword and shield slash.fbx"
@@ -2813,7 +2813,7 @@
      {
       "name": "guard",
       "durationS": 0.5417,
-      "bytes": 2840,
+      "bytes": 2760,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_block.glb"
@@ -2847,7 +2847,7 @@
    ],
    "anims": {
     "file": "77_v3_sand_windscour_bandit_anims.glb",
-    "bytes": 246992,
+    "bytes": 244712,
     "fps": 24,
     "inputSig": "fe81767f6fc2fa83",
     "rigBones": 52,
@@ -2855,7 +2855,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35720,
+      "bytes": 33344,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_idle.glb"
@@ -2895,7 +2895,7 @@
      {
       "name": "slash",
       "durationS": 1.5,
-      "bytes": 7544,
+      "bytes": 7560,
       "bonesAnimated": 52,
       "channels": 53,
       "src": "anim_slash1.glb"
@@ -2944,7 +2944,7 @@
    ],
    "anims": {
     "file": "86_v3_ash_volcanic_plate_knight_anims.glb",
-    "bytes": 155508,
+    "bytes": 153108,
     "fps": 24,
     "inputSig": "e530da3e3fd29fa7",
     "rigBones": 34,
@@ -2952,7 +2952,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35432,
+      "bytes": 33056,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -3034,7 +3034,7 @@
    ],
    "anims": {
     "file": "88_v3_ash_furnace_guardian_anims.glb",
-    "bytes": 202844,
+    "bytes": 200440,
     "fps": 24,
     "inputSig": "5c26da1216e36e1b",
     "rigBones": 34,
@@ -3042,7 +3042,7 @@
      {
       "name": "idle",
       "durationS": 8.2917,
-      "bytes": 35432,
+      "bytes": 33056,
       "bonesAnimated": 34,
       "channels": 35,
       "src": "anim_idle.glb"
@@ -3108,5 +3108,5 @@
   }
  },
  "clipBudgetMiB": 2.5,
- "totalClipBytes": 6179424
+ "totalClipBytes": 6100444
 }

@@ -134,6 +134,12 @@ export class SpellHits {
         this._burstCb = (slot, id, d2) => this._bloomBurstHit(slot, id, d2);
         /** @type {(slot:number, id:number, d2:number)=>void} */
         this._splashCb = (slot, id, d2) => this._boltSplashHit(id);
+
+        // ---- frost arc (cold LMB) ------------------------------------------
+        /** Last `spells.arcGen` consumed — the cast-edge latch. */
+        this._arcGenSeen = 0;
+        /** @type {(slot:number, id:number, d:number)=>void} */
+        this._arcCb = (slot, id, d) => this._arcHit(slot, id);
     }
 
     /** @param {number} dt */
@@ -148,6 +154,7 @@ export class SpellHits {
         }
 
         this._bolt();
+        this._frostArc();
         this._whip(dt);
         this._wave();
         this._bloom(dt);
@@ -256,6 +263,61 @@ export class SpellHits {
         this.registry.damage(
             id, this.data.bolt.splashDamage * this.damageMult, { tag: "splash" }
         );
+    }
+
+    // =====================================================================
+    // LMB (cold) — the FROST ARC (owner redesign 2026-08-11)
+    // =====================================================================
+
+    /**
+     * One forgiving frontal cone per cast, replacing the projectile in the
+     * cold realm only (`REALM_PALETTE.cold.boltArc`; the spell layer bumps
+     * `spells.arcGen` exclusively on that path, so this pass needs no realm
+     * check of its own). The wave's `forEachInCone` precedent, resolved once
+     * on the cast edge — a single query IS the one-hit-per-cast latch.
+     *
+     * Every body inside takes the dart's own per-hit damage/poise/chill
+     * (`combatData.bolt`) plus the arc's 40% × 2.5 s chill-slow through the
+     * registry's "slow" channel (bloom's precedent — tier and §5.3 DR
+     * scaling are the registry's job). The §1.1 anti-kite falloff does NOT
+     * apply: an 8 m arc cannot kite, its reach is the tax.
+     *
+     * A `dt === 0` freeze frame returns before this runs, but the edge is
+     * not lost — `arcGen` persists and the next live frame consumes it.
+     */
+    _frostArc() {
+        const sp = this.spells;
+        if (sp.arcGen === undefined || sp.arcGen === this._arcGenSeen) return;
+        this._arcGenSeen = sp.arcGen;
+        const D = this.data.bolt.arc;
+        this.registry.forEachInCone(
+            sp.arcX, sp.arcZ, sp.arcDirX, sp.arcDirZ,
+            0, D.reach, D.halfAngle, this._arcCb
+        );
+    }
+
+    /** @param {number} slot @param {number} id */
+    _arcHit(slot, id) {
+        const reg = this.registry;
+        const D = this.data.bolt;
+        // The cone test is horizontal; the arc is a ground fan, so an
+        // AIRBORNE body (vortex-lifted) sails over it. Airborne is measured
+        // against the body's OWN ground, exactly like the wave's crest gate
+        // sinks with the terrain under the ENEMY — a caster-relative gate
+        // rejected a ground-standing imp 3.6 m uphill at 8 m
+        // (`_harness/qa_arcdiag.py`, 2026-08-11).
+        const gy = this.spells.ctx.terrain.heightAt(reg.x[slot], reg.z[slot]);
+        if (reg.y[slot] > gy + D.arc.heightGate) return;
+        const dmg = D.damage * (1 + (rand() * 2 - 1) * D.variance)
+                  * this.damageMult;
+        reg.damage(id, dmg, {
+            poise: D.poise,
+            chill: D.chill,            // 1 stack per hit, exactly like the dart
+            cc: "slow",
+            ccDur: D.arc.slowDur,
+            ccMag: D.arc.slowFrac,
+            tag: "bolt",
+        });
     }
 
     // =====================================================================
