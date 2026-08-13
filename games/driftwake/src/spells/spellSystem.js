@@ -37,6 +37,9 @@ import { Vortex } from "./vortex.js";
 import { Dart } from "./dart.js";
 import { HandWeave } from "./handWeave.js";
 import { ShockwaveRings } from "../vfx/shockwave.js";
+import { ImpactBursts } from "../vfx/burst.js";
+import { CastRing } from "../vfx/castRing.js";
+import { ArcDecal } from "../vfx/arcDecal.js";
 import { aimPoint, expDamp } from "./bending.js";
 
 /**
@@ -396,6 +399,9 @@ export class SpellSystem {
             realm: REALM_PALETTE.cold,
             time: 0,
             sprayScale: 1,
+            // Filled below with { burst } once the FX pools exist — the spells
+            // hold ctx by reference, exactly like `bolt`.
+            fx: null,
             handPosition: (which, out, off) => this._handPosition(which, out, off),
         };
 
@@ -417,6 +423,20 @@ export class SpellSystem {
          * update order those flags depend on.
          */
         this.shockwave = new ShockwaveRings(scene, this.globals);
+
+        /**
+         * The FX wave (LinearAbiltyCastingThreeJS adaptations, see CREDITS.md):
+         * detonation burst shells, the player cast rings and the frost-arc
+         * sector decal. Each is one pooled mesh, one draw while live, zero
+         * while idle — the shockwave pool's exact pattern. `ctx.fx` hands the
+         * burst pool to the three spells that detonate; the cast ring and the
+         * arc decal POLL this system's own state (`_pending`, `arcGen`)
+         * instead, so no spell file knows they exist.
+         */
+        this.burst = new ImpactBursts(scene, this.globals);
+        this.castRing = new CastRing(scene, this.globals);
+        this.arcDecal = new ArcDecal(scene, this.globals);
+        this.ctx.fx = { burst: this.burst };
 
         this.sweep = new Sweep(this.ctx);
         this.ribbon = new Ribbon(this.ctx);
@@ -526,11 +546,12 @@ export class SpellSystem {
         this._camera = camera || null;
     }
 
-    /** The three meshes `gfx.warmUp()` must force a draw through. */
+    /** The meshes `gfx.warmUp()` must force a draw through. */
     get warmUpMeshes() {
         return [
             this.water.mesh, this.crystals.mesh, this.bolt.mesh,
             this.shockwave.mesh,
+            this.burst.mesh, this.castRing.mesh, this.arcDecal.mesh,
         ];
     }
 
@@ -606,6 +627,12 @@ export class SpellSystem {
         // this frame), before anything renders. Reading the flags consumes
         // nothing — dart.js clears them itself next frame.
         this.shockwave.update(dt, this.bolt, ctx);
+        // The FX wave, same slot in the frame: the bursts age, the cast ring
+        // tracks `_pending` (after `_drainPending`, so the release edge is
+        // seen the frame it fires), the arc decal polls `arcGen`.
+        this.burst.update(dt);
+        this.castRing.update(dt, this);
+        this.arcDecal.update(dt, this);
 
         // The casting stance eases in while anything is up and out again after.
         // Nothing about it is a switch.

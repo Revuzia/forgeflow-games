@@ -79,6 +79,15 @@ export class Crystallize {
         }
 
         if (R.spikeCrater) this._crater(x, z, f);
+
+        // The detonation shell (vfx/burst.js) on the plant instant — the ice
+        // snap in Cold, the SAND EXPLOSION's fireball-of-grit in Sand, the
+        // columns' eruption in Ash. 2.6 m wraps the disc's 2.23 m full reach.
+        if (this.ctx.fx) {
+            this.ctx.fx.burst.spawn(
+                x, y + 0.35, z, 2.6, 0.7, 0.7, R
+            );
+        }
     }
 
     /**

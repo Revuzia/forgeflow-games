@@ -117,6 +117,7 @@ import { SpawnShrine } from "./world/shrine.js";
 import { Enemies } from "./combat/enemies.js";
 import { MeshEnemies } from "./combat/meshEnemies.js";
 import { WeatherField } from "./vfx/weather.js";
+import { TelegraphRings } from "./vfx/telegraph.js";
 import * as realms from "./world/realms.js";
 import { Encounters } from "./combat/encounters.js";
 import { Floaters } from "./ui/floaters.js";
@@ -518,6 +519,14 @@ async function boot() {
     enemies.attachVis(enemyVis);
     spells.addConsumers(enemyVis.material);
 
+    // Enemy windup telegraph rings (vfx/telegraph.js) — presentation over the
+    // enemies' live flash/reach state, one pooled draw. Constructed here with
+    // the combat stack; updated in the frame AFTER enemies.update so the
+    // rings carry this frame's flash.
+    const fxTelegraph = new TelegraphRings(
+        scene, spells.globals, enemies, terrain, spells
+    );
+
     // ------------------------------------------------------------- weather
     // Shares `spray.globals`, so weather rides the SAME jittered view-projection
     // the wake plume does — two particle systems resolving against different
@@ -653,7 +662,7 @@ async function boot() {
     // forced visible for the duration and put back exactly as they were.
     await warmUp(renderer, scene, rig.camera, [
         ...spells.warmUpMeshes, ...figure.warmUpMeshes(), ...meshChar.warmUpMeshes(),
-        wake.mesh, spray.mesh,
+        wake.mesh, spray.mesh, fxTelegraph.mesh,
     ]);
     await shadows.warmUp();
     await depthPass.warmUp(rig.camera);
@@ -770,6 +779,9 @@ async function boot() {
         spellHits.update(dt);
         shrine.update(dt);
         enemies.update(dt);
+        // After the bodies: the telegraph rings read this frame's windup
+        // flash and positions, before anything renders.
+        fxTelegraph.update(dt);
         encounters.update(dt);
         // AFTER sky.update() rebuilt uFog from S this frame, and before
         // drawFrame() reads it: weather multiplies the realm's fog boost into
@@ -1167,6 +1179,9 @@ async function boot() {
         weather, realms, enterRealm,
         combat: { registry, spellHits, enemies, encounters, targeting,
             data: combatData },
+        // The enemy windup telegraph rings — exposed the way `deform` is, so
+        // the FX probe can read its `.stats` and A/B its `enabled` flag.
+        fxTelegraph,
         // The spawn monument (world/shrine.js) — set dressing, exposed for
         // probes the way `deform` is. The training dummies it replaced are
         // gone from this surface deliberately: harnesses spawn real enemies.

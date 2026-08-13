@@ -94,6 +94,16 @@ export class Bloom {
             this._burst = true;
             this._crater();
             this._throw();
+            // The eruption shell (vfx/burst.js), at the same instant as the
+            // crater and the ring of thrown snow, so all three are one event.
+            // 2.8 m wraps the 2.0 m damage sphere the way the flash light
+            // wraps a bolt hit; taller than wide (squash 0.85) — an eruption,
+            // not a ground slap.
+            if (this.ctx.fx) {
+                this.ctx.fx.burst.spawn(
+                    this.x, this.y + 0.4, this.z, 2.8, 0.8, 0.85, this.ctx.realm
+                );
+            }
         }
 
         this._column();

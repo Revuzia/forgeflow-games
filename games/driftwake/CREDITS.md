@@ -64,6 +64,32 @@ Additions made here, none of which exist upstream:
   written from scratch for this port's stack (RawShaderMaterial, GLSL ES 3.00, pooled
   single-draw quads, no per-frame allocation); the licence and this notice cover the
   adapted technique.
+- **The spell FX wave** — four more techniques adapted, under the same MIT licence, from
+  the same **LinearAbiltyCastingThreeJS** repository (Copyright (c) 2026
+  **mohamedachrefelouafi**). As with the shockwave, every implementation is written from
+  scratch for this port's stack — RawShaderMaterial + GLSL ES 3.00, the shared
+  `lib/common` globals block, one pooled mesh and one draw call per system, zero
+  per-frame allocation — and the notices cover the adapted techniques:
+  - **Impact burst shells** (`src/vfx/burst.js`, `src/shaders/burst.glsl.js`), from
+    `src/effects/BurstSphere.js`: noise-displaced icospheres expanding on an outQuint
+    ease with a heat-keyed dissolve and fresnel rim; its compile-time elemental modes
+    (FROST's crystallising plates, FIRE's burning tear-line) are re-expressed as two
+    continuous parameters fed from the realm palette, so one program serves all realms.
+  - **Enemy windup telegraph rings** (`src/vfx/telegraph.js`,
+    `src/shaders/telegraph.glsl.js`), from `src/effects/ZoneIndicator.js`: the
+    signed-distance boundary band evaluated in metres, tick marks stepping the boundary,
+    and the trailing feathered rotating sweep; armed here from the enemies' windup flash,
+    with the interior fill front synced to it so the ring fills exactly at the strike.
+  - **Player cast rings** (`src/vfx/castRing.js`, `src/shaders/castring.glsl.js`), from
+    `src/effects/AimIndicator.js` / `ZoneIndicator.js`: the boundary-plus-inside-liner
+    read, rim-weighted interior wash, and the snap-out reveal — radius overshooting on
+    `sin(pi * t^1.7)` and settling as it flashes — on the release edge.
+  - **The frost-arc sector decal** (`src/vfx/arcDecal.js`,
+    `src/shaders/arcdecal.glsl.js`), from the FROST decal in
+    `src/effects/GroundDecals.js`: plane-sampled (never angular) lobed reach against a
+    `pow(age, 0.30)` front, height-field relief shaded by forward differences under the
+    scene's own sun, stepped-time glints, and the lit advancing lip; the sector gate and
+    radial edge flash are this port's own.
 
 ## Third-party runtime dependencies
 

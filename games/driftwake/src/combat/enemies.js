@@ -48,6 +48,7 @@
 import { TIER } from "./damageable.js";
 import { ENEMIES as COMBAT_ROWS } from "./combatData.js";
 import { ROSTER, MESH_REUSE, ROLE_KIT } from "./roster.js";
+import { Pathing } from "./pathing.js";
 
 /** Pool size (owner brief). Unchanged: the director's ceiling is MAX_PACK 8
  *  (encounters.js) and ALIVE_CAP is 6/8/8 per realm, so 24 still leaves 16
@@ -220,6 +221,19 @@ const K_PROJ = 1;       // bolt volley through the shared projectile pool
 const K_RING = 2;       // ground ring, jumped at ollie height (§1.4)
 const K_GAP = 3;        // dash to contact from gapCloserM, then contact damage
 const K_CHANNEL = 4;    // no direct damage — ritual / alarm / drag
+
+/**
+ * Read-only presentation exports for `vfx/telegraph.js`: the attack-kind ids
+ * (so it can skip PROJ volleys and damage-free CHANNELs) and the strike
+ * test's own player pad — the drawn reach ring must be the TESTED reach
+ * (`reach + MELEE_PAD` / `aRadius + MELEE_PAD` in `_strike`), not a copy
+ * that drifts. Presentation reads these; nothing writes them.
+ */
+export const ATTACK_KIND = Object.freeze({
+    MELEE: K_MELEE, PROJ: K_PROJ, RING: K_RING, GAP: K_GAP,
+    CHANNEL: K_CHANNEL,
+});
+export const STRIKE_PAD_M = MELEE_PAD;
 
 /**
  * Per-role behaviour profile. `arch` is the LEGACY EnemyVis silhouette bucket
@@ -732,6 +746,12 @@ export class Enemies {
         this._stealthFreeAt = 0;
         this._time = 0;
         this._pIFrameUntil = 0;
+
+        /** Slope-aware steering + separation + budgeted A* fallback. Feeds
+         *  `_move` a direction; owns no state machine and no position. It is
+         *  handed ST_RETURN so a stalled returner paths HOME, not at the
+         *  player — no import cycle. */
+        this.pathing = new Pathing(terrain, { stReturn: ST_RETURN, max: ENEMY_MAX });
     }
 
     /**
@@ -876,6 +896,9 @@ export class Enemies {
 
         this._updateBolts(dt);
         this._syncShields();
+        // Separation field + timers + at most one queued A* — before the
+        // brains, so every _move this frame steers off fresh data.
+        this.pathing.beginFrame(this, dt);
         for (let i = 0; i < ENEMY_MAX; i++) {
             if (this.alive[i]) this._brain(i, dt);
         }
@@ -1492,6 +1515,20 @@ export class Enemies {
                 }
             } else if (!staggered || u.hyperArmor) {
                 this._requestClip(i, CLIP_IDLE, -1);
+                // Standing at reach between swings: separation still applies,
+                // clamped to the stand band [0.5×reach, 0.8×reach] so this
+                // branch keeps full authority over the radial axis — a pack
+                // that all earned the §4.2 proximity override fans into a
+                // ring instead of nesting into one capsule.
+                const pt = this.pathing;
+                const mag = pt.standDrift(this, i, ux, uz, dist,
+                    reach * 0.72, reach * 0.8);
+                if (mag > 0) {
+                    const ds = spd * 0.8 * Math.min(1, mag);
+                    this.x[i] += pt.outX * ds * dt;
+                    this.z[i] += pt.outZ * ds * dt;
+                    this.speedNow[i] = ds;
+                }
                 if (this.cd[i] <= 0) this._tryAttack(i, u, dist, true);
             }
             return;
@@ -2046,10 +2083,18 @@ export class Enemies {
 
     // -------------------------------------------------------------- locomotion
 
-    /** @param {number} i move along (mx,mz) at spd m/s */
+    /**
+     * Move along (mx,mz) at spd m/s — routed through the pathing stack:
+     * slope-aware steering, separation, and path-follow adjust the DIRECTION
+     * only. Speed, state and the decision to move at all stay with the
+     * brains; attack/death/stagger states never call this.
+     * @param {number} i
+     */
     _move(i, mx, mz, spd, dt) {
-        this.x[i] += mx * spd * dt;
-        this.z[i] += mz * spd * dt;
+        const pt = this.pathing;
+        pt.steer(this, i, mx, mz, dt);
+        this.x[i] += pt.outX * spd * dt;
+        this.z[i] += pt.outZ * spd * dt;
         this.speedNow[i] = spd;
     }
 

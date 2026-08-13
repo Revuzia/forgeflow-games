@@ -17,7 +17,7 @@ from pathlib import Path
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 ROOT = Path(__file__).resolve().parents[3]
-GAME_URL = "http://localhost:8822/games/driftwake/index.html?autoplay"
+GAME_URL = "http://localhost:8799/games/driftwake/index.html?autoplay"
 FLAGS = ["--ignore-gpu-blocklist", "--use-angle=d3d11", "--disable-gpu-sandbox",
          "--enable-gpu-rasterization", "--disable-features=CalculateNativeWinOcclusion"]
 
@@ -77,7 +77,7 @@ def main():
     from playwright.sync_api import sync_playwright
 
     srv = subprocess.Popen(
-        [sys.executable, "-m", "http.server", "8822"], cwd=str(ROOT),
+        [sys.executable, "-m", "http.server", "8799"], cwd=str(ROOT),
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         with sync_playwright() as pw:

@@ -154,6 +154,16 @@ export class Sweep {
         this._brushOwed = 0;
         this._sprayOwed = 0;
         this.active = true;
+
+        // The detonation shell (vfx/burst.js) — the ignition IS the wave's
+        // detonation, and in Ash this is exactly the fireball's landing.
+        // Squashed to a ground dome; realm-tinted off the palette row.
+        if (ctx.fx) {
+            ctx.fx.burst.spawn(
+                ox, ctx.terrain.heightAt(ox, oz) + 0.15, oz,
+                3.4, 0.7, 0.55, ctx.realm
+            );
+        }
     }
 
     /**
