@@ -33,7 +33,7 @@ const FLASH_MS = 340;
  * live realm's fiction names (`REALM_PALETTE.*.names`), so cold's LMB reads
  * "Rime Arc" (the frost-arc redesign) while sand's reads "Fulgurite Dart".
  */
-const NAME_KEY = { 6: "lmb", 2: "stream", 1: "wave", 3: "bloom",
+const NAME_KEY = { 6: "lmb", 7: "arc", 1: "wave", 3: "bloom",
                    4: "spikes", 5: "vortex" };
 
 const SLOTS = [
@@ -43,10 +43,11 @@ const SLOTS = [
     { id: 6, bind: "LMB", name: "bolt",
       glyph: '<path d="M12 2.6l3.1 6.2v8.4L12 21.4l-3.1-4.2V8.8z"/>' +
              '<path d="M8.9 8.8h6.2"/>' },
-    { id: 2, bind: "1", name: "stream",
-      glyph: '<path d="M4 9c3-2.6 5 2.6 8 0s5 2.6 8 0"/>' +
-             '<path d="M4 14c3-2.6 5 2.6 8 0s5 2.6 8 0"/>' +
-             '<path d="M6.5 19c2.2-2 3.8 2 6.5 0s3.4 1.4 4.5.6"/>' },
+    // The frost arc (owner 2026-08-12): a cast edge with a real cooldown,
+    // so it wipes like keys 2-5. Realm name from the palette ("Rime Arc").
+    { id: 7, bind: "1", name: "arc",
+      glyph: '<path d="M4 16A10 8 0 0 1 20 16"/>' +
+             '<path d="M7 13l-2 4M12 11v5M17 13l2 4"/>' },
     { id: 1, bind: "2", name: "wave",
       glyph: '<path d="M3 16C6 8 12 5 21 7c-5 1-8 4-9.5 9"/>' +
              '<path d="M5 19.5c4-1.8 8-2 12-.8"/>' },

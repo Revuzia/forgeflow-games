@@ -87,6 +87,11 @@ const STRIKE_DELAY = { 1: 0.71, 3: 0.66, 4: 0.95, 5: 0.98, 6: 0 };
  * `cast()` exempts it from the unlock gate rather than waiting for that file.
  */
 export const BOLT_KEY = 6;
+/** The frost-arc hotkey (owner 2026-08-12: the arc lives on KEY 1,
+ *  not LMB). Cast edge from Digit1; free like the bolt, but with a
+ *  short cooldown so an AoE-with-slow cannot be strobed. */
+export const ARC_KEY = 7;
+const ARC_COOLDOWN = 1.5;
 
 /**
  * The bolt's engine numbers, transcribed from `combat/combatData.js`
@@ -688,12 +693,13 @@ export class SpellSystem {
         // all — no wind-up, no spend. `unlocked` is progression's live Set
         // of INTERNAL ids, pushed once at attach (identity is stable).
         //
-        // The BOLT is exempt. It is the level-1 filler that is never locked
-        // (COMBAT_DESIGN §0), and `progression.js`'s UNLOCK_LEVEL table and
-        // its save-load guard both stop at id 5 — so `unlocked` will not
-        // contain 6 and an unexempted gate would disable the primary attack
-        // for the whole game. `ui/spellbar.js` exempts it identically.
-        if (key !== BOLT_KEY && this.unlocked && !this.unlocked.has(key)) return;
+        // The BOLT and the ARC are exempt. They are the never-locked filler
+        // pair (COMBAT_DESIGN §0; owner 2026-08-12 put the arc on key 1),
+        // and progression's UNLOCK_LEVEL table stops at id 5 — an
+        // unexempted gate would disable them for the whole game.
+        // `ui/spellbar.js` exempts them identically.
+        if (key !== BOLT_KEY && key !== ARC_KEY &&
+            this.unlocked && !this.unlocked.has(key)) return;
 
         if (key === 2) {
             this.holdRibbon(true);
@@ -714,10 +720,23 @@ export class SpellSystem {
             // second. See the report for the one-line meshChar addition that
             // replaces this with a proper additive-layer row.
             ctx.controller.castWave = 3;
-            // COLD: the LMB is the FROST ARC, not a projectile (owner
-            // redesign 2026-08-11; `REALM_PALETTE.cold.boltArc`).
-            if (ctx.realm.boltArc) this._fireArc();
-            else this._fireBolt();
+            // LMB is ALWAYS the bolt again (owner 2026-08-12: "LMB was fine
+            // as a bolt" — the arc moved to ARC_KEY below; the palette's
+            // boltArc flag is retired from this path).
+            this._fireBolt();
+            return;
+        }
+
+        if (key === ARC_KEY) {
+            // The FROST ARC on hotkey 1 (owner 2026-08-12). Free like the
+            // bolt — the filler pair shares the no-mana economy — but an
+            // AoE that slows cannot be strobed, so it runs a real cooldown
+            // through the same `_cdUntil` map the toolbar wipes read.
+            if (this._time < (this._cdUntil[ARC_KEY] || 0)) return;
+            this._cdUntil[ARC_KEY] = this._time + ARC_COOLDOWN;
+            this._lastCast = this._time;
+            ctx.controller.castWave = 3;
+            this._fireArc();
             return;
         }
 

@@ -248,7 +248,10 @@ export function initInput(canvas, hooks) {
         // read `spellPressed` directly — so a hold would strobe a cast flash.
         // A dedicated keydown/keyup pair writes the held flag instead, exactly
         // as the mouse handlers used to, so contract 1's pin still works.
-        if (e.code === "Digit1") input.spellHeld2 = true;
+        // Digit1 is the FROST ARC cast edge (owner 2026-08-12). The held
+        // stream lost its keyboard bind; `spellHeld2` stays a writable
+        // property because the harness contract pins it directly.
+        if (e.code === "Digit1" && !e.repeat) input.spellPressed = 7;
 
         const n = SPELL_KEYS[e.code];
         if (n) input.spellPressed = n;
@@ -257,7 +260,7 @@ export function initInput(canvas, hooks) {
     window.addEventListener("keyup", (e) => {
         keys[e.code] = false;
         if (e.code === "Space") input.jump = false;
-        if (e.code === "Digit1") input.spellHeld2 = false;
+        // (Digit1 keyup: nothing — the arc is an edge, not a hold.)
     });
 
     window.addEventListener("blur", () => {
