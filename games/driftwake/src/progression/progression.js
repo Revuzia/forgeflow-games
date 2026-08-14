@@ -58,7 +58,9 @@ export const SCHEMA_VER = 3;   // v3 adds `pos` (auto-save position, owner 2026-
  * tag and the gate can never disagree.
  * @type {Record<number, number>}
  */
-export const UNLOCK_LEVEL = { 2: 1, 1: 1, 3: 2, 4: 4, 5: 6 };
+/** Owner ladder 2026-08-13: wave L2, bloom L4, spikes L6, vortex L8.
+ *  (id 2 = the unbound stream; kept at 1 so a re-bind never locks.) */
+export const UNLOCK_LEVEL = { 2: 1, 1: 2, 3: 4, 4: 6, 5: 8 };
 
 /**
  * Every tunable in one bag, so a data override (or a future realm variant)

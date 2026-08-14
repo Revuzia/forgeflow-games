@@ -85,7 +85,7 @@ SETUP = PRELUDE + """
     c.healthMax = 10000; c.health = 10000;
     // Spells 3 and 5 are level-locked at level 1; the ring under test hangs
     // off the CAST path, so the probe unlocks them the way progression would.
-    if (SF.spells.unlocked) { SF.spells.unlocked.add(3); SF.spells.unlocked.add(5); }
+    if (SF.spells.unlocked) { SF.spells.unlocked.add(1); SF.spells.unlocked.add(3); SF.spells.unlocked.add(4); SF.spells.unlocked.add(5); }
     // The clean-frame instrument: the controller drifts on a slope and
     // NOTHING in the rig snaps, so the stand is PINNED every frame and the
     // camera is given real game time to ease onto it before any shot.

@@ -125,10 +125,13 @@ export class ArcDecal {
             this.b[o + 1] = sp.arcDirZ;
             this.b[o + 2] = arc.reach;
             this.b[o + 3] = arc.halfAngle;
-            // Channel-squared saturation, as the shockwave pool does.
-            this.c[o + 0] = t.flashR * t.flashR;
-            this.c[o + 1] = t.flashG * t.flashG;
-            this.c[o + 2] = t.flashB * t.flashB;
+            // Authored decal ink (owner 2026-08-13): the squared flash
+            // tint was near-white over snow. arcInk is final color.
+            const ink = sp.ctx.realm.arcInk ||
+                { r: t.flashR, g: t.flashG, b: t.flashB };
+            this.c[o + 0] = ink.r;
+            this.c[o + 1] = ink.g;
+            this.c[o + 2] = ink.b;
             this.c[o + 3] = rand() * 10;
         }
 

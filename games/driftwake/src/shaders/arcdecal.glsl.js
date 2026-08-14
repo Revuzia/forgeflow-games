@@ -123,27 +123,29 @@ void main() {
     vec3 nrm = normalize(vec3((h - hx) / e * 0.35, 1.0, (h - hy) / e * 0.35));
     float lam = saturate(dot(nrm, uSunDir));
     float shade = 0.40 + 0.60 * pow(lam, 0.8);
-    float wash = cover * sector * shade * (0.30 + 0.25 * saturate(h + 0.5));
+    // Body opacity raised 2026-08-13 (owner: decal unreadably faint).
+    float wash = cover * sector * shade * (0.58 + 0.30 * saturate(h + 0.5));
 
     // ---- glints — stepped in time so they twinkle, not crawl ------------
     float gl = smoothstep(0.90, 1.0,
         noise2(p * 6.5 + floor(uTime * 7.0) * 0.37 + seed) * 0.5 + 0.5);
 
     // ---- the crisp boundary: outer arc rim + the two radial edges -------
-    float flash = 1.0 - age;
+    float flash = pow(saturate(1.0 - age), 0.55);
     float rim = smoothstep(0.30, 0.0, abs(dR - front)) * sector;
     float radial = smoothstep(0.12, 0.0, abs(theta - half_) * max(d, 0.001))
                  * cover * step(0.3, d);
 
     float alpha = (wash
-                 + rim * 0.90 * flash
-                 + radial * 0.70 * flash
-                 + gl * cover * sector * 0.5 * flash) * (1.0 - age * age);
+                 + rim * 1.15 * flash
+                 + radial * 0.85 * flash
+                 + gl * cover * sector * 0.5 * flash)
+                 * (1.0 - age * age * age);
     if (alpha < 0.004) discard;
 
-    vec3 white = mix(vCol, vec3(1.0), 0.7);
-    vec3 col = vCol * (wash * 1.6 + rim * 2.6 + radial * 2.0)
-             + white * gl * cover * sector * 1.8;
+    vec3 white = mix(vCol, vec3(1.0), 0.35);
+    vec3 col = vCol * (wash * 2.3 + rim * 3.2 + radial * 2.4)
+             + white * gl * cover * sector * 1.6;
     outColor = vec4(col, saturate(alpha));
 }
 `;

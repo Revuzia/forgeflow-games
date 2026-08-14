@@ -173,6 +173,9 @@ export const REALM_PALETTE = {
         // --- CPU side ------------------------------------------------------
         milk: Object.freeze({ sweep: 0.48, ribbon: 0.14, bloom: 0.42, vortex: 0.88 }),
         light: Object.freeze({ r: 1, g: 1, b: 1, mult: 1 }),
+        /** Arc ground-decal ink (owner 2026-08-13: the pale flash tint
+         *  read as nearly invisible on bright snow). Authored final. */
+        arcInk: Object.freeze({ r: 0.08, g: 0.42, b: 1.0 }),
         spray: Object.freeze({
             clodBias: 0, grainDragMul: 1, dustDragMul: 1,
             lifeMul: 1, sizeMul: 1,
@@ -215,6 +218,7 @@ export const REALM_PALETTE = {
         // The cold cyan (~0.45, 0.77, 1.0) times this lands on warm ochre, and
         // sand does not glow, so the intensity comes DOWN.
         light: Object.freeze({ r: 2.22, g: 0.94, b: 0.34, mult: 0.85 }),
+        arcInk: Object.freeze({ r: 1.0, g: 0.52, b: 0.10 }),
         spray: Object.freeze({
             clodBias: 0.45,                // grit is hard-edged, not powder
             grainDragMul: 0.55,            // and it falls rather than hanging
@@ -251,6 +255,7 @@ export const REALM_PALETTE = {
         surface: [0.52, 0.05, 1.5, 0.40],  // rough, opaque, emissive in the cracks
         milk: Object.freeze({ sweep: 0.80, ribbon: 0.72, bloom: 0.66, vortex: 0.90 }),
         light: Object.freeze({ r: 2.22, g: 0.55, b: 0.14, mult: 1.45 }),
+        arcInk: Object.freeze({ r: 1.0, g: 0.30, b: 0.06 }),
         spray: Object.freeze({
             clodBias: 0.55, grainDragMul: 0.35, dustDragMul: 1.05,
             lifeMul: 1.25, sizeMul: 0.9,

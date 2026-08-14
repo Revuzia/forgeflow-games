@@ -557,6 +557,8 @@ async function boot() {
     /** The realm currently in force — the token, for save blobs and the
      *  CONTINUE restore. `realm().name` is a display string. */
     let realmToken = "cold";
+    /** TEMP portal re-entrancy latch (see the frame-loop consumer). */
+    let realmSwitching = false;
 
     async function enterRealm(name) {
         // The TOKEN, never `realm().name`. The row's `name` is the display
@@ -792,6 +794,18 @@ async function boot() {
         // After the bodies moved: the cycle sorts by CURRENT distance and
         // drops a target that died or left range this frame.
         targeting.update(dt);
+        // TEMPORARY realm portals (owner 2026-08-13, keys 6/7): switch to the
+        // pressed realm, or back to Cold when already there. One switch in
+        // flight at a time — enterRealm awaits a body fetch and re-entrant
+        // calls would race the roster.
+        if (input.realmPortal && !realmSwitching) {
+            const want = input.realmPortal === realmToken
+                ? "cold" : input.realmPortal;
+            realmSwitching = true;
+            enterRealm(want).then(
+                () => { realmSwitching = false; },
+                () => { realmSwitching = false; });
+        }
         progression.update(dt);
         // The autosave heartbeat: a crash or tab close costs at most ten
         // seconds of stand. Event saves (dings, boss flags) still fire on

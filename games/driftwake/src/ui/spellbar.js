@@ -60,6 +60,16 @@ const SLOTS = [
     { id: 5, bind: "5", name: "vortex",
       glyph: '<path d="M12 12c0-1.8 2.6-2 3.6-.6 1.3 1.8-.2 4.6-2.6 5' +
              '-3.4.6-6.3-2.4-6-6C7.4 6 11.6 3.8 15.4 5.4c2.9 1.2 4.6 4 4.3 7"/>' },
+    // TEMPORARY realm portals (owner 2026-08-13): preview travel until the
+    // boss-gated realm doors exist. Press again in that realm to return to
+    // Cold. Remove this pair (and the input/main wiring) when real
+    // progression travel ships.
+    { id: 96, bind: "6", name: "sand portal",
+      glyph: '<path d="M3 15c3-4 6-4 9 0s6 4 9 0"/>' +
+             '<path d="M3 10c3-4 6-4 9 0s6 4 9 0" opacity="0.5"/>' },
+    { id: 97, bind: "7", name: "ash portal",
+      glyph: '<path d="M12 3c3 4 6 6.5 6 10a6 6 0 0 1-12 0c0-2 .8-3.6 2-5.4' +
+             'C9.2 9.4 12 7 12 3z"/>' },
 ];
 
 const CSS = `
@@ -210,6 +220,9 @@ export class SpellBar {
         /** Last realm `names` row applied to the slot tooltips. The rows are
          *  frozen per realm, so a reference compare is the whole cache. */
         this._names = null;
+        // Static tooltips for the TEMP portal slots (not realm-named).
+        if (this._slot[96]) this._slot[96].title = "TEMP portal: Sand realm (press again there to return to Cold)";
+        if (this._slot[97]) this._slot[97].title = "TEMP portal: Ash realm (press again there to return to Cold)";
     }
 
     /** @param {{ overlay?: any, spells?: any }} refs @returns {void} */
@@ -247,7 +260,10 @@ export class SpellBar {
         const held = !!(this.spells && this.spells.ribbon.held);
         if (held !== this._held) {
             this._held = held;
-            this._slot[2].classList.toggle("held", held);
+            // Slot 2 (the stream) left the bar 2026-08-12; the ribbon can
+            // still be held through the harness pin, so guard the DOM.
+            const s2 = this._slot[2];
+            if (s2) s2.classList.toggle("held", held);
         }
 
         // Lock states (progression §7): cached; a ding re-renders at most 5.
@@ -262,7 +278,12 @@ export class SpellBar {
                 // bare `has()` would render the primary attack greyed out
                 // forever. `spellSystem.cast()` exempts id 6 from the same
                 // gate for the same reason; see the note in its docblock.
-                const locked = id === 6 ? false : !prog.unlocked.has(id);
+                // 6 (bolt) AND 7 (arc) are the never-locked filler pair
+                // (spellSystem.cast exempts both); 96/97 are the TEMP
+                // realm portals — never locked either. Anything else
+                // reads progression's live Set.
+                const locked = (id === 6 || id === 7 || id >= 96)
+                    ? false : !prog.unlocked.has(id);
                 if (locked === this._lockState[id]) continue;
                 this._lockState[id] = locked;
                 const slot = this._slot[id];

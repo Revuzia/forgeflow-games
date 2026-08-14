@@ -52,6 +52,9 @@ with sync_playwright() as p:
         px: SNOWFLOW.character.position.x, pz: SNOWFLOW.character.position.z,
     }))()""")
     print("baseline:", base)
+    # Owner unlock ladder 2026-08-13: wave is L2 now; the smoke casts
+    # it at a fresh L1 save, so grant it explicitly.
+    pg.evaluate("SNOWFLOW.progression.unlocked.add(1)")
 
     # -- A: spawn rimeImp at 4 m --------------------------------------------
     eid = pg.evaluate(f"""(() => {{

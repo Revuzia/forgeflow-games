@@ -80,6 +80,9 @@ export const input = {
     /** One-frame edge: TAB pressed — the target-cycle step (combat/targeting).
      *  Plain data property cleared by endFrame(), like `spellPressed`. */
     targetCycle: false,
+    /** TEMP realm-portal edge: "sand" | "ash" | null. Set on Digit6/7,
+     *  consumed by main.js, cleared by endFrame(). */
+    realmPortal: null,
     /**
      * @type {boolean} the held STREAM channel (internal spell id 2, the Ribbon).
      *
@@ -252,6 +255,11 @@ export function initInput(canvas, hooks) {
         // stream lost its keyboard bind; `spellHeld2` stays a writable
         // property because the harness contract pins it directly.
         if (e.code === "Digit1" && !e.repeat) input.spellPressed = 7;
+        // TEMPORARY realm portals (owner 2026-08-13): 6 = Sand, 7 = Ash;
+        // main.js consumes the edge and toggles back to Cold when the
+        // pressed realm is already active. Remove with the toolbar pair.
+        if (e.code === "Digit6" && !e.repeat) input.realmPortal = "sand";
+        if (e.code === "Digit7" && !e.repeat) input.realmPortal = "ash";
 
         const n = SPELL_KEYS[e.code];
         if (n) input.spellPressed = n;
@@ -338,6 +346,7 @@ export function endFrame() {
     input.spellPressed = 0;
     input.jumpPressed = false;
     input.targetCycle = false;
+    input.realmPortal = null;
 }
 
 /**
