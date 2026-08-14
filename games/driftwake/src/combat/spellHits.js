@@ -34,6 +34,7 @@ import { clamp01, smooth01, bell, rand } from "../spells/bending.js";
 import { BOLT_MAX } from "../spells/dart.js";
 import { TIER } from "./damageable.js";
 import { combatData } from "./combatData.js";
+import { sfx } from "../audio/sfx.js";
 
 export class SpellHits {
     /**
@@ -544,6 +545,9 @@ export class SpellHits {
             dirZ: dz / d,
             tag: "wave",
         });
+        // The crest connecting with a body — heard at the body, once per cast
+        // (this line sits behind the same one-hit latch as the damage).
+        sfx.trigger("hit_wave", ex, reg.y[slot], ez);
         this._waveN = this._add(this._waveIds, this._waveN, id);
     }
 

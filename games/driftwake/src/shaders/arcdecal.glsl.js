@@ -36,8 +36,9 @@ export const ARC_UNIFORM_MAX = 2;
  */
 export const vertex = /* glsl */`
 #include "lib/common"
+#include "lib/groundfx"
 
-in vec3 position;               // (decalIndex, cornerIndex, unused)
+in vec3 position;               // (decalIndex, gridX 0..16, gridZ 0..16)
 
 uniform vec4 uArcA[2];
 uniform vec4 uArcB[2];
@@ -49,7 +50,6 @@ out vec3 vCol;
 
 void main() {
     int i = int(position.x);
-    int v = int(position.y);
 
     vec4 a = uArcA[i];
     vec4 b = uArcB[i];
@@ -57,23 +57,30 @@ void main() {
 
     float live = a.w < 1.0 ? 1.0 : 0.0;
     float reach = b.z;
-    // The quad hugs the sector: full reach downrange (plus the lobes' ragged
+    // The grid hugs the sector: full reach downrange (plus the lobes' ragged
     // margin), the cone's own sine laterally, a short apron behind the feet.
     float halfW = (reach * sin(b.w) * 1.12 + 0.9) * live;
     float len = (reach * 1.10 + 0.6) * live;
 
-    float cx = (v == 1 || v == 2) ? 1.0 : -1.0;
-    float cz = (v >= 2) ? 1.0 : 0.0;
+    // Grid corner fractions: lateral -1..1, downrange 0..1 (vfx/groundfxGrid).
+    float cx = position.y * (1.0 / 8.0) - 1.0;
+    float cz = position.z * (1.0 / 16.0);
     vLocal = vec2(cx * halfW, cz * len - 0.5 * live);
 
     vec3 fwd = vec3(b.x, 0.0, b.y);
     vec3 rgt = vec3(b.y, 0.0, -b.x);
-    vec3 P = a.xyz + fwd * vLocal.y + rgt * vLocal.x;
+    vec2 pXZ = a.xz + fwd.xz * vLocal.y + rgt.xz * vLocal.x;
+
+    // THE CLASS FIX (qa_groundfx.py): every grid vertex sits on the drawn
+    // snow — the terrain's own macro/fine/deform chain — instead of the whole
+    // decal riding flat at a.y. a.y stays the CPU anchor for probes only.
+    float cell = max(halfW * 2.0, len) * (1.0 / 16.0);
+    float h = groundFxHeight(pXZ, cell) + groundFxLift(cell);
 
     vAnim = vec4(a.w, reach, b.w, c.w);
     vCol = c.xyz;
 
-    gl_Position = uViewProj * vec4(P, 1.0);
+    gl_Position = uViewProj * vec4(pXZ.x, h, pXZ.y, 1.0);
 }
 `;
 
@@ -123,8 +130,13 @@ void main() {
     vec3 nrm = normalize(vec3((h - hx) / e * 0.35, 1.0, (h - hy) / e * 0.35));
     float lam = saturate(dot(nrm, uSunDir));
     float shade = 0.40 + 0.60 * pow(lam, 0.8);
-    // Body opacity raised 2026-08-13 (owner: decal unreadably faint).
-    float wash = cover * sector * shade * (0.58 + 0.30 * saturate(h + 0.5));
+    // Body opacity raised 2026-08-13 (owner: decal unreadably faint), then
+    // raised again after the terrain-conform fix: measured on the grade-0.6
+    // spawn slope (qa_groundfx.py), the additive wash at 0.58 contributed
+    // ~119 changed pixels against the rings' ~2800 — it read as terrain
+    // shadow, not as a spell. The ink HUE is authored (realm arcInk, final);
+    // these are intensity coefficients only.
+    float wash = cover * sector * shade * (0.95 + 0.40 * saturate(h + 0.5));
 
     // ---- glints — stepped in time so they twinkle, not crawl ------------
     float gl = smoothstep(0.90, 1.0,
@@ -137,14 +149,14 @@ void main() {
                  * cover * step(0.3, d);
 
     float alpha = (wash
-                 + rim * 1.15 * flash
-                 + radial * 0.85 * flash
+                 + rim * 1.5 * flash
+                 + radial * 1.1 * flash
                  + gl * cover * sector * 0.5 * flash)
                  * (1.0 - age * age * age);
     if (alpha < 0.004) discard;
 
     vec3 white = mix(vCol, vec3(1.0), 0.35);
-    vec3 col = vCol * (wash * 2.3 + rim * 3.2 + radial * 2.4)
+    vec3 col = vCol * (wash * 3.6 + rim * 4.2 + radial * 3.2)
              + white * gl * cover * sector * 1.6;
     outColor = vec4(col, saturate(alpha));
 }

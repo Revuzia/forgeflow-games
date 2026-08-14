@@ -30,19 +30,19 @@ import * as THREE from "three";
 import { shader } from "../core/glsl.js";
 import { vertex, fragment } from "../shaders/telegraph.glsl.js";
 import { ENEMY_MAX, ATTACK_KIND, STRIKE_PAD_M } from "../combat/enemies.js";
+import { buildGroundFxGrid } from "./groundfxGrid.js";
 
 /** Pool size — must match the uniform arrays in shaders/telegraph.glsl.js. */
 export const TELE_MAX = 8;
-
-/** Rings sit this far above the terrain so they never z-fight the snow. */
-const LIFT = 0.07;
 
 export class TelegraphRings {
     /**
      * @param {THREE.Scene} scene
      * @param {Record<string, {value:any}>} globals the `lib/common` block
      * @param {import("../combat/enemies.js").Enemies} enemies
-     * @param {{heightAt(x:number,z:number):number}} terrain
+     * @param {import("../terrain/terrain.js").Terrain} terrain heightAt for
+     *   the CPU anchor, plus `clipUniforms` + `deformUniforms` (shared by
+     *   reference) for the `lib/groundfx` chain the vertex stage drapes with
      * @param {import("../spells/spellSystem.js").SpellSystem} spells realm tint
      */
     constructor(scene, globals, enemies, terrain, spells) {
@@ -60,30 +60,20 @@ export class TelegraphRings {
 
         for (let i = 0; i < TELE_MAX; i++) this.a[i * 4 + 3] = -1;
 
-        const pos = new Float32Array(TELE_MAX * 4 * 3);
-        const idx = new Uint16Array(TELE_MAX * 6);
-        for (let i = 0; i < TELE_MAX; i++) {
-            for (let v = 0; v < 4; v++) {
-                pos[(i * 4 + v) * 3 + 0] = i;
-                pos[(i * 4 + v) * 3 + 1] = v;
-            }
-            const o = i * 4;
-            idx[i * 6 + 0] = o;
-            idx[i * 6 + 1] = o + 1;
-            idx[i * 6 + 2] = o + 2;
-            idx[i * 6 + 3] = o;
-            idx[i * 6 + 4] = o + 2;
-            idx[i * 6 + 5] = o + 3;
-        }
-        this.geometry = new THREE.BufferGeometry();
-        this.geometry.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-        this.geometry.setIndex(new THREE.BufferAttribute(idx, 1));
+        // 16x16 grid per slot (vfx/groundfxGrid.js): the vertex stage drapes
+        // every grid vertex onto the terrain's own height chain. One mesh,
+        // one draw, exactly as the flat quads were.
+        this.geometry = buildGroundFxGrid(TELE_MAX);
 
         this.material = new THREE.RawShaderMaterial({
             glslVersion: THREE.GLSL3,
             vertexShader: shader(vertex),
             fragmentShader: shader(fragment),
-            uniforms: Object.assign({}, globals, {
+            // clipUniforms + deformUniforms feed lib/groundfx — shared BY
+            // REFERENCE with the terrain's five programs, so the ring reads
+            // the same height/deform state the snow is drawn from.
+            uniforms: Object.assign({}, globals,
+                terrain.clipUniforms, terrain.deformUniforms, {
                 uTeleA: { value: this.a },
                 uTeleB: { value: this.b },
             }),
@@ -129,7 +119,10 @@ export class TelegraphRings {
                 }
                 const o = j * 4;
                 this.a[o + 0] = e.x[i];
-                this.a[o + 1] = this.terrain.heightAt(e.x[i], e.z[i]) + LIFT;
+                // CPU anchor height, for probes: the vertex stage re-derives
+                // the drawn height per grid vertex from the GPU chain
+                // (lib/groundfx) and ignores this.
+                this.a[o + 1] = this.terrain.heightAt(e.x[i], e.z[i]);
                 this.a[o + 2] = e.z[i];
                 this.a[o + 3] = Math.min(1, e.flash[i]);
                 this.b[o + 0] = u.aRadius[a] + STRIKE_PAD_M;

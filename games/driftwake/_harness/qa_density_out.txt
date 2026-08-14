@@ -1,0 +1,16 @@
+boot: goto
+boot: SNOWFLOW live
+== cold setup: {"realm": "cold", "notReady": [], "level": 3, "gameDt": 0.6, "twoAllowed": true, "err": null}
+== cold sim:   {"packs": 11, "peak": 10, "mean": 6.47, "longestGap": 0.7, "samples": 1044, "gameSecs": 90, "wallTimedOut": false, "aliveEnd": 2, "packNames": ["Scout Screen", "Scout Screen"], "err": null, "setup": {"realm": "cold", "notReady": [], "level": 3, "gameDt": 0.6, "twoAllowed": true, "err": null}}
+== sand setup: {"realm": "sand", "notReady": [], "level": 10, "gameDt": 0.523, "twoAllowed": true, "err": null}
+== sand sim:   {"packs": 12, "peak": 10, "mean": 6.07, "longestGap": 1.1, "samples": 1201, "gameSecs": 90, "wallTimedOut": false, "aliveEnd": 6, "packNames": ["Glass Patrol", "Glass Patrol"], "err": null, "setup": {"realm": "sand", "notReady": [], "level": 10, "gameDt": 0.523, "twoAllowed": true, "err": null}}
+== sand shot:  {"ok": true, "pack": "Bandit Doctrine", "live": 4, "anchor": [0, -181.6]}
+   -> C:\Users\TestRun\Claude Claw\forgeflow-games\games\driftwake\_shots\density_sand.png
+== ash setup: {"realm": "ash", "notReady": [], "level": 20, "gameDt": 0.745, "twoAllowed": true, "err": null}
+== ash sim:   {"packs": 11, "peak": 9, "mean": 5.48, "longestGap": 1.7, "samples": 1201, "gameSecs": 90.1, "wallTimedOut": false, "aliveEnd": 6, "packNames": ["Beacon Route", "Slope Chase"], "err": null, "setup": {"realm": "ash", "notReady": [], "level": 20, "gameDt": 0.745, "twoAllowed": true, "err": null}}
+== ash shot:  {"ok": true, "pack": "Slope Chase", "live": 3, "anchor": [0, -341.5]}
+   -> C:\Users\TestRun\Claude Claw\forgeflow-games\games\driftwake\_shots\density_ash.png
+cold: PASS  packs=11 peak=10 mean=6.47 gap=0.7s
+sand: PASS  packs=12 peak=10 mean=6.07 gap=1.1s
+ash: PASS  packs=11 peak=9 mean=5.48 gap=1.7s
+RESULT: PASS

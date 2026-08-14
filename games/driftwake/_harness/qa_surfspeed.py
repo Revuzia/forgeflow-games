@@ -89,15 +89,22 @@ def main():
                 timeout=120000)
             pg.wait_for_timeout(2000)
 
-            # Real pointer-lock click on the canvas.
-            pg.mouse.click(640, 360)
-            pg.wait_for_timeout(500)
-            setup = pg.evaluate(SETUP_JS)
-            print("SETUP", json.dumps(setup))
-            if not setup["locked"]:
+            # Real pointer-lock click on the canvas. Chrome rejects a lock
+            # request too soon after load or a prior exit, so retry the click
+            # until the lock actually engages (2026-08-13: 3 of 4 runs never
+            # locked off a single click and measured WALK speed as "surf").
+            setup = None
+            for _ in range(6):
+                pg.bring_to_front()
                 pg.mouse.click(640, 360)
-                pg.wait_for_timeout(500)
-                print("RELOCK", json.dumps(pg.evaluate(STATE_JS)))
+                pg.wait_for_timeout(700)
+                setup = pg.evaluate(SETUP_JS)
+                print("SETUP", json.dumps(setup))
+                if setup["locked"]:
+                    break
+                pg.wait_for_timeout(1500)
+            if not setup["locked"]:
+                raise RuntimeError("pointer lock never engaged")
 
             # ---- SURF: hold W + RMB (real input), measure steady state.
             pg.keyboard.down("w")

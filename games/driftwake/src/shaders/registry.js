@@ -33,6 +33,7 @@ import deform from "./lib/deform.glsl.js";       // [DEFORM]
 import noise from "./lib/noise.glsl.js";                    // [TERRAIN]
 import terrain from "./lib/terrain.glsl.js";                // [TERRAIN]
 import clipmap from "./lib/clipmap.glsl.js";                // [TERRAIN]
+import groundfx from "./lib/groundfx.glsl.js";              // [SPELLS/FX]
 //   import deform       from "./lib/deform.glsl.js";       // [DEFORM]
 import shadowLookup from "./lib/shadowLookup.glsl.js";     // [SHADOWS]
 import atmosphere from "./lib/atmosphere.glsl.js";   // [SKY]
@@ -103,6 +104,12 @@ const CHUNKS = {
     // clipmapSurface() call the beauty, cascade and prepass vertex stages share
     // so they cannot drift. Vertex stages only. [TERRAIN]
     "lib/clipmap": clipmap,
+    // groundFxHeight()/groundFxLift(): the terrain-conforming displacement the
+    // three ground-FX vertex stages (arc decal, telegraph rings, cast rings)
+    // share, so a decal can never disagree with the snow it sits on. Pulls in
+    // lib/clipmap — vertex stages only. Consumers carry terrain.clipUniforms +
+    // terrain.deformUniforms. [SPELLS/FX]
+    "lib/groundfx": groundfx,
     // The snow BRDF: wrapped diffuse, the back-scatter subsurface term with its
     // depth-dependent blue tint, GGX, procedural grazing-gated glints, RNM normal
     // blending. Declares the sss/glint uniform block. [SNOW-SHADING]

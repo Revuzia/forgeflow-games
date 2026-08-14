@@ -471,6 +471,28 @@ export class CharacterController {
             this.velocity.x *= k;
             this.velocity.z *= k;
         }
+
+        // An adverse grade may scrub a driven carve to a STOP, never drive it
+        // BACKWARD along its own facing — an edged board digs in rather than
+        // sliding back down the hill. On the spawn-area grades (~0.9 rise/run)
+        // `slopeAssist` exceeds SURF_THRUST and the summed drive goes net
+        // negative; before this clamp that reversed the carve (owner bug
+        // 2026-08-13, reproduced at headings 180/225 from spawn, fwd speed
+        // -3..-4.6 m/s — and identically with the cap at 19.5, so the
+        // 2026-08-11 SURF_MAX cut was unrelated). The clamp removes exactly
+        // the negative-forward component and only while the input drives
+        // forward: the pull-back scrub (moveZ < 0) keeps its full braking
+        // authority, and any carve with positive forward speed — flat
+        // steady-state, downhill, drift — is bit-for-bit untouched. Grip has
+        // already killed the lateral part, so a clamped stall settles to rest
+        // instead of creeping sideways.
+        if (input.moveZ >= 0) {
+            const fwd = this.velocity.x * fx + this.velocity.z * fz;
+            if (fwd < 0) {
+                this.velocity.x -= fx * fwd;
+                this.velocity.z -= fz * fwd;
+            }
+        }
     }
 
     /**

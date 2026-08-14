@@ -49,6 +49,7 @@ import { TIER } from "./damageable.js";
 import { ENEMIES as COMBAT_ROWS } from "./combatData.js";
 import { ROSTER, MESH_REUSE, ROLE_KIT } from "./roster.js";
 import { Pathing } from "./pathing.js";
+import { sfx } from "../audio/sfx.js";
 
 /** Pool size (owner brief). Unchanged: the director's ceiling is MAX_PACK 8
  *  (encounters.js) and ALIVE_CAP is 6/8/8 per realm, so 24 still leaves 16
@@ -751,7 +752,8 @@ export class Enemies {
          *  `_move` a direction; owns no state machine and no position. It is
          *  handed ST_RETURN so a stalled returner paths HOME, not at the
          *  player — no import cycle. */
-        this.pathing = new Pathing(terrain, { stReturn: ST_RETURN, max: ENEMY_MAX });
+        this.pathing = new Pathing(terrain,
+            { stReturn: ST_RETURN, max: ENEMY_MAX, reachPad: MELEE_PAD });
     }
 
     /**
@@ -1250,7 +1252,15 @@ export class Enemies {
                 // Spike-stun during it cancels (both handled above).
                 this._face(i, ux, uz, dt);
                 this._requestClip(i, this._alarmClip(u), 1 - this.stateT[i] / ALARM_S);
-                this.flash[i] = Math.min(1, this.flash[i] + dt / ALARM_S);
+                {
+                    // Telegraph cue at the same threshold the visual flash
+                    // reads as "committed" — once per climb, on the crossing.
+                    const f0 = this.flash[i];
+                    this.flash[i] = Math.min(1, this.flash[i] + dt / ALARM_S);
+                    if (f0 < 0.6 && this.flash[i] >= 0.6) {
+                        sfx.trigger("enemy_windup", this.x[i], this.y[i] + 1, this.z[i]);
+                    }
+                }
                 this.stateT[i] -= dt;
                 if (this.stateT[i] <= 0) {
                     this._broadcast(i, u.alarmM);
@@ -1278,7 +1288,16 @@ export class Enemies {
                 this._face(i, ux, uz, dt);
                 const a = this.atk[i];
                 const tele = a >= 0 ? u.aTele[a] : 0.5;
-                this.flash[i] = Math.min(1, this.flash[i] + dt / Math.max(0.05, tele));
+                {
+                    // The windup cue (subtle — a tell, not an alarm): fires
+                    // once as the telegraph flash crosses 0.6, the same
+                    // brightness the fxTelegraph ring keys its urgency on.
+                    const f0 = this.flash[i];
+                    this.flash[i] = Math.min(1, this.flash[i] + dt / Math.max(0.05, tele));
+                    if (f0 < 0.6 && this.flash[i] >= 0.6) {
+                        sfx.trigger("enemy_windup", this.x[i], this.y[i] + 1, this.z[i]);
+                    }
+                }
                 this.atkT[i] += dt;
                 this._requestClip(i, a >= 0 ? u.aClip[a] : CLIP_IDLE,
                     this.atkDur[i] > 0 ? this.atkT[i] / this.atkDur[i] : 0);
@@ -1527,6 +1546,20 @@ export class Enemies {
                     const ds = spd * 0.8 * Math.min(1, mag);
                     this.x[i] += pt.outX * ds * dt;
                     this.z[i] += pt.outZ * ds * dt;
+                    // The drift may never EXIT the stand band: one 60 Hz
+                    // step at imp speed (~0.08 m) can cross the 0.8→0.85
+                    // reach hysteresis and re-trigger the walk-in branch,
+                    // so the radial overshoot is clamped back to the band
+                    // top. The band belongs to THIS branch — pathing only
+                    // offers a direction.
+                    const cp = this.controller.position;
+                    const ddx = this.x[i] - cp.x, ddz = this.z[i] - cp.z;
+                    const dd = Math.sqrt(ddx * ddx + ddz * ddz);
+                    const top = reach * 0.8;
+                    if (dd > top) {
+                        this.x[i] = cp.x + ddx / dd * top;
+                        this.z[i] = cp.z + ddz / dd * top;
+                    }
                     this.speedNow[i] = ds;
                 }
                 if (this.cd[i] <= 0) this._tryAttack(i, u, dist, true);
@@ -1850,6 +1883,9 @@ export class Enemies {
             this.progression.isInvulnerable()) return;
         const c = this.controller;
         c.health = Math.max(0, c.health - dmg);
+        // Behind the i-frame and invulnerability gates above, so the thud
+        // means "you were actually hit", never "something swung at you".
+        sfx.trigger("player_hurt");
         this._pIFrameUntil = this._time + PLAYER_IFRAME_S;
     }
 
@@ -2203,6 +2239,9 @@ export class Enemies {
 
     /** Death shatter through the shared spray pool (§9.4 death VFX rule). */
     _shatter(i) {
+        // The dissolve, heard where the body broke. Before the spray guard:
+        // the kill is the event, not the particles.
+        sfx.trigger("enemy_death", this.x[i], this.y[i] + 0.8, this.z[i]);
         if (!this.spray) return;
         const u = this.units[this.unitOf[i]];
         const cy = this.y[i] + u.height * 0.5;

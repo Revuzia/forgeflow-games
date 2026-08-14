@@ -36,8 +36,9 @@ export const CAST_UNIFORM_MAX = 2;
  */
 export const vertex = /* glsl */`
 #include "lib/common"
+#include "lib/groundfx"
 
-in vec3 position;               // (ringIndex, cornerIndex, unused)
+in vec3 position;               // (ringIndex, gridX 0..16, gridZ 0..16)
 
 uniform vec4 uCastA[2];
 uniform vec4 uCastB[2];
@@ -49,16 +50,13 @@ out vec3 vCol;
 
 void main() {
     int i = int(position.x);
-    int v = int(position.y);
 
     vec4 a = uCastA[i];
     vec4 b = uCastB[i];
     vec4 c = uCastC[i];
 
-    vec2 k = vec2(
-        (v == 1 || v == 2) ? 1.0 : -1.0,
-        (v >= 2)           ? 1.0 : -1.0
-    );
+    // Grid corner fractions -1..1 on both axes (vfx/groundfxGrid).
+    vec2 k = vec2(position.y, position.z) * (1.0 / 8.0) - 1.0;
 
     float ext = a.w < 0.0 ? 0.0 : c.z * 1.30 + 0.5;
 
@@ -66,8 +64,14 @@ void main() {
     vAnim = vec4(max(a.w, 0.0), b.x, c.x, c.y);
     vCol = b.yzw;
 
-    vec3 P = a.xyz + vec3(vLocal.x, 0.0, vLocal.y);
-    gl_Position = uViewProj * vec4(P, 1.0);
+    // THE CLASS FIX (qa_groundfx.py): the AoE promise drapes the drawn snow
+    // via the terrain's own macro/fine/deform chain instead of riding flat at
+    // a.y — on a slope the old quad showed only its downhill sliver.
+    vec2 pXZ = a.xz + vLocal;
+    float cell = ext * (2.0 / 16.0);
+    float h = groundFxHeight(pXZ, cell) + groundFxLift(cell);
+
+    gl_Position = uViewProj * vec4(pXZ.x, h, pXZ.y, 1.0);
 }
 `;
 

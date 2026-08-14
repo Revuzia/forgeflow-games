@@ -1,0 +1,99 @@
+{
+ "before": {
+  "level": 1,
+  "xp": 0,
+  "need": 50,
+  "driftmarks": 0,
+  "boons": [],
+  "deaths": 0,
+  "rested": 0,
+  "unlocked": [
+   2
+  ],
+  "bosses": []
+ },
+ "fresh": {
+  "level": 1,
+  "need": 50,
+  "unlocked": [
+   2
+  ],
+  "bossesKilledIsArray": true,
+  "driftmarkSpendAPI": "undefined",
+  "boonAPI": "undefined"
+ },
+ "L1_imp_a": {
+  "xp": 3,
+  "why": "kill",
+  "tier": 0,
+  "enemyLevel": 1,
+  "dinged": false,
+  "playerLevel": 1
+ },
+ "L1_imp_b": {
+  "xp": 3,
+  "why": "kill",
+  "tier": 0,
+  "enemyLevel": 1,
+  "dinged": false,
+  "playerLevel": 1
+ },
+ "L1_stalker": {
+  "xp": 7,
+  "why": "kill",
+  "tier": 1,
+  "enemyLevel": 1,
+  "dinged": false,
+  "playerLevel": 1
+ },
+ "ding": {
+  "kills": 14,
+  "gameSeconds": 5.8,
+  "dinged": true,
+  "seq": [
+   3,
+   3,
+   3,
+   3,
+   3,
+   4,
+   4,
+   4,
+   4,
+   4,
+   4,
+   4,
+   4,
+   4
+  ]
+ },
+ "L8_need": 4419,
+ "L8_imp": {
+  "xp": 45,
+  "why": "kill",
+  "tier": 0,
+  "enemyLevel": 8,
+  "dinged": false,
+  "playerLevel": 8
+ },
+ "L8_stalker": {
+  "xp": 90,
+  "why": "kill",
+  "tier": 1,
+  "enemyLevel": 8,
+  "dinged": false,
+  "playerLevel": 8
+ },
+ "L8_gray_vs_L1imp": {
+  "xp": 90,
+  "why": "kill",
+  "tier": 0,
+  "enemyLevel": 1,
+  "dinged": false,
+  "playerLevel": 8
+ },
+ "restored": {
+  "level": 8,
+  "xp": 135
+ }
+}

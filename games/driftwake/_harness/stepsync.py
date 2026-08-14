@@ -35,6 +35,7 @@ SAMPLE_JS = """() => {
         rTS: +mc._acts[2].getEffectiveTimeScale().toFixed(3),
         wW: +mc._weights[1].toFixed(2), rW: +mc._weights[2].toFixed(2),
         ivar: mc._idleVar, ivw: +mc._idleVarW.toFixed(2), ivseq: mc._idleVarSeq,
+        gameT: SF.combat.registry.time,
     };
 }"""
 
@@ -58,15 +59,31 @@ with sync_playwright() as p:
     pg.mouse.click(640, 360)   # focus the canvas
 
     def segment(name, seconds, expect_state):
+        # Expected steps integrate over GAME time (registry.time), not wall
+        # clock: main.js clamps dt at MAX_FRAME_MS, so a hitchy desktop loses
+        # game time relative to the 250 ms wall sampling and the old constant
+        # 0.25 s/sample overestimated expected. Held keys are also re-asserted:
+        # input.js clears all held state on window blur, and headless=False on
+        # this desktop can lose OS focus mid-segment.
         s0 = pg.evaluate(SAMPLE_JS)
+        prev_t = s0["gameT"]
         expected, n = 0.0, int(seconds * 4)
         for _ in range(n):
             pg.wait_for_timeout(250)
             s = pg.evaluate(SAMPLE_JS)
+            d = max(0.0, s["gameT"] - prev_t)
+            prev_t = s["gameT"]
             if s["state"] == 1 and s["wW"] > 0.5:
-                expected += 0.25 * 2 * s["wTS"] / WALK_DUR
+                expected += d * 2 * s["wTS"] / WALK_DUR
             elif s["state"] == 2 and s["rW"] > 0.5:
-                expected += 0.25 * 2 * s["rTS"] / RUN_DUR
+                expected += d * 2 * s["rTS"] / RUN_DUR
+            # Blur cleared the held keys: re-press and (if the run latch was
+            # also dropped) re-toggle Shift. No expected accrues for dropped
+            # samples, so the recovery does not skew the comparison.
+            if expect_state >= 1 and s["state"] == 0 and (s["speed"] or 0) == 0:
+                pg.keyboard.down("w")
+            elif expect_state == 2 and s["state"] == 1:
+                pg.keyboard.press("Shift")
         s1 = pg.evaluate(SAMPLE_JS)
         actual = s1["falls"] - s0["falls"]
         tol = expected * 0.15 + 2
@@ -79,13 +96,18 @@ with sync_playwright() as p:
     results = []
 
     # -- idle first: zero steps, variation arms ------------------------------
+    # 14 GAME-seconds, not wall (first variation arms at _idleVarT = 7 game-s;
+    # under desktop load game time runs well below wall time). 90 s wall cap.
     s0 = pg.evaluate(SAMPLE_JS)
     var_seen = False
-    for _ in range(56):            # 14 s
+    wall_cap = time.time() + 90
+    while time.time() < wall_cap:
         pg.wait_for_timeout(250)
         s = pg.evaluate(SAMPLE_JS)
         if s["ivar"] >= 0 and s["ivw"] > 0.3:
             var_seen = True
+        if s["gameT"] - s0["gameT"] >= 14:
+            break
     s1 = pg.evaluate(SAMPLE_JS)
     idle_steps = s1["falls"] - s0["falls"]
     print(f"{'idle 14s':14s} steps={idle_steps} (want 0)"

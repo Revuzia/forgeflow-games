@@ -28,6 +28,7 @@
 
 import { PROFILE_TUBE } from "./waterBody.js";
 import { clamp01, smooth01, bell, transport, rand } from "./bending.js";
+import { sfx } from "../audio/sfx.js";
 
 /** How many helices. Three reads as a spiral; two reads as a double helix. */
 const HELICES = 3;
@@ -72,6 +73,11 @@ export class Vortex {
         this._stripOwed = 0;
         this._grainOwed = 0;
         this.active = true;
+        // The churn: a held looping voice, not a one-shot — the column lives
+        // ~4.7 s and follows the player, so it sits centred at full level.
+        // Stopped in `_end()`, which both the natural fade and `cancel()`
+        // funnel through. (The cast-edge whoosh is SpellVoices.fire(5).)
+        sfx.loopStart("spell_vortex");
     }
 
     /** @param {number} dt */
@@ -323,6 +329,7 @@ export class Vortex {
 
     _end() {
         this.active = false;
+        sfx.loopStop("spell_vortex");
         for (let i = 0; i < HELICES; i++) {
             if (this.strands[i] >= 0) {
                 this.ctx.water.release(this.strands[i]);

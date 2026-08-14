@@ -1,0 +1,273 @@
+{
+ "cold.arcDecal": {
+  "ok": true,
+  "detail": {
+   "onCast": {
+    "burst": {
+     "active": 0,
+     "draws": 0
+    },
+    "castRing": {
+     "active": 0,
+     "draws": 0
+    },
+    "arcDecal": {
+     "active": 1,
+     "draws": 1
+    },
+    "telegraph": {
+     "active": 0,
+     "draws": 0
+    },
+    "drawCalls": 23
+   },
+   "midLife": {
+    "burst": {
+     "active": 0,
+     "draws": 0
+    },
+    "castRing": {
+     "active": 0,
+     "draws": 0
+    },
+    "arcDecal": {
+     "active": 1,
+     "draws": 1
+    },
+    "telegraph": {
+     "active": 0,
+     "draws": 0
+    },
+    "drawCalls": 22
+   }
+  }
+ },
+ "cold.castRing.bloom": {
+  "ok": true,
+  "detail": {
+   "mid3": {
+    "burst": {
+     "active": 0,
+     "draws": 0
+    },
+    "castRing": {
+     "active": 1,
+     "draws": 1
+    },
+    "arcDecal": {
+     "active": 0,
+     "draws": 0
+    },
+    "telegraph": {
+     "active": 0,
+     "draws": 0
+    },
+    "drawCalls": 21
+   }
+  }
+ },
+ "cold.castRing.vortex": {
+  "ok": true,
+  "detail": {
+   "mid5": {
+    "burst": {
+     "active": 0,
+     "draws": 0
+    },
+    "castRing": {
+     "active": 1,
+     "draws": 1
+    },
+    "arcDecal": {
+     "active": 0,
+     "draws": 0
+    },
+    "telegraph": {
+     "active": 0,
+     "draws": 0
+    },
+    "drawCalls": 21
+   },
+   "after": {
+    "burst": {
+     "active": 0,
+     "draws": 0
+    },
+    "castRing": {
+     "active": 0,
+     "draws": 0
+    },
+    "arcDecal": {
+     "active": 0,
+     "draws": 0
+    },
+    "telegraph": {
+     "active": 0,
+     "draws": 0
+    },
+    "drawCalls": 28
+   }
+  }
+ },
+ "cold.burst": {
+  "ok": true,
+  "detail": {
+   "gotThree": true,
+   "midLife": {
+    "burst": {
+     "active": 3,
+     "draws": 1
+    },
+    "castRing": {
+     "active": 0,
+     "draws": 0
+    },
+    "arcDecal": {
+     "active": 0,
+     "draws": 0
+    },
+    "telegraph": {
+     "active": 0,
+     "draws": 0
+    },
+    "drawCalls": 36
+   }
+  }
+ },
+ "cold.burst.drains": {
+  "ok": true,
+  "detail": {
+   "burst": {
+    "active": 0,
+    "draws": 0
+   },
+   "castRing": {
+    "active": 0,
+    "draws": 0
+   },
+   "arcDecal": {
+    "active": 0,
+    "draws": 0
+   },
+   "telegraph": {
+    "active": 0,
+    "draws": 0
+   },
+   "drawCalls": 42
+  }
+ },
+ "cold.telegraph": {
+  "ok": true,
+  "detail": {
+   "spawned": [
+    13,
+    14,
+    15
+   ],
+   "got": true,
+   "midWind": {
+    "burst": {
+     "active": 0,
+     "draws": 0
+    },
+    "castRing": {
+     "active": 0,
+     "draws": 0
+    },
+    "arcDecal": {
+     "active": 0,
+     "draws": 0
+    },
+    "telegraph": {
+     "active": 2,
+     "draws": 1
+    },
+    "drawCalls": 52
+   },
+   "fill": 0.13738462328910828,
+   "radius": 1.7000000476837158
+  }
+ },
+ "cold.budget": {
+  "ok": true,
+  "detail": {
+   "teleUp": true,
+   "allUp": true,
+   "withFx": {
+    "burst": {
+     "active": 3,
+     "draws": 1
+    },
+    "castRing": {
+     "active": 1,
+     "draws": 1
+    },
+    "arcDecal": {
+     "active": 1,
+     "draws": 1
+    },
+    "telegraph": {
+     "active": 1,
+     "draws": 1
+    },
+    "drawCalls": 57
+   },
+   "withoutFx": {
+    "burst": {
+     "active": 3,
+     "draws": 0
+    },
+    "castRing": {
+     "active": 1,
+     "draws": 0
+    },
+    "arcDecal": {
+     "active": 1,
+     "draws": 0
+    },
+    "telegraph": {
+     "active": 0,
+     "draws": 0
+    },
+    "drawCalls": 53
+   },
+   "fxDrawSum": 4,
+   "delta": 4
+  }
+ },
+ "ash.enter": {
+  "ok": true,
+  "detail": {
+   "realm": "ash"
+  }
+ },
+ "ash.burst": {
+  "ok": true,
+  "detail": {
+   "gotThree": true,
+   "midLife": {
+    "burst": {
+     "active": 3,
+     "draws": 1
+    },
+    "castRing": {
+     "active": 0,
+     "draws": 0
+    },
+    "arcDecal": {
+     "active": 0,
+     "draws": 0
+    },
+    "telegraph": {
+     "active": 0,
+     "draws": 0
+    },
+    "drawCalls": 28
+   }
+  }
+ },
+ "console.clean": {
+  "ok": true,
+  "detail": []
+ }
+}

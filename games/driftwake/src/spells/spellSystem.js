@@ -41,6 +41,7 @@ import { ImpactBursts } from "../vfx/burst.js";
 import { CastRing } from "../vfx/castRing.js";
 import { ArcDecal } from "../vfx/arcDecal.js";
 import { aimPoint, expDamp } from "./bending.js";
+import { sfx } from "../audio/sfx.js";
 
 /**
  * @typedef {{
@@ -439,8 +440,10 @@ export class SpellSystem {
          * instead, so no spell file knows they exist.
          */
         this.burst = new ImpactBursts(scene, this.globals);
-        this.castRing = new CastRing(scene, this.globals);
-        this.arcDecal = new ArcDecal(scene, this.globals);
+        // The cast ring and the arc decal drape the terrain (lib/groundfx),
+        // so they carry the terrain's clip + deform uniform blocks.
+        this.castRing = new CastRing(scene, this.globals, terrain);
+        this.arcDecal = new ArcDecal(scene, this.globals, terrain);
         this.ctx.fx = { burst: this.burst };
 
         this.sweep = new Sweep(this.ctx);
@@ -755,7 +758,10 @@ export class SpellSystem {
             // LMB is ALWAYS the bolt again (owner 2026-08-12: "LMB was fine
             // as a bolt" — the arc moved to ARC_KEY below; the palette's
             // boltArc flag is retired from this path).
-            this._fireBolt();
+            // The throw sound fires only when a bolt actually left the hand:
+            // a full pool (-1) is a cast that did not happen, and a sound
+            // for it would be a lie 2.2 times a second.
+            if (this._fireBolt() >= 0) sfx.trigger("spell_bolt");
             return;
         }
 
@@ -769,6 +775,7 @@ export class SpellSystem {
             this._lastCast = this._time;
             ctx.controller.castWave = 3;
             this._fireArc();
+            sfx.trigger("spell_arc");
             return;
         }
 
@@ -973,6 +980,10 @@ export class SpellSystem {
         const rig = this.ctx.rig;
         if (key === 1) {
             this.sweep.trigger(p.a0, p.a2);
+            // Counted here at the ignite edge; VOICED by audio.js's
+            // SpellVoices (the calibrated surge recording) — sfx.js's table
+            // marks this `legacy` so the two layers never double the band.
+            sfx.trigger("spell_wave");
             rig.addTrauma(0.12);
         } else if (key === 3) {
             this.bloom.trigger(p.a0, p.a1, p.a2);

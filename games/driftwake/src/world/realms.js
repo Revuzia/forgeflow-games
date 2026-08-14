@@ -655,25 +655,39 @@ export const REALMS = {
 
         sky: {
             sunAzimuth: 74,                 // [derived] |74 − 150| = 76 ✓
-            /** Lower, so the smoke column is lit edge-on. */
-            sunElevation: 9.5,
+            /** Lower, so the smoke column is lit edge-on. 9.5 → 11.0 (owner
+             *  2026-08-13 readability round): at 9.5° the camera-side dune
+             *  faces were fully shadowed almost everywhere; 11° keeps the
+             *  ember-lit low sun while shrinking the pure-shadow fraction. */
+            sunElevation: 11.0,
             /** Higher pre-extinction, because Ash's beam is eaten by Mie below. */
             sunIntensity: 5.6,
             sunTempWarm: 1.0,
             /** Ash's near-black ground bounces almost nothing. Raised 0.80 →
              *  1.15 with the exposure (owner 2026-08-10: the shadow floor sat
-             *  at pure black); the ambient is realm-tinted, so the lift stays
-             *  sooty rather than turning the hollows blue. */
-            ambientIntensity: 1.15,
+             *  at pure black), then 1.15 → 1.40 (owner 2026-08-13, second
+             *  complaint: measured shadow-floor p10 was 0.4–3.7/255). The
+             *  ambient is realm-tinted, so the lift stays sooty rather than
+             *  turning the hollows blue. */
+            ambientIntensity: 1.50,
             ambientBlue: 1.0,
             /** The far range is buried in smoke at fogDensity 0.0155 anyway, and
              *  switching it off buys back the 8.27 ms the raymarch costs
              *  (settings.js:300-305 — 93% of the sky draw). */
             showMountains: false,
             mountainHeight: 0,
-            /** God rays through smoke ARE the look of this realm. */
-            shaftStrength: 0.55,
-            cloudAmount: 0.85,              // a soot ceiling
+            /** God rays through smoke ARE the look of this realm. 0.55 →
+             *  0.85 (owner 2026-08-13 readability round): the playable views
+             *  here are contre-jour into the low sun, so every visible dune
+             *  face is sun-away — the shafts are the additive fill that
+             *  reaches those faces without brightening the sun side. */
+            shaftStrength: 0.85,
+            /** A soot ceiling. 0.85 → 0.72 (owner 2026-08-13): at 0.85 the
+             *  ceiling kept drifting across the low sun and swung the whole
+             *  frame's light ±5% minute to minute — the readability measure
+             *  flickered around its bar on cloud luck alone. 0.72 still
+             *  reads as a ceiling; the frame stops gambling on it. */
+            cloudAmount: 0.72,
             cirrusColor: [0.20, 0.18, 0.17],
             /** Soot is Mie. The largest coefficients of the three. */
             betaMie: [150e-6, 132e-6, 118e-6],
@@ -684,24 +698,34 @@ export const REALMS = {
              *  aerosol scale height than Cold's 1200 m. */
             hMie: 2600,
             /** Multiple scattering is what fills Cold's shadows blue
-             *  (skyBake.glsl.js:189-205). Ash wants dark shadows. */
-            msBoost: 1.15,
+             *  (skyBake.glsl.js:189-205). Ash originally ran 1.15 for dark
+             *  shadows, but 1.15 + contrast 1.22 together crushed the shadow
+             *  floor to p10 0.4–3.7/255 (owner 2026-08-13, second complaint).
+             *  1.5 matches Cold/Sand; the fill is realm-tinted, so the
+             *  hollows lift sooty-orange, not blue — the "dark shadows" read
+             *  now comes from the low ground albedo alone. */
+            msBoost: 1.5,
             /**
              * [derived] mean betaMie 133e-6 x hMie 2600 = 0.346 optical depth,
-             * crossed at air mass 5.60 (9.5 deg) -> exp(-1.94) = 0.144, which is
-             * 0.161 of Cold's 0.897. THE PHYSICAL NUMBER, not a tempered one:
+             * crossed at air mass 5.24 (11.0 deg) -> exp(-1.81) = 0.163, which
+             * is 0.182 of Cold's 0.897 (re-derived with the 2026-08-13
+             * sunElevation change; the 9.5 deg number was 0.161).
+             * THE PHYSICAL NUMBER, not a tempered one:
              * `sky.js` used to run Ash at 0.45 because `S.exposure` was Cold's
              * 0.105 everywhere and 0.161 rendered near-black. `vfx.exposure`
              * 0.300 below is what pays for it now — 2.86x Cold's, against a beam
              * 6.2x weaker. Ash is lit by what glows in it, not by its sun.
              */
-            beamExtinction: 0.161,
+            beamExtinction: 0.182,
             grazeTint: [1.02, 0.96, 0.92],
             /** [derived] mean 0.071; the bounce solve compounds by ~albedo³, so
              *  0.00036 against Cold's 0.652 — a factor of ~1800 in how much the
              *  ground lights the sky. That is the mechanism that makes an ash
-             *  plain feel like a pit rather than a bright field. */
-            groundAlbedo: [0.075, 0.070, 0.068],
+             *  plain feel like a pit rather than a bright field. Re-derived
+             *  +25% with the ground rows (owner 2026-08-13 readability cap):
+             *  the bounce solve must see the albedo the terrain actually
+             *  renders, or the SH lies about the ground. */
+            groundAlbedo: [0.094, 0.088, 0.085],
             /** [fallback] — `showMountains: false`, so the far range never
              *  rasterises. Set to the ash ground/rock values rather than left as
              *  Cold's so that force-enabling the range from the overlay produces a
@@ -713,8 +737,10 @@ export const REALMS = {
         },
 
         ground: {
-            /** [derived] B/R ratio 0.902. */
-            albedo: [0.082, 0.076, 0.074],
+            /** [derived] B/R ratio 0.902 — held. The magnitude carries the
+             *  +25% readability cap (owner 2026-08-13) like the loose/rock
+             *  rows below: measured base [0.082,0.076,0.074]. */
+            albedo: [0.102, 0.095, 0.092],
             roughness: 0.93,
             f0: 0.040,                      // slag glass > quartz
             thickness: 0.12,                // ash transmits nothing
@@ -723,23 +749,37 @@ export const REALMS = {
             sssDeep: [0.55, 0.19, 0.08],
             sssStrength: 0.10,
             sssRadius: 0.30,
-            caveTint: [0.34, 0.24, 0.20],   // an ash hollow goes nearly black
-            wrapAmount: [0.12, 0.06],
-            bounceCoef: 0.05,
-            compressCol: [0.048, 0.044, 0.043], // packed ash goes to soot
+            /** Was [0.34,0.24,0.20] "an ash hollow goes nearly black" — but the
+             *  grain cavity channel (cavityWeights 0.70, cavityDepth 0.78)
+             *  multiplies this into EVERY micro-crevice, and the product read
+             *  as black lace across the whole near field (owner 2026-08-13,
+             *  second complaint; measured p10 0.4–7.5/255). Lifted warm, still
+             *  ~40% of Cold's luminance, so a hollow reads sooty, not void. */
+            caveTint: [0.52, 0.40, 0.34],
+            /** Volcanic ash is porous fluff — a little terminator wrap is
+             *  physical; raised [0.12,0.06] → [0.30,0.10] for the same
+             *  shadow-floor reason as caveTint. Still under snow's 0.62.
+             *  Measured driver: the sun-away dune faces were the last spot
+             *  failing the 2026-08-13 readability bar (mean 0.46 x Cold). */
+            wrapAmount: [0.34, 0.11],
+            bounceCoef: 0.24,               // was 0.05; Cold 0.28 — same driver
+            compressCol: [0.060, 0.055, 0.054], // packed ash goes to soot (+25% cap)
             compressRough: 0.66,
             compressThick: 0.05,
             iceCol: [0.16, 0.075, 0.055],   // the ice channel becomes cooled slag
             iceRough: 0.14,
             iceF0: 0.055,
             iceThick: 0.04,
-            looseCol: [0.135, 0.125, 0.120],
+            /** +25% (the sanctioned readability cap, owner 2026-08-13) off the
+             *  measured [0.135,0.125,0.120] base — fresh ash fluff, unpacked,
+             *  scatters more than the packed plate it sits on. */
+            looseCol: [0.169, 0.156, 0.150],
             looseRough: 0.95,
             rockColA: [0.030, 0.028, 0.028],
-            rockColB: [0.075, 0.062, 0.056],
+            rockColB: [0.094, 0.078, 0.070], // +25%, same cap as looseCol
             /** Ash sticks to almost nothing, so an ash realm is MOSTLY BARE. */
             rockGate: [0.10, 0.34],
-            wakeAlbedo: [0.135, 0.125, 0.120],
+            wakeAlbedo: [0.169, 0.156, 0.150], // tracks looseCol
             wakeRough: 0.95,
         },
 
@@ -749,10 +789,16 @@ export const REALMS = {
         grain: {
             cells: [19, 47, 109],
             heightWeights: [1.0, 0.34, 0.11],
-            cavityWeights: [0.70, 0.20, 0.10],
+            /** Was [0.70,0.20,0.10] / depth 0.78 — the cavity channel "doing
+             *  70% of the work". Measured (owner 2026-08-13, second
+             *  complaint): that stamped a near-black micro-lattice over the
+             *  whole near field — p10 of the lower half sat at 8/255 with
+             *  every macro lever at cap. 0.58/0.60 keeps cavity-led absorbent
+             *  ash (Cold is 0.55/0.50) without the lattice going to zero. */
+            cavityWeights: [0.58, 0.27, 0.15],
             radius: [0.34, 0.40],
             domeMode: 2,                    // 1 - d*d*d — broad, soft, no rim highlight
-            cavityDepth: 0.78,
+            cavityDepth: 0.60,
             grainScale: 0.009,
             detailScales: [6.0, 1.35, 0.25],
         },
@@ -787,23 +833,39 @@ export const REALMS = {
             sharpness: [90.0, 140.0],
             facetCull: 0.93,                // rarest of the three
             facetTilt: [0.30, 0.50],        // no facet at all — it is a blob
-            intensity: 0.18,
+            /** 0.18 → 0.24 / emissive 3.4 → 4.2 (owner 2026-08-13): the
+             *  ember bed is the one light source that reaches a fully
+             *  sun-shadowed dune face (emissive bypasses shadow), so it is
+             *  the mood-native way to carry those faces over the readability
+             *  bar. Safe from the old "glitter on black sand" failure now the
+             *  shadow floor itself sits at p10 30+/255, not 1. */
+            intensity: 0.24,
             grazing: 0.0,
             grazingExp: 1.5,                // [derived] mix(1.5, 5.0, 0.0)
             tint: [1.00, 0.42, 0.11],       // cinder
             /** > 0 ⇒ emissive: no sunRadiance, no shadow, NdotL gate bypassed. */
-            emissive: 3.4,
+            emissive: 4.2,
         },
 
         fog: {
-            density: 0.0155,
+            /** 0.0155 → 0.0200 with start 12 → 8 (owner 2026-08-13): the
+             *  smoke inscatter is the only light a fully sun-shadowed dune
+             *  face has here, and it needed to arrive sooner and thicker —
+             *  the +60 m sight-line (a whole frame of sun-away faces) was the
+             *  last spot under the readability bar, swinging with cloud noise
+             *  around 0.55 x Cold until this notch. */
+            density: 0.0200,
             /** Smoke rises, so a SHALLOWER falloff than Cold's — the opposite of
              *  Sand. */
             heightFalloff: 0.026,
             /** [derived] 1/0.026 = 38.5 m — the haze fills the whole column. */
             scaleHeightM: 38.5,
-            start: 12,
-            aerialStrength: 1.30,
+            start: 8,
+            /** 1.30 → 1.45 (owner 2026-08-13 readability round): the smoke
+             *  filling the basin is the mood-consistent way to lift the
+             *  sun-away dune faces, which otherwise have only the tiny ash
+             *  SH to live on. */
+            aerialStrength: 1.45,
             /** What fills a SHORT path. In smoke the answer is the horizon band,
              *  not the dome — hence the low tilt and the blurrier mip. */
             nearSkyTilt: 0.12,
@@ -865,12 +927,23 @@ export const REALMS = {
              *  ember specks (glint.emissive 3.4), bloom 0.34 and shafts 0.55: the
              *  ash realm is lit by what glows in it, not by the sun. */
             /** 0.300 shipped near-unplayable (owner 2026-08-10): the ember
-             *  dots carried the frame alone. 0.44 against the physical
-             *  beamExtinction 0.161 keeps "lit by what glows in it" while the
-             *  ground relief actually reads. Tuned WITH sky.js SKY_GRADE.ash
-             *  gain 0.52 and ambientIntensity 1.15. */
-            exposure: 0.44,
-            contrast: 1.22,
+             *  dots carried the frame alone. 0.44 was still not enough (owner
+             *  2026-08-13, second complaint — measured foreground mean 26–55
+             *  against Cold's 122–144, ratio 0.21–0.38). 0.76 is where the
+             *  measured bar (mean >= 0.55 x Cold, shadow-floor p10 >= 18/255,
+             *  at spawn / +60 m / a dune hollow) was finally met — tuned WITH
+             *  sky.js SKY_GRADE.ash gain 0.76, ambientIntensity/msBoost above,
+             *  the fog/caveTint/wrap/bounce rows, and the +25%-capped ground
+             *  albedo rows. NOTE: above the exposure WIDGET's 0.6 max
+             *  (settings.js GRADE_GRID) — legal, because `applyRealmGrade`
+             *  writes the realm literal through unclamped at offset 1; only an
+             *  operator-dragged offset snaps to the widget grid. */
+            exposure: 0.78,
+            /** 1.22 pushed the AgX toe down exactly where the ash floor
+             *  lives; with the realm this dark, contrast >1 buys nothing but
+             *  a clipped floor — neutral 1.00 leaves the ember specks + bloom
+             *  to carry the punch. */
+            contrast: 1.00,
             bloomStrength: 0.34,
         },
     },

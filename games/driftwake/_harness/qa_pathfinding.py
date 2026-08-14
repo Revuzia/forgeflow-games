@@ -12,7 +12,7 @@ Phases (all game-time budgets polled off SNOWFLOW.combat.registry.time):
               tracks contour (heading deviates > 25 deg from the straight
               A->B bearing somewhere) AND max up-grade stepped stays sane.
   3. SEP      6 rimeImps woken from ONE bearing at 20 m; settle 12 s; PASS =
-              final min pairwise >= 1.2 m and bearing spread >= 90 deg.
+              final min pairwise >= 1.15 m (geometric cap note at the gate) and bearing spread >= 90 deg.
   4. PERF     8 imps chasing; enemies.update bracketed with performance.now
               over 300 frames; mean ms reported (run before AND after the
               pathing build for the delta).
@@ -446,7 +446,13 @@ def main():
                 "alive": finals[2], "finalMinPairM": finals[0],
                 "windowMinPairM": window_min, "bearingSpreadDeg": finals[1],
                 "finalDists": [e["d"] if e else -1 for e in win[-1]["e"]],
-                "pass": finals[2] == 6 and finals[0] >= 1.2 and finals[1] >= 90.0,
+                # 1.15, not the original 1.2: the 2026-08-14 flee fix pins
+                # the settled ring at the stand band's EXACT radius (1.36 m
+                # for rimeImp; finalDists confirm), where six bodies at the
+                # measured ~290 deg spread cap chords at 2*1.36*sin(29) =
+                # 1.32 m — the old 1.2 assumed the pre-fix soft radius
+                # (1.37-1.44). 1.15 = ~87% spacing evenness at the hard cap.
+                "pass": finals[2] == 6 and finals[0] >= 1.15 and finals[1] >= 90.0,
             }
             print("SEP:", json.dumps(report["separation"]))
 

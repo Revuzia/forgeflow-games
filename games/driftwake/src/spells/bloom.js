@@ -22,6 +22,7 @@
 
 import { PROFILE_TUBE } from "./waterBody.js";
 import { clamp01, smooth01, bell, transport, rand } from "./bending.js";
+import { sfx } from "../audio/sfx.js";
 
 const COLS = 34;
 /** Full height of the column at peak, metres. */
@@ -92,6 +93,10 @@ export class Bloom {
         // same event.
         if (!this._burst && this.t >= 0.10) {
             this._burst = true;
+            // Counted at the burst edge (the crater, the throw and the shell
+            // are all THIS event); voiced by SpellVoices' calibrated bloom
+            // recording — `legacy` in sfx.js's table, so nothing doubles.
+            sfx.trigger("spell_bloom_burst", this.x, this.y, this.z);
             this._crater();
             this._throw();
             // The eruption shell (vfx/burst.js), at the same instant as the

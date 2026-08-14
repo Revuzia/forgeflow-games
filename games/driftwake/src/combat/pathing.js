@@ -63,6 +63,21 @@ const SEP_MULT = 1.4;
 const SEP_MIN_R = 2.0;
 /** Separation weight vs the unit desired direction (which has length 1). */
 const SEP_W = 1.2;
+/** The separation field TAPERS to zero inside reach×SEP_BAND_MULT of the
+ *  unit's current target and is CAPPED at the pursuit magnitude (1). The
+ *  radial band belongs to the reach/standoff logic in enemies.js — an
+ *  untapered field was free to shove an arriving unit back out of its attack
+ *  band, and an uncapped one to beat the chase vector outright (qa_flee.py
+ *  mechanism (a) of the 2026-08-13 "enemies run away" report). */
+const SEP_BAND_MULT = 1.1;
+/** Contour steering never engages inside this range of the target. At close
+ *  range the ladder's committed >90° rotations are what a player reads as
+ *  the unit fleeing (qa_flee.py --crest: imp time-to-band 18.1 s vs 3.0 s
+ *  with the ladder off; `away`-steer frames on 3 of 4 units) — a straight
+ *  grind up the face, same "ugly beats unreachable" rule as desperation,
+ *  closes the last metres instead. Equals PATH_DROP_NEAR deliberately:
+ *  inside this radius NO tier overrides the direct chase. */
+const CONTOUR_MIN_DIST = 6.0;
 
 // ------------------------------------------------------------- tier 3: A*
 const STALL_WINDOW_S = 1.2;
@@ -97,6 +112,9 @@ export class Pathing {
     constructor(terrain, cfg) {
         this.terrain = terrain;
         this._stReturn = cfg.stReturn;
+        /** enemies.js's MELEE_PAD — its attack band is (reach + pad); the
+         *  separation taper must use the same band the reach logic does. */
+        this._reachPad = cfg.reachPad || 0;
         const N = cfg.max;
         this._N = N;
 
@@ -213,13 +231,17 @@ export class Pathing {
         if (dx === 0 && dz === 0) { this.outX = 0; this.outZ = 0; return; }
         const x = en.x[i], z = en.z[i];
 
-        // ---- tier 3 follow: an active path overrides the intent ----------
+        // Current target (player, or home for a returner) and its distance —
+        // the separation taper and the contour near-gate both key on it.
         const tgtPlayer = en.state[i] !== this._stReturn;
         const tx = tgtPlayer ? en.controller.position.x : en.homeX[i];
         const tz = tgtPlayer ? en.controller.position.z : en.homeZ[i];
+        const tdx0 = tx - x, tdz0 = tz - z;
+        const tDist = Math.sqrt(tdx0 * tdx0 + tdz0 * tdz0);
+
+        // ---- tier 3 follow: an active path overrides the intent ----------
         if (this._pathLen[i] > 0) {
-            const tdx = tx - x, tdz = tz - z;
-            if (tdx * tdx + tdz * tdz < PATH_DROP_NEAR * PATH_DROP_NEAR) {
+            if (tDist < PATH_DROP_NEAR) {
                 this._pathLen[i] = 0;              // close enough — go direct
             } else {
                 let wp = this._pathIdx[i];
@@ -246,44 +268,100 @@ export class Pathing {
         // ---- tier 2: separation is a steering input ----------------------
         const sx = this.sepX[i], sz = this.sepZ[i];
         if (sx !== 0 || sz !== 0) {
-            dx += sx * SEP_W;
-            dz += sz * SEP_W;
-            const l = Math.sqrt(dx * dx + dz * dz);
-            if (l > 1e-4) { dx /= l; dz /= l; }
-            else { dx = mx; dz = mz; }             // exact cancel: keep intent
+            // Taper to ZERO inside the unit's attack band, back to full one
+            // band-width further out; cap the field at the pursuit magnitude
+            // (the intent has length 1). Inside its band the radial axis
+            // belongs to enemies.js's reach logic, and a field stronger than
+            // the chase reads as the unit fleeing (qa_flee.py mechanism (a)).
+            const band = (en.units[en.unitOf[i]].reach + this._reachPad) *
+                SEP_BAND_MULT;
+            const k = (tDist - band) / band;
+            const ramp = k >= 1 ? 1 : (k <= 0 ? 0 : k);
+            let px = sx, pz = sz;
+            if (ramp < 1 && tDist > 1e-4) {
+                // Inside the band only the RADIAL half of the field belongs
+                // to enemies.js's reach/standoff logic (the shove that made
+                // arrivals look like fleeing); the TANGENTIAL half is what
+                // spaces a settled ring, and zeroing BOTH bunched six imps
+                // to 1.13 m min-pair (gate regression 2026-08-14). Fade the
+                // radial component with the band ramp, keep the tangent.
+                const ux = tdx0 / tDist, uz = tdz0 / tDist;
+                const rad = px * ux + pz * uz;
+                if (rad < 0) {
+                    // Away-from-target radial: the shove that made arrivals
+                    // read as fleeing. Fade it — but keep a 0.35 floor: a
+                    // SETTLED ring needs the outward slack to breathe past
+                    // the stand band's exact radius (six imps at 1.36 m have
+                    // ZERO chord tolerance; the floor restores the shipped
+                    // 1.21 m min-pair), while 0.35 can never beat the
+                    // pursuit magnitude of 1 during an approach.
+                    const w = ramp > 0.35 ? ramp : 0.35;
+                    px += ux * rad * (w - 1);
+                    pz += uz * rad * (w - 1);
+                }
+                // Toward-target radial and the whole TANGENT pass untouched:
+                // one speeds arrival, the other spaces the ring.
+            }
+            let sw = SEP_W;
+            {
+                const sm = Math.sqrt(px * px + pz * pz) * sw;
+                if (sm > 1) sw /= sm;              // ≤ pursuit magnitude
+                dx += px * sw;
+                dz += pz * sw;
+                const l = Math.sqrt(dx * dx + dz * dz);
+                if (l > 1e-4) { dx /= l; dz /= l; }
+                else { dx = mx; dz = mz; }         // exact cancel: keep intent
+            }
         }
 
         // ---- tier 1: slope gate on the FINAL direction -------------------
         if (this._despT[i] <= 0) {
             const h0 = this.terrain.heightAt(x, z);
             if (this._climb(x, z, h0, dx, dz) > CLIMB_MAX) {
-                // Pick (or keep) the committed contour side.
-                let side = this._contourDir[i];
-                if (side === 0) {
-                    const cs = Math.cos(SIDE_ANGLE), sn = Math.sin(SIDE_ANGLE);
-                    const gl = this._climb(x, z, h0,
-                        dx * cs - dz * sn, dz * cs + dx * sn);
-                    const gr = this._climb(x, z, h0,
-                        dx * cs + dz * sn, dz * cs - dx * sn);
-                    side = gl <= gr ? 1 : -1;      // +1 = CCW (left)
-                    this._contourDir[i] = side;
-                }
-                this._contourT[i] = CONTOUR_HOLD_S;
-                let ok = false;
-                for (let pass = 0; pass < 2 && !ok; pass++) {
-                    const s = pass === 0 ? side : -side;
-                    for (let a = 0; a < STEP_ANGLES.length; a++) {
-                        const ang = STEP_ANGLES[a] * s;
-                        const cs = Math.cos(ang), sn = Math.sin(ang);
-                        const rx = dx * cs - dz * sn;
-                        const rz = dz * cs + dx * sn;
-                        if (this._climb(x, z, h0, rx, rz) <= CLIMB_MAX) {
-                            dx = rx; dz = rz; ok = true;
-                            break;
+                if (this._climb(x, z, h0, mx, mz) <= CLIMB_MAX ||
+                    tDist < CONTOUR_MIN_DIST) {
+                    // Contour steering does NOT engage here (2026-08-13
+                    // "enemies run away" fix, evidence in qa_flee.py):
+                    //  · the DIRECT line is walkable — only the separation /
+                    //    path adjustment steered into the face; walkability
+                    //    wins the frame and the raw intent goes through;
+                    //  · or the target is inside CONTOUR_MIN_DIST — the
+                    //    ladder's committed >90° rotations at close range
+                    //    read as the unit fleeing (--crest: time-to-band
+                    //    18.1 s vs 3.0 s, `away` frames on 3 of 4 units).
+                    //    The direct grind is the same "ugly beats
+                    //    unreachable" rule as desperation, bounded to the
+                    //    last CONTOUR_MIN_DIST metres.
+                    dx = mx; dz = mz;
+                } else {
+                    // Pick (or keep) the committed contour side.
+                    let side = this._contourDir[i];
+                    if (side === 0) {
+                        const cs = Math.cos(SIDE_ANGLE), sn = Math.sin(SIDE_ANGLE);
+                        const gl = this._climb(x, z, h0,
+                            dx * cs - dz * sn, dz * cs + dx * sn);
+                        const gr = this._climb(x, z, h0,
+                            dx * cs + dz * sn, dz * cs - dx * sn);
+                        side = gl <= gr ? 1 : -1;      // +1 = CCW (left)
+                        this._contourDir[i] = side;
+                    }
+                    this._contourT[i] = CONTOUR_HOLD_S;
+                    let ok = false;
+                    for (let pass = 0; pass < 2 && !ok; pass++) {
+                        const s = pass === 0 ? side : -side;
+                        for (let a = 0; a < STEP_ANGLES.length; a++) {
+                            const ang = STEP_ANGLES[a] * s;
+                            const cs = Math.cos(ang), sn = Math.sin(ang);
+                            const rx = dx * cs - dz * sn;
+                            const rz = dz * cs + dx * sn;
+                            if (this._climb(x, z, h0, rx, rz) <= CLIMB_MAX) {
+                                dx = rx; dz = rz; ok = true;
+                                break;
+                            }
                         }
                     }
+                    if (!ok) { dx = 0; dz = 0; }   // boxed in — stall tier 3
                 }
-                if (!ok) { dx = 0; dz = 0; }       // boxed in — stall tier 3
             }
         }
 

@@ -1,0 +1,166 @@
+{
+  "baseline": {
+    "spellsArrayLen": 6,
+    "spellCtors": [
+      "Sweep",
+      "Ribbon",
+      "Bloom",
+      "Crystallize",
+      "Vortex",
+      "Dart"
+    ],
+    "level": 1,
+    "unlocked": [
+      1,
+      2
+    ],
+    "mana": 64,
+    "manaMax": 64,
+    "realm": "cold"
+  },
+  "lockedState": {
+    "Digit3": {
+      "newEdges": [
+        3
+      ],
+      "castCalls": [
+        3
+      ],
+      "cdAfter": 0,
+      "manaDelta": 0
+    },
+    "Digit5": {
+      "newEdges": [
+        5
+      ],
+      "castCalls": [
+        5
+      ],
+      "cdAfter": 0,
+      "manaDelta": 0
+    }
+  },
+  "spellbarLocks": {
+    "1": {
+      "bind": "2",
+      "locked": false,
+      "lockLabel": ""
+    },
+    "2": {
+      "bind": "1",
+      "locked": false,
+      "lockLabel": ""
+    },
+    "3": {
+      "bind": "3",
+      "locked": true,
+      "lockLabel": "L2"
+    },
+    "4": {
+      "bind": "4",
+      "locked": true,
+      "lockLabel": "L4"
+    },
+    "5": {
+      "bind": "5",
+      "locked": true,
+      "lockLabel": "L6"
+    },
+    "6": {
+      "bind": "LMB",
+      "locked": false,
+      "lockLabel": ""
+    }
+  },
+  "casts": {
+    "Digit1": {
+      "newEdges": [],
+      "castCalls": [],
+      "heldMid": {
+        "spellHeld2": true,
+        "spellHeld1": true,
+        "ribbonHeld": true
+      },
+      "ribbonHeldAfterUp": false
+    },
+    "Digit2": {
+      "newEdges": [
+        1
+      ],
+      "castCalls": [
+        1
+      ],
+      "cdAfter": 0.917,
+      "manaDelta": -14.09
+    },
+    "Digit3": {
+      "newEdges": [
+        3
+      ],
+      "castCalls": [
+        3
+      ],
+      "cdAfter": 0.945,
+      "manaDelta": -24.09
+    },
+    "Digit4": {
+      "newEdges": [
+        4
+      ],
+      "castCalls": [
+        4
+      ],
+      "cdAfter": 0.966,
+      "manaDelta": -29.04
+    },
+    "Digit5": {
+      "newEdges": [
+        5
+      ],
+      "castCalls": [
+        5
+      ],
+      "cdAfter": 0.975,
+      "manaDelta": -43.97
+    },
+    "LMB": {
+      "newEdges": [
+        6
+      ],
+      "castCalls": [
+        6,
+        6,
+        6,
+        6
+      ],
+      "boltHeldMid": true,
+      "boltHeldAfterUp": false,
+      "boltNextBefore": 0,
+      "boltNextAfter": 6.611,
+      "timeMid": 6.274,
+      "manaDelta": 1.01
+    }
+  },
+  "cooldownGate": {
+    "cdAtSecondPress": 0.931,
+    "cdAfter": 0.798,
+    "newEdges": [
+      1
+    ],
+    "castCalls": [
+      1
+    ],
+    "manaDelta": 1.58
+  },
+  "manaGate": {
+    "newEdges": [
+      4
+    ],
+    "castCalls": [
+      4
+    ],
+    "cdAfter": 0,
+    "manaAtConsume": 0.46,
+    "manaAfter": 1.38
+  }
+}

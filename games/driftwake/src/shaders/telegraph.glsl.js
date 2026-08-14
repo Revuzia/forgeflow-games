@@ -34,8 +34,9 @@ export const TELE_UNIFORM_MAX = 8;
  */
 export const vertex = /* glsl */`
 #include "lib/common"
+#include "lib/groundfx"
 
-in vec3 position;               // (ringIndex, cornerIndex, unused)
+in vec3 position;               // (ringIndex, gridX 0..16, gridZ 0..16)
 
 uniform vec4 uTeleA[8];
 uniform vec4 uTeleB[8];
@@ -46,25 +47,28 @@ out vec3 vCol;
 
 void main() {
     int i = int(position.x);
-    int v = int(position.y);
 
     vec4 a = uTeleA[i];
     vec4 b = uTeleB[i];
 
-    vec2 c = vec2(
-        (v == 1 || v == 2) ? 1.0 : -1.0,
-        (v >= 2)           ? 1.0 : -1.0
-    );
+    // Grid corner fractions -1..1 on both axes (vfx/groundfxGrid).
+    vec2 c = vec2(position.y, position.z) * (1.0 / 8.0) - 1.0;
 
-    // Dead ring: zero-area quad, the pool's constant-draw switch-off.
+    // Dead ring: zero-area grid, the pool's constant-draw switch-off.
     float ext = a.w < 0.0 ? 0.0 : b.x + 0.55;
 
     vLocal = c * ext;
     vAnim = vec2(max(a.w, 0.0), b.x);
     vCol = b.yzw;
 
-    vec3 P = a.xyz + vec3(vLocal.x, 0.0, vLocal.y);
-    gl_Position = uViewProj * vec4(P, 1.0);
+    // THE CLASS FIX (qa_groundfx.py): the ring drapes the drawn snow via the
+    // terrain's own macro/fine/deform chain instead of riding flat at a.y —
+    // uphill of a winding enemy the old quad was buried, downhill it floated.
+    vec2 pXZ = a.xz + vLocal;
+    float cell = ext * (2.0 / 16.0);
+    float h = groundFxHeight(pXZ, cell) + groundFxLift(cell);
+
+    gl_Position = uViewProj * vec4(pXZ.x, h, pXZ.y, 1.0);
 }
 `;
 

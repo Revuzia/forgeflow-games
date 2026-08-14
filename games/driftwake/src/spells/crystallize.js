@@ -24,6 +24,7 @@
  */
 
 import { smooth01, rand } from "./bending.js";
+import { sfx } from "../audio/sfx.js";
 
 /** Seconds the whole cast takes to finish planting. */
 const PLANT_TIME = 0.85;
@@ -54,6 +55,10 @@ export class Crystallize {
         this._planted = 0;
         this._seed = rand() * 1000;
         this.active = true;
+        // Counted at the plant; voiced by the crack stagger in SpellVoices
+        // (`legacy` in sfx.js's table). Before the deform early-out below,
+        // so a deform-less context still counts the cast it saw.
+        sfx.trigger("spell_spikes_plant", x, y, z);
 
         // The glaze goes down IMMEDIATELY, under where the formation will be, so
         // the ground has already changed material by the time the first prism is
@@ -78,7 +83,13 @@ export class Crystallize {
             );
         }
 
-        if (R.spikeCrater) this._crater(x, z, f);
+        if (R.spikeCrater) {
+            this._crater(x, z, f);
+            // SAND EXPLOSION — a real detonation with no legacy voice, so
+            // this one is audible from the sfx layer (pitched-down punch
+            // plus a low synth boom, attenuated from where it went off).
+            sfx.trigger("spell_spikes_detonate", x, y, z);
+        }
 
         // The detonation shell (vfx/burst.js) on the plant instant — the ice
         // snap in Cold, the SAND EXPLOSION's fireball-of-grit in Sand, the

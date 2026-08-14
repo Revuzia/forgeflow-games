@@ -33,6 +33,7 @@ import { S } from "../core/settings.js";
 import { shader } from "../core/glsl.js";
 import { vertex, fragment } from "../shaders/dart.glsl.js";
 import { rand } from "./bending.js";
+import { sfx } from "../audio/sfx.js";
 
 /** Pool size — see the docblock. */
 export const BOLT_MAX = 12;
@@ -327,6 +328,10 @@ export class Dart {
         this._dirty = true;
 
         const carrier = this.own[i] === 1;
+        // The impact, heard where it lands (1/d off the listener). Carriers
+        // skip it for the same reason they skip the brush and the trauma:
+        // their landing is the Sweep's cast, and the Sweep owns that sound.
+        if (!carrier) sfx.trigger("hit_bolt", x, y, z);
         const sp = ctx.spray;
         if (sp) {
             const sl = Math.hypot(this.vx[i], this.vy[i], this.vz[i]) || 1;

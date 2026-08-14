@@ -35,12 +35,11 @@ import { S } from "../core/settings.js";
 import { shader } from "../core/glsl.js";
 import { combatData } from "../combat/combatData.js";
 import { vertex, fragment } from "../shaders/castring.glsl.js";
+import { buildGroundFxGrid } from "./groundfxGrid.js";
 
 /** Pool size — must match the uniform arrays in shaders/castring.glsl.js. */
 export const CAST_MAX = 2;
 
-/** Rings sit this far above the terrain so they never z-fight the snow. */
-const LIFT = 0.07;
 /** Seconds the release snap-out lives. */
 const RELEASE_S = 0.42;
 /**
@@ -54,8 +53,11 @@ export class CastRing {
     /**
      * @param {THREE.Scene} scene
      * @param {Record<string, {value:any}>} globals the `lib/common` block
+     * @param {import("../terrain/terrain.js").Terrain} terrain supplies
+     *   `clipUniforms` + `deformUniforms` (shared by reference) for the
+     *   `lib/groundfx` chain the vertex stage drapes the ring with
      */
-    constructor(scene, globals) {
+    constructor(scene, globals, terrain) {
         /** (x, y, z, alpha01) — alpha < 0 = dead. THE uniform storage. */
         this.a = new Float32Array(CAST_MAX * 4);
         /** (drawnRadius, r, g, b). */
@@ -74,30 +76,20 @@ export class CastRing {
 
         for (let i = 0; i < CAST_MAX; i++) this.a[i * 4 + 3] = -1;
 
-        const pos = new Float32Array(CAST_MAX * 4 * 3);
-        const idx = new Uint16Array(CAST_MAX * 6);
-        for (let i = 0; i < CAST_MAX; i++) {
-            for (let v = 0; v < 4; v++) {
-                pos[(i * 4 + v) * 3 + 0] = i;
-                pos[(i * 4 + v) * 3 + 1] = v;
-            }
-            const o = i * 4;
-            idx[i * 6 + 0] = o;
-            idx[i * 6 + 1] = o + 1;
-            idx[i * 6 + 2] = o + 2;
-            idx[i * 6 + 3] = o;
-            idx[i * 6 + 4] = o + 2;
-            idx[i * 6 + 5] = o + 3;
-        }
-        this.geometry = new THREE.BufferGeometry();
-        this.geometry.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-        this.geometry.setIndex(new THREE.BufferAttribute(idx, 1));
+        // 16x16 grid per slot (vfx/groundfxGrid.js): the vertex stage drapes
+        // every grid vertex onto the terrain's own height chain. One mesh,
+        // one draw, exactly as the flat quads were.
+        this.geometry = buildGroundFxGrid(CAST_MAX);
 
         this.material = new THREE.RawShaderMaterial({
             glslVersion: THREE.GLSL3,
             vertexShader: shader(vertex),
             fragmentShader: shader(fragment),
-            uniforms: Object.assign({}, globals, {
+            // clipUniforms + deformUniforms feed lib/groundfx — shared BY
+            // REFERENCE with the terrain's five programs, so the ring reads
+            // the same height/deform state the snow is drawn from.
+            uniforms: Object.assign({}, globals,
+                terrain.clipUniforms, terrain.deformUniforms, {
                 uCastA: { value: this.a },
                 uCastB: { value: this.b },
                 uCastC: { value: this.c },
@@ -161,7 +153,10 @@ export class CastRing {
                 z = ctx.controller.position.z;
             }
             this.a[o + 0] = x;
-            this.a[o + 1] = ctx.terrain.heightAt(x, z) + LIFT;
+            // CPU anchor height, for probes: the vertex stage re-derives the
+            // drawn height per grid vertex from the GPU chain (lib/groundfx)
+            // and ignores this.
+            this.a[o + 1] = ctx.terrain.heightAt(x, z);
             this.a[o + 2] = z;
             this.a[o + 3] = 0.25 + 0.75 * reveal;             // fade-in gate
             const t = ctx.realm.bolt;

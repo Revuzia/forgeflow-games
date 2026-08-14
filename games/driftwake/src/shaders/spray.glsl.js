@@ -133,6 +133,12 @@ in vec4 vState;
 
 uniform vec3 camRight;
 uniform vec3 camUp;
+/// Realm grain color — consumed below in main(). Declared HERE as well as in
+/// SPRAY_VERTEX: cf1de2e4 promoted the albedo to a uniform but only declared
+/// it in the vertex stage, and an undeclared identifier fails the whole
+/// fragment compile (bootcheck: "Material Name: spray ... 'uSprayAlbedo' :
+/// undeclared identifier"), leaving every puff on the invalid-program path.
+uniform vec3 uSprayAlbedo;
 
 layout(location = 0) out vec4 outColor;
 

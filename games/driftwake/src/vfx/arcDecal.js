@@ -26,12 +26,11 @@ import { shader } from "../core/glsl.js";
 import { rand } from "../spells/bending.js";
 import { combatData } from "../combat/combatData.js";
 import { vertex, fragment } from "../shaders/arcdecal.glsl.js";
+import { buildGroundFxGrid } from "./groundfxGrid.js";
 
 /** Pool size — must match the uniform arrays in shaders/arcdecal.glsl.js. */
 export const ARC_MAX = 2;
 
-/** Decals sit this far above the terrain so they never z-fight the snow. */
-const LIFT = 0.07;
 /** Seconds the flash lives; the durable glaze is the deform ice channel. */
 const LIFE = 1.1;
 
@@ -39,8 +38,11 @@ export class ArcDecal {
     /**
      * @param {THREE.Scene} scene
      * @param {Record<string, {value:any}>} globals the `lib/common` block
+     * @param {import("../terrain/terrain.js").Terrain} terrain supplies
+     *   `clipUniforms` + `deformUniforms` (shared by reference) for the
+     *   `lib/groundfx` chain the vertex stage drapes the decal with
      */
-    constructor(scene, globals) {
+    constructor(scene, globals, terrain) {
         /** (x, y, z, age01) — age01 1 = dead. THE uniform storage. */
         this.a = new Float32Array(ARC_MAX * 4);
         /** (dirX, dirZ, reach, halfAng). */
@@ -56,30 +58,20 @@ export class ArcDecal {
 
         for (let i = 0; i < ARC_MAX; i++) this.a[i * 4 + 3] = 1;
 
-        const pos = new Float32Array(ARC_MAX * 4 * 3);
-        const idx = new Uint16Array(ARC_MAX * 6);
-        for (let i = 0; i < ARC_MAX; i++) {
-            for (let v = 0; v < 4; v++) {
-                pos[(i * 4 + v) * 3 + 0] = i;
-                pos[(i * 4 + v) * 3 + 1] = v;
-            }
-            const o = i * 4;
-            idx[i * 6 + 0] = o;
-            idx[i * 6 + 1] = o + 1;
-            idx[i * 6 + 2] = o + 2;
-            idx[i * 6 + 3] = o;
-            idx[i * 6 + 4] = o + 2;
-            idx[i * 6 + 5] = o + 3;
-        }
-        this.geometry = new THREE.BufferGeometry();
-        this.geometry.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-        this.geometry.setIndex(new THREE.BufferAttribute(idx, 1));
+        // 16x16 grid per slot (vfx/groundfxGrid.js): the vertex stage drapes
+        // every grid vertex onto the terrain's own height chain. One mesh,
+        // one draw, exactly as the flat quads were.
+        this.geometry = buildGroundFxGrid(ARC_MAX);
 
         this.material = new THREE.RawShaderMaterial({
             glslVersion: THREE.GLSL3,
             vertexShader: shader(vertex),
             fragmentShader: shader(fragment),
-            uniforms: Object.assign({}, globals, {
+            // clipUniforms + deformUniforms feed lib/groundfx — shared BY
+            // REFERENCE with the terrain's five programs, so the decal reads
+            // the same height/deform state the snow is drawn from.
+            uniforms: Object.assign({}, globals,
+                terrain.clipUniforms, terrain.deformUniforms, {
                 uArcA: { value: this.a },
                 uArcB: { value: this.b },
                 uArcC: { value: this.c },
@@ -117,8 +109,10 @@ export class ArcDecal {
             const t = sp.ctx.realm.bolt;
             const o = i * 4;
             this.a[o + 0] = sp.arcX;
-            this.a[o + 1] =
-                sp.ctx.terrain.heightAt(sp.arcX, sp.arcZ) + LIFT;
+            // CPU anchor height, for probes: the vertex stage re-derives the
+            // drawn height per grid vertex from the GPU chain (lib/groundfx)
+            // and ignores this.
+            this.a[o + 1] = sp.ctx.terrain.heightAt(sp.arcX, sp.arcZ);
             this.a[o + 2] = sp.arcZ;
             this.a[o + 3] = 0;
             this.b[o + 0] = sp.arcDirX;

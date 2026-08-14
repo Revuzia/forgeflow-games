@@ -63,6 +63,11 @@ import { S } from "../core/settings.js";
 import { noiseBuffer, gain } from "./graph.js";
 import { WindBed, SurfBed, CrunchPool, ThumpPool, SpellVoices } from "./voices.js";
 import { SampleBank } from "./samples.js";
+// The combat/spell SFX layer (bolt, arc, impacts, enemy cues, player hurt).
+// Owned by this file's lifecycle — prefetched with the samples, attached at
+// unlock under the same master chain, driven per frame, silenced with the
+// rest. Aliased because `update()` has a local `sfx` (the volume scalar).
+import { sfx as sfxLayer } from "./sfx.js";
 
 const DEG = Math.PI / 180;
 
@@ -209,8 +214,10 @@ class AudioSystem {
         this._publishFrames--;
         const SF = globalThis.SNOWFLOW;
         if (SF && !SF.audio) SF.audio = this;
+        if (SF && !SF.sfx) SF.sfx = sfxLayer;
         const DW = globalThis.DRIFTWAKE;
         if (DW && DW !== SF && !DW.audio) DW.audio = this;
+        if (DW && DW !== SF && !DW.sfx) DW.sfx = sfxLayer;
     }
 
     /**
@@ -229,6 +236,7 @@ class AudioSystem {
         // synthesised fallback. No AudioContext is created or needed by this —
         // decoding happens later, in `_build()`.
         this.samples.prefetch();
+        sfxLayer.prefetch();
         for (let i = 0; i < GESTURES.length; i++) {
             window.addEventListener(GESTURES[i], this._onGesture, { passive: true });
         }
@@ -315,6 +323,10 @@ class AudioSystem {
         // complete on their own, with `samples.play()` returning false — and the
         // synthesised voice taking over — until they do.
         this.samples.attach(ctx, this.master);
+
+        // The combat SFX layer, under the SAME master gain: the shell mute
+        // wrap, the blur/sleep ramps and the limiter all reach it for free.
+        sfxLayer.attach(ctx, this.master);
     }
 
     /** @returns {void} */
@@ -374,6 +386,7 @@ class AudioSystem {
         this.thump?.silence(now);
         this.spellVoices?.silence(now);
         this.samples?.silence(now);
+        sfxLayer.silence(now);
     }
 
     /** @param {boolean} m @returns {void} */
@@ -417,6 +430,12 @@ class AudioSystem {
         if (this._loopsPending > 0) this._adoptLoops();
 
         const yaw = rig ? rig.yaw : 0;
+
+        // The combat SFX layer's per-frame follow: SOUND FX slider on its
+        // master gain, listener pose for 1/d + pan, realm timbre.
+        sfxLayer.update(dt, character, yaw,
+            spells && spells.realm ? spells.realm : "cold");
+
         const speed01 = character ? character.speed01 : 0;
         const surfBlend = character ? character.surf : 0;
         // Hoisted above the beds: the surf bed keys on it. The jump/landing
