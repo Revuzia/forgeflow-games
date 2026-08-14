@@ -604,6 +604,11 @@ async function boot() {
         // the new ground bounce in it.
         terrain.applyRealm(realms.realm(token));
         sky.applyRealm(realms.realm(token));
+        // The surf wake and kicked spray are MADE of the ground — they
+        // wear the realm's authored albedo rows (owner 2026-08-13: the
+        // wake stayed snow-white in sand/ash).
+        wake.applyRealm(realms.realm(token));
+        spray.applyRealm(realms.realm(token));
         await sky.solve();
         realmToken = token;
         return token;

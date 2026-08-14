@@ -213,8 +213,10 @@ export class SprayField {
         /** True when the real spell-light chunk was found; false = stub term. */
         this.spellLightsBound = chunkRegistered("lib/spellLights");
 
+        this._uSprayAlbedo = { value: new Float32Array([0.92, 0.94, 0.98]) };
         const uniforms = Object.assign(
             {},
+            { uSprayAlbedo: this._uSprayAlbedo },
             this.globals,
             sky.uniforms,
             (terrain && terrain.shadingUniforms) || {},
@@ -280,6 +282,19 @@ export class SprayField {
      * @param {number} [drag] 1/s; defaults to 5.2 (powder) / 1.1 (clod)
      * @returns {void}
      */
+    /**
+     * Realm grain color (owner 2026-08-13): kicked powder is the realm's
+     * ground, not always snow. realms.js vfx.sprayAlbedo row.
+     * @param {{vfx?: {sprayAlbedo?: number[]}}} block a realms.js realm row
+     * @returns {void}
+     */
+    applyRealm(block) {
+        const a = block && block.vfx && block.vfx.sprayAlbedo;
+        if (!a) return;
+        const u = this._uSprayAlbedo.value;
+        u[0] = a[0]; u[1] = a[1]; u[2] = a[2];
+    }
+
     emit(x, y, z, vx, vy, vz, size, life, kind, drag) {
         // Bounded free-slot scan. After CAPACITY tries the pool is full and the
         // emission is simply dropped, which at these counts never happens and is

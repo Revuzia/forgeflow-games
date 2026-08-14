@@ -244,6 +244,7 @@ export class SurfWake {
          * `lib/clipmap` give the terrain.
          */
         this.wakeUniforms = {
+            uWakeAlbedo: { value: new Float32Array([0.895, 0.920, 0.965]) },
             wakeTex: { value: this.dataTex },
             wakeCount: { value: 0 },
             wakeCols: { value: COLS },
@@ -393,6 +394,20 @@ export class SurfWake {
      * @param {boolean} v
      * @returns {void}
      */
+    /**
+     * Realm surface swap (owner 2026-08-13): the thrown lip is made of the
+     * GROUND, so it wears the realm's wakeAlbedo row (realms.js authored
+     * these from day one; the fragment hardcoded Cold's until now).
+     * @param {{ground?: {wakeAlbedo?: number[]}}} block a realms.js realm row
+     * @returns {void}
+     */
+    applyRealm(block) {
+        const a = block && block.ground && block.ground.wakeAlbedo;
+        if (!a) return;
+        const u = this.wakeUniforms.uWakeAlbedo.value;
+        u[0] = a[0]; u[1] = a[1]; u[2] = a[2];
+    }
+
     setEnabled(v) {
         this._enabled = !!v;
         if (!this._enabled) this.mesh.visible = false;

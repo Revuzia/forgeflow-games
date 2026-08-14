@@ -140,6 +140,10 @@ in vec4 vSec;
 
 /// Per-term diagnostic; see the switch at the bottom. SNOWFLOW.wake.debug.
 uniform float wakeDebug;
+/// Realm surface color for the thrown lip (owner 2026-08-13: the wake
+/// stayed snow-white in sand/ash). Fed from realms.js ground.wakeAlbedo
+/// via SurfWake.applyRealm; the default matches Cold's old hardcode.
+uniform vec3 uWakeAlbedo;
 
 layout(location = 0) out vec4 outColor;
 
@@ -218,7 +222,7 @@ void main() {
     }
 
     // 5. Material. Freshly displaced snow: brighter and rougher than the pack.
-    vec3 albedo = vec3(0.895, 0.920, 0.965);
+    vec3 albedo = uWakeAlbedo;
     float roughness = 0.80;
     vec3 f0 = vec3(0.026);
 

@@ -56,6 +56,9 @@ in vec3 position;   // (particle index, cornerX, cornerY) — NOT a position
 /// RGBA32F and not RGBA16F: row 0 holds absolute world coordinates that reach
 /// ~870 m on this map, where fp16 quantises to about half a metre.
 uniform sampler2D sprayTex;
+/// Realm grain color (owner 2026-08-13). realms.js vfx.sprayAlbedo via
+/// SprayField.applyRealm; default = Cold's old hardcode.
+uniform vec3 uSprayAlbedo;
 /// The camera's right and up in world space — the first two ROWS of the view
 /// matrix, lifted on the CPU so the basis cannot disagree with the projection.
 uniform vec3 camRight;
@@ -189,7 +192,7 @@ void main() {
 
     // Snow crystals in air scatter almost isotropically at the surface and very
     // strongly forward through the volume, so both terms are needed.
-    vec3 albedo = vec3(0.92, 0.94, 0.98);
+    vec3 albedo = uSprayAlbedo;
     float diff = wrapDiffuse(dot(N, L), 0.75);
     vec3 color = albedo * INV_PI * sun * diff * shadow;
 
