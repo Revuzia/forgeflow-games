@@ -263,9 +263,14 @@ const DEATH_S = 1.2;
 const WINDUP_FRAC = 0.45;
 
 /** Core clip slots — the first five of every ROLE_KIT list (roster.js:74-105). */
-const CL_IDLE = 0, CL_WALK = 1, CL_RUN = 2, CL_DEATH = 4;
+const CL_IDLE = 0, CL_WALK = 1, CL_RUN = 2, CL_HIT = 3, CL_DEATH = 4;
 /** First attack slot; everything from here up is a role attack. */
 const CL_ATTACK0 = 5;
+
+/** Hit-flinch overlay weight while the drive channel is up (owner band
+ *  0.25–0.35): strong enough to read as a recoil, weak enough that the
+ *  locomotion underneath keeps the feet honest. */
+const FLINCH_W = 0.3;
 
 /**
  * MESH_REUSE tint tokens -> colour. roster.js:628-629 states these are TOKENS,
@@ -561,6 +566,8 @@ export class MeshEnemies {
         this.lunge = new Float32Array(SLOT_MAX);
         this.submerge = new Float32Array(SLOT_MAX);
         this.dissolve = new Float32Array(SLOT_MAX);
+        /** Hit-flinch, 1 at impact -> 0; drives the CL_HIT overlay. */
+        this.flinch = new Float32Array(SLOT_MAX);
 
         /** Resolved combatData key per slot, or null. @type {(string|null)[]} */
         this._slotKey = new Array(SLOT_MAX).fill(null);
@@ -1042,6 +1049,10 @@ export class MeshEnemies {
              *  every pooled reuse. This flag is how `_clips` knows to
              *  `reset()` it exactly once, on the frame death begins. */
             dying: false,
+            /** Flinch-entry edge — the same reset-once pattern as `dying`:
+             *  the CL_HIT action must restart from frame 0 the moment the
+             *  drive channel rises, not resume wherever it last stopped. */
+            flinching: false,
             /** Rung 1 (26-95 m) steps on alternate frames; this is its parity. */
             parity: this._insts.length & 1,
         };
@@ -1298,6 +1309,8 @@ export class MeshEnemies {
         inst.atk = -1;
         inst.striking = false;
         inst.dying = false;
+        inst.flinching = false;
+        this.flinch[i] = 0;   // never inherit the last tenant's flinch
 
         if (inst.mixer) {
             inst.targets.fill(0);
@@ -1330,6 +1343,7 @@ export class MeshEnemies {
     free(i) {
         this.used[i] = 0;
         this._slotKey[i] = null;
+        this.flinch[i] = 0;
         const inst = this._slotInst[i];
         if (!inst) return;
         this._slotInst[i] = null;
@@ -1350,9 +1364,12 @@ export class MeshEnemies {
      * @param {number} speed01 locomotion 0..1  @param {number} flash windup 0..1
      * @param {number} lunge strike thrust 0..1 @param {number} submerge 0..1
      * @param {number} dissolve death 0..1
+     * @param {number} [flinch] hit recoil 1 -> 0; DEFAULTED so every existing
+     *        nine-scalar caller (the dying-branch drive, the warm-up, the
+     *        harness hooks) stays valid unchanged
      * @returns {void}
      */
-    drive(i, x, y, z, yaw, speed01, flash, lunge, submerge, dissolve) {
+    drive(i, x, y, z, yaw, speed01, flash, lunge, submerge, dissolve, flinch = 0) {
         this.x[i] = x; this.y[i] = y; this.z[i] = z;
         this.yaw[i] = yaw;
         this.speed01[i] = speed01;
@@ -1360,6 +1377,7 @@ export class MeshEnemies {
         this.lunge[i] = lunge;
         this.submerge[i] = submerge;
         this.dissolve[i] = dissolve;
+        this.flinch[i] = flinch;
     }
 
     /**
@@ -1625,6 +1643,27 @@ export class MeshEnemies {
             if (acts[CL_IDLE]) t[CL_IDLE] += wIdle;
             if (acts[CL_WALK]) t[CL_WALK] += wWalk;
             if (acts[CL_RUN]) t[CL_RUN] += wRun;
+
+            // ---- the hit-flinch overlay (drive channel 11) ---------------
+            // The role kit's 'hit' clip, slot 3 — loaded since the 30-body
+            // port, never played until now. An ADDITIVE bump over whatever
+            // the body is doing, not a state: locomotion and the attack
+            // layer keep their weights, the recoil rides on top. Weight
+            // holds at FLINCH_W for the front of the window and collapses
+            // over the last 30%, so the release is a fade, not a pop.
+            const flinch = this.flinch[i];
+            if (flinch > 0.001 && acts[CL_HIT]) {
+                if (!inst.flinching) {
+                    // The flinch EDGE — same reset-once pattern as the
+                    // death edge above: the action must restart from its
+                    // first frame, not resume a stale playhead.
+                    inst.flinching = true;
+                    acts[CL_HIT].reset();
+                }
+                t[CL_HIT] = FLINCH_W * Math.min(1, flinch / 0.3);
+            } else {
+                inst.flinching = false;
+            }
 
             // Cadence follows ground speed so the feet track the snow rather
             // than skating, the same lever meshChar.js:903-904 pulls.

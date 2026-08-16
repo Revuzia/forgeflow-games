@@ -72,10 +72,47 @@ import { WEATHER_VERTEX, weatherFragment } from "../shaders/weather.glsl.js";
 
 /**
  * Geometry is allocated once at this size and the preset moves
- * `setDrawRange()`. Reallocating a 4096-quad lattice on a preset click would
- * cost a buffer upload mid-frame for a value that changes a draw range.
+ * `setDrawRange()`. Reallocating a lattice on a preset click would cost a
+ * buffer upload mid-frame for a value that changes a draw range.
+ *
+ * RAISED FROM 4096 TO 12288 for the storm edge (`EDGE_COUNT_GAIN`), which needs
+ * headroom above the `ultra` rung's 3072 to actually triple the field rather
+ * than to claim it. The cost is static and paid once: [derived] 12288 quads ×
+ * (4 verts × 3 floats × 4 B + 6 indices × 4 B) = 0.87 MiB of buffer, against the
+ * 0.29 MiB the 4096 lattice held. Nothing per frame changes — the draw range
+ * still moves and the vertex program still places every corner from a hash of
+ * the index, so the extra quads cost exactly zero until the band asks for them.
  */
-const WEATHER_MAX = 4096;
+const WEATHER_MAX = 12288;
+
+/**
+ * THE STORM EDGE. [laneE]
+ *
+ * The play area's boundary used to be an invisible wall in clear air:
+ * `terrain.clampToPlayArea` stopped the position and nothing else happened, so
+ * the world ended in a treadmill with no visual account of itself. Inside the
+ * band (`terrain.edge01`, 80 m wide, the same field `terrain.edgePush` scales
+ * off) the storm closes in:
+ *
+ *   EDGE_FOG_GAIN     × on top of the REALM'S OWN fog boost, so the wall is
+ *                     realm-tinted for free — Ash's boost is 1.35 and Cold's is
+ *                     1.90, and this multiplies whichever is in force rather
+ *                     than replacing it with one storm colour for all three.
+ *                     [derived] Cold at the clamp: 0.0072 × 1.90 × 2.6 =
+ *                     0.0356 /m, an e-folding distance of 28 m — you cannot see
+ *                     the far ring, which is the point.
+ *   EDGE_COUNT_GAIN   × the drawn particle count.
+ *   EDGE_ALPHA_GAIN   × the fine/coarse opacity, capped at 1.
+ *
+ * The count ramp does not pop. It follows `edge01`'s smoothstep over the whole
+ * 80 m, so crossing the band at a brisk 8 m/s takes ten seconds and adds
+ * [derived] (3×3072 − 3072) / (10 s × 60 fps) ≈ 10 quads per frame, appearing at
+ * hashed positions across a 140 m box that is already at 0.03 transmittance at
+ * its far edge.
+ */
+const EDGE_FOG_GAIN = 2.6;
+const EDGE_COUNT_GAIN = 3.0;
+const EDGE_ALPHA_GAIN = 1.35;
 
 /** Velocity-stretch gain, and the speed at which it reaches 1 + gain. */
 const STRETCH_BASE = 0.9;
@@ -327,6 +364,26 @@ export class WeatherField {
         this.groundY = null;
         this._groundRef = (deps && deps.groundRef) || null;
 
+        /**
+         * [laneE] The storm edge's height field, for `edge01(x, z)`. Anything
+         * with that method will do; the seam is one call, so this module stays
+         * constructible from a probe with no terrain in the tree — and with no
+         * terrain the edge is simply always 0 and the field behaves exactly as
+         * it did before the band existed.
+         * @type {{edge01(x:number, z:number):number}|null}
+         */
+        this._edgeField = (deps && deps.terrain) || null;
+        /** Storm-front depth under the player, 0..1. Published for the HUD and
+         *  for `_harness/qa_landform_edge.py`. */
+        this.edge01 = 0;
+        /** Last value pushed through `_applyEdge`; -1 forces the first write. */
+        this._edgeApplied = -1;
+        /** Pre-edge values `_applyQuality` resolves, that `_applyEdge` scales. */
+        this._baseCount = 0;
+        this._baseFog = 1;
+        this._baseFogFalloff = 1;
+        this._baseAlpha = new THREE.Vector3();
+
         // ---- clocks and retained state -------------------------------------
         this._t = 0;
         this._driftA = new THREE.Vector3();
@@ -543,12 +600,13 @@ export class WeatherField {
      * @returns {void}
      */
     _applyCount() {
-        const n = Math.max(0, Math.min(WEATHER_MAX, Math.round(S.weatherParticles || 0)));
-        this.count = n;
-        this.triangles = n * 2;
-        this.geometry.setDrawRange(0, n * 6);
-        this.geometry.userData.triangles = n * 2;
-        this._uCount.value = n;
+        // Clamped against the BASE headroom, not `WEATHER_MAX`: the lattice is
+        // three times the requested field so the storm edge has somewhere to go,
+        // and a slider that could ask for all 12288 at rest would leave the band
+        // with nothing to add.
+        const cap = Math.floor(WEATHER_MAX / EDGE_COUNT_GAIN);
+        this._baseCount = Math.max(0,
+            Math.min(cap, Math.round(S.weatherParticles || 0)));
         this._applyQuality();
     }
 
@@ -561,7 +619,9 @@ export class WeatherField {
      */
     _applyQuality() {
         const p = this._p;
-        const lean = this.count <= LEAN_COUNT;
+        // The BASE count, never the edge-boosted one: walking into the storm
+        // must not silently lift the machine off its lean rung.
+        const lean = this._baseCount <= LEAN_COUNT;
 
         const bx = p.box[0], by = p.box[1], bz = p.box[2];
         this._uBox.value.set(bx, by, bz);
@@ -576,7 +636,8 @@ export class WeatherField {
         this._uFade.value.set(NEAR_FADE_LO, NEAR_FADE_HI, FAR_FADE_START * farHi, farHi);
 
         this._uRadii.value.set(p.radii[0], p.radii[1], p.radii[2]);
-        this._uAlpha.value.set(p.alpha[0], p.alpha[1], p.alpha[2]);
+        this._baseAlpha.set(p.alpha[0], p.alpha[1], p.alpha[2]);
+        this._uAlpha.value.copy(this._baseAlpha);
         // Degradation 1: the ember-glow layer is dropped on the lean rung. Ash
         // still glows at ground level through the snow fragment's glint block,
         // which is already paid for.
@@ -594,8 +655,10 @@ export class WeatherField {
         // far range off (settings.js:328), so there is no far field for heavy
         // haze to act on — it would just flatten the frame for nothing.
         const fd = p.fogBoost[0], ff = p.fogBoost[1];
-        this.fogBoost.density = lean ? 1 + (fd - 1) * 0.5 : fd;
-        this.fogBoost.falloff = lean ? 1 + (ff - 1) * 0.5 : ff;
+        this._baseFog = lean ? 1 + (fd - 1) * 0.5 : fd;
+        this._baseFogFalloff = lean ? 1 + (ff - 1) * 0.5 : ff;
+        this.fogBoost.density = this._baseFog;
+        this.fogBoost.falloff = this._baseFogFalloff;
 
         // Degradation 4: no dust devils; their reserved indices go back to the
         // sheet.
@@ -609,6 +672,65 @@ export class WeatherField {
 
         this._uShadowAmt.value =
             this._shadowCompiled && S.weatherShadows !== false ? 1 : 0;
+
+        // Re-assert the edge over the values just rewritten from the realm row.
+        this._applyEdge(this.edge01, true);
+    }
+
+    /**
+     * Fold the storm edge into the field. [laneE]
+     *
+     * Three dials, all multiplicative over what `_applyQuality` resolved from
+     * the realm, so the wall wears the realm's own colour and the realm's own
+     * flake: Ash's edge is a wall of embers and smoke, Sand's is a wall of grit,
+     * and neither is a re-skin of Cold's blizzard.
+     *
+     * THE INNER-SHELL CORRECTION IS LOAD-BEARING. `uWxInner.x` is a fraction of
+     * the live count, and the vertex program folds every index below
+     * `uWxCount * uWxInner.x` into a dense shell at 0.42 of the box
+     * (`shaders/weather.glsl.js:218`). Raise the count alone and that boundary
+     * INDEX moves, so a few thousand already-drawn particles teleport from the
+     * outer field into the inner shell in one frame — a mass pop, not a build.
+     * Holding the boundary at the base count's index instead puts every added
+     * particle in the outer field, which is also where the wall wants them.
+     *
+     * @param {number} e 0..1 storm-front depth
+     * @param {boolean} [force] re-apply even at an unchanged depth
+     * @returns {void}
+     */
+    _applyEdge(e, force) {
+        const t = e < 0 ? 0 : e > 1 ? 1 : e;
+        // 1/256 of the band — finer than a frame of walking, and enough to keep
+        // an idle player from re-writing four uniforms and a draw range forever.
+        if (!force && Math.abs(t - this._edgeApplied) < 0.004) return;
+        this._edgeApplied = t;
+        this.edge01 = t;
+
+        // ---- fog: the realm's boost, deepened ------------------------------
+        this.fogBoost.density = this._baseFog * (1 + (EDGE_FOG_GAIN - 1) * t);
+        this.fogBoost.falloff = this._baseFogFalloff;
+
+        // ---- opacity: capped, never over 1 ---------------------------------
+        const ag = 1 + (EDGE_ALPHA_GAIN - 1) * t;
+        this._uAlpha.value.set(
+            Math.min(1, this._baseAlpha.x * ag),
+            Math.min(1, this._baseAlpha.y * ag),
+            Math.min(1, this._baseAlpha.z * ag)
+        );
+
+        // ---- population -----------------------------------------------------
+        const n = Math.min(WEATHER_MAX, Math.round(
+            this._baseCount * (1 + (EDGE_COUNT_GAIN - 1) * t)));
+        if (n !== this.count) {
+            this.count = n;
+            this.triangles = n * 2;
+            this.geometry.setDrawRange(0, n * 6);
+            this.geometry.userData.triangles = n * 2;
+            this._uCount.value = n;
+            // See the note above: hold the inner shell's boundary INDEX still.
+            this._uInner.value.x = n > 0
+                ? (this._baseCount * INNER_FRAC) / n : INNER_FRAC;
+        }
     }
 
     /**
@@ -701,6 +823,16 @@ export class WeatherField {
         // Clamped so one hitch cannot fling the whole field across the box.
         const h = Math.min(Math.max(dt, 0), 1 / 30);
         this._t += h;
+
+        // ---- storm edge [laneE] ---------------------------------------------
+        // Off the PLAYER, not the camera: the camera orbits several metres and
+        // would ramp the fog up and down as you turned on the spot. One hypot
+        // and a smoothstep inside `terrain.edge01`, and `_applyEdge` early-outs
+        // on an unchanged depth, so this is free everywhere but the last 80 m.
+        if (this._edgeField && this._groundRef) {
+            const gp = this._groundRef.position;
+            this._applyEdge(this._edgeField.edge01(gp.x, gp.z), false);
+        }
 
         // ---- basis and eye, straight off the camera's world matrix ----------
         _right.setFromMatrixColumn(camera.matrixWorld, 0);

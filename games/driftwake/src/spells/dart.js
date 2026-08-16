@@ -109,6 +109,15 @@ export class Dart {
         this._trailOwed = new Float32Array(BOLT_MAX);
         this._next = 0;
         this.liveCount = 0;
+        /**
+         * [LANE-M aim assist] the launch-time heading consultant, or null.
+         * `SpellHits`' constructor installs itself here; `fire()` consults it
+         * for damaging primaries only. Declared (not left implicit) so the
+         * shape of a bolt pool is the same with and without a damage pass.
+         * @type {{aimAssist:(ox:number,oy:number,oz:number,dx:number,
+         *         dy:number,dz:number,speed:number)=>Float32Array}|null}
+         */
+        this.assist = null;
 
         // ---- the pool's texture --------------------------------------------
         // Rows: (x,y,z,scale) / (dx,dy,dz,age01) / (len,wid,kind,spin)
@@ -192,6 +201,20 @@ export class Dart {
      * @returns {number} the slot, or -1 when the pool is full
      */
     fire(x, y, z, dx, dy, dz, speed, range, own, sizeMul) {
+        // ---------------------------------------- [LANE-M aim assist] BEGIN
+        // The ONE consult site for the bolt aim assist (combat/spellHits.js
+        // header, "owner 2026-08-14, whiff-rate review"). DAMAGING PRIMARIES
+        // ONLY: `own === 1` carriers — the Frost Arc's fan, the sweep's
+        // crescent head, the Ash fireball's travel phase — are never bent,
+        // because their payload is not this projectile. `this.assist` is
+        // installed by SpellHits' constructor and stays null in any tool or
+        // test that builds a bolt pool without a damage pass, which makes
+        // this a no-op there rather than a crash.
+        if (!own && this.assist) {
+            const a = this.assist.aimAssist(x, y, z, dx, dy, dz, speed);
+            dx = a[0]; dy = a[1]; dz = a[2];
+        }
+        // ------------------------------------------ [LANE-M aim assist] END
         let i = this._next;
         for (let n = 0; n < BOLT_MAX; n++) {
             if (!this.alive[i]) break;

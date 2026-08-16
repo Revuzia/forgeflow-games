@@ -126,6 +126,12 @@ const BRUTE_CD_S = 3.5;
 const ALARM_S = 3;
 /** Owner brief — player i-frames after any enemy hit. */
 const PLAYER_IFRAME_S = 0.5;
+/** Hit-flinch overlay window, s (feeds the vis `flinch` drive channel). */
+const FLINCH_S = 0.35;
+/** A hit must land at least this hard to flinch the body — chip damage
+ *  (bolt 6, arc 7) must not stunlock the animation (owner 2026-08-14).
+ *  Poise breaks always flinch. Matches HEAVY_DMG in core/hitstop.js. */
+const FLINCH_MIN_DMG = 20;
 /** Owner brief — player hurt capsule for enemy projectiles. */
 const PLAYER_R = 0.5;
 const PLAYER_H = 1.8;
@@ -700,6 +706,11 @@ export class Enemies {
         this.openerCd = new Float32Array(ENEMY_MAX);
         this.sprayT = new Float32Array(ENEMY_MAX);        // VFX emit throttle
         this.hitT = new Float32Array(ENEMY_MAX);          // flinch clip timer
+        /** Heavy-hit flinch window — the sixth `vis.drive` scalar. Unlike
+         *  `hitT` (any hit; gates the CLIP_HIT full-body request) this arms
+         *  only on hits >= FLINCH_MIN_DMG or a poise break, so chip damage
+         *  cannot stunlock the overlay. Constructs never set it (§3.4). */
+        this.flinchT = new Float32Array(ENEMY_MAX);
 
         // ---- attack execution ----
         /** Chosen damage index for the attack in flight; -1 = none. */
@@ -747,6 +758,18 @@ export class Enemies {
         this._stealthFreeAt = 0;
         this._time = 0;
         this._pIFrameUntil = 0;
+
+        /** Player-hit pulse — the feed core/hitstop.js and the HUD hurt
+         *  vignette poll. Incremented ONLY when damage actually lands
+         *  (behind the i-frame and invulnerability gates in `_hurtPlayer`),
+         *  with the unit direction AWAY from the source alongside it. */
+        this.playerHurtPulse = 0;
+        this.playerHurtDirX = 0;
+        this.playerHurtDirZ = 1;
+        /** @type {{onPlayerHit(dx:number,dz:number,amount:number):void}|null}
+         *  laneC's hurt vignette (ui/hurtFx.js); main.js assigns it. Its
+         *  direction convention is player -> SOURCE (ours is away-from). */
+        this.hurtFx = null;
 
         /** Slope-aware steering + separation + budgeted A* fallback. Feeds
          *  `_move` a direction; owns no state machine and no position. It is
@@ -842,6 +865,7 @@ export class Enemies {
         this.openerCd[i] = 0;
         this.sprayT[i] = 0;
         this.hitT[i] = 0;
+        this.flinchT[i] = 0;
         this.atk[i] = -1;
         this.atkT[i] = 0;
         this.atkDur[i] = 0;
@@ -928,6 +952,15 @@ export class Enemies {
             for (let i = 0; i < ENEMY_MAX; i++) {
                 if (!this.alive[i] || this.id[i] !== id) continue;
                 const u = this.units[this.unitOf[i]];
+                // Heavy hits and poise breaks arm the flinch overlay channel
+                // (constructs never flinch, §3.4). Deliberately NOT `hitT` —
+                // that arms on any hit and only gates the full-body CLIP_HIT
+                // request; this one is the animation overlay's window.
+                if (!u.construct &&
+                    (type === 2 ||
+                     (type === 0 && reg.evAmount[e] >= FLINCH_MIN_DMG))) {
+                    this.flinchT[i] = FLINCH_S;
+                }
                 if (type === 0) {
                     // Carapace soaks the hit before the AI reacts to it.
                     if (this.carapace[i] > 0) {
@@ -1105,6 +1138,7 @@ export class Enemies {
         if (this.cd[i] > 0) this.cd[i] -= dt;
         if (this.blinkCd[i] > 0) this.blinkCd[i] -= dt;
         if (this.hitT[i] > 0) this.hitT[i] -= dt;
+        if (this.flinchT[i] > 0) this.flinchT[i] -= dt;
         if (this.revealT[i] > 0) {
             this.revealT[i] -= dt;
             if (this.revealT[i] <= 0 && u.cloak) this.cloaked[i] = 1;
@@ -1873,11 +1907,17 @@ export class Enemies {
                 dmg *= u.flankBonus;
             }
         }
-        this._hurtPlayer(dmg);
+        this._hurtPlayer(dmg, this.x[i], this.z[i]);
     }
 
-    /** Damage the player, honouring the 0.5 s i-frame window. */
-    _hurtPlayer(dmg) {
+    /**
+     * Damage the player, honouring the 0.5 s i-frame window.
+     * @param {number} dmg
+     * @param {number} [sx] source world x (striker body / bolt), for the
+     *        hurt-direction pulse; omitted -> the last direction stands
+     * @param {number} [sz] source world z
+     */
+    _hurtPlayer(dmg, sx, sz) {
         if (this._time < this._pIFrameUntil) return;
         if (this.progression && this.progression.isInvulnerable &&
             this.progression.isInvulnerable()) return;
@@ -1886,6 +1926,27 @@ export class Enemies {
         // Behind the i-frame and invulnerability gates above, so the thud
         // means "you were actually hit", never "something swung at you".
         sfx.trigger("player_hurt");
+        // The hurt pulse (same gate): hitstop + the camera punch + the HUD
+        // vignette all key off this, so every consumer agrees a hit LANDED.
+        let known = false;
+        if (sx !== undefined) {
+            let ax = c.position.x - sx;
+            let az = c.position.z - sz;
+            const l = Math.sqrt(ax * ax + az * az);
+            if (l > 1e-4) {
+                this.playerHurtDirX = ax / l;
+                this.playerHurtDirZ = az / l;
+                known = true;
+            }
+        }
+        this.playerHurtPulse = (this.playerHurtPulse + 1) & 0xffff;
+        // laneC's vignette takes player -> source (the negation); 0,0 when
+        // the striker is unknown, which its contract reads as "no tick".
+        if (this.hurtFx) {
+            this.hurtFx.onPlayerHit(
+                known ? -this.playerHurtDirX : 0,
+                known ? -this.playerHurtDirZ : 0, dmg);
+        }
         this._pIFrameUntil = this._time + PLAYER_IFRAME_S;
     }
 
@@ -1973,7 +2034,7 @@ export class Enemies {
             // Swept segment vs the player capsule — exact at any frame rate,
             // which is the §9.3 anti-tunneling rule in closed form.
             if (segVsCapsule(x0, y0, z0, x1, y1, z1, px, py, pz, PLAYER_R, PLAYER_H)) {
-                this._hurtPlayer(this.boltDmg[b]);
+                this._hurtPlayer(this.boltDmg[b], x0, z0);
                 if (this.spray) {
                     this.spray.emit(x1, y1, z1, 0, 1.5, 0, 0.12, 0.35, 0, 5.2);
                 }
@@ -2282,7 +2343,11 @@ export class Enemies {
         this.vis.drive(
             i, this.x[i], this.y[i], this.z[i], this.yaw[i],
             Math.min(1, this.speedNow[i] / u.speed),
-            this.flash[i], this.lunge[i], this.submerge[i], 0
+            this.flash[i], this.lunge[i], this.submerge[i], 0,
+            // The flinch channel, 1 at impact -> 0 as the window closes. A
+            // renderer whose drive() takes nine scalars ignores the extra
+            // argument; meshEnemies consumes it as the 'hit' clip overlay.
+            this.flinchT[i] > 0 ? this.flinchT[i] / FLINCH_S : 0
         );
         if (this.vis.driveClip) {
             this.vis.driveClip(i, this.clip[i], this.clipPhase[i], this.clipSeq[i]);

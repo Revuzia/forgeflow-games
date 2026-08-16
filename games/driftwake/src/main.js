@@ -89,6 +89,7 @@ import {
 } from "./core/perf.js";
 import { initInput, pollInput, endFrame, input } from "./core/input.js";
 import { CameraRig } from "./core/camera.js";
+import { HitStop } from "./core/hitstop.js";
 import { checkCaps, warmUp } from "./core/gfx.js";
 import * as loading from "./core/loading.js";
 
@@ -114,14 +115,23 @@ import * as combatData from "./combat/combatData.js";
 import { SpellHits } from "./combat/spellHits.js";
 import { Targeting } from "./combat/targeting.js";
 import { SpawnShrine } from "./world/shrine.js";
+// [laneL] The realm landmark layer (world/landmarks.js) — three procedural
+// monument types per realm in one mesh, three draws for the whole layer.
+import { Landmarks } from "./world/landmarks.js";
 import { Enemies } from "./combat/enemies.js";
 import { MeshEnemies } from "./combat/meshEnemies.js";
 import { WeatherField } from "./vfx/weather.js";
 import { TelegraphRings } from "./vfx/telegraph.js";
 import * as realms from "./world/realms.js";
 import { Encounters } from "./combat/encounters.js";
+// [LANE B] the arena director + the gate a realm boss opens.
+import { BossEncounters } from "./combat/bossEncounters.js";
+import { RealmPortal } from "./world/portal.js";
+// [LANE-M motes] the kill-drop heal economy (COMBAT_DESIGN §1.4).
+import { HealthMotes } from "./combat/motes.js";
 import { Floaters } from "./ui/floaters.js";
 import { EnemyBars } from "./ui/enemybars.js";
+import { HurtFx } from "./ui/hurtFx.js";
 import { Progression } from "./progression/progression.js";
 import { XpHud } from "./progression/xphud.js";
 import { Minimap } from "./ui/minimap.js";
@@ -496,6 +506,30 @@ async function boot() {
     // Placed 7.5 m along the BOOT camera bearing (rig.yaw starts 2.4), so
     // the monument stands in the opening frame.
     const shrine = new SpawnShrine(terrain, spells.crystals, 5.0, 5.5);
+    // ---- [LANE B] the realm portal (world/portal.js) --------------------
+    // Constructed HERE, beside the shrine, for one reason: its material is a
+    // second variant of the crystal pipeline and this is the last point
+    // before the warm-up block, so it compiles behind the loading screen with
+    // everything else. The gate starts hidden (`mesh.visible = false`) and
+    // costs zero draws until a realm boss dies.
+    const portal = new RealmPortal(terrain, spells.crystals);
+    // ------------------------------------------------ [LANE-L landmarks] BEGIN
+    // The realm landmark layer (world/landmarks.js): three procedural monument
+    // types per realm — ice henge / frozen crest / glacier gate, sunken
+    // colonnade / bleached ribs / watch spire, basalt colonnade / caldera rim /
+    // ember vent — 15 instances per realm on a deterministic hashed grid.
+    //
+    // AFTER the shrine, deliberately: `shrine.positions` are the exclusion
+    // anchors (no monument within 120 m of a respawn point). It takes
+    // `spells.crystals` for the same reason the shrine does — the merged
+    // uniform block (sun, sky LUT, SH, fog, cascades, spell lights) is shared
+    // by reference, so this layer adds no per-frame uniform bookkeeping.
+    //
+    // THREE draw calls total: one beauty plus two shadow cascades. Only the
+    // active realm's prisms carry non-zero growth; the other two realms'
+    // collapse to a point in the vertex stage, so a realm swap costs no draw.
+    const landmarks = new Landmarks(terrain, spells.crystals, shrine);
+    // -------------------------------------------------- [LANE-L landmarks] END
     const enemies = new Enemies(scene, terrain, registry, character, combatData, spray);
     // The bodies are the thirty rigged Meshy enemies, not the four placeholder
     // shard constructs `EnemyVis` drew. Same API surface — spawn/free/drive/
@@ -527,6 +561,25 @@ async function boot() {
         scene, spells.globals, enemies, terrain, spells
     );
 
+    // ------------------------------------------------------------ hit-stop
+    // Global impact time-dilation (core/hitstop.js): the frame's dt is
+    // multiplied by its envelope, and it drains the registry event ring +
+    // the enemies' player-hurt pulse read-only, feeding the camera punch.
+    const hitstop = new HitStop(registry, enemies, rig);
+
+    // ------------------------------------------------- [LANE-M motes] BEGIN
+    // Health motes (combat/motes.js) — the kill-drop heal economy. It drains
+    // the SAME registry event ring hit-stop and the floaters read, so its
+    // `update(dt)` sits in that drain window below (after the combat pass,
+    // before `registry.endFrame()`), and it uploads its pool before
+    // `drawFrame()`. One pooled additive draw; `spells.globals` is the shared
+    // `lib/common` uniform block every RawShaderMaterial in the game rides.
+    const motes = new HealthMotes(
+        scene, registry, character, terrain, spells.globals
+    );
+    // laneB's boss death edge calls `motes.spawnAt(x, z, 8)` through this.
+    // ------------------------------------------------- [LANE-M motes] END
+
     // ------------------------------------------------------------- weather
     // Shares `spray.globals`, so weather rides the SAME jittered view-projection
     // the wake plume does — two particle systems resolving against different
@@ -537,6 +590,13 @@ async function boot() {
         globals: spray.globals,
         spellUniforms: spells.spellUniforms,
         groundRef: character,
+        // ------------------------------------------ [LANE-E storm edge] START
+        // The play-area boundary's storm front. `weather` reads ONE method off
+        // this — `terrain.edge01(x, z)` — and ramps its fog boost, its opacity
+        // and its population over the last 80 m. Omit it and the field behaves
+        // exactly as it did before the band existed.
+        terrain,
+        // -------------------------------------------- [LANE-E storm edge] END
     });
 
     /**
@@ -571,7 +631,14 @@ async function boot() {
         // units stood in the sand until killed). Director bookkeeping first
         // — its despawns are id-keyed — then the runtime sweep.
         encounters.onRealmChange();
+        // [LANE B] a boss belongs to its realm: the live event, its arena and
+        // the gate all drop here, before the runtime sweep below removes the
+        // body underneath them.
+        bossEncounters.setRealm(token);
         enemies.clear();
+        // [LANE-M motes] the old realm's drops do not follow the player across
+        // — same rule the enemy sweep above enforces, same reason.
+        motes.clear();
         await enemyVis.load(token);
         // The other nine bodies of the realm walk in behind the priority one
         // — stream() was never called anywhere before the audit, which is
@@ -609,6 +676,27 @@ async function boot() {
         // wake stayed snow-white in sand/ash).
         wake.applyRealm(realms.realm(token));
         spray.applyRealm(realms.realm(token));
+        // laneC: the hurt vignette red-shifts toward THIS realm's ember hue.
+        hurtFx.setRealm(token);
+        // ------------------------------ [INTEGRATOR] shrine re-ground/re-tint
+        // shrine.js has carried `setRealm(token)` — realm tint plus a
+        // 3-frame re-ground countdown, the same mechanism landmarks.js copied
+        // — since laneD built the seven-shrine network, and NOTHING has ever
+        // called it. It was invisible while every realm stood on Cold's
+        // ground; laneE's landform re-bake is what makes it a defect, because
+        // the heightfield now genuinely changes under the network. Left
+        // unwired the seven shrines keep Cold's heights (buried in Ash,
+        // floating in Sand) and `shrine.positions[i].y` goes stale for the
+        // minimap blips and `gradeAt`. Placed beside the landmarks call, and
+        // for the identical reason: AFTER `terrain.applyRealm` so the
+        // re-sample lands on the NEW heightfield.
+        shrine.setRealm(token);
+        // ---------------------------------------------------- [INTEGRATOR] END
+        // [LANE-L landmarks] AFTER terrain.applyRealm, so the re-ground this
+        // schedules lands on the NEW heightfield: the old realm's monuments
+        // sink, the new realm's rise, and every prism base is re-sampled three
+        // frames later once the re-bake has run inside terrain.update().
+        landmarks.setRealm(token);
         await sky.solve();
         realmToken = token;
         return token;
@@ -625,6 +713,20 @@ async function boot() {
     // Auto-save position (owner 2026-08-10): every save — ding, boss flag,
     // the 10 s heartbeat below — carries the exact stand, so CONTINUE
     // resumes where the game last ended rather than at the spawn.
+    // ------------------------- [INTEGRATOR] the shrine network -> respawn map
+    // `shrine.register(progression)` (shrine.js:357) hands all seven shrines
+    // to §8.1 as respawn targets. Its own jsdoc says "main.js calls this
+    // once, after Progression is constructed" — and nothing ever did, so
+    // `progression.shrines` held only the `cold_spawn: {x:0, z:0}` seed and
+    // every death resolved through the `|| this.shrines.cold_spawn` fallback
+    // at progression.js:693. Six of the seven shrines were unreachable as
+    // respawn points however the run went.
+    //
+    // Called here rather than at construction because `register` needs a
+    // Progression that exists; the shrine itself was built earlier (line 508)
+    // as a landmark-exclusion anchor.
+    shrine.register(progression);
+    // ---------------------------------------------------- [INTEGRATOR] END
     progression._posFor = () => ({
         x: character.position.x, z: character.position.z,
         facing: character.facing || 0, realm: realmToken,
@@ -639,8 +741,48 @@ async function boot() {
     const enemyBars = new EnemyBars(registry, rig);
     enemyBars.attach({ overlay });
     enemyBars.targeting = targeting;
+    // ---- laneC: player hurt feedback (ui/hurtFx.js) — vignette flash,
+    // directional tick, low-hp heartbeat. The enemy runtime may report exact
+    // hits through `enemies.hurtFx.onPlayerHit(dirX, dirZ, dmg)`; until it
+    // does, hurtFx's own health poll covers every damage path.
+    const hurtFx = new HurtFx(character, rig, registry);
+    hurtFx.attach({ overlay });
+    enemies.hurtFx = hurtFx;
     minimap.targeting = targeting;
     const xpHud = new XpHud({ overlay, progression });
+
+    // ---- [LANE B] boss encounters (combat/bossEncounters.js) ------------
+    // The SECOND director: `encounters` keeps ambient packs coming, this one
+    // runs at most one boss EVENT at a time — arena placement, emergence,
+    // phases, the 30 m leash, and the realm portal a realm-boss death opens.
+    // Constructed after progression (it gates on level and writes the
+    // bossesKilled flags) and after the shrine (arenas keep clear of them).
+    const bossEncounters = new BossEncounters(
+        enemies, registry, character, combatData, terrain,
+        { spray, shockwave: spells.shockwave });
+    bossEncounters.progression = progression;
+    bossEncounters.shrine = shrine;
+    bossEncounters.portal = portal;
+    bossEncounters.encounters = encounters;   // a live boss holds pack slot 1
+    // The portal's own realm change goes through the ONE enterRealm above, so
+    // a gate can never half-apply a realm.
+    bossEncounters.enterRealm = (token) => enterRealm(token);
+    // ------------------------------- [INTEGRATOR] boss payout: laneB -> laneM
+    // `motes.update` deliberately SKIPS TIER.BOSS kills (motes.js:279) so the
+    // arena director owns its own payout, and motes.js:23/:230 pins that
+    // contract at `spawnAt(x, z, 8)` — the spec sets fodder/elite drop RATES
+    // (COMBAT_DESIGN.md:126) but no boss COUNT, so the module contract is the
+    // authority and 8 is not invented here.
+    //
+    // Watched from the frame rather than called from `_onDeath`, because
+    // bossEncounters.js is laneB's file and this edge needs no seam inside it:
+    // `kills` increments in `_onDeath` and the arena point `ax`/`az` survives
+    // it (nothing in `_onDeath` clears them), so the edge is fully readable
+    // from the public surface. Two number reads and a compare per frame; the
+    // latch lives here so the frame closure allocates nothing.
+    let bossKillsSeen = bossEncounters.kills;
+    // ---------------------------------------------------- [INTEGRATOR] END
+
     initInput(canvas, { onToggleOverlay: () => overlay.toggle() });
 
     // ------------------------------------------------------------- warm-up
@@ -664,12 +806,21 @@ async function boot() {
     spray.update(0, rig.camera);
     wake.warmUpSeed();
     spells.warmUp(character.position.x + 3, character.position.y, character.position.z + 3);
+    // [LANE-M motes] one seeded orb so the additive pool rasterises during the
+    // warm frames. A dead mote collapses to zero radius in the vertex stage,
+    // and a zero-area triangle never specialises the fragment pipeline — the
+    // first real drop would then compile mid-fight. `update(0)` uploads
+    // without ageing; `motes.clear()` below takes it away before frame one.
+    motes.spawnAt(character.position.x + 2, character.position.z + 2, 1);
+    motes.update(0);
 
     // One compile-and-draw over the whole beauty scene. The spell meshes are
     // forced visible for the duration and put back exactly as they were.
     await warmUp(renderer, scene, rig.camera, [
         ...spells.warmUpMeshes, ...figure.warmUpMeshes(), ...meshChar.warmUpMeshes(),
         wake.mesh, spray.mesh, fxTelegraph.mesh,
+        motes.mesh,   // [LANE-M motes]
+        portal.mesh,  // [LANE B] the gate's crystal variant, compiled hidden
     ]);
     await shadows.warmUp();
     await depthPass.warmUp(rig.camera);
@@ -688,6 +839,7 @@ async function boot() {
     // Only now: the spell meshes had to be standing THROUGH those frames for
     // their pipelines to exist. Nothing synthetic survives into frame one.
     spells.finishWarmUp();
+    motes.clear();   // [LANE-M motes] the seeded warm orb never reaches frame one
     wake.warmUpClear();
     spray.clear();
     post.resetHistory();
@@ -739,7 +891,8 @@ async function boot() {
         // renders ultra at 5-7 fps, so that is not a corner case here.
         const rawMs = dtMs;
         if (dtMs > MAX_FRAME_MS) dtMs = MAX_FRAME_MS;
-        const dt = S.freezeTime ? 0 : dtMs / 1000;
+        // [HITSTOP] the one dt hook: impact frames dilate the whole clock.
+        const dt = S.freezeTime ? 0 : hitstop.scale(dtMs / 1000);
         time += dt;
 
         pollInput();
@@ -750,6 +903,28 @@ async function boot() {
         const tFrame = performance.now();
 
         character.update(dt, rig);
+        // ------------------------------------------ [LANE-E storm edge] START
+        // The world edge SHOVES before it stops. `edgePush` is exactly 0 outside
+        // the last 55 m of the disc — one hypot and an early return over 99% of
+        // the play area — and ramps quadratically to 7 m/s at the clamp, which
+        // is above the walk speed and below the surf top speed. The hard clamp
+        // below is still the backstop; this is what makes it legible.
+        // Returns a RETAINED object; do not hold it.
+        const push = terrain.edgePush(character.position.x, character.position.z);
+        if (push.fx !== 0 || push.fz !== 0) {
+            character.position.x += push.fx * dt;
+            character.position.z += push.fz * dt;
+        }
+        // A realm swap re-bakes the macro heightfield inside `terrain.update()`,
+        // so the ground under the player can move by metres between frames. The
+        // controller's grounded snap is an exponential damp (controller.js:335)
+        // and would take a visible moment to catch up; this seats it on the new
+        // surface the frame the bake lands. Reading the flag clears it.
+        if (terrain.consumeGroundDirty()) {
+            character.position.y =
+                terrain.heightAt(character.position.x, character.position.z);
+        }
+        // -------------------------------------------- [LANE-E storm edge] END
         terrain.clampToPlayArea(character.position);
         // Pose and simulate before the contact pass: the footprints are stamped
         // at the boot's actual planted position, which only exists once the
@@ -785,11 +960,43 @@ async function boot() {
         registry.update(dt);
         spellHits.update(dt);
         shrine.update(dt);
+        // [LANE-L landmarks] Growth / realm cross-fade / post-swap re-ground.
+        // A settled, un-swapped layer is a strict no-op — no upload, no uniform
+        // write, no allocation.
+        landmarks.update(dt);
         enemies.update(dt);
         // After the bodies: the telegraph rings read this frame's windup
         // flash and positions, before anything renders.
         fxTelegraph.update(dt);
+        // [HITSTOP] envelope + event drain, on WALL time. After the combat
+        // pass (this frame's kills/hits are in the ring), before
+        // registry.endFrame() clears it. Read-only on the registry.
+        hitstop.update(dtMs / 1000);
+        // [LANE-M motes] same drain window, same reason: this frame's kill
+        // events still exist and `registry.endFrame()` has not cleared them.
+        // Read-only on the ring; GAME dt, because a mote's drift and its 20 s
+        // life dilate with everything else during a hit-stop.
+        motes.update(dt);
         encounters.update(dt);
+        // [LANE B] the arena director, after the pack director so a boss that
+        // arms this frame sees the field the packs just left, and after
+        // `enemies.update` so the registry positions its leash reads are this
+        // frame's. The gate polls the player on the same clock.
+        bossEncounters.update(dt);
+        // ---------------------------- [INTEGRATOR] boss payout: laneB -> laneM
+        // The death edge, read off the public surface (see the latch above).
+        // ONE frame of upload latency by construction: `motes.update` ran at
+        // line ~936, inside the registry drain window it must sit in, so a
+        // mote dropped here uploads on the next frame. Moving the watcher
+        // above `motes.update` does not fix that — `bossEncounters.update`
+        // would not have run yet, so the edge would be seen a frame later and
+        // land on exactly the same frame. Adjacent to its cause wins.
+        if (bossEncounters.kills !== bossKillsSeen) {
+            bossKillsSeen = bossEncounters.kills;
+            motes.spawnAt(bossEncounters.ax, bossEncounters.az, 8);
+        }
+        // ------------------------------------------------- [INTEGRATOR] END
+        portal.update(dt, character.position.x, character.position.z);
         // AFTER sky.update() rebuilt uFog from S this frame, and before
         // drawFrame() reads it: weather multiplies the realm's fog boost into
         // the live uniform, so the boost lands without compounding across
@@ -877,6 +1084,7 @@ async function boot() {
         minimap.update();
         floaters.update();
         enemyBars.update();
+        hurtFx.update();
         xpHud.update();
         // Event ring drains ABOVE (floaters/xp read it); clear it last.
         registry.endFrame();
@@ -1197,7 +1405,13 @@ async function boot() {
         // way the game will. `enterRealm` is async — it awaits the body fetch.
         weather, realms, enterRealm,
         combat: { registry, spellHits, enemies, encounters, targeting,
+            // [LANE B] the arena director — `bosses.stats` is the whole event
+            // state (arena, phase, leash, kills) and `bosses.spawnBoss(kind)`
+            // is the probe's force path.
+            bosses: bossEncounters,
             data: combatData },
+        // [LANE B] the gate a realm boss opens — `portal.stats` for probes.
+        portal,
         // The enemy windup telegraph rings — exposed the way `deform` is, so
         // the FX probe can read its `.stats` and A/B its `enabled` flag.
         fxTelegraph,
@@ -1205,7 +1419,19 @@ async function boot() {
         // probes the way `deform` is. The training dummies it replaced are
         // gone from this surface deliberately: harnesses spawn real enemies.
         shrine,
-        progression, floaters, enemyBars, xpHud,
+        // [LANE-L landmarks] The realm monument layer, exposed the way `shrine`
+        // and `deform` are. `landmarks.stats` carries the live realm, the draw
+        // count, and every visible instance's anchor — which is the whole
+        // surface `_harness/qa_landmarks.py` measures spacing and clearance on.
+        landmarks,
+        // [HITSTOP] impact time-dilation — exposed for the feel probes
+        // (`.stats.triggers`, `.stats.scaleNow`).
+        hitstop,
+        // [LANE-M motes] the kill-drop heal pool — exposed for the feel probe
+        // (`.stats.spawned/.picked/.healed/.active`, `.enabled` for A/B) and
+        // for laneB's boss payout (`motes.spawnAt(x, z, 8)`).
+        motes,
+        progression, floaters, enemyBars, hurtFx, xpHud,
         // The deformation field, alongside the other subsystems it sits between.
         // `_harness/probe_deform_skip.py` reads its `stepsRun`/`stepsSkipped`
         // counters and reads the state buffer back through `texture`, which is

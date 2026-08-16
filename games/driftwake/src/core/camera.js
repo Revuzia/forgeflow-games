@@ -127,6 +127,15 @@ export class CameraRig {
         this.trauma = 0;
         this.shakeTime = 0;
 
+        // Impact punch (core/hitstop.js feeds this on kills and player hits):
+        // an instantaneous angular kick that decays over ~0.15 s. Applied on
+        // the same angle path the shake uses — it never accumulates into
+        // `yaw`/`pitch` and it composes with the rig's own damping. The decay
+        // runs on the frame's (possibly hit-stop-dilated) dt, so the kick
+        // HOLDS through a stop and releases with it, which is the feel.
+        this.punchPitch = 0;
+        this.punchYaw = 0;
+
         /**
          * Height sampler, injected once the terrain exists:
          * `rig.groundAt = (x, z) => terrain.heightAt(x, z)`.
@@ -153,6 +162,19 @@ export class CameraRig {
     /** @param {number} amount 0..1 */
     addTrauma(amount) {
         this.trauma = Math.min(1, this.trauma + amount);
+    }
+
+    /**
+     * One-frame angular kick (impact punch). Additive so a kill landing on
+     * top of a hurt reaction stacks, clamped so no burst can wrench the view.
+     * Deterministic — magnitudes come from the caller, no noise here.
+     * @param {number} pitchKick radians; negative looks up
+     * @param {number} yawKick radians
+     * @returns {void}
+     */
+    punch(pitchKick, yawKick) {
+        this.punchPitch = clamp(this.punchPitch + pitchKick, -0.12, 0.12);
+        this.punchYaw = clamp(this.punchYaw + yawKick, -0.12, 0.12);
     }
 
     /**
@@ -266,6 +288,17 @@ export class CameraRig {
         let shakePitch = 0;
         let shakeYaw = 0;
         let shakeRoll = 0;
+        // ---- impact punch: ride the shake's angle path, decay ~0.15 s -----
+        if (this.punchPitch !== 0 || this.punchYaw !== 0) {
+            shakePitch += this.punchPitch;
+            shakeYaw += this.punchYaw;
+            // Rate 20 ≈ 5% left after 0.15 s; snapped to exact zero below so
+            // the steady state re-enters the untouched fast path.
+            this.punchPitch = expDamp(this.punchPitch, 0, 20, dt);
+            this.punchYaw = expDamp(this.punchYaw, 0, 20, dt);
+            if (Math.abs(this.punchPitch) < 1e-4) this.punchPitch = 0;
+            if (Math.abs(this.punchYaw) < 1e-4) this.punchYaw = 0;
+        }
         if (shake > 0.0001) {
             const t = this.shakeTime * 26;
             _desired.x += (noise1(t) * 2 - 1) * shake * 0.16;

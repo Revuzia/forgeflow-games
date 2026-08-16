@@ -54,7 +54,7 @@
  */
 
 import * as THREE from "three";
-import { S, onChange } from "../core/settings.js";
+import { S, onChange, set } from "../core/settings.js";
 import { bearingRad } from "../core/bearing.js";
 import { makeRT, FullScreenPass } from "../core/gfx.js";
 import { fail } from "../core/loading.js";
@@ -749,6 +749,28 @@ export class Sky {
 
         const token = typeof b.token === "string" ? b.token : this.realmName;
         this.realmName = token;
+
+        // THE REALM'S OWN SUN (owner 2026-08-16, found by the landmark lane:
+        // "S.sunAzimuth stays at Cold's 118 in ALL THREE realms").
+        // `realms.js` authors an azimuth and an elevation per realm — Cold
+        // 118/13, Sand 206/22, Ash 74/11 — and every one of them was inert:
+        // this method read groundAlbedo, intensity, ambient, mountains and the
+        // grade, and nothing ever wrote the sun's DIRECTION. Three consequences,
+        // all visible: every realm cast its shadows the same way, the contract's
+        // 76-degree sun-vs-wind separation (realms.js `rebakePlan` validates it)
+        // held only in Cold, so Sand's dunes and Ash's cracks were lit as if
+        // carved by a wind that was not blowing on them; and Ash's authored
+        // elevation — re-derived alongside its beamExtinction during the
+        // visibility work — never reached the bake at all.
+        //
+        // Written through `set()` so the F1 panel reads the realm's true sun
+        // and the LUT is marked dirty; `enterRealm` awaits `solve()` on the
+        // very next line, so the re-bake is already paid for. Cold's row IS
+        // settings.js's default (118 / 13.0), so boot is untouched.
+        if (typeof sk.sunAzimuth === "number") set("sunAzimuth", sk.sunAzimuth);
+        if (typeof sk.sunElevation === "number") {
+            set("sunElevation", sk.sunElevation);
+        }
 
         // The bounce solve. The single most consequential number here.
         if (Array.isArray(sk.groundAlbedo) && sk.groundAlbedo.length >= 3) {

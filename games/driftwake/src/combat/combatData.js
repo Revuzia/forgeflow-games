@@ -228,6 +228,37 @@ export const MINIBOSS_REPEAT_MULT = 8 / 3;
  * variants live in BOSSES (§2.4).
  * ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ *
+ * PRESSURE — the encounter-pressure knobs (owner directive 2026-08-16)
+ * ------------------------------------------------------------------ */
+
+/**
+ * The spec pillar these serve is §0's "standing still must be dangerous":
+ * fodder is individually trivial and lethal by attrition (§2.5 "clear them or
+ * drown"), and the field at the entry band was not delivering that.
+ *
+ * `fodderAttackCd` multiplies the post-attack cooldown of MELEE fodder units
+ * only. §4.2 caps concurrent melee attackers at two tokens; a fodder unit
+ * holds its token from windup to the end of recovery and then waits out this
+ * cooldown before it can take one again, so cutting it to 0.8 is exactly
+ * "fodder melee tokens regenerate ~25% faster" (1 / 0.8 = 1.25×). Nothing
+ * about damage, telegraph, HP or the token COUNT moves — the §5/§8 TTK tables
+ * and every red-cue window are untouched.
+ *
+ * `coldEntryFodderBonus` records the +2 imps `combat/encounters.js` adds to
+ * cold's two entry packs, so the pack rows and this table cannot drift apart
+ * silently.
+ *
+ * CONSUMER: `combat/encounters.js` (`_applyFodderPressure`). The honest home
+ * for `fodderAttackCd` is `combat/enemies.js::buildUnits`, where the per-unit
+ * cooldown is derived — see that method's note.
+ */
+export const PRESSURE = {
+    fodderAttackCd: 0.8,
+    coldEntryFodderBonus: 2,
+    coldEntryPacks: ["Imp Warren", "The Hunt"],
+};
+
 export const ENEMIES = [
     // -------- Cold (realm 1, band 1–10) --------
     { key: "rimeImp", name: "Rime Imp", realm: "cold", archetype: "swarm-melee",

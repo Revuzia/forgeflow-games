@@ -139,6 +139,9 @@ export class Floaters {
         }
         /** Round-robin spawn cursor. */
         this._next = 0;
+        /** Hashed jitter counter — deterministic scatter, no Math.random on
+         *  the frame path (LCG stepped once per spawn). */
+        this._jit = 0x2f6e2b1;
 
         /** Per-frame merge mask over the event ring (sized to the ring). */
         this._consumed = new Uint8Array(registry.evType.length);
@@ -254,9 +257,13 @@ export class Floaters {
         if (v.x < -1.1 || v.x > 1.1 || v.y < -1.1 || v.y > 1.1) return;
 
         // ±px jitter so a burst of merged numbers over one target never
-        // stacks into an unreadable pillar.
-        const sx = (v.x * 0.5 + 0.5) * window.innerWidth + (Math.random() * 20 - 10);
-        const sy = (0.5 - v.y * 0.5) * window.innerHeight + (Math.random() * 12 - 6);
+        // stacks into an unreadable pillar. Deterministic: one LCG step per
+        // spawn, two bit-fields — reproducible under the shot harness.
+        const j = this._jit = (this._jit * 1103515245 + 12345) & 0x7fffffff;
+        const sx = (v.x * 0.5 + 0.5) * window.innerWidth +
+            (((j & 1023) / 1023) * 20 - 10);
+        const sy = (0.5 - v.y * 0.5) * window.innerHeight +
+            ((((j >> 10) & 1023) / 1023) * 12 - 6);
 
         // Round-robin — sequential spawns make this oldest-first by
         // construction; an in-flight slot is simply overwritten.

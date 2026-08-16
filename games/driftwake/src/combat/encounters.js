@@ -65,16 +65,49 @@
  * floor, so a low-level player walking a sand portal must still meet
  * entry-gate packs, not an empty realm.
  *
+ * RHYTHM (owner directive 2026-08-16: "today it is one identical pack, always
+ * dead ahead"). Three variations, all on the SPAWN EDGE, none on a frame path:
+ *   BEARING   — slot 0's anchor no longer sits on the travel bearing. Each
+ *     spawn takes the next step of a golden-ratio wheel across ±120°, so
+ *     consecutive packs arrive from genuinely different quarters and six
+ *     spawns span most of the band by construction rather than by luck. Slot 1
+ *     keeps its FAR anchor (the density directive's surrounding pressure) with
+ *     its own ±60° wheel.
+ *   COMPOSITION — one or two members of every pack are swapped for a
+ *     different unit OF THE SAME §6.1 COST from the same realm's pack pool, so
+ *     the budget the §6.2 row was authored at is preserved exactly while the
+ *     silhouette mix changes.
+ *   CADENCE   — the breather between packs is no longer a flat 1.5–2.5 s. An
+ *     "excitement" scalar in [-1, 1] decays toward 0 and is nudged on every
+ *     pack END: a FAST, CLEAN clear (inside FAST_CLEAR_S with little damage
+ *     taken) pushes it up and the next pack comes sooner (down to
+ *     BREATHER_HOT); a clear that cost the player heavy damage pushes it down
+ *     and buys a real breather (out to BREATHER_COLD). The owner's 1.5–2.5 s
+ *     band is the NEUTRAL centre of that range, not its whole extent.
+ *
+ * FODDER PRESSURE (owner directive 2026-08-16, spec pillar "standing still
+ * must be dangerous"): cold's two entry packs each carry +2 fodder, and every
+ * MELEE fodder unit's post-attack cooldown is cut by `PRESSURE.fodderAttackCd`
+ * so its share of the §4.2 two-melee-token pool recycles ~25% faster. See
+ * `_applyFodderPressure` for how that one number reaches the enemy runtime and
+ * where it really belongs.
+ *
  * TEST API (console: SNOWFLOW.encounters.…):
  *   spawnPack("The Hunt")            force-spawn a named §6.2 pack ahead of
  *                                    travel (slot 0) — replaces all active
  *                                    packs, bypasses level gates and
  *                                    cleared-area locks, honours the 25 m
  *                                    exclusions.
+ *   spawnRoam(far)                   run the REAL roam path once (bearing
+ *                                    wheel + composition jitter + gates), the
+ *                                    way the frame would — the rhythm probe's
+ *                                    entry point.
  *   spawnAt("rimeImp", x, z, level)  one untracked unit at an explicit spot;
  *                                    level omitted -> data.enemyLevelFor.
  *   packsSpawned                     lifetime count of packs queued — the
  *                                    density probe's spawn counter.
+ *   rhythm                           the last 8 spawns' bearings/offsets/
+ *                                    compositions and the last 8 breathers.
  *   _nextSpawnAt / _nextSpawnAt2     slot 0 / slot 1 roam timers (probes
  *                                    zero them to restore the director).
  *
@@ -92,6 +125,7 @@
  */
 
 import { S } from "../core/settings.js";
+import { TIER, PRESSURE } from "./combatData.js";
 
 // ---------------------------------------------------------------- spec knobs
 /** Owner directive: pack anchor lands 55–80 m from the player. */
@@ -110,9 +144,30 @@ const AREA_R_SQ = 40 * 40;
 const STAGGER_MIN = 0.5;
 const STAGGER_MAX = 2.0;
 /** Breather between ambient packs. §6.1 said 3–5 s; the owner found the
- *  resulting field sparse — halved 2026-08-13 (density directive). */
+ *  resulting field sparse — halved 2026-08-13 (density directive). This band
+ *  is now the NEUTRAL centre of the rhythm range below (owner 2026-08-16). */
 const BREATHER_MIN = 1.5;
 const BREATHER_MAX = 2.5;
+/** Rhythm extremes (owner 2026-08-16): the breather after a fast, clean clear
+ *  and after a clear that cost the player heavy damage. */
+const BREATHER_HOT = 1.1;
+const BREATHER_COLD = 4.6;
+/** A pack cleared inside this, having cost less than HEAVY_DMG_FRAC of the
+ *  player's max health, counts as a fast clean clear. */
+const FAST_CLEAR_S = 12;
+const HEAVY_DMG_FRAC = 0.18;
+/** Excitement moves by these per pack END and decays this fast per second. */
+const EXCITE_UP = 0.40;
+const EXCITE_DOWN = 0.50;
+const EXCITE_DECAY = 0.03;
+/** Bearing wheels, radians: slot 0 spans ±120° of travel (owner), slot 1 ±60°
+ *  of the FAR bearing so the surrounding pressure still comes from behind. */
+const BEAR_SPREAD_0 = 2.0944;
+const BEAR_SPREAD_1 = 1.0472;
+/** Members swapped per pack, and the rhythm ring's depth. */
+const MIX_MIN = 1;
+const MIX_MAX = 2;
+const RHYTHM_LOG = 8;
 /** Alive caps per realm — owner density directive 2026-08-13, raised from
  *  §8.2's 6/8/8 so two concurrent packs fit (ENEMY_MAX 24; never near it). */
 const ALIVE_CAP = { cold: 10, sand: 12, ash: 12 };
@@ -173,12 +228,16 @@ const MAX_AREAS = 8;
  */
 const PACKS = [
     // ---- Cold (§6.2, budgets 6→14) ----
-    { name: "Imp Warren", realm: "cold", gate: 1, budget: 8,
+    // FODDER PRESSURE (owner 2026-08-16): cold's two ENTRY packs each carry
+    // +2 rime imps over the §6.2 row, budget +2 each — the spec pillar is
+    // "standing still must be dangerous" and the entry band was the one place
+    // a planted player could out-trade the field without moving.
+    { name: "Imp Warren", realm: "cold", gate: 1, budget: 10,
         units: ["rimeImp", "rimeImp", "rimeImp", "rimeImp", "rimeImp",
-            "hoarfrostSprite"] },
-    { name: "The Hunt", realm: "cold", gate: 2, budget: 9,
+            "hoarfrostSprite", "rimeImp", "rimeImp"] },
+    { name: "The Hunt", realm: "cold", gate: 2, budget: 11,
         units: ["frostStalker", "frostStalker", "rimeImp", "rimeImp",
-            "rimeImp"] },
+            "rimeImp", "rimeImp", "rimeImp"] },
     { name: "Ritual Circle", realm: "cold", gate: 4, budget: 11,
         units: ["rimeboundCultist", "hailPlateGuard", "rimeImp", "rimeImp",
             "rimeImp"] },
@@ -226,6 +285,14 @@ const PACKS = [
 ];
 
 const TWO_PI = Math.PI * 2;
+
+/** Hashed 0..1 from an integer — the deterministic stand-in for Math.random
+ *  on the rhythm's choices, so two runs of the probe see the same wheel.
+ *  @param {number} n @returns {number} */
+function hash01(n) {
+    const h = Math.imul(n ^ 0x9e3779b9, 2654435761) >>> 0;
+    return ((h >>> 8) & 0xffff) / 65535;
+}
 
 export class Encounters {
     /**
@@ -277,6 +344,9 @@ export class Encounters {
                 qAt: new Float64Array(MAX_PACK),
                 qCount: 0, qNext: 0,
                 nextAt: 0,
+                // Rhythm bookkeeping: when this pack was queued and how much
+                // damage the player had taken by then.
+                startedAt: 0, dmgAt0: 0,
             });
         }
 
@@ -304,6 +374,110 @@ export class Encounters {
          *  Wired by main.js after construction; null is a valid state.
          *  @type {{x:number, z:number}|null} */
         this.shrine = null;
+
+        // ------------------------------------------------------- rhythm
+        /** Excitement, [-1, 1]: >0 = the field presses (shorter breathers),
+         *  <0 = the field backs off. Decays toward 0. */
+        this.excitement = 0;
+        /** A live boss owns the field: slot 1 holds while this is set
+         *  (combat/bossEncounters.js writes it; §7 caps a boss's adds). */
+        this.bossLive = false;
+        /** Monotonic player damage taken, metres of HP — the cadence input.
+         *  Polled off the controller, so EVERY damage path counts. */
+        this._dmgTotal = 0;
+        this._lastHp = -1;
+        /** Bearing wheel step, per slot. */
+        this._bearSeq = [0, 0];
+        /** Composition-jitter step. */
+        this._mixSeq = 0;
+        /** Scratch member list for the composition jitter (no per-spawn
+         *  array allocation). @type {(string|null)[]} */
+        this._mix = new Array(MAX_PACK).fill(null);
+        /** Per-realm cost buckets: cost -> keys drawn from THAT realm's own
+         *  §6.2 rows, so a swap can never field a unit the realm's tables do
+         *  not already use. Built once. @type {Record<string, string[][]>} */
+        this._costPool = this._buildCostPool();
+        /** The rhythm log the probe reads — fixed-size, mutated in place. */
+        this.rhythm = {
+            n: 0,
+            bearing: new Float32Array(RHYTHM_LOG),   // world angle, rad
+            offset: new Float32Array(RHYTHM_LOG),    // vs travel bearing, rad
+            comp: new Array(RHYTHM_LOG).fill(""),    // composition signature
+            slot: new Int8Array(RHYTHM_LOG),
+            cadence: new Float32Array(RHYTHM_LOG).fill(-1),
+            cadenceN: 0,
+            excitement: 0,
+        };
+
+        this._applyFodderPressure();
+    }
+
+    /**
+     * FODDER PRESSURE, the runtime half (owner 2026-08-16: "fodder melee
+     * tokens regenerating ~25% faster"). The §4.2 token a fodder unit holds is
+     * released at the end of its recovery; what gates its NEXT swing — and so
+     * how fast that unit recycles through the two-melee-token pool — is the
+     * unit record's post-attack cooldown, which `combat/enemies.js` derives
+     * from its role profile. Multiplying it by `PRESSURE.fodderAttackCd`
+     * (0.8 = 1.25× the swings per second) is the whole change.
+     *
+     * It is applied HERE, once, at construction, to the MELEE fodder records
+     * only (casters keep their cadence — the directive is about melee), and it
+     * is idempotent: a record already stamped is skipped, so a second director
+     * (or a hot reload) cannot compound it.
+     *
+     * RECOMMENDED (enemies.js owner): the honest home for this is `buildUnits`
+     * reading `PRESSURE.fodderAttackCd` when it writes `cd: p.cd`. This pass
+     * exists because the enemy runtime is not this lane's file; it is a
+     * boot-edge stamp, never a frame path, and it is one line to delete once
+     * the table reads the number itself.
+     * @returns {void}
+     */
+    _applyFodderPressure() {
+        const mult = PRESSURE && PRESSURE.fodderAttackCd;
+        const units = this.enemies && this.enemies.units;
+        if (!(mult > 0) || mult === 1 || !Array.isArray(units)) return;
+        let n = 0;
+        for (let i = 0; i < units.length; i++) {
+            const u = units[i];
+            if (!u || u._fodderPressure) continue;
+            if (u.tier !== TIER.FODDER || u.caster) continue;
+            u.cd = u.cd * mult;
+            u._fodderPressure = mult;
+            n++;
+        }
+        /** Records stamped — the probe's proof the pass ran. */
+        this.fodderPressureUnits = n;
+    }
+
+    /**
+     * Cost buckets per realm, from the pack tables themselves: every key any
+     * of that realm's §6.2 rows fields, grouped by its combatData cost. A
+     * composition swap draws from the bucket of the member it replaces, so the
+     * pack's authored budget is unchanged by construction.
+     * @returns {Record<string, string[][]>}
+     */
+    _buildCostPool() {
+        const rows = (this.data && this.data.ENEMIES) || [];
+        const costOf = Object.create(null);
+        for (let i = 0; i < rows.length; i++) costOf[rows[i].key] = rows[i].cost;
+        /** @type {Record<string, string[][]>} */
+        const pool = { cold: [], sand: [], ash: [] };
+        for (let p = 0; p < PACKS.length; p++) {
+            const realm = PACKS[p].realm;
+            const bucket = pool[realm];
+            if (!bucket) continue;
+            const units = PACKS[p].units;
+            for (let u = 0; u < units.length; u++) {
+                const key = units[u];
+                const c = costOf[key];
+                if (!(c > 0)) continue;
+                if (!bucket[c]) bucket[c] = [];
+                if (bucket[c].indexOf(key) < 0) bucket[c].push(key);
+            }
+        }
+        this._costOf = costOf;
+        return pool;
     }
 
     /** Name of a live pack (slot 0 first), for probes and the realm audit.
@@ -345,6 +519,21 @@ export class Encounters {
         const c = this.controller;
         const px = c.position.x, pz = c.position.z;
 
+        // Rhythm inputs: the player's damage ledger and the excitement decay.
+        // Polled off the controller so every damage path (melee, projectile,
+        // hazard) counts without any system having to report it.
+        if (typeof c.health === "number") {
+            if (this._lastHp < 0) this._lastHp = c.health;
+            else if (c.health < this._lastHp) this._dmgTotal += this._lastHp - c.health;
+            this._lastHp = c.health;
+        }
+        if (this.excitement !== 0) {
+            const d = EXCITE_DECAY * dt;
+            this.excitement = this.excitement > 0
+                ? Math.max(0, this.excitement - d)
+                : Math.min(0, this.excitement + d);
+        }
+
         for (let i = 0; i < SLOT_N; i++) {
             const sl = this._slots[i];
             this._pollMembers(sl, px, pz);
@@ -360,9 +549,7 @@ export class Encounters {
                 sl.name = null;
                 sl.qCount = 0;
                 sl.qNext = 0;
-                sl.nextAt = this.time +
-                    BREATHER_MIN +
-                    Math.random() * (BREATHER_MAX - BREATHER_MIN);
+                sl.nextAt = this.time + this._breatherFor(sl);
             }
 
             this._fireQueue(sl, px, pz);
@@ -379,7 +566,10 @@ export class Encounters {
                 this._tryRoamSpawn(s0, false);
             }
             const s1 = this._slots[1];
-            if (this._twoAllowed() && !s1.active && this.time >= s1.nextAt) {
+            // A live boss owns the field: its arena keeps ONE ambient pack for
+            // pressure and holds the second (§7 "adds capped at 2-4 fodder").
+            if (this._twoAllowed() && !this.bossLive && !s1.active &&
+                this.time >= s1.nextAt) {
                 this._tryRoamSpawn(s1, true);
             }
         }
@@ -406,7 +596,12 @@ export class Encounters {
         if (p < 0) return false;
         if (!this._findAnchor(true, false)) return false;
         this._clearAll();
-        this._queuePack(this._slots[0], p, this._ax, this._az);
+        // EXACT: the force path delivers the NAMED row verbatim. The roam
+        // path's composition jitter would quietly swap a member for another
+        // unit of the same cost, and a probe that asked for "The Hunt"
+        // because it needs its two stalkers must get its two stalkers
+        // (_harness/qa_flee.py). Rhythm is for the field, not for the fixture.
+        this._queuePack(this._slots[0], p, this._ax, this._az, true);
         return true;
     }
 
@@ -567,6 +762,50 @@ export class Encounters {
         }
     }
 
+    /**
+     * The breather after a pack END — the rhythm's cadence half. A fast,
+     * clean clear presses (BREATHER_HOT); a clear that cost heavy damage buys
+     * air (BREATHER_COLD); anything else lands in the owner's 1.5–2.5 s
+     * neutral band. The excitement it moves is what carries the read across
+     * packs instead of each clear being judged alone.
+     * @param {{startedAt:number, dmgAt0:number}} sl
+     * @returns {number} seconds
+     */
+    _breatherFor(sl) {
+        const c = this.controller;
+        const hpMax = (c && c.healthMax > 0) ? c.healthMax : 100;
+        const took = this._dmgTotal - sl.dmgAt0;
+        const clearS = this.time - sl.startedAt;
+        // The step ACCUMULATES (repeat fast clears keep pressing toward
+        // BREATHER_HOT, repeat maulings keep buying air) but it also SETS a
+        // floor/ceiling, so one bad fight always earns a real breather even
+        // when the player was on a hot streak a moment earlier. Without the
+        // clamp a decayed positive scalar can swallow the whole read.
+        if (took >= HEAVY_DMG_FRAC * hpMax) {
+            this.excitement = Math.max(-1,
+                Math.min(this.excitement - EXCITE_DOWN, -EXCITE_DOWN));
+        } else if (clearS <= FAST_CLEAR_S) {
+            this.excitement = Math.min(1,
+                Math.max(this.excitement + EXCITE_UP, EXCITE_UP));
+        }
+        const mid = (BREATHER_MIN + BREATHER_MAX) * 0.5;
+        const e = this.excitement;
+        let b = e >= 0
+            ? mid + (BREATHER_HOT - mid) * e
+            : mid + (BREATHER_COLD - mid) * -e;
+        // A hair of hashed jitter so identical clears do not metronome.
+        b += (hash01(this.rhythm.cadenceN * 17 + 3) - 0.5) *
+            (BREATHER_MAX - BREATHER_MIN) * 0.4;
+        if (b < BREATHER_HOT) b = BREATHER_HOT;
+        if (b > BREATHER_COLD) b = BREATHER_COLD;
+
+        const k = this.rhythm.cadenceN % RHYTHM_LOG;
+        this.rhythm.cadence[k] = b;
+        this.rhythm.cadenceN++;
+        this.rhythm.excitement = this.excitement;
+        return b;
+    }
+
     /** Pick an eligible pack (gate vs band-clamped level, uniform) and queue
      *  it into `sl` at a fresh anchor; on placement failure back off 1 s.
      *  `far` = anchor on the reverse bearing (slot 1). @returns {void} */
@@ -593,6 +832,35 @@ export class Encounters {
     }
 
     /**
+     * Run the real roam path once — the rhythm probe's entry point. Honours
+     * every gate the frame honours (realm table, level, exclusions, cleared
+     * areas); it only skips the roam TIMER.
+     * @param {boolean} [far] use slot 1 (far bearing) instead of slot 0
+     * @returns {boolean} true if a pack was queued
+     */
+    spawnRoam(far) {
+        const sl = this._slots[far ? 1 : 0];
+        const before = this.packsSpawned;
+        if (sl.active) this._endSlot(sl);
+        this._tryRoamSpawn(sl, !!far);
+        return this.packsSpawned > before;
+    }
+
+    /** Silently drop a slot's pack (test path — no cleared area, no
+     *  breather). @param {object} sl @returns {void} */
+    _endSlot(sl) {
+        for (let k = 0; k < MAX_PACK; k++) {
+            const id = sl.mIds[k];
+            if (id < 0) continue;
+            this.enemies.despawn(id);
+            sl.mIds[k] = -1;
+        }
+        sl.live = 0; sl.dead = 0; sl.desp = 0;
+        sl.qCount = 0; sl.qNext = 0;
+        sl.active = false; sl.name = null;
+    }
+
+    /**
      * Find a pack anchor 55–80 m along the travel direction (velocity when
      * moving, facing when planted) — or the REVERSE of it when `far` is set
      * (slot 1's far-bearing placement) — jittering the bearing across
@@ -614,6 +882,24 @@ export class Encounters {
             dirZ = -Math.cos(c.facing);
         }
         if (far) { dirX = -dirX; dirZ = -dirZ; }
+
+        // RHYTHM, bearing half (owner 2026-08-16): step the slot's wheel. The
+        // golden-ratio sequence never repeats a quarter twice running and
+        // spans its band within a handful of spawns — which a uniform random
+        // draw only does on average.
+        const slot = far ? 1 : 0;
+        const spread = far ? BEAR_SPREAD_1 : BEAR_SPREAD_0;
+        const seq = this._bearSeq[slot]++;
+        const wheel = (((seq + 1) * 0.618034) % 1) * 2 - 1;   // -1..1
+        const bear = wheel * spread;
+        {
+            const cb = Math.cos(bear), sb = Math.sin(bear);
+            const nx = dirX * cb - dirZ * sb;
+            const nz = dirX * sb + dirZ * cb;
+            dirX = nx; dirZ = nz;
+        }
+        this._lastBearOffset = bear;
+
         for (let t = 0; t < PLACE_TRIES; t++) {
             const ang = t === 0 ? 0 : (Math.random() * 2 - 1) * PLACE_JITTER;
             const ca = Math.cos(ang), sa = Math.sin(ang);
@@ -626,6 +912,7 @@ export class Encounters {
             if (this._shrineNear(ax, az, SHRINE_MARGIN)) continue;
             this._ax = ax;
             this._az = az;
+            this._lastBearWorld = Math.atan2(dx, dz);
             return true;
         }
         return false;
@@ -641,17 +928,20 @@ export class Encounters {
      *          dead:number, desp:number}} sl
      * @param {number} p index into PACKS
      * @param {number} ax @param {number} az
+     * @param {boolean} [exact] true = the row's composition verbatim (the
+     *   `spawnPack` fixture path); omitted = the roam path's jitter
      * @returns {void}
      */
-    _queuePack(sl, p, ax, az) {
+    _queuePack(sl, p, ax, az, exact) {
         const pack = PACKS[p];
-        const units = pack.units;
+        const n = Math.min(pack.units.length, MAX_PACK);
+        const units = exact ? pack.units : this._jitterComposition(pack, n);
         const phase = Math.random() * TWO_PI;
         let t = this.time;
         sl.qCount = 0;
         sl.qNext = 0;
-        for (let i = 0; i < units.length && sl.qCount < MAX_PACK; i++) {
-            const a = phase + (i / units.length) * TWO_PI;
+        for (let i = 0; i < n && sl.qCount < MAX_PACK; i++) {
+            const a = phase + (i / n) * TWO_PI;
             const r = SCATTER_MIN + Math.random() * (SCATTER_MAX - SCATTER_MIN);
             const q = sl.qCount++;
             sl.qKey[q] = units[i];
@@ -666,7 +956,55 @@ export class Encounters {
         sl.name = pack.name;
         sl.dead = 0;
         sl.desp = 0;
+        sl.startedAt = this.time;
+        sl.dmgAt0 = this._dmgTotal;
         this.packsSpawned++;
+        this._logSpawn(sl, n);
+    }
+
+    /**
+     * RHYTHM, composition half: copy the row's units into the scratch list and
+     * swap MIX_MIN..MIX_MAX of them for a different unit of the SAME §6.1
+     * cost from the same realm's pool. Same budget, different pack.
+     * @param {{units:string[], realm:string}} pack @param {number} n
+     * @returns {(string|null)[]} the scratch list (valid until the next call)
+     */
+    _jitterComposition(pack, n) {
+        const mix = this._mix;
+        for (let i = 0; i < n; i++) mix[i] = pack.units[i];
+        const pool = this._costPool[pack.realm];
+        if (!pool) return mix;
+        const seq = this._mixSeq++;
+        const swaps = MIX_MIN +
+            ((hash01(seq * 5 + 1) * (MIX_MAX - MIX_MIN + 1)) | 0);
+        for (let s = 0; s < swaps; s++) {
+            const at = (hash01(seq * 11 + s * 3 + 7) * n) | 0;
+            const key = mix[at];
+            const bucket = pool[this._costOf[key]];
+            if (!bucket || bucket.length < 2) continue;
+            // Walk from a hashed start to the first key that differs — a
+            // rejection loop would be unbounded, this one is O(bucket).
+            const start = (hash01(seq * 23 + s * 13 + 2) * bucket.length) | 0;
+            for (let b = 0; b < bucket.length; b++) {
+                const cand = bucket[(start + b) % bucket.length];
+                if (cand !== key) { mix[at] = cand; break; }
+            }
+        }
+        return mix;
+    }
+
+    /** Record one spawn in the rhythm log (bearing, offset, composition).
+     *  @param {object} sl @param {number} n @returns {void} */
+    _logSpawn(sl, n) {
+        const r = this.rhythm;
+        const k = r.n % RHYTHM_LOG;
+        r.bearing[k] = this._lastBearWorld || 0;
+        r.offset[k] = this._lastBearOffset || 0;
+        r.slot[k] = sl === this._slots[1] ? 1 : 0;
+        let sig = "";
+        for (let i = 0; i < n; i++) sig += (i ? "," : "") + sl.qKey[i];
+        r.comp[k] = sig;
+        r.n++;
     }
 
     /** Any live cleared area within 40 m of (x, z)?

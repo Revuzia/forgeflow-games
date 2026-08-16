@@ -37,6 +37,11 @@ import { S } from "../core/settings.js";
 import { bearingRad } from "../core/bearing.js";
 import heightBakeFrag from "../shaders/heightBake.glsl.js";
 import auxBakeFrag from "../shaders/auxBake.glsl.js";
+import landformBakeFrag from "./landformBake.glsl.js";
+import {
+    LANDFORM_COLD, resolveLandform, landformIsDefault, landformEquals,
+    packLandform,
+} from "./landform.js";
 
 /** Metres across the whole baked field. */
 export const WORLD_SIZE = 2048;
@@ -47,6 +52,28 @@ export const AUX_RES = 2048;
 
 /** Half-extent the player is kept inside, leaving margin for the far rings. */
 export const PLAY_RADIUS = 620;
+
+/**
+ * THE STORM EDGE. [laneE]
+ *
+ * The play area used to end in an invisible wall: `clampToPlayArea` simply
+ * stopped the position, so a player walking out hit a treadmill in open, clear
+ * air with no warning and no reason. These two bands give the boundary a body.
+ *
+ *   EDGE_BAND   metres of "you are in the storm front" — drives the fog ramp and
+ *               the weather density (`vfx/weather.js` reads `edge01`).
+ *   PUSH_BAND   metres over which the wind actually shoves back. Deliberately
+ *               SHORTER than the visual band: you see the wall well before it
+ *               starts fighting you, which is what makes the push read as the
+ *               storm rather than as a bug.
+ *   EDGE_PUSH_MAX  m/s of inward drift at the clamp itself. Above the walk speed
+ *               and below the surf top speed (19.5 m/s, surfWake.js:95) on
+ *               purpose: walking out is hopeless, surfing out gets you to the
+ *               hard clamp, and the hard clamp is still there behind it.
+ */
+export const EDGE_BAND = 80;
+const PUSH_BAND = 55;
+const EDGE_PUSH_MAX = 7.0;
 
 /**
  * Rows per readback strip.
@@ -124,6 +151,30 @@ export class Heightfield {
             invHeightRes: { value: 1 / HEIGHT_RES },
         });
 
+        // ----------------------------------------------------------- landform
+        /**
+         * The realm's ground shape. Cold's block, which `landformIsDefault`
+         * recognises, so the constructed state routes to `_heightPass` and the
+         * boot bake is the one that has always run.
+         * @type {import("./landform.js").LandformBlock}
+         */
+        this.landform = resolveLandform(LANDFORM_COLD);
+        this._lfDefault = true;
+        /**
+         * The parameterised twin, built ON FIRST NON-COLD REALM and never
+         * before. Compiling it at construction would put a second 4096²-class
+         * program on the boot path for a realm the player may never enter, and
+         * `FullScreenPass` compiles eagerly. A realm swap is already behind a
+         * loading step, which is where a compile belongs.
+         * @type {FullScreenPass|null}
+         */
+        this._realmPass = null;
+        /** Bakes run since construction. Probe surface. */
+        this.bakeCount = 0;
+        /** Last readback's GL error, 0 when clean. Non-zero means the mirror
+         *  was left holding the PREVIOUS surface — see `_readback`. */
+        this.readError = 0;
+
         /** Reused readback strip; allocated on first use, never in a frame. */
         this._strip = null;
         /** Channels per texel actually returned by readPixels; see `_readback`. */
@@ -156,13 +207,75 @@ export class Heightfield {
         // handedness header there.
         const windAngle = bearingRad(S.windDirection);
 
-        this._heightPass.uniforms.windAngle.value = windAngle;
-        this._heightPass.uniforms.heightAmp.value = S.macroHeightScale;
-        this._heightPass.render(this.heightRT);
+        if (this._lfDefault) {
+            // COLD. The original program, the original two uniforms, untouched.
+            // `S.macroHeightScale` is NOT multiplied by the block's
+            // `heightScale` here even though it is 1: the promise this branch
+            // exists to keep is that nothing in Cold's bake changed, and "1.0 is
+            // a no-op multiply" is a promise about arithmetic, not about the
+            // instruction stream.
+            this._heightPass.uniforms.windAngle.value = windAngle;
+            this._heightPass.uniforms.heightAmp.value = S.macroHeightScale;
+            this._heightPass.render(this.heightRT);
+        } else {
+            const pass = this._realmBakePass();
+            pass.uniforms.windAngle.value = windAngle;
+            // The overlay's Dune-height slider stays live ON TOP of the realm's
+            // relief rather than being replaced by it — the same "realm base ×
+            // operator offset" shape `settings.js applyRealmGrade` uses for the
+            // graded keys.
+            pass.uniforms.heightAmp.value =
+                S.macroHeightScale * this.landform.heightScale;
+            packLandform(pass.uniforms, this.landform);
+            pass.render(this.heightRT);
+        }
 
         this._auxPass.render(this.auxRT);
 
         this._readback();
+        this.bakeCount++;
+    }
+
+    /**
+     * Give the field a realm's ground shape.
+     *
+     * Does NOT bake: the caller decides when to pay for that, because a bake is
+     * a synchronous 268 MB readback and the only sane place for one is behind a
+     * loading step or inside `Terrain.update()`'s deferred slot.
+     *
+     * @param {Partial<import("./landform.js").LandformBlock>} [block]
+     * @returns {boolean} true when the shape actually moved — the caller's
+     *   signal to schedule a re-bake, and false for a redundant re-apply
+     */
+    setLandform(block) {
+        const next = resolveLandform(block);
+        if (landformEquals(next, this.landform)) return false;
+        this.landform = next;
+        this._lfDefault = landformIsDefault(next);
+        return true;
+    }
+
+    /**
+     * Build the realm bake pass on demand. See `_realmPass`.
+     * @returns {FullScreenPass}
+     */
+    _realmBakePass() {
+        if (this._realmPass === null) {
+            this._realmPass = new FullScreenPass(this.renderer, landformBakeFrag, {
+                worldOrigin: { value: this.origin },
+                worldSize: { value: this.size },
+                windAngle: { value: 0 },
+                heightAmp: { value: 1 },
+                uLfDune: { value: new THREE.Vector4() },
+                uLfSwell: { value: new THREE.Vector4() },
+                uLfDrift: { value: new THREE.Vector4() },
+                uLfBasin: { value: new THREE.Vector4() },
+                uLfRock: { value: new THREE.Vector4() },
+                uLfRock2: { value: new THREE.Vector4() },
+            });
+            this._realmPass.profileName = "landformBake";
+        }
+        return this._realmPass;
     }
 
     /**
@@ -176,6 +289,27 @@ export class Heightfield {
      * it sat at (x + 0.5), and a quarter-texel shift on a steep dune face sinks the
      * character into the surface. The box filter lands the sample exactly on the
      * centre `heightAt` assumes.
+     *
+     * THE PIXEL-PACK GUARD. WebGL2 rejects `readPixels` into an ArrayBufferView
+     * while ANY buffer is bound to `PIXEL_PACK_BUFFER` — the view overload and
+     * the offset overload are mutually exclusive — and it rejects it with
+     * INVALID_OPERATION rather than with an exception. That mattered the moment
+     * a re-bake became possible at runtime: `Sky.solve()` leaves a pack buffer
+     * bound across the `await` in its SH projection, the frame loop keeps
+     * running underneath it, and a realm swap's re-bake lands squarely inside
+     * that window. MEASURED on the failing path (`_harness/qa_lf_diag3.py`):
+     *
+     *   before-bake  packBuf true  err 0     readStride 4
+     *   after-bake   packBuf true  err 1282  readStride 2   min -4.867 (wrong)
+     *   settled      packBuf false err 0     readStride 4   min -18.326 (right)
+     *
+     * The failure is worse than a dropped read: the probe read below errors, the
+     * stride guard concludes the driver wants RG, every strip read then fails
+     * too, and the mirror is rebuilt out of a STALE strip at the wrong stride —
+     * a plausible-looking, silently sheared grounding field, which is exactly
+     * the defect the stride guard was written to prevent. Unbinding for the
+     * duration and putting the binding back is the whole fix, and it belongs
+     * here rather than in `Sky`: this is the code with the requirement.
      */
     _readback() {
         const gl = /** @type {WebGL2RenderingContext} */ (this.renderer.getContext());
@@ -187,6 +321,10 @@ export class Heightfield {
         const dst = this.heightCPU;
 
         const prevTarget = this.renderer.getRenderTarget();
+        // Saved and restored around the reads, never merely cleared: whoever
+        // bound it is mid-operation and expects to find it still bound.
+        const prevPack = gl.getParameter(gl.PIXEL_PACK_BUFFER_BINDING);
+        if (prevPack) gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
         this.renderer.setRenderTarget(this.heightRT); // binds the target's FBO
 
         // WebGL2 guarantees exactly two readPixels format/type pairs: RGBA8 and
@@ -211,6 +349,7 @@ export class Heightfield {
             const implType = gl.getParameter(gl.IMPLEMENTATION_COLOR_READ_TYPE);
             if (implType !== gl.FLOAT) {
                 this.renderer.setRenderTarget(prevTarget);
+                if (prevPack) gl.bindBuffer(gl.PIXEL_PACK_BUFFER, prevPack);
                 fail("Heightfield readback: float readback unsupported");
                 return;
             }
@@ -221,10 +360,21 @@ export class Heightfield {
 
         const strip = this._strip;
         const rowFloats = HEIGHT_RES * stride;
+        let readErr = 0;
 
         for (let y0 = 0; y0 < HEIGHT_RES; y0 += STRIP_ROWS) {
             const rows = Math.min(STRIP_ROWS, HEIGHT_RES - y0);
             gl.readPixels(0, y0, HEIGHT_RES, rows, format, gl.FLOAT, strip);
+            // A FAILED strip read leaves `strip` holding the PREVIOUS strip,
+            // and the loop below would fold that into the mirror as though it
+            // were this one — a grounding field that looks like terrain, tiles
+            // eight ways and puts the character underground. Better a stale
+            // mirror (the last surface, entirely self-consistent) than a
+            // plausible wrong one, so the whole readback is abandoned rather
+            // than half-applied. `heightAt` keeps answering for the old realm
+            // until the next bake, which the caller can retry.
+            const e = gl.getError();
+            if (e !== gl.NO_ERROR) { readErr = e; break; }
 
             // Two source rows collapse to one destination row.
             for (let y = 0; y < rows; y += 2) {
@@ -242,6 +392,10 @@ export class Heightfield {
         }
 
         this.renderer.setRenderTarget(prevTarget);
+        if (prevPack) gl.bindBuffer(gl.PIXEL_PACK_BUFFER, prevPack);
+
+        this.readError = readErr;
+        if (readErr !== 0) return;
 
         this.cpuRes = res;
         this.cpuTexel = this.size / res; // 1.0 m
@@ -334,11 +488,63 @@ export class Heightfield {
         }
     }
 
+    /**
+     * How deep into the storm front this position is.
+     *
+     * 0 anywhere inside `PLAY_RADIUS - EDGE_BAND`, rising smoothly to 1 at the
+     * clamp. Smoothstepped rather than linear so the fog does not switch on with
+     * a visible seam the moment you cross into the band — the whole point is
+     * that the wall builds.
+     *
+     * The single source of truth for the edge: `vfx/weather.js` drives its fog
+     * boost and its particle density off this, `edgePush` scales off the same
+     * distance, and the screenshot check is that they agree.
+     *
+     * @param {number} x @param {number} z
+     * @returns {number} 0..1
+     */
+    edge01(x, z) {
+        const d = Math.hypot(x, z);
+        const t = (d - (PLAY_RADIUS - EDGE_BAND)) / EDGE_BAND;
+        if (t <= 0) return 0;
+        if (t >= 1) return 1;
+        return t * t * (3 - 2 * t);
+    }
+
+    /**
+     * The storm's inward shove, in metres per second.
+     *
+     * Exactly 0 outside `PUSH_BAND`, so the integrator's add is a no-op over
+     * 99.5% of the disc and costs one `Math.hypot` there. Quadratic in depth:
+     * the first metres of the band are a hint, the last are a wall.
+     *
+     * Returns a RETAINED scratch object — call it every frame from the
+     * controller step without allocating. Copy the values out if you need to
+     * hold them; the next call overwrites them.
+     *
+     * @param {number} x @param {number} z
+     * @returns {{fx:number, fz:number}} m/s, pointing back toward the origin
+     */
+    edgePush(x, z) {
+        _push.fx = 0;
+        _push.fz = 0;
+        const d = Math.hypot(x, z);
+        const u = (d - (PLAY_RADIUS - PUSH_BAND)) / PUSH_BAND;
+        if (u <= 0 || d < 1e-4) return _push;
+        const k = u >= 1 ? 1 : u * u;
+        const mag = EDGE_PUSH_MAX * k;
+        _push.fx = (-x / d) * mag;
+        _push.fz = (-z / d) * mag;
+        return _push;
+    }
+
     /** @returns {void} */
     dispose() {
         this.heightRT.dispose();
         this.auxRT.dispose();
         this._heightPass.dispose();
+        if (this._realmPass) this._realmPass.dispose();
+        this._realmPass = null;
         this._auxPass.dispose();
         this.heightCPU = null;
         this._strip = null;
@@ -350,6 +556,9 @@ export class Heightfield {
 
 const _wx = new Float32Array(4);
 const _wz = new Float32Array(4);
+
+/** `edgePush`'s retained return. Overwritten on every call, by design. */
+const _push = { fx: 0, fz: 0 };
 
 /**
  * Cubic B-spline weights — the same polynomial the GPU fetch evaluates per axis.

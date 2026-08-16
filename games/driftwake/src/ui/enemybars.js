@@ -19,12 +19,22 @@
  *
  * A bar expires 6 s after its last damage event, or immediately when its
  * target leaves the registry. Bars are hidden (not clamped) off-screen and
- * behind the camera. `kind === "boss"` never gets an overhead bar — the
- * boss owns the bottom-center frame instead, found by a linear scan of the
- * registry (count ≤ 96, allocation-free) so it shows from first sight, not
- * first damage. Its stance sub-meter FILLS as `registry.poise` depletes —
- * the §5.1 Sekiro read: a full meter is the break, and the post-break poise
- * reset empties it.
+ * behind the camera. The FIRST `kind === "boss"` body owns the bottom-center
+ * frame, found by a linear scan of the registry (count ≤ 96,
+ * allocation-free) so it shows from first sight, not first damage. Its
+ * stance sub-meter FILLS as `registry.poise` depletes — the §5.1 Sekiro
+ * read: a full meter is the break, and the post-break poise reset empties
+ * it. Boss-kind bodies ALSO take overhead bars now (`.bosskind`): a wider
+ * sliver with a permanent name plate, so a second boss/miniboss on the
+ * field is never a nameless anonymous strip.
+ *
+ * STATUS GLYPHS (the CC-invisibility gap): each overhead bar carries a
+ * status row read straight off the registry SoA — chill (snowflake + frost
+ * bar tint + the live slow %), brittle (cracked shard), poise-break
+ * (stagger star). All glyphs are inline SVG built once at construction;
+ * per-frame work is CLASS TOGGLES ON STATE EDGES only (cached bytes per
+ * slot), plus one integer-gated text write for the slow %. TIER dressing
+ * the same way: HEAVY/ELITE get `.hv` (wider bar + plate icon).
  *
  * Every DOM write is gated behind a cached value (position quantised to
  * whole px, fills to 1/500) — a parked camera over an untouched pack writes
@@ -39,6 +49,7 @@
 
 import { Vector3 } from "three";
 import { input } from "../core/input.js";
+import { TIER } from "../combat/damageable.js";
 
 /** Overhead-bar pool — twice the alive cap of 8 (combat doc §6.1). */
 const POOL = 16;
@@ -102,6 +113,59 @@ const CSS = `
   background: linear-gradient(180deg, #e89a66, #b35c33 60%, #8a4426);
   box-shadow: inset 0 1px 1px rgba(255, 220, 190, 0.35);
   transition: transform 100ms ease-out;
+}
+
+/* ---- status row: registry CC state over the bar (chill/brittle/break).
+   Glyphs are inline SVG, built once; visibility is pure class CSS. */
+#enemybars .eb-st {
+  position: absolute; left: 50%; top: -18px;
+  transform: translateX(-50%);
+  height: 13px;
+  display: flex; align-items: center; gap: 3px;
+  white-space: nowrap;
+}
+#enemybars .eb-st svg {
+  display: none;
+  width: 11px; height: 11px;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.9));
+}
+#enemybars .eb.chill   .st-chill   { display: block; }
+#enemybars .eb.brittle .st-brittle { display: block; }
+#enemybars .eb.break   .st-break   { display: block; }
+#enemybars .st-slow {
+  display: none;
+  font: 700 9px/1 "Segoe UI", system-ui, sans-serif;
+  color: #9fdcff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95);
+}
+#enemybars .eb.chill .st-slow { display: block; }
+/* Chilled bodies wear a frost fill — same blue family as the mana bar. */
+#enemybars .eb.chill .eb-fill {
+  background: linear-gradient(180deg, #a8dcf5, #5d9fc7 60%, #3d7396);
+  box-shadow: inset 0 1px 1px rgba(220, 245, 255, 0.4);
+}
+
+/* ---- tier dressing: HEAVY/ELITE = wider bar + plate icon at the left. */
+#enemybars .eb.hv {
+  width: 76px; margin-left: -38px; height: 9px;
+  border-color: rgba(195, 225, 245, 0.42);
+}
+#enemybars .eb-plate {
+  display: none;
+  position: absolute; left: -17px; top: 50%;
+  transform: translateY(-50%);
+  width: 12px; height: 13px;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.9));
+}
+#enemybars .eb.hv .eb-plate { display: block; }
+
+/* ---- boss-kind overhead: wider still, name plate ALWAYS shown above.
+   (The bottom-center boss frame is separate and unchanged.) */
+#enemybars .eb.bosskind { width: 90px; margin-left: -45px; height: 9px; }
+#enemybars .eb.bosskind .eb-name {
+  display: block;
+  top: auto; bottom: 32px;
+  font-size: 11px; letter-spacing: 0.08em;
 }
 
 /* ---- boss frame: bottom-center, above the spellbar (bottom 42px + 46px
@@ -192,6 +256,8 @@ export class EnemyBars {
         this._nameEl = new Array(POOL);
         /** Pool index currently wearing the target frame; -1 = none. */
         this._tgtSlot = -1;
+        /** @type {HTMLElement[]} the slow-% text inside each status row. */
+        this._slowEl = new Array(POOL);
         for (let i = 0; i < POOL; i++) {
             const b = document.createElement("div");
             b.className = "eb";
@@ -202,6 +268,41 @@ export class EnemyBars {
             nm.className = "eb-name";
             b.appendChild(nm);
             this._nameEl[i] = nm;
+            // Status row + tier plate: built ONCE here; per-frame cost is
+            // class toggles on the bar element only (CSS shows/hides).
+            const st = document.createElement("div");
+            st.className = "eb-st";
+            st.innerHTML =
+                // chill: 6-spoke snowflake
+                '<svg class="st-chill" viewBox="0 0 12 12">' +
+                '<g stroke="#bfe9ff" stroke-width="1.4" stroke-linecap="round">' +
+                '<line x1="6" y1="1" x2="6" y2="11"/>' +
+                '<line x1="1.7" y1="3.5" x2="10.3" y2="8.5"/>' +
+                '<line x1="1.7" y1="8.5" x2="10.3" y2="3.5"/></g></svg>' +
+                '<span class="st-slow"></span>' +
+                // brittle: cracked shard
+                '<svg class="st-brittle" viewBox="0 0 12 12">' +
+                '<path d="M6 1 L10.5 6 L6 11 L1.5 6 Z" fill="none" ' +
+                'stroke="#ffc86e" stroke-width="1.3"/>' +
+                '<path d="M6 3 L5 6 L7 7 L6 9.5" fill="none" ' +
+                'stroke="#ffc86e" stroke-width="1"/></svg>' +
+                // poise-break: stagger star
+                '<svg class="st-break" viewBox="0 0 12 12">' +
+                '<path d="M6 0.8 L7.2 4.2 L10.8 3.4 L8.4 6 L11 8.8 L7.4 8 ' +
+                'L6 11.2 L4.6 8 L1 8.8 L3.6 6 L1.2 3.4 L4.8 4.2 Z" ' +
+                'fill="#ffd489" stroke="rgba(0,0,0,0.55)" stroke-width="0.5"/>' +
+                '</svg>';
+            b.appendChild(st);
+            this._slowEl[i] = st.querySelector(".st-slow");
+            // heavy-tier plate icon (shield silhouette)
+            const pl = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            pl.setAttribute("class", "eb-plate");
+            pl.setAttribute("viewBox", "0 0 12 13");
+            pl.innerHTML =
+                '<path d="M6 0.8 L11 2.6 V6.4 C11 9.6 8.9 11.6 6 12.4 ' +
+                'C3.1 11.6 1 9.6 1 6.4 V2.6 Z" ' +
+                'fill="rgba(20,32,44,0.85)" stroke="#cfe6f5" stroke-width="1.1"/>';
+            b.appendChild(pl);
             el.appendChild(b);
             this._bar[i] = b;
             this._fillEl[i] = f;
@@ -231,6 +332,14 @@ export class EnemyBars {
         this._sy = new Float64Array(POOL).fill(-1e9);
         this._frac = new Float64Array(POOL).fill(-1);
         this._on = new Uint8Array(POOL);
+        /** Status caches — 255 = unknown, forces the first write on claim. */
+        this._stChill = new Uint8Array(POOL).fill(255);
+        this._stBrittle = new Uint8Array(POOL).fill(255);
+        this._stBreak = new Uint8Array(POOL).fill(255);
+        /** Tier dressing per slot: -1 unset, 0 plain, 1 hv, 2 bosskind. */
+        this._tierCls = new Int8Array(POOL).fill(-1);
+        /** Slow % text cache (0 = empty). */
+        this._slowPct = new Int16Array(POOL).fill(-1);
 
         /** Cached boss-frame state. */
         this._bOn = false;
@@ -279,7 +388,9 @@ export class EnemyBars {
             if (type !== 0 && type !== 1) continue; // hit/kill only
             const id = reg.evId[e];
             const slot = reg.slot(id);
-            if (slot < 0 || reg.kind[slot] === "boss") continue; // boss = big bar
+            // Boss-kind takes an overhead bar TOO (`.bosskind` name plate);
+            // the bottom-center frame below still covers the first boss.
+            if (slot < 0) continue;
             this._touch(id, reg.time);
         }
 
@@ -330,6 +441,50 @@ export class EnemyBars {
             if (Math.abs(frac - this._frac[i]) > 0.002) {
                 this._frac[i] = frac;
                 this._fillEl[i].style.transform = `scaleX(${frac.toFixed(4)})`;
+            }
+
+            // ---- status glyphs off the registry SoA: writes on EDGES only.
+            const t = reg.time;
+            const chillOn = (reg.chill[slot] > 0 && t - reg.chillAt[slot] <= 3) ? 1 : 0;
+            if (chillOn !== this._stChill[i]) {
+                this._stChill[i] = chillOn;
+                this._bar[i].classList.toggle("chill", !!chillOn);
+            }
+            if (chillOn) {
+                // Live slow % (chill + slow through the tier matrix). speedMult
+                // hits 0 under stun/lift — suppress the % there, STUN already
+                // has its own floater.
+                const pct = Math.round((1 - reg.speedMult(id)) * 100);
+                const shown = pct > 0 && pct < 100 ? pct : 0;
+                if (shown !== this._slowPct[i]) {
+                    this._slowPct[i] = shown;
+                    this._slowEl[i].textContent = shown ? `-${shown}%` : "";
+                }
+            } else if (this._slowPct[i] !== 0) {
+                this._slowPct[i] = 0;
+                this._slowEl[i].textContent = "";
+            }
+            const brittleOn = t < reg.brittleUntil[slot] ? 1 : 0;
+            if (brittleOn !== this._stBrittle[i]) {
+                this._stBrittle[i] = brittleOn;
+                this._bar[i].classList.toggle("brittle", !!brittleOn);
+            }
+            const breakOn = t < reg.breakUntil[slot] ? 1 : 0;
+            if (breakOn !== this._stBreak[i]) {
+                this._stBreak[i] = breakOn;
+                this._bar[i].classList.toggle("break", !!breakOn);
+            }
+
+            // ---- tier dressing, written once per claim (cache poisoned by
+            // _touch): HEAVY/ELITE wear .hv, boss-kind wears the name plate.
+            const tk = reg.kind[slot] === "boss" ? 2 :
+                (reg.tier[slot] >= TIER.HEAVY ? 1 : 0);
+            if (tk !== this._tierCls[i]) {
+                this._tierCls[i] = tk;
+                const cl = this._bar[i].classList;
+                cl.toggle("hv", tk === 1);
+                cl.toggle("bosskind", tk === 2);
+                if (tk === 2) this._nameEl[i].textContent = reg.name[slot] || "";
             }
             this._setOn(i, true);
         }
@@ -385,8 +540,11 @@ export class EnemyBars {
         const i = free >= 0 ? free : stale;
         this._id[i] = id;
         this._lastHit[i] = time;
-        // Poison the caches so the first upkeep pass writes everything.
+        // Poison the caches so the first upkeep pass writes everything —
+        // including the status/tier dressing a stolen slot may still wear.
         this._sx[i] = -1e9; this._sy[i] = -1e9; this._frac[i] = -1;
+        this._stChill[i] = 255; this._stBrittle[i] = 255; this._stBreak[i] = 255;
+        this._tierCls[i] = -1; this._slowPct[i] = -1;
     }
 
     /** Free a pool slot and hide its bar. @param {number} i @returns {void} */

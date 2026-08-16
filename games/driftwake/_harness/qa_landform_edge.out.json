@@ -1,0 +1,314 @@
+{
+ "coldHold": {
+  "points": 20,
+  "drifted": 0,
+  "maxAbsDelta": 0.0,
+  "relief": [
+   -14.585060119628906,
+   16.96914291381836
+  ],
+  "baselineRelief": [
+   -14.585060119628906,
+   16.96914291381836
+  ]
+ },
+ "relief": {
+  "sand": [
+   -18.31,
+   20.89
+  ],
+  "ash": [
+   -11.67,
+   19.64
+  ],
+  "cold": [
+   -14.59,
+   16.97
+  ]
+ },
+ "transectRms": {
+  "cold-sand": 8.228,
+  "cold-ash": 3.505,
+  "sand-ash": 5.621
+ },
+ "seating": {
+  "0:sand": {
+   "realm": "sand",
+   "yBefore": -0.02,
+   "y": 3.96,
+   "ground": 3.96,
+   "seatT": [
+    0,
+    0,
+    0,
+    0
+   ],
+   "rebakes": 2
+  },
+  "1:ash": {
+   "realm": "ash",
+   "yBefore": 3.96,
+   "y": 1.57,
+   "ground": 1.57,
+   "seatT": [
+    0,
+    0,
+    0,
+    0
+   ],
+   "rebakes": 3
+  },
+  "2:cold": {
+   "realm": "cold",
+   "yBefore": 1.57,
+   "y": -0.02,
+   "ground": -0.02,
+   "seatT": [
+    0,
+    0,
+    0,
+    0
+   ],
+   "rebakes": 4
+  },
+  "3:ash": {
+   "realm": "ash",
+   "yBefore": -0.02,
+   "y": 1.57,
+   "ground": 1.57,
+   "seatT": [
+    0,
+    0,
+    0,
+    0
+   ],
+   "rebakes": 5
+  },
+  "4:sand": {
+   "realm": "sand",
+   "yBefore": 1.57,
+   "y": 3.96,
+   "ground": 3.96,
+   "seatT": [
+    0,
+    0,
+    0,
+    0
+   ],
+   "rebakes": 6
+  },
+  "5:cold": {
+   "realm": "cold",
+   "yBefore": 3.96,
+   "y": -0.02,
+   "ground": -0.02,
+   "seatT": [
+    0,
+    0,
+    0,
+    0
+   ],
+   "rebakes": 7
+  }
+ },
+ "worstSeatError": 0.0,
+ "invariants": {
+  "schema": [],
+  "landform": []
+ },
+ "edge": {
+  "cold": [
+   {
+    "d": 120,
+    "fog": 0.01368,
+    "wx": 3072,
+    "push": 0,
+    "e": 0
+   },
+   {
+    "d": 100,
+    "fog": 0.01368,
+    "wx": 3072,
+    "push": 0,
+    "e": 0
+   },
+   {
+    "d": 80,
+    "fog": 0.01368,
+    "wx": 3072,
+    "push": 0,
+    "e": 0
+   },
+   {
+    "d": 60,
+    "fog": 0.0171,
+    "wx": 4032,
+    "push": 0,
+    "e": 0.156
+   },
+   {
+    "d": 40,
+    "fog": 0.024616,
+    "wx": 6142,
+    "push": 0.508,
+    "e": 0.496
+   },
+   {
+    "d": 30,
+    "fog": 0.028509,
+    "wx": 7235,
+    "push": 1.387,
+    "e": 0.674
+   },
+   {
+    "d": 20,
+    "fog": 0.031892,
+    "wx": 8184,
+    "push": 2.669,
+    "e": 0.829
+   },
+   {
+    "d": 10,
+    "fog": 0.034386,
+    "wx": 8884,
+    "push": 4.353,
+    "e": 0.943
+   },
+   {
+    "d": 2,
+    "fog": 0.035427,
+    "wx": 9176,
+    "push": 5.955,
+    "e": 0.992
+   }
+  ],
+  "ash": [
+   {
+    "d": 120,
+    "fog": 0.027,
+    "wx": 3072,
+    "push": 0,
+    "e": 0
+   },
+   {
+    "d": 100,
+    "fog": 0.027,
+    "wx": 3072,
+    "push": 0,
+    "e": 0
+   },
+   {
+    "d": 80,
+    "fog": 0.027,
+    "wx": 3072,
+    "push": 0,
+    "e": 0
+   },
+   {
+    "d": 60,
+    "fog": 0.03375,
+    "wx": 4032,
+    "push": 0,
+    "e": 0.156
+   },
+   {
+    "d": 40,
+    "fog": 0.048586,
+    "wx": 6142,
+    "push": 0.507,
+    "e": 0.496
+   },
+   {
+    "d": 30,
+    "fog": 0.056293,
+    "wx": 7238,
+    "push": 1.387,
+    "e": 0.674
+   },
+   {
+    "d": 20,
+    "fog": 0.06299,
+    "wx": 8164,
+    "push": 2.668,
+    "e": 0.829
+   },
+   {
+    "d": 10,
+    "fog": 0.067884,
+    "wx": 8859,
+    "push": 4.333,
+    "e": 0.942
+   },
+   {
+    "d": 2,
+    "fog": 0.069891,
+    "wx": 9172,
+    "push": 5.969,
+    "e": 0.992
+   }
+  ]
+ },
+ "checks": [
+  {
+   "name": "cold byte-identical at boot",
+   "ok": true
+  },
+  {
+   "name": "transect cold vs sand > 2 m",
+   "ok": true
+  },
+  {
+   "name": "transect cold vs ash > 2 m",
+   "ok": true
+  },
+  {
+   "name": "transect sand vs ash > 2 m",
+   "ok": true
+  },
+  {
+   "name": "character re-seated < 1.0 m within 1 s",
+   "ok": true
+  },
+  {
+   "name": "realm schema symmetric",
+   "ok": true
+  },
+  {
+   "name": "landform.heightScale == wind.macroHeightScale",
+   "ok": true
+  },
+  {
+   "name": "cold: fog ramps monotonically",
+   "ok": true
+  },
+  {
+   "name": "cold: particle count ~triples",
+   "ok": true
+  },
+  {
+   "name": "cold: edgePush 0 at 100 m",
+   "ok": true
+  },
+  {
+   "name": "cold: edgePush > 0 in last 30 m",
+   "ok": true
+  },
+  {
+   "name": "ash: fog ramps monotonically",
+   "ok": true
+  },
+  {
+   "name": "ash: particle count ~triples",
+   "ok": true
+  },
+  {
+   "name": "ash: edgePush 0 at 100 m",
+   "ok": true
+  },
+  {
+   "name": "ash: edgePush > 0 in last 30 m",
+   "ok": true
+  }
+ ],
+ "failed": 0
+}

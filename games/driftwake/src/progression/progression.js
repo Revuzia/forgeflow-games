@@ -266,6 +266,36 @@ export class Progression {
         this.save();
     }
 
+    /**
+     * [INTEGRATOR] Register a shrine as a respawn TARGET without activating
+     * it — the other half of §8.1, and the method `world/shrine.js`'s
+     * `register(progression)` has always called (shrine.js:360). It did not
+     * exist: Progression shipped only `addShrine`, which sets
+     * `lastShrineId`. The two are genuinely different operations and neither
+     * substitutes for the other —
+     *
+     *   addShrine       = "the player TOUCHED this one": it becomes the
+     *                     respawn point (§8.1 activation by touch).
+     *   registerShrine  = "this one EXISTS": it joins the network so a later
+     *                     activation, or a save blob naming it, can resolve.
+     *
+     * Registering the network through `addShrine` would have made the LAST
+     * shrine written the respawn point, which is exactly what shrine.js's
+     * own contract says must not happen ("WITHOUT touching `lastShrineId`").
+     * So the spawn stays the respawn target until a touch moves it, and
+     * `_respawn()` can resolve any of the seven ids instead of always
+     * falling through to `cold_spawn`.
+     *
+     * No `save()` here: registration is derived state rebuilt from the world
+     * on every boot, and saving on each of the seven would be seven
+     * localStorage writes during construction.
+     * @param {string} id @param {number} x @param {number} z
+     * @returns {void}
+     */
+    registerShrine(id, x, z) {
+        this.shrines[id] = { x, z };
+    }
+
     /** §8.1 respawn grace / death window — enemies must not damage through
      *  it. @returns {boolean} */
     isInvulnerable() {
@@ -568,8 +598,19 @@ export class Progression {
             const key = name || "boss#" + id;
             if (!this.bossesKilled[key]) {
                 this.bossesKilled[key] = true;
-                const frac = tier === TIER.BOSS
-                    ? k.firstKill.boss : k.firstKill.miniboss;
+                // [INTEGRATOR] laneB seam. TIER alone cannot tell the two
+                // grants apart: a §2.4 arena variant is BOSS tier for BOTH
+                // kinds, so reading tier only paid every mini boss the realm
+                // boss's 35% instead of §3.2's 20%. `bossEncounters` writes
+                // `bossKindHint` at EMERGENCE (bossEncounters.js:578), which
+                // is before the kill can land and outlives `_onDeath` (that
+                // clears its own `kind`, not this hint) — so the hint is
+                // still standing when this drain runs, one frame later in
+                // main.js's order. Non-BOSS tiers keep the miniboss rate,
+                // exactly as before.
+                const frac =
+                    (this.bossKindHint === "mini" || tier !== TIER.BOSS)
+                        ? k.firstKill.miniboss : k.firstKill.boss;
                 this.addXP(Math.round(frac * this._need()), "boss-first");
                 this.save(); // the flag itself must not be lost to a crash
                 return;

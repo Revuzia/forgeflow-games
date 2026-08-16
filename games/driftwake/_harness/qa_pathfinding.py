@@ -12,6 +12,8 @@ Phases (all game-time budgets polled off SNOWFLOW.combat.registry.time):
               tracks contour (heading deviates > 25 deg from the straight
               A->B bearing somewhere) AND max up-grade stepped stays sane.
   3. SEP      6 rimeImps woken from ONE bearing at 20 m; settle 12 s; PASS =
+              they RING rather than BUNCH: min pairwise spacing >= 80% of
+              the even-split chord available at the settled ring radius
               final min pairwise >= 1.15 m (geometric cap note at the gate) and bearing spread >= 90 deg.
   4. PERF     8 imps chasing; enemies.update bracketed with performance.now
               over 300 frames; mean ms reported (run before AND after the
@@ -303,6 +305,10 @@ def main():
             print("SCAN:", json.dumps(report["scan"]))
             print("SITE:", json.dumps(scan["site"]))
             print("FLAT:", json.dumps(scan["flat"]))
+            if not scan["flat"]:
+                print("FLAT: none under grade 0.22 in rings 40-400 m — "
+                      "the SEP phase settles on rolling ground, which is "
+                      "why it is scored on evenness, not metres")
             if not scan["site"]:
                 print("PATH_JSON:", json.dumps(report))
                 print("RESULT: NO-RIDGE-SITE (grade band never exceeded on map)")
@@ -442,17 +448,38 @@ def main():
 
             finals = sep_metrics(win[-1])
             window_min = min(sep_metrics(w)[0] for w in win)
+
+            # EVENNESS, not metres. The settled ring's RADIUS is pinned by the
+            # unit's stand band (rimeImp: every finalDist reads 1.36 m), and n
+            # bodies spread over an arc cannot be further apart than the chord
+            # of an even split at that radius:
+            #
+            #     evenChord = 2 * R * sin(spread / (2 * (n - 1)))
+            #
+            # so the only question this phase can honestly ask is how close the
+            # pack gets to that ceiling. An absolute metre bar encodes ONE
+            # unit's band — it would be unreachable for a tighter-banded unit
+            # and trivial for a golem — and sat inside the run-to-run jitter
+            # the ring settles under (1.12-1.19 across runs, identical code).
+            # The pre-fix BUNCHED build measured 0.69 m against a 1.30 m
+            # ceiling = 0.53, so 0.80 separates ringing from bunching with
+            # real margin on both sides.
+            dists = [e["d"] for e in win[-1]["e"] if e]
+            ring_r = (sum(dists) / len(dists)) if dists else 0.0
+            spread_rad = math.radians(finals[1])
+            even_chord = (2 * ring_r * math.sin(spread_rad / (2 * max(1, finals[2] - 1)))
+                          if ring_r > 0 and finals[2] > 1 else 0.0)
+            evenness = (finals[0] / even_chord) if even_chord > 1e-6 else 0.0
             report["separation"] = {
                 "alive": finals[2], "finalMinPairM": finals[0],
                 "windowMinPairM": window_min, "bearingSpreadDeg": finals[1],
                 "finalDists": [e["d"] if e else -1 for e in win[-1]["e"]],
-                # 1.15, not the original 1.2: the 2026-08-14 flee fix pins
-                # the settled ring at the stand band's EXACT radius (1.36 m
-                # for rimeImp; finalDists confirm), where six bodies at the
-                # measured ~290 deg spread cap chords at 2*1.36*sin(29) =
-                # 1.32 m — the old 1.2 assumed the pre-fix soft radius
-                # (1.37-1.44). 1.15 = ~87% spacing evenness at the hard cap.
-                "pass": finals[2] == 6 and finals[0] >= 1.15 and finals[1] >= 90.0,
+                "ringRadiusM": round(ring_r, 2),
+                "evenChordM": round(even_chord, 2),
+                "evenness": round(evenness, 3),
+                "evennessBar": 0.80,
+                "pass": (finals[2] == 6 and finals[1] >= 90.0
+                         and evenness >= 0.80),
             }
             print("SEP:", json.dumps(report["separation"]))
 

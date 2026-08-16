@@ -54,7 +54,7 @@
 
 import * as THREE from "three";
 
-import { S, onChange } from "../core/settings.js";
+import { S, onChange, set as setS } from "../core/settings.js";
 import { bearingRad } from "../core/bearing.js";
 import { resolve, shader } from "../core/glsl.js";
 import { makeRT, FullScreenPass } from "../core/gfx.js";
@@ -489,6 +489,9 @@ export class Terrain {
         // doing MORE than the reference, which is the direction of departure that
         // otherwise goes unnoticed.
         this._rebakeDue = false;
+        /** [laneE] Set by `update()` on the frame a re-bake lands; see
+         *  `consumeGroundDirty()`. */
+        this.groundDirty = false;
         this._unsub = onChange(
             ["windDirection", "macroHeightScale"],
             () => { this._rebakeDue = true; }
@@ -546,6 +549,21 @@ export class Terrain {
         const fn = b.fine || {};
 
         if (typeof b.token === "string") this.realmName = b.token;
+
+        // THE REALM'S OWN WIND (owner 2026-08-16). `realms.js` authors
+        // `wind.direction` per realm (Cold 42, Sand 130, Ash 150) precisely so
+        // each realm's sun sits the contract's 76 degrees off its wind; the
+        // heightfield and every windMat in the ground shader read
+        // `S.windDirection`, which nothing but the settings panel ever wrote.
+        // Set it here, beside the realm's other terrain data: the `onChange`
+        // subscription at the top of this file already routes a direction
+        // change into the same re-bake slot `applyRealm` schedules, so the two
+        // coalesce into one bake rather than two. Cold's row is the default
+        // (42), so boot is byte-identical.
+        const wnd = b.wind || {};
+        if (typeof wnd.direction === "number") {
+            setS("windDirection", wnd.direction);
+        }
 
         setV3(u.uGroundAlbedo, g.albedo);
         setV3(u.uCompressCol, g.compressCol);
@@ -622,6 +640,26 @@ export class Terrain {
             this._detailPass.material.uniforms.grainScale.value = gs;
             this._detailPass.render(this.detailRT);
         }
+
+        // ---- landform [laneE] -----------------------------------------------
+        //
+        // THE SHAPE OF THE GROUND, and the one realm input that is neither a
+        // uniform write nor a 1024² tile: it is the 4096² macro bake plus its
+        // synchronous readback. Before this, `wind.macroHeightScale` and the
+        // rest of the realm's landform data reached nothing at all — the bake
+        // ran once at boot off `S` and every realm stood on Cold's ground (see
+        // the header of `terrain/landform.js` for the measurement).
+        //
+        // DEFERRED, not run here. `applyRealm` is called mid-swap with a frame
+        // in flight, and `Heightfield.bake()` stalls the pipeline for a few
+        // hundred milliseconds. `_rebakeDue` is the slot `update()` already
+        // drains for the two settings sliders, and draining it there is also
+        // what `world/shrine.js` expects: it schedules its own re-ground for a
+        // few frames after a realm swap and needs the new heights to exist by
+        // then. Guarded on an ACTUAL change, so re-entering the same realm — or
+        // any realm whose landform is Cold's — costs nothing and re-bakes
+        // nothing.
+        if (this.heightfield.setLandform(b.landform)) this._rebakeDue = true;
     }
 
     /** Push the measured relief to the cascade fitter, with margin. */
@@ -659,6 +697,12 @@ export class Terrain {
             this._rebakeDue = false;
             this.heightfield.bake();
             this._applyHeightBounds();
+            // [laneE] The ground under everything standing on it just moved by
+            // metres. Consumers that cached a height re-ground themselves off
+            // this edge; `world/shrine.js` already schedules its own pass a few
+            // frames after a realm swap, which is why the re-bake has to land
+            // inside `update()` rather than at some later idle moment.
+            this.groundDirty = true;
         }
 
         const g = this.globals;
@@ -720,6 +764,42 @@ export class Terrain {
      */
     clampToPlayArea(v) {
         this.heightfield.clampToPlayArea(v);
+    }
+
+    /**
+     * Storm-front depth at a position, 0..1. See `Heightfield.edge01`.
+     * @param {number} x @param {number} z @returns {number}
+     */
+    edge01(x, z) {
+        return this.heightfield.edge01(x, z);
+    }
+
+    /**
+     * The storm's inward shove in m/s — a RETAINED object, see
+     * `Heightfield.edgePush`. Zero outside the last 55 m of the disc.
+     * @param {number} x @param {number} z
+     * @returns {{fx:number, fz:number}}
+     */
+    edgePush(x, z) {
+        return this.heightfield.edgePush(x, z);
+    }
+
+    /** Half-extent of the playable disc, metres. Probe + HUD surface. */
+    get playRadius() { return PLAY_RADIUS; }
+
+    /** Macro bakes run since boot. 1 until a realm reshapes the ground. */
+    get rebakeCount() { return this.heightfield.bakeCount; }
+
+    /**
+     * True once since the last re-bake — the integrator's cue to re-seat
+     * anything holding a stale ground height. Reading it clears it, so two
+     * consumers cannot both claim the same edge.
+     * @returns {boolean}
+     */
+    consumeGroundDirty() {
+        const d = this.groundDirty === true;
+        this.groundDirty = false;
+        return d;
     }
 
     /** @returns {void} */

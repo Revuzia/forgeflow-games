@@ -36,6 +36,84 @@ import { TIER } from "./damageable.js";
 import { combatData } from "./combatData.js";
 import { sfx } from "../audio/sfx.js";
 
+// ---- bolt aim assist (owner 2026-08-14, whiff-rate review) ----------------
+// The review measured a high LMB whiff rate against strafing targets: at
+// 21 m/s a bolt fired at a 3 m/s strafer's CURRENT position misses by the
+// full lead every time. The assist is a gentle cone snap applied at LAUNCH
+// only (no homing): when the aim ray passes within ASSIST_CONE of a live
+// body inside ASSIST_RANGE, the launch direction bends toward the predicted
+// intercept of that body's velocity — capped (see the cap block below) so
+// skill still matters. The FROST ARC (cold LMB) is never snapped: its fan
+// darts are own === 1 carriers and dart.fire() only consults the assist for
+// damaging primaries — the arc is already the forgiving option.
+//
+// STATUS (laneM, 2026-08-16): this comment block and the four constants under
+// it were ALL that existed — `grep -rn ASSIST_ src/` found the declarations
+// and not one use. The assist described here had never been written, so every
+// bolt shipped with the raw player aim. The implementation is now below
+// (`_trackVelocity` + `aimAssist`), consulted from dart.js `fire()`, and
+// measured by `_harness/qa_feel.py` phase F.
+/** Eligibility half-angle: cos(3.5 deg). */
+const ASSIST_CONE_COS = Math.cos(3.5 * Math.PI / 180);
+/** Eligibility range, m. */
+const ASSIST_RANGE = 25;
+/**
+ * THE BEND CAP, derived rather than picked.
+ *
+ * A pure intercept lead subtends `atan(vTarget / vProjectile)` — note that the
+ * RANGE cancels: the lead distance is `v * (R / s)`, so the angle is
+ * `atan(v/s)` at every distance. A fixed angular cap is therefore the right
+ * shape for this system; it simply has to be large enough to express the lead
+ * for the fastest target the design expects the bolt to lead.
+ *
+ * The original constant here was a flat 5 deg, and 5 deg is `atan(1.84 / 21)`
+ * — it could only lead a 1.84 m/s target. COMBAT_DESIGN.md:552 makes the
+ * bolt's own verification rig a "*Drifting dummy* (figure-8 at **5 m/s**) —
+ * verifies bolt leading", so the shipped cap was below the spec's test speed
+ * by a factor of nearly three. Measured on port 8875 (`_harness/qa_feel.py`,
+ * phase F): a 3 m/s strafer at 12 m needs 1.71 m of lead; 5 deg delivers
+ * 1.05 m; the 0.66 m residual sits just OUTSIDE the 0.655 m hit radius
+ * (body 0.45 + `combatData.bolt.padRadius` 0.205), and the assist scored
+ * 0/10 while saturating its own cap on every shot.
+ *
+ * The cap is now computed per shot from the REAL projectile speed against the
+ * spec's 5 m/s anchor: exactly enough to lead the design's fastest verified
+ * mover, and not one degree more. `ASSIST_CAP_MAX` is the absolute ceiling on
+ * how far the game may ever aim for the player, whatever the arithmetic says.
+ */
+const ASSIST_LEAD_VMAX = 5;
+/** Hard ceiling on the derived cap, rad (15 deg). */
+const ASSIST_CAP_MAX = 15 * Math.PI / 180;
+/** Aim point up the body: fraction of capsule height above the feet. */
+const ASSIST_AIM_H = 0.55;
+/** First-order velocity filter rate, 1/s. One frame of noise must not throw
+ *  the lead; a real strafe reversal still lands inside ~80 ms. */
+const VEL_FILTER = 12;
+/**
+ * Above this implied speed a frame-over-frame position delta is a TELEPORT,
+ * not motion, and is rejected rather than filtered.
+ *
+ * Bodies in this game do jump discontinuously: `registry.kbX/kbZ` knockback is
+ * consumed as a position impulse, the Great Vortex lifts and drops, and the
+ * pathing layer can snap a body around an obstacle. Differencing across one of
+ * those yields a velocity of tens of m/s, and an intercept solved against it
+ * aims the shot at empty snow -- a phantom lead, which is a far worse failure
+ * than no assist at all. Nothing in the roster RUNS at 20 m/s (the player's
+ * own speed gate is 12), so this cannot reject real movement.
+ */
+const VEL_TELEPORT = 20;
+/** Above this the intercept solve is degenerate (target as fast as the bolt);
+ *  the assist then snaps to the CURRENT position instead of leading. */
+const VEL_DEGENERATE = 1e-4;
+
+/**
+ * Launch-direction scratch returned by `aimAssist()`. Module scope, the
+ * `_aim`/`_hand` precedent in spellSystem.js: the caller copies the three
+ * components out immediately (dart.js `fire()`), so a single buffer is safe
+ * and the assist allocates nothing on the shot path.
+ */
+const _assistDir = new Float32Array(3);
+
 export class SpellHits {
     /**
      * @param {import("../spells/spellSystem.js").SpellSystem} spells
@@ -141,11 +219,222 @@ export class SpellHits {
         this._arcGenSeen = 0;
         /** @type {(slot:number, id:number, d:number)=>void} */
         this._arcCb = (slot, id, d) => this._arcHit(slot, id);
+
+        // ---- bolt aim assist (the header block) ----------------------------
+        // The registry stores no velocity — it is a hit-test structure, and
+        // adding a column would make every mover responsible for filling it.
+        // The lead is therefore estimated HERE by differencing the registry's
+        // own positions once a frame. Slots swap-remove, so each sample is
+        // keyed by the id that owned the slot when it was taken; a new tenant
+        // resets rather than inheriting the dead body's velocity.
+        this._vId = new Int32Array(cap).fill(-1);
+        this._vLastX = new Float32Array(cap);
+        this._vLastZ = new Float32Array(cap);
+        this._vX = new Float32Array(cap);
+        this._vZ = new Float32Array(cap);
+
+        /** A-B switch for the probes: false = raw player aim, no bend. */
+        this.assistEnabled = true;
+        /** Probe surface — counters only, never read by the game. */
+        this.assistStats = { shots: 0, snapped: 0, capped: 0, bendMaxDeg: 0 };
+
+        // Self-install on the bolt pool: `dart.fire()` consults `this.assist`
+        // for damaging primaries only. Done here rather than in main.js so the
+        // assist cannot exist without the damage pass that owns its numbers.
+        if (this.spells && this.spells.bolt) this.spells.bolt.assist = this;
+    }
+
+    /**
+     * Estimate each live body's horizontal velocity by differencing the
+     * registry's positions frame to frame.
+     *
+     * Runs at the TOP of `update()`, which main.js places AFTER the frame's
+     * casts (`spells.update`) and BEFORE the bodies move (`enemies.update`) —
+     * so a shot consults a lead one frame old. At 3 m/s and 60 fps that is a
+     * 5 cm error against a 0.35 m capsule: inside the pad, and far inside the
+     * 5 deg bend cap that bounds the whole system anyway.
+     *
+     * Allocation-free; O(live bodies), no trig, no Math.random.
+     * @param {number} dt
+     * @returns {void}
+     */
+    _trackVelocity(dt) {
+        if (dt <= 0) return;
+        const reg = this.registry;
+        const inv = 1 / dt;
+        // First-order filter, dt-scaled so the response is frame-rate
+        // independent and never overshoots (clamped at 1).
+        const a = dt * VEL_FILTER < 1 ? dt * VEL_FILTER : 1;
+        for (let i = 0; i < reg.count; i++) {
+            const id = reg.idOf[i];
+            if (this._vId[i] !== id) {
+                // New tenant in this slot (spawn, or a swap-remove moved a
+                // body down into it). Seed, do not difference — the delta
+                // across two different bodies is a teleport.
+                this._vId[i] = id;
+                this._vLastX[i] = reg.x[i];
+                this._vLastZ[i] = reg.z[i];
+                this._vX[i] = 0;
+                this._vZ[i] = 0;
+                continue;
+            }
+            const vx = (reg.x[i] - this._vLastX[i]) * inv;
+            const vz = (reg.z[i] - this._vLastZ[i]) * inv;
+            // Reseed on a discontinuity and keep the last good velocity: a
+            // knockback impulse is not a run (see VEL_TELEPORT).
+            if (vx * vx + vz * vz > VEL_TELEPORT * VEL_TELEPORT) {
+                this._vLastX[i] = reg.x[i];
+                this._vLastZ[i] = reg.z[i];
+                continue;
+            }
+            this._vX[i] += (vx - this._vX[i]) * a;
+            this._vZ[i] += (vz - this._vZ[i]) * a;
+            this._vLastX[i] = reg.x[i];
+            this._vLastZ[i] = reg.z[i];
+        }
+    }
+
+    /**
+     * THE ASSIST (header block, "owner 2026-08-14, whiff-rate review").
+     *
+     * Bend one launch heading toward the predicted intercept of the best
+     * eligible body. Applied at LAUNCH ONLY — the returned direction is a
+     * constant-velocity heading and nothing homes afterwards, so a bolt that
+     * misses stays missed and a dodge still works.
+     *
+     * ELIGIBILITY  a live, non-dummy body inside ASSIST_RANGE whose bearing
+     *              from the muzzle is within ASSIST_CONE of the raw aim. The
+     *              MOST CENTRED candidate wins (the running `bestCos` is both
+     *              the gate and the comparison), so the assist can never pull
+     *              the shot onto a body the player was not already pointing at.
+     * INTERCEPT    the quadratic |R + V t| = speed * t, smallest positive root.
+     *              Degenerate when the target is as fast as the bolt: then the
+     *              snap goes to the body's CURRENT centre, which is still an
+     *              improvement over the raw ray and is bounded by the same cap.
+     * CAP          the result is clamped to `atan(ASSIST_LEAD_VMAX / speed)`
+     *              off the raw aim by rotating the raw heading toward the
+     *              solution — a hard ceiling on how much the game may aim for
+     *              the player, not a soft blend that grows with the error.
+     *
+     * @param {number} ox @param {number} oy @param {number} oz muzzle
+     * @param {number} dx @param {number} dy @param {number} dz raw unit heading
+     * @param {number} speed projectile m/s
+     * @returns {Float32Array} the module scratch — copy the 3 components out
+     */
+    aimAssist(ox, oy, oz, dx, dy, dz, speed) {
+        const out = _assistDir;
+        out[0] = dx; out[1] = dy; out[2] = dz;
+        const st = this.assistStats;
+        st.shots++;
+        if (!this.assistEnabled) return out;
+
+        // ---- pick the most centred eligible body --------------------------
+        const reg = this.registry;
+        let best = -1, bestCos = ASSIST_CONE_COS;
+        for (let i = 0; i < reg.count; i++) {
+            if (!reg.alive[i]) continue;
+            if (reg.kind[i] === "dummy") continue;   // practice targets
+            const rx = reg.x[i] - ox;
+            const ry = reg.y[i] + reg.height[i] * ASSIST_AIM_H - oy;
+            const rz = reg.z[i] - oz;
+            const d = Math.hypot(rx, ry, rz);
+            if (d < 0.05 || d > ASSIST_RANGE) continue;
+            const c = (rx * dx + ry * dy + rz * dz) / d;
+            if (c <= bestCos) continue;
+            bestCos = c; best = i;
+        }
+        if (best < 0) return out;
+
+        // ---- intercept ----------------------------------------------------
+        const rx = reg.x[best] - ox;
+        const ry = reg.y[best] + reg.height[best] * ASSIST_AIM_H - oy;
+        const rz = reg.z[best] - oz;
+        // The lead speed is clamped to the same 5 m/s anchor the cap derives
+        // from. Beyond it the cap binds anyway, so this changes nothing for a
+        // legitimate mover -- it only stops an over-read estimate (a body
+        // sampled across two frames' motion on a stalled machine) from
+        // steering the shot further off than the design ever intends.
+        let vx = this._vX[best], vz = this._vZ[best];
+        const vlen = Math.hypot(vx, vz);
+        if (vlen > ASSIST_LEAD_VMAX) {
+            const k = ASSIST_LEAD_VMAX / vlen;
+            vx *= k; vz *= k;
+        }
+
+        // (V.V - s^2) t^2 + 2 (R.V) t + R.R = 0
+        const qa = vx * vx + vz * vz - speed * speed;
+        let t = 0;
+        if (qa < -VEL_DEGENERATE || qa > VEL_DEGENERATE) {
+            const qb = 2 * (rx * vx + rz * vz);
+            const qc = rx * rx + ry * ry + rz * rz;
+            const disc = qb * qb - 4 * qa * qc;
+            if (disc >= 0) {
+                const sq = Math.sqrt(disc);
+                const t0 = (-qb + sq) / (2 * qa);
+                const t1 = (-qb - sq) / (2 * qa);
+                // Smallest POSITIVE root: the first moment the bolt can be
+                // where the body will be. A negative root is the solution
+                // behind the muzzle and is not a shot.
+                if (t0 > 0 && t1 > 0) t = t0 < t1 ? t0 : t1;
+                else if (t0 > 0) t = t0;
+                else if (t1 > 0) t = t1;
+            }
+        }
+        // A lead longer than the bolt's own flight to the body is a solution
+        // for a shot that will have expired; clamp it to something sane.
+        if (!(t >= 0) || t > 2) t = 0;
+
+        let ax = rx + vx * t;
+        const ay = ry;                 // bodies do not leave the ground
+        let az = rz + vz * t;
+        const al = Math.hypot(ax, ay, az);
+        if (al < 1e-4) return out;
+        ax /= al; const ayn = ay / al; az /= al;
+
+        // ---- the cap ------------------------------------------------------
+        // Derived per shot from THIS projectile's speed (see ASSIST_LEAD_VMAX):
+        // exactly the lead a 5 m/s mover needs, ceilinged at ASSIST_CAP_MAX.
+        let cap = Math.atan(ASSIST_LEAD_VMAX / (speed > 1 ? speed : 1));
+        if (cap > ASSIST_CAP_MAX) cap = ASSIST_CAP_MAX;
+        const capCos = Math.cos(cap);
+
+        let cos = ax * dx + ayn * dy + az * dz;
+        if (cos > 1) cos = 1; else if (cos < -1) cos = -1;
+        if (cos >= capCos) {
+            // Inside the cap: take the solution whole.
+            out[0] = ax; out[1] = ayn; out[2] = az;
+        } else {
+            // Outside: rotate the RAW heading toward the solution by exactly
+            // `cap` radians. The perpendicular component of the solution against
+            // the raw aim gives the rotation plane without a cross product.
+            let px = ax - dx * cos;
+            let py = ayn - dy * cos;
+            let pz = az - dz * cos;
+            const pl = Math.hypot(px, py, pz);
+            if (pl < 1e-6) return out;          // exactly opposed: no plane
+            px /= pl; py /= pl; pz /= pl;
+            const capSin = Math.sin(cap);
+            out[0] = dx * capCos + px * capSin;
+            out[1] = dy * capCos + py * capSin;
+            out[2] = dz * capCos + pz * capSin;
+            st.capped++;
+        }
+        st.snapped++;
+        const bend = Math.acos(
+            Math.max(-1, Math.min(1, out[0] * dx + out[1] * dy + out[2] * dz))
+        ) * 180 / Math.PI;
+        if (bend > st.bendMaxDeg) st.bendMaxDeg = bend;
+        return out;
     }
 
     /** @param {number} dt */
     update(dt) {
         if (dt === 0) return;              // §9.2: freeze is a strict no-op
+
+        // The aim assist's lead source. First, so the sample is taken at a
+        // fixed point in the frame — a mover that ran between two samples
+        // would otherwise read as a velocity spike.
+        this._trackVelocity(dt);
 
         // The speed-falloff clock runs continuously so the release read is
         // "was the player above 12 m/s within the last 0.4 s", exactly §1.1.

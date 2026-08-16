@@ -78,7 +78,17 @@ def main() -> int:
             return {
               hasGlobal: !!SF,
               members: SF ? Object.keys(SF) : [],
-              bootGone: !!(boot && boot.classList.contains('gone')),
+              // `#boot` ABSENT counts as gone. core/loading.js `done()` adds
+              // the class, then REMOVES the node six seconds later (:54-57) —
+              // so on any run where boot-to-sample took longer than that, a
+              // perfectly clean boot scored `bootGone: false` and the whole
+              // check reported NOT BOOTING CLEAN. Measured on port 8875
+              // (_harness/qa_bootstate_8875.py): gone=true at t+500 ms,
+              // element absent by t+8000 ms, zero page errors throughout.
+              // The other remover is `loading.fail()` (:66-67) — but that one
+              // also shows `#nogpu`, which is checked on its own line below,
+              // so absence can never hide a hard failure.
+              bootGone: !boot || boot.classList.contains('gone'),
               bootPhase: (document.getElementById('boot-phase')||{}).textContent || '',
               nogpu: !!(nogpu && nogpu.classList.contains('show')),
               pageErrors: window.__err || [],

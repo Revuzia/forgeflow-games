@@ -320,6 +320,64 @@ export const REALMS = {
             macroHeightScale: 1.0,          // settings.js:82
         },
 
+        // ----------------------------------------------------- §1d' landform
+        /**
+         * THE SHAPE OF THE GROUND — the 4096² macro bake's parameters, consumed
+         * by `terrain.applyRealm()` → `Heightfield.setLandform()`.
+         *
+         * Until this block existed the bake read only `S.windDirection` and
+         * `S.macroHeightScale`, neither of which a realm swap writes (settings.js
+         * `REALM_GRADE_KEYS` picks seven fog/tone keys out of `realmSettings()`
+         * and drops the rest), so it ran ONCE at boot and Sand and Ash stood on
+         * Cold's ground — identical to the last bit at 20 sampled points.
+         *
+         * COLD IS THE IDENTITY. Every number here is the literal it replaced in
+         * `shaders/lib/terrain.glsl.js`, and `terrain/landform.js` recognises the
+         * block as Cold's and routes the bake to the ORIGINAL program, so Cold's
+         * heightfield is not merely equivalent to the pre-change one, it is the
+         * same instruction stream. See that file's header.
+         *
+         * `wind.direction` is deliberately NOT a landform input. Rotating the
+         * macro layers per realm is the cheapest possible "different terrain"
+         * and it is wrong: the fine sastrugi is evaluated live off
+         * `S.windDirection` in the clipmap vertex stage and cannot see the bake,
+         * so turning the dunes without turning the wind runs the ripples across
+         * the drifts that carved them. Realms change wavelength, amplitude,
+         * anisotropy, crest shape and what else is lying on the ground.
+         */
+        landform: {
+            duneLen: 58.0,                  // lib/terrain.glsl.js:132
+            duneAmp: 15.5,                  // :134
+            duneAniso: 2.1,                 // :132
+            duneRidge: 0.0,                 // no crest fold in Cold
+            swellLen: 210.0,                // :139
+            swellAmp: 26.0,                 // :141
+            swellAniso: 1.35,               // :139
+            warp: 0.0,                      // no domain warp in Cold
+            driftLen: 13.5,                 // :147
+            driftAmp: 2.9,                  // :156
+            driftAniso: 1.55,               // :147
+            driftShear: 2.4,                // :149
+            basinCell: 0.0,                 // no basins in Cold
+            basinDepth: 0.0,
+            basinRadius: 0.0,
+            basinCull: 0.0,
+            rockCell: 165.0,                // :188
+            rockCull: 0.34,                 // :202
+            rockBase: 3.5,                  // :216
+            rockVar: 6.0,                   // :216
+            rockRadMin: 7.0,                // :205
+            rockRadVar: 11.0,               // :205
+            rockWave: 5.5,                  // :214
+            rockRough: 0.55,                // :218
+            /** Mirrors `wind.macroHeightScale`, which is the value that never
+             *  reached the bake. Kept in both rows rather than cross-read: the
+             *  wind row is what `realmSettings()` publishes to the overlay, this
+             *  is what the bake consumes, and `landformCheck()` asserts they
+             *  agree so the duplication cannot rot. */
+            heightScale: 1.0,
+        },
+
         // ------------------------------------------------------ §1e weather
         /** Blizzard / snowfall. Consumed by `src/vfx/weather.js`. The fog boost is
          *  what actually sells the storm: 3072 flakes over a 140 m box is one
@@ -573,6 +631,52 @@ export const REALMS = {
             macroHeightScale: 1.25,
         },
 
+        /**
+         * SEIF DUNES. Sand is the big-form realm: everything is longer and
+         * taller than Cold, and the dune layer is compressed harder along the
+         * wind (2.9 against Cold's 2.1) so the ridge lines run as long unbroken
+         * walls across it — the classic linear seif field. `duneRidge` 0.34 folds
+         * the crests to a knife edge instead of Cold's wind-packed rounds, and
+         * the 9 m domain warp is what stops that anisotropy reading as
+         * corrugated iron: the ridges wander rather than ruling straight to the
+         * horizon.
+         *
+         * Rock is nearly absent (a 300 m cell at a 0.14 cull is [derived] one
+         * outcrop per 643,000 m², against Cold's one per 80,900) — bedrock is
+         * buried under the sand, and it also buys back the fill the taller dunes
+         * cost.
+         *
+         * [derived] relief against Cold: swell 30 × 1.25 = 37.5 m of authority
+         * against 26.0, dunes 21 × 1.25 = 26.3 against 15.5.
+         */
+        landform: {
+            duneLen: 82.0,
+            duneAmp: 21.0,
+            duneAniso: 2.9,
+            duneRidge: 0.34,
+            swellLen: 300.0,
+            swellAmp: 30.0,
+            swellAniso: 1.5,
+            warp: 9.0,
+            driftLen: 16.5,
+            driftAmp: 3.4,
+            driftAniso: 1.7,
+            driftShear: 3.1,
+            basinCell: 0.0,                 // no basins: sand fills them
+            basinDepth: 0.0,
+            basinRadius: 0.0,
+            basinCull: 0.0,
+            rockCell: 300.0,
+            rockCull: 0.14,
+            rockBase: 4.5,
+            rockVar: 7.0,
+            rockRadMin: 9.0,
+            rockRadVar: 14.0,
+            rockWave: 7.5,
+            rockRough: 0.40,
+            heightScale: 1.25,              // == wind.macroHeightScale
+        },
+
         /** SANDSTORM / DUST DEVILS. */
         weather: {
             mode: 1,
@@ -669,7 +773,7 @@ export const REALMS = {
              *  complaint: measured shadow-floor p10 was 0.4–3.7/255). The
              *  ambient is realm-tinted, so the lift stays sooty rather than
              *  turning the hollows blue. */
-            ambientIntensity: 1.50,
+            ambientIntensity: 2.45,
             ambientBlue: 1.0,
             /** The far range is buried in smoke at fogDensity 0.0155 anyway, and
              *  switching it off buys back the 8.27 ms the raymarch costs
@@ -755,14 +859,14 @@ export const REALMS = {
              *  as black lace across the whole near field (owner 2026-08-13,
              *  second complaint; measured p10 0.4–7.5/255). Lifted warm, still
              *  ~40% of Cold's luminance, so a hollow reads sooty, not void. */
-            caveTint: [0.52, 0.40, 0.34],
+            caveTint: [0.66, 0.52, 0.44],   // owner 2026-08-16: raised with the realm's OWN sun applied (11 deg, was cold's 13) — hollows are where ash lost the visibility bar
             /** Volcanic ash is porous fluff — a little terminator wrap is
              *  physical; raised [0.12,0.06] → [0.30,0.10] for the same
              *  shadow-floor reason as caveTint. Still under snow's 0.62.
              *  Measured driver: the sun-away dune faces were the last spot
              *  failing the 2026-08-13 readability bar (mean 0.46 x Cold). */
             wrapAmount: [0.34, 0.11],
-            bounceCoef: 0.24,               // was 0.05; Cold 0.28 — same driver
+            bounceCoef: 0.30,
             compressCol: [0.060, 0.055, 0.054], // packed ash goes to soot (+25% cap)
             compressRough: 0.66,
             compressThick: 0.05,
@@ -882,6 +986,63 @@ export const REALMS = {
             macroHeightScale: 0.65,
         },
 
+        /**
+         * BLAST PLAIN. The negative-space realm, and the one shape a dune field
+         * cannot fake: `basinDepth` carves a jittered grid of bowls with raised
+         * rims into the ground rather than piling anything on top of it. At a
+         * 190 m cell and a 0.46 cull that is [derived] one crater per 78,500 m²
+         * — dense enough that the horizon is a broken lip line rather than a
+         * smooth roll.
+         *
+         * Everything else is short and low: half Cold's dune wavelength, a
+         * `heightScale` of 0.65, and a hard 0.55 crest fold, so the ash lies in
+         * tight scoured ridges instead of long drifts. Basins are carved AFTER
+         * the amplitude scale (see `landformBake.glsl.js`) so an 8 m crater is 8 m
+         * deep here and not 5.2 — the realm with the lowest relief is exactly the
+         * one whose craters must not shrink with it.
+         *
+         * THE BASIN GRID IS TUNED AGAINST A SCREENSHOT, not against the number.
+         * At the first pass (a 190 m cell, a 0.46 cull, 8.5 m dunes) the realm
+         * cleared its transect bar at 2.41 m RMS against Cold and still read as
+         * a flat plate from ground level, because at that spacing the ground
+         * BETWEEN two craters is a featureless disc a hundred metres across.
+         * Tightening the grid to 150 m at a 0.58 cull ([derived] one crater per
+         * 38,800 m², double the density) and lifting the dune and drift layers
+         * puts a lip or a scour inside every sightline. RMS is a floor, not the
+         * goal — the goal is that it does not look like Cold with a filter on.
+         *
+         * Rock is the opposite of Sand's: a 105 m cell at a 0.55 cull is
+         * [derived] one outcrop per 20,000 m², four times Cold's density, and
+         * taller — cooled basalt standing out of the ash.
+         */
+        landform: {
+            duneLen: 40.0,
+            duneAmp: 10.5,
+            duneAniso: 1.35,
+            duneRidge: 0.55,
+            swellLen: 150.0,
+            swellAmp: 14.0,
+            swellAniso: 1.15,
+            warp: 5.0,
+            driftLen: 9.5,
+            driftAmp: 2.8,
+            driftAniso: 1.25,
+            driftShear: 1.6,
+            basinCell: 150.0,
+            basinDepth: 8.0,
+            basinRadius: 42.0,
+            basinCull: 0.58,
+            rockCell: 105.0,
+            rockCull: 0.55,
+            rockBase: 5.0,
+            rockVar: 9.0,
+            rockRadMin: 5.5,
+            rockRadVar: 9.0,
+            rockWave: 4.0,
+            rockRough: 0.72,
+            heightScale: 0.65,              // == wind.macroHeightScale
+        },
+
         /** EMBER-FALL / SMOKE DRIFT. The one realm with TWO populations in ONE
          *  draw: index-hashed 60/40 between falling embers (+0.90 m/s) and rising
          *  smoke (−0.45 m/s). */
@@ -938,7 +1099,7 @@ export const REALMS = {
              *  (settings.js GRADE_GRID) — legal, because `applyRealmGrade`
              *  writes the realm literal through unclamped at offset 1; only an
              *  operator-dragged offset snaps to the widget grid. */
-            exposure: 0.78,
+            exposure: 0.95,
             /** 1.22 pushed the AgX toe down exactly where the ash floor
              *  lives; with the realm this dark, contrast >1 buys nothing but
              *  a clipped floor — neutral 1.00 leaves the ember specks + bloom
@@ -1341,6 +1502,42 @@ export function rebakePlan(from, to) {
         why: "the accent is Cold-frost hard-coded at main.js:875-876 and duplicated at hud.js:50 and xphud.js:83",
     });
     return plan;
+}
+
+/**
+ * The landform block for a realm — what `terrain.applyRealm()` feeds the macro
+ * bake. Returns the row itself (frozen by convention, like `weatherParams`).
+ * @param {string|{token?:string,name?:string}} r
+ * @returns {RealmRow["landform"]}
+ */
+export function landformFor(r) {
+    return REALMS[realmToken(r)].landform;
+}
+
+/**
+ * Cross-check the two places a realm states its relief.
+ *
+ * `wind.macroHeightScale` is what `realmSettings()` publishes (and what the
+ * overlay's Dune-height slider reads against); `landform.heightScale` is what
+ * the bake consumes. They are the same number in two rows because neither
+ * consumer can reasonably read the other's, and a duplicated number with no
+ * check on it is a number that will disagree with itself eventually. Pure —
+ * call it from a probe alongside `realmSchemaDiff()`.
+ *
+ * @returns {string[]} empty when every realm agrees with itself
+ */
+export function landformCheck() {
+    /** @type {string[]} */
+    const out = [];
+    for (let i = 0; i < REALM_ORDER.length; i++) {
+        const t = REALM_ORDER[i];
+        const R = REALMS[t];
+        if (R.landform.heightScale !== R.wind.macroHeightScale) {
+            out.push(`${t}: landform.heightScale ${R.landform.heightScale} != `
+                + `wind.macroHeightScale ${R.wind.macroHeightScale}`);
+        }
+    }
+    return out;
 }
 
 /* -------------------------------- schema check ---------------------------- */
