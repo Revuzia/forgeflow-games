@@ -408,12 +408,37 @@ Respond with ONLY the JSON, no other text."""
 
 # ── Progress state ────────────────────────────────────────────────────────
 def _load_progress():
-    if not PROGRESS_PATH.exists():
-        return {"completed": [], "failed": [], "started_at": None}
+    """Resume ledger, UNIONED with the keys of asset_vision_classifications.json.
+
+    The results file is the authoritative record of work actually done, so a lost,
+    truncated or reverted .progress file can never cause us to re-classify an asset we
+    already hold an answer for.
+
+    Why this matters (2026-08-16): `state/vision_classify.progress` was git-TRACKED, and
+    the committed copy held only 291 entries. Any routine git checkout/reset reverted the
+    ledger, so every Saturday the classifier re-did ~5,000 assets it had already classified
+    — progress oscillated 291 -> 5,299 -> 291 -> ... for 18 weeks and never passed 27%,
+    burning a full 12-hour vision-call window each time. The file is now gitignored AND
+    this union makes the resume idempotent even if the ledger is lost again.
+    """
+    prog = {"completed": [], "failed": [], "started_at": None}
+    if PROGRESS_PATH.exists():
+        try:
+            loaded = json.loads(PROGRESS_PATH.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                prog = loaded
+        except Exception:
+            pass
+    prog.setdefault("completed", [])
+    prog.setdefault("failed", [])
+    prog.setdefault("started_at", None)
     try:
-        return json.loads(PROGRESS_PATH.read_text(encoding="utf-8"))
+        already = set(_load_classifications().keys())
     except Exception:
-        return {"completed": [], "failed": [], "started_at": None}
+        already = set()
+    if already:
+        prog["completed"] = sorted(set(prog["completed"]) | already)
+    return prog
 
 
 def _save_progress(prog):
