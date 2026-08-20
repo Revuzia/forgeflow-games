@@ -204,13 +204,28 @@ export function groundRay(terrain, ox, oy, oz, dx, dy, dz, maxDist) {
  *
  * @param {Float32Array} out
  */
-export function aimPoint(out, terrain, ox, oy, oz, dx, dy, dz, maxDist, fallback) {
+export function aimPoint(out, terrain, ox, oy, oz, dx, dy, dz, maxDist,
+                         fallback, keepPitch) {
     const t = groundRay(terrain, ox, oy, oz, dx, dy, dz, maxDist);
     if (t > 0) {
         out[0] = ox + dx * t;
         out[1] = oy + dy * t;
         out[2] = oz + dz * t;
         return t;
+    }
+    // A PROJECTILE KEEPS ITS PITCH (owner 2026-08-16: "I cannot AIM UP, the
+    // attacks are forced into the sand"). The ground-drop below is right for
+    // an EFFECT that happens on the ground — a crescent, an eruption, a
+    // column — but a thrown bolt aimed over the horizon must fly where it was
+    // aimed. The miss branch is the common case the moment the reticle passes
+    // the skyline, which is why this read as "aiming up does nothing":
+    // the point was silently planted on the sand a fixed distance ahead and
+    // the bolt dutifully flew down into it.
+    if (keepPitch) {
+        out[0] = ox + dx * fallback;
+        out[1] = oy + dy * fallback;
+        out[2] = oz + dz * fallback;
+        return fallback;
     }
     // Flatten the direction and step out, then drop onto the surface.
     const fl = Math.hypot(dx, dz) || 1;

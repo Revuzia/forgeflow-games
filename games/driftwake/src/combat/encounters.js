@@ -127,6 +127,10 @@
 import { S } from "../core/settings.js";
 import { TIER, PRESSURE } from "./combatData.js";
 
+/** TEST mode's effective level: opens every realm's pack table at once for a
+ *  testing session (owner 2026-08-16). */
+const TEST_LEVEL = 10;
+
 // ---------------------------------------------------------------- spec knobs
 /** Owner directive: pack anchor lands 55–80 m from the player. */
 const SPAWN_MIN = 55;
@@ -636,6 +640,9 @@ export class Encounters {
         const sf = globalThis.SNOWFLOW;
         const p = sf ? (sf.progress || sf.progression) : null;
         const l = (p && typeof p.level === "number") ? p.level : this.playerLevel;
+        // TEST mode lifts the level gates too (owner 2026-08-16: "limits
+        // nothing by levels") — every realm's pack table opens at once.
+        if (p && p.testMode) return Math.max(l, TEST_LEVEL);
         return l >= 1 ? l : 1;
     }
 

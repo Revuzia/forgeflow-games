@@ -167,6 +167,8 @@ export class Progression {
          * @type {Set<number>}
          */
         this.unlocked = new Set();
+        /** Level limits lifted for testing? See `setTestMode`. */
+        this.testMode = false;
 
         /** Where the run last stood: {x, z, facing, realm} or null. Written
          *  into every save via `_posFor` (main.js wires it to the live
@@ -474,7 +476,9 @@ export class Progression {
             level: this.level,
             xp: this.xp,
             driftmarks: this.driftmarks,
-            spellsUnlocked: Array.from(this.unlocked),
+            // `_earnedUnlocks` and not the live set: a TEST session must not
+            // write its granted kit into a real character's save.
+            spellsUnlocked: this._earnedUnlocks(),
             boons: this.boons,
             realmsUnlocked: this.realmsUnlocked,
             bossesKilled: this.bossesKilled,
@@ -681,10 +685,48 @@ export class Progression {
     /** Add every schedule unlock at or below the current level (§7).
      *  Mutates the live Set — never reassigns it. @returns {void} */
     _unlockCheck() {
+        // TEST MODE (owner 2026-08-16: "for testing I want to be able to use
+        // ALL spells, so implement a TEST that limits nothing by levels").
+        // Everything opens regardless of level, and it re-asserts here so a
+        // level-up, a CONTINUE or a NEW RUN cannot quietly re-lock the kit.
+        if (this.testMode) {
+            for (const idStr in UNLOCK_LEVEL) this.unlocked.add(+idStr);
+            return;
+        }
         for (const idStr in UNLOCK_LEVEL) {
             const id = +idStr;
             if (UNLOCK_LEVEL[id] <= this.level) this.unlocked.add(id);
         }
+    }
+
+    /**
+     * Turn the level limits off (or back on) for a testing session.
+     *
+     * Deliberately NOT persisted: `save()` writes the unlocks this character
+     * has actually EARNED, so a test session cannot inflate a real run's save
+     * blob. Reachable as `SNOWFLOW.test(true)` and via the `?test` URL flag.
+     * @param {boolean} on @returns {{testMode:boolean, unlocked:number[]}}
+     */
+    setTestMode(on) {
+        this.testMode = !!on;
+        if (!this.testMode) {
+            // Fall back to what the level actually grants.
+            this.unlocked.clear();
+        }
+        this._unlockCheck();
+        return { testMode: this.testMode, unlocked: Array.from(this.unlocked) };
+    }
+
+    /** The spells this character has legitimately earned, test mode aside.
+     *  @returns {number[]} */
+    _earnedUnlocks() {
+        if (!this.testMode) return Array.from(this.unlocked);
+        const out = [];
+        for (const idStr in UNLOCK_LEVEL) {
+            const id = +idStr;
+            if (UNLOCK_LEVEL[id] <= this.level) out.push(id);
+        }
+        return out;
     }
 
     /**

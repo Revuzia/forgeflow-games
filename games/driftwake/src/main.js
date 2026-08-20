@@ -734,6 +734,53 @@ async function boot() {
     let autosaveT = 0;
     window.addEventListener("beforeunload", () => progression.save());
     spells.unlocked = progression.unlocked;
+
+    // ------------------------------------------------ [TEST MODE] START
+    // Owner 2026-08-16: "for testing I want to be able to use ALL spells, so
+    // implement a TEST that limits nothing by levels."
+    //
+    //   ?test            in the URL turns it on at boot
+    //   SNOWFLOW.test()  toggles it live and returns the new state
+    //
+    // It lifts BOTH gates: `progression._unlockCheck` grants every spell and
+    // re-asserts on every ding/CONTINUE/NEW RUN, and the encounter and boss
+    // directors read an effective level of TEST_LEVEL so the sand/ash pack
+    // tables, the mini boss and the realm boss are all reachable at once. It
+    // is never written to the save — `save()` persists only the unlocks the
+    // character has actually earned.
+    const testBadge = document.createElement("div");
+    testBadge.textContent = "TEST MODE - all spells, no level gates";
+    testBadge.style.cssText =
+        "position:fixed;left:50%;top:8px;transform:translateX(-50%);" +
+        "z-index:60;pointer-events:none;display:none;font:600 11px/1 " +
+        "system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;" +
+        "color:#0b1017;background:#ffd166;padding:5px 12px;border-radius:3px;" +
+        "box-shadow:0 2px 10px rgba(0,0,0,.35)";
+    document.body.appendChild(testBadge);
+
+    /**
+     * Toggle the level limits off for a testing session.
+     * @param {boolean} [on] omit to flip the current state
+     * @returns {{testMode:boolean, unlocked:number[], level:number}}
+     */
+    function setTestMode(on) {
+        const want = on === undefined ? !progression.testMode : !!on;
+        const st = progression.setTestMode(want);
+        spells.unlocked = progression.unlocked;
+        spellbar.progression = progression;
+        testBadge.style.display = want ? "block" : "none";
+        console.info("[driftwake] TEST MODE " + (want ? "ON" : "OFF"),
+                     JSON.stringify(st));
+        return { testMode: st.testMode, unlocked: st.unlocked,
+                 level: progression.level };
+    }
+    // Accept ?test, &test or #test. (The first cut of this line carried a
+    // literal 0x08 from an escape mangled in the patch that wrote it, so the
+    // regex could never match and the flag silently did nothing.)
+    if (/(^|[?&#])test($|[=&#])/i.test(location.search + location.hash + "&")) {
+        setTestMode(true);
+    }
+    // ------------------------------------------------- [TEST MODE] END
     spellbar.progression = progression;
     enemies.progression = progression;
     const floaters = new Floaters(registry, rig);
@@ -909,11 +956,34 @@ async function boot() {
         // the play area — and ramps quadratically to 7 m/s at the clamp, which
         // is above the walk speed and below the surf top speed. The hard clamp
         // below is still the backstop; this is what makes it legible.
-        // Returns a RETAINED object; do not hold it.
-        const push = terrain.edgePush(character.position.x, character.position.z);
-        if (push.fx !== 0 || push.fz !== 0) {
-            character.position.x += push.fx * dt;
-            character.position.z += push.fz * dt;
+        // RESISTANCE, NOT A CONVEYOR (owner 2026-08-16: "it stops letting me
+        // go forward and pulls me back automatically"). The first cut added
+        // `edgePush` straight to the position every frame, so the storm moved
+        // the player whether or not the player was moving: measured at r=600
+        // a surfer LOST 0.98 m over three seconds of held input, and at r=615
+        // lost 2.9 m — a treadmill, which is the exact feel the storm wall was
+        // built to replace. It now scrubs only the OUTWARD component of the
+        // player's own motion, quadratically with depth into the band: early
+        // in the storm you are slowed, at the clamp you cannot gain ground,
+        // and standing still moves you nowhere. `terrain.clampToPlayArea`
+        // below is still the hard stop. `edgePush` itself is untouched — the
+        // weather and the edge probe both read it.
+        const ex = character.position.x, ez = character.position.z;
+        const e01 = terrain.edge01(ex, ez);
+        if (e01 > 0) {
+            const ed = Math.hypot(ex, ez);
+            if (ed > 1e-4) {
+                const uxo = ex / ed, uzo = ez / ed;   // outward radial
+                const v = character.velocity;
+                const vOut = v.x * uxo + v.z * uzo;
+                if (vOut > 0) {
+                    const scrub = vOut * e01 * e01;
+                    character.position.x -= uxo * scrub * dt;
+                    character.position.z -= uzo * scrub * dt;
+                    v.x -= uxo * scrub;
+                    v.z -= uzo * scrub;
+                }
+            }
         }
         // A realm swap re-bakes the macro heightfield inside `terrain.update()`,
         // so the ground under the player can move by metres between frames. The
@@ -1442,6 +1512,9 @@ async function boot() {
         // one character — exposed the way `deform` and `crosshair` are.
         meshChar,
         S, input, perfStats: stats,
+        // TEST MODE toggle (owner 2026-08-16). `SNOWFLOW.test()`
+        // flips it; `SNOWFLOW.test(true/false)` sets it.
+        test: setTestMode,
         // The write half of the settings store. `S` alone is read-only in
         // practice: most of its keys are sampled next frame and a bare write is
         // fine, but the structural ones only mean anything on the `onChange`

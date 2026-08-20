@@ -92,6 +92,10 @@ import { gradeAt } from "../world/shrine.js";
 import { PLAY_RADIUS } from "../terrain/terrain.js";
 import { sfx } from "../audio/sfx.js";
 
+/** TEST mode's effective level: opens the mini boss (6) and the realm boss (8) at once for a
+ *  testing session (owner 2026-08-16). */
+const TEST_LEVEL = 10;
+
 // ------------------------------------------------------------- owner numbers
 /** Band-clamped player level that arms each event (owner 2026-08-16). */
 const MINI_LEVEL = 6;
@@ -415,6 +419,9 @@ export class BossEncounters {
         const p = this.progression ||
             (sf ? (sf.progress || sf.progression) : null);
         const l = (p && typeof p.level === "number") ? p.level : this.playerLevel;
+        // TEST mode: both boss tiers become reachable immediately (mini gates
+        // at 6, the realm boss at 8) — owner 2026-08-16.
+        if (p && p.testMode) return Math.max(l, TEST_LEVEL);
         return l >= 1 ? l : 1;
     }
 

@@ -858,7 +858,10 @@ export class SpellSystem {
             _aim, ctx.terrain,
             eye.x, eye.y, eye.z,
             this.aim.x, this.aim.y, this.aim.z,
-            BOLT_RANGE, BOLT_FALLBACK
+            // keepPitch: the bolt is a PROJECTILE. When the aim ray misses the
+            // ground (any shot above the skyline) it must carry the pitch it
+            // was fired at instead of being planted on the sand ahead.
+            BOLT_RANGE, BOLT_FALLBACK, true
         );
         this._handPosition(1, _hand, 0);
 
