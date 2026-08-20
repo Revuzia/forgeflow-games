@@ -445,7 +445,13 @@ export class Progression {
         this.restedBank = 0;
         this.lastSeenTs = Date.now();
         this.boons = [];
-        this.bossesKilled = [];
+        // A MAP, not an array — the field is keyed by boss name everywhere
+        // that touches it (`_onKill` line ~603, `bossEncounters.js:444/674`).
+        // As `[]` those writes land as non-index properties, which
+        // `JSON.stringify` DROPS, so every boss first-kill flag earned after a
+        // NEW RUN was lost on the next load: the boss re-armed and its
+        // cap-exempt §3.2 flat grant could be re-earned on every reload.
+        this.bossesKilled = {};
         this.realmsUnlocked = ["cold"];
         this.objectiveState = {};
         this.lastShrineId = "cold_spawn";   // §8.1 default, never null

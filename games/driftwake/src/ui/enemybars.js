@@ -254,8 +254,25 @@ export class EnemyBars {
         this._fillEl = new Array(POOL);
         /** @type {HTMLElement[]} name labels (shown on the TAB target only). */
         this._nameEl = new Array(POOL);
-        /** Pool index currently wearing the target frame; -1 = none. */
-        this._tgtSlot = -1;
+        /**
+         * PER-SLOT "is the TAB target" cache, 1 = this bar wears `.tgt`.
+         *
+         * This was ONE scalar (`_tgtSlot`, the pool index wearing the frame)
+         * and that shape cannot express the state it was caching. The upkeep
+         * pass walks slots 0..POOL in order and used `isTgt !== (_tgtSlot === i)`
+         * as the edge test, so retargeting from a HIGH pool slot to a LOW one
+         * wrote `_tgtSlot = i` at the new slot BEFORE the loop reached the old
+         * one — and the old slot then tested `false !== false`, never removed
+         * its class, and kept the caret. Measured (`_harness/qa_feel_bars_target.py`,
+         * phase BARS): select B in slot 1, retarget to A in slot 0 ->
+         * `tgtBars: [0, 1]`, two bars wearing the selection frame. `_release`
+         * had the same scalar guard, so the stale class survived the slot's
+         * release and the NEXT body to claim slot 1 inherited the caret
+         * (`afterCClaims: tgtBars [0,1]` with C in slot 1 and the target still A).
+         * A per-slot cache is the state the DOM actually holds.
+         * @type {Uint8Array}
+         */
+        this._isTgt = new Uint8Array(POOL);
         /** @type {HTMLElement[]} the slow-% text inside each status row. */
         this._slowEl = new Array(POOL);
         for (let i = 0; i < POOL; i++) {
@@ -412,14 +429,11 @@ export class EnemyBars {
                 this._release(i);
                 continue;
             }
-            if (isTgt !== (this._tgtSlot === i)) {
+            const tgtNow = isTgt ? 1 : 0;
+            if (tgtNow !== this._isTgt[i]) {
+                this._isTgt[i] = tgtNow;
                 this._bar[i].classList.toggle("tgt", isTgt);
-                if (isTgt) {
-                    this._tgtSlot = i;
-                    this._nameEl[i].textContent = reg.name[slot] || "";
-                } else if (this._tgtSlot === i) {
-                    this._tgtSlot = -1;
-                }
+                if (isTgt) this._nameEl[i].textContent = reg.name[slot] || "";
             }
             // Anchor just above the capsule's crown.
             v.set(reg.x[slot], reg.y[slot] + reg.height[slot] + 0.35, reg.z[slot])
@@ -538,6 +552,14 @@ export class EnemyBars {
             else if (this._lastHit[i] < staleAt) { staleAt = this._lastHit[i]; stale = i; }
         }
         const i = free >= 0 ? free : stale;
+        // A STOLEN slot may still be wearing the selection frame; the class is
+        // DOM state and nothing else in the upkeep pass would clear it for a
+        // body that is not the target. Idempotent for the target's own touch —
+        // the upkeep pass re-adds it on the same frame.
+        if (this._isTgt[i] && this._id[i] !== id) {
+            this._isTgt[i] = 0;
+            this._bar[i].classList.remove("tgt");
+        }
         this._id[i] = id;
         this._lastHit[i] = time;
         // Poison the caches so the first upkeep pass writes everything —
@@ -550,9 +572,9 @@ export class EnemyBars {
     /** Free a pool slot and hide its bar. @param {number} i @returns {void} */
     _release(i) {
         this._id[i] = -1;
-        if (this._tgtSlot === i) {
+        if (this._isTgt[i]) {
+            this._isTgt[i] = 0;
             this._bar[i].classList.remove("tgt");
-            this._tgtSlot = -1;
         }
         this._setOn(i, false);
     }

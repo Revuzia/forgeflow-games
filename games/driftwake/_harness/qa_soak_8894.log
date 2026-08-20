@@ -1,0 +1,93 @@
+BOOT {"resolutionScale": 0.5, "preset": "ultra", "testMode": true, "unlocked": [2, 1, 3, 4, 5], "level": 1, "realm": "cold", "deaths": 0}
+driver: started
+  [  20s] phase=A-baseline-idle  samples= 2 gt=    0.0 stalls=0
+  [  40s] phase=B-walk-run       samples= 4 gt=   15.1 stalls=0
+  [  60s] phase=B-walk-run       samples= 5 gt=   30.1 stalls=0
+  [  80s] phase=B-walk-run       samples= 5 gt=   30.1 stalls=0
+  [ 100s] phase=B-walk-run       samples= 6 gt=   45.1 stalls=0
+  [ 120s] phase=C-surf           samples= 7 gt=   60.2 stalls=0
+  [ 140s] phase=C-surf           samples= 8 gt=   75.3 stalls=0
+  [ 160s] phase=C-surf           samples= 8 gt=   75.3 stalls=0
+  [ 180s] phase=D-combat-1       samples= 9 gt=   90.3 stalls=0
+  [ 202s] phase=D-combat-1       samples= 9 gt=   90.3 stalls=0
+  [ 222s] phase=D-combat-1       samples=10 gt=  105.3 stalls=0
+  [ 242s] phase=D-combat-1       samples=11 gt=  120.3 stalls=0
+  [ 262s] phase=D-combat-1       samples=11 gt=  120.3 stalls=0
+  [ 282s] phase=D-combat-1       samples=12 gt=  135.3 stalls=0
+  [ 302s] phase=D-combat-1       samples=12 gt=  135.3 stalls=0
+  [ 322s] phase=D-combat-1       samples=13 gt=  150.4 stalls=0
+  [ 342s] phase=D-combat-1       samples=13 gt=  150.4 stalls=0
+  [ 362s] phase=D-combat-1       samples=14 gt=  165.5 stalls=0
+  [ 382s] phase=D-combat-1       samples=14 gt=  165.5 stalls=0
+  [ 402s] phase=E-storm-edge     samples=15 gt=  180.5 stalls=0
+  [ 422s] phase=E-storm-edge     samples=16 gt=  195.5 stalls=0
+  [ 442s] phase=E-storm-edge     samples=17 gt=  210.6 stalls=0
+  [ 462s] phase=E-storm-edge     samples=18 gt=  225.7 stalls=0
+  [ 483s] phase=E-storm-edge     samples=18 gt=  225.7 stalls=0
+  [ 503s] phase=E-storm-edge     samples=19 gt=  240.7 stalls=0
+  [ 523s] phase=E-storm-edge     samples=19 gt=  240.7 stalls=0
+  [ 543s] phase=F-combat-2       samples=19 gt=  240.7 stalls=0
+  [ 563s] phase=F-combat-2       samples=20 gt=  255.8 stalls=0
+  [ 583s] phase=F-combat-2       samples=21 gt=  270.8 stalls=0
+  [ 603s] phase=F-combat-2       samples=21 gt=  270.8 stalls=0
+  [ 623s] phase=F-combat-2       samples=22 gt=  285.9 stalls=0
+  [ 643s] phase=F-combat-2       samples=22 gt=  285.9 stalls=0
+  [ 663s] phase=F-combat-2       samples=23 gt=  300.9 stalls=0
+  [ 683s] phase=F-combat-2       samples=24 gt=  315.9 stalls=0
+  [ 703s] phase=F-combat-2       samples=25 gt=  331.0 stalls=0
+  [ 723s] phase=G-death-1        samples=26 gt=  346.1 stalls=0
+  [ 743s] phase=G-death-1        samples=26 gt=  346.1 stalls=0
+  [ 763s] phase=H-mini-boss      samples=27 gt=  361.1 stalls=0
+  [ 783s] phase=H-mini-boss      samples=28 gt=  376.2 stalls=0
+  [ 803s] phase=H-mini-boss      samples=28 gt=  376.2 stalls=0
+  [ 823s] phase=H-mini-boss      samples=30 gt=  406.2 stalls=0
+  (mid screenshot)
+  [ 844s] phase=H-mini-boss      samples=30 gt=  406.2 stalls=0
+  [ 864s] phase=H-mini-boss      samples=31 gt=  421.3 stalls=0
+  [ 884s] phase=H-mini-boss      samples=31 gt=  421.3 stalls=0
+  [ 904s] phase=I-realm-boss     samples=32 gt=  436.3 stalls=0
+  [ 924s] phase=I-realm-boss     samples=32 gt=  436.3 stalls=0
+  [ 950s] phase=I-realm-boss     samples=32 gt=  436.3 stalls=0
+  [ 970s] phase=I-realm-boss     samples=33 gt=  451.4 stalls=0
+  [ 990s] phase=I-realm-boss     samples=33 gt=  451.4 stalls=0
+  [1011s] phase=I-realm-boss     samples=34 gt=  466.4 stalls=0
+  [1031s] phase=I-realm-boss     samples=34 gt=  466.4 stalls=0
+  [1051s] phase=I-realm-boss     samples=35 gt=  481.5 stalls=0
+  [1071s] phase=I-realm-boss     samples=35 gt=  481.5 stalls=0
+  [1091s] phase=I-realm-boss     samples=36 gt=  496.6 stalls=0
+  [1111s] phase=I-realm-boss     samples=37 gt=  511.6 stalls=0
+  [1131s] phase=I-realm-boss     samples=37 gt=  511.6 stalls=0
+  [1151s] phase=I-realm-boss     samples=38 gt=  526.6 stalls=0
+  [1172s] phase=I-realm-boss     samples=38 gt=  526.6 stalls=0
+  [1192s] phase=I-realm-boss     samples=39 gt=  541.7 stalls=0
+  [1212s] phase=I-realm-boss     samples=39 gt=  541.7 stalls=0
+  [1232s] phase=J-portal         samples=40 gt=  556.8 stalls=0
+  [1252s] phase=J-portal         samples=40 gt=  556.8 stalls=0
+  [1272s] phase=J-portal         samples=41 gt=  571.8 stalls=0
+  [1292s] phase=J-portal         samples=42 gt=  586.8 stalls=0
+  [1312s] phase=J-portal         samples=42 gt=  586.8 stalls=0
+  [1332s] phase=J-portal         samples=43 gt=  601.9 stalls=0
+  [1352s] phase=J-portal         samples=43 gt=  601.9 stalls=0
+  [1372s] phase=J-portal         samples=44 gt=  616.9 stalls=0
+  [1392s] phase=J-portal         samples=44 gt=  616.9 stalls=0
+  [1412s] phase=J-portal         samples=45 gt=  632.0 stalls=0
+  [1432s] phase=K-death-2        samples=46 gt=  647.0 stalls=0
+  [1452s] phase=L-realm-sand     samples=46 gt=  647.0 stalls=0
+  [1475s] phase=L-realm-sand     samples=47 gt=  662.0 stalls=0
+  [1495s] phase=L-realm-sand     samples=47 gt=  662.0 stalls=0
+  [1515s] phase=L-realm-sand     samples=48 gt=  677.1 stalls=0
+  [1535s] phase=L-realm-sand     samples=48 gt=  677.1 stalls=0
+  [1555s] phase=L-realm-sand     samples=49 gt=  692.2 stalls=0
+  [1575s] phase=L-realm-sand     samples=49 gt=  692.2 stalls=0
+  [1595s] phase=L-realm-sand     samples=50 gt=  707.2 stalls=0
+  [1615s] phase=M-realm-ash      samples=51 gt=  722.3 stalls=0
+  [1635s] phase=M-realm-ash      samples=51 gt=  722.3 stalls=0
+  [1655s] phase=M-realm-ash      samples=52 gt=  737.3 stalls=0
+  [1675s] phase=M-realm-ash      samples=53 gt=  752.4 stalls=0
+  [1695s] phase=M-realm-ash      samples=53 gt=  752.4 stalls=0
+  [1715s] phase=N-shrine-idle    samples=54 gt=  767.4 stalls=0
+  [1735s] phase=N-shrine-idle    samples=55 gt=  782.5 stalls=0
+  [1755s] phase=N-shrine-idle    samples=56 gt=  797.5 stalls=0
+  [1775s] phase=N-shrine-idle    samples=56 gt=  797.5 stalls=0
+  [1795s] phase=N-shrine-idle    samples=57 gt=  812.5 stalls=0
+  [1815s] phase=N-shrine-idle    samples=58 gt=  827.5 stalls=0

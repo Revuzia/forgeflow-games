@@ -39,7 +39,18 @@ CAST_ALL = """() => new Promise((res) => {
             const before = SF.spells._lastCast;
             SF.spells.cast(k);
             fired[k] = SF.spells._lastCast !== before;
-            setTimeout(step, 380);
+            // GAME-time spacing, and longer than both the slowest strike
+            // delay (~0.95 s) and the arc's 1.5 s cooldown: a 380 ms wall
+            // gap let the previous cast still occupy the pending slot, so
+            // keys 4 and 7 intermittently read as "did not fire" when the
+            // real cause was the probe casting on top of itself.
+            const reg = SF.combat.registry;
+            const t1 = reg.time;
+            const wait = () => {
+                if (reg.time - t1 >= 1.8) { step(); return; }
+                requestAnimationFrame(wait);
+            };
+            wait();
             return;
         }
         res({ fired: fired, level: SF.progression.level });

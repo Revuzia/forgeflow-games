@@ -93,6 +93,10 @@ const LAND_REF = 7.0;
  */
 const SURF_MAX = 13.65;
 const SURF_THRUST = 11.0;
+/** Minimum forward drive of a carve the player is actively driving, m/s^2.
+ *  Above the ~0.9 m/s^2 low-speed drag term so a carve can always crawl out
+ *  of an adverse grade, far below SURF_THRUST so the grade still bites. */
+const SURF_THRUST_FLOOR = 3.0;
 const SURF_DRAG = 0.42;
 const SURF_TURN = 2.35; // rad/s at full steer
 const SURF_GRIP = 7.5;  // 1/s lateral velocity kill rate
@@ -443,7 +447,22 @@ export class CharacterController {
         const slopeAssist = -(_n.x * fx + _n.z * fz) * 26;
 
         let thrust = SURF_THRUST + slopeAssist;
-        if (input.moveZ < 0) thrust -= 14; // pull back to scrub speed
+        if (input.moveZ < 0) {
+            thrust -= 14; // pull back to scrub speed
+        } else if (thrust < SURF_THRUST_FLOOR) {
+            // A DRIVEN carve always keeps some forward authority. Without this
+            // floor an adverse grade steep enough that `slopeAssist` beats
+            // SURF_THRUST leaves the summed drive negative every frame, the
+            // never-reverse clamp below zeroes it every frame, and the carve
+            // locks at EXACTLY 0 — unable to start at all. That is not a
+            // theoretical case: measured 2026-08-20, a surf held from the
+            // spawn shrine covered 128.6 m in Cold and 115.1 m in Ash but
+            // 0.0 m in SAND, whose dune field is steeper. The floor turns
+            // "impossible" into "a crawl": well under the 11.0 baseline, so a
+            // steep face still reads as heavy, and only ever applied while the
+            // player is driving forward.
+            thrust = SURF_THRUST_FLOOR;
+        }
 
         this.velocity.x += fx * thrust * h;
         this.velocity.z += fz * thrust * h;

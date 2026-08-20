@@ -1,0 +1,1646 @@
+{
+ "B realm-change mid-fight": {
+  "live": {
+   "regCount": 3,
+   "regBoss": 1,
+   "regEnemy": 2,
+   "state": "live",
+   "kind": "mini",
+   "key": "glacierBrute",
+   "id": 3,
+   "hp": 1200,
+   "hpMax": 1200,
+   "hpFrac": 1,
+   "phase": 1,
+   "p2pct": 0.55,
+   "speedBase": 3.2,
+   "speedNow": 3.2,
+   "patN": 2,
+   "patAll": 3,
+   "leashReturns": 0,
+   "regen": 0,
+   "kills": 0,
+   "ev": 1,
+   "killed": {},
+   "refusal": null,
+   "portalOpen": false,
+   "arena": [
+    48.9,
+    -47.9
+   ],
+   "arenaGrade": 0.2226,
+   "arenaDist": 0,
+   "realmDir": "cold",
+   "bossLive": true,
+   "portal": {
+    "open": false,
+    "token": null,
+    "entered": false,
+    "x": 0,
+    "z": 0,
+    "y": 0,
+    "grow": 0,
+    "tintAmt": 0.55,
+    "tint": [
+     1,
+     1,
+     1
+    ],
+    "enterM": 2.5,
+    "prisms": 12
+   },
+   "hooks": {
+    "xp": [],
+    "p2": 0,
+    "leash": 0,
+    "death": 0
+   },
+   "playerHp": 54,
+   "dead": false,
+   "deaths": 0
+  },
+  "oldBossId": 3,
+  "oldSlotAfter": -1,
+  "leakedBossBodies": 0,
+  "leakedNames": [],
+  "after": {
+   "regCount": 0,
+   "regBoss": 0,
+   "regEnemy": 0,
+   "state": "idle",
+   "kind": null,
+   "key": null,
+   "id": -1,
+   "hp": 0,
+   "hpMax": 0,
+   "hpFrac": 0,
+   "phase": 1,
+   "p2pct": 0.55,
+   "speedBase": 3.2,
+   "speedNow": 0,
+   "patN": 0,
+   "patAll": 3,
+   "leashReturns": 0,
+   "regen": 0,
+   "kills": 0,
+   "ev": 1,
+   "killed": {},
+   "refusal": null,
+   "portalOpen": false,
+   "arena": [
+    48.9,
+    -47.9
+   ],
+   "arenaGrade": 0.2226,
+   "arenaDist": 0,
+   "realmDir": "sand",
+   "bossLive": false,
+   "portal": {
+    "open": false,
+    "token": null,
+    "entered": false,
+    "x": 0,
+    "z": 0,
+    "y": 0,
+    "grow": 0,
+    "tintAmt": 0.55,
+    "tint": [
+     1,
+     1,
+     1
+    ],
+    "enterM": 2.5,
+    "prisms": 12
+   },
+   "hooks": {
+    "xp": [],
+    "p2": 0,
+    "leash": 0,
+    "death": 0
+   },
+   "playerHp": 54,
+   "dead": false,
+   "deaths": 0
+  }
+ },
+ "CD phase2 + leash regen": {
+  "hpMax": 1815,
+  "phase2Pct": 0.55,
+  "before": {
+   "regCount": 1,
+   "regBoss": 1,
+   "regEnemy": 0,
+   "state": "live",
+   "kind": "mini",
+   "key": "duneBrute",
+   "id": 4,
+   "hp": 1815,
+   "hpMax": 1815,
+   "hpFrac": 1,
+   "phase": 1,
+   "p2pct": 0.55,
+   "speedBase": 2.2,
+   "speedNow": 2.2,
+   "patN": 2,
+   "patAll": 4,
+   "leashReturns": 0,
+   "regen": 0,
+   "kills": 0,
+   "ev": 2,
+   "killed": {},
+   "refusal": null,
+   "portalOpen": false,
+   "arena": [
+    -62,
+    -56.8
+   ],
+   "arenaGrade": 0.1706,
+   "arenaDist": 0,
+   "realmDir": "sand",
+   "bossLive": true,
+   "portal": {
+    "open": false,
+    "token": null,
+    "entered": false,
+    "x": 0,
+    "z": 0,
+    "y": 0,
+    "grow": 0,
+    "tintAmt": 0.55,
+    "tint": [
+     1,
+     1,
+     1
+    ],
+    "enterM": 2.5,
+    "prisms": 12
+   },
+   "hooks": {
+    "xp": [],
+    "p2": 0,
+    "leash": 0,
+    "death": 0
+   },
+   "playerHp": 54,
+   "dead": false,
+   "deaths": 0
+  },
+  "trace": [
+   [
+    0.99,
+    1,
+    0
+   ],
+   [
+    0.98,
+    1,
+    0
+   ],
+   [
+    0.97,
+    1,
+    0
+   ],
+   [
+    0.96,
+    1,
+    0
+   ],
+   [
+    0.95,
+    1,
+    0
+   ],
+   [
+    0.94,
+    1,
+    0
+   ],
+   [
+    0.93,
+    1,
+    0
+   ],
+   [
+    0.92,
+    1,
+    0
+   ],
+   [
+    0.91,
+    1,
+    0
+   ],
+   [
+    0.9,
+    1,
+    0
+   ],
+   [
+    0.89,
+    1,
+    0
+   ],
+   [
+    0.88,
+    1,
+    0
+   ],
+   [
+    0.87,
+    1,
+    0
+   ],
+   [
+    0.86,
+    1,
+    0
+   ],
+   [
+    0.85,
+    1,
+    0
+   ],
+   [
+    0.84,
+    1,
+    0
+   ],
+   [
+    0.83,
+    1,
+    0
+   ],
+   [
+    0.82,
+    1,
+    0
+   ],
+   [
+    0.81,
+    1,
+    0
+   ],
+   [
+    0.8,
+    1,
+    0
+   ],
+   [
+    0.79,
+    1,
+    0
+   ],
+   [
+    0.78,
+    1,
+    0
+   ],
+   [
+    0.77,
+    1,
+    0
+   ],
+   [
+    0.76,
+    1,
+    0
+   ],
+   [
+    0.75,
+    1,
+    0
+   ],
+   [
+    0.74,
+    1,
+    0
+   ],
+   [
+    0.73,
+    1,
+    0
+   ],
+   [
+    0.72,
+    1,
+    0
+   ],
+   [
+    0.71,
+    1,
+    0
+   ],
+   [
+    0.7,
+    1,
+    0
+   ],
+   [
+    0.69,
+    1,
+    0
+   ],
+   [
+    0.68,
+    1,
+    0
+   ],
+   [
+    0.67,
+    1,
+    0
+   ],
+   [
+    0.66,
+    1,
+    0
+   ],
+   [
+    0.65,
+    1,
+    0
+   ],
+   [
+    0.64,
+    1,
+    0
+   ],
+   [
+    0.63,
+    1,
+    0
+   ],
+   [
+    0.62,
+    1,
+    0
+   ],
+   [
+    0.61,
+    1,
+    0
+   ],
+   [
+    0.6,
+    1,
+    0
+   ],
+   [
+    0.59,
+    1,
+    0
+   ],
+   [
+    0.58,
+    1,
+    0
+   ],
+   [
+    0.57,
+    1,
+    0
+   ],
+   [
+    0.56,
+    1,
+    0
+   ],
+   [
+    0.55,
+    2,
+    1
+   ],
+   [
+    0.54,
+    2,
+    1
+   ],
+   [
+    0.53,
+    2,
+    1
+   ],
+   [
+    0.52,
+    2,
+    1
+   ],
+   [
+    0.51,
+    2,
+    1
+   ],
+   [
+    0.5,
+    2,
+    1
+   ],
+   [
+    0.49,
+    2,
+    1
+   ],
+   [
+    0.48,
+    2,
+    1
+   ],
+   [
+    0.47,
+    2,
+    1
+   ],
+   [
+    0.46,
+    2,
+    1
+   ],
+   [
+    0.45,
+    2,
+    1
+   ],
+   [
+    0.44,
+    2,
+    1
+   ],
+   [
+    0.43,
+    2,
+    1
+   ],
+   [
+    0.42,
+    2,
+    1
+   ],
+   [
+    0.41,
+    2,
+    1
+   ],
+   [
+    0.4,
+    2,
+    1
+   ]
+  ],
+  "afterChip": {
+   "regCount": 4,
+   "regBoss": 1,
+   "regEnemy": 3,
+   "state": "live",
+   "kind": "mini",
+   "key": "duneBrute",
+   "id": 4,
+   "hp": 726,
+   "hpMax": 1815,
+   "hpFrac": 0.4,
+   "phase": 2,
+   "p2pct": 0.55,
+   "speedBase": 2.2,
+   "speedNow": 2.53,
+   "patN": 4,
+   "patAll": 4,
+   "leashReturns": 0,
+   "regen": 0,
+   "kills": 0,
+   "ev": 2,
+   "killed": {},
+   "refusal": null,
+   "portalOpen": false,
+   "arena": [
+    -62,
+    -56.8
+   ],
+   "arenaGrade": 0.1706,
+   "arenaDist": 13.3,
+   "realmDir": "sand",
+   "bossLive": true,
+   "portal": {
+    "open": false,
+    "token": null,
+    "entered": false,
+    "x": 0,
+    "z": 0,
+    "y": 0,
+    "grow": 0,
+    "tintAmt": 0.55,
+    "tint": [
+     1,
+     1,
+     1
+    ],
+    "enterM": 2.5,
+    "prisms": 12
+   },
+   "hooks": {
+    "xp": [],
+    "p2": 1,
+    "leash": 0,
+    "death": 0
+   },
+   "playerHp": 54,
+   "dead": false,
+   "deaths": 0
+  },
+  "afterLeash": {
+   "regCount": 4,
+   "regBoss": 1,
+   "regEnemy": 3,
+   "state": "live",
+   "kind": "mini",
+   "key": "duneBrute",
+   "id": 8,
+   "hp": 1089,
+   "hpMax": 1815,
+   "hpFrac": 0.6,
+   "phase": 2,
+   "p2pct": 0.55,
+   "speedBase": 2.2,
+   "speedNow": 2.53,
+   "patN": 4,
+   "patAll": 4,
+   "leashReturns": 1,
+   "regen": 0.2,
+   "kills": 0,
+   "ev": 2,
+   "killed": {},
+   "refusal": null,
+   "portalOpen": false,
+   "arena": [
+    138,
+    -56.8
+   ],
+   "arenaGrade": 0.1706,
+   "arenaDist": 0,
+   "realmDir": "sand",
+   "bossLive": true,
+   "portal": {
+    "open": false,
+    "token": null,
+    "entered": false,
+    "x": 0,
+    "z": 0,
+    "y": 0,
+    "grow": 0,
+    "tintAmt": 0.55,
+    "tint": [
+     1,
+     1,
+     1
+    ],
+    "enterM": 2.5,
+    "prisms": 12
+   },
+   "hooks": {
+    "xp": [],
+    "p2": 1,
+    "leash": 1,
+    "death": 0
+   },
+   "playerHp": 54,
+   "dead": false,
+   "deaths": 0
+  },
+  "afterHeal": {
+   "regCount": 4,
+   "regBoss": 1,
+   "regEnemy": 3,
+   "state": "live",
+   "kind": "mini",
+   "key": "duneBrute",
+   "id": 8,
+   "hp": 1815,
+   "hpMax": 1815,
+   "hpFrac": 1,
+   "phase": 2,
+   "p2pct": 0.55,
+   "speedBase": 2.2,
+   "speedNow": 2.53,
+   "patN": 4,
+   "patAll": 4,
+   "leashReturns": 1,
+   "regen": 0.2,
+   "kills": 0,
+   "ev": 2,
+   "killed": {},
+   "refusal": null,
+   "portalOpen": false,
+   "arena": [
+    138,
+    -56.8
+   ],
+   "arenaGrade": 0.1706,
+   "arenaDist": 0,
+   "realmDir": "sand",
+   "bossLive": true,
+   "portal": {
+    "open": false,
+    "token": null,
+    "entered": false,
+    "x": 0,
+    "z": 0,
+    "y": 0,
+    "grow": 0,
+    "tintAmt": 0.55,
+    "tint": [
+     1,
+     1,
+     1
+    ],
+    "enterM": 2.5,
+    "prisms": 12
+   },
+   "hooks": {
+    "xp": [],
+    "p2": 1,
+    "leash": 1,
+    "death": 0
+   },
+   "playerHp": 54,
+   "dead": false,
+   "deaths": 0
+  },
+  "p2calls": 1,
+  "leashCalls": 1
+ },
+ "E leash ratchet": {
+  "hpMax": 1815,
+  "hpFracPerLeash": [
+   0.05,
+   0.25,
+   0.45,
+   0.65,
+   0.85,
+   1,
+   1
+  ],
+  "leashReturns": 7,
+  "snap": {
+   "regCount": 6,
+   "regBoss": 1,
+   "regEnemy": 5,
+   "state": "live",
+   "kind": "mini",
+   "key": "duneBrute",
+   "id": 17,
+   "hp": 1815,
+   "hpMax": 1815,
+   "hpFrac": 1,
+   "phase": 2,
+   "p2pct": 0.55,
+   "speedBase": 2.2,
+   "speedNow": 2.53,
+   "patN": 4,
+   "patAll": 4,
+   "leashReturns": 7,
+   "regen": 0,
+   "kills": 0,
+   "ev": 3,
+   "killed": {},
+   "refusal": null,
+   "portalOpen": false,
+   "arena": [
+    -236.1,
+    -58.7
+   ],
+   "arenaGrade": 0.1182,
+   "arenaDist": 0,
+   "realmDir": "sand",
+   "bossLive": true,
+   "portal": {
+    "open": false,
+    "token": null,
+    "entered": false,
+    "x": 0,
+    "z": 0,
+    "y": 0,
+    "grow": 0,
+    "tintAmt": 0.55,
+    "tint": [
+     1,
+     1,
+     1
+    ],
+    "enterM": 2.5,
+    "prisms": 12
+   },
+   "hooks": {
+    "xp": [],
+    "p2": 2,
+    "leash": 7,
+    "death": 0
+   },
+   "playerHp": 54,
+   "dead": false,
+   "deaths": 0
+  }
+ },
+ "F rim kill / portal placement": {
+  "playRadius": 620,
+  "edgeAtPlayer": 0.984,
+  "arenaR": 550.1,
+  "arenaSlope": 0.0576,
+  "arenaGrade": 0.1377,
+  "portalR": 550.1,
+  "portalEdge01": 0.044,
+  "portalY": 6.3,
+  "refusal": null,
+  "live": {
+   "regCount": 1,
+   "regBoss": 1,
+   "regEnemy": 0,
+   "state": "live",
+   "kind": "realm",
+   "key": "duneWarden",
+   "id": 18,
+   "hp": 6225,
+   "hpMax": 6225,
+   "hpFrac": 1,
+   "phase": 1,
+   "p2pct": 0.7,
+   "speedBase": 4.8,
+   "speedNow": 4.8,
+   "patN": 2,
+   "patAll": 3,
+   "leashReturns": 7,
+   "regen": 0,
+   "kills": 0,
+   "ev": 4,
+   "killed": {},
+   "refusal": null,
+   "portalOpen": false,
+   "arena": [
+    548.7,
+    -38.7
+   ],
+   "arenaGrade": 0.1377,
+   "arenaDist": 0,
+   "realmDir": "sand",
+   "bossLive": true,
+   "portal": {
+    "open": false,
+    "token": null,
+    "entered": false,
+    "x": 0,
+    "z": 0,
+    "y": 0,
+    "grow": 0,
+    "tintAmt": 0.55,
+    "tint": [
+     1,
+     1,
+     1
+    ],
+    "enterM": 2.5,
+    "prisms": 12
+   },
+   "hooks": {
+    "xp": [
+     [
+      18,
+      "boss-first"
+     ]
+    ],
+    "p2": 2,
+    "leash": 7,
+    "death": 0
+   },
+   "playerHp": 54,
+   "dead": false,
+   "deaths": 0
+  },
+  "after": {
+   "regCount": 2,
+   "regBoss": 1,
+   "regEnemy": 1,
+   "state": "idle",
+   "kind": null,
+   "key": null,
+   "id": -1,
+   "hp": 0,
+   "hpMax": 0,
+   "hpFrac": 0,
+   "phase": 1,
+   "p2pct": 0.7,
+   "speedBase": 4.8,
+   "speedNow": 0,
+   "patN": 0,
+   "patAll": 3,
+   "leashReturns": 7,
+   "regen": 0,
+   "kills": 1,
+   "ev": 4,
+   "killed": {
+    "sand:realm": true
+   },
+   "refusal": null,
+   "portalOpen": true,
+   "arena": [
+    548.7,
+    -38.7
+   ],
+   "arenaGrade": 0.1377,
+   "arenaDist": 0,
+   "realmDir": "sand",
+   "bossLive": false,
+   "portal": {
+    "open": true,
+    "token": "ash",
+    "entered": false,
+    "x": 548.7288497463855,
+    "z": -38.71588899884478,
+    "y": 6.298126270284406,
+    "grow": 0.253125,
+    "tintAmt": 0.6827660121175992,
+    "tint": [
+     3.3604331018883316,
+     1.0081299305664995,
+     0.20162598611329988
+    ],
+    "enterM": 2.5,
+    "prisms": 12
+   },
+   "hooks": {
+    "xp": [
+     [
+      18,
+      "boss-first"
+     ]
+    ],
+    "p2": 2,
+    "leash": 7,
+    "death": 1
+   },
+   "playerHp": 54,
+   "dead": false,
+   "deaths": 0
+  }
+ },
+ "G double-pay": [
+  {
+   "pass": 0,
+   "ok": true,
+   "id": 20,
+   "xp": [
+    [
+     10,
+     "kill"
+    ]
+   ],
+   "lvlBefore": 1,
+   "xpBefore": 18,
+   "lvlAfter": 1,
+   "xpAfter": 28,
+   "kills": 2,
+   "portalOpen": true,
+   "killed": {
+    "sand:realm": true
+   }
+  },
+  {
+   "pass": 1,
+   "ok": true,
+   "id": 25,
+   "xp": [
+    [
+     10,
+     "kill"
+    ]
+   ],
+   "lvlBefore": 1,
+   "xpBefore": 28,
+   "lvlAfter": 1,
+   "xpAfter": 38,
+   "kills": 3,
+   "portalOpen": true,
+   "killed": {
+    "sand:realm": true
+   }
+  }
+ ],
+ "H packs during boss": {
+  "rows": [
+   {
+    "t": 27.1,
+    "enemies": 2,
+    "bosses": 1,
+    "bossLive": true,
+    "slots": [
+     {
+      "a": true,
+      "n": "Shroud Hunt",
+      "live": 1,
+      "dead": 4
+     },
+     {
+      "a": true,
+      "n": "Bandit Doctrine",
+      "live": 1,
+      "dead": 3
+     }
+    ]
+   },
+   {
+    "t": 35.1,
+    "enemies": 2,
+    "bosses": 1,
+    "bossLive": true,
+    "slots": [
+     {
+      "a": true,
+      "n": "Shroud Hunt",
+      "live": 1,
+      "dead": 4
+     },
+     {
+      "a": true,
+      "n": "Bandit Doctrine",
+      "live": 1,
+      "dead": 3
+     }
+    ]
+   },
+   {
+    "t": 43.1,
+    "enemies": 2,
+    "bosses": 1,
+    "bossLive": true,
+    "slots": [
+     {
+      "a": true,
+      "n": "Shroud Hunt",
+      "live": 1,
+      "dead": 4
+     },
+     {
+      "a": true,
+      "n": "Bandit Doctrine",
+      "live": 1,
+      "dead": 3
+     }
+    ]
+   },
+   {
+    "t": 51.1,
+    "enemies": 2,
+    "bosses": 1,
+    "bossLive": true,
+    "slots": [
+     {
+      "a": true,
+      "n": "Shroud Hunt",
+      "live": 1,
+      "dead": 4
+     },
+     {
+      "a": true,
+      "n": "Bandit Doctrine",
+      "live": 1,
+      "dead": 3
+     }
+    ]
+   },
+   {
+    "t": 59.1,
+    "enemies": 2,
+    "bosses": 1,
+    "bossLive": true,
+    "slots": [
+     {
+      "a": true,
+      "n": "Shroud Hunt",
+      "live": 1,
+      "dead": 4
+     },
+     {
+      "a": true,
+      "n": "Bandit Doctrine",
+      "live": 1,
+      "dead": 3
+     }
+    ]
+   },
+   {
+    "t": 67.2,
+    "enemies": 2,
+    "bosses": 1,
+    "bossLive": true,
+    "slots": [
+     {
+      "a": true,
+      "n": "Shroud Hunt",
+      "live": 1,
+      "dead": 4
+     },
+     {
+      "a": true,
+      "n": "Bandit Doctrine",
+      "live": 1,
+      "dead": 3
+     }
+    ]
+   },
+   {
+    "t": 75.2,
+    "enemies": 2,
+    "bosses": 1,
+    "bossLive": true,
+    "slots": [
+     {
+      "a": true,
+      "n": "Shroud Hunt",
+      "live": 1,
+      "dead": 4
+     },
+     {
+      "a": true,
+      "n": "Bandit Doctrine",
+      "live": 1,
+      "dead": 3
+     }
+    ]
+   },
+   {
+    "t": 83.2,
+    "enemies": 2,
+    "bosses": 1,
+    "bossLive": true,
+    "slots": [
+     {
+      "a": true,
+      "n": "Shroud Hunt",
+      "live": 1,
+      "dead": 4
+     },
+     {
+      "a": true,
+      "n": "Bandit Doctrine",
+      "live": 1,
+      "dead": 3
+     }
+    ]
+   }
+  ],
+  "snap": {
+   "regCount": 3,
+   "regBoss": 1,
+   "regEnemy": 2,
+   "state": "live",
+   "kind": "mini",
+   "key": "duneBrute",
+   "id": 31,
+   "hp": 1815,
+   "hpMax": 1815,
+   "hpFrac": 1,
+   "phase": 1,
+   "p2pct": 0.55,
+   "speedBase": 2.2,
+   "speedNow": 2.2,
+   "patN": 2,
+   "patAll": 4,
+   "leashReturns": 7,
+   "regen": 0,
+   "kills": 3,
+   "ev": 7,
+   "killed": {
+    "sand:realm": true
+   },
+   "refusal": null,
+   "portalOpen": false,
+   "arena": [
+    -74.9,
+    -35.3
+   ],
+   "arenaGrade": 0.1265,
+   "arenaDist": 0,
+   "realmDir": "sand",
+   "bossLive": true,
+   "portal": {
+    "open": false,
+    "token": null,
+    "entered": false,
+    "x": 2.555276055517596,
+    "z": -66.2354620982906,
+    "y": 10.095373247014809,
+    "grow": 1,
+    "tintAmt": 0.47736152004167276,
+    "tint": [
+     3.3604331018883316,
+     1.0081299305664995,
+     0.20162598611329988
+    ],
+    "enterM": 2.5,
+    "prisms": 12
+   },
+   "hooks": {
+    "xp": [
+     [
+      10,
+      "kill"
+     ]
+    ],
+    "p2": 2,
+    "leash": 7,
+    "death": 3
+   },
+   "playerHp": 54,
+   "dead": false,
+   "deaths": 0
+  }
+ },
+ "I player dies mid-fight": {
+  "before": {
+   "regCount": 3,
+   "regBoss": 1,
+   "regEnemy": 2,
+   "state": "live",
+   "kind": "mini",
+   "key": "duneBrute",
+   "id": 34,
+   "hp": 1815,
+   "hpMax": 1815,
+   "hpFrac": 1,
+   "phase": 1,
+   "p2pct": 0.55,
+   "speedBase": 2.2,
+   "speedNow": 2.2,
+   "patN": 2,
+   "patAll": 4,
+   "leashReturns": 7,
+   "regen": 0,
+   "kills": 3,
+   "ev": 8,
+   "killed": {
+    "sand:realm": true
+   },
+   "refusal": null,
+   "portalOpen": false,
+   "arena": [
+    -61.6,
+    -53.9
+   ],
+   "arenaGrade": 0.0923,
+   "arenaDist": 0,
+   "realmDir": "sand",
+   "bossLive": true,
+   "portal": {
+    "open": false,
+    "token": null,
+    "entered": false,
+    "x": 2.555276055517596,
+    "z": -66.2354620982906,
+    "y": 10.095373247014809,
+    "grow": 1,
+    "tintAmt": 0.47736152004167276,
+    "tint": [
+     3.3604331018883316,
+     1.0081299305664995,
+     0.20162598611329988
+    ],
+    "enterM": 2.5,
+    "prisms": 12
+   },
+   "hooks": {
+    "xp": [
+     [
+      10,
+      "kill"
+     ],
+     [
+      10,
+      "boss-first"
+     ]
+    ],
+    "p2": 2,
+    "leash": 7,
+    "death": 3
+   },
+   "playerHp": 54,
+   "dead": false,
+   "deaths": 0
+  },
+  "dying": {
+   "regCount": 3,
+   "regBoss": 1,
+   "regEnemy": 2,
+   "state": "live",
+   "kind": "mini",
+   "key": "duneBrute",
+   "id": 34,
+   "hp": 1815,
+   "hpMax": 1815,
+   "hpFrac": 1,
+   "phase": 1,
+   "p2pct": 0.55,
+   "speedBase": 2.2,
+   "speedNow": 2.2,
+   "patN": 2,
+   "patAll": 4,
+   "leashReturns": 7,
+   "regen": 0,
+   "kills": 3,
+   "ev": 8,
+   "killed": {
+    "sand:realm": true
+   },
+   "refusal": null,
+   "portalOpen": false,
+   "arena": [
+    -61.6,
+    -53.9
+   ],
+   "arenaGrade": 0.0923,
+   "arenaDist": 0,
+   "realmDir": "sand",
+   "bossLive": true,
+   "portal": {
+    "open": false,
+    "token": null,
+    "entered": false,
+    "x": 2.555276055517596,
+    "z": -66.2354620982906,
+    "y": 10.095373247014809,
+    "grow": 1,
+    "tintAmt": 0.47736152004167276,
+    "tint": [
+     3.3604331018883316,
+     1.0081299305664995,
+     0.20162598611329988
+    ],
+    "enterM": 2.5,
+    "prisms": 12
+   },
+   "hooks": {
+    "xp": [
+     [
+      10,
+      "kill"
+     ],
+     [
+      10,
+      "boss-first"
+     ]
+    ],
+    "p2": 2,
+    "leash": 7,
+    "death": 3
+   },
+   "playerHp": 0,
+   "dead": true,
+   "deaths": 1
+  },
+  "dealt": 1000000000,
+  "killedWhileDying": {
+   "regCount": 3,
+   "regBoss": 1,
+   "regEnemy": 2,
+   "state": "idle",
+   "kind": null,
+   "key": null,
+   "id": -1,
+   "hp": 0,
+   "hpMax": 0,
+   "hpFrac": 0,
+   "phase": 1,
+   "p2pct": 0.55,
+   "speedBase": 2.2,
+   "speedNow": 0,
+   "patN": 0,
+   "patAll": 4,
+   "leashReturns": 7,
+   "regen": 0,
+   "kills": 4,
+   "ev": 8,
+   "killed": {
+    "sand:realm": true,
+    "sand:mini": true
+   },
+   "refusal": null,
+   "portalOpen": false,
+   "arena": [
+    -61.6,
+    -53.9
+   ],
+   "arenaGrade": 0.0923,
+   "arenaDist": 0,
+   "realmDir": "sand",
+   "bossLive": false,
+   "portal": {
+    "open": false,
+    "token": null,
+    "entered": false,
+    "x": 2.555276055517596,
+    "z": -66.2354620982906,
+    "y": 10.095373247014809,
+    "grow": 1,
+    "tintAmt": 0.47736152004167276,
+    "tint": [
+     3.3604331018883316,
+     1.0081299305664995,
+     0.20162598611329988
+    ],
+    "enterM": 2.5,
+    "prisms": 12
+   },
+   "hooks": {
+    "xp": [
+     [
+      10,
+      "kill"
+     ],
+     [
+      10,
+      "boss-first"
+     ]
+    ],
+    "p2": 2,
+    "leash": 7,
+    "death": 4
+   },
+   "playerHp": 0,
+   "dead": true,
+   "deaths": 1
+  },
+  "after": {
+   "regCount": 2,
+   "regBoss": 0,
+   "regEnemy": 2,
+   "state": "idle",
+   "kind": null,
+   "key": null,
+   "id": -1,
+   "hp": 0,
+   "hpMax": 0,
+   "hpFrac": 0,
+   "phase": 1,
+   "p2pct": 0.55,
+   "speedBase": 2.2,
+   "speedNow": 0,
+   "patN": 0,
+   "patAll": 4,
+   "leashReturns": 7,
+   "regen": 0,
+   "kills": 4,
+   "ev": 8,
+   "killed": {
+    "sand:realm": true,
+    "sand:mini": true
+   },
+   "refusal": null,
+   "portalOpen": false,
+   "arena": [
+    -61.6,
+    -53.9
+   ],
+   "arenaGrade": 0.0923,
+   "arenaDist": 0,
+   "realmDir": "sand",
+   "bossLive": false,
+   "portal": {
+    "open": false,
+    "token": null,
+    "entered": false,
+    "x": 2.555276055517596,
+    "z": -66.2354620982906,
+    "y": 10.095373247014809,
+    "grow": 1,
+    "tintAmt": 0.47736152004167276,
+    "tint": [
+     3.3604331018883316,
+     1.0081299305664995,
+     0.20162598611329988
+    ],
+    "enterM": 2.5,
+    "prisms": 12
+   },
+   "hooks": {
+    "xp": [
+     [
+      10,
+      "kill"
+     ],
+     [
+      10,
+      "boss-first"
+     ]
+    ],
+    "p2": 2,
+    "leash": 7,
+    "death": 4
+   },
+   "playerHp": 54,
+   "dead": false,
+   "deaths": 1
+  },
+  "hooks": {
+   "xp": [
+    [
+     10,
+     "kill"
+    ],
+    [
+     10,
+     "boss-first"
+    ]
+   ],
+   "p2": 2,
+   "leash": 7,
+   "death": 4
+  }
+ },
+ "J natural arming": [
+  {
+   "t": 90.4,
+   "state": "idle",
+   "kind": null,
+   "key": null,
+   "id": -1,
+   "refusal": null,
+   "arena": [
+    -61.6,
+    -53.9
+   ],
+   "dPlayer": 81.9
+  },
+  {
+   "t": 92.4,
+   "state": "pending",
+   "kind": "mini",
+   "key": "duneBrute",
+   "id": -1,
+   "refusal": null,
+   "arena": [
+    -85.8,
+    -23
+   ],
+   "dPlayer": 88.8
+  },
+  {
+   "t": 94.5,
+   "state": "pending",
+   "kind": "mini",
+   "key": "duneBrute",
+   "id": -1,
+   "refusal": null,
+   "arena": [
+    -85.8,
+    -23
+   ],
+   "dPlayer": 88.8
+  },
+  {
+   "t": 96.6,
+   "state": "pending",
+   "kind": "mini",
+   "key": "duneBrute",
+   "id": -1,
+   "refusal": null,
+   "arena": [
+    -85.8,
+    -23
+   ],
+   "dPlayer": 88.8
+  },
+  {
+   "t": 98.6,
+   "state": "live",
+   "kind": "mini",
+   "key": "duneBrute",
+   "id": 35,
+   "refusal": null,
+   "arena": [
+    -85.8,
+    -23
+   ],
+   "dPlayer": 0
+  },
+  {
+   "t": 100.6,
+   "state": "live",
+   "kind": "mini",
+   "key": "duneBrute",
+   "id": 35,
+   "refusal": null,
+   "arena": [
+    -85.8,
+    -23
+   ],
+   "dPlayer": 0
+  },
+  {
+   "t": 102.7,
+   "state": "live",
+   "kind": "mini",
+   "key": "duneBrute",
+   "id": 35,
+   "refusal": null,
+   "arena": [
+    -85.8,
+    -23
+   ],
+   "dPlayer": 0
+  },
+  {
+   "t": 104.8,
+   "state": "live",
+   "kind": "mini",
+   "key": "duneBrute",
+   "id": 35,
+   "refusal": null,
+   "arena": [
+    -85.8,
+    -23
+   ],
+   "dPlayer": 0
+  },
+  {
+   "t": 106.8,
+   "state": "live",
+   "kind": "mini",
+   "key": "duneBrute",
+   "id": 35,
+   "refusal": null,
+   "arena": [
+    -85.8,
+    -23
+   ],
+   "dPlayer": 95.2
+  },
+  {
+   "t": 108.9,
+   "state": "live",
+   "kind": "mini",
+   "key": "duneBrute",
+   "id": 35,
+   "refusal": null,
+   "arena": [
+    -85.8,
+    -23
+   ],
+   "dPlayer": 95.2
+  },
+  {
+   "t": 111,
+   "state": "live",
+   "kind": "mini",
+   "key": "duneBrute",
+   "id": 35,
+   "refusal": null,
+   "arena": [
+    -85.8,
+    -23
+   ],
+   "dPlayer": 95.2
+  },
+  {
+   "t": 113.1,
+   "state": "live",
+   "kind": "mini",
+   "key": "duneBrute",
+   "id": 35,
+   "refusal": null,
+   "arena": [
+    -85.8,
+    -23
+   ],
+   "dPlayer": 95.2
+  },
+  {
+   "t": 115.1,
+   "state": "live",
+   "kind": "mini",
+   "key": "duneBrute",
+   "id": 35,
+   "refusal": null,
+   "arena": [
+    -85.8,
+    -23
+   ],
+   "dPlayer": 95.2
+  },
+  {
+   "t": 117.2,
+   "state": "live",
+   "kind": "mini",
+   "key": "duneBrute",
+   "id": 35,
+   "refusal": null,
+   "arena": [
+    -85.8,
+    -23
+   ],
+   "dPlayer": 95.2
+  }
+ ],
+ "K newGame bossesKilled": {
+  "isArray": true,
+  "inMemory": {},
+  "savedRaw": "{\"schemaVer\":3,\"level\":1,\"xp\":0,\"driftmarks\":0,\"spellsUnlocked\":[2],\"boons\":[],\"realmsUnlocked\":[\"cold\"],\"bossesKilled\":[],\"lastShrineId\":\"cold_spawn\",\"restedBank\":0,\"lastSeenTs\":1787203615236,\"objectiveState\":{},\"deaths\":0,\"pos\":{\"x\":5,\"z\":5.5,\"facing\":0,\"realm\":\"sand\"}}",
+  "roundTripped": [],
+  "afterLoad": {}
+ }
+}

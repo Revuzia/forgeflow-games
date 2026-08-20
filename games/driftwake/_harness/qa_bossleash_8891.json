@@ -1,0 +1,33 @@
+{
+ "M kill while leashing": {
+  "oldId": 4,
+  "newId": 5,
+  "hpMax": 1200,
+  "hpBeforeLeash": 120,
+  "dealtOnStale": 0,
+  "staleSlotAfter": -1,
+  "newHp": 360,
+  "leashReturns": 1,
+  "state": "live",
+  "kills": 0,
+  "portalOpen": false
+ },
+ "P emergence retry throttle": {
+  "armedId": 8,
+  "pending": {
+   "state": "pending",
+   "arena": [
+    -3.483318473412327,
+    -89.30082394013016
+   ]
+  },
+  "poolFilled": 18,
+  "gameSeconds": 5.07,
+  "rafFrames": 55,
+  "emergeCalls": 0,
+  "enemySpawnCalls": 0,
+  "state": "live",
+  "id": 33,
+  "refusal": null
+ }
+}

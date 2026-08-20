@@ -145,6 +145,11 @@ const WARM_FRAMES = 3;
 
 /** Longest frame the integrator will integrate, ms. A hitch must not teleport. */
 const MAX_FRAME_MS = 100;
+/** Storm-edge deceleration, m/s^2, at full depth into the band. Bounded
+ *  so the scrub never spikes `character.acceleration` (owner
+ *  2026-08-20: the edge must resist, not jolt). */
+const EDGE_DECEL = 45;
+
 
 async function boot() {
     const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById("view"));
@@ -977,7 +982,17 @@ async function boot() {
                 const v = character.velocity;
                 const vOut = v.x * uxo + v.z * uzo;
                 if (vOut > 0) {
-                    const scrub = vOut * e01 * e01;
+                    // A bounded DECELERATION, not an instant cancel. Removing
+                    // the whole outward component in one frame is a ~800 m/s^2
+                    // step in `character.acceleration`, which `figure.js:422`
+                    // (body lean) and `character.js:507` (cloth/fur droop)
+                    // read UNDAMPED — the rider would snap sideways every
+                    // frame at the edge. 45 m/s^2 sits alongside the
+                    // controller's own accelerations: from surf top speed the
+                    // storm stops outward progress in about a third of a
+                    // second and roughly two metres, with no pose artefact.
+                    const cap = EDGE_DECEL * e01 * e01 * dt;
+                    const scrub = vOut < cap ? vOut : cap;
                     character.position.x -= uxo * scrub * dt;
                     character.position.z -= uzo * scrub * dt;
                     v.x -= uxo * scrub;
