@@ -62,10 +62,18 @@ export function makeCasings(env) {
   const geo = new THREE.CylinderGeometry(0.5, 0.46, 1, 8, 1);
   geo.rotateX(Math.PI / 2); // long axis -> Z, matching the (w, w, l) scale
   geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e6);
+  // BRASS THAT CATCHES LIGHT (iter07, D6). metalness 0.85 with no image-based
+  // lighting in the scene means the diffuse term is gone and the only thing
+  // left is a specular lobe from the handful of pooled practicals — on a night
+  // street that is a black cylinder, which is the other half of why 2 of 3
+  // critics reported no brass anywhere. Dropping metalness to 0.45 restores a
+  // diffuse response to the sodium lamps the fight happens under and keeps a
+  // real specular gradient across the eight case-wall facets. NOT emissive:
+  // brass is lit by the scene or it is not lit at all (doctrine §3).
   const mat = new THREE.MeshStandardMaterial({
-    color: 0xb9903f, // brass
-    metalness: 0.85,
-    roughness: 0.34,
+    color: 0xe0b25c, // brass
+    metalness: 0.45,
+    roughness: 0.31,
   });
   const mesh = new THREE.InstancedMesh(geo, mat, N);
   mesh.frustumCulled = false;
@@ -166,9 +174,33 @@ export function makeCasings(env) {
       // The vertical kick is also flattened (was 1.7–2.6 m/s): against the
       // sim's -20 m/s^2 that threw the shell above the frame's top edge before
       // it was ever drawn.
-      vel[i3] = rx * (1.05 + rnd() * 0.7) + dir[0] * (0.45 + rnd() * 0.35);
+      // ---- iter07 (D6 permanence): THE BRASS HAS TO LAND IN THE FRAME -----
+      // MEASURED in the live iter06 S3 pose: every one of the player's ten
+      // settled casings came to rest 2.06-2.20 m from the eye and projected to
+      // screen y 2250-2894 in a 1080-tall frame. Not "hard to see" — 100%
+      // below the bottom edge, every shot, by construction. With the eye 1.62 m
+      // up and a 62 deg vertical FOV, the ground first enters frame at
+      // 1.62/tan(31 deg) = 2.7 m, and further out again whenever the pose looks
+      // up at all (S3 pitches +3 deg, pushing it to 3.05 m). A 1.0-1.8 m/s
+      // lateral kick can never clear that.
+      // Real 5.56 ejection is 3-8 m/s and throws brass 3-5 m; at 4.4-6.6 m/s
+      // the shell's first arc alone covers ~2.5 m and the bounces carry it to
+      // ~3.7-4.2 m, i.e. onto ground the frame contains. It also clears the
+      // 0.70 m near-lens cull in ~0.06 s instead of ~0.2 s, so the tumble is
+      // actually on screen for the airborne half of a C1 beat.
+      // FORWARD is the component that decides whether brass ever lands in a
+      // frame; lateral only decides whether it leaves through the side. The
+      // bottom of the frame meets the ground at 1.62/tan(31 deg) = 2.7 m
+      // DOWN-RANGE, so a shell thrown 4 m sideways and 1 m forward is still
+      // off the bottom-right corner — the first attempt at this fix moved the
+      // settle distance from 2.06 m to 3.3 m and MEASURED the shells still at
+      // screen (2300, 1504) on a 1920x1080 frame, i.e. off two edges at once.
+      // Forward-dominant with a real lateral kick puts the settled brass ~3.5 m
+      // down-range and ~1.6 m right: inside the lower-right of frame, on the
+      // lamp-lit cobbles the last two verdicts asked for it on.
+      vel[i3] = rx * (2.4 + rnd() * 1.2) + dir[0] * (3.8 + rnd() * 1.5);
       vel[i3 + 1] = 1.35 + rnd() * 0.7;
-      vel[i3 + 2] = rz * (1.05 + rnd() * 0.7) + dir[2] * (0.45 + rnd() * 0.35);
+      vel[i3 + 2] = rz * (2.4 + rnd() * 1.2) + dir[2] * (3.8 + rnd() * 1.5);
       eul[i3] = rnd() * Math.PI * 2;
       eul[i3 + 1] = rnd() * Math.PI * 2;
       eul[i3 + 2] = rnd() * Math.PI * 2;

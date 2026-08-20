@@ -197,7 +197,10 @@ export function createFx(ctx) {
       const key = hit.entity == null ? "?" : hit.entity;
       if (!fleshGate(key)) return;
     }
-    impacts.spawn(hit.pos, hit.normal, surf);
+    // d.dir is the shot's launch direction — the only evidence available at
+    // this layer that a hit normal is a fallback rather than a measurement
+    // (decals.js `spawn` header).
+    impacts.spawn(hit.pos, hit.normal, surf, d.dir);
     counters.impacts++;
   }
 
@@ -343,6 +346,7 @@ export function createFx(ctx) {
         muzzle: muzzle.stats(),
         casings: casings.stats(),
         decalsSpawned: decals.spawnedCount(),
+        decalsRejected: decals.rejectedCount(),
         explosions: explosions.stats(),
       };
     },
