@@ -108,8 +108,8 @@ export const WEAPONS = {
       // report — single source; posAds.y = -sightY puts the sight line on
       // the vm camera's center ray BY CONSTRUCTION)
       glb: "assets/weapons/warden.glb",
-      posHip: [0.165, -0.185, -0.34], posAds: [0, -0.126, -0.26],
-      muzzle: [0, 0.064, -0.6834], eject: [0.0432, -0.004, -0.045], sightY: 0.126,
+      posHip: [0.165, -0.185, -0.34], posAds: [0, -0.134, -0.26],
+      muzzle: [0, 0.064, -0.6834], eject: [0.0432, -0.004, -0.045], sightY: 0.134,
       scale: 1,
     },
   },
@@ -133,8 +133,8 @@ export const WEAPONS = {
     penetration: { classes: ["soft"], retain: 0.45, maxThickM: 0.15 },
     view: {
       glb: "assets/weapons/vesper.glb",
-      posHip: [0.155, -0.175, -0.30], posAds: [0, -0.0967, -0.24],
-      muzzle: [0, 0.0417, -0.6094], eject: [0.0282, -0.004, -0.035], sightY: 0.0967,
+      posHip: [0.155, -0.175, -0.30], posAds: [0, -0.0997, -0.24],
+      muzzle: [0, 0.0417, -0.6094], eject: [0.0282, -0.004, -0.035], sightY: 0.0997,
       scale: 1,
     },
   },
@@ -160,8 +160,14 @@ export const WEAPONS = {
     penetration: { classes: ["soft", "metal_thin"], retain: 0.85, maxThickM: 0.40 },
     view: {
       glb: "assets/weapons/corvus.glb",
-      posHip: [0.175, -0.195, -0.40], posAds: [0, -0.103, -0.30],
-      muzzle: [0, 0.025, -0.8635], eject: [0.046, -0.002, -0.10], sightY: 0.103,
+      // W1 (iter05) posAds.z -0.30 -> -0.228: the optic's rear face sits at
+      // +0.088 in the group frame, so this parks the eye 0.14 m behind the
+      // ocular. That distance IS the size of the sight picture (build_scope's
+      // pinhole-cone note) and it is what turns iter04's "more receiver than
+      // scope" ADS frame into a scope frame. Pure Z, so the sight line stays
+      // on the centre ray. sightY re-copied from the A4BUILD report.
+      posHip: [0.175, -0.195, -0.40], posAds: [0, -0.123, -0.228],
+      muzzle: [0, 0.025, -0.8635], eject: [0.046, -0.002, -0.10], sightY: 0.123,
       scale: 1,
     },
   },

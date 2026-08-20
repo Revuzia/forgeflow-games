@@ -179,6 +179,21 @@ export function createFx(ctx) {
     const hit = d.hit;
     const surf = SURFACE_ALIAS[hit.surface] || "concrete";
     if (surf === "flesh") {
+      // THE LOCAL PLAYER IS THE CAMERA — never burst flesh on "P".
+      // ballistics.js:181 sets hit.entity = ah.who, so a bot shooting the
+      // player resolves a flesh hit AT THE PLAYER'S OWN CHEST, i.e. ~0.5 m
+      // from the lens. impacts.flesh() then spawns 8 dark-red 45–90 mm puffs
+      // there, and pools' gl_PointSize = aSize * uProj / d turns each one into
+      // a 140–190 px red disc plastered over the frame. MEASURED in the live
+      // iter05 S3 pose: 8 dust-pool particles at world [-43.7, 1.7, 48.5],
+      // d 0.5–0.7 m, colour (0.26, 0.04, 0.04), 142–189 px each — the "soft
+      // red/pink blobs floating at wall height" in the capture. Hiding
+      // fx.dust + fx.spark removed every one of them and nothing else.
+      // onHurt/onDeath already guard victim === "P" for exactly this reason;
+      // the shot-hit path was the hole. Player damage is answered by the HUD
+      // (VT §6 damage arc + red vignette), never by a world particle at eye
+      // distance.
+      if (hit.entity === "P") return;
       const key = hit.entity == null ? "?" : hit.entity;
       if (!fleshGate(key)) return;
     }

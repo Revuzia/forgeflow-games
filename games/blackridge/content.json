@@ -389,7 +389,8 @@
       "seed": 105, "timeOfDay": "night", "beat": 5, "clockS": 660, "hud": false,
       "_w3": "iter03 composition pass (W3): iter02 pitched only 2 deg above level at fov 50, so the boulevard buildings ate the horizon and the sky was a featureless strip — the ONE thing the frame exists to show. Pitch raised to ~7 deg and fov opened to 62: sky now owns the top two thirds with the horizon event and city-glow band on the skyline, the 78 m lane and its sodium pools recede along the bottom third, and the platform canopy edge anchors the foreground.",
       "camera": { "pos": [38, 6.12, -48], "lookAt": [37, 16, 30], "fov": 62 },
-      "player": { "pos": [38, 4.5, -48], "nearNode": "platform_deck", "weapon": "warden", "lowered": true },
+      "_pose_fix_iter05": "x 38 -> 37.76, z -48 -> -48.07. The authored stand sat inside collider 'pf_nest_front' and setScenario rescued it 0.25 m every take ('SPAWN INSIDE GEOMETRY ... FIX THE POSE in content.json'). These are the rescued coordinates. S5 renders through the authored camera override, so the frame is unchanged.",
+      "player": { "pos": [37.76, 4.5, -48.07], "nearNode": "platform_deck", "weapon": "warden", "lowered": true },
       "bots": [],
       "mustShow": "sky owning the upper two thirds: storm ramp + >=2 parallax cloud layers + sodium-pollution horizon band, harbor/crane silhouettes on the skyline over the canal, boulevard sodium pools receding along the bottom third"
     },
@@ -438,7 +439,8 @@
       "seed": 111, "timeOfDay": "night", "beat": 3, "clockS": 245, "hud": true, "captureSeconds": 6,
       "_w3": "iter03 pass (W3): iter02's run started at (-10,36) on yaw 0 and stopped short of the plaza, so the reload-mid frame was unlit ground with nothing in it and no target for the burst. Start slid W and the heading canted NE so the 3 s tac-sprint lands the stop-and-fire inside the plaza facing the neon wall; two contacts pinned firing at 19 m and 16 m give the burst a subject and put a second muzzle flash in the reload frame. god:true so wave fire cannot end the take mid-script.",
       "camera": { "firstPerson": true },
-      "player": { "pos": [-14, 0, 34], "yaw": -0.55, "weapon": "warden", "god": true },
+      "_pose_fix_iter05": "x -14 -> -13.5. The authored start sat exactly ON the east face of collider bld_s1 (bbox [-41,0,18]..[-14,9,42]), i.e. INSIDE it once the capsule radius is applied, so setScenario's unstickPlayer() rescued every take with 'SPAWN INSIDE GEOMETRY ... FIX THE POSE in content.json' and the capture depended on that rescue. -13.5 is the position the rescue itself resolved to and the position iter05's 18.55 m sprint was actually run from, so the framing is unchanged; only the dependency on the rescue is gone.",
+      "player": { "pos": [-13.5, 0, 34], "yaw": -0.55, "weapon": "warden", "god": true },
       "bots": [
         { "archetype": "rifleman", "pos": [6, 0, 0], "state": "combat", "firing": true },
         { "archetype": "cqb", "pos": [10, 0, 8], "state": "combat", "firing": true }

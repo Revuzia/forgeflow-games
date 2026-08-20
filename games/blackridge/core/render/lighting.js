@@ -40,7 +40,7 @@ const KIND_DEFAULTS = {
   sodium:      { intensity: 46,  distance: 20, penumbra: 0.45, decay: 1.8 },
   // neon_bounce is a CAP, not just a default — see bindOne. 130 (level.js's
   // ask) painted the whole plaza instead of pooling it (iter02 S9).
-  neon_bounce: { intensity: 74,  distance: 30, penumbra: 0.55, decay: 1.8 },
+  neon_bounce: { intensity: 58,  distance: 30, penumbra: 0.55, decay: 1.8 },
   skylight:    { intensity: 38,  distance: 16, penumbra: 0.35, decay: 1.8 },
   flood:       { intensity: 140, distance: 46, penumbra: 0.28, decay: 1.8 },
   default:     { intensity: 40,  distance: 18, penumbra: 0.4,  decay: 1.8 },
@@ -94,9 +94,9 @@ const CONE_OPACITY = { sodium: 0.075, skylight: 0.14, flood: 0.11, default: 0.09
 // VT §1 prescribes the key at "#a8c4e0 region". These are TINTS: each is close
 // enough to unit luminance that `intensity` is the only level knob, which is
 // what makes keyAmbientRatio() a meaningful number.
-const MOON_TINT = 0xa8c0e0;   // relative luminance ~0.51
-const HEMI_SKY = 0x5c7290;    // cold storm skylight,   ~0.164
-const HEMI_GROUND = 0x40382c; // sodium-polluted asphalt bounce, ~0.049
+const MOON_TINT = 0xa8c0e0;   // relative luminance ~0.514
+const HEMI_SKY = 0x4c6486;    // cold storm skylight,   ~0.124
+const HEMI_GROUND = 0x2e2a20; // sodium-polluted asphalt bounce, ~0.023
 
 // Relative luminance of a THREE.Color already in the linear working space.
 const lumOf = (c) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
@@ -122,7 +122,36 @@ export function createLights(ctx) {
   // contributed nothing at all. Fix is at the generator: colours are TINTS at
   // ~unit luminance, `intensity` carries the level, and the probe measures
   // luminance so the gate cannot pass on a lie again.
-  const moon = new THREE.DirectionalLight(MOON_TINT, 3.8);
+  //
+  // W-LaneC / iter05 ATMOSPHERE RESTORE — iter04's exposure fix over-corrected.
+  // Measured on the iter04 battery (PIL, luma = Rec.709 on the shipped PNGs):
+  //   S9 ground-band mean 103.3 / sky-band mean 53.6 — the WET ASPHALT was
+  //   twice as bright as the storm sky, which is the signature of an ambient
+  //   term doing the lighting. Frame medians sat at 37-61/255 (a mid-grey
+  //   median is an overcast DAY frame; a CoD night frame's median is 20-32)
+  //   and only 0.4-2% of pixels fell below 8/255, i.e. nothing in the ward
+  //   was allowed to be dark. Against iter03: S5 median 13, ground 12.1.
+  // The cause is the hemisphere, not the key. A HemisphereLight is pure
+  // directionless diffuse: it cannot cast, cannot separate zones, and an
+  // UP-facing surface (all the ground) receives its full sky term. At
+  // 6.1 x lum(#5c7290) = 0.996 the road was getting more radiance from the
+  // ambient than from the moon (3.8 x 0.514 x sin 38 deg = 1.20) — hence flat.
+  // Fix keeps iter04's legibility win and takes back the night in three
+  // coordinated moves, all at the generator:
+  //   (a) hemi 6.1 -> 4.6 and both terms re-tinted colder/darker: ambient
+  //       luminance 0.623 -> 0.338 (-46%), the up-facing sky term 0.996 ->
+  //       0.569 (-43%).
+  //   (b) key 3.8 -> 4.4 so absolute legibility on moon-facing surfaces does
+  //       not move while the RATIO opens up: 4.14:1 -> 7.9:1 (VT §1 needs
+  //       >= 4:1; 4.14 was sitting on the floor, which is why the delete-the-
+  //       key test nearly failed in S7).
+  //   (c) scene.environment stays where it is (reflect.js, intensity 0.5):
+  //       the IBL is the half of the ambient that carries SPECULAR, i.e. the
+  //       wet-surface payoff. Cutting the hemisphere removes flat fill and
+  //       keeps reflection — that split is the whole point.
+  // level.js separately bakes wet-asphalt albedo into aowet.r; the two are
+  // measured together (ground band must land BELOW the sky band).
+  const moon = new THREE.DirectionalLight(MOON_TINT, 4.4);
   {
     const az = (310 * Math.PI) / 180;
     const el = (38 * Math.PI) / 180;
@@ -153,10 +182,11 @@ export function createLights(ctx) {
   // sodium-pollution tint #2a2418 mixed into the ground term (LD §3.2).
   // A VERTICAL surface sees the 50/50 sky/ground mix, so that mix — not the sky
   // term — is what the ratio must be measured against: it is the light every
-  // facade in the frame actually gets. 0.88 * lum(mix) = 0.094 vs the key's
-  // 0.95 * 0.51 = 0.484 ⇒ 5.2:1, inside VT §1's "≥ 4:1" with enough absolute
-  // level for shadowed brick to carry its window grid, sills and grime.
-  const hemi = new THREE.HemisphereLight(HEMI_SKY, HEMI_GROUND, 6.1);
+  // facade in the frame actually gets. 4.6 * lum(mix 0.0735) = 0.338 vs the
+  // key's 4.4 * 0.514 = 2.263 ⇒ 7.7:1, comfortably clear of VT §1's "≥ 4:1"
+  // (iter04 sat at 4.14, ON the floor) with enough absolute level for shadowed
+  // brick to carry its window grid, sills and grime. See the moon note above.
+  const hemi = new THREE.HemisphereLight(HEMI_SKY, HEMI_GROUND, 4.6);
   hemi.layers.enableAll(); // v2.2: reach the viewmodel camera's layer (A4)
   scene.add(hemi);
 
@@ -396,7 +426,13 @@ export function createLights(ctx) {
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
-      uniforms: { uOp: { value: 0.06 } }, // LD §5.2: FAINT fog discs (0.10 stacked into the S4 wash)
+      // LD §5.2: FAINT fog discs (0.10 stacked into the S4 wash).
+      // 0.06 -> 0.036 (LaneC/iter05): the disc is the second half of the
+      // "round blob" tell — it is a hard-coded CIRCLE, so however faint it is
+      // it argues against the elongated reflection now doing the real work in
+      // level.js's wet-specular layer. It stays because glare through falling
+      // rain genuinely is round; it just no longer out-votes the reflection.
+      uniforms: { uOp: { value: 0.036 } },
       vertexShader: /* glsl */ `
         varying vec2 vUv; varying vec3 vCol;
         void main() {
@@ -560,7 +596,7 @@ export function createLights(ctx) {
       mesh.renderOrder = 9;
       const m4 = new THREE.Matrix4();
       discs.forEach((p, i) => {
-        const r = p.kind === "neon_bounce" ? 5.5 : 3.4;
+        const r = p.kind === "neon_bounce" ? 4.2 : 2.5;
         m4.makeScale(r, 1, r).setPosition(p.pos[0], 0.07, p.pos[2]);
         mesh.setMatrixAt(i, m4);
         // the plaza aggregate's disc must carry the SAME conditioned tint as

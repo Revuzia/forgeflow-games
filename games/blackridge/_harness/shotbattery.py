@@ -46,6 +46,12 @@ DEFAULT_URL = "http://localhost:8841/games/blackridge/index.html"
 FLAGS = ["--ignore-gpu-blocklist", "--use-angle=d3d11", "--disable-gpu-sandbox",
          "--enable-gpu-rasterization", "--disable-features=CalculateNativeWinOcclusion"]
 
+# A scripted capture (C1) whose player travelled less than this did not
+# perform the contracted motion, whatever its `until` predicate says. C1's
+# script holds a 3-second tac-sprint; the slowest shipped movement state
+# (MOVE.CROUCH) would still clear several metres in that time.
+MIN_SCRIPT_DISPLACEMENT_M = 2.0
+
 
 class NotReady(RuntimeError):
     """Harness infrastructure is fine; the GAME surface is not there yet."""
@@ -183,21 +189,114 @@ def wait_sim_ticks(page, want: int, start: int | None = None) -> bool:
     return True
 
 
-def run_script(page, sid: str) -> dict:
+KEY_VERB = {"KeyR": "reload", "KeyG": "grenade", "KeyF": "interact",
+            "KeyC": "crouch", "Space": "jump"}
+
+
+def step_tag(step: dict, carried: str) -> str:
+    """Caption for a beat. A zero-frame `press` step (C1's KeyR) has no beats
+    of its own, so its verb CARRIES into the `wait` steps that follow it —
+    otherwise the four frames that show the reload are captioned "hold" and
+    the critic reads a still weapon as intended behaviour instead of as the
+    reload not animating."""
+    if step.get("hold"):
+        return "+".join(step["hold"]).replace("ShiftLeft", "sprint").replace("Key", "")
+    if step.get("release"):
+        return "stop"
+    if step.get("fire"):
+        return "fire"
+    if step.get("press"):
+        return KEY_VERB.get(step["press"], step["press"].replace("Key", "press-"))
+    return carried or "hold"
+
+
+def plan_beats(steps: list) -> list:
+    """Absolute sim-tick offsets to photograph across a scripted scenario.
+
+    D10 (motion feel) is graded on the C1 CAPTURE, and a capture is a
+    sequence: the scorecard's anchors read "the sprint→fire→reload sequence
+    is fluid", "per-shot camera kick with partial recovery", "C1 capture
+    feels weighted end to end" — none of which a single still can carry.
+    iterations 3 and 4 shipped one PNG and all three critics scored D10 at
+    the 3 anchor for want of evidence, so the beats are derived from the
+    script itself: two per timed step (middle + last tick) plus the opening
+    frame, which brackets every transition the script authors.
+    """
+    beats, tick, carried = [(1, "start")], 0, ""
+    for step in steps:
+        f = int(step.get("frames") or 0)
+        tag = step_tag(step, carried)
+        carried = tag
+        if f <= 0:
+            continue
+        beats.append((tick + max(1, f // 2), tag))
+        beats.append((tick + f - 1, tag + "-end"))
+        tick += f
+    seen, out = set(), []
+    for t, tag in sorted(beats):
+        if t in seen:
+            continue
+        seen.add(t)
+        out.append((t, tag))
+    return out
+
+
+def run_script(page, sid: str, on_beat=None) -> dict:
     """Interpret a scenario's `script` (C1) with REAL input events (doctrine §5).
 
     Holds are real keydown (released with real keyup); trigger is real
     mousedown/mouseup on #view; progress is measured in SIM TICKS
     (__FPS__.sim.state.tick — the fixed-dt clock). Wall clock appears only as
     a give-up timeout, and the manifest records if it fired.
+
+    `on_beat(index, tick, tag, seconds)` is called at each planned beat with
+    the sim held at exactly that tick, so the caller can photograph it. The
+    player's position is sampled at every beat and returned: displacement is
+    the acceptance criterion for the capture, because `untilReached` proved
+    it can be satisfied by a frame containing none of the contracted motion
+    (iter04: C1's `until` fired off the reload while the player had not
+    moved one millimetre in 180 ticks).
     """
     steps = page.evaluate(
         "(n) => SCENARIOS[n].script.map(s => Object.assign({}, s))", sid)
+    beats = plan_beats(steps)
     captured_at = None
     gave_up = False
+    base = sim_ticks(page)
+    bi = 0
+    records = []
+
+    def sample_pos():
+        # Every beat records the sim state it photographed, so the manifest
+        # PROVES the contracted verbs happened (sprint moved, rounds left the
+        # barrel, the reload was live) instead of asserting it from a
+        # predicate that fired for unrelated reasons.
+        return page.evaluate("""() => { try {
+            const F = __FPS__, p = F.sim.state.player, w = p.weapon || {};
+            return {pos: p.pos.map(v => +(+v).toFixed(3)),
+                    speedNorm: +(+(p.speedNorm || 0)).toFixed(3),
+                    weaponState: w.state || null, mag: w.mag,
+                    adsT: w.adsT != null ? +(+w.adsT).toFixed(2) : null,
+                    shotsFired: F.sim.state.counters.shotsFired | 0}; }
+            catch (e) { return {sampleError: String(e)}; } }""")
+
+    def drain_beats_to(limit_offset: int):
+        """Fire every planned beat at or before `limit_offset` ticks."""
+        nonlocal bi, gave_up
+        while bi < len(beats) and beats[bi][0] <= limit_offset:
+            t, tag = beats[bi]
+            if not wait_sim_ticks(page, t, base):
+                gave_up = True
+            rec = {"i": bi, "tick": t, "tag": tag, "seconds": round(t / 60.0, 2)}
+            rec.update(sample_pos() or {})
+            if on_beat:
+                rec["file"] = on_beat(bi, t, tag, rec["seconds"])
+            records.append(rec)
+            bi += 1
+
+    offset = 0
     for step in steps:
         want = int(step.get("frames") or 0)
-        start = sim_ticks(page)
         if step.get("hold"):
             for code in step["hold"]:
                 page.evaluate(
@@ -227,8 +326,10 @@ def run_script(page, sid: str) -> dict:
                 const v = document.getElementById('view');
                 v.dispatchEvent(new MouseEvent('mousedown', {button: 0, bubbles: true}));
             }""")
+        offset += want
         if want > 0:
-            if not wait_sim_ticks(page, want, start):
+            drain_beats_to(offset)
+            if not wait_sim_ticks(page, offset, base):
                 gave_up = True
         if step.get("fire"):
             page.evaluate("""() => {
@@ -236,9 +337,65 @@ def run_script(page, sid: str) -> dict:
                 v.dispatchEvent(new MouseEvent('mouseup', {button: 0, bubbles: true}));
             }""")
         if step.get("captureAt"):
+            # The annotated moment is now ONE beat among many rather than the
+            # whole artifact — the script runs to its end so the sequence is
+            # complete, and this records which beat the pose author named.
             captured_at = step["captureAt"]
-            break  # the PNG for this scenario is taken NOW, by the caller
-    return {"capturedAt": captured_at, "scriptGaveUp": gave_up}
+    drain_beats_to(10 ** 9)
+
+    # ---- acceptance: the capture must contain MOTION ------------------------
+    disp = None
+    if len(records) >= 2:
+        a, b = records[0].get("pos"), None
+        # furthest point reached from the start over the whole take
+        best = 0.0
+        for r in records:
+            q = r.get("pos")
+            if a and q:
+                d = ((q[0] - a[0]) ** 2 + (q[2] - a[2]) ** 2) ** 0.5
+                if d > best:
+                    best, b = d, q
+        disp = round(best, 3)
+    return {"capturedAt": captured_at, "scriptGaveUp": gave_up,
+            "beats": records, "displacementM": disp,
+            "totalTicks": offset}
+
+
+def build_contact_sheet(iter_dir: str, sid: str, records: list, out_w=1920):
+    """Compose the numbered beat frames into one graded contact sheet.
+
+    The battery's scored artifact for a scripted scenario is the SHEET: a
+    critic asked "does this feel weighted end to end" needs the transitions
+    side by side, and the full-resolution beat PNGs stay on disk beside it
+    for anything that needs pixel scrutiny.
+    """
+    try:
+        from PIL import Image, ImageDraw
+    except Exception as e:
+        return {"sheet": None, "error": f"Pillow unavailable: {e}"}
+    frames = [r for r in records if r.get("file")
+              and os.path.exists(os.path.join(iter_dir, r["file"]))]
+    if not frames:
+        return {"sheet": None, "error": "no beat frames on disk"}
+    cols = 3
+    rows = (len(frames) + cols - 1) // cols
+    pw, ph = out_w // cols, int((out_w // cols) * 9 / 16)
+    sheet = Image.new("RGB", (cols * pw, rows * ph), (10, 12, 15))
+    draw = ImageDraw.Draw(sheet)
+    for i, r in enumerate(frames):
+        with Image.open(os.path.join(iter_dir, r["file"])) as im:
+            sheet.paste(im.convert("RGB").resize((pw, ph), Image.LANCZOS),
+                        ((i % cols) * pw, (i // cols) * ph))
+        x, y = (i % cols) * pw, (i // cols) * ph
+        cap = f"{r['seconds']:.2f}s  {r['tag']}"
+        draw.rectangle([x + 6, y + ph - 26, x + 6 + 9 * len(cap), y + ph - 6],
+                       fill=(0, 0, 0))
+        draw.text((x + 12, y + ph - 22), cap, fill=(232, 232, 228))
+        draw.rectangle([x, y, x + pw - 1, y + ph - 1], outline=(28, 32, 38))
+    path = os.path.join(iter_dir, f"{sid}.png")
+    sheet.save(path)
+    return {"sheet": f"{sid}.png", "panels": len(frames),
+            "size": [sheet.width, sheet.height]}
 
 
 def wait_until(page, sid: str, timeout_s: float = 15.0) -> bool:
@@ -289,9 +446,24 @@ def run_shot(page, sid: str, iter_name: str, args) -> dict:
                   sc["hud"])
     settle_frames(page, sc["settleFrames"])
 
+    iter_dir_abs = os.path.join(SHOTS_ROOT, iter_name)
     script_state = {}
     if sc["hasScript"]:
-        script_state = run_script(page, sid)
+        def shoot_beat(i, tick, tag, seconds):
+            fname = f"{sid}_{i + 1:02d}.png"
+            page.evaluate(
+                "(a) => __FPS__.__test.capture(a.name, a.w, a.h, {dpr: a.dpr})",
+                {"name": f"{iter_name}/{fname}", "w": args.width,
+                 "h": args.height, "dpr": args.dpr})
+            dl = time.time() + 15.0
+            while time.time() < dl:
+                p = os.path.join(iter_dir_abs, fname)
+                if os.path.exists(p) and os.path.getsize(p) > 1024:
+                    return fname
+                time.sleep(0.2)
+            return None
+
+        script_state = run_script(page, sid, on_beat=shoot_beat)
 
     # `until` ordering differs by kind. Posed scenario: gate BEFORE capture
     # (the world is held; until re-arms/validates the framed state). Scripted
@@ -304,10 +476,17 @@ def run_shot(page, sid: str, iter_name: str, args) -> dict:
         until_reached = wait_until(page, sid)
 
     # Capture: page renders its own RT and POSTs /__shot/<iterNN>/<sid>.png.
+    # A SCRIPTED scenario's <sid>.png is the contact sheet of the beats just
+    # photographed — the contracted artifact for C1 is a 6-second capture,
+    # and a single frame of it is not one.
     shot_name = f"{iter_name}/{sid}.png"
-    page.evaluate(
-        "(a) => __FPS__.__test.capture(a.name, a.w, a.h, {dpr: a.dpr})",
-        {"name": shot_name, "w": args.width, "h": args.height, "dpr": args.dpr})
+    sheet = None
+    if sc["hasScript"]:
+        sheet = build_contact_sheet(iter_dir_abs, sid, script_state.get("beats", []))
+    else:
+        page.evaluate(
+            "(a) => __FPS__.__test.capture(a.name, a.w, a.h, {dpr: a.dpr})",
+            {"name": shot_name, "w": args.width, "h": args.height, "dpr": args.dpr})
 
     if sc["hasUntil"] and sc["hasScript"]:
         until_reached = wait_until(page, sid)
@@ -375,12 +554,86 @@ def run_shot(page, sid: str, iter_name: str, args) -> dict:
                     simFrames: (s.frames|0) || null};
         } catch (e) { return {stateError: String(e)}; }
     }""")
+    # A scripted scenario also gets ONE compositor grab so the DOM HUD it
+    # declares (`hud: true`) is visible somewhere in the take — the GL
+    # read-back path structurally cannot see it.
+    #
+    # FAILS CLOSED. The GL beats are hidden-tab-proof (stepFrames drives them
+    # directly), so the take completes happily while the window is unfocused
+    # and the game has auto-paused — and a compositor grab of THAT state is
+    # the pause menu, i.e. a second copy of S6 filed under a name that claims
+    # to be in-mission HUD evidence. The grab resumes the mission first and is
+    # DELETED unless the game confirms it is unpaused with the HUD shown.
+    hud_grab = None
+    if sc["hasScript"] and sc["hud"]:
+        tmp = os.path.join(iter_dir_abs, f"{sid}_hud.png")
+        # `pauseCtl.active === false` is NOT proof the menu is gone: the game
+        # re-pauses on window blur, and Playwright cannot hold focus across a
+        # long battery, so the overlay is back in the DOM by the time the
+        # compositor grab happens. The check therefore reads the OVERLAY, both
+        # before and after the shutter — anything else ships a second copy of
+        # S6 under a filename claiming to be in-mission HUD evidence.
+        overlay_js = """
+            const shown = () => {
+                const sels = ['#pause', '#pause-overlay', '.pause-overlay', '#menu'];
+                for (const s of sels) {
+                    for (const el of document.querySelectorAll(s)) {
+                        const cs = getComputedStyle(el);
+                        if (cs.display !== 'none' && cs.visibility !== 'hidden'
+                            && +cs.opacity > 0.01 && el.getClientRects().length) return s;
+                    }
+                }
+                return null;
+            };"""
+        overlay_expr = "() => {" + overlay_js + " return shown(); }"
+        try:
+            page.bring_to_front()
+            # Resume and read the overlay in ONE task, so a still-visible
+            # overlay is attributable to resume() rather than to a re-pause
+            # that slipped in between two round trips.
+            res = page.evaluate("() => {" + overlay_js + """
+                const T = __FPS__.__test;
+                const wasPaused = T.isPaused();
+                if (wasPaused) T.pause(false);
+                T.hud(true); T.step(2);
+                return {wasPaused, stillPaused: T.isPaused(),
+                        overlaySameTask: shown()};
+            }""")
+            before = res["overlaySameTask"] or page.evaluate(overlay_expr)
+            if before:
+                print(f"     .. {sid}: HUD grab SKIPPED — '{before}' overlay is up "
+                      f"(wasPaused={res['wasPaused']}, stillPaused={res['stillPaused']}, "
+                      f"sameTask={res['overlaySameTask']}); a paused grab is the S6 "
+                      f"menu, not in-mission HUD", file=sys.stderr)
+            else:
+                page.screenshot(path=tmp, scale="css")
+                after = page.evaluate(overlay_expr)
+                if after:
+                    print(f"     .. {sid}: HUD grab DISCARDED — '{after}' overlay "
+                          f"appeared during the grab", file=sys.stderr)
+                else:
+                    hud_grab = f"{sid}_hud.png"
+        except Exception as e:
+            print(f"     .. {sid}: HUD grab failed ({e})", file=sys.stderr)
+        if hud_grab is None and os.path.exists(tmp):
+            os.remove(tmp)
+
+    # MOTION is the acceptance criterion for a capture, not `untilReached`.
+    # iter04's C1 reported untilReached true for a frame in which the player
+    # had not moved at all, so the contracted content was never checked.
+    no_motion = False
+    if sc["hasScript"]:
+        d = script_state.get("displacementM")
+        no_motion = (d is None) or (d < MIN_SCRIPT_DISPLACEMENT_M)
+        capture_mode = "filmstrip"
+
     errs = page.evaluate("window.__err || []")
     return {"name": sid, "file": f"{sid}.png", "seed": sc["seed"],
             "botSeed": sc["botSeed"], "rainPhase": sc["rainPhase"],
             "hud": sc["hud"], "untilReached": until_reached,
             "capturedOnDisk": on_disk, "meanLuma": mean_luma,
-            "captureMode": capture_mode,
+            "captureMode": capture_mode, "sheet": sheet, "noMotion": no_motion,
+            "hudGrab": hud_grab if sc["hasScript"] else None,
             "nearBlack": near_black, "pageErrors": errs,
             "scenario": scen_report,
             **script_state, **state}
@@ -492,6 +745,7 @@ def main() -> int:
                     manifest_rows.append(row)
                     bad = ((not row["capturedOnDisk"]) or (not row["untilReached"])
                            or row.get("scriptGaveUp", False)
+                           or row.get("noMotion", False)
                            or row.get("nearBlack", False))
                     if bad:
                         failed.append(sid)
@@ -504,6 +758,13 @@ def main() -> int:
                              else "  !! until() NEVER FIRED — frame not comparable")
                           + ("  !! script GAVE UP on wall clock — frame not comparable"
                              if row.get("scriptGaveUp") else "")
+                          + (f"  !! NO MOTION (displacement {row.get('displacementM')} m "
+                             f"< {MIN_SCRIPT_DISPLACEMENT_M} m) — the capture does not "
+                             f"contain the contracted movement"
+                             if row.get("noMotion") else "")
+                          + (f"  [filmstrip {row.get('sheet', {}).get('panels')} panels]"
+                             if row.get("captureMode") == "filmstrip"
+                             and isinstance(row.get("sheet"), dict) else "")
                           + (f"  !! {len(row['pageErrors'])} page errors"
                              if row["pageErrors"] else ""))
                 except Exception as e:

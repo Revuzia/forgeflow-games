@@ -201,11 +201,28 @@ export function createTestSurface(ctx) {
   }
 
   // ---------------------------------------------------------------- hud sweep
+  // TWO lists, and the split matters. hud(show) used to sweep ONE list with
+  // `el.style.display = show ? "" : "none"`, and that list contained the pause
+  // and menu overlays. Clearing the inline display on those does not restore
+  // "whatever pause.js wanted" — it removes the only thing hiding them, so
+  // hud(true) REVEALS THE PAUSE MENU over a live, unpaused mission. Measured:
+  // on a scripted C1 take with pauseCtl.active false before and after, a
+  // compositor grab taken right after hud(true) returned the full
+  // "PAUSED / RESUME / SETTINGS / ABANDON MISSION" overlay, read in the same
+  // JS task (wasPaused=false, stillPaused=false, #pause-overlay visible).
+  // Every hud:true page-screenshot in the battery therefore photographed the
+  // menu instead of the in-mission HUD.
+  //
+  // So: HUD_DOM toggles both ways (it is the HUD, the flag owns it), and
+  // OVERLAY_DOM is only ever HIDDEN — whether the pause menu belongs on
+  // screen is pause.js's decision and the harness must not overrule it.
   const HUD_DOM = [
     "#hud", "#crosshair", "#hitmarker", "#killfeed", "#ammo", "#compass",
-    "#objective", "#hint", ".overlay", "#perf", "#pause", "#pause-overlay",
-    ".pause-overlay", "#damage-vignette", "#threat-ring", "#subtitles",
+    "#objective", "#hint", "#perf", "#damage-vignette", "#threat-ring",
+    "#subtitles",
   ];
+  const OVERLAY_DOM = [".overlay", "#pause", "#pause-overlay", ".pause-overlay"];
+  const overlayPrev = new Map(); // el -> inline display before the harness hid it
 
   // ---------------------------------------------------------------- surface
   const t = {
@@ -405,6 +422,22 @@ export function createTestSurface(ctx) {
         document.querySelectorAll(sel).forEach((el) => {
           el.style.display = show ? "" : "none";
         });
+      }
+      // Overlays are swept out of beauty shots and then RESTORED to exactly
+      // the inline display they had before the sweep — never to "", which is
+      // what revealed the pause menu. S6 still gets its overlay because
+      // pause.js puts it there on the real ESC path, which is the only thing
+      // entitled to decide the menu is up.
+      if (!show) {
+        for (const sel of OVERLAY_DOM) {
+          document.querySelectorAll(sel).forEach((el) => {
+            if (!overlayPrev.has(el)) overlayPrev.set(el, el.style.display);
+            el.style.display = "none";
+          });
+        }
+      } else {
+        for (const [el, prev] of overlayPrev) el.style.display = prev;
+        overlayPrev.clear();
       }
       return !!show;
     },

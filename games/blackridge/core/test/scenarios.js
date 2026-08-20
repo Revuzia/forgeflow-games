@@ -224,6 +224,72 @@ export function createScenarios(ctx) {
     return ctx.stepFrames(n, DT);
   }
 
+  // ------------------------------------------------------------ unstick
+  // A pose may place the player INSIDE static geometry. The sim handles that
+  // the only way it can — the capsule is blocked on every axis, so the move
+  // solver rejects the whole displacement and zeroes velocity — and the
+  // player is welded in place for the rest of the take with no error
+  // anywhere. That is how C1 shipped a "6-second sprint capture" of a man
+  // standing still through iterations 3 and 4: its authored start
+  // (-14, 0, 34) sits 0.35 m inside collider `bld_s1` (x -41..-14,
+  // z 18..42), exactly one capsule radius past the building's east face.
+  //
+  // setScenario is the generator for every captured frame, so it refuses to
+  // emit an unsatisfiable pose: the player is pushed to the nearest clear
+  // standing spot and the correction is reported LOUDLY in warnings +
+  // console, because the durable fix is the authored pose in content.json
+  // and a silent nudge would hide it forever.
+  const CAPSULE_R = 0.35;   // MOVE.CAPSULE_R (core/sim/player.js)
+  const STAND_H = 1.8;      // MOVE.STAND_H
+
+  function unstickPlayer(sim, warnings) {
+    const w = sim.world;
+    if (!w || typeof w.capsuleBlocked !== "function") {
+      warnings.push("spawn-clearance check skipped — sim.world.capsuleBlocked unavailable");
+      return null;
+    }
+    const p = sim.state.player;
+    const at = (x, z) => w.capsuleBlocked(x, p.pos[1], z, CAPSULE_R, STAND_H);
+    const hit = at(p.pos[0], p.pos[2]);
+    if (!hit) return null;
+
+    const from = p.pos.slice();
+    // Ring search outward from the authored point: nearest clear spot wins,
+    // so the framing moves as little as the geometry allows.
+    for (let rad = 0.25; rad <= 4.0 + 1e-6; rad += 0.25) {
+      for (let k = 0; k < 24; k++) {
+        const a = (k / 24) * Math.PI * 2;
+        const x = from[0] + Math.cos(a) * rad;
+        const z = from[2] + Math.sin(a) * rad;
+        if (!at(x, z)) {
+          sim.teleport("P", x, from[1], z);
+          const info = {
+            from, to: [+x.toFixed(3), from[1], +z.toFixed(3)],
+            movedM: +rad.toFixed(2),
+            blockedBy: (hit && (hit.id || hit.kind)) || "unknown",
+            bbox: hit && hit.min && hit.max ? [hit.min, hit.max] : null,
+          };
+          const msg =
+            `SPAWN INSIDE GEOMETRY: authored player pos [${from}] is inside ` +
+            `collider '${info.blockedBy}' — the capsule is blocked on every ` +
+            `axis, so the move solver zeroes velocity and the player CANNOT ` +
+            `move for the whole take. Nudged ${info.movedM} m to ` +
+            `[${info.to}]. FIX THE POSE in content.json.`;
+          warnings.push(msg);
+          console.warn("[scenarios] " + msg);
+          return info;
+        }
+      }
+    }
+    const msg = `SPAWN INSIDE GEOMETRY and no clear standing spot within 4 m ` +
+                `of [${from}] (collider '${(hit && (hit.id || hit.kind)) || "unknown"}') ` +
+                `— the player will not move in this scenario.`;
+    warnings.push(msg);
+    console.warn("[scenarios] " + msg);
+    return { from, to: null, movedM: null,
+             blockedBy: (hit && (hit.id || hit.kind)) || "unknown" };
+  }
+
   // ------------------------------------------------------------ setScenario
   async function setScenario(name, seedObj) {
     const warnings = [];
@@ -298,6 +364,10 @@ export function createScenarios(ctx) {
     if (pp.god) sim.setGod(true);
     if (pp.noTarget) sim.setNoTarget(true);
 
+    // Clearance BEFORE aim/bots/camera: an unstick moves the eye, and
+    // everything downstream is computed from the player's final position.
+    const unstuck = unstickPlayer(sim, warnings);
+
     // aim: camera lookAt is authoritative (A2 contract note); fall back to yaw.
     if (pose.camera && pose.camera.pos && pose.camera.lookAt && !pose.cameraDetached) {
       const a = yawPitchFromTo(pose.camera.pos, pose.camera.lookAt);
@@ -354,7 +424,9 @@ export function createScenarios(ctx) {
       ctx.input.enabled = true;
       T.hud(hudOn);
       stepTicks(6); // one breath so state derives before the script starts
-      return { name, seed, botSeed, ...world, bots: botIds.length, live: true, warnings };
+      return { name, seed, botSeed, ...world, bots: botIds.length, live: true,
+               unstuck, startPos: sim.state.player.pos.map((v) => +v.toFixed(3)),
+               warnings };
     }
 
     // ---- action: ADS settle / fire burst
@@ -404,7 +476,7 @@ export function createScenarios(ctx) {
     T.hud(hudOn);
 
     return {
-      name, seed, botSeed, ...world, bots: botIds.length,
+      name, seed, botSeed, ...world, bots: botIds.length, unstuck,
       held: true, paused: ctx.pauseCtl.active,
       playerPos: sim.state.player.pos.map((v) => +v.toFixed(3)),
       yaw: +sim.state.player.yaw.toFixed(4),

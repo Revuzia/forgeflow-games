@@ -4,17 +4,36 @@
 // LD §5.4 (wetness pulls baked at setup, puddle masks via the 'aowet'
 // vertex attribute, ripple normals, R18 planar/env hook).
 //
-// Sources (BUILD_PLAN Part 4): Poly Haven asphalt/wall sets + FFG
+// Sources (BUILD_PLAN Part 4): Poly Haven asphalt/cobble sets + FFG
 // generated-materials, prepped to WebP by tools/prep_level_assets.py
-// (normals Sobel-generated from displacement — sets ship no normal maps).
-// Everything else is canvas-procedural, generated ONCE here at construction
-// (prewarm-friendly: all materials exist in-scene before the phase-5
-// compileAsync passes, so no mission-time program compiles).
+// (normals Sobel-generated from displacement — sets ship no normal maps),
+// PLUS three authored sets from tools/a3_gen_surface_sets.py —
+// concrete_formed (walls/trim/interior), wall_render (facades: cement render
+// over brick), metal_panel (painted steel). Everything else is
+// canvas-procedural, generated ONCE here at construction (prewarm-friendly:
+// all materials exist in-scene before the phase-5 compileAsync passes, so no
+// mission-time program compiles).
+//
+// TEXEL DENSITY (doctrine §3, VT §3) — read this before adding a material.
+// The tile scale is the `tile` option below, in METRES PER TILE, and the
+// shader projects its own uv from world position; it does NOT come from
+// texture.repeat applied to whatever uv attribute the geometry happens to
+// carry. That indirection is what produced iter04's worst D3 tells — the
+// generators disagree about uv units (level.js emits metres, props.js passes
+// BoxGeometry 0..1 straight through), and `concreteInterior` shipped at 1
+// m/tile beside `concreteWall` at 4.6 simply by not calling a helper.
+// A material with a tiling map and no `tile` is a bug.
 //
 // Shared shader layer (onBeforeCompile, one static variant per material —
 // no runtime defines flip, so the program count is fixed at boot):
-//   - world-space grunge overlay at two NON-INTEGER scales → roughness
+//   - world-space grunge overlay at three NON-INTEGER scales → roughness
 //     variance + albedo mottle on every large surface (anti-tiling a+b);
+//   - analytic MACRO STRUCTURE in world metres, amplitudes `seam` and `wear`:
+//     form-work board courses and panel joints on walls, slab joints on
+//     floors, thresholded aggregate chips, drainage runs down vertical faces,
+//     and ground-contact splash grime. All of it moves ROUGHNESS as well as
+//     albedo (a seam that only darkens is paint), and all of it fades out
+//     past ~40 m so it cannot alias into shimmer;
 //   - optional 'aowet' vec3 vertex attribute: r = baked AO/macro tint,
 //     g = puddle mask (roughness→0.04, ripple normal, planar blend),
 //     b = wet/grime streak factor (wall bases, gutters);
@@ -82,18 +101,24 @@ function valueNoiseCanvas(size, octaves, seed, contrast = 1) {
   return c;
 }
 
-// two independent noises packed into r/g for the grunge overlay
+// THREE independent noises packed into r/g/b for the grunge overlay.
+// b was a constant 128 until iter05; it now carries a high-octave noise so the
+// micro tap can drive SPARSE aggregate chips (thresholded) instead of the
+// uniform full-coverage crackle all three iter04 critics read as TV static —
+// a third channel on a tap we were already paying for.
 function grungeCanvas(size) {
   const a = valueNoiseCanvas(size, 5, 101, 1.35);
   const b = valueNoiseCanvas(size, 3, 707, 1.6);
+  const d = valueNoiseCanvas(size, 6, 313, 1.5);
   const c = cnv(size, size), g = c.getContext("2d");
   const ia = a.getContext("2d").getImageData(0, 0, size, size);
   const ib = b.getContext("2d").getImageData(0, 0, size, size);
+  const id = d.getContext("2d").getImageData(0, 0, size, size);
   const out = g.createImageData(size, size);
   for (let i = 0; i < size * size; i++) {
     out.data[i * 4] = ia.data[i * 4];
     out.data[i * 4 + 1] = ib.data[i * 4];
-    out.data[i * 4 + 2] = 128;
+    out.data[i * 4 + 2] = id.data[i * 4];
     out.data[i * 4 + 3] = 255;
   }
   g.putImageData(out, 0, 0);
@@ -414,13 +439,24 @@ function augment(mat, o = {}) {
     mottle: 0.12,      // albedo variance
     aowet: false,      // consume the 'aowet' vertex attribute
     puddle: false,     // puddle mask + ripple + planar (ground only)
+    // metres per texture TILE. > 0 switches the material off the geometry's
+    // own uv attribute and onto a world-space metre projection (see below) —
+    // this is doctrine §3 "UVs in metres/TILE" enforced at SHADE time instead
+    // of trusting every generator to emit them.
+    tile: 0,
+    seam: 0,           // form-work seam / slab-joint amplitude (0 = none)
+    wear: 0,           // drainage runs + ground-contact grime + spall chips
     ...o,
   };
   mat.userData.a3 = opts;
+  const W = opts.tile > 0;
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uGrunge = { value: TEX.grunge };
     sh.uniforms.uGrungeAmp = { value: opts.grunge };
     sh.uniforms.uMottle = { value: opts.mottle };
+    sh.uniforms.uSeam = { value: opts.seam };
+    sh.uniforms.uWear = { value: opts.wear };
+    if (W) sh.uniforms.uTileScale = { value: 1 / opts.tile };
     if (opts.puddle) {
       if (!GROUND_HOOKS.planarTex.value) GROUND_HOOKS.planarTex.value = TEX.black;
       sh.uniforms.uRipple = { value: TEX.ripple };
@@ -433,7 +469,16 @@ function augment(mat, o = {}) {
     sh.vertexShader = sh.vertexShader
       .replace("#include <common>", `#include <common>
 varying vec3 vWPos;
+varying vec3 vWN;
 ${opts.aowet ? "attribute vec3 aowet; varying vec3 vAowet;" : ""}`)
+      .replace("#include <beginnormal_vertex>", `#include <beginnormal_vertex>
+{
+  vec3 a3n = objectNormal;
+  #ifdef USE_INSTANCING
+  a3n = mat3( instanceMatrix ) * a3n;
+  #endif
+  vWN = normalize( mat3( modelMatrix ) * a3n );
+}`)
       .replace("#include <project_vertex>", `#include <project_vertex>
 {
   vec4 wp4 = vec4( transformed, 1.0 );
@@ -446,30 +491,122 @@ ${opts.aowet ? "vAowet = aowet;" : ""}`);
     sh.fragmentShader = sh.fragmentShader
       .replace("#include <common>", `#include <common>
 varying vec3 vWPos;
+varying vec3 vWN;
 uniform sampler2D uGrunge;
 uniform float uGrungeAmp;
 uniform float uMottle;
+uniform float uSeam;
+uniform float uWear;
+${W ? "uniform float uTileScale;" : ""}
 ${opts.aowet ? "varying vec3 vAowet;" : ""}
 ${opts.puddle ? `uniform sampler2D uRipple;
 uniform sampler2D uPlanarTex;
 uniform mat4 uPlanarMat;
 uniform float uPlanarStrength;
 uniform float uTime;` : ""}`)
+      // ------------------------------------------------------------------
+      // TEXEL DENSITY, FIXED BY CONSTRUCTION (iter04 ranked fix #4a).
+      //
+      // Critics measured "two adjacent panels of the SAME wall at wildly
+      // different texel densities" and "the noise scale visibly shifting
+      // across one flat plane". Root cause, verified in this file: the tile
+      // scale lived in `texture.repeat`, applied to whatever uv attribute the
+      // GENERATOR happened to emit — and the generators disagree. level.js
+      // projects metre UVs for boxGeo, but props.js ships BoxGeometry/
+      // CylinderGeometry 0..1 UVs straight through `ensureUV` (which only
+      // fills MISSING uvs), so a 0.07 m post and a 30 m string course both got
+      // one full tile. And `concreteInterior`/`tileInterior` never called the
+      // `uv()` helper at all, so they shaded the SHARED texture instances at
+      // repeat (1,1) = 1 m/tile against concreteWall's 4.6 — a 4.6x mismatch
+      // on the same concrete, in the arcade interior, which is exactly where
+      // the S4 hero material close-up is posed.
+      //
+      // The fix removes the generator from the loop: every tiled material
+      // projects its own uv from WORLD POSITION in metres, per dominant world
+      // axis of the surface normal, and `tile` is the metres-per-tile scalar.
+      // Redirecting three's uv varyings with a macro (rather than rewriting
+      // each map chunk) means map, roughnessMap, normalMap AND the derivative
+      // tangent frame in <normal_fragment_begin> all move together — a
+      // hand-rewritten map chunk would have left the TBN reading the old uv.
+      // On box architecture the normal is constant per face, so the axis
+      // choice is constant per face and no switch seam can appear inside one
+      // surface.
+      .replace("void main() {", `float a3edge(float x, float period, float w) {
+  float f = abs(fract(x / period + 0.5) - 0.5) * period;
+  return 1.0 - smoothstep(0.0, w, f);
+}
+${W ? `vec2 a3uv_() {
+  vec3 an = abs(vWN);
+  vec2 p = (an.y >= an.x && an.y >= an.z) ? vWPos.xz
+         : (an.x >= an.z) ? vec2(vWPos.z, vWPos.y)
+         : vec2(vWPos.x, vWPos.y);
+  return p * uTileScale;
+}
+#define vMapUv a3uv_()
+#define vRoughnessMapUv a3uv_()
+#define vNormalMapUv a3uv_()` : ""}
+void main() {`)
+      // ------------------------------------------------------------------
+      // MATERIAL STRUCTURE (ranked fix #4b/c/d). Everything below is drawn in
+      // TRUE WORLD METRES, so it never has to divide into a texture tile and
+      // never beats against the tiling. It is the register the critics found
+      // missing: "no seams, no bolt lines, no rust runs, no drip marks ... a
+      // single-frequency monochrome crackle with identical specular response
+      // across every square metre".
       .replace("#include <map_fragment>", `#include <map_fragment>
 vec2 gruv = vWPos.xz + vWPos.y * vec2(0.71, 0.37);
-float g1 = texture2D(uGrunge, gruv * 0.0619).r;
-float g2 = texture2D(uGrunge, gruv * 0.0143 + 0.29).g;
+vec3 gA = texture2D(uGrunge, gruv * 0.0619).rgb;        // macro   (~16 m)
+vec3 gB = texture2D(uGrunge, gruv * 0.0143 + 0.29).rgb; // super   (~70 m)
 // close-range tap (~1.2 m period): micro-breakup so surfaces survive the
 // S4 close crop — without it the two macro taps read as smooth clay <3 m
-float g3 = texture2D(uGrunge, gruv * 0.83 + 0.61).g;
-diffuseColor.rgb *= (1.0 + uMottle * ((g1 - 0.5) * 1.6 + (g2 - 0.5) + (g3 - 0.5) * 0.8));
+vec3 gC = texture2D(uGrunge, gruv * 0.83 + 0.61).rgb;
+float g1 = gA.r, g2 = gB.g, g3 = gC.g;
+
+vec3 a3N = normalize(vWN);
+float a3wall = 1.0 - smoothstep(0.34, 0.82, abs(a3N.y));   // 1 vertical, 0 floor
+// analytic structure aliases into shimmer at range, so fade it out well
+// before it can: past ~40 m the macro/mottle terms carry the surface alone
+float a3near = 1.0 - smoothstep(14.0, 42.0, distance(vWPos, cameraPosition));
+
+// form-work board courses + panel joints on walls; slab joints on floors
+float a3seam = uSeam * a3near * mix(
+  max(a3edge(vWPos.x, 2.85, 0.022), a3edge(vWPos.z, 2.85, 0.022)) * 0.8,
+  max(a3edge(vWPos.y + 0.13, 1.22, 0.020),
+      a3edge(dot(vWPos.xz, vec2(0.94, 0.34)), 2.45, 0.024)),
+  a3wall);
+
+// sparse aggregate chips / spall — THRESHOLDED, so ~15% of the surface has
+// them and 85% does not. Full-coverage micro noise is the tell; sparsity is
+// the fix.
+float a3chip = uWear * a3near * smoothstep(0.60, 0.84, gC.b);
+
+// drainage: grime running DOWN vertical faces, strongest under the roofline
+float a3run = texture2D(uGrunge,
+  vec2(dot(vWPos.xz, vec2(0.82, 0.57)) * 0.52, vWPos.y * 0.030) + 0.17).r;
+float a3runm = uWear * a3wall * smoothstep(0.56, 0.92, a3run)
+             * smoothstep(9.5, 2.0, vWPos.y);
+
+// ground-contact grime: the splash zone every real wall has, and the edge
+// wear VT §3 asks for at ground contacts — applied off WORLD height so it
+// also lands on props and on any geometry that skipped the aowet attribute
+float a3base = uWear * a3wall * smoothstep(1.25, 0.0, vWPos.y);
+
+diffuseColor.rgb *= (1.0 + uMottle * ((g1 - 0.5) * 1.7 + (g2 - 0.5) * 1.2 + (g3 - 0.5) * 0.55));
+diffuseColor.rgb *= (1.0 - a3seam * 0.40 - a3chip * 0.15 - a3base * 0.24);
+diffuseColor.rgb = mix(diffuseColor.rgb,
+  diffuseColor.rgb * vec3(1.32, 0.80, 0.46), a3runm * 0.42);
 ${opts.aowet ? `diffuseColor.rgb *= vAowet.r;
 diffuseColor.rgb *= (1.0 - vAowet.b * 0.30);` : ""}`)
       .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>
 roughnessFactor = clamp(
-  roughnessFactor * (1.0 + uGrungeAmp * (g1 - 0.5) * 2.0)
-    + uGrungeAmp * 0.5 * (g2 - 0.5)
-    + uGrungeAmp * 0.55 * (g3 - 0.5),
+  roughnessFactor * (1.0 + uGrungeAmp * (g1 - 0.5) * 2.2)
+    + uGrungeAmp * 0.55 * (g2 - 0.5)
+    + uGrungeAmp * 0.30 * (g3 - 0.5)
+    // structure moves ROUGHNESS, not just albedo — a seam that only darkens
+    // is paint. Chips expose smoother broken face, runs and the splash zone
+    // are matte. This is what makes the specular response stop being
+    // "identical across every square metre".
+    + a3seam * 0.15 + a3runm * 0.26 + a3base * 0.11 - a3chip * 0.19,
   0.03, 1.0);
 ${opts.aowet ? "roughnessFactor = clamp(roughnessFactor * (1.0 - vAowet.b * 0.45), 0.03, 1.0);" : ""}
 ${opts.puddle ? "float pud = vAowet.g; roughnessFactor = mix(roughnessFactor, 0.04, pud);" : ""}`);
@@ -497,7 +634,9 @@ if (pud > 0.001 && uPlanarStrength > 0.001) {
   // UNIFORMS (never in the key), only the aowet/puddle code paths fork.
   // Keying on values would fork a program per material — measured 120
   // programs vs the ≤70 budget before this key was value-free.
-  mat.customProgramCacheKey = () => `a3w${opts.aowet ? 1 : 0}p${opts.puddle ? 1 : 0}`;
+  // `tile` forks the code (the uv macro block), `seam`/`wear`/amplitudes do
+  // NOT — they are uniforms, so a per-material tile scale costs no program.
+  mat.customProgramCacheKey = () => `a3w${opts.aowet ? 1 : 0}p${opts.puddle ? 1 : 0}t${W ? 1 : 0}`;
   return mat;
 }
 
@@ -511,10 +650,6 @@ function canvasTex(c, { srgb = true, wrap = true, aniso = 8 } = {}) {
   t.anisotropy = aniso;
   return t;
 }
-
-// texture clones share the image source but keep their own version counter —
-// they must be re-marked for upload once the source image actually arrives
-const CLONES = [];
 
 // ---------------------------------------------------------------- main
 export function makeMaterials(ctx = {}) {
@@ -562,55 +697,69 @@ export function makeMaterials(ctx = {}) {
   });
   const S_ASPHALT = set("asphalt_worn");
   const S_CONCRETE = set("concrete_yard");
-  const S_PLASTER = set("wall_plaster");
+  // (wall_plaster retired: see the plaster material below. Left out of the
+  //  load list so it does not cost 3 texture fetches and delay M.ready.)
   const S_COBBLE = set("cobble");
   const S_WOOD = set("wood");
-  const S_IRON = set("iron_plate");
+  // (iron_plate retired with metalPainted -> metal_panel; leaving the set()
+  //  call in place would keep loading 3 unused textures and inflate M.ready)
+  // Authored by tools/a3_gen_surface_sets.py (VT §3 source priority 2 — there
+  // is no concrete-wall or painted-steel set on disk). `concrete_yard` is
+  // polyhaven ASPHALT_04: correct for the yard apron it is named after, and
+  // the whole reason the walls read as "TV static" to all three iter04
+  // critics — road aggregate magnified on a vertical surface. The formed set
+  // carries pour patches, staining, spall, bugholes and hairline cracks; the
+  // panel set carries seams, bolt rows, a weld bead and rust runs.
+  const S_CONC_FORMED = set("concrete_formed");
+  const S_METAL_PANEL = set("metal_panel");
+  const S_WALL_RENDER = set("wall_render");
 
   const std = (p) => new THREE.MeshStandardMaterial(p);
-  const uv = (m, sx, sy) => {
-    for (const k of ["map", "roughnessMap", "normalMap"]) {
-      if (m[k]) {
-        m[k] = m[k].clone();
-        m[k].repeat.set(sx, sy);
-        CLONES.push(m[k]); // re-marked for upload once the source image lands
-      }
-    }
-    return m;
-  };
+  // NOTE: the old `uv(m, sx, sy)` helper (clone each map, set repeat) is gone.
+  // Tile scale is now the `tile` option on augment() — a per-material uniform
+  // consumed by the world-space projection — so the file textures are shared
+  // instances with no clones, and a material CANNOT silently ship at the
+  // wrong density by forgetting to call a helper (which is exactly how
+  // concreteInterior ended up at 1 m/tile beside concreteWall at 4.6).
 
   // ---- grounds (exterior = WET per LD §5.4: roughness pulled, albedo ×0.7)
-  // metres/TILE: repeat = 1/tileMetres; geometry UVs are authored in metres.
-  const asphalt = augment(uv(std({
+  // `tile` = metres per texture tile, projected from world position in the
+  // shader. Roads get seam:0 (asphalt has no slab joints); the concrete yard
+  // and the arcade slab do get them.
+  const asphalt = augment(std({
     ...S_ASPHALT, color: 0xb4b4b4, roughness: 0.46, metalness: 0.0,
     normalScale: new THREE.Vector2(1.3, 1.3), envMapIntensity: 1.15,
-  }), 1 / 7.3, 1 / 7.3), { aowet: true, puddle: true, grunge: 0.4, mottle: 0.14 });
+  }), { tile: 7.3, aowet: true, puddle: true, grunge: 0.4, mottle: 0.14, seam: 0, wear: 0.7 });
 
-  const asphaltTram = augment(uv(std({
+  const asphaltTram = augment(std({
     ...S_ASPHALT, color: 0x9fa4a8, roughness: 0.5, metalness: 0.0,
     normalScale: new THREE.Vector2(0.8, 0.8), envMapIntensity: 1.1,
-  }), 1 / 9.1, 1 / 9.1), { aowet: true, puddle: true, grunge: 0.42, mottle: 0.12 });
+  }), { tile: 9.1, aowet: true, puddle: true, grunge: 0.42, mottle: 0.12, seam: 0, wear: 0.6 });
 
-  const cobble = augment(uv(std({
+  const cobble = augment(std({
     ...S_COBBLE, color: 0x8e8e93, roughness: 0.5, metalness: 0.0,
     normalScale: new THREE.Vector2(1.15, 1.15), envMapIntensity: 1.25,
-  }), 1 / 3.7, 1 / 3.7), { aowet: true, puddle: true, grunge: 0.38, mottle: 0.16 });
+  }), { tile: 3.7, aowet: true, puddle: true, grunge: 0.38, mottle: 0.16, seam: 0, wear: 0.55 });
 
-  const concreteYard = augment(uv(std({
+  const concreteYard = augment(std({
     ...S_CONCRETE, color: 0xa8a8a4, roughness: 0.55, metalness: 0.0,
     normalScale: new THREE.Vector2(0.8, 0.8), envMapIntensity: 1.0,
-  }), 1 / 6.1, 1 / 6.1), { aowet: true, puddle: true, grunge: 0.45, mottle: 0.12 });
+  }), { tile: 6.1, aowet: true, puddle: true, grunge: 0.45, mottle: 0.12, seam: 0.85, wear: 0.85 });
 
   // interiors stay dry
   const tileInterior = augment(std({
     map: TEX.tile, color: 0xffffff, roughness: 0.78, metalness: 0.0,
-  }), { aowet: true, puddle: true, grunge: 0.3, mottle: 0.1 });
-  TEX.tile.repeat.set(1 / 2.4, 1 / 2.4);
+  }), { tile: 2.4, aowet: true, puddle: true, grunge: 0.3, mottle: 0.1, seam: 0, wear: 0.5 });
 
+  // Was the single worst texel-density offender in the build: no `uv()` call
+  // meant it shaded the shared S_CONCRETE instances at repeat (1,1) = 1 m per
+  // tile, against concreteWall's 4.6 — and S4, the contracted hero material
+  // close-up, is posed in this exact interior. It now runs the formed-concrete
+  // set at an explicit 4.2 m/tile.
   const concreteInterior = augment(std({
-    ...S_CONCRETE, color: 0x8f8f8c, roughness: 0.86, metalness: 0.0,
-    normalScale: new THREE.Vector2(0.5, 0.5),
-  }), { aowet: true, puddle: true, grunge: 0.34, mottle: 0.1 });
+    ...S_CONC_FORMED, color: 0x8f8f8c, roughness: 0.86, metalness: 0.0,
+    normalScale: new THREE.Vector2(0.85, 0.85),
+  }), { tile: 4.2, aowet: true, puddle: true, grunge: 0.4, mottle: 0.12, seam: 0.9, wear: 1.0 });
   // (gallery roof leaks — puddle channel used for the two leak pools)
 
   // ---- walls
@@ -619,10 +768,17 @@ export function makeMaterials(ctx = {}) {
   // on every wall (iter81 S4/S5). Roughness variance (`grunge`) is the term
   // that should carry surface history — it is lit, so it moves with the key —
   // while albedo variance is flat paint and gets the smaller share.
-  const plaster = augment(uv(std({
-    ...S_PLASTER, color: 0x9a938a, roughness: 0.8, metalness: 0.0,
-    normalScale: new THREE.Vector2(0.7, 0.7),
-  }), 1 / 2.1, 1 / 2.1), { aowet: true, grunge: 0.44, mottle: 0.13 });
+  // wall_plaster (polyhaven beige_wall_001) is a near-solid beige swatch —
+  // prep_level_assets.py measures its albedo std at 0.5/255 and says so in a
+  // comment. All of its apparent detail was coming from a Sobel normal map
+  // that measured 70.2 deg mean slope, i.e. amplified JPEG noise; with that
+  // bake fixed the material would be literally featureless clay. wall_render
+  // is cement render over brick with trowel sweep, crazing, staining and
+  // spalled patches that show the brick courses through.
+  const plaster = augment(std({
+    ...S_WALL_RENDER, color: 0xa39c92, roughness: 0.8, metalness: 0.0,
+    normalScale: new THREE.Vector2(0.9, 0.9),
+  }), { tile: 2.7, aowet: true, grunge: 0.44, mottle: 0.10, seam: 0.4, wear: 0.9 });
 
   // Facade tints are a MULTIPLIER on wall_plaster_albedo (measured linear mean
   // 0.342/0.265/0.186), so the shipped effective albedo was 0.053/0.038/0.024 —
@@ -630,20 +786,27 @@ export function makeMaterials(ctx = {}) {
   // "buildings are flat black slabs". Lifted to ~0.088/0.063/0.038: still
   // visibly the soot-stained variant next to `plaster`, but now with enough
   // reflectance for the window grid, sills and grime to survive at ambient.
-  const plasterDark = augment(uv(std({
-    ...S_PLASTER, color: 0x8b857c, roughness: 0.82, metalness: 0.0,
-    normalScale: new THREE.Vector2(0.85, 0.85),
-  }), 1 / 1.7, 1 / 1.7), { aowet: true, grunge: 0.48, mottle: 0.15 });
+  const plasterDark = augment(std({
+    ...S_WALL_RENDER, color: 0x8f8880, roughness: 0.82, metalness: 0.0,
+    normalScale: new THREE.Vector2(1.0, 1.0),
+  // 3.5 m/tile, not 2.6: the spall patches are the highest-contrast thing in
+  // the set, so the number of times the tile repeats across a facade is what
+  // decides whether they read as damage or as a pattern (S8's hero box showed
+  // the repeat at ~4.6 tiles across). Fewer, larger tiles + lower spall
+  // contrast keeps D3's 'visible texture repeat at play distance -> max 6'
+  // cap from firing on a feature that was added to help.
+  }), { tile: 3.5, aowet: true, grunge: 0.48, mottle: 0.12, seam: 0.45, wear: 1.0 });
 
-  const concreteWall = augment(uv(std({
-    ...S_CONCRETE, color: 0x92928d, roughness: 0.82, metalness: 0.0,
-    normalScale: new THREE.Vector2(0.5, 0.5),
-    // 3.1 m/tile put ~600 texels per screen-metre in the S4 close crop, which
-    // read as high-frequency salt-and-pepper rather than render: coarser tiles
-    // move the aggregate pattern DOWN in spatial frequency so it reads as
-    // surface. normalScale pulled back with it — the wet micro-sparkle was
-    // doing most of the glitter.
-  }), 1 / 4.6, 1 / 4.6), { aowet: true, grunge: 0.42, mottle: 0.11 });
+  // Retiling to 4.6 m and dropping normalScale (iter04) reduced the frequency
+  // of the crackle but could not remove it, because the map itself was
+  // polyhaven ASPHALT_04 — a road, on a wall. W3 recorded the leftover as an
+  // open item; this is the actual fix: the authored formed-concrete set, whose
+  // albedo carries decimetre history (pours, stains, spall, bugholes,
+  // hairlines) rather than sub-pixel aggregate.
+  const concreteWall = augment(std({
+    ...S_CONC_FORMED, color: 0x92928d, roughness: 0.82, metalness: 0.0,
+    normalScale: new THREE.Vector2(0.9, 0.9),
+  }), { tile: 4.6, aowet: true, grunge: 0.42, mottle: 0.12, seam: 1.0, wear: 1.0 });
 
   // Trim carries every parapet cap, string course, window jamb, sill and
   // downpipe — i.e. it is the second-largest visible surface in the frame after
@@ -652,10 +815,20 @@ export function makeMaterials(ctx = {}) {
   // against a 54/52/50 wall). Concrete map + a value UNDER the wall it sits on
   // keeps cast trim reading as cast trim, and the mottle/grunge amplitudes push
   // it hard so no two metres of ledge look alike.
-  const trim = augment(uv(std({
-    ...S_CONCRETE, color: 0x5f6167, roughness: 0.72, metalness: 0.0,
-    normalScale: new THREE.Vector2(0.8, 0.8),
-  }), 1 / 0.8, 1 / 0.8), { aowet: true, grunge: 0.5, mottle: 0.16 });
+  // 0.8 m/tile was authored on the assumption that the greeble carried metre
+  // UVs; it does not (props/greeble geometry ships BoxGeometry 0..1), which is
+  // why the C1 string courses read as coarse rock chunks beside a fine-speckle
+  // wall. With the world projection the number finally means what it says —
+  // 1.6 m/tile of cast concrete, seams pulled back so ledges do not stripe.
+  const trim = augment(std({
+    ...S_CONC_FORMED, color: 0x5f6167, roughness: 0.72, metalness: 0.0,
+    normalScale: new THREE.Vector2(0.85, 0.85),
+  // 3.2 m/tile: trim ABUTS the wall on every parapet, string course and sill,
+  // and the whole D3 complaint was adjacent panels at mismatched density. At
+  // 1.6 it ran 640 texels/m against plasterDark's 293 (2.2x, visible); 3.2
+  // puts it at 320 (1.09x) while still reading as a finer casting than the
+  // wall it sits on.
+  }), { tile: 3.2, aowet: true, grunge: 0.5, mottle: 0.16, seam: 0.45, wear: 1.0 });
 
   // ---- props
   // same trap as plasterDark: iron_plate_albedo is a DARK sheet (linear 0.036),
@@ -663,10 +836,15 @@ export function makeMaterials(ctx = {}) {
   // prop (shutters, kiosks, containers, lamp posts) read as a black cut-out
   // rather than a surface. 0xa8aeb2 puts it at ~0.016, still plainly grimy
   // industrial paint and still well under the VT §3 snow ceiling.
-  const metalPainted = augment(uv(std({
-    ...S_IRON, color: 0xa8aeb2, roughness: 0.62, metalness: 0.0,
-    normalScale: new THREE.Vector2(0.9, 0.9), envMapIntensity: 0.9,
-  }), 1 / 1.3, 1 / 1.3), { grunge: 0.5, mottle: 0.25 });
+  // iron_plate is a flat sheet with no fabrication history. The authored panel
+  // set gives every shutter, kiosk, container and lamp post the seams, bolt
+  // rows, weld bead and rust runs critic-b listed by name as missing. seam:0 —
+  // the panel lines are IN the map at a scale that divides the tile, so the
+  // analytic grid would beat against them.
+  const metalPainted = augment(std({
+    ...S_METAL_PANEL, color: 0xa8aeb2, roughness: 0.62, metalness: 0.0,
+    normalScale: new THREE.Vector2(1.0, 1.0), envMapIntensity: 0.9,
+  }), { tile: 2.0, grunge: 0.5, mottle: 0.22, seam: 0, wear: 1.0 });
 
   const steel = augment(std({
     color: 0x9aa0a6, roughness: 0.3, metalness: 1.0, envMapIntensity: 1.2,
@@ -693,15 +871,15 @@ export function makeMaterials(ctx = {}) {
     color: 0x141414, roughness: 0.92, metalness: 0.0,
   }), { grunge: 0.25, mottle: 0.06 });
 
-  const wood = augment(uv(std({
+  const wood = augment(std({
     ...S_WOOD, color: 0xa08a70, roughness: 0.8, metalness: 0.0,
     normalScale: new THREE.Vector2(0.8, 0.8),
-  }), 1 / 1.1, 1 / 1.1), { grunge: 0.4, mottle: 0.24 });
+  }), { tile: 1.1, grunge: 0.4, mottle: 0.24, seam: 0, wear: 0.8 });
 
-  const woodDark = augment(uv(std({
+  const woodDark = augment(std({
     ...S_WOOD, color: 0x6b5a44, roughness: 0.85, metalness: 0.0,
     normalScale: new THREE.Vector2(0.8, 0.8),
-  }), 1 / 0.8, 1 / 0.8), { grunge: 0.42, mottle: 0.26 });
+  }), { tile: 1.1, grunge: 0.42, mottle: 0.26, seam: 0, wear: 0.8 });
 
   const corrugated = augment(std({
     map: TEX.corrugated, color: 0x8e9296, roughness: 0.55, metalness: 0.0,
@@ -773,6 +951,17 @@ export function makeMaterials(ctx = {}) {
     color: 0xffffff, opacity: 1.0,
   });
 
+  // Separate material for the props.js generator-placed GRIME scatter, so its
+  // weight can be tuned without touching the mandatory base decals or the
+  // combat impact decals in core/fx/decals.js. Pushed further off the surface
+  // than decalMat (-3 vs -1) because it is laid on top of the base decals,
+  // and rendered after them.
+  const decalGrimeMat = new THREE.MeshBasicMaterial({
+    map: TEX.decal, transparent: true, depthWrite: false,
+    polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3,
+    color: 0xffffff, opacity: 0.85,
+  });
+
   const cableMat = std({ color: 0x0c0d0e, roughness: 0.7, metalness: 0.0 });
 
   CACHE = {
@@ -786,15 +975,13 @@ export function makeMaterials(ctx = {}) {
     steel, rail, carPaint, carGlass, carTrim, rubber, woodDark, corrugated,
     burlap, tarp, plasticDark, trashBag, cableMat,
     // emissive kit + factories
-    emissive, glowMat, poolMat, windowLit, windowDark, decalMat,
+    emissive, glowMat, poolMat, windowLit, windowDark, decalMat, decalGrimeMat,
     makeNeonCanvas, makeSignCanvas, canvasTex,
     awning: [TEX.awningA, TEX.awningB],
     tex: TEX,
     hooks: GROUND_HOOKS,
     DECAL_UV,
-    ready: Promise.all(pending).then(() => {
-      for (const c of CLONES) c.needsUpdate = true;
-    }),
+    ready: Promise.all(pending),
   };
   return CACHE;
 }

@@ -90,6 +90,68 @@ function withAowet(g) {
   return g;
 }
 
+// Glass-reflection atlas for the UNLIT window states (VT §1 amateur tell #3).
+// Laid out to match materials.js's windowCanvas exactly — 4x2 cells, the four
+// "dark" variants in the LOWER canvas half, which is where the existing
+// cell-4..7 UVs already point — so it drops straight onto the same geometry.
+//
+// Why a texture and not just a brighter material colour: the shipped dark
+// atlas is #141a24 -> #080a0e, i.e. ~0.005 linear, so ANY tint over it stays
+// black; and a flat brightening would lose the mullions and read as a grey
+// sticker. This is the reflection itself — a vertical sky ramp (bright at the
+// head where the pane sees the storm dome, falling to near-black at the cill
+// where it sees the street), one slanted cloud band per variant so no two
+// panes mirror the same thing, and the mullion cross and frame shadow drawn
+// back OVER the reflection. It is bound as emissiveMap, because the reflected
+// sky does not depend on this facade's own illumination: the 128 px baked cube
+// is far too coarse to deliver it through the envMap path, which is exactly
+// why iter04's panes measured RGB 9/10/15.
+function glassReflectCanvas(size = 512) {
+  const c = document.createElement("canvas");
+  c.width = size; c.height = size / 2;
+  const g = c.getContext("2d");
+  const cs = size / 4;
+  g.fillStyle = "#000000"; g.fillRect(0, 0, size, size / 2);
+  // Four genuinely DIFFERENT panes, not four tints of one. A facade whose
+  // every pane mirrors the same slanted cloud at the same angle is the
+  // copy-paste tell wearing a new coat, so the variants differ in ramp
+  // strength, band count, band angle and band height. Combined with the
+  // per-pane horizontal UV flip at the call site that is 8 distinct
+  // reflections, and glassA/glassB run them at two different levels.
+  const VARIANT = [
+    { top: "#63779c", mid: "#1d2532", ramp: 0.46, bands: [[-0.42, -0.30, 0.15, 0.34]] },
+    { top: "#3d4b66", mid: "#161d28", ramp: 0.30, bands: [[-0.24, 0.16, 0.09, 0.22]] },
+    { top: "#6d81a8", mid: "#222a39", ramp: 0.58, bands: [[-0.55, -0.34, 0.07, 0.30], [-0.55, -0.12, 0.04, 0.20]] },
+    { top: "#2f3b52", mid: "#131822", ramp: 0.18, bands: [[0.30, 0.34, 0.05, 0.26]] },
+  ];
+  for (let i = 0; i < 4; i++) {
+    const v = VARIANT[i];
+    const x0 = i * cs, y0 = cs; // lower half = the "dark" row
+    const gr = g.createLinearGradient(0, y0 + 4, 0, y0 + cs - 4);
+    gr.addColorStop(0, v.top);
+    gr.addColorStop(v.ramp, v.mid);
+    gr.addColorStop(1, v.mid);
+    g.fillStyle = gr; g.fillRect(x0 + 3, y0 + 3, cs - 6, cs - 6);
+    for (const [rot, off, hgt, alpha] of v.bands) {
+      g.save();
+      g.beginPath(); g.rect(x0 + 3, y0 + 3, cs - 6, cs - 6); g.clip();
+      g.globalAlpha = alpha;
+      g.fillStyle = "#9cb0d2";
+      g.translate(x0 + cs / 2, y0 + cs / 2); g.rotate(rot);
+      g.fillRect(-cs, cs * off, cs * 2, cs * hgt);
+      g.restore();
+    }
+    g.globalAlpha = 1;
+    g.fillStyle = "rgba(5,7,11,0.92)";           // mullions
+    g.fillRect(x0 + cs / 2 - 2, y0 + 3, 3, cs - 6);
+    g.fillRect(x0 + 3, y0 + cs / 2 - 2, cs - 6, 3);
+    g.fillStyle = "rgba(3,5,9,0.9)";             // frame shadow inside the reveal
+    g.fillRect(x0, y0, cs, 5); g.fillRect(x0, y0 + cs - 5, cs, 5);
+    g.fillRect(x0, y0, 5, cs); g.fillRect(x0 + cs - 5, y0, 5, cs);
+  }
+  return c;
+}
+
 function setCellUV(geo, cell) {
   const uv = geo.getAttribute("uv");
   for (let i = 0; i < uv.count; i++) {
@@ -180,6 +242,37 @@ export async function buildLevel(ctx) {
     asphalt_tram: M.asphaltTram, concrete_yard: M.concreteYard,
     tile_interior: M.tileInterior,
   };
+  // ---- WET-ALBEDO BAKE (VT §4.2 "albedo x 0.8 (darkening)"), LaneC/iter05.
+  // materials.js authors the DRY swatches bright — asphalt 0xb4b4b4 is linear
+  // 0.451, i.e. fresh concrete, and cobble 0x8e8e93 is 0.27. That is why the
+  // iter04 battery measured the road band at luma 103 against a 54 sky: a
+  // 0.45-albedo road under a strong ambient cannot be anything but pale grey,
+  // whatever the lights do. Real rain-soaked asphalt at night sits near 0.05.
+  // The multiplier is baked per-vertex into aowet.r (the shader already does
+  // `diffuseColor.rgb *= vAowet.r`) rather than by editing the swatches, so
+  // the DRY material vocabulary stays honest and the wetness is a property of
+  // THIS level's weather — turn the rain off and the bake is the only thing
+  // that has to change. Interiors stay near-dry; they are under a roof.
+  const WET_ALBEDO = {
+    asphalt: 0.40, asphalt_worn: 0.40, asphalt_tram: 0.42,
+    plaza_cobble: 0.44, concrete_quay: 0.50, concrete_yard: 0.50,
+    concrete_interior: 0.70, tile_interior: 0.74,
+  };
+  const INDOOR_KIND = { concrete_interior: 1, tile_interior: 1 };
+  // Drainage sheen, 0..1 — the field that decides where the wet film SITS.
+  // Two non-commensurate low-frequency terms give slow damp/dry patches, a
+  // higher-frequency term breaks the boundary so the sheen has an edge rather
+  // than a gradient, and the caller adds kerb proximity (water runs to the
+  // edge of the camber). Consumed twice: aowet.b here (materials.js darkens
+  // 0.30x and pulls roughness 0.45x off it) and the wet-specular streak layer
+  // below, so the streaks break up on exactly the same drainage the surface
+  // does — one field, two consumers, they cannot disagree.
+  const sheenAt = (x, z) => {
+    const n1 = Math.sin(x * 0.21 + z * 0.09) * Math.cos(x * 0.062 - z * 0.148);
+    const n2 = Math.sin(x * 0.63 - z * 0.41) * Math.cos(z * 0.55 + x * 0.19);
+    const v = 0.5 + 0.44 * n1 + 0.17 * n2;
+    return Math.min(1, Math.max(0, (v - 0.28) / 0.56));
+  };
   {
     const byMat = new Map();
     const tintNoise = rng(500);
@@ -192,14 +285,23 @@ export async function buildLevel(ctx) {
       const p = g.getAttribute("position");
       const uv = new Float32Array(p.count * 2);
       const a = new Float32Array(p.count * 3);
+      const wetAlb = WET_ALBEDO[r.kind] ?? 0.45;
+      const indoor = !!INDOOR_KIND[r.kind];
       for (let i = 0; i < p.count; i++) {
         const x = p.getX(i), z = p.getZ(i);
         uv[i * 2] = x; uv[i * 2 + 1] = z;
         // macro tint variance (anti-tiling b) + contact AO
         const m = 0.92 + 0.14 * Math.abs(Math.sin(x * 0.53 + z * 0.71) * Math.cos(x * 0.11 - z * 0.17));
-        a[i * 3] = aoAt(x, z) * m;
-        a[i * 3 + 1] = puddleAt(x, z);
-        a[i * 3 + 2] = 0;
+        const ao = aoAt(x, z);
+        const pud = puddleAt(x, z);
+        // kerb proximity: aoAt is 0.62 hard against a solid, 1.0 beyond 1.4 m
+        const kerb = Math.min(1, Math.max(0, (1 - ao) / 0.38));
+        const wet = indoor ? 0 : Math.min(0.95, 0.20 + 0.55 * sheenAt(x, z) + 0.42 * kerb);
+        // standing water is darker still — what you see in a puddle is the
+        // REFLECTION, not the bed, so the bed must not compete with it.
+        a[i * 3] = ao * m * wetAlb * (1 - 0.32 * pud);
+        a[i * 3 + 1] = pud;
+        a[i * 3 + 2] = wet;
       }
       g.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
       g.setAttribute("aowet", new THREE.BufferAttribute(a, 3));
@@ -214,6 +316,218 @@ export async function buildLevel(ctx) {
       group.add(mesh);
     }
     void tintNoise;
+  }
+
+  // ============================================ 1b. WET SPECULAR STREAKS
+  // RANKED FIX #7 — "the contracted payoff of the entire rain-at-blue-hour
+  // premise never arrives: wetness reads only as darkening. There is not one
+  // elongated specular streak." All three iter04 critics reached the same
+  // mechanism independently: "a round blob means the ground is sampling a
+  // diffuse pool DECAL, not a specular reflection."
+  //
+  // They are right, and it cannot be fixed by making the decals prettier: a
+  // decal is painted in WORLD space and a reflection lives in VIEW space, so a
+  // prettier decal is still a sticker that does not move when the player does.
+  // This computes the reflection. On a flat wet plane the mirror image of a
+  // lamp at height h sits at -h, and the specular response at a ground point is
+  // the alignment between the reflected view ray and the direction to the lamp.
+  //
+  // ONE ground-plane mesh over the exterior roads, one draw, with the
+  // practicals passed as a uniform array — NOT a quad per lamp. Two reasons,
+  // both measured: per-lamp quads bounded every streak at the quad's own edge
+  // fade (streaks died around 12 m and read as blobs again), and 15
+  // overlapping 50 m quads pay their fill cost several times on the same
+  // pixels. A single sheet covers each road pixel exactly once.
+  //
+  // No lights are created here (doctrine §3 — A6 owns the pool); this is a
+  // shading term, not a light.
+  //
+  // Acceptance (the critics' own pixel probe, VT §4.2): a contiguous bright
+  // region on the ground beneath a lamp whose VERTICAL extent is at least 3x
+  // its horizontal extent.
+  const SPEC_SLOTS = 12;
+  {
+    const EXTERIOR = {
+      concrete_quay: 1, asphalt_worn: 1, asphalt: 1,
+      plaza_cobble: 1, asphalt_tram: 1, concrete_yard: 1,
+    };
+    // Slot priority, documented because 23 poles do not fit 12 slots and the
+    // choice is a look decision: every REAL practical first (they are the lit
+    // zones the level design is built around), then the neon signage — the
+    // frame's only warm/cool colour contrast, and "puddle reflections of
+    // signage" was asked for by name — then the sodium fakes standing over
+    // open road. Anything indoors or under a canopy is excluded: it has no wet
+    // road to reflect in.
+    const SKIP = { fake_platform_strip: 1, fake_gatehouse: 1 };
+    const poles = (layout.lightPoles || []).filter((p) => !SKIP[p.id]);
+    const rank = (p) => (p.real ? 0 : p.kind === "neon" ? 1 : 2);
+    const chosen = poles.slice().sort((a, b) => rank(a) - rank(b)).slice(0, SPEC_SLOTS);
+    const REACH = { flood: 40, neon_bounce: 26, sodium: 30, skylight: 16, fluorescent: 18, neon: 13, interior: 10 };
+    const GAIN = { flood: 1.30, neon_bounce: 0.55, sodium: 1.0, skylight: 0.5, fluorescent: 0.6, neon: 0.42, interior: 0.4 };
+    // Five saturated neon signs on one wall summed into a magenta film over the
+    // whole plaza the first time this ran (the same "flat pink wash" critic-a
+    // flagged in iter04 S4). A reflection off wet stone is markedly less
+    // saturated than its source — the same physical fact lighting.js already
+    // encodes as BOUNCE_SAT for the plaza aggregate — so signage reflections
+    // keep their hue and give up most of their chroma.
+    const SIGN_SAT = 0.58;
+    const uPos = [], uCol = [];
+    for (let i = 0; i < SPEC_SLOTS; i++) {
+      const p = chosen[i];
+      if (!p) { uPos.push(new THREE.Vector4(0, -500, 0, 1)); uCol.push(new THREE.Color(0, 0, 0)); continue; }
+      const gn = GAIN[p.kind] ?? 1.0;
+      const c = new THREE.Color(p.color);
+      if (p.kind === "neon" || p.kind === "neon_bounce") {
+        const lm = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+        c.setRGB(lm + (c.r - lm) * SIGN_SAT, lm + (c.g - lm) * SIGN_SAT, lm + (c.b - lm) * SIGN_SAT);
+      }
+      uPos.push(new THREE.Vector4(p.pos[0], p.pos[1], p.pos[2], REACH[p.kind] ?? 20));
+      uCol.push(c.multiplyScalar(gn));
+    }
+
+    // Ground sheet: the exterior roads only, re-tessellated at ~2.5 m so the
+    // baked wetness interpolates smoothly.
+    //
+    // BOUNDARY FADE, and it is not cosmetic. The sheet ends where the road
+    // rects end, and an additive layer that stops dead paints a perfectly
+    // STRAIGHT bright boundary across open ground — critic-a's iter04 note
+    // ("a hard-edged flat pink/magenta wash with a STRAIGHT boundary and no
+    // source anywhere in frame ... straight-edged means it is a decal quad,
+    // not light") applies word for word, and the first run of this sheet
+    // reproduced it across the S9 plaza. Fading only at the OUTER edge of the
+    // road network — probed by asking whether the neighbourhood is still road
+    // — keeps interior rect-to-rect joins seamless.
+    const onExtRoad = (x, z) => {
+      for (const r of layout.roads) {
+        if (!EXTERIOR[r.kind]) continue;
+        if (x >= r.min[0] && x <= r.max[0] && z >= r.min[1] && z <= r.max[1]) return true;
+      }
+      return false;
+    };
+    const edgeFade = (x, z) => {
+      let n = 0;
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * Math.PI * 2;
+        if (onExtRoad(x + Math.cos(a) * 2.2, z + Math.sin(a) * 2.2)) n++;
+      }
+      return n / 8;
+    };
+    const geos = [];
+    for (const r of layout.roads) {
+      if (!EXTERIOR[r.kind]) continue;
+      const w = r.max[0] - r.min[0], d = r.max[1] - r.min[1];
+      const sx = Math.max(2, Math.round(w / 2.5)), sz = Math.max(2, Math.round(d / 2.5));
+      const g = new THREE.PlaneGeometry(w, d, sx, sz);
+      g.rotateX(-Math.PI / 2);
+      g.translate(r.min[0] + w / 2, 0.014, r.min[1] + d / 2);
+      const pa = g.getAttribute("position");
+      const aW = new Float32Array(pa.count);
+      for (let i = 0; i < pa.count; i++) {
+        const x = pa.getX(i), z = pa.getZ(i);
+        const ao = aoAt(x, z);
+        const kerb = Math.min(1, Math.max(0, (1 - ao) / 0.38));
+        // The SAME drainage field the albedo bake uses, so the sheen breaks up
+        // exactly where the surface is dry — "sheen breaking up along
+        // drainage" was asked for by name, and one shared field is the only
+        // way the two can never contradict each other. Floor is 0.35, not 0:
+        // at 0.16 the dry patches chopped every streak into short segments
+        // that measured as blobs again.
+        aW[i] = Math.min(1, 0.35 + 0.45 * sheenAt(x, z) + 0.26 * kerb + 0.55 * puddleAt(x, z))
+              * ao * edgeFade(x, z);
+      }
+      g.deleteAttribute("normal");
+      g.deleteAttribute("uv");
+      g.setAttribute("aWet", new THREE.BufferAttribute(aW, 1));
+      geos.push(g);
+    }
+    if (geos.length) {
+      const mat = new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        uniforms: {
+          uTime: GROUND_HOOKS.time,
+          uGain: { value: 2.3 },
+          uAR: { value: 0.30 },   // radial roughness of the water film
+          uAT: { value: 0.075 },  // tangential roughness — the streak's WIDTH
+          uLPos: { value: uPos },
+          uLCol: { value: uCol },
+        },
+        vertexShader: /* glsl */ `
+          attribute float aWet;
+          varying vec3 vW; varying float vWet;
+          void main() {
+            vec4 wp = modelMatrix * vec4(position, 1.0);
+            vW = wp.xyz; vWet = aWet;
+            gl_Position = projectionMatrix * viewMatrix * wp;
+          }`,
+        fragmentShader: /* glsl */ `
+          uniform float uTime, uGain, uAR, uAT;
+          uniform vec4 uLPos[${SPEC_SLOTS}];
+          uniform vec3 uLCol[${SPEC_SLOTS}];
+          varying vec3 vW; varying float vWet;
+          void main() {
+            if (vWet < 0.02) discard;
+            vec3 toC = cameraPosition - vW;
+            vec3 V = toC / max(length(toC), 1e-4);
+            // Rain-agitated micro-tilt of the water film: two scrolling wave
+            // trains perturb the SURFACE NORMAL (not the reflected ray), which
+            // is what a real film does and what makes the streak shiver and
+            // ladder instead of sitting there like paint.
+            float r1 = sin(vW.x * 3.10 + uTime * 1.7) * sin(vW.z * 2.70 - uTime * 1.3);
+            float r2 = sin(vW.x * 7.30 - uTime * 2.9) * sin(vW.z * 6.10 + uTime * 2.2);
+            vec3 N = normalize(vec3((r1 + 0.55 * r2) * 0.020 * vWet, 1.0,
+                                    (r2 - 0.55 * r1) * 0.020 * vWet));
+            // grazing gain: a wet surface is a Fresnel mirror at low angles and
+            // nearly matte from straight above — which is why this payoff
+            // belongs to the street-level camera and stays quiet in top-downs.
+            float graze = 0.22 + 0.78 * smoothstep(0.0, 0.55, 1.0 - abs(V.y));
+            vec3 sum = vec3(0.0);
+            for (int i = 0; i < ${SPEC_SLOTS}; i++) {
+              vec4 LP = uLPos[i];
+              vec3 Lv = LP.xyz - vW;
+              float dl = length(Lv);
+              if (dl > LP.w) continue;
+              vec3 L = Lv / max(dl, 1e-4);
+              // ANISOTROPIC lobe, and the anisotropy IS the fix. An isotropic
+              // lobe cannot make a streak: measured on iter67/68 it painted a
+              // patch at 1.10:1 and 0.36:1 vertical-to-horizontal against the
+              // contract's >= 3:1, because a lobe slack enough to still be
+              // alive 25 m down the road is also about 2.4 m WIDE by the time
+              // it gets there. Splitting the half-vector's tangent-plane tilt
+              // into its RADIAL part (along the ground line to the lamp) and
+              // its TANGENTIAL part, and running the tangential axis ~4x
+              // tighter, keeps the reach and collapses the width. Not a cheat:
+              // a rain-struck water film has flow-stretched microfacets, and
+              // that is the physical reason wet-road reflections streak.
+              vec3 H = normalize(V + L);
+              float NoH = dot(N, H);
+              if (NoH <= 0.0) continue;
+              vec3 Hn = H - N * NoH;
+              vec3 T = normalize(vec3(L.x, 0.0, L.z) + vec3(1e-5, 0.0, 1e-5));
+              vec3 B = vec3(-T.z, 0.0, T.x);
+              float ht = dot(Hn, T) / uAR;
+              float hb = dot(Hn, B) / uAT;
+              float q = ht * ht + hb * hb;
+              // three nested widths off ONE anisotropic distance: the mirror
+              // image of the lamp head, the streak, and a halo that ties the
+              // streak to the road it is lying on
+              float lobe = exp(-q / 0.09) * 0.85 + exp(-q) * 0.85 + exp(-q / 4.0) * 0.018;
+              float atten = 1.0 - smoothstep(LP.w * 0.55, LP.w, dl);
+              sum += uLCol[i] * lobe * atten;
+            }
+            gl_FragColor = vec4(sum * (vWet * graze * uGain), 1.0);
+          }`,
+      });
+      const mesh = new THREE.Mesh(mergeGeometries(geos, false), mat);
+      mesh.name = "wet_specular";
+      mesh.renderOrder = 8; // under the fog discs (9) and head glows (11)
+      mesh.frustumCulled = false;
+      if (mesh.layers) mesh.layers.enable(3); // seen by the planar mirror pass
+      group.add(mesh);
+      console.log(`[level] wet-specular sheet: ${geos.length} road panels, ` +
+        `${chosen.length}/${SPEC_SLOTS} practical slots (VT §4.2 streak payoff)`);
+    }
   }
 
   // ---- canal water (S1: skyglow spec over the freight canal)
@@ -231,6 +545,13 @@ export async function buildLevel(ctx) {
     g.setAttribute("aowet", new THREE.BufferAttribute(a, 3));
     const mesh = new THREE.Mesh(g, M.water);
     mesh.name = "canal_water";
+    // The level's ONE ripple clock hangs off this mesh, and three other
+    // consumers now read it (puddle ripple normals, the wet-specular streak
+    // layer, the tide rings). A culled driver is a stopped clock, so this
+    // mesh opts out of frustum culling — it is a 24x12 grid, the cheapest
+    // possible always-on draw, and it sits at the map edge where it was
+    // visible in most framings anyway.
+    mesh.frustumCulled = false;
     group.add(mesh);
     // ripple time driver (shared GROUND_HOOKS.time — fixed step, battery-stable)
     mesh.onBeforeRender = () => { GROUND_HOOKS.time.value = (GROUND_HOOKS.time.value + 1 / 60) % 3600; };
@@ -334,9 +655,63 @@ export async function buildLevel(ctx) {
   const facadeDecalQ = [];
   {
     const wallGeos = { a: [], b: [], c: [] };
-    const trimGeos = [], winLit = [], winDark = [], roofGeos = [];
+    const trimGeos = [], roofGeos = [];
     const wr = rng(90210);
     let litCount = 0;
+
+    // ---- WINDOW STATES (ranked fix #9; VT §1 amateur tell #3 "the dead black
+    // window texture"). iter04 measured facade windows at RGB 9/10/15 across a
+    // whole building, and all three critics named it independently: "dozens of
+    // dead flat-black window rectangles with no glass, no frame depth and no
+    // interior shell, repeated in identical grid rows".
+    //
+    // Two separate defects hide inside that one sentence and they need
+    // different fixes. (1) The panes were BLACK: windowDark is a 0x555a60 tint
+    // over a 0x141a24..0x080a0e atlas, which multiplies out near 0.005 linear —
+    // black by construction, whatever the lighting does. (2) There were only
+    // TWO states in the whole ward, lit and dead, at a flat 12% coin flip.
+    // A real block at midnight shows warm rooms, blue TV/fluorescent rooms,
+    // rooms lit through a blind, empty rooms whose glass mirrors the sky, and
+    // boarded openings — and the lit ones CLUSTER, because a lit room usually
+    // has a lit neighbour.
+    //
+    // Six states, built as clones of A3's two so the atlas, the fog flag and
+    // the vocabulary all stay single-sourced. The unlit ones are never black:
+    // glassA/glassB are low-roughness dielectrics with a strong envMap, so
+    // they mirror the storm sky and the city glow — that IS the "interior
+    // shell" read, at zero geometry, and it is what real glass does at night.
+    const WIN = (() => {
+      const mk = (base, f) => { const m = base.clone(); f(m); return m; };
+      const glassTex = M.canvasTex(glassReflectCanvas(512), { wrap: false });
+      return {
+        lit_warm: M.windowLit,
+        lit_cool: mk(M.windowLit, (m) => {
+          m.emissive.set(0xc4d8ff); m.emissiveIntensity = 1.05; // fluorescent / screen
+        }),
+        lit_dim: mk(M.windowLit, (m) => {
+          m.emissive.set(0xffbe78); m.emissiveIntensity = 0.40; // hall light through a door
+        }),
+        blind: mk(M.windowDark, (m) => {
+          // pale blind fills the pane — lit by the world, never a mirror
+          m.color.set(0x7a7466); m.roughness = 0.62; m.envMapIntensity = 0.45;
+          m.emissiveMap = glassTex; m.emissive.set(0xffffff); m.emissiveIntensity = 0.05;
+        }),
+        glassA: mk(M.windowDark, (m) => {
+          // clean glass: a sharp mirror of the storm dome
+          m.color.set(0x2c3546); m.roughness = 0.07; m.envMapIntensity = 2.6;
+          m.emissiveMap = glassTex; m.emissive.set(0xffffff); m.emissiveIntensity = 0.20;
+        }),
+        glassB: mk(M.windowDark, (m) => {
+          // grimy glass: same reflection, dimmer and softer
+          m.color.set(0x39424f); m.roughness = 0.17; m.envMapIntensity = 1.9;
+          m.emissiveMap = glassTex; m.emissive.set(0xffffff); m.emissiveIntensity = 0.115;
+        }),
+      };
+    })();
+    const winByState = {
+      lit_warm: [], lit_cool: [], lit_dim: [], blind: [], glassA: [], glassB: [],
+    };
+    const LIT_STATE = { lit_warm: 1, lit_cool: 1, lit_dim: 1 };
     const faceDirs = [
       { n: [1, 0], ax: "z" }, { n: [-1, 0], ax: "z" },
       { n: [0, 1], ax: "x" }, { n: [0, -1], ax: "x" },
@@ -344,6 +719,21 @@ export async function buildLevel(ctx) {
     for (const b of layout.buildings) {
       if (!b.box) continue;
       const key = ["a", "b", "c"][(b.id.charCodeAt(4) || 0) % 3];
+      // ---- per-building window RHYTHM. The "perfect copy-paste rows at
+      // identical spacing" tell was literal: column pitch 2.70, floor pitch
+      // 2.95 and pane 1.25x1.55 were four GLOBAL constants, so every mass in
+      // the ward was drawn on the same graph paper and two adjacent facades
+      // lined up to the millimetre. Buildings put up by different people in
+      // different decades do not. Derived from the building's own id so the
+      // rhythm is stable across runs (R21) and unique per mass.
+      let _bh = 2166136261;
+      for (let i = 0; i < b.id.length; i++) { _bh ^= b.id.charCodeAt(i); _bh = Math.imul(_bh, 16777619); }
+      const bSeed = rng(_bh >>> 0);
+      const colPitch = 2.30 + bSeed() * 0.95;   // 2.30 – 3.25 m
+      const floorPitch = 2.72 + bSeed() * 0.55; // 2.72 – 3.27 m
+      const winW = 0.95 + bSeed() * 0.55;       // 0.95 – 1.50 m
+      const winH = 1.30 + bSeed() * 0.50;       // 1.30 – 1.80 m
+      const hw = winW / 2, hh = winH / 2;
       // 1 cm XZ inset kills coplanar z-fighting where two building boxes
       // share a plane (visual only — colliders keep the authored extents)
       const bMin = [b.box.min[0] + 0.01, b.box.min[1], b.box.min[2] + 0.01];
@@ -390,7 +780,7 @@ export async function buildLevel(ctx) {
       // trim batch — no extra draw call, no extra material.
       const bFloors = b.floors || 1;
       for (let fl = 1; fl < bFloors; fl++) {
-        const cy = 0.7 + fl * 2.95;
+        const cy = 0.7 + fl * floorPitch; // tracks the window rows, per building
         if (cy > max[1] - 0.9) break;
         trimGeos.push(boxGeo([min[0] - 0.12, cy, min[2] - 0.12], [max[0] + 0.12, cy + 0.18, min[2] + 0.02]));
         trimGeos.push(boxGeo([min[0] - 0.12, cy, max[2] - 0.02], [max[0] + 0.12, cy + 0.18, max[2] + 0.12]));
@@ -425,58 +815,97 @@ export async function buildLevel(ctx) {
         const facePos = f.n[0] > 0 ? max[0] : f.n[0] < 0 ? min[0] : f.n[1] > 0 ? max[2] : min[2];
         // skip faces at the map boundary (never seen from inside)
         if (Math.abs(facePos) >= 57.5) continue;
-        const cols = Math.floor((span - 1.4) / 2.7);
+        const cols = Math.floor((span - winW - 1.2) / colPitch) + 1;
         if (cols < 1) continue;
-        const pad = (span - cols * 2.7) / 2 + 1.35;
+        const pad = (span - (cols - 1) * colPitch) / 2;
+        let prevLit = false;
         for (let fl = 0; fl < floors; fl++) {
-          const wy = 2.15 + fl * 2.95;
-          if (wy + 0.85 > max[1] - 0.6) break;
+          const wy = 2.15 + fl * floorPitch;
+          if (wy + hh + 0.15 > max[1] - 0.6) break;
+          prevLit = false; // a new floor starts a new occupancy run
           for (let cJ = 0; cJ < cols; cJ++) {
-            const wc = lo + pad + cJ * 2.7;
+            const wc = lo + pad + cJ * colPitch;
             // VT §1 / D7-10: "every window either lit or honestly dark". At
             // 19 lit windows across the whole ward, a long facade (S5) had none
-            // and the street read abandoned rather than working-late.
-            const lit = litCount < 38 && wr() < 0.12;
-            if (lit) litCount++;
-            const g = new THREE.PlaneGeometry(1.25, 1.55);
-            const cell = lit ? (wr() * 4) | 0 : 4 + ((wr() * 4) | 0);
-            // atlas: 4 lit cells (row 0), 4 dark (row 1) on a 4×2 sheet
-            const uv = g.getAttribute("uv");
-            for (let i = 0; i < uv.count; i++) {
-              uv.setXY(i, ((cell % 4) + uv.getX(i)) / 4, cell < 4 ? 0.5 + uv.getY(i) / 2 : uv.getY(i) / 2);
+            // and the street read abandoned rather than working-late. The flat
+            // 12% coin flip that replaced it sprinkled them instead: lit rooms
+            // cluster, so a lit neighbour raises the odds sharply.
+            const pLit = prevLit ? 0.44 : 0.085;
+            let state, boarded = false;
+            if (litCount < 46 && wr() < pLit) {
+              const t = wr();
+              state = t < 0.56 ? "lit_warm" : t < 0.82 ? "lit_dim" : "lit_cool";
+              litCount++; prevLit = true;
+            } else {
+              prevLit = false;
+              const t = wr();
+              if (t < 0.055) { state = "glassA"; boarded = true; }
+              else if (t < 0.24) state = "blind";
+              else if (t < 0.64) state = "glassA";
+              else state = "glassB";
             }
-            if (f.n[0] > 0) { g.rotateY(Math.PI / 2); g.translate(facePos + 0.03, wy, wc); }
-            else if (f.n[0] < 0) { g.rotateY(-Math.PI / 2); g.translate(facePos - 0.03, wy, wc); }
-            else if (f.n[1] > 0) { g.translate(wc, wy, facePos + 0.03); }
-            else { g.rotateY(Math.PI); g.translate(wc, wy, facePos - 0.03); }
-            (lit ? winLit : winDark).push(g);
+            const lit = !!LIT_STATE[state];
+            // A boarded opening keeps its reveal but loses its pane — the
+            // cheapest possible break in a facade's rhythm, and every derelict
+            // port block has a few.
+            if (boarded) {
+              const bd = 0.06;
+              if (f.n[0]) {
+                const s = f.n[0] > 0 ? 1 : -1;
+                trimGeos.push(boxGeo([facePos + (s > 0 ? 0 : -bd), wy - hh, wc - hw],
+                                     [facePos + (s > 0 ? bd : 0), wy + hh, wc + hw]));
+              } else {
+                const s = f.n[1] > 0 ? 1 : -1;
+                trimGeos.push(boxGeo([wc - hw, wy - hh, facePos + (s > 0 ? 0 : -bd)],
+                                     [wc + hw, wy + hh, facePos + (s > 0 ? bd : 0)]));
+              }
+            } else {
+              const g = new THREE.PlaneGeometry(winW, winH);
+              const cell = lit ? (wr() * 4) | 0 : 4 + ((wr() * 4) | 0);
+              // atlas: 4 lit cells (row 0), 4 dark (row 1) on a 4×2 sheet.
+              // Mirroring u inside the cell doubles the apparent variant count
+              // for free — 4 authored reflections read as 8, which is what
+              // stops a 30-pane facade from repeating visibly.
+              const flip = wr() < 0.5;
+              const uv = g.getAttribute("uv");
+              for (let i = 0; i < uv.count; i++) {
+                const u = flip ? 1 - uv.getX(i) : uv.getX(i);
+                uv.setXY(i, ((cell % 4) + u) / 4, cell < 4 ? 0.5 + uv.getY(i) / 2 : uv.getY(i) / 2);
+              }
+              if (f.n[0] > 0) { g.rotateY(Math.PI / 2); g.translate(facePos + 0.03, wy, wc); }
+              else if (f.n[0] < 0) { g.rotateY(-Math.PI / 2); g.translate(facePos - 0.03, wy, wc); }
+              else if (f.n[1] > 0) { g.translate(wc, wy, facePos + 0.03); }
+              else { g.rotateY(Math.PI); g.translate(wc, wy, facePos - 0.03); }
+              winByState[state].push(g);
+            }
             if (lit) litWindows.push([f.n[0] ? facePos + f.n[0] * 0.03 : wc, wy, f.n[1] ? facePos + f.n[1] * 0.03 : wc, f.n]);
             // ---- reveal: jambs + lintel standing 11 cm proud of the wall,
             // opening exactly the glass size. The glass then sits at the BACK
             // of a real box, so the key throws a hard jamb shadow across it and
             // the lintel shades its top — a window reads as an opening in a
             // thick wall instead of a sticker on a flat plane (iter03/81 tell).
-            const rp = 0.11, jw = 0.13, sw = 1.4;
+            const rp = 0.11, jw = 0.13, sw = winW + 0.15;
+            const yb = wy - hh - 0.075, yt = wy + hh + 0.125;
             const n0 = f.n[0], n1 = f.n[1];
             const lo0 = (n) => facePos + Math.min(0, n * rp) - 0.01;
             const hi0 = (n) => facePos + Math.max(0, n * rp) + 0.01;
             if (n0) {
               const a = lo0(n0), bx = hi0(n0);
               // jambs
-              trimGeos.push(boxGeo([a, wy - 0.85, wc - 0.625 - jw], [bx, wy + 0.9, wc - 0.625]));
-              trimGeos.push(boxGeo([a, wy - 0.85, wc + 0.625], [bx, wy + 0.9, wc + 0.625 + jw]));
+              trimGeos.push(boxGeo([a, yb, wc - hw - jw], [bx, yt, wc - hw]));
+              trimGeos.push(boxGeo([a, yb, wc + hw], [bx, yt, wc + hw + jw]));
               // lintel
-              trimGeos.push(boxGeo([a, wy + 0.775, wc - 0.625 - jw], [bx, wy + 0.9, wc + 0.625 + jw]));
+              trimGeos.push(boxGeo([a, wy + hh, wc - hw - jw], [bx, yt, wc + hw + jw]));
               // sill (sloped read: sits proud of the jambs)
-              trimGeos.push(boxGeo([a - 0.04, wy - 0.9, wc - sw / 2], [bx + 0.04, wy - 0.79, wc + sw / 2]));
-              facadeDecalQ.push([facePos + n0 * 0.02, wy - 1.62, wc, 1.25, 1.4, n0 > 0 ? Math.PI / 2 : -Math.PI / 2, "drip_stain"]);
+              trimGeos.push(boxGeo([a - 0.04, yb - 0.05, wc - sw / 2], [bx + 0.04, yb + 0.06, wc + sw / 2]));
+              facadeDecalQ.push([facePos + n0 * 0.02, wy - hh - 0.85, wc, winW, 1.4, n0 > 0 ? Math.PI / 2 : -Math.PI / 2, "drip_stain"]);
             } else {
               const a = lo0(n1), bz = hi0(n1);
-              trimGeos.push(boxGeo([wc - 0.625 - jw, wy - 0.85, a], [wc - 0.625, wy + 0.9, bz]));
-              trimGeos.push(boxGeo([wc + 0.625, wy - 0.85, a], [wc + 0.625 + jw, wy + 0.9, bz]));
-              trimGeos.push(boxGeo([wc - 0.625 - jw, wy + 0.775, a], [wc + 0.625 + jw, wy + 0.9, bz]));
-              trimGeos.push(boxGeo([wc - sw / 2, wy - 0.9, a - 0.04], [wc + sw / 2, wy - 0.79, bz + 0.04]));
-              facadeDecalQ.push([wc, wy - 1.62, facePos + n1 * 0.02, 1.25, 1.4, n1 > 0 ? 0 : Math.PI, "drip_stain"]);
+              trimGeos.push(boxGeo([wc - hw - jw, yb, a], [wc - hw, yt, bz]));
+              trimGeos.push(boxGeo([wc + hw, yb, a], [wc + hw + jw, yt, bz]));
+              trimGeos.push(boxGeo([wc - hw - jw, wy + hh, a], [wc + hw + jw, yt, bz]));
+              trimGeos.push(boxGeo([wc - sw / 2, yb - 0.05, a - 0.04], [wc + sw / 2, yb + 0.06, bz + 0.04]));
+              facadeDecalQ.push([wc, wy - hh - 0.85, facePos + n1 * 0.02, winW, 1.4, n1 > 0 ? 0 : Math.PI, "drip_stain"]);
             }
           }
         }
@@ -503,16 +932,22 @@ export async function buildLevel(ctx) {
       rm.castShadow = true;
       group.add(rm);
     }
-    if (winDark.length) {
-      const wd = new THREE.Mesh(mergeGeometries(winDark, false), M.windowDark);
-      wd.name = "windows_dark";
-      group.add(wd);
+    // Six merged window meshes (was two). +4 draw calls out of ~244 buys the
+    // whole "a living building" read; the panes stay merged per state so the
+    // batch count never scales with window count.
+    let winTotal = 0;
+    for (const k of Object.keys(winByState)) {
+      const arr = winByState[k];
+      if (!arr.length) continue;
+      winTotal += arr.length;
+      const m = new THREE.Mesh(mergeGeometries(arr, false), WIN[k]);
+      m.name = `windows_${k}`;
+      m.castShadow = false;
+      m.receiveShadow = true;
+      group.add(m);
     }
-    if (winLit.length) {
-      const wl = new THREE.Mesh(mergeGeometries(winLit, false), M.windowLit);
-      wl.name = "windows_lit";
-      group.add(wl);
-    }
+    console.log(`[level] windows ${winTotal} panes in 6 states, ${litCount} lit ` +
+      `(warm/dim/cool), rhythm per building (VT §1 tell #3)`);
   }
 
   // ================================================= 4. BOULEVARD FURNITURE
@@ -940,8 +1375,15 @@ export async function buildLevel(ctx) {
   {
     if (poolStatic.length) {
       // 0.18: at 0.3 the sodium ground pools stacked with lighting.js's fog
-      // discs + the real spot into the iter01 S4 orange-soup wash
-      const mat = M.poolMat(0xffffff, 0.18);
+      // discs + the real spot into the iter01 S4 orange-soup wash.
+      // 0.18 -> 0.10 (LaneC/iter05): this decal IS the "round blob" all three
+      // iter04 critics identified — "S5's lamp throws a soft ROUND blob on the
+      // street, not a streak", "round blob gradients under each lamp, which
+      // read as painted ground decals rather than reflected light". It was
+      // also outshining the new wet-specular layer, so the streak had nothing
+      // to be seen against. Kept, not deleted: a real sodium head does throw a
+      // diffuse pool. It just has to sit UNDER the reflection, not over it.
+      const mat = M.poolMat(0xffffff, 0.10);
       mat.vertexColors = true;
       const m = new THREE.Mesh(mergeGeometries(poolStatic, false), mat);
       m.name = "light_pools";
@@ -954,7 +1396,7 @@ export async function buildLevel(ctx) {
       // saturated gel laid over the stones rather than light landing on them
       // (iter81 S4). Additive spill has to stay UNDER the surface it lands on
       // or the surface stops existing.
-      const mat = M.poolMat(0xffffff, 0.11);
+      const mat = M.poolMat(0xffffff, 0.075);
       mat.vertexColors = true;
       const m = new THREE.Mesh(mergeGeometries(poolPlaza, false), mat);
       m.name = "light_pools_plaza";

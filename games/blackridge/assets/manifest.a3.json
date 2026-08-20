@@ -1,7 +1,7 @@
 {
  "lane": "A3-level",
- "updated": "2026-08-19",
- "note": "level PBR texture sets + cc0-city prop meshes. All other level textures (facade/trim/emissive/decal/glow/ripple/metal/burlap/tarp) are canvas-procedural at load \u2014 zero payload.",
+ "updated": "2026-08-20",
+ "note": "level PBR texture sets (imported + authored) + cc0-city prop meshes. All other level textures (emissive/decal/glow/ripple/burlap/tarp/awning/window) are canvas-procedural at load \u2014 zero payload. NOTE: wall_plaster_* and iron_plate_* are still emitted but are no longer FETCHED by materials.js (retired in favour of wall_render / metal_panel); they are candidates for deletion once no lane references them.",
  "entries": [
   {
    "path": "assets/textures/asphalt_worn_albedo.webp",
@@ -19,7 +19,7 @@
   },
   {
    "path": "assets/textures/asphalt_worn_normal.webp",
-   "bytes": 346212,
+   "bytes": 91860,
    "kind": "imported",
    "license": "CC0 (Poly Haven)",
    "source": "pipeline/assets/_downloaded/polyhaven-textures/asphalt_02 (normal; normals Sobel-generated from displacement at build time)"
@@ -40,7 +40,7 @@
   },
   {
    "path": "assets/textures/concrete_yard_normal.webp",
-   "bytes": 161292,
+   "bytes": 33830,
    "kind": "imported",
    "license": "CC0 (Poly Haven)",
    "source": "pipeline/assets/_downloaded/polyhaven-textures/asphalt_04 (normal; normals Sobel-generated from displacement at build time)"
@@ -61,7 +61,7 @@
   },
   {
    "path": "assets/textures/wall_plaster_normal.webp",
-   "bytes": 165990,
+   "bytes": 29360,
    "kind": "imported",
    "license": "CC0 (Poly Haven)",
    "source": "pipeline/assets/_downloaded/polyhaven-textures/beige_wall_001 (normal; normals Sobel-generated from displacement at build time)"
@@ -128,6 +128,69 @@
    "kind": "generated",
    "license": "generated (FFG pipeline, original)",
    "source": "pipeline/assets/generated-materials/iron_plate (normal; normals Sobel-generated from displacement at build time)"
+  },
+  {
+   "path": "assets/textures/concrete_formed_albedo.webp",
+   "bytes": 13668,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "tools/a3_gen_surface_sets.py::concrete_formed (albedo; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)"
+  },
+  {
+   "path": "assets/textures/concrete_formed_rough.webp",
+   "bytes": 5088,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "tools/a3_gen_surface_sets.py::concrete_formed (rough; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)"
+  },
+  {
+   "path": "assets/textures/concrete_formed_normal.webp",
+   "bytes": 16238,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "tools/a3_gen_surface_sets.py::concrete_formed (normal; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)"
+  },
+  {
+   "path": "assets/textures/metal_panel_albedo.webp",
+   "bytes": 4772,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "tools/a3_gen_surface_sets.py::metal_panel (albedo; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)"
+  },
+  {
+   "path": "assets/textures/metal_panel_rough.webp",
+   "bytes": 3590,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "tools/a3_gen_surface_sets.py::metal_panel (rough; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)"
+  },
+  {
+   "path": "assets/textures/metal_panel_normal.webp",
+   "bytes": 2302,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "tools/a3_gen_surface_sets.py::metal_panel (normal; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)"
+  },
+  {
+   "path": "assets/textures/wall_render_albedo.webp",
+   "bytes": 11306,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "tools/a3_gen_surface_sets.py::wall_render (albedo; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)"
+  },
+  {
+   "path": "assets/textures/wall_render_rough.webp",
+   "bytes": 3362,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "tools/a3_gen_surface_sets.py::wall_render (rough; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)"
+  },
+  {
+   "path": "assets/textures/wall_render_normal.webp",
+   "bytes": 9428,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "tools/a3_gen_surface_sets.py::wall_render (normal; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)"
   },
   {
    "path": "assets/props/car_sedan.glb",

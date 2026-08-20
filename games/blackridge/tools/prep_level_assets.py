@@ -32,17 +32,19 @@ import numpy as np
 
 # ---------------------------------------------------------------- textures
 # (name, source kind, albedo px, rough px, normal px, albedo q, normal q,
-#  normal strength). Payload discipline: menu budget is 6 MB TOTAL and the
+#  ns = TARGET RMS SLOPE of the baked normal (see sobel_normal) — it was a
+#  raw multiplier until 2026-08-20 and the old 1.8-2.2 values baked 68-78 deg
+#  random normals. Payload discipline: menu budget is 6 MB TOTAL and the
 # vendored three is already 3.65 MB — the A3 texture share targets <= 1.6 MB.
 SETS = [
     # hero ground: cracked worn asphalt (alleys, market street, cut, quay edge)
-    dict(name="asphalt_worn", src=("ph", "asphalt_02"), a=1024, r=512, n=768, q=58, nq=58, ns=2.2),
+    dict(name="asphalt_worn", src=("ph", "asphalt_02"), a=1024, r=512, n=768, q=58, nq=62, ns=0.34),
     # worn concrete: customs yard, quay apron
-    dict(name="concrete_yard", src=("ph", "asphalt_04"), a=1024, r=512, n=512, q=60, nq=70, ns=1.8),
+    dict(name="concrete_yard", src=("ph", "asphalt_04"), a=1024, r=512, n=512, q=60, nq=72, ns=0.28),
     # plaster walls (buildings, arcade interior walls) — albedo is near-flat
     # beige (std 0.5 measured): 512 is free; facade variance comes from the
     # grunge/vertex layers in materials.js, not this map.
-    dict(name="wall_plaster", src=("ph", "beige_wall_001"), a=512, r=512, n=512, q=68, nq=70, ns=2.0),
+    dict(name="wall_plaster", src=("ph", "beige_wall_001"), a=512, r=512, n=512, q=68, nq=72, ns=0.16),
     # plaza cobbles (hero puddle ground)
     dict(name="cobble", src=("gen", "stone_cobble"), a=1024, r=512, n=1024, q=68, nq=62, ns=1.0),
     # crates / stalls / pallets
@@ -55,16 +57,52 @@ LICENSES = {"ph": "CC0 (Poly Haven)", "gen": "generated (FFG pipeline, original)
 SOURCES  = {"ph": "pipeline/assets/_downloaded/polyhaven-textures",
             "gen": "pipeline/assets/generated-materials"}
 
-def sobel_normal(gray_f32, strength):
-    """height (HxW float 0..1) -> normal map uint8 RGB (OpenGL convention)."""
-    h = gray_f32
-    gx = np.zeros_like(h); gy = np.zeros_like(h)
-    gx[:, 1:-1] = (h[:, 2:] - h[:, :-2]) * 0.5
-    gx[:, 0] = h[:, 1] - h[:, -1]; gx[:, -1] = h[:, 0] - h[:, -2]  # wrap (tiling)
-    gy[1:-1, :] = (h[2:, :] - h[:-2, :]) * 0.5
-    gy[0, :] = h[1, :] - h[-1, :]; gy[-1, :] = h[0, :] - h[-2, :]
-    nx = -gx * strength * 255.0
-    ny =  gy * strength * 255.0   # +Y (OpenGL); three.js default
+def _blur_wrap(a, passes=2):
+    """Separable 3-tap box blur with wraparound (keeps the set tiling)."""
+    for _ in range(passes):
+        a = (np.roll(a, 1, 0) + a + np.roll(a, -1, 0)) / 3.0
+        a = (np.roll(a, 1, 1) + a + np.roll(a, -1, 1)) / 3.0
+    return a
+
+
+def sobel_normal(gray_f32, rms_slope):
+    """height (HxW float 0..1) -> normal map uint8 RGB (OpenGL convention).
+
+    `rms_slope` is the TARGET RMS tangent of the surface (0.35 ~ 19 deg mean
+    slope), NOT a raw gradient multiplier.
+
+    THE BUG THIS REPLACES (measured 2026-08-20, iter04 D3 = 2.67/10):
+    the old form was `nx = -gx * strength * 255.0` where `gx` is already a
+    per-pixel central difference of a 0..1 height — so the 255 was a pure unit
+    error, ~255x too large, and `strength` (1.8-2.2) multiplied it again. The
+    Poly Haven displacement maps are JPEGs, and for `beige_wall_001` the
+    displacement std is 0.0218 while its mean per-pixel |dx| is 0.00912 — 42%
+    of the map's entire contrast lives in single-pixel steps, i.e. it is
+    compression noise. 0.00912 x 2.0 x 255 = 4.65 against nz = 1.0, so every
+    texel got a ~78 deg normal in a random direction.
+
+    Measured on the SHIPPED maps: mean surface slope 70.2 deg (wall_plaster),
+    78.1 (asphalt_worn), 68.2 (concrete_yard), with 80-91% of texels past 45
+    deg — against 5.4 deg for `cobble`, the one set that ships a real normal
+    map instead of a Sobel bake. A near-random unit-normal field is exactly
+    what the critics described three different ways: "high-frequency
+    salt-and-pepper that reads as TV static", "a single-frequency monochrome
+    crackle with identical specular response across every square metre" (a
+    random normal field averages to one uniform lobe), and "a smeared
+    liquid-normal blob" at close range.
+
+    The replacement (a) low-passes the height first, so JPEG block noise
+    cannot become geometry, and (b) rescales the gradient to a stated RMS
+    slope, so the parameter means something physical and cannot silently
+    depend on the source map's contrast.
+    """
+    h = _blur_wrap(gray_f32.astype(np.float32), 2)
+    gx = (np.roll(h, -1, 1) - np.roll(h, 1, 1)) * 0.5   # wraps => tiles
+    gy = (np.roll(h, -1, 0) - np.roll(h, 1, 0)) * 0.5
+    rms = float(np.sqrt((gx * gx + gy * gy).mean()))
+    k = rms_slope / max(rms, 1e-9)
+    nx = -gx * k
+    ny = gy * k                   # +Y (OpenGL); three.js default
     nz = np.ones_like(h)
     ln = np.sqrt(nx * nx + ny * ny + nz * nz)
     n = np.stack([nx / ln, ny / ln, nz / ln], axis=-1)
@@ -172,11 +210,47 @@ def prep_props():
     return entries
 
 # ---------------------------------------------------------------- manifest
-def main():
-    print("[prep] textures")
-    tex = prep_textures()
-    print("[prep] props")
-    props = prep_props()
+MANIFEST = os.path.join(GAME, "assets", "manifest.a3.json")
+
+
+def _authored_entries():
+    """Sets emitted by tools/a3_gen_surface_sets.py (lane B).
+
+    They live in the same output dir, so the manifest has to account for them
+    or the licence/payload record silently understates what ships.
+    """
+    out = []
+    for name in ("concrete_formed", "metal_panel", "wall_render"):
+        for role in ("albedo", "rough", "normal"):
+            p = os.path.join(OUT_TEX, f"{name}_{role}.webp")
+            if not os.path.exists(p):
+                continue
+            out.append({
+                "path": os.path.relpath(p, GAME).replace("\\", "/"),
+                "bytes": os.path.getsize(p),
+                "kind": "generated",
+                "license": "generated (FFG pipeline, original)",
+                "source": f"tools/a3_gen_surface_sets.py::{name} ({role}; "
+                          "authored procedurally — no concrete-wall or "
+                          "painted-steel set exists in the on-disk stores)",
+            })
+    return out
+
+
+def _prop_entries_from_existing():
+    """Carry the prop rows through a --textures run instead of dropping them."""
+    if not os.path.exists(MANIFEST):
+        return []
+    try:
+        with open(MANIFEST, encoding="utf-8") as f:
+            old = json.load(f)
+    except Exception:
+        return []
+    return [e for e in old.get("entries", [])
+            if str(e.get("path", "")).startswith("assets/props/")]
+
+
+def _write_manifest(tex, props_entries):
     entries = []
     for p, kind, src, role in tex:
         entries.append({
@@ -186,27 +260,48 @@ def main():
             "license": LICENSES[kind],
             "source": f"{SOURCES[kind]}/{src} ({role}; normals Sobel-generated from displacement at build time)",
         })
-    for p, rel in props:
-        entries.append({
-            "path": os.path.relpath(p, GAME).replace("\\", "/"),
-            "bytes": os.path.getsize(p),
-            "kind": "imported",
-            "license": "CC0 (Kenney / Quaternius via poly.pizza; proof: cc0-city/SOURCES.json)",
-            "source": f"pipeline/assets/_downloaded/cc0-city/{rel} (textures stripped, re-materialed at load, quantized)",
-        })
+    entries.extend(_authored_entries())
+    entries.extend(props_entries)
     frag = {
         "lane": "A3-level",
-        "updated": "2026-08-19",
-        "note": "level PBR texture sets + cc0-city prop meshes. All other level "
-                "textures (facade/trim/emissive/decal/glow/ripple/metal/burlap/tarp) "
-                "are canvas-procedural at load — zero payload.",
+        "updated": "2026-08-20",
+        "note": "level PBR texture sets (imported + authored) + cc0-city prop "
+                "meshes. All other level textures (emissive/decal/glow/ripple/"
+                "burlap/tarp/awning/window) are canvas-procedural at load — "
+                "zero payload. NOTE: wall_plaster_* and iron_plate_* are still "
+                "emitted but are no longer FETCHED by materials.js (retired in "
+                "favour of wall_render / metal_panel); they are candidates for "
+                "deletion once no lane references them.",
         "entries": entries,
     }
-    mp = os.path.join(GAME, "assets", "manifest.a3.json")
-    with open(mp, "w", encoding="utf-8") as f:
+    with open(MANIFEST, "w", encoding="utf-8") as f:
         json.dump(frag, f, indent=1)
     total = sum(e["bytes"] for e in entries)
     print(f"[prep] manifest.a3.json written — {len(entries)} entries, {total} bytes ({total/1048576:.2f} MB)")
+
+
+def main():
+    tex_only = "--textures" in sys.argv
+    print("[prep] textures")
+    tex = prep_textures()
+    if tex_only:
+        # prep_props() shells out to npx gltf-transform; a texture-side fix has
+        # no reason to rebuild the prop GLBs. The manifest is still rewritten,
+        # with the prop rows carried across from the previous file — dropping
+        # them would silently shrink the shipped-asset record.
+        print("[prep] props SKIPPED (--textures) — prop manifest rows carried over")
+        _write_manifest(tex, _prop_entries_from_existing())
+        return
+    print("[prep] props")
+    props = prep_props()
+    prop_entries = [{
+        "path": os.path.relpath(p, GAME).replace("\\", "/"),
+        "bytes": os.path.getsize(p),
+        "kind": "imported",
+        "license": "CC0 (Kenney / Quaternius via poly.pizza; proof: cc0-city/SOURCES.json)",
+        "source": f"pipeline/assets/_downloaded/cc0-city/{rel} (textures stripped, re-materialed at load, quantized)",
+    } for p, rel in props]
+    _write_manifest(tex, prop_entries)
 
 if __name__ == "__main__":
     main()

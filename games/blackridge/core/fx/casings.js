@@ -21,6 +21,21 @@ const SHELL = {
   pike: { w: 0.009, l: 0.024 },
 };
 
+// NEAR-LENS CULL (iter05 recapture). A casing is 11 x 38 mm and ejects 0.32 m
+// in FRONT of the eye, so for its first ~0.2 s it sits inside the zone where
+// the world camera's ~62 deg vFOV magnifies it past any chance of reading as
+// brass: gl-side, 0.038 m at d = 0.38 m spans 0.10 rad = ~100 px of a 1080-px
+// frame. MEASURED in the live iter05 S3 pose — fx.casings instance 2 at
+// [-43.66, 1.64, 49.17], scale (0.011, 0.011, 0.038), d = 0.38 m from the
+// camera at [-44, 1.62, 49], projecting to screen (1681, 532). That is the
+// "floating yellow slab prop with nothing under it" in iter05 S3 and S1; it is
+// NOT a props.js/layout.js placement bug (that diagnosis was handed off and is
+// disproved by the instance transform above). Below this distance the box
+// reads as a gold bar hanging in the sky, so it is not drawn; past it the
+// tumble still sells the ejection.
+const NEAR_HIDE = 0.75;
+const NEAR_HIDE_SQ = NEAR_HIDE * NEAR_HIDE;
+
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _e = new THREE.Euler();
@@ -65,7 +80,17 @@ export function makeCasings(env) {
     _e.set(eul[i3], eul[i3 + 1], eul[i3 + 2]);
     _q.setFromEuler(_e);
     _p.set(pos[i3], pos[i3 + 1], pos[i3 + 2]);
-    _s.set(dims[i * 2], dims[i * 2], dims[i * 2 + 1]);
+    // Inside the near-lens zone the shell cannot read as a shell — see
+    // NEAR_HIDE. Zero-scale rather than move it: the physics keeps running, so
+    // the same casing appears the moment it clears the zone. Flying casings are
+    // re-written every frame, so this re-evaluates itself; a RESTING shell lies
+    // on the floor ~1.6 m below the eye and can never be inside the zone.
+    const cam = env.cam;
+    if (cam && _p.distanceToSquared(cam.position) < NEAR_HIDE_SQ) {
+      _s.set(0, 0, 0);
+    } else {
+      _s.set(dims[i * 2], dims[i * 2], dims[i * 2 + 1]);
+    }
     _m.compose(_p, _q, _s);
     mesh.setMatrixAt(i, _m);
   }

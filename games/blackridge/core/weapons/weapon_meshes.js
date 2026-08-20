@@ -97,8 +97,22 @@ function repair(group) {
           const glove = /glove/i.test(m.name || "");
           m.color.setScalar(1.0);
           if (!glove) {
-            m.envMapIntensity = 1.15; // blue-hour sheen, not a second key light
-            if (m.roughness == null || m.roughness > 0.92) m.roughness = 0.92;
+            // W1 (iter05): 1.15 was not "sheen" — with metalness-1 barrel and
+            // sight hardware it mirrored the sky PMREM and rendered them as
+            // chrome at macro range in the live S8 capture. 0.55 keeps the
+            // blue-hour wet-metal cue without a second key light.
+            m.envMapIntensity = 0.55;
+            // W1 (iter05): the 0.92 clamp used to fire on EVERY gun material,
+            // because glTF's roughnessFactor default is 1.0 whenever a
+            // metallicRoughness map is bound. The build tool now ships that
+            // factor as a deliberate per-part multiplier (rubberised grip 1.06,
+            // anodised receiver 0.70 over one shared roughness map — VT §3
+            // "distinct roughness per part"), so clamping it flattened the
+            // very variance this repair exists to protect. Clamp only the
+            // mapless case, which is the one it was written for.
+            if (!m.roughnessMap && (m.roughness == null || m.roughness > 0.92)) {
+              m.roughness = 0.92;
+            }
           }
         }
         m.needsUpdate = true;

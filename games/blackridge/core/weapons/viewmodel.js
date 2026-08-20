@@ -400,6 +400,22 @@ export function createViewmodel(ctx) {
         camera.fov = fov;
         camera.updateProjectionMatrix();
       }
+
+      // VT §5 layer 4: "world FOV -15 to -20 deg, VIEWMODEL FOV TIGHTENS".
+      // W1 (iter05): the vm camera was pinned at VIEWMODEL.fovDeg forever, so
+      // ADS zoomed the WORLD and left the weapon at hip scale — which is why
+      // the corvus optic occupied ~21% of frame height in an ADS frame that is
+      // supposed to be a sight picture, and why S2 read as "more receiver than
+      // scope". Hold the vm:world FOV RATIO instead of the vm FOV: the gun
+      // keeps exactly the apparent size relative to the world it has at the
+      // hip, and the magnification an optic implies (Corvus 74 -> 34 = 2.2x)
+      // reaches the thing the player is looking through. Iron sights barely
+      // move (74 -> 55 = 1.35x), which is correct — they are 1x.
+      const vmFov = VIEWMODEL.fovDeg * (fovAim / Math.max(1, base));
+      if (Math.abs(vmCamera.fov - vmFov) > 0.01) {
+        vmCamera.fov = vmFov;
+        vmCamera.updateProjectionMatrix();
+      }
     }
 
     // ================= VIEWMODEL LAYERS =================

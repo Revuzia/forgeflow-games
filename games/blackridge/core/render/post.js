@@ -39,8 +39,8 @@ const CompositeShader = {
     // VT §2 fixes AgX exposure at 1.0–1.3; 1.35 was outside it, propping up a
     // frame the old flat shadow lift had already milked. The grade block below
     // now shapes the low end properly, so this sits at the top of spec.
-    toneMappingExposure: { value: 1.30 },
-    uVignette: { value: 0.30 },   // VT: 0.25–0.35, felt not seen
+    toneMappingExposure: { value: 1.18 },
+    uVignette: { value: 0.33 },   // VT: 0.25–0.35, felt not seen
     uVigBoost: { value: 0 },      // deepens during ADS / low hp
     // v3 (owner: "fuzzy like an old TV with bad service"). VT's 0.02–0.035
     // grain band assumes grain lands mostly in shadow — true in a DAY scene.
@@ -52,12 +52,19 @@ const CompositeShader = {
     uCA: { value: 0.35 },         // was 1.0 px — radial fringing read as bad signal
     uCABoost: { value: 1 },       // ×3 for 150 ms on explosions (hook)
     uSharpen: { value: 0.35 },    // was 0.2; real AA now gives it clean edges to bite
-    uSat: { value: 0.9 },
+    uSat: { value: 0.95 },
     uTier: { value: 2 },          // 0 = tonemap only, 1/2 = full film stages
     // ---- grade shaping (iter02 D2 fix — see the grade block in the shader)
     uBlack: { value: 0.0022 },    // soft toe: where the frame reaches black
-    uPivot: { value: 0.020 },     // contrast anchor (≈ the night frame's median)
-    uContrast: { value: 1.42 },   // gain ABOVE the pivot only
+    uPivot: { value: 0.022 },     // contrast anchor (≈ the night frame's median)
+    uContrast: { value: 1.22 },   // gain ABOVE the pivot
+    uCrush: { value: 1.30 },      // gamma BELOW the pivot (the missing S half)
+    // Split tone (VT §2 "the frame should feel COLD with warm islands").
+    // MULTIPLICATIVE, so it can never lift the black floor into a colour film
+    // — the iter02 failure mode. Shadows drift steel-blue, highlights (which
+    // at night are sodium/fluorescent practicals and the muzzle) drift warm.
+    uShadowTint: { value: new THREE.Color(0.845, 0.945, 1.20) },
+    uHighTint: { value: new THREE.Color(1.070, 1.005, 0.915) },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -71,7 +78,8 @@ const CompositeShader = {
     uniform float uTime;
     uniform vec2 uRes;
     uniform float uVignette, uVigBoost, uGrain, uCA, uCABoost, uSharpen, uSat;
-    uniform float uBlack, uPivot, uContrast;
+    uniform float uBlack, uPivot, uContrast, uCrush;
+    uniform vec3 uShadowTint, uHighTint;
     uniform int uTier;
     ${AGX_GLSL}
 
@@ -127,22 +135,35 @@ const CompositeShader = {
         // rolls smoothly to 0, so the frame can REACH black without clipping.
         col = col * col / (col + uBlack);
 
-        // ---- contrast: gain ABOVE the pivot only. A symmetric S-curve would
-        // crush the sub-pivot decade to zero at these levels (the toe already
-        // owns the bottom); this branch is continuous at the pivot, monotonic,
-        // and maps 1 -> 1 so AgX's highlight rolloff on the practicals and
-        // muzzle flashes survives intact (VT §2: never clip what AgX rolled).
+        // ---- contrast: a REAL S-curve about the pivot, both halves.
+        // iter04 ran the upper branch alone at 1.42 with the pivot pinned to
+        // the frame median (0.020), which meant "lift the brighter half of
+        // every pixel by ~31% and leave the darker half alone" — a mid-lift
+        // wearing a contrast label. Measured consequence on the iter04 PNGs:
+        // medians 37-61/255 with only 0.4-2% of pixels below 8/255, i.e. an
+        // overcast-daylight histogram on a midnight scene. Both branches are
+        // continuous at the pivot, monotonic, and pin 0 -> 0 and 1 -> 1, so
+        // AgX's highlight rolloff on practicals/muzzle survives untouched.
         vec3 up = 1.0 - (1.0 - uPivot)
                       * pow(max(1.0 - col, 0.0) / (1.0 - uPivot), vec3(uContrast));
-        col = mix(col, up, step(vec3(uPivot), col));
+        vec3 dn = uPivot * pow(max(col, 0.0) / uPivot, vec3(uCrush));
+        col = mix(dn, up, step(vec3(uPivot), col));
 
-        // ---- grade: cool shadows, desaturated highlights, sat 0.9
+        // ---- grade: cool shadows, warm practicals, desaturated highlights
         float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
         col = mix(vec3(luma), col, uSat);
-        // shadow TINT: blue-steel chroma in the deep end, scaled to the range
-        // the frame actually occupies. An order of magnitude below the old
-        // lift, and it dies by luma 0.05 instead of 0.35.
-        col += vec3(0.0016, 0.0020, 0.0034) * (1.0 - smoothstep(0.0, 0.06, luma));
+        // SPLIT TONE, multiplicative. The night frame lives in luma
+        // [0.002 .. 0.25]; both weights are scaled to that range, not to the
+        // 0..1 of a day frame. Cool wins the shadows, warm wins the islands —
+        // that separation IS the colour script (VT §1/§2), and the critics
+        // scored its absence as "one flat blue film" / "no identity".
+        float sw = smoothstep(0.004, 0.075, luma);
+        col *= mix(uShadowTint, vec3(1.0), sw);
+        float hw = smoothstep(0.10, 0.42, luma);
+        col *= mix(vec3(1.0), uHighTint, hw);
+        // shadow floor chroma: keeps the deepest end blue-steel rather than
+        // dead black, an order of magnitude below the old iter02 lift.
+        col += vec3(0.0013, 0.0017, 0.0031) * (1.0 - smoothstep(0.0, 0.05, luma));
         // desaturate + gently roll highlights
         float hi2 = smoothstep(0.7, 1.0, luma);
         col = mix(col, vec3(luma), hi2 * 0.25);

@@ -540,6 +540,7 @@ export function buildProps(layout, ctx) {
 
   const r = rng(7);
   let batches = 0;
+  let decalCount = 0;
   const mtx = new THREE.Matrix4(), q = new THREE.Quaternion(),
     pos = new THREE.Vector3(), scl = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   const staticParts = []; // low-count kinds → one merged mesh per material
@@ -673,7 +674,90 @@ export function buildProps(layout, ctx) {
       dm.renderOrder = 2;
       group.add(dm);
     }
+    decalCount += quads.length;
   }
+
+  // ---- generator-placed GRIME PASS (VT §3: "the grime pass is not optional",
+  // no 4 m² of surface without a unique breakup element).
+  //
+  // All three iter04 critics independently reported ZERO decals anywhere in
+  // the whole battery. The mandatory base decals above are one small quad
+  // directly under each prop — mostly hidden BY the prop that motivates them —
+  // so nothing broke up the open ground between props, which is most of what
+  // S1/S3/S5/S9 actually frame. This pass scatters the history: oil under the
+  // vehicles, spill and splat around the working props, tide rings and cracks
+  // on open ground, wind-caught paper.
+  //
+  // Placement rides on computePlacements() rather than raw layout coordinates
+  // so every stain lands on ground the prop probe already proved valid
+  // (LD §4.1 analytic ground raycast) — a scatter that samples the layout
+  // itself would put stains inside buildings and over the canal.
+  {
+    const quads = [];
+    const rr = rng(9173);
+    // per-kind grime vocabulary: what this object would actually leave behind
+    const GRIME = {
+      car: ["oil_stain", "oil_stain", "dirt_ring"],
+      van: ["oil_stain", "oil_stain", "splat"],
+      truck: ["oil_stain", "oil_stain", "grime_ring"],
+      dumpster: ["splat", "oil_stain", "paper", "dirt_ring"],
+      trash_bags: ["splat", "paper", "splat"],
+      fuel_drums: ["oil_stain", "oil_stain", "rust_ring"],
+      steam_vent: ["tide_ring", "grime_ring"],
+      bin: ["splat", "paper"],
+      kiosk: ["dirt_ring", "paper", "splat"],
+      stall: ["dirt_ring", "paper"],
+      pallet: ["dirt_ring", "splat"],
+      crate: ["dirt_ring", "crack"],
+      sandbags: ["dirt_ring", "splat"],
+      flood_tower: ["rust_ring", "crack", "dirt_ring"],
+      scaffold: ["splat", "dirt_ring", "crack"],
+      barrier: ["crack", "dirt_ring"],
+      shelving: ["dirt_ring"],
+      guard_hut: ["dirt_ring", "grime_ring"],
+    };
+    const DEFAULT = ["dirt_ring", "crack", "grime_ring", "tide_ring"];
+    for (const p of placements) {
+      if (p.mount === "wall") continue;             // ground scatter only
+      const vocab = GRIME[p.kind] || DEFAULT;
+      const n = 2 + ((rr() * 2) | 0);               // 2–3 marks per placement
+      // CAPPED, and capped hard. Scaling the mark off the prop footprint
+      // without a ceiling put 2–8 m stains around every car and carpeted the
+      // S1 plaza in dark blobs (measured against iter04 on the first pass) —
+      // a grime pass that repaints the ground is worse than no grime pass.
+      // Real ground marks are hand-sized to bin-sized.
+      const foot = Math.min(3.2, Math.max(p.size[0], p.size[2]));
+      for (let i = 0; i < n; i++) {
+        const kind = vocab[(rr() * vocab.length) | 0];
+        // ring the prop rather than sitting under it
+        const ang = rr() * Math.PI * 2;
+        const rad = Math.min(3.4, foot * (0.55 + rr() * 1.15));
+        const s = Math.max(0.45, Math.min(2.2, foot * (0.30 + rr() * 0.55)));
+        const g = new THREE.PlaneGeometry(s, s);
+        g.rotateX(-Math.PI / 2);
+        g.rotateY(rr() * Math.PI * 2);              // no copy-paste rotation
+        g.translate(p.pos[0] + Math.cos(ang) * rad,
+                    // 12 mm: clear of the 6 mm base decals so the two decal
+                    // meshes cannot z-fight where they overlap
+                    p.pos[1] + (p.sink || 0) + 0.012,
+                    p.pos[2] + Math.sin(ang) * rad);
+        setCellUV(g, DECAL_UV[kind] || DECAL_UV.dirt_ring);
+        quads.push(g);
+      }
+    }
+    if (quads.length) {
+      const gm = new THREE.Mesh(mergeGeometries(quads, false), M.decalGrimeMat);
+      gm.name = "props_grime_decals";
+      gm.renderOrder = 2;
+      group.add(gm);
+    }
+    decalCount += quads.length;
+  }
+  // published so the battery/manifest can ASSERT decals exist in the world
+  // instead of a fix wave trusting that "decals were added" (ranked fix #4:
+  // count them at capture time before anyone authors more)
+  group.userData.decalQuads = decalCount;
+  console.log(`[props] ${batches} instanced batches, ${decalCount} static decal quads`);
 
   // ---- steam plumes on flagged vents (LD §4.2; S2 hero ingredient)
   {
