@@ -98,11 +98,32 @@ export function createViewmodel(ctx) {
   // at boot, always visible, constant intensity, never added/removed after
   // — doctrine §3 compliant (light COUNT is a shader-permutation key; the
   // boot prewarm's vm pass compiles this permutation before frame 1).
-  const vmFill = new THREE.HemisphereLight(0x9db4d6, 0x2a2420, 0.5);
+  //
+  // W1 (iter03) LEVEL FIX — the rig was ~15x too hot and THAT is what made the
+  // viewmodel a white blob, not the geometry (the geometry defect was the torn
+  // arm chunks; fixed in a4_build_fp_weapons.py). Two numbers were wrong:
+  //   * the point light. decay 2 means irradiance = intensity / d^2, and the
+  //     gun sits 0.30-0.35 m from the camera, so d^2 ~= 0.10: intensity 0.5
+  //     delivered ~5 units at the receiver. The WORLD pool delivers ~3.2 total
+  //     (moon 3.8 x lum(#a8c0e0) 0.51 + hemi 8.0 x lum(#5c7290) 0.164,
+  //     lighting.js) — and that is across a whole night street, most of it at
+  //     grazing incidence. The viewmodel was taking a full-strength key at
+  //     point-blank range while post.js reports an AgX night frame living in
+  //     [0.004 .. 0.06]; the gun measured ~0.75 there, and post's above-pivot
+  //     contrast gain then finished the job by pushing it to paper white.
+  //   * the hemisphere sky tint #9db4d6 is luminance ~0.68 — it was carrying
+  //     level as well as colour. Tint at unit-ish luminance, intensity is the
+  //     level knob (the same discipline lighting.js's W2 exposure fix imposed
+  //     on the world pool).
+  // Levels are expressed against the vm key distance so the intent survives:
+  // VM_KEY_D is the working distance, VM_KEY_E the irradiance we want there.
+  const VM_KEY_D = 0.42;              // m, light -> receiver at the hip pose
+  const VM_KEY_E = 1.15;              // irradiance at VM_KEY_D (world pool ~3.2)
+  const vmFill = new THREE.HemisphereLight(0x8fa6c4, 0x2a2420, 0.55);
   vmFill.name = "__vm_fill__";
   vmFill.layers.set(VM_LAYER);        // NOT enableAll — vm pass only
   ctx.scene.add(vmFill);              // scene-parented: hemi axis stays world-up
-  const vmKey = new THREE.PointLight(0xd8e2f5, 0.5, 3.5, 2);
+  const vmKey = new THREE.PointLight(0xc8d6ea, VM_KEY_E * VM_KEY_D * VM_KEY_D, 3.5, 2);
   vmKey.name = "__vm_key__";
   vmKey.position.set(0.38, 0.30, 0.25); // camera-space: over the right shoulder
   vmKey.layers.set(VM_LAYER);
@@ -425,6 +446,15 @@ export function createViewmodel(ctx) {
     let px = view.posHip[0] + (view.posAds[0] - view.posHip[0]) * adsEase;
     let py = view.posHip[1] + (view.posAds[1] - view.posHip[1]) * adsEase;
     let pz = view.posHip[2] + (view.posAds[2] - view.posHip[2]) * adsEase;
+    // W1 (iter03) HIP REAR STANDOFF: weapon_meshes.js measures how far this
+    // prototype's rearmost vertex has to move to stop being inside the eye at
+    // the hip pose (warden's butt pad sat 9.4 cm from the camera and filled the
+    // frame with macro-range receiver facets — the iter01-03 "shattered white
+    // polygon" read). Hip only: at full ADS the push is 0, because the sight
+    // picture is the subject and a pushed-back weapon shrinks it.
+    if (current.group && current.group.userData.hipPush) {
+      pz -= current.group.userData.hipPush * (1 - adsEase);
+    }
     let rx = 0, ry = 0, rz = 0;
 
     const sprintBlend = sprintState === "tac" ? 1 : sprintState === "sprint" ? 0.7 : 0;

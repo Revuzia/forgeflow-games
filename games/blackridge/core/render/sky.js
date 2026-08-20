@@ -168,12 +168,21 @@ export function createSky(ctx) {
   group.name = "sky";
 
   // ---------------------------------------------------------------- dome
+  // W2/iter04: the whole ramp lifted ×1.7 in LINEAR radiance (hex values are
+  // the converted result, not a hand-picked palette). The dome is unlit
+  // MeshBasic-class output, so it does NOT scale with the light pool — when
+  // lighting.js took the key from 0.061 to 1.94 luminance the old ramp left
+  // the sky DARKER than the buildings in front of it, which inverts aerial
+  // perspective: distant geometry gains contrast with distance instead of
+  // losing it, and the city reads as flat cutouts (VT §4 amateur tell #6,
+  // D4 hard cap). weather.js FOG.color carries the same new horizon value —
+  // the fog and the sky it fades into have to be the same colour.
   const domeUniforms = {
-    uZenith: { value: new THREE.Color(0x05070d) },
-    uMid: { value: new THREE.Color(0x0d1220) },
-    uHorizon: { value: new THREE.Color(0x232a3a) },
-    uSodium: { value: new THREE.Color(0x3a2f1e) },
-    uMoonGlow: { value: new THREE.Color(0x46536e) },
+    uZenith: { value: new THREE.Color(0x080c15) },
+    uMid: { value: new THREE.Color(0x192335) },
+    uHorizon: { value: new THREE.Color(0x2e384d) },
+    uSodium: { value: new THREE.Color(0x4c3c28) },
+    uMoonGlow: { value: new THREE.Color(0x5d6f90) },
     uDusk: { value: 0 }, // setTimeOfDay('dusk') lerps horizon warmth
   };
   const domeMat = new THREE.ShaderMaterial({

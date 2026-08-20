@@ -47,7 +47,11 @@ export const FOG = {
   falloff: 0.06,    // 1/m height falloff
   start: 18,        // m — near ramp (smoothstep 6→18, non-subtractive)
   refY: 1.5,        // m — falloff reference height (eye level; see header)
-  color: 0x232a3a,
+  // MUST track sky.js's uHorizon exactly: the fog is what distant geometry
+  // fades INTO, so if the two drift the horizon shows a seam and aerial
+  // perspective stops resolving to the sky. Lifted ×1.7 with the sky ramp
+  // when lighting.js's key came up (see sky.js's note).
+  color: 0x2e384d,
 };
 
 // JS mirror of the shader integral — probe-able (the frozen ≈0.46 check).
@@ -115,7 +119,7 @@ function installHeightFog(THREE_, scene) {
       vec3 brHV = normalize( vec3( vBRFogWorld.x - cameraPosition.x, 0.0, vBRFogWorld.z - cameraPosition.z ) + vec3( 1e-5 ) );
       // sodium skyglow warm toward S/SE (linear #2e2a26)
       float brWarm = smoothstep( 0.25, 0.9, dot( brHV, normalize( vec3( 0.45, 0.0, 0.89 ) ) ) );
-      vec3 brFogCol = mix( fogColor, vec3( 0.0273, 0.0231, 0.0187 ), brWarm * 0.55 );
+      vec3 brFogCol = mix( fogColor, vec3( 0.0464, 0.0393, 0.0318 ), brWarm * 0.55 );
       // cheap in-scatter toward the moon azimuth (NW)
       float brNW = pow( max( dot( brHV, vec3( -0.766, 0.0, -0.643 ) ), 0.0 ), 2.0 );
       brFogCol *= 1.0 + 0.18 * brNW;

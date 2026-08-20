@@ -81,16 +81,23 @@ function repair(group) {
         }
         if (m.emissiveIntensity == null || m.emissiveIntensity > 1.001) m.emissiveIntensity = 1;
         if (m.map) m.map.colorSpace = THREE.SRGBColorSpace;
-        // Night-readability treatment (header note): albedo lift via the
-        // color multiplier — linear-space, maps keep the variance. Idempotent
-        // per prototype (repair runs once per cached load).
+        // W1 (iter03): NO ALBEDO MULTIPLIER. The 3.4x/4.5x lift above was
+        // written against an OLD authored texture set (the stale header note
+        // still quotes "#2b2d2e ~ 0.028 linear"); the set the build tool
+        // actually ships now measures sRGB 0.288 body / 0.426 metal / 0.22-0.36
+        // glove (PIL means over tools/_a4_gen/*.png, this session), and
+        // gen_textures' own comment says the glove band "needs no runtime lift".
+        // Multiplying a 0.15-linear metal by 3.4 puts albedo at 0.51 and then
+        // the VM fill rig lands on top of it: that is the BLOWN WHITE gun in
+        // iter03 S1/S2. Albedo > 1 is not a lighting fix, it is a clipped
+        // surface with no form left in it. Read the maps as authored; the vm
+        // fill rig (viewmodel.js) owns night readability, which is where a
+        // lighting problem belongs.
         if (m.color) {
           const glove = /glove/i.test(m.name || "");
-          if (glove) {
-            m.color.setScalar(4.5);   // dark olive gloves -> ~0.036 linear
-          } else {
-            m.color.setScalar(3.4);   // charcoal body/metal -> ~0.10 linear
-            m.envMapIntensity = 2.2;  // blue-hour sheen on the hero surface
+          m.color.setScalar(1.0);
+          if (!glove) {
+            m.envMapIntensity = 1.15; // blue-hour sheen, not a second key light
             if (m.roughness == null || m.roughness > 0.92) m.roughness = 0.92;
           }
         }
@@ -155,6 +162,80 @@ export async function loadWeaponGLB(id) {
       }
       const muzzle = findSocket(group, "SOCKET_muzzle");
       const eject = findSocket(group, "SOCKET_eject");
+      // W1 (iter03): ADS alignment BY CONSTRUCTION, not by a copied number.
+      // weapon_data's view.sightY is transcribed by hand from the build tool's
+      // A4BUILD report and it drifts — this session the tool reported warden
+      // 0.134 / vesper 0.0997 / corvus 0.106 against declared 0.126 / 0.0967 /
+      // 0.103, i.e. up to 8 mm, ~1.8 deg of aim error at the 0.26 m ADS pose.
+      // viewmodel.js parks the mount at y = -view.sightY for ADS, so shifting
+      // the prototype by (declared - built) puts the real sight line on the vm
+      // camera's centre ray whatever the data file says. Falls back to a no-op
+      // when the GLB predates the socket.
+      const sight = findSocket(group, "SOCKET_sight");
+      const declaredSightY = w && w.view && typeof w.view.sightY === "number"
+        ? w.view.sightY : null;
+      if (sight && declaredSightY != null) {
+        const builtSightY = sight.position.y;
+        const dy = declaredSightY - builtSightY;
+        if (Math.abs(dy) > 1e-4) {
+          group.position.y += dy;
+          if (Math.abs(dy) > 0.02) {
+            console.warn(`[A4] ${id}: sightY drift ${(dy * 1000).toFixed(1)} mm ` +
+              `(built ${builtSightY.toFixed(4)} vs weapon_data ${declaredSightY}) ` +
+              `— corrected at load, but re-copy the A4BUILD report`);
+          }
+        }
+      } else if (!sight) {
+        console.warn(`[A4] ${id}.glb has no SOCKET_sight — ADS rides weapon_data view.sightY unchecked`);
+      }
+
+      // ---- W1 (iter03) REAR STANDOFF -------------------------------------
+      // THE iter01-03 "shattered white polygon" framing bug, measured:
+      // weapon_data's posHip/posAds place the GRIP, and the GLB origin IS the
+      // grip — so the buttstock sticks out BEHIND the origin, straight at the
+      // eye. Rearmost vertex vs. pose (Blender -Y = glTF +Z, this session):
+      //   warden  rear +0.246 @ posHip z -0.34  ->  9.4 cm from the camera
+      //   corvus  rear +0.313 @ posHip z -0.40  ->  8.8 cm
+      //   vesper  rear +0.247 @ posHip z -0.30  ->  5.3 cm
+      // A 10 cm buttstock viewed from 9 cm at the vm camera's 60 deg vFOV
+      // subtends ~58 deg — the whole frame. That is what S1/S6 were showing:
+      // not broken geometry (the rifle clay-renders clean, iso render this
+      // session) but the REAR OF THE RECEIVER at macro range, where the base
+      // mesh's own facets read as polygon soup. No amount of material or mesh
+      // work fixes a camera that is inside the gun.
+      // Rule, not a per-asset fudge: measure the prototype and publish the
+      // forward push its rearmost point needs to clear REAR_CLEAR at the HIP
+      // pose. viewmodel.js applies it to the HIP term only and blends it out
+      // with adsEase — ADS must NOT be pushed: a shouldered rifle's stock IS
+      // behind the eye (the near plane is the correct thing to remove it), and
+      // shoving the weapon out at ADS shrinks the sight picture, which is the
+      // one thing that frame exists to show. Pure Z either way, so the sight
+      // stays on x=0,y=0 at ADS and alignment is untouched.
+      const REAR_CLEAR = 0.28;   // m of air between the eye and the butt pad
+      const MAX_PUSH = 0.28;     // never shove a weapon out to arm's length
+      // Measure the WEAPON, not the arms: a forearm is supposed to run past
+      // the eye and get clipped (that is what a real one does), and letting it
+      // drive the rule shoved the Pike — a 23 cm pistol whose own rearmost
+      // point is 5 cm behind the grip — out to 0.49 m on the strength of a
+      // 19 cm arm stub. Arm objects are named arms_<side>_<weapon> by
+      // a4_build_fp_weapons.py's place_arms().
+      const box = new THREE.Box3();
+      group.traverse((o) => {
+        if (!o.isMesh) return;
+        let n = o;
+        while (n && n !== group) { if (/^arms?_/.test(n.name || "")) return; n = n.parent; }
+        box.expandByObject(o);
+      });
+      if (box.isEmpty()) box.setFromObject(group);
+      const hipZ = (w && w.view && w.view.posHip) ? w.view.posHip[2] : -0.34;
+      const rearCam = hipZ + box.max.z;     // camera-space z, negative = ahead
+      const push = Math.min(MAX_PUSH, Math.max(0, rearCam + REAR_CLEAR));
+      group.userData.hipPush = push;
+      if (push > 0) {
+        console.info(`[A4] ${id}: rear standoff ${(-rearCam * 100).toFixed(1)} cm ` +
+          `at the hip pose — hipPush ${(push * 100).toFixed(1)} cm (0 at full ADS)`);
+      }
+      group.userData.sight = sight;
       group.userData.weaponId = id;
       group.userData.muzzle = muzzle;
       group.userData.eject = eject;

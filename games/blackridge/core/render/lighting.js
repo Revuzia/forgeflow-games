@@ -90,6 +90,17 @@ function aggregateBounceColor(poles) {
 // old 0.13/0.17; fog is atmosphere, not paint (VT §4 / LD §3.4 zone plan).
 const CONE_OPACITY = { sodium: 0.075, skylight: 0.14, flood: 0.11, default: 0.09 };
 
+// ------------------------------------------------------- exposure constants
+// VT §1 prescribes the key at "#a8c4e0 region". These are TINTS: each is close
+// enough to unit luminance that `intensity` is the only level knob, which is
+// what makes keyAmbientRatio() a meaningful number.
+const MOON_TINT = 0xa8c0e0;   // relative luminance ~0.51
+const HEMI_SKY = 0x5c7290;    // cold storm skylight,   ~0.164
+const HEMI_GROUND = 0x40382c; // sodium-polluted asphalt bounce, ~0.049
+
+// Relative luminance of a THREE.Color already in the linear working space.
+const lumOf = (c) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+
 export function createLights(ctx) {
   const scene = ctx.scene;
 
@@ -99,7 +110,19 @@ export function createLights(ctx) {
   // 0.42/0.085 (was 0.32/0.07): iter01 read as underexposed slabs — this
   // lifts material legibility while keeping key:ambient ≥4:1 (VT §1) and
   // the LD §3.4 zone-contrast ordering intact.
-  const moon = new THREE.DirectionalLight(0x5a6b8c, 0.42);
+  //
+  // W2/iter04 EXPOSURE FIX — the single cause of the "flat black slab" facades.
+  // keyAmbientRatio() below used to compare RAW intensities and ignore each
+  // light's COLOUR, so 0.42/0.085 reported "5.9:1 — passes VT §1". Measured in
+  // real luminance the pool was 0.42*lum(#5a6b8c)=0.0613 key vs 0.085*lum of
+  // the sky/ground mix = 0.00106 ambient — 57.6:1. Every surface not facing the
+  // moon received ~1e-4 radiance, i.e. NOTHING: iter03 S3's foreground wall
+  // measured RGB 6/7/10 with std 3.5, and that value is entirely post.js's
+  // shadow-tint constant (vec3(0.0016,0.0020,0.0034)) — the geometry itself
+  // contributed nothing at all. Fix is at the generator: colours are TINTS at
+  // ~unit luminance, `intensity` carries the level, and the probe measures
+  // luminance so the gate cannot pass on a lie again.
+  const moon = new THREE.DirectionalLight(MOON_TINT, 3.8);
   {
     const az = (310 * Math.PI) / 180;
     const el = (38 * Math.PI) / 180;
@@ -128,8 +151,12 @@ export function createLights(ctx) {
 
   // Hemisphere — the darkness floor. Sky #1a2030 / ground #0a0c10 with the
   // sodium-pollution tint #2a2418 mixed into the ground term (LD §3.2).
-  const groundCol = new THREE.Color(0x0a0c10).lerp(new THREE.Color(0x2a2418), 0.35);
-  const hemi = new THREE.HemisphereLight(0x1a2030, groundCol, 0.085);
+  // A VERTICAL surface sees the 50/50 sky/ground mix, so that mix — not the sky
+  // term — is what the ratio must be measured against: it is the light every
+  // facade in the frame actually gets. 0.88 * lum(mix) = 0.094 vs the key's
+  // 0.95 * 0.51 = 0.484 ⇒ 5.2:1, inside VT §1's "≥ 4:1" with enough absolute
+  // level for shadowed brick to carry its window grid, sills and grime.
+  const hemi = new THREE.HemisphereLight(HEMI_SKY, HEMI_GROUND, 6.1);
   hemi.layers.enableAll(); // v2.2: reach the viewmodel camera's layer (A4)
   scene.add(hemi);
 
@@ -391,6 +418,31 @@ export function createLights(ctx) {
     });
   }
 
+  // W4 (iter04) NaN GUARD — THE BLACK RECTANGLE, root-caused this session.
+  // GLSL leaves pow(x, y) UNDEFINED at x == 0 with a fractional y, and
+  // ANGLE/D3D11 (the capture path, and every Chrome-on-Windows player)
+  // returns a non-finite value there. CylinderGeometry's side UVs are EXACTLY
+  // 0.0 along the bottom ring, so the shaft gradient's pow(vUv.y, 1.6)
+  // poisoned the alpha of that whole edge; the additive blend wrote the poison
+  // into the HDR target and the bloom mip chain smeared it into a hard,
+  // AXIS-ALIGNED BLACK RECTANGLE (the separable blur's support region) that ate
+  // 30-55% of iter04 S1/S3/S6/S9 and blanked the S8 hero beam. It was NOT the
+  // viewmodel: an ID probe named arms_L_warden, but hide-one-child bisection on
+  // the real post-processed capture named scene.children[27], the L_QUAY god-ray
+  // cone at (-30, 3.25, 47). Measured on the S3 pose, 640x360 capture, mean
+  // luma of the affected box (frame full mean in brackets):
+  //   raw shader .................. 7.12  [7.10]
+  //   that one cone hidden ........ 84.02 [59.92]
+  //   all cone cards hidden ....... 84.06 [59.81]
+  //   constant alpha, no math ..... 88.18 [60.98]
+  //   guard the facing pow only ... 7.15  [7.11]  still broken
+  //   guard the grad pow only ..... 86.37 [60.54]  FIXED — this term is it
+  //   guard both (shipped) ........ 86.00 [60.46]
+  // Both pow bases are clamped: the facing term's base is exactly 0 on the
+  // silhouette ring for the same reason, it simply was not the term that fired
+  // here. 1e-4 ^ 1.5 = 1e-6, so the clamp is visually a no-op.
+  // KEEP THE COMMENTARY OUT OF THE TEMPLATE LITERAL — a backtick inside the
+  // shader string terminates it and the module dies with "Unexpected identifier".
   const coneMatProto = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
@@ -415,10 +467,13 @@ export function createLights(ctx) {
       varying vec2 vUv; varying vec3 vNormalW; varying vec3 vPosW;
       void main() {
         vec3 V = normalize(cameraPosition - vPosW);
-        // silhouette-edge fade (avoid edge-on billboard reveal, LD §3.5)
-        float facing = pow(abs(dot(normalize(vNormalW), V)), 1.5);
+        // silhouette-edge fade (avoid edge-on billboard reveal, LD 3.5).
+        // pow bases clamped away from 0 — see the NaN-guard note above main().
+        vec3 N = vNormalW; float nl = length(N);
+        N = nl > 1e-5 ? N / nl : vec3(0.0, 1.0, 0.0);
+        float facing = pow(max(1e-4, abs(dot(N, V))), 1.5);
         // bright at the source (uv.y=1 is the cylinder top = the lamp)
-        float grad = 0.18 + 0.82 * pow(vUv.y, 1.6);
+        float grad = 0.18 + 0.82 * pow(max(vUv.y, 1e-4), 1.6);
         // fade the shaft when the camera is inside/near it (<2 m)
         float nf = smoothstep(0.9, 2.2, distance(cameraPosition, vPosW));
         float a = uOpacity * uFlick * facing * grad * nf;
@@ -684,9 +739,18 @@ export function createLights(ctx) {
     spots,
     points,
     keyAmbientRatio() {
-      // VT §1 probe intent: white card facing the key vs facing away.
-      // Facing key sees moon+hemi; facing away sees hemi only.
-      return (moon.intensity + hemi.intensity) / Math.max(1e-5, hemi.intensity);
+      // VT §1 probe intent: white card facing the key vs facing away. This has
+      // to be measured in LUMINANCE — the old raw-intensity form ignored each
+      // light's colour and reported 5.9:1 on a pool that was really 57.6:1,
+      // which is how iter03 shipped featureless black facades through a gate
+      // whose whole job was to catch exactly that.
+      const key = moon.intensity * lumOf(moon.color);
+      // a vertical facade — the surface the tell actually appears on — sees the
+      // 50/50 sky/ground hemisphere mix.
+      const amb = hemi.intensity
+        * 0.5 * (lumOf(hemi.color) + lumOf(hemi.groundColor));
+      // card facing the key sees key+ambient; facing away sees ambient alone.
+      return (key + amb) / Math.max(1e-6, amb);
     },
   };
 

@@ -111,9 +111,16 @@ def assert_autoreset(page) -> bool:
 
 
 def analyze(samples, label):
-    dts = [s[0] for s in samples]
+    # rAF can deliver several callbacks carrying the SAME timestamp (coalesced
+    # into one frame); those yield dt == 0, which are not rendered frames. Left
+    # in, they drag the median toward 0 and silently EVADE the p50 gate — a
+    # 2 fps traversal phase once "passed" the 60 fps floor because its median
+    # came out 0.0 ms. Non-positive deltas are dropped and counted instead.
+    dts = [s[0] for s in samples if s[0] > 0]
+    zero_dt = len(samples) - len(dts)
     if not dts:
-        return {"phase": label, "frames": 0, "error": "no samples"}
+        return {"phase": label, "frames": 0, "zeroDtFrames": zero_dt,
+                "error": f"no positive-dt samples ({zero_dt} coalesced rAF callbacks)"}
     srt = sorted(dts)
     med = statistics.median(srt)
     p95 = srt[min(len(srt) - 1, int(len(srt) * 0.95))]
@@ -132,7 +139,7 @@ def analyze(samples, label):
             hitches.append({"i": i, "ms": round(dt, 1), "cause": cause,
                             "dPrograms": d_pr, "dTextures": d_tx})
     return {
-        "phase": label, "frames": len(dts),
+        "phase": label, "frames": len(dts), "zeroDtFrames": zero_dt,
         "ms": {"median": round(med, 2), "p95": round(p95, 2),
                "p99": round(p99, 2), "low1pct": round(low1, 2)},
         "programs": {"start": samples[0][1], "end": samples[-1][1],

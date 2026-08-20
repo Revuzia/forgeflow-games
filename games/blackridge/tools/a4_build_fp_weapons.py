@@ -19,9 +19,11 @@
 #      authored PBR set generated procedurally (numpy value-noise albedo
 #      mottle + ORM w/ roughness VARIANCE + Sobel normal — VT §3: uniform
 #      roughness is THE amateur tell);
-#   6. rig-cut arms: soldier.glb posed (finger curl) via its armature, hands+
-#      forearms cut by vertex-group weight, decimated, glove/sleeve tinted
-#      (bare-skin fingers darkened to tactical-glove read), placed per weapon;
+#   6. rig-cut arms: soldier.glb posed (finger curl) via its armature, then
+#      hands+forearms cut by a PLANAR HALF-SPACE BISECT perpendicular to the
+#      forearm bone axis (never by skin-weight threshold — that tears the shell;
+#      see the W1 iter03 note in build_arm_chunks), capped, cuffed, decimated,
+#      glove-tinted, placed per weapon;
 #   7. SOCKET_muzzle / SOCKET_eject empties baked;
 #   8. export GLB (+ separate gltf-transform webp+draco pass, see
 #      a4_compress.sh printed at the end) and render judgment previews
@@ -80,7 +82,11 @@ CFG = {
         "barrel_y": 0.47,          # exposed barrel/muzzle starts here
         "lh_y": 0.240,             # support-hand station on the handguard
         "muzzle_dev": {"r": 0.0115, "len": 0.062, "kind": "birdcage"},
-        "foregrip": {"y": 0.27, "drop": 0.075, "r": 0.014},
+        # W1 (iter03): NO fabricated foregrip. wpn_ar already models an angled
+        # foregrip on the handguard; the authored cylinder was stacked on top of
+        # it from the GRIP origin (not the handguard underside), so it hung in
+        # the air behind the magazine — clay-rendered this session.
+        "foregrip": None,
         "eject": {"y": 0.045, "z_rel": -0.004},
         "sights": "iron",
         "arms": True,
@@ -102,7 +108,7 @@ CFG = {
         "barrel_y": 0.36,
         "lh_y": 0.190,
         "muzzle_dev": {"r": 0.017, "len": 0.16, "kind": "suppressor"},
-        "foregrip": {"y": 0.20, "drop": 0.065, "r": 0.013},
+        "foregrip": None,          # W1 (iter03): see warden — floating cylinder
         "eject": {"y": 0.035, "z_rel": -0.004},
         "sights": "iron_low",
         "arms": True,
@@ -149,21 +155,31 @@ CFG = {
 # canonical hand chunk frame: origin at the wrist, fingers +Y, palm -Z
 # (canonicalized from the hand bone matrix at cut time). Placement builds an
 # explicit basis from the two direction vectors (eulers were unreviewable).
+#
+# W1 (iter03) FRAMING: the forearm stub runs roughly ANTI-parallel to fingers_dir
+# (the chunk is cut on the forearm bone axis, which is near-collinear with the
+# hand bone in the T-pose). The old trigger-hand fingers_dir (-0.10, 0.90, 0.25)
+# therefore pointed the forearm almost straight back AT THE EYE: at the Corvus
+# ADS pose the wrist sits 0.21 m from the vm camera and the stub reached to
+# 0.05 m, so a 10 cm-thick forearm filled the whole lower frame (iter03 S2, and
+# the corvus_ads preview). Trigger-hand fingers_dir now carries real +Z so the
+# stub falls away DOWN-and-back and leaves frame the way a shouldered rifle's
+# firing arm actually does.
 ARM_POSE = {
     "warden": [
-        ("R", (0.035, -0.095, -0.075), (-0.10, 0.90, 0.25), (-0.95, 0.20, -0.25)),
-        ("L", (-0.05, 0.22, -0.090), (0.85, 0.35, 0.40), (0.50, 0.10, 0.85)),
+        ("R", (0.035, -0.088, -0.088), (-0.10, 0.72, 0.68), (-0.95, 0.24, -0.20)),
+        ("L", (-0.05, 0.22, -0.090), (0.82, 0.22, 0.53), (0.52, 0.06, 0.85)),
     ],
     "vesper": [
-        ("R", (0.035, -0.095, -0.075), (-0.10, 0.90, 0.25), (-0.95, 0.20, -0.25)),
-        ("L", (-0.05, 0.16, -0.088), (0.85, 0.35, 0.40), (0.50, 0.10, 0.85)),
+        ("R", (0.035, -0.088, -0.088), (-0.10, 0.72, 0.68), (-0.95, 0.24, -0.20)),
+        ("L", (-0.05, 0.16, -0.088), (0.82, 0.22, 0.53), (0.52, 0.06, 0.85)),
     ],
     "corvus": [
-        ("R", (0.035, -0.095, -0.075), (-0.10, 0.90, 0.25), (-0.95, 0.20, -0.25)),
-        ("L", (-0.05, 0.19, -0.10), (0.85, 0.30, 0.45), (0.45, 0.05, 0.90)),
+        ("R", (0.035, -0.088, -0.088), (-0.10, 0.72, 0.68), (-0.95, 0.24, -0.20)),
+        ("L", (-0.05, 0.19, -0.10), (0.82, 0.18, 0.55), (0.48, 0.04, 0.88)),
     ],
     "pike": [
-        ("R", (0.030, -0.085, -0.085), (-0.10, 0.85, 0.15), (-0.95, 0.15, -0.20)),
+        ("R", (0.030, -0.080, -0.092), (-0.10, 0.70, 0.70), (-0.95, 0.22, -0.18)),
         ("L", (-0.030, -0.095, -0.105), (0.90, 0.30, 0.20), (0.60, 0.30, 0.70)),
     ],
 }
@@ -227,41 +243,52 @@ def gen_textures():
     # path where preview == export (observed this session; keep it this way).
     p = os.path.join(GEN_DIR, "gun_albedo_body.png")
     if not os.path.exists(p):
-        # Charcoal polymer furniture. W1 CALIBRATION (iter02 fix): the previous
-        # set authored sRGB 0.13-0.21 => 0.015-0.035 LINEAR, i.e. darker than
-        # charcoal, which forced weapon_meshes.js to apply a 3.4x runtime colour
-        # multiplier — and that multiplier is what turned the viewmodel into the
-        # blown-out white polygon soup of iter02 S1/S2. Authoring real values
-        # here (sRGB 0.23-0.40 => 0.042-0.13 linear, the measured range of
-        # phosphate/polymer gun furniture) lets the runtime multiplier be 1.0.
-        n = _fbm(S, 11, 5, 5) * 0.10 + 0.23
-        n += _scratches(S, 12, 90, 0.07)
+        # Charcoal polymer furniture. W1 CALIBRATION (iter03): the iter02 set
+        # over-corrected to sRGB 0.23-0.40, which is CONCRETE, not gun furniture,
+        # and with the vm fill rig on top it read as a pale grey prop. Modern
+        # military polymer/Cerakote furniture measures sRGB 0.15-0.26 (0.020-
+        # 0.055 linear). That is dark enough to sit in a night street and still
+        # take a specular edge, and it needs no runtime colour multiplier
+        # (weapon_meshes.js repair() is now 1.0 — see the W1 note there).
+        n = _fbm(S, 11, 5, 5) * 0.075 + 0.155
+        n += _scratches(S, 12, 90, 0.055)
         n = np.clip(n, 0, 1)
         rgba = np.stack([n, n * 1.02, n * 1.05, np.ones_like(n)], axis=-1)
         _save_img("gun_albedo_body", rgba)
     done["albedo_body"] = p
     p = os.path.join(GEN_DIR, "gun_albedo_metal.png")
     if not os.path.exists(p):
-        # metalness = 1 for these regions, so base colour IS F0 reflectance:
-        # parkerised/blued steel sits near 0.11-0.30 linear (sRGB 0.37-0.60).
-        n = _fbm(S, 13, 5, 7) * 0.10 + 0.37
-        n += _scratches(S, 14, 130, 0.14)
+        # metalness = 1 for these regions, so base colour IS F0 reflectance.
+        # W1 (iter03): sRGB 0.37-0.60 is BRIGHT steel, and a bright metal under
+        # the viewmodel fill rig is a mirror of that rig — it is the white
+        # barrel/scope-ring in the iter03 and iter90 S1/S2 captures. Parkerised
+        # and blued finishes read dark because they are ROUGH, not because F0
+        # is low, so the fix is split: F0 comes down a stop (sRGB 0.29-0.42) and
+        # the roughness in gun_orm_metal goes UP into doctrine 1 territory.
+        n = _fbm(S, 13, 5, 7) * 0.09 + 0.29
+        n += _scratches(S, 14, 130, 0.11)
         n = np.clip(n, 0, 1)
         rgba = np.stack([n * 0.95, n, n * 1.12, np.ones_like(n)], axis=-1)
         _save_img("gun_albedo_metal", rgba)
     done["albedo_metal"] = p
     p = os.path.join(GEN_DIR, "gun_orm_polymer.png")
     if not os.path.exists(p):
-        r = np.clip(_fbm(S, 21, 5, 7) * 0.45 + 0.48 + _scratches(S, 22, 60, -0.25), 0.05, 1)
+        r = np.clip(_fbm(S, 21, 5, 7) * 0.36 + 0.60 + _scratches(S, 22, 60, -0.22), 0.30, 1)
         rgba = np.stack([np.ones_like(r), r, np.zeros_like(r), np.ones_like(r)], axis=-1)
         _save_img("gun_orm_polymer", rgba)
     done["orm_polymer"] = p
     p = os.path.join(GEN_DIR, "gun_orm_metal.png")
     if not os.path.exists(p):
-        base = _fbm(S, 31, 5, 9) * 0.30 + 0.24
+        # W1 (iter03): was 0.24-0.54 — that is a polished-steel gloss, and at
+        # metalness 1 it turns every vm-rig light into a blown highlight across
+        # the whole barrel. Parkerised steel is 0.55-0.85 (doctrine 1's ~.78 is
+        # right in the middle). The scratch/streak variance is what keeps it
+        # from reading as flat matte plastic — VT 3: uniform roughness is THE
+        # amateur tell, so the variance stays, the floor moves.
+        base = _fbm(S, 31, 5, 9) * 0.22 + 0.55
         streak = _fbm(S, 32, 3, 2)
         streak = np.roll(streak, 3, axis=1) - streak  # directional smear
-        r = np.clip(base + streak * 0.5 + _scratches(S, 33, 120, 0.35), 0.04, 1)
+        r = np.clip(base + streak * 0.35 - _scratches(S, 33, 120, 0.30), 0.28, 1)
         rgba = np.stack([np.ones_like(r), r, np.ones_like(r), np.ones_like(r)], axis=-1)
         _save_img("gun_orm_metal", rgba)
     done["orm_metal"] = p
@@ -325,7 +352,10 @@ def make_materials(tex):
         "body": _mat("br_body", tex["albedo_body"], None, tex["orm_polymer"], tex["normal"]),
         "metal": _mat("br_metal", tex["albedo_metal"], None, tex["orm_metal"], tex["normal"]),
         "grip": _mat("br_grip", tex["albedo_body"], None, tex["orm_polymer"], tex["normal"]),
-        "accent": _mat("br_accent", None, (0.85, 0.85, 0.82), None, None, rough_factor=0.35),
+        # W1 (iter03): the front-sight dot only. It was near-white (0.85) — a
+        # tritium dot is a tiny bright POINT, and at 0.85 albedo on a 2 mm
+        # cylinder it just adds another blown pixel cluster. Warm, dimmer.
+        "accent": _mat("br_accent", None, (0.42, 0.40, 0.30), None, None, rough_factor=0.45),
         "glove": None,  # built at arm-cut time (needs the soldier image)
     }
 
@@ -410,15 +440,52 @@ def shade_smooth(o, angle_deg=40):
 # ---------------------------------------------------------------------------
 # dressing builders (build frame: +Y muzzle, +Z up, origin at grip)
 # ---------------------------------------------------------------------------
+def weld_mesh(mo, dist=0.0004):
+    """Weld UV-seam vertex splits. W1 (iter03): the last-circle Meshy props ship
+    SPLIT along every UV seam — wpn_ar imports as 4,908 verts for 5,943 tris,
+    i.e. hundreds of open boundary edges masquerading as a closed body (the same
+    defect measured on soldier.glb: 20,010 boundary edges). Any vertex delete
+    then tears along those seams instead of cutting cleanly, and smooth shading
+    breaks at every one of them — that is the faceted 'polygon soup' read on the
+    receiver at viewmodel range. Weld first, cut second."""
+    bm = bmesh.new()
+    bm.from_mesh(mo.data)
+    before = len(bm.verts)
+    bmesh.ops.remove_doubles(bm, verts=list(bm.verts), dist=dist)
+    bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
+    after = len(bm.verts)
+    bm.to_mesh(mo.data)
+    bm.free()
+    mo.data.update()
+    print(f"A4WELD {mo.name}: {before} -> {after} verts")
+
+
 def strip_top(mo, y0, y1, z_cut, half_w):
     """Remove the base mesh's mangled top furniture (bent Meshy sight towers,
     mushy rail) in a narrow centerline channel — the authored rail/sights
-    replace it. Leaves a channel the rail base covers."""
+    replace it. W1 (iter03): the delete used to leave the channel OPEN, so the
+    receiver showed torn triangle fans and black backface wedges right where the
+    viewmodel camera stares (S6, this session). Now the cut boundary is capped —
+    fill restricted to the strip's own bbox so genuine openings elsewhere on the
+    mesh (the bore, the mag well) are left alone."""
     bm = bmesh.new()
     bm.from_mesh(mo.data)
     doomed = [v for v in bm.verts
               if v.co.z > z_cut and y0 < v.co.y < y1 and abs(v.co.x) < half_w]
     bmesh.ops.delete(bm, geom=doomed, context="VERTS")
+    pad = 0.012
+    ring = [e for e in bm.edges if e.is_boundary
+            and all(y0 - pad < v.co.y < y1 + pad and abs(v.co.x) < half_w + pad
+                    and v.co.z > z_cut - pad for v in e.verts)]
+    if ring:
+        try:
+            bmesh.ops.holes_fill(bm, edges=ring, sides=0)
+        except Exception:
+            try:
+                bmesh.ops.triangle_fill(bm, edges=ring, use_beauty=True)
+            except Exception:
+                pass
+        bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
     bm.to_mesh(mo.data)
     bm.free()
     mo.data.update()
@@ -662,8 +729,10 @@ def build_arm_chunks():
 
     # record hand bone frames (world) BEFORE applying
     frames = {}
+    elbows = {}     # ForeArm bone HEAD (the elbow) — defines the cut-plane axis
     for side, key in (("Right", "R"), ("Left", "L")):
         pb = arm.pose.bones[f"mixamorig:{side}Hand"]
+        elbows[key] = arm.matrix_world @ arm.pose.bones[f"mixamorig:{side}ForeArm"].head
         head = arm.matrix_world @ pb.head
         tail = arm.matrix_world @ pb.tail
         y_axis = (tail - head).normalized()          # fingers direction
@@ -708,7 +777,10 @@ def build_arm_chunks():
         # result (~sRGB 0.20-0.36 => 0.03-0.10 linear) needs no runtime lift.
         lum = 0.30 * px[..., 0] + 0.60 * px[..., 1] + 0.10 * px[..., 2]
         v = np.clip(lum, 0.0, 1.0) ** 0.9
-        band = 0.185 + 0.175 * v
+        # W1 (iter03): band was 0.185-0.36 sRGB — that is a DAYLIT olive, and
+        # under the vm fill rig it read as pale mint-green hands (iter03 S2).
+        # Nomex tactical gloves at night sit at sRGB 0.11-0.22.
+        band = 0.110 + 0.115 * v
         px[..., 0] = band * 0.90
         px[..., 1] = band * 1.00
         px[..., 2] = band * 0.74
@@ -735,34 +807,79 @@ def build_arm_chunks():
     else:
         bsdf.inputs["Base Color"].default_value = (0.09, 0.095, 0.085, 1.0)
 
+    # ---- W1 (iter03 fix): CLEAN GEOMETRIC CUT, never a weight-threshold delete
+    # ROOT CAUSE of iter01-03's "shattered white polygon" viewmodel, isolated
+    # this session by clay-rendering the shipped warden.glb with the gun hidden
+    # (_shots/a4_fp + scratch iso renders): the RIFLE was always fine — 5.6k
+    # clean tris, readable receiver/stock/mag/rail. The wreckage was the ARMS.
+    # The old extraction deleted every vertex whose Hand+ForeArm skin-weight sum
+    # fell under 0.45. A skin-weight isosurface is not a surface boundary: the
+    # delete tore straight through the body shell, leaving ripped triangle fans,
+    # interior holes and open cone mouths (backfaces reading as black gashes),
+    # and the 0.22 decimate then shredded those open boundaries further.
+    # Doctrine 1: never measure/cut against the bind pose - cut GEOMETRY.
+    # Now: one planar half-space bisect perpendicular to the FOREARM BONE AXIS
+    # at CUT_LEN behind the wrist. A half-space cut can never tear a shell; the
+    # torso, the far arm and everything proximal fall entirely on the cleared
+    # side, so what remains is exactly hand+forearm, watertight after the cut
+    # loop is filled. Island-keep then drops any sliver the plane clipped.
+    # Frame economy: at the Corvus ADS pose the trigger wrist is 0.21 m from
+    # the vm camera, so every extra cm of stub is a cm closer to the eye.
+    # 0.105 m = hand + a cuffed sleeve stub that leaves frame instead of
+    # arriving at it. (0.19 was iter02, 0.155 still filled the ADS frame.)
+    CUT_LEN = 0.105        # m of forearm kept behind the wrist
     for side, key in (("Right", "R"), ("Left", "L")):
         dup = mesh.copy()
         dup.data = mesh.data.copy()
         dup.name = f"arm_{key}"
         link(dup)
-        keep = {f"mixamorig:{side}Hand", f"mixamorig:{side}ForeArm"}
-        for f in ("Thumb", "Index", "Middle", "Ring", "Pinky"):
-            for j in (1, 2, 3):
-                keep.add(f"mixamorig:{side}Hand{f}{j}")
-        gidx = {g.index: (g.name in keep) for g in dup.vertex_groups}
+
+        # canonicalize FIRST (wrist -> origin, fingers +Y, palm -Z) so the cut
+        # plane, the cuff and the island test all live in one frame.
+        F = frames[key]
+        dup.data.transform(F.inverted())
+        dup.data.update()
+        elbow_c = F.inverted() @ elbows[key]          # elbow in canonical space
+        if elbow_c.length < 1e-4:
+            elbow_c = Vector((0.0, -1.0, 0.0))
+        e_dir = elbow_c.normalized()                  # wrist -> elbow
+
         bm = bmesh.new()
         bm.from_mesh(dup.data)
-        dl = bm.verts.layers.deform.active
-        doomed = []
-        for v in bm.verts:
-            wsum = sum(w for gi, w in v[dl].items() if gidx.get(gi))
-            if wsum < 0.45:
-                doomed.append(v)
-        bmesh.ops.delete(bm, geom=doomed, context="VERTS")
-        # drop shredded fragments: keep only connected islands >= 200 verts
+        # 0) WELD THE UV SEAMS FIRST. Measured this session: soldier.glb ships
+        #    214,760 verts / 409,150 tris with 20,010 BOUNDARY edges — the mesh
+        #    is split along every UV seam, so it is 20k open edges pretending to
+        #    be a closed body. Every downstream op (cut, hole-fill, and above all
+        #    DECIMATE COLLAPSE) treats a UV seam as a real silhouette boundary and
+        #    rips along it: those are the jagged dark gashes down the forearm in
+        #    the iter03 battery. Welding at 0.4 mm takes it to 204,493 verts / 32
+        #    boundary edges — a genuinely closed shell that survives decimation.
+        #    (Seam UVs collapse to one value; the glove albedo is a near-uniform
+        #    olive luminance band, so there is nothing to smear.)
+        bmesh.ops.remove_doubles(bm, verts=list(bm.verts), dist=0.0004)
+        # 1) the cut. clear_outer removes the +normal side => the elbow side.
+        geom = list(bm.verts) + list(bm.edges) + list(bm.faces)
+        res = bmesh.ops.bisect_plane(
+            bm, geom=geom, dist=1e-6,
+            plane_co=tuple(e_dir * CUT_LEN), plane_no=tuple(e_dir),
+            clear_outer=True)
+        # 2) cap the single cut loop -> watertight tube mouth, no torn rim
+        cut_edges = [e for e in res.get("geom_cut", [])
+                     if isinstance(e, bmesh.types.BMEdge)]
+        if cut_edges:
+            try:
+                bmesh.ops.edgeloop_fill(bm, edges=cut_edges)
+            except Exception:
+                bmesh.ops.triangle_fill(bm, edges=cut_edges, use_beauty=True)
+        # 3) island-keep: everything connected to the wrist, plus any shell
+        #    (sleeve/glove cuff modelled as a separate skin) big enough to be
+        #    real. Slivers the plane clipped off elsewhere go.
         bm.verts.ensure_lookup_table()
-        seen = set()
-        islands = []
+        seen, islands = set(), []
         for v in bm.verts:
             if v.index in seen:
                 continue
-            stack = [v]
-            isl = []
+            stack, isl = [v], []
             seen.add(v.index)
             while stack:
                 cur = stack.pop()
@@ -773,74 +890,59 @@ def build_arm_chunks():
                         seen.add(o2.index)
                         stack.append(o2)
             islands.append(isl)
-        if islands:
-            islands.sort(key=len, reverse=True)
-            doomed2 = [v for isl in islands for v in isl if len(isl) < 200]
-            if doomed2:
-                bmesh.ops.delete(bm, geom=doomed2, context="VERTS")
-        bm.to_mesh(dup.data)
-        bm.free()
-        # canonicalize: wrist->origin, fingers +Y, palm -Z
-        dup.data.transform(frames[key].inverted())
-        dup.data.update()
-        # Shorten the forearm: keep ~19 cm behind the wrist (exits frame low).
-        # W1 (iter02 fix): this used to be a vertex DELETE, which follows the
-        # mesh's own edges and leaves a ragged, OPEN tube mouth — clay-rendered
-        # this session, both forearms ended in hollow cones with torn rims, one
-        # of the loudest amateur tells in the battery. Now: a clean planar
-        # bisect, the cut loop filled, and a proud sleeve cuff so the arm ends
-        # in a garment edge instead of a hole.
-        bm2 = bmesh.new()
-        bm2.from_mesh(dup.data)
-        CUT_Y = -0.19
-        geom = list(bm2.verts) + list(bm2.edges) + list(bm2.faces)
-        res = bmesh.ops.bisect_plane(bm2, geom=geom, dist=1e-6,
-                                     plane_co=(0.0, CUT_Y, 0.0),
-                                     plane_no=(0.0, -1.0, 0.0),
-                                     clear_outer=True)
-        cut_edges = [e for e in res.get("geom_cut", [])
-                     if isinstance(e, bmesh.types.BMEdge)]
-        if cut_edges:
-            try:
-                bmesh.ops.edgeloop_fill(bm2, edges=cut_edges)
-            except Exception:
-                bmesh.ops.triangle_fill(bm2, edges=cut_edges, use_beauty=True)
-        # belt-and-braces: close anything the bisect left open
+        doomed = []
+        for isl in islands:
+            if len(isl) >= 120:
+                continue
+            doomed.extend(isl)
+        if doomed:
+            bmesh.ops.delete(bm, geom=doomed, context="VERTS")
+        # 4) belt-and-braces: nothing may still be open
         try:
-            bmesh.ops.holes_fill(bm2, edges=list(bm2.edges), sides=0)
+            bmesh.ops.holes_fill(bm, edges=[e for e in bm.edges if e.is_boundary],
+                                 sides=0)
         except Exception:
             pass
-        # Sleeve cuff sized off the arm's OWN cross-section at the cut. The
-        # forearm is not axis-aligned there, so the radius must be measured
-        # from the section CENTROID — measuring from the canonical Y axis
-        # (first attempt this session) folded the offset into the radius and
-        # produced a pancake ~2.5x the arm, which then occluded a third of the
-        # ADS frame. Centroid + a hard clamp against a stray-vertex blow-up.
-        band = [v.co for v in bm2.verts
-                if CUT_Y - 0.004 < v.co.y < CUT_Y + 0.030]
+        # 5) sleeve cuff sized off the arm's OWN section at the cut, measured
+        #    from the section CENTROID (measuring from the canonical axis folds
+        #    the offset into the radius and produces a pancake).
+        cut_pt = e_dir * CUT_LEN
+        band = [v.co for v in bm.verts
+                if -0.004 < (v.co - cut_pt).dot(e_dir) < 0.030]
         if len(band) >= 8:
-            cx = sum(c.x for c in band) / len(band)
-            cz = sum(c.z for c in band) / len(band)
-            rs = sorted(math.hypot(c.x - cx, c.z - cz) for c in band)
-            cuff_r = rs[int(len(rs) * 0.92)]          # 92nd pct, not max
-            cuff_r = min(cuff_r, 0.045)               # a forearm is not 9 cm
+            ctr = Vector((0, 0, 0))
+            for c in band:
+                ctr += c
+            ctr /= len(band)
+            rs = sorted((c - ctr).length for c in band)
+            cuff_r = min(rs[int(len(rs) * 0.92)], 0.045)   # a forearm is not 9 cm
             if cuff_r > 0.004:
+                up = Vector((0, 0, 1))
+                if abs(e_dir.dot(up)) > 0.95:
+                    up = Vector((1, 0, 0))
+                zc = e_dir
+                xc = up.cross(zc).normalized()
+                yc = zc.cross(xc).normalized()
+                seat = ctr + e_dir * 0.009
+                rot = Matrix(((xc.x, yc.x, zc.x, seat.x),
+                              (xc.y, yc.y, zc.y, seat.y),
+                              (xc.z, yc.z, zc.z, seat.z),
+                              (0, 0, 0, 1)))
                 bmesh.ops.create_cone(
-                    bm2, cap_ends=True, cap_tris=False, segments=20,
-                    radius1=cuff_r * 1.14, radius2=cuff_r * 1.06, depth=0.026,
-                    calc_uvs=True,
-                    matrix=(Matrix.Translation((cx, CUT_Y + 0.011, cz)) @
-                            Matrix.Rotation(D(90), 4, "X")))
-        bmesh.ops.recalc_face_normals(bm2, faces=list(bm2.faces))
-        bm2.to_mesh(dup.data)
-        bm2.free()
+                    bm, cap_ends=True, cap_tris=False, segments=20,
+                    radius1=cuff_r * 1.12, radius2=cuff_r * 1.05, depth=0.028,
+                    calc_uvs=True, matrix=rot)
+        bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
+        bm.to_mesh(dup.data)
+        bm.free()
         dup.data.update()
         # single glove material
         dup.data.materials.clear()
         dup.data.materials.append(glove)
-        # decimate
+        # decimate — collapse on a WATERTIGHT mesh stays watertight; 0.22 on
+        # the old torn shells is what turned the rips into confetti.
         mod = dup.modifiers.new("dec", "DECIMATE")
-        mod.ratio = 0.22
+        mod.ratio = 0.30
         apply_all(dup)
         shade_smooth(dup, 55)
         dup.name = f"arm_{key}"
@@ -866,6 +968,23 @@ def support_hand_seat(base, y, bore_z, half_w=0.024):
     if not zs:
         return bore_z - 0.030
     return min(zs)
+
+
+def grip_seat(base, cfg, bore_z):
+    """Centroid of the PISTOL-GRIP region of the base mesh, in build frame.
+    W1 (iter03): the trigger-hand wrist was a hard-coded (0.035, -0.088, -0.088)
+    for every rifle regardless of where that rifle's grip actually is, so the
+    curled fingers closed inside the receiver and a fingertip poked out through
+    the top of it (S6 capture this session). Same discipline as
+    support_hand_seat: measure the mesh, do not guess. The region test matches
+    assign_metal_regions' slot-2 rule so the hand lands on the polygons that are
+    actually textured as the grip."""
+    pts = [p.center for p in base.data.polygons
+           if p.center.z < bore_z - 0.02 and abs(p.center.y) < 0.075]
+    if not pts:
+        return None
+    n = len(pts)
+    return (sum(p.y for p in pts) / n, sum(p.z for p in pts) / n)
 
 
 def place_arms(wid, mats, pose_override=None):
@@ -970,6 +1089,7 @@ def build(wid):
     mats = make_materials(tex)
 
     base, muzzle_y, bore_z, right_x, scale = import_base(cfg)
+    weld_mesh(base)                      # W1 (iter03) — before any cutting
     assign_metal_regions(base, mats, bore_z, cfg)
 
     parts = [base]
@@ -1029,14 +1149,26 @@ def build(wid):
     # arms — support hand seated on the MEASURED handguard underside (W1)
     if cfg.get("arms"):
         pose = [list(p) for p in ARM_POSE.get(wid, [])]
+        gs = grip_seat(base, cfg, bore_z)
+        if gs is not None:
+            gy, gz = gs
+            for p in pose:
+                if p[0] == "R":
+                    # wrist just behind and below the grip centroid: the curled
+                    # fingers then close ON the backstrap instead of inside the
+                    # receiver (W1 iter03, see grip_seat).
+                    p[1] = (p[1][0], gy - 0.028, gz - 0.022)
         lh_y = cfg.get("lh_y")
         if lh_y is not None:
             seat = support_hand_seat(base, lh_y, bore_z)
             for p in pose:
                 if p[0] == "L":
-                    # wrist sits ~3.2 cm under the handguard so the curled
-                    # fingers close ON it rather than in the air below it
-                    p[1] = (p[1][0], lh_y, seat - 0.032)
+                    # wrist sits under the handguard so the curled fingers
+                    # close ON it. W1 (iter03): 3.2 cm put the palm INSIDE the
+                    # handguard — the fingertips poked out through the top of
+                    # the rail (S6 capture). 4.6 cm seats the grip on the
+                    # underside where a support hand actually goes.
+                    p[1] = (p[1][0], lh_y, seat - 0.046)
         pose = [tuple(p) for p in pose]
         parts += place_arms(wid, mats, pose_override=pose)
 
@@ -1047,6 +1179,15 @@ def build(wid):
     ej = bpy.data.objects.new("SOCKET_eject", None)
     ej.location = ej_pos if ej_pos else (right_x, 0.03, bore_z)
     link(ej)
+    # W1 (iter03): SOCKET_sight — the sight line, baked. weapon_data.js's
+    # view.sightY is a HAND-COPIED number and it drifts (warden shipped 0.126
+    # against a built 0.134 = 8 mm = ~1.8 deg of ADS error at the 0.26 m pose).
+    # With the socket in the file, weapon_meshes.js aligns the prototype to the
+    # DECLARED sightY at load, so ADS is pixel-correct by construction whatever
+    # weapon_data says. Never re-derive the sight height at runtime — read it.
+    sg = bpy.data.objects.new("SOCKET_sight", None)
+    sg.location = (0, 0, sight_z)
+    link(sg)
 
     # previews
     previews(wid, sight_z)
@@ -1054,7 +1195,7 @@ def build(wid):
     # export
     out = os.path.join(OUT_DIR, f"{wid}.glb")
     for o in bpy.context.scene.collection.objects: o.select_set(False)
-    for o in parts + [mz, ej]:
+    for o in parts + [mz, ej, sg]:
         o.select_set(True)
     bpy.ops.export_scene.gltf(
         filepath=out, export_format="GLB", use_selection=True,

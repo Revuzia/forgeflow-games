@@ -37,3 +37,28 @@ generative-audio pipeline (Suno included) — per the captured license terms.
 NOT shipped by ruling: Poly Haven HDRIs (R18 — env comes from sky.env() PMREM
 + the plaza-baked cube), swat.glb / chibi soldier (R15), Mixamo raw files
 (Adobe terms — baked-only if used).
+
+## W1 (iter03) — FP viewmodel source survey
+
+No new external assets were fetched for the iter03 first-person-weapon work; the
+existing `games/last-circle` Meshy bases were re-surveyed and re-qualified, and
+the rebuild is entirely generator-side (`tools/a4_build_fp_weapons.py`). All six
+last-circle Meshy weapon GLBs were rendered in isolation on a neutral mid-grey
+with even three-point lighting and judged at first-person range; measured
+triangle counts (Blender import, this session):
+
+| Source (`games/last-circle/assets/props/meshy_wpn/`) | verts | tris | verdict |
+|---|---|---|---|
+| `wpn_ar.glb` | 4,908 | 5,943 | **selected** — Warden. Clean M4-pattern carbine: M-LOK handguard, birdcage device, real rail, stock, mag |
+| `wpn_smg.glb` | 4,620 | 5,962 | **selected** — Vesper |
+| `wpn_sniper.glb` | 4,479 | 6,143 | **selected** — Corvus. Bolt gun + scope; stock ships detached and is welded by the build tool |
+| `wpn_pistol.glb` | 4,482 | 5,955 | **selected** — Pike |
+| `wpn_shotgun.glb` | 4,704 | 6,088 | not used — no shotgun in the loadout |
+| `wpn_glauncher.glb` | 4,506 | 6,169 | not used — no launcher in the loadout |
+
+All six are original ForgeFlow Meshy generations (owner account), same lineage
+as the entry above; nothing here changes the licence position. Every one of them
+imports **split along its UV seams** (wpn_ar: 4,908 verts for 5,943 tris, welding
+to 2,921 at 0.4 mm), as does `soldier.glb` (214,760 verts, 20,010 boundary
+edges). That is a property of the source, not of the build — the generator now
+welds before it cuts.

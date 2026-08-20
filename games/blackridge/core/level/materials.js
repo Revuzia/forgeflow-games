@@ -614,29 +614,58 @@ export function makeMaterials(ctx = {}) {
   // (gallery roof leaks — puddle channel used for the two leak pools)
 
   // ---- walls
+  // mottle pulled 0.20 → 0.13: at the corrected exposure the albedo-variance
+  // term stopped being subtle breakup and started reading as lichen blotching
+  // on every wall (iter81 S4/S5). Roughness variance (`grunge`) is the term
+  // that should carry surface history — it is lit, so it moves with the key —
+  // while albedo variance is flat paint and gets the smaller share.
   const plaster = augment(uv(std({
     ...S_PLASTER, color: 0x9a938a, roughness: 0.8, metalness: 0.0,
     normalScale: new THREE.Vector2(0.7, 0.7),
-  }), 1 / 2.1, 1 / 2.1), { aowet: true, grunge: 0.4, mottle: 0.2 });
+  }), 1 / 2.1, 1 / 2.1), { aowet: true, grunge: 0.44, mottle: 0.13 });
 
+  // Facade tints are a MULTIPLIER on wall_plaster_albedo (measured linear mean
+  // 0.342/0.265/0.186), so the shipped effective albedo was 0.053/0.038/0.024 —
+  // an eighth of the mid-value VT §3 asks for, and the other half of iter03's
+  // "buildings are flat black slabs". Lifted to ~0.088/0.063/0.038: still
+  // visibly the soot-stained variant next to `plaster`, but now with enough
+  // reflectance for the window grid, sills and grime to survive at ambient.
   const plasterDark = augment(uv(std({
-    ...S_PLASTER, color: 0x6e6a64, roughness: 0.82, metalness: 0.0,
-    normalScale: new THREE.Vector2(0.7, 0.7),
-  }), 1 / 1.7, 1 / 1.7), { aowet: true, grunge: 0.44, mottle: 0.22 });
+    ...S_PLASTER, color: 0x8b857c, roughness: 0.82, metalness: 0.0,
+    normalScale: new THREE.Vector2(0.85, 0.85),
+  }), 1 / 1.7, 1 / 1.7), { aowet: true, grunge: 0.48, mottle: 0.15 });
 
   const concreteWall = augment(uv(std({
-    ...S_CONCRETE, color: 0x7e7e7a, roughness: 0.8, metalness: 0.0,
-    normalScale: new THREE.Vector2(0.6, 0.6),
-  }), 1 / 3.1, 1 / 3.1), { aowet: true, grunge: 0.42, mottle: 0.15 });
+    ...S_CONCRETE, color: 0x92928d, roughness: 0.82, metalness: 0.0,
+    normalScale: new THREE.Vector2(0.5, 0.5),
+    // 3.1 m/tile put ~600 texels per screen-metre in the S4 close crop, which
+    // read as high-frequency salt-and-pepper rather than render: coarser tiles
+    // move the aggregate pattern DOWN in spatial frequency so it reads as
+    // surface. normalScale pulled back with it — the wet micro-sparkle was
+    // doing most of the glitter.
+  }), 1 / 4.6, 1 / 4.6), { aowet: true, grunge: 0.42, mottle: 0.11 });
 
-  const trim = augment(std({
-    color: 0x4a4c50, roughness: 0.6, metalness: 0.0,
-  }), { grunge: 0.5, mottle: 0.2 });
+  // Trim carries every parapet cap, string course, window jamb, sill and
+  // downpipe — i.e. it is the second-largest visible surface in the frame after
+  // the walls, and it shipped as a bare untextured colour. Unmapped, it read as
+  // clean white piping on top of textured walls (iter81 S8: parapets at 38/51/74
+  // against a 54/52/50 wall). Concrete map + a value UNDER the wall it sits on
+  // keeps cast trim reading as cast trim, and the mottle/grunge amplitudes push
+  // it hard so no two metres of ledge look alike.
+  const trim = augment(uv(std({
+    ...S_CONCRETE, color: 0x5f6167, roughness: 0.72, metalness: 0.0,
+    normalScale: new THREE.Vector2(0.8, 0.8),
+  }), 1 / 0.8, 1 / 0.8), { aowet: true, grunge: 0.5, mottle: 0.16 });
 
   // ---- props
+  // same trap as plasterDark: iron_plate_albedo is a DARK sheet (linear 0.036),
+  // so 0x777d80 on top of it landed at 0.0066 effective — every painted-metal
+  // prop (shutters, kiosks, containers, lamp posts) read as a black cut-out
+  // rather than a surface. 0xa8aeb2 puts it at ~0.016, still plainly grimy
+  // industrial paint and still well under the VT §3 snow ceiling.
   const metalPainted = augment(uv(std({
-    ...S_IRON, color: 0x777d80, roughness: 0.62, metalness: 0.0,
-    normalScale: new THREE.Vector2(0.8, 0.8), envMapIntensity: 0.9,
+    ...S_IRON, color: 0xa8aeb2, roughness: 0.62, metalness: 0.0,
+    normalScale: new THREE.Vector2(0.9, 0.9), envMapIntensity: 0.9,
   }), 1 / 1.3, 1 / 1.3), { grunge: 0.5, mottle: 0.25 });
 
   const steel = augment(std({
@@ -723,9 +752,14 @@ export function makeMaterials(ctx = {}) {
     polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
   });
 
+  // 2.8 was tuned against the pre-fix exposure, where the frame's median pixel
+  // sat at 9/255; against the corrected key it blew a 1.25 m window into a
+  // half-facade glare bloom (iter81 S5/S8). Still authored above 1.0 so AgX
+  // rolls it and the bloom threshold picks it up — just no longer the brightest
+  // thing in the ward by an order of magnitude.
   const windowLit = std({
     map: TEX.window, color: 0x1a1a1a,
-    emissive: 0xffffff, emissiveIntensity: 2.8, emissiveMap: TEX.window,
+    emissive: 0xffffff, emissiveIntensity: 1.35, emissiveMap: TEX.window,
     roughness: 0.4, metalness: 0.0,
   });
   const windowDark = std({

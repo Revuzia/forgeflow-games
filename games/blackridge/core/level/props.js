@@ -611,6 +611,16 @@ export function buildProps(layout, ctx) {
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
       mesh.castShadow = true;
       mesh.receiveShadow = true;
+      // Instance-aware bounds. Without this three falls back to
+      // geometry.boundingSphere — the SINGLE prototype's sphere at the object
+      // origin (e.g. props_van: centre 0,0.7,0 r 1.5) — for both frustum
+      // culling and raycasts, while the instances themselves sit tens of
+      // metres away. Batches therefore pop out whenever the origin sphere
+      // leaves the frustum, and nothing can raycast them at all (verified in
+      // the live scene: a screen-centre ray through a van passed straight
+      // through it and hit the ground behind).
+      mesh.computeBoundingSphere();
+      mesh.computeBoundingBox();
       // turning ceiling fan / flagged animations are handled in level.js
       group.add(mesh);
     }

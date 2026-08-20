@@ -326,6 +326,12 @@ export async function buildLevel(ctx) {
 
   // ========================================================= 3. BUILDINGS
   const litWindows = []; // world positions of lit windows (for pool decals)
+  // Generator-placed facade grime, filled by the building pass and consumed by
+  // section 7. VT §3: "no 4 m² of surface without at least one unique breakup
+  // element" — iter03/iter81 facades had exactly zero, because the only wall
+  // decals authored were four door jambs and one perimeter run.
+  // Each entry: [x, y, z, w, h, ry, kind].
+  const facadeDecalQ = [];
   {
     const wallGeos = { a: [], b: [], c: [] };
     const trimGeos = [], winLit = [], winDark = [], roofGeos = [];
@@ -361,6 +367,53 @@ export async function buildLevel(ctx) {
           roofGeos.push(boxGeo([cx - 0.04, max[1], cz + 1.6], [cx + 0.04, max[1] + 2.4, cz + 1.68]));
         }
       }
+      // ---- plinth: a 55 cm splash course round the base of EVERY mass,
+      // including the low sheds that get no windows and no string course and
+      // therefore shipped as literally bare boxes (iter81 S8, near building).
+      // It grounds the mass, gives the splash-zone grime something to sit on,
+      // and costs four merged boxes.
+      trimGeos.push(boxGeo([min[0] - 0.09, 0, min[2] - 0.09], [max[0] + 0.09, 0.55, min[2] + 0.02]));
+      trimGeos.push(boxGeo([min[0] - 0.09, 0, max[2] - 0.02], [max[0] + 0.09, 0.55, max[2] + 0.09]));
+      trimGeos.push(boxGeo([min[0] - 0.09, 0, min[2]], [min[0] + 0.02, 0.55, max[2]]));
+      trimGeos.push(boxGeo([max[0] - 0.02, 0, min[2]], [max[0] + 0.09, 0.55, max[2]]));
+      // splash-zone grime every ~6 m along the two long faces
+      for (let sx = min[0] + 3; sx < max[0] - 1; sx += 6.2) {
+        facadeDecalQ.push([sx + wr() * 2, 1.15, max[2] + 0.03, 1.5, 1.9, 0, "drip_stain"]);
+        facadeDecalQ.push([sx + wr() * 2, 1.15, min[2] - 0.03, 1.5, 1.9, Math.PI, "drip_stain"]);
+      }
+
+      // ---- string courses: a shallow ledge at every floor line, all round.
+      // The cheapest possible fix for "buildings read as untextured boxes":
+      // a 12 cm proud, 18 cm tall band catches the moon on its top face and
+      // throws a hard shadow on the wall under it, so one flat plane becomes
+      // three tonal bands with a real horizon of its own. Merged into the SAME
+      // trim batch — no extra draw call, no extra material.
+      const bFloors = b.floors || 1;
+      for (let fl = 1; fl < bFloors; fl++) {
+        const cy = 0.7 + fl * 2.95;
+        if (cy > max[1] - 0.9) break;
+        trimGeos.push(boxGeo([min[0] - 0.12, cy, min[2] - 0.12], [max[0] + 0.12, cy + 0.18, min[2] + 0.02]));
+        trimGeos.push(boxGeo([min[0] - 0.12, cy, max[2] - 0.02], [max[0] + 0.12, cy + 0.18, max[2] + 0.12]));
+        trimGeos.push(boxGeo([min[0] - 0.12, cy, min[2]], [min[0] + 0.02, cy + 0.18, max[2]]));
+        trimGeos.push(boxGeo([max[0] - 0.02, cy, min[2]], [max[0] + 0.12, cy + 0.18, max[2]]));
+      }
+      // ---- downpipes at the two street-facing corners, with a rust runnel
+      // under each: vertical silhouette breakers, and the wet-wall streak they
+      // justify is the single most photographic piece of grime on a facade.
+      if (max[1] >= 5) {
+        for (const [px, pz] of [[min[0] + 0.34, max[2] + 0.14], [max[0] - 0.34, max[2] + 0.14]]) {
+          const pipe = new THREE.CylinderGeometry(0.085, 0.085, max[1] - 0.2, 7);
+          pipe.translate(px, (max[1] - 0.2) / 2, pz);
+          worldUV(pipe);
+          trimGeos.push(withAowet(pipe));
+          // collar brackets
+          for (let by = 1.6; by < max[1] - 1.0; by += 2.95) {
+            trimGeos.push(boxGeo([px - 0.14, by, pz - 0.16], [px + 0.14, by + 0.1, pz + 0.02]));
+          }
+          facadeDecalQ.push([px + 0.02, 1.9, pz + 0.05, 0.55, 3.2, 0, "rust_streak"]);
+        }
+      }
+
       // window grids per face
       const floors = b.floors || 1;
       if (max[1] < 4) continue;
@@ -380,7 +433,10 @@ export async function buildLevel(ctx) {
           if (wy + 0.85 > max[1] - 0.6) break;
           for (let cJ = 0; cJ < cols; cJ++) {
             const wc = lo + pad + cJ * 2.7;
-            const lit = litCount < 19 && wr() < 0.085;
+            // VT §1 / D7-10: "every window either lit or honestly dark". At
+            // 19 lit windows across the whole ward, a long facade (S5) had none
+            // and the street read abandoned rather than working-late.
+            const lit = litCount < 38 && wr() < 0.12;
             if (lit) litCount++;
             const g = new THREE.PlaneGeometry(1.25, 1.55);
             const cell = lit ? (wr() * 4) | 0 : 4 + ((wr() * 4) | 0);
@@ -395,14 +451,32 @@ export async function buildLevel(ctx) {
             else { g.rotateY(Math.PI); g.translate(wc, wy, facePos - 0.03); }
             (lit ? winLit : winDark).push(g);
             if (lit) litWindows.push([f.n[0] ? facePos + f.n[0] * 0.03 : wc, wy, f.n[1] ? facePos + f.n[1] * 0.03 : wc, f.n]);
-            // sill
-            const sw = 1.4;
-            if (f.n[0]) {
-              trimGeos.push(boxGeo([facePos + Math.min(0, f.n[0] * 0.1) - 0.02, wy - 0.85, wc - sw / 2],
-                [facePos + Math.max(0, f.n[0] * 0.1) + 0.02, wy - 0.77, wc + sw / 2]));
+            // ---- reveal: jambs + lintel standing 11 cm proud of the wall,
+            // opening exactly the glass size. The glass then sits at the BACK
+            // of a real box, so the key throws a hard jamb shadow across it and
+            // the lintel shades its top — a window reads as an opening in a
+            // thick wall instead of a sticker on a flat plane (iter03/81 tell).
+            const rp = 0.11, jw = 0.13, sw = 1.4;
+            const n0 = f.n[0], n1 = f.n[1];
+            const lo0 = (n) => facePos + Math.min(0, n * rp) - 0.01;
+            const hi0 = (n) => facePos + Math.max(0, n * rp) + 0.01;
+            if (n0) {
+              const a = lo0(n0), bx = hi0(n0);
+              // jambs
+              trimGeos.push(boxGeo([a, wy - 0.85, wc - 0.625 - jw], [bx, wy + 0.9, wc - 0.625]));
+              trimGeos.push(boxGeo([a, wy - 0.85, wc + 0.625], [bx, wy + 0.9, wc + 0.625 + jw]));
+              // lintel
+              trimGeos.push(boxGeo([a, wy + 0.775, wc - 0.625 - jw], [bx, wy + 0.9, wc + 0.625 + jw]));
+              // sill (sloped read: sits proud of the jambs)
+              trimGeos.push(boxGeo([a - 0.04, wy - 0.9, wc - sw / 2], [bx + 0.04, wy - 0.79, wc + sw / 2]));
+              facadeDecalQ.push([facePos + n0 * 0.02, wy - 1.62, wc, 1.25, 1.4, n0 > 0 ? Math.PI / 2 : -Math.PI / 2, "drip_stain"]);
             } else {
-              trimGeos.push(boxGeo([wc - sw / 2, wy - 0.85, facePos + Math.min(0, f.n[1] * 0.1) - 0.02],
-                [wc + sw / 2, wy - 0.77, facePos + Math.max(0, f.n[1] * 0.1) + 0.02]));
+              const a = lo0(n1), bz = hi0(n1);
+              trimGeos.push(boxGeo([wc - 0.625 - jw, wy - 0.85, a], [wc - 0.625, wy + 0.9, bz]));
+              trimGeos.push(boxGeo([wc + 0.625, wy - 0.85, a], [wc + 0.625 + jw, wy + 0.9, bz]));
+              trimGeos.push(boxGeo([wc - 0.625 - jw, wy + 0.775, a], [wc + 0.625 + jw, wy + 0.9, bz]));
+              trimGeos.push(boxGeo([wc - sw / 2, wy - 0.9, a - 0.04], [wc + sw / 2, wy - 0.79, bz + 0.04]));
+              facadeDecalQ.push([wc, wy - 1.62, facePos + n1 * 0.02, 1.25, 1.4, n1 > 0 ? 0 : Math.PI, "drip_stain"]);
             }
           }
         }
@@ -526,6 +600,21 @@ export async function buildLevel(ctx) {
   const fluorMat = M.emissive(0xcfe0d8, 2.6);
   const warmBulb = M.emissive(0xffc88a, 2.6);
 
+  // Bounce light off wet stone is markedly LESS saturated than the source that
+  // threw it (same physical fact lighting.js's BOUNCE_SAT encodes). Feeding the
+  // sign's own hex straight into an additive pool painted iter03 S4 as a flat
+  // pure-red gel with no surface under it — a colour filter laid over the
+  // ground, not light landing on it. 0.5 chroma retention, normalised so
+  // desaturating is not also a dimmer.
+  const POOL_SAT = 0.32;
+  function poolTint(color) {
+    const c = new THREE.Color(color);
+    const luma = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+    c.r = luma + (c.r - luma) * POOL_SAT;
+    c.g = luma + (c.g - luma) * POOL_SAT;
+    c.b = luma + (c.b - luma) * POOL_SAT;
+    return c.multiplyScalar(1 / Math.max(c.r, c.g, c.b, 1e-5));
+  }
   function addGlow(x, y, z, color, scale, opacity = 0.5) {
     const s = new THREE.Sprite(M.glowMat(color, opacity));
     s.position.set(x, y, z);
@@ -536,7 +625,7 @@ export async function buildLevel(ctx) {
   }
   function addPool(x, z, r, color, plazaCircuit = false, y = 0.012) {
     const g = planeXZ(r * 2, r * 2);
-    const col = new THREE.Color(color);
+    const col = poolTint(color);
     const p = g.getAttribute("position");
     const carr = new Float32Array(p.count * 3);
     for (let i = 0; i < p.count; i++) { carr[i * 3] = col.r; carr[i * 3 + 1] = col.g; carr[i * 3 + 2] = col.b; }
@@ -599,12 +688,28 @@ export async function buildLevel(ctx) {
         break;
       }
       case "skylight": {
-        const rim = M.emissive(0x7c8fb8, 1.1);
+        // iter03 S7: this was a 6.2 m PlaneGeometry with a flat emissive
+        // MeshStandardMaterial — from inside the arcade it read as a hard-edged
+        // white trapezoid pasted into the roof, the single worst artefact in
+        // the battery. A skylight is not a light-box: it is HAZE hanging in the
+        // shaft under a hole. Same footprint, but additive with a radial
+        // falloff (TEX.pool), so it has no edge to give the plane away, and it
+        // sums with the god-ray cone instead of competing with it.
+        const rim = M.poolMat(0xffffff, 0.42);
+        rim.vertexColors = true; // share light_pools' exact program variant
         const rg = new THREE.PlaneGeometry(6.2, 6.2);
         rg.rotateX(Math.PI / 2); // faces down into the lightwell
         rg.translate(-32, 8.13, -8);
+        {
+          const tint = poolTint(0x9fb0cf);
+          const rp = rg.getAttribute("position");
+          const rc = new Float32Array(rp.count * 3);
+          for (let i = 0; i < rp.count; i++) { rc[i * 3] = tint.r; rc[i * 3 + 1] = tint.g; rc[i * 3 + 2] = tint.b; }
+          rg.setAttribute("color", new THREE.BufferAttribute(rc, 3));
+        }
         const rmesh = new THREE.Mesh(rg, rim);
         rmesh.name = "skylight_glow";
+        rmesh.renderOrder = 2;
         group.add(rmesh);
         reg.emissives.push(rim);
         addPool(-32, -8, 2.4, lp.color, false, 0.02);
@@ -699,7 +804,7 @@ export async function buildLevel(ctx) {
       const g = new THREE.PlaneGeometry(w, h);
       g.rotateY(-Math.PI / 2);
       g.translate(x, y, z);
-      const col = new THREE.Color(color);
+      const col = poolTint(color);
       const p = g.getAttribute("position");
       const carr = new Float32Array(p.count * 3);
       for (let i = 0; i < p.count; i++) { carr[i * 3] = col.r; carr[i * 3 + 1] = col.g; carr[i * 3 + 2] = col.b; }
@@ -844,7 +949,12 @@ export async function buildLevel(ctx) {
       group.add(m);
     }
     if (poolPlaza.length) {
-      const mat = M.poolMat(0xffffff, 0.18);
+      // 0.18 → 0.11: the plaza pools overlap 5 signs' worth of spill on one
+      // patch of cobble, and at the corrected exposure the stack read as a
+      // saturated gel laid over the stones rather than light landing on them
+      // (iter81 S4). Additive spill has to stay UNDER the surface it lands on
+      // or the surface stops existing.
+      const mat = M.poolMat(0xffffff, 0.11);
       mat.vertexColors = true;
       const m = new THREE.Mesh(mergeGeometries(poolPlaza, false), mat);
       m.name = "light_pools_plaza";
@@ -903,6 +1013,9 @@ export async function buildLevel(ctx) {
     wq(23.03, 1.2, -30, 1.6, 2.2, -Math.PI / 2, "wear_edge");
     // splash-zone drips along the long perimeter walls (breakup per 4 m²)
     for (let x = -54; x < 54; x += 9) wq(x + dr() * 3, 1.4, -57.94, 1.2, 2.4, 0, "drip_stain");
+    // generator-placed facade grime: a sill drip under EVERY window and a rust
+    // runnel beside every downpipe, emitted by the building pass (section 3).
+    for (const d of facadeDecalQ) wq(d[0], d[1], d[2], d[3], d[4], d[5], d[6]);
     const gm = new THREE.Mesh(mergeGeometries(groundQ, false), M.decalMat);
     gm.name = "decals_ground";
     gm.renderOrder = 2;

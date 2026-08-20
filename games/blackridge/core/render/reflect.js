@@ -38,6 +38,12 @@ const REFRESH_FRAMES = 90;     // layer-membership traversal cadence
 export function createReflect(ctx) {
   const { renderer, scene, camera } = ctx;
 
+  // A3's GROUND_HOOKS handle. Declared HERE, not next to its assignment below,
+  // because renderPlanar() reads it and is called once during construction to
+  // warm the RT-variant programs — a `let` further down would put it in the
+  // temporal dead zone for that first call.
+  let hooks = null;
+
   // ------------------------------------------------------------ render target
   const rt = new THREE.WebGLRenderTarget(512, 512, {
     type: THREE.HalfFloatType, // matches the post HDR chain (prewarm covers it)
@@ -116,9 +122,19 @@ export function createReflect(ctx) {
     const prevXr = renderer.xr.enabled;
     renderer.xr.enabled = false;
     renderer.shadowMap.autoUpdate = false; // don't re-render the moon map for the mirror
+    // The ground materials sample rt.texture through GROUND_HOOKS.planarTex,
+    // and the ground is itself on REFLECT_LAYER — so rendering INTO rt with
+    // that sampler still bound is a framebuffer/texture feedback loop. Chrome
+    // logs GL_INVALID_OPERATION and drops the draw, ~14 per battery run since
+    // iter03. Zeroing the strength for the duration takes the ground down the
+    // untextured branch (the `if` in materials.js is on uPlanarStrength) and
+    // costs nothing: the mirror pass must not see last frame's mirror anyway.
+    const prevPlanar = hooks ? hooks.planarStrength.value : 0;
+    if (hooks) hooks.planarStrength.value = 0;
     renderer.setRenderTarget(rt);
     renderer.clear();
     renderer.render(scene, virtualCamera);
+    if (hooks) hooks.planarStrength.value = prevPlanar;
     renderer.setRenderTarget(prevRT);
     renderer.shadowMap.autoUpdate = prevShadow;
     renderer.xr.enabled = prevXr;
@@ -226,7 +242,6 @@ export function createReflect(ctx) {
   // planarStrength off level.js's exported hooks — nothing was writing
   // them, so planarStrength sat at 0 and the contracted planar payoff
   // never rendered (iter01: no elongated reflections anywhere).
-  let hooks = null;
   scene.traverse((o) => {
     if (!hooks && o.userData && o.userData.level && o.userData.level.hooks) {
       hooks = o.userData.level.hooks;

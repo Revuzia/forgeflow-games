@@ -325,6 +325,46 @@ def run_shot(page, sid: str, iter_name: str, args) -> dict:
     mean_luma = png_mean_luma(out_path) if on_disk else None
     near_black = (mean_luma is not None and mean_luma < 4.0)
 
+    # ---- HUD COMPOSITE (W4, iter04) ------------------------------------------
+    # __test.capture() reads the GL DRAWING BUFFER back. The HUD and the pause
+    # overlay are DOM, so `hud: true` could never appear in the PNG — S6 shipped
+    # through iter03 as a HUD-less plaza frame, which voids the one scenario the
+    # scorecard's HUD/UI dimension is graded on (VT battery table: "S6 pause menu
+    # + in-mission HUD"). The only way to get DOM into the frame is a compositor
+    # screenshot, so hud:true scenarios take one — but ONLY when the scenario is
+    # posed/held, never when it is scripted: C1's PNG must be the exact
+    # captureAt tick, and a compositor grab is a different, later moment.
+    # The GL PNG stays the fallback and the swap is VERIFIED, not assumed: the
+    # screenshot must be the right size and non-trivial, or it is discarded.
+    # (--use-angle + --disable-features=CalculateNativeWinOcclusion already keep
+    # the visible window rendering; a blank grab still cannot slip through.)
+    capture_mode = "gl"
+    if on_disk and sc["hud"] and not sc["hasScript"]:
+        tmp = out_path + ".page.png"
+        try:
+            page.screenshot(path=tmp, scale="css")
+            shot_luma = png_mean_luma(tmp)
+            from PIL import Image as _Img
+            with _Img.open(tmp) as _im:
+                good_size = _im.size == (args.width, args.height)
+            if good_size and shot_luma is not None and shot_luma >= 4.0:
+                os.replace(tmp, out_path)
+                capture_mode = "page"
+                mean_luma = shot_luma
+                near_black = False
+            else:
+                os.remove(tmp)
+                print(f"     .. {sid}: HUD composite REJECTED "
+                      f"(size ok={good_size}, luma={shot_luma}) — keeping the GL frame",
+                      file=sys.stderr)
+        except Exception as e:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+            print(f"     .. {sid}: HUD composite failed ({e}) — keeping the GL frame",
+                  file=sys.stderr)
+
     state = page.evaluate("""() => {
         try {
             const s = __FPS__.__test.state();
@@ -340,6 +380,7 @@ def run_shot(page, sid: str, iter_name: str, args) -> dict:
             "botSeed": sc["botSeed"], "rainPhase": sc["rainPhase"],
             "hud": sc["hud"], "untilReached": until_reached,
             "capturedOnDisk": on_disk, "meanLuma": mean_luma,
+            "captureMode": capture_mode,
             "nearBlack": near_black, "pageErrors": errs,
             "scenario": scen_report,
             **script_state, **state}
