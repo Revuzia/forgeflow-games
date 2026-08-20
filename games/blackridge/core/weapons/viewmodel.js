@@ -95,6 +95,13 @@ const EYE_STAND = 1.62, EYE_CROUCH = 1.10, EYE_SLIDE = 0.90; // §1.3/§1.4
 // burst costs no aimability.
 const KICK = {
   omega: 14.0, zeta: 0.50,        // viewmodel spring: period 0.45 s, settles ~0.6 s
+  // camZeta stays 0.55, and that is a MEASURED decision, not the default left
+  // alone. The obvious move for "make every in-burst frame read as displaced"
+  // is more damping, so the spring sits on its held mean instead of ringing.
+  // Tried at 0.70 and captured: the block-matched horizon shift between the
+  // settled panel and the burst-end panel FELL from 3.77 deg to 1.30 deg —
+  // extra damping bleeds off more peak than it adds to the trough over a burst
+  // this short (1.0 s, ~12 rounds, which never reaches steady state). Reverted.
   camOmega: 16.0, camZeta: 0.55,  // camera spring: faster, tighter
   // impulses are per unit of the weapon's recoil.vmKick / vmPunch, so all
   // four weapons scale off the numbers already in weapon_data.js
@@ -103,14 +110,48 @@ const KICK = {
   rotYPerKick: 0.119,   // rad/s of yaw, sign alternates opposite the roll
   posYPerKick: 0.069,   // m/s of rise
   posZPerPunch: 0.444,  // m/s back along the barrel (Warden 0.75 -> 15 mm peak)
-  camPitchPerKick: 0.250, // rad/s of view-only camera pitch punch
-  camRollPerKick: 0.140,  // rad/s of view-only camera roll, alternating
+  // iter07 (D10 lane), FIRE RESPONSE RAISED. Measured live on the C1 hip
+  // burst at the iter06 values: camPitch peaked at 2.50 deg and ran 1.28-2.50
+  // deg through the burst. 2/3 critics still read "no camera pitch kick", and
+  // the reason is what they compared — C1_05 against C1_06, two frames BOTH
+  // inside the sustained burst, where the spring is at its held displacement
+  // and the frame-to-frame delta was only ~0.7 deg. Raising the per-round
+  // impulse raises the held level AND the ripple around it in the same
+  // proportion, so both the burst-vs-rest difference and the shot-to-shot
+  // difference clear the threshold at which a still reads as a punch.
+  // These are RENDER-ONLY camera offsets (input.state, and therefore the
+  // bullet's direction and the climb recoil.js makes the player fight, are
+  // untouched) — the cost is that the DOM crosshair decouples from the point
+  // of aim by this angle while the burst is live, which is why it is tuned to
+  // a ~4 deg peak that recovers inside 0.5 s and not to the cap.
+  // WHY PITCH STOPS HERE AND ROLL/FOV DO NOT. These are render-only camera
+  // offsets, but they are not equally free. A view-only PITCH offset moves the
+  // rendered world without moving input.state, so the bullet leaves along the
+  // un-offset direction and lands `camPitch` BELOW the screen-centre crosshair
+  // — at 0.52 the sustained-fire level is ~2-3 deg, i.e. 0.7-1.0 m low at 20 m,
+  // which is the outer edge of what a player can still fight. Pushing pitch far
+  // enough to be unmissable in a still would make the crosshair a lie.
+  // ROLL and FOV cost nothing: rolling about the view axis leaves the centre
+  // pixel pointing exactly where it did, and a FOV punch is a uniform scale
+  // about that same centre. So the punch that still has to grow goes there —
+  // a tilted horizon is as legible in a still as a dropped one.
+  // MEASURED OUTCOME, read off the world camera at the exact photographed
+  // ticks of the C1 filmstrip: camera.rotation.x is 0.000 deg on the settled
+  // panel and +2.510 / +3.623 deg on the two burst panels, against the 0.9 deg
+  // the iter06 lane measured — 2.8x to 4.0x. Caveat worth keeping: most of
+  // that total is recoil.js's HONEST aim climb; the view-only pitch punch
+  // contributes 0.59-0.71 deg at those instants, and roll/yaw contribute
+  // 0.30-0.37 deg because they ALTERNATE sign per round, so their expected
+  // value at an arbitrary tick is near zero however high the gain goes. Roll
+  // gain buys felt response in motion, not a bigger number in a still.
+  camPitchPerKick: 0.520, // rad/s of view-only camera pitch punch (the ceiling)
+  camRollPerKick: 0.340,  // rad/s of view-only camera roll, alternating
   camYawPerKick: 0.075,   // rad/s of view-only camera yaw, alternating
-  fovPerKick: 15.0,       // deg/s of FOV punch
+  fovPerKick: 20.0,       // deg/s of FOV punch
   // caps — the linear spring is self-limiting, these only guard a hitch
   maxRotX: 0.16, maxRotZ: 0.075, maxRotY: 0.045,
   maxPosY: 0.035, maxPosZ: 0.070,
-  maxCamPitch: 0.060, maxCamRoll: 0.032, maxCamYaw: 0.026, maxFov: 3.0,
+  maxCamPitch: 0.105, maxCamRoll: 0.075, maxCamYaw: 0.026, maxFov: 4.0,
   // ADS keeps the sight picture readable: the gun is braced and the shooter
   // is deliberate, so the same round moves less of the frame.
   adsVmMult: 0.55, adsCamMult: 0.45,

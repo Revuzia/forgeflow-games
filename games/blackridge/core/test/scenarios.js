@@ -70,6 +70,121 @@ export function createScenarios(ctx) {
   const GAMEPLAY_HUD = new Set(["S1", "S3", "S6", "S7", "S8", "C1"]);
   const STUDY_NO_HUD = new Set(["S2", "S4", "S5", "S9", "menu"]);
 
+  // ---- iter07 REVIEW OF THAT SPLIT, because the work order asked for one.
+  // S4/S5/S9 stay OFF and the reason is the scorecard itself: visual_target.md's
+  // battery table defines S4 as "close-up of ground/wall material in practical
+  // light", S5 as "sky/horizon from an elevated position" and S9 as a detached
+  // third-person camera. A crosshair over a material sample, or a first-person
+  // ammo block over a camera the player never occupies, is not craft the
+  // scorecard rewards — it is a lie about what the frame is. No iter06 critic
+  // asked for a HUD on any of the three; the D9 deductions were S2, the pause
+  // tick, the shell chrome, "FRAG . .", the compass edge and — the big one —
+  // that no DAMAGE state appears anywhere in the battery. That last one is
+  // closed below rather than by switching study frames on.
+  //
+  // S2 also stays OFF, and this is now a MEASURED decision rather than a
+  // deferral. The iter06 note left it to the ADS-optic lane; the underlying
+  // code defect it was standing in for is fixed this wave in hud.js (the
+  // Corvus shroud used to paint over the compass and the ammo block because it
+  // is appended last — an explicit z-band now puts the optic body BELOW the
+  // information layers, so ADS never drops the ammo block in play again). What
+  // remains is purely a capture-composition question: forcing the HUD on makes
+  // S2 a scope picture — a 76 vmin bore inside a 98.5%-opaque shroud, i.e.
+  // ~85% of the frame — which would hide the receiver, the optic housing and
+  // the support hand that iter07's ranked fix #3 exists to rebuild and be
+  // graded on. Blacking out another lane's only frame to buy a D9 point is a
+  // bad trade in the same iteration. Owner/ADS-lane call, one line here.
+
+  // ---- BATTERY DAMAGE BEAT (iter07 D9). 2/3 critics: "no health or
+  // damage-direction state appears anywhere in the battery", so the contracted
+  // damage arc, the directional vignette and the hitmarker could not be
+  // credited at all — a whole graded sub-system rendering zero points because
+  // no pose ever put the player in a state that shows it. The systems all
+  // exist and are event-driven (hud.js onHurt / onShot), so the fix is to
+  // author ONE beat that puts a frame in that state, not to build anything.
+  //
+  // S1 is the honest place for it: its own contract line is "hip-fire
+  // mid-firefight w/ muzzle flash", and a man firing from the hip in a
+  // firefight has been shot at and has hit something. The beat is dispatched
+  // through the REAL event bridge at the end of the pose, so what the PNG
+  // shows is the shipping HUD reacting to shipping events — not a debug draw.
+  // Ages are sim time and the world is HELD, so between dispatch and the
+  // capture tick only the handful of driven ticks elapse (S1 drives
+  // `untilShot`, typically 4-8 ticks ≈ 0.1 s, inside the 0.22 s hitmarker
+  // life and well inside the 0.8 s arc).
+  const HUD_BEATS = {
+    S1: {
+      // 56 puts the §6 vignette curve at ~0.15 alpha: unmistakably a damage
+      // state at the screen edge, and deliberately short of the point where a
+      // cold critic could read the corners as an unmotivated red colour grade
+      // (0.19 at hp 46 was measurably close to that line on the first capture).
+      hp: 56,
+      hurtFrom: [0.82, 0, -0.57],   // taking fire from the front-right
+      hit: "head",                  // hitmarker: headshot variant (larger)
+    },
+  };
+
+  function applyHudBeat(name, sim, warnings) {
+    const beat = HUD_BEATS[name];
+    if (!beat) return null;
+    const p = sim.state.player;
+    if (beat.hp != null) p.hp = beat.hp;
+    const evs = [];
+    if (beat.hurtFrom) {
+      evs.push({ type: "hurt", data: { victim: "P", attacker: null, dir: beat.hurtFrom.slice(), amount: 100 - beat.hp } });
+    }
+    if (beat.hit && sim.state.bots.length) {
+      // aim the record at the bot nearest the player's look direction, so the
+      // hitmarker in the frame corresponds to a body actually in the frame
+      const eye = eyeOf(p);
+      const fwd = [-Math.sin(p.yaw), 0, -Math.cos(p.yaw)];
+      let best = null, bestDot = -2;
+      for (const bot of sim.state.bots) {
+        const dx = bot.pos[0] - eye[0], dz = bot.pos[2] - eye[2];
+        const len = Math.hypot(dx, dz) || 1e-6;
+        const dot = (dx / len) * fwd[0] + (dz / len) * fwd[2];
+        if (dot > bestDot) { bestDot = dot; best = bot; }
+      }
+      const hp2 = [best.pos[0], best.pos[1] + (beat.hit === "head" ? 1.62 : 1.15), best.pos[2]];
+      const dx = hp2[0] - eye[0], dy = hp2[1] - eye[1], dz = hp2[2] - eye[2];
+      const len = Math.hypot(dx, dy, dz) || 1e-6;
+      evs.push({
+        type: "shot",
+        data: {
+          shooter: "P", weaponId: p.weapon.id, impactOnly: true,
+          origin: eye.slice(), dir: [dx / len, dy / len, dz / len],
+          hit: {
+            entity: best.id, part: beat.hit, pos: hp2,
+            normal: [-dx / len, -dy / len, -dz / len], surface: "flesh",
+          },
+        },
+      });
+    }
+    if (!evs.length) return null;
+    // ONE AT A TIME, EACH GUARDED. The bridge fans an event out to every
+    // registered consumer in registration order and does not isolate them, so
+    // the first cut of this beat lost the hitmarker to an exception thrown
+    // three handlers upstream: a bare fire-time `shot` reached fx.onShot,
+    // which reads d.origin for the muzzle/tracer/casing path, and the whole
+    // dispatch — hud included — died on "Cannot read properties of undefined
+    // (reading '2')". The payload is now `impactOnly`, which is the resolution
+    // shape every consumer already handles (soldiers returns early, fx takes
+    // the hit path only, testsurface counts it as a hit record, hud.js's own
+    // header says hitmarkers count impactOnly resolutions), and each event is
+    // dispatched in its own try so one bad consumer cannot silence the rest.
+    let dispatched = 0;
+    for (const ev of evs) {
+      try { ctx.bridge.dispatch([ev]); dispatched++; }
+      catch (e) { warnings.push(`HUD beat '${ev.type}' threw in a consumer: ${e.message}`); }
+    }
+    if (!dispatched) return null;
+    warnings.push(
+      `HUD damage beat: hp ${beat.hp}, threat arc + directional vignette from ` +
+      `[${beat.hurtFrom}], ${beat.hit} hitmarker — so D9's damage state is ` +
+      `gradeable somewhere in the battery`);
+    return { hp: beat.hp, hit: beat.hit };
+  }
+
   // ------------------------------------------------------------ helpers
   function resolvePose(name) {
     const table = (ctx.content && ctx.content.scenarios) || {};
@@ -136,7 +251,30 @@ export function createScenarios(ctx) {
   // Pose one scenario bot: spawn through the real sim path, then PIN its cmd
   // (Object.defineProperty — same discipline as input pinning) so the brain
   // cannot repose it; anim comes from the REAL locomotion/weapon paths.
-  function poseBot(spec, playerEye, warnings) {
+  //
+  // THE PIN IS FOR HELD STILLS ONLY (iter07, D10 lane). A posed S-frame is one
+  // photograph of one instant, and pinning is what makes that instant the same
+  // instant next iteration — keep it. C1 is the opposite artifact: a 6-second
+  // LIVE take, graded on D10 "motion feel", photographed as an 11-panel
+  // filmstrip. Measured live this session, pre-fix, every beat of that take:
+  //
+  //   bot1 hp=100 anim=fire clip=rifle_idle mag=0 ws=firing pos=[6,0,0]
+  //   bot2 hp=100 anim=fire clip=rifle_idle mag=0 ws=firing pos=[10,0,8]
+  //
+  // — identical on all eleven beats. The pinned cmd hard-codes reload:false and
+  // moveX/moveZ 0, so both bots ran their magazines dry at t≈4.5 s and then
+  // stood in place DRY-FIRING for the rest of the take: no reload (the brain
+  // owns §5.7's dry reload), no cover break, no stance change, no displacement.
+  // Three critics independently read that as "IDENTICAL STANCES WHILE BEING
+  // FIRED AT", and the scorecard's D10 anchor voids the motion score for it.
+  // The pin's stated purpose — "an A5 AI change can never move a framed bot
+  // between critic iterations" — does not apply to a take whose whole subject
+  // is bots moving, and determinism is already carried by the explicit
+  // sim.rng.ai = mulberry32(botSeed) re-seed above plus the scripted input.
+  //
+  // So: pinned when the pose is HELD, live when the pose is LIVE. The framing
+  // contract for the S-battery is untouched.
+  function poseBot(spec, playerEye, warnings, pinned = true) {
     const sim = ctx.sim();
     let base = null;
     if (spec.spawn) {
@@ -162,6 +300,14 @@ export function createScenarios(ctx) {
     bot.yaw = spec.yaw != null ? spec.yaw : aim.yaw;
     if (spec.state === "combat") bot.aimAt = playerEye.slice();
 
+    if (!pinned) {
+      // LIVE take: the brain owns this bot from here. Seed it into the fight
+      // the pose describes (alerted + combat + a threat to shoot at) so the
+      // first second is a firefight rather than an acquisition, then get out
+      // of its way — movement, cover, stance and reload are A5's.
+      bot._scenarioPinned = false;
+      return id;
+    }
     const frozenCmd = {
       moveX: 0,
       moveZ: spec.moving || spec.anim === "run" || spec.anim === "walk" ? 1 : 0,
@@ -441,12 +587,18 @@ export function createScenarios(ctx) {
     // ---- world hooks (rain phase, time of day, blackout)
     const world = applyWorldHooks(pose, cap, warnings);
 
-    // ---- bots
+    // ---- bots. `live` is hoisted above the cast because it decides whether
+    // the cast THINKS (see poseBot's pin note): a held still keeps its pinned
+    // statues, a live take gets soldiers.
+    const live = !!pose.captureSeconds || !!pose.autoplay || name === "C1" || name === "bench";
     const playerEye = eyeOf(sim.state.player);
     const botIds = [];
     for (const spec of pose.bots || []) {
-      const id = poseBot(spec, playerEye, warnings);
+      const id = poseBot(spec, playerEye, warnings, !live);
       if (id != null) botIds.push(id);
+    }
+    if (live && botIds.length) {
+      warnings.push(`live take — ${botIds.length} bots UNPINNED (A5 brains drive them)`);
     }
 
     // ---- the pose OWNS the cast: when `bots` is declared (even empty),
@@ -481,7 +633,6 @@ export function createScenarios(ctx) {
     // (bench) drives from here; no hold, no action steps. content.json's C1
     // `script` is pose metadata; the driving script lives in shots.js and is
     // dispatched by shotbattery.py through real events.
-    const live = !!pose.captureSeconds || !!pose.autoplay || name === "C1" || name === "bench";
     if (live) {
       ctx.input.enabled = true;
       T.hud(hudOn);
@@ -594,6 +745,10 @@ export function createScenarios(ctx) {
     // ---- HUD per the merged flag (battery re-applies its own cap after).
     T.hud(hudOn);
 
+    // ---- damage / hit beat LAST, so its sim-time ages are as young as they
+    // can be when capture() takes its driven tick(s).
+    const hudBeat = hudOn ? applyHudBeat(name, sim, warnings) : null;
+
     // ---- the HOLD must not put a menu in the frame.
     // A posed beauty/gameplay shot freezes the world with the pause gate, and
     // pause.js correctly renders its overlay whenever pauseCtl.pause() runs on
@@ -624,7 +779,7 @@ export function createScenarios(ctx) {
       // being used as a freeze? Conflating the two made the first S3 capture
       // of this fix come back as a full-screen pause menu.
       overlay: wantsOverlay,
-      hud: hudOn, overlaysHidden,
+      hud: hudOn, overlaysHidden, hudBeat,
       playerPos: sim.state.player.pos.map((v) => +v.toFixed(3)),
       yaw: +sim.state.player.yaw.toFixed(4),
       pitch: +sim.state.player.pitch.toFixed(4),

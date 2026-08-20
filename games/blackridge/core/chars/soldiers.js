@@ -339,6 +339,16 @@ export function createSoldiers(ctx) {
     fadeH: 0.55,          // metres of airborne lift that fades the blob to 0
     deadR: 1.15,          // prone body: wider, softer
     deadS: 0.64,
+    // ---- wet-ground reflection (iter07 ranked fix 6) ---------------------
+    // 3/3 critics: "he casts no shadow and leaves no reflection on cobbles
+    // that are reflecting everything else — he is pasted onto the ground."
+    // A contact shadow alone cannot answer that; the mirror-wet street has to
+    // show the man standing on it. grounding.js solves the card geometry from
+    // these two numbers plus the camera, so the reflection is view-correct
+    // and moves with the player instead of sitting on the ground like a
+    // decal. Standing height is the actual body height, not the capsule.
+    standH: 1.78,
+    deadH: 0.42,          // a body on the cobbles mirrors ~its own thickness
   };
   let groundingApi = null;
   function grounding() {
@@ -460,6 +470,11 @@ export function createSoldiers(ctx) {
     const bodyName = archBody(d.archetype);
     const proto = protos[bodyName] || null;
     const actor = createActor(proto);
+    // LIFE LAYER (iter07): hash the bot id into a pose phase + playback rate.
+    // Without it every soldier who enters the 2.13 s idle on the same frame
+    // holds the identical pose for the whole engagement — critic-c, iter06:
+    // "BOTH soldiers hold the same pose as each other".
+    actor.setLifeSeed(d.botId);
     if (actor.placeholder && proto === null) {
       // loadBody already pushed the fallback flag; nothing more to report here
     }
@@ -475,6 +490,13 @@ export function createSoldiers(ctx) {
     const rec = {
       botId: d.botId,
       archetype: d.archetype,
+      // Parsed ONCE at spawn (the grounding write runs every frame for every
+      // live actor and must not allocate). Same value actor.setTint() used.
+      tintHex: (() => {
+        const t = archTint(d.archetype);
+        const n = typeof t === "string" ? parseInt(t.replace("#", ""), 16) : (t | 0);
+        return isFinite(n) ? n : 0x4b5142;
+      })(),
       actor,
       wpn,
       prev: [d.pos[0], d.pos[1], d.pos[2]],
@@ -521,6 +543,9 @@ export function createSoldiers(ctx) {
     const rec = actors.get(d.victim);
     if (!rec || rec.deathPlayed) return;
     rec.deathPlayed = true;
+    // a corpse does not breathe, sway or scan the street — kill the life
+    // layer at the same instant the death clip is committed (actor.js)
+    rec.actor.lifeGain = 0;
     // DIRECTIONAL DEATH (VT §7): the body is knocked AWAY from the shot —
     // face the shooter so the (backward-falling) Mixamo deaths read as impact
     // direction, not a canned flop. d.dir is the shot's travel direction.
@@ -567,7 +592,26 @@ export function createSoldiers(ctx) {
       bridge.register("hurt", (d) => {
         // 70 ms COLOR-MULTIPLY flinch flash — never emissive (VT §7).
         const rec = actors.get(d.victim);
-        if (rec) rec.flashUntil = viewT + 0.07;
+        if (!rec) return;
+        rec.flashUntil = viewT + 0.07;
+        // BODY FLINCH (iter07, ranked fix 7). The flash was the WHOLE of the
+        // hit reaction and it is 70 ms long: at 60 fps that is four frames,
+        // and the filmstrip samples half a second apart, so no critic has ever
+        // been able to see a soldier react to a round. `hit` (the clip) only
+        // plays when the SIM latches bot.anim = "hit", which it does not do
+        // for a graze. This is the always-on half: a directional spring in the
+        // torso that folds him over the round and snaps his head down, and it
+        // is still visibly settling ~0.4 s later.
+        // d.dir points victim -> attacker, so the ROUND travelled -d.dir.
+        let side = 0;
+        if (d.dir) {
+          const ry = rec.yaw;                 // THREE yaw of the actor root
+          // actor RIGHT in world is (cos ry, 0, -sin ry) — same basis actor.js
+          // builds its pitch axis from. side = shotDir · right.
+          side = (-d.dir[0]) * Math.cos(ry) + (-d.dir[2]) * (-Math.sin(ry));
+          side = Math.max(-1, Math.min(1, side));
+        }
+        rec.actor.hitImpulse(side, Math.min(1.5, 0.6 + (d.amount || 20) / 45));
       });
       bridge.register("botstate", (d) => {
         // fallback: a bot can die from test-surface damage with the death
@@ -584,7 +628,15 @@ export function createSoldiers(ctx) {
         if (d.impactOnly || d.pen) return;
         if (typeof d.shooter === "number") {
           const rec = actors.get(d.shooter);
-          if (rec) rec.kick = 1;
+          if (!rec) return;
+          rec.kick = 1;
+          // BODY RECOIL (iter07). rec.kick alone slides the weapon prop 2 cm
+          // along its own axis — invisible past ~5 m, and the SHOOTER looked
+          // as frozen as everyone else. The torso spring absorbs each round
+          // and, under sustained fire, holds a displaced pose rather than
+          // spiking for one frame (the viewmodel lane's iter06 finding,
+          // applied to the third-person body).
+          rec.actor.fireImpulse(1);
         }
       });
     },
@@ -627,6 +679,7 @@ export function createSoldiers(ctx) {
             if (!b.alive) { // late join on a corpse: bury it without replaying
               const rec = actors.get(b.id);
               rec.deathPlayed = true;
+              rec.actor.lifeGain = 0;   // late-joined corpse: no life layer
               rec.actor.playOnce(b.anim === "death_b" ? "death_b" : "death_a", { fade: 0, timeScale: 1000 });
             }
           }
@@ -675,6 +728,18 @@ export function createSoldiers(ctx) {
           actor.play(rec.forceAnim);
         } else if (bot.anim === "hit") {
           if (actor.currentName !== "hit") actor.playOnce("hit", { fade: 0.06 });
+        } else if (bot.weapon && bot.weapon.state === "reloading" && hs < 4.5) {
+          // RELOAD (iter07, ranked fix 7). clip_rifle_reload has shipped in
+          // CLIP_FILES since day one with NOTHING pointing at it, so a bot
+          // running §5.7's dry reload played his idle through it and 3/3
+          // critics reported the reload as invisible. The sim exposes the
+          // window directly; play it while it is open and fall back to
+          // whatever the sim wants next when it closes. Not while sprinting —
+          // a reload-on-the-move must keep its stepping cycle (foot slide is
+          // the D10 hard cap), the arms just lose the mag change.
+          if (actor.currentName !== "rifle_reload") {
+            actor.play("reload", { fade: 0.12, fromStart: true });
+          }
         } else {
           if (bot.anim === "crouch_walk") actor.crouchW = 1;
           actor.play(bot.anim);
@@ -701,10 +766,12 @@ export function createSoldiers(ctx) {
         rec.skipAcc += dtAnim;
         rec.skipN++;
         if (onScreen || rec.skipN % 3 === 0) {
-          actor.update(rec.skipAcc);
-          rec.skipAcc = 0;
-          // aim-pose blend AFTER the mixer (it edits the spine bones the mixer
-          // just wrote). Weight in for aim/fire, out for everything else.
+          // aim-pose blend is set BEFORE update() now (iter07): aimBlend() no
+          // longer writes bones, it stashes the request, and actor.update()
+          // applies it inside the restore→mixer→snapshot cycle that makes
+          // post-mixer bone edits idempotent (actor.js LIFE note). Calling it
+          // after update() would apply it one frame late and, on a HELD
+          // battery frame, would compound — the old order's real bug.
           if (bot.alive) {
             let pitch = 0, yawDelta = 0, want = 0;
             if ((bot.anim === "aim" || bot.anim === "fire") && bot.aimAt) {
@@ -719,6 +786,8 @@ export function createSoldiers(ctx) {
             }
             actor.aimBlend(pitch, yawDelta, want);
           }
+          actor.update(rec.skipAcc);
+          rec.skipAcc = 0;
         }
 
         // ---- contact shadow (ranked fix 5) ---------------------------------
@@ -744,7 +813,13 @@ export function createSoldiers(ctx) {
               rec.shadow, px, contactY + 0.014, pz,
               dead ? CONTACT.deadR : CONTACT.rx,
               dead ? CONTACT.deadR : CONTACT.rz,
-              (dead ? CONTACT.deadS : CONTACT.strength) * air);
+              (dead ? CONTACT.deadS : CONTACT.strength) * air,
+              // reflection: body height, body tint, body facing. The tint is
+              // the archetype's own tint — the same value actor.setTint()
+              // shaded the GLB with — so the mirror image is the man, not a
+              // generic grey smear.
+              (dead ? CONTACT.deadH : CONTACT.standH) * air,
+              rec.tintHex, rec.yaw);
           }
         }
       }

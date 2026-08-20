@@ -50,6 +50,13 @@ export const ANIMS = {
   hit: "hit",
   death_a: "death_a",
   death_b: "death_a",
+  // ADDED iter07 (D10 lane), 11th key — the 10 frozen keys above are untouched,
+  // this is a pure addition. rifle_reload shipped in CLIP_FILES from day one
+  // "for A5's future reload-anim hook" and NOTHING ever pointed at it: no
+  // semantic key resolved to it, so a bot reloading played its idle and the
+  // magazine change was invisible. sim exposes bot.weapon.state === "reloading"
+  // and A5's §5.7 dry-reload behaviour drives it, so the hook is due now.
+  reload: "rifle_reload",
 };
 
 /**

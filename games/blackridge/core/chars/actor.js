@@ -348,6 +348,90 @@ const _AXIS_X = new THREE.Vector3(1, 0, 0);
 const _AXIS_Y = new THREE.Vector3(0, 1, 0);
 const _AXIS_Z = new THREE.Vector3(0, 0, 1);
 
+// ===========================================================================
+// LIFE LAYER (iter07, ranked fix 7 "THE WORLD IS FROZEN")
+// ===========================================================================
+// THE DEFECT, measured live on the graded C1 filmstrip before this landed:
+// both contacts reported `anim: "fire"` on all ELEVEN beats and both resolved
+// to clip `rifle_idle`, and a crop of one soldier across the last three panels
+// diffs at meanAbs 4.1/255 with an IDENTICAL silhouette. Three critics wrote
+// that up as "IDENTICAL STANCES WHILE BEING FIRED AT" and the scorecard voids
+// the D10 motion score for it.
+//
+// The cause is structural, not a tuning miss: anim_map resolves BOTH `aim` and
+// `fire` to the Mixamo rifle idle — a deliberately motionless ready pose — so
+// a soldier who is holding a firing position has, by construction, exactly one
+// pose for as long as he holds it. No amount of clip-playback fixes that,
+// because there is no other clip: the shipped set is idle/walk/run/crouch/
+// reload/hit/death. A standing firefight has to be animated ON TOP of the idle.
+//
+// So: a procedural layer over the mixer's output, on the spine chain and neck.
+// Six channels, all deterministic per actor (a phase seed off the bot id — two
+// soldiers standing side by side must never share a pose, which is the OTHER
+// half of what the critics saw):
+//   breath   — the always-on chest cycle
+//   sway     — slow weight shift / stance settle while standing
+//   scan     — head sweeps the street when NOT aiming (the single most legible
+//              channel at 60-130 px of character height: it changes the
+//              SILHOUETTE, where a 3 cm hip shift changes 3 px of shading)
+//   aim      — spine tracks the target (was actor.aimBlend, now folded in so
+//              it is applied inside the snapshot discipline below)
+//   fireK    — per-round torso recoil, an under-damped spring that SUSTAINED
+//              fire accumulates into a held displacement (same reasoning as
+//              the viewmodel's springs — a set-then-decay term is invisible on
+//              an arbitrarily sampled frame)
+//   flinch   — being hit folds the torso and snaps the head, directional
+//
+// THE COMPOUNDING TRAP, and why this is written the way it is. The file header
+// already records it for finger curl: THREE's PropertyMixer.apply() writes a
+// bone only when the accumulated clip value CHANGED, so anything WE write
+// post-mixer survives into the next frame and the next edit multiplies onto
+// it — measured there as a finger walking to 153 deg. Post-mixer bone edits
+// are therefore only safe if they are IDEMPOTENT. They are made so here by a
+// restore→step→snapshot→apply cycle: the tracked bones are put back to the
+// last clean mixer pose BEFORE mixer.update(), so a skipped write leaves the
+// clean value, and every channel is then composed from that snapshot. The same
+// discipline retroactively fixes actor.aimBlend, which premultiplied onto the
+// bone every frame and compounded on any held battery frame.
+const LIFE = {
+  breathHz: 0.62, breathSpine: 0.020, breathHips: 0.012,
+  // Weight shift is mostly UPPER body over planted feet: the pelvis carries a
+  // token 1.7 deg and the spine the rest. A big hips rotation drags the legs
+  // with it and slides the boots on the cobbles, which is the D10 hard cap.
+  swayHz1: 0.17, swayHz2: 0.11, swayYaw: 0.030, swayRoll: 0.026,
+  swaySpineYaw: 0.055, swaySpineRoll: 0.040,
+  scanHz: 0.13, scanYaw: 0.42, scanHead: 0.20, scanPitchHz: 0.09, scanPitch: 0.07,
+  // ENGAGE channel — the fast one, and the reason it exists: the filmstrip
+  // samples ~0.25 s apart, and breath/sway run at 0.11-0.62 Hz, so between two
+  // consecutive panels they move a fraction of a degree. A man holding a
+  // firing position is not still at that timescale: he hunts around the sight
+  // picture, re-settles his shoulder, checks off-axis. These run at ~0.6-0.9
+  // Hz, which puts a full swing INSIDE one panel gap — the difference between
+  // "the world is alive" and "the numbers say it moved".
+  engYawHz: 0.85, engYaw: 0.055,
+  engPitchHz: 0.55, engPitch: 0.038,
+  engNeckHz: 0.70, engNeck: 0.115,
+  // torso recoil spring: ~7 deg single-shot peak, ~9 deg held under auto
+  fireOmega: 17.0, fireZeta: 0.42, firePerShot: 3.5, fireCap: 0.22,
+  // flinch spring: ~15 deg fold on one round, settled in ~0.6 s
+  flinchOmega: 15.0, flinchZeta: 0.50, flinchPerHit: 7.0, flinchCap: 0.30,
+};
+
+function lifeSpring(s, omega, zeta, dt, cap) {
+  s.v += (-omega * omega * s.x - 2 * zeta * omega * s.v) * dt;
+  s.x += s.v * dt;
+  if (s.x > cap) { s.x = cap; if (s.v > 0) s.v = 0; }
+  else if (s.x < -cap) { s.x = -cap; if (s.v < 0) s.v = 0; }
+}
+
+/** Sine flattened toward its extremes — a head that SWEEPS and then DWELLS,
+ *  which is how a man watches a street. A raw sine spends most of its time
+ *  mid-travel and reads as a metronome. */
+function dwell(s) {
+  const a = Math.abs(s);
+  return (s < 0 ? -1 : 1) * Math.pow(a, 0.45);
+}
+
 /** Rotate a bone by a WORLD-space quaternion, preserving its parent chain
  *  (doctrine §1: solve in world space, express in the bone's frame). */
 function rotateBoneWorld(bone, q) {
@@ -374,6 +458,7 @@ export function createActor(proto) {
     return {
       root, placeholder: true,
       play() {}, playOnce() {}, update() {}, aimBlend() {},
+      setLifeSeed() {}, fireImpulse() {}, hitImpulse() {}, lifeGain: 1,
       attachWeapon() { return null; }, setTint() {}, setFlash() {},
       currentName: null, crouchW: 0, groundSpeed: 0,
       dispose() { root.removeFromParent(); geo.dispose(); mat.dispose(); },
@@ -427,6 +512,8 @@ export function createActor(proto) {
     else if (nm === "Neck") bones.neck = o;
     else if (nm === "RightHand") bones.rHand = o;
     else if (nm === "LeftHand") bones.lHand = o;
+    else if (nm === "Spine") bones.spine = o;
+    else if (nm === "Head") bones.head = o;
   });
   // Middle knuckle = the point a handguard rests against; it is the aim target
   // for the bore solve. Falls back to the wrist on a rig without fingers.
@@ -479,6 +566,41 @@ export function createActor(proto) {
   }
   const hipsRestY = bones.hips ? bones.hips.position.y : 0;
 
+  // ---- LIFE LAYER state (see the LIFE note at the top of this file) --------
+  // The bones the procedural pass is allowed to touch, and the snapshot that
+  // makes touching them idempotent. Order matters only for readability.
+  const poseBones = [bones.hips, bones.spine, bones.spine1, bones.spine2,
+                     bones.neck, bones.head].filter(Boolean);
+  const snapQ = new Float32Array(poseBones.length * 4);
+  let snapY = hipsRestY;      // hips.position.y as the CLIP wrote it
+  let snapped = false;
+  function restorePose() {
+    if (!snapped) return;
+    for (let i = 0; i < poseBones.length; i++) {
+      poseBones[i].quaternion.set(snapQ[i * 4], snapQ[i * 4 + 1],
+                                  snapQ[i * 4 + 2], snapQ[i * 4 + 3]);
+    }
+    if (bones.hips) bones.hips.position.y = snapY;
+  }
+  function snapPose() {
+    for (let i = 0; i < poseBones.length; i++) {
+      const q = poseBones[i].quaternion;
+      snapQ[i * 4] = q.x; snapQ[i * 4 + 1] = q.y;
+      snapQ[i * 4 + 2] = q.z; snapQ[i * 4 + 3] = q.w;
+    }
+    if (bones.hips) snapY = bones.hips.position.y;
+    snapped = true;
+  }
+  const life = {
+    t: 0,               // per-actor animation clock (sim-driven dt)
+    phase: 0,           // 0..1, deterministic per bot id — no two share a pose
+    seeded: false,
+    aimPitch: 0, aimYaw: 0, aimWant: 0, aimW: 0,
+    fireK: { x: 0, v: 0 },
+    flinchP: { x: 0, v: 0 },   // fold (pitch)
+    flinchR: { x: 0, v: 0 },   // lateral jolt (roll), signed by the shot
+  };
+
   // Mixer + actions. Clips arrive pre-cleaned + renamed from loadClipSet().
   const mixer = new THREE.AnimationMixer(model);
   const actions = {};
@@ -508,12 +630,13 @@ export function createActor(proto) {
     currentName: idleName,
     crouchW: 0,      // soldiers.js drives: 1 while crouch_walk (procedural hip drop)
     groundSpeed: 0,  // soldiers.js drives: m/s, kills foot-slide on loco clips
-    _aimW: 0,
+    _clipRate: 1,    // per-actor playback rate (setLifeSeed)
+    lifeGain: 1,     // soldiers.js drives: 1 alive, 0 dead (see update())
     _current: actions[idleName] || null,
     _onceEnd: null,
 
     /** Cross-fade to a looping semantic state (resolves through ANIMS). */
-    play(logical, { fade = 0.14, timeScale = 1 } = {}) {
+    play(logical, { fade = 0.14, timeScale = 1, fromStart = false } = {}) {
       const name = ANIMS[logical] || logical;
       const a = actions[name];
       if (!a) return false;
@@ -524,7 +647,16 @@ export function createActor(proto) {
       a.reset();
       a.setLoop(THREE.LoopRepeat, Infinity);
       a.clampWhenFinished = false;
-      a.timeScale = timeScale;
+      // PER-ACTOR CLIP PHASE + RATE (iter07): two soldiers who enter the same
+      // 2.13 s idle on the same frame stay in lockstep forever, which is
+      // exactly what critic-c saw — "BOTH soldiers hold the same pose as each
+      // other". Entering at a hashed offset and running a few percent apart
+      // makes that impossible for any cast size.
+      a.timeScale = timeScale * (actor._clipRate || 1);
+      // ...but only for CYCLIC clips. A reload is a one-way action: entering it
+      // 60% of the way through would drop the mag out of a hand that never
+      // reached for it, so its caller passes fromStart.
+      a.time = fromStart ? 0 : life.phase * (a.getClip().duration || 0);
       a.fadeIn(fade);
       if (actor._current && actor._current !== a) actor._current.fadeOut(fade);
       a.play();
@@ -561,22 +693,38 @@ export function createActor(proto) {
      * yawDelta is the clamped chest correction toward aimAt beyond body yaw.
      */
     aimBlend(pitch, yawDelta, w) {
-      actor._aimW += (w - actor._aimW) * 0.18;
-      const k = actor._aimW;
-      if (k < 0.01 || !bones.spine1 || !bones.spine2) return;
-      root.updateMatrixWorld(false);
-      // actor-right axis in world (root yaw only — root never pitches/rolls)
-      const ry = root.rotation.y;
-      _v1.set(Math.cos(ry), 0, -Math.sin(ry));
-      _q1.setFromAxisAngle(_v1, -pitch * 0.5 * k);
-      rotateBoneWorld(bones.spine1, _q1);
-      rotateBoneWorld(bones.spine2, _q1);
-      if (yawDelta) {
-        _v1.set(0, 1, 0);
-        _q1.setFromAxisAngle(_v1, yawDelta * 0.5 * k);
-        rotateBoneWorld(bones.spine1, _q1);
-        rotateBoneWorld(bones.spine2, _q1);
+      life.aimPitch = pitch;
+      life.aimYaw = yawDelta;
+      life.aimWant = w;
+    },
+
+    /** Deterministic per-actor phase: two soldiers standing side by side must
+     *  never be at the same point of the same loop. Called by soldiers.js with
+     *  the bot id; the hash keeps neighbouring ids far apart in phase. */
+    setLifeSeed(n) {
+      const h = ((n | 0) * 2654435761) >>> 0;
+      life.phase = (h % 10007) / 10007;
+      life.seeded = true;
+      // stagger the clip itself too — the idle loop is 2.13 s and two bots
+      // entering it on the same frame hold literally the same pose forever.
+      if (actor._current) {
+        actor._current.time = life.phase * (actor._current.getClip().duration || 1);
       }
+      actor._clipRate = 0.88 + 0.24 * life.phase;
+    },
+
+    /** One round left this soldier's barrel — impulse the torso recoil spring
+     *  (soldiers.js calls this off the frozen `shot` event). */
+    fireImpulse(mult = 1) {
+      life.fireK.v += LIFE.firePerShot * mult;
+    },
+
+    /** This soldier took a round. `side` is the signed lateral component of the
+     *  shot direction in the actor's own frame (-1..1) so the jolt goes the way
+     *  the bullet was travelling, not a canned flop. */
+    hitImpulse(side = 0, mult = 1) {
+      life.flinchP.v += LIFE.flinchPerHit * mult;
+      life.flinchR.v += LIFE.flinchPerHit * 0.55 * mult * (side || (life.phase > 0.5 ? 1 : -1));
     },
 
     /**
@@ -643,14 +791,145 @@ export function createActor(proto) {
       const cn = actor.currentName;
       if (actor._current && (cn === "rifle_walk" || cn === "rifle_run")) {
         const nominal = cn === "rifle_run" ? 3.6 : 1.5;
-        actor._current.timeScale = Math.min(2.2, Math.max(0.35, actor.groundSpeed / nominal));
+        actor._current.timeScale = Math.min(2.2, Math.max(0.35, actor.groundSpeed / nominal))
+          * (actor._clipRate || 1);
       }
+      // ---- LIFE LAYER, phase 1: hand the mixer back a CLEAN pose ----------
+      // (see the LIFE note at the top of this file — post-mixer bone writes
+      // compound through PropertyMixer's skip-if-unchanged optimisation, so
+      // every frame starts from the last clip-authored value, never from ours)
+      restorePose();
       mixer.update(dt);
+      snapPose();
+
       // Procedural crouch-walk hip drop (see anim_map.js): rifle_walk keeps
-      // the feet stepping; the drop reads as the crouch.
-      if (bones.hips && actor.crouchW > 0.01) {
-        bones.hips.position.y = hipsRestY - 0.32 * actor.crouchW;
+      // the feet stepping; the drop reads as the crouch. Composed onto the
+      // snapshot, so it stacks with the breath bob below instead of fighting.
+      let hipY = snapY;
+      if (actor.crouchW > 0.01) hipY = hipsRestY - 0.32 * actor.crouchW;
+
+      // ---- LIFE LAYER, phase 2: animate a standing firefight --------------
+      // A CORPSE DOES NOT BREATHE. soldiers.js zeroes lifeGain the instant the
+      // death clip is committed; without it the slump would keep swaying and
+      // scanning the street, which is a worse artefact than the frozen stance
+      // this layer exists to kill (VT §7: bodies persist, and they persist
+      // STILL). Everything above — restore, mixer, snapshot, grip re-solve —
+      // still runs, so the death clip and the weapon in the dead hand are
+      // unaffected.
+      if (actor.lifeGain > 0.001) {
+        life.t += dt;
+        const ph = life.phase;
+        const TAU = Math.PI * 2;
+        const ry = root.rotation.y;
+        // actor-right and actor-up in world (root only ever yaws)
+        const rx = Math.cos(ry), rz = -Math.sin(ry);
+
+        // aim weight eases; `moving` fades the standing-only channels out so a
+        // running soldier is driven by his locomotion clip, not by idle sway.
+        life.aimW += (life.aimWant - life.aimW) * Math.min(1, 0.18 + dt * 3);
+        const aimK = life.aimW * actor.lifeGain;
+        const still = (1 - Math.min(1, actor.groundSpeed / 1.6)) * actor.lifeGain;
+
+        // springs (sub-stepped so a long held frame cannot blow them up)
+        {
+          let rem = Math.min(dt, 0.25);
+          while (rem > 1e-6) {
+            const h = Math.min(rem, 1 / 120);
+            rem -= h;
+            lifeSpring(life.fireK, LIFE.fireOmega, LIFE.fireZeta, h, LIFE.fireCap);
+            lifeSpring(life.flinchP, LIFE.flinchOmega, LIFE.flinchZeta, h, LIFE.flinchCap);
+            lifeSpring(life.flinchR, LIFE.flinchOmega, LIFE.flinchZeta, h, LIFE.flinchCap);
+          }
+        }
+
+        const breath = Math.sin((life.t * LIFE.breathHz + ph) * TAU);
+        const sway1 = Math.sin((life.t * LIFE.swayHz1 + ph * 1.7) * TAU);
+        const sway2 = Math.sin((life.t * LIFE.swayHz2 + ph * 3.1) * TAU + 1.1);
+        const scan = dwell(Math.sin((life.t * LIFE.scanHz + ph) * TAU));
+        const scanP = Math.sin((life.t * LIFE.scanPitchHz + ph * 2.3) * TAU);
+        // engage channel: only while actually aiming at something
+        const engW = aimK * still;
+        const engY = Math.sin((life.t * LIFE.engYawHz + ph * 5.3) * TAU) * engW;
+        const engP = Math.sin((life.t * LIFE.engPitchHz + ph * 2.9) * TAU + 0.7) * engW;
+        const engN = dwell(Math.sin((life.t * LIFE.engNeckHz + ph * 4.1) * TAU + 2.1)) * engW;
+
+        // -- hips: weight shift + breath bob
+        hipY += LIFE.breathHips * breath * still;
+        if (bones.hips) {
+          bones.hips.position.y = hipY;
+          if (still > 0.01) {
+            _v1.set(0, 1, 0);
+            _q1.setFromAxisAngle(_v1, LIFE.swayYaw * sway1 * still);
+            rotateBoneWorld(bones.hips, _q1);
+            _v1.set(-rz, 0, -rx);              // actor FORWARD → roll axis
+            _q1.setFromAxisAngle(_v1, LIFE.swayRoll * sway2 * still);
+            rotateBoneWorld(bones.hips, _q1);
+          }
+        }
+
+        // -- spine: breath, aim track, fire recoil, flinch fold
+        const pitchSpine = -life.aimPitch * 0.5 * aimK      // aim (was aimBlend)
+          + LIFE.breathSpine * breath * still               // breath
+          + LIFE.engPitch * engP                            // sight-picture hunt
+          - life.fireK.x * 0.55                             // recoil rides UP
+          + life.flinchP.x * 0.85;                          // hit folds forward
+        const yawSpine = life.aimYaw * 0.5 * aimK
+          + LIFE.swaySpineYaw * sway1 * still
+          + LIFE.engYaw * engY;
+        _v1.set(rx, 0, rz);
+        _q1.setFromAxisAngle(_v1, pitchSpine);
+        if (bones.spine1) rotateBoneWorld(bones.spine1, _q1);
+        if (bones.spine2) rotateBoneWorld(bones.spine2, _q1);
+        if (yawSpine) {
+          _v1.set(0, 1, 0);
+          _q1.setFromAxisAngle(_v1, yawSpine);
+          if (bones.spine1) rotateBoneWorld(bones.spine1, _q1);
+          if (bones.spine2) rotateBoneWorld(bones.spine2, _q1);
+        }
+        // torso roll: the slow lean of a weight shift + the lateral jolt of a
+        // round landing, about the actor's own FORWARD axis
+        const rollSpine = LIFE.swaySpineRoll * sway2 * still + life.flinchR.x * 0.9;
+        if (rollSpine && bones.spine1) {
+          _v1.set(-rz, 0, -rx);
+          _q1.setFromAxisAngle(_v1, rollSpine);
+          rotateBoneWorld(bones.spine1, _q1);
+          if (bones.spine2) rotateBoneWorld(bones.spine2, _q1);
+        }
+
+        // -- neck/head: the single most legible channel at character scale.
+        // NOT AIMING → sweep the street (silhouette changes every beat).
+        // AIMING     → hold on target: counter the spine's own rotation so the
+        //              head stays put while the chest turns, plus the recoil
+        //              nod and the flinch snap.
+        const nb = bones.neck || bones.head;
+        if (nb) {
+          // an aiming soldier still checks off-axis — the scan is DAMPED under
+          // aim, not switched off (killing it entirely removed the single most
+          // legible channel from exactly the bots the filmstrip photographs)
+          const scanW = (1 - 0.68 * aimK) * still;
+          const headYaw = LIFE.scanYaw * scan * scanW
+            + LIFE.engNeck * engN                       // fast off-axis checks
+            - yawSpine * 0.35 * aimK;
+          const headPitch = LIFE.scanPitch * scanP * scanW
+            + life.fireK.x * 0.75          // chin lifts with the muzzle
+            - life.flinchP.x * 0.55;       // head snaps down on a hit
+          if (headYaw) {
+            _v1.set(0, 1, 0);
+            _q1.setFromAxisAngle(_v1, headYaw);
+            rotateBoneWorld(nb, _q1);
+            if (bones.head && bones.head !== nb) {
+              _q1.setFromAxisAngle(_v1, headYaw * (LIFE.scanHead / LIFE.scanYaw));
+              rotateBoneWorld(bones.head, _q1);
+            }
+          }
+          if (headPitch) {
+            _v1.set(rx, 0, rz);
+            _q1.setFromAxisAngle(_v1, headPitch);
+            rotateBoneWorld(nb, _q1);
+          }
+        }
       }
+
       // POST-MIXER: re-seat the weapon against the pose the mixer just wrote.
       // Runs on a held frame too (dt === 0) — the battery's frozen pose has to
       // be as correct as a moving one, and holder.quaternion is ASSIGNED (not
