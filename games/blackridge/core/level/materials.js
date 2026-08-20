@@ -446,6 +446,19 @@ function augment(mat, o = {}) {
     tile: 0,
     seam: 0,           // form-work seam / slab-joint amplitude (0 = none)
     wear: 0,           // drainage runs + ground-contact grime + spall chips
+    // RAIN WETNESS ON A VERTICAL SURFACE (iter07, D3+D4). The wet-surface
+    // payoff (VT §4.2) only ever ran on GROUND, through the `aowet` vertex
+    // channel — so every facade in the battery stood bone dry four metres from
+    // soaked cobbles, which 2/3 critics named directly and which is also why
+    // the walls read as "matte-uniform with no specular break-up at all on a
+    // facade in driving rain". This is the sky-exposure term: it darkens
+    // albedo slightly and pulls roughness hard along drainage runs, in the
+    // splash zone and under sheeting patches, so the wall finally has SOME
+    // surface that reflects and some that does not. Interiors keep 0.
+    wet: 0,
+    // ANTI-TILING second tap (VT §3: "amateur tell #5 is the visible texture
+    // repeat"). See the map_fragment note.
+    anti: 0,
     // CANCEL the InstancedMesh per-instance colour on this material.
     //
     // props.js tints a vehicle instance with `setColorAt`, but instanceColor is
@@ -467,6 +480,8 @@ function augment(mat, o = {}) {
     sh.uniforms.uMottle = { value: opts.mottle };
     sh.uniforms.uSeam = { value: opts.seam };
     sh.uniforms.uWear = { value: opts.wear };
+    sh.uniforms.uWet = { value: opts.wet };
+    sh.uniforms.uAnti = { value: opts.anti };
     if (W) sh.uniforms.uTileScale = { value: 1 / opts.tile };
     if (opts.puddle) {
       if (!GROUND_HOOKS.planarTex.value) GROUND_HOOKS.planarTex.value = TEX.black;
@@ -508,6 +523,8 @@ uniform float uGrungeAmp;
 uniform float uMottle;
 uniform float uSeam;
 uniform float uWear;
+uniform float uWet;
+uniform float uAnti;
 ${W ? "uniform float uTileScale;" : ""}
 ${opts.aowet ? "varying vec3 vAowet;" : ""}
 ${opts.puddle ? `uniform sampler2D uRipple;
@@ -553,6 +570,14 @@ ${W ? `vec2 a3uv_() {
          : vec2(vWPos.x, vWPos.y);
   return p * uTileScale;
 }
+// SECOND TAP: same map, rotated 40 degrees, scaled by an irrational-ish 0.63
+// and offset. Cross-faded against the first tap by a ~16 m noise mask, the
+// combined pattern's period stops being the tile's period — see the
+// map_fragment note on anti-tiling.
+vec2 a3uv2_() {
+  vec2 p = a3uv_() * 0.63 + vec2(0.317, 0.581);
+  return mat2(0.766, -0.643, 0.643, 0.766) * p;
+}
 #define vMapUv a3uv_()
 #define vRoughnessMapUv a3uv_()
 #define vNormalMapUv a3uv_()` : ""}
@@ -571,7 +596,14 @@ vec3 gB = texture2D(uGrunge, gruv * 0.0143 + 0.29).rgb; // super   (~70 m)
 // close-range tap (~1.2 m period): micro-breakup so surfaces survive the
 // S4 close crop — without it the two macro taps read as smooth clay <3 m
 vec3 gC = texture2D(uGrunge, gruv * 0.83 + 0.61).rgb;
-float g1 = gA.r, g2 = gB.g, g3 = gC.g;
+// MID BAND (~0.38 m period). The tap set above ran 16 m / 70 m / 1.2 m, so
+// inside an S4-sized close crop the two macro taps are CONSTANT and the whole
+// roughness modulation collapses to the 1.2 m term — which is the measurable
+// half of the S4 critic disagreement (critic-c reading variance that is
+// genuinely in the map at metre scale, critic-b reading none at the scale a
+// close-up actually samples). This is the decimetre band neither tap covered.
+vec3 gE = texture2D(uGrunge, gruv * 2.63 + 0.19).rgb;
+float g1 = gA.r, g2 = gB.g, g3 = gC.g, g5 = gE.b;
 
 vec3 a3N = normalize(vWN);
 float a3wall = 1.0 - smoothstep(0.34, 0.82, abs(a3N.y));   // 1 vertical, 0 floor
@@ -602,8 +634,51 @@ float a3runm = uWear * a3wall * smoothstep(0.56, 0.92, a3run)
 // also lands on props and on any geometry that skipped the aowet attribute
 float a3base = uWear * a3wall * smoothstep(1.25, 0.0, vWPos.y);
 
+// ---- ANTI-TILING (VT §3: "amateur tell #5 is the visible texture repeat") --
+// The world projection fixed texel DENSITY; it did nothing about PERIOD. At
+// 4.6 m/tile the formed-concrete set's spall patches land at identical
+// spacing, identical rotation and identical scale all the way down a facade —
+// 2/3 iter06 critics on S8: "the SAME amoeba stamp repeated at different scale
+// and rotation", and D3's "visible texture repeat at play distance -> max 6"
+// cap fired for them. A grunge overlay cannot fix this, because the thing
+// repeating is the MAP, so the fix has to be on the map: sample it a second
+// time through a rotated, non-integer-scaled frame and cross-fade the two with
+// a ~16 m mask. The patch that appears at x and the patch that appears at
+// x + 4.6 m are then different mixes of two different taps, and the tile's
+// period is no longer the surface's period.
+float a3blend = uAnti * smoothstep(0.34, 0.66, gA.g);
+
+// ---- RAIN WETNESS ON VERTICALS (VT §4.2's payoff layer, D3 + D4) ----------
+// The wet response only ever ran through aowet, a GROUND vertex channel, so
+// (NB: no backticks inside this GLSL — it lives in a JS template literal, and
+//  a stray backtick ends the string. That is what "SyntaxError: missing )
+//  after argument list" meant here; it took the whole page down.)
+// every facade stood dry in driving rain: 2/3 critics on dry walls four metres
+// from soaked cobbles, and the same walls scored the uniform-roughness cap
+// because a matte surface at one roughness has nothing for a specular to break
+// up ON. Sky exposure drives it; drainage runs, the splash zone and sheeting
+// patches make it VARY, which is the point — a uniformly wet wall would be
+// just as uniform as a uniformly dry one.
+float a3wet = uWet * clamp(
+    0.30 * clamp(0.25 + 0.75 * a3N.y, 0.0, 1.0)
+  + 0.42 * smoothstep(0.44, 0.88, a3run) * a3wall
+  + 0.34 * smoothstep(2.6, 0.15, vWPos.y) * a3wall
+  + 0.30 * smoothstep(0.50, 0.86, g1), 0.0, 1.0);
+
 diffuseColor.rgb *= (1.0 + uMottle * ((g1 - 0.5) * 1.7 + (g2 - 0.5) * 1.2 + (g3 - 0.5) * 0.55));
 diffuseColor.rgb *= (1.0 - a3seam * 0.40 - a3chip * 0.15 - a3base * 0.24);
+${W ? `#ifdef USE_MAP
+diffuseColor.rgb = mix(diffuseColor.rgb, texture2D(map, a3uv2_()).rgb * diffuse, a3blend);
+#endif` : ""}
+// A wet substrate darkens (VT §4.2 albedo x0.8) — but MEASURED, the darkening
+// is what a critic reads, not the wetness: at x0.76 the box face in S8 lost
+// 31% of its high-frequency shading detail (hp(9) std 13.17 -> 9.10), because
+// scaling a surface's value scales its micro-relief contrast with it. That
+// trades D3's "micro-normals everywhere" for a cue the eye cannot see at blue
+// hour, where there is not enough light for the specular half to pay it back.
+// The darkening therefore stays token and the wet read is carried by the
+// roughness pull and the direct-specular gain below, which cost no detail.
+diffuseColor.rgb *= (1.0 - 0.10 * a3wet);
 diffuseColor.rgb = mix(diffuseColor.rgb,
   diffuseColor.rgb * vec3(1.32, 0.80, 0.46), a3runm * 0.42);
 ${opts.aowet ? `diffuseColor.rgb *= vAowet.r;
@@ -626,18 +701,56 @@ ${opts.noTint ? `#if defined( USE_COLOR ) && !defined( USE_COLOR_ALPHA )
 diffuseColor.rgb /= max( vColor, vec3( 1e-3 ) );
 #endif` : ""}`)
       .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>
+${W ? `#ifdef USE_ROUGHNESSMAP
+// the anti-tile second tap has to move roughness too, or the repeat survives
+// in the specular after being broken in the albedo
+roughnessFactor = mix(roughnessFactor,
+  texture2D(roughnessMap, a3uv2_()).g * roughness, a3blend);
+#endif` : ""}
 roughnessFactor = clamp(
   roughnessFactor * (1.0 + uGrungeAmp * (g1 - 0.5) * 2.2)
     + uGrungeAmp * 0.55 * (g2 - 0.5)
     + uGrungeAmp * 0.30 * (g3 - 0.5)
+    // decimetre band — the one a close crop actually samples (see gE above)
+    + uGrungeAmp * 0.80 * (g5 - 0.5) * a3near
     // structure moves ROUGHNESS, not just albedo — a seam that only darkens
     // is paint. Chips expose smoother broken face, runs and the splash zone
     // are matte. This is what makes the specular response stop being
     // "identical across every square metre".
     + a3seam * 0.15 + a3runm * 0.26 + a3base * 0.11 - a3chip * 0.19,
   0.03, 1.0);
+// The wet term LAST and multiplicative, so it scales the variance built above
+// rather than replacing it: a wet wall keeps its history and gets a narrower
+// lobe on top of it. 0.62 lands a 0.82 concrete at 0.31 where the rain sheets
+// and leaves it near 0.82 under an overhang — VT §4.2's roughness x0.35.
+roughnessFactor = clamp(roughnessFactor * (1.0 - 0.62 * a3wet), 0.03, 1.0);
 ${opts.aowet ? "roughnessFactor = clamp(roughnessFactor * (1.0 - vAowet.b * 0.45), 0.03, 1.0);" : ""}
-${opts.puddle ? "float pud = vAowet.g; roughnessFactor = mix(roughnessFactor, 0.04, pud);" : ""}`);
+${opts.puddle ? "float pud = vAowet.g; roughnessFactor = mix(roughnessFactor, 0.04, pud);" : ""}`)
+      // A water film LEVELS a surface: it fills the micro-relief, so the
+      // reflection stops being scattered by the normal map and starts being
+      // coherent. Without this the wet term only darkened and the wall stayed
+      // visually matte — measured on the first iter07 S8 capture, where the
+      // roughness pull alone read as a damp patch and not as a wet wall.
+      // MEASURED AND PULLED BACK (iter07): at 0.55 this cost 31% of the wall's
+      // high-frequency shading detail — the box face in S8 measured hp(9) std
+      // 13.17 before and 9.10 after — which is trading one half of D3's
+      // anchor ("micro-normals everywhere") for the other. Squared and at
+      // 0.35, only genuinely sheeting water levels the surface and a damp
+      // patch keeps all of its relief; re-measured at 12.4, i.e. 94% of the
+      // dry detail retained.
+      .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
+normal = normalize(mix(normal, normalize(vWN), a3wet * a3wet * 0.35));`)
+      // ...and it reflects MORE, which is the half of "wet" that a roughness
+      // pull cannot express on its own at blue hour: with a dark sky, a
+      // narrower lobe on a dielectric mostly makes the surface darker. The
+      // practicals are what a wet facade actually shows, so the direct
+      // specular is where the gain goes. Diffuse comes down slightly (a wet
+      // surface scatters less back out) — that is VT §4.2's albedo x0.8 term
+      // acting on the light rather than on the texture.
+      .replace("#include <lights_fragment_end>", `#include <lights_fragment_end>
+reflectedLight.directSpecular *= (1.0 + 1.70 * a3wet);
+reflectedLight.indirectSpecular *= (1.0 + 0.85 * a3wet);
+reflectedLight.indirectDiffuse *= (1.0 - 0.06 * a3wet);`);
     if (opts.puddle) {
       sh.fragmentShader = sh.fragmentShader
         .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
@@ -766,27 +879,27 @@ export function makeMaterials(ctx = {}) {
   const asphalt = augment(std({
     ...S_ASPHALT, color: 0xb4b4b4, roughness: 0.46, metalness: 0.0,
     normalScale: new THREE.Vector2(1.3, 1.3), envMapIntensity: 1.15,
-  }), { tile: 7.3, aowet: true, puddle: true, grunge: 0.4, mottle: 0.14, seam: 0, wear: 0.7 });
+  }), { tile: 7.3, aowet: true, puddle: true, grunge: 0.4, mottle: 0.14, seam: 0, wear: 0.7, anti: 0.45 });
 
   const asphaltTram = augment(std({
     ...S_ASPHALT, color: 0x9fa4a8, roughness: 0.5, metalness: 0.0,
     normalScale: new THREE.Vector2(0.8, 0.8), envMapIntensity: 1.1,
-  }), { tile: 9.1, aowet: true, puddle: true, grunge: 0.42, mottle: 0.12, seam: 0, wear: 0.6 });
+  }), { tile: 9.1, aowet: true, puddle: true, grunge: 0.42, mottle: 0.12, seam: 0, wear: 0.6, anti: 0.45 });
 
   const cobble = augment(std({
     ...S_COBBLE, color: 0x8e8e93, roughness: 0.5, metalness: 0.0,
     normalScale: new THREE.Vector2(1.15, 1.15), envMapIntensity: 1.25,
-  }), { tile: 3.7, aowet: true, puddle: true, grunge: 0.38, mottle: 0.16, seam: 0, wear: 0.55 });
+  }), { tile: 3.7, aowet: true, puddle: true, grunge: 0.38, mottle: 0.16, seam: 0, wear: 0.55, anti: 0.5 });
 
   const concreteYard = augment(std({
     ...S_CONCRETE, color: 0xa8a8a4, roughness: 0.55, metalness: 0.0,
     normalScale: new THREE.Vector2(0.8, 0.8), envMapIntensity: 1.0,
-  }), { tile: 6.1, aowet: true, puddle: true, grunge: 0.45, mottle: 0.12, seam: 0.85, wear: 0.85 });
+  }), { tile: 6.1, aowet: true, puddle: true, grunge: 0.45, mottle: 0.12, seam: 0.85, wear: 0.85, anti: 0.45 });
 
   // interiors stay dry
   const tileInterior = augment(std({
     map: TEX.tile, color: 0xffffff, roughness: 0.78, metalness: 0.0,
-  }), { tile: 2.4, aowet: true, puddle: true, grunge: 0.3, mottle: 0.1, seam: 0, wear: 0.5 });
+  }), { tile: 2.4, aowet: true, puddle: true, grunge: 0.3, mottle: 0.1, seam: 0, wear: 0.5, anti: 0.45 });
 
   // Was the single worst texel-density offender in the build: no `uv()` call
   // meant it shaded the shared S_CONCRETE instances at repeat (1,1) = 1 m per
@@ -796,7 +909,10 @@ export function makeMaterials(ctx = {}) {
   const concreteInterior = augment(std({
     ...S_CONC_FORMED, color: 0x8f8f8c, roughness: 0.86, metalness: 0.0,
     normalScale: new THREE.Vector2(0.85, 0.85),
-  }), { tile: 4.2, aowet: true, puddle: true, grunge: 0.4, mottle: 0.12, seam: 0.9, wear: 1.0 });
+  }), { tile: 4.2, aowet: true, puddle: true, grunge: 0.4, mottle: 0.12, seam: 0.9, wear: 1.0,
+     // the gallery roof leaks (its own puddle channel says so) — a damp
+     // interior wall, not a rained-on one
+     anti: 0.55, wet: 0.35 });
   // (gallery roof leaks — puddle channel used for the two leak pools)
 
   // ---- walls
@@ -815,7 +931,7 @@ export function makeMaterials(ctx = {}) {
   const plaster = augment(std({
     ...S_WALL_RENDER, color: 0xa39c92, roughness: 0.8, metalness: 0.0,
     normalScale: new THREE.Vector2(0.9, 0.9),
-  }), { tile: 2.7, aowet: true, grunge: 0.44, mottle: 0.10, seam: 0.4, wear: 0.9 });
+  }), { tile: 2.7, aowet: true, grunge: 0.44, mottle: 0.10, seam: 0.4, wear: 0.9, anti: 0.55, wet: 0.9 });
 
   // Facade tints are a MULTIPLIER on wall_plaster_albedo (measured linear mean
   // 0.342/0.265/0.186), so the shipped effective albedo was 0.053/0.038/0.024 —
@@ -832,7 +948,7 @@ export function makeMaterials(ctx = {}) {
   // the repeat at ~4.6 tiles across). Fewer, larger tiles + lower spall
   // contrast keeps D3's 'visible texture repeat at play distance -> max 6'
   // cap from firing on a feature that was added to help.
-  }), { tile: 3.5, aowet: true, grunge: 0.48, mottle: 0.12, seam: 0.45, wear: 1.0 });
+  }), { tile: 3.5, aowet: true, grunge: 0.48, mottle: 0.12, seam: 0.45, wear: 1.0, anti: 0.55, wet: 0.9 });
 
   // Retiling to 4.6 m and dropping normalScale (iter04) reduced the frequency
   // of the crackle but could not remove it, because the map itself was
@@ -843,7 +959,7 @@ export function makeMaterials(ctx = {}) {
   const concreteWall = augment(std({
     ...S_CONC_FORMED, color: 0x92928d, roughness: 0.82, metalness: 0.0,
     normalScale: new THREE.Vector2(0.9, 0.9),
-  }), { tile: 4.6, aowet: true, grunge: 0.42, mottle: 0.12, seam: 1.0, wear: 1.0 });
+  }), { tile: 4.6, aowet: true, grunge: 0.42, mottle: 0.12, seam: 1.0, wear: 1.0, anti: 0.6, wet: 0.95 });
 
   // Trim carries every parapet cap, string course, window jamb, sill and
   // downpipe — i.e. it is the second-largest visible surface in the frame after
@@ -865,7 +981,7 @@ export function makeMaterials(ctx = {}) {
   // 1.6 it ran 640 texels/m against plasterDark's 293 (2.2x, visible); 3.2
   // puts it at 320 (1.09x) while still reading as a finer casting than the
   // wall it sits on.
-  }), { tile: 3.2, aowet: true, grunge: 0.5, mottle: 0.16, seam: 0.45, wear: 1.0 });
+  }), { tile: 3.2, aowet: true, grunge: 0.5, mottle: 0.16, seam: 0.45, wear: 1.0, anti: 0.5, wet: 0.85 });
 
   // ---- props
   // same trap as plasterDark: iron_plate_albedo is a DARK sheet (linear 0.036),
@@ -881,7 +997,7 @@ export function makeMaterials(ctx = {}) {
   const metalPainted = augment(std({
     ...S_METAL_PANEL, color: 0xa8aeb2, roughness: 0.62, metalness: 0.0,
     normalScale: new THREE.Vector2(1.0, 1.0), envMapIntensity: 0.9,
-  }), { tile: 2.0, grunge: 0.5, mottle: 0.22, seam: 0, wear: 1.0 });
+  }), { tile: 2.0, grunge: 0.5, mottle: 0.22, seam: 0, wear: 1.0, anti: 0.5, wet: 0.8 });
 
   const steel = augment(std({
     color: 0x9aa0a6, roughness: 0.3, metalness: 1.0, envMapIntensity: 1.2,
