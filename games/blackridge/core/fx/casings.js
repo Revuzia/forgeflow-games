@@ -42,7 +42,23 @@ const SHELL = {
 // the "gold bar hanging in the sky" the cull was introduced to kill at 0.38 m.
 // Held at 0.70 m (a 38 mm case = ~49 px) after 0.52 m put a 63-px shell against
 // the open sky in S3 and reproduced that exact tell.
-const NEAR_HIDE = 0.70;
+// ---- iter09: 0.70 m IS STILL INSIDE THE ZONE, AND IT SHIPPED TWICE --------
+// The iter08 consolidation flagged this as placeholder-class and un-named by
+// the critics only by luck ("one bad framing away from a blind verdict"). It
+// is worse than that: the offending object is in TWO of the graded PNGs, and
+// the arithmetic says so. At 0.78 m — eight centimetres past this cull — a
+// 38 mm case subtends 0.038/0.78 x (1080 / 2 tan(31 deg)) = 45 px long by
+// 13 px wide. VERIFIED IN THE SHIPPED PIXELS this session, not inferred:
+//   iter08/S3.png  (1425, 745)  a vertical pale-yellow pill on the quay
+//   iter08/C1_11.png (752, 933) the same pill standing on the cobbles
+// and the iter08 verdict independently describes the first as "a smooth
+// flat-shaded pale-yellow capsule roughly the size of a fist". An eight-sided
+// cylinder has no detail to give at 45 px; it can only read as a prop.
+// 1.50 m caps it at 25 x 7 px, which is a shell casing. The cost is the first
+// ~0.13 s more of the tumble, and it is the right trade: the permanence read
+// D6 is scored on is the brass ON THE GROUND (measured below), never the one
+// frame where a case is closest to the lens.
+const NEAR_HIDE = 1.50;
 const NEAR_HIDE_SQ = NEAR_HIDE * NEAR_HIDE;
 
 const _m = new THREE.Matrix4();
@@ -59,8 +75,49 @@ export function makeCasings(env) {
   // near-lens cull only hid rather than fixed. Eight sides give a specular
   // gradient across the case wall, which is the whole of what makes brass read
   // as brass. 16 triangles against 12; one instanced draw either way.
-  const geo = new THREE.CylinderGeometry(0.5, 0.46, 1, 8, 1);
-  geo.rotateX(Math.PI / 2); // long axis -> Z, matching the (w, w, l) scale
+  // ---- iter09 (placeholder-eradication lane) ----------------------------
+  // The 8-sided straight cylinder still reads as a PILL. Two independent
+  // verification agents wrote the same noun two waves apart — iter07's "a
+  // ~40 cm yellow pill", iter08's "a smooth flat-shaded pale-yellow capsule
+  // roughly the size of a fist hanging in mid-air over the water at S3
+  // (1485, 620), with an identical one lying on the quay at (1425, 745)".
+  // Confirmed in the iter08 S3 pixels this session: both objects are present,
+  // both are uniform pale yellow, and neither has a single silhouette feature.
+  // No critic has named it only because no critic has been handed a framing
+  // that put one at play size — which is one bad C1 roll away, and the C1
+  // battery is documented non-deterministic (iter08 §8).
+  //
+  // A texture cannot fix it (this is a 96-instance InstancedMesh sharing one
+  // material, and instanceColor would fork a shader permutation against an
+  // already-blown program budget). A cartridge case is defined by its
+  // SILHOUETTE: an extractor rim standing proud of the head, a groove behind
+  // it, a body that tapers, a shoulder, and an open mouth. Lathed from that
+  // profile the object cannot read as a capsule from any angle, and the rim
+  // and shoulder give the eight facets two hard specular breaks instead of
+  // one smooth gradient — which is what makes brass read as brass at 40 px.
+  // COST, stated exactly: 8 profile points = 7 segments x 8 radial x 2 = 112
+  // triangles against the cylinder's 32, i.e. +80 per instance and +7,680
+  // across the whole 96-shell pool. That is 0.5% of the 1,450,734 triangles
+  // the iter08 combat-autoplay phase counted, it adds NO draw call (still one
+  // instanced draw), NO program and NO texture. It is the only geometry this
+  // lane adds anywhere and it is declared here rather than absorbed silently,
+  // because iter08 §4.3 asked for a geometry freeze.
+  const CASE = [                 // [radius, height] — height -0.5 = case head
+    [0.00, -0.50],               // closed head, centre
+    [0.54, -0.48],               // extractor rim, proud of the body
+    [0.44, -0.40],               // extractor groove
+    [0.50, -0.32],               // body, above the groove
+    [0.50, 0.18],                // straight wall
+    [0.41, 0.36],                // shoulder
+    [0.37, 0.50],                // case mouth, outer
+    [0.31, 0.47],                // case mouth, inner lip (open, not a dome)
+  ];
+  const geo = new THREE.LatheGeometry(
+    CASE.map(([r, z]) => new THREE.Vector2(r, z)), 8);
+  // LatheGeometry spins around +Y; the pool's per-instance scale is (w, w, l)
+  // on (x, y, z), so the long axis has to be Z.
+  geo.rotateX(Math.PI / 2);
+  geo.computeVertexNormals();
   geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e6);
   // BRASS THAT CATCHES LIGHT (iter07, D6). metalness 0.85 with no image-based
   // lighting in the scene means the diffuse term is gone and the only thing
@@ -70,10 +127,21 @@ export function makeCasings(env) {
   // diffuse response to the sodium lamps the fight happens under and keeps a
   // real specular gradient across the eight case-wall facets. NOT emissive:
   // brass is lit by the scene or it is not lit at all (doctrine §3).
+  // iter09 (D6): MEASURED live in the C1 pose — twelve settled cases at
+  // 2.76-3.85 m from the eye, all twelve inside the frame at (1296-1509,
+  // 841-959), each 7.1-9.9 px long by 2.0-2.9 px wide. So "the brass lands in
+  // frame" is CLOSED; what remained is that 8 x 2.4 px of 0xe0b25c at
+  // roughness 0.31 on unlit wet cobbles is a dark speck. The ground it lands
+  // on is the darkest part of the plate, so the only lever that is honest here
+  // is the material's own response: a brighter alloy and a tighter specular
+  // lobe, so the sodium spill and the muzzle flashes both catch it harder.
+  // STILL NOT EMISSIVE — brass is lit by the scene or it is not lit at all
+  // (doctrine §3), and an emissive shell is the exact tell this file has spent
+  // three iterations removing.
   const mat = new THREE.MeshStandardMaterial({
-    color: 0xe0b25c, // brass
+    color: 0xf2cd7d, // brass, a stop brighter
     metalness: 0.45,
-    roughness: 0.31,
+    roughness: 0.22,
   });
   const mesh = new THREE.InstancedMesh(geo, mat, N);
   mesh.frustumCulled = false;

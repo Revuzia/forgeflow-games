@@ -8,11 +8,17 @@ import * as THREE from "three";
 // PERF GATE (owner decision 2026-08-20: 60 fps on Intel integrated is a HARD
 // gate above visuals). Measured on this box with EXT_disjoint_timer_query_webgl2:
 // at DPR 1.5 the drawing buffer is 2880x1620 = 4.67 Mpx; at 1.0 it is 1920x1080
-// = 2.07 Mpx. The frame is 93% GPU and almost entirely fill-bound, so that 2.25x
-// pixel cut is very close to a 2.25x frame-time cut — the single biggest lever
-// on the board (ablation: 182.8 -> 84.1 ms, -54%, everything else held).
-// The image quality that DPR 1.5 was buying is bought back by the FXAA pass in
-// post.js (~1 ms) instead of by 4.67 Mpx of supersample.
+// = 2.07 Mpx. The frame is ~93% GPU and 90% fill-bound (perf wave 2 fitted
+// cost(s) = 0.10 + 0.90*s^2 over a six-point render-scale sweep — see the table
+// in render/dynres.js), so that 2.25x pixel cut is close to a 2.25x frame-time
+// cut and remains the single biggest lever ever found on this frame.
+//
+// CORRECTION, perf wave 2: this note used to price the replacement FXAA pass at
+// "~1 ms". Measured per-pass it is 3.75 ms of a 34.95 ms frame — 11%, the
+// second most expensive pass in the build after the scene itself. The
+// conclusion is unchanged (4x MSAA on 4.67 Mpx measured 84.8 ms, so FXAA is
+// still ~23x cheaper than what it replaced) but the number was wrong by 3.7x
+// and anything reasoning from it was reasoning from a guess.
 export const DPR_CAP = 1.0; // doctrine §3 — never above 1.5; perf gate pins 1.0
 
 export function initRenderer(canvas) {

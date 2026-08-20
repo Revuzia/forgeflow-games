@@ -323,10 +323,21 @@ export function makeImpacts(env, pools, decals) {
       // authored at 0.36-0.54 m with the black core still ~0.09 m inside it:
       // the same hole, drawn with the damage around it. See the decals.js
       // header for why the art is bi-tonal.
-      burstAt(pools.spark, p, n, 1, 0.15, 0.35, 0.05, 0.13, 0.03, 0.30, 0.10,
-        3.4, 2.2, 1.05, 0, 1.0, 0, 0, 0);
-      burstAt(pools.spark, p, n, 5, 2.2, 5.0, 1.3, 0.28, 0.12, 0.017, 0.028,
-        2.6, 1.5, 0.6, 0.25, 1.0, -9, 0.4, 0.5);
+      // ---- iter09, D6: THE STRIKE HAS TO CARRY ACROSS THE STREET ----------
+      // MEASURED live this session (C1 pose, 24 rounds): 39 decals alive, all
+      // 39 on screen, individual quads 22-64 px — so the iter07 "sub-pixel"
+      // diagnosis is CLOSED and was not the remaining defect. The remaining
+      // defect is that all 39 landed inside a 55 x 45 px patch at (930-985,
+      // 519-560) of a 1920x1080 frame, i.e. one soft blob covering 0.1% of the
+      // image, and at 4x zoom that blob reads as a pale smudge rather than as
+      // masonry that has been shot. Two things follow, and both are done here
+      // rather than in decals.js: the event needs a WIDER footprint (see the
+      // satellites call below) and a HOTTER core, because what survives 13-20 m
+      // of night air, rain haze and the AgX shoulder is contrast, not size.
+      burstAt(pools.spark, p, n, 1, 0.15, 0.35, 0.05, 0.15, 0.03, 0.36, 0.11,
+        4.4, 2.9, 1.35, 0, 1.0, 0, 0, 0);
+      burstAt(pools.spark, p, n, 8, 2.2, 5.6, 1.4, 0.34, 0.14, 0.019, 0.032,
+        3.1, 1.8, 0.72, 0.25, 1.0, -9, 0.4, 0.5);
       // chips: 28-50 mm was one pixel of dust-pool point at 20 m. Concrete
       // spall throws fragments up to fingernail size — 55-105 mm reads as
       // debris in flight instead of as sensor noise.
@@ -336,8 +347,29 @@ export function makeImpacts(env, pools, decals) {
       // pale cloud that blooms wide and hangs. 0.11 -> 0.46 m at alpha 0.36
       // was a 20 px ghost; 0.16 -> 0.95 m at 0.52 is the dust cloud a bullet
       // actually raises off masonry, and it survives the AgX shoulder.
-      burstAt(pools.dust, p, n, 2, 0.5, 1.0, 0.22, 0.85, 0.25, 0.16, 0.95,
-        0.62, 0.60, 0.56, 0.1, 0.52, -0.35, 0, 1.5);
+      burstAt(pools.dust, p, n, 3, 0.5, 1.1, 0.24, 0.95, 0.28, 0.17, 1.05,
+        0.62, 0.60, 0.56, 0.1, 0.50, -0.35, 0, 1.5);
+      // THE SMOKE THAT LINGERS. The spall puff above is a 0.95 s event, so a
+      // filmstrip panel sampled half a second after the burst has nothing left
+      // of it. One slow, very low-alpha grey cloud per strike (2.0-2.9 s,
+      // 0.35 -> 1.7 m, almost no gravity, heavy damping) is what makes a wall
+      // still be smoking in the NEXT panel — which is the D6 anchor's "smoke
+      // hangs and drifts", and the half of permanence a decal cannot supply.
+      // Alpha 0.13: eleven overlapping ones composite to ~0.78, so this must
+      // stay under the threshold where a burst turns the wall into a grey card.
+      // SIZED FOR THE NEAR CASE, NOT THE FAR ONE. First pass grew 0.35 -> 1.70 m
+      // at alpha 0.13, and the C1 filmstrip caught one at ~1.5 m from the eye
+      // where a 1.7 m sprite is most of the lower frame: it rendered as an
+      // opaque grey ball sitting on the cobbles. Bot rounds land NEAR the
+      // player by definition — that is what being shot at is — so every impact
+      // row has to survive being 1.5 m from the lens, not just 13 m. 1.05 m at
+      // 0.085 alpha still reads as haze hanging on a wall at 13 m and cannot
+      // become a solid object at 1.5 m. Laid on ~55% of strikes so a burst
+      // does not composite eleven of them into the card this was avoiding.
+      if (rnd() < 0.55) {
+        burstAt(pools.dust, p, n, 1, 0.25, 0.55, 0.16, 2.0, 0.9, 0.30, 1.05,
+          0.56, 0.55, 0.53, 0.08, 0.085, 0.10, 0, 1.9);
+      }
       decals.spawn(p, n, rnd() < 0.5 ? 0 : 3, 0.36 + rnd() * 0.18, dir);
       // SATELLITE CHIP MARKS. One round on masonry does not leave one tidy
       // dot — the crater is ringed by smaller scars where the spall came off.
@@ -346,7 +378,19 @@ export function makeImpacts(env, pools, decals) {
       // spotted: 11 rounds of pre-roll now deposit ~33 marks across the same
       // 1.7 m spread circle instead of 11. Costs nothing — the ring buffer is
       // 256 deep and this is still one instanced draw.
-      satellites(p, n, dir, 2, 0.08, 0.18, 0.42, 0.62);
+      // iter09: the spread is the whole fix. At 0.08-0.18 m the satellites sat
+      // 6-14 px from their parent at the 13 m the C1 burst is framed at, so a
+      // cluster of 39 marks rendered as ONE blob with no internal structure —
+      // measured 55 x 45 px for the entire permanence budget. At 0.16-0.44 m
+      // they sit 12-34 px out, which resolves as separate craters, and the
+      // whole burst covers ~130 px of wall: the read is "this panel has been
+      // chewed", not "there is a stain here". Capped at 0.44 m deliberately —
+      // satellites are placed in the impact PLANE, so a radius wider than the
+      // smallest thing you can shoot (a bin, a pipe) starts hanging marks off
+      // the edge of it, and a floating decal is a placeholder-class defect.
+      // Three at 0.30-0.48 m rather than two at 0.42-0.62: more marks, each
+      // smaller, is what separates a cluster from a smear.
+      satellites(p, n, dir, 3, 0.16, 0.44, 0.30, 0.48);
       // The wide dust wash the holes sit in — see decals.js cell 4. Laid on
       // ~45% of strikes rather than all of them: these overlap multiplicatively
       // and a scuff on every round of a burst stacks into one flat pale patch
@@ -360,14 +404,18 @@ export function makeImpacts(env, pools, decals) {
       // The decal was a DARK scorch dot 0.11-0.17 m: on a night vehicle that
       // is dark-on-dark at 2 px. Atlas cell 2 is a bright torn-steel gouge —
       // bare metal is the brightest thing on an unlit vehicle — at 0.22-0.34 m.
-      burstAt(pools.spark, p, n, 5, 2.6, 6.0, 1.4, 0.24, 0.12, 0.014, 0.024,
-        2.3, 1.7, 0.85, 0.2, 1.0, -9, 0.45, 0.5);
-      burstAt(pools.spark, p, n, 1, 0.2, 0.4, 0.05, 0.13, 0.03, 0.20, 0.06,
-        3.0, 2.4, 1.5, 0, 1.0, 0, 0, 0);
-      burstAt(pools.dust, p, n, 1, 0.4, 0.8, 0.18, 0.7, 0.2, 0.12, 0.60,
-        0.55, 0.53, 0.50, 0.1, 0.34, -0.3, 0, 1.5);
+      // iter09: same spread + contrast reasoning as concrete. Steel throws the
+      // longest-lived sparks of any surface in the table and they are the one
+      // impact channel that is unambiguously legible on a night street, so
+      // this row gets the largest count.
+      burstAt(pools.spark, p, n, 9, 2.6, 6.6, 1.5, 0.30, 0.14, 0.016, 0.028,
+        2.8, 2.0, 1.0, 0.2, 1.0, -9, 0.45, 0.5);
+      burstAt(pools.spark, p, n, 1, 0.2, 0.4, 0.05, 0.15, 0.03, 0.24, 0.07,
+        3.8, 3.0, 1.9, 0, 1.0, 0, 0, 0);
+      burstAt(pools.dust, p, n, 1, 0.4, 0.9, 0.20, 0.8, 0.24, 0.14, 0.78,
+        0.57, 0.55, 0.52, 0.1, 0.40, -0.3, 0, 1.5);
       decals.spawn(p, n, 2, 0.28 + rnd() * 0.14, dir);
-      satellites(p, n, dir, 1, 0.07, 0.16, 0.30, 0.44, 2);
+      satellites(p, n, dir, 2, 0.13, 0.32, 0.22, 0.34, 2);
       if (rnd() < 0.45) decals.spawn(p, n, 4, 0.55 + rnd() * 0.25, dir);
     },
     wood(p, n, dir) {
@@ -390,8 +438,18 @@ export function makeImpacts(env, pools, decals) {
     },
     flesh(p, n) {
       // 8 dark-red 0.06 m puffs, 0.35 s, gravity -4; no decal (portal rating)
-      burstAt(pools.dust, p, n, 8, 0.9, 1.8, 0.7, 0.3, 0.1, 0.045, 0.09,
-        0.28, 0.045, 0.045, 0.25, 0.72, -4, 0, 1.2);
+      // ---- iter09, D6 -----------------------------------------------------
+      // THE ONE SURFACE THE C1 SCRIPT ACTUALLY HITS. The scored filmstrip is a
+      // hip burst at two soldiers, so `concrete` gets the misses and `flesh`
+      // gets the hits — and at the 12-20 m the contacts stand at, a 45-90 mm
+      // puff at 0.28/0.045/0.045 linear is a 5-9 px near-black dot on a night
+      // street: the shot that KILLS is the one event in the whole take with no
+      // visible answer. 0.10 -> 0.22 m is 10-22 px, and lifting the red off
+      // black (0.42/0.07/0.06) puts it above the AgX toe instead of under it.
+      // Still no decal and still no gore geometry — this is a hit ANSWER, not
+      // a wound. Count 8 -> 11 so a burst reads as sustained, not as one tick.
+      burstAt(pools.dust, p, n, 11, 0.9, 2.0, 0.8, 0.34, 0.12, 0.10, 0.22,
+        0.42, 0.07, 0.06, 0.25, 0.80, -4, 0, 1.2);
     },
   };
 
@@ -400,8 +458,10 @@ export function makeImpacts(env, pools, decals) {
   const PUFFS = {
     flesh(p) { TABLE.flesh(p, UP); },
     death(p) {
-      burstAt(pools.dust, p, UP, 6, 0.7, 1.4, 0.8, 0.35, 0.12, 0.05, 0.1,
-        0.26, 0.04, 0.04, 0.25, 0.65, -4, 0, 1.2);
+      // iter09: scaled with the flesh row above, for the same measured reason.
+      // A kill at 12-20 m had a 5-10 px near-black answer; this is 12-24 px.
+      burstAt(pools.dust, p, UP, 8, 0.7, 1.5, 0.9, 0.40, 0.14, 0.12, 0.24,
+        0.40, 0.065, 0.055, 0.25, 0.74, -4, 0, 1.2);
     },
     dust(p) {
       burstAt(pools.dust, p, UP, 5, 0.5, 1.1, 0.9, 0.5, 0.15, 0.09, 0.24,

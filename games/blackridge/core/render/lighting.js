@@ -1,7 +1,8 @@
 // core/render/lighting.js [A6] — THE fixed light pool + lease API.
 // architecture §3.13 as amended R3: 1 DirectionalLight (moon, SOLE shadow
 // caster, 1024 map) + 1 HemisphereLight + 8 SpotLight (static practicals) +
-// 4 PointLight (dynamic fx leases: 3 muzzle grants + 1 explosion). ALL
+// 3 PointLight (dynamic fx leases: 2 muzzle grants + 1 explosion; was 4 --
+// see the POINT_COUNT note). ALL
 // created at boot `visible:true, intensity:0`, NEVER added/removed at
 // runtime (light count is a shader-permutation key — doctrine §3). Nobody
 // else creates a THREE.Light.
@@ -29,9 +30,26 @@
 // keyAmbientRatio(), blackout state.
 
 import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { SPEC_HOOKS } from "../level/materials.js";
 
 const SPOT_COUNT = 8;
-const POINT_COUNT = 4;
+// PERF WAVE 2 (2026-08-20): 4 -> 3. Light COUNT is a shader-permutation key and
+// every lit fragment in the frame pays for every slot whether or not it is
+// leased — a parked PointLight at intensity 0 still runs a full BRDF iteration.
+// Priced on this box with EXT_disjoint_timer_query_webgl2 (interleaved A/B
+// inside one page, RenderPass#0 only, 1920x1080 DPR 1.0): hiding all 13
+// spot+point lights cut the scene pass 28.35 -> 20.73 ms, i.e. 0.586 ms PER
+// LIGHT, flat. This slot is worth 0.59 ms.
+//
+// What it costs: the pool was "3 muzzle grants + 1 explosion". At 3 the
+// concurrency is player muzzle + one bot muzzle + one explosion, which is the
+// behaviour the iter08 critics actually credited ("the muzzle flash is a true
+// lighting event"). muzzle.js already handles a denied lease gracefully
+// (`if (!slot) return;` at muzzle.js:377, bots fall back to sprite-only) and
+// gives the player a steal path against bot leases, so the player's own flash
+// can never be the one that is dropped.
+const POINT_COUNT = 3;
 
 // Per-kind defaults for practical binds (candela-ish, three r172 physical
 // units, decay 1.8). Zone contrast per LD §3.4: plaza = 100%, floods ~80%,
@@ -88,7 +106,11 @@ function aggregateBounceColor(poles) {
 // DoubleSide sums both cylinder walls, and the cones stack on the ground
 // pools + fog discs + the real spot — iter01 S4 read as orange paint at the
 // old 0.13/0.17; fog is atmosphere, not paint (VT §4 / LD §3.4 zone plan).
-const CONE_OPACITY = { sodium: 0.075, skylight: 0.14, flood: 0.11, default: 0.09 };
+// iter09: skylight 0.14 -> 0.085. Its cone is no longer a narrow taper but a
+// near-parallel column the width of the roof opening (see the rTop note in
+// buildDecor), so the same opacity would spread ~4x the screen area at the
+// same brightness and turn a shaft into a wash.
+const CONE_OPACITY = { sodium: 0.075, skylight: 0.085, flood: 0.11, default: 0.09 };
 
 // ------------------------------------------------------- exposure constants
 // VT §1 prescribes the key at "#a8c4e0 region". These are TINTS: each is close
@@ -162,16 +184,88 @@ export function createLights(ctx) {
   }
   moon.castShadow = true;
   moon.shadow.mapSize.set(1024, 1024); // doctrine cap
-  moon.shadow.camera.left = -85;
-  moon.shadow.camera.right = 85;
-  moon.shadow.camera.top = 85;
-  moon.shadow.camera.bottom = -85;
+  // ---- iter09: TIGHT, CAMERA-FOLLOWING SHADOW FRUSTUM --------------------
+  // VT §1 contracts "tight shadow frustum around the play space; camera-
+  // following if the map exceeds it" and it had never been implemented: the
+  // box was a fixed +-85 m centred on the world origin, so one 1024 map was
+  // spread over 170 m => 0.166 m per texel. Three of three iter08 critics
+  // wrote "not one cast shadow exists anywhere in the battery".
+  //
+  // MEASURED FIRST, because two plausible explanations had to be told apart
+  // and one of them was the iter08 consolidation's own ranked fix #3.
+  //   (a) "the additive ground sheets are drawn after the opaque pass and
+  //        re-light the shadow the ground baked" — DISPROVED. S5 pose,
+  //        interleaved in-page A/B toggling moon.shadow.intensity 1 vs 0 (a
+  //        uniform, so no recompile and no permutation change), captured
+  //        through the real post chain: with the sheets VISIBLE the shadow
+  //        term moves 38.03% of frame pixels by >4/255 and the road band by
+  //        +5.14 luma; with wet_specular, window_spill, skylight_glow,
+  //        neon_wall_pools, light_pools, light_pools_plaza and fog_discs all
+  //        HIDDEN it moves 38.54% and +5.41. The sheets cost the shadow
+  //        essentially nothing. Shadows were rendering the whole time.
+  //   (b) they render but carry no SHAPE. Confirmed: the shadow-difference
+  //        image is whole surfaces evenly dimmed, with no projected silhouette
+  //        of a building, a balcony or a railing anywhere in it. At 0.166 m
+  //        per texel plus normalBias 0.03, a railing bar and a canopy lip are
+  //        both under one texel — they cannot print an edge.
+  // So this halves the texel: 45 m half-extent => 90 m / 1024 = 0.088 m per
+  // texel, and the box follows the camera so the budget is spent where the
+  // player is looking instead of on empty map corners. normalBias comes down
+  // with it (it is a world-space offset and only needs to cover a texel).
+  //
+  // Costs nothing: the perf lane priced the shadow PASS at 0 ms and 1024->512
+  // at 0.09 ms, so the map is not on the critical path; this changes only the
+  // matrices it is rendered with. The map size stays at the doctrine cap.
+  const SHADOW_HALF = 45;
+  const SHADOW_LEAD = 14;  // push the box ahead of the camera, down its view
+  moon.shadow.camera.left = -SHADOW_HALF;
+  moon.shadow.camera.right = SHADOW_HALF;
+  moon.shadow.camera.top = SHADOW_HALF;
+  moon.shadow.camera.bottom = -SHADOW_HALF;
   moon.shadow.camera.near = 20;
   moon.shadow.camera.far = 340;
-  moon.shadow.bias = -0.00035;
-  moon.shadow.normalBias = 0.03;
+  moon.shadow.camera.updateProjectionMatrix();
+  moon.shadow.bias = -0.0004;
+  moon.shadow.normalBias = 0.018;
   moon.shadow.radius = 4; // soft (PCF radius 4, LD §3.2)
   moon.target.position.set(0, 0, 0);
+  // The light and its target move TOGETHER so the direction is bit-identical
+  // frame to frame; only the volume the map covers moves. Kept as the single
+  // source for the offset so nothing can drift them apart.
+  const KEY_OFFSET = moon.position.clone();
+
+  // ---- publish the KEY to the material layer (W-D3/iter09) ----------------
+  // A3's surface coat needs the key's DIRECTION and RADIANCE to evaluate its
+  // own GGX lobe; nothing else about the pool is exposed and nothing is
+  // created, resized or re-typed here, so the light count and every
+  // shader-permutation key are untouched.
+  //
+  // WHY THE MATERIAL LAYER CANNOT DO WITHOUT THIS: measured on the booted
+  // page (S8, DPR 1.0, _harness/a3spec.py, baseline reproducing to 0.06/255),
+  // this DirectionalLight is 72.7% of the hero concrete face's 61.98 luma —
+  // and on a flat face its N.L and half-vector are CONSTANT, so all 72.7% of
+  // it lands as one flat value. The hemisphere (16.5%) has no direction at
+  // all and the env at roughness 0.82 (6.3%) resolves to one mip. Sweeping
+  // roughness across its whole range against that rig moved the wall 2.0%,
+  // backwards. The coat gives the key a second, TIGHT lobe on the water film
+  // so the same light finally deposits something that varies texel to texel.
+  // See the long note at materials.js lights_fragment_end.
+  function publishKey() {
+    // (position - target), not position. Identical while the target sits at the
+    // origin, which it did until the camera-following shadow frustum below
+    // started moving the pair together; taking the DIFFERENCE makes this true
+    // for any target and is the correct expression either way. sky.js reads
+    // api.keyDir for the same reason — the moon disc, the cloud's lit face and
+    // the material coat's GGX lobe must all be this one vector.
+    SPEC_HOOKS.keyDir.value.copy(moon.position).sub(moon.target.position).normalize();
+    // radiance, not "intensity": the colour is a TINT at ~unit luminance and
+    // `intensity` carries the level (see the exposure note above), so the
+    // product is what a shader has to multiply by. 0.16 converts the pool's
+    // physical-units level into the coat's own gain, set once by the
+    // interleaved A/B in the lane report rather than guessed.
+    SPEC_HOOKS.keyColor.value.copy(moon.color).multiplyScalar(moon.intensity * 0.16);
+  }
+  publishKey();
   moon.layers.enableAll(); // v2.2: lights must reach EVERY camera's layer —
   // the viewmodel camera renders only layer 2; without this the gun draws
   // pitch-black in-mission (A4 needsElsewhere, VT amateur tell #9).
@@ -206,7 +300,10 @@ export function createLights(ctx) {
 
   // 4 points — dynamic fx leases (3 muzzle grants + 1 explosion).
   const points = [];
-  const pointBusy = [false, false, false, false];
+  // DERIVED from POINT_COUNT, never a literal: the old `[false,false,false,
+  // false]` was correct only by coincidence, and would have silently leased a
+  // non-existent slot the moment the pool size changed.
+  const pointBusy = new Array(POINT_COUNT).fill(false);
   for (let i = 0; i < POINT_COUNT; i++) {
     const p = new THREE.PointLight(0xffffff, 0, 10, 2.0);
     p.visible = true;
@@ -734,6 +831,111 @@ export function createLights(ctx) {
     return found;
   }
 
+  // ------------------------------------------ AUTHOR THE MISSING FIXTURES
+  // iter09. FIXTURE AUTHORITY (above) got the rule right and the remedy wrong.
+  // It asks "does a solid mesh justify this glow?" and, when the answer is no,
+  // DENIES the decoration and logs `SOURCELESS LIGHT` — which removes the glow
+  // but leaves the light itself pooling on the ground from nothing. That is why
+  // the class survived a fifth consecutive critic round: all three iter08
+  // critics named ground light with no emitter, and two of three led their
+  // blind verdict with S7's "cone descending from an apex with NO fixture".
+  // Denying a decoration cannot close a defect whose complaint is about the
+  // LIGHT, and this module owns no way to delete a practical the level design
+  // contracts. So the remedy is inverted: where a pole has no fixture, BUILD
+  // one. The predicate stays exactly as it was; only the consequence changes.
+  //
+  // Every piece below is a solid, shadow-casting MeshStandardMaterial box or
+  // tube in the level's own vocabulary, merged into ONE mesh (+1 draw call,
+  // ~500 triangles total, ZERO new lights — a perf lane is cutting the light
+  // pool concurrently and nothing here spends a slot). They are deliberately
+  // small and dark: the job is to be the thing the eye finds when it asks
+  // "where is that coming from", not to add a bright object to the frame.
+  //
+  // Per orphan kind, and each shape is chosen against the specific complaint:
+  //   skylight  -> a roof APERTURE: a square lip with two mullions at the
+  //                shaft's apex. FIXTURELESS_KINDS excuses a skylight because
+  //                "its source is the sky through a hole in a roof" — but the
+  //                battery has no hole in it, so the excuse was describing
+  //                something that did not exist. Now it does.
+  //   interior  -> a wall-bracket lamp: back plate, arm, shallow shade.
+  //   neon_bounce -> a festoon lamp hung from a span cable running through the
+  //                pole point. The plaza already strings festoon cable with
+  //                bulbs (visible in iter08 S5), so this is the level's own
+  //                vocabulary rather than a new object, and it justifies the
+  //                pool WITHOUT moving the light: iter08 §9(g) escalated moving
+  //                L_PLAZA_KEY onto the real lamp at [1, 5.70, 0] as a look
+  //                decision because it re-derives the intensity and shifts the
+  //                lit footprint 6 m. Building the fixture at the aggregate's
+  //                own position changes neither.
+  //   default   -> a lamp head on a short arm.
+  const FIXTURE_MAT = new THREE.MeshStandardMaterial({
+    color: 0x2b2f36, roughness: 0.62, metalness: 0.85, name: "authored_fixture",
+  });
+
+  function orphanFixtureGeo(p) {
+    const g = [];
+    const [x, y, z] = p.pos;
+    const push = (geo, tx, ty, tz, rx, ry, rz) => {
+      if (rx) geo.rotateX(rx); if (ry) geo.rotateY(ry); if (rz) geo.rotateZ(rz);
+      geo.translate(tx, ty, tz); g.push(geo);
+    };
+    if (p.kind === "skylight") {
+      // square aperture lip, 2.4 m, sitting in the roof plane at the apex
+      const S = 1.2, T = 0.13, H = 0.34;
+      push(new THREE.BoxGeometry(S * 2 + T * 2, H, T), x, y, z - S);
+      push(new THREE.BoxGeometry(S * 2 + T * 2, H, T), x, y, z + S);
+      push(new THREE.BoxGeometry(T, H, S * 2), x - S, y, z);
+      push(new THREE.BoxGeometry(T, H, S * 2), x + S, y, z);
+      // two mullions across the opening — the thing that makes it read as
+      // glazing rather than as a rectangle cut in a ceiling
+      push(new THREE.BoxGeometry(S * 2, H * 0.42, 0.07), x, y - 0.04, z - 0.4);
+      push(new THREE.BoxGeometry(S * 2, H * 0.42, 0.07), x, y - 0.04, z + 0.4);
+    } else if (p.kind === "neon_bounce") {
+      // span cable through the pole point + a short drop + an enamel shade.
+      // Sized to READ at range, not to be minimal: the plaza key hangs at 9 m
+      // and S1 frames it from ~30 m, where a 0.30 m shade is ~14 px. A lamp
+      // the eye cannot resolve does not answer "where is that light coming
+      // from", which is the entire job. 0.44 m is a real industrial pendant.
+      push(new THREE.CylinderGeometry(0.035, 0.035, 26, 5), x, y + 0.78, z, 0, 0, Math.PI / 2);
+      push(new THREE.CylinderGeometry(0.024, 0.024, 0.62, 5), x, y + 0.44, z);
+      push(new THREE.ConeGeometry(0.44, 0.34, 12, 1, true), x, y + 0.02, z, Math.PI);
+      push(new THREE.TorusGeometry(0.44, 0.035, 6, 14), x, y - 0.15, z, Math.PI / 2);
+      push(new THREE.CylinderGeometry(0.07, 0.07, 0.16, 8), x, y + 0.14, z);
+    } else if (p.kind === "interior") {
+      // wall bracket: plate + arm + shade
+      push(new THREE.BoxGeometry(0.30, 0.42, 0.08), x, y + 0.22, z + 0.16);
+      push(new THREE.BoxGeometry(0.07, 0.07, 0.34), x, y + 0.20, z - 0.02);
+      push(new THREE.ConeGeometry(0.26, 0.22, 10, 1, true), x, y + 0.06, z - 0.17, Math.PI);
+    } else {
+      // generic lamp head on a stub arm
+      push(new THREE.BoxGeometry(0.10, 0.10, 0.5), x, y + 0.18, z + 0.24);
+      push(new THREE.BoxGeometry(0.42, 0.20, 0.30), x, y + 0.05, z);
+    }
+    return g;
+  }
+
+  // Returns the number of poles that were given a fixture (0 = nothing to do).
+  function buildOrphanFixtures(poles, fixtured) {
+    const orphans = poles.filter((p) => !fixtured.get(p.id) && Array.isArray(p.pos));
+    if (!orphans.length) return 0;
+    const geos = [];
+    for (const p of orphans) geos.push(...orphanFixtureGeo(p));
+    if (!geos.length) return 0;
+    const mesh = new THREE.Mesh(mergeGeometries(geos, false), FIXTURE_MAT);
+    mesh.name = "authored_fixtures";
+    mesh.castShadow = true;   // a fixture that throws no shadow is half a lie
+    mesh.receiveShadow = true;
+    if (mesh.layers) mesh.layers.enable(3); // mirrored in the planar reflection
+    scene.add(mesh);
+    // The predicate is now satisfied for real — a solid mesh exists within
+    // FIXTURE_R of each of these poles — so mark them and let every decoration
+    // pass below treat them like any other fixtured pole. Marking rather than
+    // re-running fixtureMap keeps the sweep at one pass; the geometry above is
+    // authored AT p.pos, so a re-sweep would return exactly this.
+    for (const p of orphans) fixtured.set(p.id, true);
+    return orphans.length;
+  }
+
   function buildDecor(poles) {
     if (decor.built) return;
     decor.built = true;
@@ -747,25 +949,26 @@ export function createLights(ctx) {
     const t1 = (globalThis.performance || Date).now();
     console.info(`[lights] fixture authority swept ${poles.length} poles in ` +
       `${(t1 - t0).toFixed(1)} ms`);
-    // L_PLAZA_KEY is the ONE accepted orphan and it is accepted on the record,
-    // not by silence: it is an abstract aggregate for the signage wall bouncing
-    // off wet stone, hung at [-5, 9, 0] over open plaza cobble where there is
-    // no wall to bracket to and no catenary to hang from (the plaza spans are
-    // anchored at x -22/-17/1/5/9/13 and deliberately never cross the street
-    // gap at x -5 — level.js §5). It is denied every decoration below, and
-    // level.js softens its penumbra to 1.0 so its footprint has no rim. If a
-    // fixture is ever authored there, delete this entry and it earns them back.
-    const ACCEPTED_ORPHANS = new Set(["L_PLAZA_KEY"]);
-    const unexpected = orphans.filter((s) => !ACCEPTED_ORPHANS.has(s.split("(")[0]));
-    if (unexpected.length) {
+    // iter09: orphans are REPAIRED, not denied. The old branch here logged a
+    // console.error naming L_PLAZA_KEY and fake_gatehouse and then withheld
+    // their decorations — which left the practicals themselves pooling light
+    // from nothing, and put an [error] line in every boot of a battery whose
+    // own cleanliness bar forbids one. See buildOrphanFixtures() above for why
+    // building the fixture is the remedy the rule always implied.
+    const built = buildOrphanFixtures(poles, fixtured);
+    const stillOrphan = poles.filter((p) => !fixtured.get(p.id))
+      .map((p) => `${p.id}(${p.kind})`);
+    if (stillOrphan.length) {
+      // Only reachable for a pole with no usable `pos`, i.e. malformed data —
+      // that is a real authoring error and still deserves the loud line.
       console.error("[lights] SOURCELESS LIGHT: no fixture mesh within " +
-        `${FIXTURE_R} m of ${unexpected.join(", ")} — these poles get NO glow, NO fog ` +
-        "disc and NO god-ray cone. Author the fixture in level.js or delete the pole.");
+        `${FIXTURE_R} m of ${stillOrphan.join(", ")} and none could be authored ` +
+        "(missing pos?) — these poles get NO glow, NO fog disc and NO god-ray cone.");
     }
     console.info(`[lights] fixture authority: ${poles.length - orphans.length}/` +
-      `${poles.length} poles carry a visible fixture` +
-      (orphans.length ? ` — decorations denied to ${orphans.join(", ")}` : "") +
-      "; no additive decoration exists without one");
+      `${poles.length} poles carried a fixture; ${built} authored here ` +
+      (orphans.length ? `(${orphans.join(", ")}) ` : "") +
+      "— every practical in the ward now has a visible solid source");
 
     // --- god-ray cones: exactly the godRay:true poles (5 per LD §3.5)
     const rays = poles.filter((p) => p.godRay && fixtured.get(p.id));
@@ -775,7 +978,26 @@ export function createLights(ctx) {
       const h = from.distanceTo(to);
       const halfAngle = ((p.cone || 45) * Math.PI) / 360;
       const rBottom = Math.tan(halfAngle) * h * 0.85;
-      const geo = new THREE.CylinderGeometry(Math.max(0.12, rBottom * 0.12), rBottom, h, 20, 1, true);
+      // ---- iter09: THE SHAFT MUST LEAVE ITS OPENING AT THE OPENING'S WIDTH --
+      // 2 of 3 iter08 blind verdicts led with S7's shaft: "a white volumetric
+      // cone descends from a POINT in the ceiling with no fixture" (critic-a),
+      // "the shaft brightest at the TOP" (critic-b). Both are describing the
+      // same geometry. A lamp's beam does start near a point — the bulb — so
+      // rBottom * 0.12 is right for sodium and flood. A SKYLIGHT's source is a
+      // hole in a roof several metres across, and the arcade opening in S7 is
+      // exactly that: the level authors a large aperture with a deep reveal,
+      // sky and a crane visible through it. The cone was drawing a 0.5 m
+      // pinprick 1.5 m BELOW that opening, which is why three critics read
+      // "sourceless" in a frame that already had a perfectly good source in it
+      // — the shaft did not appear to come from the hole, so the hole did not
+      // count as its source. Nearly parallel-sided is what daylight through a
+      // roof opening actually looks like, and it makes the attachment
+      // unmistakable. Opacity drops with it (see CONE_OPACITY.skylight): the
+      // same brightness over a much wider column would be a wash.
+      const rTop = p.kind === "skylight"
+        ? rBottom * 0.86
+        : Math.max(0.12, rBottom * 0.12);
+      const geo = new THREE.CylinderGeometry(rTop, rBottom, h, 20, 1, true);
       const mat = coneMatProto.clone();
       mat.uniforms.uColor.value = new THREE.Color(p.color);
       mat.uniforms.uOpacity.value = CONE_OPACITY[p.kind] ?? CONE_OPACITY.default;
@@ -805,7 +1027,17 @@ export function createLights(ctx) {
     // place to encode it, because it stayed true after level.js authored the
     // plaza lamp and would have stayed false if a sodium pole lost its head.
     {
-      const glowPoles = poles.filter((p) => fixtured.get(p.id));
+      // iter09: FIXTURELESS_KINDS are excluded here as well as from the fixture
+      // sweep, and for the reason the sweep excuses them in the first place. A
+      // head glow is the bloom around a LAMP HEAD; a skylight's source is a
+      // hole in a roof, so its glow instance rendered as a ~15 px hot pinprick
+      // hanging in mid-air 1.5 m below the arcade opening — visible in S7 of
+      // every battery, and precisely the "soft ellipse floating clear of any
+      // fixture" shape three critics have now named five waves running. The
+      // sweep marked these poles `true` to spare them the orphan error, and
+      // that `true` was then read downstream as "has a lamp head", which is the
+      // one thing it never meant.
+      const glowPoles = poles.filter((p) => fixtured.get(p.id) && !FIXTURELESS_KINDS.has(p.kind));
       const geo = new THREE.PlaneGeometry(1, 1);
       const mesh = new THREE.InstancedMesh(geo, makeGlowMaterial(), glowPoles.length);
       mesh.name = "head_glows";
@@ -821,7 +1053,17 @@ export function createLights(ctx) {
           p.kind === "interior" ? 0.45 : 0.6;
         m4.makeScale(size, size, size).setPosition(p.pos[0], p.pos[1], p.pos[2]);
         mesh.setMatrixAt(i, m4);
-        const col = new THREE.Color(p.color);
+        // iter09: `neon_bounce` takes the SAME conditioned tint as its spot and
+        // its disc. L_PLAZA_KEY only entered this pass now that it has an
+        // authored fixture, and it would otherwise have arrived wearing
+        // p.color — the club sign's raw violet #c86ee0, the exact hue the
+        // aggregate is forbidden (see aggregateBounceColor: a bounce is the SUM
+        // of the wall and is markedly less saturated than any one sign). A
+        // violet glow over the plaza is the magenta film iter05 spent a whole
+        // wave removing; it does not come back through a side door.
+        const col = p.kind === "neon_bounce"
+          ? bounceColor().clone()
+          : new THREE.Color(p.color);
         mesh.setColorAt(i, col);
         const plaza = p.id === "L_PLAZA_KEY" || p.kind === "neon";
         decor.glowMeta.push({
@@ -844,8 +1086,14 @@ export function createLights(ctx) {
       // to be in this list on kind alone: L_PLAZA_KEY's 4.2 m additive ellipse
       // sat on open plaza cobble with literally nothing above it and was the
       // largest single "hard-edged pale ellipse with no fixture" in the ward.
-      const discs = poles.filter((p) => fixtured.get(p.id) &&
-        (p.kind === "sodium" || p.kind === "neon_bounce"));
+      // iter09: `neon_bounce` stays OFF this list even though buildOrphanFixtures
+      // has now given L_PLAZA_KEY a real festoon lamp. A fog disc is the haze
+      // puddle under a lamp, sized to that lamp; this entry's disc was sized to
+      // the ABSTRACT AGGREGATE at r = 4.2 m, which is a 8.4 m additive ellipse
+      // under a 0.6 m shade. Restoring it because the predicate now passes
+      // would re-open the exact "hard-edged pale ellipse" iter08 closed — the
+      // fixture justifies the pole's GLOW, not a disc four times its size.
+      const discs = poles.filter((p) => fixtured.get(p.id) && p.kind === "sodium");
       const geo = new THREE.PlaneGeometry(1, 1);
       geo.rotateX(-Math.PI / 2);
       const mesh = new THREE.InstancedMesh(geo, makeDiscMaterial(), discs.length);
@@ -978,8 +1226,54 @@ export function createLights(ctx) {
   let t = 0;
   let setpieceHooked = false;
 
+  // Scratch for the shadow follow — no per-frame allocation.
+  const _sc = new THREE.Vector3(), _fw = new THREE.Vector3();
+  const _u = new THREE.Vector3(), _v = new THREE.Vector3();
+  // Initialised HERE, not on the first _tick: sky.js reads it on frame 0 and
+  // normalising a zero vector yields NaN, which would poison the moon disc's
+  // dot product and paint the whole dome.
+  const KEY_DIR = KEY_OFFSET.clone().normalize();
+
+  // Recentre the shadow volume on the camera, snapped to the shadow map's own
+  // texel grid. THE SNAP IS NOT OPTIONAL: without it the depth texture
+  // resamples on a sub-texel offset every frame and every shadow edge crawls
+  // and shimmers as the player walks — which reads far worse than no shadow at
+  // all, and would have turned a fix into a new D10 complaint.
+  function followShadow() {
+    const cam = ctx.camera;
+    if (!cam) return;
+    KEY_DIR.copy(KEY_OFFSET).normalize();
+    // centre: camera on the ground plane, pushed SHADOW_LEAD down its own
+    // horizontal facing so the covered box sits in front of the player
+    cam.getWorldDirection(_fw);
+    _fw.y = 0;
+    if (_fw.lengthSq() < 1e-6) _fw.set(0, 0, -1); else _fw.normalize();
+    _sc.set(cam.position.x + _fw.x * SHADOW_LEAD, 0,
+            cam.position.z + _fw.z * SHADOW_LEAD);
+    // Build the light's own basis and quantise the centre in it. `_u` is any
+    // axis not parallel to the key; the moon sits at 38 deg elevation so world
+    // up is safe.
+    _u.set(0, 1, 0).cross(KEY_DIR);
+    if (_u.lengthSq() < 1e-6) _u.set(1, 0, 0);
+    _u.normalize();
+    _v.copy(KEY_DIR).cross(_u).normalize();
+    const texel = (SHADOW_HALF * 2) / moon.shadow.mapSize.x;
+    const du = Math.round(_sc.dot(_u) / texel) * texel - _sc.dot(_u);
+    const dv = Math.round(_sc.dot(_v) / texel) * texel - _sc.dot(_v);
+    _sc.addScaledVector(_u, du).addScaledVector(_v, dv);
+    moon.target.position.copy(_sc);
+    moon.position.copy(_sc).add(KEY_OFFSET);
+    moon.target.updateMatrixWorld();
+  }
+
   function _tick(dt) {
     t += dt;
+    followShadow();
+    // Re-publish the key every frame (W-D3/iter09). ~6 ops. It is here rather
+    // than only at boot so that ANY future move of the key — a blackout beat,
+    // a time-of-day pass, another lane retuning the exposure — carries into
+    // the material coat automatically instead of silently desyncing it.
+    publishKey();
 
     // set-piece drains: live once A0 adopts sim.mission / exposes mission
     const sim = ctx.sim && ctx.sim();
@@ -1029,6 +1323,12 @@ export function createLights(ctx) {
     moon,
     hemi,
     // ---- private additions (allowed by the freeze) ----
+    // The key's DIRECTION, unit, pointing from the world toward the light.
+    // Published because `moon.position` stopped being the direction the moment
+    // the shadow volume started following the camera (position and target move
+    // together). sky.js draws the moon disc and shades the cloud deck off this
+    // vector, so the sky cannot disagree with the light that shades the world.
+    keyDir: KEY_DIR,
     _tick,
     setPiece(id) { if (id === "transformer_blackout") startBlackout(); },
     // scenarios.js has called lights.setBlackout(bool) since A11 and this

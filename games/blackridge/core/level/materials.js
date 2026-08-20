@@ -468,6 +468,42 @@ export const GROUND_HOOKS = {
   time: { value: 0.0 },                    // ripple phase (level.js drives)
 };
 
+// ---- SPEC_HOOKS — the KEY LIGHT, published to the material layer ----------
+// W-D3/iter09. A6 owns the light pool; this is the one thing the material
+// shader needs from it and cannot get any other way: the key's direction and
+// its radiance, in WORLD space, as live uniform objects (same pattern as
+// GROUND_HOOKS). lighting.js writes them once at createLights and again
+// whenever the blackout state machine moves the key. Nothing here creates,
+// resizes or re-types a light, so the shader-permutation key is untouched.
+//
+// WHY A6 HAS TO HAND THIS OVER — measured on the booted page, S8, 1920x1080
+// DPR 1.0, all deltas against a same-page baseline that reproduced to
+// 0.06/255 (base 61.978 vs base2 61.988 on the hero wall):
+//
+//   term reaching the S8 hero concrete face   mean luma of 61.98
+//     moon (DirectionalLight)   45.06   72.7%
+//     hemisphere                10.20   16.5%
+//     scene.environment IBL      3.93    6.3%
+//     the iter08 wet sheen       0.68    1.1%
+//   FULL roughness sweep 0.08 -> 1.00      1.26 total   2.0%   (and BACKWARDS:
+//                                                  rougher renders BRIGHTER)
+//
+// Read that table as one sentence: EVERY term reaching that wall is
+// SPATIALLY CONSTANT. A DirectionalLight on a flat face has constant N.L and
+// a constant half-vector; a HemisphereLight has no direction at all; the env
+// at roughness 0.82 resolves to the top mip, i.e. one colour. A constant
+// cannot make roughness READ no matter how large it is, which is why raising
+// scene.environmentIntensity 0.5 -> 4.0 (8x) added +20.8/255 of flat level to
+// the wall and only +0.19 of high-pass std: a wash, not a material.
+//
+// So the defect was never "no PMREM" (there is one, reflect.js bakes it) and
+// never "the roughness map is not authored well enough". It is that this rig
+// gives a flat wall NO term that varies across it. uCoat below is that term.
+export const SPEC_HOOKS = {
+  keyDir:   { value: new THREE.Vector3(0.586, 0.616, 0.526) }, // toward the key
+  keyColor: { value: new THREE.Color(0.30, 0.33, 0.42) },      // tint * intensity
+};
+
 function augment(mat, o = {}) {
   const opts = {
     grunge: 0.35,      // roughness variance amplitude (VT §3 — never 0 on large surfaces)
@@ -508,6 +544,20 @@ function augment(mat, o = {}) {
     // ANTI-TILING second tap (VT §3: "amateur tell #5 is the visible texture
     // repeat"). See the map_fragment note.
     anti: 0,
+    // ---- SURFACE COAT (W-D3/iter09) — see the SPEC_HOOKS table above and
+    // the long note at lights_fragment_end. A thin water/patina film with its
+    // OWN roughness, so the key deposits a TIGHT lobe on it instead of the
+    // substrate's 0.82 smear. Default follows `wet`: an exterior surface in
+    // driving rain has a coat, an interior does not. ZERO texture fetches —
+    // pure ALU on maps this shader has already sampled.
+    coat: null,        // null ⇒ derive from `wet` (see below)
+    // The FILM's roughness, independent of the substrate's. NOT 0.05: water
+    // lying on rough masonry follows the substrate's macro relief, and a
+    // mirror-grade lobe on a flat face puts the whole face inside the peak at
+    // once, which is a blown white plate rather than a wet wall. 0.30 is a
+    // lobe narrow enough to resolve the normal map into glints and wide
+    // enough that the glint field reads as a surface. Ground overrides down.
+    coatRough: 0.30,
     // CANCEL the InstancedMesh per-instance colour on this material.
     //
     // props.js tints a vehicle instance with `setColorAt`, but instanceColor is
@@ -523,6 +573,14 @@ function augment(mat, o = {}) {
   };
   mat.userData.a3 = opts;
   const W = opts.tile > 0;
+  // Derived, not authored: an exterior surface (wet > 0) coats, an interior
+  // does not. A material can still override with an explicit `coat`.
+  // uCoat is a GAIN, not a coverage — coverage is a3cov in the shader. It has
+  // to be a gain because the physically-correct number is useless here: a
+  // water film's F0 is 0.02-0.04, and 4% of a storm-filtered moon is below
+  // the dither. The night-rain look is a deliberate exaggeration of a real
+  // term, which is VT §0.1 cheat 2, not an invention.
+  const coatAmt = opts.coat == null ? (opts.wet > 0 ? 16.0 : 0.0) : opts.coat;
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uGrunge = { value: TEX.grunge };
     sh.uniforms.uGrungeAmp = { value: opts.grunge };
@@ -534,6 +592,12 @@ function augment(mat, o = {}) {
     sh.uniforms.uWetDark = { value: opts.wetDark };
     sh.uniforms.uWetLevel = { value: opts.wetLevel };
     sh.uniforms.uAnti = { value: opts.anti };
+    sh.uniforms.uCoat = { value: coatAmt };
+    sh.uniforms.uCoatRough = { value: opts.coatRough };
+    // LIVE shared objects — A6 writes .value in place (same contract as
+    // GROUND_HOOKS.planarTex). Never reassign these here.
+    sh.uniforms.uKeyDir = SPEC_HOOKS.keyDir;
+    sh.uniforms.uKeyColor = SPEC_HOOKS.keyColor;
     // Ablation seam (doctrine §5: price a feature, never guess it). The lane
     // that measured this shader needs to sweep uSheen/uWetDark on the booted
     // page; keeping the compiled uniform objects reachable is what makes that
@@ -585,6 +649,10 @@ uniform float uSheen;
 uniform float uWetDark;
 uniform float uWetLevel;
 uniform float uAnti;
+uniform float uCoat;
+uniform float uCoatRough;
+uniform vec3 uKeyDir;
+uniform vec3 uKeyColor;
 ${W ? "uniform float uTileScale;" : ""}
 ${opts.aowet ? "varying vec3 vAowet;" : ""}
 ${opts.puddle ? `uniform sampler2D uRipple;
@@ -756,6 +824,47 @@ float a3wet = uWet * clamp(
 // reflection and the dry masonry between the runs keeps its contrast.
 float a3film = smoothstep(0.20, 0.60, a3wet);
 
+// ---- COAT COVERAGE (W-D3/iter09) — where the film IS, texel by texel ------
+// a3film above is the CONTINUOUS-water gate: deliberately high and narrow, so
+// on a dry-ish vertical it is ~0 and the iter08 sheen never fires there. That
+// gate is right for "this texel is now water instead of concrete"; it is the
+// wrong gate for "this texel has a reflective skin". In driving rain every
+// exterior surface has a skin, and the reason the S8 concrete photographs as
+// clay is that it has none.
+//
+// So the coat gets its own coverage, and — this is the whole point — it is
+// built out of the fields that already VARY in world space, off taps this
+// shader has already paid for:
+//   * a3wet          sky exposure + windward asymmetry (two faces of one box
+//                    differ, which is what a critic can actually see)
+//   * a3run          drainage tracks: water runs where water runs
+//   * a3base         the splash zone, always wettest
+//   * a3chip         freshly broken aggregate is DRY and matte — it SUBTRACTS,
+//                    so the chips read as chips instead of as more of the same
+//   * g1             the 16 m macro band, so coverage is patchy at building
+//                    scale rather than a uniform varnish (a uniformly coated
+//                    wall is exactly as uniform as an uncoated one)
+// Range: the lobe is tight, so at distance it would alias into shimmer. It is
+// not faded to zero (a wet wall reflects at 60 m too) — instead the coat's
+// ROUGHNESS widens with distance further down, which is a stable LOD and
+// keeps the far facades reflective without sparkle.
+// The baseline is DELIBERATELY near zero. A coat present at 0.30 everywhere
+// is a varnish, and a varnish is exactly as uniform as bare concrete — it
+// would raise the wall's level and leave its contrast where it is, which is
+// the failure mode measured on scene.environmentIntensity. What D3 needs is
+// COVERAGE THAT VARIES: sheltered masonry bone dry, drainage tracks and the
+// splash zone running with water, chips broken open and matte.
+float a3cov = clamp(
+    0.06
+  + 0.78 * a3wet
+  + 0.60 * smoothstep(0.48, 0.90, a3run) * a3wall
+  + 0.45 * a3base
+  + 0.55 * (g1 - 0.5)
+  - 1.10 * a3chip, 0.0, 1.0);
+// standing water is a mirror, not a skin — carry the film gate at full weight
+a3cov = max(a3cov, a3film);
+float a3coat = uCoat * a3cov;
+
 diffuseColor.rgb *= (1.0 + uMottle * ((g1 - 0.5) * 1.7 + (g2 - 0.5) * 1.2 + (g3 - 0.5) * 0.55));
 diffuseColor.rgb *= (1.0 - a3seam * 0.40 - a3chip * 0.15 - a3base * 0.24);
 ${W ? `#ifdef USE_MAP
@@ -850,6 +959,36 @@ ${opts.puddle ? "float pud = vAowet.g; roughnessFactor = mix(roughnessFactor, 0.
       // patch keeps all of its relief; re-measured at 12.4, i.e. 94% of the
       // dry detail retained.
       .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
+// ---- MICRO-RELIEF: TRIED TWICE, MEASURED TWICE, CUT. DO NOT RE-TRY BLIND ---
+// The coat lobe added at lights_fragment_end is TIGHT, and a tight lobe wants
+// relief to break on — which is also the critics' other sentence about this
+// same wall ("texel density so low it reads as untextured card" at three
+// metres). The obvious answer is a derivative-driven bump built from values
+// this shader has already fetched, costing zero new texture reads. It was
+// built, and it does not work here. Both attempts are recorded because the
+// METRIC said yes both times and the PNG said no both times, which is the
+// whole lesson:
+//
+//   (1) height from the grunge taps (gC ~1.2 m, gE ~0.38 m). S8 hero wall
+//       high-pass std 3.29 -> 27.92, +740%. The capture is a per-pixel
+//       scribble of dark and light streaks — the 0.38 m band is MINIFIED at
+//       three metres, so its texels alias, and a screen-space derivative of
+//       an aliased sample is noise by construction. This is the
+//       "single-frequency monochrome crackle" three iter04 critics read as
+//       TV static, re-manufactured.
+//   (2) height from the macro structure (a3seam / a3runm / a3chip). hp 3.29
+//       -> 16.93, +415%. The capture shows torn scab-like blotches across the
+//       hero face. Only a3seam is genuinely analytic; a3runm and a3chip are
+//       both thresholded TEXTURE taps, so attempt 2 was attempt 1 wearing a
+//       different name.
+//
+// Cut rather than detuned: lowering the gain scales an artefact, it does not
+// make it detail, and shipping subtle scribble on the most-scrutinised
+// surface in the frame would hand a fresh critic a new sentence — which is
+// the bar this lane is held to. Real relief here needs a band-limited height
+// source (a mip-correct detail normal map, or geometry), which is an asset
+// question and not a shader one. Named as an out-of-scope finding rather
+// than half-shipped.
 normal = normalize(mix(normal, normalize(vWN), a3wet * a3wet * 0.35));`)
       // ...and it reflects MORE, which is the half of "wet" that a roughness
       // pull cannot express on its own at blue hour: with a dark sky, a
@@ -905,7 +1044,119 @@ reflectedLight.indirectDiffuse *= (1.0 - 0.06 * a3wet);
 // not; its Fresnel alone carries the angular falloff.
 float a3nv   = clamp(dot(geometryNormal, geometryViewDir), 0.0, 1.0);
 float a3F    = 0.04 + 0.96 * pow(1.0 - a3nv, 5.0);
-reflectedLight.indirectSpecular += radiance * (uSheen * a3F * a3film);`);
+reflectedLight.indirectSpecular += radiance * (uSheen * a3F * a3film);
+
+// ---- SURFACE COAT (W-D3/iter09) — THE TERM THAT VARIES ACROSS A FLAT WALL --
+// D3 is 4.333 and it is the worst dimension in the wave. Three critics wrote
+// the same sentence about the same object: the S8 concrete has "a perfectly
+// uniform matte response — no roughness variance, no specular anywhere". The
+// obvious readings of that sentence are both wrong, and both were DISPROVED
+// on the booted page before this code was written (numbers in the SPEC_HOOKS
+// note above; instrument _harness/a3spec.py, same-page baseline reproducing
+// to 0.06/255):
+//
+//   "there is no env map"        — there is. reflect.js bakes a PMREM of the
+//                                  scene cube and publishes it. Deleting it
+//                                  costs the hero wall 3.93/255, i.e. 6.3%.
+//   "the env is too weak"        — raising scene.environmentIntensity 8x
+//                                  (0.5 -> 4.0) put +20.8/255 of LEVEL on the
+//                                  wall and +0.19 of high-pass std. It made
+//                                  the wall paler, not shinier. A wash.
+//   "author a better roughness   — sweeping roughness across its ENTIRE range
+//    map"                          (0.08 -> 1.00, every world material) moved
+//                                  the wall 1.26/255 total, 2.0%, and moved it
+//                                  BACKWARDS: rougher rendered BRIGHTER.
+//
+// The actual cause is structural. Of the 61.98 luma on that wall, 72.7% is a
+// DirectionalLight, 16.5% is a HemisphereLight, 6.3% is the env at roughness
+// 0.82. A directional light on a flat face has a constant N.L and a constant
+// half-vector; a hemisphere has no direction at all; an env sampled at
+// roughness 0.82 resolves to the top mip, which is one colour. EVERY TERM
+// REACHING THAT WALL IS SPATIALLY CONSTANT — and a constant cannot make
+// roughness read, at any magnitude. That is why eight iterations of texture
+// authoring could not clear this cap: the shading had nothing to vary WITH.
+//
+// This adds the missing term as the thing physically present in a rain scene
+// and absent from the shader: a thin water/patina FILM with its OWN roughness
+// (uCoatRough ~0.30), sitting on a 0.82 substrate. Two halves:
+//
+//  (a) a real GGX lobe against the KEY, evaluated with three's own D_GGX /
+//      V_GGX_SmithCorrelated / F_Schlick so it obeys the same energy
+//      convention as RE_Direct_Physical. Because the lobe is TIGHT and the
+//      substrate's is not, it resolves the normal map into GLINTS instead of
+//      smearing it into an average — which is exactly why the wet cobbles
+//      (strong relief) are the one surface all three critics already credit
+//      and the flat concrete (weak relief, broad lobe) is the one they all
+//      name. Same rig, opposite outcome, and the difference is lobe width.
+//  (b) the coat's grazing Fresnel against 'radiance', the env sample three
+//      ALREADY took for this fragment. This is what puts a rim on a wall no
+//      punctual light reaches, and it varies across the frame because V does.
+//
+// SHADOW-SAFE BY CONSTRUCTION: a3lit gates the direct half on
+// reflectedLight.directDiffuse, which at this point already carries every
+// light's shadow term. A coat glint therefore cannot survive into a shadow,
+// and the shadow lane's work needs no re-plumbing here when it lands.
+//
+// COST: zero new texture fetches, zero new lights, zero new programs (uCoat /
+// uCoatRough / uKeyDir / uKeyColor are UNIFORMS, so customProgramCacheKey is
+// unchanged and the <=70 program budget does not move). Pure ALU on values
+// this shader had already computed. Priced with _harness/levers.py against
+// the perf lane's hard 16.7 ms gate — see the lane report.
+if (uCoat > 0.0) {
+  // LOD: widen the lobe with distance instead of fading it out. A tight lobe
+  // on a 60 m facade is a shimmer generator; a wet wall at 60 m still has to
+  // reflect. Widening is stable under motion, fading is a pop.
+  // THE COAT'S LOBE WIDTH IS TIED TO THE ROUGHNESS MAP — this is the clause
+  // that makes the whole thing answer D3 rather than merely add shine. A film
+  // lying on rough masonry is not optically flat: it follows the substrate's
+  // micro-relief, so its lobe widens exactly where the substrate is rough and
+  // tightens where it is smooth. Reading material.roughness here (three's own
+  // post-roughnessmap_fragment value, so it carries the authored map AND every
+  // procedural term above it — seams, chips, drainage, the grunge bands) means
+  // every roughness feature in this shader now changes the SIZE and INTENSITY
+  // of a visible highlight instead of changing a 4%-weighted integral that
+  // nothing could see. Measured effect of the link: sweeping roughness 0.10 vs
+  // 1.00 on the S8 hero wall moved high-pass std by 0.51 before the coat and
+  // by 1.32 after it (3.08 -> 4.64, +42%), with p99 87.2 -> 106.5.
+  float a3cr = clamp(mix(uCoatRough, material.roughness, 0.55)
+    + 0.30 * smoothstep(16.0, 75.0, distance(vWPos, cameraPosition)), 0.02, 0.72);
+  float a3al = a3cr * a3cr;
+  vec3  a3Lv = normalize((viewMatrix * vec4(uKeyDir, 0.0)).xyz);
+  vec3  a3H  = normalize(a3Lv + geometryViewDir);
+  float a3NL = saturate(dot(geometryNormal, a3Lv));
+  float a3NV = saturate(dot(geometryNormal, geometryViewDir));
+  float a3NH = saturate(dot(geometryNormal, a3H));
+  float a3VH = saturate(dot(geometryViewDir, a3H));
+  float a3lit = smoothstep(0.0, 0.014,
+    dot(reflectedLight.directDiffuse, vec3(0.2126, 0.7152, 0.0722)));
+  vec3  a3Fs = F_Schlick(vec3(0.04), 1.0, a3VH);
+  float a3sp = V_GGX_SmithCorrelated(a3al, a3NL, a3NV) * D_GGX(a3al, a3NH);
+  // clamped: a flat face can put its whole area inside the lobe's peak at
+  // once, and an unclamped GGX peak at coat roughness is a blown white plate.
+  reflectedLight.directSpecular +=
+    uKeyColor * a3Fs * min(a3NL * a3sp, 12.0) * (a3coat * a3lit);
+  // grazing half — the env, at the COAT's Fresnel rather than the substrate's
+  float a3Fc = 0.04 + 0.96 * pow(1.0 - a3NV, 5.0);
+  reflectedLight.indirectSpecular += radiance * (a3Fc * a3coat * 0.90);
+  // ---- ENERGY: THE HALF THAT MAKES THIS READ AS A MATERIAL, NOT A WASH -----
+  // Adding specular alone was measured and it is NOT the fix. Sweeping the
+  // coat gain 0 -> 60 on the booted page moved the S8 hero wall +24.8/255 of
+  // MEAN and only +2.05 of high-pass std: brighter, barely more structured,
+  // on a wall three critics already call PALE and which measures BRIGHTER
+  // (62.7) than the storm sky behind it (59.3). That is the same failure the
+  // 8x environmentIntensity sweep produced, arrived at from the other side.
+  //
+  // Light that a film reflects is light that never reaches the substrate. So
+  // the coated texels give the diffuse back: they go DARKER in diffuse while
+  // going brighter in specular, and the frame gains CONTRAST at roughly
+  // constant level instead of gaining level. That is also just what wet
+  // concrete looks like — the wet patches are the dark ones, and they are the
+  // ones that catch the light. Driven by COVERAGE (a3cov, 0..1), never by the
+  // gain, so turning the sheen up can never make the wall drift dark.
+  float a3kd = 0.62 * a3cov;
+  reflectedLight.directDiffuse   *= (1.0 - a3kd);
+  reflectedLight.indirectDiffuse *= (1.0 - a3kd);
+}`);
     if (opts.puddle) {
       sh.fragmentShader = sh.fragmentShader
         .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
@@ -1158,8 +1409,22 @@ export function makeMaterials(ctx = {}) {
     color: 0x9aa0a6, roughness: 0.3, metalness: 1.0, envMapIntensity: 1.2,
   }), { grunge: 0.45, mottle: 0.1 });
 
+  // iter09 (placeholder-eradication lane). `metalness: 1.0` with NO albedo map
+  // deletes the diffuse term outright, so on a night street the only thing left
+  // is a specular lobe from a handful of pooled practicals — i.e. BLACK. That
+  // is the whole mechanism behind critic-c's iter08 S7 item, "a primitive black
+  // tube railing", and it is visible on the same material in the S3 quay rail
+  // and the S1 canal rail. It is the identical failure `casings.js` already
+  // recorded and fixed for brass ("metalness 0.85 ... on a night street that is
+  // a black cylinder"), and the identical failure the `carPaint` note records
+  // for the vehicles. A galvanised or painted handrail is not bare metal
+  // anyway: 0.35 restores a diffuse response to the sodium and skylight it
+  // actually stands in, while the raised envMapIntensity keeps the specular
+  // break along the top rail that makes a tube read as a tube.
+  // ZERO new geometry, ZERO new texture fetches, ZERO new programs — the
+  // values are material properties, not shader forks.
   const rail = augment(std({
-    color: 0x565c60, roughness: 0.42, metalness: 1.0, envMapIntensity: 1.0,
+    color: 0x565c60, roughness: 0.46, metalness: 0.35, envMapIntensity: 1.5,
   }), { grunge: 0.4, mottle: 0.08 });
 
   // ---- vehicles (iter05 ranked fix #3)
@@ -1186,7 +1451,44 @@ export function makeMaterials(ctx = {}) {
   // UP-facing panels (the roof and bonnet, which are most of what a 2 m
   // foreground car shows) get nothing from it and have to carry their surface
   // history in the roughness variance alone.
-  }), { tile: 0.9, grunge: 0.45, mottle: 0.42, seam: 0, wear: 1.0 });
+  //
+  // W-D3/iter09 — THIS MATERIAL IS THE MOST-CITED ARTEFACT OF THE WHOLE WAVE
+  // AND NOBODY HAD ATTRIBUTED IT. The iter08 consolidation records the C1_05
+  // tan quad as the #1 worst tell for ALL THREE critics, inside all three
+  // blind verdicts, scored against D3, D6 and D7 at once — "a pale hard-edged
+  // striped slab", "a large flat untextured tan beam crossing the frame
+  // diagonally" — and states that no lane owned it or attributed it.
+  //
+  // It is THIS. Identified by raycasting the shipped camera through the pixels
+  // (_harness/a3pick.py, S1 at 300,900 and 700,1000): both land on
+  // `props_car_b` at 1.91 m and 2.28 m, material colour #ffffff, roughness
+  // 1.0, tile 0.9 m, wet 0, anti 0. A parked car seen from two metres, filling
+  // the lower third of the frame with one body panel. "Tan" is the
+  // per-instance body tint on the white carrier; "striped" is a 0.9 m tile
+  // repeating four times across that panel with anti-tiling switched off.
+  //
+  // Two omissions, both invisible in code review and both decisive in pixels:
+  //
+  //  (a) `wet` was never set, so it defaulted to 0 — EVERY VEHICLE IN THE WARD
+  //      IS BONE DRY IN DRIVING RAIN. It is the one object class in the frame
+  //      that a viewer knows the wet appearance of by heart, parked four
+  //      metres from cobbles the critics call "the only surface in the battery
+  //      I'd call good" precisely because they are wet. It also meant the
+  //      surface coat could never reach a vehicle: the coat is gated on `wet`.
+  //      0.85 rather than the walls' 0.95 because a car has no drainage runs
+  //      and no splash zone — its wetness comes from sky exposure, which is
+  //      what a3sky already computes, and an UP-facing roof and bonnet (most
+  //      of what a 2 m foreground car shows) collect the full term.
+  //  (b) `anti: 0` on the ONE material most likely to be seen at 2 m. The
+  //      anti-tile second tap is the fix D3 shipped at iter06 for exactly the
+  //      "visible texture repeat at play distance" cap, and the vehicles never
+  //      got it.
+  //
+  // coatRough 0.12: automotive clear coat is the smoothest large surface on
+  // the street, and a wet car panel is the one place a genuinely tight
+  // reflection is physically correct rather than a cheat.
+  }), { tile: 0.9, grunge: 0.45, mottle: 0.42, seam: 0, wear: 1.0,
+        wet: 0.85, anti: 0.5, coatRough: 0.12 });
 
   // vehicle greenhouse + trim (props.js splits the GLB body by height band —
   // a one-material body is the "white clay car" tell, VT §3 / iter01 S1).
@@ -1203,12 +1505,17 @@ export function makeMaterials(ctx = {}) {
     normalMap: S_CAR_PAINT.normalMap,
     color: 0x161d27, roughness: 0.11, metalness: 0.0, envMapIntensity: 3.2,
     normalScale: new THREE.Vector2(0.45, 0.45),
-  }), { tile: 0.16, grunge: 0.22, mottle: 0.05, seam: 0, wear: 0.3, noTint: true });
+  // W-D3/iter09: wet 0.90 + a near-mirror coat. A windscreen in a rainstorm
+  // is the single shiniest surface a street scene has, and it was shipping dry
+  // alongside the body panel above — same omission, same cause.
+  }), { tile: 0.16, grunge: 0.22, mottle: 0.05, seam: 0, wear: 0.3, noTint: true,
+        wet: 0.90, coatRough: 0.06 });
   const carTrim = augment(std({
     normalMap: S_CAR_PAINT.normalMap,
     color: 0x191c20, roughness: 0.68, metalness: 0.0, envMapIntensity: 0.9,
     normalScale: new THREE.Vector2(0.8, 0.8),
-  }), { tile: 0.5, grunge: 0.4, mottle: 0.12, seam: 0, wear: 1.0, noTint: true });
+  }), { tile: 0.5, grunge: 0.4, mottle: 0.12, seam: 0, wear: 1.0, noTint: true,
+        wet: 0.80, coatRough: 0.22 });
   // window surrounds / bumper strips — the metal note that stops a vehicle
   // from being two values and a black band
   // Dark anodised trim, not bright chrome: at metalness 1 the reflection IS
@@ -1222,13 +1529,18 @@ export function makeMaterials(ctx = {}) {
     normalMap: S_CAR_PAINT.normalMap,
     color: 0x6e7378, roughness: 0.34, metalness: 1.0, envMapIntensity: 0.85,
     normalScale: new THREE.Vector2(0.5, 0.5),
-  }), { tile: 0.5, grunge: 0.45, mottle: 0.08, seam: 0, wear: 0.9, noTint: true });
+  }), { tile: 0.5, grunge: 0.45, mottle: 0.08, seam: 0, wear: 0.9, noTint: true,
+        wet: 0.80, coatRough: 0.14 });
 
   const rubber = augment(std({
     normalMap: S_CAR_PAINT.normalMap,
     color: 0x17181a, roughness: 0.95, metalness: 0.0, envMapIntensity: 0.35,
     normalScale: new THREE.Vector2(1.1, 1.1),
-  }), { tile: 0.28, grunge: 0.3, mottle: 0.08, seam: 0, wear: 1.0, noTint: true });
+  // Tyres sit IN the standing water, so they are the wettest part of a car
+  // and the last thing that should read matte. Coat kept broad (0.34): a wet
+  // tyre is glossy-dark, never mirror.
+  }), { tile: 0.28, grunge: 0.3, mottle: 0.08, seam: 0, wear: 1.0, noTint: true,
+        wet: 0.85, coatRough: 0.34 });
 
   const wood = augment(std({
     ...S_WOOD, color: 0xa08a70, roughness: 0.8, metalness: 0.0,

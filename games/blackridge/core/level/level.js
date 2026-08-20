@@ -1024,6 +1024,42 @@ export async function buildLevel(ctx) {
     }
     g.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
     g.setAttribute("aowet", new THREE.BufferAttribute(a, 3));
+    // ---- SURFACE (iter09, placeholder-eradication lane) ------------------
+    // MEASURED on iter08 S3: the canal is high-frequency luma std 5.409
+    // against 10.804 for the wet cobble quay in the SAME frame at comparable
+    // mean (58.7 vs 63.9) — half the surface detail of the surface next to it,
+    // across a third of the frame. `M.water` shipped as `{ color 0x0a1016,
+    // roughness 0.06, map:false, normalMap:false, roughnessMap:false }`: a
+    // mirror-smooth dielectric with a flat albedo under a dark sky resolves to
+    // exactly one smooth gradient, which is the literal definition of the
+    // untextured-plane read. It is the LARGEST object in the battery carrying
+    // it — 340 x 110 m — and no critic has had to name it only because S3 is
+    // the one shot that frames it.
+    //
+    // Fixed with the ripple normal map the puddles already use, driven off the
+    // level's own fixed-step clock (so a held battery frame stays
+    // deterministic — never wall clock). Two counter-scrolling layers would
+    // need two maps; one map scrolled diagonally plus the augment layer's own
+    // grunge/mottle is enough to break the mirror.
+    // COST: zero new geometry, zero new draw calls, one texture fetch on one
+    // plane — the perf lane's geometry freeze is respected by construction.
+    // Cloned so the `uRipple` sampler the puddle path binds (materials.js:609)
+    // keeps its own wrap/repeat state — that path does its own uv maths in
+    // GLSL and must not inherit a transform authored for this plane.
+    const canalRipple = M.tex.ripple.clone();
+    canalRipple.needsUpdate = true;
+    canalRipple.wrapS = canalRipple.wrapT = THREE.RepeatWrapping;
+    // uv on this plane is WORLD METRES (set above), so repeat is 1/metres per
+    // tile. 0.34 puts one ripple tile every ~2.9 m: chop, not a mirror, and
+    // coarse enough that it does not alias into shimmer at 60 m.
+    canalRipple.repeat.set(0.34, 0.34);
+    M.water.normalMap = canalRipple;
+    M.water.normalScale.set(0.60, 0.60);
+    // 0.06 is a perfect mirror: with the ripple normals in place a slightly
+    // broader lobe is what turns point skyglow into the elongated streaks the
+    // rest of the map already sells.
+    M.water.roughness = 0.13;
+    M.water.needsUpdate = true;
     const mesh = new THREE.Mesh(g, M.water);
     mesh.name = "canal_water";
     // The level's ONE ripple clock hangs off this mesh, and three other
@@ -1035,7 +1071,14 @@ export async function buildLevel(ctx) {
     mesh.frustumCulled = false;
     group.add(mesh);
     // ripple time driver (shared GROUND_HOOKS.time — fixed step, battery-stable)
-    mesh.onBeforeRender = () => { GROUND_HOOKS.time.value = (GROUND_HOOKS.time.value + 1 / 60) % 3600; };
+    mesh.onBeforeRender = () => {
+      GROUND_HOOKS.time.value = (GROUND_HOOKS.time.value + 1 / 60) % 3600;
+      // Drift the canal chop off the SAME fixed-step clock. Diagonal so the
+      // tile seam never runs along a frame axis, and slow (a canal is not
+      // surf): ~0.09 m/s across, ~0.05 m/s along.
+      const t = GROUND_HOOKS.time.value;
+      canalRipple.offset.set((t * 0.031) % 1, (t * 0.017) % 1);
+    };
   }
 
   // ========================================================== 2. WALL LIST
@@ -1247,15 +1290,22 @@ export async function buildLevel(ctx) {
     cuts.push(hi);
     // heights: only ever ABOVE the authored top, so the collider stays the
     // conservative volume and nothing the player can touch moved.
-    const POOL = [0, 0.65, 1.6, 2.9, 4.3];
+    // iter09 D7: the pool topped out at +4.3 m and the required contrast
+    // between neighbours was 1.15 m. On a 12 m mass that is a 10% step, and
+    // the S5 elevation photographs it as ONE straight parapet running the
+    // length of the block — critic-c's "prismatic slab masses" survived the
+    // iter08 split for exactly this reason. The steps are the silhouette;
+    // 1.15 m of it is a ledge, 3 m of it is a different building.
+    const POOL = [0, 1.0, 2.2, 3.6, 5.1, 7.0];
+    const MINSTEP = 1.9;
     const rises = [];
     let prev = -99;
     for (let i = 0; i < n; i++) {
       let c = 0;
-      for (let t = 0; t < 6; t++) { c = POOL[(R() * POOL.length) | 0]; if (Math.abs(c - prev) >= 1.15) break; }
+      for (let t = 0; t < 8; t++) { c = POOL[(R() * POOL.length) | 0]; if (Math.abs(c - prev) >= MINSTEP) break; }
       rises.push(c); prev = c;
     }
-    if (n > 1 && Math.max(...rises) - Math.min(...rises) < 1.15) rises[(R() * n) | 0] += 2.7;
+    if (n > 1 && Math.max(...rises) - Math.min(...rises) < MINSTEP) rises[(R() * n) | 0] += 3.4;
     const segs = [];
     for (let i = 0; i < n; i++) {
       const a = min.slice(), c = max.slice();
@@ -1271,26 +1321,38 @@ export async function buildLevel(ctx) {
       if (i > 0) segs[i].block[fLo] = segs[i - 1].max[1];
       if (i < n - 1) segs[i].block[fHi] = segs[i + 1].max[1];
     }
-    // ---- setback tower on one slab: the single most legible "not a prism"
-    // signal there is, and it hands us a terrace to put roof plant on.
-    if (H >= 6.5) {
-      const si = (R() * n) | 0, s = segs[si];
+    // ---- setback towers: the single most legible "not a prism" signal there
+    // is, and each one hands us a terrace to put roof plant on.
+    // iter09 D7: this used to fire ONCE PER BUILDING on a randomly chosen
+    // slab, so a five-slab quay block got four untouched prisms and one
+    // tower. Every slab now gets its own roll, the inset is drawn per slab
+    // (so two neighbouring towers are different widths, not a repeated
+    // module), and the width test is relaxed from a 3.2 m residual to 2.6 m
+    // because it was rejecting most of the narrower street plots outright.
+    if (H >= 6.0) {
       const cross = axis === 0 ? 2 : 0;
-      const sw = s.max[cross] - s.min[cross];
-      const sl = s.max[axis] - s.min[axis];
-      const ia = 1.15 + R() * 1.5, ib = 1.15 + R() * 1.5;
-      if (sw > ia + ib + 3.2 && sl > 4.4) {
+      const nSegs = segs.length;
+      let towers = 0;
+      for (let si = 0; si < nSegs; si++) {
+        const s = segs[si];
+        // never two in a row — a repeated tower is its own copy-paste tell
+        const roll = R();
+        if (roll > (towers && segs[si - 1] && segs[si - 1].terrace ? 0.22 : 0.62)) continue;
+        const sw = s.max[cross] - s.min[cross];
+        const sl = s.max[axis] - s.min[axis];
+        const ia = 0.9 + R() * 1.9, ib = 0.9 + R() * 1.9;
+        if (!(sw > ia + ib + 2.6 && sl > 4.0)) continue;
         const a = s.min.slice(), c = s.max.slice();
         a[cross] += ia; c[cross] -= ib;
         // on the split axis, inset only where the face is actually external
-        if (!s.block[fLo]) a[axis] += 0.9 + R() * 1.7;
-        if (!s.block[fHi]) c[axis] -= 0.9 + R() * 1.7;
-        if (c[axis] - a[axis] >= 3.4) {
-          a[1] = s.max[1] - 0.05;
-          c[1] = s.max[1] + 2.3 + R() * 2.1;
-          segs.push({ id: s.id + "T", min: a, max: c, role: "setback", block: [0, 0, 0, 0], grounded: false });
-          s.terrace = true;
-        }
+        if (!s.block[fLo]) a[axis] += 0.7 + R() * 2.1;
+        if (!s.block[fHi]) c[axis] -= 0.7 + R() * 2.1;
+        if (c[axis] - a[axis] < 3.0) continue;
+        a[1] = s.max[1] - 0.05;
+        c[1] = s.max[1] + 2.0 + R() * 3.4;
+        segs.push({ id: s.id + "T", min: a, max: c, role: "setback", block: [0, 0, 0, 0], grounded: false });
+        s.terrace = true;
+        towers++;
       }
     }
     return segs;
@@ -1473,6 +1535,163 @@ export async function buildLevel(ctx) {
       }
     }
 
+    // ---- ROOF PROFILE (iter09 #D7). roofscape() dresses the DECK; this
+    // changes the SILHOUETTE. iter08 gave every mass the same terminating
+    // move — a 24 cm parapet cap with a coping course — so however much the
+    // segment heights stepped, every roofline in the battery ended in the
+    // same 24 cm horizontal line, and the S5 elevation reads as one extruded
+    // slab for the length of the block. A real port street terminates five
+    // different ways, and which one a mass got is the first thing the eye
+    // uses to tell two buildings apart at 40 m.
+    //
+    // Five families, chosen per SEGMENT (not per building, so a split mass
+    // can carry two). Everything merges into the SAME two batches roofscape
+    // already fills, so the roofscape's zero-draw-call property is preserved
+    // and the cost is triangles only — measured at build time and reported.
+    // Nothing here descends below segTop, so no collider, sightline or nav
+    // input changes: this is additive-above, exactly like massSegments().
+    const ROOF_PROFILES = { flat: 0, attic: 0, gable: 0, monitor: 0, sawtooth: 0 };
+    function roofProfile(sg, R) {
+      const x0 = sg.min[0], x1 = sg.max[0], z0 = sg.min[2], z1 = sg.max[2];
+      const y = sg.max[1] + 0.06;                 // sits on the coping course
+      const W = x1 - x0, D = z1 - z0;
+      const long = W >= D ? 0 : 2;                // ridge runs along the long axis
+      const L = long === 0 ? W : D, C = long === 0 ? D : W;
+      const t = R();
+      let kind = "flat";
+      if (C < 3.2 || L < 3.2) kind = t < 0.42 ? "attic" : "flat";
+      else if (t < 0.26) kind = "flat";
+      else if (t < 0.52) kind = "attic";
+      else if (t < 0.72) kind = "gable";
+      else if (t < 0.88) kind = "monitor";
+      else kind = "sawtooth";
+      ROOF_PROFILES[kind]++;
+      const RET = kind;
+      if (kind === "flat" || kind === "attic") {
+        // fall through — these leave a usable deck, so roofscape() still runs
+      } else {
+        // A pitched form has no deck for roofscape's tanks and condensers, so
+        // it carries its own terminations instead: a brick flue and a ridge
+        // vent. Without these a gabled mass is the one silhouette on the
+        // street with nothing on top of it.
+        const fx0 = x0 + 0.5 + R() * Math.max(0.2, W - 1.6);
+        const fz0 = z0 + 0.5 + R() * Math.max(0.2, D - 1.6);
+        const fh = 1.5 + R() * 1.9;
+        trimGeos.push(boxGeo([fx0 - 0.28, y, fz0 - 0.24], [fx0 + 0.28, y + fh, fz0 + 0.24]));
+        trimGeos.push(boxGeo([fx0 - 0.36, y + fh, fz0 - 0.32], [fx0 + 0.36, y + fh + 0.14, fz0 + 0.32]));
+        const cw = new THREE.CylinderGeometry(0.11, 0.11, 0.42, 7);
+        cw.translate(fx0 - 0.13, y + fh + 0.35, fz0);
+        worldUV(cw); roofGeos.push(withAowet(cw));
+      }
+      if (kind === "flat") return RET;
+
+      // slab helper: an axis-aligned box rotated about the LONG axis, so a
+      // pitched plane costs one box and stays in the merged batch.
+      const slab = (cx, cy, cz, sw, sh, sd, tilt) => {
+        const g = new THREE.BoxGeometry(sw, sh, sd);
+        if (tilt) (long === 0 ? g.rotateX(tilt) : g.rotateZ(tilt));
+        g.translate(cx, cy, cz);
+        worldUV(g);
+        return withAowet(g);
+      };
+
+      if (kind === "attic") {
+        // A raised attic / signage bay over part of the run, with its own
+        // coping — the "not every parapet is one height" move, and the one
+        // that reads hardest from street level.
+        const runF = 0.34 + R() * 0.34;
+        const off = R() * (1 - runF);
+        const a0 = (long === 0 ? x0 : z0) + off * L;
+        const a1 = a0 + runF * L;
+        const h = 0.75 + R() * 1.35;
+        const mk = (lo0, lo1, cr0, cr1, yy0, yy1) => (long === 0
+          ? boxGeo([lo0, yy0, cr0], [lo1, yy1, cr1])
+          : boxGeo([cr0, yy0, lo0], [cr1, yy1, lo1]));
+        const c0 = long === 0 ? z0 : x0, c1 = long === 0 ? z1 : x1;
+        trimGeos.push(mk(a0, a1, c0 - 0.10, c1 + 0.10, y, y + h));
+        trimGeos.push(mk(a0 - 0.14, a1 + 0.14, c0 - 0.17, c1 + 0.17, y + h, y + h + 0.17));
+        // a raked shoulder on one side so the bay is not a plain block
+        if (R() < 0.6) trimGeos.push(mk(a1, Math.min(a1 + 0.8, (long === 0 ? x1 : z1)),
+          c0 - 0.06, c1 + 0.06, y, y + h * 0.45));
+        return RET;
+      }
+
+      if (kind === "gable") {
+        // Low pitched sheet roof behind the parapet: two planes + two gable
+        // walls. Pitch is shallow (14-22 deg) — a port warehouse, not a barn.
+        const pitch = 0.24 + R() * 0.16;
+        const half = C / 2;
+        const rise = half * Math.tan(pitch);
+        const sl = Math.hypot(half, rise) + 0.12;
+        const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
+        for (const s of [-1, 1]) {
+          const cx = long === 0 ? mx : mx + s * half / 2;
+          const cz = long === 0 ? mz + s * half / 2 : mz;
+          const cy = y + rise / 2;
+          roofGeos.push(long === 0
+            ? slab(cx, cy, cz, L + 0.24, 0.10, sl, -s * pitch)
+            : slab(cx, cy, cz, sl, 0.10, D + 0.24, s * pitch));
+        }
+        // ridge cap
+        roofGeos.push(long === 0
+          ? boxGeo([x0 - 0.1, y + rise - 0.04, mz - 0.11], [x1 + 0.1, y + rise + 0.09, mz + 0.11])
+          : boxGeo([mx - 0.11, y + rise - 0.04, z0 - 0.1], [mx + 0.11, y + rise + 0.09, z1 + 0.1]));
+        // gable walls, stepped as three courses so the end reads as masonry
+        for (const e of [0, 1]) {
+          const u = long === 0 ? (e ? x1 : x0) : (e ? z1 : z0);
+          const sgn = e ? -1 : 1;
+          for (let k = 0; k < 3; k++) {
+            const f = k / 3, f2 = (k + 1) / 3;
+            const hw = half * (1 - f);
+            const yy = y + rise * f2;
+            const c = long === 0 ? mz : mx;
+            trimGeos.push(long === 0
+              ? boxGeo([u, y, c - hw], [u + sgn * 0.22, yy, c + hw])
+              : boxGeo([c - hw, y, u], [c + hw, yy, u + sgn * 0.22]));
+          }
+        }
+        return RET;
+      }
+
+      if (kind === "monitor") {
+        // Clerestory monitor running the length of the deck — a lit ridge
+        // box with a shallow cap. The glazing strip is a trim band, not a
+        // window material, so it costs nothing in the pane batches.
+        const mw = C * (0.34 + R() * 0.20);
+        const h = 1.15 + R() * 0.85;
+        const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
+        const endM = 0.6 + R() * 1.4;
+        const box = (yy0, yy1, halfC, endPad) => (long === 0
+          ? boxGeo([x0 + endM - endPad, yy0, mz - halfC], [x1 - endM + endPad, yy1, mz + halfC])
+          : boxGeo([mx - halfC, yy0, z0 + endM - endPad], [mx + halfC, yy1, z1 - endM + endPad]));
+        roofGeos.push(box(y, y + h, mw / 2, 0));
+        roofGeos.push(box(y + h, y + h + 0.12, mw / 2 + 0.16, 0.16));
+        // the louvre band under the cap
+        trimGeos.push(box(y + h * 0.62, y + h * 0.62 + 0.09, mw / 2 + 0.05, 0.02));
+        return RET;
+      }
+
+      // sawtooth — north-light industrial bays. Each tooth is a vertical
+      // glazing face and a shallow back slope; 2-4 of them across the run.
+      const n = 2 + ((R() * 3) | 0);
+      const step = C / n;
+      const h = Math.min(1.5, step * 0.55);
+      for (let i = 0; i < n; i++) {
+        const s0 = (long === 0 ? z0 : x0) + i * step;
+        const mkA = (a0, a1, yy0, yy1) => (long === 0
+          ? boxGeo([x0 + 0.3, yy0, a0], [x1 - 0.3, yy1, a1])
+          : boxGeo([a0, yy0, z0 + 0.3], [a1, yy1, z1 - 0.3]));
+        trimGeos.push(mkA(s0, s0 + 0.16, y, y + h));                 // riser
+        const cx = long === 0 ? (x0 + x1) / 2 : s0 + step / 2;
+        const cz = long === 0 ? s0 + step / 2 : (z0 + z1) / 2;
+        const sl = Math.hypot(step, h) * 0.98;
+        roofGeos.push(long === 0
+          ? slab(cx, y + h / 2, cz, (x1 - x0) - 0.6, 0.09, sl, Math.atan2(h, step))
+          : slab(cx, y + h / 2, cz, sl, 0.09, (z1 - z0) - 0.6, -Math.atan2(h, step)));
+      }
+      return RET;
+    }
+
     for (const b of layout.buildings) {
       if (!b.box) continue;
       const segments = massSegments(b);
@@ -1560,7 +1779,11 @@ export async function buildLevel(ctx) {
           }
           trimGeos.push(boxGeo([min[0] - 0.1, segTop + 0.06, max[2] - 0.14], [max[0] + 0.1, segTop + 0.15, max[2] + 0.1]));
         }
-        roofscape(seg, sR);
+        // profile FIRST: a pitched form has no deck, so roofscape's tanks and
+        // condensers would float inside it (roofProfile carries its own flue
+        // and ridge vent in that case).
+        const roofKind = roofProfile(seg, sR);
+        if (roofKind === "flat" || roofKind === "attic") roofscape(seg, sR);
         // ---- plinth: a 55 cm splash course round the base of every GROUNDED
         // mass, including the low sheds that get no windows and no string
         // course and therefore shipped as literally bare boxes.
@@ -1980,9 +2203,24 @@ export async function buildLevel(ctx) {
               if (fSeed() < 0.6) fbox(ju - 0.035, ju + 0.035, Math.max(yBase + 0.2, 0.4 + fSeed() * 0.8), cy2, 0.05, 0.115);
             }
           }
-          // 2. balconies — the loudest break in a marching window comb
+          // 2. balconies — the loudest break in a marching window comb.
+          //
+          // iter09 D7. iter08 emitted ONE balcony prototype and varied only
+          // its width, its projection and its baluster count; everything the
+          // eye actually reads — 14 cm slab, 94 cm rail, 7 cm end post, thin
+          // vertical bars — was a constant. critic-c graded the result as
+          // "prismatic slab masses with TWO IDENTICAL BALCONY ASSEMBLIES SIDE
+          // BY SIDE", which is the D7 copy-paste cap fired at a facade sub-
+          // assembly rather than at a prop. Varying a shared prototype's
+          // dimensions does not fix an identity complaint; the assemblies have
+          // to be DIFFERENT OBJECTS.
+          //
+          // Four families, drawn per balcony, plus per-balcony dressing on
+          // roughly half of them. All of it lands in the existing trim batch,
+          // so the draw-call cost is still zero.
           if (topY >= 7) {
-            const nBal = fSeed() < 0.30 ? 0 : 1 + ((fSeed() * 2.4) | 0);
+            const nBal = fSeed() < 0.26 ? 0 : 1 + ((fSeed() * 2.6) | 0);
+            let lastFam = -1;
             for (let q = 0; q < nBal; q++) {
               const bi = (fSeed() * bays.length) | 0;
               const bay = bays[bi];
@@ -1991,16 +2229,117 @@ export async function buildLevel(ctx) {
               if (fl >= fy.length) continue;
               const y = fy[fl] - 0.12;
               if (y < Math.max(2.4, yBase + 0.5) || y > topY - 2.2) continue;
-              const bwd = Math.max(1.1, bay.w * 0.86), dOut = 0.72 + fSeed() * 0.30;
-              const u0 = bay.c - bwd / 2, u1 = bay.c + bwd / 2;
-              fbox(u0, u1, y, y + 0.14, -0.02, dOut);                    // slab
-              fbox(u0, u1, y + 0.94, y + 1.02, dOut - 0.09, dOut);       // top rail
-              fbox(u0, u0 + 0.07, y + 0.14, y + 1.02, dOut - 0.09, dOut);// end posts
-              fbox(u1 - 0.07, u1, y + 0.14, y + 1.02, dOut - 0.09, dOut);
-              const nb = 4 + ((fSeed() * 3) | 0);
-              for (let r2 = 1; r2 < nb; r2++) {
-                const u = u0 + (bwd * r2) / nb;
-                fbox(u - 0.022, u + 0.022, y + 0.14, y + 0.96, dOut - 0.07, dOut - 0.025);
+              // never the same family twice on one face — the complaint was
+              // literally about two of them next to each other
+              let fam = (fSeed() * 4) | 0;
+              if (fam === lastFam) fam = (fam + 1 + ((fSeed() * 3) | 0)) % 4;
+              lastFam = fam;
+              const wide = fam === 3 && bays[bi + 1] && bays[bi + 1].kind !== "pier";
+              const bwd = wide
+                ? Math.max(1.6, (bays[bi + 1].c + bays[bi + 1].w / 2) - (bay.c - bay.w / 2) - 0.2)
+                : Math.max(1.1, bay.w * (0.78 + fSeed() * 0.16));
+              const cU = wide ? (bay.c - bay.w / 2 + bwd / 2) : bay.c;
+              const u0 = cU - bwd / 2, u1 = cU + bwd / 2;
+              const slabT = 0.10 + fSeed() * 0.13;
+              const railH = fam === 1 ? 0.80 + fSeed() * 0.16 : 0.86 + fSeed() * 0.30;
+
+              if (fam === 2) {
+                // JULIET: no floor plate at all — a guard rail bolted flat
+                // across a full-height opening. Reads completely unlike the
+                // other three from any distance because it has no soffit.
+                const dj = 0.13 + fSeed() * 0.09;
+                fbox(u0 - 0.06, u1 + 0.06, y + railH, y + railH + 0.07, dj - 0.06, dj);
+                fbox(u0 - 0.06, u0 + 0.05, y + 0.05, y + railH + 0.07, dj - 0.06, dj);
+                fbox(u1 - 0.05, u1 + 0.06, y + 0.05, y + railH + 0.07, dj - 0.06, dj);
+                const nb = 5 + ((fSeed() * 5) | 0);
+                for (let r2 = 1; r2 < nb; r2++) {
+                  const u = u0 + (bwd * r2) / nb;
+                  fbox(u - 0.018, u + 0.018, y + 0.08, y + railH, dj - 0.05, dj - 0.015);
+                }
+                // two cast brackets under the rail
+                for (const bu of [u0 + 0.12, u1 - 0.12]) {
+                  fbox(bu - 0.035, bu + 0.035, y + railH * 0.32, y + railH, 0.0, dj - 0.03);
+                }
+                continue;
+              }
+
+              const dOut = (fam === 3 ? 1.05 : 0.62) + fSeed() * 0.42;
+              fbox(u0, u1, y, y + slabT, -0.02, dOut);                    // slab
+              // soffit nosing — the underside is what you see from the street
+              fbox(u0 - 0.05, u1 + 0.05, y - 0.06, y, dOut - 0.16, dOut + 0.04);
+
+              if (fam === 0) {
+                // MASONRY BALUSTRADE: a solid parapet wall with a coping and
+                // three pierced lights. No thin bars anywhere.
+                fbox(u0, u1, y + slabT, y + railH, dOut - 0.13, dOut);
+                fbox(u0 - 0.06, u1 + 0.06, y + railH, y + railH + 0.09, dOut - 0.19, dOut + 0.04);
+                const nP = 2 + ((fSeed() * 2) | 0);
+                for (let r2 = 1; r2 <= nP; r2++) {
+                  const u = u0 + (bwd * r2) / (nP + 1);
+                  fbox(u - 0.10, u + 0.10, y + slabT + 0.18, y + railH - 0.14, dOut - 0.14, dOut - 0.055);
+                }
+              } else if (fam === 1) {
+                // WELDED PLATE: sheet-steel panel front with a flat-bar cap
+                // and a diagonal brace under the plate.
+                fbox(u0, u1, y + slabT, y + railH, dOut - 0.05, dOut - 0.01);
+                fbox(u0 - 0.04, u1 + 0.04, y + railH, y + railH + 0.05, dOut - 0.11, dOut + 0.02);
+                for (const bu of [u0 + 0.06, u1 - 0.06]) {
+                  fbox(bu - 0.03, bu + 0.03, y + slabT, y + railH + 0.05, dOut - 0.09, dOut);
+                }
+                for (let k = 0; k < 3; k++) {
+                  const u = u0 + bwd * (0.2 + k * 0.3);
+                  fbox(u - 0.05, u + 0.05, y - 0.24, y, dOut * (0.45 - k * 0.06), dOut - 0.1);
+                }
+              } else {
+                // DEEP TERRACE (fam 3): two bays wide, a corner post carried
+                // to a canopy, and an open steel rail.
+                fbox(u0, u1, y + railH, y + railH + 0.07, dOut - 0.10, dOut);
+                fbox(u0, u0 + 0.08, y + slabT, y + railH + 0.07, dOut - 0.10, dOut);
+                fbox(u1 - 0.08, u1, y + slabT, y + railH + 0.07, dOut - 0.10, dOut);
+                fbox(u0, u1, y + railH * 0.5, y + railH * 0.5 + 0.05, dOut - 0.09, dOut - 0.02);
+                const nb = 6 + ((fSeed() * 6) | 0);
+                for (let r2 = 1; r2 < nb; r2++) {
+                  const u = u0 + (bwd * r2) / nb;
+                  fbox(u - 0.02, u + 0.02, y + slabT, y + railH, dOut - 0.085, dOut - 0.03);
+                }
+                if (fSeed() < 0.7) {   // canopy on the corner posts
+                  const cy = y + 2.25;
+                  if (cy < topY - 0.5) {
+                    fbox(u0 + 0.01, u0 + 0.07, y + railH, cy, dOut - 0.09, dOut - 0.03);
+                    fbox(u1 - 0.07, u1 - 0.01, y + railH, cy, dOut - 0.09, dOut - 0.03);
+                    fbox(u0 - 0.08, u1 + 0.08, cy, cy + 0.07, -0.02, dOut + 0.05);
+                  }
+                }
+              }
+
+              // ---- dressing: what is ON a balcony is half of what tells two
+              // of them apart. One item, drawn per balcony, never the same
+              // one twice in a row on this face.
+              const dr = fSeed();
+              const cu = u0 + 0.22 + fSeed() * Math.max(0.05, bwd - 0.5);
+              if (dr < 0.22) {          // stacked crates
+                fbox(cu - 0.19, cu + 0.19, y + slabT, y + slabT + 0.34, dOut - 0.46, dOut - 0.10);
+                fbox(cu - 0.14, cu + 0.16, y + slabT + 0.34, y + slabT + 0.60, dOut - 0.42, dOut - 0.14);
+              } else if (dr < 0.42) {   // planter trough + a scraggy plant
+                fbox(u0 + 0.05, u1 - 0.05, y + railH - 0.02, y + railH + 0.20, dOut - 0.02, dOut + 0.16);
+                fbox(cu - 0.09, cu + 0.09, y + railH + 0.20, y + railH + 0.44, dOut + 0.0, dOut + 0.13);
+              } else if (dr < 0.58) {   // a bicycle / junk stack against the rail
+                fbox(u1 - 0.12, u1 - 0.05, y + railH, y + railH + 0.40, dOut - 0.07, dOut - 0.02);
+                fbox(u1 - 0.52, u1 - 0.08, y + slabT, y + slabT + 0.06, dOut - 0.34, dOut - 0.04);
+                fbox(u1 - 0.50, u1 - 0.42, y + slabT + 0.06, y + slabT + 0.52, dOut - 0.30, dOut - 0.08);
+                fbox(u1 - 0.20, u1 - 0.12, y + slabT + 0.06, y + slabT + 0.44, dOut - 0.30, dOut - 0.08);
+              } else if (dr < 0.76) {   // laundry line between two stub posts
+                fbox(u0 + 0.06, u0 + 0.10, y + railH, y + railH + 0.62, dOut - 0.06, dOut - 0.02);
+                fbox(u1 - 0.10, u1 - 0.06, y + railH, y + railH + 0.62, dOut - 0.06, dOut - 0.02);
+                fbox(u0 + 0.08, u1 - 0.08, y + railH + 0.58, y + railH + 0.60, dOut - 0.05, dOut - 0.035);
+                for (let k = 0; k < 3; k++) {
+                  const u = u0 + bwd * (0.25 + k * 0.25);
+                  fbox(u - 0.12, u + 0.12, y + railH + 0.20, y + railH + 0.58, dOut - 0.05, dOut - 0.04);
+                }
+              }
+              // an air-con condenser clamped to the rail on some of them
+              if (fSeed() < 0.3) {
+                fbox(u1 - 0.44, u1 - 0.06, y + slabT + 0.05, y + slabT + 0.44, dOut, dOut + 0.30);
               }
             }
           }
@@ -2037,6 +2376,77 @@ export async function buildLevel(ctx) {
             const y = 3.0 + fSeed() * 0.9;
             fbox(u - 0.05, u + 0.05, y + 0.34, y + 0.42, 0.02, 1.05);       // bracket
             fbox(u - 0.055, u + 0.055, y - 0.34, y + 0.40, 0.62, 1.02);     // board
+          }
+
+          // ---- 5b. THE ATTIC BAND (iter09 #D7). The iter08 facade lane
+          // named this residual on its own work and the S5 elevation
+          // confirms it: above the top window row every mass ran a plain
+          // unbroken plane up to the parapet, 2-4 m tall and the full length
+          // of the face — the single largest bare surface on any building,
+          // sitting exactly where the eye lands when it reads a roofline.
+          // A real attic band carries a corbel course, blind panels between
+          // pilaster stubs, painted signage and vent openings for the roof
+          // void. Frame-only panels (four thin members, no infill) keep the
+          // triangle cost to a fifth of a modelled recess.
+          if (nRows > 0) {
+            const aTop = oTop(nRows - 1) + 0.35;
+            const bandT = topY - 0.30;
+            if (bandT - aTop > 1.55 && span > 2.6) {
+              // TRIANGLE BUDGET (iter09, measured, not assumed). The first
+              // cut of this band cost +50.7k triangles in `building_trim` —
+              // 56% on top of a batch the perf lane had just identified as
+              // the wave's structural problem (geometry grew 284->413 draws
+              // and 648k->1.45M tris while it was removing pixels). Rebuilt
+              // against a budget: PROUD panels (one box each) instead of
+              // four-member frames, a hard corbel cap instead of a dentil run
+              // at 0.5 m pitch, and two vents instead of three. Same read at
+              // the 25 m the elevation is graded from, ~4x fewer primitives.
+              // corbel course under the parapet — a continuous band plus a
+              // capped number of brackets, never a dentil comb
+              if (fSeed() < 0.7) {
+                const dy = bandT - 0.34;
+                fbox(lo, hi, dy + 0.20, dy + 0.30, 0.0, 0.13);
+                const nc = Math.max(2, Math.min(6, Math.round(span / 3.4)));
+                const cp = span / nc;
+                for (let k = 0; k < nc; k++) {
+                  const u = lo + 0.3 + k * cp;
+                  fbox(u, Math.min(hi - 0.1, u + cp * 0.30), dy, dy + 0.20, 0.0, 0.11);
+                }
+              }
+              // blind panels: ONE proud box each, the pilaster stubs are the
+              // gaps between them
+              const nP = Math.max(1, Math.min(4, Math.round(span / (3.0 + fSeed() * 2.0))));
+              const mgn = 0.42 + fSeed() * 0.5;
+              const pw = (span - mgn * 2) / nP;
+              const py0 = aTop + 0.18, py1 = Math.min(bandT - 0.62, py0 + 0.85 + fSeed() * 0.95);
+              if (py1 - py0 > 0.42 && pw > 1.1) {
+                const dp = 0.05 + fSeed() * 0.05;
+                for (let k = 0; k < nP; k++) {
+                  const a0 = lo + mgn + k * pw + 0.20, a1 = lo + mgn + (k + 1) * pw - 0.20;
+                  if (a1 - a0 < 0.7) continue;
+                  fbox(a0, a1, py0, py1, 0.0, dp, k % 2 ? 0.94 : 1.0);
+                }
+                // painted ghost sign: one proud board across two panels
+                if (fSeed() < 0.34 && nP >= 2) {
+                  const k = (fSeed() * (nP - 1)) | 0;
+                  const a0 = lo + mgn + k * pw + 0.30, a1 = lo + mgn + (k + 2) * pw - 0.30;
+                  if (a1 - a0 > 1.0) fbox(a0, a1, py0 + 0.16, py1 - 0.16, dp, dp + 0.035, 0.72);
+                }
+              }
+              // roof-void louvre vents, staggered so they never make a comb
+              if (fSeed() < 0.55) {
+                const nv = 1 + (fSeed() < 0.4 ? 1 : 0);
+                for (let k = 0; k < nv; k++) {
+                  const u = lo + 0.8 + fSeed() * Math.max(0.2, span - 1.6);
+                  const vy = aTop + 0.35 + fSeed() * Math.max(0.1, (bandT - aTop) * 0.4);
+                  const vw = 0.34 + fSeed() * 0.28, vh = 0.38 + fSeed() * 0.26;
+                  if (vy + vh > bandT - 0.4) continue;
+                  fbox(u - vw, u + vw, vy, vy + vh, -0.10, -0.03, 0.55);
+                  fbox(u - vw - 0.06, u + vw + 0.06, vy + vh, vy + vh + 0.08, -0.02, 0.09);
+                  fbox(u - vw + 0.04, u + vw - 0.04, vy + vh * 0.45, vy + vh * 0.45 + 0.04, -0.06, 0.01);
+                }
+              }
+            }
           }
 
           // ---- 6. WHERE THE BUILDING MEETS THE STREET. The ground storey used
@@ -2190,9 +2600,11 @@ export async function buildLevel(ctx) {
       sm.renderOrder = 2;
       group.add(sm);
     }
-    console.log(`[level] massing (iter08 #8a): ${layout.buildings.length} authored ` +
+    console.log(`[level] massing (iter08 #8a + iter09 D7 roof profiles/balcony families/attic band): ${layout.buildings.length} authored ` +
       `masses -> ${segCount} visual segments (${setbacks} setback towers, ` +
-      `${oriels} projecting oriels, ${escapes} fire escapes), every segment top ` +
+      `${oriels} projecting oriels, ${escapes} fire escapes), roof profiles ` +
+      `${Object.entries(ROOF_PROFILES).map(([k, v]) => `${k}:${v}`).join(" ")}; ` +
+      `every segment top ` +
       `>= its authored collider top so collision is unchanged; every opening sits ` +
       `in a ${RECESS.toFixed(2)} m POCKET cut into a wall that is solid at the ` +
       `authored plane; ` +

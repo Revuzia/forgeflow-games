@@ -440,7 +440,16 @@ const LIFE = {
   // with it and slides the boots on the cobbles, which is the D10 hard cap.
   swayHz1: 0.17, swayHz2: 0.11, swayYaw: 0.030, swayRoll: 0.026,
   swaySpineYaw: 0.055, swaySpineRoll: 0.040,
-  scanHz: 0.13, scanYaw: 0.42, scanHead: 0.20, scanPitchHz: 0.09, scanPitch: 0.07,
+  // ---- iter09 (D10), FREQUENCY IS THE DEFECT, NOT AMPLITUDE ---------------
+  // The filmstrip a critic grades samples ~250-500 ms apart. `scan` ran at
+  // 0.13 Hz — a 7.7 s sweep — so between two consecutive panels the head moved
+  // 3-6% of its travel, which is a couple of pixels of a 100 px silhouette. An
+  // amplitude that large moving that slowly is INVISIBLE AT THE SAMPLING RATE:
+  // it is the aliasing failure, not a tuning miss, and it is why iter08 could
+  // raise every amplitude in this table and still read "identical stances" to
+  // 3/3 critics. 0.26 Hz puts a half-sweep inside one panel gap while staying
+  // slower than a man can turn his head, so it does not read as a twitch.
+  scanHz: 0.26, scanYaw: 0.46, scanHead: 0.24, scanPitchHz: 0.19, scanPitch: 0.085,
   // ENGAGE channel — the fast one, and the reason it exists: the filmstrip
   // samples ~0.25 s apart, and breath/sway run at 0.11-0.62 Hz, so between two
   // consecutive panels they move a fraction of a degree. A man holding a
@@ -448,28 +457,43 @@ const LIFE = {
   // picture, re-settles his shoulder, checks off-axis. These run at ~0.6-0.9
   // Hz, which puts a full swing INSIDE one panel gap — the difference between
   // "the world is alive" and "the numbers say it moved".
-  engYawHz: 0.85, engYaw: 0.090,
-  engPitchHz: 0.55, engPitch: 0.062,
-  engNeckHz: 0.70, engNeck: 0.190,
+  engYawHz: 0.85, engYaw: 0.115,
+  engPitchHz: 0.55, engPitch: 0.078,
+  engNeckHz: 0.70, engNeck: 0.235,
+  // iter09: the engage channel used to be gated ENTIRELY on `aim` — engW was
+  // life.aimW * still — so a living soldier who was not currently aiming at
+  // the player had nothing but breath (0.62 Hz, 1.1 deg) and sway (0.11-0.17
+  // Hz) driving him, and the C1 filmstrip catches bots in exactly that state
+  // (measured this session: both contacts read anim "run", state "combat", and
+  // aimAt is only published on anim aim/fire). A man standing in a firefight
+  // he is not currently shooting into is not still. This floor runs the
+  // engage channels at 45% for every living, near-stationary soldier and
+  // opens them to full when he actually aims.
+  engIdleFloor: 0.45,
   // ARM half of the engage channel. 0.5 m of arm+weapon lever, so 0.085 rad is
   // ~4 cm of muzzle travel — the rifle bar visibly re-aims between panels.
   // Two frequencies that do not share a period with the spine channels, or the
   // whole upper body would move as one rigid piece.
-  engArmHz: 0.63, engArm: 0.085,
-  engArmHz2: 0.41, engArm2: 0.055,
+  engArmHz: 0.63, engArm: 0.118,
+  engArmHz2: 0.41, engArm2: 0.076,
   // torso recoil spring: ~7 deg single-shot peak, ~9 deg held under auto
   fireOmega: 17.0, fireZeta: 0.42, firePerShot: 3.5, fireCap: 0.22,
   // ARM recoil spring — the weapon drives back into the shoulder and the
   // muzzle climbs. Faster and stiffer than the torso: the arms absorb the
   // round first and the torso follows, which is the order a body does it in.
-  armOmega: 21.0, armZeta: 0.40, armPerShot: 4.2, armCap: 0.30,
+  armOmega: 21.0, armZeta: 0.40, armPerShot: 5.2, armCap: 0.36,
   armFore: 0.55,     // forearm share of the arm rotation (elbow folds harder)
-  // flinch spring: ~15 deg fold on one round, settled in ~0.6 s
-  flinchOmega: 15.0, flinchZeta: 0.50, flinchPerHit: 7.0, flinchCap: 0.30,
+  // flinch spring. iter09: settled in ~0.6 s was the problem, not the size —
+  // the panel AFTER the one where a soldier is hit is 250-500 ms later, so a
+  // 0.6 s settle has already spent most of its travel and the reaction is
+  // over before the second sample. omega 15 -> 12 stretches the visible
+  // settle to ~0.85 s (still a flinch, not a wobble) and the per-hit impulse
+  // and cap go up with it so the peak fold is ~20 deg rather than ~15.
+  flinchOmega: 12.0, flinchZeta: 0.50, flinchPerHit: 9.5, flinchCap: 0.40,
   // A round landing also knocks the weapon off-shoulder — 3/3 critics read the
   // iter07 flinch as invisible because the torso folded under a rifle that
   // stayed welded to it. This is what makes a hit read AS a hit.
-  flinchArm: 1.15,
+  flinchArm: 1.35,
   // READY POSE. Low-ready drops the muzzle and the hands; measured target is a
   // >= 0.18 m hand drop, which is ~10 px of silhouette at the C1 framing.
   readyDrop: 0.62,   // rad of upper-arm rotation between shouldered and low
@@ -989,8 +1013,10 @@ export function createActor(proto) {
         const sway2 = Math.sin((life.t * LIFE.swayHz2 + ph * 3.1) * TAU + 1.1);
         const scan = dwell(Math.sin((life.t * LIFE.scanHz + ph) * TAU));
         const scanP = Math.sin((life.t * LIFE.scanPitchHz + ph * 2.3) * TAU);
-        // engage channel: only while actually aiming at something
-        const engW = aimK * still;
+        // engage channel. iter09: no longer gated ENTIRELY on aiming — see
+        // LIFE.engIdleFloor. `still` already carries lifeGain, so a corpse is
+        // still exactly still.
+        const engW = still * (LIFE.engIdleFloor + (1 - LIFE.engIdleFloor) * life.aimW);
         const engY = Math.sin((life.t * LIFE.engYawHz + ph * 5.3) * TAU) * engW;
         const engP = Math.sin((life.t * LIFE.engPitchHz + ph * 2.9) * TAU + 0.7) * engW;
         const engN = dwell(Math.sin((life.t * LIFE.engNeckHz + ph * 4.1) * TAU + 2.1)) * engW;

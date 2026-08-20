@@ -119,15 +119,77 @@ function repair(group) {
           m.needsUpdate = true;
           continue;                  // skip the parkerised-metal treatment
         }
+        // ---- D5 (iter09) THE SURFACE, MEASURED --------------------------
+        // Three cold critics read the closest asset in the game as broken:
+        // "smeared, stretched camo", "bright orange edge-highlights that trace
+        // polygon seams", "chaotic high-frequency gold/white striated glitter
+        // with hard triangular facets". None of that is exposure (clip250 is
+        // 0.0000% on every shot in the iter08 battery) and none of it is the
+        // texture generator (a4's maps are correct: map + roughnessMap +
+        // normalMap + metalnessMap with real UVs on all 7 materials). It is
+        // the SAMPLING and the LOBE, both measured live this session on the
+        // booted page with the four in-page A/B sweeps below.
+        //
+        //  1. ANISOTROPY WAS 1. Probed on the running build: every viewmodel
+        //     texture reported `anisotropy: 1` against a driver maximum of 16.
+        //     The barrel and the receiver run AWAY from the eye, so their
+        //     texels are minified anisotropically — exactly the case a 1x
+        //     sampler cannot filter — and a 768 px normal map under that
+        //     sampler is a per-frame noise generator. That is the "striated
+        //     glitter" and the "smeared camo" in one mechanism: the A/B at
+        //     aniso 16 is the single largest visible change of the four.
+        //     three clamps this to the driver max at upload, so 16 is safe on
+        //     hardware that offers less.
+        //  2. NORMAL SCALE. The build tool authors 1.00-1.25 (correct for a
+        //     hero asset at arm's length); at the 25 cm the hip pose actually
+        //     renders it, that amplitude puts the shading normal outside the
+        //     specular lobe on adjacent pixels. Halved, not zeroed — the micro
+        //     detail is the thing VT §3 grades.
+        //  3. ROUGHNESS FACTOR 1.0 IS WHY THE GUN IS CLAY WITHOUT A FLASH.
+        //     Measured: br_body / br_metal / br_glove all shipped
+        //     roughnessFactor 1.0 and metalness 1. A rough metal has no
+        //     specular lobe to speak of, so in S2/S8 (no muzzle flash) the
+        //     weapon rendered as a flat navy silhouette with no form at all.
+        //     PROOF THAT THIS, NOT THE ENV, IS THE CAUSE: sweeping
+        //     envMapIntensity 0.55 -> 1.4 -> 2.4 at roughnessFactor 1.0 moved
+        //     the S8 weapon-region mean luma by 0.04 of 42.6 — a dead lever.
+        //     Sweeping the roughness FACTOR 1.0 -> 0.62 -> 0.42 -> 0.28 at
+        //     fixed env brought the receiver, the barrel and the stock into
+        //     form on the first step. The factor multiplies the authored MAP,
+        //     so its variance survives untouched — this scales the lobe, it
+        //     does not flatten the surface. 0.58 is the S1/S8 compromise: the
+        //     S8 pass wants lower still, the S1 muzzle-flash frame gets hotter
+        //     as it drops (weapon-region mean 122.8 at 1.0 -> 138.8 at 0.62 ->
+        //     148.7 at 0.42), and the flash's own intensity is not this file's
+        //     to change.
+        const setAniso = (t) => {
+          if (t && t.anisotropy !== 16) { t.anisotropy = 16; t.needsUpdate = true; }
+        };
+        setAniso(m.map); setAniso(m.normalMap);
+        setAniso(m.roughnessMap); setAniso(m.metalnessMap);
+        if (m.normalScale) m.normalScale.multiplyScalar(0.5);
         if (m.color) {
           const glove = /glove/i.test(m.name || "");
           m.color.setScalar(1.0);
+          // Scale the authored roughness FACTOR, never replace it: the
+          // per-part multipliers the build tool ships (grip 1.06, receiver
+          // 0.70 over one shared map) are the "distinct roughness per part"
+          // VT §3 asks for, and they survive a uniform scale.
+          if (m.roughnessMap) m.roughness = Math.max(0.06, m.roughness * 0.58);
           if (!glove) {
             // W1 (iter05): 1.15 was not "sheen" — with metalness-1 barrel and
             // sight hardware it mirrored the sky PMREM and rendered them as
             // chrome at macro range in the live S8 capture. 0.55 keeps the
             // blue-hour wet-metal cue without a second key light.
-            m.envMapIntensity = 0.55;
+            // iter09: 0.55 -> 1.0. The iter05 chroming happened at
+            // roughnessFactor 1.0, where (measured this session) the env term
+            // is inert anyway — so whatever chromed the barrel then, it was
+            // not this number acting alone. With the lobe restored above the
+            // env finally has something to reflect INTO, and 1.0 x the
+            // scene's own environmentIntensity 0.5 = 0.5x a night PMREM,
+            // which is the ambient specular a wet receiver should have and
+            // still half of what the world's materials take.
+            m.envMapIntensity = 1.0;
             // W1 (iter05): the 0.92 clamp used to fire on EVERY gun material,
             // because glTF's roughnessFactor default is 1.0 whenever a
             // metallicRoughness map is bound. The build tool now ships that
@@ -251,8 +313,21 @@ export async function loadWeaponGLB(id) {
       // shoving the weapon out at ADS shrinks the sight picture, which is the
       // one thing that frame exists to show. Pure Z either way, so the sight
       // stays on x=0,y=0 at ADS and alignment is untouched.
-      const REAR_CLEAR = 0.28;   // m of air between the eye and the butt pad
-      const MAX_PUSH = 0.28;     // never shove a weapon out to arm's length
+      // iter09 D5: 0.28 -> 0.35. Two of three cold critics called the shipped
+      // framing "grossly oversized — the barrel crosses frame centre and the
+      // gun eats the whole lower-right quadrant", and the iter08 consolidation
+      // measured br_body's rear at -0.235 m from the eye, i.e. 4.5 cm INSIDE
+      // the standoff this constant already demanded (the kick spring's 9 cm of
+      // posZ drive-back is what eats it during a burst — the rule was written
+      // against the static pose and the burst is what gets photographed).
+      // Swept live in-page at +0, +4, +8 and +12 cm of extra push on the S1
+      // muzzle-flash frame: +7 cm opens the lower-right quadrant enough to
+      // read the car, the sandbag stack and the crates behind the weapon
+      // without shrinking the gun below VT §5's "~30% of every frame".
+      // ADS is untouched (the push blends out with adsEase), so the sight
+      // picture S2 exists to show is exactly as before.
+      const REAR_CLEAR = 0.35;   // m of air between the eye and the butt pad
+      const MAX_PUSH = 0.34;     // never shove a weapon out to arm's length
       // Measure the WEAPON, not the arms: a forearm is supposed to run past
       // the eye and get clipped (that is what a real one does), and letting it
       // drive the rule shoved the Pike — a 23 cm pistol whose own rearmost

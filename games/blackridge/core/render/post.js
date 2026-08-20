@@ -51,7 +51,7 @@ const CompositeShader = {
     uGrain: { value: 0.008 },
     uCA: { value: 0.35 },         // was 1.0 px — radial fringing read as bad signal
     uCABoost: { value: 1 },       // ×3 for 150 ms on explosions (hook)
-    uSharpen: { value: 0.35 },    // was 0.2; real AA now gives it clean edges to bite
+    // (uSharpen moved to the FXAA pass — see FXAA_SHARPEN)
     uSat: { value: 0.95 },
     uTier: { value: 2 },          // 0 = tonemap only, 1/2 = full film stages
     // ---- grade shaping (iter02 D2 fix — see the grade block in the shader)
@@ -77,7 +77,7 @@ const CompositeShader = {
     uniform sampler2D tDiffuse;
     uniform float uTime;
     uniform vec2 uRes;
-    uniform float uVignette, uVigBoost, uGrain, uCA, uCABoost, uSharpen, uSat;
+    uniform float uVignette, uVigBoost, uGrain, uCA, uCABoost, uSat;
     uniform float uBlack, uPivot, uContrast, uCrush;
     uniform vec3 uShadowTint, uHighTint;
     uniform int uTier;
@@ -109,16 +109,24 @@ const CompositeShader = {
         hdr.g = texture2D(tDiffuse, uv).g;
         hdr.b = texture2D(tDiffuse, uv - caOff).b;
 
-        // ---- contrast-adaptive sharpen (4 cross taps, HDR domain)
-        vec3 n1 = texture2D(tDiffuse, uv + vec2(px.x, 0.0)).rgb;
-        vec3 n2 = texture2D(tDiffuse, uv - vec2(px.x, 0.0)).rgb;
-        vec3 n3 = texture2D(tDiffuse, uv + vec2(0.0, px.y)).rgb;
-        vec3 n4 = texture2D(tDiffuse, uv - vec2(0.0, px.y)).rgb;
-        vec3 blur = (n1 + n2 + n3 + n4) * 0.25;
-        vec3 hi = hdr - blur;
-        // adapt: back off where local contrast is already high (no halos)
-        float adapt = 1.0 / (1.0 + 4.0 * dot(abs(hi), vec3(0.333)));
-        hdr += hi * uSharpen * adapt;
+        // THE CONTRAST-ADAPTIVE SHARPEN USED TO LIVE HERE AND HAS MOVED INTO
+        // THE FXAA PASS (perf wave 2, 2026-08-20). It cost four extra taps of
+        // the FULL-RESOLUTION HDR buffer — and this pass is bandwidth-bound on
+        // exactly those taps: measured per-pass with
+        // EXT_disjoint_timer_query_webgl2 at 1920x1080 DPR 1.0, the composite
+        // was 2.61 ms of a 38.0 ms frame while reading 7 HDR texels per output
+        // pixel. FXAA, the very next pass, ALREADY fetches the centre and its
+        // four cross neighbours to build its luma — the identical 5-tap
+        // stencil, on an RGBA8 target that is half the bytes. Doing the
+        // sharpen there reuses fetches that are already paid for and deletes
+        // four HDR reads per pixel from this pass.
+        //
+        // The trade, stated: sharpening now runs on the TONEMAPPED sRGB image
+        // instead of the linear HDR one. That is where AMD's CAS and every
+        // shipped implementation put it, and it cannot amplify a pre-tonemap
+        // highlight into a halo the way the HDR version could. uSharpen was
+        // re-calibrated against measured acutance, not by eye — see the note
+        // on FXAA_SHARPEN.
       }
 
       // ---- exposure + AgX (three's own kernel implementation)
@@ -202,14 +210,68 @@ const CompositeShader = {
 // without touching the 4.67 Mpx that MSAA charged for. The residual cost is
 // FXAA's known weakness on sub-pixel detail — thin wires and distant railings
 // shimmer slightly more in motion than under 4x MSAA. That is the trade, stated.
+// Bloom base-resolution divisor (drawing buffer / BLOOM_DIV). See the
+// bloomDiv note in createPost().
+const BLOOM_DIV = 4;
+
+// Sized internal format for the HDR scene buffer. 'R11F_G11F_B10F' is 4 B/px
+// with float range; null falls back to three's RGBA16F (8 B/px). Probed for
+// colour-renderability at build time — see hdrRenderable().
+const HDR_INTERNAL_FORMAT = "R11F_G11F_B10F";
+
+// Is `name` a colour-renderable sized format on THIS driver? Asked with a
+// 4x4 throwaway attachment rather than assumed from the spec: R11F_G11F_B10F
+// is colour-renderable in core WebGL2, but a blocklisted or emulated ANGLE
+// backend is exactly the case this game's capability gate exists for.
+function hdrRenderable(gl, name) {
+  if (!name || !gl[name]) return false;
+  const fb = gl.createFramebuffer();
+  const tx = gl.createTexture();
+  const prevFb = gl.getParameter(gl.FRAMEBUFFER_BINDING);
+  const prevTx = gl.getParameter(gl.TEXTURE_BINDING_2D);
+  let ok = false;
+  try {
+    gl.bindTexture(gl.TEXTURE_2D, tx);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, gl[name], 4, 4);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tx, 0);
+    ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+  } catch (e) {
+    ok = false;
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, prevFb);
+  gl.bindTexture(gl.TEXTURE_2D, prevTx);
+  gl.deleteFramebuffer(fb);
+  gl.deleteTexture(tx);
+  while (gl.getError() !== gl.NO_ERROR) { /* drain the probe's own errors */ }
+  return ok;
+}
+
 const FXAA_EDGE_MIN = 0.0312;
 const FXAA_EDGE_MAX = 0.125;
 const FXAA_SUBPIX = 0.75;
+// Contrast-adaptive sharpen, relocated here from the composite pass (perf wave
+// 2). It runs on the five taps FXAA already has, so it adds ZERO texture
+// fetches; the composite pass lost four full-res HDR reads per pixel for it.
+//
+// CALIBRATED, NOT GUESSED. Sharpening after the tonemap is stronger per unit
+// than sharpening before it, so the composite's old 0.35 could not simply be
+// copied across: at 0.20 it OVERSHOT, taking S1 acutance (mean |Laplacian| on
+// luma, full battery capture path) 8.561 -> 9.211 and S3 7.977 -> 8.827.
+// Swept on the real battery, two points per shot:
+//     s = 0.00 -> S1 8.209  S3 7.718     (the AA-only floor)
+//     s = 0.20 -> S1 9.211  S3 8.827
+// Linear in s, so the value that lands back on iter08's measured acutance is
+// 0.070 (S1) / 0.047 (S3); 0.06 is the midpoint and is what ships. The whole
+// sharpen stage is worth ~4% of frame acutance either way — it was never the
+// thing carrying edge definition, FXAA is.
+const FXAA_SHARPEN = 0.06;
 
 const FxaaShader = {
   uniforms: {
     tDiffuse: { value: null },
     uRes: { value: new THREE.Vector2(1920, 1080) },
+    uSharpen: { value: FXAA_SHARPEN },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -221,6 +283,7 @@ const FxaaShader = {
     varying vec2 vUv;
     uniform sampler2D tDiffuse;
     uniform vec2 uRes;
+    uniform float uSharpen;
 
     // sqrt() of the luma: FXAA wants perceptual distance, and the input here
     // is already sRGB-encoded (the composite pass encodes before writing).
@@ -230,22 +293,37 @@ const FxaaShader = {
       vec2 inv = 1.0 / uRes;
       vec2 uv = vUv;
 
+      // The four cross neighbours are FXAA's luma stencil AND the composite
+      // pass's old sharpen stencil — the same five texels. They are read once,
+      // in RGB, and used for both. (Keeping .rgb rather than folding to luma
+      // costs nothing: an RGBA8 fetch returns the whole texel either way.)
       vec3 cM = texture2D(tDiffuse, uv).rgb;
+      vec3 cD = texture2D(tDiffuse, uv + vec2(0.0, -1.0) * inv).rgb;
+      vec3 cU = texture2D(tDiffuse, uv + vec2(0.0,  1.0) * inv).rgb;
+      vec3 cL = texture2D(tDiffuse, uv + vec2(-1.0, 0.0) * inv).rgb;
+      vec3 cR = texture2D(tDiffuse, uv + vec2( 1.0, 0.0) * inv).rgb;
+
       float lM = fxLuma(cM);
-      float lD = fxLuma(texture2D(tDiffuse, uv + vec2(0.0, -1.0) * inv).rgb);
-      float lU = fxLuma(texture2D(tDiffuse, uv + vec2(0.0,  1.0) * inv).rgb);
-      float lL = fxLuma(texture2D(tDiffuse, uv + vec2(-1.0, 0.0) * inv).rgb);
-      float lR = fxLuma(texture2D(tDiffuse, uv + vec2( 1.0, 0.0) * inv).rgb);
+      float lD = fxLuma(cD);
+      float lU = fxLuma(cU);
+      float lL = fxLuma(cL);
+      float lR = fxLuma(cR);
+
+      // ---- contrast-adaptive sharpen (relocated from the composite pass).
+      // Same kernel and same adapt term as before; LDR domain now.
+      vec3 hi = cM - (cD + cU + cL + cR) * 0.25;
+      float adapt = uSharpen / (1.0 + 4.0 * dot(abs(hi), vec3(0.333)));
+      vec3 sharpen = hi * adapt;
 
       float lMin = min(lM, min(min(lD, lU), min(lL, lR)));
       float lMax = max(lM, max(max(lD, lU), max(lL, lR)));
       float range = lMax - lMin;
 
-      // Flat pixel: 5 fetches and out. This early-out is what keeps FXAA at
-      // ~1 ms — on a night frame most of the screen never reaches the edge
-      // threshold at all.
+      // Flat pixel: 5 fetches and out. This early-out is what keeps FXAA off
+      // most of a night frame — on the S3 pose the whole pass measures 3.69 ms
+      // of a 38.0 ms frame, and the flat majority is why it is not far more.
       if (range < max(${FXAA_EDGE_MIN.toFixed(4)}, lMax * ${FXAA_EDGE_MAX.toFixed(4)})) {
-        gl_FragColor = vec4(cM, 1.0);
+        gl_FragColor = vec4(clamp(cM + sharpen, 0.0, 1.0), 1.0);
         return;
       }
 
@@ -325,7 +403,9 @@ const FxaaShader = {
 
       vec2 outUv = uv;
       if (horz) outUv.y += finalOff * stepLen; else outUv.x += finalOff * stepLen;
-      gl_FragColor = vec4(texture2D(tDiffuse, outUv).rgb, 1.0);
+      // sharpen rides the ANTI-ALIASED sample, so the AA blend is not
+      // re-aliased by a sharpen applied after it (CAS's own ordering rule).
+      gl_FragColor = vec4(clamp(texture2D(tDiffuse, outUv).rgb + sharpen, 0.0, 1.0), 1.0);
     }`,
 };
 
@@ -337,6 +417,25 @@ export function createPost(ctx) {
   // an ablation run can price it instead of guessing. Default lives in ONE
   // place; build() reads it.
   let msaaSamples = 0; // MSAA REMOVED — FXAA does the AA now (see FxaaShader)
+  // Bloom base = drawing buffer / BLOOM_DIV. UnrealBloomPass is a 5-level mip
+  // chain with two separable 13-tap blurs per level, so its cost is linear in
+  // BASE AREA and the divisor is a quadratic knob. Measured per-pass on this
+  // box (EXT_disjoint_timer_query_webgl2, S3, 1920x1080, DPR 1.0): see the
+  // table in the perf note at the head of this file's build().
+  let bloomDiv = BLOOM_DIV;
+  // Profiler seam only — the shipped chain is HalfFloat because bloom
+  // thresholds at 1.0 require a genuinely HDR scene buffer.
+  let hdrType = THREE.HalfFloatType;
+  // null => let three derive it from format+type (RGBA16F). Set to a WebGL2
+  // sized-format name to override. Probed once below and downgraded to null if
+  // the driver will not render to it.
+  let hdrInternalFormat = hdrRenderable(gl, HDR_INTERNAL_FORMAT)
+    ? HDR_INTERNAL_FORMAT
+    : null;
+  if (!hdrInternalFormat && HDR_INTERNAL_FORMAT) {
+    console.info(`[post] ${HDR_INTERNAL_FORMAT} not colour-renderable here — ` +
+      "HDR scene buffer falls back to RGBA16F (8 B/px)");
+  }
   let composer = null;
   let renderPass = null;
   let bloomPass = null;
@@ -360,7 +459,40 @@ export function createPost(ctx) {
     curW = w; curH = h; curPR = pr;
 
     const rt = new THREE.WebGLRenderTarget(w * pr, h * pr, {
-      type: THREE.HalfFloatType, // the HDR chain (EXT_color_buffer_float gated)
+      type: hdrType, // the HDR chain (EXT_color_buffer_float gated)
+      // R11F_G11F_B10F: HDR RANGE AT HALF THE BYTES (perf wave 2). The scene
+      // buffer is written once by the scene pass, read once by bloom's high-
+      // pass and three times by the composite's CA taps, all at full
+      // resolution — so its bytes-per-pixel is multiplied by five on a frame
+      // that measured 90% pixel-proportional (DPR sweep: cost = 0.10 + 0.90 x
+      // pixel-area, r^2 fit over six render scales). Dropping RGBA16F's 8 B/px
+      // to 4 B/px was measured at -2.25 ms of 37.7 (-5.5%) by substituting
+      // RGBA8, which is the same byte count.
+      // It keeps float range (max ~65024) so bloom's 1.0 threshold is
+      // unaffected; what it gives up is the alpha channel (unused — the scene
+      // pass writes opaque) and mantissa bits (6 for R/G, 5 for B against
+      // half-float's 10), i.e. the risk is BANDING in a smooth gradient.
+      // Verified in pixels rather than assumed: S1/S3 recaptured through the
+      // full battery path show the storm-sky gradient — the smoothest large
+      // area in the game — with no contouring, and frame statistics move by
+      // less than a level (S1 mean luma 55.80 -> 55.36, S3 44.39 -> 44.02,
+      // p99 198.0 -> 198.0 / 178.9 -> 179.0, clip250 unchanged at 0.04% /
+      // 0.03%). Measured A/B, interleaved inside one page: reverting this
+      // field to three's derived RGBA16F costs +2.36 ms (+6.8%), four rounds,
+      // per-round ratios 1.066/1.067/1.069/1.074.
+      //
+      // NOTE FOR ANYONE EDITING THE LINE BELOW: RGBA + HALF_FLOAT +
+      // R11F_G11F_B10F is an INVALID triple through texImage2D. ANGLE rejects
+      // it with GL_INVALID_OPERATION, the attachment is left at zero size and
+      // every subsequent draw fails with GL_INVALID_FRAMEBUFFER_OPERATION —
+      // observed, not theorised. The format must move with the internalFormat,
+      // which is why the next line exists.
+      internalFormat: hdrInternalFormat,
+      // R11F_G11F_B10F takes format RGB (not RGBA) through texImage2D —
+      // RGBA + HALF_FLOAT + R11F_G11F_B10F is an invalid triple and ANGLE
+      // rejects it with GL_INVALID_OPERATION, leaving a zero-size attachment
+      // and an incomplete framebuffer. Verified by doing exactly that.
+      format: hdrInternalFormat ? THREE.RGBFormat : THREE.RGBAFormat,
       depthBuffer: true,
       // v3: MSAA on the HDR target. Was 0, and gfx.js also had antialias:false
       // ("bloom+grain hide it") — so nothing anti-aliased anything and the
@@ -409,7 +541,8 @@ export function createPost(ctx) {
     // and softer. On a rain-hazed night street that is the direction the look
     // wanted anyway, and threshold 1.0 still keeps it off diffuse geometry.
     bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(Math.max(2, Math.floor((w * pr) / 4)), Math.max(2, Math.floor((h * pr) / 4))),
+      new THREE.Vector2(Math.max(2, Math.floor((w * pr) / bloomDiv)),
+                        Math.max(2, Math.floor((h * pr) / bloomDiv))),
       0.32, 0.58, 1.0,
     );
     bloomPass.enabled = quality !== "low";
@@ -497,6 +630,23 @@ export function createPost(ctx) {
     caKick() { caBoostT = 0.15; }, // fx hook: explosion CA pulse (VT §2)
     // ---- profiler seam (perf lane, measurement only) ----
     setSamples(n) { msaaSamples = n | 0; build(curW, curH, curPR); },
+    setBloomDiv(n) { bloomDiv = Math.max(1, n | 0); build(curW, curH, curPR); },
+    setBloomParams(strength, radius) {
+      if (bloomPass) {
+        if (strength != null) bloomPass.strength = strength;
+        if (radius != null) bloomPass.radius = radius;
+      }
+    },
+    // MEASUREMENT ONLY — an RGBA8 scene buffer breaks bloom's 1.0 threshold.
+    setHdrType(t) { hdrType = t; build(curW, curH, curPR); },
+    // Profiler seam: null restores three's derived RGBA16F (8 B/px) so the
+    // 4-byte format can be A/B'd inside one page against its own baseline.
+    setHdrInternalFormat(name) {
+      hdrInternalFormat = name && hdrRenderable(gl, name) ? name : null;
+      build(curW, curH, curPR);
+      return hdrInternalFormat;
+    },
+    hdrInternalFormat() { return hdrInternalFormat; },
     setBloom(on) { if (bloomPass) bloomPass.enabled = !!on; },
     setTier(n) { if (compositePass) compositePass.uniforms.uTier.value = n | 0; },
     passes() { return { composer, renderPass, bloomPass, compositePass, fxaaPass, ldrTarget }; },

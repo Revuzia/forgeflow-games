@@ -78,8 +78,11 @@ function atlasTexture() {
       const hy = cy + (rnd() - 0.5) * R * 0.30;
       const hr = R * (0.72 + rnd() * 0.24);
       const hg = g.createRadialGradient(hx, hy, R * 0.10, hx, hy, hr);
-      hg.addColorStop(0.00, "rgba(96,92,86,0.20)");
-      hg.addColorStop(0.45, "rgba(88,84,79,0.11)");
+      // iter09: the halo is the low-frequency component and it is exactly what
+      // averaged the whole mark into a pale smudge. Cut roughly in half now
+      // that the rim above carries the "this is damage" signal.
+      hg.addColorStop(0.00, "rgba(96,92,86,0.12)");
+      hg.addColorStop(0.45, "rgba(88,84,79,0.065)");
       hg.addColorStop(1.00, "rgba(80,77,72,0)");
       g.fillStyle = hg;
       g.fillRect(cell * CELL, 0, CELL, CELL);
@@ -91,6 +94,20 @@ function atlasTexture() {
     // the pale rim, and a rim drawn at 0.30R survives that minification as
     // about two pixels. 0.38R keeps the same physical crater (the quad also
     // carries the halo) while giving the rim the width it needs to read.
+    // ---- iter09, D6: THE MARK IS BIG ENOUGH, IT IS NOT CONTRASTY ENOUGH ----
+    // MEASURED live this session in the C1 pose: 39 decals alive, all 39 on
+    // screen, individual quads 22-64 px. So "sub-pixel" is closed. Zoomed 4x
+    // on the captured frame, what those 22-64 px actually contain is a SOFT
+    // PALE SMUDGE — the crater rim at 0.90/0.86 alpha over a 0.20-alpha halo
+    // is a low-frequency gradient, and every step of the chain that follows
+    // (13x minification into mip 3, FXAA, AgX, bloom, rain haze at 13 m) is a
+    // low-pass filter. What survives a stack of low-pass filters is not size
+    // and it is not average tone: it is a HARD LIGHT-DARK EDGE at the scale
+    // that survives. So the crater rim is tightened into a ring with a dark
+    // shoulder inside it, and the black core is grown from R*0.16 to R*0.21 at
+    // full opacity, which at a 0.45 m quad is a ~0.09 m crater mouth — the
+    // physical size masonry spall actually leaves — and which minifies to a
+    // 5-7 px hard black dot instead of a 2 px grey one.
     const craterR = R * 0.38;
     g.beginPath();
     for (let i = 0; i <= lobes; i++) {
@@ -100,28 +117,45 @@ function atlasTexture() {
       if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
     }
     g.closePath();
+    // A BRIGHT NARROW RIM, not a broad pale disc: the gradient now peaks at
+    // the crater EDGE (0.62-0.88 of craterR) and falls away on both sides, so
+    // minification averages a light annulus against the dark core inside it
+    // rather than averaging one pale field into the wall's own tone.
     const cg = g.createRadialGradient(cx, cy, craterR * 0.15, cx, cy, craterR * 1.25);
-    cg.addColorStop(0.00, "rgba(126,121,113,0.90)");
-    cg.addColorStop(0.55, "rgba(112,107,100,0.86)");
-    cg.addColorStop(1.00, "rgba(92,88,82,0.34)");
+    // Rim tone set by looking at captured plates at 1:1 and at 3x, not by
+    // taste, and it took two passes. 168/0.98 read as a ring of bright donuts
+    // at 13 m and as GLOWING WHITE FLOWERS on the near cobbles and the van at
+    // 1.5-4 m in the C1 filmstrip — a decal is unlit, so a value picked to
+    // survive 13 m of haze is a value that blows out at 2 m, and the near
+    // range is where a critic's eye lands first. 122 peak sits inside the
+    // pale concrete's own value range at BOTH distances; the ring SHAPE — a
+    // narrow bright annulus at 0.62-0.88 of the crater radius with a dark
+    // shoulder inside it — is what survives minification, and that is kept in
+    // full. Structure carries the read, not brightness.
+    cg.addColorStop(0.00, "rgba(104,100,94,0.34)");
+    cg.addColorStop(0.55, "rgba(116,112,105,0.62)");
+    cg.addColorStop(0.78, "rgba(122,118,110,0.70)");
+    cg.addColorStop(0.92, "rgba(104,100,94,0.46)");
+    cg.addColorStop(1.00, "rgba(88,84,79,0.18)");
     g.fillStyle = cg;
     g.fill();
 
     // (3) inner shadow — the crater has depth, so its floor is darker
     const ig = g.createRadialGradient(cx, cy, R * 0.02, cx, cy, craterR * 0.72);
-    ig.addColorStop(0.00, "rgba(16,15,14,0.92)");
-    ig.addColorStop(0.55, "rgba(28,26,24,0.60)");
+    ig.addColorStop(0.00, "rgba(10,9,9,0.97)");
+    ig.addColorStop(0.55, "rgba(20,19,17,0.78)");
     ig.addColorStop(1.00, "rgba(40,38,35,0)");
     g.fillStyle = ig;
     g.beginPath(); g.arc(cx, cy, craterR * 0.75, 0, Math.PI * 2); g.fill();
 
-    // (4) the hole itself — near-black, small, hard
-    const kg = g.createRadialGradient(cx, cy, 1, cx, cy, R * 0.15);
-    kg.addColorStop(0.00, "rgba(5,5,5,0.97)");
-    kg.addColorStop(0.62, "rgba(8,8,8,0.92)");
-    kg.addColorStop(1.00, "rgba(14,13,12,0)");
+    // (4) the hole itself — near-black, hard, and now big enough to SURVIVE
+    // 13x minification (see the iter09 note above)
+    const kg = g.createRadialGradient(cx, cy, 1, cx, cy, R * 0.20);
+    kg.addColorStop(0.00, "rgba(3,3,3,1)");
+    kg.addColorStop(0.74, "rgba(5,5,5,0.99)");
+    kg.addColorStop(1.00, "rgba(12,11,10,0)");
     g.fillStyle = kg;
-    g.beginPath(); g.arc(cx, cy, R * 0.16, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(cx, cy, R * 0.21, 0, Math.PI * 2); g.fill();
 
     // (5) radial hairline cracks running out of the crater
     g.lineCap = "round";
@@ -172,10 +206,15 @@ function atlasTexture() {
       const w = R * (0.035 + rnd() * 0.045);
       g.save();
       g.translate(cx, cy); g.rotate(a);
+      // iter09: 150/0.92 was the brightest unlit value in the whole atlas and
+      // the C1 filmstrip caught three of these on the pale van at ~3 m, where
+      // they rendered as glowing white starbursts with bloom on them. Bare
+      // torn steel is still the brightest thing on a night vehicle, but it is
+      // a metal highlight, not a light source: 124/0.80.
       const pg = g.createLinearGradient(0, 0, len, 0);
-      pg.addColorStop(0.00, "rgba(150,146,138,0.92)");
-      pg.addColorStop(0.45, "rgba(122,118,112,0.68)");
-      pg.addColorStop(1.00, "rgba(96,92,88,0)");
+      pg.addColorStop(0.00, "rgba(124,120,114,0.80)");
+      pg.addColorStop(0.45, "rgba(104,100,95,0.58)");
+      pg.addColorStop(1.00, "rgba(86,83,79,0)");
       g.fillStyle = pg;
       g.beginPath();
       g.moveTo(0, -w); g.lineTo(len, -w * 0.25); g.lineTo(len, w * 0.25); g.lineTo(0, w);
@@ -185,9 +224,9 @@ function atlasTexture() {
 
     // bright torn lip right around the punch
     const lg = g.createRadialGradient(cx, cy, R * 0.07, cx, cy, R * 0.17);
-    lg.addColorStop(0.00, "rgba(158,154,146,0)");
-    lg.addColorStop(0.42, "rgba(158,154,146,0.85)");
-    lg.addColorStop(1.00, "rgba(120,116,110,0)");
+    lg.addColorStop(0.00, "rgba(132,128,121,0)");
+    lg.addColorStop(0.42, "rgba(132,128,121,0.78)");
+    lg.addColorStop(1.00, "rgba(104,100,95,0)");
     g.fillStyle = lg;
     g.beginPath(); g.arc(cx, cy, R * 0.18, 0, Math.PI * 2); g.fill();
 
@@ -247,17 +286,24 @@ function atlasTexture() {
       // rendering artifact, not battle damage. At 0.07, and laid on only some
       // strikes (impacts.js), a burst lands around 0.25: a surface that has
       // clearly been chewed, with nothing on it that reads as a stamped card.
-      hg.addColorStop(0.00, "rgba(104,100,94,0.07)");
-      hg.addColorStop(0.50, "rgba(96,92,87,0.042)");
+      // iter09: 0.07 -> 0.05. At 4x zoom on the captured C1 burst the pale
+      // wash — not the craters — was the dominant read, a soft light blob with
+      // the strikes lost inside it. Dust is what the marks sit ON; the moment
+      // it out-contrasts them it has stopped doing its job and started hiding
+      // them. Grit count is doubled in exchange, because the high-frequency
+      // half of pulverised masonry survives minification where the wash does
+      // not, and it is what stops this cell reading as a lens smudge.
+      hg.addColorStop(0.00, "rgba(104,100,94,0.05)");
+      hg.addColorStop(0.50, "rgba(96,92,87,0.030)");
       hg.addColorStop(1.00, "rgba(88,85,80,0)");
       g.fillStyle = hg;
       g.fillRect(x0, 0, CELL, CELL);
     }
-    // a few dark grit specks so it is dust, not a lens smudge
-    for (let i = 0; i < 22; i++) {
+    // dark grit specks so it is dust, not a lens smudge
+    for (let i = 0; i < 44; i++) {
       const a = rnd() * Math.PI * 2;
-      const r = R * rnd() * 0.72;
-      g.fillStyle = `rgba(22,21,20,${(0.10 + rnd() * 0.18).toFixed(2)})`;
+      const r = R * rnd() * 0.78;
+      g.fillStyle = `rgba(20,19,18,${(0.12 + rnd() * 0.22).toFixed(2)})`;
       g.fillRect(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 2 + rnd() * 4, 2 + rnd() * 4);
     }
     g.restore();
