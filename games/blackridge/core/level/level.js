@@ -556,15 +556,18 @@ export async function buildLevel(ctx) {
     return { hx, hz, headY: y - 0.3 };
   }
 
+  // Intensities re-tuned against live captures (iter00): with the doubled
+  // additive glow/pool wash removed, the REAL spots have to carry the LD
+  // §3.4 zone plan — plaza is the 100% money zone, floods 80%, pockets dim.
   const specById = {
-    L_QUAY: { intensity: 34, distance: 18, penumbra: 0.42 },
-    L_ALLEY_A: { intensity: 28, distance: 15, penumbra: 0.45 },
-    L_PLAZA_KEY: { intensity: 55, distance: 26, penumbra: 0.55 },
-    L_ARCADE_SKY: { intensity: 26, distance: 14, penumbra: 0.3 },
-    L_BLVD_1: { intensity: 30, distance: 16, penumbra: 0.42 },
-    L_BLVD_3: { intensity: 30, distance: 16, penumbra: 0.42 },
-    L_FLOOD_W: { intensity: 62, distance: 34, penumbra: 0.35 },
-    L_FLOOD_E: { intensity: 62, distance: 34, penumbra: 0.35 },
+    L_QUAY: { intensity: 38, distance: 18, penumbra: 0.42 },
+    L_ALLEY_A: { intensity: 34, distance: 15, penumbra: 0.45 },
+    L_PLAZA_KEY: { intensity: 130, distance: 26, penumbra: 0.55 },
+    L_ARCADE_SKY: { intensity: 34, distance: 14, penumbra: 0.3 },
+    L_BLVD_1: { intensity: 34, distance: 16, penumbra: 0.42 },
+    L_BLVD_3: { intensity: 34, distance: 16, penumbra: 0.42 },
+    L_FLOOD_W: { intensity: 110, distance: 34, penumbra: 0.35 },
+    L_FLOOD_E: { intensity: 110, distance: 34, penumbra: 0.35 },
   };
   const staticLightSpecs = [];
 
@@ -581,18 +584,18 @@ export async function buildLevel(ctx) {
     }
     switch (lp.kind) {
       case "sodium": {
+        // head glow comes from lighting.js's instanced glow pass — a second
+        // sprite here doubled every halo (the iter01 S4 orange-soup tell)
         const h = sodiumPole(lp);
         const lensMat = sodiumHead;
         reg.emissives.push(lensMat);
-        reg.sprites.push(addGlow(h.hx, h.headY - 0.05, h.hz, lp.color, 2.4, 0.5));
-        addPool(lp.aim ? lp.aim[0] : x, lp.aim ? lp.aim[2] : z, 4.4, lp.color, false);
+        void h;
+        addPool(lp.aim ? lp.aim[0] : x, lp.aim ? lp.aim[2] : z, 2.8, lp.color, false);
         break;
       }
       case "flood": {
-        // towers themselves are props; here: glow + the big aimed pools
-        reg.sprites.push(addGlow(x - 0.35, y + 0.15, z, lp.color, 3.2, 0.6));
-        reg.sprites.push(addGlow(x + 0.35, y + 0.15, z, lp.color, 3.2, 0.6));
-        addPool(lp.aim[0], lp.aim[2], 7.5, lp.color, false);
+        // towers are props; lighting.js draws the head glow — pools only here
+        addPool(lp.aim[0], lp.aim[2], 5.0, lp.color, false);
         break;
       }
       case "skylight": {
@@ -614,11 +617,9 @@ export async function buildLevel(ctx) {
         const tm = new THREE.Mesh(tube, fluorMat);
         tm.name = "platform_fluor";
         group.add(tm);
-        const sp = addGlow(x, y - 0.1, z, lp.color, 2.6, 0.4);
-        reg.emissives.push(fluorMat);
-        reg.sprites.push(sp);
-        addPool(x, z, 4.6, lp.color, false, 4.512); // pools ON the deck (y 4.5)
-        if (lp.flicker) registry.flicker.push({ mat: fluorMat, sprite: sp, base: 2.6 });
+        reg.emissives.push(fluorMat); // head glow: lighting.js instanced pass
+        addPool(x, z, 3.4, lp.color, false, 4.512); // pools ON the deck (y 4.5)
+        if (lp.flicker) registry.flicker.push({ mat: fluorMat, base: 2.6 });
         break;
       }
       case "interior": { // gatehouse — lit window on the yard-facing east face
@@ -631,8 +632,7 @@ export async function buildLevel(ctx) {
         const wmesh = new THREE.Mesh(wg, M.windowLit);
         wmesh.name = "gatehouse_window";
         group.add(wmesh);
-        reg.sprites.push(addGlow(11.4, 1.7, -52.5, lp.color, 1.6, 0.4));
-        addPool(12.2, -52.5, 2.4, lp.color, false);
+        addPool(12.2, -52.5, 2.0, lp.color, false); // glow: lighting.js pass
         break;
       }
       case "neon_bounce": break; // L_PLAZA_KEY — aggregate; signs are the visuals
@@ -665,8 +665,8 @@ export async function buildLevel(ctx) {
       bulb.translate(l.x, l.y - 0.02, l.z);
       (l.lit ? bulbsLit : bulbsDead).push(bulb);
       if (l.lit) {
-        addGlow(l.x, l.y - 0.05, l.z, 0xffc88a, 1.6, 0.45);
-        addPool(l.x, l.z, 3.2, 0xffc88a, !!l.plaza);
+        addGlow(l.x, l.y - 0.05, l.z, 0xffc88a, 1.3, 0.38);
+        addPool(l.x, l.z, 2.4, 0xffc88a, !!l.plaza);
       }
     }
     const sm = new THREE.Mesh(mergeGeometries(shades, false), M.metal);
@@ -685,36 +685,85 @@ export async function buildLevel(ctx) {
     }
   }
 
-  // ---- neon signage wall (LD §3.3 invented brands — the S3 hero backdrop)
+  // ---- neon signage wall (LD §3.3 invented brands — the S3 hero backdrop).
+  // FIXTURES, not floating glyphs (iter01 S1 tell): each sign is an emissive
+  // face inside a metal cabinet flush-mounted on the gallery wall (LD §4.1
+  // rule 5), with a frame, a mount plate, and an additive spill pool on the
+  // LOCAL WALL (so the sign visibly lights the surface that carries it) plus
+  // the ground pool. All spill dies with the plaza circuit in the blackout.
   {
+    const wallFaceX = 15.5; // gallery west wall (layout: gallery X 15.5..24.5)
+    const housingGeos = [], frameGeos = [], plateGeos = [];
+    const wallPoolQ = [];
+    const wallPool = (x, y, z, w, h, color) => {
+      const g = new THREE.PlaneGeometry(w, h);
+      g.rotateY(-Math.PI / 2);
+      g.translate(x, y, z);
+      const col = new THREE.Color(color);
+      const p = g.getAttribute("position");
+      const carr = new Float32Array(p.count * 3);
+      for (let i = 0; i < p.count; i++) { carr[i * 3] = col.r; carr[i * 3 + 1] = col.g; carr[i * 3 + 2] = col.b; }
+      g.setAttribute("color", new THREE.BufferAttribute(carr, 3));
+      wallPoolQ.push(g);
+    };
     for (const lp of layout.lightPoles) {
       if (lp.kind !== "neon") continue;
       const [x, y, z] = lp.pos;
       const text = lp.sign || "ZAROV";
       const wdt = Math.max(1.6, text.length * 0.42), hgt = text === "+" ? 1.4 : 0.95;
+      const faceX = x - 0.09; // sign face proud of the cabinet front
+      // cabinet: from the wall face out to the sign plane
+      housingGeos.push(boxGeo([faceX + 0.015, y - hgt / 2 - 0.09, z - wdt / 2 - 0.11],
+        [wallFaceX + 0.02, y + hgt / 2 + 0.09, z + wdt / 2 + 0.11]));
+      // mount plate: slightly larger, flush against the wall
+      plateGeos.push(boxGeo([wallFaceX - 0.015, y - hgt / 2 - 0.16, z - wdt / 2 - 0.18],
+        [wallFaceX + 0.035, y + hgt / 2 + 0.16, z + wdt / 2 + 0.18]));
+      // frame lips around the face
+      const fx0 = faceX - 0.015, fx1 = faceX + 0.05;
+      frameGeos.push(boxGeo([fx0, y + hgt / 2 + 0.03, z - wdt / 2 - 0.11], [fx1, y + hgt / 2 + 0.09, z + wdt / 2 + 0.11]));
+      frameGeos.push(boxGeo([fx0, y - hgt / 2 - 0.09, z - wdt / 2 - 0.11], [fx1, y - hgt / 2 - 0.03, z + wdt / 2 + 0.11]));
+      frameGeos.push(boxGeo([fx0, y - hgt / 2 - 0.09, z - wdt / 2 - 0.11], [fx1, y + hgt / 2 + 0.09, z - wdt / 2 - 0.05]));
+      frameGeos.push(boxGeo([fx0, y - hgt / 2 - 0.09, z + wdt / 2 + 0.05], [fx1, y + hgt / 2 + 0.09, z + wdt / 2 + 0.11]));
       const tex = new THREE.CanvasTexture(makeNeonCanvas(text, lp.color, text === "+" ? 128 : 512, 128));
       tex.colorSpace = THREE.SRGBColorSpace;
-      const plateG = new THREE.PlaneGeometry(wdt + 0.2, hgt + 0.16);
-      plateG.rotateY(-Math.PI / 2);
-      plateG.translate(x + 0.06, y, z);
-      const plate = new THREE.Mesh(plateG, M.plasticDark);
-      group.add(plate);
       const nm = new THREE.MeshStandardMaterial({
         color: 0x060708, roughness: 0.5, metalness: 0,
-        emissive: 0xffffff, emissiveIntensity: 3.4, emissiveMap: tex, map: tex,
+        emissive: 0xffffff, emissiveIntensity: 4.6, emissiveMap: tex, map: tex,
       });
       const sg = new THREE.PlaneGeometry(wdt, hgt);
       sg.rotateY(-Math.PI / 2);
-      sg.translate(x, y, z);
+      sg.translate(faceX, y, z);
       const sMesh = new THREE.Mesh(sg, nm);
       sMesh.name = `neon_${lp.id}`;
       group.add(sMesh);
-      const glow = addGlow(x - 0.35, y, z, lp.color, Math.max(2.2, wdt * 0.9), 0.34);
+      const glow = addGlow(faceX - 0.4, y, z, lp.color, Math.max(1.6, wdt * 0.6), 0.22);
       registry.practicals[lp.id] = { emissives: [nm], sprites: [glow] };
       registry.blackout.emissiveMats.push(nm);
       registry.blackout.sprites.push(glow);
-      // neon spill pool on the plaza ground below the sign
-      addPool(x - 2.2, z, 3.4, lp.color, true);
+      // spill: local wall pool (1.5 cm proud of the wall) + plaza ground pool
+      wallPool(wallFaceX - 0.015, y, z, wdt + 2.6, hgt + 2.3, lp.color);
+      addPool(x - 2.0, z, 2.6, lp.color, true);
+    }
+    if (housingGeos.length) {
+      const hm = new THREE.Mesh(mergeGeometries(housingGeos, false), M.metal);
+      hm.name = "neon_housings";
+      hm.castShadow = true;
+      group.add(hm);
+      const fm = new THREE.Mesh(mergeGeometries(frameGeos, false), M.trim);
+      fm.name = "neon_frames";
+      group.add(fm);
+      const pm2 = new THREE.Mesh(mergeGeometries(plateGeos, false), M.plasticDark);
+      pm2.name = "neon_plates";
+      group.add(pm2);
+    }
+    if (wallPoolQ.length) {
+      const mat = M.poolMat(0xffffff, 0.16);
+      mat.vertexColors = true;
+      const m = new THREE.Mesh(mergeGeometries(wallPoolQ, false), mat);
+      m.name = "neon_wall_pools";
+      m.renderOrder = 2;
+      group.add(m);
+      registry.blackout.sprites.push(mat); // dies with the plaza circuit
     }
   }
 
@@ -739,7 +788,9 @@ export async function buildLevel(ctx) {
       m.name = "sign";
       group.add(m);
     }
-    // arcade hanging shop signs ×6 (warm dim — 25 % interior zone)
+    // arcade hanging shop signs ×6 — the LD §3.4 "warm tungsten stalls" 25%
+    // interior read: lit sign faces + a warm bulb glow + a floor pool each
+    // (iter00 S4: the interior was pitch black around the skylight shaft)
     const shopNames = [["ЧАЙ • KAVA"], ["ТКАНИ"], ["REMONT"], ["ЛАВКА 12"], ["РЫБА"], ["FOTO ZAROV"]];
     for (let i = 0; i < 6; i++) {
       const x = -37.5 + (i % 3) * 4.2, z = i < 3 ? -15.5 : 1.2;
@@ -747,7 +798,7 @@ export async function buildLevel(ctx) {
       tex.colorSpace = THREE.SRGBColorSpace;
       const mat = new THREE.MeshStandardMaterial({
         map: tex, roughness: 0.8, metalness: 0,
-        emissive: 0xffc88a, emissiveIntensity: 0.16, emissiveMap: tex,
+        emissive: 0xffc88a, emissiveIntensity: 0.85, emissiveMap: tex,
       });
       const g = new THREE.PlaneGeometry(1.2, 0.45);
       g.translate(x, 3.15, z);
@@ -757,6 +808,8 @@ export async function buildLevel(ctx) {
       const hang = boxGeo([x - 0.02, 3.38, z - 0.02], [x + 0.02, 3.95, z + 0.02]);
       const hm = new THREE.Mesh(hang, M.trim);
       group.add(hm);
+      addGlow(x, 3.0, z + 0.12, 0xffc88a, 0.9, 0.3);
+      addPool(x, z + 0.4, 1.7, 0xffc88a, false, 0.014);
     }
   }
 
@@ -765,10 +818,11 @@ export async function buildLevel(ctx) {
     for (const p of layout.props) {
       if (p.flags && p.flags.headlights) {
         const [x, , z] = p.pos;
-        // abandoned car beams into the rain (LD §3.3) — pure glow cards
-        addGlow(x - 0.6, 0.72, z + 2.1, 0xfff2cc, 1.5, 0.5);
-        addGlow(x + 0.6, 0.72, z + 2.1, 0xfff2cc, 1.5, 0.5);
-        addPool(x, z + 4.4, 3.6, 0xfff2cc, false);
+        // abandoned car beams into the rain (LD §3.3) — pure glow cards,
+        // pinned tight to the lamp housings so they read as headlights
+        addGlow(x - 0.62, 0.68, z + 2.05, 0xfff2cc, 1.0, 0.45);
+        addGlow(x + 0.62, 0.68, z + 2.05, 0xfff2cc, 1.0, 0.45);
+        addPool(x, z + 3.8, 2.8, 0xfff2cc, false);
       }
       if (p.flags && p.flags.alarmBlink) {
         const s = addGlow(p.pos[0], 1.02, p.pos[2], 0xff3020, 0.34, 0.85);
@@ -780,7 +834,9 @@ export async function buildLevel(ctx) {
   // pool decal meshes (vertex-colored, one static + one plaza-circuit)
   {
     if (poolStatic.length) {
-      const mat = M.poolMat(0xffffff, 0.3);
+      // 0.18: at 0.3 the sodium ground pools stacked with lighting.js's fog
+      // discs + the real spot into the iter01 S4 orange-soup wash
+      const mat = M.poolMat(0xffffff, 0.18);
       mat.vertexColors = true;
       const m = new THREE.Mesh(mergeGeometries(poolStatic, false), mat);
       m.name = "light_pools";
@@ -788,7 +844,7 @@ export async function buildLevel(ctx) {
       group.add(m);
     }
     if (poolPlaza.length) {
-      const mat = M.poolMat(0xffffff, 0.3);
+      const mat = M.poolMat(0xffffff, 0.18);
       mat.vertexColors = true;
       const m = new THREE.Mesh(mergeGeometries(poolPlaza, false), mat);
       m.name = "light_pools_plaza";

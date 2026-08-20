@@ -63,9 +63,22 @@ CFG = {
         # raw-frame (unscaled, muzzle at -X) landmarks measured off renders:
         "grip_x_raw": 0.42,        # pistol-grip center
         "barrel_probe_raw": 0.10,  # sample width at the muzzle end to find bore z
-        "sight_h": 0.062,          # sight line ABOVE the bore line (m)
-        "rail": {"y0": -0.06, "y1": 0.42, "z_rel": 0.008, "w": 0.026, "strip_rel": 0.026},
-        "strip_tower": {"y0": 0.28, "y1": 0.56, "half_w": 0.05, "z_rel": 0.03},
+        # W1 (iter02 fix): sight line = the BASE MESH's own rail plane + real
+        # sight height, MEASURED off the mesh (tools probe, this session):
+        # wpn_ar carries a genuine flat top rail at bore+0.041 from y 0.084 to
+        # y 0.430, with its own front (y 0.462) and rear (y ~0.00) sight bosses
+        # at bore+0.070. We keep the rifle and replace only the two mushy Meshy
+        # bosses — the old build fabricated a rail and deleted the whole spine.
+        "sight_h": 0.070,          # sight line ABOVE the bore line (m)
+        "rail": None,              # the base mesh HAS a rail — never stack one
+        "iron_base_rel": 0.041,    # the mesh's own rail plane, rel bore
+        "iron": {"rear_y": -0.004, "front_y": 0.462},
+        "strip_regions": [         # surgical: the two mushy Meshy sight bosses
+            {"y0": -0.044, "y1": 0.036, "half_w": 0.017, "z_rel": 0.046},
+            {"y0": 0.440, "y1": 0.486, "half_w": 0.016, "z_rel": 0.046},
+        ],
+        "barrel_y": 0.47,          # exposed barrel/muzzle starts here
+        "lh_y": 0.240,             # support-hand station on the handguard
         "muzzle_dev": {"r": 0.0115, "len": 0.062, "kind": "birdcage"},
         "foregrip": {"y": 0.27, "drop": 0.075, "r": 0.014},
         "eject": {"y": 0.045, "z_rel": -0.004},
@@ -76,9 +89,18 @@ CFG = {
         "src": "wpn_smg.glb", "length": 0.72,
         "grip_x_raw": 0.30,
         "barrel_probe_raw": 0.10,
-        "sight_h": 0.055,
-        "rail": {"y0": -0.05, "y1": 0.30, "z_rel": 0.008, "w": 0.024, "strip_rel": 0.024},
-        "strip_tower": {"y0": 0.20, "y1": 0.45, "half_w": 0.04, "z_rel": 0.028},
+        # measured: rail plane bore+0.038 (y 0.023..0.160); rear boss y ~-0.015,
+        # front boss y 0.333 — both at bore+0.049..0.060.
+        "sight_h": 0.058,
+        "rail": None,
+        "iron_base_rel": 0.038,
+        "iron": {"rear_y": -0.014, "front_y": 0.333},
+        "strip_regions": [
+            {"y0": -0.048, "y1": 0.014, "half_w": 0.015, "z_rel": 0.042},
+            {"y0": 0.316, "y1": 0.352, "half_w": 0.014, "z_rel": 0.040},
+        ],
+        "barrel_y": 0.36,
+        "lh_y": 0.190,
         "muzzle_dev": {"r": 0.017, "len": 0.16, "kind": "suppressor"},
         "foregrip": {"y": 0.20, "drop": 0.065, "r": 0.013},
         "eject": {"y": 0.035, "z_rel": -0.004},
@@ -89,8 +111,18 @@ CFG = {
         "src": "wpn_sniper.glb", "length": 1.12,
         "grip_x_raw": 0.36,
         "barrel_probe_raw": 0.10,
-        "sight_h": 0.078,          # scope line (ADS uses A10's overlay)
-        "rail": None,              # scope already mounted
+        # measured: the Meshy scope tube runs y -0.09..0.19 with its axis at
+        # bore+0.081. The OCULAR end is the blobby torus that filled iter02's
+        # S2 frame — stripped and rebuilt as a crisp eyepiece (see build_scope).
+        "sight_h": 0.081,          # scope axis (ADS rides this line)
+        "rail": None,
+        "scope": {"axis_rel": 0.081, "y_ocular": -0.088, "tube_r": 0.0165,
+                  "bell_r": 0.0225, "y_turret": 0.045},
+        "strip_regions": [
+            {"y0": -0.135, "y1": -0.052, "half_w": 0.030, "z_rel": 0.056},
+        ],
+        "barrel_y": 0.60,
+        "lh_y": 0.235,
         "muzzle_dev": {"r": 0.0125, "len": 0.07, "kind": "brake"},
         "foregrip": None,
         "eject": {"y": 0.10, "z_rel": -0.002},
@@ -104,6 +136,7 @@ CFG = {
         "barrel_probe_raw": 0.12,
         "sight_h": 0.028,
         "rail": None,
+        "barrel_y": 0.075,
         "muzzle_dev": None,
         "foregrip": None,
         "eject": {"y": 0.01, "z_rel": -0.002},
@@ -194,9 +227,14 @@ def gen_textures():
     # path where preview == export (observed this session; keep it this way).
     p = os.path.join(GEN_DIR, "gun_albedo_body.png")
     if not os.path.exists(p):
-        # dark charcoal polymer mottle (values in raw sRGB space; darker than
-        # instinct says — AgX lifts shadows and guns read nearly black)
-        n = _fbm(S, 11, 5, 5) * 0.08 + 0.13
+        # Charcoal polymer furniture. W1 CALIBRATION (iter02 fix): the previous
+        # set authored sRGB 0.13-0.21 => 0.015-0.035 LINEAR, i.e. darker than
+        # charcoal, which forced weapon_meshes.js to apply a 3.4x runtime colour
+        # multiplier — and that multiplier is what turned the viewmodel into the
+        # blown-out white polygon soup of iter02 S1/S2. Authoring real values
+        # here (sRGB 0.23-0.40 => 0.042-0.13 linear, the measured range of
+        # phosphate/polymer gun furniture) lets the runtime multiplier be 1.0.
+        n = _fbm(S, 11, 5, 5) * 0.10 + 0.23
         n += _scratches(S, 12, 90, 0.07)
         n = np.clip(n, 0, 1)
         rgba = np.stack([n, n * 1.02, n * 1.05, np.ones_like(n)], axis=-1)
@@ -204,7 +242,9 @@ def gen_textures():
     done["albedo_body"] = p
     p = os.path.join(GEN_DIR, "gun_albedo_metal.png")
     if not os.path.exists(p):
-        n = _fbm(S, 13, 5, 7) * 0.09 + 0.15
+        # metalness = 1 for these regions, so base colour IS F0 reflectance:
+        # parkerised/blued steel sits near 0.11-0.30 linear (sRGB 0.37-0.60).
+        n = _fbm(S, 13, 5, 7) * 0.10 + 0.37
         n += _scratches(S, 14, 130, 0.14)
         n = np.clip(n, 0, 1)
         rgba = np.stack([n * 0.95, n, n * 1.12, np.ones_like(n)], axis=-1)
@@ -436,6 +476,52 @@ def build_sights(kind, rail_top_z, sight_z, y_front, y_rear, mats):
             objs.append(box(f"rs_blade{sx}", sx * 0.0042, y_rear, sight_z - 0.003, 0.004, 0.005, 0.0065, mats["metal"], bevel=0.0004))
     return objs
 
+def build_scope(cfg, bore_z, mats):
+    """Crisp authored OCULAR for the DMR (W1, iter02 S2 fix).
+
+    The Meshy sniper carries a real scope body, but its rear ocular is a lumpy
+    asymmetric blob — and at full ADS that blob IS the frame (iter02 S2 read as
+    'a deformed torus with shattered facets'). strip_regions removes the blob;
+    this rebuilds the eyepiece the shooter actually stares through: a stepped
+    bell, a crisp eyecup lip, and an OPEN bore so the world stays visible
+    (no black lens disc — A10 owns the scope overlay; an opaque lens would
+    blind the player if that overlay is late).
+    """
+    sc = cfg.get("scope")
+    if not sc:
+        return []
+    z = bore_z + sc["axis_rel"]
+    y = sc["y_ocular"]
+    tr, br = sc["tube_r"], sc["bell_r"]
+    objs = []
+    # tube stub bridging into the surviving Meshy scope body
+    objs.append(cyl("sc_tube", 0, y + 0.055, z, tr, 0.075, mats["metal"], axis="Y", verts=28))
+    # stepped ocular bell (tube -> bell over 18 mm)
+    objs.append(cyl("sc_step", 0, y + 0.026, z, tr * 1.16, 0.018, mats["metal"], axis="Y", verts=28,
+                    r2=br * 0.94))
+    objs.append(cyl("sc_bell", 0, y + 0.008, z, br, 0.022, mats["metal"], axis="Y", verts=32))
+    # rubber eyecup lip: a thin proud ring at the very rear face
+    objs.append(cyl("sc_cup", 0, y - 0.005, z, br * 1.06, 0.007, mats["grip"], axis="Y", verts=32))
+    # bore it out so the eyepiece is a RING, not a plug
+    bore = cyl("sc_bore", 0, y + 0.010, z, br * 0.80, 0.060, None, axis="Y", verts=32)
+    for o in (objs[-1], objs[-2]):
+        m = o.modifiers.new("bore", "BOOLEAN")
+        m.operation = "DIFFERENCE"
+        m.object = bore
+        bpy.context.view_layer.update()
+        apply_all(o)
+    bpy.data.objects.remove(bore, do_unlink=True)
+    # elevation + windage turrets (crisp knurled cylinders on the real tube)
+    ty = sc["y_turret"]
+    objs.append(cyl("sc_turret_up", 0, ty, z + tr * 0.92, 0.011, 0.016, mats["metal"], axis="Z", verts=18))
+    objs.append(cyl("sc_turret_up_cap", 0, ty, z + tr * 0.92 + 0.014, 0.0092, 0.005, mats["metal"], axis="Z", verts=18))
+    objs.append(cyl("sc_turret_lw", -tr * 0.92, ty, z, 0.010, 0.014, mats["metal"], axis="X", verts=18))
+    # ring mounts
+    for my in (ty - 0.055, ty + 0.075):
+        objs.append(cyl(f"sc_ring{my:.3f}", 0, my, z, tr * 1.14, 0.012, mats["metal"], axis="Y", verts=24))
+    return objs
+
+
 def build_muzzle_device(cfg, muzzle_y, bore_z, mats):
     objs = []
     md = cfg.get("muzzle_dev")
@@ -531,7 +617,7 @@ def assign_metal_regions(mo, mats, bore_z, cfg):
     mo.data.materials.append(mats["body"])
     mo.data.materials.append(mats["metal"])
     mo.data.materials.append(mats["grip"])
-    fg_y = cfg["rail"]["y1"] if cfg.get("rail") else cfg["length"] * 0.35
+    fg_y = cfg.get("barrel_y", cfg["length"] * 0.52)
     for p in mo.data.polygons:
         c = p.center
         if c.y > fg_y and abs(c.z - bore_z) < 0.05:
@@ -613,9 +699,19 @@ def build_arm_chunks():
         px = np.empty(w * h * 4, dtype=np.float32)
         sol_img.pixels.foreach_get(px)
         px = px.reshape(h, w, 4)
-        px[..., 0] *= 0.22   # raw-space multiply ≈ strong linear darken
-        px[..., 1] *= 0.235
-        px[..., 2] *= 0.20
+        # W1: was 0.22/0.235/0.20 => ~0.02 linear, i.e. black at night, which is
+        # why the runtime applied a 4.5x glove multiplier. A plain multiply is
+        # the wrong operator though — it keeps the soldier atlas's SKIN HUE, so
+        # the forearms read as bare arms (observed in this session's preview).
+        # Re-map luminance into a dark-olive nomex band instead: hue is forced,
+        # the albedo's own detail survives as the value variation, and the
+        # result (~sRGB 0.20-0.36 => 0.03-0.10 linear) needs no runtime lift.
+        lum = 0.30 * px[..., 0] + 0.60 * px[..., 1] + 0.10 * px[..., 2]
+        v = np.clip(lum, 0.0, 1.0) ** 0.9
+        band = 0.185 + 0.175 * v
+        px[..., 0] = band * 0.90
+        px[..., 1] = band * 1.00
+        px[..., 2] = band * 0.74
         img = bpy.data.images.new("glove_albedo", w, h, alpha=True)
         img.pixels.foreach_set(px.ravel())
         img.filepath_raw = glove_alb
@@ -687,11 +783,55 @@ def build_arm_chunks():
         # canonicalize: wrist->origin, fingers +Y, palm -Z
         dup.data.transform(frames[key].inverted())
         dup.data.update()
-        # shorten the forearm: keep ~19 cm behind the wrist (exits frame low)
+        # Shorten the forearm: keep ~19 cm behind the wrist (exits frame low).
+        # W1 (iter02 fix): this used to be a vertex DELETE, which follows the
+        # mesh's own edges and leaves a ragged, OPEN tube mouth — clay-rendered
+        # this session, both forearms ended in hollow cones with torn rims, one
+        # of the loudest amateur tells in the battery. Now: a clean planar
+        # bisect, the cut loop filled, and a proud sleeve cuff so the arm ends
+        # in a garment edge instead of a hole.
         bm2 = bmesh.new()
         bm2.from_mesh(dup.data)
-        cut = [v for v in bm2.verts if v.co.y < -0.19]
-        bmesh.ops.delete(bm2, geom=cut, context="VERTS")
+        CUT_Y = -0.19
+        geom = list(bm2.verts) + list(bm2.edges) + list(bm2.faces)
+        res = bmesh.ops.bisect_plane(bm2, geom=geom, dist=1e-6,
+                                     plane_co=(0.0, CUT_Y, 0.0),
+                                     plane_no=(0.0, -1.0, 0.0),
+                                     clear_outer=True)
+        cut_edges = [e for e in res.get("geom_cut", [])
+                     if isinstance(e, bmesh.types.BMEdge)]
+        if cut_edges:
+            try:
+                bmesh.ops.edgeloop_fill(bm2, edges=cut_edges)
+            except Exception:
+                bmesh.ops.triangle_fill(bm2, edges=cut_edges, use_beauty=True)
+        # belt-and-braces: close anything the bisect left open
+        try:
+            bmesh.ops.holes_fill(bm2, edges=list(bm2.edges), sides=0)
+        except Exception:
+            pass
+        # Sleeve cuff sized off the arm's OWN cross-section at the cut. The
+        # forearm is not axis-aligned there, so the radius must be measured
+        # from the section CENTROID — measuring from the canonical Y axis
+        # (first attempt this session) folded the offset into the radius and
+        # produced a pancake ~2.5x the arm, which then occluded a third of the
+        # ADS frame. Centroid + a hard clamp against a stray-vertex blow-up.
+        band = [v.co for v in bm2.verts
+                if CUT_Y - 0.004 < v.co.y < CUT_Y + 0.030]
+        if len(band) >= 8:
+            cx = sum(c.x for c in band) / len(band)
+            cz = sum(c.z for c in band) / len(band)
+            rs = sorted(math.hypot(c.x - cx, c.z - cz) for c in band)
+            cuff_r = rs[int(len(rs) * 0.92)]          # 92nd pct, not max
+            cuff_r = min(cuff_r, 0.045)               # a forearm is not 9 cm
+            if cuff_r > 0.004:
+                bmesh.ops.create_cone(
+                    bm2, cap_ends=True, cap_tris=False, segments=20,
+                    radius1=cuff_r * 1.14, radius2=cuff_r * 1.06, depth=0.026,
+                    calc_uvs=True,
+                    matrix=(Matrix.Translation((cx, CUT_Y + 0.011, cz)) @
+                            Matrix.Rotation(D(90), 4, "X")))
+        bmesh.ops.recalc_face_normals(bm2, faces=list(bm2.faces))
         bm2.to_mesh(dup.data)
         bm2.free()
         dup.data.update()
@@ -716,10 +856,22 @@ def build_arm_chunks():
             pass
     return _ARM_CACHE
 
-def place_arms(wid, mats):
+def support_hand_seat(base, y, bore_z, half_w=0.024):
+    """Underside of the handguard at station y (build frame) — the surface the
+    support hand must actually wrap. W1: the old ARM_POSE hard-coded the left
+    wrist ~9 cm BELOW the handguard on every rifle, so the support hand gripped
+    empty air (visible in this session's clay render). Measured, not guessed."""
+    zs = [v.co.z for v in base.data.vertices
+          if abs(v.co.y - y) < 0.035 and abs(v.co.x) < half_w]
+    if not zs:
+        return bore_z - 0.030
+    return min(zs)
+
+
+def place_arms(wid, mats, pose_override=None):
     chunks = build_arm_chunks()
     placed = []
-    for hand, loc, fingers, palm in ARM_POSE.get(wid, []):
+    for hand, loc, fingers, palm in (pose_override or ARM_POSE.get(wid, [])):
         src = chunks[hand]
         dup = src.copy()
         dup.data = src.data
@@ -821,15 +973,19 @@ def build(wid):
     assign_metal_regions(base, mats, bore_z, cfg)
 
     parts = [base]
-    rail_top = bore_z + 0.02
-    tw = cfg.get("strip_tower")
-    if tw:  # bent original Meshy sight towers — replaced by authored sights
-        strip_top(base, tw["y0"], tw["y1"], bore_z + tw["z_rel"], tw["half_w"])
-    if cfg.get("rail"):
-        z_cut = bore_z + cfg["rail"].get("strip_rel", 0.026)
-        strip_top(base, cfg["rail"]["y0"] - 0.01, muzzle_y - 0.05, z_cut, 0.020)
-        rail_objs, rail_top = build_rail(cfg["rail"], z_cut, mats)
-        parts += rail_objs
+    # ---- W1: SURGICAL strips only -------------------------------------------
+    # iter02's shattered-viewmodel root cause lived here: the old build called
+    # strip_top over a ~50 cm centreline channel (rail y0-0.01 .. muzzle-0.05 at
+    # bore+0.026) AND a 10 cm-wide front-half channel, deleting the whole spine
+    # out of a perfectly good 5.9k-tri AR — torn triangle fans everywhere — then
+    # stacked a fabricated rail and a 22 cm 'cheek_plate' slab on top of the
+    # wreckage. Verified by clay-rendering the shipped GLB this session.
+    # The base meshes carry their own rail and sight bosses; we now remove ONLY
+    # the two mushy bosses (a few cm each) and seat crisp sights on the mesh's
+    # own rail plane. No fabricated rail, no cheek plate.
+    for sr in (cfg.get("strip_regions") or []):
+        strip_top(base, sr["y0"], sr["y1"], bore_z + sr["z_rel"], sr["half_w"])
+
     sight_z = bore_z + cfg["sight_h"]
     if cfg["sights"] == "pistol":
         # sights ride the slide top: find top of mesh near centerline
@@ -837,15 +993,12 @@ def build(wid):
         sight_z = top + 0.006
         parts += build_sights("pistol", top, sight_z, muzzle_y - 0.02, -0.03, mats)
     elif cfg["sights"] != "none":
-        y_front = (cfg["rail"]["y1"] - 0.02) if cfg.get("rail") else muzzle_y - 0.05
-        y_rear = (cfg["rail"]["y0"] + 0.025) if cfg.get("rail") else -0.05
-        parts += build_sights(cfg["sights"], rail_top, sight_z, y_front, y_rear, mats)
-    # receiver-top / cheek plate: crisp dark geometry over the ADS-dominant
-    # stock-top mush (the surface the shooter stares at while aiming)
-    if cfg.get("rail"):
-        y0r = cfg["rail"]["y0"]
-        plate_z = bore_z + cfg["rail"].get("strip_rel", 0.026) - 0.012
-        parts.append(box("cheek_plate", 0, y0r - 0.10, plate_z, 0.030, 0.22, 0.012, mats["body"], bevel=0.002))
+        iron = cfg.get("iron") or {}
+        base_z = bore_z + cfg.get("iron_base_rel", 0.030)   # the MESH's rail plane
+        y_front = iron.get("front_y", muzzle_y - 0.05)
+        y_rear = iron.get("rear_y", -0.02)
+        parts += build_sights(cfg["sights"], base_z, sight_z, y_front, y_rear, mats)
+    parts += build_scope(cfg, bore_z, mats)
     md_objs, muzzle_tip_y = build_muzzle_device(cfg, muzzle_y, bore_z, mats)
     parts += md_objs
     parts += build_foregrip(cfg.get("foregrip"), mats)
@@ -873,9 +1026,19 @@ def build(wid):
         joined.name = "dressing"
         parts = [base, joined]
 
-    # arms
+    # arms — support hand seated on the MEASURED handguard underside (W1)
     if cfg.get("arms"):
-        parts += place_arms(wid, mats)
+        pose = [list(p) for p in ARM_POSE.get(wid, [])]
+        lh_y = cfg.get("lh_y")
+        if lh_y is not None:
+            seat = support_hand_seat(base, lh_y, bore_z)
+            for p in pose:
+                if p[0] == "L":
+                    # wrist sits ~3.2 cm under the handguard so the curled
+                    # fingers close ON it rather than in the air below it
+                    p[1] = (p[1][0], lh_y, seat - 0.032)
+        pose = [tuple(p) for p in pose]
+        parts += place_arms(wid, mats, pose_override=pose)
 
     # sockets
     mz = bpy.data.objects.new("SOCKET_muzzle", None)

@@ -38,14 +38,57 @@ const POINT_COUNT = 4;
 // sodium pockets 10–40%, arcade shaft 25%.
 const KIND_DEFAULTS = {
   sodium:      { intensity: 46,  distance: 20, penumbra: 0.45, decay: 1.8 },
-  neon_bounce: { intensity: 150, distance: 30, penumbra: 0.55, decay: 1.8 },
+  // neon_bounce is a CAP, not just a default — see bindOne. 130 (level.js's
+  // ask) painted the whole plaza instead of pooling it (iter02 S9).
+  neon_bounce: { intensity: 74,  distance: 30, penumbra: 0.55, decay: 1.8 },
   skylight:    { intensity: 38,  distance: 16, penumbra: 0.35, decay: 1.8 },
   flood:       { intensity: 140, distance: 46, penumbra: 0.28, decay: 1.8 },
   default:     { intensity: 40,  distance: 18, penumbra: 0.4,  decay: 1.8 },
 };
 
+// ---------------------------------------------------------- bounce aggregate
+// The plaza practical (kind 'neon_bounce', L_PLAZA_KEY) is an ABSTRACT
+// aggregate: ONE 85 deg spot from 9 m standing in for the whole signage wall
+// bouncing off wet stone. layout.js hands it the CLUB sign's own violet
+// (#c86ee0), so iter02 S9 came back with mean RGB 40.5 / 38.3 / 58.4 — green
+// BELOW red, the magenta signature — a uniform purple film over the frame.
+// That breaks VT §1's colour script outright ("warm sodium / cool fluorescent
+// practicals against the blue-hour key"; the cool-ambient vs warm-practical
+// separation IS the night look).
+//
+// Two physical facts fix it, both derived from the SAME single source rather
+// than a new magic constant: bounce light is (a) the SUM of every sign on the
+// wall, not one of them, and (b) markedly less saturated than its source, so
+// re-tinting or adding a sign in layout.js moves the plaza bounce with it.
+const BOUNCE_SAT = 0.55; // chroma retained relative to the aggregate's own luma
+
+function aggregateBounceColor(poles) {
+  const acc = new THREE.Color(0, 0, 0);
+  const c = new THREE.Color();
+  let n = 0;
+  for (const p of poles || []) {
+    if (p.kind !== "neon" || !p.color) continue;
+    c.set(p.color); // hex is sRGB; Color.set lands it in the linear working space
+    acc.r += c.r; acc.g += c.g; acc.b += c.b;
+    n++;
+  }
+  if (!n) return new THREE.Color(0xffd8b4); // warm fallback — never violet
+  acc.multiplyScalar(1 / n);
+  const luma = 0.2126 * acc.r + 0.7152 * acc.g + 0.0722 * acc.b;
+  acc.r = luma + (acc.r - luma) * BOUNCE_SAT;
+  acc.g = luma + (acc.g - luma) * BOUNCE_SAT;
+  acc.b = luma + (acc.b - luma) * BOUNCE_SAT;
+  // a light COLOUR is a tint; `intensity` carries the level. Normalise so
+  // desaturating never doubles as a dimmer.
+  acc.multiplyScalar(1 / Math.max(acc.r, acc.g, acc.b, 1e-5));
+  return acc;
+}
+
 // God-ray cone opacity by kind (LD §3.5 — exactly the 5 godRay:true poles).
-const CONE_OPACITY = { sodium: 0.13, skylight: 0.16, flood: 0.17, default: 0.12 };
+// DoubleSide sums both cylinder walls, and the cones stack on the ground
+// pools + fog discs + the real spot — iter01 S4 read as orange paint at the
+// old 0.13/0.17; fog is atmosphere, not paint (VT §4 / LD §3.4 zone plan).
+const CONE_OPACITY = { sodium: 0.075, skylight: 0.14, flood: 0.11, default: 0.09 };
 
 export function createLights(ctx) {
   const scene = ctx.scene;
@@ -53,7 +96,10 @@ export function createLights(ctx) {
   // ------------------------------------------------------------ the pool
   // Moon — the ONE shadow caster. Azimuth 310° (NW), elevation 38°,
   // #5a6b8c storm-filtered (LD §3.2). +X east, -Z north.
-  const moon = new THREE.DirectionalLight(0x5a6b8c, 0.32);
+  // 0.42/0.085 (was 0.32/0.07): iter01 read as underexposed slabs — this
+  // lifts material legibility while keeping key:ambient ≥4:1 (VT §1) and
+  // the LD §3.4 zone-contrast ordering intact.
+  const moon = new THREE.DirectionalLight(0x5a6b8c, 0.42);
   {
     const az = (310 * Math.PI) / 180;
     const el = (38 * Math.PI) / 180;
@@ -83,7 +129,7 @@ export function createLights(ctx) {
   // Hemisphere — the darkness floor. Sky #1a2030 / ground #0a0c10 with the
   // sodium-pollution tint #2a2418 mixed into the ground term (LD §3.2).
   const groundCol = new THREE.Color(0x0a0c10).lerp(new THREE.Color(0x2a2418), 0.35);
-  const hemi = new THREE.HemisphereLight(0x1a2030, groundCol, 0.07);
+  const hemi = new THREE.HemisphereLight(0x1a2030, groundCol, 0.085);
   hemi.layers.enableAll(); // v2.2: reach the viewmodel camera's layer (A4)
   scene.add(hemi);
 
@@ -125,6 +171,17 @@ export function createLights(ctx) {
   };
 
   const byId = {}; // practical id → { spot, spec }
+
+  // memoised bounce tint (layout.lightPoles is static for the level's life)
+  let _bounce = null;
+  function bounceColor() {
+    if (!_bounce) {
+      _bounce = aggregateBounceColor(
+        (ctx.layout && ctx.layout.lightPoles) || [],
+      );
+    }
+    return _bounce;
+  }
 
   // ------------------------------------------------------------- blackout
   // State machine ticked by _tick(dt). Phases: idle → fading (0.4 s) →
@@ -312,7 +369,7 @@ export function createLights(ctx) {
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
-      uniforms: { uOp: { value: 0.10 } }, // LD §5.2: faint additive fog discs
+      uniforms: { uOp: { value: 0.06 } }, // LD §5.2: FAINT fog discs (0.10 stacked into the S4 wash)
       vertexShader: /* glsl */ `
         varying vec2 vUv; varying vec3 vCol;
         void main() {
@@ -448,10 +505,14 @@ export function createLights(ctx) {
       mesh.renderOrder = 9;
       const m4 = new THREE.Matrix4();
       discs.forEach((p, i) => {
-        const r = p.kind === "neon_bounce" ? 7.0 : 4.6;
+        const r = p.kind === "neon_bounce" ? 5.5 : 3.4;
         m4.makeScale(r, 1, r).setPosition(p.pos[0], 0.07, p.pos[2]);
         mesh.setMatrixAt(i, m4);
-        const col = new THREE.Color(p.color);
+        // the plaza aggregate's disc must carry the SAME conditioned tint as
+        // its spot — a violet 5.5 m additive disc is the same magenta film
+        const col = p.kind === "neon_bounce"
+          ? bounceColor().clone()
+          : new THREE.Color(p.color);
         mesh.setColorAt(i, col);
         const plaza = p.id === "L_PLAZA_KEY";
         decor.discMeta.push({ baseColor: col.clone(), plaza, phase: (i * 2.3) % 6.28 });
@@ -490,6 +551,15 @@ export function createLights(ctx) {
     spot.angle = ((spec.cone ?? 50) * Math.PI) / 360; // cone = FULL angle
     spot.penumbra = spec.penumbra ?? d.penumbra;
     spot.decay = spec.decay ?? d.decay;
+    if (spec.kind === "neon_bounce") {
+      // aggregate, not a sign: warm-neutral sum of the wall (see above), and
+      // intensity CAPPED — level.js asks 130, which from 9 m through an 85 deg
+      // cone is a wash across the whole plaza, not a pool. The cap keeps the
+      // plaza the brightest zone (LD §3.4 = 100%) while leaving the moon/hemi
+      // cool visible in the cobble shadows, which is the warm/cool contrast.
+      spot.color.copy(bounceColor());
+      spot.intensity = Math.min(spot.intensity, d.intensity);
+    }
     if (spec.id) byId[spec.id] = { spot, spec };
   }
 

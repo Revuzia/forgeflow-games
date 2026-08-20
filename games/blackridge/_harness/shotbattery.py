@@ -14,9 +14,14 @@ shotserver sink (R20) — hidden-tab-proof: the page reads its own render
 target back, never a compositor screenshot.
 
 Exit codes: 0 = every requested shot captured AND every `until` fired;
-1 = a shot failed or an `until` never fired; 2 = navigation failure;
-3 = iteration dir already exists; 4 = NOT READY (game surface missing —
-expected until A11 wave-2 core/test/* + the game code land).
+1 = a shot failed (no PNG, near-black frame, unfired `until`, script
+give-up, or a per-shot load that kept failing after retries); 2 = FIRST
+load failed after retries; 3 = iteration dir already exists; 4 = NOT READY
+(game surface missing — expected until A11 wave-2 core/test/* + the game
+code land). NOT READY is only ever decided on the FIRST load: once shots
+are running, every failure is per-shot, the loop continues, and the
+manifest is ALWAYS written (iter01 regression: an aborted mid-run reload
+used to eat the manifest and print a false "#nogpu" NOT-READY).
 
 Driftwake `shoot.py` lineage minus the two-target A/B comparison, plus
 iteration management. Frames, never wall clock, for anything the sim drives.
@@ -34,7 +39,7 @@ for _s in (sys.stdout, sys.stderr):
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from shotserver import ensure_server, SHOTS_ROOT
+from shotserver import ensure_server, SHOTS_ROOT, PORT as SERVER_PORT, _port_open, _is_ours
 
 DEFAULT_URL = "http://localhost:8841/games/blackridge/index.html"
 
@@ -44,6 +49,18 @@ FLAGS = ["--ignore-gpu-blocklist", "--use-angle=d3d11", "--disable-gpu-sandbox",
 
 class NotReady(RuntimeError):
     """Harness infrastructure is fine; the GAME surface is not there yet."""
+
+
+class BootFailed(RuntimeError):
+    """ONE page load failed to boot (boot error / transient WebGL churn).
+
+    Retryable — a fresh navigation re-runs the capability gate and the boot.
+    Distinct from NotReady: boot.js fail() shows #nogpu for ANY boot error,
+    so '#nogpu is showing' must never be reported as 'WebGL2 unavailable'
+    unless __BR_CAPS__ actually says the capability probe failed AND it keeps
+    failing across fresh loads (iter01 lesson: one transient #nogpu on the
+    5th reload aborted the whole battery with a false NOT-READY line).
+    """
 
 
 def load_shots_source() -> str:
@@ -72,32 +89,54 @@ BOOTSTRAP = r"""
 
 READY_EXPR = "!!(globalThis.__FPS__ && __FPS__.renderer && __FPS__.sim)"  # R11
 
+# One evaluate per poll: ready state + full #nogpu forensics in the same
+# snapshot, so the diagnosis is what the page ACTUALLY showed, not a guess.
+BOOT_PROBE = """() => {
+    const el = document.getElementById('nogpu');
+    const caps = window.__BR_CAPS__ || null;
+    return {
+        ready: !!(globalThis.__FPS__ && __FPS__.renderer && __FPS__.sim),
+        nogpu: !!(el && el.classList.contains('show')),
+        panel: (el && el.classList.contains('show')) ? String(el.innerText || '').slice(0, 300) : '',
+        capsOk: caps ? !!caps.ok : null,
+        capsFatal: caps ? caps.fatal : null,
+        bootErrors: (window.__BOOT_ERRORS__ || []).slice(0, 4).map(String),
+        phase: (document.getElementById('boot-phase') || {}).textContent || '',
+    };
+}"""
+
 
 def wait_ready(page, timeout_s: float) -> None:
+    """Wait for the game surface; raise BootFailed (retryable) on #nogpu.
+
+    #nogpu.show has TWO generators (index.html cap gate + boot.js fail()),
+    so it is diagnosed, never assumed: only a capability-gate verdict is
+    reported as a GPU problem, and even that is retryable — Chrome's WebGL2
+    probe can fail transiently under the context churn of reload-per-shot.
+    """
     deadline = time.time() + timeout_s
+    st = {}
     while time.time() < deadline:
         try:
-            nogpu = page.evaluate(
-                "!!(document.getElementById('nogpu') && "
-                "document.getElementById('nogpu').classList.contains('show'))")
-            if nogpu:
-                raise NotReady("page shows #nogpu — WebGL2 unavailable in this Chrome")
-            if page.evaluate(READY_EXPR):
-                return
-        except NotReady:
-            raise
+            st = page.evaluate(BOOT_PROBE)
         except Exception:
-            pass
+            st = {}
+        if st.get("ready"):
+            return
+        if st.get("nogpu"):
+            if st.get("capsOk") is False:
+                raise BootFailed(
+                    f"capability gate refused this load: missing {st.get('capsFatal')} "
+                    f"(healthy GPUs hit this transiently under reload context churn)")
+            raise BootFailed(
+                f"boot FAILED with #nogpu shown (NOT a GPU verdict) — "
+                f"boot errors: {st.get('bootErrors') or 'none recorded'}; "
+                f"panel: {st.get('panel')!r}")
         page.wait_for_timeout(400)
-    phase = ""
-    try:
-        phase = page.evaluate(
-            "(document.getElementById('boot-phase')||{}).textContent || ''")
-    except Exception:
-        pass
     raise NotReady(
-        f"no __FPS__ global after {timeout_s:.0f}s (boot phase={phase!r}) — "
-        f"A0 skeleton not booting; run bootcheck.py first")
+        f"no __FPS__ global after {timeout_s:.0f}s (boot phase={st.get('phase')!r}, "
+        f"boot errors={st.get('bootErrors')!r}) — A0 skeleton not booting; "
+        f"run bootcheck.py first")
 
 
 def require_surface(page) -> None:
@@ -124,18 +163,32 @@ def settle_frames(page, n: int, giveup_s: float = 30.0) -> None:
         page.wait_for_timeout(25)
 
 
-def sim_frames(page) -> int:
+def sim_ticks(page) -> int:
+    # REAL sim ticks (fixed-dt), not rendered frames — stats().frames counts
+    # rAF renders, which pace differently when Playwright renders slowly.
     return page.evaluate(
-        "(() => { try { return __FPS__.stats().frames|0; } catch(e) { return 0; } })()")
+        "(() => { try { return __FPS__.sim.state.tick|0; } "
+        "catch(e) { try { return __FPS__.stats().frames|0; } catch(e2) { return 0; } } })()")
+
+
+def wait_sim_ticks(page, want: int, start: int | None = None) -> bool:
+    """Poll until `want` sim ticks elapsed past `start`; False = wall-clock give-up."""
+    if start is None:
+        start = sim_ticks(page)
+    giveup = time.time() + want / 60.0 * 8 + 5.0
+    while sim_ticks(page) - start < want:
+        if time.time() > giveup:
+            return False
+        page.wait_for_timeout(25)
+    return True
 
 
 def run_script(page, sid: str) -> dict:
     """Interpret a scenario's `script` (C1) with REAL input events (doctrine §5).
 
     Holds are real keydown (released with real keyup); trigger is real
-    mousedown/mouseup on #view; progress is measured in SIM frames via
-    __FPS__.stats().frames — the fixed-dt accumulator makes sim frames track
-    real time even when Playwright renders slowly. Wall clock appears only as
+    mousedown/mouseup on #view; progress is measured in SIM TICKS
+    (__FPS__.sim.state.tick — the fixed-dt clock). Wall clock appears only as
     a give-up timeout, and the manifest records if it fired.
     """
     steps = page.evaluate(
@@ -144,7 +197,7 @@ def run_script(page, sid: str) -> dict:
     gave_up = False
     for step in steps:
         want = int(step.get("frames") or 0)
-        start = sim_frames(page)
+        start = sim_ticks(page)
         if step.get("hold"):
             for code in step["hold"]:
                 page.evaluate(
@@ -156,22 +209,27 @@ def run_script(page, sid: str) -> dict:
                     "(c) => window.dispatchEvent(new KeyboardEvent('keyup', {code: c, bubbles: true}))",
                     code)
         if step.get("press"):
-            page.evaluate("""(c) => {
-                window.dispatchEvent(new KeyboardEvent('keydown', {code: c, bubbles: true}));
-                window.dispatchEvent(new KeyboardEvent('keyup',   {code: c, bubbles: true}));
-            }""", step["press"])
+            # A press must SPAN sim ticks: keydown+keyup in one JS task flips
+            # input.state before any fixed-dt cmd build samples it, so the sim
+            # never sees the key (iter01 root cause: C1's KeyR reload never
+            # started and `until reloads > 0` could not fire). Hold the key
+            # across >=3 real ticks, then release with a real keyup.
+            page.evaluate(
+                "(c) => window.dispatchEvent(new KeyboardEvent('keydown', {code: c, bubbles: true}))",
+                step["press"])
+            if not wait_sim_ticks(page, 3):
+                gave_up = True
+            page.evaluate(
+                "(c) => window.dispatchEvent(new KeyboardEvent('keyup', {code: c, bubbles: true}))",
+                step["press"])
         if step.get("fire"):
             page.evaluate("""() => {
                 const v = document.getElementById('view');
                 v.dispatchEvent(new MouseEvent('mousedown', {button: 0, bubbles: true}));
             }""")
         if want > 0:
-            giveup = time.time() + want / 60.0 * 8 + 5.0
-            while sim_frames(page) - start < want:
-                if time.time() > giveup:
-                    gave_up = True
-                    break
-                page.wait_for_timeout(25)
+            if not wait_sim_ticks(page, want, start):
+                gave_up = True
         if step.get("fire"):
             page.evaluate("""() => {
                 const v = document.getElementById('view');
@@ -181,6 +239,35 @@ def run_script(page, sid: str) -> dict:
             captured_at = step["captureAt"]
             break  # the PNG for this scenario is taken NOW, by the caller
     return {"capturedAt": captured_at, "scriptGaveUp": gave_up}
+
+
+def wait_until(page, sid: str, timeout_s: float = 15.0) -> bool:
+    deadline = time.time() + timeout_s  # give-up timeout ONLY — not a duration
+    while time.time() < deadline:
+        if page.evaluate(
+                "(n) => { const F = globalThis.__FPS__; "
+                "return !!(new Function('F', 'return (' + SCENARIOS[n].until + ')'))(F); }",
+                sid):
+            return True
+        page.wait_for_timeout(50)
+    return False
+
+
+def png_mean_luma(path: str):
+    """Mean 0-255 luma of a PNG, or None if Pillow is unavailable.
+
+    An all-black/near-black capture is a FAILED capture (a night scene still
+    reads well above black); the battery must say so, not hand the critic a
+    void frame as if it were the game.
+    """
+    try:
+        from PIL import Image, ImageStat
+        with Image.open(path) as im:
+            g = im.convert("L")
+            g.thumbnail((192, 108))
+            return round(ImageStat.Stat(g).mean[0], 2)
+    except Exception:
+        return None
 
 
 def run_shot(page, sid: str, iter_name: str, args) -> dict:
@@ -196,32 +283,34 @@ def run_shot(page, sid: str, iter_name: str, args) -> dict:
     scen_report = page.evaluate(
         "(n) => __FPS__.__test.setScenario(n, SCENARIOS[n])", sid)
 
-    script_state = {}
-    if sc["hasScript"]:
-        script_state = run_script(page, sid)
-
+    # HUD state + settle FIRST — for a scripted scenario the capture fires the
+    # instant the script hits captureAt; nothing may drift that moment.
     page.evaluate("(h) => { __FPS__.__test.hud(h); window.__bkChrome(h); }",
                   sc["hud"])
     settle_frames(page, sc["settleFrames"])
 
+    script_state = {}
+    if sc["hasScript"]:
+        script_state = run_script(page, sid)
+
+    # `until` ordering differs by kind. Posed scenario: gate BEFORE capture
+    # (the world is held; until re-arms/validates the framed state). Scripted
+    # scenario: capture at the captureAt moment, gate AFTER — C1's
+    # "reloads > 0" only fires when the reload COMPLETES, ~1.2 s after the
+    # reload-mid frame the capture must freeze; waiting first would
+    # deliberately outlive the moment being photographed.
     until_reached = True
-    if sc["hasUntil"]:
-        until_reached = False
-        deadline = time.time() + 15.0  # give-up timeout ONLY — not a duration
-        while time.time() < deadline:
-            if page.evaluate(
-                    "(n) => { const F = globalThis.__FPS__; "
-                    "return !!(new Function('F', 'return (' + SCENARIOS[n].until + ')'))(F); }",
-                    sid):
-                until_reached = True
-                break
-            page.wait_for_timeout(50)
+    if sc["hasUntil"] and not sc["hasScript"]:
+        until_reached = wait_until(page, sid)
 
     # Capture: page renders its own RT and POSTs /__shot/<iterNN>/<sid>.png.
     shot_name = f"{iter_name}/{sid}.png"
     page.evaluate(
         "(a) => __FPS__.__test.capture(a.name, a.w, a.h, {dpr: a.dpr})",
         {"name": shot_name, "w": args.width, "h": args.height, "dpr": args.dpr})
+
+    if sc["hasUntil"] and sc["hasScript"]:
+        until_reached = wait_until(page, sid)
 
     # OBSERVE the effect: the PNG must exist on disk (local sink only).
     out_path = os.path.join(SHOTS_ROOT, iter_name, f"{sid}.png")
@@ -232,6 +321,9 @@ def run_shot(page, sid: str, iter_name: str, args) -> dict:
             on_disk = True
             break
         time.sleep(0.25)
+
+    mean_luma = png_mean_luma(out_path) if on_disk else None
+    near_black = (mean_luma is not None and mean_luma < 4.0)
 
     state = page.evaluate("""() => {
         try {
@@ -247,7 +339,8 @@ def run_shot(page, sid: str, iter_name: str, args) -> dict:
     return {"name": sid, "file": f"{sid}.png", "seed": sc["seed"],
             "botSeed": sc["botSeed"], "rainPhase": sc["rainPhase"],
             "hud": sc["hud"], "untilReached": until_reached,
-            "capturedOnDisk": on_disk, "pageErrors": errs,
+            "capturedOnDisk": on_disk, "meanLuma": mean_luma,
+            "nearBlack": near_black, "pageErrors": errs,
             "scenario": scen_report,
             **script_state, **state}
 
@@ -283,6 +376,7 @@ def main() -> int:
     manifest_rows, console_log, failed = [], [], []
     version = None
 
+    todo = []
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(channel="chrome", headless=False, args=FLAGS)
@@ -291,16 +385,35 @@ def main() -> int:
             page.on("pageerror", lambda e: console_log.append(f"[pageerror] {e}"))
             page.add_init_script(BOOTSTRAP)
 
-            def fresh():
-                page.goto(args.url, wait_until="load", timeout=90_000)
-                page.add_script_tag(content=shots_src)
-                # setScenario's seed-table fallback: boot's one-arg routing
-                # lambda drops the second argument, so the table also rides
-                # on a window global scenarios.js knows to read (R21).
-                page.evaluate("window.__BR_SEEDS__ = SCENARIOS")
-                wait_ready(page, args.ready_timeout)
-                require_surface(page)
-                settle_frames(page, 30)  # prewarm settle — frames, not wall clock
+            def fresh(attempts: int = 3):
+                # BootFailed and navigation errors are RETRYABLE: each attempt
+                # is a fresh load that re-runs the capability gate (transient
+                # WebGL churn clears on reload — iter01's S5 abort lesson).
+                # NotReady (surface genuinely missing) is never retried.
+                last = None
+                for a in range(1, attempts + 1):
+                    try:
+                        page.goto(args.url, wait_until="load", timeout=90_000)
+                        page.add_script_tag(content=shots_src)
+                        # setScenario's seed-table fallback: boot's one-arg
+                        # routing lambda drops the second argument, so the
+                        # table also rides on a window global scenarios.js
+                        # knows to read (R21).
+                        page.evaluate("window.__BR_SEEDS__ = SCENARIOS")
+                        wait_ready(page, args.ready_timeout)
+                        require_surface(page)
+                        settle_frames(page, 30)  # prewarm settle — frames, not wall clock
+                        return
+                    except NotReady:
+                        raise
+                    except Exception as e:
+                        last = e
+                        if a < attempts:
+                            print(f"  .. load attempt {a}/{attempts} failed "
+                                  f"({e}); retrying with a fresh navigation",
+                                  file=sys.stderr)
+                            page.wait_for_timeout(700 * a)
+                raise last
 
             try:
                 fresh()
@@ -313,24 +426,39 @@ def main() -> int:
 
             version = page.evaluate("__FPS__.version || null")
             battery = page.evaluate("BATTERY")
-            todo = [s for s in battery if not want or s in want]
-            unknown = set(want) - set(battery) - set(
-                page.evaluate("Object.keys(SCENARIOS)"))
-            if unknown:
-                print(f"!! unknown scenario ids: {sorted(unknown)}", file=sys.stderr)
+            all_ids = page.evaluate("Object.keys(SCENARIOS)")
+            if want:
+                # Any SCENARIOS id is requestable (menu/bench included) —
+                # filtering against BATTERY only silently dropped them.
+                todo = [s for s in want if s in all_ids]
+                unknown = [s for s in want if s not in all_ids]
+                if unknown:
+                    print(f"!! unknown scenario ids (counted as failures): "
+                          f"{unknown}", file=sys.stderr)
+                    failed.extend(unknown)
+            else:
+                todo = list(battery)
 
             for i, sid in enumerate(todo):
-                if i > 0 and not args.no_reload:
-                    fresh()
+                # EVERYTHING per-shot lives inside this try — a failed reload
+                # for one shot is that shot's failure, never the battery's
+                # (iter01: an unguarded fresh() abort ate S5..C1 AND the
+                # manifest for the four shots already on disk).
                 try:
+                    if i > 0 and not args.no_reload:
+                        fresh()
                     row = run_shot(page, sid, iter_name, args)
                     manifest_rows.append(row)
                     bad = ((not row["capturedOnDisk"]) or (not row["untilReached"])
-                           or row.get("scriptGaveUp", False))
+                           or row.get("scriptGaveUp", False)
+                           or row.get("nearBlack", False))
                     if bad:
                         failed.append(sid)
                     print(f"  [{i + 1}/{len(todo)}] {sid}"
                           + ("" if row["capturedOnDisk"] else "  !! PNG never arrived on disk")
+                          + ("  !! NEAR-BLACK frame (mean luma "
+                             f"{row.get('meanLuma')}) — capture is void"
+                             if row.get("nearBlack") else "")
                           + ("" if row["untilReached"]
                              else "  !! until() NEVER FIRED — frame not comparable")
                           + ("  !! script GAVE UP on wall clock — frame not comparable"
@@ -339,10 +467,15 @@ def main() -> int:
                              if row["pageErrors"] else ""))
                 except Exception as e:
                     failed.append(sid)
+                    manifest_rows.append({
+                        "name": sid, "file": f"{sid}.png", "error": str(e),
+                        "capturedOnDisk": False, "untilReached": False})
                     print(f"  !! {sid} FAILED: {e}", file=sys.stderr)
 
             browser.close()
     except NotReady as e:
+        # Only reachable BEFORE the first shot (per-shot failures are caught
+        # in the loop) — so this can never again mask a half-finished run.
         print(f"NOT READY: {e}", file=sys.stderr)
         # Leave no half-claimed iteration dir behind if nothing was captured.
         try:
@@ -359,9 +492,21 @@ def main() -> int:
     with open(os.path.join(iter_dir, "console.log"), "w", encoding="utf-8") as f:
         f.write("\n".join(console_log))
 
-    ok = len(manifest_rows) - len([r for r in manifest_rows
-                                   if r["name"] in failed])
-    print(f"\n{ok}/{len(manifest_rows) if manifest_rows else 0} shots -> {iter_dir}")
+    # Leave the sink healthy for the NEXT run — verify, never assume; respawn
+    # if this run's load killed it (detached process, so normally it outlives
+    # us; the probe is the observation that it actually did).
+    try:
+        if _port_open(SERVER_PORT) and _is_ours(SERVER_PORT):
+            print(f"[shotserver] healthy on port {SERVER_PORT} for the next run")
+        else:
+            print(f"[shotserver] NOT answering after the run — respawning",
+                  file=sys.stderr)
+            ensure_server()
+    except Exception as e:
+        print(f"[shotserver] could not verify/respawn: {e}", file=sys.stderr)
+
+    ok = len([r for r in manifest_rows if r["name"] not in failed])
+    print(f"\n{ok}/{len(todo)} shots -> {iter_dir}")
     if failed:
         print(f"FAILED: {failed}", file=sys.stderr)
     return 0 if manifest_rows and not failed else 1

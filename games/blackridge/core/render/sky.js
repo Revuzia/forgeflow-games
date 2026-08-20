@@ -337,8 +337,18 @@ export function createSky(ctx) {
     if (envRT) envRT.dispose(); // setTimeOfDay rebake must not leak the old RT
     envRT = rt;
     envTex = rt.texture;
-    scene.environment = envTex;
-    if ("environmentIntensity" in scene) scene.environmentIntensity = 0.3;
+    // reflect.js publishes a PMREM of the plaza-baked SCENE cube (R18) — it
+    // carries the practicals/neon and is the wet-streak source, so it wins
+    // as scene.environment once present; the dome PMREM is boot-time cover
+    // (scenarios re-call setTimeOfDay every pose — never clobber the cube).
+    const pub = globalThis.__BR_REFLECT__;
+    if (pub && pub.envPMREM) {
+      scene.environment = pub.envPMREM;
+      if ("environmentIntensity" in scene) scene.environmentIntensity = 0.5;
+    } else {
+      scene.environment = envTex;
+      if ("environmentIntensity" in scene) scene.environmentIntensity = 0.3;
+    }
   }
   try { bakeEnv(); } catch (e) {
     console.warn("[sky] env bake failed:", e && e.message);

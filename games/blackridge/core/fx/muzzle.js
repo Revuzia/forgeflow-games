@@ -6,62 +6,104 @@
 // multipliers read from weapon_data.js FIRST_SHOT (A4's shared export;
 // local fallback only guards a stub regression).
 //
+// ITER01 F2 REWORK (visual_target §5): the old single 8-point-star canvas
+// sprite at 0.52 m base read as a giant cartoon star (S1). Replaced with a
+// 4-variant combustion-flash ATLAS (irregular ragged petals + blob core +
+// spark specks — never a clean geometric star), per-sprite random variant +
+// a mid-life frame SWAP (the spec's "2-frame additive sprite cluster"), and
+// honest sizes. PLAYER flashes render on VM_LAYER in their own instanced
+// pool: the viewmodel renders through the 60° vm camera while the world pass
+// runs at world FOV, so a world-layer sprite at the muzzle-socket position
+// lands visibly OFF the barrel (iter01 S1 star floating left of the gun).
+// The vm-layer pool draws inside the vm pass — pixel-aligned to the barrel
+// crown, never occluded, bloomed with the gun. Bot flashes keep a world-
+// layer pool (with a distance-readability size mult; tracers + the leased
+// light carry the rest at range).
+//
 // Lights come ONLY from the A6 lease API (lights.lease/dynamicFree) — this
 // file never constructs a THREE.Light (hard rule). While A6's pool is still
 // the zero-light stub, dynamicFree() is 0 and every flash is sprite-only,
-// by design. 12 sprite slots (architecture §3.14); a flash uses 2 (star +
-// side flare). Internal to fx.js.
+// by design. Sprite budget (architecture §3.14): 12 world slots + 8 vm
+// slots; a flash uses 2 (crown core + leading puff). Internal to fx.js.
 
 import * as THREE from "three";
 import * as WD from "../weapons/weapon_data.js";
+import { VM_LAYER } from "../weapons/viewmodel.js";
 
 const FIRST = WD.FIRST_SHOT ||
   { gapS: 0.5, flashScaleMult: 1.2, flashIntensityMult: 1.25, fullTracer: true };
 
-const N = 12;               // sprite slots (frozen pool size)
+const N_WORLD = 12;         // world-layer sprite slots (bots)
+const N_VM = 8;             // vm-layer sprite slots (player)
 const LIGHT = { color: 0xffc27a, peak: 18, durS: 0.055, radius: 9 }; // §4.2
 const MAX_MUZZLE_LEASES = 3; // 3-light grant rule (4th pool light = explosions)
 const BOT_LIGHT_MAX_DIST = 60;
-const FLASH_SIZE = { warden: 0.52, vesper: 0.42, corvus: 0.66, pike: 0.36 };
+// Base sprite size (m). Through the 60° vm camera at ~0.7 m these cover
+// ~200–260 px of a 1080p frame — a flash frame, not a torch (VT §5).
+const FLASH_SIZE = { warden: 0.15, vesper: 0.12, corvus: 0.19, pike: 0.11 };
+const BOT_SIZE_MULT = 2.2; // night readability at 10–60 m through world FOV
 
-function starTexture() {
+// ---- 4-variant flash atlas (2×2, 512²) --------------------------------------
+// Irregular combustion read: ragged petals at jittered angles/lengths, a
+// multi-blob core, spark specks. Four variants; each sprite picks one at
+// spawn and swaps to a second mid-life (multi-frame flicker).
+function flashAtlasTexture(rnd) {
   const cv = document.createElement("canvas");
-  cv.width = cv.height = 128;
+  cv.width = cv.height = 512;
   const g = cv.getContext("2d");
-  const spike = (angle, len, w) => {
+  for (let f = 0; f < 4; f++) {
+    const cx = (f % 2) * 256 + 128, cy = ((f / 2) | 0) * 256 + 128;
     g.save();
-    g.translate(64, 64);
-    g.rotate(angle);
-    const gr = g.createLinearGradient(0, 0, len, 0);
-    gr.addColorStop(0, "rgba(255,244,220,0.95)");
-    gr.addColorStop(0.35, "rgba(255,205,130,0.55)");
-    gr.addColorStop(1, "rgba(255,170,80,0)");
-    g.fillStyle = gr;
-    g.beginPath();
-    g.moveTo(0, -w);
-    g.lineTo(len, 0);
-    g.lineTo(0, w);
-    g.closePath();
-    g.fill();
+    g.translate(cx, cy);
+    const petals = 6 + ((rnd() * 4) | 0);
+    const a0 = rnd() * Math.PI;
+    for (let i = 0; i < petals; i++) {
+      const a = a0 + (i / petals) * Math.PI * 2 + (rnd() - 0.5) * 0.9;
+      const len = 38 + rnd() * 52;   // short ragged petals — flash, not star
+      const w = 5 + rnd() * 9;
+      const gr = g.createLinearGradient(0, 0, Math.cos(a) * len, Math.sin(a) * len);
+      gr.addColorStop(0, "rgba(255,236,200,0.85)");
+      gr.addColorStop(0.4, "rgba(255,180,90,0.38)");
+      gr.addColorStop(1, "rgba(255,140,60,0)");
+      g.fillStyle = gr;
+      g.beginPath();
+      g.moveTo(Math.cos(a + Math.PI / 2) * w * 0.5, Math.sin(a + Math.PI / 2) * w * 0.5);
+      g.quadraticCurveTo(Math.cos(a) * len * 0.55, Math.sin(a) * len * 0.55,
+                         Math.cos(a) * len, Math.sin(a) * len);
+      g.quadraticCurveTo(Math.cos(a) * len * 0.55, Math.sin(a) * len * 0.55,
+                         Math.cos(a - Math.PI / 2) * w * 0.5, Math.sin(a - Math.PI / 2) * w * 0.5);
+      g.closePath();
+      g.fill();
+    }
+    for (let b = 0; b < 3; b++) {
+      const ox = (rnd() - 0.5) * 22, oy = (rnd() - 0.5) * 22;
+      const r = 34 + rnd() * 26;
+      const core = g.createRadialGradient(ox, oy, 1, ox, oy, r);
+      core.addColorStop(0, "rgba(255,252,240,0.95)");
+      core.addColorStop(0.45, "rgba(255,210,140,0.55)");
+      core.addColorStop(1, "rgba(255,160,70,0)");
+      g.fillStyle = core;
+      g.fillRect(-128, -128, 256, 256);
+    }
+    for (let s = 0; s < 12; s++) {
+      const a = rnd() * Math.PI * 2, r = 30 + rnd() * 80;
+      g.fillStyle = `rgba(255,${(200 + rnd() * 40) | 0},150,${(0.25 + rnd() * 0.5).toFixed(2)})`;
+      g.beginPath();
+      g.arc(Math.cos(a) * r, Math.sin(a) * r, 1 + rnd() * 2.2, 0, Math.PI * 2);
+      g.fill();
+    }
     g.restore();
-  };
-  // 4-point star + short diagonals (the "star + side flare" cluster read)
-  spike(0, 62, 7); spike(Math.PI, 62, 7);
-  spike(Math.PI / 2, 44, 6); spike(-Math.PI / 2, 44, 6);
-  spike(Math.PI / 4, 26, 3.5); spike(-Math.PI / 4, 26, 3.5);
-  spike((3 * Math.PI) / 4, 26, 3.5); spike((-3 * Math.PI) / 4, 26, 3.5);
-  const core = g.createRadialGradient(64, 64, 1, 64, 64, 18);
-  core.addColorStop(0, "rgba(255,255,250,1)");
-  core.addColorStop(0.5, "rgba(255,225,170,0.7)");
-  core.addColorStop(1, "rgba(255,190,110,0)");
-  g.fillStyle = core;
-  g.fillRect(0, 0, 128, 128);
+  }
   const t = new THREE.CanvasTexture(cv);
   t.minFilter = THREE.LinearFilter;
   t.magFilter = THREE.LinearFilter;
   t.generateMipmaps = false;
   return t;
 }
+
+// atlas cell -> UV offset (CanvasTexture flipY: row 0 of the canvas is v 0.5)
+function frameU(f) { return (f & 1) * 0.5; }
+function frameV(f) { return f < 2 ? 0.5 : 0; }
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -74,37 +116,122 @@ const _to = new THREE.Vector3();
 const _vmMuzzle = new THREE.Vector3();
 const _ZAXIS = new THREE.Vector3(0, 0, 1);
 
-export function makeMuzzle(env) {
+// One instanced sprite pool (world- or vm-layer). Per-sprite: position,
+// size, roll, birth, life, HDR brightness, atlas frame A→B swap.
+function createPool(n, mat, env, layer, renderOrder, name) {
   const geo = new THREE.PlaneGeometry(1, 1);
   geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e6);
+  const uvOff = new THREE.InstancedBufferAttribute(new Float32Array(n * 2), 2);
+  uvOff.setUsage(THREE.DynamicDrawUsage);
+  geo.setAttribute("aUvOff", uvOff);
+  const mesh = new THREE.InstancedMesh(geo, mat, n);
+  mesh.frustumCulled = false;
+  mesh.renderOrder = renderOrder;
+  mesh.name = name;
+  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  if (layer != null) mesh.layers.set(layer);
+  _m.makeScale(0, 0, 0);
+  _c.setRGB(1, 1, 1);
+  for (let i = 0; i < n; i++) { mesh.setMatrixAt(i, _m); mesh.setColorAt(i, _c); }
+  env.root.add(mesh);
+
+  const pos = new Float32Array(n * 3);
+  const size = new Float32Array(n);
+  const roll = new Float32Array(n);
+  const birth = new Float32Array(n);
+  const life = new Float32Array(n);
+  const bright = new Float32Array(n);
+  const frameB = new Uint8Array(n);
+  const swapped = new Uint8Array(n);
+  const alive = new Uint8Array(n);
+  let cursor = 0;
+  let active = 0;
+  const rnd = env.rng;
+
+  function setFrame(i, f) {
+    uvOff.setXY(i, frameU(f), frameV(f));
+    uvOff.needsUpdate = true;
+  }
+
+  function spawn(x, y, z, sz, brightMult) {
+    const i = cursor;
+    cursor = (cursor + 1) % n;
+    if (!alive[i]) { alive[i] = 1; active++; }
+    const i3 = i * 3;
+    pos[i3] = x; pos[i3 + 1] = y; pos[i3 + 2] = z;
+    size[i] = sz;
+    roll[i] = rnd() * Math.PI * 2;
+    birth[i] = env.now();
+    life[i] = 0.042 + rnd() * 0.016; // 42–58 ms (VT: 40–60; spec pulse 55)
+    bright[i] = brightMult;
+    const fA = (rnd() * 4) | 0;
+    frameB[i] = (fA + 1 + ((rnd() * 3) | 0)) % 4;
+    swapped[i] = 0;
+    setFrame(i, fA);
+  }
+
+  function deactivate(i) {
+    if (!alive[i]) return;
+    alive[i] = 0;
+    active--;
+    _m.makeScale(0, 0, 0);
+    mesh.setMatrixAt(i, _m);
+  }
+
+  function update(now) {
+    if (active === 0) return;
+    const camQ = env.cam.quaternion;
+    for (let i = 0; i < n; i++) {
+      if (!alive[i]) continue;
+      const u = (now - birth[i]) / life[i];
+      if (u >= 1) { deactivate(i); continue; }
+      if (!swapped[i] && u > 0.45) { swapped[i] = 1; setFrame(i, frameB[i]); }
+      const i3 = i * 3;
+      _qr.setFromAxisAngle(_ZAXIS, roll[i]);
+      _q.copy(camQ).multiply(_qr);
+      const s = size[i] * (0.85 + 0.45 * u);
+      _p.set(pos[i3], pos[i3 + 1], pos[i3 + 2]);
+      _s.set(s, s, 1);
+      _m.compose(_p, _q, _s);
+      mesh.setMatrixAt(i, _m);
+      const b = bright[i] * (1 - 0.55 * u) * 2.0; // HDR: flash blooms in post
+      _c.setRGB(b, b * 0.92, b * 0.8);
+      mesh.setColorAt(i, _c);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  }
+
+  function clear() {
+    for (let i = 0; i < n; i++) deactivate(i);
+    mesh.instanceMatrix.needsUpdate = true;
+  }
+
+  return { mesh, spawn, update, clear, activeCount: () => active };
+}
+
+export function makeMuzzle(env) {
   const mat = new THREE.MeshBasicMaterial({
-    map: starTexture(),
+    map: flashAtlasTexture(env.rng),
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
     side: THREE.DoubleSide,
     fog: false,
   });
-  const mesh = new THREE.InstancedMesh(geo, mat, N);
-  mesh.frustumCulled = false;
-  mesh.renderOrder = 25;
-  mesh.name = "fx.muzzle";
-  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  _m.makeScale(0, 0, 0);
-  _c.setRGB(1, 1, 1);
-  for (let i = 0; i < N; i++) { mesh.setMatrixAt(i, _m); mesh.setColorAt(i, _c); }
-  env.root.add(mesh);
+  // per-instance atlas cell: shift vMapUv into the sprite's 2×2 cell
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader
+      .replace("#include <common>", "#include <common>\nattribute vec2 aUvOff;")
+      .replace("#include <uv_vertex>", "#include <uv_vertex>\n\tvMapUv = vMapUv * 0.5 + aUvOff;");
+  };
 
-  // sprite state
-  const pos = new Float32Array(N * 3);
-  const size = new Float32Array(N);
-  const roll = new Float32Array(N);
-  const birth = new Float32Array(N);
-  const life = new Float32Array(N);
-  const bright = new Float32Array(N); // HDR multiplier (blooms in post)
-  const alive = new Uint8Array(N);
-  let cursor = 0;
-  let activeSprites = 0;
+  // Player flash lives on the VM layer: drawn in the viewmodel pass through
+  // the vm camera — pixel-aligned to the muzzle socket, over the gun, after
+  // the depth clear. Bot flashes draw in the world pass.
+  const poolWorld = createPool(N_WORLD, mat, env, null, 25, "fx.muzzle.world");
+  const poolVm = createPool(N_VM, mat, env, VM_LAYER, 40, "fx.muzzle.vm");
+
   let flashCount = 0;
 
   // light leases: [{slot, x,y,z, t0, peak}] — fixed-size, preallocated
@@ -157,27 +284,6 @@ export function makeMuzzle(env) {
     leaseCount++;
   }
 
-  function spawnSprite(x, y, z, sz, brightMult) {
-    const i = cursor;
-    cursor = (cursor + 1) % N;
-    if (!alive[i]) { alive[i] = 1; activeSprites++; }
-    const i3 = i * 3;
-    pos[i3] = x; pos[i3 + 1] = y; pos[i3 + 2] = z;
-    size[i] = sz;
-    roll[i] = rnd() * Math.PI * 2;
-    birth[i] = env.now();
-    life[i] = 0.042 + rnd() * 0.016; // 42–58 ms (VT: 40–60; spec pulse 55)
-    bright[i] = brightMult;
-  }
-
-  function deactivate(i) {
-    if (!alive[i]) return;
-    alive[i] = 0;
-    activeSprites--;
-    _m.makeScale(0, 0, 0);
-    mesh.setMatrixAt(i, _m);
-  }
-
   function onScreenAndNear(x, y, z) {
     const cam = env.cam;
     _to.set(x, y, z).sub(cam.position);
@@ -224,11 +330,17 @@ export function makeMuzzle(env) {
     spawn(d) {
       resolveMuzzle(d, _mz);
       const first = !!d.firstShot;
-      const base = (FLASH_SIZE[d.weaponId] || 0.5) * (first ? (FIRST.flashScaleMult || 1.2) : 1);
       const isPlayer = d.shooter === "P";
-      // star + smaller side flare = the 2-sprite cluster (VT §5)
-      spawnSprite(_mz[0], _mz[1], _mz[2], base * (0.9 + rnd() * 0.3), first ? 1.5 : 1.15);
-      spawnSprite(_mz[0], _mz[1], _mz[2], base * 0.55, 0.9);
+      const base = (FLASH_SIZE[d.weaponId] || 0.14)
+        * (first ? (FIRST.flashScaleMult || 1.2) : 1)
+        * (isPlayer ? 1 : BOT_SIZE_MULT);
+      const pool = isPlayer ? poolVm : poolWorld;
+      const dir = d.dir || [0, 0, 0];
+      // 2-sprite cluster (VT §5): crown core + a smaller leading puff 12 cm
+      // down-range — both frame-randomized, both swap frames mid-life.
+      pool.spawn(_mz[0], _mz[1], _mz[2], base * (0.85 + rnd() * 0.35), first ? 1.6 : 1.2);
+      pool.spawn(_mz[0] + dir[0] * 0.12, _mz[1] + dir[1] * 0.12, _mz[2] + dir[2] * 0.12,
+                 base * 0.55, 0.95);
       flashCount++;
       if (isPlayer || onScreenAndNear(_mz[0], _mz[1], _mz[2])) {
         grantLight(_mz[0], _mz[1], _mz[2], isPlayer, first);
@@ -237,28 +349,8 @@ export function makeMuzzle(env) {
 
     update() {
       const now = env.now();
-      // sprites: camera-billboarded, pop-in scale, HDR color fade
-      if (activeSprites > 0) {
-        const camQ = env.cam.quaternion;
-        for (let i = 0; i < N; i++) {
-          if (!alive[i]) continue;
-          const u = (now - birth[i]) / life[i];
-          if (u >= 1) { deactivate(i); continue; }
-          const i3 = i * 3;
-          _qr.setFromAxisAngle(_ZAXIS, roll[i]);
-          _q.copy(camQ).multiply(_qr);
-          const s = size[i] * (0.85 + 0.45 * u);
-          _p.set(pos[i3], pos[i3 + 1], pos[i3 + 2]);
-          _s.set(s, s, 1);
-          _m.compose(_p, _q, _s);
-          mesh.setMatrixAt(i, _m);
-          const b = bright[i] * (1 - 0.55 * u) * 2.0; // HDR: flash blooms
-          _c.setRGB(b, b * 0.92, b * 0.8);
-          mesh.setColorAt(i, _c);
-        }
-        mesh.instanceMatrix.needsUpdate = true;
-        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-      }
+      poolWorld.update(now);
+      poolVm.update(now);
       // light pulses: 0 → peak → 0 over 55 ms (sin envelope), then release
       for (let i = 0; i < leases.length; i++) {
         const L = leases[i];
@@ -273,11 +365,12 @@ export function makeMuzzle(env) {
     },
 
     clear() {
-      for (let i = 0; i < N; i++) deactivate(i);
-      mesh.instanceMatrix.needsUpdate = true;
+      poolWorld.clear();
+      poolVm.clear();
       for (let i = 0; i < leases.length; i++) releaseLease(leases[i]);
     },
-    prewarmables() { return [mesh]; },
-    stats: () => ({ activeSprites, leaseCount, flashCount }),
+    prewarmables() { return [poolWorld.mesh, poolVm.mesh]; },
+    stats: () => ({ activeSprites: poolWorld.activeCount() + poolVm.activeCount(),
+                    leaseCount, flashCount }),
   };
 }

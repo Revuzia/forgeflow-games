@@ -50,6 +50,7 @@ function toFloatGeo(src) {
     g.setAttribute(name, new THREE.BufferAttribute(out, size));
   }
   if (src.index) g.setIndex(Array.from(src.index.array));
+  else g.setIndex([...Array(g.getAttribute("position").count).keys()]); // index parity for merges
   if (!g.getAttribute("normal")) g.computeVertexNormals();
   return g;
 }
@@ -137,6 +138,53 @@ function classifyGlbMat(kind, meshName, matName, M) {
   return M.metal; // dumpster / ac_unit / fallback
 }
 
+// The cc0-city vehicle GLBs ship ONE "body" mesh with one palette material
+// (textures stripped by prep) — rendered whole with carPaint it reads as an
+// untextured clay shell (iter01 S1 tell). Split the body's triangles into
+// paint / glass / trim by height band + face slope so the greenhouse reads
+// as dark wet glass and the skirt/bumpers as trim. Heuristic, verified
+// against live captures (no part names or UVs survive the prep to split on).
+function splitVehicleBody(geo, M) {
+  const pos = geo.getAttribute("position");
+  const idx = geo.index ? Array.from(geo.index.array) : [...Array(pos.count).keys()];
+  geo.computeBoundingBox();
+  const bb = geo.boundingBox;
+  const h = Math.max(1e-6, bb.max.y - bb.min.y);
+  const out = { paint: [], glass: [], trim: [] };
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+  const ab = new THREE.Vector3(), ac = new THREE.Vector3(), n = new THREE.Vector3();
+  for (let t = 0; t < idx.length; t += 3) {
+    a.fromBufferAttribute(pos, idx[t]);
+    b.fromBufferAttribute(pos, idx[t + 1]);
+    c.fromBufferAttribute(pos, idx[t + 2]);
+    ab.subVectors(b, a); ac.subVectors(c, a);
+    n.crossVectors(ab, ac).normalize();
+    const relY = ((a.y + b.y + c.y) / 3 - bb.min.y) / h;
+    const ny = Math.abs(n.y);
+    let bucket = "paint";
+    if (relY < 0.14) {
+      bucket = "trim";                       // skirt + bumper band
+    } else if (relY > 0.47 && ny < 0.8) {
+      // greenhouse band: vertical side/rear panes + sloped windshields;
+      // roof (ny≈1) and hood/trunk (below the band) stay paint
+      bucket = "glass";
+    }
+    out[bucket].push(idx[t], idx[t + 1], idx[t + 2]);
+  }
+  const mats = { paint: M.carPaint, glass: M.carGlass, trim: M.carTrim };
+  const parts = [];
+  for (const k of ["paint", "glass", "trim"]) {
+    if (!out[k].length) continue;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", geo.getAttribute("position"));
+    if (geo.getAttribute("normal")) g.setAttribute("normal", geo.getAttribute("normal"));
+    if (geo.getAttribute("uv")) g.setAttribute("uv", geo.getAttribute("uv"));
+    g.setIndex(out[k]); // stays INDEXED — mergeParts requires index parity
+    parts.push({ geo: g, mat: mats[k] });
+  }
+  return parts.length ? parts : [{ geo, mat: M.carPaint }];
+}
+
 export async function loadPropLibrary(ctx) {
   if (LIB) return LIB;
   const M = makeMaterials(ctx);
@@ -148,11 +196,17 @@ export async function loadPropLibrary(ctx) {
       const gltf = await loader.loadAsync(`./assets/props/${file}.glb${V}`);
       gltf.scene.updateMatrixWorld(true);
       const parts = [];
+      const vehicle = kind === "car" || kind === "van" || kind === "truck";
       gltf.scene.traverse((o) => {
         if (!o.isMesh) return;
         const g = toFloatGeo(o.geometry);
         g.applyMatrix4(o.matrixWorld);
-        parts.push({ geo: g, mat: classifyGlbMat(kind, o.name, o.material && o.material.name, M) });
+        const nm = (o.name || "").toLowerCase();
+        if (vehicle && nm.includes("body")) {
+          parts.push(...splitVehicleBody(g, M)); // paint/glass/trim (VT §3)
+        } else {
+          parts.push({ geo: g, mat: classifyGlbMat(kind, o.name, o.material && o.material.name, M) });
+        }
       });
       if (!parts.length) throw new Error("empty GLB");
       if (kind === "ac_unit") {

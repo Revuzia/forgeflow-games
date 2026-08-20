@@ -183,15 +183,25 @@ export function createScenarios(ctx) {
     return { rainPhase, timeOfDay };
   }
 
-  function applyCamera(pose, sim) {
+  function applyCamera(pose, sim, botIds) {
     const cam = ctx.camera;
     const c = pose.camera || {};
     if (c.fov) { cam.fov = c.fov; cam.updateProjectionMatrix(); }
     if (pose.cameraDetached && c.pos && c.lookAt) {
       window.__BR_CAMDETACH__ = true; // camera-rig lanes must respect this
       ctx.cameraDetached = true;      // v2.2: A4's rig gates on ctx.cameraDetached
-      cam.position.set(c.pos[0], c.pos[1], c.pos[2]);
-      cam.lookAt(c.lookAt[0], c.lookAt[1], c.lookAt[2]);
+      // v2.3 (F4): relToBot — pos/lookAt become OFFSETS from a posed bot's
+      // POST-SETTLE position. Pinned running bots displace during the settle
+      // ticks (locomotion is real, R21), so an absolute close-up camera
+      // drifts off its subject; anchoring to the bot keeps the authored
+      // framing distance exact regardless of clip speed.
+      let base = [0, 0, 0];
+      if (c.relToBot != null && botIds && botIds[c.relToBot] != null) {
+        const b = sim.state.bots.find((x) => x.id === botIds[c.relToBot]);
+        if (b) base = b.pos;
+      }
+      cam.position.set(base[0] + c.pos[0], base[1] + c.pos[1], base[2] + c.pos[2]);
+      cam.lookAt(base[0] + c.lookAt[0], base[1] + c.lookAt[1], base[2] + c.lookAt[2]);
       return;
     }
     window.__BR_CAMDETACH__ = false;
@@ -231,6 +241,27 @@ export function createScenarios(ctx) {
     T.unpinAll();
     window.__BR_SCENARIO__ = null;
     if (ctx.pauseCtl.active) ctx.pauseCtl.resume();
+    if (ctx.settings && window.__BR_FOV0__ != null) {
+      ctx.settings.fov = window.__BR_FOV0__; // restore pre-scenario base FOV
+      window.__BR_FOV0__ = null;
+    }
+
+    // ---- cinematic FOV (F4, iter01 fix): the viewmodel rig re-writes
+    // camera.fov EVERY driven frame from its base = settings.fov (74) blended
+    // toward the weapon's adsFov — so a pose's camera.fov never survives to
+    // the capture on first-person scenarios (iter01 S1/S3/S4 all rendered at
+    // 74, not their authored 55/58/44). The rig's own base channel IS the
+    // sanctioned input: write the pose fov to settings.fov directly (a plain
+    // mutable object; bypassing set() on purpose — battery framings may sit
+    // below the player-facing 60–90 clamp, and a direct write never touches
+    // localStorage or listeners). Restored on the next setScenario; battery
+    // page-reloads reset it anyway. ADS poses are unaffected: at adsT=1 the
+    // rig's fov = adsFov regardless of base. Detached poses keep applyCamera's
+    // direct write (the rig does not drive while ctx.cameraDetached).
+    if (ctx.settings && pose.camera && pose.camera.fov && !pose.cameraDetached) {
+      window.__BR_FOV0__ = ctx.settings.fov;
+      ctx.settings.fov = pose.camera.fov;
+    }
 
     // ---- menu: no mission. Fresh page loads sit on the title screen; if a
     // mission is already live we cannot return to menu from here (menu ref
@@ -284,6 +315,27 @@ export function createScenarios(ctx) {
     for (const spec of pose.bots || []) {
       const id = poseBot(spec, playerEye, warnings);
       if (id != null) botIds.push(id);
+    }
+
+    // ---- the pose OWNS the cast: when `bots` is declared (even empty),
+    // the live mission's wave spawner may not repopulate the frame. iter01
+    // C1 lesson: the scripted sprint crossed the infil→assault reach
+    // trigger, wave bots spawned mid-capture and killed the player
+    // mid-reload, so `until: reloads > 0` could never fire and the frame
+    // was a different scene every run. Installed AFTER poseBot (which
+    // spawns through the same seam); dies with this sim instance — every
+    // setScenario/startMission builds a fresh sim. Autoplay poses (bench)
+    // keep the spawner: their live combat IS the fixture.
+    if (Array.isArray(pose.bots) && !pose.autoplay) {
+      const realSpawnFromSpec = sim.spawnBotFromSpec;
+      let dropped = 0;
+      sim._scenarioCastLock = true;
+      sim.spawnBotFromSpec = function (spec) {
+        if (sim._scenarioCastLock && !(spec && spec._scenarioPose)) { dropped++; return null; }
+        return realSpawnFromSpec.call(this, spec);
+      };
+      sim._scenarioSpawnsDropped = () => dropped;
+      warnings.push("mission wave spawner locked — the pose owns the cast");
     }
 
     // ---- viewmodel state
@@ -346,7 +398,7 @@ export function createScenarios(ctx) {
     ctx.input.enabled = true;
 
     // ---- camera LAST (action steps may have nudged the player pose)
-    applyCamera(pose, sim);
+    applyCamera(pose, sim, botIds);
 
     // ---- HUD per the merged flag (battery re-applies its own cap after).
     T.hud(hudOn);

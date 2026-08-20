@@ -36,15 +36,28 @@ const CompositeShader = {
     tDiffuse: { value: null },
     uTime: { value: 0 },
     uRes: { value: new THREE.Vector2(1920, 1080) },
-    toneMappingExposure: { value: 1.12 },
+    // VT §2 fixes AgX exposure at 1.0–1.3; 1.35 was outside it, propping up a
+    // frame the old flat shadow lift had already milked. The grade block below
+    // now shapes the low end properly, so this sits at the top of spec.
+    toneMappingExposure: { value: 1.30 },
     uVignette: { value: 0.30 },   // VT: 0.25–0.35, felt not seen
     uVigBoost: { value: 0 },      // deepens during ADS / low hp
-    uGrain: { value: 0.024 },     // VT: 0.02–0.035, luminance-weighted
-    uCA: { value: 1.0 },          // px at extreme corners (≤1.5)
+    // v3 (owner: "fuzzy like an old TV with bad service"). VT's 0.02–0.035
+    // grain band assumes grain lands mostly in shadow — true in a DAY scene.
+    // This is a night game: almost every pixel is low-luma, so the shadow
+    // weighting below ran grain near full strength over the WHOLE frame.
+    // Cut to the floor of a third of spec and flatten the weighting (see uGrain
+    // use in the shader) so grain is texture, not snow.
+    uGrain: { value: 0.008 },
+    uCA: { value: 0.35 },         // was 1.0 px — radial fringing read as bad signal
     uCABoost: { value: 1 },       // ×3 for 150 ms on explosions (hook)
-    uSharpen: { value: 0.2 },
+    uSharpen: { value: 0.35 },    // was 0.2; real AA now gives it clean edges to bite
     uSat: { value: 0.9 },
     uTier: { value: 2 },          // 0 = tonemap only, 1/2 = full film stages
+    // ---- grade shaping (iter02 D2 fix — see the grade block in the shader)
+    uBlack: { value: 0.0022 },    // soft toe: where the frame reaches black
+    uPivot: { value: 0.020 },     // contrast anchor (≈ the night frame's median)
+    uContrast: { value: 1.42 },   // gain ABOVE the pivot only
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -58,6 +71,7 @@ const CompositeShader = {
     uniform float uTime;
     uniform vec2 uRes;
     uniform float uVignette, uVigBoost, uGrain, uCA, uCABoost, uSharpen, uSat;
+    uniform float uBlack, uPivot, uContrast;
     uniform int uTier;
     ${AGX_GLSL}
 
@@ -103,11 +117,32 @@ const CompositeShader = {
       vec3 col = AgXToneMapping(hdr);
 
       if (uTier > 0) {
-        // ---- grade: lifted cool shadows, desaturated highlights, sat 0.9
+        // ---- black point: a SOFT toe, not a subtract. Measured on iter02,
+        // an AgX night frame lives in col ~[0.004 .. 0.06] — the old flat
+        // +0.010/0.012/0.020 shadow lift therefore sat 3-5x ABOVE the darkest
+        // pixel and, because its smoothstep(0.0,0.35) was full-strength across
+        // ~99% of the frame, it was not a shadow lift at all: it was a milky
+        // blue film on everything (S3 p1..p99 = 13..64/255, std 11.8 — dark
+        // AND flat, the "muddy" read). x^2/(x+k) is ~identity for x >> k and
+        // rolls smoothly to 0, so the frame can REACH black without clipping.
+        col = col * col / (col + uBlack);
+
+        // ---- contrast: gain ABOVE the pivot only. A symmetric S-curve would
+        // crush the sub-pivot decade to zero at these levels (the toe already
+        // owns the bottom); this branch is continuous at the pivot, monotonic,
+        // and maps 1 -> 1 so AgX's highlight rolloff on the practicals and
+        // muzzle flashes survives intact (VT §2: never clip what AgX rolled).
+        vec3 up = 1.0 - (1.0 - uPivot)
+                      * pow(max(1.0 - col, 0.0) / (1.0 - uPivot), vec3(uContrast));
+        col = mix(col, up, step(vec3(uPivot), col));
+
+        // ---- grade: cool shadows, desaturated highlights, sat 0.9
         float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
         col = mix(vec3(luma), col, uSat);
-        // shadow lift, slightly blue — the floor never crushes to pure black
-        col += vec3(0.010, 0.012, 0.020) * (1.0 - smoothstep(0.0, 0.35, luma));
+        // shadow TINT: blue-steel chroma in the deep end, scaled to the range
+        // the frame actually occupies. An order of magnitude below the old
+        // lift, and it dies by luma 0.05 instead of 0.35.
+        col += vec3(0.0016, 0.0020, 0.0034) * (1.0 - smoothstep(0.0, 0.06, luma));
         // desaturate + gently roll highlights
         float hi2 = smoothstep(0.7, 1.0, luma);
         col = mix(col, vec3(luma), hi2 * 0.25);
@@ -119,7 +154,11 @@ const CompositeShader = {
         // ---- film grain: animated, luminance-weighted (stronger in shadows)
         float g = brHash(uv * uRes + vec2(fract(uTime * 13.7) * 191.0,
                                           fract(uTime * 7.3) * 127.0)) - 0.5;
-        col += g * uGrain * (1.0 - luma * 0.72);
+        // v3: weighting flattened from (1.0 - luma*0.72) to a shallow ramp.
+        // The old curve peaked at 1.0 in blacks — i.e. everywhere, in a night
+        // frame. This keeps a touch more grain in shadow without letting the
+        // dark 95% of the image sit at maximum noise.
+        col += g * uGrain * (1.0 - luma * 0.25);
       }
 
       gl_FragColor = vec4(sRGB(clamp(col, 0.0, 1.0)), 1.0);
@@ -151,7 +190,12 @@ export function createPost(ctx) {
     const rt = new THREE.WebGLRenderTarget(w * pr, h * pr, {
       type: THREE.HalfFloatType, // the HDR chain (EXT_color_buffer_float gated)
       depthBuffer: true,
-      samples: 0,
+      // v3: MSAA on the HDR target. Was 0, and gfx.js also had antialias:false
+      // ("bloom+grain hide it") — so nothing anti-aliased anything and the
+      // stated mitigation was to bury stair-stepped edges under noise. On a
+      // night scene that reads as analog-TV snow over a soft picture. WebGL2
+      // multisampled render targets are cheap; 4x is the quality/cost knee.
+      samples: 4,
     });
     composer = new EffectComposer(renderer, rt);
     composer.setPixelRatio(pr);

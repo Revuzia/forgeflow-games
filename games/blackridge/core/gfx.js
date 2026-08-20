@@ -10,7 +10,13 @@ export const DPR_CAP = 1.5; // doctrine §3 — never above 1.5
 export function initRenderer(canvas) {
   const renderer = new THREE.WebGLRenderer({
     canvas,
-    antialias: false,           // post AA not in v1 — bloom+grain hide it
+    // v3: the composer's HDR target now carries samples:4 (post.js build()),
+    // which is what actually anti-aliases the scene — every scene pass goes
+    // through the composer, so this flag only covers direct-to-canvas draws.
+    // Left false deliberately: enabling it allocates a second MSAA backbuffer
+    // that nothing renders into. The old comment ("bloom+grain hide it") was
+    // the bug — grain was hiding aliasing instead of the pipeline removing it.
+    antialias: false,
     powerPreference: "high-performance",
     stencil: false,
   });

@@ -85,6 +85,29 @@ export function createViewmodel(ctx) {
 
   ctx.vmCamera = vmCamera;
 
+  // ---- VM FILL RIG (iter01 F2 fix) -----------------------------------------
+  // The blue-hour scene's ambient floor is (correctly) near zero — VT §1
+  // demands darkness — but that left the gun a BLACK CUTOUT at night (iter01
+  // S1 "shattered black polygon soup" / S2 "no viewmodel visible": the
+  // camera-facing surfaces collected ~no light; a 3.4× albedo lift changed
+  // nothing, verified by capture). The viewmodel is ~30% of every frame and
+  // MUST read (VT §5) — CoD ships a dedicated viewmodel lighting rig for
+  // exactly this reason. Two lights on VM_LAYER ONLY: camera layer masks
+  // filter light collection, so the WORLD pass never sees them and the
+  // world's key:ambient discipline (VT §1 ≥4:1) is untouched. Created ONCE
+  // at boot, always visible, constant intensity, never added/removed after
+  // — doctrine §3 compliant (light COUNT is a shader-permutation key; the
+  // boot prewarm's vm pass compiles this permutation before frame 1).
+  const vmFill = new THREE.HemisphereLight(0x9db4d6, 0x2a2420, 0.5);
+  vmFill.name = "__vm_fill__";
+  vmFill.layers.set(VM_LAYER);        // NOT enableAll — vm pass only
+  ctx.scene.add(vmFill);              // scene-parented: hemi axis stays world-up
+  const vmKey = new THREE.PointLight(0xd8e2f5, 0.5, 3.5, 2);
+  vmKey.name = "__vm_key__";
+  vmKey.position.set(0.38, 0.30, 0.25); // camera-space: over the right shoulder
+  vmKey.layers.set(VM_LAYER);
+  camera.add(vmKey);
+
   // ---- state ---------------------------------------------------------------
   let visible = true;
   let current = null;        // { id, w, group }

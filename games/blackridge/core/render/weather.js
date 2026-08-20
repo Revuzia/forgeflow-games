@@ -335,8 +335,12 @@ export function createWeather(ctx) {
         varying vec2 vUv; varying float vA;
         void main() {
           vUv = uv;
-          float r = mix(0.05, 0.34, aAge);
-          vA = 1.0 - aAge;
+          // W2/iter02 S9: at 0.34 m the ring grew to ~0.7 m across and, held
+          // in a paused beauty frame, read as a floating white marker ring on
+          // the cobbles. A real rain crown is 10-20 cm and dies fast, so the
+          // ring must be gone before it is big enough to be read as a shape.
+          float r = mix(0.03, 0.17, aAge);
+          vA = (1.0 - aAge) * (1.0 - aAge);
           vec3 vert = aPos + vec3(position.x * 2.0 * r, 0.0, position.z * 2.0 * r);
           gl_Position = projectionMatrix * viewMatrix * vec4(vert, 1.0);
         }`,
@@ -345,8 +349,12 @@ export function createWeather(ctx) {
         void main() {
           vec2 q = vUv * 2.0 - 1.0;
           float d = length(q);
-          float ring = smoothstep(0.55, 0.8, d) * smoothstep(1.0, 0.86, d);
-          gl_FragColor = vec4(vec3(0.16, 0.17, 0.20), ring * vA * 0.5);
+          // thinner wall + a fraction of the old opacity: a wet-stone sheen
+          // disturbance, not a drawn circle. 0.16 linear at alpha 0.5 sat ~8x
+          // above the surrounding ground after AgX, which is what made it
+          // read white rather than wet.
+          float ring = smoothstep(0.70, 0.88, d) * smoothstep(1.0, 0.91, d);
+          gl_FragColor = vec4(vec3(0.055, 0.060, 0.074), ring * vA * 0.17);
         }`,
     });
     const mesh = new THREE.Mesh(geo, mat);

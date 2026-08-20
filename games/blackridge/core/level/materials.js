@@ -459,12 +459,17 @@ uniform float uTime;` : ""}`)
 vec2 gruv = vWPos.xz + vWPos.y * vec2(0.71, 0.37);
 float g1 = texture2D(uGrunge, gruv * 0.0619).r;
 float g2 = texture2D(uGrunge, gruv * 0.0143 + 0.29).g;
-diffuseColor.rgb *= (1.0 + uMottle * ((g1 - 0.5) * 1.6 + (g2 - 0.5)));
+// close-range tap (~1.2 m period): micro-breakup so surfaces survive the
+// S4 close crop — without it the two macro taps read as smooth clay <3 m
+float g3 = texture2D(uGrunge, gruv * 0.83 + 0.61).g;
+diffuseColor.rgb *= (1.0 + uMottle * ((g1 - 0.5) * 1.6 + (g2 - 0.5) + (g3 - 0.5) * 0.8));
 ${opts.aowet ? `diffuseColor.rgb *= vAowet.r;
 diffuseColor.rgb *= (1.0 - vAowet.b * 0.30);` : ""}`)
       .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>
 roughnessFactor = clamp(
-  roughnessFactor * (1.0 + uGrungeAmp * (g1 - 0.5) * 2.0) + uGrungeAmp * 0.5 * (g2 - 0.5),
+  roughnessFactor * (1.0 + uGrungeAmp * (g1 - 0.5) * 2.0)
+    + uGrungeAmp * 0.5 * (g2 - 0.5)
+    + uGrungeAmp * 0.55 * (g3 - 0.5),
   0.03, 1.0);
 ${opts.aowet ? "roughnessFactor = clamp(roughnessFactor * (1.0 - vAowet.b * 0.45), 0.03, 1.0);" : ""}
 ${opts.puddle ? "float pud = vAowet.g; roughnessFactor = mix(roughnessFactor, 0.04, pud);" : ""}`);
@@ -477,8 +482,10 @@ vec2 rip = (ripA + ripB) * 0.5;
 normal = normalize(normal + vec3(rip * 0.35, 0.0) * pud);`)
         .replace("#include <opaque_fragment>", `#include <opaque_fragment>
 if (pud > 0.001 && uPlanarStrength > 0.001) {
+  // uPlanarMat = bias(0.5) * proj * viewInverse (reflect.js) — the 0..1
+  // remap is IN the matrix; a second *0.5+0.5 here double-biased the lookup
   vec4 pc = uPlanarMat * vec4(vWPos, 1.0);
-  vec2 puv = pc.xy / max(pc.w, 1e-4) * 0.5 + 0.5;
+  vec2 puv = pc.xy / max(pc.w, 1e-4);
   if (puv.x > 0.0 && puv.x < 1.0 && puv.y > 0.0 && puv.y < 1.0 && pc.w > 0.0) {
     vec3 pr = texture2D(uPlanarTex, puv + rip * 0.03).rgb;
     gl_FragColor.rgb = mix(gl_FragColor.rgb, pr, pud * uPlanarStrength * 0.85);
@@ -497,7 +504,7 @@ if (pud > 0.001 && uPlanarStrength > 0.001) {
 // ------------------------------------------------------------- textures
 const TEX = {}; // filled in makeMaterials (module-cached)
 
-function canvasTex(c, { srgb = true, wrap = true, aniso = 4 } = {}) {
+function canvasTex(c, { srgb = true, wrap = true, aniso = 8 } = {}) {
   const t = new THREE.CanvasTexture(c);
   if (srgb) t.colorSpace = THREE.SRGBColorSpace;
   if (wrap) t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -545,7 +552,7 @@ export function makeMaterials(ctx = {}) {
     });
     if (srgb) t.colorSpace = THREE.SRGBColorSpace;
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.anisotropy = 4;
+    t.anisotropy = 8; // grazing-angle ground reads (S4/S5) go mush at 4
     return t;
   };
   const set = (name) => ({
@@ -576,7 +583,7 @@ export function makeMaterials(ctx = {}) {
   // metres/TILE: repeat = 1/tileMetres; geometry UVs are authored in metres.
   const asphalt = augment(uv(std({
     ...S_ASPHALT, color: 0xb4b4b4, roughness: 0.46, metalness: 0.0,
-    normalScale: new THREE.Vector2(0.9, 0.9), envMapIntensity: 1.15,
+    normalScale: new THREE.Vector2(1.3, 1.3), envMapIntensity: 1.15,
   }), 1 / 7.3, 1 / 7.3), { aowet: true, puddle: true, grunge: 0.4, mottle: 0.14 });
 
   const asphaltTram = augment(uv(std({
@@ -641,8 +648,17 @@ export function makeMaterials(ctx = {}) {
   }), { grunge: 0.4, mottle: 0.08 });
 
   const carPaint = augment(std({
-    color: 0xffffff, roughness: 0.3, metalness: 0.0, envMapIntensity: 1.35,
+    color: 0xffffff, roughness: 0.32, metalness: 0.0, envMapIntensity: 1.5,
   }), { grunge: 0.42, mottle: 0.1 });
+
+  // vehicle greenhouse + trim (props.js splits the GLB body by height band —
+  // a one-material body is the "white clay car" tell, VT §3 / iter01 S1)
+  const carGlass = augment(std({
+    color: 0x0b1118, roughness: 0.08, metalness: 0.0, envMapIntensity: 2.2,
+  }), { grunge: 0.15, mottle: 0.04 });
+  const carTrim = augment(std({
+    color: 0x16181b, roughness: 0.62, metalness: 0.0, envMapIntensity: 0.8,
+  }), { grunge: 0.35, mottle: 0.1 });
 
   const rubber = augment(std({
     color: 0x141414, roughness: 0.92, metalness: 0.0,
@@ -709,7 +725,7 @@ export function makeMaterials(ctx = {}) {
 
   const windowLit = std({
     map: TEX.window, color: 0x1a1a1a,
-    emissive: 0xffffff, emissiveIntensity: 2.2, emissiveMap: TEX.window,
+    emissive: 0xffffff, emissiveIntensity: 2.8, emissiveMap: TEX.window,
     roughness: 0.4, metalness: 0.0,
   });
   const windowDark = std({
@@ -733,8 +749,8 @@ export function makeMaterials(ctx = {}) {
     // walls
     plaster, plasterDark, concreteWall, trim,
     // props
-    steel, rail, carPaint, rubber, woodDark, corrugated, burlap, tarp,
-    plasticDark, trashBag, cableMat,
+    steel, rail, carPaint, carGlass, carTrim, rubber, woodDark, corrugated,
+    burlap, tarp, plasticDark, trashBag, cableMat,
     // emissive kit + factories
     emissive, glowMat, poolMat, windowLit, windowDark, decalMat,
     makeNeonCanvas, makeSignCanvas, canvasTex,

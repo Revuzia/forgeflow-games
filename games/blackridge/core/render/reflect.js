@@ -162,6 +162,8 @@ export function createReflect(ctx) {
   const cubeCam = new THREE.CubeCamera(0.3, 600, cubeRT);
   cubeCam.position.set(PLAZA_CENTER.x, 1.6, PLAZA_CENTER.z);
   let cubeBaked = false;
+  let envPMREM = null;
+  let envPMREMRT = null;
   function bakeCube() {
     const prevShadow = renderer.shadowMap.autoUpdate;
     renderer.shadowMap.autoUpdate = false;
@@ -170,6 +172,20 @@ export function createReflect(ctx) {
       cubeCam.update(renderer, scene);
       scene.remove(cubeCam);
       cubeBaked = true;
+      // The scene-wide IBL: PMREM of THIS baked cube (neon wall, sodium
+      // heads, lit windows — the bright sources). sky.js's dome-only PMREM
+      // has no practicals in it, so wet ground could only ever reflect dark
+      // sky — "wetness only darkens" is a D4 hard cap (VT §4). Constructed
+      // pre-prewarm so the program fork is inside the baseline.
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      const rt = pmrem.fromCubemap(cubeRT.texture);
+      pmrem.dispose();
+      if (envPMREMRT) envPMREMRT.dispose();
+      envPMREMRT = rt;
+      envPMREM = rt.texture;
+      scene.environment = envPMREM;
+      if ("environmentIntensity" in scene) scene.environmentIntensity = 0.5;
+      if (globalThis.__BR_REFLECT__) globalThis.__BR_REFLECT__.envPMREM = envPMREM;
     } catch (e) {
       console.warn("[reflect] cube bake failed:", e && e.message);
     }
@@ -200,9 +216,31 @@ export function createReflect(ctx) {
     textureMatrix,
     active: false,
     envCube: cubeRT.texture,
+    envPMREM,
     layer: REFLECT_LAYER,
   };
   globalThis.__BR_REFLECT__ = published;
+
+  // ---- A3 GROUND_HOOKS feed (the consumer contract's OTHER half): the
+  // hero-puddle shader (materials.js) reads planarTex/planarMat/
+  // planarStrength off level.js's exported hooks — nothing was writing
+  // them, so planarStrength sat at 0 and the contracted planar payoff
+  // never rendered (iter01: no elongated reflections anywhere).
+  let hooks = null;
+  scene.traverse((o) => {
+    if (!hooks && o.userData && o.userData.level && o.userData.level.hooks) {
+      hooks = o.userData.level.hooks;
+    }
+  });
+  if (hooks) {
+    hooks.planarTex.value = rt.texture;
+    hooks.planarMat.value = textureMatrix; // same Matrix4 instance — updates live
+  } else {
+    console.warn("[reflect] level GROUND_HOOKS not found — hero puddles stay on envMap");
+  }
+  function feedHooks() {
+    if (hooks) hooks.planarStrength.value = published.active ? 0.9 : 0.0;
+  }
 
   const api = {
     update(dt) {
@@ -214,10 +252,11 @@ export function createReflect(ctx) {
 
       if (!want) {
         published.active = false;
+        feedHooks();
         return;
       }
       frameFlip ^= 1;
-      if (frameFlip) return; // every 2nd frame (LD §5.4)
+      if (frameFlip) { feedHooks(); return; } // every 2nd frame (LD §5.4)
 
       framesSinceRefresh += 2;
       if (framesSinceRefresh >= REFRESH_FRAMES) {
@@ -225,6 +264,7 @@ export function createReflect(ctx) {
         refreshMembership();
       }
       published.active = renderPlanar();
+      feedHooks();
     },
     setEnabled(on) { enabled = !!on; },
     // ---- private additions ----

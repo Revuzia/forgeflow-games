@@ -15,6 +15,18 @@
 // Doctrine §1/§3 discipline: strips any GLB-embedded light; defensive Meshy
 // material repair (emissive-as-albedo bug) even though the build script
 // authors materials — the next regenerated asset arrives broken the same way.
+// NIGHT TREATMENT (iter01 F2 fix): VT §3/§5 — "source weapon GLBs ... then
+// ADD roughness variance + edge-wear treatment at load. The viewmodel weapon
+// is the closest, most-stared-at surface in the game." The a4 build tool
+// authors a charcoal albedo set (body mean #2b2d2e ≈ 0.028 linear, gloves
+// #121212 ≈ 0.008 linear) that is plausible PBR in daylight but renders as a
+// BLACK CUTOUT in the blue-hour scene (iter01 S1/S2: "shattered black
+// polygon soup" / "no viewmodel visible" — both were the unlit-black gun).
+// repair() lifts albedo through the material color multiplier (the ORM/
+// albedo MAPS stay authoritative for variance and edge wear) and gives the
+// body a real env-map sheen so the night sky/practicals model the surface.
+// Tuned against tools/a4_build_fp_weapons.py's authored set — regenerating
+// brighter textures at the build tool makes these multipliers 1.0 again.
 // On failure: HONEST dev placeholder (screaming magenta, unmistakably not a
 // gun) + window.__FFG_FALLBACKS__ push — ship is BLOCKED while non-empty
 // (doctrine §7). A primitive composition is never silently shipped as final.
@@ -69,6 +81,19 @@ function repair(group) {
         }
         if (m.emissiveIntensity == null || m.emissiveIntensity > 1.001) m.emissiveIntensity = 1;
         if (m.map) m.map.colorSpace = THREE.SRGBColorSpace;
+        // Night-readability treatment (header note): albedo lift via the
+        // color multiplier — linear-space, maps keep the variance. Idempotent
+        // per prototype (repair runs once per cached load).
+        if (m.color) {
+          const glove = /glove/i.test(m.name || "");
+          if (glove) {
+            m.color.setScalar(4.5);   // dark olive gloves -> ~0.036 linear
+          } else {
+            m.color.setScalar(3.4);   // charcoal body/metal -> ~0.10 linear
+            m.envMapIntensity = 2.2;  // blue-hour sheen on the hero surface
+            if (m.roughness == null || m.roughness > 0.92) m.roughness = 0.92;
+          }
+        }
         m.needsUpdate = true;
       }
     }

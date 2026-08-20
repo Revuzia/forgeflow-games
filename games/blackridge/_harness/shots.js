@@ -58,27 +58,43 @@ export const SCENARIOS = {
   S2: {
     seed: 202, botSeed: 1202, rainPhase: 0.40, timeOfDay: "night",
     hud: false, settleFrames: 24, blind: true,
-    until: null, // ADS pose is fully authored by setScenario (adsT=1, breath still)
-    desc: "ADS on an AI at range — boulevard_long_rain re-posed: Corvus ADS " +
-          "from the barricade line at the platform marksman, 78 m, sodium " +
-          "pools receding into fog.",
+    // ADS must be OBSERVABLY engaged in the captured state, not just authored:
+    // the frame is only comparable if the sight picture is up (F4, iter01).
+    until: "F.__test.state().player.weapon.adsT > 0.98",
+    desc: "ADS sight picture on an AI at range — Corvus from the boulevard " +
+          "centre lane at Z+18 onto a contact standing IN the L_BLVD_3 sodium " +
+          "pool at 44 m (top-lit, ~75 px tall); a second contact fires at 22 m " +
+          "frame-right. (iter02 aimed at the platform marksman at 82 m in no " +
+          "practical at all — 40 px of unlit silhouette, no readable subject.)",
     tests: "D5 viewmodel/sight alignment, D2 exposure, D3 atmosphere depth",
   },
   S3: {
     seed: 303, botSeed: 1303, rainPhase: 0.10, timeOfDay: "night",
     hud: false, settleFrames: 24, blind: true,
-    until: null,
-    desc: "Quiet establishing wide — dock_infil_skyline: quay, freighter/crane " +
-          "silhouettes on the horizon ring, rain vs the glow. (v2.2: L_QUAY " +
-          "god-ray clause dropped — ~70 deg off-axis behind this pose, A6/A11.)",
-    tests: "D1 art direction, D3 atmosphere, D8 sky/horizon, D9 materials",
+    // iter03 (W3): S3 is now a FIREFIGHT establishing wide, so the frame is
+    // only comparable if a player round actually left the barrel — same gate
+    // S1 uses. Without it the capture is a posed tableau with no flash and
+    // the 55 ms muzzle light cannot survive the settle wait.
+    until: "F.__test.counters().shotsFired > 0",
+    desc: "Establishing wide of the compound, mid-firefight — quay run east " +
+          "from (-44,49): L_QUAY sodium pool + god-ray ~1 deg off the sight " +
+          "axis, compound rooflines right, canal + city-glow band left, quay " +
+          "edge as foreground anchor; player 4-round burst live, 3 quay bots " +
+          "engaged at 21-36 m with tracers in flight. (iter02 aimed 40 m past " +
+          "the far bank at Z+90 and captured empty water — no compound, no " +
+          "subject, no combat.)",
+    tests: "D1 art direction, D3 atmosphere, D6 combat VFX, D8 sky/horizon",
   },
   S4: {
     seed: 404, botSeed: 1404, rainPhase: 0.55, timeOfDay: "night",
     hud: false, settleFrames: 24, blind: true,
     until: null,
-    desc: "Close-up ground/wall material in practical light — alley under " +
-          "L_ALLEY_A (derived from alley_steam_cqb): wet asphalt + wall + steam.",
+    desc: "Close-up ground/wall material in practical light — low (0.95 m) " +
+          "crop of WET COBBLE at the plaza east neon wall: sign colours " +
+          "streaked along the wet stone toward the lens, wall base + grime " +
+          "line. (iter02 stood 4.5 m from the arcade lightwell with the " +
+          "god-ray cone card BETWEEN lens and floor: the capture was cone " +
+          "alpha, a blue haze ellipse, not material. S7 keeps that shaft.)",
     tests: "D9 material close-up, D2 exposure, D7 practical-light falloff",
   },
   S5: {
@@ -86,7 +102,10 @@ export const SCENARIOS = {
     hud: false, settleFrames: 24, blind: true,
     until: null,
     desc: "Sky/horizon from elevated position — tram-platform deck (y +4.5) " +
-          "looking S over the boulevard to the 3-ring harbor silhouette.",
+          "looking S over the boulevard, pitch ~+7 deg at fov 62 so the sky " +
+          "owns the top two thirds and the sodium pools recede along the " +
+          "bottom. (iter02 sat 2 deg off level at fov 50: buildings ate the " +
+          "horizon and the sky was a featureless strip.)",
     tests: "D8 night-storm ramp (LUT sky, horizon event, parallax cloud layers)",
   },
   S6: {
@@ -100,16 +119,23 @@ export const SCENARIOS = {
     seed: 707, botSeed: 1707, rainPhase: 0.20, timeOfDay: "night",
     hud: false, settleFrames: 24, blind: false, // supplementary (R10 note)
     until: null,
-    desc: "arcade_god_rays — interior lightwell shaft on the wet floor pool; " +
-          "interior must show ZERO rain streaks (occlusion-volume proof).",
+    desc: "arcade_god_rays — the WHOLE L_ARCADE_SKY shaft (head, column, wet " +
+          "floor pool) with a rim-lit contact at the pool edge for scale; " +
+          "interior must show ZERO rain streaks (occlusion-volume proof). " +
+          "(iter02 centred at pitch -21.5 deg: shaft jammed against the top " +
+          "edge, ~70% of frame unlit black floor.)",
     tests: "D7 god-ray chiaroscuro, D3 interior/exterior contrast",
   },
   S8: {
     seed: 808, botSeed: 1808, rainPhase: 0.60, timeOfDay: "night",
     hud: false, settleFrames: 24, blind: false, // supplementary
     until: null,
-    desc: "gate9_floodlight_stand — both flood god-ray beams full of rain, " +
-          "wave silhouettes (incl. 1 heavy) rim-lit in the gate mouths.",
+    desc: "gate9_floodlight_stand — HERO-BEAM framing (iter03 amendment): " +
+          "camera swung ~44 deg E onto L_FLOOD_E, now 8 deg off-axis, with " +
+          "wave-3 bots (incl. the heavy) re-posed INSIDE that beam's cone at " +
+          "25/28/35 m. Measured: from the iter02 aim BOTH poles sat at 51 deg " +
+          "against a 50.2 deg half-fov — on the frame edges — so one beam " +
+          "clipped in at the margin and the left 55% was an unlit black wall.",
     tests: "D7 volumetric beams, D4 silhouette readability",
   },
   S9: {
@@ -129,7 +155,12 @@ export const SCENARIOS = {
   C1: {
     seed: 601, botSeed: 1601, rainPhase: 0.25, timeOfDay: "night",
     hud: true, settleFrames: 12, blind: false,
-    until: "F.__test.counters().harness.reloads > 0", // reload actually committed
+    // The PNG is taken at captureAt "reload-mid": the comparable state is the
+    // reload MOTION live (weapon.state === 'reloading'), not the completed
+    // count — waiting on reloads>0 let the reload FINISH before the capture
+    // (F4, iter01). The done-count stays as a fallback for a fast commit.
+    until: "F.__test.state().player.weapon.state === 'reloading' || " +
+           "F.__test.counters().harness.reloads > 0",
     script: [
       { hold: ["ShiftLeft", "KeyW"], frames: 180 },   // 3.0 s tac-sprint
       { release: "all",              frames: 30  },   // 0.5 s stop, sprint-out
@@ -139,7 +170,12 @@ export const SCENARIOS = {
       { wait: true,                  frames: 30  },   // run out the 6.0 s
     ],
     desc: "6 s live capture: sprint -> stop -> fire burst -> reload; plaza " +
-          "run with the Warden, HUD on.",
+          "run with the Warden, HUD on. iter03: start slid to (-14,34) on a " +
+          "NE heading so the stop-and-fire lands INSIDE the plaza facing the " +
+          "neon wall, with two contacts pinned firing at 16-19 m. NOTE: the " +
+          "HUD is DOM and capture() reads the GL drawing buffer, so `hud: " +
+          "true` cannot appear in this PNG until the capture path composites " +
+          "a page screenshot (cross-file, reported by W3).",
     tests: "D5 viewmodel motion (sprint pose, sway, recoil, reload anim), D10 HUD",
   },
 
