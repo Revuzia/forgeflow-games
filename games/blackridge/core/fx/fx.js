@@ -30,6 +30,7 @@ import { makeTracers } from "./tracers.js";
 import { makeDecals } from "./decals.js";
 import { makeCasings } from "./casings.js";
 import { makeExplosions } from "./explosions.js";
+import { makeGrounding } from "./grounding.js";
 
 const FX_SEED = 0xa7f0c5; // reseeded every mission:start → deterministic batteries
 const MISS_TRACER_DIST = 130; // terminal-miss streak length cap (m)
@@ -41,7 +42,37 @@ export function createFx(ctx) {
   ctx.scene.add(root);
 
   let rand = mulberry32(FX_SEED);
+
+  // ---- THE FX CLOCK IS THE SIM CLOCK (iter05, lane D) ---------------------
+  // `clock` is the epoch every pool ages against (decal birth, casing TTL,
+  // muzzle 55 ms flash life, tracer travel). It used to accumulate the WALL dt
+  // handed to update() by boot's rAF loop, which runs viewUpdates every frame
+  // whether or not the sim stepped (boot.js frame(): `if (pauseCtl.active) acc
+  // = 0` — then viewUpdates(dt) unconditionally). That made every posed
+  // battery frame unphotographable by construction, MEASURED live on S1 this
+  // session: across the harness's 24-frame settle the sim advanced 0.000 s and
+  // the wall clock advanced 3.70 s, and in that gap particlesActive went
+  // 49 -> 0, tracersActive 3 -> 0, muzzle activeSprites 4 -> 0, leased flash
+  // lights 2 -> 0 and casings flying 9 -> 0. Every critic's "zero combat
+  // permanence" tell is that one line of arithmetic.
+  //
+  // Keying to the sim clock is also the only correct answer during PLAY: a
+  // paused game must hold its brass and its smoke, and at this build's frame
+  // rate a 0.25 s wall dt teleports a particle a quarter-second down its arc
+  // in one step. Sim-delta is both frozen-frame-safe and motion-correct.
   let clock = 0;
+  let lastSimT = null;
+
+  function simDt(dtWall) {
+    const s = ctx.sim && ctx.sim();
+    if (!s) return Math.min(Math.max(dtWall, 0), 0.25); // pre-mission: wall
+    const t = s.state.time;
+    if (lastSimT === null) { lastSimT = t; return 0; }
+    const d = t - lastSimT;
+    lastSimT = t;
+    if (!(d > 0)) return 0;         // sim held (pause/freeze) or restarted
+    return Math.min(d, 0.25);       // clamp a multi-step catch-up frame
+  }
 
   // ---- shared subsystem environment -------------------------------------
   const env = {
@@ -68,8 +99,10 @@ export function createFx(ctx) {
   const muzzle = makeMuzzle(env);
   const casings = makeCasings(env);
   const explosions = makeExplosions(env, pools, decals);
+  const grounding = makeGrounding(env);
 
   const counters = { shots: 0, impacts: 0, explosions: 0, grenadeFx: 0 };
+  let groundingBaked = false;
   const lastFlesh = new Map(); // victim → sim time of last puff (dedupe)
 
   // Pool-mesh registry for the reparenting self-heal below. THREE's add()
@@ -83,6 +116,7 @@ export function createFx(ctx) {
     ...decals.prewarmables(),
     ...casings.prewarmables(),
     ...explosions.prewarmables(),
+    ...grounding.prewarmables(),
   ];
 
   function healParents() {
@@ -219,6 +253,12 @@ export function createFx(ctx) {
     casings.clear();
     explosions.clear();
     lastFlesh.clear();
+    // A fresh sim restarts state.time at 0; re-latch so the first simDt() after
+    // a mission start is 0 rather than a large negative (which would clamp to
+    // 0 anyway, but latching keeps the intent explicit).
+    lastSimT = null;
+    // Character blobs are owned by soldiers.js, which clears its own cast on
+    // mission:start; releasing here would orphan slots it still holds.
     rand = mulberry32(FX_SEED); // deterministic per mission/scenario (R21)
   }
 
@@ -242,9 +282,17 @@ export function createFx(ctx) {
       bridge.register("grenade", guard(onGrenade));
     },
 
-    update(dt) {
+    update(dtWall) {
+      const dt = simDt(dtWall);   // sim time, never wall time (see the header)
       clock += dt;
       healParents(); // reclaim pools a prewarm pass reparented (see above)
+      // One-time grounding bake, the first frame the level exists in the scene
+      // (props are built before boot's rAF loop starts, so this is frame 1).
+      if (!groundingBaked) {
+        groundingBaked = true;
+        const n = grounding.bakeStatics(ctx.scene);
+        if (n) poolMeshes.push(...grounding.prewarmables());
+      }
       // perspective point-size factor: drawingBufferHeight / (2 tan(vfov/2))
       const h = ctx.renderer.domElement.height || 1080;
       const f = h / (2 * Math.tan((ctx.camera.fov * Math.PI) / 360));
@@ -265,8 +313,14 @@ export function createFx(ctx) {
 
     // private extras (allowed by the freeze): probe/testing visibility
     clear: clearAll,
+    // The ONE contact-shadow helper (ranked fix 5). soldiers.js leases dynamic
+    // slots through here rather than importing grounding.js a second time, so
+    // characters, props and vehicles all share one texture and one pool.
+    grounding,
     stats() {
       return {
+        clock: +clock.toFixed(3),
+        grounding: grounding.stats(),
         events: { ...counters },
         particlesActive: pools.active(),
         tracersActive: tracers.active(),

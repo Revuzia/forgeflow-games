@@ -37,6 +37,18 @@ const N_WORLD = 12;         // world-layer sprite slots (bots)
 const N_VM = 8;             // vm-layer sprite slots (player)
 const LIGHT = { color: 0xffc27a, peak: 18, durS: 0.055, radius: 9 }; // §4.2
 const MAX_MUZZLE_LEASES = 3; // 3-light grant rule (4th pool light = explosions)
+// Metres the PLAYER's leased flash light stands off down-range from the muzzle
+// so an inverse-square point light 15 cm from the receiver stops clipping the
+// viewmodel's top rail to white. See the call site in spawn().
+// MEASURED, not guessed (live S1, same held pose, three captures over the gun
+// rail box x[1050,1400] y[600,780], mean luma / p99 / pixels >= 250):
+//   baseline (stand-off 0.5)     143.6 / 251.1 / 911
+//   lights.lease suppressed       57.6 / 112.1 /   0
+//   fx.muzzle.vm sprite hidden   143.9 / 251.0 / 890
+// The sprite is worth 0.3 luma of the rail's exposure; the leased PointLight is
+// worth 86 and ALL of the clipping. So the "smeared white bar down the barrel"
+// is the light's near-field inverse-square, and the lever is distance.
+const PLAYER_LIGHT_STANDOFF = 0.9;
 const BOT_LIGHT_MAX_DIST = 60;
 // Base sprite size (m). Through the 60° vm camera at ~0.7 m these cover
 // ~200–260 px of a 1080p frame — a flash frame, not a torch (VT §5).
@@ -343,7 +355,22 @@ export function makeMuzzle(env) {
                  base * 0.55, 0.95);
       flashCount++;
       if (isPlayer || onScreenAndNear(_mz[0], _mz[1], _mz[2])) {
-        grantLight(_mz[0], _mz[1], _mz[2], isPlayer, first);
+        // PLAYER FLASH LIGHT STAND-OFF (iter04 open item a: "the muzzle flash
+        // over-exposes the top rail in S1 — the gun's own materials are
+        // correctly exposed in S6, same pose without flash"). The lease is a
+        // PointLight at decay 2.0 (lighting.js:210), so illuminance is
+        // intensity / d². Parked AT the muzzle it sits ~0.15 m from the
+        // receiver: 18 / 0.15² ≈ 800, which clips the whole top rail to paper
+        // white and reads as "a smeared white bar running the length of the
+        // barrel" — a real content defect all three critics described
+        // identically. Standing the light off down-range raises that distance
+        // to ~0.65 m (≈ 19× less on the gun) while moving the source by well
+        // under a metre against world geometry metres away, so the scene
+        // lighting and the lit hands the critics CREDITED are preserved.
+        const d0 = d.dir || [0, 0, 0];
+        const off = isPlayer ? PLAYER_LIGHT_STANDOFF : 0;
+        grantLight(_mz[0] + d0[0] * off, _mz[1] + d0[1] * off, _mz[2] + d0[2] * off,
+                   isPlayer, first);
       }
     },
 

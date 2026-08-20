@@ -10,8 +10,16 @@ import * as WD from "../weapons/weapon_data.js";
 
 const TRACER = WD.TRACER_MODEL || { cosmeticCapMps: 300, color: 0xffd9a0 };
 const N = 24;
-const LEN = 3.2;    // max streak length (m)
-const WIDTH = 0.035; // streak width (m)
+// iter05 (lane D): measured in the live S1 frame — 4 tracers alive at the
+// shutter, projected to screen at 11.5 m and 39.3 m depth. At the old 0.035 m
+// width that is 3.1 px and 0.9 px across, i.e. a sub-pixel thread over a neon
+// wall, which is why three critics independently reported "no tracers are
+// visible in any shot despite S1 being a firing frame" while the counters said
+// tracersSpawned 9. The pool was never the problem; the streak was too thin to
+// survive resampling. 6.5 m / 0.075 m puts a warden streak at ~7 px across and
+// ~580 px long at 11 m — legible without becoming a laser bolt.
+const LEN = 6.5;     // max streak length (m)
+const WIDTH = 0.075; // streak width (m)
 const HDR = 2.2;    // color multiplier — the streak blooms, the frame doesn't
 
 function streakTexture() {

@@ -95,9 +95,17 @@ export function makeCasings(env) {
       pos[i3] = origin[0] + dir[0] * 0.32 + rx * 0.12;
       pos[i3 + 1] = origin[1] + dir[1] * 0.32 - 0.06;
       pos[i3 + 2] = origin[2] + dir[2] * 0.32 + rz * 0.12;
-      vel[i3] = rx * (1.5 + rnd() * 1.0) - dir[0] * (0.3 + rnd() * 0.4);
-      vel[i3 + 1] = 1.3 + rnd() * 0.9;
-      vel[i3 + 2] = rz * (1.5 + rnd() * 1.0) - dir[2] * (0.3 + rnd() * 0.4);
+      // EJECTION ARC (iter05, lane D). Measured in the live S1 frame: the
+      // player's three airborne casings projected to screen x = 1687 / 2701 /
+      // 3017 against a 1920-wide frame — every one of them had already left the
+      // right edge. At 0.3 m from the eye the visible half-width is only 0.28 m,
+      // so a 1.5–2.5 m/s lateral kick clears frame in ~0.08 s and no hip-fire
+      // frame can ever contain brass. Softer sideways, higher and slightly
+      // longer rearward: the shell tumbles up-and-right through the frame for
+      // roughly a quarter second, which is the shot COD sells.
+      vel[i3] = rx * (0.9 + rnd() * 0.7) - dir[0] * (0.15 + rnd() * 0.3);
+      vel[i3 + 1] = 1.7 + rnd() * 0.9;
+      vel[i3 + 2] = rz * (0.9 + rnd() * 0.7) - dir[2] * (0.15 + rnd() * 0.3);
       eul[i3] = rnd() * Math.PI * 2;
       eul[i3 + 1] = rnd() * Math.PI * 2;
       eul[i3 + 2] = rnd() * Math.PI * 2;

@@ -148,6 +148,35 @@ export function createSoldiers(ctx) {
   let loadPromise = null;
   let viewT = 0;                  // monotonic view clock (flash timing)
   const botIndex = new Map();     // persistent per-frame id -> bot index
+  let lastSimT = null;            // sim clock latch (held-frame detection)
+
+  // ---- contact shadows (ranked fix 5) --------------------------------------
+  // VT §1 amateur tell #2: iter04 had NO character grounded. Critic-a measured
+  // the S9 ground directly under the soldier's boots at RGB 154/165/177 against
+  // 44/51/61 away from him — the brightest patch in the shot was exactly where
+  // his contact shadow belonged. There is no character light to remove (actor.js
+  // strips every light out of the GLB); that lift is the wet-cobble specular
+  // sheen that peaks toward frame centre, and the only thing missing was the
+  // shadow itself. Slots come from fx's ONE shared grounding pool (core/fx/
+  // grounding.js) — never a per-system blob — resolved lazily through the
+  // test-surface global exactly as fx.js resolves the light pool.
+  const CONTACT = {
+    // Half-extents of the QUAD, not of the visible core: the radial falloff
+    // reaches zero at the quad edge, so the dark part is roughly half of this.
+    rx: 0.56, rz: 0.50,
+    strength: 0.88,       // peak alpha multiplier at full contact
+    fadeH: 0.55,          // metres of airborne lift that fades the blob to 0
+    deadR: 1.15,          // prone body: wider, softer
+    deadS: 0.64,
+  };
+  let groundingApi = null;
+  function grounding() {
+    if (groundingApi) return groundingApi;
+    const fx = ctx.fx || ((typeof window !== "undefined" && window.__FPS__)
+      ? window.__FPS__.fx : null);
+    if (fx && fx.grounding) groundingApi = fx.grounding;
+    return groundingApi;
+  }
 
   function archBody(arch) {
     const a = ctx.content && ctx.content.archetypes && ctx.content.archetypes[arch];
@@ -289,6 +318,7 @@ export function createSoldiers(ctx) {
       skipAcc: 0,
       forceAnim: null,
       kick: 0,
+      shadow: -1, // grounding slot, leased on the first update (fx may lag boot)
     };
     actor.root.position.set(d.pos[0], d.pos[1], d.pos[2]);
     actor.root.rotation.y = rec.yaw;
@@ -299,12 +329,19 @@ export function createSoldiers(ctx) {
   function removeActor(botId) {
     const rec = actors.get(botId);
     if (!rec) return;
+    const G = grounding();
+    if (G && rec.shadow >= 0) G.free(rec.shadow);
+    rec.shadow = -1;
     rec.actor.dispose();
     actors.delete(botId);
   }
 
   function clearAll() {
-    for (const rec of actors.values()) rec.actor.dispose();
+    const G = grounding();
+    for (const rec of actors.values()) {
+      if (G && rec.shadow >= 0) G.free(rec.shadow);
+      rec.actor.dispose();
+    }
     actors.clear();
     pendingSpawns.length = 0;
   }
@@ -386,10 +423,26 @@ export function createSoldiers(ctx) {
      * from bot.anim, aim-blend, flash restore, off-screen 1-in-3 pose eval.
      */
     update(dt, alpha) {
-      viewT += dt;
       const sim = ctx.sim();
       if (!sim) return;
       const st = sim.state;
+      const G = grounding();
+
+      // ---- HELD-FRAME GUARD (ranked fix 5, S9 pose) ------------------------
+      // boot's rAF loop calls viewUpdates() every frame whether or not the sim
+      // stepped, so while the world is held for a battery pose the mixer kept
+      // advancing on WALL time: the harness's 24-frame settle spends 3.70 s of
+      // wall clock at 0.000 s of sim (measured live this session), which walks
+      // a 1.2 s run cycle three times over and lands the pose wherever the
+      // machine's frame rate happens to drop it. That is why S9's captured
+      // stance is a mid-air stride with the rear boot off the cobbles: it is
+      // not a chosen pose, it is a lottery. Freezing the mixer when the sim
+      // clock does not move makes a held pose deterministic AND makes it the
+      // pose the scenario's own settle ticks produced.
+      const simHeld = (lastSimT !== null) && !(st.time > lastSimT);
+      lastSimT = st.time;
+      const dtAnim = simHeld ? 0 : dt;
+      viewT += dtAnim;
 
       // one pass over state (persistent map — no per-frame allocation growth)
       botIndex.clear();
@@ -437,7 +490,7 @@ export function createSoldiers(ctx) {
 
         // ---- facing (damped — pivots with weight, never snaps)
         if (bot.alive && !rec.forceAnim) rec.yawTarget = bot.yaw + Math.PI;
-        rec.yaw = dampAngle(rec.yaw, rec.yawTarget, rec.deathPlayed ? 18 : 10, dt);
+        rec.yaw = dampAngle(rec.yaw, rec.yawTarget, rec.deathPlayed ? 18 : 10, dtAnim);
         actor.root.rotation.y = rec.yaw;
 
         // ---- animation selection (sim's bot.anim is authoritative)
@@ -463,7 +516,7 @@ export function createSoldiers(ctx) {
         // ---- weapon fire kick (cosmetic; decays fast)
         if (rec.wpn && rec.kick > 0.001) {
           rec.wpn.position.z = -0.02 * rec.kick;
-          rec.kick *= Math.exp(-22 * dt);
+          rec.kick *= Math.exp(-22 * dtAnim);
         } else if (rec.wpn && rec.wpn.position.z !== 0) {
           rec.wpn.position.z = 0;
         }
@@ -474,7 +527,7 @@ export function createSoldiers(ctx) {
         _sphere.center.y += 0.9;
         _sphere.radius = 1.3;
         const onScreen = _frustum.intersectsSphere(_sphere);
-        rec.skipAcc += dt;
+        rec.skipAcc += dtAnim;
         rec.skipN++;
         if (onScreen || rec.skipN % 3 === 0) {
           actor.update(rec.skipAcc);
@@ -494,6 +547,33 @@ export function createSoldiers(ctx) {
               want = 1;
             }
             actor.aimBlend(pitch, yawDelta, want);
+          }
+        }
+
+        // ---- contact shadow (ranked fix 5) ---------------------------------
+        // Placement is the actor's own feet plane: bot.pos is the sim capsule
+        // FOOT position, so the blob needs no downward raycast to be exact on
+        // decks and stairs — the same contract fx.js uses to floor brass. The
+        // terrain height is consulted only to fade the blob out while a body
+        // is genuinely airborne (jump / fall), so a lifted stride foot keeps
+        // its shadow and a vaulting soldier does not drag one through the air.
+        if (G) {
+          if (rec.shadow < 0) rec.shadow = G.alloc();
+          if (rec.shadow >= 0) {
+            const px = actor.root.position.x;
+            const pz = actor.root.position.z;
+            const py = actor.root.position.y;
+            const gy = (ctx.colliders && ctx.colliders.groundY)
+              ? ctx.colliders.groundY(px, pz) : 0;
+            const contactY = Math.min(py, gy);
+            const lift = Math.max(0, py - gy);
+            const air = Math.max(0, 1 - lift / CONTACT.fadeH);
+            const dead = !bot.alive;
+            G.write(
+              rec.shadow, px, contactY + 0.014, pz,
+              dead ? CONTACT.deadR : CONTACT.rx,
+              dead ? CONTACT.deadR : CONTACT.rz,
+              (dead ? CONTACT.deadS : CONTACT.strength) * air);
           }
         }
       }
