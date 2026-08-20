@@ -81,7 +81,7 @@ export function update(W, dt) {
     ctl.wall.position.z = st.center.z;
     ctl.wall.scale.set(st.radius, 1, st.radius);
     // The wall is a unit cylinder SCALED to the storm radius, but tex.repeat was
-    // fixed at 12 for the whole match. At the opening radius (~739m) that is a
+    // fixed at 12 for the whole match. At the opening radius (784m, = map.half) that is a
     // 4.6km circumference cut into 12 tiles — each streak smeared ~390m wide, so
     // the "wall" painted thin vertical stripes across the entire sky instead of
     // reading as a wall. By the final circle the same 12 tiles were packed into

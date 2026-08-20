@@ -815,25 +815,14 @@ function installHumanInput(W) {
   W.kernel.onUpdate((dt) => {
     if (!W.player || !W.player.alive || W.phase === "menu" || W.paused) return;
     const inp = W.player.input;
-    // UNLOCKED LOOK-AROUND (owner: "mouse move is NOT smooth... it should
-    // follow the cursor"): proportional cursor-follow, the way browser TPS do
-    // it — the camera turns toward wherever the cursor sits, rate scaling
-    // smoothly (smoothstep) from a small dead-zone at center to full speed at
-    // the edge, with a critically-damped rate filter so there is no step or
-    // jerk when the cursor crosses the zone. Pointer lock (any click) remains
-    // the primary raw-delta look, zero added latency.
-    if (document.pointerLockElement !== dom && W.mouseNDC && !rmbDrag) {
-      const d = dt || 0.016, n = W.mouseNDC, dz = 0.12;
-      const shape = (v) => {
-        const s = Math.min(1, Math.max(0, (Math.abs(v) - dz) / (1 - dz)));
-        return Math.sign(v) * s * s * (3 - 2 * s);
-      };
-      const wantYawR = -shape(n.x) * 3.2, wantPitchR = shape(n.y) * 2.2;
-      W._lookYawR = (W._lookYawR || 0) + (wantYawR - (W._lookYawR || 0)) * Math.min(1, d * 12);
-      W._lookPitchR = (W._lookPitchR || 0) + (wantPitchR - (W._lookPitchR || 0)) * Math.min(1, d * 12);
-      inp.yaw += W._lookYawR * d;
-      inp.pitch = K.clamp(inp.pitch + W._lookPitchR * d, -1.35, 1.35);
-    } else { W._lookYawR = 0; W._lookPitchR = 0; }
+    // NO UNCOMMANDED CAMERA MOTION. A previous build panned the camera toward
+    // wherever the OS cursor sat whenever pointer lock was not held — up to
+    // 177 deg/s of continuous rotation, with the cursor hidden and the reticle
+    // pinned to centre, so nothing on screen explained it (owner: "camera seems
+    // drunk, it doesn't hold properly"). Shooters do not edge-pan; that is an
+    // RTS/MOBA convention. Pointer lock is the only look mode, RMB-drag is the
+    // explicit fallback when the browser denies it, and an unlocked camera now
+    // holds perfectly still while the HUD tells the player to click.
     inp.mx = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
     inp.mz = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
     const sprintHeld = !!keys.ShiftLeft;   // canon() folds ShiftRight into this
@@ -1767,7 +1756,17 @@ function updateCamera(W, dt) {
   // keep camera out of terrain/structures (skip in first-person — at the eye)
   if (!firstPerson) {
     const minY = W.map.heightAt(camPos.x, camPos.z) + 0.35;
-    if (camPos.y < minY) camPos.y = minY;
+    // Snap UP instantly so terrain never clips the view, but ease back DOWN —
+    // the standard third-person collision rule (pull in on contact, release
+    // slowly). This is a SINGLE-SAMPLE probe at the orbiting camera position,
+    // so turning beside a slope sweeps it through metres of height in a
+    // fraction of a second; applying that raw made the camera heave on its own
+    // while the player was only looking around.
+    const wantLift = Math.max(0, minY - camPos.y);
+    W._camLift = (W._camLift == null || wantLift > W._camLift)
+      ? wantLift
+      : W._camLift + (wantLift - W._camLift) * Math.min(1, dt * 4);
+    camPos.y += W._camLift;
   }
   // The shake used to be written straight into cam.position, which is ALSO the
   // source of next frame's lerp — so each frame's jitter fed back through the

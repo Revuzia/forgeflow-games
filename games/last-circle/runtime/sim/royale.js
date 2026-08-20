@@ -275,21 +275,28 @@
   // gentler early cuts (~58-64% radius kept per phase vs ~46% before), longer
   // waits, one extra phase: ~13.5 min total on standard.
   var STORM_PHASES = {
+    // PACING RESHAPED 2026-08-20 (owner: "the circle shrinks too fast").
+    // Researched against the live tables: Apex ring 1 is 75 s hold + ~260 s
+    // close and eats 28% of the whole match; Fortnite holds the FULL island for
+    // 60 s at zero damage, then phase 1 is 110 s wait + 85 s close; PUBG gives
+    // 120 s before the first circle is even drawn. Ours ran 60 s + 80 s — the
+    // first wall started moving barely 20 s after a player finished landing.
+    // Early phases are now long and gentle, late phases stay tight.
     standard: [
-      { wait: 60, shrink: 80, radiusFrac: 0.78,  dps: 1 },
-      { wait: 60, shrink: 70, radiusFrac: 0.58,  dps: 1 },
-      { wait: 50, shrink: 60, radiusFrac: 0.42,  dps: 2 },
-      { wait: 45, shrink: 50, radiusFrac: 0.28,  dps: 3 },
-      { wait: 40, shrink: 45, radiusFrac: 0.17,  dps: 5 },
-      { wait: 30, shrink: 40, radiusFrac: 0.09,  dps: 7 },
+      { wait: 100, shrink: 140, radiusFrac: 0.78,  dps: 1 },
+      { wait:  65, shrink:  85, radiusFrac: 0.58,  dps: 1 },
+      { wait:  50, shrink:  65, radiusFrac: 0.42,  dps: 2 },
+      { wait:  40, shrink:  55, radiusFrac: 0.28,  dps: 3 },
+      { wait:  30, shrink:  45, radiusFrac: 0.17,  dps: 5 },
+      { wait:  22, shrink:  38, radiusFrac: 0.09,  dps: 7 },
       // Late phases trade WAIT for SHRINK, same per-phase totals (60s / 65s):
       // Fortnite's circles 7-9 have zero wait — the endgame storm never stops
       // moving, which is what makes final circles frantic instead of campy.
       // Ours idled 25s then 20s at exactly the moment the genre goes continuous.
-      { wait: 10, shrink: 50, radiusFrac: 0.04,  dps: 9 },
+      { wait: 10, shrink: 35, radiusFrac: 0.04,  dps: 9 },
       // final circle HOLDS at ~10m — closing to zero storm-killed every
       // survivor simultaneously and crowned a corpse; someone must WIN the fight
-      { wait: 0, shrink: 65, radiusFrac: 0.012, dps: 12 },
+      { wait: 0, shrink: 40, radiusFrac: 0.012, dps: 12 },
     ],
     quick: [
       { wait: 30, shrink: 35, radiusFrac: 0.28, dps: 2 },
@@ -302,7 +309,16 @@
   };
   // quick mode starts pre-shrunk:
   var MODE = {
-    standard: { players: 50, startRadiusFrac: 1.35, lootMult: 1.0, drop: "glider" },
+    // startRadiusFrac 1.0 => opening ring sits exactly on the map edge, and the
+    // ENTIRE first shrink is visible. It used to be 1.35 (and briefly 1.42 while
+    // chasing square-corner coverage), which put the ring off the minimap and off
+    // the 3D wall's own visibility gate: the player saw nothing move for the
+    // first ~190 s and then watched the whole perceptible collapse happen in the
+    // last minute — read as "it starts shrunk, then shrinks too fast".
+    // Covering the square's CORNERS is unnecessary: isla_viva's islandMask
+    // (maps.js mkHeightFn) reaches zero at 714 m from centre, so every metre of
+    // land already sits inside a 784 m circle; the corners are open ocean.
+    standard: { players: 50, startRadiusFrac: 1.0, lootMult: 1.0, drop: "glider" },
     quick:    { players: 50, startRadiusFrac: 0.75, lootMult: 1.8, drop: "ground" },
     practice: { players: 1,  startRadiusFrac: 1.35, lootMult: 1.0, drop: "ground" },
   };
@@ -361,7 +377,15 @@
       // at 0.8 a bad roll made the far side close at (1.8 x dR)/shrink — up to
       // 10 m/s on standard phase 1 and 19 m/s on quick vs 8.0 sprint: a death
       // with no counterplay. 0.5 keeps circles wandering without doubling the sweep.
-      var maxOff = Math.max(0, prev.r - r) * 0.5;   // stay well inside
+      // Fortnite's early safe zones are STRICTLY CONCENTRIC — move distance is
+      // literally 0 m through phase 6 — and only relocate from phase 7 on, which
+      // is a deliberate anti-camping device: holding the centre is correct early
+      // and worthless late. Copy that shape. It also matters mechanically here,
+      // because the centre offset ADDS to the distance the far edge must sweep,
+      // and a wandering opening circle is what makes the first storm feel like
+      // it is chasing you across the map.
+      var OFF_FRAC = [0.06, 0.10, 0.22, 0.34, 0.46, 0.55, 0.60, 0.60];
+      var maxOff = Math.max(0, prev.r - r) * (OFF_FRAC[i] != null ? OFF_FRAC[i] : 0.5);
       var ang = rng() * Math.PI * 2, off = rng() * maxOff;
       var cx = prev.x + Math.cos(ang) * off, cz = prev.z + Math.sin(ang) * off;
       // clamp inside map bounds
@@ -376,12 +400,20 @@
     // travel this phase is (radius delta + center offset) — both known exactly
     // here — so extend the shrink time until edge speed <= EDGE_MAX. Purely a
     // function of (seed, mode, half), so host and clients still agree.
-    var EDGE_MAX = 6.4;   // m/s — 80% of sprint: escapable, but only just
+    // Edge speed as a FRACTION OF SPRINT (MOVE.sprint = 8.0 m/s), per phase.
+  // A single global 6.4 (80% of sprint) applied the endgame's pressure to the
+  // opening circle. Researched shape: Apex ring 1 closes at 54-55% of sprint;
+  // PUBG's early zones are outrunnable at a jog while its LATE walls run
+  // 1.5-3.0 m/s (24-48% of sprint) because the zones are tiny by then. So:
+  // gentle early, demanding mid, and late phases capped by small absolute
+  // distances rather than raw speed.
+  var EDGE_FRAC = [0.50, 0.55, 0.60, 0.65, 0.70, 0.72, 0.75, 0.75];
     this.shrinkS = [];
     for (var m = 0; m < this.phases.length; m++) {
       var ca = this.circles[m], cb = this.circles[m + 1];
       var edgeTravel = (ca.r - cb.r) + Math.sqrt((cb.x - ca.x) * (cb.x - ca.x) + (cb.z - ca.z) * (cb.z - ca.z));
-      this.shrinkS.push(Math.max(this.phases[m].shrink, edgeTravel / EDGE_MAX));
+      var cap = (EDGE_FRAC[m] != null ? EDGE_FRAC[m] : 0.75) * MOVE.sprint;
+      this.shrinkS.push(Math.max(this.phases[m].shrink, edgeTravel / cap));
     }
     // Phase timeline: [waitEnd, shrinkEnd] pairs cumulative
     this.timeline = [];
@@ -402,6 +434,10 @@
       var tl = this.timeline[i], ph = this.phases[i];
       var from = this.circles[i], to = this.circles[i + 1];
       if (t < tl.shrinkStart) {
+        // Both rings are always visible, as in Fortnite and PUBG. An earlier fix
+        // hid the first target circle during the opening wait (Apex does that),
+        // but the bots read nextCenter/nextRadius directly for their rotation
+        // scoring — so hiding it from the HUD only handicapped the human.
         return { center: { x: from.x, z: from.z }, radius: from.r, dps: i === 0 ? 0 : this.phases[i - 1].dps,
                  phase: i + 1, phaseState: "waiting", tToNext: tl.shrinkStart - t, closing: false, done: false,
                  nextCenter: { x: to.x, z: to.z }, nextRadius: to.r };

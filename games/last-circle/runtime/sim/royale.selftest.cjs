@@ -34,13 +34,13 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
 
   const st0 = s1.stateAt(0);
   ok(st0.phaseState === "waiting" && st0.dps === 0, "storm: t=0 waiting, no damage");
-  ok(approx(st0.radius, 800 * 1.35, 0.01), "storm: initial radius = startRadiusFrac × half");
+  ok(approx(st0.radius, 800 * 1.0, 0.01), "storm: initial radius = startRadiusFrac × half");
 
   // mid-shrink of phase 1: radius strictly between start and target
   const p0 = R.STORM_PHASES.standard[0];
   const stMid = s1.stateAt(p0.wait + p0.shrink / 2);
   ok(stMid.phaseState === "closing" && stMid.dps === p0.dps, "storm: mid phase-1 shrink closing at phase dps");
-  ok(stMid.radius < 800 * 1.35 && stMid.radius > 800 * p0.radiusFrac, "storm: radius interpolates during shrink");
+  ok(stMid.radius < 800 * 1.0 && stMid.radius > 800 * p0.radiusFrac, "storm: radius interpolates during shrink");
 
   // circles are nested: every next circle inside previous
   let nested = true;
@@ -66,8 +66,41 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   // quick mode is much shorter; standard is real-BR length. Bounds allow the
   // outrunnable-edge shrink extension (worst seed: standard ~+25s, quick ~+51s).
   const q = new R.Storm({ seed: 42, mode: "quick", half: 800 });
-  ok(q.totalS < s1.totalS && q.totalS <= 300, "storm: quick mode timeline ≤ ~5 min of storm");
-  ok(s1.totalS >= 540 && s1.totalS <= 820, "storm: standard timeline 9-13.5 min (" + s1.totalS + "s)");
+  ok(q.totalS < s1.totalS && q.totalS <= 420, "storm: quick mode timeline ≤ ~7 min of storm");
+  ok(s1.totalS >= 780 && s1.totalS <= 960, "storm: standard timeline 13-16 min (" + s1.totalS + "s)");
+
+  // ── GENRE PACING (researched 2026-08-20 against Fortnite / PUBG / Apex) ────
+  // The opening circle must be a stroll, not a chase: Apex ring 1 closes at
+  // 54-55% of sprint and consumes ~28% of the match. Ours was 78% of sprint in
+  // 18% of the match — the reported "shrinks too fast".
+  {
+    const SPRINT = R.MOVE.sprint;
+    let worstFrac = 0, ph1Frac = 0, coversCorners = true;
+    for (let seed = 1; seed <= 40; seed++) {
+      const s = new R.Storm({ seed, mode: "standard", half: 800 });
+      // Opening ring must contain every metre of LAND. isla_viva's islandMask
+      // reaches zero at 0.893 * half, so 750 m is a real margin past the last
+      // beach; the square's corners beyond that are open ocean by construction.
+      if (s.circles[0].r < 750) coversCorners = false;
+      for (let i = 0; i < s.phases.length; i++) {
+        const a = s.circles[i], b = s.circles[i + 1], tl = s.timeline[i];
+        const travel = (a.r - b.r) + Math.hypot(b.x - a.x, b.z - a.z);
+        const f = (travel / (tl.end - tl.shrinkStart)) / SPRINT;
+        if (f > worstFrac) worstFrac = f;
+        if (i === 0 && f > ph1Frac) ph1Frac = f;
+      }
+    }
+    ok(coversCorners, "storm: opening zone contains all land (island ends at 0.893*half)");
+    ok(ph1Frac <= 0.55, "storm: opening circle closes at <=55% of sprint, Apex-style (" + (ph1Frac * 100).toFixed(0) + "%)");
+    ok(worstFrac <= 0.80, "storm: no phase ever closes faster than 80% of sprint (" + (worstFrac * 100).toFixed(0) + "%)");
+    const ph1Share = s1.timeline[0].end / s1.totalS;
+    ok(ph1Share >= 0.22 && ph1Share <= 0.36, "storm: phase 1 is ~a quarter to a third of the match, like Apex ring 1 (" + (ph1Share * 100).toFixed(0) + "%)");
+    // The opening ring must be ON the map, not off it: if it starts outside the
+    // map bounds the player watches nothing move, then sees the whole visible
+    // collapse compressed into the tail of the phase.
+    ok(s1.circles[0].r <= 800 * 1.02, "storm: opening ring is on-map, so the whole first shrink is visible");
+    ok(s1.stateAt(1).nextRadius > 0, "storm: next circle is shown from the start (Fortnite/PUBG convention)");
+  }
 
   // OUTRUNNABLE: for every phase of every mode across many seeds, the closing
   // edge's worst-case speed (radius delta + center shift over the effective

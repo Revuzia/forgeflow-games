@@ -1768,6 +1768,15 @@ export function showHUD(W) {
   }
 
   // interact hint + chest-open progress ring
+  // MOUSE-LOOK PROMPT. Pointer lock is the only look mode in play, and the
+  // browser drops it on Esc / tab-out / focus loss with no signal of its own —
+  // so an unlocked player used to be left with a camera that simply would not
+  // turn (and, in the build before this, one that drifted on its own). Say it
+  // plainly instead.
+  R.lookHint = h("div", { position: "absolute", left: "50%", top: "46%", transform: "translateX(-50%)",
+    background: "rgba(0,0,0,0.62)", padding: "8px 18px", borderRadius: "10px",
+    font: "700 14px system-ui", letterSpacing: "0.08em", color: "#dbeaff",
+    border: "1px solid rgba(140,190,255,0.35)", display: "none", pointerEvents: "none" }, "CLICK TO LOOK AROUND", L);
   R.interact = h("div", { position: "absolute", left: "50%", top: "60%", transform: "translateX(-50%)", background: "rgba(0,0,0,0.55)", padding: "6px 14px", borderRadius: "8px", fontSize: "14px", display: "none" }, "", L);
   R.chestRing = h("div", { position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "58px", height: "58px", borderRadius: "50%", display: "none", background: "conic-gradient(#ffd254 0deg, rgba(255,255,255,0.15) 0deg)", WebkitMask: "radial-gradient(circle, transparent 22px, #000 23px)", mask: "radial-gradient(circle, transparent 22px, #000 23px)" }, null, L);
 
@@ -2151,8 +2160,16 @@ export function update(W, dt) {
   R.cross.style.display = (p.input.ads && wid && K.WEAPONS[wid] && K.WEAPONS[wid].scope) ? "none" : "block";
   const locked = W.pointerLocked && W.pointerLocked();
   const dom = W.kernel.renderer.domElement;
-  const wantCursor = p.alive && !W.paused ? "none" : "";
+  // Show the OS cursor whenever the mouse is NOT captured: a hidden cursor with
+  // no pointer lock is the worst of both worlds — you cannot see where the mouse
+  // is and the camera will not turn.
+  const wantCursor = p.alive && !W.paused && locked ? "none" : "";
   if (dom.style.cursor !== wantCursor) dom.style.cursor = wantCursor;
+  if (R.lookHint) {
+    const wantHint = !locked && p.alive && !W.paused && W.phase !== "menu";
+    const d2 = wantHint ? "block" : "none";
+    if (R.lookHint.style.display !== d2) R.lookHint.style.display = d2;
+  }
   // Reticle pinned to SCREEN CENTER in every mode (owner: "cursor always
   // stays CENTERED") — shots aim through center (weapons.js crosshairPoint),
   // and the unlocked mouse pans the camera instead of dragging the reticle.
