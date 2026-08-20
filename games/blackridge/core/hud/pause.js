@@ -68,6 +68,41 @@ export function createPause(ctx, cb) {
   const navEl = rail.querySelector(".nav");
   const confirmEl = rail.querySelector(".confirm");
 
+  // ---------------------------------------------------- SELECTED ROW (iter07)
+  // visual_target.md §6 contracts "left-rail vertical nav in caps with amber
+  // active tick", and the same deduction has been taken in iter04, iter05 and
+  // iter06 — 3/3 critics in the last round. The tick artwork already existed
+  // (.a10-item::before, an amber 2 px bar) but nothing ever carried `.on`,
+  // because the menu was mouse-only: no row was ever SELECTED, only hovered,
+  // and a hover state cannot appear in a screenshot. The fix is the missing
+  // half of the menu, not a decoration — a keyboard-navigable rail with a real
+  // selection, which is also what a console shooter's pause menu is.
+  const rowsOf = (el) => Array.from(el.querySelectorAll(".a10-item"));
+  let sel = 0;
+  function paintSel() {
+    const rows = rowsOf(confirmOpen ? confirmEl : navEl);
+    if (!rows.length) return;
+    sel = Math.max(0, Math.min(rows.length - 1, sel));
+    rows.forEach((el, i) => el.classList.toggle("on", i === sel));
+    // the group that is NOT showing must not keep a stale tick
+    rowsOf(confirmOpen ? navEl : confirmEl).forEach((el) => el.classList.remove("on"));
+  }
+  function moveSel(d) {
+    const rows = rowsOf(confirmOpen ? confirmEl : navEl);
+    if (!rows.length) return;
+    sel = (sel + d + rows.length) % rows.length;
+    paintSel();
+  }
+  // hover and keyboard drive the SAME selection — a mouse user never sees the
+  // tick disagree with the pointer.
+  rail.addEventListener("mousemove", (e) => {
+    const item = e.target && e.target.closest && e.target.closest(".a10-item");
+    if (!item) return;
+    const rows = rowsOf(confirmOpen ? confirmEl : navEl);
+    const i = rows.indexOf(item);
+    if (i >= 0 && i !== sel) { sel = i; paintSel(); }
+  });
+
   const vmark = document.createElement("div");
   vmark.className = "a10-vmark";
   vmark.textContent = `BLACKRIDGE ${ctx.version || ""}`;
@@ -80,6 +115,8 @@ export function createPause(ctx, cb) {
     confirmOpen = !!on;
     navEl.style.display = on ? "none" : "block";
     confirmEl.style.display = on ? "block" : "none";
+    sel = 0;              // a group change always lands on its first row
+    paintSel();
   }
 
   function overlayAllowed() {
@@ -105,6 +142,7 @@ export function createPause(ctx, cb) {
       setConfirm(false);
       ctx.input.enabled = false; // hotkey/fire gate while the overlay is up
       ctx.input.unlock();
+      sel = 0; paintSel();       // RESUME is the selected row on every open
       if (overlayAllowed()) root.style.display = "block";
     },
 
@@ -139,6 +177,21 @@ export function createPause(ctx, cb) {
   };
 
   // ------------------------------------------------------------------ input
+  // Arrow / WS move the selection, Enter or Space activates it. Registered
+  // before the ESC handler below and gated the same way, so it can never fire
+  // while the settings overlay or the debrief owns the keyboard.
+  window.addEventListener("keydown", (e) => {
+    if (!active || !overlayAllowed()) return;
+    if (shell.settingsUI && shell.settingsUI.visible) return;
+    const c = e.code;
+    if (c === "ArrowDown" || c === "KeyS") { moveSel(1); e.preventDefault(); return; }
+    if (c === "ArrowUp" || c === "KeyW") { moveSel(-1); e.preventDefault(); return; }
+    if (c === "Enter" || c === "NumpadEnter" || c === "Space") {
+      const rows = rowsOf(confirmOpen ? confirmEl : navEl);
+      if (rows[sel]) { rows[sel].click(); e.preventDefault(); }
+    }
+  });
+
   rail.addEventListener("click", (e) => {
     const a = e.target && e.target.getAttribute && e.target.getAttribute("data-a");
     if (!a) return;

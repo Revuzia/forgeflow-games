@@ -92,12 +92,30 @@ export function ensureStyle() {
   text-shadow:0 1px 2px rgba(0,0,0,.6);
   -webkit-user-select:none;user-select:none;}
 #hud *{box-sizing:border-box;}
+/* ---- LAYER ORDER (iter07 D9) --------------------------------------------
+   2/3 critics: "the entire HUD including ammo vanishes in ADS — which is not
+   the convention". The ammo block was never REMOVED in ADS (update() only
+   fades the crosshair, per VT §6); it was BURIED. #a10-scope is appended last
+   and paints its 9999 px 98.5%-opaque shroud over every sibling before it, so
+   scoping a Corvus takes the compass, the ammo block and the killfeed with it.
+   Three explicit bands fix it for good: the optic shroud is scenery, the
+   information layers read over it (which is the console convention the critics
+   were citing), and the full-screen damage/death effects sit over everything. */
+#hud > *{z-index:2;}                                   /* information layers */
+#hud > #a10-scope{z-index:1;}                          /* optic body: scenery */
+#hud > #a10-vignette,#hud > #a10-vigdir,#hud > #a10-desat,
+#hud > #a10-flash,#hud > #a10-fade{z-index:3;}         /* full-screen effects */
 
 /* ------------------------------------------------------------- compass */
 #compass{position:absolute;top:18px;left:50%;transform:translateX(-50%);
   width:min(560px,42vw);height:44px;opacity:.55;
-  -webkit-mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent);
-  mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent);}
+  /* iter07 D9: the fade ran 18%/82%, which still delivered ~85% opacity at the
+     first and last numeral — a critic reading the tape at 1:1 sees a bearing
+     label cut in half by the element edge, which is what "compass letters clip
+     raw at the tape edges with no fade mask" means. 26%/74% puts the outermost
+     label inside the ramp so it reads as fading out rather than as clipped. */
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 26%,#000 74%,transparent);
+  mask-image:linear-gradient(90deg,transparent,#000 26%,#000 74%,transparent);}
 #compass .a10-tape{position:absolute;top:6px;left:50%;height:20px;will-change:transform;}
 #compass .a10-tk{position:absolute;top:0;width:1px;height:6px;background:var(--a10-ink);opacity:.8;}
 #compass .a10-tk.card{height:9px;width:1.5px;}
@@ -114,13 +132,22 @@ export function ensureStyle() {
   background:var(--a10-red);opacity:0;}
 
 /* ----------------------------------------------------------- crosshair */
+/* iter07 D9 — THE RETICLE HAD TO BE FINDABLE. critic-c cropped the centre of
+   S1 and reported "there is NO crosshair at all"; the verification lane
+   measured one at exactly 960/540. Both were right: four 1.5x7 px ticks with a
+   2 px soft shadow, sitting at a hip-fire gap of ~50 px over a bloomed market
+   awning, are present and illegible. Still hairline per VT §6 (no glow, no
+   ornament) — 2x9 px arms, a hard 1 px dark contour so it survives on a bright
+   surface, and the optional centre dot VT §6 permits, which is what makes the
+   eye find the middle at a glance. */
 #crosshair{position:absolute;left:50%;top:50%;width:0;height:0;}
 #crosshair .a10-x{position:absolute;left:0;top:0;background:var(--a10-ink);
-  box-shadow:0 0 2px rgba(0,0,0,.7);will-change:transform;}
-#crosshair .a10-xv{width:1.5px;height:7px;margin-left:-0.75px;}
-#crosshair .a10-xh{width:7px;height:1.5px;margin-top:-0.75px;}
-#crosshair .a10-dot{position:absolute;left:-1px;top:-1px;width:2px;height:2px;
-  background:var(--a10-ink);border-radius:50%;}
+  box-shadow:0 0 0 1px rgba(0,0,0,.6),0 0 4px rgba(0,0,0,.85);will-change:transform;}
+#crosshair .a10-xv{width:2px;height:9px;margin-left:-1px;}
+#crosshair .a10-xh{width:9px;height:2px;margin-top:-1px;}
+#crosshair .a10-dot{position:absolute;left:-1.5px;top:-1.5px;width:3px;height:3px;
+  background:var(--a10-ink);border-radius:50%;
+  box-shadow:0 0 0 1px rgba(0,0,0,.65),0 0 3px rgba(0,0,0,.8);}
 #a10-reload{position:absolute;left:50%;top:50%;transform:translate(-50%,26px);opacity:0;}
 #a10-reload svg{display:block;}
 #a10-dry{position:absolute;left:50%;top:50%;transform:translate(-50%,26px);
@@ -160,8 +187,16 @@ export function ensureStyle() {
 #ammo .a10-res{font-size:18px;font-weight:400;opacity:.6;font-variant-numeric:tabular-nums;}
 #ammo .a10-low{font-size:10px;letter-spacing:.3em;color:var(--a10-amber);
   margin-top:3px;visibility:hidden;}
-#ammo .a10-nades{margin-top:6px;font-size:11px;letter-spacing:.18em;opacity:.7;}
-#ammo .a10-nades .off{opacity:.25;}
+/* iter07 D9: 'FRAG ● ●' rendered as "FRAG . ." at 11 px and 2/3 critics read it
+   as an unreadable inventory state. Same information, stated the way the rest
+   of the block states it — label, glyph, tabular count — so it parses in one
+   fixation instead of being decoded. */
+#ammo .a10-nades{margin-top:7px;font-size:10px;letter-spacing:.24em;opacity:.82;
+  display:flex;align-items:center;justify-content:flex-end;gap:7px;}
+#ammo .a10-nades.empty{opacity:.34;}
+#ammo .a10-nades .g{display:block;opacity:.9;}
+#ammo .a10-nades .n{font-size:15px;letter-spacing:.02em;opacity:.92;
+  font-variant-numeric:tabular-nums;}
 @keyframes a10pulse{0%,100%{opacity:.92}50%{opacity:.55}}
 
 /* ------------------------------------------------------------ killfeed */
@@ -173,7 +208,14 @@ export function ensureStyle() {
 #killfeed .a10-kr .me{color:var(--a10-amber);}
 
 /* ---------------------------------------------------- objective + banner */
-#objective{position:absolute;left:50%;bottom:24%;transform:translateX(-50%);
+/* iter07 D9: critic-c reported the objective card sitting "exactly the spot the
+   reticle belongs" in S1/S3/S8 and read the reticle as absent. The card was
+   never AT the reticle (bottom 24% is y≈820 against a centre of 540) — but at
+   ~250 px on a 1080 frame, with a 7 px reticle, "near the middle, and brighter
+   than the thing in the middle" is the same defect from the reader's side. The
+   reticle is now legible on its own (see the crosshair block) and the card
+   drops another 3% of frame height clear of it. */
+#objective{position:absolute;left:50%;bottom:21%;transform:translateX(-50%);
   text-align:center;opacity:0;}
 #objective .t{font-size:11px;letter-spacing:.32em;color:var(--a10-amber);}
 #objective .l{font-size:16px;letter-spacing:.14em;margin-top:4px;text-transform:uppercase;}
@@ -733,9 +775,11 @@ export function createHud(ctx) {
       if (Math.abs(gap - st.lastGap) > 0.2) {
         st.lastGap = gap;
         const g = gap.toFixed(1);
-        xT.style.transform = `translate(0,${-(+g + 7)}px)`;
+        // 9 = the arm's own length (a10-xv height / a10-xh width) — the inner
+        // end of each tick lands exactly `gap` px from centre.
+        xT.style.transform = `translate(0,${-(+g + 9)}px)`;
         xB.style.transform = `translate(0,${g}px)`;
-        xL.style.transform = `translate(${-(+g + 7)}px,0)`;
+        xL.style.transform = `translate(${-(+g + 9)}px,0)`;
         xR.style.transform = `translate(${g}px,0)`;
       }
     }
@@ -812,7 +856,15 @@ export function createHud(ctx) {
     const nades = p.grenades | 0;
     if (nades !== st.lastNades) {
       st.lastNades = nades;
-      amNades.innerHTML = `FRAG <span${nades < 1 ? ' class="off"' : ""}>●</span> <span${nades < 2 ? ' class="off"' : ""}>●</span>`;
+      amNades.className = "a10-nades" + (nades < 1 ? " empty" : "");
+      amNades.innerHTML =
+        `<span>FRAG</span>` +
+        `<svg class="g" width="10" height="13" viewBox="0 0 10 13" fill="currentColor">` +
+        `<rect x="3.4" y="0" width="3.2" height="1.6"/>` +
+        `<rect x="5" y="1.1" width="4" height="1.1" rx="0.4" transform="rotate(-22 5 1.1)"/>` +
+        `<path d="M2 3.6h6a1 1 0 0 1 1 1v4.9A3 3 0 0 1 6 12.5H4a3 3 0 0 1-3-3V4.6a1 1 0 0 1 1-1z"/>` +
+        `</svg>` +
+        `<span class="n">×${nades}</span>`;
     }
 
     // ---- compass tape + pips + wedges

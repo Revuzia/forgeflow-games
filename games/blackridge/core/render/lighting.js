@@ -245,6 +245,10 @@ export function createLights(ctx) {
   // dark (2.0 s) → relight (0.5 s ramp) → done. Intensity/emissive ONLY.
   const blackout = {
     phase: "idle", t: 0,
+    // f: the live plaza-circuit dim factor (1 lit, 0 dark). Read by the emitter
+    // authority so the wet-specular sheet cannot mirror a fixture that is out.
+    f: 1,
+    locked: false, // setBlackout(false): a pose that contracts a LIT grid
     fadeS: 0.4, darkS: 2.0, relightS: 0.5,
     spot: null, spec: null,
     origIntensity: 0, origColor: new THREE.Color(),
@@ -304,6 +308,7 @@ export function createLights(ctx) {
   }
 
   function startBlackout() {
+    if (blackout.locked) return; // pose contracts a lit grid (setBlackout(false))
     if (blackout.phase !== "idle" && blackout.phase !== "done") return;
     const entry = byId.L_PLAZA_KEY;
     blackout.spot = entry ? entry.spot : null;
@@ -328,6 +333,7 @@ export function createLights(ctx) {
   function applyBlackoutDim(f) {
     // f: 1 → fully lit, 0 → dark. Applied to the key spot, tagged
     // emissives, and this module's own plaza glow/disc/cone instances.
+    blackout.f = f;
     if (blackout.spot) blackout.spot.intensity = blackout.origIntensity * f;
     if (blackout.emissives) {
       for (const e of blackout.emissives) {
@@ -361,6 +367,10 @@ export function createLights(ctx) {
       const c = decor.cones[i];
       c.mat.uniforms.uOpacity.value = c.baseOpacity * f;
     }
+    // A fixture that is out cannot be mirrored (see EMITTER AUTHORITY): the
+    // wet-specular sheet's slots follow the circuit it reflects, in both
+    // directions, so a blackout never leaves sourceless colour on the stones.
+    syncReflectableSlots(`blackout f=${f.toFixed(2)}`);
   }
 
   function tickBlackout(dt) {
@@ -545,15 +555,51 @@ export function createLights(ctx) {
   // by kind + world position and the pass no-ops when nothing matches, so it
   // stays correct if the sheet is rebuilt, renamed, or fixed at its own end.
   //
-  // The five neon SIGNS keep their reflections: they are lit cabinets bolted to
-  // a wall the player can see, which is what makes those streaks motivated.
+  // The five neon SIGNS keep their reflections *while they are lit*: they are
+  // lit cabinets bolted to a wall the player can see, which is what makes those
+  // streaks motivated. When the grid drops they stop being motivated — see
+  // EMITTER AUTHORITY below, which is the iter07 generalisation of this rule.
+  //
+  // ---------------------------------------------------------- EMITTER AUTHORITY
+  // iter06 closed the magenta column and dimension D1 moved +0.00, because the
+  // ROOT defect — additive light with no visible emitter — immediately
+  // re-presented in a second body. This pass is the general form of the rule
+  // above, and it fixes the second body at the same seam.
+  //
+  // The second body, diagnosed live rather than from the code: C1's own pose
+  // locks the mission wave spawner ("mission wave spawner locked — the pose owns
+  // the cast", C1 manifest), so `waveAlive('w_plaza_a')` is 0, which satisfies
+  // the beat-3 set-piece trigger `waveAlive lte 2` — a condition met by ABSENCE.
+  // The transformer blackout therefore fires at t≈0 of every C1 take and the
+  // neon wall is dead from C1_04 onward. applyBlackoutDim() correctly kills the
+  // sign emissives, their glow sprites, their wall spill and their ground pools
+  // — and does NOT touch level.js's wet-specular sheet, whose slots are static
+  // uniforms written once at build. The sheet went on drawing the mirror image,
+  // streak and halo of five signs that were switched off, over open cobble, with
+  // the dark cabinets 4.5 m up out of the read. That is what 2/3 critics called
+  // "saturated red, green and white ORBS hovering at waist height over open
+  // pavement with no fixture" and led both their blind verdicts with.
+  //
+  // The rule is therefore stated once, over ALL emitters: a pole may be mirrored
+  // iff it has a physical fixture AND that fixture is currently emitting. A slot
+  // that fails either half is parked exactly the way the sheet parks an unused
+  // slot (y −500, reach 1, black) so the shader's `dl > LP.w` guard drops it on
+  // the first branch, and it is RESTORED from a snapshot the moment the fixture
+  // lights again (the emergency circuit relights the key, not the signs, so in
+  // practice the sign slots stay parked for the rest of a blackout take).
   const ABSTRACT_AGGREGATE = { neon_bounce: 1 };
   const hasFixture = (p) => !!p && !ABSTRACT_AGGREGATE[p.kind];
+  // Poles wired to the plaza circuit — the ones applyBlackoutDim() puts out.
+  const onPlazaCircuit = (p) => !!p && (p.id === "L_PLAZA_KEY" || p.kind === "neon");
 
-  function retireSourcelessReflections(poles) {
-    const ghosts = (poles || []).filter((p) => !hasFixture(p) && Array.isArray(p.pos));
-    if (!ghosts.length) return;
-    let retired = 0;
+  // Snapshot of every wet-specular slot, taken once, before anything is parked.
+  const specSlots = []; // [{P, C, pos:Vector4, col:Color, pole, parked}]
+  let specCollected = false;
+
+  function collectSpecSlots(poles) {
+    if (specCollected) return;
+    specCollected = true;
+    const list = (poles || []).filter((p) => Array.isArray(p.pos));
     scene.traverse((o) => {
       const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
       for (const m of mats) {
@@ -562,20 +608,42 @@ export function createLights(ctx) {
         const P = u.uLPos.value, C = u.uLCol.value;
         if (!Array.isArray(P) || !Array.isArray(C)) continue;
         for (let i = 0; i < P.length && i < C.length; i++) {
-          const near = ghosts.some((g) =>
+          if (P[i].y < -400) continue; // already an unused slot
+          const pole = list.find((g) =>
             Math.abs(P[i].x - g.pos[0]) < 0.25 &&
             Math.abs(P[i].y - g.pos[1]) < 0.25 &&
-            Math.abs(P[i].z - g.pos[2]) < 0.25);
-          if (!near) continue;
-          P[i].set(0, -500, 0, 1);
-          C[i].setRGB(0, 0, 0);
-          retired++;
+            Math.abs(P[i].z - g.pos[2]) < 0.25) || null;
+          specSlots.push({
+            P, C, i, pole, parked: false,
+            pos: P[i].clone(), col: C[i].clone(),
+          });
         }
       }
     });
-    if (retired) {
-      console.info(`[lights] retired ${retired} sourceless reflection slot(s) — ` +
-        `abstract aggregates (${ghosts.map((g) => g.id).join(", ")}) have no fixture to mirror`);
+  }
+
+  // 1 = fixture emitting at full, 0 = dark. `blackout.f` is the live dim factor
+  // applied by applyBlackoutDim(); poles off the plaza circuit never dim.
+  function emitterLevel(p) {
+    if (!hasFixture(p)) return 0;
+    if (onPlazaCircuit(p)) return blackout.f;
+    return 1;
+  }
+
+  // Idempotent: called at bind time and again on every blackout dim step.
+  function syncReflectableSlots(why) {
+    let parked = 0, restored = 0;
+    for (const s of specSlots) {
+      const want = emitterLevel(s.pole) <= 0.12; // want === "should be parked"
+      if (want === s.parked) continue;
+      if (want) { s.P[s.i].set(0, -500, 0, 1); s.C[s.i].setRGB(0, 0, 0); parked++; }
+      else { s.P[s.i].copy(s.pos); s.C[s.i].copy(s.col); restored++; }
+      s.parked = want;
+    }
+    if (parked || restored) {
+      console.info(`[lights] emitter authority (${why}): parked ${parked}, ` +
+        `restored ${restored} reflection slot(s) — a mirror image is only legal ` +
+        `while the fixture it mirrors exists AND is lit`);
     }
   }
 
@@ -736,7 +804,8 @@ export function createLights(ctx) {
     const poles = (ctx.layout && ctx.layout.lightPoles) || list;
     buildDecor(poles);
     // after the level sheet exists (boot builds the level before createLights)
-    retireSourcelessReflections(poles);
+    collectSpecSlots(poles);
+    syncReflectableSlots("bind");
 
     const ratio = api.keyAmbientRatio();
     console.log(`[lights] pool 1 dir + 1 hemi + ${SPOT_COUNT} spot + ${POINT_COUNT} point; ` +
@@ -834,6 +903,30 @@ export function createLights(ctx) {
     // ---- private additions (allowed by the freeze) ----
     _tick,
     setPiece(id) { if (id === "transformer_blackout") startBlackout(); },
+    // scenarios.js has called lights.setBlackout(bool) since A11 and this
+    // module never implemented it, so `worldState.blackout:false` was a silent
+    // no-op on every pose that declared it (the typeof guard chose the else
+    // branch, and that branch only warns when blackout was requested TRUE).
+    // A pose that pins the grid LIT must actually be able to hold it lit: the
+    // beat-3 set-piece fires off `waveAlive lte 2`, which a posed cast with a
+    // locked wave spawner satisfies at t=0, so without a lock the declaration
+    // loses a race it never knew it was in.
+    setBlackout(on) {
+      blackout.locked = !on;
+      if (on) { startBlackout(); return; }
+      if (blackout.phase !== "idle") {
+        applyBlackoutDim(1);                       // restore the plaza circuit
+        if (blackout.spot) {
+          blackout.spot.intensity = blackout.origIntensity;
+          blackout.spot.color.copy(blackout.origColor);
+        }
+        blackout.phase = "idle";
+        blackout.t = 0;
+      } else {
+        blackout.f = 1;
+        syncReflectableSlots("setBlackout(false)");
+      }
+    },
     blackoutPhase() { return blackout.phase; },
     byId,
     spots,
