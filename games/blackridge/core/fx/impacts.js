@@ -267,20 +267,37 @@ export function makeImpacts(env, pools, decals) {
   // combat_spec §4.2 table, row by row.
   const TABLE = {
     concrete(p, n) {
-      // 6 gray chips + 1 dust puff 0.25 m, 0.5 s; bullet-hole decal
-      burstAt(pools.dust, p, n, 6, 1.6, 3.4, 1.1, 0.42, 0.16, 0.028, 0.04,
+      // IMPACT LEGIBILITY AT COMBAT RANGE (iter06, D6). The authored row —
+      // 6 chips at 28-40 mm and one 0.28 m dust puff — is physically right and
+      // optically invisible: gl_PointSize = aSize * uProj / d puts a 34 mm chip
+      // at the 17-20 m contact ranges of S1/S3/C1 at UNDER TWO PIXELS. Three
+      // critics reported no impact anywhere in the battery while the counters
+      // said 74 impacts and 74 decals in a single C1 take, which is exactly
+      // what "spawned but sub-pixel" looks like from outside.
+      // What survives 20 m of night air and the post chain is a HOT ADDITIVE
+      // core, so concrete now gets one: a 0.30 m spark-pool flash decaying to
+      // 0.10 m over 130 ms (>= one rendered frame at this build's pacing —
+      // see muzzle.js's LIGHT header for why 60 ms rows never render at all),
+      // plus 5 ricochet sparks. Chips and dust unchanged in character.
+      burstAt(pools.spark, p, n, 1, 0.15, 0.35, 0.05, 0.13, 0.03, 0.30, 0.10,
+        3.4, 2.2, 1.05, 0, 1.0, 0, 0, 0);
+      burstAt(pools.spark, p, n, 5, 2.2, 5.0, 1.3, 0.28, 0.12, 0.017, 0.028,
+        2.6, 1.5, 0.6, 0.25, 1.0, -9, 0.4, 0.5);
+      burstAt(pools.dust, p, n, 6, 1.6, 3.4, 1.1, 0.42, 0.16, 0.028, 0.05,
         0.56, 0.55, 0.52, 0.25, 0.9, -9, 0.35, 0.4);
-      burstAt(pools.dust, p, n, 1, 0.6, 0.9, 0.15, 0.5, 0.1, 0.1, 0.28,
-        0.5, 0.48, 0.44, 0.1, 0.34, -0.4, 0, 1.6);
-      decals.spawn(p, n, 0, 0.12 + rnd() * 0.05);
+      burstAt(pools.dust, p, n, 1, 0.6, 0.9, 0.15, 0.62, 0.12, 0.11, 0.46,
+        0.5, 0.48, 0.44, 0.1, 0.36, -0.4, 0, 1.6);
+      decals.spawn(p, n, 0, 0.17 + rnd() * 0.07);
     },
     metal(p, n) {
-      // 5 bright spark streaks 0.3 s + a 60 ms ring flash; scorch-dot decal
+      // 5 bright spark streaks 0.3 s + a ring flash; scorch-dot decal.
+      // The ring flash was authored at 60 ms — shorter than one rendered
+      // frame's sim advance on this build, i.e. never drawn. 130 ms.
       burstAt(pools.spark, p, n, 5, 2.6, 6.0, 1.4, 0.24, 0.12, 0.014, 0.024,
         2.3, 1.7, 0.85, 0.2, 1.0, -9, 0.45, 0.5);
-      burstAt(pools.spark, p, n, 1, 0.2, 0.4, 0.05, 0.06, 0.02, 0.09, 0.05,
+      burstAt(pools.spark, p, n, 1, 0.2, 0.4, 0.05, 0.13, 0.03, 0.20, 0.06,
         3.0, 2.4, 1.5, 0, 1.0, 0, 0, 0);
-      decals.spawn(p, n, 1, 0.08 + rnd() * 0.05);
+      decals.spawn(p, n, 1, 0.11 + rnd() * 0.06);
     },
     wood(p, n) {
       // 7 splinters 0.45 s; hole decal
@@ -322,6 +339,16 @@ export function makeImpacts(env, pools, decals) {
     dustSmall(p) {
       burstAt(pools.dust, p, UP, 3, 0.4, 0.8, 0.5, 0.4, 0.1, 0.06, 0.14,
         0.45, 0.42, 0.38, 0.15, 0.28, -0.5, 0, 1.5);
+    },
+    // Muzzle smoke (iter06, D6 — called by muzzle.js on every fire-time shot).
+    // Two soft grey puffs that grow 0.07 -> 0.22 m over 0.6-0.95 s and drift
+    // gently up and down-range. Deliberately LOW alpha: this must read as
+    // propellant haze hanging where the barrel was, never as a grey card. The
+    // caller seeds it 1.4 m down-range for the player so the point sprite
+    // cannot swell over the lens.
+    muzzleSmoke(p) {
+      burstAt(pools.dust, p, UP, 2, 0.15, 0.45, 0.28, 0.6, 0.35, 0.07, 0.22,
+        0.47, 0.46, 0.45, 0.12, 0.15, 0.35, 0, 1.9);
     },
   };
 

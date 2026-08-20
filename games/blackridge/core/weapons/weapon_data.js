@@ -160,13 +160,18 @@ export const WEAPONS = {
     penetration: { classes: ["soft", "metal_thin"], retain: 0.85, maxThickM: 0.40 },
     view: {
       glb: "assets/weapons/corvus.glb",
-      // W1 (iter05) posAds.z -0.30 -> -0.228: the optic's rear face sits at
-      // +0.088 in the group frame, so this parks the eye 0.14 m behind the
-      // ocular. That distance IS the size of the sight picture (build_scope's
-      // pinhole-cone note) and it is what turns iter04's "more receiver than
-      // scope" ADS frame into a scope frame. Pure Z, so the sight line stays
-      // on the centre ray. sightY re-copied from the A4BUILD report.
-      posHip: [0.175, -0.195, -0.40], posAds: [0, -0.123, -0.228],
+      // W1 (iter06) posAds.z -0.228 -> -0.26. This number is GEOMETRY INPUT,
+      // not a framing taste: a4_build_fp_weapons.py VIEW["corvus"].zAds MUST
+      // hold the same value, because build_scope derives the optic's bore cone
+      // — and from it every housing radius — from how far the eye sits behind
+      // the ocular. Changing one without the other vignettes the sight picture.
+      // iter05 parked the eye 0.140 m back; measured in the live S2 pose that
+      // projected the ocular rim to 42% of frame height (3/3 critics: "the size
+      // of a tire"). 0.26 puts the eye 0.166 m behind the bore's rear plane,
+      // and with the housing re-derived at real 30 mm-tube dimensions the
+      // widest ring measures 14.4% of frame height. Pure Z, so the sight line
+      // stays on the centre ray. sightY re-copied from the A4BUILD report.
+      posHip: [0.175, -0.195, -0.40], posAds: [0, -0.123, -0.26],
       muzzle: [0, 0.025, -0.8635], eject: [0.046, -0.002, -0.10], sightY: 0.123,
       scale: 1,
     },

@@ -446,6 +446,17 @@ function augment(mat, o = {}) {
     tile: 0,
     seam: 0,           // form-work seam / slab-joint amplitude (0 = none)
     wear: 0,           // drainage runs + ground-contact grime + spall chips
+    // CANCEL the InstancedMesh per-instance colour on this material.
+    //
+    // props.js tints a vehicle instance with `setColorAt`, but instanceColor is
+    // a MESH attribute: three multiplies it into EVERY material group of that
+    // mesh, so a per-body-colour roll was also multiplying the glass, the
+    // tyres, the black trim and (once it existed) the chrome. That is why the
+    // greenhouse read as a featureless black hole rather than as glass — the
+    // already-dark glass albedo was being multiplied by a ~0.09 linear body
+    // tint on top. `noTint` divides the instance colour back out for the
+    // groups that are not paint, so ONE colour roll drives ONE material.
+    noTint: false,
     ...o,
   };
   mat.userData.a3 = opts;
@@ -597,6 +608,23 @@ diffuseColor.rgb = mix(diffuseColor.rgb,
   diffuseColor.rgb * vec3(1.32, 0.80, 0.46), a3runm * 0.42);
 ${opts.aowet ? `diffuseColor.rgb *= vAowet.r;
 diffuseColor.rgb *= (1.0 - vAowet.b * 0.30);` : ""}`)
+      // instance-colour cancel (see `noTint` above).
+      //
+      // THE VARYING IS `vColor`, NOT `vInstanceColor`, and the fragment guard
+      // is USE_COLOR, NOT USE_INSTANCING_COLOR — verified in the vendored
+      // build: color_vertex does `vColor.xyz *= instanceColor.xyz` under
+      // USE_INSTANCING_COLOR (a VERTEX-only define), while the fragment prefix
+      // emits `#define USE_COLOR` for `vertexColors || instancingColor ||
+      // batchingColor`. Guarding on USE_INSTANCING_COLOR here compiles to
+      // nothing in the fragment stage and fails SILENTLY — no GL error, no
+      // console warning, just an option that does not do its job.
+      //
+      // Safe as an exact inverse only because no noTint material also carries
+      // real vertexColors: where both exist, vColor is their product.
+      .replace("#include <color_fragment>", `#include <color_fragment>
+${opts.noTint ? `#if defined( USE_COLOR ) && !defined( USE_COLOR_ALPHA )
+diffuseColor.rgb /= max( vColor, vec3( 1e-3 ) );
+#endif` : ""}`)
       .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>
 roughnessFactor = clamp(
   roughnessFactor * (1.0 + uGrungeAmp * (g1 - 0.5) * 2.2)
@@ -636,7 +664,8 @@ if (pud > 0.001 && uPlanarStrength > 0.001) {
   // programs vs the ≤70 budget before this key was value-free.
   // `tile` forks the code (the uv macro block), `seam`/`wear`/amplitudes do
   // NOT — they are uniforms, so a per-material tile scale costs no program.
-  mat.customProgramCacheKey = () => `a3w${opts.aowet ? 1 : 0}p${opts.puddle ? 1 : 0}t${W ? 1 : 0}`;
+  mat.customProgramCacheKey = () =>
+    `a3w${opts.aowet ? 1 : 0}p${opts.puddle ? 1 : 0}t${W ? 1 : 0}n${opts.noTint ? 1 : 0}`;
   return mat;
 }
 
@@ -713,6 +742,14 @@ export function makeMaterials(ctx = {}) {
   const S_CONC_FORMED = set("concrete_formed");
   const S_METAL_PANEL = set("metal_panel");
   const S_WALL_RENDER = set("wall_render");
+  // Authored by tools/a3b_gen_vehicle_sets.py (VT §3 source priority 2 — there
+  // is no automotive-paint or hessian set on disk, and both prop families
+  // shipped with NO maps at all: iter05 ranked fix #3, 3/3 critics, in all
+  // three blind verdicts). `car_paint` is deliberately achromatic near-white —
+  // hue comes from the per-instance body-colour roll in props.js — and carries
+  // the clear-coat story in its ROUGHNESS (0.11 clean panel -> 0.69 road film).
+  const S_CAR_PAINT = set("car_paint");
+  const S_SACK = set("burlap_sack");
 
   const std = (p) => new THREE.MeshStandardMaterial(p);
   // NOTE: the old `uv(m, sx, sy)` helper (clone each map, set repeat) is gone.
@@ -854,22 +891,73 @@ export function makeMaterials(ctx = {}) {
     color: 0x565c60, roughness: 0.42, metalness: 1.0, envMapIntensity: 1.0,
   }), { grunge: 0.4, mottle: 0.08 });
 
+  // ---- vehicles (iter05 ranked fix #3)
+  // WHAT WAS WRONG, measured in the booted page this session: carPaint was
+  // `{ color: #ffffff, roughness: 0.32, map: false, normalMap: false,
+  //   roughnessMap: false }` — an untextured white material under ONE uniform
+  // roughness. That is the literal definition of the D3 uniform-roughness cap
+  // and it is what 3/3 critics read as "flat white clay" from 2 m.
+  //
+  // color stays WHITE because it is the carrier for the per-instance body
+  // colour (props.js PALETTES.car -> setColorAt); the set supplies value,
+  // roughness and normal. roughness 1.0 because roughnessMap MULTIPLIES it and
+  // the map is already baked to final values (0.11 clean clear coat -> 0.69
+  // road film). `wear: 1.0` buys the analytic layer for free: a3base darkens
+  // and roughens everything below 1.25 m of world height on non-up-facing
+  // faces — i.e. exactly the sills, skirts and lower doors — and a3run puts
+  // warm road-spray streaks down the flanks. seam stays 0: a car has no
+  // formwork grid. 0.9 m/tile keeps the world-space axis switch across the
+  // shoulder invisible, because the flake/peel/film content is isotropic.
   const carPaint = augment(std({
-    color: 0xffffff, roughness: 0.32, metalness: 0.0, envMapIntensity: 1.5,
-  }), { grunge: 0.42, mottle: 0.1 });
+    ...S_CAR_PAINT, color: 0xffffff, roughness: 1.0, metalness: 0.0,
+    normalScale: new THREE.Vector2(0.6, 0.6), envMapIntensity: 1.6,
+  // grunge 0.45, not 0.30: the analytic wear layer is gated on `a3wall`, so
+  // UP-facing panels (the roof and bonnet, which are most of what a 2 m
+  // foreground car shows) get nothing from it and have to carry their surface
+  // history in the roughness variance alone.
+  }), { tile: 0.9, grunge: 0.45, mottle: 0.42, seam: 0, wear: 1.0 });
 
   // vehicle greenhouse + trim (props.js splits the GLB body by height band —
-  // a one-material body is the "white clay car" tell, VT §3 / iter01 S1)
+  // a one-material body is the "white clay car" tell, VT §3 / iter01 S1).
+  // All three carry noTint so the body-colour roll cannot drag them with it.
+  // Glass borrows the paint NORMAL at 0.16 m/tile: at that scale the flake and
+  // peel content reads as rain beading on the pane, which is what a wet-night
+  // windscreen needs and what a mirror-flat pane can never have.
+  // 0x0a1017 was authored while the body tint was still (wrongly) multiplying
+  // into it; standing on its own that value is an information-free black hole
+  // over the whole greenhouse. Real automotive glass at night is a dark mirror
+  // of the sky, not a void — lifted, and the env pushed up to give it something
+  // to mirror.
   const carGlass = augment(std({
-    color: 0x0b1118, roughness: 0.08, metalness: 0.0, envMapIntensity: 2.2,
-  }), { grunge: 0.15, mottle: 0.04 });
+    normalMap: S_CAR_PAINT.normalMap,
+    color: 0x161d27, roughness: 0.11, metalness: 0.0, envMapIntensity: 3.2,
+    normalScale: new THREE.Vector2(0.45, 0.45),
+  }), { tile: 0.16, grunge: 0.22, mottle: 0.05, seam: 0, wear: 0.3, noTint: true });
   const carTrim = augment(std({
-    color: 0x16181b, roughness: 0.62, metalness: 0.0, envMapIntensity: 0.8,
-  }), { grunge: 0.35, mottle: 0.1 });
+    normalMap: S_CAR_PAINT.normalMap,
+    color: 0x191c20, roughness: 0.68, metalness: 0.0, envMapIntensity: 0.9,
+    normalScale: new THREE.Vector2(0.8, 0.8),
+  }), { tile: 0.5, grunge: 0.4, mottle: 0.12, seam: 0, wear: 1.0, noTint: true });
+  // window surrounds / bumper strips — the metal note that stops a vehicle
+  // from being two values and a black band
+  // Dark anodised trim, not bright chrome: at metalness 1 the reflection IS
+  // the albedo, so 0xb4b9be against this scene's teal env cube rendered as a
+  // saturated MINT stripe down the flank rather than as metal.
+  // Carries the same normal map and the same augment flags as carTrim purely so
+  // the two share ONE compiled program: programs-at-ready is already 23 over
+  // the <=70 budget (iter05 ranked fix #9) and a prop-material lane has no
+  // business adding a variant it can avoid.
+  const carChrome = augment(std({
+    normalMap: S_CAR_PAINT.normalMap,
+    color: 0x6e7378, roughness: 0.34, metalness: 1.0, envMapIntensity: 0.85,
+    normalScale: new THREE.Vector2(0.5, 0.5),
+  }), { tile: 0.5, grunge: 0.45, mottle: 0.08, seam: 0, wear: 0.9, noTint: true });
 
   const rubber = augment(std({
-    color: 0x141414, roughness: 0.92, metalness: 0.0,
-  }), { grunge: 0.25, mottle: 0.06 });
+    normalMap: S_CAR_PAINT.normalMap,
+    color: 0x17181a, roughness: 0.95, metalness: 0.0, envMapIntensity: 0.35,
+    normalScale: new THREE.Vector2(1.1, 1.1),
+  }), { tile: 0.28, grunge: 0.3, mottle: 0.08, seam: 0, wear: 1.0, noTint: true });
 
   const wood = augment(std({
     ...S_WOOD, color: 0xa08a70, roughness: 0.8, metalness: 0.0,
@@ -892,7 +980,35 @@ export function makeMaterials(ctx = {}) {
   }), { grunge: 0.35, mottle: 0.2 });
   TEX.burlap.repeat.set(1 / 0.9, 1 / 0.9);
 
-  const dirt = burlap; // sandbags/dirt piles share the weave read at night
+  const dirt = burlap; // dirt piles share the weave read at night
+
+  // ---- sandbags (iter05 ranked fix #3, "untextured tan lumps", 3/3 critics)
+  // The old sandbags shaded on `burlap`: a 256 px canvas weave sampled through
+  // the SPHERE's own 0..1 uv, i.e. roughly ONE tile per bag, which at play
+  // distance is no weave at all. This set is authored at ~8 mm per thread and
+  // projected in world metres at 0.34 m/tile, so the hessian actually reads.
+  // vertexColors is the bag-to-bag tonal channel: props.js bakes a per-bag
+  // tint (and a damp-dark gradient toward each bag's underside) into the merged
+  // proto, so one InstancedMesh still shows a dozen different sacks.
+  // color is a DOWNWARD trim on the authored tan, not white: at 0xffffff the
+  // near-camera bags in S5 measured 105/103/90 against a frame median of
+  // 17/30/56 — the brightest, warmest mass in the lower third of a contracted
+  // cold/sodium frame, which is how "pale lumps" comes back wearing a new hue.
+  const sandbag = augment(std({
+    ...S_SACK, color: 0xb2ada2, roughness: 1.0, metalness: 0.0,
+    normalScale: new THREE.Vector2(1.15, 1.15), vertexColors: true,
+    envMapIntensity: 0.7,
+  }), { tile: 0.34, grunge: 0.42, mottle: 0.22, seam: 0, wear: 1.0 });
+
+  // ---- jersey barriers. They shipped on `concreteWall` at 4.6 m/tile with
+  // seam 1.0: a 2 m barrier therefore showed under half a texture tile (flat)
+  // AND caught the analytic 2.85 m formwork grid it has no business carrying.
+  // Precast barrier: its own tile so the casting reads, no formwork seams,
+  // full wear so the tyre-rub and splash zone lands at the base.
+  const barrierConc = augment(std({
+    ...S_CONC_FORMED, color: 0x8e8e88, roughness: 0.88, metalness: 0.0,
+    normalScale: new THREE.Vector2(1.05, 1.05),
+  }), { tile: 1.15, grunge: 0.46, mottle: 0.20, seam: 0, wear: 1.0 });
 
   const tarp = augment(std({
     map: TEX.burlap, color: 0x3d4c55, roughness: 0.7, metalness: 0.0,
@@ -972,7 +1088,8 @@ export function makeMaterials(ctx = {}) {
     // walls
     plaster, plasterDark, concreteWall, trim,
     // props
-    steel, rail, carPaint, carGlass, carTrim, rubber, woodDark, corrugated,
+    steel, rail, carPaint, carGlass, carTrim, carChrome, rubber, woodDark,
+    corrugated, sandbag, barrierConc,
     burlap, tarp, plasticDark, trashBag, cableMat,
     // emissive kit + factories
     emissive, glowMat, poolMat, windowLit, windowDark, decalMat, decalGrimeMat,

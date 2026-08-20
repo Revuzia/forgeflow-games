@@ -224,6 +224,129 @@ export function createTestSurface(ctx) {
   const OVERLAY_DOM = [".overlay", "#pause", "#pause-overlay", ".pause-overlay"];
   const overlayPrev = new Map(); // el -> inline display before the harness hid it
 
+  // ------------------------------------------------------- HUD COMPOSITE (W6)
+  // capture() reads the GL DRAWING BUFFER back. The HUD (core/hud/hud.js) is
+  // DOM, so `hud: true` was STRUCTURALLY invisible in every battery PNG through
+  // iter05 — D9 (HUD/UI craft) was graded on twenty frames that could not
+  // contain a HUD no matter how good the HUD was. The compositor-screenshot
+  // workaround is not a fix: it photographs the WHOLE PAGE (FFG shell chrome,
+  // whatever overlay pause.js has up) at a DIFFERENT moment than the read-back,
+  // which is why it had to fail closed on every scripted beat.
+  //
+  // The layer is rasterised from the LIVE DOM instead: the visible HUD subtree
+  // is serialised into an SVG <foreignObject>, decoded as an image, and drawn
+  // over the read-back frame inside the SAME capture() call — same tick, same
+  // pixels, no compositor, still hidden-tab-proof. Measured in-page before this
+  // was written: Chrome decodes the SVG at the layout size, does NOT taint the
+  // canvas (getImageData AND toDataURL both succeed), and it carries real HUD
+  // pixels. There is no second HUD model — this photographs the one hud.js
+  // built, in whatever state stepReal() just left it.
+  const HUD_LAYERS = ["#hud"];
+
+  // The contracted condensed family is a bundled woff2; an SVG-as-image may not
+  // fetch it (no external loads in that mode), so it rides inline as a data URI
+  // or the composite silently falls back to Arial Narrow and D9 grades a
+  // different typeface than the game ships. Fetched once, cached.
+  let fontCssP = null;
+  function hudFontCss() {
+    if (fontCssP) return fontCssP;
+    fontCssP = (async () => {
+      try {
+        const res = await fetch("./assets/fonts/oswald-400-latin.woff2");
+        if (!res.ok) return "";
+        const b = new Uint8Array(await res.arrayBuffer());
+        let s = "";
+        for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+        return "@font-face{font-family:'Oswald';font-style:normal;font-weight:400;" +
+               `src:url(data:font/woff2;base64,${btoa(s)}) format('woff2');}`;
+      } catch (e) { return ""; }
+    })();
+    return fontCssP;
+  }
+
+  function isVisible(el) {
+    const cs = getComputedStyle(el);
+    return cs.display !== "none" && cs.visibility !== "hidden" &&
+           +cs.opacity > 0.01 && el.getClientRects().length > 0;
+  }
+
+  function xmlText(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  }
+
+  /**
+   * Serialise the visible DOM layers into an SVG data URL sized to the LAYOUT
+   * viewport (the HUD is laid out in CSS px against innerWidth/innerHeight, so
+   * the raster must use those and be scaled into the capture rect).
+   * Returns null when nothing is visible — a hud(false) beauty shot composites
+   * nothing and is byte-for-byte the frame it was before.
+   */
+  async function hudLayerUrl(sels) {
+    const roots = [];
+    for (const sel of sels) {
+      for (const el of document.querySelectorAll(sel)) {
+        if (isVisible(el)) roots.push(el);
+      }
+    }
+    if (!roots.length) return null;
+    let css = "";
+    for (const id of ["a10-style", "a10-shell-style"]) {
+      const s = document.getElementById(id);
+      if (s) css += s.textContent;
+    }
+    css = (await hudFontCss()) + xmlText(css);
+    const ser = new XMLSerializer();
+    let body = "";
+    for (const el of roots) {
+      const clone = el.cloneNode(true);
+      // The root may be shown by a class/stylesheet rule the clone still
+      // matches, but a harness sweep may also have written display:none onto
+      // the ORIGINAL and restored it — pin the computed value so the clone
+      // renders exactly what is on screen right now.
+      clone.style.display = getComputedStyle(el).display;
+      body += ser.serializeToString(clone);
+    }
+    const vw = window.innerWidth || 1920, vh = window.innerHeight || 1080;
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${vw}" height="${vh}" ` +
+      `viewBox="0 0 ${vw} ${vh}">` +
+      `<foreignObject x="0" y="0" width="${vw}" height="${vh}">` +
+      `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${vw}px;height:${vh}px">` +
+      `<style>${css}</style>${body}</div>` +
+      `</foreignObject></svg>`;
+    return { url: "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg),
+             layers: roots.map((e) => e.id || e.className || "?"), vw, vh };
+  }
+
+  function decodeImage(url, giveUpMs = 4000) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      let settled = false;
+      const done = (v) => { if (!settled) { settled = true; resolve(v); } };
+      img.onload = () => done(img);
+      img.onerror = () => done(null);
+      setTimeout(() => done(null), giveUpMs);
+      img.src = url;
+    });
+  }
+
+  // Coverage of the rasterised layer, measured on a small scratch canvas so it
+  // costs nothing: the acceptance criterion for this lane is "the HUD is IN the
+  // PNG", and a silently-empty layer must be reported as empty, never as done.
+  function layerCoverage(img, vw, vh) {
+    try {
+      const cw = 240, ch = Math.max(1, Math.round(240 * vh / vw));
+      const c = document.createElement("canvas");
+      c.width = cw; c.height = ch;
+      const x = c.getContext("2d");
+      x.drawImage(img, 0, 0, cw, ch);
+      const d = x.getImageData(0, 0, cw, ch).data;
+      let n = 0;
+      for (let i = 3; i < d.length; i += 4) if (d[i] > 8) n++;
+      return { px: n, of: cw * ch };
+    } catch (e) { return { px: -1, of: 0, error: String(e) }; }
+  }
+
   // ---------------------------------------------------------------- surface
   const t = {
     async startMission(opts = {}) {
@@ -381,14 +504,42 @@ export function createTestSurface(ctx) {
       sctx.putImageData(img, 0, 0);
 
       // Downscale the DPR-supersampled buffer to the presentation size.
-      let out = src;
+      let out = src, outCtx = sctx;
       if (dbw !== w || dbh !== h) {
         out = document.createElement("canvas");
         out.width = w; out.height = h;
-        const octx = out.getContext("2d");
-        octx.imageSmoothingEnabled = true;
-        octx.imageSmoothingQuality = "high";
-        octx.drawImage(src, 0, 0, w, h);
+        outCtx = out.getContext("2d");
+        outCtx.imageSmoothingEnabled = true;
+        outCtx.imageSmoothingQuality = "high";
+        outCtx.drawImage(src, 0, 0, w, h);
+      }
+
+      // ---- HUD composite: the DOM layer this frame's tick actually shows.
+      // Drawn at the PRESENTATION size, after the downscale, so 1px HUD rules
+      // and the ammo numerals stay crisp instead of being supersampled to mush.
+      let hudInfo = { composited: false, reason: "no visible HUD layer" };
+      if (opts.hudLayer !== false) {
+        try {
+          const spec = await hudLayerUrl(opts.hudLayers || HUD_LAYERS);
+          if (spec) {
+            const img = await decodeImage(spec.url);
+            if (img) {
+              const cov = layerCoverage(img, spec.vw, spec.vh);
+              outCtx.drawImage(img, 0, 0, w, h);
+              hudInfo = { composited: true, layers: spec.layers,
+                          coveragePx: cov.px, coverageOf: cov.of };
+              if (cov.px === 0) {
+                hudInfo.composited = false;
+                hudInfo.reason = "layer rasterised EMPTY (0 opaque px)";
+              }
+            } else {
+              hudInfo = { composited: false, reason: "SVG layer failed to decode",
+                          layers: spec.layers };
+            }
+          }
+        } catch (e) {
+          hudInfo = { composited: false, reason: "composite threw: " + (e && e.message) };
+        }
       }
 
       const url = out.toDataURL(opts.jpeg ? "image/jpeg" : "image/png", opts.quality ?? 0.92);
@@ -399,7 +550,7 @@ export function createTestSurface(ctx) {
       } catch (e) {
         server = "POST failed: " + (e && e.message);
       }
-      return { name, w, h, bytes: url.length, server };
+      return { name, w, h, bytes: url.length, server, hud: hudInfo };
     },
 
     pause(on) { on ? ctx.pauseCtl.pause() : ctx.pauseCtl.resume(); },
@@ -446,6 +597,32 @@ export function createTestSurface(ctx) {
     setAmmo(n) { ctx.sim().setAmmo(n); return ctx.sim().state.player.weapon.mag; },
 
     // ---- private additions (harness helpers — additive, never frozen) ----
+    // Hide whatever overlay DOM is up WITHOUT touching pauseCtl. The posed
+    // battery holds the world with the pause gate and pause.js is entitled to
+    // put its menu on screen for that — but a hud:true GAMEPLAY pose must not
+    // photograph the S6 menu, and now that capture() composites DOM, "it is
+    // only on screen, not in the PNG" is no longer true. Returns what it hid.
+    // Deliberately does NOT record into overlayPrev: that map is hud()'s
+    // restore ledger, and putting this sweep in it made hud(true) — which the
+    // battery calls right after setScenario — put the pause menu straight back
+    // on screen. Measured: the first S3 capture after this landed came back as
+    // a full-screen "PAUSED / RESUME / SETTINGS / ABANDON MISSION" page grab.
+    // A capture-time sweep is one-way; the next setScenario/page load resets it.
+    hideOverlays() {
+      const hid = [];
+      for (const sel of OVERLAY_DOM) {
+        document.querySelectorAll(sel).forEach((el) => {
+          if (getComputedStyle(el).display === "none") return;
+          el.style.display = "none";
+          hid.push(el.id || sel);
+        });
+      }
+      return hid;
+    },
+    hudVisible() {
+      const el = document.getElementById("hud");
+      return !!(el && isVisible(el));
+    },
     pin, unpin, unpinAll,
     isPaused() { return !!ctx.pauseCtl.active; },
     isFrozen() { return !!frozen.sim; },

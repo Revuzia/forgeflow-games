@@ -61,6 +61,71 @@ const BOB = {
 
 const EYE_STAND = 1.62, EYE_CROUCH = 1.10, EYE_SLIDE = 0.90; // §1.3/§1.4
 
+// ===== FIRE RESPONSE (combat_spec §2.3, VT §5 layer 6, VT §7) ==============
+// iter05 measurement, live build, C1 pose, Warden, 12 rounds of auto (probe
+// sampled every rAF): mount.rotation.x peaked at 0.020-0.028 rad (1.1-1.6°)
+// and sat at 0.009-0.015 rad (0.5-0.9°) at the ticks C1 actually photographs
+// (240, 269); camera.rotation.z was EXACTLY 0 on every frame; camera.fov was
+// EXACTLY 74.000 on every frame. Two of the four channels the scorecard names
+// (roll, FOV) were not implemented at all, and the two that were had decayed
+// to a fifth of their peak by capture time — which is why 3/3 critics read
+// "no weapon kick, no camera pitch, no roll, no FOV change" off a filmstrip
+// whose manifest proves rounds were leaving the barrel.
+//
+// ROOT CAUSE of the invisibility (not the amplitudes alone): a shot was
+// SETTING a value that then decayed to zero — `damp(rotPunch, 0, 0.07)`
+// (τ 70 ms) and `punchT -= 6·dt` (0.75 units gone in 125 ms, exactly one
+// 750-rpm shot interval). A set-then-decay term is at its maximum for one
+// frame and near zero for the rest, so an arbitrarily-sampled frame almost
+// never catches it, and sustained fire never accumulates.
+//
+// FIX: every channel is an under-damped SPRING that a round IMPULSES (adds
+// velocity to), integrated every frame. Three consequences, all wanted:
+//   1. a single shot peaks inside VT §5.6's per-shot envelope (translation
+//      back 8-15 mm, rotation up 1-3°);
+//   2. sustained auto fire ACCUMULATES — 8 impulses/s into a 0.45 s-period
+//      spring settles at a HELD displacement, exactly as a real spring-mass
+//      under repeated impulses does — so EVERY frame inside a burst reads as
+//      displaced, not just the one frame after a round;
+//   3. the return overshoots slightly and settles over ~0.5 s, so frames
+//      after the burst read as RECOVERING rather than as a different still.
+// Aim is untouched: these are render-only offsets on the camera (the same
+// differential seam §2.6 sway uses). input.state is written only by
+// recoil.js — the climb the player fights stays the spec'd one, so a punchy
+// burst costs no aimability.
+const KICK = {
+  omega: 14.0, zeta: 0.50,        // viewmodel spring: period 0.45 s, settles ~0.6 s
+  camOmega: 16.0, camZeta: 0.55,  // camera spring: faster, tighter
+  // impulses are per unit of the weapon's recoil.vmKick / vmPunch, so all
+  // four weapons scale off the numbers already in weapon_data.js
+  rotXPerKick: 0.364,   // rad/s of pitch-up  (Warden 3.2 -> 3.0° single-shot peak)
+  rotZPerKick: 0.260,   // rad/s of roll, sign alternates per round
+  rotYPerKick: 0.119,   // rad/s of yaw, sign alternates opposite the roll
+  posYPerKick: 0.069,   // m/s of rise
+  posZPerPunch: 0.444,  // m/s back along the barrel (Warden 0.75 -> 15 mm peak)
+  camPitchPerKick: 0.250, // rad/s of view-only camera pitch punch
+  camRollPerKick: 0.140,  // rad/s of view-only camera roll, alternating
+  camYawPerKick: 0.075,   // rad/s of view-only camera yaw, alternating
+  fovPerKick: 15.0,       // deg/s of FOV punch
+  // caps — the linear spring is self-limiting, these only guard a hitch
+  maxRotX: 0.16, maxRotZ: 0.075, maxRotY: 0.045,
+  maxPosY: 0.035, maxPosZ: 0.070,
+  maxCamPitch: 0.060, maxCamRoll: 0.032, maxCamYaw: 0.026, maxFov: 3.0,
+  // ADS keeps the sight picture readable: the gun is braced and the shooter
+  // is deliberate, so the same round moves less of the frame.
+  adsVmMult: 0.55, adsCamMult: 0.45,
+  altRollMult: -0.55,   // every other round rolls the other way, weaker
+};
+
+// Semi-implicit Euler on { x, v }. Sub-stepped by the caller so a frame hitch
+// cannot make the integrator explode.
+function springStep(s, omega, zeta, dt, cap) {
+  s.v += (-omega * omega * s.x - 2 * zeta * omega * s.v) * dt;
+  s.x += s.v * dt;
+  if (s.x > cap) { s.x = cap; if (s.v > 0) s.v = 0; }
+  else if (s.x < -cap) { s.x = -cap; if (s.v < 0) s.v = 0; }
+}
+
 function damp(cur, target, tau, dt) {
   return cur + (target - cur) * (1 - Math.exp(-dt / Math.max(1e-4, tau)));
 }
@@ -150,9 +215,14 @@ export function createViewmodel(ctx) {
   const prevCamPos = new THREE.Vector3();
   let havePrevCam = false;
 
-  // kick
-  let rotPunch = 0;          // rad, pitch-up
-  let punchT = 0;            // vmPunch units, linear decay 6/s
+  // kick — one under-damped spring per channel (see KICK above)
+  const K = {
+    rotX: { x: 0, v: 0 }, rotZ: { x: 0, v: 0 }, rotY: { x: 0, v: 0 },
+    posY: { x: 0, v: 0 }, posZ: { x: 0, v: 0 },
+    camP: { x: 0, v: 0 }, camR: { x: 0, v: 0 }, camY: { x: 0, v: 0 },
+    fov:  { x: 0, v: 0 },
+  };
+  let kickSide = 1;          // alternates per round (roll/yaw shimmy)
   let lastShotsFired = null; // dedup vs impactOnly replays (see recoil.js note)
 
   // breath / sway (§2.6)
@@ -228,26 +298,50 @@ export function createViewmodel(ctx) {
   }
 
   // ---- kick -----------------------------------------------------------------
+  // One round's worth of impulse into every fire-response spring. `adsEase`
+  // is the eased ADS blend at the moment of the shot.
+  function impulse(w, adsEase) {
+    const vmK = w.recoil.vmKick || 3;     // rotational action-cycle read
+    const vmP = w.recoil.vmPunch || 0.7;  // barrel-axis slide
+    const gv = KICK.adsVmMult + (1 - KICK.adsVmMult) * (1 - adsEase);
+    const gc = KICK.adsCamMult + (1 - KICK.adsCamMult) * (1 - adsEase);
+    const side = kickSide > 0 ? 1 : KICK.altRollMult;
+    kickSide = -kickSide;
+
+    K.rotX.v += vmK * KICK.rotXPerKick * gv;          // muzzle climbs
+    K.posY.v += vmK * KICK.posYPerKick * gv;          // gun rides up
+    K.posZ.v += vmP * KICK.posZPerPunch * gv;         // gun drives back into the eye
+    K.rotZ.v += vmK * KICK.rotZPerKick * gv * side;   // torque roll, alternating
+    K.rotY.v -= vmK * KICK.rotYPerKick * gv * side;   // opposite lateral swing
+
+    K.camP.v += vmK * KICK.camPitchPerKick * gc;      // view-only pitch punch
+    K.camR.v += vmK * KICK.camRollPerKick * gc * side;
+    K.camY.v += vmK * KICK.camYawPerKick * gc * side;
+    K.fov.v  += vmK * KICK.fovPerKick * gc;           // brief FOV widen
+  }
+
   function kick(weaponId) {
     const w = WEAPONS[weaponId];
     if (!w || !w.recoil) return;
+    let n = 1;
     // dedup impactOnly/pen replays via the fire-time-only shotsFired counter
     try {
       const sim = ctx.sim && ctx.sim();
       const c = sim && sim.state && sim.state.counters;
       if (c) {
         if (lastShotsFired == null) lastShotsFired = Math.max(0, c.shotsFired - 1);
-        const n = c.shotsFired - lastShotsFired;
+        n = c.shotsFired - lastShotsFired;
         lastShotsFired = c.shotsFired;
         if (n <= 0) return;
+        n = Math.min(n, 4); // batched fire events under a hitch — never lose one
       }
     } catch (e) { /* fall through — kick anyway */ }
-    // vmKick: rotational action-cycle read (degrees); vmPunch: barrel-axis
-    // slide, last-circle scale (units × ~2.8 cm ⇒ Corvus 1.9 ≈ the 5 cm
-    // slide), linear decay vmPunchDecayPerS.
-    rotPunch = Math.min((w.recoil.vmKick || 3) * 2 * DEG,
-      rotPunch + (w.recoil.vmKick || 3) * DEG * 0.55);
-    punchT = Math.min((w.recoil.vmPunch || 0.7) * 2, punchT + (w.recoil.vmPunch || 0.7));
+    const wp = (() => {
+      try { const s = ctx.sim && ctx.sim(); return s && s.state && s.state.player && s.state.player.weapon; }
+      catch (e) { return null; }
+    })();
+    const adsEase = smoothstep(wp ? (wp.adsT || 0) : 0);
+    for (let i = 0; i < n; i++) impulse(w, adsEase);
   }
 
   // ---- update ---------------------------------------------------------------
@@ -269,6 +363,27 @@ export function createViewmodel(ctx) {
 
     const driving = visible && !ctx.cameraDetached && p && p.alive &&
       st && LIVE_PHASES.has(st.phase);
+
+    // -- fire-response springs: integrated EVERY frame, before anything reads
+    // them, and before the `!rig.visible` early-out below — a spring that only
+    // ticks while the rig draws would freeze mid-kick across a hidden frame.
+    // Sub-stepped at 120 Hz so a hitch cannot blow the integrator up.
+    {
+      let rem = Math.min(dt, 0.25);
+      while (rem > 1e-6) {
+        const h = Math.min(rem, 1 / 120);
+        rem -= h;
+        springStep(K.rotX, KICK.omega, KICK.zeta, h, KICK.maxRotX);
+        springStep(K.rotZ, KICK.omega, KICK.zeta, h, KICK.maxRotZ);
+        springStep(K.rotY, KICK.omega, KICK.zeta, h, KICK.maxRotY);
+        springStep(K.posY, KICK.omega, KICK.zeta, h, KICK.maxPosY);
+        springStep(K.posZ, KICK.omega, KICK.zeta, h, KICK.maxPosZ);
+        springStep(K.camP, KICK.camOmega, KICK.camZeta, h, KICK.maxCamPitch);
+        springStep(K.camR, KICK.camOmega, KICK.camZeta, h, KICK.maxCamRoll);
+        springStep(K.camY, KICK.camOmega, KICK.camZeta, h, KICK.maxCamYaw);
+        springStep(K.fov,  KICK.camOmega, KICK.camZeta, h, KICK.maxFov);
+      }
+    }
 
     // ================= CAMERA RIG =================
     let rollOut = 0;
@@ -381,10 +496,13 @@ export function createViewmodel(ctx) {
         p.pos[1] + eyeH + camBobY + dipY,
         p.pos[2] - camBobX * Math.sin(input.state.yaw),
       );
+      // VT §7 fire response, camera share: pitch punch + roll + yaw, all
+      // RENDER-ONLY (input.state is recoil.js's alone), so the burst reads as
+      // physical without stealing a degree of aim from the player.
       camera.rotation.set(
-        input.state.pitch + camSwayPitch,
-        input.state.yaw + camSwayYaw,
-        rollOut, "YXZ",
+        input.state.pitch + camSwayPitch + K.camP.x,
+        input.state.yaw + camSwayYaw + K.camY.x,
+        rollOut + K.camR.x, "YXZ",
       );
 
       // FOV kinetics (§1.4, §2.4, VT §7): base → adsFov by eased adsT,
@@ -395,7 +513,7 @@ export function createViewmodel(ctx) {
       fovSprint = damp(fovSprint,
         sprintState === "tac" ? 7 : sprintState === "sprint" ? 5 : 0, 0.12, dt);
       fovSlide = damp(fovSlide, sliding ? 4 : 0, sliding ? 0.06 : 0.1, dt);
-      const fov = fovAim + fovSprint + fovSlide;
+      const fov = fovAim + fovSprint + fovSlide + K.fov.x;
       if (Math.abs(camera.fov - fov) > 0.01) {
         camera.fov = fov;
         camera.updateProjectionMatrix();
@@ -527,20 +645,16 @@ export function createViewmodel(ctx) {
     const breatheY = 0.0015 * (Math.sin(swayT * 2 * Math.PI * 0.32) * 0.7 +
                                Math.sin(swayT * 2 * Math.PI * 0.53 + 1.1) * 0.3);
 
-    // kick decay
-    rotPunch = damp(rotPunch, 0, 0.07, dt);
-    punchT = Math.max(0, punchT - ((w && w.recoil && w.recoil.vmPunchDecayPerS) || 6) * dt);
-    const punchZ = punchT * 0.028; // Corvus 1.9 ≈ the 5 cm barrel-axis slide
-
+    // fire response, viewmodel share (springs integrated at the top of update)
     mount.position.set(
       px + lagX + vmBobX,
-      py + lagY + vmBobY + breatheY + dipY * 0.6,
-      pz + lagZ + punchZ,
+      py + lagY + vmBobY + breatheY + dipY * 0.6 + K.posY.x,
+      pz + lagZ + K.posZ.x,
     );
     mount.rotation.set(
-      rx + swayPitch * (1 - 0.7 * adsEase) + rotPunch,
-      ry + swayYaw * (1 - 0.7 * adsEase),
-      rz + swayYaw * 0.35 * (1 - adsEase),
+      rx + swayPitch * (1 - 0.7 * adsEase) + K.rotX.x,
+      ry + swayYaw * (1 - 0.7 * adsEase) + K.rotY.x,
+      rz + swayYaw * 0.35 * (1 - adsEase) + K.rotZ.x,
       "YXZ",
     );
   }
@@ -592,5 +706,15 @@ export function createViewmodel(ctx) {
     get camera() { return vmCamera; },
     get currentId() { return current ? current.id : null; },
     get _breath() { return { meter: breathMeter, winded }; },
+    // fire-response spring state — the D10 probe reads this to assert the
+    // burst is displaced at the ticks C1 photographs (never frozen surface)
+    get _kick() {
+      return {
+        vmPitch: K.rotX.x, vmRoll: K.rotZ.x, vmYaw: K.rotY.x,
+        vmUp: K.posY.x, vmBack: K.posZ.x,
+        camPitch: K.camP.x, camRoll: K.camR.x, camYaw: K.camY.x,
+        fov: K.fov.x,
+      };
+    },
   };
 }

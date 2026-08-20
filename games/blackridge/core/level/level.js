@@ -90,66 +90,244 @@ function withAowet(g) {
   return g;
 }
 
-// Glass-reflection atlas for the UNLIT window states (VT §1 amateur tell #3).
-// Laid out to match materials.js's windowCanvas exactly — 4x2 cells, the four
-// "dark" variants in the LOWER canvas half, which is where the existing
-// cell-4..7 UVs already point — so it drops straight onto the same geometry.
+// ---------------------------------------------------------------------------
+// DARK-GLASS PANE ATLAS  (iter06 strike item #8: "every window pane on every
+// facade carries the SAME diagonal highlight at the SAME angle").
 //
-// Why a texture and not just a brighter material colour: the shipped dark
-// atlas is #141a24 -> #080a0e, i.e. ~0.005 linear, so ANY tint over it stays
-// black; and a flat brightening would lose the mullions and read as a grey
-// sticker. This is the reflection itself — a vertical sky ramp (bright at the
-// head where the pane sees the storm dome, falling to near-black at the cill
-// where it sees the street), one slanted cloud band per variant so no two
-// panes mirror the same thing, and the mullion cross and frame shadow drawn
-// back OVER the reflection. It is bound as emissiveMap, because the reflected
-// sky does not depend on this facade's own illumination: the 128 px baked cube
-// is far too coarse to deliver it through the envMap path, which is exactly
-// why iter04's panes measured RGB 9/10/15.
-function glassReflectCanvas(size = 512) {
+// iter05 shipped four authored dark variants x a per-pane horizontal UV mirror.
+// The measurement said 8 reflections; the eye said one, because all four
+// variants carried ONE slanted cloud band inside a ~0.85 rad window and the
+// mirror only flips the sign — the ANGLE never changed, so the stamp survived
+// pane by pane. The fix is structural, not statistical:
+//
+//   * 32 cells, not 4. Eight columns x four rows.
+//   * Cells 0..23 are glass, in FOUR ORIENTATION FAMILIES of six. The family
+//     is chosen by the facade's normal, so an east-facing wall mirrors a
+//     different sky sector (different brightness, different dominant band
+//     angle) than the north-facing wall across the street from it. That is the
+//     physical behaviour the critic asked for: what a pane reflects depends on
+//     what is opposite it.
+//   * Inside a family the six cells differ in band COUNT (0..3), band ANGLE
+//     (drawn across the family's range plus +/-0.17 rad of jitter, and the
+//     families do not overlap), band width, band height, softness and alpha —
+//     plus a reflected opposite-mass silhouette with its own skyline, its own
+//     rain streaking, its own grime field and one of five mullion layouts.
+//     Some cells carry NO band at all.
+//   * Cells 24..31 are interiors: blinds at varying pitch and drop, curtains,
+//     a dim warm room, boarded-from-behind ply.
+//
+// Cell choice at the call site is driven off the pane's WORLD POSITION and is
+// then forced to differ from the pane to its left and the pane below it, so
+// "two adjacent panes carry the same highlight" is impossible by construction
+// rather than improbable by sampling.
+//
+// Still bound as map AND emissiveMap: the 128 px baked cube is far too coarse
+// to carry a sky reflection through the envMap path alone (that is what made
+// iter04's panes measure RGB 9/10/15), so the painted layer sets the base and
+// the per-material envMap (three roughness/intensity tiers) supplies the
+// view-dependent specular on top.
+const GLASS_COLS = 8, GLASS_ROWS = 4, GLASS_FAMN = 6, GLASS_INTERIOR0 = 24;
+
+function glassPaneAtlas(cs = 160) {
   const c = document.createElement("canvas");
-  c.width = size; c.height = size / 2;
+  c.width = GLASS_COLS * cs; c.height = GLASS_ROWS * cs;
   const g = c.getContext("2d");
-  const cs = size / 4;
-  g.fillStyle = "#000000"; g.fillRect(0, 0, size, size / 2);
-  // Four genuinely DIFFERENT panes, not four tints of one. A facade whose
-  // every pane mirrors the same slanted cloud at the same angle is the
-  // copy-paste tell wearing a new coat, so the variants differ in ramp
-  // strength, band count, band angle and band height. Combined with the
-  // per-pane horizontal UV flip at the call site that is 8 distinct
-  // reflections, and glassA/glassB run them at two different levels.
-  const VARIANT = [
-    { top: "#63779c", mid: "#1d2532", ramp: 0.46, bands: [[-0.42, -0.30, 0.15, 0.34]] },
-    { top: "#3d4b66", mid: "#161d28", ramp: 0.30, bands: [[-0.24, 0.16, 0.09, 0.22]] },
-    { top: "#6d81a8", mid: "#222a39", ramp: 0.58, bands: [[-0.55, -0.34, 0.07, 0.30], [-0.55, -0.12, 0.04, 0.20]] },
-    { top: "#2f3b52", mid: "#131822", ramp: 0.18, bands: [[0.30, 0.34, 0.05, 0.26]] },
+  g.fillStyle = "#05070a"; g.fillRect(0, 0, c.width, c.height);
+
+  // one family per facade normal: sky ramp colours + a NON-OVERLAPPING band
+  // angle range, so two facades of the same building cannot draw the same slant
+  const FAMILY = [
+    { sky: ["#7e93b9", "#252d3c"], lift: 0.50, ang: [-1.22, -0.66], glow: 0.55 }, // +x
+    { sky: ["#465573", "#1a2130"], lift: 0.24, ang: [0.12, 0.58], glow: 0.22 },   // -x
+    { sky: ["#5e739b", "#1c2331"], lift: 0.38, ang: [-0.30, 0.10], glow: 0.40 },  // +z
+    { sky: ["#3b4864", "#161c27"], lift: 0.20, ang: [0.66, 1.24], glow: 0.16 },   // -z
   ];
-  for (let i = 0; i < 4; i++) {
-    const v = VARIANT[i];
-    const x0 = i * cs, y0 = cs; // lower half = the "dark" row
-    const gr = g.createLinearGradient(0, y0 + 4, 0, y0 + cs - 4);
-    gr.addColorStop(0, v.top);
-    gr.addColorStop(v.ramp, v.mid);
-    gr.addColorStop(1, v.mid);
-    g.fillStyle = gr; g.fillRect(x0 + 3, y0 + 3, cs - 6, cs - 6);
-    for (const [rot, off, hgt, alpha] of v.bands) {
-      g.save();
-      g.beginPath(); g.rect(x0 + 3, y0 + 3, cs - 6, cs - 6); g.clip();
-      g.globalAlpha = alpha;
-      g.fillStyle = "#9cb0d2";
-      g.translate(x0 + cs / 2, y0 + cs / 2); g.rotate(rot);
-      g.fillRect(-cs, cs * off, cs * 2, cs * hgt);
+  const BAND_TINT = ["156,176,210", "138,158,196", "176,192,216", "120,142,180", "196,206,224"];
+
+  for (let idx = 0; idx < GLASS_COLS * GLASS_ROWS; idx++) {
+    const x0 = (idx % GLASS_COLS) * cs, y0 = ((idx / GLASS_COLS) | 0) * cs;
+    const r = rng((Math.imul(idx + 17, 2654435761) ^ 0x9e3779b9) >>> 0);
+    const interior = idx >= GLASS_INTERIOR0;
+    const fam = FAMILY[interior ? (idx - GLASS_INTERIOR0) % 4 : (idx / GLASS_FAMN) | 0];
+
+    const inset = Math.max(3, cs * 0.030);
+    const gx = x0 + inset, gy = y0 + inset, gw = cs - inset * 2, gh = cs - inset * 2;
+    const clip = () => { g.save(); g.beginPath(); g.rect(gx, gy, gw, gh); g.clip(); };
+
+    // ---- 1. sky ramp: bright where the pane sees the storm dome, dark at the
+    // cill where it sees the street. Stop position varies per cell.
+    const stop = Math.min(0.94, 0.24 + fam.lift * (0.70 + r() * 0.80));
+    const gr = g.createLinearGradient(0, gy, 0, gy + gh);
+    gr.addColorStop(0, fam.sky[0]);
+    gr.addColorStop(stop, fam.sky[1]);
+    gr.addColorStop(1, fam.sky[1]);
+    g.fillStyle = gr; g.fillRect(gx, gy, gw, gh);
+
+    // ---- 2. the mass opposite: a reflected skyline with a couple of lit
+    // rooms in it. Different silhouette per cell = different reflection.
+    if (!interior) {
+      clip();
+      const baseY = gy + gh * (0.54 + r() * 0.32);
+      let sx = gx - gw * 0.1;
+      while (sx < gx + gw) {
+        const w = gw * (0.10 + r() * 0.30);
+        const top = baseY - gh * (r() * 0.26);
+        g.fillStyle = `rgba(${7 + ((r() * 10) | 0)},${9 + ((r() * 10) | 0)},${15 + ((r() * 12) | 0)},${0.62 + r() * 0.2})`;
+        g.fillRect(sx, top, w + 1, gy + gh - top);
+        if (r() < 0.26) { // a lit room in the reflected block
+          g.fillStyle = `rgba(255,${170 + ((r() * 50) | 0)},${90 + ((r() * 70) | 0)},${0.20 + r() * 0.28})`;
+          g.fillRect(sx + w * 0.25, top + gh * (0.06 + r() * 0.2), w * 0.28, gh * 0.07);
+        }
+        sx += w;
+      }
       g.restore();
     }
-    g.globalAlpha = 1;
-    g.fillStyle = "rgba(5,7,11,0.92)";           // mullions
-    g.fillRect(x0 + cs / 2 - 2, y0 + 3, 3, cs - 6);
-    g.fillRect(x0 + 3, y0 + cs / 2 - 2, cs - 6, 3);
-    g.fillStyle = "rgba(3,5,9,0.9)";             // frame shadow inside the reveal
-    g.fillRect(x0, y0, cs, 5); g.fillRect(x0, y0 + cs - 5, cs, 5);
-    g.fillRect(x0, y0, 5, cs); g.fillRect(x0 + cs - 5, y0, 5, cs);
+
+    // ---- 3. interior states (cells 24..31): blind / curtain / dim room / ply
+    if (interior) {
+      clip();
+      const kind = (idx - GLASS_INTERIOR0) >> 1; // 0..3
+      if (kind === 0) {                    // venetian blind, partial drop
+        const drop = gh * (0.55 + r() * 0.45);
+        g.fillStyle = `rgb(${118 + ((r() * 34) | 0)},${114 + ((r() * 30) | 0)},${100 + ((r() * 28) | 0)})`;
+        g.fillRect(gx, gy, gw, drop);
+        const pitch = gh * (0.035 + r() * 0.035);
+        g.fillStyle = "rgba(46,42,34,0.42)";
+        for (let y = gy + pitch; y < gy + drop; y += pitch) g.fillRect(gx, y, gw, Math.max(1, pitch * 0.3));
+        g.fillStyle = "rgba(30,28,24,0.55)";
+        g.fillRect(gx, gy + drop - 2, gw, 3);
+      } else if (kind === 1) {             // curtains, off-centre, soft folds
+        const wLeft = gw * (0.18 + r() * 0.34), wRight = gw * (0.14 + r() * 0.36);
+        for (const [cxs, cw] of [[gx, wLeft], [gx + gw - wRight, wRight]]) {
+          const cgr = g.createLinearGradient(cxs, 0, cxs + cw, 0);
+          cgr.addColorStop(0, "rgba(96,90,82,0.94)");
+          cgr.addColorStop(0.45, "rgba(140,132,120,0.90)");
+          cgr.addColorStop(1, "rgba(70,66,60,0.86)");
+          g.fillStyle = cgr; g.fillRect(cxs, gy, cw, gh);
+          g.fillStyle = "rgba(40,38,34,0.22)";
+          for (let f = 0; f < 3; f++) g.fillRect(cxs + cw * (0.2 + f * 0.3), gy, Math.max(1, cw * 0.05), gh);
+        }
+      } else if (kind === 2) {             // dim room, light spilling in low
+        g.fillStyle = "rgba(10,9,8,0.86)"; g.fillRect(gx, gy, gw, gh);
+        const rg = g.createRadialGradient(
+          gx + gw * (0.25 + r() * 0.5), gy + gh * (0.72 + r() * 0.2), 1,
+          gx + gw * 0.5, gy + gh * 0.8, gw * (0.5 + r() * 0.4));
+        rg.addColorStop(0, `rgba(255,${168 + ((r() * 46) | 0)},96,${0.28 + r() * 0.24})`);
+        rg.addColorStop(1, "rgba(255,150,80,0)");
+        g.fillStyle = rg; g.fillRect(gx, gy, gw, gh);
+      } else {                             // boarded from behind, horizontal ply
+        g.fillStyle = "rgba(74,64,52,0.95)"; g.fillRect(gx, gy, gw, gh);
+        const bh = gh / (2 + ((r() * 3) | 0));
+        for (let y = gy; y < gy + gh; y += bh) {
+          g.fillStyle = `rgba(${58 + ((r() * 40) | 0)},${50 + ((r() * 32) | 0)},${40 + ((r() * 26) | 0)},0.9)`;
+          g.fillRect(gx, y, gw, bh - 1);
+          g.fillStyle = "rgba(22,18,14,0.55)"; g.fillRect(gx, y + bh - 2, gw, 2);
+        }
+      }
+      g.restore();
+    }
+
+    // ---- 4. cloud bands. Count, ANGLE, width, offset, softness and tint all
+    // per cell; the family range keeps facades apart, the jitter keeps panes
+    // apart. Zero bands is a legal outcome — an overcast pane with no slant.
+    const nBands = interior ? ((r() < 0.45) ? 1 : 0) : [0, 1, 1, 2, 2, 3][(r() * 6) | 0];
+    for (let b = 0; b < nBands; b++) {
+      const ang = fam.ang[0] + r() * (fam.ang[1] - fam.ang[0]) + (r() - 0.5) * 0.34;
+      const bh = gh * (0.05 + r() * 0.30);
+      const off = (r() - 0.5) * gh * 1.0;
+      const a = (0.09 + r() * 0.28) * (interior ? 0.45 : 1) * (0.55 + fam.glow);
+      const soft = 0.10 + r() * 0.34;      // 0.1 = hard-ish edge, 0.44 = haze
+      const tint = BAND_TINT[(r() * BAND_TINT.length) | 0];
+      g.save();
+      g.beginPath(); g.rect(gx, gy, gw, gh); g.clip();
+      g.translate(gx + gw / 2, gy + gh / 2);
+      g.rotate(ang);
+      const bg = g.createLinearGradient(0, off - bh / 2, 0, off + bh / 2);
+      bg.addColorStop(0, `rgba(${tint},0)`);
+      bg.addColorStop(soft, `rgba(${tint},${a})`);
+      bg.addColorStop(1 - soft, `rgba(${tint},${a * (0.5 + r() * 0.6)})`);
+      bg.addColorStop(1, `rgba(${tint},0)`);
+      g.fillStyle = bg;
+      g.fillRect(-cs, off - bh / 2, cs * 2, bh);
+      g.restore();
+    }
+
+    // ---- 5. rain streaking: vertical (gravity does not care about the
+    // family), per-cell count from 0 to ~14, varying length and opacity
+    clip();
+    const nStreak = (r() * (interior ? 5 : 15)) | 0;
+    for (let s = 0; s < nStreak; s++) {
+      const sxp = gx + r() * gw, y1 = gy + r() * gh * 0.55;
+      const len = Math.min(gy + gh - y1, gh * (0.18 + r() * 0.85));
+      const w = 1 + r() * 2.4;
+      const sg = g.createLinearGradient(0, y1, 0, y1 + len);
+      sg.addColorStop(0, "rgba(196,212,236,0)");
+      sg.addColorStop(0.25, `rgba(196,212,236,${0.04 + r() * 0.14})`);
+      sg.addColorStop(1, "rgba(196,212,236,0)");
+      g.fillStyle = sg; g.fillRect(sxp, y1, w, len);
+      if (r() < 0.4) { g.fillStyle = "rgba(210,224,244,0.16)"; g.fillRect(sxp - 0.5, y1 + len - 3, w + 1, 3); }
+    }
+    // ---- 6. grime: blotch field + a dirt wedge in one lower corner
+    const nGrime = 3 + ((r() * 10) | 0);
+    for (let q = 0; q < nGrime; q++) {
+      const px = gx + r() * gw, py = gy + r() * gh, rad = gw * (0.07 + r() * 0.28);
+      const bg = g.createRadialGradient(px, py, 0, px, py, rad);
+      bg.addColorStop(0, `rgba(${16 + ((r() * 22) | 0)},${16 + ((r() * 20) | 0)},${14 + ((r() * 18) | 0)},${0.05 + r() * 0.2})`);
+      bg.addColorStop(1, "rgba(20,20,18,0)");
+      g.fillStyle = bg; g.fillRect(px - rad, py - rad, rad * 2, rad * 2);
+    }
+    {
+      const left = r() < 0.5;
+      const cg = g.createLinearGradient(left ? gx : gx + gw, gy + gh, left ? gx + gw * 0.55 : gx + gw * 0.45, gy + gh * 0.35);
+      cg.addColorStop(0, `rgba(14,14,13,${0.22 + r() * 0.3})`);
+      cg.addColorStop(1, "rgba(14,14,13,0)");
+      g.fillStyle = cg; g.fillRect(gx, gy, gw, gh);
+    }
+    g.restore();
+
+    // ---- 7. mullions: five layouts, varying bar weight and rail height, so
+    // the pane's own drawing changes cell to cell as well as its reflection
+    const bar = Math.max(1.6, cs * (0.011 + r() * 0.013));
+    g.fillStyle = `rgba(${5 + ((r() * 10) | 0)},${7 + ((r() * 10) | 0)},${11 + ((r() * 12) | 0)},0.94)`;
+    const L = (r() * 5) | 0;
+    if (L === 0) {                         // two over two
+      const my = gy + gh * (0.36 + r() * 0.26);
+      g.fillRect(gx + gw / 2 - bar / 2, gy, bar, gh);
+      g.fillRect(gx, my, gw, bar * 1.3);
+    } else if (L === 1) {                  // single meeting rail
+      g.fillRect(gx, gy + gh * (0.28 + r() * 0.42), gw, bar * 1.5);
+    } else if (L === 2) {                  // three vertical lites
+      g.fillRect(gx + gw / 3 - bar / 2, gy, bar, gh);
+      g.fillRect(gx + (2 * gw) / 3 - bar / 2, gy, bar, gh);
+    } else if (L === 3) {                  // two over one, off-centre post
+      const mx = gx + gw * (0.34 + r() * 0.3), my = gy + gh * (0.52 + r() * 0.22);
+      g.fillRect(mx, gy, bar, my - gy + bar);
+      g.fillRect(gx, my, gw, bar * 1.3);
+    }                                      // L === 4: one big lite, no mullion
+
+    // ---- 8. frame shadow inside the reveal — per-side depth, so the implied
+    // key direction differs cell to cell too
+    const ft = cs * 0.034;
+    g.fillStyle = "rgba(3,5,9,0.93)";
+    g.fillRect(x0, y0, cs, ft * (0.9 + r() * 1.5));
+    g.fillRect(x0, y0 + cs - ft, cs, ft);
+    g.fillRect(x0, y0, ft * (0.7 + r() * 1.7), cs);
+    g.fillRect(x0 + cs - ft, y0, ft, cs);
   }
   return c;
+}
+
+// FNV-1a over the pane's quantised world position — the cell a pane draws is a
+// property of WHERE IT IS, not of a repeating UV counter, so a facade cannot
+// fall into a period.
+function paneHash(x, y, z) {
+  let h = 2166136261;
+  for (const v of [Math.round(x * 8) | 0, Math.round(y * 8) | 0, Math.round(z * 8) | 0]) {
+    h ^= v & 255; h = Math.imul(h, 16777619);
+    h ^= (v >> 8) & 255; h = Math.imul(h, 16777619);
+    h ^= (v >> 16) & 255; h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
 }
 
 function setCellUV(geo, cell) {
@@ -682,7 +860,16 @@ export async function buildLevel(ctx) {
     // shell" read, at zero geometry, and it is what real glass does at night.
     const WIN = (() => {
       const mk = (base, f) => { const m = base.clone(); f(m); return m; };
-      const glassTex = M.canvasTex(glassReflectCanvas(512), { wrap: false });
+      const glassTex = M.canvasTex(glassPaneAtlas(160), { wrap: false });
+      // The three glass tiers differ in how they RESPOND, not only in what is
+      // painted on them: roughness and envMapIntensity set how much of the
+      // view-dependent cube reflection each pane carries, so a clean pane and
+      // the grimy one next to it break differently as the camera moves.
+      const dark = (color, rough, env, emi) => mk(M.windowDark, (m) => {
+        m.map = glassTex; m.color.set(color);
+        m.roughness = rough; m.envMapIntensity = env;
+        m.emissiveMap = glassTex; m.emissive.set(0xffffff); m.emissiveIntensity = emi;
+      });
       return {
         lit_warm: M.windowLit,
         lit_cool: mk(M.windowLit, (m) => {
@@ -691,30 +878,27 @@ export async function buildLevel(ctx) {
         lit_dim: mk(M.windowLit, (m) => {
           m.emissive.set(0xffbe78); m.emissiveIntensity = 0.40; // hall light through a door
         }),
+        // blind/curtain/dim-room/ply cells (atlas row 3) — lit by the world,
+        // barely a mirror at all
         blind: mk(M.windowDark, (m) => {
-          // pale blind fills the pane — lit by the world, never a mirror
-          m.color.set(0x7a7466); m.roughness = 0.62; m.envMapIntensity = 0.45;
+          m.map = glassTex; m.color.set(0x8d887c);
+          m.roughness = 0.66; m.envMapIntensity = 0.40;
           m.emissiveMap = glassTex; m.emissive.set(0xffffff); m.emissiveIntensity = 0.05;
         }),
-        glassA: mk(M.windowDark, (m) => {
-          // clean glass: a sharp mirror of the storm dome
-          m.color.set(0x2c3546); m.roughness = 0.07; m.envMapIntensity = 2.6;
-          m.emissiveMap = glassTex; m.emissive.set(0xffffff); m.emissiveIntensity = 0.20;
-        }),
-        glassB: mk(M.windowDark, (m) => {
-          // grimy glass: same reflection, dimmer and softer
-          m.color.set(0x39424f); m.roughness = 0.17; m.envMapIntensity = 1.9;
-          m.emissiveMap = glassTex; m.emissive.set(0xffffff); m.emissiveIntensity = 0.115;
-        }),
+        glassA: dark(0x2c3546, 0.05, 3.0, 0.185),  // clean: sharp mirror
+        glassB: dark(0x39424f, 0.16, 2.0, 0.120),  // grimy: dimmer, softer
+        glassC: dark(0x333b46, 0.31, 1.15, 0.080), // old/pitted: scatters it
       };
     })();
     const winByState = {
-      lit_warm: [], lit_cool: [], lit_dim: [], blind: [], glassA: [], glassB: [],
+      lit_warm: [], lit_cool: [], lit_dim: [], blind: [], glassA: [], glassB: [], glassC: [],
     };
     const LIT_STATE = { lit_warm: 1, lit_cool: 1, lit_dim: 1 };
+    // fam = which orientation family of the glass atlas this face reflects.
+    // Two faces of the SAME building now mirror different sky sectors.
     const faceDirs = [
-      { n: [1, 0], ax: "z" }, { n: [-1, 0], ax: "z" },
-      { n: [0, 1], ax: "x" }, { n: [0, -1], ax: "x" },
+      { n: [1, 0], ax: "z", fam: 0 }, { n: [-1, 0], ax: "z", fam: 1 },
+      { n: [0, 1], ax: "x", fam: 2 }, { n: [0, -1], ax: "x", fam: 3 },
     ];
     for (const b of layout.buildings) {
       if (!b.box) continue;
@@ -733,6 +917,12 @@ export async function buildLevel(ctx) {
       const floorPitch = 2.72 + bSeed() * 0.55; // 2.72 – 3.27 m
       const winW = 0.95 + bSeed() * 0.55;       // 0.95 – 1.50 m
       const winH = 1.30 + bSeed() * 0.50;       // 1.30 – 1.80 m
+      // rhythm breakers: paired openings (tight inner gap, wide outer) on some
+      // masses, and a per-building sill height. An even comb of identical gaps
+      // is half of what "same stamp" means.
+      const paired = bSeed() < 0.45;
+      const pairJit = paired ? colPitch * (0.14 + bSeed() * 0.13) : 0;
+      const winY0 = 2.00 + bSeed() * 0.35;
       const hw = winW / 2, hh = winH / 2;
       // 1 cm XZ inset kills coplanar z-fighting where two building boxes
       // share a plane (visual only — colliders keep the authored extents)
@@ -818,13 +1008,21 @@ export async function buildLevel(ctx) {
         const cols = Math.floor((span - winW - 1.2) / colPitch) + 1;
         if (cols < 1) continue;
         const pad = (span - (cols - 1) * colPitch) / 2;
+        // one blank bay on longer faces — a service riser or a stair core.
+        // Nothing breaks a copy-paste comb like a missing tooth.
+        const blankCol = (cols > 4 && wr() < 0.42) ? 1 + ((wr() * (cols - 2)) | 0) : -1;
+        // the cell each column drew on the floor BELOW, so a pane can be forced
+        // to differ from its neighbour underneath as well as its neighbour left
+        const belowCell = new Array(cols).fill(-1);
         let prevLit = false;
         for (let fl = 0; fl < floors; fl++) {
-          const wy = 2.15 + fl * floorPitch;
+          const wy = winY0 + fl * floorPitch;
           if (wy + hh + 0.15 > max[1] - 0.6) break;
           prevLit = false; // a new floor starts a new occupancy run
+          let leftCell = -1;
           for (let cJ = 0; cJ < cols; cJ++) {
-            const wc = lo + pad + cJ * colPitch;
+            if (cJ === blankCol) { prevLit = false; leftCell = -1; belowCell[cJ] = -1; continue; }
+            const wc = lo + pad + cJ * colPitch + (paired ? (cJ % 2 ? -pairJit : pairJit) : 0);
             // VT §1 / D7-10: "every window either lit or honestly dark". At
             // 19 lit windows across the whole ward, a long facade (S5) had none
             // and the street read abandoned rather than working-late. The flat
@@ -840,15 +1038,17 @@ export async function buildLevel(ctx) {
               prevLit = false;
               const t = wr();
               if (t < 0.055) { state = "glassA"; boarded = true; }
-              else if (t < 0.24) state = "blind";
-              else if (t < 0.64) state = "glassA";
-              else state = "glassB";
+              else if (t < 0.27) state = "blind";
+              else if (t < 0.53) state = "glassA";
+              else if (t < 0.79) state = "glassB";
+              else state = "glassC";
             }
             const lit = !!LIT_STATE[state];
             // A boarded opening keeps its reveal but loses its pane — the
             // cheapest possible break in a facade's rhythm, and every derelict
             // port block has a few.
             if (boarded) {
+              leftCell = -1; belowCell[cJ] = -1; // no pane here to match against
               const bd = 0.06;
               if (f.n[0]) {
                 const s = f.n[0] > 0 ? 1 : -1;
@@ -861,17 +1061,43 @@ export async function buildLevel(ctx) {
               }
             } else {
               const g = new THREE.PlaneGeometry(winW, winH);
-              const cell = lit ? (wr() * 4) | 0 : 4 + ((wr() * 4) | 0);
-              // atlas: 4 lit cells (row 0), 4 dark (row 1) on a 4×2 sheet.
-              // Mirroring u inside the cell doubles the apparent variant count
-              // for free — 4 authored reflections read as 8, which is what
-              // stops a 30-pane facade from repeating visibly.
-              const flip = wr() < 0.5;
+              const wpx = f.n[0] ? facePos : wc, wpz = f.n[0] ? wc : facePos;
+              const h = paneHash(wpx, wy, wpz);
+              const flip = (h & 8) !== 0;
               const uv = g.getAttribute("uv");
-              for (let i = 0; i < uv.count; i++) {
-                const u = flip ? 1 - uv.getX(i) : uv.getX(i);
-                uv.setXY(i, ((cell % 4) + u) / 4, cell < 4 ? 0.5 + uv.getY(i) / 2 : uv.getY(i) / 2);
+              let cell;
+              if (lit) {
+                // lit panes still live on materials.js's 4×2 window atlas
+                // (row 0 = the four warm interiors)
+                cell = h % 4;
+                if (cell === leftCell) cell = (cell + 1) % 4;
+                for (let i = 0; i < uv.count; i++) {
+                  const u = flip ? 1 - uv.getX(i) : uv.getX(i);
+                  uv.setXY(i, (cell + u) / 4, 0.5 + uv.getY(i) / 2);
+                }
+              } else {
+                // glass/interior panes live on the 8×4 pane atlas. The
+                // orientation family comes from the FACE, the cell inside it
+                // from the pane's world position — then it is forced away from
+                // the pane on its left and the pane below, so "two adjacent
+                // panes carry the same highlight" cannot happen.
+                const isInt = state === "blind";
+                const base = isInt ? GLASS_INTERIOR0 : f.fam * GLASS_FAMN;
+                const span2 = isInt ? (GLASS_COLS * GLASS_ROWS - GLASS_INTERIOR0) : GLASS_FAMN;
+                let k = h % span2;
+                for (let guard = 0; guard < span2; guard++) {
+                  cell = base + k;
+                  if (cell !== leftCell && cell !== belowCell[cJ]) break;
+                  k = (k + 1) % span2;
+                }
+                const cx = cell % GLASS_COLS, cyr = (cell / GLASS_COLS) | 0;
+                for (let i = 0; i < uv.count; i++) {
+                  const u = flip ? 1 - uv.getX(i) : uv.getX(i);
+                  uv.setXY(i, (cx + u) / GLASS_COLS,
+                    (GLASS_ROWS - 1 - cyr + uv.getY(i)) / GLASS_ROWS);
+                }
               }
+              leftCell = cell; belowCell[cJ] = cell;
               if (f.n[0] > 0) { g.rotateY(Math.PI / 2); g.translate(facePos + 0.03, wy, wc); }
               else if (f.n[0] < 0) { g.rotateY(-Math.PI / 2); g.translate(facePos - 0.03, wy, wc); }
               else if (f.n[1] > 0) { g.translate(wc, wy, facePos + 0.03); }
@@ -946,8 +1172,11 @@ export async function buildLevel(ctx) {
       m.receiveShadow = true;
       group.add(m);
     }
-    console.log(`[level] windows ${winTotal} panes in 6 states, ${litCount} lit ` +
-      `(warm/dim/cool), rhythm per building (VT §1 tell #3)`);
+    console.log(`[level] windows ${winTotal} panes in 7 states, ${litCount} lit ` +
+      `(warm/dim/cool); glass atlas ${GLASS_COLS}x${GLASS_ROWS} = ` +
+      `${GLASS_COLS * GLASS_ROWS} cells (4 orientation families x ${GLASS_FAMN} + ` +
+      `${GLASS_COLS * GLASS_ROWS - GLASS_INTERIOR0} interiors), cell chosen by world ` +
+      `position and forced != left/below neighbour (iter06 strike #8)`);
   }
 
   // ================================================= 4. BOULEVARD FURNITURE

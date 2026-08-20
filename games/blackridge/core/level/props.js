@@ -150,7 +150,7 @@ function splitVehicleBody(geo, M) {
   geo.computeBoundingBox();
   const bb = geo.boundingBox;
   const h = Math.max(1e-6, bb.max.y - bb.min.y);
-  const out = { paint: [], glass: [], trim: [] };
+  const out = { paint: [], glass: [], trim: [], chrome: [] };
   const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
   const ab = new THREE.Vector3(), ac = new THREE.Vector3(), n = new THREE.Vector3();
   for (let t = 0; t < idx.length; t += 3) {
@@ -160,10 +160,31 @@ function splitVehicleBody(geo, M) {
     ab.subVectors(b, a); ac.subVectors(c, a);
     n.crossVectors(ab, ac).normalize();
     const relY = ((a.y + b.y + c.y) / 3 - bb.min.y) / h;
+    // A CENTROID test cannot cut a narrow band out of a low-poly body: the
+    // cc0-city sedan's whole flank is a handful of triangles, and one of them
+    // has its centroid at ~0.45, so a centroid-based belt-line rule painted the
+    // ENTIRE SIDE as chrome (measured: C1_06 came back a flat mint-metal wedge
+    // across the right third of frame). The chrome bands therefore test the
+    // triangle's full vertical EXTENT and only claim triangles that lie wholly
+    // inside them — a big panel falls through to paint, which is the safe
+    // default. trim/glass keep the original centroid rule, which was validated.
+    const yLo = (Math.min(a.y, b.y, c.y) - bb.min.y) / h;
+    const yHi = (Math.max(a.y, b.y, c.y) - bb.min.y) / h;
     const ny = Math.abs(n.y);
     let bucket = "paint";
-    if (relY < 0.14) {
-      bucket = "trim";                       // skirt + bumper band
+    if (yLo > 0.40 && yHi < 0.50 && ny < 0.8) {
+      // window surround at the belt line. A four-value body (paint / chrome /
+      // glass / trim) is the minimum that stops a vehicle reading as one
+      // moulded shell — iter05, 3/3 critics.
+      bucket = "chrome";
+    } else if (relY < 0.17) {
+      // rubber skirt, sill and the lower half of the tyres. NO chrome band
+      // down here: the wheels live INSIDE the `body` mesh on these GLBs (their
+      // meshes are not named "wheel", so classifyGlbMat never sees them), so a
+      // rocker-strip band at 0.10-0.175 cut a horizontal chrome slice straight
+      // through both tyres — measured in C1_06 as a polished tan disc where the
+      // wheel should be. Bands below the belt line are not safe on this mesh.
+      bucket = "trim";
     } else if (relY > 0.47 && ny < 0.8) {
       // greenhouse band: vertical side/rear panes + sloped windshields;
       // roof (ny≈1) and hood/trunk (below the band) stay paint
@@ -171,9 +192,9 @@ function splitVehicleBody(geo, M) {
     }
     out[bucket].push(idx[t], idx[t + 1], idx[t + 2]);
   }
-  const mats = { paint: M.carPaint, glass: M.carGlass, trim: M.carTrim };
+  const mats = { paint: M.carPaint, glass: M.carGlass, trim: M.carTrim, chrome: M.carChrome };
   const parts = [];
-  for (const k of ["paint", "glass", "trim"]) {
+  for (const k of ["paint", "glass", "trim", "chrome"]) {
     if (!out[k].length) continue;
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", geo.getAttribute("position"));
@@ -246,20 +267,81 @@ function buildKind(kind, s, M) {
       shape.lineTo(-t, h * 0.92); shape.lineTo(-b * 0.82, kY); shape.closePath();
       const g = new THREE.ExtrudeGeometry(shape, { depth: w, bevelEnabled: false });
       g.rotateY(Math.PI / 2);
-      return [{ geo: g, mat: M.concreteWall }];
+      // barrierConc, not concreteWall: a 2 m barrier on a 4.6 m tile showed
+      // under half a texture and caught the analytic formwork grid meant for
+      // cast-in-place walls (iter05 "white barrier blocks").
+      return [{ geo: g, mat: M.barrierConc }];
     }
     case "sandbags": {
+      // iter05 ranked fix #3: "identical white blocks" / "untextured tan lumps".
+      // Three defects, all here: every bag was the SAME ellipsoid at the same
+      // yaw and the same tone, the stack was two-two-one with no bond, and
+      // nothing tied it to the ground. Rebuilt with per-bag slump, yaw, sag and
+      // tone (baked to vertex colour so ONE instanced proto still shows a
+      // dozen different sacks), a staggered bond row to row, and a spoil ring
+      // of mud at the base.
       const parts = [];
       const r = rng(11);
-      const bw = w / 2.2, bd = d / 1.4;
-      for (let row = 0; row < 3; row++) {
-        const n = row === 2 ? 1 : 2;
-        for (let i = 0; i < n; i++) {
-          parts.push(SPH(M.burlap, 0.5,
-            (i - (n - 1) / 2) * bw + (r() - 0.5) * 0.06,
-            h * (0.18 + row * 0.3), (r() - 0.5) * 0.12,
-            bw * 1.05, h * 0.42, bd));
+      const tint = new THREE.Color();
+      // hessian tones — bleached, standard, damp-dark, mud-brown
+      const TONES = [0xefe7d4, 0xdcd0b4, 0xc2b596, 0xa89a7c, 0xcfc0a0, 0x9d8f74];
+
+      // one sagged, yawed, tonally distinct bag
+      const bag = (cx, cy, cz, sx, sy, sz, yaw, tilt, toneI, damp) => {
+        const g = new THREE.SphereGeometry(0.5, 10, 7);
+        // sag: squash the underside harder than the crown so the bag settles
+        const p = g.getAttribute("position");
+        for (let i = 0; i < p.count; i++) {
+          const y = p.getY(i);
+          if (y < 0) p.setY(i, y * (0.72 + damp * 0.10));
+          p.setX(i, p.getX(i) * (1.0 + Math.max(0, -y) * 0.34));
+          p.setZ(i, p.getZ(i) * (1.0 + Math.max(0, -y) * 0.22));
         }
+        g.scale(sx, sy, sz);
+        g.rotateZ(tilt);
+        g.rotateY(yaw);
+        g.translate(cx, cy, cz);
+        // per-bag tone + a damp gradient toward the underside (mud wicks up)
+        const col = new Float32Array(p.count * 3);
+        tint.setHex(TONES[toneI % TONES.length]);
+        const bb = new THREE.Box3().setFromBufferAttribute(g.getAttribute("position"));
+        const span = Math.max(1e-4, bb.max.y - bb.min.y);
+        for (let i = 0; i < p.count; i++) {
+          const t = (g.getAttribute("position").getY(i) - bb.min.y) / span;
+          const k = 0.46 + 0.54 * Math.min(1, t / 0.55); // dark at the foot
+          col[i * 3] = tint.r * k;
+          col[i * 3 + 1] = tint.g * k * (1 - damp * 0.10);
+          col[i * 3 + 2] = tint.b * k * (1 - damp * 0.16);
+        }
+        g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+        return { geo: g, mat: M.sandbag };
+      };
+
+      const rows = [3, 2, 2];
+      for (let row = 0; row < rows.length; row++) {
+        const n = rows[row];
+        const bw = w / (n + 0.30);
+        // running bond: alternate rows step half a bag so no two courses align
+        const bond = (row % 2) * bw * 0.5;
+        for (let i = 0; i < n; i++) {
+          const sag = 0.86 + r() * 0.30;
+          parts.push(bag(
+            (i - (n - 1) / 2) * bw + bond + (r() - 0.5) * bw * 0.16,
+            h * (0.15 + row * 0.30) * (0.94 + r() * 0.12),
+            (r() - 0.5) * d * 0.16,
+            bw * (0.96 + r() * 0.14), h * 0.34 * sag, d * (0.62 + r() * 0.16),
+            (r() - 0.5) * 0.7, (r() - 0.5) * 0.22,
+            (row * 2 + i + ((r() * 3) | 0)) | 0, r(),
+          ));
+        }
+      }
+      // spoil/mud ring: the bags sit IN the ground, not on a clean floor
+      for (let i = 0; i < 3; i++) {
+        parts.push(bag(
+          (r() - 0.5) * w * 0.9, h * 0.035, (r() - 0.5) * d * 0.7 + d * 0.22,
+          w * (0.30 + r() * 0.18), h * 0.075, d * (0.34 + r() * 0.2),
+          r() * Math.PI, 0, 3, 1.0,
+        ));
       }
       return parts;
     }
@@ -510,16 +592,42 @@ function buildKind(kind, s, M) {
   }
 }
 
-// per-kind instance tint palettes (deterministic — battery-stable)
+// per-kind instance tint palettes (deterministic — battery-stable).
+//
+// VEHICLES: the old car palette was six desaturated greys within ~10% of each
+// other, which is why the street read as "a row of identical white cars"
+// (iter05, 2/3 critics). These are real registration-plate body colours —
+// silver, navy, oxblood, olive, taupe, graphite, black, sand, teal, brick —
+// so the car park stops being one prototype. They are the FULL body value:
+// carPaint's own colour is white and its albedo map is achromatic, so what is
+// written here is what the panel shades at.
+//
+// Only the paint group consumes it — carGlass/carTrim/carChrome/rubber carry
+// `noTint` (materials.js), so a red car no longer gets red glass and red tyres.
 const PALETTES = {
-  car: [0x6a7076, 0x4a4f55, 0x5c5348, 0x3c434c, 0x565049, 0x4e565e],
-  van: [0x707478, 0x5a5f52],
-  truck: [0x4e5450, 0x5a534a],
+  // Values are the FULL body reflectance, and the night key is weak: an entry
+  // below ~0.04 linear renders as an information-free black mass at 2 m, which
+  // is just the opposite failure to the white clay it replaced. Floor is the
+  // graphite at ~0.041, ceiling the silver at ~0.22.
+  // LOW CHROMA. A saturated body colour survives a daylight reference and dies
+  // in a graded night frame: 0x3a6b6f (21% chroma) rendered as a vivid
+  // turquoise wedge that reads as a toy, not as a parked car. Every entry here
+  // is held near or below ~12% chroma, so hue identity survives at 20 m while
+  // the car still sits inside the cold/sodium colour script.
+  car: [0x74787c, 0x44506a, 0x6b463f, 0x4d5546, 0x6d6558, 0x50545a,
+        0x35383c, 0x7a7360, 0x455f60, 0x7a5340],
+  van: [0x8b8f92, 0x5c6a60, 0x7a766e, 0x4a5566],
+  truck: [0x5e6460, 0x6a6357, 0x746a52, 0x4d555d],
   dumpster: [0x3e5244, 0x37454e, 0x4e463c],
   crate: [0xa89678, 0x968468, 0xb0a088],
   trash_bags: [0xffffff, 0xd8d8e0, 0xc8ccc8],
   kiosk: [0xffffff, 0xe8e0d4, 0xd8dce0],
   stall: [0xffffff, 0xe0d8cc, 0xccd4d8],
+  // emplacement-to-emplacement variation, ON TOP of the per-BAG vertex tone
+  // baked into the proto — one prototype, no two stacks alike.
+  sandbags: [0xece5d6, 0xd6d0be, 0xc0baa8, 0xd0c6b0],
+  // precast barriers weather apart: fresh grey, sun-bleached, road-filthy
+  barrier: [0xb2b2ac, 0x9a9a94, 0x86867f, 0xa4a096],
 };
 
 // ---------------------------------------------------------------- build
@@ -568,6 +676,9 @@ export function buildProps(layout, ctx) {
     })();
     const [bw, bh, bd] = proto.size;
     const pal = PALETTES[kind];
+    // deterministic per-kind phase for the palette stride below
+    let kindOff = 0;
+    for (let ci = 0; ci < kind.length; ci++) kindOff = (kindOff * 31 + kind.charCodeAt(ci)) >>> 0;
     const instanced = list.length >= 3 || lib; // GLB kinds always instanced
     let mesh = null;
     if (instanced) {
@@ -590,8 +701,13 @@ export function buildProps(layout, ctx) {
       if (instanced) {
         mesh.setMatrixAt(i, mtx);
         if (pal) {
-          const c = new THREE.Color(pal[(r() * pal.length) | 0]);
-          c.offsetHSL(0, 0, (r() - 0.5) * 0.05);
+          // STRIDE, not a random draw. A uniform roll over 10 entries puts the
+          // same body colour on adjacent cars roughly 1 time in 10, and "two
+          // identical cars parked nose to tail" is precisely the copy-paste
+          // tell the palette exists to kill. gcd(7, len) = 1 for every palette
+          // here, so the stride walks the whole set before it repeats.
+          const c = new THREE.Color(pal[(i * 7 + kindOff) % pal.length]);
+          c.offsetHSL((r() - 0.5) * 0.03, (r() - 0.5) * 0.10, (r() - 0.5) * 0.07);
           mesh.setColorAt(i, c);
         }
       } else {

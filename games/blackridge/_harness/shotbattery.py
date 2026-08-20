@@ -11,7 +11,10 @@ stay diffable; a re-run of the same iteration goes to iterNN only after the
 caller deletes it deliberately. Captures land at 1920x1080 DPR 1.5 (R10/R21)
 via `__FPS__.__test.capture()` -> POST /__shot/iterNN/<name>.png into the
 shotserver sink (R20) — hidden-tab-proof: the page reads its own render
-target back, never a compositor screenshot.
+target back, never a compositor screenshot. The DOM HUD is composited INTO
+that read-back frame by capture() itself (iter06), so `hud: true` is visible
+in posed frames and scripted filmstrip beats alike; the ONE compositor
+screenshot left is the paused scenario (S6), whose menu needs backdrop-filter.
 
 Exit codes: 0 = every requested shot captured AND every `until` fired;
 1 = a shot failed (no PNG, near-black frame, unfired `until`, script
@@ -85,10 +88,20 @@ BOOTSTRAP = r"""
   (function tick() { window.__bkFrames++; requestAnimationFrame(tick); })();
   // Belt-and-braces chrome hide on top of __test.hud(false); HUD_SELECTORS
   // comes from the injected shots.js.
+  //
+  // HIDE-ONLY (iter06). This used to write `display: ''` on the whole selector
+  // list when show=true — and that list contains '#pause', '#pause-overlay'
+  // and '.overlay', so "show the HUD" literally REVEALED the pause menu that
+  // the posed hold puts up. Harmless while DOM could never reach the PNG;
+  // now that capture() composites DOM it would photograph the S6 menu over
+  // every gameplay frame. Whether the HUD is up is __test.hud()'s call and
+  // whether the menu is up is pause.js's; this sweep only ever takes chrome
+  // AWAY from a beauty shot.
   window.__bkChrome = (show) => {
+    if (show) return;
     const sels = (typeof HUD_SELECTORS !== 'undefined') ? HUD_SELECTORS : [];
     for (const sel of sels)
-      document.querySelectorAll(sel).forEach(e => { e.style.display = show ? '' : 'none'; });
+      document.querySelectorAll(sel).forEach(e => { e.style.display = 'none'; });
   };
 })();
 """
@@ -442,19 +455,27 @@ def run_shot(page, sid: str, iter_name: str, args) -> dict:
 
     # HUD state + settle FIRST — for a scripted scenario the capture fires the
     # instant the script hits captureAt; nothing may drift that moment.
-    page.evaluate("(h) => { __FPS__.__test.hud(h); window.__bkChrome(h); }",
-                  sc["hud"])
+    #
+    # THE EFFECTIVE HUD STATE IS THE SCENARIO'S, NOT THE SEED TABLE'S (iter06).
+    # core/test/scenarios.js owns the gameplay-vs-study split (GAMEPLAY_HUD /
+    # STUDY_NO_HUD) and reports what it applied; re-asserting `SCENARIOS[n].hud`
+    # here would silently undo it — and for a hud:false pose the chrome sweep
+    # below is what actually guarantees a clean beauty frame.
+    hud_on = bool(scen_report.get("hud", sc["hud"]))
+    page.evaluate("(h) => { __FPS__.__test.hud(h); window.__bkChrome(h); }", hud_on)
     settle_frames(page, sc["settleFrames"])
 
     iter_dir_abs = os.path.join(SHOTS_ROOT, iter_name)
     script_state = {}
+    hud_reports = []
     if sc["hasScript"]:
         def shoot_beat(i, tick, tag, seconds):
             fname = f"{sid}_{i + 1:02d}.png"
-            page.evaluate(
+            res = page.evaluate(
                 "(a) => __FPS__.__test.capture(a.name, a.w, a.h, {dpr: a.dpr})",
                 {"name": f"{iter_name}/{fname}", "w": args.width,
                  "h": args.height, "dpr": args.dpr})
+            hud_reports.append((res or {}).get("hud"))
             dl = time.time() + 15.0
             while time.time() < dl:
                 p = os.path.join(iter_dir_abs, fname)
@@ -484,9 +505,10 @@ def run_shot(page, sid: str, iter_name: str, args) -> dict:
     if sc["hasScript"]:
         sheet = build_contact_sheet(iter_dir_abs, sid, script_state.get("beats", []))
     else:
-        page.evaluate(
+        res = page.evaluate(
             "(a) => __FPS__.__test.capture(a.name, a.w, a.h, {dpr: a.dpr})",
             {"name": shot_name, "w": args.width, "h": args.height, "dpr": args.dpr})
+        hud_reports.append((res or {}).get("hud"))
 
     if sc["hasUntil"] and sc["hasScript"]:
         until_reached = wait_until(page, sid)
@@ -504,21 +526,28 @@ def run_shot(page, sid: str, iter_name: str, args) -> dict:
     mean_luma = png_mean_luma(out_path) if on_disk else None
     near_black = (mean_luma is not None and mean_luma < 4.0)
 
-    # ---- HUD COMPOSITE (W4, iter04) ------------------------------------------
-    # __test.capture() reads the GL DRAWING BUFFER back. The HUD and the pause
-    # overlay are DOM, so `hud: true` could never appear in the PNG — S6 shipped
-    # through iter03 as a HUD-less plaza frame, which voids the one scenario the
-    # scorecard's HUD/UI dimension is graded on (VT battery table: "S6 pause menu
-    # + in-mission HUD"). The only way to get DOM into the frame is a compositor
-    # screenshot, so hud:true scenarios take one — but ONLY when the scenario is
-    # posed/held, never when it is scripted: C1's PNG must be the exact
-    # captureAt tick, and a compositor grab is a different, later moment.
-    # The GL PNG stays the fallback and the swap is VERIFIED, not assumed: the
-    # screenshot must be the right size and non-trivial, or it is discarded.
-    # (--use-angle + --disable-features=CalculateNativeWinOcclusion already keep
-    # the visible window rendering; a blank grab still cannot slip through.)
+    # ---- HUD COMPOSITE (W6, iter06) ------------------------------------------
+    # THE HUD IS NOW IN THE GL FRAME. __test.capture() serialises the visible
+    # HUD DOM into an SVG <foreignObject> and draws it over the read-back frame
+    # inside the same capture call (core/test/testsurface.js), so `hud: true`
+    # appears in EVERY captured PNG — posed frames and scripted filmstrip beats
+    # alike — at the exact tick that was photographed. That closes the defect
+    # the compositor screenshot below could never close: a page grab is a
+    # different, later moment and photographs the whole page (FFG shell chrome,
+    # whatever overlay pause.js has up), which is why it had to fail closed on
+    # every scripted beat and shipped the S6 pause menu when it did not.
+    #
+    # The compositor swap is kept for ONE case only: the PAUSED scenario (S6).
+    # Its overlay leans on `backdrop-filter: blur()` for the blurred-scene menu
+    # all three critics praised, and an SVG-as-image rasteriser does not run
+    # backdrop-filter — so S6 keeps the page grab, which is legitimate there
+    # because S6 is held and paused, i.e. the compositor moment IS the moment.
     capture_mode = "gl"
-    if on_disk and sc["hud"] and not sc["hasScript"]:
+    # `paused` is true for EVERY posed frame (the hold IS the pause gate), so
+    # the gate is `overlay`: did the POSE ask for the menu to be in the
+    # picture? Only S6 does. (Measured: gating on `paused` shipped an S3
+    # that was a full-screen pause menu.)
+    if on_disk and hud_on and not sc["hasScript"] and scen_report.get("overlay"):
         tmp = out_path + ".page.png"
         try:
             page.screenshot(path=tmp, scale="css")
@@ -554,69 +583,28 @@ def run_shot(page, sid: str, iter_name: str, args) -> dict:
                     simFrames: (s.frames|0) || null};
         } catch (e) { return {stateError: String(e)}; }
     }""")
-    # A scripted scenario also gets ONE compositor grab so the DOM HUD it
-    # declares (`hud: true`) is visible somewhere in the take — the GL
-    # read-back path structurally cannot see it.
+    # The separate `<sid>_hud.png` compositor grab is GONE (iter06). It existed
+    # only because the GL read-back could not see the DOM HUD; it had to fail
+    # closed on the pause overlay, so it produced no file in iter05 and its
+    # absence is precisely the defect. capture() composites the HUD into every
+    # beat now, so the evidence is in the filmstrip itself.
     #
-    # FAILS CLOSED. The GL beats are hidden-tab-proof (stepFrames drives them
-    # directly), so the take completes happily while the window is unfocused
-    # and the game has auto-paused — and a compositor grab of THAT state is
-    # the pause menu, i.e. a second copy of S6 filed under a name that claims
-    # to be in-mission HUD evidence. The grab resumes the mission first and is
-    # DELETED unless the game confirms it is unpaused with the HUD shown.
-    hud_grab = None
-    if sc["hasScript"] and sc["hud"]:
-        tmp = os.path.join(iter_dir_abs, f"{sid}_hud.png")
-        # `pauseCtl.active === false` is NOT proof the menu is gone: the game
-        # re-pauses on window blur, and Playwright cannot hold focus across a
-        # long battery, so the overlay is back in the DOM by the time the
-        # compositor grab happens. The check therefore reads the OVERLAY, both
-        # before and after the shutter — anything else ships a second copy of
-        # S6 under a filename claiming to be in-mission HUD evidence.
-        overlay_js = """
-            const shown = () => {
-                const sels = ['#pause', '#pause-overlay', '.pause-overlay', '#menu'];
-                for (const s of sels) {
-                    for (const el of document.querySelectorAll(s)) {
-                        const cs = getComputedStyle(el);
-                        if (cs.display !== 'none' && cs.visibility !== 'hidden'
-                            && +cs.opacity > 0.01 && el.getClientRects().length) return s;
-                    }
-                }
-                return null;
-            };"""
-        overlay_expr = "() => {" + overlay_js + " return shown(); }"
-        try:
-            page.bring_to_front()
-            # Resume and read the overlay in ONE task, so a still-visible
-            # overlay is attributable to resume() rather than to a re-pause
-            # that slipped in between two round trips.
-            res = page.evaluate("() => {" + overlay_js + """
-                const T = __FPS__.__test;
-                const wasPaused = T.isPaused();
-                if (wasPaused) T.pause(false);
-                T.hud(true); T.step(2);
-                return {wasPaused, stillPaused: T.isPaused(),
-                        overlaySameTask: shown()};
-            }""")
-            before = res["overlaySameTask"] or page.evaluate(overlay_expr)
-            if before:
-                print(f"     .. {sid}: HUD grab SKIPPED — '{before}' overlay is up "
-                      f"(wasPaused={res['wasPaused']}, stillPaused={res['stillPaused']}, "
-                      f"sameTask={res['overlaySameTask']}); a paused grab is the S6 "
-                      f"menu, not in-mission HUD", file=sys.stderr)
-            else:
-                page.screenshot(path=tmp, scale="css")
-                after = page.evaluate(overlay_expr)
-                if after:
-                    print(f"     .. {sid}: HUD grab DISCARDED — '{after}' overlay "
-                          f"appeared during the grab", file=sys.stderr)
-                else:
-                    hud_grab = f"{sid}_hud.png"
-        except Exception as e:
-            print(f"     .. {sid}: HUD grab failed ({e})", file=sys.stderr)
-        if hud_grab is None and os.path.exists(tmp):
-            os.remove(tmp)
+    # ---- ACCEPTANCE: the HUD must be IN the PNG, not merely enabled ---------
+    # `hud: true` was true for C1 in iter04 AND iter05 while twenty frames
+    # carried no HUD, so the flag is not evidence. capture() reports the layer
+    # it actually rasterised and drew (coveragePx over a 240x135 probe); a
+    # hud:true shot whose layer came back empty or undrawn is a FAILED shot.
+    hud_reports = [h for h in hud_reports if h]
+    hud_composited = bool(hud_reports) and all(h.get("composited") for h in hud_reports)
+    hud_cov = [h.get("coveragePx") for h in hud_reports if h.get("coveragePx") is not None]
+    hud_missing = hud_on and not hud_composited
+    hud_state = {
+        "wanted": hud_on, "declared": bool(sc["hud"]),
+        "composited": hud_composited,
+        "captures": len(hud_reports),
+        "coveragePx": hud_cov,
+        "reasons": sorted({h.get("reason") for h in hud_reports if h.get("reason")}),
+    }
 
     # MOTION is the acceptance criterion for a capture, not `untilReached`.
     # iter04's C1 reported untilReached true for a frame in which the player
@@ -630,10 +618,10 @@ def run_shot(page, sid: str, iter_name: str, args) -> dict:
     errs = page.evaluate("window.__err || []")
     return {"name": sid, "file": f"{sid}.png", "seed": sc["seed"],
             "botSeed": sc["botSeed"], "rainPhase": sc["rainPhase"],
-            "hud": sc["hud"], "untilReached": until_reached,
+            "hud": hud_on, "untilReached": until_reached,
             "capturedOnDisk": on_disk, "meanLuma": mean_luma,
             "captureMode": capture_mode, "sheet": sheet, "noMotion": no_motion,
-            "hudGrab": hud_grab if sc["hasScript"] else None,
+            "hudLayer": hud_state, "hudMissing": hud_missing,
             "nearBlack": near_black, "pageErrors": errs,
             "scenario": scen_report,
             **script_state, **state}
@@ -746,6 +734,7 @@ def main() -> int:
                     bad = ((not row["capturedOnDisk"]) or (not row["untilReached"])
                            or row.get("scriptGaveUp", False)
                            or row.get("noMotion", False)
+                           or row.get("hudMissing", False)
                            or row.get("nearBlack", False))
                     if bad:
                         failed.append(sid)
@@ -762,6 +751,13 @@ def main() -> int:
                              f"< {MIN_SCRIPT_DISPLACEMENT_M} m) — the capture does not "
                              f"contain the contracted movement"
                              if row.get("noMotion") else "")
+                          + (f"  !! HUD DECLARED BUT NOT IN THE PNG "
+                             f"({row.get('hudLayer', {}).get('reasons')}) — the "
+                             f"frame cannot be graded on D9"
+                             if row.get("hudMissing") else "")
+                          + (f"  [hud {min(row['hudLayer']['coveragePx'])}"
+                             f"-{max(row['hudLayer']['coveragePx'])}/32400 px]"
+                             if row.get("hudLayer", {}).get("coveragePx") else "")
                           + (f"  [filmstrip {row.get('sheet', {}).get('panels')} panels]"
                              if row.get("captureMode") == "filmstrip"
                              and isinstance(row.get("sheet"), dict) else "")

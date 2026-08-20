@@ -1,7 +1,7 @@
 {
  "lane": "A3-level",
  "updated": "2026-08-20",
- "note": "level PBR texture sets (imported + authored) + cc0-city prop meshes. All other level textures (emissive/decal/glow/ripple/burlap/tarp/awning/window) are canvas-procedural at load \u2014 zero payload. NOTE: wall_plaster_* and iron_plate_* are still emitted but are no longer FETCHED by materials.js (retired in favour of wall_render / metal_panel); they are candidates for deletion once no lane references them.",
+ "note": "level PBR texture sets (imported + authored) + cc0-city prop meshes. All other level textures (emissive/decal/glow/ripple/burlap/tarp/awning/window) are canvas-procedural at load — zero payload. NOTE: wall_plaster_* and iron_plate_* are still emitted but are no longer FETCHED by materials.js (retired in favour of wall_render / metal_panel); they are candidates for deletion once no lane references them. 2026-08-20 (iter05 ranked fix #3): car_paint_* and burlap_sack_* added by tools/a3b_gen_vehicle_sets.py — vehicles and sandbags shipped with NO maps at all (carPaint measured in-page as {color:#ffffff, roughness:0.32, map:false}), which is the 'untextured white clay' defect all three critics named in their blind verdicts.",
  "entries": [
   {
    "path": "assets/textures/asphalt_worn_albedo.webp",
@@ -134,63 +134,63 @@
    "bytes": 13668,
    "kind": "generated",
    "license": "generated (FFG pipeline, original)",
-   "source": "tools/a3_gen_surface_sets.py::concrete_formed (albedo; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)"
+   "source": "tools/a3_gen_surface_sets.py::concrete_formed (albedo; authored procedurally — no concrete-wall or painted-steel set exists in the on-disk stores)"
   },
   {
    "path": "assets/textures/concrete_formed_rough.webp",
    "bytes": 5088,
    "kind": "generated",
    "license": "generated (FFG pipeline, original)",
-   "source": "tools/a3_gen_surface_sets.py::concrete_formed (rough; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)"
+   "source": "tools/a3_gen_surface_sets.py::concrete_formed (rough; authored procedurally — no concrete-wall or painted-steel set exists in the on-disk stores)"
   },
   {
    "path": "assets/textures/concrete_formed_normal.webp",
    "bytes": 16238,
    "kind": "generated",
    "license": "generated (FFG pipeline, original)",
-   "source": "tools/a3_gen_surface_sets.py::concrete_formed (normal; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)"
+   "source": "tools/a3_gen_surface_sets.py::concrete_formed (normal; authored procedurally — no concrete-wall or painted-steel set exists in the on-disk stores)"
   },
   {
    "path": "assets/textures/metal_panel_albedo.webp",
    "bytes": 4772,
    "kind": "generated",
    "license": "generated (FFG pipeline, original)",
-   "source": "tools/a3_gen_surface_sets.py::metal_panel (albedo; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)"
+   "source": "tools/a3_gen_surface_sets.py::metal_panel (albedo; authored procedurally — no concrete-wall or painted-steel set exists in the on-disk stores)"
   },
   {
    "path": "assets/textures/metal_panel_rough.webp",
    "bytes": 3590,
    "kind": "generated",
    "license": "generated (FFG pipeline, original)",
-   "source": "tools/a3_gen_surface_sets.py::metal_panel (rough; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)"
+   "source": "tools/a3_gen_surface_sets.py::metal_panel (rough; authored procedurally — no concrete-wall or painted-steel set exists in the on-disk stores)"
   },
   {
    "path": "assets/textures/metal_panel_normal.webp",
    "bytes": 2302,
    "kind": "generated",
    "license": "generated (FFG pipeline, original)",
-   "source": "tools/a3_gen_surface_sets.py::metal_panel (normal; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)"
+   "source": "tools/a3_gen_surface_sets.py::metal_panel (normal; authored procedurally — no concrete-wall or painted-steel set exists in the on-disk stores)"
   },
   {
    "path": "assets/textures/wall_render_albedo.webp",
    "bytes": 11306,
    "kind": "generated",
    "license": "generated (FFG pipeline, original)",
-   "source": "tools/a3_gen_surface_sets.py::wall_render (albedo; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)"
+   "source": "tools/a3_gen_surface_sets.py::wall_render (albedo; authored procedurally — no concrete-wall or painted-steel set exists in the on-disk stores)"
   },
   {
    "path": "assets/textures/wall_render_rough.webp",
    "bytes": 3362,
    "kind": "generated",
    "license": "generated (FFG pipeline, original)",
-   "source": "tools/a3_gen_surface_sets.py::wall_render (rough; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)"
+   "source": "tools/a3_gen_surface_sets.py::wall_render (rough; authored procedurally — no concrete-wall or painted-steel set exists in the on-disk stores)"
   },
   {
    "path": "assets/textures/wall_render_normal.webp",
    "bytes": 9428,
    "kind": "generated",
    "license": "generated (FFG pipeline, original)",
-   "source": "tools/a3_gen_surface_sets.py::wall_render (normal; authored procedurally \u2014 no concrete-wall or painted-steel set exists in the on-disk stores)"
+   "source": "tools/a3_gen_surface_sets.py::wall_render (normal; authored procedurally — no concrete-wall or painted-steel set exists in the on-disk stores)"
   },
   {
    "path": "assets/props/car_sedan.glb",
@@ -240,6 +240,48 @@
    "kind": "imported",
    "license": "CC0 (Kenney / Quaternius via poly.pizza; proof: cc0-city/SOURCES.json)",
    "source": "pipeline/assets/_downloaded/cc0-city/props/ac-unit-quaternius.glb (textures stripped, re-materialed at load, quantized)"
+  },
+  {
+   "path": "assets/textures/car_paint_albedo.webp",
+   "bytes": 3234,
+   "kind": "authored",
+   "license": "original (generated)",
+   "source": "tools/a3b_gen_vehicle_sets.py (albedo) — authored automotive paint (metallic flake, orange peel, clear-coat swirl, road film, water spotting) — achromatic near-white so props.js PALETTES.car drives hue via InstancedMesh setColorAt"
+  },
+  {
+   "path": "assets/textures/car_paint_rough.webp",
+   "bytes": 3164,
+   "kind": "authored",
+   "license": "original (generated)",
+   "source": "tools/a3b_gen_vehicle_sets.py (rough) — authored automotive paint (metallic flake, orange peel, clear-coat swirl, road film, water spotting) — achromatic near-white so props.js PALETTES.car drives hue via InstancedMesh setColorAt"
+  },
+  {
+   "path": "assets/textures/car_paint_normal.webp",
+   "bytes": 6490,
+   "kind": "authored",
+   "license": "original (generated)",
+   "source": "tools/a3b_gen_vehicle_sets.py (normal) — authored automotive paint (metallic flake, orange peel, clear-coat swirl, road film, water spotting) — achromatic near-white so props.js PALETTES.car drives hue via InstancedMesh setColorAt"
+  },
+  {
+   "path": "assets/textures/burlap_sack_albedo.webp",
+   "bytes": 25694,
+   "kind": "authored",
+   "license": "original (generated)",
+   "source": "tools/a3b_gen_vehicle_sets.py (albedo) — authored hessian sandbag (warp/weft weave at ~8 mm/thread, slubs, slump wrinkles, damp mud staining, frayed threads)"
+  },
+  {
+   "path": "assets/textures/burlap_sack_rough.webp",
+   "bytes": 4788,
+   "kind": "authored",
+   "license": "original (generated)",
+   "source": "tools/a3b_gen_vehicle_sets.py (rough) — authored hessian sandbag (warp/weft weave at ~8 mm/thread, slubs, slump wrinkles, damp mud staining, frayed threads)"
+  },
+  {
+   "path": "assets/textures/burlap_sack_normal.webp",
+   "bytes": 59330,
+   "kind": "authored",
+   "license": "original (generated)",
+   "source": "tools/a3b_gen_vehicle_sets.py (normal) — authored hessian sandbag (warp/weft weave at ~8 mm/thread, slubs, slump wrinkles, damp mud staining, frayed threads)"
   }
  ]
 }

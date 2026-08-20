@@ -517,6 +517,68 @@ export function createLights(ctx) {
       }`,
   });
 
+  // ------------------------------------------- sourceless-reflection retirement
+  // iter05 ranked defect #1 ("a magenta light column with no emitter dominates
+  // the lower-centre of every C1 frame"), diagnosed by live bisect rather than
+  // by reading the code: at the C1_06 camera pose the magenta-signature pixel
+  // fraction was 1.963%; zeroing ONE wet-specular reflection slot took it to
+  // 0.121% (-94%), while zeroing all twelve only reached 0.074%. The slot was
+  // uLPos[2] = (-5, 9, 0) reach 26 — L_PLAZA_KEY — carrying uLCol (0.251,
+  // 0.116, 0.304), i.e. the club sign's raw violet #c86ee0.
+  //
+  // THIS MODULE ALREADY OWNS THE RULE THE REFLECTION BREAKS. kind
+  // 'neon_bounce' is an ABSTRACT AGGREGATE: one 85 deg spot from 9 m standing
+  // in for the whole signage wall bouncing off wet stone. It has NO physical
+  // fixture, which is exactly why the head-glow pass below excludes it ("a head
+  // glow there reads as a floating ball") and why its spot and its fog disc are
+  // both re-tinted through bounceColor() instead of using p.color. A mirror
+  // image is a stronger emitter claim than a head glow: level.js's wet-specular
+  // sheet was drawing the streak, halo and lamp-image of a lamp that does not
+  // exist, in the one hue the aggregate is explicitly forbidden to wear. Every
+  // bright pixel must trace to a source (VT D1); this one traced to nothing.
+  //
+  // Fix at the rule, not at the pixel: a pole is REFLECTABLE iff a viewer could
+  // see the fixture whose mirror image the reflection would be. Abstract
+  // aggregates are not, so their reflection slots are retired here — parked
+  // exactly the way the sheet parks an unused slot (y -500, reach 1, black), so
+  // the shader's `dl > LP.w` guard drops them on the first branch. Matching is
+  // by kind + world position and the pass no-ops when nothing matches, so it
+  // stays correct if the sheet is rebuilt, renamed, or fixed at its own end.
+  //
+  // The five neon SIGNS keep their reflections: they are lit cabinets bolted to
+  // a wall the player can see, which is what makes those streaks motivated.
+  const ABSTRACT_AGGREGATE = { neon_bounce: 1 };
+  const hasFixture = (p) => !!p && !ABSTRACT_AGGREGATE[p.kind];
+
+  function retireSourcelessReflections(poles) {
+    const ghosts = (poles || []).filter((p) => !hasFixture(p) && Array.isArray(p.pos));
+    if (!ghosts.length) return;
+    let retired = 0;
+    scene.traverse((o) => {
+      const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
+      for (const m of mats) {
+        const u = m && m.uniforms;
+        if (!u || !u.uLPos || !u.uLCol) continue;
+        const P = u.uLPos.value, C = u.uLCol.value;
+        if (!Array.isArray(P) || !Array.isArray(C)) continue;
+        for (let i = 0; i < P.length && i < C.length; i++) {
+          const near = ghosts.some((g) =>
+            Math.abs(P[i].x - g.pos[0]) < 0.25 &&
+            Math.abs(P[i].y - g.pos[1]) < 0.25 &&
+            Math.abs(P[i].z - g.pos[2]) < 0.25);
+          if (!near) continue;
+          P[i].set(0, -500, 0, 1);
+          C[i].setRGB(0, 0, 0);
+          retired++;
+        }
+      }
+    });
+    if (retired) {
+      console.info(`[lights] retired ${retired} sourceless reflection slot(s) — ` +
+        `abstract aggregates (${ghosts.map((g) => g.id).join(", ")}) have no fixture to mirror`);
+    }
+  }
+
   function buildDecor(poles) {
     if (decor.built) return;
     decor.built = true;
@@ -673,6 +735,8 @@ export function createLights(ctx) {
 
     const poles = (ctx.layout && ctx.layout.lightPoles) || list;
     buildDecor(poles);
+    // after the level sheet exists (boot builds the level before createLights)
+    retireSourcelessReflections(poles);
 
     const ratio = api.keyAmbientRatio();
     console.log(`[lights] pool 1 dir + 1 hemi + ${SPOT_COUNT} spot + ${POINT_COUNT} point; ` +

@@ -33,7 +33,16 @@ const SHELL = {
 // disproved by the instance transform above). Below this distance the box
 // reads as a gold bar hanging in the sky, so it is not drawn; past it the
 // tumble still sells the ejection.
-const NEAR_HIDE = 0.75;
+// iter06 (D6): 0.75 m was too conservative to leave a usable window. The shell
+// ejects 0.34 m from the eye and clears 0.75 m only after ~0.35 s, by which
+// point its arc has carried it past the frame edge — measured across the whole
+// iter90 C1 filmstrip, not one shell was on screen in any of the eleven panels
+// while the counters reported 7-9 in flight throughout. At 0.52 m a 38 mm case
+// subtends ~66 px, which is a shell casing tumbling past the lens rather than
+// the "gold bar hanging in the sky" the cull was introduced to kill at 0.38 m.
+// Held at 0.70 m (a 38 mm case = ~49 px) after 0.52 m put a 63-px shell against
+// the open sky in S3 and reproduced that exact tell.
+const NEAR_HIDE = 0.70;
 const NEAR_HIDE_SQ = NEAR_HIDE * NEAR_HIDE;
 
 const _m = new THREE.Matrix4();
@@ -43,8 +52,15 @@ const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
 
 export function makeCasings(env) {
-  // unit box, per-instance scale carries the shell dimensions
-  const geo = new THREE.BoxGeometry(1, 1, 1);
+  // Unit CYLINDER on the Z axis (per-instance scale carries w, w, l).
+  // Was a BoxGeometry: at the 40-70 px a near-lens shell actually occupies, a
+  // 6-quad box shows exactly one flat unshaded face to the camera and reads as
+  // a yellow slab — the "floating yellow prop" tell from iter05, which the
+  // near-lens cull only hid rather than fixed. Eight sides give a specular
+  // gradient across the case wall, which is the whole of what makes brass read
+  // as brass. 16 triangles against 12; one instanced draw either way.
+  const geo = new THREE.CylinderGeometry(0.5, 0.46, 1, 8, 1);
+  geo.rotateX(Math.PI / 2); // long axis -> Z, matching the (w, w, l) scale
   geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1e6);
   const mat = new THREE.MeshStandardMaterial({
     color: 0xb9903f, // brass
@@ -117,9 +133,20 @@ export function makeCasings(env) {
       let rx = -dir[2], rz = dir[0];
       const rl = Math.hypot(rx, rz) || 1;
       rx /= rl; rz /= rl;
-      pos[i3] = origin[0] + dir[0] * 0.32 + rx * 0.12;
-      pos[i3 + 1] = origin[1] + dir[1] * 0.32 - 0.06;
-      pos[i3 + 2] = origin[2] + dir[2] * 0.32 + rz * 0.12;
+      // PORT POSITION, MEASURED-DRIVEN (iter06). The shot origin is the EYE, so
+      // a shell seeded 0.32 m down-range starts 0.35 m from the lens with a
+      // forward component of only 0.32 m. Its lateral kick then outruns that
+      // forward component before it clears the near-lens cull: the ratio
+      // lateral/forward passes tan(46.7 deg) — the frustum's half-width — at
+      // ~0.18 s while the distance passes the cull at ~0.2 s, so the shell is
+      // hidden right up until the moment it is off the right edge. MEASURED:
+      // over 70 ticks of sustained fire in the live S3 pose, ZERO player shells
+      // projected inside the frame on any tick. Seeding at 0.42 m gives the
+      // forward term enough head start for the arc to cross the lower-right
+      // quadrant instead of exiting behind the cull.
+      pos[i3] = origin[0] + dir[0] * 0.42 + rx * 0.14;
+      pos[i3 + 1] = origin[1] + dir[1] * 0.42 - 0.10;
+      pos[i3 + 2] = origin[2] + dir[2] * 0.42 + rz * 0.14;
       // EJECTION ARC (iter05, lane D). Measured in the live S1 frame: the
       // player's three airborne casings projected to screen x = 1687 / 2701 /
       // 3017 against a 1920-wide frame — every one of them had already left the
@@ -128,9 +155,20 @@ export function makeCasings(env) {
       // frame can ever contain brass. Softer sideways, higher and slightly
       // longer rearward: the shell tumbles up-and-right through the frame for
       // roughly a quarter second, which is the shot COD sells.
-      vel[i3] = rx * (0.9 + rnd() * 0.7) - dir[0] * (0.15 + rnd() * 0.3);
-      vel[i3 + 1] = 1.7 + rnd() * 0.9;
-      vel[i3 + 2] = rz * (0.9 + rnd() * 0.7) - dir[2] * (0.15 + rnd() * 0.3);
+      // iter06: less rise, marginally more lateral. The old 1.7-2.6 m/s of lift
+      // threw the shell above the frame's top edge inside 0.2 s — brass leaves
+      // a hip-fire composition upward, not sideways — while the lateral kick
+      // was the component that got it out of the near-lens cull. Flattening the
+      // arc keeps it tumbling through the lower-right quadrant for ~0.4 s.
+      // Right-and-slightly-FORWARD, not right-and-back. Brass inherits the
+      // shooter's forward motion in life and the sim does not model that, so a
+      // rearward bias put every shell behind the lens within a quarter second.
+      // The vertical kick is also flattened (was 1.7–2.6 m/s): against the
+      // sim's -20 m/s^2 that threw the shell above the frame's top edge before
+      // it was ever drawn.
+      vel[i3] = rx * (1.05 + rnd() * 0.7) + dir[0] * (0.45 + rnd() * 0.35);
+      vel[i3 + 1] = 1.35 + rnd() * 0.7;
+      vel[i3 + 2] = rz * (1.05 + rnd() * 0.7) + dir[2] * (0.45 + rnd() * 0.35);
       eul[i3] = rnd() * Math.PI * 2;
       eul[i3 + 1] = rnd() * Math.PI * 2;
       eul[i3 + 2] = rnd() * Math.PI * 2;

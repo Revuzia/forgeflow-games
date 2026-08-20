@@ -57,16 +57,58 @@ const BODY_GLB = {
   juggernaut: "assets/chars/juggernaut.glb",
 };
 
-// Grip basis per body, HAND-BONE-LOCAL Euler. These are last-circle's live
-// grid-search results against the SAME rigs (runtime/3d/royale/player.js
-// HAND_AIM_ROT, dotForward 0.99): the rotation that points a +Z-barrelled
-// weapon forward and level out of the fist. A holder rigidly attached to the
-// hand keeps its grip correct in every pose, so the calibration transfers to
-// the Mixamo rifle clips unchanged — verified by the S9 close-up capture.
-const HAND_GRIP_ROT = {
-  soldier: [-1.449, -0.105, -0.779],
-  juggernaut: [-1.094, -0.444, -0.676],
-};
+// ---------------------------------------------------------------------------
+// TWO-HAND WEAPON HOLD (iter06 — ranked fix 7, unactioned x3)
+// ---------------------------------------------------------------------------
+// This USED to be a pair of hand-bone-local Euler constants ported from
+// last-circle (HAND_GRIP_ROT). The port's premise — "a holder rigidly attached
+// to the hand keeps its grip correct in every pose" — is true for the FIRING
+// hand and false for everything else, and the constants were never re-solved
+// against THIS clip set. Measured live this session on the S9 pose: the bore
+// came out 28.8 deg off the firing-fist -> support-fist line and tilted UP,
+// which is exactly the critics' "the muzzle points up across his own face",
+// and it left the support hand 14.3 cm BELOW the handguard holding nothing —
+// "splayed open in mid-air", flagged by 3/3 critics for three iterations.
+//
+// A constant cannot fix that, because the two hands move relative to each
+// other between clips. So the basis is SOLVED, every frame, from the rig
+// itself: the bore is the ray from the grip holder through the support hand's
+// middle knuckle, and weapon-up is world-up projected off that ray. The
+// support hand is then ON the handguard BY CONSTRUCTION in every clip, in
+// every body, and for any weapon a later wave attaches — the defect class is
+// closed at the generator, not patched per-shot.
+//
+// GRIP_Y: metres from the wrist joint toward the knuckles (measured: the
+// knuckle line sits 0.133 m out on this rig), i.e. the weapon origin — which
+// prepWeaponProto puts at the pistol-grip anchor — lands in the palm.
+const GRIP_Y = 0.05;
+// Below this hand separation the ray is noise (hands crossed, arms tucked, a
+// death slump): keep the last good basis rather than spinning the weapon.
+const GRIP_MIN_SPAN = 0.12;
+
+// SUPPORT-HAND CURL — BAKED INTO THE CLIPS, never applied per frame.
+// The Mixamo rifle clips DO animate fingers (verified: all 7 shipped clips
+// carry all 15 left-hand rotation tracks), but the support hand's authored
+// pose is a loose open cradle — LeftHandMiddle2 at 48 deg against the firing
+// hand's 103 deg fist — because in Mixamo's source a handguard already fills
+// it. At 2 m that reads as an open palm held in the air.
+//
+// The obvious implementation — multiply the curl onto the bone quaternion
+// after mixer.update() — is a TRAP, and it was measured failing this session
+// (LeftHandMiddle2 walked to 153 deg, a different value every frame). THREE's
+// PropertyMixer.apply() writes to the scene graph only when the accumulated
+// clip value CHANGED since the last apply; on a held battery frame, or any
+// frame where a track is momentarily flat, it skips the write, the bone keeps
+// the value WE wrote, and the next multiply compounds it. So the curl is
+// composed into the clip tracks once, at load, where the mixer then owns the
+// result absolutely: q_track * q_curl, post-multiplied = a rotation in the
+// bone's own frame (+X closes on both hands on this rig — verified from the
+// clip's own quaternions, which are X-dominant and positive on both).
+const CURL = { 1: 0.50, 2: 0.55, 3: 0.35 };
+const CURL_THUMB = { 1: 0.18, 2: 0.32, 3: 0.26 };
+// glTF node names carry a colon ("mixamorig:LeftHandIndex1") that THREE's
+// PropertyBinding.sanitizeNodeName strips, so match both spellings.
+const SUPPORT_TRACK = /LeftHand(Index|Middle|Ring|Pinky|Thumb)([123])\.quaternion$/;
 
 // ---------------------------------------------------------------------------
 // Clip hygiene
@@ -106,8 +148,32 @@ function cleanClip(clip, name) {
     if (/\.position$/.test(t.name) && !/Hips\.position$/.test(t.name)) return false;
     return true;
   });
+  curlSupportHand(c);
   c.name = name;
   return c;
+}
+
+/**
+ * Close the SUPPORT (left) hand around the handguard, in place, on every
+ * keyframe of every finger track. See the CURL note above for why this is a
+ * load-time clip edit and not a post-mixer bone edit.
+ */
+function curlSupportHand(clip) {
+  for (const t of clip.tracks) {
+    const m = SUPPORT_TRACK.exec(t.name);
+    if (!m) continue;
+    const amt = (m[1] === "Thumb" ? CURL_THUMB : CURL)[m[2]];
+    if (!amt) continue;
+    const bx = Math.sin(amt / 2), bw = Math.cos(amt / 2); // curl about local +X
+    const v = t.values;
+    for (let i = 0; i + 3 < v.length; i += 4) {
+      const ax = v[i], ay = v[i + 1], az = v[i + 2], aw = v[i + 3];
+      v[i] = ax * bw + aw * bx;
+      v[i + 1] = ay * bw + az * bx;
+      v[i + 2] = az * bw - ay * bx;
+      v[i + 3] = aw * bw - ax * bx;
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -270,9 +336,17 @@ export async function loadBody(name) {
 // Module scratch — createActor/update run per bot per frame; allocating these
 // in the loop would GC-storm mid-firefight (doctrine §3: 0 allocs in update).
 const _v1 = new THREE.Vector3();
+const _v2 = new THREE.Vector3();
+const _v3 = new THREE.Vector3();
+const _v4 = new THREE.Vector3();
+const _v5 = new THREE.Vector3();
 const _q1 = new THREE.Quaternion();
 const _q2 = new THREE.Quaternion();
 const _q3 = new THREE.Quaternion();
+const _m1 = new THREE.Matrix4();
+const _AXIS_X = new THREE.Vector3(1, 0, 0);
+const _AXIS_Y = new THREE.Vector3(0, 1, 0);
+const _AXIS_Z = new THREE.Vector3(0, 0, 1);
 
 /** Rotate a bone by a WORLD-space quaternion, preserving its parent chain
  *  (doctrine §1: solve in world space, express in the bone's frame). */
@@ -342,9 +416,11 @@ export function createActor(proto) {
   // Bones (mixamorig: prefix — THREE sanitizes the colon away; normalize like
   // last-circle's findArmBones or every lookup silently no-ops).
   const bones = {};
+  const byName = new Map();
   model.traverse((o) => {
     if (!o.isBone) return;
     const nm = o.name.replace(/^mixamorig:?/i, "");
+    byName.set(nm, o);
     if (nm === "Hips") bones.hips = o;
     else if (nm === "Spine1") bones.spine1 = o;
     else if (nm === "Spine2") bones.spine2 = o;
@@ -352,6 +428,55 @@ export function createActor(proto) {
     else if (nm === "RightHand") bones.rHand = o;
     else if (nm === "LeftHand") bones.lHand = o;
   });
+  // Middle knuckle = the point a handguard rests against; it is the aim target
+  // for the bore solve. Falls back to the wrist on a rig without fingers.
+  bones.rKnuckle = byName.get("RightHandMiddle1") || bones.rHand;
+  bones.lKnuckle = byName.get("LeftHandMiddle1") || bones.lHand;
+  const grips = [];  // attached weapon holders, re-solved every update()
+
+  /**
+   * Seat the weapon in both hands. The firing palm holds the weapon ORIGIN,
+   * which prepWeaponProto put at the pistol-grip anchor — well BELOW the bore.
+   * So the palm→support-knuckle line is not the bore: it rises toward the
+   * muzzle by the height of the handguard above the pistol grip (h.hold,
+   * measured off the weapon's own geometry at load). Aligning the bore with
+   * that line directly is what left the first attempt's handguard floating
+   * ~9 cm over the support hand in the live capture. Instead the weapon is
+   * pitched down by asin(hold/span) so that the LOCAL point (0, hold, z*) —
+   * the underside of the handguard — lands exactly on the knuckle.
+   *
+   * Full basis, all three axes pinned: a one-axis setFromUnitVectors solve
+   * leaves roll free, which is the sideways-weapon bug.
+   */
+  function solveGrip(h) {
+    const { holder, bone, support } = h;
+    if (!support) return;
+    // Both matrixWorlds are stale inside update() (the mixer writes local TRS
+    // only), so refresh just these two chains — ~20 matrix composes per bot,
+    // versus a full-skeleton updateMatrixWorld the renderer is about to do
+    // anyway. Ancestors first: worldToLocal-free, no allocation.
+    support.updateWorldMatrix(true, false);
+    holder.updateWorldMatrix(true, false);
+    _v2.setFromMatrixPosition(support.matrixWorld);
+    _v3.setFromMatrixPosition(holder.matrixWorld);
+    _v4.subVectors(_v2, _v3);
+    const span = _v4.length();
+    if (span < GRIP_MIN_SPAN) return;   // keep the last good basis
+    _v4.multiplyScalar(1 / span);       // bore, world
+    // world-up unless the bore IS vertical (a rifle pointed at the sky)
+    _v5.crossVectors(Math.abs(_v4.y) > 0.94 ? _AXIS_Z : _AXIS_Y, _v4);
+    if (_v5.lengthSq() < 1e-8) return;
+    _v5.normalize();                    // weapon right
+    _v1.crossVectors(_v4, _v5);         // weapon up (already unit: two unit ⟂)
+    _m1.makeBasis(_v5, _v1, _v4);
+    _q1.setFromRotationMatrix(_m1);
+    // pitch down so the handguard underside, not the grip axis, meets the hand
+    const s = h.hold / span;
+    _q3.setFromAxisAngle(_AXIS_X, Math.asin(s > 0.5 ? 0.5 : s < -0.5 ? -0.5 : s));
+    _q1.multiply(_q3);
+    bone.getWorldQuaternion(_q2);
+    holder.quaternion.copy(_q2.invert().multiply(_q1));
+  }
   const hipsRestY = bones.hips ? bones.hips.position.y : 0;
 
   // Mixer + actions. Clips arrive pre-cleaned + renamed from loadClipSet().
@@ -455,26 +580,35 @@ export function createActor(proto) {
     },
 
     /**
-     * attachWeapon(group, hand='R') — holder on the hand bone, counter-scaled
-     * so children live in world metres (bone world scale varies wildly across
-     * Meshy rig families), grip basis = HAND_GRIP_ROT: the world-space
-     * grid-search result from last-circle on these exact rigs (full basis —
-     * all three axes pinned; setFromUnitVectors-style one-axis solves leave
-     * roll free, the sideways-helmet bug).
+     * attachWeapon(group, hand='R') — holder on the FIRING hand bone,
+     * counter-scaled so children live in world metres (bone world scale varies
+     * wildly across Meshy rig families). The grip basis is not a constant: see
+     * the TWO-HAND WEAPON HOLD note at the top of this file. The holder is
+     * registered here and re-solved every update() so the bore always runs
+     * from the palm through the support hand's knuckle, and the support hand
+     * is told to close (its clip pose is an open cradle).
      */
     attachWeapon(group, hand = "R") {
-      const bone = hand === "L" ? bones.lHand : bones.rHand;
-      if (!bone) return null;
+      const firing = hand === "L" ? bones.lHand : bones.rHand;
+      const support = hand === "L" ? bones.rKnuckle : bones.lKnuckle;
+      if (!firing) return null;
       const holder = new THREE.Group();
-      bone.add(holder);
+      firing.add(holder);
       root.updateMatrixWorld(true);
-      bone.getWorldScale(_v1);
+      firing.getWorldScale(_v1);
       const ws = Math.max(1e-4, _v1.x);
       holder.scale.setScalar(1 / ws); // children are in metres
-      holder.position.set(0, 0.02 / ws, 0);
-      const hr = HAND_GRIP_ROT[proto.name] || HAND_GRIP_ROT.soldier;
-      holder.rotation.set(hr[0], hr[1], hr[2]);
+      holder.position.set(0, GRIP_Y / ws, 0);
       if (group) holder.add(group);
+      // hold = handguard underside above the grip anchor, measured off the
+      // weapon's own geometry by prepWeaponProto (numbers only in userData —
+      // Object3D.copy JSON-round-trips it on every clone).
+      const hold = (group && group.userData && +group.userData.brHold) || 0;
+      const h = { holder, bone: firing, support, hold };
+      grips.push(h);
+      // Solve once NOW: the actor is already settled into idle, so the very
+      // first rendered frame is correct — never one frame of the bind basis.
+      solveGrip(h);
       return holder;
     },
 
@@ -517,6 +651,11 @@ export function createActor(proto) {
       if (bones.hips && actor.crouchW > 0.01) {
         bones.hips.position.y = hipsRestY - 0.32 * actor.crouchW;
       }
+      // POST-MIXER: re-seat the weapon against the pose the mixer just wrote.
+      // Runs on a held frame too (dt === 0) — the battery's frozen pose has to
+      // be as correct as a moving one, and holder.quaternion is ASSIGNED (not
+      // accumulated), so re-running it on an unchanged pose is a no-op.
+      for (let i = 0; i < grips.length; i++) solveGrip(grips[i]);
     },
 
     dispose() {

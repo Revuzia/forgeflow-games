@@ -24,7 +24,16 @@ const WPN_GLB = {
   smg: "assets/chars/wpn3p_smg.glb",
   sniper: "assets/chars/wpn3p_sniper.glb",
 };
-const WPN_LEN = { ar: 0.62, smg: 0.5, sniper: 0.95 };
+// Overall length in metres. iter06: the old set (0.62 / 0.50 / 0.95) was
+// sub-scale — a 0.62 m "assault rifle" is a prop, and it is also WHY the
+// support hand had nothing to hold: the grip anchor sits 0.26 m behind the
+// muzzle while the Mixamo rifle clips put the support fist ~0.35 m forward of
+// the firing fist, so the handguard physically could not reach it (measured
+// live this session: support fist at 0.372 m in weapon space vs a 0.322 m
+// forward extent). These are the real lengths of the classes they represent —
+// M4-with-stock-out 0.84, MP5-class 0.66, DMR 1.05 — which puts the support
+// fist at ~85% of each weapon's forward extent, i.e. ON the handguard.
+const WPN_LEN = { ar: 0.84, smg: 0.66, sniper: 1.05 };
 // MANUAL 180° overrides (last-circle owner playtest, verified by screenshots):
 // the muzzle-thin/stock-dense heuristic picks WRONG on the AR — its rail/mag
 // block out-clusters the stock. Same source GLBs, same override.
@@ -36,6 +45,147 @@ const WPN_KIND = { warden: "ar", vesper: "smg", corvus: "sniper", pike: "smg" };
 // JSON-stringifies userData on every clone, and a THREE.Group in there is
 // circular — measured this session as a pageerror storm on spawn.
 const WPN_PROTO_CACHE = new Map(); // kind -> Promise<Group>
+
+// ---------------------------------------------------------------------------
+// 3P WEAPON MATERIAL — parkerised steel + polymer furniture (iter06, ranked
+// fix 7: "UNACTIONED FOR THREE CONSECUTIVE ITERATIONS", 3/3 critics).
+//
+// The defect, measured this session rather than assumed: the Meshy source GLBs
+// ship a BAKED SATURATED albedo — the AR's baseColorTexture means sRGB
+// (106,116,51) over the 69% of its texels with saturation > 0.30, i.e. the
+// whole receiver/handguard/stock is highlighter lime; the sniper's is orange-
+// brown. The old repair here only touched metalness/roughness FACTORS, so the
+// lime went to the screen untouched and read as a missing-texture fallback.
+// Its metallicRoughness map is also a real map (mean G 102/255 → roughness
+// 0.40, B 9/255 → metalness 0.035), so factor 0.35/0.55 multiplied DOWN to
+// roughness ~0.22 / metalness ~0.01: glossy dielectric, i.e. lime PLASTIC.
+//
+// Fix at the generator, not the artifact (doctrine §1/§3): remap the authored
+// albedo through a luminance classifier into the same treatment the FP guns
+// get (weapon_meshes.js repair(): read the maps as authored, let roughness
+// vary PER PART, no albedo blowout). Dark source texels are the barrel/optic/
+// magazine → parkerised phosphate steel; bright source texels are the painted
+// furniture → black polymer. The two albedos sit close together (a cohesive
+// dark firearm); the READ comes from the generated roughness/metalness map,
+// which is VT §3's "distinct roughness per part" done per texel. Source tonal
+// variation survives as a brightness modulation so the result is not a flat
+// grey slab, and the GLB's normal map keeps carrying the real surface detail.
+const GUN_STEEL = [85, 88, 92];    // parkerised receiver/barrel, sRGB
+const GUN_POLY = [66, 68, 71];     // black polymer furniture, sRGB
+const GUN_STEEL_R = 0.40, GUN_STEEL_M = 0.70;
+const GUN_POLY_R = 0.76, GUN_POLY_M = 0.05;
+
+/** Build {albedo, orm} CanvasTextures from an authored baseColor texture.
+ *  Returns null when there is nothing to read (headless, or a mapless
+ *  material) — the caller then falls back to flat gunmetal. */
+function buildGunMaps(src) {
+  if (!src || !src.image || typeof document === "undefined") return null;
+  const img = src.image;
+  const w = img.width | 0, h = img.height | 0;
+  if (!w || !h) return null;
+  const ac = document.createElement("canvas");
+  ac.width = w; ac.height = h;
+  const ag = ac.getContext("2d", { willReadFrequently: true });
+  if (!ag) return null;
+  ag.drawImage(img, 0, 0, w, h);
+  const idat = ag.getImageData(0, 0, w, h);
+  const px = idat.data;
+  const n = w * h;
+
+  // Percentile-normalise luminance so ONE classifier works across the whole
+  // set (the AR is bright-lime dominant, the SMG is dark-dominant): a fixed
+  // threshold would classify a whole weapon as one material.
+  const hist = new Uint32Array(256);
+  const lum = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const j = i * 4;
+    const L = 0.2126 * px[j] + 0.7152 * px[j + 1] + 0.0722 * px[j + 2];
+    lum[i] = L;
+    hist[L | 0]++;
+  }
+  let acc = 0, lo = 0, hi = 255;
+  for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= n * 0.05) { lo = v; break; } }
+  acc = 0;
+  for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= n * 0.95) { hi = v; break; } }
+  const span = Math.max(8, hi - lo);
+
+  const oc = document.createElement("canvas");
+  oc.width = w; oc.height = h;
+  const og = oc.getContext("2d");
+  if (!og) return null;
+  const odat = og.createImageData(w, h);
+  const opx = odat.data;
+  for (let i = 0; i < n; i++) {
+    let t = (lum[i] - lo) / span;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    let u = (t - 0.35) / 0.30;              // smoothstep → polymer weight
+    u = u < 0 ? 0 : u > 1 ? 1 : u;
+    const pw = u * u * (3 - 2 * u);
+    const f = 0.85 + 0.30 * t;              // keep the authored tonal variation
+    const j = i * 4;
+    px[j] = Math.min(255, (GUN_STEEL[0] + (GUN_POLY[0] - GUN_STEEL[0]) * pw) * f);
+    px[j + 1] = Math.min(255, (GUN_STEEL[1] + (GUN_POLY[1] - GUN_STEEL[1]) * pw) * f);
+    px[j + 2] = Math.min(255, (GUN_STEEL[2] + (GUN_POLY[2] - GUN_STEEL[2]) * pw) * f);
+    px[j + 3] = 255;
+    opx[j] = 255;                                                     // (unused AO)
+    opx[j + 1] = (255 * (GUN_STEEL_R + (GUN_POLY_R - GUN_STEEL_R) * pw)) | 0;
+    opx[j + 2] = (255 * (GUN_STEEL_M + (GUN_POLY_M - GUN_STEEL_M) * pw)) | 0;
+    opx[j + 3] = 255;
+  }
+  ag.putImageData(idat, 0, 0);
+  og.putImageData(odat, 0, 0);
+
+  const albedo = new THREE.CanvasTexture(ac);
+  const orm = new THREE.CanvasTexture(oc);
+  for (const t2 of [albedo, orm]) {
+    // glTF textures are flipY:false and the pixels were read/written in the
+    // SOURCE orientation — copying the sampler state keeps the UVs valid.
+    t2.flipY = src.flipY;
+    t2.wrapS = src.wrapS; t2.wrapT = src.wrapT;
+    t2.repeat.copy(src.repeat); t2.offset.copy(src.offset);
+    t2.anisotropy = src.anisotropy;
+    if (src.channel !== undefined) t2.channel = src.channel;
+    t2.needsUpdate = true;
+  }
+  albedo.colorSpace = THREE.SRGBColorSpace;
+  orm.colorSpace = THREE.NoColorSpace;
+  return { albedo, orm };
+}
+
+function repairGunMaterial(mat) {
+  if (!mat || mat.userData.__brGun) return;
+  mat.userData.__brGun = true;
+  // Meshy's emissive channel is the albedo-as-emissive export bug class — a
+  // gun that glows cannot darken in shadow and feeds the bloom threshold.
+  mat.emissiveMap = null;
+  if (mat.emissive) mat.emissive.setHex(0x000000);
+  if (mat.emissiveIntensity !== undefined) mat.emissiveIntensity = 0;
+  // W1's iter05 lesson, transliterated: envMapIntensity 1.0 on metal mirrors
+  // the sky PMREM and renders as chrome. 0.5 keeps the wet-metal cue.
+  mat.envMapIntensity = 0.5;
+  let built = null;
+  try {
+    built = buildGunMaps(mat.map);
+  } catch (e) {
+    console.warn("[soldiers] 3P gun albedo remap failed — flat gunmetal", e);
+  }
+  if (built) {
+    mat.map = built.albedo;
+    mat.roughnessMap = built.orm;
+    mat.metalnessMap = built.orm;
+    mat.roughness = 1.0;   // the generated map is authoritative for both
+    mat.metalness = 1.0;
+    if (mat.color) mat.color.setHex(0xffffff);
+  } else {
+    mat.map = null;
+    mat.roughnessMap = null;
+    mat.metalnessMap = null;
+    if (mat.color) mat.color.setHex(0x494c50);
+    mat.roughness = 0.52;
+    mat.metalness = 0.45;
+  }
+  mat.needsUpdate = true;
+}
 
 function prepWeaponProto(kind) {
   if (!WPN_PROTO_CACHE.has(kind)) WPN_PROTO_CACHE.set(kind, _prepWeaponProto(kind));
@@ -98,20 +248,41 @@ async function _prepWeaponProto(kind) {
   if (gN) grip.multiplyScalar(1 / gN); else bb.getCenter(grip);
   grip.z += (WPN_LEN[kind] > 0.55 ? 0.06 : 0.0); // long guns: stock clears the arm
   m.position.sub(grip); // grip → hand origin
-  // Same Meshy export defect the characters have: absent metallicFactor
-  // defaults to 1.0 → near-black silhouette. Gunmetal, not mirror.
+  // Real firearm material (doctrine §1 repair, weapon edition — iter06).
+  const done = new Set();
   m.traverse((o) => {
     if (!o.isMesh || !o.material) return;
     for (const mat of Array.isArray(o.material) ? o.material : [o.material]) {
-      if (mat.metalness === 1) mat.metalness = 0.35;
-      if (mat.roughness === 1) mat.roughness = 0.55;
-      if (mat.emissiveMap) { mat.emissiveMap = null; if (mat.emissive) mat.emissive.setHex(0x000000); }
-      mat.needsUpdate = true;
+      if (mat && !done.has(mat)) { done.add(mat); repairGunMaterial(mat); }
     }
     o.castShadow = true;
     o.frustumCulled = false; // rides a skinned hand — bounds lie like the body's
   });
+  // SUPPORT-HAND HOLD HEIGHT. The weapon origin is the pistol-grip anchor,
+  // which sits well BELOW the bore, so the line from the firing palm to the
+  // support hand is NOT the bore — it rises toward the muzzle. actor.js needs
+  // one number to correct for that: how far above the origin the underside of
+  // the handguard sits. Measured off this weapon's own geometry (the 25th-
+  // percentile y over the forward z-band a support hand can reach, which is
+  // past the magazine and short of the muzzle device), so it is right for any
+  // weapon a later wave drops in — never a per-model constant.
+  m.updateMatrixWorld(true); // position.sub(grip) above left matrixWorld stale
+  bb.setFromObject(m);
+  const zF = bb.max.z;
+  const ys = [];
+  m.traverse((o) => {
+    if (!o.isMesh) return;
+    const posA = o.geometry.attributes.position;
+    const step = Math.max(1, Math.floor(posA.count / 3000));
+    for (let i = 0; i < posA.count; i += step) {
+      wp.fromBufferAttribute(posA, i).applyMatrix4(o.matrixWorld);
+      if (wp.z > zF * 0.40 && wp.z < zF * 0.85) ys.push(wp.y);
+    }
+  });
+  ys.sort((a, b) => a - b);
+  const hold = ys.length ? ys[Math.floor(ys.length * 0.25)] : 0.06 * WPN_LEN[kind];
   const g = new THREE.Group();
+  g.userData.brHold = hold;
   g.add(m);
   return g;
 }

@@ -18,9 +18,18 @@ const N = 24;
 // tracersSpawned 9. The pool was never the problem; the streak was too thin to
 // survive resampling. 6.5 m / 0.075 m puts a warden streak at ~7 px across and
 // ~580 px long at 11 m — legible without becoming a laser bolt.
-const LEN = 6.5;     // max streak length (m)
-const WIDTH = 0.075; // streak width (m)
-const HDR = 2.2;    // color multiplier — the streak blooms, the frame doesn't
+// iter06 (D6 lane): the pool is NOT the problem and was not the problem in
+// iter05 either — measured live across C1's whole 60-tick fire window,
+// tracersActive never dropped below 2 and tracersSpawned reached 40. Three
+// critics still reported no tracer in any frame. So this is purely a
+// legibility budget: 0.075 m at the 17-20 m contact range of these poses is
+// ~4 px of warm streak over a neon-lit wet street that is already carrying
+// bloom. Widened to 0.105 m (~5.5 px at 17 m, ~9 px at 11 m), lengthened to
+// 9 m, and lifted 2.2 -> 3.1 HDR so the streak survives the post chain's
+// tonemap instead of being averaged into the background.
+const LEN = 9.0;     // max streak length (m)
+const WIDTH = 0.105; // streak width (m)
+const HDR = 3.1;    // color multiplier — the streak blooms, the frame doesn't
 
 function streakTexture() {
   const cv = document.createElement("canvas");

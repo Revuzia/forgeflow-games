@@ -39,6 +39,37 @@ export function createScenarios(ctx) {
 
   const surface = () => (window.__FPS__ && window.__FPS__.__test) || null;
 
+  // ------------------------------------------------------- HUD POLICY (W6)
+  // Which battery frames are IN-MISSION GAMEPLAY, and therefore must carry the
+  // live HUD. Through iter05 only S6 and C1 declared `hud: true`, and neither
+  // could show it (capture() reads the GL buffer; the HUD is DOM) — so all
+  // three critics reported "no crosshair, no ammo block, no compass tape, no
+  // damage arcs" across every frame for two iterations running and D9 was
+  // structurally capped. capture() now composites the DOM layer, so the flag
+  // finally means something and the split has to be authored deliberately:
+  //
+  //   HUD ON  — first-person gameplay frames a player would actually see:
+  //             S1 hip-fire, S3 establishing firefight, S6 pause,
+  //             S7 arcade shaft, S8 gate floodlight, C1 the moving capture.
+  //   HUD OFF — the STUDY frames, per visual_target.md's battery table:
+  //             S4 (macro material close-up — a crosshair sits on the sample),
+  //             S5 (sky/horizon vista, graded on D8),
+  //             S9 (detached third-person camera — a first-person HUD over it
+  //                 would be a lie about what the player sees), and `menu`.
+  //             S2 — see below; NOT a free call.
+  //
+  // S2 IS DELIBERATELY OFF, AND THE REASON IS A FINDING, NOT A PREFERENCE.
+  // S2 is Corvus ADS at adsT ~1, and hud.js:924 legitimately shows the Corvus
+  // SCOPE overlay in exactly that state — a 76vmin bore inside a 98.5%-opaque
+  // mask. Measured with the HUD forced on: the composited layer covered 27,500
+  // of a 32,400-px probe (85% of frame) and S2 became a scope picture with the
+  // street reduced to a circle. That may well be the honest frame — it is what
+  // the game actually puts on screen — but it is a wholesale re-composition of
+  // the one scenario the ADS-optic work order (iter06 ranked fix #5) is
+  // rebuilding, so it is that lane's call and the owner's, not this one's.
+  const GAMEPLAY_HUD = new Set(["S1", "S3", "S6", "S7", "S8", "C1"]);
+  const STUDY_NO_HUD = new Set(["S2", "S4", "S5", "S9", "menu"]);
+
   // ------------------------------------------------------------ helpers
   function resolvePose(name) {
     const table = (ctx.content && ctx.content.scenarios) || {};
@@ -297,7 +328,17 @@ export function createScenarios(ctx) {
     const cap = resolveSeedObj(name, seedObj);
     const seed = (cap && cap.seed != null) ? cap.seed : (pose.seed != null ? pose.seed : 1);
     const botSeed = (cap && cap.botSeed != null) ? cap.botSeed : seed + 1000;
-    const hudOn = (cap && cap.hud != null) ? !!cap.hud : !!pose.hud;
+    const hudDeclared = (cap && cap.hud != null) ? !!cap.hud : !!pose.hud;
+    const hudOn = GAMEPLAY_HUD.has(name) ? true
+      : STUDY_NO_HUD.has(name) ? false
+      : hudDeclared;
+    if (hudOn !== hudDeclared) {
+      warnings.push(
+        `HUD policy override: '${name}' is a ` +
+        `${GAMEPLAY_HUD.has(name) ? "GAMEPLAY frame — HUD forced ON"
+                                  : "STUDY frame — HUD forced OFF"} ` +
+        `(seed table declared hud:${hudDeclared})`);
+    }
 
     const T = surface();
     if (!T) throw new Error("[scenarios] __FPS__.__test not assigned yet");
@@ -423,9 +464,16 @@ export function createScenarios(ctx) {
     if (live) {
       ctx.input.enabled = true;
       T.hud(hudOn);
+      // A live take never wants a menu in frame; sweep any stale overlay AFTER
+      // hud(true) (which restores overlay display) — see the note below.
+      const liveOverlays = typeof T.hideOverlays === "function" ? T.hideOverlays() : [];
+      if (liveOverlays.length) {
+        warnings.push(`swept ${liveOverlays.join(", ")} before the live take`);
+      }
       stepTicks(6); // one breath so state derives before the script starts
       return { name, seed, botSeed, ...world, bots: botIds.length, live: true,
-               unstuck, startPos: sim.state.player.pos.map((v) => +v.toFixed(3)),
+               unstuck, hud: hudOn, overlaysHidden: liveOverlays,
+               startPos: sim.state.player.pos.map((v) => +v.toFixed(3)),
                warnings };
     }
 
@@ -437,14 +485,64 @@ export function createScenarios(ctx) {
       if (sim.state.player.weapon.adsT < 0.99) warnings.push("adsT never reached 1 within 90 ticks");
     }
     if (pp.action === "fireBurst") {
+      // ---- COMBAT PRE-ROLL (iter04 ranked fix 8a; unassigned for two waves,
+      // assigned to the D6 lane in iter06) -------------------------------
+      // A fire pose that fires three rounds and stops has a wall with three
+      // sub-pixel bullet holes and three shells still in the air, which is
+      // why three critics read the battery as "zero permanence — no brass, no
+      // decals, no scorch anywhere". The world has to have BEEN fought in
+      // before the shutter opens.
+      //
+      // This is affordable now and was not before: the fx clock is the SIM
+      // clock (fx.js header, iter05 lane D) and a posed scenario HOLDS the sim
+      // on the pause gate, so pre-roll seconds are the only ageing these
+      // effects ever get. Decals live 14 s + 6 s fade and casings 10-20 s, so
+      // everything the pre-roll deposits is still there at capture time no
+      // matter how long the harness's real-time settle takes.
+      //
+      // Shape: a sustained burst, then a QUIET GAP so the brass lands and the
+      // dust falls — a frame full of fresh airborne debris reads as one shot,
+      // not as a firefight. The capture-time burst re-arms the flash after.
+      const preRounds = pp.preRoll != null ? pp.preRoll : 11;
+      const preGap = pp.preRollGapTicks != null ? pp.preRollGapTicks : 48;
+      const fxBefore = (window.__FPS__ && window.__FPS__.fx
+        && window.__FPS__.fx.stats && window.__FPS__.fx.stats()) || null;
+      if (preRounds > 0) {
+        const magBefore = sim.state.player.weapon.mag;
+        T.pin("fire", true);
+        let pg = 0;
+        const p0 = sim.state.counters.shotsFired;
+        while (sim.state.counters.shotsFired - p0 < preRounds && pg++ < 300) stepTicks(1);
+        T.unpin("fire");
+        // Restore the magazine the pose was authored with, so the pre-roll can
+        // never starve the capture-time burst or drop a reload animation into
+        // the frame. Restoring the PRIOR count (not a guessed mag size) keeps
+        // this correct for every weapon.
+        if (typeof T.setAmmo === "function") {
+          try { T.setAmmo(magBefore); } catch (e) { /* optional surface member */ }
+        }
+        for (let g = 0; g < preGap; g++) stepTicks(1);
+      }
       T.pin("fire", true);
       const want = Math.max(1, (pp.rounds || 4) - 1); // leave the LAST round for capture time
       let guard = 0;
       const c0 = sim.state.counters.shotsFired;
       while (sim.state.counters.shotsFired - c0 < want && guard++ < 180) stepTicks(1);
       if (sim.state.counters.shotsFired === c0) warnings.push("fireBurst: no shots fired in 180 ticks");
+      // Report what the pre-roll actually DEPOSITED, from fx's own counters —
+      // the manifest must be able to prove permanence without reading a PNG.
+      const fxAfter = (window.__FPS__ && window.__FPS__.fx
+        && window.__FPS__.fx.stats && window.__FPS__.fx.stats()) || null;
+      if (fxAfter) {
+        warnings.push(
+          `combat pre-roll: ${preRounds} rounds + ${preGap} settle ticks -> ` +
+          `decals ${(fxBefore && fxBefore.decalsSpawned) || 0}->${fxAfter.decalsSpawned}, ` +
+          `casings ejected ${(fxBefore && fxBefore.casings.ejected) || 0}->${fxAfter.casings.ejected} ` +
+          `(${fxAfter.casings.flying} still flying), ` +
+          `impacts ${(fxBefore && fxBefore.events.impacts) || 0}->${fxAfter.events.impacts}`);
+      }
       // capture() steps until a FRESH shot lands in its final tick so the
-      // 55 ms flash + leased light are live in the read-back frame.
+      // flash sprite + leased light are live in the read-back frame.
       window.__BR_SCENARIO__ = { captureDrive: "untilShot", maxTicks: 20 };
     } else {
       // settle the posed world a fixed tick count (deterministic per seed)
@@ -475,9 +573,37 @@ export function createScenarios(ctx) {
     // ---- HUD per the merged flag (battery re-applies its own cap after).
     T.hud(hudOn);
 
+    // ---- the HOLD must not put a menu in the frame.
+    // A posed beauty/gameplay shot freezes the world with the pause gate, and
+    // pause.js correctly renders its overlay whenever pauseCtl.pause() runs on
+    // a live mission (pause.js:108). That was harmless only while DOM could
+    // never reach the PNG; capture() now composites DOM, so a hud:true pose
+    // would photograph the S6 menu over the gameplay frame — the exact failure
+    // iter05's harness had to fail closed on. S6 (pose.paused) is the ONE
+    // scenario entitled to the overlay, so it is exempted; everything else has
+    // the overlay swept AFTER hud(true) (which restores overlay display).
+    let overlaysHidden = [];
+    const wantsOverlay = !!(pose.paused || pose.overlay === "pause");
+    if (!wantsOverlay && typeof T.hideOverlays === "function") {
+      overlaysHidden = T.hideOverlays();
+      if (overlaysHidden.length) {
+        warnings.push(
+          `pause-gate hold left ${overlaysHidden.join(", ")} on screen — swept ` +
+          `so the composited frame shows the in-mission HUD, not the pause menu`);
+      }
+    }
+
     return {
       name, seed, botSeed, ...world, bots: botIds.length, unstuck,
       held: true, paused: ctx.pauseCtl.active,
+      // `paused` is just the HOLD gate — every posed frame in the battery is
+      // paused, because that is how the world is held still. `overlay` is the
+      // different question the harness actually needs: did this POSE ask for
+      // the pause MENU to be in the picture (S6), or is the pause gate only
+      // being used as a freeze? Conflating the two made the first S3 capture
+      // of this fix come back as a full-screen pause menu.
+      overlay: wantsOverlay,
+      hud: hudOn, overlaysHidden,
       playerPos: sim.state.player.pos.map((v) => +v.toFixed(3)),
       yaw: +sim.state.player.yaw.toFixed(4),
       pitch: +sim.state.player.pitch.toFixed(4),
