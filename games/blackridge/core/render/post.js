@@ -186,14 +186,163 @@ const CompositeShader = {
     }`,
 };
 
+// ---------------------------------------------------------------- FXAA
+// Replaces the 4x MSAA that used to live on the HDR target. MSAA at 4.67 Mpx
+// on Intel UHD 630 measured 84.8 ms of the 182.8 ms frame (ablation, GPU timer
+// query, disjoint:false) — i.e. ANTI-ALIASING ALONE WAS 46% OF THE FRAME.
+// FXAA is the standard answer at this budget: ~5 texture fetches on flat
+// pixels, ~15-25 on edge pixels, one full-screen pass, and it runs on the
+// TONEMAPPED sRGB image where edge contrast is perceptual — which is where AA
+// belongs. This is Simon Rodriguez's FXAA 3.11 formulation (edge detect →
+// direction → both-way edge-end search → sub-pixel term).
+//
+// NOT a quality regression to argue away: the owner complaint that produced
+// MSAA was "fuzzy like an old TV". Fuzz came from GRAIN, not from missing MSAA
+// (see uGrain, cut to 0.008 in the same pass), and FXAA closes stair-stepping
+// without touching the 4.67 Mpx that MSAA charged for. The residual cost is
+// FXAA's known weakness on sub-pixel detail — thin wires and distant railings
+// shimmer slightly more in motion than under 4x MSAA. That is the trade, stated.
+const FXAA_EDGE_MIN = 0.0312;
+const FXAA_EDGE_MAX = 0.125;
+const FXAA_SUBPIX = 0.75;
+
+const FxaaShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uRes: { value: new THREE.Vector2(1920, 1080) },
+  },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`,
+  fragmentShader: /* glsl */ `
+    varying vec2 vUv;
+    uniform sampler2D tDiffuse;
+    uniform vec2 uRes;
+
+    // sqrt() of the luma: FXAA wants perceptual distance, and the input here
+    // is already sRGB-encoded (the composite pass encodes before writing).
+    float fxLuma(vec3 c) { return sqrt(dot(c, vec3(0.299, 0.587, 0.114))); }
+
+    void main() {
+      vec2 inv = 1.0 / uRes;
+      vec2 uv = vUv;
+
+      vec3 cM = texture2D(tDiffuse, uv).rgb;
+      float lM = fxLuma(cM);
+      float lD = fxLuma(texture2D(tDiffuse, uv + vec2(0.0, -1.0) * inv).rgb);
+      float lU = fxLuma(texture2D(tDiffuse, uv + vec2(0.0,  1.0) * inv).rgb);
+      float lL = fxLuma(texture2D(tDiffuse, uv + vec2(-1.0, 0.0) * inv).rgb);
+      float lR = fxLuma(texture2D(tDiffuse, uv + vec2( 1.0, 0.0) * inv).rgb);
+
+      float lMin = min(lM, min(min(lD, lU), min(lL, lR)));
+      float lMax = max(lM, max(max(lD, lU), max(lL, lR)));
+      float range = lMax - lMin;
+
+      // Flat pixel: 5 fetches and out. This early-out is what keeps FXAA at
+      // ~1 ms — on a night frame most of the screen never reaches the edge
+      // threshold at all.
+      if (range < max(${FXAA_EDGE_MIN.toFixed(4)}, lMax * ${FXAA_EDGE_MAX.toFixed(4)})) {
+        gl_FragColor = vec4(cM, 1.0);
+        return;
+      }
+
+      float lDL = fxLuma(texture2D(tDiffuse, uv + vec2(-1.0, -1.0) * inv).rgb);
+      float lUR = fxLuma(texture2D(tDiffuse, uv + vec2( 1.0,  1.0) * inv).rgb);
+      float lUL = fxLuma(texture2D(tDiffuse, uv + vec2(-1.0,  1.0) * inv).rgb);
+      float lDR = fxLuma(texture2D(tDiffuse, uv + vec2( 1.0, -1.0) * inv).rgb);
+
+      float lDU = lD + lU;
+      float lLR = lL + lR;
+      float lLC = lDL + lUL;
+      float lDC = lDL + lDR;
+      float lRC = lDR + lUR;
+      float lUC = lUR + lUL;
+
+      float edgeH = abs(-2.0 * lL + lLC) + abs(-2.0 * lM + lDU) * 2.0 + abs(-2.0 * lR + lRC);
+      float edgeV = abs(-2.0 * lU + lUC) + abs(-2.0 * lM + lLR) * 2.0 + abs(-2.0 * lD + lDC);
+      bool horz = edgeH >= edgeV;
+
+      float l1 = horz ? lD : lL;
+      float l2 = horz ? lU : lR;
+      float g1 = l1 - lM;
+      float g2 = l2 - lM;
+      bool steep1 = abs(g1) >= abs(g2);
+      float gScaled = 0.25 * max(abs(g1), abs(g2));
+
+      float stepLen = horz ? inv.y : inv.x;
+      float lAvg = 0.0;
+      if (steep1) { stepLen = -stepLen; lAvg = 0.5 * (l1 + lM); }
+      else        {                     lAvg = 0.5 * (l2 + lM); }
+
+      vec2 cur = uv;
+      if (horz) cur.y += stepLen * 0.5; else cur.x += stepLen * 0.5;
+
+      vec2 off = horz ? vec2(inv.x, 0.0) : vec2(0.0, inv.y);
+      vec2 uv1 = cur - off;
+      vec2 uv2 = cur + off;
+
+      float e1 = fxLuma(texture2D(tDiffuse, uv1).rgb) - lAvg;
+      float e2 = fxLuma(texture2D(tDiffuse, uv2).rgb) - lAvg;
+      bool done1 = abs(e1) >= gScaled;
+      bool done2 = abs(e2) >= gScaled;
+      if (!done1) uv1 -= off;
+      if (!done2) uv2 += off;
+
+      // 8 accelerating steps each way. The classic 12-step PC preset buys a
+      // little more on near-horizontal edges and costs fetches we do not have.
+      if (!(done1 && done2)) {
+        for (int i = 0; i < 8; i++) {
+          float q = i < 3 ? 1.5 : (i < 5 ? 2.0 : (i < 7 ? 4.0 : 8.0));
+          if (!done1) { e1 = fxLuma(texture2D(tDiffuse, uv1).rgb) - lAvg; done1 = abs(e1) >= gScaled; }
+          if (!done2) { e2 = fxLuma(texture2D(tDiffuse, uv2).rgb) - lAvg; done2 = abs(e2) >= gScaled; }
+          if (!done1) uv1 -= off * q;
+          if (!done2) uv2 += off * q;
+          if (done1 && done2) break;
+        }
+      }
+
+      float d1 = horz ? (uv.x - uv1.x) : (uv.y - uv1.y);
+      float d2 = horz ? (uv2.x - uv.x) : (uv2.y - uv.y);
+      bool dir1 = d1 < d2;
+      float dFinal = min(d1, d2);
+      float thick = d1 + d2;
+      float pxOff = -dFinal / thick + 0.5;
+
+      bool centreSmaller = lM < lAvg;
+      bool correct = ((dir1 ? e1 : e2) < 0.0) != centreSmaller;
+      float finalOff = correct ? pxOff : 0.0;
+
+      // sub-pixel term: rescues single-pixel features the edge search cannot
+      // see (muzzle sparks, rain streaks, distant window mullions).
+      float lAvgAll = (1.0 / 12.0) * (2.0 * (lDU + lLR) + lLC + lRC);
+      float sp1 = clamp(abs(lAvgAll - lM) / range, 0.0, 1.0);
+      float sp2 = (-2.0 * sp1 + 3.0) * sp1 * sp1;
+      float sp = sp2 * sp2 * ${FXAA_SUBPIX.toFixed(3)};
+      finalOff = max(finalOff, sp);
+
+      vec2 outUv = uv;
+      if (horz) outUv.y += finalOff * stepLen; else outUv.x += finalOff * stepLen;
+      gl_FragColor = vec4(texture2D(tDiffuse, outUv).rgb, 1.0);
+    }`,
+};
+
 export function createPost(ctx) {
   const { renderer } = ctx;
   const gl = renderer.getContext();
 
+  // Profiler seam (perf lane): the HDR target's MSAA sample count is a knob so
+  // an ablation run can price it instead of guessing. Default lives in ONE
+  // place; build() reads it.
+  let msaaSamples = 0; // MSAA REMOVED — FXAA does the AA now (see FxaaShader)
   let composer = null;
   let renderPass = null;
   let bloomPass = null;
   let compositePass = null;
+  let fxaaPass = null;
+  let ldrTarget = null;
   let curW = 0, curH = 0, curPR = 1;
   let quality = ctx.settings.quality || "med";
   let time = 0;
@@ -205,7 +354,9 @@ export function createPost(ctx) {
     // does not reach (leak caught in review).
     if (bloomPass && bloomPass.dispose) bloomPass.dispose();
     if (compositePass && compositePass.material) compositePass.material.dispose();
-    if (composer) composer.dispose();
+    if (fxaaPass && fxaaPass.material) fxaaPass.material.dispose();
+    if (composer) composer.dispose(); // also disposes rt1 (= ldrTarget) and rt2
+    ldrTarget = null;
     curW = w; curH = h; curPR = pr;
 
     const rt = new THREE.WebGLRenderTarget(w * pr, h * pr, {
@@ -216,19 +367,49 @@ export function createPost(ctx) {
       // stated mitigation was to bury stair-stepped edges under noise. On a
       // night scene that reads as analog-TV snow over a soft picture. WebGL2
       // multisampled render targets are cheap; 4x is the quality/cost knee.
-      samples: 4,
+      samples: msaaSamples,
     });
     composer = new EffectComposer(renderer, rt);
     composer.setPixelRatio(pr);
     composer.setSize(w, h);
 
+    // LDR PING-PONG. EffectComposer's own buffer roles, traced in the vendored
+    // source rather than assumed: readBuffer starts as renderTarget2 (the
+    // CLONE of the target passed in) and RenderPass.js:62 renders the scene
+    // into readBuffer — so rt2 is the HDR scene buffer and rt1 is what the
+    // composite pass writes. That written image is already tonemapped, graded
+    // and sRGB-encoded and can never exceed 0..1, yet it was RGBA16F: 8 bytes
+    // per pixel written by composite and 8 read by FXAA, on a part whose whole
+    // problem is bandwidth. rt1 becomes RGBA8; rt2 stays HalfFloat because the
+    // SCENE is genuinely HDR (bloom thresholds at 1.0 depend on it).
+    ldrTarget = new THREE.WebGLRenderTarget(
+      Math.max(2, Math.floor(w * pr)), Math.max(2, Math.floor(h * pr)), {
+        type: THREE.UnsignedByteType,
+        depthBuffer: false,
+        // NoColorSpace: the composite shader applies the sRGB OETF itself, so
+        // this target must store the bytes verbatim with no second encode.
+        colorSpace: THREE.NoColorSpace,
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+      });
+    if (composer.renderTarget1) composer.renderTarget1.dispose();
+    composer.renderTarget1 = ldrTarget;
+    composer.writeBuffer = composer.renderTarget1; // LDR — composite's output
+    composer.readBuffer = composer.renderTarget2;  // HDR — the scene
+
     renderPass = new RenderPass(ctx.scene, ctx.camera);
     composer.addPass(renderPass);
 
-    // HALF-RES selective bloom: threshold 1.0 → only authored >1.0 emissives
+    // QUARTER-RES selective bloom: threshold 1.0 → only authored >1.0 emissives
     // (practicals, neon, muzzle, tracers). VT: strength 0.25–0.4, radius 0.5–0.7.
+    // Was half-res, and measured 45.9 ms of a 168.5 ms frame at DPR 1.5 —
+    // UnrealBloomPass is a 5-level mip chain with two separable blur passes per
+    // level, so its cost is linear in base area and quartering the base is a 4x
+    // cut. Visible consequence: the glow around a practical is marginally wider
+    // and softer. On a rain-hazed night street that is the direction the look
+    // wanted anyway, and threshold 1.0 still keeps it off diffuse geometry.
     bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(Math.max(2, Math.floor((w * pr) / 2)), Math.max(2, Math.floor((h * pr) / 2))),
+      new THREE.Vector2(Math.max(2, Math.floor((w * pr) / 4)), Math.max(2, Math.floor((h * pr) / 4))),
       0.32, 0.58, 1.0,
     );
     bloomPass.enabled = quality !== "low";
@@ -239,8 +420,17 @@ export function createPost(ctx) {
       vertexShader: CompositeShader.vertexShader,
       fragmentShader: CompositeShader.fragmentShader,
     });
-    compositePass.renderToScreen = true;
+    compositePass.renderToScreen = false; // FXAA is the last pass now
     composer.addPass(compositePass);
+
+    // FXAA LAST, on the tonemapped sRGB image (see FxaaShader header).
+    fxaaPass = new ShaderPass({
+      uniforms: THREE.UniformsUtils.clone(FxaaShader.uniforms),
+      vertexShader: FxaaShader.vertexShader,
+      fragmentShader: FxaaShader.fragmentShader,
+    });
+    fxaaPass.renderToScreen = true;
+    composer.addPass(fxaaPass);
 
     applyQuality(quality);
   }
@@ -273,6 +463,7 @@ export function createPost(ctx) {
       const u = compositePass.uniforms;
       u.uTime.value = time;
       u.uRes.value.set(gl.drawingBufferWidth, gl.drawingBufferHeight);
+      fxaaPass.uniforms.uRes.value.set(gl.drawingBufferWidth, gl.drawingBufferHeight);
 
       // vignette breathing: deepens during ADS + at critical hp (VT §2/§6)
       let boost = 0;
@@ -304,6 +495,11 @@ export function createPost(ctx) {
 
     // ---- private additions ----
     caKick() { caBoostT = 0.15; }, // fx hook: explosion CA pulse (VT §2)
+    // ---- profiler seam (perf lane, measurement only) ----
+    setSamples(n) { msaaSamples = n | 0; build(curW, curH, curPR); },
+    setBloom(on) { if (bloomPass) bloomPass.enabled = !!on; },
+    setTier(n) { if (compositePass) compositePass.uniforms.uTier.value = n | 0; },
+    passes() { return { composer, renderPass, bloomPass, compositePass, fxaaPass, ldrTarget }; },
     setExposure(v) { if (compositePass) compositePass.uniforms.toneMappingExposure.value = v; },
   };
 
@@ -321,5 +517,6 @@ export function createPost(ctx) {
 
   ctx.onChange("quality", (q) => applyQuality(q));
   ctx.post = api; // A11's capture() resize fallback reads ctx.post
+  globalThis.__BR_POST__ = api; // profiler seam — perfprobe ablation reads it
   return api;
 }

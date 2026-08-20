@@ -393,6 +393,46 @@ const _AXIS_Z = new THREE.Vector3(0, 0, 1);
 // clean value, and every channel is then composed from that snapshot. The same
 // discipline retroactively fixes actor.aimBlend, which premultiplied onto the
 // bone every frame and compounded on any held battery frame.
+//
+// ===========================================================================
+// iter08 REVISION — WHY THE ABOVE WAS NOT ENOUGH, MEASURED
+// ===========================================================================
+// iter07 shipped the layer above and D10 moved +0.33; all three critics still
+// wrote "identical stances while being fired at". This session the clip set
+// itself was instrumented — one soldier, `actor.update(0.15)` x8, world bone
+// positions read off matrixWorld — and the numbers say the layer was aiming at
+// the wrong bones:
+//
+//   rifle_idle (BOTH `aim` and `fire` resolve here): over 1.2 s the head
+//     travels 1.554 -> 1.550 m and the hands 1.366 -> 1.364 m. FOUR
+//     MILLIMETRES. The clip a soldier holding a firing position plays is,
+//     within measurement noise, a single static pose.
+//   rifle_crouch (`crouch_idle`, which the A5 peek cycle DOES request —
+//     botfsm.js:904 sets c.crouch while hiding at low cover): hips 0.952 m,
+//     i.e. IDENTICAL to standing, head only 1.43 vs 1.55, and the feet lift to
+//     0.32-0.46 m. It is a marching-in-place clip, not a crouch. So the one
+//     silhouette change the sim already asks for was being rendered as a
+//     standing man lifting his knees.
+//   rifle_walk / rifle_run: legs cycle, head holds 1.50-1.51, hands hold
+//     1.34-1.40. The upper body is static in every clip in the set.
+//
+// The iter07 layer only ever touched hips/spine/neck/head, so the ARMS — and
+// therefore the rifle, which is the strongest horizontal line in a 100 px
+// silhouette — could not move at all, in any clip, ever. That is the defect
+// CLASS, and it is why turning the existing channels up would not have closed
+// it: at the C1 framing a soldier is ~55x100 px, where 3 deg of spine yaw is
+// under two pixels of shading change and a 25 cm weapon drop is 14 px of
+// silhouette.
+//
+// So iter08 extends the tracked set to the ARM chains and the LEG chains and
+// adds four channels that change the SILHOUETTE:
+//   crouch  — a real knee bend with the feet planted (see crouchLegs below),
+//             which finally renders the stance the AI already asks for
+//   ready   — shouldered <-> low-ready; moves the rifle bar 20-25 cm
+//   armK    — per-round recoil driven into the arms, not just the torso
+//   engArm  — the fast engaged hunt, on the arms where it is legible
+// Every one of them is driven by a state the SIM already publishes (bot.anim,
+// bot.stance, the frozen `shot`/`hurt` events). Nothing here invents gameplay.
 const LIFE = {
   breathHz: 0.62, breathSpine: 0.020, breathHips: 0.012,
   // Weight shift is mostly UPPER body over planted feet: the pelvis carries a
@@ -408,13 +448,47 @@ const LIFE = {
   // picture, re-settles his shoulder, checks off-axis. These run at ~0.6-0.9
   // Hz, which puts a full swing INSIDE one panel gap — the difference between
   // "the world is alive" and "the numbers say it moved".
-  engYawHz: 0.85, engYaw: 0.055,
-  engPitchHz: 0.55, engPitch: 0.038,
-  engNeckHz: 0.70, engNeck: 0.115,
+  engYawHz: 0.85, engYaw: 0.090,
+  engPitchHz: 0.55, engPitch: 0.062,
+  engNeckHz: 0.70, engNeck: 0.190,
+  // ARM half of the engage channel. 0.5 m of arm+weapon lever, so 0.085 rad is
+  // ~4 cm of muzzle travel — the rifle bar visibly re-aims between panels.
+  // Two frequencies that do not share a period with the spine channels, or the
+  // whole upper body would move as one rigid piece.
+  engArmHz: 0.63, engArm: 0.085,
+  engArmHz2: 0.41, engArm2: 0.055,
   // torso recoil spring: ~7 deg single-shot peak, ~9 deg held under auto
   fireOmega: 17.0, fireZeta: 0.42, firePerShot: 3.5, fireCap: 0.22,
+  // ARM recoil spring — the weapon drives back into the shoulder and the
+  // muzzle climbs. Faster and stiffer than the torso: the arms absorb the
+  // round first and the torso follows, which is the order a body does it in.
+  armOmega: 21.0, armZeta: 0.40, armPerShot: 4.2, armCap: 0.30,
+  armFore: 0.55,     // forearm share of the arm rotation (elbow folds harder)
   // flinch spring: ~15 deg fold on one round, settled in ~0.6 s
   flinchOmega: 15.0, flinchZeta: 0.50, flinchPerHit: 7.0, flinchCap: 0.30,
+  // A round landing also knocks the weapon off-shoulder — 3/3 critics read the
+  // iter07 flinch as invisible because the torso folded under a rifle that
+  // stayed welded to it. This is what makes a hit read AS a hit.
+  flinchArm: 1.15,
+  // READY POSE. Low-ready drops the muzzle and the hands; measured target is a
+  // >= 0.18 m hand drop, which is ~10 px of silhouette at the C1 framing.
+  readyDrop: 0.62,   // rad of upper-arm rotation between shouldered and low
+  readyFore: 0.28,   // the elbow opens as the weapon comes down
+  readyLambda: 5.0,  // ease rate (1/s) — a weapon comes up fast, not instantly
+  // CROUCH. Symmetric two-link squat: hip flex th, knee flex 2th, ankle th, so
+  // the shin returns to vertical and the FOOT STAYS FLAT. The pelvis then
+  // drops by however much the ankles actually rose — MEASURED off the rig each
+  // frame, not derived (see crouchLegs) — so the boots never sink into the
+  // cobbles, which is exactly what the old flat -0.32 m hip drop did: it moved
+  // the pelvis with nothing under it to hold the feet up.
+  crouchKnee: 0.95,  // rad at full crouch -> ~0.27 m measured head drop
+  // The torso comes forward over the knees — but this is applied to Spine1 AND
+  // Spine2, so the effective lean is 2x and the head inherits all of it. At
+  // 0.20 the captured pose was a man bent double staring at the cobbles, not a
+  // man crouching. 0.13 gives ~15 deg of lean, and crouchLevel takes it back
+  // out of the neck so he keeps watching the street.
+  crouchLean: 0.13,
+  crouchLevel: 0.90, // share of the lean the neck counters (1 = head stays level)
 };
 
 function lifeSpring(s, omega, zeta, dt, cap) {
@@ -460,7 +534,7 @@ export function createActor(proto) {
       play() {}, playOnce() {}, update() {}, aimBlend() {},
       setLifeSeed() {}, fireImpulse() {}, hitImpulse() {}, lifeGain: 1,
       attachWeapon() { return null; }, setTint() {}, setFlash() {},
-      currentName: null, crouchW: 0, groundSpeed: 0,
+      currentName: null, crouchW: 0, groundSpeed: 0, readyWant: 1,
       dispose() { root.removeFromParent(); geo.dispose(); mat.dispose(); },
     };
   }
@@ -514,6 +588,19 @@ export function createActor(proto) {
     else if (nm === "LeftHand") bones.lHand = o;
     else if (nm === "Spine") bones.spine = o;
     else if (nm === "Head") bones.head = o;
+    // iter08: the arm and leg chains join the tracked set — see the iter08
+    // REVISION note above. Present on both shipped bodies (verified live:
+    // all 12 names resolve on `soldier`, 52 bones total).
+    else if (nm === "LeftArm") bones.lArm = o;
+    else if (nm === "RightArm") bones.rArm = o;
+    else if (nm === "LeftForeArm") bones.lFore = o;
+    else if (nm === "RightForeArm") bones.rFore = o;
+    else if (nm === "LeftUpLeg") bones.lUpLeg = o;
+    else if (nm === "RightUpLeg") bones.rUpLeg = o;
+    else if (nm === "LeftLeg") bones.lLeg = o;
+    else if (nm === "RightLeg") bones.rLeg = o;
+    else if (nm === "LeftFoot") bones.lFoot = o;
+    else if (nm === "RightFoot") bones.rFoot = o;
   });
   // Middle knuckle = the point a handguard rests against; it is the aim target
   // for the bore solve. Falls back to the wrist on a rig without fingers.
@@ -566,11 +653,34 @@ export function createActor(proto) {
   }
   const hipsRestY = bones.hips ? bones.hips.position.y : 0;
 
+  /** World Y of both ankles, refreshed through their own chains (the mixer
+   *  writes local TRS only, so matrixWorld is stale mid-update). Scratch-free:
+   *  returns the shared object, which never escapes this module. */
+  const _footY = { l: 0, r: 0 };
+  function footY() {
+    if (bones.lFoot) {
+      bones.lFoot.updateWorldMatrix(true, false);
+      _footY.l = bones.lFoot.matrixWorld.elements[13];
+    }
+    if (bones.rFoot) {
+      bones.rFoot.updateWorldMatrix(true, false);
+      _footY.r = bones.rFoot.matrixWorld.elements[13];
+    }
+    return _footY;
+  }
+
   // ---- LIFE LAYER state (see the LIFE note at the top of this file) --------
   // The bones the procedural pass is allowed to touch, and the snapshot that
   // makes touching them idempotent. Order matters only for readability.
   const poseBones = [bones.hips, bones.spine, bones.spine1, bones.spine2,
-                     bones.neck, bones.head].filter(Boolean);
+                     bones.neck, bones.head,
+                     // iter08 — arms and legs are written by the layer now, so
+                     // they MUST be in the restore/snapshot set or the
+                     // PropertyMixer skip-if-unchanged trap compounds them
+                     // exactly the way it compounded a finger to 153 deg.
+                     bones.lArm, bones.rArm, bones.lFore, bones.rFore,
+                     bones.lUpLeg, bones.rUpLeg, bones.lLeg, bones.rLeg,
+                     bones.lFoot, bones.rFoot].filter(Boolean);
   const snapQ = new Float32Array(poseBones.length * 4);
   let snapY = hipsRestY;      // hips.position.y as the CLIP wrote it
   let snapped = false;
@@ -597,8 +707,11 @@ export function createActor(proto) {
     seeded: false,
     aimPitch: 0, aimYaw: 0, aimWant: 0, aimW: 0,
     fireK: { x: 0, v: 0 },
+    armK: { x: 0, v: 0 },      // iter08: per-round recoil in the arm chain
     flinchP: { x: 0, v: 0 },   // fold (pitch)
     flinchR: { x: 0, v: 0 },   // lateral jolt (roll), signed by the shot
+    readyW: 1,                 // eased 0..1 toward actor.readyWant
+    crouchEase: 0,             // eased 0..1 toward actor.crouchW
   };
 
   // Mixer + actions. Clips arrive pre-cleaned + renamed from loadClipSet().
@@ -628,7 +741,13 @@ export function createActor(proto) {
     root,
     placeholder: false,
     currentName: idleName,
-    crouchW: 0,      // soldiers.js drives: 1 while crouch_walk (procedural hip drop)
+    crouchW: 0,      // soldiers.js drives: 1 while the sim says stance=crouch
+    // iter08 — WEAPON READY POSE. 1 = shouldered (aiming/firing), 0 = low
+    // ready (patrolling, searching, reloading on the move). soldiers.js drives
+    // it off bot.anim, which is the sim's own authoritative state, so the
+    // rifle bar rising and falling in the silhouette is a real state change
+    // and not a decoration. Eased in update() (see life.readyW).
+    readyWant: 1,
     groundSpeed: 0,  // soldiers.js drives: m/s, kills foot-slide on loco clips
     _clipRate: 1,    // per-actor playback rate (setLifeSeed)
     lifeGain: 1,     // soldiers.js drives: 1 alive, 0 dead (see update())
@@ -717,6 +836,10 @@ export function createActor(proto) {
      *  (soldiers.js calls this off the frozen `shot` event). */
     fireImpulse(mult = 1) {
       life.fireK.v += LIFE.firePerShot * mult;
+      // iter08: the arms take the round first. Without this the torso rocked
+      // under a rifle that stayed welded to it, which reads as a man leaning,
+      // not a man shooting.
+      life.armK.v += LIFE.armPerShot * mult;
     },
 
     /** This soldier took a round. `side` is the signed lateral component of the
@@ -725,6 +848,9 @@ export function createActor(proto) {
     hitImpulse(side = 0, mult = 1) {
       life.flinchP.v += LIFE.flinchPerHit * mult;
       life.flinchR.v += LIFE.flinchPerHit * 0.55 * mult * (side || (life.phase > 0.5 ? 1 : -1));
+      // iter08: knock the weapon off the shoulder too — a flinch that leaves
+      // the rifle exactly where it was is not legible at battery scale.
+      life.armK.v -= LIFE.armPerShot * LIFE.flinchArm * mult;
     },
 
     /**
@@ -802,11 +928,16 @@ export function createActor(proto) {
       mixer.update(dt);
       snapPose();
 
-      // Procedural crouch-walk hip drop (see anim_map.js): rifle_walk keeps
-      // the feet stepping; the drop reads as the crouch. Composed onto the
-      // snapshot, so it stacks with the breath bob below instead of fighting.
+      // ---- CROUCH (iter08). The old line here was `hipY = hipsRestY - 0.32 *
+      // crouchW` — a bare pelvis drop with NOTHING under it to hold the feet
+      // up, so a crouching bot's boots went 0.32 m into the cobbles. It was
+      // covering for a clip that does not crouch: rifle_crouch was measured
+      // this session at hips 0.952 m (identical to standing) with the feet
+      // lifted to 0.32-0.46 m — a marching-in-place pose. Both halves are
+      // replaced by a real two-link squat solved below in crouchLegs(), whose
+      // drop is COMPUTED from the rig's own bone lengths so the soles stay on
+      // the ground by construction.
       let hipY = snapY;
-      if (actor.crouchW > 0.01) hipY = hipsRestY - 0.32 * actor.crouchW;
 
       // ---- LIFE LAYER, phase 2: animate a standing firefight --------------
       // A CORPSE DOES NOT BREATHE. soldiers.js zeroes lifeGain the instant the
@@ -837,9 +968,20 @@ export function createActor(proto) {
             const h = Math.min(rem, 1 / 120);
             rem -= h;
             lifeSpring(life.fireK, LIFE.fireOmega, LIFE.fireZeta, h, LIFE.fireCap);
+            lifeSpring(life.armK, LIFE.armOmega, LIFE.armZeta, h, LIFE.armCap);
             lifeSpring(life.flinchP, LIFE.flinchOmega, LIFE.flinchZeta, h, LIFE.flinchCap);
             lifeSpring(life.flinchR, LIFE.flinchOmega, LIFE.flinchZeta, h, LIFE.flinchCap);
           }
+        }
+
+        // ---- eased posture channels (iter08). Both are sim-authored states
+        // (bot.anim / bot.stance) eased so the silhouette TRANSITIONS rather
+        // than teleports — a rifle that snaps from low to shouldered between
+        // two filmstrip panels reads as a glitch, not as a man raising it.
+        {
+          const k = 1 - Math.exp(-LIFE.readyLambda * dt);
+          life.readyW += ((actor.readyWant ? 1 : 0) - life.readyW) * k;
+          life.crouchEase += (actor.crouchW - life.crouchEase) * k;
         }
 
         const breath = Math.sin((life.t * LIFE.breathHz + ph) * TAU);
@@ -852,9 +994,59 @@ export function createActor(proto) {
         const engY = Math.sin((life.t * LIFE.engYawHz + ph * 5.3) * TAU) * engW;
         const engP = Math.sin((life.t * LIFE.engPitchHz + ph * 2.9) * TAU + 0.7) * engW;
         const engN = dwell(Math.sin((life.t * LIFE.engNeckHz + ph * 4.1) * TAU + 2.1)) * engW;
+        // arm hunt: two incommensurate frequencies so the rifle never settles
+        // into a period the 0.25 s filmstrip cadence can alias against
+        const engA = (Math.sin((life.t * LIFE.engArmHz + ph * 6.7) * TAU) * LIFE.engArm
+          + Math.sin((life.t * LIFE.engArmHz2 + ph * 2.3) * TAU + 1.9) * LIFE.engArm2) * engW;
 
-        // -- hips: weight shift + breath bob
-        hipY += LIFE.breathHips * breath * still;
+        // ---- CROUCH LEGS (iter08) — a real squat, feet planted -------------
+        // Symmetric two-link solve, expressed in WORLD rotations about the
+        // actor's right axis so it composes with whatever the clip authored:
+        //   thigh  +th   (hip flexes, knee travels forward)
+        //   shin   -th   (net, i.e. 2th of knee flex, shin returns to vertical)
+        //   foot    0    (net, i.e. the sole stays flat on the cobbles)
+        // and the pelvis drops by LEG_LEN*(1-cos th), which is exactly the
+        // height a two-link chain of that length loses at that flex — so the
+        // boots do not move and do not sink. `crouchDrop` is folded into hipY
+        // below, alongside the breath bob, rather than fighting it.
+        const cw = life.crouchEase;
+        let crouchDrop = 0;
+        if (cw > 0.004) {
+          const th = LIFE.crouchKnee * cw;
+          // The drop is MEASURED, not derived. The closed form
+          // LEG_LEN*(1-cos th) assumes both links start vertical; these clips
+          // stand a man with one foot forward and one back, so the two legs
+          // lose different amounts of height at the same flex — shipping the
+          // formula put the left boot 4.8 cm UNDER the cobbles and the right
+          // one 6.8 cm above them (measured, this session, at crouchKnee 0.95).
+          // Reading the ankles either side of the rotation costs four
+          // updateWorldMatrix walks on the frames a bot is actually crouching
+          // and is exact for any rig and any clip.
+          // NOTE: footY() returns a SHARED scratch object (0 allocs in
+          // update), so the before-values must be copied out as scalars —
+          // holding the reference would compare the second reading to itself.
+          const f0 = footY();
+          const y0l = f0.l, y0r = f0.r;
+          _v1.set(rx, 0, rz);                 // actor RIGHT — the sagittal axis
+          _q1.setFromAxisAngle(_v1, th);
+          if (bones.lUpLeg) rotateBoneWorld(bones.lUpLeg, _q1);
+          if (bones.rUpLeg) rotateBoneWorld(bones.rUpLeg, _q1);
+          _q1.setFromAxisAngle(_v1, -2 * th);
+          if (bones.lLeg) rotateBoneWorld(bones.lLeg, _q1);
+          if (bones.rLeg) rotateBoneWorld(bones.rLeg, _q1);
+          _q1.setFromAxisAngle(_v1, th);
+          if (bones.lFoot) rotateBoneWorld(bones.lFoot, _q1);
+          if (bones.rFoot) rotateBoneWorld(bones.rFoot, _q1);
+          // Take the LARGER of the two rises: the leg that lifted most is the
+          // one that would leave a boot hanging in the air, and a floating
+          // boot is an amateur tell while the other boot's few cm of overlap
+          // with the cobbles is hidden by the stone and its own contact blob.
+          const f1 = footY();
+          crouchDrop = Math.max(f1.l - y0l, f1.r - y0r, 0);
+        }
+
+        // -- hips: weight shift + breath bob + the squat drop
+        hipY += LIFE.breathHips * breath * still - crouchDrop;
         if (bones.hips) {
           bones.hips.position.y = hipY;
           if (still > 0.01) {
@@ -872,7 +1064,8 @@ export function createActor(proto) {
           + LIFE.breathSpine * breath * still               // breath
           + LIFE.engPitch * engP                            // sight-picture hunt
           - life.fireK.x * 0.55                             // recoil rides UP
-          + life.flinchP.x * 0.85;                          // hit folds forward
+          + life.flinchP.x * 0.85                           // hit folds forward
+          + LIFE.crouchLean * cw;                           // squat brings the chest over the knees
         const yawSpine = life.aimYaw * 0.5 * aimK
           + LIFE.swaySpineYaw * sway1 * still
           + LIFE.engYaw * engY;
@@ -896,6 +1089,34 @@ export function createActor(proto) {
           if (bones.spine2) rotateBoneWorld(bones.spine2, _q1);
         }
 
+        // ---- ARMS (iter08) — where the rifle lives, and therefore where the
+        // silhouette is. Both upper arms take the SAME world rotation, so the
+        // firing-palm -> support-knuckle line that solveGrip() derives the bore
+        // from rotates rigidly with them: the weapon follows the hands instead
+        // of the hands sliding along the weapon. The forearms take a share on
+        // top (LIFE.armFore) because an elbow folds harder than a shoulder.
+        //   ready  — shouldered (0) to low-ready (readyDrop); the biggest
+        //            single silhouette change available on a standing body
+        //   armK   — per-round recoil into the shoulder, and the negative
+        //            impulse a hit adds, which knocks the muzzle off line
+        //   engA   — the fast hunt around the sight picture
+        // Sign convention verified live (see the ARM SIGN note in the update
+        // header): +rotation about the actor's RIGHT axis lowers the hands.
+        const armPitch = LIFE.readyDrop * (1 - life.readyW)
+          - life.armK.x * 0.85
+          + engA;
+        if (armPitch && (bones.lArm || bones.rArm)) {
+          _v1.set(rx, 0, rz);
+          _q1.setFromAxisAngle(_v1, armPitch);
+          if (bones.lArm) rotateBoneWorld(bones.lArm, _q1);
+          if (bones.rArm) rotateBoneWorld(bones.rArm, _q1);
+          const fore = armPitch * LIFE.armFore
+            + LIFE.readyFore * (1 - life.readyW);
+          _q1.setFromAxisAngle(_v1, fore);
+          if (bones.lFore) rotateBoneWorld(bones.lFore, _q1);
+          if (bones.rFore) rotateBoneWorld(bones.rFore, _q1);
+        }
+
         // -- neck/head: the single most legible channel at character scale.
         // NOT AIMING → sweep the street (silhouette changes every beat).
         // AIMING     → hold on target: counter the spine's own rotation so the
@@ -912,7 +1133,11 @@ export function createActor(proto) {
             - yawSpine * 0.35 * aimK;
           const headPitch = LIFE.scanPitch * scanP * scanW
             + life.fireK.x * 0.75          // chin lifts with the muzzle
-            - life.flinchP.x * 0.55;       // head snaps down on a hit
+            - life.flinchP.x * 0.55        // head snaps down on a hit
+            // a crouching man keeps his eyes on the street: take the torso's
+            // lean back out of the neck (it is applied to Spine1 AND Spine2,
+            // hence the 2x) or he crouches face-down
+            - 2 * LIFE.crouchLean * LIFE.crouchLevel * cw;
           if (headYaw) {
             _v1.set(0, 1, 0);
             _q1.setFromAxisAngle(_v1, headYaw);

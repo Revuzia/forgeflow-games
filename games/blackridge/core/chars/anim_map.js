@@ -32,9 +32,20 @@ export const CLIP_FILES = {
  *  - aim/fire share rifle_idle: the Mixamo rifle idle IS the ready pose; the
  *    aim read comes from the spine aim-blend layer (VT §7) + muzzle fx, and
  *    sharing the clip means aim↔fire transitions never pop.
- *  - crouch_walk uses rifle_walk (a real stepping cycle) with a procedural
- *    hip-drop in soldiers.js — playing the static rifle_crouch pose while a
- *    bot translates would be sliding feet, the D10 hard-cap.
+ *  - crouch_walk uses rifle_walk (a real stepping cycle) — playing the static
+ *    rifle_crouch pose while a bot translates would be sliding feet, the D10
+ *    hard-cap.
+ *  - MEASURED 2026-08-20, and it invalidates an assumption this file used to
+ *    carry: `rifle_crouch` IS NOT A CROUCH. Sampled live on the shipped rig
+ *    (world bone positions, 8 frames of playback): hips 0.952 m — IDENTICAL to
+ *    the standing idle — head 1.43 vs 1.55, and the feet lifting to 0.32-0.46 m.
+ *    It is a marching-in-place clip. So `crouch_idle` resolving to it renders a
+ *    standing man raising his knees, which is what the AI's low-cover peek
+ *    cycle (botfsm.js:904) has been drawing for its whole life. The crouch is
+ *    now SOLVED procedurally in actor.js — a symmetric two-link squat with the
+ *    hip drop measured off the rig so the boots stay planted — and this clip
+ *    supplies only the upper-body pose it blends under. Do not "simplify" the
+ *    procedural squat away on the belief that the clip already crouches.
  *  - death_a AND death_b resolve to the one proven fall clip (see CLIP_FILES
  *    note); soldiers.js varies playback rate + fall direction per victim so
  *    no two nearby deaths read identical. The frozen 10-key SHAPE is intact.

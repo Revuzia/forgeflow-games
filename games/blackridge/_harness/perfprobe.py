@@ -309,6 +309,25 @@ def analyze(samples, label):
     }
 
 
+GPU_MS = 16.7  # owner gate 2026-08-20: GPU frame time by timer query, 60 fps
+
+
+def gate_gpu(phase: str, gpu: dict):
+    """THE hard ship gate (owner decision 2026-08-20): 60 fps sustained on
+    Intel integrated == GPU frame time <= 16.7 ms BY TIMER QUERY at the shipped
+    render scale. Stated separately from the sync gate on purpose: sync is
+    CPU+GPU wall cost and moves with whatever else is on the box, while the
+    timer query is the GPU's own accounting of our work and is the number the
+    gate names."""
+    if gpu.get("error"):
+        return [f"{phase}: GPU timer query produced nothing — {gpu['error']} "
+                f"(the hard gate could not be run)"]
+    if gpu["median"] > GPU_MS:
+        return [f"{phase}: GPU median {gpu['median']} ms > {GPU_MS} ms "
+                f"(60 fps hard gate, timer query)"]
+    return []
+
+
 def gate_cost(phase: str, sync: dict):
     """The ONLY frame-time gate. Judges the gl.finish-bracketed cost.
 
@@ -377,9 +396,13 @@ def main() -> int:
     ap.add_argument("--phases", default="perf-static,perf-combat,perf-traversal")
     ap.add_argument("--seed", type=int, default=47)
     ap.add_argument("--ready-timeout", type=float, default=120.0)
-    ap.add_argument("--dpr", type=float, default=1.5,
+    ap.add_argument("--dpr", type=float, default=1.0,
                     help="the DPR the gate is stated at; also the page's "
-                         "deviceScaleFactor, because gfx/dynres clamp to it")
+                         "deviceScaleFactor, because gfx/dynres clamp to it. "
+                         "DEFAULT MOVED 1.5 -> 1.0 (2026-08-20): the owner's "
+                         "perf gate is stated 'at the shipped render scale', "
+                         "and gfx.DPR_CAP is now 1.0 — so 1.5 would exit 2 on "
+                         "the DPR assertion below and measure nothing.")
     ap.add_argument("--sync-samples", type=int, default=90)
     ap.add_argument("--gpu-samples", type=int, default=60)
     args = ap.parse_args()
@@ -500,6 +523,7 @@ def main() -> int:
                   f"gpu median={gpu.get('median', gpu.get('error'))} ms "
                   f"({gpu_share}% of frame)")
             results.append(row)
+            failures.extend(gate_gpu(phase, gpu))   # the hard gate
             failures.extend(gate_cost(phase, sync))
             return row
 

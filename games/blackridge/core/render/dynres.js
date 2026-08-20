@@ -36,6 +36,8 @@
 //
 // Frozen export: createDynres(renderer, perf) → { update() }.
 
+import { DPR_CAP } from "../gfx.js"; // one source for the cap (perf gate)
+
 const WINDOW = 120;
 const CHECK_EVERY = 30;
 const UP_STREAK = 300;
@@ -50,7 +52,9 @@ const PANIC_P95_MS = DOWN_P95_MS * 2;
 const PANIC_COOLDOWN = 30;
 
 export function createDynres(renderer, perf) {
-  const ceiling = Math.min(1.5, window.devicePixelRatio || 1);
+  // Ceiling tracks gfx.DPR_CAP — hardcoding 1.5 here let dynres step the
+  // renderer BACK ABOVE the cap gfx.js had just lowered for the perf gate.
+  const ceiling = Math.min(DPR_CAP, window.devicePixelRatio || 1);
   const ring = new Float32Array(WINDOW);
   const scratch = new Float32Array(WINDOW);
   let head = 0, filled = 0;

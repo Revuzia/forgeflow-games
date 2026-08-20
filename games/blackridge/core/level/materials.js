@@ -181,6 +181,35 @@ function decalAtlasCanvas(size) {
     gr.addColorStop(1, `rgba(${col},${a1})`);
     g.fillStyle = gr; g.fillRect(0, 0, cs, cs);
   };
+  // ---- SOURCELESS LIGHT, the mechanism (iter08).
+  // A canvas radial gradient CLAMPS past r1 to its last colour stop. A cell is
+  // a SQUARE and its inscribed circle only reaches the edge midpoints, so any
+  // cell whose outermost stop is not alpha 0 fills all four CORNERS at that
+  // alpha — and every quad drawn with it then renders its own rectangle
+  // silhouette. That is the mechanism behind the artefact 3/3 iter07 critics
+  // named in the same words: "razor-edged trapezoid ... perfectly straight
+  // polygon boundaries ... no fixture anywhere above them" (critic-a),
+  // "hard-edged pale parallelograms with crisp straight boundaries, no
+  // falloff" (critic-b), "straight-edged trapezoids with a visible polygon
+  // boundary" (critic-c). It is not a decal that needs to be prettier; it is a
+  // gradient that never reaches zero.
+  //
+  // `radial()` can only express TWO stops, so a cell that wants a RING was
+  // forced to end on its peak alpha — which is exactly how grime_ring (0.55),
+  // tide_ring (0.35) and oil_stain (0.05) came to fill their cells. ringStops()
+  // takes as many stops as the shape needs, normalised so t=1 IS the inscribed
+  // circle, and the caller must return to 0 there. Anything authored through
+  // this helper cannot re-present the defect.
+  const ringStops = (stops, col = "0,0,0") => {
+    const last = stops[stops.length - 1];
+    if (last[0] !== 1 || last[1] !== 0) {
+      throw new Error("decal atlas: a radial cell must end at [1, 0] or it " +
+        "fills its cell corners and draws a hard-edged quad (sourceless light)");
+    }
+    const gr = g.createRadialGradient(cs / 2, cs / 2, 0, cs / 2, cs / 2, cs * 0.5);
+    for (const [t, a] of stops) gr.addColorStop(t, `rgba(${col},${a})`);
+    g.fillStyle = gr; g.fillRect(0, 0, cs, cs);
+  };
   const speckle = (n, col, a, rMax) => {
     for (let i = 0; i < n; i++) {
       g.fillStyle = `rgba(${col},${a * (0.4 + rnd() * 0.6)})`;
@@ -191,7 +220,10 @@ function decalAtlasCanvas(size) {
     }
   };
   cell(0, 0, () => { radial(0.05, 0.48, 0.62, 0); speckle(70, "20,16,12", 0.35, 3); });          // ao_blob
-  cell(1, 0, () => { radial(0.22, 0.5, 0.0, 0.55); radial(0.0, 0.3, 0.5, 0.1); speckle(90, "28,22,14", 0.4, 2.5); }); // grime_ring
+  // grime_ring: was radial(0.22,0.5,0,0.55) + radial(0,0.3,0.5,0.1) — the first
+  // clamped alpha 0.55 into every corner, the second 0.1. Same ring, same core,
+  // both now returning to 0 inside the inscribed circle.
+  cell(1, 0, () => { ringStops([[0.44, 0], [0.84, 0.55], [1, 0]]); ringStops([[0, 0.5], [0.6, 0.1], [1, 0]]); speckle(90, "28,22,14", 0.4, 2.5); }); // grime_ring
   cell(2, 0, () => { radial(0.1, 0.45, 0.45, 0); speckle(160, "50,30,16", 0.5, 2); });            // rust_ring
   cell(3, 0, () => { radial(0.08, 0.46, 0.5, 0); speckle(120, "38,32,20", 0.45, 3.5); });         // dirt_ring
   cell(0, 1, () => { radial(0.02, 0.42, 0.72, 0); speckle(50, "8,8,8", 0.5, 4); });               // scorch_ring
@@ -220,7 +252,7 @@ function decalAtlasCanvas(size) {
       g.fillStyle = gr; g.fillRect(x, 0, w, l);
     }
   });
-  cell(0, 2, () => { radial(0.03, 0.4, 0.66, 0, "10,10,14"); radial(0.0, 0.18, 0.25, 0.05, "40,40,60"); }); // oil_stain
+  cell(0, 2, () => { radial(0.03, 0.4, 0.66, 0, "10,10,14"); ringStops([[0, 0.25], [0.36, 0.05], [1, 0]], "40,40,60"); }); // oil_stain
   cell(1, 2, () => {                                                                              // paper_a
     for (let i = 0; i < 7; i++) {
       g.save();
@@ -233,7 +265,10 @@ function decalAtlasCanvas(size) {
       g.restore();
     }
   });
-  cell(2, 2, () => { radial(0.3, 0.5, 0, 0.35, "16,20,26"); radial(0.28, 0.34, 0.3, 0.05, "60,70,84"); }); // tide_ring
+  // tide_ring: the "hard-edged pale grey ellipse stamped on the cobbles with
+  // nothing above it". Its silt rim clamped 0.35 into the corners and its
+  // mineral line another 0.05 — an 8 m quad reading as a flat grey rhombus.
+  cell(2, 2, () => { ringStops([[0.6, 0], [0.88, 0.35], [1, 0]], "16,20,26"); ringStops([[0.56, 0.3], [0.7, 0.05], [1, 0]], "60,70,84"); }); // tide_ring
   cell(3, 2, () => {                                                                              // crack
     g.strokeStyle = "rgba(12,12,12,0.65)"; g.lineWidth = 2;
     let x = cs * 0.1, y = cs * (0.3 + rnd() * 0.4);
@@ -456,6 +491,20 @@ function augment(mat, o = {}) {
     // splash zone and under sheeting patches, so the wall finally has SOME
     // surface that reflects and some that does not. Interiors keep 0.
     wet: 0,
+    // WET SHEEN gain — the Fresnel water-film layer added at
+    // lights_fragment_end (see the long note there). Gated by the film mask,
+    // which is 0 wherever a3wet is, so a dry material is bit-identical to the
+    // pre-iter08 build and pays nothing. A uniform, NOT a program-key value.
+    sheen: 2.0,
+    // How far a water film darkens the substrate (VT §4.2 asks x0.8, i.e.
+    // 0.20 here). Uniform so the D3/D4 trade can be re-priced on the live
+    // page — see the diffuseColor note.
+    wetDark: 0.20,
+    // How completely a CONTINUOUS film levels the substrate's roughness.
+    // 1.0 = standing water (roughness 0.13); 0 = the pre-iter08 behaviour,
+    // where wetness could only multiply roughness down to a damp 0.31 and the
+    // env sample therefore stayed on a blurred mip. See the roughness note.
+    wetLevel: 1.0,
     // ANTI-TILING second tap (VT §3: "amateur tell #5 is the visible texture
     // repeat"). See the map_fragment note.
     anti: 0,
@@ -481,7 +530,15 @@ function augment(mat, o = {}) {
     sh.uniforms.uSeam = { value: opts.seam };
     sh.uniforms.uWear = { value: opts.wear };
     sh.uniforms.uWet = { value: opts.wet };
+    sh.uniforms.uSheen = { value: opts.sheen };
+    sh.uniforms.uWetDark = { value: opts.wetDark };
+    sh.uniforms.uWetLevel = { value: opts.wetLevel };
     sh.uniforms.uAnti = { value: opts.anti };
+    // Ablation seam (doctrine §5: price a feature, never guess it). The lane
+    // that measured this shader needs to sweep uSheen/uWetDark on the booted
+    // page; keeping the compiled uniform objects reachable is what makes that
+    // possible without a rebuild. Harmless: a plain array of references.
+    mat.userData.a3uniforms = sh.uniforms;
     if (W) sh.uniforms.uTileScale = { value: 1 / opts.tile };
     if (opts.puddle) {
       if (!GROUND_HOOKS.planarTex.value) GROUND_HOOKS.planarTex.value = TEX.black;
@@ -524,6 +581,9 @@ uniform float uMottle;
 uniform float uSeam;
 uniform float uWear;
 uniform float uWet;
+uniform float uSheen;
+uniform float uWetDark;
+uniform float uWetLevel;
 uniform float uAnti;
 ${W ? "uniform float uTileScale;" : ""}
 ${opts.aowet ? "varying vec3 vAowet;" : ""}
@@ -659,26 +719,64 @@ float a3blend = uAnti * smoothstep(0.34, 0.66, gA.g);
 // up ON. Sky exposure drives it; drainage runs, the splash zone and sheeting
 // patches make it VARY, which is the point — a uniformly wet wall would be
 // just as uniform as a uniformly dry one.
+//
+// W-D3/iter08 — THE SKY-EXPOSURE TERM WAS UNDER-WETTING EVERY FACADE BY 4x.
+// It read 0.30 * clamp(0.25 + 0.75 * a3N.y): an UP-facing surface collected
+// 0.300, a VERTICAL one 0.075. Downstream that is a roughness pull of x0.954
+// on a 0.82 concrete — 0.78, which is not a wet wall, it is the same dry wall
+// with a rounding error. Measured on the booted page this session: forcing
+// every material mirror-smooth (roughness 0.05, roughnessMap off) made the S8
+// frame DARKER, not shinier (mean 47.08 -> 42.00, meanDelta -5.08), which is
+// the signature of a rig where lowering roughness only narrows a lobe that has
+// nothing bright to point at. a3sky keeps the GROUND at exactly its authored
+// 0.300 (a3N.y = 1 -> a3sky = 1) and raises a vertical to 0.165, and the wind
+// term adds the windward asymmetry a driving storm actually produces — rain
+// travels toward -X (weather.js buildRain: vel[i*3] = -1.2, "west wind
+// shear"), so a face whose outward normal is +X is the one being rained ON.
+// Two faces of the same box now carry different wetness, which is a difference
+// a critic can see and a uniform value never was.
+float a3sky  = clamp(0.55 + 0.45 * a3N.y, 0.0, 1.0);
+float a3wind = clamp(dot(a3N.xz, vec2(1.0, 0.0)), 0.0, 1.0);
 float a3wet = uWet * clamp(
-    0.30 * clamp(0.25 + 0.75 * a3N.y, 0.0, 1.0)
+    0.30 * a3sky
+  + 0.16 * a3wind * a3wall
   + 0.42 * smoothstep(0.44, 0.88, a3run) * a3wall
   + 0.34 * smoothstep(2.6, 0.15, vWPos.y) * a3wall
   + 0.30 * smoothstep(0.50, 0.86, g1), 0.0, 1.0);
+// Is there a CONTINUOUS film on this texel, or is it merely damp? The two
+// are different materials and only the first one reflects. Declared here
+// because both the roughness block and the sheen at lights_fragment_end
+// need it, and main() scope reaches both.
+// The band is DELIBERATELY high and narrow. At smoothstep(0.10, 0.55) a
+// merely-damp texel got a partial film, which meant a partial sheen was
+// being added to a surface whose roughness had NOT been leveled — i.e. the
+// blurred env average, which is a milky wash, and the S4 wall measurably
+// hazed over. Above 0.20 the two halves move together: the texels that
+// sheen are the texels that were leveled, so what gets added is a sharp
+// reflection and the dry masonry between the runs keeps its contrast.
+float a3film = smoothstep(0.20, 0.60, a3wet);
 
 diffuseColor.rgb *= (1.0 + uMottle * ((g1 - 0.5) * 1.7 + (g2 - 0.5) * 1.2 + (g3 - 0.5) * 0.55));
 diffuseColor.rgb *= (1.0 - a3seam * 0.40 - a3chip * 0.15 - a3base * 0.24);
 ${W ? `#ifdef USE_MAP
 diffuseColor.rgb = mix(diffuseColor.rgb, texture2D(map, a3uv2_()).rgb * diffuse, a3blend);
 #endif` : ""}
-// A wet substrate darkens (VT §4.2 albedo x0.8) — but MEASURED, the darkening
-// is what a critic reads, not the wetness: at x0.76 the box face in S8 lost
-// 31% of its high-frequency shading detail (hp(9) std 13.17 -> 9.10), because
-// scaling a surface's value scales its micro-relief contrast with it. That
-// trades D3's "micro-normals everywhere" for a cue the eye cannot see at blue
-// hour, where there is not enough light for the specular half to pay it back.
-// The darkening therefore stays token and the wet read is carried by the
-// roughness pull and the direct-specular gain below, which cost no detail.
-diffuseColor.rgb *= (1.0 - 0.10 * a3wet);
+// A wet substrate darkens (VT §4.2 albedo x0.8). iter07 pulled this back from
+// x0.76 to x0.90 on the finding that the S8 box face "lost 31% of its
+// high-frequency shading detail (hp(9) std 13.17 -> 9.10)".
+//
+// W-D3/iter08 — THAT FINDING WAS A METRIC ARTEFACT AND THE RETREAT COST A REAL
+// CUE. hp(9) std is an ABSOLUTE measure of high-frequency amplitude, so
+// multiplying a surface's value by k multiplies its high-frequency std by k
+// too, mechanically, whether or not any detail was lost. 13.17 -> 9.10 is
+// x0.69 against a darkening of x0.76 plus the normal-flatten term that shipped
+// in the same edit: the surface was DARKER, not flatter. The scale-invariant
+// question is std/mean, and it is the one this lane measures (_d3metric prints
+// both). Darkness is also what the specular is read AGAINST — a pale wet wall
+// has no contrast for a sheen to land in, which is precisely why the S8 box
+// photographs as pale clay. The multiplier is a UNIFORM (uWetDark) so the
+// trade can be re-priced on the live page instead of re-argued.
+diffuseColor.rgb *= (1.0 - uWetDark * a3wet);
 diffuseColor.rgb = mix(diffuseColor.rgb,
   diffuseColor.rgb * vec3(1.32, 0.80, 0.46), a3runm * 0.42);
 ${opts.aowet ? `diffuseColor.rgb *= vAowet.r;
@@ -724,6 +822,19 @@ roughnessFactor = clamp(
 // lobe on top of it. 0.62 lands a 0.82 concrete at 0.31 where the rain sheets
 // and leaves it near 0.82 under an overhang — VT §4.2's roughness x0.35.
 roughnessFactor = clamp(roughnessFactor * (1.0 - 0.62 * a3wet), 0.03, 1.0);
+// Where the film is CONTINUOUS the visible surface is no longer concrete at
+// all — it is water, and water is roughness ~0.1, not 0.5. Two things depend
+// on actually saying so: the direct lobe from a sodium practical narrows into
+// a highlight the eye reads as WET rather than as pale, and the env sample
+// three takes for this fragment (getIBLRadiance at material.roughness) drops
+// to a SHARP mip. The first cut of this edit left the substrate roughness
+// alone, so the sheen below was adding the blurred env AVERAGE and the S8
+// column came back looking hazed rather than reflective. Multiplicative-only
+// wetting could never get there: 0.62 * a3wet on a 0.82 substrate bottoms out
+// at 0.31, which is a damp wall, and a damp wall is what four iterations of
+// critics have been calling matte.
+roughnessFactor = mix(roughnessFactor,
+  min(roughnessFactor, 0.13), a3film * uWetLevel);
 ${opts.aowet ? "roughnessFactor = clamp(roughnessFactor * (1.0 - vAowet.b * 0.45), 0.03, 1.0);" : ""}
 ${opts.puddle ? "float pud = vAowet.g; roughnessFactor = mix(roughnessFactor, 0.04, pud);" : ""}`)
       // A water film LEVELS a surface: it fills the micro-relief, so the
@@ -750,7 +861,51 @@ normal = normalize(mix(normal, normalize(vWN), a3wet * a3wet * 0.35));`)
       .replace("#include <lights_fragment_end>", `#include <lights_fragment_end>
 reflectedLight.directSpecular *= (1.0 + 1.70 * a3wet);
 reflectedLight.indirectSpecular *= (1.0 + 0.85 * a3wet);
-reflectedLight.indirectDiffuse *= (1.0 - 0.06 * a3wet);`);
+reflectedLight.indirectDiffuse *= (1.0 - 0.06 * a3wet);
+// ---- WET SHEEN — the specular layer a rough dielectric does not have ------
+// THE MEASURED ROOT CAUSE OF D3, and it is not the textures. Ablated live on
+// the booted page this session with a calibration-sphere rig (VT §1's own
+// prescription: 2x5 spheres at roughness 0.05/0.25/0.5/0.75/1.0, dielectric
+// row and metal row, photographed through the shipped post chain):
+//   * the METAL row at roughness 0.05 mirrors the street cleanly — the env IS
+//     there and IS rich (disc std 45.4, p99 236.7 of 255). Re-baking the cube
+//     after the practicals light changed the frame by meanDelta +0.40/255, so
+//     neither env CONTENT nor bake TIMING was ever the defect.
+//   * the DIELECTRIC row is five identical grey balls. roughness 0.05 vs 1.00
+//     differ by disc mean 76.8 vs 62.4 with no highlight on either.
+// That is physics, not a bug: a dielectric has F0 = 0.04, and three folds the
+// substrate roughness into DFGApprox, so at roughness 0.8 the env term is a
+// flat 4% wash of the env AVERAGE — an integral that barely moves when
+// roughness moves. Every hero surface in this level is a rough dielectric.
+// No roughness map can be authored that clears the uniform-roughness cap
+// while that is the whole specular story, which is what the previous lane's
+// "roughness map off == flat 0.75" A/B was actually measuring.
+//
+// What is MISSING is the water. A film of rain is not "the substrate at a
+// lower roughness number" — it is a SMOOTH DIELECTRIC LAYER lying on top of
+// it, with its own Fresnel: ~0.02 head-on, rising to ~1.0 at grazing. That
+// term is why wet asphalt mirrors a sodium lamp down the street and reads
+// merely damp from directly above, and it is the entire reason a rain scene
+// is the cheapest AAA sell in WebGL (VT §0.1 cheat 2). Layered additively, so
+// a dry surface (a3wet 0) is bit-identical to before — interiors, undersides
+// and every wet:0 material are untouched by construction.
+//
+// COST: ZERO new texture fetches and zero new lights. 'radiance' is the env
+// sample three ALREADY took for this fragment (verified in the vendored
+// r172 build: lights_fragment_begin declares 'vec3 radiance' at main() scope
+// under RE_IndirectSpecular, lights_fragment_maps fills it via
+// getIBLRadiance(geometryViewDir, geometryNormal, material.roughness)), so
+// this is ~8 ALU on a frame the perf lane measured as 60% per-pixel shading.
+// The IBL was being paid for on every fragment and returning almost nothing.
+// The film is a MASK (is there standing water on this texel?), not a weight.
+// The first cut of this edit used a3wet*a3wet as the weight and measured
+// mad 1.7/255 on the S8 box — because a3wet on a vertical is ~0.17, squaring
+// it gives 0.03, and multiplying THAT by water's 0.02 head-on Fresnel is
+// 0.0006 of the env: an effect below the dither. A coat is present or it is
+// not; its Fresnel alone carries the angular falloff.
+float a3nv   = clamp(dot(geometryNormal, geometryViewDir), 0.0, 1.0);
+float a3F    = 0.04 + 0.96 * pow(1.0 - a3nv, 5.0);
+reflectedLight.indirectSpecular += radiance * (uSheen * a3F * a3film);`);
     if (opts.puddle) {
       sh.fragmentShader = sh.fragmentShader
         .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>

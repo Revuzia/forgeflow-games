@@ -207,30 +207,43 @@ export function ensureStyle() {
 #killfeed .a10-kr svg{vertical-align:-2px;margin:0 7px;opacity:.7;}
 #killfeed .a10-kr .me{color:var(--a10-amber);}
 
-/* ---------------------------------------------------- objective + banner */
-/* iter07 D9: critic-c reported the objective card sitting "exactly the spot the
-   reticle belongs" in S1/S3/S8 and read the reticle as absent. The card was
-   never AT the reticle (bottom 24% is y≈820 against a centre of 540) — but at
-   ~250 px on a 1080 frame, with a 7 px reticle, "near the middle, and brighter
-   than the thing in the middle" is the same defect from the reader's side. The
-   reticle is now legible on its own (see the crosshair block) and the card
-   drops another 3% of frame height clear of it. */
-#objective{position:absolute;left:50%;bottom:21%;transform:translateX(-50%);
-  text-align:center;opacity:0;}
+/* ------------------------------------------- comms rail (objective/banner/
+   subtitle) — iter08 D9, THE LAST NAMED DEDUCTION ON THIS DIMENSION.
+   Named by 3/3 critics in FOUR consecutive verdicts, and after iter07 it was
+   the only thing between D9 (7.33) and 8.0. critic-c, iter07: "a modern
+   shooter would never leave two lines of body copy across the middle of the
+   screen for the whole mission." iter06 and iter07 both answered it by moving
+   the block DOWN the centre column (bottom 24% -> 21%), which is why it kept
+   coming back: the deduction is about the horizontal centre, not the height.
+   A 72vw centred subtitle spans x 269..1651 on a 1080p frame — it crosses the
+   centre third (640..1280) whatever its bottom offset is, and the objective
+   card sits directly under the reticle in every gameplay frame.
+
+   The whole comms group moves to a LEFT-ANCHORED RAIL, left-aligned, capped at
+   30vw so its right edge lands at x=610 on a 1920 frame — outside the centre
+   third by 30 px, by construction and at any aspect. That is where radio
+   chatter lives in the games this is measured against, it is the one HUD
+   quadrant this build left empty (ammo bottom-right, killfeed top-right,
+   compass top-centre), and it takes body copy off the action permanently
+   rather than nudging it. Stack order bottom-up: subtitle, objective, banner. */
+#objective{position:absolute;left:34px;bottom:150px;text-align:left;opacity:0;
+  max-width:min(560px,30vw);}
 #objective .t{font-size:11px;letter-spacing:.32em;color:var(--a10-amber);}
 #objective .l{font-size:16px;letter-spacing:.14em;margin-top:4px;text-transform:uppercase;}
-#objective .u{height:1px;background:var(--a10-amber);margin:7px auto 0;width:0;}
-#a10-banner{position:absolute;left:50%;bottom:31%;transform:translateX(-50%);
+#objective .u{height:1px;background:var(--a10-amber);margin:7px 0 0;width:0;}
+/* the kill banner was the third centre-parked text element and duplicated the
+   killfeed row it fires alongside — same rail, above the objective */
+#a10-banner{position:absolute;left:34px;bottom:214px;
   font-size:14px;letter-spacing:.2em;opacity:0;white-space:nowrap;}
 #a10-banner .x{color:var(--a10-kill);margin-right:8px;}
 
 /* ------------------------------------------------------------ subtitles */
-#a10-subtitle{position:absolute;left:50%;bottom:12%;transform:translateX(-50%);
-  max-width:min(760px,72vw);text-align:center;font-size:15px;line-height:1.5;
+#a10-subtitle{position:absolute;left:34px;bottom:64px;
+  max-width:min(560px,30vw);text-align:left;font-size:15px;line-height:1.5;
   letter-spacing:.04em;opacity:0;font-family:var(--a10-ui-font);
   text-shadow:0 1px 3px rgba(0,0,0,.85);}
 #a10-subtitle .sp{color:var(--a10-amber);font-family:var(--a10-hud-font);
-  letter-spacing:.14em;margin-right:.6em;}
+  letter-spacing:.14em;margin-right:.6em;display:block;margin-bottom:2px;}
 
 /* ------------------------------------------------- vignette / fade / fx */
 #a10-vignette{position:absolute;inset:0;opacity:0;will-change:opacity;
@@ -283,9 +296,21 @@ export function ensureShellStyle() {
   el.textContent = `
 .a10-overlay{position:fixed;inset:0;font-family:var(--a10-ui-font);
   color:var(--a10-ink);pointer-events:auto;-webkit-user-select:none;user-select:none;}
+/* iter08 D9 (ranked fix 10, second half): critic-a called S6 "a mud field
+   rather than a readable mission still". Measured cause — blur(18px) on a
+   1080p frame is a 36 px kernel, which is wider than a market awning and about
+   the height of a soldier at plaza distance, so nothing in the live frame
+   survives as a recognisable object; brightness(.75) under a wash that is
+   already 86% opaque at the rail then takes the readable half of the image to
+   near-black. A pause wash has to do two things at once — keep the rail
+   legible and prove the mission is still there behind it — and the old numbers
+   only did the first. 7 px is a real defocus that still leaves the neon signs,
+   the awnings and the wet pools identifiable; the gradient keeps its density
+   under the rail and opens up sooner across the frame; brightness .86 stops
+   the right half crushing. */
 .a10-overlay .wash{position:absolute;inset:0;
-  background:linear-gradient(90deg,rgba(4,6,10,.86),rgba(4,6,10,.42) 55%,rgba(4,6,10,.18));
-  backdrop-filter:blur(18px) saturate(.9) brightness(.75);}
+  background:linear-gradient(90deg,rgba(4,6,10,.84),rgba(4,6,10,.30) 46%,rgba(4,6,10,.10));
+  backdrop-filter:blur(7px) saturate(.95) brightness(.86);}
 .a10-rail{position:absolute;left:8vw;top:50%;transform:translateY(-50%);}
 .a10-rail .wm{font-family:var(--a10-hud-font);font-weight:400;font-size:40px;
   letter-spacing:.42em;margin-bottom:6px;}
@@ -531,6 +556,35 @@ export function createHud(ctx) {
     `<div class="hole"></div>`;
   root.appendChild(scope);
   const scopeDrift = scope.querySelector(".drift");
+
+  // ---- ADS Z-ORDER SELF-CHECK (iter08) ------------------------------------
+  // The iter07 fix above (the three z-bands) answers 2/3 critics' "the entire
+  // HUD including ammo vanishes in ADS", and it CANNOT be verified by the shot
+  // battery: S2 is the only ADS frame and it is captured hud:false, which is a
+  // deliberate, re-affirmed decision (see core/test/scenarios.js — turning it
+  // on replaces the one frame that shows the hero optic with a 98.5%-opaque
+  // shroud covering ~85% of the picture, and the D5 defect the battery is
+  // supposed to be tracking would stop being visible at all).
+  //
+  // So the fix is verified by a DIFFERENT instrument instead of being left
+  // unverified: read the resolved stacking order back out of the live DOM and
+  // fail LOUDLY at boot if the optic shroud ever climbs over the information
+  // layers again. bootcheck.py fails the build on any console error, so a
+  // regression here stops a battery instead of quietly costing a dimension
+  // four iterations later. Deferred one frame so the stylesheet is applied.
+  setTimeout(() => {
+    try {
+      const zs = (el) => parseInt(getComputedStyle(el).zIndex, 10) || 0;
+      const zScope = zs(scope), zInfo = zs(ammo), zFx = zs(vig);
+      if (!(zScope < zInfo && zInfo < zFx)) {
+        console.error(
+          `[hud] ADS Z-ORDER REGRESSION: optic shroud z=${zScope}, information ` +
+          `layers z=${zInfo}, full-screen effects z=${zFx} — required ` +
+          `shroud < information < effects. Scoping the Corvus will bury the ` +
+          `ammo block, the compass and the killfeed (iter06/iter07, 2/3 critics).`);
+      }
+    } catch (e) { /* headless / detached DOM — nothing to assert against */ }
+  }, 0);
 
   // debrief (interactive — sits OUTSIDE the pointer-events:none hud root) ----------
   const debrief = document.createElement("div");

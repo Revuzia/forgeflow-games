@@ -111,6 +111,48 @@ def gen_car_paint(size=512):
     wash = np.clip((wash - 0.50) / 0.30, 0, 1)
     film = np.clip(film * (1.0 - wash * 0.75) + wash * 0.10, 0, 1)
 
+    # --- SECOND FILM OCTAVE SET, at panel scale rather than car scale.
+    #
+    # iter07 blind verdicts, 2/3, on the S1 hero frame: "the entire lower-left
+    # foreground is an untextured flat-shaded tan structure", "a large flat
+    # cream polygon mass with hard facets and zero texture". Measured by
+    # raycast this session that object is `props_car_b` at 2.08 m — a fully
+    # modelled 2,660-triangle car whose paint IS mapped. What fails at 2 m is
+    # the FREQUENCY: the film above is a 5-cell fbm authored at 0.9 m/tile, so
+    # a bonnet shows roughly one blob of it, and one blob across a whole panel
+    # is a flat panel. The measured value confirms it — the tan mass sits at
+    # mean luma 141.6 against a frame ground of 24.8, i.e. the brightest large
+    # area in the shot, with nothing at panel scale to break it up.
+    #
+    # This layer is DARKENING ONLY (it enters `v` and the desaturation mix with
+    # a negative sign and nothing else), so it cannot brighten a car that is
+    # already the brightest thing in frame, and it cannot regress the
+    # mid-ground cars that iter07 credited: it only ever removes light.
+    # ANISOTROPIC, and at a third of the amplitude the first build used. An
+    # isotropic 17-cell field at 0.42 was legible at 2 m — and read as round
+    # grey MOULD SPOTS on the flank in C1_02, which is a different placeholder
+    # tell wearing the same clothes ("a smeared blotchy noise texture" is
+    # already in the iter07 verdicts about another asset). Dirt on a car
+    # obeys gravity: stretched down the projection's V axis, which the
+    # world-space projection maps to world Y on every vertical panel.
+    grime = fbm(size, 105, base_cells=15, octaves=4, gain=0.52, aniso=3.2)
+    grime = np.clip((grime - 0.47) / 0.36, 0, 1) ** 1.25
+    # traffic-film streaks: the vertical run water leaves down a flank, at a
+    # tighter period than `wash` so the two do not beat into one band
+    run = fbm(size, 106, base_cells=23, octaves=4, gain=0.5, aniso=7.0)
+    run = np.clip((run - 0.55) / 0.26, 0, 1)
+    film = np.clip(film + grime * 0.22 + run * 0.20, 0, 1)
+
+    # --- rain beading: this is a night-rain level and every horizontal panel
+    # in it is covered in standing droplets. Small, dense, and carried in BOTH
+    # albedo (a bead is a lens over dirt: locally darker) and height.
+    beads = np.zeros((size, size), np.float32)
+    for _ in range(1400):
+        cx, cy = int(rng.integers(0, size)), int(rng.integers(0, size))
+        r = float(rng.uniform(size * 0.0016, size * 0.0055))
+        stamp(beads, cx, cy, r, lambda d: (1.0 - d * d) ** 0.75)
+    beads = np.clip(beads, 0, 1)
+
     # --- water spotting: dried rain marks, small rings (this is a rain level)
     spots = np.zeros((size, size), np.float32)
     for _ in range(160):
@@ -120,8 +162,9 @@ def gen_car_paint(size=512):
     spots = np.clip(spots, 0, 1)
 
     # --- albedo: near-white, faintly cooled where the film sits
-    v = 0.92 + peel_c * 0.030 + flake_a * 0.028 - film * 0.42 - spots * 0.045
-    v = np.clip(v, 0.28, 1.0)
+    v = (0.92 + peel_c * 0.030 + flake_a * 0.028
+         - film * 0.42 - spots * 0.045 - beads * 0.085)
+    v = np.clip(v, 0.22, 1.0)
     col = np.stack([v, v * 0.998, v * 1.0], -1)
     # film is grey-brown road dust, not neutral grey — and it DESATURATES the
     # body colour underneath, which is what stops a strong paint hue from
@@ -137,11 +180,14 @@ def gen_car_paint(size=512):
              + film * 0.46
              + spots * 0.10
              + swirl * 0.09
-             + flake_hi * 0.05)
-    rough = np.clip(rough, 0.11, 0.78)
+             + flake_hi * 0.05
+             - beads * 0.09)          # standing water is the GLOSSIEST thing on a car
+    rough = np.clip(rough, 0.07, 0.80)
 
-    # --- height for the normal bake: peel is the shape, flake is the sparkle
-    height = peel_c * 1.0 + flake_a * 0.11 + swirl * 0.10 - spots * 0.08
+    # --- height for the normal bake: peel is the shape, flake is the sparkle,
+    # and the beads are the only feature small enough to survive a 2 m read
+    height = (peel_c * 1.0 + flake_a * 0.11 + swirl * 0.10 - spots * 0.08
+              + beads * 0.55)
     return np.clip(col, 0, 1), rough, height
 
 

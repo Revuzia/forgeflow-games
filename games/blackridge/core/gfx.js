@@ -5,7 +5,15 @@
 
 import * as THREE from "three";
 
-export const DPR_CAP = 1.5; // doctrine §3 — never above 1.5
+// PERF GATE (owner decision 2026-08-20: 60 fps on Intel integrated is a HARD
+// gate above visuals). Measured on this box with EXT_disjoint_timer_query_webgl2:
+// at DPR 1.5 the drawing buffer is 2880x1620 = 4.67 Mpx; at 1.0 it is 1920x1080
+// = 2.07 Mpx. The frame is 93% GPU and almost entirely fill-bound, so that 2.25x
+// pixel cut is very close to a 2.25x frame-time cut — the single biggest lever
+// on the board (ablation: 182.8 -> 84.1 ms, -54%, everything else held).
+// The image quality that DPR 1.5 was buying is bought back by the FXAA pass in
+// post.js (~1 ms) instead of by 4.67 Mpx of supersample.
+export const DPR_CAP = 1.0; // doctrine §3 — never above 1.5; perf gate pins 1.0
 
 export function initRenderer(canvas) {
   const renderer = new THREE.WebGLRenderer({

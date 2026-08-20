@@ -14,6 +14,10 @@
 import * as THREE from "three";
 import { loadBody, createActor, loadGLB } from "./actor.js";
 import { validateAnimMap } from "./anim_map.js";
+// The silhouette ids the shared grounding pool draws its contact shadow AND
+// its wet-ground reflection from. A character must ground as a PERSON — the
+// generic ellipse is itself a named placeholder defect (VT §1).
+import { SHAPE } from "../fx/grounding.js";
 
 // ---------------------------------------------------------------------------
 // 3P weapon protos — transliterated from last-circle weapons.js (the proven
@@ -332,13 +336,19 @@ export function createSoldiers(ctx) {
   // grounding.js) — never a per-system blob — resolved lazily through the
   // test-surface global exactly as fx.js resolves the light pool.
   const CONTACT = {
-    // Half-extents of the QUAD, not of the visible core: the radial falloff
-    // reaches zero at the quad edge, so the dark part is roughly half of this.
-    rx: 0.56, rz: 0.50,
-    strength: 0.88,       // peak alpha multiplier at full contact
+    // ITER08: these are now the FOOTPRINT half-extents of the body itself, not
+    // of a quad. grounding.js draws a silhouette (torso oval + two boots) from
+    // them and sizes its own quad to hold the swept shadow, so widening these
+    // widens the MAN, not the blur — iter07's numbers were quad extents and a
+    // radial falloff turned them into a 0.25 m dark dot that his own boots then
+    // covered. That is the measured reason 3/3 critics read "no shadow".
+    rx: 0.30, rz: 0.26,
+    strength: 0.92,       // peak alpha multiplier at full contact
     fadeH: 0.55,          // metres of airborne lift that fades the blob to 0
-    deadR: 1.15,          // prone body: wider, softer
-    deadS: 0.64,
+    // A body on the cobbles is a long ellipse, not a big circle: one silhouette
+    // id (SHAPE.PRONE) and a footprint the shape of a man lying down.
+    deadRX: 0.32, deadRZ: 0.95,
+    deadS: 0.70,
     // ---- wet-ground reflection (iter07 ranked fix 6) ---------------------
     // 3/3 critics: "he casts no shadow and leaves no reflection on cobbles
     // that are reflecting everything else — he is pasted onto the ground."
@@ -721,13 +731,44 @@ export function createSoldiers(ctx) {
         const hs = bot.vel ? Math.hypot(bot.vel[0], bot.vel[2]) : 0;
         actor.groundSpeed = hs;
         actor.crouchW = 0;
+        // ---- WEAPON READY POSE (iter08) -----------------------------------
+        // The sim publishes exactly the state this needs and nobody was
+        // reading it: `aim`/`fire` mean the rifle is up and pointed at a
+        // threat, everything else means it is not. Driving actor.readyWant off
+        // it moves the rifle bar ~0.2 m in the silhouette between a patrolling
+        // bot and an engaged one, and it moves it back the moment the bot
+        // loses contact — which is the ONE upper-body channel the clip set
+        // cannot supply (measured: rifle_idle's hands travel 2 mm in 1.2 s).
+        // Running men carry the weapon down too; a sprint at 5+ m/s is not a
+        // firing position whatever the state machine last latched.
+        actor.readyWant = bot.alive &&
+          (bot.anim === "aim" || bot.anim === "fire" || bot.anim === "hit" ||
+           bot.state === "combat" || bot.state === "suppress") && hs < 5.0;
         if (!bot.alive) {
           if (!rec.deathPlayed) onDeath({ victim: rec.botId, dir: null });
         } else if (rec.forceAnim) {
           actor.groundSpeed = rec.forceAnim === "run" ? 3.6 : rec.forceAnim === "walk" ? 1.5 : 0;
           actor.play(rec.forceAnim);
         } else if (bot.anim === "hit") {
-          if (actor.currentName !== "hit") actor.playOnce("hit", { fade: 0.06 });
+          // THE `hit` CLIP IS NO LONGER PLAYED (iter08), and this is a defect
+          // closure, not a regression. iter07's fix routed the sim's `hit`
+          // state into clip_hit.glb; 2/3 critics then named the result as a
+          // NEW defect — "frozen in a bizarre hands-up-at-the-cheeks pose that
+          // is not a combat stance" (critic-a), "a bizarre both-hands-to-face
+          // pose" (critic-b). Measured this session, that clip drops the hips
+          // 0.952 -> 0.70 m and the right hand to 0.76 m: it is a Mixamo
+          // unarmed flail, and no amount of blending makes a man holding a
+          // rifle do it. The reaction is now entirely the procedural flinch
+          // (actor.hitImpulse: torso fold + head snap + the weapon knocked off
+          // the shoulder), which reads AS a flinch because it stays inside a
+          // combat stance. The clip stays loaded and stays in ANIMS — the
+          // frozen 10-key shape is untouched and a future authored rifle-hit
+          // clip drops straight into the same slot.
+          // A man shot while running keeps running: fall through to the
+          // locomotion clip so the feet never stop cycling under a moving
+          // body (foot slide is the D10 hard cap). Standing, he holds his
+          // firing stance and the spring does the reacting.
+          actor.play(hs > 5.0 ? "run" : hs > 0.5 ? "walk" : "aim");
         } else if (bot.weapon && bot.weapon.state === "reloading" && hs < 4.5) {
           // RELOAD (iter07, ranked fix 7). clip_rifle_reload has shipped in
           // CLIP_FILES since day one with NOTHING pointing at it, so a bot
@@ -741,7 +782,15 @@ export function createSoldiers(ctx) {
             actor.play("reload", { fade: 0.12, fromStart: true });
           }
         } else {
-          if (bot.anim === "crouch_walk") actor.crouchW = 1;
+          // CROUCH, BOTH STATES (iter08). This used to fire on crouch_walk
+          // only, so a bot ducking behind low cover — botfsm.js:904's peek
+          // cycle, which sets c.crouch for 1.2-2.0 s at a time and is the ONE
+          // stance change the AI already produces — rendered as `crouch_idle`
+          // -> clip rifle_crouch, measured this session at hips 0.952 m
+          // (identical to standing) with the feet lifted off the ground. The
+          // sim asked for a crouch and the view drew a man marching in place.
+          // actor.js now solves a real two-link squat for both states.
+          if (bot.anim === "crouch_walk" || bot.anim === "crouch_idle") actor.crouchW = 1;
           actor.play(bot.anim);
         }
 
@@ -811,15 +860,19 @@ export function createSoldiers(ctx) {
             const dead = !bot.alive;
             G.write(
               rec.shadow, px, contactY + 0.014, pz,
-              dead ? CONTACT.deadR : CONTACT.rx,
-              dead ? CONTACT.deadR : CONTACT.rz,
+              dead ? CONTACT.deadRX : CONTACT.rx,
+              dead ? CONTACT.deadRZ : CONTACT.rz,
               (dead ? CONTACT.deadS : CONTACT.strength) * air,
               // reflection: body height, body tint, body facing. The tint is
               // the archetype's own tint — the same value actor.setTint()
               // shaded the GLB with — so the mirror image is the man, not a
               // generic grey smear.
               (dead ? CONTACT.deadH : CONTACT.standH) * air,
-              rec.tintHex, rec.yaw);
+              rec.tintHex, rec.yaw,
+              // The silhouette both the shadow and the reflection are drawn
+              // from. A standing man grounds as boots + torso and mirrors as a
+              // figure with shoulders; a body grounds as a long ellipse.
+              dead ? SHAPE.PRONE : SHAPE.HUMAN);
           }
         }
       }

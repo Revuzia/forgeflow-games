@@ -293,5 +293,6 @@ export function createReflect(ctx) {
   };
 
   ctx.reflect = api;
+  globalThis.__BR_REFLECT_API__ = api; // profiler seam — ablation prices the pass
   return api;
 }

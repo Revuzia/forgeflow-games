@@ -421,9 +421,37 @@ Each dimension 0–10. Written anchors below at 5 / 8 / 10; interpolate for the
 rest. A named amateur tell that is VISIBLE in the battery hard-caps its dimension
 at the score listed with it, regardless of everything else done right.
 
-**SHIP BAR: every dimension ≥ 8 AND mean ≥ 8.5 AND blind verdict at least
-"borderline" from EVERY critic. Miss any one → iterate. No exceptions, no
-averaging-away a weak dimension.**
+**SHIP BAR (v2 — REVISED 2026-08-20 BY OWNER DECISION):**
+**every dimension ≥ 6 AND mean ≥ 6.5 AND no placeholder-class defect named in
+ANY critic's blind verdict. Miss any one → iterate. No averaging-away a weak
+dimension. The blind verdict itself may remain "no" — what must disappear is any
+critic naming untextured/placeholder/primitive/sourceless-light artefacts.**
+
+**PLUS a hard, non-negotiable PERFORMANCE GATE (owner decision, same date):
+60 fps sustained on Intel integrated graphics — GPU frame time ≤ 16.7 ms
+measured by timer query (not rAF cadence) at the shipped render scale. A build
+that fails this does not ship regardless of how it screenshots. An unplayable
+game fails the player no matter what a still frame shows.**
+
+> **Why the bar moved, recorded honestly so no one later mistakes this for
+> quality drift.** The original bar (every dimension ≥ 8, mean ≥ 8.5, blind
+> verdict ≥ borderline) was carried for seven iterations and measured as
+> unreachable on this architecture. Cold-critic means went 3.83 → 4.00 → 5.25 →
+> 5.27; dimensions D1 (lighting), D2 (filmic) and D8 (sky) posted four-iteration
+> nets of exactly 0.00. The consolidation established WHY, and the reasons are
+> architectural rather than effort-related: D1 ≥ 8 requires cast shadows, which
+> require frame budget a build already GPU-bound at ~50 ms does not have; D3 ≥ 8
+> requires authored PBR texture sets, and a live A/B on the booted page found
+> the authored roughness map visually INDISTINGUISHABLE from a flat 0.75 because
+> a hemisphere light contributes diffuse irradiance only, so no amount of
+> roughness authoring can clear the cap until the rig produces a real specular
+> lobe; D7 ≥ 8 requires uniquely modelled props and non-prismatic building
+> masses, which is level-art production, not procedural generation. The owner
+> chose to revise the bar to what the loop can actually deliver and then spend
+> the remaining effort on breadth (the multi-biome campaign and PVP), rather
+> than fund an asset-production programme. The 8/8.5 anchors BELOW ARE LEFT
+> INTACT and unmodified — they remain the description of AAA, and the honest
+> record is that this build targets ≥ 6, not that 6 is what AAA means.
 
 ### D1 — Lighting coherence
 - **5**: A key light exists and casts shadows; but ambient does most of the work,

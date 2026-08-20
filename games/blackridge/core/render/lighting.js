@@ -647,12 +647,128 @@ export function createLights(ctx) {
     }
   }
 
+  // ---------------------------------------------- FIXTURE AUTHORITY (iter08)
+  // THE rule for the sourceless-light class, enforced instead of remembered:
+  // an additive decoration (head glow, fog disc, god-ray cone) may only exist
+  // where a SOLID mesh exists to justify it. Four consecutive critic rounds
+  // named this class and the previous two attempts fixed instances; it kept
+  // re-presenting because "which poles get a glow" was a hand-maintained kind
+  // list (`kind !== 'neon_bounce'`, `kind === 'sodium' || kind === 'neon_bounce'`)
+  // that nothing checked against the geometry actually in the scene. A list
+  // drifts; a query cannot.
+  //
+  // "Solid" excludes exactly what a fixture is not: additive blends, the decal
+  // sheets (depthWrite:false), sprites, and the instanced decorations
+  // themselves. Radius 1.6 m covers a sodium head on its 0.55 m arm and a neon
+  // cabinet behind its sign face without reaching a neighbouring pole (the
+  // closest two practicals in layout.lightPoles are 12 m apart).
+  //
+  // The test measures distance to the mesh SURFACE, and both halves of that
+  // are load-bearing:
+  //   - not the bounding BOX. level.js merges its architecture into a handful
+  //     of level-spanning meshes, so a Box3 built from the buildings mesh
+  //     contains the whole ward. The first version of this check answered
+  //     "is this pole inside the level" and duly reported all 22 poles
+  //     fixtured, L_PLAZA_KEY included.
+  //   - not the VERTICES. The second version walked vertices and reported
+  //     three of the six neon signs orphaned, because a sign cabinet is a long
+  //     thin box whose only vertices are its far corners: nothing is within
+  //     1.6 m of the middle of a 5 m housing except the housing itself.
+  // A point-to-triangle distance is the actual question and answers both.
+  //
+  // MESH_VERT_CAP keeps the sweep cheap AND says something true: a light
+  // fixture is a small authored object, never a merged 100k-vertex sheet, so
+  // the ground, cobble and building shells are not candidates to justify a
+  // glow. Measured cost of the whole sweep at boot with this cap: see the
+  // "[lights] fixture authority swept" line.
+  const FIXTURE_R = 1.6;
+  const MESH_VERT_CAP = 20000;
+  // A skylight is the ONE motivated exception in the vocabulary: its source is
+  // the sky through a hole in a roof, so the thing that justifies its shaft is
+  // an aperture in the buildings mesh rather than a fixture beside it. Named
+  // here, once, instead of being an unstated hole in the rule.
+  const FIXTURELESS_KINDS = new Set(["skylight"]);
+  function fixtureMap(poles) {
+    const found = new Map(poles.map((p) => [p.id, FIXTURELESS_KINDS.has(p.kind)]));
+    const R2 = FIXTURE_R * FIXTURE_R;
+    const box = new THREE.Box3(), v = new THREE.Vector3(), cp = new THREE.Vector3();
+    const tri = new THREE.Triangle();
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+    const meshes = [];
+    scene.traverse((o) => {
+      if (!o.isMesh || o.isInstancedMesh || o.isSprite || !o.visible) return;
+      const m = o.material;
+      if (!m || m.blending === THREE.AdditiveBlending || m.depthWrite === false) return;
+      const g = o.geometry, pos = g && g.getAttribute("position");
+      if (!pos || pos.count > MESH_VERT_CAP) return;
+      meshes.push(o);
+    });
+    for (const o of meshes) {
+      box.setFromObject(o);
+      const near = poles.filter((p) => !found.get(p.id) &&
+        box.distanceToPoint(v.fromArray(p.pos)) <= FIXTURE_R);
+      if (!near.length) continue;
+      const g = o.geometry, pos = g.getAttribute("position"), idx = g.index;
+      o.updateWorldMatrix(true, false);
+      const n = idx ? idx.count : pos.count;
+      for (let i = 0; i + 2 < n; i += 3) {
+        const i0 = idx ? idx.getX(i) : i;
+        const i1 = idx ? idx.getX(i + 1) : i + 1;
+        const i2 = idx ? idx.getX(i + 2) : i + 2;
+        a.fromBufferAttribute(pos, i0).applyMatrix4(o.matrixWorld);
+        b.fromBufferAttribute(pos, i1).applyMatrix4(o.matrixWorld);
+        c.fromBufferAttribute(pos, i2).applyMatrix4(o.matrixWorld);
+        const nx = Math.min(a.x, b.x, c.x) - FIXTURE_R, xx = Math.max(a.x, b.x, c.x) + FIXTURE_R;
+        const ny = Math.min(a.y, b.y, c.y) - FIXTURE_R, xy = Math.max(a.y, b.y, c.y) + FIXTURE_R;
+        const nz = Math.min(a.z, b.z, c.z) - FIXTURE_R, xz = Math.max(a.z, b.z, c.z) + FIXTURE_R;
+        for (const p of near) {
+          if (found.get(p.id)) continue;
+          const px = p.pos[0], py = p.pos[1], pz = p.pos[2];
+          if (px < nx || px > xx || py < ny || py > xy || pz < nz || pz > xz) continue;
+          tri.set(a, b, c);
+          tri.closestPointToPoint(v.set(px, py, pz), cp);
+          if (cp.distanceToSquared(v) <= R2) found.set(p.id, true);
+        }
+      }
+    }
+    return found;
+  }
+
   function buildDecor(poles) {
     if (decor.built) return;
     decor.built = true;
 
+    // Priced once, at bind time, off the level geometry that already exists
+    // (boot builds the level before createLights — see bindStatic).
+    const t0 = (globalThis.performance || Date).now();
+    const fixtured = fixtureMap(poles);
+    const orphans = poles.filter((p) => !fixtured.get(p.id))
+      .map((p) => `${p.id}(${p.kind})`);
+    const t1 = (globalThis.performance || Date).now();
+    console.info(`[lights] fixture authority swept ${poles.length} poles in ` +
+      `${(t1 - t0).toFixed(1)} ms`);
+    // L_PLAZA_KEY is the ONE accepted orphan and it is accepted on the record,
+    // not by silence: it is an abstract aggregate for the signage wall bouncing
+    // off wet stone, hung at [-5, 9, 0] over open plaza cobble where there is
+    // no wall to bracket to and no catenary to hang from (the plaza spans are
+    // anchored at x -22/-17/1/5/9/13 and deliberately never cross the street
+    // gap at x -5 — level.js §5). It is denied every decoration below, and
+    // level.js softens its penumbra to 1.0 so its footprint has no rim. If a
+    // fixture is ever authored there, delete this entry and it earns them back.
+    const ACCEPTED_ORPHANS = new Set(["L_PLAZA_KEY"]);
+    const unexpected = orphans.filter((s) => !ACCEPTED_ORPHANS.has(s.split("(")[0]));
+    if (unexpected.length) {
+      console.error("[lights] SOURCELESS LIGHT: no fixture mesh within " +
+        `${FIXTURE_R} m of ${unexpected.join(", ")} — these poles get NO glow, NO fog ` +
+        "disc and NO god-ray cone. Author the fixture in level.js or delete the pole.");
+    }
+    console.info(`[lights] fixture authority: ${poles.length - orphans.length}/` +
+      `${poles.length} poles carry a visible fixture` +
+      (orphans.length ? ` — decorations denied to ${orphans.join(", ")}` : "") +
+      "; no additive decoration exists without one");
+
     // --- god-ray cones: exactly the godRay:true poles (5 per LD §3.5)
-    const rays = poles.filter((p) => p.godRay);
+    const rays = poles.filter((p) => p.godRay && fixtured.get(p.id));
     for (const p of rays) {
       const from = new THREE.Vector3().fromArray(p.pos);
       const to = new THREE.Vector3().fromArray(p.aim || [p.pos[0], 0, p.pos[2]]);
@@ -665,6 +781,7 @@ export function createLights(ctx) {
       mat.uniforms.uOpacity.value = CONE_OPACITY[p.kind] ?? CONE_OPACITY.default;
       mat.uniforms.uFlick.value = 1.0;
       const mesh = new THREE.Mesh(geo, mat);
+      mesh.name = `godray_cone_${p.id}`; // named so ablate.py can price it
       const axis = to.clone().sub(from).normalize();
       mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis.clone().negate());
       mesh.position.copy(from).add(to).multiplyScalar(0.5);
@@ -680,14 +797,18 @@ export function createLights(ctx) {
       });
     }
 
-    // --- head glows: every pole with a PHYSICAL fixture (real + fake + neon
-    // signs). kind 'neon_bounce' (L_PLAZA_KEY) is an ABSTRACT aggregate light
-    // standing in for the signage sum — a head glow there reads as a floating
-    // ball (caught in the S1-pose review); it gets pool + spot only.
+    // --- head glows: every pole with a PHYSICAL fixture, and now that is
+    // MEASURED off the scene rather than asserted by kind. The old rule was
+    // `kind !== 'neon_bounce'`, written because L_PLAZA_KEY was an abstract
+    // aggregate with nothing to glow on and "a head glow there reads as a
+    // floating ball". The observation was right; the kind list was the wrong
+    // place to encode it, because it stayed true after level.js authored the
+    // plaza lamp and would have stayed false if a sodium pole lost its head.
     {
-      const glowPoles = poles.filter((p) => p.kind !== "neon_bounce");
+      const glowPoles = poles.filter((p) => fixtured.get(p.id));
       const geo = new THREE.PlaneGeometry(1, 1);
       const mesh = new THREE.InstancedMesh(geo, makeGlowMaterial(), glowPoles.length);
+      mesh.name = "head_glows";
       mesh.frustumCulled = false;
       mesh.renderOrder = 11;
       const m4 = new THREE.Matrix4();
@@ -718,10 +839,17 @@ export function createLights(ctx) {
 
     // --- sodium fog-disc pools (LD §5.2) + the plaza key pool
     {
-      const discs = poles.filter((p) => p.kind === "sodium" || p.kind === "neon_bounce");
+      // A fog disc is the haze puddle a DOWNWARD-throwing lamp hangs in, so it
+      // needs both a fixture overhead and an aim below it. `neon_bounce` used
+      // to be in this list on kind alone: L_PLAZA_KEY's 4.2 m additive ellipse
+      // sat on open plaza cobble with literally nothing above it and was the
+      // largest single "hard-edged pale ellipse with no fixture" in the ward.
+      const discs = poles.filter((p) => fixtured.get(p.id) &&
+        (p.kind === "sodium" || p.kind === "neon_bounce"));
       const geo = new THREE.PlaneGeometry(1, 1);
       geo.rotateX(-Math.PI / 2);
       const mesh = new THREE.InstancedMesh(geo, makeDiscMaterial(), discs.length);
+      mesh.name = "fog_discs";
       mesh.frustumCulled = false;
       mesh.renderOrder = 9;
       const m4 = new THREE.Matrix4();

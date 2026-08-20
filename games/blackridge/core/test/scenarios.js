@@ -82,18 +82,35 @@ export function createScenarios(ctx) {
   // that no DAMAGE state appears anywhere in the battery. That last one is
   // closed below rather than by switching study frames on.
   //
-  // S2 also stays OFF, and this is now a MEASURED decision rather than a
-  // deferral. The iter06 note left it to the ADS-optic lane; the underlying
-  // code defect it was standing in for is fixed this wave in hud.js (the
-  // Corvus shroud used to paint over the compass and the ammo block because it
-  // is appended last — an explicit z-band now puts the optic body BELOW the
-  // information layers, so ADS never drops the ammo block in play again). What
-  // remains is purely a capture-composition question: forcing the HUD on makes
-  // S2 a scope picture — a 76 vmin bore inside a 98.5%-opaque shroud, i.e.
-  // ~85% of the frame — which would hide the receiver, the optic housing and
-  // the support hand that iter07's ranked fix #3 exists to rebuild and be
-  // graded on. Blacking out another lane's only frame to buy a D9 point is a
-  // bad trade in the same iteration. Owner/ADS-lane call, one line here.
+  // ---- iter08: S2 STAYS `hud: false`, AND THE ADS Z-ORDER FIX IS RECORDED AS
+  // PERMANENTLY UNGRADED BY THIS BATTERY. The work order asked for the call to
+  // be taken rather than deferred again; this is it, with the reasons.
+  //
+  // 1. Turning it on would not actually grade the fix. What the z-band protects
+  //    is the compass (top centre), the ammo block (bottom right) and the
+  //    killfeed (top right) — all of them OUTSIDE the 76 vmin bore. Captured
+  //    with the HUD forced on this session at 1920x1080, the composited frame
+  //    is a lit circle in the middle of a near-black field with a few small
+  //    pale glyphs at the edges. A critic scoring that frame is scoring
+  //    "is there small text on black", not a stacking order.
+  // 2. It would cost the only frame in the battery that shows the hero
+  //    weapon's receiver, optic housing and support hand — i.e. the D5 subject
+  //    AND the evidence for iter07 ranked fix #5, which is still OPEN (the
+  //    scope-ring notch: 3/3 critics, 2/3 blind verdicts). Hiding an open
+  //    defect behind a shroud is worse than leaving a fix ungraded; it removes
+  //    the battery's own evidence that the defect exists.
+  // 3. The measured shroud covers ~85% of the frame at 98.5% opacity. That is
+  //    an honest picture of what a scoped player sees and a poor picture of
+  //    anything else, and the harness's own nearBlack gate exists for frames
+  //    that go that dark.
+  //
+  // The fix is NOT left unverified — it moves to a different instrument.
+  // hud.js now reads the resolved z-indices of the optic shroud, the
+  // information layers and the full-screen effects back out of the live DOM at
+  // boot and console.errors if the order ever inverts; bootcheck.py fails the
+  // build on any console error, so a regression stops a battery instead of
+  // costing a dimension four iterations later. That is a strictly stronger
+  // gate than one graded frame: it runs on every boot, not once per wave.
 
   // ---- BATTERY DAMAGE BEAT (iter07 D9). 2/3 critics: "no health or
   // damage-direction state appears anywhere in the battery", so the contracted

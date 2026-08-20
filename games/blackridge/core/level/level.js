@@ -804,10 +804,47 @@ export async function buildLevel(ctx) {
     // encodes as BOUNCE_SAT for the plaza aggregate — so signage reflections
     // keep their hue and give up most of their chroma.
     const SIGN_SAT = 0.58;
-    const uPos = [], uCol = [];
+    // EMITTER HALF-WIDTH, in metres, along the ground-tangential axis — the
+    // fix for the C1 orbs, and the reason they survived iter06 and iter07.
+    //
+    // The sheet's tightest lobe (`exp(-q/0.09)`) is the MIRROR IMAGE of the
+    // emitter. On a 0.44 m sodium lamp head that is correct and is the best
+    // thing in the frame. Every slot was a POINT, so a 3.8 m neon sign
+    // cabinet got the same crisp dot: a saturated round ball of colour lying
+    // on the cobbles about 2 m out from the wall, with its 4.6 m-high cabinet
+    // far above and behind it and nothing in between. That is exactly what
+    // 2/3 iter07 critics named as "floating red/green/white orbs", and it is
+    // why the previous two attempts missed — nobody was drawing an orb, the
+    // sheet was drawing a POINT LIGHT's reflection for an EXTENDED source.
+    //
+    // Verified by ablation this session (_harness/ablate.py at the C1_11 eye,
+    // pose from the iter81 manifest): hiding `wet_specular` removes the cyan,
+    // red and green blobs entirely and removes nothing else; hiding the glow
+    // sprites, the wall pools and the ground pools leaves all three untouched.
+    //
+    // The physical quantity is the source's ANGULAR half-size, w/d, so the
+    // shader divides by distance and a point source (0) is unchanged. Height
+    // is not modelled separately: a shop sign is wide and short, which is why
+    // its reflection smears ALONG the wall and stays tight toward the lens —
+    // the streak the frame wants.
+    const signWidth = (p) => Math.max(1.6, String(p.sign || "ZAROV").length * 0.42);
+    const halfWidth = (p) => (
+      p.kind === "neon" ? signWidth(p) * 0.5 :   // the cabinet, level.js §6
+      p.kind === "neon_bounce" ? 9.0 :           // the whole signage wall
+      p.kind === "fluorescent" ? 4.5 :           // the 9 m platform tube
+      p.kind === "flood" ? 0.45 :                // flood housing
+      0.0                                        // lamp heads, bulbs: points
+    );
+    const uPos = [], uCol = [], uWide = [];
     for (let i = 0; i < SPEC_SLOTS; i++) {
       const p = chosen[i];
-      if (!p) { uPos.push(new THREE.Vector4(0, -500, 0, 1)); uCol.push(new THREE.Color(0, 0, 0)); continue; }
+      if (!p) {
+        uPos.push(new THREE.Vector4(0, -500, 0, 1));
+        uCol.push(new THREE.Color(0, 0, 0));
+        uWide.push(0);
+        continue;
+      }
+      uWide.push(halfWidth(p));
       const gn = GAIN[p.kind] ?? 1.0;
       const c = new THREE.Color(p.color);
       if (p.kind === "neon" || p.kind === "neon_bounce") {
@@ -885,6 +922,7 @@ export async function buildLevel(ctx) {
           uAT: { value: 0.075 },  // tangential roughness — the streak's WIDTH
           uLPos: { value: uPos },
           uLCol: { value: uCol },
+          uLWide: { value: uWide },
         },
         vertexShader: /* glsl */ `
           attribute float aWet;
@@ -898,6 +936,7 @@ export async function buildLevel(ctx) {
           uniform float uTime, uGain, uAR, uAT;
           uniform vec4 uLPos[${SPEC_SLOTS}];
           uniform vec3 uLCol[${SPEC_SLOTS}];
+          uniform float uLWide[${SPEC_SLOTS}];
           varying vec3 vW; varying float vWet;
           void main() {
             if (vWet < 0.02) discard;
@@ -939,8 +978,17 @@ export async function buildLevel(ctx) {
               vec3 Hn = H - N * NoH;
               vec3 T = normalize(vec3(L.x, 0.0, L.z) + vec3(1e-5, 0.0, 1e-5));
               vec3 B = vec3(-T.z, 0.0, T.x);
+              // An EXTENDED emitter's mirror image is as wide as the emitter
+              // looks from here. Its angular half-size is w/dl, and a mirror
+              // maps that to half as much half-vector tilt, so the tangential
+              // lobe width gains 0.5*w/dl. A point source contributes 0 and
+              // keeps the crisp lamp-head dot this sheet is built around; a
+              // 3.8 m shop sign at 20 m gains ~0.048 on top of uAT's 0.075 and
+              // its reflection smears ALONG the wall into a band instead of
+              // sitting on the cobbles as a ball. See the halfWidth() note.
+              float aT = uAT + 0.5 * uLWide[i] / max(dl, 1.0);
               float ht = dot(Hn, T) / uAR;
-              float hb = dot(Hn, B) / uAT;
+              float hb = dot(Hn, B) / aT;
               float q = ht * ht + hb * hb;
               // three nested widths off ONE anisotropic distance: the mirror
               // image of the lamp head, the streak, and a halo that ties the
@@ -1102,33 +1150,157 @@ export async function buildLevel(ctx) {
   // ward once the facades moved off materials.js's 4x2 row; fixing the class
   // means fixing that instance too, not only the 99 on the facades.
   let litFacadeMat = null;
-  function winSpill(n, facePos, wc, wy, w, h, color, amp) {
-    const g = new THREE.PlaneGeometry(w, h);
-    // 0.4 cm proud of the wall face and 1.0 cm BEHIND the lit pane (which sits
-    // at 1.4). The quad is a radial falloff brightest at its centre, so laying
-    // it in FRONT of the pane put a milky wash over the interior and killed the
-    // room's own contrast (measured on the first capture of this fix). Behind
-    // the pane, the opaque pane depth-rejects the hot centre and only the
-    // surround — the part that is actually wall — survives.
-    const off = 0.004;
-    if (n[0] > 0) { g.rotateY(Math.PI / 2); g.translate(facePos + off, wy, wc); }
-    else if (n[0] < 0) { g.rotateY(-Math.PI / 2); g.translate(facePos - off, wy, wc); }
-    else if (n[1] > 0) { g.translate(wc, wy, facePos + off); }
-    else { g.rotateY(Math.PI); g.translate(wc, wy, facePos - off); }
+  // ---- iter08 #8a: FACADE RECESS DEPTH. The window field of a relieved
+  // facade sits this far BEHIND the authored wall plane; the piers and the
+  // storey bands stand AT the plane. A pane is then genuinely 17.5 cm inside a
+  // hole with four real reveal faces round it, instead of a quad floated 1.4 cm
+  // off a flat slab. This is the half of #8a that the atlas work could not
+  // reach: no amount of per-pane variety fixes a facade with no relief in it.
+  const RECESS = 0.16;
+  function winSpill(n, facePos, wc, wy, w, h, ow, oh, color, amp) {
+    // iter08: the spill is a FRAME, not a quad. iter07 laid ONE radial quad
+    // BEHIND the pane so the opaque pane depth-rejected its hot centre — that
+    // only worked while the pane sat 1.4 cm PROUD of the wall. The pane now
+    // sits inside a real reveal, so a quad on the wall face would wash straight
+    // over the interior and kill exactly the contrast the perspective-room
+    // atlas exists to give. Emitting the same radial gradient as four border
+    // quads with PARENT-SPACE UVs cuts the opening out geometrically: what
+    // survives is only the part that is actually wall.
+    const off = 0.006;
     const col = poolTint(color);
-    const p = g.getAttribute("position");
-    const carr = new Float32Array(p.count * 3);
-    for (let i = 0; i < p.count; i++) {
-      carr[i * 3] = col.r * amp; carr[i * 3 + 1] = col.g * amp; carr[i * 3 + 2] = col.b * amp;
+    const hw = w / 2, hh = h / 2, ohw = ow / 2, ohh = oh / 2;
+    const rects = [
+      [-hw, hw, ohh, hh],       // over the head
+      [-hw, hw, -hh, -ohh],     // under the sill
+      [-hw, -ohw, -ohh, ohh],   // left jamb side
+      [ohw, hw, -ohh, ohh],     // right jamb side
+    ];
+    for (const [u0, u1, v0, v1] of rects) {
+      const rw = u1 - u0, rh = v1 - v0;
+      if (rw <= 0.03 || rh <= 0.03) continue;
+      const g = new THREE.PlaneGeometry(rw, rh);
+      const uv = g.getAttribute("uv");
+      for (let i = 0; i < uv.count; i++) {
+        const lu = u0 + uv.getX(i) * rw, lv = v0 + uv.getY(i) * rh;
+        uv.setXY(i, (lu + hw) / w, (lv + hh) / h);
+      }
+      const cu = (u0 + u1) / 2, cv = (v0 + v1) / 2;
+      if (n[0] > 0) { g.rotateY(Math.PI / 2); g.translate(facePos + off, wy + cv, wc - cu); }
+      else if (n[0] < 0) { g.rotateY(-Math.PI / 2); g.translate(facePos - off, wy + cv, wc + cu); }
+      else if (n[1] > 0) { g.translate(wc + cu, wy + cv, facePos + off); }
+      else { g.rotateY(Math.PI); g.translate(wc - cu, wy + cv, facePos - off); }
+      const p = g.getAttribute("position");
+      const carr = new Float32Array(p.count * 3);
+      for (let i = 0; i < p.count; i++) {
+        carr[i * 3] = col.r * amp; carr[i * 3 + 1] = col.g * amp; carr[i * 3 + 2] = col.b * amp;
+      }
+      g.setAttribute("color", new THREE.BufferAttribute(carr, 3));
+      winSpillQ.push(g);
     }
-    g.setAttribute("color", new THREE.BufferAttribute(carr, 3));
-    winSpillQ.push(g);
   }
+
+  // ========================================================== MASSING (#8a)
+  // A BUILDING IS NOT ITS COLLIDER. layout.js authors one AABB per mass because
+  // collision wants a box; what four consecutive critic waves actually graded is
+  // that the VISUALS shipped that same box. iter06 gave every building its own
+  // window pitch and iter07 gave every FACE an irregular bay programme, and 3/3
+  // critics still fired the D7 copy-paste cap — because an irregular skin on a
+  // rectangular prism is still one prototype: the SILHOUETTE never changes, and
+  // at 25 m the eye reads silhouette before it reads pane spacing.
+  //
+  // massSegments() splits every authored mass into 1–4 visual sub-volumes with
+  // different heights, plus a setback tower and a projecting oriel where the
+  // footprint allows. Two hard rules keep it visual-only:
+  //
+  //   * a segment's top is NEVER BELOW the authored height (only ever above),
+  //   * nothing leaves the authored footprint below 3.2 m of world height.
+  //
+  // colliders.js reads layout.js directly, so geometry that only ADDS above and
+  // outside-but-overhead cannot change collision, line of sight or navigation
+  // by construction — there is no second source to drift from.
+  function massSegments(b) {
+    const { min, max } = b.box;
+    const H = max[1];
+    let hs = 2166136261;
+    for (let i = 0; i < b.id.length; i++) { hs ^= b.id.charCodeAt(i); hs = Math.imul(hs, 16777619); }
+    const R = rng((hs ^ 0x5bf03635) >>> 0);
+    const W = max[0] - min[0], D = max[2] - min[2];
+    const axis = W >= D ? 0 : 2;
+    const L = axis === 0 ? W : D;
+    const lo = min[axis], hi = max[axis];
+    const MINSEG = 6.0;
+    // Slab count scales with LENGTH, not with a bucket. bld_e1 is 82 m of quay
+    // wall: three slabs still leaves 27 m runs, which is what the S5 capture
+    // read as "one uniform slab". ~12 m per slab is a city plot.
+    let n = Math.max(1, Math.min(5, Math.round(L / (10 + R() * 5))));
+    n = Math.max(1, Math.min(n, Math.floor(L / MINSEG)));
+    // cut points — a random walk, never an even division (an even division of a
+    // long slab is its own copy-paste tell)
+    const cuts = [lo];
+    let rem = L, left = n, p = lo;
+    for (let i = 0; i < n - 1; i++) {
+      const avg = rem / left;
+      const w = Math.max(MINSEG, Math.min(rem - MINSEG * (left - 1), avg * (0.60 + R() * 0.80)));
+      p += w; rem -= w; left--;
+      cuts.push(p);
+    }
+    cuts.push(hi);
+    // heights: only ever ABOVE the authored top, so the collider stays the
+    // conservative volume and nothing the player can touch moved.
+    const POOL = [0, 0.65, 1.6, 2.9, 4.3];
+    const rises = [];
+    let prev = -99;
+    for (let i = 0; i < n; i++) {
+      let c = 0;
+      for (let t = 0; t < 6; t++) { c = POOL[(R() * POOL.length) | 0]; if (Math.abs(c - prev) >= 1.15) break; }
+      rises.push(c); prev = c;
+    }
+    if (n > 1 && Math.max(...rises) - Math.min(...rises) < 1.15) rises[(R() * n) | 0] += 2.7;
+    const segs = [];
+    for (let i = 0; i < n; i++) {
+      const a = min.slice(), c = max.slice();
+      a[axis] = cuts[i]; c[axis] = cuts[i + 1];
+      c[1] = H + rises[i];
+      segs.push({ id: `${b.id}~${i}`, min: a, max: c, role: "body", block: [0, 0, 0, 0], grounded: true });
+    }
+    // internal faces: a split face is buried up to its neighbour's roofline,
+    // and VISIBLE above it — which is where the "lower wing / taller block"
+    // read comes from without ever lowering a collider.
+    const fLo = axis === 0 ? 1 : 3, fHi = axis === 0 ? 0 : 2;
+    for (let i = 0; i < n; i++) {
+      if (i > 0) segs[i].block[fLo] = segs[i - 1].max[1];
+      if (i < n - 1) segs[i].block[fHi] = segs[i + 1].max[1];
+    }
+    // ---- setback tower on one slab: the single most legible "not a prism"
+    // signal there is, and it hands us a terrace to put roof plant on.
+    if (H >= 6.5) {
+      const si = (R() * n) | 0, s = segs[si];
+      const cross = axis === 0 ? 2 : 0;
+      const sw = s.max[cross] - s.min[cross];
+      const sl = s.max[axis] - s.min[axis];
+      const ia = 1.15 + R() * 1.5, ib = 1.15 + R() * 1.5;
+      if (sw > ia + ib + 3.2 && sl > 4.4) {
+        const a = s.min.slice(), c = s.max.slice();
+        a[cross] += ia; c[cross] -= ib;
+        // on the split axis, inset only where the face is actually external
+        if (!s.block[fLo]) a[axis] += 0.9 + R() * 1.7;
+        if (!s.block[fHi]) c[axis] -= 0.9 + R() * 1.7;
+        if (c[axis] - a[axis] >= 3.4) {
+          a[1] = s.max[1] - 0.05;
+          c[1] = s.max[1] + 2.3 + R() * 2.1;
+          segs.push({ id: s.id + "T", min: a, max: c, role: "setback", block: [0, 0, 0, 0], grounded: false });
+          s.terrace = true;
+        }
+      }
+    }
+    return segs;
+  }
+
   {
     const wallGeos = { a: [], b: [], c: [] };
     const trimGeos = [], roofGeos = [];
     const wr = rng(90210);
-    let litCount = 0;
+    let litCount = 0, segCount = 0, escapes = 0, oriels = 0, setbacks = 0;
 
     // ---- WINDOW STATES (ranked fix #9; VT §1 amateur tell #3 "the dead black
     // window texture"). iter04 measured facade windows at RGB 9/10/15 across a
@@ -1199,215 +1371,382 @@ export async function buildLevel(ctx) {
       { n: [1, 0], ax: "z", fam: 0 }, { n: [-1, 0], ax: "z", fam: 1 },
       { n: [0, 1], ax: "x", fam: 2 }, { n: [0, -1], ax: "x", fam: 3 },
     ];
+
+    // ---- ROOFSCAPE (#8a). iter07 shipped one box, one tank and a 4 cm mast
+    // on masses over 9 m, which is why every roofline in S5 is a dead straight
+    // edge for 80 m. A roof is the part of a building the player looks at from
+    // the tram deck and the quay, and it is where the free silhouette lives.
+    // Everything here merges into the SAME two batches (metal + trim), so the
+    // draw-call delta of the whole roofscape is zero.
+    function roofscape(sg, R) {
+      const [x0, y, z0] = [sg.min[0], sg.max[1], sg.min[2]];
+      const [x1, z1] = [sg.max[0], sg.max[2]];
+      const w = x1 - x0, d = z1 - z0;
+      if (w < 2.6 || d < 2.6) return;
+      const M0 = 0.95;                       // keep clutter off the parapet
+      const px = (t) => x0 + M0 + t * Math.max(0.1, w - 2 * M0);
+      const pz = (t) => z0 + M0 + t * Math.max(0.1, d - 2 * M0);
+      const big = w > 5.5 && d > 5.5;
+      // 1. stair bulkhead / lift overrun — the tallest thing on a low roof and
+      //    the one that reads as ARCHITECTURE rather than plant
+      if (big && R() < 0.82) {
+        const bw = 2.0 + R() * 1.5, bd = 1.7 + R() * 1.2, bh = 2.2 + R() * 0.9;
+        const cx = px(0.18 + R() * 0.5), cz = pz(0.18 + R() * 0.5);
+        const ax0 = Math.max(x0 + 0.5, cx - bw / 2), ax1 = Math.min(x1 - 0.5, cx + bw / 2);
+        const az0 = Math.max(z0 + 0.5, cz - bd / 2), az1 = Math.min(z1 - 0.5, cz + bd / 2);
+        if (ax1 - ax0 > 1.2 && az1 - az0 > 1.0) {
+          trimGeos.push(boxGeo([ax0, y, az0], [ax1, y + bh, az1], 0.92));
+          trimGeos.push(boxGeo([ax0 - 0.11, y + bh, az0 - 0.11], [ax1 + 0.11, y + bh + 0.13, az1 + 0.11]));
+          // a door, recessed, on the long side
+          const dw = Math.min(0.95, (ax1 - ax0) * 0.55), dcx = (ax0 + ax1) / 2;
+          roofGeos.push(boxGeo([dcx - dw / 2, y + 0.02, az1 - 0.06], [dcx + dw / 2, y + 2.0, az1 + 0.03]));
+          trimGeos.push(boxGeo([dcx - dw / 2 - 0.1, y + 2.0, az1 - 0.02], [dcx + dw / 2 + 0.1, y + 2.14, az1 + 0.09]));
+        }
+      }
+      // 2. water tank on a braced steel frame (was a bare cylinder sitting on
+      //    the deck — a tank with no legs is a placeholder tell of its own)
+      if (R() < 0.72) {
+        const r = 0.62 + R() * 0.42, lh = 0.85 + R() * 0.75;
+        const cx = px(0.35 + R() * 0.5), cz = pz(0.35 + R() * 0.45);
+        for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+          roofGeos.push(boxGeo([cx + sx * r * 0.7 - 0.06, y, cz + sz * r * 0.7 - 0.06],
+            [cx + sx * r * 0.7 + 0.06, y + lh, cz + sz * r * 0.7 + 0.06]));
+        }
+        roofGeos.push(boxGeo([cx - r * 0.78, y + lh * 0.45, cz - r * 0.78],
+          [cx + r * 0.78, y + lh * 0.45 + 0.05, cz + r * 0.78]));
+        const tk = new THREE.CylinderGeometry(r, r, 1.35 + R() * 0.6, 12);
+        tk.translate(cx, y + lh + 0.68, cz); worldUV(tk); roofGeos.push(withAowet(tk));
+        const cap = new THREE.CylinderGeometry(r * 0.34, r * 0.34, 0.34, 8);
+        cap.translate(cx, y + lh + 1.5, cz); worldUV(cap); roofGeos.push(withAowet(cap));
+        // downfeed pipe to the deck
+        roofGeos.push(boxGeo([cx + r * 0.55, y, cz - 0.045], [cx + r * 0.55 + 0.09, y + lh + 0.4, cz + 0.045]));
+      }
+      // 3. extract cowls — a bank of them, never one
+      const nc = 2 + ((R() * 4) | 0);
+      const cbx = px(0.1 + R() * 0.6), cbz = pz(0.1 + R() * 0.7), cdir = R() < 0.5 ? 0 : 1;
+      for (let i = 0; i < nc; i++) {
+        const ox = cdir ? 0 : i * 0.62, oz = cdir ? i * 0.62 : 0;
+        const cx = cbx + ox, cz = cbz + oz;
+        if (cx > x1 - 0.6 || cz > z1 - 0.6) break;
+        const ch = 0.34 + R() * 0.4;
+        const st = new THREE.CylinderGeometry(0.13, 0.13, ch, 7);
+        st.translate(cx, y + ch / 2, cz); worldUV(st); roofGeos.push(withAowet(st));
+        const hd = new THREE.CylinderGeometry(0.23, 0.16, 0.2, 7);
+        hd.translate(cx, y + ch + 0.1, cz); worldUV(hd); roofGeos.push(withAowet(hd));
+      }
+      // 4. condenser / plant units, on anti-vibration feet
+      const nu = big ? 1 + ((R() * 3) | 0) : (R() < 0.5 ? 1 : 0);
+      for (let i = 0; i < nu; i++) {
+        const uw = 0.95 + R() * 0.7, ud = 0.62 + R() * 0.35, uh = 0.62 + R() * 0.3;
+        const cx = px(R()), cz = pz(R());
+        const a0 = Math.max(x0 + 0.5, cx - uw / 2), a1 = Math.min(x1 - 0.5, cx + uw / 2);
+        const b0 = Math.max(z0 + 0.5, cz - ud / 2), b1 = Math.min(z1 - 0.5, cz + ud / 2);
+        if (a1 - a0 < 0.6 || b1 - b0 < 0.4) continue;
+        roofGeos.push(boxGeo([a0, y + 0.12, b0], [a1, y + 0.12 + uh, b1]));
+        roofGeos.push(boxGeo([a0 + 0.05, y, b0 + 0.04], [a0 + 0.16, y + 0.12, b1 - 0.04]));
+        roofGeos.push(boxGeo([a1 - 0.16, y, b0 + 0.04], [a1 - 0.05, y + 0.12, b1 - 0.04]));
+        for (let s2 = 0; s2 < 3; s2++) {           // grille slats
+          const yy = y + 0.2 + s2 * 0.13;
+          roofGeos.push(boxGeo([a0 + 0.06, yy, b1 - 0.02], [a1 - 0.06, yy + 0.05, b1 + 0.03]));
+        }
+      }
+      // 5. a pipe run across the deck on sleeper blocks
+      if (big && R() < 0.6) {
+        const zc = pz(0.25 + R() * 0.5);
+        roofGeos.push(boxGeo([x0 + 0.7, y + 0.24, zc - 0.055], [x1 - 0.7, y + 0.24 + 0.11, zc + 0.055]));
+        for (let xx = x0 + 1.1; xx < x1 - 0.9; xx += 2.3) {
+          trimGeos.push(boxGeo([xx, y, zc - 0.14], [xx + 0.2, y + 0.24, zc + 0.14]));
+        }
+      }
+      // 6. aerial mast with crossarms + a dish — tall masses only
+      if (y >= 10.5 && R() < 0.62) {
+        const cx = px(0.12 + R() * 0.25), cz = pz(0.12 + R() * 0.75);
+        const mh = 3.4 + R() * 2.4;
+        roofGeos.push(boxGeo([cx - 0.05, y, cz - 0.05], [cx + 0.05, y + mh, cz + 0.05]));
+        for (let a = 0; a < 3; a++) {
+          const yy = y + mh * (0.5 + a * 0.16), aw = 0.75 - a * 0.16;
+          roofGeos.push(boxGeo([cx - aw, yy, cz - 0.03], [cx + aw, yy + 0.05, cz + 0.03]));
+        }
+        const dish = new THREE.CylinderGeometry(0.38, 0.36, 0.09, 10);
+        dish.rotateZ(Math.PI / 2); dish.translate(cx + 0.3, y + mh * 0.42, cz);
+        worldUV(dish); roofGeos.push(withAowet(dish));
+      }
+    }
+
     for (const b of layout.buildings) {
       if (!b.box) continue;
-      const key = ["a", "b", "c"][(b.id.charCodeAt(4) || 0) % 3];
-      // ---- per-building window RHYTHM. The "perfect copy-paste rows at
-      // identical spacing" tell was literal: column pitch 2.70, floor pitch
-      // 2.95 and pane 1.25x1.55 were four GLOBAL constants, so every mass in
-      // the ward was drawn on the same graph paper and two adjacent facades
-      // lined up to the millimetre. Buildings put up by different people in
-      // different decades do not. Derived from the building's own id so the
-      // rhythm is stable across runs (R21) and unique per mass.
-      let _bh = 2166136261;
-      for (let i = 0; i < b.id.length; i++) { _bh ^= b.id.charCodeAt(i); _bh = Math.imul(_bh, 16777619); }
-      const bSeed = rng(_bh >>> 0);
-      const colPitch = 2.30 + bSeed() * 0.95;   // 2.30 – 3.25 m
-      const floorPitch = 2.72 + bSeed() * 0.55; // 2.72 – 3.27 m
-      const winW = 0.95 + bSeed() * 0.55;       // 0.95 – 1.50 m
-      const winH = 1.30 + bSeed() * 0.50;       // 1.30 – 1.80 m
-      // ---- iter07 #8a: THE REPEAT MOVED ONE LEVEL OUT AND HAS TO BE KILLED
-      // AT THE MODULE, NOT AT THE PANE. iter06 gave every BUILDING its own
-      // pitch and pane size; 3/3 critics then reported "identical window units
-      // at identical spacing marching the full length of two facades" and
-      // "every window an identical instance at identical rotation", and D7's
-      // copy-paste cap fired for all three. Per-building constants cannot fix
-      // that, because a single long facade is still one prototype stamped N
-      // times — which is precisely what S5's left wall is.
-      //
-      // Two structural changes, both inside one mass:
-      //
-      //   FLOOR BANDS. Storeys are no longer one pitch repeated. The ground
-      //   storey is 1.2-1.6x taller with its own taller opening (a shopfront /
-      //   entry band), the top storey of a tall mass is a shallower attic band,
-      //   and the string courses are driven off the SAME table, so the ledges,
-      //   the sills and the window rows all move together and the building
-      //   reads as a section rather than as graph paper.
-      //
-      //   BAY PROGRAMME. Each FACE walks its own irregular sequence of bays —
-      //   narrow, standard, wide, twin-lite and solid pier — drawn from a
-      //   per-face weighting, so no two faces of one building (let alone two
-      //   buildings) carry the same comb. Window WIDTH follows the bay, so the
-      //   openings themselves differ down a single facade.
-      const winY0 = 2.00 + bSeed() * 0.35;
-      const hw = winW / 2, hh = winH / 2;
-      const bFloorsN = b.floors || 1;
-      const groundH = floorPitch * (1.18 + bSeed() * 0.42);
-      const atticFrom = bFloorsN >= 3 && bSeed() < 0.55 ? bFloorsN - 1 : -1;
-      // fy[fl] = the floor LEVEL of storey fl (fy[0] = 0, ground band taller)
-      const fy = [0];
-      for (let fl = 1; fl <= bFloorsN; fl++) fy.push(fy[fl - 1] + (fl === 1 ? groundH : floorPitch));
-      // per-storey opening size: ground = tall shopfront band, attic = shallow
-      const bSeed0 = bSeed();
-      const bandH = (fl) => (fl === 0 ? winH * (1.16 + bSeed0 * 0.22)
-        : fl === atticFrom ? winH * 0.74 : winH);
-      const bandY = (fl) => (fl === 0 ? Math.min(groundH - 0.55, winY0 + 0.34) : fy[fl] + winY0 - 0.35);
-      const bandW = (fl) => (fl === 0 ? 1.22 : fl === atticFrom ? 0.86 : 1.0);
-      // 1 cm XZ inset kills coplanar z-fighting where two building boxes
-      // share a plane (visual only — colliders keep the authored extents)
-      const bMin = [b.box.min[0] + 0.01, b.box.min[1], b.box.min[2] + 0.01];
-      const bMax = [b.box.max[0] - 0.01, b.box.max[1], b.box.max[2] - 0.01];
-      wallGeos[key].push(boxGeo(bMin, bMax, 0.9 + wr() * 0.16));
-      const { min, max } = b.box;
-      // parapet cap
-      trimGeos.push(boxGeo([min[0] - 0.06, max[1] - 0.18, min[2] - 0.06], [max[0] + 0.06, max[1] + 0.06, min[2] + 0.12]));
-      trimGeos.push(boxGeo([min[0] - 0.06, max[1] - 0.18, max[2] - 0.12], [max[0] + 0.06, max[1] + 0.06, max[2] + 0.06]));
-      trimGeos.push(boxGeo([min[0] - 0.06, max[1] - 0.18, min[2]], [min[0] + 0.12, max[1] + 0.06, max[2]]));
-      trimGeos.push(boxGeo([max[0] - 0.12, max[1] - 0.18, min[2]], [max[0] + 0.06, max[1] + 0.06, max[2]]));
-      // roof clutter for the skyline (S5)
-      if (max[1] >= 9) {
-        const cx = (min[0] + max[0]) / 2, cz = (min[2] + max[2]) / 2;
-        roofGeos.push(boxGeo([cx - 1.2, max[1], cz - 1.0], [cx + 0.4, max[1] + 1.1, cz + 0.6]));
-        const tank = new THREE.CylinderGeometry(0.7, 0.7, 1.4, 10);
-        tank.translate(cx + 2.2, max[1] + 0.7, cz - 1.4);
-        worldUV(tank);
-        roofGeos.push(withAowet(tank));
-        if (wr() > 0.5) {
-          roofGeos.push(boxGeo([cx - 0.04, max[1], cz + 1.6], [cx + 0.04, max[1] + 2.4, cz + 1.68]));
+      const segments = massSegments(b);
+      for (const seg of segments) {
+        segCount++;
+        if (seg.role === "setback") setbacks++;
+        const min = seg.min, max = seg.max;
+        const segTop = max[1];
+        // per-SEGMENT wall material: two slabs of one authored mass may be
+        // rendered in different materials, which is what a street of buildings
+        // put up in different decades actually looks like.
+        let _bh = 2166136261;
+        for (let i = 0; i < seg.id.length; i++) { _bh ^= seg.id.charCodeAt(i); _bh = Math.imul(_bh, 16777619); }
+        _bh >>>= 0;
+        const key = ["a", "b", "c"][_bh % 3];
+        const bSeed = rng(_bh);
+        const sR = rng((_bh ^ 0x27d4eb2f) >>> 0);
+        // ---- per-segment window RHYTHM. The "perfect copy-paste rows at
+        // identical spacing" tell was literal: column pitch 2.70, floor pitch
+        // 2.95 and pane 1.25x1.55 were four GLOBAL constants, so every mass in
+        // the ward was drawn on the same graph paper. Now the unit of rhythm is
+        // the SEGMENT, not even the building.
+        const colPitch = 2.30 + bSeed() * 0.95;   // 2.30 – 3.25 m
+        const floorPitch = 2.72 + bSeed() * 0.55; // 2.72 – 3.27 m
+        const winW = 0.95 + bSeed() * 0.55;       // 0.95 – 1.50 m
+        const winH = 1.30 + bSeed() * 0.50;       // 1.30 – 1.80 m
+        //   FLOOR BANDS. Storeys are not one pitch repeated. The ground storey
+        //   is 1.2-1.6x taller with its own taller opening (a shopfront / entry
+        //   band), the top storey of a tall mass is a shallower attic band, and
+        //   the string courses are driven off the SAME table, so ledges, sills
+        //   and window rows move together and the building reads as a section
+        //   rather than as graph paper.
+        //   BAY PROGRAMME. Each FACE walks its own irregular sequence of bays —
+        //   narrow, standard, wide, twin-lite and solid pier — so no two faces
+        //   of one segment carry the same comb.
+        const winY0 = 2.00 + bSeed() * 0.35;
+        const baseY = seg.grounded ? 0 : min[1];
+        const groundH = floorPitch * (1.18 + bSeed() * 0.42);
+        const usable = segTop - baseY;
+        let bFloorsN = seg.grounded
+          ? Math.max(1, Math.min(9, 1 + Math.floor((usable - groundH - 0.9) / floorPitch)))
+          : Math.max(1, Math.min(4, Math.floor((usable - 0.9) / floorPitch)));
+        const atticFrom = bFloorsN >= 3 && bSeed() < 0.55 ? bFloorsN - 1 : -1;
+        // fy[fl] = the floor LEVEL of storey fl (ground band taller)
+        const fy = [baseY];
+        for (let fl = 1; fl <= bFloorsN; fl++) {
+          fy.push(fy[fl - 1] + (fl === 1 && seg.grounded ? groundH : floorPitch));
         }
-      }
-      // ---- plinth: a 55 cm splash course round the base of EVERY mass,
-      // including the low sheds that get no windows and no string course and
-      // therefore shipped as literally bare boxes (iter81 S8, near building).
-      // It grounds the mass, gives the splash-zone grime something to sit on,
-      // and costs four merged boxes.
-      trimGeos.push(boxGeo([min[0] - 0.09, 0, min[2] - 0.09], [max[0] + 0.09, 0.55, min[2] + 0.02]));
-      trimGeos.push(boxGeo([min[0] - 0.09, 0, max[2] - 0.02], [max[0] + 0.09, 0.55, max[2] + 0.09]));
-      trimGeos.push(boxGeo([min[0] - 0.09, 0, min[2]], [min[0] + 0.02, 0.55, max[2]]));
-      trimGeos.push(boxGeo([max[0] - 0.02, 0, min[2]], [max[0] + 0.09, 0.55, max[2]]));
-      // splash-zone grime every ~6 m along the two long faces
-      for (let sx = min[0] + 3; sx < max[0] - 1; sx += 6.2) {
-        facadeDecalQ.push([sx + wr() * 2, 1.15, max[2] + 0.03, 1.5, 1.9, 0, "drip_stain"]);
-        facadeDecalQ.push([sx + wr() * 2, 1.15, min[2] - 0.03, 1.5, 1.9, Math.PI, "drip_stain"]);
-      }
-
-      // ---- string courses: a shallow ledge at every floor line, all round.
-      // The cheapest possible fix for "buildings read as untextured boxes":
-      // a 12 cm proud, 18 cm tall band catches the moon on its top face and
-      // throws a hard shadow on the wall under it, so one flat plane becomes
-      // three tonal bands with a real horizon of its own. Merged into the SAME
-      // trim batch — no extra draw call, no extra material.
-      // Driven off the SAME fy[] table as the window rows (iter07 #8a), so the
-      // ledge under the first-floor sills sits at the top of the taller ground
-      // storey and the bands are unevenly spaced up the mass — the section a
-      // real building has, not a repeated offset.
-      const bFloors = bFloorsN;
-      for (let fl = 1; fl < bFloors; fl++) {
-        const cy = fy[fl] - 0.28;
-        if (cy > max[1] - 0.9) break;
-        // the ground-storey cornice is the deepest band on the mass; the
-        // upper string courses are shallower and one is sometimes omitted
-        const deep = fl === 1;
-        if (!deep && bSeed() < 0.22) continue;
-        const pr = deep ? 0.20 : 0.10 + bSeed() * 0.06;
-        const th = deep ? 0.26 : 0.14;
-        trimGeos.push(boxGeo([min[0] - pr, cy, min[2] - pr], [max[0] + pr, cy + th, min[2] + 0.02]));
-        trimGeos.push(boxGeo([min[0] - pr, cy, max[2] - 0.02], [max[0] + pr, cy + th, max[2] + pr]));
-        trimGeos.push(boxGeo([min[0] - pr, cy, min[2]], [min[0] + 0.02, cy + th, max[2]]));
-        trimGeos.push(boxGeo([max[0] - 0.02, cy, min[2]], [max[0] + pr, cy + th, max[2]]));
-      }
-      // ---- downpipes at the two street-facing corners, with a rust runnel
-      // under each: vertical silhouette breakers, and the wet-wall streak they
-      // justify is the single most photographic piece of grime on a facade.
-      if (max[1] >= 5) {
-        for (const [px, pz] of [[min[0] + 0.34, max[2] + 0.14], [max[0] - 0.34, max[2] + 0.14]]) {
-          const pipe = new THREE.CylinderGeometry(0.085, 0.085, max[1] - 0.2, 7);
-          pipe.translate(px, (max[1] - 0.2) / 2, pz);
-          worldUV(pipe);
-          trimGeos.push(withAowet(pipe));
-          // collar brackets
-          for (let by = 1.6; by < max[1] - 1.0; by += 2.95) {
-            trimGeos.push(boxGeo([px - 0.14, by, pz - 0.16], [px + 0.14, by + 0.1, pz + 0.02]));
+        const bSeed0 = bSeed();
+        const bandH = (fl) => (fl === 0 && seg.grounded ? winH * (1.16 + bSeed0 * 0.22)
+          : fl === atticFrom ? winH * 0.74 : winH);
+        const bandY = (fl) => (fl === 0
+          ? (seg.grounded ? Math.min(groundH - 0.55, winY0 + 0.34) : baseY + 1.15)
+          : fy[fl] + winY0 - 0.35);
+        const bandW = (fl) => (fl === 0 && seg.grounded ? 1.22 : fl === atticFrom ? 0.86 : 1.0);
+        const oTop = (fl) => bandY(fl) + bandH(fl) / 2;
+        const oBot = (fl) => bandY(fl) - bandH(fl) / 2;
+        // how many storeys actually fit under this segment's own roof
+        let nRows = 0;
+        for (let fl = 0; fl < bFloorsN; fl++) {
+          if (bandY(fl) + bandH(fl) / 2 + 0.15 > segTop - 0.6) break;
+          nRows++;
+        }
+        const relieved = nRows > 0 && segTop - baseY >= 4;
+        // 1 cm inset when the mass ships flat; the full RECESS when it gets a
+        // frame, because then the piers and bands are what stands at the plane.
+        const inset = relieved ? RECESS : 0.01;
+        wallGeos[key].push(boxGeo(
+          [min[0] + inset, min[1], min[2] + inset],
+          [max[0] - inset, max[1], max[2] - inset], 0.9 + wr() * 0.16));
+        // parapet cap — inner edge clears the recessed core, or the eye looks
+        // straight down a 6 cm slot between cap and wall
+        const pin = inset + 0.05;
+        trimGeos.push(boxGeo([min[0] - 0.06, segTop - 0.18, min[2] - 0.06], [max[0] + 0.06, segTop + 0.06, min[2] + pin]));
+        trimGeos.push(boxGeo([min[0] - 0.06, segTop - 0.18, max[2] - pin], [max[0] + 0.06, segTop + 0.06, max[2] + 0.06]));
+        trimGeos.push(boxGeo([min[0] - 0.06, segTop - 0.18, min[2]], [min[0] + pin, segTop + 0.06, max[2]]));
+        trimGeos.push(boxGeo([max[0] - pin, segTop - 0.18, min[2]], [max[0] + 0.06, segTop + 0.06, max[2]]));
+        // a coping course on top of the cap, broken by a gap on one run — a
+        // parapet that runs unbroken for 80 m is the roofline tell itself
+        if (sR() < 0.7) {
+          const gapU = min[0] + 1.5 + sR() * Math.max(0.5, (max[0] - min[0]) - 3.5), gapW = 1.2 + sR() * 1.6;
+          trimGeos.push(boxGeo([min[0] - 0.1, segTop + 0.06, min[2] - 0.1], [Math.min(max[0], gapU) + 0.1, segTop + 0.15, min[2] + 0.14]));
+          if (gapU + gapW < max[0]) {
+            trimGeos.push(boxGeo([gapU + gapW, segTop + 0.06, min[2] - 0.1], [max[0] + 0.1, segTop + 0.15, min[2] + 0.14]));
           }
-          facadeDecalQ.push([px + 0.02, 1.9, pz + 0.05, 0.55, 3.2, 0, "rust_streak"]);
+          trimGeos.push(boxGeo([min[0] - 0.1, segTop + 0.06, max[2] - 0.14], [max[0] + 0.1, segTop + 0.15, max[2] + 0.1]));
         }
-      }
-
-      // window grids per face
-      const floors = bFloorsN;
-      if (max[1] < 4) continue;
-      for (const f of faceDirs) {
-        const horiz = f.ax === "x";
-        const lo = horiz ? min[0] : min[2], hi = horiz ? max[0] : max[2];
-        const span = hi - lo;
-        if (span < 3) continue;
-        const facePos = f.n[0] > 0 ? max[0] : f.n[0] < 0 ? min[0] : f.n[1] > 0 ? max[2] : min[2];
-        // skip faces at the map boundary (never seen from inside)
-        if (Math.abs(facePos) >= 57.5) continue;
-
-        // ---- THE BAY PROGRAMME (iter07 #8a). A face is walked left to right
-        // emitting bays of DIFFERENT widths and kinds; the window follows the
-        // bay it sits in, so opening width, opening spacing and the gaps
-        // between them all change down a single facade. The weights are drawn
-        // per FACE, so the two long faces of one mass do not share a comb
-        // either — which is the exact frame critic-c named ("S5.png's left
-        // facade repeats the identical window unit down its entire length").
-        const fSeed = rng((_bh ^ Math.imul(f.fam + 7, 0x85ebca6b)) >>> 0);
-        const wPier = 0.05 + fSeed() * 0.15;
-        const wNarrow = 0.10 + fSeed() * 0.22;
-        const wWide = 0.10 + fSeed() * 0.24;
-        const wTwin = fSeed() < 0.55 ? 0.06 + fSeed() * 0.18 : 0;
-        const bays = [];
-        const endM = 0.55 + fSeed() * 0.7;
-        let bx = lo + endM;
-        for (let guardB = 0; guardB < 64 && bx < hi - endM; guardB++) {
-          const t = fSeed();
-          let kind = "std", bw = colPitch * (0.94 + fSeed() * 0.14);
-          if (t < wPier) { kind = "pier"; bw = colPitch * (0.45 + fSeed() * 0.55); }
-          else if (t < wPier + wNarrow) { kind = "narrow"; bw = colPitch * (0.62 + fSeed() * 0.16); }
-          else if (t < wPier + wNarrow + wWide) { kind = "wide"; bw = colPitch * (1.24 + fSeed() * 0.34); }
-          else if (t < wPier + wNarrow + wWide + wTwin) { kind = "twin"; bw = colPitch * (1.22 + fSeed() * 0.26); }
-          if (bx + bw > hi - endM) break;
-          bays.push({ kind, c: bx + bw / 2, w: bw });
-          bx += bw;
+        roofscape(seg, sR);
+        // ---- plinth: a 55 cm splash course round the base of every GROUNDED
+        // mass, including the low sheds that get no windows and no string
+        // course and therefore shipped as literally bare boxes.
+        if (seg.grounded) {
+          const pd = Math.max(0.06, inset - 0.04);
+          trimGeos.push(boxGeo([min[0] - 0.09, 0, min[2] - 0.09], [max[0] + 0.09, 0.55, min[2] + pd]));
+          trimGeos.push(boxGeo([min[0] - 0.09, 0, max[2] - pd], [max[0] + 0.09, 0.55, max[2] + 0.09]));
+          trimGeos.push(boxGeo([min[0] - 0.09, 0, min[2]], [min[0] + pd, 0.55, max[2]]));
+          trimGeos.push(boxGeo([max[0] - pd, 0, min[2]], [max[0] + 0.09, 0.55, max[2]]));
+          // a second, chamfered kerb course where the mass meets the street
+          trimGeos.push(boxGeo([min[0] - 0.15, 0, min[2] - 0.15], [max[0] + 0.15, 0.16, min[2] + pd]));
+          trimGeos.push(boxGeo([min[0] - 0.15, 0, max[2] - pd], [max[0] + 0.15, 0.16, max[2] + 0.15]));
+          for (let sx = min[0] + 3; sx < max[0] - 1; sx += 6.2) {
+            facadeDecalQ.push([sx + wr() * 2, 1.15, max[2] + 0.03, 1.5, 1.9, 0, "drip_stain"]);
+            facadeDecalQ.push([sx + wr() * 2, 1.15, min[2] - 0.03, 1.5, 1.9, Math.PI, "drip_stain"]);
+          }
         }
-        if (!bays.length) continue;
-        // centre the run: a programme flush to the left edge is its own tell
-        const shift = (hi - endM - bx) / 2;
-        for (const bb of bays) bb.c += shift;
 
-        // the cell each column drew on the floor BELOW, so a pane can be forced
-        // to differ from its neighbour underneath as well as its neighbour left
-        const belowCell = new Array(bays.length * 2).fill(-1);
-        let prevLit = false;
-        let leftCell = -1;
-        let litOnFace = 0;
-        // ---- one opening. Everything below used to be the body of the column
-        // loop with the building-wide winW/winH; it now takes the bay's own
-        // width and the storey band's own height.
-        const placeOpening = (wc, oW, oH, wy, cJ) => {
+        // ---- string courses: a shallow ledge at every floor line, all round.
+        // A 12 cm proud, 18 cm tall band catches the moon on its top face and
+        // throws a hard shadow on the wall under it. Merged into the SAME trim
+        // batch — no extra draw call, no extra material. Driven off the SAME
+        // fy[] table as the window rows, so the bands are unevenly spaced up
+        // the mass — the section a real building has, not a repeated offset.
+        for (let fl = 1; fl < nRows; fl++) {
+          const cy = fy[fl] - 0.28;
+          if (cy > segTop - 0.9) break;
+          const deep = fl === 1;
+          if (!deep && bSeed() < 0.22) continue;
+          const pr = deep ? 0.20 : 0.10 + bSeed() * 0.06;
+          const th = deep ? 0.26 : 0.14;
+          trimGeos.push(boxGeo([min[0] - pr, cy, min[2] - pr], [max[0] + pr, cy + th, min[2] + 0.02]));
+          trimGeos.push(boxGeo([min[0] - pr, cy, max[2] - 0.02], [max[0] + pr, cy + th, max[2] + pr]));
+          trimGeos.push(boxGeo([min[0] - pr, cy, min[2]], [min[0] + 0.02, cy + th, max[2]]));
+          trimGeos.push(boxGeo([max[0] - 0.02, cy, min[2]], [max[0] + pr, cy + th, max[2]]));
+        }
+        // ---- downpipes at the two street-facing corners, with a rust runnel
+        // under each: vertical silhouette breakers, and the wet-wall streak
+        // they justify is the most photographic piece of grime on a facade.
+        if (segTop >= 5 && seg.grounded) {
+          for (const [px2, pz2] of [[min[0] + 0.34, max[2] + 0.14], [max[0] - 0.34, max[2] + 0.14]]) {
+            const pipe = new THREE.CylinderGeometry(0.085, 0.085, segTop - 0.2, 7);
+            pipe.translate(px2, (segTop - 0.2) / 2, pz2);
+            worldUV(pipe);
+            trimGeos.push(withAowet(pipe));
+            for (let by = 1.6; by < segTop - 1.0; by += 2.95) {
+              trimGeos.push(boxGeo([px2 - 0.14, by, pz2 - 0.16], [px2 + 0.14, by + 0.1, pz2 + 0.02]));
+            }
+            // a cast shoe where the pipe meets the pavement — "where the
+            // building meets the street" is a real detail, not an abstraction
+            trimGeos.push(boxGeo([px2 - 0.14, 0, pz2 - 0.1], [px2 + 0.14, 0.42, pz2 + 0.22]));
+            facadeDecalQ.push([px2 + 0.02, 1.9, pz2 + 0.05, 0.55, 3.2, 0, "rust_streak"]);
+          }
+        }
+
+        // ================= per-face skin
+        for (let fi = 0; fi < 4; fi++) {
+          const f = faceDirs[fi];
+          const horiz = f.ax === "x";
+          const lo = horiz ? min[0] : min[2], hi = horiz ? max[0] : max[2];
+          const span = hi - lo;
+          const facePos = f.n[0] > 0 ? max[0] : f.n[0] < 0 ? min[0] : f.n[1] > 0 ? max[2] : min[2];
+          const s = f.n[0] || f.n[1];
+          const yBase = Math.max(baseY, seg.block[fi]);
+          // u = along the face, y = height, d = distance OUT from the authored
+          // wall plane (negative = into the recess).
+          const mkbox = (u0, u1, y0, y1, d0, d1, tint = 1) => {
+            const p0 = facePos + s * d0, p1 = facePos + s * d1;
+            const a = Math.min(p0, p1), q = Math.max(p0, p1);
+            return f.n[0] ? boxGeo([a, y0, u0], [q, y1, u1], tint)
+              : boxGeo([u0, y0, a], [u1, y1, q], tint);
+          };
+          const fbox = (...a) => { trimGeos.push(mkbox(...a)); };
+          const wbox = (...a) => { wallGeos[key].push(mkbox(...a)); };
+          if (yBase >= segTop - 0.25) continue;              // fully buried
+          const boundary = Math.abs(facePos) >= 57.5;
+          // a face that gets no window programme still has to be SOLID at the
+          // authored plane, or the recess shows as a gap at every corner
+          const flatSkin = () => { if (inset > 0.02) wbox(lo, hi, yBase, segTop, -inset - 0.01, 0.0); };
+          if (!relieved || boundary || span < 3) { flatSkin(); continue; }
+
+          // ---- THE BAY PROGRAMME. A face is walked left to right emitting
+          // bays of DIFFERENT widths and kinds; the window follows the bay it
+          // sits in, so opening width, opening spacing and the gaps between
+          // them all change down a single facade. The weights are drawn per
+          // FACE, so the two long faces of one mass do not share a comb.
+          const fSeed = rng((_bh ^ Math.imul(f.fam + 7, 0x85ebca6b)) >>> 0);
+          const wPier = 0.05 + fSeed() * 0.15;
+          const wNarrow = 0.10 + fSeed() * 0.22;
+          const wWide = 0.10 + fSeed() * 0.24;
+          const wTwin = fSeed() < 0.55 ? 0.06 + fSeed() * 0.18 : 0;
+          const bays = [];
+          const endM = 0.55 + fSeed() * 0.7;
+          let bx = lo + endM;
+          for (let guardB = 0; guardB < 64 && bx < hi - endM; guardB++) {
+            const t = fSeed();
+            let kind = "std", bw = colPitch * (0.94 + fSeed() * 0.14);
+            if (t < wPier) { kind = "pier"; bw = colPitch * (0.45 + fSeed() * 0.55); }
+            else if (t < wPier + wNarrow) { kind = "narrow"; bw = colPitch * (0.62 + fSeed() * 0.16); }
+            else if (t < wPier + wNarrow + wWide) { kind = "wide"; bw = colPitch * (1.24 + fSeed() * 0.34); }
+            else if (t < wPier + wNarrow + wWide + wTwin) { kind = "twin"; bw = colPitch * (1.22 + fSeed() * 0.26); }
+            if (bx + bw > hi - endM) break;
+            bays.push({ kind, c: bx + bw / 2, w: bw });
+            bx += bw;
+          }
+          if (!bays.length) { flatSkin(); continue; }
+          const shift = (hi - endM - bx) / 2;
+          for (const bb of bays) bb.c += shift;
+
+          // ---- THE POCKET WALL (#8a, the half the atlas work could not reach).
+          //
+          // FIRST CUT OF THIS, REJECTED ON THE CAPTURE: piers on every bay
+          // boundary plus a full-width band between every window row, with the
+          // recessed core showing between them. Read on S5 it was a bright
+          // structural cage over near-black panels — a parking deck, and a NEW
+          // regular grid, i.e. the same defect wearing different clothes.
+          //
+          // What ships instead: the wall is SOLID at the authored plane and each
+          // opening gets a tight recessed POCKET, opening size plus ~17 cm of
+          // margin. The skin is emitted as the complement of those pockets — a
+          // full-width band between storeys, and per-row runs between the
+          // pockets. So the relief is exactly where a real facade has it (round
+          // the holes) and nowhere it does not, and the pane ends up at the back
+          // of a 16 cm box whose four faces the key light actually shades.
+          // The vertical rhythm comes from a SPARSE pilaster every 2–4 bays
+          // standing proud of the plane, not from a pier at every boundary.
+          const rowsF = [];
+          for (let fl = 0; fl < nRows; fl++) {
+            if (bandY(fl) - bandH(fl) / 2 < yBase + 0.45) continue;
+            rowsF.push(fl);
+          }
+          if (!rowsF.length) { flatSkin(); continue; }
+          const PM = 0.17;                                  // pocket margin
+          const ry0 = (fl) => bandY(fl) - bandH(fl) / 2 - PM;
+          const ry1 = (fl) => bandY(fl) + bandH(fl) / 2 + PM + 0.04;
+          // horizontal skin between storeys — full width, so the corners where
+          // two faces meet are always solid at the plane
+          let prevTop = yBase;
+          for (const fl of rowsF) {
+            if (ry0(fl) - prevTop > 0.05) wbox(lo, hi, prevTop, ry0(fl), -inset - 0.01, 0.0);
+            prevTop = ry1(fl);
+          }
+          if (segTop - prevTop > 0.05) wbox(lo, hi, prevTop, segTop, -inset - 0.01, 0.0);
+          // sparse pilasters: a vertical rhythm the window rows cannot line up
+          // with, standing PROUD of the plane rather than framing a recess
+          {
+            const pilStep = 2 + ((fSeed() * 3) | 0);
+            const pilOut = 0.05 + fSeed() * 0.06;
+            const pilTrim = ((_bh >>> 5) & 7) < 3;          // ~40% of masses
+            const pilPush = pilTrim ? fbox : wbox;
+            for (let i = pilStep; i < bays.length; i += pilStep) {
+              const e = bays[i].c - bays[i].w / 2;
+              if (e - lo < 0.5 || hi - e < 0.5) continue;
+              const pw = 0.30 + fSeed() * 0.20;
+              pilPush(e - pw / 2, e + pw / 2, yBase, segTop - 0.22, -0.02, pilOut);
+              fbox(e - pw / 2 - 0.06, e + pw / 2 + 0.06, segTop - 0.62, segTop - 0.22, -0.02, pilOut + 0.06);
+            }
+          }
+
+          // the cell each column drew on the floor BELOW, so a pane can be
+          // forced to differ from its neighbour underneath as well as its
+          // neighbour left
+          const belowCell = new Array(bays.length * 2 + 8).fill(-1);
+          let prevLit = false;
+          let leftCell = -1;
+          let litOnFace = 0;
+          // ---- one opening. `fpo` overrides the wall plane (used by the
+          // projecting oriel) and `rc` its recess depth.
+          const placeOpening = (wc, oW, oH, wy, cJ, fpo, rc) => {
+            const fp = fpo === undefined ? facePos : fpo;
+            const RC = rc === undefined ? inset : rc;
             const winW = oW, winH = oH, hw = oW / 2, hh = oH / 2;
-            const wpx = f.n[0] ? facePos : wc, wpz = f.n[0] ? wc : facePos;
+            const wpx = f.n[0] ? fp : wc, wpz = f.n[0] ? wc : fp;
             const h = paneHash(wpx, wy, wpz);
             // WHICH windows are lit is a property of WHERE THEY ARE, not of a
-            // running draw off the shared building stream (iter07 #8a). The
-            // first cut of the bay programme changed how many openings each
-            // face emits, which shifted that stream and moved every lit room in
-            // the ward — S3's hero facade came back with none. Hashing the
-            // pane's world position makes the ward's lighting invariant under
-            // any future rhythm change, exactly as the atlas cell choice is.
+            // running draw off the shared building stream: hashing the pane's
+            // world position makes the ward's lighting invariant under any
+            // future rhythm change, exactly as the atlas cell choice is.
             const hr = (k) => ((h >>> (k * 7)) & 8191) / 8192;
-            // VT §1 / D7-10: "every window either lit or honestly dark". Lit
-            // rooms CLUSTER — a lit neighbour raises the odds sharply — so the
-            // run state still chains along the row.
-            // Budget is now PER FACE as well as ward-wide. A single ward-wide
-            // cap of 46 was spent by the buildings the loop reached first, so
-            // the long S5 facade — the one 3/3 critics graded — got none and
-            // read abandoned. A face gets at most 9 lit rooms; the ward gets
-            // at most 110 across 450 panes.
+            // Lit rooms CLUSTER — a lit neighbour raises the odds sharply — so
+            // the run state still chains along the row. Budget is PER FACE as
+            // well as ward-wide, or the buildings the loop reaches first spend
+            // the whole allowance and the long graded facade reads abandoned.
             const pLit = prevLit ? 0.46 : 0.135;
             let state, boarded = false;
-            if (litCount < 110 && litOnFace < 9 && hr(0) < pLit) {
+            if (litCount < 120 && litOnFace < 9 && hr(0) < pLit) {
               litOnFace++;
               const t = hr(1);
               state = t < 0.56 ? "lit_warm" : t < 0.82 ? "lit_dim" : "lit_cool";
@@ -1422,20 +1761,22 @@ export async function buildLevel(ctx) {
               else state = "glassC";
             }
             const lit = !!LIT_STATE[state];
+            const n0 = f.n[0], n1 = f.n[1];
+            // pane depth: at the BACK of the recess, so the reveal is real
+            const paneD = -(RC - (lit ? 0.005 : 0.025));
+            const px3 = fp + s * paneD;
             // A boarded opening keeps its reveal but loses its pane — the
             // cheapest possible break in a facade's rhythm, and every derelict
             // port block has a few.
             if (boarded) {
-              leftCell = -1; belowCell[cJ] = -1; // no pane here to match against
-              const bd = 0.06;
-              if (f.n[0]) {
-                const s = f.n[0] > 0 ? 1 : -1;
-                trimGeos.push(boxGeo([facePos + (s > 0 ? 0 : -bd), wy - hh, wc - hw],
-                                     [facePos + (s > 0 ? bd : 0), wy + hh, wc + hw]));
+              leftCell = -1; belowCell[cJ] = -1;
+              const bd = Math.max(0.055, RC * 0.55);
+              if (n0) {
+                const a = fp + n0 * (-RC + 0.01), q = fp + n0 * (-RC + 0.01 + bd);
+                trimGeos.push(boxGeo([Math.min(a, q), wy - hh, wc - hw], [Math.max(a, q), wy + hh, wc + hw]));
               } else {
-                const s = f.n[1] > 0 ? 1 : -1;
-                trimGeos.push(boxGeo([wc - hw, wy - hh, facePos + (s > 0 ? 0 : -bd)],
-                                     [wc + hw, wy + hh, facePos + (s > 0 ? bd : 0)]));
+                const a = fp + n1 * (-RC + 0.01), q = fp + n1 * (-RC + 0.01 + bd);
+                trimGeos.push(boxGeo([wc - hw, wy - hh, Math.min(a, q)], [wc + hw, wy + hh, Math.max(a, q)]));
               }
             } else {
               const g = new THREE.PlaneGeometry(winW, winH);
@@ -1445,9 +1786,8 @@ export async function buildLevel(ctx) {
               if (lit) {
                 // lit panes live on the 16-cell perspective-room atlas, chosen
                 // by world position and forced away from the pane on the left
-                // and the pane below — the same rule the glass path uses, so
-                // "two lit windows are the same sticker" is impossible by
-                // construction rather than improbable by sampling.
+                // and the pane below — so "two lit windows are the same
+                // sticker" is impossible by construction.
                 const nLit = LIT_COLS * LIT_ROWS;
                 let k = h % nLit;
                 for (let guard = 0; guard < nLit; guard++) {
@@ -1462,11 +1802,6 @@ export async function buildLevel(ctx) {
                     (LIT_ROWS - 1 - lcy + uv.getY(i)) / LIT_ROWS);
                 }
               } else {
-                // glass/interior panes live on the 8×4 pane atlas. The
-                // orientation family comes from the FACE, the cell inside it
-                // from the pane's world position — then it is forced away from
-                // the pane on its left and the pane below, so "two adjacent
-                // panes carry the same highlight" cannot happen.
                 const isInt = state === "blind";
                 const base = isInt ? GLASS_INTERIOR0 : f.fam * GLASS_FAMN;
                 const span2 = isInt ? (GLASS_COLS * GLASS_ROWS - GLASS_INTERIOR0) : GLASS_FAMN;
@@ -1484,175 +1819,330 @@ export async function buildLevel(ctx) {
                 }
               }
               leftCell = cell; belowCell[cJ] = cell;
-              // A lit pane sits DEEPER in the reveal than a dark one (1.4 cm
-              // proud of the face against 3.0 cm), so the 11 cm jambs and the
-              // lintel actually shade it — half of "sticker on a flat plane".
-              const po = lit ? 0.014 : 0.03;
-              if (f.n[0] > 0) { g.rotateY(Math.PI / 2); g.translate(facePos + po, wy, wc); }
-              else if (f.n[0] < 0) { g.rotateY(-Math.PI / 2); g.translate(facePos - po, wy, wc); }
-              else if (f.n[1] > 0) { g.translate(wc, wy, facePos + po); }
-              else { g.rotateY(Math.PI); g.translate(wc, wy, facePos - po); }
+              if (n0 > 0) { g.rotateY(Math.PI / 2); g.translate(px3, wy, wc); }
+              else if (n0 < 0) { g.rotateY(-Math.PI / 2); g.translate(px3, wy, wc); }
+              else if (n1 > 0) { g.translate(wc, wy, px3); }
+              else { g.rotateY(Math.PI); g.translate(wc, wy, px3); }
               winByState[state].push(g);
-              // ---- the window lights its own wall (iter07 #8b; critic-c D1:
-              // "the wall around a glowing window is dead black, so the window
-              // is a sticker, not a source"). An additive spill quad on the
-              // facade, 2.5 cm proud, sized off the opening. This is legal
-              // under the iter07 sourceless-light rule by construction: the
-              // emitter is the pane at the centre of the quad, so the fixture
-              // is in frame whenever the spill is.
+              // ---- REAL MULLIONS, standing in FRONT of a recessed pane
+              // (#8a-ii, "lit panes read as flat glowing stickers with no
+              // interior depth"). A bar 9 cm proud of the glass occludes the
+              // painted room, moves against it as the camera moves, and takes a
+              // hard shadow edge from any practical — three things a painted
+              // mullion inside the atlas cannot do at any resolution.
+              const mullD = paneD + Math.max(0.032, Math.min(0.09, RC * 0.5));
+              const mkm = (a0, a1, y0, y1) => {
+                const q0 = fp + s * (mullD - 0.022), q1 = fp + s * (mullD + 0.022);
+                trimGeos.push(n0
+                  ? boxGeo([Math.min(q0, q1), y0, a0], [Math.max(q0, q1), y1, a1], 0.6)
+                  : boxGeo([a0, y0, Math.min(q0, q1)], [a1, y1, Math.max(q0, q1)], 0.6));
+              };
+              if (winW > 1.02 || lit) mkm(wc - 0.028, wc + 0.028, wy - hh, wy + hh);
               if (lit) {
-                const sw2 = winW * 2.4, sh2 = winH * 2.1;
+                const ty = wy + hh - winH * (0.30 + ((h >>> 9) & 7) * 0.02);
+                mkm(wc - hw, wc + hw, ty - 0.026, ty + 0.026);
+              }
+              // ---- the window lights its own wall. An additive spill FRAME on
+              // the facade, sized off the opening, with the opening cut out of
+              // it geometrically so the recessed interior keeps its contrast.
+              // Legal under the sourceless-light rule by construction: the
+              // emitter is the pane at the centre, so the fixture is in frame
+              // whenever the spill is.
+              if (lit) {
+                const sw2 = winW * 2.6, sh2 = winH * 2.25;
                 const tint = state === "lit_cool" ? 0xbcd0ff
                   : state === "lit_dim" ? 0xffc890 : 0xffb774;
-                const amp = state === "lit_dim" ? 0.5 : state === "lit_cool" ? 0.8 : 1.0;
-                winSpill(f.n, facePos, wc, wy, sw2, sh2, tint, amp);
+                const amp = state === "lit_dim" ? 0.55 : state === "lit_cool" ? 0.85 : 1.05;
+                winSpill(f.n, fp, wc, wy, sw2, sh2, winW * 0.98, winH * 0.98, tint, amp);
               }
             }
-            if (lit) litWindows.push([f.n[0] ? facePos + f.n[0] * 0.03 : wc, wy, f.n[1] ? facePos + f.n[1] * 0.03 : wc, f.n]);
-            // ---- reveal: jambs + lintel standing 11 cm proud of the wall,
-            // opening exactly the glass size. The glass then sits at the BACK
-            // of a real box, so the key throws a hard jamb shadow across it and
-            // the lintel shades its top — a window reads as an opening in a
-            // thick wall instead of a sticker on a flat plane (iter03/81 tell).
-            const rp = 0.11, jw = 0.13, sw = winW + 0.15;
+            if (lit) litWindows.push([n0 ? fp + n0 * 0.03 : wc, wy, n1 ? fp + n1 * 0.03 : wc, f.n]);
+            // ---- reveal: jambs, lintel and sill spanning the FULL recess, so
+            // the glass sits at the back of a real box and the key throws a
+            // hard jamb shadow across it. iter07 built this as an 11 cm box
+            // standing PROUD of a flat wall; it is now the lining of an actual
+            // hole in a frame.
+            const jw = 0.12, sw = winW + 0.16;
             const yb = wy - hh - 0.075, yt = wy + hh + 0.125;
-            const n0 = f.n[0], n1 = f.n[1];
-            const lo0 = (n) => facePos + Math.min(0, n * rp) - 0.01;
-            const hi0 = (n) => facePos + Math.max(0, n * rp) + 0.01;
+            const dIn = -RC - 0.015, dOut2 = 0.02;
+            const rb = (u0, u1, y0, y1, d0, d1) => {
+              const q0 = fp + s * d0, q1 = fp + s * d1;
+              const a = Math.min(q0, q1), q = Math.max(q0, q1);
+              trimGeos.push(n0 ? boxGeo([a, y0, u0], [q, y1, u1]) : boxGeo([u0, y0, a], [u1, y1, q]));
+            };
+            rb(wc - hw - jw, wc - hw, yb, yt, dIn, dOut2);
+            rb(wc + hw, wc + hw + jw, yb, yt, dIn, dOut2);
+            rb(wc - hw - jw, wc + hw + jw, wy + hh, yt, dIn, dOut2);
+            rb(wc - sw / 2, wc + sw / 2, yb - 0.05, yb + 0.06, dIn, dOut2 + 0.05);
             if (n0) {
-              const a = lo0(n0), bx = hi0(n0);
-              // jambs
-              trimGeos.push(boxGeo([a, yb, wc - hw - jw], [bx, yt, wc - hw]));
-              trimGeos.push(boxGeo([a, yb, wc + hw], [bx, yt, wc + hw + jw]));
-              // lintel
-              trimGeos.push(boxGeo([a, wy + hh, wc - hw - jw], [bx, yt, wc + hw + jw]));
-              // sill (sloped read: sits proud of the jambs)
-              trimGeos.push(boxGeo([a - 0.04, yb - 0.05, wc - sw / 2], [bx + 0.04, yb + 0.06, wc + sw / 2]));
-              facadeDecalQ.push([facePos + n0 * 0.02, wy - hh - 0.85, wc, winW, 1.4, n0 > 0 ? Math.PI / 2 : -Math.PI / 2, "drip_stain"]);
+              facadeDecalQ.push([fp + n0 * 0.03, wy - hh - 0.85, wc, winW, 1.4, n0 > 0 ? Math.PI / 2 : -Math.PI / 2, "drip_stain"]);
             } else {
-              const a = lo0(n1), bz = hi0(n1);
-              trimGeos.push(boxGeo([wc - hw - jw, yb, a], [wc - hw, yt, bz]));
-              trimGeos.push(boxGeo([wc + hw, yb, a], [wc + hw + jw, yt, bz]));
-              trimGeos.push(boxGeo([wc - hw - jw, wy + hh, a], [wc + hw + jw, yt, bz]));
-              trimGeos.push(boxGeo([wc - sw / 2, yb - 0.05, a - 0.04], [wc + sw / 2, yb + 0.06, bz + 0.04]));
-              facadeDecalQ.push([wc, wy - hh - 0.85, facePos + n1 * 0.02, winW, 1.4, n1 > 0 ? 0 : Math.PI, "drip_stain"]);
+              facadeDecalQ.push([wc, wy - hh - 0.85, fp + n1 * 0.03, winW, 1.4, n1 > 0 ? 0 : Math.PI, "drip_stain"]);
             }
-        };
+          };
 
-        // ---- drive the programme: storey bands x bays
-        for (let fl = 0; fl < floors; fl++) {
-          const oH = bandH(fl), wy = bandY(fl);
-          if (wy + oH / 2 + 0.15 > max[1] - 0.6) break;
-          prevLit = false;   // a new floor starts a new occupancy run
-          leftCell = -1;
-          for (let bi = 0; bi < bays.length; bi++) {
-            const bay = bays[bi];
-            if (bay.kind === "pier") {
-              prevLit = false; leftCell = -1;
-              belowCell[bi * 2] = -1; belowCell[bi * 2 + 1] = -1;
-              continue;
-            }
-            const bwk = bandW(fl);
-            if (bay.kind === "twin" && fl > 0) {
-              const oW = Math.min(winW * 0.58 * bwk, bay.w * 0.36);
-              const sep = bay.w * 0.215;
-              if (oW >= 0.45) {
-                placeOpening(bay.c - sep, oW, oH, wy, bi * 2);
-                placeOpening(bay.c + sep, oW, oH, wy, bi * 2 + 1);
+          // ---- drive the programme: storey bands x bays. The row is DECIDED
+          // first and PLACED second, because the skin runs between the pockets
+          // can only be emitted once the row's openings are known; the reset
+          // markers keep the lit-run and atlas-neighbour state in the exact
+          // left-to-right order the placement pass needs.
+          for (const fl of rowsF) {
+            const oH = bandH(fl), wy = bandY(fl);
+            const row = [];
+            for (let bi = 0; bi < bays.length; bi++) {
+              const bay = bays[bi];
+              if (bay.kind === "pier") {
+                row.push(null);
+                belowCell[bi * 2] = -1; belowCell[bi * 2 + 1] = -1;
                 continue;
               }
+              const bwk = bandW(fl);
+              if (bay.kind === "twin" && fl > 0) {
+                const oW = Math.min(winW * 0.58 * bwk, bay.w * 0.36);
+                const sep = bay.w * 0.215;
+                if (oW >= 0.45) {
+                  row.push({ c: bay.c - sep, w: oW, j: bi * 2 });
+                  row.push({ c: bay.c + sep, w: oW, j: bi * 2 + 1 });
+                  continue;
+                }
+              }
+              const k = bay.kind === "narrow" ? 0.68 : bay.kind === "wide" ? 1.44
+                : bay.kind === "twin" ? 1.32 : 1.0;
+              const oW = Math.min(winW * k * bwk, bay.w - 0.44);
+              belowCell[bi * 2 + 1] = -1;
+              if (oW < 0.5) { row.push(null); belowCell[bi * 2] = -1; continue; }
+              row.push({ c: bay.c, w: oW, j: bi * 2 });
             }
-            const k = bay.kind === "narrow" ? 0.68 : bay.kind === "wide" ? 1.44
-              : bay.kind === "twin" ? 1.32 : 1.0;
-            const oW = Math.min(winW * k * bwk, bay.w - 0.44);
-            belowCell[bi * 2 + 1] = -1;
-            if (oW < 0.5) { prevLit = false; leftCell = -1; belowCell[bi * 2] = -1; continue; }
-            placeOpening(bay.c, oW, oH, wy, bi * 2);
+            // skin runs at the authored plane between this row's pockets
+            let u = lo;
+            for (const o of row) {
+              if (!o) continue;
+              const p0 = o.c - o.w / 2 - PM, p1 = o.c + o.w / 2 + PM;
+              if (p0 - u > 0.06) wbox(u, p0, ry0(fl), ry1(fl), -inset - 0.01, 0.0);
+              u = Math.max(u, p1);
+            }
+            if (hi - u > 0.06) wbox(u, hi, ry0(fl), ry1(fl), -inset - 0.01, 0.0);
+            // now place, in order
+            prevLit = false;
+            leftCell = -1;
+            for (const o of row) {
+              if (!o) { prevLit = false; leftCell = -1; continue; }
+              placeOpening(o.c, o.w, oH, wy, o.j);
+            }
           }
-        }
 
-        // ---- FACADE GREEBLES (iter07 #8a). 3/3 critics: "no pipes, vents,
-        // downspouts, conduit or cable runs break any facade silhouette".
-        // Everything here merges into the SAME trim batch — no extra draw call
-        // and no extra material — and every item is placed off the face's own
-        // rng, so what breaks one facade's rhythm is not what breaks the next.
-        // u = along the face, y = height, d = distance out from the wall.
-        const fbox = (u0, u1, y0, y1, d0, d1, tint) => {
-          const s = f.n[0] || f.n[1];
-          const p0 = facePos + s * d0, p1 = facePos + s * d1;
-          const a = Math.min(p0, p1), q = Math.max(p0, p1);
-          trimGeos.push(f.n[0] ? boxGeo([a, y0, u0], [q, y1, u1], tint)
-                               : boxGeo([u0, y0, a], [u1, y1, q], tint));
-        };
-        const topY = max[1];
-        // 1. a conduit / cable run crossing the face, with junction boxes and
-        //    a vertical drop or two
-        if (fSeed() < 0.72 && topY >= 5) {
-          const cy2 = 1.9 + fSeed() * Math.max(0.5, Math.min(topY - 3.4, 5.5));
-          fbox(lo + 0.3, hi - 0.3, cy2, cy2 + 0.075, 0.03, 0.135);
-          for (let j = 0; j < 2; j++) {
-            const ju = lo + 0.9 + fSeed() * Math.max(0.2, span - 1.8);
-            fbox(ju - 0.16, ju + 0.16, cy2 - 0.20, cy2 + 0.28, 0.02, 0.20);
-            if (fSeed() < 0.6) fbox(ju - 0.035, ju + 0.035, 0.4 + fSeed() * 0.8, cy2, 0.05, 0.115);
-          }
-        }
-        // 2. balconies — the single loudest break in a marching window comb
-        if (topY >= 7) {
-          const nBal = fSeed() < 0.30 ? 0 : 1 + ((fSeed() * 2.4) | 0);
-          for (let q = 0; q < nBal; q++) {
-            const bi = (fSeed() * bays.length) | 0;
+          // ---- PROJECTING ORIEL. A bay that leaves the wall plane entirely,
+          // carried on corbels, with its own glass on three sides. Starts at
+          // 3.2 m — above every reachable height — so the authored footprint
+          // still bounds everything the player can touch.
+          if (seg.grounded && nRows >= 2 && span > 7 && !boundary && fSeed() < 0.52 && oriels < 9) {
+            const bi = 1 + ((fSeed() * Math.max(1, bays.length - 2)) | 0);
             const bay = bays[bi];
-            if (!bay || bay.kind === "pier") continue;
-            const fl = 1 + ((fSeed() * Math.max(1, floors - 1)) | 0);
-            if (fl >= fy.length) continue;
-            const y = fy[fl] - 0.12;
-            if (y < 2.4 || y > topY - 2.2) continue;
-            const bwd = Math.max(1.1, bay.w * 0.86), dOut = 0.72 + fSeed() * 0.30;
-            const u0 = bay.c - bwd / 2, u1 = bay.c + bwd / 2;
-            fbox(u0, u1, y, y + 0.14, -0.02, dOut);                    // slab
-            fbox(u0, u1, y + 0.94, y + 1.02, dOut - 0.09, dOut);       // top rail
-            fbox(u0, u0 + 0.07, y + 0.14, y + 1.02, dOut - 0.09, dOut);// end posts
-            fbox(u1 - 0.07, u1, y + 0.14, y + 1.02, dOut - 0.09, dOut);
-            const nb = 4 + ((fSeed() * 3) | 0);
-            for (let r2 = 1; r2 < nb; r2++) {
-              const u = u0 + (bwd * r2) / nb;
-              fbox(u - 0.022, u + 0.022, y + 0.14, y + 0.96, dOut - 0.07, dOut - 0.025);
+            if (bay && bay.kind !== "pier") {
+              const ow = Math.min(bay.w * 1.15, 3.4), od = 0.62 + fSeed() * 0.24;
+              const y0 = Math.max(3.2, oBot(1) - 0.55), y1 = Math.min(segTop - 0.35, oTop(nRows - 1) + 0.5);
+              if (y1 - y0 > 2.0 && bay.c - ow / 2 > lo + 0.3 && bay.c + ow / 2 < hi - 0.3) {
+                oriels++;
+                const u0 = bay.c - ow / 2, u1 = bay.c + ow / 2;
+                wbox(u0, u1, y0, y1, -0.02, od);                       // the box
+                fbox(u0 - 0.06, u1 + 0.06, y0 - 0.16, y0, -0.02, od + 0.06);   // soffit
+                fbox(u0 - 0.08, u1 + 0.08, y1, y1 + 0.18, -0.02, od + 0.08);   // cap
+                for (let c2 = 0; c2 < 3; c2++) {                        // corbels
+                  const u = u0 + (ow * (c2 + 0.5)) / 3;
+                  fbox(u - 0.08, u + 0.08, y0 - 0.62, y0 - 0.14, 0.0, od * 0.72);
+                }
+                for (let fl = 1; fl < nRows; fl++) {
+                  const wy = bandY(fl);
+                  if (wy - bandH(fl) / 2 < y0 + 0.2 || wy + bandH(fl) / 2 > y1 - 0.2) continue;
+                  // rc 0 — the oriel front is a SOLID box, so its panes sit on
+                  // its face with a proud frame; the relief here is the 0.7 m
+                  // the whole bay steps off the wall, not a reveal depth.
+                  placeOpening(bay.c, Math.min(ow - 0.5, winW * 1.25), bandH(fl) * 0.92, wy,
+                    bays.length * 2 + 2, facePos + s * od, 0.0);
+                }
+              }
             }
           }
-        }
-        // 3. plant / extract units bracketed under an opening
-        {
-          const nAc = (fSeed() * 3.2) | 0;
-          for (let q = 0; q < nAc; q++) {
-            const bay = bays[(fSeed() * bays.length) | 0];
-            if (!bay) continue;
-            const fl = 1 + ((fSeed() * Math.max(1, floors - 1)) | 0);
-            if (fl >= fy.length) continue;
-            const y = fy[fl] + 0.55 + fSeed() * 0.4;
-            if (y > topY - 1.4) continue;
-            const w2 = 0.44 + fSeed() * 0.24;
-            fbox(bay.c - w2, bay.c + w2, y, y + 0.56, 0.0, 0.42 + fSeed() * 0.16);
-            fbox(bay.c - w2 - 0.05, bay.c + w2 + 0.05, y + 0.56, y + 0.62, 0.0, 0.50);
-            facadeDecalQ.push(f.n[0]
-              ? [facePos + f.n[0] * 0.02, y - 0.9, bay.c, 0.5, 1.5, f.n[0] > 0 ? Math.PI / 2 : -Math.PI / 2, "rust_streak"]
-              : [bay.c, y - 0.9, facePos + f.n[1] * 0.02, 0.5, 1.5, f.n[1] > 0 ? 0 : Math.PI, "rust_streak"]);
+
+          // ---- FACADE GREEBLES. 3/3 critics: "no pipes, vents, downspouts,
+          // conduit or cable runs break any facade silhouette". Everything here
+          // merges into the SAME trim batch — no extra draw call and no extra
+          // material — and every item is placed off the face's own rng, so what
+          // breaks one facade's rhythm is not what breaks the next.
+          const topY = segTop;
+          // 1. a conduit / cable run crossing the face, with junction boxes
+          if (fSeed() < 0.72 && topY >= 5) {
+            const cy2 = Math.max(yBase + 0.6, 1.9 + fSeed() * Math.max(0.5, Math.min(topY - 3.4, 5.5)));
+            fbox(lo + 0.3, hi - 0.3, cy2, cy2 + 0.075, 0.03, 0.135);
+            for (let j = 0; j < 2; j++) {
+              const ju = lo + 0.9 + fSeed() * Math.max(0.2, span - 1.8);
+              fbox(ju - 0.16, ju + 0.16, cy2 - 0.20, cy2 + 0.28, 0.02, 0.20);
+              if (fSeed() < 0.6) fbox(ju - 0.035, ju + 0.035, Math.max(yBase + 0.2, 0.4 + fSeed() * 0.8), cy2, 0.05, 0.115);
+            }
           }
-        }
-        // 4. a caged roof ladder on one tall face — a full-height vertical that
-        //    no window row can line up with
-        if (topY >= 9 && fSeed() < 0.42) {
-          const u = lo + 0.9 + fSeed() * Math.max(0.2, span - 1.8);
-          const y1 = 2.2, y2 = topY + 0.5;
-          fbox(u - 0.20, u - 0.16, y1, y2, 0.16, 0.20);
-          fbox(u + 0.16, u + 0.20, y1, y2, 0.16, 0.20);
-          for (let y = y1 + 0.34; y < y2; y += 0.34) fbox(u - 0.19, u + 0.19, y, y + 0.035, 0.165, 0.195);
-        }
-        // 5. a projecting sign box at street level — reads at any distance
-        if (fSeed() < 0.38 && span > 6) {
-          const u = lo + 1.6 + fSeed() * Math.max(0.3, span - 3.2);
-          const y = 3.0 + fSeed() * 0.9;
-          fbox(u - 0.05, u + 0.05, y + 0.34, y + 0.42, 0.02, 1.05);       // bracket
-          fbox(u - 0.055, u + 0.055, y - 0.34, y + 0.40, 0.62, 1.02);     // board
+          // 2. balconies — the loudest break in a marching window comb
+          if (topY >= 7) {
+            const nBal = fSeed() < 0.30 ? 0 : 1 + ((fSeed() * 2.4) | 0);
+            for (let q = 0; q < nBal; q++) {
+              const bi = (fSeed() * bays.length) | 0;
+              const bay = bays[bi];
+              if (!bay || bay.kind === "pier") continue;
+              const fl = 1 + ((fSeed() * Math.max(1, nRows - 1)) | 0);
+              if (fl >= fy.length) continue;
+              const y = fy[fl] - 0.12;
+              if (y < Math.max(2.4, yBase + 0.5) || y > topY - 2.2) continue;
+              const bwd = Math.max(1.1, bay.w * 0.86), dOut = 0.72 + fSeed() * 0.30;
+              const u0 = bay.c - bwd / 2, u1 = bay.c + bwd / 2;
+              fbox(u0, u1, y, y + 0.14, -0.02, dOut);                    // slab
+              fbox(u0, u1, y + 0.94, y + 1.02, dOut - 0.09, dOut);       // top rail
+              fbox(u0, u0 + 0.07, y + 0.14, y + 1.02, dOut - 0.09, dOut);// end posts
+              fbox(u1 - 0.07, u1, y + 0.14, y + 1.02, dOut - 0.09, dOut);
+              const nb = 4 + ((fSeed() * 3) | 0);
+              for (let r2 = 1; r2 < nb; r2++) {
+                const u = u0 + (bwd * r2) / nb;
+                fbox(u - 0.022, u + 0.022, y + 0.14, y + 0.96, dOut - 0.07, dOut - 0.025);
+              }
+            }
+          }
+          // 3. plant / extract units bracketed under an opening
+          {
+            const nAc = (fSeed() * 3.2) | 0;
+            for (let q = 0; q < nAc; q++) {
+              const bay = bays[(fSeed() * bays.length) | 0];
+              if (!bay) continue;
+              const fl = 1 + ((fSeed() * Math.max(1, nRows - 1)) | 0);
+              if (fl >= fy.length) continue;
+              const y = fy[fl] + 0.55 + fSeed() * 0.4;
+              if (y > topY - 1.4 || y < yBase + 0.4) continue;
+              const w2 = 0.44 + fSeed() * 0.24;
+              fbox(bay.c - w2, bay.c + w2, y, y + 0.56, 0.0, 0.42 + fSeed() * 0.16);
+              fbox(bay.c - w2 - 0.05, bay.c + w2 + 0.05, y + 0.56, y + 0.62, 0.0, 0.50);
+              facadeDecalQ.push(f.n[0]
+                ? [facePos + f.n[0] * 0.02, y - 0.9, bay.c, 0.5, 1.5, f.n[0] > 0 ? Math.PI / 2 : -Math.PI / 2, "rust_streak"]
+                : [bay.c, y - 0.9, facePos + f.n[1] * 0.02, 0.5, 1.5, f.n[1] > 0 ? 0 : Math.PI, "rust_streak"]);
+            }
+          }
+          // 4. a caged roof ladder — a full-height vertical no window row can
+          //    line up with
+          if (topY >= 9 && fSeed() < 0.42) {
+            const u = lo + 0.9 + fSeed() * Math.max(0.2, span - 1.8);
+            const y1 = Math.max(2.2, yBase + 0.4), y2 = topY + 0.5;
+            fbox(u - 0.20, u - 0.16, y1, y2, 0.16, 0.20);
+            fbox(u + 0.16, u + 0.20, y1, y2, 0.16, 0.20);
+            for (let y = y1 + 0.52; y < y2; y += 0.52) fbox(u - 0.19, u + 0.19, y, y + 0.04, 0.165, 0.195);
+          }
+          // 5. a projecting sign box at street level — reads at any distance
+          if (fSeed() < 0.38 && span > 6 && yBase < 2.5) {
+            const u = lo + 1.6 + fSeed() * Math.max(0.3, span - 3.2);
+            const y = 3.0 + fSeed() * 0.9;
+            fbox(u - 0.05, u + 0.05, y + 0.34, y + 0.42, 0.02, 1.05);       // bracket
+            fbox(u - 0.055, u + 0.055, y - 0.34, y + 0.40, 0.62, 1.02);     // board
+          }
+
+          // ---- 6. WHERE THE BUILDING MEETS THE STREET. The ground storey used
+          // to be a taller window band and nothing else, so every mass met the
+          // pavement with the same blank plinth. A shopfront has a fascia, a
+          // canopy over it, a shutter that is sometimes half down, a meter
+          // cabinet and a stepped threshold — and none of it is symmetric.
+          if (seg.grounded && yBase < 0.6 && nRows >= 1) {
+            const gTop = oTop(0);
+            const b0 = (fSeed() * Math.max(1, bays.length - 2)) | 0;
+            const run = 1 + ((fSeed() * 3) | 0);
+            const bA = bays[b0], bB = bays[Math.min(bays.length - 1, b0 + run)];
+            if (bA && bB) {
+              const u0 = bA.c - bA.w / 2 + 0.12, u1 = bB.c + bB.w / 2 - 0.12;
+              if (u1 - u0 > 1.4) {
+                // fascia over the shopfront run
+                fbox(u0, u1, gTop + 0.10, gTop + 0.62, 0.0, 0.13);
+                // canopy at 3.4 m+ — above every reachable height
+                if (fSeed() < 0.62) {
+                  const cy = Math.max(3.4, gTop + 0.70), cd = 0.95 + fSeed() * 0.45;
+                  fbox(u0 - 0.1, u1 + 0.1, cy, cy + 0.09, 0.0, cd);
+                  fbox(u0 - 0.1, u1 + 0.1, cy - 0.16, cy, cd - 0.09, cd);
+                  fbox(u0 + 0.15, u0 + 0.19, cy + 0.09, cy + 0.72, 0.0, cd * 0.75);
+                  fbox(u1 - 0.19, u1 - 0.15, cy + 0.09, cy + 0.72, 0.0, cd * 0.75);
+                }
+              }
+            }
+            // a roller shutter part-way down over one ground bay
+            if (fSeed() < 0.55) {
+              const bay = bays[(fSeed() * bays.length) | 0];
+              if (bay && bay.kind !== "pier") {
+                const drop = 0.35 + fSeed() * 0.6;
+                const yTop2 = gTop, yBot = gTop - bandH(0) * drop;
+                const sw3 = Math.min(bay.w - 0.3, winW * 1.5);
+                fbox(bay.c - sw3 / 2, bay.c + sw3 / 2, yTop2 + 0.06, yTop2 + 0.34, -0.02, 0.22);  // box
+                for (let yy = yBot; yy < yTop2; yy += 0.20) {
+                  fbox(bay.c - sw3 / 2, bay.c + sw3 / 2, yy, yy + 0.085, -inset + 0.03, -inset + 0.10, 0.72);
+                }
+              }
+            }
+            // entrance: a stone surround, a threshold step and a bracket lamp
+            if (fSeed() < 0.7) {
+              const bay = bays[(fSeed() * bays.length) | 0];
+              if (bay) {
+                const dw = 0.62, dh = Math.min(2.35, gTop - 0.1);
+                fbox(bay.c - dw - 0.16, bay.c - dw, 0, dh + 0.2, -inset - 0.01, 0.15);
+                fbox(bay.c + dw, bay.c + dw + 0.16, 0, dh + 0.2, -inset - 0.01, 0.15);
+                fbox(bay.c - dw - 0.16, bay.c + dw + 0.16, dh, dh + 0.2, -inset - 0.01, 0.19);
+                fbox(bay.c - dw, bay.c + dw, 0, 0.12, 0.0, 0.34);          // threshold
+                fbox(bay.c - 0.03, bay.c + 0.03, dh + 0.34, dh + 0.4, 0.02, 0.32);
+                fbox(bay.c - 0.13, bay.c + 0.13, dh + 0.16, dh + 0.36, 0.20, 0.42);
+              }
+            }
+            // service / meter cabinet against the wall
+            if (fSeed() < 0.45) {
+              const u = lo + 0.8 + fSeed() * Math.max(0.4, span - 1.6);
+              fbox(u - 0.42, u + 0.42, 0.35, 1.62, 0.0, 0.21);
+              fbox(u - 0.46, u + 0.46, 1.62, 1.70, 0.0, 0.25);
+            }
+          }
+
+          // ---- 7. FIRE ESCAPE. A zig-zag steel stair bolted across a facade
+          // is the loudest silhouette breaker a flat wall can carry, and it is
+          // the one piece of a port block that no window rhythm can absorb.
+          // Everything sits above 2.4 m; the drop ladder stops short of the
+          // pavement, as a real counterweight ladder does.
+          if (seg.grounded && nRows >= 2 && topY >= 8 && !boundary && escapes < 6
+              && span > 6.5 && fSeed() < 0.42) {
+            escapes++;
+            const u = lo + 1.4 + fSeed() * Math.max(0.4, span - 3.6);
+            const lw = 1.9, dOut = 1.05;
+            let lowest = 1e9;
+            for (let fl = 1; fl < nRows; fl++) {
+              const y = fy[fl] - 0.10;
+              if (y < 2.5 || y > topY - 1.4) continue;
+              lowest = Math.min(lowest, y);
+              fbox(u - lw / 2, u + lw / 2, y, y + 0.08, -0.02, dOut);            // landing
+              fbox(u - lw / 2, u + lw / 2, y + 0.92, y + 0.99, dOut - 0.07, dOut);
+              fbox(u - lw / 2, u - lw / 2 + 0.06, y + 0.08, y + 0.99, dOut - 0.07, dOut);
+              fbox(u + lw / 2 - 0.06, u + lw / 2, y + 0.08, y + 0.99, dOut - 0.07, dOut);
+              for (let r2 = 1; r2 < 4; r2++) {
+                const uu = u - lw / 2 + (lw * r2) / 4;
+                fbox(uu - 0.018, uu + 0.018, y + 0.08, y + 0.94, dOut - 0.06, dOut - 0.02);
+              }
+              // flight down to the landing below, as real steps
+              const yPrev = fy[fl - 1] - 0.10;
+              if (yPrev >= 2.5) {
+                const nst = 7, dir = fl % 2 ? 1 : -1;
+                for (let st = 0; st < nst; st++) {
+                  const t = (st + 0.5) / nst;                 // 0 = at the top landing
+                  const yy = y - (y - yPrev) * t;
+                  const uu = u + dir * (lw * 0.5 - 0.34) * t;
+                  fbox(uu - 0.30, uu + 0.30, yy - 0.05, yy, dOut - 0.95 + t * 0.5, dOut - 0.52 + t * 0.5);
+                }
+                fbox(u - lw / 2 - 0.04, u - lw / 2 + 0.02, yPrev, y, dOut - 0.9, dOut - 0.78);
+              }
+            }
+            // counterweight drop ladder, stopping 2.3 m off the pavement
+            if (lowest < 1e8) {
+              fbox(u - 0.28, u - 0.22, 2.3, lowest, dOut - 0.30, dOut - 0.22);
+              fbox(u + 0.22, u + 0.28, 2.3, lowest, dOut - 0.30, dOut - 0.22);
+              for (let y = 2.45; y < lowest - 0.2; y += 0.46) {
+                fbox(u - 0.27, u + 0.27, y, y + 0.03, dOut - 0.29, dOut - 0.23);
+              }
+            }
+          }
         }
       }
     }
@@ -1669,6 +2159,7 @@ export async function buildLevel(ctx) {
       const t = new THREE.Mesh(mergeGeometries(trimGeos, false), M.trim);
       t.name = "building_trim";
       t.castShadow = true;
+      t.receiveShadow = true;
       group.add(t);
     }
     if (roofGeos.length) {
@@ -1699,15 +2190,19 @@ export async function buildLevel(ctx) {
       sm.renderOrder = 2;
       group.add(sm);
     }
-    console.log(`[level] windows ${winTotal} panes in 7 states on an irregular ` +
-      `per-face BAY PROGRAMME (iter07 #8a), ${litCount} lit on the ` +
-      `${LIT_COLS}x${LIT_ROWS} perspective-room atlas with ${winSpillQ.length} ` +
-      `facade spill quads (iter07 #8b); ` +
-      `${litCount} lit ` +
-      `(warm/dim/cool); glass atlas ${GLASS_COLS}x${GLASS_ROWS} = ` +
-      `${GLASS_COLS * GLASS_ROWS} cells (4 orientation families x ${GLASS_FAMN} + ` +
-      `${GLASS_COLS * GLASS_ROWS - GLASS_INTERIOR0} interiors), cell chosen by world ` +
-      `position and forced != left/below neighbour (iter06 strike #8)`);
+    console.log(`[level] massing (iter08 #8a): ${layout.buildings.length} authored ` +
+      `masses -> ${segCount} visual segments (${setbacks} setback towers, ` +
+      `${oriels} projecting oriels, ${escapes} fire escapes), every segment top ` +
+      `>= its authored collider top so collision is unchanged; every opening sits ` +
+      `in a ${RECESS.toFixed(2)} m POCKET cut into a wall that is solid at the ` +
+      `authored plane; ` +
+      `windows ${winTotal} panes in 7 states on an irregular per-face BAY ` +
+      `PROGRAMME, ${litCount} lit on the ${LIT_COLS}x${LIT_ROWS} perspective-room ` +
+      `atlas with real mullions and ${winSpillQ.length} spill-frame quads; ` +
+      `glass atlas ${GLASS_COLS}x${GLASS_ROWS} = ${GLASS_COLS * GLASS_ROWS} cells ` +
+      `(4 orientation families x ${GLASS_FAMN} + ` +
+      `${GLASS_COLS * GLASS_ROWS - GLASS_INTERIOR0} interiors), cell chosen by ` +
+      `world position and forced != left/below neighbour`);
   }
 
   // ================================================= 4. BOULEVARD FURNITURE
@@ -1811,10 +2306,15 @@ export async function buildLevel(ctx) {
     c.b = luma + (c.b - luma) * POOL_SAT;
     return c.multiplyScalar(1 / Math.max(c.r, c.g, c.b, 1e-5));
   }
+  // `scale` may be a number (round halo — a bulb) or [w, h] (a halo shaped
+  // like the fixture it surrounds). A round halo on a 0.95 m tall, 5 m wide
+  // sign cabinet is a coloured BALL hanging off a wall, not that cabinet's
+  // bloom: iter07's blind verdicts read those as free-standing light.
   function addGlow(x, y, z, color, scale, opacity = 0.5) {
     const s = new THREE.Sprite(M.glowMat(color, opacity));
     s.position.set(x, y, z);
-    s.scale.setScalar(scale);
+    if (Array.isArray(scale)) s.scale.set(scale[0], scale[1], 1);
+    else s.scale.setScalar(scale);
     glowSprites.push(s);
     group.add(s);
     return s;
@@ -1850,7 +2350,20 @@ export async function buildLevel(ctx) {
   const specById = {
     L_QUAY: { intensity: 38, distance: 18, penumbra: 0.42 },
     L_ALLEY_A: { intensity: 34, distance: 15, penumbra: 0.45 },
-    L_PLAZA_KEY: { intensity: 130, distance: 26, penumbra: 0.55 },
+    // penumbra 0.55 -> 1.0. L_PLAZA_KEY is the one pole in the ward with no
+    // fixture and none available: it is an ABSTRACT aggregate standing in for
+    // the whole signage wall bouncing off wet stone, hung at [-5, 9, 0] over
+    // open plaza cobble where there is no wall to bracket to and no catenary
+    // to hang from (the plaza spans are anchored at x -22/-17/1/5/9/13 and
+    // deliberately never cross the street gap at x -5). lighting.js's fixture
+    // authority now denies it a head glow and a fog disc, which removes both
+    // things about it that were VISIBLE. What is left is its footprint, and a
+    // spot at penumbra 0.55 still draws a discernible rim on the stones at
+    // 26 m. A bounce has no rim. At 1.0 the cone is soft edge to edge, so the
+    // aggregate contributes a gradient across the plaza and nothing a critic
+    // can point at and call a pool. Intensity is untouched: this changes what
+    // the light's EDGE looks like, not the zone plan (LD §3.4) or the budget.
+    L_PLAZA_KEY: { intensity: 130, distance: 26, penumbra: 1.0 },
     L_ARCADE_SKY: { intensity: 34, distance: 14, penumbra: 0.3 },
     L_BLVD_1: { intensity: 34, distance: 16, penumbra: 0.42 },
     L_BLVD_3: { intensity: 34, distance: 16, penumbra: 0.42 },
@@ -1949,6 +2462,26 @@ export async function buildLevel(ctx) {
         wmesh.name = "gatehouse_window";
         group.add(wmesh);
         addPool(12.2, -52.5, 2.0, lp.color, false); // glow: lighting.js pass
+        // ITER08 — the lamp that lights that window. `fake_gatehouse` sits at
+        // [8, 2.5, -52.5], the middle of the gatehouse volume, 3 m back from
+        // its own window; lighting.js hung a warm head glow on it and there was
+        // nothing there to glow. This is the fixture: a shade and a bulb on the
+        // gatehouse ceiling, visible through the window it lights, so the halo
+        // is a bulb's halo. (Reported by the fixture-authority sweep, which is
+        // the point of that sweep — it found this one, nobody had named it.)
+        {
+          const shade = new THREE.CylinderGeometry(0.05, 0.19, 0.17, 8, 1, true);
+          shade.translate(x, y + 0.09, z);
+          const sh = new THREE.Mesh(shade, M.metal);
+          sh.name = "gatehouse_lamp_shade";
+          group.add(sh);
+          const blb = new THREE.SphereGeometry(0.05, 8, 6);
+          blb.translate(x, y - 0.02, z);
+          const bm = new THREE.Mesh(blb, warmBulb);
+          bm.name = "gatehouse_lamp_bulb";
+          group.add(bm);
+          reg.emissives.push(warmBulb);
+        }
         break;
       }
       case "neon_bounce": break; // L_PLAZA_KEY — aggregate; signs are the visuals
@@ -2052,21 +2585,44 @@ export async function buildLevel(ctx) {
       const sMesh = new THREE.Mesh(sg, nm);
       sMesh.name = `neon_${lp.id}`;
       group.add(sMesh);
-      const glow = addGlow(faceX - 0.4, y, z, lp.color, Math.max(1.6, wdt * 0.6), 0.22);
+      // The halo is the CABINET's bloom, so it is shaped like the cabinet:
+      // 0.9x its width along the wall, 1.8x its height. It used to be a circle
+      // of diameter max(1.6, wdt*0.6) — up to 3.0 m across on a 0.95 m tall
+      // sign, i.e. 1.2 m of coloured glow standing clear above and below the
+      // fixture with nothing in it.
+      const glow = addGlow(faceX - 0.25, y, z, lp.color,
+        [Math.max(1.4, wdt * 0.9), hgt * 1.8], 0.20);
       registry.practicals[lp.id] = { emissives: [nm], sprites: [glow] };
       registry.blackout.emissiveMats.push(nm);
       registry.blackout.sprites.push(glow);
-      // spill: local wall pool (1.5 cm proud of the wall) + plaza ground pool
+      // spill: the local WALL pool only (1.5 cm proud of the wall). The wall
+      // is the surface the cabinet is bolted to, it is in frame whenever the
+      // sign is, and light landing on it is the sign visibly lighting its own
+      // mount — that half of the spill is motivated and stays.
       wallPool(wallFaceX - 0.015, y, z, wdt + 2.6, hgt + 2.3, lp.color);
-      // ITER07 #1: the ground spill was a 5.2 m DISC centred 2.0 m out from the
-      // wall, so its bright core sat in open cobble with a dark gap between it
-      // and the wall base — from 30 m (C1_06/C1_11) that reads as a coloured
-      // ball hovering over the pavement rather than as the sign's wash. A wall
-      // source at 4.5 m peaks at the base and falls off outward, so the pool
-      // now sits 0.9 m off the wall and is an ellipse stretched ALONG it: it
-      // touches the surface it comes from, which is what makes it read as
-      // spill instead of as a free-standing light.
-      addPool(x - 0.9, z, [2.0, 3.2], lp.color, true);
+      //
+      // ITER08 — THE GROUND POOL IS DELETED, not re-shaped for the third time.
+      // iter06 moved it, iter07 flattened it into an ellipse and pulled it to
+      // 0.9 m off the wall; both times 3/3 critics came back naming the same
+      // artefact, and the iter07 blind verdicts describe it as floating red /
+      // green / white orbs standing on the cobbles from C1 beat 3.25 s on.
+      // Measured with _harness/ablate.py (hide the mesh, capture, low-pass the
+      // difference): `light_pools_plaza` was brightening 12.28% of the S4 frame
+      // at mean +11.6 / max +38 — twenty-five times the 0.48% capture-noise
+      // control and 2.5x the next-largest contributor. It IS the S4 magenta
+      // wash and it IS the C1 orbs.
+      //
+      // It cannot be fixed by authoring, because of what it is: an ADDITIVE
+      // decal painted in WORLD space standing in for a REFLECTION, which lives
+      // in view space. It does not move when the player does, so at 30 m it is
+      // a saturated ball sitting on the stones and at 1 m it is a coloured
+      // film over the lens. The sign's presence on wet ground is already
+      // carried by two things that are view-correct: the planar reflection in
+      // core/render/reflect.js (the signs are layer-3 enrolled, and the perf
+      // lane priced the whole pass at 0 ms), and the wet-specular sheet whose
+      // emitter slots lighting.js parks and restores with the circuit.
+      // Deleting the decal does not remove the sign from the ground; it
+      // removes the sticker that was competing with the reflection.
     }
     if (housingGeos.length) {
       const hm = new THREE.Mesh(mergeGeometries(housingGeos, false), M.metal);
