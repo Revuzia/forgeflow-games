@@ -1126,8 +1126,16 @@ def make_materials(tex):
         # the multicoating rim on that lens — a thin cool ring that catches the
         # scene's practicals at the glass edge. Dim on purpose: it is a coating
         # flare, not a light source, and VT §1 does not permit a new emitter.
+        # emissive cut ~3.7x from the first cut (0.055, 0.140, 0.145) after a
+        # four-way live A/B on the S2 frame: at the original level the ring was
+        # a saturated mint circle that pulled the eye off the reticle, and at a
+        # quarter of it the ring reads as a coating catching the street rather
+        # than as a light. Cutting the LENS opacity instead was also tried and
+        # is the wrong knob — below ~0.20 the sight picture becomes
+        # indistinguishable from the street around the tube and the whole
+        # "there is glass here" cue goes with it.
         "arcoat": _mat("br_arcoat", None, (0.055, 0.075, 0.070), None, None,
-                       rough_factor=0.16, emissive=(0.055, 0.140, 0.145)),
+                       rough_factor=0.16, emissive=(0.017, 0.040, 0.036)),
         "glove": None,  # built at arm-cut time (needs the soldier image)
     }
 
@@ -1352,6 +1360,20 @@ def uv_axial_project(objs, m_per_tile):
         # would stretch a wide objective bell and squash a narrow eyecup.
         rs = [math.hypot(v.co[i1] - cA, v.co[i2] - cB) for v in me.vertices]
         r_ref = max(1e-4, sum(rs) / len(rs))
+        # SEAM (W1, iter07). A cylindrical unwrap has one column where U must
+        # jump by a whole circumference, and that seam is invisible ONLY if the
+        # texture tiles exactly across it. `ang * r_ref / mpt` gives the right
+        # metric density and an arbitrary fractional tile count, so the two
+        # sides of the seam sampled different parts of the map and the join
+        # drew a hard line — the bright zig-zag running down the inside of the
+        # S2 ring, which survived every geometry change thrown at it (bore
+        # segments 44 -> 180 -> 72 matched to the shell: unmoved, pixel for
+        # pixel, because it was never geometry). It sits where it does for a
+        # reason worth keeping: the ADS eye rides ~1.2 mm above the optical
+        # axis, so the tube's BOTTOM inner wall is the part you see, and the
+        # seam is at the bottom of the tube. Rounding the tile count to a whole
+        # number costs at most half a tile of density and closes the seam.
+        u_tiles = max(1.0, round(2.0 * math.pi * r_ref / mpt))
         for p in me.polygons:
             if abs(p.normal[a]) > 0.6:              # cap / bore-cut annulus
                 for li in p.loop_indices:
@@ -1361,7 +1383,25 @@ def uv_axial_project(objs, m_per_tile):
             ref = None
             for li in p.loop_indices:
                 co = me.vertices[me.loops[li].vertex_index].co
-                ang = math.atan2(co[i2] - cB, co[i1] - cA)
+                # BRANCH CUT AT THE TOP OF THE TUBE, NOT THE BOTTOM (W1,
+                # iter07). A cylindrical unwrap always has one seam column, and
+                # the generated noise fields are not periodic, so integer tile
+                # counts cannot make the two sides match — the seam is a line
+                # wherever it lands. So land it where nobody looks. Raycast on
+                # the shipped S2 frame put the bright zig-zag squarely on
+                # `sc_cup` at u = -0.007 .. -0.022, i.e. the seam column, and
+                # atan2(x, z_rel) cuts at x=0, z_rel<0 = the BOTTOM of the
+                # tube. The ADS eye rides ~1.2 mm ABOVE the optical axis (probed
+                # live), so the bottom inner wall is precisely the crescent the
+                # player sees down the tube. Negating both arguments rotates the
+                # cut by pi onto the top wall, which the eye never sees inside
+                # this optic. The two cheap-looking fixes were both tried first
+                # and are recorded so nobody repeats them: bore segments
+                # 44 -> 180 -> 72-matched-to-the-shell moved it not one pixel
+                # (it was never geometry), and rounding the tile count closed
+                # the arithmetic without closing the seam (the map does not
+                # tile).
+                ang = math.atan2(-(co[i2] - cB), -(co[i1] - cA))
                 if ref is None:
                     ref = ang
                 else:                                # unwrap across the +/-pi seam
@@ -1369,7 +1409,7 @@ def uv_axial_project(objs, m_per_tile):
                         ang -= 2 * math.pi
                     while ref - ang > math.pi:
                         ang += 2 * math.pi
-                uvl.data[li].uv = (ang * r_ref / mpt, co[a] / mpt)
+                uvl.data[li].uv = (ang / (2.0 * math.pi) * u_tiles, co[a] / mpt)
 
 
 def apply_all(o):
@@ -2917,4 +2957,16 @@ def build(wid):
     report = {
         "weapon": wid, "glb": out,
         "muzzle_tip": [0, round(bore_z, 4), round(-muzzle_tip_y, 4)],  # glTF space [x,y,z]
-        "eject": [round(ej_pos[0], 4), round(ej_pos[2], 4), round(-ej_pos[1], 4)] if ej
+        "eject": [round(ej_pos[0], 4), round(ej_pos[2], 4), round(-ej_pos[1], 4)] if ej_pos else None,
+        "sightY": round(sight_z, 4),
+        "scale_applied": round(scale, 4),
+        "bytes_raw": os.path.getsize(out),
+    }
+    print("A4BUILD " + json.dumps(report))
+    return report
+
+ids = ONLY or list(CFG.keys())
+reports = []
+for wid in ids:
+    reports.append(build(wid))
+print("A4DONE " + json.dumps([r["weapon"] for r in reports]))

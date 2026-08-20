@@ -93,6 +93,32 @@ function repair(group) {
         // surface with no form left in it. Read the maps as authored; the vm
         // fill rig (viewmodel.js) owns night readability, which is where a
         // lighting problem belongs.
+        // ---- OPTIC GLASS (W1, iter07) -----------------------------------
+        // a4_build_fp_weapons.py build_scope() authors an objective lens disc
+        // (br_glass) and its coating rim (br_arcoat) as OPAQUE meshes, and the
+        // transparency is applied here on purpose: glTF alphaMode/alphaCutoff
+        // round-trips are exporter-version dependent, and a lens that silently
+        // exports opaque does not soften a frame — it BLINDS the optic. Keyed
+        // on the material name, which is the contract between the two files.
+        // The defect this exists to close: 2/3 iter06 blind verdicts led with
+        // the S2 ADS frame, and both named the same absence — "no modelled
+        // optic body, no lens, no glass". The tube was bored end to end, so
+        // the pixels inside the ring were byte-identical to the pixels outside
+        // it and nothing said the player was looking THROUGH anything.
+        if (/glass|arcoat/i.test(m.name || "")) {
+          const rim = /arcoat/i.test(m.name || "");
+          m.transparent = true;
+          m.opacity = rim ? 0.55 : 0.24;
+          m.depthWrite = false;      // never occlude the reticle behind it
+          m.metalness = 0.0;
+          m.roughness = rim ? 0.16 : 0.035;
+          // A coated objective is a MIRROR at grazing angles — this is the one
+          // surface on the gun that legitimately reflects the sky and the
+          // sodium practicals, and it is what makes glass read as glass.
+          m.envMapIntensity = rim ? 1.4 : 3.2;
+          m.needsUpdate = true;
+          continue;                  // skip the parkerised-metal treatment
+        }
         if (m.color) {
           const glove = /glove/i.test(m.name || "");
           m.color.setScalar(1.0);
