@@ -15,6 +15,23 @@
 #   uniform-roughness cap. `burlap` had a 256 px canvas weave at ~1 tile per
 #   BAG, which at play distance is no weave at all.
 #
+# WHAT THIS FILE DID *NOT* FIX, recorded here so the next wave does not re-run
+# it (iter06 cold-critic verdict, ranked fix #2):
+#   These two sets landed. Nobody says "white clay" or "untextured white
+#   low-poly wedge" any more, and the D3 uniform-roughness cap no longer fires
+#   on the vehicles. And all three critics STILL called the cars placeholder
+#   geometry, in all three blind verdicts, because the defect was never the
+#   surface — it was the MESH. The cc0-city shells had no door shutlines, no
+#   window frames, no mirrors, no lamps, no wheel arches and no tread, and a
+#   texture cannot supply a B-pillar. The silhouette work therefore lives in
+#   core/level/vehicles.js (iter07), which BUILDS the car/van/truck rather than
+#   importing them — and it shades those builds on exactly the sets below, so
+#   this generator is still the surface authority for both families and its
+#   outputs are unchanged. If a future wave wants more from the vehicles, the
+#   open item here is a dedicated TYRE set: the tread is castellated geometry
+#   now, but the rubber material still borrows car_paint's normal map (flake and
+#   orange peel), which is the wrong micro-surface for a sidewall.
+#
 # DIVISION OF LABOUR (same contract as a3_gen_surface_sets.py, do not merge):
 #   - THIS FILE emits MID-frequency material character that must live in the
 #     texture: metallic flake, orange peel, clear-coat swirl, road film,

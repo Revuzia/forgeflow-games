@@ -1,7 +1,7 @@
 {
  "lane": "A3-level",
  "updated": "2026-08-20",
- "note": "level PBR texture sets (imported + authored) + cc0-city prop meshes. All other level textures (emissive/decal/glow/ripple/burlap/tarp/awning/window) are canvas-procedural at load — zero payload. NOTE: wall_plaster_* and iron_plate_* are still emitted but are no longer FETCHED by materials.js (retired in favour of wall_render / metal_panel); they are candidates for deletion once no lane references them. 2026-08-20 (iter05 ranked fix #3): car_paint_* and burlap_sack_* added by tools/a3b_gen_vehicle_sets.py — vehicles and sandbags shipped with NO maps at all (carPaint measured in-page as {color:#ffffff, roughness:0.32, map:false}), which is the 'untextured white clay' defect all three critics named in their blind verdicts.",
+ "note": "level PBR texture sets (imported + authored) + cc0-city prop meshes. All other level textures (emissive/decal/glow/ripple/burlap/tarp/awning/window) are canvas-procedural at load — zero payload. NOTE: wall_plaster_* and iron_plate_* are still emitted but are no longer FETCHED by materials.js (retired in favour of wall_render / metal_panel); they are candidates for deletion once no lane references them. 2026-08-20 (iter05 ranked fix #3): car_paint_* and burlap_sack_* added by tools/a3b_gen_vehicle_sets.py — vehicles and sandbags shipped with NO maps at all (carPaint measured in-page as {color:#ffffff, roughness:0.32, map:false}), which is the 'untextured white clay' defect all three critics named in their blind verdicts. 2026-08-20 (iter07 ranked fix #2, 3/3 critics + 3/3 blind verdicts): the VEHICLE MESHES are retired, not just re-materialed. car_paint_* landed in iter06 and nobody says 'white clay' any more, but every critic still read the cars as placeholder GEOMETRY, because the cc0-city shells carry no door shutlines, no window frames, no mirrors, no lamps, no wheel arches and no tread — a material split by height band can paint a wedge four colours, it cannot give a wedge a B-pillar. car/van/truck, sandbags and refuse sacks are now built in core/level/vehicles.js; car_paint_* and burlap_sack_* are still the surface sets those builds shade on, so this file's texture entries are unchanged.",
  "entries": [
   {
    "path": "assets/textures/asphalt_worn_albedo.webp",
@@ -197,21 +197,24 @@
    "bytes": 45348,
    "kind": "imported",
    "license": "CC0 (Kenney / Quaternius via poly.pizza; proof: cc0-city/SOURCES.json)",
-   "source": "pipeline/assets/_downloaded/cc0-city/vehicles/sedan.glb (textures stripped, re-materialed at load, quantized)"
+   "source": "pipeline/assets/_downloaded/cc0-city/vehicles/sedan.glb (textures stripped, quantized)",
+   "status": "RETIRED 2026-08-20 (iter07 ranked fix #2) — NOT FETCHED. props.js no longer loads any vehicle GLB; core/level/vehicles.js builds the car/van/truck from an automotive parts vocabulary instead. Kept on disk for licence provenance and for diffing against the mesh it replaced; delete once no lane needs the comparison."
   },
   {
    "path": "assets/props/van.glb",
    "bytes": 46696,
    "kind": "imported",
    "license": "CC0 (Kenney / Quaternius via poly.pizza; proof: cc0-city/SOURCES.json)",
-   "source": "pipeline/assets/_downloaded/cc0-city/vehicles/van.glb (textures stripped, re-materialed at load, quantized)"
+   "source": "pipeline/assets/_downloaded/cc0-city/vehicles/van.glb (textures stripped, quantized)",
+   "status": "RETIRED 2026-08-20 (iter07 ranked fix #2) — NOT FETCHED. props.js no longer loads any vehicle GLB; core/level/vehicles.js builds the car/van/truck from an automotive parts vocabulary instead. Kept on disk for licence provenance and for diffing against the mesh it replaced; delete once no lane needs the comparison."
   },
   {
    "path": "assets/props/truck.glb",
    "bytes": 46908,
    "kind": "imported",
    "license": "CC0 (Kenney / Quaternius via poly.pizza; proof: cc0-city/SOURCES.json)",
-   "source": "pipeline/assets/_downloaded/cc0-city/vehicles/truck.glb (textures stripped, re-materialed at load, quantized)"
+   "source": "pipeline/assets/_downloaded/cc0-city/vehicles/truck.glb (textures stripped, quantized)",
+   "status": "RETIRED 2026-08-20 (iter07 ranked fix #2) — NOT FETCHED. props.js no longer loads any vehicle GLB; core/level/vehicles.js builds the car/van/truck from an automotive parts vocabulary instead. Kept on disk for licence provenance and for diffing against the mesh it replaced; delete once no lane needs the comparison."
   },
   {
    "path": "assets/props/dumpster.glb",

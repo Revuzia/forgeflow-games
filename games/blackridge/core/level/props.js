@@ -6,10 +6,16 @@
 //
 // Mesh sources (BUILD_PLAN Part 4): Kenney/Quaternius cc0-city GLBs
 // (repacked by tools/prep_level_assets.py: textures stripped, quantized)
-// for vehicles + generic street furniture; disciplined procedural
-// hard-surface builds for the map-specific dressing (doctrine §7 allows
-// procedural props/architecture behind the visual gate). NO lights are
-// created here — emissive materials + additive cards only.
+// for generic street furniture; disciplined procedural hard-surface builds
+// for the map-specific dressing (doctrine §7 allows procedural
+// props/architecture behind the visual gate). NO lights are created here —
+// emissive materials + additive cards only.
+//
+// VEHICLES, SANDBAGS AND REFUSE moved OUT of the GLB path in iter07 and are
+// built in ./vehicles.js. The imported meshes carried no automotive structure
+// at all (no shutlines, arches, mirrors, lamps or tread) and all three iter06
+// critics plus all three blind verdicts read them as placeholder geometry at
+// play distance even after the iter06 texture wave landed on them.
 //
 // buildProps(layout, ctx) is SYNCHRONOUS (frozen signature): level.js
 // awaits loadPropLibrary() inside buildLevel (boot awaits buildLevel before
@@ -20,6 +26,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { computePlacements } from "./layout.js";
 import { makeMaterials, DECAL_UV } from "./materials.js";
+import { buildVehicle, buildSandbags, buildTrashBags } from "./vehicles.js";
 
 let LIB = null; // kind -> {geo, mats, size:[w,h,d]}
 
@@ -124,86 +131,28 @@ const SPH = (mat, r, x, y, z, sx = 1, sy = 1, sz = 1) => {
 };
 
 // ------------------------------------------------------ GLB prop library
+// VEHICLES ARE NO LONGER LOADED FROM GLB (iter07 ranked fix #2). The cc0-city
+// car/van/truck meshes are single undifferentiated shells — 2032 triangles with
+// no door shutlines, no window frames, no mirrors, no lamps, no wheel arches
+// and no tread — and 3/3 critics plus 3/3 blind verdicts read them as
+// placeholder geometry in iter06 EVEN AFTER the texture wave landed. They are
+// built from an automotive parts vocabulary in ./vehicles.js instead; the GLBs
+// stay on disk (licence + history) but nothing fetches them.
 const GLB_KINDS = {
-  car: "car_sedan", van: "van", truck: "truck",
   dumpster: "dumpster", crate: "crate", planter: "planter", ac_unit: "ac_unit",
 };
+
+// Procedural hero-prop protos, built at their LAYOUT footprint. The `_b` keys
+// are second silhouettes: buildProps splits the placement list across them so a
+// street of fifteen cars is not fifteen copies of one prototype.
+const VEHICLE_KINDS = { car: 0, car_b: 1, van: 0, truck: 0 };
 
 function classifyGlbMat(kind, meshName, matName, M) {
   const n = (meshName || "").toLowerCase();
   if (n.includes("wheel")) return M.rubber;
-  if (kind === "car" || kind === "van" || kind === "truck") return M.carPaint;
   if (kind === "crate") return M.wood;
   if (kind === "planter") return M.concrete;
   return M.metal; // dumpster / ac_unit / fallback
-}
-
-// The cc0-city vehicle GLBs ship ONE "body" mesh with one palette material
-// (textures stripped by prep) — rendered whole with carPaint it reads as an
-// untextured clay shell (iter01 S1 tell). Split the body's triangles into
-// paint / glass / trim by height band + face slope so the greenhouse reads
-// as dark wet glass and the skirt/bumpers as trim. Heuristic, verified
-// against live captures (no part names or UVs survive the prep to split on).
-function splitVehicleBody(geo, M) {
-  const pos = geo.getAttribute("position");
-  const idx = geo.index ? Array.from(geo.index.array) : [...Array(pos.count).keys()];
-  geo.computeBoundingBox();
-  const bb = geo.boundingBox;
-  const h = Math.max(1e-6, bb.max.y - bb.min.y);
-  const out = { paint: [], glass: [], trim: [], chrome: [] };
-  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
-  const ab = new THREE.Vector3(), ac = new THREE.Vector3(), n = new THREE.Vector3();
-  for (let t = 0; t < idx.length; t += 3) {
-    a.fromBufferAttribute(pos, idx[t]);
-    b.fromBufferAttribute(pos, idx[t + 1]);
-    c.fromBufferAttribute(pos, idx[t + 2]);
-    ab.subVectors(b, a); ac.subVectors(c, a);
-    n.crossVectors(ab, ac).normalize();
-    const relY = ((a.y + b.y + c.y) / 3 - bb.min.y) / h;
-    // A CENTROID test cannot cut a narrow band out of a low-poly body: the
-    // cc0-city sedan's whole flank is a handful of triangles, and one of them
-    // has its centroid at ~0.45, so a centroid-based belt-line rule painted the
-    // ENTIRE SIDE as chrome (measured: C1_06 came back a flat mint-metal wedge
-    // across the right third of frame). The chrome bands therefore test the
-    // triangle's full vertical EXTENT and only claim triangles that lie wholly
-    // inside them — a big panel falls through to paint, which is the safe
-    // default. trim/glass keep the original centroid rule, which was validated.
-    const yLo = (Math.min(a.y, b.y, c.y) - bb.min.y) / h;
-    const yHi = (Math.max(a.y, b.y, c.y) - bb.min.y) / h;
-    const ny = Math.abs(n.y);
-    let bucket = "paint";
-    if (yLo > 0.40 && yHi < 0.50 && ny < 0.8) {
-      // window surround at the belt line. A four-value body (paint / chrome /
-      // glass / trim) is the minimum that stops a vehicle reading as one
-      // moulded shell — iter05, 3/3 critics.
-      bucket = "chrome";
-    } else if (relY < 0.17) {
-      // rubber skirt, sill and the lower half of the tyres. NO chrome band
-      // down here: the wheels live INSIDE the `body` mesh on these GLBs (their
-      // meshes are not named "wheel", so classifyGlbMat never sees them), so a
-      // rocker-strip band at 0.10-0.175 cut a horizontal chrome slice straight
-      // through both tyres — measured in C1_06 as a polished tan disc where the
-      // wheel should be. Bands below the belt line are not safe on this mesh.
-      bucket = "trim";
-    } else if (relY > 0.47 && ny < 0.8) {
-      // greenhouse band: vertical side/rear panes + sloped windshields;
-      // roof (ny≈1) and hood/trunk (below the band) stay paint
-      bucket = "glass";
-    }
-    out[bucket].push(idx[t], idx[t + 1], idx[t + 2]);
-  }
-  const mats = { paint: M.carPaint, glass: M.carGlass, trim: M.carTrim, chrome: M.carChrome };
-  const parts = [];
-  for (const k of ["paint", "glass", "trim", "chrome"]) {
-    if (!out[k].length) continue;
-    const g = new THREE.BufferGeometry();
-    g.setAttribute("position", geo.getAttribute("position"));
-    if (geo.getAttribute("normal")) g.setAttribute("normal", geo.getAttribute("normal"));
-    if (geo.getAttribute("uv")) g.setAttribute("uv", geo.getAttribute("uv"));
-    g.setIndex(out[k]); // stays INDEXED — mergeParts requires index parity
-    parts.push({ geo: g, mat: mats[k] });
-  }
-  return parts.length ? parts : [{ geo, mat: M.carPaint }];
 }
 
 export async function loadPropLibrary(ctx) {
@@ -212,22 +161,23 @@ export async function loadPropLibrary(ctx) {
   const V = (ctx && ctx.V) || "";
   const loader = new GLTFLoader();
   LIB = {};
+  // ---- procedural vehicles (iter07 ranked fix #2). Synchronous, so they are
+  // in LIB before the first await resolves and buildProps can never race them.
+  for (const [kind, variant] of Object.entries(VEHICLE_KINDS)) {
+    const parts = buildVehicle(kind.replace(/_b$/, ""), M, variant);
+    const { geo, mats } = mergeParts(parts);
+    LIB[kind] = { geo, mats, size: normalize(geo) };
+  }
   await Promise.all(Object.entries(GLB_KINDS).map(async ([kind, file]) => {
     try {
       const gltf = await loader.loadAsync(`./assets/props/${file}.glb${V}`);
       gltf.scene.updateMatrixWorld(true);
       const parts = [];
-      const vehicle = kind === "car" || kind === "van" || kind === "truck";
       gltf.scene.traverse((o) => {
         if (!o.isMesh) return;
         const g = toFloatGeo(o.geometry);
         g.applyMatrix4(o.matrixWorld);
-        const nm = (o.name || "").toLowerCase();
-        if (vehicle && nm.includes("body")) {
-          parts.push(...splitVehicleBody(g, M)); // paint/glass/trim (VT §3)
-        } else {
-          parts.push({ geo: g, mat: classifyGlbMat(kind, o.name, o.material && o.material.name, M) });
-        }
+        parts.push({ geo: g, mat: classifyGlbMat(kind, o.name, o.material && o.material.name, M) });
       });
       if (!parts.length) throw new Error("empty GLB");
       if (kind === "ac_unit") {
@@ -272,79 +222,18 @@ function buildKind(kind, s, M) {
       // cast-in-place walls (iter05 "white barrier blocks").
       return [{ geo: g, mat: M.barrierConc }];
     }
-    case "sandbags": {
-      // iter05 ranked fix #3: "identical white blocks" / "untextured tan lumps".
-      // Three defects, all here: every bag was the SAME ellipsoid at the same
-      // yaw and the same tone, the stack was two-two-one with no bond, and
-      // nothing tied it to the ground. Rebuilt with per-bag slump, yaw, sag and
-      // tone (baked to vertex colour so ONE instanced proto still shows a
-      // dozen different sacks), a staggered bond row to row, and a spoil ring
-      // of mud at the base.
-      const parts = [];
-      const r = rng(11);
-      const tint = new THREE.Color();
-      // hessian tones — bleached, standard, damp-dark, mud-brown
-      const TONES = [0xefe7d4, 0xdcd0b4, 0xc2b596, 0xa89a7c, 0xcfc0a0, 0x9d8f74];
-
-      // one sagged, yawed, tonally distinct bag
-      const bag = (cx, cy, cz, sx, sy, sz, yaw, tilt, toneI, damp) => {
-        const g = new THREE.SphereGeometry(0.5, 10, 7);
-        // sag: squash the underside harder than the crown so the bag settles
-        const p = g.getAttribute("position");
-        for (let i = 0; i < p.count; i++) {
-          const y = p.getY(i);
-          if (y < 0) p.setY(i, y * (0.72 + damp * 0.10));
-          p.setX(i, p.getX(i) * (1.0 + Math.max(0, -y) * 0.34));
-          p.setZ(i, p.getZ(i) * (1.0 + Math.max(0, -y) * 0.22));
-        }
-        g.scale(sx, sy, sz);
-        g.rotateZ(tilt);
-        g.rotateY(yaw);
-        g.translate(cx, cy, cz);
-        // per-bag tone + a damp gradient toward the underside (mud wicks up)
-        const col = new Float32Array(p.count * 3);
-        tint.setHex(TONES[toneI % TONES.length]);
-        const bb = new THREE.Box3().setFromBufferAttribute(g.getAttribute("position"));
-        const span = Math.max(1e-4, bb.max.y - bb.min.y);
-        for (let i = 0; i < p.count; i++) {
-          const t = (g.getAttribute("position").getY(i) - bb.min.y) / span;
-          const k = 0.46 + 0.54 * Math.min(1, t / 0.55); // dark at the foot
-          col[i * 3] = tint.r * k;
-          col[i * 3 + 1] = tint.g * k * (1 - damp * 0.10);
-          col[i * 3 + 2] = tint.b * k * (1 - damp * 0.16);
-        }
-        g.setAttribute("color", new THREE.BufferAttribute(col, 3));
-        return { geo: g, mat: M.sandbag };
-      };
-
-      const rows = [3, 2, 2];
-      for (let row = 0; row < rows.length; row++) {
-        const n = rows[row];
-        const bw = w / (n + 0.30);
-        // running bond: alternate rows step half a bag so no two courses align
-        const bond = (row % 2) * bw * 0.5;
-        for (let i = 0; i < n; i++) {
-          const sag = 0.86 + r() * 0.30;
-          parts.push(bag(
-            (i - (n - 1) / 2) * bw + bond + (r() - 0.5) * bw * 0.16,
-            h * (0.15 + row * 0.30) * (0.94 + r() * 0.12),
-            (r() - 0.5) * d * 0.16,
-            bw * (0.96 + r() * 0.14), h * 0.34 * sag, d * (0.62 + r() * 0.16),
-            (r() - 0.5) * 0.7, (r() - 0.5) * 0.22,
-            (row * 2 + i + ((r() * 3) | 0)) | 0, r(),
-          ));
-        }
-      }
-      // spoil/mud ring: the bags sit IN the ground, not on a clean floor
-      for (let i = 0; i < 3; i++) {
-        parts.push(bag(
-          (r() - 0.5) * w * 0.9, h * 0.035, (r() - 0.5) * d * 0.7 + d * 0.22,
-          w * (0.30 + r() * 0.18), h * 0.075, d * (0.34 + r() * 0.2),
-          r() * Math.PI, 0, 3, 1.0,
-        ));
-      }
-      return parts;
-    }
+    case "sandbags":
+    case "sandbags_b":
+      // iter07 ranked fix #2. iter05 rebuilt the sandbag MATERIAL and iter06
+      // verified the hessian weave at 5x; all three critics still wrote
+      // "smooth olive lozenges" / "identical lumpy sandbag potatoes" /
+      // "untextured tan lumps" at battery framing, wording unchanged. The tell
+      // was never the texture — it was that every bag is a smoothed ellipsoid
+      // and every one of the nine emplacements is the same 3-2-2 stack. Bag
+      // silhouette (folded ears, settled crown, seam ridge, fill creases) and
+      // stack variation (two protos, different courses, a slumped course) now
+      // live in vehicles.js so the two prototypes stay diffable side by side.
+      return buildSandbags(M, w, h, d, kind.endsWith("_b") ? 1 : 0);
     case "kiosk": {
       const parts = [];
       parts.push(B(M.woodDark, w * 0.92, h * 0.62, d * 0.92, 0, h * 0.31, 0));     // body
@@ -391,15 +280,11 @@ function buildKind(kind, s, M) {
         B(M.glass, w * 0.8, h * 0.3, 0.02, 0, h * 0.62, d / 2),
         B(M.metal, w * 0.8, h * 0.18, d * 0.8, 0, h * 0.09, 0),
       ];
-    case "trash_bags": {
-      const parts = []; const r = rng(5);
-      for (let i = 0; i < 3; i++) {
-        parts.push(SPH(M.trashBag, 0.5, (r() - 0.5) * w * 0.5, h * 0.35 * (0.8 + r() * 0.4),
-          (r() - 0.5) * d * 0.5, w * 0.42, h * 0.62, d * 0.42));
-      }
-      parts.push(B(M.woodDark, w * 0.5, h * 0.3, d * 0.32, w * 0.22, h * 0.15, -d * 0.2, 0.4)); // cardboard
-      return parts;
-    }
+    case "trash_bags":
+      // critic-b named this in the same clause as the car — "the teal sedan
+      // and the smooth black ellipsoid in C1_02.png". Three smoothed spheres
+      // are a doctrine §7 primitive standing in a graded foreground.
+      return buildTrashBags(M, w, h, d);
     case "steam_vent":
       return [
         CYL(M.steel, w * 0.5, w * 0.55, h, 0, h / 2, 0, 12),
@@ -629,6 +514,28 @@ const PALETTES = {
   // precast barriers weather apart: fresh grey, sun-bleached, road-filthy
   barrier: [0xb2b2ac, 0x9a9a94, 0x86867f, 0xa4a096],
 };
+// second-silhouette batches share their family's palette, but the palette
+// STRIDE is phased off the kind name, so the two batches never hand adjacent
+// placements the same body colour either.
+PALETTES.car_b = PALETTES.car;
+PALETTES.sandbags_b = PALETTES.sandbags;
+
+// One prototype per kind is a copy-paste tell in its own right: iter06's D7 cap
+// fired for all three critics on "identical units at identical spacing", and
+// the fifteen plaza/boulevard cars were one mesh fifteen times. An InstancedMesh
+// cannot vary geometry per instance, so the placement list is dealt across TWO
+// protos (`car`/`car_b`) — one extra draw call for a second silhouette.
+const VARIANT_SPLIT = { car: "car_b", sandbags: "sandbags_b" };
+function splitVariantBatches(byKind) {
+  for (const [base, alt] of Object.entries(VARIANT_SPLIT)) {
+    const list = byKind.get(base);
+    if (!list || list.length < 4) continue;
+    const a = [], b = [];
+    list.forEach((p, i) => ((i % 2) ? b : a).push(p));
+    byKind.set(base, a);
+    byKind.set(alt, b);
+  }
+}
 
 // ---------------------------------------------------------------- build
 export function buildProps(layout, ctx) {
@@ -645,10 +552,92 @@ export function buildProps(layout, ctx) {
     if (!byKind.has(p.kind)) byKind.set(p.kind, []);
     byKind.get(p.kind).push(p);
   }
+  splitVariantBatches(byKind);   // second silhouette per vehicle/sandbag family
 
   const r = rng(7);
   let batches = 0;
   let decalCount = 0;
+
+  // ---- GROUNDING CONTRACT (iter07 ranked fix 6) ----------------------------
+  // "Nothing in the world is grounded" survived iter06 partly because
+  // core/fx/grounding.js could only ground what it could SEE: it swept the
+  // scene for per-instance transforms, and `props_static` below is a MERGED
+  // batch — one mesh per material holding many props baked into world space,
+  // whose bounding box spans the whole batch. Every low-count prop (the S3
+  // tire, the S8 centre box, the ramp wedge) was therefore ungrounded by
+  // construction, and the fix was recorded as "a merged batch cannot be
+  // grounded per-object" — which is true of the MESH and false of the
+  // GENERATOR. This function knows every placement's exact contact point,
+  // footprint and yaw, because it is what places them.
+  //
+  // So publish it. One authored record per ground-mounted placement, taken
+  // from computePlacements() — the same analytic ground contact tools/
+  // probe_props.mjs gates — and grounding.js consumes the list instead of
+  // guessing. Merged, instanced or single no longer makes any difference.
+  //
+  // `tint` is the body value the reflection card mirrors: the SAME palette
+  // entry the instance shades at, so a graphite car reflects graphite and a
+  // sand crate reflects sand. `wet` says whether there is a water film to
+  // reflect in at all — an indoor arcade prop must not smear a reflection
+  // across dry tile.
+  const groundingSpecs = [];
+  const wetRects = [];
+  {
+    const WET_ROAD = {
+      concrete_quay: 1, asphalt_worn: 1, asphalt: 1,
+      plaza_cobble: 1, asphalt_tram: 1, concrete_yard: 1,
+    };
+    for (const rd of layout.roads || []) {
+      if (WET_ROAD[rd.kind]) wetRects.push([rd.min[0], rd.min[1], rd.max[0], rd.max[1]]);
+    }
+  }
+  const onWetGround = (x, z) => {
+    for (const q of wetRects) {
+      if (x >= q[0] && x <= q[2] && z >= q[1] && z <= q[3]) return 1;
+    }
+    return 0;
+  };
+  // ---- CORNER-OPAQUE ATLAS CELLS (same defect class as the fix above) ------
+  // A ground decal whose alpha does not reach ZERO at the cell edge renders as
+  // a hard-edged dark RHOMBUS on the ground — the exact artifact critic-c
+  // reported beside the S3 tire ("a visible hard-edged rectangular quad, not a
+  // soft radial blob") and the dark slab under the parked cars. Isolated live
+  // this session by hiding one mesh at a time: with `props_grime_decals`
+  // hidden the two hard rhombi next to the tire disappear and the grounding
+  // blob stays, so they are decal quads, not shadows.
+  //
+  // The cause is in the atlas generator (materials.js decalAtlasCanvas): two
+  // of the sixteen cells end their radial gradient ABOVE zero —
+  // `grime_ring` = radial(0.22, 0.5, 0.0, 0.55) and
+  // `tide_ring`  = radial(0.30, 0.5, 0.0, 0.35) — and a canvas radial gradient
+  // clamps to its last stop past r1, so the whole cell INCLUDING the corners
+  // is filled at that alpha. Every other cell falls to 0 and is safe.
+  //
+  // materials.js belongs to another lane this wave, so the fix lands where the
+  // choice is made rather than where the pixels are: props.js stops ASKING for
+  // a cell that cannot fade out, and maps each to its nearest cell that can.
+  // `grime_ring` was the base-decal kind for every car/van/truck/dumpster/
+  // kiosk via decalKindFor(), which is why the slab appeared under vehicles.
+  const SOFT_CELL = { grime_ring: "dirt_ring", tide_ring: "oil_stain" };
+  const softDecal = (k) => SOFT_CELL[k] || k;
+
+  function addGroundingSpec(p, rot, sx, sz, tintHex) {
+    if (p.mount !== "ground") return;              // wall/ceiling: no contact
+    const rx = Math.abs(sx) * 0.5, rz = Math.abs(sz) * 0.5;
+    if (Math.max(rx, rz) * 2 < 0.10) return;
+    groundingSpecs.push({
+      x: p.pos[0],
+      // pos[1] is already sunk 1.5 cm INTO the support; the contact plane the
+      // shadow and the reflection both start from is the support itself.
+      y: p.pos[1] + (p.sink || 0),
+      z: p.pos[2],
+      rx, rz,
+      h: Math.max(0.05, p.size[1]),
+      yaw: rot,
+      tint: tintHex,
+      wet: onWetGround(p.pos[0], p.pos[2]),
+    });
+  }
   const mtx = new THREE.Matrix4(), q = new THREE.Quaternion(),
     pos = new THREE.Vector3(), scl = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   const staticParts = []; // low-count kinds → one merged mesh per material
@@ -698,6 +687,7 @@ export function buildProps(layout, ctx) {
       pos.set(p.pos[0], y, p.pos[2]);
       scl.set(sx / bw, p.size[1] / bh, sz / bd);
       mtx.compose(pos, q, scl);
+      let tintHex = pal ? pal[0] : null;
       if (instanced) {
         mesh.setMatrixAt(i, mtx);
         if (pal) {
@@ -709,6 +699,7 @@ export function buildProps(layout, ctx) {
           const c = new THREE.Color(pal[(i * 7 + kindOff) % pal.length]);
           c.offsetHSL((r() - 0.5) * 0.03, (r() - 0.5) * 0.10, (r() - 0.5) * 0.07);
           mesh.setColorAt(i, c);
+          tintHex = c.getHex();  // the reflection mirrors THIS body, not a mean
         }
       } else {
         for (let gi = 0; gi < proto.mats.length; gi++) {
@@ -722,6 +713,10 @@ export function buildProps(layout, ctx) {
           staticParts.push({ geo: sub, mat: proto.mats[gi] });
         }
       }
+      // Merged or instanced, the placement is the same placement — this is
+      // the ONE call that makes props_static groundable (see the contract
+      // note above).
+      addGroundingSpec(p, rot, sx, sz, tintHex);
     });
     if (instanced) {
       mesh.instanceMatrix.needsUpdate = true;
@@ -764,7 +759,18 @@ export function buildProps(layout, ctx) {
     const rr = rng(23);
     for (const p of placements) {
       if (!p.baseDecal) continue;
-      const cell = DECAL_UV[p.baseDecal.kind] || DECAL_UV.ao_blob;
+      // THE HARD-EDGED RECTANGLE UNDER THE TIRE (iter06 critic-c: "the tire's
+      // contact shadow is a visible hard-edged rectangular quad, not a soft
+      // radial blob"). decalKindFor() falls through to `ao_blob` for anything
+      // it has no specific vocabulary for, and materials.js composites
+      // speckle(70, …) across the WHOLE ao_blob cell after its radial — so its
+      // corners keep alpha and the quad reads as a rectangle. It was standing
+      // in for a contact shadow; grounding.js now emits a real radial blob for
+      // every ground placement, so the stand-in is dropped rather than
+      // re-authored. The prop-specific grime vocabulary (oil, dirt, rust,
+      // splat rings) below is untouched — this drops ONLY the fake AO patch.
+      if (p.mount !== "wall" && p.baseDecal.kind === "ao_blob") continue;
+      const cell = DECAL_UV[softDecal(p.baseDecal.kind)] || DECAL_UV.ao_blob;
       if (p.mount === "wall") {
         // rust/drip streak on the wall below the unit
         const n = (p.flags && p.flags.n) || [0, 1];
@@ -857,7 +863,7 @@ export function buildProps(layout, ctx) {
                     // meshes cannot z-fight where they overlap
                     p.pos[1] + (p.sink || 0) + 0.012,
                     p.pos[2] + Math.sin(ang) * rad);
-        setCellUV(g, DECAL_UV[kind] || DECAL_UV.dirt_ring);
+        setCellUV(g, DECAL_UV[softDecal(kind)] || DECAL_UV.dirt_ring);
         quads.push(g);
       }
     }
@@ -873,7 +879,13 @@ export function buildProps(layout, ctx) {
   // instead of a fix wave trusting that "decals were added" (ranked fix #4:
   // count them at capture time before anyone authors more)
   group.userData.decalQuads = decalCount;
-  console.log(`[props] ${batches} instanced batches, ${decalCount} static decal quads`);
+  // The grounding contract core/fx/grounding.js consumes (see the note where
+  // groundingSpecs is built). Published on the props group so it travels with
+  // the geometry and needs no boot-order wiring.
+  group.userData.grounding = groundingSpecs;
+  group.userData.wetRects = wetRects;
+  console.log(`[props] ${batches} instanced batches, ${decalCount} static decal quads, ` +
+    `${groundingSpecs.length} grounding contacts published`);
 
   // ---- steam plumes on flagged vents (LD §4.2; S2 hero ingredient)
   {
