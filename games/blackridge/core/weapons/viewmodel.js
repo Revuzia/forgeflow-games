@@ -247,6 +247,18 @@ export function createViewmodel(ctx) {
     inPass = true;
     const sm = renderer.shadowMap.autoUpdate;
     renderer.shadowMap.autoUpdate = false; // vm pass re-renders no shadow maps
+    // F1 (iter07), same fidelity class as the vm:world FOV ratio below: the vm
+    // camera's ASPECT must track the WORLD camera's, not the window's. The
+    // resize listener is the only other writer, and __test.capture() renders a
+    // read-back frame with camera.aspect = w/h WITHOUT touching this camera
+    // (testsurface.js owns that path) — so any capture whose aspect differed
+    // from the live window stretched the weapon relative to the world it is
+    // composited into, silently. No-op when they already agree (the 1920x1080
+    // battery in a 1920x1080 page), correct when they do not.
+    if (Math.abs(vmCamera.aspect - ctx.camera.aspect) > 1e-6) {
+      vmCamera.aspect = ctx.camera.aspect;
+      vmCamera.updateProjectionMatrix();
+    }
     renderer.clearDepth();                 // R8: viewmodel never clips
     renderer.render(ctx.scene, vmCamera);
     renderer.shadowMap.autoUpdate = sm;
@@ -529,7 +541,25 @@ export function createViewmodel(ctx) {
       // hip, and the magnification an optic implies (Corvus 74 -> 34 = 2.2x)
       // reaches the thing the player is looking through. Iron sights barely
       // move (74 -> 55 = 1.35x), which is correct — they are 1x.
-      const vmFov = VIEWMODEL.fovDeg * (fovAim / Math.max(1, base));
+      //
+      // F1 (iter07) — THE DENOMINATOR IS THE PLAYER'S BASE FOV, NOT WHATEVER
+      // IS CURRENTLY IN settings.fov. The ratio this line exists to hold is
+      // vm:world = VIEWMODEL.fovDeg / (player base FOV) — a constant of the
+      // rig, identical at hip and at full ADS. A11's scenario path forces
+      // settings.fov to a pose's cinematic framing (scenarios.js: it is the
+      // rig's own base channel, and the only input that survives a driven
+      // frame), which silently rewrote THIS denominator too and collapsed the
+      // ratio to 1 whenever a pose's fov matched the weapon's adsFov: measured
+      // live in S2, vm 60 against world 34 (ratio 1.765) where real gameplay
+      // renders vm 27.57 against world 34 (ratio 0.811) — the captured weapon
+      // 2.35x SMALLER in solid angle than any player has ever seen it, across
+      // every battery frame of three iterations. ctx.vmFovBase carries the
+      // un-poisoned base through that override, so a captured frame is a
+      // faithful (uniformly magnified) image of the gameplay frame instead of
+      // a differently-proportioned one. Null in normal play → base, unchanged.
+      const vmBase = (ctx.vmFovBase != null && ctx.vmFovBase > 0)
+        ? ctx.vmFovBase : base;
+      const vmFov = VIEWMODEL.fovDeg * (fovAim / Math.max(1, vmBase));
       if (Math.abs(vmCamera.fov - vmFov) > 0.01) {
         vmCamera.fov = vmFov;
         vmCamera.updateProjectionMatrix();

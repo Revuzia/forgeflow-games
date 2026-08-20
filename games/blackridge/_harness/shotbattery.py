@@ -55,6 +55,109 @@ FLAGS = ["--ignore-gpu-blocklist", "--use-angle=d3d11", "--disable-gpu-sandbox",
 # (MOVE.CROUCH) would still clear several metres in that time.
 MIN_SCRIPT_DISPLACEMENT_M = 2.0
 
+# ---- CAPTURE FIDELITY: the viewmodel must be photographed AT GAMEPLAY SCALE -
+# core/weapons/weapon_data.js VIEWMODEL.fovDeg. The viewmodel camera holds a
+# fixed FOV *ratio* to the world camera — vmFov = fovDeg * fovAim / playerBase —
+# so vmFov/worldFov is the constant fovDeg/playerBase at hip AND at full ADS.
+# Iterations 4-6 all shipped batteries where it was not: scenarios.js forced
+# settings.fov to a pose's cinematic framing, which is also the denominator of
+# that ratio, and S2 rendered the Corvus at vm FOV 60 against world 34 where a
+# player sees vm 27.57 — the weapon 2.35x smaller in solid angle than in play,
+# under every viewmodel judgement three critic rounds made. Nothing in the
+# manifest could have caught it, so it was found by hand three iterations late.
+# It is measured on every shot now: `viewmodelFidelity` in each manifest row.
+VM_FOV_DEG = 60.0
+VM_RATIO_TOL = 0.02
+
+VM_FIDELITY = """() => {
+  try {
+    const F = __FPS__;
+    const cam = F.camera, vmc = F.vm && F.vm.camera;
+    if (!cam || !vmc) return {error: "no viewmodel camera"};
+    // scenarios.js parks the player's REAL base FOV here while a pose's
+    // cinematic FOV occupies settings.fov; null when no override is live.
+    const base = (window.__BR_FOV0__ != null) ? window.__BR_FOV0__ : F.settings.fov;
+    let adsT = null, weapon = null, rigVisible = null;
+    try { adsT = +F.sim.state.player.weapon.adsT.toFixed(3); } catch (e) {}
+    try { weapon = F.vm.currentId; } catch (e) {}
+    try { cam.traverse(o => { if (o.name === "__vm_rig__") rigVisible = !!o.visible; }); } catch (e) {}
+    return {
+      worldFov: +cam.fov.toFixed(3),
+      vmFov: +vmc.fov.toFixed(3),
+      poseFov: F.settings.fov,
+      playerBaseFov: base,
+      ratio: +(vmc.fov / cam.fov).toFixed(4),
+      aspectMatch: Math.abs(vmc.aspect - cam.aspect) < 1e-6,
+      weapon: weapon, adsT: adsT, rigVisible: rigVisible,
+      detached: !!window.__BR_CAMDETACH__,
+    };
+  } catch (e) { return {error: String(e)}; }
+}"""
+
+
+def vm_fidelity_verdict(fid: dict, scripted: bool) -> dict:
+    """Grade one shot's viewmodel scale against what gameplay renders.
+
+    Two independent numbers, and they answer different questions:
+
+    `ratio` vs `expectedRatio` — is the WEAPON drawn at its gameplay
+    proportion inside this frame? This is the ratio the F1 defect broke.
+
+    `zoomVsGameplay` — is the FRAME the one a player sees, or a magnified
+    crop of it? A pose may author a cinematic world FOV (S1's 55 where the
+    player plays at 74), which magnifies everything uniformly. It is the
+    conversion a critic measurement needs: a weapon measuring X% of frame
+    height here measures X/zoom % in play. It is computed against the FOV
+    gameplay renders AT THIS MOMENT, not against the base — at full ADS the
+    world FOV is the weapon's adsFov in play too, so an ADS pose that authors
+    that same FOV (S2's 34) is at zoom 1.0, not 74/34.
+    """
+    if not fid or fid.get("error"):
+        return {**(fid or {}), "faithful": None}
+    base = fid.get("playerBaseFov") or 0
+    world = fid.get("worldFov") or 0
+    if not base or not world:
+        return {**fid, "faithful": None}
+    expected = VM_FOV_DEG / base
+
+    # The FOV gameplay would render at this moment. viewmodel.js:
+    #   fovAim = poseBase + (adsFov - poseBase) * smoothstep(adsT)
+    #   vmFov  = VM_FOV_DEG * fovAim / playerBase        <- invert for fovAim
+    # so the weapon's adsFov can be recovered from the captured pair and the
+    # same blend re-run against the player's real base.
+    t = fid.get("adsT")
+    t = 0.0 if t is None else max(0.0, min(1.0, float(t)))
+    ease = t * t * (3 - 2 * t)
+    pose_base = fid.get("poseFov") or base
+    fov_aim = fid["vmFov"] * base / VM_FOV_DEG
+    if ease <= 1e-6:
+        gameplay_aim = float(base)              # hip: the player's base FOV
+    elif ease >= 1 - 1e-6:
+        gameplay_aim = fov_aim                  # full ADS: the weapon's adsFov
+    else:
+        ads_fov = pose_base + (fov_aim - pose_base) / ease
+        gameplay_aim = base + (ads_fov - base) * ease
+
+    out = {**fid,
+           "expectedRatio": round(expected, 4),
+           "gameplayWorldFov": round(gameplay_aim, 3),
+           "zoomVsGameplay": round(gameplay_aim / world, 4)}
+    if fid.get("detached") or fid.get("rigVisible") is False:
+        # No viewmodel in this frame (S9's detached close-up, a `lowered`
+        # study pose): the rig is not driving, so these numbers are stale
+        # leftovers and grading them would invent a defect or hide one.
+        out["faithful"] = None
+        out["note"] = "no viewmodel in frame (detached or hidden rig) — not graded"
+    elif scripted:
+        # A live take's world FOV carries the sprint/slide/kick adders, which
+        # the viewmodel deliberately does not follow — the ratio is not a
+        # constant across those beats and a verdict here would be noise.
+        out["faithful"] = None
+        out["note"] = "live take — sprint/slide/kick FOV adders make the ratio non-constant"
+    else:
+        out["faithful"] = abs(fid["ratio"] - expected) <= VM_RATIO_TOL
+    return out
+
 
 class NotReady(RuntimeError):
     """Harness infrastructure is fine; the GAME surface is not there yet."""
@@ -615,8 +718,22 @@ def run_shot(page, sid: str, iter_name: str, args) -> dict:
         no_motion = (d is None) or (d < MIN_SCRIPT_DISPLACEMENT_M)
         capture_mode = "filmstrip"
 
+    # ---- viewmodel capture fidelity (measured at the photographed moment) ----
+    vm_fid = vm_fidelity_verdict(page.evaluate(VM_FIDELITY), bool(sc["hasScript"]))
+    if vm_fid.get("faithful") is False:
+        print(f"     !! {sid}: VIEWMODEL NOT AT GAMEPLAY SCALE — vm FOV "
+              f"{vm_fid.get('vmFov')} against world {vm_fid.get('worldFov')} "
+              f"(ratio {vm_fid.get('ratio')}, gameplay {vm_fid.get('expectedRatio')}). "
+              f"Every weapon-scale judgement off this frame is wrong by that factor.",
+              file=sys.stderr)
+    if vm_fid.get("aspectMatch") is False:
+        print(f"     !! {sid}: vm camera aspect != world camera aspect — the "
+              f"weapon is stretched relative to the world it sits in.",
+              file=sys.stderr)
+
     errs = page.evaluate("window.__err || []")
     return {"name": sid, "file": f"{sid}.png", "seed": sc["seed"],
+            "viewmodelFidelity": vm_fid,
             "botSeed": sc["botSeed"], "rainPhase": sc["rainPhase"],
             "hud": hud_on, "untilReached": until_reached,
             "capturedOnDisk": on_disk, "meanLuma": mean_luma,

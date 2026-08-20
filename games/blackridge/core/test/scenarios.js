@@ -352,6 +352,7 @@ export function createScenarios(ctx) {
       ctx.settings.fov = window.__BR_FOV0__; // restore pre-scenario base FOV
       window.__BR_FOV0__ = null;
     }
+    ctx.vmFovBase = null; // no override live ⇒ the rig uses settings.fov (F1)
 
     // ---- cinematic FOV (F4, iter01 fix): the viewmodel rig re-writes
     // camera.fov EVERY driven frame from its base = settings.fov (74) blended
@@ -365,8 +366,28 @@ export function createScenarios(ctx) {
     // page-reloads reset it anyway. ADS poses are unaffected: at adsT=1 the
     // rig's fov = adsFov regardless of base. Detached poses keep applyCamera's
     // direct write (the rig does not drive while ctx.cameraDetached).
+    //
+    // ---- CAPTURE FIDELITY (F1, iter07). That write moves TWO things, and
+    // only one of them is a framing choice. settings.fov is (a) the world
+    // camera's base FOV — what the pose means to set — and (b) the
+    // denominator of the viewmodel's vm:world FOV ratio
+    // (viewmodel.js: vmFov = VIEWMODEL.fovDeg * fovAim / base). Overwriting it
+    // collapsed (b): S2 poses fov 34 to hold the Corvus ADS framing, base
+    // became 34, the ratio became 1, and the battery rendered the weapon at vm
+    // FOV 60 where gameplay renders it at 60 * 34/74 = 27.57 — measured live,
+    // pre-fix, ratio 1.765 vs gameplay 0.811. Three iterations of viewmodel
+    // scoring were done on frames whose weapon was 2.35x smaller in solid
+    // angle than any player sees, so "the optic is a compliant 11% of frame
+    // height" was really ~34% in play. Pin the TRUE base alongside the
+    // override: the world still frames as the pose authored it, and the
+    // weapon renders at exactly its gameplay proportion inside that frame —
+    // the capture becomes a uniformly magnified image of the real frame
+    // rather than a differently-proportioned one. (For an ADS pose whose fov
+    // equals the weapon's adsFov — S2 — the world FOV the rig derives is
+    // 34 either way, so that capture is now pixel-faithful outright.)
     if (ctx.settings && pose.camera && pose.camera.fov && !pose.cameraDetached) {
       window.__BR_FOV0__ = ctx.settings.fov;
+      ctx.vmFovBase = ctx.settings.fov;   // read by viewmodel.js (F1)
       ctx.settings.fov = pose.camera.fov;
     }
 
