@@ -1,0 +1,182 @@
+{
+ "lane": "A3-level",
+ "updated": "2026-08-19",
+ "note": "level PBR texture sets + cc0-city prop meshes. All other level textures (facade/trim/emissive/decal/glow/ripple/metal/burlap/tarp) are canvas-procedural at load \u2014 zero payload.",
+ "entries": [
+  {
+   "path": "assets/textures/asphalt_worn_albedo.webp",
+   "bytes": 261218,
+   "kind": "imported",
+   "license": "CC0 (Poly Haven)",
+   "source": "pipeline/assets/_downloaded/polyhaven-textures/asphalt_02 (albedo; normals Sobel-generated from displacement at build time)"
+  },
+  {
+   "path": "assets/textures/asphalt_worn_rough.webp",
+   "bytes": 49566,
+   "kind": "imported",
+   "license": "CC0 (Poly Haven)",
+   "source": "pipeline/assets/_downloaded/polyhaven-textures/asphalt_02 (rough; normals Sobel-generated from displacement at build time)"
+  },
+  {
+   "path": "assets/textures/asphalt_worn_normal.webp",
+   "bytes": 346212,
+   "kind": "imported",
+   "license": "CC0 (Poly Haven)",
+   "source": "pipeline/assets/_downloaded/polyhaven-textures/asphalt_02 (normal; normals Sobel-generated from displacement at build time)"
+  },
+  {
+   "path": "assets/textures/concrete_yard_albedo.webp",
+   "bytes": 167394,
+   "kind": "imported",
+   "license": "CC0 (Poly Haven)",
+   "source": "pipeline/assets/_downloaded/polyhaven-textures/asphalt_04 (albedo; normals Sobel-generated from displacement at build time)"
+  },
+  {
+   "path": "assets/textures/concrete_yard_rough.webp",
+   "bytes": 924,
+   "kind": "imported",
+   "license": "CC0 (Poly Haven)",
+   "source": "pipeline/assets/_downloaded/polyhaven-textures/asphalt_04 (rough; normals Sobel-generated from displacement at build time)"
+  },
+  {
+   "path": "assets/textures/concrete_yard_normal.webp",
+   "bytes": 161292,
+   "kind": "imported",
+   "license": "CC0 (Poly Haven)",
+   "source": "pipeline/assets/_downloaded/polyhaven-textures/asphalt_04 (normal; normals Sobel-generated from displacement at build time)"
+  },
+  {
+   "path": "assets/textures/wall_plaster_albedo.webp",
+   "bytes": 702,
+   "kind": "imported",
+   "license": "CC0 (Poly Haven)",
+   "source": "pipeline/assets/_downloaded/polyhaven-textures/beige_wall_001 (albedo; normals Sobel-generated from displacement at build time)"
+  },
+  {
+   "path": "assets/textures/wall_plaster_rough.webp",
+   "bytes": 2690,
+   "kind": "imported",
+   "license": "CC0 (Poly Haven)",
+   "source": "pipeline/assets/_downloaded/polyhaven-textures/beige_wall_001 (rough; normals Sobel-generated from displacement at build time)"
+  },
+  {
+   "path": "assets/textures/wall_plaster_normal.webp",
+   "bytes": 165990,
+   "kind": "imported",
+   "license": "CC0 (Poly Haven)",
+   "source": "pipeline/assets/_downloaded/polyhaven-textures/beige_wall_001 (normal; normals Sobel-generated from displacement at build time)"
+  },
+  {
+   "path": "assets/textures/cobble_albedo.webp",
+   "bytes": 123958,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "pipeline/assets/generated-materials/stone_cobble (albedo; normals Sobel-generated from displacement at build time)"
+  },
+  {
+   "path": "assets/textures/cobble_rough.webp",
+   "bytes": 1500,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "pipeline/assets/generated-materials/stone_cobble (rough; normals Sobel-generated from displacement at build time)"
+  },
+  {
+   "path": "assets/textures/cobble_normal.webp",
+   "bytes": 99016,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "pipeline/assets/generated-materials/stone_cobble (normal; normals Sobel-generated from displacement at build time)"
+  },
+  {
+   "path": "assets/textures/wood_albedo.webp",
+   "bytes": 29456,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "pipeline/assets/generated-materials/wood_planks (albedo; normals Sobel-generated from displacement at build time)"
+  },
+  {
+   "path": "assets/textures/wood_rough.webp",
+   "bytes": 3494,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "pipeline/assets/generated-materials/wood_planks (rough; normals Sobel-generated from displacement at build time)"
+  },
+  {
+   "path": "assets/textures/wood_normal.webp",
+   "bytes": 26942,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "pipeline/assets/generated-materials/wood_planks (normal; normals Sobel-generated from displacement at build time)"
+  },
+  {
+   "path": "assets/textures/iron_plate_albedo.webp",
+   "bytes": 14290,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "pipeline/assets/generated-materials/iron_plate (albedo; normals Sobel-generated from displacement at build time)"
+  },
+  {
+   "path": "assets/textures/iron_plate_rough.webp",
+   "bytes": 1180,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "pipeline/assets/generated-materials/iron_plate (rough; normals Sobel-generated from displacement at build time)"
+  },
+  {
+   "path": "assets/textures/iron_plate_normal.webp",
+   "bytes": 7436,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "pipeline/assets/generated-materials/iron_plate (normal; normals Sobel-generated from displacement at build time)"
+  },
+  {
+   "path": "assets/props/car_sedan.glb",
+   "bytes": 45348,
+   "kind": "imported",
+   "license": "CC0 (Kenney / Quaternius via poly.pizza; proof: cc0-city/SOURCES.json)",
+   "source": "pipeline/assets/_downloaded/cc0-city/vehicles/sedan.glb (textures stripped, re-materialed at load, quantized)"
+  },
+  {
+   "path": "assets/props/van.glb",
+   "bytes": 46696,
+   "kind": "imported",
+   "license": "CC0 (Kenney / Quaternius via poly.pizza; proof: cc0-city/SOURCES.json)",
+   "source": "pipeline/assets/_downloaded/cc0-city/vehicles/van.glb (textures stripped, re-materialed at load, quantized)"
+  },
+  {
+   "path": "assets/props/truck.glb",
+   "bytes": 46908,
+   "kind": "imported",
+   "license": "CC0 (Kenney / Quaternius via poly.pizza; proof: cc0-city/SOURCES.json)",
+   "source": "pipeline/assets/_downloaded/cc0-city/vehicles/truck.glb (textures stripped, re-materialed at load, quantized)"
+  },
+  {
+   "path": "assets/props/dumpster.glb",
+   "bytes": 14160,
+   "kind": "imported",
+   "license": "CC0 (Kenney / Quaternius via poly.pizza; proof: cc0-city/SOURCES.json)",
+   "source": "pipeline/assets/_downloaded/cc0-city/props/dumpster-quaternius.glb (textures stripped, re-materialed at load, quantized)"
+  },
+  {
+   "path": "assets/props/crate.glb",
+   "bytes": 25768,
+   "kind": "imported",
+   "license": "CC0 (Kenney / Quaternius via poly.pizza; proof: cc0-city/SOURCES.json)",
+   "source": "pipeline/assets/_downloaded/cc0-city/props/crate-quaternius.glb (textures stripped, re-materialed at load, quantized)"
+  },
+  {
+   "path": "assets/props/planter.glb",
+   "bytes": 8160,
+   "kind": "imported",
+   "license": "CC0 (Kenney / Quaternius via poly.pizza; proof: cc0-city/SOURCES.json)",
+   "source": "pipeline/assets/_downloaded/cc0-city/props/planter.glb (textures stripped, re-materialed at load, quantized)"
+  },
+  {
+   "path": "assets/props/ac_unit.glb",
+   "bytes": 23156,
+   "kind": "imported",
+   "license": "CC0 (Kenney / Quaternius via poly.pizza; proof: cc0-city/SOURCES.json)",
+   "source": "pipeline/assets/_downloaded/cc0-city/props/ac-unit-quaternius.glb (textures stripped, re-materialed at load, quantized)"
+  }
+ ]
+}

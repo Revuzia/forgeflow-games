@@ -1,0 +1,91 @@
+{
+  "lane": "A8",
+  "updated": "2026-08-19",
+  "note": "Soldier bodies + shared clip set + 3P carried weapons. Bodies are Draco+WebP repacks of last-circle's Meshy cast (simplify 0.10/0.065 -> ~41k tris; 512 WebP). Clip GLBs are animation-only and retarget to both bodies (same mixamorig skeleton). clip_death_b/c REMOVED 2026-08-19: their source lineage (soldier_death2/3, Blender re-export) has different bone rests + cm/Z-up hips space -> only the hips animated on this body (standing corpse, measured); death variety ships as timescale + fall direction on the one proven death clip until 2 variants are re-baked via the Mixamo flow (clip-gap RESERVE, BUILD_PLAN Part 4). Mission-gate payload sum: 1460216 bytes.",
+  "entries": [
+    {
+      "path": "assets/chars/soldier.glb",
+      "bytes": 350212,
+      "kind": "imported",
+      "license": "Meshy generated (FFG owned, last-circle provenance)",
+      "source": "games/last-circle/assets/chars/meshy/soldier.glb (repacked: gltf-transform simplify+webp+draco)"
+    },
+    {
+      "path": "assets/chars/juggernaut.glb",
+      "bytes": 344816,
+      "kind": "imported",
+      "license": "Meshy generated (FFG owned, last-circle provenance)",
+      "source": "games/last-circle/assets/chars/meshy/juggernaut.glb (repacked)"
+    },
+    {
+      "path": "assets/chars/clip_rifle_idle.glb",
+      "bytes": 82128,
+      "kind": "imported",
+      "license": "Mixamo baked via last-circle flow (never shipped raw)",
+      "source": "games/last-circle/assets/chars/meshy/soldier_rifle_idle.glb (resampled)"
+    },
+    {
+      "path": "assets/chars/clip_rifle_walk.glb",
+      "bytes": 83512,
+      "kind": "imported",
+      "license": "Mixamo baked via last-circle flow",
+      "source": "games/last-circle/assets/chars/meshy/soldier_rifle_walk.glb (resampled)"
+    },
+    {
+      "path": "assets/chars/clip_rifle_run.glb",
+      "bytes": 78668,
+      "kind": "imported",
+      "license": "Mixamo baked via last-circle flow",
+      "source": "games/last-circle/assets/chars/meshy/soldier_rifle_run.glb (resampled)"
+    },
+    {
+      "path": "assets/chars/clip_rifle_crouch.glb",
+      "bytes": 84096,
+      "kind": "imported",
+      "license": "Mixamo baked via last-circle flow",
+      "source": "games/last-circle/assets/chars/meshy/soldier_rifle_crouch.glb (resampled)"
+    },
+    {
+      "path": "assets/chars/clip_rifle_reload.glb",
+      "bytes": 127660,
+      "kind": "imported",
+      "license": "Mixamo baked via last-circle flow",
+      "source": "games/last-circle/assets/chars/meshy/soldier_rifle_reload.glb (resampled)"
+    },
+    {
+      "path": "assets/chars/clip_hit.glb",
+      "bytes": 35644,
+      "kind": "imported",
+      "license": "Mixamo baked via last-circle flow",
+      "source": "games/last-circle/assets/chars/meshy/soldier_hit.glb (resampled)"
+    },
+    {
+      "path": "assets/chars/clip_death_a.glb",
+      "bytes": 49284,
+      "kind": "imported",
+      "license": "Mixamo baked via last-circle flow",
+      "source": "games/last-circle/assets/chars/meshy/soldier_death.glb (resampled)"
+    },
+    {
+      "path": "assets/chars/wpn3p_ar.glb",
+      "bytes": 92456,
+      "kind": "imported",
+      "license": "Meshy generated (FFG owned, last-circle provenance)",
+      "source": "games/last-circle/assets/props/meshy_wpn/wpn_ar.glb (draco)"
+    },
+    {
+      "path": "assets/chars/wpn3p_smg.glb",
+      "bytes": 70704,
+      "kind": "imported",
+      "license": "Meshy generated (FFG owned, last-circle provenance)",
+      "source": "games/last-circle/assets/props/meshy_wpn/wpn_smg.glb (draco)"
+    },
+    {
+      "path": "assets/chars/wpn3p_sniper.glb",
+      "bytes": 61036,
+      "kind": "imported",
+      "license": "Meshy generated (FFG owned, last-circle provenance)",
+      "source": "games/last-circle/assets/props/meshy_wpn/wpn_sniper.glb (draco)"
+    }
+  ]
+}

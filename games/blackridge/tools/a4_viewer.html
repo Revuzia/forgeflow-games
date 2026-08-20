@@ -1,0 +1,66 @@
+<!doctype html><html><head><meta charset="utf-8"/>
+<title>A4 FP weapon viewer (dev tool — tools/ is withheld from deploy)</title>
+<style>html,body{margin:0;background:#0a0e14;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">
+{ "imports": { "three": "../assets/vendor/three/build/three.module.js",
+               "three/addons/": "../assets/vendor/three/examples/jsm/" } }
+</script>
+</head><body>
+<script type="module">
+// Judgment rig for the A4 FP asset spike: loads the SHIPPED GLBs through the
+// REAL core/weapons/weapon_meshes.js loader (repair + sockets + fallback),
+// renders with AgX at the viewmodel camera's 60° vFOV, night-adjacent
+// lighting. ?w=warden|vesper|corvus|pike & pose=hip|ads|close
+import * as THREE from "three";
+import { loadWeaponGLB } from "../core/weapons/weapon_meshes.js";
+import { WEAPONS, VIEWMODEL } from "../core/weapons/weapon_data.js";
+
+const P = new URLSearchParams(location.search);
+const wid = P.get("w") || "warden";
+const pose = P.get("pose") || "hip";
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(1.5);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.AgXToneMapping;   // the game's post target
+renderer.toneMappingExposure = 1.0;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x11151c); // night street ambience-ish
+const camera = new THREE.PerspectiveCamera(VIEWMODEL.fovDeg, innerWidth / innerHeight, 0.005, 10);
+scene.add(camera);
+
+// night-adjacent judgment lighting at GAME-plausible levels (LD night storm:
+// hemi ambient low, sodium practicals at distance, cold moon rim)
+scene.add(new THREE.HemisphereLight(0x2a3448, 0x0a0c10, 0.55));
+const key = new THREE.PointLight(0xffb46b, 3.2, 0, 2);  // sodium practical
+key.position.set(0.8, 0.9, 0.4);
+scene.add(key);
+const rim = new THREE.DirectionalLight(0x9db4c8, 0.55); // cold moon rim
+rim.position.set(-0.7, 0.8, -0.9);
+scene.add(rim);
+
+const group = new THREE.Group();
+scene.add(group);
+
+const v = (WEAPONS[wid] && WEAPONS[wid].view) || {};
+const posHip = v.posHip || [0.165, -0.185, -0.34];
+const posAds = v.posAds || [0, -0.148, -0.26];
+
+loadWeaponGLB(wid).then((g) => {
+  group.add(g);
+  if (pose === "ads") group.position.set(...posAds);
+  else if (pose === "close") { group.position.set(0.02, -0.10, -0.24); group.rotation.y = -0.5; }
+  else group.position.set(...posHip);
+  renderer.render(scene, camera);
+  window.__SHOT_META = {
+    wid, pose,
+    placeholder: !!g.userData.placeholder,
+    fallbacks: (window.__FFG_FALLBACKS__ || []).slice(),
+  };
+  window.__READY = true;
+});
+</script>
+</body></html>

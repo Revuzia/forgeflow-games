@@ -1,0 +1,21 @@
+{
+  "title": "BLACKRIDGE",
+  "short_description": "A single showcase night operation in Meridian Ward, Zarov: rain-slick streets, sodium lamps, and Vektor Ancile PMC squads between you and the CINDERLOCK uplink. A modern-military first-person shooter built for the browser — four original weapons, squad AI that flanks and suppresses, and a storm that never lets up.",
+  "description": "RAVEN 2-1, you are going in alone. Meridian Ward is a blacked-out harbor district — one hundred and twenty metres of quays, alleys, arcades and boulevards under night rain — held by Vektor Ancile private military contractors. Work the infiltration from the docks, take the plaza, and reach the CINDERLOCK uplink before exfil closes.\n\nFour original weapons carry the mission: the M-72 Warden full-auto rifle, the suppressed KS-23 Vesper for close work, the LR-1 Corvus marksman rifle, and the GS-9 Pike sidearm. Movement is modern-military: sprint, slide, mantle, aim-down-sights, and frag grenades you can cook. The opposition plays fair and plays smart — squads that take fire tokens, flank when you hold a lane, suppress when you camp, and call every move aloud.\n\nOne mission, six beats, checkpoint respawns. Night storm throughout.",
+  "genre": "action",
+  "sub_genre": "fps",
+  "difficulty": "medium",
+  "controls_keyboard": "WASD move · Mouse look · LMB fire · RMB aim · R reload · SHIFT sprint · CTRL crouch (slide while sprinting) · SPACE jump/mantle · 1/2 weapons · G grenade · F interact · ESC pause",
+  "tags": [
+    "fps",
+    "shooter",
+    "military",
+    "action",
+    "3d",
+    "night",
+    "singleplayer",
+    "tactical",
+    "webgl"
+  ],
+  "status": "unpublished"
+}

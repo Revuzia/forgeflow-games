@@ -1,0 +1,1127 @@
+{
+ "game": "blackridge",
+ "updated": "2026-08-19",
+ "note": "Merged by tools/merge_manifests.py (A0). Byte counts are re-verified against disk at merge time; a bytes_fragment_stale field records a fragment's stale figure. Fragments (manifest.a*.json) remain the per-lane sources.",
+ "entry_shape": {
+  "path": "str",
+  "bytes": "int",
+  "kind": "vendored|generated|imported|procedural",
+  "license": "str",
+  "source": "str"
+ },
+ "payload_sums_bytes": {
+  "menu": 5630190,
+  "mission": 2887826,
+  "menu_budget": 6291456,
+  "mission_budget": 5242880
+ },
+ "entries": [
+  {
+   "path": "assets/audio/SONNISS-LICENSE.txt",
+   "bytes": 5273,
+   "kind": "imported",
+   "license": "license text",
+   "source": "sonniss.com/gdc-bundle-license (captured 2026-08-04)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/beds/harbor_distant_loop.ogg",
+   "bytes": 164243,
+   "kind": "imported",
+   "license": "Sonniss GDC royalty-free (assets/audio/SONNISS-LICENSE.txt)",
+   "source": "pipeline/assets/sonniss-gdc2024/Jake Fielding - Industrial Harbor/AMBInd_Distant Port Atmos Dover (20-42s, seamless xfade loop 20s)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/beds/rain_night_loop.ogg",
+   "bytes": 270758,
+   "kind": "imported",
+   "license": "Sonniss GDC royalty-free (assets/audio/SONNISS-LICENSE.txt)",
+   "source": "pipeline/assets/sonniss-gdc2024/Bolt - Backyard Rain & Thunder/RAIN_Rain at Night Slow Crescendo (180-202s, seamless xfade loop 20s)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/oneshots/expl_frag.ogg",
+   "bytes": 18866,
+   "kind": "imported",
+   "license": "Sonniss GDC royalty-free (assets/audio/SONNISS-LICENSE.txt)",
+   "source": "pipeline/assets/sonniss-gdc2024/DavidDumais - Explosion SFX Pack/EXPLReal_Medium Realistic Explosion 15 (sliced 0-2.36s, 44.1k mono OGG)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/oneshots/expl_large.ogg",
+   "bytes": 39036,
+   "kind": "imported",
+   "license": "Sonniss GDC royalty-free (assets/audio/SONNISS-LICENSE.txt)",
+   "source": "pipeline/assets/sonniss-gdc2024/DavidDumais - Explosion SFX Pack/DESTRCrsh_Designed Car Explosion 06 (sliced 0-4.6s, 44.1k mono OGG)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/oneshots/thunder_a.ogg",
+   "bytes": 83866,
+   "kind": "imported",
+   "license": "Sonniss GDC royalty-free (assets/audio/SONNISS-LICENSE.txt)",
+   "source": "pipeline/assets/sonniss-gdc2024/Bolt - Backyard Rain & Thunder/RAIN_Distant Thunder... Thunderstorm C (sliced 67-77s)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/oneshots/thunder_b.ogg",
+   "bytes": 83438,
+   "kind": "imported",
+   "license": "Sonniss GDC royalty-free (assets/audio/SONNISS-LICENSE.txt)",
+   "source": "pipeline/assets/sonniss-gdc2024/Bolt - Backyard Rain & Thunder/RAIN_Distant Thunder... Thunderstorm C (sliced 107.5-117.5s)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/FFSL-LICENSE.txt",
+   "bytes": 659,
+   "kind": "imported",
+   "license": "license text",
+   "source": "games/last-circle/assets/audio/sfx (in-dir licenses)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/KENNEY-LICENSE.txt",
+   "bytes": 980,
+   "kind": "imported",
+   "license": "license text",
+   "source": "games/last-circle/assets/audio/sfx (in-dir licenses)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/beltHandle1.ogg",
+   "bytes": 10820,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/beltHandle2.ogg",
+   "bytes": 15410,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/cloth1.ogg",
+   "bytes": 16508,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/cloth2.ogg",
+   "bytes": 11787,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/dropLeather.ogg",
+   "bytes": 11695,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/impactGeneric_light_000.ogg",
+   "bytes": 5827,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/impactGeneric_light_001.ogg",
+   "bytes": 5636,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/impactGeneric_light_002.ogg",
+   "bytes": 5795,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/impactGlass_light_000.ogg",
+   "bytes": 6526,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/impactGlass_light_001.ogg",
+   "bytes": 6544,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/impactGlass_light_002.ogg",
+   "bytes": 6562,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/impactMetal_light_000.ogg",
+   "bytes": 7651,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/impactMetal_light_001.ogg",
+   "bytes": 6967,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/impactMetal_light_002.ogg",
+   "bytes": 6804,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/impactPlank_medium_000.ogg",
+   "bytes": 12016,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/impactPlank_medium_001.ogg",
+   "bytes": 12082,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/impactPlank_medium_002.ogg",
+   "bytes": 12313,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/impactPlate_light_000.ogg",
+   "bytes": 10474,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/impactPlate_light_001.ogg",
+   "bytes": 11730,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/impactPlate_light_002.ogg",
+   "bytes": 9932,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/metalClick.ogg",
+   "bytes": 13615,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/metalLatch.ogg",
+   "bytes": 10208,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/shot_ar_0.ogg",
+   "bytes": 11822,
+   "kind": "imported",
+   "license": "CC0 (Free Firearm Sound Library)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/shot_ar_1.ogg",
+   "bytes": 10811,
+   "kind": "imported",
+   "license": "CC0 (Free Firearm Sound Library)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/shot_ar_2.ogg",
+   "bytes": 11441,
+   "kind": "imported",
+   "license": "CC0 (Free Firearm Sound Library)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/shot_pistol_0.ogg",
+   "bytes": 11411,
+   "kind": "imported",
+   "license": "CC0 (Free Firearm Sound Library)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/shot_pistol_1.ogg",
+   "bytes": 11384,
+   "kind": "imported",
+   "license": "CC0 (Free Firearm Sound Library)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/shot_smg_0.ogg",
+   "bytes": 10982,
+   "kind": "imported",
+   "license": "CC0 (Free Firearm Sound Library)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/shot_smg_1.ogg",
+   "bytes": 11718,
+   "kind": "imported",
+   "license": "CC0 (Free Firearm Sound Library)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/shot_smg_2.ogg",
+   "bytes": 11977,
+   "kind": "imported",
+   "license": "CC0 (Free Firearm Sound Library)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/shot_sniper_0.ogg",
+   "bytes": 10513,
+   "kind": "imported",
+   "license": "CC0 (Free Firearm Sound Library)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/shot_sniper_1.ogg",
+   "bytes": 10517,
+   "kind": "imported",
+   "license": "CC0 (Free Firearm Sound Library)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/shot_sniper_2.ogg",
+   "bytes": 10625,
+   "kind": "imported",
+   "license": "CC0 (Free Firearm Sound Library)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/step_concrete_000.ogg",
+   "bytes": 5808,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/step_concrete_001.ogg",
+   "bytes": 6308,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/step_concrete_002.ogg",
+   "bytes": 6255,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/step_concrete_003.ogg",
+   "bytes": 5805,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/step_grass_000.ogg",
+   "bytes": 8290,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/step_grass_001.ogg",
+   "bytes": 8313,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/step_grass_002.ogg",
+   "bytes": 8278,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/step_grass_003.ogg",
+   "bytes": 8129,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/step_wood_000.ogg",
+   "bytes": 5949,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/step_wood_001.ogg",
+   "bytes": 5929,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/step_wood_002.ogg",
+   "bytes": 5895,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/step_wood_003.ogg",
+   "bytes": 6207,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/svd_mag.ogg",
+   "bytes": 11516,
+   "kind": "imported",
+   "license": "Sonniss GDC royalty-free (assets/audio/SONNISS-LICENSE.txt)",
+   "source": "pipeline/assets/sonniss-gdc2024/Dramatic Cat - SVD Dragunov/GUNMech_... Magazine Insert Slow (sliced 5.7-7.0s)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/svd_shot_0.ogg",
+   "bytes": 16337,
+   "kind": "imported",
+   "license": "Sonniss GDC royalty-free (assets/audio/SONNISS-LICENSE.txt)",
+   "source": "pipeline/assets/sonniss-gdc2024/Dramatic Cat - SVD Dragunov/GUNRif_... DESIGNED Single Shot Core Long (sliced 0-1.6s)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/ui_back_001.ogg",
+   "bytes": 6997,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/ui_click_001.ogg",
+   "bytes": 4876,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/ui_click_002.ogg",
+   "bytes": 4275,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/ui_confirmation_001.ogg",
+   "bytes": 8968,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/audio/sfx/ui_error_001.ogg",
+   "bytes": 7373,
+   "kind": "imported",
+   "license": "CC0 (Kenney)",
+   "source": "games/last-circle/assets/audio/sfx (ready-sliced)",
+   "lane": "A9-audio",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_death_a.glb",
+   "bytes": 49284,
+   "kind": "imported",
+   "license": "Mixamo baked via last-circle flow",
+   "source": "games/last-circle/assets/chars/meshy/soldier_death.glb (resampled)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_hit.glb",
+   "bytes": 35644,
+   "kind": "imported",
+   "license": "Mixamo baked via last-circle flow",
+   "source": "games/last-circle/assets/chars/meshy/soldier_hit.glb (resampled)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_crouch.glb",
+   "bytes": 84096,
+   "kind": "imported",
+   "license": "Mixamo baked via last-circle flow",
+   "source": "games/last-circle/assets/chars/meshy/soldier_rifle_crouch.glb (resampled)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_idle.glb",
+   "bytes": 82128,
+   "kind": "imported",
+   "license": "Mixamo baked via last-circle flow (never shipped raw)",
+   "source": "games/last-circle/assets/chars/meshy/soldier_rifle_idle.glb (resampled)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_reload.glb",
+   "bytes": 127660,
+   "kind": "imported",
+   "license": "Mixamo baked via last-circle flow",
+   "source": "games/last-circle/assets/chars/meshy/soldier_rifle_reload.glb (resampled)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_run.glb",
+   "bytes": 78668,
+   "kind": "imported",
+   "license": "Mixamo baked via last-circle flow",
+   "source": "games/last-circle/assets/chars/meshy/soldier_rifle_run.glb (resampled)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/clip_rifle_walk.glb",
+   "bytes": 83512,
+   "kind": "imported",
+   "license": "Mixamo baked via last-circle flow",
+   "source": "games/last-circle/assets/chars/meshy/soldier_rifle_walk.glb (resampled)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/juggernaut.glb",
+   "bytes": 344816,
+   "kind": "imported",
+   "license": "Meshy generated (FFG owned, last-circle provenance)",
+   "source": "games/last-circle/assets/chars/meshy/juggernaut.glb (repacked)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/soldier.glb",
+   "bytes": 350212,
+   "kind": "imported",
+   "license": "Meshy generated (FFG owned, last-circle provenance)",
+   "source": "games/last-circle/assets/chars/meshy/soldier.glb (repacked: gltf-transform simplify+webp+draco)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/wpn3p_ar.glb",
+   "bytes": 92456,
+   "kind": "imported",
+   "license": "Meshy generated (FFG owned, last-circle provenance)",
+   "source": "games/last-circle/assets/props/meshy_wpn/wpn_ar.glb (draco)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/wpn3p_smg.glb",
+   "bytes": 70704,
+   "kind": "imported",
+   "license": "Meshy generated (FFG owned, last-circle provenance)",
+   "source": "games/last-circle/assets/props/meshy_wpn/wpn_smg.glb (draco)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/chars/wpn3p_sniper.glb",
+   "bytes": 61036,
+   "kind": "imported",
+   "license": "Meshy generated (FFG owned, last-circle provenance)",
+   "source": "games/last-circle/assets/props/meshy_wpn/wpn_sniper.glb (draco)",
+   "lane": "A8",
+   "payload": "mission"
+  },
+  {
+   "path": "assets/fonts/oswald-400-latin.woff2",
+   "bytes": 12248,
+   "kind": "imported",
+   "license": "SIL OFL 1.1",
+   "source": "Google Fonts 'Oswald' v57 latin subset (pipeline/assets/_downloaded/fonts/Oswald/Oswald_02.woff2)",
+   "lane": "A10",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/props/ac_unit.glb",
+   "bytes": 23156,
+   "kind": "imported",
+   "license": "CC0 (Kenney / Quaternius via poly.pizza; proof: cc0-city/SOURCES.json)",
+   "source": "pipeline/assets/_downloaded/cc0-city/props/ac-unit-quaternius.glb (textures stripped, re-materialed at load, quantized)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/props/car_sedan.glb",
+   "bytes": 45348,
+   "kind": "imported",
+   "license": "CC0 (Kenney / Quaternius via poly.pizza; proof: cc0-city/SOURCES.json)",
+   "source": "pipeline/assets/_downloaded/cc0-city/vehicles/sedan.glb (textures stripped, re-materialed at load, quantized)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/props/crate.glb",
+   "bytes": 25768,
+   "kind": "imported",
+   "license": "CC0 (Kenney / Quaternius via poly.pizza; proof: cc0-city/SOURCES.json)",
+   "source": "pipeline/assets/_downloaded/cc0-city/props/crate-quaternius.glb (textures stripped, re-materialed at load, quantized)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/props/dumpster.glb",
+   "bytes": 14160,
+   "kind": "imported",
+   "license": "CC0 (Kenney / Quaternius via poly.pizza; proof: cc0-city/SOURCES.json)",
+   "source": "pipeline/assets/_downloaded/cc0-city/props/dumpster-quaternius.glb (textures stripped, re-materialed at load, quantized)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/props/planter.glb",
+   "bytes": 8160,
+   "kind": "imported",
+   "license": "CC0 (Kenney / Quaternius via poly.pizza; proof: cc0-city/SOURCES.json)",
+   "source": "pipeline/assets/_downloaded/cc0-city/props/planter.glb (textures stripped, re-materialed at load, quantized)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/props/truck.glb",
+   "bytes": 46908,
+   "kind": "imported",
+   "license": "CC0 (Kenney / Quaternius via poly.pizza; proof: cc0-city/SOURCES.json)",
+   "source": "pipeline/assets/_downloaded/cc0-city/vehicles/truck.glb (textures stripped, re-materialed at load, quantized)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/props/van.glb",
+   "bytes": 46696,
+   "kind": "imported",
+   "license": "CC0 (Kenney / Quaternius via poly.pizza; proof: cc0-city/SOURCES.json)",
+   "source": "pipeline/assets/_downloaded/cc0-city/vehicles/van.glb (textures stripped, re-materialed at load, quantized)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/asphalt_worn_albedo.webp",
+   "bytes": 261218,
+   "kind": "imported",
+   "license": "CC0 (Poly Haven)",
+   "source": "pipeline/assets/_downloaded/polyhaven-textures/asphalt_02 (albedo; normals Sobel-generated from displacement at build time)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/asphalt_worn_normal.webp",
+   "bytes": 346212,
+   "kind": "imported",
+   "license": "CC0 (Poly Haven)",
+   "source": "pipeline/assets/_downloaded/polyhaven-textures/asphalt_02 (normal; normals Sobel-generated from displacement at build time)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/asphalt_worn_rough.webp",
+   "bytes": 49566,
+   "kind": "imported",
+   "license": "CC0 (Poly Haven)",
+   "source": "pipeline/assets/_downloaded/polyhaven-textures/asphalt_02 (rough; normals Sobel-generated from displacement at build time)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/cobble_albedo.webp",
+   "bytes": 123958,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "pipeline/assets/generated-materials/stone_cobble (albedo; normals Sobel-generated from displacement at build time)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/cobble_normal.webp",
+   "bytes": 99016,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "pipeline/assets/generated-materials/stone_cobble (normal; normals Sobel-generated from displacement at build time)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/cobble_rough.webp",
+   "bytes": 1500,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "pipeline/assets/generated-materials/stone_cobble (rough; normals Sobel-generated from displacement at build time)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/concrete_yard_albedo.webp",
+   "bytes": 167394,
+   "kind": "imported",
+   "license": "CC0 (Poly Haven)",
+   "source": "pipeline/assets/_downloaded/polyhaven-textures/asphalt_04 (albedo; normals Sobel-generated from displacement at build time)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/concrete_yard_normal.webp",
+   "bytes": 161292,
+   "kind": "imported",
+   "license": "CC0 (Poly Haven)",
+   "source": "pipeline/assets/_downloaded/polyhaven-textures/asphalt_04 (normal; normals Sobel-generated from displacement at build time)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/concrete_yard_rough.webp",
+   "bytes": 924,
+   "kind": "imported",
+   "license": "CC0 (Poly Haven)",
+   "source": "pipeline/assets/_downloaded/polyhaven-textures/asphalt_04 (rough; normals Sobel-generated from displacement at build time)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/iron_plate_albedo.webp",
+   "bytes": 14290,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "pipeline/assets/generated-materials/iron_plate (albedo; normals Sobel-generated from displacement at build time)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/iron_plate_normal.webp",
+   "bytes": 7436,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "pipeline/assets/generated-materials/iron_plate (normal; normals Sobel-generated from displacement at build time)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/iron_plate_rough.webp",
+   "bytes": 1180,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "pipeline/assets/generated-materials/iron_plate (rough; normals Sobel-generated from displacement at build time)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/wall_plaster_albedo.webp",
+   "bytes": 702,
+   "kind": "imported",
+   "license": "CC0 (Poly Haven)",
+   "source": "pipeline/assets/_downloaded/polyhaven-textures/beige_wall_001 (albedo; normals Sobel-generated from displacement at build time)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/wall_plaster_normal.webp",
+   "bytes": 165990,
+   "kind": "imported",
+   "license": "CC0 (Poly Haven)",
+   "source": "pipeline/assets/_downloaded/polyhaven-textures/beige_wall_001 (normal; normals Sobel-generated from displacement at build time)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/wall_plaster_rough.webp",
+   "bytes": 2690,
+   "kind": "imported",
+   "license": "CC0 (Poly Haven)",
+   "source": "pipeline/assets/_downloaded/polyhaven-textures/beige_wall_001 (rough; normals Sobel-generated from displacement at build time)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/wood_albedo.webp",
+   "bytes": 29456,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "pipeline/assets/generated-materials/wood_planks (albedo; normals Sobel-generated from displacement at build time)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/wood_normal.webp",
+   "bytes": 26942,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "pipeline/assets/generated-materials/wood_planks (normal; normals Sobel-generated from displacement at build time)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/textures/wood_rough.webp",
+   "bytes": 3494,
+   "kind": "generated",
+   "license": "generated (FFG pipeline, original)",
+   "source": "pipeline/assets/generated-materials/wood_planks (rough; normals Sobel-generated from displacement at build time)",
+   "lane": "A3-level",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/vendor/draco/draco_decoder.js",
+   "bytes": 719410,
+   "kind": "vendored",
+   "license": "Apache-2.0",
+   "source": "games/colosseum/assets/vendor (three.js r172)",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/vendor/draco/draco_decoder.wasm",
+   "bytes": 285747,
+   "kind": "vendored",
+   "license": "Apache-2.0",
+   "source": "games/colosseum/assets/vendor (three.js r172)",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/vendor/draco/draco_wasm_wrapper.js",
+   "bytes": 58763,
+   "kind": "vendored",
+   "license": "Apache-2.0",
+   "source": "games/colosseum/assets/vendor (three.js r172)",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/vendor/three/build/three.core.js",
+   "bytes": 754325,
+   "kind": "vendored",
+   "license": "MIT",
+   "source": "games/colosseum/assets/vendor (three.js r172)",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/vendor/three/build/three.module.js",
+   "bytes": 575699,
+   "kind": "vendored",
+   "license": "MIT",
+   "source": "games/colosseum/assets/vendor (three.js r172)",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/vendor/three/examples/jsm/libs/draco/draco_decoder.js",
+   "bytes": 719410,
+   "kind": "vendored",
+   "license": "Apache-2.0",
+   "source": "games/colosseum/assets/vendor (three.js r172)",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/vendor/three/examples/jsm/libs/draco/draco_decoder.wasm",
+   "bytes": 285747,
+   "kind": "vendored",
+   "license": "Apache-2.0",
+   "source": "games/colosseum/assets/vendor (three.js r172)",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/vendor/three/examples/jsm/libs/draco/draco_wasm_wrapper.js",
+   "bytes": 58763,
+   "kind": "vendored",
+   "license": "Apache-2.0",
+   "source": "games/colosseum/assets/vendor (three.js r172)",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/vendor/three/examples/jsm/loaders/DRACOLoader.js",
+   "bytes": 13699,
+   "kind": "vendored",
+   "license": "Apache-2.0",
+   "source": "games/colosseum/assets/vendor (three.js r172)",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/vendor/three/examples/jsm/loaders/GLTFLoader.js",
+   "bytes": 110608,
+   "kind": "vendored",
+   "license": "MIT",
+   "source": "games/colosseum/assets/vendor (three.js r172)",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/vendor/three/examples/jsm/postprocessing/EffectComposer.js",
+   "bytes": 4619,
+   "kind": "vendored",
+   "license": "MIT",
+   "source": "games/colosseum/assets/vendor (three.js r172)",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/vendor/three/examples/jsm/postprocessing/MaskPass.js",
+   "bytes": 2231,
+   "kind": "vendored",
+   "license": "MIT",
+   "source": "games/colosseum/assets/vendor (three.js r172)",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/vendor/three/examples/jsm/postprocessing/OutputPass.js",
+   "bytes": 2524,
+   "kind": "vendored",
+   "license": "MIT",
+   "source": "games/colosseum/assets/vendor (three.js r172)",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/vendor/three/examples/jsm/postprocessing/Pass.js",
+   "bytes": 1706,
+   "kind": "vendored",
+   "license": "MIT",
+   "source": "games/colosseum/assets/vendor (three.js r172)",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/vendor/three/examples/jsm/postprocessing/RenderPass.js",
+   "bytes": 1941,
+   "kind": "vendored",
+   "license": "MIT",
+   "source": "games/colosseum/assets/vendor (three.js r172)",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/vendor/three/examples/jsm/postprocessing/ShaderPass.js",
+   "bytes": 1576,
+   "kind": "vendored",
+   "license": "MIT",
+   "source": "games/colosseum/assets/vendor (three.js r172)",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/vendor/three/examples/jsm/postprocessing/UnrealBloomPass.js",
+   "bytes": 12410,
+   "kind": "vendored",
+   "license": "MIT",
+   "source": "games/colosseum/assets/vendor (three.js r172)",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/vendor/three/examples/jsm/shaders/CopyShader.js",
+   "bytes": 571,
+   "kind": "vendored",
+   "license": "MIT",
+   "source": "games/colosseum/assets/vendor (three.js r172)",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/vendor/three/examples/jsm/shaders/LuminosityHighPassShader.js",
+   "bytes": 1147,
+   "kind": "vendored",
+   "license": "MIT",
+   "source": "games/colosseum/assets/vendor (three.js r172)",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/vendor/three/examples/jsm/shaders/OutputShader.js",
+   "bytes": 1490,
+   "kind": "vendored",
+   "license": "MIT",
+   "source": "games/colosseum/assets/vendor (three.js r172)",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/vendor/three/examples/jsm/utils/BufferGeometryUtils.js",
+   "bytes": 31778,
+   "kind": "vendored",
+   "license": "MIT",
+   "source": "games/colosseum/assets/vendor (three.js r172)",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/vendor/three/examples/jsm/utils/SkeletonUtils.js",
+   "bytes": 8802,
+   "kind": "vendored",
+   "license": "MIT",
+   "source": "games/colosseum/assets/vendor (three.js r172)",
+   "payload": "menu"
+  },
+  {
+   "path": "assets/weapons/corvus.glb",
+   "bytes": 136612,
+   "kind": "generated",
+   "license": "Original (Meshy, owner account; base wpn_sniper.glb + soldier.glb arms per games/last-circle/CREDITS.md) + authored dressing",
+   "source": "tools/a4_build_fp_weapons.py",
+   "lane": "A4",
+   "bytes_fragment_stale": 141128,
+   "payload": "mission"
+  },
+  {
+   "path": "assets/weapons/pike.glb",
+   "bytes": 144828,
+   "kind": "generated",
+   "license": "Original (Meshy, owner account; base wpn_pistol.glb + soldier.glb arms per games/last-circle/CREDITS.md) + authored dressing",
+   "source": "tools/a4_build_fp_weapons.py",
+   "lane": "A4",
+   "bytes_fragment_stale": 148536,
+   "payload": "menu"
+  },
+  {
+   "path": "assets/weapons/vesper.glb",
+   "bytes": 142268,
+   "kind": "generated",
+   "license": "Original (Meshy, owner account; base wpn_smg.glb + soldier.glb arms per games/last-circle/CREDITS.md) + authored dressing",
+   "source": "tools/a4_build_fp_weapons.py",
+   "lane": "A4",
+   "bytes_fragment_stale": 181452,
+   "payload": "mission"
+  },
+  {
+   "path": "assets/weapons/warden.glb",
+   "bytes": 146692,
+   "kind": "generated",
+   "license": "Original (Meshy, owner account; base wpn_ar.glb + soldier.glb arms per games/last-circle/CREDITS.md) + authored dressing",
+   "source": "tools/a4_build_fp_weapons.py",
+   "lane": "A4",
+   "bytes_fragment_stale": 197812,
+   "payload": "menu"
+  }
+ ]
+}
