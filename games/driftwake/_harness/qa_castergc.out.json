@@ -1,0 +1,169 @@
+{
+ "armA": [
+  {
+   "tag": "A0:cold",
+   "realm": "cold",
+   "instances": 14,
+   "types": 10,
+   "shEnt": [
+    22,
+    9,
+    1
+   ],
+   "shProxy": [
+    "14/22",
+    "1/9",
+    "0/1"
+   ],
+   "dpEnt": 20,
+   "dpProxy": "14/20",
+   "hookShadow": "undefined",
+   "hookDepth": "undefined"
+  },
+  {
+   "tag": "A1:sand",
+   "realm": "sand",
+   "instances": 9,
+   "types": 10,
+   "shEnt": [
+    31,
+    10,
+    1
+   ],
+   "shProxy": [
+    "9/17",
+    "1/9",
+    "0/1"
+   ],
+   "dpEnt": 29,
+   "dpProxy": "9/15",
+   "hookShadow": "undefined",
+   "hookDepth": "undefined"
+  },
+  {
+   "tag": "A2:ash",
+   "realm": "ash",
+   "instances": 10,
+   "types": 10,
+   "shEnt": [
+    41,
+    10,
+    1
+   ],
+   "shProxy": [
+    "10/18",
+    "0/8",
+    "0/1"
+   ],
+   "dpEnt": 39,
+   "dpProxy": "10/16",
+   "hookShadow": "undefined",
+   "hookDepth": "undefined"
+  },
+  {
+   "tag": "A3:cold",
+   "realm": "cold",
+   "instances": 9,
+   "types": 10,
+   "shEnt": [
+    50,
+    11,
+    1
+   ],
+   "shProxy": [
+    "9/17",
+    "1/9",
+    "0/1"
+   ],
+   "dpEnt": 48,
+   "dpProxy": "9/15",
+   "hookShadow": "undefined",
+   "hookDepth": "undefined"
+  }
+ ],
+ "armB": [
+  {
+   "tag": "B0:cold",
+   "realm": "cold",
+   "instances": 12,
+   "types": 10,
+   "shEnt": [
+    53,
+    11,
+    1
+   ],
+   "shProxy": [
+    "12/20",
+    "1/9",
+    "0/1"
+   ],
+   "dpEnt": 51,
+   "dpProxy": "12/18",
+   "hookShadow": "function",
+   "hookDepth": "function"
+  },
+  {
+   "tag": "B1:sand",
+   "realm": "sand",
+   "instances": 9,
+   "types": 10,
+   "shEnt": [
+    50,
+    11,
+    1
+   ],
+   "shProxy": [
+    "9/17",
+    "1/9",
+    "0/1"
+   ],
+   "dpEnt": 48,
+   "dpProxy": "9/15",
+   "hookShadow": "function",
+   "hookDepth": "function"
+  },
+  {
+   "tag": "B2:ash",
+   "realm": "ash",
+   "instances": 9,
+   "types": 10,
+   "shEnt": [
+    50,
+    10,
+    1
+   ],
+   "shProxy": [
+    "9/17",
+    "0/8",
+    "0/1"
+   ],
+   "dpEnt": 48,
+   "dpProxy": "9/15",
+   "hookShadow": "function",
+   "hookDepth": "function"
+  },
+  {
+   "tag": "B3:cold",
+   "realm": "cold",
+   "instances": 9,
+   "types": 10,
+   "shEnt": [
+    50,
+    11,
+    1
+   ],
+   "shProxy": [
+    "9/17",
+    "1/9",
+    "0/1"
+   ],
+   "dpEnt": 48,
+   "dpProxy": "9/15",
+   "hookShadow": "function",
+   "hookDepth": "function"
+  }
+ ],
+ "errs": [],
+ "pageerrors": [],
+ "ok": true
+}

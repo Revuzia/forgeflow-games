@@ -44,8 +44,19 @@
  *     (`dt === 0` strict no-op paths in enemies/meshEnemies) cannot trigger
  *     from a hit-stop: dt stays a small positive number.
  *
+ * PAUSE. `update()` is a strict no-op under `S.freezeTime` — see the guard at
+ * the top of it. main.js calls this every frame with the RAW wall dt whether
+ * the game is running or not (`hitstop.update(dtMs / 1000)`, unconditional),
+ * so without the guard a kill landing on the pause edge welded its camera
+ * punch and its trauma into the frozen frame — a view that jumps with nothing
+ * moving behind it — and the envelope drained on wall time while the world
+ * stood still, so the impact frame the stop exists to sell was already spent
+ * by the time the player unpaused.
+ *
  * Allocation-free: all state is scalar; `update()` allocates nothing.
  */
+
+import { S } from "./settings.js";
 
 // ------------------------------------------------------------- the numbers
 const KILL_S = 0.060, KILL_SCALE = 0.05;
@@ -124,6 +135,24 @@ export class HitStop {
      * @returns {void}
      */
     update(dt) {
+        // ---- paused: the whole envelope is a no-op ------------------------
+        // Nothing advances (`_wall` is the anchor for the 90 ms stack cap and
+        // the 250 ms cooldown, so freezing it keeps both intact across a
+        // pause), nothing triggers, and the scale is held at exactly 1 so
+        // `scale()` is the identity the moment the game resumes. The player
+        // pulse is still consumed, otherwise a hit taken on the pause edge
+        // would fire its punch on the first UNPAUSED frame, long after the
+        // blow that caused it. An envelope caught mid-flight simply picks up
+        // where it left off: `_remaining` and `_dur` are untouched, so the
+        // first running frame recomputes the same smoothstep it would have.
+        if (S.freezeTime) {
+            if (this.enemies) this._pulseSeen = this.enemies.playerHurtPulse | 0;
+            this._scaleNow = 1;
+            this.stats.active = this._remaining > 0;
+            this.stats.scaleNow = 1;
+            return;
+        }
+
         this._wall += dt;
 
         // ---- advance / release --------------------------------------------

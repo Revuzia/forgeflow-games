@@ -29,8 +29,7 @@
  * HEAL — +10% of player max HP on pickup (progression doc §7 redefinition:
  * exactly +10 at the L10 anchor; the lane brief's 6% was the spec-missing
  * fallback and the spec has the number, so the spec wins). Pickup rings
- * `sfx.trigger("pickup_mote", ...)` — a no-op until an EVENTS row lands in
- * audio/sfx.js (reported as the audio hook; sfx ignores unknown names).
+ * `sfx.trigger("pickup_mote", ...)` — the EVENTS row lives in audio/sfx.js.
  *
  * MOTION — CPU integrates drift only: a mote rests at hover height over its
  * drop point and, inside 4 m, eases toward the player's chest, faster the
@@ -173,6 +172,9 @@ export class HealthMotes {
         this._acc = 0;
         /** Deterministic scatter counter for multi-mote drops. */
         this._seed = 0x2f6e2b1 | 0;
+        /** Retained scratch for `terrain.clampToPlayArea` (mutates in place) —
+         *  a literal here would allocate on every drop. */
+        this._clampV = { x: 0, z: 0 };
 
         /** (x, y, z, age01) per mote — THE uniform storage. */
         this.a = new Float32Array(MOTE_MAX * 4);
@@ -230,7 +232,9 @@ export class HealthMotes {
      * Drop `n` motes around a world point — the boss hook (`spawnAt(x, z, 8)`
      * on the boss death edge) and the internal drop path share it. Positions
      * scatter on a deterministic hashed ring so an 8-mote boss payout reads
-     * as a burst, not a stack.
+     * as a burst, not a stack, and every one of them is clamped into the
+     * playable disc (see the clamp below) so a kill at the storm wall cannot
+     * throw the payout somewhere the player is not allowed to go.
      * @param {number} x @param {number} z @param {number} n
      * @returns {void}
      */
@@ -243,8 +247,22 @@ export class HealthMotes {
             this._seed = (Math.imul(this._seed, 1664525) + 1013904223) | 0;
             const v = ((this._seed >>> 9) & 1023) / 1023;
             const r = n > 1 ? 0.35 + v * 0.55 : 0;
-            const px = x + Math.cos(u * 6.28318) * r;
-            const pz = z + Math.sin(u * 6.28318) * r;
+            // CLAMP TO THE PLAY DISC. The caller's point is not guaranteed to
+            // be reachable: the boss hook drops 8 motes wherever the boss
+            // died, and main.js clamps the PLAYER to `terrain.playRadius`
+            // (620 m) every frame — so a boss killed against the storm wall
+            // scattered its whole payout outside the wall, where the player
+            // is shoved back from and can never follow. Clamping through the
+            // terrain's own clamp (the single source of truth for the edge,
+            // the same call the character goes through) puts every drop
+            // somewhere the player can actually stand. The ground height is
+            // sampled AFTER the clamp so the orb hovers over real terrain.
+            const cv = this._clampV;
+            cv.x = x + Math.cos(u * 6.28318) * r;
+            cv.z = z + Math.sin(u * 6.28318) * r;
+            this.terrain.clampToPlayArea(cv);
+            const px = cv.x;
+            const pz = cv.z;
 
             const i = this._next;
             this._next = (i + 1) % MOTE_MAX;
@@ -339,9 +357,11 @@ export class HealthMotes {
                     this.stats.picked++;
                     this.alive[i] = 0;
                     this.a[i * 4 + 3] = 1;
-                    // Audio hook — a no-op until audio/sfx.js grows a
-                    // "pickup_mote" EVENTS row (reported; unknown names are
-                    // ignored by design, sfx.js trigger()).
+                    // The pickup cue — audio/sfx.js EVENTS."pickup_mote", a
+                    // rising chime under a bright airy tick. World-placed, so
+                    // it attenuates like every other combat event (at pickup
+                    // range that is unity, which is the point: a heal you
+                    // walked into should read at full level).
                     sfx.trigger("pickup_mote", this.x[i], this.y[i], this.z[i]);
                     continue;
                 }

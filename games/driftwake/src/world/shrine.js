@@ -40,6 +40,17 @@
  * `terrain.update`) every prism base is re-sampled through `heightAt` and
  * the texture re-uploaded once — an event, never a steady-frame cost.
  *
+ * STAND POINTS (owner 2026-08-19). Each entry in `positions` carries an
+ * anchor (x, z) AND a stand point (sx, sz, sy): the flattest point on a
+ * STAND_R ring around the anchor, by the same `gradeAt` scan the ring layout
+ * uses. `progression._respawn()` drops the player on the STAND POINT, because
+ * the anchor is the monolith's own axis — `_buildFormation` puts a 0.34 m
+ * radius, 3.6 m prism exactly there, so respawning on the anchor materialised
+ * the player inside the ice. The anchors are FROZEN for the run (they are the
+ * respawn identity and must not move mid-run); the stand points are re-chosen
+ * per realm inside `_reground()` and re-published to progression from there,
+ * so a landform swap cannot leave a respawn on a wall.
+ *
  * Steady-frame allocation: none. A settled, un-swapped network uploads
  * nothing and writes no uniforms.
  */
@@ -60,6 +71,21 @@ const RING_RADIUS = 350;
 /** Flat-spot nudge: scan ±span at step, pick the min-grade point. */
 const NUDGE_SPAN = 40;
 const NUDGE_STEP = 8;
+
+/**
+ * STAND POINT ring radius, m (owner 2026-08-19). The respawn may NOT be the
+ * anchor: `_buildFormation` puts the monolith — 0.34 m radius, 3.6 m tall —
+ * at exactly (x, z), so `progression._respawn()` writing the anchor verbatim
+ * materialised the player inside an ice prism on every death. 4.5 m clears
+ * the whole formation: the monolith is at 0, the seven shards ring it at
+ * 0.95-1.20 m, and the four low outliers reach 2.1-3.0 m.
+ */
+const STAND_R = 4.5;
+
+/** Samples around the stand ring, 15° apart. The flattest wins; ties break to
+ *  the first scanned (angle 0, +x) — deterministic, no RNG, same rule the
+ *  layout nudge uses. */
+const STAND_SAMPLES = 24;
 
 /** Grade sample half-width, m (central differences). */
 const GRADE_E = 2;
@@ -145,11 +171,21 @@ export class SpawnShrine {
         this.z = z;
         this.y = terrain.heightAt(x, z);
 
+        /** Progression, once `register()` has been called — held so the
+         *  post-swap re-ground can re-publish the stand points. */
+        this._progression = null;
+
         /**
          * The network, world positions — read-only for consumers: progression
          * (respawn targets), the minimap (blips via SNOWFLOW.shrine.positions)
          * and the worldnet probe. y refreshes on re-ground.
-         * @type {{id:string, x:number, z:number, y:number}[]}
+         *
+         * `x, z` is the ANCHOR: the monolith's axis, frozen for the run.
+         * `sx, sz, sy` is the STAND POINT — where a respawn puts the player,
+         * STAND_R out on the flattest bearing, re-chosen per realm inside
+         * `_reground()`. `sgrade` is that point's |∇h|, for probes.
+         * @type {{id:string, x:number, z:number, y:number,
+         *         sx:number, sz:number, sy:number, sgrade:number}[]}
          */
         this.positions = this._layout(terrain, x, z);
 
@@ -267,6 +303,10 @@ export class SpawnShrine {
                 y: terrain.heightAt(bx, bz),
             });
         }
+        // Every anchor gets its stand point. Done here AND in `_reground` —
+        // the anchors are frozen for the run (they are respawn targets), the
+        // stand points follow the landform.
+        for (let i = 0; i < out.length; i++) this._setStand(terrain, out[i]);
         // The spacing floor is structural (radius 350, nudge ±40) — assert it
         // rather than trust it, so a future radius edit fails the boot.
         for (let i = 0; i < out.length; i++) {
@@ -279,6 +319,38 @@ export class SpawnShrine {
             }
         }
         return out;
+    }
+
+    /**
+     * Choose (or re-choose) one shrine's STAND POINT and write it onto the
+     * entry as `sx / sz / sy / sgrade`.
+     *
+     * The stand point is where a respawn actually puts the player — the
+     * flattest point on a STAND_R ring around the anchor, picked with the
+     * same `gradeAt` scan the ring layout uses. It is deliberately NOT the
+     * anchor and deliberately NOT persisted: the anchor is the respawn
+     * IDENTITY (frozen for the run, saved by id), the stand point is a
+     * per-realm rendering of "where the ground is walkable next to it", so it
+     * is recomputed from the live heightfield inside `_reground()` and
+     * re-published to progression from there.
+     *
+     * @param {{heightAt:(x:number,z:number)=>number}} terrain
+     * @param {{x:number, z:number}} e a `positions` entry, mutated in place
+     * @returns {void}
+     */
+    _setStand(terrain, e) {
+        let bx = e.x + STAND_R, bz = e.z, bg = Infinity;
+        for (let k = 0; k < STAND_SAMPLES; k++) {
+            const a = k * (Math.PI * 2 / STAND_SAMPLES);
+            const px = e.x + Math.cos(a) * STAND_R;
+            const pz = e.z + Math.sin(a) * STAND_R;
+            const g = gradeAt(terrain, px, pz);
+            if (g < bg) { bg = g; bx = px; bz = pz; }
+        }
+        e.sx = bx;
+        e.sz = bz;
+        e.sy = terrain.heightAt(bx, bz);
+        e.sgrade = bg;
     }
 
     /**
@@ -355,9 +427,26 @@ export class SpawnShrine {
      * @returns {void}
      */
     register(progression) {
+        // Held so `_reground()` can re-publish the STAND POINTS after a realm
+        // swap. Anchors never move, so the ids and (x, z) it hands over are
+        // written once; the stand points are the half that follows the
+        // landform, and progression reads them on the next death. No main.js
+        // hook is needed for that — main.js already calls this once (line
+        // ~733) and already drives `setRealm` + `update`, which is the whole
+        // chain the refresh rides on.
+        this._progression = progression;
+        this._publish();
+    }
+
+    /** Push the network — anchors AND stand points — into progression.
+     *  Idempotent; called on `register()` and after every re-ground.
+     *  @returns {void} */
+    _publish() {
+        const P = this._progression;
+        if (!P || !P.registerShrine) return;
         for (let i = 0; i < this.positions.length; i++) {
             const p = this.positions[i];
-            progression.registerShrine(p.id, p.x, p.z);
+            P.registerShrine(p.id, p.x, p.z, p.sx, p.sz);
         }
     }
 
@@ -391,8 +480,14 @@ export class SpawnShrine {
         for (let i = 0; i < this.positions.length; i++) {
             const s = this.positions[i];
             s.y = terrain.heightAt(s.x, s.z);
+            // The ANCHOR stays put across realms — it is the respawn identity
+            // and must not move mid-run — but the STAND POINT is re-chosen
+            // against this realm's landform, so a dune or a basin that moved
+            // under the monument cannot leave the respawn on a wall.
+            this._setStand(terrain, s);
         }
         this.y = this.positions[0].y;
+        this._publish();
         this.dataTex.needsUpdate = true;
     }
 

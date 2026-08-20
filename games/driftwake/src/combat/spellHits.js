@@ -235,8 +235,13 @@ export class SpellHits {
 
         /** A-B switch for the probes: false = raw player aim, no bend. */
         this.assistEnabled = true;
-        /** Probe surface — counters only, never read by the game. */
-        this.assistStats = { shots: 0, snapped: 0, capped: 0, bendMaxDeg: 0 };
+        /** Probe surface — counters plus the last selection, never read by
+         *  the game. `lastTargetId` is the registry id the most recent shot
+         *  bent toward, or -1 when nothing was eligible; it is what makes the
+         *  eligibility rule measurable from outside (qa_feelfix.py). */
+        this.assistStats = {
+            shots: 0, snapped: 0, capped: 0, bendMaxDeg: 0, lastTargetId: -1,
+        };
 
         // Self-install on the bolt pool: `dart.fire()` consults `this.assist`
         // for damaging primaries only. Done here rather than in main.js so the
@@ -278,6 +283,20 @@ export class SpellHits {
                 this._vZ[i] = 0;
                 continue;
             }
+            // A body at 0 hp is a CORPSE, not a mover. enemies.js holds a
+            // killed body in ST_DYING — still registered, `alive[i]` still 1 —
+            // for DEATH_S = 1.2 s, and a body that died mid-stride would
+            // otherwise keep the run it had when it fell as a lead estimate.
+            // Zero it and re-seed the sample, so nothing downstream can read a
+            // stale velocity off a dead body (belt to the eligibility rule's
+            // braces in aimAssist).
+            if (reg.hp[i] <= 0) {
+                this._vX[i] = 0;
+                this._vZ[i] = 0;
+                this._vLastX[i] = reg.x[i];
+                this._vLastZ[i] = reg.z[i];
+                continue;
+            }
             const vx = (reg.x[i] - this._vLastX[i]) * inv;
             const vz = (reg.z[i] - this._vLastZ[i]) * inv;
             // Reseed on a discontinuity and keep the last good velocity: a
@@ -302,7 +321,9 @@ export class SpellHits {
      * constant-velocity heading and nothing homes afterwards, so a bolt that
      * misses stays missed and a dodge still works.
      *
-     * ELIGIBILITY  a live, non-dummy body inside ASSIST_RANGE whose bearing
+     * ELIGIBILITY  a body with hp REMAINING (not merely an occupied registry
+     *              slot — see the hp guard in the loop), non-dummy, inside
+     *              ASSIST_RANGE, whose bearing
      *              from the muzzle is within ASSIST_CONE of the raw aim. The
      *              MOST CENTRED candidate wins (the running `bestCos` is both
      *              the gate and the comparison), so the assist can never pull
@@ -326,6 +347,7 @@ export class SpellHits {
         out[0] = dx; out[1] = dy; out[2] = dz;
         const st = this.assistStats;
         st.shots++;
+        st.lastTargetId = -1;
         if (!this.assistEnabled) return out;
 
         // ---- pick the most centred eligible body --------------------------
@@ -333,6 +355,15 @@ export class SpellHits {
         let best = -1, bestCos = ASSIST_CONE_COS;
         for (let i = 0; i < reg.count; i++) {
             if (!reg.alive[i]) continue;
+            // `alive[i]` is the SLOT-OCCUPIED flag (damageable.js: "alive[i]
+            // false = free slot"), NOT "has hit points" — enemies.js keeps a
+            // killed body registered through its ST_DYING fade, DEATH_S =
+            // 1.2 s. Without this line the compare below is a pure cosine
+            // test with no hp term, so for that whole second and a bit a
+            // corpse that is more centred than a live enemy ALWAYS wins and
+            // the shot is led into empty snow. `ui/hurtFx.js`'s nearest-body
+            // scan already filters on hp for the same reason.
+            if (reg.hp[i] <= 0) continue;            // corpses in the fade
             if (reg.kind[i] === "dummy") continue;   // practice targets
             const rx = reg.x[i] - ox;
             const ry = reg.y[i] + reg.height[i] * ASSIST_AIM_H - oy;
@@ -343,6 +374,7 @@ export class SpellHits {
             if (c <= bestCos) continue;
             bestCos = c; best = i;
         }
+        st.lastTargetId = best >= 0 ? reg.idOf[best] : -1;
         if (best < 0) return out;
 
         // ---- intercept ----------------------------------------------------

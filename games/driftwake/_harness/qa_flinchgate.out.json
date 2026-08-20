@@ -1,0 +1,112 @@
+{
+ "rimeImp": {
+  "rows": [
+   {
+    "phase": "T telegraphing",
+    "drive": {
+     "flash": 0.15,
+     "lunge": 0,
+     "flinch": 1
+    },
+    "atk": 5,
+    "striking": false,
+    "wHit": 0,
+    "tHit": 0,
+    "wAtk": 0.15,
+    "tAtk": 0.15,
+    "hitClip": "hit",
+    "atkClip": "rake_flurry",
+    "hitBlendMode": 2500
+   },
+   {
+    "phase": "F not winding up",
+    "drive": {
+     "flash": 0,
+     "lunge": 0,
+     "flinch": 1
+    },
+    "atk": -1,
+    "striking": false,
+    "wHit": 0.3,
+    "tHit": 0.3,
+    "wAtk": -1,
+    "tAtk": -1,
+    "hitClip": "hit",
+    "atkClip": "-",
+    "hitBlendMode": 2500
+   },
+   {
+    "phase": "S committed",
+    "drive": {
+     "flash": 1,
+     "lunge": 1,
+     "flinch": 1
+    },
+    "atk": 6,
+    "striking": true,
+    "wHit": 0.3,
+    "tHit": 0.3,
+    "wAtk": 1,
+    "tAtk": 1,
+    "hitClip": "hit",
+    "atkClip": "pounce",
+    "hitBlendMode": 2500
+   }
+  ]
+ },
+ "glacierBrute": {
+  "rows": [
+   {
+    "phase": "T telegraphing",
+    "drive": {
+     "flash": 0.15,
+     "lunge": 0,
+     "flinch": 1
+    },
+    "atk": 5,
+    "striking": false,
+    "wHit": 0,
+    "tHit": 0,
+    "wAtk": 0.15,
+    "tAtk": 0.15,
+    "hitClip": "hit",
+    "atkClip": "overhead_smash",
+    "hitBlendMode": 2500
+   },
+   {
+    "phase": "F not winding up",
+    "drive": {
+     "flash": 0,
+     "lunge": 0,
+     "flinch": 1
+    },
+    "atk": -1,
+    "striking": false,
+    "wHit": 0.3,
+    "tHit": 0.3,
+    "wAtk": -1,
+    "tAtk": -1,
+    "hitClip": "hit",
+    "atkClip": "-",
+    "hitBlendMode": 2500
+   },
+   {
+    "phase": "S committed",
+    "drive": {
+     "flash": 1,
+     "lunge": 1,
+     "flinch": 1
+    },
+    "atk": 6,
+    "striking": true,
+    "wHit": 0.3,
+    "tHit": 0.3,
+    "wAtk": 1,
+    "tAtk": 1,
+    "hitClip": "hit",
+    "atkClip": "sweep",
+    "hitBlendMode": 2500
+   }
+  ]
+ }
+}

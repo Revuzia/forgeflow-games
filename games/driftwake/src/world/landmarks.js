@@ -99,6 +99,18 @@
  * The build ASSERTS the full instance count and re-asserts every pairwise
  * distance, and THROWS rather than shipping a short or clustered layer.
  *
+ * THE SCAN RUNS PER REALM, not once (fixed 2026-08-19). It used to run only
+ * in the constructor — which main.js reaches at line ~536, far above the
+ * first `enterRealm` — and `_reground()` re-sampled Y alone, never x/z. Every
+ * realm's monuments therefore stood on anchors chosen for COLD's heightfield:
+ * harmless while all three realms shared one landform, a live defect the
+ * moment the per-realm landforms landed, because sand's dunes and ash's
+ * basins can float or swallow a spot that was flat in Cold. `_reground()` now
+ * re-runs the identical scan against the live heightfield and slides each
+ * formation onto its new anchor (`_relayoutRealm`) before re-seating. These
+ * are DECORATIVE, so their (x, z) is allowed to move per realm; the shrine
+ * anchors next door are respawn targets and deliberately are not.
+ *
  * =============================================================================
  * COST
  *
@@ -896,6 +908,18 @@ export class Landmarks {
          *          y:number, prism0:number, prisms:number}[]} */
         this.instances = [];
 
+        /**
+         * The shrine network, held for the PER-REALM re-layout (see
+         * `_relayoutRealm`). Its `positions` are the clearance anchors and
+         * they are frozen for the run, so re-asserting SHRINE_CLEAR against
+         * them after a swap is meaningful rather than circular.
+         */
+        this._shrine = shrine || null;
+        /** Times a runtime re-layout came up short and kept the previous
+         *  anchors. Non-zero means the constraints stopped fitting some
+         *  realm's landform — see `_relayoutRealm`. Surfaced in `stats`. */
+        this._relayoutShort = 0;
+
         // ------------------------------------------------- layout, per realm
         const shrines = shrine && shrine.positions ? shrine.positions : [];
         /** @type {Prism[]} flattened, index-aligned with the data texture */
@@ -931,6 +955,11 @@ export class Landmarks {
         this._baseOff = new Float32Array(N);
         /** Per-prism growth stagger, so a formation rises rather than pops. */
         this._stag = new Float32Array(N);
+        /** Prism offset from ITS instance's anchor, m. Kept so a per-realm
+         *  re-layout can slide a whole formation onto a new anchor without
+         *  rebuilding it — see `_relayoutRealm`. */
+        this._localX = new Float32Array(N);
+        this._localZ = new Float32Array(N);
         /** Live growth 0..1 per prism — the value uploaded into row 2. */
         this._grow = new Float32Array(N);
         /** Growth target per prism: 1 for the active realm, 0 otherwise. */
@@ -1026,6 +1055,84 @@ export class Landmarks {
     _layoutRealm(token, ri, terrain, shrines, out) {
         const keys = TYPES_BY_REALM[token];
         const want = keys.length * PER_TYPE;
+        const spots = this._scanSpots(token, ri, terrain, shrines);
+
+        // Loud, not silent. A short layer means the constraints and the play
+        // area no longer fit each other, and shipping nine landmarks where
+        // fifteen were asked for is the kind of thing nobody notices for weeks.
+        // THE BUILD ASSERT, unchanged — the runtime re-layout in
+        // `_relayoutRealm` degrades loudly instead, because throwing out of a
+        // realm swap would take the swap with it.
+        if (spots.length < want) {
+            throw new Error("landmarks.js: " + token + " placed only "
+                + spots.length + " of " + want + " landmarks — the grid, the "
+                + "annulus [" + MIN_R + "," + MAX_R + "] and the "
+                + MIN_SPACING + " m / " + SHRINE_CLEAR + " m floors no longer fit");
+        }
+
+        // Types round-robin over the accepted spots. The scan order is a stride
+        // walk rather than row-major, so consecutive spots are far apart and the
+        // three types interleave across the whole field instead of banding.
+        for (let n = 0; n < want; n++) {
+            const key = keys[n % keys.length];
+            const inst = (n / keys.length) | 0;
+            const spec = LANDMARK_TYPES[key];
+            const local = spec.build(inst);
+            const prism0 = out.length;
+            const ax = spots[n].x, az = spots[n].z;
+            const ay = terrain.heightAt(ax, az);
+
+            for (let p = 0; p < local.length; p++) {
+                const q = local[p];
+                out.push({
+                    // World AND local: the local pair is what `_relayoutRealm`
+                    // re-offsets from when the anchor moves for a new realm.
+                    dx: ax + q.dx, dz: az + q.dz, dy: q.dy,
+                    lx: q.dx, lz: q.dz,
+                    h: q.h, rad: q.rad,
+                    ax: q.ax, ay: q.ay, az: q.az,
+                    f1: q.f1, f2: q.f2, t1: q.t1, t2: q.t2, wob: q.wob,
+                    realm: ri,
+                });
+            }
+            this.instances.push({
+                type: key, realm: token, label: spec.label,
+                x: ax, z: az, y: ay, prism0, prisms: local.length,
+            });
+        }
+    }
+
+    /**
+     * The layout SCAN, alone: walk the candidate grid in this realm's stride
+     * order, nudge each candidate to its flattest neighbour against the
+     * heightfield it is HANDED, and accept it if it clears the annulus, the
+     * shrines and the other accepted spots.
+     *
+     * Split out of `_layoutRealm` so the identical scan can run twice: once
+     * at construction (against Cold's heightfield, the only one that exists
+     * then) and once per realm change inside `_reground()`, against the
+     * landform actually in force. That second call is the fix for the real
+     * defect — both this layer and `shrine.js` ran their flat-spot scan in
+     * their CONSTRUCTORS, far above the first `enterRealm`, and neither
+     * `_reground` re-ran it (they re-sampled Y only, never x/z), so every
+     * realm's monuments stood on spots chosen for Cold's terrain. Dormant
+     * while all three realms shared one heightfield; live the moment the
+     * per-realm landforms landed, because sand's dunes and ash's basins can
+     * swallow or tilt a spot that was flat in Cold.
+     *
+     * Pure function of (token, ri, heightfield, shrines) — same inputs,
+     * same spots, no RNG.
+     *
+     * @param {string} token realm
+     * @param {number} ri realm index, the hash salt and the scan-stride key
+     * @param {{heightAt:(x:number,z:number)=>number}} terrain
+     * @param {{x:number,z:number}[]} shrines exclusion anchors
+     * @returns {{x:number,z:number}[]} accepted anchors; SHORT if the
+     *   constraints no longer fit — callers decide whether that is fatal
+     */
+    _scanSpots(token, ri, terrain, shrines) {
+        const keys = TYPES_BY_REALM[token];
+        const want = keys.length * PER_TYPE;
         const stride = STRIDE[token];
         const cells = GRID_N * GRID_N;
         const half = (GRID_N - 1) / 2;
@@ -1072,43 +1179,76 @@ export class Landmarks {
             if (ok) spots.push({ x: bx, z: bz });
         }
 
-        // Loud, not silent. A short layer means the constraints and the play
-        // area no longer fit each other, and shipping nine landmarks where
-        // fifteen were asked for is the kind of thing nobody notices for weeks.
+        return spots;
+    }
+
+    /**
+     * Re-choose ONE realm's anchors against the CURRENT heightfield and slide
+     * its prisms onto them, keeping every formation's internal geometry
+     * exactly as built.
+     *
+     * Landmarks are decorative, so unlike the shrine anchors — which are
+     * respawn targets and stay frozen for the run — these MAY move per realm,
+     * which is what lets the scan actually correct for the realm's landform.
+     * The prism count, the type assignment and the texture layout are all
+     * invariant: instance n of a realm keeps its slot, its type and its
+     * `prism0`, and only the anchor under it changes, so nothing downstream
+     * (the data texture, the growth arrays, the shadow caster) is resized or
+     * re-bound.
+     *
+     * SHRINE_CLEAR is re-asserted here through `_scanSpots`, against the live
+     * (fixed) shrine anchors — a re-nudge must not walk a monument onto a
+     * respawn point.
+     *
+     * A SHORT scan is loud but NOT fatal, deliberately: this runs inside a
+     * realm swap, and the build assert's `throw` would take the swap down
+     * with it. The previous anchors are kept, the console carries the failure
+     * and `stats.relayoutShort` counts it.
+     *
+     * @param {string} token realm to re-lay-out — always the LIVE one
+     * @returns {void}
+     */
+    _relayoutRealm(token) {
+        const ri = REALM_ORDER.indexOf(token);
+        if (ri < 0) return;
+        const keys = TYPES_BY_REALM[token];
+        const want = keys.length * PER_TYPE;
+        const shrines = this._shrine && this._shrine.positions
+            ? this._shrine.positions : [];
+        const spots = this._scanSpots(token, ri, this.terrain, shrines);
+
         if (spots.length < want) {
-            throw new Error("landmarks.js: " + token + " placed only "
-                + spots.length + " of " + want + " landmarks — the grid, the "
-                + "annulus [" + MIN_R + "," + MAX_R + "] and the "
-                + MIN_SPACING + " m / " + SHRINE_CLEAR + " m floors no longer fit");
+            this._relayoutShort++;
+            console.error("landmarks.js: " + token + " re-layout placed only "
+                + spots.length + " of " + want + " — the annulus ["
+                + MIN_R + "," + MAX_R + "] and the " + MIN_SPACING + " m / "
+                + SHRINE_CLEAR + " m floors no longer fit this realm's "
+                + "landform; KEEPING the previous anchors");
+            return;
         }
 
-        // Types round-robin over the accepted spots. The scan order is a stride
-        // walk rather than row-major, so consecutive spots are far apart and the
-        // three types interleave across the whole field instead of banding.
-        for (let n = 0; n < want; n++) {
-            const key = keys[n % keys.length];
-            const inst = (n / keys.length) | 0;
-            const spec = LANDMARK_TYPES[key];
-            const local = spec.build(inst);
-            const prism0 = out.length;
+        const d = this._texData;
+        let n = 0;
+        for (let i = 0; i < this.instances.length; i++) {
+            const inst = this.instances[i];
+            // `instances` was built realm by realm in the same `n` order the
+            // scan produces, so filtering by realm walks them in that order
+            // and instance n keeps the type it was assigned at build.
+            if (inst.realm !== token) continue;
             const ax = spots[n].x, az = spots[n].z;
-            const ay = terrain.heightAt(ax, az);
-
-            for (let p = 0; p < local.length; p++) {
-                const q = local[p];
-                out.push({
-                    dx: ax + q.dx, dz: az + q.dz, dy: q.dy,
-                    h: q.h, rad: q.rad,
-                    ax: q.ax, ay: q.ay, az: q.az,
-                    f1: q.f1, f2: q.f2, t1: q.t1, t2: q.t2, wob: q.wob,
-                    realm: ri,
-                });
+            n++;
+            inst.x = ax;
+            inst.z = az;
+            const end = inst.prism0 + inst.prisms;
+            for (let p = inst.prism0; p < end; p++) {
+                const o = p * 4;
+                d[o] = ax + this._localX[p];
+                d[o + 2] = az + this._localZ[p];
             }
-            this.instances.push({
-                type: key, realm: token, label: spec.label,
-                x: ax, z: az, y: ay, prism0, prisms: local.length,
-            });
         }
+        // Y is not written here — the caller (`_reground`) re-seats every
+        // prism through `seatY` immediately after, which is the ONLY correct
+        // order: seating reads the x/z this just moved.
     }
 
     /**
@@ -1144,6 +1284,8 @@ export class Landmarks {
 
             this._prismRealm[p] = q.realm;
             this._baseOff[p] = q.dy;
+            this._localX[p] = q.lx;
+            this._localZ[p] = q.lz;
             // Stagger by position within the formation: the centre rises first.
             this._stag[p] = Math.min(0.55, 0.04 * (p % 12));
         }
@@ -1194,6 +1336,13 @@ export class Landmarks {
      * @returns {void}
      */
     _reground() {
+        // FIRST: re-choose this realm's anchors against the heightfield that
+        // is now in force. The flat-spot scan used to run ONLY in the
+        // constructor — above the first `enterRealm` — so sand and ash stood
+        // on spots chosen for Cold's terrain. The seat loop below then runs
+        // over the x/z this just moved, which is why the order matters.
+        this._relayoutRealm(this.realm);
+
         const d = this._texData;
         const terrain = this.terrain;
         const w = this.prismCount * 4;
@@ -1276,6 +1425,9 @@ export class Landmarks {
             liveInstances: live.length,
             minSpacing: MIN_SPACING,
             shrineClear: SHRINE_CLEAR,
+            // Non-zero = some realm's landform stopped satisfying the floors
+            // and that realm kept its previous anchors. See `_relayoutRealm`.
+            relayoutShort: this._relayoutShort,
             instances: live.map((s) => ({
                 type: s.type, label: s.label,
                 x: +s.x.toFixed(2), z: +s.z.toFixed(2), y: +s.y.toFixed(2),

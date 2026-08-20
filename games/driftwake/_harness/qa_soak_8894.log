@@ -91,3 +91,12 @@ driver: started
   [1775s] phase=N-shrine-idle    samples=56 gt=  797.5 stalls=0
   [1795s] phase=N-shrine-idle    samples=57 gt=  812.5 stalls=0
   [1815s] phase=N-shrine-idle    samples=58 gt=  827.5 stalls=0
+  [1835s] phase=N-shrine-idle    samples=59 gt=  842.6 stalls=0
+  [1855s] phase=O-return-cold    samples=60 gt=  857.7 stalls=0
+  [1875s] phase=O-return-cold    samples=61 gt=  872.7 stalls=0
+  [1895s] phase=P-final-idle     samples=63 gt=  891.9 stalls=0
+  [1916s] phase=P-final-idle     samples=64 gt=  902.8 stalls=0
+  [1936s] phase=P-final-idle     samples=65 gt=  917.9 stalls=0
+  [1956s] phase=P-final-idle     samples=68 gt=  947.9 stalls=0
+  [1976s] phase=P-final-idle     samples=69 gt=  951.9 stalls=0
+wrote C:\Users\TestRun\Claude Claw\forgeflow-games\games\driftwake\_harness\qa_soak_8894.out.json

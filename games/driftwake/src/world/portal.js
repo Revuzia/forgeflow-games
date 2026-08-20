@@ -34,6 +34,16 @@
  * owner) and fires `onEnter(token)` ONCE, latched — the realm change it
  * triggers is async, and a portal that fired twice would race the roster.
  *
+ * AND IT MUST BE WALKED INTO. A gate ARMS only once the player has been seen
+ * OUTSIDE ENTER_M; a gate that rises with the player already inside the ring
+ * waits for them to step out before it will take them anywhere. Two ways that
+ * happens, both real: the boss dies under the player's feet and the gate goes
+ * up around them, and — since the arena director learned to re-raise a cleared
+ * realm's gate on re-entry (`combat/bossEncounters.js` `_restoreGate`) — a
+ * player arriving back in a cleared realm near its old arena. Without the arm
+ * latch the first is an instant teleport nobody asked for and the second is a
+ * bounce straight back out of the realm they just entered.
+ *
  * Steady-frame allocation: none. A closed gate is a strict no-op.
  */
 
@@ -112,6 +122,9 @@ export class RealmPortal {
 
         this._open = false;
         this._entered = false;
+        /** Armed = the player has been seen outside ENTER_M since the gate
+         *  rose. An unarmed gate never fires — see the header. */
+        this._armed = false;
         /** Growth 0..1 while the gate rises. */
         this._g = 0;
         this._pulseT = 0;
@@ -199,6 +212,7 @@ export class RealmPortal {
         this.token = token;
         this._open = true;
         this._entered = false;
+        this._armed = false;      // must be walked into, not stood in
         this._g = 0;
         this._pulseT = 0;
 
@@ -257,7 +271,12 @@ export class RealmPortal {
 
         if (!this._entered) {
             const dx = px - this.x, dz = pz - this.z;
-            if (dx * dx + dz * dz <= ENTER_M * ENTER_M) {
+            const inside = dx * dx + dz * dz <= ENTER_M * ENTER_M;
+            // Arm on the first frame the player is outside the ring; only an
+            // armed gate can be walked into.
+            if (!this._armed) {
+                if (!inside) this._armed = true;
+            } else if (inside) {
                 this._entered = true;
                 const t = this.token;
                 if (this.onEnter && t) this.onEnter(t);
@@ -326,6 +345,7 @@ export class RealmPortal {
     get stats() {
         return {
             open: this._open, token: this.token, entered: this._entered,
+            armed: this._armed,
             x: this.x, z: this.z, y: this.y,
             grow: this._g, tintAmt: this._tintAmt.value,
             tint: [this._tint.value.x, this._tint.value.y, this._tint.value.z],

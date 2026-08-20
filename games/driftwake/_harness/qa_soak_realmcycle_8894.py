@@ -92,6 +92,53 @@ function look(dx) {
         { movementX: dx, bubbles: true }));
 }
 
+// The rider's live animation state. The soak's end-of-session screenshot
+// showed an arms-out pose; this is the disconfirming check — capture the
+// SAME reading on a fresh boot-idle and after a long play session, so an
+// ordinary idle pose cannot be mistaken for a bind-pose fallback.
+function riderPose() {
+    const mc = S.meshChar;
+    if (!mc) return { err: "no meshChar" };
+    const acts = mc._acts || [];
+    const out = { weights: {}, running: {}, mixerTime: mc.mixer ? +mc.mixer.time.toFixed(2) : null,
+                  wSum: 0, visible: !!(mc.root && mc.root.visible) };
+    const NAMES = ["idle", "walk", "run", "jump", "fall", "land", "roll",
+                   "skate", "lookaround", "weightshift", "cast",
+                   "cast3", "cast4", "cast5"];
+    for (let i = 0; i < acts.length; i++) {
+        if (!acts[i]) continue;
+        const w = acts[i].getEffectiveWeight();
+        out.weights[NAMES[i] || i] = +w.toFixed(3);
+        out.running[NAMES[i] || i] = acts[i].isRunning();
+        out.wSum += w;
+    }
+    out.wSum = +out.wSum.toFixed(3);
+    // Bone geometry: a bind/T-pose reads as arms far apart and level with
+    // the shoulders. Measured, not eyeballed.
+    let L = null, R = null, hips = null, head = null;
+    mc.root.traverse((o) => {
+        if (!o.isBone) return;
+        if (!L && /LeftHand$/.test(o.name)) L = o;
+        if (!R && /RightHand$/.test(o.name)) R = o;
+        if (!hips && /Hips$/.test(o.name)) hips = o;
+        if (!head && /Head$/.test(o.name)) head = o;
+    });
+    if (L && R && hips) {
+        const a = new L.position.constructor();
+        const b = new L.position.constructor();
+        const h = new L.position.constructor();
+        L.getWorldPosition(a); R.getWorldPosition(b); hips.getWorldPosition(h);
+        out.handSpanM = +a.distanceTo(b).toFixed(3);
+        out.handRiseM = +(((a.y + b.y) / 2) - h.y).toFixed(3);
+        if (head) {
+            const hd = new L.position.constructor();
+            head.getWorldPosition(hd);
+            out.headRiseM = +(hd.y - h.y).toFixed(3);
+        }
+    }
+    return out;
+}
+
 function row(tag) {
     const info = S.renderer.info, m = performance.memory || null;
     let objs = 0; S.scene.traverse(() => objs++);
@@ -166,6 +213,13 @@ async function go(realmKey, label) {
 
 (async () => {
 try {
+    // Fresh boot, no input has ever been sent: THE idle-pose baseline.
+    await wait(6);
+    R.poseFresh = riderPose();
+    R.poseFreshAt = +reg.time.toFixed(1);
+    window.__poseShot = "fresh";
+    await wait(4);
+
     row("BASELINE-cold");
     await fight(30);
     row("cold-after-fight-0");
@@ -183,7 +237,15 @@ try {
     // Quiescent: nothing alive, nothing cast, settle then compare.
     en.clear();
     S.motes.clear();
-    await wait(20);
+    // Every held input released, exactly as the long soak's final leg did.
+    key("KeyW", false); key("KeyS", false);
+    I.surf = false; I.boltHeld = false; I.spellHeld2 = false;
+    mouse("mouseup", 0);
+    await wait(45);
+    R.poseAfter = riderPose();
+    R.poseAfterAt = +reg.time.toFixed(1);
+    window.__poseShot = "after";
+    await wait(10);
     row("FINAL-cold-quiescent");
 } catch (e) {
     R.fatal = String((e && e.stack) || e);
@@ -218,18 +280,26 @@ def main():
                 "() => globalThis.SNOWFLOW && !SNOWFLOW.S.freezeTime",
                 timeout=180000)
             pg.wait_for_timeout(2500)
+            pg.evaluate("() => SNOWFLOW.set('resolutionScale', 0.5)")
+            pg.wait_for_timeout(1500)
             print("driver:", pg.evaluate(DRIVER), flush=True)
             t0 = time.time()
+            shot_done = set()
             while True:
-                time.sleep(20)
+                time.sleep(10)
                 st = pg.evaluate("() => ({n: window.__rc.rows.length, "
                                  "done: window.__rc.done, "
                                  "fatal: window.__rc.fatal, "
+                                 "shot: window.__poseShot || null, "
                                  "tag: window.__rc.rows.length ? "
                                  "window.__rc.rows[window.__rc.rows.length-1].tag : ''})")
+                if st["shot"] and st["shot"] not in shot_done:
+                    shot_done.add(st["shot"])
+                    pg.screenshot(path=str(HERE / ("pose_%s.png" % st["shot"])))
+                    print("  (pose screenshot: %s)" % st["shot"], flush=True)
                 print("  [%4ds] rows=%d last=%s" % (int(time.time() - t0),
                                                     st["n"], st["tag"]), flush=True)
-                if st["done"] or time.time() - t0 > 20 * 60:
+                if st["done"] or time.time() - t0 > 35 * 60:
                     break
             out["rc"] = pg.evaluate("() => window.__rc")
             pg.screenshot(path=str(HERE / "soak_realmcycle_end.png"))

@@ -207,6 +207,26 @@ export class DepthPass {
         if (this.materials.indexOf(material) < 0) this.materials.push(material);
     }
 
+    // ------------------------------------------------------------------
+    // INTEGRATION HOOK — mesh-enemy realm release (lane F1). The inverse of
+    // `registerCaster`: without it a released enemy body stayed in `_casters`
+    // and its proxy stayed a child of `this.scene` for the rest of the run.
+    // meshEnemies._releaseInstance feature-detects this (meshEnemies.js:1406).
+    // ------------------------------------------------------------------
+    /**
+     * Drop every prepass entry registered for `mesh` and remove its proxy from
+     * the prepass scene. Safe for an unregistered mesh, and safe to repeat.
+     * @param {THREE.Object3D} mesh
+     * @returns {void}
+     */
+    unregisterCaster(mesh) {
+        for (let i = this._casters.length - 1; i >= 0; i--) {
+            if (this._casters[i].mesh !== mesh) continue;
+            this.scene.remove(this._casters[i].proxy);
+            this._casters.splice(i, 1);
+        }
+    }
+
     /**
      * @param {number} w
      * @param {number} h

@@ -126,6 +126,30 @@ const EVENTS = {
         tone: { f0: 92, f1: 50, peak: 0.16, dur: 0.20 },
         synth: { band: 420, q: 0.8, rate: 0.75, peak: 0.30, decay: 0.15 },
     },
+    // ---- pickups -------------------------------------------------------
+    /**
+     * Health mote (combat/motes.js pickup edge) — the heal was completely
+     * silent, the one piece of positive combat feedback with no sound on it.
+     *
+     * Synth only: no recording in FILES fits a chime, and the whole point of
+     * the synth path is that a recipe is cheaper than a new asset. The grammar
+     * is `enemy_windup` inverted — that cue RISES to warn (620 -> 930 Hz), and
+     * this one rises further and brighter (700 -> 1240) to reward, which is
+     * the pickup idiom every player already reads. Levels sit under
+     * `enemy_windup`'s 0.30: a heal you walked into should be noticed, not
+     * announced, and the boss payout drops eight of these at once — at 0.34
+     * with the tone carrying most of it, eight overlapping picks stay inside
+     * the master's headroom instead of hammering the limiter.
+     *
+     * `world: true` for the same reason every impact has it. At pickup range
+     * (PICKUP_R = 0.85 m) the 1/d attenuation is unity by construction, so the
+     * flag costs nothing here and keeps this row honest with the table.
+     */
+    pickup_mote: {
+        gain: 0.34, world: true, jitter: 0.05,
+        synth: { band: 5200, q: 3.2, rate: 1.45, peak: 0.14, decay: 0.08 },
+        tone: { f0: 700, f1: 1240, peak: 0.085, dur: 0.17 },
+    },
 };
 
 /** Realm timbre: pitch multiplier + lowpass tilt (Hz) on the sample chain. */

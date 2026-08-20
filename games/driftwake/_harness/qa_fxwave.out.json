@@ -19,7 +19,7 @@
      "active": 0,
      "draws": 0
     },
-    "drawCalls": 26
+    "drawCalls": 27
    },
    "midLife": {
     "burst": {
@@ -38,7 +38,7 @@
      "active": 0,
      "draws": 0
     },
-    "drawCalls": 26
+    "drawCalls": 25
    }
   }
  },
@@ -86,7 +86,7 @@
      "active": 0,
      "draws": 0
     },
-    "drawCalls": 24
+    "drawCalls": 25
    },
    "after": {
     "burst": {
@@ -153,16 +153,16 @@
     "active": 0,
     "draws": 0
    },
-   "drawCalls": 27
+   "drawCalls": 28
   }
  },
  "cold.telegraph": {
   "ok": true,
   "detail": {
    "spawned": [
-    14,
-    15,
-    16
+    3,
+    4,
+    5
    ],
    "got": true,
    "midWind": {
@@ -179,12 +179,12 @@
      "draws": 0
     },
     "telegraph": {
-     "active": 1,
+     "active": 2,
      "draws": 1
     },
     "drawCalls": 37
    },
-   "fill": 0.404461532831192,
+   "fill": 0.38584616780281067,
    "radius": 1.7000000476837158
   }
  },
@@ -210,7 +210,7 @@
      "active": 1,
      "draws": 1
     },
-    "drawCalls": 42
+    "drawCalls": 41
    },
    "withoutFx": {
     "burst": {
@@ -229,7 +229,7 @@
      "active": 0,
      "draws": 0
     },
-    "drawCalls": 38
+    "drawCalls": 37
    },
    "fxDrawSum": 4,
    "delta": 4
@@ -262,7 +262,7 @@
      "active": 0,
      "draws": 0
     },
-    "drawCalls": 31
+    "drawCalls": 32
    }
   }
  },

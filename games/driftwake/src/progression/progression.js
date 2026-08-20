@@ -26,8 +26,13 @@
  *   §7    unlock schedule (internal spell ids per ui/spellbar.js):
  *         L1 Bolt(2)+Wave(1) · L2 Mini-Vortex(3) · L4 Spikes(4) · L6 Great
  *         Vortex(5)
- *   §8.1  death: knockdown fade 1.5 s → respawn at last shrine (cold spawn
- *         defaults, never null), full pools, 2 s grace; no XP loss
+ *   §8.1  death: knockdown fade 1.5 s → respawn at last ACTIVATED shrine
+ *         (cold spawn defaults, never null), full pools, 2 s grace; no XP
+ *         loss. Activation is BY TOUCH — `update()` scans the registered
+ *         network every frame and the first frame inside SHRINE_TOUCH_R of a
+ *         new shrine makes it the target and saves, once. The respawn lands
+ *         on that shrine's STAND POINT (`world/shrine.js`), never its anchor:
+ *         the anchor is the monolith's own axis.
  *   §9    Driftmarks: overflow at cap, cost(n) = round(20000·1.05^(n-1)),
  *         cap 100
  *
@@ -39,8 +44,14 @@
  * the `deaths` counter): {schemaVer, level, xp, driftmarks, spellsUnlocked,
  * boons, realmsUnlocked, bossesKilled, lastShrineId, restedBank, lastSeenTs,
  * objectiveState, deaths}. Loaded on construct; saved on ding, death, boss
- * first-kill and every 30 s. Restore is at the shrine, never exact position
- * (no save-inside-hazard).
+ * first-kill, SHRINE ACTIVATION (the touch edge, once per new shrine) and
+ * every 30 s. v3 added `pos`, so CONTINUE resumes the exact stand; a v1/v2
+ * blob has none and resumes at the shrine.
+ *
+ * The shrine network itself is NOT persisted — only `lastShrineId` is. The
+ * positions are derived state, republished from `world/shrine.js` on every
+ * boot and after every realm re-ground, so a save can name a shrine without
+ * pinning coordinates that the landform may have re-chosen.
  */
 
 import { TIER } from "../combat/damageable.js";
@@ -49,6 +60,23 @@ import { TIER } from "../combat/damageable.js";
 export const SAVE_KEY = "driftwake_save";
 /** Current save schema. v1 blobs load with defaulted new fields. */
 export const SCHEMA_VER = 3;   // v3 adds `pos` (auto-save position, owner 2026-08-10)
+
+/**
+ * §8.1 ACTIVATION RADIUS, m (owner 2026-08-19). Come within this of any
+ * registered shrine and it becomes the respawn target — silently, no modal,
+ * no prompt. The activation edge is the only thing that saves; standing at a
+ * shrine for a minute writes once, not once per frame.
+ *
+ * This is the trigger the network shipped WITHOUT: `addShrine()` — the only
+ * writer of `lastShrineId` besides the `"cold_spawn"` default and the save
+ * blob — had zero call sites, because `world/shrine.js`'s `register()`
+ * deliberately goes through `registerShrine()` ("WITHOUT touching
+ * lastShrineId", shrine.js) and nothing else ever detected a touch. Six of
+ * the seven shrines were therefore decorative: every death in every realm
+ * resolved through the `|| this.shrines.cold_spawn` fallback in `_respawn()`
+ * and landed on the spawn monument.
+ */
+export const SHRINE_TOUCH_R = 6.0;
 
 /**
  * Spell unlock levels by INTERNAL spell id (§7 mapped through the owner
@@ -186,6 +214,16 @@ export class Progression {
         this.realmsUnlocked = ["cold"];
         /** @type {Record<string, boolean>} first-kill flags, by boss name (§3.2). */
         this.bossesKilled = {};
+        /**
+         * INTEGRATION HOOK — realm-gate persistence (lane F3).
+         * `bossEncounters` mirrors each raised realm gate here beside the
+         * killed flag (bossEncounters.js:941) and reads it back through
+         * `_gateFor()` (:489). Declared here so it is never `undefined`, and
+         * carried by `save()`/`load()` below so a gate survives a RELOAD, not
+         * only a realm change.
+         * @type {Record<string, {x:number,z:number,token:string}>}
+         */
+        this.bossGates = {};
         /** §8.1 — defaults to the cold spawn shrine, never null. */
         this.lastShrineId = "cold_spawn";
         /** Banked rested XP (§3.4), drained 1:1 while it pays ×2. */
@@ -197,12 +235,32 @@ export class Progression {
 
         // ------------------------------------------------- live state
         /**
-         * Known shrines: id → world position. The cold spawn is the origin
-         * area where main.js places the character; the shrine network (P0.2)
-         * registers the rest through `addShrine()`.
-         * @type {Record<string, {x:number, z:number}>}
+         * Known shrines: id → {anchor, stand point}. `x, z` is the monument's
+         * axis (the identity, what `lastShrineId` names); `sx, sz` is the
+         * STAND POINT `_respawn()` actually drops the player on — see
+         * `world/shrine.js`'s `_setStand`. The cold spawn is the origin area
+         * where main.js places the character; `shrine.register()` fills in
+         * the rest through `registerShrine()`, and re-publishes the stand
+         * points after every realm re-ground.
+         * @type {Record<string, {x:number, z:number, sx:number, sz:number}>}
          */
-        this.shrines = { cold_spawn: { x: 0, z: 0 } };
+        this.shrines = {};
+        /**
+         * The same network as three index-aligned flat arrays. The per-frame
+         * touch scan walks THESE, never `Object.keys(this.shrines)` — the
+         * steady-frame path allocates nothing, and a `for…in` over a growing
+         * object is exactly the kind of thing that quietly starts to.
+         * @type {string[]} */
+        this._shrineIds = [];
+        /** @type {number[]} */
+        this._shrineX = [];
+        /** @type {number[]} */
+        this._shrineZ = [];
+        /** Monotonic count of touch ACTIVATIONS this session — the edge, not
+         *  the frames spent inside the radius. Live state, never persisted;
+         *  it exists so a probe can prove the edge guard saves once. */
+        this.shrineActivations = 0;
+        this.registerShrine("cold_spawn", 0, 0);
         /** Player spell-damage multiplier, 1.09^(L−10) (§4). SpellSystem
          *  scales outgoing damage by this — pushed into `spells.damageMult`
          *  on attach and on every ding. */
@@ -263,7 +321,7 @@ export class Progression {
      * @returns {void}
      */
     addShrine(id, x, z) {
-        this.shrines[id] = { x, z };
+        this.registerShrine(id, x, z);
         this.lastShrineId = id;
         this.save();
     }
@@ -291,11 +349,76 @@ export class Progression {
      * No `save()` here: registration is derived state rebuilt from the world
      * on every boot, and saving on each of the seven would be seven
      * localStorage writes during construction.
+     * Re-callable: `world/shrine.js` calls this again after every post-swap
+     * re-ground, because the anchors are frozen but the STAND POINTS are
+     * re-chosen against the new realm's landform. Re-registering an existing
+     * id updates it in place and never grows the flat arrays.
+     *
      * @param {string} id @param {number} x @param {number} z
+     * @param {number} [sx] stand point x — where a respawn actually lands.
+     *   Defaults to the anchor, which is what a caller that has no formation
+     *   around its shrine (a test, a future non-monument checkpoint) wants.
+     * @param {number} [sz] stand point z
      * @returns {void}
      */
-    registerShrine(id, x, z) {
-        this.shrines[id] = { x, z };
+    registerShrine(id, x, z, sx, sz) {
+        const stx = Number.isFinite(sx) ? sx : x;
+        const stz = Number.isFinite(sz) ? sz : z;
+        const known = this.shrines[id];
+        if (known) {
+            known.x = x; known.z = z; known.sx = stx; known.sz = stz;
+        } else {
+            this.shrines[id] = { x, z, sx: stx, sz: stz };
+        }
+        // Keep the scan arrays index-aligned with the map.
+        const at = this._shrineIds.indexOf(id);
+        if (at < 0) {
+            this._shrineIds.push(id);
+            this._shrineX.push(x);
+            this._shrineZ.push(z);
+        } else {
+            this._shrineX[at] = x;
+            this._shrineZ[at] = z;
+        }
+    }
+
+    /**
+     * §8.1 ACTIVATION BY TOUCH — one frame of the shrine proximity scan.
+     * Called from `update()`; allocation-free (flat arrays, squared
+     * distances, no `Math.hypot`, no iterator).
+     *
+     * EDGE-GUARDED, and the guard is `id !== lastShrineId`: coming within
+     * SHRINE_TOUCH_R of a NEW shrine writes the target and saves ONCE, and
+     * every subsequent frame inside that radius is a compare and a return.
+     * Walking away and back is not a new activation either — same id. That
+     * also makes the post-respawn frames free: a respawn lands on its own
+     * shrine's stand point, 4.5 m from the anchor and therefore inside the
+     * radius, but the id already matches.
+     *
+     * Silent by owner decision (2026-08-19): no modal, no prompt, no XP.
+     * @returns {void}
+     */
+    _touchShrines() {
+        const c = this.controller;
+        const p = c && c.position;
+        if (!p) return;
+        const ids = this._shrineIds;
+        let best = -1;
+        let bestD2 = SHRINE_TOUCH_R * SHRINE_TOUCH_R;
+        for (let i = 0; i < ids.length; i++) {
+            const dx = p.x - this._shrineX[i];
+            const dz = p.z - this._shrineZ[i];
+            const d2 = dx * dx + dz * dz;
+            // `<` not `<=`, and nearest-wins, so two shrines that ever came
+            // within 12 m of each other would still resolve deterministically.
+            if (d2 < bestD2) { bestD2 = d2; best = i; }
+        }
+        if (best < 0) return;
+        const id = ids[best];
+        if (id === this.lastShrineId) return;
+        this.lastShrineId = id;
+        this.shrineActivations++;
+        this.save();
     }
 
     /** §8.1 respawn grace / death window — enemies must not damage through
@@ -333,6 +456,13 @@ export class Progression {
                 this._onKill(r.evId[e], r.evTier[e]);
             }
         }
+
+        // ---- §8.1 shrine activation by touch. BEFORE the death block, so a
+        // player who dies standing on a shrine has already activated it and
+        // respawns there rather than at whatever they touched last. Skipped
+        // while dead: the corpse must not re-target the network during the
+        // fade, and `_respawn()` teleports through the radius.
+        if (!this.dead) this._touchShrines();
 
         // ---- death → fade → respawn (§8.1).
         const c = this.controller;
@@ -452,6 +582,9 @@ export class Progression {
         // NEW RUN was lost on the next load: the boss re-armed and its
         // cap-exempt §3.2 flat grant could be re-earned on every reload.
         this.bossesKilled = {};
+        // Gates are earned by the kills above, so they clear with them — a NEW
+        // RUN must not inherit the previous run's raised realm gates.
+        this.bossGates = {};
         this.realmsUnlocked = ["cold"];
         this.objectiveState = {};
         this.lastShrineId = "cold_spawn";   // §8.1 default, never null
@@ -488,6 +621,10 @@ export class Progression {
             boons: this.boons,
             realmsUnlocked: this.realmsUnlocked,
             bossesKilled: this.bossesKilled,
+            // Realm gates ride the same blob as the kills that raised them
+            // (lane F3): without this key a standing gate is lost on reload
+            // and the realm re-locks behind a boss that is already dead.
+            bossGates: this.bossGates || {},
             lastShrineId: this.lastShrineId,
             restedBank: Math.round(this.restedBank),
             lastSeenTs: this.lastSeenTs,
@@ -537,6 +674,10 @@ export class Progression {
             ? b.realmsUnlocked : ["cold"];
         this.bossesKilled = (b.bossesKilled && typeof b.bossesKilled === "object")
             ? b.bossesKilled : {};
+        // Lane F3: gates restore like the kills. A v1/v2 blob has no key, so
+        // an old save simply comes back gateless rather than corrupt.
+        this.bossGates = (b.bossGates && typeof b.bossGates === "object")
+            ? b.bossGates : {};
         this.lastShrineId = typeof b.lastShrineId === "string" && b.lastShrineId
             ? b.lastShrineId : "cold_spawn";
         this.objectiveState = (b.objectiveState && typeof b.objectiveState === "object")
@@ -769,10 +910,18 @@ export class Progression {
     _respawn() {
         const c = this.controller;
         const sh = this.shrines[this.lastShrineId] || this.shrines.cold_spawn;
-        c.position.x = sh.x;
-        c.position.z = sh.z;
+        // The STAND POINT, never the anchor. The anchor IS the monolith's
+        // axis — `shrine.js:_buildFormation` puts a 0.34 m radius, 3.6 m tall
+        // prism at exactly (x, z) — so writing it verbatim (the shipped
+        // `c.position.x = sh.x`) materialised the player INSIDE the ice on
+        // every single death. `sx, sz` is the flattest point on a 4.5 m ring,
+        // outside the whole 12-prism formation, re-chosen per realm.
+        const rx = Number.isFinite(sh.sx) ? sh.sx : sh.x;
+        const rz = Number.isFinite(sh.sz) ? sh.sz : sh.z;
+        c.position.x = rx;
+        c.position.z = rz;
         if (c.terrain && c.terrain.heightAt) {
-            c.position.y = c.terrain.heightAt(sh.x, sh.z);
+            c.position.y = c.terrain.heightAt(rx, rz);
         }
         c.velocity.set(0, 0, 0);
         c.vertVel = 0;

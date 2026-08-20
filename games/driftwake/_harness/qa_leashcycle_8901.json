@@ -1,0 +1,74 @@
+{
+ "V5 honest cycles": {
+  "hpMax": 1200,
+  "cycles": [
+   {
+    "cycle": 0,
+    "fracIn": 0.4492,
+    "fracOut": 0.6492,
+    "leashed": true,
+    "aggroS": 0,
+    "cycleS": 61.06,
+    "erow": {
+     "state": 2,
+     "speedNow": 3.13,
+     "dHome": 11.2
+    }
+   },
+   {
+    "cycle": 1,
+    "fracIn": 0.6492,
+    "fracOut": 0.7204,
+    "leashed": true,
+    "aggroS": 0,
+    "cycleS": 30.39,
+    "erow": {
+     "state": 0,
+     "speedNow": 0,
+     "dHome": 0
+    }
+   },
+   {
+    "cycle": 2,
+    "fracIn": 0.7204,
+    "fracOut": 0.7964,
+    "leashed": true,
+    "aggroS": 0,
+    "cycleS": 60.09,
+    "erow": {
+     "state": 0,
+     "speedNow": 0,
+     "dHome": 0
+    }
+   }
+  ],
+  "leashes": 3,
+  "log": [
+   {
+    "t": 8.09,
+    "hpFrac": 0.4492
+   },
+   {
+    "t": 92.94,
+    "hpFrac": 0.5204
+   },
+   {
+    "t": 153.03,
+    "hpFrac": 0.5964
+   }
+  ]
+ },
+ "V6 post-leash UI": {
+  "dirState": "live",
+  "kind": "mini",
+  "hpFrac": 0.7964,
+  "arenaDist": 0,
+  "bossLive": true,
+  "erow": {
+   "state": 0,
+   "speedNow": 0,
+   "dHome": 0
+  },
+  "playerToArena": 34.9
+ }
+}

@@ -1,0 +1,1127 @@
+[
+ {
+  "realm": {
+   "shrine": "cold",
+   "landmarks": "cold",
+   "terrain": "cold"
+  },
+  "bakes": 1,
+  "spawn": {
+   "x": 5,
+   "z": 5.5
+  },
+  "playRadius": 620,
+  "shrines": [
+   {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5,
+    "offX": -40,
+    "offZ": -24,
+    "here": 0.018,
+    "unnudged": 0.126,
+    "best": 0.018,
+    "bestX": 315,
+    "bestZ": -18.5,
+    "rank": 0
+   },
+   {
+    "id": "shrine_ne",
+    "x": 172,
+    "z": 276.6,
+    "offX": -8,
+    "offZ": -32,
+    "here": 0.013,
+    "unnudged": 0.124,
+    "best": 0.013,
+    "bestX": 172,
+    "bestZ": 276.6,
+    "rank": 0
+   },
+   {
+    "id": "shrine_nw",
+    "x": -170,
+    "z": 340.6,
+    "offX": 0,
+    "offZ": 32,
+    "here": 0.028,
+    "unnudged": 0.187,
+    "best": 0.028,
+    "bestX": -170,
+    "bestZ": 340.6,
+    "rank": 0
+   },
+   {
+    "id": "shrine_w",
+    "x": -337,
+    "z": 13.5,
+    "offX": 8,
+    "offZ": 8,
+    "here": 0.032,
+    "unnudged": 0.137,
+    "best": 0.032,
+    "bestX": -337,
+    "bestZ": 13.5,
+    "rank": 0
+   },
+   {
+    "id": "shrine_sw",
+    "x": -138,
+    "z": -329.6,
+    "offX": 32,
+    "offZ": -32,
+    "here": 0.025,
+    "unnudged": 0.454,
+    "best": 0.025,
+    "bestX": -138,
+    "bestZ": -329.6,
+    "rank": 0
+   },
+   {
+    "id": "shrine_se",
+    "x": 148,
+    "z": -313.6,
+    "offX": -32,
+    "offZ": -16,
+    "here": 0.056,
+    "unnudged": 0.206,
+    "best": 0.056,
+    "bestX": 148,
+    "bestZ": -313.6,
+    "rank": 0
+   }
+  ],
+  "landmarks": [
+   {
+    "t": "rimeCircle",
+    "x": -411.8,
+    "z": 127.4,
+    "here": 0.07,
+    "best": 0.05,
+    "rank": 0.041
+   },
+   {
+    "t": "frozenCrest",
+    "x": 480.9,
+    "z": 186.5,
+    "here": 0.034,
+    "best": 0.034,
+    "rank": 0
+   },
+   {
+    "t": "glacierGate",
+    "x": 251.8,
+    "z": -183.8,
+    "here": 0.054,
+    "best": 0.021,
+    "rank": 0.041
+   },
+   {
+    "t": "rimeCircle",
+    "x": -264.5,
+    "z": 186.3,
+    "here": 0.043,
+    "best": 0.043,
+    "rank": 0
+   },
+   {
+    "t": "frozenCrest",
+    "x": -480.5,
+    "z": -216.9,
+    "here": 0.048,
+    "best": 0.047,
+    "rank": 0.02
+   },
+   {
+    "t": "glacierGate",
+    "x": 209.3,
+    "z": 51.4,
+    "here": 0.033,
+    "best": 0.033,
+    "rank": 0
+   },
+   {
+    "t": "rimeCircle",
+    "x": 274.3,
+    "z": -460.9,
+    "here": 0.036,
+    "best": 0.036,
+    "rank": 0
+   },
+   {
+    "t": "frozenCrest",
+    "x": 1.5,
+    "z": -270.1,
+    "here": 0.029,
+    "best": 0.029,
+    "rank": 0
+   },
+   {
+    "t": "glacierGate",
+    "x": -291.9,
+    "z": -119.1,
+    "here": 0.064,
+    "best": 0.064,
+    "rank": 0
+   },
+   {
+    "t": "rimeCircle",
+    "x": 65.1,
+    "z": 371.9,
+    "here": 0.029,
+    "best": 0.029,
+    "rank": 0
+   },
+   {
+    "t": "frozenCrest",
+    "x": -34.6,
+    "z": -529.9,
+    "here": 0.043,
+    "best": 0.043,
+    "rank": 0
+   },
+   {
+    "t": "glacierGate",
+    "x": -291.1,
+    "z": -342.7,
+    "here": 0.094,
+    "best": 0.047,
+    "rank": 0.02
+   },
+   {
+    "t": "rimeCircle",
+    "x": 294.8,
+    "z": 180,
+    "here": 0.033,
+    "best": 0.033,
+    "rank": 0
+   },
+   {
+    "t": "frozenCrest",
+    "x": 197.1,
+    "z": 472.6,
+    "here": 0.013,
+    "best": 0.013,
+    "rank": 0
+   },
+   {
+    "t": "glacierGate",
+    "x": 487.1,
+    "z": 22.8,
+    "here": 0.025,
+    "best": 0.025,
+    "rank": 0
+   }
+  ],
+  "base": {
+   "n": 2821,
+   "p10": 0.102,
+   "p25": 0.175,
+   "p50": 0.267,
+   "p75": 0.38,
+   "p90": 0.5,
+   "max": 1.067
+  },
+  "tag": "boot"
+ },
+ {
+  "realm": {
+   "shrine": "sand",
+   "landmarks": "sand",
+   "terrain": "sand"
+  },
+  "bakes": 2,
+  "spawn": {
+   "x": 5,
+   "z": 5.5
+  },
+  "playRadius": 620,
+  "shrines": [
+   {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5,
+    "offX": -40,
+    "offZ": -24,
+    "here": 0.203,
+    "unnudged": 0.178,
+    "best": 0.008,
+    "bestX": 355,
+    "bestZ": -10.5,
+    "rank": 0.463
+   },
+   {
+    "id": "shrine_ne",
+    "x": 172,
+    "z": 276.6,
+    "offX": -8,
+    "offZ": -32,
+    "here": 0.072,
+    "unnudged": 0.142,
+    "best": 0.012,
+    "bestX": 156,
+    "bestZ": 340.6,
+    "rank": 0.066
+   },
+   {
+    "id": "shrine_nw",
+    "x": -170,
+    "z": 340.6,
+    "offX": 0,
+    "offZ": 32,
+    "here": 0.421,
+    "unnudged": 0.156,
+    "best": 0.014,
+    "bestX": -154,
+    "bestZ": 300.6,
+    "rank": 0.744
+   },
+   {
+    "id": "shrine_w",
+    "x": -337,
+    "z": 13.5,
+    "offX": 8,
+    "offZ": 8,
+    "here": 0.33,
+    "unnudged": 0.051,
+    "best": 0.023,
+    "bestX": -305,
+    "bestZ": 45.5,
+    "rank": 0.636
+   },
+   {
+    "id": "shrine_sw",
+    "x": -138,
+    "z": -329.6,
+    "offX": 32,
+    "offZ": -32,
+    "here": 0.361,
+    "unnudged": 0.128,
+    "best": 0.01,
+    "bestX": -138,
+    "bestZ": -289.6,
+    "rank": 0.719
+   },
+   {
+    "id": "shrine_se",
+    "x": 148,
+    "z": -313.6,
+    "offX": -32,
+    "offZ": -16,
+    "here": 0.274,
+    "unnudged": 0.252,
+    "best": 0.008,
+    "bestX": 172,
+    "bestZ": -321.6,
+    "rank": 0.521
+   }
+  ],
+  "landmarks": [
+   {
+    "t": "sunkenColonnade",
+    "x": -15.6,
+    "z": -458.9,
+    "here": 0.236,
+    "best": 0.031,
+    "rank": 0.51
+   },
+   {
+    "t": "bleachedRibs",
+    "x": -412.9,
+    "z": -92.1,
+    "here": 0.348,
+    "best": 0.02,
+    "rank": 0.551
+   },
+   {
+    "t": "watchSpire",
+    "x": 312.7,
+    "z": 177.9,
+    "here": 0.267,
+    "best": 0.009,
+    "rank": 0.755
+   },
+   {
+    "t": "sunkenColonnade",
+    "x": -315.9,
+    "z": 326.5,
+    "here": 0.649,
+    "best": 0.037,
+    "rank": 0.857
+   },
+   {
+    "t": "bleachedRibs",
+    "x": -94.1,
+    "z": -179.3,
+    "here": 0.129,
+    "best": 0.021,
+    "rank": 0.286
+   },
+   {
+    "t": "watchSpire",
+    "x": 197.8,
+    "z": 451,
+    "here": 0.16,
+    "best": 0.044,
+    "rank": 0.265
+   },
+   {
+    "t": "sunkenColonnade",
+    "x": -257.6,
+    "z": -348.4,
+    "here": 0.129,
+    "best": 0.015,
+    "rank": 0.082
+   },
+   {
+    "t": "bleachedRibs",
+    "x": 440.3,
+    "z": -98.9,
+    "here": 0.439,
+    "best": 0.034,
+    "rank": 0.673
+   },
+   {
+    "t": "watchSpire",
+    "x": -39.3,
+    "z": 307.4,
+    "here": 0.178,
+    "best": 0.019,
+    "rank": 0.367
+   },
+   {
+    "t": "sunkenColonnade",
+    "x": 267.9,
+    "z": -248.9,
+    "here": 0.105,
+    "best": 0.013,
+    "rank": 0.184
+   },
+   {
+    "t": "bleachedRibs",
+    "x": -224.8,
+    "z": 100.5,
+    "here": 0.079,
+    "best": 0.077,
+    "rank": 0.041
+   },
+   {
+    "t": "watchSpire",
+    "x": -469.9,
+    "z": 183.4,
+    "here": 0.12,
+    "best": 0.034,
+    "rank": 0.143
+   },
+   {
+    "t": "sunkenColonnade",
+    "x": 190.4,
+    "z": -460.4,
+    "here": 1.037,
+    "best": 0.064,
+    "rank": 0.98
+   },
+   {
+    "t": "bleachedRibs",
+    "x": 474.5,
+    "z": 127.7,
+    "here": 0.182,
+    "best": 0.051,
+    "rank": 0.265
+   },
+   {
+    "t": "watchSpire",
+    "x": -37.5,
+    "z": 533.7,
+    "here": 0.088,
+    "best": 0.036,
+    "rank": 0.163
+   }
+  ],
+  "base": {
+   "n": 2821,
+   "p10": 0.085,
+   "p25": 0.141,
+   "p50": 0.245,
+   "p75": 0.4,
+   "p90": 0.616,
+   "max": 1.447
+  },
+  "tag": "sand"
+ },
+ {
+  "realm": {
+   "shrine": "ash",
+   "landmarks": "ash",
+   "terrain": "ash"
+  },
+  "bakes": 3,
+  "spawn": {
+   "x": 5,
+   "z": 5.5
+  },
+  "playRadius": 620,
+  "shrines": [
+   {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5,
+    "offX": -40,
+    "offZ": -24,
+    "here": 0.188,
+    "unnudged": 0.2,
+    "best": 0.003,
+    "bestX": 347,
+    "bestZ": 21.5,
+    "rank": 0.603
+   },
+   {
+    "id": "shrine_ne",
+    "x": 172,
+    "z": 276.6,
+    "offX": -8,
+    "offZ": -32,
+    "here": 0.069,
+    "unnudged": 0.102,
+    "best": 0.012,
+    "bestX": 220,
+    "bestZ": 268.6,
+    "rank": 0.298
+   },
+   {
+    "id": "shrine_nw",
+    "x": -170,
+    "z": 340.6,
+    "offX": 0,
+    "offZ": 32,
+    "here": 0.47,
+    "unnudged": 0.133,
+    "best": 0.006,
+    "bestX": -146,
+    "bestZ": 284.6,
+    "rank": 0.818
+   },
+   {
+    "id": "shrine_w",
+    "x": -337,
+    "z": 13.5,
+    "offX": 8,
+    "offZ": 8,
+    "here": 0.136,
+    "unnudged": 0.161,
+    "best": 0.004,
+    "bestX": -353,
+    "bestZ": 45.5,
+    "rank": 0.777
+   },
+   {
+    "id": "shrine_sw",
+    "x": -138,
+    "z": -329.6,
+    "offX": 32,
+    "offZ": -32,
+    "here": 0.102,
+    "unnudged": 0.137,
+    "best": 0.006,
+    "bestX": -210,
+    "bestZ": -257.6,
+    "rank": 0.636
+   },
+   {
+    "id": "shrine_se",
+    "x": 148,
+    "z": -313.6,
+    "offX": -32,
+    "offZ": -16,
+    "here": 0.053,
+    "unnudged": 0.126,
+    "best": 0.008,
+    "bestX": 180,
+    "bestZ": -321.6,
+    "rank": 0.298
+   }
+  ],
+  "landmarks": [
+   {
+    "t": "basaltColonnade",
+    "x": -107,
+    "z": -451,
+    "here": 0.175,
+    "best": 0.011,
+    "rank": 0.673
+   },
+   {
+    "t": "calderaRim",
+    "x": -266,
+    "z": 184.8,
+    "here": 0.153,
+    "best": 0.017,
+    "rank": 0.755
+   },
+   {
+    "t": "emberVent",
+    "x": 332.5,
+    "z": -388.3,
+    "here": 0.078,
+    "best": 0.007,
+    "rank": 0.327
+   },
+   {
+    "t": "basaltColonnade",
+    "x": 8.4,
+    "z": -286.4,
+    "here": 0.046,
+    "best": 0.004,
+    "rank": 0.204
+   },
+   {
+    "t": "calderaRim",
+    "x": -376.1,
+    "z": -148.9,
+    "here": 0.099,
+    "best": 0.02,
+    "rank": 0.694
+   },
+   {
+    "t": "emberVent",
+    "x": 487.1,
+    "z": -166.1,
+    "here": 0.098,
+    "best": 0.016,
+    "rank": 0.673
+   },
+   {
+    "t": "basaltColonnade",
+    "x": 259,
+    "z": 431.8,
+    "here": 0.071,
+    "best": 0.011,
+    "rank": 0.286
+   },
+   {
+    "t": "calderaRim",
+    "x": 514.3,
+    "z": -5.8,
+    "here": 0.017,
+    "best": 0.007,
+    "rank": 0.102
+   },
+   {
+    "t": "emberVent",
+    "x": 194.6,
+    "z": 111.8,
+    "here": 0.056,
+    "best": 0.01,
+    "rank": 0.306
+   },
+   {
+    "t": "basaltColonnade",
+    "x": -343.4,
+    "z": -342.6,
+    "here": 0.047,
+    "best": 0.017,
+    "rank": 0.347
+   },
+   {
+    "t": "calderaRim",
+    "x": 196,
+    "z": -73.2,
+    "here": 0.363,
+    "best": 0.018,
+    "rank": 0.714
+   },
+   {
+    "t": "emberVent",
+    "x": 13.8,
+    "z": 493,
+    "here": 0.1,
+    "best": 0.019,
+    "rank": 0.469
+   },
+   {
+    "t": "basaltColonnade",
+    "x": 108.9,
+    "z": -499.9,
+    "here": 0.043,
+    "best": 0.03,
+    "rank": 0.122
+   },
+   {
+    "t": "calderaRim",
+    "x": -111.9,
+    "z": 134.9,
+    "here": 0.083,
+    "best": 0.017,
+    "rank": 0.388
+   },
+   {
+    "t": "emberVent",
+    "x": -457.9,
+    "z": 278.9,
+    "here": 0.108,
+    "best": 0.019,
+    "rank": 0.551
+   }
+  ],
+  "base": {
+   "n": 2821,
+   "p10": 0.033,
+   "p25": 0.054,
+   "p50": 0.093,
+   "p75": 0.164,
+   "p90": 0.284,
+   "max": 1.67
+  },
+  "tag": "ash"
+ },
+ {
+  "realm": {
+   "shrine": "cold",
+   "landmarks": "cold",
+   "terrain": "cold"
+  },
+  "bakes": 4,
+  "spawn": {
+   "x": 5,
+   "z": 5.5
+  },
+  "playRadius": 620,
+  "shrines": [
+   {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5,
+    "offX": -40,
+    "offZ": -24,
+    "here": 0.018,
+    "unnudged": 0.126,
+    "best": 0.018,
+    "bestX": 315,
+    "bestZ": -18.5,
+    "rank": 0
+   },
+   {
+    "id": "shrine_ne",
+    "x": 172,
+    "z": 276.6,
+    "offX": -8,
+    "offZ": -32,
+    "here": 0.013,
+    "unnudged": 0.124,
+    "best": 0.013,
+    "bestX": 172,
+    "bestZ": 276.6,
+    "rank": 0
+   },
+   {
+    "id": "shrine_nw",
+    "x": -170,
+    "z": 340.6,
+    "offX": 0,
+    "offZ": 32,
+    "here": 0.028,
+    "unnudged": 0.187,
+    "best": 0.028,
+    "bestX": -170,
+    "bestZ": 340.6,
+    "rank": 0
+   },
+   {
+    "id": "shrine_w",
+    "x": -337,
+    "z": 13.5,
+    "offX": 8,
+    "offZ": 8,
+    "here": 0.032,
+    "unnudged": 0.137,
+    "best": 0.032,
+    "bestX": -337,
+    "bestZ": 13.5,
+    "rank": 0
+   },
+   {
+    "id": "shrine_sw",
+    "x": -138,
+    "z": -329.6,
+    "offX": 32,
+    "offZ": -32,
+    "here": 0.025,
+    "unnudged": 0.454,
+    "best": 0.025,
+    "bestX": -138,
+    "bestZ": -329.6,
+    "rank": 0
+   },
+   {
+    "id": "shrine_se",
+    "x": 148,
+    "z": -313.6,
+    "offX": -32,
+    "offZ": -16,
+    "here": 0.056,
+    "unnudged": 0.206,
+    "best": 0.056,
+    "bestX": 148,
+    "bestZ": -313.6,
+    "rank": 0
+   }
+  ],
+  "landmarks": [
+   {
+    "t": "rimeCircle",
+    "x": -411.8,
+    "z": 127.4,
+    "here": 0.07,
+    "best": 0.05,
+    "rank": 0.041
+   },
+   {
+    "t": "frozenCrest",
+    "x": 480.9,
+    "z": 186.5,
+    "here": 0.034,
+    "best": 0.034,
+    "rank": 0
+   },
+   {
+    "t": "glacierGate",
+    "x": 251.8,
+    "z": -183.8,
+    "here": 0.054,
+    "best": 0.021,
+    "rank": 0.041
+   },
+   {
+    "t": "rimeCircle",
+    "x": -264.5,
+    "z": 186.3,
+    "here": 0.043,
+    "best": 0.043,
+    "rank": 0
+   },
+   {
+    "t": "frozenCrest",
+    "x": -480.5,
+    "z": -216.9,
+    "here": 0.048,
+    "best": 0.047,
+    "rank": 0.02
+   },
+   {
+    "t": "glacierGate",
+    "x": 209.3,
+    "z": 51.4,
+    "here": 0.033,
+    "best": 0.033,
+    "rank": 0
+   },
+   {
+    "t": "rimeCircle",
+    "x": 274.3,
+    "z": -460.9,
+    "here": 0.036,
+    "best": 0.036,
+    "rank": 0
+   },
+   {
+    "t": "frozenCrest",
+    "x": 1.5,
+    "z": -270.1,
+    "here": 0.029,
+    "best": 0.029,
+    "rank": 0
+   },
+   {
+    "t": "glacierGate",
+    "x": -291.9,
+    "z": -119.1,
+    "here": 0.064,
+    "best": 0.064,
+    "rank": 0
+   },
+   {
+    "t": "rimeCircle",
+    "x": 65.1,
+    "z": 371.9,
+    "here": 0.029,
+    "best": 0.029,
+    "rank": 0
+   },
+   {
+    "t": "frozenCrest",
+    "x": -34.6,
+    "z": -529.9,
+    "here": 0.043,
+    "best": 0.043,
+    "rank": 0
+   },
+   {
+    "t": "glacierGate",
+    "x": -291.1,
+    "z": -342.7,
+    "here": 0.094,
+    "best": 0.047,
+    "rank": 0.02
+   },
+   {
+    "t": "rimeCircle",
+    "x": 294.8,
+    "z": 180,
+    "here": 0.033,
+    "best": 0.033,
+    "rank": 0
+   },
+   {
+    "t": "frozenCrest",
+    "x": 197.1,
+    "z": 472.6,
+    "here": 0.013,
+    "best": 0.013,
+    "rank": 0
+   },
+   {
+    "t": "glacierGate",
+    "x": 487.1,
+    "z": 22.8,
+    "here": 0.025,
+    "best": 0.025,
+    "rank": 0
+   }
+  ],
+  "base": {
+   "n": 2821,
+   "p10": 0.102,
+   "p25": 0.175,
+   "p50": 0.267,
+   "p75": 0.38,
+   "p90": 0.5,
+   "max": 1.067
+  },
+  "tag": "cold"
+ },
+ {
+  "realm": {
+   "shrine": "sand",
+   "landmarks": "sand",
+   "terrain": "sand"
+  },
+  "bakes": 5,
+  "spawn": {
+   "x": 5,
+   "z": 5.5
+  },
+  "playRadius": 620,
+  "shrines": [
+   {
+    "id": "shrine_e",
+    "x": 315,
+    "z": -18.5,
+    "offX": -40,
+    "offZ": -24,
+    "here": 0.203,
+    "unnudged": 0.178,
+    "best": 0.008,
+    "bestX": 355,
+    "bestZ": -10.5,
+    "rank": 0.463
+   },
+   {
+    "id": "shrine_ne",
+    "x": 172,
+    "z": 276.6,
+    "offX": -8,
+    "offZ": -32,
+    "here": 0.072,
+    "unnudged": 0.142,
+    "best": 0.012,
+    "bestX": 156,
+    "bestZ": 340.6,
+    "rank": 0.066
+   },
+   {
+    "id": "shrine_nw",
+    "x": -170,
+    "z": 340.6,
+    "offX": 0,
+    "offZ": 32,
+    "here": 0.421,
+    "unnudged": 0.156,
+    "best": 0.014,
+    "bestX": -154,
+    "bestZ": 300.6,
+    "rank": 0.744
+   },
+   {
+    "id": "shrine_w",
+    "x": -337,
+    "z": 13.5,
+    "offX": 8,
+    "offZ": 8,
+    "here": 0.33,
+    "unnudged": 0.051,
+    "best": 0.023,
+    "bestX": -305,
+    "bestZ": 45.5,
+    "rank": 0.636
+   },
+   {
+    "id": "shrine_sw",
+    "x": -138,
+    "z": -329.6,
+    "offX": 32,
+    "offZ": -32,
+    "here": 0.361,
+    "unnudged": 0.128,
+    "best": 0.01,
+    "bestX": -138,
+    "bestZ": -289.6,
+    "rank": 0.719
+   },
+   {
+    "id": "shrine_se",
+    "x": 148,
+    "z": -313.6,
+    "offX": -32,
+    "offZ": -16,
+    "here": 0.274,
+    "unnudged": 0.252,
+    "best": 0.008,
+    "bestX": 172,
+    "bestZ": -321.6,
+    "rank": 0.521
+   }
+  ],
+  "landmarks": [
+   {
+    "t": "sunkenColonnade",
+    "x": -15.6,
+    "z": -458.9,
+    "here": 0.236,
+    "best": 0.031,
+    "rank": 0.51
+   },
+   {
+    "t": "bleachedRibs",
+    "x": -412.9,
+    "z": -92.1,
+    "here": 0.348,
+    "best": 0.02,
+    "rank": 0.551
+   },
+   {
+    "t": "watchSpire",
+    "x": 312.7,
+    "z": 177.9,
+    "here": 0.267,
+    "best": 0.009,
+    "rank": 0.755
+   },
+   {
+    "t": "sunkenColonnade",
+    "x": -315.9,
+    "z": 326.5,
+    "here": 0.649,
+    "best": 0.037,
+    "rank": 0.857
+   },
+   {
+    "t": "bleachedRibs",
+    "x": -94.1,
+    "z": -179.3,
+    "here": 0.129,
+    "best": 0.021,
+    "rank": 0.286
+   },
+   {
+    "t": "watchSpire",
+    "x": 197.8,
+    "z": 451,
+    "here": 0.16,
+    "best": 0.044,
+    "rank": 0.265
+   },
+   {
+    "t": "sunkenColonnade",
+    "x": -257.6,
+    "z": -348.4,
+    "here": 0.129,
+    "best": 0.015,
+    "rank": 0.082
+   },
+   {
+    "t": "bleachedRibs",
+    "x": 440.3,
+    "z": -98.9,
+    "here": 0.439,
+    "best": 0.034,
+    "rank": 0.673
+   },
+   {
+    "t": "watchSpire",
+    "x": -39.3,
+    "z": 307.4,
+    "here": 0.178,
+    "best": 0.019,
+    "rank": 0.367
+   },
+   {
+    "t": "sunkenColonnade",
+    "x": 267.9,
+    "z": -248.9,
+    "here": 0.105,
+    "best": 0.013,
+    "rank": 0.184
+   },
+   {
+    "t": "bleachedRibs",
+    "x": -224.8,
+    "z": 100.5,
+    "here": 0.079,
+    "best": 0.077,
+    "rank": 0.041
+   },
+   {
+    "t": "watchSpire",
+    "x": -469.9,
+    "z": 183.4,
+    "here": 0.12,
+    "best": 0.034,
+    "rank": 0.143
+   },
+   {
+    "t": "sunkenColonnade",
+    "x": 190.4,
+    "z": -460.4,
+    "here": 1.037,
+    "best": 0.064,
+    "rank": 0.98
+   },
+   {
+    "t": "bleachedRibs",
+    "x": 474.5,
+    "z": 127.7,
+    "here": 0.182,
+    "best": 0.051,
+    "rank": 0.265
+   },
+   {
+    "t": "watchSpire",
+    "x": -37.5,
+    "z": 533.7,
+    "here": 0.088,
+    "best": 0.036,
+    "rank": 0.163
+   }
+  ],
+  "base": {
+   "n": 2821,
+   "p10": 0.085,
+   "p25": 0.141,
+   "p50": 0.245,
+   "p75": 0.4,
+   "p90": 0.616,
+   "max": 1.447
+  },
+  "tag": "sand"
+ }
+]

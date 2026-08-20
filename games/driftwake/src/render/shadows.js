@@ -333,6 +333,32 @@ export class ShadowSystem {
         }
     }
 
+    // ------------------------------------------------------------------
+    // INTEGRATION HOOK — mesh-enemy realm release (lane F1).
+    // Until now `registerCaster` had no inverse, so every caster entry a
+    // released body left behind pinned a dead SkinnedMesh (and through it a
+    // decoded BufferGeometry + base-colour texture) in `_perCascade`, and its
+    // proxy stayed a child of `scenes[c]` forever. meshEnemies._releaseInstance
+    // feature-detects this method (meshEnemies.js:1403) and calls it.
+    // ------------------------------------------------------------------
+    /**
+     * Drop every cascade entry registered for `mesh`, removing its proxy from
+     * the cascade scene. Safe to call for a mesh that was never registered,
+     * and safe to call twice.
+     * @param {THREE.Object3D} mesh
+     * @returns {void}
+     */
+    unregisterCaster(mesh) {
+        for (let c = 0; c < CASCADE_COUNT; c++) {
+            const list = this._perCascade[c];
+            for (let i = list.length - 1; i >= 0; i--) {
+                if (list[i].mesh !== mesh) continue;
+                this.scenes[c].remove(list[i].proxy);
+                list.splice(i, 1);
+            }
+        }
+    }
+
     /**
      * The `lib/shadowLookup` uniform block for one receiving material.
      *

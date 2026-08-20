@@ -6,8 +6,9 @@
  * Three signals, all fed off the player-damage seam:
  *
  *   1. VIGNETTE FLASH — a screen-edge radial flash, red-shifted toward the
- *      current realm's ember hue, 250 ms linear decay. Peak scales with the
- *      hit's size (a 40+ hit is a full flash, a graze is a third).
+ *      current realm's ember hue, 250 ms linear decay on the GAME clock (see
+ *      `_now()` — it freezes with a pause and dilates with hit-stop). Peak
+ *      scales with the hit's size (a 40+ hit is a full flash, a graze a third).
  *   2. DIRECTIONAL TICK — a short arc segment at the screen edge toward the
  *      damage source: world direction player->source converted to a bearing
  *      relative to the camera yaw (core/camera.js frame: fwd=(sin yaw, 0,
@@ -42,6 +43,10 @@ import { input } from "../core/input.js";
 const TICKS = 4;
 /** Vignette flash decay, ms. */
 const FLASH_MS = 250;
+/** The same number in the units the flash is actually clocked in — GAME
+ *  seconds. See `_now()`: the vignette runs on the world's clock, not the
+ *  wall's, so it freezes with the world and dilates with hit-stop. */
+const FLASH_S = FLASH_MS / 1000;
 /** Tick fade, ms (matches the CSS animation). */
 const TICK_MS = 600;
 /** Low-hp heartbeat threshold, fraction of healthMax. */
@@ -171,7 +176,7 @@ export class HurtFx {
         /** Round-robin tick cursor. */
         this._nextTick = 0;
 
-        /** Flash state: wall-clock end + peak opacity. */
+        /** Flash state: GAME-clock end (see `_now`) + peak opacity. 0 = idle. */
         this._flashUntil = 0;
         this._flashPeak = 0;
         /** Cached vignette opacity (2-dp quantised) — writes gate on this. */
@@ -188,6 +193,28 @@ export class HurtFx {
         this._lastAngleDeg = null;
 
         this._realm = "cold";
+    }
+
+    /**
+     * THE FLASH CLOCK — game seconds, not wall seconds.
+     *
+     * `registry.time` is the world's own clock: main.js advances it with the
+     * frame dt, which is exactly 0 under `S.freezeTime` and dilated by
+     * core/hitstop.js during an impact envelope. Reading it here is what makes
+     * the vignette freeze when the game freezes and stretch when the game
+     * stretches — on `performance.now()` the flash drained through a paused
+     * frame and ran at full speed through a hit-stop, which is the one moment
+     * it is most on screen. No other seam is needed: the registry is already a
+     * constructor dependency (the nearest-body fallback scan uses it).
+     *
+     * The fallback keeps the module usable in a harness that builds a HurtFx
+     * without a registry; there the wall clock is the only clock there is.
+     * @returns {number} seconds
+     */
+    _now() {
+        const reg = this.registry;
+        return reg && typeof reg.time === "number"
+            ? reg.time : performance.now() / 1000;
     }
 
     /** @param {{ overlay?: { visible: boolean } }} refs @returns {void} */
@@ -226,10 +253,10 @@ export class HurtFx {
 
         // Vignette: peak scales with the hit, refreshes on overlap.
         const peak = Math.min(1, 0.35 + amount / 60);
-        const now = performance.now();
+        const now = this._now();
         this._flashPeak = this._flashUntil > now
             ? Math.max(this._flashPeak, peak) : peak;
-        this._flashUntil = now + FLASH_MS;
+        this._flashUntil = now + FLASH_S;
 
         // Directional tick, camera-relative bearing (0 = ahead = top).
         const len = Math.hypot(dirX, dirZ);
@@ -295,13 +322,16 @@ export class HurtFx {
         }
 
         // ---- vignette decay (writes only while a flash is live) ----------
+        // GAME time (`_now`): a paused frame advances the clock by 0, so the
+        // opacity computed here is bit-identical to last frame's and the
+        // quantised gate below writes nothing at all.
         let op = 0;
         if (this._flashUntil > 0) {
-            const left = this._flashUntil - performance.now();
+            const left = this._flashUntil - this._now();
             if (left <= 0) {
                 this._flashUntil = 0;
             } else {
-                op = this._flashPeak * (left / FLASH_MS);
+                op = this._flashPeak * (left / FLASH_S);
             }
         }
         const q = Math.round(op * 100) / 100;

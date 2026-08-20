@@ -227,14 +227,45 @@ const CASCADES_STD = 1;
 const CASCADES_BOSS = 2;
 
 /**
- * Hard ceiling on resident instances. There is NO unregister on either caster
- * system (shadows.js has `registerCaster` at :297 and no removal; likewise
- * depthPass.js:195), so an instance, once built, is permanent — pooled per body
- * TYPE and reused, never freed. Steady state is bounded by the sum over types of
- * their peak concurrency, which for a director capping live enemies at 8
- * (encounters.js:115-117) against a 24-slot pool sits far below this. The cap
- * exists so a pathological session degrades visibly (a warning, a missing body)
- * instead of leaking skeletons.
+ * Hard ceiling on resident instances, counted over EVERY type at once.
+ *
+ * Within one realm an instance is permanent: `free(i)` returns it to its own
+ * `type.free` list and it is reused. That is correct, and it is a leak the
+ * moment the realm changes, because a Cold body pooled on Cold's free list is
+ * never spawned again while the player is in Sand and still counts against this
+ * cap. Three realms of ten bodies is thirty types against a cap of forty, so the
+ * THIRD realm ran `_acquire` past the ceiling and enemies.js drove registry
+ * bodies with no mesh bound — an invisible enemy that still fights (measured:
+ * scene objects 522 -> 1741, instances 8 -> 31, heap 118 -> 154 MB over a
+ * 15.9 min three-realm soak, none of it returned on coming back to Cold).
+ *
+ * `_releaseRealm` closes it: on every `load(realm)`, before the new realm's
+ * bodies are fetched, every type outside `BY_REALM[realm]` gives up its pooled
+ * instances and — once it has none live — its geometry, texture and material.
+ * Steady state is therefore ONE realm's peak concurrency, which for a director
+ * capping live enemies at 8 (encounters.js:115-117) against a 24-slot pool sits
+ * far below this. The cap survives as the visible-degradation backstop: a
+ * pathological session gets a warning and a missing body, not a heap of
+ * skeletons.
+ *
+ * WHAT RELEASE CANNOT REACH. Neither caster system has an unregister —
+ * `shadows.registerCaster` (shadows.js:297) pushes `{mesh, proxy, material}`
+ * into `_perCascade[c]` (:331) and `depthPass.registerCaster` (:195) pushes
+ * `{mesh, proxy}` into `_casters` (:206), and there is no `unregisterCaster`,
+ * `removeCaster` or `splice` in either file. `_releaseInstance` therefore takes
+ * the proxy OUT OF THE PROXY SCENE, which is what stops it drawing (both render
+ * loops only walk `scenes[c]` / `scene`; the bookkeeping array just mirrors
+ * `mesh.visible` onto a now-detached object), and then STRIPS both the proxy
+ * and the mesh, because the surviving array entry would otherwise pin the whole
+ * decoded body — see `_releaseInstance` for the measurement that forced this.
+ *
+ * THE RESIDUAL, stated plainly: `_perCascade[0]` and `_casters` still grow one
+ * entry per instance ever built (measured 52 -> 122 over six realm switches),
+ * and each costs one boolean write per frame and holds two stripped Object3Ds.
+ * Retained heap over those same six switches was FLAT (105.4 -> 107.2 MB), so
+ * the residual is a count, not a footprint. It retires the day shadows.js and
+ * depthPass.js grow an `unregisterCaster(mesh)` — `_releaseInstance` already
+ * feature-detects and calls one.
  */
 const INSTANCE_MAX = 40;
 
@@ -308,6 +339,13 @@ const _box = new THREE.Box3();
 
 /** No-op raycast, shared by every body (they are not pickable). */
 function _noRaycast() {}
+
+/**
+ * Object3D's own default `onBeforeRender`. Put back on a detached caster proxy
+ * so that if anything ever draws it again, it reads no `_inst` and cannot
+ * dereference a released skeleton.
+ */
+function _noHook() {}
 
 /** Deterministic 0..1 hash — spawn-time jitter only, never on the frame path. */
 function h01(n) {
@@ -671,20 +709,29 @@ export class MeshEnemies {
      * @returns {Promise<void>}
      */
     async load(realm, priority) {
+        // Validate BEFORE releasing anything. A bad token (the display string
+        // "Sand" instead of "sand" — main.js:629 documents that exact caller
+        // bug) would otherwise match no slug, evict the realm the player is
+        // standing in, and only then throw.
+        const slugs = BY_REALM[realm];
+        if (!slugs || !slugs.length) {
+            throw new Error("meshEnemies: no bodies for realm " + realm);
+        }
+
         this.realm = realm;
         // A realm switch starts a fresh background walk: the old `streaming`
         // promise belongs to the old realm's slug list, and holding on to it
         // made stream() a boot-only one-shot (audit 2026-08-10 — the other
         // nine bodies of every later realm never loaded).
         this.streaming = null;
+        // Give the OLD realm back before the new one is fetched, so the peak is
+        // one realm resident and not two. See INSTANCE_MAX above for what this
+        // fixes and what it cannot reach.
+        this._releaseRealm(realm);
         const res = await fetch(MANIFEST_URL);
         if (!res.ok) throw new Error("meshEnemies: manifest " + res.status);
         this.manifest = await res.json();
 
-        const slugs = BY_REALM[realm];
-        if (!slugs || !slugs.length) {
-            throw new Error("meshEnemies: no bodies for realm " + realm);
-        }
         const first = priority && slugs.indexOf(priority) >= 0 ? priority : slugs[0];
         await this._loadType(first);
     }
@@ -843,6 +890,20 @@ export class MeshEnemies {
         type.material = this._buildMaterial(type);
         type.state = 1;
         this.stats.types = this._types.size;
+
+        // STALE ON ARRIVAL. `stream()` stands down between bodies when the realm
+        // changes, but it cannot cancel the fetch it is already awaiting: that
+        // body lands seconds AFTER `_releaseRealm` has walked the map, so it
+        // would sit resident — a full GLB of geometry, texture and material for
+        // a realm the player left — until the next switch happened to notice.
+        // Release it here instead. (Everything that reaches `_loadType` today
+        // comes from `BY_REALM[this.realm]`; a future cross-realm loader must
+        // widen this test rather than delete it.)
+        const keep = BY_REALM[this.realm];
+        if (keep && keep.indexOf(slug) < 0) {
+            this._releaseType(type);
+            return;
+        }
 
         // Any slot that spawned this body while it was still in flight binds now.
         for (let i = 0; i < SLOT_MAX; i++) {
@@ -1055,6 +1116,14 @@ export class MeshEnemies {
             flinching: false,
             /** Rung 1 (26-95 m) steps on alternate frames; this is its parity. */
             parity: this._insts.length & 1,
+            /** The cascade/prepass proxies claimed for this instance, in claim
+             *  order. Recorded at claim time because there is no unregister to
+             *  ask (see INSTANCE_MAX): releasing the instance has to take these
+             *  out of their proxy scenes by hand, and re-finding them later by
+             *  scanning `shadows.scenes[c].children` would be a linear search
+             *  over every caster in the game. Built once, never on a frame.
+             *  @type {THREE.Mesh[]} */
+            proxies: [],
         };
         inst.state[2] = h01(this._insts.length * 13.7);
 
@@ -1168,6 +1237,225 @@ export class MeshEnemies {
         }
         proxy._inst = inst;
         proxy.onBeforeRender = _writeCasterSkin;
+        inst.proxies.push(proxy);
+    }
+
+    // ====================================================================
+    //  Release — the realm-scoped counterpart to _build / _loadType
+    // ====================================================================
+
+    /**
+     * Give back every body type that does not belong to `realm`.
+     *
+     * Called from `load()` BEFORE the new realm's bodies are fetched, so the
+     * resident set is one realm and not the union of every realm visited. Two
+     * stages, because they have different preconditions:
+     *
+     *   1. INSTANCES. Drain each doomed type's `free` list — those are the
+     *      pooled bodies `enemies.clear()` handed back on the way out — and tear
+     *      each one out of the scene, the caster proxy scenes and `_insts`.
+     *      An instance with `live` still set is one a body in flight is driving
+     *      (a slot freed after this walk, a probe holding a slot): SKIPPED, not
+     *      torn out from under the renderer.
+     *   2. SHARED RESOURCES. Only once a type has no instances left at all can
+     *      its geometry, base-colour texture and material go — every instance
+     *      of a type shares all three (`_build`: `SkeletonUtils.clone` shares
+     *      geometry and material by design). A type that still has a live
+     *      instance keeps everything and is retried on the next realm change.
+     *
+     * NO LRU. A one-realm LRU was the alternative and is the wrong trade here:
+     * the instances it would hold are exactly the dead weight that exhausts
+     * INSTANCE_MAX, and the types it would hold are ~2.8 MiB of GLB per realm
+     * plus their decoded geometry and textures — i.e. it would keep roughly half
+     * of both defects alive to save one `_loadType` on a ping-pong switch. What
+     * it would actually save is small: `load()` awaits ONE priority body
+     * (~0.8 MB) whose GLB is already in the HTTP cache, and `stream()` refetches
+     * the other nine in the background either way.
+     *
+     * Allocation: one array of slugs, on the realm-change path. Never a frame.
+     *
+     * @param {string} realm the realm being entered
+     * @returns {void}
+     */
+    _releaseRealm(realm) {
+        const keep = BY_REALM[realm];
+        if (!keep) return;   // unknown token: release nothing, `load()` throws
+        // Snapshot the keys: the loop deletes out of the very Map it walks.
+        const slugs = [];
+        for (const slug of this._types.keys()) {
+            if (keep.indexOf(slug) < 0) slugs.push(slug);
+        }
+        for (let k = 0; k < slugs.length; k++) {
+            this._releaseType(this._types.get(slugs[k]));
+        }
+        this.stats.types = this._types.size;
+        this.stats.instances = this._insts.length;
+    }
+
+    /**
+     * Release one body type: its pooled instances, then — if nothing of it is
+     * still live — its shared GPU resources and its entry in `_types`.
+     * @param {any} type
+     * @returns {void}
+     */
+    _releaseType(type) {
+        if (!type) return;
+        // Walk backwards: `_dropInstance` splices out of the list being walked.
+        for (let k = type.free.length - 1; k >= 0; k--) {
+            const inst = type.free[k];
+            // Belt and braces — `free(i)` clears `live` before it pushes, so a
+            // live instance on this list is already a contract violation. Skip
+            // it rather than pull a body out from under a driven slot.
+            if (inst.live) continue;
+            type.free.splice(k, 1);
+            this._dropInstance(inst);
+        }
+        if (type.insts.length) return;   // still live somewhere: keep the assets
+
+        // Nothing left to draw with them.
+        type.state = 0;
+        if (type.geometry) { type.geometry.dispose(); type.geometry = null; }
+        if (type.map) { type.map.dispose(); type.map = null; }
+        if (type.material) {
+            const mi = this.materials.indexOf(type.material);
+            if (mi >= 0) this.materials.splice(mi, 1);
+            type.material.dispose();
+            type.material = null;
+        }
+        // The load-time GLB scene graph and the clip bundle are the other half
+        // of the resident cost (8.44 MiB of GLB across the thirty bodies) and
+        // are pure JS — dropping the references is the whole release.
+        type.proto = null;
+        type.protoMesh = null;
+        type.clips = null;
+        this._types.delete(type.slug);
+        // `_loadType` publishes `stats.types` on the way in, so the stale-on-
+        // arrival path has to publish it on the way back out. It is not just a
+        // diagnostic: `_harness/qa_enemy_aaa.py` waits on `stats.types >= 8`
+        // before it starts a realm's gauntlet, and a count left one high lets
+        // that wait finish early.
+        this.stats.types = this._types.size;
+    }
+
+    /**
+     * Tear one instance out of every list that holds it, then release it.
+     * @param {any} inst
+     * @returns {void}
+     */
+    _dropInstance(inst) {
+        const ti = inst.type.insts.indexOf(inst);
+        if (ti >= 0) inst.type.insts.splice(ti, 1);
+        const gi = this._insts.indexOf(inst);
+        if (gi >= 0) this._insts.splice(gi, 1);   // the write `_acquire` counts
+        this._releaseInstance(inst);
+        this.stats.instances = this._insts.length;
+    }
+
+    /**
+     * Undo `_build`: leave the scene, leave both proxy scenes, free the
+     * skeleton's bone texture, drop the mixer's caches — and STRIP the two
+     * objects the caster bookkeeping will go on holding forever.
+     *
+     * Removing the proxy from `shadows.scenes[c]` / `depthPass.scene` is what
+     * stops it drawing: both systems render their proxy SCENE, so a detached
+     * proxy rasterises nothing. It also has to happen before
+     * `type.geometry.dispose()`, or the very next cascade pass re-uploads the
+     * disposed BufferGeometry and the dispose achieves nothing.
+     *
+     * Detaching is not sufficient on its own, and the first run of
+     * `qa_meshrelease.py` proved it: releasing instances made the pool healthy
+     * (types flat at 10 instead of 10 -> 20 -> 30) while the JS heap got WORSE
+     * over a six-switch churn (163 -> 212 MB) than doing nothing at all
+     * (160.8 MB). Every switch now BUILDS ten fresh instances, each of which
+     * registers with both caster systems, and neither has an unregister — so
+     * `shadows._perCascade[0]` and `depthPass._casters` grew ten entries per
+     * switch (33 -> 83 and 31 -> 81, measured), each entry pinning a dead
+     * SkinnedMesh and through it a whole decoded BufferGeometry and base-colour
+     * texture that `_releaseType` had just disposed.
+     *
+     * The entry cannot be spliced from here — it lives in another module's
+     * private array and neither file exports a removal (see INSTANCE_MAX). But
+     * the objects INSIDE it are ours: we built the mesh in `_build` and claimed
+     * the proxy in `_claimProxy`. And exactly one field of either is ever read
+     * again — `.visible`:
+     *
+     *   shadows.js:584      entry.proxy.visible = entry.mesh.visible;
+     *   depthPass.js:258    this._casters[i].proxy.visible = ...mesh.visible;
+     *
+     * (`entry.material` is the shared `_depthMats[c]`, which outlives every
+     * instance and is disposed only in `dispose()`.) So both are stripped to a
+     * bare Object3D carrying a `.visible` boolean. The stale entry survives —
+     * one pointer pair and one boolean write per frame — and holds nothing.
+     *
+     * @param {any} inst
+     * @returns {void}
+     */
+    _releaseInstance(inst) {
+        // Idempotent: `root` is the sentinel, nulled at the end. `dispose()`
+        // after a realm release must not re-dispose a skeleton it already freed.
+        if (!inst || !inst.root) return;
+
+        // FORWARD COMPATIBLE. Neither caster system has an unregister today
+        // (see INSTANCE_MAX), so this is a no-op — but the day shadows.js and
+        // depthPass.js grow one, the stale bookkeeping entry this file has to
+        // work around disappears on its own and the stripping below becomes
+        // belt-and-braces instead of the fix. Feature-detected, never assumed.
+        if (typeof this.shadows.unregisterCaster === "function") {
+            this.shadows.unregisterCaster(inst.mesh);
+        }
+        if (this.depth && typeof this.depth.unregisterCaster === "function") {
+            this.depth.unregisterCaster(inst.mesh);
+        }
+
+        const px = inst.proxies;
+        for (let k = 0; k < px.length; k++) {
+            const p = px[k];
+            if (p.parent) p.parent.remove(p);
+            p.visible = false;
+            // `_writeCasterSkin` dereferences `_inst.boneTexture`; the skeleton
+            // is about to be disposed, so take the hook off first. `_inst` stays
+            // DEFINED (null, never `undefined`) so `_claimProxy`'s
+            // already-claimed assert still recognises it if it is ever seen
+            // again — a claimed proxy must never be claimable twice.
+            p.onBeforeRender = _noHook;
+            p._inst = null;
+            p.geometry = null;   // the type's BufferGeometry: let it go
+        }
+        px.length = 0;
+
+        if (inst.mixer) {
+            inst.mixer.stopAllAction();
+            // The mixer caches an AnimationAction per (root, clip) and an
+            // interpolant per bound property; `uncacheRoot` is the only thing
+            // that lets go of both. `getRoot()` is the CLONE, not the holder
+            // Group — `_build` constructs the mixer on the clone.
+            inst.mixer.uncacheRoot(inst.mixer.getRoot());
+            inst.mixer = null;
+        }
+        for (let k = 0; k < inst.acts.length; k++) inst.acts[k] = null;
+
+        const mesh = inst.mesh;
+        mesh.visible = false;
+        inst.root.visible = false;
+        if (inst.root.parent) inst.root.parent.remove(inst.root);
+        inst.skeleton.dispose();   // frees this instance's bone texture
+
+        // Detach the body from its clone hierarchy too, so the caster entry's
+        // pointer to `mesh` does not walk back up `mesh.parent` into the holder
+        // Group and keep the whole bone tree alive with it.
+        if (mesh.parent) mesh.parent.remove(mesh);
+        mesh.geometry = null;      // shared per type — disposed by _releaseType
+        mesh.material = null;      // ditto, and it holds the base-colour map
+        mesh.skeleton = null;
+        mesh.onBeforeRender = _noHook;
+        mesh._inst = null;
+
+        inst.boneTexture = null;
+        inst.bindMatrix = null;
+        inst.skeleton = null;
+        inst.root = null;
+        inst.live = 0;
+        inst.slot = -1;
     }
 
     /**
@@ -1646,13 +1934,36 @@ export class MeshEnemies {
 
             // ---- the hit-flinch overlay (drive channel 11) ---------------
             // The role kit's 'hit' clip, slot 3 — loaded since the 30-body
-            // port, never played until now. An ADDITIVE bump over whatever
-            // the body is doing, not a state: locomotion and the attack
-            // layer keep their weights, the recoil rides on top. Weight
-            // holds at FLINCH_W for the front of the window and collapses
-            // over the last 30%, so the release is a fade, not a pop.
+            // port, never played until now.
+            //
+            // IT IS NOT ADDITIVE, WHATEVER AN EARLIER COMMENT HERE CLAIMED.
+            // Nothing in this file calls `AnimationUtils.makeClipAdditive` and
+            // no action sets `blendMode`, so CL_HIT is a NORMAL-blend action
+            // that competes for the mixer's weight pool like every other clip.
+            // At a fixed FLINCH_W of 0.3 it therefore OUT-WEIGHED the thing it
+            // was supposed to ride on: the attack action is weighted
+            // `max(clamp01(flash), lunge)` just above, which is below 0.3 for
+            // the whole early telegraph, so a body hit mid-windup swallowed its
+            // own tell — and the telegraph is the fairness contract (§3: "the
+            // one channel that may not be approximated").
+            //
+            // FIXED BY GATING, not by converting the clip. `makeClipAdditive`
+            // rewrites the clip's tracks IN PLACE, and `type.clips` is shared by
+            // every instance of a type and re-read by every later `_build`, so
+            // converting would need a once-per-type latch and would still
+            // subtract a reference pose from retargeted bundles whose basis this
+            // file's own history (the e2 rebuild, `_loadType`) says not to
+            // trust. Gating is one comparison, no allocation, and states the
+            // contract directly: while the body is WINDING UP, the windup owns
+            // the pose. The moment it commits (`striking`) — and at every other
+            // time, idle, walking, running, fleeing — the recoil plays in full,
+            // from frame 0, which is when a flinch actually reads. A flinch
+            // arriving during a windup is not dropped, only deferred: `t`
+            // stays 0 so the ramp below fades any in-progress recoil out over
+            // FADE rather than popping it off.
             const flinch = this.flinch[i];
-            if (flinch > 0.001 && acts[CL_HIT]) {
+            const telegraphing = inst.atk >= 0 && !inst.striking;
+            if (flinch > 0.001 && acts[CL_HIT] && !telegraphing) {
                 if (!inst.flinching) {
                     // The flinch EDGE — same reset-once pattern as the
                     // death edge above: the action must restart from its
@@ -1770,18 +2081,52 @@ export class MeshEnemies {
 
     /** @returns {void} */
     dispose() {
+        // RETIRE THE SLOTS FIRST. `enemies.js` does not know this layer can be
+        // torn down and goes on calling `update()` (main.js:655) on the very
+        // next frame; `update()` walks `used[]` and drives `_slotInst[i].root`.
+        // A realm release can never be reached that way — `free(i)` nulls
+        // `_slotInst[i]` BEFORE pushing to `type.free`, and only the free list
+        // is drained — but `dispose()` releases LIVE instances too, so without
+        // this the next frame threw "Cannot read properties of null (reading
+        // 'position')" once `_releaseInstance` started nulling `root`.
+        // Observed, six times, by `_harness/qa_meshrelease.py` gate 5.
+        this.used.fill(0);
+        this._slotInst.fill(null);
+        this._slotKey.fill(null);
+
+        // Through the SAME teardown a realm change uses, so a fix to one is a
+        // fix to both — the caster-proxy detach in particular was missing here
+        // and left every instance's cascade and prepass proxies in their scenes
+        // after `dispose()` had disposed the geometry they draw.
         for (let k = 0; k < this._insts.length; k++) {
-            const inst = this._insts[k];
-            if (inst.mixer) inst.mixer.stopAllAction();
-            if (inst.root.parent) inst.root.parent.remove(inst.root);
-            inst.skeleton.dispose();   // frees this instance's bone texture
+            this._releaseInstance(this._insts[k]);
         }
-        for (const slug of this._types.keys()) {
-            const t = this._types.get(slug);
-            if (t.geometry) t.geometry.dispose();
-            if (t.map) t.map.dispose();
-            if (t.material) t.material.dispose();
+        this._insts.length = 0;
+        this.stats.instances = 0;
+
+        // AND RETIRE THE TYPES, through the same `_releaseType` a realm change
+        // uses. The old loop here disposed each type's geometry/map/material
+        // and stopped — leaving `_types` populated with types whose assets were
+        // gone and, worse, leaving the just-released instances sitting on
+        // `type.free`. `enemies.js` keeps spawning, `spawn()` still found the
+        // type resident, and `_acquire` handed back a dead instance: "Cannot
+        // read properties of null (reading 'scale')" out of `_bind`, then the
+        // same on `position` every frame after, because `_bind` assigns
+        // `_slotInst[i]` before it touches the root. Both observed by
+        // `_harness/qa_meshrelease.py` gate 5. Clearing the pools first makes
+        // `_releaseType` see an empty type and take its dispose-and-delete
+        // branch, so after this the layer is inert: `ready()` false, `spawn()`
+        // a no-op, `_types` empty.
+        const slugs = [];
+        for (const slug of this._types.keys()) slugs.push(slug);
+        for (let k = 0; k < slugs.length; k++) {
+            const t = this._types.get(slugs[k]);
+            t.free.length = 0;
+            t.insts.length = 0;
+            this._releaseType(t);
         }
+        this.materials.length = 0;
+
         for (let b = 0; b < BOLT_MAX; b++) {
             const m = this._boltMeshes[b];
             if (m.parent) m.parent.remove(m);

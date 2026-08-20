@@ -26,14 +26,24 @@
  *      sight — the arena variant registers as one, so the bar is free).
  *   4. PHASE 2   — at the phase threshold the boss opens the REST of its own
  *      damage table and gains +15% move speed.
- *   5. LEASH     — dragged more than 30 m from the arena, it disengages,
- *      re-seats at the arena and regenerates 20% of its max HP.
+ *   5. LEASH     — dragged more than 30 m from the arena, it disengages and
+ *      re-seats at the arena, CARRYING its fight state (stance bar, chill
+ *      stacks, Brittle and stance-break windows, CC and the §5.3 diminishing-
+ *      returns history), and regenerates 20% of its max HP — but at most once
+ *      per 25 s of game time and at most twice per emergence. Past either
+ *      limit the boss still comes home, at the HP it left with.
  *   6. DEAD      — flagged in `progression.bossesKilled` (never re-fires this
- *      run) and, for a REALM boss, the portal rises at the arena.
+ *      run) and, for a REALM boss, the portal rises at the arena and is
+ *      RECORDED, so re-entering that realm later raises the gate again.
  *
  * NUMBERS AND WHERE THEY COME FROM (nothing here is invented):
  *   level gates 6 / 8, arena 60-90 m, leash 30 m, leash regen 20%, phase-2
  *   floor 55% HP, phase-2 speed +15%   — owner directive 2026-08-16.
+ *   leash-regen limit: 1 per 25 s of game time, 2 per emergence
+ *                                      — owner decision 2026-08-20.
+ *   realm ring                         — `world/realms.js` (`nextRealm`), the
+ *      single authority; ash's `next` is null and this file closes the ring
+ *      back to cold for continued play (see `ringNext`).
  *   boss identity, arena HP, arena stance                — `combat/roster.js`
  *      rows (`bossKind` / `bossName` / `arenaHp` / `arenaStance`), which are
  *      _spec/COMBAT_DESIGN.md §2.4's field-vs-boss variant table as the
@@ -82,6 +92,8 @@
  *                              (bypasses the level gate and the killed flags;
  *                              still honours flatness/shrine/play-area rules)
  *   clearBoss()                despawn the live boss, close the portal
+ *                              (`clearBoss(true)` keeps a standing gate up;
+ *                              the gate RECORD survives either way)
  *   stats                      the whole event state, for probes
  */
 
@@ -89,6 +101,7 @@ import { TIER } from "./damageable.js";
 import { BOSSES } from "./combatData.js";
 import { ROSTER } from "./roster.js";
 import { gradeAt } from "../world/shrine.js";
+import { nextRealm } from "../world/realms.js";
 import { PLAY_RADIUS } from "../terrain/terrain.js";
 import { sfx } from "../audio/sfx.js";
 
@@ -112,6 +125,13 @@ const EMERGE_M = 45;
 const LEASH_M = 30;
 /** Fraction of max HP a leashed boss regenerates on re-seating (owner). */
 const LEASH_REGEN = 0.20;
+/** Leash-regen RATE LIMIT (owner decision 2026-08-20, after the audit found a
+ *  player could kite a boss in and out of the leash ring to farm the 20% back
+ *  on every crossing): at most ONE regen per LEASH_REGEN_CD_S seconds of game
+ *  time, and at most LEASH_REGEN_MAX per emergence. Further leash returns
+ *  still RE-SEAT the boss at the arena — they simply do not heal it. */
+const LEASH_REGEN_CD_S = 25;
+const LEASH_REGEN_MAX = 2;
 /** Phase-2 HP fraction floor, and the speed it gains (owner). */
 const PHASE2_FLOOR = 0.55;
 const PHASE2_SPEED = 1.15;
@@ -121,8 +141,24 @@ const PORTAL_ENTER_M = 2.5;
 // --------------------------------------------------------- impl constants
 /** Realm band floors — the same table encounters.js gates against. */
 const REALM_FLOOR = { cold: 1, sand: 8, ash: 18 };
-/** Realm ring: cold -> sand -> ash -> cold (owner). */
-const NEXT_REALM = { cold: "sand", sand: "ash", ash: "cold" };
+/**
+ * Realm ring destination. `world/realms.js` is the SINGLE AUTHORITY for the
+ * chain — this file used to carry its own `NEXT_REALM` table, which had
+ * already drifted: it claimed `ash -> cold` while `realms.js:733-734` states
+ * `ash.next = null` ("End of the chain"). Two tables cannot both be right, so
+ * the table is gone and `nextRealm()` is imported.
+ *
+ * Where the authority returns null — ash, the authored END of the chain — the
+ * gate returns the player to COLD. That is the deliberate RING CLOSURE for
+ * continued play: the ash realm boss is the finale, and rather than opening a
+ * gate to nowhere (or opening none at all, stranding the player in ash) its
+ * gate loops the run back to the first realm. The chain stays authored in
+ * realms.js; only the closure is decided here.
+ * @param {string} realm @returns {"cold"|"sand"|"ash"}
+ */
+function ringNext(realm) {
+    return nextRealm(realm) || "cold";
+}
 /** First arena attempt this long after a realm settles, then retry cadence. */
 const FIRST_TRY_S = 6;
 const RETRY_S = 4;
@@ -248,8 +284,25 @@ export class BossEncounters {
         /** Killed flags for THIS run, "<realm>:<kind>". Mirrored into
          *  progression.bossesKilled so a save carries them. */
         this._killed = Object.create(null);
+        /**
+         * STANDING GATES, per realm: `{x, z, token}` recorded when a realm
+         * boss dies. A cleared realm's gate is RECOVERABLE — this is the
+         * record `setRealm` re-opens from, so leaving a realm (through the
+         * gate, or with the TEMP dev keys 6/7) can never strand a run.
+         * `_isKilled` guarantees the fight is never re-offered, so before this
+         * record existed a destroyed gate was a permanent soft-lock.
+         * Mirrored into `progression.bossGates` beside the killed flags; that
+         * blob does not persist it yet (progression.save()'s key list is
+         * fixed) — the one-line hook is in the report.
+         * @type {Record<string,{x:number,z:number,token:string}>}
+         */
+        this._gates = Object.create(null);
         /** Cached arena-variant clones, by roster combat key. */
         this._clones = Object.create(null);
+        /** Preallocated scratch for the leash re-seat's DR carry: the four
+         *  §5.3 category counts, then their four window starts. Allocating a
+         *  pair of arrays on an event edge is still an allocation. */
+        this._drCarry = new Float32Array(8);
         /** Deterministic choice counter (arena bearing/distance wheel). */
         this._seq = 0;
         /** Why the last placement/emergence refused — diagnosis, not state.
@@ -262,6 +315,23 @@ export class BossEncounters {
         this.leashReturns = 0;
         this.regenTicks = 0;
         this.lastRegenFrac = 0;
+        /** Game time of the last leash regen, and how many this emergence has
+         *  spent — the rate limit's two counters. `-1e9` so the first leash of
+         *  an emergence is always outside the cooldown. */
+        this.lastRegenAt = -1e9;
+        this.regenSpent = 0;
+        /**
+         * THE ID SWAP, published for consumers that cache a registry id across
+         * frames (`combat/targeting.js` holds `targetId`; `ui/enemybars.js`
+         * reads the boss body each frame). A re-seat that has to retire the id
+         * writes the old id here, the new one in `reseatTo`, and the game time
+         * in `reseatAt`, so a consumer can FOLLOW the boss instead of dropping
+         * it. Both are -1 until a re-seat has actually swapped an id; when
+         * `enemies.reseat()` exists the id never changes and these stay -1.
+         */
+        this.reseatFrom = -1;
+        this.reseatTo = -1;
+        this.reseatAt = 0;
         this.patternP1 = 0;
         this.patternAll = 0;
         this.patternOpened = 0;
@@ -327,7 +397,8 @@ export class BossEncounters {
     spawnBoss(kind) {
         const row = BOSS_BY_REALM[this.realm] && BOSS_BY_REALM[this.realm][kind];
         if (!row) { this.lastRefusal = "no " + kind + " row for " + this.realm; return false; }
-        this.clearBoss();
+        // keepPortal: forcing a boss must not tear down a gate already earned.
+        this.clearBoss(true);
         this.lastRefusal = null;
         if (!this._pickArena()) return false;
         this.kind = kind;
@@ -336,9 +407,24 @@ export class BossEncounters {
         return this._emerge();
     }
 
-    /** Despawn the live boss, close the portal, return to idle. Killed flags
-     *  are NOT cleared — a cleared boss stays cleared. @returns {void} */
-    clearBoss() {
+    /**
+     * Despawn the live boss and return to idle. Killed flags are NOT cleared —
+     * a cleared boss stays cleared.
+     *
+     * `keepPortal` leaves a standing gate alone. Both callers pass it: a realm
+     * switch manages the gate itself (`setRealm` below), and forcing a boss
+     * with `spawnBoss` must not tear down a gate the player has already
+     * earned. The default stays false so the console contract documented at
+     * the head of this file ("clearBoss() — despawn the live boss, close the
+     * portal") still holds for a bare `clearBoss()`.
+     *
+     * Note what this never touches either way: `_gates`. Closing the gate MESH
+     * is not the same as forgetting that the realm HAS a gate — that record is
+     * what makes a cleared realm recoverable.
+     * @param {boolean} [keepPortal]
+     * @returns {void}
+     */
+    clearBoss(keepPortal) {
         if (this.bossId > 0) this.enemies.despawn(this.bossId);
         this.bossId = -1;
         this.state = "idle";
@@ -346,21 +432,62 @@ export class BossEncounters {
         this.row = null;
         this.phase = 1;
         this._setBossLive(false);
-        if (this.portal && this.portal.isOpen) this.portal.close();
+        if (!keepPortal && this.portal && this.portal.isOpen) this.portal.close();
         this._tryAt = this.time + RETRY_S;
     }
 
     /**
      * Realm switch (main.enterRealm): a boss belongs to its realm. Drops the
-     * live event and the portal, and re-arms the clock so the new realm gets a
-     * breather before its own boss is offered.
+     * live event, moves the gate to whatever the NEW realm is owed, and
+     * re-arms the clock so the new realm gets a breather before its own boss
+     * is offered.
+     *
+     * THE SOFT-LOCK THIS CLOSES (audit 2026-08-20). This used to be an
+     * unconditional `clearBoss()`, which closed any standing gate — and
+     * `_isKilled` guarantees a dead realm boss is never re-offered, so the
+     * gate could never come back. One press of the TEMP dev keys 6/7 after a
+     * realm-boss kill therefore stranded that realm's progression for the rest
+     * of the run. Now the gate is a RECORD (`_gates`), the mesh follows the
+     * player's realm, and re-entering a cleared realm raises its gate again.
      * @param {"cold"|"sand"|"ash"} token
      * @returns {void}
      */
     setRealm(token) {
-        this.clearBoss();
+        // keepPortal: the gate is this method's business, not clearBoss's.
+        this.clearBoss(true);
+        // The OLD realm's gate stops drawing — we are not standing in that
+        // realm any more. The RECORD survives, so walking back re-raises it.
+        if (this.portal && this.portal.isOpen) this.portal.close();
         this.realm = token;
+        this._restoreGate();
         this._tryAt = this.time + FIRST_TRY_S;
+    }
+
+    /**
+     * Raise this realm's gate again if it has one standing. Called on every
+     * realm change; a no-op for a realm whose boss has not died.
+     * @returns {void}
+     */
+    _restoreGate() {
+        const g = this._gateFor(this.realm);
+        if (!g || !this.portal) return;
+        this.portal.onEnter = (t) => this._onPortalEnter(t);
+        this.portal.open(g.x, g.z, g.token);
+    }
+
+    /**
+     * This realm's gate record — the director's own first, then the
+     * progression mirror (so a future save that carries `bossGates` restores
+     * gates the same way `bossesKilled` restores the fights).
+     * @param {string} realm
+     * @returns {{x:number,z:number,token:string}|null}
+     */
+    _gateFor(realm) {
+        const own = this._gates[realm];
+        if (own) return own;
+        const p = this.progression;
+        const m = p && p.bossGates ? p.bossGates[realm] : null;
+        return m && typeof m.x === "number" ? m : null;
     }
 
     /** Everything a probe needs, in one read. */
@@ -394,6 +521,23 @@ export class BossEncounters {
             leashReturns: this.leashReturns,
             regenTicks: this.regenTicks,
             lastRegenFrac: this.lastRegenFrac,
+            // The rate limit, readable: how many regens this emergence has
+            // spent, when the last one fired, and the two owner numbers.
+            regenSpent: this.regenSpent,
+            lastRegenAt: this.lastRegenAt,
+            regenMax: LEASH_REGEN_MAX,
+            regenCdS: LEASH_REGEN_CD_S,
+            // The published id swap (-1/-1 until a re-seat has retired an id).
+            reseatFrom: this.reseatFrom,
+            reseatTo: this.reseatTo,
+            reseatAt: this.reseatAt,
+            // Live fight state on the boss body — the columns the re-seat used
+            // to wipe, so a probe can prove they survive it.
+            poise: s >= 0 ? r.poise[s] : 0,
+            chill: s >= 0 ? r.chill[s] : 0,
+            brittleUntil: s >= 0 ? r.brittleUntil[s] : 0,
+            breakUntil: s >= 0 ? r.breakUntil[s] : 0,
+            regTime: r.time,
             speedBase: this.speedBase,
             speedNow: clone ? clone.speed : 0,
             patternP1: this.patternP1,
@@ -405,7 +549,13 @@ export class BossEncounters {
             killed: Object.assign({}, this._killed),
             refusal: this.lastRefusal || null,
             portalOpen: !!(this.portal && this.portal.isOpen),
-            nextRealm: NEXT_REALM[this.realm],
+            // The ring, from realms.js — ash closes back to cold (see ringNext).
+            nextRealm: ringNext(this.realm),
+            realmsNext: nextRealm(this.realm),
+            // Standing gates, per realm: what makes a cleared realm recoverable.
+            gates: Object.assign({}, this._gates),
+            gateOpen: !!this._gateFor(this.realm),
+            realm: this.realm,
             level6: MINI_LEVEL, level8: REALM_LEVEL,
         };
     }
@@ -566,6 +716,13 @@ export class BossEncounters {
         this.phase = 1;
         this.phase2At = 0;
         this.phase2Pct = this._phase2Pct(row);
+        // The leash-regen budget is PER EMERGENCE: a fresh fight starts with
+        // both regens available and no cooldown standing over it.
+        this.regenSpent = 0;
+        this.lastRegenAt = -1e9;
+        this.lastRegenFrac = 0;
+        this.reseatFrom = -1;
+        this.reseatTo = -1;
 
         this.bossLevel = this._bossLevel(row);
         const id = this.enemies.spawn(clone.index, this.ax, this.az, this.bossLevel);
@@ -622,35 +779,130 @@ export class BossEncounters {
     }
 
     /**
-     * Leash: re-seat at the arena and regenerate LEASH_REGEN of max HP. The
-     * enemy runtime's own leash is disabled for BOSS tier by design (§4.3
-     * "the arena IS the leash"), so the director owns this one. Re-seating is
-     * a despawn + respawn through the public API, with the carried HP written
-     * once — an event edge, never a frame path.
+     * Leash: re-seat at the arena, and — WITHIN THE RATE LIMIT — regenerate
+     * LEASH_REGEN of max HP. The enemy runtime's own leash is disabled for
+     * BOSS tier by design (§4.3 "the arena IS the leash"), so the director
+     * owns this one. An event edge, never a frame path.
+     *
+     * TWO AUDIT FIXES LIVE HERE (2026-08-20).
+     *
+     * 1. THE RE-SEAT CARRIES THE FIGHT. Re-seating used to be a despawn plus a
+     *    fresh `enemies.spawn()`, and `registry.register()` (damageable.js:135-
+     *    160) initialises a BRAND-NEW slot: `poise = poiseMax`, `chill = 0`,
+     *    `brittleUntil = 0`, `breakUntil = 0`, every CC window zeroed and the
+     *    §5.3 diminishing-returns counters reset. Only `hp` was written back,
+     *    so every leash crossing handed the boss a full stance bar and wiped
+     *    the player's chill stacks, Brittle window, stance-break window and DR
+     *    history. The fight state is now CAPTURED off the old slot before the
+     *    despawn and written back beside the HP line, on the same direct-SoA
+     *    precedent that line already sets.
+     *      NOT carried, deliberately: `kbX/kbZ` and `lifted`. Residual
+     *    knockback is what dragged the boss out of the ring; carrying it would
+     *    shove the re-seated body straight back out. A re-seat is a teleport
+     *    home, so the impulse ends with the crossing.
+     *
+     * 2. THE HEAL IS RATE-LIMITED. See LEASH_REGEN_CD_S / LEASH_REGEN_MAX.
+     *    Over the limit the boss still comes home; it just comes home at the
+     *    HP it left with. `leashReturns` counts every crossing, `regenTicks`
+     *    only the crossings that actually healed — the probe reads both.
+     *
      * @param {number} hp @param {number} hpMax @returns {void}
      */
     _leashHome(hp, hpMax) {
-        const want = Math.min(hpMax, hp + LEASH_REGEN * hpMax);
-        this.enemies.despawn(this.bossId);
-        this.bossId = -1;
-        const clone = this._clones[this.row.combatKey];
-        const id = this.enemies.spawn(clone.index, this.ax, this.az, this.bossLevel);
-        if (typeof id !== "number" || id <= 0) {
-            // Could not re-seat (pool full): the event ends rather than
-            // leaving a phantom.
-            this.state = "idle";
-            this._setBossLive(false);
-            this._tryAt = this.time + RETRY_S;
-            return;
+        const r = this.registry;
+        // ---- the heal, if the limit allows it ---------------------------
+        const mayRegen = this.regenSpent < LEASH_REGEN_MAX &&
+            this.time - this.lastRegenAt >= LEASH_REGEN_CD_S;
+        const want = mayRegen ? Math.min(hpMax, hp + LEASH_REGEN * hpMax) : hp;
+
+        // ---- carry the fight across the re-seat -------------------------
+        // Read off the OLD slot while it still exists. Times are absolute
+        // registry times and `registry.time` is continuous across a re-seat,
+        // so the windows carry verbatim.
+        const s0 = r.slot(this.bossId);
+        let poise = -1, chill = 0, chillAt = 0, brittleUntil = 0, breakUntil = 0;
+        let lastPoiseHitAt = -99, stunUntil = 0, staggerUntil = 0;
+        let slowUntil = 0, slowFrac = 0;
+        const dr = this._drCarry;
+        if (s0 >= 0) {
+            poise = r.poise[s0];
+            chill = r.chill[s0]; chillAt = r.chillAt[s0];
+            brittleUntil = r.brittleUntil[s0]; breakUntil = r.breakUntil[s0];
+            lastPoiseHitAt = r.lastPoiseHitAt[s0];
+            stunUntil = r.stunUntil[s0]; staggerUntil = r.staggerUntil[s0];
+            slowUntil = r.slowUntil[s0]; slowFrac = r.slowFrac[s0];
+            if (r._drCount && r._drStart) {
+                for (let c = 0; c < 4; c++) {
+                    dr[c] = r._drCount[s0 * 4 + c];
+                    dr[c + 4] = r._drStart[s0 * 4 + c];
+                }
+            }
         }
-        this.bossId = id;
-        const s = this.registry.slot(id);
-        if (s >= 0) {
-            this.registry.hp[s] = want;
-            this.lastRegenFrac = hpMax > 0 ? (want - hp) / hpMax : 0;
+
+        // ---- move the body ----------------------------------------------
+        // PREFERRED PATH: `enemies.reseat(id, x, z)` moves the body and
+        // re-anchors its home WITHOUT retiring the registry slot, so no
+        // consumer's cached id ever goes stale and nothing above needs
+        // carrying. enemies.js does not export it yet (the exact one-line
+        // addition is in this lane's report); the moment it does, this branch
+        // takes over with no further edit here.
+        if (typeof this.enemies.reseat === "function") {
+            this.enemies.reseat(this.bossId, this.ax, this.az);
+            const s = r.slot(this.bossId);
+            if (s >= 0) r.hp[s] = Math.min(r.hpMax[s], want);
+        } else {
+            const from = this.bossId;
+            this.enemies.despawn(from);
+            this.bossId = -1;
+            const clone = this._clones[this.row.combatKey];
+            const id = this.enemies.spawn(clone.index, this.ax, this.az, this.bossLevel);
+            if (typeof id !== "number" || id <= 0) {
+                // Could not re-seat (pool full): the event ends rather than
+                // leaving a phantom.
+                this.state = "idle";
+                this._setBossLive(false);
+                this._tryAt = this.time + RETRY_S;
+                return;
+            }
+            this.bossId = id;
+            // Publish the swap so a consumer holding the old id can follow it
+            // (targeting.js drops a target whose slot is gone; the overhead
+            // bar re-pops). Published BEFORE the state write so anything
+            // reading on the same edge sees a consistent pair.
+            this.reseatFrom = from;
+            this.reseatTo = id;
+            this.reseatAt = this.time;
+            const s = r.slot(id);
+            if (s >= 0) {
+                r.hp[s] = Math.min(r.hpMax[s], want);
+                if (poise >= 0) {
+                    r.poise[s] = Math.min(r.poiseMax[s], poise);
+                    r.chill[s] = chill; r.chillAt[s] = chillAt;
+                    r.brittleUntil[s] = brittleUntil;
+                    r.breakUntil[s] = breakUntil;
+                    r.lastPoiseHitAt[s] = lastPoiseHitAt;
+                    r.stunUntil[s] = stunUntil;
+                    r.staggerUntil[s] = staggerUntil;
+                    r.slowUntil[s] = slowUntil; r.slowFrac[s] = slowFrac;
+                    if (r._drCount && r._drStart) {
+                        for (let c = 0; c < 4; c++) {
+                            r._drCount[s * 4 + c] = dr[c];
+                            r._drStart[s * 4 + c] = dr[c + 4];
+                        }
+                    }
+                }
+            }
         }
+
         this.leashReturns++;
-        this.regenTicks++;
+        if (mayRegen) {
+            this.lastRegenAt = this.time;
+            this.regenSpent++;
+            this.regenTicks++;
+            this.lastRegenFrac = hpMax > 0 ? (want - hp) / hpMax : 0;
+        } else {
+            this.lastRegenFrac = 0;
+        }
         this._burst(this.ax, this.az, 0.8);
     }
 
@@ -676,9 +928,23 @@ export class BossEncounters {
             }
         }
 
-        if (kind === "realm" && row && this.portal) {
-            this.portal.onEnter = (token) => this._onPortalEnter(token);
-            this.portal.open(this.ax, this.az, NEXT_REALM[this.realm]);
+        if (kind === "realm" && row) {
+            // RECORD the gate before raising it. The record is what survives a
+            // realm change (see `setRealm`), so it is written even if no
+            // portal object is attached — a bare harness still books the gate.
+            const token = ringNext(this.realm);
+            const g = { x: this.ax, z: this.az, token };
+            this._gates[this.realm] = g;
+            const p = this.progression;
+            if (p) {
+                if (!p.bossGates) p.bossGates = Object.create(null);
+                p.bossGates[this.realm] = g;
+                if (typeof p.save === "function") p.save();
+            }
+            if (this.portal) {
+                this.portal.onEnter = (t) => this._onPortalEnter(t);
+                this.portal.open(g.x, g.z, token);
+            }
         }
 
         this.kind = null;

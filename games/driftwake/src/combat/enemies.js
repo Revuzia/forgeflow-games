@@ -1016,6 +1016,38 @@ export class Enemies {
         }
     }
 
+    // ------------------------------------------------------------------
+    // INTEGRATION HOOK — boss leash re-seat (lane F3).
+    // The 30 m leash used to despawn+respawn the boss, which RETIRED its
+    // registry id and handed back a fresh slot: every consumer holding the id
+    // across frames (targeting, the overhead bar) went stale, and all fight
+    // state — poise, chill, brittle/break windows, DR stacks — reset to full.
+    // bossEncounters.js:849 feature-detects this method and prefers it.
+    // ------------------------------------------------------------------
+    /**
+     * Move a live body to (x, z) and re-anchor its leash/post there WITHOUT
+     * retiring its registry id (§4.3 anchor contract), mirroring the anchor
+     * writes `spawn()` makes at :845. Height comes from the terrain, as it
+     * does on spawn. Knockback velocity is cleared so the body does not keep
+     * sliding away from the anchor it was just re-seated on.
+     * @param {number} id registry id
+     * @param {number} x
+     * @param {number} z
+     * @returns {boolean} false if no live body holds that id
+     */
+    reseat(id, x, z) {
+        for (let i = 0; i < ENEMY_MAX; i++) {
+            if (!this.alive[i] || this.id[i] !== id) continue;
+            const y = this.terrain.heightAt(x, z);
+            this.x[i] = x; this.y[i] = y; this.z[i] = z;
+            this.homeX[i] = x; this.homeZ[i] = z;
+            this.kbvX[i] = this.kbvZ[i] = 0;
+            this.registry.move(id, x, y, z);
+            return true;
+        }
+        return false;
+    }
+
     // ------------------------------------------------------------------ brains
 
     /** @param {number} i @param {number} dt */

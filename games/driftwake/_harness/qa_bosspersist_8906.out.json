@@ -1,0 +1,254 @@
+{
+ "A_afterPlay": {
+  "isArray": false,
+  "ctor": "[object Object]",
+  "liveKeys": [],
+  "liveMini": false,
+  "liveName": false,
+  "blobBossesJSON": "{}",
+  "blobIsArray": false,
+  "level": 1,
+  "xp": 0,
+  "deaths": 0,
+  "realms": [
+   "cold"
+  ],
+  "shrine": "cold_spawn",
+  "testMode": true,
+  "gate": {
+   "isKilledMini": false,
+   "eligible": "mini",
+   "dirLevel": 10
+  }
+ },
+ "A_write": {
+  "liveJSON": "{\"cold:mini\":true,\"Moraine Colossus\":true}",
+  "liveKeys": [
+   "cold:mini",
+   "Moraine Colossus"
+  ],
+  "savedRaw": "{\"schemaVer\":3,\"level\":1,\"xp\":0,\"driftmarks\":0,\"spellsUnlocked\":[2],\"boons\":[],\"realmsUnlocked\":[\"cold\"],\"bossesKilled\":{\"cold:mini\":true,\"Moraine Colossus\":true},\"lastShrineId\":\"cold_spawn\",\"restedBank\":0,\"lastSeenTs\":1787207554663,\"objectiveState\":{},\"deaths\":0,\"pos\":{\"x\":0,\"z\":0,\"facing\":0,\"realm\":\"cold\"}}"
+ },
+ "A_afterSave": {
+  "isArray": false,
+  "ctor": "[object Object]",
+  "liveKeys": [
+   "cold:mini",
+   "Moraine Colossus"
+  ],
+  "liveMini": true,
+  "liveName": true,
+  "blobBossesJSON": "{\"cold:mini\":true,\"Moraine Colossus\":true}",
+  "blobIsArray": false,
+  "level": 1,
+  "xp": 0,
+  "deaths": 0,
+  "realms": [
+   "cold"
+  ],
+  "shrine": "cold_spawn",
+  "testMode": true,
+  "gate": {
+   "isKilledMini": true,
+   "eligible": "realm",
+   "dirLevel": 10
+  }
+ },
+ "A_afterReload_preClick": {
+  "isArray": false,
+  "ctor": "[object Object]",
+  "liveKeys": [
+   "cold:mini",
+   "Moraine Colossus"
+  ],
+  "liveMini": true,
+  "liveName": true,
+  "blobBossesJSON": "{\"cold:mini\":true,\"Moraine Colossus\":true}",
+  "blobIsArray": false,
+  "level": 1,
+  "xp": 0,
+  "deaths": 0,
+  "realms": [
+   "cold"
+  ],
+  "shrine": "cold_spawn",
+  "testMode": true,
+  "gate": {
+   "isKilledMini": true,
+   "eligible": "realm",
+   "dirLevel": 10
+  }
+ },
+ "A_afterContinue": {
+  "isArray": false,
+  "ctor": "[object Object]",
+  "liveKeys": [
+   "cold:mini",
+   "Moraine Colossus"
+  ],
+  "liveMini": true,
+  "liveName": true,
+  "blobBossesJSON": "{\"cold:mini\":true,\"Moraine Colossus\":true}",
+  "blobIsArray": false,
+  "level": 1,
+  "xp": 0,
+  "deaths": 0,
+  "realms": [
+   "cold"
+  ],
+  "shrine": "cold_spawn",
+  "testMode": true,
+  "gate": {
+   "isKilledMini": true,
+   "eligible": "realm",
+   "dirLevel": 10
+  }
+ },
+ "B_write": {
+  "liveJSON": "[]",
+  "liveKeys": [
+   "cold:mini",
+   "Moraine Colossus"
+  ],
+  "savedRaw": "{\"schemaVer\":3,\"level\":1,\"xp\":0,\"driftmarks\":0,\"spellsUnlocked\":[2],\"boons\":[],\"realmsUnlocked\":[\"cold\"],\"bossesKilled\":[],\"lastShrineId\":\"cold_spawn\",\"restedBank\":0,\"lastSeenTs\":1787207577765,\"objectiveState\":{},\"deaths\":0,\"pos\":{\"x\":0,\"z\":0,\"facing\":0,\"realm\":\"cold\"}}"
+ },
+ "B_afterSave": {
+  "isArray": true,
+  "ctor": "[object Array]",
+  "liveKeys": [
+   "cold:mini",
+   "Moraine Colossus"
+  ],
+  "liveMini": true,
+  "liveName": true,
+  "blobBossesJSON": "[]",
+  "blobIsArray": true,
+  "level": 1,
+  "xp": 0,
+  "deaths": 0,
+  "realms": [
+   "cold"
+  ],
+  "shrine": "cold_spawn",
+  "testMode": true,
+  "gate": {
+   "isKilledMini": true,
+   "eligible": "realm",
+   "dirLevel": 10
+  }
+ },
+ "B_afterReload_preClick": {
+  "isArray": true,
+  "ctor": "[object Array]",
+  "liveKeys": [],
+  "liveMini": false,
+  "liveName": false,
+  "blobBossesJSON": "[]",
+  "blobIsArray": true,
+  "level": 1,
+  "xp": 0,
+  "deaths": 0,
+  "realms": [
+   "cold"
+  ],
+  "shrine": "cold_spawn",
+  "testMode": true,
+  "gate": {
+   "isKilledMini": false,
+   "eligible": "mini",
+   "dirLevel": 10
+  }
+ },
+ "B_afterContinue": {
+  "isArray": true,
+  "ctor": "[object Array]",
+  "liveKeys": [],
+  "liveMini": false,
+  "liveName": false,
+  "blobBossesJSON": "[]",
+  "blobIsArray": true,
+  "level": 1,
+  "xp": 0,
+  "deaths": 0,
+  "realms": [
+   "cold"
+  ],
+  "shrine": "cold_spawn",
+  "testMode": true,
+  "gate": {
+   "isKilledMini": false,
+   "eligible": "mini",
+   "dirLevel": 10
+  }
+ },
+ "C_roundTrip": {
+  "isArray": true,
+  "ctor": "[object Array]",
+  "liveKeys": [],
+  "liveMini": false,
+  "liveName": false,
+  "blobBossesJSON": "[]",
+  "blobIsArray": true,
+  "level": 7,
+  "xp": 123,
+  "deaths": 3,
+  "realms": [
+   "cold",
+   "sand"
+  ],
+  "shrine": "sand_gate",
+  "testMode": true,
+  "gate": {
+   "isKilledMini": false,
+   "eligible": "mini",
+   "dirLevel": 10
+  }
+ },
+ "C_afterContinue": {
+  "isArray": true,
+  "ctor": "[object Array]",
+  "liveKeys": [],
+  "liveMini": false,
+  "liveName": false,
+  "blobBossesJSON": "[]",
+  "blobIsArray": true,
+  "level": 7,
+  "xp": 123,
+  "deaths": 3,
+  "realms": [
+   "cold",
+   "sand"
+  ],
+  "shrine": "sand_gate",
+  "testMode": true,
+  "gate": {
+   "isKilledMini": false,
+   "eligible": "mini",
+   "dirLevel": 10
+  }
+ },
+ "C_afterNewRun": {
+  "isArray": true,
+  "ctor": "[object Array]",
+  "liveKeys": [],
+  "liveMini": false,
+  "liveName": false,
+  "blobBossesJSON": "[]",
+  "blobIsArray": true,
+  "level": 7,
+  "xp": 123,
+  "deaths": 3,
+  "realms": [
+   "cold",
+   "sand"
+  ],
+  "shrine": "sand_gate",
+  "testMode": true,
+  "gate": {
+   "isKilledMini": false,
+   "eligible": "mini",
+   "dirLevel": 10
+  }
+ },
+ "pageerrors": []
+}

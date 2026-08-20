@@ -1,0 +1,66 @@
+{
+ "earn": {
+  "realm": "cold",
+  "gate": {
+   "open": true,
+   "token": "sand",
+   "x": 48.941,
+   "z": -47.923
+  },
+  "liveMirror": {
+   "cold": {
+    "x": 48.940799271455575,
+    "z": -47.92278682402358,
+    "token": "sand"
+   }
+  },
+  "blobHasKey": true,
+  "blobGates": {
+   "cold": {
+    "x": 48.940799271455575,
+    "z": -47.92278682402358,
+    "token": "sand"
+   }
+  },
+  "blobKeys": 15
+ },
+ "armA": {
+  "realm": "cold",
+  "progressionGates": {},
+  "directorOwnGates": [],
+  "portal": {
+   "open": false,
+   "token": null,
+   "x": null,
+   "z": null
+  }
+ },
+ "armB": {
+  "realm": "cold",
+  "progressionGates": {
+   "cold": {
+    "x": 48.940799271455575,
+    "z": -47.92278682402358,
+    "token": "sand"
+   }
+  },
+  "directorOwnGates": [],
+  "portal": {
+   "open": true,
+   "token": "sand",
+   "x": 48.941,
+   "z": -47.923
+  }
+ },
+ "checks": {
+  "save blob carries bossGates": true,
+  "ARM A: mirror empty after reload": true,
+  "ARM A: no gate re-raised (the old soft-lock)": true,
+  "ARM B: mirror restored after reload": true,
+  "ARM B: gate re-raised": true,
+  "ARM B: same token": true,
+  "ARM B: same place": true,
+  "no page errors": true
+ },
+ "pageerrors": []
+}
