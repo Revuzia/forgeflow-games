@@ -34,7 +34,9 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
-import { WEAPONS } from "./weapon_data.js";
+import { WEAPONS, VIEWMODEL } from "./weapon_data.js";
+
+const DEG = Math.PI / 180;
 
 const GLB_BASE = new URL("../../assets/weapons/", import.meta.url);
 const DRACO_BASE = new URL("../../assets/vendor/draco/", import.meta.url).href;
@@ -62,6 +64,26 @@ function pushFallback(msg) {
   console.warn("[A4]", msg);
 }
 
+// D-lane (iter10) MATERIALS ARE SHARED BETWEEN MESHES — REPAIR EACH ONE ONCE.
+// Every treatment below that MULTIPLIES an authored value (roughness × 0.58,
+// normalScale × 0.5) was being applied once PER MESH, and glTF materials are
+// shared datablocks: br_metal is bound to Mesh_0_1 AND `dressing`, br_glove to
+// arms_R AND arms_L. Those two therefore took the multiplier TWICE — squared.
+// Measured live on the shipped warden this session (probe: material factors
+// read off the booted page), against the values a4_build_fp_weapons.py authors:
+//   br_body  1 mesh  → roughness 0.580 = 1.00×0.58   normalScale 0.575 ✓
+//   br_grip  1 mesh  → roughness 0.615 = 1.06×0.58   normalScale 0.625 ✓
+//   br_recv  1 mesh  → roughness 0.429 = 0.74×0.58   normalScale 0.500 ✓
+//   br_metal 2 meshes→ roughness 0.336 = 1.00×0.58²  normalScale 0.262 ✗
+//   br_glove 2 meshes→ roughness 0.336 = 1.00×0.58²  normalScale 0.287 ✗
+// The glove's authored roughness MAP means 0.885, so a squared factor put the
+// effective roughness of a nomex glove at 0.30 — wet latex — with half the
+// authored micro-relief to break it up. That is why both hands read as smooth
+// chrome-ish sheets rather than fabric, at hip and at ADS alike. The guard is a
+// WeakSet, so a material shared across two WEAPONS is still repaired once (the
+// treatments are idempotent by intent, not by construction).
+const repaired = new WeakSet();
+
 // Doctrine §1 defensive repair + light strip + shadow discipline.
 function repair(group) {
   const doomedLights = [];
@@ -74,6 +96,8 @@ function repair(group) {
       const mats = Array.isArray(o.material) ? o.material : [o.material];
       for (const m of mats) {
         if (!m) continue;
+        if (repaired.has(m)) continue;
+        repaired.add(m);
         // Meshy export bug class: albedo bound as full-strength emissive.
         if (m.emissiveMap && m.emissiveMap === m.map) {
           m.emissiveMap = null;
@@ -291,7 +315,103 @@ export async function loadWeaponGLB(id) {
         console.warn(`[A4] ${id}.glb has no SOCKET_sight — ADS rides weapon_data view.sightY unchecked`);
       }
 
-      // ---- W1 (iter03) REAR STANDOFF -------------------------------------
+      // ---- HIP STANDOFF — MEASURED AGAINST THE FRUSTUM (D lane, iter10) ---
+      // OWNER REPORT, playing the build: "the hand/weapon isn't fully
+      // procedural, only when zooming in". Measured live this session on the
+      // booted page (colour-ID pass rendered with the real vm camera, per-mesh
+      // visible-pixel counts at 1280x720, warden, hip vs full ADS held with a
+      // real MouseEvent(button 2)):
+      //     hip  total viewmodel  5.98 % of frame   (arms 2.20 %)
+      //     ADS  total viewmodel  9.76 % of frame   (arms 4.76 %)
+      // The weapon the player holds while NOT aiming was 1.63x smaller than the
+      // same weapon while aiming, and 5x under visual_target.md's "30% of every
+      // frame is the viewmodel". The mount sat at z -0.596 m at the hip against
+      // -0.26 m at ADS: the rig was being held 60 cm from the eye, past the end
+      // of a human arm, which is exactly the "bare pipe with no hands" read.
+      //
+      // CAUSE — the rule below used to be `push the rearmost vertex until it is
+      // REAR_CLEAR metres from the eye`, and REAR_CLEAR had been raised 0.28 ->
+      // 0.35 by a still-frame-graded pass. A scalar distance is the wrong test:
+      // it does not know where the frame EDGE is. The warden's butt pad sits at
+      // camera-space (x +0.13..+0.19, y -0.32..-0.06) because posHip offsets the
+      // grip right and down — at 9.4 cm the vm camera's 60 deg vFOV spans only
+      // +/-0.097 m horizontally, so the whole buttstock is OFF-SCREEN RIGHT and
+      // was never capable of "filling the frame with macro facets". The rule was
+      // paying a 26 cm framing tax to solve a problem that projection had
+      // already solved.
+      //
+      // THE RULE NOW: push only far enough that no WEAPON vertex is BOTH nearer
+      // than MACRO_D and inside the vm camera's view volume. Same intent (never
+      // photograph a receiver facet at macro range), tested where it actually
+      // matters. Self-adapting per weapon, no per-asset constant. Measured
+      // outcome this session, warden: push 0.2562 m -> 0.000 m, hip viewmodel
+      // 5.98 % -> 10.06 %, i.e. hip/ADS parity, with both gloved hands legible
+      // on the grip and the handguard.
+      //
+      // Retained from the old rule, and still right:
+      //  * HIP ONLY — viewmodel.js blends the push out with adsEase. A
+      //    shouldered rifle's stock IS behind the eye and the near plane is the
+      //    correct thing to remove it; pushing at ADS shrinks the sight picture,
+      //    which is the one thing that frame exists to show.
+      //  * PURE Z — the sight stays on x=0,y=0 at ADS, so alignment is untouched.
+      //  * MEASURE THE WEAPON, NOT THE ARMS — a forearm is supposed to run past
+      //    the eye and be clipped; letting it drive the rule shoved the Pike (a
+      //    23 cm pistol) out to 0.49 m on the strength of a 19 cm arm stub.
+      const MACRO_D = 0.16;      // m — nearer than this, a facet reads as macro noise
+      const HARD_D = 0.055;      // m — nearer than this it is inside the eye, always push
+      const MAX_PUSH = 0.34;     // never shove a weapon out to arm's length
+      const EDGE_MARGIN = 1.05;  // 5% of slack outside the frame edge, for bob/sway
+      const REF_ASPECT = 16 / 9; // the aspect the game is designed and captured at
+      const TAN_V = Math.tan(VIEWMODEL.fovDeg * 0.5 * DEG);
+      const hipPose = (w && w.view && w.view.posHip) ? w.view.posHip : [0.16, -0.18, -0.34];
+      // weapon vertices in mount space (the group is unparented here, so a
+      // mesh's matrixWorld already carries the sightY shift and view.scale)
+      const wpnPts = [];
+      {
+        const p = new THREE.Vector3();
+        group.traverse((o) => {
+          if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
+          let n = o;
+          while (n && n !== group) { if (/^arms?_/.test(n.name || "")) return; n = n.parent; }
+          o.updateWorldMatrix(true, false);
+          const a = o.geometry.attributes.position;
+          const stride = Math.max(1, Math.floor(a.count / 4000));
+          for (let i = 0; i < a.count; i += stride) {
+            p.set(a.getX(i), a.getY(i), a.getZ(i)).applyMatrix4(o.matrixWorld);
+            wpnPts.push(p.x, p.y, p.z);
+          }
+        });
+      }
+      const offends = (push) => {
+        for (let i = 0; i < wpnPts.length; i += 3) {
+          const cx = hipPose[0] + wpnPts[i];
+          const cy = hipPose[1] + wpnPts[i + 1];
+          const d = -(hipPose[2] - push + wpnPts[i + 2]); // metres in front of the eye
+          if (d < HARD_D) return true;                    // in the eye, on-screen or not
+          if (d >= MACRO_D) continue;                     // far enough to be a surface
+          const hh = d * TAN_V * EDGE_MARGIN;
+          if (Math.abs(cy) > hh) continue;                // above/below the frame
+          if (Math.abs(cx) > hh * REF_ASPECT) continue;   // left/right of the frame
+          return true;                                    // macro-range AND on screen
+        }
+        return false;
+      };
+      let push = 0;
+      if (wpnPts.length) {
+        while (push < MAX_PUSH && offends(push)) push += 0.005;
+        push = Math.min(push, MAX_PUSH);
+      }
+      group.userData.hipPush = push;
+      {
+        // report the framing the rule actually produces, every load
+        let rear = -Infinity;
+        for (let i = 2; i < wpnPts.length; i += 3) rear = Math.max(rear, wpnPts[i]);
+        const rearCam = hipPose[2] - push + rear;
+        console.info(`[A4] ${id}: hip standoff — grip ${(-(hipPose[2] - push) * 100).toFixed(1)} cm ` +
+          `from the eye, rearmost weapon vertex ${(-rearCam * 100).toFixed(1)} cm, ` +
+          `hipPush ${(push * 100).toFixed(1)} cm (0 at full ADS)`);
+      }
+      // ---- superseded (kept for the record) — W1 (iter03) REAR STANDOFF ----
       // THE iter01-03 "shattered white polygon" framing bug, measured:
       // weapon_data's posHip/posAds place the GRIP, and the GLB origin IS the
       // grip — so the buttstock sticks out BEHIND the origin, straight at the
@@ -326,30 +446,8 @@ export async function loadWeaponGLB(id) {
       // without shrinking the gun below VT §5's "~30% of every frame".
       // ADS is untouched (the push blends out with adsEase), so the sight
       // picture S2 exists to show is exactly as before.
-      const REAR_CLEAR = 0.35;   // m of air between the eye and the butt pad
-      const MAX_PUSH = 0.34;     // never shove a weapon out to arm's length
-      // Measure the WEAPON, not the arms: a forearm is supposed to run past
-      // the eye and get clipped (that is what a real one does), and letting it
-      // drive the rule shoved the Pike — a 23 cm pistol whose own rearmost
-      // point is 5 cm behind the grip — out to 0.49 m on the strength of a
-      // 19 cm arm stub. Arm objects are named arms_<side>_<weapon> by
-      // a4_build_fp_weapons.py's place_arms().
-      const box = new THREE.Box3();
-      group.traverse((o) => {
-        if (!o.isMesh) return;
-        let n = o;
-        while (n && n !== group) { if (/^arms?_/.test(n.name || "")) return; n = n.parent; }
-        box.expandByObject(o);
-      });
-      if (box.isEmpty()) box.setFromObject(group);
-      const hipZ = (w && w.view && w.view.posHip) ? w.view.posHip[2] : -0.34;
-      const rearCam = hipZ + box.max.z;     // camera-space z, negative = ahead
-      const push = Math.min(MAX_PUSH, Math.max(0, rearCam + REAR_CLEAR));
-      group.userData.hipPush = push;
-      if (push > 0) {
-        console.info(`[A4] ${id}: rear standoff ${(-rearCam * 100).toFixed(1)} cm ` +
-          `at the hip pose — hipPush ${(push * 100).toFixed(1)} cm (0 at full ADS)`);
-      }
+      //   const REAR_CLEAR = 0.35; push = clamp(rearCam + REAR_CLEAR, 0, 0.34)
+      // ----------------------------------------------------------------------
       group.userData.sight = sight;
       group.userData.weaponId = id;
       group.userData.muzzle = muzzle;
