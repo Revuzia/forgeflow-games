@@ -113,7 +113,12 @@ export function createSim(opts = {}) {
 
     // ---- private plumbing (additions)
     world, rng, weapons, colliders, nav, squad, internal,
-    flags: { god: false, noTarget: false },
+    // simRecoil (wave-10 aim-truth fix, ballistics §2.3 block): FALSE in the
+    // live game — the player's recoil climb is owned by weapons/recoil.js,
+    // which kicks input.state, so it is already inside cmd.yaw/pitch and the
+    // bullet leaves along the crosshair ray EXACTLY. Headless probes have no
+    // recoil.js; they set this true so the sim models the same climb.
+    flags: { god: false, noTarget: false, simRecoil: false },
     emit: (type, data) => {
       if (type === "shot" && !data.impactOnly && !data.pen) internal.shotsAnyTotal++;
       emit(type, data);

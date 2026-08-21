@@ -706,6 +706,61 @@ export async function buildLevel(ctx) {
     const v = 0.5 + 0.44 * n1 + 0.17 * n2;
     return Math.min(1, Math.max(0, (v - 0.28) / 0.56));
   };
+  // ================================================ COPLANAR OVERLAP GUARD
+  // LaneC/iter10 — THE ground glitch the owner reported ("the ground has a
+  // glitch ... black patches"), found by driving the real game rather than by
+  // reading the table.
+  //
+  // The ROADS table (layout.js) authors four rects that OVERLAP other rects:
+  //     r_gallery x r_cut       36 m^2   x[15.5,24.5] z[-22,-18]  (gallery door)
+  //     r_blvd    x r_cye       36 m^2   x[28,46]     z[-41,-39]
+  //     r_arcade  x r_cs1       13 m^2   x[-39,-26]   z[-19,-18]  (arcade door)
+  //     r_customs x r_street  12.5 m^2   x[-12.5,0]   z[-41,-40]
+  // Every rect was translated to y = 0 EXACTLY, so each of those 97.5 m^2
+  // carried two opaque, depth-writing ground surfaces at identical depth —
+  // textbook z-fighting, and because the pairs are always a bright interior
+  // concrete against a dark wet asphalt (baked WET_ALBEDO 0.70 vs 0.40) the
+  // fight resolves as irregular BLACK PATCHES that crawl as the player walks.
+  // MEASURED live before this fix: a raycast of the shipped camera through the
+  // gallery-doorway floor returned two `ground` meshes at the SAME distance
+  // 4.49 m (colours #8f8f8c and #b4b4b4, delta 0.0000 m).
+  //
+  // Fixed HERE, in the generator, not by hand-trimming the table: an authored
+  // overlap is a legitimate thing to want (a road cut that runs into a room),
+  // what is not legitimate is two surfaces sharing a depth. Each rect is given
+  // an explicit paint LAYER; the winner keeps y = 0 exactly (so every analytic
+  // ground-contact calculation in layout.js/props.js is untouched) and each
+  // loser sinks 2 mm per layer — under the winner where they overlap, and a
+  // 2 mm step at the seam elsewhere, which is below one pixel at any distance
+  // a player can stand. Priority is SEMANTIC, not table order: an interior
+  // floor always wins, so a room's floor is continuous and the street never
+  // paints over it. Ties fall back to table order, so the result is stable.
+  const roadLift = new Map();
+  {
+    const hit = (a, b) => (Math.min(a.max[0], b.max[0]) - Math.max(a.min[0], b.min[0]) > 1e-4) &&
+                          (Math.min(a.max[1], b.max[1]) - Math.max(a.min[1], b.min[1]) > 1e-4);
+    // interior first, then table order — deterministic
+    const order = layout.roads
+      .map((r, i) => ({ r, i, pri: INDOOR_KIND[r.kind] ? 0 : 1 }))
+      .sort((a, b) => (a.pri - b.pri) || (a.i - b.i));
+    const placed = [];
+    const clashes = [];
+    for (const e of order) {
+      let layer = 0;
+      for (const q of placed) {
+        if (!hit(e.r, q.r)) continue;
+        layer = Math.max(layer, (roadLift.get(q.r.id) ?? 0) + 1);
+        clashes.push(`${q.r.id}>${e.r.id}`);
+      }
+      roadLift.set(e.r.id, layer);
+      placed.push(e);
+    }
+    if (clashes.length) {
+      console.log(`[level] coplanar ground guard: ${clashes.length} authored rect ` +
+                  `overlap(s) separated by 2 mm layers — ${clashes.join(", ")}`);
+    }
+  }
+
   {
     const byMat = new Map();
     const tintNoise = rng(500);
@@ -714,7 +769,7 @@ export async function buildLevel(ctx) {
       const sx = Math.max(2, Math.round(w / 1.5)), sz = Math.max(2, Math.round(d / 1.5));
       const g = new THREE.PlaneGeometry(w, d, sx, sz);
       g.rotateX(-Math.PI / 2);
-      g.translate(r.min[0] + w / 2, 0, r.min[1] + d / 2);
+      g.translate(r.min[0] + w / 2, -0.002 * (roadLift.get(r.id) || 0), r.min[1] + d / 2);
       const p = g.getAttribute("position");
       const uv = new Float32Array(p.count * 2);
       const a = new Float32Array(p.count * 3);
@@ -867,7 +922,28 @@ export async function buildLevel(ctx) {
     // reproduced it across the S9 plaza. Fading only at the OUTER edge of the
     // road network — probed by asking whether the neighbourhood is still road
     // — keeps interior rect-to-rect joins seamless.
+    //
+    // INDOOR CUT-OUT (LaneC/iter10). `EXTERIOR` selects rects by KIND, but two
+    // exterior rects reach INSIDE a room: r_cut runs 4 m into the gallery and
+    // r_cs1 runs 1 m into the arcade (the same authored overlaps the coplanar
+    // guard above separates). The sheet is a wet-ROAD term — rain cannot fall
+    // on a floor under a roof — so those panels were painting a hard-edged,
+    // straight-sided ADDITIVE bright slab across the gallery's concrete floor.
+    // MEASURED in the live game at eye (20, 1.65, -16) looking north: hiding
+    // `wet_specular` removed a rectangular bright patch from the interior floor
+    // and removed nothing else from the frame. Treating an indoor point as
+    // "not road" makes edgeFade fade the sheet out across the doorway instead
+    // of stopping it dead at the rect boundary, which is the same reason the
+    // boundary fade exists at all.
+    const INDOOR_RECTS = layout.roads.filter((r) => INDOOR_KIND[r.kind]);
+    const indoors = (x, z) => {
+      for (const r of INDOOR_RECTS) {
+        if (x >= r.min[0] && x <= r.max[0] && z >= r.min[1] && z <= r.max[1]) return true;
+      }
+      return false;
+    };
     const onExtRoad = (x, z) => {
+      if (indoors(x, z)) return false;
       for (const r of layout.roads) {
         if (!EXTERIOR[r.kind]) continue;
         if (x >= r.min[0] && x <= r.max[0] && z >= r.min[1] && z <= r.max[1]) return true;
@@ -886,7 +962,14 @@ export async function buildLevel(ctx) {
     for (const r of layout.roads) {
       if (!EXTERIOR[r.kind]) continue;
       const w = r.max[0] - r.min[0], d = r.max[1] - r.min[1];
-      const sx = Math.max(2, Math.round(w / 2.5)), sz = Math.max(2, Math.round(d / 2.5));
+      // A rect that reaches into a room is re-tessellated twice as fine, so
+      // the indoor cut-out below has vertices to fade across: r_cut is only
+      // 4 m deep and at the default ~2.5 m spacing the mask would have had two
+      // rows to work with and would have cut a hard edge of its own.
+      const fine = INDOOR_RECTS.some((q) =>
+        Math.min(r.max[0], q.max[0]) - Math.max(r.min[0], q.min[0]) > 1e-4 &&
+        Math.min(r.max[1], q.max[1]) - Math.max(r.min[1], q.min[1]) > 1e-4) ? 1.0 : 2.5;
+      const sx = Math.max(2, Math.round(w / fine)), sz = Math.max(2, Math.round(d / fine));
       const g = new THREE.PlaneGeometry(w, d, sx, sz);
       g.rotateX(-Math.PI / 2);
       g.translate(r.min[0] + w / 2, 0.014, r.min[1] + d / 2);
@@ -903,7 +986,8 @@ export async function buildLevel(ctx) {
         // at 0.16 the dry patches chopped every streak into short segments
         // that measured as blobs again.
         aW[i] = Math.min(1, 0.35 + 0.45 * sheenAt(x, z) + 0.26 * kerb + 0.55 * puddleAt(x, z))
-              * ao * edgeFade(x, z);
+              * ao * edgeFade(x, z)
+              * (indoors(x, z) ? 0 : 1);   // no rain film under a roof
       }
       g.deleteAttribute("normal");
       g.deleteAttribute("uv");
@@ -994,6 +1078,27 @@ export async function buildLevel(ctx) {
               // image of the lamp head, the streak, and a halo that ties the
               // streak to the road it is lying on
               float lobe = exp(-q / 0.09) * 0.85 + exp(-q) * 0.85 + exp(-q / 4.0) * 0.018;
+              // ENERGY NORMALISATION (LaneC/iter10) — the fix for the "red /
+              // maroon triangular wedge on the ground" the owner photographed,
+              // and for its green twin.
+              //
+              // aT above widens the tangential lobe by the emitter's angular
+              // half-size, but nothing paid for the extra area: the peak stayed
+              // at 0.85 + 0.85 while the lobe covered several times the ground.
+              // A mirror image cannot be brighter than its source because the
+              // source is wide — spreading light spreads it THINNER. MEASURED
+              // in the live game from eye (5, 1.65, 8): the ЛАПША ДОМ sign
+              // (slot 10, half-width 1.89 m, reach 13 m) put lobe 0.954 x atten
+              // 0.454 x graze 1.0 x gain 2.3 = 0.287 linear RED onto cobbles
+              // whose own wet albedo is ~0.03, i.e. an additive term about ten
+              // times the surface it lay on, over a straight-edged patch that
+              // covered 3.6% of the frame in the lower left. Dividing by the
+              // widening factor conserves the lobe's energy instead of
+              // multiplying it, so an extended sign smears and dims exactly as
+              // it should. A POINT emitter (uLWide == 0) gives aT == uAT and is
+              // mathematically UNCHANGED — every sodium lamp-head streak this
+              // sheet was built for renders identically.
+              lobe *= uAT / aT;
               float atten = 1.0 - smoothstep(LP.w * 0.55, LP.w, dl);
               sum += uLCol[i] * lobe * atten;
             }

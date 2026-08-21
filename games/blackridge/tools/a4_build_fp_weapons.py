@@ -2731,14 +2731,31 @@ def place_arms(wid, mats, pose_override=None):
 # preview renders
 # ---------------------------------------------------------------------------
 VIEW = {  # posHip / zAds in glTF camera space (x right, y up, z back).
-    # zAds MUST track core/weapons/weapon_data.js view.posAds[2] — the ADS
-    # preview is worthless as a judgment view if it stands somewhere the game
-    # never stands, and for an optic the eye distance IS the size of the sight
-    # picture (build_scope's pinhole-cone note).
-    "warden": {"posHip": (0.165, -0.185, -0.34), "zAds": -0.26},
-    "vesper": {"posHip": (0.155, -0.175, -0.30), "zAds": -0.24},
-    "corvus": {"posHip": (0.175, -0.195, -0.40), "zAds": -0.26},
-    "pike":   {"posHip": (0.145, -0.165, -0.27), "zAds": -0.22},
+    # zAds MUST track the EFFECTIVE ADS eye distance the game renders at —
+    # core/weapons/weapon_data.js view.posAds[2] MINUS the iter10 ADS standoff
+    # (VIEWMODEL.adsStandoff, or view.adsStandoff where the weapon overrides
+    # it). The ADS preview is worthless as a judgment view if it stands
+    # somewhere the game never stands, and for an optic the eye distance IS the
+    # size of the sight picture (build_scope's pinhole-cone note).
+    #
+    # iter10 added the standoff to fix the owner's "it blocks alot of the
+    # vision when aiming": the weapon is pushed further from the eye at full
+    # ADS (0.18 m default, 0.10 m for the Corvus), so posAds[2] alone no longer
+    # describes where the eye actually is. The numbers below are
+    # posAds[2] - standoff.
+    #
+    # STOPGAP FLAG (doctrine: fix the generator, flag the artefact): the
+    # SHIPPED assets/weapons/corvus.glb was built against the OLD -0.26 and has
+    # NOT been regenerated (that needs Blender). Measured live at the new eye
+    # distance the sight picture is still clean — housing ~12% of screen
+    # height, clear aperture ~73 of 110 px, reticle centred, no vignette bite —
+    # because build_scope's EYEBOX = 1.45 margin absorbs the extra 0.10 m. The
+    # next Blender rebuild will derive a marginally slimmer tube, which is the
+    # direction this lane wants anyway.
+    "warden": {"posHip": (0.165, -0.185, -0.34), "zAds": -0.44},  # -0.26 - 0.18
+    "vesper": {"posHip": (0.155, -0.175, -0.30), "zAds": -0.42},  # -0.24 - 0.18
+    "corvus": {"posHip": (0.175, -0.195, -0.40), "zAds": -0.36},  # -0.26 - 0.10
+    "pike":   {"posHip": (0.145, -0.165, -0.27), "zAds": -0.40},  # -0.22 - 0.18
 }
 
 def add_area(name, loc, energy, color, size, rot):

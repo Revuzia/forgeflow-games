@@ -44,7 +44,26 @@ export function createRecoil(input) {
   let expectedPitch = null;    // for pulldown detection between updates
   let lastShotsFired = null;   // sim counter watermark for the dedup guard
 
-  const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now()) / 1000;
+  // WAVE-10: the burst boundary and the recovery delay run on the SIM clock,
+  // not the wall clock. They used to read performance.now(), which drifts
+  // away from sim time whenever the two do not advance together — and they
+  // do not: the frame loop steps a fixed 1/60 sim while a frame takes 34-42
+  // ms on the owner's machine, and ctx.stepFrames() (harness / hidden tab)
+  // runs one sim tick per RENDERED frame, so wall time can run 2.5x sim time.
+  // The visible defect that buys: a hitch longer than FIRST_SHOT.gapS of wall
+  // time, mid-burst, with fire still held, reset burstIdx to 0 and re-applied
+  // the pattern's HEAVIEST rows in the middle of the burst — recoil that
+  // spikes at random is recoil the player cannot learn. The sim's own burst
+  // boundary (player.js `sinceShot >= 0.5`) is sim-time; matching it keeps
+  // the camera walking exactly the row the sim counts.
+  const wallNow = () => (typeof performance !== "undefined" ? performance.now() : Date.now()) / 1000;
+  function now() {
+    try {
+      const F = typeof window !== "undefined" && (window.__FPS__ || window.__FFG3D__);
+      if (F && F.sim && F.sim.state && typeof F.sim.state.time === "number") return F.sim.state.time;
+    } catch (e) { /* view-side best effort */ }
+    return wallNow();
+  }
 
   function simCounters() {
     try {
@@ -66,8 +85,22 @@ export function createRecoil(input) {
     return pat[i];
   }
 
+  // The sim clock restarts at 0 on every startMission (a fresh createSim), so
+  // a stale watermark from the previous mission would read as "the future"
+  // and freeze both the burst boundary and recovery. Detect it and re-arm.
+  function rearmIfClockRewound(t) {
+    if (t < lastKickT && lastKickT !== -Infinity) {
+      lastKickT = -Infinity;
+      burstIdx = 0;
+      accYaw = 0; accPitch = 0;
+      expectedPitch = null;
+      lastShotsFired = null;
+    }
+  }
+
   function applyKick(w) {
     const t = now();
+    rearmIfClockRewound(t);
     if (t - lastKickT >= FIRST_SHOT.gapS) burstIdx = 0; // new burst (§2.8 boundary, matches sim)
     const step = patternStep(w, burstIdx);
     const scale = ((w.recoil && w.recoil.scale) || 1) *
@@ -102,6 +135,7 @@ export function createRecoil(input) {
 
     update(dt) {
       if (!(dt > 0)) return;
+      rearmIfClockRewound(now());
       const st = input.state;
       // ---- player pulldown compensation (before any recovery) -------------
       if (expectedPitch == null) expectedPitch = st.pitch;

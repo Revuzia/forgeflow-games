@@ -174,6 +174,26 @@ export const WEAPONS = {
       posHip: [0.175, -0.195, -0.40], posAds: [0, -0.123, -0.26],
       muzzle: [0, 0.025, -0.8635], eject: [0.046, -0.002, -0.10], sightY: 0.123,
       scale: 1,
+      // iter10 — the ONE weapon that gets a share of the world's ADS zoom
+      // (VIEWMODEL.adsZoomShare). It carries a real 2.2x optic, and at share 0
+      // the ocular ring measures ~13.5% of screen height: legible, but a bead
+      // rather than glass. 0.35 of the 2.18x zoom (in tangent space) works out
+      // to 1.31x on the tube, landing the housing at ~19% of screen height —
+      // an optic you look through, with the street still readable around it.
+      adsZoom: 0.35,
+      // ...and a SHORTER standoff than the 0.18 default, because the optic's
+      // own 2.18x magnification already shrinks the housing hard once its zoom
+      // share is cut. Measured live (_harness/occl_sweep.py, 1600x900), the
+      // Corvus was by far the worst weapon in the game for this — at the old
+      // share=1 / standoff=0 it covered 100 % of the sight-picture disc and
+      // 17.09 % of the horizontal threat band:
+      //     share 0.35, standoff 0.00 / 0.10 / 0.18
+      //       area  9.03 / 8.30 / 8.02 %    band 7.71 / 4.82 / 3.58 %
+      //       disc 70.1  / 44.5 / 33.0 %    housing top 61.8 / 58.7 / 56.6 %
+      // 0.10 lands the tube at ~12 % of screen height — a compact optic with a
+      // legible reticle and the street readable all the way around it. 0.18
+      // buys 0.3 points of area and costs the glass its readability.
+      adsStandoff: 0.10,
     },
   },
 
@@ -292,4 +312,63 @@ export const VIEWMODEL = {
   posLagMaxM: 0.032,   // ... max offset 3.2 cm
   rotLagTau: 0.065,    // rotation lag τ 65 ms ...
   rotLagMaxDeg: 4,     // ... max 4°
+
+  // ---- ADS OCCLUSION (iter10, owner report: "it blocks alot of the vision
+  // when aiming (right click)") --------------------------------------------
+  // How much of the WORLD's ADS zoom the VIEWMODEL camera also applies to the
+  // gun. 1 = the iter05 behaviour (hold the vm:world FOV ratio, so the weapon
+  // is magnified by exactly the same factor as the world); 0 = the gun keeps
+  // the angular size it has at the hip while the world zooms past it.
+  //
+  // MEASURED, live, 1600x900, mask read back through the vm camera with
+  // scene.overrideMaterial forced flat (_harness/occlusion.py) at share = 1:
+  //     weapon   ADS screen area   sight-picture disc (r = 12% of height)
+  //     warden        10.86 %                26.6 % blocked
+  //     vesper        12.61 %                48.6 % blocked
+  //     corvus        12.61 %               100.0 % blocked
+  //     pike           9.92 %                56.7 % blocked
+  // i.e. right-clicking made the gun cover roughly TWICE the screen it covers
+  // at the hip (4-6 %) — the moment the player most needs to see is the moment
+  // the viewmodel grew. That is the owner's complaint, in numbers.
+  //
+  // WHY share = 0 IS THE PHYSICAL ANSWER, not a taste call: an optic (or the
+  // focus shift of shouldering irons) magnifies the WORLD. It does not
+  // magnify the rifle that is already 30 cm from your eye — that object's
+  // angular size is set by where it is, and shouldering it moves it a few
+  // centimetres, not a factor of 1.35. Applying the world's zoom to the
+  // viewmodel is a rendering artefact of driving both cameras off one number.
+  // Iron sights are 1x, so they get 0. The Corvus is a real 2.2x optic and
+  // gets a partial share so the ocular still reads as glass you look THROUGH
+  // rather than a bead on the barrel (see WEAPONS.corvus.view.adsZoom).
+  //
+  // The knob is exact and alignment-safe BY CONSTRUCTION: the vm camera zooms
+  // about its own centre ray, and posAds.y = -sightY already parks the sight
+  // line ON that ray, so any FOV change slides the sight along the ray and
+  // never off it. Lane A's "where I aim is where it hits" cannot regress here.
+  adsZoomShare: 0,     // default for anything without view.adsZoom
+
+  // Extra metres the weapon is pushed AWAY from the eye at full ADS (default
+  // for anything without view.adsStandoff). See the long note in
+  // viewmodel.js: a 55 deg render is not a 120 deg human field, so a
+  // physically-placed weapon subtends ~3.3x the fraction of the frame it does
+  // in life.
+  //
+  // 0.18 m was picked off a live sweep, not by eye (_harness/occl_sweep.py,
+  // Warden, 1600x900, the mask read back through the vm camera). The zoom
+  // share alone moved almost nothing because the silhouette was CLIPPED —
+  // shrinking it only pulled previously off-screen receiver into frame:
+  //     share 1 -> 0 at standoff 0:      10.69 % -> 9.68 % of screen
+  // Distance is the lever that actually empties the frame, and the two
+  // compose:
+  //     share 0, standoff 0.00 / 0.12 / 0.18 / 0.24
+  //       area   9.68 / 8.00 / 6.95 / 6.23 %
+  //       bboxW 33.3 / 26.6 / 25.0 / 24.9 % of screen width
+  //       sight   40 /   30 /   26 /   24 px wide
+  // 0.24 keeps paying in area but the sight assembly is down to 24 px at 900p
+  // (~29 px at 1080p) and stops reading; 0.18 is the knee — a third of the
+  // occlusion gone with the sight still legible. Every row of that sweep
+  // measured the sight centroid at x = -0.5 px from screen centre (the
+  // half-pixel is the pixel-grid convention, cx = w/2 vs pixel centres at
+  // x+0.5): INVARIANT across both levers, which is the alignment proof.
+  adsStandoff: 0.18,
 };

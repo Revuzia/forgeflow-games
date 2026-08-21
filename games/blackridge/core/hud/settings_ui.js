@@ -21,10 +21,38 @@ import { shell, isMissionLive, ensureShellStyle } from "./hud.js";
 
 const PCT = (v) => Math.round(v * 100) + "%";
 
+// ITER11 LANE E. The owner asked for aiming that is "easy to adjust". A bare
+// "×1.00" is not adjustable, it is a guess — so every aim row prints what the
+// number BUYS: mouse pixels for a full 360° turn (the genre's cm/360 without
+// needing to know the mouse's DPI), and for ADS the effective multiplier the
+// player will actually feel once zoom-proportional scaling is folded in.
+// Read off the LIVE input instance (input.pxPer360AtSens1), never imported:
+// boot loads modules with a `?v=N` query, so a bare import of ../input.js here
+// would instantiate a second copy of that module and of the weapon table it
+// pulls in. Set once when the panel is created; the fallback is input.js's own
+// 2*PI/LOOK_SCALE and is only reached if ctx has no input (tests).
+let PX360_AT_1 = (2 * Math.PI) / 0.0022;
+const px360 = (sens) => Math.round(PX360_AT_1 / Math.max(1e-6, sens));
+
 const ROWS = [
   { key: "quality", label: "Quality", kind: "seg", options: ["low", "med", "high"] },
   { key: "fov", label: "Field of view", kind: "range", min: 60, max: 90, step: 1, fmt: (v) => `${Math.round(v)}°` }, // R9 vertical
-  { key: "sens", label: "Mouse sensitivity", kind: "range", min: 0.2, max: 3.0, step: 0.05, fmt: (v) => "×" + Number(v).toFixed(2) },
+  { key: "sens", label: "Mouse sensitivity", kind: "range", min: 0.05, max: 5.0, step: 0.01,
+    fmt: (v) => "×" + Number(v).toFixed(2),
+    hint: (v) => `${px360(v)} mouse px per 360° turn` },
+  { key: "adsSens", label: "ADS sensitivity", kind: "range", min: 0.2, max: 2.0, step: 0.01,
+    fmt: (v) => "×" + Number(v).toFixed(2),
+    // 1.00 = combat_spec §2.4 zoom-proportional (aim sweeps the same number of
+    // SCREEN pixels down the sights as it does at the hip) — the default.
+    hint: (v) => Math.abs(v - 1) < 0.005
+      ? "zoom-matched — sights feel like the hip"
+      : (v < 1 ? "slower down the sights" : "faster down the sights") },
+  { key: "renderScale", label: "Render scale", kind: "range", min: 0.6, max: 1.0, step: 0.05,
+    fmt: (v) => Math.round(v * 100) + "%",
+    // The smoothness lever, and the only one with the needed magnitude on
+    // integrated graphics (dynres.js header: cost(s) = 0.10 + 0.90·s²).
+    // 1.00 is native and is the default — nothing softens on its own.
+    hint: (v) => v >= 0.999 ? "native — sharpest" : "upscaled — smoother aim, softer image" },
   { key: "bob", label: "Head bob", kind: "range", min: 0, max: 1, step: 0.05, fmt: PCT },
   { key: "music", label: "Music volume", kind: "range", min: 0, max: 1, step: 0.05, fmt: PCT },
   { key: "sfx", label: "SFX volume", kind: "range", min: 0, max: 1, step: 0.05, fmt: PCT },
@@ -33,6 +61,7 @@ const ROWS = [
 
 export function createSettingsUI(ctx) {
   ensureShellStyle();
+  if (ctx.input && ctx.input.pxPer360AtSens1 > 0) PX360_AT_1 = ctx.input.pxPer360AtSens1;
 
   let visible = false;
   let onBack = null;
@@ -68,9 +97,18 @@ export function createSettingsUI(ctx) {
         r.options.map((o) => `<button data-o="${o}">${o}</button>`).join("") +
         `</span></div>`;
     } else {
+      // `hint` rows carry a second, quieter line under the label saying what
+      // the number buys (LANE E "easy to adjust"). Inline styles only — the
+      // shared .a10-* sheet lives in hud.js and is not this lane's file.
+      const lbl = r.hint
+        ? `<span style="display:flex;flex-direction:column;gap:4px">` +
+          `<span class="lbl">${r.label}</span>` +
+          `<span class="hint" data-h="${r.key}" style="font-size:10.5px;letter-spacing:.08em;` +
+          `text-transform:none;color:rgba(232,232,228,.36)"></span></span>`
+        : `<span class="lbl">${r.label}</span>`;
       html +=
-        `<div class="a10-row"><span class="lbl">${r.label}</span>` +
-        `<span style="display:flex;align-items:center;gap:14px">` +
+        `<div class="a10-row">${lbl}` +
+        `<span style="display:flex;align-items:center;gap:14px;flex:0 0 auto">` +
         `<input type="range" data-k="${r.key}" min="${r.min}" max="${r.max}" step="${r.step}"/>` +
         `<span class="val" data-v="${r.key}"></span></span></div>`;
     }
@@ -86,6 +124,7 @@ export function createSettingsUI(ctx) {
       refs[r.key] = {
         inputEl: panel.querySelector(`input[data-k="${r.key}"]`),
         valEl: panel.querySelector(`.val[data-v="${r.key}"]`),
+        hintEl: panel.querySelector(`.hint[data-h="${r.key}"]`),
       };
     }
   }
@@ -100,6 +139,7 @@ export function createSettingsUI(ctx) {
       // Don't fight the user's drag: only push when materially different.
       if (Math.abs(Number(ref.inputEl.value) - v) > (r.step || 0.01) / 2) ref.inputEl.value = v;
       ref.valEl.textContent = r.fmt(v);
+      if (ref.hintEl && r.hint) ref.hintEl.textContent = r.hint(v);
     }
   }
   function syncAll() { for (const r of ROWS) syncRow(r); }

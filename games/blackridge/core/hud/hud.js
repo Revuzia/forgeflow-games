@@ -140,7 +140,7 @@ export function ensureStyle() {
    ornament) — 2x9 px arms, a hard 1 px dark contour so it survives on a bright
    surface, and the optional centre dot VT §6 permits, which is what makes the
    eye find the middle at a glance. */
-#crosshair{position:absolute;left:50%;top:50%;width:0;height:0;}
+#crosshair{position:absolute;left:50%;top:50%;width:0;height:0;will-change:transform;}
 #crosshair .a10-x{position:absolute;left:0;top:0;background:var(--a10-ink);
   box-shadow:0 0 0 1px rgba(0,0,0,.6),0 0 4px rgba(0,0,0,.85);will-change:transform;}
 #crosshair .a10-xv{width:2px;height:9px;margin-left:-1px;}
@@ -626,6 +626,7 @@ export function createHud(ctx) {
     // change-gates
     lastGap: -1, lastBearing: 1e9, lastMag: -1, lastRes: -1, lastWname: "",
     lastMode: "", lastNades: -1, lastVig: -1, lastFade: -1, lastCrossA: -1,
+    lastCrossX: 1e9, lastCrossY: 1e9, // reticle aim-ray anchor (wave-10)
     hintWasShown: false,
   };
 
@@ -807,6 +808,52 @@ export function createHud(ctx) {
     }
   });
 
+  // ------------------------------------------------- reticle aim-ray anchor
+  // Project the sim's AIM direction (the exact vector ballistics.js fires
+  // along) into screen space through the camera as it is posed THIS frame,
+  // and park #crosshair there. Screen centre and the aim ray coincide unless
+  // viewmodel.js has a render-only camera offset live, so at rest this writes
+  // translate(0,0) once and then does nothing.
+  //
+  // Camera euler order is YXZ (viewmodel.js sets it): world→camera is
+  // Rz(-z)·Rx(-x)·Ry(-y). Done by hand rather than through camera matrices
+  // because hud.update() runs BEFORE renderer.render(), so matrixWorldInverse
+  // is still a frame stale at this point — reading it would reintroduce
+  // exactly the one-frame desync this fix exists to remove.
+  function reticleOffset(p) {
+    const cam = ctx.camera;
+    if (!cam) return;
+    const vw = window.innerWidth || 1920, vh2 = window.innerHeight || 1080;
+    // aim direction, world space (ballistics.dirFromAngles, verbatim)
+    const cp = Math.cos(p.pitch);
+    let vx = -Math.sin(p.yaw) * cp, vy = Math.sin(p.pitch), vz = -Math.cos(p.yaw) * cp;
+    const rx = cam.rotation.x, ry = cam.rotation.y, rz = cam.rotation.z;
+    let s = Math.sin(ry), c = Math.cos(ry);            // Ry(-ry)
+    let tx = c * vx - s * vz, tz = s * vx + c * vz;
+    vx = tx; vz = tz;
+    s = Math.sin(rx); c = Math.cos(rx);                // Rx(-rx)
+    let ty = c * vy + s * vz; tz = -s * vy + c * vz;
+    vy = ty; vz = tz;
+    if (rz) {                                          // Rz(-rz)
+      s = Math.sin(rz); c = Math.cos(rz);
+      tx = c * vx + s * vy; ty = -s * vx + c * vy;
+      vx = tx; vy = ty;
+    }
+    const depth = -vz;
+    let ox = 0, oy = 0;
+    if (depth > 0.05) {
+      const f = (vh2 / 2) / Math.tan((cam.fov * Math.PI / 180) / 2);
+      const lim = vh2 * 0.45; // a frame hitch must never fling the reticle
+      ox = Math.max(-lim, Math.min(lim, f * vx / depth));
+      oy = Math.max(-lim, Math.min(lim, -f * vy / depth));
+      void vw;
+    }
+    if (Math.abs(ox - st.lastCrossX) > 0.15 || Math.abs(oy - st.lastCrossY) > 0.15) {
+      st.lastCrossX = ox; st.lastCrossY = oy;
+      cross.style.transform = `translate(${ox.toFixed(2)}px,${oy.toFixed(2)}px)`;
+    }
+  }
+
   // ------------------------------------------------------------------ update
   function update(dt) {
     const sim = ctx.sim();
@@ -821,6 +868,22 @@ export function createHud(ctx) {
     // ---- crosshair: THE live effectiveSpread (§2.5 shared model, §4.6 px map)
     const weapon = W[p.weapon.id];
     let crossAlpha = 0.9;
+    // WAVE-10 AIM-TRUTH: the reticle is anchored to the AIM RAY, not to the
+    // centre pixel. viewmodel.js adds a RENDER-ONLY fire-response offset to
+    // camera.rotation (K.camP/K.camY pitch+yaw punch, ADS sway, bob roll)
+    // which moves the rendered world WITHOUT moving input.state — so the
+    // bullet, which follows input.state, stops leaving through the centre
+    // pixel for as long as the punch is live. MEASURED in the live page
+    // before this landed, Warden, 28-round held hip burst: the angle between
+    // the camera's forward vector and the sim's aim vector ran mean 3.12°,
+    // max 3.66° — 19.7 px of pure crosshair lie at 1280x720, i.e. ~1.1 m low
+    // at 20 m. §2.5's contract is that the reticle draws the real number, so
+    // it is projected onto the aim ray every frame instead: at rest the offset
+    // is 0 px and nothing moves; during a burst the reticle stays on the
+    // target while the view kicks around it, which is what makes the climb
+    // readable and compensable. Projection is exact (full YXZ basis incl.
+    // roll), costs one transform per frame, and needs no THREE import.
+    reticleOffset(p);
     if (weapon) {
       const spread = effectiveSpread(weapon, playerSpreadState(sim));
       const fovRad = (ctx.camera ? ctx.camera.fov : 74) * Math.PI / 180;

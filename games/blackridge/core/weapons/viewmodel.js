@@ -304,6 +304,14 @@ export function createViewmodel(ctx) {
   let prevAdsFull = false;
   let swayT = 0;
 
+  // MEASUREMENT SEAM (iter10, private extra — never the frozen surface).
+  // _harness/occlusion.py sets this to 1 to reproduce the pre-iter10
+  // "hold the vm:world FOV ratio" behaviour on the SAME build, so the
+  // before/after occlusion numbers are a controlled A/B rather than a
+  // comparison across two builds. null in normal play.
+  let zoomShareOverride = null;
+  let standoffOverride = null;   // metres added to the ADS standoff (same seam)
+
   const _v = new THREE.Vector3();
   const _q = new THREE.Quaternion();
 
@@ -631,7 +639,49 @@ export function createViewmodel(ctx) {
       // a differently-proportioned one. Null in normal play → base, unchanged.
       const vmBase = (ctx.vmFovBase != null && ctx.vmFovBase > 0)
         ? ctx.vmFovBase : base;
-      const vmFov = VIEWMODEL.fovDeg * (fovAim / Math.max(1, vmBase));
+      // ---- iter10 ADS OCCLUSION FIX (owner: "it blocks alot of the vision
+      // when aiming (right click)") -----------------------------------------
+      // The line above used to be `fovDeg * (fovAim / vmBase)` — hold the
+      // vm:world FOV RATIO, i.e. apply the world's ADS zoom to the gun as
+      // well. Measured live at 1600x900 through the vm camera with a flat
+      // override material (_harness/occlusion.py), that made right-click
+      // roughly DOUBLE the weapon's screen footprint against the hip:
+      //   warden 5.88 -> 10.86 % of screen, 26.6 % of the sight-picture disc
+      //   vesper 5.13 -> 12.61 %,           48.6 %
+      //   corvus 5.04 -> 12.61 %,          100.0 %  (the disc was ALL housing)
+      //   pike   4.07 ->  9.92 %,           56.7 %
+      //
+      // A zoom optic magnifies the WORLD; it does not magnify the rifle
+      // already 30 cm from the eye. So the share of the world's zoom that
+      // reaches the viewmodel is now an explicit number per weapon — 0 for the
+      // three 1x iron-sighted guns, VIEWMODEL.adsZoomShare (also 0) for
+      // anything unlisted, and 0.35 for the Corvus's real 2.2x optic.
+      //
+      // Done in TANGENT space, which is where "magnification" actually lives:
+      //   magWorld = tan(vmBase/2) / tan(fovAim/2)     (1 at the hip, rising)
+      //   magVm    = magWorld ** share
+      //   vmFov    = 2*atan( tan(fovDeg/2) / magVm )
+      // share = 1 reproduces the old magnification exactly; share = 0 pins the
+      // vm FOV at fovDeg so the gun holds its hip angular size all the way in.
+      // Continuous through the whole ADS blend (magWorld -> 1 as fovAim ->
+      // vmBase), so there is no step at the start or end of the transition,
+      // and vmFovBase's capture-fidelity role (F1, iter07) is untouched — it
+      // is still the denominator.
+      //
+      // ALIGNMENT IS SAFE BY CONSTRUCTION: a FOV change on the vm camera is a
+      // pure scale about that camera's centre ray, and view.posAds.y =
+      // -view.sightY already parks the sight line ON the centre ray. Scaling
+      // slides the sight along the ray, never off it — verified live after the
+      // change (sight-to-centre error measured in _harness/occlusion.py).
+      const share = zoomShareOverride != null ? zoomShareOverride
+        : (w && w.view && w.view.adsZoom != null)
+          ? w.view.adsZoom
+          : (VIEWMODEL.adsZoomShare != null ? VIEWMODEL.adsZoomShare : 1);
+      const halfBase = Math.tan(0.5 * DEG * Math.max(1, vmBase));
+      const halfAim = Math.tan(0.5 * DEG * Math.max(1, fovAim));
+      const magWorld = Math.max(1e-3, halfBase / Math.max(1e-6, halfAim));
+      const magVm = share === 0 ? 1 : Math.pow(magWorld, share);
+      const vmFov = 2 * Math.atan(Math.tan(0.5 * DEG * VIEWMODEL.fovDeg) / magVm) / DEG;
       if (Math.abs(vmCamera.fov - vmFov) > 0.01) {
         vmCamera.fov = vmFov;
         vmCamera.updateProjectionMatrix();
@@ -690,6 +740,31 @@ export function createViewmodel(ctx) {
     // picture is the subject and a pushed-back weapon shrinks it.
     if (current.group && current.group.userData.hipPush) {
       pz -= current.group.userData.hipPush * (1 - adsEase);
+    }
+    // ---- iter10 ADS STANDOFF (owner: "it blocks alot of the vision when
+    // aiming (right click)") -------------------------------------------------
+    // The eye-to-weapon distance is the ONLY lever that shrinks the weapon's
+    // solid angle without also flattening or distorting it, and it is exact:
+    // the sight line already lies ON the vm camera's centre ray (posAds.y =
+    // -view.sightY, no ADS rotation), so translating along -Z slides the sight
+    // ALONG that ray and can never take it off it. Alignment is preserved by
+    // construction, which is why this was chosen over any pose re-authoring.
+    //
+    // WHY IT IS NEEDED AT ALL — the render FOV is not a human field of view.
+    // A shouldered rifle really does sit ~0.25 m from the eye, but a human
+    // reads it inside a ~120 deg field while the game renders 55 deg at ADS,
+    // so a physically-placed weapon subtends tan(60)/tan(27.5) = 3.3x the
+    // fraction of the frame it occupies in life. Every shipped military
+    // shooter compensates by parking the ADS viewmodel further out than the
+    // anatomy implies; blackridge did not, and the owner's "it blocks alot of
+    // the vision" is that omission, measured (see weapon_data.js VIEWMODEL).
+    //
+    // Applied on adsEase so the hip pose is bit-identical to before.
+    {
+      const so = standoffOverride != null ? standoffOverride
+        : (w && w.view && w.view.adsStandoff != null) ? w.view.adsStandoff
+          : (VIEWMODEL.adsStandoff || 0);
+      if (so) pz -= so * adsEase;
     }
     let rx = 0, ry = 0, rz = 0;
 
@@ -804,6 +879,9 @@ export function createViewmodel(ctx) {
     },
     // ---- private extras (not in the frozen surface) -----------------------
     ejectWorld,
+    // iter10 A/B seam — see zoomShareOverride above.
+    setAdsZoomShareOverride(v) { zoomShareOverride = (v == null ? null : +v); },
+    setAdsStandoffOverride(v) { standoffOverride = (v == null ? null : +v); },
     renderPass: vmRenderPass,
     get camera() { return vmCamera; },
     get currentId() { return current ? current.id : null; },

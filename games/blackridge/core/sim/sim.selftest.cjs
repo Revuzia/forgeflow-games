@@ -244,11 +244,43 @@ async function main() {
   }
 
   // ================================================================ recoil
+  // WAVE-10 AIM-TRUTH: in the LIVE game the player's recoil authority is
+  // weapons/recoil.js — it kicks input.state, so the climb is already inside
+  // cmd.yaw/pitch and ballistics fires the bullet along that cmd EXACTLY
+  // (combat_spec §2.3 "aim and camera are one ray ... exactly one recoil").
+  // Node has no recoil.js, so these probes set sim.flags.simRecoil to make
+  // the sim model the same per-shot pattern step. The first block below is
+  // the new contract itself: with the flag OFF — the live configuration —
+  // a full-ADS player round leaves along the aim ray to the last bit.
+  section("probe_aimtruth — full-ADS player rounds leave EXACTLY along cmd");
+  {
+    const { sim, events } = makeSim({ seed: 5150 });
+    sim.setGod(true); sim.setNoTarget(true);
+    sim.aimAt(0, 1.62, -50);
+    for (let i = 0; i < 40; i++) sim.step(cmd({ ads: true, yaw: sim.state.player.yaw, pitch: sim.state.player.pitch }));
+    ok(sim.flags.simRecoil === false, "live default: sim.flags.simRecoil is FALSE (recoil.js owns the player's climb)");
+    const aim = B.dirFromAngles(sim.state.player.yaw, sim.state.player.pitch);
+    for (let i = 0; i < 200; i++) {
+      sim.step(cmd({ ads: true, fire: true, yaw: sim.state.player.yaw, pitch: sim.state.player.pitch }));
+      if (events.filter((e) => e.type === "shot" && !e.data.impactOnly && !e.data.pen).length >= 30) break;
+    }
+    const dirs = events.filter((e) => e.type === "shot" && !e.data.impactOnly && !e.data.pen).map((e) => e.data.dir);
+    const worst = Math.max(...dirs.map((d) => Math.acos(Math.max(-1, Math.min(1,
+      d[0] * aim[0] + d[1] * aim[1] + d[2] * aim[2])))));
+    ok(dirs.length >= 30, `30 full-ADS rounds fired (${dirs.length})`);
+    ok(worst <= 1e-9,
+      `worst angular error over ${dirs.length} full-ADS rounds = ${(worst * 180 / Math.PI).toExponential(2)}° ≤ 1e-9° (spread.ads 0 ⇒ pinpoint, no hidden pattern offset)`);
+    // and the shared-model number the crosshair draws is the same zero
+    ok(sim.state.player.weapon._lastSpread === 0,
+      "effectiveSpread at full ADS = 0 — the number the crosshair draws is the number the bullet used");
+  }
+
   section("probe_recoil — pattern determinism + envelope (sim side)");
   {
     const run = (seed) => {
       const { sim, events } = makeSim({ seed });
       sim.setGod(true); sim.setNoTarget(true);
+      sim.flags.simRecoil = true; // Node stands in for recoil.js (see note above)
       sim.aimAt(0, 1.62, -50);
       for (let i = 0; i < 40; i++) sim.step(cmd({ ads: true, yaw: sim.state.player.yaw, pitch: sim.state.player.pitch }));
       for (let i = 0; i < 200; i++) {
@@ -266,6 +298,7 @@ async function main() {
     // envelope: 95th percentile angular deviation from base aim ≤ 3.2°
     const { sim, events } = makeSim({ seed: 99 });
     sim.setGod(true); sim.setNoTarget(true);
+    sim.flags.simRecoil = true;
     sim.aimAt(0, 1.62, -50);
     for (let i = 0; i < 40; i++) sim.step(cmd({ ads: true, yaw: sim.state.player.yaw, pitch: sim.state.player.pitch }));
     const aim = B.dirFromAngles(sim.state.player.yaw, sim.state.player.pitch);

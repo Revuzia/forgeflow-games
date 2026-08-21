@@ -75,9 +75,50 @@
 // floor below 1.0 would engage on THIS box during every critic battery and
 // silently soften the frames four visual lanes are being graded on.
 //
+// ITER11 LANE E — IT IS NOW THE PLAYER'S CALL, AND STILL NOBODY ELSE'S.
+// The owner's report was about aim FEEL ("smooth and flawless"), and framerate
+// is part of feel: the camera can only show a mouse movement on a frame, so at
+// 25-30 fps every input waits an average of half a frame just for a frame to
+// exist, on top of present and scan-out. Measured mousemove -> camera-matrix
+// latency tracked the frame almost exactly (aimfeel.py D stage, live mission,
+// real MouseEvents): 74.5 ms median on a 37 ms frame, 21.4 ms median on a
+// 20 ms frame — ~1 frame, both times. Aim latency IS frame time here.
+//
+// WHAT THIS WAVE COULD AND COULD NOT MEASURE, STATED PLAINLY.
+// At a 1280x720 viewport, live mission, an interleaved sweep with the 1.00
+// baseline re-measured between every scale gave p50 20.0 ms at EVERY scale
+// from 1.00 down to 0.60 (buffers 1280x720 through 768x432), baseline drift
+// 20.0/20.0/20.2/20.0/20.0/20.0. Flat. At 720p this machine is NOT fill-bound
+// at all — it sits on a hard ~50 Hz presentation ceiling, and render scale buys
+// exactly nothing there.
+// The matching 1920x1080 sweep could NOT be taken: three other headed-Chrome
+// lanes were sharing this GPU and the run returned 83 ms at scale 1.00 rising
+// to 257 ms at scale 0.80 — frame time going UP as resolution goes DOWN is
+// impossible, so that run measured contention, not the game, and is discarded
+// rather than reported. The 1920x1080 numbers to trust remain the fitted table
+// higher up this header, taken on a quiet box in an earlier wave.
+//
+// So `settings.renderScale` (settings.js SCHEMA, DEFAULT 1.00) is subscribed
+// here. At 1.00 every constant below behaves exactly as it did before this
+// paragraph existed — floor 1.0, ceiling 1.0, nothing softens. Only an explicit
+// move of the player's slider takes it lower. The trade is stated in the
+// settings row itself ("native — sharpest" / "upscaled — smoother aim, softer
+// image") so it is made with open eyes, and no lane and no automated battery
+// can make it by accident: the batteries never touch the setting, so they still
+// grade native frames.
+//
 // Frozen export: createDynres(renderer, perf) → { update() }.
 
 import { DPR_CAP } from "../gfx.js"; // one source for the cap (perf gate)
+
+// The player's render-scale choice is read through settings.js's LIVE-INSTANCE
+// handle, never by importing "../settings.js" here. boot.js loads every module
+// with a `?v=N` query and an ES module is keyed by its full URL, so the bare
+// specifier yields a SECOND copy of S with its own listener map — measured this
+// wave: the slider moved __FPS__.settings.renderScale to 0.75 while this file's
+// imported copy still read 1 and the renderer never changed. See the long note
+// at the bottom of settings.js.
+const settingsLive = () => globalThis.__BR_SETTINGS__ || null;
 
 const WINDOW = 120;
 const CHECK_EVERY = 30;
@@ -104,7 +145,19 @@ export function createDynres(renderer, perf) {
   // min(DPR_CAP, devicePixelRatio) is 1.0, and a ceiling of 1.0 with a floor
   // of 0.65 is a working range. Clamping the ceiling at or above the floor is
   // what keeps setDpr()'s max(FLOOR, min(ceiling, v)) monotonic.
-  const ceiling = Math.max(FLOOR, Math.min(DPR_CAP, window.devicePixelRatio || 1));
+  const hwCeiling = Math.max(FLOOR, Math.min(DPR_CAP, window.devicePixelRatio || 1));
+
+  // ---- the player's render-scale choice (LANE E) --------------------------
+  // At the default 1.00 these are hwCeiling and FLOOR verbatim, so the whole
+  // controller below is bit-identical to the pre-iter11 build.
+  const userScale = () => {
+    const st = settingsLive();
+    const v = st ? Number(st.S.renderScale) : NaN;
+    return Number.isFinite(v) ? Math.max(0.5, Math.min(1, v)) : 1;
+  };
+  let ceiling = Math.min(hwCeiling, userScale());
+  let floorNow = Math.min(FLOOR, userScale());
+
   const ring = new Float32Array(WINDOW);
   const scratch = new Float32Array(WINDOW);
   let head = 0, filled = 0;
@@ -122,14 +175,36 @@ export function createDynres(renderer, perf) {
   }
 
   function setDpr(v) {
-    const clamped = Math.max(FLOOR, Math.min(ceiling, Math.round(v * 10) / 10));
+    // Quantised to 0.05, not 0.1: the automatic controller's STEP is 0.1 and
+    // still lands exactly, but the player's slider step is 0.05 and a 0.1 grid
+    // would silently round 0.75 to 0.8 and 0.65 to 0.7.
+    const clamped = Math.max(floorNow, Math.min(ceiling, Math.round(v * 20) / 20));
     if (Math.abs(clamped - renderer.getPixelRatio()) < 0.001) return false;
     renderer.setPixelRatio(clamped);
     // re-apply the CSS size so the drawing buffer actually changes; post.js
     // notices the buffer change next render and resizes its chain.
     renderer.setSize(window.innerWidth, window.innerHeight, false);
-    console.info(`[dynres] DPR → ${clamped.toFixed(1)}${clamped <= FLOOR + 1e-6 ? " (floor — planar reflection auto-offs)" : ""}`);
+    console.info(`[dynres] DPR → ${clamped.toFixed(2)}${clamped <= floorNow + 1e-6 ? " (floor — planar reflection auto-offs)" : ""}`);
     return true;
+  }
+
+  // The player moved the Render scale slider (settings.js). Re-derive the
+  // working range and go there immediately — a resolution choice must be
+  // visible the moment it is made, not 120 frames later. Also reset the
+  // controller's window: samples taken at the old scale say nothing about
+  // the new one.
+  function applyUserScale() {
+    const u = userScale();
+    ceiling = Math.min(hwCeiling, u);
+    floorNow = Math.min(FLOOR, u);
+    api.ceiling = ceiling;
+    head = 0; filled = 0; sinceCheck = 0; upStreak = 0; cooldown = WINDOW;
+    setDpr(u);
+  }
+  {
+    const st = settingsLive();
+    if (st) st.onChange("renderScale", applyUserScale);
+    else console.warn("[dynres] no __BR_SETTINGS__ handle — render scale slider inert");
   }
 
   const api = {
@@ -147,7 +222,7 @@ export function createDynres(renderer, perf) {
       // twice the step-down threshold. Same rule ("p95 over budget → step
       // down"), just not made to wait 120 frames to notice a 100 ms frame.
       if (filled >= PANIC_MIN_SAMPLES && filled < WINDOW &&
-          renderer.getPixelRatio() > FLOOR + 1e-6 && p95() > PANIC_P95_MS) {
+          renderer.getPixelRatio() > floorNow + 1e-6 && p95() > PANIC_P95_MS) {
         if (setDpr(renderer.getPixelRatio() - STEP)) {
           steps.down++; steps.panic++;
           upStreak = 0;
@@ -171,7 +246,7 @@ export function createDynres(renderer, perf) {
       if (++sinceCheck >= CHECK_EVERY && filled >= WINDOW) {
         sinceCheck = 0;
         const p = p95();
-        if (p > DOWN_P95_MS && renderer.getPixelRatio() > FLOOR + 1e-6) {
+        if (p > DOWN_P95_MS && renderer.getPixelRatio() > floorNow + 1e-6) {
           if (setDpr(renderer.getPixelRatio() - STEP)) {
             steps.down++;
             upStreak = 0;
@@ -183,14 +258,15 @@ export function createDynres(renderer, perf) {
       }
     },
     // ---- private additions ----
-    atFloor() { return renderer.getPixelRatio() <= FLOOR + 1e-6 && ceiling > FLOOR; },
+    atFloor() { return renderer.getPixelRatio() <= floorNow + 1e-6 && ceiling > floorNow; },
     dpr() { return renderer.getPixelRatio(); },
     ceiling,
     // Harness-visible state (perfprobe records it): a run that passed only
     // because dynres quietly dropped resolution is not the same result as a
     // run that held its DPR, and the verdict must be able to tell them apart.
     report() {
-      return { dpr: renderer.getPixelRatio(), ceiling, floor: FLOOR,
+      return { dpr: renderer.getPixelRatio(), ceiling, floor: floorNow,
+               hwCeiling, userScale: userScale(),
                samples: filled, p95: +p95().toFixed(2),
                atFloor: api.atFloor(), steps: { ...steps } };
     },
@@ -199,5 +275,11 @@ export function createDynres(renderer, perf) {
   // reflect.js (created before dynres in boot order, no shared ctx in this
   // frozen signature) reads the floor state through this documented global.
   globalThis.__BR_DYNRES__ = api;
+
+  // A render scale the player chose in a previous session is persisted by
+  // settings.js and must be live from the first frame, not from the first
+  // slider move. No-op at the 1.00 default.
+  if (userScale() < 0.999) applyUserScale();
+
   return api;
 }

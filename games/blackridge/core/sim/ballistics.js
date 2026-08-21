@@ -272,9 +272,31 @@ export function fireShot(sim, shooter, weapon, origin, aimDir, rng) {
   const spread = effectiveSpread(weapon, st);
   w._lastSpread = spread; // probe hook: shared-model identity
 
-  // §2.3 single-step pattern offset at recoilIndex (the CAMERA carries the
-  // accumulated climb via A4's recoil.js input kick; the sim applies only
-  // this shot's table step so headless runs match compensated play).
+  // ---------------------------------------------------------------- §2.3
+  // RECOIL AIM AUTHORITY — "aim and camera are one ray ... exactly one
+  // recoil" (combat_spec §2.3, first line). The pattern step is added to THE
+  // AIM, and the round that triggers the kick leaves along the PRE-kick aim.
+  //
+  // WAVE-10 AIM-TRUTH FIX (owner report: "where i aim is where it hits").
+  // This block used to add the step to the BULLET as well, on top of the
+  // camera climb weapons/recoil.js already applies through input.addLook —
+  // two recoils, which is the third-person anti-pattern §2.3 opens by
+  // forbidding. MEASURED in the live page before the fix (16 single shots,
+  // stationary, full ADS, spread 0, angle between the RENDERED camera
+  // forward at trigger-down and the bullet's launch direction):
+  //     warden  mean 0.436° / p50 0.413°  =  5.3 px high at 1280x720
+  //     pike    mean 0.855°               = 10.6 px high
+  //     corvus  mean 1.894°               = 34.9 px high  (1.65 m at 50 m)
+  // i.e. every FIRST shot of every burst — the one §2.4 promises is a laser
+  // at full ADS — left the barrel one whole pattern row above the crosshair.
+  //
+  // The player's climb is view-side: it is already inside cmd.yaw/pitch by
+  // the time the sim sees it, so the bullet must follow that cmd EXACTLY.
+  // BOTS have no view-side recoil module, so for them the sim stays the
+  // recoil authority and applies the step here, unchanged.
+  // sim.flags.simRecoil makes the sim the authority for the player too —
+  // headless probes (sim.selftest probe_recoil) have no recoil.js and set it
+  // to model the same climb. It is FALSE in the live game, always.
   const pat = weapon.recoil && weapon.recoil.pattern && weapon.recoil.pattern.length
     ? weapon.recoil.pattern : [[0, 0]];
   let idx = w.recoilIndex || 0;
@@ -284,10 +306,14 @@ export function fireShot(sim, shooter, weapon, origin, aimDir, rng) {
   }
   const jit = weapon.recoil && weapon.recoil.jitter != null ? weapon.recoil.jitter : 0.12;
   const scale = (weapon.recoil && weapon.recoil.scale) || 1;
+  // The jitter rolls are drawn UNCONDITIONALLY: the `weapons` rng stream's
+  // position is part of the determinism contract (probe_determinism hashes
+  // 3000 ticks), so skipping the draws would reseed every later spread roll.
   const jy = 1 + (rng() * 2 - 1) * jit;
   const jp = 1 + (rng() * 2 - 1) * jit;
-  const stepYaw = pat[idx][0] * jy * scale;
-  const stepPitch = pat[idx][1] * jp * scale;
+  const simOwnsRecoil = shooter !== "P" || !!(sim.flags && sim.flags.simRecoil);
+  const stepYaw = simOwnsRecoil ? pat[idx][0] * jy * scale : 0;
+  const stepPitch = simOwnsRecoil ? pat[idx][1] * jp * scale : 0;
 
   const base = anglesFromDir(aimDir);
   let firstHit = null;

@@ -7,7 +7,27 @@ const KEY = "blackridge.settings.v1";
 export const SCHEMA = {
   quality: { kind: "enum", options: ["low", "med", "high"], default: "med" },
   fov:     { kind: "range", min: 60, max: 90, step: 1, default: 74 }, // VERTICAL deg (R9)
-  sens:    { kind: "range", min: 0.2, max: 3.0, step: 0.05, default: 1.0 },
+  // ITER11 LANE E — the owner asked for aiming that is "easy to adjust".
+  // sens was 0.20-3.00 in steps of 0.05: 57 stops, none of them below half
+  // default, and no way to say what a stop meant. Now 0.05-5.00 in 0.01, and
+  // settings_ui prints the px-per-360° each value buys (input.js
+  // PX_PER_360_AT_SENS_1 = 2856 px at ×1.00). Existing persisted values stay
+  // in range, so nobody's saved sensitivity moves.
+  sens:    { kind: "range", min: 0.05, max: 5.0, step: 0.01, default: 1.0 },
+  // ADS sensitivity multiplier ON TOP of the zoom-proportional scaling
+  // input.js applies (combat_spec §2.4, monitor-distance coefficient 1.0).
+  // Default 1.00 IS the spec: pure zoom-proportional, muscle memory preserved
+  // through the right-click. The slider exists because the owner asked for it
+  // by name; the spec's "no separate slider in v1" line is superseded by that
+  // request, and defaulting to 1.00 means the shipped feel is still the spec's.
+  adsSens: { kind: "range", min: 0.2, max: 2.0, step: 0.01, default: 1.0 },
+  // Render scale — the ONE lever that changes how smooth aiming actually
+  // feels on integrated graphics (dynres.js header: cost(s) = 0.10 + 0.90·s²).
+  // Default 1.00 = pixel-for-pixel native, IDENTICAL to the build before this
+  // setting existed. Nothing softens unless the player moves this slider; the
+  // sharpness/smoothness trade is theirs to make, not a lane's. dynres.js
+  // subscribes and pins the renderer DPR to the chosen value.
+  renderScale: { kind: "range", min: 0.6, max: 1.0, step: 0.05, default: 1.0 },
   bob:     { kind: "range", min: 0, max: 1, step: 0.05, default: 1.0 },
   music:   { kind: "range", min: 0, max: 1, step: 0.05, default: 0.4 },
   sfx:     { kind: "range", min: 0, max: 1, step: 0.05, default: 1.0 },
@@ -71,4 +91,31 @@ export function set(key, val) {
   } catch (e) { /* persistence best-effort */ }
   const list = listeners.get(key);
   if (list) for (const fn of list) fn(v, key);
+}
+
+// ---------------------------------------------------------------------------
+// LIVE-INSTANCE HANDLE — the dual-instance guard.
+//
+// boot.js imports every module with a `?v=N` cache-busting query. An ES module
+// is keyed by its FULL URL, so a module that does `import { S } from
+// "../settings.js"` with no query gets a SECOND, completely independent copy:
+// its own S object, its own listener map. Writes through the game's settings
+// never reach it and its onChange handlers never fire. weather.js's
+// "// const table — dual-instance safe" note is about exactly this hazard; it
+// gets away with it because QUALITY_PRESETS is a frozen table.
+//
+// MEASURED this wave (_harness/settingsprobe.py): dynres.js imported the bare
+// specifier to read the new Render scale setting. Driving the real slider set
+// __FPS__.settings.renderScale to 0.75 while dynres's copy still read 1, so the
+// renderer stayed at pixel ratio 1 and the setting did nothing until the page
+// was reloaded (at which point the persisted value took effect through the
+// versioned instance and the buffer correctly became 960x540). Silent, and
+// invisible to anything that only checks the setting object.
+//
+// FIRST INSTANCE WINS, and boot AWAITS `settings.js?v=N` in phase 1 before any
+// phase-2 module can pull a bare copy — so the handle always points at the
+// instance the game actually reads. Consumers that need LIVE values (not const
+// tables) read this instead of importing.
+if (!globalThis.__BR_SETTINGS__) {
+  globalThis.__BR_SETTINGS__ = { S, SCHEMA, set, onChange };
 }
