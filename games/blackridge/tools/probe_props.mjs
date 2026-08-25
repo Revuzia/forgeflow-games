@@ -19,7 +19,8 @@
 // run: node tools/probe_props.mjs     → exit 0 = pass, 1 = fail
 
 import { buildLayout, computePlacements } from "../core/level/layout.js";
-import { buildColliders } from "../core/level/colliders.js";
+import { buildColliders, propSubBoxes } from "../core/level/colliders.js";
+import { rayBox } from "../core/sim/world.js";
 
 const EPS = 0.002; // 2 mm interpenetration tolerance (shared faces pass)
 const SURFACES = new Set(["concrete", "metal", "dirt", "wood", "glass"]);
@@ -108,6 +109,9 @@ console.log(`map: ${MAP}`);
   for (let i = 0; i < bs.length; i++) {
     for (let j = i + 1; j < bs.length; j++) {
       const a = bs[i], b = bs[j];
+      // compound sub-boxes of ONE prop (collision-layer split) may
+      // legitimately interpenetrate each other and their moveOnly hull
+      if (a.propId && a.propId === b.propId) continue;
       const ox = Math.min(a.max[0], b.max[0]) - Math.max(a.min[0], b.min[0]);
       if (ox <= EPS) continue;
       const oz = Math.min(a.max[2], b.max[2]) - Math.max(a.min[2], b.min[2]);
@@ -132,6 +136,7 @@ function insideBox(x, y, z, b, eps = 0.01) {
 // A standing point is blocked if a solid occupies its feet→head band.
 function pointBlocked(x, y, z) {
   for (const b of C.boxes) {
+    if (b.rayOnly) continue; // ballistic layer — standpoints use move hulls
     if (insideBox(x, y + 0.1, z, b) || insideBox(x, y + 0.9, z, b)) return b;
   }
   return null;
@@ -147,6 +152,7 @@ function walkable(x, z, y) {
 function supported(x, z, y) {
   if (y <= 0.05) return C.groundY(x, z) === 0; // terrain
   for (const b of C.boxes) {
+    if (b.rayOnly) continue; // support = movement layer
     if (Math.abs(b.max[1] - y) <= 0.05 &&
         x >= b.min[0] - 0.01 && x <= b.max[0] + 0.01 &&
         z >= b.min[2] - 0.01 && z <= b.max[2] + 0.01) return true;
@@ -221,7 +227,7 @@ function checkStandpoint(label, pos) {
   const nx = Math.round((C.bounds.max[0] - x0) / CELL);
   const nz = Math.round((C.bounds.max[2] - z0) / CELL);
   const walkRects0 = C.walkRects.filter((r) => r.y === 0);
-  const blockers = C.boxes.filter((b) => b.max[1] > 0.35 && b.min[1] < 1.75);
+  const blockers = C.boxes.filter((b) => !b.rayOnly && b.max[1] > 0.35 && b.min[1] < 1.75);
   const open = new Uint8Array(nx * nz);
   for (let ix = 0; ix < nx; ix++) {
     const x = x0 + (ix + 0.5) * CELL;
@@ -318,7 +324,7 @@ function checkStandpoint(label, pos) {
       // corners must not sit inside a DIFFERENT solid (interpenetration)
       for (const [cx, cz] of p.corners) {
         for (const b of C.boxes) {
-          if (b.id === p.id) continue;
+          if (b.id === p.id || b.propId === p.id) continue;
           if (insideBox(cx, p.pos[1] + 0.06, cz, b)) {
             fail(`contact: ${p.id} corner inside solid '${b.id}'`);
             break;
@@ -353,6 +359,148 @@ function checkStandpoint(label, pos) {
   if (C.groundY(0, 55) !== -1.5) fail("groundY: canal height wrong");
   if (typeof C.spawns.playerYaw !== "number") fail("spawns: playerYaw missing");
   info(`groundY/spawns: base 0, canal −1.5, playerYaw ${C.spawns.playerYaw.toFixed(3)}`);
+}
+
+// 10. ray-vs-silhouette gate (owner report 2026-08: campaign truck collided
+// as a full rectangular prism). For every compound prop kind in this map,
+// sample rays through the KNOWN see-through gaps of the visual silhouette —
+// they must MISS every ray-visible sub-box — and rays at solid metal — they
+// must HIT. Coordinates are fractions of the footprint (x,z ∈ [−0.5,0.5]
+// scaled by size, y ∈ [0,1] scaled by height), tested in the prop's LOCAL
+// frame against propSubBoxes(kind, size), so the gate covers every instance
+// of the kind at that footprint regardless of yaw. Every compound prop must
+// ALSO keep its moveOnly hull in the world collider set (movement/nav
+// byte-identical to the pre-compound set — the layer split, colliders.js).
+{
+  const before = failures;
+  // rays: [fromFrac, toFrac] segments; from/to sit outside the footprint
+  const GATES = {
+    truck: {
+      gaps: [
+        ["under-bed", [-0.8, 0.307, -0.07], [0.8, 0.307, -0.07]],
+        ["over-cab", [-0.8, 0.95, 0.33], [0.8, 0.95, 0.33]],
+        ["over-hood", [-0.8, 0.65, 0.45], [0.8, 0.65, 0.45]],
+      ],
+      solids: [
+        ["cargo", [-0.8, 0.6, -0.2], [0.8, 0.6, -0.2]],
+        ["cab", [-0.8, 0.5, 0.28], [0.8, 0.5, 0.28]],
+        ["axle", [-0.8, 0.05, 0.35], [0.8, 0.05, 0.35]],
+      ],
+    },
+    car: {
+      gaps: [
+        ["over-trunk", [-0.8, 0.78, -0.46], [0.8, 0.78, -0.46]],
+        ["over-hood", [-0.8, 0.78, 0.40], [0.8, 0.78, 0.40]],
+      ],
+      solids: [
+        ["body", [-0.8, 0.3, 0], [0.8, 0.3, 0]],
+        ["cabin", [-0.8, 0.85, -0.1], [0.8, 0.85, -0.1]],
+      ],
+    },
+    van: {
+      gaps: [
+        ["over-hood", [-0.8, 0.62, 0.46], [0.8, 0.62, 0.46]],
+        ["over-screen", [-0.8, 0.95, 0.33], [0.8, 0.95, 0.33]],
+      ],
+      solids: [
+        ["body", [-0.8, 0.5, -0.1], [0.8, 0.5, -0.1]],
+        ["hood", [-0.8, 0.3, 0.46], [0.8, 0.3, 0.46]],
+      ],
+    },
+    kiosk: {
+      gaps: [["over-counter", [-0.8, 0.76, -0.2], [0.8, 0.76, -0.2]]],
+      solids: [
+        ["body", [-0.8, 0.3, 0], [0.8, 0.3, 0]],
+        ["awning", [0, 1.3, 0.2], [0, 0.75, 0.2]],
+      ],
+    },
+    flood_tower: {
+      gaps: [["lattice-mid", [-0.8, 0.5, 0], [0.8, 0.5, 0]]],
+      solids: [
+        ["legs", [-0.8, 0.5, 0.36], [0.8, 0.5, 0.36]],
+        ["head", [0, 1.2, 0], [0, 0.9, 0]],
+      ],
+    },
+    scaffold: {
+      gaps: [["bay", [0.15, 0.62, -0.8], [0.15, 0.62, 0.8]]],
+      solids: [
+        ["deck", [0, 1.1, 0], [0, 0.8, 0]],
+        ["pole", [0.417, 0.5, -0.8], [0.417, 0.5, 0.8]],
+      ],
+    },
+    fence: {
+      gaps: [["mesh", [0.08, 0.5, -0.8], [0.08, 0.5, 0.8]]],
+      solids: [["rail", [0.08, 0.99, -0.8], [0.08, 0.99, 0.8]]],
+    },
+    transformer_pole: {
+      gaps: [["beside-pole", [0.46, 0.35, -0.8], [0.46, 0.35, 0.8]]],
+      solids: [
+        ["pole", [0, 0.35, -0.8], [0, 0.35, 0.8]],
+        ["head", [0.46, 0.85, -0.8], [0.46, 0.85, 0.8]],
+      ],
+    },
+    route_board: {
+      gaps: [
+        ["under-board", [0, 0.2, -0.8], [0, 0.2, 0.8]],
+        ["over-board", [0, 0.975, -0.8], [0, 0.975, 0.8]],
+      ],
+      solids: [["board", [0, 0.7, -0.8], [0, 0.7, 0.8]]],
+    },
+    newsbox: {
+      gaps: [["under-cabinet", [-0.8, 0.11, 0], [0.8, 0.11, 0]]],
+      solids: [
+        ["cabinet", [-0.8, 0.6, 0], [0.8, 0.6, 0]],
+        ["legs", [-0.8, 0.1, 0.40], [0.8, 0.1, 0.40]],
+      ],
+    },
+    tram_shelter: {
+      gaps: [["open-side", [0.9, 0.5, 0.2], [0.05, 0.5, 0.2]]],
+      solids: [
+        ["roof", [0, 1.2, 0], [0, 0.85, 0]],
+        ["posts", [-0.8, 0.5, 0.42], [0.8, 0.5, 0.42]],
+      ],
+    },
+  };
+  const segHits = (a, b, subBoxes) => {
+    const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const len = Math.hypot(...d);
+    const dn = d.map((v) => v / len);
+    for (const sb of subBoxes) {
+      const h = rayBox(a, dn, sb);
+      if (h && h.tOut > 0 && h.tIn < len) return sb.tag;
+    }
+    return null;
+  };
+  const seen = new Set();
+  let kindsGated = 0, raysRun = 0;
+  for (const p of L.props) {
+    if (!p.solid || !GATES[p.kind]) continue;
+    const key = `${p.kind}|${p.size.join(",")}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    kindsGated++;
+    const [w, h, l] = [p.size[0], p.size[1], p.size[2]];
+    const subs = propSubBoxes(p.kind, p.size);
+    if (!subs) { fail(`silhouette: ${p.kind} has a gate but no compound sub-boxes`); continue; }
+    const toM = (f) => [f[0] * w, f[1] * h, f[2] * l];
+    for (const [name, a, b] of GATES[p.kind].gaps) {
+      raysRun++;
+      const hit = segHits(toM(a), toM(b), subs);
+      if (hit) fail(`silhouette: ${key} gap ray '${name}' HIT sub-box '${hit}' (must pass through visible air)`);
+    }
+    for (const [name, a, b] of GATES[p.kind].solids) {
+      raysRun++;
+      if (!segHits(toM(a), toM(b), subs)) {
+        fail(`silhouette: ${key} solid ray '${name}' MISSED (must hit visible metal)`);
+      }
+    }
+    // layer split: every compound prop keeps its movement hull
+    const hull = C.boxes.find((bx) => bx.propId === p.id && bx.moveOnly);
+    if (!hull) fail(`silhouette: ${p.id} (${p.kind}) missing moveOnly movement hull`);
+  }
+  if (failures === before) {
+    info(`silhouette: ${kindsGated} compound kind/footprint combos gated, ${raysRun} rays (gaps pass, metal hits, move hulls present)`);
+  }
 }
 
 // summary

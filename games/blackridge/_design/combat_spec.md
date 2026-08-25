@@ -216,7 +216,7 @@ ADS recoil = table × 1.0; hip recoil = table × 0.85 (hip pays in spread, not k
 
 | Shot # | pitch° | yaw° |
 |---|---|---|
-| 1 | 0.42 | +0.02 |
+| 1 | 0.55 | +0.02 |
 | 2 | 0.40 | −0.03 |
 | 3 | 0.38 | +0.05 |
 | 4 | 0.34 | +0.08 |
@@ -231,15 +231,26 @@ ADS recoil = table × 1.0; hip recoil = table × 0.85 (hip pays in spread, not k
 | 13–16 | 0.22 | alternate ±0.09 |
 | 17–30 | 0.21 | loop [+0.08, +0.04, −0.05, −0.09] |
 
-30-round full-auto total uncompensated climb ≈ 8.1° — heavy enough to demand
+30-round full-auto total uncompensated climb ≈ 7.5° — heavy enough to demand
 pulldown, patterned enough to learn. Per-shot random jitter ±12% on both axes
 (from the `weapons` rng stream, so probes are deterministic per seed).
+
+> **Amendment 2026-08-25 (first-shot signature).** Measured live
+> (`_harness/recoilfeel.py`): the shipped tables reproduced exactly, but the
+> first-shot kick was only +5% (Warden 0.42 vs 0.40) / +8% (Vesper 0.26 vs
+> 0.24) over the followups — below the genre standard's "first-shot kick
+> noticeably larger than followups". Row 1 pitch raised: Warden 0.42 → 0.55
+> (1.38× shot 2), Vesper 0.26 → 0.34 (1.42× shot 2). Corvus/Pike unchanged —
+> semi-autos fully settle between shots (measured), so every shot already IS
+> the full punch. The earlier prose here claimed ≈8.1° full-mag climb; the
+> table itself sums to 7.39° (live-verified) — prose corrected to the table,
+> now ≈7.5° with the new row 1. TTK, jitter, recovery, hip ×0.85 untouched.
 
 **Vesper (SMG)** — fast, low, buzzy; loop 9–12:
 
 | Shot # | pitch° | yaw° |
 |---|---|---|
-| 1 | 0.26 | +0.03 |
+| 1 | 0.34 | +0.03 |
 | 2 | 0.24 | −0.04 |
 | 3 | 0.22 | +0.06 |
 | 4 | 0.20 | +0.08 |

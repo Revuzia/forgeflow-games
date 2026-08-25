@@ -59,7 +59,10 @@ const DEFAULT_AMBIENT = 0.35; // custom/test collider sets without zones
 export function bakeNav(colliders, opts = {}) {
   const t0 = (globalThis.performance ? performance.now() : Date.now());
   const cellOpt = opts.cell != null ? opts.cell : 1.0;
-  const boxes = colliders.boxes || [];
+  // rayOnly boxes are the ballistic collision layer (compound prop
+  // silhouettes, colliders.js) — movement/nav uses each prop's moveOnly
+  // hull instead, so the bake sees the same box count it was budgeted for.
+  const boxes = (colliders.boxes || []).filter((b) => !b.rayOnly);
   const groundY = colliders.groundY || (() => 0);
   const bounds = colliders.bounds || { min: [-60, -2, -60], max: [60, 14, 60] };
 

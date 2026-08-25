@@ -3,10 +3,11 @@
 // a backdrop-filter wash — VT §6) + left-rail vertical nav in caps with the
 // amber active tick. Zero ornament (amateur tell #10 guard).
 //
-// W6 (PVP_BUILD_PLAN Part 4.1, owner amendment A1): the title rail offers
-// FOUR entries — CAMPAIGN (the existing mission, unchanged), SKIRMISH,
-// CAPTURE THE FLAG, FREE-FOR-ALL — plus Settings/Credits. The three PVP
-// entries open the mode-select screen (mode_select.js) preselected; START
+// W6 (PVP_BUILD_PLAN Part 4.1, owner amendment A1; owner feedback 2026-08-24
+// "all PVP should be under PVP then you can choose from there"): the title
+// rail offers TWO play entries — CAMPAIGN (the existing mission, unchanged)
+// and PVP — plus Settings/Credits. PVP opens the mode-select screen
+// (mode_select.js: Skirmish / Capture the Flag / Free-for-All cards); START
 // MATCH drives ctx.startMatch({mode, difficulty}) (boot.js W1). A mode whose
 // lane has not landed shows COMING ONLINE and cannot start (honest failure,
 // never a page error).
@@ -162,9 +163,7 @@ export function createMenu(ctx, cb) {
     if (screen === "title") {
       navEl.innerHTML =
         navBtn("campaign", "Campaign") +
-        navBtn("mode:tdm", "Skirmish") +
-        navBtn("mode:ctf", "Capture the Flag") +
-        navBtn("mode:ffa", "Free-for-All") +
+        navBtn("pvp", "PVP") +
         navBtn("settings", "Settings") +
         navBtn("credits", "Credits");
     } else if (screen === "modeselect") {
@@ -183,9 +182,7 @@ export function createMenu(ctx, cb) {
     } else if (screen === "settings") {
       navEl.innerHTML =
         navBtn("campaign", "Campaign") +
-        navBtn("mode:tdm", "Skirmish") +
-        navBtn("mode:ctf", "Capture the Flag") +
-        navBtn("mode:ffa", "Free-for-All") +
+        navBtn("pvp", "PVP") +
         navBtn("settings", "Settings", "", true) +
         navBtn("credits", "Credits");
     }
@@ -288,7 +285,8 @@ Full per-asset provenance: CREDITS.md</pre></div>`;
     const a = e.target && e.target.getAttribute && e.target.getAttribute("data-a");
     if (!a) return;
     if (a === "campaign") menu.show("briefing");
-    else if (a.startsWith("mode:")) {
+    else if (a === "pvp") menu.show("modeselect");
+    else if (a.startsWith("mode:")) { // legacy deep-link (no nav emits it now)
       modeSelect.mode = a.slice(5);
       menu.show("modeselect");
     }

@@ -42,10 +42,14 @@ export function makeWorld(colliders) {
   }
 
   // Nearest hit along origin + dir*t, t ∈ (0, maxDist]. dir normalized.
+  // Boxes tagged moveOnly (colliders.js collision-layer split: the coarse
+  // movement hull kept over open-lattice props) are invisible to bullets
+  // and LOS — only their compound sub-boxes stop rays.
   function raycast(origin, dir, maxDist) {
     let best = null, bestT = maxDist;
     for (let i = 0; i < boxes.length; i++) {
       const b = boxes[i];
+      if (b.moveOnly) continue;
       const h = rayBox(origin, dir, b);
       if (!h || h.tIn > bestT || h.tOut < 0) continue;
       const t = Math.max(0, h.tIn);
@@ -82,6 +86,7 @@ export function makeWorld(colliders) {
     let y = groundYFn(x, z);
     for (let i = 0; i < boxes.length; i++) {
       const b = boxes[i];
+      if (b.rayOnly) continue; // ballistic-layer sub-box (colliders.js split)
       if (x >= b.min[0] && x <= b.max[0] && z >= b.min[2] && z <= b.max[2]) {
         if (b.max[1] > y) y = b.max[1];
       }
@@ -97,6 +102,7 @@ export function makeWorld(colliders) {
     const r = radius * 0.6;
     for (let i = 0; i < boxes.length; i++) {
       const b = boxes[i];
+      if (b.rayOnly) continue; // ballistic layer — never a walk support
       if (x + r < b.min[0] || x - r > b.max[0] || z + r < b.min[2] || z - r > b.max[2]) continue;
       const top = b.max[1];
       if (top <= y + STEP_UP && top > sup) sup = top;
@@ -109,6 +115,7 @@ export function makeWorld(colliders) {
   function capsuleBlocked(x, y, z, radius, height) {
     for (let i = 0; i < boxes.length; i++) {
       const b = boxes[i];
+      if (b.rayOnly) continue; // ballistic layer — movement uses the hull
       if (x + radius <= b.min[0] || x - radius >= b.max[0]) continue;
       if (z + radius <= b.min[2] || z - radius >= b.max[2]) continue;
       if (b.max[1] <= y + STEP_UP) continue;      // step/kerb — walkable
@@ -152,6 +159,7 @@ export function makeWorld(colliders) {
     const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
     for (let i = 0; i < boxes.length; i++) {
       const box = boxes[i];
+      if (box.moveOnly) continue; // movement hull — transparent to sight
       if (filter && !filter(box)) continue;
       const h = rayBox(a, d, box);
       if (h && h.tOut > 0.001 && h.tIn < 0.999) return true;

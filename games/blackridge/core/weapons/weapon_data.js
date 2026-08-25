@@ -44,8 +44,12 @@ const deg = (d) => (d * Math.PI) / 180;
 
 // Warden (AR) — learnable climb-then-right-drift; §2.3 table rows 1–16 +
 // loop 17–20 [+0.08, +0.04, −0.05, −0.09] @ pitch 0.21.
+// 2026-08-25 first-shot signature (spec §2.3 amendment, measured live at
+// 0.42 = only +5% over shot 2 — below the genre-standard "noticeably larger
+// first shot"): row 1 pitch 0.42 → 0.55 (1.38× shot 2). Full-mag climb
+// 7.39° → 7.52°; aim-truth untouched (kick lands AFTER the round leaves).
 const WARDEN_PATTERN = [
-  [deg(+0.02), deg(0.42)], [deg(-0.03), deg(0.40)], [deg(+0.05), deg(0.38)],
+  [deg(+0.02), deg(0.55)], [deg(-0.03), deg(0.40)], [deg(+0.05), deg(0.38)],
   [deg(+0.08), deg(0.34)], [deg(+0.10), deg(0.30)], [deg(+0.12), deg(0.28)],
   [deg(+0.10), deg(0.26)], [deg(-0.06), deg(0.25)], [deg(-0.10), deg(0.24)],
   [deg(-0.12), deg(0.24)], [deg(-0.08), deg(0.23)], [deg(+0.06), deg(0.23)],
@@ -58,8 +62,10 @@ const WARDEN_PATTERN = [
 
 // Vesper (SMG) — fast, low, buzzy; rows 1–8 + loop 9–12
 // [+0.07, −0.06, −0.08, +0.06] @ pitch 0.16.
+// 2026-08-25 first-shot signature (same §2.3 amendment as the Warden):
+// row 1 pitch 0.26 → 0.34 (1.42× shot 2); full-mag climb 5.48° → 5.56°.
 const VESPER_PATTERN = [
-  [deg(+0.03), deg(0.26)], [deg(-0.04), deg(0.24)], [deg(+0.06), deg(0.22)],
+  [deg(+0.03), deg(0.34)], [deg(-0.04), deg(0.24)], [deg(+0.06), deg(0.22)],
   [deg(+0.08), deg(0.20)], [deg(-0.07), deg(0.19)], [deg(-0.09), deg(0.18)],
   [deg(+0.07), deg(0.18)], [deg(+0.05), deg(0.17)],
   // loop segment
