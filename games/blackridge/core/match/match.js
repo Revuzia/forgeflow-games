@@ -83,6 +83,32 @@ function readMagsPerKill(content, modeId) {
 // discipline of sim.grantAmmoMag (sim.js): the held weapon's `reserve` and
 // its `_slotAmmo` mirror move together. Returns true if any ammo landed
 // (the caller emits the "resupply" event only on a real grant).
+// ---------------------------------------------------- [F2] empty-ammo trickle
+// BASE-LEDGER RULE, MATCHES ONLY (this driver never runs in campaign — the
+// walkover rule covers it there). Design hole found in every autoplay run:
+// with kill-only resupply, an actor with zero kills can reach TOTAL zero ammo
+// (mag+reserve, held weapon) with no recovery route and idle out the match.
+// The floor: after `dryS` CONSECUTIVE seconds at total zero, grant `mags`
+// magazine(s) to the held weapon's reserve, at most once per `cooldownS` per
+// actor. Data-driven via content.json pickups pk_ammo_empty_trickle (kind
+// "ammo_rule", emptyDryS/emptyCooldownS/emptyMags, modes[]); defaults below.
+const EMPTY_TRICKLE_DEFAULTS = { dryS: 10, cooldownS: 30, mags: 1 };
+
+function readEmptyTrickle(content, modeId) {
+  const r = Object.assign({}, EMPTY_TRICKLE_DEFAULTS);
+  for (const pk of (content && content.pickups) || []) {
+    if (!pk || pk.kind !== "ammo_rule") continue;
+    const hasField = typeof pk.emptyDryS === "number" ||
+      typeof pk.emptyCooldownS === "number" || typeof pk.emptyMags === "number";
+    if (!hasField) continue; // the kill-refill / walkover rules — not ours
+    if (Array.isArray(pk.modes) && !pk.modes.includes(modeId)) continue;
+    if (typeof pk.emptyDryS === "number") r.dryS = pk.emptyDryS;
+    if (typeof pk.emptyCooldownS === "number") r.cooldownS = pk.emptyCooldownS;
+    if (typeof pk.emptyMags === "number") r.mags = pk.emptyMags;
+  }
+  return r;
+}
+
 function applyKillResupply(m, actor, magsPerKill) {
   if (!(magsPerKill > 0) || !actor) return false;
   const body = m.bodyOf(actor);
@@ -164,6 +190,7 @@ export function makeMatch(content, emit, opts = {}) {
   if (mode.id !== modeId) throw new Error(`mode id '${mode.id}' !== registry id '${modeId}'`);
   Object.assign(rules, mode.defaults || {}, (content.modes && content.modes[modeId]) || {});
   const magsPerKill = readMagsPerKill(content, modeId); // [P2] base-ledger resupply
+  const trickle = readEmptyTrickle(content, modeId);    // [F2] empty-ammo floor
 
   // ---------------------------------------------------------------- state
   const ms = {
@@ -182,6 +209,8 @@ export function makeMatch(content, emit, opts = {}) {
     oobDeaths: 0,
     spawnedT: new Array(10).fill(-1),
     lastPointByActor: new Array(10).fill(null),
+    drySince: new Array(10).fill(-1),        // [F2] t the actor's total ammo hit zero (-1 = not dry)
+    trickleLastT: new Array(10).fill(-1),    // [F2] last trickle grant per actor (-1 = never)
     damageRings: [],         // per actorId: [{attacker, amount, t}] (bounded)
     roster: null,            // {teams, actors, squadIdOf}
     seed: opts.seed != null ? opts.seed : 0,
@@ -633,6 +662,39 @@ export function makeMatch(content, emit, opts = {}) {
           bodyByWho.delete(b.id);
           byWho.delete(b.id);
           bots.splice(i, 1);
+        }
+      }
+
+      // -- 3b. [F2] empty-ammo trickle — the base ledger's floor half.
+      // Kill resupply only feeds killers; an actor at TOTAL zero ammo (held
+      // weapon mag+reserve) has no recovery route. After trickle.dryS
+      // consecutive dry seconds grant trickle.mags magazine(s), at most once
+      // per trickle.cooldownS per actor. Matches only by construction (this
+      // tick never runs in campaign). Emits the existing "resupply" event so
+      // the HUD toast picks it up unchanged (additive reason field).
+      if (trickle.mags > 0) {
+        const weaponsT = (SIM && SIM.weapons) || {};
+        for (const a of ms.roster.actors) {
+          const aid = a.actorId;
+          if (!a.alive) { ms.drySince[aid] = -1; continue; }
+          const b = bodyByWho.get(a.who);
+          const w = b && b.weapon;
+          if (!w || typeof w.mag !== "number" || typeof w.reserve !== "number") {
+            ms.drySince[aid] = -1; continue;
+          }
+          if (w.mag + w.reserve > 0) { ms.drySince[aid] = -1; continue; }
+          if (ms.drySince[aid] < 0) { ms.drySince[aid] = t; continue; }
+          if (t - ms.drySince[aid] < trickle.dryS) continue;
+          if (ms.trickleLastT[aid] >= 0 && t - ms.trickleLastT[aid] < trickle.cooldownS) continue;
+          const wt = weaponsT[w.id];
+          if (!wt || !(wt.mag > 0)) continue;
+          // same reserve-write discipline as applyKillResupply: reserve and
+          // its _slotAmmo mirror move together (a reload then draws from it)
+          w.reserve = Math.min(wt.reserve, w.reserve + wt.mag * trickle.mags);
+          if (b._slotAmmo && b._slotAmmo[w.id]) b._slotAmmo[w.id].reserve = w.reserve;
+          ms.drySince[aid] = -1;
+          ms.trickleLastT[aid] = t;
+          emit("resupply", { who: a.who, mags: trickle.mags, reason: "trickle" });
         }
       }
 

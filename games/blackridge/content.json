@@ -1635,6 +1635,15 @@
       "modes": ["tdm", "ctf", "ffa"],
       "magsPerKill": 1,
       "_comment": "[P2] PVP kill resupply — each kill grants +magsPerKill mags to the killer's held weapon (reserve capped at the weapon's starting reserve); a fully-dry other slot gets one rescue mag. Consumed by core/match/modes/tdm.js readMagsPerKill (W8/W9 adopt the same read for ctf/ffa). Replaces walkover in matches: corpses reap ~4 s after death there."
+    },
+    {
+      "id": "pk_ammo_empty_trickle",
+      "kind": "ammo_rule",
+      "modes": ["tdm", "ctf", "ffa"],
+      "emptyDryS": 10,
+      "emptyCooldownS": 30,
+      "emptyMags": 1,
+      "_comment": "[F2] PVP empty-ammo floor — a living actor whose held weapon sits at TOTAL zero (mag+reserve) for emptyDryS consecutive seconds is granted emptyMags magazine(s), at most once per emptyCooldownS per actor. Closes the kill-only-resupply dead end (zero kills = zero ammo forever). Consumed by core/match/match.js readEmptyTrickle. MATCHES ONLY — campaign keeps walkover."
     }
   ],
   "reverbZones": {

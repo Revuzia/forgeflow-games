@@ -23,7 +23,20 @@ import { mulberry32 } from "../rng.js";
 
 const STEP = 0.36;          // traversable height delta (A3: risers 0.3)
 const CLEAR_H = 1.7;        // headroom needed over a floor
-const FOOT_R = 0.2;         // blocking footprint (see stair note below)
+// W3 nav/capsule honesty fix (matchprobe AC-4/T-CTF-1/T-CTF-4 finding): the
+// locomotion capsule is MOVE.CAPSULE_R 0.35 (player.js — bots use the same
+// mover), so a floor sample cleared at the old 0.2 footprint could anchor a
+// waypoint 0.2–0.35 m from a box face — reachable by the bake, impossible
+// for the capsule. A* then routed bots through FOOT_R-only lanes and they
+// pushed against the world for 100+ s (measured: 60/60 battery matches with
+// worstStuckIdle 68–684 s; 14% of lanternwalk / 39% of meridian_ward nav
+// nodes were capsule-blocked). 0.34 = capsule radius minus a hair so faces
+// exactly at the mover's own boundary don't flap; cell 0.75's offset
+// sampling (±0.09/±0.28 m, max sample gap 0.19 m) keeps every lane ≥0.9 m
+// wide walkable, and the arena's narrowest intended lane is the 2.0 m pier
+// gap (R4). The kerb exception below still passes ≤STEP risers, so stairs
+// are unaffected.
+const FOOT_R = 0.34;        // blocking footprint = the locomotion capsule
 const MAX_FLOOR_ABOVE = 6;  // never nav roofs
 const GRID_MAX = 160;       // frozen budget
 
@@ -82,13 +95,22 @@ export function bakeNav(colliders, opts = {}) {
   const nodeX = [], nodeY = [], nodeZ = [], nodeCell = [];
   const scratch = [];
 
+  // Stair note (why two radii): a 0.28 m-deep step top is ALWAYS within
+  // 0.34 m of the +2 riser's face, so the full capsule footprint would mark
+  // every stair-run sample blocked and sever arcade_upper/platform_deck
+  // (measured: ai.selftest R24 reachability broke at FOOT_R 0.34 flat).
+  // The real mover climbs through that proximity — y rises as it advances,
+  // so a "+2" riser is "+1" by the time its face is inside the radius. A
+  // box ≤2 risers above the floor is therefore climb-adjacent and keeps the
+  // legacy 0.2 footprint; anything taller is a wall and gets the capsule's.
   function blockedAt(x, z, y, near) {
     for (let k = 0; k < near.length; k++) {
       const b = boxes[near[k]];
-      if (x + FOOT_R <= b.min[0] || x - FOOT_R >= b.max[0]) continue;
-      if (z + FOOT_R <= b.min[2] || z - FOOT_R >= b.max[2]) continue;
       if (b.max[1] <= y + STEP + 0.01) continue;   // step/kerb — walkable over
       if (b.min[1] >= y + CLEAR_H) continue;       // high ceiling — clear
+      const r = b.max[1] - y <= 2 * STEP + 0.01 ? 0.2 : FOOT_R;
+      if (x + r <= b.min[0] || x - r >= b.max[0]) continue;
+      if (z + r <= b.min[2] || z - r >= b.max[2]) continue;
       return true;
     }
     return false;
@@ -404,10 +426,16 @@ export function bakeNav(colliders, opts = {}) {
   }
 
   // straight-line walkability (string pulling): supercover samples along the
-  // segment must find a floor chaining within STEP of the running height.
+  // segment must find a floor chaining within STEP of the running height —
+  // AND clear the capsule footprint (W3 nav/capsule honesty fix, part 2:
+  // pulled segments used to hug corners a cleared-anchor path never touched;
+  // bots wedged mid-segment pushing into concave pockets at vel 0 — measured
+  // live: a flag CARRIER pinned 297 s at one such corner, seed 17 0-0).
+  // Step 0.4×cell (~0.3 m at cell 0.75): the FOOT_R pad makes even a corner
+  // graze block ≥~0.3 m of the line, so samples cannot skip past one.
   function lineWalkable(x0, y0, z0, x1, y1, z1) {
     const dist = Math.hypot(x1 - x0, z1 - z0);
-    const steps = Math.max(1, Math.ceil(dist / (cell * 0.5)));
+    const steps = Math.max(1, Math.ceil(dist / (cell * 0.4)));
     let y = y0;
     for (let s = 1; s <= steps; s++) {
       const t = s / steps;
@@ -421,6 +449,7 @@ export function bakeNav(colliders, opts = {}) {
         if (walk[ids[k]] && Math.abs(nodeY[ids[k]] - y) <= STEP + 0.02) { y = nodeY[ids[k]]; ok = true; break; }
       }
       if (!ok) return false;
+      if (blockedAt(x, z, y, nearBoxes(x, z))) return false;
     }
     return Math.abs(y - y1) <= STEP + 0.02;
   }
@@ -429,10 +458,48 @@ export function bakeNav(colliders, opts = {}) {
 
   const bakeMs = (globalThis.performance ? performance.now() : Date.now()) - t0;
 
+  // start-node resolution with reachability (W3 wedge fix, part 3): nodeAt's
+  // score picks the geometrically nearest node — which can sit in a concave
+  // pocket the capsule cannot enter from the caller's side (measured: bot at
+  // 6.85,-24.65 vs node 6.63,-25.41 across a 0.5 m pier/building slit — every
+  // repath re-resolved the same unreachable first waypoint and the bot pushed
+  // at the corner for the rest of the match). Iterate candidates in score
+  // order and take the first with a capsule-clear straight line from `pos`;
+  // fall back to the plain nearest when none is (old behavior, never worse).
+  function reachableNodeAt(pos, maxDy = 2.0) {
+    const px = pos[0], py = pos[1] || 0, pz = pos[2];
+    const cix = Math.floor((px - ox) / cell), ciz = Math.floor((pz - oz) / cell);
+    const cands = [];
+    for (let dx = -2; dx <= 2; dx++) {
+      for (let dz = -2; dz <= 2; dz++) {
+        const ix = cix + dx, iz = ciz + dz;
+        if (ix < 0 || ix >= nx || iz < 0 || iz >= nz) continue;
+        const ids = cellNodes[ix * nz + iz];
+        if (!ids) continue;
+        for (let k = 0; k < ids.length; k++) {
+          const id = ids[k];
+          const dy = Math.abs(nodeY[id] - py);
+          if (dy > maxDy) continue;
+          const score = dy * 3 + Math.abs(nodeX[id] - px) + Math.abs(nodeZ[id] - pz)
+            + (walkArr && !walkArr[id] ? 100 : 0);
+          cands.push([score, id]);
+        }
+      }
+    }
+    if (!cands.length) return -1;
+    cands.sort((u1, u2) => u1[0] - u2[0]);
+    const lim = Math.min(cands.length, 10);
+    for (let k = 0; k < lim; k++) {
+      const id = cands[k][1];
+      if (lineWalkable(px, py, pz, nodeX[id], nodeY[id], nodeZ[id])) return id;
+    }
+    return cands[0][1];
+  }
+
   const nav = {
     // -------------------------------------------------- frozen signatures
     findPath(from, to) {
-      const a = nodeAt(from), b = nodeAt(to);
+      const a = reachableNodeAt(from), b = nodeAt(to);
       if (a < 0 || b < 0 || !walk[a] || !walk[b]) return null;
       if (comp[a] !== comp[b]) return null;
       const ids = astar(a, b);

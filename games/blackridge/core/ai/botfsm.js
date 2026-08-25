@@ -126,6 +126,7 @@ function mkBrain(bot, t) {
     burstSize: 0, burstLeft: 0, pauseUntil: -9, prevMag: -1, burstLog: [],
     // movement
     goal: null, path: null, pathI: 0, needRepath: false, stuckT: 0,
+    stuckN: 0, detourUntil: -9, wpKey: -1, wpMinD: Infinity, goalKey: null, goalMinD: Infinity,
     sprintMove: false, arrived: true,
     // patrol / investigate
     patrolI: 0, waitUntil: -9, scanYaw: 0, scanDir: 1, idleBarkAt: t + 25,
@@ -457,6 +458,13 @@ function countSquadAlive(sim, bot) {
 
 function setGoal(nav, sim, brain, bot, pos, sprint) {
   if (!pos) return;
+  // W3 wedge-escape window: while a stuck detour runs (watchdog below), the
+  // objective drive may NOT re-assert its anchor — it used to overwrite the
+  // escape goal within one think (H1 re-sets whenever goal drifts >1 m from
+  // the anchor), pinning wedged bots against geometry for 100+ s (measured:
+  // matchprobe AC-4, every match). A wedged bot cannot execute orders anyway;
+  // the window is ≤3.5 s and only ever opens after 1.5 s of zero movement.
+  if (brain.detourUntil > sim.state.time) { brain.sprintMove = sprint; return; }
   if (brain.goal && hdist(brain.goal, pos) < 0.8 && !brain.needRepath) { brain.sprintMove = sprint; return; }
   brain.goal = [pos[0], pos[1] != null ? pos[1] : bot.pos[1], pos[2]];
   brain.sprintMove = !!sprint;
@@ -884,12 +892,26 @@ function act(sim, nav, squad, bot, dt, t) {
     // (W3: never the live player transform — last-known / heard only)
     const threat = (P && (P.lastKnown || P.heardAt)) || null;
     if (threat) {
+      // F1 (AC-4 finding): the old blind pos±3 m lateral point lands inside
+      // the cover geometry about half the time at a cover station — the bot
+      // then pushed INTO its own cover for the whole reload, every reload of
+      // a standoff (measured: mx=0 "frozen" episodes, cmd pulsing, 126 s).
+      // Validate the point (and its midpoint) against the mover's own
+      // capsule test; try the other side; nowhere clear → crouch in place.
       const ty = yawTo(bot.pos, threat);
-      const side = rng() < 0.5 ? 1 : -1;
-      brain.reloadDest = [
-        bot.pos[0] + Math.cos(ty) * 3 * side, bot.pos[1],
-        bot.pos[2] - Math.sin(ty) * 3 * side,
-      ];
+      const s0 = rng() < 0.5 ? 1 : -1;
+      let dest = null;
+      const blocked = (x, y, z) =>
+        sim.world && sim.world.capsuleBlocked && sim.world.capsuleBlocked(x, y, z, 0.35, 1.7);
+      for (const side of [s0, -s0]) {
+        const dx = Math.cos(ty) * 3 * side, dz = -Math.sin(ty) * 3 * side;
+        const cand = [bot.pos[0] + dx, bot.pos[1], bot.pos[2] + dz];
+        if (blocked(cand[0], cand[1], cand[2])) continue;
+        if (blocked(bot.pos[0] + dx * 0.5, bot.pos[1], bot.pos[2] + dz * 0.5)) continue;
+        dest = cand;
+        break;
+      }
+      brain.reloadDest = dest;
     } else brain.reloadDest = null;
   }
   brain.prevWeaponState = bot.weapon.state;
@@ -993,7 +1015,18 @@ function act(sim, nav, squad, bot, dt, t) {
     // visible — wantHold requires the lock to have expired.
     const hspeed = Math.hypot(bot.vel[0], bot.vel[2]);
     const visibleFresh = P && P.seesTarget && t - P.lastSeenT <= 0.3;
-    const wantHold = (visibleFresh && t >= brain.taskLockUntil) || st === "suppress";
+    // F1 (AC-14 finding): fire-hold used to pin EVERY bot the moment its
+    // target was visible — carriers, returners and stand-grabbers froze
+    // into duels mid-route and objective runs never completed (measured:
+    // 100+ s zero-displacement firefight holds all over the battery; the
+    // capture rate collapsed once the nav fixes made contact frequent).
+    // The objective layer already encodes "this movement is worth a trade"
+    // as priority ≥0.9 (§7.4 grab, carry, stall-breaker, return); those
+    // orders keep the feet moving — aim stays on the target through the H2
+    // strafe frame, so the fight continues on the move. One-directional:
+    // no information, speed, or accuracy is granted (monotonic rule).
+    const objPress = obj && obj.anchor && obj.priority >= 0.9 && !brain.arrived;
+    const wantHold = ((visibleFresh && t >= brain.taskLockUntil) || st === "suppress") && !objPress;
     if (!brain.arrived && brain.goal && !wantHold) {
       followPath(sim, bot, brain, c, dt);
       c.sprint = brain.sprintMove && hdist(bot.pos, brain.goal) > 6;
@@ -1152,15 +1185,72 @@ function act(sim, nav, squad, bot, dt, t) {
   }
   brain.wasFiring = c.fire;
 
-  // ---- stuck watchdog
-  if ((c.moveZ !== 0 || c.moveX !== 0) && Math.hypot(bot.vel[0], bot.vel[2]) < 0.3) {
-    brain.stuckT += dt;
-    if (brain.stuckT > 1.5) {
+  // ---- stuck watchdog (W3 wedge-escape rework — matchprobe AC-4 finding)
+  // Old behavior randomized around the GOAL — the unreachable thing — and
+  // the objective drive re-asserted its anchor within one think, so a wedged
+  // bot pushed at the same corner for 100+ s. Now: detour around the BOT
+  // (any reachable nav node nearby breaks the wall contact), and hold the
+  // detour via brain.detourUntil (setGoal defers all overrides while it
+  // runs). Escalating radius: repeat wedges walk progressively farther out.
+  {
+    const speed = Math.hypot(bot.vel[0], bot.vel[2]);
+    if ((c.moveZ !== 0 || c.moveX !== 0) && speed < 0.3) {
+      brain.stuckT += dt;
+      if (brain.stuckT > 1.5) {
+        brain.stuckT = 0;
+        brain.stuckN = (brain.stuckN || 0) + 1;
+        // W3 embed tomb (mover-layer defect, recovered here): descending off
+        // a stair-run SIDE embeds the capsule up to 0.14 m into the tall
+        // step (supportAt clears at 0.6xR while blocking uses full R), and
+        // axis-blocked velocity zeroing caps a standstill frame's step at
+        // ~0.01 m — the bot can never generate the exit step and freezes
+        // PERMANENTLY (measured: bot 54 seed 6, 534 s at the alley stair,
+        // capsuleBlocked true at its own pos). After 3 fruitless detours at
+        // zero speed, depenetrate: shortest lateral nudge to a non-blocked
+        // position, compass order (deterministic). The real fix is mover
+        // depenetration in world.js — out of this lane, flagged.
+        if (speed < 0.05 && brain.stuckN >= 3 && sim.world && sim.world.capsuleBlocked) {
+          const h = bot.stance === "crouch" ? 1.35 : 1.8;
+          if (sim.world.capsuleBlocked(bot.pos[0], bot.pos[1], bot.pos[2], 0.35, h)) {
+            outer:
+            for (const rr of [0.12, 0.2, 0.3, 0.45]) {
+              for (let k8 = 0; k8 < 8; k8++) {
+                const ang = k8 * Math.PI / 4;
+                const nx = bot.pos[0] + Math.cos(ang) * rr;
+                const nz = bot.pos[2] + Math.sin(ang) * rr;
+                if (!sim.world.capsuleBlocked(nx, bot.pos[1], nz, 0.35, h)) {
+                  bot.pos[0] = nx; bot.pos[2] = nz;
+                  brain.stuckN = 0;
+                  brain.needRepath = true;
+                  break outer;
+                }
+              }
+            }
+          }
+        }
+        if (nav) {
+          // escalate BOTH knobs with repeat wedges: a cross-wall combat
+          // approach (target euclid-near, nav-far — the pier slit) pulls the
+          // bot straight back after a short detour; by stuckN 4+ the detour
+          // walks far enough to round the obstacle and holds long enough
+          // that the re-approach happens from the far side (measured: the
+          // last AC-4 window was exactly this class, 32 s at the slit).
+          const esc = nav.randomPoint(bot.pos, 3 + Math.min(9, brain.stuckN * 2), rng);
+          if (esc && hdist(esc, bot.pos) > 0.6) {
+            brain.detourUntil = 0; // let this setGoal through its own guard
+            brain.needRepath = true;
+            setGoal(nav, sim, brain, bot, esc, false);
+            brain.detourUntil = t + 1.5 + 0.7 * Math.min(6, brain.stuckN);
+          } else {
+            brain.needRepath = true; // no node nearby: at least force a repath
+          }
+        }
+      }
+    } else {
       brain.stuckT = 0;
-      brain.needRepath = true;
-      if (nav && brain.goal) brain.goal = nav.randomPoint(brain.goal, 2.5, rng);
+      if (speed >= 1.0) brain.stuckN = 0; // genuinely moving again
     }
-  } else brain.stuckT = 0;
+  }
 }
 
 // §1.8 sprint-out (mirrors player.js SPRINT_OUT_S normal column — bots never
@@ -1227,17 +1317,39 @@ function fireBlocked(sim, bot, eye, dir, distToTarget, targetWho) {
 function followPath(sim, bot, brain, c, dt) {
   const goal = brain.goal;
   if (!goal) { brain.arrived = true; return; }
+  // W3 AC-4 orbit fix: the fixed 0.6 m accept radius is INSIDE the turning
+  // circle at movement speed (walk 4.6 / turn 2.4-5.6 rad/s → radius up to
+  // ~2.7 m sprinting), so a bot that overshot a waypoint veered around it
+  // forever (measured: vel 4-6 m/s, zero net displacement, 30-90 s). Accept
+  // scales with speed, and passing a waypoint (closest approach < 2 m, now
+  // receding) counts as reaching it.
+  const speed = Math.hypot(bot.vel[0], bot.vel[2]);
+  const accept = Math.max(0.6, speed * 0.25);
   let wp = null;
   if (brain.path && brain.pathI < brain.path.length) {
     wp = brain.path[brain.pathI];
-    if (hdist(bot.pos, wp) < 0.6) {
+    let d = hdist(bot.pos, wp);
+    if (brain.wpKey !== brain.pathI) { brain.wpKey = brain.pathI; brain.wpMinD = d; }
+    else if (d < brain.wpMinD) brain.wpMinD = d;
+    if (d < accept || (brain.wpMinD < 2.0 && d > brain.wpMinD + 0.5)) {
       brain.pathI++;
+      brain.wpKey = -1;
       wp = brain.pathI < brain.path.length ? brain.path[brain.pathI] : null;
     }
   }
   if (!wp) {
-    // direct or path-exhausted: head at the goal itself
-    if (hdist(bot.pos, goal) < 0.8) { brain.arrived = true; return; }
+    // direct or path-exhausted: head at the goal itself. The same orbit rule
+    // applies — but the GOAL accept stays inside 1.2 m: flag stands and
+    // pickups trigger at standR/pickupR 1.2 (flags.js), and a speed-scaled
+    // accept parked carriers 1.3-1.6 m from the stand FOREVER (measured:
+    // T-CTF-1 capture never fired after the wide accept landed). Passed-
+    // detection bounds at 1.1: the closest-approach moment was already
+    // inside every 1.2 m trigger.
+    const d = hdist(bot.pos, goal);
+    if (brain.goalKey !== goal) { brain.goalKey = goal; brain.goalMinD = d; }
+    else if (d < brain.goalMinD) brain.goalMinD = d;
+    if (d < 0.8 ||
+        (brain.goalMinD < 1.1 && d > brain.goalMinD + 0.5)) { brain.arrived = true; return; }
     wp = goal;
   }
   brain.moveYaw = yawTo(bot.pos, wp);

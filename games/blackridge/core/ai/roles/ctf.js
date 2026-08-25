@@ -258,19 +258,50 @@ export function assign(ctx) {
   const assigned = new Map(); // b → role
   for (const role of order) {
     let want = q[role];
+    // F1 latch-break selectivity: with the W7 preempt-limiter fixed, Tier-W
+    // events actually deliver preempt passes — and DEATHS are Tier-W, so a
+    // team preempts every few seconds all match. A preempt that overrides
+    // every latch reshuffled the whole team that often, and attack runs
+    // never completed (measured: captures DROPPED after the limiter fix —
+    // 6/20 capture-less seeds). Only the flag-critical roles may break a
+    // live latch on preempt (AC-15's duel-breaking intercept, S4's return);
+    // the rest honor §3.4 and rebalance when their latch expires.
+    const latchBreak = role === "return" || role === "intercept";
     while (want > 0 && assigned.size < pool.length) {
       let best = null, bestU = -Infinity;
       for (const b of pool) {
         if (assigned.has(b)) continue;
         // role latch (§3.4): a latched bot resists reassignment unless a
-        // preempting event fired this pass
-        if (!api.preempt && api.latched(b.rec) && b.rec.role !== role) continue;
+        // preempting event fired this pass AND the role may break latches
+        if (!(api.preempt && latchBreak) && api.latched(b.rec) && b.rec.role !== role) continue;
         const u = util[role](b);
         if (u > bestU) { bestU = u; best = b; }
       }
       if (!best || bestU <= -9) break;
       assigned.set(best, role);
       want--;
+    }
+  }
+  // F1 (T-CTF-1 finding): the attack quota is the capture engine — the fill
+  // order tries return/intercept/escort/defend first, and with permanent
+  // latches a small pool can leave attack COMPLETELY unfilled forever (a
+  // lone bot latched 'defend' never grabbed a wholly undefended flag). On a
+  // preempt pass, if attack got zero fills, steal the best candidate from
+  // the lower-leverage holders (defend/float/lane).
+  if (api.preempt && q.attack > 0 && ourS !== "CARRIED") {
+    let hasAttack = false;
+    for (const r2 of assigned.values()) if (r2 === "attack") hasAttack = true;
+    for (const b of pool) if (!assigned.has(b) && b.rec.role === "attack") hasAttack = true;
+    if (!hasAttack) {
+      let best = null, bestU = -Infinity;
+      for (const b of pool) {
+        const cur = assigned.get(b);
+        if (cur && cur !== "defend" && cur !== "float") continue;
+        if (b.rec.role != null && !["defend", "float", "lane", "attack"].includes(b.rec.role)) continue;
+        const u = util.attack(b);
+        if (u > bestU) { bestU = u; best = b; }
+      }
+      if (best) assigned.set(best, "attack");
     }
   }
   // leftovers float
@@ -309,10 +340,24 @@ export function assign(ctx) {
         rec.progD = dHome; rec.progT = t;
       } else if (dHome < rec.progD - 5) { rec.progD = dHome; rec.progT = t; }
       const stalled = t < rec.stallUntil;
-      const anchor = driveTo(ctx, b, [ourStand[0], ourStand[1], ourStand[2]], stalled);
+      // F1 (T-CTF-1 monotonic-window finding): the junction-graph route
+      // detoured the carrier AWAY from home by up to 7.9 m inside a 10 s
+      // window (same lane-approximation error as the returner's). Inside
+      // 30 m of home the anchor is the stand itself — the real nav path is
+      // exact and monotone at that range; beyond it the exposure-aware
+      // route still picks the lane.
+      // F1 (AC-13 monotonic bar): the carrier takes NO lane-graph route at
+      // all — every cost variant detoured it away from home by 8-10 m inside
+      // a 10 s window (junction-path approximation + lane flattening, even
+      // lengthOnly). The anchor is the stand itself: the bot's REAL nav path
+      // is optimal, so nav-distance-home falls monotonically by construction.
+      // The carrier's safety is the escorts' job (§7.7); its own job is the
+      // shortest walk home. Escort stations fall back to carrier-pos rings.
+      const anchor = [ourStand[0], ourStand[1], ourStand[2]];
+      rec.route = null;
       api.write(rec, body, {
         role: "carry", reason: stalled ? R.STALL_BREAKER : R.CARRY,
-        anchor, anchorKind: "stand", routeUse: true,
+        anchor, anchorKind: "stand", routeUse: false,
         priority: stalled ? 1.0 : 0.95,
         firePolicy: "defensive", selfDefenseM: 12, posture,
         noRetreat: true, noFlank: true, noGrenade: true, holdS: 2,
@@ -345,16 +390,35 @@ export function assign(ctx) {
     const rec = b.rec, body = b.body;
     const engaged = api.engagedNow(body);
     const combatNow = body.state === "combat" || body.state === "flank" || body.state === "suppress";
+    // one-shot break bookkeeping (see the return/intercept branches): a new
+    // engagement, or leaving the breaking roles, re-arms the break.
+    if ((!combatNow && !engaged) || (role !== "return" && role !== "intercept")) rec._brokeFor = null;
 
     if (role === "return" && dropPos) {
-      const anchor = driveTo(ctx, b, [dropPos[0], dropPos[1], dropPos[2]]);
+      // F1 (T-CTF-4 finding): the junction-graph route badly over-detours
+      // short trips (measured: nav 17.7 m to the drop, lane route walked the
+      // returner to 22.4 m AWAY before turning). Inside 25 m the anchor is
+      // the drop itself — botfsm's real nav path is exact at that range.
+      // navDistApprox over-estimates in-yard trips (junction detour clamped
+      // to 3x euclid — measured 45 for a real 17.7 m trip), so the direct
+      // gate also accepts a short EUCLID trip: the anchor only seeds the
+      // bot's REAL nav path, which routes around any wall correctly.
+      const ndDrop = api.navDist(body.pos, dropPos);
+      const direct = ndDrop <= 25 || api.hdist(body.pos, dropPos) <= 20;
+      const anchor = direct ? [dropPos[0], dropPos[1], dropPos[2]]
+        : driveTo(ctx, b, [dropPos[0], dropPos[1], dropPos[2]]);
+      if (direct) rec.route = null;
+      // F1 (T-CTF-2-class finding): a role write during the §7.9 hit-lock
+      // used to consume the one-shot break (rec.role changed, breakFight
+      // false) — the break now re-arms until it actually fires once.
       const hardBreak = combatNow && !api.neverBreak(body) &&
-        api.navDist(body.pos, dropPos) <= 40 && rec.role !== "return";
+        ndDrop <= 40 && (rec.role !== "return" || !rec._brokeFor);
       api.write(rec, body, {
-        role: "return", reason: R.RETURN_FLAG, anchor, anchorKind: "flag", routeUse: true,
+        role: "return", reason: R.RETURN_FLAG, anchor, anchorKind: "flag", routeUse: !direct,
         priority: 1.0, firePolicy: "defensive", selfDefenseM: 10, posture,
         noRetreat: true, breakFight: hardBreak, rearm: hardBreak,
       });
+      if (hardBreak) rec._brokeFor = "return";
       if (rec._lastReturnBark == null || t - rec._lastReturnBark > 8) {
         rec._lastReturnBark = t; api.bark(body, "returning");
       }
@@ -364,13 +428,24 @@ export function assign(ctx) {
     if (role === "intercept") {
       const c = cut.get(b);
       if (c) {
-        const hardBreak = combatNow && !api.neverBreak(body) && rec.role !== "intercept";
+        // F1 (T-CTF-2 finding): with preempts latched, a stale death event
+        // can assign intercept while the duelist is inside the §7.9 hit-lock
+        // — the one-shot role-transition break was consumed with breakFight
+        // false and never re-offered. The break now re-arms every pass until
+        // it actually fires once for this engagement.
+        // (combatNow || engaged): during the very no-hit gap that makes the
+        // break §7.9-legal, the FSM can sit one state outside the strict
+        // combat set while the percept engagement is still live — the break
+        // must not miss its only legal window over that technicality.
+        const hardBreak = (combatNow || engaged) && !api.neverBreak(body) &&
+          (rec.role !== "intercept" || rec._brokeFor !== "intercept");
         rec.route = null;
         api.write(rec, body, {
           role: "intercept", reason: R.CUTOFF_FEASIBLE, anchor: c.wp.slice(),
           anchorKind: "cutoff", priority: 0.9, firePolicy: "free", posture,
           noFlank: true, breakFight: hardBreak, rearm: hardBreak, holdS: 2,
         });
+        if (hardBreak) rec._brokeFor = "intercept";
         if (rec._lastIntBark == null || t - rec._lastIntBark > 10) {
           rec._lastIntBark = t; api.bark(body, "intercept");
         }

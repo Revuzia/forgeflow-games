@@ -650,6 +650,16 @@ export function createMode(ctx) {
         m.rules.respawnS = st.baseRespawnS;
         m.rules.protectS = st.baseProtectS;
       }
+      // F1 (AC-5): §3.8 freezes a CARRIED flag at the horn, and AC-5 allows
+      // exactly AT_STAND | CARRIED as end states — but a flag DROPPED inside
+      // its 30 s dropReturnS window when the clock expires used to freeze as
+      // DROPPED and fail the end-state invariant. Nothing plays after the
+      // horn, so a dangling drop returns home (same machinery as stalemate).
+      if (st.flags) {
+        for (const f of m.state.flags || []) {
+          if (f.state === "DROPPED") st.flags.forceReturn(f, "matchEnd");
+        }
+      }
     },
 
     onSpawn(m, ev) {

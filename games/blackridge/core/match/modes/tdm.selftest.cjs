@@ -315,7 +315,12 @@ async function main() {
     // the "team scores untouched" assertion below for a reason unrelated to
     // §2.2. Freeze targeting the tick live begins; the test's own intent
     // (zero combat kills, zone deaths only) is unchanged.
-    stepN(sim, 185);
+    // [F1 2026-08-25] same class again: the W3 nav/movement fixes (capsule-
+    // honest bake, orbit-proof waypoint accept) shift every trajectory from
+    // tick 0, and on this seed a kill landed inside even the 185-tick
+    // window's last ~5 live ticks. Freeze at the warmup boundary itself —
+    // live begins at tick 181; 181 leaves zero un-frozen live ticks.
+    stepN(sim, 181);
     sim.setNoTarget(true);
     sim.teleport("P", COLLAPSE_CENTRE[0], 0, COLLAPSE_CENTRE[2]); // human safe inside
     let guard = 0;
@@ -330,6 +335,28 @@ async function main() {
       "collapse centre honours content.match.collapse override");
     const r1 = pub.radius;
     ok(r1 <= 12.0 + 1e-6 && r1 >= 6.0, `radius inside [6,12] just after arm: ${r1}`);
+    // [F1 2026-08-25] scene isolation: noTarget hides only the PLAYER from
+    // perception — bot-vs-bot stays live, and on this flat fixture arena the
+    // freeze-era idle wander can drift enemies into mutual LOS (the W3
+    // movement fixes shifted every trajectory; this seed then produced two
+    // real combat kills and the §2.2 assertion failed for a reason unrelated
+    // to zone scoring). The scene's subject is "a ZONE death never scores",
+    // so make combat impossible: park each team in its own far corner
+    // OUTSIDE the ring, beyond any detect range, and anchor the brains there
+    // so nobody walks back through the centre before the ring kills.
+    for (const b of sim.state.bots) {
+      if (!b.alive) continue;
+      const cx = b.team === 0 ? -35 : 35;
+      const cz = b.team === 0 ? -35 : 35;
+      sim.teleport(b.id, cx + (b.id % 3), 0, cz + ((b.id * 7) % 3));
+      const br = b._brain;
+      if (br) {
+        br.anchor = [b.pos[0], b.pos[1], b.pos[2]];
+        br.floorAnchor = br.anchor;
+        br.goal = br.anchor.slice(); br.path = null; br.pathI = 0;
+        br.arrived = true;
+      }
+    }
     stepN(sim, 60 * 10);
     if (M.phase !== "ended") {
       ok(M.mode.collapse.radius < r1, `ring is shrinking: ${M.mode.collapse.radius} < ${r1}`);
@@ -351,7 +378,7 @@ async function main() {
     ok(M.result && M.result.result === "win" && M.result.reason === "overtime first death",
       "zone death resolves through the first-death rule");
     ok(M.teams[0].score === 0 && M.teams[1].score === 0,
-      "zone death is a death, never a kill — team scores untouched (§2.2)");
+      `zone death is a death, never a kill — team scores untouched (§2.2) [got ${M.teams[0].score}/${M.teams[1].score}; deaths: ${events.filter((e) => e.type === "death").map((e) => `${e.data.victim}<-${e.data.attacker != null ? e.data.attacker : "zone"}`).join(",")}]`);
     const snap = sim.match.snapshot();
     ok(snap.oobDeaths === 0, "zero out-of-bounds backstop deaths (AC-8)");
     ok(!sim.match._ms.watchdogFired, "watchdog never fired — COLLAPSE is the terminator, not the watchdog");

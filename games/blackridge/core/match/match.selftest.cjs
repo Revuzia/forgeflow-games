@@ -484,6 +484,89 @@ async function main() {
       ok(me && me.data.match && me.data.match.modeId === "tdm",
         "mission:end carries the additive match block (freeze amendment d)");
     }
+
+    section("[F2] empty-ammo trickle — floor beside kill resupply");
+    {
+      // Design hole: kill-only resupply gives a zero-kill actor at TOTAL zero
+      // ammo no recovery route. The floor: 10 consecutive dry seconds → +1
+      // mag to the held weapon, 30 s cooldown per actor (fixture has no
+      // pk_ammo_empty_trickle → EMPTY_TRICKLE_DEFAULTS 10/30/1 are under test).
+      const { sim, events } = makeMatchSim("tdm", 51);
+      sim.match.start(sim);
+      for (let i = 0; i < 200; i++) sim.step(null); // through warmup, into live
+      ok(sim.state.match.phase === "live", "fixture match live for the trickle test");
+      const p = sim.state.player;
+      const wid = p.weapon.id;
+      const starve = () => {
+        p.weapon.mag = 0; p.weapon.reserve = 0;
+        if (p._slotAmmo && p._slotAmmo[wid]) { p._slotAmmo[wid].mag = 0; p._slotAmmo[wid].reserve = 0; }
+      };
+      // keep the test subject alive; the trickle needs a LIVING dry actor
+      const step = () => { p.hp = 100; sim.step(null); };
+      const trickles = () => events.filter((e) => e.type === "resupply" && e.data.reason === "trickle" && e.data.who === "P");
+      starve();
+      events.length = 0;
+      for (let i = 0; i < 570; i++) step(); // 9.5 s dry — under the 10 s floor
+      ok(trickles().length === 0, "no trickle before 10 consecutive dry seconds");
+      for (let i = 0; i < 60; i++) step(); // cross 10 s
+      ok(trickles().length === 1, "trickle grant lands after 10 s at total zero ('resupply' event, reason 'trickle', mags 1)");
+      ok(trickles().length && trickles()[0].data.mags === 1, "grant is 1 magazine");
+      ok(p.weapon.mag + p.weapon.reserve > 0, "held weapon TOTAL ammo now > 0 — recovery route exists");
+      const wt = sim.weapons[wid];
+      ok(p.weapon.reserve === Math.min(wt.reserve, wt.mag), "reserve grant = one weapon-table mag, capped at table reserve");
+      ok(p._slotAmmo && p._slotAmmo[wid] && p._slotAmmo[wid].reserve === p.weapon.reserve,
+        "_slotAmmo mirror moved with the reserve (sim.grantAmmoMag discipline)");
+      // cooldown: dry again immediately — 15 s later (dry ≥10 s) still no
+      // second grant (30 s cooldown holds)…
+      starve();
+      for (let i = 0; i < 900; i++) step(); // +15 s, dry throughout
+      ok(trickles().length === 1, "second grant blocked inside the 30 s per-actor cooldown");
+      // cooldown EXPIRY + content-driven constants need a second sim: the
+      // fixture's 30 s tdm clock ends the match before a 30 s cooldown can
+      // expire. Custom pk rule (dry 2 s / cooldown 8 s / 2 mags) + long limits
+      // exercises the readEmptyTrickle content path at testable timescales.
+      {
+        const c2 = JSON.parse(JSON.stringify(fixtureContent));
+        c2.modes.tdm = { scoreLimit: 999, timeLimitS: 120, respawnS: 1.0, protectS: 0.5 };
+        c2.pickups = [{ id: "pk_ammo_empty_trickle", kind: "ammo_rule", modes: ["tdm"],
+          emptyDryS: 2, emptyCooldownS: 8, emptyMags: 2 }];
+        const events2 = [];
+        const sim2 = S.createSim({
+          content: c2, colliders: flatColliders(), weapons: WEAPONS, seed: 52,
+          mode: "tdm", tuning: "pvp", matchOpts: {},
+          emit: (ty, da) => events2.push({ type: ty, data: da }),
+        });
+        sim2.match.start(sim2);
+        for (let i = 0; i < 200; i++) sim2.step(null); // into live
+        const p2 = sim2.state.player;
+        const wid2 = p2.weapon.id;
+        const starve2 = () => {
+          p2.weapon.mag = 0; p2.weapon.reserve = 0;
+          if (p2._slotAmmo && p2._slotAmmo[wid2]) { p2._slotAmmo[wid2].mag = 0; p2._slotAmmo[wid2].reserve = 0; }
+        };
+        const step2 = () => { p2.hp = 100; sim2.step(null); };
+        const trickles2 = () => events2.filter((e) => e.type === "resupply" && e.data.reason === "trickle" && e.data.who === "P");
+        starve2();
+        for (let i = 0; i < 90; i++) step2(); // 1.5 s dry — under the custom 2 s
+        ok(trickles2().length === 0, "content-driven dryS honored (no grant at 1.5 s dry with emptyDryS 2)");
+        for (let i = 0; i < 60; i++) step2(); // cross 2 s
+        ok(trickles2().length === 1 && trickles2()[0].data.mags === 2,
+          "content-driven grant lands (emptyDryS 2, emptyMags 2 from the pk rule)");
+        const wt2 = sim2.weapons[wid2];
+        ok(p2.weapon.reserve === Math.min(wt2.reserve, wt2.mag * 2),
+          "reserve grant = 2 table mags, capped at table reserve");
+        starve2();
+        for (let i = 0; i < 300; i++) step2(); // +5 s — dry ≥2 s but inside the 8 s cooldown
+        ok(trickles2().length === 1, "content-driven cooldown holds (no re-grant at 5 s with emptyCooldownS 8)");
+        for (let i = 0; i < 300; i++) step2(); // +5 s → 10 s since grant, dry throughout
+        ok(trickles2().length === 2, "grant fires again after the cooldown expires (still dry)");
+      }
+      // live content carries the data-driven rule (constants in content, not code)
+      const pkT = (liveContent.pickups || []).find((pk) => pk.id === "pk_ammo_empty_trickle");
+      ok(!!pkT && pkT.kind === "ammo_rule" && pkT.emptyDryS === 10 && pkT.emptyCooldownS === 30 &&
+         pkT.emptyMags === 1 && Array.isArray(pkT.modes) && pkT.modes.length === 3,
+        "content.json pk_ammo_empty_trickle present (ammo_rule, 10/30/1, all three modes)");
+    }
   }
 
   // ================================================================ seeds

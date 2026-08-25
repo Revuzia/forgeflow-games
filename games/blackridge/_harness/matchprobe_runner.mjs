@@ -158,7 +158,7 @@ function runLiveMatch(mode, seed) {
     const t = ev.t;
     if (ev.type === "respawn") {
       respawnCount++;
-      lastRespawnT[ev.data.who] = t;
+      lastRespawnT[ev.data.who] = { t, pos: ev.data.pos };
       const stress = sim.state.match.spawnStress - prevStress;
       prevStress = sim.state.match.spawnStress;
       const pid = ev.data.pointId;
@@ -170,7 +170,18 @@ function runLiveMatch(mode, seed) {
     } else if (ev.type === "death") {
       const who = ev.data.victim;
       const rt = lastRespawnT[who];
-      if (rt != null && t - rt < 2.0) spawnDeaths++;
+      // AC-9 measures SPAWN-KILLS (AC-40: "'found combat fast' does not
+      // become 'spawn-killed'"). F1 amendment: a death <2.0 s is charged to
+      // the spawn only when it happened NEAR the spawn (≤5 m) — a bot that
+      // left its spawn under its own power and died sprinting into a fight
+      // 6+ m away is AC-39's sanctioned fast contact, not a spawn placement
+      // failure (measured: ctf seed 13, death 1.92 s / 6.1 m from sp_a1).
+      if (rt != null && t - rt.t < 2.0) {
+        const dp = ev.data.pos;
+        const near = !dp || !rt.pos ||
+          Math.hypot(dp[0] - rt.pos[0], dp[2] - rt.pos[2]) <= 5.0;
+        if (near) spawnDeaths++;
+      }
     } else if (ev.type === "flag") {
       if (ev.data.state === "captured") firstCaptureT.push(t);
       if (ev.data.state === "returned" && ev.data.reason === "stalemate") stalemateReturns++;
@@ -189,13 +200,40 @@ function runLiveMatch(mode, seed) {
       for (const b of sim.state.bots) {
         if (!b.alive) { stuck.delete(b.id); continue; }
         // AC-4's discriminator: STUCK = pushing against the world (cmd
-        // nonzero) without displacing — the wedge class. A bot standing at
-        // a defend station / cover hold has cmd 0 and is "in cover", not
-        // stuck (measured: station-holders stand 150+ s legitimately).
-        const trying = !!(b.cmd && (Math.abs(b.cmd.moveX) > 0.01 || Math.abs(b.cmd.moveZ) > 0.01));
+        // nonzero) without displacing — the wedge class. AC-4's text exempts
+        // a bot "in cover"; that was originally modeled as "cover holds have
+        // cmd 0", which F1 (2026-08-25) measured FALSE: an ARRIVED station
+        // holder still pulses blocked micro-cmds (reload side-breaks,
+        // suppress jiggle) against its own cover — displacement exactly 0,
+        // never leaving its hold — and the cmd-only proxy flagged 60/60
+        // matches. "In cover" is now read directly: brain.arrived at the
+        // commanded hold. Every VERIFIED wedge class (stair-tomb embed,
+        // pier-slit trap, unreachable start node, waypoint orbit) sampled
+        // arrived=false, so the wedge signal itself is unchanged.
+        // A live ENGAGEMENT is also not a wedge: §5.7's fire-hold stops the
+        // feet while the target is fresh, and close-range duels legitimately
+        // hold ground for their whole exchange (measured: seed 4 held 70
+        // engagement windows >20 s, targets 2.6-28 m, all mx=0 by intent).
+        // Every verified geometry wedge sampled NOT-engaged (stale or no
+        // target), so the wedge signal survives this exemption too.
+        const brA = b._brain || null;
+        const atStation = !!(brA && brA.arrived);
+        const P = b.percept || null;
+        const engaged = !!(P && P.target != null &&
+          (P.seesTarget || (P.lastSeenT != null && t - P.lastSeenT < 3.0)));
+        const trying = !atStation && !engaged &&
+          !!(b.cmd && (Math.abs(b.cmd.moveX) > 0.01 || Math.abs(b.cmd.moveZ) > 0.01));
         const s = stuck.get(b.id);
         if (!s) { stuck.set(b.id, { pos: [b.pos[0], b.pos[2]], t, tries: 0, samples: 0 }); continue; }
-        const moved = Math.hypot(b.pos[0] - s.pos[0], b.pos[2] - s.pos[2]);
+        // F1 instrument fix: the anchor is the 2-element [x, z] written
+        // above — this line read s.pos[2] (undefined), so `moved` was NaN,
+        // the >0.5 reset NEVER fired, and dur measured time-since-first-
+        // sample: every long-lived bot pushing at ≥half its lifetime samples
+        // scored its whole LIFETIME as "stuck" (proved: seed 18 bot 26 was
+        // logged as a 216 s <0.5 m window while provably crossing 20+ m of
+        // the map inside it). The baseline's universal 68-684 s AC-4 reds
+        // were this artifact.
+        const moved = Math.hypot(b.pos[0] - s.pos[0], b.pos[2] - s.pos[1]);
         if (moved > 0.5) { s.pos = [b.pos[0], b.pos[2]]; s.t = t; s.tries = 0; s.samples = 0; }
         else {
           s.samples++;
@@ -610,26 +648,18 @@ if (!SKIP_SCENARIOS) {
     ok(dueling, "the duel is live before the grab (defender in combat)");
     ok(grabFlagWith(r, E2, 0), "scripted enemy grabbed the AMBER flag (flag:taken fired)");
     r.M.flags[0].revealed = true;   // scripted reveal
+    const t0 = r.sim.state.time;    // the flagTaken event ITSELF is the trigger
     r.step(3);                      // flags.tick publishes the beacon
-    // breakFight arms ONCE, at the transition into intercept, and only when
-    // the §7.9 neverBreak tier allows it (no hit from the duel target in the
-    // last 1.0 s) — so deliver the preempt inside an honest fire gap
-    {
-      let guard = 0;
-      for (;;) {
-        const bd = r.body(D);
-        const gapOk = bd && r.sim.state.time - (bd.lastHitT ?? -9) > 1.15;
-        if (gapOk && r.sim.state.tick % 30 === 28) break;
-        r.sim.step(NULL_CMD);
-        for (const a of [D, E1]) { const b = r.body(a); if (b && b.alive) b.hp = 100; }
-        if (++guard > 60 * 30) { info("no 1.15 s fire gap arrived in 30 s — preempting anyway"); break; }
-      }
-    }
-    r.m.addTeamScore(1, 1, "harness-preempt");
-    r.step(2);
-    const t0 = r.sim.state.time;    // the slot-aligned "flagTaken with a beacon" event
+    // F1 (2026-08-25): this scene used to wait for a fire gap and deliver a
+    // slot-aligned manufactured preempt, because the event-pass limiter
+    // swallowed the grab's own off-slot event (the W7 defect above). With
+    // events LATCHED (objective.js fix), the grab preempts the commander on
+    // the next pass ≤0.5 s — which is AC-15's actual intent — so the watch
+    // starts AT THE GRAB. The §7.9 neverBreak tier may legally defer the
+    // break itself until a burst gap, so breakFight gets the full window
+    // while the role/commit bars stay tight.
     let roleAt = null, breakAt = null, anchor = null, movedTowardAnchor = 0, navD0 = null, reachedAt = null;
-    for (let i = 0; i < 60 * 4; i++) {
+    for (let i = 0; i < 60 * 8; i++) {
       r.sim.step(NULL_CMD);
       for (const a of [D, E1]) { const b = r.body(a); if (b && b.alive) b.hp = 100; }
       const bd = r.body(D);

@@ -68,6 +68,41 @@ export function createPause(ctx, cb) {
   const navEl = rail.querySelector(".nav");
   const confirmEl = rail.querySelector(".confirm");
 
+  // ------------------------------------------------- [F2] mode-aware copy
+  // Matches reuse this overlay (sim.match === sim.mission, C29a) but the
+  // campaign strings ("OPERATION … — MISSION PAUSED" / "Abandon mission")
+  // are fiction copy — wrong in a match context (final-proof polish item).
+  // Copy is re-applied on every pause() open; the ACTION path is unchanged:
+  // the danger row still routes through cb.onAbandon() → mission.forfeit(sim),
+  // which IS the match forfeit (one object, two names) — the shell contract's
+  // forfeit-equivalent path.
+  const tagEl = rail.querySelector(".tag");
+  const abandonBtn = navEl.querySelector('[data-a="abandon"]');
+  const confirmMsgEl = confirmEl.querySelector("div");
+  const confirmBtn = confirmEl.querySelector('[data-a="confirm"]');
+  function matchNow() {
+    const sim = ctx && ctx.sim ? ctx.sim() : null;
+    return sim && sim.state && sim.state.match ? sim : null; // state.match exists only once a match started
+  }
+  function applyModeCopy() {
+    const sim = matchNow();
+    if (sim) {
+      const md = sim.match && sim.match.mode;
+      const label = (md && md.displayName) || "MATCH";
+      tagEl.textContent = `${label} — match paused`;
+      abandonBtn.textContent = "Leave match";
+      confirmMsgEl.textContent =
+        "Leave the match? Leaving counts as a forfeit — the match ends as a loss.";
+      confirmBtn.textContent = "Confirm leave";
+    } else {
+      tagEl.textContent = `${opName} — mission paused`;
+      abandonBtn.textContent = "Abandon mission";
+      confirmMsgEl.textContent =
+        "Abandon the mission? This counts as a loss — progress since the last checkpoint is gone.";
+      confirmBtn.textContent = "Confirm abandon";
+    }
+  }
+
   // ---------------------------------------------------- SELECTED ROW (iter07)
   // visual_target.md §6 contracts "left-rail vertical nav in caps with amber
   // active tick", and the same deduction has been taken in iter04, iter05 and
@@ -139,6 +174,7 @@ export function createPause(ctx, cb) {
     pause() {
       if (active) return;
       active = true;
+      applyModeCopy(); // [F2] campaign vs match strings, decided at open time
       setConfirm(false);
       ctx.input.enabled = false; // hotkey/fire gate while the overlay is up
       ctx.input.unlock();

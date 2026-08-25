@@ -256,6 +256,12 @@ function writeObj(sim, st, rec, bot, t, f) {
   const changed = o.role !== f.role || o.reason !== f.reason;
   o.role = f.role;
   o.reason = f.reason;
+  // W7 latch note: holdUntil deliberately refreshes on every pass — an
+  // expiry-based rebalance was tried (F1 2026-08-25) and MEASURED WORSE:
+  // roles churned between passes, long attack runs never completed, and the
+  // AC-14 capture rate dropped (14/20 → 3/8 on the hard seeds). Reassignment
+  // is served instead by the latched Tier-W preempts (see the pass scheduler)
+  // plus the flag-critical latch-break in roles/ctf.js.
   if (changed || f.rearm) { o.assignedT = t; rec.assignedT = t; }
   o.holdUntil = t + (f.holdS != null ? f.holdS : ROLE_LATCH_S);
   rec.holdUntil = o.holdUntil;
@@ -527,21 +533,29 @@ export function objectiveStep(sim, nav, squad, dt) {
   }
 
   // ---- which commander passes run this tick?
-  const passes = [];
-  if (modeId === "ffa") {
-    if (tick % PASS_PERIOD_TICKS === 0) passes.push("ffa");
-    else if (eventTeams) {
-      const tr = teamRec(st, "ffa");
-      if (t - tr.lastPassT >= EVENT_PASS_MIN_S) passes.push("ffa");
+  // W7 preempt-limiter fix (matchprobe W7-DEFECT finding): EVENT_PASS_MIN_S
+  // (0.5 s) equals the scheduled cadence, so an off-slot Tier-W event used
+  // to be swallowed — the rate limit blocked the event pass, the flag was
+  // local to that tick, and the next scheduled pass ran WITHOUT preempt
+  // (~29/30 of events). The event is now LATCHED per team (tr.eventDueT)
+  // and consumed by the first pass that runs — scheduled or event-driven —
+  // which then runs WITH preempt. The 0.5 s rate limit still holds: no team
+  // ever passes more often than before; only the preempt flag stops leaking.
+  const passes = []; // [key, preempt]
+  const wantPass = (key, slot) => {
+    const tr = teamRec(st, key);
+    if (eventTeams) tr.eventDueT = t; // latch: an event is pending
+    const pending = tr.eventDueT >= 0;
+    if (tick % PASS_PERIOD_TICKS === slot) {
+      passes.push([key, pending]);
+      tr.eventDueT = -1;
+    } else if (pending && t - tr.lastPassT >= EVENT_PASS_MIN_S) {
+      passes.push([key, true]);
+      tr.eventDueT = -1;
     }
-  } else {
-    for (let team = 0; team < 2; team++) {
-      const slot = team === 0 ? 0 : 15;
-      const tr = teamRec(st, team);
-      if (tick % PASS_PERIOD_TICKS === slot) passes.push(team);
-      else if (eventTeams && t - tr.lastPassT >= EVENT_PASS_MIN_S) passes.push(team);
-    }
-  }
+  };
+  if (modeId === "ffa") wantPass("ffa", 0);
+  else { wantPass(0, 0); wantPass(1, 15); }
 
   // ---- beacons (Tier W) — refreshed at the 3 s cadence, before any pass
   if (passes.length || eventTeams || tick % 15 === 7) updateBeacons(st, m, t);
@@ -553,10 +567,10 @@ export function objectiveStep(sim, nav, squad, dt) {
     for (const b of sim.state.bots) if (b.alive) liveIds.add(b.id);
     for (const id of st.recs.keys()) if (!liveIds.has(id)) st.recs.delete(id);
 
-    for (const pass of passes) {
+    for (const [pass, preempt] of passes) {
       const tr = teamRec(st, pass);
       tr.lastPassT = t;
-      runPass(sim, st, m, modeId, pass, t, !!eventTeams, squad);
+      runPass(sim, st, m, modeId, pass, t, preempt, squad);
     }
     OBJ_PERF._inStep = false;
   }
