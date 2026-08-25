@@ -246,14 +246,17 @@ async function main() {
       ok(c.spread() === preSpread, "consuming rng.match never advances rng.spread (fixed-offset independence)");
     }
 
-    section("pvp_tuning — identity delta set (C25)");
+    section("pvp_tuning — wave-5 delta set LIVE (C25/W11)");
     {
       const sp = TUN.getTuning("sp"), pvp = TUN.getTuning("pvp");
       ok(sp.maxHp === 100 && sp.regenDelayS === 4.5 && sp.regenPerS === 35,
         "sp table matches the pre-PVP constants (100 HP / 4.5 s / 35 HP/s)");
-      const strip = (t) => JSON.stringify(Object.assign({}, t, { id: null }));
-      ok(strip(sp) === strip(pvp),
-        "pvp table is BYTE-IDENTICAL to sp minus the id (wave-5 flips the data, not before)");
+      ok(pvp.maxHp === 110 && pvp.regenDelayS === 5.0 && pvp.regenPerS === 28 &&
+         pvp.steadyMult === 1.0,
+        "pvp table carries the C25 deltas (110 HP / 5.0 s / 28 HP/s / steadyMult 1.0)");
+      ok(sp.weaponDeltas && Object.keys(sp.weaponDeltas).length === 0 &&
+         Object.keys(pvp.weaponDeltas).length === 4,
+        "sp has NO weapon deltas; pvp overrides all four weapons (§4.3 B2/B3)");
     }
 
     section("areEnemies — the one truth (Part 3.4)");

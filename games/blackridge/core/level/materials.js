@@ -466,6 +466,15 @@ export const GROUND_HOOKS = {
   planarMat: { value: new THREE.Matrix4() }, // texture-projection matrix
   planarStrength: { value: 0.0 },          // 0 ⇒ envMap fallback (dynres floor)
   time: { value: 0.0 },                    // ripple phase (level.js drives)
+  // LANE P1 (2026-08-24) — far-field ground fade band, metres. Between
+  // farNear and farFar the ground's grunge/anti-tile/ripple taps blend to
+  // their means and are then SKIPPED (see the FAR-FIELD block in augment) —
+  // the ground was measured as the largest single surface cost of the
+  // traversal frame. Shared LIVE uniforms across every `puddle` ground
+  // material; a harness pins {1e6, 1e6+1} to A/B the fade without a
+  // recompile. Walls/props never read these.
+  farNear: { value: 26.0 },
+  farFar: { value: 46.0 },
 };
 
 // ---- SPEC_HOOKS — the KEY LIGHT, published to the material layer ----------
@@ -612,6 +621,9 @@ function augment(mat, o = {}) {
       sh.uniforms.uPlanarMat = GROUND_HOOKS.planarMat;
       sh.uniforms.uPlanarStrength = GROUND_HOOKS.planarStrength;
       sh.uniforms.uTime = GROUND_HOOKS.time;
+      // LANE P1 far-field fade band — live shared uniform objects
+      sh.uniforms.uFarNear = GROUND_HOOKS.farNear;
+      sh.uniforms.uFarFar = GROUND_HOOKS.farFar;
     }
     sh.vertexShader = sh.vertexShader
       .replace("#include <common>", `#include <common>
@@ -659,7 +671,9 @@ ${opts.puddle ? `uniform sampler2D uRipple;
 uniform sampler2D uPlanarTex;
 uniform mat4 uPlanarMat;
 uniform float uPlanarStrength;
-uniform float uTime;` : ""}`)
+uniform float uTime;
+uniform float uFarNear;
+uniform float uFarFar;` : ""}`)
       // ------------------------------------------------------------------
       // TEXEL DENSITY, FIXED BY CONSTRUCTION (iter04 ranked fix #4a).
       //
@@ -719,7 +733,42 @@ void main() {`)
       // across every square metre".
       .replace("#include <map_fragment>", `#include <map_fragment>
 vec2 gruv = vWPos.xz + vWPos.y * vec2(0.71, 0.37);
-vec3 gA = texture2D(uGrunge, gruv * 0.0619).rgb;        // macro   (~16 m)
+${opts.puddle ? `// ---- LANE P1 FAR-FIELD (GROUND ONLY — uniform-driven, NO program fork) ----
+// The ground is the largest single surface cost of the traversal frame
+// (levers: -12.2% of frame at the boulevard pose), and most of that is
+// texture bandwidth: 4 grunge taps + drainage + 2 anti-tile + 2 ripple, per
+// fragment, at anisotropy 8 on a grazing surface. Past uFarFar metres every
+// one of those bands is minified below visibility (a3near already zeroes the
+// analytic structure past 42 m), so each tap blends to its own mean (0.5 —
+// zero-mean noise) across the fade band and the FETCHES are skipped once the
+// blend completes. The branch is per-fragment but spatially coherent across
+// the far field, so warps take one side; the implicit-derivative caveat for
+// samples inside non-uniform flow only touches quads on the a3far≈1 rim,
+// where the sample's weight is <0.001 of the pixel. uFarNear/uFarFar are
+// LIVE uniforms (GROUND_HOOKS) — pin 1e6 to A/B the fade with no recompile.
+// This block rides the EXISTING puddle (p1) permutation: no cacheKey change,
+// wall/prop (p0) shader text is byte-identical to before.
+float a3far = smoothstep(uFarNear, uFarFar, distance(vWPos, cameraPosition));
+vec3 gA; vec3 gB; vec3 gC; vec3 gE;
+float a3run;
+if (a3far < 0.999) {
+  gA = texture2D(uGrunge, gruv * 0.0619).rgb;        // macro   (~16 m)
+  gB = texture2D(uGrunge, gruv * 0.0143 + 0.29).rgb; // super   (~70 m)
+  gC = texture2D(uGrunge, gruv * 0.83 + 0.61).rgb;   // close   (~1.2 m)
+  gE = texture2D(uGrunge, gruv * 2.63 + 0.19).rgb;   // mid     (~0.38 m)
+  // drainage tap (used by a3runm/a3wet below) — fetched here so the far
+  // field can skip it with the rest
+  a3run = texture2D(uGrunge,
+    vec2(dot(vWPos.xz, vec2(0.82, 0.57)) * 0.52, vWPos.y * 0.030) + 0.17).r;
+  gA = mix(gA, vec3(0.5), a3far);
+  gB = mix(gB, vec3(0.5), a3far);
+  gC = mix(gC, vec3(0.5), a3far);
+  gE = mix(gE, vec3(0.5), a3far);
+  a3run = mix(a3run, 0.5, a3far);
+} else {
+  gA = vec3(0.5); gB = vec3(0.5); gC = vec3(0.5); gE = vec3(0.5);
+  a3run = 0.5;
+}` : `vec3 gA = texture2D(uGrunge, gruv * 0.0619).rgb;        // macro   (~16 m)
 vec3 gB = texture2D(uGrunge, gruv * 0.0143 + 0.29).rgb; // super   (~70 m)
 // close-range tap (~1.2 m period): micro-breakup so surfaces survive the
 // S4 close crop — without it the two macro taps read as smooth clay <3 m
@@ -730,7 +779,7 @@ vec3 gC = texture2D(uGrunge, gruv * 0.83 + 0.61).rgb;
 // half of the S4 critic disagreement (critic-c reading variance that is
 // genuinely in the map at metre scale, critic-b reading none at the scale a
 // close-up actually samples). This is the decimetre band neither tap covered.
-vec3 gE = texture2D(uGrunge, gruv * 2.63 + 0.19).rgb;
+vec3 gE = texture2D(uGrunge, gruv * 2.63 + 0.19).rgb;`}
 float g1 = gA.r, g2 = gB.g, g3 = gC.g, g5 = gE.b;
 
 vec3 a3N = normalize(vWN);
@@ -752,8 +801,8 @@ float a3seam = uSeam * a3near * mix(
 float a3chip = uWear * a3near * smoothstep(0.60, 0.84, gC.b);
 
 // drainage: grime running DOWN vertical faces, strongest under the roofline
-float a3run = texture2D(uGrunge,
-  vec2(dot(vWPos.xz, vec2(0.82, 0.57)) * 0.52, vWPos.y * 0.030) + 0.17).r;
+${opts.puddle ? `// (a3run fetched in the FAR-FIELD block above for puddle grounds)` : `float a3run = texture2D(uGrunge,
+  vec2(dot(vWPos.xz, vec2(0.82, 0.57)) * 0.52, vWPos.y * 0.030) + 0.17).r;`}
 float a3runm = uWear * a3wall * smoothstep(0.56, 0.92, a3run)
              * smoothstep(9.5, 2.0, vWPos.y);
 
@@ -774,7 +823,7 @@ float a3base = uWear * a3wall * smoothstep(1.25, 0.0, vWPos.y);
 // a ~16 m mask. The patch that appears at x and the patch that appears at
 // x + 4.6 m are then different mixes of two different taps, and the tile's
 // period is no longer the surface's period.
-float a3blend = uAnti * smoothstep(0.34, 0.66, gA.g);
+float a3blend = uAnti * smoothstep(0.34, 0.66, gA.g)${opts.puddle ? " * (1.0 - a3far)" : ""};
 
 // ---- RAIN WETNESS ON VERTICALS (VT §4.2's payoff layer, D3 + D4) ----------
 // The wet response only ever ran through aowet, a GROUND vertex channel, so
@@ -867,9 +916,13 @@ float a3coat = uCoat * a3cov;
 
 diffuseColor.rgb *= (1.0 + uMottle * ((g1 - 0.5) * 1.7 + (g2 - 0.5) * 1.2 + (g3 - 0.5) * 0.55));
 diffuseColor.rgb *= (1.0 - a3seam * 0.40 - a3chip * 0.15 - a3base * 0.24);
-${W ? `#ifdef USE_MAP
+${W ? (opts.puddle ? `#ifdef USE_MAP
+if (a3blend > 0.001) {
+  diffuseColor.rgb = mix(diffuseColor.rgb, texture2D(map, a3uv2_()).rgb * diffuse, a3blend);
+}
+#endif` : `#ifdef USE_MAP
 diffuseColor.rgb = mix(diffuseColor.rgb, texture2D(map, a3uv2_()).rgb * diffuse, a3blend);
-#endif` : ""}
+#endif`) : ""}
 // A wet substrate darkens (VT §4.2 albedo x0.8). iter07 pulled this back from
 // x0.76 to x0.90 on the finding that the S8 box face "lost 31% of its
 // high-frequency shading detail (hp(9) std 13.17 -> 9.10)".
@@ -908,12 +961,17 @@ ${opts.noTint ? `#if defined( USE_COLOR ) && !defined( USE_COLOR_ALPHA )
 diffuseColor.rgb /= max( vColor, vec3( 1e-3 ) );
 #endif` : ""}`)
       .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>
-${W ? `#ifdef USE_ROUGHNESSMAP
+${W ? (opts.puddle ? `#ifdef USE_ROUGHNESSMAP
+if (a3blend > 0.001) {
+  roughnessFactor = mix(roughnessFactor,
+    texture2D(roughnessMap, a3uv2_()).g * roughness, a3blend);
+}
+#endif` : `#ifdef USE_ROUGHNESSMAP
 // the anti-tile second tap has to move roughness too, or the repeat survives
 // in the specular after being broken in the albedo
 roughnessFactor = mix(roughnessFactor,
   texture2D(roughnessMap, a3uv2_()).g * roughness, a3blend);
-#endif` : ""}
+#endif`) : ""}
 roughnessFactor = clamp(
   roughnessFactor * (1.0 + uGrungeAmp * (g1 - 0.5) * 2.2)
     + uGrungeAmp * 0.55 * (g2 - 0.5)
@@ -1160,9 +1218,13 @@ if (uCoat > 0.0) {
     if (opts.puddle) {
       sh.fragmentShader = sh.fragmentShader
         .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
-vec2 ripA = texture2D(uRipple, vWPos.xz * 0.45 + vec2(uTime * 0.030, uTime * 0.021)).xy * 2.0 - 1.0;
-vec2 ripB = texture2D(uRipple, vWPos.xz * 0.31 - vec2(uTime * 0.026, uTime * 0.037)).xy * 2.0 - 1.0;
-vec2 rip = (ripA + ripB) * 0.5;
+// LANE P1 far-field: ripple is sub-pixel past the fade band — skip the taps
+vec2 rip = vec2(0.0);
+if (a3far < 0.999) {
+  vec2 ripA = texture2D(uRipple, vWPos.xz * 0.45 + vec2(uTime * 0.030, uTime * 0.021)).xy * 2.0 - 1.0;
+  vec2 ripB = texture2D(uRipple, vWPos.xz * 0.31 - vec2(uTime * 0.026, uTime * 0.037)).xy * 2.0 - 1.0;
+  rip = (ripA + ripB) * 0.5 * (1.0 - a3far);
+}
 normal = normalize(normal + vec3(rip * 0.35, 0.0) * pud);`)
         .replace("#include <opaque_fragment>", `#include <opaque_fragment>
 if (pud > 0.001 && uPlanarStrength > 0.001) {

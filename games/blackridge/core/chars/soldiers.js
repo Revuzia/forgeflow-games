@@ -489,6 +489,27 @@ export function createSoldiers(ctx) {
       // loadBody already pushed the fallback flag; nothing more to report here
     }
     actor.setTint(archTint(d.archetype));
+    // W11 faction rim (C29f wave-5 / pvp_design §3.1): matches only — the
+    // campaign never sets a rim, so its frames are unchanged (Amendment A2).
+    // Rule: friend-or-foe FROM THE HUMAN'S SEAT, which is what the read is
+    // for — teammates rim AMBER, hostiles rim SLATE. In FFA team===actorId,
+    // so every bot is hostile and rims SLATE with zero special-casing.
+    // ≥0.35 intensity per §3.1; tints from the match's own team table when
+    // it is the two-team shape, else the C2 constants.
+    {
+      const sim = ctx.sim();
+      const ms = sim && sim.state && sim.state.match;
+      if (ms) {
+        const b = sim.state.bots.find((x) => x.id === d.botId);
+        const pTeam = sim.state.player ? sim.state.player.team : 0;
+        const friendly = !!b && b.team === pTeam;
+        const twoTeams = Array.isArray(ms.teams) && ms.teams.length === 2;
+        const rimHex = friendly
+          ? ((twoTeams && ms.teams[0] && ms.teams[0].tint) || "#d9a441")   // AMBER
+          : ((twoTeams && ms.teams[1] && ms.teams[1].tint) || "#7c9fd0"); // SLATE
+        actor.setRim(rimHex, 0.4);
+      }
+    }
     const kind = archWpnKind(d.archetype);
     let wpn = null;
     if (wpnProtos[kind]) {

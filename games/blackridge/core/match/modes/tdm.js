@@ -42,6 +42,13 @@ const CONTACT_WINDOW_S = 6.0; // killfeed positions considered "where the fight 
 const PRESS_DEFICIT = 8;      // arch 5.4 — losing by ≥8 → press
 const CONTROL_LEAD = 12;      // arch 5.4 — winning by ≥12 → hold what you have
 
+// [P2] AMMO RESUPPLY — partial refill on kill (gate-2 dry-Warden finding).
+// LIFTED to match.js's base ledger by W10 (per this lane's own report note:
+// "W10 lifts it into match.js's base ledger") — the rule is mode-agnostic,
+// so ALL modes now inherit it from the driver's onActorDeath, still
+// data-driven per mode via content.json pickups pk_ammo_kill_refill.
+// The mechanism comment and the helper live in core/match/match.js.
+
 const MAX_CONTACTS = 12;
 
 export function createMode(ctx) {
@@ -399,6 +406,7 @@ export function createMode(ctx) {
 
     onKill(m, ev) {
       // TEAM SCORE = kills (modes.md §1.5); assists never add to it.
+      // ([P2] kill resupply now lands in the driver's base ledger.)
       m.addTeamScore(ev.attacker.team, 1, "kill");
     },
 

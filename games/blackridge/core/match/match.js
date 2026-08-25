@@ -57,6 +57,60 @@ const DRIVER_DEFAULTS = {
   ffa: { scoreLimit: 25, timeLimitS: 480, respawnS: 3.0, protectS: 2.0 },
 };
 
+// ------------------------------------------------------- [P2] kill resupply
+// BASE-LEDGER RULE, ALL MODES — lifted from modes/tdm.js by W10 per P2's own
+// lane note ("W10 lifts it into match.js's base ledger"). Kills exist in
+// tdm/ctf/ffa alike and the helper reads nothing mode-specific; the rate
+// stays DATA-DRIVEN PER MODE via content.json pickups pk_ammo_kill_refill
+// (kind "ammo_rule", magsPerKill, modes[]); default 1 when absent.
+// Mechanism + rationale: see the P2 comment block preserved in modes/tdm.js
+// history — partial refill on kill, capped at the weapon-table starting
+// reserve (refills a fighter, never stockpiles a camper), plus the player-
+// only dry-rescue clause for a fully empty OTHER slot.
+const KILL_RESUPPLY_DEFAULT_MAGS = 1;
+
+function readMagsPerKill(content, modeId) {
+  let mags = KILL_RESUPPLY_DEFAULT_MAGS;
+  for (const pk of (content && content.pickups) || []) {
+    if (!pk || pk.kind !== "ammo_rule" || typeof pk.magsPerKill !== "number") continue;
+    if (Array.isArray(pk.modes) && !pk.modes.includes(modeId)) continue;
+    mags = pk.magsPerKill;
+  }
+  return mags;
+}
+
+// Grants the kill refill to `actor`'s live body. Mirrors the reserve-write
+// discipline of sim.grantAmmoMag (sim.js): the held weapon's `reserve` and
+// its `_slotAmmo` mirror move together. Returns true if any ammo landed
+// (the caller emits the "resupply" event only on a real grant).
+function applyKillResupply(m, actor, magsPerKill) {
+  if (!(magsPerKill > 0) || !actor) return false;
+  const body = m.bodyOf(actor);
+  if (!body || !body.weapon) return false; // body already reaped — no grant
+  const weapons = (m.sim && m.sim.weapons) || {};
+  let granted = false;
+  const w = body.weapon;
+  const wt = weapons[w.id];
+  if (wt && wt.mag > 0 && w.reserve < wt.reserve) {
+    w.reserve = Math.min(wt.reserve, w.reserve + wt.mag * magsPerKill);
+    if (body._slotAmmo && body._slotAmmo[w.id]) body._slotAmmo[w.id].reserve = w.reserve;
+    granted = true;
+  }
+  // dry-rescue: a fully empty OTHER slot gets one mag so it can re-enter play
+  if (body.slots && body._slotAmmo) {
+    for (const slotId of body.slots) {
+      if (slotId === w.id) continue;
+      const sa = body._slotAmmo[slotId];
+      const swt = weapons[slotId];
+      if (sa && swt && swt.mag > 0 && sa.mag === 0 && sa.reserve === 0) {
+        sa.reserve = Math.min(swt.reserve, swt.mag * magsPerKill);
+        granted = true;
+      }
+    }
+  }
+  return granted;
+}
+
 // ---------------------------------------------------------------- makeMatch
 // opts: { mode:'tdm'|'ctf'|'ffa', rng (the makeStreams bundle), seed,
 //         difficulty:'casual'|'standard'|'hard', veteran:false,
@@ -109,6 +163,7 @@ export function makeMatch(content, emit, opts = {}) {
   const mode = factory(modeCtx);
   if (mode.id !== modeId) throw new Error(`mode id '${mode.id}' !== registry id '${modeId}'`);
   Object.assign(rules, mode.defaults || {}, (content.modes && content.modes[modeId]) || {});
+  const magsPerKill = readMagsPerKill(content, modeId); // [P2] base-ledger resupply
 
   // ---------------------------------------------------------------- state
   const ms = {
@@ -455,6 +510,19 @@ export function makeMatch(content, emit, opts = {}) {
           console.warn("[match] spawn director init failed — fallback picker:", e && e.message);
         }
       }
+      // W2 seam (W10 pre-battery fix): V5 needs detonation positions.
+      // grenades.js emits 'explosion' via a call-time `sim.emit` property
+      // read, so wrapping it here intercepts every detonation without
+      // touching the sim. One wrap per match; a new match gets a new sim.
+      if (director && director.noteExplosion) {
+        const prevEmit = sim.emit;
+        sim.emit = (type, data) => {
+          if (type === "explosion" && data && data.pos) {
+            director.noteExplosion(data.pos, sim.state.time);
+          }
+          prevEmit(type, data);
+        };
+      }
       // deferred contract half — node/weapon/nav checks (C19)
       if (!pvpContentPending) {
         const full = validateMatchContent(content, {
@@ -586,9 +654,11 @@ export function makeMatch(content, emit, opts = {}) {
         if (w) { endMatch(w); return; }
       }
 
-      // -- 8. influence grid rebuild at 5 Hz (W2's hook, if wired)
-      if (director && director.influenceTick && sim.state.tick % 12 === 0) {
-        director.influenceTick(m);
+      // -- 8. influence grid rebuild at 5 Hz (W2's director.rebuild — the
+      // seam was miswired to a nonexistent `influenceTick` until W10's
+      // pre-battery fix; W9's verified finding. dt = the rebuild interval.)
+      if (director && director.rebuild && sim.state.tick % 12 === 0) {
+        director.rebuild(m, 12 * DT);
       }
 
       // -- 9. objectives refresh
@@ -615,6 +685,15 @@ export function makeMatch(content, emit, opts = {}) {
       const body = bodyByWho.get(ev.victim);
       if (body && ev.victim !== "P") body._reapAtT = t + CORPSE_REAP_S;
       bodyByWho.delete(victim.who === "P" ? "__never" : victim.who); // bot bodies rotate; 'P' persists
+
+      // W2 seam (W10 pre-battery fix): the death feeds V6 (recent-death
+      // veto), the trap override, and the influence death deposits.
+      if (director && director.noteDeath) {
+        director.noteDeath(m, {
+          actor: victim, actorId: victim.actorId, team: victim.team,
+          pos: victim._lastPos, t,
+        });
+      }
 
       const killer = ev.attacker != null ? byWho.get(ev.attacker) : null;
       const isKill = killer && areEnemies(killer, victim);
@@ -649,6 +728,14 @@ export function makeMatch(content, emit, opts = {}) {
         for (const aid of assists) entries.push({ actor: ms.roster.actors[aid], points: 25, reason: "assist" });
       }
       if (entries) for (const e of entries) m.addScore(e.actor, e.points, e.reason);
+
+      // [P2] kill resupply — the base ledger's ammo half (moved from
+      // modes/tdm.js; ALL modes inherit). Only a confirmed ENEMY kill grants
+      // (isKill gates on areEnemies), so team kills, suicides and zone
+      // deaths never refill anyone — same behaviour tdm/ctf shipped.
+      if (isKill && applyKillResupply(m, killer, magsPerKill)) {
+        emit("resupply", { who: killer.who, mags: magsPerKill });
+      }
 
       // respawn queue (no respawns in overtime — modes.md §2.3)
       if (ms.phase !== "overtime" && ms.phase !== "ended") {

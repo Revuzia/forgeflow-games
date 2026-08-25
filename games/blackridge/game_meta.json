@@ -1,11 +1,11 @@
 {
   "title": "BLACKRIDGE",
-  "short_description": "A single showcase night operation in Meridian Ward, Zarov: rain-slick streets, sodium lamps, and Vektor Ancile PMC squads between you and the CINDERLOCK uplink. A modern-military first-person shooter built for the browser — four original weapons, squad AI that flanks and suppresses, and a storm that never lets up.",
-  "description": "RAVEN 2-1, you are going in alone. Meridian Ward is a blacked-out harbor district — one hundred and twenty metres of quays, alleys, arcades and boulevards under night rain — held by Vektor Ancile private military contractors. Work the infiltration from the docks, take the plaza, and reach the CINDERLOCK uplink before exfil closes.\n\nFour original weapons carry the mission: the M-72 Warden full-auto rifle, the suppressed KS-23 Vesper for close work, the LR-1 Corvus marksman rifle, and the GS-9 Pike sidearm. Movement is modern-military: sprint, slide, mantle, aim-down-sights, and frag grenades you can cook. The opposition plays fair and plays smart — squads that take fire tokens, flank when you hold a lane, suppress when you camp, and call every move aloud.\n\nOne mission, six beats, checkpoint respawns. Night storm throughout.",
+  "short_description": "Night-rain modern-military FPS in Meridian Ward, Zarov — a full campaign mission plus three PVP modes on the carved Lanternwalk arena: SKIRMISH 5v5, CAPTURE THE FLAG, and FREE-FOR-ALL, each fought as 1 human + 9 AI combatants (10 max) who know the rules and play to win.",
+  "description": "One game, four ways to fight, all under the same night storm.\n\nCAMPAIGN — RAVEN 2-1, you are going in alone. Meridian Ward is a blacked-out harbor district held by Vektor Ancile private military contractors. Work the infiltration from the docks, take the plaza, and reach the CINDERLOCK uplink before exfil closes. One mission, six beats, checkpoint respawns.\n\nPVP — the Lanternwalk arena, carved from the ward's densest blocks, hosts three modes at a maximum of 10 combatants: you plus 9 AI opponents and teammates who know each mode's full rules and fight to win.\n- SKIRMISH — 5v5 team deathmatch, AMBER vs SLATE. First to 50 kills or best score at 8:00; overtime is sudden death.\n- CAPTURE THE FLAG — 5v5, mirrored flag rooms, 3 captures to win. Carriers get escorted, runners get cut off.\n- FREE-FOR-ALL — every operator for themselves, 10-way, first to 25 kills.\n\nFour original weapons carry every mode: the M-72 Warden full-auto rifle, the suppressed KS-23 Vesper for close work, the LR-1 Corvus marksman rifle, and the GS-9 Pike sidearm — with kill resupply keeping the ammo economy honest in PVP. Movement is modern-military: sprint, slide, mantle, aim-down-sights, and frag grenades you can cook. The opposition plays fair and plays smart — no wallhacks, no aimbots: squads that take fire tokens, flank when you hold a lane, suppress when you camp, and call every move aloud. Hold TAB for the live scoreboard.",
   "genre": "action",
   "sub_genre": "fps",
   "difficulty": "medium",
-  "controls_keyboard": "WASD move · Mouse look · LMB fire · RMB aim · R reload · SHIFT sprint · CTRL crouch (slide while sprinting) · SPACE jump/mantle · 1/2 weapons · G grenade · F interact · ESC pause",
+  "controls_keyboard": "WASD move · Mouse look · LMB fire · RMB aim · R reload · SHIFT sprint · CTRL crouch (slide while sprinting) · SPACE jump/mantle · 1/2 weapons · G grenade · F interact · TAB scoreboard (matches) · ESC pause",
   "tags": [
     "fps",
     "shooter",
@@ -14,6 +14,10 @@
     "3d",
     "night",
     "singleplayer",
+    "pvp-vs-bots",
+    "team-deathmatch",
+    "capture-the-flag",
+    "free-for-all",
     "tactical",
     "webgl"
   ],

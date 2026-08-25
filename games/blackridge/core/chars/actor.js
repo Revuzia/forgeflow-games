@@ -221,8 +221,20 @@ export function applyWetShoulder(mat) {
     if (!m || m.userData.__brWet) continue;
     m.userData.__brWet = true;
     m.envMapIntensity = 1.25; // the rim/spec boost half of the override
-    m.customProgramCacheKey = () => "br_soldier_wet";
+    // W11 faction rim (PVP_BUILD_PLAN C29f wave-5 / pvp_design §3.1): a
+    // view-space fresnel rim added to the emissive term, per-material
+    // uniforms so AMBER/SLATE read at range without nameplates. Strength 0
+    // (the default, and the campaign's permanent value) contributes an exact
+    // arithmetic zero — the campaign frame is unchanged. STILL ONE PROGRAM:
+    // every soldier material returns the same cache key, so the whole cast
+    // stays one extra program, compiled inside soldiers.ready() before any
+    // match (programs delta 0 during play — AC-49's FAIL gate).
+    const rim = { c: { value: new THREE.Color(0, 0, 0) }, s: { value: 0 } };
+    m.userData.__brRim = rim;
+    m.customProgramCacheKey = () => "br_soldier_wet_rim";
     m.onBeforeCompile = (sh) => {
+      sh.uniforms.uBrRimC = rim.c;
+      sh.uniforms.uBrRimS = rim.s;
       sh.vertexShader =
         "varying float vBrWetY;\n" +
         sh.vertexShader.replace(
@@ -230,12 +242,20 @@ export function applyWetShoulder(mat) {
           "#include <skinning_vertex>\n\tvBrWetY = transformed.y;"
         );
       sh.fragmentShader =
-        "varying float vBrWetY;\n" +
+        "varying float vBrWetY;\nuniform vec3 uBrRimC;\nuniform float uBrRimS;\n" +
         sh.fragmentShader.replace(
           "#include <roughnessmap_fragment>",
           "#include <roughnessmap_fragment>\n" +
           "\tfloat brWet = smoothstep(1.05, 1.42, vBrWetY);\n" +
           "\troughnessFactor = mix(roughnessFactor, 0.35, brWet * 0.85);"
+        ).replace(
+          "#include <emissivemap_fragment>",
+          "#include <emissivemap_fragment>\n" +
+          // silhouette fresnel: 0 face-on, 1 edge-on — visible from BEHIND at
+          // any angle the actor is visible at (the §3.1 requirement), because
+          // a back-facing silhouette is all edge.
+          "\tfloat brRimF = pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), 2.2);\n" +
+          "\ttotalEmissiveRadiance += uBrRimC * (uBrRimS * brRimF);"
         );
     };
     m.needsUpdate = true;
@@ -557,7 +577,7 @@ export function createActor(proto) {
       root, placeholder: true,
       play() {}, playOnce() {}, update() {}, aimBlend() {},
       setLifeSeed() {}, fireImpulse() {}, hitImpulse() {}, lifeGain: 1,
-      attachWeapon() { return null; }, setTint() {}, setFlash() {},
+      attachWeapon() { return null; }, setTint() {}, setRim() {}, setFlash() {},
       currentName: null, crouchW: 0, groundSpeed: 0, readyWant: 1,
       dispose() { root.removeFromParent(); geo.dispose(); mat.dispose(); },
     };
@@ -917,6 +937,19 @@ export function createActor(proto) {
     setTint(hex) {
       baseColor.set(hex).lerp(_WHITE, 0.35);
       for (const m of mats) m.color.copy(baseColor);
+    },
+
+    /** W11 faction rim (C29f wave-5 / pvp_design §3.1): AMBER/SLATE team
+     *  read at range, per-actor uniforms on the shared soldier program.
+     *  strength 0 (the default) is an exact no-op — the campaign never
+     *  calls this, so its frames are unchanged (Amendment A2). */
+    setRim(hex, strength = 0.4) {
+      for (const m of mats) {
+        const r = m.userData && m.userData.__brRim;
+        if (!r) continue;
+        r.c.value.set(hex);
+        r.s.value = strength;
+      }
     },
 
     /** Flinch flash (VT §7): 70 ms COLOR-MULTIPLY — never emissive (emissive

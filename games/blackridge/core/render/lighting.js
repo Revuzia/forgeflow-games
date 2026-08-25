@@ -272,6 +272,42 @@ export function createLights(ctx) {
   scene.add(moon);
   scene.add(moon.target);
 
+  // ---------------------------------------------- PVP lighting profile (W11)
+  // arena.md E19 / pvp_design §3.1, the render half. Applied per MAP at
+  // bindStatic time (boot re-binds on every world swap), so the campaign path
+  // is untouched: profile 'campaign' holds every baseline value and the
+  // switch only ever diverges while the Lanternwalk arena is the bound map.
+  //   - key lift: moon × 1.14 — §3.1 raises the darkest-zone floor "by
+  //     lifting the KEY … never by raising ambient" (E10's "+0.06" against
+  //     the level_design-era 0.42 key = +14.3%; re-derived against today's
+  //     4.4). Ambient untouched, so key:ambient RISES (≥4:1 held — logged).
+  //   - fog ×0.7: 0.010 → 0.007 — a target at the end of the 46 m gallery
+  //     lane is a silhouette, not a rumour. Applied to scene.fog.density (the
+  //     live FogExp2 uniform weather.js exposes for exactly this), lazily if
+  //     the fog does not exist yet at bind time (weather boots after lights).
+  //   - practical flicker OFF while the profile is 'pvp' (§3.1: a flickering
+  //     light is a randomised visibility roll on a duel). Lanternwalk authors
+  //     no flicker:true poles today; the gate is here so one authored later
+  //     cannot regress a duel silently.
+  //   - dynamic light events (blackout) BANNED during a live match — see the
+  //     guard in startBlackout.
+  // The pool never changes size; intensity/emissive/fog values only.
+  const MOON_BASE = moon.intensity;
+  const PROFILE_VALS = {
+    campaign: { moonMult: 1.0, fogDensity: 0.010 },
+    pvp: { moonMult: 1.14, fogDensity: 0.007 },
+  };
+  let profile = "campaign";
+  let pendingFog = null; // fog target not yet applied (scene.fog was null)
+  function applyProfile(id) {
+    const v = PROFILE_VALS[id] || PROFILE_VALS.campaign;
+    profile = PROFILE_VALS[id] ? id : "campaign";
+    moon.intensity = MOON_BASE * v.moonMult;
+    publishKey(); // the material coat's key radiance follows the lift
+    if (scene.fog) { scene.fog.density = v.fogDensity; pendingFog = null; }
+    else pendingFog = v.fogDensity;
+  }
+
   // Hemisphere — the darkness floor. Sky #1a2030 / ground #0a0c10 with the
   // sodium-pollution tint #2a2418 mixed into the ground term (LD §3.2).
   // A VERTICAL surface sees the 50/50 sky/ground mix, so that mix — not the sky
@@ -405,6 +441,17 @@ export function createLights(ctx) {
   }
 
   function startBlackout() {
+    // E19/pvp_design §3.1: dynamic light events are BANNED during a live
+    // match — a blackout is a randomised visibility roll on every duel in
+    // the arena. Campaign missions (no sim.state.match) are unaffected.
+    {
+      const sim = ctx.sim && ctx.sim();
+      const ms = sim && sim.state && sim.state.match;
+      if (ms && ms.phase !== "ended") {
+        console.info("[lights] blackout suppressed — dynamic light events are banned during a live match (E19)");
+        return;
+      }
+    }
     if (blackout.locked) return; // pose contracts a lit grid (setBlackout(false))
     if (blackout.phase !== "idle" && blackout.phase !== "done") return;
     const entry = byId.L_PLAZA_KEY;
@@ -1183,9 +1230,16 @@ export function createLights(ctx) {
     collectSpecSlots(poles);
     syncReflectableSlots("bind");
 
+    // W11: the lighting profile follows the bound MAP (boot re-binds on every
+    // world swap). Lanternwalk is the only PVP arena; every other map keeps
+    // the campaign baseline bit-for-bit.
+    const mapId = ctx.layout && ctx.layout.mapId;
+    applyProfile(mapId === "lanternwalk" ? "pvp" : "campaign");
+
     const ratio = api.keyAmbientRatio();
     console.log(`[lights] pool 1 dir + 1 hemi + ${SPOT_COUNT} spot + ${POINT_COUNT} point; ` +
-      `${list.length} practicals bound; key:ambient ${ratio.toFixed(1)}:1 (>=4 required, VT §1)`);
+      `${list.length} practicals bound; profile ${profile} (fog ${PROFILE_VALS[profile].fogDensity}); ` +
+      `key:ambient ${ratio.toFixed(1)}:1 (>=4 required, VT §1)`);
   }
 
   // ---------------------------------------------------------------- leases
@@ -1301,13 +1355,23 @@ export function createLights(ctx) {
       c.mat.uniforms.uFlick.value = 1.0 + 0.05 * Math.sin(t * 2.1 + c.phase) * Math.sin(t * 5.7 + c.phase * 1.3);
     }
 
-    // platform fluorescent flicker (layout flicker:true)
+    // W11: fog target deferred from applyProfile (weather boots after lights)
+    if (pendingFog != null && scene.fog) {
+      scene.fog.density = pendingFog;
+      pendingFog = null;
+    }
+
+    // platform fluorescent flicker (layout flicker:true) — OFF under the PVP
+    // profile (E19: a flickering light is a randomised visibility roll on a
+    // duel). Restore any mid-flicker dim to base the frame the profile flips.
     if (decor.glowMesh) {
       let dirty = false;
       for (let i = 0; i < decor.glowMeta.length; i++) {
         const g = decor.glowMeta[i];
         if (!g.flicker) continue;
-        const on = Math.sin(t * 13.0 + g.phase) + Math.sin(t * 31.7) > -0.85 ? 1.0 : 0.25;
+        const on = profile === "pvp"
+          ? 1.0
+          : (Math.sin(t * 13.0 + g.phase) + Math.sin(t * 31.7) > -0.85 ? 1.0 : 0.25);
         _c.copy(g.baseColor).multiplyScalar(on);
         decor.glowMesh.setColorAt(i, _c);
         dirty = true;

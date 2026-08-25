@@ -850,17 +850,55 @@ async function main() {
 
   // ================================================================ pvp seam
   // (W1, PVP_BUILD_PLAN C25 + AC-38 — runs as part of the full battery.)
-  section("pvp tuning seam (C25) — identity in wave 1; AC-38 one-HP rule");
+  section("pvp tuning seam (C25) — WAVE-5 DATA LIVE (W11); AC-38 one-HP rule");
   {
     const TUN = await import(u("core/pvp/pvp_tuning.js"));
     const sp = TUN.getTuning("sp"), pvp = TUN.getTuning("pvp");
-    const strip = (t) => JSON.stringify(Object.assign({}, t, { id: null }));
-    ok(strip(sp) === strip(pvp),
-      "pvp delta set is IDENTITY (wave 5 flips the data — C25); sp==pvp minus id");
     ok(sp.maxHp === 100 && sp.regenDelayS === 4.5 && sp.regenPerS === 35 &&
        Math.abs(sp.regenPerS * sp.botRetreatRegenMult - 24.5) < 1e-9,
       "sp table equals the pre-PVP constants (100 HP, 4.5 s, 35 HP/s, retreat 24.5 HP/s)");
+    // pvp_design §4.2 + §4.3 B1: the wave-5 flip landed.
+    ok(pvp.maxHp === 110 && pvp.regenDelayS === 5.0 && pvp.regenPerS === 28 &&
+       Math.abs(pvp.regenPerS * pvp.botRetreatRegenMult - 24.5) < 1e-9,
+      "pvp table: 110 HP, regen 5.0 s @ 28 HP/s, bot retreat regen still 24.5 HP/s");
+    ok(sp.steadyMult === 0.55 && pvp.steadyMult === 1.0,
+      "steadyMult: sp 0.55, pvp 1.00 — the camping subsidy is removed in PVP (§4.3 B1)");
+    // §4.5: the SP table is bit-identical to the untuned WEAPONS export.
+    ok(TUN.applyTuning(WEAPONS, sp) === WEAPONS,
+      "applyTuning(WEAPONS, sp) returns the INPUT REFERENCE — the fork stays honest");
+    const PW = TUN.applyTuning(WEAPONS, pvp);
+    ok(PW !== WEAPONS && WEAPONS.corvus.adsTime === 0.340 && WEAPONS.warden.recoil.jitter === 0.12,
+      "applyTuning(pvp) never mutates the base table");
+    ok(Math.abs(PW.corvus.adsTime - 0.380) < 1e-9 && PW.warden.recoil.jitter === 0.08 &&
+       PW.vesper.recoil.jitter === 0.12 && PW.corvus.recoil.jitter === 0.06 &&
+       PW.pike.recoil.jitter === 0.10,
+      "pvp weapon deltas: Corvus adsTime 380 ms; jitter .08/.12/.06/.10 (§4.3 B2/B3)");
+    ok(PW.warden.recoil.pattern === WEAPONS.warden.recoil.pattern,
+      "merged entries keep the base pattern reference (patterns are NOT re-rolled)");
+    // §4.1 STK battery at 110 HP, all-body-shots, from the live damage data:
+    const stk = (dmg) => Math.ceil(110 / dmg);
+    ok(stk(PW.warden.damage.body) === 4, "Warden near: 4 shots at 110 HP (240 ms — unchanged)");
+    ok(PW.warden.damage.min * 5 === 110,
+      "Warden far floor: 5 × 22 = EXACTLY 110 — the §4.1 boundary row, asserted so it cannot drift");
+    ok(stk(PW.vesper.damage.body) === 5, "Vesper near: 4 → 5 shots (200 → 267 ms — the intended fix)");
+    ok(stk(PW.vesper.damage.min) === 7, "Vesper far: 6 → 7 shots");
+    ok(stk(PW.corvus.damage.body) === 2, "Corvus ≤45 m: still a 2-shot");
+    ok(stk(PW.corvus.damage.min) === 3, "Corvus @90 m: still a 3-shot (48 × 2 = 96 < 110)");
+    ok(stk(PW.pike.damage.body) === 4, "Pike body: still 4 shots");
+    ok(Math.ceil(110 / (PW.pike.damage.body * PW.pike.damage.headMult)) === 3,
+      "Pike headshot: 2 → 3 (the 158 ms two-tap is gone — §4.1's other target)");
+    // §4.5: no PVP body-shot TTK below 220 ms (shots-1 intervals at each rpm).
+    for (const id of ["warden", "vesper", "corvus", "pike"]) {
+      const w = PW[id];
+      const ttkMs = (stk(w.damage.body) - 1) * (60000 / w.rpm);
+      ok(ttkMs >= 220 - 1e-6, `${id}: PVP body TTK ${ttkMs.toFixed(0)} ms >= 220 ms`);
+    }
     const { sim } = makeSim({ tuning: "pvp" });
+    ok(sim.weapons.corvus.adsTime === 0.380 && sim.weapons.warden.recoil.jitter === 0.08,
+      "createSim({tuning:'pvp'}) resolves the MERGED weapons table onto sim.weapons");
+    const spSim = makeSim({}).sim;
+    ok(spSim.weapons === WEAPONS,
+      "campaign sim holds the untuned WEAPONS reference — sp path bit-identical (§4.5)");
     ok(sim.tuning && sim.tuning.id === "pvp", "createSim({tuning:'pvp'}) resolves the table");
     sim.spawnBot("rifleman", 5, 5, {});
     sim.spawnBot("rifleman", -5, 5, { band: "hardened" });

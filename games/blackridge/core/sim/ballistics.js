@@ -67,7 +67,11 @@ export function effectiveSpread(weapon, s = {}) {
   if (s.airborne) spread *= 1.9;
   if (s.sliding) spread *= 1.6;
   if (s.crouched) spread *= 0.75;
-  if (s.steady) spread *= 0.55;
+  // C25/W11: steadyMult rides the tuning table (sp 0.55, pvp 1.00 — the
+  // camping subsidy is removed in PVP, pvp_design §4.3 B1). The state
+  // builders below pass it from sim.tuning; a hand-built state without the
+  // field keeps the SP constant, so every existing probe reads unchanged.
+  if (s.steady) spread *= (s.steadyMult ?? 0.55);
   if (s.landedRecently) spread *= 1.35;
   return spread;
 }
@@ -375,6 +379,7 @@ export function playerSpreadState(sim) {
     sliding: !!m.sliding,
     crouched: p.stance === "crouch" && !m.sliding,
     steady: (t - (m.lastMovedT ?? -999) >= 0.4) && (t - (m.lastShotT ?? -999) >= 0.45),
+    steadyMult: sim.tuning ? sim.tuning.steadyMult : undefined,
     landedRecently: t < (m.landPenaltyUntil ?? -999),
   };
 }
@@ -389,6 +394,7 @@ export function botSpreadState(sim, bot) {
     sliding: false,
     crouched: bot.stance === "crouch",
     steady: speed < 0.1 && sim.state.time - (bot.weapon.lastShotT ?? -999) >= 0.45,
+    steadyMult: sim.tuning ? sim.tuning.steadyMult : undefined,
     landedRecently: false,
   };
 }

@@ -27,6 +27,7 @@
 
 import { perceive, enemyBodiesOf } from "./perception.js";
 import { spawnGrenade, GRENADE } from "../sim/grenades.js";
+import { objectiveStep } from "./objective.js"; // W7 slot 3a (bot_ai §2.4)
 
 const DEG = Math.PI / 180;
 
@@ -229,6 +230,9 @@ export function aiStep(sim, nav, squad, dt) {
 
   const t0 = perfNow();
   squad._bind(sim);
+  // W7 slot 3a: the commander runs BEFORE squad._tick (bot_ai §2.4). One
+  // branch when no match is live; writes bot._obj only — H1–H4 read it.
+  objectiveStep(sim, nav, squad, dt);
   squad._tick(sim, dt);
 
   const t = S.time;

@@ -164,12 +164,39 @@ export function createReflect(ctx) {
   // catches A3's plaza geometry and A8's soldiers when they land — no
   // cross-lane file edit needed, ~40 draws budgeted.
   let enrolled = 0;
+  // LANE P1 (2026-08-24) — a mesh whose material SAMPLES the planar target
+  // (the a3 `puddle` grounds read GROUND_HOOKS.planarTex = rt.texture) must
+  // never be enrolled in the mirror pass: drawing it INTO rt while rt.texture
+  // is bound as its sampler is a framebuffer/texture feedback loop. The
+  // planarStrength-zeroing in renderPlanar() takes the SHADER down the cheap
+  // branch but GL validates the BINDING, not the branch — Chrome still logged
+  // GL_INVALID_OPERATION "Feedback loop formed" ~250x/run and dropped the
+  // draw. Ground in the mirror is also the mirror's single largest surface
+  // cost, for a payoff that cannot be seen (a horizontal plane mirrored
+  // across a plane 2 cm above itself). Excluding it kills the warnings and
+  // the cost; puddles keep reflecting buildings/signs/sky (A2), which are
+  // the layer's remaining members.
+  function samplesPlanar(o) {
+    const ms = Array.isArray(o.material) ? o.material : [o.material];
+    for (const m of ms) {
+      if (m && m.userData && m.userData.a3 && m.userData.a3.puddle) return true;
+    }
+    return false;
+  }
   function refreshMembership() {
     enrolled = 0;
     scene.traverse((o) => {
       if (!o.isMesh && !o.isPoints) return;
       if (o.userData && o.userData.br_sky) { enrolled++; return; } // already on
-      if (o.userData && o.userData.noReflect) return;              // opt-out hook
+      if (o.userData && o.userData.noReflect) {                    // opt-out hook
+        o.layers.disable(REFLECT_LAYER);
+        return;
+      }
+      if (o.isMesh && samplesPlanar(o)) {   // planar consumers: see note above
+        o.userData.noReflect = true;
+        o.layers.disable(REFLECT_LAYER);
+        return;
+      }
       _v.setFromMatrixPosition(o.matrixWorld);
       const inPlaza =
         _v.x > PLAZA_BOX.minX && _v.x < PLAZA_BOX.maxX &&

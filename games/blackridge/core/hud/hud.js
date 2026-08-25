@@ -741,7 +741,7 @@ export function createHud(ctx) {
   }
 
   function onMissionEnd(d) {
-    showDebrief(d && d.result === "won", (d && d.stats) || null);
+    showDebrief(d && d.result === "won", (d && d.stats) || null, (d && d.match) || null);
   }
 
   function nameOf(who) {
@@ -768,13 +768,24 @@ export function createHud(ctx) {
   }
 
   // ------------------------------------------------------------------ debrief
-  function showDebrief(won, stats) {
+  function showDebrief(won, stats, match) {
     st.debriefOpen = true;
-    dbTitle.textContent = won ? "MISSION COMPLETE" : "MISSION FAILED";
-    dbTitle.classList.toggle("lost", !won);
-    dbSub.textContent = won
-      ? "CINDERLOCK secured. Extraction confirmed — good effect on target."
-      : "Raven 2-1 is combat ineffective. CINDERLOCK remains with Vektor Ancile.";
+    // W11 (PVP_BUILD_PLAN O3): a MATCH debrief reads VICTORY / DRAW / DEFEAT;
+    // the campaign keeps its mission copy untouched.
+    if (match) {
+      dbTitle.textContent = match.result === "draw" ? "DRAW" : (won ? "VICTORY" : "DEFEAT");
+      dbTitle.classList.toggle("lost", !won && match.result !== "draw");
+      dbSub.textContent = match.result === "draw"
+        ? "Neither side held the advantage. The match is a draw."
+        : (won ? "Your team takes the match. Good effect on target."
+               : "The enemy team takes the match. Reset and go again.");
+    } else {
+      dbTitle.textContent = won ? "MISSION COMPLETE" : "MISSION FAILED";
+      dbTitle.classList.toggle("lost", !won);
+      dbSub.textContent = won
+        ? "CINDERLOCK secured. Extraction confirmed — good effect on target."
+        : "Raven 2-1 is combat ineffective. CINDERLOCK remains with Vektor Ancile.";
+    }
     const sim = ctx.sim();
     const c = stats || (sim ? sim.state.counters : {});
     const acc = c.shotsFired ? Math.round((c.shotsHit / c.shotsFired) * 100) : 0;

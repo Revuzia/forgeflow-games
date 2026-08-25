@@ -1627,7 +1627,14 @@
       "id": "pk_ammo_walkover",
       "kind": "ammo_rule",
       "magsPerPickup": 1,
-      "_comment": "combat_spec §2.2 — walkover of a dead bot grants +1 mag of that bot's weapon class; systemic, not placed"
+      "_comment": "combat_spec §2.2 — walkover of a dead bot grants +1 mag of that bot's weapon class; systemic, not placed. CAMPAIGN ONLY (consumed by mission.js checkPickups)."
+    },
+    {
+      "id": "pk_ammo_kill_refill",
+      "kind": "ammo_rule",
+      "modes": ["tdm", "ctf", "ffa"],
+      "magsPerKill": 1,
+      "_comment": "[P2] PVP kill resupply — each kill grants +magsPerKill mags to the killer's held weapon (reserve capped at the weapon's starting reserve); a fully-dry other slot gets one rescue mag. Consumed by core/match/modes/tdm.js readMagsPerKill (W8/W9 adopt the same read for ctf/ffa). Replaces walkover in matches: corpses reap ~4 s after death there."
     }
   ],
   "reverbZones": {

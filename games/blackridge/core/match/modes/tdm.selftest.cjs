@@ -309,7 +309,13 @@ async function main() {
     const { sim, events } = makeMatchSim(105);
     sim.match.start(sim);
     const M = sim.state.match;
-    stepN(sim, 260);
+    // [W11 2026-08-25] was stepN(260): that left ~1.3 s of live, un-frozen
+    // fire before the freeze, and the wave-5 tuning flip (recoil jitter cut,
+    // C25) made a bot land a kill inside that window on this seed — failing
+    // the "team scores untouched" assertion below for a reason unrelated to
+    // §2.2. Freeze targeting the tick live begins; the test's own intent
+    // (zero combat kills, zone deaths only) is unchanged.
+    stepN(sim, 185);
     sim.setNoTarget(true);
     sim.teleport("P", COLLAPSE_CENTRE[0], 0, COLLAPSE_CENTRE[2]); // human safe inside
     let guard = 0;
@@ -461,6 +467,83 @@ async function main() {
     stepN(sim, 30);
     const after = bots.map((a) => a.actorId + ":" + a.duty.role).join(",");
     ok(before === after, "roles stable across a 0.5 s window (4 s latch — no thrash)");
+  }
+
+  // ==================================================== 8b. kill resupply
+  section("[P2] kill resupply — +1 mag on kill, reserve cap, dry-rescue, bots too");
+  {
+    const { sim, events } = makeMatchSim(120);
+    sim.match.start(sim);
+    const M = sim.state.match;
+    stepN(sim, 260);
+    sim.setNoTarget(true);
+    ok(M.phase === "live", "match live");
+
+    // live content.json carries the rule (store truth: the mechanism is
+    // content-authored, not a magic number) — and the campaign walkover
+    // rule survived the pickups edit untouched
+    const rule = (liveContent.pickups || []).find((p) => p.id === "pk_ammo_kill_refill");
+    ok(!!rule && rule.kind === "ammo_rule" && rule.magsPerKill === 1 &&
+       Array.isArray(rule.modes) && rule.modes.includes("tdm") && rule.modes.includes("ctf") && rule.modes.includes("ffa"),
+      "content.json pickups has pk_ammo_kill_refill {ammo_rule, magsPerKill:1, modes:[tdm,ctf,ffa]}");
+    ok((liveContent.pickups || []).some((p) => p.id === "pk_ammo_walkover" && p.magsPerPickup === 1),
+      "campaign pk_ammo_walkover untouched by the pickups edit");
+
+    // (1) player: empty reserve + a kill → exactly one mag back
+    const p = sim.state.player;
+    const wt = WEAPONS[p.weapon.id];
+    p.weapon.reserve = 0;
+    if (p._slotAmmo && p._slotAmmo[p.weapon.id]) p._slotAmmo[p.weapon.id].reserve = 0;
+    scriptKill(sim, livingBot(M, 1, sim.match, true), "P");
+    stepN(sim, 2);
+    const expect1 = Math.min(wt.reserve, wt.mag);
+    ok(p.weapon.reserve === expect1,
+      `player kill at 0 reserve → +1 mag: reserve ${p.weapon.reserve} === ${expect1}`);
+    ok(p._slotAmmo[p.weapon.id].reserve === p.weapon.reserve,
+      "_slotAmmo mirror moved with the live reserve (grantAmmoMag discipline)");
+    ok(events.some((e) => e.type === "resupply" && e.data && e.data.who === "P"),
+      "'resupply' event emitted for the player");
+
+    // (2) cap: a full reserve gains nothing (refills a fighter, never
+    // stockpiles a camper)
+    p.weapon.reserve = wt.reserve;
+    if (p._slotAmmo && p._slotAmmo[p.weapon.id]) p._slotAmmo[p.weapon.id].reserve = wt.reserve;
+    stepN(sim, 120);
+    scriptKill(sim, livingBot(M, 1, sim.match, true), "P");
+    stepN(sim, 2);
+    ok(p.weapon.reserve === wt.reserve,
+      `reserve CAPPED at the weapon-table start reserve (${wt.reserve})`);
+
+    // (3) dry-rescue: the OTHER slot at 0/0 gets one mag from a kill with
+    // the held weapon (closes the gate-2 dry-Warden chicken-and-egg)
+    const otherId = p.slots.find((id) => id !== p.weapon.id);
+    if (otherId) {
+      const owt = WEAPONS[otherId];
+      p._slotAmmo[otherId] = { mag: 0, reserve: 0 };
+      stepN(sim, 120);
+      scriptKill(sim, livingBot(M, 1, sim.match, true), "P");
+      stepN(sim, 2);
+      const expectR = Math.min(owt.reserve, owt.mag);
+      ok(p._slotAmmo[otherId].reserve === expectR,
+        `dry other slot '${otherId}' rescued: reserve ${p._slotAmmo[otherId].reserve} === ${expectR}`);
+      ok(p._slotAmmo[otherId].mag === 0, "rescue lands in RESERVE — the reload is still on the player");
+    } else {
+      ok(true, "single-slot loadout — dry-rescue clause has no other slot (n/a)");
+    }
+
+    // (4) bots use the same mechanism through the same hook — no crate,
+    // no goal hook, no W7 role term needed
+    stepN(sim, 120);
+    const killerBot = livingBot(M, 1, sim.match, false);
+    const kb = sim.match.m.bodyOf(killerBot);
+    const bwt = WEAPONS[kb.weapon.id];
+    kb.weapon.reserve = 0;
+    scriptKill(sim, livingBot(M, 0, sim.match, true), killerBot.who);
+    stepN(sim, 2);
+    const expectB = Math.min(bwt.reserve, bwt.mag);
+    ok(kb.weapon.reserve === expectB,
+      `bot killer at 0 reserve → +1 mag: reserve ${kb.weapon.reserve} === ${expectB}`);
+    ok(!sim.match._ms.watchdogFired, "watchdog silent through the resupply battery");
   }
 
   // ====================================================== 9. determinism

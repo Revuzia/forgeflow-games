@@ -29,7 +29,7 @@ import { stepGrenades } from "./grenades.js";
 import { stepHealth, applyDamage } from "./damage.js";
 import { makeMission } from "./mission.js";
 import { makeMatch } from "../match/match.js";
-import { getTuning } from "../pvp/pvp_tuning.js";
+import { getTuning, applyTuning } from "../pvp/pvp_tuning.js";
 import { aiStep } from "../ai/botfsm.js";
 import { makeSquad } from "../ai/squad.js";
 
@@ -46,7 +46,7 @@ export function createSim(opts = {}) {
     content = null,
     colliders = { boxes: [], groundY: () => 0, spawns: { player: [0, 0, 0], playerYaw: 0 }, cover: [], nodes: {}, bounds: { min: [-99, -5, -99], max: [99, 30, 99] } },
     nav = null,
-    weapons = {},
+    weapons: weaponsIn = {},
     seed = 1,
     emit = () => {},
     // PVP seam (PVP_BUILD_PLAN W1):
@@ -64,6 +64,10 @@ export function createSim(opts = {}) {
   const world = makeWorld(colliders);
   const squad = makeSquad();
   const tun = getTuning(tuning);
+  // C25/W11: per-weapon tuning deltas ride the sim's own weapons table. 'sp'
+  // has no deltas, so the campaign path gets the INPUT REFERENCE back —
+  // bit-identical to the untuned WEAPONS export (pvp_design §4.5).
+  const weapons = applyTuning(weaponsIn, tun);
 
   const loadoutSlots = (content && content.mission && content.mission.loadout && content.mission.loadout.slots)
     || ["warden", "pike"];
@@ -91,7 +95,7 @@ export function createSim(opts = {}) {
       },
       slots: loadoutSlots.slice(0, 2),
       speedNorm: 0,
-      grenades: (content && content.mission && content.mission.loadout && content.mission.loadout.grenades) || 2,
+      grenades: (content && content.mission && content.mission.loadout && content.mission.loadout.grenades) || tun.grenades,
       lastDamageT: -999,
       _slotAmmo: null,
       _m: null,
