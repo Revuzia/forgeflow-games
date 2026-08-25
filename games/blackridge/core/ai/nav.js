@@ -29,9 +29,17 @@ const GRID_MAX = 160;       // frozen budget
 
 // POI zone ambient light (LD §3.4 zone-contrast plan, scaled to the §5.1
 // ground-light term; pools from the practicals add on top).
-const ZONE_BASE = {
-  poi_dock: 0.06, poi_alleys: 0.05, poi_arcade: 0.25, poi_plaza: 0.35,
+// W3 (PVP_BUILD_PLAN C20/X2): the three Lanternwalk PVP rooms get authored
+// entries — an unknown key falls through to 0.1 (NOT DEFAULT_AMBIENT), so
+// without these the interiors read DARKER to the AI than they render and
+// bots over-estimate their own concealment — a fairness bug, not cosmetic.
+// poi_alleys rises 0.05 → 0.16 to match the PVP lighting profile's 18%
+// floor (the light bake and the rendered scene must not disagree).
+// Exported: the ai selftest asserts these values (C20 is a wave-1 blocker).
+export const ZONE_BASE = {
+  poi_dock: 0.06, poi_alleys: 0.16, poi_arcade: 0.25, poi_plaza: 0.35,
   poi_gallery: 0.08, poi_blvd: 0.12, poi_platform: 0.30, poi_customs: 0.65,
+  poi_lanternyard: 0.22, poi_exchange: 0.20, poi_corridor: 0.15,
 };
 const DEFAULT_AMBIENT = 0.35; // custom/test collider sets without zones
 

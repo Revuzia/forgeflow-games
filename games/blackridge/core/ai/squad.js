@@ -59,13 +59,29 @@ export function makeSquad() {
     let e = squads.get(sqId);
     if (!e) {
       e = {
-        fire: new Set(), suppress: null, flank: { L: null, R: null },
+        fire: new Set(), fireTgt: new Map(), suppress: null, flank: { L: null, R: null },
         grenadeReadyT: 0, lastArbT: -9, contactT: -99,
         lastKnown: null, lastKnownT: -9, prevAlive: -1,
+        lk: new Map(), // W3: per-target blackboard (who → {pos, t}); the
+                       // commsGroup split moves this into comms.js in W7
       };
       squads.set(sqId, e);
     }
     return e;
+  }
+
+  // W3 (C21/AC-36): ≤2 simultaneous fire-token holders per HUMAN target,
+  // GLOBAL across squads — the cap protects the audience; bots shooting
+  // bots are uncapped. Counts current holders whose token targets `who`.
+  function humanHolders(who, exceptBotId) {
+    let n = 0;
+    for (const [, e] of squads) {
+      for (const [id, tgt] of e.fireTgt) {
+        if (id === exceptBotId) continue;
+        if (tgt === who && e.fire.has(id)) n++;
+      }
+    }
+    return n;
   }
 
   function botById(id) {
@@ -84,21 +100,49 @@ export function makeSquad() {
 
   const squad = {
     // ---------------------------------------------------- frozen surface
-    requestToken(botId) {
+    // W3 (arch §5.3): ADDITIVE targetWho parameter; old 1-arg calls behave
+    // as before (the campaign's only target is the human). The caps are
+    // per-target and bind only when the target is the human.
+    requestToken(botId, targetWho) {
+      const who = targetWho === undefined ? "P" : targetWho;
       const e = entry(squadIdOf(botId));
-      if (e.fire.has(botId)) return true;
+      if (e.fire.has(botId)) {
+        const prev = e.fireTgt.get(botId);
+        if (prev === who) return true;
+        // retargeting while holding: bot→human must re-check the human cap
+        if (who === "P" && humanHolders("P", botId) >= 2) {
+          e.fire.delete(botId);
+          e.fireTgt.delete(botId);
+          return false;
+        }
+        e.fireTgt.set(botId, who);
+        return true;
+      }
       // prune invalid holders before deciding
       for (const id of [...e.fire]) {
         const b = botById(id);
-        if (!b || !b.alive || !inCombatFamily(b)) e.fire.delete(id);
+        if (!b || !b.alive || !inCombatFamily(b)) { e.fire.delete(id); e.fireTgt.delete(id); }
       }
-      if (e.fire.size < 2) { e.fire.add(botId); return true; }
-      return false;
+      if (who === "P") {
+        // squad token cap ≤2 (human-target holders) AND the global
+        // ≤2-holders-per-human cap
+        let sq = 0;
+        for (const [id, tgt] of e.fireTgt) if (tgt === "P" && e.fire.has(id)) sq++;
+        if (sq >= 2 || humanHolders("P", botId) >= 2) return false;
+        e.fire.add(botId);
+        e.fireTgt.set(botId, "P");
+        return true;
+      }
+      // bot-vs-bot: not the audience — no cap (still tracked for pruning)
+      e.fire.add(botId);
+      e.fireTgt.set(botId, who);
+      return true;
     },
 
     release(botId) {
       const e = entry(squadIdOf(botId));
       e.fire.delete(botId);
+      e.fireTgt.delete(botId);
       if (e.suppress === botId) e.suppress = null;
       if (e.flank.L === botId) e.flank.L = null;
       if (e.flank.R === botId) e.flank.R = null;
@@ -143,20 +187,34 @@ export function makeSquad() {
     holdsSuppress(botId) { return entry(squadIdOf(botId)).suppress === botId; },
     holdsFire(botId) { return entry(squadIdOf(botId)).fire.has(botId); },
 
-    // fire authorization — the mission-wide ≤3-in-250 ms window
-    fireAuthOk(botId, t) {
+    // fire authorization — the ≤3-in-250 ms window, HUMAN victims only
+    // (W3/C21: the window protects the audience; bot victims are exempt)
+    fireAuthOk(botId, t, targetWho) {
+      const who = targetWho === undefined ? "P" : targetWho;
+      if (who !== "P") return true;
       for (const [id, at] of fireWindow) if (t - at > FIRE_WINDOW_S) fireWindow.delete(id);
       return fireWindow.has(botId) || fireWindow.size < FIRE_WINDOW_MAX;
     },
-    noteFireAuth(botId, t) { fireWindow.set(botId, t); },
+    noteFireAuth(botId, t, targetWho) {
+      const who = targetWho === undefined ? "P" : targetWho;
+      if (who !== "P") return;
+      fireWindow.set(botId, t);
+    },
 
-    noteLastKnown(botId, pos, t) {
+    // W3: per-target blackboard. `who` omitted → the human (campaign) /
+    // most-recent contact — old call sites behave exactly as before.
+    noteLastKnown(botId, pos, t, who) {
       const e = entry(squadIdOf(botId));
       e.lastKnown = pos.slice();
       e.lastKnownT = t;
+      e.lk.set(who === undefined ? "P" : who, { pos: e.lastKnown, t });
     },
-    squadLastKnown(botId) {
+    squadLastKnown(botId, who) {
       const e = entry(squadIdOf(botId));
+      if (who !== undefined && who !== null) {
+        const r = e.lk.get(who);
+        return r ? { pos: r.pos, t: r.t } : null;
+      }
       return e.lastKnown ? { pos: e.lastKnown, t: e.lastKnownT } : null;
     },
     noteConfirm(botId, t) {
@@ -194,11 +252,16 @@ export function makeSquad() {
 
     _debug() {
       const tokens = {};
-      for (const [k, e] of squads) tokens[k] = { fire: [...e.fire], suppress: e.suppress };
+      for (const [k, e] of squads) {
+        const tgt = {};
+        for (const [id, w] of e.fireTgt) tgt[id] = w;
+        tokens[k] = { fire: [...e.fire], suppress: e.suppress, fireTgt: tgt };
+      }
       return {
         tokens, refereeLog: referee.log.slice(), pushOn: referee.pushOn,
         fireWindowSize: fireWindow.size, active: referee.active,
         lastEventT: referee.lastEventT,
+        humanHolders: humanHolders("P", null), // W3: global ≤2-per-human probe
       };
     },
 
@@ -220,7 +283,7 @@ export function makeSquad() {
       for (const [k, e] of squads) {
         for (const id of [...e.fire]) {
           const b = botById(id);
-          if (!b || !b.alive) e.fire.delete(id);
+          if (!b || !b.alive) { e.fire.delete(id); e.fireTgt.delete(id); }
         }
         if (e.suppress != null) {
           const b = botById(e.suppress);
@@ -267,23 +330,42 @@ export function makeSquad() {
 
       // ---- fire-token re-arbitration (every 4 s per squad): nearest-with-
       // LOS wins ties (§5.7). Deterministic sort (sees desc, dist asc, id).
-      const p = S.player;
+      // W3 (Part 12.6 + C21): keyed to each bot's CURRENT TARGET, not the
+      // player. Human-target tokens are arbitrated (≤2 per squad, ≤2 global
+      // per human); bot-target combat bots always hold a token — bots
+      // shooting bots are not the audience and are never starved.
       for (const [k, e] of squads) {
         if (t - e.lastArbT < REARB_S) continue;
         e.lastArbT = t;
-        const cands = [];
+        const humanCands = [];
+        const botTargeted = [];
         for (let i = 0; i < bots.length; i++) {
           const b = bots[i];
           if (!b.alive || (b.squadId || "_default") !== k) continue;
           if (!(b.state === "combat" || b.state === "suppress")) continue;
-          const sees = b.percept && b.percept.seesPlayer ? 1 : 0;
-          const d = Math.hypot(b.pos[0] - p.pos[0], b.pos[2] - p.pos[2]);
-          cands.push({ id: b.id, sees, d });
+          const P = b.percept;
+          const who = P ? P.target : null;
+          if (who != null && who !== "P") { botTargeted.push({ id: b.id, who }); continue; }
+          const sees = P && P.seesTarget ? 1 : 0;
+          // distance ranking against the bot's own knowledge of the human:
+          // its per-target last-known, else the squad blackboard — never the
+          // live transform.
+          let ref = null;
+          if (P && P.byTarget && P.byTarget.P && P.byTarget.P.lastKnown) ref = P.byTarget.P.lastKnown;
+          else if (e.lk.has("P")) ref = e.lk.get("P").pos;
+          const d = ref ? Math.hypot(b.pos[0] - ref[0], b.pos[2] - ref[2]) : 1e9;
+          humanCands.push({ id: b.id, sees, d });
         }
-        cands.sort((a, b) => (b.sees - a.sees) || (a.d - b.d) || (a.id - b.id));
+        humanCands.sort((a, b) => (b.sees - a.sees) || (a.d - b.d) || (a.id - b.id));
         e.fire.clear();
-        for (let i = 0; i < Math.min(2, cands.length); i++) e.fire.add(cands[i].id);
-        e.suppress = cands.length > 2 ? cands[2].id : null;
+        e.fireTgt.clear();
+        for (const bt of botTargeted) { e.fire.add(bt.id); e.fireTgt.set(bt.id, bt.who); }
+        let grant = Math.min(2, humanCands.length);
+        // the global ≤2-per-human cap binds across squads at re-arb too
+        const already = humanHolders("P", null);
+        grant = Math.min(grant, Math.max(0, 2 - already));
+        for (let i = 0; i < grant; i++) { e.fire.add(humanCands[i].id); e.fireTgt.set(humanCands[i].id, "P"); }
+        e.suppress = humanCands.length > grant ? humanCands[grant].id : null;
       }
 
       // ---- damage/death watch (either way) → referee clock resets
@@ -371,7 +453,8 @@ export function makeSquad() {
         }
       }
 
-      // ---- player-static tracking (grenade eligibility, §5.9)
+      // ---- player-static tracking (grenade eligibility, §5.9 — human only)
+      const p = S.player;
       if (!playerStatic.init || Math.hypot(p.pos[0] - playerStatic.ax, p.pos[2] - playerStatic.az) > 2.5) {
         playerStatic.ax = p.pos[0];
         playerStatic.az = p.pos[2];

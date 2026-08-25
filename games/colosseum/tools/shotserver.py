@@ -72,8 +72,11 @@ class Handler(SimpleHTTPRequestHandler):
         print("[shot]", out, len(raw), "bytes", flush=True)
 
     def log_message(self, fmt, *args):
-        # Quiet: only POSTs and errors are interesting here.
-        if "POST" in (args[0] if args else ""):
+        # Quiet: only POSTs and errors are interesting here. str() matters:
+        # send_error() routes through here with an INT first arg
+        # (log_error("code %d...", 400, ...)) and `"POST" in 400` raises,
+        # killing the handler before the error response is written.
+        if "POST" in str(args[0] if args else ""):
             super().log_message(fmt, *args)
 
 

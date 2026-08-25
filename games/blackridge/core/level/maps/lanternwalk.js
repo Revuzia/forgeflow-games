@@ -397,7 +397,11 @@ export function buildLayout(seed = 1) {
     { id: "fake_corridor_e", pos: [10, 3.2, -21.5], color: "#cfe0d8", kind: "fluorescent", real: false },
     { id: "fake_street_1", pos: [-10, 6, -22], color: "#ff9a3c", kind: "sodium", real: false },
     { id: "fake_street_2", pos: [-2, 6, -30], color: "#ff9a3c", kind: "sodium", real: false },
-    { id: "fake_checkpoint", pos: [-6, 5, -29.7], color: "#dce8ff", kind: "flood", real: false },
+    // [W6 cross-lane fix, flagged] level.js:2916 (case "flood") reads lp.aim
+    // unconditionally; this entry had none and buildLevel crashed on ANY
+    // lanternwalk render ("Cannot read properties of undefined (reading '0')").
+    // aim mirrors pos at ground level, like every sibling entry.
+    { id: "fake_checkpoint", pos: [-6, 5, -29.7], color: "#dce8ff", kind: "flood", real: false, aim: [-6, 0, -29.7] },
     { id: "neon_club", pos: [15.4, 6, -12], color: "#e83ea8", kind: "neon", real: false, sign: "ЗАРОВ НОЧЬ" },
     { id: "neon_meridian", pos: [15.4, 5, -6], color: "#38d8d0", kind: "neon", real: false, sign: "MERIDIAN 24" },
     { id: "neon_noodle", pos: [15.4, 4.5, 0], color: "#ff4040", kind: "neon", real: false, sign: "ЛАПША ДОМ" },

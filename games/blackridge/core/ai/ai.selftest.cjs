@@ -14,6 +14,13 @@
  *
  * Run:  node core/ai/ai.selftest.cjs            → full battery
  *       node core/ai/ai.selftest.cjs --fast     → skips the sim.selftest child run
+ *       node core/ai/ai.selftest.cjs --teams    → full battery PLUS the W3
+ *         team-AI battery (PVP_BUILD_PLAN Part 4.1 W3): two-team and
+ *         ten-team fairness worlds, per-target latch invariance, target-
+ *         switch hysteresis, LOS budget (MAX_LOS_PER_TICK 12), the C10b
+ *         honesty fixes (pickCover yaw, enterFlank fallback, think cadence),
+ *         the H1–H4 objective hooks + patrol floor, ZONE_BASE C20, the
+ *         AC-32 monotonicity BASELINE, and C28 respawn reset.
  * Exit 0 = all pass. Exit 1 = failures (each printed FAIL, verbatim).
  */
 "use strict";
@@ -68,6 +75,7 @@ function customColliders(boxes, playerPos, cover, boundsHalf) {
 
 async function main() {
   const fast = process.argv.includes("--fast");
+  const teams = process.argv.includes("--teams");
 
   const S = await import(u("core/sim/sim.js"));
   const NAV = await import(u("core/ai/nav.js"));
@@ -700,6 +708,536 @@ async function main() {
     const illegal = [...seen].filter((t) => !ALLOWED_EVENTS.has(t));
     ok(illegal.length === 0, "AI emits ONLY the R13-amended vocabulary (bark/botstate/…)"
       + (illegal.length ? " — ILLEGAL: " + illegal.join(",") : ""));
+  }
+
+  // ================================================================ W3 teams
+  if (teams) {
+    // stub match facade — W3 codes against the Part 3 contract, not W1's
+    // code: the only surface perception needs is livingEnemyBodiesOf(bot).
+    const attachTeams = (sim, teamOf) => {
+      sim.state.player.team = teamOf.P != null ? teamOf.P : 0;
+      for (const b of sim.state.bots) if (teamOf[b.id] != null) b.team = teamOf[b.id];
+      const teamOfWho = (who) => {
+        if (who === "P") return sim.state.player.team;
+        const b = sim.state.bots.find((x) => x.id === who);
+        return b ? b.team : null;
+      };
+      // the minimal facade the sim core touches when sim.match is present
+      // (damage.js gates + sim.js freeze) plus the W3 perception surface
+      sim.match = {
+        livingEnemyBodiesOf(bot) {
+          const out = [];
+          const St = sim.state;
+          if (St.player.alive && St.player.team !== bot.team) out.push(St.player);
+          for (const ob of St.bots) {
+            if (!ob.alive || ob === bot) continue;
+            if (ob.team !== bot.team) out.push(ob);
+          }
+          return out;
+        },
+        sameTeam(a, b) {
+          const ta = teamOfWho(a), tb = teamOfWho(b);
+          return ta != null && tb != null && ta === tb;
+        },
+        isProtected() { return false; },
+        botsFrozen() { return false; },
+        onDamage() {},
+        onActorDeath() {},
+        m: { actorOf() { return null; } },
+      };
+    };
+    const identityObj = () => ({
+      role: "attack", reason: "probe", assignedT: 0, holdUntil: 1e9,
+      anchor: null, anchorKind: null, route: null,
+      priority: 0, firePolicy: "free", selfDefenseM: 0,
+      posture: "balanced", breakFight: false,
+      noRetreat: false, noFlank: false, noGrenade: false,
+    });
+
+    section("teams: ZONE_BASE gains the Lanternwalk PVP entries (C20/X2)");
+    {
+      const ZB = NAV.ZONE_BASE;
+      ok(ZB && approx(ZB.poi_lanternyard, 0.22), "poi_lanternyard = 0.22");
+      ok(ZB && approx(ZB.poi_exchange, 0.20), "poi_exchange = 0.20");
+      ok(ZB && approx(ZB.poi_corridor, 0.15), "poi_corridor = 0.15");
+      ok(ZB && approx(ZB.poi_alleys, 0.16), "poi_alleys raised 0.05 → 0.16 (18% floor)");
+    }
+
+    section("teams: two-team 5v5 fairness — the audited surface, per target (AC-36)");
+    {
+      const V = { preReaction: 0, humanCap: 0, window: 0, hyst: 0, latch: 0, losPeak: 0 };
+      let botOnBotHurt = 0, botOnBotDeaths = 0, botShots = 0;
+      for (let seed = 900; seed < 906; seed++) {
+        const events = [];
+        let simRef = null;
+        const sim = S.createSim({
+          content, colliders, nav, weapons: WEAPONS, seed,
+          emit: (type, data) => {
+            const t = simRef ? simRef.state.time : 0;
+            events.push({ t, type, data });
+            if (type === "shot" && data.shooter !== "P" && !data.impactOnly && !data.pen) {
+              botShots++;
+              const b = simRef.state.bots.find((x) => x.id === data.shooter);
+              const br = b && b._brain;
+              if (!br || br.confirmT < 0 || t < br.confirmT + br.reactionS - 1e-6) V.preReaction++;
+            }
+            if (type === "hurt" && data.attacker !== "P" && data.attacker != null && data.victim !== "P") botOnBotHurt++;
+            if (type === "death" && data.attacker !== "P" && data.attacker != null && data.victim !== "P") botOnBotDeaths++;
+          },
+        });
+        simRef = sim;
+        sim.setGod(true);
+        sim.state.phase = "assault";
+        sim.teleport("P", -5, 0, 0);
+        const t0ids = [
+          sim.spawnBotFromSpec({ archetype: "rifleman", band: "regular", squad: "t0_a", pos: [-8, 0, -4], yaw: 0, alerted: true }),
+          sim.spawnBotFromSpec({ archetype: "cqb", band: "regular", squad: "t0_a", pos: [-2, 0, -4], yaw: 0, alerted: true }),
+          sim.spawnBotFromSpec({ archetype: "rifleman", band: "hardened", squad: "t0_b", pos: [-11, 0, 2], yaw: 0, alerted: true }),
+          sim.spawnBotFromSpec({ archetype: "marksman", band: "regular", squad: "t0_b", pos: [-14, 0, -2], yaw: 0, alerted: true }),
+        ];
+        const t1ids = [
+          sim.spawnBotFromSpec({ archetype: "rifleman", band: "regular", squad: "t1_a", pos: [4, 0, -14], yaw: 0, alerted: true }),
+          sim.spawnBotFromSpec({ archetype: "cqb", band: "hardened", squad: "t1_a", pos: [10, 0, -8], yaw: 0, alerted: true }),
+          sim.spawnBotFromSpec({ archetype: "rifleman", band: "recruit", squad: "t1_a", pos: [8, 0, 2], yaw: 0, alerted: true }),
+          sim.spawnBotFromSpec({ archetype: "marksman", band: "regular", squad: "t1_b", pos: [14, 0, 6], yaw: 0, alerted: true }),
+          sim.spawnBotFromSpec({ archetype: "rifleman", band: "regular", squad: "t1_b", pos: [12, 0, -2], yaw: 0, alerted: true }),
+        ];
+        const teamOf = { P: 0 };
+        for (const id of t0ids) teamOf[id] = 0;
+        for (const id of t1ids) teamOf[id] = 1;
+        attachTeams(sim, teamOf);
+
+        const switches = new Map(); // botId → [{t, prevWho, prevAlive}]
+        const prevTgt = new Map();
+        const latch = new Map();    // "bot:who:confirmT" → Set(reactionS)
+        const hurtRing = [];
+        for (let i = 0; i < 2000; i++) {
+          const c = cmd({ yaw: 0, pitch: 1.2 });
+          if (i === 30) c.fire = true; // reveal the human to the east team
+          sim.step(c);
+          const t = sim.state.time;
+          const dbg = sim.squad._debug();
+          if (dbg.humanHolders > 2) V.humanCap++;
+          for (const b of sim.state.bots) {
+            if (!b.alive || !b.percept) continue;
+            const who = b.percept.target;
+            const prev = prevTgt.get(b.id);
+            if (prev !== undefined && prev !== who && prev != null && who != null) {
+              const prevBody = prev === "P" ? sim.state.player
+                : sim.state.bots.find((x) => x.id === prev);
+              const list = switches.get(b.id) || [];
+              const prevAlive = !!(prevBody && prevBody.alive);
+              // AC-36: no more than one switch per 2 s BETWEEN LIVING targets
+              if (prevAlive && list.length && t - list[list.length - 1].t < 2.0 - 1e-6 &&
+                  list[list.length - 1].prevAlive) V.hyst++;
+              list.push({ t, prevAlive });
+              switches.set(b.id, list);
+            }
+            prevTgt.set(b.id, who);
+            const br = b._brain;
+            if (br && br.confirmT >= 0 && br.curTgtWho != null) {
+              const key = b.id + ":" + br.curTgtWho + ":" + br.confirmT.toFixed(4);
+              let set = latch.get(key);
+              if (!set) { set = new Set(); latch.set(key, set); }
+              set.add(br.reactionS);
+            }
+          }
+          // ≤3 distinct attackers on the HUMAN per 250 ms (hurt-derived)
+          for (const e of events) {
+            if (e._seen) continue;
+            e._seen = true;
+            if (e.type === "hurt" && e.data.victim === "P" && e.data.attacker !== "P") {
+              hurtRing.push({ t: e.t, a: e.data.attacker });
+            }
+          }
+          while (hurtRing.length && t - hurtRing[0].t > 0.25) hurtRing.shift();
+          const dist = new Set(hurtRing.map((h) => h.a));
+          if (dist.size > 3) V.window++;
+          if (sim._losb && sim._losb.peak > 12) V.losPeak++;
+          events.length = 0;
+        }
+        for (const set of latch.values()) if (set.size !== 1) V.latch++;
+      }
+      ok(botOnBotHurt > 50, `bot-vs-bot war is real (${botOnBotHurt} hurt events, ${botOnBotDeaths} deaths over 6 seeds)`);
+      ok(botShots > 300, `bots shoot (${botShots} rounds over 6 seeds)`);
+      ok(V.preReaction === 0, `zero shots before the rolled reaction, per target (${V.preReaction})`);
+      ok(V.humanCap === 0, `≤2 fire-token holders per HUMAN target, globally, every tick (${V.humanCap})`);
+      ok(V.window === 0, `≤3 distinct attackers on the human per 250 ms (${V.window})`);
+      ok(V.hyst === 0, `target-switch hysteresis holds — never twice in 2 s between living targets (${V.hyst})`);
+      ok(V.latch === 0, `reaction rolls latched PER TARGET — re-acquire never re-rolls (${V.latch})`);
+      ok(V.losPeak === 0, `global LOS budget ≤ ${PER.MAX_LOS_PER_TICK} candidates/tick (${V.losPeak} violations)`);
+    }
+
+    section("teams: think cadence keys to nearest ENEMY, not the player (Part 12.6)");
+    {
+      const cc = customColliders([], [10, 0, 0], [], 80);
+      const cnav = NAV.bakeNav(cc);
+      const sim = S.createSim({ colliders: cc, nav: cnav, weapons: WEAPONS, seed: 55, emit: () => {} });
+      sim.setGod(true);
+      sim.state.phase = "assault";
+      const a = sim.spawnBotFromSpec({ archetype: "rifleman", band: "regular", squad: "tA", pos: [0, 0, 0], yaw: 0, alerted: false });
+      const b = sim.spawnBotFromSpec({ archetype: "rifleman", band: "regular", squad: "tB", pos: [50, 0, 0], yaw: 0, alerted: false });
+      // the PLAYER is 10 m away but on bot A's OWN team — bot B (enemy) is 50 m
+      attachTeams(sim, { P: 1, [a]: 1, [b]: 2 });
+      const bA = botById(sim, a);
+      const iv = (ticks) => {
+        const out = [];
+        let last = -1;
+        for (let i = 0; i < ticks; i++) {
+          sim.step(cmd({}));
+          const lt = bA._brain ? bA._brain.lastThinkT : -1;
+          if (lt !== last && last >= 0) out.push(lt - last);
+          if (lt !== last) last = lt;
+        }
+        return out;
+      };
+      const far = iv(240);
+      const farMed = far.sort((x, y) => x - y)[far.length >> 1];
+      ok(farMed >= 0.35, `enemy 50 m, player 10 m (allied) → FAR cadence (median ${farMed ? farMed.toFixed(2) : "?"} s) — the old code would think at 0.15 s`);
+      sim.teleport(b, 10, 0, 0);
+      iv(30); // settle
+      const near = iv(240);
+      const nearMed = near.sort((x, y) => x - y)[near.length >> 1];
+      ok(nearMed <= 0.2, `enemy moved to 10 m → NEAR cadence (median ${nearMed ? nearMed.toFixed(2) : "?"} s)`);
+    }
+
+    section("teams: honesty probe — hidden idle human is NEVER a goal (AC-33)");
+    {
+      // player sealed in a pocket at (30,0,30); two bot teams fight in the
+      // open ~45 m away. No bot may ever set a goal within 10 m of the
+      // human's true position, and no bot may accrue awareness of them.
+      const pocket = [
+        mkBox(27, 33, 0, 3, 27, 27.4), mkBox(27, 33, 0, 3, 32.6, 33),
+        mkBox(27, 27.4, 0, 3, 27, 33), mkBox(32.6, 33, 0, 3, 27, 33),
+      ];
+      const cc = customColliders(pocket, [30, 0, 30], [{ pos: [0, 0, -14], dir: [0, 0, 1], height: "low" }, { pos: [-4, 0, -6], dir: [0, 0, 1], height: "low" }], 40);
+      const cnav = NAV.bakeNav(cc);
+      const sim = S.createSim({ colliders: cc, nav: cnav, weapons: WEAPONS, seed: 66, emit: () => {} });
+      sim.setGod(true);
+      sim.state.phase = "assault";
+      const ids = [
+        sim.spawnBotFromSpec({ archetype: "rifleman", band: "regular", squad: "hA", pos: [-10, 0, -10], yaw: Math.PI, alerted: true }),
+        sim.spawnBotFromSpec({ archetype: "cqb", band: "regular", squad: "hA", pos: [-6, 0, -12], yaw: Math.PI, alerted: true }),
+        sim.spawnBotFromSpec({ archetype: "rifleman", band: "regular", squad: "hB", pos: [10, 0, -10], yaw: 0, alerted: true }),
+        sim.spawnBotFromSpec({ archetype: "cqb", band: "regular", squad: "hB", pos: [6, 0, -8], yaw: 0, alerted: true }),
+      ];
+      attachTeams(sim, { P: 0, [ids[0]]: 1, [ids[1]]: 1, [ids[2]]: 2, [ids[3]]: 2 });
+      let goalNearHuman = 0, awOfHuman = 0;
+      const pp = sim.state.player.pos;
+      for (let i = 0; i < 1800; i++) {
+        sim.step(cmd({}));
+        for (const b of sim.state.bots) {
+          if (!b.alive) continue;
+          const g = b._brain && b._brain.goal;
+          if (g && Math.hypot(g[0] - pp[0], g[2] - pp[2]) < 10) goalNearHuman++;
+          const rec = b.percept && b.percept.byTarget && b.percept.byTarget.P;
+          if (rec && rec.awareness > 0.001) awOfHuman++;
+        }
+      }
+      ok(goalNearHuman === 0, `zero goals within 10 m of the hidden human's true position (${goalNearHuman})`);
+      ok(awOfHuman === 0, `zero awareness of a human who was never seen or heard (${awOfHuman})`);
+    }
+
+    section("teams: pickCover ignores the UNSEEN player's yaw (C10b Part 12.1)");
+    {
+      const wall = mkBox(-6, 6, 0, 3, 8, 8.6);
+      const coverNodes = [
+        { pos: [-4, 0, -2], dir: [0, 0, 1], height: "low" },
+        { pos: [3, 0, -4], dir: [0, 0, 1], height: "low" },
+        { pos: [-1, 0, -8], dir: [0, 0, 1], height: "low" },
+        { pos: [5, 0, -10], dir: [0, 0, 1], height: "low" },
+      ];
+      const run = (hiddenYaw) => {
+        const cc = customColliders([wall], [0, 0, 4], coverNodes, 40);
+        const cnav = NAV.bakeNav(cc);
+        const sim = S.createSim({ colliders: cc, nav: cnav, weapons: WEAPONS, seed: 77, emit: () => {} });
+        sim.setGod(true);
+        sim.state.phase = "assault";
+        const id = sim.spawnBotFromSpec({ archetype: "rifleman", band: "regular", squad: "yA", pos: [0, 0, -14], yaw: 0, alerted: true });
+        attachTeams(sim, { P: 0, [id]: 1 });
+        const b = botById(sim, id);
+        const trace = [];
+        for (let i = 0; i < 900; i++) {
+          const c = cmd({ yaw: 0, pitch: 1.2 });
+          if (i === 30) c.fire = true;             // reveal + confirm
+          if (i === 240) sim.teleport("P", 0, 0, 12); // duck behind the wall
+          if (i > 300) c.yaw = hiddenYaw;           // yaw differs ONLY while hidden
+          sim.step(c);
+          if (i > 300 && i % 30 === 0) trace.push(b.pos[0].toFixed(4), b.pos[2].toFixed(4), b.state, b._brain ? b._brain.coverIdx : -1);
+        }
+        return JSON.stringify(trace);
+      };
+      const A = run(0), B = run(Math.PI * 0.9);
+      ok(A === B, "bot behaviour identical whatever the hidden player's yaw — no through-wall aim-cone read");
+    }
+
+    section("teams: enterFlank with NO knowledge does not flank (C10b Part 12.2)");
+    {
+      const cc = customColliders([], [60, 0, 60], [{ pos: [5, 0, 5], dir: [0, 0, 1], height: "low" }], 70);
+      const cnav = NAV.bakeNav(cc);
+      const sim = S.createSim({ colliders: cc, nav: cnav, weapons: WEAPONS, seed: 88, emit: () => {} });
+      sim.setGod(true);
+      sim.setNoTarget(true); // the bot has NO legitimate knowledge of anyone
+      sim.state.phase = "assault";
+      const id = sim.spawnBotFromSpec({ archetype: "rifleman", band: "regular", squad: "fA", pos: [0, 0, 0], yaw: 0, alerted: true });
+      const b = botById(sim, id);
+      for (let i = 0; i < 30; i++) sim.step(cmd({}));
+      b.state = "combat";
+      b._brain.forceFlank = true;
+      for (let i = 0; i < 40; i++) sim.step(cmd({}));
+      ok(b.state === "combat", `no-knowledge flank refused — state stays combat (is '${b.state}')`);
+      ok(b._brain.goal == null, "no goal fabricated from the live player transform");
+    }
+
+    section("teams: AC-32 monotonicity BASELINE — identity objective layer is bit-identical");
+    {
+      const runPair = (withObj) => {
+        FSM.AI_PROBE.enabled = true;
+        FSM.AI_PROBE.jitter.length = 0;
+        let shots = 0;
+        let simRef = null;
+        const sim = S.createSim({
+          content, colliders, nav, weapons: WEAPONS, seed: 777,
+          emit: (type, data) => {
+            if (type === "shot" && data.shooter !== "P" && !data.impactOnly && !data.pen) shots++;
+          },
+        });
+        simRef = sim; void simRef;
+        sim.setGod(true);
+        sim.state.phase = "assault";
+        sim.teleport("P", -5, 0, 0);
+        const ids = [
+          sim.spawnBotFromSpec({ archetype: "rifleman", band: "regular", squad: "t0_a", pos: [-8, 0, -4], yaw: 0, alerted: true }),
+          sim.spawnBotFromSpec({ archetype: "cqb", band: "hardened", squad: "t0_a", pos: [-2, 0, -6], yaw: 0, alerted: true }),
+          sim.spawnBotFromSpec({ archetype: "rifleman", band: "regular", squad: "t1_a", pos: [6, 0, -12], yaw: 0, alerted: true }),
+          sim.spawnBotFromSpec({ archetype: "marksman", band: "regular", squad: "t1_a", pos: [12, 0, -4], yaw: 0, alerted: true }),
+        ];
+        const teamOf = { P: 0, [ids[0]]: 0, [ids[1]]: 0, [ids[2]]: 1, [ids[3]]: 1 };
+        attachTeams(sim, teamOf);
+        if (withObj) for (const b of sim.state.bots) b._obj = identityObj();
+        for (let i = 0; i < 1800; i++) {
+          const c = cmd({ yaw: 0, pitch: 1.2 });
+          if (i === 30) c.fire = true;
+          sim.step(c);
+        }
+        const logs = {};
+        for (const b of sim.state.bots) logs[b.id] = b._brain ? b._brain.reactionLog : [];
+        const jit = JSON.stringify(FSM.AI_PROBE.jitter);
+        FSM.AI_PROBE.enabled = false;
+        return { logs: JSON.stringify(logs), jit, shots };
+      };
+      const off = runPair(false), on = runPair(true);
+      ok(off.logs === on.logs, "reactionLog BIT-IDENTICAL with the identity objective layer on vs off");
+      ok(off.jit === on.jit, "AI_PROBE.jitter BIT-IDENTICAL with the layer on vs off");
+      ok(on.shots <= off.shots, `layered shot count ≤ unlayered (${on.shots} vs ${off.shots}) — the layer can only remove`);
+    }
+
+    section("teams: H1–H4 objective hooks + patrol floor + fire policy (C10)");
+    {
+      const mk1v1 = (seed) => {
+        const cc = customColliders([], [0, 0, 10], [
+          { pos: [-3, 0, -6], dir: [0, 0, 1], height: "low" },
+          { pos: [4, 0, -8], dir: [0, 0, 1], height: "low" },
+        ], 60);
+        const cnav = NAV.bakeNav(cc);
+        const sim = S.createSim({ colliders: cc, nav: cnav, weapons: WEAPONS, seed, emit: () => {} });
+        sim.setGod(true);
+        sim.state.phase = "assault";
+        const id = sim.spawnBotFromSpec({ archetype: "rifleman", band: "regular", squad: "oA", pos: [0, 0, -10], yaw: 0, alerted: true });
+        attachTeams(sim, { P: 0, [id]: 1 });
+        return { sim, b: botById(sim, id) };
+      };
+      const countShots = (sim, ticks, fire0) => {
+        let shots = 0;
+        const undo = sim.emit;
+        void undo;
+        // count via weapon mag deltas (emit already bound at create)
+        const b = sim.state.bots[0];
+        let prevMag = b.weapon.mag;
+        for (let i = 0; i < ticks; i++) {
+          const c = cmd({ yaw: Math.PI, pitch: 1.2 });
+          if (fire0 && i === 10) c.fire = true;
+          sim.step(c);
+          if (b.weapon.mag < prevMag) shots += prevMag - b.weapon.mag;
+          if (b.weapon.mag > prevMag) { /* reload */ }
+          prevMag = b.weapon.mag;
+        }
+        return shots;
+      };
+      // H3 'hold' — never fires; 'free' — fires (sanity pair)
+      {
+        const A = mk1v1(101);
+        A.b._obj = Object.assign(identityObj(), { firePolicy: "hold" });
+        const sHold = countShots(A.sim, 600, true);
+        const B = mk1v1(101);
+        B.b._obj = identityObj();
+        const sFree = countShots(B.sim, 600, true);
+        ok(sHold === 0, `H3 'hold' → zero shots (${sHold})`);
+        ok(sFree > 0, `H3 'free' sanity — same scene fires (${sFree} rounds)`);
+      }
+      // H3 'defensive' — silent at 16 m… until hit
+      {
+        const A = mk1v1(102);
+        A.b._obj = Object.assign(identityObj(), { firePolicy: "defensive", selfDefenseM: 6 });
+        const s1 = countShots(A.sim, 600, true);
+        ok(s1 === 0, `H3 'defensive' at 16 m, unharmed → zero shots (${s1})`);
+        A.sim.damage(A.b.id, 10); // being hit arms self-defense for 2.0 s
+        const s2 = countShots(A.sim, 120, false);
+        ok(s2 > 0, `H3 'defensive' returns fire within 2 s of being hit (${s2} rounds)`);
+      }
+      // H1 priority ≥0.75 — the goal IS the anchor, even mid-fight
+      {
+        const A = mk1v1(103);
+        const anchor = [20, 0, -20];
+        A.b._obj = Object.assign(identityObj(), { priority: 0.9, anchor });
+        for (let i = 0; i < 240; i++) {
+          const c = cmd({ yaw: Math.PI, pitch: 1.2 });
+          if (i === 10) c.fire = true;
+          A.sim.step(c);
+        }
+        const g = A.b._brain.goal;
+        ok(g && Math.hypot(g[0] - anchor[0], g[2] - anchor[2]) < 1.5,
+          `H1 priority 0.9 → combat goal is the objective anchor (goal ${g ? g.map((v) => v.toFixed(1)).join(",") : "null"})`);
+        const B = mk1v1(103);
+        B.b._obj = Object.assign(identityObj(), { priority: 0.2, anchor });
+        for (let i = 0; i < 240; i++) {
+          const c = cmd({ yaw: Math.PI, pitch: 1.2 });
+          if (i === 10) c.fire = true;
+          B.sim.step(c);
+        }
+        const g2 = B.b._brain.goal;
+        ok(!g2 || Math.hypot(g2[0] - anchor[0], g2[2] - anchor[2]) > 1.5,
+          "H1 priority 0.2 → the FSM keeps its own goal (byte-identical band)");
+      }
+      // H2 breakFight — releases tokens, walks the anchor, STAYS combat
+      {
+        const A = mk1v1(104);
+        for (let i = 0; i < 300; i++) {
+          const c = cmd({ yaw: Math.PI, pitch: 1.2 });
+          if (i === 10) c.fire = true;
+          A.sim.step(c);
+        }
+        ok(A.b.state === "combat", "H2 setup: bot engaged in combat");
+        const anchor = [25, 0, -25];
+        const d0 = Math.hypot(A.b.pos[0] - anchor[0], A.b.pos[2] - anchor[2]);
+        A.b._obj = Object.assign(identityObj(), { breakFight: true, anchor, assignedT: A.sim.state.time });
+        for (let i = 0; i < 180; i++) A.sim.step(cmd({ yaw: Math.PI, pitch: 1.2 }));
+        const d1 = Math.hypot(A.b.pos[0] - anchor[0], A.b.pos[2] - anchor[2]);
+        ok(A.b.state === "combat", `H2 breakFight stays in combat (is '${A.b.state}')`);
+        ok(d0 - d1 >= 4, `H2 breakFight physically moves toward the anchor (${d0.toFixed(1)} → ${d1.toFixed(1)} m)`);
+      }
+      // H4 — the objective anchor owns the idle anchor; the bot walks it
+      {
+        const A = mk1v1(105);
+        A.sim.setNoTarget(true); // keep it idle
+        const anchor = [15, 0, -15];
+        A.b._obj = Object.assign(identityObj(), { anchor });
+        let minD = Infinity;
+        for (let i = 0; i < 900; i++) {
+          A.sim.step(cmd({}));
+          const d = Math.hypot(A.b.pos[0] - anchor[0], A.b.pos[2] - anchor[2]);
+          if (d < minD) minD = d;
+        }
+        const dEnd = Math.hypot(A.b.pos[0] - anchor[0], A.b.pos[2] - anchor[2]);
+        ok(A.b._brain.anchor && Math.hypot(A.b._brain.anchor[0] - anchor[0], A.b._brain.anchor[2] - anchor[2]) < 0.6,
+          "H4 brain.anchor = _obj.anchor");
+        ok(minD < 4, `H4 idle bot walked to the objective anchor (closest ${minD.toFixed(1)} m)`);
+        ok(dEnd <= 12.5, `H4 bot HOLDS the anchor area — floor wander stays inside its 12 m radius (${dEnd.toFixed(1)} m)`);
+      }
+      // PATROL FLOOR — a routeless idle bot on the real map does not statue
+      {
+        const sim = plazaSim(106);
+        sim.setGod(true);
+        sim.setNoTarget(true);
+        sim.state.phase = "assault";
+        const id = sim.spawnBotFromSpec({ archetype: "rifleman", band: "regular", squad: "pf", pos: [-5, 0, -8], yaw: 0, alerted: false });
+        const b = botById(sim, id);
+        const start = b.pos.slice();
+        let maxDisp = 0;
+        for (let i = 0; i < 1500; i++) {
+          sim.step(cmd({}));
+          const d = Math.hypot(b.pos[0] - start[0], b.pos[2] - start[2]);
+          if (d > maxDisp) maxDisp = d;
+        }
+        ok(maxDisp > 2, `patrol floor: routeless idle bot wanders its anchor (max displacement ${maxDisp.toFixed(1)} m) — no statue in a doorway`);
+      }
+      // C28 — respawn = new body, fresh brain; killed targets are dropped
+      {
+        const cc = customColliders([], [0, 0, 30], [], 60);
+        const cnav = NAV.bakeNav(cc);
+        const sim = S.createSim({ colliders: cc, nav: cnav, weapons: WEAPONS, seed: 107, emit: () => {} });
+        sim.setGod(true);
+        sim.state.phase = "assault";
+        const a = sim.spawnBotFromSpec({ archetype: "rifleman", band: "regular", squad: "rA", pos: [0, 0, 0], yaw: 0, alerted: true });
+        const b2 = sim.spawnBotFromSpec({ archetype: "rifleman", band: "regular", squad: "rB", pos: [0, 0, -12], yaw: 0, alerted: true });
+        attachTeams(sim, { P: 0, [a]: 1, [b2]: 2 });
+        // hold fire on both so neither dies before the drop-on-death check
+        for (const bb of sim.state.bots) bb._obj = Object.assign(identityObj(), { firePolicy: "hold" });
+        for (let i = 0; i < 300; i++) sim.step(cmd({}));
+        const bA = botById(sim, a);
+        ok(bA.percept && bA.percept.target === b2, "setup: bot A targets bot B");
+        sim.damage(b2, 999);
+        const nb = sim.spawnBotFromSpec({ archetype: "rifleman", band: "regular", squad: "rB", pos: [5, 0, -40], yaw: 0, alerted: true });
+        const nbBody = botById(sim, nb);
+        ok(nbBody._brain == null && nbBody.percept == null,
+          "C28: a respawned actor is a NEW body — no brain, no percept, no latched rolls carried over");
+        for (let i = 0; i < 150; i++) sim.step(cmd({}));
+        ok(bA.percept.target !== b2, `dead target dropped within 2.5 s (now targets '${bA.percept.target}')`);
+      }
+    }
+
+    section("teams: ten-team FFA world — caps still bind with no radio (AC-36/C21)");
+    {
+      FSM.AI_PERF.calls = 0; FSM.AI_PERF.totalMs = 0; FSM.AI_PERF.avgMs = 0;
+      let humanCapBad = 0, losBad = 0, botDeaths = 0, preReaction = 0, shots = 0;
+      for (let seed = 950; seed < 953; seed++) {
+        let simRef = null;
+        const sim = S.createSim({
+          content, colliders, nav, weapons: WEAPONS, seed,
+          emit: (type, data) => {
+            const t = simRef ? simRef.state.time : 0;
+            if (type === "shot" && data.shooter !== "P" && !data.impactOnly && !data.pen) {
+              shots++;
+              const b = simRef.state.bots.find((x) => x.id === data.shooter);
+              const br = b && b._brain;
+              if (!br || br.confirmT < 0 || t < br.confirmT + br.reactionS - 1e-6) preReaction++;
+            }
+            if (type === "death" && data.attacker !== "P" && data.attacker != null) botDeaths++;
+          },
+        });
+        simRef = sim;
+        sim.setGod(true);
+        sim.state.phase = "assault";
+        sim.teleport("P", -5, 0, 0);
+        const teamOf = { P: 0 };
+        for (let i = 0; i < 9; i++) {
+          const a = (i / 9) * Math.PI * 2;
+          const id = sim.spawnBotFromSpec({
+            archetype: i % 3 === 0 ? "cqb" : (i % 3 === 1 ? "rifleman" : "marksman"),
+            band: ["recruit", "regular", "hardened"][i % 3],
+            squad: "ffa_" + i,
+            pos: [-5 + Math.cos(a) * (12 + (i % 3) * 6), 0, Math.sin(a) * (12 + (i % 3) * 6)],
+            yaw: 0, alerted: true,
+          });
+          teamOf[id] = i + 1; // ten teams of one — the human is team 0
+        }
+        attachTeams(sim, teamOf);
+        for (let i = 0; i < 3000; i++) {
+          const c = cmd({ yaw: 0, pitch: 1.2 });
+          if (i === 30) c.fire = true;
+          sim.step(c);
+          const dbg = sim.squad._debug();
+          if (dbg.humanHolders > 2) humanCapBad++;
+          if (sim._losb && sim._losb.peak > 12) losBad++;
+        }
+      }
+      ok(botDeaths >= 3, `FFA is a war of all against all (${botDeaths} bot-on-bot deaths over 3 seeds)`);
+      ok(shots > 200, `FFA bots shoot (${shots} rounds)`);
+      ok(preReaction === 0, `zero pre-reaction shots in the 10-team world (${preReaction})`);
+      ok(humanCapBad === 0, `FFA: ≤2 fire-token holders on the human at any tick (${humanCapBad})`);
+      ok(losBad === 0, `FFA: LOS budget ≤ 12/tick with 9 mutually-hostile brains (${losBad})`);
+      ok(FSM.AI_PERF.avgMs <= 1.5, `FFA AI share ${FSM.AI_PERF.avgMs.toFixed(3)} ms ≤ 1.5 ms with per-target perception (AC-45)`);
+    }
   }
 
   // ================================================================ integration

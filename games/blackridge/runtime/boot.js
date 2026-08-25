@@ -83,7 +83,7 @@ try {
     { createSim }, /*player*/, /*ballistics*/, /*damage*/, /*worldMod*/, { makeMission }, /*grenades*/,
     { bakeNav }, /*perception*/, /*botfsm*/, /*squad*/,
     { WEAPONS }, { createViewmodel }, { createRecoil }, { loadWeaponGLB },
-    { buildLayout }, { buildColliders }, { buildLevel }, { buildProps }, /*materials*/,
+    { buildLayout, buildLayoutFor, setActiveMap, getActiveMap }, { buildColliders, buildCollidersFor }, { buildLevel }, { buildProps }, /*materials*/,
     { createSky }, { createLights }, { createPost }, { prewarm }, { createDynres }, { createWeather }, { createReflect },
     { createFx }, /*muzzle*/, /*tracers*/, /*impacts*/, /*decals*/, /*casings*/, /*explosions*/,
     /*actor*/, /*anim_map*/, { createSoldiers },
@@ -123,6 +123,33 @@ try {
     import(`../core/test/autoplay.js${V}`),
   ]);
 
+  // ---- PVP match core (W1) — own modules, imported eagerly so a syntax
+  // error fails bootcheck with a named module (same policy as above).
+  const matchMod = await import(`../core/match/match.js${V}`);
+  await import(`../core/match/roster.js${V}`);
+  await import(`../core/match/contract.js${V}`);
+  await import(`../core/pvp/pvp_tuning.js${V}`);
+
+  // Mode modules + spawn director land in CONCURRENT lanes (W5/W8/W9, W2).
+  // Probe with fetch first (a plain 404, no console error), import + register
+  // what exists; a missing lane is a warn, never a crash (arch 1.6 rule 5).
+  async function importIfPresent(fetchRel, importRel) {
+    try {
+      const res = await fetch(fetchRel + V, { cache: "no-store" });
+      if (!res.ok) return null;
+      return await import(importRel + V);
+    } catch (e) {
+      console.warn(`[boot] optional module ${importRel} failed to import:`, e && e.message);
+      return null;
+    }
+  }
+  for (const id of ["tdm", "ctf", "ffa"]) {
+    const mm = await importIfPresent(`./core/match/modes/${id}.js`, `../core/match/modes/${id}.js`);
+    if (mm && mm.createMode) matchMod.registerMode(id, mm.createMode);
+    else console.warn(`[boot] mode '${id}' not landed yet — its lane registers it via core/match/modes/${id}.js`);
+  }
+  const spawnsMod = await importIfPresent("./core/match/spawns.js", "../core/match/spawns.js");
+
   // -------------------------------------------------------------------------
   // Phase 3 — building world.
   // -------------------------------------------------------------------------
@@ -155,13 +182,55 @@ try {
   const input = createInput(canvas, S);
   const perf = createPerf(renderer);
 
-  const layout = buildLayout(seedParam);
-  const colliders = buildColliders(seedParam);
-  const nav = bakeNav(colliders);
-  const levelOut = await buildLevel({ THREE, renderer, scene, layout, settings: S });
+  let layout = buildLayout(seedParam);
+  let colliders = buildColliders(seedParam);
+  // C20/R4: cell 0.75 so the arena's 2.0 m pier gaps stay walkable —
+  // default 1.0 with FOOT_R 0.2 can silently sever the north artery.
+  let nav = bakeNav(colliders, { cell: 0.75 });
+  let levelOut = await buildLevel({ THREE, renderer, scene, layout, settings: S });
   scene.add(levelOut.group);
-  const propsOut = buildProps(layout, { THREE, scene, settings: S });
+  let propsOut = buildProps(layout, { THREE, scene, settings: S });
   scene.add(propsOut.group);
+
+  // W1 (wave-2 gate fix) — live map swap. Matches play on the arena carve
+  // (content.arena.id → 'lanternwalk'); the campaign plays on meridian_ward
+  // (Amendment A1). Each map is built at most once and its scene groups are
+  // swapped in/out of the scene — no disposal churn, and returning to the
+  // campaign swaps straight back. layout.js's header names this exact call
+  // order: setActiveMap → rebuild layout/colliders/nav (cell 0.75, C20/R4)
+  // → level + props rebuild.
+  const worldCache = new Map();
+  worldCache.set(getActiveMap(), { layout, colliders, nav, levelOut, propsOut });
+  async function setWorldMap(mapId) {
+    if (getActiveMap() === mapId) return;
+    scene.remove(levelOut.group);
+    scene.remove(propsOut.group);
+    setActiveMap(mapId);
+    let w = worldCache.get(mapId);
+    if (!w) {
+      // EXPLICIT-map builders, never the ACTIVE-map ones: boot's layout.js is
+      // the ?v=N instance while colliders.js imports bare './layout.js' — TWO
+      // module instances, TWO ACTIVE variables. setActiveMap above flips only
+      // boot's; buildColliders(seed) would silently build the OLD map's
+      // colliders against the NEW map's visuals (the exact wave-2 gate
+      // failure: lanternwalk level, meridian_ward nodes).
+      const wLayout = buildLayoutFor(mapId, seedParam);
+      const wColliders = buildCollidersFor(mapId, seedParam);
+      const wNav = bakeNav(wColliders, { cell: 0.75 });
+      const wLevel = await buildLevel({ THREE, renderer, scene, layout: wLayout, settings: S });
+      const wProps = buildProps(wLayout, { THREE, scene, settings: S });
+      w = { layout: wLayout, colliders: wColliders, nav: wNav, levelOut: wLevel, propsOut: wProps };
+      worldCache.set(mapId, w);
+    }
+    ({ layout, colliders, nav, levelOut, propsOut } = w);
+    scene.add(levelOut.group);
+    scene.add(propsOut.group);
+    ctx.layout = layout; ctx.colliders = colliders; ctx.nav = nav;
+    // Re-bind the fixed spot pool to this map's practicals (decor is built
+    // once — the carve shares the ward's district, so fixtures stay valid).
+    if (ctx.lights) ctx.lights.bindStatic(levelOut.staticLightSpecs);
+    console.log(`[boot] world map → ${mapId}`);
+  }
 
   // Shared view context. Modules take what they need; sim stays THREE-free.
   const ctx = {
@@ -256,6 +325,9 @@ try {
 
   // startMission — the real path (§5), used by menu AND __test.
   async function startMission(opts = {}) {
+    // Amendment A1: the campaign plays on meridian_ward. A prior match leaves
+    // the arena carve active — swap back before rebuilding the sim.
+    await setWorldMap("meridian_ward");
     epoch++;
     bus.resetCounters();
     sim = createSim({
@@ -279,12 +351,63 @@ try {
     return true;
   }
 
+  // startMatch — the PVP entry (W1; owner amendment A1: matches start ONLY
+  // here — startMission keeps its campaign behaviour unchanged, so the 11
+  // harness callers, six of them aim-wave probes, keep the exact semantics
+  // they were written against).
+  let defaultModeId = "tdm";
+  async function startMatch(opts = {}) {
+    const modeId = opts.mode || defaultModeId;
+    const prevMap = getActiveMap();
+    const arenaId = (content.arena && content.arena.id) || "lanternwalk";
+    try {
+      // The match plays on the arena the content declares — swap the live
+      // world (layout/colliders/nav/level/props) BEFORE creating the sim so
+      // match.start's contract gate validates against matching geometry.
+      await setWorldMap(arenaId);
+      const newSim = createSim({
+        content, colliders, nav, weapons: WEAPONS,
+        seed: opts.seed ?? seedParam, emit: bus.emit,
+        mode: modeId,
+        tuning: "pvp", // C25 seam — identity delta set until wave 5
+        matchOpts: {
+          difficulty: opts.difficulty,
+          veteran: opts.veteran,
+          spawnDirectorFactory: spawnsMod && spawnsMod.makeSpawns ? spawnsMod.makeSpawns : null,
+        },
+      });
+      epoch++;
+      bus.resetCounters();
+      sim = newSim;
+      sim.epoch = epoch;
+      bridge.clear();
+      attachAll();
+      const archetypes = content.archetypes
+        ? Object.keys(content.archetypes).filter((k) => !k.startsWith("_")) : [];
+      await soldiers.ready(archetypes);
+      mission = sim.mission; // sim.match === sim.mission (one object, two names)
+      mission.start(sim); // INSIDE the guard: a contract-gate throw here is a
+      // reported error, never an unhandled rejection (arch 1.6 rule 5)
+    } catch (e) {
+      // a missing mode lane (W5/W8/W9 not landed) or a contract-gate failure
+      // is a reported error, never a page crash (arch 1.6 rule 5)
+      console.error("[boot] startMatch failed:", e && e.message);
+      try { await setWorldMap(prevMap); } catch (_) { /* keep the page alive */ }
+      return false;
+    }
+    menu.hide();
+    hud.show();
+    input.enabled = true;
+    return true;
+  }
+
   // ---------------------------------------------------------------------------
   // Frame stepping — shared by the rAF loop and the synchronous test path.
   // ---------------------------------------------------------------------------
   const DT = 1 / 60;
   let acc = 0;
   let last = performance.now();
+  let simStepsDropped = 0; // C27 counter — perf gate AC-48 reads it via stats()
 
   function viewUpdates(dt, alpha) {
     recoil.update(dt);
@@ -338,13 +461,19 @@ try {
     } else {
       acc += dt;
       let steps = 0;
-      while (acc >= DT && steps < 5) {
+      // C27: clamp 3, not 5 — at 30 fps the normal case is 2 steps/frame, so
+      // 3 gives one step of catch-up headroom; 5 permitted a 2.5× sim burst
+      // on any hitch, which is how a hitch spirals into a stall.
+      while (acc >= DT && steps < 3) {
         bus.now = sim.state.time;
         sim.step(input.buildCmd()); // sim.step ticks sim.mission internally (v2.2)
         acc -= DT;
         steps++;
       }
-      if (steps === 5) acc = 0; // clamp discards the remainder
+      if (steps === 3 && acc >= DT) {
+        simStepsDropped += Math.floor(acc / DT); // AC-48 asserts this stays 0
+        acc = 0; // clamp discards the remainder
+      }
     }
 
     bridge.dispatch(bus.drain());
@@ -379,6 +508,7 @@ try {
 
   // Test surface + global — assigned at the END of phase 6 (§6).
   ctx.startMission = startMission;
+  ctx.startMatch = startMatch; // W6's mode-select menu calls this
   ctx.stepFrames = stepFrames;
   ctx.pauseCtl = pauseCtl;
   const scenarios = createScenarios(ctx);
@@ -389,6 +519,18 @@ try {
   // autoplay takes (profile, seconds, opts).
   __test.setScenario = (name, seedObj) => scenarios.setScenario(name, seedObj);
   __test.autoplay = (profile, seconds, opts) => autoplayCtl.autoplay(profile, seconds, opts);
+  // PVP surface (freeze amendment g, as amended by A1): startMission keeps
+  // its campaign behaviour UNCHANGED; matches start only via startMatch.
+  // These boot-side routes override testsurface's provisional
+  // startMatch→startMission alias; W10 may later move them in-module.
+  __test.startMatch = (opts) => startMatch(opts || {});
+  __test.matchState = () =>
+    sim.state.match ? JSON.parse(JSON.stringify(sim.state.match)) : null;
+  __test.setMode = (id) => { defaultModeId = id; return defaultModeId; };
+  __test.endMatch = (outcome) => {
+    if (sim.match) sim.match.m.endMatch(outcome || { result: "forfeit", winnerTeam: null, reason: "test" });
+    return !!sim.match;
+  };
 
   window.__FPS__ = window.__FFG3D__ = {
     renderer, scene, camera,
@@ -410,6 +552,8 @@ try {
         drawCalls: s.drawCalls, triangles: s.triangles, programs: s.programs,
         geometries: s.geometries, textures: s.textures,
         bots: soldiers.count(), phase: sim.state.phase, frames: s.frames,
+        simStepsDropped, // C27/AC-48 — must stay 0 over a full match
+        match: sim.state.match ? { modeId: sim.state.match.modeId, phase: sim.state.match.phase } : null,
         version: `v${VN}`,
       };
     },

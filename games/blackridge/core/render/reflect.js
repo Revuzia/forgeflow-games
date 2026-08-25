@@ -35,6 +35,23 @@ const PLANE_Y = 0.02;          // hero-puddle water surface
 const NEAR_GATE = 55;          // planar pass only when the camera can see plaza puddles
 const REFRESH_FRAMES = 90;     // layer-membership traversal cadence
 
+// ---- LANE V2 (2026-08-24) — the mirror only runs when its payoff can be on
+// screen. Measured with EXT_disjoint_timer_query_webgl2 (interleaved even/odd
+// whole-frame split, mirror runs every 2nd frame): the mirror pass costs
+// 4.7-5.1 ms per mirror frame on the boulevard (~2.4 ms/frame amortised),
+// 3.3-3.7 ms at the plaza — and the old distance-only NEAR_GATE (55 m) keeps
+// it running through the whole perf-traversal sprint down the boulevard, where
+// the three hero puddles it feeds are 60-65 deg off the view axis and OUTSIDE
+// the frustum entirely. A frustum + projected-screen-area test on the hero
+// puddle discs skips exactly the frames where no planar pixel can appear.
+// When skipped, `active` goes false and consumers fall back to the baked cube
+// envMap — the SAME designed no-pop fallback the quality preset and the dynres
+// floor already use. The 0.5 s linger stops flip-flicker on a fast pan; the
+// +2 m sphere margin makes the gate flip before a puddle can enter the view.
+const GATE_MARGIN = 2.0;       // m added to each hero disc for the frustum test
+const GATE_MIN_FRAC = 0.0015;  // min summed projected area, fraction of screen
+const GATE_LINGER_S = 0.5;     // keep the mirror alive this long after visible
+
 export function createReflect(ctx) {
   const { renderer, scene, camera } = ctx;
 
@@ -257,13 +274,49 @@ export function createReflect(ctx) {
     if (hooks) hooks.planarStrength.value = published.active ? 0.9 : 0.0;
   }
 
+  // ---- LANE V2 payoff-visibility gate (see the constant block up top) ------
+  // Hero puddle discs from layout (single source: layout.terrain.heroPuddles,
+  // pos = [x, z]). No data → the gate never engages (mirror behaves as before).
+  const heroDiscs = ((ctx.layout && ctx.layout.terrain && ctx.layout.terrain.heroPuddles) || [])
+    .map((h) => ({ x: h.pos[0], z: h.pos[1], r: h.r }));
+  const _frustum = new THREE.Frustum();
+  const _projScreen = new THREE.Matrix4();
+  const _gSph = new THREE.Sphere();
+  let gateLinger = GATE_LINGER_S; // start visible: boot/scenario poses judge fresh
+  let gateOverride = null;        // measurement seam: true/false pins the gate, null = live
+  function puddlePayoffVisible() {
+    if (!heroDiscs.length) return true;
+    _projScreen.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    _frustum.setFromProjectionMatrix(_projScreen);
+    const cy = camera.position.y;
+    let frac = 0;
+    for (const h of heroDiscs) {
+      _gSph.center.set(h.x, PLANE_Y, h.z);
+      _gSph.radius = h.r + GATE_MARGIN;
+      if (!_frustum.intersectsSphere(_gSph)) continue;
+      const d = Math.max(1, Math.hypot(h.x - camera.position.x, cy - PLANE_Y, h.z - camera.position.z));
+      // apparent area of a ground disc: pi r^2 foreshortened by sin(elevation)
+      // ~ (cy - PLANE_Y)/d, against the view-plane area at distance d.
+      const apparent = Math.PI * h.r * h.r * Math.min(1, Math.max(0.05, (cy - PLANE_Y) / d));
+      const viewH = 2 * Math.tan((camera.fov * Math.PI) / 360) * d;
+      const viewW = viewH * camera.aspect;
+      frac += apparent / Math.max(1e-3, viewW * viewH);
+      if (frac >= GATE_MIN_FRAC) return true;
+    }
+    return frac >= GATE_MIN_FRAC;
+  }
+
   const api = {
     update(dt) {
       const dyn = globalThis.__BR_DYNRES__;
       const atFloor = !!(dyn && dyn.atFloor && dyn.atFloor());
       const nearPlaza =
         camera.position.distanceTo(reflectorWorldPosition) < NEAR_GATE;
-      const want = enabled && qualityOn && !atFloor && nearPlaza;
+      // payoff gate with linger (dt is the frame's seconds; clamp odd values)
+      if (puddlePayoffVisible()) gateLinger = GATE_LINGER_S;
+      else gateLinger = Math.max(-1, gateLinger - Math.max(0, Math.min(0.1, dt || 0.016)));
+      const payoff = gateOverride !== null ? gateOverride : gateLinger > 0;
+      const want = enabled && qualityOn && !atFloor && nearPlaza && payoff;
 
       if (!want) {
         published.active = false;
@@ -290,6 +343,16 @@ export function createReflect(ctx) {
     isActive() { return published.active; },
     enrolledCount() { return enrolled; },
     cubeBaked() { return cubeBaked; },
+    // LANE V2 — harness-visible gate state (a run that got faster because the
+    // mirror was gated off is a different result from one where it ran).
+    gateReport() {
+      return { payoffVisible: puddlePayoffVisible(), lingerS: +gateLinger.toFixed(2),
+               heroDiscs: heroDiscs.length, active: published.active,
+               override: gateOverride };
+    },
+    // measurement seam only (A/B pricing + regression capture): pins the
+    // payoff gate; pass null to return to the live test.
+    setGateOverride(v) { gateOverride = v === null ? null : !!v; },
   };
 
   ctx.reflect = api;

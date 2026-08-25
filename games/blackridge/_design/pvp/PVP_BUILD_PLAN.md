@@ -1442,3 +1442,34 @@ contradicted a design doc, Part 2 says so by name rather than quietly designing 
 two cross-wave collisions in Part 6 (O1, O2) share no file with the concurrent aim wave and were
 found by reading its probes, not its file list — they are the reason this plan orders two
 specific wave-1 tasks ahead of everything else.*
+
+---
+
+## PART 10 — OWNER AMENDMENTS (2026-08-20, BINDING — override any conflicting ruling above)
+
+**A1 — THE CAMPAIGN STAYS. C16 is OVERRULED.** The owner's words: "do not delete campaign,
+leave it - add the pvp mode." Therefore:
+- `core/sim/mission.js` is NOT moved to the attic. It stays wired and the campaign stays
+  playable. W1's file list loses that MOVE action; everything else in W1 stands.
+- `content.json` v2 RETAINS the `mission` block (and `archetypes`/`pois`/`pickups` the
+  campaign needs) alongside the new `arena`/`modes` blocks. W4 does not split campaign
+  content into the attic; the contract gate validates BOTH.
+- The menu (W6 `mode_select.js`/`menu.js`) offers FOUR entries: CAMPAIGN, SKIRMISH (5v5 TDM),
+  CAPTURE THE FLAG, FREE-FOR-ALL.
+- `__test.startMission()` KEEPS its campaign behaviour unchanged. This RESOLVES the Part 0
+  startMission finding more cleanly than W10's redefinition: the 11 harness callers (6 of them
+  aim-wave probes) keep exactly the semantics they were written against. Matches start ONLY
+  via the new `__test.startMatch({mode, seed, bots})`. W10's row is amended accordingly:
+  no `startMission({}) → {mode:'tdm', bots:0}` redefinition.
+- The campaign must still PASS its smoke test after the PVP build: mission starts, beats fire,
+  bots spawn, no page errors. Breaking the campaign is a regression, not an acceptable cost.
+
+**A2 — VISUALS MUST NOT REGRESS.** The owner: "ensure we do not drop visuals." The final
+proof wave captures the shot battery and compares against the current build's frames; any
+frame that reads worse than the pre-PVP build is a FAIL to fix, not a note. The PVP lighting
+profile (W11/E19) may change the ARENA's look only in ways the balance rationale requires,
+and never below the current visual bar.
+
+**A3 — 30 FPS is the accepted perf bar (owner, earlier today): GPU ≤ 33.3 ms by timer query,
+all phases, including perf-match with 10 actors.** Traversal currently measures ~41.9 ms and
+must be brought inside the bar.

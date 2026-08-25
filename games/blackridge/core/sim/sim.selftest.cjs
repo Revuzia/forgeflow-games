@@ -848,6 +848,31 @@ async function main() {
       (illegal.length ? " — ILLEGAL: " + illegal.join(",") : ` (saw: ${[...seen].sort().join(", ")})`));
   }
 
+  // ================================================================ pvp seam
+  // (W1, PVP_BUILD_PLAN C25 + AC-38 — runs as part of the full battery.)
+  section("pvp tuning seam (C25) — identity in wave 1; AC-38 one-HP rule");
+  {
+    const TUN = await import(u("core/pvp/pvp_tuning.js"));
+    const sp = TUN.getTuning("sp"), pvp = TUN.getTuning("pvp");
+    const strip = (t) => JSON.stringify(Object.assign({}, t, { id: null }));
+    ok(strip(sp) === strip(pvp),
+      "pvp delta set is IDENTITY (wave 5 flips the data — C25); sp==pvp minus id");
+    ok(sp.maxHp === 100 && sp.regenDelayS === 4.5 && sp.regenPerS === 35 &&
+       Math.abs(sp.regenPerS * sp.botRetreatRegenMult - 24.5) < 1e-9,
+      "sp table equals the pre-PVP constants (100 HP, 4.5 s, 35 HP/s, retreat 24.5 HP/s)");
+    const { sim } = makeSim({ tuning: "pvp" });
+    ok(sim.tuning && sim.tuning.id === "pvp", "createSim({tuning:'pvp'}) resolves the table");
+    sim.spawnBot("rifleman", 5, 5, {});
+    sim.spawnBot("rifleman", -5, 5, { band: "hardened" });
+    const hps = [sim.state.player.hp, ...sim.state.bots.map((b) => b.hp)];
+    ok(hps.every((h) => h === sim.tuning.maxHp),
+      "AC-38: every actor spawns at ONE shared hp value regardless of band");
+    ok(sim.state.player.team === 0 && sim.state.bots.every((b) => b.team === 1),
+      "campaign team mirrors: player 0, bots default 1 (hostile) — Part 3.4 additive");
+    ok(sim.state.match === null && !sim.match,
+      "campaign sim has NO match driver (A1 coexistence: one driver per sim)");
+  }
+
   return finish();
 }
 

@@ -28,6 +28,8 @@ import { stepProjectiles } from "./ballistics.js";
 import { stepGrenades } from "./grenades.js";
 import { stepHealth, applyDamage } from "./damage.js";
 import { makeMission } from "./mission.js";
+import { makeMatch } from "../match/match.js";
+import { getTuning } from "../pvp/pvp_tuning.js";
 import { aiStep } from "../ai/botfsm.js";
 import { makeSquad } from "../ai/squad.js";
 
@@ -47,11 +49,21 @@ export function createSim(opts = {}) {
     weapons = {},
     seed = 1,
     emit = () => {},
+    // PVP seam (PVP_BUILD_PLAN W1):
+    //   mode    — 'tdm'|'ctf'|'ffa' constructs the MATCH driver instead of
+    //             the campaign mission driver. Exactly ONE driver per sim
+    //             (A1: the two coexist in the codebase, never in one sim).
+    //   tuning  — 'sp'|'pvp' balance table (C25 — identity delta set in wave 1)
+    //   matchOpts — {difficulty, veteran, spawnDirector} forwarded to makeMatch
+    mode = null,
+    tuning = "sp",
+    matchOpts = {},
   } = opts;
 
   const rng = makeStreams(seed);
   const world = makeWorld(colliders);
   const squad = makeSquad();
+  const tun = getTuning(tuning);
 
   const loadoutSlots = (content && content.mission && content.mission.loadout && content.mission.loadout.slots)
     || ["warden", "pike"];
@@ -69,8 +81,10 @@ export function createSim(opts = {}) {
       pitch: 0,
       stance: "stand",
       grounded: true,
-      hp: 100,
+      hp: tun.maxHp,
       alive: true,
+      team: 0, // mirrored int (Part 3.4) — written by roster.bindBody in matches;
+               // 0 in the campaign so generalized team reads stay coherent
       weapon: {
         id: primary, mag: wTable.mag, reserve: wTable.reserve, state: "idle",
         ads: false, adsT: 0, recoilIndex: 0, stateT: 0,
@@ -84,6 +98,7 @@ export function createSim(opts = {}) {
     },
     bots: [],
     objectives: [],
+    match: null, // filled by match.start() in PVP (Part 3.2); null in campaign
     counters: {
       shotsFired: 0, shotsHit: 0, kills: 0, headshots: 0,
       damageDealt: 0, damageTaken: 0, deaths: 0,
@@ -119,11 +134,14 @@ export function createSim(opts = {}) {
     // bullet leaves along the crosshair ray EXACTLY. Headless probes have no
     // recoil.js; they set this true so the sim models the same climb.
     flags: { god: false, noTarget: false, simRecoil: false },
+    tuning: tun, // C25 balance seam — identity in wave 1; W11 flips the data
     emit: (type, data) => {
       if (type === "shot" && !data.impactOnly && !data.pen) internal.shotsAnyTotal++;
       emit(type, data);
     },
-    mission: null, // set below when content present
+    mission: null, // set below when content present (campaign driver, A1)
+    match: null,   // set below when opts.mode requests a PVP match; when set,
+                   // sim.match === sim.mission (ONE object, two names — C29a)
 
     // ------------------------------------------------------------- step
     step(cmd) {
@@ -140,6 +158,15 @@ export function createSim(opts = {}) {
 
       // 3. AI brains (A5) — write bot.cmd only; ≤4 think/tick inside
       aiStep(sim, nav, squad, DT);
+
+      // 3.5 warm-up freeze (C14): during match warm-up the noTarget lever
+      // (V9) stops perception/fire, and bot movement/fire cmds are zeroed
+      // here — between the brains writing cmd and locomotion consuming it.
+      if (sim.match && sim.match.botsFrozen && sim.match.botsFrozen()) {
+        for (const b of state.bots) {
+          if (b.cmd) { b.cmd.fire = false; b.cmd.moveX = 0; b.cmd.moveZ = 0; b.cmd.sprint = false; b.cmd.grenade = false; }
+        }
+      }
 
       // 4. bot locomotion + weapon fire — the player's code paths
       for (const b of state.bots) {
@@ -207,8 +234,12 @@ export function createSim(opts = {}) {
         archetype: spec.archetype,
         pos: spec.pos.slice(),
         yaw: spec.yaw || 0,
-        hp: 100, // R16 — 100 HP at every band, no exceptions
+        hp: tun.maxHp, // R16/AC-38 — ONE hp value at every band, no exceptions
         alive: true,
+        // mirrored team int (Part 3.4; written by roster.bindBody in matches).
+        // Campaign default 1 = hostile to the team-0 player, so generalized
+        // team reads keep today's everyone-is-an-enemy semantics.
+        team: spec.team != null ? spec.team : 1,
         state: spec.alerted ? "alert" : "patrol",
         anim: "idle",
         aimAt: null,
@@ -305,8 +336,22 @@ export function createSim(opts = {}) {
     },
   };
 
-  // mission (constructed here; boot calls sim.mission.start(sim))
-  if (content) sim.mission = makeMission(content, sim.emit);
+  // Driver selection (A1 — the campaign and the match COEXIST; exactly one
+  // is constructed per sim, so exactly one ticks at slot 6):
+  //   opts.mode set   → the PVP match driver (frozen triple, Part 3.1)
+  //   opts.mode unset → the campaign mission driver, byte-for-byte as before
+  if (mode) {
+    sim.match = makeMatch(content, sim.emit, {
+      mode, rng, seed,
+      difficulty: matchOpts.difficulty,
+      veteran: matchOpts.veteran,
+      spawnDirector: matchOpts.spawnDirector,
+      spawnDirectorFactory: matchOpts.spawnDirectorFactory,
+    });
+    sim.mission = sim.match; // ONE object, two names — boot.js/damage.js unchanged
+  } else if (content) {
+    sim.mission = makeMission(content, sim.emit);
+  }
 
   // ---- helpers
   function updateReverbZone() {

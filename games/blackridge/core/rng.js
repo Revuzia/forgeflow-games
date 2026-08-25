@@ -16,8 +16,19 @@ export function mulberry32(seed) {
 
 // Independent streams derived from one seed with fixed offsets — creating a
 // stream never advances another. `spread` = weapon spread/recoil rolls,
-// `ai` = every bot decision, `mission` = spawn/wave rolls, `fx` = view-side
-// cosmetic randomness (may NEVER feed back into sim state).
+// `ai` = every bot decision, `mission` = spawn/wave rolls (retained — the
+// campaign driver uses it; PVP_BUILD_PLAN C26), `fx` = view-side cosmetic
+// randomness (may NEVER feed back into sim state).
+//
+// PVP additions (PVP_BUILD_PLAN C26 / Part 3.10f — same mulberry32
+// construction, fixed offsets, so creating them never advances an existing
+// stream and every pre-PVP seeded battery replays bit-identically):
+//   `match` = match-driver rolls (mode modules draw ONLY from this; callsign
+//             draw per modes.md §1.1 uses it),
+//   `spawn` = spawn-director scoring noise (C8's +6 × rng.spawn() term),
+//   `obj`   = the objective layer (W7). Load-bearing: a shared stream would
+//             shift downstream reaction/jitter rolls and make the AC-32
+//             monotonicity assertion impossible to write.
 export function makeStreams(seed) {
   const s = seed >>> 0;
   return {
@@ -25,5 +36,8 @@ export function makeStreams(seed) {
     ai: mulberry32(s ^ 0x85ebca6b),
     mission: mulberry32(s ^ 0xc2b2ae35),
     fx: mulberry32(s ^ 0x27d4eb2f),
+    match: mulberry32(s ^ 0x165667b1),
+    spawn: mulberry32(s ^ 0xd3a2646c),
+    obj: mulberry32(s ^ 0xfd7046c5),
   };
 }
