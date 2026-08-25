@@ -763,6 +763,25 @@ function buildKind(kind, s, M) {
     case "breaker_box":
       return [B(M.metal, w, h, d, 0, h / 2, 0),
               B(M.trim, w * 0.8, h * 0.8, 0.015, 0, h / 2, d / 2)];
+    case "container": {
+      // W4 (LANTERNWALK carve, arena.md A6): freight container — corrugated
+      // side panels between corner posts, lock-bar door end, capped roof.
+      // Without this case the boundary stacks and sightline breakers render
+      // as bare grey boxes (buildKind's default arm).
+      const parts = [];
+      const pw = Math.min(0.14, w * 0.08), ph = h;
+      parts.push(B(M.corrugated, w - pw * 1.6, ph * 0.92, d, 0, ph * 0.5, 0));      // body
+      for (const sx of [-1, 1]) for (const sz of [-1, 1])
+        parts.push(B(M.metal, pw, ph, pw, sx * (w / 2 - pw / 2), ph / 2, sz * (d / 2 - pw / 2)));
+      parts.push(B(M.metal, w, 0.05, d, 0, ph - 0.025, 0));                          // roof cap
+      parts.push(B(M.metal, w, 0.08, d, 0, 0.04, 0));                                // skid rail
+      // door end: two lock bars + latch plates on the +Z face
+      for (const sx of [-1, 1]) {
+        parts.push(CYL(M.trim, 0.025, 0.025, ph * 0.86, sx * w * 0.18, ph * 0.47, d / 2 + 0.02, 8));
+        parts.push(B(M.trim, 0.09, 0.06, 0.05, sx * w * 0.18, ph * 0.52, d / 2 + 0.03));
+      }
+      return parts;
+    }
     default:
       return [B(M.metal, w, h, d, 0, h / 2, 0)];
   }

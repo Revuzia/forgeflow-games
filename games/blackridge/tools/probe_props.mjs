@@ -24,12 +24,27 @@ import { buildColliders } from "../core/level/colliders.js";
 const EPS = 0.002; // 2 mm interpenetration tolerance (shared faces pass)
 const SURFACES = new Set(["concrete", "metal", "dirt", "wood", "glass"]);
 const MATCLASSES = new Set(["soft", "metal_thin", "hard"]);
-const R24_KEYS = [
-  "dock_spawn", "quay_mid", "alley_dogleg_s", "alley_dogleg_n",
-  "arcade_ground", "arcade_upper", "plaza_center", "plaza_west",
-  "gallery_mid", "blvd_barricade", "blvd_mid", "platform_deck",
-  "customs_sandbags", "gate9", "exfil",
-];
+// Per-map contract data (W4 map split — the BLACKRIDGE_MAP env var selects
+// the layout; see core/level/layout.js). meridian_ward keeps the frozen R24
+// campaign set + LD §6's 44 bot spawns; lanternwalk carries the 17-key arena
+// set (PVP_BUILD_PLAN Part 3.10 i) and probe-emitted spawns live in
+// content.json instead of refSpawns.
+const NODE_KEY_SETS = {
+  meridian_ward: [
+    "dock_spawn", "quay_mid", "alley_dogleg_s", "alley_dogleg_n",
+    "arcade_ground", "arcade_upper", "plaza_center", "plaza_west",
+    "gallery_mid", "blvd_barricade", "blvd_mid", "platform_deck",
+    "customs_sandbags", "gate9", "exfil",
+  ],
+  lanternwalk: [
+    "plaza_center", "plaza_west", "plaza_ne", "arcade_ground", "arcade_upper",
+    "arcade_lightwell", "alley_mid", "alley_north", "cs1_mid", "street_mouth",
+    "corridor_mid", "cut_mouth", "gallery_north", "gallery_mid",
+    "gallery_south", "lantern_yard", "exchange_house",
+  ],
+};
+const SEED_NODE = { meridian_ward: "dock_spawn", lanternwalk: "plaza_center" };
+const EXPECT_BOT_SPAWNS = { meridian_ward: 44, lanternwalk: 0 };
 
 let failures = 0;
 const fail = (msg) => { failures++; console.error(`FAIL  ${msg}`); };
@@ -38,6 +53,9 @@ const info = (msg) => console.log(`ok    ${msg}`);
 // ---------------------------------------------------------------- build
 const C = buildColliders(1);
 const L = buildLayout(1);
+const MAP = L.mapId || "meridian_ward";
+const R24_KEYS = NODE_KEY_SETS[MAP];
+console.log(`map: ${MAP}`);
 
 // 1. determinism — same seed twice AND a different seed must produce the
 // same data (wave-1 layout is fully authored; seed is cosmetic-reserve only).
@@ -65,10 +83,17 @@ const L = buildLayout(1);
     if (!okBox) { fail(`schema: degenerate box ${b.id}`); bad++; continue; }
     if (!SURFACES.has(b.surface)) { fail(`schema: box ${b.id} bad surface '${b.surface}'`); bad++; }
     if (!MATCLASSES.has(b.matClass)) { fail(`schema: box ${b.id} bad matClass '${b.matClass}'`); bad++; }
+    // lanternwalk's C.bounds is the ARENA AABB; skyline masses and boundary
+    // backing legitimately extend beyond it, so the containment envelope is
+    // the ward's world extent there (arena.md §5.1: "keep them as
+    // out-of-bounds mass for the skyline; either is fine").
+    const ENV = MAP === "lanternwalk"
+      ? { min: [-60, -2, -60], max: [60, 14, 60] }
+      : C.bounds;
     const inB =
-      b.min[0] >= C.bounds.min[0] - EPS && b.max[0] <= C.bounds.max[0] + EPS &&
-      b.min[1] >= C.bounds.min[1] - EPS && b.max[1] <= C.bounds.max[1] + EPS &&
-      b.min[2] >= C.bounds.min[2] - EPS && b.max[2] <= C.bounds.max[2] + EPS;
+      b.min[0] >= ENV.min[0] - EPS && b.max[0] <= ENV.max[0] + EPS &&
+      b.min[1] >= ENV.min[1] - EPS && b.max[1] <= ENV.max[1] + EPS &&
+      b.min[2] >= ENV.min[2] - EPS && b.max[2] <= ENV.max[2] + EPS;
     if (!inB) { fail(`schema: box ${b.id} outside bounds`); bad++; }
   }
   const ids = new Set(C.boxes.map((b) => b.id));
@@ -156,15 +181,16 @@ function checkStandpoint(label, pos) {
     seen.set(sig, k);
     checkStandpoint(`node ${k}`, v);
   }
-  if (!failures) info(`nodes: ${keys.length}/15 R24 keys present, unique, walkable, clear, supported`);
+  if (!failures) info(`nodes: ${keys.length}/${R24_KEYS.length} ${MAP} keys present, unique, walkable, clear, supported`);
 }
 
-// 5. LD §6 spawns (player + 44)
+// 5. LD §6 spawns (ward: player + 44; lanternwalk: player only — the arena's
+// spawn set is probe-emitted into content.json by tools/probe_arena.mjs)
 {
   const before = failures;
   const names = Object.keys(C.refSpawns);
   const botNames = names.filter((n) => n !== "player");
-  if (botNames.length !== 44) fail(`spawns: expected 44 LD §6 bot spawns, found ${botNames.length}`);
+  if (botNames.length !== EXPECT_BOT_SPAWNS[MAP]) fail(`spawns: expected ${EXPECT_BOT_SPAWNS[MAP]} bot spawns, found ${botNames.length}`);
   checkStandpoint("spawn player", C.refSpawns.player.pos);
   for (const n of botNames) checkStandpoint(`spawn ${n}`, C.refSpawns[n]);
   if (failures === before) info(`spawns: player + ${botNames.length} LD §6 spawns walkable, clear, supported`);
@@ -215,10 +241,11 @@ function checkStandpoint(label, pos) {
   }
   const reach = new Uint8Array(nx * nz);
   const cellOf = (x, z) => [Math.floor((x - x0) / CELL), Math.floor((z - z0) / CELL)];
-  const [sx, sz] = cellOf(C.nodes.dock_spawn[0], C.nodes.dock_spawn[2]);
+  const seedNode = SEED_NODE[MAP];
+  const [sx, sz] = cellOf(C.nodes[seedNode][0], C.nodes[seedNode][2]);
   const q = [[sx, sz]];
   reach[sx * nz + sz] = open[sx * nz + sz];
-  if (!reach[sx * nz + sz]) fail("connectivity: dock_spawn cell itself is not open");
+  if (!reach[sx * nz + sz]) fail(`connectivity: ${seedNode} cell itself is not open`);
   while (q.length) {
     const [ix, iz] = q.pop();
     for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {

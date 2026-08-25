@@ -7,8 +7,7 @@
     "triggers": "trigger vocabulary: {kind:'missionStart'} | {kind:'beat',beat} | {kind:'reach',node|area,radius?} (area=[[minX,minZ],[maxX,maxZ]]) | {kind:'contact',beat} (first shot by anyone OR first bot confirm while that beat is active) | {kind:'waveAlive',wave,lte} (wave fully spawned AND alive<=lte) | {kind:'objective',id} (fires when that objective completes) | {kind:'anyOf',of:[...]}",
     "beatOrdering": "beats advance strictly in order; only the NEXT beat's trigger is armed (entering a later beat's area early does nothing). Known edge: a rusher entering the arcade during beat 3 can have 9 bots alive briefly (5 plaza + 4 arcade) — above LD's 8 content guidance, inside the 12 engine budget (R23); A1's spawner may queue above 12, never above."
   },
-  "version": 1,
-
+  "version": 2,
   "mission": {
     "id": "meridian_ward",
     "title": "Operation BLACKRIDGE — Meridian Ward",
@@ -22,450 +21,3413 @@
       "premise": "A storm blackout has cut the ward's grid. Vektor Ancile, a delisted PMC turned arms broker, is moving CINDERLOCK — a stolen missile-guidance module — through Meridian Ward to a freighter that sails at dawn. Infiltrate from the freight canal, seize the case at the handoff point, and hold Customs Gate 9 until extraction.",
       "_ip": "all names invented for this project (level_design §1/§7 — no real brands, cities, units, or CoD references)"
     },
-    "loadout": { "slots": ["warden", "pike"], "grenades": 2 },
-    "death": { "respawnAt": "beat_checkpoint", "fadeS": 1.2, "_comment": "R22 — death restarts the current beat: full HP, loadout as at beat entry, completed objectives persist. Forfeit routes through the real loss path." },
+    "loadout": {
+      "slots": [
+        "warden",
+        "pike"
+      ],
+      "grenades": 2
+    },
+    "death": {
+      "respawnAt": "beat_checkpoint",
+      "fadeS": 1.2,
+      "_comment": "R22 — death restarts the current beat: full HP, loadout as at beat entry, completed objectives persist. Forfeit routes through the real loss path."
+    },
     "phases": [
-      { "id": "infil",   "beats": [1, 2] },
-      { "id": "assault", "beats": [3, 4, 5] },
-      { "id": "exfil",   "beats": [6] }
+      {
+        "id": "infil",
+        "beats": [
+          1,
+          2
+        ]
+      },
+      {
+        "id": "assault",
+        "beats": [
+          3,
+          4,
+          5
+        ]
+      },
+      {
+        "id": "exfil",
+        "beats": [
+          6
+        ]
+      }
     ],
-    "path": ["dock_spawn", "quay_mid", "alley_dogleg_s", "alley_dogleg_n", "plaza_west", "plaza_center", "arcade_ground", "arcade_upper", "gallery_mid", "blvd_mid", "blvd_barricade", "platform_deck", "customs_sandbags", "gate9", "exfil"],
-
+    "path": [
+      "dock_spawn",
+      "quay_mid",
+      "alley_dogleg_s",
+      "alley_dogleg_n",
+      "plaza_west",
+      "plaza_center",
+      "arcade_ground",
+      "arcade_upper",
+      "gallery_mid",
+      "blvd_mid",
+      "blvd_barricade",
+      "platform_deck",
+      "customs_sandbags",
+      "gate9",
+      "exfil"
+    ],
     "beats": [
       {
-        "beat": 1, "id": "b1_wet_insertion", "name": "WET INSERTION", "phase": "infil",
-        "trigger": { "kind": "missionStart" },
-        "checkpoint": { "pos": [-38, 0, 50], "yaw": -1.5708 },
-        "waves": ["w_dock"],
+        "beat": 1,
+        "id": "b1_wet_insertion",
+        "name": "WET INSERTION",
+        "phase": "infil",
+        "trigger": {
+          "kind": "missionStart"
+        },
+        "checkpoint": {
+          "pos": [
+            -38,
+            0,
+            50
+          ],
+          "yaw": -1.5708
+        },
+        "waves": [
+          "w_dock"
+        ],
         "objective": "obj_insertion",
         "radio": [
-          { "at": "start", "speaker": "RAVEN ACTUAL", "line": "Raven 2-1, you're inside Vektor's cordon. CINDERLOCK moves at dawn — the freighter is already loading." },
-          { "at": "start+8", "speaker": "RAVEN 2-2", "line": "Quay patrol ahead. Two of them. Teach them why the canal was a bad idea." }
+          {
+            "at": "start",
+            "speaker": "RAVEN ACTUAL",
+            "line": "Raven 2-1, you're inside Vektor's cordon. CINDERLOCK moves at dawn — the freighter is already loading."
+          },
+          {
+            "at": "start+8",
+            "speaker": "RAVEN 2-2",
+            "line": "Quay patrol ahead. Two of them. Teach them why the canal was a bad idea."
+          }
         ]
       },
       {
-        "beat": 2, "id": "b2_alley_sweep", "name": "ALLEY SWEEP", "phase": "infil",
-        "trigger": { "kind": "anyOf", "of": [
-          { "kind": "reach", "area": [[-48, 34], [-41, 42]] },
-          { "kind": "reach", "area": [[-14, 18], [-6, 32]] }
-        ] },
+        "beat": 2,
+        "id": "b2_alley_sweep",
+        "name": "ALLEY SWEEP",
+        "phase": "infil",
+        "trigger": {
+          "kind": "anyOf",
+          "of": [
+            {
+              "kind": "reach",
+              "area": [
+                [
+                  -48,
+                  34
+                ],
+                [
+                  -41,
+                  42
+                ]
+              ]
+            },
+            {
+              "kind": "reach",
+              "area": [
+                [
+                  -14,
+                  18
+                ],
+                [
+                  -6,
+                  32
+                ]
+              ]
+            }
+          ]
+        },
         "_trigger_comment": "primary = the alley mouth between bld_w1 and bld_s1; second area = committed up the plaza ramp (the C1 bypass) so beats never stall — the alley checkpoint team converges on gunfire either way.",
-        "checkpoint": { "pos": [-44, 0, 40], "yaw": 0 },
-        "waves": ["w_alley_fwd", "w_alley_reinf"],
+        "checkpoint": {
+          "pos": [
+            -44,
+            0,
+            40
+          ],
+          "yaw": 0
+        },
+        "waves": [
+          "w_alley_fwd",
+          "w_alley_reinf"
+        ],
         "objective": "obj_alleys",
         "radio": [
-          { "at": "start", "speaker": "RAVEN ACTUAL", "line": "Checkpoint team holds the tannery dog-legs. Steam and sodium — use the dark between the pools." }
+          {
+            "at": "start",
+            "speaker": "RAVEN ACTUAL",
+            "line": "Checkpoint team holds the tannery dog-legs. Steam and sodium — use the dark between the pools."
+          }
         ]
       },
       {
-        "beat": 3, "id": "b3_market_blackout", "name": "MARKET BLACKOUT", "phase": "assault",
-        "trigger": { "kind": "reach", "area": [[-25, -18], [15, 18]] },
-        "checkpoint": { "pos": [-20, 0, 0], "yaw": -1.5708 },
-        "waves": ["w_plaza_a", "w_plaza_b"],
+        "beat": 3,
+        "id": "b3_market_blackout",
+        "name": "MARKET BLACKOUT",
+        "phase": "assault",
+        "trigger": {
+          "kind": "reach",
+          "area": [
+            [
+              -25,
+              -18
+            ],
+            [
+              15,
+              18
+            ]
+          ]
+        },
+        "checkpoint": {
+          "pos": [
+            -20,
+            0,
+            0
+          ],
+          "yaw": -1.5708
+        },
+        "waves": [
+          "w_plaza_a",
+          "w_plaza_b"
+        ],
         "objective": "obj_market",
         "setPieces": [
           {
             "id": "transformer_blackout",
-            "trigger": { "kind": "waveAlive", "wave": "w_plaza_a", "lte": 2 },
-            "source": { "prop": "pl_transformer" },
+            "trigger": {
+              "kind": "waveAlive",
+              "wave": "w_plaza_a",
+              "lte": 2
+            },
+            "source": {
+              "prop": "pl_transformer"
+            },
             "sequence": "fx-pool arc light + sparks + thump at the transformer pole; L_PLAZA_KEY and all plaza neon emissives die over 0.4 s; 2.0 s of moon-and-muzzle darkness; emergency circuit relights at level 0.4 cyan #4adcd6 (matches layout.js lightPoles L_PLAZA_KEY.blackout — LD §3.3's 40%; LD §6's '35%' prose superseded by the on-disk single source)",
             "_comment": "intensity/emissive animation ONLY — the light pool never resizes (LD §3.1, doctrine §3). Wave B spawns on the same condition."
           }
         ],
         "radio": [
-          { "at": "start", "speaker": "RAVEN 2-2", "line": "Market feed's still hot. Cross the kiosk field — I'll watch the wires." },
-          { "at": "setpiece:transformer_blackout", "speaker": "RAVEN 2-2", "line": "Grid just died — whole block's dark. Watch for muzzle flashes." }
+          {
+            "at": "start",
+            "speaker": "RAVEN 2-2",
+            "line": "Market feed's still hot. Cross the kiosk field — I'll watch the wires."
+          },
+          {
+            "at": "setpiece:transformer_blackout",
+            "speaker": "RAVEN 2-2",
+            "line": "Grid just died — whole block's dark. Watch for muzzle flashes."
+          }
         ]
       },
       {
-        "beat": 4, "id": "b4_the_handoff", "name": "THE HANDOFF", "phase": "assault",
-        "trigger": { "kind": "reach", "area": [[-39, -19], [-26, 5]] },
-        "checkpoint": { "pos": [-27, 0, -12], "yaw": 1.5708 },
-        "waves": ["w_arcade"],
+        "beat": 4,
+        "id": "b4_the_handoff",
+        "name": "THE HANDOFF",
+        "phase": "assault",
+        "trigger": {
+          "kind": "reach",
+          "area": [
+            [
+              -39,
+              -19
+            ],
+            [
+              -26,
+              5
+            ]
+          ]
+        },
+        "checkpoint": {
+          "pos": [
+            -27,
+            0,
+            -12
+          ],
+          "yaw": 1.5708
+        },
+        "waves": [
+          "w_arcade"
+        ],
         "objective": "obj_cinderlock",
         "radio": [
-          { "at": "start", "speaker": "RAVEN ACTUAL", "line": "Handoff room is upstairs in the Lanternwalk Arcade. The case is the mission, 2-1." },
-          { "at": "objective:obj_cinderlock", "speaker": "RAVEN ACTUAL", "line": "Case secured. Exfil is Customs Gate 9 — a truck rolls at dawn. Move." }
+          {
+            "at": "start",
+            "speaker": "RAVEN ACTUAL",
+            "line": "Handoff room is upstairs in the Lanternwalk Arcade. The case is the mission, 2-1."
+          },
+          {
+            "at": "objective:obj_cinderlock",
+            "speaker": "RAVEN ACTUAL",
+            "line": "Case secured. Exfil is Customs Gate 9 — a truck rolls at dawn. Move."
+          }
         ],
         "_comment": "CINDERLOCK pickup spawns nothing (no pickup-ambush cliché, LD §6); pressure arrives next beat."
       },
       {
-        "beat": 5, "id": "b5_long_rain", "name": "LONG RAIN", "phase": "assault",
-        "trigger": { "kind": "objective", "id": "obj_cinderlock" },
-        "checkpoint": { "pos": [-24, 0, -12], "yaw": -1.5708 },
-        "waves": ["w_marks", "w_blvd"],
+        "beat": 5,
+        "id": "b5_long_rain",
+        "name": "LONG RAIN",
+        "phase": "assault",
+        "trigger": {
+          "kind": "objective",
+          "id": "obj_cinderlock"
+        },
+        "checkpoint": {
+          "pos": [
+            -24,
+            0,
+            -12
+          ],
+          "yaw": -1.5708
+        },
+        "waves": [
+          "w_marks",
+          "w_blvd"
+        ],
         "objective": "obj_boulevard",
         "radio": [
-          { "at": "start", "speaker": "RAVEN 2-2", "line": "Marksman on the tram platform owns that boulevard. Duel him long, push the car line, or cut through the Storm Gallery." }
+          {
+            "at": "start",
+            "speaker": "RAVEN 2-2",
+            "line": "Marksman on the tram platform owns that boulevard. Duel him long, push the car line, or cut through the Storm Gallery."
+          }
         ],
         "_comment": "platform is player-ownable after the marksman falls (overwatch into beat 6's yard mouths); corvus lootable from the nest (pickups pk_corvus_nest)."
       },
       {
-        "beat": 6, "id": "b6_hold_gate9", "name": "HOLD GATE 9", "phase": "exfil",
-        "trigger": { "kind": "objective", "id": "obj_gate9_reach" },
-        "checkpoint": { "pos": [-2, 0, -50], "yaw": 3.14159 },
-        "waves": ["w_cust_w1", "w_cust_w2", "w_cust_w3"],
+        "beat": 6,
+        "id": "b6_hold_gate9",
+        "name": "HOLD GATE 9",
+        "phase": "exfil",
+        "trigger": {
+          "kind": "objective",
+          "id": "obj_gate9_reach"
+        },
+        "checkpoint": {
+          "pos": [
+            -2,
+            0,
+            -50
+          ],
+          "yaw": 3.14159
+        },
+        "waves": [
+          "w_cust_w1",
+          "w_cust_w2",
+          "w_cust_w3"
+        ],
         "objective": "obj_hold",
-        "truck": { "arrivesAfterS": 180, "throughNode": "gate9", "_comment": "the truck IS the clock (LD §6) — beat ends deterministically; every engagement ends (doctrine §2)" },
+        "truck": {
+          "arrivesAfterS": 180,
+          "throughNode": "gate9",
+          "_comment": "the truck IS the clock (LD §6) — beat ends deterministically; every engagement ends (doctrine §2)"
+        },
         "setPieces": [
-          { "id": "fuel_drums", "source": { "prop": "cu_drums" }, "_comment": "explodable drum group — player's set-piece tool, fx-pool explosion light (prop flags in layout.js are the single source)" }
+          {
+            "id": "fuel_drums",
+            "source": {
+              "prop": "cu_drums"
+            },
+            "_comment": "explodable drum group — player's set-piece tool, fx-pool explosion light (prop flags in layout.js are the single source)"
+          }
         ],
         "radio": [
-          { "at": "start", "speaker": "RAVEN ACTUAL", "line": "Hold Gate 9. Extraction truck is three minutes out. They will come through both mouths." },
-          { "at": "truck", "speaker": "RAVEN ACTUAL", "line": "Truck's through the gate — get aboard, 2-1!" }
+          {
+            "at": "start",
+            "speaker": "RAVEN ACTUAL",
+            "line": "Hold Gate 9. Extraction truck is three minutes out. They will come through both mouths."
+          },
+          {
+            "at": "truck",
+            "speaker": "RAVEN ACTUAL",
+            "line": "Truck's through the gate — get aboard, 2-1!"
+          }
         ]
       }
     ],
-
     "objectives": [
-      { "id": "obj_insertion",  "label": "Clear the quay patrol",             "kind": "clear",    "waves": ["w_dock"], "initial": true, "unlocks": ["obj_alleys"] },
-      { "id": "obj_alleys",     "label": "Sweep the Tannery Alleys",          "kind": "clear",    "waves": ["w_alley_fwd", "w_alley_reinf"], "unlocks": ["obj_market"] },
-      { "id": "obj_market",     "label": "Cross Meridian Market",             "kind": "clear",    "waves": ["w_plaza_a", "w_plaza_b"], "unlocks": ["obj_cinderlock"] },
-      { "id": "obj_cinderlock", "label": "Seize the CINDERLOCK case",         "kind": "interact", "node": "arcade_upper", "pos": [-34, 4.2, -12], "radius": 1.6, "unlocks": ["obj_boulevard"], "_comment": "handoff table (layout arc_table, upstairs)" },
-      { "id": "obj_boulevard",  "label": "Break the boulevard overwatch",     "kind": "clear",    "waves": ["w_marks"], "unlocks": ["obj_gate9_reach"], "_comment": "the marksman is the gate; w_blvd is pressure, not a lock — flanking via the gallery stays viable (LD beat 5 choices)" },
-      { "id": "obj_gate9_reach","label": "Fall back to Customs Gate 9",       "kind": "reach",    "node": "customs_sandbags", "radius": 6, "unlocks": ["obj_hold"] },
-      { "id": "obj_hold",       "label": "Hold Gate 9 until extraction",      "kind": "clear",    "waves": ["w_cust_w1", "w_cust_w2", "w_cust_w3"], "holdUntilTruckS": 180, "unlocks": ["obj_exfil"], "_comment": "completes at truck arrival (180 s after beat-6 start) even if waves cleared early; survivors stay hostile while the player boards" },
-      { "id": "obj_exfil",      "label": "Board the extraction truck",        "kind": "reach",    "node": "exfil", "radius": 4, "unlocks": [] }
+      {
+        "id": "obj_insertion",
+        "label": "Clear the quay patrol",
+        "kind": "clear",
+        "waves": [
+          "w_dock"
+        ],
+        "initial": true,
+        "unlocks": [
+          "obj_alleys"
+        ]
+      },
+      {
+        "id": "obj_alleys",
+        "label": "Sweep the Tannery Alleys",
+        "kind": "clear",
+        "waves": [
+          "w_alley_fwd",
+          "w_alley_reinf"
+        ],
+        "unlocks": [
+          "obj_market"
+        ]
+      },
+      {
+        "id": "obj_market",
+        "label": "Cross Meridian Market",
+        "kind": "clear",
+        "waves": [
+          "w_plaza_a",
+          "w_plaza_b"
+        ],
+        "unlocks": [
+          "obj_cinderlock"
+        ]
+      },
+      {
+        "id": "obj_cinderlock",
+        "label": "Seize the CINDERLOCK case",
+        "kind": "interact",
+        "node": "arcade_upper",
+        "pos": [
+          -34,
+          4.2,
+          -12
+        ],
+        "radius": 1.6,
+        "unlocks": [
+          "obj_boulevard"
+        ],
+        "_comment": "handoff table (layout arc_table, upstairs)"
+      },
+      {
+        "id": "obj_boulevard",
+        "label": "Break the boulevard overwatch",
+        "kind": "clear",
+        "waves": [
+          "w_marks"
+        ],
+        "unlocks": [
+          "obj_gate9_reach"
+        ],
+        "_comment": "the marksman is the gate; w_blvd is pressure, not a lock — flanking via the gallery stays viable (LD beat 5 choices)"
+      },
+      {
+        "id": "obj_gate9_reach",
+        "label": "Fall back to Customs Gate 9",
+        "kind": "reach",
+        "node": "customs_sandbags",
+        "radius": 6,
+        "unlocks": [
+          "obj_hold"
+        ]
+      },
+      {
+        "id": "obj_hold",
+        "label": "Hold Gate 9 until extraction",
+        "kind": "clear",
+        "waves": [
+          "w_cust_w1",
+          "w_cust_w2",
+          "w_cust_w3"
+        ],
+        "holdUntilTruckS": 180,
+        "unlocks": [
+          "obj_exfil"
+        ],
+        "_comment": "completes at truck arrival (180 s after beat-6 start) even if waves cleared early; survivors stay hostile while the player boards"
+      },
+      {
+        "id": "obj_exfil",
+        "label": "Board the extraction truck",
+        "kind": "reach",
+        "node": "exfil",
+        "radius": 4,
+        "unlocks": []
+      }
     ],
-
     "spawns": {
-      "player": { "pos": [-38, 0, 50], "yaw": -1.5708, "_comment": "matches colliders.spawns — faces east along the quay" },
+      "player": {
+        "pos": [
+          -38,
+          0,
+          50
+        ],
+        "yaw": -1.5708,
+        "_comment": "matches colliders.spawns — faces east along the quay"
+      },
       "waves": [
         {
-          "id": "w_dock", "trigger": { "kind": "beat", "beat": 1 },
+          "id": "w_dock",
+          "trigger": {
+            "kind": "beat",
+            "beat": 1
+          },
           "bots": [
-            { "id": "sp_dock_1", "archetype": "rifleman", "band": "recruit", "squad": "sq_dock", "pos": [-18, 0, 48], "yaw": -1.5708, "alerted": false, "patrol": [[-18, 48], [0, 46], [-8, 50]] },
-            { "id": "sp_dock_2", "archetype": "rifleman", "band": "recruit", "squad": "sq_dock", "pos": [2, 0, 46],   "yaw": 1.5708,  "alerted": false, "patrol": [[2, 46], [16, 48], [-4, 49]] }
+            {
+              "id": "sp_dock_1",
+              "archetype": "rifleman",
+              "band": "recruit",
+              "squad": "sq_dock",
+              "pos": [
+                -18,
+                0,
+                48
+              ],
+              "yaw": -1.5708,
+              "alerted": false,
+              "patrol": [
+                [
+                  -18,
+                  48
+                ],
+                [
+                  0,
+                  46
+                ],
+                [
+                  -8,
+                  50
+                ]
+              ]
+            },
+            {
+              "id": "sp_dock_2",
+              "archetype": "rifleman",
+              "band": "recruit",
+              "squad": "sq_dock",
+              "pos": [
+                2,
+                0,
+                46
+              ],
+              "yaw": 1.5708,
+              "alerted": false,
+              "patrol": [
+                [
+                  2,
+                  46
+                ],
+                [
+                  16,
+                  48
+                ],
+                [
+                  -4,
+                  49
+                ]
+              ]
+            }
           ]
         },
         {
-          "id": "w_alley_fwd", "trigger": { "kind": "beat", "beat": 2 },
+          "id": "w_alley_fwd",
+          "trigger": {
+            "kind": "beat",
+            "beat": 2
+          },
           "bots": [
-            { "id": "sp_alley_1", "archetype": "cqb",      "band": "recruit", "squad": "sq_alley1", "pos": [-50, 0, 26], "yaw": 3.14159, "alerted": false, "patrol": [[-50, 26], [-46, 30]] },
-            { "id": "sp_alley_2", "archetype": "rifleman", "band": "regular", "squad": "sq_alley1", "pos": [-54, 0, 14], "yaw": 3.14159, "alerted": false }
+            {
+              "id": "sp_alley_1",
+              "archetype": "cqb",
+              "band": "recruit",
+              "squad": "sq_alley1",
+              "pos": [
+                -50,
+                0,
+                26
+              ],
+              "yaw": 3.14159,
+              "alerted": false,
+              "patrol": [
+                [
+                  -50,
+                  26
+                ],
+                [
+                  -46,
+                  30
+                ]
+              ]
+            },
+            {
+              "id": "sp_alley_2",
+              "archetype": "rifleman",
+              "band": "regular",
+              "squad": "sq_alley1",
+              "pos": [
+                -54,
+                0,
+                14
+              ],
+              "yaw": 3.14159,
+              "alerted": false
+            }
           ]
         },
         {
           "id": "w_alley_reinf",
-          "trigger": { "kind": "anyOf", "of": [ { "kind": "contact", "beat": 2 }, { "kind": "beat", "beat": 3 } ] },
+          "trigger": {
+            "kind": "anyOf",
+            "of": [
+              {
+                "kind": "contact",
+                "beat": 2
+              },
+              {
+                "kind": "beat",
+                "beat": 3
+              }
+            ]
+          },
           "_comment": "LD §6: 3 reinforce from the north dog-leg on first shot; the beat-3 arm guarantees they exist even for a ghost/ramp run so obj_alleys can always complete",
           "bots": [
-            { "id": "sp_alley_3", "archetype": "cqb",      "band": "regular", "squad": "sq_alley2", "pos": [-46, 0, -2],  "yaw": 3.14159, "alerted": true },
-            { "id": "sp_alley_4", "archetype": "rifleman", "band": "recruit", "squad": "sq_alley2", "pos": [-52, 0, -10], "yaw": 3.14159, "alerted": true },
-            { "id": "sp_alley_5", "archetype": "cqb",      "band": "regular", "squad": "sq_alley2", "pos": [-44, 0, -20], "yaw": 3.14159, "alerted": true }
+            {
+              "id": "sp_alley_3",
+              "archetype": "cqb",
+              "band": "regular",
+              "squad": "sq_alley2",
+              "pos": [
+                -46,
+                0,
+                -2
+              ],
+              "yaw": 3.14159,
+              "alerted": true
+            },
+            {
+              "id": "sp_alley_4",
+              "archetype": "rifleman",
+              "band": "recruit",
+              "squad": "sq_alley2",
+              "pos": [
+                -52,
+                0,
+                -10
+              ],
+              "yaw": 3.14159,
+              "alerted": true
+            },
+            {
+              "id": "sp_alley_5",
+              "archetype": "cqb",
+              "band": "regular",
+              "squad": "sq_alley2",
+              "pos": [
+                -44,
+                0,
+                -20
+              ],
+              "yaw": 3.14159,
+              "alerted": true
+            }
           ]
         },
         {
-          "id": "w_plaza_a", "trigger": { "kind": "beat", "beat": 3 },
+          "id": "w_plaza_a",
+          "trigger": {
+            "kind": "beat",
+            "beat": 3
+          },
           "bots": [
-            { "id": "sp_plaza_a1", "archetype": "rifleman", "band": "regular",  "squad": "sq_plaza_a1", "pos": [-2, 0, -14],  "yaw": 1.5708, "alerted": true },
-            { "id": "sp_plaza_a2", "archetype": "rifleman", "band": "regular",  "squad": "sq_plaza_a1", "pos": [8, 0, -8],    "yaw": 1.5708, "alerted": true },
-            { "id": "sp_plaza_a3", "archetype": "cqb",      "band": "regular",  "squad": "sq_plaza_a1", "pos": [-14, 0, -6],  "yaw": 1.5708, "alerted": true },
-            { "id": "sp_plaza_a4", "archetype": "rifleman", "band": "hardened", "squad": "sq_plaza_a2", "pos": [12, 0, 4],    "yaw": 1.5708, "alerted": true },
-            { "id": "sp_plaza_a5", "archetype": "cqb",      "band": "hardened", "squad": "sq_plaza_a2", "pos": [-8, 0, -16],  "yaw": 1.5708, "alerted": true }
+            {
+              "id": "sp_plaza_a1",
+              "archetype": "rifleman",
+              "band": "regular",
+              "squad": "sq_plaza_a1",
+              "pos": [
+                -2,
+                0,
+                -14
+              ],
+              "yaw": 1.5708,
+              "alerted": true
+            },
+            {
+              "id": "sp_plaza_a2",
+              "archetype": "rifleman",
+              "band": "regular",
+              "squad": "sq_plaza_a1",
+              "pos": [
+                8,
+                0,
+                -8
+              ],
+              "yaw": 1.5708,
+              "alerted": true
+            },
+            {
+              "id": "sp_plaza_a3",
+              "archetype": "cqb",
+              "band": "regular",
+              "squad": "sq_plaza_a1",
+              "pos": [
+                -14,
+                0,
+                -6
+              ],
+              "yaw": 1.5708,
+              "alerted": true
+            },
+            {
+              "id": "sp_plaza_a4",
+              "archetype": "rifleman",
+              "band": "hardened",
+              "squad": "sq_plaza_a2",
+              "pos": [
+                12,
+                0,
+                4
+              ],
+              "yaw": 1.5708,
+              "alerted": true
+            },
+            {
+              "id": "sp_plaza_a5",
+              "archetype": "cqb",
+              "band": "hardened",
+              "squad": "sq_plaza_a2",
+              "pos": [
+                -8,
+                0,
+                -16
+              ],
+              "yaw": 1.5708,
+              "alerted": true
+            }
           ]
         },
         {
-          "id": "w_plaza_b", "trigger": { "kind": "waveAlive", "wave": "w_plaza_a", "lte": 2 },
+          "id": "w_plaza_b",
+          "trigger": {
+            "kind": "waveAlive",
+            "wave": "w_plaza_a",
+            "lte": 2
+          },
           "_comment": "spawns with the transformer blackout set-piece (same condition) — pushes in the dark",
           "bots": [
-            { "id": "sp_plaza_b1", "archetype": "cqb",      "band": "hardened", "squad": "sq_plaza_b", "pos": [-12, 0, -38], "yaw": 3.14159,  "alerted": true },
-            { "id": "sp_plaza_b2", "archetype": "rifleman", "band": "regular",  "squad": "sq_plaza_b", "pos": [-4, 0, -40],  "yaw": 3.14159,  "alerted": true },
-            { "id": "sp_plaza_b3", "archetype": "cqb",      "band": "regular",  "squad": "sq_plaza_b", "pos": [18, 0, 12],   "yaw": 1.5708,   "alerted": true, "_comment": "Storm Gallery interior, exits the plaza-side gallery door (A3 placement note)" },
-            { "id": "sp_plaza_b4", "archetype": "cqb",      "band": "hardened", "squad": "sq_plaza_b", "pos": [-25, 0, -12], "yaw": -1.5708,  "alerted": true, "_comment": "arcade east door opening (A3 placement note)" }
+            {
+              "id": "sp_plaza_b1",
+              "archetype": "cqb",
+              "band": "hardened",
+              "squad": "sq_plaza_b",
+              "pos": [
+                -12,
+                0,
+                -38
+              ],
+              "yaw": 3.14159,
+              "alerted": true
+            },
+            {
+              "id": "sp_plaza_b2",
+              "archetype": "rifleman",
+              "band": "regular",
+              "squad": "sq_plaza_b",
+              "pos": [
+                -4,
+                0,
+                -40
+              ],
+              "yaw": 3.14159,
+              "alerted": true
+            },
+            {
+              "id": "sp_plaza_b3",
+              "archetype": "cqb",
+              "band": "regular",
+              "squad": "sq_plaza_b",
+              "pos": [
+                18,
+                0,
+                12
+              ],
+              "yaw": 1.5708,
+              "alerted": true,
+              "_comment": "Storm Gallery interior, exits the plaza-side gallery door (A3 placement note)"
+            },
+            {
+              "id": "sp_plaza_b4",
+              "archetype": "cqb",
+              "band": "hardened",
+              "squad": "sq_plaza_b",
+              "pos": [
+                -25,
+                0,
+                -12
+              ],
+              "yaw": -1.5708,
+              "alerted": true,
+              "_comment": "arcade east door opening (A3 placement note)"
+            }
           ]
         },
         {
-          "id": "w_arcade", "trigger": { "kind": "beat", "beat": 4 },
+          "id": "w_arcade",
+          "trigger": {
+            "kind": "beat",
+            "beat": 4
+          },
           "bots": [
-            { "id": "sp_arc_1", "archetype": "cqb",      "band": "regular",  "squad": "sq_arcade", "pos": [-36, 0, -4],    "yaw": -1.5708, "alerted": true },
-            { "id": "sp_arc_2", "archetype": "cqb",      "band": "regular",  "squad": "sq_arcade", "pos": [-29, 0, -14],   "yaw": -1.5708, "alerted": true },
-            { "id": "sp_arc_3", "archetype": "rifleman", "band": "hardened", "squad": "sq_arcade", "pos": [-38, 4.2, -14], "yaw": -2.3562, "alerted": true, "_comment": "balcony NW — covers the lightwell + SE stairs" },
-            { "id": "sp_arc_4", "archetype": "rifleman", "band": "hardened", "squad": "sq_arcade", "pos": [-28, 4.2, 2],   "yaw": 0.7854,  "alerted": true, "_comment": "balcony SE — covers the NW stairs" }
+            {
+              "id": "sp_arc_1",
+              "archetype": "cqb",
+              "band": "regular",
+              "squad": "sq_arcade",
+              "pos": [
+                -36,
+                0,
+                -4
+              ],
+              "yaw": -1.5708,
+              "alerted": true
+            },
+            {
+              "id": "sp_arc_2",
+              "archetype": "cqb",
+              "band": "regular",
+              "squad": "sq_arcade",
+              "pos": [
+                -29,
+                0,
+                -14
+              ],
+              "yaw": -1.5708,
+              "alerted": true
+            },
+            {
+              "id": "sp_arc_3",
+              "archetype": "rifleman",
+              "band": "hardened",
+              "squad": "sq_arcade",
+              "pos": [
+                -38,
+                4.2,
+                -14
+              ],
+              "yaw": -2.3562,
+              "alerted": true,
+              "_comment": "balcony NW — covers the lightwell + SE stairs"
+            },
+            {
+              "id": "sp_arc_4",
+              "archetype": "rifleman",
+              "band": "hardened",
+              "squad": "sq_arcade",
+              "pos": [
+                -28,
+                4.2,
+                2
+              ],
+              "yaw": 0.7854,
+              "alerted": true,
+              "_comment": "balcony SE — covers the NW stairs"
+            }
           ]
         },
         {
-          "id": "w_marks", "trigger": { "kind": "beat", "beat": 5 },
+          "id": "w_marks",
+          "trigger": {
+            "kind": "beat",
+            "beat": 5
+          },
           "bots": [
-            { "id": "sp_marks_1", "archetype": "marksman", "band": "hardened", "squad": "sq_overwatch", "pos": [38, 4.5, -46], "yaw": 3.14159, "alerted": true, "_comment": "tram-platform sandbag nest; scope glint + tracer discipline; fires on fairness constants — no insta-beam (LD §6)" }
+            {
+              "id": "sp_marks_1",
+              "archetype": "marksman",
+              "band": "hardened",
+              "squad": "sq_overwatch",
+              "pos": [
+                38,
+                4.5,
+                -46
+              ],
+              "yaw": 3.14159,
+              "alerted": true,
+              "_comment": "tram-platform sandbag nest; scope glint + tracer discipline; fires on fairness constants — no insta-beam (LD §6)"
+            }
           ]
         },
         {
-          "id": "w_blvd", "trigger": { "kind": "beat", "beat": 5 },
+          "id": "w_blvd",
+          "trigger": {
+            "kind": "beat",
+            "beat": 5
+          },
           "bots": [
-            { "id": "sp_blvd_1", "archetype": "rifleman", "band": "hardened", "squad": "sq_blvd1", "pos": [30, 0, -2],  "yaw": 0, "alerted": true },
-            { "id": "sp_blvd_2", "archetype": "cqb",      "band": "regular",  "squad": "sq_blvd1", "pos": [44, 0, -6],  "yaw": 0, "alerted": true },
-            { "id": "sp_blvd_3", "archetype": "rifleman", "band": "hardened", "squad": "sq_blvd1", "pos": [30, 0, -18], "yaw": 0, "alerted": true },
-            { "id": "sp_blvd_4", "archetype": "cqb",      "band": "regular",  "squad": "sq_blvd2", "pos": [44, 0, -24], "yaw": 0, "alerted": true },
-            { "id": "sp_blvd_5", "archetype": "rifleman", "band": "regular",  "squad": "sq_blvd2", "pos": [36, 0, -34], "yaw": 0, "alerted": true }
+            {
+              "id": "sp_blvd_1",
+              "archetype": "rifleman",
+              "band": "hardened",
+              "squad": "sq_blvd1",
+              "pos": [
+                30,
+                0,
+                -2
+              ],
+              "yaw": 0,
+              "alerted": true
+            },
+            {
+              "id": "sp_blvd_2",
+              "archetype": "cqb",
+              "band": "regular",
+              "squad": "sq_blvd1",
+              "pos": [
+                44,
+                0,
+                -6
+              ],
+              "yaw": 0,
+              "alerted": true
+            },
+            {
+              "id": "sp_blvd_3",
+              "archetype": "rifleman",
+              "band": "hardened",
+              "squad": "sq_blvd1",
+              "pos": [
+                30,
+                0,
+                -18
+              ],
+              "yaw": 0,
+              "alerted": true
+            },
+            {
+              "id": "sp_blvd_4",
+              "archetype": "cqb",
+              "band": "regular",
+              "squad": "sq_blvd2",
+              "pos": [
+                44,
+                0,
+                -24
+              ],
+              "yaw": 0,
+              "alerted": true
+            },
+            {
+              "id": "sp_blvd_5",
+              "archetype": "rifleman",
+              "band": "regular",
+              "squad": "sq_blvd2",
+              "pos": [
+                36,
+                0,
+                -34
+              ],
+              "yaw": 0,
+              "alerted": true
+            }
           ]
         },
         {
-          "id": "w_cust_w1", "trigger": { "kind": "beat", "beat": 6 },
+          "id": "w_cust_w1",
+          "trigger": {
+            "kind": "beat",
+            "beat": 6
+          },
           "bots": [
-            { "id": "sp_cust_w1_1", "archetype": "rifleman", "band": "hardened", "squad": "sq_gate_w1", "pos": [-8, 0, -40], "yaw": 0, "alerted": true },
-            { "id": "sp_cust_w1_2", "archetype": "cqb",      "band": "hardened", "squad": "sq_gate_w1", "pos": [-6, 0, -40], "yaw": 0, "alerted": true },
-            { "id": "sp_cust_w1_3", "archetype": "rifleman", "band": "hardened", "squad": "sq_gate_w1", "pos": [-4, 0, -40], "yaw": 0, "alerted": true },
-            { "id": "sp_cust_w1_4", "archetype": "cqb",      "band": "hardened", "squad": "sq_gate_w1", "pos": [-2, 0, -40], "yaw": 0, "alerted": true },
-            { "id": "sp_cust_w1_5", "archetype": "rifleman", "band": "hardened", "squad": "sq_gate_w1", "pos": [0, 0, -40],  "yaw": 0, "alerted": true }
+            {
+              "id": "sp_cust_w1_1",
+              "archetype": "rifleman",
+              "band": "hardened",
+              "squad": "sq_gate_w1",
+              "pos": [
+                -8,
+                0,
+                -40
+              ],
+              "yaw": 0,
+              "alerted": true
+            },
+            {
+              "id": "sp_cust_w1_2",
+              "archetype": "cqb",
+              "band": "hardened",
+              "squad": "sq_gate_w1",
+              "pos": [
+                -6,
+                0,
+                -40
+              ],
+              "yaw": 0,
+              "alerted": true
+            },
+            {
+              "id": "sp_cust_w1_3",
+              "archetype": "rifleman",
+              "band": "hardened",
+              "squad": "sq_gate_w1",
+              "pos": [
+                -4,
+                0,
+                -40
+              ],
+              "yaw": 0,
+              "alerted": true
+            },
+            {
+              "id": "sp_cust_w1_4",
+              "archetype": "cqb",
+              "band": "hardened",
+              "squad": "sq_gate_w1",
+              "pos": [
+                -2,
+                0,
+                -40
+              ],
+              "yaw": 0,
+              "alerted": true
+            },
+            {
+              "id": "sp_cust_w1_5",
+              "archetype": "rifleman",
+              "band": "hardened",
+              "squad": "sq_gate_w1",
+              "pos": [
+                0,
+                0,
+                -40
+              ],
+              "yaw": 0,
+              "alerted": true
+            }
           ]
         },
         {
-          "id": "w_cust_w2", "trigger": { "kind": "waveAlive", "wave": "w_cust_w1", "lte": 1 },
+          "id": "w_cust_w2",
+          "trigger": {
+            "kind": "waveAlive",
+            "wave": "w_cust_w1",
+            "lte": 1
+          },
           "bots": [
-            { "id": "sp_cust_w2_1", "archetype": "rifleman", "band": "hardened", "squad": "sq_gate_w2a", "pos": [30, 0, -40],   "yaw": 0, "alerted": true },
-            { "id": "sp_cust_w2_2", "archetype": "cqb",      "band": "hardened", "squad": "sq_gate_w2a", "pos": [31.6, 0, -40], "yaw": 0, "alerted": true },
-            { "id": "sp_cust_w2_3", "archetype": "rifleman", "band": "hardened", "squad": "sq_gate_w2a", "pos": [33.2, 0, -40], "yaw": 0, "alerted": true },
-            { "id": "sp_cust_w2_4", "archetype": "cqb",      "band": "hardened", "squad": "sq_gate_w2b", "pos": [34.8, 0, -40], "yaw": 0, "alerted": true },
-            { "id": "sp_cust_w2_5", "archetype": "rifleman", "band": "hardened", "squad": "sq_gate_w2b", "pos": [36.4, 0, -40], "yaw": 0, "alerted": true },
-            { "id": "sp_cust_w2_6", "archetype": "marksman", "band": "hardened", "squad": "sq_gate_w2b", "pos": [38, 0, -40],   "yaw": 0, "alerted": true }
+            {
+              "id": "sp_cust_w2_1",
+              "archetype": "rifleman",
+              "band": "hardened",
+              "squad": "sq_gate_w2a",
+              "pos": [
+                30,
+                0,
+                -40
+              ],
+              "yaw": 0,
+              "alerted": true
+            },
+            {
+              "id": "sp_cust_w2_2",
+              "archetype": "cqb",
+              "band": "hardened",
+              "squad": "sq_gate_w2a",
+              "pos": [
+                31.6,
+                0,
+                -40
+              ],
+              "yaw": 0,
+              "alerted": true
+            },
+            {
+              "id": "sp_cust_w2_3",
+              "archetype": "rifleman",
+              "band": "hardened",
+              "squad": "sq_gate_w2a",
+              "pos": [
+                33.2,
+                0,
+                -40
+              ],
+              "yaw": 0,
+              "alerted": true
+            },
+            {
+              "id": "sp_cust_w2_4",
+              "archetype": "cqb",
+              "band": "hardened",
+              "squad": "sq_gate_w2b",
+              "pos": [
+                34.8,
+                0,
+                -40
+              ],
+              "yaw": 0,
+              "alerted": true
+            },
+            {
+              "id": "sp_cust_w2_5",
+              "archetype": "rifleman",
+              "band": "hardened",
+              "squad": "sq_gate_w2b",
+              "pos": [
+                36.4,
+                0,
+                -40
+              ],
+              "yaw": 0,
+              "alerted": true
+            },
+            {
+              "id": "sp_cust_w2_6",
+              "archetype": "marksman",
+              "band": "hardened",
+              "squad": "sq_gate_w2b",
+              "pos": [
+                38,
+                0,
+                -40
+              ],
+              "yaw": 0,
+              "alerted": true
+            }
           ]
         },
         {
-          "id": "w_cust_w3", "trigger": { "kind": "waveAlive", "wave": "w_cust_w2", "lte": 1 },
+          "id": "w_cust_w3",
+          "trigger": {
+            "kind": "waveAlive",
+            "wave": "w_cust_w2",
+            "lte": 1
+          },
           "_comment": "LD §6 wave 3 = 7 bots INCLUDING the 2 heavies (5+6+7=18 keeps the 44 total — A3's reading, adopted)",
           "bots": [
-            { "id": "sp_cust_w3_1",   "archetype": "rifleman", "band": "hardened", "squad": "sq_gate_w3a", "pos": [-7, 0, -40], "yaw": 0, "alerted": true },
-            { "id": "sp_cust_w3_2",   "archetype": "cqb",      "band": "hardened", "squad": "sq_gate_w3a", "pos": [-3, 0, -40], "yaw": 0, "alerted": true },
-            { "id": "sp_cust_w3_3",   "archetype": "rifleman", "band": "hardened", "squad": "sq_gate_w3a", "pos": [-1, 0, -40], "yaw": 0, "alerted": true },
-            { "id": "sp_cust_w3_4",   "archetype": "rifleman", "band": "hardened", "squad": "sq_gate_w3b", "pos": [31, 0, -40], "yaw": 0, "alerted": true },
-            { "id": "sp_cust_w3_5",   "archetype": "cqb",      "band": "hardened", "squad": "sq_gate_w3b", "pos": [33, 0, -40], "yaw": 0, "alerted": true },
-            { "id": "sp_cust_heavy_1","archetype": "heavy",    "band": "veteran",  "squad": "sq_gate_w3a", "pos": [-4, 0, -40], "yaw": 0, "alerted": true },
-            { "id": "sp_cust_heavy_2","archetype": "heavy",    "band": "veteran",  "squad": "sq_gate_w3b", "pos": [34, 0, -40], "yaw": 0, "alerted": true }
+            {
+              "id": "sp_cust_w3_1",
+              "archetype": "rifleman",
+              "band": "hardened",
+              "squad": "sq_gate_w3a",
+              "pos": [
+                -7,
+                0,
+                -40
+              ],
+              "yaw": 0,
+              "alerted": true
+            },
+            {
+              "id": "sp_cust_w3_2",
+              "archetype": "cqb",
+              "band": "hardened",
+              "squad": "sq_gate_w3a",
+              "pos": [
+                -3,
+                0,
+                -40
+              ],
+              "yaw": 0,
+              "alerted": true
+            },
+            {
+              "id": "sp_cust_w3_3",
+              "archetype": "rifleman",
+              "band": "hardened",
+              "squad": "sq_gate_w3a",
+              "pos": [
+                -1,
+                0,
+                -40
+              ],
+              "yaw": 0,
+              "alerted": true
+            },
+            {
+              "id": "sp_cust_w3_4",
+              "archetype": "rifleman",
+              "band": "hardened",
+              "squad": "sq_gate_w3b",
+              "pos": [
+                31,
+                0,
+                -40
+              ],
+              "yaw": 0,
+              "alerted": true
+            },
+            {
+              "id": "sp_cust_w3_5",
+              "archetype": "cqb",
+              "band": "hardened",
+              "squad": "sq_gate_w3b",
+              "pos": [
+                33,
+                0,
+                -40
+              ],
+              "yaw": 0,
+              "alerted": true
+            },
+            {
+              "id": "sp_cust_heavy_1",
+              "archetype": "heavy",
+              "band": "veteran",
+              "squad": "sq_gate_w3a",
+              "pos": [
+                -4,
+                0,
+                -40
+              ],
+              "yaw": 0,
+              "alerted": true
+            },
+            {
+              "id": "sp_cust_heavy_2",
+              "archetype": "heavy",
+              "band": "veteran",
+              "squad": "sq_gate_w3b",
+              "pos": [
+                34,
+                0,
+                -40
+              ],
+              "yaw": 0,
+              "alerted": true
+            }
           ]
         }
       ]
     }
   },
-
   "archetypes": {
     "rifleman": {
-      "label": "Vektor Rifleman", "role": "support",
-      "weapon": "warden", "body": "soldier", "bodyGlb": "assets/chars/soldier.glb",
-      "tint": "#4b5142", "hp": 100,
-      "preferredBandM": [15, 35], "burstRounds": [3, 5]
+      "label": "Vektor Rifleman",
+      "role": "support",
+      "weapon": "warden",
+      "body": "soldier",
+      "bodyGlb": "assets/chars/soldier.glb",
+      "tint": "#4b5142",
+      "hp": 100,
+      "preferredBandM": [
+        15,
+        35
+      ],
+      "burstRounds": [
+        3,
+        5
+      ]
     },
     "cqb": {
-      "label": "Vektor Pointman", "role": "pointman",
-      "weapon": "vesper", "body": "soldier", "bodyGlb": "assets/chars/soldier.glb",
-      "tint": "#3a3e46", "hp": 100,
-      "preferredBandM": [8, 18], "burstRounds": [5, 8]
+      "label": "Vektor Pointman",
+      "role": "pointman",
+      "weapon": "vesper",
+      "body": "soldier",
+      "bodyGlb": "assets/chars/soldier.glb",
+      "tint": "#3a3e46",
+      "hp": 100,
+      "preferredBandM": [
+        8,
+        18
+      ],
+      "burstRounds": [
+        5,
+        8
+      ]
     },
     "marksman": {
-      "label": "Vektor Marksman", "role": "marksman",
-      "weapon": "corvus", "body": "soldier", "bodyGlb": "assets/chars/soldier.glb",
-      "tint": "#414b56", "hp": 100,
-      "preferredBandM": [35, 80], "burstRounds": [1, 1]
+      "label": "Vektor Marksman",
+      "role": "marksman",
+      "weapon": "corvus",
+      "body": "soldier",
+      "bodyGlb": "assets/chars/soldier.glb",
+      "tint": "#414b56",
+      "hp": 100,
+      "preferredBandM": [
+        35,
+        80
+      ],
+      "burstRounds": [
+        1,
+        1
+      ]
     },
     "heavy": {
-      "label": "Vektor Juggernaut", "role": "heavy",
-      "weapon": "warden", "body": "juggernaut", "bodyGlb": "assets/chars/juggernaut.glb",
-      "tint": "#33292b", "hp": 100,
-      "preferredBandM": [10, 30], "burstRounds": [5, 8],
+      "label": "Vektor Juggernaut",
+      "role": "heavy",
+      "weapon": "warden",
+      "body": "juggernaut",
+      "bodyGlb": "assets/chars/juggernaut.glb",
+      "tint": "#33292b",
+      "hp": 100,
+      "preferredBandM": [
+        10,
+        30
+      ],
+      "burstRounds": [
+        5,
+        8
+      ],
       "_comment": "R16 — heavy is COSMETIC + band + longer burst allowance ONLY. 100 HP like everything else; no damage multipliers, ever (combat_spec §5.5)."
     },
-    "_comment": "bands (recruit/regular/hardened/veteran) are per-bot in the waves — combat_spec §5.5 constants; R30: no player-facing difficulty selector, this authored mix ships."
+    "_comment": "bands (recruit/regular/hardened/veteran) are per-bot in the waves — combat_spec §5.5 constants; R30: no player-facing difficulty selector, this authored mix ships.",
+    "rifleman_a": {
+      "label": "Amber Rifleman",
+      "role": "support",
+      "weapon": "warden",
+      "body": "soldier",
+      "bodyGlb": "assets/chars/soldier.glb",
+      "tint": "#6b5530",
+      "hp": 100,
+      "preferredBandM": [
+        15,
+        35
+      ],
+      "burstRounds": [
+        3,
+        5
+      ]
+    },
+    "rifleman_b": {
+      "label": "Slate Rifleman",
+      "role": "support",
+      "weapon": "warden",
+      "body": "soldier",
+      "bodyGlb": "assets/chars/soldier.glb",
+      "tint": "#44536b",
+      "hp": 100,
+      "preferredBandM": [
+        15,
+        35
+      ],
+      "burstRounds": [
+        3,
+        5
+      ]
+    },
+    "cqb_a": {
+      "label": "Amber Pointman",
+      "role": "pointman",
+      "weapon": "vesper",
+      "body": "soldier",
+      "bodyGlb": "assets/chars/soldier.glb",
+      "tint": "#5f4c2c",
+      "hp": 100,
+      "preferredBandM": [
+        8,
+        18
+      ],
+      "burstRounds": [
+        5,
+        8
+      ]
+    },
+    "cqb_b": {
+      "label": "Slate Pointman",
+      "role": "pointman",
+      "weapon": "vesper",
+      "body": "soldier",
+      "bodyGlb": "assets/chars/soldier.glb",
+      "tint": "#3d4a60",
+      "hp": 100,
+      "preferredBandM": [
+        8,
+        18
+      ],
+      "burstRounds": [
+        5,
+        8
+      ]
+    },
+    "marksman_a": {
+      "label": "Amber Marksman",
+      "role": "marksman",
+      "weapon": "corvus",
+      "body": "soldier",
+      "bodyGlb": "assets/chars/soldier.glb",
+      "tint": "#75603a",
+      "hp": 100,
+      "preferredBandM": [
+        35,
+        80
+      ],
+      "burstRounds": [
+        1,
+        1
+      ]
+    },
+    "marksman_b": {
+      "label": "Slate Marksman",
+      "role": "marksman",
+      "weapon": "corvus",
+      "body": "soldier",
+      "bodyGlb": "assets/chars/soldier.glb",
+      "tint": "#4b5c76",
+      "hp": 100,
+      "preferredBandM": [
+        35,
+        80
+      ],
+      "burstRounds": [
+        1,
+        1
+      ]
+    }
   },
-
   "pois": {
-    "poi_dock":     { "name": "Dockside Cut",        "role": "infil — tutorializes movement/ADS",             "min": [-58, 42],  "max": [58, 54] },
-    "poi_alleys":   { "name": "Tannery Alleys",      "role": "CQB lane (west)",                               "min": [-58, -30], "max": [-41, 42] },
-    "poi_arcade":   { "name": "Pale Lantern Arcade", "role": "the accessible interior; CINDERLOCK handoff room upstairs", "min": [-41, -20], "max": [-25, 6] },
-    "poi_plaza":    { "name": "Meridian Market",     "role": "main set-piece, hero screenshot space (center)", "min": [-25, -18], "max": [15, 18] },
-    "poi_gallery":  { "name": "Storm Gallery",       "role": "flank route",                                   "min": [15.5, -34], "max": [24.5, 14] },
-    "poi_blvd":     { "name": "Tramline Boulevard",  "role": "the 78 m marksman lane (east)",                 "min": [28, -41],  "max": [46, 41] },
-    "poi_platform": { "name": "Tram Platform",       "role": "the overlook (deck y +4.5); enemy perch, then player overwatch", "min": [28, -52], "max": [46, -40] },
-    "poi_customs":  { "name": "Customs Yard / Gate 9", "role": "exfil defense arena",                         "min": [-18, -58], "max": [24, -40] },
+    "poi_dock": {
+      "name": "Dockside Cut",
+      "role": "infil — tutorializes movement/ADS",
+      "min": [
+        -58,
+        42
+      ],
+      "max": [
+        58,
+        54
+      ]
+    },
+    "poi_alleys": {
+      "name": "Tannery Alleys",
+      "role": "CQB lane (west)",
+      "min": [
+        -58,
+        -30
+      ],
+      "max": [
+        -41,
+        42
+      ]
+    },
+    "poi_arcade": {
+      "name": "Pale Lantern Arcade",
+      "role": "the accessible interior; CINDERLOCK handoff room upstairs",
+      "min": [
+        -41,
+        -20
+      ],
+      "max": [
+        -25,
+        6
+      ]
+    },
+    "poi_plaza": {
+      "name": "Meridian Market",
+      "role": "main set-piece, hero screenshot space (center)",
+      "min": [
+        -25,
+        -18
+      ],
+      "max": [
+        15,
+        18
+      ]
+    },
+    "poi_gallery": {
+      "name": "Storm Gallery",
+      "role": "flank route",
+      "min": [
+        15.5,
+        -34
+      ],
+      "max": [
+        24.5,
+        14
+      ]
+    },
+    "poi_blvd": {
+      "name": "Tramline Boulevard",
+      "role": "the 78 m marksman lane (east)",
+      "min": [
+        28,
+        -41
+      ],
+      "max": [
+        46,
+        41
+      ]
+    },
+    "poi_platform": {
+      "name": "Tram Platform",
+      "role": "the overlook (deck y +4.5); enemy perch, then player overwatch",
+      "min": [
+        28,
+        -52
+      ],
+      "max": [
+        46,
+        -40
+      ]
+    },
+    "poi_customs": {
+      "name": "Customs Yard / Gate 9",
+      "role": "exfil defense arena",
+      "min": [
+        -18,
+        -58
+      ],
+      "max": [
+        24,
+        -40
+      ]
+    },
     "_comment": "bounds copied from core/level/layout.js ZONES (single source) — LD §2.4 ids are the content keys"
   },
-
   "signage": [
-    { "id": "sg_club",      "text": "ЗАРОВ НОЧЬ",                "latin": "ZAROV NOCH",        "meaning": "night club",              "color": "#e83ea8", "kind": "neon",    "where": "plaza east wall" },
-    { "id": "sg_meridian24","text": "MERIDIAN 24",               "latin": "MERIDIAN 24",       "meaning": "24h convenience store",   "color": "#38d8d0", "kind": "neon",    "where": "plaza east wall" },
-    { "id": "sg_noodle",    "text": "ЛАПША ДОМ",                 "latin": "LAPSHA DOM",        "meaning": "noodle house stall",      "color": "#ff4040", "kind": "neon",    "where": "plaza east wall" },
-    { "id": "sg_pharmacy",  "text": "+ АПТЕКА МЕРИДИАН",         "latin": "APTEKA MERIDIAN",   "meaning": "pharmacy (green cross)",  "color": "#3cff88", "kind": "neon",    "where": "plaza east wall" },
-    { "id": "sg_pawn",      "text": "ЗОЛОТО ЗАРОВ",              "latin": "ZOLOTO ZAROV",      "meaning": "gold-buyer / pawnshop",   "color": "#ffb340", "kind": "neon",    "where": "plaza east wall" },
-    { "id": "sg_freight",   "text": "ZFL — ZAROV FREIGHT LINES", "latin": "ZFL",               "meaning": "port freight brand",      "color": "#9db4c8", "kind": "painted", "where": "quay crates, containers, crane" },
-    { "id": "sg_transit",   "text": "ЗАРОВ ТРАНЗИТ · LINE 4 MERIDIAN", "latin": "ZAROV TRANZIT", "meaning": "tram authority + route", "color": "#cfe0d8", "kind": "printed", "where": "platform route board, shelter" },
-    { "id": "sg_customs",   "text": "CUSTOMS TERMINAL 9 · ТАМОЖНЯ", "latin": "TAMOZHNYA",      "meaning": "customs gate",            "color": "#dce8ff", "kind": "stencil", "where": "gate gantry, gatehouse" },
-    { "id": "sg_arcade",    "text": "LANTERNWALK ARCADE · ПАССАЖ", "latin": "PASSAZH",         "meaning": "shopping arcade entrance", "color": "#ffc88a", "kind": "backlit", "where": "arcade east + west doors" },
-    { "id": "sg_kiosk",     "text": "ТАБАК · ПРЕССА",            "latin": "TABAK PRESSA",      "meaning": "tobacco + newsstand",     "color": "#ffb340", "kind": "fascia",  "where": "market kiosk boards" },
-    { "id": "sg_beer",      "text": "ПИВО СТАРЫЙ ПОРТ",          "latin": "PIVO STARY PORT",   "meaning": "Old Port beer poster",    "color": "#ffc88a", "kind": "poster",  "where": "alley + gallery walls" },
-    { "id": "sg_vektor",    "text": "VEKTOR ANCILE",             "latin": "VEKTOR ANCILE",     "meaning": "enemy PMC mark",          "color": "#8a1f2b", "kind": "stencil", "where": "enemy crates, patches, checkpoint drums" },
-    { "id": "sg_raven",     "text": "RAVEN 2-1",                 "latin": "RAVEN 2-1",         "meaning": "player element tag",      "color": "#d9a441", "kind": "hud",     "where": "briefing/HUD only" }
+    {
+      "id": "sg_club",
+      "text": "ЗАРОВ НОЧЬ",
+      "latin": "ZAROV NOCH",
+      "meaning": "night club",
+      "color": "#e83ea8",
+      "kind": "neon",
+      "where": "plaza east wall"
+    },
+    {
+      "id": "sg_meridian24",
+      "text": "MERIDIAN 24",
+      "latin": "MERIDIAN 24",
+      "meaning": "24h convenience store",
+      "color": "#38d8d0",
+      "kind": "neon",
+      "where": "plaza east wall"
+    },
+    {
+      "id": "sg_noodle",
+      "text": "ЛАПША ДОМ",
+      "latin": "LAPSHA DOM",
+      "meaning": "noodle house stall",
+      "color": "#ff4040",
+      "kind": "neon",
+      "where": "plaza east wall"
+    },
+    {
+      "id": "sg_pharmacy",
+      "text": "+ АПТЕКА МЕРИДИАН",
+      "latin": "APTEKA MERIDIAN",
+      "meaning": "pharmacy (green cross)",
+      "color": "#3cff88",
+      "kind": "neon",
+      "where": "plaza east wall"
+    },
+    {
+      "id": "sg_pawn",
+      "text": "ЗОЛОТО ЗАРОВ",
+      "latin": "ZOLOTO ZAROV",
+      "meaning": "gold-buyer / pawnshop",
+      "color": "#ffb340",
+      "kind": "neon",
+      "where": "plaza east wall"
+    },
+    {
+      "id": "sg_freight",
+      "text": "ZFL — ZAROV FREIGHT LINES",
+      "latin": "ZFL",
+      "meaning": "port freight brand",
+      "color": "#9db4c8",
+      "kind": "painted",
+      "where": "quay crates, containers, crane"
+    },
+    {
+      "id": "sg_transit",
+      "text": "ЗАРОВ ТРАНЗИТ · LINE 4 MERIDIAN",
+      "latin": "ZAROV TRANZIT",
+      "meaning": "tram authority + route",
+      "color": "#cfe0d8",
+      "kind": "printed",
+      "where": "platform route board, shelter"
+    },
+    {
+      "id": "sg_customs",
+      "text": "CUSTOMS TERMINAL 9 · ТАМОЖНЯ",
+      "latin": "TAMOZHNYA",
+      "meaning": "customs gate",
+      "color": "#dce8ff",
+      "kind": "stencil",
+      "where": "gate gantry, gatehouse"
+    },
+    {
+      "id": "sg_arcade",
+      "text": "LANTERNWALK ARCADE · ПАССАЖ",
+      "latin": "PASSAZH",
+      "meaning": "shopping arcade entrance",
+      "color": "#ffc88a",
+      "kind": "backlit",
+      "where": "arcade east + west doors"
+    },
+    {
+      "id": "sg_kiosk",
+      "text": "ТАБАК · ПРЕССА",
+      "latin": "TABAK PRESSA",
+      "meaning": "tobacco + newsstand",
+      "color": "#ffb340",
+      "kind": "fascia",
+      "where": "market kiosk boards"
+    },
+    {
+      "id": "sg_beer",
+      "text": "ПИВО СТАРЫЙ ПОРТ",
+      "latin": "PIVO STARY PORT",
+      "meaning": "Old Port beer poster",
+      "color": "#ffc88a",
+      "kind": "poster",
+      "where": "alley + gallery walls"
+    },
+    {
+      "id": "sg_vektor",
+      "text": "VEKTOR ANCILE",
+      "latin": "VEKTOR ANCILE",
+      "meaning": "enemy PMC mark",
+      "color": "#8a1f2b",
+      "kind": "stencil",
+      "where": "enemy crates, patches, checkpoint drums"
+    },
+    {
+      "id": "sg_raven",
+      "text": "RAVEN 2-1",
+      "latin": "RAVEN 2-1",
+      "meaning": "player element tag",
+      "color": "#d9a441",
+      "kind": "hud",
+      "where": "briefing/HUD only"
+    }
   ],
   "_signage_comment": "LD §7: invented brands only — signage[] is the canon set (LD §3.3) plus extensions; the art pass may not add real-world marks",
-
   "pickups": [
     {
-      "id": "pk_vesper_crate", "kind": "weapon", "weapon": "vesper",
-      "pos": [-39.6, 0, -2], "radius": 1.2, "interact": true,
-      "spawnOn": { "kind": "beat", "beat": 4 },
+      "id": "pk_vesper_crate",
+      "kind": "weapon",
+      "weapon": "vesper",
+      "pos": [
+        -39.6,
+        0,
+        -2
+      ],
+      "radius": 1.2,
+      "interact": true,
+      "spawnOn": {
+        "kind": "beat",
+        "beat": 4
+      },
       "label": "KS-23 Vesper — weapon crate",
       "_comment": "R26 — arcade west door, beat-4 entry"
     },
     {
-      "id": "pk_corvus_nest", "kind": "weapon", "weapon": "corvus",
-      "pos": [38, 4.5, -45.6], "radius": 1.2, "interact": true,
-      "spawnOn": { "kind": "waveAlive", "wave": "w_marks", "lte": 0 },
+      "id": "pk_corvus_nest",
+      "kind": "weapon",
+      "weapon": "corvus",
+      "pos": [
+        38,
+        4.5,
+        -45.6
+      ],
+      "radius": 1.2,
+      "interact": true,
+      "spawnOn": {
+        "kind": "waveAlive",
+        "wave": "w_marks",
+        "lte": 0
+      },
       "label": "LR-1 Corvus — marksman's nest",
       "_comment": "R26 — lootable from the platform marksman's nest once he falls (beat 5)"
     },
     {
-      "id": "pk_ammo_walkover", "kind": "ammo_rule", "magsPerPickup": 1,
+      "id": "pk_ammo_walkover",
+      "kind": "ammo_rule",
+      "magsPerPickup": 1,
       "_comment": "combat_spec §2.2 — walkover of a dead bot grants +1 mag of that bot's weapon class; systemic, not placed"
     }
   ],
-
   "reverbZones": {
     "params": {
-      "exterior":   { "rt60S": 0.25, "predelayS": 0.090, "character": "night slap, single echo; distant dog/wind bed" },
-      "warehouse":  { "rt60S": 1.10, "predelayS": 0.018, "character": "the showcase interior" },
-      "corridor":   { "rt60S": 0.50, "predelayS": 0.008, "character": "flutter component" },
-      "small_room": { "rt60S": 0.35, "predelayS": 0.005, "character": "" }
+      "exterior": {
+        "rt60S": 0.25,
+        "predelayS": 0.09,
+        "character": "night slap, single echo; distant dog/wind bed"
+      },
+      "warehouse": {
+        "rt60S": 1.1,
+        "predelayS": 0.018,
+        "character": "the showcase interior"
+      },
+      "corridor": {
+        "rt60S": 0.5,
+        "predelayS": 0.008,
+        "character": "flutter component"
+      },
+      "small_room": {
+        "rt60S": 0.35,
+        "predelayS": 0.005,
+        "character": ""
+      }
     },
     "default": "exterior",
     "volumes": [
-      { "id": "rz_arcade",    "zone": "warehouse",  "min": [-41, 0, -20], "max": [-25, 8.2, 6],  "_comment": "Pale Lantern Arcade, both floors" },
-      { "id": "rz_gallery",   "zone": "corridor",   "min": [15.5, 0, -34], "max": [24.5, 5.5, 14] },
-      { "id": "rz_gatehouse", "zone": "small_room", "min": [5, 0, -55],   "max": [11, 3.2, -50] }
+      {
+        "id": "rz_arcade",
+        "zone": "warehouse",
+        "min": [
+          -41,
+          0,
+          -20
+        ],
+        "max": [
+          -25,
+          8.2,
+          6
+        ],
+        "_comment": "Pale Lantern Arcade, both floors"
+      },
+      {
+        "id": "rz_gallery",
+        "zone": "corridor",
+        "min": [
+          15.5,
+          0,
+          -34
+        ],
+        "max": [
+          24.5,
+          5.5,
+          14
+        ]
+      },
+      {
+        "id": "rz_gatehouse",
+        "zone": "small_room",
+        "min": [
+          5,
+          0,
+          -55
+        ],
+        "max": [
+          11,
+          3.2,
+          -50
+        ]
+      }
     ],
     "_comment": "combat_spec §7.3 — camera zone drives the shared convolver (250 ms crossfade); shooter's TAIL uses the SHOOTER's zone; zones differ + no LOS = lowpass 900 Hz. R13 `zone {reverbZone}` event carries these zone names."
   },
-
   "scenarios": {
     "_comment": "R10 canonical battery ids. Poses live HERE (A2); per-scenario capture seeds/params also live in _harness/shots.js (A11) and setScenario(id, seedObj) consumes both (R21). Camera pos/lookAt are authoritative for aim; scenarios.js derives player yaw/pitch from them. All captures: 1920x1080, DPR 1.5, post chain on, after prewarm.",
     "S1": {
-      "vt": "hip-fire mid-firefight with muzzle flash", "poseSource": "market_neon_rain (LD §8 S3, hero) — player slid 2.5 m SW off LD's camera point, which sits inside pl_car_6's collider (first-person pose needs a valid capsule)",
+      "vt": "hip-fire mid-firefight with muzzle flash",
+      "poseSource": "market_neon_rain (LD §8 S3, hero) — player slid 2.5 m SW off LD's camera point, which sits inside pl_car_6's collider (first-person pose needs a valid capsule)",
       "_w3": "iter03 composition pass (W3): lookAt rotated 5 deg E onto the neon wall (iter02 spent the left 40% of the frame on unlit plaza) and a CQB contact added at 16 m — iter02 had its nearest bot at 24 m reading as a smudge, so the firefight had no legible subject. Depth now: weapon (0.5 m) / 16 m contact / 24-40 m contacts / neon wall 42 m / roofline.",
-      "seed": 101, "timeOfDay": "night", "beat": 3, "clockS": 250, "hud": true,
-      "camera": { "pos": [-22.5, 1.5, 16.5], "lookAt": [12, 4.2, -7], "fov": 55 },
-      "player": { "pos": [-22.5, 0, 16.5], "nearNode": "plaza_west", "weapon": "warden", "ads": false, "action": "fireBurst", "rounds": 4, "god": true },
+      "seed": 101,
+      "timeOfDay": "night",
+      "beat": 3,
+      "clockS": 250,
+      "hud": true,
+      "camera": {
+        "pos": [
+          -22.5,
+          1.5,
+          16.5
+        ],
+        "lookAt": [
+          12,
+          4.2,
+          -7
+        ],
+        "fov": 55
+      },
+      "player": {
+        "pos": [
+          -22.5,
+          0,
+          16.5
+        ],
+        "nearNode": "plaza_west",
+        "weapon": "warden",
+        "ads": false,
+        "action": "fireBurst",
+        "rounds": 4,
+        "god": true
+      },
       "bots": [
-        { "archetype": "cqb", "pos": [-12, 0, 4], "state": "combat", "firing": true },
-        { "spawn": "sp_plaza_a2", "state": "combat", "firing": true },
-        { "spawn": "sp_plaza_a3", "state": "combat" },
-        { "spawn": "sp_plaza_a4", "state": "combat" }
+        {
+          "archetype": "cqb",
+          "pos": [
+            -12,
+            0,
+            4
+          ],
+          "state": "combat",
+          "firing": true
+        },
+        {
+          "spawn": "sp_plaza_a2",
+          "state": "combat",
+          "firing": true
+        },
+        {
+          "spawn": "sp_plaza_a3",
+          "state": "combat"
+        },
+        {
+          "spawn": "sp_plaza_a4",
+          "state": "combat"
+        }
       ],
-      "worldState": { "blackout": false },
+      "worldState": {
+        "blackout": false
+      },
       "mustShow": "full pre-blackout neon wall (all 5 signs), hero puddle planar reflections bottom-third, a LEGIBLE lead contact at ~16 m plus >=2 further bots in the kiosk field, player Warden muzzle flash light live, catenary lamps overhead, rain against neon"
     },
     "S2": {
-      "vt": "ADS on an AI at range", "poseSource": "boulevard_long_rain re-posed (R10; F4 iter01 amendment: slid 5 m E along the barricade line — the LD point put L_BLVD_1's pole ~4 deg off the sight axis, a pole dead-center of the scope picture at 16 m)",
+      "vt": "ADS on an AI at range",
+      "poseSource": "boulevard_long_rain re-posed (R10; F4 iter01 amendment: slid 5 m E along the barricade line — the LD point put L_BLVD_1's pole ~4 deg off the sight axis, a pole dead-center of the scope picture at 16 m)",
       "_w3": "iter03 scenario-truth pass (W3): the iter02 target was the platform marksman at 82 m standing in NO practical — 40 px tall and unlit, so the frame did not read as 'ADS on an AI'. Player moved into the boulevard centre lane at Z+18 and the marksman re-posed into the L_BLVD_3 sodium pool (36,7,-28) at 44 m — top-lit, ~75 px tall, unmistakably a man. A second contact at 22 m off the roadway edge fires, so a tracer and a flash sit in the mid depth. Sight axis stays dead down the clear centre lane: no pole, no wire, no car in the sight picture.",
-      "seed": 102, "timeOfDay": "night", "beat": 5, "clockS": 540, "hud": true,
-      "camera": { "pos": [37, 1.62, 18], "lookAt": [37, 1.55, -26], "fov": 34 },
-      "player": { "pos": [37, 0, 18], "nearNode": "blvd_barricade", "weapon": "corvus", "ads": true },
+      "seed": 102,
+      "timeOfDay": "night",
+      "beat": 5,
+      "clockS": 540,
+      "hud": true,
+      "camera": {
+        "pos": [
+          37,
+          1.62,
+          18
+        ],
+        "lookAt": [
+          37,
+          1.55,
+          -26
+        ],
+        "fov": 34
+      },
+      "player": {
+        "pos": [
+          37,
+          0,
+          18
+        ],
+        "nearNode": "blvd_barricade",
+        "weapon": "corvus",
+        "ads": true
+      },
       "bots": [
-        { "spawn": "sp_marks_1", "pos": [37, 0, -26], "state": "combat", "firing": true },
-        { "archetype": "rifleman", "pos": [43, 0, -4], "state": "combat", "firing": true }
+        {
+          "spawn": "sp_marks_1",
+          "pos": [
+            37,
+            0,
+            -26
+          ],
+          "state": "combat",
+          "firing": true
+        },
+        {
+          "archetype": "rifleman",
+          "pos": [
+            43,
+            0,
+            -4
+          ],
+          "state": "combat",
+          "firing": true
+        }
       ],
       "mustShow": "Corvus sight picture centred on a top-lit contact at ~44 m in the L_BLVD_3 pool, a second contact firing at ~22 m frame-right, sodium pools receding into fog, tram wires converging overhead"
     },
     "S3": {
-      "vt": "establishing wide of the compound, mid-firefight", "poseSource": "dock_infil_skyline (LD §8 S1) — RE-AIMED and re-cast, W3 iter03",
+      "vt": "establishing wide of the compound, mid-firefight",
+      "poseSource": "dock_infil_skyline (LD §8 S1) — RE-AIMED and re-cast, W3 iter03",
       "_w3": "iter03 scenario-truth pass (W3). iter02's lookAt (-18,6,90) aimed 40 m PAST the far bank of the canal at Z+90, i.e. off the map into open water: the capture was a rain vista with no compound, no subject, no foreground and no combat. Two faults fixed at once. (a) TRUTH: the pose is now a firefight — the player is un-lowered with a 4-round fireBurst (guaranteed muzzle flash + leased light, gated by shots.js `until`), and three quay bots are pinned firing, so tracers are in flight from both directions. (b) COMPOSITION: camera slid W to (-44,49) and swung ~78 deg onto the quay run east, which puts L_QUAY (-30,6.5,47) 1 deg off the sight axis at 16 deg elevation (upper third, the light source doing work), the compound rooflines and the plaza glow along the right of frame, the canal and city-glow band on the left, and the quay edge/railing as the foreground anchor. Depth layers: weapon 0.5 m / lead contact 21 m / second contact 36 m / roofline 60 m+ / skyline ring.",
-      "seed": 103, "timeOfDay": "night", "beat": 1, "clockS": 5, "hud": false,
-      "camera": { "pos": [-44, 1.5, 49], "lookAt": [-12, 3.2, 42], "fov": 62 },
-      "player": { "pos": [-44, 0, 49], "nearNode": "dock_spawn", "weapon": "warden", "ads": false, "action": "fireBurst", "rounds": 4, "god": true },
+      "seed": 103,
+      "timeOfDay": "night",
+      "beat": 1,
+      "clockS": 5,
+      "hud": false,
+      "camera": {
+        "pos": [
+          -44,
+          1.5,
+          49
+        ],
+        "lookAt": [
+          -12,
+          3.2,
+          42
+        ],
+        "fov": 62
+      },
+      "player": {
+        "pos": [
+          -44,
+          0,
+          49
+        ],
+        "nearNode": "dock_spawn",
+        "weapon": "warden",
+        "ads": false,
+        "action": "fireBurst",
+        "rounds": 4,
+        "god": true
+      },
       "bots": [
-        { "spawn": "sp_dock_1", "pos": [-24, 0, 46], "state": "combat", "firing": true },
-        { "spawn": "sp_dock_2", "pos": [-8, 0, 44], "state": "combat", "firing": true },
-        { "archetype": "cqb", "pos": [-17, 0, 52], "state": "combat", "firing": true }
+        {
+          "spawn": "sp_dock_1",
+          "pos": [
+            -24,
+            0,
+            46
+          ],
+          "state": "combat",
+          "firing": true
+        },
+        {
+          "spawn": "sp_dock_2",
+          "pos": [
+            -8,
+            0,
+            44
+          ],
+          "state": "combat",
+          "firing": true
+        },
+        {
+          "archetype": "cqb",
+          "pos": [
+            -17,
+            0,
+            52
+          ],
+          "state": "combat",
+          "firing": true
+        }
       ],
       "mustShow": "a READABLE firefight: >=2 bots engaged at 20-40 m, player muzzle flash lighting the quay and the rain, tracers in flight, the player weapon in frame; L_QUAY's sodium pool + god-ray cone upper-left of centre; compound rooflines and the canal/city-glow band carrying the establishing read; no hard skybox seam (v2.2 amendment retained: the L_QUAY clause is now SATISFIED by this re-aim, not dropped)"
     },
     "S4": {
-      "vt": "close-up ground/wall material in practical light", "poseSource": "Pale Lantern Arcade ground floor, lightwell drip pool (F4 iter01 amendment, orchestrator-directed: S4 moves INSIDE the arcade interior — the alley pose stood 3.5 m behind L_ALLEY_A's own pole staring through its god-ray cone card, so the frame read as an orange-fogged courtyard, never a material close-up; the interior L_ARCADE_SKY practical delivers the same VT intent with the drip pool as the mirror)",
-      "seed": 104, "timeOfDay": "night", "beat": 4, "clockS": 415, "hud": false,
+      "vt": "close-up ground/wall material in practical light",
+      "poseSource": "Pale Lantern Arcade ground floor, lightwell drip pool (F4 iter01 amendment, orchestrator-directed: S4 moves INSIDE the arcade interior — the alley pose stood 3.5 m behind L_ALLEY_A's own pole staring through its god-ray cone card, so the frame read as an orange-fogged courtyard, never a material close-up; the interior L_ARCADE_SKY practical delivers the same VT intent with the drip pool as the mirror)",
+      "seed": 104,
+      "timeOfDay": "night",
+      "beat": 4,
+      "clockS": 415,
+      "hud": false,
       "_w3": "iter03 pass (W3): the arcade-interior pose captured a featureless blue haze ellipse — the L_ARCADE_SKY god-ray cone card sat BETWEEN camera and floor at 4.5 m, so the frame was cone alpha, not material, and nothing in it survived scrutiny. S4 moves to the plaza's east neon wall: a low (0.95 m) crop of wet cobble under the neon_wall_pools with the sign colours streaked along the wet stone toward the lens, plus the wall base and its grime line for the dielectric/roughness split. The arcade shaft is NOT lost — S7 is that frame, and it keeps the interior/rain-occlusion proof.",
       "_w7": "iter07 ranked fix #1 (SOURCELESS LIGHT). The old pose stood 3.5 m off the wall looking ACROSS it at fov 38: measured live, zero neon cabinets fell inside the frustum while three of their ground spill pools and all five of their wet-specular streaks did, so the frame's whole contracted payoff was coloured light with its emitters 4.5 m above the top edge. 2/3 critics: 'S4.png puts saturated magenta and cyan streaks across the cobbles with no source anywhere in frame'. Tilting up ~8 deg does not reach it — the nearest cabinet sits 30 deg above the sight axis. The pose instead swings to look ALONG the wall, standing on plaza cobble at (13.2, 6.5) and aiming north to z -13 at fov 55: three cabinets (LAPSHA DOM, MERIDIAN 24, ZAROV NOCH) sit in the upper third at 13-23 deg elevation, the wall base and its grime line run the full depth of the right side, and the wet cobble starts at ~3.2 m and fills the lower half. Streaks that run toward the lens now start under the sign that throws them, which is also the geometry that makes them longest. First attempt stood at (13.0, 17.0): all five cabinets made frame but pl_car_4 ate the lower-left third and the stand was off the cobble, so the material crop the frame exists for was gone. Second attempt at (13.2, 8.5) stood level with the gallery door (wall opening z 8..12), and the unlit interior behind it read as a hard-edged black wedge over the right quarter of the frame — z 6.5 puts the opening behind the eye.",
-      "camera": { "pos": [13.2, 0.95, 6.5], "lookAt": [14.9, 0.95, -13], "fov": 55 },
-      "player": { "pos": [13.2, 0, 6.5], "nearNode": "plaza_center", "weapon": "warden", "lowered": true },
+      "camera": {
+        "pos": [
+          13.2,
+          0.95,
+          6.5
+        ],
+        "lookAt": [
+          14.9,
+          0.95,
+          -13
+        ],
+        "fov": 55
+      },
+      "player": {
+        "pos": [
+          13.2,
+          0,
+          6.5
+        ],
+        "nearNode": "plaza_center",
+        "weapon": "warden",
+        "lowered": true
+      },
       "bots": [],
       "mustShow": "close crop of WET COBBLE from ~2 m to ~6 m under the neon wall: elongated magenta/cyan/amber practical reflections running toward the lens (the contracted rain payoff), roughness variance between stone crowns and joint water, wall base with its grime/tide line, NO uniform-roughness plastic read"
     },
     "S5": {
-      "vt": "sky/horizon from elevated position", "poseSource": "tram-platform deck looking S over the boulevard (R10)",
-      "seed": 105, "timeOfDay": "night", "beat": 5, "clockS": 660, "hud": false,
+      "vt": "sky/horizon from elevated position",
+      "poseSource": "tram-platform deck looking S over the boulevard (R10)",
+      "seed": 105,
+      "timeOfDay": "night",
+      "beat": 5,
+      "clockS": 660,
+      "hud": false,
       "_w3": "iter03 composition pass (W3): iter02 pitched only 2 deg above level at fov 50, so the boulevard buildings ate the horizon and the sky was a featureless strip — the ONE thing the frame exists to show. Pitch raised to ~7 deg and fov opened to 62: sky now owns the top two thirds with the horizon event and city-glow band on the skyline, the 78 m lane and its sodium pools recede along the bottom third, and the platform canopy edge anchors the foreground.",
-      "camera": { "pos": [38, 6.12, -48], "lookAt": [37, 16, 30], "fov": 62 },
+      "camera": {
+        "pos": [
+          38,
+          6.12,
+          -48
+        ],
+        "lookAt": [
+          37,
+          16,
+          30
+        ],
+        "fov": 62
+      },
       "_pose_fix_iter05": "x 38 -> 37.76, z -48 -> -48.07. The authored stand sat inside collider 'pf_nest_front' and setScenario rescued it 0.25 m every take ('SPAWN INSIDE GEOMETRY ... FIX THE POSE in content.json'). These are the rescued coordinates. S5 renders through the authored camera override, so the frame is unchanged.",
-      "player": { "pos": [37.76, 4.5, -48.07], "nearNode": "platform_deck", "weapon": "warden", "lowered": true },
+      "player": {
+        "pos": [
+          37.76,
+          4.5,
+          -48.07
+        ],
+        "nearNode": "platform_deck",
+        "weapon": "warden",
+        "lowered": true
+      },
       "bots": [],
       "mustShow": "sky owning the upper two thirds: storm ramp + >=2 parallax cloud layers + sodium-pollution horizon band, harbor/crane silhouettes on the skyline over the canal, boulevard sodium pools receding along the bottom third"
     },
     "S6": {
-      "vt": "pause menu + in-mission HUD", "poseSource": "ESC overlay over a live plaza frame (R10)",
-      "seed": 106, "timeOfDay": "night", "beat": 3, "clockS": 255, "hud": true, "paused": true, "overlay": "pause",
+      "vt": "pause menu + in-mission HUD",
+      "poseSource": "ESC overlay over a live plaza frame (R10)",
+      "seed": 106,
+      "timeOfDay": "night",
+      "beat": 3,
+      "clockS": 255,
+      "hud": true,
+      "paused": true,
+      "overlay": "pause",
       "_w3": "iter03 (W3): camera kept in lockstep with S1's re-aimed hero framing so the pause overlay is graded over the same plaza composition. NOTE (cross-file, reported by W3): the HUD and the ESC overlay are DOM (core/hud/*.js), and __test.capture() reads the WebGL drawing buffer with gl.readPixels — DOM chrome is physically absent from every battery PNG. iter02's S6 was NOT a pause-overlay failure: isPaused() was true and the overlay was up on screen. The capture path is what cannot see it.",
-      "camera": { "pos": [-22.5, 1.5, 16.5], "lookAt": [12, 4.2, -7], "fov": 55 },
-      "player": { "pos": [-22.5, 0, 16.5], "nearNode": "plaza_west", "weapon": "warden", "ads": false },
-      "bots": [ { "archetype": "cqb", "pos": [-12, 0, 4], "state": "combat" }, { "spawn": "sp_plaza_a2", "state": "combat" }, { "spawn": "sp_plaza_a3", "state": "combat" } ],
-      "worldState": { "blackout": false },
+      "camera": {
+        "pos": [
+          -22.5,
+          1.5,
+          16.5
+        ],
+        "lookAt": [
+          12,
+          4.2,
+          -7
+        ],
+        "fov": 55
+      },
+      "player": {
+        "pos": [
+          -22.5,
+          0,
+          16.5
+        ],
+        "nearNode": "plaza_west",
+        "weapon": "warden",
+        "ads": false
+      },
+      "bots": [
+        {
+          "archetype": "cqb",
+          "pos": [
+            -12,
+            0,
+            4
+          ],
+          "state": "combat"
+        },
+        {
+          "spawn": "sp_plaza_a2",
+          "state": "combat"
+        },
+        {
+          "spawn": "sp_plaza_a3",
+          "state": "combat"
+        }
+      ],
+      "worldState": {
+        "blackout": false
+      },
       "mustShow": "pause overlay legible over the blurred live plaza frame; HUD state intact beneath"
     },
     "S7": {
-      "vt": "supplementary — interior god-ray shaft, rain-occlusion proof", "poseSource": "arcade_god_rays (LD §8 S4)",
-      "seed": 107, "timeOfDay": "night", "beat": 4, "clockS": 420, "hud": false,
+      "vt": "supplementary — interior god-ray shaft, rain-occlusion proof",
+      "poseSource": "arcade_god_rays (LD §8 S4)",
+      "seed": 107,
+      "timeOfDay": "night",
+      "beat": 4,
+      "clockS": 420,
+      "hud": false,
       "_w3": "iter03 composition pass (W3): iter02's lookAt put frame CENTRE at pitch -21.5 deg, so the shaft head (+12 deg) was pushed against the top edge and ~70% of the frame was unlit black floor. lookAt y raised 0.5 -> 3.95 (centre pitch ~-6 deg): the shaft now spans roughly -18 to +18 deg — head, column and floor pool all inside the frame. A CQB contact stands at the pool's rim so the shaft has a rim-lit SUBJECT and a human scale reference instead of an empty cone.",
-      "camera": { "pos": [-36, 5.2, 2], "lookAt": [-31.5, 3.95, -9], "fov": 60 },
-      "player": { "pos": [-36, 4.2, 2], "nearNode": "arcade_upper", "weapon": "warden", "lowered": true },
-      "bots": [ { "archetype": "cqb", "pos": [-30.0, 0, -8.0], "state": "combat" } ],
+      "camera": {
+        "pos": [
+          -36,
+          5.2,
+          2
+        ],
+        "lookAt": [
+          -31.5,
+          3.95,
+          -9
+        ],
+        "fov": 60
+      },
+      "player": {
+        "pos": [
+          -36,
+          4.2,
+          2
+        ],
+        "nearNode": "arcade_upper",
+        "weapon": "warden",
+        "lowered": true
+      },
+      "bots": [
+        {
+          "archetype": "cqb",
+          "pos": [
+            -30,
+            0,
+            -8
+          ],
+          "state": "combat"
+        }
+      ],
       "mustShow": "the WHOLE L_ARCADE_SKY shaft in frame — head, column, and the wet lightwell floor pool — with a rim-lit contact standing at the pool edge for scale, drip column sparkling in the beam, ZERO rain streaks indoors, CINDERLOCK table edge-lit frame left"
     },
     "S8": {
-      "vt": "supplementary — flood beams, wave silhouettes", "poseSource": "gate9_floodlight_stand (LD §8 S6; F4 iter01 amendment: camera pulled back to the gate line + fov 55->68 — from LD's (0,-52) the flood poles sat 70-83 deg off-axis, geometrically outside any playable fov, same class of unsatisfiable clause as the v2.2 L_QUAY drop; bots slid W into the L_FLOOD_W beam path so the silhouettes actually stand in light)",
-      "seed": 108, "timeOfDay": "night", "beat": 6, "clockS": 750, "hud": true,
+      "vt": "supplementary — flood beams, wave silhouettes",
+      "poseSource": "gate9_floodlight_stand (LD §8 S6; F4 iter01 amendment: camera pulled back to the gate line + fov 55->68 — from LD's (0,-52) the flood poles sat 70-83 deg off-axis, geometrically outside any playable fov, same class of unsatisfiable clause as the v2.2 L_QUAY drop; bots slid W into the L_FLOOD_W beam path so the silhouettes actually stand in light)",
+      "seed": 108,
+      "timeOfDay": "night",
+      "beat": 6,
+      "clockS": 750,
+      "hud": true,
       "_w3": "iter03 composition pass (W3). Measured from the iter02 pose: BOTH flood poles sat at 51 deg off-axis, against a 50.2 deg horizontal half-fov — i.e. exactly on the frame edges — so one beam clipped in at the right margin and the left 55% of the capture was an unlit black wall. The 'both beams entering from the frame edges' clause is geometrically self-defeating: any framing wide enough to hold both poles centres on the dead ground between them. Amended to a HERO-BEAM framing (same class of amendment as the v2.2 L_QUAY drop): camera swung ~44 deg E onto L_FLOOD_E (18,9,-44), which now sits 8 deg off-axis at 20 deg elevation, and the wave-3 cast re-posed INTO that beam's cone (its axis runs from the head down to ground at x=18, z=-24.7) so the silhouettes are genuinely backlit at three depths — 25 m, 28 m, 35 m. The black wall is out of frame.",
-      "camera": { "pos": [2, 1.62, -57], "lookAt": [14, 4.0, -44], "fov": 62 },
-      "player": { "pos": [2, 0, -57], "nearNode": "customs_sandbags", "weapon": "warden", "ads": false },
+      "camera": {
+        "pos": [
+          2,
+          1.62,
+          -57
+        ],
+        "lookAt": [
+          14,
+          4,
+          -44
+        ],
+        "fov": 62
+      },
+      "player": {
+        "pos": [
+          2,
+          0,
+          -57
+        ],
+        "nearNode": "customs_sandbags",
+        "weapon": "warden",
+        "ads": false
+      },
       "bots": [
-        { "spawn": "sp_cust_w3_4", "pos": [19.0, 0, -31.0], "state": "combat", "moving": true },
-        { "spawn": "sp_cust_w3_5", "pos": [14.5, 0, -34.0], "state": "combat", "moving": true },
-        { "spawn": "sp_cust_heavy_2", "pos": [17.5, 0, -30.0], "state": "combat", "moving": true }
+        {
+          "spawn": "sp_cust_w3_4",
+          "pos": [
+            19,
+            0,
+            -31
+          ],
+          "state": "combat",
+          "moving": true
+        },
+        {
+          "spawn": "sp_cust_w3_5",
+          "pos": [
+            14.5,
+            0,
+            -34
+          ],
+          "state": "combat",
+          "moving": true
+        },
+        {
+          "spawn": "sp_cust_heavy_2",
+          "pos": [
+            17.5,
+            0,
+            -30
+          ],
+          "state": "combat",
+          "moving": true
+        }
       ],
       "mustShow": "the L_FLOOD_E god-ray beam full of rain as the frame's subject (upper right of centre, source visible), wave-3 bots INCLUDING the juggernaut heavy backlit inside that beam at three depths, jersey field foreground, no dead unlit quarter of frame"
     },
     "S9": {
-      "vt": "supplementary — soldier close-up ~2 m, running clip, never bind pose", "poseSource": "R10 supplementary (F4 iter01 amendment: camera anchored relToBot 0 — the pinned running bot covers ~2.5 m during the settle ticks, so an absolute camera loses the 2 m framing; pos/lookAt are now OFFSETS from the bot's post-settle position)",
-      "seed": 109, "timeOfDay": "night", "beat": 3, "clockS": 260, "hud": false, "cameraDetached": true,
-      "camera": { "relToBot": 0, "pos": [1.8, 1.6, 1.4], "lookAt": [0, 1.15, 0], "fov": 50 },
-      "player": { "pos": [-2, 0, 8], "weapon": "warden", "god": true, "noTarget": true },
-      "bots": [ { "archetype": "rifleman", "pos": [-7, 0, 2], "yaw": -1.5708, "anim": "run", "state": "combat", "moving": true } ],
+      "vt": "supplementary — soldier close-up ~2 m, running clip, never bind pose",
+      "poseSource": "R10 supplementary (F4 iter01 amendment: camera anchored relToBot 0 — the pinned running bot covers ~2.5 m during the settle ticks, so an absolute camera loses the 2 m framing; pos/lookAt are now OFFSETS from the bot's post-settle position)",
+      "seed": 109,
+      "timeOfDay": "night",
+      "beat": 3,
+      "clockS": 260,
+      "hud": false,
+      "cameraDetached": true,
+      "camera": {
+        "relToBot": 0,
+        "pos": [
+          1.8,
+          1.6,
+          1.4
+        ],
+        "lookAt": [
+          0,
+          1.15,
+          0
+        ],
+        "fov": 50
+      },
+      "player": {
+        "pos": [
+          -2,
+          0,
+          8
+        ],
+        "weapon": "warden",
+        "god": true,
+        "noTarget": true
+      },
+      "bots": [
+        {
+          "archetype": "rifleman",
+          "pos": [
+            -7,
+            0,
+            2
+          ],
+          "yaw": -1.5708,
+          "anim": "run",
+          "state": "combat",
+          "moving": true
+        }
+      ],
       "mustShow": "Meshy soldier at ~2 m mid-RUN clip (never bind pose), wet-shoulder spec, tint variant readable (v2.2 amendment: 'Vektor patch' removed — body texture carries no faction patch and adding one needs texture regen, per A8; tint + silhouette carry faction identity in v1)"
     },
     "C1": {
-      "vt": "6 s capture: sprint -> stop -> fire burst -> reload", "poseSource": "plaza run, Warden (R10)",
-      "seed": 111, "timeOfDay": "night", "beat": 3, "clockS": 245, "hud": true, "captureSeconds": 6,
-      "worldState": { "blackout": false },
+      "vt": "6 s capture: sprint -> stop -> fire burst -> reload",
+      "poseSource": "plaza run, Warden (R10)",
+      "seed": 111,
+      "timeOfDay": "night",
+      "beat": 3,
+      "clockS": 245,
+      "hud": true,
+      "captureSeconds": 6,
+      "worldState": {
+        "blackout": false
+      },
       "_w8": "iter08 SOURCELESS LIGHT — the class was still open after _w7 and this is why, measured rather than argued (_harness/ablate.py: hide one named mesh, capture, low-pass the difference, report the brightening delta; rain gives a 0.19-0.48% noise floor at +3, so anything above ~1% at +6 is real). THREE causes, none of them the one iter06 and iter07 fixed. (1) THE ORBS ARE THE WET-SPECULAR SHEET, not a decal and not a glow: at the C1_11 eye, hiding wet_specular removes the cyan/red/green blobs entirely while hiding the glow sprites, the wall pools and the ground pools leaves all three untouched. Every slot in that sheet was a POINT emitter, so its tightest lobe — the correct crisp mirror image of a 0.44 m sodium lamp head — was also drawn for a 3.8 m neon sign cabinet, as a saturated round ball on the cobbles with its fixture 4.6 m up and 20 m back. level.js now feeds the sheet each emitter half-width and the shader spreads the tangential lobe by its angular size (0.5*w/d); a point source is unchanged and a shop sign smears along the wall into the band a wet street actually shows. (2) THE S4 MAGENTA WASH IS THE NEON GROUND POOL, measured at 12.28% of the S4 frame brightened at mean +11.6 — 25x the noise control and 2.5x anything else. DELETED, not re-shaped a third time: it is a world-space additive decal standing in for a view-space reflection that reflect.js and the wet-specular sheet already draw. After deletion light_pools_plaza measures 5.10%, all of it the two lit festoon lamps that have a hanging lamp directly above them. (3) THE HARD-EDGED PALE TRAPEZOIDS ARE NOT A LIGHTING OBJECT AT ALL. Hiding fx.grounding.staticrefl removes them completely; they survive every light in the pool at intensity 0, the IBL at null, the planar mirror disabled, all five god-ray cones, and every pool and decal sheet. Four iterations of this lane hunted in lighting.js and level.js for an artefact generated in core/fx/grounding.js. NOT fixed here — that file was edited by the grounding lane 20 minutes before this note and a cross-lane edit is how four batteries died last wave. Needs an owner.",
       "_w7": "iter07 ranked fix #1 (SOURCELESS LIGHT), and it is a scenario-truth fix as much as a lighting one. C1 is a beat-3 PRE-blackout plaza firefight — the same beat S1 shoots, and S1 pins blackout:false. But C1 is the only LIVE pose, and its own cast lock ('mission wave spawner locked — the pose owns the cast') leaves waveAlive('w_plaza_a') at 0, which SATISFIES the beat-3 set-piece trigger `waveAlive lte 2` — a condition met by absence. So the transformer blackout fired at t~0 of every take: measured live, the neon emissives, their glow sprites, their wall spill and their ground pools were all correctly extinguished from C1_04 onward, while level.js's wet-specular sheet went on drawing the mirror image of five signs that were switched off. That is the 'saturated red, green and white ORBS hovering at waist height over open pavement with no fixture' both leading blind verdicts named. This pins the grid lit (lights.setBlackout(false) now exists and LOCKS the set-piece — it was a silent no-op before), and lighting.js's emitter authority parks the reflections of any fixture that does go out, so both halves are closed independently.",
       "_w3": "iter03 pass (W3): iter02's run started at (-10,36) on yaw 0 and stopped short of the plaza, so the reload-mid frame was unlit ground with nothing in it and no target for the burst. Start slid W and the heading canted NE so the 3 s tac-sprint lands the stop-and-fire inside the plaza facing the neon wall; two contacts pinned firing at 19 m and 16 m give the burst a subject and put a second muzzle flash in the reload frame. god:true so wave fire cannot end the take mid-script.",
-      "camera": { "firstPerson": true },
+      "camera": {
+        "firstPerson": true
+      },
       "_pose_fix_iter05": "x -14 -> -13.5. The authored start sat exactly ON the east face of collider bld_s1 (bbox [-41,0,18]..[-14,9,42]), i.e. INSIDE it once the capsule radius is applied, so setScenario's unstickPlayer() rescued every take with 'SPAWN INSIDE GEOMETRY ... FIX THE POSE in content.json' and the capture depended on that rescue. -13.5 is the position the rescue itself resolved to and the position iter05's 18.55 m sprint was actually run from, so the framing is unchanged; only the dependency on the rescue is gone.",
-      "_pose_fix_iter07": "pos z 34 -> 31.5 and yaw -0.55 -> -0.6274, and the reason is a COLLIDER, not a framing preference. MEASURED LIVE: the authored 3 s tac-sprint does not end in the plaza — it ends AGAINST THE WEST FACE OF bld_s2 (bbox [-6,0,18]..[15,8,42]). Probe at the stop, pre-fix: player [-6.35, 0, 18.91], eye ray dir [0.549, 0, -0.836], world.raycast hitDist 0.644 m, box bld_s2, surface concrete. Every round of the capture burst therefore hit a wall 64 cm from the muzzle: a trace of all 12 fire-time shot events came back 'concrete at [-6, 1.63, 18.2]' twelve times, counters.shotsHit 0, both contacts hp 100 at the end of the take. THAT is the whole of iter06's 3/3 'no hit flinch, no hitstop, no death and no bodies' — the contacts were never in danger, because the sight line was inside a building. The geometry is unforgiving: the shot clears only while tan(-yaw) < a/b with a = (-6 - px) and b = (pz - 18), and at the old stop that read 0.656 < 0.385 = false, so it was blocked; a 0.5 m difference in where the wall-slide left the player flipped it either way run to run. Starting 2.5 m further down the corridor lets the slide carry the player PAST z=18 into the open plaza (stop now [-6.11, 0, 16.7], b negative, no corner to clip), and -0.6274 is the bearing from that stop to contact 1 — measured aim error 0.00 deg. Result, measured: 3 hits / 117.6 damage / 1 KILL inside the capture window, contact 1 plays the hit clip at beat 5 and the death clip from beat 6, and the body persists through the reload panels.", "player": { "pos": [-13.5, 0, 31.5], "yaw": -0.6274, "weapon": "warden", "god": true },
+      "_pose_fix_iter07": "pos z 34 -> 31.5 and yaw -0.55 -> -0.6274, and the reason is a COLLIDER, not a framing preference. MEASURED LIVE: the authored 3 s tac-sprint does not end in the plaza — it ends AGAINST THE WEST FACE OF bld_s2 (bbox [-6,0,18]..[15,8,42]). Probe at the stop, pre-fix: player [-6.35, 0, 18.91], eye ray dir [0.549, 0, -0.836], world.raycast hitDist 0.644 m, box bld_s2, surface concrete. Every round of the capture burst therefore hit a wall 64 cm from the muzzle: a trace of all 12 fire-time shot events came back 'concrete at [-6, 1.63, 18.2]' twelve times, counters.shotsHit 0, both contacts hp 100 at the end of the take. THAT is the whole of iter06's 3/3 'no hit flinch, no hitstop, no death and no bodies' — the contacts were never in danger, because the sight line was inside a building. The geometry is unforgiving: the shot clears only while tan(-yaw) < a/b with a = (-6 - px) and b = (pz - 18), and at the old stop that read 0.656 < 0.385 = false, so it was blocked; a 0.5 m difference in where the wall-slide left the player flipped it either way run to run. Starting 2.5 m further down the corridor lets the slide carry the player PAST z=18 into the open plaza (stop now [-6.11, 0, 16.7], b negative, no corner to clip), and -0.6274 is the bearing from that stop to contact 1 — measured aim error 0.00 deg. Result, measured: 3 hits / 117.6 damage / 1 KILL inside the capture window, contact 1 plays the hit clip at beat 5 and the death clip from beat 6, and the body persists through the reload panels.",
+      "player": {
+        "pos": [
+          -13.5,
+          0,
+          31.5
+        ],
+        "yaw": -0.6274,
+        "weapon": "warden",
+        "god": true
+      },
       "bots": [
-        { "archetype": "rifleman", "pos": [6, 0, 0], "state": "combat", "firing": true },
-        { "archetype": "cqb", "pos": [10, 0, 8], "state": "combat", "firing": true }
+        {
+          "archetype": "rifleman",
+          "pos": [
+            6,
+            0,
+            0
+          ],
+          "state": "combat",
+          "firing": true
+        },
+        {
+          "archetype": "cqb",
+          "pos": [
+            10,
+            0,
+            8
+          ],
+          "state": "combat",
+          "firing": true
+        }
       ],
       "script": [
-        { "t": 0.0, "do": "sprint" },
-        { "t": 1.2, "do": "tacSprint" },
-        { "t": 2.6, "do": "stop" },
-        { "t": 3.0, "do": "fire", "rounds": 8 },
-        { "t": 4.3, "do": "reload" }
+        {
+          "t": 0,
+          "do": "sprint"
+        },
+        {
+          "t": 1.2,
+          "do": "tacSprint"
+        },
+        {
+          "t": 2.6,
+          "do": "stop"
+        },
+        {
+          "t": 3,
+          "do": "fire",
+          "rounds": 8
+        },
+        {
+          "t": 4.3,
+          "do": "reload"
+        }
       ],
       "_comment": "starts on the plaza ramp heading north; exercises sprint-out lockout, first-shot signature, and the reload commit window in one take"
     },
     "menu": {
-      "vt": "title screen", "seed": 100, "kind": "menu", "hud": false,
+      "vt": "title screen",
+      "seed": 100,
+      "kind": "menu",
+      "hud": false,
       "_comment": "menu visible, HUD hidden; backdrop = in-engine captured mission still (Part 4)"
     },
     "bench": {
-      "vt": "?bench=1 fixture", "seed": 113, "extends": "S1",
-      "autoplay": { "profile": "objective", "seconds": 30 },
+      "vt": "?bench=1 fixture",
+      "seed": 113,
+      "extends": "S1",
+      "autoplay": {
+        "profile": "objective",
+        "seconds": 30
+      },
       "_comment": "R10 — bench = scenario S1 + autoplay('objective', 30); ARCH's night_firefight fixture name superseded"
     }
-  }
+  },
+  "teams": [
+    {
+      "id": 0,
+      "name": "AMBER",
+      "tint": "#d9a441",
+      "archetypeSuffix": "_a",
+      "side": "west"
+    },
+    {
+      "id": 1,
+      "name": "SLATE",
+      "tint": "#7c9fd0",
+      "archetypeSuffix": "_b",
+      "side": "east"
+    }
+  ],
+  "botRoster": [
+    {
+      "slot": 1,
+      "team": 0,
+      "archetype": "cqb"
+    },
+    {
+      "slot": 2,
+      "team": 0,
+      "archetype": "rifleman"
+    },
+    {
+      "slot": 3,
+      "team": 0,
+      "archetype": "rifleman"
+    },
+    {
+      "slot": 4,
+      "team": 0,
+      "archetype": "marksman"
+    },
+    {
+      "slot": 5,
+      "team": 1,
+      "archetype": "cqb"
+    },
+    {
+      "slot": 6,
+      "team": 1,
+      "archetype": "rifleman"
+    },
+    {
+      "slot": 7,
+      "team": 1,
+      "archetype": "rifleman"
+    },
+    {
+      "slot": 8,
+      "team": 1,
+      "archetype": "rifleman"
+    },
+    {
+      "slot": 9,
+      "team": 1,
+      "archetype": "marksman"
+    }
+  ],
+  "modes": {
+    "_comment": "PVP_BUILD_PLAN C12 limits / C13 overtime+COLLAPSE / C15 points ledger. Keys must exactly match the MODES registry (contract gate, both directions).",
+    "tdm": {
+      "displayName": "SKIRMISH",
+      "teamCount": 2,
+      "scoreLimit": 50,
+      "timeLimitS": 480,
+      "respawnS": 4,
+      "firstSpawnS": 0,
+      "protectS": 1.5,
+      "homeClusters": {
+        "0": [
+          "SC_LANTERN",
+          "SC_ARCADE"
+        ],
+        "1": [
+          "SC_MARKET",
+          "SC_GALLERY"
+        ]
+      },
+      "flipClusters": {
+        "0": "SC_WEST",
+        "1": "SC_NORTH"
+      },
+      "overtime": {
+        "capS": 180,
+        "respawn": false,
+        "winOn": "firstDeath"
+      },
+      "points": {
+        "kill": 100,
+        "assist": 25
+      }
+    },
+    "ctf": {
+      "displayName": "CAPTURE THE FLAG",
+      "teamCount": 2,
+      "captureLimit": 3,
+      "timeLimitS": 720,
+      "respawnS": 5,
+      "respawnPressureS": 8,
+      "protectS": 1.5,
+      "protectPressureS": 0.75,
+      "sideClusters": {
+        "0": [
+          "SC_LANTERN",
+          "SC_ARCADE",
+          "SC_WEST"
+        ],
+        "1": [
+          "SC_MARKET",
+          "SC_GALLERY",
+          "SC_NORTH"
+        ]
+      },
+      "flag": {
+        "pickupR": 1.2,
+        "pickupDy": 2,
+        "revealS": 8,
+        "carryCapS": 120,
+        "dropReturnS": 30,
+        "stuckStrikes": 3,
+        "stuckCheckHz": 1,
+        "captureNeedsOwnFlagHome": true,
+        "carrierTacSprint": false,
+        "carrierGrenade": false,
+        "carrierRegen": false,
+        "beacon": {
+          "refreshS": 3,
+          "quantM": 6
+        }
+      },
+      "pressure": {
+        "enterS": 60,
+        "resetS": 90
+      },
+      "overtime": {
+        "capS": 180,
+        "winOn": "goldenCapture",
+        "collapseStandExemptM": 8
+      },
+      "points": {
+        "capture": 500,
+        "grab": 50,
+        "return": 100,
+        "carrierKill": 150,
+        "defendKill": 50,
+        "defendR": 12,
+        "escortAssist": 50,
+        "escortR": 15,
+        "kill": 100,
+        "assist": 25
+      }
+    },
+    "ffa": {
+      "displayName": "FREE-FOR-ALL",
+      "teamCount": "perActor",
+      "scoreLimit": 25,
+      "timeLimitS": 480,
+      "respawnS": 3,
+      "firstSpawnS": 0,
+      "protectS": 2,
+      "leaderMark": {
+        "atScore": 15,
+        "orLeadBy": 5
+      },
+      "vetoOverrides": {
+        "v1M": 10,
+        "v2LosM": 20,
+        "v3ConeM": 16,
+        "v10ClusterCooldownS": 3
+      },
+      "overtime": {
+        "capS": 180,
+        "respawn": false,
+        "winOn": "lastLeaderStanding"
+      },
+      "points": {
+        "kill": 100,
+        "assist": 25,
+        "leaderKill": 150
+      }
+    }
+  },
+  "match": {
+    "warmupS": 3,
+    "defaultMode": "tdm",
+    "difficultyDefault": "standard",
+    "collapse": {
+      "centre": [
+        -5,
+        0,
+        0
+      ],
+      "r0": 12,
+      "r1": 6,
+      "shrinkS": 30,
+      "dps0": 5,
+      "dps1": 15,
+      "rampS": 20,
+      "armsAfterOtS": 60
+    }
+  },
+  "arena": {
+    "id": "lanternwalk",
+    "bounds": {
+      "min": [
+        -48.5,
+        -2,
+        -34.5
+      ],
+      "max": [
+        24.5,
+        14,
+        14.6
+      ]
+    },
+    "vetoOverrides": {
+      "v1M": 12,
+      "v2LosM": 25,
+      "v3ConeM": 20
+    },
+    "_comment": "PROBE-EMITTED by tools/probe_arena.mjs --emit (measured geometry; PVP_BUILD_PLAN Part 4.2). Do not hand-edit spawnPoints/clusters/flags."
+  },
+  "clusters": {
+    "SC_WEST": {
+      "anchor": [
+        -44,
+        0,
+        -12
+      ],
+      "node": "alley_mid",
+      "inwardYaw": -1.57,
+      "side": "west"
+    },
+    "SC_ARCADE": {
+      "anchor": [
+        -32.5,
+        0,
+        -8
+      ],
+      "node": "arcade_lightwell",
+      "inwardYaw": -1.57,
+      "side": "west"
+    },
+    "SC_LANTERN": {
+      "anchor": [
+        -23,
+        0,
+        7.5
+      ],
+      "node": "lantern_yard",
+      "inwardYaw": -0.79,
+      "side": "west"
+    },
+    "SC_NORTH": {
+      "anchor": [
+        -24.5,
+        0,
+        -22.5
+      ],
+      "node": "cs1_mid",
+      "inwardYaw": 3.14,
+      "side": "east"
+    },
+    "SC_MARKET": {
+      "anchor": [
+        -0.5,
+        0,
+        -24
+      ],
+      "node": "street_mouth",
+      "inwardYaw": 3.14,
+      "side": "east"
+    },
+    "SC_GALLERY": {
+      "anchor": [
+        17.5,
+        0,
+        -7.5
+      ],
+      "node": "gallery_mid",
+      "inwardYaw": 1.57,
+      "side": "east"
+    },
+    "SC_PLAZA": {
+      "anchor": [
+        -4,
+        0,
+        -5.5
+      ],
+      "node": "plaza_center",
+      "inwardYaw": null,
+      "side": "mid",
+      "modes": [
+        "ffa"
+      ]
+    }
+  },
+  "spawnPoints": [
+    {
+      "id": "sp_w1",
+      "pos": [
+        -44.5,
+        0,
+        -28
+      ],
+      "yaw": -1.92,
+      "cluster": "SC_WEST",
+      "cover": 0.6,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "alley_mid"
+    },
+    {
+      "id": "sp_w2",
+      "pos": [
+        -46.5,
+        0,
+        -24
+      ],
+      "yaw": -2.53,
+      "cluster": "SC_WEST",
+      "cover": 0.6,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "alley_mid"
+    },
+    {
+      "id": "sp_w3",
+      "pos": [
+        -43.5,
+        0,
+        -19
+      ],
+      "yaw": -2.44,
+      "cluster": "SC_WEST",
+      "cover": 0.3,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "alley_mid"
+    },
+    {
+      "id": "sp_w6",
+      "pos": [
+        -43,
+        0,
+        -6
+      ],
+      "yaw": -2.36,
+      "cluster": "SC_WEST",
+      "cover": 0.6,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "alley_mid"
+    },
+    {
+      "id": "sp_w7",
+      "pos": [
+        -43.5,
+        0,
+        -3
+      ],
+      "yaw": -1.48,
+      "cluster": "SC_WEST",
+      "cover": 0.4,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "alley_mid"
+    },
+    {
+      "id": "sp_w8",
+      "pos": [
+        -45.5,
+        0,
+        6
+      ],
+      "yaw": -2.18,
+      "cluster": "SC_WEST",
+      "cover": 0.5,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "alley_mid"
+    },
+    {
+      "id": "sp_a1",
+      "pos": [
+        -36,
+        0,
+        -16
+      ],
+      "yaw": -2.62,
+      "cluster": "SC_ARCADE",
+      "cover": 0.7,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "arcade_lightwell"
+    },
+    {
+      "id": "sp_a2",
+      "pos": [
+        -27.5,
+        0,
+        -16
+      ],
+      "yaw": -2.62,
+      "cluster": "SC_ARCADE",
+      "cover": 0.8,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "arcade_lightwell"
+    },
+    {
+      "id": "sp_a3",
+      "pos": [
+        -28,
+        0,
+        -8
+      ],
+      "yaw": -0.52,
+      "cluster": "SC_ARCADE",
+      "cover": 0.3,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "arcade_lightwell"
+    },
+    {
+      "id": "sp_a4",
+      "pos": [
+        -37.5,
+        0,
+        -2
+      ],
+      "yaw": -0.87,
+      "cluster": "SC_ARCADE",
+      "cover": 0.5,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "arcade_lightwell"
+    },
+    {
+      "id": "sp_a5",
+      "pos": [
+        -34.5,
+        0,
+        2.5
+      ],
+      "yaw": -2.62,
+      "cluster": "SC_ARCADE",
+      "cover": 0.7,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "arcade_lightwell"
+    },
+    {
+      "id": "sp_a7",
+      "pos": [
+        -32,
+        0,
+        -9
+      ],
+      "yaw": -1.22,
+      "cluster": "SC_ARCADE",
+      "cover": 0.2,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "arcade_lightwell"
+    },
+    {
+      "id": "sp_l1",
+      "pos": [
+        -32,
+        0,
+        12.5
+      ],
+      "yaw": 0,
+      "cluster": "SC_LANTERN",
+      "cover": 0.4,
+      "modes": [
+        "tdm",
+        "ffa"
+      ],
+      "zoneHint": "lantern_yard"
+    },
+    {
+      "id": "sp_l2",
+      "pos": [
+        -39.5,
+        0,
+        11.5
+      ],
+      "yaw": -1.75,
+      "cluster": "SC_LANTERN",
+      "cover": 0.7,
+      "modes": [
+        "tdm",
+        "ffa"
+      ],
+      "zoneHint": "lantern_yard"
+    },
+    {
+      "id": "sp_l3",
+      "pos": [
+        -33,
+        0,
+        9.5
+      ],
+      "yaw": -0.09,
+      "cluster": "SC_LANTERN",
+      "cover": 0.5,
+      "modes": [
+        "tdm",
+        "ffa"
+      ],
+      "zoneHint": "lantern_yard"
+    },
+    {
+      "id": "sp_l4",
+      "pos": [
+        -27,
+        0,
+        13.5
+      ],
+      "yaw": -0.79,
+      "cluster": "SC_LANTERN",
+      "cover": 0.8,
+      "modes": [
+        "tdm",
+        "ffa"
+      ],
+      "zoneHint": "lantern_yard"
+    },
+    {
+      "id": "sp_l5",
+      "pos": [
+        -17.5,
+        0,
+        7
+      ],
+      "yaw": -0.17,
+      "cluster": "SC_LANTERN",
+      "cover": 0.6,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "lantern_yard"
+    },
+    {
+      "id": "sp_l6",
+      "pos": [
+        -21,
+        0,
+        3.5
+      ],
+      "yaw": -1.48,
+      "cluster": "SC_LANTERN",
+      "cover": 0.4,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "lantern_yard"
+    },
+    {
+      "id": "sp_l7",
+      "pos": [
+        -12.5,
+        0,
+        10.5
+      ],
+      "yaw": -0.79,
+      "cluster": "SC_LANTERN",
+      "cover": 0.4,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "lantern_yard"
+    },
+    {
+      "id": "sp_lc1",
+      "pos": [
+        -16,
+        0,
+        0.5
+      ],
+      "yaw": -1.05,
+      "cluster": "SC_LANTERN",
+      "cover": 0.3,
+      "modes": [
+        "ctf"
+      ],
+      "zoneHint": "lantern_yard"
+    },
+    {
+      "id": "sp_lc2",
+      "pos": [
+        -13.5,
+        0,
+        6.5
+      ],
+      "yaw": -1.22,
+      "cluster": "SC_LANTERN",
+      "cover": 0.4,
+      "modes": [
+        "ctf"
+      ],
+      "zoneHint": "lantern_yard"
+    },
+    {
+      "id": "sp_lc3",
+      "pos": [
+        -19.5,
+        0,
+        -3
+      ],
+      "yaw": -1.22,
+      "cluster": "SC_LANTERN",
+      "cover": 0.2,
+      "modes": [
+        "ctf"
+      ],
+      "zoneHint": "lantern_yard"
+    },
+    {
+      "id": "sp_n1",
+      "pos": [
+        -38,
+        0,
+        -26
+      ],
+      "yaw": 2.27,
+      "cluster": "SC_NORTH",
+      "cover": 0.6,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "cs1_mid"
+    },
+    {
+      "id": "sp_n2",
+      "pos": [
+        -31.5,
+        0,
+        -24
+      ],
+      "yaw": -2.09,
+      "cluster": "SC_NORTH",
+      "cover": 0.5,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "cs1_mid"
+    },
+    {
+      "id": "sp_n3",
+      "pos": [
+        -28,
+        0,
+        -22.5
+      ],
+      "yaw": -2.27,
+      "cluster": "SC_NORTH",
+      "cover": 0.4,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "cs1_mid"
+    },
+    {
+      "id": "sp_n4",
+      "pos": [
+        -22.5,
+        0,
+        -22
+      ],
+      "yaw": -2.71,
+      "cluster": "SC_NORTH",
+      "cover": 0.4,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "cs1_mid"
+    },
+    {
+      "id": "sp_n5",
+      "pos": [
+        -17,
+        0,
+        -25.5
+      ],
+      "yaw": -2.09,
+      "cluster": "SC_NORTH",
+      "cover": 0.5,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "cs1_mid"
+    },
+    {
+      "id": "sp_n6",
+      "pos": [
+        -13.5,
+        0,
+        -21
+      ],
+      "yaw": 2.97,
+      "cluster": "SC_NORTH",
+      "cover": 0.3,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "cs1_mid"
+    },
+    {
+      "id": "sp_n7",
+      "pos": [
+        -23,
+        0,
+        -18.5
+      ],
+      "yaw": -2.44,
+      "cluster": "SC_NORTH",
+      "cover": 0.4,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "cs1_mid"
+    },
+    {
+      "id": "sp_m1",
+      "pos": [
+        -12.5,
+        0,
+        -25
+      ],
+      "yaw": 2.97,
+      "cluster": "SC_MARKET",
+      "cover": 0.1,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "street_mouth"
+    },
+    {
+      "id": "sp_m2",
+      "pos": [
+        -5,
+        0,
+        -28
+      ],
+      "yaw": -2.36,
+      "cluster": "SC_MARKET",
+      "cover": 0.6,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "street_mouth"
+    },
+    {
+      "id": "sp_m3",
+      "pos": [
+        -9.5,
+        0,
+        -21
+      ],
+      "yaw": 2.79,
+      "cluster": "SC_MARKET",
+      "cover": 0.2,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "street_mouth"
+    },
+    {
+      "id": "sp_m4",
+      "pos": [
+        -1.5,
+        0,
+        -20
+      ],
+      "yaw": 2.53,
+      "cluster": "SC_MARKET",
+      "cover": 0.5,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "street_mouth"
+    },
+    {
+      "id": "sp_m6",
+      "pos": [
+        11,
+        0,
+        -22.5
+      ],
+      "yaw": 3.05,
+      "cluster": "SC_MARKET",
+      "cover": 0.7,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "street_mouth"
+    },
+    {
+      "id": "sp_m7",
+      "pos": [
+        7,
+        0,
+        -32
+      ],
+      "yaw": 2.79,
+      "cluster": "SC_MARKET",
+      "cover": 0.6,
+      "modes": [
+        "tdm",
+        "ffa"
+      ],
+      "zoneHint": "street_mouth"
+    },
+    {
+      "id": "sp_m8",
+      "pos": [
+        4,
+        0,
+        -27.5
+      ],
+      "yaw": 2.97,
+      "cluster": "SC_MARKET",
+      "cover": 0.6,
+      "modes": [
+        "tdm",
+        "ffa"
+      ],
+      "zoneHint": "street_mouth"
+    },
+    {
+      "id": "sp_mc1",
+      "pos": [
+        -1.5,
+        0,
+        -24
+      ],
+      "yaw": 2.71,
+      "cluster": "SC_MARKET",
+      "cover": 0.4,
+      "modes": [
+        "ctf"
+      ],
+      "zoneHint": "street_mouth"
+    },
+    {
+      "id": "sp_mc2",
+      "pos": [
+        3.5,
+        0,
+        -20
+      ],
+      "yaw": -2.88,
+      "cluster": "SC_MARKET",
+      "cover": 0.5,
+      "modes": [
+        "ctf"
+      ],
+      "zoneHint": "street_mouth"
+    },
+    {
+      "id": "sp_g1",
+      "pos": [
+        20.5,
+        0,
+        -26.5
+      ],
+      "yaw": 2.62,
+      "cluster": "SC_GALLERY",
+      "cover": 0.4,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "gallery_mid"
+    },
+    {
+      "id": "sp_g3",
+      "pos": [
+        21,
+        0,
+        -13
+      ],
+      "yaw": 0.61,
+      "cluster": "SC_GALLERY",
+      "cover": 0.5,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "gallery_mid"
+    },
+    {
+      "id": "sp_g4",
+      "pos": [
+        19,
+        0,
+        -5.5
+      ],
+      "yaw": 2.09,
+      "cluster": "SC_GALLERY",
+      "cover": 0.2,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "gallery_mid"
+    },
+    {
+      "id": "sp_g5",
+      "pos": [
+        20.5,
+        0,
+        4.5
+      ],
+      "yaw": 2.36,
+      "cluster": "SC_GALLERY",
+      "cover": 0.6,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "gallery_mid"
+    },
+    {
+      "id": "sp_g6",
+      "pos": [
+        16.5,
+        0,
+        9.5
+      ],
+      "yaw": 0.7,
+      "cluster": "SC_GALLERY",
+      "cover": 0.5,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "gallery_mid"
+    },
+    {
+      "id": "sp_g7",
+      "pos": [
+        7,
+        0,
+        -15.5
+      ],
+      "yaw": 1.66,
+      "cluster": "SC_GALLERY",
+      "cover": 0.4,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "gallery_mid"
+    },
+    {
+      "id": "sp_p1",
+      "pos": [
+        -17,
+        0,
+        -14
+      ],
+      "yaw": -2.53,
+      "cluster": "SC_PLAZA",
+      "cover": 0.3,
+      "modes": [
+        "ffa"
+      ],
+      "zoneHint": "plaza_center"
+    },
+    {
+      "id": "sp_p2",
+      "pos": [
+        -8,
+        0,
+        -3
+      ],
+      "yaw": -1.98,
+      "cluster": "SC_PLAZA",
+      "cover": 0.2,
+      "modes": [
+        "ffa"
+      ],
+      "zoneHint": "plaza_center"
+    },
+    {
+      "id": "sp_p3",
+      "pos": [
+        -1.5,
+        0,
+        -16.5
+      ],
+      "yaw": 1.86,
+      "cluster": "SC_PLAZA",
+      "cover": 0.5,
+      "modes": [
+        "ffa"
+      ],
+      "zoneHint": "plaza_center"
+    },
+    {
+      "id": "sp_p4",
+      "pos": [
+        12.5,
+        0,
+        -3.5
+      ],
+      "yaw": 1.13,
+      "cluster": "SC_PLAZA",
+      "cover": 0.1,
+      "modes": [
+        "ffa"
+      ],
+      "zoneHint": "plaza_center"
+    },
+    {
+      "id": "sp_p5",
+      "pos": [
+        -0.5,
+        0,
+        9.5
+      ],
+      "yaw": 0.63,
+      "cluster": "SC_PLAZA",
+      "cover": 0.4,
+      "modes": [
+        "ffa"
+      ],
+      "zoneHint": "plaza_center"
+    },
+    {
+      "id": "sp_p6",
+      "pos": [
+        -12,
+        0,
+        0
+      ],
+      "yaw": -0.33,
+      "cluster": "SC_PLAZA",
+      "cover": 0.1,
+      "modes": [
+        "ffa"
+      ],
+      "zoneHint": "plaza_center"
+    }
+  ],
+  "flags": [
+    {
+      "id": "flag_amber",
+      "team": 0,
+      "home": [
+        -33.5,
+        0,
+        12
+      ],
+      "node": "lantern_yard",
+      "standR": 1.2,
+      "standH": 2.5
+    },
+    {
+      "id": "flag_slate",
+      "team": 1,
+      "home": [
+        6.5,
+        0,
+        -30
+      ],
+      "node": "exchange_house",
+      "standR": 1.2,
+      "standH": 2.5
+    }
+  ]
 }

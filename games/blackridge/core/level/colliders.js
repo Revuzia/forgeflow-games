@@ -23,10 +23,20 @@
 // Private extras (allowed additions): walkRects, refSpawns, zones — probe +
 // nav-seeding data. Runtime gameplay reads only the frozen fields.
 
-import { buildLayout } from "./layout.js";
+import { buildLayout, buildLayoutFor } from "./layout.js";
+
+// W4 (PVP map split, PVP_BUILD_PLAN C17): explicit-map variant for probes and
+// the match path. buildColliders(seed) keeps its frozen signature and builds
+// the ACTIVE map (campaign default: meridian_ward — Amendment A1).
+export function buildCollidersFor(mapId, seed = 1) {
+  return collidersFromLayout(buildLayoutFor(mapId, seed));
+}
 
 export function buildColliders(seed = 1) {
-  const L = buildLayout(seed);
+  return collidersFromLayout(buildLayout(seed));
+}
+
+function collidersFromLayout(L) {
 
   const boxes = [];
   for (const b of L.buildings) {
