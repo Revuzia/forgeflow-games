@@ -2,7 +2,10 @@
 // Oswald latin subset + "Barlow Semi Condensed"/"Arial Narrow" fallback stack,
 // no external font fetch), off-white #e8e8e4 at 85–92%, single amber accent
 // #d9a441, red RESERVED for damage/kill/critical. Compass tape, ammo block,
-// NO permanent health bar (damage vignette per combat_spec §6), crosshair
+// NO permanent health bar (damage vignette per combat_spec §6) — but a
+// DAMAGE-REACTIVE bar per the VT §6 amendment (2026-08-25, owner request):
+// fades in on damage, segmented, above the ammo block, lingers while below
+// max, fades out 1.5 s after regen completes. Crosshair
 // driven by the LIVE effectiveSpread from core/sim/ballistics.js (never a
 // second model — §2.5/§4.6), hitmarker + headshot/kill variants (§4.1),
 // threat-ring damage direction (§4.3), killfeed with DISPLAY names (R4 —
@@ -198,6 +201,31 @@ export function ensureStyle() {
 #ammo .a10-nades .n{font-size:15px;letter-spacing:.02em;opacity:.92;
   font-variant-numeric:tabular-nums;}
 @keyframes a10pulse{0%,100%{opacity:.92}50%{opacity:.55}}
+
+/* ------------------------------------------------- health (reactive bar) */
+/* VT §6 amendment 2026-08-25 (owner playtest): damage-REACTIVE bar — the
+   PERMANENT ban stands. Same type/colour language as the ammo block: off-white
+   ink, amber ≤60%, red reserved for critical ≤30%. Opacity + pulse are driven
+   from update() on SIM time (lane discipline — deterministic for captures);
+   no CSS animation here. */
+/* bottom 232: the ammo block (bottom 64) stacks wname/mag/LOW/nades ~145px
+   tall — a first cut at 190 landed the bar ON the weapon name (read off the
+   h1_hp50 capture). 232 clears it with a full row of air. */
+#a10-health{position:absolute;right:34px;bottom:232px;opacity:0;will-change:opacity;
+  display:flex;align-items:center;gap:9px;}
+#a10-health .a10-hnum{font-size:16px;font-weight:700;line-height:1;
+  font-variant-numeric:tabular-nums;opacity:.92;min-width:32px;text-align:right;}
+#a10-health .a10-htrack{position:relative;width:172px;height:5px;
+  background:rgba(232,232,228,.16);box-shadow:0 1px 2px rgba(0,0,0,.5);}
+#a10-health .a10-hfill{position:absolute;left:0;top:0;bottom:0;width:100%;
+  background:var(--a10-ink);opacity:.88;will-change:width,opacity;}
+#a10-health .a10-hsegs{position:absolute;inset:0;background:repeating-linear-gradient(
+  90deg,transparent 0,transparent calc(10% - 1px),rgba(4,6,10,.8) calc(10% - 1px),
+  rgba(4,6,10,.8) 10%);}
+#a10-health.low .a10-hfill{background:var(--a10-amber);}
+#a10-health.low .a10-hnum{color:var(--a10-amber);}
+#a10-health.crit .a10-hfill{background:var(--a10-red);}
+#a10-health.crit .a10-hnum{color:var(--a10-red);}
 
 /* ------------------------------------------------------------ killfeed */
 #killfeed{position:absolute;right:34px;top:64px;text-align:right;font-size:12.5px;
@@ -505,6 +533,15 @@ export function createHud(ctx) {
   const amMag = ammo.querySelector(".a10-mag"), amRes = ammo.querySelector(".a10-res");
   const amLow = ammo.querySelector(".a10-low"), amNades = ammo.querySelector(".a10-nades");
 
+  // reactive health bar (VT §6 amendment 2026-08-25) --------------------------
+  const health = document.createElement("div");
+  health.id = "a10-health";
+  health.innerHTML =
+    `<span class="a10-hnum">100</span>` +
+    `<div class="a10-htrack"><div class="a10-hfill"></div><div class="a10-hsegs"></div></div>`;
+  root.appendChild(health);
+  const hNum = health.querySelector(".a10-hnum"), hFill = health.querySelector(".a10-hfill");
+
   // killfeed ---------------------------------------------------------------
   const killfeed = document.createElement("div");
   killfeed.id = "killfeed";
@@ -623,9 +660,14 @@ export function createHud(ctx) {
     debriefOpen: false,
     // tallies (playprobe parity — harness_plan §2.5)
     tallies: { hitmarkers: 0, killfeed: 0 },
+    // reactive health bar (VT §6 amendment): hpBarA = eased opacity;
+    // hpFullT: -9 = idle/hidden, -1 = below max (bar live), >=0 = sim time
+    // regen completed (linger 1.5 s, then fade back to -9)
+    hpBarA: 0, hpFullT: -9,
     // change-gates
     lastGap: -1, lastBearing: 1e9, lastMag: -1, lastRes: -1, lastWname: "",
     lastMode: "", lastNades: -1, lastVig: -1, lastFade: -1, lastCrossA: -1,
+    lastHpShown: -1, lastHpBarA: -1, lastHpCls: "", lastHpPulse: "", lastDesat: -1,
     lastCrossX: 1e9, lastCrossY: 1e9, // reticle aim-ray anchor (wave-10)
     hintWasShown: false,
   };
@@ -635,6 +677,8 @@ export function createHud(ctx) {
   function resetTransient() {
     st.hmT = st.dryT = st.bannerT = st.objToastT = st.flashT = st.vigDirT = -9;
     st.nade = null;
+    st.hpBarA = 0; st.hpFullT = -9; st.lastHpBarA = -1;
+    health.style.opacity = "0";
     st.subQ.length = 0; st.subUntil = -9;
     st.lastHitWeapon = {};
     st.tallies.hitmarkers = 0; st.tallies.killfeed = 0;
@@ -995,6 +1039,48 @@ export function createHud(ctx) {
         `<span class="n">×${nades}</span>`;
     }
 
+    // ---- reactive health bar (VT §6 amendment 2026-08-25 — owner request)
+    // Fades in on first damage, lingers while below max, fades out 1.5 s after
+    // regen completes. Hidden while dead (the death fade owns the screen) and
+    // at mission start. maxHp from sim.tuning (sp 100 / pvp 110 — C25 seam),
+    // so the bar and its thresholds stay truthful in every mode.
+    const maxHp = (sim.tuning && sim.tuning.maxHp) || 100;
+    const hpFrac = Math.max(0, Math.min(1, p.hp / maxHp));
+    let showHp;
+    if (!p.alive) { showHp = false; st.hpFullT = -9; }
+    else if (hpFrac < 0.999) { showHp = true; st.hpFullT = -1; }
+    else {
+      if (st.hpFullT === -1) st.hpFullT = t;             // regen just completed
+      showHp = st.hpFullT >= 0 && t - st.hpFullT < 1.5;  // linger, then release
+      if (!showHp) st.hpFullT = -9;
+    }
+    const hpTarget = showHp ? 1 : 0;
+    st.hpBarA += (hpTarget - st.hpBarA) * Math.min(1, dt * (hpTarget > st.hpBarA ? 12 : 3));
+    if (Math.abs(st.hpBarA - st.lastHpBarA) > 0.01) {
+      st.lastHpBarA = st.hpBarA;
+      health.style.opacity = st.hpBarA.toFixed(2);
+    }
+    const hpInt = p.alive ? Math.max(1, Math.ceil(p.hp)) : 0;
+    if (hpInt !== st.lastHpShown) {
+      st.lastHpShown = hpInt;
+      hNum.textContent = String(hpInt);
+      // width from the DISPLAYED integer (not raw hp) so bar and numeral can
+      // never disagree — the change-gate keys on hpInt, so a fractional final
+      // regen tick (99.6 → 100) would otherwise leave the bar frozen short.
+      hFill.style.width = Math.min(100, (hpInt / maxHp) * 100).toFixed(1) + "%";
+      const cls = hpFrac <= 0.30 ? "crit" : hpFrac <= 0.60 ? "low" : "";
+      if (cls !== st.lastHpCls) { st.lastHpCls = cls; health.className = cls; }
+    }
+    // CRITICAL pulse: tempo-matched to the audio heartbeat (58→82 bpm scaled
+    // by 1 − hp/35, combat_spec §6) so the bar, the vignette and the audible
+    // beat read as ONE body signal. Sim-time driven (deterministic).
+    const hpBpm = 58 + 24 * Math.max(0, Math.min(1, 1 - p.hp / 35));
+    if (st.lastHpCls === "crit" && p.alive) {
+      const pulse = 0.62 + 0.3 * (0.5 + 0.5 * Math.sin(2 * Math.PI * (hpBpm / 60) * t));
+      const ps = pulse.toFixed(2);
+      if (ps !== st.lastHpPulse) { st.lastHpPulse = ps; hFill.style.opacity = ps; }
+    } else if (st.lastHpPulse !== "") { st.lastHpPulse = ""; hFill.style.opacity = ""; }
+
     // ---- compass tape + pips + wedges
     const bearing = norm360(-p.yaw * DEG);
     if (Math.abs(norm180(bearing - st.lastBearing)) > 0.05) {
@@ -1069,9 +1155,13 @@ export function createHud(ctx) {
       subEl.style.opacity = "0";
     }
 
-    // ---- damage vignette (combat_spec §6 curve — never a health bar)
-    let a = Math.pow(1 - p.hp / 100, 1.6) * 0.55;
-    if (p.hp < 30) a += 0.12 * Math.sin(2 * Math.PI * 1.2 * t) * (p.hp > 0 ? 1 : 0);
+    // ---- damage vignette (combat_spec §6 curve; hp normalized by tuning
+    // maxHp — the old /100 made the curve NaN above 100 hp in pvp (110), which
+    // the change-gate silently swallowed). Below 30% CRITICAL: the pulse is
+    // tempo-matched to the audio heartbeat (H1 2026-08-25) instead of the flat
+    // 1.2 Hz — same ±0.12 alpha depth, so the §6 look is preserved.
+    let a = Math.pow(Math.max(0, 1 - hpFrac), 1.6) * 0.55;
+    if (hpFrac < 0.30) a += 0.12 * Math.sin(2 * Math.PI * (hpBpm / 60) * t) * (p.hp > 0 ? 1 : 0);
     a = Math.max(0, Math.min(0.85, a));
     if (Math.abs(a - st.lastVig) > 0.005) {
       st.lastVig = a;
@@ -1079,7 +1169,14 @@ export function createHud(ctx) {
       // regen "inward wipe": the ring relaxes outward as hp returns
       vig.style.transform = `scale(${(1 + 0.18 * a).toFixed(3)})`;
     }
-    desat.style.display = p.hp < 25 && p.alive ? "block" : "none";
+    // desaturation: two stages (H1 escalation) — §6's 20% desat at the old
+    // threshold, deeper near death so CRITICAL visibly drains the frame.
+    const dLvl = !p.alive ? 0 : p.hp < 15 ? 2 : p.hp < 30 ? 1 : 0;
+    if (dLvl !== st.lastDesat) {
+      st.lastDesat = dLvl;
+      desat.style.display = dLvl ? "block" : "none";
+      if (dLvl) desat.style.backdropFilter = dLvl === 2 ? "saturate(.62)" : "saturate(.8)";
+    }
     // directional bias (§4.3): red creeps 12% further in from the hit side
     const vdAge = t - st.vigDirT;
     if (vdAge >= 0 && vdAge < 0.5) {

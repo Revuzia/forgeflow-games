@@ -26,6 +26,7 @@
 
 import { areEnemies, makeRoster, bindBody } from "./roster.js";
 import { validateMatchContent, hasPvpContent } from "./contract.js";
+import { resolveDifficulty } from "../pvp/pvp_tuning.js";
 
 const DT = 1 / 60;
 const WARMUP_S = 3.0;          // C14 — 3.0 s, mapped onto phase 'infil'
@@ -528,6 +529,13 @@ export function makeMatch(content, emit, opts = {}) {
 
   // ------------------------------------------------------------- the match
   const match = {
+    // H2 (additive, freeze-safe): difficulty surface for damage.js — same
+    // pair the campaign driver exposes, so sim.mission.diffCfg is
+    // driver-agnostic. startMatch already carries opts.difficulty here
+    // (menu → boot → matchOpts); this only EXPOSES it to the damage layer.
+    // Selftests never pass a difficulty → diffCfg null → identity damage.
+    difficulty: opts.difficulty || null,
+    diffCfg: resolveDifficulty(opts.difficulty, content && content.difficulty),
     // ---------------------------------------------------------- frozen triple
     start(sim) {
       SIM = sim;

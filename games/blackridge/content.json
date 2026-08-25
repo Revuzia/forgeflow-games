@@ -8,6 +8,12 @@
     "beatOrdering": "beats advance strictly in order; only the NEXT beat's trigger is armed (entering a later beat's area early does nothing). Known edge: a rusher entering the arcade during beat 3 can have 9 bots alive briefly (5 plaza + 4 arcade) — above LD's 8 content guidance, inside the 12 engine budget (R23); A1's spawner may queue above 12, never above."
   },
   "version": 2,
+  "difficulty": {
+    "_comment": "H2 survivability config — overrides core/pvp/pvp_tuning.js DIFFICULTY field-by-field. playerIncomingMult scales damage the HUMAN receives from bots ONLY (never bot-vs-bot, never player-outgoing — doctrine §2 honesty). bandShift (campaign only) moves each authored spawn band down the recruit<regular<hardened<veteran ladder, clamped (casual softens; 0 = authored mix). regenDelayS (optional, consumed by damage.js) overrides the player's regen delay — measured NOT needed at casual (H2 probe, deaths identical), so unset. HARD = identity: pre-H2 lethality byte-for-byte (closer 2026-08-25: bandShift hard 1->0 — +1 made HARD harder than the pre-change build, breaking the identity contract).",
+    "casual":   { "playerIncomingMult": 0.60, "bandShift": -1 },
+    "standard": { "playerIncomingMult": 0.80, "bandShift": 0 },
+    "hard":     { "playerIncomingMult": 1.00, "bandShift": 0 }
+  },
   "mission": {
     "id": "meridian_ward",
     "title": "Operation BLACKRIDGE — Meridian Ward",

@@ -54,6 +54,13 @@ export function createAudio(ctx) {
   let tinnitusLast = -100;        // sim-clock guard (max once / 20 s)
   let slideGain = null, slideSrc = null; // §7.4 slide scrape loop
   let muffleOpen = true;
+  // H1 (2026-08-25, owner request): laboured-breathing loop at CRITICAL hp.
+  // No breathing take exists in the CC0 set (assets/audio audited: steps/
+  // impacts/shots/ui/thunder/cloth only) — synthesized: bandpass noise with
+  // per-cycle inhale/exhale envelopes, scheduled like the heartbeat.
+  let breathSrc = null, breathGain = null, breathFilt = null, breathNext = 0;
+  let lowEpisode = false;         // hp dipped <50 while alive → recovery cue at full
+  let lastBreathT = 0;            // diagnostic (debugHp)
   const volumes = (ctx.content && ctx.content.reverbZones && ctx.content.reverbZones.volumes) || [];
   const defaultZone =
     (ctx.content && ctx.content.reverbZones && ctx.content.reverbZones.default) || "exterior";
@@ -369,6 +376,7 @@ export function createAudio(ctx) {
         engaged.clear();
         sfx.reset();
         music.start("mission");
+        breathStop(); lowEpisode = false;   // H1: no stale breathing across missions
       }));
       bridge.register("mission:phase", safe("mission:phase", (d) => music.onPhase(d)));
       bridge.register("mission:end", safe("mission:end", (d) => {
@@ -392,12 +400,15 @@ export function createAudio(ctx) {
       const sim = ctx.sim();
       const st = sim && sim.state;
 
-      // hp muffle + heartbeat (combat_spec §6)
+      // hp muffle + heartbeat (combat_spec §6) + laboured breathing (H1)
       if (st && st.player) {
         const hp = fin(st.player.hp, 100);
         const t = ac.currentTime;
         if (hp < 35 && st.player.alive) {
-          const f = 1100 + 18900 * Math.max(0, hp / 35);
+          // H1: curve steepened (linear → ^1.6) so CRITICAL sits noticeably
+          // deeper in the muffle; §6 endpoints preserved (35 hp → 20 kHz,
+          // 0 hp → 1.1 kHz).
+          const f = 1100 + 18900 * Math.pow(Math.max(0, hp / 35), 1.6);
           buses.hpMuffle.frequency.setTargetAtTime(fin(f, 20000), t, 0.12);
           muffleOpen = false;
           if (t >= heartNext) {
@@ -411,6 +422,24 @@ export function createAudio(ctx) {
           buses.hpMuffle.frequency.setTargetAtTime(20000, t, 0.4);
           muffleOpen = true;
         }
+
+        // H1 laboured breathing: starts below 30 hp (CRITICAL), hysteresis
+        // release at 40 hp so regen doesn't gate-chatter the loop. The loop
+        // feeds the limiter input directly (like heartbeat/tinnitus): the
+        // player's own body is never muffled by its own dying ears.
+        const critical = hp < 30 && st.player.alive;
+        if (critical && !breathSrc) breathStart();
+        else if (breathSrc && (hp >= 40 || !st.player.alive)) breathStop();
+        if (breathSrc && critical && t >= breathNext) {
+          breathCycle(Math.min(1, 1 - hp / 30));
+        }
+        // H1 recovery cue: hp dipped below 50, then regenned to FULL while
+        // alive → one soft inhale/exhale so "safe again" is as legible as
+        // "dying". Death clears the episode (a respawn must not sigh).
+        const maxHpA = (sim && sim.tuning && sim.tuning.maxHp) || 100;
+        if (!st.player.alive) lowEpisode = false;
+        else if (hp < 50) lowEpisode = true;
+        else if (lowEpisode && hp >= maxHpA - 0.5) { lowEpisode = false; recoverBreath(); }
 
         // §7.4 slide scrape: crouched at near-sprint speed = sliding (heuristic
         // read of frozen state; there is no slide event in the vocabulary)
@@ -465,6 +494,22 @@ export function createAudio(ctx) {
     },
 
     // ---- private extras (allowed additions; other lanes may call) ------------
+    // H1 diagnostic: harness-readable proof the low-hp layers are live (the
+    // operator cannot listen — gains + muffle Hz at each threshold ARE the
+    // verification record).
+    debugHp() {
+      return {
+        ctxState: ac ? ac.state : "none",
+        muffleHz: buses ? buses.hpMuffle.frequency.value : null,
+        duck: buses ? buses.duck.gain.value : null,
+        heartNext,
+        breathing: !!breathSrc,
+        breathGain: breathGain ? breathGain.gain.value : 0,
+        breathNext, lastBreathT, lowEpisode,
+        voices: env.voices,
+        acTime: ac ? ac.currentTime : 0,
+      };
+    },
     ui(kind) { if (ac && sfx) { try { sfx.ui(kind); } catch (e) { err(e, "ui"); } } },
     radioSquelch() { if (ac && sfx) { try { sfx.radioSquelch(); } catch (e) { err(e, "squelch"); } } },
 
@@ -547,6 +592,15 @@ export function createAudio(ctx) {
       } catch (e) { err(e, "muffle"); }
       await wait(400);
 
+      // H1 breathing paths: loop start → one cycle → stop, then recovery cue.
+      // Any AudioParam exception lands in `errors` and fails the gate.
+      breathStart();
+      breathCycle(0.8);
+      await wait(250);
+      breathStop();
+      recoverBreath();
+      await wait(300);
+
       return {
         ok: errors.length === 0,
         ctxState: ac.state,
@@ -613,6 +667,80 @@ export function createAudio(ctx) {
       o.start(t); o.stop(t + 2.25);
       env.voices++;
     } catch (e) { err(e, "tinnitus"); }
+  }
+
+  // ---- H1 laboured breathing (2026-08-25, owner request) --------------------
+  // Persistent noise loop; each cycle schedules an inhale (rising, brighter)
+  // and a heavier exhale (louder, darker) on the shared gain/filter. depth 0..1
+  // scales rate (23 → 37 breaths/min) and volume. Linear ramps only (lane rule).
+  function breathStart() {
+    if (breathSrc || !ac || !buses) return;
+    try {
+      breathSrc = ac.createBufferSource();
+      breathSrc.buffer = env.noiseBuf();
+      breathSrc.loop = true;
+      breathFilt = ac.createBiquadFilter();
+      breathFilt.type = "bandpass"; breathFilt.frequency.value = 620; breathFilt.Q.value = 0.9;
+      breathGain = ac.createGain(); breathGain.gain.value = 0;
+      breathSrc.connect(breathFilt); breathFilt.connect(breathGain);
+      breathGain.connect(buses.limiter);
+      breathSrc.start();
+      breathNext = ac.currentTime + 0.12;
+    } catch (e) { err(e, "breath:start"); breathSrc = null; breathGain = null; breathFilt = null; }
+  }
+  function breathStop() {
+    if (!breathSrc) return;
+    const s = breathSrc, g = breathGain;
+    breathSrc = null; breathGain = null; breathFilt = null;
+    try {
+      g.gain.cancelScheduledValues(ac.currentTime);
+      g.gain.setTargetAtTime(0, ac.currentTime, 0.15);
+      setTimeout(() => { try { s.stop(); } catch (e) {} }, 900);
+    } catch (e) {}
+  }
+  function breathCycle(depth) {
+    try {
+      const d = Math.min(1, Math.max(0, fin(depth, 0)));
+      const t = Math.max(ac.currentTime, breathNext);
+      const cyc = 2.6 - 1.0 * d;                    // full cycle length, s
+      const inD = cyc * 0.32, exD = cyc * 0.42;     // rest of the cycle = gap
+      const peak = 0.045 + 0.105 * d;
+      const g = breathGain.gain, f = breathFilt.frequency;
+      // inhale — rising, brighter
+      g.setValueAtTime(0.0001, t);
+      g.linearRampToValueAtTime(gclamp(peak), t + inD * 0.7);
+      g.linearRampToValueAtTime(gclamp(peak * 0.25), t + inD);
+      f.setValueAtTime(520, t);
+      f.linearRampToValueAtTime(920, t + inD);
+      // exhale — heavier, darker
+      g.linearRampToValueAtTime(gclamp(peak * 1.25), t + inD + exD * 0.35);
+      g.linearRampToValueAtTime(0.0001, t + inD + exD);
+      f.linearRampToValueAtTime(420, t + inD + exD);
+      breathNext = t + cyc;
+      lastBreathT = t;
+      env.voices++;
+    } catch (e) { err(e, "breath:cycle"); }
+  }
+  // one-shot soft inhale/exhale when regen completes after a low episode
+  function recoverBreath() {
+    try {
+      const t = ac.currentTime;
+      const src = ac.createBufferSource(); src.buffer = env.noiseBuf(); src.loop = true;
+      const f = ac.createBiquadFilter();
+      f.type = "bandpass"; f.Q.value = 0.8;
+      f.frequency.setValueAtTime(680, t);
+      f.frequency.linearRampToValueAtTime(980, t + 0.5);   // inhale opens
+      f.frequency.linearRampToValueAtTime(380, t + 1.6);   // exhale settles
+      const g = ac.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.045, t + 0.45);     // soft inhale
+      g.gain.linearRampToValueAtTime(0.012, t + 0.7);
+      g.gain.linearRampToValueAtTime(0.055, t + 0.95);     // long exhale
+      g.gain.linearRampToValueAtTime(0.0001, t + 1.8);
+      src.connect(f); f.connect(g); g.connect(buses.limiter);
+      src.start(t); src.stop(t + 1.9);
+      env.voices++;
+    } catch (e) { err(e, "breath:recover"); }
   }
 
   // low double-thump heartbeat under the muffle (feeds limiter directly)

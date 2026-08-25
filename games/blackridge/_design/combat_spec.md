@@ -667,6 +667,22 @@ rule applied to dialogue).
 - Explosion within 6 m: 2.2 s tinnitus ring + duck −10 dB, max once per 20 s.
 - Damage direction + flinch per §3.4/§4.3. Death: 1.2 s slow-fade kill-cam-less
   cut to the shell's mission-failed flow (ESC/forfeit contracts per doctrine §6).
+- *Amendment 2026-08-25 (owner playtest — low-health legibility + survivability):*
+  hp fractions normalize by tuning maxHp (sp 100 / pvp 110), and:
+  (a) **damage-reactive health bar** per visual_target §6 amendment — fades in on
+  damage, segmented 10 ticks, amber ≤60%, red ≤30%, fades 1.5 s after regen
+  completes; the permanent-bar ban stands. (b) The critical **pulse is
+  tempo-matched to the heartbeat bpm** (58→82 by 1 − hp/35) instead of flat
+  1.2 Hz; same ±0.12 depth. (c) Desat is two-stage: saturate(.8) below 30 hp,
+  saturate(.62) below 15. (d) Muffle sweep curve steepened to (hp/35)^1.6,
+  endpoints unchanged. (e) **Laboured-breathing loop** (synth bandpass noise,
+  23→37 bpm by depth) below 30 hp, hysteresis release at 40; one soft
+  recovery breath when regen completes after dipping below 50.
+  (f) **Difficulty scales damage the PLAYER RECEIVES from bots** (CoD lever):
+  CASUAL ×0.60 (+ campaign authored bands shifted one rung down), STANDARD
+  ×0.80, HARD ×1.00 = byte-identical pre-amendment lethality. Bot-vs-bot,
+  player-outgoing, and §5.5 band honesty untouched; selector defaults
+  STANDARD, persisted, shared campaign/PVP.
 
 ---
 

@@ -20,9 +20,18 @@
 // free. Radio lines + set-pieces are queued on private drains pending the
 // `radio`/`setpiece` freeze amendments (see lane report needsElsewhere).
 
+import { resolveDifficulty } from "../pvp/pvp_tuning.js";
+
 const ENGINE_BOT_CAP = 12;
 const TRIGGER_KINDS = ["missionStart", "beat", "reach", "contact", "waveAlive", "objective", "anyOf"];
 const DEFAULT_REACH_RADIUS = 3;
+
+// H2 campaign difficulty — combat_spec §5.5 band ladder, ordered soft→hard.
+// bandShift moves each AUTHORED spawn band one rung down (casual; hard = 0,
+// the authored mix — identity with pre-difficulty builds),
+// clamped to the ladder — bands stay honest per GAME_DOCTRINE §2 (a shifted
+// bot is exactly an authored band, never an invented one).
+const BAND_ORDER = ["recruit", "regular", "hardened", "veteran"];
 
 // ---------------------------------------------------------------- validation
 export function validateContent(content, opts = {}) {
@@ -153,6 +162,20 @@ export function makeMission(content, emit) {
   for (const o of OBJECTIVES) objById[o.id] = o;
   const beatOfWave = {};
   for (const b of beats) for (const w of b.waves || []) beatOfWave[w] = b.beat;
+
+  // H2: campaign difficulty. content.difficultySelected is written by the
+  // briefing screen (menu.js) before deploy; headless probes never set it,
+  // so diffCfg is null there and every pre-H2 expectation holds byte-for-byte.
+  const diffId = (content.difficultySelected && typeof content.difficultySelected === "string")
+    ? content.difficultySelected : null;
+  const diffCfg = resolveDifficulty(diffId, content.difficulty);
+
+  function shiftBand(band) {
+    if (!diffCfg || !diffCfg.bandShift) return band;
+    const i = BAND_ORDER.indexOf(band || "regular");
+    if (i < 0) return band;
+    return BAND_ORDER[Math.max(0, Math.min(BAND_ORDER.length - 1, i + diffCfg.bandShift))];
+  }
 
   const ms = {
     started: false,
@@ -308,7 +331,13 @@ export function makeMission(content, emit) {
     const stealth = ms.stealthReplayWaves && ms.stealthReplayWaves.has(wid);
     if (stealth) ms.stealthReplayWaves.delete(wid);
     for (const spec of w.bots) {
-      ms.spawnQueue.push(stealth ? { ...spec, alerted: false, wave: wid } : { ...spec, wave: wid });
+      // H2: per-difficulty band shift — applied at queue time so restarts,
+      // checkpoint replays and the waveAlive triggers all see one consistent
+      // roster for the selected difficulty.
+      const band = shiftBand(spec.band);
+      ms.spawnQueue.push(stealth
+        ? { ...spec, band, alerted: false, wave: wid }
+        : { ...spec, band, wave: wid });
     }
   }
 
@@ -519,7 +548,7 @@ export function makeMission(content, emit) {
       p.yaw = b.checkpoint.yaw || 0;
       p.pitch = 0;
       p.vel = [0, 0, 0];
-      p.hp = 100;
+      p.hp = sim.tuning ? sim.tuning.maxHp : 100; // H2: was hardcoded 100 (sp maxHp IS 100 — identity)
       p.alive = true;
       p.lastDamageT = -999;
       if (cp) {
@@ -546,6 +575,10 @@ export function makeMission(content, emit) {
     drainSetPieces() { const q = ms.setPieceQueue || []; ms.setPieceQueue = []; return q; },
     get beat() { return ms.beatIdx; },
     get beatStartT() { return ms.beatStartT; },
+    // H2: difficulty surface — damage.js reads diffCfg via sim.mission (the
+    // match driver exposes the same pair, so the read is driver-agnostic).
+    difficulty: diffId,
+    diffCfg,
     get objectives() { return { ...ms.obj }; },
     get pickups() { return { spawned: { ...ms.pickupsSpawned }, taken: { ...ms.pickupsTaken } }; },
     _ms: ms,

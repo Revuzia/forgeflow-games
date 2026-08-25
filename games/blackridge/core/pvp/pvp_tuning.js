@@ -81,6 +81,49 @@ export function getTuning(id) {
   return TUNINGS[id === "pvp" ? "pvp" : "sp"];
 }
 
+// ------------------------------------------------------------- DIFFICULTY (H2)
+// Survivability by difficulty — owner feedback 2026-08-24 ("death shouldn't
+// occur so fast unless it's on HIGH difficulty"). The genre-standard lever:
+// a multiplier on damage the HUMAN PLAYER RECEIVES from bots (CoD's model).
+// GAME_DOCTRINE §2 honesty note: bands still change only perception/reaction/
+// accuracy/aggression — this scales the player's incoming damage, never bot
+// omniscience, never bot-vs-bot damage, never player outgoing damage.
+//
+//   playerIncomingMult — damage.js applies it to bot→player damage only
+//   bandShift          — CAMPAIGN only (mission.js): per-beat authored band
+//                        mix shifted one band down (casual; 0 = authored mix)
+//                        within combat_spec §5.5's band ladder. PVP rosters
+//                        already band-mix per difficulty (roster.js presets)
+//                        and ignore this field.
+//   regenDelayS        — optional player regen-delay override. MEASURED and
+//                        NOT applied (H2 probe: casual 4.5 s vs 4.0 s over
+//                        8×60 s pinned fights → identical deaths 141=141;
+//                        the incoming mult carries the survivability). The
+//                        seam stays live in damage.js for data-only tuning.
+//
+// HARD is the identity row: byte-identical lethality to pre-H2 builds
+// (closer 2026-08-25: bandShift hard 1->0 — the +1 shifted campaign beat-1
+// recruits to regulars, breaking the identity contract this comment states).
+// content.json's top-level "difficulty" block (same shape) overrides these
+// defaults field-by-field, so tuning is a data change (resolveDifficulty).
+//
+// CONTRACT (probe safety): resolveDifficulty(null/unknown) returns null —
+// NO scaling. Headless selftests never select a difficulty, so every
+// existing probe expectation is byte-identical by construction; the live
+// game always selects one (menu default STANDARD).
+export const DIFFICULTY = {
+  casual:   { playerIncomingMult: 0.60, bandShift: -1 },
+  standard: { playerIncomingMult: 0.80, bandShift: 0 },
+  hard:     { playerIncomingMult: 1.00, bandShift: 0 },
+};
+
+export function resolveDifficulty(id, contentDiff) {
+  if (!id || !DIFFICULTY[id]) return null;
+  const base = DIFFICULTY[id];
+  const over = contentDiff && contentDiff[id];
+  return over && typeof over === "object" ? { ...base, ...over } : base;
+}
+
 // ---------------------------------------------------------------- applyTuning
 // pvp_design §4.0: ONE fork point, not a forked table. Returns the weapons
 // table with tuning.weaponDeltas merged one level deep (top-level scalar

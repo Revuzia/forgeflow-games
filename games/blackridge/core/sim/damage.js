@@ -50,6 +50,21 @@ export function applyDamage(sim, who, amount, attacker = null, part = "body", sr
   // OOB backstop damage bypasses it (src 'oob' — the timer already ran).
   if (sim.match && src !== "oob" && sim.match.isProtected(who)) return;
 
+  // -- H2 survivability: difficulty scales damage the HUMAN receives from
+  // bots — the genre lever (CoD model; doctrine §2 honesty: never bot-vs-bot,
+  // never player-outgoing, never bot perception). diffCfg is null unless a
+  // difficulty was EXPLICITLY selected (menu / startMatch), so every headless
+  // probe stays byte-identical; HARD's mult is 1.00 (identity) by data.
+  // Scaled BEFORE match.onDamage so assist/damage bookkeeping sees the real
+  // amount. attacker !== 'P' keeps self-damage at 100%; oob/env (attacker
+  // null) unscaled.
+  if (who === "P" && attacker != null && attacker !== "P") {
+    const dcfg = sim.mission && sim.mission.diffCfg;
+    if (dcfg && dcfg.playerIncomingMult != null && dcfg.playerIncomingMult !== 1) {
+      amount *= dcfg.playerIncomingMult;
+    }
+  }
+
   // additive event fields (freeze amendment d): actor/team attribution
   const _vA = sim.match ? sim.match.m.actorOf(who) : null;
   const _aA = sim.match && attacker != null ? sim.match.m.actorOf(attacker) : null;
@@ -137,8 +152,14 @@ export function stepHealth(sim, dt) {
   const S = sim.state;
   const t = sim.tuning;
   const maxHp = t ? t.maxHp : MAX_HP;
-  const regenDelayS = t ? t.regenDelayS : REGEN_DELAY_S;
+  let regenDelayS = t ? t.regenDelayS : REGEN_DELAY_S;
   const regenPerS = t ? t.regenPerS : REGEN_PER_S;
+  // H2: optional per-difficulty player regen-delay override (data block).
+  // Player only — the bot retreat-regen path below never reads the delay.
+  {
+    const dcfg = sim.mission && sim.mission.diffCfg;
+    if (dcfg && dcfg.regenDelayS != null) regenDelayS = dcfg.regenDelayS;
+  }
   const botRetreatPerS = regenPerS * (t ? t.botRetreatRegenMult : BOT_RETREAT_REGEN_MULT);
   const p = S.player;
   if (p.alive && p.hp < maxHp && S.time - (p.lastDamageT ?? -999) >= regenDelayS) {

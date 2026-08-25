@@ -43,6 +43,22 @@ const PITCH = {
 
 const DIFFICULTIES = ["casual", "standard", "hard"];
 
+// H2: ONE persisted difficulty, shared by PVP mode-select AND the campaign
+// briefing (menu.js imports these). Default STANDARD (C11). Same
+// localStorage-only persistence policy as the match stats (modes.md §6.5).
+const DIFF_KEY = "blackridge.difficulty.v1";
+export function loadDifficulty() {
+  try {
+    const v = typeof localStorage !== "undefined" && localStorage.getItem(DIFF_KEY);
+    if (v && DIFFICULTIES.indexOf(v) >= 0) return v;
+  } catch (e) { /* blocked storage → default */ }
+  return "standard";
+}
+export function saveDifficulty(d) {
+  if (DIFFICULTIES.indexOf(d) < 0) return;
+  try { localStorage.setItem(DIFF_KEY, d); } catch (e) { /* best-effort */ }
+}
+
 let styleDone = false;
 function ensureCardStyle() {
   if (styleDone || typeof document === "undefined") return;
@@ -81,7 +97,7 @@ export function createModeSelect(ctx, cb) {
 
   const state = {
     mode: "tdm",
-    difficulty: "standard",
+    difficulty: loadDifficulty(), // H2: persisted; default "standard" (C11)
     panel: null,
   };
 
@@ -123,6 +139,7 @@ export function createModeSelect(ctx, cb) {
   }
 
   function render(panel) {
+    if (panel) state.difficulty = loadDifficulty(); // H2: screen (re)open → sync with the campaign row's choice
     state.panel = panel || state.panel;
     if (!state.panel) return;
     const cards = ["tdm", "ctf", "ffa"].map((id) => {
@@ -160,6 +177,7 @@ export function createModeSelect(ctx, cb) {
     state.panel.querySelectorAll(".w6-diff button").forEach((b) => {
       b.addEventListener("click", () => {
         state.difficulty = b.getAttribute("data-diff");
+        saveDifficulty(state.difficulty); // H2: shared with the campaign row
         render();
       });
     });

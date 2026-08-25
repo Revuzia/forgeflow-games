@@ -350,6 +350,12 @@ high transparency, zero ornament. **Mil-sim clean, NOT sci-fi neon: amateur tell
   by damage taken (NOT binary — last-circle's flat 0.4-alpha-for-0.7 s tint is
   the documented anti-pattern), desaturation ramp below 35% HP, faint pulse +
   heartbeat at critical. Regen clears with a subtle inward wipe.
+  - *Amendment 2026-08-25 (owner playtest request):* a **damage-reactive** health
+    bar is approved — fades in on first damage, segmented (10 ticks), sits above
+    the ammo block in the existing type/colour system (off-white ink, amber ≤60%,
+    red reserved for critical ≤30%, pulse tempo-matched to the audio heartbeat),
+    lingers while below max and fades out ~1.5 s after regen completes. The ban
+    on a PERMANENT always-on health bar stands.
 - **Crosshair states**: 4 hairline ticks + optional center dot; gap breathes off
   the ACTUAL next-shot spread (last-circle pattern — the crosshair never lies);
   expands with fire/sprint, fades OUT entirely during ADS; ticks blank while

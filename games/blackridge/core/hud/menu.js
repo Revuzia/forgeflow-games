@@ -32,7 +32,7 @@ import { shell, isMissionLive, ensureShellStyle } from "./hud.js";
 import { MODES, MODE_IDS, registerMode } from "../match/match.js";
 import { createMatchHud } from "./match_hud.js";
 import { createScoreboard } from "./scoreboard.js";
-import { createModeSelect } from "./mode_select.js";
+import { createModeSelect, loadDifficulty, saveDifficulty } from "./mode_select.js";
 import { createFlagView } from "../match/flagview.js";
 
 // ---------------------------------------------------------------------------
@@ -150,6 +150,7 @@ export function createMenu(ctx, cb) {
   // ------------------------------------------------------------------ render
   let deploying = false;      // campaign deploy single-flight
   let matchStarting = false;  // match start single-flight
+  let campaignDiff = loadDifficulty(); // H2: campaign difficulty (persisted, default STANDARD)
 
   function navBtn(action, label, cls = "", on = false) {
     return `<button class="a10-item ${cls}${on ? " on" : ""}" data-a="${action}">${label}</button>`;
@@ -195,8 +196,13 @@ export function createMenu(ctx, cb) {
     } else if (screen === "modeselect") {
       modeSelect.render(panel);
     } else if (screen === "briefing") {
+      campaignDiff = loadDifficulty(); // H2: stay in sync with the PVP row's persisted choice
       const rows = CONTROLS.map(([k, v]) =>
         `<div class="a10-row"><span class="lbl">${k}</span><span class="val" style="min-width:0;font-size:11.5px;letter-spacing:.08em;opacity:.75">${v}</span></div>`).join("");
+      // H2: same CASUAL/STANDARD/HARD row as mode_select (its w6-diff style is
+      // registered by createModeSelect above), persisted in the same profile.
+      const diffRow = ["casual", "standard", "hard"].map((d) =>
+        `<button data-cdiff="${d}" class="${campaignDiff === d ? "on" : ""}">${d}</button>`).join("");
       panel.innerHTML =
         `<h2>Briefing — Operation ${esc(opName)}</h2>` +
         `<div class="body">` +
@@ -204,6 +210,8 @@ export function createMenu(ctx, cb) {
         `<div style="font-size:11px;letter-spacing:.22em;opacity:.55;margin-bottom:4px">CALLSIGN ` +
         `<span class="amber">${esc(fiction.playerCallsign || "RAVEN 2-1")}</span>` +
         ` — OPFOR <span class="amber">${esc(fiction.enemy || "")}</span></div>` +
+        `<div style="font-size:10px;letter-spacing:.24em;opacity:.5;margin:14px 0 6px">DIFFICULTY</div>` +
+        `<div class="w6-diff">${diffRow}</div>` +
         `<div class="a10-err" style="display:none;color:var(--a10-red);font-size:12px;` +
         `letter-spacing:.08em;margin:10px 0"></div>` +
         `<div style="margin-top:18px">${rows}</div>` +
@@ -228,6 +236,12 @@ Full per-asset provenance: CREDITS.md</pre></div>`;
   // ------------------------------------------------------------------ actions
   function deploy() {
     if (deploying) return;
+    // H2: hand the selected campaign difficulty to the mission driver.
+    // ctx.content is the SAME object boot passes to createSim on deploy, and
+    // makeMission reads content.difficultySelected at construction — no boot
+    // signature change needed. Headless probes never set this field, so their
+    // sims stay identity (resolveDifficulty(null) → null).
+    if (ctx.content) ctx.content.difficultySelected = campaignDiff;
     deploying = true;
     render("briefing");
     Promise.resolve(cb && cb.onStartMission ? cb.onStartMission() : null)
@@ -282,6 +296,14 @@ Full per-asset provenance: CREDITS.md</pre></div>`;
   }
 
   root.addEventListener("click", (e) => {
+    // H2: campaign difficulty row (briefing screen)
+    const cd = e.target && e.target.getAttribute && e.target.getAttribute("data-cdiff");
+    if (cd) {
+      campaignDiff = cd;
+      saveDifficulty(cd);
+      if (menu._screen === "briefing") render("briefing");
+      return;
+    }
     const a = e.target && e.target.getAttribute && e.target.getAttribute("data-a");
     if (!a) return;
     if (a === "campaign") menu.show("briefing");
