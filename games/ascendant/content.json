@@ -1,0 +1,30 @@
+{
+  "title": "ASCENDANT",
+  "slug": "ascendant",
+  "genre": "first-person-parkour",
+  "renderer": "three",
+  "tagline": "Every death is a lesson. The clock keeps running.",
+  "view": { "width": 1280, "height": 720, "background": "#05070d" },
+  "howToPlay": [
+    "WASD to move, mouse to look, SPACE to jump. Hold SPACE longer to jump higher — a tap is a short hop, a full hold clears just over two metres.",
+    "Hold SHIFT to sprint. Sprinting adds about 40% to your jump distance, so a gap you cannot make from a standstill often opens up with a run-up.",
+    "You keep coyote time (a fraction of a second of grace after leaving a ledge) and jump buffering (press early and it fires the instant you land). Trust them — they are there so a good input is never eaten.",
+    "Glowing rings are checkpoints. Touch one and every death after it returns you there, with the hazards reset to the same timing.",
+    "Hazards run on a fixed clock, not on luck. The gauntlet that killed you will present exactly the same pattern next attempt.",
+    "Ice removes your grip, conveyors move the floor, wind pushes you off the edge, and lava, lasers, spikes, saws and crushers all kill instantly.",
+    "R restarts the stage, T sends you back to your last checkpoint, TAB opens stage select, ESC pauses."
+  ],
+  "tips": [
+    "Bright edge stripes mark every landable surface — if it does not have one, you cannot stand on it.",
+    "Watch a hazard through one full cycle before committing. Every one of them telegraphs before it kills.",
+    "On ice, stop steering before you want to stop moving.",
+    "Jump pads launch you to a fixed height. Add your own jump on the frame you touch the pad for a little extra.",
+    "The orbs are never on the main route. If a coin looks easy, you are on the wrong line."
+  ],
+  "credits": {
+    "worlds": "Four hand-authored worlds — Neon Dojo, Lava Foundry, Frozen Spire, Sky Temple — each with its own lighting, sky, materials and music bed",
+    "art": "Procedural PBR material library (albedo/roughness/metalness/normal generated at runtime), procedural skies, plus CC0 prop models from the ForgeFlow asset library (attribution in assets/props/CREDITS.txt)",
+    "audio": "Fully procedural Web Audio — five generative music beds and every sound effect synthesised at runtime, no sample files",
+    "engine": "Three.js r172, ES modules, no build step"
+  }
+}

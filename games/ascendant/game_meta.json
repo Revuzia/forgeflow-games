@@ -1,0 +1,22 @@
+{
+  "title": "Ascendant",
+  "short_description": "Ascendant — a first-person parkour gauntlet across four worlds. Precision jumps, collapsing platforms, sweeping blades and rising lava, with checkpoints that make every death a lesson instead of a punishment.",
+  "description": "ASCENDANT is a first-person obstacle course built for people who like the moment a jump lands by two centimetres.\n\nYou start in the Sanctum, a quiet hub ringed by four portals, and you climb. NEON DOJO teaches you the language — precision beams, moving platforms, panels that blink out from under your boots. LAVA FOUNDRY takes it underground, where crushers slam on a beat, conveyor belts fight your footing and the lava keeps rising. FROZEN SPIRE takes away your friction. SKY TEMPLE takes away the ground.\n\nThe movement is the game: momentum-preserving acceleration, coyote time, jump buffering, variable jump height, real air control that lets you save a bad launch, and wall-slides you can push off. Nothing floats. Nothing sticks. Every hazard runs on a deterministic clock, so the gauntlet that killed you presents exactly the same timing on the next attempt — you learn it, you beat it.\n\nCheckpoints are frequent and fair, the respawn is under a second, and the timer keeps running. Beat your best. Collect the orbs on the risky line. Clear a world.",
+  "genre": "platformer",
+  "sub_genre": "first-person-parkour",
+  "difficulty": "medium",
+  "controls_keyboard": "WASD move · Mouse look · SPACE jump (hold for height) · SHIFT sprint · CTRL crouch · R restart stage · T back to checkpoint · TAB stage select · ESC pause",
+  "tags": [
+    "platformer",
+    "parkour",
+    "obby",
+    "first-person",
+    "3d",
+    "precision",
+    "speedrun",
+    "singleplayer",
+    "obstacle-course",
+    "time-attack"
+  ],
+  "status": "unpublished"
+}

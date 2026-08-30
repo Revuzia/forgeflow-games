@@ -1,0 +1,1141 @@
+/* ============================================================================
+ * ASCENDANT — runtime/core/input.js
+ * Contract §4.  Pointer lock, layout-independent keyboard, remappable bindings,
+ * gamepad (standard mapping) and a touch fallback — merged into one frame-stable
+ * state block that consumers read after Input.update(dt).
+ *
+ * Integration notes for other modules
+ * -----------------------------------
+ *  • `look.dx/.dy` are RAW MOUSE PIXELS already multiplied by sensitivity and by
+ *    the invert-Y sign (contract: "already sens-scaled").  FPCamera should NOT
+ *    multiply by Settings.sens again — convert pixels to radians with
+ *    `RAD_PER_PX` (exported) or use the pre-converted `lookRad`.
+ *  • Input does NOT import settings.js (keeps core dependency-free).  It reads
+ *    the `ascendant.settings` localStorage snapshot for `sens`/`invertY` and
+ *    exposes `setSensitivity(sens, invertY)` so Game can push live changes from
+ *    `Settings.on(...)`.
+ *  • `mute` (KeyM) is reported as an edge ONLY.  game_controls.js already owns
+ *    the page-level mute on KeyM — toggling here too would cancel it out.
+ *  • `fullscreen` (KeyF) is handled here (index.html sets `fs_hotkey:false`, i.e.
+ *    the game claims F) unless a listener is registered via `on('fullscreen')`.
+ * ==========================================================================*/
+
+const IS_BROWSER = typeof window !== 'undefined' && typeof document !== 'undefined';
+
+/** Radians of yaw/pitch per sens-scaled mouse pixel. */
+export const RAD_PER_PX = 0.0022;
+
+/** Every logical action, in a stable order (iterated per frame — no allocation). */
+export const ACTIONS = Object.freeze([
+  'forward', 'back', 'left', 'right',
+  'jump', 'sprint', 'crouch', 'interact',
+  'restart', 'respawnToCheckpoint',
+  'pause', 'stageSelect', 'mute', 'fullscreen', 'dev',
+]);
+
+/** Actions that stay live while `suspended` (menus need them). */
+const MENU_ACTIONS = Object.freeze({
+  pause: 1, stageSelect: 1, mute: 1, fullscreen: 1, dev: 1,
+});
+
+/** Default remappable bindings, by KeyboardEvent.code (layout independent). */
+export const DEFAULT_BINDINGS = Object.freeze({
+  forward: ['KeyW', 'ArrowUp'],
+  back: ['KeyS', 'ArrowDown'],
+  left: ['KeyA', 'ArrowLeft'],
+  right: ['KeyD', 'ArrowRight'],
+  jump: ['Space'],
+  sprint: ['ShiftLeft', 'ShiftRight'],
+  crouch: ['ControlLeft', 'KeyC'],
+  interact: ['KeyE'],
+  restart: ['KeyR'],
+  respawnToCheckpoint: ['KeyT'],
+  pause: ['Escape'],
+  stageSelect: ['Tab'],
+  mute: ['KeyM'],
+  fullscreen: ['KeyF'],
+  dev: ['Backquote'],
+});
+
+const BINDINGS_KEY = 'ascendant.bindings.v1';
+const SETTINGS_KEY = 'ascendant.settings';
+
+/** Codes whose browser default we swallow while the game owns the page. */
+const SWALLOW = Object.freeze({
+  Space: 1, Tab: 1, ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1,
+  Backquote: 1, F1: 0,
+});
+
+/* Standard-gamepad button indices (W3C "standard" mapping). */
+const PAD_A = 0, PAD_B = 1, PAD_X = 2, PAD_Y = 3;
+const PAD_LB = 4, PAD_RB = 5, PAD_LT = 6, PAD_RT = 7;
+const PAD_SELECT = 8, PAD_START = 9;
+const PAD_DU = 12, PAD_DD = 13, PAD_DL = 14, PAD_DR = 15;
+const PAD_BUTTON_COUNT = 18;
+
+const PAD_ACTION_BUTTONS = Object.freeze([
+  [PAD_A, 'jump'],
+  [PAD_B, 'crouch'],
+  [PAD_X, 'interact'],
+  [PAD_Y, 'respawnToCheckpoint'],
+  [PAD_LB, 'crouch'],
+  [PAD_RB, 'sprint'],
+  [PAD_LT, 'sprint'],
+  [PAD_RT, 'sprint'],
+  [PAD_SELECT, 'stageSelect'],
+  [PAD_START, 'pause'],
+  [PAD_DU, 'forward'],
+  [PAD_DD, 'back'],
+  [PAD_DL, 'left'],
+  [PAD_DR, 'right'],
+]);
+
+/* Tuning for analog sticks. */
+const STICK_DEAD_MOVE = 0.18;
+const STICK_DEAD_LOOK = 0.14;
+const LOOK_CURVE = 1.65;          // response curve exponent for the right stick
+const PAD_LOOK_PX_PER_SEC = 1450; // pixel-equivalents/sec at full stick deflection
+const TRIGGER_ON = 0.35;
+
+/* ---- module-scope scratch (never allocate in update) ---------------------- */
+const _scratch = { mx: 0, my: 0, len: 0 };
+
+function clamp01(v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
+function isFiniteNum(v) { return typeof v === 'number' && Number.isFinite(v); }
+
+/** Radial deadzone + response curve, sign preserved. */
+function curveAxis(v, dead, expo) {
+  const a = Math.abs(v);
+  if (a <= dead) return 0;
+  const n = (a - dead) / (1 - dead);
+  const c = expo === 1 ? n : Math.pow(n, expo);
+  return v < 0 ? -c : c;
+}
+
+/** Pretty label for a binding code, for the controls UI. */
+export function codeLabel(code) {
+  if (!code) return '—';
+  if (code.startsWith('Key')) return code.slice(3);
+  if (code.startsWith('Digit')) return code.slice(5);
+  if (code.startsWith('Numpad')) return 'Num ' + code.slice(6);
+  if (code.startsWith('Arrow')) return code.slice(5) + ' Arrow';
+  if (code.startsWith('Mouse')) {
+    const n = code.slice(5);
+    return n === '0' ? 'Left Click' : n === '1' ? 'Middle Click' : n === '2' ? 'Right Click' : 'Mouse ' + n;
+  }
+  switch (code) {
+    case 'Space': return 'Space';
+    case 'ShiftLeft': return 'L Shift';
+    case 'ShiftRight': return 'R Shift';
+    case 'ControlLeft': return 'L Ctrl';
+    case 'ControlRight': return 'R Ctrl';
+    case 'AltLeft': return 'L Alt';
+    case 'AltRight': return 'R Alt';
+    case 'Escape': return 'Esc';
+    case 'Backquote': return '`';
+    case 'Tab': return 'Tab';
+    case 'Enter': return 'Enter';
+    case 'Backslash': return '\\';
+    case 'Minus': return '-';
+    case 'Equal': return '=';
+    default: return code;
+  }
+}
+
+/* ==========================================================================
+ * Input
+ * ========================================================================*/
+export class Input {
+  /**
+   * @param {HTMLElement} domElement canvas (or any element) that owns pointer lock
+   */
+  constructor(domElement) {
+    this.dom = domElement || (IS_BROWSER ? document.body : null);
+
+    /* ---- public contract state ---- */
+    this.move = { x: 0, y: 0 };
+    this.look = { dx: 0, dy: 0 };        // sens-scaled pixels, consumed by camera
+    this.lookRad = { dx: 0, dy: 0 };     // same, pre-converted to radians
+
+    this.jump = false; this.jumpPressed = false; this.jumpReleased = false;
+    this.sprint = false; this.sprintPressed = false; this.sprintReleased = false;
+    this.crouch = false; this.crouchPressed = false; this.crouchReleased = false;
+    this.interact = false; this.interactPressed = false;
+    this.restart = false; this.restartPressed = false;
+    this.respawnPressed = false;
+    this.pausePressed = false;
+    this.stageSelectPressed = false;
+    this.mutePressed = false;
+    this.fullscreenPressed = false;
+    this.devPressed = false;
+    this.anyPressed = false;
+
+    this.locked = false;
+    this._suspended = false;   // public accessor `suspended` is defined below
+
+    /* ---- config ---- */
+    this.bindings = this._loadBindings();
+    this.sensitivity = 1;
+    this.invertY = false;
+    this.autoLock = true;          // click-to-lock on the canvas
+    this.touchLookSens = 1.35;
+
+    /* ---- device state ---- */
+    this.hasTouch = IS_BROWSER && this._detectCoarsePointer();
+    this.touchActive = false;
+    this.gamepadConnected = false;
+    this.gamepadId = '';
+    this._padIndex = -1;
+
+    /* ---- internals ---- */
+    this._acts = Object.create(null);
+    for (let i = 0; i < ACTIONS.length; i++) {
+      this._acts[ACTIONS[i]] = {
+        kbd: false, pad: false, touch: false,
+        held: false, pressed: false, released: false,
+        pressQ: 0, releaseQ: 0,           // events accumulated between frames
+      };
+    }
+    this._codeMap = Object.create(null);
+    this._rebuildCodeMap();
+
+    this._downCodes = Object.create(null);
+    this._mouseDX = 0;
+    this._mouseDY = 0;
+    this._padLookX = 0;
+    this._padLookY = 0;
+    this._padMoveX = 0;
+    this._padMoveY = 0;
+    this._padPrev = new Uint8Array(PAD_BUTTON_COUNT);
+    this._padCur = new Uint8Array(PAD_BUTTON_COUNT);
+
+    this._listeners = new Map();
+    this._lockWanted = false;
+    this._lockRetryAt = 0;
+    this._lastPauseEmit = -1e9;
+    this._unadjustedOk = true;
+    this._destroyed = false;
+
+    this._touchUI = null;
+    this._touchStick = { id: -1, baseX: 0, baseY: 0, x: 0, y: 0 };
+    this._touchLook = { id: -1, x: 0, y: 0 };
+
+    this._readSettingsSnapshot();
+    if (IS_BROWSER) this._attach();
+    if (this.hasTouch) this._buildTouchUI();
+  }
+
+  /* ======================================================================
+   * Event emitter — 'lock' | 'unlock' | 'pause' | 'blur' | 'bindings' |
+   *                 'lockerror' | 'fullscreen' | 'mute' | 'gamepad'
+   * ====================================================================*/
+  on(evt, fn) {
+    if (typeof fn !== 'function') return this;
+    let a = this._listeners.get(evt);
+    if (!a) { a = []; this._listeners.set(evt, a); }
+    if (a.indexOf(fn) === -1) a.push(fn);
+    return this;
+  }
+
+  off(evt, fn) {
+    const a = this._listeners.get(evt);
+    if (!a) return this;
+    const i = a.indexOf(fn);
+    if (i !== -1) a.splice(i, 1);
+    return this;
+  }
+
+  _emit(evt, arg) {
+    const a = this._listeners.get(evt);
+    if (!a || a.length === 0) return false;
+    for (let i = 0; i < a.length; i++) {
+      try { a[i](arg); } catch (e) { /* a bad listener never kills input */ }
+    }
+    return true;
+  }
+
+  /* ======================================================================
+   * Bindings
+   * ====================================================================*/
+  _loadBindings() {
+    const out = Object.create(null);
+    for (let i = 0; i < ACTIONS.length; i++) {
+      const a = ACTIONS[i];
+      out[a] = DEFAULT_BINDINGS[a] ? DEFAULT_BINDINGS[a].slice() : [];
+    }
+    try {
+      const raw = IS_BROWSER ? window.localStorage.getItem(BINDINGS_KEY) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          for (let i = 0; i < ACTIONS.length; i++) {
+            const a = ACTIONS[i];
+            const v = parsed[a];
+            if (Array.isArray(v)) {
+              const codes = [];
+              for (let k = 0; k < v.length && codes.length < 4; k++) {
+                if (typeof v[k] === 'string' && v[k].length > 0 && codes.indexOf(v[k]) === -1) codes.push(v[k]);
+              }
+              if (codes.length) out[a] = codes;
+            }
+          }
+        }
+      }
+    } catch (e) { /* private mode / corrupt JSON: defaults stand */ }
+    return out;
+  }
+
+  _saveBindings() {
+    try {
+      if (IS_BROWSER) window.localStorage.setItem(BINDINGS_KEY, JSON.stringify(this.bindings));
+    } catch (e) { /* private mode: bindings live for the session only */ }
+  }
+
+  _rebuildCodeMap() {
+    const m = Object.create(null);
+    for (let i = 0; i < ACTIONS.length; i++) {
+      const a = ACTIONS[i];
+      const codes = this.bindings[a];
+      if (!codes) continue;
+      for (let k = 0; k < codes.length; k++) {
+        const c = codes[k];
+        let list = m[c];
+        if (!list) { list = []; m[c] = list; }
+        if (list.indexOf(a) === -1) list.push(a);
+      }
+    }
+    this._codeMap = m;
+  }
+
+  /** Replace every code bound to an action. */
+  setBinding(action, codes) {
+    if (!this._acts[action]) return false;
+    const arr = [];
+    const src = Array.isArray(codes) ? codes : [codes];
+    for (let i = 0; i < src.length && arr.length < 4; i++) {
+      if (typeof src[i] === 'string' && src[i] && arr.indexOf(src[i]) === -1) arr.push(src[i]);
+    }
+    this.bindings[action] = arr;
+    this._rebuildCodeMap();
+    this._saveBindings();
+    this._emit('bindings', action);
+    return true;
+  }
+
+  /** Bind one code into a slot (0 = primary, 1 = alternate). Steals it from any other action. */
+  rebind(action, code, slot) {
+    if (!this._acts[action] || typeof code !== 'string' || !code) return false;
+    const s = (slot | 0) || 0;
+    for (let i = 0; i < ACTIONS.length; i++) {
+      const other = ACTIONS[i];
+      if (other === action) continue;
+      const list = this.bindings[other];
+      const idx = list.indexOf(code);
+      if (idx !== -1) list.splice(idx, 1);
+    }
+    const cur = this.bindings[action];
+    const dup = cur.indexOf(code);
+    if (dup !== -1) cur.splice(dup, 1);
+    while (cur.length < s) cur.push('');
+    cur[s] = code;
+    for (let i = cur.length - 1; i >= 0; i--) if (!cur[i]) cur.splice(i, 1);
+    this._rebuildCodeMap();
+    this._saveBindings();
+    this._emit('bindings', action);
+    return true;
+  }
+
+  resetBindings() {
+    for (let i = 0; i < ACTIONS.length; i++) {
+      const a = ACTIONS[i];
+      this.bindings[a] = DEFAULT_BINDINGS[a] ? DEFAULT_BINDINGS[a].slice() : [];
+    }
+    this._rebuildCodeMap();
+    this._saveBindings();
+    this._emit('bindings', null);
+  }
+
+  bindingLabel(action, slot) {
+    const list = this.bindings[action];
+    if (!list) return '—';
+    return codeLabel(list[(slot | 0) || 0]);
+  }
+
+  /**
+   * Listen for the next key/mouse code and bind it. Returns a cancel function.
+   * Escape cancels the capture instead of binding.
+   */
+  captureBinding(action, slot, done) {
+    if (!IS_BROWSER || !this._acts[action]) return function () {};
+    const self = this;
+    let live = true;
+    const finish = (code) => {
+      if (!live) return;
+      live = false;
+      window.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('mousedown', onMouse, true);
+      if (code) self.rebind(action, code, slot);
+      if (typeof done === 'function') { try { done(code || null); } catch (e) {} }
+    };
+    const onKey = (e) => {
+      e.preventDefault(); e.stopPropagation();
+      finish(e.code === 'Escape' ? null : e.code);
+    };
+    const onMouse = (e) => {
+      e.preventDefault(); e.stopPropagation();
+      finish('Mouse' + e.button);
+    };
+    window.addEventListener('keydown', onKey, true);
+    window.addEventListener('mousedown', onMouse, true);
+    return () => finish(null);
+  }
+
+  /* ======================================================================
+   * Sensitivity (pushed by Game from Settings, or read from its snapshot)
+   * ====================================================================*/
+  setSensitivity(sens, invertY) {
+    if (isFiniteNum(sens)) this.sensitivity = Math.min(6, Math.max(0.05, sens));
+    if (typeof invertY === 'boolean') this.invertY = invertY;
+  }
+
+  _readSettingsSnapshot() {
+    try {
+      if (!IS_BROWSER) return;
+      const raw = window.localStorage.getItem(SETTINGS_KEY);
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      if (s && typeof s === 'object') {
+        if (isFiniteNum(s.sens)) this.sensitivity = Math.min(6, Math.max(0.05, s.sens));
+        if (typeof s.invertY === 'boolean') this.invertY = s.invertY;
+      }
+    } catch (e) { /* defaults stand */ }
+  }
+
+  /* ======================================================================
+   * Pointer lock
+   * ====================================================================*/
+  requestLock() {
+    if (!IS_BROWSER || !this.dom) return;
+    if (this.hasTouch && !this.dom.requestPointerLock) {
+      /* Touch-only device: there is no pointer lock — enter "playing" directly. */
+      if (!this.locked) { this.locked = true; this._emit('lock'); }
+      return;
+    }
+    this._lockWanted = true;
+    if (this.locked) return;
+    if (typeof this.dom.requestPointerLock !== 'function') {
+      if (!this.locked) { this.locked = true; this._emit('lock'); }
+      return;
+    }
+    try {
+      let p = null;
+      if (this._unadjustedOk) {
+        try {
+          p = this.dom.requestPointerLock({ unadjustedMovement: true });
+        } catch (inner) {
+          this._unadjustedOk = false;
+          p = null;
+          try { this.dom.requestPointerLock(); } catch (e2) { /* cooldown */ }
+        }
+      } else {
+        p = this.dom.requestPointerLock();
+      }
+      if (p && typeof p.catch === 'function') {
+        p.catch(() => {
+          /* NotSupportedError on unadjustedMovement, or the ESC cooldown. */
+          this._unadjustedOk = false;
+          this._lockRetryAt = (IS_BROWSER ? performance.now() : 0) + 1300;
+        });
+      }
+    } catch (e) {
+      this._lockRetryAt = (IS_BROWSER ? performance.now() : 0) + 1300;
+    }
+  }
+
+  releaseLock() {
+    this._lockWanted = false;
+    if (!IS_BROWSER) return;
+    if (this.hasTouch && !document.pointerLockElement) {
+      if (this.locked) { this.locked = false; this._emit('unlock'); }
+      return;
+    }
+    try { if (document.exitPointerLock) document.exitPointerLock(); } catch (e) {}
+  }
+
+  /* ======================================================================
+   * DOM wiring
+   * ====================================================================*/
+  _detectCoarsePointer() {
+    try {
+      if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) return true;
+    } catch (e) {}
+    return ('ontouchstart' in window) && (navigator.maxTouchPoints || 0) > 0;
+  }
+
+  _attach() {
+    const dom = this.dom;
+
+    this._onKeyDown = (e) => {
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (e.ctrlKey && (e.code === 'KeyR' || e.code === 'KeyW' || e.code === 'KeyT')) return; // let the browser have them
+      const code = e.code;
+      if (SWALLOW[code] && !e.metaKey) e.preventDefault();
+      if (e.repeat) return;
+      if (this._downCodes[code]) return;
+      this._downCodes[code] = 1;
+      this._pressCode(code, true);
+    };
+
+    this._onKeyUp = (e) => {
+      const code = e.code;
+      if (!this._downCodes[code]) {
+        /* Key went down while unfocused: still clear any latched state. */
+        this._releaseCode(code, true);
+        return;
+      }
+      this._downCodes[code] = 0;
+      this._releaseCode(code, true);
+    };
+
+    this._onMouseDown = (e) => {
+      if (this.hasTouch) return;
+      const code = 'Mouse' + e.button;
+      if (this._downCodes[code]) return;
+      this._downCodes[code] = 1;
+      this._pressCode(code, true);
+    };
+
+    this._onMouseUp = (e) => {
+      const code = 'Mouse' + e.button;
+      if (!this._downCodes[code]) return;
+      this._downCodes[code] = 0;
+      this._releaseCode(code, true);
+    };
+
+    this._onMouseMove = (e) => {
+      if (!this.locked || this.suspended) return;
+      let dx = e.movementX, dy = e.movementY;
+      if (!isFiniteNum(dx)) dx = 0;
+      if (!isFiniteNum(dy)) dy = 0;
+      /* A hardware glitch can emit a huge spike on the frame lock engages. */
+      if (dx > 900) dx = 900; else if (dx < -900) dx = -900;
+      if (dy > 900) dy = 900; else if (dy < -900) dy = -900;
+      this._mouseDX += dx;
+      this._mouseDY += dy;
+    };
+
+    this._onPointerDownDom = (e) => {
+      if (this.hasTouch) return;
+      if (this.suspended || !this.autoLock) return;
+      if (!this.locked) this.requestLock();
+    };
+
+    this._onLockChange = () => {
+      const el = document.pointerLockElement;
+      const now = !!el && (el === this.dom || (this.dom && this.dom.contains && this.dom.contains(el)));
+      if (now === this.locked) return;
+      this.locked = now;
+      if (now) {
+        this._mouseDX = 0; this._mouseDY = 0;
+        this._emit('lock');
+      } else {
+        this._releaseAllKeys();
+        this._emit('unlock');
+        this._firePause('unlock');
+      }
+    };
+
+    this._onLockError = () => {
+      this._unadjustedOk = false;
+      this._lockRetryAt = performance.now() + 1300;
+      this._emit('lockerror');
+    };
+
+    this._onBlur = () => {
+      this._releaseAllKeys();
+      this._mouseDX = 0; this._mouseDY = 0;
+      this._emit('blur');
+    };
+
+    this._onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        this._releaseAllKeys();
+        this._mouseDX = 0; this._mouseDY = 0;
+        this._emit('blur');
+        this._firePause('hidden');
+      }
+    };
+
+    this._onPadConnect = (e) => {
+      this.gamepadConnected = true;
+      this._padIndex = e.gamepad ? e.gamepad.index : -1;
+      this.gamepadId = e.gamepad ? (e.gamepad.id || 'gamepad') : 'gamepad';
+      this._emit('gamepad', true);
+    };
+
+    this._onPadDisconnect = (e) => {
+      if (e.gamepad && e.gamepad.index === this._padIndex) {
+        this._padIndex = -1;
+        this.gamepadConnected = false;
+        this.gamepadId = '';
+        this._padPrev.fill(0);
+        this._padCur.fill(0);
+        this._padMoveX = 0; this._padMoveY = 0;
+        this._padLookX = 0; this._padLookY = 0;
+        for (let i = 0; i < ACTIONS.length; i++) this._acts[ACTIONS[i]].pad = false;
+        this._emit('gamepad', false);
+      }
+    };
+
+    window.addEventListener('keydown', this._onKeyDown, false);
+    window.addEventListener('keyup', this._onKeyUp, false);
+    window.addEventListener('mousedown', this._onMouseDown, false);
+    window.addEventListener('mouseup', this._onMouseUp, false);
+    document.addEventListener('mousemove', this._onMouseMove, false);
+    document.addEventListener('pointerlockchange', this._onLockChange, false);
+    document.addEventListener('pointerlockerror', this._onLockError, false);
+    window.addEventListener('blur', this._onBlur, false);
+    document.addEventListener('visibilitychange', this._onVisibility, false);
+    window.addEventListener('gamepadconnected', this._onPadConnect, false);
+    window.addEventListener('gamepaddisconnected', this._onPadDisconnect, false);
+    if (dom && dom.addEventListener) dom.addEventListener('pointerdown', this._onPointerDownDom, false);
+  }
+
+  destroy() {
+    if (this._destroyed || !IS_BROWSER) return;
+    this._destroyed = true;
+    window.removeEventListener('keydown', this._onKeyDown, false);
+    window.removeEventListener('keyup', this._onKeyUp, false);
+    window.removeEventListener('mousedown', this._onMouseDown, false);
+    window.removeEventListener('mouseup', this._onMouseUp, false);
+    document.removeEventListener('mousemove', this._onMouseMove, false);
+    document.removeEventListener('pointerlockchange', this._onLockChange, false);
+    document.removeEventListener('pointerlockerror', this._onLockError, false);
+    window.removeEventListener('blur', this._onBlur, false);
+    document.removeEventListener('visibilitychange', this._onVisibility, false);
+    window.removeEventListener('gamepadconnected', this._onPadConnect, false);
+    window.removeEventListener('gamepaddisconnected', this._onPadDisconnect, false);
+    if (this.dom && this.dom.removeEventListener) this.dom.removeEventListener('pointerdown', this._onPointerDownDom, false);
+    if (this._touchUI && this._touchUI.parentNode) this._touchUI.parentNode.removeChild(this._touchUI);
+    this._touchUI = null;
+    this._listeners.clear();
+  }
+
+  /* ---- raw code -> action edges ---- */
+  _pressCode(code, fromKeyboard) {
+    const list = this._codeMap[code];
+    if (!list) return;
+    for (let i = 0; i < list.length; i++) {
+      const st = this._acts[list[i]];
+      if (fromKeyboard) st.kbd = true;
+      st.pressQ++;
+    }
+  }
+
+  _releaseCode(code, fromKeyboard) {
+    const list = this._codeMap[code];
+    if (!list) return;
+    for (let i = 0; i < list.length; i++) {
+      const a = list[i];
+      const st = this._acts[a];
+      if (fromKeyboard) {
+        /* Only clear if no other bound code for this action is still down. */
+        st.kbd = this._anyBoundCodeDown(a);
+      }
+      st.releaseQ++;
+    }
+  }
+
+  _anyBoundCodeDown(action) {
+    const codes = this.bindings[action];
+    if (!codes) return false;
+    for (let i = 0; i < codes.length; i++) if (this._downCodes[codes[i]]) return true;
+    return false;
+  }
+
+  _releaseAllKeys() {
+    for (const code in this._downCodes) {
+      if (this._downCodes[code]) {
+        this._downCodes[code] = 0;
+        const list = this._codeMap[code];
+        if (list) for (let i = 0; i < list.length; i++) this._acts[list[i]].releaseQ++;
+      }
+    }
+    for (let i = 0; i < ACTIONS.length; i++) this._acts[ACTIONS[i]].kbd = false;
+    this._touchStick.id = -1; this._touchStick.x = 0; this._touchStick.y = 0;
+    this._touchLook.id = -1;
+    if (this._touchUI) this._resetTouchVisual();
+    for (let i = 0; i < ACTIONS.length; i++) this._acts[ACTIONS[i]].touch = false;
+  }
+
+  _firePause(reason) {
+    const t = IS_BROWSER ? performance.now() : 0;
+    if (t - this._lastPauseEmit < 250) return;
+    this._lastPauseEmit = t;
+    this._emit('pause', reason);
+  }
+
+  /* ======================================================================
+   * Gamepad
+   * ====================================================================*/
+  _pollGamepad(dt) {
+    this._padMoveX = 0; this._padMoveY = 0;
+    this._padLookX = 0; this._padLookY = 0;
+    if (!IS_BROWSER || !navigator.getGamepads) return;
+
+    let pads;
+    try { pads = navigator.getGamepads(); } catch (e) { return; }
+    if (!pads) return;
+
+    let pad = null;
+    if (this._padIndex >= 0 && this._padIndex < pads.length && pads[this._padIndex]) {
+      pad = pads[this._padIndex];
+    } else {
+      for (let i = 0; i < pads.length; i++) {
+        const p = pads[i];
+        if (p && p.connected) { pad = p; this._padIndex = i; this.gamepadId = p.id || 'gamepad'; break; }
+      }
+    }
+    if (!pad || !pad.connected) {
+      if (this.gamepadConnected) {
+        this.gamepadConnected = false;
+        this._padPrev.fill(0); this._padCur.fill(0);
+        for (let i = 0; i < ACTIONS.length; i++) this._acts[ACTIONS[i]].pad = false;
+      }
+      return;
+    }
+    this.gamepadConnected = true;
+
+    const ax = pad.axes;
+    const btns = pad.buttons;
+
+    /* --- sticks --- */
+    if (ax && ax.length >= 2) {
+      const lx = isFiniteNum(ax[0]) ? ax[0] : 0;
+      const ly = isFiniteNum(ax[1]) ? ax[1] : 0;
+      const mag = Math.sqrt(lx * lx + ly * ly);
+      if (mag > STICK_DEAD_MOVE) {
+        const scaled = Math.min(1, (mag - STICK_DEAD_MOVE) / (1 - STICK_DEAD_MOVE));
+        const inv = scaled / mag;
+        this._padMoveX = lx * inv;
+        this._padMoveY = -ly * inv;   // stick +Y is "down"; game +Y is forward
+      }
+    }
+    if (ax && ax.length >= 4) {
+      const rx = curveAxis(isFiniteNum(ax[2]) ? ax[2] : 0, STICK_DEAD_LOOK, LOOK_CURVE);
+      const ry = curveAxis(isFiniteNum(ax[3]) ? ax[3] : 0, STICK_DEAD_LOOK, LOOK_CURVE);
+      const step = PAD_LOOK_PX_PER_SEC * (dt > 0.05 ? 0.05 : dt);
+      this._padLookX = rx * step;
+      this._padLookY = ry * step;
+    }
+
+    /* --- buttons --- */
+    this._padCur.fill(0);
+    if (btns) {
+      const n = Math.min(btns.length, PAD_BUTTON_COUNT);
+      for (let i = 0; i < n; i++) {
+        const b = btns[i];
+        if (!b) continue;
+        let on;
+        if (i === PAD_LT || i === PAD_RT) on = (isFiniteNum(b.value) ? b.value : (b.pressed ? 1 : 0)) > TRIGGER_ON;
+        else on = !!b.pressed || (isFiniteNum(b.value) && b.value > 0.5);
+        this._padCur[i] = on ? 1 : 0;
+      }
+    }
+
+    for (let i = 0; i < ACTIONS.length; i++) this._acts[ACTIONS[i]].pad = false;
+
+    for (let i = 0; i < PAD_ACTION_BUTTONS.length; i++) {
+      const idx = PAD_ACTION_BUTTONS[i][0];
+      const action = PAD_ACTION_BUTTONS[i][1];
+      const st = this._acts[action];
+      if (!st) continue;
+      const cur = this._padCur[idx];
+      const prev = this._padPrev[idx];
+      if (cur) st.pad = true;
+      if (cur && !prev) st.pressQ++;
+      else if (!cur && prev) st.releaseQ++;
+    }
+
+    const tmp = this._padPrev;
+    this._padPrev = this._padCur;
+    this._padCur = tmp;
+  }
+
+  /** Haptics, if the pad exposes an actuator. Safe no-op everywhere else. */
+  rumble(strong, weak, ms) {
+    if (!IS_BROWSER || !navigator.getGamepads || this._padIndex < 0) return;
+    try {
+      const pads = navigator.getGamepads();
+      const pad = pads && pads[this._padIndex];
+      const act = pad && pad.vibrationActuator;
+      if (act && typeof act.playEffect === 'function') {
+        act.playEffect('dual-rumble', {
+          duration: Math.max(0, Math.min(1000, ms || 120)),
+          strongMagnitude: clamp01(strong || 0),
+          weakMagnitude: clamp01(weak === undefined ? (strong || 0) * 0.6 : weak),
+        }).catch(() => {});
+      }
+    } catch (e) {}
+  }
+
+  /* ======================================================================
+   * Touch fallback  (left stick + jump/sprint/crouch, right half = look)
+   * ====================================================================*/
+  _buildTouchUI() {
+    if (!IS_BROWSER || this._touchUI) return;
+    const host = document.getElementById('ui') || document.body;
+    if (!host) return;
+
+    if (!document.getElementById('asc-touch-style')) {
+      const st = document.createElement('style');
+      st.id = 'asc-touch-style';
+      st.textContent = [
+        '#asc-touch{position:absolute;inset:0;pointer-events:none;z-index:5;touch-action:none;',
+        '  font-family:system-ui,-apple-system,sans-serif;-webkit-user-select:none;user-select:none}',
+        '#asc-touch.off{display:none}',
+        '#asc-touch .zone{position:absolute;pointer-events:auto;touch-action:none}',
+        '#asc-touch #asc-look{left:38%;right:0;top:0;bottom:0}',
+        '#asc-touch #asc-stickzone{left:0;bottom:0;width:38%;height:62%}',
+        '#asc-touch #asc-stick{position:absolute;width:132px;height:132px;margin:-66px 0 0 -66px;left:120px;top:60%;',
+        '  border-radius:50%;border:2px solid rgba(150,214,255,.30);',
+        '  background:radial-gradient(circle at 50% 50%,rgba(20,40,66,.42),rgba(8,16,28,.24) 70%,transparent 72%);',
+        '  opacity:.5;transition:opacity .18s ease}',
+        '#asc-touch #asc-stick.on{opacity:.95}',
+        '#asc-touch #asc-knob{position:absolute;left:50%;top:50%;width:58px;height:58px;margin:-29px 0 0 -29px;',
+        '  border-radius:50%;background:radial-gradient(circle at 38% 32%,#bfe8ff,#4aa6e8 55%,#1c5f9c);',
+        '  box-shadow:0 3px 12px rgba(0,0,0,.5),0 0 16px rgba(90,200,255,.35);will-change:transform}',
+        '#asc-touch .btn{position:absolute;pointer-events:auto;touch-action:none;border-radius:50%;',
+        '  display:flex;align-items:center;justify-content:center;color:#dff2ff;letter-spacing:.14em;',
+        '  font-size:11px;font-weight:600;text-transform:uppercase;',
+        '  border:2px solid rgba(150,214,255,.34);background:rgba(12,26,44,.44);',
+        '  box-shadow:inset 0 0 18px rgba(90,190,255,.14),0 2px 10px rgba(0,0,0,.42);',
+        '  transition:transform .08s ease,background .12s ease,border-color .12s ease}',
+        '#asc-touch .btn.on{transform:scale(.92);background:rgba(46,124,190,.62);border-color:rgba(190,240,255,.8)}',
+        '#asc-touch #asc-jump{right:26px;bottom:34px;width:98px;height:98px;font-size:13px}',
+        '#asc-touch #asc-sprint{right:132px;bottom:118px;width:70px;height:70px}',
+        '#asc-touch #asc-crouch{right:132px;bottom:34px;width:70px;height:70px}',
+        '#asc-touch #asc-pausebtn{left:14px;top:14px;width:44px;height:44px;font-size:15px;border-radius:12px}',
+      ].join('\n');
+      document.head.appendChild(st);
+    }
+
+    const root = document.createElement('div');
+    root.id = 'asc-touch';
+    root.innerHTML = [
+      '<div class="zone" id="asc-look"></div>',
+      '<div class="zone" id="asc-stickzone"></div>',
+      '<div id="asc-stick"><div id="asc-knob"></div></div>',
+      '<div class="btn" id="asc-jump">Jump</div>',
+      '<div class="btn" id="asc-sprint">Run</div>',
+      '<div class="btn" id="asc-crouch">Duck</div>',
+      '<div class="btn" id="asc-pausebtn">II</div>',
+    ].join('');
+    host.appendChild(root);
+    this._touchUI = root;
+
+    this._elStick = root.querySelector('#asc-stick');
+    this._elKnob = root.querySelector('#asc-knob');
+
+    const stickZone = root.querySelector('#asc-stickzone');
+    const lookZone = root.querySelector('#asc-look');
+
+    /* ---- left stick ---- */
+    const onStickStart = (e) => {
+      if (this.suspended) return;
+      e.preventDefault();
+      const t = e.changedTouches ? e.changedTouches[0] : e;
+      this._touchStick.id = t.identifier === undefined ? -2 : t.identifier;
+      this._touchStick.baseX = t.clientX;
+      this._touchStick.baseY = t.clientY;
+      this._touchStick.x = 0; this._touchStick.y = 0;
+      this.touchActive = true;
+      if (this._elStick) {
+        this._elStick.style.left = t.clientX + 'px';
+        this._elStick.style.top = t.clientY + 'px';
+        this._elStick.classList.add('on');
+      }
+      if (!this.locked) { this.locked = true; this._emit('lock'); }
+    };
+    const onStickMove = (e) => {
+      if (this._touchStick.id === -1) return;
+      e.preventDefault();
+      const list = e.changedTouches;
+      for (let i = 0; i < (list ? list.length : 1); i++) {
+        const t = list ? list[i] : e;
+        const id = t.identifier === undefined ? -2 : t.identifier;
+        if (id !== this._touchStick.id) continue;
+        const R = 60;
+        let dx = (t.clientX - this._touchStick.baseX) / R;
+        let dy = (t.clientY - this._touchStick.baseY) / R;
+        const m = Math.sqrt(dx * dx + dy * dy);
+        if (m > 1) { dx /= m; dy /= m; }
+        this._touchStick.x = dx;
+        this._touchStick.y = -dy;
+        if (this._elKnob) this._elKnob.style.transform = 'translate(' + (dx * R).toFixed(1) + 'px,' + (dy * R).toFixed(1) + 'px)';
+      }
+    };
+    const onStickEnd = (e) => {
+      const list = e.changedTouches;
+      for (let i = 0; i < (list ? list.length : 1); i++) {
+        const t = list ? list[i] : e;
+        const id = t.identifier === undefined ? -2 : t.identifier;
+        if (id !== this._touchStick.id) continue;
+        this._touchStick.id = -1;
+        this._touchStick.x = 0; this._touchStick.y = 0;
+        this._resetTouchVisual();
+      }
+    };
+    stickZone.addEventListener('touchstart', onStickStart, { passive: false });
+    stickZone.addEventListener('touchmove', onStickMove, { passive: false });
+    stickZone.addEventListener('touchend', onStickEnd, { passive: false });
+    stickZone.addEventListener('touchcancel', onStickEnd, { passive: false });
+
+    /* ---- right half look drag ---- */
+    const onLookStart = (e) => {
+      if (this.suspended) return;
+      e.preventDefault();
+      const t = e.changedTouches ? e.changedTouches[0] : e;
+      this._touchLook.id = t.identifier === undefined ? -2 : t.identifier;
+      this._touchLook.x = t.clientX;
+      this._touchLook.y = t.clientY;
+      this.touchActive = true;
+      if (!this.locked) { this.locked = true; this._emit('lock'); }
+    };
+    const onLookMove = (e) => {
+      if (this._touchLook.id === -1) return;
+      e.preventDefault();
+      const list = e.changedTouches;
+      for (let i = 0; i < (list ? list.length : 1); i++) {
+        const t = list ? list[i] : e;
+        const id = t.identifier === undefined ? -2 : t.identifier;
+        if (id !== this._touchLook.id) continue;
+        this._mouseDX += (t.clientX - this._touchLook.x) * this.touchLookSens;
+        this._mouseDY += (t.clientY - this._touchLook.y) * this.touchLookSens;
+        this._touchLook.x = t.clientX;
+        this._touchLook.y = t.clientY;
+      }
+    };
+    const onLookEnd = (e) => {
+      const list = e.changedTouches;
+      for (let i = 0; i < (list ? list.length : 1); i++) {
+        const t = list ? list[i] : e;
+        const id = t.identifier === undefined ? -2 : t.identifier;
+        if (id === this._touchLook.id) this._touchLook.id = -1;
+      }
+    };
+    lookZone.addEventListener('touchstart', onLookStart, { passive: false });
+    lookZone.addEventListener('touchmove', onLookMove, { passive: false });
+    lookZone.addEventListener('touchend', onLookEnd, { passive: false });
+    lookZone.addEventListener('touchcancel', onLookEnd, { passive: false });
+
+    /* ---- buttons ---- */
+    this._wireTouchButton(root.querySelector('#asc-jump'), 'jump');
+    this._wireTouchButton(root.querySelector('#asc-sprint'), 'sprint');
+    this._wireTouchButton(root.querySelector('#asc-crouch'), 'crouch');
+    this._wireTouchButton(root.querySelector('#asc-pausebtn'), 'pause');
+  }
+
+  _wireTouchButton(el, action) {
+    if (!el) return;
+    const st = this._acts[action];
+    const down = (e) => {
+      e.preventDefault();
+      if (this.suspended && !MENU_ACTIONS[action]) return;
+      if (st.touch) return;
+      st.touch = true;
+      st.pressQ++;
+      el.classList.add('on');
+      this.touchActive = true;
+      if (!this.locked && !MENU_ACTIONS[action]) { this.locked = true; this._emit('lock'); }
+    };
+    const up = (e) => {
+      e.preventDefault();
+      if (!st.touch) return;
+      st.touch = false;
+      st.releaseQ++;
+      el.classList.remove('on');
+    };
+    el.addEventListener('touchstart', down, { passive: false });
+    el.addEventListener('touchend', up, { passive: false });
+    el.addEventListener('touchcancel', up, { passive: false });
+  }
+
+  _resetTouchVisual() {
+    if (this._elKnob) this._elKnob.style.transform = 'translate(0px,0px)';
+    if (this._elStick) this._elStick.classList.remove('on');
+  }
+
+  /** Show/hide the on-screen controls (menus call this). */
+  setTouchVisible(v) {
+    if (!this._touchUI) return;
+    this._touchUI.classList.toggle('off', !v);
+    if (!v) {
+      this._touchStick.id = -1; this._touchStick.x = 0; this._touchStick.y = 0;
+      this._touchLook.id = -1;
+      this._resetTouchVisual();
+    }
+  }
+
+  /* ======================================================================
+   * Per-frame update — call ONCE, before player.update
+   * ====================================================================*/
+  update(dt) {
+    const d = isFiniteNum(dt) && dt > 0 ? (dt > 0.05 ? 0.05 : dt) : 0.016;
+
+    /* Re-request pointer lock after the browser's post-ESC cooldown. */
+    if (this._lockWanted && !this.locked && !this.suspended && this._lockRetryAt > 0) {
+      const t = IS_BROWSER ? performance.now() : 0;
+      if (t >= this._lockRetryAt) { this._lockRetryAt = 0; this.requestLock(); }
+    }
+
+    this._pollGamepad(d);
+
+    /* ---- resolve every action: held + edges ---- */
+    let any = false;
+    for (let i = 0; i < ACTIONS.length; i++) {
+      const a = ACTIONS[i];
+      const st = this._acts[a];
+      const rawHeld = st.kbd || st.pad || st.touch;
+      let pressed = st.pressQ > 0;
+      let released = st.releaseQ > 0;
+      /* A key held across frames without a fresh event is neither edge. */
+      if (!pressed && rawHeld && !st.held) pressed = true;
+      if (!released && !rawHeld && st.held) released = true;
+      st.pressQ = 0; st.releaseQ = 0;
+
+      const blocked = this.suspended && !MENU_ACTIONS[a];
+      st.held = rawHeld;
+      st.pressed = blocked ? false : pressed;
+      st.released = blocked ? false : released;
+      if (st.pressed) any = true;
+    }
+    this.anyPressed = any;
+
+    /* ---- movement ---- */
+    let mx = 0, my = 0;
+    if (!this.suspended) {
+      if (this._acts.right.held) mx += 1;
+      if (this._acts.left.held) mx -= 1;
+      if (this._acts.forward.held) my += 1;
+      if (this._acts.back.held) my -= 1;
+      mx += this._padMoveX + this._touchStick.x;
+      my += this._padMoveY + this._touchStick.y;
+      const len = Math.sqrt(mx * mx + my * my);
+      if (len > 1) { mx /= len; my /= len; }
+      _scratch.len = len;
+    }
+    this.move.x = mx;
+    this.move.y = my;
+
+    /* ---- look: consume the accumulated deltas exactly once ---- */
+    let lx = this._mouseDX + this._padLookX;
+    let ly = this._mouseDY + this._padLookY;
+    this._mouseDX = 0; this._mouseDY = 0;
+    if (this.suspended || (!this.locked && !this.touchActive)) { lx = 0; ly = 0; }
+    const sens = this.sensitivity;
+    const invert = this.invertY ? -1 : 1;
+    this.look.dx = isFiniteNum(lx) ? lx * sens : 0;
+    this.look.dy = isFiniteNum(ly) ? ly * sens * invert : 0;
+    this.lookRad.dx = this.look.dx * RAD_PER_PX;
+    this.lookRad.dy = this.look.dy * RAD_PER_PX;
+
+    /* ---- flatten to the contract's public booleans ---- */
+    const j = this._acts.jump;
+    this.jump = j.held && !this.suspended;
+    this.jumpPressed = j.pressed;
+    this.jumpReleased = j.released;
+
+    const sp = this._acts.sprint;
+    this.sprint = sp.held && !this.suspended;
+    this.sprintPressed = sp.pressed;
+    this.sprintReleased = sp.released;
+
+    const cr = this._acts.crouch;
+    this.crouch = cr.held && !this.suspended;
+    this.crouchPressed = cr.pressed;
+    this.crouchReleased = cr.released;
+
+    const it = this._acts.interact;
+    this.interact = it.held && !this.suspended;
+    this.interactPressed = it.pressed;
+
+    const rs = this._acts.restart;
+    this.restart = rs.held && !this.suspended;
+    this.restartPressed = rs.pressed;
+
+    this.respawnPressed = this._acts.respawnToCheckpoint.pressed;
+    this.pausePressed = this._acts.pause.pressed;
+    this.stageSelectPressed = this._acts.stageSelect.pressed;
+    this.mutePressed = this._acts.mute.pressed;
+    this.fullscreenPressed = this._acts.fullscreen.pressed;
+    this.devPressed = this._acts.dev.pressed;
+
+    /* ---- side channels ---- */
+    if (this.pausePressed) this._firePause('key');
+    if (this.mutePressed) this._emit('mute');   // game_controls already toggled it
+    if (this.fullscreenPressed) {
+      if (!this._emit('fullscreen')) {
+        try {
+          if (window.__CONTROLS__ && window.__CONTROLS__.toggleFullscreen) window.__CONTROLS__.toggleFullscreen();
+        } catch (e) {}
+      }
+    }
+  }
+
+  /* ======================================================================
+   * Generic queries (menus, dev tools, rebind UI)
+   * ====================================================================*/
+  held(action) { const s = this._acts[action]; return s ? s.held : false; }
+  pressed(action) { const s = this._acts[action]; return s ? s.pressed : false; }
+  released(action) { const s = this._acts[action]; return s ? s.released : false; }
+
+  /** Zero everything without touching bindings — used on state transitions. */
+  clear() {
+    this._releaseAllKeys();
+    this._mouseDX = 0; this._mouseDY = 0;
+    this._padMoveX = 0; this._padMoveY = 0;
+    this._padLookX = 0; this._padLookY = 0;
+    for (let i = 0; i < ACTIONS.length; i++) {
+      const st = this._acts[ACTIONS[i]];
+      st.held = false; st.pressed = false; st.released = false;
+      st.pressQ = 0; st.releaseQ = 0; st.pad = false;
+    }
+    this.move.x = 0; this.move.y = 0;
+    this.look.dx = 0; this.look.dy = 0;
+    this.lookRad.dx = 0; this.lookRad.dy = 0;
+    this.jump = this.sprint = this.crouch = this.interact = this.restart = false;
+    this.jumpPressed = this.jumpReleased = false;
+  }
+
+  /**
+   * Contract-facing flag. Exposed as an accessor rather than a plain field so
+   * that a direct `input.suspended = true` (which is how the contract reads)
+   * ALSO drops the held state immediately — otherwise a menu opened mid-sprint
+   * would leave one frame of stale movement, and closing it would resume a
+   * sprint the player is no longer holding.
+   */
+  get suspended() { return this._suspended; }
+  set suspended(v) { this.setSuspended(v); }
+
+  /** Menus call this. Keeps pause/select/mute/fullscreen/dev alive. */
+  setSuspended(v) {
+    const next = !!v;
+    if (next === this._suspended) return;
+    this._suspended = next;
+    if (next) {
+      this.move.x = 0; this.move.y = 0;
+      this.look.dx = 0; this.look.dy = 0;
+      this.lookRad.dx = 0; this.lookRad.dy = 0;
+      this._mouseDX = 0; this._mouseDY = 0;
+      this.jump = this.sprint = this.crouch = this.interact = this.restart = false;
+      this.jumpPressed = this.jumpReleased = false;
+      this._touchStick.x = 0; this._touchStick.y = 0; this._touchStick.id = -1;
+      this._touchLook.id = -1;
+      this._resetTouchVisual();
+    }
+  }
+}
+
+export default Input;
