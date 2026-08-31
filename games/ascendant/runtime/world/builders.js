@@ -82,6 +82,11 @@ const DEFAULT_PALETTE = {
   finish: 0xffd76a,
   accent: 0x4fb9ff,
   deco: 0x6f86a8,
+  /* pad = the jump/speed-pad family's world identity. Round 2 (2026-08-31):
+   * jump pads wore `checkpointOn` verbatim, which is why one mint pad showed
+   * up in EVERY world — pads now carry a per-theme colour that is NOT the
+   * checkpoint armed signal. */
+  pad: 0x4fb9ff,
 };
 
 /** Read a palette colour from a ThemeDef, with a hard fallback. */
@@ -395,6 +400,15 @@ function _hslOf(hex, out) {
 
 const KILL_BAND = 30 / 360;   // hue distance that counts as "wearing the kill colour"
 const CPON_BAND = 20 / 360;   // hue distance that counts as "wearing checkpointOn"
+/* The pre-round-2 universal checkpoint mint (0x56ffd0 family). Stage data
+ * authored literal copies of it on checkpoint decks ("glow: MINT // palette.
+ * checkpointOn"); the palette has since moved to per-world pad identities, so
+ * those hexes are stale. Any landable glow still in this band was authored to
+ * MEAN "checkpoint deck" — remap it to the theme's CURRENT checkpointOn
+ * instead of letting thirteen data files resurrect the mint (round 2,
+ * 2026-08-31). */
+const LEGACY_MINT_H = 158 / 360;
+const LEGACY_MINT_BAND = 22 / 360;
 
 /**
  * @param {number|null} color authored glow colour (hex) or null
@@ -410,7 +424,12 @@ function safeLandableGlow(color, theme) {
   const nearKill = _hueDist(gh, killH) <= KILL_BAND && gsat >= 0.45;
   _hslOf(pal(theme, 'checkpointOn'), _sanHSL);
   const nearCp = _hueDist(gh, _sanHSL.h) <= CPON_BAND && gsat >= 0.35;
-  if (!nearKill && !nearCp) return color;
+  if (!nearKill && !nearCp) {
+    if (_hueDist(gh, LEGACY_MINT_H) <= LEGACY_MINT_BAND && gsat >= 0.35) {
+      return pal(theme, 'checkpointOn');
+    }
+    return color;
+  }
   const accent = pal(theme, 'accent');
   _hslOf(accent, _sanHSL);
   return _hueDist(_sanHSL.h, killH) >= 45 / 360 ? accent : pal(theme, 'safeEdge');
@@ -487,12 +506,19 @@ function glowMat(color, opts) {
     },
     vertexShader:
       'varying vec2 vUvG;\n' +
-      'void main(){ vUvG = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      'varying vec3 vWG;\n' +
+      'void main(){ vUvG = uv; vec4 wp = modelMatrix * vec4(position, 1.0); vWG = wp.xyz; gl_Position = projectionMatrix * viewMatrix * wp; }',
     fragmentShader:
       'uniform vec3 uColor; uniform float uTime, uSpeed, uPower, uGain;\n' +
       'varying vec2 vUvG;\n' +
+      'varying vec3 vWG;\n' +
       'void main(){\n' + (mode === 'shaft' ? shaftBody : radialBody) + '\n' +
       '  a *= uGain;\n' +
+      // Standing ON a pad puts the camera inside this additive volume: without
+      // a near fade its walls painted the whole frame with the glow colour
+      // (round-2 toggle probe, 2026-08-31 — same failure the checkpoint beam
+      // fixed with its vDepth fade). Beyond ~2.6 m it is a no-op.
+      '  a *= smoothstep(0.9, 2.6, distance(vWG, cameraPosition));\n' +
       '  if (a < 0.004) discard;\n' +
       '  gl_FragColor = vec4(uColor * (0.85 + 0.35 * a), a);\n' +
       '}',
@@ -970,8 +996,12 @@ function stripeFaces(def) {
 const SURFACE_LOOK = {
   normal:   ['stone', 'safeEdge', 1.00],
   ice:      ['ice', 'safeEdge', 1.15],
-  bounce:   ['rubber', 'checkpointOn', 1.35],
-  speed:    ['neon', 'finish', 1.40],
+  /* bounce wore 'checkpointOn' and speed wore 'finish' — a bouncy deck
+   * impersonated a save point in every theme and a speed strip stole the
+   * finish's reserved violet (round-2 critic, 2026-08-31). Bounce now wears
+   * the theme's pad identity, speed its safeEdge (the hot landable stripe). */
+  bounce:   ['rubber', 'pad', 1.35],
+  speed:    ['neon', 'safeEdge', 1.40],
   conveyor: ['conveyor', 'accent', 1.10],
   sticky:   ['rubber', 'deco', 0.90],
   nostick:  ['metal', 'safeEdge', 1.00],
@@ -1284,12 +1314,23 @@ export function buildPad(def, theme, mats) {
   const isSpeed = !!(def && (def.kind === 'speedpad' || def.surface === 'speed'));
   const gs = glowSpec(def);
   const glow = gs.k;
-  const tint = gs.color !== null ? gs.color : pal(theme, isSpeed ? 'finish' : 'checkpointOn');
+  /* Round 2 (2026-08-31 toggle probe): jump pads wore checkpointOn — the same
+   * mint in every world — and speed pads wore the finish's reserved violet.
+   * Pads now wear the theme's own pad identity (THEMES[world].palette.pad),
+   * speed pads its safeEdge, so foundry pads are cyan-on-steel, spire's ice
+   * blue, temple's gold. The ring follows 'pad' too (in foundry the accent is
+   * amber — an amber self-lit animated ring on a landable violates that
+   * theme's "only hazards are orange + emissive + moving" law). */
+  const tint = gs.color !== null ? gs.color : pal(theme, isSpeed ? 'safeEdge' : 'pad');
 
   const plinthMat = materialFor('metal', theme, mats);
   const discMat = materialFor('panel', theme, mats);
-  const ringMat = emissiveMat(pal(theme, 'accent'), 1.5 * glow);
-  const coreMat = pulseMat(tint, 2.6 * glow, 1.5 * glow, 3.4);
+  /* core 2.6/1.5 blew the pad centre to white under every theme's bloom
+   * threshold (0.85-1.10); 1.7/0.9 still clears the thresholds so the core
+   * glows with a halo, but its hue survives — the controlled-emissive rim the
+   * round-2 spec demands. */
+  const ringMat = emissiveMat(pal(theme, 'pad'), 1.2 * glow);
+  const coreMat = pulseMat(tint, 1.7 * glow, 0.9 * glow, 3.4);
 
   const key = GeoCache.key('pad', r, height, isSpeed ? 's' : 'j');
   const geo = GeoCache.get(key, () => {
@@ -1326,7 +1367,7 @@ export function buildPad(def, theme, mats) {
   group.add(solid);
 
   const poolGeo = GeoCache.get(GeoCache.key('padpool', r), () => discGeometry(r * 1.85, 44));
-  const pool = new THREE.Mesh(poolGeo, glowMat(tint, { mode: 'radial', speed: 2.2, power: 2.4, gain: 0.55 * glow }));
+  const pool = new THREE.Mesh(poolGeo, glowMat(tint, { mode: 'radial', speed: 2.2, power: 2.4, gain: 0.42 * glow }));
   pool.position.y = 0.006;
   pool.renderOrder = 2;
   pool.userData.noMerge = true;
@@ -1343,7 +1384,7 @@ export function buildPad(def, theme, mats) {
     uvAttr.needsUpdate = true;
     return g;
   });
-  const shaft = new THREE.Mesh(shaftGeo, glowMat(tint, { mode: 'shaft', speed: 1.6, power: 1.9, gain: 0.5 * glow }));
+  const shaft = new THREE.Mesh(shaftGeo, glowMat(tint, { mode: 'shaft', speed: 1.6, power: 1.9, gain: 0.4 * glow }));
   shaft.position.y = height + shaftH * 0.5;
   shaft.renderOrder = 3;
   shaft.userData.noMerge = true;

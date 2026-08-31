@@ -253,6 +253,7 @@ varying float vState;
 varying float vSeed;
 varying float vCore;
 varying float vDepth;
+varying float vAxisD;
 void main(){
   vUv = uv; vState = aState; vSeed = aSeed;
   vec3 p = position;
@@ -261,6 +262,9 @@ void main(){
   p.y *= mix(0.52, 1.0, aState);
   vec4 mv = modelViewMatrix * ${instanced ? 'instanceMatrix * ' : ''}vec4(p, 1.0);
   vDepth = -mv.z;
+  // horizontal camera-to-column-axis distance, for the whole-column near fade
+  vec4 wo = modelMatrix * ${instanced ? 'instanceMatrix * ' : ''}vec4(0.0, 0.0, 0.0, 1.0);
+  vAxisD = length(wo.xz - cameraPosition.xz);
   vec3 radial = normalize(vec3(position.x, 0.0, position.z) + vec3(1e-5, 0.0, 1e-5));
   vec3 nrm = normalize(normalMatrix * radial);
   vec3 vdir = normalize(-mv.xyz);
@@ -280,6 +284,7 @@ varying float vState;
 varying float vSeed;
 varying float vCore;
 varying float vDepth;
+varying float vAxisD;
 void main(){
   float h = clamp(vUv.y, 0.0, 1.0);
   float fall = pow(1.0 - h, 1.65);
@@ -293,6 +298,14 @@ void main(){
   // wash (measured 2026-08-31: hiding the column dropped foundry-1's mean frame
   // luma from 197 to 117 at a checkpoint station). Beyond ~3.5 m it is a no-op.
   a *= smoothstep(0.35, 3.5, vDepth);
+  // ...but the fragment fade alone was not enough: the column is 9.2 m tall,
+  // and its UPPER half sits 4-9 m from a camera standing on the pad — far
+  // enough to pass the vDepth fade, close enough to arc a tinted dome across
+  // the whole upper frame (round-2 toggle probe, 2026-08-31: hiding the cp
+  // group turned foundry's green sky back to smoke). Fade the WHOLE column
+  // once the camera is within ~3.2 m of its axis; from across the stage the
+  // beacon is untouched.
+  a *= smoothstep(1.5, 3.2, vAxisD);
   if (a <= 0.0025) discard;
   vec3 col = mix(uColorOff, uColorOn, vState);
   col *= 0.85 + 1.15 * vState + 0.30 * band;
@@ -335,7 +348,10 @@ void main(){
   float a = (0.34 + 0.66 * vState) * mix(0.48, 1.0, dash) * (0.7 + 0.3 * tube);
   a *= mix(1.0, 0.65, smoothstep(80.0, 260.0, vDepth));
   vec3 col = mix(uColorOff, uColorOn, vState);
-  col *= 1.0 + 1.5 * vState + 1.1 * vPulse + 0.4 * dash;
+  // 1.0+1.5+1.1+0.4 drove the armed ring to ~4x — THE white-hot rim of the
+  // round-2 critic. Held to ~2x peak: still clears every bloom threshold for
+  // a halo, but the ring keeps its hue instead of clipping to white.
+  col *= 0.90 + 0.85 * vState + 0.80 * vPulse + 0.28 * dash;
   gl_FragColor = vec4(col, a);
 }`;
 
@@ -370,6 +386,7 @@ uniform float uTime;
 varying vec2  vUv;
 varying float vState;
 varying float vPulse;
+varying float vAxisD;
 void main(){
   vUv = uv; vState = aState; vPulse = aPulse;
   float c = cos(aAngle), s = sin(aAngle);
@@ -377,6 +394,8 @@ void main(){
   vec3 r = vec3(p.x * c - p.z * s, p.y, p.x * s + p.z * c);
   r *= mix(0.74, 1.0, aState);
   r.y += 0.34 + 0.30 * aState + 0.075 * sin(uTime * 1.5 + aSeed * 6.2831);
+  vec4 wo = modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+  vAxisD = length(wo.xz - cameraPosition.xz);
   gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(r, 1.0);
 }`;
 
@@ -387,11 +406,20 @@ uniform vec3 uColorOn;
 varying vec2  vUv;
 varying float vState;
 varying float vPulse;
+varying float vAxisD;
 void main(){
   vec4 t = texture2D(uMap, vUv);
   float a = t.a * (0.30 + 0.85 * vState) * (1.0 + 0.9 * vPulse);
+  // The glyph floats 0.4-0.7 m under a standing player's eye: at full gain it
+  // was the floor-filling colour wash in every station shot (round-2 toggle
+  // probe, 2026-08-31 — hiding the cp group flipped spire's pad region from
+  // rgb(74,147,137) back to the deck's true rgb(46,67,91)). Fade it away as
+  // the camera closes in; from approach range it still reads as the marker.
+  a *= smoothstep(1.3, 2.8, vAxisD);
   if (a <= 0.004) discard;
-  vec3 col = mix(uColorOff, uColorOn, vState) * (0.85 + 1.5 * vState + 1.0 * vPulse);
+  // 0.85+1.5+1.0 pushed the armed glyph to ~2.9x — past every theme's bloom
+  // threshold, so it read white-hot, not its colour. Controlled emissive:
+  vec3 col = mix(uColorOff, uColorOn, vState) * (0.80 + 0.90 * vState + 0.75 * vPulse);
   gl_FragColor = vec4(col, a);
 }`;
 

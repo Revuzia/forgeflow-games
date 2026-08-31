@@ -29,11 +29,11 @@
  * the ground truth they are re-checked against.
  *
  *   theme     stone vs fog   panel vs fog   edge vs keyline   cpOn vs cpOff
- *   neon         8.08:1         10.77:1         16.9:1            7.79:1
- *   foundry     10.38:1         10.67:1         14.3:1            9.13:1
- *   spire        4.40:1          4.60:1         12.7:1            4.02:1
- *   temple       3.69:1          3.95:1         18.4:1            3.40:1
- *   hub         10.81:1         11.46:1         15.2:1            8.09:1
+ *   neon         8.08:1         10.77:1         16.9:1            6.91:1
+ *   foundry     10.38:1         10.67:1         14.3:1            7.57:1
+ *   spire        4.40:1          4.60:1         12.7:1            4.50:1
+ *   temple       3.69:1          3.95:1         18.4:1            4.41:1
+ *   hub         10.81:1         11.46:1         15.2:1            6.08:1
  *
  * "edge vs keyline": every leading-edge stripe is flanked by 0.03 m near-black
  * keylines (builders.js) so the stripe reads as a drawn line on ANY deck value
@@ -56,7 +56,15 @@
  *
  * Cross-theme constants, so muscle memory transfers between worlds:
  *   kill          = hot red/orange, always emissive, always moving
- *   checkpointOn  = mint/emerald (149-174 deg from that theme's kill)
+ *   checkpointOn  = that WORLD's bright pad identity (round 2, 2026-08-31:
+ *                   the old universal mint rendered one identical pad in all
+ *                   five worlds — the critic's "universal mint pad". The armed
+ *                   signal is now the SHAPE language: ring + glyph + beam +
+ *                   pulse, wearing the world's colour; hue stays >= 45 deg
+ *                   from that theme's kill and cpOn-vs-cpOff >= 4.4:1)
+ *   pad           = the jump/speed-pad family identity (foundry cyan-on-steel,
+ *                   neon cyan, spire ice blue, temple gold, hub violet);
+ *                   builders.js reads it for pads so no world defaults to mint
  *   finish        = violet, a hue used for nothing else in any theme
  *   safeEdge      = the brightest thing on a landable surface
  * Red/green pairs are never the *only* cue (deuteranopia): kill animates,
@@ -137,8 +145,12 @@ export const THEMES = {
     palette: {
       safe: 0x5d7f9c, safeEdge: 0xc9f7ff,
       kill: 0xff1f4e, killGlow: 0xff6f96,
-      checkpoint: 0x2b4668, checkpointOn: 0x7dffc4,
+      /* checkpointOn was the universal mint 0x7dffc4 — identical in all five
+       * worlds (round-2 critic). Neon's armed pads are now turquoise-cyan, the
+       * world's own family; 6.91:1 vs off, 175 deg from kill. */
+      checkpoint: 0x2b4668, checkpointOn: 0x4df2dc,
       finish: 0xc9a6ff, accent: 0x22d3ee, deco: 0x241a4a,
+      pad: 0x22d3ee,
     },
 
     particles: { type: 'mote', rate: 26, color: 0x7fe6ff, size: 0.055, drift: [0.06, 0.16, 0.02] },
@@ -187,8 +199,13 @@ export const THEMES = {
 
     /* density 0.0160 hid the far lip of a 3 m gap from its own take-off point
      * (house rule: EVERY LANDING IS VISIBLE FROM ITS TAKE-OFF). Thinned until
-     * the next platform silhouettes from CP0; the near haze band still reads. */
-    fog: { color: 0x2a0f06, near: 8, far: 95, density: 0.0125, type: 'exp2' },
+     * the next platform silhouettes from CP0; the near haze band still reads.
+     * Round 2: 0.0125 still merged everything past the current deck into one
+     * orange wall in the re-shots (foundry-1_1 showed zero course geometry
+     * ahead) — 0.0095 keeps a platform at 30 m under 8 % fogged so the next
+     * three jumps silhouette against the molten sea; the readability owner's
+     * contrast work sits on top of this floor. */
+    fog: { color: 0x2a0f06, near: 8, far: 95, density: 0.0095, type: 'exp2' },
 
     sky: {
       type: 'ember',
@@ -211,7 +228,10 @@ export const THEMES = {
         /* the lava SEA itself: dark crust plates threaded by glowing channels
          * on the below-horizon dome (sky.js FRAG_EMBER) — looking down or out
          * now shows molten ground instead of a blank gradient. */
-        seaStrength: 1.0, seaScale: 5.0, seaSpeed: 0.010,
+        /* round 2: at 1.0 the sea's bright band behind the course was the wall
+         * the thinner fog now has to read against — 0.8 keeps the molten floor
+         * alive while giving mid-course silhouettes a darker backdrop. */
+        seaStrength: 0.8, seaScale: 5.0, seaSpeed: 0.010,
         emberGlow: 0xffa04a, dither: 1.0,
         sunDir: [0.24, 0.30, -0.94], sunColor: 0xff8a3c, sunSize: 0.0, sunIntensity: 0.0,
         starDensity: 0.0, starBrightness: 0.0,
@@ -248,8 +268,14 @@ export const THEMES = {
     palette: {
       safe: 0x8b94a4, safeEdge: 0xa8e6ff,
       kill: 0xff4a10, killGlow: 0xffb04a,
-      checkpoint: 0x2f3a48, checkpointOn: 0x56ffd0,
+      /* was mint 0x56ffd0 (round-2 critic: same pad in every world). Icy cyan
+       * enforces this theme's own law — every landable identity is COLD; only
+       * hazards are orange + self-lit + moving. 7.57:1 vs off, 178 deg from
+       * kill. `pad` deliberately does NOT follow accent (amber sits 20 deg
+       * from kill — an amber self-lit pulsing pad would read as a hazard). */
+      checkpoint: 0x2f3a48, checkpointOn: 0x6fe0ff,
       finish: 0xc9a6ff, accent: 0xffb44a, deco: 0x2a2320,
+      pad: 0x9fe0ff,
     },
 
     particles: { type: 'ember', rate: 60, color: 0xff8a2a, size: 0.070, drift: [0.05, 0.85, 0.03] },
@@ -292,7 +318,10 @@ export const THEMES = {
 
     heat: 0.55,   // -> Post.setHeat() via engine.setTheme()
     music: { key: 'D', scale: 'phrygian', bpm: 96, mood: 'industrial dread' },
-    effects: { heatShimmer: true, heatStrength: 0.55, grain: 0.045, snowWind: 0 },
+    /* heatStrength 0.55 smeared the 20-40 m band the thinner fog just opened
+     * up — the shimmer was un-drawing the silhouettes the fog change bought
+     * (round 2). 0.38 keeps the furnace air without erasing the course. */
+    effects: { heatShimmer: true, heatStrength: 0.38, grain: 0.045, snowWind: 0 },
     shadow: { mapSize: 2048, extent: 36, bias: -0.00050, normalBias: 0.040 },
   },
 
@@ -333,10 +362,16 @@ export const THEMES = {
         top: 0x243e74, mid: 0x5f88b8, horizon: 0xc8dcec, bottom: 0xa8c2d8,
         horizonGlow: 0xffd6a8, glowPower: 8.0, glowStrength: 0.38,
         /* sunIntensity 1.0 with a 0.013 disc sat BELOW the 1.10 bloom threshold
-         * — a paper sticker, no glare (spire-1_0). 2.6 puts the disc alone into
-         * HDR so bloom gives it a real winter glint; the halo stays tight. */
-        sunDir: [-0.78, 0.10, -0.61], sunColor: 0xffd8a8, sunSize: 0.014, sunIntensity: 2.6,
-        sunHalo: 0.22,
+         * — a paper sticker, no glare (spire-1_0). But 0.014 @ 2.6 was the
+         * round-2 REJECT: acos(1-0.014) is a ~10 deg disc, and at 2.6x every
+         * pixel of it fed bloom — the sun rendered as a blown white BALL at
+         * the horizon (sunprobe 2026-08-31, sun faced: 1.074 % pure-white
+         * pixels; uSunIntensity=0 -> 0.092 %, so the sun IS the source; bloom
+         * off -> 0.132 %, so the flood is disc x bloom). 0.0022 is a ~3.8 deg
+         * disc: a compact winter sun whose core alone crosses the 1.10
+         * threshold for a tight glint + soft halo, never a frame flood. */
+        sunDir: [-0.78, 0.10, -0.61], sunColor: 0xffd8a8, sunSize: 0.0022, sunIntensity: 1.8,
+        sunHalo: 0.30,
         auroraA: 0x4affc8, auroraB: 0x7f9cff,
         /* ribbons lifted into the dark zenith band where they can actually
          * read; over the pale mid band they were a white smear + bloom blob. */
@@ -372,8 +407,12 @@ export const THEMES = {
     palette: {
       safe: 0x466074, safeEdge: 0xffc94a,
       kill: 0xd6001c, killGlow: 0xff5a3c,
-      checkpoint: 0x46606e, checkpointOn: 0x00e59c,
+      /* was emerald 0x00e59c (round-2 critic: universal mint pad). Spire's
+       * armed pads are now ice blue — the world identity. 4.50:1 vs off,
+       * 158 deg from kill. */
+      checkpoint: 0x46606e, checkpointOn: 0x7fe2ff,
       finish: 0x6a3cd6, accent: 0x5ac8f0, deco: 0x8fb4cc,
+      pad: 0x5ac8f0,
     },
 
     particles: { type: 'snow', rate: 90, color: 0xeaf6ff, size: 0.045, drift: [0.35, -0.55, 0.10] },
@@ -484,8 +523,13 @@ export const THEMES = {
        * frame, trim reads gold, fog reads amber. */
       safe: 0x665134, safeEdge: 0xffd98c,
       kill: 0xff1044, killGlow: 0xff5a7a,
-      checkpoint: 0x6d5c46, checkpointOn: 0x18d69a,
+      /* was emerald 0x18d69a (round-2 critic: universal mint pad). Temple's
+       * armed pads are now bright gold — the world identity. 4.41:1 vs off,
+       * 53 deg of hue from kill (the closest pair of the five, so the shape
+       * language — pulse, ring, beam — carries extra weight here). */
+      checkpoint: 0x6d5c46, checkpointOn: 0xffcf70,
       finish: 0xd9b6ff, accent: 0xffc35c, deco: 0xa88f66,
+      pad: 0xffc35c,
     },
 
     particles: { type: 'mote', rate: 34, color: 0xffe6b0, size: 0.050, drift: [0.10, 0.05, 0.06] },
@@ -571,8 +615,12 @@ export const THEMES = {
     palette: {
       safe: 0x8e9cb5, safeEdge: 0xbfeaff,
       kill: 0xff2020, killGlow: 0xff6a4a,
-      checkpoint: 0x39415a, checkpointOn: 0x6effc8,
+      /* was mint 0x6effc8 (round-2 critic: universal mint pad). The hub's
+       * armed pads are now observatory blue; 6.08:1 vs off, 155 deg from
+       * kill. `pad` follows the violet accent. */
+      checkpoint: 0x39415a, checkpointOn: 0x8fd0ff,
       finish: 0xc9a6ff, accent: 0x9a7dff, deco: 0x2b3350,
+      pad: 0x9a7dff,
     },
 
     particles: { type: 'mote', rate: 18, color: 0xa9b8ff, size: 0.045, drift: [0.02, 0.03, 0.02] },
