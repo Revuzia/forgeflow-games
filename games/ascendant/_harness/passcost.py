@@ -147,15 +147,16 @@ async () => {
 GRADE = ["GradePass", "FinishPass"]
 AA = ["SMAAPass", "FXAAPass"]
 OUT = ["OutputPass"]
+BLOOM = ["UnrealBloomPass", "ScaledBloomPass"]
 
 CONFIGS = [
     ("full chain", []),
-    ("-bloom", ["UnrealBloomPass"]),
+    ("-bloom", BLOOM),
     ("-grade/finish", GRADE),
     ("-viewmodel", ["ViewmodelPass"]),
     ("-AA", AA),
     ("-output", OUT),
-    ("scene only", ["UnrealBloomPass", "ViewmodelPass"] + GRADE + AA + OUT),
+    ("scene only", BLOOM + ["ViewmodelPass"] + GRADE + AA + OUT),
 ]
 
 

@@ -360,6 +360,22 @@ export const DEFAULT_GRADE = {
 export const DEFAULT_BLOOM = { strength: 0.62, radius: 0.55, threshold: 0.86 };
 
 /**
+ * Ceiling on what the bloom bright-pass may read from the HDR scene buffer.
+ *
+ * The default is the largest value a half float can represent, which makes the
+ * clamp INERT on every finite pixel — it only removes NaN and Infinity. That is
+ * deliberate: this stage's scene buffer legitimately reaches 65504 today (see
+ * ScaledBloomPass._installInputClamp), so any lower ceiling would CHANGE the
+ * shipped image, and the image is not this change's to alter.
+ *
+ * Presets that are explicitly allowed to trade quality lower it via
+ * `quality.bloomClamp`. Once whatever writes 65504 into the scene buffer is
+ * fixed, a ceiling around 12–24 becomes safe everywhere and unlocks the cheaper
+ * half-resolution bloom; the measured sweep is in the report.
+ */
+export const DEFAULT_BLOOM_CLAMP = 65504;
+
+/**
  * The grade pass, which is also the output pass.
  *
  * A ShaderPass subclass partly so the uniform plumbing has names instead of
@@ -450,7 +466,7 @@ class ScaledBloomPass extends UnrealBloomPass {
    * @param {number} strength @param {number} radius @param {number} threshold
    * @param {number} scale 0..1 fraction of the frame to build the mips from
    */
-  constructor(resolution, strength, radius, threshold, scale) {
+  constructor(resolution, strength, radius, threshold, scale, inputClamp) {
     const s = clamp(numOr(scale, 1), 0.125, 1);
     super(
       new THREE.Vector2(
@@ -460,6 +476,59 @@ class ScaledBloomPass extends UnrealBloomPass {
       strength, radius, threshold,
     );
     this.bloomScale = s;
+    this._installInputClamp(clamp(numOr(inputClamp, DEFAULT_BLOOM_CLAMP), 1, 1e6));
+  }
+
+  /**
+   * Clamp what the bright pass is allowed to see.
+   *
+   * MEASURED, on neon-1: the HDR scene buffer this pass consumes contains
+   * non-finite channels and finite values up to 65504 — the largest number a
+   * half float can hold — with 0.72 % of all channels above 100. Bloom is a
+   * blur, so a single such texel does not stay a dot: it is spread across the
+   * frame and then ADDED back, and the whole image saturates. Full-frame
+   * measurement of the pre-existing chain: 80.6 % of pixels already at luma
+   * 1.0. Lowering the bloom resolution makes it strictly worse, because each
+   * mip texel then covers more of the screen — at half scale it reached 100 %.
+   *
+   * A clamp on the bloom INPUT is the standard guard for this (Unity and
+   * Unreal both ship one). It costs one instruction, leaves every value below
+   * the ceiling untouched, and makes the pass resolution-independent, which is
+   * what lets the cheaper mip chain be safe at all.
+   *
+   * This treats the SYMPTOM. The disease is whatever writes 65504 into the
+   * scene buffer, which lives in the lighting/material code this change does
+   * not own — see the note in the report.
+   *
+   * @private @param {number} ceiling
+   */
+  _installInputClamp(ceiling) {
+    const mat = this.materialHighPassFilter;
+    if (!mat) throw new Error('[Post] UnrealBloomPass has no materialHighPassFilter to clamp');
+
+    const from = 'vec4 texel = texture2D( tDiffuse, vUv );';
+    if (mat.fragmentShader.indexOf(from) === -1) {
+      throw new Error('[Post] LuminosityHighPassShader no longer starts with the expected ' +
+        'texel fetch — the bloom input clamp is stale, re-derive it.');
+    }
+    const to = [
+      'vec4 texel = texture2D( tDiffuse, vUv );',
+      '// NaN never compares equal to itself; Inf is caught by the min below.',
+      'texel.rgb = mix( vec3( 0.0 ), texel.rgb, vec3( equal( texel.rgb, texel.rgb ) ) );',
+      'texel.rgb = clamp( texel.rgb, vec3( 0.0 ), vec3( uBloomClamp ) );',
+    ].join('\n');
+
+    mat.fragmentShader = ('uniform float uBloomClamp;\n' +
+      mat.fragmentShader.replace(from, to));
+    mat.uniforms.uBloomClamp = { value: ceiling };
+    this.highPassUniforms.uBloomClamp = mat.uniforms.uBloomClamp;
+    mat.needsUpdate = true;
+  }
+
+  /** @param {number} v the highest value bloom may see */
+  setInputClamp(v) {
+    const u = this.materialHighPassFilter && this.materialHighPassFilter.uniforms.uBloomClamp;
+    if (u) u.value = clamp(numOr(v, DEFAULT_BLOOM_CLAMP), 1, 1e6);
   }
 
   setSize(width, height) {
@@ -509,7 +578,42 @@ function fxaaFragment() {
     }
     src = src.split(from).join(to);
   }
-  return src;
+
+  // ApplyFXAA returns from inside a branch, which is the remaining half of the
+  // X4000 warning: HLSL sees a path where the inlined return value was never
+  // written. Same algorithm, one exit.
+  const head = src.indexOf('vec4 ApplyFXAA(');
+  const tail = src.indexOf('void main()');
+  if (head === -1 || tail === -1 || tail < head) {
+    throw new Error('[Post] could not locate ApplyFXAA/main in FXAAShader — ' +
+      'the single-exit rewrite is stale, re-derive it against the vendored shader.');
+  }
+  const singleExit = /* glsl */`vec4 ApplyFXAA( sampler2D tex2D, vec2 texSize, vec2 uv ) {
+
+  LuminanceData luminance = SampleLuminanceNeighborhood( tex2D, texSize, uv );
+  vec2 outUv = uv;
+
+  if ( ! ShouldSkipPixel( luminance ) ) {
+
+    float pixelBlend = DeterminePixelBlendFactor( luminance );
+    EdgeData edge = DetermineEdge( texSize, luminance );
+    float edgeBlend = DetermineEdgeBlendFactor( tex2D, texSize, luminance, edge, uv );
+    float finalBlend = max( pixelBlend, edgeBlend );
+
+    if ( edge.isHorizontal ) {
+      outUv.y += edge.pixelStep * finalBlend;
+    } else {
+      outUv.x += edge.pixelStep * finalBlend;
+    }
+
+  }
+
+  return Sample( tex2D, outUv );
+
+}
+
+`;
+  return src.slice(0, head) + singleExit + src.slice(tail);
 }
 
 /**
@@ -653,7 +757,7 @@ export class Post {
       this.bloomPass = new ScaledBloomPass(
         new THREE.Vector2(dw, dh),
         this._bloom.strength, this._bloom.radius, this._bloom.threshold,
-        numOr(q.bloomScale, 0.5),
+        numOr(q.bloomScale, 1), numOr(q.bloomClamp, this._bloom.clamp),
       );
       composer.addPass(this.bloomPass);
     }
@@ -782,12 +886,14 @@ export class Post {
     cur.strength = clamp(numOr(src.strength, DEFAULT_BLOOM.strength), 0, 4);
     cur.radius = clamp(numOr(src.radius, DEFAULT_BLOOM.radius), 0, 2);
     cur.threshold = clamp(numOr(src.threshold, DEFAULT_BLOOM.threshold), 0, 8);
+    cur.clamp = clamp(numOr(src.clamp, DEFAULT_BLOOM_CLAMP), 1, 1e6);
 
     const p = this.bloomPass;
     if (!p) return;
     p.strength = cur.strength;
     p.radius = cur.radius;
     p.threshold = cur.threshold;
+    p.setInputClamp(numOr(this.quality && this.quality.bloomClamp, cur.clamp));
   }
 
   /**
@@ -903,7 +1009,7 @@ export class Post {
       !this.composer ||
       !!next.bloom !== !!prev.bloom ||
       aaMode(next) !== aaMode(prev) ||
-      numOr(next.bloomScale, 0.5) !== numOr(prev.bloomScale, 0.5);
+      numOr(next.bloomScale, 1) !== numOr(prev.bloomScale, 1);
 
     this.quality = next;
 

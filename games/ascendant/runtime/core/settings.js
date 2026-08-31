@@ -27,11 +27,23 @@ import { TUNE } from './tuning.js';
  *   shadowMap      shadow map resolution in texels, 0 disables shadows entirely
  *   bloom          a bloom pass in the chain
  *   bloomScale     fraction of the frame the bloom mip chain is built from.
- *                  Bloom is a blur, so resolving it at full res is paying for
- *                  detail that is immediately destroyed; 0.5 is visually near
- *                  identical and quarters the fill. NOTE UnrealBloomPass already
- *                  halves internally, so 0.5 here means its first mip is a
- *                  QUARTER of the frame width.
+ *                  NOTE UnrealBloomPass already halves internally, so 1 here
+ *                  still means its first mip is HALF the frame width, and 0.5
+ *                  means a quarter.
+ *                  high/ultra deliberately keep 1. Half-resolution bloom is
+ *                  normally free-looking, but it is NOT free on this content:
+ *                  the HDR scene buffer currently contains Infinity and values
+ *                  up to 65504, and a coarser mip smears those over more of the
+ *                  screen. Measured full-frame on neon-1, share of pixels at
+ *                  luma 1.0:  full-res 80.6 %  ->  half-res 100 %. The look is
+ *                  not this preset's to change, so the cheaper chain is only
+ *                  used on the tiers that are allowed to trade quality.
+ *   bloomClamp     ceiling on what the bloom bright-pass may read. 65504 (the
+ *                  half-float maximum) is inert on finite pixels and only
+ *                  removes NaN/Infinity. low/medium lower it to 12, which is
+ *                  what makes their cheaper bloom look acceptable. Once the
+ *                  source of the 65504s is fixed, 12-24 is safe everywhere and
+ *                  high/ultra can drop to bloomScale 0.5 for free.
  *   aa             'smaa' | 'fxaa' | 'none'. SMAA is three full-screen draws
  *                  plus two full-size render targets it owns; FXAA is one draw
  *                  and no targets. Bloom is never switched off to save time —
@@ -60,25 +72,29 @@ import { TUNE } from './tuning.js';
 export const QUALITY = {
   low: {
     id: 'low', label: 'LOW',
-    dpr: 1, shadowMap: 0, bloom: true, bloomScale: 0.25, aa: 'fxaa', smaa: false, ssao: false,
+    dpr: 1, shadowMap: 0, bloom: true, bloomScale: 0.25, bloomClamp: 12,
+    aa: 'fxaa', smaa: false, ssao: false,
     particles: 0.35, decor: 0.3, shadowDistance: 0,
     anisotropy: 1, maxLights: 2,
   },
   medium: {
     id: 'medium', label: 'MEDIUM',
-    dpr: 1.25, shadowMap: 1024, bloom: true, bloomScale: 0.25, aa: 'fxaa', smaa: false, ssao: false,
+    dpr: 1.25, shadowMap: 1024, bloom: true, bloomScale: 0.5, bloomClamp: 12,
+    aa: 'fxaa', smaa: false, ssao: false,
     particles: 0.6, decor: 0.6, shadowDistance: 45,
     anisotropy: 2, maxLights: 4,
   },
   high: {
     id: 'high', label: 'HIGH',
-    dpr: 1.5, shadowMap: 2048, bloom: true, bloomScale: 0.5, aa: 'fxaa', smaa: false, ssao: false,
+    dpr: 1.5, shadowMap: 2048, bloom: true, bloomScale: 1, bloomClamp: 65504,
+    aa: 'fxaa', smaa: false, ssao: false,
     particles: 1, decor: 1, shadowDistance: 70,
     anisotropy: 4, maxLights: 6,
   },
   ultra: {
     id: 'ultra', label: 'ULTRA',
-    dpr: 1.5, shadowMap: 2048, bloom: true, bloomScale: 0.5, aa: 'smaa', smaa: true, ssao: true,
+    dpr: 1.5, shadowMap: 2048, bloom: true, bloomScale: 1, bloomClamp: 65504,
+    aa: 'smaa', smaa: true, ssao: true,
     particles: 1, decor: 1, shadowDistance: 110,
     anisotropy: 8, maxLights: 8,
   },
