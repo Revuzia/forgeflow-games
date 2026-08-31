@@ -166,6 +166,27 @@ def main() -> int:
                 print(f"{sid}: never loaded")
                 continue
             click_play(pg)
+            pg.wait_for_timeout(1500)
+            # ?stage= only preloads; PLAY lands in the HUB. Drive the dev hook and
+            # verify the id, or every "stage" shot is a photo of the hub.
+            try:
+                pg.evaluate("(s)=>ASCENDANT.game.__dev.goto(s)", sid)
+            except Exception as e:
+                print(f"{sid}: goto failed {e}")
+                continue
+            arrived = False
+            deadline = time.time() + 60
+            while time.time() < deadline:
+                try:
+                    if pg.evaluate("(s)=>!!(ASCENDANT.game.stage && ASCENDANT.game.stage.def && ASCENDANT.game.stage.def.id===s)", sid):
+                        arrived = True
+                        break
+                except Exception:
+                    pass
+                pg.wait_for_timeout(400)
+            if not arrived:
+                print(f"{sid}: stage id never became {sid}")
+                continue
             pg.wait_for_timeout(2200)
             for i in range(args.per):
                 try:
