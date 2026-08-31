@@ -3331,6 +3331,106 @@ export class Stage {
   /* ──────────────────────────────────────────────────────────── debug ── */
 
   /** Collider + kill-volume wireframes (dev mode only). */
+  /**
+   * Force every chunk (and every culled hazard mesh) visible and render two
+   * frames so ALL shader programs compile and every merged geometry uploads NOW,
+   * while the intro card covers the screen — then restore culling.
+   *
+   * Why: first visibility is expensive. Measured at temple-1 cp3: respawning
+   * into a never-yet-visible chunk compiled 10 programs and uploaded 149
+   * geometries in ONE 1712 ms frame (probe 2026-08-31). Death is exactly when a
+   * chunk tends to become visible for the first time (the checkpoint may sit in
+   * a chunk the player sprinted past), so the hitch landed inside the respawn.
+   */
+  warmup(renderer, camera) {
+    /* Force EVERY object visible and un-culled — not just chunks. State-driven
+       art hides descendants until a phase turns them on (a vanish platform's
+       ghost wireframe, warn flakes, a crusher's warning lamp glow): a chunk- or
+       hazard-level force misses those, and their first appearance mid-death
+       still compiled 9 programs in a 1.3 s frame at temple-1 cp3 even after the
+       whole-stage-frustum warmup. Save exact flags, restore after. */
+    /* Exercise every lazy build path FIRST. resetFrom() is what a death runs,
+       and re-arming state hazards (a crumble platform's shard debris, a vanish
+       ghost) creates meshes and MATERIAL VARIANTS on their first reset — the
+       named culprits at temple-1 cp3 were asc.ice.temple / fb_sand / an
+       emissive + six shadow variants, all born inside the first resetFrom(3).
+       Run every checkpoint's reset now so those children exist before the
+       compile pass below, then restore a pristine stage. */
+    try {
+      for (let i = 0; i < this.checkpoints.length; i++) this.resetFrom(i);
+      this.reset();
+    } catch (e) { /* never break a load */ }
+    const saved = [];
+    for (const ch of this._chunks) {
+      saved.push([ch, ch.visible, ch.detailVisible]);
+      ch.visible = true; ch.group.visible = true;
+      if (ch.detail) { ch.detailVisible = true; ch.detail.visible = true; }
+    }
+    const objFlags = [];
+    /* Traverse the whole SCENE, not stage.group: the nine cp3 programs turned
+       out to belong to scene-level containers (props/glow placed beside the
+       stage group) whose geometry first renders when the death cam looks down. */
+    const sceneRoot = this.group.parent || this.group;
+    sceneRoot.traverse((o) => {
+      objFlags.push([o, o.visible, o.frustumCulled]);
+      o.visible = true;
+      o.frustumCulled = false;
+    });
+    const hazVis = [];
+    for (const h of this.hazards) {
+      if (h.mesh) { hazVis.push([h.mesh, h.mesh.visible]); h.mesh.visible = true; }
+    }
+    try {
+      const scene = this.group.parent || this.group;
+      /* compile() and render() both respect FRUSTUM culling, so warming up
+         through the player's camera misses everything the player cannot see
+         from spawn — which is exactly what a death cam then reveals (it pitches
+         down): temple-1 cp3 overlooks a well whose interior compiled 10 programs
+         in one 1611 ms frame mid-death. Use a synthetic wide-angle camera high
+         over the stage centre looking straight down: the whole course fits in
+         one frustum, so every material compiles and every geometry uploads in
+         these covered renders. */
+      const b = this.bounds;
+      const warmCam = new THREE.PerspectiveCamera(110, 1.78, 0.1, 4000);
+      /* A fresh camera sees only layer 0 — meshes on selective layers (glow /
+         bloom overlays) upload their geometry but never DRAW, so their programs
+         still compile mid-death. See everything. */
+      warmCam.layers.enableAll();
+      if (b && isFinite(b.min.x)) {
+        const cx = (b.min.x + b.max.x) / 2, cz = (b.min.z + b.max.z) / 2;
+        const spanX = b.max.x - b.min.x, spanZ = b.max.z - b.min.z;
+        const h = Math.max(spanX, spanZ) * 0.42 + (b.max.y - b.min.y) + 20;
+        warmCam.position.set(cx, b.max.y + h, cz);
+        warmCam.lookAt(cx, b.min.y, cz);
+      } else {
+        warmCam.copy(camera);
+      }
+      warmCam.updateMatrixWorld(true);
+      /* CRITICAL: render into a LINEAR HalfFloat target, not the canvas. The
+         program cache key includes the output colour space, and real frames go
+         scene -> composer RT (srgb-linear); a warmup render to the canvas
+         compiles only useless `srgb` variants — which is why every earlier
+         warmup iteration left the death-frame compiles intact (the cacheKey
+         diff finally named it: srgb vs srgb-linear). */
+      const warmRT = new THREE.WebGLRenderTarget(64, 64, { type: THREE.HalfFloatType });
+      const prevRT = renderer.getRenderTarget();
+      renderer.setRenderTarget(warmRT);
+      renderer.render(scene, warmCam);       // compiles + uploads + shadow variants
+      renderer.render(scene, warmCam);
+      // one pass through the PLAYER camera too, for anything whose shader
+      // depends on the real view configuration
+      renderer.render(scene, camera);
+      renderer.setRenderTarget(prevRT);
+      warmRT.dispose();
+    } catch (e) { /* a warm-up must never break a load */ }
+    for (const [o, v, fc] of objFlags) { o.visible = v; o.frustumCulled = fc; }
+    for (const [ch, v, dv] of saved) {
+      ch.visible = v; ch.group.visible = v;
+      if (ch.detail) { ch.detailVisible = dv; ch.detail.visible = dv; }
+    }
+    for (const [m, v] of hazVis) m.visible = v;
+  }
+
   debugDraw(on) {
     this._debugOn = !!on;
     if (this._debugOn && !this._debugGroup) this._buildDebug();

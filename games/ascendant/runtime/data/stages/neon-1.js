@@ -6,19 +6,21 @@
  * silhouette. Nothing here is trying to kill you except the drop, and the drop is
  * always somewhere you chose to be.
  *
- * SHAPE      ~252 m of travel, 48 gameplay objects, 12 dynamic hazards,
+ * SHAPE      ~252 m of travel, 49 gameplay objects, 12 dynamic hazards,
  *            6 checkpoints (never more than 49 m apart), 3 coins.
  *            It runs long on purpose: every mechanic is taught in isolation before
  *            it is ever asked for, and that costs metres. Later stages are denser.
  *
- * TEACHES    walk -> a gap -> gaps that grow -> aim sideways -> step up -> a belt
- *            that carries you -> a beam you have to walk -> a ferry that comes back
- *            -> the jump pad -> sprint -> panels that vanish -> spikes -> a floor
- *            that sinks -> and a launch into a three-tier ascent for the finish.
+ * TEACHES    walk -> a gap -> gaps that grow while the floor dips away -> aim
+ *            sideways -> step up -> a belt that carries you down into the underpass
+ *            -> a beam you have to walk -> the climb back out -> a ferry that comes
+ *            back -> the jump pad -> sprint -> panels that vanish -> spikes -> a
+ *            floor that sinks -> and a launch into a three-tier ascent for the finish.
  *
  * ── HOUSE RULES THIS FILE EXISTS TO DEMONSTRATE ──────────────────────────────
  * Ten more stages will be written against this one. The rules below are not style
- * preferences; the first four are enforced by `_harness/reachcheck.mjs`.
+ * preferences; the first four are enforced by `_harness/reachcheck.mjs` and rule 7
+ * by `_harness/geomcheck.mjs`.
  *
  * 1. THE ENVELOPE IS LAW.  CONTRACT §0: at run speed (8.6 m/s) a flat gap of
  *    4.4 m is the authoring limit and 5.24 m is the theoretical maximum. This
@@ -34,13 +36,11 @@
  *    therefore fail half the time:
  *        4.36 m .. 5.24 m  (a run jump at full stretch, level ground)
  *        6.18 m .. 7.44 m  (a sprint jump at full stretch, level ground)
- *    Both bands stretch as the landing drops — at -4 m they sit at 5.8-6.9 m and
- *    8.2-9.8 m — which is why a high ledge over a low deck is the single most
- *    common way a stage grows a jump nobody designed. Every pair in this file is
- *    under the safe line, inside the comfortable sprint band, or past the point
- *    where nothing can reach. There are no full-stretch jumps here at all.
- *    Concretely: chain platforms >= 3.0 m wide with >= 2.4 m gaps and the skip-one
- *    lands past 7.8 m on its own.
+ *    Both bands MOVE with the height difference — at -1.0 m they sit at 4.78-5.76
+ *    and 6.78-8.17 — and they move in BOTH directions independently, so a ledge one
+ *    metre down has a different forbidden band going back up than coming down. Every
+ *    pair in this file has been checked in both directions. There are no full-stretch
+ *    jumps here at all.
  *
  * 3. EVERY LINK MUST BE JUMPABLE.  A mover, lift or belt is a RIDE, never the only
  *    connection between two halves of a stage. If the only way across is to stand
@@ -54,13 +54,20 @@
  *    gauntlet learnable instead of lucky.
  *
  * 5. VARY EVERYTHING, ALWAYS.  Gap length, height delta and platform width change on
- *    almost every object here. Where they do not — BEAT 2 holds height and width
- *    steady so that distance is the only variable — that is stated in the comment,
- *    because an unexplained repeat reads as laziness and five identical hops teach
- *    nothing after the second.
+ *    almost every object here.
  *
  * 6. EVERY LANDING IS VISIBLE FROM ITS TAKE-OFF. No blind drops, no jumps into
  *    fog, no landing that only exists once you are already committed.
+ *
+ * 7. NEVER LET THE COURSE GO FLAT.  geomcheck measures the longest stretch of X with
+ *    no height change over 0.75 m and warns past 40 m, fails past 60 m — and it takes
+ *    the WORST stretch, so fixing the worst only exposes the next one. Two stretches
+ *    of this stage used to be flat corridors: BEAT 2-3 held one height for 48 m, and
+ *    BEAT 5 ran the belt, both beams, the ferry and its landing at exactly 3.70 for
+ *    59 m. Both are now shaped: BEAT 2 dips 0.8 m into a trough and climbs back out
+ *    onto the checkpoint, and BEAT 5 drops a metre into an underpass and climbs 1.2 m
+ *    back out of it. The longest flat run left is the sprint runway, at 35 m, which
+ *    is flat because a sprint runway has to be.
  *
  * CONVENTIONS (full list in runtime/data/index.js):
  *   p = CENTRE, s = FULL size. A top surface is p[1] + s[1]/2 and a platform spans
@@ -70,14 +77,16 @@
  *   `stripe: true` = "you had to jump to get here". Walk-on floors do not get one.
  *
  * REACH BUDGET USED (safe limits: 4.4 flat / 3.8 at +1.0 m / 5.2 at -2.0 m):
- *   longest flat run-speed gap    3.8 m   (BEAT 5, off the second beam onto the ferry)
+ *   longest flat run-speed gap    3.68 m  (BEAT 3, the zig-zag diagonal)
  *   longest rise                  0.9 m over 3.1 m   (BEAT 4, the climb)
- *   longest diagonal              3.68 m  (BEAT 3, the zig-zag)
+ *   longest drop asked for        1.0 m over 0 m     (BEAT 5, off the deck onto the belt)
  *   the one sprint gap            5.6 m   (BEAT 7, after 12 m of runway + a speed pad)
- *   riskiest optional line        3.77 m flat        (BEAT 3, the coin shortcut)
+ *   riskiest optional line        3.15 m at +0.90    (BEAT 5, climbing out of the sump)
  *
- * HEIGHT LADDER: 0.5 (dojo floor) -> 0.9 -> 1.0 -> 1.9 -> 2.8 -> 3.7 (deck & beams)
- *                -> 7.7 (upper roof, by pad) -> 12.5 -> 13.8 -> 15.1 (the ascent).
+ * HEIGHT LADDER: 0.5 (dojo floor) -> -0.3 (BEAT 2 trough) -> 0.5 -> 1.0 -> 1.9 -> 2.8
+ *                -> 3.7 (dojo deck) -> 2.7 (the underpass) -> 1.8 (the sump)
+ *                -> 3.25 -> 3.9 (the beams and the ferry) -> 3.7 (the pad deck)
+ *                -> 7.7 (upper roof) -> 12.5 -> 13.8 -> 15.1 (the ascent).
  */
 
 const NEON = 0x7ef0ff;
@@ -97,14 +106,15 @@ export default {
   killY: -30,
 
   checkpoints: [
-    // On the wide relief pad at the end of the growing gaps, looking at the zig-zag:
-    // the first time you have to commit sideways over nothing.
+    // On the wide relief pad at the top of the climb out of the trough, looking at
+    // the zig-zag: the first time you have to commit sideways over nothing.
     { p: [36.4, 0.6, 0], yaw: 0, clockOffset: 0 },
     // The dojo deck at the top of the climb, before the belt and the beams.
     { p: [85.0, 3.8, 0], yaw: 0, clockOffset: 0 },
-    // The small pad between the two beams. You earned this one by walking.
-    { p: [107.2, 3.8, 0], yaw: 0, clockOffset: 0 },
-    // Off the ferry, in front of the jump pad.
+    // The pad at the top of the climb out of the underpass. You earned this one by
+    // walking a beam and then climbing 1.2 m of it back.
+    { p: [113.4, 4.0, 0], yaw: 0, clockOffset: 0 },
+    // Off the ferry, on the deck in front of the jump pad.
     { p: [136.0, 3.8, 0], yaw: 0, clockOffset: 0 },
     // The sprint landing. Everything from here on is the stage asking for it back.
     { p: [182.3, 7.8, 0], yaw: 0, clockOffset: 0 },
@@ -116,7 +126,7 @@ export default {
 
   coins: [
     { p: [54.0, 2.0, 8.4] }, // BEAT 3 — the zig-zag shortcut, out over the void
-    { p: [114.8, 4.7, 5.4] }, // BEAT 5 — a side ledge off the second beam
+    { p: [105.8, 2.7, 5.0] }, // BEAT 5 — down in the sump, under the beam
     { p: [144.0, 10.1, 3.0] }, // BEAT 6 — on top of the roof mast
   ],
 
@@ -155,26 +165,37 @@ export default {
     { kind: 'light', p: [1.0, 3.4, 0], color: 0xbcd8f5, intensity: 7, distance: 18 },
 
     /* ============================================================================ */
-    /* BEAT 2 — GAPS THAT GROW                                                      */
-    /* 2.2 -> 2.6 -> 2.9 -> 3.2 m, then a wide 2.7 m relief hop down onto the        */
-    /* checkpoint. Height and width barely move (see HOUSE RULE 5): distance is the  */
-    /* only variable, because the only question this beat asks is "how far does one  */
-    /* jump go". The hardest hop spends 73% of the 4.4 m safe budget.                */
-    /* Widths stay >= 3.0 m so that platform N to platform N+2 is always past 7.8 m  */
-    /* — out of reach, rather than a barely-possible skip (HOUSE RULE 2).            */
+    /* BEAT 2 — GAPS THAT GROW, OVER A TROUGH                                       */
+    /* 2.2 -> 2.6 -> 2.9 -> 3.2 m, then a wide 2.7 m hop up onto the checkpoint.     */
+    /* Distance is the beat's subject, so it is the thing that changes every hop;    */
+    /* but the floor is NOT allowed to hold still under it. Slabs three and four sit */
+    /* 0.8 m LOWER than the first two, so the run reads as a shallow dip: step down  */
+    /* into it on the 2.9, cross the bottom on the 3.2, climb out on the 2.7 and     */
+    /* arrive at the checkpoint above where you started (HOUSE RULE 7).              */
+    /*                                                                              */
+    /* Dipping rather than climbing is deliberate. Raising the middle slabs would    */
+    /* have put their top faces inside the arc of the very first jump the stage      */
+    /* asks for; dropping them puts the whole trough under it, and gives the beat a  */
+    /* silhouette you can read from the start line.                                  */
+    /*                                                                              */
+    /* The hardest hop spends 73% of the 4.4 m safe budget. Widths stay >= 3.0 m so  */
+    /* that slab N to slab N+2 is 8.7-9.5 m — past even the sprint envelope at these */
+    /* height deltas, rather than a barely-possible skip (HOUSE RULE 2).             */
     /* ============================================================================ */
 
-    { kind: 'platform', p: [11.7, 0, 0], s: [3.0, 1, 4.6], mat: 'panel', glow: NEON, stripe: true }, // gap 2.2
-    { kind: 'platform', p: [17.4, 0, 0.7], s: [3.2, 1, 4.4], mat: 'panel', glow: NEON, stripe: true }, // gap 2.6
-    { kind: 'platform', p: [23.6, 0.4, 0], s: [3.4, 1, 4.2], mat: 'panel', glow: NEON, stripe: true }, // gap 2.9, +0.4
-    { kind: 'platform', p: [30.0, 0.4, -0.9], s: [3.0, 1, 4.0], mat: 'panel', glow: NEON, stripe: true }, // gap 3.2
-    { kind: 'platform', p: [36.4, 0, 0], s: [4.4, 1, 5.2], mat: 'panel', glow: NEON, stripe: true }, // gap 2.7, -0.4
+    { kind: 'platform', p: [11.7, 0, 0], s: [3.0, 1, 4.6], mat: 'panel', glow: NEON, stripe: true }, // gap 2.2, top 0.5
+    { kind: 'platform', p: [17.4, 0, 0.7], s: [3.2, 1, 4.4], mat: 'panel', glow: NEON, stripe: true }, // gap 2.6, top 0.5
+    { kind: 'platform', p: [23.6, -0.8, 0], s: [3.4, 1, 4.2], mat: 'panel', glow: NEON, stripe: true }, // gap 2.9, -0.8 into the trough
+    { kind: 'platform', p: [30.0, -0.8, -0.9], s: [3.0, 1, 4.0], mat: 'panel', glow: NEON, stripe: true }, // gap 3.2, the trough floor
+    { kind: 'platform', p: [36.4, 0, 0], s: [4.4, 1, 5.2], mat: 'panel', glow: NEON, stripe: true }, // gap 2.7, +0.8 back out
 
     { kind: 'text', p: [9.8, 2.3, 3.4], rot: [0, -Math.PI / 2, 0], text: 'they get further apart', size: 0.26, color: 0x6f8dac },
+    { kind: 'text', p: [21.4, 1.6, 3.6], rot: [0, -Math.PI / 2, 0], text: 'and the floor drops away', size: 0.24, color: 0x6f8dac },
     { kind: 'deco', kindOf: 'lantern', p: [14.0, 3.6, 5.4], s: [0.7, 1.0, 0.7], mat: 'emissive', tint: HOT },
     { kind: 'deco', kindOf: 'lantern', p: [26.0, 3.9, -5.6], s: [0.7, 1.0, 0.7], mat: 'emissive', tint: HOT },
+    { kind: 'deco', kindOf: 'buttress', p: [26.8, -3.4, 4.6], s: [10.0, 4.0, 0.5], mat: 'obsidian', tint: DIM },
     { kind: 'deco', kindOf: 'cable', p: [23.0, 4.6, 0], s: [28.0, 0.06, 0.06], mat: 'metal', tint: 0x1c3550 },
-    { kind: 'light', p: [23.0, 3.2, 0], color: NEON, intensity: 6, distance: 26 },
+    { kind: 'light', p: [23.0, 2.4, 0], color: NEON, intensity: 6, distance: 26 },
 
     /* ============================================================================ */
     /* BEAT 3 — SIDEWAYS                                                            */
@@ -228,82 +249,130 @@ export default {
     { kind: 'light', p: [85.0, 6.6, 0], color: NEON, intensity: 10, distance: 20 },
 
     /* ============================================================================ */
-    /* BEAT 5 — THE BELT AND THE BEAMS                                              */
-    /* HAZARD 1 (teaching): a conveyor, flush with the deck, running at 4 m/s — less */
-    /* than half of TUNE.conveyorMax and slower than a sprint, so it nudges rather   */
-    /* than shoves. It is a floor that moves, introduced while there is nothing else */
-    /* to think about, and it feeds you into the beam at the right speed.            */
+    /* BEAT 5 — THE UNDERPASS                                                       */
+    /* The dojo deck ends in a lip and the floor drops a metre. Everything in this   */
+    /* beat happens down in that gap and then climbs back out of it, which is what   */
+    /* keeps 50 m of "walk carefully" from reading as a corridor (HOUSE RULE 7).     */
     /*                                                                              */
-    /* Then no gap at all for seven metres — just 1.0 m of width. A different kind   */
-    /* of problem, solved by walking, and the first time the stage asks you to slow  */
-    /* down. A 2.6 m hop to a small pad (the checkpoint), then a second beam.        */
+    /* HAZARD 1 (teaching): the belt IS the step down. It butts straight against the */
+    /* deck's edge, one metre below it, so you walk off the lip and land on a floor  */
+    /* that is already moving — 4 m/s, less than half of TUNE.conveyorMax and slower */
+    /* than a sprint, so it nudges rather than shoves. A moving floor introduced     */
+    /* while there is nothing else to think about, feeding you into the beam at the  */
+    /* right speed. Stepping back UP onto the deck is a plain 1.0 m hop, so nobody   */
+    /* is trapped down here.                                                         */
     /*                                                                              */
-    /* COIN 2 hangs off the second beam: a 3.7 m lateral jump from a surface you are */
-    /* already balancing on, and the same jump back.                                */
+    /* Then a 2.2 m hop off the end of the belt onto seven metres of beam — 1.1 m of */
+    /* width strung across the underpass, with nothing to do on it but walk. A       */
+    /* different kind of problem, and the first time the stage asks you to slow down.*/
+    /*                                                                              */
+    /* COIN 2 is in the SUMP: a 3.15 m hop off the side of the beam and 0.9 m FURTHER */
+    /* DOWN. The only jump back out at run speed is the same 3.15 m back up onto the */
+    /* beam (0.90 m of rise, 82% of the safe budget for it); the stone is 4.5 m away */
+    /* at +1.45, which is a sprint. It is the only place on the stage where the      */
+    /* optional line is below you rather than beside you, and the only thing it costs */
+    /* is the nerve to leave the beam.                                               */
+    /*                                                                              */
+    /* Then the climb out: a small stone stepped 0.55 m up and 2.2 m off the axis to */
+    /* -Z, so the last hop onto the checkpoint pad is taken at an angle, and the pad */
+    /* itself sits 1.2 m above the underpass floor. Beam two runs at the new height. */
     /* ============================================================================ */
 
-    { kind: 'conveyor', p: [91.5, 3.2, 0], s: [6.0, 1, 4.2], dir: [1, 0, 0], power: 4, mat: 'conveyor' },
-    { kind: 'text', p: [88.2, 5.4, 0], rot: [0, -Math.PI / 2, 0], text: 'the floor helps', size: 0.28, color: AMBER },
+    { kind: 'conveyor', p: [91.9, 2.2, 0], s: [6.8, 1, 4.6], dir: [1, 0, 0], power: 4, mat: 'conveyor' }, // top 2.7, flush with the deck's edge
+    { kind: 'text', p: [87.4, 4.6, 0], rot: [0, -Math.PI / 2, 0], text: 'step down  ·  the floor helps', size: 0.28, color: AMBER },
 
-    { kind: 'beam', p: [99.8, 3.4, 0], s: [7.0, 0.6, 1.0], mat: 'metal' }, // 1.8 m off the belt
-    { kind: 'platform', p: [107.2, 3.2, 0], s: [2.6, 1, 3.0], mat: 'panel', glow: NEON, stripe: true }, // gap 2.6
-    { kind: 'beam', p: [114.2, 3.4, 0], s: [6.0, 0.6, 1.0], mat: 'metal' }, // gap 2.7
+    { kind: 'beam', p: [101.1, 2.4, 0], s: [7.2, 0.6, 1.1], mat: 'metal' }, // gap 2.2 off the belt, top 2.7
+    { kind: 'platform', p: [105.8, 1.3, 5.0], s: [2.6, 1, 2.6], mat: 'grate', glow: HOT, stripe: true }, // THE SUMP, top 1.8 — coin 2
+    { kind: 'platform', p: [107.2, 2.75, -2.2], s: [2.4, 1, 2.8], mat: 'panel', glow: NEON, stripe: true }, // gap 1.3, +0.55, off-axis
+    { kind: 'platform', p: [113.4, 3.4, 0], s: [4.2, 1, 4.0], mat: 'panel', glow: NEON, stripe: true }, // gap 2.9, +0.65 — cp2, top 3.9
+    { kind: 'beam', p: [118.5, 3.6, 0], s: [3.0, 0.6, 1.2], mat: 'metal' }, // gap 1.5, top 3.9 — a short plank, not a second corridor
 
-    { kind: 'platform', p: [114.8, 3.2, 5.4], s: [2.4, 1, 2.4], mat: 'panel', glow: HOT, stripe: true }, // 3.7 m off the beam
-    { kind: 'deco', kindOf: 'ring', p: [114.8, 4.7, 5.4], s: [0.12, 2.2, 2.2], rot: [0, Math.PI / 2, 0], mat: 'emissive', tint: HOT },
-    { kind: 'light', p: [114.8, 4.9, 5.4], color: HOT, intensity: 6, distance: 13 },
+    { kind: 'deco', kindOf: 'ring', p: [105.8, 3.1, 5.0], s: [0.12, 2.2, 2.2], rot: [0, Math.PI / 2, 0], mat: 'emissive', tint: HOT },
+    { kind: 'light', p: [105.8, 3.4, 5.0], color: HOT, intensity: 6, distance: 13 },
 
-    { kind: 'text', p: [97.6, 4.9, 0], rot: [0, -Math.PI / 2, 0], text: 'narrow  ·  walk it', size: 0.28, color: 0x6f8dac },
-    { kind: 'deco', kindOf: 'rail', p: [102.0, 5.4, 3.2], s: [22.0, 0.07, 0.07], mat: 'metal', tint: DIM },
-    { kind: 'deco', kindOf: 'rail', p: [102.0, 5.4, -3.2], s: [22.0, 0.07, 0.07], mat: 'metal', tint: DIM },
-    { kind: 'deco', kindOf: 'lantern', p: [97.0, 4.9, -3.2], s: [0.6, 0.9, 0.6], mat: 'emissive', tint: HOT },
-    { kind: 'deco', kindOf: 'lantern', p: [112.0, 4.9, -3.2], s: [0.6, 0.9, 0.6], mat: 'emissive', tint: HOT },
+    { kind: 'text', p: [96.4, 4.2, 0], rot: [0, -Math.PI / 2, 0], text: 'narrow  ·  walk it', size: 0.28, color: 0x6f8dac },
+    { kind: 'text', p: [109.6, 5.4, 0], rot: [0, -Math.PI / 2, 0], text: 'and back up', size: 0.26, color: 0x6f8dac },
+    // Rails ride at y 5.6 and the buttress stops at x 103: DRESSING RULE 7 — the
+    // stone tops out at 3.25 and the sump ledge starts at x 104.5, so nothing here
+    // is within 2.3 m of anywhere a player stands or passes through anything.
+    { kind: 'deco', kindOf: 'rail', p: [104.0, 5.6, 3.0], s: [22.0, 0.07, 0.07], mat: 'metal', tint: DIM },
+    { kind: 'deco', kindOf: 'rail', p: [104.0, 5.6, -3.0], s: [22.0, 0.07, 0.07], mat: 'metal', tint: DIM },
+    { kind: 'deco', kindOf: 'buttress', p: [97.0, 0.4, 4.4], s: [12.0, 3.2, 0.5], mat: 'obsidian', tint: DIM },
+    { kind: 'deco', kindOf: 'lantern', p: [95.0, 3.9, -3.4], s: [0.6, 0.9, 0.6], mat: 'emissive', tint: HOT },
+    { kind: 'deco', kindOf: 'lantern', p: [117.0, 5.1, -3.4], s: [0.6, 0.9, 0.6], mat: 'emissive', tint: HOT },
 
     /* ============================================================================ */
     /* BEAT 5b — THE FERRY                                                          */
     /* HAZARD 2 (teaching): the gentlest mover in the game. Straight down the stage  */
     /* axis, a 9 s round trip, 1.4 s of dwell at each end, and it comes back if you  */
-    /* miss it. Board at 3.8 m from the beam, ride 7 m, step off at 1.5 m.           */
+    /* miss it. Board at 1.0 m off the plank, ride 7.0 m, step off at 1.5 m.         */
     /*                                                                              */
-    /* The pier at z = -6.4 is not a shortcut — it is somewhere to STAND while the   */
-    /* ferry comes back for you, which is the whole lesson. Both ends of the ferry's */
-    /* travel are within a jump of it, and the far landing is a jump from the ferry, */
-    /* so no player is ever stranded (HOUSE RULE 3).                                */
+    /* The pier at z = -7.4 is not a shortcut — it is somewhere to STAND while the   */
+    /* ferry comes back for you, which is the whole lesson. BOTH ends of the ferry's */
+    /* travel are within a 3.75 m hop of it and it is within a hop of both of them,  */
+    /* and the pad deck is a 5.69 m sprint away, so a player who misses the boat is  */
+    /* inconvenienced and never stranded (HOUSE RULE 3). The plank cannot reach the  */
+    /* pier at all — 7.71 m, past the sprint envelope — so the pier is somewhere you */
+    /* arrive from the ferry, not somewhere you take instead of it.                  */
+    /*                                                                              */
+    /* The ferry's FAR pose is also the reason it stops at x 132 and not further on. */
+    /* The upper roof's lip is 10.4 m away and 3.8 m above it, and the mast base is  */
+    /* 11.0 m away and 5.0 m above it: a drop of that size stretches the sprint      */
+    /* envelope to 9.74 m and 10.30 m respectively, so a ferry parked two metres     */
+    /* further forward would have quietly offered a suicide dive backwards off the   */
+    /* roof onto a moving platform. Both are out of range by better than half a      */
+    /* metre (HOUSE RULE 2 — the bands move with the drop, and they move a long way).*/
     /* ============================================================================ */
 
     {
       kind: 'mover',
-      p: [123.0, 3.2, 0],
+      p: [123.0, 3.4, 0],
       s: [4.0, 1, 4.4],
       mat: 'metal',
-      motion: { type: 'linear', to: [130.0, 3.2, 0], period: 9.0, phase: 0, ease: 'sine', dwell: 1.4 },
+      motion: { type: 'linear', to: [130.0, 3.4, 0], period: 9.0, phase: 0, ease: 'sine', dwell: 1.4 },
     },
-    { kind: 'platform', p: [126.6, 3.2, -6.4], s: [2.8, 1, 2.8], mat: 'panel', glow: AMBER, stripe: true }, // the pier
-    { kind: 'platform', p: [136.0, 3.2, 0], s: [5.0, 1, 6.0], mat: 'stone', glow: DIM, stripe: true }, // 1.5 m off the ferry
+    { kind: 'platform', p: [127.1, 3.4, -7.4], s: [3.0, 1, 3.0], mat: 'panel', glow: AMBER, stripe: true }, // the pier
+    { kind: 'platform', p: [137.9, 3.2, 0], s: [8.8, 1, 6.0], mat: 'stone', glow: DIM, stripe: true }, // 1.5 m off the ferry, top 3.7
 
-    { kind: 'text', p: [119.0, 5.6, 0], rot: [0, -Math.PI / 2, 0], text: 'RIDE IT', size: 0.5, color: NEON },
-    { kind: 'text', p: [119.0, 5.05, 0], rot: [0, -Math.PI / 2, 0], text: 'it comes back  ·  wait on the pier', size: 0.24, color: 0x6f8dac },
-    { kind: 'deco', kindOf: 'rail', p: [125.6, 5.6, 6.4], s: [24, 0.08, 0.08], mat: 'metal', tint: DIM },
-    { kind: 'light', p: [125.6, 5.8, 0], color: NEON, intensity: 7, distance: 22 },
+    { kind: 'text', p: [119.4, 5.6, 0], rot: [0, -Math.PI / 2, 0], text: 'RIDE IT', size: 0.5, color: NEON },
+    { kind: 'text', p: [119.4, 5.05, 0], rot: [0, -Math.PI / 2, 0], text: 'it comes back  ·  wait on the pier', size: 0.24, color: 0x6f8dac },
+    { kind: 'deco', kindOf: 'rail', p: [126.0, 5.6, 6.4], s: [24, 0.08, 0.08], mat: 'metal', tint: DIM },
+    { kind: 'light', p: [126.0, 5.8, 0], color: NEON, intensity: 7, distance: 22 },
 
     /* ============================================================================ */
     /* BEAT 6 — THE JUMP PAD  (the stage's first "whoa")                            */
-    /* power = APEX METRES above the pad, so 5.4 puts your head at y 9.2 from a pad  */
-    /* at 3.84. With gravRise 38 / gravFall 54 that is 0.533 s up and 0.239 s down   */
-    /* to the roof at 7.7 — 0.772 s of flight and up to 9.4 m of travel at sprint.   */
-    /* The roof's lip is 4.0 m away and the roof is 9 m deep: you cannot really miss.*/
-    /* There is no jump from the ferry landing to the roof. The pad IS the route,    */
-    /* which is exactly why the pad is a platform-sized slab you cannot walk past.   */
+    /* The pad deck ends flush against the face of the upper roof: a 4 m wall with   */
+    /* no jump in it. The pad is the route, which is exactly why the pad is a        */
+    /* platform-sized slab you cannot walk past.                                     */
     /*                                                                              */
-    /* COIN 3 sits on the mast: a 1.2 m hop up from the roof, or a direct pad launch */
-    /* if you aim. The mast stands INSIDE the roof's footprint rather than out over  */
-    /* the drop, which is not a decorative choice — a 1.2 m ledge hung off the roof's */
-    /* north edge is 4 m above the ferry landing and 5-9 m away from it, and every    */
-    /* placement out there lands one of those distances in a forbidden band.          */
+    /* power = APEX METRES above the pad, so 6.2 puts your head at y 10.04 from a pad */
+    /* at 3.84. A PAD IS NOT A JUMP: both halves of a bounce integrate at gravFall,  */
+    /* the pad adds nothing horizontal, and the arc is therefore FIXED — the landing */
+    /* point is decided entirely by the speed you carried on. That band runs from    */
+    /* 4.64 m (a player who strolled on at 6 m/s) to 11.17 m (a sprint entry holding */
+    /* jump for the +25% bounce bonus), measured from the pad's trailing edge at     */
+    /* x 139.35. The roof spans 142.4 to 151.4, i.e. 3.05 m to 12.05 m from that     */
+    /* line: it swallows the WHOLE band with a metre to spare at each end.           */
+    /*                                                                              */
+    /* This is the thing the old version of this beat got wrong — apex 5.4 from a pad*/
+    /* 4.1 m further back threw a walking player 3.03 m short of the roof lip, which */
+    /* is a hidden death for anyone who does not sprint onto a pad they were told to */
+    /* stand on. The deck grew forward to carry the pad forward and the apex went up */
+    /* from 5.4 to 6.2; the roof itself did not move a centimetre.                   */
+    /*                                                                              */
+    /* The roof's lip is also far enough ahead of the launch that a SPRINTING entry  */
+    /* is already at y 8.62 when it crosses x 142.4 — nearly a metre clear of the    */
+    /* roof's top face, so nobody launches into the underside of the building.       */
+    /*                                                                              */
+    /* COIN 3 sits on the mast: a 1.2 m hop up from the roof. The mast stands INSIDE */
+    /* the roof's footprint rather than out over the drop, which is not a decorative */
+    /* choice — a 1.2 m ledge hung off the roof's north edge is 4 m above the pad    */
+    /* deck and 5-9 m away from it, and every placement out there lands one of those */
+    /* distances in a forbidden band.                                                */
     /* ============================================================================ */
 
-    { kind: 'jumppad', p: [137.0, 3.77, 0], s: [2.8, 0.14, 2.8], power: 5.4, dir: [0, 1, 0] },
-    { kind: 'text', p: [134.6, 5.4, 0], rot: [0, -Math.PI / 2, 0], text: 'STAND ON IT', size: 0.32, color: NEON },
+    { kind: 'jumppad', p: [140.9, 3.77, 0], s: [2.4, 0.14, 3.0], power: 6.2, dir: [0, 1, 0] },
+    { kind: 'text', p: [136.4, 5.4, 0], rot: [0, -Math.PI / 2, 0], text: 'STAND ON IT', size: 0.32, color: NEON },
 
     { kind: 'platform', p: [146.9, 7.2, 0], s: [9, 1, 10], mat: 'stone', glow: DIM, stripe: true }, // the upper roof, top 7.7
     { kind: 'platform', p: [144.0, 8.4, 3.0], s: [2.0, 1, 2.0], mat: 'obsidian', glow: HOT, stripe: true }, // the mast base, top 8.9
@@ -329,9 +398,11 @@ export default {
     /* fluke at full stretch teaches nothing; a gap that simply requires the button  */
     /* teaches sprinting in one attempt. (HOUSE RULE 2, the forbidden bands.)        */
     /*                                                                              */
-    /* The hurdle sits 6 m into the runway, not at its mouth: a 0.7 m obstacle is a  */
-    /* raised surface like any other, and up against the roof it would have offered  */
-    /* a 7.9 m sprint-and-pray back the way you came.                                */
+    /* This runway is the longest flat stretch left on the stage (35 m) and it stays */
+    /* flat on purpose: a sprint gap needs unbroken run-up, and geomcheck's corridor */
+    /* warning starts at 40 m. The hurdle sits 6 m into it, not at its mouth: a 0.7 m*/
+    /* obstacle is a raised surface like any other, and up against the roof it would */
+    /* have offered a 7.9 m sprint-and-pray back the way you came.                   */
     /* ============================================================================ */
 
     { kind: 'platform', p: [164.0, 7.2, 0], s: [18, 1, 6], mat: 'stone', glow: DIM, stripe: true }, // gap 3.6, the runway
@@ -394,15 +465,19 @@ export default {
     /* behind (3.0 m at +1.5) and the launch deck ahead (3.0 m at +1.5) are still    */
     /* inside the envelope. A tutorial teaches "keep moving" by making it cost time. */
     /*                                                                              */
-    /* Then a 6.0 m pad throws you 4.66 m up and 4.5 m out onto the first of three  */
-    /* tiers that spiral up and away from the city. Each tier is +1.3 m over a 2.7 / */
-    /* 2.25 m gap — well inside the 3.59 m budget for that rise, and small enough    */
-    /* that you have to aim while looking up. Everything the stage taught, in twenty */
-    /* seconds, ending above the skyline.                                            */
+    /* Then the biggest throw in the stage: apex 8 m off a pad at 7.84, onto the     */
+    /* first of three tiers that spiral up and away from the city. Same fixed-arc    */
+    /* arithmetic as BEAT 6 — the entry-speed band lands between 5.38 m and 12.85 m  */
+    /* from the pad's trailing edge at x 223.35, so tier one runs 227.7 to 237.7 and */
+    /* catches a stroll and a held sprint alike with a metre of margin either side.  */
+    /* (At the old apex 6 over a tier starting at 231.2, a walking player landed     */
+    /* 3.68 m short of the deck — into the void, off the stage's own set-piece.)     */
+    /* Tier one's near edge is also past the point where a sprint entry has cleared  */
+    /* its underside, so the launch never headbutts the platform it is aimed at.     */
     /*                                                                              */
-    /* Tier one sits 11.5 m past the sinking floor rather than the 10.6 m the layout */
-    /* wanted: from 4.8 m up, the sprint envelope reaches 10.85 m, and a tier at     */
-    /* 10.6 m would have quietly offered a suicide dive back onto the sinker.        */
+    /* Tiers two and three are +1.3 m over 2.2 / 2.25 m gaps — inside the 3.59 m     */
+    /* budget for that rise, and small enough that you have to aim while looking up. */
+    /* Everything the stage taught, in twenty seconds, ending above the skyline.     */
     /* ============================================================================ */
 
     {
@@ -418,11 +493,11 @@ export default {
     { kind: 'text', p: [213.0, 9.4, 0], rot: [0, -Math.PI / 2, 0], text: 'DO NOT LINGER', size: 0.38, color: AMBER },
 
     { kind: 'platform', p: [225.2, 7.2, 0], s: [5.0, 1, 6.4], mat: 'stone', glow: DIM, stripe: true }, // gap 3.0
-    { kind: 'jumppad', p: [225.2, 7.77, 0], s: [3.0, 0.14, 3.0], power: 6.0, dir: [0, 1, 0] },
+    { kind: 'jumppad', p: [225.2, 7.77, 0], s: [3.0, 0.14, 3.0], power: 8.0, dir: [0, 1, 0] },
     { kind: 'text', p: [223.0, 10.1, 0], rot: [0, -Math.PI / 2, 0], text: 'UP', size: 0.7, color: NEON },
 
-    { kind: 'platform', p: [234.2, 12.0, 0], s: [6, 1, 7], mat: 'panel', glow: NEON, stripe: true }, // top 12.5
-    { kind: 'platform', p: [242.4, 13.3, 3.4], s: [5, 1, 5], mat: 'panel', glow: NEON, stripe: true }, // gap 2.7, top 13.8
+    { kind: 'platform', p: [232.7, 12.0, 0], s: [10, 1, 6], mat: 'panel', glow: NEON, stripe: true }, // top 12.5, catches the whole pad band
+    { kind: 'platform', p: [242.4, 13.3, 3.4], s: [5, 1, 5], mat: 'panel', glow: NEON, stripe: true }, // gap 2.2, top 13.8
     { kind: 'platform', p: [250.4, 14.6, 0.4], s: [6.5, 1, 7], mat: 'obsidian', glow: NEON, stripe: true }, // gap 2.25, top 15.1
 
     // The finish gate, built so it frames the last jump.
@@ -431,7 +506,7 @@ export default {
     { kind: 'deco', kindOf: 'pillar', p: [250.4, 17.4, -3.2], s: [1.1, 5.6, 1.1], mat: 'obsidian' },
     { kind: 'deco', kindOf: 'beacon', p: [253.7, 16.7, 0.4], s: [0.6, 2.6, 0.6], mat: 'emissive', tint: NEON },
     { kind: 'light', p: [250.4, 18.1, 0.4], color: NEON, intensity: 18, distance: 30 },
-    { kind: 'light', p: [234.2, 14.9, 0], color: NEON, intensity: 8, distance: 20 },
+    { kind: 'light', p: [232.7, 14.9, 0], color: NEON, intensity: 8, distance: 20 },
     { kind: 'text', p: [247.8, 16.5, 0.4], rot: [0, -Math.PI / 2, 0], text: 'FIRST LIGHT', size: 0.4, color: NEON },
 
     /* ============================================================================ */
@@ -454,7 +529,7 @@ export default {
     // Rim lights strung down the length of the course so the path reads from far away.
     { kind: 'light', p: [48, 5.0, 0], color: NEON, intensity: 6, distance: 24 },
     { kind: 'light', p: [71, 6.9, 0], color: NEON, intensity: 6, distance: 22 },
-    { kind: 'light', p: [107, 7.1, 0], color: NEON, intensity: 7, distance: 20 },
+    { kind: 'light', p: [110, 6.4, 0], color: NEON, intensity: 7, distance: 20 },
     { kind: 'light', p: [198, 10.4, 0], color: AMBER, intensity: 7, distance: 22 },
     { kind: 'light', p: [225, 10.9, 0], color: NEON, intensity: 8, distance: 22 },
   ],

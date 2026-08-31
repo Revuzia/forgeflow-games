@@ -640,6 +640,12 @@ export class Game {
       }
 
       /* ---- 9. one settle frame so the first visible frame is complete ---- */
+      /* Warm-up first, while the veil is still down: force every chunk visible,
+         compile all programs and upload all merged geometry in two covered
+         renders. A respawn into a first-seen chunk otherwise eats the compile
+         in ONE frame mid-death — measured at temple-1 cp3: +10 programs,
+         +149 geometries, a 1712 ms frame. */
+      safe(() => stage.warmup(this.engine.renderer, this.engine.camera), 'stage.warmup');
       safe(() => stage.update(0), 'stage.update(0)');
       safe(() => this.player.update(0), 'player.update(0)');
       safe(() => this.camera && this.camera.update(0), 'camera.update(0)');
