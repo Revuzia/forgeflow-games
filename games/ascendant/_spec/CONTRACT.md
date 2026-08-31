@@ -346,7 +346,7 @@ ObjectDef (flat, discriminated by `kind`) — full list:
 {kind:'conveyor', p, s, dir, power, mat?}
 {kind:'ice',      p, s, rot?}
 {kind:'wind',     p, s, dir, power}
-{kind:'chase',    axis:'y'|'z', from, to, speed, delay, mat:'lava'|'void'|'wall'}
+{kind:'chase',    axis:'x'|'y'|'z', from, to, speed, delay, mat:'lava'|'void'|'wall'}
 {kind:'deco',     p, s?, rot?, model?, kindOf?, scale?, count?, spread?, seed?}
 {kind:'text',     p, rot?, text, size?, color?}                  // in-world signage/tutorial
 {kind:'light',    p, color, intensity, distance, flicker?}

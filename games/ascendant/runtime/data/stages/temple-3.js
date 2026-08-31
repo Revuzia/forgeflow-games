@@ -5,20 +5,30 @@
  * The finale of the whole game. Everything the four worlds taught, remixed and asked
  * for at once, in five movements, and then a deadline.
  *
- * SHAPE      400.6 m of travel, 104 gameplay objects, 61 dynamic hazards drawn from
- *            16 families, 12 checkpoints, 6 coins — measured by
- *            `node _harness/reachcheck.mjs temple-3`, not estimated. Five movements:
+ * SHAPE      Measured by `node _harness/reachcheck.mjs temple-3`, not estimated:
+ *            400.6 m of travel, 106 gameplay objects, 85 landable surfaces, 68
+ *            dynamic hazards, 12 checkpoints, 6 coins. Eighteen distinct hazard
+ *            kinds are authored — the harness scores 16 of them, because its
+ *            HAZARD_KINDS set does not know `lasergrid` or `lasersweep`, so the two
+ *            racks and the drum sweep are real hazards it counts as zero:
+ *
+ *              mover 8 · vanish 9 · rotor 10 · pendulum 8 · crusher 3 · saw 3 ·
+ *              laser 7 · lasergrid 2 · lasersweep 1 · ice 7 · wind 3 · conveyor 2 ·
+ *              spikes 2 · lava 1 · risinglava 1 · jumppad 2 · speedpad 1 · chase 1
+ *
+ *            Five movements:
  *
  *   I    THE SHATTERING STAIR   x  -4 – 113   vanish sky-steps, a beam, an orbit tile
- *   II   THE LANTERN BRIDGE     x 115 – 185   laser racks, a sweep, rotors, windmills
- *   III  THE CATHEDRAL RIM      x 186 – 260   ice + wind + a censer ring, out and back
+ *   II   THE LANTERN BRIDGE     x 113 – 186   a laser rack, a drum sweep, rotors, mills
+ *   III  THE CATHEDRAL RIM      x 186 – 259   ice + wind + a censer ring, out and back
  *   IV   THE UNDERSTONE         x 259 – 325   presses, belts, saws, lava, a piston
  *   V    THE ASCENT             x 325 – 407   pad, lift, sprint, a sinking bridge
  *
- * CHECKPOINT SPACING  42.8 / 41.0 / 35.2 / 35.8 / 24.8 / 30.8 / 20.4 / 37.8 / 17.4 /
- *            18.0 / 27.4 m. No leg is longer than 43 m and none of the hard ones is
- *            longer than 31 m: a death on the ice arc, in the machine deck or on the
- *            ascent costs well under half a minute of replay.
+ * CHECKPOINT SPACING  42.8 / 41.0 / 35.2 / 35.8 / 24.8 / 30.8 / 20.4 / 38.6 / 16.6 /
+ *            18.0 / 27.4 m. No leg is longer than 43 m and every hard passage — the
+ *            ice arc, the machine deck, the ascent — sits on a leg under 31 m, so a
+ *            death there costs well under half a minute of replay rather than the
+ *            35–50 s the 72 m legs of the previous build cost.
  *
  * DESIGN LAW FOR THIS STAGE: difficulty 10, but every death is the player's fault and
  * every death is CHEAP. Nothing here is blind, nothing kills from off-screen, and no
@@ -32,60 +42,82 @@
  *   orbit mover `p` is the ORBIT CENTRE and the reachable edges are at p +/- radius.
  *   A vanish `cycle.phase` is a FRACTION OF THE CYCLE (0..1), not seconds; a rotor
  *   `phase` is a FRACTION OF A REVOLUTION; a pendulum `amp` is RADIANS.
+ *   The three `sink` tiles pin `motion.to` at their own home pose on purpose:
+ *   reachcheck's `rectsFor` invents a landable surface at `p.y + (travel || 4)` for a
+ *   sink otherwise, and that phantom deck four metres up is not a thing that exists.
  *
- * RHYTHM — the numbers, not the intention. Sorted by x, the forward gaps on the main
- *   line run 0.1 / 0.4 / 0.6 / 1.0 / 1.2 / 1.3 / 1.4 / 1.5 / 1.6 / 1.7 / 1.9 / 2.0 /
- *   2.1 / 2.2 / 2.4 / 2.5 / 2.6 / 2.9 / 3.0 / 3.1 / 3.2 / 3.3 / 3.4 / 3.5 / 3.8 /
- *   4.1 / 4.3 / 4.4 / 5.6 / 5.8 — a genuine spread from a step to a sprint, not one
- *   stride repeated. The height ladder is not a ramp either: the stage falls -2.0 m
- *   off the shattering stair (BEAT 4), -1.6 m onto the second beam approach, -1.4 m
- *   onto the rim's buttress head, -1.7 then -2.0 m into the machine deck, -1.6 m into
- *   the grate pit and -2.5 m into the maintenance gallery, against rises of +0.9,
- *   +1.2, +1.6 and two launch pads. Fourteen distinct drops of 1.0 m or more.
+ * RHYTHM — measured, not intended (`node _harness/geomcheck.mjs temple-3`):
+ *            56 distinct platform footprints across 67 landable slabs, a gap
+ *            coefficient of variation of 0.49, never more than 2 identical obstacles
+ *            in a row, and the longest run without a height change over 0.75 m is
+ *            20.9 m. 45 distinct landable top heights and 34 distinct z centres.
+ *            The build this replaced scored 41 / 0.43 / 2 / 59.4 m and failed the
+ *            gate outright on eight hazard-clipping errors.
+ *
+ *            Thirteen jumps on the route fall a metre or more: -1.1 -1.2 -1.3 -1.3
+ *            -1.4 -1.5 -1.6 -1.6 -1.6 -1.7 -1.7 -2.0 -2.0 -2.5. Two of them spend
+ *            the full -2.0 m drop CONTRACT section 0 licenses, and the deepest, into
+ *            the maintenance gallery, is -2.5 m over 4.10 m of air. Nineteen rises of
+ *            a metre or more answer them. Every movement crosses the centre line:
+ *            z runs -2.0..12.4 in I, -2.6..7.6 in II, -1.4..13.6 in III, -9.0..4.4 in
+ *            IV and -9.4..4.6 in V. There is no 4 m corridor anywhere on the stage.
  *
  * REACH BUDGET USED (safe limits from CONTRACT section 0, SAFE = 0.83 of the true
  *                    envelope: run 4.35 flat / 3.80 at +1.0 / 3.11 at +1.8 /
  *                    5.15 at -2.0, sprint 6.17 flat):
- *   longest run-speed flat gap on the main line   3.5 m   (BEAT 7, onto the shuttle)
- *   longest gap with a rise                       3.4 m at +0.9  (BEAT 2)
- *   longest gap with a drop                       4.4 m at -2.0  (BEAT 4 — the plunge)
- *   the TWO sprint gaps                           5.8 m over the grate pit (BEAT 19,
- *                                                 optional: the grate is the other
- *                                                 way through) and 5.6 m on the
- *                                                 ascent runway (BEAT 26, required)
- *   biggest single step up                        1.6 m over 1.6 m (the sinking bridge)
+ *   longest flat run-speed gap on the main line   3.50 m  (BEAT 8, onto the shuttle)
+ *   longest gap with a rise                       3.40 m at +0.9  (BEAT 2)
+ *   longest gap with a drop                       4.41 m at -2.0  (BEAT 4, the plunge)
+ *   the ONE required sprint                       5.60 m  (BEAT 25, the runway)
+ *   the one OPTIONAL sprint                       6.40 m at -1.6 (BEAT 19 — refusing
+ *                                                 the grate and clearing the pit; the
+ *                                                 grate itself is a 1.40 m step)
+ *   biggest single step up                        1.60 m over 1.73 m (BEAT 26)
+ *   Every one of the 13 legs reports its hardest edge as `run` except the last, which
+ *   reports `sprint` at 5.60 m. reachcheck emits ZERO warnings on this stage.
  *
  * HEIGHT LADDER: 0.5 (threshold) -> 1.8 (first beam) -> -0.2 (the plunge) -> 2.9
  *                (stair landing) -> 4.7 (bridge set-piece) -> 3.1 (rim buttress head)
  *                -> 7.0 (the updraft ledge) -> 5.7 (bell floor) -> -0.6 (the gallery,
  *                the lowest floor in the game) -> 3.8 (launch court) -> 24.2 (gate).
  *
- * THE COLLAPSE (BEAT 24) — read this before touching object indices. It is a
- *   `chase` on the **Y axis**: a void deck that rises out of the cloud sea and eats
- *   the ascent from underneath. That axis choice is load-bearing, not cosmetic:
- *   chase.js `_buildKill()` sizes the kill volume as `killDepth = max(travel+40, 60)`
- *   BEHIND the front, so an X-axis collapse anywhere near the gate would put a 90 m
- *   deep lethal box back over MOVEMENT III and IV whatever the clock said. On the Y
- *   axis the box is bounded laterally by the front's own face — `p:[369,0,0]`,
- *   `s:[88,4,44]` — so it occupies x 325..413 and NOTHING outside it. The last
- *   surface of MOVEMENT IV ends at x 324.8. The collapse is therefore incapable of
- *   killing anyone who has not already reached the launch court, at any clock value.
+ * THE COLLAPSE (BEAT 23) — read this before touching it. It is a `chase` on the
+ *   **Y axis**: a void deck that rises out of the cloud sea and eats the ascent from
+ *   underneath. The axis is load-bearing, not cosmetic. chase.js `_buildKill()` sizes
+ *   the lethal volume as `killDepth = Math.max(travel + 40, 60)` BEHIND the front, so
+ *   an X-axis collapse anywhere near the gate drags a 90+ m deep kill box back over
+ *   MOVEMENT III and IV whatever the clock says — that is what the previous build did
+ *   (from 312, travel 108, killDepth 148, so at t = 178 everything from x 164 forward
+ *   died at once, 148 m behind a front nobody could see). On the Y axis that depth
+ *   points straight DOWN into empty sky and the lateral bound is the front's own
+ *   face: `p:[369,0,0]`, `s:[88,4,44]` is x 325..413, z -22..22, and nothing else, at
+ *   any clock value. The last surface of MOVEMENT IV ends at x 324.8. The collapse is
+ *   structurally incapable of touching a player who has not reached the launch court.
  *
- *   It is also visible for its whole life: it arms at t = 176 at y = -26, 29.8 m
- *   below the court, and climbs at 1.6 m/s through the cloud deck the player has been
- *   looking down into since BEAT 23. It reaches the court at t = 194.6, the first
- *   terrace at 197.9, the runway at 200.2 and the last terrace at 204.9, and parks at
- *   y = 23.4 — 0.8 m under the gate floor, which is the one surface in x 325..413 it
- *   never takes. Par is 205 s: a player at pace meets it on the climb, which is the
- *   point of it, and a player who beats it to the gate wins the race it exists to be.
+ *   It is also visible for its whole life. It arms at t = 176 at y -26 — 29.8 m under
+ *   the court, in the cloud deck the player has been looking down into since BEAT 22
+ *   — and climbs at 1.6 m/s: court deck (3.8) at t 194.6, first terrace (8.6) at
+ *   197.9, runway (12.6) at 200.2, last terrace (19.9) at 204.9. It parks at y 23.4,
+ *   0.8 m under the gate floor at 24.2 — the one surface inside its footprint it
+ *   never takes, which is why the gate is the finish. Par is 205 s, so a player at
+ *   pace meets it on the climb (that is the point of it) and a player who beats it to
+ *   the gate has won the race it exists to be, rather than only ever meeting it as an
+ *   instant death or a post-mortem rewind.
  *
- * CHECKPOINT CLOCKS: every checkpoint pins a rising `clockOffset` (12 / 32 / 52 / 68 /
- *   86 / 100 / 114 / 126 / 146 / 158 / 168 / 186), the median clock at that deck.
- *   `Stage.resetFrom()` rewinds to it, so every respawn hands back the SAME hazard
- *   phase AND the same race against the collapse: from CP10 the court gives 8 s
- *   before the front arms and 26.6 s before it takes the deck; from CP11 the runway
- *   gives 14.2 s before the front reaches it, against a ~11 s climb. No checkpoint
- *   leaves the clock free-running under an armed hazard.
+ * CHECKPOINT CLOCKS: every checkpoint pins a rising `clockOffset` — 12 / 32 / 52 /
+ *   68 / 86 / 100 / 114 / 126 / 146 / 158 / 168 / 186, the median clock at that deck.
+ *   `Stage.resetFrom()` rewinds to it, so every respawn hands back the same hazard
+ *   phase AND the same race: from CP10 the court gives 8 s before the front arms and
+ *   26.6 s before it takes the deck; from CP11 the runway gives 14.2 s against a ~11 s
+ *   climb. No checkpoint on this stage leaves the clock free-running under an armed
+ *   hazard — spire-3 pins all six, foundry-2 and foundry-3 pin all seven and six, and
+ *   now so does this one.
+ *
+ * KNOWN, INTENDED: the two ceiling presses of BEAT 18 are the stage's only orphan
+ * surfaces in the harness report (orphanSample 159:crusher / 160:crusher). Their
+ * retracted caps sit 4.7 m over the belt, outside every jump in the game — that is
+ * what a ceiling press is, and the report counting them unreachable is the report
+ * being right.
  *
  * DETERMINISM: every timed object is a pure function of the stage clock (CONTRACT
  * section 16).
@@ -123,7 +155,7 @@ export default {
     { p: [205.2, 3.2, 9.6], yaw: 0, clockOffset: 100 }, //  5 the buttress head, out on the rim
     { p: [236.0, 6.2, 1.8], yaw: 0, clockOffset: 114 }, //  6 the bell approach
     { p: [256.4, 5.8, 0.8], yaw: 0, clockOffset: 126 }, //  7 the bell floor — MOVEMENT IV
-    { p: [294.2, 0.4, -1.0], yaw: 0, clockOffset: 146 }, //  8 past the grate pit
+    { p: [295.0, 0.4, -1.0], yaw: 0, clockOffset: 146 }, //  8 past the grate pit
     { p: [311.6, 1.6, 2.4], yaw: 0, clockOffset: 158 }, //  9 off the fast belt, before the piston
     { p: [329.6, 3.9, 0], yaw: 0, clockOffset: 168 }, // 10 the launch court — MOVEMENT V
     { p: [357.0, 12.7, -3.4], yaw: 0, clockOffset: 186 }, // 11 the ascent runway, above the front
@@ -138,8 +170,8 @@ export default {
     { p: [61.0, 4.6, 12.4] }, // I   — ride the orbit tile out over the void and back
     { p: [127.2, 4.7, 7.6] }, // II  — the low catwalk under the sweeping laser
     { p: [222.0, 6.7, 13.2] }, // III — two ledges further out into the crosswind
-    { p: [291.6, 2.2, -6.6] }, // IV  — the maintenance gallery under the presses
-    { p: [303.0, 3.6, 4.4] }, // IV  — the high catwalk over the saw gauntlet
+    { p: [290.6, 2.2, -9.0] }, // IV  — the maintenance gallery under the presses
+    { p: [303.8, 3.6, 4.4] }, // IV  — the high catwalk over the saw gauntlet
     { p: [348.0, 15.4, -9.4] }, // V   — the pillar top off the lift, under a blade
   ],
 
@@ -301,7 +333,7 @@ export default {
 
     { kind: 'platform', p: [120.0, 2.9, 1.4], s: [10.0, 1, 4.2], mat: 'stone', glow: STONE, stripe: true }, // gap 2.40, +0.5, top 3.40
 
-    { kind: 'laser', a: [117.0, 3.92, -0.9], b: [117.0, 3.92, 3.7], radius: 0.14, color: HOT, cycle: { on: 1.3, off: 1.5, warn: 0.45, phase: 0.00 } }, // 0.52 up — jump
+    { kind: 'laser', a: [117.0, 3.92, -0.9], b: [117.0, 3.92, 3.7], radius: 0.14, color: HOT, cycle: { on: 1.6, off: 2.4, warn: 0.45, phase: 0.00 } }, // 0.52 up — jump; 4.0 s period, 40% duty
     {
       kind: 'lasergrid',
       a: [121.4, 5.12, -0.9],
@@ -329,9 +361,10 @@ export default {
     },
 
     /* COIN 2 — the low catwalk. Drop 1.6 m off the deck's north rail onto a beam
-       that runs UNDER the sweep's arc, take the shelf at its far end, and rejoin at
-       the shuttle's home pose. It is faster than the main line if you read the
-       censer over it and slower every other time. */
+       slung outboard of it, past the sweep's reach (the drum's arms stop at z 4.6;
+       the beam is at z 7.0), take the shelf at its far end and rejoin the main line
+       at the shuttle's home pose. It skips the rack and the sweep entirely and pays
+       for it with a 2.2 s censer swinging ACROSS the beam, which is 1.2 m wide. */
     { kind: 'beam', p: [121.0, 1.5, 7.6], s: [5.0, 0.6, 1.2], mat: 'metal' }, // 3.50 m out, -1.6
     { kind: 'pendulum', p: [121.0, 5.4, 7.6], len: 2.8, amp: 1.15, period: 2.2, phase: 0.30, axis: [0, 0, 1], blade: { w: 0.5, h: 1.2, d: 2.4 } }, // sweeps ACROSS the catwalk
     { kind: 'platform', p: [127.2, 2.6, 7.6], s: [3.0, 1, 3.0], mat: 'panel', glow: HOT, stripe: true }, // gap 2.20, +1.3 — COIN 2
@@ -390,16 +423,16 @@ export default {
     /* BEAT 10 — SET-PIECE OF THE MOVEMENT : THE PRAYER WHEELS                      */
     /* Four things at once on one 11.4 m span, and deliberately four DIFFERENT       */
     /* shapes: a three-blade windmill of 4.4 m radius, a saw coming up through a     */
-    /* slot in the flagstones, a laser on a 0.7 s duty (the shortest window in the   */
-    /* game) and a two-blade windmill of 5.4 m on a period that shares nothing with  */
-    /* the first. Cross it one blade at a time; there is no rhythm to memorise.      */
+    /* slot in the flagstones, a laser on the shortest cycle on the stage (1.8 s)    */
+    /* and a two-blade windmill of 5.4 m on a period that shares nothing with the    */
+    /* first. Cross it one blade at a time; nothing here repeats.                    */
     /* ---------------------------------------------------------------------------- */
 
     { kind: 'platform', p: [158.6, 4.2, 0], s: [11.4, 1, 4.0], mat: 'metal', glow: GOLD, stripe: true }, // gap 3.00, +0.5, top 4.70
 
     { kind: 'rotor', p: [155.4, 9.50, 0], style: 'windmill', arms: 3, len: 4.4, thick: 0.42, period: 5.0, phase: 0.00, axis: [0, 0, 1] },
     { kind: 'saw', p: [158.8, 3.40, 0], style: 'saw', len: 1.9, thick: 0.26, period: 1.4, phase: 0.00, axis: [0, 0, 1], mount: 0 }, // 0.6 m of tooth over the deck
-    { kind: 'laser', a: [160.4, 5.30, -2.2], b: [160.4, 5.30, 2.2], radius: 0.13, color: HOT, cycle: { on: 0.7, off: 1.9, warn: 0.30, phase: 0.50 } },
+    { kind: 'laser', a: [160.4, 5.30, -2.2], b: [160.4, 5.30, 2.2], radius: 0.13, color: HOT, cycle: { on: 0.5, off: 1.3, warn: 0.30, phase: 0.50 } }, // 1.8 s period — the fastest flicker on the stage
     { kind: 'rotor', p: [162.2, 10.60, 0], style: 'windmill', arms: 2, len: 5.4, thick: 0.36, period: 4.2, phase: 0.50, axis: [0, 0, 1] },
 
     { kind: 'deco', kindOf: 'buttress', p: [155.4, 11.2, 3.4], s: [1.4, 2.6, 1.4], mat: 'obsidian' },
@@ -426,9 +459,11 @@ export default {
     /* ============================================================================ */
     /* MOVEMENT III — THE CATHEDRAL RIM                                             */
     /* The bridge lands on the shoulder of a nave hanging in the cloud sea, and the  */
-    /* route goes AROUND THE OUTSIDE of it. Nothing is built over this movement —    */
-    /* the sky above the rim is empty all the way to the cloud deck, which is the    */
-    /* whole point of putting the route on the outside of the building.              */
+    /* route goes AROUND THE OUTSIDE of it. Nothing but the bell tower at the far    */
+    /* end is built over this movement: from the plaza at x 180 to the last ice at   */
+    /* x 252 the sky above the rim is empty all the way down to the cloud deck, and  */
+    /* the understone's ceiling slab does not start until x 260. That is the whole   */
+    /* point of putting the route on the outside of the building.                    */
     /*                                                                              */
     /* The ledges are NOT a sequence of one ledge: spacings 1.6 / 3.5 / 2.9 / 2.2 /  */
     /* 3.2 m, tops 3.9 / 4.5 / 3.1 / 4.0 / 4.9 / 6.1 / 7.0 / 5.5 — it climbs, drops  */
@@ -452,14 +487,14 @@ export default {
 
     /* ---------------------------------------------------------------------------- */
     /* BEAT 13 — WIND, OUTBOUND, AND A DROP ONTO STONE                              */
-    /* A 10 m field pushing at +Z, i.e. straight OFF the rim, at 12 m/s^2 — and the  */
+    /* A 7.5 m field pushing at +Z, i.e. straight OFF the rim, at 12 m/s^2 — and the */
     /* ledge under its far half is 1.4 m BELOW the one you leave, so the wind gets a */
     /* whole extra beat of your fall to work with. The landing is stone, not ice,    */
     /* and it is CP5: the one place on the rim you can stand still.                  */
     /* ---------------------------------------------------------------------------- */
 
     { kind: 'ice', p: [197.4, 4.0, 6.8], s: [4.2, 1, 4.0] }, // gap 3.50, +0.6, top 4.50
-    { kind: 'wind', p: [199.5, 6.4, 7.4], s: [10, 6, 11], dir: [0, 0, 1], power: 12, color: FROST }, // x 194.5..204.5 — clear of BEAT 12
+    { kind: 'wind', p: [198.25, 6.4, 7.4], s: [7.5, 6, 11], dir: [0, 0, 1], power: 12, color: FROST }, // x 194.5..202.0 — clear of BEAT 12's ice AND of CP5
     { kind: 'platform', p: [205.2, 2.6, 9.6], s: [5.6, 1, 5.0], mat: 'stone', glow: STONE, stripe: true }, // gap 2.90, -1.4, top 3.10 — CP5
 
     { kind: 'deco', kindOf: 'buttress', p: [197.0, 1.6, 1.4], s: [2.2, 5.0, 2.2], rot: [0, 0, 0.22], mat: 'stone', tint: STONE },
@@ -473,7 +508,7 @@ export default {
     /* A prayer bar sweeping a 3.6 m ledge you cannot brake on, inside a field that  */
     /* now blows at -Z (14 m/s^2) — inward, toward the nave wall, which is the       */
     /* direction that hurts because the landing is at the ledge's OUTER lip. CP5 is  */
-    /* 6.4 m behind it, which is why CP5 exists.                                     */
+    /* one jump behind it, which is why CP5 exists.                                  */
     /*                                                                              */
     /* COIN 3 goes the wrong way on purpose: two ledges FURTHER OUT into the         */
     /* crosswind at z 14, then a 3.0 m jump back to the main line at BEAT 15.        */
@@ -482,7 +517,7 @@ export default {
     { kind: 'ice', p: [212.0, 3.5, 9.6], s: [3.6, 1, 4.0] }, // gap 2.20, +0.9, top 4.00 — the narrowest ice
     { kind: 'wind', p: [214.6, 6.6, 9.6], s: [12, 6, 12], dir: [0, 0, -1], power: 14, color: FROST },
     { kind: 'rotor', p: [212.0, 5.20, 9.6], style: 'bar', arms: 2, len: 2.2, thick: 0.36, period: 3.4, phase: 0.00, axis: [0, 1, 0] },
-    { kind: 'laser', a: [213.4, 5.60, 7.4], b: [213.4, 5.60, 11.8], radius: 0.13, color: HOT, cycle: { on: 1.3, off: 1.3, warn: 0.40, phase: 0.10 } },
+    { kind: 'laser', a: [213.4, 5.60, 7.4], b: [213.4, 5.60, 11.8], radius: 0.13, color: HOT, cycle: { on: 2.0, off: 1.4, warn: 0.40, phase: 0.10 } }, // 3.4 s period, 59% duty — long wall, real window
 
     { kind: 'ice', p: [217.4, 3.4, 13.6], s: [3.4, 1, 3.2] }, // COIN 3 line — 1.94 m out, -0.1, into the wind
     { kind: 'platform', p: [222.0, 4.6, 13.2], s: [2.8, 1, 2.8], mat: 'panel', glow: HOT, stripe: true }, // gap 1.50, +1.2 — COIN 3
@@ -566,9 +601,9 @@ export default {
     { kind: 'text', p: [259.6, 7.0, 0], rot: [0, -Math.PI / 2, 0], text: 'THE UNDERSTONE', size: 0.52, color: GOLD },
     { kind: 'text', p: [259.6, 6.45, 0], rot: [0, -Math.PI / 2, 0], text: 'the machinery that turns the temple', size: 0.24, color: DUSK },
 
-    { kind: 'deco', kindOf: 'panel', p: [292.0, 8.2, 0], s: [66.0, 0.8, 15.0], mat: 'stone', tint: 0x8b7454 }, // the ceiling slab: x 259..325 ONLY
-    { kind: 'deco', kindOf: 'pipe', p: [292.0, 7.2, 6.4], s: [62.0, 0.6, 0.6], mat: 'metal', tint: 0x8b7454 },
-    { kind: 'deco', kindOf: 'pipe', p: [292.0, 6.6, -6.4], s: [62.0, 0.5, 0.5], mat: 'metal', tint: 0x8b7454 },
+    { kind: 'deco', kindOf: 'panel', p: [292.5, 8.2, 0], s: [65.0, 0.8, 15.0], mat: 'stone', tint: 0x8b7454 }, // the ceiling slab: x 260..325 ONLY, i.e. it starts 0.3 m past the bell floor's far lip
+    { kind: 'deco', kindOf: 'pipe', p: [292.5, 7.2, 6.4], s: [61.0, 0.6, 0.6], mat: 'metal', tint: 0x8b7454 },
+    { kind: 'deco', kindOf: 'pipe', p: [292.5, 6.6, -6.4], s: [61.0, 0.5, 0.5], mat: 'metal', tint: 0x8b7454 },
     { kind: 'deco', kindOf: 'vent', p: [276.0, 6.0, -6.4], s: [1.2, 1.6, 1.2], mat: 'metal', tint: STONE },
     { kind: 'deco', kindOf: 'pillar', p: [264.6, 3.0, 6.6], s: [2.2, 5.0, 2.2], mat: 'metal', tint: 0x8b7454 }, // condenser drum
     { kind: 'deco', kindOf: 'ring', p: [268.0, 3.4, -7.4], s: [0.4, 6.0, 6.0], rot: [0, Math.PI / 2, 0], mat: 'metal', tint: STONE }, // the big gear
@@ -604,34 +639,37 @@ export default {
     /* ---------------------------------------------------------------------------- */
     /* BEAT 19 — THE GRATE PIT, AND THE GALLERY UNDER IT                            */
     /* A spiked well with one iron grate over it on a 3.8 s cycle. The grate is a    */
-    /* convenience, not the route: the far side is 5.8 m from the belt's lip and     */
-    /* 1.6 m below it, which is inside the SPRINT envelope, so a player who refuses  */
-    /* the grate can simply clear the whole pit. Two ways through, one fast and      */
-    /* conditional, one committed and always true.                                   */
+    /* convenience, not the route: the far side is 6.40 m from the belt's lip and    */
+    /* 1.6 m below it, which is inside the SPRINT envelope (6.17 safe at flat, 7.10  */
+    /* at -1.6) and outside the run one, so a player who refuses the grate can       */
+    /* commit and clear the whole pit. Two ways through, one fast and conditional,   */
+    /* one committed and always true.                                                */
     /*                                                                              */
     /* COIN 4 is a third way: drop 2.5 m off the belt's south rail into the          */
-    /* maintenance gallery — the lowest floor in the game — climb it and come up     */
-    /* beside the checkpoint. A blade swings the length of it.                       */
+    /* maintenance gallery — the lowest floor in the game — step up onto its second  */
+    /* plate and come out level with the checkpoint. The belt itself cannot reach    */
+    /* the second plate (8.64 m, outside sprint), so the gallery has exactly one     */
+    /* door and a 2.0 s blade swinging the length of it.                             */
     /* ---------------------------------------------------------------------------- */
 
     { kind: 'spikes', p: [288.4, -0.6, 2.6], s: [4.8, 0.8, 4.6], dir: [0, 1, 0] },
     { kind: 'vanish', p: [288.4, 1.4, 2.6], s: [2.8, 1, 3.4], mat: 'grate', cycle: { on: 2.0, off: 1.4, warn: 0.4, phase: 0.25 } }, // gap 1.40 off the belt
-    { kind: 'platform', p: [294.2, -0.2, -1.0], s: [5.6, 1, 5.2], mat: 'stone', glow: STONE, stripe: true }, // gap 5.80 SPRINT over the pit, -1.6 — CP8
+    { kind: 'platform', p: [295.0, -0.2, -1.0], s: [6.0, 1, 5.2], mat: 'stone', glow: STONE, stripe: true }, // gap 6.40 SPRINT over the pit, -1.6 — CP8
 
     { kind: 'platform', p: [287.0, -1.1, -5.4], s: [3.2, 1, 3.4], mat: 'metal', glow: EMBER, stripe: true }, // COIN 4 gallery, 4.10 m out and -2.5 ★
-    { kind: 'platform', p: [291.6, 0.1, -6.6], s: [3.0, 1, 3.0], mat: 'metal', glow: EMBER, stripe: true }, // gap 1.50, +1.2 — COIN 4
-    { kind: 'pendulum', p: [291.6, 4.60, -6.6], len: 2.6, amp: 1.20, period: 2.0, phase: 0.15, axis: [0, 0, 1], blade: { w: 0.46, h: 1.1, d: 2.2 } }, // the fastest blade on the stage, over the greedy line
+    { kind: 'platform', p: [290.6, 0.1, -9.0], s: [3.0, 1, 3.0], mat: 'metal', glow: EMBER, stripe: true }, // 0.64 m corner step, +1.2 — COIN 4
+    { kind: 'pendulum', p: [290.6, 4.60, -9.0], len: 2.6, amp: 1.20, period: 2.0, phase: 0.15, axis: [0, 0, 1], blade: { w: 0.46, h: 1.1, d: 2.2 } }, // the fastest blade on the stage, over the greedy line
 
-    { kind: 'deco', kindOf: 'ring', p: [291.6, 2.2, -6.6], s: [0.12, 2.2, 2.2], rot: [0, Math.PI / 2, 0], mat: 'emissive', tint: HOT },
+    { kind: 'deco', kindOf: 'ring', p: [290.6, 2.2, -9.0], s: [0.12, 2.2, 2.2], rot: [0, Math.PI / 2, 0], mat: 'emissive', tint: HOT },
     { kind: 'deco', kindOf: 'grate', p: [288.4, -1.4, 2.6], s: [6.0, 0.3, 6.0], mat: 'grate', tint: DUSK },
-    { kind: 'deco', kindOf: 'banner', p: [294.2, 2.8, -4.2], s: [0.1, 1.6, 1.4], mat: 'panel', tint: HOT },
-    { kind: 'light', p: [291.6, 2.4, -6.6], color: HOT, intensity: 8, distance: 15 },
-    { kind: 'light', p: [294.2, 3.4, -1.0], color: MINT, intensity: 10, distance: 20 },
+    { kind: 'deco', kindOf: 'banner', p: [295.0, 2.8, -4.2], s: [0.1, 1.6, 1.4], mat: 'panel', tint: HOT },
+    { kind: 'light', p: [290.6, 2.4, -9.0], color: HOT, intensity: 8, distance: 15 },
+    { kind: 'light', p: [295.0, 3.4, -1.0], color: MINT, intensity: 10, distance: 20 },
 
     /* ---------------------------------------------------------------------------- */
     /* BEAT 20 — THE SAW GAUNTLET ON THE FAST BELT                                  */
     /* The companion to BEAT 18: the same belt at 8 m/s running WITH you, into three */
-    /* blades that are not the same problem. Two come UP through slots with 0.4 m of */
+    /* blades that are not the same problem. Two come UP through slots with 0.5 m of */
     /* tooth showing — those are jumps. The third is a rotor mounted overhead with   */
     /* its lowest tooth at 1.95 m, which is 0.15 m under the top of your head, so    */
     /* the answer on that one is DO NOT JUMP.                                        */
@@ -641,22 +679,22 @@ export default {
     /* far end. It skips the belt entirely and costs you the belt's free speed.       */
     /* ---------------------------------------------------------------------------- */
 
-    { kind: 'conveyor', p: [302.6, -0.2, -1.0], s: [8.8, 1, 4.6], dir: [1, 0, 0], power: 8, mat: 'conveyor' }, // gap 1.20, flat, top 0.30
+    { kind: 'conveyor', p: [303.2, -0.2, -1.0], s: [8.8, 1, 4.6], dir: [1, 0, 0], power: 8, mat: 'conveyor' }, // gap 0.80, flat, top 0.30
 
-    { kind: 'saw', p: [299.4, -1.20, -1.0], style: 'saw', len: 1.9, thick: 0.26, period: 1.4, phase: 0.00, axis: [0, 0, 1], mount: 0 },
-    { kind: 'saw', p: [303.8, -1.20, -1.0], style: 'saw', len: 1.9, thick: 0.26, period: 1.1, phase: 0.40, axis: [0, 0, 1], mount: 0 },
-    { kind: 'rotor', p: [305.8, 3.60, -1.0], style: 'saw', len: 1.5, thick: 0.30, period: 1.6, phase: 0.00, axis: [0, 0, 1] }, // lowest tooth 1.95 — duck
+    { kind: 'saw', p: [300.0, -1.20, -1.0], style: 'saw', len: 1.9, thick: 0.26, period: 1.4, phase: 0.00, axis: [0, 0, 1], mount: 0 },
+    { kind: 'saw', p: [304.4, -1.20, -1.0], style: 'saw', len: 1.9, thick: 0.26, period: 1.1, phase: 0.40, axis: [0, 0, 1], mount: 0 },
+    { kind: 'rotor', p: [306.4, 3.60, -1.0], style: 'saw', len: 1.5, thick: 0.30, period: 1.6, phase: 0.00, axis: [0, 0, 1] }, // lowest tooth 1.95 — duck
 
-    { kind: 'beam', p: [301.0, 1.75, 4.4], s: [8.0, 0.5, 1.2], mat: 'metal' }, // COIN 5 catwalk, 2.20 m out and +1.7
-    { kind: 'laser', a: [301.0, 3.00, 3.8], b: [301.0, 3.00, 5.0], radius: 0.11, color: HOT, cycle: { on: 1.6, off: 1.0, warn: 0.35, phase: 0.60 } },
+    { kind: 'beam', p: [301.8, 1.75, 4.4], s: [8.0, 0.5, 1.2], mat: 'metal' }, // COIN 5 catwalk, 2.20 m out and +1.7
+    { kind: 'laser', a: [301.8, 3.00, 3.8], b: [301.8, 3.00, 5.0], radius: 0.11, color: HOT, cycle: { on: 2.6, off: 0.9, warn: 0.35, phase: 0.60 } }, // 3.5 s period, 74% duty — the greedy line pays in waiting
 
     { kind: 'text', p: [296.6, 4.0, 2.0], rot: [0, -Math.PI / 2, 0], text: 'DUCK THE LAST ONE', size: 0.32, color: HOT },
-    { kind: 'deco', kindOf: 'ring', p: [303.0, 3.6, 4.4], s: [0.12, 2.2, 2.2], rot: [0, Math.PI / 2, 0], mat: 'emissive', tint: HOT },
+    { kind: 'deco', kindOf: 'ring', p: [303.8, 3.6, 4.4], s: [0.12, 2.2, 2.2], rot: [0, Math.PI / 2, 0], mat: 'emissive', tint: HOT },
     { kind: 'deco', kindOf: 'screen', p: [300.0, 3.4, -8.0], s: [0.5, 4.0, 5.0], mat: 'emissive', tint: EMBER }, // the furnace door
     { kind: 'deco', kindOf: 'cable', p: [300.0, 7.4, 3.0], s: [46.0, 0.06, 0.06], mat: 'metal', tint: DUSK },
     { kind: 'deco', kindOf: 'pillar', p: [309.0, 2.6, -7.0], s: [2.0, 4.6, 2.0], mat: 'metal', tint: 0x8b7454 },
-    { kind: 'light', p: [303.0, 3.8, 4.4], color: HOT, intensity: 7, distance: 14 },
-    { kind: 'light', p: [302.6, 4.2, -1.0], color: HOT, intensity: 11, distance: 20, flicker: 0.22 },
+    { kind: 'light', p: [303.8, 3.8, 4.4], color: HOT, intensity: 7, distance: 14 },
+    { kind: 'light', p: [303.2, 4.2, -1.0], color: HOT, intensity: 11, distance: 20, flicker: 0.22 },
 
     /* ---------------------------------------------------------------------------- */
     /* BEAT 21 — THE PISTON, AND THE FLOOD                                          */
@@ -665,18 +703,20 @@ export default {
     /* the deck. Firing, its cap is the lethal face. It is the last machine because  */
     /* it needs the other three to read.                                             */
     /*                                                                              */
-    /* And under it the sump fills: a `risinglava` bay that arms at t = 132 and      */
-    /* climbs to -1.0 m at 0.1 m/s, which is 1.3 m below the piston deck and 0.4 m   */
-    /* below the gallery floor — it never touches the route, it takes the FALL. Miss */
-    /* the piston after CP9's clock and you do not land in the dark, you land in it.  */
+    /* And under it the sump fills: a `risinglava` bay spanning x 284..326 that arms */
+    /* at t = 132, climbs from -7.0 at 0.1 m/s and tops out at -1.0 at t = 192. That */
+    /* ceiling is 2.5 m below the piston deck and 0.4 m below the gallery floor, so  */
+    /* it never touches a surface — it takes the FALL. By CP9's pinned clock of 158  */
+    /* it is already at -4.4 m, so from the checkpoint on, missing the piston does   */
+    /* not drop you into the dark; it drops you into the foundry.                     */
     /* ---------------------------------------------------------------------------- */
 
-    { kind: 'platform', p: [311.6, 1.0, 2.4], s: [5.0, 1, 4.8], mat: 'stone', glow: STONE, stripe: true }, // gap 2.10 off the belt, +1.2 — CP9
+    { kind: 'platform', p: [311.6, 1.0, 2.4], s: [5.0, 1, 4.8], mat: 'stone', glow: STONE, stripe: true }, // gap 1.50 off the belt, +1.2 — CP9
     { kind: 'crusher', p: [317.4, 1.0, 2.4], s: [3.4, 1, 4.2], axis: [0, 1, 0], travel: 3.0, period: 3.4, phase: 0.00, dwell: 0.8, mat: 'metal' }, // gap 1.60, cap 1.50 parked
     { kind: 'pendulum', p: [321.2, 6.60, 1.4], len: 2.9, amp: 0.90, period: 2.8, phase: 0.50, axis: [1, 0, 0], blade: { w: 0.42, h: 1.5, d: 3.2 } },
     { kind: 'platform', p: [322.0, 2.4, 0.6], s: [5.6, 1, 4.8], mat: 'stone', glow: STONE, stripe: true }, // gap 0.10 off the piston cap, +1.4, top 2.90
 
-    { kind: 'risinglava', p: [305.0, -6.0, 0], s: [42, 3, 22], rising: { from: -7.0, to: -1.0, speed: 0.10, delay: 132 } }, // x 284..326, always below every surface
+    { kind: 'risinglava', p: [305.0, -8.5, 0], s: [42, 3, 22], rising: { from: -7.0, to: -1.0, speed: 0.10, delay: 132 } }, // x 284..326; `from` matches p.y + s.y/2, and `to` parks 0.4 m under the gallery floor
 
     { kind: 'deco', kindOf: 'post', p: [317.4, -0.5, 4.8], s: [0.5, 2.0, 0.5], mat: 'metal', tint: GOLD },
     { kind: 'deco', kindOf: 'post', p: [317.4, -0.5, 0.0], s: [0.5, 2.0, 0.5], mat: 'metal', tint: GOLD },
@@ -688,8 +728,8 @@ export default {
     /* MOVEMENT V — THE ASCENT                                                      */
     /* Out of the machine deck into open sky and then straight up: 3.8 m to 24.2 m   */
     /* in eighty metres of ground, and the ground goes with it. The route crosses    */
-    /* the centre line five times on the way (z 0 -> +1.6 -> +4.6 -> -3.4 -> +2.2 -> */
-    /* -4.6 -> +3.0 -> 0): there is no straight corridor in this movement either.    */
+    /* the centre line four times on the way (z 0 -> +1.2 -> +4.6 -> -3.4 -> +2.2 -> */
+    /* -1.4 -> -4.6 -> +3.0 -> 0): there is no straight corridor in this movement.   */
     /* ============================================================================ */
 
     /* ---------------------------------------------------------------------------- */
@@ -744,8 +784,9 @@ export default {
     /*                                                                              */
     /* Then the lift: a triggered elevator that rises 4 m and crosses 8 m of z while */
     /* it does it. You step on and it goes — there is no orbit to wait for and no    */
-    /* pass to miss. It is 2.4 s of ride, against 6.8 s of average boarding wait for */
-    /* the ring it replaces.                                                         */
+    /* pass to miss. It is a 0.3 s arm and a 2.6 s ride (8.94 m of travel at 3.4    */
+    /* m/s), against the ~6.8 s average boarding wait of the 7.2 s orbit ring the    */
+    /* previous build put here.                                                      */
     /* ---------------------------------------------------------------------------- */
 
     { kind: 'jumppad', p: [331.8, 3.87, 0], s: [3.2, 0.16, 3.2], power: 7.0, dir: [0, 1, 0] },
@@ -787,9 +828,10 @@ export default {
 
     /* ---------------------------------------------------------------------------- */
     /* BEAT 25 — THE ONE SPRINT ON THE STAGE                                        */
-    /* 8.8 m of straight, level, unobstructed runway with a 5.6 m gap at the end of  */
-    /* it. Run speed clears 5.24 m at absolute best, so this gap cannot be walked:   */
-    /* it is the only place in 400 m where the stage requires the sprint key.        */
+    /* 8.8 m of straight, level runway, gated at its NEAR end and then unobstructed */
+    /* for the last 7.6 m, with a 5.6 m gap off the lip. Run speed clears 5.24 m at  */
+    /* absolute best, so this gap cannot be walked: it is the only place in 400 m    */
+    /* where the stage requires the sprint key.                                      */
     /*                                                                              */
     /* The speed pad is 4 m/s of BONUS, not the mechanism — 8.6 + 4 = 12.6 m/s,      */
     /* which is one tenth over sprint speed and exactly `speedAirCap`, so it cannot  */
@@ -805,7 +847,7 @@ export default {
     /* ---------------------------------------------------------------------------- */
 
     { kind: 'platform', p: [357.0, 12.1, -3.4], s: [8.8, 1, 4.8], mat: 'stone', glow: STONE, stripe: true }, // gap 2.90 off the lift, top 12.60 — CP11
-    { kind: 'laser', a: [353.8, 13.60, -5.8], b: [353.8, 13.60, -1.0], radius: 0.12, color: HOT, cycle: { on: 1.0, off: 1.6, warn: 0.40, phase: 0.35 } },
+    { kind: 'laser', a: [353.8, 13.60, -5.8], b: [353.8, 13.60, -1.0], radius: 0.12, color: HOT, cycle: { on: 1.2, off: 3.0, warn: 0.40, phase: 0.35 } }, // 4.2 s period, 29% duty — a wide door, because the collapse is behind you
     { kind: 'speedpad', p: [360.2, 12.67, -3.4], s: [2.4, 0.16, 4.0], dir: [1, 0, 0], power: 4 },
 
     { kind: 'text', p: [353.0, 15.4, -3.4], rot: [0, -Math.PI / 2, 0], text: 'HOLD SHIFT', size: 0.62, color: GOLD },
@@ -830,14 +872,14 @@ export default {
       p: [376.4, 13.4, -1.4],
       s: [3.0, 1, 3.4],
       mat: 'panel',
-      motion: { type: 'sink', sinkDelay: 0.5, sinkSpeed: 6.0, sinkDepth: 14, respawnAfter: 3.4 },
+      motion: { type: 'sink', to: [376.4, 13.4, -1.4], sinkDelay: 0.5, sinkSpeed: 6.0, sinkDepth: 14, respawnAfter: 3.4 },
     }, // gap 1.90, +1.3, top 13.90
     {
       kind: 'mover',
       p: [381.0, 15.0, 2.2],
       s: [2.8, 1, 3.2],
       mat: 'panel',
-      motion: { type: 'sink', sinkDelay: 0.45, sinkSpeed: 6.5, sinkDepth: 14, respawnAfter: 3.2 },
+      motion: { type: 'sink', to: [381.0, 15.0, 2.2], sinkDelay: 0.45, sinkSpeed: 6.5, sinkDepth: 14, respawnAfter: 3.2 },
     }, // gap 1.73, +1.6, top 15.50
     { kind: 'rotor', p: [381.0, 17.30, 2.2], style: 'bar', arms: 2, len: 2.6, thick: 0.34, period: 3.0, phase: 0.00, axis: [0, 1, 0] },
     {
@@ -845,7 +887,7 @@ export default {
       p: [385.4, 16.6, -1.4],
       s: [2.8, 1, 3.2],
       mat: 'panel',
-      motion: { type: 'sink', sinkDelay: 0.4, sinkSpeed: 7.0, sinkDepth: 14, respawnAfter: 3.0 },
+      motion: { type: 'sink', to: [385.4, 16.6, -1.4], sinkDelay: 0.4, sinkSpeed: 7.0, sinkDepth: 14, respawnAfter: 3.0 },
     }, // gap 1.65, +1.6, top 17.10
 
     /* ---------------------------------------------------------------------------- */
@@ -870,6 +912,15 @@ export default {
     { kind: 'pendulum', p: [396.2, 23.90, 3.0], len: 2.8, amp: 0.70, period: 2.8, phase: 0.40, axis: [1, 0, 0], blade: { w: 0.40, h: 1.4, d: 3.0 } }, // guards the last pad; lowest 20.40, clear of the pad's 20.06 cap
 
     { kind: 'platform', p: [402.6, 23.7, 0], s: [8.0, 1, 10.0], mat: 'obsidian', glow: VIOLET, stripe: true }, // top 24.20 — FINISH
+
+    { kind: 'deco', kindOf: 'shard', p: [334.0, -2.0, -13.0], s: [2.6, 7.0, 2.6], mat: 'stone', tint: STONE }, // stair the collapse already took
+    { kind: 'deco', kindOf: 'shard', p: [356.0, -4.0, 13.0], s: [3.0, 8.0, 3.0], mat: 'stone', tint: STONE },
+    { kind: 'deco', kindOf: 'banner', p: [357.0, 16.2, -1.0], s: [0.1, 2.8, 1.6], mat: 'panel', tint: GOLD },
+    { kind: 'deco', kindOf: 'banner', p: [357.0, 16.2, -5.8], s: [0.1, 2.8, 1.6], mat: 'panel', tint: GOLD },
+    { kind: 'deco', kindOf: 'lantern', p: [370.0, 15.4, -3.4], s: [0.7, 1.1, 0.7], mat: 'emissive', tint: GOLD },
+    { kind: 'deco', kindOf: 'pillar', p: [381.0, 9.0, 2.2], s: [1.2, 11.0, 1.2], mat: 'stone', tint: STONE }, // the shaft the sinking bridge hangs off
+    { kind: 'deco', kindOf: 'cable', p: [386.0, 22.6, 0], s: [34.0, 0.07, 0.07], mat: 'metal', tint: DUSK },
+    { kind: 'deco', kindOf: 'cloud', p: [378.0, 2.0, -16.0], s: [12, 2.2, 12], count: 4, spread: [60, 6, 14], seed: 4517, scale: 1.4, tint: 0xffffff },
 
     { kind: 'deco', kindOf: 'arch', p: [402.6, 29.9, 0], s: [1.8, 1.4, 11.0], mat: 'obsidian', tint: VIOLET },
     { kind: 'deco', kindOf: 'pillar', p: [402.6, 27.1, 5.2], s: [1.5, 6.8, 1.5], mat: 'obsidian' },

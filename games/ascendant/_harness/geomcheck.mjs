@@ -10,6 +10,13 @@
  *                   swings over, so the hazard is inside the floor.
  *   3. BLOCKED    — a required jump whose arc runs into solid geometry.
  *   4. MONOTONY   — 166 m without a height change; the same obstacle five times.
+ *   5. ROOFED JUMP — a jump TAKEN FROM UNDER A CEILING. Added after a spire-3 review
+ *                   found a 1.80 m gap whose take-off ledge had 1.45 m of headroom:
+ *                   the ceiling zeroes vy after 0.40 m of rise (controller.js:1032),
+ *                   the player is crouched at 4.2 m/s (speedCrouch, because they do
+ *                   not fit standing), and the reach is 0.58 m. Both gates passed it.
+ *                   reachcheck cannot see this at all — it graphs top faces and
+ *                   evaluates every edge at speedRun/speedSprint.
  *
  * This tool measures all four. Run it alongside reachcheck on every stage.
  *
@@ -85,6 +92,11 @@ function checkHeadroom(objs, boxes, problems, warnings) {
       if (clear > PLAYER_H + 0.9) continue;        // plenty of room
       const cov = (overlap1(L.x0, L.x1, B.x0, B.x1) * overlap1(L.z0, L.z1, B.z0, B.z1)) / la;
       if (cov < 0.3) continue;                     // an arch over a corner is fine
+      // SURFACE LAYERING, not a ceiling: an ice/conveyor sheet laid just above a
+      // platform (thin gap, near-total coverage, itself landable) IS the walking
+      // surface — the platform below it is cladding. temple-1 hit this: an ice
+      // skin 0.20 m over its slab was reported as an unusable 0.20 m tunnel.
+      if (LANDABLE.has(b.kind) && clear < 0.6 && cov > 0.85) continue;
       const what = `obj ${i} (${o.kind}) under obj ${j} (${b.kind}) covers ${(cov * 100) | 0}% of it`;
       const bothMove = DYNAMIC_SOLID.has(o.kind) && DYNAMIC_SOLID.has(b.kind);
       if (clear < CROUCH_H) {
@@ -208,6 +220,102 @@ function checkClipping(objs, boxes, problems, warnings) {
         problems.push(`CLIPPING: obj ${j} ${sw.what} sweeps to y=${sw.lowest.toFixed(2)}, which is ${(B.y1 - sw.lowest).toFixed(2)} m BELOW the top of obj ${i} (${o.kind}) it passes over — the hazard is inside the floor`);
       }
     }
+  }
+}
+
+// ── 5. ROOFED JUMPS ──────────────────────────────────────────────────────────
+/**
+ * Horizontal reach of a jump taken with a ceiling `h` metres above the feet, landing
+ * `dyLand` metres up. Mirrors the controller exactly:
+ *   - a player who does not fit standing is crouched, so speedCrouch, not speedRun
+ *     (`_resolveStance` will not let them stand into geometry);
+ *   - the rise stops when the head meets the ceiling — controller.js sets
+ *     `res.ceiling` and zeroes a positive vy;
+ *   - ducking in the AIR does not help: the airborne tuck lifts the FEET and pins the
+ *     capsule top (FOOT_LIFT), so it buys no head clearance.
+ * Returns null when the jump cannot reach the landing height at all.
+ */
+function roofedReach(h, dyLand) {
+  const stand = h >= PLAYER_H;
+  const speed = stand ? TUNE.speedRun : TUNE.speedCrouch;
+  const rise = Math.min(APEX, Math.max(0, h - (stand ? PLAYER_H : CROUCH_H)));
+  let tUp;
+  if (rise >= APEX - 1e-6) tUp = T_RISE;
+  else {
+    const disc = TUNE.jumpV * TUNE.jumpV - 2 * TUNE.gravRise * rise;
+    tUp = (TUNE.jumpV - Math.sqrt(Math.max(0, disc))) / TUNE.gravRise;
+  }
+  const drop = rise - dyLand;
+  if (drop < 0) return null;                       // cannot get high enough at all
+  return { reach: speed * (tUp + Math.sqrt(2 * drop / TUNE.gravFall)), stand, speed };
+}
+
+/** Lowest PERMANENT solid over a point, measured from `aboveY`. Movers and vanish
+ *  panels are excluded: they gate a route in time, they are not a ceiling. */
+function ceilingOver(objs, boxes, px, pz, aboveY, skipA, skipB) {
+  let clear = Infinity, who = -1;
+  for (let j = 0; j < objs.length; j++) {
+    if (j === skipA || j === skipB) continue;
+    const o = objs[j];
+    if (!SOLID.has(o.kind) || DYNAMIC_SOLID.has(o.kind)) continue;
+    const b = boxes[j];
+    if (b.y0 <= aboveY + 0.02) continue;
+    if (px < b.x0 - PLAYER_R || px > b.x1 + PLAYER_R) continue;
+    if (pz < b.z0 - PLAYER_R || pz > b.z1 + PLAYER_R) continue;
+    if (b.y0 - aboveY < clear) { clear = b.y0 - aboveY; who = j; }
+  }
+  return { clear, who };
+}
+
+function checkRoofed(objs, boxes, problems, warnings) {
+  const rects = [];
+  for (let i = 0; i < objs.length; i++) {
+    if (!LANDABLE.has(objs[i].kind)) continue;
+    rects.push({ i, b: boxes[i], top: boxes[i].y1 });
+  }
+  // pass 1: classify every jumpable pair as blocked-by-ceiling or not
+  const blocked = [];
+  const escapable = new Set();
+  for (const a of rects) {
+    for (const b of rects) {
+      if (a === b) continue;
+      const dy = b.top - a.top;
+      const dx = Math.max(0, Math.max(a.b.x0 - b.b.x1, b.b.x0 - a.b.x1));
+      const dz = Math.max(0, Math.max(a.b.z0 - b.b.z1, b.b.z0 - a.b.z1));
+      const d = Math.hypot(dx, dz);
+      // contiguous ground, or a step down you can walk off: never a roofed jump
+      if (d < 0.05) { if (Math.abs(dy) <= TUNE.stepUp || dy < 0) escapable.add(a.i); continue; }
+      if (dy > APEX - 0.02) continue;                        // out of reach anyway
+      const tFall = Math.sqrt((2 * (APEX - dy)) / TUNE.gravFall);
+      if (d > TUNE.speedSprint * (T_RISE + tFall)) continue;  // nobody could make it
+      const tx = Math.min(Math.max((b.b.x0 + b.b.x1) / 2, a.b.x0), a.b.x1);
+      const tz = Math.min(Math.max((b.b.z0 + b.b.z1) / 2, a.b.z0), a.b.z1);
+      const c = ceilingOver(objs, boxes, tx, tz, a.top, a.i, b.i);
+      // clearance under the crouch height is a HEADROOM defect, not a reach one: the
+      // player cannot be standing there to jump at all, so checkHeadroom owns it.
+      if (!Number.isFinite(c.clear) || c.clear >= PLAYER_H + 0.4 || c.clear < CROUCH_H) {
+        escapable.add(a.i);
+        continue;
+      }
+      const rr = roofedReach(c.clear, dy);
+      if (rr && rr.reach >= d) { escapable.add(a.i); continue; }
+      blocked.push({ a, b, d, dy, c, rr });
+    }
+  }
+  // pass 2: a blocked pair on a surface with no other way out is a TRAP; a blocked
+  // pair beside an open exit is only a route the ceiling quietly deletes.
+  const seen = new Set();
+  for (const { a, b, d, dy, c, rr } of blocked) {
+    const key = `${a.i}>${b.i}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const how = rr === null
+      ? `the ceiling stops the rise below the ${dy.toFixed(2)} m landing`
+      : `${rr.reach.toFixed(2)} m of reach at ${rr.stand ? 'speedRun' : 'speedCrouch'} ${rr.speed}`;
+    const line = `ROOFED JUMP: obj ${a.i} (${objs[a.i].kind}) -> obj ${b.i} (${objs[b.i].kind}) is ${d.toFixed(2)} m ` +
+      `but the take-off has obj ${c.who} ${c.clear.toFixed(2)} m overhead — ${how}`;
+    if (escapable.has(a.i)) warnings.push(line + ' (the surface has another way out, so this is a route the roof deletes)');
+    else problems.push(line + ' — and it is the ONLY way off that surface');
   }
 }
 
@@ -364,6 +472,7 @@ function analyse(def) {
 
   checkHeadroom(objs, boxes, problems, warnings);
   checkClipping(objs, boxes, problems, warnings);
+  checkRoofed(objs, boxes, problems, warnings);
   checkBlocked(objs, boxes, way, problems, warnings);
   const mono = checkMonotony(objs, boxes, problems, warnings, isHub);
 
@@ -392,7 +501,7 @@ for (const f of files.sort()) {
 }
 
 console.log(`\nASCENDANT geometry check — player ${PLAYER_H} m standing / ${CROUCH_H} m crouched, radius ${PLAYER_R} m`);
-console.log('headroom · hazard clipping · blocked jump arcs · monotony\n');
+console.log('headroom · hazard clipping · roofed jumps · blocked jump arcs · monotony\n');
 console.log('id            obj  flatRun  sizes  gapCv  rep   status');
 console.log('-'.repeat(74));
 let failing = 0;

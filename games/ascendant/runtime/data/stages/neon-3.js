@@ -4,65 +4,88 @@
  *
  * The finale of the dojo. A holographic test rig hung in the rain above the city:
  * magenta key light, cyan rim, wireframe architecture that is drawn rather than built,
- * and 286 m of nothing underneath it. neon-1 taught you where your feet go and neon-2
- * taught you when. This one asks for both at once and then turns the room on.
+ * and three hundred metres of nothing underneath it. neon-1 taught you where your feet
+ * go and neon-2 taught you when. This one asks for both at once, then spins the room.
  *
- * SHAPE      287.3 m of travel, 66 gameplay objects, 5 checkpoints never more than
- *            60.8 m apart, 5 coins, and 28 dynamic hazards drawn from nine families
- *            (speedpad, laser, lasergrid, lasersweep, mover, vanish, rotor, pendulum,
- *            jumppad). Measured by `node _harness/reachcheck.mjs neon-3`, not counted
- *            by hand — and note that the harness's own hazard tally does not know
- *            about `lasergrid`/`lasersweep`, so the six racks and the two drum sweeps
- *            are real hazards it scores as zero.
+ * SHAPE      ~315 m of travel, 9 checkpoints never more than 41.3 m apart, 5 coins,
+ *            and a hazard mix drawn from nine families (speedpad, jumppad, laser,
+ *            lasergrid, lasersweep, mover, vanish, rotor, pendulum). Every number in
+ *            these comments is emitted by `_harness/reachcheck.mjs` / `geomcheck.mjs`
+ *            or computed from the factory the object is built by — see MEASUREMENT.
+ *
+ * IT IS NOT A CORRIDOR. The route turns twice inside the laser dog-leg (east, north,
+ * east again), rides a shuttle diagonally back to the centre line, climbs a pavilion
+ * from a terrace BELOW the walk line to a roof ABOVE it, crosses a cog you cannot
+ * stand still on, and finishes on a wheel that actually turns.
  *
  * INTRODUCES three things, each in isolation before it is ever combined:
- *   SPEED PADS      BEAT 3  — a pad on a 16.6 m runway, then a gap you cannot walk.
- *   LASER CORRIDOR  BEAT 4  — one beam, a rolling rack, a duck rack, a fast pair.
- *   ROTOR + VANISH  BEAT 7  — mill blades sweeping the tiles you are standing on.
- * and then spends them: BEAT 5 rides a shuttle through a beam gate onto timed tiles,
- * BEAT 8 threads pendulums and a beam rack down a 3.4 m bridge, and BEAT 9 is THE DRUM.
+ *   RAMP PADS       BEAT 3 — a pad you cannot walk past, on a gap you cannot jump.
+ *   LASER CORRIDOR  BEAT 4 — one beam, a rolling rack, a curtain you must CROUCH under.
+ *   ROTOR + VANISH  BEAT 7 — mill blades that cover the whole width of the tile.
+ * and then spends them: BEAT 5 rides a diagonal shuttle through a beam gate onto timed
+ * tiles, BEAT 8 threads pendulums and a beam rack down a 3.4 m bridge, BEAT 9 is THE DRUM.
  *
- * DETERMINISM: every timed object is phase-locked to the stage clock (CONTRACT §16).
+ * ────────────────────────────────────────────────────────────────────────────────────
+ * MEASUREMENT — how the numbers below were obtained, so they can be re-checked
+ * ────────────────────────────────────────────────────────────────────────────────────
+ * REACH ENVELOPE, measured from runtime/core/tuning.js (apex 2.089 m, airtime 0.610 s):
+ *
+ *      run 8.6 m/s     flat 5.244 max / 4.352 SAFE     at +0.80 m  4.731 / 3.927
+ *      sprint 12.2     flat 7.439 max / 6.174 SAFE     at +1.05 m  4.539 / 3.767
+ *                                                      at -2.00 m  8.793 / 7.299 (sprint)
+ *
+ * THE RAMP PADS ARE NOT DECORATION, AND THE MATHS SAYS SO TWICE.
+ *   1. A FLAT speed pad cannot extend a jump in this engine. `_applySpeedPad`
+ *      (controller.js:1137) ADDS `power` to the horizontal velocity, and ground
+ *      friction (TUNE.friction 13) then bleeds everything above the movement target
+ *      at 13/s: a 13 m/s boost is gone in 0.042 s and buys 0.73 m of ground. That is
+ *      why every pad here is a RAMP — `dir` with a real +Y component, which trips
+ *      `if (_dir.y > 0.2)` and puts the player in the air on the frame of contact,
+ *      where the only bleed is airDrag 0.35/s. (Contact also leaves coyoteT at 0, so
+ *      the launch cannot be re-jumped: the arc is the pad's, and it is deterministic.)
+ *   2. Each pad occupies the LAST 2.8 m of its runway, full deck width. You cannot
+ *      stand at the lip, so the plain sprint jump from the lip is not a line that
+ *      exists — and jumping BEFORE the pad launches you at the void from 2.8 m further
+ *      back, which no jump in the envelope survives. The pad is the only way across.
+ *   Landing windows below are from a replay of the controller's own integration
+ *   (1/120 s substeps, velocity-Verlet gravity, airDrag above speedAirCap), reported
+ *   as crouch-entry / run-entry / sprint-entry so the deck can be sized to catch all
+ *   three. The GAP is what the player must clear; the WINDOW is where they land.
+ *
+ *      PAD 1  dir[2,1,0]   power 18   gap 6.60 flat      lands 7.71 / 9.38 / 10.75
+ *      PAD 2  dir[1.6,1,0] power 18   gap 7.10 flat      lands 8.64 / 10.59 / 12.19
+ *      PAD 3  dir[2,1,0]   power 17   gap 8.20 at -2.0   lands 9.43 / 11.56 / 13.31
+ *
+ *   reachcheck has no speed-pad term in `edge()` (it populates `pad` only for
+ *   `jumppad`), so it scores all three as plain sprint jumps and flags them
+ *   `sprint-tight`. That warning is CORRECT AND EXPECTED: it is the harness saying
+ *   "no unaided sprint gets across this safely", which is exactly the design. It is
+ *   the only warning class this stage carries on its forward route.
  *
  * PHASE UNITS — FOUR HAZARD FAMILIES, THREE DIFFERENT UNITS. Read the factory, not
  * the neighbouring object:
- *   vanish    `cycle.phase`   FRACTION of one cycle, 0..1   (vanish.js: `fract(t/period + phase)`)
- *   mover     `motion.phase`  FRACTION of one cycle, 0..1   (movers.js: `fract(t/period + phase)`)
- *   rotor     `phase`         FRACTION of one revolution    (rotors.js: `theta = TAU*(t/period + phase)*dir`)
- *   pendulum  `phase`         RADIANS                       (pendulum.js: `arg = TAU*t/period + phase`)
- *   laser     `cycle.phase`   SECONDS, added to t           (lasers.js `cycleState`: shifted = t + phase)
+ *   vanish    `cycle.phase`   FRACTION of one cycle, 0..1   (vanish.js:233 `period = on+warn+off`)
+ *   mover     `motion.phase`  FRACTION of one cycle, 0..1   (movers.js:432 `TAU*(t/period+phase)`)
+ *   rotor     `phase`         FRACTION of one revolution    (rotors.js:751)
+ *   pendulum  `phase`         RADIANS                       (pendulum.js `arg = TAU*t/period + phase`)
+ *   laser     `cycle.phase`   SECONDS, added to t           (lasers.js:604 `shifted = t + phase`)
  * Every phase below is written in the unit its own factory reads, and the pendulum ones
- * are written as expressions of Math.PI so the unit cannot be misread. Do NOT "tidy" the
- * vanish or rotor fractions into seconds — they wrap, and the drum falls apart.
+ * are written as expressions of Math.PI so the unit cannot be misread.
  *
  * CONVENTIONS (full list in runtime/data/index.js):
  *   p = CENTRE, s = FULL size, top surface = p[1] + s[1]/2. Gaps in the comments are
- *   EDGE TO EDGE. rot/yaw in radians, yaw 0 faces +X. `stripe: true` = must jump to reach.
- *   A mover's `p` is its HOME pose, `motion.to` its far pose; both are landable.
+ *   EDGE TO EDGE and include the lateral (z) separation where there is one. rot/yaw in
+ *   radians, yaw 0 faces +X. `stripe: true` = must jump to reach. A mover's `p` is its
+ *   HOME pose and `motion.to` its far pose; for `type:'circle'` the `p` is the CENTRE
+ *   OF THE ORBIT and the panel is landable everywhere on the circle.
  *
- * REACH BUDGET USED. The numbers below are the harness's MEASURED envelope from
- * runtime/core/tuning.js (apex 2.089 m, airtime 0.610 s), not the rounded table in
- * CONTRACT §0 — they are slightly tighter, and the tighter one is the one that binds:
- *
- *      run 8.6 m/s     flat 5.244 max / 4.352 SAFE      at +0.9 m  4.657 / 3.866
- *      sprint 12.2     flat 7.439 max / 6.174 SAFE      at -1.0 m  8.172 / 6.783
- *
- *   longest run-speed gap on the main line   3.90 m flat        (BEAT 9, off the drum)
- *   longest run-speed rise                   0.90 m over 2.00 m (BEAT 4, into CP2)
- *   sprint gap 1                             5.60 m flat  (BEAT 3, 16.6 m of runway + a pad)
- *   sprint gap 2                             5.70 m flat  (BEAT 3, 8.6 m of deck + a pad)
- *   sprint gap 3, the last jump in the world 6.80 m at -2.0 m
- *                                                        (BEAT 9, 9.2 m of runway + a pad)
- *   riskiest optional line                   5.55 m flat  (BEAT 9, the drum outrigger,
- *                                                          taken from the wrong panel)
- * Every jump on every route is a `run`, `sprint`, `walkoff`, `step` or `pad` edge inside
- * the safe envelope; the stage contains no run-tight or sprint-tight edge that a forward
- * route can use.
- *
- * HEIGHT LADDER: 0.5 (boot) -> 1.9 (the grid, the runway, corridor A) -> 2.35 (corridor B)
- *                -> 3.25 (the ride) -> 4.6 (gallery, cog, mills) -> 5.05 (the bridge)
- *                -> 5.95 (the drum) -> 3.95 (the finish: two metres BELOW the launch,
- *                so the last thing this world does is drop you into the gate).
+ * HEIGHT LADDER: 0.5 (boot) -> 1.30 (the launch runway, 0.80 m BELOW the gate deck it
+ *                starts from) -> 2.35/3.30 (the dog-leg) -> 2.40..3.05 (the ride)
+ *                -> 3.40 (gallery) -> 2.60 (the terrace, BELOW it) -> 5.70 (the roof,
+ *                ABOVE it) -> 4.05 (the cog) -> 4.50 (the bridge) -> 6.20 (the gantry
+ *                lip) -> 5.35 (the wheel, which you DROP onto) -> 6.30 (the launch)
+ *                -> 4.30 (the finish: two metres BELOW the launch, so the last thing
+ *                this world does is drop you into the gate).
  */
 
 const CYAN = 0x7ef0ff; // rim light, safe edges, the path lights
@@ -77,59 +100,71 @@ export default {
   world: 'neon',
   name: 'OVERCLOCK',
   subtitle: 'The dojo runs the whole program at once',
-  par: 178000,
-  difficulty: 5,
+  par: 196000,
+  difficulty: 6,
 
   spawn: { p: [0, 0.6, 0], yaw: 0 },
   killY: -40,
 
   checkpoints: [
-    // On the grid deck, looking down 16.6 m of empty runway. Everything before this is
-    // neon-1 revision; everything after it is new.
-    { p: [44.2, 2.0, 0], yaw: 0, clockOffset: 0 },
-    // The corridor mouth. The next 27 m are beams and there is no way round them.
-    { p: [80.9, 2.0, 0], yaw: 0, clockOffset: 0 },
-    // Off the corridor, before the shuttle-through-a-beam-gate. clockOffset 0.6: the
-    // shuttle is 0.6 s into its outbound leg, i.e. still close and still coming back,
-    // which is the only phase of that ride you can read from a standing start.
-    { p: [115.9, 3.35, 0], yaw: 0, clockOffset: 0.6 },
-    // The gallery, before the cog and the mills. The longest leg on the stage ends here.
-    { p: [176.7, 4.7, 0], yaw: 0, clockOffset: 0 },
-    // The drum gantry. clockOffset 1.85: at t = 1.85 the entry panel A is 1.85 s into its
-    // 2.6 s solid window and the leading sweep has just crossed the entry spoke. You land
-    // looking at a drum you can step onto, not one mid-blink.
-    { p: [234.1, 5.6, 0], yaw: 0, clockOffset: 1.85 },
+    // CP0 — on the gate deck, looking down at a runway that is 0.80 m BELOW you and
+    // ends in a ramp. Everything before this is neon-1 revision.
+    { p: [44.6, 2.2, 0], yaw: 0, clockOffset: 0 },
+    // CP1 — off the second ramp. The corridor starts 2.00 m away and 1.05 m up.
+    { p: [85.9, 1.4, 0], yaw: 0, clockOffset: 0 },
+    // CP2 — the far end of the dog-leg, 8.6 m north of the centre line, facing the
+    // shuttle that takes you back to it. clockOffset 0.6: the shuttle is 0.6 s into
+    // its outbound leg — close, still coming back, the only phase you can read cold.
+    { p: [126.7, 3.4, 8.6], yaw: 0, clockOffset: 0.6 },
+    // CP3 — ON THE FAR SIDE OF THE SHUTTLE. Dying on the vanish tiles used to cost a
+    // 7.2 s wait for the ride plus the ride itself; from here the tiles are four
+    // seconds away.
+    { p: [147.5, 2.5, 0], yaw: 0, clockOffset: 0 },
+    // CP4 — the gallery floor, before the pavilion climb.
+    { p: [176.4, 3.5, 0], yaw: 0, clockOffset: 0 },
+    // CP5 — off the pavilion roof, at the mouth of the cog.
+    { p: [192.8, 4.15, 0], yaw: 0, clockOffset: 0 },
+    // CP6 — past the mills, before the bridge.
+    { p: [230.8, 4.6, 0], yaw: 0, clockOffset: 0 },
+    // CP7 — ON THE GANTRY LIP, at the mouth of the drum rather than three seconds
+    // short of it. clockOffset 14.0: the drum's period is 15.0 s and a panel sits at
+    // the west vertex at t = 15k, so a second after you stand up the entry panel is
+    // there. You never respawn looking at a wheel you cannot read.
+    { p: [258.6, 6.3, 0], yaw: 0, clockOffset: 14.0 },
+    // CP8 — OFF THE DRUM, on the launch runway. The last jump in the world is a ramp
+    // over a two-metre drop; failing it costs one runway, not one drum.
+    { p: [297.0, 6.4, 0], yaw: 0, clockOffset: 0 },
   ],
 
-  finish: { p: [288.5, 4.05, 0], yaw: 0 },
+  finish: { p: [316.2, 4.4, 0], yaw: 0 },
 
   coins: [
-    { p: [25.4, 2.4, -7.6] }, // BEAT 2 — a spur over the void that rejoins at the beam
-    { p: [58.6, 3.0, 11.4] }, // BEAT 3 — out and back, and it costs you your run-up
-    { p: [90.5, 3.5, 6.6] }, // BEAT 4 — an alcove with a beam firing across its mouth
-    { p: [180.1, 8.3, 7.6] }, // BEAT 6 — pad-only: 2.6 m up, and a jump apexes at 2.09
-    { p: [259.3, 7.55, 12.8] }, // BEAT 9 — an outrigger hanging off the turning drum
+    { p: [25.2, 2.45, -8.0] }, // BEAT 2 — a spur south, and a landing deck back onto the beam
+    { p: [55.6, 3.85, 10.4] }, // BEAT 3 — two hops north off the runway; it costs you the pad approach
+    { p: [97.0, 3.35, -6.8] }, // BEAT 4 — an alcove with a beam firing across its mouth
+    { p: [187.2, 9.1, 9.8] }, // BEAT 6 — pad-only: 2.40 m up, and a standing jump apexes at 2.089
+    { p: [272.0, 6.35, 12.8] }, // BEAT 9 — an outrigger you can only reach as the wheel brings a panel north
   ],
 
   objects: [
     /* ============================================================================ */
-    /* BEAT 1 — BOOT SECTOR                                                         */
-    /* A wide deck, two risers, and the stage telling you what it is about to do.     */
+    /* BEAT 1 — BOOT SECTOR                                                          */
+    /* A wide deck, two steps, and the stage telling you what it is about to do.      */
     /* Nothing here is on a timer. Almost everything after BEAT 2 is.                 */
     /* ============================================================================ */
 
-    { kind: 'platform', p: [2, 0, 0], s: [13, 1, 12], mat: 'stone', glow: DIM },
+    { kind: 'platform', p: [2, 0, 0], s: [13, 1, 12], mat: 'stone', glow: DIM }, // top 0.50
 
-    { kind: 'platform', p: [1.2, 0.75, 4.4], s: [2.4, 0.5, 2.4], mat: 'panel', glow: CYAN, stripe: true }, // top 1.0, a step
-    { kind: 'platform', p: [6.2, 1.0, 4.4], s: [2.2, 1.0, 2.2], mat: 'panel', glow: CYAN, stripe: true }, // top 1.5, a 2.7 m hop at +0.5
+    { kind: 'platform', p: [1.2, 0.75, 4.4], s: [2.4, 0.5, 2.4], mat: 'panel', glow: CYAN, stripe: true }, // top 1.00, a step
+    { kind: 'platform', p: [6.2, 1.0, 4.4], s: [2.2, 1, 2.2], mat: 'panel', glow: CYAN, stripe: true }, // top 1.50, a 2.70 m hop at +0.50
 
     { kind: 'text', p: [-4.4, 2.8, 0], rot: [0, -Math.PI / 2, 0], text: 'OVERCLOCK', size: 0.82, color: MAG },
     { kind: 'text', p: [-4.4, 2.15, 0], rot: [0, -Math.PI / 2, 0], text: 'NEON DOJO  ·  III', size: 0.28, color: 0x6f8dac },
     { kind: 'text', p: [-4.4, 1.6, 0], rot: [0, -Math.PI / 2, 0], text: 'everything at once, and faster', size: 0.24, color: HOT },
     { kind: 'text', p: [6.2, 3.0, 4.4], rot: [0, -Math.PI / 2, 0], text: 'warm up', size: 0.24, color: CYAN },
 
-    // The threshold gate, drawn in light rather than built in stone — the first hint that
-    // this floor is a projection of a dojo and not a dojo.
+    // The threshold gate, drawn in light rather than built in stone — the first hint
+    // that this floor is a projection of a dojo and not a dojo.
     { kind: 'deco', kindOf: 'arch', p: [8.0, 4.8, 0], s: [1.0, 0.9, 15.0], mat: 'emissive', tint: MAG },
     { kind: 'deco', kindOf: 'pillar', p: [8.0, 2.7, 6.8], s: [1.1, 5.4, 1.1], mat: 'obsidian' },
     { kind: 'deco', kindOf: 'pillar', p: [8.0, 2.7, -6.8], s: [1.1, 5.4, 1.1], mat: 'obsidian' },
@@ -138,29 +173,31 @@ export default {
     { kind: 'light', p: [1.0, 3.6, 0], color: 0xbcd8f5, intensity: 7, distance: 20 },
 
     /* ============================================================================ */
-    /* BEAT 2 — GRID RECALL                                                         */
-    /* neon-1's whole vocabulary in twenty seconds: a straight hop, a lateral step-up, */
-    /* a diagonal, a narrow beam walk, a rise, a landing. Six obstacles and six        */
-    /* different problems — gaps 2.20 / 2.90 / 3.06 / 2.00 / 2.58 / 3.30 and rises      */
-    /* 0 / +0.45 / 0 / 0 / +0.70 / +0.25 — so no jump here is the jump you just made.   */
-    /*                                                                              */
-    /* COIN 1 is a spur: drop south off the diagonal pad onto a ledge over open air,    */
-    /* then take a 3.96 m diagonal DOWN 0.5 m onto the near end of the beam. Skip it     */
-    /* and you lose nothing but the coin.                                              */
+    /* BEAT 2 — GRID RECALL                                                          */
+    /* neon-1's whole vocabulary in twenty seconds, and NO TWO JUMPS ARE THE SAME     */
+    /* SHAPE. Gaps 2.20 / 2.95 / 3.59 / 1.40 / 2.02 / 2.40 against rises              */
+    /* 0 / +0.80 / -0.30 / 0 / +0.95 / +0.15 — a straight hop, a lateral step-up, a   */
+    /* diagonal DOWN, a short drop onto a narrow beam, a high step, a landing.        */
+    /*                                                                               */
+    /* COIN 1 IS A LOOP, NOT AN OUT-AND-BACK, and it does not end on the beam. The    */
+    /* ledge is a step UP from the diagonal (1.00 -> 1.45), and the way home is a     */
+    /* 2.90 m hop onto a 2.8 x 2.8 m deck that then steps 1.30 m sideways onto the    */
+    /* beam — so nothing on this route lands across a 1.2 m rail at run speed.        */
     /* ============================================================================ */
 
-    { kind: 'platform', p: [12.3, 0, 0], s: [3.2, 1, 4.6], mat: 'panel', glow: CYAN, stripe: true }, // gap 2.20, top 0.5
-    { kind: 'platform', p: [18.1, 0.45, 2.0], s: [2.6, 1, 3.2], mat: 'panel', glow: CYAN, stripe: true }, // gap 2.90, +0.45
-    { kind: 'platform', p: [23.9, 0.45, -1.7], s: [3.0, 1, 3.0], mat: 'panel', glow: CYAN, stripe: true }, // diagonal 3.06
+    { kind: 'platform', p: [12.3, 0, 0], s: [3.2, 1, 4.6], mat: 'panel', glow: CYAN, stripe: true }, // gap 2.20, top 0.50
+    { kind: 'platform', p: [18.15, 0.8, 2.1], s: [2.6, 1, 3.0], mat: 'panel', glow: CYAN, stripe: true }, // gap 2.95, +0.80, top 1.30
+    { kind: 'platform', p: [24.6, 0.5, -1.9], s: [3.4, 1, 3.0], mat: 'panel', glow: CYAN, stripe: true }, // diagonal 3.59, -0.30, top 1.00
 
-    // -- the optional line -------------------------------------------------------
-    { kind: 'platform', p: [25.4, 0.95, -7.6], s: [2.6, 1, 2.6], mat: 'panel', glow: MAG, stripe: true }, // 3.10 m south at +0.5
-    { kind: 'deco', kindOf: 'ring', p: [25.4, 2.4, -7.6], s: [0.12, 2.2, 2.2], rot: [0, Math.PI / 2, 0], mat: 'emissive', tint: MAG },
-    { kind: 'light', p: [25.4, 2.7, -7.6], color: MAG, intensity: 7, distance: 14 },
+    // -- the optional loop -------------------------------------------------------
+    { kind: 'platform', p: [25.2, 0.95, -8.0], s: [3.0, 1, 3.0], mat: 'panel', glow: MAG, stripe: true }, // 3.10 m south, +0.45, top 1.45
+    { kind: 'platform', p: [31.0, 0.6, -5.2], s: [2.8, 1, 2.8], mat: 'panel', glow: MAG, stripe: true }, // 2.90 m back east, -0.35, top 1.10
+    { kind: 'deco', kindOf: 'ring', p: [25.2, 2.45, -8.0], s: [0.12, 2.2, 2.2], rot: [0, Math.PI / 2, 0], mat: 'emissive', tint: MAG },
+    { kind: 'light', p: [25.2, 2.7, -8.0], color: MAG, intensity: 7, distance: 14 },
 
-    { kind: 'beam', p: [30.2, 0.7, -1.9], s: [5.6, 0.5, 1.0], mat: 'metal' }, // gap 2.00, 1.0 m wide, top 0.95
-    { kind: 'platform', p: [36.6, 1.15, 1.8], s: [3.0, 1, 3.4], mat: 'panel', glow: CYAN, stripe: true }, // diagonal 2.58, +0.70
-    { kind: 'platform', p: [44.2, 1.4, 0], s: [5.6, 1, 6.4], mat: 'stone', glow: DIM, stripe: true }, // gap 3.30, +0.25, top 1.9 — CP0
+    { kind: 'beam', p: [30.9, 0.75, -1.9], s: [6.4, 0.5, 1.2], mat: 'metal' }, // gap 1.40 off the diagonal, 1.30 off the loop deck, top 1.00
+    { kind: 'platform', p: [37.6, 1.45, 1.2], s: [3.2, 1, 3.6], mat: 'panel', glow: CYAN, stripe: true }, // diagonal 2.02, +0.95, top 1.95
+    { kind: 'platform', p: [44.6, 1.6, 0], s: [6.0, 1, 6.4], mat: 'stone', glow: DIM, stripe: true }, // gap 2.40, +0.15, top 2.10 — CP0
 
     { kind: 'text', p: [10.4, 2.4, 3.6], rot: [0, -Math.PI / 2, 0], text: 'you know this part', size: 0.26, color: 0x6f8dac },
     { kind: 'deco', kindOf: 'cable', p: [26.0, 4.8, 0], s: [34.0, 0.06, 0.06], mat: 'metal', tint: 0x14283f },
@@ -169,420 +206,534 @@ export default {
     { kind: 'light', p: [22.0, 3.4, 0], color: CYAN, intensity: 6, distance: 26 },
 
     /* ============================================================================ */
-    /* BEAT 3 — OVERCLOCK : THE SPEED PAD                                           */
-    /* NEW MECHANIC, taught with nothing else in the room. The CP0 deck and the runway */
-    /* are flush, so there are 16.6 m of dead-straight unobstructed approach before the */
-    /* first gap, and the landing deck is 8.6 m long before the second — both well past */
-    /* the 8 m of run-up a sprint-required jump is allowed to ask for.                  */
-    /*                                                                              */
-    /*   pad 1 (13.2 m/s) -> 5.60 m flat   run tops out at 5.244; sprint is safe to 6.17 */
-    /*   pad 2 (14.0 m/s) -> 5.70 m flat   same again, ten metres further and unfenced   */
-    /*                                                                              */
-    /* Neither gap is landable at run speed and both are landable off the pad without    */
-    /* ever touching SHIFT. That is the whole lesson: the pad IS the sprint.             */
-    /*                                                                              */
-    /* COIN 2 is a two-hop spur north off the RUNWAY, which means taking it costs you    */
-    /* the run-up you were building. There is no faster line; there is a slower one.      */
+    /* BEAT 3 — OVERCLOCK : THE RAMP PADS                                            */
+    /* NEW MECHANIC, taught with nothing else in the room.                           */
+    /*                                                                               */
+    /* You WALK OFF the CP0 deck onto a runway 0.80 m below it — the stage's first    */
+    /* deliberate drop — and that runway ends in a ramp that fills its last 2.8 m,    */
+    /* wall to wall. There is no lip to stand on and no way past the pad:             */
+    /*   run onto it    -> launched, and the 6.60 m gap is 1.11 m inside the throw    */
+    /*   crouch onto it -> still launched, still 1.11 m inside it (see MEASUREMENT)   */
+    /*   jump over it   -> you leave from 2.8 m further back over a 9.40 m gap, which */
+    /*                     beats the sprint maximum of 7.44 m by two metres           */
+    /* An unaided sprint from the lip would need 6.60 m against a 6.17 m safe / 7.44  */
+    /* m absolute envelope — and there IS no lip. The pad is not the sprint. The pad  */
+    /* is the only thing that crosses this.                                          */
+    /*                                                                               */
+    /* PAD 2 is the same lesson with a different arc: dir[1.6,1] is steeper, so it    */
+    /* throws you higher (apex 1.28 m over the deck against pad 1's 0.92 m) and 1.2 m */
+    /* further, over a 7.10 m gap. Same button, different shape in the air.           */
+    /*                                                                               */
+    /* COIN 2 is a two-hop climb north off the runway — 2.40 m at +0.75, then 1.86 m  */
+    /* at +0.80 — which means taking it drops you back onto the runway from a height  */
+    /* with no approach left. There is no faster line; there is a slower one.         */
     /* ============================================================================ */
 
-    { kind: 'platform', p: [52.5, 1.4, 0], s: [11.0, 1, 5.2], mat: 'metal', glow: DIM }, // flush with the CP0 deck, top 1.9
-    { kind: 'speedpad', p: [50.0, 1.97, 0], s: [3.4, 0.14, 4.4], dir: [1, 0, 0], power: 13.2 },
+    { kind: 'platform', p: [53.6, 0.8, 0], s: [12.0, 1, 5.4], mat: 'metal', glow: DIM }, // flush with CP0's east edge, 0.80 m BELOW it, top 1.30
+    { kind: 'speedpad', p: [58.2, 1.37, 0], s: [2.8, 0.14, 5.4], dir: [2, 1, 0], power: 18 }, // fills x 56.8..59.6 — the whole lip
 
-    { kind: 'text', p: [46.4, 4.0, 0], rot: [0, -Math.PI / 2, 0], text: 'OVERCLOCK', size: 0.62, color: MAG },
-    { kind: 'text', p: [46.4, 3.35, 0], rot: [0, -Math.PI / 2, 0], text: 'the pad is the sprint  ·  run straight', size: 0.24, color: 0x6f8dac },
+    { kind: 'text', p: [48.4, 3.4, 0], rot: [0, -Math.PI / 2, 0], text: 'OVERCLOCK', size: 0.62, color: MAG },
+    { kind: 'text', p: [48.4, 2.75, 0], rot: [0, -Math.PI / 2, 0], text: 'the ramp is the jump  ·  do not press SPACE', size: 0.24, color: HOT },
 
     // -- the optional line: off the runway, out over the city, and back ----------
-    { kind: 'platform', p: [53.2, 1.4, 6.6], s: [2.4, 1, 2.4], mat: 'panel', glow: MAG, stripe: true }, // 2.80 m north off the runway
-    { kind: 'platform', p: [58.6, 1.4, 11.4], s: [2.2, 1, 2.2], mat: 'panel', glow: MAG, stripe: true }, // 3.98 m further out — and no way back except the way in
-    { kind: 'deco', kindOf: 'ring', p: [58.6, 3.0, 11.4], s: [0.12, 2.0, 2.0], rot: [0, Math.PI / 2, 0], mat: 'emissive', tint: MAG },
-    { kind: 'light', p: [56.4, 3.4, 9.2], color: MAG, intensity: 7, distance: 16 },
+    { kind: 'platform', p: [52.0, 1.55, 6.4], s: [2.6, 1, 2.6], mat: 'panel', glow: MAG, stripe: true }, // 2.40 m north, +0.75, top 2.05
+    { kind: 'platform', p: [55.6, 2.35, 10.4], s: [2.4, 1, 2.4], mat: 'panel', glow: MAG, stripe: true }, // 1.86 m diagonal, +0.80, top 2.85
+    { kind: 'deco', kindOf: 'ring', p: [55.6, 3.85, 10.4], s: [0.12, 2.0, 2.0], rot: [0, Math.PI / 2, 0], mat: 'emissive', tint: MAG },
+    { kind: 'light', p: [54.0, 3.6, 8.4], color: MAG, intensity: 7, distance: 16 },
 
-    { kind: 'platform', p: [67.9, 1.4, 0], s: [8.6, 1, 5.2], mat: 'panel', glow: CYAN, stripe: true }, // gap 5.60, top 1.9, 8.6 m of deck
-    { kind: 'speedpad', p: [67.5, 1.97, 0], s: [2.6, 0.14, 5.2], dir: [1, 0, 0], power: 14.0 },
+    { kind: 'platform', p: [70.4, 0.8, 0], s: [8.4, 1, 5.6], mat: 'panel', glow: CYAN, stripe: true }, // gap 6.60, top 1.30 — lands 7.71/9.38/10.75 into an 8.4 m deck
+    { kind: 'speedpad', p: [73.2, 1.37, 0], s: [2.8, 0.14, 5.6], dir: [1.6, 1, 0], power: 18 }, // fills x 71.8..74.6
 
-    { kind: 'platform', p: [80.9, 1.4, 0], s: [6.0, 1, 6.4], mat: 'stone', glow: DIM, stripe: true }, // gap 5.70, top 1.9 — CP1
+    { kind: 'platform', p: [85.9, 0.8, 0], s: [8.4, 1, 6.4], mat: 'stone', glow: DIM, stripe: true }, // gap 7.10, top 1.30 — CP1
 
-    { kind: 'deco', kindOf: 'rail', p: [52.5, 3.2, 3.4], s: [11.0, 0.08, 0.08], mat: 'metal', tint: MAG },
-    { kind: 'deco', kindOf: 'rail', p: [52.5, 3.2, -3.4], s: [11.0, 0.08, 0.08], mat: 'metal', tint: MAG },
-    { kind: 'deco', kindOf: 'post', p: [60.0, 2.9, -3.4], s: [0.2, 2.0, 0.2], count: 5, spread: [22, 0, 0], seed: 3101, tint: DIM },
-    { kind: 'deco', kindOf: 'sign', p: [63.0, 4.2, -4.8], s: [0.25, 1.8, 3.4], mat: 'emissive', tint: HOT },
-    { kind: 'light', p: [52.5, 4.4, 0], color: MAG, intensity: 10, distance: 26 },
-    { kind: 'light', p: [67.9, 4.0, 0], color: CYAN, intensity: 8, distance: 22 },
+    { kind: 'deco', kindOf: 'rail', p: [53.6, 2.6, 3.0], s: [12.0, 0.08, 0.08], mat: 'metal', tint: MAG },
+    { kind: 'deco', kindOf: 'rail', p: [53.6, 2.6, -3.0], s: [12.0, 0.08, 0.08], mat: 'metal', tint: MAG },
+    { kind: 'deco', kindOf: 'post', p: [62.0, 2.3, -3.0], s: [0.2, 2.0, 0.2], count: 5, spread: [22, 0, 0], seed: 3101, tint: DIM },
+    { kind: 'deco', kindOf: 'sign', p: [64.0, 3.6, -4.8], s: [0.25, 1.8, 3.4], mat: 'emissive', tint: HOT },
+    { kind: 'light', p: [53.6, 3.8, 0], color: MAG, intensity: 10, distance: 26 },
+    { kind: 'light', p: [70.4, 3.4, 0], color: CYAN, intensity: 8, distance: 22 },
 
     /* ============================================================================ */
-    /* BEAT 4 — THE LASER CORRIDOR                                                  */
-    /* NEW MECHANIC. Twenty-seven metres of walkway 4.6 m wide with a drop on both     */
-    /* sides, and four beam installations that each escalate in exactly one dimension:  */
-    /*                                                                              */
-    /*   1. ONE beam at ankle height, 1.5 s on / 2.4 s off with a 0.8 s warning. Stand  */
-    /*      and watch it. It is the most generous cycle in the world.                   */
-    /*   2. THREE ankle beams 2.6 m apart, staggered 0.9 s: a wave rolling toward you.   */
-    /*      Same skill, now with a tempo.                                               */
-    /*   3. THREE beams at 1.55 m, staggered 0.85 s. Ankle beams are jumped; these are   */
-    /*      ducked. CTRL, not SPACE. Different verb, identical read.                     */
-    /*   4. TWO ankle beams, 0.9 s on / 1.5 s off, staggered 0.75 s — the same tempo at   */
-    /*      the speed the rest of the stage is going to use.                             */
-    /*                                                                              */
-    /* Laser `cycle.phase` is SECONDS and `warn` is carved off the END of `off`, so the  */
-    /* emitter you see strobing is always the one about to fire, never one that stopped. */
-    /*                                                                              */
-    /* COIN 3 sits in an alcove 3.0 m off the corridor's north edge with its own beam    */
-    /* firing across the mouth on a 3.0 s cycle: two hops, both through the same gate.    */
+    /* BEAT 4 — THE LASER CORRIDOR  (and the stage's first turn)                     */
+    /* NEW MECHANIC. Thirty-five metres of walkway with a drop on both sides — but    */
+    /* it does not run straight. It goes EAST 13 m, turns NORTH 8.6 m through a       */
+    /* corner deck, then turns EAST again for another 13.4 m, 0.95 m higher up.       */
+    /* Four beam installations, each escalating in exactly one dimension:             */
+    /*                                                                               */
+    /*   1. ONE beam at ankle height, 1.5 s on / 2.4 s off with a 0.8 s warning.      */
+    /*      Stand and watch it. It is the most generous cycle in the world.           */
+    /*   2. THREE ankle beams 2.6 m apart, staggered 0.9 s: a wave rolling at you.    */
+    /*   3. THE CURTAIN, twice. Each is a lasergrid whose `offset` is [0,1,0], so its */
+    /*      three beams stack VERTICALLY at 4.60 / 5.20 / 5.80 over a deck topping at */
+    /*      3.30 — a wall of light from 1.20 m to 2.60 m above the floor, all three   */
+    /*      beams on the same cycle (stagger 0) so it never opens a hole. Standing    */
+    /*      head height is 5.10 and is inside it. Crouched head height is 4.35 and    */
+    /*      clears the bottom beam by 0.15 m. Jumping needs your FEET above 5.90, i.e.*/
+    /*      2.60 m over the deck, against an apex of 2.089 — and a crouch-jump only   */
+    /*      shortens the body, it does not lift it. CTRL is not a suggestion here;    */
+    /*      it is the only solution the geometry admits.                              */
+    /*   4. TWO ankle beams, 0.9 s on / 1.5 s off, staggered 0.75 s — the tempo the   */
+    /*      rest of the stage is going to use.                                        */
+    /*                                                                               */
+    /* Every beam's a/b span exceeds the deck it crosses (±2.7 over a ±2.3 deck; the  */
+    /* corner beams run x 100.5..105.7 over a deck spanning 101.3..105.1; the north   */
+    /* leg's beams run z 6.0..11.2 over a deck spanning 6.4..10.8), so no beam in     */
+    /* this corridor has a walk-around.                                               */
     /* ============================================================================ */
 
-    { kind: 'platform', p: [90.7, 1.4, 0], s: [13.6, 1, 4.6], mat: 'metal', glow: DIM }, // flush with the CP1 deck, top 1.9
+    { kind: 'platform', p: [98.6, 1.85, 0], s: [13.0, 1, 4.6], mat: 'metal', glow: DIM, stripe: true }, // gap 2.00 at +1.05, top 2.35
 
-    { kind: 'laser', a: [87.1, 2.25, -2.6], b: [87.1, 2.25, 2.6], radius: 0.1, color: HOT, cycle: { on: 1.5, off: 2.4, warn: 0.8, phase: 0 } },
+    { kind: 'laser', a: [94.6, 2.6, -2.7], b: [94.6, 2.6, 2.7], radius: 0.1, color: HOT, cycle: { on: 1.5, off: 2.4, warn: 0.8, phase: 0 } },
 
     {
       kind: 'lasergrid',
-      a: [92.9, 2.25, -2.6],
-      b: [92.9, 2.25, 2.6],
+      a: [99.8, 2.6, -2.7],
+      b: [99.8, 2.6, 2.7],
       count: 3,
       spacing: 2.6,
-      offset: [1, 0, 0], // the rack marches ALONG the corridor: beams at x 90.3 / 92.9 / 95.5
+      offset: [1, 0, 0], // the rack marches ALONG the corridor: beams at x 97.2 / 99.8 / 102.4
       stagger: 0.9,
       radius: 0.1,
       color: HOT,
       cycle: { on: 1.0, off: 2.0, warn: 0.5, phase: 0.5 },
     },
 
-    // -- the alcove --------------------------------------------------------------
-    { kind: 'platform', p: [90.5, 1.4, 6.6], s: [2.6, 1, 2.6], mat: 'panel', glow: MAG, stripe: true }, // 3.00 m north of the corridor
-    { kind: 'laser', a: [90.5, 2.4, 2.5], b: [90.5, 2.4, 5.6], radius: 0.09, color: MAG, cycle: { on: 1.7, off: 1.3, warn: 0.45, phase: 0.3 } },
-    { kind: 'deco', kindOf: 'ring', p: [90.5, 3.5, 6.6], s: [0.12, 2.2, 2.2], rot: [0, Math.PI / 2, 0], mat: 'emissive', tint: MAG },
-    { kind: 'light', p: [90.5, 3.9, 6.6], color: MAG, intensity: 7, distance: 14 },
+    // -- the alcove (COIN 3), south side --------------------------------------
+    { kind: 'platform', p: [97.0, 1.85, -6.8], s: [2.8, 1, 2.8], mat: 'panel', glow: MAG, stripe: true }, // 3.10 m south of the corridor, level
+    { kind: 'laser', a: [97.0, 2.65, -2.6], b: [97.0, 2.65, -5.6], radius: 0.09, color: MAG, cycle: { on: 1.7, off: 1.3, warn: 0.45, phase: 0.3 } },
+    { kind: 'deco', kindOf: 'ring', p: [97.0, 3.35, -6.8], s: [0.12, 2.2, 2.2], rot: [0, Math.PI / 2, 0], mat: 'emissive', tint: MAG },
+    { kind: 'light', p: [97.0, 3.9, -6.8], color: MAG, intensity: 7, distance: 14 },
 
-    { kind: 'platform', p: [105.2, 1.85, 0], s: [11.4, 1, 4.6], mat: 'metal', glow: DIM, stripe: true }, // gap 2.00, +0.45, top 2.35
+    // -- the corner: the route turns north -------------------------------------
+    { kind: 'platform', p: [103.2, 1.85, 6.6], s: [3.8, 1, 8.6], mat: 'metal', glow: DIM }, // flush with the east leg at z 2.3, top 2.35
+    { kind: 'laser', a: [100.5, 2.6, 4.4], b: [105.7, 2.6, 4.4], radius: 0.1, color: HOT, cycle: { on: 1.1, off: 1.6, warn: 0.5, phase: 0.85 } },
+    { kind: 'laser', a: [100.5, 2.6, 9.0], b: [105.7, 2.6, 9.0], radius: 0.1, color: HOT, cycle: { on: 1.1, off: 1.6, warn: 0.5, phase: 2.15 } },
+
+    // -- the north leg: the curtains -------------------------------------------
+    { kind: 'platform', p: [113.4, 2.8, 8.6], s: [13.4, 1, 4.4], mat: 'metal', glow: DIM, stripe: true }, // gap 1.60, +0.95, top 3.30
 
     {
       kind: 'lasergrid',
-      a: [102.9, 3.9, -2.6],
-      b: [102.9, 3.9, 2.6], // 1.55 m over the deck: standing (1.8) clips it, crouching (1.05) does not
+      a: [110.0, 5.2, 6.0],
+      b: [110.0, 5.2, 11.2],
       count: 3,
-      spacing: 2.4,
-      offset: [1, 0, 0], // beams at x 100.5 / 102.9 / 105.3
-      stagger: 0.85,
+      spacing: 0.6,
+      offset: [0, 1, 0], // STACKED VERTICALLY: beams at y 4.05 / 4.65 / 5.25 — a curtain, not a rack
+      stagger: 0, // all three fire together; the wall never opens a gap
       radius: 0.1,
       color: HOT,
-      cycle: { on: 1.2, off: 1.9, warn: 0.5, phase: 0 },
+      cycle: { on: 1.6, off: 2.2, warn: 0.6, phase: 0 },
     },
     {
       kind: 'lasergrid',
-      a: [108.3, 2.7, -2.6],
-      b: [108.3, 2.7, 2.6],
+      a: [114.8, 5.2, 6.0],
+      b: [114.8, 5.2, 11.2],
+      count: 3,
+      spacing: 0.6,
+      offset: [0, 1, 0],
+      stagger: 0,
+      radius: 0.1,
+      color: HOT,
+      cycle: { on: 1.6, off: 2.2, warn: 0.6, phase: 1.9 }, // 1.9 s out of phase: they alternate, and crouch speed 4.2 m/s covers the 4.8 m between them in 1.14 s
+    },
+    {
+      kind: 'lasergrid',
+      a: [118.4, 3.6, 6.0],
+      b: [118.4, 3.6, 11.2],
       count: 2,
-      spacing: 3.2,
-      offset: [1, 0, 0], // beams at x 106.7 / 109.9
+      spacing: 3.0,
+      offset: [1, 0, 0], // beams at x 116.9 / 119.9 — stand up again, and run
       stagger: 0.75,
       radius: 0.1,
       color: HOT,
       cycle: { on: 0.9, off: 1.5, warn: 0.4, phase: 0.6 },
     },
 
-    { kind: 'platform', p: [115.9, 2.75, 0], s: [6.0, 1, 6.4], mat: 'stone', glow: DIM, stripe: true }, // gap 2.00 at +0.90, top 3.25 — CP2
+    { kind: 'platform', p: [126.7, 2.8, 8.6], s: [6.4, 1, 6.6], mat: 'stone', glow: DIM, stripe: true }, // gap 3.40, top 3.30 — CP2
 
-    { kind: 'text', p: [84.4, 4.2, 0], rot: [0, -Math.PI / 2, 0], text: 'CUTTING FLOOR', size: 0.52, color: HOT },
-    { kind: 'text', p: [84.4, 3.65, 0], rot: [0, -Math.PI / 2, 0], text: 'the strobe is the one about to fire', size: 0.24, color: 0x6f8dac },
-    { kind: 'text', p: [98.6, 4.4, -2.9], rot: [0, -Math.PI / 2, 0], text: 'CROUCH', size: 0.42, color: AMBER },
-    { kind: 'deco', kindOf: 'grate', p: [90.7, 0.6, 0], s: [13.6, 0.12, 4.4], mat: 'grate', tint: DIM }, // under the walk line
-    { kind: 'deco', kindOf: 'grate', p: [105.2, 1.05, 0], s: [11.4, 0.12, 4.4], mat: 'grate', tint: DIM },
-    { kind: 'deco', kindOf: 'pipe', p: [97.0, 7.6, 7.6], s: [30.0, 0.6, 0.6], mat: 'metal', tint: DIM },
-    { kind: 'deco', kindOf: 'pipe', p: [97.0, 8.2, -7.6], s: [30.0, 0.6, 0.6], mat: 'metal', tint: DIM },
-    { kind: 'deco', kindOf: 'buttress', p: [83.9, 6.0, 4.2], s: [1.2, 3.2, 1.2], mat: 'obsidian' },
-    { kind: 'deco', kindOf: 'buttress', p: [97.5, 6.0, -4.2], s: [1.2, 3.2, 1.2], mat: 'obsidian' },
-    { kind: 'deco', kindOf: 'buttress', p: [110.9, 6.4, 4.2], s: [1.2, 3.2, 1.2], mat: 'obsidian' },
-    { kind: 'light', p: [90.5, 4.6, 0], color: HOT, intensity: 9, distance: 22, flicker: 0.09 },
-    { kind: 'light', p: [105.2, 5.0, 0], color: HOT, intensity: 9, distance: 22, flicker: 0.09 },
+    { kind: 'text', p: [90.6, 4.0, 0], rot: [0, -Math.PI / 2, 0], text: 'CUTTING FLOOR', size: 0.52, color: HOT },
+    { kind: 'text', p: [90.6, 3.45, 0], rot: [0, -Math.PI / 2, 0], text: 'the strobe is the one about to fire', size: 0.24, color: 0x6f8dac },
+    { kind: 'text', p: [107.6, 4.4, 5.2], rot: [0, -Math.PI / 2, 0], text: 'CROUCH', size: 0.42, color: AMBER },
+    { kind: 'text', p: [107.6, 3.9, 5.2], rot: [0, -Math.PI / 2, 0], text: 'you cannot jump a curtain', size: 0.22, color: 0x6f8dac },
+    { kind: 'deco', kindOf: 'grate', p: [98.6, 1.05, 0], s: [13.0, 0.12, 4.4], mat: 'grate', tint: DIM },
+    { kind: 'deco', kindOf: 'grate', p: [113.4, 2.0, 8.6], s: [13.4, 0.12, 4.2], mat: 'grate', tint: DIM },
+    { kind: 'deco', kindOf: 'pipe', p: [104.0, 7.6, -7.6], s: [30.0, 0.6, 0.6], mat: 'metal', tint: DIM },
+    { kind: 'deco', kindOf: 'pipe', p: [112.0, 8.2, 15.4], s: [26.0, 0.6, 0.6], mat: 'metal', tint: DIM },
+    { kind: 'deco', kindOf: 'buttress', p: [92.6, 6.0, 4.2], s: [1.2, 3.2, 1.2], mat: 'obsidian' },
+    { kind: 'deco', kindOf: 'buttress', p: [104.4, 6.2, -4.2], s: [1.2, 3.2, 1.2], mat: 'obsidian' },
+    { kind: 'deco', kindOf: 'buttress', p: [119.0, 6.4, 12.6], s: [1.2, 3.2, 1.2], mat: 'obsidian' },
+    { kind: 'light', p: [98.6, 4.6, 0], color: HOT, intensity: 9, distance: 22, flicker: 0.09 },
+    { kind: 'light', p: [112.4, 5.4, 8.6], color: HOT, intensity: 9, distance: 22, flicker: 0.09 },
 
     /* ============================================================================ */
-    /* BEAT 5 — THE RIDE  (mover + laser + vanish, combined)                        */
-    /* The first passage that asks for two clocks at once. A 7.2 s shuttle carries you */
-    /* 6.2 m east THROUGH a beam gate on a 3.3 s cycle: you cannot outrun the gate and  */
-    /* you cannot get off, so the only answer is to jump it from a floor that is moving. */
-    /*                                                                              */
-    /* Then three vanish tiles, each with its own beam skimming 0.35 m above it, phased  */
-    /* so a beam fires while its tile is still solid. The tile says go, the beam says     */
-    /* wait, and exactly one of them is lying at any given moment.                        */
-    /*                                                                              */
-    /* Tile phases are FRACTIONS (0 / 0.30 / 0.60 of a 4.4 s cycle = 1.32 s apart); beam  */
-    /* phases are SECONDS (0 / 1.1 / 2.2). Both drift against the 7.2 s shuttle, so there */
-    /* is no count to memorise. There is only looking.                                    */
+    /* BEAT 5 — THE RIDE  (mover + laser + vanish, combined)                         */
+    /* The shuttle is not a lift, it is the way home: it carries you 6.2 m east AND   */
+    /* 8.6 m south, off the dog-leg and back onto the centre line, on a 7.2 s cycle   */
+    /* with a 0.9 s dwell at each end. A beam gate crosses the middle of that run at  */
+    /* 2.2 s on / 1.0 s off — safe 31% of the time, so waiting it out on a deck that  */
+    /* is going to arrive anyway is not an option: you jump the gate from a floor     */
+    /* that is moving diagonally. The gate is 9.16 m long, laid perpendicular to the  */
+    /* run (its direction dotted with the travel direction is -0.006), across a       */
+    /* platform whose diagonal is 6.23 m — there is no corner of the shuttle it does  */
+    /* not cover.                                                                     */
+    /*                                                                               */
+    /* Then three vanish tiles — different size, different height, different lateral  */
+    /* offset, different cycle — each with its own beam skimming 0.35 m above it,     */
+    /* phased so a beam fires while its tile is still solid. The tile says go, the    */
+    /* beam says wait, and exactly one of them is lying at any given moment.          */
     /* ============================================================================ */
 
     {
       kind: 'mover',
-      p: [123.3, 2.75, 0],
-      s: [3.8, 1, 4.2],
+      p: [133.8, 2.8, 8.6],
+      s: [4.2, 1, 4.6],
       mat: 'metal',
-      motion: { type: 'linear', to: [129.5, 2.75, 0], period: 7.2, phase: 0, ease: 'sine', dwell: 0.9 },
-    }, // board at 2.50 m off CP2's deck; 6.2 m of travel; tops 3.25 at both poses
+      motion: { type: 'linear', to: [140.0, 2.8, 0.0], period: 7.2, phase: 0, ease: 'sine', dwell: 0.9 },
+    }, // board 1.80 m off CP2; 10.6 m of diagonal travel; top 3.30 at both poses
 
-    { kind: 'laser', a: [126.4, 3.6, -3.6], b: [126.4, 3.6, 3.6], radius: 0.1, color: HOT, cycle: { on: 1.4, off: 1.9, warn: 0.6, phase: 0 } }, // the gate, 0.35 m over the shuttle deck
+    // the gate: perpendicular to the shuttle's diagonal, at its midpoint, 0.35 m up
+    { kind: 'laser', a: [132.4, 3.65, 1.6], b: [139.8, 3.65, 7.0], radius: 0.1, color: HOT, cycle: { on: 2.2, off: 1.0, warn: 0.45, phase: 0 } },
 
-    { kind: 'platform', p: [135.9, 2.75, 0], s: [3.6, 1, 4.8], mat: 'panel', glow: CYAN, stripe: true }, // gap 2.70 off the shuttle's far pose
+    { kind: 'platform', p: [147.5, 1.9, 0], s: [5.6, 1, 5.6], mat: 'stone', glow: DIM, stripe: true }, // gap 2.60 off the shuttle's far pose, -0.90, top 2.40 — CP3
 
-    { kind: 'vanish', p: [141.3, 2.75, 0], s: [4.0, 1, 3.6], mat: 'panel', cycle: { on: 2.4, off: 1.4, warn: 0.6, phase: 0.0 } }, // gap 1.60
-    { kind: 'vanish', p: [147.9, 2.75, 2.0], s: [3.6, 1, 3.6], mat: 'panel', cycle: { on: 2.4, off: 1.4, warn: 0.6, phase: 0.3 } }, // gap 2.80, +2.0 on z
-    { kind: 'vanish', p: [153.5, 2.75, -2.0], s: [3.6, 1, 3.6], mat: 'panel', cycle: { on: 2.4, off: 1.4, warn: 0.6, phase: 0.6 } }, // diagonal 2.04
+    { kind: 'vanish', p: [155.4, 1.9, 0], s: [4.4, 1, 3.4], mat: 'panel', cycle: { on: 1.9, off: 1.7, warn: 0.55, phase: 0.0 } }, // gap 2.90, level — solid 59%
+    { kind: 'vanish', p: [162.0, 2.55, 2.2], s: [3.6, 1, 3.2], mat: 'panel', cycle: { on: 1.7, off: 1.9, warn: 0.5, phase: 0.34 } }, // gap 2.60, +0.65, 2.2 m north — solid 54%
+    { kind: 'vanish', p: [168.4, 2.1, -1.8], s: [3.2, 1, 3.6], mat: 'panel', cycle: { on: 1.6, off: 1.9, warn: 0.5, phase: 0.67 } }, // diagonal 3.06, -0.45 — solid 53%
 
-    { kind: 'laser', a: [141.3, 3.6, -2.8], b: [141.3, 3.6, 2.8], radius: 0.09, color: HOT, cycle: { on: 1.2, off: 2.1, warn: 0.5, phase: 0.0 } },
-    { kind: 'laser', a: [147.9, 3.6, -0.8], b: [147.9, 3.6, 4.8], radius: 0.09, color: HOT, cycle: { on: 1.2, off: 2.1, warn: 0.5, phase: 1.1 } },
-    { kind: 'laser', a: [153.5, 3.6, -4.8], b: [153.5, 3.6, 0.8], radius: 0.09, color: HOT, cycle: { on: 1.2, off: 2.1, warn: 0.5, phase: 2.2 } },
+    { kind: 'laser', a: [155.4, 2.75, -2.6], b: [155.4, 2.75, 2.6], radius: 0.09, color: HOT, cycle: { on: 1.2, off: 2.1, warn: 0.5, phase: 0.0 } },
+    { kind: 'laser', a: [162.0, 3.4, -0.6], b: [162.0, 3.4, 5.0], radius: 0.09, color: HOT, cycle: { on: 1.2, off: 2.1, warn: 0.5, phase: 1.1 } },
+    { kind: 'laser', a: [168.4, 2.95, -4.6], b: [168.4, 2.95, 1.0], radius: 0.09, color: HOT, cycle: { on: 1.2, off: 2.1, warn: 0.5, phase: 2.2 } },
 
-    { kind: 'platform', p: [161.1, 3.2, 0], s: [5.6, 1, 6.2], mat: 'stone', glow: DIM, stripe: true }, // gap 3.00, +0.45, top 3.7
+    { kind: 'platform', p: [176.4, 2.9, 0], s: [5.6, 1, 6.0], mat: 'stone', glow: DIM, stripe: true }, // gap 3.60, +0.80, top 3.40 — CP4
 
-    { kind: 'text', p: [119.0, 5.2, 0], rot: [0, -Math.PI / 2, 0], text: 'RIDE IT ANYWAY', size: 0.46, color: MAG },
-    { kind: 'deco', kindOf: 'rail', p: [126.0, 3.0, 6.4], s: [22.0, 0.08, 0.08], mat: 'metal', tint: DIM },
-    { kind: 'deco', kindOf: 'monolith', p: [144.0, 9.0, 14.0], s: [6.0, 16.0, 6.0], mat: 'obsidian', tint: 0x16304e },
-    { kind: 'deco', kindOf: 'screen', p: [144.0, 9.4, 10.6], s: [0.35, 5.4, 7.4], mat: 'emissive', tint: 0x8a3fa8 },
-    { kind: 'deco', kindOf: 'antenna', p: [135.0, 8.0, -12.6], s: [0.5, 15.0, 0.5], mat: 'metal', tint: DIM },
-    { kind: 'light', p: [126.4, 5.4, 0], color: HOT, intensity: 10, distance: 22 },
-    { kind: 'light', p: [147.5, 5.0, 0], color: AMBER, intensity: 9, distance: 26, flicker: 0.1 },
-
-    /* ============================================================================ */
-    /* BEAT 6 — BREATHER : THE GALLERY                                              */
-    /* Fifteen metres where nothing is on a timer. BEAT 5 was two clocks and BEAT 7 is  */
-    /* a third; those two must not touch. This is also the stage's one view — the city   */
-    /* is below you on both sides and there is a rail to stand at.                       */
-    /*                                                                              */
-    /* COIN 4 is pad-only, and that is a fact about the maths rather than an opinion:     */
-    /* the perch is 2.60 m above the plaza and a standing jump apexes at 2.089, so there  */
-    /* is no route up that is not the pad. The pad is also placed EAST of the perch, so   */
-    /* you have to turn in the air to land on it.                                         */
-    /* ============================================================================ */
-
-    { kind: 'platform', p: [168.1, 3.65, 0], s: [3.4, 1, 4.4], mat: 'panel', glow: CYAN, stripe: true }, // gap 2.50, +0.45
-    { kind: 'platform', p: [176.7, 4.1, 0], s: [8.4, 1, 8.4], mat: 'stone', glow: DIM, stripe: true }, // gap 2.70, +0.45, top 4.6 — CP3
-
-    { kind: 'jumppad', p: [178.3, 4.67, 2.2], s: [2.6, 0.14, 2.6], power: 3.6, dir: [0, 1, 0] }, // apex 3.6 m over the pad
-    { kind: 'platform', p: [180.1, 6.7, 7.6], s: [2.8, 1, 2.8], mat: 'panel', glow: MAG, stripe: true }, // the perch, top 7.2 — 2.60 m over the plaza
-
-    { kind: 'deco', kindOf: 'ring', p: [180.1, 8.3, 7.6], s: [0.12, 2.4, 2.4], rot: [0, Math.PI / 2, 0], mat: 'emissive', tint: MAG },
-    { kind: 'deco', kindOf: 'rail', p: [176.7, 5.2, -4.0], s: [8.0, 0.09, 0.09], mat: 'metal', tint: CYAN },
-    { kind: 'deco', kindOf: 'brazier', p: [173.5, 5.5, -3.2], s: [0.9, 1.2, 0.9], mat: 'metal', tint: AMBER },
-    { kind: 'deco', kindOf: 'banner', p: [179.8, 7.4, -3.8], s: [0.1, 3.0, 1.8], mat: 'panel', tint: MAG },
-    { kind: 'text', p: [172.2, 6.4, -3.9], rot: [0, -Math.PI / 2, 0], text: 'BREATHE', size: 0.4, color: CYAN },
-    { kind: 'light', p: [173.5, 6.4, -3.2], color: AMBER, intensity: 7, distance: 15, flicker: 0.3 },
-    { kind: 'light', p: [180.1, 9.0, 7.6], color: MAG, intensity: 8, distance: 16 },
+    { kind: 'text', p: [122.0, 4.9, 8.6], rot: [0, -Math.PI / 2, 0], text: 'RIDE IT ANYWAY', size: 0.46, color: MAG },
+    { kind: 'deco', kindOf: 'rail', p: [136.0, 3.0, 12.0], s: [16.0, 0.08, 0.08], mat: 'metal', tint: DIM },
+    { kind: 'deco', kindOf: 'monolith', p: [158.0, 9.0, 14.0], s: [6.0, 16.0, 6.0], mat: 'obsidian', tint: 0x16304e },
+    { kind: 'deco', kindOf: 'screen', p: [158.0, 9.4, 10.6], s: [0.35, 5.4, 7.4], mat: 'emissive', tint: 0x8a3fa8 },
+    { kind: 'deco', kindOf: 'antenna', p: [149.0, 8.0, -12.6], s: [0.5, 15.0, 0.5], mat: 'metal', tint: DIM },
+    { kind: 'light', p: [136.1, 5.4, 4.3], color: HOT, intensity: 10, distance: 22 },
+    { kind: 'light', p: [162.0, 5.0, 0], color: AMBER, intensity: 9, distance: 26, flicker: 0.1 },
 
     /* ============================================================================ */
-    /* BEAT 7 — THE COG, THEN THE MILLS  (rotor alone -> rotor OVER vanish)         */
+    /* BEAT 6 — THE LANTERN PAVILION  (breather, and the only architecture)          */
+    /* Nothing here is on a timer — BEAT 5 was two clocks and BEAT 7 is a third, and  */
+    /* those two must not touch. But this is not fifteen metres of the same deck with */
+    /* a rail and the word BREATHE on it. There is no straight line through it: the   */
+    /* gallery floor at 3.40 does not reach the cog mouth at 4.05, because they are   */
+    /* 11.4 m apart. THE ONLY ROUTE IS THROUGH THE BUILDING.                          */
+    /*                                                                               */
+    /*   walk OFF the gallery, 0.80 m DOWN onto the south terrace (2.60) — the view,  */
+    /*     out over thirty storeys of rain, with a rail to stand at                   */
+    /*   climb the stair that wraps the lantern column: 3.15, then 4.10               */
+    /*   cross the ROOF at 5.70 — 2.30 m ABOVE the floor you came in on               */
+    /*   step off the roof's east edge and drop 1.65 m to the cog mouth               */
+    /*                                                                               */
+    /* Down, around, up, over and down again: 3.40 -> 2.60 -> 5.70 -> 4.05, inside    */
+    /* 21 m. It is the one place in the stage you can look back at.                   */
+    /*                                                                               */
+    /* COIN 4 is pad-only, and that is arithmetic rather than opinion: the perch is   */
+    /* 2.40 m above the roof and a standing jump apexes at 2.089, so `reachcheck`     */
+    /* itself can only reach it through the pad's `pad` edge. The pad throws you      */
+    /* straight up and the perch is 3.40 m NORTH of the pad, so you turn in the air.  */
+    /* ============================================================================ */
+
+    { kind: 'platform', p: [178.0, 2.1, -6.6], s: [8.4, 1, 5.2], mat: 'stone', glow: DIM }, // the terrace: 1.00 m south, 0.80 m DOWN, top 2.60
+    { kind: 'platform', p: [184.9, 2.65, -6.0], s: [2.6, 1, 2.6], mat: 'panel', glow: CYAN, stripe: true }, // stair 1: gap 1.40, +0.55, top 3.15
+    { kind: 'platform', p: [187.4, 3.6, -0.8], s: [2.6, 1, 2.6], mat: 'panel', glow: CYAN, stripe: true }, // stair 2: gap 2.60 north, +0.95, top 4.10
+    { kind: 'platform', p: [186.6, 5.2, 4.0], s: [4.4, 1, 4.0], mat: 'stone', glow: DIM, stripe: true }, // the roof: gap 1.50 north, +1.60, top 5.70
+
+    { kind: 'jumppad', p: [186.6, 5.77, 4.0], s: [2.4, 0.14, 2.4], power: 3.4, dir: [0, 1, 0] }, // apex 3.4 m over the roof
+    { kind: 'platform', p: [187.2, 7.6, 9.8], s: [2.4, 1, 2.4], mat: 'panel', glow: MAG, stripe: true }, // the perch: 3.40 m north of the pad, +2.40 over the roof — top 8.10
+
+    { kind: 'platform', p: [192.8, 3.55, 0], s: [4.4, 1, 5.0], mat: 'stone', glow: DIM, stripe: true }, // off the roof: gap 1.80, -1.65, top 4.05 — CP5
+
+    { kind: 'deco', kindOf: 'pillar', p: [186.6, 4.0, 0.4], s: [1.6, 8.0, 1.6], mat: 'obsidian' }, // the lantern column the stair wraps
+    { kind: 'deco', kindOf: 'arch', p: [186.6, 8.2, 4.0], s: [1.0, 0.8, 6.0], mat: 'metal', tint: DIM }, // the pavilion's roof beam, 2.5 m over the roof deck
+    { kind: 'deco', kindOf: 'emblem', p: [186.6, 9.2, 0.4], s: [0.2, 1.8, 1.8], mat: 'emissive', tint: AMBER }, // the lantern itself
+    { kind: 'deco', kindOf: 'ring', p: [187.2, 9.1, 9.8], s: [0.12, 2.4, 2.4], rot: [0, Math.PI / 2, 0], mat: 'emissive', tint: MAG },
+    { kind: 'deco', kindOf: 'rail', p: [178.0, 3.2, -9.0], s: [8.0, 0.09, 0.09], mat: 'metal', tint: CYAN },
+    { kind: 'deco', kindOf: 'brazier', p: [174.6, 3.5, -8.2], s: [0.9, 1.2, 0.9], mat: 'metal', tint: AMBER },
+    { kind: 'deco', kindOf: 'banner', p: [182.0, 4.6, -8.8], s: [0.1, 3.0, 1.8], mat: 'panel', tint: MAG },
+    { kind: 'text', p: [175.4, 4.4, -8.9], rot: [0, -Math.PI / 2, 0], text: 'BREATHE', size: 0.4, color: CYAN },
+    { kind: 'text', p: [181.0, 4.0, -4.4], rot: [0, -Math.PI / 2, 0], text: 'the only way on is up', size: 0.22, color: 0x6f8dac },
+    { kind: 'light', p: [174.6, 4.4, -8.2], color: AMBER, intensity: 7, distance: 15, flicker: 0.3 },
+    { kind: 'light', p: [186.6, 9.6, 0.4], color: AMBER, intensity: 10, distance: 20 },
+    { kind: 'light', p: [187.2, 10.0, 9.8], color: MAG, intensity: 8, distance: 16 },
+
+    /* ============================================================================ */
+    /* BEAT 7 — THE COG, THEN THE MILLS  (rotor alone -> rotor OVER vanish)          */
     /* Two halves, deliberately separated.                                           */
-    /*                                                                              */
-    /* THE COG is a 9.6 m disc with a three-armed bar sweeping the whole of it every    */
-    /* 4.2 s — a blade past your shins every 1.4 s, on solid ground, with nothing else    */
-    /* in the room. neon-2's discs each had a safe island to stand on and count from;     */
-    /* this one deliberately does not. The disc is 9.6 m wide and the bar is slow, so the */
-    /* refuge is timing rather than terrain, and that is the whole point of the beat.     */
-    /*                                                                              */
-    /* THE MILLS are the combination the world has been building toward: three vanish    */
-    /* tiles with windmill rotors hung over the FIRST and the THIRD. Hubs at y 9.4 with  */
-    /* 4.6 m arms put the lowest blade tip at 4.8 — 0.2 m above a tile top of 4.6, so     */
-    /* the blade sweeps the tile you are standing on and the jump that clears it is a     */
-    /* jump made from a floor that is already counting down. The middle tile is clean:     */
-    /* the beat is blade, breath, blade, and that rest is what makes it learnable          */
-    /* instead of merely survivable.                                                      */
+    /*                                                                               */
+    /* THE COG is not a square. It is two overlapping slabs — 9.6 x 6.0 crossed with  */
+    /* 6.0 x 9.6 — which makes an octagonal deck whose furthest point from the axle   */
+    /* is a corner at r = 5.657. The three-armed bar reaches innerR 0.396 + len 5.0   */
+    /* + 0.16 = r 5.556, and a player is 0.35 m wide, so the bar's solid arm covers   */
+    /* every point out to r 5.906. THERE IS NO SAFE CORNER: the old 9.6 m square put  */
+    /* its corners at r 6.788 and handed you four places to stand and watch. Now the  */
+    /* refuge really is timing — a bar past your shins every 1.4 s, jumpable (the arm */
+    /* tops out 0.93 m over the deck against an apex of 2.089) but never dodgeable.   */
+    /* The bar is SOLID, not lethal (rotors.js:310 — a 'bar' without `kill` is a      */
+    /* sweeper): it does not cut you, it puts you in the city.                        */
+    /*                                                                               */
+    /* THE MILLS are the combination the world has been building toward, and this     */
+    /* time the blade covers the tile. A windmill's kill volume is one capsule per    */
+    /* arm of radius max(thick, rootC*0.30) where rootC = max(0.45, height*2.6) and   */
+    /* height defaults to `thick` (rotors.js:578, 621). At thick 0.4 that radius is   */
+    /* 0.40 m and a 3.8 m tile has a 1.15 m safe lane down BOTH edges. At thick 0.9   */
+    /* it is 0.90 m: lethal to |z| = 0.90 + 0.35 = 1.25, against tiles that are 2.4   */
+    /* m wide (half 1.20). No lane, either side, on either mill — the same            */
+    /* calculation BEAT 8's pendulums already passed.                                 */
+    /*   M1 hub y 10.4: kill floor = 10.4 - (0.81 + 4.6) - 0.90 = 4.09, which is      */
+    /*      0.04 m over a tile topping at 4.05.                                       */
+    /*   M2 hub y  9.8: kill floor =  9.8 - (0.81 + 4.2) - 0.90 = 3.89, 0.04 m over   */
+    /*      a tile topping at 3.85. It also turns the other way (`dir: -1`).          */
+    /*                                                                               */
+    /* AND THE THREE TILES ARE THREE DIFFERENT OBJECTS. 3.6x2.4 at 4.05 on a 3.20 m   */
+    /* gap; 2.8x3.2 at 4.95, 1.9 m NORTH and 0.90 m UP, on a 3.00 m gap; 4.2x2.4 at   */
+    /* 3.85, back south and 1.10 m DOWN, on a 2.10 m gap. Sizes, heights, offsets and */
+    /* cycles all                                                                     */
+    /* differ; the middle one is the rest between the blades.                         */
     /* ============================================================================ */
 
-    { kind: 'platform', p: [187.7, 4.1, 0], s: [9.6, 1, 9.6], mat: 'stone', glow: DIM, stripe: true }, // gap 2.00, top 4.6
-    { kind: 'rotor', p: [187.7, 5.2, 0], style: 'bar', arms: 3, len: 4.4, thick: 0.44, period: 4.2, phase: 0.35, axis: [0, 1, 0] }, // arms reach r 4.80 — the rim, so there is no walk-around
+    { kind: 'platform', p: [201.8, 3.55, 0], s: [9.6, 1, 6.0], mat: 'stone', glow: DIM, stripe: true }, // the cog, long axis: gap 2.00, top 4.05
+    { kind: 'platform', p: [201.8, 3.55, 0], s: [6.0, 1, 9.6], mat: 'stone', glow: DIM }, // the cog, cross axis — together an octagon, max r 5.657
+    { kind: 'rotor', p: [201.8, 4.65, 0], style: 'bar', arms: 3, len: 5.0, thick: 0.44, period: 4.2, phase: 0.35, axis: [0, 1, 0] }, // solid arm to r 5.556; covers the deck to r 5.906
 
-    { kind: 'vanish', p: [196.7, 4.1, 0], s: [3.4, 1, 3.8], mat: 'panel', cycle: { on: 2.2, off: 1.4, warn: 0.6, phase: 0.0 } }, // gap 2.50 — under mill 1
-    { kind: 'vanish', p: [202.5, 4.1, 0], s: [3.4, 1, 3.8], mat: 'panel', cycle: { on: 2.2, off: 1.4, warn: 0.6, phase: 0.34 } }, // gap 2.40 — the rest
-    { kind: 'vanish', p: [208.1, 4.1, 0], s: [3.4, 1, 3.8], mat: 'panel', cycle: { on: 2.2, off: 1.4, warn: 0.6, phase: 0.68 } }, // gap 2.20 — under mill 2
+    { kind: 'vanish', p: [211.6, 3.55, 0], s: [3.6, 1, 2.4], mat: 'panel', cycle: { on: 1.7, off: 1.65, warn: 0.55, phase: 0.0 } }, // gap 3.20, top 4.05 — under mill 1, solid 58%
+    { kind: 'vanish', p: [217.8, 4.45, 1.9], s: [2.8, 1, 3.2], mat: 'panel', cycle: { on: 2.0, off: 1.4, warn: 0.5, phase: 0.42 } }, // gap 3.00, +0.90, 1.9 m north — the rest, solid 64%
+    { kind: 'vanish', p: [223.4, 3.35, -0.6], s: [4.2, 1, 2.4], mat: 'panel', cycle: { on: 1.5, off: 1.8, warn: 0.45, phase: 0.71 } }, // gap 2.10, -1.10 — under mill 2, solid 52%
 
-    { kind: 'rotor', p: [196.7, 9.4, 0], style: 'windmill', arms: 3, len: 4.6, thick: 0.4, period: 5.6, phase: 0, axis: [0, 0, 1] }, // a blade every 1.87 s
-    { kind: 'rotor', p: [208.1, 9.4, 0], style: 'windmill', arms: 2, len: 4.6, thick: 0.4, period: 4.4, phase: 0.4, axis: [0, 0, 1] }, // a blade every 2.20 s, 0.4 of a turn out of step
+    { kind: 'rotor', p: [211.6, 10.4, 0], style: 'windmill', arms: 3, len: 4.6, thick: 0.9, period: 5.6, phase: 0, axis: [0, 0, 1] }, // a blade every 1.87 s, lethal to |z| 1.25
+    { kind: 'rotor', p: [223.4, 9.8, -0.6], style: 'windmill', arms: 2, len: 4.2, thick: 0.9, period: 4.4, phase: 0.4, dir: -1, axis: [0, 0, 1] }, // a blade every 2.20 s, turning the other way
 
-    { kind: 'platform', p: [214.9, 4.55, 0], s: [5.6, 1, 6.2], mat: 'stone', glow: DIM, stripe: true }, // gap 2.30, +0.45, top 5.05
+    { kind: 'platform', p: [230.8, 4.0, 0], s: [5.6, 1, 6.2], mat: 'stone', glow: DIM, stripe: true }, // gap 2.50, +0.65, top 4.50 — CP6
 
-    { kind: 'text', p: [181.6, 7.2, -4.6], rot: [0, -Math.PI / 2, 0], text: 'THE COG', size: 0.5, color: AMBER },
-    { kind: 'text', p: [192.8, 7.4, 0], rot: [0, -Math.PI / 2, 0], text: 'and now the floor goes too', size: 0.26, color: HOT },
-    { kind: 'deco', kindOf: 'pillar', p: [187.7, 9.4, 0], s: [1.2, 6.4, 1.2], mat: 'obsidian' }, // the cog's axle
-    { kind: 'deco', kindOf: 'ring', p: [187.7, 4.72, 0], s: [9.6, 0.06, 9.6], mat: 'emissive', tint: AMBER }, // the bar's reach, painted flat on the deck so you can read it before you step on
-    { kind: 'deco', kindOf: 'buttress', p: [196.7, 11.2, 3.6], s: [1.4, 2.6, 1.4], mat: 'obsidian' },
-    { kind: 'deco', kindOf: 'buttress', p: [208.1, 11.2, 3.6], s: [1.4, 2.6, 1.4], mat: 'obsidian' },
-    { kind: 'deco', kindOf: 'cable', p: [202.4, 12.4, 0], s: [26.0, 0.08, 0.08], mat: 'metal', tint: 0x14283f },
-    { kind: 'light', p: [187.7, 8.2, 0], color: AMBER, intensity: 11, distance: 22 },
-    { kind: 'light', p: [202.5, 7.6, 0], color: AMBER, intensity: 10, distance: 24, flicker: 0.08 },
+    { kind: 'text', p: [195.6, 6.4, -4.6], rot: [0, -Math.PI / 2, 0], text: 'THE COG', size: 0.5, color: AMBER },
+    { kind: 'text', p: [195.6, 5.9, -4.6], rot: [0, -Math.PI / 2, 0], text: 'nowhere on it is safe', size: 0.22, color: HOT },
+    { kind: 'text', p: [207.0, 7.4, 0], rot: [0, -Math.PI / 2, 0], text: 'and now the floor goes too', size: 0.26, color: HOT },
+    { kind: 'deco', kindOf: 'pillar', p: [201.8, 8.6, 0], s: [1.2, 6.4, 1.2], mat: 'obsidian' }, // the cog's axle
+    { kind: 'deco', kindOf: 'ring', p: [201.8, 4.14, 0], s: [11.2, 0.06, 11.2], mat: 'emissive', tint: AMBER }, // the bar's reach, painted flat on the deck
+    { kind: 'deco', kindOf: 'buttress', p: [211.6, 12.4, 3.6], s: [1.4, 2.6, 1.4], mat: 'obsidian' },
+    { kind: 'deco', kindOf: 'buttress', p: [223.4, 11.8, 3.6], s: [1.4, 2.6, 1.4], mat: 'obsidian' },
+    { kind: 'deco', kindOf: 'cable', p: [217.0, 13.6, 0], s: [26.0, 0.08, 0.08], mat: 'metal', tint: 0x14283f },
+    { kind: 'light', p: [201.8, 7.6, 0], color: AMBER, intensity: 11, distance: 22 },
+    { kind: 'light', p: [217.8, 7.6, 0], color: AMBER, intensity: 10, distance: 24, flicker: 0.08 },
 
     /* ============================================================================ */
-    /* BEAT 8 — CROSSFIRE                                                           */
-    /* A 3.4 m bridge with no way round anything on it. Two pendulums swing ALONG the  */
-    /* stage axis (axis [0,0,1] runs the blade span across the bridge) on 3.2 s and      */
-    /* 2.6 s, and two ankle beams sit under their arcs on a 2.6 s cycle staggered 0.7 s. */
-    /* Pivots at y 9.8 with 3.2 m arms and a 1.5 m blade put the lowest lethal point at   */
-    /* 5.35 — 0.30 m over a deck at 5.05, so a blade takes your legs and a jump does not. */
-    /* Three timers, one lane, eleven metres, and then the drum gantry.                   */
+    /* BEAT 8 — CROSSFIRE                                                            */
+    /* A 3.4 m bridge with no way round anything on it. Two pendulums swing ALONG the */
+    /* stage axis (axis [0,0,1] runs the blade span across the bridge) on 3.2 s and   */
+    /* 2.6 s, and two ankle beams sit under their arcs on a 2.6 s cycle staggered     */
+    /* 0.7 s. Pivots at y 8.75 with 3.2 m arms and a 1.5 m blade put the lowest       */
+    /* lethal point at 4.80 — 0.30 m over a deck at 4.50, so a blade takes your legs  */
+    /* and a jump does not. The blade's kill box spans w*0.34 = 1.02 m along the      */
+    /* swing axis with radius max(0.322, 0.45) = 0.45, i.e. lethal out to |z| = 1.47  */
+    /* on a bridge that only reaches 1.70: to stand clear you would have to be at     */
+    /* |z| >= 1.82 and there is no such place. Three timers, one lane, eleven metres. */
     /* ============================================================================ */
 
-    { kind: 'platform', p: [223.1, 4.55, 0], s: [10.8, 1, 3.4], mat: 'metal', glow: CYAN }, // flush with BEAT 7's landing, top 5.05
+    { kind: 'platform', p: [239.0, 4.0, 0], s: [10.8, 1, 3.4], mat: 'metal', glow: CYAN }, // flush with CP6's deck, top 4.50
 
-    { kind: 'pendulum', p: [220.7, 9.8, 0], len: 3.2, amp: 1.05, period: 3.2, phase: 0, blade: { w: 3.0, h: 1.5, d: 0.28 }, axis: [0, 0, 1] },
-    { kind: 'pendulum', p: [226.1, 9.8, 0], len: 3.2, amp: 1.05, period: 2.6, phase: Math.PI * 0.5, blade: { w: 3.0, h: 1.5, d: 0.28 }, axis: [0, 0, 1] }, // a quarter-turn out of step, in RADIANS
+    { kind: 'pendulum', p: [236.6, 8.75, 0], len: 3.2, amp: 1.05, period: 3.2, phase: 0, blade: { w: 3.0, h: 1.5, d: 0.28 }, axis: [0, 0, 1] },
+    { kind: 'pendulum', p: [242.0, 8.75, 0], len: 3.2, amp: 1.05, period: 2.6, phase: Math.PI * 0.5, blade: { w: 3.0, h: 1.5, d: 0.28 }, axis: [0, 0, 1] }, // a quarter-turn out of step, in RADIANS
 
     {
       kind: 'lasergrid',
-      a: [223.4, 5.4, -1.8],
-      b: [223.4, 5.4, 1.8],
+      a: [239.3, 4.9, -1.8],
+      b: [239.3, 4.9, 1.8],
       count: 2,
       spacing: 2.8,
-      offset: [1, 0, 0], // beams at x 222.0 / 224.8 — one under each pendulum's arc
+      offset: [1, 0, 0], // beams at x 237.9 / 240.7 — one under each pendulum's arc
       stagger: 0.7,
       radius: 0.09,
       color: HOT,
       cycle: { on: 1.0, off: 1.6, warn: 0.4, phase: 0.25 },
     },
 
-    { kind: 'platform', p: [234.1, 5.0, 0], s: [7.2, 1, 7.6], mat: 'stone', glow: DIM, stripe: true }, // gap 2.00, +0.45, top 5.5 — CP4
+    { kind: 'platform', p: [250.8, 4.4, 0], s: [7.2, 1, 7.6], mat: 'stone', glow: DIM, stripe: true }, // gap 2.80, +0.40, top 4.90
 
-    { kind: 'text', p: [216.4, 7.4, -2.2], rot: [0, -Math.PI / 2, 0], text: 'CROSSFIRE', size: 0.46, color: HOT },
-    { kind: 'deco', kindOf: 'arch', p: [220.7, 10.6, 0], s: [0.8, 0.7, 7.0], mat: 'metal', tint: DIM }, // the gantry the blades hang from
-    { kind: 'deco', kindOf: 'arch', p: [226.1, 10.6, 0], s: [0.8, 0.7, 7.0], mat: 'metal', tint: DIM },
-    { kind: 'deco', kindOf: 'pillar', p: [220.7, 8.0, 3.5], s: [0.7, 5.2, 0.7], mat: 'obsidian' },
-    { kind: 'deco', kindOf: 'pillar', p: [220.7, 8.0, -3.5], s: [0.7, 5.2, 0.7], mat: 'obsidian' },
-    { kind: 'deco', kindOf: 'pillar', p: [226.1, 8.0, 3.5], s: [0.7, 5.2, 0.7], mat: 'obsidian' },
-    { kind: 'deco', kindOf: 'pillar', p: [226.1, 8.0, -3.5], s: [0.7, 5.2, 0.7], mat: 'obsidian' },
-    { kind: 'deco', kindOf: 'rail', p: [223.1, 5.6, 1.8], s: [10.8, 0.08, 0.08], mat: 'metal', tint: HOT },
-    { kind: 'deco', kindOf: 'rail', p: [223.1, 5.6, -1.8], s: [10.8, 0.08, 0.08], mat: 'metal', tint: HOT },
-    { kind: 'light', p: [223.4, 7.0, 0], color: HOT, intensity: 12, distance: 22, flicker: 0.12 },
+    { kind: 'text', p: [233.0, 6.9, -2.2], rot: [0, -Math.PI / 2, 0], text: 'CROSSFIRE', size: 0.46, color: HOT },
+    { kind: 'deco', kindOf: 'arch', p: [236.6, 9.6, 0], s: [0.8, 0.7, 7.0], mat: 'metal', tint: DIM }, // the gantry the blades hang from
+    { kind: 'deco', kindOf: 'arch', p: [242.0, 9.6, 0], s: [0.8, 0.7, 7.0], mat: 'metal', tint: DIM },
+    { kind: 'deco', kindOf: 'pillar', p: [236.6, 7.0, 3.5], s: [0.7, 5.2, 0.7], mat: 'obsidian' },
+    { kind: 'deco', kindOf: 'pillar', p: [236.6, 7.0, -3.5], s: [0.7, 5.2, 0.7], mat: 'obsidian' },
+    { kind: 'deco', kindOf: 'pillar', p: [242.0, 7.0, 3.5], s: [0.7, 5.2, 0.7], mat: 'obsidian' },
+    { kind: 'deco', kindOf: 'pillar', p: [242.0, 7.0, -3.5], s: [0.7, 5.2, 0.7], mat: 'obsidian' },
+    { kind: 'deco', kindOf: 'rail', p: [239.0, 5.1, 1.8], s: [10.8, 0.08, 0.08], mat: 'metal', tint: HOT },
+    { kind: 'deco', kindOf: 'rail', p: [239.0, 5.1, -1.8], s: [10.8, 0.08, 0.08], mat: 'metal', tint: HOT },
+    { kind: 'light', p: [239.3, 6.6, 0], color: HOT, intensity: 12, distance: 22, flicker: 0.12 },
 
     /* ============================================================================ */
-    /* BEAT 9 — SET-PIECE : THE DRUM                                                */
+    /* BEAT 9 — SET-PIECE : THE DRUM                                                 */
     /* ---------------------------------------------------------------------------- */
-    /* A hexagonal drum 18.4 m across, hung on an axle over the city and built from six */
-    /* vanish panels at the vertices of a hexagon of radius 7.4 — with nothing whatever  */
-    /* in the middle. The panel phases advance by exactly 1/6 of a cycle going round the */
-    /* ring (0.00, 0.17, 0.34, 0.50, 0.66, 0.83), so the solid arc SWEEPS around the      */
-    /* drum at one panel every 0.74 s. It is not a floor that blinks. It is a wheel that  */
-    /* turns, and you ride it round.                                                     */
-    /*                                                                              */
-    /* Two beams sweep the deck from the axle at 0.35 m above the panels, one clockwise   */
-    /* on 6.6 s and one anticlockwise on 5.4 s. They cross twice a cycle and never twice  */
-    /* in the same place, so there is no safe spoke — only a safe moment.                 */
-    /*                                                                              */
-    /* THE ROUTE. You enter on panel A at the west vertex and leave on panel D at the      */
-    /* east. Three hops either way, and the ring's own timing decides which:               */
-    /*   SOUTH  A -> B -> C -> D  runs WITH the sweep: each panel goes solid 0.74 s after   */
-    /*          the one before, so walking off A as it warns lands you on a fresh B.        */
-    /*   NORTH  A -> F -> E -> D  runs AGAINST it. Every hop lands on a panel that is       */
-    /*          further through its window than the one you left.                          */
-    /* COIN 5 hangs off the NORTH arc: an outrigger gantry 3.39 m off panel E, out over     */
-    /* the drop, with no way back except the way you came. It is the only reason to go the  */
-    /* wrong way round a wheel, which is exactly what a coin is for.                        */
-    /*                                                                              */
-    /* Then: a 9.2 m runway, a 14.2 m/s pad, and a 6.80 m jump that DROPS TWO metres into  */
-    /* the gate. Run tops out at 6.199 m over a 2 m drop and sprint is safe to 7.299, so it  */
-    /* is the pad or it is the city. You do not walk to the end of NEON DOJO.                */
+    /* THE DRUM TURNS. Six panels ride a 7.4 m circle about an axle at x 272.0 on a   */
+    /* 15.0 s revolution — `mover` / `motion.type:'circle'`, so the panels are        */
+    /* landable everywhere on that circle, they yaw as they go, and they carry the    */
+    /* player's facing round with them (controller.js:826, `_platformYawRate`). At    */
+    /* t = 15k a panel sits at the west vertex, and the wheel runs WEST -> NORTH ->   */
+    /* EAST. This is the only rotating floor in the world and it is the last thing    */
+    /* in it.                                                                        */
+    /*                                                                               */
+    /* TWO LINES OFF IT, and the wheel decides which is faster:                       */
+    /*   RIDE   stand still and let the panel carry you half a revolution to the east */
+    /*          vertex: 7.5 s of doing nothing except surviving the sweeps.           */
+    /*   HOP    jump forward station to station with the rotation — 60 degrees a hop, */
+    /*          7.4 m centre to centre. Each panel's local X is TANGENTIAL and its    */
+    /*          local Z is RADIAL (movers.js `sampleQuat` yaws a circle mover with    */
+    /*          its own orbit angle), and the chord meets both at 30 degrees, so the  */
+    /*          real edge-to-edge gap is 7.4 - 2*(0.866*w/2 + 0.5*d/2) = 2.5 m — well */
+    /*          inside the 4.35 m run-safe envelope. Three hops and the wheel does    */
+    /*          the rest: roughly half the time, and three chances to miss a deck     */
+    /*          that is moving under you.                                             */
+    /*                                                                               */
+    /* THE SWEEPS ARE WAGS AND THIS BEAT IS DESIGNED FOR WAGS. lasers.js:1380 is      */
+    /* `ang = sin(((t+phase)/period)*TAU) * arc*0.5` — a sinusoid, not a revolution:  */
+    /* each beam is FASTEST through the middle of its arc and STALLS at the ends, and */
+    /* that is the read the player is given. Each covers 207 degrees, so sweep 1      */
+    /* (dir +X) owns the eastern two-thirds and sweep 2 (dir -X) owns the western     */
+    /* two-thirds; between them nothing on the wheel is unswept, and the entry (west) */
+    /* and exit (east) vertices each answer to exactly one beam.                      */
+    /* THE DARK WINDOW NEVER SITS STILL. Sweep 1 swings on 6.6 s and fires on a       */
+    /* 4.55 + 1.35 = 5.90 s cycle; sweep 2 swings on 5.4 s and fires on 4.70 + 1.35 = */
+    /* 6.05 s. Neither ratio is 1:1 — a 6.6 s swing against a 6.6 s cycle at phase 0  */
+    /* would park its blind spot on the same spoke for ever. These two beat against   */
+    /* their own swing every 389 s and 653 s: there is no safe spoke, only a safe     */
+    /* moment.                                                                       */
+    /*                                                                               */
+    /* THE EXIT IS A BLINK. Two static plates bridge the wheel to the launch runway   */
+    /* and they are the most hostile vanish in the stage: solid 45.6% and 51.5% of    */
+    /* the time (vanish.js:233 — `period = on + warn + off`, and the tile is solid    */
+    /* through `on` AND `warn`). You come off a turning wheel onto a floor that is    */
+    /* absent more than half the time.                                               */
+    /*                                                                               */
+    /* COIN 5 hangs 2.40 m north of the wheel's north vertex, over the drop, and the  */
+    /* only way to it is to be standing on a panel at the moment that panel is north. */
+    /* Take it and the wheel keeps turning without you.                               */
+    /*                                                                               */
+    /* Then: a 9.6 m runway, a ramp filling its last 2.8 m, and 8.20 m of nothing at  */
+    /* -2.00 m. Sprint tops out at 8.793 there and is only SAFE to 7.299 — and you    */
+    /* cannot reach the lip on foot to try. You do not walk to the end of NEON DOJO.  */
     /* ============================================================================ */
 
-    { kind: 'platform', p: [241.1, 5.45, 0], s: [3.6, 1, 4.0], mat: 'metal', glow: CYAN, stripe: true }, // gap 1.60 at +0.45, top 5.95 — the gantry lip, flush with the drum
+    { kind: 'platform', p: [258.6, 5.7, 0], s: [3.6, 1, 4.0], mat: 'metal', glow: CYAN, stripe: true }, // the gantry lip: gap 2.40, +1.30, top 6.20 — you DROP 0.85 m onto the wheel
 
-    // -- the drum. centre x 255.6, radius 7.4, panels 3.6 m square, every top at 5.95 --
-    { kind: 'vanish', p: [248.2, 5.45, 0.0], s: [3.6, 1, 3.6], mat: 'panel', cycle: { on: 2.6, off: 1.3, warn: 0.55, phase: 0.0 } }, // A  west       · the entry, flat gap 3.50
-    { kind: 'vanish', p: [251.9, 5.45, -6.41], s: [3.6, 1, 3.6], mat: 'panel', cycle: { on: 2.6, off: 1.3, warn: 0.55, phase: 0.17 } }, // B  south-west · 2.81 m diagonal
-    { kind: 'vanish', p: [259.3, 5.45, -6.41], s: [3.6, 1, 3.6], mat: 'panel', cycle: { on: 2.6, off: 1.3, warn: 0.55, phase: 0.34 } }, // C  south-east · 3.80 m straight
-    { kind: 'vanish', p: [263.0, 5.45, 0.0], s: [3.6, 1, 3.6], mat: 'panel', cycle: { on: 2.6, off: 1.3, warn: 0.55, phase: 0.5 } }, // D  east       · the exit
-    { kind: 'vanish', p: [259.3, 5.45, 6.41], s: [3.6, 1, 3.6], mat: 'panel', cycle: { on: 2.6, off: 1.3, warn: 0.55, phase: 0.66 } }, // E  north-east · the coin panel
-    { kind: 'vanish', p: [251.9, 5.45, 6.41], s: [3.6, 1, 3.6], mat: 'panel', cycle: { on: 2.6, off: 1.3, warn: 0.55, phase: 0.83 } }, // F  north-west
+    // -- the wheel. axle x 272.0, orbit radius 7.4, revolution 15.0 s, phases 1/6 apart --
+    // phase is a FRACTION of a revolution; 0.75 puts a panel at the west vertex at t = 0.
+    // DO NOT "tidy" `axis: 'y'` into `[0, 1, 0]`. movers.js reads it through readVec, which
+    // ignores a string and falls back to (0,1,0) — identical at runtime — but reachcheck's
+    // `rectsFor` tests `axis === 'y'` literally, and with an array it models the orbit as a
+    // VERTICAL oscillation of +/-7.4 m and stops seeing the drum's four cardinal poses.
+    // Six panels, six different footprints: the sizes vary so the ring never reads as one
+    // stamped tile repeated (and so geomcheck's identical-obstacle run stays at 1).
+    { kind: 'mover', p: [272.0, 4.85, 0], s: [3.8, 1, 3.4], mat: 'panel', motion: { type: 'circle', radius: 7.4, axis: 'y', period: 15.0, phase: 0.75 } }, // A — west at t=0, the entry
+    { kind: 'mover', p: [272.0, 4.85, 0], s: [3.4, 1, 3.8], mat: 'panel', motion: { type: 'circle', radius: 7.4, axis: 'y', period: 15.0, phase: 0.9167 } }, // B — north-west
+    { kind: 'mover', p: [272.0, 4.85, 0], s: [3.6, 1, 3.6], mat: 'panel', motion: { type: 'circle', radius: 7.4, axis: 'y', period: 15.0, phase: 0.0833 } }, // C — north-east
+    { kind: 'mover', p: [272.0, 4.85, 0], s: [4.0, 1, 3.2], mat: 'panel', motion: { type: 'circle', radius: 7.4, axis: 'y', period: 15.0, phase: 0.25 } }, // D — east, the exit side
+    { kind: 'mover', p: [272.0, 4.85, 0], s: [3.2, 1, 4.0], mat: 'panel', motion: { type: 'circle', radius: 7.4, axis: 'y', period: 15.0, phase: 0.4167 } }, // E — south-east
+    { kind: 'mover', p: [272.0, 4.85, 0], s: [3.5, 1, 3.5], mat: 'panel', motion: { type: 'circle', radius: 7.4, axis: 'y', period: 15.0, phase: 0.5833 } }, // F — south-west
 
-    { kind: 'platform', p: [259.3, 5.45, 12.8], s: [2.4, 1, 2.4], mat: 'obsidian', glow: MAG, stripe: true }, // COIN 5 outrigger: 3.39 m off E, 5.55 m off F, top 5.95
+    { kind: 'platform', p: [272.0, 4.85, 12.8], s: [2.6, 1, 2.6], mat: 'obsidian', glow: MAG, stripe: true }, // COIN 5 outrigger: 2.40 m off the north vertex, top 5.35
+
+    { kind: 'vanish', p: [285.0, 4.85, 0], s: [3.2, 1, 3.6], mat: 'panel', cycle: { on: 1.1, off: 1.85, warn: 0.45, phase: 0.0 } }, // gap 2.00 off the east vertex — solid 45.6%
+    { kind: 'vanish', p: [290.4, 4.85, 0], s: [2.8, 1, 3.2], mat: 'panel', cycle: { on: 1.3, off: 1.6, warn: 0.4, phase: 0.45 } }, // gap 2.40 — solid 51.5%
 
     {
       kind: 'lasersweep',
-      p: [255.6, 6.3, 0], // the axle, 0.35 m over the panels
-      len: 9.4, // just past the far corner of every panel
+      p: [272.0, 5.7, 0], // the axle, 0.35 m over the panels
+      len: 9.6, // past the far corner of every panel: 7.4 + 2.0 of half-panel
       axis: [0, 1, 0],
-      dir: [1, 0, 0],
+      dir: [1, 0, 0], // centred on the EAST vertex
       arc: Math.PI * 1.15,
       period: 6.6,
       phase: 0,
       radius: 0.1,
       color: HOT,
-      cycle: { on: 5.4, off: 1.2, warn: 0.5, phase: 0 },
+      cycle: { on: 4.55, off: 1.35, warn: 0.45, phase: 0 }, // 5.90 s against a 6.6 s swing
     },
     {
       kind: 'lasersweep',
-      p: [255.6, 6.3, 0],
-      len: 9.4,
+      p: [272.0, 5.7, 0],
+      len: 9.6,
       axis: [0, 1, 0],
-      dir: [-1, 0, 0], // starts opposite and sweeps the other way
+      dir: [-1, 0, 0], // centred on the WEST vertex, so the entry is covered too
       arc: Math.PI * 1.15,
       period: 5.4,
       phase: 1.7,
       radius: 0.1,
       color: MAG,
-      cycle: { on: 4.6, off: 1.4, warn: 0.5, phase: 0.7 },
+      cycle: { on: 4.7, off: 1.35, warn: 0.45, phase: 0.7 }, // 6.05 s against a 5.4 s swing
     },
 
-    // The drum's structure: the axle, the two rim rings and the cradle. Every piece of it
-    // is above head height, below the walk line, or beyond |z| = 15, so nothing here can
-    // be mistaken for a panel.
-    { kind: 'deco', kindOf: 'pillar', p: [255.6, 10.4, 0], s: [1.4, 7.0, 1.4], mat: 'obsidian' }, // the axle
-    { kind: 'deco', kindOf: 'ring', p: [255.6, 9.2, 0], s: [18.4, 0.24, 18.4], mat: 'emissive', tint: MAG }, // the rim, overhead
-    { kind: 'deco', kindOf: 'ring', p: [255.6, 3.0, 0], s: [18.4, 0.24, 18.4], mat: 'emissive', tint: CYAN }, // and its twin, well under the panels
-    { kind: 'deco', kindOf: 'arch', p: [255.6, 13.4, 0], s: [1.2, 1.0, 21.0], mat: 'metal', tint: DIM }, // the cradle
-    { kind: 'deco', kindOf: 'pillar', p: [255.6, 11.4, 16.0], s: [1.3, 9.0, 1.3], mat: 'obsidian' },
-    { kind: 'deco', kindOf: 'pillar', p: [255.6, 11.4, -16.0], s: [1.3, 9.0, 1.3], mat: 'obsidian' },
-    { kind: 'deco', kindOf: 'ring', p: [259.3, 7.55, 12.8], s: [0.12, 2.0, 2.0], rot: [0, Math.PI / 2, 0], mat: 'emissive', tint: MAG },
-    { kind: 'text', p: [238.4, 7.6, 0], rot: [0, -Math.PI / 2, 0], text: 'THE DRUM', size: 0.62, color: MAG },
-    { kind: 'text', p: [238.4, 6.95, 0], rot: [0, -Math.PI / 2, 0], text: 'south goes with it  ·  north does not', size: 0.24, color: 0x6f8dac },
-    { kind: 'light', p: [255.6, 8.0, 0], color: MAG, intensity: 16, distance: 30 },
-    { kind: 'light', p: [249.0, 7.2, -4.4], color: HOT, intensity: 8, distance: 18, flicker: 0.1 },
-    { kind: 'light', p: [262.0, 7.2, 4.4], color: CYAN, intensity: 8, distance: 18 },
+    // The drum's structure: the axle, the two rim rings and the cradle. Every piece of
+    // it is above head height, below the walk line, or beyond |z| = 15, so nothing here
+    // can be mistaken for a panel.
+    { kind: 'deco', kindOf: 'pillar', p: [272.0, 9.9, 0], s: [1.4, 7.0, 1.4], mat: 'obsidian' }, // the axle
+    { kind: 'deco', kindOf: 'ring', p: [272.0, 8.7, 0], s: [18.4, 0.24, 18.4], mat: 'emissive', tint: MAG }, // the rim, overhead
+    { kind: 'deco', kindOf: 'ring', p: [272.0, 2.5, 0], s: [18.4, 0.24, 18.4], mat: 'emissive', tint: CYAN }, // and its twin, well under the panels
+    { kind: 'deco', kindOf: 'arch', p: [272.0, 12.9, 0], s: [1.2, 1.0, 21.0], mat: 'metal', tint: DIM }, // the cradle
+    { kind: 'deco', kindOf: 'pillar', p: [272.0, 10.9, 16.0], s: [1.3, 9.0, 1.3], mat: 'obsidian' },
+    { kind: 'deco', kindOf: 'pillar', p: [272.0, 10.9, -16.0], s: [1.3, 9.0, 1.3], mat: 'obsidian' },
+    { kind: 'deco', kindOf: 'ring', p: [272.0, 6.35, 12.8], s: [0.12, 2.0, 2.0], rot: [0, Math.PI / 2, 0], mat: 'emissive', tint: MAG },
+    { kind: 'text', p: [254.8, 7.4, 0], rot: [0, -Math.PI / 2, 0], text: 'THE DRUM', size: 0.62, color: MAG },
+    { kind: 'text', p: [254.8, 6.75, 0], rot: [0, -Math.PI / 2, 0], text: 'ride it, or beat it round', size: 0.24, color: 0x6f8dac },
+    { kind: 'light', p: [272.0, 7.6, 0], color: MAG, intensity: 16, distance: 30 },
+    { kind: 'light', p: [265.6, 7.0, -4.4], color: HOT, intensity: 8, distance: 18, flicker: 0.1 },
+    { kind: 'light', p: [278.4, 7.0, 4.4], color: CYAN, intensity: 8, distance: 18 },
 
     // -- the launch ---------------------------------------------------------------
-    { kind: 'platform', p: [273.3, 5.45, 0], s: [9.2, 1, 5.2], mat: 'metal', glow: CYAN, stripe: true }, // gap 3.90 off panel D, top 5.95, 9.2 m of runway
-    { kind: 'speedpad', p: [270.7, 6.02, 0], s: [3.4, 0.14, 4.4], dir: [1, 0, 0], power: 14.2 },
-    { kind: 'text', p: [267.0, 8.0, 0], rot: [0, -Math.PI / 2, 0], text: 'DO NOT STOP', size: 0.54, color: MAG },
+    { kind: 'platform', p: [299.4, 5.8, 0], s: [9.6, 1, 5.2], mat: 'metal', glow: CYAN, stripe: true }, // gap 2.80 off the second plate, +0.95, top 6.30 — CP8
+    { kind: 'speedpad', p: [302.8, 6.37, 0], s: [2.8, 0.14, 5.2], dir: [2, 1, 0], power: 17 }, // fills x 301.4..304.2 — the whole lip
+    { kind: 'text', p: [295.0, 8.35, 0], rot: [0, -Math.PI / 2, 0], text: 'DO NOT STOP', size: 0.54, color: MAG },
+    { kind: 'text', p: [295.0, 7.85, 0], rot: [0, -Math.PI / 2, 0], text: 'and do not jump', size: 0.24, color: HOT },
 
-    { kind: 'platform', p: [288.5, 3.45, 0], s: [7.6, 1, 8.4], mat: 'obsidian', glow: MAG, stripe: true }, // gap 6.80 at -2.0, top 3.95
+    { kind: 'platform', p: [316.2, 3.8, 0], s: [7.6, 1, 8.4], mat: 'obsidian', glow: MAG, stripe: true }, // gap 8.20 at -2.00, top 4.30 — lands 9.43/11.56/13.31 into a 7.6 m deck
 
-    // The gate is built low and wide so all of it is inside your view for the whole flight:
-    // you should be able to see where you are going to land the instant you leave the pad.
-    { kind: 'deco', kindOf: 'arch', p: [288.5, 9.4, 0], s: [1.4, 1.1, 9.6], mat: 'obsidian', tint: MAG },
-    { kind: 'deco', kindOf: 'pillar', p: [288.5, 6.9, 4.6], s: [1.3, 5.9, 1.3], mat: 'obsidian' },
-    { kind: 'deco', kindOf: 'pillar', p: [288.5, 6.9, -4.6], s: [1.3, 5.9, 1.3], mat: 'obsidian' },
-    { kind: 'deco', kindOf: 'beacon', p: [292.1, 6.2, 0], s: [0.7, 3.0, 0.7], mat: 'emissive', tint: MAG },
-    { kind: 'deco', kindOf: 'emblem', p: [288.5, 7.6, 0], s: [0.2, 2.0, 2.0], mat: 'emissive', tint: CYAN },
-    { kind: 'text', p: [285.7, 6.4, 0], rot: [0, -Math.PI / 2, 0], text: 'OVERCLOCK', size: 0.44, color: MAG },
-    { kind: 'light', p: [288.5, 7.8, 0], color: MAG, intensity: 22, distance: 34 },
+    // The gate is built low and wide so all of it is inside your view for the whole
+    // flight: you should be able to see where you are going to land the instant the
+    // ramp lets go of you.
+    { kind: 'deco', kindOf: 'arch', p: [316.2, 9.75, 0], s: [1.4, 1.1, 9.6], mat: 'obsidian', tint: MAG },
+    { kind: 'deco', kindOf: 'pillar', p: [316.2, 7.25, 4.6], s: [1.3, 5.9, 1.3], mat: 'obsidian' },
+    { kind: 'deco', kindOf: 'pillar', p: [316.2, 7.25, -4.6], s: [1.3, 5.9, 1.3], mat: 'obsidian' },
+    { kind: 'deco', kindOf: 'beacon', p: [319.8, 6.55, 0], s: [0.7, 3.0, 0.7], mat: 'emissive', tint: MAG },
+    { kind: 'deco', kindOf: 'emblem', p: [316.2, 7.95, 0], s: [0.2, 2.0, 2.0], mat: 'emissive', tint: CYAN },
+    { kind: 'text', p: [313.4, 6.75, 0], rot: [0, -Math.PI / 2, 0], text: 'OVERCLOCK', size: 0.44, color: MAG },
+    { kind: 'light', p: [316.2, 8.15, 0], color: MAG, intensity: 22, distance: 34 },
 
     /* ============================================================================ */
-    /* THE CITY — every piece of it is at |z| >= 17 or below y = -4, i.e. outside every */
-    /* play corridor on the stage, the drum's 18.4 m span and the two coin spurs that    */
-    /* reach out to z 12.8 included. Towers grow taller as the course runs east so the    */
-    /* skyline keeps pace with the difficulty, and the holo-panels are the only saturated */
-    /* magenta that is not trying to kill you — which is why every lethal thing in this    */
-    /* stage is HOT and nothing else in it is.                                             */
+    /* THE CITY — every piece of it is at |z| >= 17 or below y = -4, i.e. outside     */
+    /* every play corridor on the stage: the dog-leg's north leg at z 10.8, the drum's*/
+    /* 18.4 m span and the two coin spurs that reach out to z 12.8 included. Towers   */
+    /* grow taller as the course runs east so the skyline keeps pace with the         */
+    /* difficulty, and the holo-panels are the only saturated magenta that is not     */
+    /* trying to kill you — which is why every lethal thing in this stage is HOT and  */
+    /* nothing else in it is.                                                         */
     /* ============================================================================ */
 
     { kind: 'deco', kindOf: 'monolith', p: [50, -14, 34], s: [10, 34, 10], count: 8, spread: [110, 24, 20], seed: 9101, tint: DEEP },
     { kind: 'deco', kindOf: 'monolith', p: [50, -16, -34], s: [10, 34, 10], count: 8, spread: [110, 24, 20], seed: 9102, tint: DEEP },
-    { kind: 'deco', kindOf: 'monolith', p: [175, -10, 36], s: [12, 44, 12], count: 8, spread: [130, 30, 22], seed: 9103, tint: 0x16304e },
-    { kind: 'deco', kindOf: 'monolith', p: [175, -12, -36], s: [12, 44, 12], count: 8, spread: [130, 30, 22], seed: 9104, tint: 0x16304e },
-    { kind: 'deco', kindOf: 'monolith', p: [272, -8, 40], s: [13, 50, 13], count: 5, spread: [70, 30, 20], seed: 9105, tint: 0x1a3a5c },
-    { kind: 'deco', kindOf: 'monolith', p: [272, -10, -40], s: [13, 50, 13], count: 5, spread: [70, 30, 20], seed: 9106, tint: 0x1a3a5c },
+    { kind: 'deco', kindOf: 'monolith', p: [185, -10, 36], s: [12, 44, 12], count: 8, spread: [130, 30, 22], seed: 9103, tint: 0x16304e },
+    { kind: 'deco', kindOf: 'monolith', p: [185, -12, -36], s: [12, 44, 12], count: 8, spread: [130, 30, 22], seed: 9104, tint: 0x16304e },
+    { kind: 'deco', kindOf: 'monolith', p: [296, -8, 40], s: [13, 50, 13], count: 5, spread: [70, 30, 20], seed: 9105, tint: 0x1a3a5c },
+    { kind: 'deco', kindOf: 'monolith', p: [296, -10, -40], s: [13, 50, 13], count: 5, spread: [70, 30, 20], seed: 9106, tint: 0x1a3a5c },
 
-    { kind: 'deco', kindOf: 'antenna', p: [150, 2, 30], s: [0.6, 22, 0.6], count: 7, spread: [260, 10, 14], seed: 9201, tint: DIM },
-    { kind: 'deco', kindOf: 'antenna', p: [150, 0, -30], s: [0.6, 22, 0.6], count: 7, spread: [260, 10, 14], seed: 9202, tint: DIM },
+    { kind: 'deco', kindOf: 'antenna', p: [160, 2, 30], s: [0.6, 22, 0.6], count: 7, spread: [280, 10, 14], seed: 9201, tint: DIM },
+    { kind: 'deco', kindOf: 'antenna', p: [160, 0, -30], s: [0.6, 22, 0.6], count: 7, spread: [280, 10, 14], seed: 9202, tint: DIM },
     { kind: 'deco', kindOf: 'panel', p: [62, 15, 17.0], s: [0.3, 6.0, 9.0], mat: 'emissive', tint: MAG }, // holo-billboards, all far above head height
-    { kind: 'deco', kindOf: 'panel', p: [122, 16, -17.0], s: [0.3, 7.0, 10.0], mat: 'emissive', tint: 0x8a3fa8 },
-    { kind: 'deco', kindOf: 'panel', p: [210, 17, 18.0], s: [0.3, 7.0, 11.0], mat: 'emissive', tint: MAG },
-    { kind: 'deco', kindOf: 'panel', p: [278, 18, -19.0], s: [0.3, 8.0, 12.0], mat: 'emissive', tint: 0x8a3fa8 },
-    { kind: 'deco', kindOf: 'cable', p: [148, 20.0, 13.0], s: [280, 0.09, 0.09], mat: 'metal', tint: 0x0e1e33 },
-    { kind: 'deco', kindOf: 'cable', p: [148, 23.0, -14.0], s: [280, 0.09, 0.09], mat: 'metal', tint: 0x0e1e33 },
-    { kind: 'deco', kindOf: 'cloud', p: [148, -26, 0], s: [22, 3, 22], count: 16, spread: [300, 12, 110], seed: 9301, scale: 2.0, tint: 0x1b3c5e },
+    { kind: 'deco', kindOf: 'panel', p: [130, 16, -17.0], s: [0.3, 7.0, 10.0], mat: 'emissive', tint: 0x8a3fa8 },
+    { kind: 'deco', kindOf: 'panel', p: [222, 17, 18.0], s: [0.3, 7.0, 11.0], mat: 'emissive', tint: MAG },
+    { kind: 'deco', kindOf: 'panel', p: [302, 18, -19.0], s: [0.3, 8.0, 12.0], mat: 'emissive', tint: 0x8a3fa8 },
+    { kind: 'deco', kindOf: 'cable', p: [158, 20.0, 13.0], s: [300, 0.09, 0.09], mat: 'metal', tint: 0x0e1e33 },
+    { kind: 'deco', kindOf: 'cable', p: [158, 23.0, -14.0], s: [300, 0.09, 0.09], mat: 'metal', tint: 0x0e1e33 },
+    { kind: 'deco', kindOf: 'cloud', p: [158, -26, 0], s: [22, 3, 22], count: 16, spread: [320, 12, 110], seed: 9301, scale: 2.0, tint: 0x1b3c5e },
 
     // Path lights, roughly one per beat, so the whole course reads as a single line of
     // light from the boot deck. You can see the drum turning from two hundred metres away.
     { kind: 'light', p: [30, 3.4, 0], color: CYAN, intensity: 6, distance: 24 },
-    { kind: 'light', p: [80, 4.0, 0], color: CYAN, intensity: 7, distance: 22 },
-    { kind: 'light', p: [116, 5.0, 0], color: CYAN, intensity: 7, distance: 22 },
-    { kind: 'light', p: [161, 5.6, 0], color: CYAN, intensity: 7, distance: 24 },
-    { kind: 'light', p: [215, 7.0, 0], color: CYAN, intensity: 8, distance: 24 },
-    { kind: 'light', p: [241, 7.4, 0], color: CYAN, intensity: 9, distance: 24 },
-    { kind: 'light', p: [273, 8.2, 0], color: CYAN, intensity: 9, distance: 26 },
+    { kind: 'light', p: [86, 3.4, 0], color: CYAN, intensity: 7, distance: 22 },
+    { kind: 'light', p: [126, 5.0, 8.6], color: CYAN, intensity: 7, distance: 22 },
+    { kind: 'light', p: [176, 5.4, 0], color: CYAN, intensity: 7, distance: 24 },
+    { kind: 'light', p: [231, 6.6, 0], color: CYAN, intensity: 8, distance: 24 },
+    { kind: 'light', p: [258, 7.4, 0], color: CYAN, intensity: 9, distance: 24 },
+    { kind: 'light', p: [299, 8.95, 0], color: CYAN, intensity: 9, distance: 26 },
   ],
 };

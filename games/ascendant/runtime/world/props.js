@@ -1543,8 +1543,9 @@ function makeLibrary(themeId, entries, missing) {
     get(id) { return entries.get(id) || null; },
 
     /**
-     * A standalone, non-instanced copy of a prop, with its point light attached.
-     * Use for the one hero torch by the checkpoint; use placeProps for the rest.
+     * A standalone, non-instanced copy of a prop. Pass `light:true` to attach a
+     * real point light — do that for the ONE hero torch by the checkpoint and
+     * nowhere else; use placeProps (with a lightSink) for the rest.
      * @param {string} id
      * @param {object} [o] {scale, yaw, light:true, name}
      * @returns {THREE.Group|null}
@@ -1562,7 +1563,10 @@ function makeLibrary(themeId, entries, missing) {
         if (e.animated) { m.userData.noMerge = true; m.onBeforeRender = tickTime; }
         g.add(m);
       }
-      if (e.light && (!cfg || cfg.light !== false)) {
+      /* `light:true` is opt-IN now. A hero torch by a checkpoint is the one
+       * place a real point light is worth it; everything else should register
+       * a site with the stage budget via placeProps({lightSink}). */
+      if (e.light && cfg && cfg.light === true) {
         const pl = new THREE.PointLight(e.light.color, e.light.intensity, e.light.distance, e.light.decay);
         pl.position.set(0, e.light.y, 0);
         pl.castShadow = false;
@@ -1616,19 +1620,29 @@ function makeLibrary(themeId, entries, missing) {
  *   yJitter         vertical jitter in metres (default 0)
  *   light           false to suppress this def's point lights
  *
+ * LIGHTS. A torch is not worth a THREE.PointLight: three.js evaluates every
+ * light in the scene per fragment, so a row of eight braziers taxes every
+ * material within range of any of them. Pass `opts.lightSink` — Stage exposes
+ * exactly this as `stage.addLightSite` — and each site is handed to the stage's
+ * fixed light-pool budget instead, which points a small number of real lights
+ * at whichever fixtures the player is nearest. Without a sink this falls back
+ * to real point lights, and `maxLights` defaults to 2 rather than 8; the props
+ * that miss out keep their emissive geometry and still read as lit.
+ *
  * @param {THREE.Object3D} stageGroup  where the instanced meshes are parented
  * @param {object[]} defs
  * @param {object} propLibrary from loadProps / proceduralLibrary
  * @param {function} [rng] ()=>float01; omit and one is seeded per def
- * @param {object} [opts] {maxLights:8, shadows:true}
- * @returns {{meshes:THREE.InstancedMesh[], lights:THREE.PointLight[], instances:number,
- *            skipped:string[], dispose:function}}
+ * @param {object} [opts] {maxLights:2, shadows:true, lightSink:fn}
+ * @returns {{meshes:THREE.InstancedMesh[], lights:THREE.PointLight[], sites:object[],
+ *            instances:number, skipped:string[], dispose:function}}
  */
 export function placeProps(stageGroup, defs, propLibrary, rng, opts) {
   const o = opts || {};
-  const maxLights = o.maxLights === undefined ? 8 : o.maxLights;
+  const sink = typeof o.lightSink === 'function' ? o.lightSink : null;
+  const maxLights = o.maxLights === undefined ? 2 : o.maxLights;
   const shadows = o.shadows !== false;
-  const out = { meshes: [], lights: [], instances: 0, skipped: [], dispose: null };
+  const out = { meshes: [], lights: [], sites: [], instances: 0, skipped: [], dispose: null };
   if (!stageGroup || !defs || !defs.length || !propLibrary) {
     out.dispose = () => {};
     return out;
@@ -1723,16 +1737,34 @@ export function placeProps(stageGroup, defs, propLibrary, rng, opts) {
   }
 
   // --- light budget ---------------------------------------------------------
-  // Deterministic: keep the first `maxLights` sites in def order. The rest keep
-  // their emissive geometry, so they still read as lit without costing a light.
-  const nLights = Math.min(maxLights, lightSites.length);
-  for (let i = 0; i < nLights; i++) {
-    const site = lightSites[i];
-    const pl = new THREE.PointLight(site.light.color, site.light.intensity, site.light.distance * site.s, site.light.decay);
-    pl.position.set(site.x, site.y, site.z);
-    pl.castShadow = false;
-    stageGroup.add(pl);
-    out.lights.push(pl);
+  // With a sink (Stage.addLightSite) EVERY fixture is registered: the stage owns
+  // one small pool of real lights and moves it to whatever is nearest, so the
+  // count on screen is bounded no matter how many torches a stage places.
+  if (sink) {
+    for (let i = 0; i < lightSites.length; i++) {
+      const site = lightSites[i];
+      const rec = sink({
+        p: [site.x, site.y, site.z],
+        color: site.light.color,
+        intensity: site.light.intensity,
+        distance: site.light.distance * site.s,
+        decay: site.light.decay,
+      });
+      if (rec) out.sites.push(rec);
+    }
+  } else {
+    // No sink: fall back to real lights, but only the first `maxLights` in def
+    // order (deterministic). The rest keep their emissive geometry, so they
+    // still read as lit without costing a per-fragment light term.
+    const nLights = Math.min(maxLights, lightSites.length);
+    for (let i = 0; i < nLights; i++) {
+      const site = lightSites[i];
+      const pl = new THREE.PointLight(site.light.color, site.light.intensity, site.light.distance * site.s, site.light.decay);
+      pl.position.set(site.x, site.y, site.z);
+      pl.castShadow = false;
+      stageGroup.add(pl);
+      out.lights.push(pl);
+    }
   }
 
   out.dispose = function () {
@@ -1745,8 +1777,13 @@ export function placeProps(stageGroup, defs, propLibrary, rng, opts) {
       const l = out.lights[i];
       if (l.parent) l.parent.remove(l);
     }
+    for (let i = 0; i < out.sites.length; i++) {
+      const st = out.sites[i];
+      if (st && typeof st.remove === 'function') st.remove();
+    }
     out.meshes.length = 0;
     out.lights.length = 0;
+    out.sites.length = 0;
   };
   return out;
 }

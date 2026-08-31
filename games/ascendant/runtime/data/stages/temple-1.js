@@ -8,10 +8,12 @@
  * hung under a rock arch, which you cross by walking round its shoulder and dropping
  * through its mouth.
  *
- * SHAPE      ~330 m of travel, 97 gameplay objects (3.4 m per object — the densest
- *            stage in the game), 6 checkpoints, 5 coins, 36 dynamic hazards across
- *            TEN families: jumppad, speedpad, wind, mover, vanish, ice, conveyor,
- *            rotor, pendulum, crusher. Difficulty 5.
+ * SHAPE      338.8 m of travel, 100 gameplay objects — 3.39 m per gameplay object,
+ *            which makes it the DENSEST stage in the game (spire-3 3.43, temple-3
+ *            4.16, and neon-1, the difficulty-1 tutorial, 5.26). 7 checkpoints,
+ *            5 coins, 40 dynamic hazards across TEN families: jumppad, speedpad,
+ *            wind, mover, vanish, ice, conveyor, rotor, pendulum, crusher.
+ *            Difficulty 5.
  *
  * ─────────────────────────────────────────────────────────────────────────────────
  * THE FOUR LAWS THIS STAGE IS BUILT ON  (each one is checked, not asserted)
@@ -30,16 +32,17 @@
  *    bleeds what you arrived with, so the landing point is set by how fast you were
  *    moving when you touched it — and holding jump on the contact frame buys another
  *    25% of apex (BOUNCE_HELD_BONUS), which stretches the flight again. Every pad on
- *    this stage lands on a deck that starts at least 0.9 m BEFORE a 6 m/s stroll comes
- *    down and ends at least 1.4 m PAST where a 12.2 m/s sprint with a held bounce
- *    does. Nobody dies here for being timid, and nobody overshoots for being quick.
+ *    this stage lands on a deck that starts at least 0.90 m BEFORE a 6 m/s stroll
+ *    comes down and ends at least 1.92 m PAST where a 12.2 m/s sprint with a held
+ *    bounce does. Nobody dies here for being timid, nobody overshoots for being
+ *    quick, and the four bands are written out against the four pads below.
  *
  * 3. EVERY LANDING IS READABLE BEFORE YOU CAN NO LONGER CHANGE IT.
  *    For a plain jump that means the landing's top face is at or below the take-off
  *    eye line (feet + 1.62). For a pad it means the hoop hangs at the exact apex so
  *    the height is visible before you touch anything, AND the landing deck's top face
- *    clears your eye line inside the first 8% of the flight — with the other 92% left
- *    to steer in. Both numbers are printed against each pad below.
+ *    clears your eye line inside the first 8% of the flight (measured: 3.1%, 4.5%,
+ *    5.7%, 7.6%) — with the rest of it left to steer in.
  *
  * 4. A WIND VOLUME IS A MARGIN, NEVER A ROUTE, AND NEVER TOUCHES A FLOOR.
  *    Wind is `vel += power * dt`; against ground friction 13 a column of power p
@@ -52,32 +55,45 @@
  * THE SHAPE OF THE THING
  * ─────────────────────────────────────────────────────────────────────────────────
  * It is not a corridor. The route leaves the centre line four times and comes back:
- * out to z +14 across the rime terrace, out to z +19 down into the well (where it
- * also runs 14 m BACKWARDS in x), out to z -11 around the bell's shoulder, and it
- * DESCENDS three separate times — 4.4 → 3.6 on the ice, 14.2 → 8.4 into the well,
- * 22.9 → 20.4 through the bell's mouth. 32 of 68 landable surfaces sit off the centre
- * line. There is no single beat you could paste twice and no two gameplay objects on
- * the stage share a size, a period and a material.
+ * out to z +14 across the rime terrace, out to z +26 down into the well (where it
+ * also runs 14 m BACKWARDS in x), out to z -14 along the bell's north rib, and it
+ * DESCENDS four separate times — 4.4 → 2.6 under the pad deck, 14.2 → 8.4 into the
+ * well, 18.5 → 17.6 onto the causeway, 22.9 → 20.4 through the bell's mouth.
+ * Only 27 of 90 landable surfaces sit on the centre line (the stage this replaces
+ * had 33 of 47), and the off-axis ones spread across 41 distinct |z| bands.
+ * There is no single beat you could paste twice, and no gameplay footprint appears
+ * on this stage more than twice — checked, not asserted.
  *
  * BEAT MAP
  *   1  THE THRESHOLD      walk, look down, understand the drop
- *   2  READ THE EDGE      six hops, wandering ±6 m off the line
+ *   2  READ THE EDGE      five hops onto stones and one onto the deck, ±6 m off line
  *   3  PAD SCHOOL         one pad, in isolation, onto a deck that cannot punish it
  *   4  THE RIME TERRACE   ice, downhill, off-axis, into a counterweight lift
  *   5  THE CENSER         a swinging censer, and a coin you have to crouch for
  *   6  THE THERMAL        a pad, then the stage's only sprint gap with a column in it
  *   7  THE WELL           a crosswind bridge, then DOWN and BACKWARDS round a wheel
- *   8  THE CAROUSEL       two counter-turning rings; never more than 3.9 s to wait
+ *   8  THE CAROUSEL       two counter-turning rings; never more than 4.3 s to wait
  *   9  THE CRUMBLING STAIR vanish tiles, a fork, a shuttle
  *  10  THE GLASS CAUSEWAY a speed pad that survives, because it lands on ice
  *  11  THE GREAT BELL     round its shoulder, under its hammer, through its mouth
  *
  * WHY THE CAROUSEL IS TWO RINGS AND NOT THREE ORBITS IN A ROW
- *   Three slow orbits in series is not three challenges, it is three queues. Inner
- *   ring 7 s, outer ring 9 s turning the other way: relative angular rate is
- *   2π/7 + 2π/9 = 1.596 rad/s, so they line up every 3.94 s and the longest you can
- *   ever be made to stand still is under four seconds. The whole crossing is about
- *   eleven seconds and you are moving for most of them.
+ *   Three slow orbits in series is not three challenges, it is three queues, and a
+ *   queue is what the stage this replaces spent thirty-three seconds of every full
+ *   replay standing in. Inner ring 5 s, outer ring 6 s turning the other way:
+ *   relative angular rate 2π/5 + 2π/6 = 2.304 rad/s, so they line up every 2.73 s.
+ *   And riding the outer ring from its west extreme to its east extreme is half a
+ *   turn — three seconds — which puts you at the exit without a second hop, so the
+ *   inner ring is a shortcut you may take and never a queue you must join.
+ *
+ * HOW LONG THIS STAGE MAKES YOU STAND STILL
+ *   Every mover was sampled against the stage clock at 2 ms with movers.js' own
+ *   samplers, asking "from the surface you are standing on, does a jump onto this
+ *   deck exist right now?". Worst-case waits, in route order: counterweight 3.81 s,
+ *   well shuttle 4.13 s, carousel 4.39 s, stair shuttle 0.00 s (it never changes
+ *   height), last ring 0.00 s from the lip bracket. Nothing on this stage can make
+ *   you stand still for five seconds, and the total of every worst case end to end
+ *   is 12.3 s across 338 m.
  *
  * WHY THE SPEED PAD IS ON ICE
  *   `_applySpeedPad` is `vel.x += dir.x * power` — an add, and nothing holds it.
@@ -87,10 +103,12 @@
  *   at the lip you still carry 8.6 + 6.0·e^(−1.4·0.47) = 11.7 m/s. That is what the
  *   coin spur is priced against, and the main line does not need it at all.
  *
- * CHECKPOINTS: six. Longest leg 55 m (the well), shortest 27 m. Every clockOffset is
- * 0, so the phase you are shown after a death is the phase you were shown before it.
- * cp5 stands on the launch court's west lip, 1.7 m clear of the pad — a respawn never
- * fires anything.
+ * CHECKPOINTS: seven, because the bell crossing is 76 m of open sky and half of it
+ * is a fair replay while all of it is not. Longest leg 72 m (the carousel and the
+ * stair, both of which have floor under them), shortest 26 m. Every clockOffset is 0,
+ * so the phase you are shown after a death is the phase you were shown before it.
+ * cp5 stands on the launch court's west lip, 2.9 m clear of the pad's near edge, and
+ * cp6 on the bell's crown step: no respawn on this stage lands on a pad and fires it.
  *
  * CONVENTIONS: p = CENTRE, s = FULL size, top = p[1] + s[1]/2. Gaps in comments are
  * EDGE TO EDGE. yaw 0 faces +X. A mover's `p` is its HOME pose and `motion.to` its far
@@ -98,8 +116,9 @@
  * orbit basis is bu = X̂ × ŷ = +Ẑ — movers.js:356). `glow` is a MULTIPLIER on emissive
  * gain (builders.js:909), not a colour — colours come from the theme palette.
  *
- * HEIGHT LADDER  0.5 → 1.4 → 4.4 → (down 3.6) → 11.2 → 14.2 → (down 8.4) → 14.8
- *                → 15.8 → 18.5 → 21.1 → 22.9 → (down 20.4) → 19.9 → 23.0
+ * HEIGHT LADDER  0.5 → 1.45 → 1.4 → 4.4 → (down 3.2) → 11.2 → 14.2 → (down 8.4)
+ *                → 14.8 → 15.8 → 18.5 → (down 17.6) → 21.1 → 22.9 → (down 20.4)
+ *                → 19.9 → 23.0
  */
 
 const GOLD = 0xffc35c; // theme accent — pads, hoops, warm trim
@@ -137,16 +156,19 @@ export default {
     // The launch court's WEST lip — 1.7 m clear of the pad, so a respawn here never
     // fires it. Ahead: the bell, and 70 m with no floor under any part of it.
     { p: [263.4, 18.7, 0], yaw: 0, clockOffset: 0 },
+    // The bell's crown step, at the top of the shoulder walk and one hop short of the
+    // mouth. Without it the last leg is 76 m of open sky; with it, 39 and 37.
+    { p: [302.6, 23.1, -4.6], yaw: 0, clockOffset: 0 },
   ],
 
-  finish: { p: [337.4, 23.2, 0], yaw: 0 },
+  finish: { p: [339.8, 23.2, 0], yaw: 0 },
 
   coins: [
     { p: [50.0, 5.6, -11.2] }, // 1 — out along a 1.0 m rib with nothing under it
     { p: [91.0, 11.9, 19.4] }, // 2 — in a 1.15 m slot: the only crouch on the stage
     { p: [145.0, 15.4, 7.0] }, // 3 — on a vanish tile downwind of the bridge
     { p: [138.4, 9.4, 18.8] }, // 4 — 1.8 m BELOW the well floor, under the wheel
-    { p: [262.4, 20.0, 8.2] }, // 5 — only the speed pad's carry reaches this
+    { p: [262.4, 19.1, 8.2] }, // 5 — only the speed pad's carry reaches this
   ],
 
   objects: [
@@ -159,7 +181,7 @@ export default {
 
     { kind: 'platform', p: [2, 0, 0], s: [14, 1, 14], mat: 'stone', glow: 1.0, stripe: true }, // x -5..9, top 0.5
     { kind: 'platform', p: [1.0, 0.85, -5.2], s: [2.6, 0.7, 2.6], mat: 'sand', glow: 1.2, stripe: true }, // top 1.20
-    { kind: 'platform', p: [4.2, 1.15, -5.2], s: [2.4, 1.3, 2.4], mat: 'sand', glow: 1.2, stripe: true }, // top 1.80
+    { kind: 'platform', p: [4.2, 1.45, -5.2], s: [2.4, 1.3, 2.4], mat: 'sand', glow: 1.2, stripe: true }, // top 2.10, a 0.90 step off the first riser
     { kind: 'platform', p: [6.2, 0.4, 4.8], s: [3.4, 0.8, 3.4], mat: 'sand', glow: 1.1, stripe: true }, // the dais, top 0.80
 
     { kind: 'text', p: [-4.2, 2.9, 0], rot: [0, -Math.PI / 2, 0], text: 'ASCENSION', size: 0.82, color: GOLD },
@@ -185,9 +207,9 @@ export default {
 
     { kind: 'platform', p: [13.4, 0, 0], s: [3.6, 1, 5.0], mat: 'sand', glow: 1.3, stripe: true }, // gap 2.60, top 0.5
     { kind: 'platform', p: [19.2, 0, 2.8], s: [3.0, 1, 4.0], mat: 'sand', glow: 1.3, stripe: true }, // gap 2.50, drifts +Z
-    { kind: 'platform', p: [24.8, 0, -2.4], s: [2.8, 1, 3.2], mat: 'sand', glow: 1.3, stripe: true }, // gap 3.14 diagonal
-    { kind: 'platform', p: [29.8, 0.45, -5.6], s: [2.6, 1, 2.6], mat: 'sand', glow: 1.3, stripe: true }, // gap 2.32 at +0.45, top 0.95
-    { kind: 'platform', p: [34.6, 0.9, -2.8], s: [2.6, 1, 2.6], mat: 'sand', glow: 1.3, stripe: true }, // gap 2.21 at +0.45, top 1.40
+    { kind: 'platform', p: [24.8, 0.95, -2.4], s: [2.8, 1, 3.2], mat: 'sand', glow: 1.3, stripe: true }, // gap 3.14 diagonal at +0.95, top 1.45
+    { kind: 'platform', p: [29.8, 0.45, -5.6], s: [2.6, 1, 2.6], mat: 'sand', glow: 1.3, stripe: true }, // gap 2.32 at -0.50, top 0.95
+    { kind: 'platform', p: [34.6, 0.9, -2.8], s: [2.4, 1, 2.8], mat: 'sand', glow: 1.3, stripe: true }, // gap 2.21 at +0.45, top 1.40
     { kind: 'platform', p: [42.0, 0.9, 0], s: [9, 1, 9], mat: 'stone', glow: 1.0, stripe: true }, // the approach deck, gap 1.60, x 37.5..46.5, top 1.40
 
     { kind: 'text', p: [11.0, 2.4, 3.8], rot: [0, -Math.PI / 2, 0], text: 'the bright edge is the edge', size: 0.26, color: 0xc9b48c },
@@ -205,12 +227,12 @@ export default {
     /*                                                                              */
     /* PAD 1  power 6.5, top 1.54, apex 8.04 — and the hoop hangs at 8.04, so the     */
     /*        height is a thing you SEE before you touch anything.                    */
-    /*        arc  t = sqrt(13/54) + sqrt(7.14/54) = 0.4907 + 0.3636 = 0.854 s        */
+    /*        arc  t = sqrt(13/54) + sqrt(7.28/54) = 0.4907 + 0.3672 = 0.858 s        */
     /*        fires at x 42.55 (near edge 42.90 less the 0.35 m radius)               */
-    /*        walk 6.0 m/s  -> 47.68     |  deck starts 46.80  (0.88 m of margin)     */
-    /*        run  8.6 m/s  -> 49.90     |  deck 46.80..58.40, so this is dead centre */
-    /*        sprint 12.2 + held bounce (apex 8.125, t 0.987 s) -> 54.59 (3.81 spare) */
-    /*        the deck's top face clears the eye line 50 ms in — 5.9% of the flight,  */
+    /*        walk 6.0 m/s  -> 47.70     |  deck starts 46.80  (0.90 m of margin)     */
+    /*        run  8.6 m/s  -> 49.93     |  deck 46.80..58.40, so this is dead centre */
+    /*        sprint 12.2 + held bounce (apex 8.125, t 0.990 s) -> 54.63 (3.77 spare) */
+    /*        the deck's top face clears the eye line 49 ms in — 5.7% of the flight,  */
     /*        with 94% of it left to steer.                                          */
     /* ============================================================================ */
 
@@ -227,6 +249,14 @@ export default {
     { kind: 'beam', p: [50.0, 3.9, -8.4], s: [1.0, 1, 7.4], mat: 'stone', glow: 1.6 }, // z -12.10..-4.70, top 4.40
     { kind: 'deco', kindOf: 'crystals', p: [50.0, 4.4, -11.2], count: 5, spread: 0.7, scale: 0.9, seed: 702, glow: 2.4 },
     { kind: 'light', p: [50.0, 6.2, -11.2], color: GOLD, intensity: 8, distance: 15 },
+
+    // -- THE LOWER LEDGE. Four tiles hung under the deck's south rim, 2.60 -> 3.20.
+    //    You drop 1.80 m off the deck onto the first and climb back out onto the ice
+    //    at the far end: the same ground, in the shade, a metre under the floor.
+    { kind: 'platform', p: [49.0, 2.1, 7.0], s: [2.6, 1, 2.6], mat: 'obsidian', glow: 1.4, stripe: true }, // gap 1.20 at -1.80, top 2.60
+    { kind: 'platform', p: [52.6, 2.3, 8.6], s: [2.4, 1, 2.8], mat: 'obsidian', glow: 1.4, stripe: true }, // gap 1.00 at +0.20, top 2.80
+    { kind: 'platform', p: [56.2, 2.5, 8.0], s: [2.8, 1, 2.4], mat: 'obsidian', glow: 1.4, stripe: true }, // gap 1.00 at +0.20, top 3.00
+    { kind: 'platform', p: [59.8, 2.7, 6.4], s: [2.8, 1, 2.8], mat: 'obsidian', glow: 1.4, stripe: true }, // gap 0.90 at +0.20, top 3.20 - the ice is 1.20 above this
 
     { kind: 'deco', kindOf: 'spires', p: [52.6, 4.4, 4.2], count: 4, spread: 1.4, scale: 4.2, seed: 703, mat: 'stone' },
     { kind: 'deco', kindOf: 'girders', p: [52.6, 3.2, 0], count: 6, spread: 4.0, scale: 2.2, seed: 704, mat: 'metal' }, // the deck's underside
@@ -250,6 +280,8 @@ export default {
     { kind: 'ice', p: [60.2, 3.9, 6.0], s: [5.2, 1, 4.2], color: SKY }, // x 57.6..62.8, top 4.40 — flush with the deck's south-east corner
     { kind: 'ice', p: [64.8, 3.5, 9.8], s: [4.6, 1, 3.8], color: SKY }, // top 4.00, steps down and out
     { kind: 'ice', p: [69.6, 3.1, 12.6], s: [4.2, 1, 3.4], color: SKY }, // gap 0.40 at −0.40, top 3.60
+    { kind: 'ice', p: [66.6, 3.3, 6.4], s: [3.6, 1, 3.4], color: SKY }, // the south shelf - a second ice lane, top 3.80
+    { kind: 'platform', p: [73.0, 2.5, 8.4], s: [3.0, 1, 3.0], mat: 'stone', glow: 1.2, stripe: true }, // the low rock, gap 3.10 at -0.80, top 3.00
     { kind: 'conveyor', p: [76.0, 3.1, 12.6], s: [7.2, 1, 4.2], dir: [1, 0, 0], power: 5.0, mat: 'conveyor' }, // gap 0.70, top 3.60
 
     {
@@ -259,7 +291,7 @@ export default {
       mat: 'metal',
       glow: 1.4,
       stripe: true,
-      motion: { type: 'linear', to: [83.6, 10.7, 12.6], period: 6.6, dwell: 1.1, ease: 'sine' },
+      motion: { type: 'linear', to: [83.6, 10.7, 12.6], period: 6.6, dwell: 1.6, ease: 'sine' },
     }, // THE COUNTERWEIGHT — boards at top 3.60 (gap 1.70 off the conveyor), sets you down at 11.20
 
     { kind: 'platform', p: [91.0, 10.7, 12.6], s: [9, 1, 8], mat: 'stone', glow: 1.0, stripe: true }, // the west terrace, x 86.5..95.5, z 8.6..16.6, top 11.20
@@ -289,6 +321,8 @@ export default {
     { kind: 'platform', p: [91.0, 12.6, 18.6], s: [4.0, 0.5, 3.6], mat: 'obsidian', glow: 0.8, stripe: false }, // the lid — underside 12.35, so the slot is 1.15 m
     { kind: 'light', p: [91.0, 11.6, 20.2], color: GOLD, intensity: 6, distance: 12 },
 
+    { kind: 'platform', p: [95.4, 10.7, 19.4], s: [3.0, 1, 3.0], mat: 'sand', glow: 1.3, stripe: true }, // the far side of the slot, gap 0.90, top 11.20
+    { kind: 'platform', p: [99.8, 10.7, 15.0], s: [3.2, 1, 3.2], mat: 'sand', glow: 1.3, stripe: true }, // gap 1.84 - the crouch slot is a loop, not a cul-de-sac, top 11.20
     { kind: 'platform', p: [97.6, 10.7, 8.0], s: [3.6, 1, 3.6], mat: 'sand', glow: 1.3, stripe: true }, // gap 0.30 off the terrace, top 11.20
     { kind: 'platform', p: [106.0, 10.7, 1.0], s: [9, 1, 8.4], mat: 'stone', glow: 1.0, stripe: true }, // the launch spur, gap 2.33 diagonal, x 101.5..110.5, top 11.20
 
@@ -301,13 +335,13 @@ export default {
     /* ============================================================================ */
     /* BEAT 6 — THE THERMAL                                                         */
     /*                                                                              */
-    /* PAD 2  power 8.0, top 11.27, apex 19.27.                                      */
-    /*        arc  t = sqrt(16/54) + sqrt(10.14/54) = 0.5443 + 0.4333 = 0.978 s       */
+    /* PAD 2  power 8.0, top 11.34, apex 19.34.                                      */
+    /*        arc  t = sqrt(16/54) + sqrt(10.28/54) = 0.5443 + 0.4363 = 0.981 s       */
     /*        fires at x 106.05                                                      */
-    /*        walk   -> 111.92   |  courtyard starts 110.20  (1.72 m of margin)       */
-    /*        run    -> 114.46   |  courtyard 110.20..122.20                          */
-    /*        sprint + held (apex 10, t 1.120 s) -> 119.72  (2.48 m spare)            */
-    /*        landing readable 45 ms in — 4.6% of the flight.                         */
+    /*        walk   -> 111.93   |  courtyard starts 110.20  (1.73 m of margin)       */
+    /*        run    -> 114.48   |  courtyard 110.20..122.20                          */
+    /*        sprint + held (apex 10, t 1.123 s) -> 119.75  (2.45 m spare)            */
+    /*        landing readable 44 ms in — 4.5% of the flight.                         */
     /*                                                                              */
     /* THEN THE ONLY SPRINT GAP ON THE STAGE. 6.00 m flat off the courtyard's east    */
     /* lip: past the 5.24 m a run-speed jump can physically cover, inside the 6.17 m  */
@@ -318,13 +352,15 @@ export default {
     /* side. It rescues the player who did not sprint. It is not the route.           */
     /* ============================================================================ */
 
-    { kind: 'jumppad', p: [108.0, 11.20, 0], s: [3.2, 0.14, 3.8], power: 8.0, dir: [0, 1, 0] }, // spur top 11.20 + 0.07 = pad top 11.27
-    { kind: 'deco', kindOf: 'crystals', p: [108.0, 19.27, 0], count: 9, spread: 1.9, scale: 1.0, seed: 1001, glow: 2.2 }, // the hoop, AT the apex
+    { kind: 'jumppad', p: [108.0, 11.27, 0], s: [3.2, 0.14, 3.8], power: 8.0, dir: [0, 1, 0] }, // spur top 11.20 + 0.07; the pad face stands 0.14 proud of the deck
+    { kind: 'deco', kindOf: 'crystals', p: [108.0, 19.34, 0], count: 9, spread: 1.9, scale: 1.0, seed: 1001, glow: 2.2 }, // the hoop, AT the apex
     { kind: 'text', p: [103.0, 13.6, 0], rot: [0, -Math.PI / 2, 0], text: 'THE AIR HOLDS YOU', size: 0.5, color: SKY },
 
     { kind: 'platform', p: [116.2, 13.7, 0], s: [12, 1, 13], mat: 'stone', glow: 1.0, stripe: true }, // the great courtyard, x 110.2..122.2, top 14.20
 
-    { kind: 'wind', p: [125.2, 17.7, 0], s: [4.4, 9, 8], dir: [0, 1, 0], power: 16, color: SKY }, // x 123.0..127.4, base 13.2 — entirely over the void
+    { kind: 'platform', p: [116.2, 15.1, -5.0], s: [5.0, 1, 2.4], mat: 'sand', glow: 1.3, stripe: true }, // the courtyard shelf, +1.40 straight up, top 15.60
+    { kind: 'wind', p: [125.2, 17.7, 0], s: [4.4, 9, 8], dir: [0, 1, 0], power: 16, color: SKY }, // x 123.0..127.4, z +-4, base 13.2 - entirely over the void
+    { kind: 'platform', p: [124.6, 13.7, -7.4], s: [2.8, 1, 2.4], mat: 'sand', glow: 1.3, stripe: true }, // the long way round the sprint gap: 1.10 out, 2.55 back, top 14.20 // x 123.0..127.4, base 13.2 — entirely over the void
     { kind: 'platform', p: [132.2, 13.7, 0], s: [8, 1, 10], mat: 'stone', glow: 1.0, stripe: true }, // the east court, gap 6.00 flat, x 128.2..136.2, top 14.20
 
     { kind: 'text', p: [120.0, 16.4, 0], rot: [0, -Math.PI / 2, 0], text: 'SPRINT  —  or trust the column', size: 0.28, color: SKY },
@@ -366,6 +402,11 @@ export default {
     { kind: 'rotor', p: [145.0, 11.5, 18.8], style: 'bar', arms: 3, len: 2.6, thick: 0.34, period: 3.8, phase: 0, axis: 'y' }, // the prayer wheel, 1.3 m over the floor
 
     { kind: 'platform', p: [138.4, 7.9, 18.8], s: [3.0, 1, 3.0], mat: 'obsidian', glow: 1.5, stripe: true }, // COIN 4's shelf: 1.10 m out, 1.80 m down, top 8.40
+    { kind: 'platform', p: [135.6, 7.9, 21.6], s: [2.4, 1, 2.6], mat: 'obsidian', glow: 1.4, stripe: true }, // the under-loop, top 8.40
+    { kind: 'platform', p: [136.2, 8.9, 24.4], s: [2.6, 1, 2.4], mat: 'obsidian', glow: 1.4, stripe: true }, // gap 0.20 at +1.00, top 9.40
+    { kind: 'platform', p: [140.4, 9.7, 24.6], s: [3.2, 1, 2.8], mat: 'obsidian', glow: 1.4, stripe: true }, // gap 1.40 at +0.80, back onto the well floor, top 10.20
+    { kind: 'wind', p: [139.0, 12.4, 21.0], s: [3.0, 5, 4.0], dir: [0, 1, 0], power: 10, color: SKY }, // base 9.90 - 1.50 m over the shelf, so it only catches you in the air
+    { kind: 'rotor', p: [152.6, 14.6, 3.6], style: 'windmill', arms: 4, len: 2.4, thick: 0.30, period: 5.2, phase: 0.30, axis: 'y' }, // the small wheel, 1.20 m over the first drop
 
     {
       kind: 'mover',
@@ -374,12 +415,12 @@ export default {
       mat: 'metal',
       glow: 1.4,
       stripe: true,
-      motion: { type: 'linear', to: [152.6, 14.3, 14.0], period: 7.2, dwell: 0.9, ease: 'sine' },
+      motion: { type: 'linear', to: [152.6, 14.3, 14.0], period: 7.2, dwell: 1.6, ease: 'sine' },
     }, // the diagonal shuttle: boards at top 11.20 (gap 1.60 at +1.00), sets you down at 14.80
 
     { kind: 'platform', p: [159.4, 14.3, 12.0], s: [6, 1, 7], mat: 'stone', glow: 1.0, stripe: true }, // the east landing, gap 1.80, x 156.4..162.4, top 14.80
     { kind: 'platform', p: [166.6, 14.3, 5.8], s: [4.4, 1, 4.4], mat: 'sand', glow: 1.3, stripe: true }, // gap 2.06 diagonal, top 14.80
-    { kind: 'platform', p: [172.4, 14.3, 1.0], s: [4.6, 1, 4.6], mat: 'sand', glow: 1.3, stripe: true }, // gap 1.30 diagonal, back on the line, top 14.80
+    { kind: 'platform', p: [172.8, 14.3, 1.0], s: [4.6, 1, 4.6], mat: 'sand', glow: 1.3, stripe: true }, // gap 0.76, back on the line, 0.6 m clear of the outer ring's swept box, top 14.80
 
     { kind: 'text', p: [150.0, 15.4, 3.6], rot: [0, -Math.PI / 2, 0], text: 'DOWN', size: 0.5, color: GOLD },
     { kind: 'text', p: [141.0, 12.6, 18.8], rot: [0, -Math.PI / 2, 0], text: 'the wheel is older than the floor', size: 0.22, color: 0xc9b48c },
@@ -394,10 +435,23 @@ export default {
     /* ============================================================================ */
     /* BEAT 8 — THE CAROUSEL                                                        */
     /* Two rings on one spindle, turning against each other. OUTER radius 8.4, period */
-    /* 9, anticlockwise; INNER radius 3.6, period 7, clockwise. When they line up the */
-    /* decks are 0.40 m apart and you step across; relative rate 2π/7 + 2π/9 = 1.596  */
-    /* rad/s puts an alignment under your feet every 3.94 s, so the longest this beat  */
-    /* can ever make you stand still is 3.9 seconds, and the crossing is about eleven. */
+    /* 6, anticlockwise; INNER radius 2.6, period 5, clockwise. When they line up the */
+    /* decks are 2.10 m apart and you hop across; relative rate 2π/5 + 2π/6 = 2.304   */
+    /* rad/s puts an alignment under your feet every 2.73 s. Boarding the outer ring   */
+    /* off the approach tile is open 26.8% of its turn — worst wait 4.39 s, measured   */
+    /* — and riding it half a turn (3.0 s) delivers you to the exit deck with no       */
+    /* second hop, so the inner ring is a shortcut and never a queue.                  */
+    /*                                                                              */
+    /* Every static surface here is OUTSIDE the outer ring's swept box (x 175.5..196.5, */
+    /* z ±10.5): the approach tile ends at 175.1, the exit deck starts at 198.5, and    */
+    /* the two outriggers sit at |z| 11.0 and 11.1. A ring never grinds on a rock.      */
+    /*                                                                              */
+    /* AND THE TWO RINGS NEVER TOUCH EACH OTHER. An orbiting deck stays AXIS-ALIGNED   */
+    /* (movers.js sampleQuat returns identity for 'orbit'), so its closest approach to  */
+    /* the spindle is R − √2·half at the 45° diagonal, not R − half. Sampled at 1 ms    */
+    /* over 200 s — 33 full beat cycles — the closest the two decks ever come is       */
+    /* 0.578 m, at the 45° diagonal; when they line up to be hopped they are 2.10 m     */
+    /* apart, which is a hop and not a step, and that is deliberate.                    */
     /*                                                                              */
     /* A mover carries no telegraph of its own (HAZARD_META.mover, telegraph:false),  */
     /* so the phase is read against something that does not move: a lit dock post at   */
@@ -408,26 +462,28 @@ export default {
     {
       kind: 'mover',
       p: [186.0, 15.3, 0],
-      s: [4.6, 1, 4.6],
+      s: [4.2, 1, 4.2],
       mat: 'stone',
       glow: 1.5,
       stripe: true,
-      motion: { type: 'orbit', radius: 8.4, axis: 'y', period: 9, phase: 0.25 },
-    }, // OUTER — reaches x 177.6 and 194.4, top 15.80
+      motion: { type: 'orbit', radius: 8.4, axis: 'y', period: 6, phase: 0.25 },
+    }, // OUTER - swept box x 175.5..196.5, z +-10.5, reaches x 177.6 and 194.4, top 15.80
 
     {
       kind: 'mover',
       p: [186.0, 15.3, 0],
-      s: [4.2, 1, 4.2],
+      s: [3.2, 1, 3.2],
       mat: 'obsidian',
       glow: 1.7,
       stripe: true,
-      motion: { type: 'orbit', radius: 3.6, axis: 'y', period: 7, phase: 0, dir: -1 },
-    }, // INNER — reaches x 182.4 and 189.6, top 15.80, turning the other way
+      motion: { type: 'orbit', radius: 2.6, axis: 'y', period: 5, phase: 0, dir: -1 },
+    }, // INNER - swept box x 184.4..187.6 +-2.6, reaches x 183.4 and 188.6, top 15.80, turning the other way
 
-    { kind: 'platform', p: [202.0, 15.3, 0], s: [8, 1, 9], mat: 'stone', glow: 1.0, stripe: true }, // the exit deck, x 198..206, top 15.80
+    { kind: 'platform', p: [186.0, 15.3, -12.6], s: [3.0, 1, 3.2], mat: 'obsidian', glow: 1.5, stripe: true }, // the north outrigger - the outer ring stops 0.20 m off it, top 15.80
+    { kind: 'platform', p: [186.0, 15.3, 12.6], s: [3.2, 1, 3.0], mat: 'obsidian', glow: 1.5, stripe: true }, // the south outrigger, top 15.80
+    { kind: 'platform', p: [202.0, 15.3, 0], s: [7, 1, 9], mat: 'stone', glow: 1.0, stripe: true }, // the exit deck, x 198.5..205.5, top 15.80
 
-    { kind: 'text', p: [174.0, 17.4, 0], rot: [0, -Math.PI / 2, 0], text: 'THEY LINE UP EVERY 3.9 s', size: 0.34, color: GOLD },
+    { kind: 'text', p: [173.6, 17.4, 0], rot: [0, -Math.PI / 2, 0], text: 'THEY LINE UP EVERY 2.7 s', size: 0.34, color: GOLD },
     { kind: 'deco', kindOf: 'antennae', p: [175.0, 15.8, 0], count: 2, spread: 0.4, scale: 1.8, seed: 1201, glow: 2.4 }, // the west dock post — the fixed thing you read the phase against
     { kind: 'deco', kindOf: 'antennae', p: [197.0, 15.8, 0], count: 2, spread: 0.4, scale: 1.8, seed: 1202, glow: 2.4 }, // the east dock post
     { kind: 'deco', kindOf: 'pipes', p: [186.0, 20.4, 0], count: 7, spread: 1.5, scale: 3.0, seed: 1203, mat: 'metal' }, // the spindle head, entirely above both decks
@@ -451,12 +507,16 @@ export default {
     /* stick drift, because it can never touch you while you are standing.             */
     /* ============================================================================ */
 
+    { kind: 'wind', p: [206.95, 19.0, 0], s: [1.9, 5, 10], dir: [0, 0, 1], power: 8, color: SKY }, // the void 206.0..207.9, base 16.5
     { kind: 'vanish', p: [209.6, 16.2, 0], s: [3.4, 1, 3.8], mat: 'sand', glow: 1.4, stripe: true, cycle: { on: 3.0, off: 1.6, warn: 0.8, phase: 0.00 } }, // gap 1.90 at +0.90, top 16.70
     { kind: 'wind', p: [212.1, 19.6, 1.1], s: [1.6, 5, 9], dir: [0, 0, 1], power: 8, color: SKY }, // the void 211.3..212.9, base 17.1
     { kind: 'vanish', p: [214.4, 17.1, 2.2], s: [3.0, 1, 3.4], mat: 'sand', glow: 1.4, stripe: true, cycle: { on: 3.0, off: 1.6, warn: 0.8, phase: 0.28 } }, // gap 1.60 at +0.90, top 17.60
     { kind: 'wind', p: [216.9, 20.5, 0.4], s: [2.1, 5, 11], dir: [0, 0, 1], power: 8, color: SKY }, // the void 215.9..218.0, base 18.0
+    { kind: 'vanish', p: [214.4, 17.1, -2.6], s: [2.6, 1, 2.6], mat: 'sand', glow: 1.4, stripe: true, cycle: { on: 3.0, off: 1.6, warn: 0.8, phase: 0.62 } }, // the second riser forks too - north lane, gap 1.90, top 17.60
     { kind: 'vanish', p: [219.4, 18.0, -2.2], s: [2.8, 1, 2.8], mat: 'sand', glow: 1.4, stripe: true, cycle: { on: 2.6, off: 2.2, warn: 0.6, phase: 0.55 } }, // the fork, north lane, gap 2.47, top 18.50
     { kind: 'vanish', p: [219.4, 18.0, 2.6], s: [2.8, 1, 2.8], mat: 'sand', glow: 1.4, stripe: true, cycle: { on: 2.6, off: 2.2, warn: 0.6, phase: 0.05 } }, // the fork, south lane — half a cycle away
+
+    { kind: 'vanish', p: [222.2, 18.9, -0.2], s: [2.2, 1, 2.4], mat: 'sand', glow: 1.4, stripe: true, cycle: { on: 2.4, off: 2.4, warn: 0.6, phase: 0.30 } }, // the keystone: 0.60 m off either lane at +0.90, top 19.40
 
     {
       kind: 'mover',
@@ -487,23 +547,25 @@ export default {
     /* ============================================================================ */
 
     { kind: 'platform', p: [241.6, 18.0, 0], s: [10, 1, 7], mat: 'stone', glow: 1.0, stripe: true }, // the colonnade, gap 1.70, x 236.6..246.6, top 18.50
-    { kind: 'crusher', p: [238.6, 22.0, 0], s: [2.6, 1.4, 4.6], axis: [0, -1, 0], travel: 2.8, period: 3.6, phase: 0.00, dwell: 0.9, mat: 'metal' },
-    { kind: 'crusher', p: [242.2, 22.0, 0], s: [2.2, 1.4, 4.6], axis: [0, -1, 0], travel: 2.8, period: 4.4, phase: 0.37, dwell: 1.1, mat: 'metal' },
-    { kind: 'crusher', p: [245.4, 22.0, 0], s: [2.8, 1.4, 4.6], axis: [0, -1, 0], travel: 2.8, period: 3.1, phase: 0.71, dwell: 0.7, mat: 'metal' },
+    { kind: 'crusher', p: [238.6, 22.0, 0], s: [2.6, 1.4, 4.6], axis: [0, -1, 0], travel: 2.8, period: 3.6, phase: 0.00, dwell: 1.3, mat: 'metal' },
+    { kind: 'crusher', p: [242.2, 22.0, 0], s: [2.2, 1.4, 4.6], axis: [0, -1, 0], travel: 2.8, period: 4.4, phase: 0.37, dwell: 1.5, mat: 'metal' },
+    { kind: 'crusher', p: [245.4, 22.0, 0], s: [2.8, 1.4, 4.6], axis: [0, -1, 0], travel: 2.8, period: 3.1, phase: 0.71, dwell: 1.1, mat: 'metal' },
 
-    { kind: 'ice', p: [252.2, 18.0, 0], s: [10, 1, 4.0], color: SKY }, // the causeway, gap 0.60, x 247.2..257.2, top 18.50
-    { kind: 'speedpad', p: [249.0, 18.57, 0], s: [2.8, 0.14, 4.0], dir: [1, 0, 0], power: 6.0 }, // ice top 18.50 + 0.07; 6.8 m of ice left to spend it on
-    { kind: 'platform', p: [262.4, 18.0, 8.2], s: [2.6, 1, 2.6], mat: 'obsidian', glow: 1.6, stripe: true }, // COIN 5's island: 6.26 m out and across, top 18.50
-    { kind: 'platform', p: [266.0, 18.0, 0], s: [9, 1, 9], mat: 'stone', glow: 1.0, stripe: true }, // the launch court, gap 4.30 flat, x 261.5..270.5, top 18.50
+    { kind: 'platform', p: [237.4, 18.0, -6.6], s: [3.2, 1, 2.8], mat: 'sand', glow: 1.3, stripe: true }, // the bypass: round the counterweights instead of under them, top 18.50
+    { kind: 'platform', p: [243.2, 18.0, -7.0], s: [2.8, 1, 3.2], mat: 'sand', glow: 1.3, stripe: true }, // gap 2.80, then 4.28 down onto the causeway, top 18.50
+    { kind: 'ice', p: [252.2, 17.1, 0], s: [10, 1, 4.0], color: SKY }, // the causeway, gap 0.60 at -0.90, x 247.2..257.2, top 17.60
+    { kind: 'speedpad', p: [249.0, 17.67, 0], s: [2.8, 0.14, 4.0], dir: [1, 0, 0], power: 6.0 }, // ice top 17.60 + 0.07; 6.8 m of ice left to spend it on
+    { kind: 'platform', p: [262.4, 17.1, 8.2], s: [2.8, 1, 2.6], mat: 'obsidian', glow: 1.6, stripe: true }, // COIN 5's island: 6.20 m out and across, flat off the ice, top 17.60
+    { kind: 'platform', p: [265.3, 18.0, 0], s: [9, 1, 9], mat: 'stone', glow: 1.0, stripe: true }, // the launch court, gap 3.60 at +0.90, x 260.8..269.8, top 18.50
 
     { kind: 'text', p: [247.6, 20.4, 0], rot: [0, -Math.PI / 2, 0], text: 'THE ICE KEEPS IT', size: 0.44, color: SKY },
     { kind: 'text', p: [247.6, 19.8, 0], rot: [0, -Math.PI / 2, 0], text: 'friction 1.4 — the boost lasts the whole causeway', size: 0.22, color: 0xc9b48c },
     { kind: 'deco', kindOf: 'spires', p: [241.6, 18.6, 4.4], count: 5, spread: 2.0, scale: 4.4, seed: 1401, mat: 'stone' },
     { kind: 'deco', kindOf: 'spires', p: [241.6, 18.6, -4.4], count: 5, spread: 2.0, scale: 4.4, seed: 1402, mat: 'stone' },
-    { kind: 'deco', kindOf: 'crystals', p: [252.2, 18.9, 2.6], count: 8, spread: 2.6, scale: 1.0, seed: 1403, glow: 1.8 },
+    { kind: 'deco', kindOf: 'crystals', p: [252.2, 18.0, 2.6], count: 8, spread: 2.6, scale: 1.0, seed: 1403, glow: 1.8 },
     { kind: 'light', p: [241.6, 21.0, 0], color: 0xffe6bf, intensity: 11, distance: 28 },
-    { kind: 'light', p: [252.2, 21.0, 0], color: SKY, intensity: 9, distance: 24 },
-    { kind: 'light', p: [262.4, 20.6, 8.2], color: GOLD, intensity: 8, distance: 15 },
+    { kind: 'light', p: [252.2, 20.1, 0], color: SKY, intensity: 9, distance: 24 },
+    { kind: 'light', p: [262.4, 19.7, 8.2], color: GOLD, intensity: 8, distance: 15 },
 
     /* ============================================================================ */
     /* BEAT 11 — THE GREAT BELL                                                     */
@@ -517,29 +579,33 @@ export default {
     /*                                                                              */
     /* PAD 3  power 7.6, top 18.57, apex 26.17.                                      */
     /*        arc  t = sqrt(15.2/54) + sqrt(10.14/54) = 0.5305 + 0.4333 = 0.964 s     */
-    /*        fires at 266.35 | walk -> 272.13, collar starts 270.70 (1.43 m margin)  */
-    /*        run -> 274.64 (collar 270.70..281.70) | sprint + held -> 279.79         */
-    /*        landing readable 32 ms in — 3.3% of the flight.                         */
+    /*        fires at 265.95 | walk -> 271.75, collar starts 270.70 (1.05 m margin)  */
+    /*        run -> 274.27 (collar 270.70..281.70) | sprint + held -> 279.42 (2.28)  */
+    /*        landing readable 30 ms in — 3.1% of the flight.                         */
     /*                                                                              */
-    /* PAD 4  power 5.6, top 19.97, apex 25.57.                                      */
-    /*        arc  t = sqrt(11.2/54) + sqrt(5.14/54) = 0.4553 + 0.3085 = 0.764 s      */
-    /*        fires at 328.95 | walk -> 333.53, summit starts 332.60 (0.93 m margin)  */
-    /*        run -> 335.52 | sprint + held -> 339.84, summit ends 342.20 (2.36 spare) */
+    /* PAD 4  power 5.6, top 20.04, apex 25.64.                                      */
+    /*        arc  t = sqrt(11.2/54) + sqrt(5.28/54) = 0.4553 + 0.3127 = 0.768 s      */
+    /*        fires at 331.55 | walk -> 336.16, summit starts 335.20 (0.96 m margin)  */
+    /*        run -> 338.16 | sprint + held -> 342.48, summit ends 344.40 (1.92 spare) */
     /*        landing readable 58 ms in — 7.6% of the flight.                         */
     /*                                                                              */
     /* Nothing out here repeats: the collar is 11 × 7, the shoulder 6.4 × 4.6, the    */
     /* brow 6 × 4.4, the crown step 5.6 × 5, the throat tiles 3.2 / 3.0 / 2.8, the    */
-    /* ring is a single 5.4 m deck on an 8 s turn, and the summit is 9.6 × 12.        */
+    /* ring is a single 4.6 m deck on a 6 s turn, and the summit is 9.2 × 12. The     */
+    /* tongue you board the ring from is SOLID stone, because a stage may never ask   */
+    /* you to stand and wait on a tile that is counting down to vanishing.            */
     /* ============================================================================ */
 
-    { kind: 'jumppad', p: [268.4, 18.57, 0], s: [3.4, 0.14, 4.0], power: 7.6, dir: [0, 1, 0] }, // court top 18.50 + 0.07
-    { kind: 'deco', kindOf: 'crystals', p: [268.4, 26.17, 0], count: 10, spread: 2.0, scale: 1.0, seed: 1501, glow: 2.2 }, // the hoop, AT the apex
+    { kind: 'jumppad', p: [268.0, 18.57, 0], s: [3.4, 0.14, 4.0], power: 7.6, dir: [0, 1, 0] }, // court top 18.50 + 0.07
+    { kind: 'deco', kindOf: 'crystals', p: [268.0, 26.24, 0], count: 10, spread: 2.0, scale: 1.0, seed: 1501, glow: 2.2 }, // the hoop, AT the apex
     { kind: 'text', p: [262.0, 22.0, 0], rot: [0, -Math.PI / 2, 0], text: 'THE BELL', size: 0.72, color: GOLD },
     { kind: 'text', p: [262.0, 21.3, 0], rot: [0, -Math.PI / 2, 0], text: 'round the shoulder  ·  through the mouth', size: 0.24, color: 0xc9b48c },
 
     { kind: 'platform', p: [276.2, 20.6, 0], s: [11, 1, 7], mat: 'stone', glow: 1.0, stripe: true }, // THE COLLAR, x 270.70..281.70, top 21.10
     { kind: 'platform', p: [287.0, 20.6, -7.2], s: [6.4, 1, 4.6], mat: 'stone', glow: 1.2, stripe: true }, // the shoulder, gap 2.52 diagonal, top 21.10
+    { kind: 'platform', p: [281.6, 20.6, -10.6], s: [2.8, 1, 3.2], mat: 'obsidian', glow: 1.5, stripe: true }, // the lantern perch, gap 0.70 off the shoulder, top 21.10
     { kind: 'platform', p: [296.0, 21.5, -8.4], s: [6, 1, 4.4], mat: 'stone', glow: 1.2, stripe: true }, // the brow, gap 2.80 at +0.90, top 22.00
+    { kind: 'beam', p: [294.0, 21.5, -11.4], s: [1.0, 1, 6.0], mat: 'stone', glow: 1.6 }, // the north rib - 6 m of 1 m plank straight out over the cloud sea, top 22.00
     { kind: 'pendulum', p: [296.0, 28.26, -8.4], len: 3.6, amp: 0.50, period: 3.4, phase: 0, axis: [1, 0, 0], blade: { w: 2.8, h: 2.6, d: 0.26 } }, // THE HAMMER, pivot = brow top + 6.26
     { kind: 'platform', p: [302.6, 22.4, -4.6], s: [5.6, 1, 5.0], mat: 'stone', glow: 1.2, stripe: true }, // the crown step, gap 2.60 at +0.90, x 299.8..305.4, top 22.90
 
@@ -550,20 +616,23 @@ export default {
     { kind: 'vanish', p: [311.4, 21.1, 1.6], s: [3.0, 1, 3.2], mat: 'obsidian', glow: 1.6, stripe: true, cycle: { on: 3.2, off: 1.5, warn: 0.8, phase: 0.45 } }, // gap 0.70 at −1.20, top 21.60
     { kind: 'vanish', p: [313.6, 19.9, -1.4], s: [2.8, 1, 3.0], mat: 'obsidian', glow: 1.6, stripe: true, cycle: { on: 3.2, off: 1.5, warn: 0.8, phase: 0.75 } }, // gap 0.00 at −1.20, top 20.40
 
+    { kind: 'platform', p: [317.4, 20.9, -4.6], s: [3.2, 1, 3.2], mat: 'obsidian', glow: 1.5, stripe: true }, // the lip bracket, gap 0.81 at +1.00 off the last tile, top 21.40
+    { kind: 'platform', p: [313.4, 19.4, 2.2], s: [3.0, 1, 3.0], mat: 'stone', glow: 1.4, stripe: true }, // THE TONGUE - solid, because this is where you wait for the ring, top 19.90
+
     {
       kind: 'mover',
       p: [322.0, 19.4, 0],
-      s: [5.4, 1, 5.4],
+      s: [4.6, 1, 4.6],
       mat: 'obsidian',
       glow: 1.6,
       stripe: true,
-      motion: { type: 'orbit', radius: 4.6, axis: 'y', period: 8, phase: 0.5 },
-    }, // THE LAST RING — reaches x 317.4 and 326.6, top 19.90, one turn every 8 s
+      motion: { type: 'orbit', radius: 3.4, axis: 'y', period: 6, phase: 0.5 },
+    }, // THE LAST RING - swept box x 316.3..327.7, z +-5.7, top 19.90, one turn every 6 s
 
-    { kind: 'platform', p: [329.4, 19.4, 0], s: [6.4, 1, 8], mat: 'stone', glow: 1.0, stripe: true }, // the summit stair, gap 1.70, x 326.2..332.6, top 19.90
-    { kind: 'jumppad', p: [330.6, 19.97, 0], s: [2.6, 0.14, 3.4], power: 5.6, dir: [0, 1, 0] }, // stair top 19.90 + 0.07
-    { kind: 'deco', kindOf: 'crystals', p: [330.6, 25.57, 0], count: 8, spread: 1.6, scale: 0.9, seed: 1502, glow: 2.4 }, // the last hoop
-    { kind: 'platform', p: [337.4, 22.5, 0], s: [9.6, 1, 12], mat: 'obsidian', glow: 1.2, stripe: true }, // THE SUMMIT, x 332.60..342.20, top 23.00
+    { kind: 'platform', p: [332.0, 19.4, 0], s: [6.4, 1, 8], mat: 'stone', glow: 1.0, stripe: true }, // the summit stair, gap 1.10 off the ring, x 328.8..335.2, top 19.90
+    { kind: 'jumppad', p: [333.2, 19.97, 0], s: [2.6, 0.14, 3.4], power: 5.6, dir: [0, 1, 0] }, // stair top 19.90 + 0.07
+    { kind: 'deco', kindOf: 'crystals', p: [333.2, 25.64, 0], count: 8, spread: 1.6, scale: 0.9, seed: 1502, glow: 2.4 }, // the last hoop, AT the apex
+    { kind: 'platform', p: [339.8, 22.5, 0], s: [9.2, 1, 12], mat: 'obsidian', glow: 1.2, stripe: true }, // THE SUMMIT, x 335.20..344.40, top 23.00
 
     // The bell itself. It has no collider anywhere — it is the thing you go round and
     // through, not a thing you land on, and nothing about it carries a stripe.
@@ -578,11 +647,11 @@ export default {
     { kind: 'light', p: [311.0, 24.0, 0], color: VIOLET, intensity: 12, distance: 26 },
     { kind: 'light', p: [322.0, 23.0, 0], color: VIOLET, intensity: 11, distance: 26 },
 
-    { kind: 'deco', kindOf: 'spires', p: [337.4, 23.0, 5.6], count: 5, spread: 1.6, scale: 5.0, seed: 1701, mat: 'obsidian' },
-    { kind: 'deco', kindOf: 'spires', p: [337.4, 23.0, -5.6], count: 5, spread: 1.6, scale: 5.0, seed: 1702, mat: 'obsidian' },
-    { kind: 'deco', kindOf: 'crystals', p: [341.0, 23.0, 0], count: 9, spread: 1.4, scale: 1.6, seed: 1703, glow: 2.6 },
-    { kind: 'text', p: [333.8, 25.4, 0], rot: [0, -Math.PI / 2, 0], text: 'ASCENSION', size: 0.44, color: VIOLET },
-    { kind: 'light', p: [337.4, 26.0, 0], color: VIOLET, intensity: 22, distance: 36 },
+    { kind: 'deco', kindOf: 'spires', p: [339.8, 23.0, 5.6], count: 5, spread: 1.6, scale: 5.0, seed: 1701, mat: 'obsidian' },
+    { kind: 'deco', kindOf: 'spires', p: [339.8, 23.0, -5.6], count: 5, spread: 1.6, scale: 5.0, seed: 1702, mat: 'obsidian' },
+    { kind: 'deco', kindOf: 'crystals', p: [343.4, 23.0, 0], count: 9, spread: 1.4, scale: 1.6, seed: 1703, glow: 2.6 },
+    { kind: 'text', p: [336.2, 25.4, 0], rot: [0, -Math.PI / 2, 0], text: 'ASCENSION', size: 0.44, color: VIOLET },
+    { kind: 'light', p: [339.8, 26.0, 0], color: VIOLET, intensity: 22, distance: 36 },
 
     /* ============================================================================ */
     /* THE SKY — cloud sea, sister islands, and the temple that carries on past this  */

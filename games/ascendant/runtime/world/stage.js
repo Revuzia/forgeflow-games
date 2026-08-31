@@ -773,8 +773,15 @@ export class Stage {
       if (k === 'chase') {
         if (!fin(o.from) || !fin(o.to)) failObj(i, k, 'chase requires finite "from" and "to"');
         if (!fin(o.speed) || o.speed <= 0) failObj(i, k, '"speed" must be > 0, got ' + String(o.speed));
-        if (o.axis !== 'y' && o.axis !== 'z' && o.axis !== undefined)
-          failObj(i, k, '"axis" must be "y" or "z", got ' + String(o.axis));
+        // chase.js:120 resolves 'x' | 'y' | 'z' and implements all three end to end
+        // (face size :137, front point :175, kill half-extents :328, the inside test
+        // :417) and its own factory doc at :502 advertises 'x'. This validator used to
+        // reject 'x', which made a horizontal run-or-die wall — the one every stage
+        // that runs along +X actually wants — throw on Stage.load. Neither reachcheck
+        // nor geomcheck calls validate, so a stage could carry one and pass both gates
+        // while being unloadable.
+        if (o.axis !== 'x' && o.axis !== 'y' && o.axis !== 'z' && o.axis !== undefined)
+          failObj(i, k, '"axis" must be "x", "y" or "z", got ' + String(o.axis));
       }
 
       /* period / cycle sanity — a zero period is an infinite loop or a NaN */
@@ -2878,6 +2885,7 @@ export class Stage {
       }
       for (let a = 0; a < n; a++) {
         const l = L[idx[a]];
+        if (l.base <= 0.01) continue;               // dark site: never holds a slot
         if (!this._ppValid || l.d2 < l.range2) l.want = true;
       }
 
