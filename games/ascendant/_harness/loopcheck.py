@@ -42,7 +42,9 @@ async (opts) => {
   const R = {checks: [], stage: opts.stage};
   const ok  = (name, pass, detail) => R.checks.push({name, pass: !!pass, detail: detail === undefined ? null : detail});
   if (!A || !A.game) { ok('bootstrap', false, 'no ASCENDANT.game'); return R; }
-  const G = A.game, T = A.THREE;
+  const G = A.game;
+  // ASCENDANT does not publish THREE; borrow Vector3 off a live vector.
+  const T = A.THREE || { Vector3: (G.player && G.player.pos ? G.player.pos.constructor : null) };
   const frame = () => new Promise(r => requestAnimationFrame(r));
   const wait = async (ms) => { const t = performance.now(); while (performance.now() - t < ms) await frame(); };
   const until = async (fn, ms, label) => {

@@ -15,7 +15,12 @@ import argparse
 import sys
 from playwright.sync_api import sync_playwright
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-FLAGS=["--ignore-gpu-blocklist","--use-angle=d3d11","--disable-gpu-sandbox",
+# --disable-gpu-vsync/--disable-frame-rate-limit: this machine's panel is 50 Hz
+# (DisplayLink USB), so a capped rAF reads ~50 fps no matter what the renderer
+# does. Uncapped, fps deltas mean something again. Absolute numbers are still
+# machine-specific; the RELATIVE per-pass deltas are the signal.
+FLAGS=["--disable-gpu-vsync","--disable-frame-rate-limit",
+       "--ignore-gpu-blocklist","--use-angle=d3d11","--disable-gpu-sandbox",
        "--enable-gpu-rasterization","--disable-features=CalculateNativeWinOcclusion",
        "--autoplay-policy=no-user-gesture-required"]
 _ap = argparse.ArgumentParser()
@@ -31,10 +36,36 @@ with sync_playwright() as p:
     for _ in range(150):
         if pg.evaluate("!!(globalThis.ASCENDANT&&ASCENDANT.game&&ASCENDANT.game.stage)"): break
         pg.wait_for_timeout(400)
-    for sel in ["#ui button.asc-btn:visible:has-text('NEW RUN')","#ui button.asc-btn:visible:has-text('CONTINUE')"]:
-        try: pg.click(sel,timeout=3000); break
+    # The title menu sits in a transformed/blurred container, so Playwright's
+    # actionability click can miss it; activate the button in the page. Then
+    # ?stage= is only a preload hint - PLAY lands in the hub - so drive the dev
+    # hook and VERIFY the stage id, or this silently measures the hub (which is
+    # exactly what happened to the first perf round).
+    pg.evaluate("""() => {
+      const btns = Array.from(document.querySelectorAll('button.asc-btn'));
+      for (const want of ['NEW RUN','PLAY','CONTINUE'])
+        for (const b of btns) {
+          const r = b.getBoundingClientRect();
+          if (!b.disabled && r.width > 4 && (b.textContent||'').toUpperCase().includes(want)) {
+            if (b.__activate) b.__activate(); else b.click();
+            return want;
+          }
+        }
+      return null;
+    }""")
+    pg.wait_for_timeout(1500)
+    try:
+        pg.evaluate("(s)=>ASCENDANT.game.__dev.goto(s)", _ARGS.stage)
+    except Exception as e:
+        print("goto failed:", str(e)[:200])
+    for _ in range(120):
+        try:
+            if pg.evaluate("(s)=>!!(ASCENDANT.game.stage && (ASCENDANT.game.stage.id===s || (ASCENDANT.game.stage.def&&ASCENDANT.game.stage.def.id===s)))", _ARGS.stage):
+                break
         except Exception: pass
-    pg.wait_for_timeout(3000)
+        pg.wait_for_timeout(400)
+    print("MEASURING STAGE:", pg.evaluate("()=>ASCENDANT.game.stage && (ASCENDANT.game.stage.id || (ASCENDANT.game.stage.def&&ASCENDANT.game.stage.def.id))"))
+    pg.wait_for_timeout(2000)
     print("GPU:", pg.evaluate("""()=>{const c=document.createElement('canvas');const g=c.getContext('webgl2');
       const d=g.getExtension('WEBGL_debug_renderer_info');
       return {vendor:d?g.getParameter(d.UNMASKED_VENDOR_WEBGL):'?',
@@ -58,7 +89,9 @@ with sync_playwright() as p:
       let n=0;const t0=performance.now();while(performance.now()-t0<2000){await f();n++;}
       c.passes.forEach((p,i)=>p.enabled=saved[i]);
       return {off:off.join(',')||'(none)', fps:Math.round(n/2)};}"""
-    for off in [[],["UnrealBloomPass"],["SMAAPass"],["ShaderPass"],["ViewmodelPass"],
-                ["UnrealBloomPass","SMAAPass"],["UnrealBloomPass","SMAAPass","ShaderPass"]]:
+    live = pg.evaluate("()=>ASCENDANT.engine.post.composer.passes.map(p=>p.constructor.name)")
+    togglable = [n for n in live if n not in ("RenderPass", "OutputPass")]
+    combos = [[]] + [[n] for n in togglable] + ([togglable] if len(togglable) > 1 else [])
+    for off in combos:
         print("PASS:", pg.evaluate(MEAS, off))
     br.close()

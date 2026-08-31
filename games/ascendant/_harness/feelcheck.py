@@ -60,7 +60,9 @@ async () => {
 
   // ---- a flat, empty test slab far from the level so nothing interferes ----
   const TEST = {x: 0, y: 400, z: 600};
-  const THREE = A.THREE;
+  // ASCENDANT does not publish THREE; borrow Vector3 off a live vector.
+  const THREE = A.THREE || { Vector3: (A.game && A.game.player && A.game.player.pos
+                                       ? A.game.player.pos.constructor : null) };
   let slab = null;
   if (A.engine && THREE && A.Collider) {
     const g = new THREE.BoxGeometry(120, 2, 24);

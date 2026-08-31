@@ -803,14 +803,17 @@ export class Viewmodel {
    * Key + rim, parented into the viewmodel root so they travel with the arms
    * and leave with them on setVisible(false).
    *
-   * TWO lights for two forearms. It used to be four — key, rim, a dim blue
-   * bounce directional and a hemisphere — and every one of them was evaluated
-   * per fragment for the whole overlay pass. The bounce and the hemi are folded
-   * into `ambient` here instead: an AmbientLight is a single uniform add in
-   * three.js, not a loop iteration, and the fill they were providing was
-   * near-uniform on a surface that only ever faces the camera. What is lost is
-   * the top/bottom gradient of the hemisphere, which the overlay scene's PMREM
-   * environment already supplies on these metallic gloves.
+   * Two DIRECTIONALS for two forearms, plus one hemisphere. It used to be four
+   * — key, rim, a dim blue bounce directional and a hemisphere — and every one
+   * was evaluated per fragment across the whole overlay pass.
+   *
+   * The bounce directional is gone: what it contributed was underside fill,
+   * which is exactly what a hemisphere's GROUND colour is, so it folds into
+   * this one light instead of costing a second shadowless directional. A flat
+   * AmbientLight was tried first (cheaper still — three folds it into a single
+   * uniform rather than a loop term) and rejected on the screenshots: it
+   * flattened the knuckles, because the top-to-underside gradient is most of
+   * what reads as form on a glove that only ever faces the camera.
    *
    * Guarded: these are tuned for an EMPTY overlay scene. If this Viewmodel is
    * handed a populated world scene instead of engine.overlayScene, injecting
@@ -835,12 +838,13 @@ export class Viewmodel {
     rim.target = rimT;
     this.root.add(rim, rimT);
 
-    /* the old bounce (0x5f7fa8 @ 0.75) + hemi (0x3d556e/0x11151c @ 0.55),
-     * collapsed to the constant term they were mostly contributing */
-    const ambient = new THREE.AmbientLight(0x4a6383, 0.62);
-    this.root.add(ambient);
+    /* one hemisphere carrying BOTH the old hemi (0x3d556e/0x11151c @ 0.55) and
+     * the old bounce directional (0x5f7fa8 @ 0.75, aimed up from below): the
+     * bounce lives in the ground colour, lifted to match. */
+    const hemi = new THREE.HemisphereLight(0x3d556e, 0x2c3d55, 0.95);
+    this.root.add(hemi);
 
-    this.lights = { key, rim, ambient, bounce: null, hemi: null };
+    this.lights = { key, rim, hemi, bounce: null, ambient: null };
   }
 
   /** True when `scene` looks like a dedicated viewmodel overlay rather than the world. */

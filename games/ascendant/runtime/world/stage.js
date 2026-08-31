@@ -115,7 +115,14 @@ const MAX_DEBUG_BOXES = 4096;
  *
  * 21 point lights was the measured cost of the old one-light-per-site model on
  * Intel UHD: three.js evaluates every light in the list per fragment. */
-const LIGHT_POOL_SIZE = 4;    // real PointLights allocated per stage, forever
+/* Six, not four. Measured on the target Intel UHD at 1280x720, foundry-1:
+ * dropping 23 live point lights to 4 bought 1.48 ms/frame, i.e. ~0.08 ms per
+ * point light — real, but far from the dominant cost, and two more slots buy
+ * back the local fill on decor standing next to a fixture that four slots was
+ * visibly losing. Six is also exactly what QUALITY.high.maxLights already
+ * asked for; the pool is the ceiling and the preset still picks the number in
+ * use (low 2, medium 4, high/ultra 6). */
+const LIGHT_POOL_SIZE = 6;    // real PointLights allocated per stage, forever
 const LIGHT_FADE_IN   = 5.0;  // 1/s
 const LIGHT_FADE_OUT  = 9.0;  // 1/s — a slot must reach 0 before it re-targets
 const LIGHT_SELECT_HZ = 0.2;  // s between re-selections

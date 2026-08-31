@@ -26,11 +26,34 @@ for _s in (sys.stdout, sys.stderr):
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 BASE = "http://localhost:8788/games/ascendant/index.html"
-FLAGS = ["--ignore-gpu-blocklist", "--use-angle=d3d11", "--disable-gpu-sandbox",
+# --disable-gpu-vsync/--disable-frame-rate-limit: rAF cannot exceed the display
+# refresh, so on a 50 Hz panel EVERY stage reported ~50 fps and failed the 55 fps
+# budget regardless of what the renderer was doing. Uncap it and the number means
+# something again.
+FLAGS = ["--disable-gpu-vsync", "--disable-frame-rate-limit",
+         "--ignore-gpu-blocklist", "--use-angle=d3d11", "--disable-gpu-sandbox",
          "--enable-gpu-rasterization", "--disable-features=CalculateNativeWinOcclusion",
          "--autoplay-policy=no-user-gesture-required"]
 
 BUDGET = {"drawCalls": 220, "tris": 350_000, "minFps": 55}
+
+# The title menu lives inside a transformed/blurred page, so Playwright's
+# actionability click silently misses it. Activate the button in the page.
+CLICK_PLAY_JS = r"""() => {
+  const wants = ['NEW RUN', 'PLAY', 'CONTINUE'];
+  const btns = Array.from(document.querySelectorAll('button.asc-btn'));
+  for (const want of wants) {
+    for (const b of btns) {
+      if (b.disabled) continue;
+      const r = b.getBoundingClientRect();
+      if (r.width < 4 || r.height < 4) continue;
+      if ((b.textContent || '').toUpperCase().indexOf(want) < 0) continue;
+      if (b.__activate) b.__activate(); else b.click();
+      return want;
+    }
+  }
+  return null;
+}"""
 
 SAMPLE_JS = r"""
 async (samples) => {
@@ -53,7 +76,9 @@ async (samples) => {
     const a = clean[i0], b = clean[i1];
     if (!a || !b) continue;
     const x = a.x + (b.x - a.x) * f, y = a.y + (b.y - a.y) * f, z = a.z + (b.z - a.z) * f;
-    if (P && P.__test) { P.__test.teleport(new A.THREE.Vector3(x, y + 1.0, z)); P.__test.setVel(new A.THREE.Vector3(0,0,0)); }
+    // ASCENDANT does not publish THREE; borrow Vector3 off a live vector.
+    const V3 = (A.THREE && A.THREE.Vector3) || (P && P.pos ? P.pos.constructor : null);
+    if (P && P.__test && V3) { P.__test.teleport(new V3(x, y + 1.0, z)); P.__test.setVel(new V3(0,0,0)); }
     for (let k = 0; k < 8; k++) await frame();          // let culling + LOD settle
     let dc = 0, tr = 0, fps = 0, n = 0;
     for (let k = 0; k < 10; k++) {
@@ -116,17 +141,37 @@ def main() -> int:
             if not ok:
                 results[sid] = {"error": "stage never loaded"}
                 continue
-            for sel in ["#ui button.asc-btn:visible:has-text('NEW RUN')", "#ui button.asc-btn:visible:has-text('CONTINUE')", "#ui button.asc-btn:visible:has-text('PLAY')", "#ui button.asc-btn.is-primary:visible", "button.asc-btn:visible"]:
+            try:
+                pg.evaluate(CLICK_PLAY_JS)
+            except Exception:
+                pass
+            pg.wait_for_timeout(1500)
+            # ?stage= only tells the title what PLAY should load. Drive the dev
+            # hook and verify the id, or this silently measures the hub.
+            try:
+                pg.evaluate("(s)=>ASCENDANT.game.__dev.goto(s)", sid)
+            except Exception as e:
+                results[sid] = {"error": f"goto: {e}"}
+                continue
+            arrived = False
+            deadline = time.time() + 60
+            while time.time() < deadline:
                 try:
-                    el = pg.query_selector(sel)
-                    if el:
-                        el.click()
+                    if pg.evaluate("(s)=>!!(ASCENDANT.game.stage && ASCENDANT.game.stage.id===s)", sid):
+                        arrived = True
                         break
                 except Exception:
                     pass
-            pg.wait_for_timeout(1500)
+                pg.wait_for_timeout(400)
+            if not arrived:
+                results[sid] = {"error": "stage id never became " + sid}
+                continue
+            pg.wait_for_timeout(2000)
             try:
-                results[sid] = pg.evaluate(SAMPLE_JS, args.samples)
+                r = pg.evaluate(SAMPLE_JS, args.samples)
+                if isinstance(r, dict):
+                    r["stageId"] = pg.evaluate("()=>ASCENDANT.game.stage.id")
+                results[sid] = r
             except Exception as e:
                 results[sid] = {"error": str(e)}
         br.close()
