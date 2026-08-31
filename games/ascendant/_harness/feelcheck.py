@@ -65,31 +65,59 @@ async () => {
   const allUp = () => ['KeyW','KeyA','KeyS','KeyD','Space','ShiftLeft','ControlLeft']
                         .forEach(up);
   const spd = () => Math.hypot(P.vel.x, P.vel.z);
-  const out = {};
+  const out = {pre:{}, fail:{}};
+
+  // ---- 0. leave the stage-intro freeze -----------------------------------
+  // game.js skips player.update() while G._introT >= 0 (the 1.6 s stage-intro
+  // card; the PLAY click that got us here starts one). Measuring during the
+  // card measures a FROZEN player - the apex_full = 0.000 defect. A jump press
+  // after the card's first 260 ms skips it, so tap Space until it is gone.
+  let guard = 0;
+  while (G._introT >= 0 && guard++ < 60) {
+    down('Space'); await frame(); up('Space');
+    await wait(120);
+  }
+  out.intro_cleared = G._introT < 0;
+  out.state = G.state;
+  if (!out.intro_cleared) return Object.assign({error:'intro card never ended'}, out);
+  if (G.state !== 'hub' && G.state !== 'playing')
+    return Object.assign({error:'unexpected game state: ' + G.state}, out);
+  await wait(300);                 // let the skip-tap's 0.13 s jump buffer expire
+  syncP();
 
   // ---- a flat, empty test slab far from the level so nothing interferes ----
+  // YAW: controller.js:547 - forward = (-sin(yaw), 0, -cos(yaw)), so yaw 0
+  // walks toward -Z, NOT +X. yaw = -PI/2 genuinely faces +X, and every ground
+  // test travels along +X. The slab spans x in [-70, +70]: the farthest start
+  // is reset(-40) (30 m inside the -X edge) and the longest ground track
+  // (run 1.1 s + sample + sprint 1.1 s + sample + decay + stop, ~36 m) ends
+  // near x = 0, ~70 m short of the +X edge - >= 20 m margin everywhere. Only
+  // the coyote test is MEANT to walk off the +X edge.
   const TEST = {x: 0, y: 400, z: 600};
-  // ASCENDANT does not publish THREE; borrow Vector3 off a live vector.
-  const THREE = A.THREE || { Vector3: (A.game && A.game.player && A.game.player.pos
-                                       ? A.game.player.pos.constructor : null) };
+  const FACE_PLUS_X = -Math.PI / 2;
+  const GRAV_FALL = 54;            // tuning.js gravFall; terminal (65) is never
+                                   // reached in a 2 m hop, so exact ballistics
+  const HX = 70, HY = 1, HZ = 12;  // slab top sits at TEST.y exactly
+  const THREE = A.THREE, Collider = A.Collider;    // published by boot.js
+  if (!THREE || !Collider)
+    return Object.assign({error:'ASCENDANT.THREE / ASCENDANT.Collider missing'}, out);
+
+  const col = new Collider({
+    center: new THREE.Vector3(TEST.x, TEST.y - HY, TEST.z),
+    half:   new THREE.Vector3(HX, HY, HZ),
+    surface:'normal'});
+  if (typeof col.update === 'function') col.update();   // compute the AABB before hashing
+  G.stage.broadphase.add(col);
+  if (typeof G.stage.broadphase.refresh === 'function') G.stage.broadphase.refresh(col);
+  out._slab = true;
+  out._slabAabb = col.aabb ? [col.aabb.min.x, col.aabb.max.x, col.aabb.min.y,
+                              col.aabb.max.y, col.aabb.min.z, col.aabb.max.z] : null;
   let slab = null;
-  if (A.engine && THREE && A.Collider) {
-    const g = new THREE.BoxGeometry(120, 2, 24);
-    const m = new THREE.MeshBasicMaterial({color:0x223344});
-    slab = new THREE.Mesh(g, m);
-    slab.position.set(TEST.x + 40, TEST.y - 1, TEST.z);
+  if (A.engine && THREE.BoxGeometry) {
+    slab = new THREE.Mesh(new THREE.BoxGeometry(HX * 2, HY * 2, HZ * 2),
+                          new THREE.MeshBasicMaterial({color:0x223344}));
+    slab.position.set(TEST.x, TEST.y - HY, TEST.z);
     A.engine.scene.add(slab);
-    const c = new A.Collider({
-      center: new THREE.Vector3(TEST.x + 40, TEST.y - 1, TEST.z),
-      half:   new THREE.Vector3(60, 1, 12),
-      surface:'normal'});
-    if (typeof c.update === 'function') c.update();   // compute the AABB before hashing
-    G.stage.broadphase.add(c);
-    if (typeof G.stage.broadphase.refresh === 'function') G.stage.broadphase.refresh(c);
-    out._slab = true;
-    out._slabAabb = c.aabb ? [c.aabb.min.y, c.aabb.max.y] : null;
-  } else {
-    out._slab = false;   // fall back to wherever the player already stands
   }
 
   const reset = async (x) => {
@@ -97,80 +125,134 @@ async () => {
     allUp();
     P.__test.teleport(new THREE.Vector3(x === undefined ? TEST.x : x, TEST.y + 0.4, TEST.z));
     P.__test.setVel(new THREE.Vector3(0,0,0));
-    P.yaw = 0;                       // face +X (stages run along +X)
+    P.yaw = FACE_PLUS_X;             // face +X (see the yaw note above)
+    P.pitch = 0;
     await wait(420);                 // settle onto the slab
-    return P.grounded;
+    syncP();
+    return P.grounded && !P.dead;
+  };
+
+  // Every measurement starts from a PROVEN grounded stand on the slab. A test
+  // whose precondition fails reports FAIL with the reason - never a number.
+  const ground = async (names, x) => {
+    const ok = await reset(x);
+    const info = {grounded: !!P.grounded, dead: !!P.dead,
+                  x: +P.pos.x.toFixed(2), y: +P.pos.y.toFixed(2), z: +P.pos.z.toFixed(2)};
+    for (const n of names) out.pre[n] = info;
+    if (!ok) for (const n of names) {
+      out[n] = null;
+      out.fail[n] = 'precondition failed: not grounded at ('
+                    + info.x + ', ' + info.y + ', ' + info.z + ')'
+                    + (info.dead ? ' [dead]' : '');
+    }
+    return ok;
   };
 
   // ---------- 1. full-hold apex + airtime ----------
-  out.grounded_after_reset = await reset();
-  let y0 = P.pos.y, peak = -1e9, t0 = performance.now(), tLeave = 0, tLand = 0;
-  down('Space');
-  while (performance.now() - t0 < 1400) {
-    await frame();
-    peak = Math.max(peak, P.pos.y);
-    if (!P.grounded && !tLeave) tLeave = performance.now();
-    if (tLeave && P.grounded && performance.now() - tLeave > 60) { tLand = performance.now(); break; }
+  out.grounded_after_reset = await ground(['apex_full', 'airtime']);
+  if (out.grounded_after_reset) {
+    const y0 = P.pos.y;
+    let peak = -1e9, t0 = performance.now(), tLeave = 0, tLand = 0;
+    down('Space');
+    while (performance.now() - t0 < 1400) {
+      await frame();
+      peak = Math.max(peak, P.pos.y);
+      if (!P.grounded && !tLeave) tLeave = performance.now();
+      if (tLeave && P.grounded && performance.now() - tLeave > 60) { tLand = performance.now(); break; }
+    }
+    up('Space');
+    out.apex_full = +(peak - y0).toFixed(3);
+    if (tLand) out.airtime = +((tLand - tLeave)/1000).toFixed(3);
+    else { out.airtime = null; out.fail.airtime = 'never landed within 1.4 s'; }
+    await wait(300);
   }
-  up('Space');
-  out.apex_full = +(peak - y0).toFixed(3);
-  out.airtime   = tLand ? +((tLand - tLeave)/1000).toFixed(3) : null;
-  await wait(300);
 
   // ---------- 2. tap apex (variable jump height) ----------
-  await reset();
-  y0 = P.pos.y; peak = -1e9; t0 = performance.now(); tLeave = 0;
-  down('Space'); await wait(60); up('Space');
-  while (performance.now() - t0 < 1200) {
-    await frame(); peak = Math.max(peak, P.pos.y);
-    if (!P.grounded && !tLeave) tLeave = performance.now();
-    if (tLeave && P.grounded && performance.now() - tLeave > 60) break;
+  if (await ground(['apex_tap'])) {
+    const y0 = P.pos.y;
+    let peak = -1e9, t0 = performance.now(), tLeave = 0;
+    down('Space'); await wait(60); up('Space');
+    while (performance.now() - t0 < 1200) {
+      await frame(); peak = Math.max(peak, P.pos.y);
+      if (!P.grounded && !tLeave) tLeave = performance.now();
+      if (tLeave && P.grounded && performance.now() - tLeave > 60) break;
+    }
+    out.apex_tap = +(peak - y0).toFixed(3);
+    await wait(250);
   }
-  out.apex_tap = +(peak - y0).toFixed(3);
-  await wait(250);
 
   // ---------- 3. run + sprint steady speed ----------
-  await reset(-40);
-  down('KeyW'); await wait(1100);
-  let s = []; for (let i=0;i<20;i++){ await frame(); s.push(spd()); }
-  out.run_speed = +(s.reduce((a,b)=>a+b,0)/s.length).toFixed(2);
-  down('ShiftLeft'); await wait(1100);
-  s = []; for (let i=0;i<20;i++){ await frame(); s.push(spd()); }
-  out.sprint_speed = +(s.reduce((a,b)=>a+b,0)/s.length).toFixed(2);
-  up('ShiftLeft');
+  if (await ground(['run_speed', 'sprint_speed', 'stop_time'], -40)) {
+    down('KeyW'); await wait(1100);
+    let s = []; for (let i=0;i<20;i++){ await frame(); s.push(spd()); }
+    if (P.grounded) out.run_speed = +(s.reduce((a,b)=>a+b,0)/s.length).toFixed(2);
+    else { out.run_speed = null;
+           out.fail.run_speed = 'left the ground during the sample (x=' + P.pos.x.toFixed(1) + ')'; }
+    down('ShiftLeft'); await wait(1100);
+    s = []; for (let i=0;i<20;i++){ await frame(); s.push(spd()); }
+    if (P.grounded) out.sprint_speed = +(s.reduce((a,b)=>a+b,0)/s.length).toFixed(2);
+    else { out.sprint_speed = null;
+           out.fail.sprint_speed = 'left the ground during the sample (x=' + P.pos.x.toFixed(1) + ')'; }
+    up('ShiftLeft');
 
-  // ---------- 4. stop time ----------
-  await wait(500);            // back down to run speed
-  allUp();
-  t0 = performance.now();
-  while (performance.now() - t0 < 900) { await frame(); if (spd() < 0.2) break; }
-  out.stop_time = +((performance.now() - t0)/1000).toFixed(3);
+    // ---------- 4. stop time ----------
+    await wait(500);            // back down to run speed
+    if (!P.grounded) {
+      out.stop_time = null;
+      out.fail.stop_time = 'not grounded at release (x=' + P.pos.x.toFixed(1) + ')';
+    } else {
+      allUp();
+      // Timed from the frame the release REGISTERS in the sim (P.wishLen
+      // drops to 0), not from the dispatch - timing from the dispatch bills
+      // the harness's own event latency to the game.
+      const t0 = performance.now();
+      let tReg = 0, stopped = false;
+      while (performance.now() - t0 < 900) {
+        await frame();
+        if (!tReg && P.wishLen === 0) tReg = performance.now();
+        if (tReg && spd() < 0.2) { stopped = true; break; }
+      }
+      if (!tReg) { out.stop_time = null; out.fail.stop_time = 'key release never registered'; }
+      else {
+        out.stop_time = +((performance.now() - tReg)/1000).toFixed(3);
+        if (!stopped) out.fail.stop_time = 'still moving after ' + out.stop_time + ' s';
+      }
+    }
+  }
 
   // ---------- 5. flat gap at run speed ----------
-  await reset(-40);
-  down('KeyW'); await wait(1200);          // reach steady run speed
-  const px = P.pos.x, pz = P.pos.z;
-  down('Space');
-  tLeave = 0; t0 = performance.now();
-  let xAtLeave = px, zAtLeave = pz;
-  while (performance.now() - t0 < 1600) {
-    await frame();
-    if (!P.grounded && !tLeave) { tLeave = performance.now(); xAtLeave = P.pos.x; zAtLeave = P.pos.z; }
-    if (tLeave && P.grounded && performance.now() - tLeave > 60) break;
+  if (await ground(['gap_run'], -40)) {
+    down('KeyW'); await wait(1200);          // reach steady run speed
+    if (!P.grounded) {
+      out.gap_run = null;
+      out.fail.gap_run = 'not grounded at takeoff (x=' + P.pos.x.toFixed(1) + ')';
+    } else {
+      down('Space');
+      let tLeave = 0, t0 = performance.now(), xL = 0, zL = 0, landed = false;
+      while (performance.now() - t0 < 1600) {
+        await frame();
+        if (!P.grounded && !tLeave) { tLeave = performance.now(); xL = P.pos.x; zL = P.pos.z; }
+        if (tLeave && P.grounded && performance.now() - tLeave > 60) { landed = true; break; }
+      }
+      if (!tLeave) { out.gap_run = null; out.fail.gap_run = 'jump never left the ground'; }
+      else if (!landed) { out.gap_run = null; out.fail.gap_run = 'never landed back on the slab'; }
+      else out.gap_run = +Math.hypot(P.pos.x - xL, P.pos.z - zL).toFixed(2);
+    }
+    allUp(); await wait(400);
   }
-  out.gap_run = tLeave ? +Math.hypot(P.pos.x - xAtLeave, P.pos.z - zAtLeave).toFixed(2) : null;
-  allUp(); await wait(400);
 
   // ---------- 6. coyote time ----------
-  // Walk off the slab's +X end and press jump after a delay; binary-search the
-  // largest delay that still produces a jump.
+  // Walk off the slab's +X edge (x = +70; from x = +60 that is ~10 m, ~1.3 s
+  // of walking) and press jump after a delay; binary-search the largest delay
+  // that still produces a jump. Returns null when a precondition breaks.
   const tryCoyote = async (delayMs) => {
-    await reset(52);                       // near the +X edge (slab spans -20..100)
-    down('KeyW'); await wait(1000);
-    // wait until ungrounded (walked off), then delay, then jump
+    if (!await reset(60)) return null;
+    down('KeyW');
     let t = performance.now();
-    while (P.grounded && performance.now() - t < 2500) await frame();
-    const yOff = P.pos.y, vyOff = P.vel.y;
+    while (P.grounded && performance.now() - t < 2600) await frame();
+    if (P.grounded) { allUp(); return null; }        // +X edge never reached
+    if (!out.pre.coyote_edge)
+      out.pre.coyote_edge = {x: +P.pos.x.toFixed(2), y: +P.pos.y.toFixed(2)};
     await wait(delayMs);
     const vyBefore = P.vel.y;
     down('Space'); await wait(50); up('Space');
@@ -178,27 +260,40 @@ async () => {
     allUp(); await wait(150);
     return jumped;
   };
-  let lo = 0, hi = 320, best = 0;
+  let lo = 0, hi = 320, best = 0, searchBroke = null;
   for (let i = 0; i < 6; i++) {
     const mid = Math.round((lo + hi) / 2);
-    if (await tryCoyote(mid)) { best = mid; lo = mid; } else { hi = mid; }
+    const r = await tryCoyote(mid);
+    if (r === null) {
+      searchBroke = 'precondition failed mid-search (not grounded on slab, or +X edge never reached)';
+      break;
+    }
+    if (r) { best = mid; lo = mid; } else { hi = mid; }
   }
-  out.coyote = +(best/1000).toFixed(3);
+  if (searchBroke) { out.coyote = null; out.fail.coyote = searchBroke; }
+  else out.coyote = +(best/1000).toFixed(3);
 
   // ---------- 7. jump buffer ----------
-  // Jump, then press again N ms before landing; a buffered press produces a second
-  // jump the instant we touch down.
+  // Jump (short hold), then press again N ms before landing; a buffered press
+  // produces a second jump the instant we touch down. The remaining-time
+  // prediction is EXACT ballistics against the slab's real top (TEST.y):
+  // t = (sqrt(vy^2 + 2 g dy) - |vy|) / g. The old dy/|vy| linearisation
+  // overestimates the remaining time high on the arc, which pressed far too
+  // early and corrupted the measured window.
   const tryBuffer = async (leadMs) => {
-    await reset();
+    if (!await reset()) return null;
     down('Space'); await wait(120); up('Space');
-    // wait until close to landing: predict by falling velocity
     let t = performance.now();
+    while (P.grounded && performance.now() - t < 800) await frame();
+    if (P.grounded) return null;               // the first jump never happened
+    t = performance.now();
     while (performance.now() - t < 1500) {
       await frame();
+      if (P.grounded) break;                   // landed before the press window
       if (P.vel.y < 0) {
-        // time to ground ~= (pos.y - slabTop) / |vy|
-        const dy = P.pos.y - (TEST.y);
-        const tt = dy / Math.max(0.001, -P.vel.y) * 1000;
+        const dy = Math.max(0, P.pos.y - TEST.y);
+        const s = -P.vel.y;
+        const tt = (Math.sqrt(s*s + 2*GRAV_FALL*dy) - s) / GRAV_FALL * 1000;
         if (tt <= leadMs) break;
       }
     }
@@ -207,32 +302,52 @@ async () => {
     t = performance.now();
     while (performance.now() - t < 500) {
       await frame();
-      if (P.grounded === false && P.vel.y > 4) { jumped = true; break; }
-      if (P.grounded && P.vel.y > 4) { jumped = true; break; }
+      if (P.vel.y > 4) { jumped = true; break; }
     }
     up('Space'); allUp(); await wait(200);
     return jumped;
   };
-  lo = 0; hi = 340; best = 0;
+  lo = 0; hi = 340; best = 0; searchBroke = null;
   for (let i = 0; i < 6; i++) {
     const mid = Math.round((lo + hi) / 2);
-    if (await tryBuffer(mid)) { best = mid; lo = mid; } else { hi = mid; }
+    const r = await tryBuffer(mid);
+    if (r === null) {
+      searchBroke = 'precondition failed mid-search (not grounded, or the first jump never left the ground)';
+      break;
+    }
+    if (r) { best = mid; lo = mid; } else { hi = mid; }
   }
-  out.buffer = +(best/1000).toFixed(3);
+  if (searchBroke) { out.buffer = null; out.fail.buffer = searchBroke; }
+  else out.buffer = +(best/1000).toFixed(3);
 
   // ---------- 8. death -> respawn ----------
-  await reset();
-  const tDeath = performance.now();
-  P.kill('manual');
-  let tBack = null;
-  const dl = performance.now() + 4000;
-  while (performance.now() < dl) {
-    await frame();
-    if (!P.dead && (!G.input || !G.input.suspended)) { tBack = performance.now(); break; }
+  if (await ground(['respawn_ms'])) {
+    const tDeath = performance.now();
+    const trace = [];
+    P.kill('manual');
+    let tBack = null;
+    const dl = performance.now() + 4000;
+    let n = 0;
+    while (performance.now() < dl) {
+      await frame();
+      syncP();
+      if ((n++ % 6) === 0 && trace.length < 40)
+        trace.push({t: Math.round(performance.now() - tDeath), st: G.state,
+                    dT: Math.round(G._deathT), dead: P.dead,
+                    susp: !!(G.input && G.input.suspended)});
+      if (!P.dead && (!G.input || !G.input.suspended)) { tBack = performance.now(); break; }
+    }
+    if (tBack === null) {
+      out.fail.respawn_ms = 'control never restored within 4 s';
+      out._respawn_trace = trace;
+    }
+    out.respawn_ms = tBack ? Math.round(tBack - tDeath) : null;
   }
-  out.respawn_ms = tBack ? Math.round(tBack - tDeath) : null;
 
   if (slab) { A.engine.scene.remove(slab); slab.geometry.dispose(); slab.material.dispose(); }
+  if (G.stage && G.stage.broadphase && typeof G.stage.broadphase.remove === 'function') {
+    try { G.stage.broadphase.remove(col); } catch (e) { /* best effort */ }
+  }
   allUp();
   return out;
 }
@@ -266,12 +381,16 @@ CLICK_JS = r"""() => {
 }"""
 
 
-def click_play(pg, timeout=25):
-    """Click the title's PLAY/NEW RUN and WAIT until the state actually leaves
-    'title'. The title lays out asynchronously (webfont + stage numbering), so a
-    single click at a fixed delay can fire before the button exists and the game
-    silently stays on the title - where input.suspended gates jump but not
-    movement, which made feelcheck report a passing game as 8 failures."""
+def click_play(pg, timeout=40):
+    """Click the title's PLAY/NEW RUN and WAIT until the game is actually in
+    'hub'/'playing'. The title lays out asynchronously (webfont + stage
+    numbering), so a single click at a fixed delay can fire before the button
+    exists and the game silently stays on the title - where input.suspended
+    gates jump but not movement, which made feelcheck report a passing game as
+    8 failures. NOTE the boot also passes through a transient 'loading' state
+    BEFORE the title even exists, so "any state != 'title'" is NOT proof the
+    click worked - it raced the boot, never clicked, and measured the title
+    screen. Only 'hub'/'playing' counts."""
     import time as _t
     deadline = _t.time() + timeout
     while _t.time() < deadline:
@@ -279,12 +398,13 @@ def click_play(pg, timeout=25):
             st = pg.evaluate("globalThis.ASCENDANT && ASCENDANT.game && ASCENDANT.game.state")
         except Exception:
             st = None
-        if st and st != "title":
+        if st in ("hub", "playing"):
             return True
-        try:
-            pg.evaluate(CLICK_JS)
-        except Exception:
-            pass
+        if st == "title":
+            try:
+                pg.evaluate(CLICK_JS)
+            except Exception:
+                pass
         pg.wait_for_timeout(400)
     return False
 
@@ -342,10 +462,11 @@ def main() -> int:
 
     print("-" * 66)
     fails = 0
+    reasons = res.get("fail") if isinstance(res.get("fail"), dict) else {}
     for name, want, tol, unit in EXPECT:
         got = res.get(name)
         if got is None:
-            print("  %-13s MISSING" % name)
+            print("  %-13s      FAIL  (%s)" % (name, reasons.get(name, "no measurement")))
             fails += 1
             continue
         ok = abs(got - want) <= tol
@@ -354,13 +475,19 @@ def main() -> int:
               % (name, got, unit, want, tol, "OK" if ok else "FAIL"))
     st = res.get("stop_time")
     if st is None or st > 0.15:
-        print("  %-13s %s  want < 0.150 s   FAIL" % ("stop_time", st))
+        why = reasons.get("stop_time")
+        print("  %-13s %s  want < 0.150 s   FAIL%s"
+              % ("stop_time", "-" if st is None else ("%.3f s" % st),
+                 (" (%s)" % why) if why else ""))
         fails += 1
     else:
         print("  %-13s %8.3f s     want < 0.150 s   OK" % ("stop_time", st))
     rs = res.get("respawn_ms")
     if rs is None or rs > 620:
-        print("  %-13s %s  want <= 620 ms   FAIL" % ("respawn_ms", rs))
+        why = reasons.get("respawn_ms")
+        print("  %-13s %s  want <= 620 ms   FAIL%s"
+              % ("respawn_ms", "-" if rs is None else ("%d ms" % rs),
+                 (" (%s)" % why) if why else ""))
         fails += 1
     else:
         print("  %-13s %8d ms    want <= 620 ms   OK" % ("respawn_ms", rs))
