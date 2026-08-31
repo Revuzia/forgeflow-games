@@ -43,24 +43,46 @@
  *      `if (_dir.y > 0.2)` and puts the player in the air on the frame of contact,
  *      where the only bleed is airDrag 0.35/s. (Contact also leaves coyoteT at 0, so
  *      the launch cannot be re-jumped: the arc is the pad's, and it is deterministic.)
- *   2. Each pad occupies the LAST 2.8 m of its runway, full deck width. You cannot
- *      stand at the lip, so the plain sprint jump from the lip is not a line that
- *      exists — and jumping BEFORE the pad launches you at the void from 2.8 m further
- *      back, which no jump in the envelope survives. The pad is the only way across.
- *   Landing windows below are from a replay of the controller's own integration
- *   (1/120 s substeps, velocity-Verlet gravity, airDrag above speedAirCap), reported
- *   as crouch-entry / run-entry / sprint-entry so the deck can be sized to catch all
- *   three. The GAP is what the player must clear; the WINDOW is where they land.
+ *   2. THE PAD FIRES AT ITS WEST FACE, NOT AT THE LIP — and the first revision of this
+ *      stage had that backwards, which cost all three landings. `_readContacts` applies
+ *      the 'speed' surface on the FIRST substep the player is grounded on it
+ *      (controller.js:1070-1078), and `_applySpeedPad` un-grounds them on that same
+ *      frame because `dir.y > 0.2` (controller.js:1154-1158). The launch therefore
+ *      happens ONE PLAYER RADIUS BEFORE the pad's leading face — 3.15 m short of the
+ *      lip for a 2.8 m pad. reachcheck's own `padSpan` comment says exactly this
+ *      ("the first face their capsule touches — one radius before it, not at the
+ *      centre and certainly not at the far lip"). Measured from the lip, PAD 1's old
+ *      6.60 m gap looked crossed with 1.11 m to spare; measured from the real launch
+ *      point, a walk-on entry landed 1.44 m SHORT of the deck and a full run entry
+ *      0.46 m short. Only a sprint lived. Every window below is measured FROM THE
+ *      LAUNCH POINT, and every deck below catches the WHOLE entry band.
+ *   3. Each pad still fills the LAST 2.8 m of its runway, full deck width, so there is
+ *      no lip to stand on and no way to walk past it: whatever speed you arrive with,
+ *      the ramp is what puts you in the air. What changed is that the deck it throws
+ *      you at now sits where the arc actually ends. The pad is generous, not lethal.
+ *   Windows below replay the controller's own integration (1/120 s substeps, half a
+ *   step of gravity either side of the sweep, gravRise on the way UP because a speed
+ *   pad never sets `_bounceRise`, airDrag 0.35/s only above speedAirCap 12.6), at
+ *   crouch 4.2 / walk 6.0 / run 8.6 / sprint 12.2 entry.
  *
- *      PAD 1  dir[2,1,0]   power 18   gap 6.60 flat      lands 7.71 / 9.38 / 10.75
- *      PAD 2  dir[1.6,1,0] power 18   gap 7.10 flat      lands 8.64 / 10.59 / 12.19
- *      PAD 3  dir[2,1,0]   power 17   gap 8.20 at -2.0   lands 9.43 / 11.56 / 13.31
+ *      PAD 1  dir[2,1,0]   power 20   launch x 56.45 y 1.44   apex y 2.49
+ *             lands 64.72 / 65.39 / 66.36 / 68.86 — the first three on the 1.75 m
+ *             terrace (63.50..66.20), the sprint on the 1.30 m deck flush behind it.
+ *             Worst margin past the terrace lip 1.22 m.  Gap 3.90 at +0.45.
+ *      PAD 2  dir[1.6,1,0] power 19   launch x 71.45 y 1.44   apex y 2.77
+ *             lands 79.43 / 80.14 / 81.16 / 84.40 — three on the 2.10 m terrace
+ *             (78.20..82.20), the sprint on CP1's deck.  Worst margin 1.23 m.
+ *             Gap 3.60 at +0.80.
+ *      PAD 3  dir[2,1,0]   power 17   launch x 301.05 y 6.44  apex y 7.20
+ *             lands 310.41 / 311.27 / 312.53 / 314.26 on the gate apron (309.00..
+ *             312.40) and the finish deck it is flush with, both topping at 4.30.
+ *             Worst margin 1.41 m.  Gap 4.80 at -2.00.
  *
- *   reachcheck has no speed-pad term in `edge()` (it populates `pad` only for
- *   `jumppad`), so it scores all three as plain sprint jumps and flags them
- *   `sprint-tight`. That warning is CORRECT AND EXPECTED: it is the harness saying
- *   "no unaided sprint gets across this safely", which is exactly the design. It is
- *   the only warning class this stage carries on its forward route.
+ *   All three geometric gaps now sit inside the RUN-SAFE envelope (3.90 <= 4.13 at
+ *   +0.45, 3.60 <= 3.93 at +0.80, 4.80 <= 5.14 at -2.00), so reachcheck — which has no
+ *   speed-pad term in `edge()`, it populates `pad` only for `jumppad` — scores them as
+ *   ordinary run jumps, and this stage carries NO tight-jump warning on its forward
+ *   route. The ramp is the flourish; the gap underneath it is honest.
  *
  * PHASE UNITS — FOUR HAZARD FAMILIES, THREE DIFFERENT UNITS. Read the factory, not
  * the neighbouring object:
@@ -80,12 +102,15 @@
  *   OF THE ORBIT and the panel is landable everywhere on the circle.
  *
  * HEIGHT LADDER: 0.5 (boot) -> 1.30 (the launch runway, 0.80 m BELOW the gate deck it
- *                starts from) -> 2.35/3.30 (the dog-leg) -> 2.40..3.05 (the ride)
+ *                starts from) -> 1.75 then 2.10 (the two ramp terraces: each pad
+ *                throws you UP onto a terrace and each terrace steps back DOWN onto
+ *                the next runway) -> 2.35/3.30 (the dog-leg) -> 2.40..3.05 (the ride)
  *                -> 3.40 (gallery) -> 2.60 (the terrace, BELOW it) -> 5.70 (the roof,
  *                ABOVE it) -> 4.05 (the cog) -> 4.50 (the bridge) -> 6.20 (the gantry
  *                lip) -> 5.35 (the wheel, which you DROP onto) -> 6.30 (the launch)
- *                -> 4.30 (the finish: two metres BELOW the launch, so the last thing
- *                this world does is drop you into the gate).
+ *                -> 4.30 (the gate apron and the finish deck flush behind it: two
+ *                metres BELOW the launch, so the last thing this world does is drop
+ *                you into the gate).
  */
 
 const CYAN = 0x7ef0ff; // rim light, safe edges, the path lights
@@ -211,18 +236,25 @@ export default {
     /*                                                                               */
     /* You WALK OFF the CP0 deck onto a runway 0.80 m below it — the stage's first    */
     /* deliberate drop — and that runway ends in a ramp that fills its last 2.8 m,    */
-    /* wall to wall. There is no lip to stand on and no way past the pad:             */
-    /*   run onto it    -> launched, and the 6.60 m gap is 1.11 m inside the throw    */
-    /*   crouch onto it -> still launched, still 1.11 m inside it (see MEASUREMENT)   */
-    /*   jump over it   -> you leave from 2.8 m further back over a 9.40 m gap, which */
-    /*                     beats the sprint maximum of 7.44 m by two metres           */
-    /* An unaided sprint from the lip would need 6.60 m against a 6.17 m safe / 7.44  */
-    /* m absolute envelope — and there IS no lip. The pad is not the sprint. The pad  */
-    /* is the only thing that crosses this.                                          */
+    /* wall to wall. There is no lip to stand on and no way past the pad, so the ramp */
+    /* fires whatever you do:                                                        */
+    /*   crouch onto it -> launched at 4.2, lands 1.22 m onto the terrace             */
+    /*   walk onto it   -> launched at 6.0, lands 1.89 m onto it                      */
+    /*   run onto it    -> 2.86 m onto it                                             */
+    /*   sprint onto it -> clean over the terrace, onto the 1.30 m deck behind it     */
+    /* THE PAD FIRES AT ITS WEST FACE (MEASUREMENT §2), 3.15 m before the lip, so the */
+    /* arc ends far earlier than a lip-relative reading suggests — which is why the   */
+    /* terrace starts 3.90 m out and not 6.60 m out. Every entry speed the controller */
+    /* can produce lands on solid floor; none of them lands in the city.              */
+    /*                                                                               */
+    /* THE TERRACE IS A STEP UP, and that is the point of it: you are thrown 0.45 m   */
+    /* ABOVE the runway you left, then walk back down 0.45 m onto the runway that     */
+    /* feeds PAD 2. Two pads, two terraces, and the height ladder moves under you the */
+    /* whole way instead of thirty-eight metres of one flat deck.                     */
     /*                                                                               */
     /* PAD 2 is the same lesson with a different arc: dir[1.6,1] is steeper, so it    */
-    /* throws you higher (apex 1.28 m over the deck against pad 1's 0.92 m) and 1.2 m */
-    /* further, over a 7.10 m gap. Same button, different shape in the air.           */
+    /* throws you higher (apex 1.47 m over its runway against pad 1's 1.19 m) onto a  */
+    /* terrace 0.80 m up rather than 0.45 m. Same button, different shape in the air. */
     /*                                                                               */
     /* COIN 2 is a two-hop climb north off the runway — 2.40 m at +0.75, then 1.86 m  */
     /* at +0.80 — which means taking it drops you back onto the runway from a height  */
@@ -230,7 +262,7 @@ export default {
     /* ============================================================================ */
 
     { kind: 'platform', p: [53.6, 0.8, 0], s: [12.0, 1, 5.4], mat: 'metal', glow: DIM }, // flush with CP0's east edge, 0.80 m BELOW it, top 1.30
-    { kind: 'speedpad', p: [58.2, 1.37, 0], s: [2.8, 0.14, 5.4], dir: [2, 1, 0], power: 18 }, // fills x 56.8..59.6 — the whole lip
+    { kind: 'speedpad', p: [58.2, 1.37, 0], s: [2.8, 0.14, 5.4], dir: [2, 1, 0], power: 20 }, // fills x 56.8..59.6 — the whole lip; fires at x 56.45
 
     { kind: 'text', p: [48.4, 3.4, 0], rot: [0, -Math.PI / 2, 0], text: 'OVERCLOCK', size: 0.62, color: MAG },
     { kind: 'text', p: [48.4, 2.75, 0], rot: [0, -Math.PI / 2, 0], text: 'the ramp is the jump  ·  do not press SPACE', size: 0.24, color: HOT },
@@ -241,10 +273,20 @@ export default {
     { kind: 'deco', kindOf: 'ring', p: [55.6, 3.85, 10.4], s: [0.12, 2.0, 2.0], rot: [0, Math.PI / 2, 0], mat: 'emissive', tint: MAG },
     { kind: 'light', p: [54.0, 3.6, 8.4], color: MAG, intensity: 7, distance: 16 },
 
-    { kind: 'platform', p: [70.4, 0.8, 0], s: [8.4, 1, 5.6], mat: 'panel', glow: CYAN, stripe: true }, // gap 6.60, top 1.30 — lands 7.71/9.38/10.75 into an 8.4 m deck
-    { kind: 'speedpad', p: [73.2, 1.37, 0], s: [2.8, 0.14, 5.6], dir: [1.6, 1, 0], power: 18 }, // fills x 71.8..74.6
+    // TERRACE 1 — where PAD 1 actually puts you. x 63.50..66.20, top 1.75: a step UP
+    // off the ramp, and it catches crouch 64.72 / walk 65.39 / run 66.36 with 1.22 m
+    // of margin at the worst entry. Gap off the lip 3.90 at +0.45 (run-safe 4.13).
+    // CYAN, not MAG: in this stage magenta means an optional spur, and this is the path.
+    { kind: 'platform', p: [64.85, 1.25, 0], s: [2.7, 1, 5.6], mat: 'panel', glow: CYAN, stripe: true },
 
-    { kind: 'platform', p: [85.9, 0.8, 0], s: [8.4, 1, 6.4], mat: 'stone', glow: DIM, stripe: true }, // gap 7.10, top 1.30 — CP1
+    { kind: 'platform', p: [70.4, 0.8, 0], s: [8.4, 1, 5.6], mat: 'panel', glow: CYAN, stripe: true }, // flush at 66.20, 0.45 m DOWN — top 1.30; catches the sprint entry at 68.86
+    { kind: 'speedpad', p: [73.2, 1.37, 0], s: [2.8, 0.14, 5.6], dir: [1.6, 1, 0], power: 19 }, // fills x 71.8..74.6; fires at x 71.45
+
+    // TERRACE 2 — steeper ramp, higher step. x 78.20..82.20, top 2.10: crouch 79.43 /
+    // walk 80.14 / run 81.16, worst margin 1.23 m. Gap 3.60 at +0.80 (run-safe 3.93).
+    { kind: 'platform', p: [80.2, 1.6, 0], s: [4.0, 1, 5.2], mat: 'panel', glow: CYAN, stripe: true },
+
+    { kind: 'platform', p: [86.15, 0.8, 0], s: [7.9, 1, 6.4], mat: 'stone', glow: DIM, stripe: true }, // flush at 82.20, 0.80 m DOWN — top 1.30, CP1; catches the sprint entry at 84.40
 
     { kind: 'deco', kindOf: 'rail', p: [53.6, 2.6, 3.0], s: [12.0, 0.08, 0.08], mat: 'metal', tint: MAG },
     { kind: 'deco', kindOf: 'rail', p: [53.6, 2.6, -3.0], s: [12.0, 0.08, 0.08], mat: 'metal', tint: MAG },
@@ -610,9 +652,14 @@ export default {
     /* only way to it is to be standing on a panel at the moment that panel is north. */
     /* Take it and the wheel keeps turning without you.                               */
     /*                                                                               */
-    /* Then: a 9.6 m runway, a ramp filling its last 2.8 m, and 8.20 m of nothing at  */
-    /* -2.00 m. Sprint tops out at 8.793 there and is only SAFE to 7.299 — and you    */
-    /* cannot reach the lip on foot to try. You do not walk to the end of NEON DOJO.  */
+    /* Then: a 9.6 m runway, a ramp filling its last 2.8 m, and a 4.80 m drop-gap at  */
+    /* -2.00 m onto the gate apron. The ramp fires at x 301.05 — 3.15 m before the    */
+    /* lip — and throws crouch 310.41 / walk 311.27 / run 312.53 / sprint 314.26 onto */
+    /* an apron that starts at 309.00, so the slowest entry the controller can make   */
+    /* still lands 1.41 m inside it and the fastest is still 5.74 m short of the far  */
+    /* rail. The gap under the arc is run-safe (4.80 <= 5.14 at -2.00), so nothing    */
+    /* here needs a sprint — but you cannot reach the lip on foot to try one anyway.  */
+    /* You do not walk to the end of NEON DOJO.                                      */
     /* ============================================================================ */
 
     { kind: 'platform', p: [258.6, 5.7, 0], s: [3.6, 1, 4.0], mat: 'metal', glow: CYAN, stripe: true }, // the gantry lip: gap 2.40, +1.30, top 6.20 — you DROP 0.85 m onto the wheel
@@ -682,11 +729,17 @@ export default {
 
     // -- the launch ---------------------------------------------------------------
     { kind: 'platform', p: [299.4, 5.8, 0], s: [9.6, 1, 5.2], mat: 'metal', glow: CYAN, stripe: true }, // gap 2.80 off the second plate, +0.95, top 6.30 — CP8
-    { kind: 'speedpad', p: [302.8, 6.37, 0], s: [2.8, 0.14, 5.2], dir: [2, 1, 0], power: 17 }, // fills x 301.4..304.2 — the whole lip
+    { kind: 'speedpad', p: [302.8, 6.37, 0], s: [2.8, 0.14, 5.2], dir: [2, 1, 0], power: 17 }, // fills x 301.4..304.2 — the whole lip; fires at x 301.05
     { kind: 'text', p: [295.0, 8.35, 0], rot: [0, -Math.PI / 2, 0], text: 'DO NOT STOP', size: 0.54, color: MAG },
     { kind: 'text', p: [295.0, 7.85, 0], rot: [0, -Math.PI / 2, 0], text: 'and do not jump', size: 0.24, color: HOT },
 
-    { kind: 'platform', p: [316.2, 3.8, 0], s: [7.6, 1, 8.4], mat: 'obsidian', glow: MAG, stripe: true }, // gap 8.20 at -2.00, top 4.30 — lands 9.43/11.56/13.31 into a 7.6 m deck
+    // THE GATE APRON — x 309.00..312.40, top 4.30, narrower in z than the deck behind
+    // it so the flight reads as landing INTO the gate rather than onto another slab.
+    // It catches crouch 310.41 / walk 311.27 / run 312.53; the sprint carries through
+    // to 314.26 on the finish deck, which is flush with it at the same 4.30.
+    { kind: 'platform', p: [310.7, 3.8, 0], s: [3.4, 1, 6.0], mat: 'metal', glow: CYAN, stripe: true },
+
+    { kind: 'platform', p: [316.2, 3.8, 0], s: [7.6, 1, 8.4], mat: 'obsidian', glow: MAG, stripe: true }, // flush at 312.40, top 4.30 — the finish deck
 
     // The gate is built low and wide so all of it is inside your view for the whole
     // flight: you should be able to see where you are going to land the instant the

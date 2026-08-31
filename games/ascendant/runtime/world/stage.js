@@ -769,13 +769,23 @@ export class Stage {
       if (o.motion && o.motion.to !== undefined && !fin3(o.motion.to))
         failObj(i, k, 'motion.to must be a finite [x,y,z]');
 
-      /* required positions */
-      if (k !== 'chase' && k !== 'laser' && o.p !== undefined && !fin3(o.p))
+      /* required positions.
+         Beam kinds author ENDPOINTS, not a centre: LaserHazard grid mode reads
+         def.a/def.b (lasers.js:1030-1031) and sweep reads def.p || def.a
+         (lasers.js:1061). This table used to exempt only 'laser', so every
+         stage carrying a lasergrid validated fine in reachcheck/geomcheck
+         (neither calls validate) and then THREW on live load — neon-3 and
+         temple-3 were unloadable while every static gate showed green. */
+      const beamKind = k === 'laser' || k === 'lasergrid' || k === 'lasersweep';
+      if (k !== 'chase' && !beamKind && o.p !== undefined && !fin3(o.p))
         failObj(i, k, '"p" must be a finite [x,y,z]');
-      if (k !== 'chase' && k !== 'laser' && o.p === undefined)
+      if (k !== 'chase' && !beamKind && o.p === undefined)
         failObj(i, k, 'missing required field "p"');
-      if (k === 'laser') {
-        if (!fin3(o.a) || !fin3(o.b)) failObj(i, k, 'laser requires finite "a" and "b" endpoints');
+      if (k === 'laser' || k === 'lasergrid') {
+        if (!fin3(o.a) || !fin3(o.b)) failObj(i, k, k + ' requires finite "a" and "b" endpoints');
+      }
+      if (k === 'lasersweep') {
+        if (!fin3(o.p) && !fin3(o.a)) failObj(i, k, 'lasersweep requires a finite "p" (or "a") origin');
       }
       if (k === 'chase') {
         if (!fin(o.from) || !fin(o.to)) failObj(i, k, 'chase requires finite "from" and "to"');

@@ -143,9 +143,11 @@ export default {
     // The approach deck, one walk short of the first pad. Everything before this is a
     // hop you could take twice; everything after it is a launch you cannot take back.
     { p: [39.0, 1.6, 0], yaw: 0, clockOffset: 0 },
-    // The west terrace, at the top of the counterweight lift and out of the censer's
-    // arc. You can watch the censer swing three times and lose nothing but time.
-    { p: [90.0, 11.4, 12.6], yaw: 0, clockOffset: 0 },
+    // The west terrace, at the top of the counterweight lift — at the WEST edge of
+    // the deck, 1.9 m clear of the censer's swing. The old spot ([90.0, ...]) was
+    // dead-centre under the blade (pivot 17.46, len 3.6, blade h 2.6 -> bottom
+    // 12.56 vs a standing head at 13.0): every respawn there was a second death.
+    { p: [87.4, 11.4, 12.6], yaw: 0, clockOffset: 0 },
     // The great courtyard, clear of the thermal and 8 m short of the sprint gap.
     { p: [116.2, 14.4, 0], yaw: 0, clockOffset: 0 },
     // The east landing, back up out of the well and pointed at the carousel.

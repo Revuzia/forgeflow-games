@@ -474,6 +474,57 @@ function analyse(def) {
   checkClipping(objs, boxes, problems, warnings);
   checkRoofed(objs, boxes, problems, warnings);
   checkBlocked(objs, boxes, way, problems, warnings);
+  // ── 5. CHECKPOINT SAFETY ─────────────────────────────────────────────────────
+  // A respawn point inside a hazard's swept volume is a guaranteed second death:
+  // temple-1's cp1 sat dead-centre under a censer pendulum (blade bottom 12.56 m,
+  // standing head 13.0 m) and loopcheck measured every death there as two. The
+  // sweep footprints are conservative per-plane volumes from hazardSweep().
+  {
+    const points = [];
+    if (def.spawn && Array.isArray(def.spawn.p)) points.push({ name: 'spawn', p: v3(def.spawn.p) });
+    (def.checkpoints || []).forEach((c, k) => {
+      if (c && Array.isArray(c.p)) points.push({ name: 'cp' + k, p: v3(c.p) });
+    });
+    for (let j = 0; j < objs.length; j++) {
+      const o = objs[j];
+      const sw = hazardSweep(o);
+      if (!sw) continue;
+      // a 'bar' rotor is SOLID, not lethal, unless the def says kill — being hit
+      // is a shove, not a guaranteed second death. Report those as warnings.
+      const barPush = o.kind === 'rotor' && (o.style || 'bar') === 'bar' && !o.kill;
+      let hi = Number.isFinite(sw.highest) ? sw.highest : sw.lowest;
+      let lo = sw.lowest;
+      for (const pt of points) {
+        const inX = Math.abs(pt.p[0] - sw.cx) <= sw.rx + PLAYER_R;
+        const inZ = Math.abs(pt.p[2] - sw.cz) <= sw.rz + PLAYER_R;
+        if (!inX || !inZ) continue;
+        // Pendulums: the blade is LOWEST at the swing centre and rises toward the
+        // ends — evaluate at this point's real offset instead of the global
+        // minimum, or a checkpoint near the end of the arc false-positives.
+        if (o.kind === 'pendulum') {
+          const len = num(o.len, 4);
+          const bh = (String(o.mode || 'axe').toLowerCase() === 'ball')
+            ? num(o.radius, 0.8) : (o.blade ? num(o.blade.h, 1) : 1);
+          const piv = v3(o.p);
+          const ax = readAxis(o.axis, 0, 0, 1);
+          // swing direction is perpendicular to the axis, in the XZ plane
+          const d = Math.abs(ax[2]) > 0.7 ? (pt.p[0] - piv[0]) : (pt.p[2] - piv[2]);
+          const dd = Math.min(Math.abs(d), len * 0.999);
+          lo = piv[1] - Math.sqrt(len * len - dd * dd) - bh * 0.5;
+          hi = lo + bh;
+        }
+        // the player occupies [y, y + height] standing at the respawn point
+        const feet = pt.p[1], head = pt.p[1] + PLAYER_H;
+        if (hi <= feet + 0.05 || lo >= head - 0.05) continue;
+        const line = 'CHECKPOINT SAFETY: ' + pt.name + ' at [' + pt.p.map((v) => v.toFixed(1)).join(', ') +
+          '] stands inside the sweep of obj ' + j + ' (' + sw.what + ', y ' + lo.toFixed(2) +
+          '..' + hi.toFixed(2) + ' at this offset)';
+        if (barPush) warnings.push(line + ' - solid bar: a shove off the pad, verify it cannot push the player into a drop');
+        else problems.push(line + ' - every respawn there is a second death');
+      }
+    }
+  }
+
   const mono = checkMonotony(objs, boxes, problems, warnings, isHub);
 
   return { id: def.id, name: def.name, objects: objs.length, mono,
@@ -501,7 +552,7 @@ for (const f of files.sort()) {
 }
 
 console.log(`\nASCENDANT geometry check — player ${PLAYER_H} m standing / ${CROUCH_H} m crouched, radius ${PLAYER_R} m`);
-console.log('headroom · hazard clipping · roofed jumps · blocked jump arcs · monotony\n');
+console.log('headroom · hazard clipping · roofed jumps · blocked arcs · checkpoint safety · monotony\n');
 console.log('id            obj  flatRun  sizes  gapCv  rep   status');
 console.log('-'.repeat(74));
 let failing = 0;

@@ -45,13 +45,14 @@ import { clamp, lerp, smoothstep, easeOutCubic, fmtTime, nowMs } from './core/ut
  * real milliseconds — no per-phase timers to drift.
  * ------------------------------------------------------------------------ */
 /* Designed total is 560 ms, deliberately under the 620 ms contract bound: the
- * sequence advances on rAF, so a 50 Hz panel adds up to ~60 ms of frame
- * quantisation between the kill and the measured input restore. 560 designed
- * keeps the MEASURED median inside 620 (loopcheck asserts exactly that). */
+ * sequence advances on rAF, so a 50 Hz panel adds up to ~60-90 ms of frame
+ * quantisation between the kill and the measured input restore (heavier stages
+ * drop the odd frame during the swap). 540 designed
+ * keeps the MEASURED median inside 620 on every stage weight (loopcheck asserts exactly that). */
 const D_FLASH = 80;                       // 0    .. 80    flash + freeze + duck
-const D_HOLD = 150;                       // 80   .. 230   hold on the death cam
-const D_FADE = 130;                       // 230  .. 360   fade to theme colour
-const D_RESTORE = 200;                    // 360  .. 560   fade back in
+const D_HOLD = 140;                       // 80   .. 220   hold on the death cam
+const D_FADE = 130;                       // 220  .. 350   fade to theme colour
+const D_RESTORE = 190;                    // 350  .. 540   fade back in
 const T_HOLD_END = D_FLASH + D_HOLD;                       // 270
 const T_FADE_END = T_HOLD_END + D_FADE;                    // 410  <- world swap
 const T_DEATH_END = T_FADE_END + D_RESTORE;                // 620

@@ -330,7 +330,11 @@ export default {
   checkpoints: [
     { p: [8.4, 6.1, 0], yaw: 0, clockOffset: 0 },
     { p: [34.7, 5.3, 0.8], yaw: 0, clockOffset: 0 },
-    { p: [63.61, 6.5, 2.0], yaw: 0, clockOffset: 0.9 },
+    { p: [60.8, 6.5, 2.0], yaw: 0, clockOffset: 0.9 }, /* moved off x=63.61: the
+       wrecking ball above (pivot 15.7, len 7.4, r 1.2) sweeps a thin corridor at
+       x 62.1..65.2 covering the WHOLE deck in z — the old spot put every respawn
+       inside it (ball bottom 7.1 vs a standing head at 8.3). 60.8 clears the
+       corridor by 1.3 m and stays on the same deck (x 59.6..67.6). */
     { p: [86.16, 8.7, 1.2], yaw: 0 },
     { p: [116.86, 7.3, 1.2], yaw: 0 },
     { p: [144.26, 10.9, 0.6], yaw: 0 },
