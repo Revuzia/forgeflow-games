@@ -362,18 +362,20 @@ export const DEFAULT_BLOOM = { strength: 0.62, radius: 0.55, threshold: 0.86 };
 /**
  * Ceiling on what the bloom bright-pass may read from the HDR scene buffer.
  *
- * The default is the largest value a half float can represent, which makes the
- * clamp INERT on every finite pixel — it only removes NaN and Infinity. That is
- * deliberate: this stage's scene buffer legitimately reaches 65504 today (see
- * ScaledBloomPass._installInputClamp), so any lower ceiling would CHANGE the
- * shipped image, and the image is not this change's to alter.
+ * This used to be 65504 (half-float max, i.e. INERT) because the scene buffer
+ * really did reach 65504: stage data authored `glow: <palette colour>` and the
+ * builders multiplied that colour into emissiveIntensity (≈ 11 million), so the
+ * platform trim rendered at the half-float ceiling and any real clamp would
+ * have changed the shipped image. That writer is fixed (builders.js glowSpec,
+ * 2026-08-31 exposure forensics), so the ceiling the original note promised is
+ * now safe: nothing legitimate in the scene exceeds ~20 (lava crust peaks ≈ 12)
+ * and a bounded bright-pass is what stops one hot surface from flooding the
+ * whole frame white through the mip chain.
  *
- * Presets that are explicitly allowed to trade quality lower it via
- * `quality.bloomClamp`. Once whatever writes 65504 into the scene buffer is
- * fixed, a ceiling around 12–24 becomes safe everywhere and unlocks the cheaper
- * half-resolution bloom; the measured sweep is in the report.
+ * Presets may still LOWER it via `quality.bloomClamp` (low/medium ship 12);
+ * a preset value above this default no longer raises it — see setBloom.
  */
-export const DEFAULT_BLOOM_CLAMP = 65504;
+export const DEFAULT_BLOOM_CLAMP = 16;
 
 /**
  * The grade pass, which is also the output pass.
@@ -757,7 +759,9 @@ export class Post {
       this.bloomPass = new ScaledBloomPass(
         new THREE.Vector2(dw, dh),
         this._bloom.strength, this._bloom.radius, this._bloom.threshold,
-        numOr(q.bloomScale, 1), numOr(q.bloomClamp, this._bloom.clamp),
+        numOr(q.bloomScale, 1),
+        // min, not override: a preset clamps harder, never disables (see setBloom)
+        Math.min(numOr(q.bloomClamp, DEFAULT_BLOOM_CLAMP), numOr(this._bloom.clamp, DEFAULT_BLOOM_CLAMP)),
       );
       composer.addPass(this.bloomPass);
     }
@@ -893,7 +897,12 @@ export class Post {
     p.strength = cur.strength;
     p.radius = cur.radius;
     p.threshold = cur.threshold;
-    p.setInputClamp(numOr(this.quality && this.quality.bloomClamp, cur.clamp));
+    // The preset may clamp HARDER than the default (low/medium ship 12) but a
+    // preset can no longer disable the clamp: high/ultra still carry the legacy
+    // 65504 "inert" value from the era when the scene buffer legitimately hit
+    // half-float max, and taking the min keeps them at the sane default now
+    // that the 65504 writer is fixed.
+    p.setInputClamp(Math.min(numOr(this.quality && this.quality.bloomClamp, cur.clamp), cur.clamp));
   }
 
   /**

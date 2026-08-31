@@ -342,6 +342,34 @@ function materialFor(key, theme, mats) {
 // ---------------------------------------------------------------------------
 const _emCache = new Map();
 
+/**
+ * Normalise `def.glow`. Stage data authors TWO shapes:
+ *
+ *   glow: 1.4        — a brightness multiplier for the emissive trim (temple-1)
+ *   glow: 0xa8e6ff   — a palette COLOUR for the trim (foundry/neon/spire/hub,
+ *                      temple-2/3 — authored as `glow: COLD` etc.)
+ *
+ * Every builder used to read BOTH as the multiplier, so a colour authored as
+ * glow became emissiveIntensity ≈ 11 million (0xa8e6ff = 11,069,183): the trim
+ * rendered at the half-float ceiling (65504) and the bloom pass smeared it over
+ * the whole frame — the 2026-08-31 white-out on every colour-glow stage.
+ * Measured: foundry-1 frame was 60.8 % pure white; hiding the two `em_*`
+ * materials with 10^7 intensities collapsed the HDR mean from 15,443 to 8,186.
+ *
+ * A finite scalar in (0, 16] is the multiplier; any larger number is a colour
+ * (the smallest colour in shipped data is 0x2c4c6e = 2,903,150, so the bands
+ * cannot collide). Colour glows keep multiplier 1 and tint the trim instead.
+ *
+ * @param {object|null} def
+ * @returns {{k: number, color: number|null}}
+ */
+function glowSpec(def) {
+  const g = def && def.glow;
+  if (typeof g !== 'number' || !isFinite(g) || g <= 0) return { k: 1, color: null };
+  if (g > 16) return { k: 1, color: g >>> 0 };
+  return { k: g, color: null };
+}
+
 /** Flat emissive band — bright enough to read at 25 m through fog. */
 function emissiveMat(color, intensity, opts) {
   const o = opts || null;
@@ -906,13 +934,14 @@ export function buildPlatform(def, theme, mats) {
   const surface = (def && def.surface) || 'normal';
   const look = SURFACE_LOOK[surface] || SURFACE_LOOK.normal;
   const bodyKey = (def && def.mat) || look[0];
-  const glow = (def && def.glow) || 1;
+  const gs = glowSpec(def);
+  const glow = gs.k;
   const faces = stripeFaces(def);
 
   const bodyMat = materialFor(bodyKey, theme, mats);
   const panelMat = materialFor(surface === 'ice' ? 'ice' : (bodyKey === 'grate' ? 'metal' : 'panel'), theme, mats);
   const rimMat = emissiveMat(pal(theme, 'accent'), 0.85 * glow);
-  const stripeMat = emissiveMat(pal(theme, look[1]), 2.6 * glow * look[2]);
+  const stripeMat = emissiveMat(gs.color !== null ? gs.color : pal(theme, look[1]), 2.6 * glow * look[2]);
   const underMat = materialFor('obsidian', theme, mats);
 
   const key = GeoCache.key('plat', w, h, d, faces.join(''));
@@ -1068,10 +1097,11 @@ function platformGeometry(w, h, d, faces) {
 export function buildBeam(def, theme, mats) {
   const s = size3(def, 6, 0.28, 0.6);
   const w = s[0], h = s[1], d = s[2];
-  const glow = (def && def.glow) || 1;
+  const gs = glowSpec(def);
+  const glow = gs.k;
   const bodyMat = materialFor((def && def.mat) || 'metal', theme, mats);
   const capMat = materialFor('panel', theme, mats);
-  const lineMat = emissiveMat(pal(theme, 'safeEdge'), 3.0 * glow);
+  const lineMat = emissiveMat(gs.color !== null ? gs.color : pal(theme, 'safeEdge'), 3.0 * glow);
   const trimMat = emissiveMat(pal(theme, 'accent'), 0.9 * glow);
   const alongX = w >= d;
 
@@ -1156,8 +1186,9 @@ export function buildPad(def, theme, mats) {
   const r = (def && def.r) || Math.max(s[0], s[2]) * 0.5;
   const height = Math.max(0.04, s[1]);
   const isSpeed = !!(def && (def.kind === 'speedpad' || def.surface === 'speed'));
-  const tint = pal(theme, isSpeed ? 'finish' : 'checkpointOn');
-  const glow = (def && def.glow) || 1;
+  const gs = glowSpec(def);
+  const glow = gs.k;
+  const tint = gs.color !== null ? gs.color : pal(theme, isSpeed ? 'finish' : 'checkpointOn');
 
   const plinthMat = materialFor('metal', theme, mats);
   const discMat = materialFor('panel', theme, mats);
@@ -1250,10 +1281,11 @@ export function buildPillar(def, theme, mats) {
   const s = size3(def, 0.9, 5, 0.9);
   const w = s[0], h = s[1], d = s[2];
   const round = (def && def.round !== undefined) ? !!def.round : true;
-  const glow = (def && def.glow) || 1;
+  const gs = glowSpec(def);
+  const glow = gs.k;
   const bodyMat = materialFor((def && def.mat) || 'stone', theme, mats);
   const trimMat = materialFor('metal', theme, mats);
-  const bandMat = emissiveMat(pal(theme, 'accent'), 1.5 * glow);
+  const bandMat = emissiveMat(gs.color !== null ? gs.color : pal(theme, 'accent'), 1.5 * glow);
 
   const key = GeoCache.key('pillar', w, h, d, round ? 'r' : 's');
   const geo = GeoCache.get(key, () => {
@@ -1325,10 +1357,11 @@ export function buildPillar(def, theme, mats) {
 export function buildWall(def, theme, mats) {
   const s = size3(def, 8, 4, 0.5);
   const w = s[0], h = s[1], d = s[2];
-  const glow = (def && def.glow) || 1;
+  const gs = glowSpec(def);
+  const glow = gs.k;
   const bodyMat = materialFor((def && def.mat) || 'panel', theme, mats);
   const frameMat = materialFor('metal', theme, mats);
-  const seamMat = emissiveMat(pal(theme, 'accent'), 1.1 * glow);
+  const seamMat = emissiveMat(gs.color !== null ? gs.color : pal(theme, 'accent'), 1.1 * glow);
 
   const key = GeoCache.key('wall', w, h, d);
   const geo = GeoCache.get(key, () => {
@@ -1394,11 +1427,15 @@ export function buildWall(def, theme, mats) {
 export function buildRing(def, theme, mats) {
   const r = (def && (def.r || def.radius)) || size3(def, 3, 3, 0.4)[0] * 0.5;
   const tube = (def && def.tube) || Math.max(0.10, r * 0.09);
-  const glow = (def && def.glow) || 1;
+  const gs = glowSpec(def);
+  const glow = gs.k;
   const struts = (def && def.struts !== undefined) ? (def.struts | 0) : 2;
   const bodyMat = materialFor((def && def.mat) || 'metal', theme, mats);
   const trimMat = materialFor('panel', theme, mats);
-  const bandMat = emissiveMat(pal(theme, (def && def.tint) || 'checkpointOn'), 2.4 * glow);
+  const bandMat = emissiveMat(
+    (def && def.tint) ? pal(theme, def.tint)
+      : (gs.color !== null ? gs.color : pal(theme, 'checkpointOn')),
+    2.4 * glow);
 
   const key = GeoCache.key('ring', r, tube, struts);
   const geo = GeoCache.get(key, () => {
@@ -1460,10 +1497,11 @@ export function buildArch(def, theme, mats) {
   const w = s[0], h = s[1], d = s[2];
   const pierW = (def && def.pier) || Math.min(1.0, w * 0.18);
   const rise = (def && def.rise) || Math.min(h * 0.42, Math.max(0.4, (w - pierW * 2) * 0.5));
-  const glow = (def && def.glow) || 1;
+  const gs = glowSpec(def);
+  const glow = gs.k;
   const bodyMat = materialFor((def && def.mat) || 'stone', theme, mats);
   const trimMat = materialFor('metal', theme, mats);
-  const lineMat = emissiveMat(pal(theme, 'accent'), 1.6 * glow);
+  const lineMat = emissiveMat(gs.color !== null ? gs.color : pal(theme, 'accent'), 1.6 * glow);
 
   const key = GeoCache.key('arch', w, h, d, pierW, rise);
   const geo = GeoCache.get(key, () => {
@@ -1558,12 +1596,14 @@ export function buildDeco(def, theme, mats) {
   const spread = (def && def.spread) || 3;
   const scale = (def && def.scale) || 1;
   const seed = (def && def.seed !== undefined) ? def.seed : 1337;
-  const glow = (def && def.glow) || 1;
+  const gs = glowSpec(def);
+  const glow = gs.k;
 
   const baseKey = (def && def.mat) || (kindOf === 'crystals' ? 'crystal' : kindOf === 'rocks' ? 'stone' : 'metal');
   const bodyMat = materialFor(baseKey, theme, mats);
   const trimMat = materialFor('obsidian', theme, mats);
-  const emMat = emissiveMat(pal(theme, 'deco'), (kindOf === 'crystals' || kindOf === 'antennae' ? 2.0 : 0.8) * glow);
+  const emMat = emissiveMat(gs.color !== null ? gs.color : pal(theme, 'deco'),
+    (kindOf === 'crystals' || kindOf === 'antennae' ? 2.0 : 0.8) * glow);
 
   const key = GeoCache.key('deco', kindOf, count, spread, scale, seed);
   const geo = GeoCache.get(key, () => {

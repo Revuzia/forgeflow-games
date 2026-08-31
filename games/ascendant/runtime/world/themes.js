@@ -160,10 +160,15 @@ export const THEMES = {
       type: 'ember',
       params: {
         top: 0x080503, mid: 0x140806, horizon: 0x40120a, bottom: 0x0a0403,
-        horizonGlow: 0xff4a10, glowPower: 3.2, glowStrength: 1.10,
+        horizonGlow: 0xff4a10, glowPower: 3.2, glowStrength: 0.85,
         smokeColor: 0x2e1c15, smokeDark: 0x070403,
         smokeScale: 2.4, smokeSpeed: 0.022, smokeWarp: 0.35, smokeContrast: 1.35,
-        glowColor: 0xff6a1a, glowHeight: 0.26, furnace: 0.60,
+        /* furnace 0.60 lit the ENTIRE below-horizon dome at full strength (the
+         * shader's underside term saturates for any downward ray), which is
+         * most of the frame in a stage of floating platforms — the place read
+         * bright orange, not near-black smoke. Halved, the underside glow still
+         * reads as the lava sea's bounce without owning the atmosphere. */
+        glowColor: 0xff6a1a, glowHeight: 0.26, furnace: 0.30,
         emberGlow: 0xffa04a, dither: 1.0,
         sunDir: [0.24, 0.30, -0.94], sunColor: 0xff8a3c, sunSize: 0.0, sunIntensity: 0.0,
         starDensity: 0.0, starBrightness: 0.0,
@@ -184,7 +189,13 @@ export const THEMES = {
       saturation: 1.10, vignette: 0.46, chroma: 0.0022,
       tint: 0xffb27a, tintRGB: [1.06, 0.96, 0.88],
     },
-    bloom: { strength: 1.25, radius: 0.85, threshold: 0.52 },
+    /* strength 1.25 / threshold 0.52 was tuned against a near-black scene, but
+     * the lava sea legitimately covers half the frame at luma 2..12: at that
+     * threshold the WHOLE floor is bright-pass input and the frame floods white
+     * (2026-08-31 forensics: bloom off took the frame from 60.8 % to 1.2 % pure
+     * white). Threshold above the fogged-crust plateau, moderate strength: only
+     * the vein cores, rims and bulbs bloom, which is the industrial look. */
+    bloom: { strength: 0.55, radius: 0.62, threshold: 0.85 },
 
     palette: {
       safe: 0x8b94a4, safeEdge: 0xa8e6ff,
@@ -232,18 +243,28 @@ export const THEMES = {
     id: 'spire',
     name: 'FROZEN SPIRE',
     bg: 0xcfe2f2,
-    exposure: 1.14,
-    envIntensity: 1.35,
+    /* 1.14 + 0.0090 fog painted the whole mid-distance solid white (measured
+     * 6.9-10.7 % pure-white pixels; a platform 30 m out had no silhouette).
+     * Bright-lit but never blown: exposure trimmed, fog thinned and a step
+     * deeper than the 245-white cut so distance reads as pale blue, not paper. */
+    exposure: 1.05,
+    envIntensity: 1.20,
 
-    fog: { color: 0xd6e8f6, near: 20, far: 260, density: 0.0090, type: 'exp2' },
+    fog: { color: 0xbfd6e9, near: 20, far: 260, density: 0.0055, type: 'exp2' },
 
     sky: {
       type: 'aurora',
       params: {
-        top: 0x2c4a86, mid: 0x7fa8d2, horizon: 0xe8f2fb, bottom: 0xcfe2f2,
-        horizonGlow: 0xffd6a8, glowPower: 8.0, glowStrength: 0.55,
-        sunDir: [-0.78, 0.10, -0.61], sunColor: 0xffd8a8, sunSize: 0.020, sunIntensity: 1.6,
-        sunHalo: 0.30,
+        /* horizon 0xe8f2fb was 4 counts from pure white before the glow, fog
+         * and bloom even stacked — the measured 8-11 % blown band lived here.
+         * One step deeper keeps the pale-band identity below the blowout line. */
+        top: 0x2c4a86, mid: 0x7fa8d2, horizon: 0xd8e7f4, bottom: 0xc6daec,
+        horizonGlow: 0xffd6a8, glowPower: 8.0, glowStrength: 0.38,
+        /* the one blob still blowing out after the band fix was the sun itself:
+         * disc + halo + fog scatter + bloom covered ~3 % of the frame. A low
+         * winter sun should be a tight glint, not a searchlight. */
+        sunDir: [-0.78, 0.10, -0.61], sunColor: 0xffd8a8, sunSize: 0.013, sunIntensity: 1.0,
+        sunHalo: 0.10,
         auroraA: 0x4affc8, auroraB: 0x7f9cff,
         auroraSpeed: 0.055, auroraHeight: 0.34, auroraStrength: 0.55, auroraBands: 3.0,
         starDensity: 0.55, starBrightness: 0.28, dither: 1.0,
@@ -264,7 +285,11 @@ export const THEMES = {
       saturation: 1.05, vignette: 0.30, chroma: 0.0009,
       tint: 0xdceffc, tintRGB: [0.97, 1.00, 1.05],
     },
-    bloom: { strength: 0.45, radius: 0.62, threshold: 0.86 },
+    /* threshold 0.86 sat below the pale scene's own haze (~0.9-1.5 linear), so
+     * bloom lifted the whole bright half of the frame over the white line
+     * (measured: bloom off took 4.5 % blown pixels to 0.1 %). In a bright-key
+     * theme only true HDR sources — sun, stripes, aurora — may bloom. */
+    bloom: { strength: 0.35, radius: 0.60, threshold: 1.10 },
 
     palette: {
       safe: 0x2f4a5a, safeEdge: 0xffc94a,
@@ -312,10 +337,13 @@ export const THEMES = {
     id: 'temple',
     name: 'SKY TEMPLE',
     bg: 0x1d4472,
-    exposure: 1.10,
+    /* exposure 1.10 + cream fog 0xd9c7a8 was half of the cream-on-cream washout
+     * (the other half was bloom, see the bloom block). Golden hour, not cream:
+     * slightly deeper amber fog, a touch thinner, neutral-plus exposure. */
+    exposure: 1.04,
     envIntensity: 1.15,
 
-    fog: { color: 0xd9c7a8, near: 30, far: 340, density: 0.0055, type: 'exp2' },
+    fog: { color: 0xccb28b, near: 30, far: 340, density: 0.0046, type: 'exp2' },
 
     sky: {
       type: 'cloudsea',
@@ -344,7 +372,12 @@ export const THEMES = {
       saturation: 1.08, vignette: 0.26, chroma: 0.0007,
       tint: 0xffe6bf, tintRGB: [1.04, 1.00, 0.93],
     },
-    bloom: { strength: 0.75, radius: 0.72, threshold: 0.72 },
+    /* 0.75 @ 0.72 dissolved the whole golden scene into cream haze: the bright
+     * fog band + near-white safeEdge trim sat above the threshold, so bloom +
+     * fog + emissives merged into one wash (measured 30 % pure-white pixels;
+     * bloom off alone recovered it to 0.1 %). Golden hour needs the SUN to
+     * bloom, not the architecture. */
+    bloom: { strength: 0.40, radius: 0.60, threshold: 0.88 },
 
     palette: {
       safe: 0xbfa273, safeEdge: 0xfff8e6,

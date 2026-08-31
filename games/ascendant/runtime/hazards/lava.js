@@ -400,7 +400,12 @@ class LavaHazard extends Hazard {
     }
 
     // A soft glow card that sells the bounce even where nothing is close enough to be lit.
-    this.glow = makeGlowSprite(this.hotColor.getHex(), Math.min(this.size.x, this.size.z) * 0.9, 0.30, 3.0);
+    // Sized to the pool but capped: on the big foundry seas the old min*0.9 card was a
+    // 20 m additive quad that fed the bloom bright-pass across half the frame (part of
+    // the 2026-08-31 white-out). The bounce read comes from the first couple of metres
+    // above the surface; a tighter, dimmer card keeps it without the frame-wide flood.
+    this.glow = makeGlowSprite(this.hotColor.getHex(),
+      Math.min(Math.min(this.size.x, this.size.z) * 0.55, 10), 0.16, 3.4);
     this.own(this.glow.material);
     this.glow.position.set(this.center.x, this._surfaceY + 0.6, this.center.z);
     this.glow.renderOrder = 3;
@@ -480,7 +485,8 @@ class LavaHazard extends Hazard {
     }
     if (this.glow) {
       this.glow.position.y = y + 0.6;
-      this.glow.material.opacity = 0.20 + 0.14 * flick;
+      // tracks the dimmer base opacity of the smaller glow card (see _buildLight)
+      this.glow.material.opacity = 0.11 + 0.08 * flick;
     }
 
     // kill volume tracks the surface

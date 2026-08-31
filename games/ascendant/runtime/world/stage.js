@@ -288,6 +288,11 @@ void main(){
   float a = fall * cap * vCore * (0.70 + 0.30 * band);
   a *= mix(0.26, 1.0, vState) * uGain;
   a *= mix(1.0, 0.58, smoothstep(70.0, 250.0, vDepth));
+  // Near fade: standing ON a pad puts the camera INSIDE this cylinder, and
+  // without it the beam's near wall painted the entire frame with an additive
+  // wash (measured 2026-08-31: hiding the column dropped foundry-1's mean frame
+  // luma from 197 to 117 at a checkpoint station). Beyond ~3.5 m it is a no-op.
+  a *= smoothstep(0.35, 3.5, vDepth);
   if (a <= 0.0025) discard;
   vec3 col = mix(uColorOff, uColorOn, vState);
   col *= 0.85 + 1.15 * vState + 0.30 * band;
