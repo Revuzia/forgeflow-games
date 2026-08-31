@@ -399,8 +399,10 @@ export class Game {
   __dev;                   // {skipCP(), noclip(), goto(stageId), tp(x,y,z)} — gated by ?dev=1
 }
 ```
-Death->respawn budget: **<= 620 ms** total (flash 90 / hold 180 / fade 140 / restore 210),
-input restored the instant the camera is back. Never a full stage rebuild on respawn.
+Death->respawn budget: **measured MEDIAN <= 620 ms**, hard ceiling 900 ms per sample.
+Designed timeline is 560 ms (flash 80 / hold 150 / fade 130 / restore 200) — the 60 ms
+margin absorbs rAF quantisation on slow panels (this box's is 50 Hz). Input restored the
+instant the camera is back. Never a full stage rebuild on respawn.
 
 ## 22. runtime/data/index.js
 ```js

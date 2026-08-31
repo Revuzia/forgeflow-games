@@ -255,9 +255,15 @@ export default {
     /* THE PEDESTAL — three walkable 0.44 m steps and the shard that lights the room */
     /* ============================================================================ */
 
+    // Each step is a SOLID block resting on the core floor, not a 0.44 m shelf stacked
+    // on the one below it. Tops are unchanged (0.44 / 0.88 / 1.32, three 0.44 m risers
+    // under TUNE.stepUp 0.55) and each smaller block leaves the ring of the one beneath
+    // it exposed, so it reads exactly as before — but there is no longer a 0.44 m void
+    // between the core deck and the underside of step 2, which geomcheck correctly read
+    // as a ceiling 0.44 m over 30% of the core floor.
     { kind: 'platform', p: [0, CORE + 0.22, 0], s: [9.0, 0.44, 9.0], rot: [0, Math.PI / 8, 0], mat: 'obsidian', glow: 0x5aa8e6 },
-    { kind: 'platform', p: [0, CORE + 0.66, 0], s: [6.4, 0.44, 6.4], rot: [0, Math.PI / 4, 0], mat: 'obsidian', glow: 0x5aa8e6 },
-    { kind: 'platform', p: [0, CORE + 1.10, 0], s: [4.3, 0.44, 4.3], mat: 'obsidian', glow: 0x7ecdff },
+    { kind: 'platform', p: [0, CORE + 0.44, 0], s: [6.4, 0.88, 6.4], rot: [0, Math.PI / 4, 0], mat: 'obsidian', glow: 0x5aa8e6 },
+    { kind: 'platform', p: [0, CORE + 0.66, 0], s: [4.3, 1.32, 4.3], mat: 'obsidian', glow: 0x7ecdff },
 
     { kind: 'deco', kindOf: 'monolith', p: [0, CORE + 2.52, 0], s: [2.2, 2.4, 2.2], rot: [0, Math.PI / 4, 0], mat: 'obsidian', tint: 0x3d7fb8 },
     { kind: 'deco', kindOf: 'crystal', p: [0, CORE + 5.9, 0], s: [1.7, 3.1, 1.7], mat: 'crystal', tint: 0x9adcff },
@@ -317,20 +323,34 @@ export default {
     { kind: 'text', p: at(139, 19.4, OUTER + 2.9), rot: [0, facingIn(139), 0], text: 'WARM UP', size: 0.34, color: 0x7ef0ff },
 
     /* ============================================================================ */
-    /* LEDGE CLIMB + OVERLOOK — south-west rim. Four hops of +1.4 m over 2.7 m gaps, */
-    /* well inside the 3.0 m safe reach for a +1.8 m rise. Miss and you land on the  */
-    /* promenade, which is the whole point of putting it here.                       */
+    /* LEDGE CLIMB + OVERLOOK — south-west rim, 16 deg apart on r 19.0, so every hop */
+    /* is a 5.29 m chord minus the two tangential half-widths. Miss and you land on   */
+    /* the promenade, which is the whole point of putting it here.                    */
+    /*                                                                               */
+    /* HEADROOM: the first two are PLINTHS — solid blocks sunk to OUTER-2.30, the     */
+    /* same way the warm-up ring is built — because at 0.7 m thick their undersides   */
+    /* hung 1.30 m over the promenade you walk along at deg 192-208, i.e. below head  */
+    /* height on the main lobby floor. A plinth has no underside to duck. The upper    */
+    /* two stay thin floating slabs: at 2.30 m and 3.75 m their undersides clear the   */
+    /* promenade by 3.20 m and 4.65 m, which is roof enough to walk under upright.     */
+    /*                                                                               */
+    /* RHYTHM: rises now read +0.60, +1.40, +1.80, +1.40, +1.00 rather than four      */
+    /* identical +1.4 steps, and each block is a different size. Every hop stays       */
+    /* inside the run envelope (+1.8 m rise -> 3.0 m safe; the widest gap here is      */
+    /* 2.79 m edge to edge).                                                          */
     /* ============================================================================ */
 
     ...[
-      { deg: 192, top: OUTER + 0.6 },
-      { deg: 208, top: OUTER + 2.0 },
-      { deg: 224, top: OUTER + 3.4 },
-      { deg: 240, top: OUTER + 4.8 },
+      // radial depth + tangential width, the walkable top, and how far the block
+      // reaches DOWN. base below OUTER = a plinth; base just under top = a slab.
+      { deg: 192, top: OUTER + 0.60, base: OUTER - 2.30, radial: 2.9, width: 2.6 },
+      { deg: 208, top: OUTER + 2.00, base: OUTER - 2.30, radial: 2.6, width: 2.4 },
+      { deg: 224, top: OUTER + 3.80, base: OUTER + 3.20, radial: 2.4, width: 2.6 },
+      { deg: 240, top: OUTER + 5.20, base: OUTER + 4.65, radial: 2.2, width: 2.4 },
     ].map((d) => ({
       kind: 'platform',
-      p: at(d.deg, 19.0, d.top - 0.35),
-      s: [2.6, 0.7, 2.6],
+      p: at(d.deg, 19.0, (d.top + d.base) / 2),
+      s: [d.radial, d.top - d.base, d.width],
       rot: [0, -d.deg * D2R, 0],
       mat: 'panel',
       glow: 0xa8e4ff,

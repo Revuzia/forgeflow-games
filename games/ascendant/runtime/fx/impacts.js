@@ -9,7 +9,7 @@
  * machine the Game polls. Timing lives HERE, in one place, so it can never drift.
  *
  *   death timeline (contract §21, 620 ms total)
- *   ┌── flash 90 ms ──┬── hold 180 ms ──┬── fade 140 ms ──┬── restore 210 ms ──┐
+ *   ┌── flash 80 ms ──┬── hold 150 ms ──┬── fade 130 ms ──┬── restore 200 ms ──┐  (game.js owns the gate)
  *   pulse + slow-mo    death cam drop    fade to black     fade back in
  *                                        ^ respawn fires at 410 ms, input unlocks
  *
