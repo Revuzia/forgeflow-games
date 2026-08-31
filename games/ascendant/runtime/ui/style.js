@@ -794,6 +794,38 @@ export function makeRow(name, hint, control) {
   return row;
 }
 
+/* ---------------------------------------------------------------------------
+ * Difficulty bands (chart-obby convention: named bands over the raw 1..10)
+ * -------------------------------------------------------------------------*/
+const DIFF_BANDS = [
+  { max: 2, label: 'EASY', cls: 'easy' },
+  { max: 4, label: 'MEDIUM', cls: 'medium' },
+  { max: 6, label: 'HARD', cls: 'hard' },
+  { max: 8, label: 'EXPERT', cls: 'expert' },
+  { max: 10, label: 'INSANE', cls: 'insane' },
+];
+
+/**
+ * Named difficulty band for a 1..10 difficulty value.
+ * @param {number} level
+ * @returns {{label:string, cls:string}|null} null for a non-positive level
+ */
+export function diffBand(level) {
+  const lv = clamp(level | 0, 0, 10);
+  if (lv <= 0) return null;
+  for (const b of DIFF_BANDS) if (lv <= b.max) return { label: b.label, cls: b.cls };
+  return { label: 'INSANE', cls: 'insane' };
+}
+
+/** A small pill label for a difficulty band ("HARD"), for grids and cards. */
+export function makeBandLabel(level) {
+  const b = diffBand(level);
+  const n = el('span', 'asc-dband' + (b ? ' db-' + b.cls : ''));
+  n.textContent = b ? b.label : '';
+  if (!b) n.style.display = 'none';
+  return n;
+}
+
 /** Difficulty dots (1..10, the top third burns red). */
 export function makeDots(level, max) {
   const n = max || 10;
@@ -1161,13 +1193,30 @@ const HUD_CSS = `
 .ah-stagenum{
   margin-top:6px; display:flex; align-items:center; gap:8px;
   font-family:var(--f-num); font-size:${UI_TOKENS.type.xs}px; letter-spacing:.26em;
-  text-transform:uppercase; color:var(--ink-mute);
+  text-transform:uppercase; color:var(--ink-dim);
+  text-shadow:0 1px 10px rgba(0,0,0,.75), 0 0 1px rgba(0,0,0,.8);
 }
 .ah-stagenum b{ color:var(--ink-dim); font-weight:600; }
 .ah-diff{ display:flex; gap:3px; margin-left:2px; }
 .ah-diff i{ width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,.16); }
 .ah-diff i.on{ background:var(--accent); box-shadow:0 0 5px var(--accent-glow); }
 .ah-diff i.hot{ background:var(--danger); box-shadow:0 0 5px rgba(255,85,70,.55); }
+
+/* named difficulty band next to the pips (chart-obby convention) + the shared
+   pill used on stage-select tiles */
+.ah-diffband, .asc-dband{
+  font-family:var(--f-display); font-size:${UI_TOKENS.type['2xs']}px; font-weight:700;
+  letter-spacing:.22em; line-height:1; text-transform:uppercase;
+  padding:2px 5px 1px 6px; border-radius:3px;
+  color:var(--ink-dim); background:rgba(255,255,255,.07);
+  border:1px solid rgba(255,255,255,.10);
+}
+.ah-diffband:empty{ display:none; }
+.db-easy{ color:var(--cp); border-color:rgba(103,240,168,.35); background:rgba(103,240,168,.10); }
+.db-medium{ color:var(--accent); border-color:rgba(79,215,255,.35); background:rgba(79,215,255,.10); }
+.db-hard{ color:var(--finish); border-color:rgba(255,207,92,.38); background:rgba(255,207,92,.10); }
+.db-expert{ color:#ff9a4d; border-color:rgba(255,154,77,.4); background:rgba(255,154,77,.10); }
+.db-insane{ color:var(--danger); border-color:rgba(255,85,70,.45); background:rgba(255,85,70,.12); }
 
 /* --- top-centre: progress ------------------------------------------- */
 .ah-tc{ top:26px; left:50%; width:min(460px,42vw); transform-origin:top center;
@@ -1744,6 +1793,11 @@ const SELECT_CSS = `
   letter-spacing:.10em; text-transform:uppercase; color:#fff; line-height:1.1;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
+.as-tile .tstages{
+  margin-top:3px; font-family:var(--f-num); font-size:${UI_TOKENS.type['2xs']}px;
+  font-weight:600; letter-spacing:.22em; text-transform:uppercase; color:var(--ink-mute);
+}
+.as-tile .tstages b{ color:var(--wc,var(--accent)); font-weight:700; }
 .as-tile .trow{
   margin-top:8px; display:flex; align-items:center; justify-content:space-between; gap:8px;
 }

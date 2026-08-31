@@ -10,7 +10,7 @@
  *
  * SHAPE      338.8 m of travel, 100 gameplay objects — 3.39 m per gameplay object,
  *            which makes it the DENSEST stage in the game (spire-3 3.43, temple-3
- *            4.16, and neon-1, the difficulty-1 tutorial, 5.26). 7 checkpoints,
+ *            4.16, and neon-1, the difficulty-1 tutorial, 5.26). 8 checkpoints,
  *            5 coins, 40 dynamic hazards across TEN families: jumppad, speedpad,
  *            wind, mover, vanish, ice, conveyor, rotor, pendulum, crusher.
  *            Difficulty 5.
@@ -103,12 +103,14 @@
  *   at the lip you still carry 8.6 + 6.0·e^(−1.4·0.47) = 11.7 m/s. That is what the
  *   coin spur is priced against, and the main line does not need it at all.
  *
- * CHECKPOINTS: seven, because the bell crossing is 76 m of open sky and half of it
- * is a fair replay while all of it is not. Longest leg 72 m (the carousel and the
- * stair, both of which have floor under them), shortest 26 m. Every clockOffset is 0,
- * so the phase you are shown after a death is the phase you were shown before it.
- * cp5 stands on the launch court's west lip, 2.9 m clear of the pad's near edge, and
- * cp6 on the bell's crown step: no respawn on this stage lands on a pad and fires it.
+ * CHECKPOINTS: eight, because the bell crossing is 76 m of open sky and half of it
+ * is a fair replay while all of it is not, and because the carousel and the stair
+ * are two different lessons that used to share one 72 m leg — the carousel exit
+ * deck now carries a pad so a stair death never replays the carousel. Longest leg
+ * 48.4 m, shortest 28.8 m. Every clockOffset is 0, so the phase you are shown after
+ * a death is the phase you were shown before it. cp6 stands on the launch court's
+ * west lip, 2.9 m clear of the pad's near edge, and cp7 on the bell's crown step:
+ * no respawn on this stage lands on a pad and fires it.
  *
  * CONVENTIONS: p = CENTRE, s = FULL size, top = p[1] + s[1]/2. Gaps in comments are
  * EDGE TO EDGE. yaw 0 faces +X. A mover's `p` is its HOME pose and `motion.to` its far
@@ -152,6 +154,12 @@ export default {
     { p: [116.2, 14.4, 0], yaw: 0, clockOffset: 0 },
     // The east landing, back up out of the well and pointed at the carousel.
     { p: [159.4, 15.0, 12.0], yaw: -0.9, clockOffset: 0 },
+    // The carousel exit deck, centred at [202, ...] — x 198.5..205.5, top 15.80,
+    // outside the outer ring's swept box (ends x 196.5) and 4.6 m short of the
+    // first wind void (starts x 206.0). Immediately BEFORE the crumbling stair,
+    // which is the difficulty spike of this stretch: the old 72 m carousel+stair
+    // leg made every stair death replay the whole carousel. Now 42.6 m + 29.4 m.
+    { p: [202.0, 15.9, 0], yaw: 0, clockOffset: 0 },
     // The stair landing. The crumbling stair is the only thing on this stage that
     // takes the floor away from you, so it gets a checkpoint on each side of it.
     { p: [231.4, 18.7, 0], yaw: 0, clockOffset: 0 },

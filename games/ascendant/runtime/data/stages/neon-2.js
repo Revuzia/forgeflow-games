@@ -6,7 +6,7 @@
  * is on a timer. The stage is a lesson in reading a rhythm rather than a distance.
  *
  * SHAPE      ~291 m of travel, 51 gameplay objects, 25 dynamic hazards from four
- *            families, 5 checkpoints (never more than 61 m apart), 4 coins.
+ *            families, 6 checkpoints (never more than 52 m apart), 4 coins.
  *
  * ESCALATES what neon-1 taught in isolation:
  *   MOVERS   BEAT 3 recaps the shuttle and makes it CLIMB, then BEAT 4 turns one
@@ -126,6 +126,11 @@ export default {
     { p: [77.7, 1.1, 0], yaw: 0, clockOffset: 0 },
     // Out of the vanish pit, before movers and tiles get combined.
     { p: [113.9, 2.0, 0], yaw: 0, clockOffset: 0 },
+    // On the stone deck where BEAT 6 lands — caps the replay cost of the
+    // mover/tile/tile/mover gauntlet (and of the BEAT 7 side-coin attempts) at
+    // ~21 m instead of the 60 m this leg used to be. Nothing timed starts for
+    // another 30 m, so clockOffset 0 is safe.
+    { p: [153.6, 2.8, 0], yaw: 0, clockOffset: 0 },
     // On the plaza, before the first rotor. clockOffset 1.25 rather than 0: with r1
     // on a 5.0 s period and two arms, a bar crosses the entry every 2.5 s, and at
     // t = 1.25 one has just gone past. You respawn into the safe half of the cycle

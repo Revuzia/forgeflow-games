@@ -52,8 +52,10 @@ async ([i, n]) => {
   const i0 = Math.floor(t), i1 = Math.min(pts.length - 1, i0 + 1), f = t - i0;
   const a = pts[i0], b = pts[i1];
   const x = a.x + (b.x - a.x) * f, y = a.y + (b.y - a.y) * f, z = a.z + (b.z - a.z) * f;
-  // stand a little behind the station and look down the course (+X)
-  P.__test.teleport(new T.Vector3(x - 2.5, y + 0.6, z));
+  // stand ON the station itself (2.5 m back was off the platform at several
+  // checkpoints - the neon-1 station-1 'shot' was a photo of the player
+  // falling into the void at -46 m/s)
+  P.__test.teleport(new T.Vector3(x, y + 0.6, z));
   P.__test.setVel(new T.Vector3(0, 0, 0));
   if (P.yaw !== undefined) P.yaw = 0;
   if (P.pitch !== undefined) P.pitch = -0.06;

@@ -28,7 +28,7 @@
 
 import * as THREE from 'three';
 
-import { WORLDS, HUB, getStage } from './data/index.js';
+import { WORLDS, HUB, getStage, loadStageNumbering, globalStageOf } from './data/index.js';
 import { Stage } from './world/stage.js';
 import { THEMES, applyTheme } from './world/themes.js';
 import { Player } from './player/controller.js';
@@ -292,10 +292,17 @@ export class Game {
     /* Reused HUD snapshot — HUD.update() is called every frame. */
     this._snap = {
       stageName: '', worldName: '', stageIdx: 0, stageCount: 0,
+      globalStage: 0, globalTotal: 0,
       timeMs: 0, totalMs: 0, deaths: 0, cpIndex: 0, cpCount: 0,
       progress01: 0, coins: 0, coinTotal: 0, best: null, speed: 0,
       state: 'loading', par: 0, difficulty: 1, isHub: true, pointerLocked: false,
     };
+
+    /* Global stage numbering (obby convention: one checkpoint segment = one
+       numbered stage). Derived from every stage def's checkpoint array, so it
+       loads them all once in the background — same cache getStage uses. The HUD
+       falls back to the world-local label until this resolves. */
+    loadStageNumbering().catch(() => { /* HUD falls back to world-local numbers */ });
 
     this._buildOverlays();
   }
@@ -823,7 +830,16 @@ export class Game {
 
     const worldName = isHub ? 'THE SANCTUM' : (w && w.name) || (def.world || '').toUpperCase();
     const idx = w ? w.stages.indexOf(def.id) + 1 : 0;
-    const label = idx > 0 ? worldName + '  ·  STAGE ' + idx + ' / ' + w.stages.length : worldName;
+    /* Obby convention: lead with the level's global stage range ("STAGES 7 - 12"),
+       falling back to the world-local index until the numbering has loaded. */
+    const gn = isHub ? null : globalStageOf(def.id, 0);
+    let label = worldName;
+    if (gn) {
+      label = worldName + '  ·  ' + (gn.segments > 1
+        ? 'STAGES ' + gn.first + ' – ' + gn.last : 'STAGE ' + gn.first) + ' / ' + gn.total;
+    } else if (idx > 0) {
+      label = worldName + '  ·  STAGE ' + idx + ' / ' + w.stages.length;
+    }
 
     this.el.introWorld.textContent = label;
     this.el.introName.textContent = def.name || String(def.id || '').toUpperCase();
@@ -1185,8 +1201,14 @@ export class Game {
     this._recordCpClock(idx);
     if (this.stageId && this.stageId !== HUB_ID) safe(() => this.save.setCheckpoint(this.stageId, idx), 'save.setCheckpoint');
 
-    safe(() => this.hud && this.hud.checkpointFlash(), 'hud.checkpointFlash');
-    safe(() => this.hud && this.hud.toast('CHECKPOINT ' + idx + ' / ' + (cps.length - 1), fmtTime(this.timeMs / 1000), 'checkpoint'), 'hud.toast');
+    /* Obby convention: the checkpoint IS the stage. Flash + toast the global
+       stage number the player just entered; fall back to the per-stage count
+       when the numbering has not resolved yet. */
+    const gn = globalStageOf(this.stageId, idx);
+    safe(() => this.hud && this.hud.checkpointFlash(gn && gn.num, gn && gn.total), 'hud.checkpointFlash');
+    safe(() => this.hud && this.hud.toast(
+      gn ? 'STAGE ' + gn.num + ' / ' + gn.total : 'CHECKPOINT ' + idx + ' / ' + (cps.length - 1),
+      fmtTime(this.timeMs / 1000), 'checkpoint'), 'hud.toast');
     safe(() => this.audio && this.audio.sfx('checkpoint'), 'audio.sfx');
     safe(() => this.camera && this.camera.dip(-0.06), 'camera.dip');
     safe(() => this.camera && this.camera.punch && this.camera.punch(), 'camera.punch');
@@ -1841,6 +1863,12 @@ export class Game {
     s.worldName = isHub ? 'HUB' : (w && w.name) || (def && def.world ? String(def.world).toUpperCase() : '');
     s.stageIdx = w ? w.stages.indexOf(this.stageId) + 1 : 0;
     s.stageCount = w ? w.stages.length : 0;
+    /* Global stage number (obby convention): the checkpoint segment the player is
+       in, numbered across the whole game. 0 until the numbering has loaded, and
+       always 0 in the hub — the HUD hides/falls back on 0. */
+    const gn = isHub ? null : globalStageOf(this.stageId, this.cpIndex);
+    s.globalStage = gn ? gn.num : 0;
+    s.globalTotal = gn ? gn.total : 0;
     s.timeMs = this.timeMs;
     s.totalMs = this.totalMs;
     s.deaths = this.deaths;

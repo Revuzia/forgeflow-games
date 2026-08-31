@@ -10,12 +10,12 @@
 
 import { clamp } from '../core/util.js';
 import { Save } from '../core/save.js';
-import { WORLDS, getStage } from '../data/index.js';
+import { WORLDS, getStage, loadStageNumbering, stageNumbering, worldStageRange } from '../data/index.js';
 import { THEMES } from '../world/themes.js';
 import {
   injectStyles, UI_TOKENS, UIRegistry, el, icon, fmtMs, medalFor, makeDots, makeMedal,
   makeButton, animateOnce, uiAction, uiSfx, pushCapture, popCapture, cssColor,
-  mixColor, alphaColor,
+  mixColor, alphaColor, diffBand,
 } from './style.js';
 
 /* Which ObjectDef kinds read as landable vs lethal on the mini-map. */
@@ -388,10 +388,17 @@ export class StageSelect {
       const bodyEl = el('div', 'tbody');
       const nm = el('div', 'tname');
       nm.textContent = id;
+      /* global stage range for this level (obby convention) — filled on refresh */
+      const stagesLine = el('div', 'tstages');
       const row = el('div', 'trow');
+      const dotWrap = el('span');
+      dotWrap.style.cssText = 'display:flex;align-items:center;gap:8px;';
       const dots = makeDots(0);
+      const band = el('span', 'asc-dband');
+      band.style.display = 'none';
+      dotWrap.appendChild(dots); dotWrap.appendChild(band);
       const bestWrap = el('div', 'tbest none');
-      row.appendChild(dots); row.appendChild(bestWrap);
+      row.appendChild(dotWrap); row.appendChild(bestWrap);
       const stats = el('div', 'tstats');
       const sd = el('span'); sd.innerHTML = icon('skull');
       const sdT = document.createTextNode('0');
@@ -404,13 +411,14 @@ export class StageSelect {
       sp.appendChild(spT);
       stats.appendChild(sd); stats.appendChild(sc); stats.appendChild(sp);
 
-      bodyEl.appendChild(nm); bodyEl.appendChild(row); bodyEl.appendChild(stats);
+      bodyEl.appendChild(nm); bodyEl.appendChild(stagesLine); bodyEl.appendChild(row); bodyEl.appendChild(stats);
       tile.appendChild(cv); tile.appendChild(load); tile.appendChild(no);
       tile.appendChild(tick); tile.appendChild(bodyEl);
       vm.grid.appendChild(tile);
 
       const rec = {
-        id, tile, cv, load, nm, dots, bestWrap, tick, deaths: sdT, coins: scT, par: spT,
+        id, tile, cv, load, nm, stagesLine, dots, band, bestWrap, tick,
+        deaths: sdT, coins: scT, par: spT,
         drawn: false, vm,
       };
       tile.__activate = () => this._pick(rec);
@@ -438,7 +446,11 @@ export class StageSelect {
         })
         .catch(() => { this._defs.set(id, null); });
     });
-    this._loading = Promise.all(jobs).then(() => { this._loading = null; });
+    /* The global stage numbering derives from the same defs — resolve it inside
+       the same load so refresh() always sees ranges once the defs are in. */
+    this._loading = Promise.all(jobs)
+      .then(() => loadStageNumbering().catch(() => {}))
+      .then(() => { this._loading = null; });
     return this._loading;
   }
 
@@ -458,6 +470,20 @@ export class StageSelect {
     return null;
   }
 
+  /**
+   * Global stages (checkpoint segments) cleared in one level. Reaching pad k
+   * means segments 0..k-1 are done — k segments; a cleared level counts all of
+   * them. Returns 0 when the numbering has not loaded.
+   */
+  _clearedSegments(stageId, rec) {
+    const num = stageNumbering();
+    const e = num ? num.perStage.get(stageId) : null;
+    if (!e) return 0;
+    if (rec && rec.cleared) return e.segments;
+    const k = rec ? Math.max(0, rec.cpIndex | 0) : 0;
+    return Math.min(k, e.segments - 1);
+  }
+
   refresh() {
     let unlocked = null;
     try {
@@ -470,6 +496,8 @@ export class StageSelect {
     let medals = 0;
     let clearedAll = 0;
     let stageTotal = 0;
+    let clearedSegAll = 0;
+    const numbering = stageNumbering();
 
     for (let i = 0; i < this._worlds.length; i++) {
       const vm = this._worlds[i];
@@ -480,17 +508,27 @@ export class StageSelect {
       vm.card.classList.toggle('is-locked', locked);
 
       let cleared = 0;
+      let clearedSeg = 0;
       for (const id of ids) {
         const r = this._rec(id);
         if (r && r.cleared) cleared++;
+        clearedSeg += this._clearedSegments(id, r);
         const def = this._defs.get(id);
         if (r && r.best != null && def && def.par && medalFor(r.best, def.par)) medals++;
       }
       clearedAll += cleared;
+      clearedSegAll += clearedSeg;
 
-      const pct = ids.length ? cleared / ids.length : 0;
+      /* Progress in global-stage units (obby convention: one checkpoint segment
+         = one stage) once the numbering is in; level units until then. */
+      const range = numbering ? worldStageRange(vm.world.id) : null;
+      const pct = range && range.segments
+        ? clearedSeg / range.segments
+        : (ids.length ? cleared / ids.length : 0);
       vm.barFill.style.transform = 'scaleX(' + pct.toFixed(3) + ')';
-      vm.lbl.textContent = cleared + ' / ' + ids.length;
+      vm.lbl.textContent = range && range.segments
+        ? clearedSeg + ' / ' + range.segments
+        : cleared + ' / ' + ids.length;
 
       if (locked) {
         const prev = this._worlds[i - 1];
@@ -501,7 +539,9 @@ export class StageSelect {
         vm.wmeta.appendChild(rq);
         vm.glyph.innerHTML = icon('lock');
       } else {
-        vm.wmeta.textContent = ids.length + ' STAGES  ·  ' + cleared + ' CLEARED';
+        vm.wmeta.textContent = range
+          ? 'STAGES ' + range.first + ' – ' + range.last + '  ·  ' + clearedSeg + ' CLEARED'
+          : ids.length + ' STAGES  ·  ' + cleared + ' CLEARED';
         vm.glyph.textContent = String(i + 1).padStart(2, '0');
       }
 
@@ -510,7 +550,9 @@ export class StageSelect {
 
     let totals = null;
     try { totals = Save && typeof Save.totals === 'function' ? Save.totals() : null; } catch (e) { totals = null; }
-    this.totals.CLEARED.textContent = clearedAll + ' / ' + stageTotal;
+    this.totals.CLEARED.textContent = numbering
+      ? clearedSegAll + ' / ' + numbering.total
+      : clearedAll + ' / ' + stageTotal;
     this.totals.MEDALS.textContent = String(medals);
     this.totals.DEATHS.textContent = totals ? String(totals.deaths | 0) : '—';
     this.totals.TIME.textContent = totals && totals.timeMs ? fmtMs(totals.timeMs) : '—';
@@ -524,11 +566,35 @@ export class StageSelect {
       rec.nm.textContent = def && def.name ? def.name : String(rec.id).toUpperCase();
       rec.tile.classList.toggle('locked', vm.locked);
 
+      /* global stage range for this level (obby convention) */
+      const num = stageNumbering();
+      const e = num ? num.perStage.get(rec.id) : null;
+      if (e) {
+        rec.stagesLine.innerHTML = '';
+        const b = el('b');
+        b.textContent = e.segments > 1 ? 'STAGES ' + e.first + ' – ' + e.last : 'STAGE ' + e.first;
+        rec.stagesLine.appendChild(b);
+        const done = this._clearedSegments(rec.id, r);
+        rec.stagesLine.appendChild(document.createTextNode('  ·  ' + done + ' / ' + e.segments + ' CLEARED'));
+        rec.stagesLine.style.display = '';
+      } else {
+        rec.stagesLine.style.display = 'none';
+      }
+
       /* difficulty */
       const lv = def && def.difficulty != null ? clamp(def.difficulty | 0, 0, 10) : 0;
       const kids = rec.dots.children;
       for (let i = 0; i < kids.length; i++) {
         kids[i].className = i < lv ? (i >= 7 ? 'hot' : 'on') : '';
+      }
+      /* named difficulty band (chart-obby convention) */
+      const band = diffBand(lv);
+      if (band) {
+        rec.band.textContent = band.label;
+        rec.band.className = 'asc-dband db-' + band.cls;
+        rec.band.style.display = '';
+      } else {
+        rec.band.style.display = 'none';
       }
 
       /* best time + medal */

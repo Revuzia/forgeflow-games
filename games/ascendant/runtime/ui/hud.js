@@ -3,7 +3,9 @@
  * The in-game interface. DOM overlay in #hud (contract §20).
  *
  * Composition:
- *   top-left     world / stage / stage x of y + difficulty
+ *   top-left     world / GLOBAL stage number (obby convention: "STAGE 37 / 101",
+ *                one checkpoint segment = one numbered stage) / level name +
+ *                difficulty pips + difficulty band label
  *   top-centre   progress rail, checkpoint pips, pace ghost
  *   top-right    stage timer, live split vs best, run total, stage best
  *   bottom-left  deaths, coins, speed ribbon
@@ -23,6 +25,7 @@ import {
   injectStyles, UI_TOKENS, UIRegistry, el, textNode, icon, splitTime, fmtMs, fmtSplit,
   medalFor, makeMedal, makeButton, animateOnce, causeInfo, setUITheme, countUp,
   RollingNumber, FocusList, uiAction, uiSfx, pushCapture, popCapture, cssColor,
+  diffBand,
 } from './style.js';
 
 /* --- module-scope scratch (no per-frame allocation) --------------------- */
@@ -61,7 +64,7 @@ export class HUD {
 
     /** last-written value cache — the whole point of a cheap HUD */
     this._c = {
-      world: '', stage: '', stageNum: '', diff: -1,
+      world: '', stage: '', stageNum: '', levelName: '', diffBand: '', diff: -1,
       prog: -1, ghost: -1, cpOn: -1, cpCount: -1,
       timeMain: '', timeFrac: '', split: '', splitCls: '', total: '', best: '',
       deaths: -1, coins: -1, coinTotal: -1, speed: -1,
@@ -101,6 +104,10 @@ export class HUD {
     const E = this.nPlay;
 
     /* --- top-left ----------------------------------------------------- */
+    /* Obby convention: the GLOBAL stage number is the headline ("STAGE 37 / 101")
+       and the world / level name is secondary context. The big .ah-stage line
+       carries the global number while numbering is available, the level name
+       otherwise (and always in the hub). */
     const tl = el('div', 'ah-cluster ah-tl');
     this.nWorld = el('div', 'ah-world');
     this.tWorld = textNode(this.nWorld, '');
@@ -111,6 +118,8 @@ export class HUD {
     this.nDiff = el('div', 'ah-diff');
     for (let i = 0; i < 10; i++) this.nDiff.appendChild(el('i'));
     num.appendChild(this.nDiff);
+    this.nDiffBand = el('span', 'ah-diffband');
+    num.appendChild(this.nDiffBand);
     tl.appendChild(this.nWorld); tl.appendChild(this.nStage); tl.appendChild(num);
     E.appendChild(tl);
     this.nTL = tl;
@@ -364,18 +373,32 @@ export class HUD {
       c.world = s.worldName;
       this.tWorld.nodeValue = String(s.worldName || '');
     }
-    if (s.stageName !== undefined && s.stageName !== c.stage) {
-      c.stage = s.stageName;
-      this.tStage.nodeValue = String(s.stageName || '');
+    /* Entrance animation fires on a LEVEL change only — the global stage number
+       also ticks up on every checkpoint, and that must not replay the slide. */
+    if (s.stageName !== undefined && s.stageName !== c.levelName) {
+      c.levelName = s.stageName;
       animateOnce(this.nTL, [
         { opacity: 0, transform: 'translateX(-14px) scale(var(--hud-scale))' },
         { opacity: 1, transform: 'translateX(0) scale(var(--hud-scale))' },
       ], { duration: 460, easing: UI_TOKENS.ease.out });
     }
-    if (s.stageIdx != null && s.stageCount != null) {
-      const t = 'STAGE ' + (s.stageIdx + 1) + ' / ' + s.stageCount;
-      if (t !== c.stageNum) { c.stageNum = t; this.tStageNum.nodeValue = t; }
+    /* Headline: the global stage number (obby convention). Fallback (numbering
+       not loaded yet, or the hub): the level name, as before. */
+    const hasGlobal = (s.globalStage | 0) > 0 && (s.globalTotal | 0) > 0;
+    const bigTxt = hasGlobal
+      ? 'STAGE ' + (s.globalStage | 0) + ' / ' + (s.globalTotal | 0)
+      : String(s.stageName || '');
+    if (bigTxt !== c.stage) {
+      c.stage = bigTxt;
+      this.tStage.nodeValue = bigTxt;
     }
+    /* Secondary line: the level name under a global headline; the world-local
+       index when there is no numbering (never "STAGE 1 / 0" in the hub). */
+    const subTxt = hasGlobal
+      ? String(s.stageName || '')
+      : (s.stageIdx > 0 && s.stageCount > 0 ? 'STAGE ' + s.stageIdx + ' / ' + s.stageCount : '');
+    if (subTxt !== c.stageNum) { c.stageNum = subTxt; this.tStageNum.nodeValue = subTxt; }
+
     const diff = s.difficulty != null ? s.difficulty
       : (this.game && this.game.stage && this.game.stage.def ? this.game.stage.def.difficulty : null);
     if (diff != null && diff !== c.diff) {
@@ -386,6 +409,16 @@ export class HUD {
         const on = i < lv;
         kids[i].className = on ? (i >= 7 ? 'hot' : 'on') : '';
       }
+    }
+    /* chart-obby convention: a named difficulty band next to the pips.
+       Keyed on its own cache so a hub transition clears it even when the raw
+       difficulty number happens not to change. */
+    const band = s.isHub || diff == null ? null : diffBand(clamp(diff | 0, 0, 10));
+    const bandTxt = band ? band.label : '';
+    if (bandTxt !== c.diffBand) {
+      c.diffBand = bandTxt;
+      this.nDiffBand.textContent = bandTxt;
+      this.nDiffBand.className = 'ah-diffband' + (band ? ' db-' + band.cls : '');
     }
 
     /* --- progress ----------------------------------------------------- */
@@ -678,8 +711,17 @@ export class HUD {
    * FLASHES
    * ====================================================================*/
 
-  /** Full-screen ring wipe in the checkpoint colour + a CHECKPOINT wordmark. */
-  checkpointFlash(index, total) {
+  /**
+   * Full-screen ring wipe in the checkpoint colour + a stage-number wordmark.
+   * Obby convention: touching a checkpoint means entering a new global stage, so
+   * the wordmark is "STAGE 38" (with the total in the sub line). Called with no
+   * arguments — numbering not loaded — it falls back to the classic CHECKPOINT
+   * wordmark.
+   *
+   * @param {number} [globalStage] global stage number just entered (1-based)
+   * @param {number} [globalTotal] total global stages in the game
+   */
+  checkpointFlash(globalStage, globalTotal) {
     const w = window.innerWidth || 1280;
     const h = window.innerHeight || 720;
     const target = (Math.sqrt(w * w + h * h) / 100) * 1.15;
@@ -693,9 +735,15 @@ export class HUD {
     ], { duration: 900, easing: 'linear', fill: 'forwards' });
 
     this.nWord.style.setProperty('--wc', 'var(--cp)');
-    this.tWord.nodeValue = 'CHECKPOINT';
-    this.nWordSub.textContent = (index != null && total != null)
-      ? (index + ' / ' + total) : 'PROGRESS SAVED';
+    const num = globalStage | 0;
+    if (num > 0) {
+      this.tWord.nodeValue = 'STAGE ' + num;
+      this.nWordSub.textContent = (globalTotal | 0) > 0
+        ? 'CHECKPOINT · ' + num + ' / ' + (globalTotal | 0) : 'CHECKPOINT';
+    } else {
+      this.tWord.nodeValue = 'CHECKPOINT';
+      this.nWordSub.textContent = 'PROGRESS SAVED';
+    }
     animateOnce(this.nWord, [
       { opacity: 0, transform: 'translate(-50%,-50%) scale(1.22)', filter: 'blur(6px)', easing: UI_TOKENS.ease.out },
       { opacity: 1, transform: 'translate(-50%,-50%) scale(1)', filter: 'blur(0)', offset: 0.24 },
