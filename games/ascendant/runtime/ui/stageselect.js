@@ -24,6 +24,15 @@ const SAFE_KINDS = new Set(['platform', 'beam', 'mover', 'vanish', 'ice', 'conve
 const KILL_KINDS = new Set(['lava', 'spikes', 'crusher', 'saw', 'chase']);
 const PREVIEW_H = 104;
 
+/* Preview scale clamps (px per world metre). Whole-bounds fitting shrank a
+   long gauntlet into a ~4 px strip of specks; instead the route is
+   straightened (rotated so spawn->finish runs along the canvas) and the
+   scale never drops below K_MIN — a stage longer than the window is CROPPED
+   to a centred window around the route (with edge fades) rather than shrunk
+   into illegibility. */
+const K_MIN = 1.35;
+const K_MAX = 4.5;
+
 /* ---------------------------------------------------------------------------
  * Mini-map renderer — pure function of the stage def.
  * `s` is treated as full size (w,h,d) centred on `p`, per §18 builders.
@@ -50,12 +59,11 @@ function drawPreview(cv, def, pal) {
   const rects = [];
   const segs = [];
   const circles = [];
-  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  const pts = [];                     // every extreme point, flat [x,z, x,z, …]
   let minY = Infinity, maxY = -Infinity;
 
   const acc = (x, z, y) => {
-    if (x < minX) minX = x; if (x > maxX) maxX = x;
-    if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+    pts.push(x, z);
     if (y != null) { if (y < minY) minY = y; if (y > maxY) maxY = y; }
   };
 
@@ -110,22 +118,65 @@ function drawPreview(cv, def, pal) {
   const coins = (def.coins || []).filter((c) => c && Array.isArray(c.p));
   for (const c of coins) acc(c.p[0], c.p[2], c.p[1]);
 
-  if (!isFinite(minX) || !isFinite(minZ)) return false;
+  if (pts.length < 2) return false;
   if (!isFinite(minY)) { minY = 0; maxY = 1; }
 
-  /* ---- fit --------------------------------------------------------- */
+  /* ---- route-aligned frame ----------------------------------------- */
+  /* Straighten the route: rotate the world so spawn->finish runs along the
+     drawing x-axis (falls back to +X, the §18 authoring convention). */
+  let th = 0;
+  if (route.length > 1) {
+    const a0 = route[0], a1 = route[route.length - 1];
+    const dx = a1[0] - a0[0], dz = a1[2] - a0[2];
+    if (Math.hypot(dx, dz) > 4) th = Math.atan2(dz, dx);
+  }
+  const cosT = Math.cos(th), sinT = Math.sin(th);
+
+  /* spans in route space: u along the route, v across it */
+  let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity;
+  for (let i = 0; i < pts.length; i += 2) {
+    const u = pts[i] * cosT + pts[i + 1] * sinT;
+    const v = -pts[i] * sinT + pts[i + 1] * cosT;
+    if (u < minU) minU = u; if (u > maxU) maxU = u;
+    if (v < minV) minV = v; if (v > maxV) maxV = v;
+  }
+  const spanU = Math.max(maxU - minU, 2);
+  const spanV = Math.max(maxV - minV, 2);
+  const uMid = (minU + maxU) / 2, vMid = (minV + maxV) / 2;
+
+  /* Frame angle + scale. kFor(phi) = the largest px-per-metre that still
+     contains the route box at canvas angle phi. When even the level fit
+     lands under K_MIN the stage is cropped anyway, so stage it climbing the
+     canvas diagonal (up-right — this game ascends); otherwise take whichever
+     candidate angle contains it at the larger scale. */
   const pad = 9;
-  const spanX = Math.max(maxX - minX, 2);
-  const spanZ = Math.max(maxZ - minZ, 2);
-  const k = Math.min((w - pad * 2) / spanX, (h - pad * 2) / spanZ);
-  const ox = (w - spanX * k) / 2 - minX * k;
-  const oy = (h - spanZ * k) / 2 - minZ * k;
-  const PX = (x) => ox + x * k;
-  const PZ = (z) => oy + z * k;
+  const iw = w - pad * 2, ih = h - pad * 2;
+  const diag = Math.atan2(ih, iw);
+  const kFor = (phi) => {
+    const c = Math.cos(phi), s = Math.sin(phi);
+    return Math.min(iw / (spanU * c + spanV * s), ih / (spanU * s + spanV * c));
+  };
+  let phi = 0;
+  let kFit = kFor(0);
+  if (kFit < K_MIN) {
+    phi = diag * 0.55;
+    kFit = kFor(phi);
+  } else {
+    for (const cand of [diag * 0.55, diag]) {
+      const kc = kFor(cand);
+      if (kc > kFit + 0.02) { kFit = kc; phi = cand; }
+    }
+  }
+  const k = clamp(kFit, K_MIN, K_MAX);
+  const cropped = k > kFit + 1e-6;
+
+  /* the world point that lands on the canvas centre */
+  const cx = uMid * cosT - vMid * sinT;
+  const cz = uMid * sinT + vMid * cosT;
   const ySpan = Math.max(maxY - minY, 0.001);
   const lift = (y) => clamp((y - minY) / ySpan, 0, 1);
 
-  /* ---- ground ------------------------------------------------------ */
+  /* ---- ground (screen space) ---------------------------------------- */
   const bg = g.createLinearGradient(0, 0, 0, h);
   bg.addColorStop(0, '#0b1422');
   bg.addColorStop(1, '#04070d');
@@ -135,39 +186,50 @@ function drawPreview(cv, def, pal) {
   g.strokeStyle = 'rgba(255,255,255,.045)';
   g.lineWidth = 1;
   g.beginPath();
-  const step = Math.max(8, Math.round(10 * k) / 1);
-  for (let x = (ox % step + step) % step; x < w; x += step) { g.moveTo(x + 0.5, 0); g.lineTo(x + 0.5, h); }
-  for (let y = (oy % step + step) % step; y < h; y += step) { g.moveTo(0, y + 0.5); g.lineTo(w, y + 0.5); }
+  const step = clamp(10 * k, 9, 44);
+  for (let x = (w / 2) % step; x < w; x += step) { g.moveTo(x + 0.5, 0); g.lineTo(x + 0.5, h); }
+  for (let y = (h / 2) % step; y < h; y += step) { g.moveTo(0, y + 0.5); g.lineTo(w, y + 0.5); }
   g.stroke();
 
-  /* ---- hazards under, platforms over ------------------------------- */
+  /* ---- content (route-aligned world space) --------------------------- */
+  g.save();
+  g.translate(w / 2, h / 2);
+  g.rotate(-phi);                 /* drawing +x -> up the canvas diagonal */
+  g.scale(k, k);
+  g.rotate(-th);                  /* world route direction -> drawing +x  */
+  g.translate(-cx, -cz);
+
+  const px = (v) => v / k;        /* "n screen px" expressed in world units */
+  const mn = px(1.6);             /* minimum feature size on screen */
+
+  /* hazards under, platforms over */
   g.lineJoin = 'round';
   for (let pass = 0; pass < 2; pass++) {
     for (const r of rects) {
       if ((pass === 0) !== r.kill) continue;
-      const x = PX(r.x), y = PZ(r.z);
-      const rw = Math.max(1.4, r.w * k), rh = Math.max(1.4, r.d * k);
+      const rw = Math.max(mn, r.w), rh = Math.max(mn, r.d);
       if (r.kill) {
         g.fillStyle = alphaColor(cKill, 0.42);
-        g.fillRect(x, y, rw, rh);
+        g.fillRect(r.x, r.z, rw, rh);
         g.strokeStyle = alphaColor(cKill, 0.85);
-        g.lineWidth = 1;
-        g.strokeRect(x + 0.5, y + 0.5, Math.max(0, rw - 1), Math.max(0, rh - 1));
+        g.lineWidth = px(1);
+        g.strokeRect(r.x, r.z, rw, rh);
       } else {
         const t = lift(r.y);
         g.fillStyle = alphaColor(mixColor('#2a4056', cSafe, 0.25 + t * 0.45), 0.55 + t * 0.35);
-        g.fillRect(x, y, rw, rh);
-        g.fillStyle = alphaColor(cEdge, 0.35 + t * 0.5);
-        g.fillRect(x, y, rw, Math.min(1.4, rh));
+        g.fillRect(r.x, r.z, rw, rh);
+        g.strokeStyle = alphaColor(cEdge, 0.30 + t * 0.45);
+        g.lineWidth = px(0.9);
+        g.strokeRect(r.x, r.z, rw, rh);
       }
     }
   }
 
   for (const c of circles) {
     g.beginPath();
-    g.arc(PX(c.x), PZ(c.z), Math.max(2, c.r * k), 0, Math.PI * 2);
+    g.arc(c.x, c.z, Math.max(px(2), c.r), 0, Math.PI * 2);
     g.strokeStyle = alphaColor(c.c, 0.7);
-    g.lineWidth = 1;
+    g.lineWidth = px(1);
     g.stroke();
     g.fillStyle = alphaColor(c.c, 0.12);
     g.fill();
@@ -175,23 +237,26 @@ function drawPreview(cv, def, pal) {
 
   for (const s of segs) {
     g.beginPath();
-    g.moveTo(PX(s.a[0]), PZ(s.a[2]));
-    g.lineTo(PX(s.b[0]), PZ(s.b[2]));
+    g.moveTo(s.a[0], s.a[2]);
+    g.lineTo(s.b[0], s.b[2]);
     g.strokeStyle = s.c;
-    g.lineWidth = s.dash ? 1 : 1.4;
-    if (s.dash) g.setLineDash([2, 3]); else g.setLineDash([]);
+    g.lineWidth = s.dash ? px(1) : px(1.4);
+    if (s.dash) g.setLineDash([px(2.5), px(3)]); else g.setLineDash([]);
     g.stroke();
     g.setLineDash([]);
   }
 
-  /* ---- route ------------------------------------------------------- */
+  /* ---- route: soft glow underlay + dashed spine ---------------------- */
   if (route.length > 1) {
     g.beginPath();
-    g.moveTo(PX(route[0][0]), PZ(route[0][2]));
-    for (let i = 1; i < route.length; i++) g.lineTo(PX(route[i][0]), PZ(route[i][2]));
-    g.strokeStyle = alphaColor(cAcc, 0.55);
-    g.lineWidth = 1.2;
-    g.setLineDash([4, 3]);
+    g.moveTo(route[0][0], route[0][2]);
+    for (let i = 1; i < route.length; i++) g.lineTo(route[i][0], route[i][2]);
+    g.strokeStyle = alphaColor(cAcc, 0.16);
+    g.lineWidth = px(3.4);
+    g.stroke();
+    g.strokeStyle = alphaColor(cAcc, 0.6);
+    g.lineWidth = px(1.3);
+    g.setLineDash([px(4.5), px(3.5)]);
     g.stroke();
     g.setLineDash([]);
   }
@@ -199,7 +264,7 @@ function drawPreview(cv, def, pal) {
   /* ---- coins ------------------------------------------------------- */
   for (const c of coins) {
     g.beginPath();
-    g.arc(PX(c.p[0]), PZ(c.p[2]), 1.6, 0, Math.PI * 2);
+    g.arc(c.p[0], c.p[2], px(1.7), 0, Math.PI * 2);
     g.fillStyle = alphaColor(cFin, 0.9);
     g.fill();
   }
@@ -210,25 +275,37 @@ function drawPreview(cv, def, pal) {
     g.moveTo(x, y - r); g.lineTo(x + r, y); g.lineTo(x, y + r); g.lineTo(x - r, y);
     g.closePath();
     g.fillStyle = fill; g.fill();
-    if (stroke) { g.strokeStyle = stroke; g.lineWidth = 1; g.stroke(); }
+    if (stroke) { g.strokeStyle = stroke; g.lineWidth = px(1); g.stroke(); }
   };
 
   if (def.spawn && Array.isArray(def.spawn.p)) {
-    const x = PX(def.spawn.p[0]), y = PZ(def.spawn.p[2]);
-    g.beginPath(); g.arc(x, y, 3.4, 0, Math.PI * 2);
-    g.strokeStyle = alphaColor('#ffffff', 0.85); g.lineWidth = 1.4; g.stroke();
-    g.beginPath(); g.arc(x, y, 1.2, 0, Math.PI * 2);
+    const x = def.spawn.p[0], y = def.spawn.p[2];
+    g.beginPath(); g.arc(x, y, px(3.4), 0, Math.PI * 2);
+    g.strokeStyle = alphaColor('#ffffff', 0.85); g.lineWidth = px(1.4); g.stroke();
+    g.beginPath(); g.arc(x, y, px(1.2), 0, Math.PI * 2);
     g.fillStyle = '#ffffff'; g.fill();
   }
   for (const c of (def.checkpoints || [])) {
     if (!c || !Array.isArray(c.p)) continue;
-    diamond(PX(c.p[0]), PZ(c.p[2]), 3, alphaColor(cCp, 0.95), alphaColor('#000', 0.5));
+    diamond(c.p[0], c.p[2], px(3), alphaColor(cCp, 0.95), alphaColor('#000', 0.5));
   }
   if (def.finish && Array.isArray(def.finish.p)) {
-    const x = PX(def.finish.p[0]), y = PZ(def.finish.p[2]);
     g.shadowColor = cFin; g.shadowBlur = 8;
-    diamond(x, y, 4.6, cFin, alphaColor('#000', 0.5));
+    diamond(def.finish.p[0], def.finish.p[2], px(4.6), cFin, alphaColor('#000', 0.5));
     g.shadowBlur = 0;
+  }
+
+  g.restore();
+
+  /* ---- cropped-window edge fades ------------------------------------ */
+  if (cropped) {
+    const fw = 26;
+    let lg = g.createLinearGradient(0, 0, fw, 0);
+    lg.addColorStop(0, 'rgba(4,7,13,.85)'); lg.addColorStop(1, 'rgba(4,7,13,0)');
+    g.fillStyle = lg; g.fillRect(0, 0, fw, h);
+    lg = g.createLinearGradient(w, 0, w - fw, 0);
+    lg.addColorStop(0, 'rgba(4,7,13,.85)'); lg.addColorStop(1, 'rgba(4,7,13,0)');
+    g.fillStyle = lg; g.fillRect(w - fw, 0, fw, h);
   }
 
   /* ---- vignette ---------------------------------------------------- */
@@ -461,6 +538,25 @@ export class StageSelect {
   stageName(id) {
     const d = this._defs.get(id);
     return d && d.name ? d.name : null;
+  }
+
+  /**
+   * Medals earned across every level (gold/silver/bronze vs each def's par).
+   * Null until the defs are cached — the title menu shows an em dash and
+   * re-refreshes when its preload() resolves. Shared with the title so both
+   * surfaces speak the same stat vocabulary from the same data.
+   */
+  medalCount() {
+    if (!this._defs.size) return null;
+    let m = 0;
+    for (const w of (WORLDS || [])) {
+      for (const id of (w.stages || [])) {
+        const def = this._defs.get(id);
+        const r = this._rec(id);
+        if (r && r.best != null && def && def.par && medalFor(r.best, def.par)) m++;
+      }
+    }
+    return m;
   }
 
   _rec(stageId) {

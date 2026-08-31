@@ -69,7 +69,7 @@ export class HUD {
       timeMain: '', timeFrac: '', split: '', splitCls: '', total: '', best: '',
       deaths: -1, coins: -1, coinTotal: -1, speed: -1,
       air: null, danger: -1, dangerLabel: '', showTimer: null, theme: null,
-      hudScale: -1,
+      hudScale: -1, isHub: null,
     };
 
     this._toastLive = [];
@@ -308,8 +308,14 @@ export class HUD {
     const show = s.showTimer !== false;
     if (show !== this._c.showTimer) {
       this._c.showTimer = show;
-      this.nTR.style.display = show ? '' : 'none';
+      this._paintTimerVis();
     }
+  }
+
+  /** Timers show only when the setting allows AND we are not in the hub. */
+  _paintTimerVis() {
+    const on = this._c.showTimer !== false && this._c.isHub !== true;
+    this.nTR.style.display = on ? '' : 'none';
   }
 
   /** Re-tint the HUD from a theme id or ThemeDef. */
@@ -367,6 +373,18 @@ export class HUD {
     const c = this._c;
 
     this._syncTheme(s);
+
+    /* --- hub: a lobby shows no race chrome ---------------------------- */
+    /* The progress rail (+ checkpoint pips + START/FINISH legend), the
+       timers and the difficulty pips are stage furniture; the hub renders
+       none of them (the difficulty BAND already gates on isHub below). */
+    const isHub = !!s.isHub;
+    if (isHub !== c.isHub) {
+      c.isHub = isHub;
+      this.nTC.style.display = isHub ? 'none' : '';
+      this.nDiff.style.display = isHub ? 'none' : '';
+      this._paintTimerVis();
+    }
 
     /* --- names ------------------------------------------------------- */
     if (s.worldName !== undefined && s.worldName !== c.world) {

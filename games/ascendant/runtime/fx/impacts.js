@@ -5,17 +5,25 @@
  * The single place where a GAME EVENT becomes a felt effect. Player and Stage raise
  * semantic events ("landed at 21 m/s on ice", "died to lava"); this module turns each
  * one into the exact combination of particles, sound, camera work, post-processing and
- * decals that sells it — and, for death, owns the whole 620 ms timeline as a state
- * machine the Game polls. Timing lives HERE, in one place, so it can never drift.
+ * decals that sells it. For death, runtime/game.js OWNS the clock and the gate
+ * (its D_FLASH/D_HOLD/D_FADE/D_RESTORE constants); the DEATH_TIMELINE below is a
+ * MIRROR of those numbers so the damage vignette this module drives ends exactly
+ * when the Game's veil does. If you change one file, change BOTH — the two state
+ * machines run on the same real-time clock from the same instant, and a mismatch
+ * here is how a dead vignette once smeared ~200 ms into the next attempt.
  *
- *   death timeline (contract §21, 620 ms total)
- *   ┌── flash 80 ms ──┬── hold 150 ms ──┬── fade 130 ms ──┬── restore 200 ms ──┐  (game.js owns the gate)
+ *   death timeline (mirrors game.js; contract §21 budget: measured median <= 620 ms)
+ *   ┌── flash 80 ms ──┬── hold 140 ms ──┬── fade 130 ms ──┬── restore 190 ms ──┐  (game.js owns the gate)
  *   pulse + slow-mo    death cam drop    fade to black     fade back in
- *                                        ^ respawn fires at 410 ms, input unlocks
+ *                                        ^ respawn/world swap at 350 ms, input unlocks
+ *   designed total 540 ms — deliberately under the 620 ms budget (rAF quantisation)
  *
  * The Game loop is expected to do:
  *     impacts.update(realDt);                 // REAL dt, never scaled
- *     const dt = realDt * impacts.timeScale;  // gameplay dt
+ *     const dt = realDt * impacts.timeScale;  // gameplay dt — game.js computes its
+ *                                             // `sdt` in _update(); that multiply is
+ *                                             // where the death hit-stop reaches
+ *                                             // hazards and the player
  *     if (impacts.consumeRespawn()) this.respawn();
  *
  * Art-direction law for everything in this file: an effect must READ in a single
@@ -30,15 +38,19 @@ import { clamp, lerp, smoothstep, easeOutCubic } from '../core/util.js';
  *  timeline + tables
  * ------------------------------------------------------------------ */
 
+/* MUST mirror runtime/game.js D_FLASH=80 / D_HOLD=140 / D_FADE=130 / D_RESTORE=190
+ * (cumulative 80 / 220 / 350 / 540 ms). game.js owns the gate: it performs the
+ * respawn at its own fade-end and unsuspends input there, so any drift in these
+ * numbers leaks this module's vignette into the next attempt. */
 export const DEATH_TIMELINE = Object.freeze({
-  flash: 0.09,
-  hold: 0.18,
-  fade: 0.14,
-  restore: 0.21,
-  flashEnd: 0.09,
-  holdEnd: 0.27,
-  fadeEnd: 0.41,     // respawn happens here — screen is fully black
-  total: 0.62,
+  flash: 0.08,
+  hold: 0.14,
+  fade: 0.13,
+  restore: 0.19,
+  flashEnd: 0.08,
+  holdEnd: 0.22,
+  fadeEnd: 0.35,     // respawn happens here — screen is fully black
+  total: 0.54,
 });
 
 /**
@@ -191,11 +203,14 @@ export class Impacts {
    *  so nothing here assumes a method exists.
    * ------------------------------------------------------------------ */
 
-  _sfx(name, volume, rate) {
+  _sfx(name, gain, rate) {
     const a = this.audio;
     if (!a || typeof a.sfx !== 'function') return;
     try {
-      a.sfx(name, { volume: clamp(volume === undefined ? 1 : volume, 0, 2), rate: rate || 1 });
+      // core/audio.js reads `gain` (see its sfx() options: {gain, rate, ...}).
+      // This used to pass `volume:` — a key audio.js never reads — which
+      // silently flattened every authored loudness curve in this file to 1.
+      a.sfx(name, { gain: clamp(gain === undefined ? 1 : gain, 0, 2), rate: rate || 1 });
     } catch (e) { /* audio must never take a frame down */ }
   }
 
@@ -322,8 +337,9 @@ export class Impacts {
   }
 
   /**
-   * DEATH — starts the 620 ms sequence and returns immediately. Everything after
-   * this point is driven by update(); the Game polls timeScale / consumeRespawn().
+   * DEATH — starts the 540 ms sequence (mirroring game.js's gate) and returns
+   * immediately. Everything after this point is driven by update(); the Game
+   * polls timeScale / consumeRespawn().
    * @param {string} cause 'lava'|'void'|'spike'|'laser'|'crush'|'saw'|'manual'
    * @param {THREE.Vector3|number[]} pos
    * @param {THREE.Vector3|number[]} [dir] direction of the blow (hazard -> player)
@@ -599,7 +615,7 @@ export class Impacts {
    *  polled state (the Game reads these)
    * ------------------------------------------------------------------ */
 
-  /** true exactly once per death, at the fade-to-black low point (410 ms) */
+  /** true exactly once per death, at the fade-to-black low point (350 ms) */
   consumeRespawn() {
     if (!this._respawnPending) return false;
     this._respawnPending = false;

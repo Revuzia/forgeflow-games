@@ -1414,13 +1414,19 @@ function bakeSand() {
       const grit = fbm(u, v, 90, 2, 0.5, 4747);
       const damp = smoothstep(0.62, 0.86, fbm(u, v, 7, 3, 0.55, 1010));
 
-      B.h[i] = 0.5 + (drift - 0.5) * 0.42 + ripple * 0.16 + (grit - 0.5) * 0.10;
+      /* ripple weight was 0.16 — under a flat fill the dune structure produced
+       * no visible normal response at all and the money-shot blocks read as a
+       * uniform speckle (temple-1_1, 2026-08-31 critic pass). The wind-ripple
+       * field now DOMINATES the height and the albedo shades with it, so the
+       * surface reads as sand from 2 m and from 25 m. */
+      B.h[i] = 0.5 + (drift - 0.5) * 0.40 + (ripple - 0.5) * 0.34 + (grit - 0.5) * 0.10;
 
       let r = 0.560, g = 0.462, b = 0.318;
-      r += (drift - 0.5) * 0.10 + ripple * 0.075 + (grit - 0.5) * 0.05;
-      g += (drift - 0.5) * 0.085 + ripple * 0.065 + (grit - 0.5) * 0.045;
-      b += (drift - 0.5) * 0.060 + ripple * 0.045 + (grit - 0.5) * 0.035;
-      r = lerp(r, r * 0.62, damp); g = lerp(g, g * 0.60, damp); b = lerp(b, b * 0.62, damp);
+      const shade = (ripple - 0.5) * 2;               // -1 trough .. +1 crest
+      r += (drift - 0.5) * 0.14 + shade * 0.075 + (grit - 0.5) * 0.05;
+      g += (drift - 0.5) * 0.12 + shade * 0.062 + (grit - 0.5) * 0.045;
+      b += (drift - 0.5) * 0.085 + shade * 0.040 + (grit - 0.5) * 0.035;
+      r = lerp(r, r * 0.58, damp); g = lerp(g, g * 0.56, damp); b = lerp(b, b * 0.58, damp);
       // mica sparkle
       if (hash2i(x, y, 8181) > 0.9955) { r = 1.0; g = 0.98; b = 0.90; }
 
@@ -1435,11 +1441,11 @@ function bakeSand() {
   const maps = {
     map: upload(commitA(B), 'sand.albedo', true, 0.55),
     orm: upload(commitO(B), 'sand.orm', false, 0.55),
-    normal: upload(heightToNormal(B.h, n, 1.0), 'sand.normal', false, 0.55),
+    normal: upload(heightToNormal(B.h, n, 1.6), 'sand.normal', false, 0.55),
   };
   return assemble('sand', maps, {
     color: 0xffffff, roughness: 1, metalness: 0,
-    normalScale: new THREE.Vector2(0.8, 0.8), envMapIntensity: 0.5,
+    normalScale: new THREE.Vector2(1.15, 1.15), envMapIntensity: 0.5,
   }, 0.55);
 }
 

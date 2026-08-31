@@ -10,7 +10,7 @@
 import { clamp } from '../core/util.js';
 import { Settings, QUALITY } from '../core/settings.js';
 import { Save } from '../core/save.js';
-import { WORLDS } from '../data/index.js';
+import { WORLDS, stageNumbering } from '../data/index.js';
 import {
   injectStyles, UI_TOKENS, UIRegistry, el, fmtMs, makeButton, makeSegmented,
   makeSlider, makeToggle, makeRow, animateOnce, FocusList, uiAction, uiSfx,
@@ -62,6 +62,7 @@ export class Menu {
     this.page = null;
     this._back = 'title';
     this._listening = null;
+    this._bootWait = null;
 
     this.el = el('div', 'asc-menu asc-ui');
     this.el.appendChild(el('div', 'am-scrim'));
@@ -102,8 +103,10 @@ export class Menu {
     return p;
   }
 
-  /** A glass panel page with a head / scrolling body / footer. */
-  _panel(page, eyebrow, title, wide) {
+  /** A glass panel page with a head / scrolling body / footer.
+   *  `hints` is the per-page footer key legend — a page only advertises the
+   *  controls its widgets actually have (a button list has no ←→ ADJUST). */
+  _panel(page, eyebrow, title, wide, hints) {
     const panel = el('div', 'am-panel asc-glass asc-scan' + (wide ? ' wide' : ''));
     const head = el('div', 'am-head');
     const hl = el('div', 'h-l');
@@ -115,11 +118,13 @@ export class Menu {
     const body = el('div', 'am-body');
     const foot = el('div', 'am-foot');
     const keys = el('div', 'keys');
-    keys.innerHTML =
-      '<span><b class="asc-kbd">↑</b><b class="asc-kbd">↓</b>NAVIGATE</span>' +
-      '<span><b class="asc-kbd">←</b><b class="asc-kbd">→</b>ADJUST</span>' +
-      '<span><b class="asc-kbd">ENTER</b>SELECT</span>' +
-      '<span><b class="asc-kbd">ESC</b>BACK</span>';
+    const hs = hints || [
+      [['↑', '↓'], 'NAVIGATE'], [['←', '→'], 'ADJUST'],
+      [['ENTER'], 'SELECT'], [['ESC'], 'BACK'],
+    ];
+    keys.innerHTML = hs.map(([ks, label]) =>
+      '<span>' + ks.map((k) => '<b class="asc-kbd">' + k + '</b>').join('') + label + '</span>'
+    ).join('');
     const brand = el('div');
     brand.textContent = 'ASCENDANT';
     foot.appendChild(keys); foot.appendChild(brand);
@@ -159,13 +164,16 @@ export class Menu {
     wrap.appendChild(rule); wrap.appendChild(list);
     p.appendChild(wrap);
 
+    /* version only — the middleware readout ("THREE R172 · WEBGL 2") was
+       debug-overlay smell, not player information */
     const ver = el('div', 'am-version');
-    ver.innerHTML = '<b>V' + VERSION + '</b> &nbsp;·&nbsp; THREE R172 &nbsp;·&nbsp; WEBGL 2';
+    ver.innerHTML = '<b>V' + VERSION + '</b>';
     p.appendChild(ver);
 
+    /* Same stat vocabulary as stage select: CLEARED / MEDALS / DEATHS / TIME. */
     const stats = el('div', 'am-title-stats');
     this.tStats = {};
-    for (const k of ['CLEARED', 'DEATHS', 'TIME', 'COINS']) {
+    for (const k of ['CLEARED', 'MEDALS', 'DEATHS', 'TIME']) {
       const s = el('div', 'am-tstat');
       const kk = el('div', 'k'); kk.textContent = k;
       const vv = el('div', 'v'); vv.textContent = '—';
@@ -189,14 +197,40 @@ export class Menu {
     }
     let totals = null;
     try { totals = Save && typeof Save.totals === 'function' ? Save.totals() : null; } catch (e) { totals = null; }
-    let stageCount = 0;
-    try { for (const w of WORLDS || []) stageCount += (w.stages || []).length; } catch (e) { /* ignore */ }
+
+    /* CLEARED counts GLOBAL stages (one checkpoint segment = one stage) from
+       stageNumbering() — the SAME source stage select uses, so the front door
+       and the grid can never disagree ("0 / 101", not "0 / 12"). Falls back
+       to level counts only until the numbering has loaded (the preload above
+       re-runs this refresh the moment it lands). */
+    let num = null;
+    try { num = typeof stageNumbering === 'function' ? stageNumbering() : null; } catch (e) { num = null; }
+    if (num && num.total) {
+      let seg = 0;
+      try {
+        for (const [id, e] of num.perStage) {
+          const st = Save.stage(id);
+          if (st && st.cleared) seg += e.segments;
+          else seg += Math.min(Math.max(0, st ? st.cpIndex | 0 : 0), e.segments - 1);
+        }
+      } catch (e) { seg = 0; }
+      this.tStats.CLEARED.textContent = seg + ' / ' + num.total;
+    } else {
+      let stageCount = 0;
+      try { for (const w of WORLDS || []) stageCount += (w.stages || []).length; } catch (e) { /* ignore */ }
+      this.tStats.CLEARED.textContent = ((totals && totals.cleared) | 0) + ' / ' + stageCount;
+    }
+
+    /* MEDALS needs the stage defs (par times) — stage select owns that cache. */
+    let medals = null;
+    try {
+      medals = sel && typeof sel.medalCount === 'function' ? sel.medalCount() : null;
+    } catch (e) { medals = null; }
+    this.tStats.MEDALS.textContent = medals == null ? '—' : String(medals);
 
     if (totals) {
-      this.tStats.CLEARED.textContent = (totals.cleared | 0) + ' / ' + stageCount;
       this.tStats.DEATHS.textContent = String(totals.deaths | 0);
       this.tStats.TIME.textContent = totals.timeMs ? fmtMs(totals.timeMs) : '—';
-      this.tStats.COINS.textContent = String(totals.coins | 0);
     }
 
     const target = this._continueTarget();
@@ -258,10 +292,14 @@ export class Menu {
 
   _buildPause() {
     const p = this._page('pause', 'am-pause');
-    const ui = this._panel(p, 'PAUSED', 'STAGE');
+    /* buttons only — no adjustable rows, so no ←→ ADJUST hint */
+    const ui = this._panel(p, 'PAUSED', 'STAGE', false, [
+      [['↑', '↓'], 'NAVIGATE'], [['ENTER'], 'SELECT'], [['ESC'], 'RESUME'],
+    ]);
     this.pauseUI = ui;
 
     this.pStats = {};
+    this.pStatEls = {};
     for (const k of ['TIME', 'DEATHS', 'BEST', 'CHECKPOINT']) {
       const s = el('div', 'am-hstat');
       const kk = el('div', 'k'); kk.textContent = k;
@@ -269,6 +307,7 @@ export class Menu {
       s.appendChild(kk); s.appendChild(vv);
       ui.hr.appendChild(s);
       this.pStats[k] = vv;
+      this.pStatEls[k] = s;
     }
 
     const list = el('div', 'am-list');
@@ -312,6 +351,12 @@ export class Menu {
     const cpCount = def && Array.isArray(def.checkpoints) ? def.checkpoints.length : 0;
     const cpIdx = rec ? (rec.cpIndex | 0) : 0;
     this.pStats.CHECKPOINT.textContent = cpCount ? cpIdx + ' / ' + cpCount : '—';
+
+    /* The hub is a lobby — checkpoint bookkeeping and best times are race
+       stats and have no meaning there. */
+    const isHub = !!def && (def.isHub === true || def.id === 'hub' || def.world == null);
+    this.pStatEls.CHECKPOINT.style.display = isHub ? 'none' : '';
+    this.pStatEls.BEST.style.display = isHub ? 'none' : '';
 
     this.pBtnRestart.setSub(def ? (def.name || def.id) : '');
     this.nav.pause.refresh();
@@ -475,7 +520,9 @@ export class Menu {
 
   _buildControls() {
     const p = this._page('controls', 'am-controls');
-    const ui = this._panel(p, 'INPUT MAP', 'CONTROLS', true);
+    const ui = this._panel(p, 'INPUT MAP', 'CONTROLS', true, [
+      [['↑', '↓'], 'NAVIGATE'], [['ENTER'], 'REBIND'], [['ESC'], 'BACK'],
+    ]);
     this.controlsUI = ui;
 
     const head = el('div', 'am-ctlhead');
@@ -623,7 +670,9 @@ export class Menu {
 
   _buildCredits() {
     const p = this._page('credits', 'am-credits-page');
-    const ui = this._panel(p, 'ASCENDANT', 'CREDITS');
+    const ui = this._panel(p, 'ASCENDANT', 'CREDITS', false, [
+      [['↑', '↓'], 'NAVIGATE'], [['ENTER'], 'SELECT'], [['ESC'], 'BACK'],
+    ]);
     const body = el('div', 'am-credits');
     const block = (k, v) => {
       const b = el('div', 'c-block');
@@ -670,7 +719,6 @@ export class Menu {
       pushCapture(this.game);
       if (UIRegistry.hud) UIRegistry.hud.hideFor('menu');
       this.el.classList.add('on');
-      animateOnce(this.el, [{ opacity: 0 }, { opacity: 1 }], { duration: 220 });
     }
 
     for (const k in this.pages) this.pages[k].classList.toggle('on', k === id);
@@ -686,8 +734,58 @@ export class Menu {
     const nav = this.nav[id];
     if (nav) { nav.refresh(); nav.index = -1; nav.focusIndex(0, true); }
 
+    /* Boot handoff: game.boot() opens the title while the #boot splash still
+       covers the screen. Revealing now double-exposes two ASCENDANT lockups
+       and burns the whole staggered entrance behind the splash — so hold the
+       menu invisible and play the entrance only after the splash has faded. */
+    if (this._deferForBoot()) return;
+
+    this._reveal(id);
+  }
+
+  /** Fade the menu in and run the page entrance. */
+  _reveal(id) {
+    this.el.classList.remove('asc-gone');
+    animateOnce(this.el, [{ opacity: 0 }, { opacity: 1 }], { duration: 220 });
     this._animateIn(id);
     uiSfx(this.game, 'ui_ok');
+  }
+
+  /**
+   * True while the boot splash (#boot, index.html) is still covering the
+   * screen — the reveal is queued for the moment its fade-out finishes
+   * (transitionend on opacity, with a poll fallback).
+   */
+  _deferForBoot() {
+    let boot = null;
+    try { boot = document.getElementById('boot'); } catch (e) { boot = null; }
+    const covering = !!(boot && boot.parentNode && !boot.classList.contains('gone'));
+    if (!covering) { this._cancelBootWait(); return false; }
+    this.el.classList.add('asc-gone');
+    if (this._bootWait) return true;           /* already queued */
+    const fire = () => {
+      if (!this._bootWait) return;
+      this._cancelBootWait();
+      if (!this._open) return;
+      this._reveal(this.page);
+    };
+    const onEnd = (ev) => { if (ev.target === boot && ev.propertyName === 'opacity') fire(); };
+    boot.addEventListener('transitionend', onEnd);
+    const timer = setInterval(() => {
+      try {
+        if (!boot.parentNode || parseFloat(getComputedStyle(boot).opacity) <= 0.02) fire();
+      } catch (e) { fire(); }
+    }, 120);
+    this._bootWait = { boot, onEnd, timer };
+    return true;
+  }
+
+  _cancelBootWait() {
+    const w = this._bootWait;
+    if (!w) return;
+    this._bootWait = null;
+    try { w.boot.removeEventListener('transitionend', w.onEnd); } catch (e) { /* ignore */ }
+    clearInterval(w.timer);
   }
 
   _animateIn(id) {
@@ -728,8 +826,11 @@ export class Menu {
     if (!this._open) return;
     this._open = false;
     this._listening = null;
+    this._cancelBootWait();
     const a = animateOnce(this.el, [{ opacity: 1 }, { opacity: 0 }], { duration: 190 });
-    const done = () => { if (!this._open) this.el.classList.remove('on'); };
+    const done = () => {
+      if (!this._open) { this.el.classList.remove('on'); this.el.classList.remove('asc-gone'); }
+    };
     if (a) a.onfinish = done; else done();
     if (UIRegistry.hud) UIRegistry.hud.showFor('menu');
     const playing = !this.game || this.game.state === 'playing' || this.game.state === 'hub' ||
@@ -795,6 +896,7 @@ export class Menu {
    * ====================================================================*/
 
   dispose() {
+    this._cancelBootWait();
     window.removeEventListener('keydown', this._onKey, true);
     if (this.el && this.el.parentNode) this.el.parentNode.removeChild(this.el);
     if (UIRegistry.menu === this) UIRegistry.menu = null;

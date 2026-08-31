@@ -33,10 +33,11 @@ const BASE_PALETTE = {
 };
 
 export const UI_TOKENS = {
-  /** Font stacks. No webfonts load in this sandbox — the stack degrades from
-   *  condensed display grotesques (if the user has them) to Bahnschrift
-   *  (ships with Windows 10+, variable + condensed + tabular figures) to
-   *  Segoe UI Variable to system-ui. */
+  /** Font stacks. Rajdhani (SIL OFL) ships with the game as WOFF2
+   *  (assets/fonts/, @font-face below) so the condensed-display look no
+   *  longer gambles on the viewer's OS. The rest of the stack is the
+   *  fallback chain: Bahnschrift (Windows 10+), Segoe UI Variable,
+   *  system-ui. */
   font: {
     display:
       "'Rajdhani','Barlow Condensed','Bahnschrift SemiCondensed','Bahnschrift'," +
@@ -223,6 +224,22 @@ const STYLE_ID = 'asc-ui-style';
 let _injected = false;
 
 const CSS = `
+/* ===== shipped display face ============================================ */
+/* Rajdhani — SIL Open Font License. Latin subset, ~15 KB per weight.
+   font-display:swap keeps first paint instant on a cold cache. */
+@font-face{
+  font-family:'Rajdhani'; font-style:normal; font-weight:400; font-display:swap;
+  src:url('assets/fonts/rajdhani-400-latin.woff2') format('woff2');
+}
+@font-face{
+  font-family:'Rajdhani'; font-style:normal; font-weight:600; font-display:swap;
+  src:url('assets/fonts/rajdhani-600-latin.woff2') format('woff2');
+}
+@font-face{
+  font-family:'Rajdhani'; font-style:normal; font-weight:700; font-display:swap;
+  src:url('assets/fonts/rajdhani-700-latin.woff2') format('woff2');
+}
+
 /* ===== custom properties ============================================== */
 :root{
   --f-display:${UI_TOKENS.font.display};
@@ -509,6 +526,84 @@ const CSS = `
 }
 `;
 
+/* ---------------------------------------------------------------------------
+ * 4b. GAME-OVERLAY BRIDGE
+ * game.js owns the #asc-intro / #asc-prompt / #asc-cont nodes and carries its
+ * own fallback styling (GAME_CSS, its private --asc-* tokens at weight 200).
+ * The design system re-skins those surfaces here so the whole game reads as
+ * ONE type system: tokens, display weights, and the live per-world --accent
+ * that setUITheme() re-tints. Selectors are deliberately over-specified
+ * (div#…) so they beat GAME_CSS's #id .class rules regardless of which
+ * <style> tag lands in <head> first.
+ * -------------------------------------------------------------------------*/
+const BRIDGE_CSS = `
+/* ===== stage-intro card ================================================= */
+/* Readability scrim: the card sits over raw sky in bright worlds (Sky
+   Temple), so a soft radial pool of dark backs the whole lockup. It lives on
+   #asc-intro itself and therefore fades with the card's own opacity. */
+div#asc-intro{
+  background:radial-gradient(52% 46% at 50% 38%,
+    rgba(2,5,10,.58), rgba(2,5,10,.30) 55%, rgba(2,5,10,0) 76%);
+}
+div#asc-intro .asc-intro-world{
+  font:600 11px/1 var(--f-display); letter-spacing:.44em; margin-left:.44em;
+  color:var(--accent); text-transform:uppercase; opacity:1;
+  text-shadow:0 1px 12px rgba(0,0,0,.85), 0 0 1px rgba(0,0,0,.9);
+}
+div#asc-intro .asc-intro-name{
+  font:700 clamp(34px,6vw,72px)/1 var(--f-display); letter-spacing:.05em;
+  margin-left:.05em; text-transform:uppercase;
+  background:linear-gradient(180deg,#ffffff 16%,#e8f3fd 50%,var(--accent-hot) 112%);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  filter:drop-shadow(0 2px 6px rgba(0,0,0,.85)) drop-shadow(0 10px 30px rgba(0,0,0,.55));
+}
+div#asc-intro .asc-intro-sub{
+  font:600 12px/1.5 var(--f-ui); letter-spacing:.24em; margin-left:.24em;
+  color:var(--ink-dim); text-transform:uppercase;
+  text-shadow:0 1px 10px rgba(0,0,0,.85), 0 0 1px rgba(0,0,0,.9);
+}
+div#asc-intro .asc-intro-inner::before,
+div#asc-intro .asc-intro-inner::after{
+  background:linear-gradient(90deg,transparent,var(--accent),transparent);
+}
+div#asc-intro .asc-diff-label{
+  font:600 9px/1 var(--f-display); letter-spacing:.36em; color:var(--ink-mute);
+  text-shadow:0 1px 8px rgba(0,0,0,.8);
+}
+div#asc-intro .asc-pips u.on{ background:var(--accent); box-shadow:0 0 8px var(--accent-glow); }
+
+/* Hub intro de-dupe: game.js hardcodes the kicker to the hub's own name,
+   stacking "THE SANCTUM" over "THE SANCTUM". The hub is the only intro whose
+   difficulty row is inline display:none — key on that and swap the kicker
+   text for the brand. STOPGAP: the durable fix is the kicker string in
+   game.js _startIntro (not this module's file). Degrades to the old
+   duplicate where :has() is unsupported. */
+div#asc-intro:has(.asc-intro-diff[style*="none"]) .asc-intro-world{
+  font-size:0; letter-spacing:0; margin-left:0;
+}
+div#asc-intro:has(.asc-intro-diff[style*="none"]) .asc-intro-world::before{
+  content:'ASCENDANT'; font:600 11px/1 var(--f-display);
+  letter-spacing:.44em; margin-left:.44em;
+}
+
+/* ===== prompt + continue line =========================================== */
+div#asc-prompt .asc-prompt-text{
+  font:600 13px/1 var(--f-display); letter-spacing:.2em; margin-left:.2em;
+  color:var(--ink); text-transform:uppercase;
+}
+div#asc-prompt .asc-prompt-sub{
+  font:600 10px/1 var(--f-ui); letter-spacing:.3em; color:var(--ink-mute);
+}
+div#asc-prompt .asc-key{
+  background:var(--accent); color:var(--accent-ink);
+  box-shadow:0 2px 0 var(--accent-dim), 0 0 16px var(--accent-glow);
+}
+div#asc-cont span{
+  font:600 11px/1 var(--f-display); letter-spacing:.42em; margin-left:.42em;
+  color:var(--ink-dim);
+}
+`;
+
 /** Idempotent. Injects the whole design system into a single <style> tag. */
 export function injectStyles() {
   if (_injected && document.getElementById(STYLE_ID)) return;
@@ -518,7 +613,7 @@ export function injectStyles() {
     tag.id = STYLE_ID;
     document.head.appendChild(tag);
   }
-  tag.textContent = CSS + HUD_CSS + MENU_CSS + SELECT_CSS;
+  tag.textContent = CSS + HUD_CSS + MENU_CSS + SELECT_CSS + BRIDGE_CSS;
   _injected = true;
 }
 
@@ -1267,7 +1362,8 @@ const HUD_CSS = `
   position:absolute; left:0; right:0; top:23px;
   display:flex; justify-content:space-between;
   font-family:var(--f-num); font-size:${UI_TOKENS.type['2xs']}px; letter-spacing:.28em;
-  text-transform:uppercase; color:var(--ink-mute);
+  text-transform:uppercase; color:var(--ink-dim);
+  text-shadow:0 1px 10px rgba(0,0,0,.75), 0 0 1px rgba(0,0,0,.8);
 }
 .ah-prog-legend span:last-child{ margin-right:-2px; }
 
@@ -1524,9 +1620,15 @@ const MENU_CSS = `
   backdrop-filter:blur(18px) saturate(.86) brightness(.72);
   -webkit-backdrop-filter:blur(18px) saturate(.86) brightness(.72);
 }
+/* The title stages the live 3D scene as its backdrop: a horizontal gradient
+   protects only the left menu column and the blur drops to a whisper so the
+   right ~60% of the frame is the game, not near-black. */
 .asc-menu.is-title .am-scrim{
-  backdrop-filter:blur(9px) saturate(1.06) brightness(.62);
-  -webkit-backdrop-filter:blur(9px) saturate(1.06) brightness(.62);
+  background:linear-gradient(94deg,
+    rgba(3,6,12,.88) 0%, rgba(3,6,12,.68) 26%, rgba(3,6,12,.26) 50%,
+    rgba(3,6,12,.06) 68%, rgba(3,6,12,.34) 100%);
+  backdrop-filter:blur(2.5px) saturate(1.08) brightness(.88);
+  -webkit-backdrop-filter:blur(2.5px) saturate(1.08) brightness(.88);
 }
 .asc-menu .am-grain{
   position:absolute; inset:0; pointer-events:none; opacity:.5;
@@ -1584,11 +1686,13 @@ const MENU_CSS = `
   position:absolute; left:clamp(38px,8vw,132px); bottom:34px;
   font-family:var(--f-num); font-size:${UI_TOKENS.type['2xs']}px; letter-spacing:.28em;
   text-transform:uppercase; color:var(--ink-mute); opacity:.75;
+  text-shadow:0 1px 10px rgba(0,0,0,.8);
 }
 .am-version b{ color:var(--ink-dim); font-weight:600; }
 .am-title-stats{
   position:absolute; right:clamp(38px,7vw,96px); bottom:34px; text-align:right;
   display:flex; gap:30px;
+  text-shadow:0 1px 12px rgba(0,0,0,.85), 0 0 1px rgba(0,0,0,.8);
 }
 .am-tstat .k{ font-family:var(--f-display); font-size:${UI_TOKENS.type['2xs']}px; font-weight:600;
   letter-spacing:.30em; text-transform:uppercase; color:var(--ink-mute); }

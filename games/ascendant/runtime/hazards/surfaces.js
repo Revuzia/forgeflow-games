@@ -61,6 +61,42 @@ function slab(w, h, d, x, y, z, bevel = 0.02, detail = 1) {
   return g;
 }
 
+const _hslA = { h: 0, s: 0, l: 0 };
+const _hslB = { h: 0, s: 0, l: 0 };
+
+/**
+ * The colour a MOTION telegraph (conveyor/speedpad chevrons, lamps) may wear.
+ * Normally the theme accent — but never a colour in the theme's kill hue band:
+ * foundry's accent (35 deg) is 20 deg from its kill (15 deg), and "orange that
+ * glows and moves" is that theme's own definition of lethal. There the cue
+ * falls back to safeEdge, matching its landable language (cyan-striped steel).
+ */
+function motionAccent(ctx) {
+  const pal = palette(ctx);
+  const accent = pal.accent !== undefined ? pal.accent : 0x5ec8ff;
+  const kill = pal.kill !== undefined ? pal.kill : 0xff3a1f;
+  _c.set(accent).getHSL(_hslA, THREE.SRGBColorSpace);
+  _c.set(kill).getHSL(_hslB, THREE.SRGBColorSpace);
+  const d = Math.abs(_hslA.h - _hslB.h) % 1;
+  const hueDist = Math.min(d, 1 - d);
+  if (hueDist < 45 / 360) return pal.safeEdge !== undefined ? pal.safeEdge : 0x9fdcff;
+  return accent;
+}
+
+/**
+ * Near-black matte backing for a bright telegraph. An additive chevron on an
+ * emissive belt in bright fog contributes nothing (additive-over-bright is
+ * invisible); riding on this plate it reads at distance in every theme.
+ * One shared material — never disposed by a hazard.
+ */
+let _chevBackMat = null;
+function chevronBackingMaterial() {
+  if (_chevBackMat) return _chevBackMat;
+  _chevBackMat = new THREE.MeshBasicMaterial({ color: 0x0a0d12, fog: false });
+  _chevBackMat.name = 'chevron_backing';
+  return _chevBackMat;
+}
+
 /** A flat chevron (arrow head) lying in the XZ plane, pointing +Z. */
 function chevronGeometry(w, d, thick) {
   const shape = new THREE.Shape();
@@ -167,8 +203,10 @@ class IceHazard extends Hazard {
       const edge = Math.floor(rnd() * 4);
       const sx = edge < 2 ? lerp(-w * 0.5, w * 0.5, along) : (edge === 2 ? w * 0.5 : -w * 0.5);
       const sz = edge < 2 ? (edge === 0 ? d * 0.5 : -d * 0.5) : lerp(-d * 0.5, d * 0.5, along);
+      // y-stretch capped at 1.8 (was 3.0): needle rime read as a miniature
+      // spike bed lining a walkable surface — chunks, not spikes.
       const g = new THREE.OctahedronGeometry(lerp(0.05, 0.14, rnd()), 0);
-      g.scale(1, lerp(1.4, 3.0, rnd()), 1);
+      g.scale(1, lerp(1.2, 1.8, rnd()), 1);
       g.rotateY(rnd() * Math.PI);
       g.translate(sx, h * 0.5 - 0.02, sz);
       crustParts.push(g);
@@ -277,7 +315,7 @@ class ConveyorHazard extends Hazard {
     this.beltWidth = Math.max(0.4, extentAlong(this.size, this.side));
     this.beltThick = Math.max(0.12, extentAlong(this.size, this.nrm));
     this.R = this.beltThick * 0.5;
-    this.accent = new THREE.Color(pal.accent !== undefined ? pal.accent : 0x5ec8ff);
+    this.accent = new THREE.Color(motionAccent(ctx));
 
     // A closed loop: two straight runs plus a half-turn around each roller.
     this.straight = Math.max(0.2, this.beltLen - this.beltThick);
@@ -384,6 +422,23 @@ class ConveyorHazard extends Hazard {
     }
     const arrowGeo = mergeAll(arrowParts);
     if (arrowGeo) {
+      // dark backing first, so the additive arrows read on the lit rail
+      const backParts = [];
+      for (let i = 0; i < n; i++) {
+        const z = lerp(-L * 0.42, L * 0.42, n === 1 ? 0.5 : i / (n - 1));
+        for (const sx of [1, -1]) {
+          const g = chevronGeometry(railW * 0.94, railW * 1.24, 0.012);
+          g.translate(sx * (this.beltWidth - railW) * 0.5, R * 0.9 + 0.006, z);
+          backParts.push(g);
+        }
+      }
+      const backGeo = mergeAll(backParts);
+      if (backGeo) {
+        const backing = new THREE.Mesh(backGeo, chevronBackingMaterial());
+        backing.renderOrder = 3;
+        this._orient(backing, this.power < 0);
+        this.add(backing);
+      }
       this.arrowMat = additiveMaterial(this.accent.getHex(), { cached: false, opacity: 0.55 });
       this.own(this.arrowMat);
       const arrows = new THREE.Mesh(arrowGeo, this.arrowMat);
@@ -434,6 +489,17 @@ class ConveyorHazard extends Hazard {
     const n = clamp(Math.round(L / 0.85), 2, 22);
     this.chevCount = n;
     this.chevSpacing = L / n;
+    // Dark plate UNDER each flowing chevron: "the chevrons point the way it
+    // will carry you" only teaches if a chevron survives to the screen — an
+    // additive glyph alone dies on an emissive belt. The backing geometry is
+    // authored 6 mm lower so both meshes share one instance matrix.
+    const backGeo = chevronGeometry(this.beltWidth * 0.46, this.beltWidth * 0.38, 0.02);
+    backGeo.translate(0, -0.006, 0);
+    this.chevBack = new THREE.InstancedMesh(backGeo, chevronBackingMaterial(), n);
+    this.chevBack.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.chevBack.frustumCulled = false;
+    this.chevBack.renderOrder = 4;
+    this.add(this.chevBack);
     const geo = chevronGeometry(this.beltWidth * 0.38, this.beltWidth * 0.30, 0.02);
     this.chevMat = additiveMaterial(this.accent.getHex(), { cached: false, opacity: 0.7 });
     this.own(this.chevMat);
@@ -475,8 +541,10 @@ class ConveyorHazard extends Hazard {
       _s.set(sc, sc, sc);
       _m.compose(_v, baseQ, _s);
       this.chevMesh.setMatrixAt(i, _m);
+      this.chevBack.setMatrixAt(i, _m);
     }
     this.chevMesh.instanceMatrix.needsUpdate = true;
+    this.chevBack.instanceMatrix.needsUpdate = true;
     this.chevMat.opacity = 0.45 + 0.30 * (0.5 + 0.5 * Math.sin(t * 3.4));
 
     this.collider.active = this.enabled;
@@ -789,7 +857,7 @@ class SpeedPadHazard extends Hazard {
     if (this.flat.lengthSq() < 1e-6) this.flat.set(1, 0, 0);
     this.flat.normalize();
     this.power = clamp(num(def.power, TUNE.speedSprint), 1, 30);
-    this.accent = new THREE.Color(pal.accent !== undefined ? pal.accent : 0x5ec8ff);
+    this.accent = new THREE.Color(motionAccent(ctx));
     this.top = this.center.y + this.size.y * 0.5;
     this._fireAt = -99;
     this._lastAuto = -99;
@@ -844,9 +912,16 @@ class SpeedPadHazard extends Hazard {
     this.lamps.position.copy(this.center);
     this.add(this.lamps);
 
-    // flowing chevrons
+    // flowing chevrons, each on a dark backing plate (see chevronBackingMaterial)
     this.chevCount = clamp(Math.round(len / 0.55), 3, 16);
     this.chevSpacing = len / this.chevCount;
+    const bg = chevronGeometry(wid * 0.58, wid * 0.42, 0.02);
+    bg.translate(0, -0.006, 0);
+    this.chevBack = new THREE.InstancedMesh(bg, chevronBackingMaterial(), this.chevCount);
+    this.chevBack.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.chevBack.frustumCulled = false;
+    this.chevBack.renderOrder = 5;
+    this.add(this.chevBack);
     const cg = chevronGeometry(wid * 0.5, wid * 0.34, 0.02);
     this.chevMat = additiveMaterial(this.accent.getHex(), { cached: false, opacity: 0.85 });
     this.own(this.chevMat);
@@ -856,7 +931,10 @@ class SpeedPadHazard extends Hazard {
     this.chevMesh.renderOrder = 6;
     this.add(this.chevMesh);
 
-    this.glow = makeGlowSprite(this.accent.getHex(), Math.max(wid, len) * 1.1, 0.16, 2.8);
+    // Half-size, dimmer halo: at 1.1x pad size the sprite fused pad, lamps and
+    // chevrons into one bloomed blob from 15 m — the telegraph must stay a
+    // drawn arrow field, not a light source (foundry-1_0 forensics).
+    this.glow = makeGlowSprite(this.accent.getHex(), Math.max(wid, len) * 0.6, 0.10, 2.8);
     this.own(this.glow.material);
     this.glow.position.set(this.center.x, this.top + 0.10, this.center.z);
     this.add(this.glow);
@@ -912,13 +990,15 @@ class SpeedPadHazard extends Hazard {
       _s.set(sc, sc, sc);
       _m.compose(_v, this.baseQuat, _s);
       this.chevMesh.setMatrixAt(i, _m);
+      this.chevBack.setMatrixAt(i, _m);
     }
     this.chevMesh.instanceMatrix.needsUpdate = true;
+    this.chevBack.instanceMatrix.needsUpdate = true;
 
     const pulse = 0.5 + 0.5 * Math.sin(t * 5.2);
     this.chevMat.opacity = 0.55 + 0.28 * pulse + boost * 0.4;
-    this.lampMat.opacity = 0.42 + 0.24 * pulse + boost * 0.6;
-    this.glow.material.opacity = 0.12 + 0.06 * pulse + boost * 0.45;
+    this.lampMat.opacity = 0.32 + 0.18 * pulse + boost * 0.6;
+    this.glow.material.opacity = 0.08 + 0.04 * pulse + boost * 0.40;
     this.collider.active = this.enabled;
   }
 

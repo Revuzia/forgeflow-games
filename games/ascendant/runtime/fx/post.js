@@ -305,6 +305,14 @@ void main() {
   #ifdef SRGB_TRANSFER
     gl_FragColor = sRGBTransferOETF( gl_FragColor );
   #endif
+
+  // ------------------------------------------------- output dither
+  // +/- half an LSB in DISPLAY space, after the OETF — the only place a dither
+  // can actually break up 8-bit banding. The film grain above lives in linear
+  // and is compressed to nothing in the darks by the filmic curve, which is
+  // where banding shows most (the sky domes dither their direct-to-screen
+  // path the same way).
+  gl_FragColor.rgb += ( hash21( gl_FragCoord.xy + vec2( fract( uTime * 13.7 ) * 511.0 ) ) - 0.5 ) * ( 1.2 / 255.0 );
 }
 `;
 
@@ -443,6 +451,138 @@ export class FinishPass extends ShaderPass {
 
   /** @param {number} v 0..1 */
   setHeat(v) { this.uniforms.uHeat.value = v; }
+}
+
+/* ===========================================================================
+ * Ambient occlusion (ultra tier)
+ * ======================================================================== */
+
+const AO_FRAG = /* glsl */`
+uniform sampler2D tDiffuse;
+uniform sampler2D tDepth;
+uniform mat4  uInvProj;
+uniform float uProj00;
+uniform float uProj11;
+uniform float uRadius;
+uniform float uIntensity;
+uniform float uTime;
+
+varying vec2 vUv;
+
+const int   AO_SAMPLES = 10;
+const float AO_BIAS = 0.06;
+const vec3  LUMA = vec3( 0.2126, 0.7152, 0.0722 );
+
+float hashAo( vec2 p ) {
+  vec3 p3 = fract( vec3( p.xyx ) * 0.1031 );
+  p3 += dot( p3, p3.yzx + 33.33 );
+  return fract( ( p3.x + p3.y ) * p3.z );
+}
+
+vec3 viewPos( vec2 uv, float depth ) {
+  vec4 clip = vec4( uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0 );
+  vec4 v = uInvProj * clip;
+  return v.xyz / v.w;
+}
+
+void main() {
+  vec4 base = texture2D( tDiffuse, vUv );
+  float depth = texture2D( tDepth, vUv ).r;
+
+  // sky / far plane: nothing to occlude
+  if ( depth >= 0.9999 ) { gl_FragColor = base; return; }
+
+  vec3 P = viewPos( vUv, depth );
+  vec3 N = normalize( cross( dFdx( P ), dFdy( P ) ) );
+
+  // world-space radius projected to uv space at this depth
+  float rz = uRadius / max( -P.z, 0.05 );
+  vec2 rUv = vec2( uProj00, uProj11 ) * rz * 0.5;
+
+  float ang = hashAo( gl_FragCoord.xy ) * 6.2831853;
+  float ca = cos( ang ), sa = sin( ang );
+
+  float occ = 0.0;
+  for ( int i = 0; i < AO_SAMPLES; i ++ ) {
+    float fi = ( float( i ) + 0.5 ) / float( AO_SAMPLES );
+    float a = fi * 6.2831853 * 2.4;              // golden-ish spiral
+    float r = sqrt( fi );
+    vec2 off = vec2( cos( a ) * ca - sin( a ) * sa, cos( a ) * sa + sin( a ) * ca ) * r * rUv;
+    vec2 uv2 = clamp( vUv + off, vec2( 0.001 ), vec2( 0.999 ) );
+    float d2 = texture2D( tDepth, uv2 ).r;
+    if ( d2 >= 0.9999 ) continue;
+    vec3 S = viewPos( uv2, d2 );
+    vec3 v = S - P;
+    float dist = length( v );
+    float fall = 1.0 / ( 1.0 + ( dist / uRadius ) * ( dist / uRadius ) * 4.0 );
+    occ += max( 0.0, dot( N, v / max( dist, 1e-4 ) ) - AO_BIAS ) * fall;
+  }
+  float ao = clamp( 1.0 - ( occ / float( AO_SAMPLES ) ) * uIntensity * 2.6, 0.0, 1.0 );
+
+  // emissive guard: self-lit surfaces (trim, lava, checkpoint pools) must not
+  // collect contact shade — their light IS the read.
+  float lm = dot( base.rgb, LUMA );
+  ao = mix( ao, 1.0, smoothstep( 1.1, 2.6, lm ) );
+
+  gl_FragColor = vec4( base.rgb * ao, base.a );
+}
+`;
+
+/**
+ * Screen-space ambient occlusion from the scene DEPTH alone — no normal
+ * buffer, no separate passes, one full-screen draw. The ultra preset has
+ * declared `ssao: true` since the contract was written and the old chain
+ * dropped it with a console.info because no three SSAO pass was vendored
+ * (2026-08-31 critic pass: "zero contact occlusion in every frame"). This
+ * pass is the vendored answer: depth-reconstructed view position, derivative
+ * normals, 10-tap rotated spiral, luminance-guarded so emissive surfaces keep
+ * their glow. Runs BEFORE the viewmodel pass, both because the arms should
+ * not receive world AO and because ViewmodelPass clears the depth buffer.
+ *
+ * The composer's ping-pong targets each carry a DepthTexture (attached in
+ * _build); whichever target the world was just rendered into is handed to
+ * this pass per frame via setDepthTexture().
+ */
+class AOPass extends ShaderPass {
+  constructor() {
+    super({
+      name: 'AscendantAO',
+      uniforms: {
+        tDiffuse: { value: null },
+        tDepth: { value: null },
+        uInvProj: { value: new THREE.Matrix4() },
+        uProj00: { value: 1 },
+        uProj11: { value: 1 },
+        uRadius: { value: 0.7 },
+        uIntensity: { value: 0.85 },
+        uTime: { value: 0 },
+      },
+      vertexShader: GRADE_VERT,
+      fragmentShader: AO_FRAG,
+    });
+    this.material.toneMapped = false;
+    this.material.depthTest = false;
+    this.material.depthWrite = false;
+    /** @type {THREE.Camera|null} set by Post so the reconstruction matches */
+    this.sceneCamera = null;
+    /** configured strength; the uniform is zeroed per-frame when depth is missing */
+    this.intensity = 0.85;
+  }
+
+  render(renderer, writeBuffer, readBuffer, deltaTime, maskActive) {
+    const cam = this.sceneCamera;
+    if (cam && cam.projectionMatrix) {
+      this.uniforms.uInvProj.value.copy(cam.projectionMatrixInverse);
+      this.uniforms.uProj00.value = cam.projectionMatrix.elements[0];
+      this.uniforms.uProj11.value = cam.projectionMatrix.elements[5];
+    }
+    // depth lives on the target the world pass just rendered into; the
+    // ping-pong buffers alternate across frames, so re-bind every render
+    const depth = readBuffer ? readBuffer.depthTexture : null;
+    this.uniforms.tDepth.value = depth;
+    this.uniforms.uIntensity.value = depth ? this.intensity : 0;
+    super.render(renderer, writeBuffer, readBuffer, deltaTime, maskActive);
+  }
 }
 
 /**
@@ -703,10 +843,13 @@ export class Post {
     this.composer = null;
     /** @type {RenderPass|null} */    this.renderPass = null;
     /** @type {ViewmodelPass|null} */ this.viewmodelPass = null;
+    /** @type {AOPass|null} */        this.aoPass = null;
     /** @type {UnrealBloomPass|null} */ this.bloomPass = null;
     /** @type {FinishPass|null} */   this.finishPass = null;
     /** @type {SMAAPass|null} */     this.smaaPass = null;
     /** @type {FXAAPass|null} */     this.fxaaPass = null;
+    /** @type {THREE.DepthTexture[]} depth attachments created for the AO pass */
+    this._depthTextures = [];
 
     // Persistent state so a quality rebuild does not lose the theme's look.
     this._grade = Object.assign({}, DEFAULT_GRADE);
@@ -746,6 +889,27 @@ export class Post {
     // 1 — world
     this.renderPass = new RenderPass(this.scene, this.camera);
     composer.addPass(this.renderPass);
+
+    // 1.5 — ambient occlusion (the ultra tier's declared ssao budget). Sits
+    // between the world and the viewmodel: the arms must not collect world AO,
+    // and ViewmodelPass clears the depth buffer the AO read depends on. Each
+    // ping-pong target gets its own DepthTexture; the pass re-binds whichever
+    // one the world was rendered into every frame.
+    if (q.ssao) {
+      const rts = [composer.renderTarget1, composer.renderTarget2];
+      for (let i = 0; i < rts.length; i++) {
+        const rt = rts[i];
+        if (rt && !rt.depthTexture) {
+          const dt = new THREE.DepthTexture(rt.width, rt.height);
+          dt.type = THREE.UnsignedIntType;
+          rt.depthTexture = dt;
+          this._depthTextures.push(dt);
+        }
+      }
+      this.aoPass = new AOPass();
+      this.aoPass.sceneCamera = this.camera;
+      composer.addPass(this.aoPass);
+    }
 
     // 2 — first-person viewmodel, composited with a cleared depth buffer
     this.viewmodelPass = new ViewmodelPass(this.overlayScene, this.overlayCamera);
@@ -787,13 +951,10 @@ export class Post {
       composer.addPass(this.fxaaPass);
     }
 
-    // SSAO is declared by the ultra preset but three ships no SSAO pass in the
-    // vendored addon set for this build, so the chain intentionally omits it.
-    // Reported here once so a future ultra build does not silently miss it.
-    if (q.ssao && !Post._ssaoWarned) {
-      Post._ssaoWarned = true;
-      console.info('[Post] quality.ssao requested; no SSAO pass is vendored — rendering without it.');
-    }
+    // quality.ssao is honoured by the AOPass inserted after the world render
+    // (step 1.5). The old chain dropped the ultra tier's declared budget with
+    // a console.info because no three SSAO pass was vendored; AscendantAO is
+    // the vendored answer.
   }
 
   /** @private Dispose every pass and both composer targets. */
@@ -810,9 +971,14 @@ export class Post {
       passes.length = 0;
       try { composer.dispose(); } catch (e) { /* ignore */ }
     }
+    for (let i = 0; i < this._depthTextures.length; i++) {
+      try { this._depthTextures[i].dispose(); } catch (e) { /* ignore */ }
+    }
+    this._depthTextures.length = 0;
     this.composer = null;
     this.renderPass = null;
     this.viewmodelPass = null;
+    this.aoPass = null;
     this.bloomPass = null;
     this.finishPass = null;
     this.smaaPass = null;
@@ -968,6 +1134,7 @@ export class Post {
       this.renderPass.scene = this.scene;
       this.renderPass.camera = this.camera;
     }
+    if (this.aoPass) this.aoPass.sceneCamera = this.camera;
   }
 
   /** Attach or replace the viewmodel overlay pair. */
@@ -1017,6 +1184,7 @@ export class Post {
     const structural =
       !this.composer ||
       !!next.bloom !== !!prev.bloom ||
+      !!next.ssao !== !!prev.ssao ||
       aaMode(next) !== aaMode(prev) ||
       numOr(next.bloomScale, 1) !== numOr(prev.bloomScale, 1);
 
@@ -1093,8 +1261,6 @@ export class Post {
     this.overlayCamera = null;
   }
 }
-
-Post._ssaoWarned = false;
 
 /* ===========================================================================
  * helpers

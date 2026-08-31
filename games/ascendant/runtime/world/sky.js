@@ -142,7 +142,12 @@ vec3 sunDisc( vec3 d ) {
   float sz = max( uSunSize, 0.002 );
   float disc = smoothstep( 1.0 - sz, 1.0 - sz * 0.30, sd );
   float m = max( sd, 0.0 );
-  float halo = pow( m, 900.0 ) * 0.9 + pow( m, 40.0 ) * 0.35 + pow( m, 6.0 ) * uSunHalo * 0.30;
+  // The old falloffs — pow(m,40)*0.35 and pow(m,6)*halo — spread the halo
+  // across ~35 degrees of dome. Over a pale sky that whole region crossed the
+  // bloom threshold and rendered as a giant off-sun blowout (spire-1_0's
+  // left-edge blob, 2026-08-31 uniform probe: uSunIntensity 0 removed it).
+  // Tight glare instead: gone within a few degrees of the disc.
+  float halo = pow( m, 900.0 ) * 0.9 + pow( m, 300.0 ) * 0.30 + pow( m, 24.0 ) * uSunHalo * 0.45;
   return uSunColor * ( disc * uSunIntensity + halo * uSunIntensity * 0.45 );
 }
 
@@ -167,7 +172,12 @@ vec3 starField( vec3 d ) {
   return tint * ( on * core * tw * ( 0.35 + bright ) * uStarBrightness * sky );
 }
 
-/** ordered-ish dither: kills 8-bit banding across a big smooth gradient */
+/** ordered-ish dither: kills 8-bit banding across a big smooth gradient.
+ *  Applied AFTER the tonemapping/colorspace includes (display-referred): added
+ *  in linear before ACES it was compressed below one display LSB exactly where
+ *  banding shows most — the dark zenith (2026-08-31 critic pass, neon-1_1).
+ *  Under the composer those includes are no-ops (LinearSRGB HDR target) and
+ *  the post chain's own output dither owns the final 8-bit boundary. */
 vec3 skyDither( vec2 c ) {
   return vec3( ( hash12( c ) - 0.5 ) * uDither * ( 1.6 / 255.0 ) );
 }
@@ -182,10 +192,10 @@ void main() {
   col += horizonGlow( d );
   col += starField( d );
   col += sunDisc( d );
-  col += skyDither( gl_FragCoord.xy );
   gl_FragColor = vec4( max( col, vec3( 0.0 ) ), 1.0 );
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
+  gl_FragColor.rgb += skyDither( gl_FragCoord.xy );
 }
 `;
 
@@ -247,10 +257,10 @@ void main() {
   col += uCityGlow * mass * 0.06;
 
   col += sunDisc( d );
-  col += skyDither( gl_FragCoord.xy );
   gl_FragColor = vec4( max( col, vec3( 0.0 ) ), 1.0 );
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
+  gl_FragColor.rgb += skyDither( gl_FragCoord.xy );
 }
 `;
 
@@ -309,6 +319,9 @@ uniform float uSmokeWarp;
 uniform float uSmokeContrast;
 uniform float uGlowHeight;
 uniform float uFurnace;
+uniform float uSeaStrength;
+uniform float uSeaScale;
+uniform float uSeaSpeed;
 
 void main() {
   vec3 d = normalize( vDir );
@@ -334,6 +347,30 @@ void main() {
   float lid = smoothstep( -0.10, 0.85, d.y );
   col = mix( col, smoke, lid * 0.88 );
 
+  // ---- the lava SEA on the below-horizon dome ---------------------------
+  // Dark basalt plates threaded by glowing channels, so a downward or level
+  // glance shows molten ground instead of a featureless gradient. Faded out
+  // right at the horizon line (the divisor blows up there) and strongest
+  // looking down.
+  if ( uSeaStrength > 0.001 && d.y < -0.015 ) {
+    float away = smoothstep( 0.03, 0.30, -d.y );
+    vec2 sq = ( d.xz / max( -d.y * 0.9 + 0.08, 0.06 ) ) * uSeaScale * 0.12;
+    float ts = uTime * uSeaSpeed;
+    float crust = fbm5( sq + vec2( ts, -ts * 0.6 ) );
+    float veins = 1.0 - abs( crust * 2.0 - 1.0 );
+    veins = veins * veins * veins;
+    float plates = fbm3( sq * 2.7 + 13.1 );
+    // distance attenuation: near the horizon the projection compresses the
+    // vein field to sub-pixel frequency whose AVERAGE is bright — unattenuated
+    // it rendered as a solid glowing band that bloom then flooded.
+    float att = 1.0 / ( 1.0 + dot( sq, sq ) * 0.0045 );
+    vec3 crustCol = mix( uSmokeDark, uSmokeColor, plates * 0.55 );
+    col = mix( col, crustCol, uSeaStrength * away * 0.85 );
+    col += uGlowColor * smoothstep( 0.42, 0.92, veins + plates * 0.18 )
+         * uSeaStrength * away * att * 0.60;
+    col += uEmberGlow * pow( veins, 6.0 ) * uSeaStrength * away * att * 0.65;
+  }
+
   // furnace glow lighting the underside of the smoke from below the horizon
   float low = pow( clamp( 1.0 - ( d.y + 0.06 ) / max( uGlowHeight, 0.02 ), 0.0, 1.0 ), 2.0 );
   col += uGlowColor * low * uFurnace * ( 0.45 + 0.85 * f );
@@ -344,10 +381,10 @@ void main() {
   col += uEmberGlow * pocket * 0.22;
 
   col += sunDisc( d );
-  col += skyDither( gl_FragCoord.xy );
   gl_FragColor = vec4( max( col, vec3( 0.0 ) ), 1.0 );
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
+  gl_FragColor.rgb += skyDither( gl_FragCoord.xy );
 }
 `;
 
@@ -367,7 +404,7 @@ void main() {
   col += horizonGlow( d );
   col += starField( d );
 
-  if ( d.y > -0.06 ) {
+  if ( d.y > 0.10 ) {
     vec2 sp = domeUv( d );
     float t = uTime * uAuroraSpeed;
     float acc = 0.0;
@@ -376,24 +413,29 @@ void main() {
       float fi = float( i );
       if ( fi >= uAuroraBands ) break;
       float w = fbm3( sp * ( 1.15 + fi * 0.55 ) + vec2( t * ( 1.0 + fi * 0.42 ), fi * 3.7 ) );
-      float centre = uAuroraHeight + fi * 0.115 + ( w - 0.5 ) * 0.36;
+      // excursion was 0.36: a constructive fold could drop a ribbon to ~10 deg
+      // elevation, where it summed over the pale horizon band into an HDR blob
+      // that bloomed into the unexplained left-edge blowout (spire-1_0/1_1,
+      // 2026-08-31 critic pass + toggle probe). Tighter excursion, ribbons
+      // clamped to the darker upper sky where they actually read as aurora.
+      float centre = uAuroraHeight + fi * 0.115 + ( w - 0.5 ) * 0.22;
       float s = exp( -abs( d.y - centre ) * ( 15.0 - fi * 3.2 ) );
       float striae = 0.60 + 0.40 * sin( sp.x * ( 22.0 + fi * 9.0 ) + w * 14.0 + t * 3.1 );
       acc += s * striae * ( 1.0 - fi * 0.22 );
       striaeAcc += s;
     }
-    acc *= smoothstep( -0.04, 0.20, d.y );
+    acc = min( acc, 1.3 ) * smoothstep( 0.12, 0.30, d.y );
     vec3 ribbon = mix( uAuroraA, uAuroraB, clamp( d.y * 1.5, 0.0, 1.0 ) );
     col += ribbon * acc * uAuroraStrength;
     // a faint wash under the ribbons, the way real aurora lights the whole sky
-    col += ribbon * striaeAcc * uAuroraStrength * 0.06;
+    col += ribbon * min( striaeAcc, 1.5 ) * uAuroraStrength * 0.06;
   }
 
   col += sunDisc( d );
-  col += skyDither( gl_FragCoord.xy );
   gl_FragColor = vec4( max( col, vec3( 0.0 ) ), 1.0 );
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
+  gl_FragColor.rgb += skyDither( gl_FragCoord.xy );
 }
 `;
 
@@ -413,10 +455,10 @@ void main() {
 
   col += starField( d );
   col += sunDisc( d );
-  col += skyDither( gl_FragCoord.xy );
   gl_FragColor = vec4( max( col, vec3( 0.0 ) ), 1.0 );
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
+  gl_FragColor.rgb += skyDither( gl_FragCoord.xy );
 }
 `;
 
@@ -609,6 +651,9 @@ export class Sky extends THREE.Object3D {
       uniforms.uSmokeContrast = { value: N(p.smokeContrast, 1.35) };
       uniforms.uGlowHeight = { value: N(p.glowHeight, 0.26) };
       uniforms.uFurnace = { value: N(p.furnace, 0.6) };
+      uniforms.uSeaStrength = { value: N(p.seaStrength, 1.0) };
+      uniforms.uSeaScale = { value: N(p.seaScale, 5.0) };
+      uniforms.uSeaSpeed = { value: N(p.seaSpeed, 0.010) };
     } else if (type === 'aurora') {
       frag = FRAG_AURORA;
       uniforms.uAuroraA = { value: C(p.auroraA, 0x4affc8) };

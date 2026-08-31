@@ -458,8 +458,16 @@ export class Player {
     this.prevPos.copy(this.pos);
     this.renderPos.copy(this.pos);
     this._ev('death', this.deathCause, this.pos);
-    this._sfx('death');
-    this._fxDeath(this.deathCause, this.pos);
+    // Presentation is owned by whoever listens to 'death' — the Game routes it
+    // to fx/impacts.js (or covers the minimum itself when Impacts is absent).
+    // 'death' is CRITICAL in core/audio.js, so the 18 ms anti-machinegun floor
+    // never dedupes a second copy: firing it here as well doubled the death
+    // sound and the death burst on every single death. The local fallback runs
+    // only when nothing at all is wired to the event (standalone harness).
+    if (!this._hasListener('death')) {
+      this._sfx('death');
+      this._fxDeath(this.deathCause, this.pos);
+    }
   }
 
   dispose() {
@@ -1048,8 +1056,12 @@ export class Player {
       // Landing NEVER touches horizontal velocity — momentum is preserved.
       this._stepDist = (STEP_WALK * 0.55);
       this._ev('land', impact, surface, this.pos);
-      if (impact > 0.9) {
-        this._sfx('land', impact);
+      // Same ownership rule as 'death': the Game routes 'land' to Impacts,
+      // which applies the authored loudness curve AND its LAND_MIN quiet-tick
+      // gate. Duplicating the thump + dust ring here double-fired both and
+      // bypassed that gate. Local fallback only when nothing is listening.
+      if (impact > 0.9 && !this._hasListener('land')) {
+        this._sfx('land', { impact: impact });
         this._fxLand(impact, surface, this.pos);
       }
     } else if (grounded) {
@@ -1129,7 +1141,7 @@ export class Player {
     this._lastWallJumpRef = null;
     this._lastWallJumpValid = false;
     this._ev('bounce', power, this.pos);
-    this._sfx('bounce', power);
+    this._sfx('bounce', { power: power });   // audio.js scales the pad voice off o.power
     this._fxBurst('land', this.pos);
   }
 
@@ -1187,7 +1199,7 @@ export class Player {
         this._scrapeT = WALL_SCRAPE_EVERY;
         this._ev('wallscrape', this.pos, this.wallNormal);
         this._fxBurst('wallScrape', this.pos, this.wallNormal);
-        this._sfx('step_stone', 0.3);
+        this._sfx('step_stone', { gain: 0.3 });
       }
     }
   }
@@ -1470,11 +1482,22 @@ export class Player {
     return 'step_stone';
   }
 
-  _sfx(name, amount) {
+  /** True when at least one live listener is bound to `name` on our emitter. */
+  _hasListener(name) {
+    const e = this.events;
+    if (!e || typeof e.has !== 'function') return false;
+    try { return !!e.has(name); } catch (err) { return false; }
+  }
+
+  _sfx(name, opts) {
     if (!this.autoAudio) return;
     const a = this.audio;
     if (!a || typeof a.sfx !== 'function') return;
-    try { a.sfx(name, amount); } catch (err) { /* audio must never break movement */ }
+    // core/audio.js reads an OPTIONS OBJECT ({gain, rate, impact, power, ...});
+    // a bare number as the second argument is silently ignored there, so only
+    // real objects are forwarded.
+    const o = (opts && typeof opts === 'object') ? opts : undefined;
+    try { a.sfx(name, o); } catch (err) { /* audio must never break movement */ }
   }
 
   _fxBurst(preset, pos, extra) {

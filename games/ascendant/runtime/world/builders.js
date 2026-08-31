@@ -370,6 +370,52 @@ function glowSpec(def) {
   return { k: g, color: null };
 }
 
+// --- landable-glow sanitizer (readability law, CONTRACT §9) ------------------
+// Stage data has shipped `glow: <kill colour>` on coin-shortcut platforms and
+// `glow: <checkpointOn colour>` on plain decks. Both break the game's colour
+// contract: the moment a landable wears the kill hue, red stops meaning death;
+// the moment a plain deck wears mint, mint stops meaning "save point". This is
+// the generator-level guard: ANY colour glow authored on a landable (platform /
+// beam) that sits in the theme's kill hue band, or reads as that theme's
+// checkpointOn, is remapped to the theme accent — or to safeEdge when the
+// accent itself lives in the kill band (foundry: accent 35°, kill 15°).
+// Checkpoint furniture built by stage.js keeps checkpointOn exclusively.
+const _sanColor = new THREE.Color();
+const _sanHSL = { h: 0, s: 0, l: 0 };
+
+function _hueDist(a, b) {
+  const d = Math.abs(a - b) % 1;
+  return Math.min(d, 1 - d);
+}
+
+function _hslOf(hex, out) {
+  _sanColor.set(hex >>> 0);
+  return _sanColor.getHSL(out, THREE.SRGBColorSpace);
+}
+
+const KILL_BAND = 30 / 360;   // hue distance that counts as "wearing the kill colour"
+const CPON_BAND = 20 / 360;   // hue distance that counts as "wearing checkpointOn"
+
+/**
+ * @param {number|null} color authored glow colour (hex) or null
+ * @param {object} theme ThemeDef
+ * @returns {number|null} a colour safe for a landable surface
+ */
+function safeLandableGlow(color, theme) {
+  if (color === null || color === undefined) return color;
+  _hslOf(color, _sanHSL);
+  const gh = _sanHSL.h, gsat = _sanHSL.s;
+  _hslOf(pal(theme, 'kill'), _sanHSL);
+  const killH = _sanHSL.h;
+  const nearKill = _hueDist(gh, killH) <= KILL_BAND && gsat >= 0.45;
+  _hslOf(pal(theme, 'checkpointOn'), _sanHSL);
+  const nearCp = _hueDist(gh, _sanHSL.h) <= CPON_BAND && gsat >= 0.35;
+  if (!nearKill && !nearCp) return color;
+  const accent = pal(theme, 'accent');
+  _hslOf(accent, _sanHSL);
+  return _hueDist(_sanHSL.h, killH) >= 45 / 360 ? accent : pal(theme, 'safeEdge');
+}
+
 /** Flat emissive band — bright enough to read at 25 m through fog. */
 function emissiveMat(color, intensity, opts) {
   const o = opts || null;
@@ -388,6 +434,26 @@ function emissiveMat(color, intensity, opts) {
   });
   if (opacity < 1) { m.transparent = true; m.opacity = opacity; }
   m.name = 'em_' + key;
+  _emCache.set(key, m);
+  return m;
+}
+
+/**
+ * The dark KEYLINE that flanks every leading-edge stripe. The stripe alone is a
+ * glow bank under bloom — its own fringe swallows the physical lip it marks.
+ * Bordered by two near-black matte strips it stays a *drawn line* at any bloom
+ * setting: emissive bleeds into dark, not into deck. Cached, one per session.
+ */
+function keylineMaterial() {
+  const key = 'keyline';
+  let m = _emCache.get(key);
+  if (m) return m;
+  m = new THREE.MeshStandardMaterial({
+    color: 0x0a0d12,
+    roughness: 0.92,
+    metalness: 0.05,
+  });
+  m.name = 'em_keyline';
   _emCache.set(key, m);
   return m;
 }
@@ -938,16 +1004,17 @@ export function buildPlatform(def, theme, mats) {
   const glow = gs.k;
   const faces = stripeFaces(def);
 
+  const glowColor = safeLandableGlow(gs.color, theme);
   const bodyMat = materialFor(bodyKey, theme, mats);
   const panelMat = materialFor(surface === 'ice' ? 'ice' : (bodyKey === 'grate' ? 'metal' : 'panel'), theme, mats);
   const rimMat = emissiveMat(pal(theme, 'accent'), 0.85 * glow);
-  const stripeMat = emissiveMat(gs.color !== null ? gs.color : pal(theme, look[1]), 2.6 * glow * look[2]);
+  const stripeMat = emissiveMat(glowColor !== null ? glowColor : pal(theme, look[1]), 2.6 * glow * look[2]);
   const underMat = materialFor('obsidian', theme, mats);
 
   const key = GeoCache.key('plat', w, h, d, faces.join(''));
   const geo = GeoCache.get(key, () => platformGeometry(w, h, d, faces));
 
-  const mesh = new THREE.Mesh(geo, [bodyMat, panelMat, rimMat, stripeMat, underMat]);
+  const mesh = new THREE.Mesh(geo, [bodyMat, panelMat, rimMat, stripeMat, underMat, keylineMaterial()]);
   mesh.name = 'platform';
   mesh.castShadow = true;
   mesh.receiveShadow = true;
@@ -968,7 +1035,7 @@ export function buildPlatform(def, theme, mats) {
 
 /**
  * The platform art, in local space, centred on the slab.
- * Material slots: 0 body · 1 panel · 2 rim · 3 stripe · 4 underside.
+ * Material slots: 0 body · 1 panel · 2 rim · 3 stripe · 4 underside · 5 keyline.
  */
 function platformGeometry(w, h, d, faces) {
   const b = bevelFor(w, h, d);
@@ -1013,23 +1080,51 @@ function platformGeometry(w, h, d, faces) {
   // --- 4. LEADING-EDGE STRIPES ---------------------------------------------
   // The readability feature: a 0.12 m top band inset just inside the rim, plus a
   // matching band down the vertical face so the edge also reads from below.
+  // Every emissive band is FLANKED by 0.03 m near-black keylines (slot 5) so the
+  // stripe stays a drawn line under bloom instead of a glow bank — the physical
+  // lip must never hide inside its own marker's fringe.
   const SW = 0.12;
+  const KW = 0.03;                                    // keyline width
   const vH = Math.min(0.14, Math.max(0.05, h * 0.55));
   const eps = 0.004;
+  const hasFace = (name) => faces.indexOf(name) >= 0;
+  // one vertical face band + keyline underline, shared by both loops below
+  const vBandX = (sx) => {
+    const len = Math.max(0.05, d - b * 1.2);
+    push(xform(boxGeometry(0.02, vH, len, 1), sx * (w * 0.5 + 0.004), hy - b - vH * 0.5, 0), 3);
+    push(xform(boxGeometry(0.022, 0.035, len, 1), sx * (w * 0.5 + 0.005), hy - b - vH - 0.022, 0), 5);
+  };
+  const vBandZ = (sz) => {
+    const len = Math.max(0.05, w - b * 1.2);
+    push(xform(boxGeometry(len, vH, 0.02, 1), 0, hy - b - vH * 0.5, sz * (d * 0.5 + 0.004)), 3);
+    push(xform(boxGeometry(len, 0.035, 0.022, 1), 0, hy - b - vH - 0.022, sz * (d * 0.5 + 0.005)), 5);
+  };
   for (let i = 0; i < faces.length; i++) {
     const f = faces[i];
     if (f === '+x' || f === '-x') {
       const sx = f === '+x' ? 1 : -1;
-      push(xform(boxGeometry(SW, 0.014, Math.max(0.05, d - b * 1.2), 1),
-        sx * (rx - SW * 0.5 - 0.055), hy + eps - 0.007, 0), 3);
-      push(xform(boxGeometry(0.02, vH, Math.max(0.05, d - b * 1.2), 1),
-        sx * (w * 0.5 + 0.004), hy - b - vH * 0.5, 0), 3);
+      const cxs = sx * (rx - SW * 0.5 - 0.055);       // top band centre
+      const len = Math.max(0.05, d - b * 1.2);
+      push(xform(boxGeometry(SW, 0.014, len, 1), cxs, hy + eps - 0.007, 0), 3);
+      // keylines flanking the top band, a hair taller so they cap the glow
+      push(xform(boxGeometry(KW, 0.016, len, 1), cxs + sx * (SW * 0.5 + KW * 0.5), hy + eps - 0.006, 0), 5);
+      push(xform(boxGeometry(KW, 0.016, len, 1), cxs - sx * (SW * 0.5 + KW * 0.5), hy + eps - 0.006, 0), 5);
+      vBandX(sx);
+      // MIRROR the vertical band onto the approach face: the course runs +X, so
+      // the face the player actually sees while lining up a jump is the -X one.
+      // Without this every landing ahead is a dark silhouette and the stripe
+      // only rewards you after you arrive ("every landing is visible from its
+      // take-off" — the landing's near face carries the mark).
+      if (!hasFace(sx === 1 ? '-x' : '+x')) vBandX(-sx);
     } else {
       const sz = f === '+z' ? 1 : -1;
-      push(xform(boxGeometry(Math.max(0.05, w - b * 1.2), 0.014, SW, 1),
-        0, hy + eps - 0.007, sz * (rz - SW * 0.5 - 0.055)), 3);
-      push(xform(boxGeometry(Math.max(0.05, w - b * 1.2), vH, 0.02, 1),
-        0, hy - b - vH * 0.5, sz * (d * 0.5 + 0.004)), 3);
+      const czs = sz * (rz - SW * 0.5 - 0.055);
+      const len = Math.max(0.05, w - b * 1.2);
+      push(xform(boxGeometry(len, 0.014, SW, 1), 0, hy + eps - 0.007, czs), 3);
+      push(xform(boxGeometry(len, 0.016, KW, 1), 0, hy + eps - 0.006, czs + sz * (SW * 0.5 + KW * 0.5)), 5);
+      push(xform(boxGeometry(len, 0.016, KW, 1), 0, hy + eps - 0.006, czs - sz * (SW * 0.5 + KW * 0.5)), 5);
+      vBandZ(sz);
+      if (!hasFace(sz === 1 ? '-z' : '+z')) vBandZ(-sz);
     }
   }
 
@@ -1083,7 +1178,7 @@ function platformGeometry(w, h, d, faces) {
   push(xform(long ? boxGeometry(spineLen * 0.92, 0.016, 0.035, 1.4) : boxGeometry(0.035, 0.016, spineLen * 0.92, 1.4),
     0, -hy - 0.094, 0), 2);
 
-  return assembleIndexed(parts, 5);
+  return assembleIndexed(parts, 6);
 }
 
 // ---------------------------------------------------------------------------
@@ -1099,9 +1194,10 @@ export function buildBeam(def, theme, mats) {
   const w = s[0], h = s[1], d = s[2];
   const gs = glowSpec(def);
   const glow = gs.k;
+  const beamGlowColor = safeLandableGlow(gs.color, theme);
   const bodyMat = materialFor((def && def.mat) || 'metal', theme, mats);
   const capMat = materialFor('panel', theme, mats);
-  const lineMat = emissiveMat(gs.color !== null ? gs.color : pal(theme, 'safeEdge'), 3.0 * glow);
+  const lineMat = emissiveMat(beamGlowColor !== null ? beamGlowColor : pal(theme, 'safeEdge'), 3.0 * glow);
   const trimMat = emissiveMat(pal(theme, 'accent'), 0.9 * glow);
   const alongX = w >= d;
 
@@ -1583,7 +1679,36 @@ function rngFrom(seed) {
 }
 
 /** The scatter vocabulary buildDeco understands via `def.kindOf`. */
-export const DECO_KINDS = ['rocks', 'spires', 'fins', 'pipes', 'slabs', 'crystals', 'antennae', 'girders'];
+export const DECO_KINDS = ['rocks', 'spires', 'fins', 'pipes', 'slabs', 'crystals', 'shard', 'antennae', 'girders'];
+
+/**
+ * Decoration must never wear the landable body material — a floating rock in
+ * the platform's own stone reads as a platform (Sky Temple shipped exactly
+ * that: sand rocks, sand decks, sand fog, one colour, three meanings). Deco
+ * bodies get the theme's `palette.deco` tint instead: same texture family,
+ * visibly NOT the course. Cached per theme.
+ */
+function decoBodyMaterial(theme) {
+  const id = 'decoBody|' + themeId(theme);
+  let m = _matCache.get(id);
+  if (m) return m;
+  const f = family('speckle');
+  const opts = {
+    color: pal(theme, 'deco'),
+    roughness: 0.94,
+    metalness: 0.02,
+  };
+  if (f.map) {
+    opts.map = f.map;
+    opts.roughnessMap = f.roughnessMap;
+    opts.normalMap = f.normalMap;
+  }
+  m = new THREE.MeshStandardMaterial(opts);
+  if (f.normalMap) m.normalScale = new THREE.Vector2(1.0, 1.0);
+  m.name = 'deco_body';
+  _matCache.set(id, m);
+  return m;
+}
 
 /**
  * A decorative cluster, deterministic from `def.seed`, merged into ONE mesh and
@@ -1593,70 +1718,109 @@ export const DECO_KINDS = ['rocks', 'spires', 'fins', 'pipes', 'slabs', 'crystal
 export function buildDeco(def, theme, mats) {
   const kindOf = (def && def.kindOf) || 'rocks';
   const count = Math.max(1, Math.min(64, (def && def.count) || 6));
-  const spread = (def && def.spread) || 3;
   const scale = (def && def.scale) || 1;
   const seed = (def && def.seed !== undefined) ? def.seed : 1337;
   const gs = glowSpec(def);
   const glow = gs.k;
 
-  const baseKey = (def && def.mat) || (kindOf === 'crystals' ? 'crystal' : kindOf === 'rocks' ? 'stone' : 'metal');
-  const bodyMat = materialFor(baseKey, theme, mats);
+  // `spread` is a radius, or [sx, sy, sz]: a box scatter with vertical jitter.
+  // (Stage data ships arrays — a naive number multiply turned every such cluster
+  // into NaN geometry that silently rendered nothing and poisoned chunk bounds.)
+  const sprRaw = def && def.spread;
+  let sprX = 3, sprY = 0, sprZ = null;
+  if (Array.isArray(sprRaw)) {
+    sprX = Math.abs(+sprRaw[0]) || 3;
+    sprY = Math.abs(+sprRaw[1]) || 0;
+    sprZ = sprRaw[2] === undefined ? sprX : (Math.abs(+sprRaw[2]) || 0);
+  } else if (typeof sprRaw === 'number' && isFinite(sprRaw) && sprRaw > 0) {
+    sprX = sprRaw;
+  }
+
+  const authoredMat = def && def.mat;
+  const baseKey = authoredMat
+    || ((kindOf === 'crystals' || kindOf === 'shard') ? 'crystal' : kindOf === 'rocks' ? 'stone' : 'metal');
+  // rocks / slabs (and any unrecognised kind, which falls to the rocks shape)
+  // are the flat-topped, landable-looking clusters: they must NOT wear the
+  // course's stone. See decoBodyMaterial.
+  const rockShaped = kindOf === 'rocks' || kindOf === 'slabs' || DECO_KINDS.indexOf(kindOf) < 0;
+  const useDecoBody = rockShaped && (!authoredMat || authoredMat === 'stone' || authoredMat === 'sand');
+  const bodyMat = useDecoBody ? decoBodyMaterial(theme) : materialFor(baseKey, theme, mats);
   const trimMat = materialFor('obsidian', theme, mats);
   const emMat = emissiveMat(gs.color !== null ? gs.color : pal(theme, 'deco'),
-    (kindOf === 'crystals' || kindOf === 'antennae' ? 2.0 : 0.8) * glow);
+    (kindOf === 'crystals' || kindOf === 'shard' || kindOf === 'antennae' ? 2.0 : 0.8) * glow);
 
-  const key = GeoCache.key('deco', kindOf, count, spread, scale, seed);
+  const key = GeoCache.key('deco', kindOf, count, sprX, sprY, sprZ === null ? 'r' : sprZ, scale, seed);
   const geo = GeoCache.get(key, () => {
     const rnd = rngFrom(Math.imul(seed | 0, 2654435761));
     const parts = [];
     const push = (g, m) => parts.push({ geo: g, mat: m });
     for (let i = 0; i < count; i++) {
-      const ang = rnd() * Math.PI * 2;
-      const rad = Math.sqrt(rnd()) * spread;
-      const x = Math.cos(ang) * rad, z = Math.sin(ang) * rad;
+      let x, z;
+      if (sprZ !== null) {
+        x = (rnd() * 2 - 1) * sprX;
+        z = (rnd() * 2 - 1) * sprZ;
+      } else {
+        const ang = rnd() * Math.PI * 2;
+        const rad = Math.sqrt(rnd()) * sprX;
+        x = Math.cos(ang) * rad; z = Math.sin(ang) * rad;
+      }
+      const by = sprY > 0 ? rnd() * sprY : 0;   // vertical jitter (box scatter)
       const yaw = rnd() * Math.PI * 2;
       const sc = scale * (0.6 + rnd() * 0.8);
 
       if (kindOf === 'spires') {
+        // Leaning flat-topped monoliths. The old silhouette was a needle-sharp
+        // cone with a pointed tip — the universal obby language of kill spikes,
+        // worn by decoration (readability law: decor must never impersonate a
+        // hazard). Truncated shaft, hex cap, real lean: crystal, not spike.
         const hgt = 1.6 * sc * (0.7 + rnd());
-        push(xform(tubeGeometry(0.02, 0.24 * sc, hgt, 6, 1.0), x, hgt * 0.5, z, 0, yaw, (rnd() - 0.5) * 0.18), 0);
-        push(xform(tubeGeometry(0.0, 0.07 * sc, 0.3 * sc, 6, 1.4), x, hgt + 0.12 * sc, z, 0, yaw, 0), 2);
+        const leanZ = (rnd() - 0.5) * 0.30;
+        push(xform(tubeGeometry(0.10 * sc, 0.24 * sc, hgt, 6, 1.0), x, by + hgt * 0.5, z, 0, yaw, leanZ), 0);
+        const tx = x - Math.sin(leanZ) * hgt * 0.5 * Math.cos(yaw);
+        const tz = z + Math.sin(leanZ) * hgt * 0.5 * Math.sin(yaw);
+        push(xform(prismGeometry(0.085 * sc, 0.09 * sc, 6, 1.4),
+          tx, by + hgt * 0.5 + Math.cos(leanZ) * hgt * 0.5 - 0.02 * sc, tz, 0, yaw, leanZ), 2);
       } else if (kindOf === 'fins') {
         const hgt = 1.1 * sc * (0.6 + rnd());
-        push(xform(bevelBoxGeometry(0.09 * sc, hgt, 0.85 * sc, 0.02, 1.1), x, hgt * 0.5, z, 0, yaw, (rnd() - 0.5) * 0.14), 0);
-        push(xform(boxGeometry(0.02, hgt * 0.7, 0.02, 1), x, hgt * 0.55, z + 0.42 * sc, 0, yaw, 0), 2);
+        push(xform(bevelBoxGeometry(0.09 * sc, hgt, 0.85 * sc, 0.02, 1.1), x, by + hgt * 0.5, z, 0, yaw, (rnd() - 0.5) * 0.14), 0);
+        push(xform(boxGeometry(0.02, hgt * 0.7, 0.02, 1), x, by + hgt * 0.55, z + 0.42 * sc, 0, yaw, 0), 2);
       } else if (kindOf === 'pipes') {
         const len = 1.8 * sc * (0.6 + rnd());
         const tilt = (rnd() - 0.5) * 0.5;
-        push(xform(tubeGeometry(0.11 * sc, 0.11 * sc, len, 10, 0.8), x, 0.35 * sc, z, Math.PI * 0.5, yaw, tilt), 0);
-        push(xform(ringProfileGeometry(0.14 * sc, [0.035 * sc, 0.05 * sc, 0.012], 12, 1.4), x, 0.35 * sc, z, Math.PI * 0.5, yaw, tilt), 1);
+        push(xform(tubeGeometry(0.11 * sc, 0.11 * sc, len, 10, 0.8), x, by + 0.35 * sc, z, Math.PI * 0.5, yaw, tilt), 0);
+        push(xform(ringProfileGeometry(0.14 * sc, [0.035 * sc, 0.05 * sc, 0.012], 12, 1.4), x, by + 0.35 * sc, z, Math.PI * 0.5, yaw, tilt), 1);
       } else if (kindOf === 'slabs') {
         const hgt = 0.35 * sc * (0.6 + rnd());
-        push(xform(bevelBoxGeometry(1.1 * sc, hgt, 0.9 * sc, 0.05, 0.7), x, hgt * 0.5, z, (rnd() - 0.5) * 0.12, yaw, (rnd() - 0.5) * 0.12), 0);
-      } else if (kindOf === 'crystals') {
+        push(xform(bevelBoxGeometry(1.1 * sc, hgt, 0.9 * sc, 0.05, 0.7), x, by + hgt * 0.5, z, (rnd() - 0.5) * 0.12, yaw, (rnd() - 0.5) * 0.12), 0);
+      } else if (kindOf === 'crystals' || kindOf === 'shard') {
+        // Crystals, NOT spikes: truncated tops and a pronounced lean, so a
+        // cluster near the course line can never read as a kill spike bed.
         const hgt = 1.0 * sc * (0.5 + rnd() * 1.2);
-        push(xform(tubeGeometry(0.0, 0.17 * sc, hgt, 5, 1.2), x, hgt * 0.45, z, (rnd() - 0.5) * 0.35, yaw, (rnd() - 0.5) * 0.35), 0);
-        push(xform(tubeGeometry(0.0, 0.09 * sc, hgt * 0.55, 5, 1.6), x + 0.14 * sc, hgt * 0.22, z - 0.10 * sc, (rnd() - 0.5) * 0.4, yaw, (rnd() - 0.5) * 0.4), 2);
+        const rB = 0.17 * sc;
+        const leanX = (rnd() - 0.5) * 0.7, leanZ = (rnd() - 0.5) * 0.7;
+        push(xform(tubeGeometry(rB * 0.34, rB, hgt, 5, 1.2), x, by + hgt * 0.45, z, leanX, yaw, leanZ), 0);
+        push(xform(tubeGeometry(rB * 0.32, rB * 0.55, hgt * 0.55, 5, 1.6),
+          x + 0.14 * sc, by + hgt * 0.22, z - 0.10 * sc, leanX * 1.6, yaw, leanZ * 1.6), 2);
       } else if (kindOf === 'antennae') {
         const hgt = 2.4 * sc * (0.7 + rnd() * 0.6);
-        push(xform(tubeGeometry(0.018 * sc, 0.06 * sc, hgt, 6, 1.0), x, hgt * 0.5, z, 0, yaw, 0), 0);
+        push(xform(tubeGeometry(0.018 * sc, 0.06 * sc, hgt, 6, 1.0), x, by + hgt * 0.5, z, 0, yaw, 0), 0);
         for (let k = 1; k <= 3; k++) {
-          push(xform(boxGeometry(0.34 * sc * (1 - k * 0.2), 0.016, 0.016, 1), x, hgt * (0.45 + k * 0.16), z, 0, yaw + k * 0.7, 0), 1);
+          push(xform(boxGeometry(0.34 * sc * (1 - k * 0.2), 0.016, 0.016, 1), x, by + hgt * (0.45 + k * 0.16), z, 0, yaw + k * 0.7, 0), 1);
         }
-        push(xform(prismGeometry(0.045 * sc, 0.05 * sc, 6, 2.0), x, hgt + 0.03, z), 2);
+        push(xform(prismGeometry(0.045 * sc, 0.05 * sc, 6, 2.0), x, by + hgt + 0.03, z), 2);
       } else if (kindOf === 'girders') {
         const len = 2.6 * sc * (0.6 + rnd());
-        const y = 0.4 * sc + rnd() * 0.5;
+        const y = by + 0.4 * sc + rnd() * 0.5;
         const rr = (rnd() - 0.5) * 0.3, rz = (rnd() - 0.5) * 0.4;
         push(xform(bevelBoxGeometry(len, 0.16 * sc, 0.16 * sc, 0.02, 0.8), x, y, z, rr, yaw, rz), 0);
         push(xform(bevelBoxGeometry(len * 0.96, 0.05 * sc, 0.34 * sc, 0.012, 1.2), x, y, z, rr, yaw, rz), 1);
       } else { // rocks
         const s2 = sc * 0.55;
         push(xform(bevelBoxGeometry(s2 * (0.8 + rnd() * 0.8), s2 * (0.5 + rnd() * 0.7), s2 * (0.8 + rnd() * 0.8), s2 * 0.22, 1.0),
-          x, s2 * 0.3, z, (rnd() - 0.5) * 0.7, yaw, (rnd() - 0.5) * 0.7), 0);
+          x, by + s2 * 0.3, z, (rnd() - 0.5) * 0.7, yaw, (rnd() - 0.5) * 0.7), 0);
         if (rnd() > 0.5) {
           push(xform(bevelBoxGeometry(s2 * 0.5, s2 * 0.4, s2 * 0.5, s2 * 0.16, 1.2),
-            x + s2 * 0.5, s2 * 0.22, z - s2 * 0.4, (rnd() - 0.5) * 0.9, yaw, (rnd() - 0.5) * 0.9), 1);
+            x + s2 * 0.5, by + s2 * 0.22, z - s2 * 0.4, (rnd() - 0.5) * 0.9, yaw, (rnd() - 0.5) * 0.9), 1);
         }
       }
     }
@@ -1736,25 +1900,36 @@ export function edgeStripe(mesh, color, width, opts) {
   const vH = Math.min(0.14, Math.max(0.04, h * 0.5));
 
   const bands = [];
+  const keys = [];   // dark keyline flanks (see keylineMaterial) — appended as their own group
+  const KW = 0.03;
   for (let i = 0; i < faces.length; i++) {
     const f = faces[i];
     if (f === '+x' || f === '-x') {
       const sg = f === '+x' ? 1 : -1;
-      bands.push(xform(boxGeometry(W, 0.014, d * 0.96, 1), cx + sg * (w * 0.5 - W * 0.5 - 0.03), topY - 0.004, cz));
+      const bx = cx + sg * (w * 0.5 - W * 0.5 - 0.03);
+      bands.push(xform(boxGeometry(W, 0.014, d * 0.96, 1), bx, topY - 0.004, cz));
+      keys.push(xform(boxGeometry(KW, 0.016, d * 0.96, 1), bx + sg * (W * 0.5 + KW * 0.5), topY - 0.003, cz));
+      keys.push(xform(boxGeometry(KW, 0.016, d * 0.96, 1), bx - sg * (W * 0.5 + KW * 0.5), topY - 0.003, cz));
       bands.push(xform(boxGeometry(0.02, vH, d * 0.96, 1), cx + sg * (w * 0.5 + 0.005), topY - 0.02 - vH * 0.5, cz));
     } else if (f === '+z' || f === '-z') {
       const sg = f === '+z' ? 1 : -1;
-      bands.push(xform(boxGeometry(w * 0.96, 0.014, W, 1), cx, topY - 0.004, cz + sg * (d * 0.5 - W * 0.5 - 0.03)));
+      const bz = cz + sg * (d * 0.5 - W * 0.5 - 0.03);
+      bands.push(xform(boxGeometry(w * 0.96, 0.014, W, 1), cx, topY - 0.004, bz));
+      keys.push(xform(boxGeometry(w * 0.96, 0.016, KW, 1), cx, topY - 0.003, bz + sg * (W * 0.5 + KW * 0.5)));
+      keys.push(xform(boxGeometry(w * 0.96, 0.016, KW, 1), cx, topY - 0.003, bz - sg * (W * 0.5 + KW * 0.5)));
       bands.push(xform(boxGeometry(w * 0.96, vH, 0.02, 1), cx, topY - 0.02 - vH * 0.5, cz + sg * (d * 0.5 + 0.005)));
     } else if (f === '+y') {
       const rr = Math.min(w, d) * 0.5;
       bands.push(xform(ringGeometry(Math.max(0.01, rr - W), rr, 40, 1), cx, topY + 0.004, cz));
+      keys.push(xform(ringGeometry(Math.max(0.005, rr - W - KW), Math.max(0.01, rr - W), 40, 1), cx, topY + 0.0045, cz));
     }
   }
   if (bands.length === 0) { if (host !== geo) host.dispose(); return mesh; }
   const band = bands.length === 1 ? bands[0] : mergeGeometries(bands, false);
   if (bands.length > 1) for (const b of bands) b.dispose();
-  if (!band) { if (host !== geo) host.dispose(); return mesh; }
+  if (!band) { for (const k of keys) k.dispose(); if (host !== geo) host.dispose(); return mesh; }
+  const keyBand = keys.length === 0 ? null : (keys.length === 1 ? keys[0] : mergeGeometries(keys, false));
+  if (keys.length > 1) for (const k of keys) k.dispose();
 
   const hostCount = host.attributes.position.count;
   // A mesh with a SINGLE material renders its whole geometry with it — three
@@ -1770,8 +1945,11 @@ export function edgeStripe(mesh, color, width, opts) {
     }))
     : [{ start: 0, count: hostCount, materialIndex: 0 }];
 
-  const merged = mergeGeometries([host, band], false);
+  const bandCount = band.attributes.position.count;
+  const merged = keyBand ? mergeGeometries([host, band, keyBand], false)
+                         : mergeGeometries([host, band], false);
   band.dispose();
+  if (keyBand) keyBand.dispose();
   if (host !== geo) host.dispose();
   if (!merged) return mesh;
 
@@ -1779,8 +1957,12 @@ export function edgeStripe(mesh, color, width, opts) {
   for (let i = 0; i < hostGroups.length; i++) {
     merged.addGroup(hostGroups[i].start, hostGroups[i].count, hostGroups[i].materialIndex);
   }
-  merged.addGroup(hostCount, merged.attributes.position.count - hostCount, mats.length);
+  merged.addGroup(hostCount, bandCount, mats.length);
   mats.push(emissiveMat(_col.set(color).getHex(), intensity));
+  if (keyBand) {
+    merged.addGroup(hostCount + bandCount, merged.attributes.position.count - hostCount - bandCount, mats.length);
+    mats.push(keylineMaterial());
+  }
   merged.computeBoundingSphere();
   merged.computeBoundingBox();
   merged.userData.__shared = false;

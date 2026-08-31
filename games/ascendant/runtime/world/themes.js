@@ -16,21 +16,31 @@
  * from below (foundry's lava bounce is the only one that does).
  *
  * ---------------------------------------------------------------------------
- * READABILITY LAW  (CONTRACT section 9) — measured, not asserted
+ * READABILITY LAW  (CONTRACT section 9) — measured on what the renderer SHOWS
  * ---------------------------------------------------------------------------
- * The law: `palette.safe` must hold >= 3.5:1 relative-luminance contrast against
- * `bg` at 30 m of fog, and `palette.kill` must be unmistakably hot/saturated
- * against everything that means "you can be here".
+ * The law: the WALKED SURFACE (the materialOverride tints the decks actually
+ * wear — palette.safe declares the same colour) must hold >= 3.5:1 relative-
+ * luminance contrast against the colour that is actually BEHIND a platform at
+ * eye level, which is the FOG/horizon band, not the zenith `bg`. A previous
+ * version of this table was computed on palette.safe (which no shipped surface
+ * wore) against `bg` (which is never behind a platform at eye level) — it
+ * claimed 5.92:1 for spire while the frames measured 1.07:1. Numbers below are
+ * raw WCAG contrast of the shipped tints; the shot battery (_shots/*.png) is
+ * the ground truth they are re-checked against.
  *
- * Measured (WCAG relative luminance; safe first blended toward `fog` by that
- * theme's exp2 fog factor at 30 m, then compared with `bg`):
+ *   theme     stone vs fog   panel vs fog   edge vs keyline   cpOn vs cpOff
+ *   neon         8.08:1         10.77:1         16.9:1            7.79:1
+ *   foundry     10.38:1         10.67:1         14.3:1            9.13:1
+ *   spire        4.40:1          4.60:1         12.7:1            4.02:1
+ *   temple       3.69:1          3.95:1         18.4:1            3.40:1
+ *   hub         10.81:1         11.46:1         15.2:1            8.09:1
  *
- *   theme     fog@30m   safe@30m vs bg   edge vs safe   cpOn vs cpOff
- *   neon       0.049        4.43:1          3.57:1          7.79:1
- *   foundry    0.206        4.66:1          2.07:1          9.13:1
- *   spire      0.070        5.92:1          5.17:1          4.02:1
- *   temple     0.027        4.12:1          2.25:1          3.40:1
- *   hub        0.032        6.47:1          2.14:1          8.09:1
+ * "edge vs keyline": every leading-edge stripe is flanked by 0.03 m near-black
+ * keylines (builders.js) so the stripe reads as a drawn line on ANY deck value
+ * and under any bloom — edge-vs-deck alone was 1.2-2.1:1 in the bright-deck
+ * themes and unfixable there without dimming the stripes themselves.
+ * Temple trades away zenith contrast (dark deck vs dark sky ~1.3:1) for the
+ * eye-level read; its undersides carry the accent spine line for the look-up.
  *
  * Kill separation. Every `kill` is saturation >= 0.87 in the 330-40 deg hot
  * band, and is >= 45 deg of hue from `safe`, `safeEdge`, `checkpointOn` and
@@ -40,6 +50,9 @@
  * is orange — so there the discriminator is carried by emission and motion
  * instead: hazards are the only orange things that are self-lit AND animated,
  * and every landable surface there is cold steel wearing a cyan edge stripe.
+ * ENFORCED, not assumed: builders.js remaps any stage-authored landable glow
+ * that sits in the kill hue band (or reads as checkpointOn off a checkpoint)
+ * to the theme accent — data cannot ship a red pad you must stand on.
  *
  * Cross-theme constants, so muscle memory transfers between worlds:
  *   kill          = hot red/orange, always emissive, always moving
@@ -83,9 +96,15 @@ export const THEMES = {
         starDensity: 0.22, starBrightness: 0.35, dither: 1.0,
         // read by engine.js readThemeLighting() for its own PMREM probe
         sunPower: 60, haze: 0.55, intensity: 1.00,
-        gridColor: 0x22d3ee, gridY: -26, gridSpacing: 4.0, gridLine: 0.030,
-        gridFade: 520, gridGlow: 0.60,
-        scanColor: 0x9ffcff, scanSpeed: 0.085, scanWidth: 0.028,
+        /* The backdrop grid must never share the landable identity. 0x22d3ee
+         * was palette.accent verbatim — the same family as every platform
+         * stripe — and at gridGlow 0.60 the lower half of every frame read as
+         * a crisp landable floor (players died steering for it mid-fall).
+         * Magenta is the neon HORIZON identity (horizonGlow/cityGlow), used by
+         * nothing landable in any theme; dimmed so it reads as atmosphere. */
+        gridColor: 0xff3fa8, gridY: -26, gridSpacing: 4.0, gridLine: 0.030,
+        gridFade: 520, gridGlow: 0.22,
+        scanColor: 0xff9fd6, scanSpeed: 0.085, scanWidth: 0.028,
         cityColor: 0x0e0824, cityGlow: 0xff3fa8, cityHeight: 0.26,
         cityDensity: 34.0, cityBand: 0.09,
       },
@@ -102,9 +121,18 @@ export const THEMES = {
     grade: {
       lift: [0.008, 0.004, 0.030], gamma: [1.00, 1.00, 0.97], gain: [1.03, 1.00, 1.08],
       saturation: 1.18, vignette: 0.38, chroma: 0.0016,
-      tint: 0x8fb8ff, tintRGB: [0.94, 0.97, 1.06],
+      /* tint is the value post.js actually multiplies by (colorRatio). The old
+       * hex 0x8fb8ff decoded to x[0.56,0.72,1.00] — a heavy blue filter nobody
+       * intended; the gentle push lived in a `tintRGB` field nothing read.
+       * (2026-08-31 critic pass, all five themes.) */
+      tint: [0.94, 0.97, 1.06],
     },
-    bloom: { strength: 1.05, radius: 0.78, threshold: 0.60 },
+    /* 1.05 @ 0.60 flooded the near field: the start pad's trim (emissive ~2.4+
+     * linear) filled the bottom third of the frame with one blown cyan wash and
+     * swallowed the gloves (neon-1_0/1_2, plain_neon-1_high). Threshold above
+     * diffuse range so only true emitters bloom; strength down to a halo, not
+     * a fog. The trim itself also came down (materialOverrides.neon). */
+    bloom: { strength: 0.70, radius: 0.62, threshold: 0.95 },
 
     palette: {
       safe: 0x5d7f9c, safeEdge: 0xc9f7ff,
@@ -125,8 +153,11 @@ export const THEMES = {
       glass: { tint: 0xbfe4ff },
       obsidian: { tint: 0xb0a8ff },
       crystal: { emissive: 0x22d3ee, attenuationColor: 0x1a6fa0 },
-      neon: { emissive: 0x22d3ee, emissiveIntensity: 3.8 },
-      emissive: { emissive: 0x22d3ee, emissiveIntensity: 3.0 },
+      /* 3.8/3.0 under the old 0.60-threshold bloom was the near-field flood;
+       * 2.5/2.3 still clears the 0.95 threshold, so strips glow with a halo
+       * instead of erasing the bottom of the frame. */
+      neon: { emissive: 0x22d3ee, emissiveIntensity: 2.5 },
+      emissive: { emissive: 0x22d3ee, emissiveIntensity: 2.3 },
       hazard: { emissive: 0xff2b5e, emissiveIntensity: 2.2 },
       conveyor: { emissive: 0x22d3ee },
       lava: { emissiveIntensity: 3.0 },
@@ -154,21 +185,33 @@ export const THEMES = {
     exposure: 1.00,
     envIntensity: 0.70,
 
-    fog: { color: 0x2a0f06, near: 8, far: 95, density: 0.0160, type: 'exp2' },
+    /* density 0.0160 hid the far lip of a 3 m gap from its own take-off point
+     * (house rule: EVERY LANDING IS VISIBLE FROM ITS TAKE-OFF). Thinned until
+     * the next platform silhouettes from CP0; the near haze band still reads. */
+    fog: { color: 0x2a0f06, near: 8, far: 95, density: 0.0125, type: 'exp2' },
 
     sky: {
       type: 'ember',
       params: {
         top: 0x080503, mid: 0x140806, horizon: 0x40120a, bottom: 0x0a0403,
-        horizonGlow: 0xff4a10, glowPower: 3.2, glowStrength: 0.85,
-        smokeColor: 0x2e1c15, smokeDark: 0x070403,
-        smokeScale: 2.4, smokeSpeed: 0.022, smokeWarp: 0.35, smokeContrast: 1.35,
+        /* glowPower 3.2 / strength 0.85 spread the horizon band over most of
+         * the dome; summed with the furnace term it read as one featureless
+         * orange gradient and the smoke churn never survived it (foundry-1_0,
+         * 2026-08-31 critic pass). Narrower and dimmer: the horizon burns, the
+         * upper dome stays near-black churning smoke. */
+        horizonGlow: 0xff4a10, glowPower: 5.0, glowStrength: 0.60,
+        smokeColor: 0x36211a, smokeDark: 0x060302,
+        smokeScale: 2.4, smokeSpeed: 0.022, smokeWarp: 0.35, smokeContrast: 1.85,
         /* furnace 0.60 lit the ENTIRE below-horizon dome at full strength (the
          * shader's underside term saturates for any downward ray), which is
          * most of the frame in a stage of floating platforms — the place read
          * bright orange, not near-black smoke. Halved, the underside glow still
          * reads as the lava sea's bounce without owning the atmosphere. */
-        glowColor: 0xff6a1a, glowHeight: 0.26, furnace: 0.30,
+        glowColor: 0xff6a1a, glowHeight: 0.26, furnace: 0.24,
+        /* the lava SEA itself: dark crust plates threaded by glowing channels
+         * on the below-horizon dome (sky.js FRAG_EMBER) — looking down or out
+         * now shows molten ground instead of a blank gradient. */
+        seaStrength: 1.0, seaScale: 5.0, seaSpeed: 0.010,
         emberGlow: 0xffa04a, dither: 1.0,
         sunDir: [0.24, 0.30, -0.94], sunColor: 0xff8a3c, sunSize: 0.0, sunIntensity: 0.0,
         starDensity: 0.0, starBrightness: 0.0,
@@ -187,7 +230,12 @@ export const THEMES = {
     grade: {
       lift: [0.020, 0.008, 0.002], gamma: [0.98, 1.00, 1.03], gain: [1.08, 1.00, 0.94],
       saturation: 1.10, vignette: 0.46, chroma: 0.0022,
-      tint: 0xffb27a, tintRGB: [1.06, 0.96, 0.88],
+      /* the old hex tint 0xffb27a decoded to x[1.00,0.70,0.48] — a heavy orange
+       * filter that yellowed the cyan edge stripes (the theme's own hot/cold
+       * discriminator) and re-warmed the already-orange world. The gentle warm
+       * push the tintRGB note documented is now what actually applies, eased
+       * further on blue so cyan survives the grade. */
+      tint: [1.04, 0.99, 0.95],
     },
     /* strength 1.25 / threshold 0.52 was tuned against a near-black scene, but
      * the lava sea legitimately covers half the frame at luma 2..12: at that
@@ -206,24 +254,39 @@ export const THEMES = {
 
     particles: { type: 'ember', rate: 60, color: 0xff8a2a, size: 0.070, drift: [0.05, 0.85, 0.03] },
 
+    /* The walked materials were warm near-white multipliers (0xffb488 steel!)
+     * on top of an orange key/fill/hemi rig — the fire was being counted twice,
+     * and every deck lip blew out to a yellow-white blob at grazing angles.
+     * The theme's own doctrine is "cold steel wearing a cyan edge stripe": the
+     * tints below are neutral steel (palette.safe 0x8b94a4 family) and the
+     * LIGHTS do all the warming. */
     materialOverrides: {
-      stone: { tint: 0xffb488, rough: 0.03 },
-      panel: { tint: 0xe8c0a0 },
-      metal: { tint: 0xffc9a0, rough: 0.05 },
-      grate: { tint: 0xffbe94 },
-      checker: { tint: 0xf0c4a0 },
+      stone: { tint: 0x9098a4, rough: 0.03 },
+      panel: { tint: 0x8a94a2 },
+      /* mirror-metal at grazing angle reflected the 2.05 white furnace key
+       * straight into bloom — tread fields and pad tops (hazMat 'metal') read
+       * as one blown slab. `rough` deltas are no-ops here (base scalar is
+       * already 1.0; the maps carry the value), so the specular is tamed the
+       * only way this material allows: absolute metalness + env cut. */
+      metal: { tint: 0x9aa6b4, metalness: 0.40, env: 0.55 },
+      grate: { tint: 0x8791a0, metalness: 0.45, env: 0.60 },
+      checker: { tint: 0x939ca8 },
       ice: { tint: 0xffd6b8, transmission: 0.20 },
       glass: { tint: 0xffd8bc },
-      obsidian: { tint: 0xffa878 },
+      obsidian: { tint: 0x554c48 },
       crystal: { emissive: 0xff9a3c, attenuationColor: 0x8a2a00 },
       neon: { emissive: 0x9fe0ff, emissiveIntensity: 3.2 },
       emissive: { emissive: 0xffb44a, emissiveIntensity: 3.0 },
       hazard: { emissive: 0xff4a10, emissiveIntensity: 2.4 },
-      conveyor: { emissive: 0xffb44a },
-      lava: { emissiveIntensity: 4.0 },
-      rubber: { tint: 0xe0b096 },
-      wood: { tint: 0xffb890 },
-      sand: { tint: 0xffc79c },
+      /* Both mechanic surfaces were losing their hue to ACES clipping: the belt
+       * rendered as a featureless yellow-white slab (its chevrons invisible at
+       * 9 m) and the lava rendered cream. Emission clamped to where the hue
+       * survives tone-mapping; "orange that glows and moves" stays orange. */
+      conveyor: { emissive: 0xff9a3c, emissiveIntensity: 0.8 },
+      lava: { emissiveIntensity: 2.4 },
+      rubber: { tint: 0x6e6c74 },
+      wood: { tint: 0x8a7a6a },
+      sand: { tint: 0x9a927e },
       cloud: { tint: 0xd8a888 },
     },
 
@@ -235,10 +298,11 @@ export const THEMES = {
 
   /* ----------------------------------------------------------------- SPIRE */
   /* High-altitude twilight. Pale cyan-white at the horizon (that pale band is
-   * `bg` — it is what sits behind the stages, and what the contrast law is
-   * measured against) deepening to a star-bearing blue-violet zenith. A high
-   * cold key, a strong blue sky-fill, and a warm low sun rim that catches the
-   * ice edges. Distance haze, falling snow, low bloom, high contrast.        */
+   * what sits behind the stages at eye level — the contrast law is measured
+   * against the fog colour, and the COURSE is dark glacial slate so it can
+   * hold 3.5:1 against that pale air) deepening to a star-bearing blue-violet
+   * zenith. A high cold key, a strong blue sky-fill, and a warm low sun rim
+   * that catches the ice edges. Distance haze, falling snow, low bloom.      */
   spire: {
     id: 'spire',
     name: 'FROZEN SPIRE',
@@ -250,7 +314,10 @@ export const THEMES = {
     exposure: 1.05,
     envIntensity: 1.20,
 
-    fog: { color: 0xbfd6e9, near: 20, far: 260, density: 0.0055, type: 'exp2' },
+    /* 0.0055 still dissolved the 40-90 m course into the pale band even after
+     * the surfaces went dark; a touch thinner keeps the next three landings
+     * silhouetted while the far spire still fades into altitude haze. */
+    fog: { color: 0xbfd6e9, near: 20, far: 260, density: 0.0044, type: 'exp2' },
 
     sky: {
       type: 'aurora',
@@ -258,32 +325,43 @@ export const THEMES = {
         /* horizon 0xe8f2fb was 4 counts from pure white before the glow, fog
          * and bloom even stacked — the measured 8-11 % blown band lived here.
          * One step deeper keeps the pale-band identity below the blowout line. */
-        top: 0x2c4a86, mid: 0x7fa8d2, horizon: 0xd8e7f4, bottom: 0xc6daec,
+        /* mid/bottom deepened one stop: the dome was a near-white field from
+         * 15 deg up, so the aurora and stars were invisible in every capture
+         * and any bright patch went straight over the bloom threshold (the
+         * unexplained left-edge blowout was an aurora fold over the pale mid
+         * band, bloomed — 2026-08-31 toggle probe: bloom off removed it). */
+        top: 0x243e74, mid: 0x5f88b8, horizon: 0xc8dcec, bottom: 0xa8c2d8,
         horizonGlow: 0xffd6a8, glowPower: 8.0, glowStrength: 0.38,
-        /* the one blob still blowing out after the band fix was the sun itself:
-         * disc + halo + fog scatter + bloom covered ~3 % of the frame. A low
-         * winter sun should be a tight glint, not a searchlight. */
-        sunDir: [-0.78, 0.10, -0.61], sunColor: 0xffd8a8, sunSize: 0.013, sunIntensity: 1.0,
-        sunHalo: 0.10,
+        /* sunIntensity 1.0 with a 0.013 disc sat BELOW the 1.10 bloom threshold
+         * — a paper sticker, no glare (spire-1_0). 2.6 puts the disc alone into
+         * HDR so bloom gives it a real winter glint; the halo stays tight. */
+        sunDir: [-0.78, 0.10, -0.61], sunColor: 0xffd8a8, sunSize: 0.014, sunIntensity: 2.6,
+        sunHalo: 0.22,
         auroraA: 0x4affc8, auroraB: 0x7f9cff,
-        auroraSpeed: 0.055, auroraHeight: 0.34, auroraStrength: 0.55, auroraBands: 3.0,
-        starDensity: 0.55, starBrightness: 0.28, dither: 1.0,
-        sunPower: 90, haze: 0.85, intensity: 1.25,
+        /* ribbons lifted into the dark zenith band where they can actually
+         * read; over the pale mid band they were a white smear + bloom blob. */
+        auroraSpeed: 0.055, auroraHeight: 0.50, auroraStrength: 0.70, auroraBands: 3.0,
+        starDensity: 0.55, starBrightness: 0.50, dither: 1.0,
+        sunPower: 90, haze: 0.85, intensity: 1.10,
       },
     },
 
     lights: {
       key: { color: 0xf2fbff, intensity: 2.60, dir: [0.28, 0.93, 0.24] },
-      fill: { color: 0x7fb6ff, intensity: 1.30, dir: [-0.35, 0.55, -0.75] },
+      fill: { color: 0x7fb6ff, intensity: 1.15, dir: [-0.35, 0.55, -0.75] },
       rim: { color: 0xffcf9a, intensity: 2.10, dir: [-0.78, 0.10, -0.61] },
-      ambient: { color: 0xbcd6ea, intensity: 0.62 },
-      hemi: { skyColor: 0xd8ecff, groundColor: 0x6f8ea6, intensity: 0.95 },
+      /* ambient+hemi trimmed so the key's shadows survive the fill instead of
+       * being flat-lit away (shadow-visibility pass, 2026-08-31). */
+      ambient: { color: 0xbcd6ea, intensity: 0.50 },
+      hemi: { skyColor: 0xd8ecff, groundColor: 0x6f8ea6, intensity: 0.80 },
     },
 
     grade: {
       lift: [-0.006, -0.004, 0.004], gamma: [1.02, 1.01, 0.99], gain: [0.98, 1.00, 1.05],
       saturation: 1.05, vignette: 0.30, chroma: 0.0009,
-      tint: 0xdceffc, tintRGB: [0.97, 1.00, 1.05],
+      /* hex 0xdceffc decoded to x[0.86,0.94,0.99] — an unintended darkening
+       * filter; the documented gentle cool push now actually applies. */
+      tint: [0.97, 1.00, 1.05],
     },
     /* threshold 0.86 sat below the pale scene's own haze (~0.9-1.5 linear), so
      * bloom lifted the whole bright half of the frame over the white line
@@ -292,7 +370,7 @@ export const THEMES = {
     bloom: { strength: 0.35, radius: 0.60, threshold: 1.10 },
 
     palette: {
-      safe: 0x2f4a5a, safeEdge: 0xffc94a,
+      safe: 0x466074, safeEdge: 0xffc94a,
       kill: 0xd6001c, killGlow: 0xff5a3c,
       checkpoint: 0x46606e, checkpointOn: 0x00e59c,
       finish: 0x6a3cd6, accent: 0x5ac8f0, deco: 0x8fb4cc,
@@ -300,24 +378,33 @@ export const THEMES = {
 
     particles: { type: 'snow', rate: 90, color: 0xeaf6ff, size: 0.045, drift: [0.35, -0.55, 0.10] },
 
+    /* The walked materials were 0xc8dcf0..0xffffff — white streaks in white fog
+     * (screenshot-measured 1.07-1.50:1 against the fog band; the course past
+     * the current platform's far edge was literally invisible). Frozen Spire's
+     * course is now dark glacial slate under pale air: figure dark, ground
+     * bright. Tints below clear 3.8:1+ raw against fog 0xbfd6e9; palette.safe
+     * declares the same slate the stone actually renders. Decorative ice stays
+     * pale — the course is the dark thing with the gold edge. */
     materialOverrides: {
-      stone: { tint: 0xc8dcf0, rough: -0.04 },
-      panel: { tint: 0xcfe4f8 },
-      metal: { tint: 0xd8ecff, rough: -0.05 },
-      grate: { tint: 0xc8dcf0 },
-      checker: { tint: 0xcfe2f2 },
-      ice: { tint: 0xffffff, transmission: 0.42, iridescence: 0.40 },
+      stone: { tint: 0x466074, rough: -0.04 },
+      panel: { tint: 0x435d72 },
+      metal: { tint: 0x4c6a82, rough: -0.05 },
+      grate: { tint: 0x3c5265 },
+      checker: { tint: 0x445e72 },
+      /* env 0.35: clearcoat ice mirroring a white sky was re-whitening itself
+       * no matter how dark the tint went — the shelf measured 1.08:1 vs fog. */
+      ice: { tint: 0x47708c, transmission: 0.16, iridescence: 0.40, env: 0.35 },
       glass: { tint: 0xe6f6ff },
-      obsidian: { tint: 0xb8d0e8 },
+      obsidian: { tint: 0x3a4e60 },
       crystal: { emissive: 0x9fe8ff, attenuationColor: 0x2f74b0 },
       neon: { emissive: 0xffcf5c, emissiveIntensity: 3.2 },
       emissive: { emissive: 0x6fd8ff, emissiveIntensity: 2.6 },
       hazard: { emissive: 0xd6001c, emissiveIntensity: 2.4 },
       conveyor: { emissive: 0x6fd8ff },
       lava: { emissiveIntensity: 3.6 },
-      rubber: { tint: 0xb0c4d8 },
-      wood: { tint: 0xc0cfe0 },
-      sand: { tint: 0xd8e6f2 },
+      rubber: { tint: 0x6c8496 },
+      wood: { tint: 0x465c6c },
+      sand: { tint: 0x4a6478 },
       cloud: { tint: 0xf2fbff },
     },
 
@@ -343,17 +430,23 @@ export const THEMES = {
     exposure: 1.04,
     envIntensity: 1.15,
 
-    fog: { color: 0xccb28b, near: 30, far: 340, density: 0.0046, type: 'exp2' },
+    fog: { color: 0xc2a67b, near: 30, far: 340, density: 0.0042, type: 'exp2' },
 
     sky: {
       type: 'cloudsea',
       params: {
-        top: 0x14356a, mid: 0x2f6bb0, horizon: 0xf0cd9a, bottom: 0xd8bc94,
+        /* horizon/bottom deepened from 0xf0cd9a/0xd8bc94: the band read as one
+         * dead cream stripe; amber keeps golden-hour and leaves headroom for
+         * the sun to own the top of the range. */
+        top: 0x14356a, mid: 0x2f6bb0, horizon: 0xe4ba82, bottom: 0xc6a578,
         horizonGlow: 0xffb85c, glowPower: 3.0, glowStrength: 1.00,
         sunDir: [-0.56, 0.19, 0.60], sunColor: 0xfff0cc, sunSize: 0.030,
         sunIntensity: 3.2, sunHalo: 0.55,
-        cloudY: -62, cloudScale: 0.018, cloudSpeed: 0.010, cloudCoverage: 0.52,
-        cloudLit: 0xfff2dc, cloudShadow: 0x8fa4c4, cloudFade: 700, cloudSharp: 2.2,
+        /* deeper shadow tone + more coverage + longer fade: the cloud sea was
+         * invisible under the fog band (temple-1_0) — lit tops against a
+         * genuinely darker floor is what makes the plane read at distance. */
+        cloudY: -62, cloudScale: 0.018, cloudSpeed: 0.010, cloudCoverage: 0.60,
+        cloudLit: 0xfff2dc, cloudShadow: 0x74889f, cloudFade: 950, cloudSharp: 2.2,
         starDensity: 0.0, starBrightness: 0.0, dither: 1.0,
         sunPower: 120, haze: 0.70, intensity: 1.15,
       },
@@ -361,26 +454,35 @@ export const THEMES = {
 
     lights: {
       key: { color: 0xffd08a, intensity: 3.10, dir: [-0.56, 0.40, 0.60] },
-      fill: { color: 0x8fc0ff, intensity: 1.35, dir: [0.30, 0.86, -0.40] },
+      fill: { color: 0x8fc0ff, intensity: 1.20, dir: [0.30, 0.86, -0.40] },
       rim: { color: 0xfff0d0, intensity: 1.50, dir: [0.72, 0.14, -0.68] },
-      ambient: { color: 0xb79a72, intensity: 0.48 },
-      hemi: { skyColor: 0x74a8e0, groundColor: 0xd8b98a, intensity: 1.00 },
+      /* ambient+hemi trimmed: at 0.48/1.00 the fill floor sat so high the low
+       * key's long colonnade shadows read as barely-darker paint. */
+      ambient: { color: 0xb79a72, intensity: 0.40 },
+      hemi: { skyColor: 0x74a8e0, groundColor: 0xd8b98a, intensity: 0.82 },
     },
 
     grade: {
       lift: [0.010, 0.006, 0.000], gamma: [1.00, 1.00, 1.01], gain: [1.05, 1.01, 0.96],
       saturation: 1.08, vignette: 0.26, chroma: 0.0007,
-      tint: 0xffe6bf, tintRGB: [1.04, 1.00, 0.93],
+      /* hex 0xffe6bf decoded to x[1.00,0.90,0.75] — a QUARTER of the blue
+       * removed, which is most of why every hue in the frame converged to the
+       * same cream. The gentle golden push now applies, with more blue kept. */
+      tint: [1.03, 1.00, 0.96],
     },
     /* 0.75 @ 0.72 dissolved the whole golden scene into cream haze: the bright
      * fog band + near-white safeEdge trim sat above the threshold, so bloom +
      * fog + emissives merged into one wash (measured 30 % pure-white pixels;
      * bloom off alone recovered it to 0.1 %). Golden hour needs the SUN to
      * bloom, not the architecture. */
-    bloom: { strength: 0.40, radius: 0.60, threshold: 0.88 },
+    bloom: { strength: 0.36, radius: 0.60, threshold: 0.95 },
 
     palette: {
-      safe: 0xbfa273, safeEdge: 0xfff8e6,
+      /* safeEdge was 0xfff8e6 — the trim, the sign strip, the fog band and the
+       * sun halo were all the same near-white, so nothing anchored a highlight
+       * hierarchy. Deep gold trim: the SUN is now the only white thing in the
+       * frame, trim reads gold, fog reads amber. */
+      safe: 0x665134, safeEdge: 0xffd98c,
       kill: 0xff1044, killGlow: 0xff5a7a,
       checkpoint: 0x6d5c46, checkpointOn: 0x18d69a,
       finish: 0xd9b6ff, accent: 0xffc35c, deco: 0xa88f66,
@@ -388,24 +490,30 @@ export const THEMES = {
 
     particles: { type: 'mote', rate: 34, color: 0xffe6b0, size: 0.050, drift: [0.10, 0.05, 0.06] },
 
+    /* Sand platforms, sand fog, sand decor — one colour, three meanings
+     * (screenshot-measured 1.38-1.68:1 platform-vs-fog). The course is now
+     * deep bronzed stone under the cream air: every walked tint clears 3.6:1+
+     * raw against fog 0xccb28b, ivory edges and gold trim burn on top of it,
+     * and decor keeps the pale palette.deco so it recedes into the haze
+     * instead of impersonating a deck. palette.safe = the rendered stone. */
     materialOverrides: {
-      stone: { tint: 0xffe2b4, rough: -0.02 },
-      panel: { tint: 0xf0d8ae },
-      metal: { tint: 0xffdca8, rough: -0.06, metal: 0.03 },
-      grate: { tint: 0xf0d0a0 },
-      checker: { tint: 0xffe6c0 },
+      stone: { tint: 0x665134, rough: -0.02 },
+      panel: { tint: 0x5c4e3c },
+      metal: { tint: 0x66502f, rough: -0.06, metal: 0.03 },
+      grate: { tint: 0x54462f },
+      checker: { tint: 0x63533a },
       ice: { tint: 0xdff0ff },
       glass: { tint: 0xfff0d8 },
-      obsidian: { tint: 0xd8b890 },
+      obsidian: { tint: 0x4a3d2e },
       crystal: { emissive: 0xffd08a, attenuationColor: 0xb06a1a },
       neon: { emissive: 0xffe0a0, emissiveIntensity: 2.8 },
       emissive: { emissive: 0xffc35c, emissiveIntensity: 2.6 },
       hazard: { emissive: 0xff1044, emissiveIntensity: 2.2 },
       conveyor: { emissive: 0xffc35c },
       lava: { emissiveIntensity: 3.2 },
-      rubber: { tint: 0xc8ac88 },
-      wood: { tint: 0xffd8a8 },
-      sand: { tint: 0xffe4b8 },
+      rubber: { tint: 0x6a5840 },
+      wood: { tint: 0x655031 },
+      sand: { tint: 0x615033 },
       cloud: { tint: 0xffffff },
     },
 
@@ -451,9 +559,14 @@ export const THEMES = {
     grade: {
       lift: [0.004, 0.004, 0.012], gamma: [1.00, 1.00, 1.00], gain: [1.00, 1.00, 1.03],
       saturation: 1.04, vignette: 0.32, chroma: 0.0006,
-      tint: 0xc9d4ff, tintRGB: [0.98, 0.99, 1.04],
+      /* hex 0xc9d4ff decoded to x[0.79,0.83,1.00] — a heavy blue filter; the
+       * documented gentle push now applies. */
+      tint: [0.98, 0.99, 1.04],
     },
-    bloom: { strength: 0.60, radius: 0.70, threshold: 0.70 },
+    /* 0.60 @ 0.70 turned the launch-pad ring into a solid white parallelogram
+     * with zero internal gradient (hub_0/hub_1). Threshold above the diffuse
+     * range: the ring keeps its violet gradient and blooms only at its core. */
+    bloom: { strength: 0.50, radius: 0.65, threshold: 0.92 },
 
     palette: {
       safe: 0x8e9cb5, safeEdge: 0xbfeaff,
@@ -473,8 +586,11 @@ export const THEMES = {
       ice: { tint: 0xdce8ff },
       glass: { tint: 0xe0ecff },
       obsidian: { tint: 0xb0a8e0 },
-      crystal: { emissive: 0xb49aff, attenuationColor: 0x4a3a9a },
-      neon: { emissive: 0x9a7dff, emissiveIntensity: 3.0 },
+      /* the hub's primary dressing read as unlit purple blobs (hub_0): give the
+       * cores real internal light and let the sky-based env probe (applyTheme
+       * default) hand the transmission something to refract. */
+      crystal: { emissive: 0xb49aff, emissiveIntensity: 2.2, attenuationColor: 0x4a3a9a },
+      neon: { emissive: 0x9a7dff, emissiveIntensity: 2.6 },
       emissive: { emissive: 0x9a7dff, emissiveIntensity: 2.4 },
       hazard: { emissive: 0xff2020, emissiveIntensity: 2.0 },
       conveyor: { emissive: 0x9a7dff },
@@ -502,10 +618,15 @@ export const THEME_ORDER = ['hub', 'neon', 'foundry', 'spire', 'temple'];
 /** one live rig per engine — swapping themes tears the old one down first */
 const _rigs = new WeakMap();
 
-/* hoisted scratch: applyTheme runs on stage load, but setShadowFocus runs
- * per-frame from game code, so nothing here may allocate. */
+/* hoisted scratch: applyTheme runs on stage load, but setShadowFocus and the
+ * rig's camera-follow run per-frame, so nothing here may allocate. */
 const _v = new THREE.Vector3();
 const _dir = new THREE.Vector3();
+const _camW = new THREE.Vector3();
+const _lRight = new THREE.Vector3();
+const _lUp = new THREE.Vector3();
+const _lDir = new THREE.Vector3();
+const _UP_HINT = new THREE.Vector3(0, 1, 0);
 
 function placeLight(light, dir, distance, target) {
   _dir.set(dir[0], dir[1], dir[2]);
@@ -540,7 +661,12 @@ function makeDirectional(spec, name) {
  */
 export function applyTheme(engine, themeId, opts) {
   const def = THEMES[themeId] || THEMES[String(themeId)] || THEMES.hub;
-  const wantSkyEnv = !!(opts && opts.skyEnvironment);
+  /* Sky-environment is the DEFAULT (2026-08-31 critic pass): the shipped caller
+   * (game.js:789) passes no opts, so the old opt-in meant the true-sky probe
+   * had zero callers and every reflective surface mirrored the engine's generic
+   * studio cards instead of the neon city / aurora / cloud sea it stood under.
+   * Pass {skyEnvironment:false} to keep the engine's card probe. */
+  const wantSkyEnv = !(opts && opts.skyEnvironment === false);
   if (!engine || !engine.scene) {
     console.warn('[themes] applyTheme called without an engine');
     return null;
@@ -630,16 +756,12 @@ export function applyTheme(engine, themeId, opts) {
   scene.add(group);
 
   /* ---- environment ------------------------------------------------------- *
-   * Engine.setTheme() already bakes a PMREM probe (gradient + sun + three
-   * emissive light cards) and owns scene.environment, so when the engine
-   * handled the theme we leave the probe alone — two modules baking the same
-   * slot is how you get a probe that flips on every context restore.
-   *
-   * We only render our own probe FROM THE ACTUAL SKY when either
-   *   (a) there is no engine.setTheme to own it, or
-   *   (b) the caller explicitly asks: applyTheme(engine, id, {skyEnvironment:true}),
-   * which trades the light cards for true backdrop fidelity — the neon city
-   * glow, the aurora and the cloud sea all show up in reflections.
+   * Engine.setTheme() bakes its generic PMREM probe (gradient + sun + three
+   * emissive light cards) first; unless the caller opts OUT with
+   * {skyEnvironment:false} we then replace it with a probe rendered FROM THE
+   * ACTUAL SKY DOME, so the neon city glow, the aurora and the cloud sea all
+   * show up in reflections — obsidian's clearcoat mirrors the world it stands
+   * in, not a studio card. dispose() hands the slot back to the engine probe.
    * ------------------------------------------------------------------------ */
   const prevEnv = scene.environment;
   let env = null;
@@ -659,7 +781,57 @@ export function applyTheme(engine, themeId, opts) {
 
   /* ---- rig --------------------------------------------------------------- */
   let disposed = false;
-  const onFrame = (dt) => { if (!disposed) sky.update(dt); };
+
+  /**
+   * Re-place the whole light rig around (x,y,z), snapping the shadow focus to
+   * the shadow-map texel grid IN LIGHT SPACE so a gliding frustum does not make
+   * every shadow edge shimmer. Allocation-free.
+   */
+  const texelWorld = mapSize > 0 ? (sh.extent * 2) / mapSize : 0;
+  function moveFocus(x, y, z) {
+    _v.set(x, y, z);
+    if (texelWorld > 0) {
+      // light basis: dir toward the light; right/up span the ortho frustum
+      _lDir.set(def.lights.key.dir[0], def.lights.key.dir[1], def.lights.key.dir[2]).normalize();
+      _lRight.crossVectors(_UP_HINT, _lDir);
+      if (_lRight.lengthSq() < 1e-6) _lRight.set(1, 0, 0);
+      _lRight.normalize();
+      _lUp.crossVectors(_lDir, _lRight);
+      const pr = _v.dot(_lRight);
+      const pu = _v.dot(_lUp);
+      const pd = _v.dot(_lDir);
+      const qr = Math.round(pr / texelWorld) * texelWorld;
+      const qu = Math.round(pu / texelWorld) * texelWorld;
+      _v.set(0, 0, 0)
+        .addScaledVector(_lRight, qr)
+        .addScaledVector(_lUp, qu)
+        .addScaledVector(_lDir, pd);
+    }
+    focus.copy(_v);
+    placeLight(key, def.lights.key.dir, keyDist, focus);
+    placeLight(fill, def.lights.fill.dir, 60, focus);
+    placeLight(rim, def.lights.rim.dir, 70, focus);
+    hemi.position.set(x, y + 60, z);
+  }
+
+  /* Follow the camera every frame. game.js never calls setShadowFocus, and a
+   * fixed frustum around the origin left every station past ~extent metres
+   * (most of a 150 m+ course — the 2026-08-31 critic pass measured player
+   * x=180 on temple-1) with NO shadow coverage at all: configured maps, zero
+   * visible shadows. The rig owns the problem now: it slides itself. */
+  const onFrame = (dt) => {
+    if (disposed) return;
+    sky.update(dt);
+    const cam = engine.camera;
+    if (cam && key.castShadow) {
+      _camW.setFromMatrixPosition(cam.matrixWorld);
+      if (Math.abs(_camW.x - focus.x) > 0.5 ||
+          Math.abs(_camW.y - focus.y) > 0.5 ||
+          Math.abs(_camW.z - focus.z) > 0.5) {
+        moveFocus(_camW.x, _camW.y, _camW.z);
+      }
+    }
+  };
 
   const rig = {
     theme: def,
@@ -672,15 +844,12 @@ export function applyTheme(engine, themeId, opts) {
     /**
      * Slide the shadow frustum (and the whole light rig) to follow the player
      * down a long stage. Allocation-free — call it every frame if you like.
+     * (The rig also follows engine.camera on its own each frame; this remains
+     * for callers that want a different focus, e.g. a cinematic.)
      */
     setShadowFocus(x, y, z) {
       if (disposed) return;
-      _v.set(x, y, z);
-      focus.copy(_v);
-      placeLight(key, def.lights.key.dir, keyDist, focus);
-      placeLight(fill, def.lights.fill.dir, 60, focus);
-      placeLight(rim, def.lights.rim.dir, 70, focus);
-      hemi.position.set(x, y + 60, z);
+      moveFocus(x, y, z);
     },
 
     dispose() {
