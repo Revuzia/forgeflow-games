@@ -44,7 +44,7 @@ import { clamp, lerp, smoothstep, easeOutCubic, fmtTime, nowMs } from './core/ut
  * Stored as cumulative boundaries so the sequence is a pure function of elapsed
  * real milliseconds — no per-phase timers to drift.
  * ------------------------------------------------------------------------ */
-/* Designed total is 560 ms, deliberately under the 620 ms contract bound: the
+/* Designed total is 540 ms, deliberately under the 620 ms contract bound: the
  * sequence advances on rAF, so a 50 Hz panel adds up to ~60-90 ms of frame
  * quantisation between the kill and the measured input restore (heavier stages
  * drop the odd frame during the swap). 540 designed
@@ -53,9 +53,9 @@ const D_FLASH = 80;                       // 0    .. 80    flash + freeze + duck
 const D_HOLD = 140;                       // 80   .. 220   hold on the death cam
 const D_FADE = 130;                       // 220  .. 350   fade to theme colour
 const D_RESTORE = 190;                    // 350  .. 540   fade back in
-const T_HOLD_END = D_FLASH + D_HOLD;                       // 270
-const T_FADE_END = T_HOLD_END + D_FADE;                    // 410  <- world swap
-const T_DEATH_END = T_FADE_END + D_RESTORE;                // 620
+const T_HOLD_END = D_FLASH + D_HOLD;                       // 220
+const T_FADE_END = T_HOLD_END + D_FADE;                    // 350  <- world swap
+const T_DEATH_END = T_FADE_END + D_RESTORE;                // 540
 const T_SOFT_START = T_HOLD_END - 20;     // manual respawn skips flash + hold
 
 const INTRO_MS = 1600;                    // stage intro card, skippable
@@ -485,6 +485,11 @@ export class Game {
     });
     bindEvent(inp, 'blur', () => { this.pause('blur'); });
     bindEvent(inp, 'unlock', () => {
+      /* Dev mode never pauses on lock loss: automation (feelcheck, loopcheck)
+         cannot acquire pointer lock from synthetic events, so this pause put
+         the harness in a suspend/resume cycle that swallowed every jump edge —
+         feelcheck reported a passing game as 8 failures because of it. */
+      if (this.__dev) return;
       if (this._isLive() && this._deathT < 0) this.pause('unlock');
     });
   }
@@ -1051,7 +1056,7 @@ export class Game {
          flash, the damage vignette, the death cam, the knock, the burst, the duck
          and the death hit are all one call — and now that Game hands it the real
          FPCamera and Post (_wireImpacts) and ticks its clock, they all land.
-         Game keeps the TIMELINE: the veil, the swap at 410 ms and the state.
+         Game keeps the TIMELINE: the veil, the swap at T_FADE_END (350 ms) and the state.
          Doing any of it here as well would be the same defect twice over. */
       const p = this.player ? this.player.pos : _v1.set(0, 0, 0);
       if (this._impactsOwnsDeathScreen()) {
@@ -1075,7 +1080,7 @@ export class Game {
   /**
    * Whether fx/impacts.js is driving the death SCREEN this run — the flash and
    * the damage vignette. Exactly one system does; Game keeps the timeline (veil,
-   * the swap at 410 ms, the state) either way, and takes the screen over only
+   * the swap at T_FADE_END (350 ms), the state) either way, and takes the screen over only
    * where there is no Impacts to hand it to.
    */
   _impactsOwnsDeathScreen() {
@@ -1719,7 +1724,11 @@ export class Game {
        Only an actual menu state stops the clock. */
     const simBlocked = this.state === 'paused' || this.state === 'select' || this._selectOpen;
     const menuOpen = simBlocked || this.state === 'title' || !!(this.menu && this.menu.isOpen);
-    const sdt = simulating && !simBlocked ? Math.min(rdt * this.timeScale, 1 / 20) : 0;
+    /* impacts.timeScale is the hit-stop (death slow-mo 0.06x for 90 ms, hard
+       landings) — impacts.js:539 documents that the Game must multiply it in,
+       and until now nothing did: the death hitch was authored but never felt. */
+    const hitStop = this.impacts && isNum(this.impacts.timeScale) ? this.impacts.timeScale : 1;
+    const sdt = simulating && !simBlocked ? Math.min(rdt * this.timeScale * hitStop, 1 / 20) : 0;
 
     /* --- timers: gameplay only --- */
     if (this._timerRun && live && !menuOpen && this._deathT < 0) {

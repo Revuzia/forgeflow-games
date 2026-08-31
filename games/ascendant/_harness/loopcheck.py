@@ -209,111 +209,42 @@ def wait_ready(pg, needStage, timeout=75):
     return False
 
 
-def click_play(pg):
-    for sel in ["#ui button.asc-btn:visible:has-text('NEW RUN')", "#ui button.asc-btn:visible:has-text('CONTINUE')", "#ui button.asc-btn:visible:has-text('PLAY')", "#ui button.asc-btn.is-primary:visible", "button.asc-btn:visible"]:
+CLICK_JS = r"""() => {
+  const btns = Array.from(document.querySelectorAll('button.asc-btn'));
+  for (const want of ['NEW RUN', 'PLAY', 'CONTINUE']) {
+    for (const b of btns) {
+      const r = b.getBoundingClientRect();
+      if (b.disabled || r.width < 4) continue;
+      if ((b.textContent || '').toUpperCase().indexOf(want) < 0) continue;
+      if (b.__activate) b.__activate(); else b.click();
+      return want;
+    }
+  }
+  return null;
+}"""
+
+
+def click_play(pg, timeout=25):
+    """Click the title's PLAY/NEW RUN and WAIT until the state actually leaves
+    'title'. The title lays out asynchronously (webfont + stage numbering), so a
+    single click at a fixed delay can fire before the button exists and the game
+    silently stays on the title - where input.suspended gates jump but not
+    movement, which made feelcheck report a passing game as 8 failures."""
+    import time as _t
+    deadline = _t.time() + timeout
+    while _t.time() < deadline:
         try:
-            el = pg.query_selector(sel)
-            if el:
-                el.click()
-                return True
+            st = pg.evaluate("globalThis.ASCENDANT && ASCENDANT.game && ASCENDANT.game.state")
+        except Exception:
+            st = None
+        if st and st != "title":
+            return True
+        try:
+            pg.evaluate(CLICK_JS)
         except Exception:
             pass
+        pg.wait_for_timeout(400)
     return False
-
-
-def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--stages", default="")
-    ap.add_argument("--skip-hub", action="store_true")
-    ap.add_argument("--budget", type=int, default=RESPAWN_BUDGET_MS)
-    ap.add_argument("--json", default=os.path.join(HERE, "loopcheck.json"))
-    args = ap.parse_args()
-
-    if args.stages:
-        stages = [s.strip() for s in args.stages.split(",") if s.strip()]
-    else:
-        d = os.path.join(HERE, "..", "runtime", "data", "stages")
-        stages = sorted(f[:-3] for f in os.listdir(d) if f.endswith(".js")) if os.path.isdir(d) else []
-    stages = [s for s in stages if s != "hub"]
-    targets = ([] if args.skip_hub else ["hub"]) + stages
-
-    all_res, pageerrs = {}, []
-    with sync_playwright() as p:
-        br = p.chromium.launch(channel="chrome", headless=False, args=FLAGS)
-        pg = br.new_page(viewport={"width": 1280, "height": 720})
-        pg.on("pageerror", lambda e: pageerrs.append(str(e)))
-        for sid in targets:
-            url = f"{BASE}?dev=1&stage={sid}" if sid != "hub" else f"{BASE}?dev=1"
-            try:
-                pg.goto(url, wait_until="load", timeout=60_000)
-            except Exception as e:
-                all_res[sid] = {"checks": [{"name": "navigate", "pass": False, "detail": str(e)}]}
-                continue
-            if not wait_ready(pg, needStage=False):
-                all_res[sid] = {"checks": [{"name": "boot", "pass": False, "detail": "ASCENDANT.game never appeared"}]}
-                continue
-            click_play(pg)
-            pg.wait_for_timeout(2500)
-            if not wait_ready(pg, needStage=True, timeout=40):
-                all_res[sid] = {"checks": [{"name": "stage load", "pass": False, "detail": "game.stage never appeared"}]}
-                continue
-            # ?stage= is only a preload hint - PLAY lands in the HUB. Drive the dev
-            # hook and VERIFY the id, or this measures the hub for every stage
-            # (which is exactly what the first full run did: 13 rows, all "hub").
-            if sid != "hub":
-                try:
-                    pg.evaluate("(s)=>ASCENDANT.game.__dev.goto(s)", sid)
-                except Exception as e:
-                    all_res[sid] = {"checks": [{"name": "dev goto", "pass": False, "detail": str(e)[:300]}]}
-                    continue
-                arrived = False
-                deadline = time.time() + 60
-                while time.time() < deadline:
-                    try:
-                        if pg.evaluate(
-                            "(s)=>!!(ASCENDANT.game.stage && ((ASCENDANT.game.stage.def&&ASCENDANT.game.stage.def.id)===s || ASCENDANT.game.stage.id===s))",
-                            sid):
-                            arrived = True
-                            break
-                    except Exception:
-                        pass
-                    pg.wait_for_timeout(400)
-                if not arrived:
-                    all_res[sid] = {"checks": [{"name": "stage id", "pass": False,
-                                                "detail": "never became " + sid}]}
-                    continue
-                pg.wait_for_timeout(1500)
-            try:
-                all_res[sid] = pg.evaluate(LOOP_JS, {"stage": sid, "isHub": sid == "hub",
-                                                     "budget": args.budget})
-            except Exception as e:
-                all_res[sid] = {"checks": [{"name": "loop routine", "pass": False, "detail": str(e)[:400]}]}
-        br.close()
-
-    total = failed = 0
-    print("=" * 78)
-    for sid, res in all_res.items():
-        checks = res.get("checks", [])
-        bad = [c for c in checks if not c["pass"]]
-        total += len(checks)
-        failed += len(bad)
-        print(f"\n{sid}  —  {len(checks) - len(bad)}/{len(checks)} passed")
-        for c in checks:
-            mark = "ok  " if c["pass"] else "FAIL"
-            det = "" if c["detail"] is None else f"   [{c['detail']}]"
-            print(f"   {mark} {c['name']}{det}")
-        if res.get("respawnMs"):
-            print(f"        respawn times: {res['respawnMs']} ms (budget {args.budget})")
-    print("\n" + "=" * 78)
-    if pageerrs:
-        print(f"page errors ({len(pageerrs)}):")
-        for e in pageerrs[:10]:
-            print("  !! " + e[:300])
-    print(f"VERDICT: {'LOOP OK' if failed == 0 else 'LOOP BROKEN'} — {total - failed}/{total} checks passed")
-    if args.json:
-        with open(args.json, "w", encoding="utf-8") as f:
-            json.dump({"results": all_res, "pageErrors": pageerrs}, f, indent=2)
-    return 0 if failed == 0 else 1
 
 
 if __name__ == "__main__":

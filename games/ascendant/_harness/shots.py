@@ -57,7 +57,9 @@ async ([i, n]) => {
   // falling into the void at -46 m/s)
   P.__test.teleport(new T.Vector3(x, y + 0.6, z));
   P.__test.setVel(new T.Vector3(0, 0, 0));
-  if (P.yaw !== undefined) P.yaw = 0;
+  // controller forward = (-sin(yaw), 0, -cos(yaw)): yaw 0 faces -Z, so the old
+  // battery shot the course SIDEWAYS. Face +X (down-course): yaw = -PI/2.
+  if (P.yaw !== undefined) P.yaw = -Math.PI / 2;
   if (P.pitch !== undefined) P.pitch = -0.06;
   for (let k = 0; k < 40; k++) await frame();     // let lighting/LOD/particles settle
   return {x:+x.toFixed(1), y:+y.toFixed(1), z:+z.toFixed(1), station:i};
@@ -79,14 +81,12 @@ def wait_ready(pg, needStage=True, timeout=70):
     return False
 
 
-CLICK_PLAY_JS = r"""() => {
-  const wants = ['NEW RUN', 'PLAY', 'CONTINUE'];
+CLICK_JS = r"""() => {
   const btns = Array.from(document.querySelectorAll('button.asc-btn'));
-  for (const want of wants) {
+  for (const want of ['NEW RUN', 'PLAY', 'CONTINUE']) {
     for (const b of btns) {
-      if (b.disabled) continue;
       const r = b.getBoundingClientRect();
-      if (r.width < 4 || r.height < 4) continue;          // not laid out / hidden page
+      if (b.disabled || r.width < 4) continue;
       if ((b.textContent || '').toUpperCase().indexOf(want) < 0) continue;
       if (b.__activate) b.__activate(); else b.click();
       return want;
@@ -96,120 +96,27 @@ CLICK_PLAY_JS = r"""() => {
 }"""
 
 
-def click_play(pg):
-    """The title menu buttons live inside a transformed/blurred page, so
-    Playwright's actionability click silently misses them and every shot came
-    back as the title screen. Activate the button in the page instead."""
-    try:
-        hit = pg.evaluate(CLICK_PLAY_JS)
-    except Exception:
-        hit = None
-    return bool(hit)
-
-
-def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--stages", default="")
-    ap.add_argument("--per", type=int, default=4)
-    ap.add_argument("--quality", default="high")
-    ap.add_argument("--width", type=int, default=1600)
-    ap.add_argument("--height", type=int, default=900)
-    ap.add_argument("--ui", action="store_true")
-    args = ap.parse_args()
-
-    os.makedirs(SHOTS, exist_ok=True)
-    if args.stages:
-        stages = [s.strip() for s in args.stages.split(",") if s.strip()]
-    else:
-        d = os.path.join(HERE, "..", "runtime", "data", "stages")
-        stages = sorted(f[:-3] for f in os.listdir(d) if f.endswith(".js")) if os.path.isdir(d) else []
-
-    taken = []
-    with sync_playwright() as p:
-        br = p.chromium.launch(channel="chrome", headless=False, args=FLAGS)
-        pg = br.new_page(viewport={"width": args.width, "height": args.height})
-
-        if args.ui:
-            pg.goto(f"{BASE}?quality={args.quality}", wait_until="load", timeout=60_000)
-            wait_ready(pg, needStage=False)
-            pg.wait_for_timeout(2500)
-            out = os.path.join(SHOTS, "ui_title.png")
-            pg.screenshot(path=out)
-            taken.append(out)
-            click_play(pg)
-            pg.wait_for_timeout(3000)
-            out = os.path.join(SHOTS, "ui_hud.png")
-            pg.screenshot(path=out)
-            taken.append(out)
-            pg.keyboard.press("Escape")
-            pg.wait_for_timeout(900)
-            out = os.path.join(SHOTS, "ui_pause.png")
-            pg.screenshot(path=out)
-            taken.append(out)
-            pg.keyboard.press("Escape")
-            pg.wait_for_timeout(500)
-            pg.keyboard.press("Tab")
-            pg.wait_for_timeout(1100)
-            out = os.path.join(SHOTS, "ui_select.png")
-            pg.screenshot(path=out)
-            taken.append(out)
-            br.close()
-            print(json.dumps(taken, indent=2))
-            return 0
-
-        for sid in stages:
-            url = f"{BASE}?dev=1&quality={args.quality}&stage={sid}"
-            try:
-                pg.goto(url, wait_until="load", timeout=60_000)
-            except Exception as e:
-                print(f"{sid}: nav failed {e}")
-                continue
-            if not wait_ready(pg):
-                print(f"{sid}: never loaded")
-                continue
-            click_play(pg)
-            pg.wait_for_timeout(1500)
-            # ?stage= only preloads; PLAY lands in the HUB. Drive the dev hook and
-            # verify the id, or every "stage" shot is a photo of the hub.
-            try:
-                pg.evaluate("(s)=>ASCENDANT.game.__dev.goto(s)", sid)
-            except Exception as e:
-                print(f"{sid}: goto failed {e}")
-                continue
-            arrived = False
-            deadline = time.time() + 60
-            while time.time() < deadline:
-                try:
-                    if pg.evaluate("(s)=>!!(ASCENDANT.game.stage && ASCENDANT.game.stage.def && ASCENDANT.game.stage.def.id===s)", sid):
-                        arrived = True
-                        break
-                except Exception:
-                    pass
-                pg.wait_for_timeout(400)
-            if not arrived:
-                print(f"{sid}: stage id never became {sid}")
-                continue
-            pg.wait_for_timeout(2200)
-            for i in range(args.per):
-                try:
-                    info = pg.evaluate(POSE_JS, [i, args.per])
-                except Exception as e:
-                    print(f"{sid}[{i}]: pose failed {e}")
-                    continue
-                if isinstance(info, dict) and info.get("error"):
-                    print(f"{sid}[{i}]: {info['error']}")
-                    continue
-                out = os.path.join(SHOTS, f"{sid}_{i}.png")
-                try:
-                    pg.screenshot(path=out)
-                    taken.append(out)
-                    print(f"{sid}[{i}] -> {out}  {info}")
-                except Exception as e:
-                    print(f"{sid}[{i}]: screenshot failed {e}")
-        br.close()
-
-    print(f"\n{len(taken)} shots in {os.path.abspath(SHOTS)}")
-    return 0 if taken else 1
+def click_play(pg, timeout=25):
+    """Click the title's PLAY/NEW RUN and WAIT until the state actually leaves
+    'title'. The title lays out asynchronously (webfont + stage numbering), so a
+    single click at a fixed delay can fire before the button exists and the game
+    silently stays on the title - where input.suspended gates jump but not
+    movement, which made feelcheck report a passing game as 8 failures."""
+    import time as _t
+    deadline = _t.time() + timeout
+    while _t.time() < deadline:
+        try:
+            st = pg.evaluate("globalThis.ASCENDANT && ASCENDANT.game && ASCENDANT.game.state")
+        except Exception:
+            st = None
+        if st and st != "title":
+            return True
+        try:
+            pg.evaluate(CLICK_JS)
+        except Exception:
+            pass
+        pg.wait_for_timeout(400)
+    return False
 
 
 if __name__ == "__main__":

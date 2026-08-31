@@ -44,13 +44,22 @@ MEASURE_JS = r"""
 async () => {
   const A = globalThis.ASCENDANT;
   if (!A || !A.game || !A.game.player) return {error:'no ASCENDANT.game.player'};
-  const G = A.game, P = G.player;
+  const G = A.game;
+  // P must be LIVE: loadStage REPLACES game.player, and this routine can start
+  // while the click's stage load is still in flight - a captured const P then
+  // drives an orphaned player the game no longer updates (the source of the
+  // apex=0 / stop_time=0.9 / gap=13.76 ghost measurements).
+  let P = G.player;
+  const syncP = () => { if (G.player && G.player !== P) P = G.player; return P; };
   const frame = () => new Promise(r => requestAnimationFrame(r));
   const wait = async (ms) => { const t0 = performance.now();
                                while (performance.now() - t0 < ms) await frame(); };
   const key = (type, code) => {
-    const ev = new KeyboardEvent(type, {code, key:' ', bubbles:true, cancelable:true});
-    window.dispatchEvent(ev); document.dispatchEvent(ev);
+    // ONE dispatch, to window. Re-dispatching the same object at document made
+    // the input see a duplicate keydown; with the down-latch that was survivable,
+    // but re-dispatch semantics differ per event state and are the last
+    // structural difference from the probes where jumping demonstrably works.
+    window.dispatchEvent(new KeyboardEvent(type, {code, key: code === 'Space' ? ' ' : code.replace('Key','').toLowerCase(), bubbles:true, cancelable:true}));
   };
   const down = c => key('keydown', c), up = c => key('keyup', c);
   const allUp = () => ['KeyW','KeyA','KeyS','KeyD','Space','ShiftLeft','ControlLeft']
@@ -74,13 +83,17 @@ async () => {
       center: new THREE.Vector3(TEST.x + 40, TEST.y - 1, TEST.z),
       half:   new THREE.Vector3(60, 1, 12),
       surface:'normal'});
+    if (typeof c.update === 'function') c.update();   // compute the AABB before hashing
     G.stage.broadphase.add(c);
+    if (typeof G.stage.broadphase.refresh === 'function') G.stage.broadphase.refresh(c);
     out._slab = true;
+    out._slabAabb = c.aabb ? [c.aabb.min.y, c.aabb.max.y] : null;
   } else {
     out._slab = false;   // fall back to wherever the player already stands
   }
 
   const reset = async (x) => {
+    syncP();
     allUp();
     P.__test.teleport(new THREE.Vector3(x === undefined ? TEST.x : x, TEST.y + 0.4, TEST.z));
     P.__test.setVel(new THREE.Vector3(0,0,0));
@@ -237,6 +250,44 @@ EXPECT = [
 ]
 
 
+
+CLICK_JS = r"""() => {
+  const btns = Array.from(document.querySelectorAll('button.asc-btn'));
+  for (const want of ['NEW RUN', 'PLAY', 'CONTINUE']) {
+    for (const b of btns) {
+      const r = b.getBoundingClientRect();
+      if (b.disabled || r.width < 4) continue;
+      if ((b.textContent || '').toUpperCase().indexOf(want) < 0) continue;
+      if (b.__activate) b.__activate(); else b.click();
+      return want;
+    }
+  }
+  return null;
+}"""
+
+
+def click_play(pg, timeout=25):
+    """Click the title's PLAY/NEW RUN and WAIT until the state actually leaves
+    'title'. The title lays out asynchronously (webfont + stage numbering), so a
+    single click at a fixed delay can fire before the button exists and the game
+    silently stays on the title - where input.suspended gates jump but not
+    movement, which made feelcheck report a passing game as 8 failures."""
+    import time as _t
+    deadline = _t.time() + timeout
+    while _t.time() < deadline:
+        try:
+            st = pg.evaluate("globalThis.ASCENDANT && ASCENDANT.game && ASCENDANT.game.state")
+        except Exception:
+            st = None
+        if st and st != "title":
+            return True
+        try:
+            pg.evaluate(CLICK_JS)
+        except Exception:
+            pass
+        pg.wait_for_timeout(400)
+    return False
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", default=DEFAULT_URL)
@@ -257,21 +308,22 @@ def main() -> int:
                 break
             pg.wait_for_timeout(400)
 
-        # Real click = the user gesture that grants pointer lock and starts audio.
-        for sel in ["#ui button.asc-btn:visible:has-text('NEW RUN')", "#ui button.asc-btn:visible:has-text('CONTINUE')", "#ui button.asc-btn:visible:has-text('PLAY')", "#ui button.asc-btn.is-primary:visible", "button.asc-btn:visible"]:
+        # Retry the click until the state actually leaves the title: on the title
+        # the world simulates and W moves, but input.suspended gates jump - the
+        # exact fingerprint of the fabricated 8-failure verdicts.
+        if not click_play(pg):
+            print("FEEL CHECK: never left the title screen", file=sys.stderr)
+            br.close()
+            return 2
+        deadline = time.time() + 40
+        while time.time() < deadline:
             try:
-                el = pg.query_selector(sel)
-                if el:
-                    el.click()
+                if pg.evaluate("!!(ASCENDANT.game.player && ASCENDANT.game.stage && ASCENDANT.game.player.__test)"):
                     break
             except Exception:
                 pass
-        pg.wait_for_timeout(1500)
-        try:
-            pg.click("canvas", timeout=3000)
-        except Exception:
-            pass
-        pg.wait_for_timeout(800)
+            pg.wait_for_timeout(400)
+        pg.wait_for_timeout(1200)
 
         try:
             res = pg.evaluate(MEASURE_JS)

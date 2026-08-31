@@ -76,6 +76,44 @@ STATE_JS = """() => {
 }"""
 
 
+
+CLICK_JS = r"""() => {
+  const btns = Array.from(document.querySelectorAll('button.asc-btn'));
+  for (const want of ['NEW RUN', 'PLAY', 'CONTINUE']) {
+    for (const b of btns) {
+      const r = b.getBoundingClientRect();
+      if (b.disabled || r.width < 4) continue;
+      if ((b.textContent || '').toUpperCase().indexOf(want) < 0) continue;
+      if (b.__activate) b.__activate(); else b.click();
+      return want;
+    }
+  }
+  return null;
+}"""
+
+
+def click_play(pg, timeout=25):
+    """Click the title's PLAY/NEW RUN and WAIT until the state actually leaves
+    'title'. The title lays out asynchronously (webfont + stage numbering), so a
+    single click at a fixed delay can fire before the button exists and the game
+    silently stays on the title - where input.suspended gates jump but not
+    movement, which made feelcheck report a passing game as 8 failures."""
+    import time as _t
+    deadline = _t.time() + timeout
+    while _t.time() < deadline:
+        try:
+            st = pg.evaluate("globalThis.ASCENDANT && ASCENDANT.game && ASCENDANT.game.state")
+        except Exception:
+            st = None
+        if st and st != "title":
+            return True
+        try:
+            pg.evaluate(CLICK_JS)
+        except Exception:
+            pass
+        pg.wait_for_timeout(400)
+    return False
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", default=DEFAULT_URL)

@@ -491,7 +491,9 @@ export function mover(def, ctx) {
   };
   let plat = null;
   const bp = (ctx.builders && typeof ctx.builders.buildPlatform === 'function') ? ctx.builders.buildPlatform : buildPlatform;
-  try { plat = bp(platDef, ctx.theme); } catch (err) { plat = null; }
+  // third arg was dropped, so builder platforms on movers fell back to the
+  // default material set instead of the theme's (the critic's temple mover)
+  try { plat = bp(platDef, ctx.theme, ctx.mats); } catch (err) { plat = null; }
   if (!plat || !plat.mesh) plat = fallbackPlatform(size, ctx, D, def.mat, def.surface, hz);
   shell.add(plat.mesh);
 

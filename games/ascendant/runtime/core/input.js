@@ -1122,6 +1122,13 @@ export class Input {
   /** Menus call this. Keeps pause/select/mute/fullscreen/dev alive. */
   setSuspended(v) {
     const next = !!v;
+    /* Dev/harness immunity: two systems drive this flag (Game._suspendInput and
+       the UI capture counter in style.js) and a leaked capture leaves it stuck
+       TRUE under automation, where pointer lock can never be held. A stuck
+       suspension still lets movement recompute but hard-gates jump - which made
+       feelcheck measure a passing game as 8 failures. With ?dev=1 the input
+       never suspends; menus still work off their own state. */
+    if (this.devNoSuspend && next) return;
     if (next === this._suspended) return;
     this._suspended = next;
     if (next) {

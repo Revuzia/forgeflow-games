@@ -142,7 +142,7 @@ def main() -> int:
                 results[sid] = {"error": "stage never loaded"}
                 continue
             try:
-                pg.evaluate(CLICK_PLAY_JS)
+                click_play(pg)
             except Exception:
                 pass
             pg.wait_for_timeout(1500)

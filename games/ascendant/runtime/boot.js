@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 /* ============================================================================
  * ASCENDANT — runtime/boot.js
  * Contract §22.  The module entry: capability check, URL parameters, ordered
@@ -26,6 +27,7 @@
 
 import { Engine } from './core/engine.js';
 import { Mats } from './world/materials.js';
+import { Collider } from './world/collider.js';
 import { Audio } from './core/audio.js';
 import { Save } from './core/save.js';
 import { Settings } from './core/settings.js';
@@ -339,6 +341,10 @@ async function main() {
   /* ---- 6. input ---- */
   const input = await phase(0.59, 'input devices', () => {
     const i = new Input(engine.renderer.domElement);
+    // Harness immunity: with ?dev=1 the input never suspends (see input.js
+    // setSuspended) - automation cannot hold pointer lock, and a leaked UI
+    // capture otherwise pins suspended=true and swallows every jump edge.
+    if (DEV) i.devNoSuspend = true;
     i.setSensitivity(typeof settings.sens === 'number' ? settings.sens : 1, !!settings.invertY);
     return i;
   });
@@ -439,6 +445,11 @@ function publishHandle(engine, game) {
     Settings,
     Save,
     version: '1.0.0',
+    /* Harness contract: feelcheck.py builds its measurement slab from
+       ASCENDANT.Collider + ASCENDANT.THREE. Without these the probe's floor
+       never exists and the gate fabricates 8 failures for a passing game. */
+    THREE,
+    Collider,
     get player() { return game.player; },
     get stage() { return game.stage; },
     get state() { return game.state; },
