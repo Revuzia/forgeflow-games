@@ -110,8 +110,17 @@ SNAP = r"""() => {
     return cs.display !== 'none' && cs.visibility !== 'hidden' && parseFloat(cs.opacity) > 0.05;
   };
   const inp = g.input;
+  /* The HUD is "visible" when BOTH the model says so (no hide reason left
+     behind by a menu / the select / the death dip / the clear card, and
+     setVisible(true) was the last word) AND the DOM agrees (.ah-play is not
+     faded out). Either alone has lied before. */
+  const hud = g.hud;
+  const play = document.querySelector('.ah-play');
+  const hudModel = !!(hud && hud._visible && hud._hidden && hud._hidden.size === 0);
+  const hudDom = !!(play && !play.classList.contains('is-off'));
   return {
     state: g.state,
+    phase: g._phase === undefined ? null : g._phase,
     stageId: g.stageId,
     menuIsOpen: !!(g.menu && g.menu.isOpen),
     menuPage: g.menu ? g.menu.page : null,
@@ -119,6 +128,9 @@ SNAP = r"""() => {
     gameSelectOpen: !!g._selectOpen,
     finishOpen: !!(g.hud && g.hud.finishOpen),
     introVisible: vis('.asc-intro'),
+    hudVisible: hudModel && hudDom,
+    hudHidden: hud && hud._hidden ? Array.from(hud._hidden) : [],
+    prompt: g._pT || '',
     suspended: !!(inp && inp.suspended),
     locked: !!(inp && inp.locked),
     devNoSuspend: !!(inp && inp.devNoSuspend),
@@ -129,6 +141,7 @@ SNAP = r"""() => {
     loading: !!g._loading,
     jumps: g.player && g.player.stats ? g.player.stats.jumps : null,
     grounded: g.player ? !!g.player.grounded : null,
+    pos: g.player && g.player.pos ? [g.player.pos.x, g.player.pos.y, g.player.pos.z] : null,
     keysHeld: inp ? [inp.jump, inp.sprint, inp.crouch,
                      inp.move ? inp.move.x : 0, inp.move ? inp.move.y : 0] : null,
     finishTriggered: !!(g.stage && g.stage.finish && g.stage.finish.triggered),
@@ -342,18 +355,34 @@ class Flow:
                 return True
             pg.evaluate(r"""() => {
               const g = ASCENDANT.game;
-              if (g.hud && g.hud.finishOpen) g.hud.hideFinish();
-              if (g.stageSelect && g.stageSelect.isOpen) g.stageSelect.close(true);
-              g._selectOpen = false;
-              g._endClear(true); g._cancelDeath(); g._endIntro(true);
-              if (g.menu) g.menu.close();
-              if (g.state !== 'playing' && g.state !== 'hub') {
-                g.state = g.stageId === 'hub' ? 'hub' : 'playing';
+              if (g.stageSelect && g.stageSelect.isOpen) {
+                if (typeof g.closeStageSelect === 'function') g.closeStageSelect();
+                else g.stageSelect.close(true);
               }
+              g._selectOpen = false;
+              if (g.state === 'paused' && typeof g.resume === 'function') g.resume();
+              else if (g.menu && g.menu.isOpen) g.menu.close();
+              g._endClear(true); g._cancelDeath(); g._endIntro(true);
+              const live = g.stageId === 'hub' ? 'hub' : 'playing';
+              /* state is derived from _phase where the phase model exists;
+                 poke whichever the build has */
+              if (g._phase !== undefined) { if (g._phase !== 'hub' && g._phase !== 'playing') g._phase = live; }
+              if (g.state !== 'playing' && g.state !== 'hub') g.state = live;
               g._timerRun = true;
               if (g.input) g.input.setSuspended(false);
             }""")
             self.wait(700)
+        return False
+
+    def wait_grounded(self, ms=3000):
+        """A jump probe against a body in free fall proves nothing about the
+        input path. Give the player a moment to land (or to die and come back)."""
+        deadline = time.time() + ms / 1000.0
+        while time.time() < deadline:
+            s = self.snap()
+            if s["grounded"] and s["deathT"] < 0 and s["state"] in ("playing", "hub"):
+                return True
+            self.wait(60)
         return False
 
     def jump(self):
@@ -386,7 +415,18 @@ class Flow:
             self.fail("%s: state='select' with the stage select closed "
                       "- the state machine is stranded" % tag)
             bad = True
+        if s["state"] in allow_states and s["state"] in ("playing", "hub") and not s["hudVisible"]:
+            self.fail("%s: the HUD is NOT visible in live play (hidden reasons=%s) "
+                      "- a surface hid it and never gave it back"
+                      % (tag, s["hudHidden"]))
+            bad = True
         if bad:
+            return False
+        if not self.wait_grounded():
+            s2 = self.snap()
+            self.fail("%s: player never landed within 3 s (grounded=%s deathT=%.0f "
+                      "state=%s pos=%s) - cannot probe the jump"
+                      % (tag, s2["grounded"], s2["deathT"], s2["state"], s2["pos"]))
             return False
         vy, dj = self.jump()
         if dj <= 0:
@@ -419,14 +459,20 @@ class Flow:
         """Fire the gate through the stage's own event, the way crossing it does.
 
         `triggered` latches, so re-arm first — otherwise the second clear in a
-        run is a silent no-op and the scenario tests nothing.
+        run is a silent no-op and the scenario tests nothing. The hub has no
+        gate at all (finish: null) — a scenario that arrives there (the previous
+        one cleared the last stage of a world) is first put back on a stage.
         """
+        if self.snap()["stageId"] == "hub":
+            if not self.goto(self.args.stage):
+                return False
+            self.recover()
         self.pg.evaluate(r"""() => {
           const g = ASCENDANT.game;
           if (g.stage && g.stage.finish) g.stage.finish.triggered = false;
-          if (g.state !== 'playing' && g.state !== 'hub') {
-            g.state = g.stageId === 'hub' ? 'hub' : 'playing';
-          }
+          const live = g.stageId === 'hub' ? 'hub' : 'playing';
+          if (g._phase !== undefined && g._phase !== 'hub' && g._phase !== 'playing') g._phase = live;
+          if (g.state !== 'playing' && g.state !== 'hub') g.state = live;
         }""")
         self.pg.evaluate("ASCENDANT.game.stage.triggerFinish(false)")
         deadline = time.time() + 3
@@ -440,29 +486,100 @@ class Flow:
     # SCENARIOS
     # =====================================================================
 
-    def sc_esc_during_death(self):
-        """ESC in the ~540 ms death window must not strand the machine."""
-        if not self.ensure_locked("esc/death"):
-            return
+    def _overlay_over_sequence(self, tag, open_fn, close_fn, expect_menu):
+        """THE ONE RULE, probed: an overlay (pause menu or stage select) raised
+        over a running death sequence FREEZES it, owns the input, and hands the
+        sequence back exactly where it was when the overlay closes — after which
+        the death completes and the game is live, HUD up, jump working.
+
+        `open_fn` raises the overlay, `close_fn` lowers it. `expect_menu` says
+        whether the pause menu is the overlay (state 'paused') or the stage
+        select is (state 'select')."""
+        want_state = "paused" if expect_menu else "select"
+        open_fn()
+        self.wait(500)
+        s = self.snap()
+        if expect_menu and not s["menuIsOpen"]:
+            self.fail("%s: the pause menu did not open over the death sequence "
+                      "(state=%r deathT=%.0f)" % (tag, s["state"], s["deathT"]))
+            return False
+        if not expect_menu and not s["selIsOpen"]:
+            self.fail("%s: the stage select did not open over the death sequence "
+                      "(state=%r deathT=%.0f)" % (tag, s["state"], s["deathT"]))
+            return False
+        if s["state"] != want_state:
+            self.fail("%s: overlay is up but state=%r, expected %r"
+                      % (tag, s["state"], want_state))
+        if not s["suspended"]:
+            self.fail("%s: overlay is up but input is NOT suspended" % tag)
+        if s["deathT"] < 0:
+            self.fail("%s: the death sequence ran to completion UNDER the overlay "
+                      "(deathT=%.0f) - the overlay did not freeze it" % (tag, s["deathT"]))
+        frozen_at = s["deathT"]
+        self.wait(600)
+        s2 = self.snap()
+        if s2["deathT"] != frozen_at:
+            self.fail("%s: the death sequence advanced under the overlay "
+                      "(deathT %.0f -> %.0f)" % (tag, frozen_at, s2["deathT"]))
+        else:
+            self.ok("%s: death frozen at deathT=%.0f under the overlay (state=%s)"
+                    % (tag, frozen_at, s2["state"]))
+        close_fn()
+        self.wait(1200)                       # frozen remainder <= 540 ms, plus slack
+        s3 = self.snap()
+        if s3["menuIsOpen"] or s3["selIsOpen"] or s3["gameSelectOpen"]:
+            self.fail("%s: the overlay is still up after closing it (menu=%s select=%s "
+                      "_selectOpen=%s state=%r)" % (tag, s3["menuIsOpen"], s3["selIsOpen"],
+                                                    s3["gameSelectOpen"], s3["state"]))
+            return False
+        if s3["deathT"] >= 0:
+            self.fail("%s: the death sequence did not resume after the overlay closed "
+                      "(deathT=%.0f 1200 ms later, state=%r)" % (tag, s3["deathT"], s3["state"]))
+        if s3["state"] not in ("playing", "hub"):
+            self.fail("%s: after the overlay closed and the death completed, state=%r "
+                      "(_selectOpen=%s suspended=%s hud=%s) - the machine is stranded"
+                      % (tag, s3["state"], s3["gameSelectOpen"], s3["suspended"], s3["hudVisible"]))
+        self.ok("%s: after close: state=%s locked=%s prompt=%r hud=%s"
+                % (tag, s3["state"], s3["locked"], s3["prompt"], s3["hudVisible"]))
+        return True
+
+    def _death_to(self, ms):
+        """Start a real death and wait until its clock passes `ms`."""
         if not self.start_death():
             self.fail("could not start a death sequence")
-            return
-        self.wait(120)                       # inside the veil, before the swap
-        s = self.snap()
-        self.ok("pressed ESC at deathT=%.0f ms" % s["deathT"])
-        self.pg.keyboard.press("Escape")
-        self.wait(900)                       # death budget is 540 ms
-        s = self.snap()
-        if s["deathT"] >= 0:
-            self.fail("death sequence still running 900 ms after ESC (deathT=%.0f)" % s["deathT"])
-        if s["menuIsOpen"] and s["state"] != "paused":
-            self.fail("menu is open but state=%r - the menu is sitting over a live game"
-                      % s["state"])
-        if s["state"] == "paused":
-            self.click_button("RESUME") or self.pg.keyboard.press("Escape")
-            self.wait(900)
-        self.ensure_locked("after esc/death")
-        self.assert_playable("after ESC during death")
+            return False
+        deadline = time.time() + 2
+        while time.time() < deadline:
+            s = self.snap()
+            if s["deathT"] >= ms or s["deathT"] < 0:
+                break
+            self.wait(15)
+        return True
+
+    def sc_esc_during_death(self):
+        """ESC in the ~540 ms death window: the pause menu opens over the FROZEN
+        death, RESUME hands it back, it completes, the game is live.
+
+        (It used to be silently ignored — but the browser had already dropped
+        pointer lock for the ESC, and nothing re-took it while state was 'dead',
+        so the player came back from the respawn unlocked, staring at CLICK TO
+        RESUME. Tab already froze the death under the stage select; one rule.)"""
+        for at in (100, 400):                 # pre-swap (input suspended), post-swap
+            if not self.recover():
+                self.fail("could not reach live gameplay")
+                return
+            if not self.ensure_locked("esc/death@%d" % at):
+                return
+            if not self._death_to(at):
+                return
+            d0 = self.snap()["deathT"]
+            self._overlay_over_sequence(
+                "ESC at deathT=%.0f" % d0,
+                lambda: self.pg.keyboard.press("Escape"),
+                lambda: (self.click_button("RESUME") or self.pg.keyboard.press("Escape")),
+                expect_menu=True)
+            self.ensure_locked("after esc/death@%d" % at)
+            self.assert_playable("after ESC during death (deathT=%.0f)" % d0)
 
     def sc_esc_during_intro(self):
         """ESC on the stage-intro card: menu up, card frozen, CLOCK FROZEN."""
@@ -685,33 +802,193 @@ class Flow:
         self.assert_playable("after stage select opened from pause")
 
     def sc_stageselect_during_death(self):
-        """Tab in the death window, then close it."""
-        if not self.recover():
+        """Tab in the death window, then out again by every route a player has.
+
+        A second Tab is NOT a route: StageSelect._handleKey captures Tab for
+        list navigation and stops propagation before Input's bubble-phase
+        listener, so Game.toggleStageSelect() never sees it. The previous
+        harness pressed Tab to "close" it, saw the select still open with
+        state='select', and reported that as a strand. ESC and the BACK button
+        are the two exits; each is tried at three points on the death timeline
+        (pre-hold, pre-swap, post-swap)."""
+        for closer, name in (("escape", "ESC"), ("back", "BACK button")):
+            for at in (40, 240, 400):
+                tag = "Tab@%d / %s" % (at, name)
+                if not self.recover():
+                    self.fail("%s: could not reach live gameplay" % tag)
+                    return
+                if not self.ensure_locked(tag):
+                    return
+                if not self._death_to(at):
+                    return
+                d0 = self.snap()["deathT"]
+
+                def close():
+                    if closer == "escape":
+                        self.pg.keyboard.press("Escape")
+                    elif not self.click_button("BACK"):
+                        self.fail("%s: no BACK button on the stage select" % tag)
+
+                self._overlay_over_sequence(
+                    "Tab at deathT=%.0f / %s" % (d0, name),
+                    lambda: self.pg.keyboard.press("Tab"), close, expect_menu=False)
+                self.ensure_locked("after %s" % tag)
+                self.assert_playable(tag)
+
+    def sc_stageselect_from_title(self):
+        """Tab on the title screen: the select sits over the title menu and
+        closing it must land back ON THE TITLE, not on a pause menu over a run
+        that was never started."""
+        self.pg.evaluate("ASCENDANT.game.toTitle()")
+        self.wait(900)
+        s = self.snap()
+        if s["state"] != "title" or not s["menuIsOpen"]:
+            self.fail("could not reach the title (state=%r menu=%s)" % (s["state"], s["menuIsOpen"]))
             return
-        self.ensure_locked("select/death")
-        if not self.start_death():
-            self.fail("could not start a death sequence")
-            return
-        self.wait(100)
         self.pg.keyboard.press("Tab")
         self.wait(700)
         s = self.snap()
         if not s["selIsOpen"]:
-            self.ok("Tab during death did not open the stage select (state=%s)" % s["state"])
-        else:
-            self.wait(900)                # let the death sequence run out underneath
+            # the title menu's FocusList eats Tab as focus navigation (capture
+            # phase, stopPropagation) before Input ever sees it - so the only
+            # route on the title is the menu's own STAGE SELECT button
+            self.ok("Tab on the title is menu navigation (state=%s); using the button" % s["state"])
+            if not self.click_button("STAGE SELECT"):
+                self.fail("no STAGE SELECT button on the title menu")
+                return
+            self.wait(900)
             s = self.snap()
-            if s["selIsOpen"] and s["state"] not in ("select", "paused"):
-                self.fail("the death sequence finished under the open stage select and "
-                          "overwrote the state to %r" % s["state"])
-            self.pg.keyboard.press("Tab")
+        if not s["selIsOpen"]:
+            self.fail("the stage select did not open from the title (state=%r)" % s["state"])
+        else:
+            if s["state"] != "select":
+                self.fail("stage select is up from the title but state=%r, expected 'select'" % s["state"])
+            self.pg.keyboard.press("Escape")
             self.wait(900)
+            s = self.snap()
+            if s["selIsOpen"]:
+                self.fail("ESC did not close the stage select opened from the title")
+            if s["state"] != "title" or not s["menuIsOpen"] or s["menuPage"] != "title":
+                self.fail("closing the stage select from the title left state=%r menu=%s "
+                          "page=%r - expected the title menu back" % (s["state"], s["menuIsOpen"], s["menuPage"]))
+            else:
+                self.ok("landed back on the title menu")
+        # and the title must still start a run
+        self.pg.keyboard.press("Enter")
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            s = self.snap()
+            if s["state"] in ("playing", "hub") and s["introT"] < 0 and not s["loading"]:
+                break
+            self.wait(300)
+        self.wait(800)
+        self.ensure_locked("after title/select")
+        self.assert_playable("after stage select from the title, then PLAY")
+
+    def sc_clear_card_stages(self):
+        """The clear card's STAGES button: the select sits over the card, the
+        card's auto-advance is FROZEN underneath, and closing the select hands
+        the card back. It used to hide the card and leave the clear timer
+        running, so the next stage loaded under the open stage select."""
+        if not self.recover():
+            return
+        stage0 = self.snap()["stageId"]
+        if not self.force_finish():
+            self.fail("could not fire the finish gate")
+            return
+        self.wait(600)
+        if not self.click_button("STAGES"):
+            self.fail("no STAGES button on the clear card")
+            return
+        self.wait(700)
         s = self.snap()
-        if s["state"] == "paused":
-            self.click_button("RESUME") or self.pg.keyboard.press("Escape")
-            self.wait(900)
-        self.ensure_locked("after select/death")
-        self.assert_playable("after stage select during death")
+        if not s["selIsOpen"]:
+            self.fail("STAGES did not open the stage select")
+            return
+        if s["state"] != "select":
+            self.fail("stage select is up from the clear card but state=%r" % s["state"])
+        c0 = s["clearT"]
+        self.wait(5200)                       # CLEAR_AUTO_MS is 4600
+        s = self.snap()
+        if s["stageId"] != stage0 or s["loading"]:
+            self.fail("the clear card auto-advanced UNDER the open stage select "
+                      "(stage %s -> %s, loading=%s)" % (stage0, s["stageId"], s["loading"]))
+        elif s["clearT"] != c0:
+            self.fail("the clear timer kept running under the stage select "
+                      "(clearT %.0f -> %.0f)" % (c0, s["clearT"]))
+        else:
+            self.ok("clear frozen under the stage select (clearT=%.0f, still on %s)" % (c0, stage0))
+        self.pg.keyboard.press("Escape")
+        self.wait(800)
+        s = self.snap()
+        if s["selIsOpen"]:
+            self.fail("ESC did not close the stage select opened from the clear card")
+        if not s["finishOpen"] or s["state"] != "cleared":
+            self.fail("closing the select did not hand the clear card back "
+                      "(finishOpen=%s state=%r)" % (s["finishOpen"], s["state"]))
+        else:
+            self.ok("clear card back after the select closed (state=%s)" % s["state"])
+        if not self.click_button("CONTINUE"):
+            self.click_button("RETURN TO HUB")
+        self.wait(4000)
+        self.ensure_locked("after clear/stages")
+        self.assert_playable("after STAGES from the clear card, then CONTINUE")
+
+    def sc_restart_from_pause(self):
+        """Pause -> RESTART STAGE: the restart respawn must come back LOCKED
+        (the pause released the pointer; only the respawn can re-take it)."""
+        if not self.recover():
+            return
+        self.ensure_locked("restart/pause")
+        self.pg.keyboard.press("Escape")
+        self.wait(1500)                       # past Chrome's post-ESC lock cooldown
+        if self.snap()["state"] != "paused":
+            self.fail("ESC did not pause (state=%r)" % self.snap()["state"])
+            return
+        if not self.click_button("RESTART STAGE"):
+            self.fail("no RESTART STAGE button on the pause menu")
+            return
+        deadline = time.time() + 4
+        s = None
+        while time.time() < deadline:
+            s = self.snap()
+            if s["state"] in ("playing", "hub") and s["deathT"] < 0 and s["locked"]:
+                break
+            self.wait(100)
+        if s["state"] not in ("playing", "hub") or s["deathT"] >= 0:
+            self.fail("RESTART STAGE from pause did not come back live (state=%r deathT=%.0f)"
+                      % (s["state"], s["deathT"]))
+        elif not s["locked"]:
+            self.fail("RESTART STAGE from pause came back UNLOCKED (prompt=%r) - the "
+                      "player has to click to get the mouse back" % s["prompt"])
+        else:
+            self.ok("back live and locked after RESTART STAGE (prompt=%r)" % s["prompt"])
+        self.ensure_locked("after restart/pause")
+        self.assert_playable("after RESTART STAGE from the pause menu")
+
+    def sc_pause_on_clear_card(self):
+        """The page's own pause control (game_controls.js -> __PAUSE__) on the
+        clear card: the card is modal, so the pause is refused and nothing
+        stacks over it."""
+        if not self.recover():
+            return
+        if not self.force_finish():
+            self.fail("could not fire the finish gate")
+            return
+        self.wait(600)
+        self.pg.evaluate("window.__PAUSE__ && window.__PAUSE__.toggle && window.__PAUSE__.toggle()")
+        self.wait(500)
+        s = self.snap()
+        if s["menuIsOpen"] or s["state"] != "cleared":
+            self.fail("pause on the clear card opened the menu over it (menu=%s state=%r)"
+                      % (s["menuIsOpen"], s["state"]))
+        else:
+            self.ok("pause refused on the clear card (state=%s)" % s["state"])
+        if not self.click_button("CONTINUE"):
+            self.click_button("RETURN TO HUB")
+        self.wait(4000)
+        self.ensure_locked("after pause/clear")
+        self.assert_playable("after a refused pause on the clear card")
 
     def sc_restart_variants(self):
         """R during the intro, during death, and on the clear card."""
@@ -814,7 +1091,9 @@ class Flow:
             return
         self.ensure_locked("tabhide")
         pg = self.pg
-        pg.keyboard.down("KeyW")
+        # Space only: holding W as well walked the player off the platform, and
+        # the jump probe after the resume then ran against a body in free fall
+        # (vel.y -40) - a harness lie, not a dead jump.
         pg.keyboard.down("Space")
         self.wait(120)
         t0 = self.snap()
@@ -841,7 +1120,6 @@ class Flow:
         else:
             self.ok("clock paused while hidden (totalMs %.0f -> %.0f)"
                     % (t_hidden, still["totalMs"]))
-        pg.keyboard.up("KeyW")
         pg.keyboard.up("Space")
         pg.evaluate(r"""() => {
           Object.defineProperty(document, 'visibilityState',
@@ -859,24 +1137,20 @@ class Flow:
         _ = t0
 
     def sc_blur_during_death(self):
+        """Window blur mid-death: a fact that may pause. Under the one rule it
+        does — the pause menu over a frozen death, resumed by RESUME."""
         if not self.recover():
             return
-        self.ensure_locked("blur/death")
-        if not self.start_death():
-            self.fail("could not start a death sequence")
+        if not self.ensure_locked("blur/death"):
             return
-        self.wait(110)
-        self.pg.evaluate("window.dispatchEvent(new Event('blur'))")
-        self.wait(1100)
-        s = self.snap()
-        if s["deathT"] >= 0:
-            self.fail("death sequence stalled by the blur (deathT=%.0f after 1100 ms)"
-                      % s["deathT"])
-        if s["menuIsOpen"] and s["state"] != "paused":
-            self.fail("blur during death left the menu open over state=%r" % s["state"])
-        if s["state"] == "paused":
-            self.click_button("RESUME") or self.pg.keyboard.press("Escape")
-            self.wait(900)
+        if not self._death_to(110):
+            return
+        d0 = self.snap()["deathT"]
+        self._overlay_over_sequence(
+            "blur at deathT=%.0f" % d0,
+            lambda: self.pg.evaluate("window.dispatchEvent(new Event('blur'))"),
+            lambda: (self.click_button("RESUME") or self.pg.keyboard.press("Escape")),
+            expect_menu=True)
         self.ensure_locked("after blur/death")
         self.assert_playable("after window blur during death")
 
@@ -996,7 +1270,11 @@ class Flow:
           const g = ASCENDANT.game, h = g.hud;
           const nav = h && h.finishNav;
           const items = nav ? nav.items.map((n) => (n.textContent || '').trim().toUpperCase()) : [];
-          const card = document.querySelector('.ah-finish, [class*="finish"]');
+          /* .ah-finish is the clear-card wrapper (hud.js _buildFinish). The old
+             '[class*="finish"]' alternative matched the HUD's progress pip
+             (.ah-pip.is-finish) first in document order, so `card.contains`
+             was always false and two "failures" were the harness lying. */
+          const card = document.querySelector('.ah-finish');
           return { items: items, index: nav ? nav.index : -1,
                    active: document.activeElement ? (document.activeElement.textContent || '').trim().toUpperCase() : null,
                    inCard: !!(card && document.activeElement && card.contains(document.activeElement)) };
@@ -1018,7 +1296,11 @@ class Flow:
             self.wait(120)
         after = self.pg.evaluate(r"""() => {
           const g = ASCENDANT.game, h = g.hud, nav = h && h.finishNav;
-          const card = document.querySelector('.ah-finish, [class*="finish"]');
+          /* .ah-finish is the clear-card wrapper (hud.js _buildFinish). The old
+             '[class*="finish"]' alternative matched the HUD's progress pip
+             (.ah-pip.is-finish) first in document order, so `card.contains`
+             was always false and two "failures" were the harness lying. */
+          const card = document.querySelector('.ah-finish');
           return { index: nav ? nav.index : -1,
                    inCard: !!(card && document.activeElement && card.contains(document.activeElement)),
                    tag: document.activeElement ? document.activeElement.tagName : null };
@@ -1052,10 +1334,14 @@ class Flow:
         ("esc_on_clear_card", sc_esc_on_clear_card),
         ("clear_card_autoadvance", sc_clear_card_autoadvance),
         ("clear_card_buttons", sc_clear_card_buttons),
+        ("clear_card_stages", sc_clear_card_stages),
+        ("pause_on_clear_card", sc_pause_on_clear_card),
         ("stageselect_escape", sc_stageselect_escape),
         ("stageselect_during_pause", sc_stageselect_during_pause),
         ("stageselect_during_death", sc_stageselect_during_death),
+        ("stageselect_from_title", sc_stageselect_from_title),
         ("restart_variants", sc_restart_variants),
+        ("restart_from_pause", sc_restart_from_pause),
         ("restart_run", sc_restart_run),
         ("finish_while_dead", sc_finish_while_dead),
         ("tabhide_midjump", sc_tabhide_midjump),
