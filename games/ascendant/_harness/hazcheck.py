@@ -275,7 +275,7 @@ const mk = (ctx) => H.makeHazard(
 
 /* ---- 2. a hazard with a live player must arm from a LANDING ------------- */
 {
-  const player = { pos: new THREE.Vector3(999, 999, 999), grounded: false, ground: null, vel: new THREE.Vector3() };
+  const player = { pos: new THREE.Vector3(999, 999, 999), grounded: false, groundCollider: null, vel: new THREE.Vector3() };
   const ctx = baseCtx();
   ctx.player = player;
   const hz = mk(ctx);
@@ -285,7 +285,7 @@ const mk = (ctx) => H.makeHazard(
   // The player LANDS: standing on the tile's own collider, grounded.
   player.pos.set(P[0], TOP, P[2]);
   player.grounded = true;
-  player.ground = hz.colliders[0];
+  player.groundCollider = hz.colliders[0];
   run(hz, 0.5, 0.5 + 0.32 + 0.06);
   ok('crumble breaks when the player LANDS on it', !anySolid(hz), 'grounded on its own collider');
   hz.dispose();
@@ -293,7 +293,7 @@ const mk = (ctx) => H.makeHazard(
 
 /* ---- 3. a teleport-in must NOT break it -------------------------------- */
 {
-  const player = { pos: new THREE.Vector3(999, 999, 999), grounded: false, ground: null, vel: new THREE.Vector3() };
+  const player = { pos: new THREE.Vector3(999, 999, 999), grounded: false, groundCollider: null, vel: new THREE.Vector3() };
   const ctx = baseCtx();
   ctx.player = player;
   const hz = mk(ctx);
@@ -303,7 +303,7 @@ const mk = (ctx) => H.makeHazard(
   hz.reset(0.5);
   player.pos.set(P[0], TOP, P[2]);
   player.grounded = false;
-  player.ground = null;
+  player.groundCollider = null;
   run(hz, 0.5, 0.5 + 0.32 + 0.06);
   ok('crumble does NOT break from a teleport-in', anySolid(hz),
      'player placed on the tile with no landing');
@@ -312,7 +312,7 @@ const mk = (ctx) => H.makeHazard(
 
 /* ---- 4. a fly-over must not break it ----------------------------------- */
 {
-  const player = { pos: new THREE.Vector3(999, 999, 999), grounded: false, ground: null, vel: new THREE.Vector3() };
+  const player = { pos: new THREE.Vector3(999, 999, 999), grounded: false, groundCollider: null, vel: new THREE.Vector3() };
   const ctx = baseCtx();
   ctx.player = player;
   const hz = mk(ctx);
@@ -326,7 +326,7 @@ const mk = (ctx) => H.makeHazard(
 
 /* ---- 5. walking underneath must not break it --------------------------- */
 {
-  const player = { pos: new THREE.Vector3(999, 999, 999), grounded: true, ground: null, vel: new THREE.Vector3() };
+  const player = { pos: new THREE.Vector3(999, 999, 999), grounded: true, groundCollider: null, vel: new THREE.Vector3() };
   const ctx = baseCtx();
   ctx.player = player;
   const hz = mk(ctx);
@@ -360,6 +360,19 @@ ok('crumble tile starts armed', solid(hz));
 const P = G.player;
 P.__test.teleport(new THREE.Vector3(p[0], top + 0.05, p[2]));
 P.__test.setVel(new THREE.Vector3(0, 0, 0));
+// The trigger must come through the STAGE (Stage._detectStand -> hz.onStand), the only
+// path that knows the player's ground contact. Sample it DURING the stand: once the tile
+// breaks the player falls through, is no longer grounded, and _standOn goes back to null.
+let sawStand = false, sawMs = -1;
+{
+  const t0 = performance.now();
+  while (performance.now() - t0 < 700) {
+    await frame();
+    if (hz.colliders.indexOf(S._standOn) >= 0) { sawStand = true; sawMs = Math.round(performance.now() - t0); break; }
+  }
+}
+ok('the stage registered the stand on the tile\'s own collider', sawStand,
+   sawStand ? `stage._standOn became this tile ${sawMs} ms after the teleport` : 'never became this tile within 700 ms');
 await wait(1400);
 const brokeLive = !solid(hz);
 ok('a real landing breaks the tile in the live stage', brokeLive,
@@ -381,6 +394,46 @@ const stageId = (S.def && S.def.id) || S.id;
 const recs = S.hazards || [];
 
 function yOf(rec) { return rec.h.colliders[0] ? rec.h.colliders[0].center.y : NaN; }
+/** Each sub-test starts with a LIVE player: the previous one may have ended in a death,
+ *  and a teleport issued inside the death freeze is undone by the game's own respawn. */
+async function settleAlive() {
+  // The game's own "the player is back" condition (loopcheck uses the same one): alive,
+  // the run state is 'playing' and input is not suspended by a respawn fade.
+  const back = () => !P.dead && G.state === 'playing' && !(G.input && G.input.suspended);
+  const t0 = performance.now();
+  while (!back() && performance.now() - t0 < 6000) await frame();
+  await wait(350);
+}
+/**
+ * Every sub-test starts from the game's own respawn path — resetFrom(0) re-arms every
+ * stateful hazard, the player is placed at the spawn, and the run is back in 'playing'.
+ * Without this the previous sub-test leaks in: on temple-3 the rider ejected from the
+ * sinker falls onto the ELEVATOR deck below, the stage fires that trigger on the way
+ * down, and the elevator sub-test then finds it mid-cycle (movers' tryTrigger no-ops
+ * while a cycle is running) and reads "8.10 -> 8.10".
+ */
+async function freshStart() {
+  await settleAlive();
+  G.cpIndex = 0;
+  S.resetFrom(0);
+  const sp = S.spawnFor(0);
+  P.respawn(sp.pos, sp.yaw || 0);
+  await wait(400);
+  await settleAlive();
+}
+/** Teleport onto a deck and wait until the STAGE registers the stand (one retry). */
+async function standOn(rec, x, y, z) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    P.__test.teleport(new THREE.Vector3(x, y, z));
+    P.__test.setVel(new THREE.Vector3(0, 0, 0));
+    const t0 = performance.now();
+    while (performance.now() - t0 < 1000) {
+      await frame();
+      if (rec.h.colliders.indexOf(S._standOn) >= 0) return Math.round(performance.now() - t0);
+    }
+  }
+  return -1;
+}
 
 /* ---- sinkers (foundry-2 / neon-1) --------------------------------------- */
 {
@@ -388,13 +441,41 @@ function yOf(rec) { return rec.h.colliders[0] ? rec.h.colliders[0].center.y : Na
   if (sinks.length) {
     const rec = sinks[0];
     const d = rec.def, s = d.s || [4, 1, 4];
+    await freshStart();
     const rest = yOf(rec);
+    const col = rec.h.colliders[0];
     P.__test.teleport(new THREE.Vector3(d.p[0], d.p[1] + s[1] * 0.5 + 0.05, d.p[2]));
     P.__test.setVel(new THREE.Vector3(0, 0, 0));
-    await wait(1600);
-    const sunk = yOf(rec);
-    ok(`${stageId}: a sink mover actually SINKS when stood on`, sunk < rest - 0.4,
-       `y ${rest.toFixed(2)} -> ${sunk.toFixed(2)}`);
+    // Sample the DECK continuously, for up to 3 s or until it has clearly sunk. On
+    // foundry-2 the sinker descends into lava, so the game itself may kill + respawn
+    // (and resetFrom) the rider inside the window; the trigger question ("does standing
+    // on it make it sink?") is the deck's minimum y, and the rider's fate is a separate
+    // question, asked below and only while the rider is alive.
+    let minY = rest, rideMs = 0, worstGap = 0, ejected = false;
+    {
+      const t0 = performance.now();
+      while (performance.now() - t0 < 3000) {
+        await frame();
+        const y = yOf(rec);
+        if (y < minY) minY = y;
+        const deckTop = col.center.y + col.half.y;
+        if (!P.dead && y < rest - 0.02 && deckTop > 2.5) {   // the deck is moving and still above the pool
+          const gap = deckTop - P.pos.y;                     // > 0 == the rider is BELOW the deck top
+          if (gap > worstGap) worstGap = gap;
+          if (gap > 0.6 && !ejected) { ejected = true; rideMs = Math.round(performance.now() - t0); }
+        }
+        if (minY < rest - 0.6 && (ejected || performance.now() - t0 > 1500)) break;
+      }
+    }
+    ok(`${stageId}: a sink mover actually SINKS when stood on`, minY < rest - 0.4,
+       `deck y ${rest.toFixed(2)} -> min ${minY.toFixed(2)}`);
+    // A rider on a descending deck must stay ON it (fall onto it under gravity, at worst
+    // hover above it) — never pass THROUGH it. Owned by the collision layer's platform
+    // velocity carry (collide.js / movers.js linVel), i.e. the PHYSICS lane, not this one:
+    // zeroing hz.linVel after each update makes the rider track the deck exactly.
+    ok(`${stageId}: the rider stays ON the sinking deck (physics lane: collide.js carry)`, !ejected,
+       ejected ? `rider ${worstGap.toFixed(2)} m BELOW the deck top ${rideMs} ms in — carried through it`
+               : `worst rider-below-deck gap ${worstGap.toFixed(2)} m`);
     G.cpIndex = 0;
     S.resetFrom(0);
     await wait(60);
@@ -409,14 +490,35 @@ function yOf(rec) { return rec.h.colliders[0] ? rec.h.colliders[0].center.y : Na
   if (lifts.length) {
     const rec = lifts[0];
     const d = rec.def, s = d.s || [4, 1, 4];
+    await freshStart();
     const rest = yOf(rec);
     const to = d.motion.to;
-    P.__test.teleport(new THREE.Vector3(d.p[0], d.p[1] + s[1] * 0.5 + 0.05, d.p[2]));
-    P.__test.setVel(new THREE.Vector3(0, 0, 0));
-    await wait(3000);
-    const up = yOf(rec);
-    ok(`${stageId}: an elevator actually RISES when stood on`, up > rest + 0.5,
-       `y ${rest.toFixed(2)} -> ${up.toFixed(2)} (target ${to ? to[1] : '?'})`);
+    const col = rec.h.colliders[0];
+    const stoodMs = await standOn(rec, d.p[0], d.p[1] + s[1] * 0.5 + 0.05, d.p[2]);
+    // Same discipline as the sinker: the deck's PEAK is the trigger evidence (the game
+    // may kill + respawn + resetFrom an ejected rider inside the window, snapping the
+    // deck back to rest before a single end sample); the rider's fate is asked separately.
+    let maxY = rest, worstGap = 0, ejected = false, rideMs = 0;
+    {
+      const t0 = performance.now();
+      while (performance.now() - t0 < 4000) {
+        await frame();
+        const y = yOf(rec);
+        if (y > maxY) maxY = y;
+        const deckTop = col.center.y + col.half.y;
+        if (!P.dead && y > rest + 0.02) {
+          const gap = deckTop - P.pos.y;                     // > 0 == the rider is BELOW the deck top
+          if (gap > worstGap) worstGap = gap;
+          if (gap > 0.6 && !ejected) { ejected = true; rideMs = Math.round(performance.now() - t0); }
+        }
+        if (maxY > rest + 1.0 && (ejected || performance.now() - t0 > 2500)) break;
+      }
+    }
+    ok(`${stageId}: an elevator actually RISES when stood on`, maxY > rest + 0.5,
+       `deck y ${rest.toFixed(2)} -> peak ${maxY.toFixed(2)} (target ${to ? to[1] : '?'}); stand registered ${stoodMs < 0 ? 'NEVER' : stoodMs + ' ms'} after the teleport`);
+    ok(`${stageId}: the rider stays ON the rising deck (physics lane: collide.js carry)`, !ejected,
+       ejected ? `rider ${worstGap.toFixed(2)} m BELOW the deck top ${rideMs} ms in — the deck rose through them`
+               : `worst rider-below-deck gap ${worstGap.toFixed(2)} m`);
     P.__test.teleport(new THREE.Vector3(d.p[0] + 40, d.p[1] + 30, d.p[2]));
     G.cpIndex = 0;
     S.resetFrom(0);
@@ -432,6 +534,7 @@ function yOf(rec) { return rec.h.colliders[0] ? rec.h.colliders[0].center.y : Na
   if (chases.length) {
     const hz = chases[0].h;
     const d = chases[0].def;
+    await freshStart();
     S.reset(); S.clock = 0;
     for (const r of recs) if (r.h.reset) r.h.reset(0);
     const home = hz.frontAt ? hz.frontAt(0) : hz.front;
@@ -587,6 +690,42 @@ for (const kind in GOOD) {
     if (a.ok !== b.ok) rows.push({ kind, field: 'no ' + field, stage: a.ok, haz: b.ok, msg: (a.msg || b.msg) });
   }
 }
+/* Malformed VALUES (not just missing fields): both validators must REJECT every one of
+   these — a zero period is an infinite loop, a zero-amplitude pendulum a NaN — and both
+   must ACCEPT the documented aliases the factories read (pendulum `ampDeg`). */
+const BAD = [
+  ['rotor period 0',        Object.assign({}, GOOD.rotor, { period: 0 })],
+  ['rotor len 0',           Object.assign({}, GOOD.rotor, { len: 0 })],
+  ['rotor arms 0',          Object.assign({}, GOOD.rotor, { arms: 0 })],
+  ['pendulum len 0',        Object.assign({}, GOOD.pendulum, { len: 0 })],
+  ['pendulum period -1',    Object.assign({}, GOOD.pendulum, { period: -1 })],
+  ['crusher travel 0',      Object.assign({}, GOOD.crusher, { travel: 0 })],
+  ['mover motion.period 0', Object.assign({}, GOOD.mover, { motion: { type: 'linear', to: [10, 2, 0], period: 0 } })],
+  ['mover motion.to NaN',   Object.assign({}, GOOD.mover, { motion: { type: 'linear', to: [10, NaN, 0], period: 4 } })],
+  ['vanish cycle.on -1',    Object.assign({}, GOOD.vanish, { cycle: { on: -1, off: 1.4, warn: 0.5 } })],
+  ['vanish cycle on+off 0', Object.assign({}, GOOD.vanish, { cycle: { on: 0, off: 0, warn: 0 } })],
+  ['laser cycle.warn -1',   Object.assign({}, GOOD.laser, { cycle: { on: 1, off: 1.4, warn: -1 } })],
+  ['jumppad power 0',       Object.assign({}, GOOD.jumppad, { power: 0 })],
+  ['speedpad power 0',      Object.assign({}, GOOD.speedpad, { power: 0 })],
+  ['chase speed 0',         Object.assign({}, GOOD.chase, { speed: 0 })],
+  ['pendulum no amplitude', (() => { const d = Object.assign({}, GOOD.pendulum); delete d.amp; return d; })()],
+];
+const GOOD_ALIAS = [
+  ['pendulum ampDeg instead of amp', (() => { const d = Object.assign({}, GOOD.pendulum); delete d.amp; d.ampDeg = 42; return d; })()],
+];
+let badN = 0, badWrong = 0, aliasWrong = 0;
+for (const [label, d] of BAD) {
+  const sv = stageVerdict(d), hv = hazardVerdict(d);
+  badN++;
+  if (sv.ok || hv.ok) { badWrong++; rows.push({ kind: d.kind, field: label, stage: sv.ok, haz: hv.ok, msg: 'malformed value ACCEPTED' }); }
+}
+for (const [label, d] of GOOD_ALIAS) {
+  const sv = stageVerdict(d), hv = hazardVerdict(d);
+  if (!sv.ok || !hv.ok) { aliasWrong++; rows.push({ kind: d.kind, field: label, stage: sv.ok, haz: hv.ok, msg: sv.msg || hv.msg }); }
+}
+ok('both validators REJECT every malformed value', badWrong === 0, `${badN - badWrong}/${badN} rejected by both`);
+ok('both validators ACCEPT the factory aliases (pendulum ampDeg)', aliasWrong === 0,
+   aliasWrong ? `${aliasWrong} alias def(s) rejected` : `${GOOD_ALIAS.length}/${GOOD_ALIAS.length}`);
 R.rows = rows;
 ok('Stage.validate and the hazard contract agree on every def', rows.length === 0,
    `${rows.length} disagreement(s)`);

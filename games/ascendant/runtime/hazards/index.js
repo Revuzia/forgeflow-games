@@ -249,7 +249,12 @@ const REQUIRED = {
   mover:      { p: 'vec3', s: 'vec3', motion: 'object' },
   vanish:     { p: 'vec3', s: 'vec3' },   // `cycle` is mode-dependent — see SEMANTIC.vanish
   rotor:      { p: 'vec3', period: 'number' },
-  pendulum:   { p: 'vec3', len: 'number', amp: 'number', period: 'number' },
+  // `amp` is RADIANS; pendulum.js:295 also reads `ampDeg` as the documented degrees
+  // convenience, and four shipped pendulums (foundry-3 x2, spire-1, temple-2) author it.
+  // Requiring `amp` here rejected them BEFORE the factory ran: Stage.validate passed the
+  // stage, makeHazard threw, _buildHazard logged and dropped them — three stages shipped
+  // with missing blades and every static gate stayed green. amp|ampDeg is SEMANTIC.pendulum.
+  pendulum:   { p: 'vec3', len: 'number', period: 'number' },
   crusher:    { p: 'vec3', s: 'vec3', travel: 'number', period: 'number' },
   saw:        { p: 'vec3', period: 'number' },
 
@@ -270,8 +275,56 @@ const REQUIRED = {
   sticky:     { p: 'vec3', s: 'vec3' },
 };
 
+/**
+ * Sanity every hazard kind shares — a zero period is an infinite loop or a NaN, a negative
+ * cycle window is a phase that never comes. These used to live only in Stage.validate, which
+ * meant the stage validator and this contract could (and did) drift apart; the stage
+ * validator now delegates every hazard-routed object here, so this is the single owner.
+ */
+function commonSemantic(def, fail) {
+  if (def.period !== undefined && !(isNum(def.period) && def.period > 0)) {
+    fail(`'period' must be > 0, got ${brief(def.period)}`);
+  }
+  const m = def.motion;
+  if (isObj(m)) {
+    if (m.period !== undefined && !(isNum(m.period) && m.period > 0)) {
+      fail(`'motion.period' must be > 0, got ${brief(m.period)}`);
+    }
+    if (m.to !== undefined && m.to !== null && !isVec(m.to)) fail("'motion.to' must be a finite [x,y,z]");
+  }
+  const c = def.cycle;
+  if (c !== undefined && c !== null) {
+    if (!isObj(c)) fail("'cycle' must be an object {on, off, warn, phase}");
+    const on = +c.on, off = +c.off;
+    if (c.on !== undefined && !(isNum(on) && on >= 0)) fail(`'cycle.on' must be a finite number >= 0, got ${brief(c.on)}`);
+    if (c.off !== undefined && !(isNum(off) && off >= 0)) fail(`'cycle.off' must be a finite number >= 0, got ${brief(c.off)}`);
+    if (c.on !== undefined && c.off !== undefined && on + off <= 0) fail("'cycle.on' + 'cycle.off' must be > 0 (the period would be zero)");
+    if (c.warn !== undefined && !(isNum(c.warn) && c.warn >= 0)) fail("'cycle.warn' must be a finite number >= 0");
+  }
+}
+
 /** Extra checks that a type table cannot express. */
 const SEMANTIC = {
+  rotor(def, fail) {
+    // rotors.js:299 defaults `len` (6 m bar / 2.2 m saw); only a PRESENT len can be wrong.
+    if (def.len !== undefined && !(isNum(def.len) && def.len > 0)) fail(`'len' must be > 0, got ${brief(def.len)}`);
+    if (def.arms !== undefined && !(isNum(def.arms) && def.arms >= 1)) fail(`'arms' must be >= 1, got ${brief(def.arms)}`);
+  },
+  saw(def, fail) {
+    if (def.len !== undefined && !(isNum(def.len) && def.len > 0)) fail(`'len' must be > 0, got ${brief(def.len)}`);
+  },
+  pendulum(def, fail) {
+    // pendulum.js:295-297 — `ampDeg` (degrees) wins when present, else `amp` (radians).
+    const hasDeg = def.ampDeg !== undefined && def.ampDeg !== null;
+    const hasRad = def.amp !== undefined && def.amp !== null;
+    if (!hasDeg && !hasRad) fail("needs a swing amplitude: 'amp' (radians) or 'ampDeg' (degrees)");
+    if (hasDeg && !isNum(def.ampDeg)) fail(`'ampDeg' must be a finite number, got ${brief(def.ampDeg)}`);
+    if (!hasDeg && hasRad && !isNum(def.amp)) fail(`'amp' must be a finite number, got ${brief(def.amp)}`);
+    if (!(def.len > 0)) fail(`'len' must be > 0, got ${brief(def.len)}`);
+  },
+  crusher(def, fail) {
+    if (def.travel === 0) fail("'travel' must be a non-zero finite number, got 0");
+  },
   laser(def, fail) {
     if (sameVec(def.a, def.b)) fail("'a' and 'b' are the same point — a laser needs length");
   },
@@ -281,6 +334,7 @@ const SEMANTIC = {
   },
   chase(def, fail) {
     if (def.from === def.to) fail("'from' equals 'to' — the chase would never move");
+    if (!(def.speed > 0)) fail(`'speed' must be > 0, got ${brief(def.speed)}`);
     if (def.axis !== undefined && !isAxis(def.axis)) fail("'axis' must be 'x', 'y' or 'z'");
     if (def.mat !== undefined && !['lava', 'void', 'wall'].includes(def.mat)) {
       fail("'mat' must be 'lava', 'void' or 'wall'");
@@ -318,6 +372,8 @@ const SEMANTIC = {
   },
   speedpad(def, fail) {
     if (isVec(def.dir) && vecLen(def.dir) < 1e-6) fail("'dir' has zero length");
+    // surfaces.js:859 defaults `power` to the sprint speed; only a PRESENT power can be wrong.
+    if (def.power !== undefined && !(isNum(def.power) && def.power > 0)) fail(`'power' must be > 0, got ${brief(def.power)}`);
   },
 };
 
@@ -411,12 +467,12 @@ export function validateHazardDef(def, ctx) {
       );
     }
   }
+  const fail = (msg) => {
+    throw new HazardDefError(`hazard '${kind}': ${msg} — ${where()}`, def);
+  };
+  if (spec) commonSemantic(def, fail);
   const extra = SEMANTIC[kind];
-  if (extra) {
-    extra(def, (msg) => {
-      throw new HazardDefError(`hazard '${kind}': ${msg} — ${where()}`, def);
-    });
-  }
+  if (extra) extra(def, fail);
   return true;
 }
 

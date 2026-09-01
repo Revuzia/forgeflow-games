@@ -203,9 +203,28 @@ function burstFX(ctx, preset, pos, opts) {
     if (fx.ps && typeof fx.ps.burst === 'function') fx.ps.burst(preset, pos, opts);
   } catch (err) { /* ignore */ }
 }
+/**
+ * The live Player object, or null. Walks the same handles lasers.js resolvePlayer() does —
+ * including the STAGE's registered player (`ctx.stage._playerRef`, set by stage.setPlayer()),
+ * which is the only handle the shipped stage ctx actually carries. The old lookup stopped at
+ * `ctx.player` / `ctx.world.player`, neither of which the stage provides, so in the live game
+ * this never resolved and no crumble tile could self-detect a stand.
+ */
+function resolvePlayer(ctx) {
+  if (!ctx) return null;
+  const direct = ctx.player || (typeof ctx.getPlayer === 'function' ? ctx.getPlayer() : null) || (ctx.world ? ctx.world.player : null);
+  if (direct && direct.pos) return direct;
+  const st = ctx.stage;
+  if (st) {
+    if (st._playerRef && st._playerRef.pos) return st._playerRef;
+    if (st.player && st.player.pos) return st.player;
+    if (st.ctx && st.ctx.player && st.ctx.player.pos) return st.ctx.player;
+  }
+  return null;
+}
 function resolvePlayerPos(ctx, out) {
   if (!ctx) return false;
-  const p = ctx.player || (typeof ctx.getPlayer === 'function' ? ctx.getPlayer() : null) || (ctx.world ? ctx.world.player : null);
+  const p = resolvePlayer(ctx);
   if (p && p.pos && typeof p.pos.x === 'number') { out.set(p.pos.x, p.pos.y, p.pos.z); return true; }
   if (ctx.playerPos && typeof ctx.playerPos.x === 'number') { out.copy(ctx.playerPos); return true; }
   return false;
@@ -671,13 +690,32 @@ export function vanish(def, ctx) {
   hz.onTouch = hz.onStand;
   hz.trigger = hz.onStand;
 
+  /**
+   * A crumble tile breaks from a STAND — feet on its deck, ground contact reported — and
+   * from nothing else. The old test was a proximity box (0.75 m below the deck to 2.7 m
+   * above it, 0.42 m of slop around the footprint) with no ground check at all, so a
+   * respawn teleport onto the tile, a running jump clean over it and a walk underneath
+   * all cracked it (hazcheck: 3 of 3 such probes broke the tile). Stage._detectStand()
+   * is the primary trigger path (it calls hz.onStand on the stand transition); this is
+   * the fallback for a host that never registers a player with the stage, and it now
+   * asks the same question: grounded, and grounded on THIS tile's collider when the
+   * player reports one — else feet within 12 cm of the deck, inside the footprint.
+   */
   function selfDetectStand(t) {
     if (mode !== 'crumble' || trigT !== null) return;
-    if (!resolvePlayerPos(ctx, _c)) return;
+    const p = resolvePlayer(ctx);
+    if (!p || p.grounded !== true) return;                 // airborne: fly-over / teleport-in
+    const gc = p.groundCollider !== undefined ? p.groundCollider : p.ground;
+    if (gc !== undefined && gc !== null) {
+      if (hz.colliders.indexOf(gc) < 0) return;             // standing on something else
+      tryTrigger(t);
+      return;
+    }
+    if (!p.pos || typeof p.pos.x !== 'number') return;
     const top = origin.y + size[1] * 0.5;
-    if (_c.y < top - 0.75 || _c.y > top + 2.7) return;
-    if (Math.abs(_c.x - origin.x) > size[0] * 0.5 + 0.42) return;
-    if (Math.abs(_c.z - origin.z) > size[2] * 0.5 + 0.42) return;
+    if (Math.abs(p.pos.y - top) > 0.12) return;             // feet must be ON the deck
+    if (Math.abs(p.pos.x - origin.x) > size[0] * 0.5 + 0.05) return;
+    if (Math.abs(p.pos.z - origin.z) > size[2] * 0.5 + 0.05) return;
     tryTrigger(t);
   }
 

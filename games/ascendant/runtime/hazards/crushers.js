@@ -222,9 +222,18 @@ function shakeCam(ctx, amount, ms) {
     if (typeof ctx.shake === 'function') ctx.shake(amount, ms);
   } catch (err) { /* ignore */ }
 }
+/** Feet of the live player (slam SFX distance only). Also reads the STAGE's registered
+ *  player — `ctx.stage._playerRef` from stage.setPlayer() — which is the only player handle
+ *  the shipped stage ctx carries; the old lookup never resolved in the live game. */
 function resolvePlayerPos(ctx, out) {
   if (!ctx) return false;
-  const p = ctx.player || (typeof ctx.getPlayer === 'function' ? ctx.getPlayer() : null) || (ctx.world ? ctx.world.player : null);
+  let p = ctx.player || (typeof ctx.getPlayer === 'function' ? ctx.getPlayer() : null) || (ctx.world ? ctx.world.player : null);
+  if (!(p && p.pos) && ctx.stage) {
+    const st = ctx.stage;
+    p = (st._playerRef && st._playerRef.pos) ? st._playerRef
+      : (st.player && st.player.pos) ? st.player
+        : (st.ctx && st.ctx.player && st.ctx.player.pos) ? st.ctx.player : null;
+  }
   if (p && p.pos && typeof p.pos.x === 'number') { out.set(p.pos.x, p.pos.y, p.pos.z); return true; }
   if (ctx.playerPos && typeof ctx.playerPos.x === 'number') { out.copy(ctx.playerPos); return true; }
   return false;
@@ -658,8 +667,14 @@ export function crusher(def, ctx) {
       // it only widens on a genuine hitch (dt > SWEEP_STEP), and it is clamped
       // to the head's own thickness so it can never poke out of the safe back
       // face and kill someone riding a fast-closing crusher from behind.
+      //   front plane = +sAlong/2 + 0.06 ahead of the head centre, so the slab's
+      //   back = sAlong/2 + 0.06 - thick, which stays inside the head only while
+      //   thick <= sAlong + 0.06. The clamp used to be sAlong + 0.12: at slam
+      //   speed the slab poked 6 cm out of the safe back face — the deck a rider
+      //   stands on (hazcheck: 39 of ~2160 samples out the back, 36 behind the
+      //   centre).
       const kv = un.kill;
-      const thick = Math.min(0.16 + speed * Math.max(SWEEP_STEP, dt) * 1.15, sAlong + 0.12);
+      const thick = Math.min(0.16 + speed * Math.max(SWEEP_STEP, dt) * 1.15, sAlong + 0.06);
       if (kv.half && kv.half.setY) kv.half.setY(thick * 0.5);
       else if (kv.half) kv.half.y = thick * 0.5;
       _a.copy(un.basePos).addScaledVector(un.dir, dist + sAlong * 0.5 + 0.06 - thick * 0.5);

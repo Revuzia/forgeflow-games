@@ -663,6 +663,7 @@ export class Stage {
     this._pp = new THREE.Vector3();
     this._ppValid = false;
     this._playerRef = null;
+    this._standOn = null;   // the collider the player last stood on — see _detectStand()
     this._lightTimer = 0;
     this._lightIdx = [];
     this._maxLights = 3;
@@ -802,66 +803,31 @@ export class Stage {
       if (o.motion && o.motion.to !== undefined && !fin3(o.motion.to))
         failObj(i, k, 'motion.to must be a finite [x,y,z]');
 
-      /* required positions.
-         Beam kinds author ENDPOINTS, not a centre: LaserHazard grid mode reads
-         def.a/def.b (lasers.js:1030-1031) and sweep reads def.p || def.a
-         (lasers.js:1061). This table used to exempt only 'laser', so every
-         stage carrying a lasergrid validated fine in reachcheck/geomcheck
-         (neither calls validate) and then THREW on live load — neon-3 and
-         temple-3 were unloadable while every static gate showed green. */
-      const beamKind = k === 'laser' || k === 'lasergrid' || k === 'lasersweep';
-      if (k !== 'chase' && !beamKind && o.p !== undefined && !fin3(o.p))
-        failObj(i, k, '"p" must be a finite [x,y,z]');
-      if (k !== 'chase' && !beamKind && o.p === undefined)
-        failObj(i, k, 'missing required field "p"');
-      if (k === 'laser' || k === 'lasergrid') {
-        if (!fin3(o.a) || !fin3(o.b)) failObj(i, k, k + ' requires finite "a" and "b" endpoints');
-      }
-      if (k === 'lasersweep') {
-        if (!fin3(o.p) && !fin3(o.a)) failObj(i, k, 'lasersweep requires a finite "p" (or "a") origin');
-      }
-      if (k === 'chase') {
-        if (!fin(o.from) || !fin(o.to)) failObj(i, k, 'chase requires finite "from" and "to"');
-        if (!fin(o.speed) || o.speed <= 0) failObj(i, k, '"speed" must be > 0, got ' + String(o.speed));
-        // chase.js:120 resolves 'x' | 'y' | 'z' and implements all three end to end
-        // (face size :137, front point :175, kill half-extents :328, the inside test
-        // :417) and its own factory doc at :502 advertises 'x'. This validator used to
-        // reject 'x', which made a horizontal run-or-die wall — the one every stage
-        // that runs along +X actually wants — throw on Stage.load. Neither reachcheck
-        // nor geomcheck calls validate, so a stage could carry one and pass both gates
-        // while being unloadable.
-        if (o.axis !== 'x' && o.axis !== 'y' && o.axis !== 'z' && o.axis !== undefined)
-          failObj(i, k, '"axis" must be "x", "y" or "z", got ' + String(o.axis));
+      /* HAZARD KINDS: one contract, owned by hazards/index.js.
+         This validator used to keep its own per-kind field list, and it drifted
+         from the one makeHazard enforces: hazcheck's contract section measured
+         29 defs on which the two disagreed. The dangerous direction is "this
+         accepts, makeHazard rejects" — Stage.load passes, the factory throws in
+         _buildHazard, the throw is logged and the hazard is DROPPED, and the
+         stage ships with a hole (four pendulums authored with `ampDeg` were
+         missing from spire-1, foundry-3 and temple-2 while every gate was green).
+         Delegating makes the verdicts identical by construction, and turns a
+         silent drop into a load-time error that names the object. */
+      if (isHazardKind(k) && typeof HazardLib.validateHazardDef === 'function') {
+        try {
+          HazardLib.validateHazardDef(o, { stageId: sid, objectIndex: i });
+        } catch (e) {
+          failObj(i, k, (e && e.message) ? e.message : String(e));
+        }
       }
 
-      /* period / cycle sanity — a zero period is an infinite loop or a NaN */
-      if (o.motion && o.motion.period !== undefined) {
-        if (!fin(o.motion.period) || o.motion.period <= 0)
-          failObj(i, k, 'motion.period must be > 0, got ' + String(o.motion.period));
-      }
-      if (o.period !== undefined) {
-        if (!fin(o.period) || o.period <= 0)
-          failObj(i, k, '"period" must be > 0, got ' + String(o.period));
-      }
-      if (o.cycle) {
-        const on = +o.cycle.on, off = +o.cycle.off;
-        if (!fin(on) || on < 0) failObj(i, k, 'cycle.on must be a finite number >= 0, got ' + String(o.cycle.on));
-        if (!fin(off) || off < 0) failObj(i, k, 'cycle.off must be a finite number >= 0, got ' + String(o.cycle.off));
-        if (on + off <= 0) failObj(i, k, 'cycle.on + cycle.off must be > 0 (period would be zero)');
-        if (o.cycle.warn !== undefined && (!fin(o.cycle.warn) || o.cycle.warn < 0))
-          failObj(i, k, 'cycle.warn must be a finite number >= 0');
-      }
-      if (k === 'pendulum' && (!fin(o.len) || o.len <= 0))
-        failObj(i, k, '"len" must be > 0, got ' + String(o.len));
-      if (k === 'rotor') {
-        if (!fin(o.len) || o.len <= 0) failObj(i, k, '"len" must be > 0, got ' + String(o.len));
-        if (o.arms !== undefined && (!fin(o.arms) || o.arms < 1))
-          failObj(i, k, '"arms" must be >= 1, got ' + String(o.arms));
-      }
-      if (k === 'crusher' && (!fin(o.travel) || o.travel === 0))
-        failObj(i, k, '"travel" must be a non-zero finite number, got ' + String(o.travel));
-      if ((k === 'jumppad' || k === 'speedpad') && (!fin(o.power) || o.power <= 0))
-        failObj(i, k, '"power" must be > 0, got ' + String(o.power));
+      /* BUILDER KINDS: positions the builders read directly. Hazard kinds have
+         theirs checked by the contract above (beam kinds author endpoints a/b,
+         a chase authors from/to — neither carries a `p`). */
+      if (isBuilderKind(k) && o.p !== undefined && !fin3(o.p))
+        failObj(i, k, '"p" must be a finite [x,y,z]');
+      if (isBuilderKind(k) && o.p === undefined)
+        failObj(i, k, 'missing required field "p"');
       if (k === 'text' && (typeof o.text !== 'string' || !o.text.length))
         failObj(i, k, '"text" must be a non-empty string');
       if (k === 'light' && o.intensity !== undefined && (!fin(o.intensity) || o.intensity < 0))
@@ -875,6 +841,28 @@ export class Stage {
           const dx = o.p[0] - def.finish.p[0], dz = o.p[2] - def.finish.p[2];
           if (dx * dx + dz * dz < 144) supportNearFinish = true;
         }
+      }
+    }
+
+    /* A respawn pad swept by a SOLID rotor bar. geomcheck's static sweep exempts
+       bar rotors on purpose (they push, they do not kill) — but a push off a deck
+       into lava is a death all the same. hazcheck's live respawn walk measured
+       foundry-3 cp4 (pad 176.6,18.4 under a 2-arm bar of len 3.0 at the same
+       point): 2 of 4 respawns shoved 3.6 m off the deck edge into the pool
+       within 1.4 s. Nothing at runtime can make such a pad safe; the data must
+       move the pad or the rotor, so this names it at validate time. */
+    for (let i = 0; i < cps.length; i++) {
+      const cp = cps[i];
+      if (!cp || !fin3(cp.p)) continue;
+      for (let j = 0; j < def.objects.length; j++) {
+        const o = def.objects[j];
+        if (!o || o.kind !== 'rotor' || !fin3(o.p) || o.kill) continue;
+        if ((o.style || 'bar') !== 'bar') continue;              // saws/blades are lethal: geomcheck's sweep owns them
+        const reach = (fin(o.len) ? o.len : 6) + 0.8;            // arm length + the player's radius
+        const dx = cp.p[0] - o.p[0], dz = cp.p[2] - o.p[2], dy = cp.p[1] - o.p[1];
+        if (dx * dx + dz * dz <= reach * reach && dy > -2.2 && dy < 1.2)
+          warnings.push('checkpoints[' + i + '] at ' + cp.p.join(',') + ' is inside the sweep of the solid rotor bar ' +
+                        'objects[' + j + '] (len ' + (fin(o.len) ? o.len : 6) + ') — a respawn there can be pushed off the deck');
       }
     }
 
@@ -2786,6 +2774,7 @@ export class Stage {
     if (playerPos && fin(playerPos.x)) { this._pp.copy(playerPos); this._ppValid = true; }
     else this._ppValid = this._resolvePlayerPos();
 
+    this._detectStand();
     this._updateHazards(dt);
     this._updateCulling(dt);
     this._updateLights(dt);
@@ -2825,6 +2814,33 @@ export class Stage {
       return fin(this._pp.x);
     }
     return false;
+  }
+
+  /**
+   * STAND DETECTION — the collision layer never calls `hazard.onStand()`, and
+   * the hazard ctx carries no player handle, so crumble tiles (vanish.js),
+   * sinkers and elevators (movers.js) were self-detecting by proximity through
+   * a `ctx.player` that the live stage never provides: hazcheck measured every
+   * crumble tile on spire-2 and every sinker/elevator on foundry-2, neon-1,
+   * neon-2 and temple-3 as INERT in the shipped game. The stage is the one
+   * place that knows both the player's ground contact and which hazard owns
+   * that collider, so it fires the hook on a STAND TRANSITION — the frame the
+   * player's grounded collider becomes this one, whether by landing or by
+   * walking on from a neighbour — and never on a fly-over, a walk-underneath
+   * or a teleport-in (the player arrives airborne; see Player.respawn()).
+   * stage.update() runs before player.update() (game.js), so the contact it
+   * reads is last frame's: one physics step of latency, no proximity band.
+   */
+  _detectStand() {
+    const p = this._playerRef;
+    const c = (p && p.grounded === true) ? (p.groundCollider || null) : null;
+    if (c === this._standOn) return;
+    this._standOn = c;
+    if (!c) return;
+    const ref = c.ref;
+    if (ref && typeof ref.onStand === 'function') {
+      try { ref.onStand(this.clock, c, p); } catch (e) { /* a hazard hook threw; the sim goes on */ }
+    }
   }
 
   _updateHazards(dt) {
@@ -3321,6 +3337,9 @@ export class Stage {
 
   /** Re-arm crumble/vanish, un-sink sinkers, rewind chasers. */
   _resetHazards(t) {
+    /* Forget the last stand: a player still grounded on a re-armed tile after a
+       reset must re-trigger it on the next frame, not ride it for free. */
+    this._standOn = null;
     for (let i = 0; i < this.hazards.length; i++) {
       const rec = this.hazards[i];
       const h = rec.h;
