@@ -151,7 +151,18 @@ const TEMPLE = 0xffd27a;
 /* The player arrives on the outer tier at 157.5 deg, looking straight at the pedestal. */
 const ARRIVE_DEG = 157.5;
 const ARRIVE = at(ARRIVE_DEG, 19.5, OUTER + 0.1);
-const ARRIVE_YAW = facingIn(ARRIVE_DEG) + Math.PI / 2; // = -22.5 deg, i.e. inward
+/* Arrival heading, in the DATA convention this file documents above (yaw 0 faces
+ * +X, +PI/2 faces +Z): from a point at ARRIVE_DEG on the ring, the heading that
+ * looks back at the centre is simply ARRIVE_DEG + 180.
+ *
+ * This read `facingIn(ARRIVE_DEG) + Math.PI / 2`, which mixes two spaces:
+ * facingIn() returns a MESH rotation.y (that is what it is used for — the `rot:`
+ * on each plinth's text), and adding PI/2 to it collapses to -ARRIVE_DEG, i.e.
+ * -157.5 deg. The comment beside it already stated the intended value, -22.5
+ * deg; only the expression disagreed. Spawn yaw is read through Game._spawnFor,
+ * which converts THIS convention into a controller heading, so the mismatch
+ * aimed the arrival 135 deg away from the pedestal it is meant to face. */
+const ARRIVE_YAW = (ARRIVE_DEG + 180) * D2R;   // 337.5 deg == -22.5 deg, i.e. inward
 
 export default {
   id: 'hub',

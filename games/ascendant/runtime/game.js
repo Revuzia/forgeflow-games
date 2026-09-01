@@ -122,6 +122,33 @@ function yawOf(src, fallback) {
   return fallback || 0;
 }
 
+/**
+ * Authored yaw -> the controller's heading. TWO CONVENTIONS, ONE CONVERSION.
+ *
+ * Stage data says so in every file it appears in — foundry-1.js:87 and
+ * foundry-2.js:171 ("rot/yaw are radians; yaw 0 faces +X"), hub.js:33 ("yaw =
+ * radians, 0 faces +X, +PI/2 faces +Z") — and the hub's portal ring proves it:
+ * its four gates are authored 0 / PI/2 / PI / -PI/2 at +X / +Z / -X / -Z.
+ * So authored forward = (cos y, 0, sin y).
+ *
+ * The controller runs the other way: forward = (-sin y, 0, -cos y)
+ * (controller.js:547), so ITS yaw 0 faces -Z and its angle winds the opposite
+ * direction. Solving (cos d, sin d) = (-sin c, -cos c) gives c = -d - PI/2.
+ *
+ * Nothing performed this conversion. Authored yaw went straight into
+ * player.spawn/respawn, so on every stage — all of which run along +X from an
+ * authored `yaw: 0` — the view was aimed 90 deg off the course. And because
+ * respawn re-applies it, EVERY death snapped the camera sideways mid-play, with
+ * the course out of frame. That is the "camera randomly resets" report.
+ *
+ * Fixed here, at the one point where authored spawn data becomes a heading, so
+ * the 13 stage files keep the convention they document.
+ */
+function headingFromAuthoredYaw(dataYaw) {
+  const y = isNum(dataYaw) ? dataYaw : 0;
+  return -y - Math.PI / 2;
+}
+
 /** Colour of any shape (0xRRGGBB | '#rgb' | THREE.Color | {color:...}) -> css. */
 function cssColor(c, fallback) {
   const fb = fallback || '#05070d';
@@ -437,6 +464,44 @@ export class Game {
     else inp.suspended = !!on;
   }
 
+  /**
+   * Does a UI surface own the input right now?  DERIVED, never accumulated.
+   *
+   * `input.suspended` used to be driven by two independent systems: this class
+   * and a module-global push/pop counter in ui/style.js. Two writers with no
+   * reconciliation can desync, and the failure is silent and one-directional —
+   * an unbalanced push leaves the counter above zero forever, so every later
+   * popCapture returns early without clearing the flag. Movement still
+   * recomputes from scratch each frame, but jump is hard-gated per frame, so
+   * the game keeps walking and stops jumping.
+   *
+   * So: compute it from what is actually on screen, every frame. The counter
+   * survives only as a relock hint. There is no state to leak, because there is
+   * no state — only this question, asked again each frame.
+   */
+  _uiOwnsInput() {
+    if (this.state === 'title' || this.state === 'paused' || this.state === 'select') return true;
+    if (this._selectOpen) return true;
+    if (this.menu && this.menu.isOpen) return true;
+    if (this.stageSelect && this.stageSelect.isOpen) return true;
+    if (this.hud && this.hud.finishOpen) return true;
+    /* The death freeze, but only up to the swap: _performRespawn hands the
+       controls back the instant the world is replaced (contract §21), while
+       _deathT is still counting out the restore. The intro card deliberately
+       leaves input live so it is skippable and you can look around — so it is
+       NOT a suspension, and must not appear here. */
+    if (this._deathT >= 0 && !this._deathSwapped) return true;
+    return false;
+  }
+
+  /** Make input.suspended match _uiOwnsInput(). Called once per frame. */
+  _reconcileSuspend() {
+    const inp = this.input;
+    if (!inp) return;
+    const want = this._uiOwnsInput();
+    if (!!inp.suspended !== want) this._suspendInput(want);
+  }
+
   _progress(p, msg) {
     if (typeof this.onProgress === 'function') safe(() => this.onProgress(clamp(p, 0, 1), msg), 'onProgress');
   }
@@ -478,13 +543,25 @@ export class Game {
   _bindInput() {
     const inp = this.input;
     if (!inp) return;
+    /* ONE owner for the pause/resume decision.
+     *
+     * 'pause' is the only TOGGLE, and input.js raises it only for an explicit
+     * press of a pause-bound control. Lock loss and focus loss are facts, not
+     * intents: they may pause, never resume. Previously all three fed the
+     * toggle, so a single ESC arrived twice — once as the keypress and once as
+     * the pointer-lock loss it caused — and the second arrival resumed the game
+     * the menu had just opened for. Which one won depended on whether a frame
+     * landed in the ~30 ms between them, i.e. on the frame rate: the menu
+     * "didn't always stay up". */
     bindEvent(inp, 'pause', () => {
-      /* Input fires this on ESC, pointer-lock loss and tab hide. */
       if (this.state === 'paused') { this.resume(); return; }
       this.pause('input');
     });
     bindEvent(inp, 'blur', () => { this.pause('blur'); });
-    bindEvent(inp, 'unlock', () => {
+    bindEvent(inp, 'unlock', (reason) => {
+      /* The player's own pause key caused this loss — the toggle above has
+         already acted on that press. Acting again here is the race. */
+      if (reason === 'key') return;
       /* Dev mode never pauses on lock loss: automation (feelcheck, loopcheck)
          cannot acquire pointer lock from synthetic events, so this pause put
          the harness in a suspend/resume cycle that swallowed every jump edge —
@@ -1167,6 +1244,12 @@ export class Game {
     safe(() => this.camera && this.camera.setDeathCam(false), 'camera.setDeathCam');
   }
 
+  /**
+   * Where the player stands and which way they face for a checkpoint index.
+   * `out.yaw` is a CONTROLLER heading — every branch converts the authored yaw
+   * through headingFromAuthoredYaw(), because this is the only route by which
+   * authored spawn data reaches player.spawn/respawn.
+   */
   _spawnFor(cpIndex) {
     const out = this._spawnOut || (this._spawnOut = { pos: new THREE.Vector3(), yaw: 0 });
     let got = null;
@@ -1175,16 +1258,16 @@ export class Game {
     }
     if (got) {
       toVec3(got.pos !== undefined ? got.pos : got, out.pos);
-      out.yaw = yawOf(got, 0);
+      out.yaw = headingFromAuthoredYaw(yawOf(got, 0));
       return out;
     }
     const def = (this.stage && this.stage.def) || null;
     const cps = (this.stage && this.stage.checkpoints) || (def && def.checkpoints) || EMPTY_ARRAY;
     const cp = cpIndex > 0 ? cps[cpIndex] : null;
-    if (cp) { toVec3(cp, out.pos); out.yaw = yawOf(cp, 0); return out; }
+    if (cp) { toVec3(cp, out.pos); out.yaw = headingFromAuthoredYaw(yawOf(cp, 0)); return out; }
     const sp = def && def.spawn ? def.spawn : null;
     toVec3(sp, out.pos);
-    out.yaw = yawOf(sp, 0);
+    out.yaw = headingFromAuthoredYaw(yawOf(sp, 0));
     return out;
   }
 
@@ -1714,7 +1797,17 @@ export class Game {
 
     /* --- real-time sequences (never scaled by slow-mo) --- */
     if (this._deathT >= 0) this._stepDeath(rms);
-    if (this._introT >= 0) this._stepIntro(rms);
+    /* The intro card is FROZEN BY A PAUSE, and by nothing else. It used to run
+       straight through one, and _endIntro -> _handOverControl then set the state
+       back to 'playing' and took the controls back UNDERNEATH the open pause
+       menu — ESC during a stage intro left the menu on screen over a live game.
+       The gate is deliberately just the pause states: gating it on "any UI is
+       up" also caught the title menu, and a stage loaded behind the title then
+       never finished its intro at all, which leaves the player frozen (see
+       `frozen` below) and never grounded. Pause cannot happen mid-death or
+       mid-clear, so those two sequences need no gate. */
+    const pausedForIntro = this.state === 'paused' || this.state === 'select' || this._selectOpen;
+    if (this._introT >= 0 && !pausedForIntro) this._stepIntro(rms);
     if (this._clearT >= 0) this._stepClear(rms);
     if (this._fadeDur > 0) this._stepFade(rms);
 
@@ -1745,6 +1838,9 @@ export class Game {
     }
 
     /* ================= the mandated order ================= */
+    /* Suspension is derived from the live UI, immediately before input reads it,
+       so no transition can leave it stuck. */
+    this._reconcileSuspend();
     if (this.input) this.input.update(rdt);
     this._readInputActions();
 

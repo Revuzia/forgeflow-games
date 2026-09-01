@@ -25,6 +25,14 @@ const IS_BROWSER = typeof window !== 'undefined' && typeof document !== 'undefin
 /** Radians of yaw/pitch per sens-scaled mouse pixel. */
 export const RAD_PER_PX = 0.0022;
 
+/**
+ * How long a pause-bound keypress keeps explaining a pointer-lock loss.
+ * Chrome drops the lock asynchronously — measured at 20-40 ms after the ESC
+ * keydown on a healthy frame, and well past 250 ms on a loaded one — so the
+ * window has to outlast a bad frame without swallowing an unrelated later loss.
+ */
+const LOCK_LOSS_KEY_WINDOW = 1000;
+
 /** Every logical action, in a stable order (iterated per frame — no allocation). */
 export const ACTIONS = Object.freeze([
   'forward', 'back', 'left', 'right',
@@ -213,6 +221,7 @@ export class Input {
     this._lockWanted = false;
     this._lockRetryAt = 0;
     this._lastPauseEmit = -1e9;
+    this._pauseKeyAt = -1e9;       // when a pause-bound key was last pressed WHILE locked
     this._unadjustedOk = true;
     this._destroyed = false;
 
@@ -228,6 +237,18 @@ export class Input {
   /* ======================================================================
    * Event emitter — 'lock' | 'unlock' | 'pause' | 'blur' | 'bindings' |
    *                 'lockerror' | 'fullscreen' | 'mute' | 'gamepad'
+   *
+   * Pause-relevant events, and who is allowed to raise them:
+   *   'pause'  — INTENT, a toggle. Raised ONLY by an explicit press of a
+   *              pause-bound control. Exactly one per press.
+   *   'unlock' — FACT: pointer lock went away. Argument is the reason:
+   *              'key'      the player's own pause key caused it, so the
+   *                         'pause' toggle above already owns the decision —
+   *                         a listener must NOT pause or resume on it;
+   *              'external' anything else (clicked away, browser UI, our own
+   *                         releaseLock) — a listener may pause, never resume.
+   *   'blur'   — FACT: focus or visibility went away. Pause-only.
+   * One physical action must reach the game as exactly one pause decision.
    * ====================================================================*/
   on(evt, fn) {
     if (typeof fn !== 'function') return this;
@@ -485,6 +506,19 @@ export class Input {
       if (this._downCodes[code]) return;
       this._downCodes[code] = 1;
       this._pressCode(code, true);
+
+      /* A pause-bound key pressed WHILE the pointer is locked is itself the
+         reason the browser is about to drop the lock. Record it so
+         _onLockChange reports that loss as 'key' rather than as an independent
+         cause: one physical ESC must produce exactly ONE pause decision. Two
+         reports of the same press is the race that opened the menu and then
+         immediately closed it again. */
+      if (this.locked) {
+        const acts = this._codeMap[code];
+        if (acts && acts.indexOf('pause') !== -1) {
+          this._pauseKeyAt = IS_BROWSER ? performance.now() : 0;
+        }
+      }
     };
 
     this._onKeyUp = (e) => {
@@ -541,8 +575,17 @@ export class Input {
         this._emit('lock');
       } else {
         this._releaseAllKeys();
-        this._emit('unlock');
-        this._firePause('unlock');
+        /* ONE cause, ONE report. 'unlock' is a statement of fact with the reason
+           attached; it is NOT a second pause event. Firing 'pause' here as well
+           used to hand the same physical ESC to the game's pause TOGGLE twice —
+           the second hit landed while the game was already paused and resumed
+           it, which is why the menu "didn't always stay up". Whether it did was
+           decided by whether a frame happened to land between the keydown and
+           the browser's pointerlockchange. */
+        const t = IS_BROWSER ? performance.now() : 0;
+        const byKey = (t - this._pauseKeyAt) < LOCK_LOSS_KEY_WINDOW;
+        this._pauseKeyAt = -1e9;
+        this._emit('unlock', byKey ? 'key' : 'external');
       }
     };
 
@@ -562,8 +605,10 @@ export class Input {
       if (document.visibilityState === 'hidden') {
         this._releaseAllKeys();
         this._mouseDX = 0; this._mouseDY = 0;
+        /* 'blur' alone. It is already a pause-ONLY signal on the game side;
+           also firing 'pause' here put a tab-hide through the pause TOGGLE,
+           so hiding the tab while the menu was up RESUMED the game. */
         this._emit('blur');
-        this._firePause('hidden');
       }
     };
 
@@ -669,6 +714,14 @@ export class Input {
     for (let i = 0; i < ACTIONS.length; i++) this._acts[ACTIONS[i]].touch = false;
   }
 
+  /**
+   * The ONE pause *intent* channel: an explicit press of a pause-bound control
+   * (ESC, gamepad START, the touch pause button). The game treats it as a
+   * toggle, so nothing else may raise it — pointer-lock loss and tab-hide are
+   * reported through 'unlock' and 'blur', which are pause-only on the game side.
+   * The short debounce only coalesces a keyboard and a gamepad press of the
+   * same beat; it is not what keeps the menu open.
+   */
   _firePause(reason) {
     const t = IS_BROWSER ? performance.now() : 0;
     if (t - this._lastPauseEmit < 250) return;

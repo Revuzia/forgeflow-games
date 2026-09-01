@@ -1138,15 +1138,27 @@ export function uiSfx(game, name) {
   try { const a = game && game.audio; if (a && typeof a.sfx === 'function') a.sfx(name); } catch (e) { /* silent */ }
 }
 
+/**
+ * How many UI surfaces are currently up. A POINTER-LOCK hint only.
+ *
+ * This counter used to also own `input.suspended`, in parallel with
+ * Game._suspendInput — two writers, no reconciliation. An unbalanced push left
+ * it above zero permanently, and from then on every popCapture returned early
+ * without clearing the flag, so input stayed suspended: the player could still
+ * walk (movement recomputes each frame) but could never jump again (jump is
+ * hard-gated per frame). Game.update now DERIVES suspension from the live UI
+ * every frame (Game._uiOwnsInput), which is the single source of truth. Do not
+ * write input.suspended from here — a drifted count must not be able to take
+ * the controls away.
+ */
 let _capture = 0;
 
 /** Menus claim input capture; the HUD/game resume when the last one closes. */
 export function pushCapture(game) {
   _capture++;
   const inp = resolveInput(game);
-  if (inp) {
-    inp.suspended = true;
-    if (typeof inp.releaseLock === 'function') { try { inp.releaseLock(); } catch (e) { /* ignore */ } }
+  if (inp && typeof inp.releaseLock === 'function') {
+    try { inp.releaseLock(); } catch (e) { /* ignore */ }
   }
 }
 
@@ -1154,9 +1166,8 @@ export function popCapture(game, relock) {
   _capture = Math.max(0, _capture - 1);
   if (_capture > 0) return;
   const inp = resolveInput(game);
-  if (inp) {
-    inp.suspended = false;
-    if (relock && typeof inp.requestLock === 'function') { try { inp.requestLock(); } catch (e) { /* ignore */ } }
+  if (inp && relock && typeof inp.requestLock === 'function') {
+    try { inp.requestLock(); } catch (e) { /* ignore */ }
   }
 }
 
