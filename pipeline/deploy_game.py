@@ -59,7 +59,15 @@ R2_PUBLIC_URL = "https://forgeflow-games.pages.dev"  # Will be updated once R2 c
 # Directories inside a game folder that are development-only and must never be
 # uploaded to the public CDN. Matched against the FIRST path segment, so a
 # legitimate runtime path like "assets/tools_ui.png" is unaffected.
-DEV_ONLY_DIRS = {"tools", "_src", "__pycache__", ".git", ".grok"}
+DEV_ONLY_DIRS = {
+    "tools", "_src", "__pycache__", ".git", ".grok",
+    # Verification/authoring trees added by the hand-built games (ascendant,
+    # driftwake, …). `_shots` alone is 352 MB of PNG evidence in ascendant, and
+    # `_harness` is our Playwright gate suite — neither belongs on a public CDN,
+    # and `_spec` is the internal module contract.
+    "_harness", "_shots", "_spec", "_tools", "_wip", "_attic",
+    ".playwright-mcp", ".grokui-inbox",
+}
 # Individual dev artefacts that can sit at a game's root.
 DEV_ONLY_NAMES = {".gitignore", ".DS_Store", "Thumbs.db"}
 # Backup suffixes left by asset-migration passes (e.g. *.pre_draco.bak,
