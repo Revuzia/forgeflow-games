@@ -982,6 +982,23 @@ export class StageSelect {
       const nav = UIRegistry.menu.nav ? UIRegistry.menu.nav[UIRegistry.menu.page] : null;
       if (nav) nav.refresh(true);
     }
+
+    /* TELL THE GAME.
+     *
+     * Game.openStageSelect() moves the state machine into 'select' and raises
+     * `_selectOpen`, and Game derives input.suspended from exactly those. This
+     * close — which is what ESC and the BACK button call, and they are the only
+     * two ways out, because _handleKey eats Tab for list navigation — used to
+     * take the overlay down and tell Game nothing. The result was a game frozen
+     * in state 'select' with input suspended and no UI on the screen at all.
+     *
+     * Game.closeStageSelect() is the reconciler and is guarded against the
+     * round trip back into here; it is also safe when Game never owned this
+     * open (uiAction('stageSelect') calls open() directly). */
+    const g = this.game;
+    if (g && typeof g.closeStageSelect === 'function') {
+      try { g.closeStageSelect(); } catch (e) { console.warn('[ascendant.ui] closeStageSelect threw', e); }
+    }
   }
 
   dispose() {

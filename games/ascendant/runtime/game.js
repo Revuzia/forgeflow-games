@@ -300,6 +300,7 @@ export class Game {
     this._settingsSub = null;
     this._spawnOut = { pos: new THREE.Vector3(), yaw: 0 };
     this._prevSelectState = 'paused';
+    this._closingSelect = false;          // re-entry guard, see closeStageSelect
 
     /* Stable physics-world handle handed to Player once and never replaced. */
     const self = this;
@@ -1044,7 +1045,14 @@ export class Game {
     if (this.state !== 'paused') return;
     safe(() => this.menu && this.menu.close(), 'menu.close');
     this.state = this._prePauseState === 'hub' ? 'hub' : 'playing';
-    this._timerRun = true;
+    /* The clock belongs to whichever authored sequence is still running.
+       _startIntro clears _timerRun deliberately — the body is frozen while the
+       card reads, so the stage clock must not tick. Starting it here
+       unconditionally meant an ESC during a stage intro resumed into a running
+       clock over a frozen player: the stage charged you for time you could not
+       possibly have used. _endIntro -> _handOverControl starts it at the moment
+       control is actually handed over, which is the only correct moment. */
+    this._timerRun = this._introT < 0 && this._deathT < 0 && this._clearT < 0;
     this._suspendInput(false);
     this._requestLockSoon(140);
   }
@@ -1076,14 +1084,49 @@ export class Game {
     safe(() => this.stageSelect.open(), 'stageSelect.open');
   }
 
+  /**
+   * THE ONE RECONCILER for "the stage select is going away", callable from
+   * either side and safe either way.
+   *
+   * It used to early-return on `!this._selectOpen`, and StageSelect.close() —
+   * which is what ESC and the BACK button actually call — had no channel back
+   * here at all. So the overlay faded out while Game stayed in state 'select'
+   * with `_selectOpen` true, and _uiOwnsInput() therefore held input suspended
+   * against a screen with no UI on it: a frozen game, no menu, no way back.
+   * Since StageSelect's own ESC/BACK are the only ways to close it (its capture
+   * handler eats Tab for list navigation, so Game's toggle never sees a second
+   * press), that was every exit.
+   *
+   * StageSelect.close() now calls this, and this calls StageSelect.close() —
+   * `_closingSelect` makes the round trip settle in one pass instead of
+   * recursing.
+   */
   closeStageSelect() {
-    if (!this._selectOpen) return;
+    const owned = this._selectOpen || this.state === 'select';
     this._selectOpen = false;
-    safe(() => this.stageSelect && this.stageSelect.close(), 'stageSelect.close');
-    if (this.state === 'select') {
-      this.state = 'paused';
-      safe(() => this.menu && this.menu.open('pause'), 'menu.open(pause)');
+
+    if (!this._closingSelect) {
+      this._closingSelect = true;
+      safe(() => this.stageSelect && this.stageSelect.close(), 'stageSelect.close');
+      this._closingSelect = false;
     }
+
+    /* Opened straight through uiAction('stageSelect') (the pause menu's and the
+       clear card's buttons call StageSelect.open() directly), Game never took
+       ownership of the state — so there is nothing here to give back. */
+    if (!owned || this.state !== 'select') return;
+
+    /* Go back to where openStageSelect() found us. `_prevSelectState` was
+       already being recorded there and then never read: a death or a clear
+       interrupted by Tab must resume its sequence, not be dropped into a pause
+       menu that would freeze it a second time. */
+    const back = this._prevSelectState;
+    if (back === 'dead' || back === 'cleared') {
+      this.state = back;
+      return;
+    }
+    this.state = 'paused';
+    safe(() => this.menu && this.menu.open('pause'), 'menu.open(pause)');
   }
 
   toggleStageSelect() {
@@ -1453,6 +1496,20 @@ export class Game {
     this.timeScale = 1;
     this._fovPull = 0;
     this._hideCont();
+    /* THE CARD COMES DOWN WITH THE SEQUENCE.
+     *
+     * hud.finish() raises the clear card; only hud._finishAction (a click on one
+     * of its three buttons) used to lower it. Every other way out of a clear —
+     * the CLEAR_AUTO_MS auto-advance, R, a stage load, returnToHub, toTitle —
+     * left `hud.finishOpen` true forever, and _uiOwnsInput() reads that flag:
+     * input stayed suspended into the NEXT stage, so a player who simply read
+     * their split for four seconds arrived somewhere they could not move. It
+     * also leaked hud.finish()'s pushCapture, permanently.
+     *
+     * _endClear is the one funnel every exit already goes through, so it is
+     * where the card belongs. hideFinish() is idempotent (it early-returns when
+     * the card is down), so the button path still works exactly as before. */
+    safe(() => this.hud && this.hud.hideFinish && this.hud.hideFinish(), 'hud.hideFinish');
     if (this.engine && this.engine.post && this.theme && this.theme.bloom) {
       safe(() => this.engine.post.setBloom(this.theme.bloom), 'post.setBloom');
     }
@@ -1796,19 +1853,27 @@ export class Game {
     const rms = rdt * 1000;
 
     /* --- real-time sequences (never scaled by slow-mo) --- */
-    if (this._deathT >= 0) this._stepDeath(rms);
-    /* The intro card is FROZEN BY A PAUSE, and by nothing else. It used to run
-       straight through one, and _endIntro -> _handOverControl then set the state
-       back to 'playing' and took the controls back UNDERNEATH the open pause
-       menu — ESC during a stage intro left the menu on screen over a live game.
-       The gate is deliberately just the pause states: gating it on "any UI is
+    /* ALL THREE authored sequences are frozen by a menu, and by nothing else.
+       The intro used to run straight through one, and _endIntro ->
+       _handOverControl then set the state back to 'playing' and took the
+       controls back UNDERNEATH the open pause menu — ESC during a stage intro
+       left the menu on screen over a live game.
+       The gate is deliberately just the menu states: gating it on "any UI is
        up" also caught the title menu, and a stage loaded behind the title then
        never finished its intro at all, which leaves the player frozen (see
-       `frozen` below) and never grounded. Pause cannot happen mid-death or
-       mid-clear, so those two sequences need no gate. */
-    const pausedForIntro = this.state === 'paused' || this.state === 'select' || this._selectOpen;
-    if (this._introT >= 0 && !pausedForIntro) this._stepIntro(rms);
-    if (this._clearT >= 0) this._stepClear(rms);
+       `frozen` below) and never grounded.
+       Death and clear were exempted on the reasoning that pause() refuses
+       mid-death and state is not live mid-clear — true of pause(), false of the
+       stage select, which openStageSelect() can raise over either. Tab during a
+       death then ran the death sequence to completion underneath the open
+       overlay, and its last act is `this.state = 'playing'` — so it overwrote
+       'select' out from under a UI that was still on screen, and every later
+       transition reasoned from a state that no longer described anything. Same
+       defect as the intro's, same fix, one predicate. */
+    const uiFrozen = this.state === 'paused' || this.state === 'select' || this._selectOpen;
+    if (this._deathT >= 0 && !uiFrozen) this._stepDeath(rms);
+    if (this._introT >= 0 && !uiFrozen) this._stepIntro(rms);
+    if (this._clearT >= 0 && !uiFrozen) this._stepClear(rms);
     if (this._fadeDur > 0) this._stepFade(rms);
 
     const live = this.state === 'playing' || this.state === 'hub';

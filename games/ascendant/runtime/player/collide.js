@@ -179,26 +179,70 @@ function setPlayerBox() {
   PC.set(CTX.pos.x, CTX.pos.y + CTX.halfH, CTX.pos.z);
 }
 
+/**
+ * Is every number the narrow phase will read off `c` finite?
+ *
+ * This is not paranoia, it is a hard requirement of the maths below. Every
+ * early-out in `mtv` / `axisContact` / `probeDown` is written as
+ * `if (overlap <= EPS) bail`, and EVERY comparison against NaN is false — so a
+ * collider carrying a single NaN slips past all of them and hands the sweep a
+ * NaN push. `moveAndCollide`'s exit guard then restores the entry position and
+ * zeroes the velocity, and does it again the next frame, and the next: the
+ * player is left perfectly finite and PERMANENTLY FROZEN, unable to move a
+ * centimetre in any direction. Reproduced with one bad collider next to the
+ * player: 0.000 m of travel over 60 frames with movement held.
+ *
+ * One add-chain plus one isFinite catches NaN and both infinities in every
+ * component at once (Infinity + -Infinity is NaN, which is not finite), and it
+ * lives in queryCands because that is the single gate every narrow-phase
+ * consumer draws its candidates through — sweeps, depenetrate, step-up
+ * clearance, the ground probe, the wall feeler and the mover carry alike.
+ */
+function usable(c) {
+  const b = c.aabb;
+  if (b === undefined || b === null) return false;
+  return isFinite(
+    b.min.x + b.min.y + b.min.z + b.max.x + b.max.y + b.max.z +
+    c.center.x + c.center.y + c.center.z +
+    c.half.x + c.half.y + c.half.z,
+  );
+}
+
 function queryCands(buf) {
   const m = QUERY_MARGIN;
   QBOX.min.set(PC.x - PH.x - m, PC.y - PH.y - m, PC.z - PH.z - m);
   QBOX.max.set(PC.x + PH.x + m, PC.y + PH.y + m, PC.z + PH.z + m);
-  if (CTX.bp !== null) return CTX.bp.query(QBOX, buf);
-  buf.length = 0;
-  const list = CTX.list;
-  if (list === null) return buf;
-  const min = QBOX.min, max = QBOX.max;
+
+  let list;
+  if (CTX.bp !== null) {
+    list = CTX.bp.query(QBOX, buf);
+  } else {
+    buf.length = 0;
+    list = buf;
+    const src = CTX.list;
+    if (src === null) return buf;
+    const min = QBOX.min, max = QBOX.max;
+    for (let i = 0; i < src.length; i++) {
+      const c = src[i];
+      if (!c || c.active === false) continue;
+      const b = c.aabb;
+      if (!b) continue;
+      if (b.max.x < min.x || b.min.x > max.x) continue;
+      if (b.max.y < min.y || b.min.y > max.y) continue;
+      if (b.max.z < min.z || b.min.z > max.z) continue;
+      buf.push(c);
+    }
+  }
+
+  // Compact out anything the narrow phase cannot safely reason about.
+  let w = 0;
   for (let i = 0; i < list.length; i++) {
     const c = list[i];
-    if (!c || c.active === false) continue;
-    const b = c.aabb;
-    if (!b) continue;
-    if (b.max.x < min.x || b.min.x > max.x) continue;
-    if (b.max.y < min.y || b.min.y > max.y) continue;
-    if (b.max.z < min.z || b.min.z > max.z) continue;
-    buf.push(c);
+    if (!usable(c)) continue;
+    list[w++] = c;
   }
-  return buf;
+  list.length = w;
+  return list;
 }
 
 /**

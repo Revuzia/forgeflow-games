@@ -57,6 +57,12 @@ const SPRINT_RAMP = 0.18;         // seconds run -> sprint
 const SPRINT_FWD_MIN = 0.30;      // forward-ish input required to sprint
 
 const PITCH_LIMIT = 1.5533;       // +/- 89 deg
+// Radians of yaw/pitch per sens-scaled mouse pixel. core/input.js exports the
+// same number; kept local so the controller has no core/input.js import (the
+// same arrangement camera.js uses at camera.js:84). It exists here for ONE
+// reason: the standalone look fallback below reads `input.look`, which is
+// PIXELS, and _applyLook takes RADIANS.
+const RAD_PER_PX = 0.0022;
 const EYE_LAMBDA = 16;            // eye-height smoothing
 const STAND_GUARD = 0.10;         // re-crouch window if we stood into a ceiling
 
@@ -68,8 +74,10 @@ const CLEAR_INSET_Y = 0.03;
 // ---------------------------------------------------------------------------
 //  Module scratch — NOTHING in the sim path allocates.
 // ---------------------------------------------------------------------------
-const _carry = new THREE.Vector3();
+const _carry = new THREE.Vector3();      // platform velocity + belt push (launch)
 const _carryPrev = new THREE.Vector3();
+const _push = new THREE.Vector3();       // belt push ONLY (integrated into pos)
+const _pushPrev = new THREE.Vector3();
 const _launchV = new THREE.Vector3();
 const _wallN = new THREE.Vector3();
 const _lastWallN = new THREE.Vector3();
@@ -239,7 +247,10 @@ export class Player {
     this._scrapeT = 0;
     this._standT = 0;
     this._stepDist = 0;
-    this._extLookT = 0;
+    /* True once anything drives look through addLook(). See update()'s look
+       block: this is a LATCH, not a lease — "the camera has not called in a
+       while" is not evidence that there is no camera. */
+    this._lookDriven = false;
 
     this._wallRef = null;
     this._lastWallJumpRef = null;
@@ -257,7 +268,13 @@ export class Player {
     this._eyePos = new THREE.Vector3();
 
     // ---- integration switches other modules may flip ---------------------
-    /** Set false if collide.js already translates the player by platformVel. */
+    /**
+     * Gates the controller's own POSITION carry: the conveyor-belt push while
+     * grounded, and the 70%/0.25 s launch after leaving a mover or a belt.
+     * It does NOT gate the moving-platform ride — collide.js owns that
+     * (carryAndPush), and re-applying it here carried the player at 2x deck
+     * speed. Set false only for a collision layer that carries nothing.
+     */
     this.applyPlatformCarry = true;
     /** Set false if the Game wires all audio off `events` instead. */
     this.autoAudio = true;
@@ -375,6 +392,7 @@ export class Player {
     this._wind.set(0, 0, 0);
     this._impulse.set(0, 0, 0);
     _carryPrev.set(0, 0, 0);
+    _pushPrev.set(0, 0, 0);
     _launchV.set(0, 0, 0);
 
     this.dead = false;
@@ -446,6 +464,7 @@ export class Player {
     this._wind.set(0, 0, 0);
     this._impulse.set(0, 0, 0);
     _carryPrev.set(0, 0, 0);
+    _pushPrev.set(0, 0, 0);
     _launchV.set(0, 0, 0);
     this._launchT = 0;
     this.grounded = false;
@@ -485,7 +504,9 @@ export class Player {
   //  Look — the player owns yaw/pitch; FPCamera drives it through addLook().
   // -------------------------------------------------------------------------
   addLook(dx, dy) {
-    this._extLookT = 0.5;
+    /* Latched for the rest of the session: a camera owns look, so update()'s
+       standalone fallback must never run again. */
+    this._lookDriven = true;
     if (this.dead) return;
     this._applyLook(dx, dy);
   }
@@ -568,11 +589,49 @@ export class Player {
     const active = !!inp && !inp.suspended && !this.dead;
 
     // --- look ------------------------------------------------------------
-    if (this._extLookT > 0) this._extLookT -= dt;
-    if (active && this.consumeLook && this._extLookT <= 0 && inp.look) {
-      const lx = inp.look.dx || 0;
-      const ly = inp.look.dy || 0;
-      if (lx !== 0 || ly !== 0) this._applyLook(lx, ly);
+    // STANDALONE FALLBACK ONLY. It exists so a Player wired up without an
+    // FPCamera still turns. Two things were wrong with it and both reached
+    // the player as the same symptom — "looking around after jumping snaps
+    // the camera straight up":
+    //
+    //  1. UNITS. `input.look` is sens-scaled PIXELS (core/input.js:165);
+    //     _applyLook takes RADIANS. An 18 px flick therefore turned the view
+    //     18 rad — 1030 deg — and an 11 px vertical flick drove pitch
+    //     straight into the +/-89 deg clamp. Measured: one trusted mousemove
+    //     of movementX=18 movementY=11 produced dyaw = -1033.59 deg and
+    //     pitch = -89.00 deg in a single frame.
+    //
+    //  2. WHEN. The old guard was a 0.5 s lease refreshed on every addLook,
+    //     so "the camera has not driven look for half a second" re-armed the
+    //     fallback. Half a second with a still mouse is ORDINARY play: you
+    //     line the jump up, you jump, you land. The next mouse movement then
+    //     got applied twice — once here in pixels-as-radians, and once again
+    //     correctly by FPCamera later in the same frame, because
+    //     player.update() precedes camera.update() (game.js:1854, 1857).
+    //     Presence of a camera is a LATCH, not a timeout: `_lookDriven` is
+    //     set by addLook and never cleared, and `fpCamera` is the handle an
+    //     FPCamera publishes on the player at construction (camera.js:228).
+    const camDrivesLook = this._lookDriven || !!this.fpCamera;
+    if (active && this.consumeLook && !camDrivesLook) {
+      // Prefer the radian mirror; otherwise convert pixels exactly the way
+      // the camera would have.
+      const rad = inp.lookRad;
+      let lx = 0, ly = 0;
+      if (rad && ((rad.dx || 0) !== 0 || (rad.dy || 0) !== 0)) {
+        lx = rad.dx || 0;
+        ly = rad.dy || 0;
+      } else if (inp.look) {
+        lx = (inp.look.dx || 0) * RAD_PER_PX;
+        ly = (inp.look.dy || 0) * RAD_PER_PX;
+      }
+      if (lx !== 0 || ly !== 0) {
+        this._applyLook(lx, ly);
+        // Consume every mirror so this delta can never be applied a second
+        // time by a reader further down the frame.
+        if (inp.look) { inp.look.dx = 0; inp.look.dy = 0; }
+        if (inp.lookRad) { inp.lookRad.dx = 0; inp.lookRad.dy = 0; }
+        if (inp.lookRaw) { inp.lookRaw.dx = 0; inp.lookRaw.dy = 0; }
+      }
     }
 
     // --- latch per-frame input edges into the substep sim -----------------
@@ -813,14 +872,25 @@ export class Player {
     // on the continuous parabola, so jumpV 12.6 really does apex at 2.089 m.
     this._gravity(dt * 0.5);
 
-    // ---- 13. platform carry (POSITION, not velocity) ---------------------
-    // Riding a mover must not silently pump your velocity, so the carry is
-    // applied to the position and resolved by the collision sweep.
+    // ---- 13. surface push (POSITION, not velocity) -----------------------
+    // A belt must not silently pump your velocity, so the push is applied to
+    // the position and resolved by the collision sweep.
+    //
+    // ONLY the belt. The moving-platform RIDE belongs to collide.js:
+    // carryAndPush() already translates the player by the platform velocity
+    // before the sweep, and its header says so in as many words — "platformVel
+    // is REPORTING ONLY ... do NOT integrate it into the position again".
+    // Adding _carryPrev here did exactly that, and every mover carried the
+    // player at TWICE its deck speed: measured 10.05 m/s of travel while
+    // standing still on a 5.00 m/s deck (2.01x), against 5.06 m/s with this
+    // block disabled. At 2x you slide off the leading edge of a 6 m deck in
+    // under a second, which is what "the moving platform throws me off" is.
+    // Belts are still ours: collide.js reports 'conveyor' as a surface but
+    // never moves anyone along one.
     if (this.applyPlatformCarry) {
       if (this.grounded) {
-        pos.x += _carryPrev.x * dt;
-        pos.y += _carryPrev.y * dt;
-        pos.z += _carryPrev.z * dt;
+        pos.x += _pushPrev.x * dt;
+        pos.z += _pushPrev.z * dt;
       } else if (this._launchT > 0) {
         // ...EXCEPT that leaving a mover keeps 70% of its horizontal velocity
         // for 0.25 s, which is how an obby lets a platform launch you.
@@ -1092,7 +1162,14 @@ export class Player {
     }
 
     // ---- carry reference velocity for the NEXT substep -------------------
+    // TWO vectors, because they have two different jobs:
+    //   _push  — the belt only. This is the sole thing step 13 integrates into
+    //            position; the mover ride is collide.js's (see step 13).
+    //   _carry — belt + platform velocity. This is what a jump INHERITS when
+    //            you leave the surface (70% for 0.25 s), so stepping off a
+    //            mover still throws you and stepping off a belt still carries.
     _carry.set(0, 0, 0);
+    _push.set(0, 0, 0);
     if (this.grounded) {
       const pv = res && res.platformVel;
       if (pv) _carry.set(pv.x || 0, pv.y || 0, pv.z || 0);
@@ -1106,12 +1183,14 @@ export class Player {
           const max = T.conveyorMax;
           if (power > max) power = max;
           else if (power < -max) power = -max;
-          _carry.x += _dir.x * power;
-          _carry.z += _dir.z * power;
+          _push.x += _dir.x * power;
+          _push.z += _dir.z * power;
         }
       }
+      _carry.add(_push);
     }
     _carryPrev.copy(_carry);
+    _pushPrev.copy(_push);
   }
 
   /**

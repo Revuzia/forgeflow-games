@@ -26,6 +26,33 @@ const IS_BROWSER = typeof window !== 'undefined' && typeof document !== 'undefin
 export const RAD_PER_PX = 0.0022;
 
 /**
+ * Largest movementX/movementY a SINGLE mousemove event is allowed to carry.
+ *
+ * Mice report at 125-1000 Hz, so even a violent flick — 10 cm at 1600 DPI in
+ * 100 ms, about 6300 counts — arrives as 6 px per event at 1000 Hz and 50 px
+ * per event at 125 Hz. Nothing a hand does puts 150 px in one event. What
+ * does: a driver glitch, and the repositioning delta a browser can emit on
+ * the event right after pointer lock engages.
+ *
+ * This was 900, which at RAD_PER_PX is 1.98 rad — 113 deg of pitch from ONE
+ * event, enough to slam the view into the +/-89 deg clamp. Measured exactly
+ * that: _harness/lookcheck.py's synthetic movementY=-900 produced a single
+ * frame of +113.45 deg. 150 px is 19 deg — a brisk flick, not a teleport.
+ */
+const MAX_EVENT_PX = 150;
+
+/**
+ * Ceiling on the look pixels one FRAME may accumulate, expressed as a rate so
+ * it cannot punish a long frame. 7200 px/s is ~907 deg/s at RAD_PER_PX and
+ * sens 1 — far past any sustained human turn, but it caps a burst of maxed-out
+ * events (20 events x 150 px in one frame is still 3000 px) at something the
+ * player can read. Applied to RAW accumulated pixels, before sensitivity: the
+ * bound is on what the hardware claimed to have done, not on the multiplier
+ * the player chose.
+ */
+const MAX_LOOK_PX_PER_SEC = 7200;
+
+/**
  * How long a pause-bound keypress keeps explaining a pointer-lock loss.
  * Chrome drops the lock asynchronously — measured at 20-40 ms after the ESC
  * keydown on a healthy frame, and well past 250 ms on a loaded one — so the
@@ -193,7 +220,14 @@ export class Input {
     this.touchActive = false;
     this.gamepadConnected = false;
     this.gamepadId = '';
+    /**
+     * False until a look stick has been seen to MOVE. Gamepad look stays off
+     * until then — see the phantom-device guard in _pollGamepad.
+     */
+    this.padLookArmed = false;
     this._padIndex = -1;
+    this._padLookRestX = NaN;   // first sampled axes[2]/[3], the device's rest
+    this._padLookRestY = NaN;
 
     /* ---- internals ---- */
     this._acts = Object.create(null);
@@ -552,9 +586,12 @@ export class Input {
       let dx = e.movementX, dy = e.movementY;
       if (!isFiniteNum(dx)) dx = 0;
       if (!isFiniteNum(dy)) dy = 0;
-      /* A hardware glitch can emit a huge spike on the frame lock engages. */
-      if (dx > 900) dx = 900; else if (dx < -900) dx = -900;
-      if (dy > 900) dy = 900; else if (dy < -900) dy = -900;
+      /* A hardware glitch, or the repositioning delta a browser can emit on
+         the first event after pointer lock engages, arrives as one enormous
+         movementX/Y. See MAX_EVENT_PX: at the old 900 px bound a single such
+         event was worth 113 deg and pinned the camera at the pitch clamp. */
+      if (dx > MAX_EVENT_PX) dx = MAX_EVENT_PX; else if (dx < -MAX_EVENT_PX) dx = -MAX_EVENT_PX;
+      if (dy > MAX_EVENT_PX) dy = MAX_EVENT_PX; else if (dy < -MAX_EVENT_PX) dy = -MAX_EVENT_PX;
       this._mouseDX += dx;
       this._mouseDY += dy;
     };
@@ -614,6 +651,7 @@ export class Input {
 
     this._onPadConnect = (e) => {
       this.gamepadConnected = true;
+      this._resetPadLookArming();     // a fresh device has not moved a stick yet
       this._padIndex = e.gamepad ? e.gamepad.index : -1;
       this.gamepadId = e.gamepad ? (e.gamepad.id || 'gamepad') : 'gamepad';
       this._emit('gamepad', true);
@@ -627,7 +665,7 @@ export class Input {
         this._padPrev.fill(0);
         this._padCur.fill(0);
         this._padMoveX = 0; this._padMoveY = 0;
-        this._padLookX = 0; this._padLookY = 0;
+        this._resetPadLookArming();
         for (let i = 0; i < ACTIONS.length; i++) this._acts[ACTIONS[i]].pad = false;
         this._emit('gamepad', false);
       }
@@ -732,6 +770,15 @@ export class Input {
   /* ======================================================================
    * Gamepad
    * ====================================================================*/
+  /** Forget which device we were watching: a new pad must earn look again. */
+  _resetPadLookArming() {
+    this.padLookArmed = false;
+    this._padLookRestX = NaN;
+    this._padLookRestY = NaN;
+    this._padLookX = 0;
+    this._padLookY = 0;
+  }
+
   _pollGamepad(dt) {
     this._padMoveX = 0; this._padMoveY = 0;
     this._padLookX = 0; this._padLookY = 0;
@@ -747,13 +794,18 @@ export class Input {
     } else {
       for (let i = 0; i < pads.length; i++) {
         const p = pads[i];
-        if (p && p.connected) { pad = p; this._padIndex = i; this.gamepadId = p.id || 'gamepad'; break; }
+        if (p && p.connected) {
+          if (i !== this._padIndex) this._resetPadLookArming();   // different device
+          pad = p; this._padIndex = i; this.gamepadId = p.id || 'gamepad';
+          break;
+        }
       }
     }
     if (!pad || !pad.connected) {
       if (this.gamepadConnected) {
         this.gamepadConnected = false;
         this._padPrev.fill(0); this._padCur.fill(0);
+        this._resetPadLookArming();
         for (let i = 0; i < ACTIONS.length; i++) this._acts[ACTIONS[i]].pad = false;
       }
       return;
@@ -776,11 +828,40 @@ export class Input {
       }
     }
     if (ax && ax.length >= 4) {
-      const rx = curveAxis(isFiniteNum(ax[2]) ? ax[2] : 0, STICK_DEAD_LOOK, LOOK_CURVE);
-      const ry = curveAxis(isFiniteNum(ax[3]) ? ax[3] : 0, STICK_DEAD_LOOK, LOOK_CURVE);
-      const step = PAD_LOOK_PX_PER_SEC * (dt > 0.05 ? 0.05 : dt);
-      this._padLookX = rx * step;
-      this._padLookY = ry * step;
+      const rawX = isFiniteNum(ax[2]) ? ax[2] : 0;
+      const rawY = isFiniteNum(ax[3]) ? ax[3] : 0;
+
+      /* PHANTOM-DEVICE GUARD. Plenty of hardware that is not a controller
+         enumerates as one — keyboards, mice, wheels, flight sticks — and an
+         uncentred trigger reported as axes[3] rests at -1 rather than 0.
+         Feeding that into look every frame walks the pitch to the +/-89 deg
+         clamp with the player's hands nowhere near a pad: measured at +67.2
+         deg of pitch in 1.5 s of no input at all (_harness/lookcheck.py's
+         phantom-pad phase), ending pinned at the clamp.
+
+         Magnitude cannot tell a parked axis from a held stick — both read
+         past the deadzone. MOVEMENT can: a real stick travels, a phantom axis
+         is a constant. So remember where the axes were first seen and arm pad
+         look only once one of them has travelled a deadzone away from that
+         rest. A player who is already holding the stick arms it the moment
+         they let go; a device that never moves never arms. */
+      if (!(this._padLookRestX === this._padLookRestX)) {   // NaN test: first sample
+        this._padLookRestX = rawX;
+        this._padLookRestY = rawY;
+      } else if (!this.padLookArmed) {
+        if (Math.abs(rawX - this._padLookRestX) > STICK_DEAD_LOOK ||
+            Math.abs(rawY - this._padLookRestY) > STICK_DEAD_LOOK) {
+          this.padLookArmed = true;
+        }
+      }
+
+      if (this.padLookArmed) {
+        const rx = curveAxis(rawX, STICK_DEAD_LOOK, LOOK_CURVE);
+        const ry = curveAxis(rawY, STICK_DEAD_LOOK, LOOK_CURVE);
+        const step = PAD_LOOK_PX_PER_SEC * (dt > 0.05 ? 0.05 : dt);
+        this._padLookX = rx * step;
+        this._padLookY = ry * step;
+      }
     }
 
     /* --- buttons --- */
@@ -1087,6 +1168,13 @@ export class Input {
     let ly = this._mouseDY + this._padLookY;
     this._mouseDX = 0; this._mouseDY = 0;
     if (this.suspended || (!this.locked && !this.touchActive)) { lx = 0; ly = 0; }
+    /* Per-FRAME ceiling on raw look pixels — the backstop behind the
+       per-event clamp, for a burst of many maxed events inside one frame.
+       Scaled by the frame's own dt so a long frame is not punished, and set
+       high enough (MAX_LOOK_PX_PER_SEC) that no human turn reaches it. */
+    const lookCap = MAX_LOOK_PX_PER_SEC * d;
+    if (lx > lookCap) lx = lookCap; else if (lx < -lookCap) lx = -lookCap;
+    if (ly > lookCap) ly = lookCap; else if (ly < -lookCap) ly = -lookCap;
     const sens = this.sensitivity;
     const invert = this.invertY ? -1 : 1;
     this.look.dx = isFiniteNum(lx) ? lx * sens : 0;
