@@ -581,9 +581,17 @@ export default {
     { kind: 'deco', kindOf: 'cloud', p: [156, -24, 0], s: [22, 3, 22], count: 14, spread: [320, 12, 100], seed: 8080, scale: 1.9, tint: 0x1b3c5e },
 
     // Path lights, one per beat, so the route reads as a line from a distance.
+    // A LIGHT SITE IS GEOMETRY: stage.js _buildLight gives every site a physical
+    // bulb mesh + a 2.2 m additive halo. cp3's deck top is 2.7, so a standing
+    // eye is at ~4.3 — the old y 4.4 parked that bulb 0.4 m IN FRONT OF THE FACE
+    // of anyone at the checkpoint, and the blown bulb+halo rendered 7.5 % pure
+    // white at the cp3 station (whitefrac 2026-09-01; hiding that one merged
+    // glow mesh took the frame to 0.04 %). 6.9 hangs it 2.6 m over the eye —
+    // above a jump apex too (eye peaks ~6.4) — while it still reads as the
+    // beat's route landmark from the BEAT 6 movers 15-40 m out.
     { kind: 'light', p: [46, 3.4, 0], color: NEON, intensity: 6, distance: 22 },
     { kind: 'light', p: [114, 4.2, 0], color: NEON, intensity: 7, distance: 22 },
-    { kind: 'light', p: [154, 4.4, 0], color: NEON, intensity: 7, distance: 22 },
+    { kind: 'light', p: [154, 6.9, 0], color: NEON, intensity: 7, distance: 22 },
     { kind: 'light', p: [226, 5.6, 0], color: NEON, intensity: 8, distance: 24 },
     { kind: 'light', p: [255, 9.8, 0], color: AMBER, intensity: 9, distance: 26 },
     { kind: 'light', p: [277, 9.8, 0], color: NEON, intensity: 8, distance: 24 },

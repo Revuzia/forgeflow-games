@@ -574,12 +574,25 @@ export default {
     /* |z| >= 1.82 and there is no such place. Three timers, one lane, eleven metres. */
     /* ============================================================================ */
 
-    // mat 'obsidian' (round-3 readability): from CP6 this strip is the measured
-    // next walked top against the mid-purple bridge-zone backdrop (lum ~0.16) —
-    // the round-3 pale metal read (173,183,216) vs (104,109,153) = 2.49:1, stuck
-    // in the mid-vs-mid trap. Dark violet obsidian silhouettes against that
-    // band; the cyan stripe carries the near-field read. contrastcheck neon-3 c6.
-    { kind: 'platform', p: [239.0, 4.0, 0], s: [10.8, 1, 3.4], mat: 'obsidian', glow: CYAN }, // flush with CP6's deck, top 4.50
+    // mat 'panel' (2026-09-01, contrastcheck neon-3 c6): the round-3 note above
+    // this line claimed dark obsidian "silhouettes" against the mid-purple
+    // backdrop — it does not, and never did: the CROSSFIRE mood light two
+    // metres over the deck (HOT, intensity 12, flicker) pumps the obsidian top
+    // to a MID (156,124,170), which the tool measured at 1.43:1 vs the
+    // (109,116,161) fogband — worse than the pale metal (2.49:1) it replaced.
+    // The row previously read as accepted only when a swinging blade happened
+    // to cover the strip at capture ("hidden behind decor props") — solo
+    // contrastcheck runs of this stage park a blade over the strip at the
+    // shutter and print n/a; the full-battery arrival clock is what measured
+    // it. Against a ~0.18-luminance haze band the dark side of the pair needs
+    // a top under 0.025 luminance — unreachable two metres under a hot light —
+    // so the fix goes the BRIGHT way: 'panel' is the neon world's own
+    // walk-here identity, and its pale lit top clears the band from above
+    // (probe-measured, blade clear of the strip: top ~(247,233,240), L 0.75-
+    // 0.86, vs the tool's fogband (109,116,161) L 0.175 => ~3.8:1; not yet a
+    // tool-printed row because the measured roll needs the full-battery
+    // clock). Gate evidence: contrastcheck neon-3 c6.
+    { kind: 'platform', p: [239.0, 4.0, 0], s: [10.8, 1, 3.4], mat: 'panel', glow: CYAN }, // flush with CP6's deck, top 4.50
 
     { kind: 'pendulum', p: [236.6, 8.75, 0], len: 3.2, amp: 1.05, period: 3.2, phase: 0, blade: { w: 3.0, h: 1.5, d: 0.28 }, axis: [0, 0, 1] },
     { kind: 'pendulum', p: [242.0, 8.75, 0], len: 3.2, amp: 1.05, period: 2.6, phase: Math.PI * 0.5, blade: { w: 3.0, h: 1.5, d: 0.28 }, axis: [0, 0, 1] }, // a quarter-turn out of step, in RADIANS

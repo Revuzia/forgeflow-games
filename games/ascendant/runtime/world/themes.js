@@ -287,8 +287,25 @@ export const THEMES = {
      * threshold the WHOLE floor is bright-pass input and the frame floods white
      * (2026-08-31 forensics: bloom off took the frame from 60.8 % to 1.2 % pure
      * white). Threshold above the fogged-crust plateau, moderate strength: only
-     * the vein cores, rims and bulbs bloom, which is the industrial look. */
-    bloom: { strength: 0.55, radius: 0.62, threshold: 0.85 },
+     * the vein cores, rims and bulbs bloom, which is the industrial look.
+     *
+     * Threshold 2.8, not 0.85 (2026-09-01, the foundry-2 c10 glare cap). 0.85
+     * did not actually sit above the plateau: at a station's grazing sightline
+     * across the big sea the fogged plateau lands just OVER 0.85 across half
+     * the frame, all of it bright-pass input, and the mip chain integrated it
+     * into an additive veil that a swapped unlit-black tile still read through
+     * (contrastcheck's glare-floor test capped the station at 2.3:1 — no
+     * walked albedo could pass). The bright-pass input CLAMP is no defence
+     * against that veil (measured: clamp 1.2 left it intact — the feed is a
+     * huge area barely over threshold, not a few hot pixels; only strength or
+     * threshold moved it). 2.8 excludes the plateau and keeps the vein cores,
+     * rims and hot emissives blooming — the look this comment always promised.
+     * Tool-printed before/after at foundry-2 c10 (rubber tile, 8.4 m): veiled
+     * deck vs sea was FAIL/glare-capped; now deck (46,28,19) vs sea
+     * (202,60,7) = 3.22:1 [side vanish-solid]. At 2.4 the residual veil still
+     * held the same tile at (63,38,23) = 2.83:1 — under the floor — which is
+     * why the value is 2.8 and not the first number that looked acceptable. */
+    bloom: { strength: 0.55, radius: 0.62, threshold: 2.8 },
 
     palette: {
       safe: 0x8b94a4, safeEdge: 0xa8e6ff,
