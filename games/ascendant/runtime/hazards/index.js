@@ -247,7 +247,7 @@ export class HazardDefError extends Error {
  */
 const REQUIRED = {
   mover:      { p: 'vec3', s: 'vec3', motion: 'object' },
-  vanish:     { p: 'vec3', s: 'vec3', cycle: 'object' },
+  vanish:     { p: 'vec3', s: 'vec3' },   // `cycle` is mode-dependent — see SEMANTIC.vanish
   rotor:      { p: 'vec3', period: 'number' },
   pendulum:   { p: 'vec3', len: 'number', amp: 'number', period: 'number' },
   crusher:    { p: 'vec3', s: 'vec3', travel: 'number', period: 'number' },
@@ -301,6 +301,14 @@ const SEMANTIC = {
     if (def.mode === 'retract' && def.cycle !== undefined && !isObj(def.cycle)) {
       fail("'cycle' must be an object {on, off, warn, phase}");
     }
+  },
+  vanish(def, fail) {
+    const mode = String(def.mode || 'cycle').toLowerCase();
+    if (!['cycle', 'flicker', 'crumble'].includes(mode)) {
+      fail("'mode' must be 'cycle', 'flicker' or 'crumble'");
+    }
+    if (mode === 'crumble') return; // crumble ignores `cycle` — crackDelay/chunkLife drive it (vanish.js)
+    if (!isObj(def.cycle)) fail(`mode '${mode}' requires 'cycle' as an object {on, off, warn, phase}`);
   },
   conveyor(def, fail) {
     if (isVec(def.dir) && vecLen(def.dir) < 1e-6) fail("'dir' has zero length");
