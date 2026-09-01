@@ -594,23 +594,26 @@ export class Player {
     // the player as the same symptom — "looking around after jumping snaps
     // the camera straight up":
     //
-    //  1. UNITS. `input.look` is sens-scaled PIXELS (core/input.js:165);
-    //     _applyLook takes RADIANS. An 18 px flick therefore turned the view
-    //     18 rad — 1030 deg — and an 11 px vertical flick drove pitch
-    //     straight into the +/-89 deg clamp. Measured: one trusted mousemove
-    //     of movementX=18 movementY=11 produced dyaw = -1033.59 deg and
-    //     pitch = -89.00 deg in a single frame.
+    //  1. UNITS. `input.look` is sens-scaled PIXELS (core/input.js, `look`
+    //     in the Input constructor); _applyLook takes RADIANS. An 18 px flick
+    //     therefore turned the view 18 rad — 1030 deg — and a 10 px vertical
+    //     flick drove pitch straight into the +/-89 deg clamp. Measured by
+    //     _harness/lookcheck.py against the shipped build: one trusted
+    //     mousemove of movementX=18 movementY=10 produced dyaw = -1033.59 deg
+    //     and dpitch = -178.00 deg in a single frame, from THIS call site
+    //     (Player.update -> _applyLook(18, 10)), with FPCamera's correct
+    //     addLook(0.0396, 0.022) landing in the same frame.
     //
     //  2. WHEN. The old guard was a 0.5 s lease refreshed on every addLook,
     //     so "the camera has not driven look for half a second" re-armed the
     //     fallback. Half a second with a still mouse is ORDINARY play: you
     //     line the jump up, you jump, you land. The next mouse movement then
     //     got applied twice — once here in pixels-as-radians, and once again
-    //     correctly by FPCamera later in the same frame, because
-    //     player.update() precedes camera.update() (game.js:1854, 1857).
-    //     Presence of a camera is a LATCH, not a timeout: `_lookDriven` is
-    //     set by addLook and never cleared, and `fpCamera` is the handle an
-    //     FPCamera publishes on the player at construction (camera.js:228).
+    //     correctly by FPCamera later in the same frame, because Game._update
+    //     runs player.update() before camera.update(). Presence of a camera
+    //     is a LATCH, not a timeout: `_lookDriven` is set by addLook and never
+    //     cleared, and `fpCamera` is the handle an FPCamera publishes on the
+    //     player at construction (camera.js, "player.fpCamera = this").
     const camDrivesLook = this._lookDriven || !!this.fpCamera;
     if (active && this.consumeLook && !camDrivesLook) {
       // Prefer the radian mirror; otherwise convert pixels exactly the way

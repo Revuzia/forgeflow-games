@@ -26,31 +26,65 @@ const IS_BROWSER = typeof window !== 'undefined' && typeof document !== 'undefin
 export const RAD_PER_PX = 0.0022;
 
 /**
- * Largest movementX/movementY a SINGLE mousemove event is allowed to carry.
+ * LOOK HYGIENE — the bounds below exist because of one shipped bug and its
+ * family. yaw/pitch have one writer (Player._applyLook) and the look channel
+ * that feeds it had four ways to carry something that was not the player's
+ * hand: a units bug in the controller's standalone fallback (fixed there), a
+ * 900 px per-event clamp that let one glitch event turn the view 113 deg, a
+ * gamepad axis that was read without the stick ever moving, and a touch mode
+ * entered on capability sniffing alone. _harness/lookcheck.py drives every
+ * one of them in production mode.
  *
- * Mice report at 125-1000 Hz, so even a violent flick — 10 cm at 1600 DPI in
- * 100 ms, about 6300 counts — arrives as 6 px per event at 1000 Hz and 50 px
- * per event at 125 Hz. Nothing a hand does puts 150 px in one event. What
- * does: a driver glitch, and the repositioning delta a browser can emit on
- * the event right after pointer lock engages.
- *
- * This was 900, which at RAD_PER_PX is 1.98 rad — 113 deg of pitch from ONE
- * event, enough to slam the view into the +/-89 deg clamp. Measured exactly
- * that: _harness/lookcheck.py's synthetic movementY=-900 produced a single
- * frame of +113.45 deg. 150 px is 19 deg — a brisk flick, not a teleport.
+ * All angular bounds are AFTER sensitivity, in radians, because pixels are
+ * not a physical unit: mice ship from 400 to 25 600 DPI (64x) and the player
+ * tunes `sens` to their own. What is invariant across all of them is the
+ * angle a hand can turn a view through in a given time.
  */
-const MAX_EVENT_PX = 150;
 
 /**
- * Ceiling on the look pixels one FRAME may accumulate, expressed as a rate so
- * it cannot punish a long frame. 7200 px/s is ~907 deg/s at RAD_PER_PX and
- * sens 1 — far past any sustained human turn, but it caps a burst of maxed-out
- * events (20 events x 150 px in one frame is still 3000 px) at something the
- * player can read. Applied to RAW accumulated pixels, before sensitivity: the
- * bound is on what the hardware claimed to have done, not on the multiplier
- * the player chose.
+ * The most ONE mousemove event may turn the view, after sensitivity.
+ *
+ * 0.5 rad is 28.6 deg. A hard 180 deg flick in 100 ms is 14 deg per event on
+ * a 125 Hz mouse and 20 deg per event on a 90 Hz Bluetooth one — the worst
+ * cases, since 1000 Hz mice split the same flick into 1.8 deg events. So no
+ * human event reaches this and it costs nothing; a glitch event (a driver
+ * hiccup, the repositioning delta a browser emits on the event right after
+ * pointer lock engages, a script-dispatched event) is cut from "pinned at the
+ * clamp" to a bounded jolt.
+ *
+ * The previous bound here was 900 px, RAW: 1.98 rad at sens 1, a 113 deg
+ * turn from one event — measured exactly that by lookcheck's spike phase.
  */
-const MAX_LOOK_PX_PER_SEC = 7200;
+const MAX_EVENT_RAD = 0.5;
+
+/**
+ * Ceiling on the look ONE FRAME may deliver, after sensitivity, as a RATE so
+ * a long frame is not punished and a short one is not starved. 42 rad/s is
+ * 2400 deg/s — above the fastest measured human flicks (a 180 deg flick in
+ * 100 ms is 1800 deg/s) — with MAX_EVENT_RAD as the floor so a single
+ * bounded event always fits in a 4 ms frame. This is the backstop behind the
+ * per-event bound for a BURST of many bounded glitch events inside one frame.
+ *
+ * It replaces a 7200 px/s RAW-pixel rate cap that delivered exactly 50% of a
+ * 180 deg/100 ms flick at 60 fps (240 px in, 120 px out) and at 240 fps —
+ * i.e. it halved every fast turn a real player made. Measured in Node against
+ * that build; the flick phase of lookcheck now guards against it.
+ */
+const MAX_LOOK_RAD_PER_SEC = 42;
+
+/**
+ * Mousemove events watched after each pointer-lock acquisition.
+ *
+ * The FIRST event after lock is always dropped: Chromium computes its
+ * movementX/Y against a cursor position from before the lock, so it can carry
+ * the whole screen-space distance the cursor was warped by. Observed under a
+ * real lock: the harness asked for a -600 px move and the first event read
+ * (-923, -105) — the extra 323/105 px is the warp. The next events of the
+ * window are dropped only if they are implausible (past MAX_EVENT_RAD), so a
+ * player who clicks and immediately flicks loses at most one event's worth
+ * of motion — 1 to 8 ms of it.
+ */
+const LOCK_SETTLE_EVENTS = 3;
 
 /**
  * How long a pause-bound keypress keeps explaining a pointer-lock loss.
@@ -216,7 +250,18 @@ export class Input {
     this.touchLookSens = 1.35;
 
     /* ---- device state ---- */
+    /**
+     * Touch mode: the on-screen controls and the touch look zone. True from
+     * the start ONLY when the primary pointer is coarse (a phone, a tablet);
+     * otherwise it arms on the first real touch event (_armTouch). It used to
+     * be decided by capability sniffing — `ontouchstart` + maxTouchPoints —
+     * which is true on every touchscreen laptop, so a player with a mouse got
+     * the touch overlay and, since _onPointerDownDom bailed on hasTouch, no
+     * click-to-lock: measured by lookcheck's laptop probe, "a real mouse
+     * click did NOT take pointer lock".
+     */
     this.hasTouch = IS_BROWSER && this._detectCoarsePointer();
+    this.touchSeen = false;
     this.touchActive = false;
     this.gamepadConnected = false;
     this.gamepadId = '';
@@ -244,6 +289,10 @@ export class Input {
     this._downCodes = Object.create(null);
     this._mouseDX = 0;
     this._mouseDY = 0;
+    this._lockSettle = 0;          // mousemove events still inside the post-lock window
+    this.lockCount = 0;            // pointer-lock acquisitions this session
+    /** Look events refused or bounded, for diagnostics — lookcheck reads these. */
+    this.lookDrops = { untrusted: 0, settle: 0, clamped: 0, frame: 0 };
     this._padLookX = 0;
     this._padLookY = 0;
     this._padMoveX = 0;
@@ -520,11 +569,18 @@ export class Input {
   /* ======================================================================
    * DOM wiring
    * ====================================================================*/
+  /**
+   * Is the PRIMARY pointer coarse — a phone or a tablet? Only `(pointer:
+   * coarse)` answers that. `ontouchstart` / maxTouchPoints say the machine
+   * CAN take touch, which every touchscreen laptop can, and is no reason to
+   * take the mouse away from someone using one. See _armTouch for how a
+   * touch-capable machine enters touch mode: by being touched.
+   */
   _detectCoarsePointer() {
     try {
       if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) return true;
     } catch (e) {}
-    return ('ontouchstart' in window) && (navigator.maxTouchPoints || 0) > 0;
+    return false;
   }
 
   _attach() {
@@ -582,22 +638,45 @@ export class Input {
     };
 
     this._onMouseMove = (e) => {
+      /* Only a hand may look. A script-dispatched mousemove (an extension, a
+         page script) is not one — and it is the one kind of event that can
+         carry any movementX/Y it likes: lookcheck's untrusted movementY=-900
+         turned the view 113 deg under the old code. */
+      if (e.isTrusted === false) { this.lookDrops.untrusted++; return; }
       if (!this.locked || this.suspended) return;
       let dx = e.movementX, dy = e.movementY;
       if (!isFiniteNum(dx)) dx = 0;
       if (!isFiniteNum(dy)) dy = 0;
-      /* A hardware glitch, or the repositioning delta a browser can emit on
-         the first event after pointer lock engages, arrives as one enormous
-         movementX/Y. See MAX_EVENT_PX: at the old 900 px bound a single such
-         event was worth 113 deg and pinned the camera at the pitch clamp. */
-      if (dx > MAX_EVENT_PX) dx = MAX_EVENT_PX; else if (dx < -MAX_EVENT_PX) dx = -MAX_EVENT_PX;
-      if (dy > MAX_EVENT_PX) dy = MAX_EVENT_PX; else if (dy < -MAX_EVENT_PX) dy = -MAX_EVENT_PX;
+
+      /* Per-event bound, in pixels equivalent to MAX_EVENT_RAD at the current
+         sensitivity (sens is clamped to [0.05, 6], so this is finite). */
+      const capPx = MAX_EVENT_RAD / (RAD_PER_PX * this.sensitivity);
+      const implausible = dx > capPx || dx < -capPx || dy > capPx || dy < -capPx;
+
+      /* Post-lock settle window — see LOCK_SETTLE_EVENTS. */
+      if (this._lockSettle > 0) {
+        const first = this._lockSettle === LOCK_SETTLE_EVENTS;
+        this._lockSettle--;
+        if (first || implausible) { this.lookDrops.settle++; return; }
+      }
+
+      if (implausible) {
+        this.lookDrops.clamped++;
+        if (dx > capPx) dx = capPx; else if (dx < -capPx) dx = -capPx;
+        if (dy > capPx) dy = capPx; else if (dy < -capPx) dy = -capPx;
+      }
       this._mouseDX += dx;
       this._mouseDY += dy;
     };
 
     this._onPointerDownDom = (e) => {
-      if (this.hasTouch) return;
+      /* A touch never asks for pointer lock (the touch UI owns "playing" on a
+         touch device), and on a coarse-pointer device only a real mouse may.
+         Decided per EVENT by pointerType, not by hasTouch, so a mouse keeps
+         working on a machine that has also been touched. */
+      const pt = e && e.pointerType;
+      if (pt === 'touch') return;
+      if (this.hasTouch && pt !== 'mouse') return;
       if (this.suspended || !this.autoLock) return;
       if (!this.locked) this.requestLock();
     };
@@ -609,6 +688,8 @@ export class Input {
       this.locked = now;
       if (now) {
         this._mouseDX = 0; this._mouseDY = 0;
+        this._lockSettle = LOCK_SETTLE_EVENTS;
+        this.lockCount++;
         this._emit('lock');
       } else {
         this._releaseAllKeys();
@@ -671,6 +752,9 @@ export class Input {
       }
     };
 
+    /* Touch mode arms on the first touch actually SEEN — see hasTouch. */
+    this._onTouchSeen = () => { this._armTouch(); };
+
     window.addEventListener('keydown', this._onKeyDown, false);
     window.addEventListener('keyup', this._onKeyUp, false);
     window.addEventListener('mousedown', this._onMouseDown, false);
@@ -682,6 +766,7 @@ export class Input {
     document.addEventListener('visibilitychange', this._onVisibility, false);
     window.addEventListener('gamepadconnected', this._onPadConnect, false);
     window.addEventListener('gamepaddisconnected', this._onPadDisconnect, false);
+    window.addEventListener('touchstart', this._onTouchSeen, { capture: true, passive: true });
     if (dom && dom.addEventListener) dom.addEventListener('pointerdown', this._onPointerDownDom, false);
   }
 
@@ -699,6 +784,7 @@ export class Input {
     document.removeEventListener('visibilitychange', this._onVisibility, false);
     window.removeEventListener('gamepadconnected', this._onPadConnect, false);
     window.removeEventListener('gamepaddisconnected', this._onPadDisconnect, false);
+    window.removeEventListener('touchstart', this._onTouchSeen, { capture: true });
     if (this.dom && this.dom.removeEventListener) this.dom.removeEventListener('pointerdown', this._onPointerDownDom, false);
     if (this._touchUI && this._touchUI.parentNode) this._touchUI.parentNode.removeChild(this._touchUI);
     this._touchUI = null;
@@ -917,6 +1003,19 @@ export class Input {
   /* ======================================================================
    * Touch fallback  (left stick + jump/sprint/crouch, right half = look)
    * ====================================================================*/
+  /**
+   * Enter touch mode because a touch was seen. Idempotent. Builds the
+   * on-screen controls on demand; `touchSeen` records the fact for anyone
+   * who wants to know whether touch mode was sniffed or earned.
+   */
+  _armTouch() {
+    this.touchSeen = true;
+    if (this.hasTouch) return;
+    this.hasTouch = true;
+    this._buildTouchUI();
+    this._emit('touch', true);
+  }
+
   _buildTouchUI() {
     if (!IS_BROWSER || this._touchUI) return;
     const host = document.getElementById('ui') || document.body;
@@ -1028,6 +1127,7 @@ export class Input {
 
     /* ---- right half look drag ---- */
     const onLookStart = (e) => {
+      if (e.isTrusted === false) { this.lookDrops.untrusted++; return; }   // only a finger may look
       if (this.suspended) return;
       e.preventDefault();
       const t = e.changedTouches ? e.changedTouches[0] : e;
@@ -1038,6 +1138,7 @@ export class Input {
       if (!this.locked) { this.locked = true; this._emit('lock'); }
     };
     const onLookMove = (e) => {
+      if (e.isTrusted === false) { this.lookDrops.untrusted++; return; }
       if (this._touchLook.id === -1) return;
       e.preventDefault();
       const list = e.changedTouches;
@@ -1168,15 +1269,21 @@ export class Input {
     let ly = this._mouseDY + this._padLookY;
     this._mouseDX = 0; this._mouseDY = 0;
     if (this.suspended || (!this.locked && !this.touchActive)) { lx = 0; ly = 0; }
-    /* Per-FRAME ceiling on raw look pixels — the backstop behind the
-       per-event clamp, for a burst of many maxed events inside one frame.
-       Scaled by the frame's own dt so a long frame is not punished, and set
-       high enough (MAX_LOOK_PX_PER_SEC) that no human turn reaches it. */
-    const lookCap = MAX_LOOK_PX_PER_SEC * d;
-    if (lx > lookCap) lx = lookCap; else if (lx < -lookCap) lx = -lookCap;
-    if (ly > lookCap) ly = lookCap; else if (ly < -lookCap) ly = -lookCap;
     const sens = this.sensitivity;
     const invert = this.invertY ? -1 : 1;
+    /* Per-FRAME ceiling, in the angle the player will actually see — see
+       MAX_LOOK_RAD_PER_SEC. The backstop behind the per-event bound, for a
+       burst of many bounded events inside one frame. Scaled by the frame's
+       REAL length (not the 50 ms sim clamp above) so a hitch that legitimately
+       accumulated a whole flick still delivers it. */
+    const capDt = isFiniteNum(dt) && dt > 0 ? (dt > 0.25 ? 0.25 : dt) : 0.016;
+    const capRad = MAX_LOOK_RAD_PER_SEC * capDt;
+    const capPx = (capRad > MAX_EVENT_RAD ? capRad : MAX_EVENT_RAD) / (RAD_PER_PX * sens);
+    if (lx > capPx || lx < -capPx || ly > capPx || ly < -capPx) {
+      this.lookDrops.frame++;
+      if (lx > capPx) lx = capPx; else if (lx < -capPx) lx = -capPx;
+      if (ly > capPx) ly = capPx; else if (ly < -capPx) ly = -capPx;
+    }
     this.look.dx = isFiniteNum(lx) ? lx * sens : 0;
     this.look.dy = isFiniteNum(ly) ? ly * sens * invert : 0;
     this.lookRad.dx = this.look.dx * RAD_PER_PX;
