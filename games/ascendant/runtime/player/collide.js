@@ -19,6 +19,11 @@
  *    area then collider id.
  *  - Clean wall slide. X, then Z, then Y, each resolved independently, so
  *    running into a corner slides instead of snagging.
+ *  - A ride that stays put. A moving deck carries the player by the deck's
+ *    own motion: its frame-mean linear velocity (what movers.js publishes as
+ *    linVel — the derivative at t drifts by a*dt^2/2 a frame) and, for a
+ *    spinning deck, an EXACT rotation about its axis (a tangent step creeps
+ *    outward by (w*dt)^2/2 a substep and never comes back). See carryOn().
  *
  * ORDER OF OPERATIONS, PER SUBSTEP
  * --------------------------------
@@ -721,6 +726,64 @@ function wallFeeler() {
  * Moving platforms — carry, push, crush
  * ======================================================================== */
 
+/**
+ * Ride `gc` for `sdt`: translate by its linear velocity and ROTATE about its
+ * spin axis by exactly angVel * sdt.
+ *
+ * Why a rotation and not the tangent step `velocityAt(pos) * sdt`: the tangent
+ * of a circle leaves the circle. A step of (w x r) * dt lengthens |r| by a
+ * factor sqrt(1 + (w dt)^2) — (w dt)^2 / 2 relative — every substep it is
+ * applied, and nothing ever pulls it back. On spire-3's ice carousel (radius
+ * 6 m, period 5 s, w = 1.257 rad/s) that is 5.5e-5 per 1/120 s substep, 3.9 cm
+ * of outward creep every second of simply standing still, straight off the
+ * outer edge: measured +0.418 m of radial creep over two revolutions
+ * (predicted +0.403). A spinning rotor deck creeps the same way. Rotating the
+ * offset from the pivot by the exact angle preserves |r| to floating point, so
+ * the rider stays on the spot they stood on. Reads the same `ref` fields
+ * Collider.velocityAt does (world/collider.js:25-28): a scalar angVel spins
+ * about angAxis (default +Y), a vector angVel is the axis-scaled rate. Nothing
+ * here allocates.
+ */
+function carryOn(gc, pos, sdt) {
+  const ref = gc.ref;
+  if (!ref) return;
+
+  const lin = ref.linVel;
+  if (lin) {
+    pos.x += (Number(lin.x) || 0) * sdt;
+    pos.y += (Number(lin.y) || 0) * sdt;
+    pos.z += (Number(lin.z) || 0) * sdt;
+  }
+
+  const av = ref.angVel;
+  if (av === undefined || av === null) return;
+  let wx = 0, wy = 0, wz = 0;
+  if (typeof av === 'number') {
+    if (av === 0 || !isFinite(av)) return;
+    const axis = ref.angAxis;
+    if (axis) { wx = (axis.x || 0) * av; wy = (axis.y || 0) * av; wz = (axis.z || 0) * av; }
+    else wy = av;
+  } else {
+    wx = Number(av.x) || 0; wy = Number(av.y) || 0; wz = Number(av.z) || 0;
+  }
+  const w = Math.sqrt(wx * wx + wy * wy + wz * wz);
+  if (!(w > 1e-9) || !isFinite(w)) return;
+
+  const theta = w * sdt;
+  const kx = wx / w, ky = wy / w, kz = wz / w;
+  const cc = ref.angCenter || gc.center;
+  const rx = pos.x - cc.x, ry = pos.y - cc.y, rz = pos.z - cc.z;
+  // Rodrigues: r' = r cos(th) + (k x r) sin(th) + k (k . r) (1 - cos(th)).
+  // Its first-order term is (k x r) * th = (w x r) * sdt — the tangent step —
+  // so the sign convention is velocityAt's exactly.
+  const c = Math.cos(theta), s = Math.sin(theta), m = 1 - c;
+  const kd = kx * rx + ky * ry + kz * rz;
+  const cx = ky * rz - kz * ry, cy = kz * rx - kx * rz, cz = kx * ry - ky * rx;
+  pos.x = cc.x + rx * c + cx * s + kx * kd * m;
+  pos.y = cc.y + ry * c + cy * s + ky * kd * m;
+  pos.z = cc.z + rz * c + cz * s + kz * kd * m;
+}
+
 function carryAndPush(sdt) {
   const pos = CTX.pos, r = CTX.res;
 
@@ -728,12 +791,7 @@ function carryAndPush(sdt) {
   if (CTX.grounded) {
     probeDown(CARRY_DIST);
     const gc = PROBE.collider;
-    if (gc !== null && gc.isMoving()) {
-      gc.velocityAt(pos, TMPV);
-      pos.x += TMPV.x * sdt;
-      pos.y += TMPV.y * sdt;
-      pos.z += TMPV.z * sdt;
-    }
+    if (gc !== null && gc.isMoving()) carryOn(gc, pos, sdt);
   }
 
   // --- push: a mover sweeping into the player displaces them, never eats them ---

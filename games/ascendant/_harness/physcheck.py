@@ -57,7 +57,7 @@ FLAGS = ["--ignore-gpu-blocklist", "--use-angle=d3d11", "--disable-gpu-sandbox",
          "--autoplay-policy=no-user-gesture-required"]
 
 SCENARIOS = [
-    "ride_linear", "ride_circle", "mover_launch",
+    "ride_linear", "ride_circle", "ride_real_linear", "ride_real_circle", "mover_launch",
     "conveyor", "conveyor_jump", "ice",
     "step_up", "seams", "snap_on_jump",
     "crouch_ceiling", "wall_jump",
@@ -95,8 +95,9 @@ SETUP_JS = r"""async () => {
   const FACE_PLUS_X = -Math.PI / 2;             // forward = (-sin yaw, 0, -cos yaw)
 
   const PH = {
-    t: 0, movers: [], cols: [], kills: [], meshes: [],
+    t: 0, movers: [], reals: [], cols: [], kills: [], meshes: [],
     BASE, FACE_PLUS_X, TUNE, THREE, Collider, KillVolume, UP,
+    lastFrameDt: 0,
   };
   window.__PHYS = PH;
 
@@ -110,7 +111,8 @@ SETUP_JS = r"""async () => {
       orig(dt, pp);
       const d = (typeof dt === 'number' && isFinite(dt)) ? dt : 0;
       PH.t += d;
-      for (let i = 0; i < PH.movers.length; i++) PH.movers[i].tick(PH.t);
+      PH.lastFrameDt = d;
+      for (let i = 0; i < PH.movers.length; i++) PH.movers[i].tick(PH.t, d);
     };
     G.stage.__physWrapped = true;
   }
@@ -202,15 +204,21 @@ SETUP_JS = r"""async () => {
     G.stage.broadphase.add(col);
     G.stage.broadphase.refresh(col);
 
-    const m = {col, ref, origin, kind: o.kind, o, t0: null};
-    m.tick = (t) => {
+    const m = {col, ref, origin, kind: o.kind, o, t0: null, prev: new THREE.Vector3()};
+    const posAt = (u, out) => {
+      if (o.kind === 'drift') {
+        return out.set(origin.x + o.vel[0] * u, origin.y + o.vel[1] * u, origin.z + o.vel[2] * u);
+      }
+      const w = 2 * Math.PI / o.period, s = Math.sin(w * u);          // pingpong
+      return out.set(origin.x + o.dir[0] * o.amp * s,
+                     origin.y + o.dir[1] * o.amp * s,
+                     origin.z + o.dir[2] * o.amp * s);
+    };
+    m.tick = (t, dt) => {
       if (m.t0 === null) m.t0 = t;
       const u = t - m.t0;
-      if (o.kind === 'drift') {
-        col.center.set(origin.x + o.vel[0] * u, origin.y + o.vel[1] * u, origin.z + o.vel[2] * u);
-        ref.linVel.set(o.vel[0], o.vel[1], o.vel[2]);
-        ref.angVel = 0;
-      } else if (o.kind === 'circle') {
+      const d = (typeof dt === 'number' && dt > 1e-6) ? dt : 0;
+      if (o.kind === 'circle') {
         const w = 2 * Math.PI / o.period;
         const a = w * u;
         // Rotation about +Y by `a` sends (R,0,0) -> (R cos a, 0, -R sin a).
@@ -220,21 +228,110 @@ SETUP_JS = r"""async () => {
         ref.angVel = w;
         ref.angAxis.set(0, 1, 0);
         ref.angCenter.copy(origin);
-      } else {                                        // pingpong
-        const w = 2 * Math.PI / o.period;
-        const s = Math.sin(w * u), c = Math.cos(w * u);
-        col.center.set(origin.x + o.dir[0] * o.amp * s,
-                       origin.y + o.dir[1] * o.amp * s,
-                       origin.z + o.dir[2] * o.amp * s);
-        ref.linVel.set(o.dir[0] * o.amp * w * c, o.dir[1] * o.amp * w * c, o.dir[2] * o.amp * w * c);
+      } else {
+        // The contract movers.js publishes: linVel is the MEAN velocity over
+        // the frame that just elapsed, (pos(t) - pos(t - dt)) / dt, so a carry
+        // of linVel * (this frame's substeps) reproduces the deck's actual
+        // displacement. Publishing the instantaneous velocity at t instead is
+        // a first-order mismatch (a * dt^2 / 2 per frame) against a deck that
+        // moved EXACTLY, and it accumulates to (dt_frame / 2) * delta-v across
+        // every acceleration phase: 0.156 m over one period of this very deck
+        // at 29 fps, measured before movers.js switched to the mean.
+        posAt(u, col.center);
+        if (d > 0) {
+          posAt(u - d, m.prev);
+          ref.linVel.subVectors(col.center, m.prev).multiplyScalar(1 / d);
+        } else if (o.kind === 'drift') {
+          ref.linVel.set(o.vel[0], o.vel[1], o.vel[2]);
+        } else {
+          const w = 2 * Math.PI / o.period, c = Math.cos(w * u);
+          ref.linVel.set(o.dir[0] * o.amp * w * c, o.dir[1] * o.amp * w * c, o.dir[2] * o.amp * w * c);
+        }
         ref.angVel = 0;
       }
       col.update();
       G.stage.broadphase.refresh(col);
     };
-    m.tick(PH.t);
+    m.tick(PH.t, 0);
     PH.movers.push(m);
     return m;
+  };
+
+  /**
+   * A REAL mover: built by the stage's own hazard factory (movers.js, through
+   * stage._buildHazard) and ticked by stage._updateHazards on the stage clock,
+   * exactly like an authored one. The synthetic movers above bypass movers.js
+   * entirely, so only this exercises what the game actually publishes as
+   * linVel / angVel — and a movers.js fix can only be proven here.
+   */
+  PH.addRealMover = (def) => {
+    const st = G.stage;
+    if (typeof st._buildHazard !== 'function' || !Array.isArray(st.hazards)) return null;
+    const n0 = st.hazards.length;
+    st._buildHazard(def, 90000 + PH.reals.length);
+    if (st.hazards.length !== n0 + 1) return null;
+    const rec = st.hazards[st.hazards.length - 1];
+    try { rec.h.reset(st.clock); } catch (e) {}
+    try { rec.h.update(st.clock, 0); } catch (e) {}
+    try { if (typeof st._measureHazard === 'function') st._measureHazard(rec); } catch (e) {}
+    for (const c of rec.colliders) { c.update(); st.broadphase.refresh(c); }
+    const m = {rec, col: rec.colliders[0], hz: rec.h, real: true,
+               origin: new THREE.Vector3(def.p[0], def.p[1], def.p[2])};
+    PH.reals.push(m);
+    return m;
+  };
+
+  const _l = new THREE.Vector3(), _l0 = new THREE.Vector3();
+  /**
+   * Stand still on mover `m` for `secs` of GAME time and measure how well the
+   * carry keeps the player glued to the deck. The offset is read in the deck's
+   * LOCAL frame (Collider.toLocal), so a spinning deck is judged exactly like a
+   * sliding one. `o.period` records the drift at the end of every period;
+   * `o.orbit` = {center, radius} adds the radial-from-orbit read that isolates
+   * the OUTWARD creep of a tangent-step rotation carry (|r| grows by
+   * (w * dt)^2 / 2 every step it is applied, and never comes back).
+   */
+  PH.ride = async (m, secs, o) => {
+    o = o || {};
+    const col = m.col;
+    const p0 = PH.player();
+    col.toLocal(p0.pos, _l0);
+    const orb = o.orbit || null;
+    const rad0 = orb ? Math.hypot(p0.pos.x - orb.center.x, p0.pos.z - orb.center.z) : 0;
+    const out = {max_drift_m: 0, max_sink_m: 0, lost_ground_frames: 0, samples: 0,
+                 frame_dt_mean: 0, frame_dt_max: 0, drift_at_period: [], radial_at_period: [],
+                 radial_end_m: 0, max_radial_m: 0};
+    let sumDt = 0, maxDt = 0, marks = 0, radial = 0, drift = 0;
+    const tStart = PH.t;
+    while (PH.t - tStart < secs) {
+      await PH.frame();
+      const pp = PH.player();
+      const d = PH.lastFrameDt; sumDt += d; if (d > maxDt) maxDt = d;
+      col.toLocal(pp.pos, _l);
+      drift = Math.hypot(_l.x - _l0.x, _l.z - _l0.z);
+      const sink = (col.center.y + col.half.y) - pp.pos.y;     // >0: feet below the deck top
+      if (drift > out.max_drift_m) out.max_drift_m = drift;
+      if (sink > out.max_sink_m) out.max_sink_m = sink;
+      if (!pp.grounded) out.lost_ground_frames++;
+      if (orb) {
+        radial = Math.hypot(pp.pos.x - orb.center.x, pp.pos.z - orb.center.z) - rad0;
+        if (Math.abs(radial) > Math.abs(out.max_radial_m)) out.max_radial_m = radial;
+      }
+      if (o.period && PH.t - tStart >= (marks + 1) * o.period) {
+        marks++;
+        out.drift_at_period.push(+drift.toFixed(4));
+        if (orb) out.radial_at_period.push(+radial.toFixed(4));
+      }
+      out.samples++;
+    }
+    out.frame_dt_mean = out.samples ? +(sumDt / out.samples).toFixed(4) : 0;
+    out.frame_dt_max = +maxDt.toFixed(4);
+    out.max_drift_m = +out.max_drift_m.toFixed(4);
+    out.max_sink_m = +out.max_sink_m.toFixed(4);
+    out.max_radial_m = +out.max_radial_m.toFixed(4);
+    out.radial_end_m = +radial.toFixed(4);
+    out.drift_end_m = +drift.toFixed(4);
+    return out;
   };
 
   PH.addKill = (opts) => {
@@ -248,6 +345,21 @@ SETUP_JS = r"""async () => {
     PH.allUp();
     for (const c of PH.cols) { try { G.stage.broadphase.remove(c); } catch (e) {} }
     for (const m of PH.movers) { try { G.stage.broadphase.remove(m.col); } catch (e) {} }
+    for (const m of PH.reals) {
+      const st = G.stage;
+      for (const c of m.rec.colliders) {
+        try { st.broadphase.remove(c); } catch (e) {}
+        const i = st._allColliders.indexOf(c); if (i >= 0) st._allColliders.splice(i, 1);
+      }
+      for (const k of (m.hz.kills || [])) {
+        k.active = false;
+        const i = st.killVolumes.indexOf(k); if (i >= 0) st.killVolumes.splice(i, 1);
+      }
+      const ri = st.hazards.indexOf(m.rec); if (ri >= 0) st.hazards.splice(ri, 1);
+      try { if (m.hz.mesh && m.hz.mesh.parent) m.hz.mesh.parent.remove(m.hz.mesh); } catch (e) {}
+      try { if (typeof m.hz.dispose === 'function') m.hz.dispose(); } catch (e) {}
+    }
+    PH.reals.length = 0;
     for (const k of PH.kills) {
       k.kv.active = false;
       const i = k.list.indexOf(k.kv);
@@ -279,6 +391,24 @@ SETUP_JS = r"""async () => {
     p.pitch = 0;
     await PH.wait(settleMs === undefined ? 420 : settleMs);
     return G.player;
+  };
+
+  /* Wait until the player has been grounded for `frames` consecutive frames.
+     A teleport onto a deck doing 7.5 m/s can read ONE airborne frame at the
+     500 ms mark (seen once at 4x CPU throttle: grounded_at_start false, then
+     0 lost-ground frames for the whole ride) — the ride reads must not start
+     on that frame. */
+  PH.settleGround = async (maxMs, frames) => {
+    const need = frames === undefined ? 3 : frames;
+    const cap = maxMs === undefined ? 2500 : maxMs;
+    const t0 = performance.now();
+    let run = 0;
+    while (performance.now() - t0 < cap) {
+      await PH.frame();
+      run = PH.player().grounded ? run + 1 : 0;
+      if (run >= need) return true;
+    }
+    return false;
   };
 
   // Disable the void plane for the sandbox (a scenario that wants a void death
@@ -323,68 +453,98 @@ RUN_JS = r"""async (name) => {
 
   // =====================================================================
   case 'ride_linear': {
-    // A 6 x 0.5 x 6 deck ping-ponging 4 m along X, period 6 s
-    // (peak speed 4.19 m/s). Stand still on it for a FULL period and watch the
-    // player's offset from the deck centre and their height above the deck top.
+    // A 6 x 0.5 x 6 synthetic deck ping-ponging 4 m along X, period 6 s (peak
+    // 4.19 m/s). Stand still on it for TWO full periods and watch the offset
+    // from the deck centre and the height above the deck top. The synthetic
+    // mover publishes the movers.js contract (frame-mean linVel), so this
+    // isolates collide.js's linear carry.
     const per = 6, amp = 4;
     const m = PH.addMover({center:[B.x, B.y, B.z], half:[3, 0.25, 3],
                            kind:'pingpong', dir:[1,0,0], amp, period:per});
     await PH.tp(B.x, B.y + 0.35, B.z, 500);
-    const p = P();
-    R.grounded_at_start = !!p.grounded;
-    const dx0 = p.pos.x - m.col.center.x;
-    let maxDrift = 0, maxSink = 0, minY = 1e9, lostGround = 0, samples = 0;
-    const t0 = performance.now();
-    while (performance.now() - t0 < per * 1000 + 200) {
-      await frame();
-      const pp = P();
-      const top = m.col.center.y + m.col.half.y;
-      const drift = Math.abs((pp.pos.x - m.col.center.x) - dx0);
-      const sink = top - pp.pos.y;               // >0 means feet below the deck
-      if (drift > maxDrift) maxDrift = drift;
-      if (sink > maxSink) maxSink = sink;
-      if (pp.pos.y < minY) minY = pp.pos.y;
-      if (!pp.grounded) lostGround++;
-      samples++;
-    }
+    R.settled = await PH.settleGround();
+    R.grounded_at_start = !!P().grounded;
+    Object.assign(R, await PH.ride(m, 2 * per + 0.2, {period: per}));
+    R.periods = 2;
     R.peak_platform_speed = +(amp * 2 * Math.PI / per).toFixed(3);
-    R.max_drift_m = +maxDrift.toFixed(4);
-    R.max_sink_m = +maxSink.toFixed(4);
-    R.lost_ground_frames = lostGround;
-    R.samples = samples;
+    // What a velocity-at-end-of-frame carry would drift by at this frame rate.
+    R.first_order_predict_m = +(R.frame_dt_mean * R.peak_platform_speed).toFixed(4);
     R.dead = !!P().dead;
     break;
   }
 
   // =====================================================================
   case 'ride_circle': {
-    // Orbit radius 5, period 8 s -> 3.93 m/s deck speed. The deck also SPINS,
-    // so a correct carry has to include the rotational term.
+    // Synthetic orbit, radius 5, period 8 s -> 3.93 m/s deck speed. The deck
+    // also SPINS, so the carry has to include the rotational term — and it has
+    // to apply it as a ROTATION: a tangent step (w x r) * dt lengthens |r| by
+    // (w dt)^2 / 2 every substep, an outward creep that never comes back.
+    // Two periods so the creep has time to show.
     const per = 8, rad = 5;
     const m = PH.addMover({center:[B.x, B.y, B.z], half:[3, 0.25, 3],
                            kind:'circle', radius:rad, period:per});
     await PH.tp(m.col.center.x, B.y + 0.35, m.col.center.z, 500);
-    const p = P();
-    R.grounded_at_start = !!p.grounded;
-    let maxDrift = 0, maxSink = 0, lostGround = 0, samples = 0;
-    const t0 = performance.now();
-    while (performance.now() - t0 < per * 1000 + 200) {
-      await frame();
-      const pp = P();
-      const top = m.col.center.y + m.col.half.y;
-      const dx = pp.pos.x - m.col.center.x, dz = pp.pos.z - m.col.center.z;
-      const drift = Math.hypot(dx, dz);
-      const sink = top - pp.pos.y;
-      if (drift > maxDrift) maxDrift = drift;
-      if (sink > maxSink) maxSink = sink;
-      if (!pp.grounded) lostGround++;
-      samples++;
-    }
+    R.settled = await PH.settleGround();
+    R.grounded_at_start = !!P().grounded;
+    Object.assign(R, await PH.ride(m, 2 * per + 0.2,
+                  {period: per, orbit: {center: m.origin, radius: rad}}));
+    R.periods = 2;
     R.deck_speed = +(2 * Math.PI / per * rad).toFixed(3);
-    R.max_drift_m = +maxDrift.toFixed(4);
-    R.max_sink_m = +maxSink.toFixed(4);
-    R.lost_ground_frames = lostGround;
-    R.samples = samples;
+    // Outward creep a tangent-step carry accumulates over the ride, per substep
+    // (w / 120)^2 / 2 relative, 120 substeps a second.
+    const w = 2 * Math.PI / per;
+    R.tangent_creep_predict_m = +(rad * (2 * per + 0.2) * 120 * Math.pow(w / 120, 2) / 2).toFixed(4);
+    R.dead = !!P().dead;
+    break;
+  }
+
+  // =====================================================================
+  case 'ride_real_linear': {
+    // spire-2's authored oscillator (runtime/data/stages/spire-2.js:583):
+    // 7.6 m of travel at period 3.4 s, sine ease -> 7.02 m/s peak, built by
+    // movers.js through the stage's own factory and ticked on the stage clock.
+    const per = 3.4;
+    const m = PH.addRealMover({kind:'mover', p:[B.x, B.y, B.z], s:[3.6, 1, 3.6], mat:'metal',
+                               motion:{type:'oscillate', to:[B.x + 7.6, B.y, B.z],
+                                       period:per, phase:0.75, ease:'sine'}});
+    if (!m) { R.error = 'stage._buildHazard produced no mover'; break; }
+    R.real = true;
+    const top = m.col.center.y + m.col.half.y;
+    await PH.tp(m.col.center.x, top + 0.10, m.col.center.z, 500);
+    R.settled = await PH.settleGround();
+    R.grounded_at_start = !!P().grounded;
+    R.surface = P().surface;
+    Object.assign(R, await PH.ride(m, 2 * per + 0.2, {period: per}));
+    R.periods = 2;
+    R.peak_platform_speed = +(3.8 * 2 * Math.PI / per).toFixed(3);
+    R.first_order_predict_m = +(R.frame_dt_mean * R.peak_platform_speed).toFixed(4);
+    R.dead = !!P().dead;
+    break;
+  }
+
+  // =====================================================================
+  case 'ride_real_circle': {
+    // spire-3's authored ice carousel (runtime/data/stages/spire-3.js:662):
+    // radius 6 m, period 5 s, dir -1 -> 7.54 m/s, w = 1.257 rad/s, on ICE.
+    // Ridden for two revolutions standing still.
+    const per = 5.0, rad = 6.0;
+    const m = PH.addRealMover({kind:'mover', p:[B.x, B.y, B.z], s:[4.4, 0.6, 2.4], mat:'ice',
+                               surface:'ice',
+                               motion:{type:'circle', radius:rad, axis:'y', period:per,
+                                       phase:0.0, dir:-1}});
+    if (!m) { R.error = 'stage._buildHazard produced no mover'; break; }
+    R.real = true;
+    const top = m.col.center.y + m.col.half.y;
+    await PH.tp(m.col.center.x, top + 0.10, m.col.center.z, 500);
+    R.settled = await PH.settleGround();
+    R.grounded_at_start = !!P().grounded;
+    R.surface = P().surface;
+    Object.assign(R, await PH.ride(m, 2 * per + 0.2,
+                  {period: per, orbit: {center: m.origin, radius: rad}}));
+    R.periods = 2;
+    R.deck_speed = +(2 * Math.PI / per * rad).toFixed(3);
+    const w = 2 * Math.PI / per;
+    R.tangent_creep_predict_m = +(rad * (2 * per + 0.2) * 120 * Math.pow(w / 120, 2) / 2).toFixed(4);
     R.dead = !!P().dead;
     break;
   }
@@ -764,36 +924,50 @@ RUN_JS = r"""async (name) => {
     await PH.tp(B.x - 1, B.y + 0.35, B.z, 700);
     const wj0 = P().stats.wallJumps;
     const y0 = P().pos.y;
+    // EVENTS, not frame samples. The assertion is "never two wall jumps off
+    // the same wall without touching the ground in between" — exactly what
+    // _canWallJump() promises — but a landing and a buffered re-jump can both
+    // happen inside ONE frame's 2-3 substeps (bufferT is 0.13 s), so `grounded`
+    // sampled at rAF never sees the floor and reads a legitimate
+    // land -> ground jump -> wall jump as a repeat. The controller emits 'land'
+    // on every landing substep and 'jump' with its kind ('ground' | 'coyote' |
+    // 'wall'); those are the ground truth.
+    const seq = [];
+    const onJump = (kind, pos) => seq.push({e: 'jump', k: kind, y: +(pos.y - y0).toFixed(2)});
+    const onLand = () => seq.push({e: 'land'});
+    P().events.on('jump', onJump);
+    P().events.on('land', onLand);
     PH.down('KeyW');
     await wait(400);
-    // Spam jump while holding into the wall and record, per frame, the wall-jump
-    // counter and whether the player was grounded. The assertion is not "at most
-    // one wall jump" — it is "never two wall jumps without a grounded frame in
-    // between", which is exactly what _canWallJump() promises.
     let maxY = P().pos.y, taps = 0;
-    let groundedSince = true, backToBack = 0, prevWJ = P().stats.wallJumps;
-    const evts = [];
     for (let i = 0; i < 220; i++) {
       if (i % 10 === 0) { PH.down('Space'); taps++; }
       if (i % 10 === 4) PH.up('Space');
       await frame();
       const p = P();
       if (p.pos.y > maxY) maxY = p.pos.y;
-      if (p.grounded) groundedSince = true;
-      if (p.stats.wallJumps > prevWJ) {
-        evts.push({n: p.stats.wallJumps - wj0, grounded_since: groundedSince,
-                   y: +(p.pos.y - y0).toFixed(2)});
-        if (!groundedSince) backToBack++;
-        groundedSince = false;
-        prevWJ = p.stats.wallJumps;
-      }
     }
     PH.up('KeyW'); PH.up('Space');
     await wait(200);
+    try { P().events.off('jump', onJump); P().events.off('land', onLand); } catch (e) {}
+    // back-to-back = a 'wall' jump with no 'land' since the previous 'wall' jump
+    let backToBack = 0, landedSince = true, n = 0;
+    const evts = [], b2b = [];
+    for (const s of seq) {
+      if (s.e === 'land') { landedSince = true; continue; }
+      if (s.k !== 'wall') continue;
+      n++;
+      evts.push({n, landed_since: landedSince, y: s.y});
+      if (!landedSince) { backToBack++; b2b.push({n, y: s.y}); }
+      landedSince = false;
+    }
     R.taps = taps;
     R.wall_jumps_total = P().stats.wallJumps - wj0;
     R.wall_jumps_back_to_back = backToBack;
+    R.back_to_back_events = b2b;
     R.wall_jump_events = evts.slice(0, 12);
+    R.landings = seq.filter((s) => s.e === 'land').length;
+    R.sequence = seq.slice(0, 48);
     R.max_climb_m = +(maxY - y0).toFixed(3);
     R.wall_height = 12;
     R.dead = !!P().dead;
@@ -974,35 +1148,71 @@ RUN_JS = r"""async (name) => {
 # ===========================================================================
 #  Verdicts — one function per scenario, returns (ok, message)
 # ===========================================================================
+RIDE_DRIFT_MAX = 0.15      # metres off the spot you stood on, over two periods
+RIDE_CREEP_MAX = 0.10      # metres of net radial creep from the orbit, over two periods
+
+
+def _fps(r):
+    d = r.get("frame_dt_mean") or 0
+    return (1.0 / d) if d > 1e-6 else 0.0
+
+
 def v_ride_linear(r):
     if not r.get("grounded_at_start"):
         return False, "never landed on the mover"
     bad = []
-    if r.get("max_drift_m", 9) > 0.15:
-        bad.append("drift %.3f m > 0.15 (carry is wrong: %.2f m/s deck)"
-                   % (r["max_drift_m"], r.get("peak_platform_speed", 0)))
+    if r.get("max_drift_m", 9) > RIDE_DRIFT_MAX:
+        bad.append("drift %.3f m > %.2f on a %.2f m/s deck at %.0f fps (per-period %s; a "
+                   "velocity-at-frame-end carry predicts %.3f)"
+                   % (r["max_drift_m"], RIDE_DRIFT_MAX, r.get("peak_platform_speed", 0), _fps(r),
+                      r.get("drift_at_period"), r.get("first_order_predict_m", 0)))
     if r.get("max_sink_m", 9) > 0.03:
         bad.append("sank %.3f m into the deck" % r["max_sink_m"])
     if r.get("lost_ground_frames", 0) > max(3, 0.02 * r.get("samples", 1)):
         bad.append("lost ground on %d/%d frames" % (r["lost_ground_frames"], r.get("samples", 0)))
     if r.get("dead"):
         bad.append("died")
-    return (not bad), "; ".join(bad) or ("drift %.3f m, sink %.3f m" % (r["max_drift_m"], r["max_sink_m"]))
+    return (not bad), "; ".join(bad) or ("drift %.3f m over %d periods (%.2f m/s deck, %.0f fps), sink %.3f m"
+                                         % (r["max_drift_m"], r.get("periods", 1),
+                                            r.get("peak_platform_speed", 0), _fps(r), r["max_sink_m"]))
 
 
 def v_ride_circle(r):
     if not r.get("grounded_at_start"):
         return False, "never landed on the mover"
     bad = []
-    if r.get("max_drift_m", 9) > 1.0:
-        bad.append("drift %.3f m > 1.0 (deck %.2f m/s)" % (r["max_drift_m"], r.get("deck_speed", 0)))
+    if r.get("max_drift_m", 9) > RIDE_DRIFT_MAX:
+        bad.append("drift %.3f m > %.2f on a %.2f m/s deck at %.0f fps (per-period %s)"
+                   % (r["max_drift_m"], RIDE_DRIFT_MAX, r.get("deck_speed", 0), _fps(r),
+                      r.get("drift_at_period")))
+    if abs(r.get("radial_end_m", 9)) > RIDE_CREEP_MAX:
+        bad.append("crept %+.3f m radially off the orbit over %d periods (per-period %s; a "
+                   "tangent-step carry predicts +%.3f) - the deck slides you off"
+                   % (r["radial_end_m"], r.get("periods", 1), r.get("radial_at_period"),
+                      r.get("tangent_creep_predict_m", 0)))
     if r.get("max_sink_m", 9) > 0.03:
         bad.append("sank %.3f m" % r["max_sink_m"])
     if r.get("lost_ground_frames", 0) > max(3, 0.05 * r.get("samples", 1)):
         bad.append("lost ground on %d/%d frames" % (r["lost_ground_frames"], r.get("samples", 0)))
     if r.get("dead"):
         bad.append("died")
-    return (not bad), "; ".join(bad) or ("drift %.3f m, sink %.3f m" % (r["max_drift_m"], r["max_sink_m"]))
+    return (not bad), "; ".join(bad) or ("drift %.3f m, radial creep %+.3f m over %d periods (%.2f m/s, %.0f fps), sink %.3f m"
+                                         % (r["max_drift_m"], r.get("radial_end_m", 0), r.get("periods", 1),
+                                            r.get("deck_speed", 0), _fps(r), r["max_sink_m"]))
+
+
+def v_ride_real_linear(r):
+    if r.get("real") is not True:
+        return False, "real mover was not built"
+    return v_ride_linear(r)
+
+
+def v_ride_real_circle(r):
+    if r.get("real") is not True:
+        return False, "real mover was not built"
+    if r.get("surface") != "ice":
+        return False, "surface read '%s', expected the authored ice" % r.get("surface")
+    return v_ride_circle(r)
 
 
 def v_mover_launch(r):
@@ -1202,6 +1412,7 @@ def v_bounce_apex(r):
 
 VERDICT = {
     "ride_linear": v_ride_linear, "ride_circle": v_ride_circle,
+    "ride_real_linear": v_ride_real_linear, "ride_real_circle": v_ride_real_circle,
     "mover_launch": v_mover_launch, "conveyor": v_conveyor,
     "conveyor_jump": v_conveyor_jump, "ice": v_ice, "step_up": v_step_up,
     "seams": v_seams, "snap_on_jump": v_snap_on_jump,
@@ -1250,6 +1461,9 @@ def main() -> int:
     ap.add_argument("--json", default=os.path.join(HERE, "physcheck.json"))
     ap.add_argument("--only", default="", help="comma-separated scenario names")
     ap.add_argument("--wait", type=float, default=60.0)
+    ap.add_argument("--throttle", type=float, default=1.0,
+                    help="CDP CPU throttling rate (e.g. 4 = quarter speed) - lowers the frame "
+                         "rate so frame-time-proportional carry errors show clearly")
     args = ap.parse_args()
 
     want = [s.strip() for s in args.only.split(",") if s.strip()] or SCENARIOS
@@ -1300,6 +1514,14 @@ def main() -> int:
             br.close()
             return 2
         print("sandbox: %s" % json.dumps(setup))
+
+        if args.throttle and args.throttle > 1.0:
+            try:
+                cdp = pg.context.new_cdp_session(pg)
+                cdp.send("Emulation.setCPUThrottlingRate", {"rate": float(args.throttle)})
+                print("cpu throttle: %gx" % args.throttle)
+            except Exception as e:
+                print("cpu throttle FAILED: %s" % e)
 
         for name in want:
             t0 = time.time()
