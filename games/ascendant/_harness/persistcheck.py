@@ -1,17 +1,18 @@
 #!/usr/bin/env python
-"""ASCENDANT persistcheck — persistence, settings and audio lifecycle gate.
+"""ASCENDANT persistcheck - persistence, settings and audio lifecycle gate.
 
 Runs a REAL headed Chrome (rAF must actually tick, and a real mouse click is the
-only trusted gesture a Web Audio context will resume from) and asserts the four
+only trusted gesture a Web Audio context will resume from) and asserts the
 things a player notices when this lens is broken:
 
   save      clear a stage -> reload -> best time, cleared flag, coins, deaths and
-            the furthest checkpoint all come back; CONTINUE resumes at the right
-            stage; unlockedWorlds() matches the documented rule; one page load
-            counts exactly one session.
+            the furthest checkpoint all come back; CONTINUE (a REAL click on the
+            title's own button) resumes at the right stage; unlockedWorlds()
+            matches the documented rule; one page load counts exactly one
+            session.
   corrupt   truncated JSON / future schema version / wrong types / non-object
-            payloads never block boot: the game starts on a fresh save and says
-            so exactly once.
+            payloads never block boot: the game starts on a fresh (or repaired)
+            save, Save.recovered says so, and the player is told exactly once.
   settings  every persisted field round-trips through a reload and applies live;
             five quality switches leave renderer.info.memory where they found it
             (a post-chain rebuild that leaks render targets shows up here).
@@ -22,14 +23,21 @@ things a player notices when this lens is broken:
             the tab and coming back does not leave a suspended context with the
             bed "playing" silently forever.
   boot      ?quality= / ?stage= / ?mode=ai / ?mode=online / junk values are all
-            respected or ignored gracefully, #boot always goes away, and a stage
-            id that cannot load produces a readable error instead of a black hole.
+            respected or ignored gracefully, #boot always goes away - including
+            when a module fetch stalls forever (the failure card takes over) -
+            and a ?stage= id that is not a stage is said so, visibly.
 
     python persistcheck.py
     python persistcheck.py --only audio,boot
     python persistcheck.py --url http://localhost:8788/games/ascendant/index.html
+    python persistcheck.py --only boot --boot-js path/to/old/boot.js   # A/B a boot.js
 
 Exit 0 only when every selected section passes.
+
+XFAIL rows: defects this probe REPRODUCES but whose generator lives outside the
+persistence/settings/audio lane (game.js, menu.js, style.js). They print as
+"xfail" with the owning file, do not fail the run, and flip to "XPASS" the day
+someone fixes them - so the report can never quietly forget them.
 
 NOTE: this probe deliberately runs in PRODUCTION mode (no ?dev=1) and does NOT
 pass --autoplay-policy=no-user-gesture-required, so the gesture requirement it
@@ -122,29 +130,37 @@ window.__AP = { calls: 0, throws: [], bad: [] };
 class Section:
     def __init__(self, name):
         self.name = name
-        self.rows = []          # (ok, label, detail)
+        self.rows = []          # (ok, label, detail, xfail)
 
-    def check(self, ok, label, detail=""):
-        self.rows.append((bool(ok), label, str(detail)))
+    def check(self, ok, label, detail="", xfail=None):
+        """xfail: owning file + reason for a REPRODUCED defect outside this lane.
+        Such rows never fail the run; they print as xfail / XPASS."""
+        self.rows.append((bool(ok), label, str(detail), xfail))
         return bool(ok)
 
     @property
     def failures(self):
-        return [r for r in self.rows if not r[0]]
+        return [r for r in self.rows if not r[0] and not r[3]]
 
     def dump(self):
         print("-" * 74)
         print("[%s]" % self.name)
-        for ok, label, detail in self.rows:
-            mark = "ok  " if ok else "FAIL"
-            line = "  %s  %s" % (mark, label)
+        for ok, label, detail, xfail in self.rows:
+            if xfail:
+                mark = "XPASS" if ok else "xfail"
+            else:
+                mark = "ok   " if ok else "FAIL "
+            line = "  %s %s" % (mark, label)
             if detail:
                 line += "   %s" % detail
+            if xfail:
+                line += "   [out of lane: %s]" % xfail
             print(line)
 
 
 def wait_boot(pg, wait=60.0):
-    """Wait until the runtime handle exists AND the #boot overlay is gone."""
+    """Wait until the runtime handle exists AND the #boot overlay is gone.
+    Returns early (bootGone False) if the failure card shows up instead."""
     deadline = time.time() + wait
     got_global = False
     while time.time() < deadline:
@@ -154,10 +170,15 @@ def wait_boot(pg, wait=60.0):
             got_global = False
         if got_global:
             break
+        try:
+            if pg.evaluate("!!document.getElementById('asc-fail')"):
+                return {"global": False, "bootGone": False, "failCard": True}
+        except Exception:
+            pass
         pg.wait_for_timeout(250)
     if not got_global:
-        return {"global": False, "bootGone": False}
-    deadline = time.time() + 15.0
+        return {"global": False, "bootGone": False, "failCard": False}
+    deadline = time.time() + 25.0
     gone = False
     while time.time() < deadline:
         try:
@@ -169,80 +190,81 @@ def wait_boot(pg, wait=60.0):
         if gone:
             break
         pg.wait_for_timeout(200)
-    return {"global": True, "bootGone": gone}
+    return {"global": True, "bootGone": gone, "failCard": False}
 
 
-def wait_title(pg, timeout=20.0):
-    """Wait until the title menu has finished its async refresh.
+TITLE_JS = r"""() => {
+  const g = globalThis.ASCENDANT && ASCENDANT.game;
+  const m = g && g.menu;
+  if (!m || !m.tBtnPlay) return null;
+  const r = m.tBtnPlay.getBoundingClientRect();
+  return {state: g.state, open: !!m._open, page: m.page,
+          gone: m.el.classList.contains('asc-gone'),
+          opacity: parseFloat(getComputedStyle(m.el).opacity),
+          playW: Math.round(r.width),
+          has: (() => { try { return m._hasProgress(); } catch (e) { return null; } })()};
+}"""
 
-    `Menu.refresh()` runs after loadStageNumbering() resolves, so the CONTINUE
-    button's display is set a beat AFTER the boot overlay is gone. Sampling
-    before that reads a button the player never sees in that state.
-    """
+
+def wait_title(pg, timeout=30.0):
+    """Wait until the title menu is REVEALED: open, on the title page, not held
+    behind the boot splash (asc-gone) and with a PLAY button that has geometry.
+    Menu.open('title') runs while #boot still covers the screen and the reveal
+    is deferred to the splash's fade-out - sampling before that reads a menu
+    the player cannot see or click."""
     deadline = time.time() + timeout
     last = None
     while time.time() < deadline:
         try:
-            last = pg.evaluate(
-                """() => {
-                     const g = globalThis.ASCENDANT && ASCENDANT.game;
-                     const m = g && g.menu;
-                     if (!m || !m.tBtnCont) return null;
-                     return {state: g.state, open: !!m._open, page: m.page,
-                             cont: getComputedStyle(m.tBtnCont).display,
-                             has: (() => { try { return m._hasProgress(); } catch (e) { return null; } })()};
-                   }"""
-            )
+            last = pg.evaluate(TITLE_JS)
         except Exception:
             last = None
-        if last and last["state"] == "title" and last["open"] and last["page"] == "title":
-            # settled means: either there is progress and CONTINUE is shown, or
-            # there is none and it is hidden — both are a finished refresh.
-            if (last["has"] and last["cont"] != "none") or (not last["has"]):
-                pg.wait_for_timeout(400)
-                return last
+        if (last and last["state"] == "title" and last["open"] and last["page"] == "title"
+                and not last["gone"] and last["opacity"] > 0.9 and last["playW"] > 4):
+            pg.wait_for_timeout(300)
+            return last
         pg.wait_for_timeout(250)
     return last
 
 
-def click_play_for_real(pg, timeout=20.0):
-    """Click the title PLAY/CONTINUE with a REAL mouse press.
+def title_button_box(pg, which):
+    """Centre of one of the title's OWN buttons (menu.tBtnPlay / tBtnCont).
+    Never search the DOM by text: the HUD's finish card also has a hidden
+    CONTINUE button, earlier in DOM order, that a text search finds first."""
+    return pg.evaluate(
+        """(which) => {
+             const m = ASCENDANT.game.menu; const b = m && m[which];
+             if (!b) return null;
+             const r = b.getBoundingClientRect();
+             return {x: r.x + r.width / 2, y: r.y + r.height / 2, w: r.width, h: r.height,
+                     display: getComputedStyle(b).display, disabled: !!b.disabled,
+                     text: (b.textContent || '').trim()};
+           }""", which)
+
+
+def click_play_for_real(pg, timeout=30.0):
+    """Click the title PLAY with a REAL mouse press.
 
     pg.evaluate('...menu._act("play")') gets past the title but is not a trusted
     gesture, so a context resumed that way is a lie. The audio section needs the
     real thing.
     """
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        box = pg.evaluate(
-            """() => {
-              const btns = Array.from(document.querySelectorAll('button.asc-btn'));
-              for (const want of ['PLAY', 'NEW RUN', 'CONTINUE']) {
-                for (const b of btns) {
-                  if (b.disabled) continue;
-                  const t = (b.textContent || '').toUpperCase();
-                  if (t.indexOf(want) < 0) continue;
-                  const r = b.getBoundingClientRect();
-                  if (r.width < 4 || r.height < 4) continue;
-                  return {x: r.x + r.width / 2, y: r.y + r.height / 2, label: want};
-                }
-              }
-              return null;
-            }"""
-        )
-        if box:
-            pg.mouse.click(box["x"], box["y"])
-            for _ in range(40):
-                st = pg.evaluate("ASCENDANT && ASCENDANT.game && ASCENDANT.game.state")
-                if st and st not in ("title", "loading"):
-                    return box["label"]
-                pg.wait_for_timeout(150)
-            return box["label"]
-        pg.wait_for_timeout(250)
-    return None
+    t = wait_title(pg, timeout)
+    if not t:
+        return None
+    box = title_button_box(pg, "tBtnPlay")
+    if not box or box["w"] < 4:
+        return None
+    pg.mouse.click(box["x"], box["y"])
+    for _ in range(60):
+        st = pg.evaluate("ASCENDANT && ASCENDANT.game && ASCENDANT.game.state")
+        if st and st not in ("title", "loading"):
+            return box["text"]
+        pg.wait_for_timeout(150)
+    return box["text"]
 
 
-def act_play(pg, timeout=20.0):
+def act_play(pg, timeout=30.0):
     """Get past the title without needing a trusted gesture."""
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -261,7 +283,8 @@ def act_play(pg, timeout=20.0):
 
 
 def seed_storage(pg, origin, save_raw=None, settings_raw=None, clear=False):
-    """Write localStorage for the game origin BEFORE the game modules run."""
+    """Write localStorage for the game origin BEFORE the game modules run.
+    (The blank URL 404s - callers reset their console capture after this.)"""
     pg.goto(origin + "/__persistcheck_blank__", wait_until="domcontentloaded")
     pg.evaluate(
         """([key, sk, save, settings, clear]) => {
@@ -271,6 +294,17 @@ def seed_storage(pg, origin, save_raw=None, settings_raw=None, clear=False):
            }""",
         [SAVE_KEY, SET_KEY, save_raw, settings_raw, clear],
     )
+
+
+def wait_stage(pg, stage_id, timeout=25.0):
+    deadline = time.time() + timeout
+    loaded = None
+    while time.time() < deadline:
+        loaded = pg.evaluate("() => ({id: ASCENDANT.game.stageId, state: ASCENDANT.game.state})")
+        if loaded["id"] == stage_id and loaded["state"] != "loading":
+            return loaded
+        pg.wait_for_timeout(250)
+    return loaded
 
 
 # ---------------------------------------------------------------------------
@@ -303,16 +337,9 @@ READ_PROGRESS_JS = r"""() => {
     totals: S.totals(),
     sessions: S.raw().sessions,
     persistent: S.persistent,
+    recovered: S.recovered,
     cont: (() => {
       try { return ASCENDANT.game.menu._continueTarget(); } catch (e) { return null; }
-    })(),
-    contBtn: (() => {
-      const b = Array.from(document.querySelectorAll('button.asc-btn'))
-        .find(x => (x.textContent || '').toUpperCase().indexOf('CONTINUE') >= 0);
-      if (!b) return null;
-      const r = b.getBoundingClientRect();
-      return {visible: r.width > 4 && getComputedStyle(b).display !== 'none',
-              disabled: !!b.disabled, text: (b.textContent || '').trim()};
     })(),
   };
 }"""
@@ -331,6 +358,10 @@ def sec_save(pg, url, origin):
     first_sessions = pg.evaluate("ASCENDANT.Save.raw().sessions")
     s.check(first_sessions == 1, "one page load counts one session",
             "sessions=%s (want 1)" % first_sessions)
+    s.check(pg.evaluate("ASCENDANT.Save.recovered") is False,
+            "a brand-new player is not a 'recovered' save")
+    s.check(pg.evaluate("ASCENDANT.Save.load() === ASCENDANT.Save.raw()"),
+            "Save.load() is idempotent (a second call returns the live object)")
 
     wrote = pg.evaluate(WRITE_PROGRESS_JS)
     s.check(wrote["unlocked"] == ["neon", "foundry"],
@@ -341,10 +372,13 @@ def sec_save(pg, url, origin):
     b = wait_boot(pg)
     if not s.check(b["global"] and b["bootGone"], "boot after reload", json.dumps(b)):
         return s
-    wait_title(pg)
+    t = wait_title(pg)
+    s.check(bool(t) and not t["gone"] and t["playW"] > 4, "title menu revealed after the splash",
+            json.dumps(t))
     r = pg.evaluate(READ_PROGRESS_JS)
 
     s.check(r["persistent"] is True, "localStorage is persistent", r["persistent"])
+    s.check(r["recovered"] is False, "a valid save is not flagged as recovered", r["recovered"])
     n1, n2, n3 = r["n1"], r["n2"], r["n3"]
     s.check(n1["best"] == 41234, "neon-1 best time restored", "best=%s want 41234" % n1["best"])
     s.check(n1["cleared"] is True, "neon-1 cleared flag restored", n1["cleared"])
@@ -371,55 +405,47 @@ def sec_save(pg, url, origin):
     cont = r["cont"] or {}
     s.check(cont.get("stageId") == "neon-3", "CONTINUE targets the first uncleared stage",
             "target=%s want neon-3" % cont.get("stageId"))
-    cb = r["contBtn"] or {}
-    s.check(bool(cb.get("visible")) and not cb.get("disabled"),
-            "CONTINUE button is shown and enabled", json.dumps(cb))
+    cb = title_button_box(pg, "tBtnCont") or {}
+    s.check(cb.get("w", 0) > 4 and cb.get("display") != "none" and not cb.get("disabled"),
+            "the title's CONTINUE button is shown and enabled", json.dumps(cb))
 
-    # ---- and it actually loads that stage ----
-    ok = pg.evaluate(
-        """() => {
-             const b = Array.from(document.querySelectorAll('button.asc-btn'))
-               .find(x => (x.textContent || '').toUpperCase().indexOf('CONTINUE') >= 0);
-             if (!b) return false;
-             if (b.__activate) b.__activate(); else b.click();
-             return true;
-           }"""
-    )
+    # ---- and a REAL click on it loads that stage ----
     loaded = None
-    if ok:
-        deadline = time.time() + 25
-        while time.time() < deadline:
-            loaded = pg.evaluate("ASCENDANT.game.stageId")
-            if loaded == "neon-3":
-                break
-            pg.wait_for_timeout(300)
-    s.check(loaded == "neon-3", "CONTINUE resumes at the right stage",
-            "loaded=%s want neon-3" % loaded)
+    if cb.get("w", 0) > 4:
+        pg.mouse.click(cb["x"], cb["y"])
+        loaded = wait_stage(pg, "neon-3")
+    s.check(bool(loaded) and loaded["id"] == "neon-3", "CONTINUE resumes at the right stage",
+            "loaded=%s want neon-3" % json.dumps(loaded))
 
-    # spawning at the stored checkpoint is what "resumes" means to a player
+    # Resuming is only half done if the player is dropped at the start of a
+    # stage whose saved cpIndex says they reached checkpoint 2 - the title's
+    # CLEARED stat even counts those segments. loadStage() always spawns at 0.
     cp = pg.evaluate("ASCENDANT.game.cpIndex")
-    s.check(isinstance(cp, int), "checkpoint index is live after resume", "cpIndex=%s" % cp)
+    s.check(cp == 2, "resume spawns at the saved furthest checkpoint (cpIndex 2)",
+            "game.cpIndex=%s saved=2" % cp,
+            xfail="game.js loadStage() sets cpIndex=0 and spawns at _spawnFor(0); the saved cpIndex is never read back")
     return s
 
 
 # ---------------------------------------------------------------------------
 # SECTION: corrupt payloads
 # ---------------------------------------------------------------------------
+# (label, payload, expected Save.recovery.kind)
 CORRUPT_CASES = [
-    ("truncated JSON", '{"v":1,"sessions":4,"stages":{"neon-1":{"best":1234,"cleared":tr'),
-    ("future schema version", json.dumps({"v": 99, "stages": {"neon-1": {"best": 111, "cleared": True}}})),
+    ("truncated JSON", '{"v":1,"sessions":4,"stages":{"neon-1":{"best":1234,"cleared":tr', "unreadable"),
+    ("future schema version", json.dumps({"v": 99, "stages": {"neon-1": {"best": 111, "cleared": True}}}), "newer-version"),
     ("wrong types everywhere", json.dumps({
         "v": "one", "createdAt": "yesterday", "updatedAt": None, "sessions": {},
         "totalPlaytimeMs": "lots", "unlockAll": "yes",
         "stages": {"neon-1": {"best": "fast", "coins": "all", "cpIndex": -4,
                               "cleared": "yes", "deaths": None, "attempts": [],
                               "firstClearDate": 12345}},
-    })),
-    ("stages is an array", json.dumps({"v": 1, "stages": [1, 2, 3]})),
-    ("payload is a bare string", '"just a string"'),
-    ("payload is null", "null"),
-    ("payload is empty", ""),
-    ("payload is binary junk", "\x00\x01\x02 not json at all �"),
+    }), "repaired"),
+    ("stages is an array", json.dumps({"v": 1, "stages": [1, 2, 3]}), "repaired"),
+    ("payload is a bare string", '"just a string"', "not-an-object"),
+    ("payload is null", "null", "not-an-object"),
+    ("payload is empty", "", "unreadable"),
+    ("payload is binary junk", "\x00\x01\x02 not json at all �", "unreadable"),
 ]
 
 CORRUPT_SETTINGS = json.dumps({
@@ -427,75 +453,96 @@ CORRUPT_SETTINGS = json.dumps({
     "master": -3, "music": None, "sfx": [], "showTimer": 0, "hudScale": "big",
 })
 
+CORRUPT_STATE_JS = r"""() => {
+  const S = ASCENDANT && ASCENDANT.Save;
+  if (!S) return null;
+  const raw = S.raw();
+  const n = document.getElementById('asc-save-notice');
+  const r = n ? n.getBoundingClientRect() : null;
+  return {
+    v: raw.v,
+    n1best: S.stage('neon-1').best,
+    n1cleared: S.stage('neon-1').cleared,
+    stageIds: S.stageIds(),
+    unlockAll: raw.unlockAll,
+    sessions: raw.sessions,
+    recovered: !!S.recovered,
+    kind: S.recovery ? S.recovery.kind : null,
+    repairs: S.recovery ? S.recovery.repairs : [],
+    notice: !!n,
+    noticeShown: !!(n && r.width > 40 && r.height > 20 && parseFloat(getComputedStyle(n).opacity) > 0.9),
+    noticeText: n ? (n.innerText || '').replace(/\s+/g, ' ').slice(0, 160) : '',
+    bak: (() => { try { return localStorage.getItem('ascendant.save.v1.bak') !== null; } catch (e) { return null; } })(),
+    stored: (() => { try { const t = localStorage.getItem('ascendant.save.v1'); const o = JSON.parse(t); return o && o.v === 1 && typeof o.stages === 'object'; } catch (e) { return false; } })(),
+    quality: ASCENDANT.Settings.qualityId(),
+    fov: ASCENDANT.Settings.get().fov,
+    failCard: !!document.getElementById('asc-fail'),
+  };
+}"""
+
 
 def sec_corrupt(pg, url, origin):
     s = Section("corrupt")
-    for label, payload in CORRUPT_CASES:
-        errs = []
-        cerr = []
-        pg.on("pageerror", lambda e, box=errs: box.append(str(e)))
-        handler = lambda m, box=cerr: box.append((m.type, m.text))
-        pg.on("console", handler)
-        try:
+    errs, cerr = [], []
+    pg.on("pageerror", lambda e: errs.append(str(e)))
+    handler = lambda m: cerr.append((m.type, m.text))
+    pg.on("console", handler)
+    try:
+        for label, payload, want_kind in CORRUPT_CASES:
             seed_storage(pg, origin, save_raw=payload, settings_raw=CORRUPT_SETTINGS, clear=True)
+            del errs[:]
+            del cerr[:]
             pg.goto(url, wait_until="load", timeout=60_000)
             b = wait_boot(pg)
-            state = pg.evaluate(
-                """() => {
-                     const S = ASCENDANT && ASCENDANT.Save;
-                     if (!S) return null;
-                     const raw = S.raw();
-                     return {
-                       v: raw.v,
-                       n1best: S.stage('neon-1').best,
-                       n1cleared: S.stage('neon-1').cleared,
-                       stageIds: S.stageIds(),
-                       unlockAll: raw.unlockAll,
-                       sessions: raw.sessions,
-                       recovered: !!S.recovered,
-                       notice: !!document.getElementById('asc-save-notice'),
-                       quality: ASCENDANT.Settings.qualityId(),
-                       fov: ASCENDANT.Settings.get().fov,
-                       failCard: !!document.getElementById('asc-fail'),
-                     };
-                   }"""
-            ) if b["global"] else None
-        finally:
-            pg.remove_listener("console", handler)
+            state = None
+            if b["global"]:
+                # the notice fades in over two rAFs and the stored write is debounced 320 ms
+                pg.wait_for_timeout(900)
+                state = pg.evaluate(CORRUPT_STATE_JS)
+            hard = [t for (k, t) in cerr if k == "error"]
+            ok_boot = bool(b["global"] and b["bootGone"] and not errs and state and not state["failCard"])
+            s.check(ok_boot, "%s: boot completes, no failure card" % label,
+                    "global=%s bootGone=%s pageerrors=%d consoleErrors=%d %s" %
+                    (b["global"], b["bootGone"], len(errs), len(hard), hard[:1]))
+            if not state:
+                continue
+            s.check(state["v"] == 1, "%s: save migrated to v1" % label, state["v"])
+            s.check(state["n1best"] is None and state["n1cleared"] is False,
+                    "%s: neon-1 carries nothing from the bad payload" % label,
+                    "best=%s cleared=%s" % (state["n1best"], state["n1cleared"]))
+            s.check(state["unlockAll"] is False, "%s: unlockAll not smuggled in" % label,
+                    state["unlockAll"])
+            s.check(isinstance(state["sessions"], int) and state["sessions"] == 1,
+                    "%s: session counter restarts at 1" % label, state["sessions"])
+            s.check(state["recovered"] is True and state["kind"] == want_kind,
+                    "%s: Save.recovered flags it as %s" % (label, want_kind),
+                    "recovered=%s kind=%s repairs=%s" % (state["recovered"], state["kind"], state["repairs"][:4]))
+            s.check(state["notice"] and state["noticeShown"],
+                    "%s: the player is told, visibly" % label,
+                    "#asc-save-notice present=%s shown=%s text=%r" %
+                    (state["notice"], state["noticeShown"], state["noticeText"][:70]))
+            s.check(state["bak"] is True, "%s: the damaged payload was kept as a backup" % label, state["bak"])
+            s.check(state["stored"] is True, "%s: a clean v1 save was written back" % label, state["stored"])
+            # corrupt settings must not survive either
+            s.check(state["quality"] in ("low", "medium", "high", "ultra"),
+                    "%s: corrupt settings fall back to a real quality" % label, state["quality"])
+            s.check(65 <= state["fov"] <= 110, "%s: corrupt fov clamped into range" % label,
+                    state["fov"])
+            s.check(len(hard) == 0, "%s: no console errors" % label, hard[:2])
 
-        hard = [t for (k, t) in cerr if k == "error"]
-        ok_boot = b["global"] and b["bootGone"] and not errs and not state["failCard"] if state else False
-        s.check(ok_boot, "%s: boot completes, no failure card" % label,
-                "global=%s bootGone=%s pageerrors=%d consoleErrors=%d" %
-                (b["global"], b["bootGone"], len(errs), len(hard)))
-        if not state:
-            continue
-        s.check(state["v"] == 1, "%s: save migrated to v1" % label, state["v"])
-        s.check(state["n1best"] is None and state["n1cleared"] is False,
-                "%s: replaced by a FRESH save" % label,
-                "best=%s cleared=%s" % (state["n1best"], state["n1cleared"]))
-        s.check(state["unlockAll"] is False, "%s: unlockAll not smuggled in" % label,
-                state["unlockAll"])
-        s.check(isinstance(state["sessions"], int) and state["sessions"] >= 1,
-                "%s: session counter is a number" % label, state["sessions"])
-        s.check(state["recovered"] is True, "%s: Save.recovered flags the reset" % label,
-                state["recovered"])
-        s.check(state["notice"] is True, "%s: the player is told, once" % label,
-                "#asc-save-notice present=%s" % state["notice"])
-        # corrupt settings must not survive either
-        s.check(state["quality"] in ("low", "medium", "high", "ultra"),
-                "%s: corrupt settings fall back to a real quality" % label, state["quality"])
-        s.check(65 <= state["fov"] <= 110, "%s: corrupt fov clamped into range" % label,
-                state["fov"])
-
-    # the notice appears ONCE — a second load on the now-clean save must be quiet
-    pg.goto(url, wait_until="load", timeout=60_000)
-    b = wait_boot(pg)
-    quiet = pg.evaluate(
-        "() => ({notice: !!document.getElementById('asc-save-notice'),"
-        " recovered: !!ASCENDANT.Save.recovered})") if b["global"] else {}
-    s.check(quiet.get("notice") is False and quiet.get("recovered") is False,
-            "notice does NOT reappear on the next clean load", json.dumps(quiet))
+        # the notice appears ONCE - a second load on the now-clean save must be quiet
+        pg.goto(url, wait_until="load", timeout=60_000)
+        b = wait_boot(pg)
+        pg.wait_for_timeout(900)
+        quiet = pg.evaluate(
+            "() => ({notice: !!document.getElementById('asc-save-notice'),"
+            " recovered: !!ASCENDANT.Save.recovered, sessions: ASCENDANT.Save.raw().sessions})") if b["global"] else {}
+        s.check(quiet.get("notice") is False and quiet.get("recovered") is False,
+                "notice does NOT reappear on the next clean load", json.dumps(quiet))
+        s.check(quiet.get("sessions") == 2, "the repaired save carried its session count forward",
+                "sessions=%s (want 2)" % quiet.get("sessions"))
+    finally:
+        pg.remove_listener("console", handler)
     return s
 
 
@@ -515,6 +562,11 @@ NON_DEFAULT = {
     "motionBlurDip": False,
     "hudScale": 1.25,
 }
+
+POST_JS = r"""() => { const p = ASCENDANT.engine.post; return {
+  qType: typeof p.quality, qId: p.quality && p.quality.id,
+  bloom: !!p.bloomPass, aa: !!(p.fxaaPass || p.smaaPass),
+  passes: p.composer ? p.composer.passes.map(x => x.constructor.name) : null }; }"""
 
 
 def sec_settings(pg, url, origin):
@@ -540,24 +592,19 @@ def sec_settings(pg, url, origin):
                pixelRatio: e.renderer ? +e.renderer.getPixelRatio().toFixed(3) : null,
                wantRatio: +A.Settings.pixelRatio().toFixed(3),
                qualityId: A.Settings.qualityId(),
-               postQuality: e.post && e.post.q ? e.post.q.id : (e.post && e.post.quality ? e.post.quality.id : null),
                invertY: g.input ? !!g.input.invertY : null,
                sens: g.input ? g.input.sensitivity : null,
                audioMaster: g.audio && g.audio.vol ? g.audio.vol.master : null,
                audioMusic: g.audio && g.audio.vol ? g.audio.vol.music : null,
                audioSfx: g.audio && g.audio.vol ? g.audio.vol.sfx : null,
-               masterGain: g.audio && g.audio.master ? +g.audio.master.gain.value.toFixed(3) : null,
-               hudScaleApplied: (() => {
-                 const h = document.getElementById('hud');
-                 if (!h) return null;
-                 const el = h.querySelector('[style*="scale"], .asc-hud, .hud-root') || h.firstElementChild;
-                 return el ? getComputedStyle(el).transform : null;
-               })(),
                timerVisible: (() => {
-                 const t = document.querySelector('.asc-hud-timer, #asc-timer, [data-hud="timer"]');
+                 /* hud.js hides the whole top-right cluster (nTR.style.display='none'),
+                    so ask layout, not the child's own computed display */
+                 const t = document.querySelector('.ah-timer');
                  if (!t) return null;
-                 return getComputedStyle(t).display !== 'none' && getComputedStyle(t).visibility !== 'hidden';
+                 return t.getClientRects().length > 0;
                })(),
+               hudShowTimer: (() => { const h = ASCENDANT.game.hud; return h && h._c ? h._c.showTimer : null; })(),
              };
            }"""
     )
@@ -569,11 +616,27 @@ def sec_settings(pg, url, origin):
             "renderer pixel ratio follows the preset",
             "renderer=%s want=%s" % (live["pixelRatio"], live["wantRatio"]))
     s.check(live["invertY"] is True, "invertY applies live to input", live["invertY"])
+    s.check(abs((live["sens"] or 0) - 2.35) < 1e-6, "sensitivity applies live to input", live["sens"])
     s.check(live["audioMaster"] == 0.35 and live["audioMusic"] == 0.25 and live["audioSfx"] == 0.55,
             "volumes applied live to the audio buses",
             "master=%s music=%s sfx=%s" % (live["audioMaster"], live["audioMusic"], live["audioSfx"]))
-    s.check(live["timerVisible"] in (None, False), "showTimer=false hides the timer",
-            live["timerVisible"])
+    s.check(live["timerVisible"] in (None, False) and live["hudShowTimer"] is False,
+            "showTimer=false hides the timer (hud._c.showTimer + no layout box)",
+            "layoutBox=%s hud._c.showTimer=%s" % (live["timerVisible"], live["hudShowTimer"]))
+    post = pg.evaluate(POST_JS)
+    s.check(post["qType"] == "object" and post["qId"] == "medium" and post["bloom"] and post["aa"],
+            "Settings.set(quality) leaves a complete post chain (bloom + AA)", json.dumps(post))
+
+    # --- the OPTIONS menu path, which is what a player actually uses ---
+    pg.evaluate("() => ASCENDANT.game.menu._set({quality: 'high'})")
+    pg.wait_for_timeout(600)
+    post = pg.evaluate(POST_JS)
+    s.check(post["qType"] == "object" and post["qId"] == "high" and post["bloom"] and post["aa"],
+            "menu._set(quality) leaves a complete post chain (bloom + AA)", json.dumps(post),
+            xfail="menu.js _applyLive() passes the preset ID STRING (s.quality) to engine.post.setQuality(); "
+                  "post rebuilds with quality='high' and drops bloom + AA until a non-menu quality change")
+    pg.evaluate("() => ASCENDANT.Settings.set({quality: 'medium'})")   # repair for the rest of the section
+    pg.wait_for_timeout(300)
 
     # --- round-trip ---
     pg.goto(url, wait_until="load", timeout=60_000)
@@ -693,6 +756,7 @@ def sec_audio(pg, url, origin, ctx):
     pg.on("console", handler)
     try:
         seed_storage(pg, origin, save_raw=None, settings_raw=None, clear=True)
+        del cerr[:]
         pg.goto(url, wait_until="load", timeout=60_000)
         b = wait_boot(pg)
         if not s.check(b["global"] and b["bootGone"], "boot", json.dumps(b)):
@@ -739,7 +803,7 @@ def sec_audio(pg, url, origin, ctx):
                }"""
         )
         pg.wait_for_timeout(1500)
-        # positional loops too — they own the other half of the graph
+        # positional loops too - they own the other half of the graph
         pg.evaluate(
             """() => {
                  const a = ASCENDANT.game.audio;
@@ -865,11 +929,28 @@ BOOT_STATE_JS = r"""() => {
     qualityValid: ['low','medium','high','ultra'].indexOf(A.Settings.qualityId()) >= 0,
     pending: A.game._pendingStage,
     menuOpen: !!document.querySelector('button.asc-btn'),
+    paramNotice: !!document.getElementById('asc-param-notice'),
   };
 }"""
 
+NOTICE_JS = r"""(id) => {
+  const n = document.getElementById(id);
+  if (!n) return {present: false};
+  const r = n.getBoundingClientRect();
+  return {present: true, shown: r.width > 40 && r.height > 20 && parseFloat(getComputedStyle(n).opacity) > 0.9,
+          text: (n.innerText || '').replace(/\s+/g, ' ').slice(0, 200)};
+}"""
 
-def sec_boot(pg, url, origin):
+FAIL_JS = r"""() => {
+  const f = document.getElementById('asc-fail');
+  const boot = document.getElementById('boot');
+  return {failCard: !!f, text: f ? (f.innerText || '').replace(/\s+/g, ' ').slice(0, 300) : '',
+          bootHidden: !boot || getComputedStyle(boot).display === 'none' || boot.classList.contains('gone'),
+          bootMsg: boot ? (document.getElementById('boot-msg') || {}).textContent : null};
+}"""
+
+
+def sec_boot(pg, url, origin, ctx, boot_js_override=None):
     s = Section("boot")
     base = url.split("?")[0]
     for label, qs, want in BOOT_CASES:
@@ -892,40 +973,133 @@ def sec_boot(pg, url, origin):
         for k, v in want.items():
             s.check(st.get(k) == v, "%s: %s == %r" % (label, k, v), "got %r" % st.get(k))
         s.check(st["menuOpen"], "%s: the title menu is the first thing shown" % label)
+        s.check(not st["paramNotice"], "%s: no 'unknown stage' notice for a valid link" % label)
 
-    # ---- a stage id that cannot load must produce a readable error ----
+        if qs == "?stage=neon-2":
+            # The contract says PLAY loads the ?stage= stage. The title's PLAY
+            # routes through style.js uiAction('play') -> callFirst(game,
+            # ['startRun','newRun','beginRun','returnToHub']); Game has none of
+            # the first three, so PLAY reloads the hub and Game.startGame() - the
+            # only consumer of _pendingStage - is never reached from the UI.
+            wait_title(pg)
+            box = title_button_box(pg, "tBtnPlay")
+            if box and box["w"] > 4:
+                pg.mouse.click(box["x"], box["y"])
+            loaded = wait_stage(pg, "neon-2", 20)
+            s.check(bool(loaded) and loaded["id"] == "neon-2", "%s: PLAY loads the ?stage= stage" % label,
+                    "after PLAY: %s pending=%s" % (json.dumps(loaded), pg.evaluate("ASCENDANT.game._pendingStage")),
+                    xfail="style.js uiAction('play') never reaches Game.startGame() (no startRun/newRun/beginRun on Game) - PLAY calls returnToHub()")
+
+    # ---- a ?stage= id that is not a stage: said so, visibly, then ignored ----
     seed_storage(pg, origin, save_raw=None, settings_raw=None, clear=True)
     pg.goto(base + "?stage=not-a-real-stage", wait_until="load", timeout=60_000)
     b = wait_boot(pg)
     s.check(b["global"] and b["bootGone"], "?stage=not-a-real-stage still boots to the menu",
             json.dumps(b))
+    pg.wait_for_timeout(700)
+    n = pg.evaluate(NOTICE_JS, "asc-param-notice")
+    s.check(n["present"] and n["shown"] and "not-a-real-stage" in n["text"],
+            "an unknown ?stage= id is reported to the player, visibly, naming the id",
+            json.dumps(n))
+    s.check(pg.evaluate("ASCENDANT.game._pendingStage") is None,
+            "the unknown id is not handed to the game", "pending=%r" % pg.evaluate("ASCENDANT.game._pendingStage"))
     act_play(pg)
-    pg.wait_for_timeout(3500)
+    pg.wait_for_timeout(2500)
     err = pg.evaluate(
-        """() => {
-             const A = ASCENDANT;
-             const txt = (document.getElementById('hud').innerText || '') + ' ' +
-                         (document.getElementById('ui').innerText || '');
-             return {
-               state: A.game.state,
-               frames: A.game.frames,
-               failCard: !!document.getElementById('asc-fail'),
-               readable: /COULD NOT LOAD|NOT-A-REAL-STAGE|unknown stage/i.test(txt),
-               text: txt.replace(/\s+/g, ' ').slice(0, 200),
-             };
-           }"""
+        """() => ({state: ASCENDANT.game.state, frames: ASCENDANT.game.frames,
+                   failCard: !!document.getElementById('asc-fail')})"""
     )
-    s.check(err["readable"], "a failed stage load shows a readable error card",
-            err["text"])
-    s.check(err["state"] in ("hub", "title", "playing"),
-            "the game falls back to a live state, not a black hole", err["state"])
-    s.check(not err["failCard"], "one bad stage id does not kill the whole runtime",
-            err["failCard"])
+    s.check(err["state"] in ("hub", "playing"), "PLAY still works - the game falls back to a live state",
+            err["state"])
+    s.check(not err["failCard"], "one bad stage id does not kill the whole runtime", err["failCard"])
     frames0 = err["frames"]
     pg.wait_for_timeout(1200)
     s.check(pg.evaluate("() => ASCENDANT.game.frames") > frames0,
-            "the render loop keeps running after the failed load")
+            "the render loop keeps running after the ignored id")
+
+    # ---- a module fetch that stalls forever must NOT leave the splash forever ----
+    # (real-world analogue: a CDN request that hangs.) The watchdog window is
+    # shortened through the documented harness hook so this runs in seconds.
+    pg2 = ctx.new_page()
+    pg2.add_init_script(INIT_JS + "\nwindow.__ASCENDANT_BOOT_STALL_MS = 6000;")
+    if boot_js_override:
+        _serve_override(pg2, boot_js_override)
+    pg2.route("**/runtime/ui/menu.js*", lambda route: None)   # never fulfilled, never aborted
+    t0 = time.time()
+    try:
+        pg2.goto(base, wait_until="load", timeout=60_000)
+    except Exception as e:
+        pass
+    card = None
+    while time.time() - t0 < 45:
+        try:
+            card = pg2.evaluate(FAIL_JS)
+        except Exception:
+            card = None
+        if card and card["failCard"]:
+            break
+        pg2.wait_for_timeout(500)
+    dt = time.time() - t0
+    s.check(bool(card) and card["failCard"], "a stalled module fetch ends in the failure card, not a splash forever",
+            "after %.1fs: %s" % (dt, json.dumps(card)))
+    s.check(bool(card) and card["failCard"] and "stalled" in card["text"].lower() and "interface" in card["text"].lower(),
+            "the card names the stall and the phase that hung", (card or {}).get("text", "")[:160])
+    s.check(bool(card) and card["bootHidden"], "the #boot splash is out of the way once the card shows",
+            json.dumps({k: (card or {}).get(k) for k in ("bootHidden", "bootMsg")}))
+    pg2.unroute("**/runtime/ui/menu.js*")
+    pg2.close()
+
+    # ---- a RUNTIME stage-load failure (module aborted) - what the player sees ----
+    pg3 = ctx.new_page()
+    pg3.add_init_script(INIT_JS)
+    pg3.route("**/runtime/data/stages/neon-2.js*", lambda route: route.abort())
+    seed_storage(pg3, origin, save_raw=None, settings_raw=None, clear=True)
+    pg3.goto(base, wait_until="load", timeout=60_000)
+    b = wait_boot(pg3)
+    act_play(pg3)
+    pg3.wait_for_timeout(1500)
+    pg3.evaluate("() => { ASCENDANT.game.loadStage('neon-2').catch(() => {}); }")
+    seen = {"toast": False, "visibleSamples": 0, "samples": 0, "text": ""}
+    t0 = time.time()
+    while time.time() - t0 < 5:
+        o = pg3.evaluate(
+            """() => { const t = document.querySelector('.ah-toast'); const p = document.querySelector('.ah-play');
+                       return {toast: !!t, text: t ? t.textContent.trim().slice(0, 80) : '',
+                               visible: !!(t && p && parseFloat(getComputedStyle(p).opacity) > 0.5)}; }""")
+        seen["samples"] += 1
+        if o["toast"]:
+            seen["toast"] = True
+            seen["text"] = o["text"]
+            if o["visible"]:
+                seen["visibleSamples"] += 1
+        pg3.wait_for_timeout(120)
+    # a toast lives 2.6 s; "readable" means it stayed visible for most of that,
+    # not that one sample caught .ah-play mid-fade
+    seen["toastVisible"] = seen["visibleSamples"] >= 10
+    after = pg3.evaluate(
+        """() => ({state: ASCENDANT.game.state, stageId: ASCENDANT.game.stageId,
+                   suspended: !!(ASCENDANT.game.input && ASCENDANT.game.input.suspended),
+                   hudVisible: !!(ASCENDANT.game.hud && ASCENDANT.game.hud._visible),
+                   failCard: !!document.getElementById('asc-fail'), frames: ASCENDANT.game.frames})""")
+    # 'paused' counts as live: a focus change while the probe drives two pages
+    # pauses the game (pause('blur')) - the loop still runs and the menu is up.
+    s.check(not after["failCard"] and after["state"] in ("hub", "playing", "paused"),
+            "a runtime load failure falls back to a live state", json.dumps(after))
+    s.check(seen["toast"], "a runtime load failure raises the 'COULD NOT LOAD' toast", json.dumps(seen))
+    s.check(seen["toastVisible"], "...and the player can actually SEE it (visible >= 1.2 s of its 2.6 s life)",
+            json.dumps(seen),
+            xfail="game.js _onLoadError() toasts into hud.nPlay, which loadStage() hid (setVisible(false)) and never re-shows")
+    pg3.unroute("**/runtime/data/stages/neon-2.js*")
+    pg3.close()
     return s
+
+
+def _serve_override(pg, path):
+    """A/B helper: serve an alternate boot.js (e.g. the committed one) so the
+    same probe can show the defect before and after."""
+    body = open(path, "rb").read()
+    pg.route("**/runtime/boot.js*", lambda route: route.fulfill(
+        status=200, body=body, headers={"Content-Type": "text/javascript", "Cache-Control": "no-store"}))
 
 
 # ---------------------------------------------------------------------------
@@ -945,6 +1119,8 @@ def main() -> int:
     ap.add_argument("--width", type=int, default=1280)
     ap.add_argument("--height", type=int, default=720)
     ap.add_argument("--json", default=os.path.join(HERE, "persistcheck.json"))
+    ap.add_argument("--boot-js", default=None,
+                    help="serve this file as runtime/boot.js (A/B a boot.js against the same probe)")
     args = ap.parse_args()
 
     want = [x.strip() for x in args.only.split(",") if x.strip()] or list(SECTIONS.keys())
@@ -960,6 +1136,8 @@ def main() -> int:
     print("ASCENDANT persistcheck   (PRODUCTION mode - no ?dev=1, no autoplay flag)")
     print("URL      : %s" % args.url)
     print("sections : %s" % ", ".join(want))
+    if args.boot_js:
+        print("boot.js  : OVERRIDE %s" % args.boot_js)
     print("=" * 74)
 
     results = []
@@ -968,10 +1146,14 @@ def main() -> int:
         ctx = br.new_context(viewport={"width": args.width, "height": args.height})
         pg = ctx.new_page()
         pg.add_init_script(INIT_JS)
+        if args.boot_js:
+            _serve_override(pg, args.boot_js)
         for name in want:
             try:
                 if name == "audio":
                     sec = SECTIONS[name](pg, args.url, origin, ctx)
+                elif name == "boot":
+                    sec = SECTIONS[name](pg, args.url, origin, ctx, args.boot_js)
                 else:
                     sec = SECTIONS[name](pg, args.url, origin)
             except Exception as e:
@@ -982,7 +1164,9 @@ def main() -> int:
         ctx.close()
         br.close()
 
-    fails = [(s.name, lbl, det) for s in results for (ok, lbl, det) in s.rows if not ok]
+    fails = [(s.name, lbl, det) for s in results for (ok, lbl, det, xf) in s.rows if not ok and not xf]
+    xfails = [(s.name, lbl, xf) for s in results for (ok, lbl, det, xf) in s.rows if not ok and xf]
+    xpass = [(s.name, lbl, xf) for s in results for (ok, lbl, det, xf) in s.rows if ok and xf]
     total = sum(len(s.rows) for s in results)
     print("=" * 74)
     if fails:
@@ -990,7 +1174,15 @@ def main() -> int:
         for name, lbl, det in fails:
             print("  x [%s] %s   %s" % (name, lbl, det))
     else:
-        print("all %d checks passed" % total)
+        print("all %d in-lane checks passed" % (total - len(xfails) - len(xpass)))
+    if xfails:
+        print("OPEN, OUT OF LANE (%d, reproduced here, not counted):" % len(xfails))
+        for name, lbl, xf in xfails:
+            print("  ~ [%s] %s   -> %s" % (name, lbl, xf))
+    if xpass:
+        print("XPASS (%d): previously open defects now passing - drop the xfail:" % len(xpass))
+        for name, lbl, xf in xpass:
+            print("  + [%s] %s" % (name, lbl))
     print("=" * 74)
     print("VERDICT: %s" % ("PERSIST OK" if not fails else "PERSIST BROKEN"))
 
@@ -998,9 +1190,11 @@ def main() -> int:
         with open(args.json, "w", encoding="utf-8") as fh:
             json.dump({
                 "url": args.url,
-                "sections": {s.name: [{"ok": o, "label": l, "detail": d} for (o, l, d) in s.rows]
+                "sections": {s.name: [{"ok": o, "label": l, "detail": d, "xfail": xf} for (o, l, d, xf) in s.rows]
                              for s in results},
                 "failing": len(fails),
+                "xfail": len(xfails),
+                "xpass": len(xpass),
                 "total": total,
             }, fh, indent=2)
     except Exception:

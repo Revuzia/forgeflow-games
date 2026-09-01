@@ -154,60 +154,124 @@ function removeRaw(key) {
 }
 
 /* ------------------------------------------------------------- migration */
+/*
+ * Sanitisers that also REPORT. A field that is PRESENT but unusable is a
+ * repair — the player is told once that their save was damaged and mended.
+ * An ABSENT field is normal (older, leaner saves) and never counts.
+ */
+const MAX_REPAIRS = 24;
+function has(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
+function note(repairs, where) { if (repairs.length < MAX_REPAIRS) repairs.push(where); }
+
+/** non-negative integer, or `def` (+repair) when present but unusable */
+function takeInt(raw, key, def, repairs, where) {
+  if (!has(raw, key)) return def;
+  const v = raw[key];
+  if (typeof v === 'number' && Number.isFinite(v) && v >= 0) return Math.floor(v);
+  note(repairs, where + '.' + key);
+  return def;
+}
+
+/** positive ms rounded, or null; null is a legal stored value (no clear yet) */
+function takeMs(raw, key, repairs, where) {
+  if (!has(raw, key)) return null;
+  const v = raw[key];
+  if (v === null) return null;
+  if (typeof v === 'number' && Number.isFinite(v) && v > 0) return Math.round(v);
+  note(repairs, where + '.' + key);
+  return null;
+}
+
+function takeBool(raw, key, def, repairs, where) {
+  if (!has(raw, key)) return def;
+  const v = raw[key];
+  if (typeof v === 'boolean') return v;
+  note(repairs, where + '.' + key);
+  return def;
+}
+
+function takeCoins(raw, repairs, where) {
+  if (!has(raw, 'coins')) return [];
+  const v = raw.coins;
+  if (!Array.isArray(v)) { note(repairs, where + '.coins'); return []; }
+  const out = uniqSortedInts(v, 512);
+  for (let i = 0; i < v.length; i++) {
+    const n = v[i];
+    if (typeof n !== 'number' || !Number.isFinite(n) || n < 0 || n > 4095) { note(repairs, where + '.coins[' + i + ']'); break; }
+  }
+  return out;
+}
+
 /**
- * Accepts anything and returns a valid, fully sanitised save object.
+ * Accepts anything and returns a valid, fully sanitised save object plus the
+ * list of fields that had to be repaired.
  * Unknown-future versions are preserved to the .bak slot and replaced with a
  * fresh save rather than being half-read into a broken state.
  */
 function migrate(raw) {
-  if (!isObj(raw)) return { data: freshData(), replaced: true };
+  const repairs = [];
+  if (!isObj(raw)) return { data: freshData(), replaced: true, repairs };
 
-  const v = posInt(raw.v, 0);
+  const v = takeInt(raw, 'v', 0, repairs, 'save');
 
   if (v > SCHEMA_VERSION) {
     try { writeRaw(BAK_KEY, JSON.stringify(raw)); } catch (e) {}
     const d = freshData();
     d.migratedFromVersion = v;
-    return { data: d, replaced: true };
+    return { data: d, replaced: true, repairs };
   }
 
   const out = freshData();
-  out.createdAt = posInt(raw.createdAt, out.createdAt);
-  out.updatedAt = posInt(raw.updatedAt, out.updatedAt);
-  out.sessions = posInt(raw.sessions, 0);
-  out.totalPlaytimeMs = posInt(raw.totalPlaytimeMs, 0);
-  out.longestRunNoDeathMs = posInt(raw.longestRunNoDeathMs, 0);
-  out.unlockAll = raw.unlockAll === true;
+  out.createdAt = takeInt(raw, 'createdAt', out.createdAt, repairs, 'save');
+  out.updatedAt = takeInt(raw, 'updatedAt', out.updatedAt, repairs, 'save');
+  out.sessions = takeInt(raw, 'sessions', 0, repairs, 'save');
+  out.totalPlaytimeMs = takeInt(raw, 'totalPlaytimeMs', 0, repairs, 'save');
+  out.longestRunNoDeathMs = takeInt(raw, 'longestRunNoDeathMs', 0, repairs, 'save');
+  out.unlockAll = takeBool(raw, 'unlockAll', false, repairs, 'save');
 
   /* v0 (pre-versioning) stored the stage map at the root. */
-  const srcStages = isObj(raw.stages) ? raw.stages : (v === 0 ? raw : null);
+  const stagesIsMap = isObj(raw.stages);
+  if (has(raw, 'stages') && !stagesIsMap) note(repairs, 'save.stages');
+  const srcStages = stagesIsMap ? raw.stages : (v === 0 ? raw : null);
   if (isObj(srcStages)) {
     for (const id in srcStages) {
-      if (!Object.prototype.hasOwnProperty.call(srcStages, id)) continue;
+      if (!has(srcStages, id)) continue;
       if (id === 'v' || id === 'stages' || id === 'createdAt' || id === 'updatedAt') continue;
       const s = srcStages[id];
-      if (!isObj(s)) continue;
+      if (!isObj(s)) {
+        /* In a real stage map every entry is a record; at a v0 root the other
+           keys are ordinary top-level fields and are not corruption. */
+        if (stagesIsMap) note(repairs, 'stages.' + id);
+        continue;
+      }
+      const where = 'stages.' + id;
       const rec = freshStage(id);
-      rec.best = msOrNull(s.best);
-      rec.deaths = posInt(s.deaths, 0);
-      rec.cleared = s.cleared === true || rec.best !== null;
-      rec.coins = uniqSortedInts(s.coins, 512);
-      rec.cpIndex = posInt(s.cpIndex, 0);
-      rec.attempts = posInt(s.attempts, 0);
-      rec.clears = posInt(s.clears, rec.cleared ? 1 : 0);
-      rec.playMs = posInt(s.playMs, 0);
-      rec.lastPlayed = posInt(s.lastPlayed, 0);
-      rec.longestRunNoDeathMs = posInt(s.longestRunNoDeathMs, 0);
-      rec.firstClearDate = (typeof s.firstClearDate === 'string' && s.firstClearDate.length <= 40)
-        ? s.firstClearDate : null;
+      rec.best = takeMs(s, 'best', repairs, where);
+      rec.deaths = takeInt(s, 'deaths', 0, repairs, where);
+      rec.cleared = takeBool(s, 'cleared', false, repairs, where) || rec.best !== null;
+      rec.coins = takeCoins(s, repairs, where);
+      rec.cpIndex = takeInt(s, 'cpIndex', 0, repairs, where);
+      rec.attempts = takeInt(s, 'attempts', 0, repairs, where);
+      rec.clears = takeInt(s, 'clears', rec.cleared ? 1 : 0, repairs, where);
+      rec.playMs = takeInt(s, 'playMs', 0, repairs, where);
+      rec.lastPlayed = takeInt(s, 'lastPlayed', 0, repairs, where);
+      rec.longestRunNoDeathMs = takeInt(s, 'longestRunNoDeathMs', 0, repairs, where);
+      if (has(s, 'firstClearDate')) {
+        const f = s.firstClearDate;
+        if (f === null || (typeof f === 'string' && f.length <= 40)) rec.firstClearDate = f;
+        else note(repairs, where + '.firstClearDate');
+      }
       if (rec.cleared && !rec.firstClearDate) rec.firstClearDate = new Date(rec.lastPlayed || Date.now()).toISOString();
-      if (typeof s.world === 'string' && s.world) rec.world = s.world;
+      if (has(s, 'world')) {
+        if (typeof s.world === 'string' && s.world) rec.world = s.world;
+        else note(repairs, where + '.world');
+      }
       out.stages[id] = rec;
     }
   }
 
   out.v = SCHEMA_VERSION;
-  return { data: out, replaced: false };
+  return { data: out, replaced: false, repairs };
 }
 
 /* ============================================================ Save object */
@@ -215,6 +279,8 @@ let _data = null;
 let _dirty = false;
 let _writeTimer = 0;
 let _unloadHooked = false;
+/** Set by load() when this page load did NOT start from a clean, readable save. */
+let _recovery = null;
 const _subs = [];
 
 let _worldOrder = DEFAULT_WORLD_ORDER.slice();
@@ -284,27 +350,74 @@ export const Save = {
   /** false when running in private mode / storage-denied contexts. */
   get persistent() { storage(); return _persistent; },
 
+  /**
+   * true when this page load did not start from a clean, readable save:
+   * the stored payload was unparseable, not an object, from a newer schema,
+   * or had fields that were present but unusable and got reset.
+   * A brand-new player (no stored payload at all) is NOT a recovery.
+   */
+  get recovered() { return _recovery !== null; },
+
+  /**
+   * Detail for the one-time notice / a bug report, or null.
+   * {kind:'unreadable'|'not-an-object'|'newer-version'|'repaired',
+   *  repairs:string[], fromVersion:number|null, backedUp:boolean, at:number}
+   */
+  get recovery() { return _recovery; },
+
   /* ---------------------------------------------------- load / reset / io */
 
-  /** Read + migrate from storage. Idempotent; returns the live save object. */
-  load() {
+  /**
+   * Read + migrate from storage. IDEMPOTENT: the first call reads storage,
+   * every later call returns the live object. boot.js and Game.boot() both
+   * call this, and re-reading counted every page load as two sessions
+   * (sessions=2 on a first run). Pass {force:true} to re-read on purpose.
+   */
+  load(opts) {
+    if (_data && !(opts && opts.force === true)) return _data;
+
+    let raw = null;
+    try { raw = readRaw(KEY); } catch (e) { raw = null; }
+    const present = typeof raw === 'string';
     let parsed = null;
-    try {
-      const raw = readRaw(KEY);
-      if (raw) parsed = JSON.parse(raw);
-    } catch (e) {
-      /* Corrupt JSON: keep the bad text around for a bug report, start clean. */
-      try { const raw = readRaw(KEY); if (raw) writeRaw(BAK_KEY, raw); } catch (e2) {}
-      parsed = null;
+    let unreadable = false;
+    if (present) {
+      try { parsed = JSON.parse(raw); } catch (e) { unreadable = true; parsed = null; }
     }
+
     const res = migrate(parsed);
+
+    let kind = null;
+    if (present) {
+      if (unreadable) kind = 'unreadable';
+      else if (!isObj(parsed)) kind = 'not-an-object';
+      else if (res.data.migratedFromVersion) kind = 'newer-version';
+      else if (res.repairs.length) kind = 'repaired';
+    }
+    /* Keep the damaged text around for a bug report (a newer-version payload
+       was already copied to the .bak slot inside migrate). */
+    if (kind && kind !== 'newer-version') { try { writeRaw(BAK_KEY, raw); } catch (e) {} }
+
     _data = res.data;
     _data.sessions = posInt(_data.sessions, 0) + 1;
-    if (res.replaced || !parsed) markDirty(null);
+    _recovery = kind ? {
+      kind,
+      repairs: res.repairs.slice(),
+      fromVersion: res.data.migratedFromVersion || null,
+      backedUp: true,
+      at: Date.now(),
+    } : null;
+
+    /* A replaced OR repaired save is written promptly, so the next load is
+       clean and the recovery notice is shown exactly once. */
+    if (kind || res.replaced || !parsed) markDirty(null);
     else { _dirty = true; hookUnload(); }
-    emit('load', { replaced: res.replaced });
+    emit('load', { replaced: res.replaced, recovered: kind !== null, recovery: _recovery });
     return _data;
   },
+
+  /** Re-read storage on purpose (tooling / a "reload save" button). */
+  reload() { return this.load({ force: true }); },
 
   /** Wipe everything back to a brand-new save. */
   reset() {
@@ -312,6 +425,7 @@ export const Save = {
     if (old) { try { writeRaw(BAK_KEY, JSON.stringify(old)); } catch (e) {} }
     _data = freshData();
     _data.sessions = 1;
+    _recovery = null;
     _dirty = true;
     this.flush();
     emit('reset', {});
@@ -345,9 +459,10 @@ export const Save = {
     if (_data) { try { writeRaw(BAK_KEY, JSON.stringify(_data)); } catch (e) {} }
     const res = migrate(parsed);
     _data = res.data;
+    _recovery = null;
     _dirty = true;
     this.flush();
-    emit('import', { replaced: res.replaced });
+    emit('import', { replaced: res.replaced, repairs: res.repairs.slice() });
     return true;
   },
 

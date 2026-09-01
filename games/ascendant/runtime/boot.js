@@ -14,7 +14,10 @@ import * as THREE from 'three';
  *
  * URL parameters
  *   ?dev=1                     dev tools + debug draw (Game.__dev appears)
- *   ?stage=<id>                sets what PLAY loads — it does NOT auto-start
+ *   ?stage=<id>                sets what PLAY loads — it does NOT auto-start.
+ *                              An id that is not a stage is IGNORED with a
+ *                              visible notice (it used to be handed to the game
+ *                              and fail silently at PLAY time).
  *   ?quality=low|medium|high|ultra
  *   ?mode=ai|online            IGNORED, deliberately.  The FFG portal appends
  *                              this to every launch; a game that auto-starts on
@@ -23,6 +26,13 @@ import * as THREE from 'three';
  *
  * Audio is never started here.  A Web Audio context may only be resumed from a
  * user gesture — the title PLAY click is that gesture (Game.startAudio()).
+ *
+ * Two things this file promises the player (both probed by
+ * _harness/persistcheck.py):
+ *   • the #boot splash ALWAYS goes away — a boot that stalls (a module fetch
+ *     that never settles) ends in the failure card, not a splash forever;
+ *   • a save that could not be read is said so ONCE, on the load that
+ *     replaced or repaired it (Save.recovered), never silently.
  * ==========================================================================*/
 
 import { Engine } from './core/engine.js';
@@ -36,6 +46,7 @@ import { ParticleSystem } from './fx/particles.js';
 import { Decals } from './fx/decals.js';
 import { Impacts } from './fx/impacts.js';
 import { Game } from './game.js';
+import { isStageId } from './data/index.js';
 
 /* ---------------------------------------------------------------------------
  * URL parameters
@@ -51,6 +62,9 @@ const QUALITY_PARAM = (PARAMS.get('quality') || '').toLowerCase();
 const STAGE_PARAM = PARAMS.get('stage') || null;
 const MODE_PARAM = PARAMS.get('mode') || null;
 const VALID_QUALITY = { low: 1, medium: 1, high: 1, ultra: 1 };
+/* Validated against the world registry (pure data, already in the module
+   graph via game.js). game.js's data/index.js is the one source of stage ids. */
+const STAGE_OK = STAGE_PARAM ? (() => { try { return isStageId(STAGE_PARAM); } catch (e) { return false; } })() : true;
 
 /* ---------------------------------------------------------------------------
  * Boot overlay
@@ -63,11 +77,23 @@ const containerEl = document.getElementById('game-container') || document.body;
 
 let shownProgress = 0;
 
+function nowMs() {
+  return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+}
+
+/* Every progress write is also a heartbeat for the stall watchdog below. */
+let lastProgressAt = nowMs();
+let lastPhase = 'initialising';
+let stallHinted = false;
+
 function setProgress(p, message) {
   const v = Math.max(shownProgress, Math.min(1, Math.max(0, p)));
   shownProgress = v;
   if (barEl) barEl.style.width = (v * 100).toFixed(1) + '%';
   if (msgEl && typeof message === 'string' && message) msgEl.textContent = message;
+  lastProgressAt = nowMs();
+  if (typeof message === 'string' && message) lastPhase = message;
+  stallHinted = false;
 }
 
 /** Two rAFs: one to commit the style write, one to let it actually paint. */
@@ -84,7 +110,11 @@ async function phase(p, message, fn) {
   return fn ? fn() : undefined;
 }
 
+/** true once the splash has been resolved one way or another (game, no-GPU, card) */
+let bootEnded = false;
+
 function dismissBoot() {
+  bootEnded = true;
   if (!bootEl) return;
   bootEl.classList.add('gone');
   window.setTimeout(() => {
@@ -93,6 +123,7 @@ function dismissBoot() {
 }
 
 function showNoGPU(detail) {
+  bootEnded = true;
   if (bootEl) bootEl.style.display = 'none';
   if (noGpuEl) {
     noGpuEl.style.display = 'flex';
@@ -175,6 +206,7 @@ function describe(err) {
 function showFailure(err, where) {
   if (failureShown) return;
   failureShown = true;
+  bootEnded = true;
   injectFailureStyle();
   if (bootEl) bootEl.style.display = 'none';
 
@@ -229,6 +261,160 @@ function showFailure(err, where) {
   (document.body || document.documentElement).appendChild(wrap);
 
   if (typeof console !== 'undefined' && console.error) console.error('[ascendant] fatal', err);
+}
+
+/* ---------------------------------------------------------------------------
+ * Boot stall watchdog
+ *
+ * The worst boot outcome is not an error — it is the branded splash sitting
+ * there forever with a frozen bar, no message and no Reload button. That is
+ * exactly what a module fetch that never settles produces: `await import()`
+ * inside resolveClass() simply never returns, nothing throws, and neither the
+ * error listeners nor main().catch ever fire.  Reproduced by stalling one
+ * runtime/ui/*.js request (persistcheck.py "boot stall").
+ *
+ * Progress is a heartbeat (every phase() and every Game onProgress call
+ * refreshes it).  Silence for STALL_HINT_MS turns the message into
+ * "<phase> — still working"; silence for STALL_FAIL_MS hands over to the
+ * failure card, naming the phase that hung.  90 s is far beyond any healthy
+ * phase (the slowest, the material bake and the sanctum build, are a few
+ * seconds each and keep reporting), so a slow machine never trips it.
+ * `window.__ASCENDANT_BOOT_STALL_MS` lets a harness shorten the wait.
+ * ------------------------------------------------------------------------ */
+const STALL_HINT_MS = 30000;
+const STALL_FAIL_MS = (() => {
+  try { const v = window.__ASCENDANT_BOOT_STALL_MS | 0; return v > 0 ? v : 90000; } catch (e) { return 90000; }
+})();
+let stallTimer = 0;
+
+function startStallWatch() {
+  if (stallTimer) return;
+  stallTimer = window.setInterval(() => {
+    if (bootEnded || failureShown) { window.clearInterval(stallTimer); stallTimer = 0; return; }
+    const idle = nowMs() - lastProgressAt;
+    if (idle >= STALL_FAIL_MS) {
+      window.clearInterval(stallTimer); stallTimer = 0;
+      showFailure(
+        new Error('Boot stalled for ' + Math.round(idle / 1000) + ' s during "' + lastPhase + '". ' +
+          'A script or asset never finished loading — check the network, then reload.'),
+        'startup · stalled at "' + lastPhase + '"',
+      );
+    } else if (idle >= STALL_HINT_MS && !stallHinted) {
+      stallHinted = true;
+      if (msgEl) msgEl.textContent = lastPhase + ' — still working';
+    }
+  }, 1000);
+}
+
+/* ---------------------------------------------------------------------------
+ * Non-fatal notices — a small card at the top of the screen for things the
+ * player should hear once and can dismiss: a save that had to be reset or
+ * repaired, a link parameter that was ignored.  Never blocks the menu.
+ * ------------------------------------------------------------------------ */
+function injectNoticeStyle() {
+  if (document.getElementById('asc-notice-style')) return;
+  const st = document.createElement('style');
+  st.id = 'asc-notice-style';
+  st.textContent = `
+.asc-notice{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:40;
+  width:min(600px,92vw);box-sizing:border-box;padding:13px 16px 12px 14px;border-radius:11px;
+  display:flex;gap:12px;align-items:flex-start;cursor:pointer;pointer-events:auto;
+  background:linear-gradient(180deg,rgba(32,20,18,.94),rgba(14,10,12,.96));
+  border:1px solid rgba(255,150,110,.28);box-shadow:0 14px 40px rgba(0,0,0,.55);
+  font-family:'Segoe UI',system-ui,-apple-system,sans-serif;color:#eadcd6;
+  opacity:0;transition:opacity .3s ease,transform .3s ease}
+.asc-notice.on{opacity:1}
+.asc-notice.off{opacity:0;transform:translateX(-50%) translateY(-8px)}
+.asc-notice .ic{flex:none;width:22px;height:22px;border-radius:50%;margin-top:1px;
+  background:#ff8a6b;color:#1a0d09;font:700 14px/22px inherit;text-align:center}
+.asc-notice .tx{flex:1;min-width:0}
+.asc-notice .t1{font:600 11px/1.2 inherit;letter-spacing:.26em;text-transform:uppercase;color:#ffb9a4}
+.asc-notice .t2{margin-top:5px;font:400 12.5px/1.55 inherit;color:#cdb8b1}
+.asc-notice .t3{margin-top:6px;font:500 10.5px/1.5 ui-monospace,'Cascadia Mono',Consolas,monospace;color:#8f7670;
+  white-space:pre-wrap;word-break:break-word;max-height:9em;overflow:auto}
+.asc-notice .x{flex:none;margin:-2px -4px 0 0;font:400 16px/1 inherit;color:#8f7670}
+`;
+  document.head.appendChild(st);
+}
+
+function showNotice(id, title, body, detail, ttlMs) {
+  try {
+    if (document.getElementById(id)) return null;
+    injectNoticeStyle();
+    const el = document.createElement('div');
+    el.id = id;
+    el.className = 'asc-notice';
+    el.setAttribute('role', 'status');
+    const ic = document.createElement('div'); ic.className = 'ic'; ic.textContent = '!';
+    const tx = document.createElement('div'); tx.className = 'tx';
+    const t1 = document.createElement('div'); t1.className = 't1'; t1.textContent = title;
+    const t2 = document.createElement('div'); t2.className = 't2'; t2.textContent = body;
+    tx.appendChild(t1); tx.appendChild(t2);
+    if (detail) { const t3 = document.createElement('div'); t3.className = 't3'; t3.textContent = detail; tx.appendChild(t3); }
+    const x = document.createElement('div'); x.className = 'x'; x.textContent = '×';
+    el.appendChild(ic); el.appendChild(tx); el.appendChild(x);
+    (document.body || document.documentElement).appendChild(el);
+    let gone = false;
+    const hide = () => {
+      if (gone) return;
+      gone = true;
+      el.classList.remove('on'); el.classList.add('off');
+      window.setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 340);
+    };
+    el.addEventListener('click', hide);
+    /* setTimeout, not rAF: a game booted in a background tab gets no animation
+       frames, and the notice must not stay at opacity 0 until it is gone. */
+    window.setTimeout(() => el.classList.add('on'), 30);
+    /* The clock only runs while the tab is visible, so a boot behind another
+       tab still shows the notice for its full life once the player looks. */
+    const ttl = Math.max(2000, ttlMs || 10000);
+    const arm = () => {
+      if (document.visibilityState === 'hidden') {
+        document.addEventListener('visibilitychange', arm, { once: true });
+        return;
+      }
+      window.setTimeout(hide, ttl);
+    };
+    arm();
+    return el;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** The one-time "your save could not be read" notice (Save.recovered). */
+function noticeSaveRecovery(rec) {
+  if (!rec) return;
+  let title, body, detail = '';
+  if (rec.kind === 'repaired') {
+    const n = rec.repairs.length;
+    title = 'Saved progress was repaired';
+    body = n + (n === 1 ? ' field' : ' fields') + ' in your save could not be read and ' +
+      (n === 1 ? 'was' : 'were') + ' reset. Everything else was kept, and a copy of the original is in your browser storage.';
+    detail = rec.repairs.slice(0, 8).join('\n') + (n > 8 ? '\n… +' + (n - 8) + ' more' : '');
+  } else if (rec.kind === 'newer-version') {
+    title = 'Save from a newer version';
+    body = 'Your saved progress was written by a newer build (v' + rec.fromVersion + ') and cannot be read by this one. ' +
+      'You are starting fresh; the original was kept as a backup in your browser storage.';
+  } else {
+    title = 'Saved progress could not be read';
+    body = 'The stored save was damaged, so you are starting fresh. A copy of the damaged data was kept in your browser storage.';
+  }
+  detail = detail || ('ascendant.save.v1.bak · ' + rec.kind);
+  showNotice('asc-save-notice', title, body, detail, 12000);
+  if (typeof console !== 'undefined' && console.warn) {
+    console.warn('[ascendant] save recovered (' + rec.kind + ')', rec.repairs.length ? rec.repairs : '');
+  }
+}
+
+/** ?stage=<id> named something that is not a stage. */
+function noticeBadStage(id) {
+  showNotice('asc-param-notice', 'Unknown stage in the link',
+    '"' + String(id).slice(0, 48) + '" is not a stage id, so it was ignored. PLAY starts from the sanctum as usual.',
+    'valid ids look like neon-1 … temple-3 (or hub)', 10000);
+  if (typeof console !== 'undefined' && console.warn) {
+    console.warn('[ascendant] ?stage=' + id + ' is not a stage id — ignored.');
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -306,6 +492,8 @@ async function resolveClass(label, candidates, names) {
  * Main
  * ------------------------------------------------------------------------ */
 async function main() {
+  startStallWatch();
+
   /* ---- 0. capability ---- */
   setProgress(0.03, 'checking device');
   await paint();
@@ -367,7 +555,7 @@ async function main() {
       input, audio, fx: particles, impacts, decals,
       mats: Mats, settings: Settings, save: Save,
       dev: DEV,
-      stage: STAGE_PARAM,
+      stage: STAGE_OK ? STAGE_PARAM : null,
       onProgress: (p, m) => setProgress(0.88 + p * 0.11, m),
       onFatal: (err) => showFailure(err, 'render loop'),
     });
@@ -405,6 +593,10 @@ async function main() {
   await paint();
   dismissBoot();
 
+  /* Things the player should hear once, over the title — never fatal. */
+  if (Save.recovered) noticeSaveRecovery(Save.recovery);
+  if (STAGE_PARAM && !STAGE_OK) noticeBadStage(STAGE_PARAM);
+
   /* Audio can only start from a gesture.  The title PLAY click is the intended
      one; this catches a player who presses a key first instead. */
   const gesture = () => {
@@ -428,7 +620,7 @@ async function main() {
       '\n  `  (backquote)                         toggle the readout',
     );
   }
-  if (STAGE_PARAM) {
+  if (STAGE_PARAM && STAGE_OK) {
     console.info('[ascendant] ?stage=' + STAGE_PARAM + ' — PLAY will load this stage. ' +
       'Nothing auto-starts; the menu comes first.');
   }
