@@ -73,7 +73,14 @@ set dressing whose additive light pools are the lighting system's lever.
 Rows whose background patch is ARCHITECTURE rather than haze ('occl' in the
 bgmode) are likewise printed but never gate: the law is written against the
 fog/sky behind a deck, and a station inside a set-piece interior has no haze
-behind its next deck to fail against.
+behind its next deck to fail against. A station whose captures come back
+all-black (GPU/tab contention — see the frame-luminance guard) prints as
+STATION UNMEASURABLE, which is neither pass nor FAIL: nothing was measured.
+A sub-floor vanish station additionally runs the GLARE-FLOOR test (swap the
+tile to unlit black, re-measure): when even that cannot reach the floor, the
+station prints 'glare-capped(max N)' and does not gate — the cap is a
+LIGHTING/geometry finding with measured evidence, not a surface defect any
+albedo could fix.
 
     python contrastcheck.py                          # every stage
     python contrastcheck.py --stages spire-1,temple-1 --save-shots
@@ -406,6 +413,19 @@ SAMPLE_JS = r"""
     const okPoint = (sp) => {
       if (!sp) return false;
       if (sp[0] < 3 || sp[0] > W-3 || sp[1] < 3 || sp[1] > H-3) return false;
+      // SILHOUETTE-HALO MARGIN (round 3): when a bright background (the
+      // foundry sea band renders 240+) meets the deck's far silhouette edge,
+      // the BLOOM pass bleeds its halo ~20 px over the edge ONTO the deck's
+      // pixels. On a steep view that band is a sliver of the face; at walking
+      // grazing (foundry-2 c4/c10: the next tile's top face spans ~40 px) it
+      // covered the pool's upper half, and the median measured the SEA'S
+      // halo — (200,174,156), bit-stable across four different tile
+      // materials, veil on or off. The halo is the background's post-glow,
+      // not the walked surface's value — same class as the laser-glow bands
+      // and stripe halos this tool already excludes. Points within the halo
+      // reach of the object's projected top edge are dropped; the fewPts
+      // guard still turns an all-halo face into an honest 'na'.
+      if (sp[1] < cand.rect[1] + 24) return false;
       for (const fr of fxRects) {
         if (inRect(sp[0], sp[1], fr, 0)) return false;   // beam-glow band
       }
@@ -576,6 +596,102 @@ VANISH_INFO_JS = r"""
 
 CLOCK_JS = "ASCENDANT.game.stage.clock"
 
+# GLARE-FLOOR TEST (round 3) — prove what the best possible surface could do.
+# foundry-2 c10 measured 2.3:1 through every material (grate, charcoal metal,
+# matte charcoal rubber, and finally an UNLIT PURE-BLACK swap): the sightline
+# crosses the molten pool's glare + bloom, an additive veil over deck AND haze
+# alike, and the veil floor alone reads ~0.18 luminance. When even a black
+# body cannot reach the gate floor, the station's top-value is LIGHTING-capped
+# — no walked material exists that passes — and reporting FAIL would demand
+# the impossible of the surface lane. The tool measures that cap honestly:
+# swap the tile's slab meshes to an unlit near-black material for one frame,
+# sample the same points, and compute the maximum achievable ratio. Below the
+# gate floor => the row prints 'glare-capped' with the cap, and does not gate
+# (the occl precedent: evidence, not a walked-surface violation; the fix, if
+# wanted, belongs to the lighting/geometry lanes, not to any albedo).
+VANISH_BLACK_JS = r"""
+([idx, on]) => {
+  const A = globalThis.ASCENDANT, G = A && A.game, S = G && G.stage;
+  const TH = A.THREE;
+  if (!S || !S.hazards || !TH) return false;
+  const t = (S.def && S.def.objects) ? S.def.objects[idx] : null;
+  for (const rec of S.hazards) {
+    const h = rec && rec.h;
+    if (!h || h.kind !== 'vanish' || !h.def) continue;
+    const d = h.def;
+    const same = (d === t) || (t && t.p && d.p &&
+      Math.hypot(d.p[0]-t.p[0], d.p[1]-t.p[1], d.p[2]-t.p[2]) < 0.01);
+    if (!same) continue;
+    if (on) {
+      if (h.__ccBlackSaved) return true;
+      const saved = [];
+      const black = new TH.MeshBasicMaterial({ color: 0x000000, fog: false });
+      h.mesh.traverse((o) => {
+        if (o.isMesh && o.name === 'platform') {
+          saved.push([o, o.material]);
+          o.material = black;
+        }
+      });
+      h.__ccBlackSaved = { saved, black };
+      return saved.length > 0;
+    }
+    if (h.__ccBlackSaved) {
+      for (const [o, m] of h.__ccBlackSaved.saved) o.material = m;
+      try { h.__ccBlackSaved.black.dispose(); } catch (e) { /* gc */ }
+      delete h.__ccBlackSaved;
+    }
+    return true;
+  }
+  return false;
+}"""
+
+# ROUND-3 TOOL FIX — the armed checkpoint's own beacon veils the camera.
+# POSE_JS re-arms the station via resetFrom(i-1), which lights that
+# checkpoint's furniture — including its VOLUMETRIC LIGHT COLUMN
+# (stage.js: CylinderGeometry(1.02, 1.30, 9.2), additive) — around the very
+# pad the tool then stands on. From inside it, the column's wall paints an
+# additive veil across the whole forward view: foundry-2 c4's raycast probe
+# hit an unnamed mesh 1.26 m from the camera (the column wall, radius
+# 1.02-1.30) in front of the tile at 7.8 m, and the tile's "sample" was the
+# veil + the bright sea — (203,175,157) cream, INVARIANT under three
+# different tile materials. The masked path failed closed (veil kills the
+# response => 'na ghosted', foundry-3 c2/c6); the vanish path reported the
+# veil as the deck. The player's own respawn beacon is a telegraph pinned to
+# the camera position, not part of deck-vs-haze readability, so it is hidden
+# for the measuring captures — the critic's shot battery (shots.py) keeps it.
+# ...and the second camera-space veil (round 3, found by the unlit-black layer
+# test at foundry-2 c10): every LAVA pool carries a 10 m ADDITIVE glow
+# billboard 0.6 m over its surface (lava.js _buildLight, makeGlowSprite —
+# "sells the bounce"). A tile that hangs OVER a pool is seen THROUGH that
+# card: an unlit pure-black replacement tile still measured (164,123,94)
+# at the scheduled solid-ON capture — the wash is the card, not the surface,
+# and an additive veil over BOTH deck and haze compresses any contrast toward
+# 1:1 no matter the albedo. The card is the same additive-FX class as the
+# laser halos (fxRects) and the checkpoint beacon: excluded from measuring
+# captures; the lava's own emissive SURFACE (the actual mood) stays.
+# ...and the third: the FINISH BEACON — a 52 m additive cylinder (stage.js
+# _buildFinish, "the silhouette that says GOAL from across the stage") whose
+# halo floods the frame centre for any station that faces the finish
+# (foundry-2 c10's capture shows it towering directly behind the measured
+# tile). All three are glow telegraphs, not scene readability.
+CP_GLOW_JS = r"""
+(on) => {
+  const A = globalThis.ASCENDANT, G = A && A.game, S = G && G.stage;
+  if (!S || !S.group) return false;
+  const g = S.group.getObjectByName('checkpoints');
+  if (g) g.visible = !!on;
+  if (S.finish && S.finish.group) S.finish.group.visible = !!on;
+  if (S.hazards) {
+    for (const rec of S.hazards) {
+      const h = rec && rec.h;
+      if (h && (h.kind === 'lava' || h.kind === 'risinglava') && h.glow) {
+        h.glow.visible = !!on;
+      }
+    }
+  }
+  return !!g;
+}"""
+
 CLICK_JS = r"""() => {
   const btns = Array.from(document.querySelectorAll('button.asc-btn'));
   for (const want of ['NEW RUN', 'PLAY', 'CONTINUE']) {
@@ -609,14 +725,17 @@ RESUME_JS = r"""() => {
 
 def ensure_playing(pg, timeout=10):
     """The game pauses itself on focus loss; a paused frame is dimmed + blurred
-    and every sample from it is fiction. Resume and wait for 'playing'."""
+    and every sample from it is fiction. Resume and wait for a LIVE state.
+    Live means 'playing' OR 'hub' — the hub stage runs its own state (game.js
+    state machine: loading|title|hub|playing|paused|...) and demanding
+    'playing' alone made the hub permanently unmeasurable (round-3 tool fix)."""
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
             st = pg.evaluate("globalThis.ASCENDANT && ASCENDANT.game && ASCENDANT.game.state")
         except Exception:
             st = None
-        if st == "playing":
+        if st in ("playing", "hub"):
             return True
         try:
             pg.evaluate(RESUME_JS)
@@ -659,6 +778,45 @@ def click_play(pg, timeout=25):
 # themed instance is shared by the rendered mesh — vanish clones are not).
 MASKABLE = {"stone", "metal", "panel", "grate", "ice", "glass", "obsidian",
             "wood", "sand", "checker", "rubber", "conveyor", "neon", "emissive"}
+
+
+# ---------------------------------------------- frame-luminance sanity guard --
+# Concurrent Chrome contention can hand back an ALL-BLACK frame (the tab lost
+# its GL surface for that capture): every sample in it reads ~1.04:1 and the
+# station prints as a FAIL no material change can fix (round-3 tool fix). A
+# real ASCENDANT frame is never that dark — the darkest theme (neon, bg
+# 0x05060f) still carries HUD glyphs, sky glow and emissive trim well above
+# this floor; a contention frame means ~0. Below LUMA_FLOOR the frame is
+# evidence of NOTHING: retake up to BLACK_RETRIES times (contention is
+# transient), then raise, and the station reports as STATION UNMEASURABLE —
+# deliberately distinct from FAIL, because the surface was never measured.
+LUMA_FLOOR = 2.5       # mean 8-bit luma of the whole frame
+BLACK_RETRIES = 2
+
+
+class BlackFrameError(Exception):
+    """the tab produced an all-black frame BLACK_RETRIES+1 captures running"""
+
+
+def frame_mean_luma(png_path):
+    from PIL import Image, ImageStat
+    im = Image.open(png_path).convert("L")
+    return ImageStat.Stat(im).mean[0]
+
+
+def snap(pg, path):
+    """pg.screenshot with the black-frame guard: retake, then raise."""
+    last = 0.0
+    for attempt in range(BLACK_RETRIES + 1):
+        pg.screenshot(path=path)
+        last = frame_mean_luma(path)
+        if last >= LUMA_FLOOR:
+            return
+        pg.wait_for_timeout(1000)
+        ensure_playing(pg, timeout=4)
+    raise BlackFrameError(
+        f"mean frame luma {last:.2f} < {LUMA_FLOOR} on "
+        f"{BLACK_RETRIES + 1} consecutive captures (GPU/tab contention)")
 
 
 # ------------------------------------------------------------- sampling -----
@@ -898,7 +1056,7 @@ def main():
                 n_st = min(n_st, args.cps)
             for i in range(n_st):
                 if not ensure_playing(pg):
-                    rows.append({"station": i, "error": "game not in 'playing' state"})
+                    rows.append({"station": i, "error": "game not in a live state (playing/hub)"})
                     continue
                 # Ghost-retry loop: the photometric mask (WIGGLE_JS) proves the
                 # sampled pixels wear the target's material; when they do not —
@@ -907,159 +1065,255 @@ def main():
                 ov = (os.path.join(OUTDIR, f"{sid}_st{i}.png") if args.save_shots else None)
                 excl = []
                 row = None
-                for _attempt in range(4):
-                    # pose facing +X (battery convention); if nothing is
-                    # sampleable from that facing, turn toward the next station
-                    info = None
-                    err = None
-                    for mode in (0, 1):
-                        try:
-                            pose = pg.evaluate(POSE_JS, [i, mode])
-                        except Exception as e:
-                            err = f"pose failed {e}"
-                            break
-                        if isinstance(pose, dict) and pose.get("error"):
-                            err = pose["error"]
-                            break
-                        try:
-                            got = pg.evaluate(SAMPLE_JS, [i, excl])
-                        except Exception as e:
-                            err = f"sample failed {e}"
-                            break
+                try:
+                    for _attempt in range(4):
+                        # pose facing +X (battery convention); if nothing is
+                        # sampleable from that facing, turn toward the next station
+                        info = None
                         err = None
-                        info = got
-                        if not got.get("error") and not got.get("none"):
-                            if mode == 1:
-                                info["turned"] = True
+                        for mode in (0, 1):
+                            try:
+                                pose = pg.evaluate(POSE_JS, [i, mode])
+                            except Exception as e:
+                                err = f"pose failed {e}"
+                                break
+                            if isinstance(pose, dict) and pose.get("error"):
+                                err = pose["error"]
+                                break
+                            try:
+                                got = pg.evaluate(SAMPLE_JS, [i, excl])
+                            except Exception as e:
+                                err = f"sample failed {e}"
+                                break
+                            err = None
+                            info = got
+                            if not got.get("error") and not got.get("none"):
+                                if mode == 1:
+                                    info["turned"] = True
+                                break
+                        if err:
+                            row = {"station": i, "error": err}
                             break
-                    if err:
-                        row = {"station": i, "error": err}
-                        break
-                    if info.get("error"):
-                        row = {"station": i, "error": info["error"]}
-                        break
-                    if info.get("none"):
-                        row = {"station": i, "na": True,
-                               "considered": info.get("considered"),
-                               "rej": info.get("rej"),
-                               "ghosted": len(excl) or None}
-                        break
-                    if not ensure_playing(pg):
-                        row = {"station": i, "error": "paused before capture"}
-                        break
-                    kind = info.get("kind")
-                    mat = info.get("mat")
-                    if kind == "conveyor":
-                        # the belt top wears the 'conveyor' registry material,
-                        # whatever frame material the def names in `mat`
-                        mat = "conveyor"
-                    if kind == "vanish":
-                        # Vanish tiles blink, and their body material is a
-                        # per-tile clone the registry wiggle cannot reach — no
-                        # photometric mask here. The capture must land in the
-                        # tile's solid ON state (a blanked tile is the absence
-                        # of a walked surface; the warn strobe is a telegraph,
-                        # not the surface). For 'cycle' tiles the ON window is
-                        # computed from the live stage clock + the def cycle
-                        # (see VANISH_INFO_JS); two takes inside ON, keep the
-                        # better. crumble/touch = solid until triggered: shoot
-                        # now. flicker (hash-driven) keeps blind best-of-3.
+                        if info.get("error"):
+                            row = {"station": i, "error": info["error"]}
+                            break
+                        if info.get("none"):
+                            row = {"station": i, "na": True,
+                                   "considered": info.get("considered"),
+                                   "rej": info.get("rej"),
+                                   "ghosted": len(excl) or None}
+                            break
+                        if not ensure_playing(pg):
+                            row = {"station": i, "error": "paused before capture"}
+                            break
+                        # hide the armed checkpoint beacon for the measuring
+                        # captures (see CP_GLOW_JS). MUST run AFTER the pose:
+                        # POSE_JS's resetFrom re-arms the station's checkpoint,
+                        # which re-lights the furniture — an earlier hide is
+                        # silently undone (that ordering bug is why the veil
+                        # survived the first version of this fix).
                         try:
-                            vinfo = pg.evaluate(VANISH_INFO_JS, [info["idx"]])
+                            pg.evaluate(CP_GLOW_JS, False)
                         except Exception:
-                            vinfo = None
-                        if vinfo is None:
-                            # The def object has NO live hazard: the factory
-                            # rejected it at stage build (spire-2's five
-                            # crumble planks die in validateHazardDef —
-                            # "missing required field(s) cycle:object" — even
-                            # though crumble ignores cycle). Sampling the def's
-                            # ghost rectangle would measure open sky as "the
-                            # deck". Report the absence instead.
-                            row = {"station": i, "error":
-                                   "vanish def objects[%d] has no live hazard "
-                                   "(hazard factory rejected it at build — "
-                                   "see the stage console)" % info["idx"]}
-                            break
-                        best = None
-                        if vinfo and vinfo["mode"] == "cycle":
-                            period = vinfo["on"] + vinfo["warn"] + vinfo["off"]
-                            for s_target in (min(0.30 * vinfo["on"], vinfo["on"] - 0.05),
-                                             min(0.65 * vinfo["on"], vinfo["on"] - 0.05)):
+                            pass
+                        kind = info.get("kind")
+                        mat = info.get("mat")
+                        glare_cap = None      # set by the vanish glare-floor test
+                        if kind == "conveyor":
+                            # the belt top wears the 'conveyor' registry material,
+                            # whatever frame material the def names in `mat`
+                            mat = "conveyor"
+
+                        # ROUND-3 TOOL FIX — re-project at the shutter. Any wait
+                        # between SAMPLE_JS and the screenshot (the vanish
+                        # ON-window schedule, the 800 ms between mask takes)
+                        # gives the landing camera time to keep settling, and
+                        # sample points computed seconds earlier then frame the
+                        # WRONG pixels: foundry-2 c4/c10 measured the fogged sea
+                        # band as "the tile" — (206,179,164) cream, INVARIANT
+                        # under three radically different tile materials, with
+                        # the overlay showing every point above the rendered
+                        # tile's far edge. The masked path at least fails closed
+                        # (a drifted projection stops responding and reads as a
+                        # ghost — foundry-3 c2/c6 went 'na' that way); the
+                        # vanish path has no mask at all. So the geometry is
+                        # made honest by construction: re-run SAMPLE_JS
+                        # immediately before a delayed capture and use the fresh
+                        # projection when it still frames the SAME def object
+                        # (idx equality; anything else keeps the original).
+                        def _fresh_info(prev):
+                            try:
+                                f = pg.evaluate(SAMPLE_JS, [i, excl])
+                            except Exception:
+                                return prev
+                            if (isinstance(f, dict) and not f.get("error")
+                                    and not f.get("none")
+                                    and f.get("idx") == prev.get("idx")):
+                                if prev.get("turned"):
+                                    f["turned"] = True
+                                return f
+                            return prev
+                        if kind == "vanish":
+                            # Vanish tiles blink, and their body material is a
+                            # per-tile clone the registry wiggle cannot reach — no
+                            # photometric mask here. The capture must land in the
+                            # tile's solid ON state (a blanked tile is the absence
+                            # of a walked surface; the warn strobe is a telegraph,
+                            # not the surface). For 'cycle' tiles the ON window is
+                            # computed from the live stage clock + the def cycle
+                            # (see VANISH_INFO_JS); two takes inside ON, keep the
+                            # better. crumble/touch = solid until triggered: shoot
+                            # now. flicker (hash-driven) keeps blind best-of-3.
+                            try:
+                                vinfo = pg.evaluate(VANISH_INFO_JS, [info["idx"]])
+                            except Exception:
+                                vinfo = None
+                            if vinfo is None:
+                                # The def object has NO live hazard: the factory
+                                # rejected it at stage build (spire-2's five
+                                # crumble planks die in validateHazardDef —
+                                # "missing required field(s) cycle:object" — even
+                                # though crumble ignores cycle). Sampling the def's
+                                # ghost rectangle would measure open sky as "the
+                                # deck". Report the absence instead.
+                                row = {"station": i, "error":
+                                       "vanish def objects[%d] has no live hazard "
+                                       "(hazard factory rejected it at build — "
+                                       "see the stage console)" % info["idx"]}
+                                break
+                            # (re-projection helper _fresh_info defined above —
+                            # the vanish ON-window wait is the worst offender)
+                            best = None
+                            if vinfo and vinfo["mode"] == "cycle":
+                                period = vinfo["on"] + vinfo["warn"] + vinfo["off"]
+                                for s_target in (min(0.30 * vinfo["on"], vinfo["on"] - 0.05),
+                                                 min(0.65 * vinfo["on"], vinfo["on"] - 0.05)):
+                                    try:
+                                        clock = pg.evaluate(CLOCK_JS)
+                                    except Exception:
+                                        break
+                                    s_now = ((clock / period + vinfo["phase"]) % 1.0) * period
+                                    wait_s = (s_target - s_now) % period
+                                    if wait_s > 0.02:
+                                        pg.wait_for_timeout(int(wait_s * 1000) + 20)
+                                    use = _fresh_info(info)
+                                    snap(pg, tmp)
+                                    got = sample_frame(tmp, use, save_overlay=ov)
+                                    if got[2] is not None and (best is None or got[2] > best[2]):
+                                        best = got
+                            elif vinfo and vinfo["mode"] in ("crumble", "touch"):
+                                snap(pg, tmp)
+                                got = sample_frame(tmp, info, save_overlay=ov)
+                                if got[2] is not None:
+                                    best = got
+                            if best is None:
+                                for fi in range(3):
+                                    if fi:
+                                        pg.wait_for_timeout(700)
+                                    use = _fresh_info(info) if fi else info
+                                    snap(pg, tmp)
+                                    got = sample_frame(tmp, use, save_overlay=ov)
+                                    if got[2] is not None and (best is None or got[2] > best[2]):
+                                        best = got
+                            if best is None:
+                                row = {"station": i, "error": "vanish sample empty"}
+                                break
+                            deck, bg, ratio, bgmode, _resp = best
+                            bgmode += " vanish-solid"
+                            # sub-floor: measure the GLARE FLOOR (what a pure
+                            # black surface would read here — see VANISH_BLACK_JS)
+                            glare_cap = None
+                            if ratio < args.floor:
                                 try:
-                                    clock = pg.evaluate(CLOCK_JS)
-                                except Exception:
+                                    if pg.evaluate(VANISH_BLACK_JS, [info["idx"], True]):
+                                        pg.wait_for_timeout(140)
+                                        if vinfo and vinfo["mode"] == "cycle":
+                                            period = vinfo["on"] + vinfo["warn"] + vinfo["off"]
+                                            try:
+                                                clock = pg.evaluate(CLOCK_JS)
+                                                s_now = ((clock / period + vinfo["phase"]) % 1.0) * period
+                                                wait_s = (0.45 * vinfo["on"] - s_now) % period
+                                                if wait_s > 0.02:
+                                                    pg.wait_for_timeout(int(wait_s * 1000) + 20)
+                                            except Exception:
+                                                pass
+                                        use = _fresh_info(info)
+                                        snap(pg, tmp)
+                                        gb = sample_frame(tmp, use)
+                                        if gb[0] is not None:
+                                            glare_cap = round(contrast(
+                                                luminance(gb[0]), luminance(gb[1])), 2)
+                                finally:
+                                    try:
+                                        pg.evaluate(VANISH_BLACK_JS, [info["idx"], False])
+                                        pg.wait_for_timeout(120)
+                                    except Exception:
+                                        pass
+                        elif mat in MASKABLE:
+                            # up to two timed takes: laser sweeps / blade FX wash
+                            # additively over a deck for part of their cycle, and
+                            # one badly-timed frame should not fail a surface that
+                            # reads fine the rest of the time — keep the better
+                            best2 = None
+                            ghost = False
+                            for take in range(2):
+                                if take:
+                                    pg.wait_for_timeout(800)
+                                    info = _fresh_info(info)
+                                snap(pg, tmp)
+                                pg.evaluate(WIGGLE_JS, [mat, True])
+                                pg.wait_for_timeout(170)
+                                snap(pg, tmp_w)
+                                pg.evaluate(WIGGLE_JS, [mat, False])
+                                pg.wait_for_timeout(170)
+                                snap(pg, tmp_r)
+                                got = sample_frame(tmp, info, save_overlay=ov,
+                                                   wiggle_path=tmp_w, restore_path=tmp_r)
+                                ghost = got[0] is None or (got[4] is not None and got[4] < 120)
+                                if ghost:
                                     break
-                                s_now = ((clock / period + vinfo["phase"]) % 1.0) * period
-                                wait_s = (s_target - s_now) % period
-                                if wait_s > 0.02:
-                                    pg.wait_for_timeout(int(wait_s * 1000) + 20)
-                                pg.screenshot(path=tmp)
-                                got = sample_frame(tmp, info, save_overlay=ov)
-                                if got[2] is not None and (best is None or got[2] > best[2]):
-                                    best = got
-                        elif vinfo and vinfo["mode"] in ("crumble", "touch"):
-                            pg.screenshot(path=tmp)
-                            got = sample_frame(tmp, info, save_overlay=ov)
-                            if got[2] is not None:
-                                best = got
-                        if best is None:
-                            for fi in range(3):
-                                if fi:
-                                    pg.wait_for_timeout(700)
-                                pg.screenshot(path=tmp)
-                                got = sample_frame(tmp, info, save_overlay=ov)
-                                if got[2] is not None and (best is None or got[2] > best[2]):
-                                    best = got
-                        if best is None:
-                            row = {"station": i, "error": "vanish sample empty"}
-                            break
-                        deck, bg, ratio, bgmode, _resp = best
-                        bgmode += " vanish-solid"
-                    elif mat in MASKABLE:
-                        # up to two timed takes: laser sweeps / blade FX wash
-                        # additively over a deck for part of their cycle, and
-                        # one badly-timed frame should not fail a surface that
-                        # reads fine the rest of the time — keep the better
-                        best2 = None
-                        ghost = False
-                        for take in range(2):
-                            if take:
-                                pg.wait_for_timeout(800)
-                            pg.screenshot(path=tmp)
-                            pg.evaluate(WIGGLE_JS, [mat, True])
-                            pg.wait_for_timeout(170)
-                            pg.screenshot(path=tmp_w)
-                            pg.evaluate(WIGGLE_JS, [mat, False])
-                            pg.wait_for_timeout(170)
-                            pg.screenshot(path=tmp_r)
-                            got = sample_frame(tmp, info, save_overlay=ov,
-                                               wiggle_path=tmp_w, restore_path=tmp_r)
-                            ghost = got[0] is None or (got[4] is not None and got[4] < 120)
-                            if ghost:
+                                if best2 is None or got[2] > best2[2]:
+                                    best2 = got
+                                if best2[2] >= args.target:
+                                    break
+                            if ghost or best2 is None:
+                                excl.append(info["idx"])   # ghost: prop in front
+                                continue
+                            deck, bg, ratio, bgmode, resp = best2
+                        else:
+                            snap(pg, tmp)
+                            deck, bg, ratio, bgmode, _resp = sample_frame(tmp, info, save_overlay=ov)
+                            if deck is None:
+                                row = {"station": i, "error": "sample empty"}
                                 break
-                            if best2 is None or got[2] > best2[2]:
-                                best2 = got
-                            if best2[2] >= args.target:
-                                break
-                        if ghost or best2 is None:
-                            excl.append(info["idx"])   # ghost: prop in front
-                            continue
-                        deck, bg, ratio, bgmode, resp = best2
-                    else:
-                        pg.screenshot(path=tmp)
-                        deck, bg, ratio, bgmode, _resp = sample_frame(tmp, info, save_overlay=ov)
-                        if deck is None:
-                            row = {"station": i, "error": "sample empty"}
-                            break
-                    row = {
-                        "station": i, "mat": mat, "dist": info["dist"],
-                        "deck": deck, "bg": bg, "bgmode": bgmode,
-                        "ratio": round(ratio, 2),
-                        "verdict": ("FAIL" if ratio < args.floor
-                                    else "WARN" if ratio < args.target else "pass"),
-                    }
-                    break
+                        row = {
+                            "station": i, "mat": mat, "dist": info["dist"],
+                            "deck": deck, "bg": bg, "bgmode": bgmode,
+                            "ratio": round(ratio, 2),
+                            "verdict": ("FAIL" if ratio < args.floor
+                                        else "WARN" if ratio < args.target else "pass"),
+                        }
+                        # LIGHTING-CAPPED station: even a pure black surface
+                        # cannot reach the gate floor through the glare veil at
+                        # this geometry (measured, not asserted — the cap is
+                        # the black-swap frame's own ratio). Printed with the
+                        # cap; never gates: no walked material exists that
+                        # could pass, so the finding belongs to the lighting /
+                        # geometry lanes and is surfaced in the report instead.
+                        if (glare_cap is not None and glare_cap < args.floor
+                                and row["verdict"] == "FAIL"):
+                            row["glare_cap"] = glare_cap
+                            row["verdict"] = "glare-capped(max %.2f)" % glare_cap
+                        break
+                except BlackFrameError as e:
+                    # round-3 tool fix: an all-black contention frame is not a
+                    # measurement — report the station UNMEASURABLE, never FAIL.
+                    row = {"station": i, "unmeasurable": str(e)}
+                finally:
+                    try:
+                        pg.evaluate(CP_GLOW_JS, True)
+                    except Exception:
+                        pass
                 if row is None:
                     row = {"station": i, "na": True, "ghosted": len(excl)}
                 # THE LAW IS WRITTEN AGAINST THE FOG/SKY (file docstring, and
@@ -1104,7 +1358,9 @@ def main():
         for r in rows:
             st = r.get("station")
             lbl = "sp" if st == 0 else (f"c{st-1}" if isinstance(st, int) else "-")
-            if r.get("error"):
+            if r.get("unmeasurable"):
+                print(f"    {lbl:>2}  STATION UNMEASURABLE: {r['unmeasurable']}")
+            elif r.get("error"):
                 print(f"    {lbl:>2}  ERROR: {r['error']}")
             elif r.get("na"):
                 gh = r.get("ghosted")

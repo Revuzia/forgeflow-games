@@ -574,7 +574,12 @@ export default {
     /* |z| >= 1.82 and there is no such place. Three timers, one lane, eleven metres. */
     /* ============================================================================ */
 
-    { kind: 'platform', p: [239.0, 4.0, 0], s: [10.8, 1, 3.4], mat: 'metal', glow: CYAN }, // flush with CP6's deck, top 4.50
+    // mat 'obsidian' (round-3 readability): from CP6 this strip is the measured
+    // next walked top against the mid-purple bridge-zone backdrop (lum ~0.16) —
+    // the round-3 pale metal read (173,183,216) vs (104,109,153) = 2.49:1, stuck
+    // in the mid-vs-mid trap. Dark violet obsidian silhouettes against that
+    // band; the cyan stripe carries the near-field read. contrastcheck neon-3 c6.
+    { kind: 'platform', p: [239.0, 4.0, 0], s: [10.8, 1, 3.4], mat: 'obsidian', glow: CYAN }, // flush with CP6's deck, top 4.50
 
     { kind: 'pendulum', p: [236.6, 8.75, 0], len: 3.2, amp: 1.05, period: 3.2, phase: 0, blade: { w: 3.0, h: 1.5, d: 0.28 }, axis: [0, 0, 1] },
     { kind: 'pendulum', p: [242.0, 8.75, 0], len: 3.2, amp: 1.05, period: 2.6, phase: Math.PI * 0.5, blade: { w: 3.0, h: 1.5, d: 0.28 }, axis: [0, 0, 1] }, // a quarter-turn out of step, in RADIANS
@@ -729,7 +734,13 @@ export default {
 
     // -- the launch ---------------------------------------------------------------
     { kind: 'platform', p: [299.4, 5.8, 0], s: [9.6, 1, 5.2], mat: 'metal', glow: CYAN, stripe: true }, // gap 2.80 off the second plate, +0.95, top 6.30 — CP8
-    { kind: 'speedpad', p: [302.8, 6.37, 0], s: [2.8, 0.14, 5.2], dir: [2, 1, 0], power: 17 }, // fills x 301.4..304.2 — the whole lip; fires at x 301.05
+    { kind: 'speedpad', p: [302.8, 6.37, 0], s: [2.8, 0.14, 5.2], dir: [2, 1, 0], power: 17, mat: 'sand' }, // fills x 301.4..304.2 — the whole lip; fires at x 301.05.
+    // mat 'sand' (round-3 readability): from CP8 this pad is the measured next
+    // walked top and its DISC is what the sampler reads — as 'panel' it sat dark
+    // against the dark city band, (18,59,110) vs (87,17,91) = 1.13:1 (contrastcheck
+    // neon-3 c8; a glow raise measurably changed nothing — the disc, not the
+    // chevrons, owns the pooled median). Sand is neon's bright lit-deck voice,
+    // proven 5:1 on the neon-2 rotor deck and the neon-3 c5 stone class.
     { kind: 'text', p: [295.0, 8.35, 0], rot: [0, -Math.PI / 2, 0], text: 'DO NOT STOP', size: 0.54, color: MAG },
     { kind: 'text', p: [295.0, 7.85, 0], rot: [0, -Math.PI / 2, 0], text: 'and do not jump', size: 0.24, color: HOT },
 

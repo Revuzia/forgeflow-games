@@ -407,7 +407,14 @@ export default {
     /* catch: nobody drew that jump, but the geometry did.                            */
     /* ============================================================================ */
 
-    { kind: 'platform', p: [185.2, 3.3, 0], s: [10, 1, 10], mat: 'stone', glow: DIM, stripe: true }, // gap 3.5, top 3.8
+    // mat 'sand' (round-3 readability): from cp4 this deck is the measured next
+    // walked top, and it sits in front of the magenta CITY band — dark distant
+    // geometry, not the bright grid horizon — where 'stone' rendered (50,89,124)
+    // vs (78,1,76) = 1.99:1 (contrastcheck neon-2 c4). Sand's brighter warm
+    // albedo under the magenta key lifts the top over the 3.5:1 line while the
+    // neon blue tint keeps it in-world; local fix because only THIS deck reads
+    // against the city wall.
+    { kind: 'platform', p: [185.2, 3.3, 0], s: [10, 1, 10], mat: 'sand', glow: DIM, stripe: true }, // gap 3.5, top 3.8
     { kind: 'rotor', p: [185.2, 4.4, 0], style: 'bar', arms: 2, len: 4.6, thick: 0.42, height: 0.42, period: 5.0, phase: 0, axis: 'y' }, // sweeps 4.19..4.61 — 0.39 over the deck
     { kind: 'platform', p: [189.0, 5.05, 3.4], s: [1.8, 0.5, 1.8], mat: 'obsidian', glow: NEON, stripe: true }, // slung perch, underside 4.80, top 5.30
 

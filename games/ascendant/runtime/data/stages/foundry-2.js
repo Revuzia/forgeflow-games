@@ -451,9 +451,16 @@ export default {
     { kind: 'platform', p: [109.36, 5.9, -1.8], s: [3.2, 1, 3.4], mat: 'metal', glow: EDGE, stripe: true }, // top 6.40, gap 2.80 at -0.40 — the sump mouth
     { kind: 'platform', p: [116.86, 6.7, 1.2], s: [4.4, 1, 5.0], mat: 'stone', glow: MINT, stripe: true }, // top 7.20, gap 3.70 at +0.80, cp4
     {
-      kind: 'vanish', p: [124.06, 7.2, -1.6], s: [3.6, 1, 3.6], mat: 'grate',
+      kind: 'vanish', p: [124.06, 7.2, -1.6], s: [3.6, 1, 3.6], mat: 'rubber',
       cycle: { on: 2.4, off: 1.2, warn: 0.6, phase: 0.2 },
     }, // EDGE — vanish.js paints its own safeEdge rim + stripe (def.glow is not read). top 7.70, gap 3.20 at +0.50
+       // mat 'rubber' (round-3 readability): this tile is read from cp4 at ~8.7 deg
+       // grazing, where a smooth dielectric's Fresnel smears the warm rim/key light
+       // across the whole top — measured (203,174,156) cream, INVARIANT through
+       // grate -> charcoal metal (the spec term is untinted; raycast probe confirmed
+       // the sampled pixels ARE this top face). Rubber's map-carried roughness
+       // (0.55-1.0, metalness 0) is the one walked material whose grazing lobe
+       // collapses; the dark matte top finally silhouettes. contrastcheck foundry-2 c4.
     { kind: 'platform', p: [130.96, 8.1, 1.6], s: [3.4, 1, 3.6], mat: 'grate', glow: EDGE, stripe: true }, // top 8.60, gap 3.40 at +0.90
     { kind: 'platform', p: [136.76, 8.8, -1.2], s: [3.0, 1, 3.4], mat: 'metal', glow: EDGE, stripe: true }, // top 9.30, gap 2.60 at +0.70
     { kind: 'platform', p: [144.26, 10.3, 0.6], s: [5.6, 1, 6.4], mat: 'stone', glow: MINT, stripe: true }, // top 10.80, gap 3.20 at +1.50, cp5
@@ -559,14 +566,18 @@ export default {
     { kind: 'platform', p: [284.9, 10.2, -1.0], s: [5.0, 1, 5.0], mat: 'stone', glow: MINT, stripe: true }, // top 10.70, gap 3.80 at -0.60, cp8
 
     {
-      kind: 'vanish', p: [292.7, 9.8, 1.0], s: [3.4, 1, 3.2], mat: 'grate',
+      kind: 'vanish', p: [292.7, 9.8, 1.0], s: [3.4, 1, 3.2], mat: 'rubber',
       cycle: { on: 2.2, off: 1.1, warn: 0.5, phase: 0.0 },
     }, // EDGE — vanish.js paints its own safeEdge rim + stripe. top 10.30, gap 3.60 at -0.40
+       // mat 'rubber' (round-3 readability): same ~8 deg grazing spec smear as the
+       // pit tile at c4 — (218,194,184) cream through three material swaps. The
+       // matte rubber top is the fix. contrastcheck foundry-2 c10.
     { kind: 'crusher', p: [295.8, 11.7, 4.6], s: [2.2, 2.2, 1.8], axis: [0, 0, -1], travel: 3.6, period: 3.3, phase: 0.4, dwell: 0.9 }, // side ram, on the grates' OWN 3.3 s period
     {
-      kind: 'vanish', p: [298.9, 9.8, 1.0], s: [3.4, 1, 3.2], mat: 'grate',
+      kind: 'vanish', p: [298.9, 9.8, 1.0], s: [3.4, 1, 3.2], mat: 'rubber',
       cycle: { on: 2.2, off: 1.1, warn: 0.5, phase: 0.5 },
-    }, // EDGE — half a cycle out of step with grate 1: never both gone
+    }, // EDGE — half a cycle out of step with grate 1: never both gone.
+       // mat 'rubber' with its pair — see the c10 tile note above.
     { kind: 'platform', p: [306.7, 10.4, -0.6], s: [5.0, 1, 4.6], mat: 'stone', glow: EDGE, stripe: true }, // hall exit — top 10.90, gap 3.60 at +0.60
 
     { kind: 'spikes', p: [253.5, 8.0, 1.0], s: [57, 1.2, 14], dir: [0, 1, 0] }, // tips 8.60, x 225..282, z -6..8

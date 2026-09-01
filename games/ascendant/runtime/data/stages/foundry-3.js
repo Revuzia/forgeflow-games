@@ -495,7 +495,13 @@ export default {
     { kind: 'spikes', p: [129.0, 14.8, -7.4], s: [2.2, 0.8, 2.2], dir: [0, 1, 0] },   // reef 1: z -8.5..-6.3, lane z -6.3..-3.5
     { kind: 'spikes', p: [133.0, 14.8, -4.6], s: [2.2, 0.8, 2.2], dir: [0, 1, 0] },   // reef 2: z -5.7..-3.5, lane z -8.5..-5.7
 
-    { kind: 'speedpad', p: [134.0, 14.4, -6.0], s: [2.4, 0.14, 3.2], dir: [1, 0, 0], power: 6.5 },  // 2.4 m back from the lip
+    { kind: 'speedpad', p: [134.0, 14.4, -6.0], s: [2.4, 0.14, 3.2], dir: [1, 0, 0], power: 6.5, glow: 0.4 },  // 2.4 m back from the lip.
+    // glow 0.4 (round-3 readability): at full glow the pad's core+ring+shaft all
+    // crossed the 0.85 bloom threshold and, seen from cp4 44.8 m away as "the
+    // next walked top", the whole pad measured as one cream blob — (207,177,174)
+    // vs (189,83,65) haze = 2.29:1 (contrastcheck foundry-3 c4). At 0.4 nothing
+    // on it blooms: the top face median reads its dark disc, and up close (the
+    // player boards it from 2.4 m) the cyan core still pulses visibly.
 
     { kind: 'platform', p: [148.2, 14.3, -6.0], s: [10.2, 1, 5.0], mat: 'metal', glow: EDGE, stripe: true },  // CP3 catch gantry, top 14.80, THE GAP 5.5 m
 

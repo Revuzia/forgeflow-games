@@ -1324,7 +1324,11 @@ export function buildPad(def, theme, mats) {
   const tint = gs.color !== null ? gs.color : pal(theme, isSpeed ? 'safeEdge' : 'pad');
 
   const plinthMat = materialFor('metal', theme, mats);
-  const discMat = materialFor('panel', theme, mats);
+  /* the disc defaults to 'panel'; stage data may author `mat` when the pad's
+   * top must read against a specific backdrop (round-3 readability: neon-3's
+   * launch pad measured 1.13:1 because its panel disc sat dark against the
+   * dark city band — its def wears mat 'sand', the neon bright-deck voice). */
+  const discMat = materialFor((def && def.mat) || 'panel', theme, mats);
   /* core 2.6/1.5 blew the pad centre to white under every theme's bloom
    * threshold (0.85-1.10); 1.7/0.9 still clears the thresholds so the core
    * glows with a halo, but its hue survives — the controlled-emissive rim the

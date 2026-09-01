@@ -160,9 +160,22 @@ export const THEMES = {
     particles: { type: 'mote', rate: 26, color: 0x7fe6ff, size: 0.055, drift: [0.06, 0.16, 0.02] },
 
     materialOverrides: {
-      stone: { tint: 0x93a8cc, rough: 0.02 },
+      /* Round 3 readability: neon's WALKED DECK bodies (stone + metal) read
+       * against the DARK magenta city band at eye level from most stations
+       * (contrastcheck: neon-2 c4 stone 1.99:1, neon-3 c5 stone 1.32:1,
+       * neon-3 c8 runway metal 1.10:1 — the band is lum ~0.02-0.03, darker
+       * than any plausible deck, so decks must be the BRIGHT side). Diffuse
+       * tint alone saturates under this theme's moderate lights (measured:
+       * pale tint stalled at 3.13:1) — the faint cool self-glow is what buys
+       * the 3.5:1 margin, exactly the recipe the sand deck proved at 4.99:1.
+       * It stays far under the 0.95 bloom threshold (a lit deck, not a lamp)
+       * and reads nothing like checkpointOn turquoise or kill red. `panel`
+       * deliberately stays dark: it is the one measured deck that reads
+       * dark-against-BRIGHT (the spawn's cyan grid horizon, 5.5:1). */
+      stone: { tint: 0xd8e2ff, rough: 0.02, emissive: 0x9fb4e8, emissiveIntensity: 0.38 },
       panel: { tint: 0x9ec4f0 },
-      metal: { tint: 0xb6cde8 },
+      metal: { tint: 0xd8e2ff, metalness: 0.25, env: 0.40,
+               emissive: 0x9fb4e8, emissiveIntensity: 0.25 },
       grate: { tint: 0x9fb4d0 },
       checker: { tint: 0xa8cbe8 },
       ice: { tint: 0xbfe6ff },
@@ -179,7 +192,15 @@ export const THEMES = {
       lava: { emissiveIntensity: 3.0 },
       rubber: { tint: 0xa8b0d0 },
       wood: { tint: 0x9fb0d8 },
-      sand: { tint: 0xa8b6d8 },
+      /* sand is neon's BRIGHT-DECK voice (round 3): no neon stage shipped a
+       * sand surface until neon-2's rotor deck needed a top that separates
+       * from the DARK magenta city band behind it (stone measured 1.99:1,
+       * sand at the old tint 2.43:1, pale tint alone 3.13:1 — contrastcheck
+       * neon-2 c4; diffuse saturates under this theme's moderate lights).
+       * The faint cool self-glow is what buys the 3.5:1 margin: 0.30 stays
+       * far under the 0.95 bloom threshold (a lit landing deck, not a lamp),
+       * reads nothing like the turquoise checkpointOn or the red kill. */
+      sand: { tint: 0xd8e2ff, emissive: 0x9fb4e8, emissiveIntensity: 0.30 },
       cloud: { tint: 0x9fbce0 },
     },
 
@@ -288,24 +309,42 @@ export const THEMES = {
      * on top of an orange key/fill/hemi rig — the fire was being counted twice,
      * and every deck lip blew out to a yellow-white blob at grazing angles.
      * The theme's own doctrine is "cold steel wearing a cyan edge stripe": the
-     * tints below are neutral steel (palette.safe 0x8b94a4 family) and the
-     * LIGHTS do all the warming. */
+     * LIGHTS do all the warming.
+     *
+     * Round 3 readability (2026-08-31, contrastcheck evidence): the "neutral
+     * steel" tints (0x9aa6b4 family) still RENDERED 170-220 sRGB cream under
+     * the 2.05 white key + 2.2 warm rim — measured foundry-3 c2 metal beam
+     * (186,169,169) vs its own haze band (235,90,41) = 1.55:1, foundry-3 c6
+     * stone (172,180,185) = 1.93:1. In THIS theme the eye-level haze band is
+     * the BRIGHT side of the figure/ground pair (the molten glow, lum
+     * 0.21-0.26): a walked deck can only separate by silhouetting DARK
+     * against it, exactly the "readable course silhouettes" the accepted
+     * lighting look describes. Tints below are charcoal steel (the maps'
+     * brushed/hex texture still reads); the cyan stripes + keylines carry the
+     * near-field affordance. metal/grate also give up the grazing-angle env
+     * mirror (metalness/env cut hard — at walking incidence Fresnel was
+     * repainting the tile tops with the fogged sea, (206,179,164) on a grate
+     * whose diffuse renders ~60): the spire walked-ice recipe, applied to
+     * steel. Only contrastcheck.py numbers may justify touching these. */
     materialOverrides: {
-      stone: { tint: 0x9098a4, rough: 0.03 },
-      panel: { tint: 0x8a94a2 },
-      /* mirror-metal at grazing angle reflected the 2.05 white furnace key
-       * straight into bloom — tread fields and pad tops (hazMat 'metal') read
-       * as one blown slab. `rough` deltas are no-ops here (base scalar is
-       * already 1.0; the maps carry the value), so the specular is tamed the
-       * only way this material allows: absolute metalness + env cut. */
-      metal: { tint: 0x9aa6b4, metalness: 0.40, env: 0.55 },
-      grate: { tint: 0x8791a0, metalness: 0.45, env: 0.60 },
-      checker: { tint: 0x939ca8 },
+      stone: { tint: 0x2b2f36, rough: 0.03 },
+      panel: { tint: 0x2a2e34 },
+      metal: { tint: 0x282c30, metalness: 0.12, env: 0.12 },
+      grate: { tint: 0x2c3136, metalness: 0.12, env: 0.12 },
+      checker: { tint: 0x2e3238 },
       ice: { tint: 0xffd6b8, transmission: 0.20 },
       glass: { tint: 0xffd8bc },
-      obsidian: { tint: 0x554c48 },
+      /* obsidian: dielectric body but a 1.0 clearcoat mirror + env 1.8 —
+       * grazing incidence mirrors the molten sea like the steel did. Same
+       * cut; the near-black facet albedo is the point. */
+      obsidian: { tint: 0x2e2a28, env: 0.12, clearcoat: 0.15,
+                  clearcoatRoughness: 0.60, specularIntensity: 0.10 },
       crystal: { emissive: 0xff9a3c, attenuationColor: 0x8a2a00 },
-      neon: { emissive: 0x9fe0ff, emissiveIntensity: 3.2 },
+      /* 3.2 was most of what a vanish tile's trim halo painted onto its own
+       * small top through the 0.85 bloom threshold (round 3, the temple
+       * lesson): 1.8 keeps the drawn-line glow above threshold without
+       * repainting the walked surface. */
+      neon: { emissive: 0x9fe0ff, emissiveIntensity: 1.8 },
       emissive: { emissive: 0xffb44a, emissiveIntensity: 3.0 },
       hazard: { emissive: 0xff4a10, emissiveIntensity: 2.4 },
       /* Both mechanic surfaces were losing their hue to ACES clipping: the belt
@@ -314,7 +353,10 @@ export const THEMES = {
        * survives tone-mapping; "orange that glows and moves" stays orange. */
       conveyor: { emissive: 0xff9a3c, emissiveIntensity: 0.8 },
       lava: { emissiveIntensity: 2.4 },
-      rubber: { tint: 0x6e6c74 },
+      /* round 3: rubber is now a walked TOP in this theme (the two grazing
+       * vanish tiles) — same charcoal family as the steel, for the same
+       * silhouette reason. */
+      rubber: { tint: 0x34343a },
       wood: { tint: 0x8a7a6a },
       sand: { tint: 0x9a927e },
       cloud: { tint: 0xd8a888 },
@@ -616,7 +658,15 @@ export const THEMES = {
       ice: { tint: 0x101820, transmission: 0.04, env: 0.06,
              clearcoat: 0.15, clearcoatRoughness: 0.60, specularIntensity: 0.08 },
       glass: { tint: 0xfff0d8 },
-      obsidian: { tint: 0x4a3d2e },
+      /* Round 3 readability: temple-1 c7's obsidian vanish tiles measured
+       * (166,140,143) vs the amber haze (237,213,164) = 2.16:1 — but the
+       * obsidian DIFFUSE is near-black; everything the tile top showed was
+       * the 1.0-clearcoat mirror + env 1.8 reflecting the golden sky. The
+       * walked-ice recipe (cut the mirror, keep a glint) lets the volcanic
+       * glass read as the dark thing the temple doctrine wants everywhere:
+       * decks, vanish runs, the summit, and every platform underside. */
+      obsidian: { tint: 0x3a3128, env: 0.10, clearcoat: 0.12,
+                  clearcoatRoughness: 0.60, specularIntensity: 0.08 },
       crystal: { emissive: 0xffd08a, attenuationColor: 0xb06a1a },
       /* 2.8 gold wash was most of what the small vanish/pad tops rendered —
        * trimmed so the stripe reads as a line, not as the tile's colour.
