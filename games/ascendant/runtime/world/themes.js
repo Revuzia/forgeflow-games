@@ -21,26 +21,30 @@
  * The law: the WALKED SURFACE (the materialOverride tints the decks actually
  * wear — palette.safe declares the same colour) must hold >= 3.5:1 relative-
  * luminance contrast against the colour that is actually BEHIND a platform at
- * eye level, which is the FOG/horizon band, not the zenith `bg`. A previous
- * version of this table was computed on palette.safe (which no shipped surface
- * wore) against `bg` (which is never behind a platform at eye level) — it
- * claimed 5.92:1 for spire while the frames measured 1.07:1. Numbers below are
- * raw WCAG contrast of the shipped tints; the shot battery (_shots/*.png) is
- * the ground truth they are re-checked against.
+ * eye level, which is the FOG/horizon band, not the zenith `bg`.
  *
- *   theme     stone vs fog   panel vs fog   edge vs keyline   cpOn vs cpOff
- *   neon         8.08:1         10.77:1         16.9:1            6.91:1
- *   foundry     10.38:1         10.67:1         14.3:1            7.57:1
- *   spire        4.40:1          4.60:1         12.7:1            4.50:1
- *   temple       3.69:1          3.95:1         18.4:1            4.41:1
- *   hub         10.81:1         11.46:1         15.2:1            6.08:1
+ * THERE IS NO CONTRAST TABLE IN THIS FILE, ON PURPOSE (round 2, 2026-08-31).
+ * Two consecutive versions of the table that used to sit here were fiction:
+ * one computed palette.safe against `bg` and claimed 5.92:1 for spire while
+ * the frames measured 1.07:1; its replacement computed the shipped tints
+ * against the fog hex — "spire 4.40:1, temple 3.69:1" — while the rendered
+ * frames measured 1.0-1.9:1, because the light rig, exposure, grade, bloom
+ * and the sky dome all sit between a hex constant and the pixel. Constant
+ * arithmetic cannot testify about the render. The ONLY accepted evidence is
  *
- * "edge vs keyline": every leading-edge stripe is flanked by 0.03 m near-black
- * keylines (builders.js) so the stripe reads as a drawn line on ANY deck value
- * and under any bloom — edge-vs-deck alone was 1.2-2.1:1 in the bright-deck
- * themes and unfixable there without dimming the stripes themselves.
- * Temple trades away zenith contrast (dark deck vs dark sky ~1.3:1) for the
- * eye-level read; its undersides carry the accent spine line for the look-up.
+ *     python _harness/contrastcheck.py            # all stages, gates at 3.0
+ *
+ * which stands the player at every station, screenshots, samples the next
+ * walked top surface and the haze behind it, and prints per-stage WCAG
+ * ratios (results also land in _harness/contrastcheck.json). Any contrast
+ * number written into a comment here must be one that tool printed — or it
+ * is a lie waiting to be found. Palette-vs-palette ratios (e.g. checkpointOn
+ * vs checkpoint below) are plain constant arithmetic and may be asserted.
+ *
+ * Leading-edge stripes are flanked by 0.03 m near-black keylines
+ * (builders.js) so the stripe reads as a drawn line on ANY deck value and
+ * under any bloom. Temple trades away zenith contrast for the eye-level
+ * read; its undersides carry the accent spine line for the look-up.
  *
  * Kill separation. Every `kill` is saturation >= 0.87 in the 330-40 deg hot
  * band, and is >= 45 deg of hue from `safe`, `safeEdge`, `checkpointOn` and
@@ -345,8 +349,12 @@ export const THEMES = {
 
     /* 0.0055 still dissolved the 40-90 m course into the pale band even after
      * the surfaces went dark; a touch thinner keeps the next three landings
-     * silhouetted while the far spire still fades into altitude haze. */
-    fog: { color: 0xbfd6e9, near: 20, far: 260, density: 0.0044, type: 'exp2' },
+     * silhouetted while the far spire still fades into altitude haze.
+     * Round 2 readability: colour lifted one step (0xbfd6e9 -> 0xcadeee) — the
+     * haze is the BRIGHT side of the figure/ground pair, and every point of
+     * background luminance is a point of measured deck contrast. Still below
+     * the 245-white cut; the 1.10 bloom threshold keeps it out of the bloom. */
+    fog: { color: 0xd4e6f4, near: 20, far: 260, density: 0.0044, type: 'exp2' },
 
     sky: {
       type: 'aurora',
@@ -405,7 +413,9 @@ export const THEMES = {
     bloom: { strength: 0.35, radius: 0.60, threshold: 1.10 },
 
     palette: {
-      safe: 0x466074, safeEdge: 0xffc94a,
+      /* safe tracks materialOverrides.stone — the slate the decks actually
+       * wear (round 2 readability: darkened with the walked tints). */
+      safe: 0x192631, safeEdge: 0xffc94a,
       kill: 0xd6001c, killGlow: 0xff5a3c,
       /* was emerald 0x00e59c (round-2 critic: universal mint pad). Spire's
        * armed pads are now ice blue — the world identity. 4.50:1 vs off,
@@ -417,33 +427,59 @@ export const THEMES = {
 
     particles: { type: 'snow', rate: 90, color: 0xeaf6ff, size: 0.045, drift: [0.35, -0.55, 0.10] },
 
-    /* The walked materials were 0xc8dcf0..0xffffff — white streaks in white fog
-     * (screenshot-measured 1.07-1.50:1 against the fog band; the course past
-     * the current platform's far edge was literally invisible). Frozen Spire's
-     * course is now dark glacial slate under pale air: figure dark, ground
-     * bright. Tints below clear 3.8:1+ raw against fog 0xbfd6e9; palette.safe
-     * declares the same slate the stone actually renders. Decorative ice stays
-     * pale — the course is the dark thing with the gold edge. */
+    /* THE WALKED COURSE IS DARK GLACIAL SLATE UNDER PALE AIR — figure dark,
+     * ground bright. Round 2 (2026-08-31): the previous "dark slate" tints
+     * (stone 0x466074 family) still RENDERED at 130-220 sRGB under this
+     * theme's white 2.6 key + 1.2 env + pale hemi — screenshot-measured
+     * 1.0-1.9:1 against the fog band, invisible decks. Never trust tint-vs-fog
+     * arithmetic here: `python _harness/contrastcheck.py --stages spire-1` is
+     * the only accepted evidence. Tints below are authored ~2.5x darker than
+     * the rendered goal because the light rig multiplies them back up; the
+     * reflective walked surfaces (ice / glass / metal) also give up most of
+     * their transmission / env mirror, which was re-whitening them regardless
+     * of tint. Decorative ice stays pale — the course is the dark thing. */
     materialOverrides: {
-      stone: { tint: 0x466074, rough: -0.04 },
-      panel: { tint: 0x435d72 },
-      metal: { tint: 0x4c6a82, rough: -0.05 },
-      grate: { tint: 0x3c5265 },
-      checker: { tint: 0x445e72 },
-      /* env 0.35: clearcoat ice mirroring a white sky was re-whitening itself
-       * no matter how dark the tint went — the shelf measured 1.08:1 vs fog. */
-      ice: { tint: 0x47708c, transmission: 0.16, iridescence: 0.40, env: 0.35 },
-      glass: { tint: 0xe6f6ff },
+      stone: { tint: 0x192631 },
+      panel: { tint: 0x18252f },
+      /* rough UP, not down: at eye level most of a walked top is at grazing
+       * incidence, where Fresnel mirrors the pale horizon on ANY albedo —
+       * only a rougher microsurface breaks that mirror. */
+      metal: { tint: 0x24384a, metalness: 0.12, env: 0.12 },
+      grate: { tint: 0x223140 },
+      checker: { tint: 0x263846 },
+      /* walked ice: transmission, clearcoat and env were daylighting the slab
+       * from behind and above no matter the tint — all three cut hard (the
+       * full-gloss clearcoat also drew a sun-glint streak down the slab's
+       * middle that alone held the measured top value near 2.4:1). The frost
+       * sparkle and fracture normals still read; the slab now silhouettes. */
+      /* round-2 re-measure: contrastcheck still read the ice deck a step too
+       * bright at the first checkpoint (fog + the white 2.6 key re-lift the
+       * slab at 9 m) — tint one notch deeper, spec/coat trimmed to match. */
+      ice: { tint: 0x0a131a, transmission: 0.03, iridescence: 0.20, env: 0.08,
+             clearcoat: 0.12, clearcoatRoughness: 0.60, specularIntensity: 0.08 },
+      /* spire-2 walks on glass beams: base transmission 0.90 made them
+       * skylights and the glossy coat mirrored the horizon down their whole
+       * length (measured 1.2:1). Smoked, roughened glass — still glints at
+       * the sun, now reads as a deck. */
+      /* round-2 re-measure: the smoked beam still rendered a mid blue-grey
+       * (the coat + spec mirror the pale horizon at walking incidence and the
+       * blue fill pumps the diffuse) — deck FAILed the gate at spire-2 c0.
+       * Darker smoke, less mirror; the sun glint survives via clearcoat. */
+      glass: { tint: 0x0d1722, transmission: 0.03, env: 0.06,
+               clearcoat: 0.10, clearcoatRoughness: 0.55, specularIntensity: 0.08 },
       obsidian: { tint: 0x3a4e60 },
       crystal: { emissive: 0x9fe8ff, attenuationColor: 0x2f74b0 },
-      neon: { emissive: 0xffcf5c, emissiveIntensity: 3.2 },
-      emissive: { emissive: 0x6fd8ff, emissiveIntensity: 2.6 },
+      /* 3.2 gold flooded small tiles (vanish tops read 240+ cream through the
+       * bloom wash); the stripe still burns at 2.4 — it just stops owning the
+       * whole tile top. */
+      neon: { emissive: 0xffcf5c, emissiveIntensity: 2.4 },
+      emissive: { emissive: 0x6fd8ff, emissiveIntensity: 2.2 },
       hazard: { emissive: 0xd6001c, emissiveIntensity: 2.4 },
       conveyor: { emissive: 0x6fd8ff },
       lava: { emissiveIntensity: 3.6 },
-      rubber: { tint: 0x6c8496 },
-      wood: { tint: 0x465c6c },
-      sand: { tint: 0x4a6478 },
+      rubber: { tint: 0x3b4954 },
+      wood: { tint: 0x25313c },
+      sand: { tint: 0x263642 },
       cloud: { tint: 0xf2fbff },
     },
 
@@ -469,7 +505,11 @@ export const THEMES = {
     exposure: 1.04,
     envIntensity: 1.15,
 
-    fog: { color: 0xc2a67b, near: 30, far: 340, density: 0.0042, type: 'exp2' },
+    /* Round 2 readability: one step brighter (0xc2a67b -> 0xccb086) — the
+     * amber haze is the ground the dark decks must separate from, and its
+     * luminance is half of every measured deck ratio. Still amber, not cream:
+     * the cream-washout fixes (bloom 0.95, deep golden grade) hold. */
+    fog: { color: 0xd4b88c, near: 30, far: 340, density: 0.0042, type: 'exp2' },
 
     sky: {
       type: 'cloudsea',
@@ -513,15 +553,25 @@ export const THEMES = {
      * fog band + near-white safeEdge trim sat above the threshold, so bloom +
      * fog + emissives merged into one wash (measured 30 % pure-white pixels;
      * bloom off alone recovered it to 0.1 %). Golden hour needs the SUN to
-     * bloom, not the architecture. */
-    bloom: { strength: 0.36, radius: 0.60, threshold: 0.95 },
+     * bloom, not the architecture. Round-2 re-measure: the stripe's halo was
+     * still repainting the small vanish-tile tops cream (the tile is small
+     * enough that no inset escapes a wide halo) — strength/radius eased and
+     * the threshold lifted past the trim's fogged tail; the sun at 3.2 still
+     * owns the frame's one true bloom. */
+    bloom: { strength: 0.30, radius: 0.55, threshold: 1.02 },
 
     palette: {
       /* safeEdge was 0xfff8e6 — the trim, the sign strip, the fog band and the
        * sun halo were all the same near-white, so nothing anchored a highlight
        * hierarchy. Deep gold trim: the SUN is now the only white thing in the
-       * frame, trim reads gold, fog reads amber. */
-      safe: 0x665134, safeEdge: 0xffd98c,
+       * frame, trim reads gold, fog reads amber. Round-2 re-measure: one step
+       * deeper still — at 0xffd98c the stripe on a SMALL tile (vanish runs)
+       * out-shone its own deck so hard the whole top read as trim wash; the
+       * near-black keylines flanking the stripe keep the drawn-line read at
+       * any trim value. */
+      /* safe tracks materialOverrides.stone — the bronze the decks actually
+       * wear (round 2 readability: darkened with the walked tints). */
+      safe: 0x2f2517, safeEdge: 0xeab461,
       kill: 0xff1044, killGlow: 0xff5a7a,
       /* was emerald 0x18d69a (round-2 critic: universal mint pad). Temple's
        * armed pads are now bright gold — the world identity. 4.41:1 vs off,
@@ -535,29 +585,53 @@ export const THEMES = {
     particles: { type: 'mote', rate: 34, color: 0xffe6b0, size: 0.050, drift: [0.10, 0.05, 0.06] },
 
     /* Sand platforms, sand fog, sand decor — one colour, three meanings
-     * (screenshot-measured 1.38-1.68:1 platform-vs-fog). The course is now
-     * deep bronzed stone under the cream air: every walked tint clears 3.6:1+
-     * raw against fog 0xccb28b, ivory edges and gold trim burn on top of it,
-     * and decor keeps the pale palette.deco so it recedes into the haze
-     * instead of impersonating a deck. palette.safe = the rendered stone. */
+     * (screenshot-measured 1.38-1.68:1 platform-vs-fog). Round 2: the first
+     * "deep bronzed stone" pass (stone 0x665134 family) was tuned by raw
+     * tint-vs-fog arithmetic against a fog hex this theme no longer ships,
+     * and the frames measured 1.3-3.3:1 — the 3.10 golden key + warm hemi
+     * re-brightened every deck. Tints below are authored ~2x darker than the
+     * rendered goal for that reason; `python _harness/contrastcheck.py
+     * --stages temple-1,temple-2,temple-3` is the only accepted evidence.
+     * Ivory edges and gold trim burn on top of the dark decks, and decor
+     * keeps the pale palette.deco so it recedes into the haze instead of
+     * impersonating a deck. palette.safe = the walked stone tint. */
     materialOverrides: {
-      stone: { tint: 0x665134, rough: -0.02 },
-      panel: { tint: 0x5c4e3c },
-      metal: { tint: 0x66502f, rough: -0.06, metal: 0.03 },
-      grate: { tint: 0x54462f },
-      checker: { tint: 0x63533a },
-      ice: { tint: 0xdff0ff },
+      stone: { tint: 0x2f2517 },
+      /* panel is what vanish-tile bodies wear (temple-3 walks a vanish run at
+       * its first checkpoint) and contrastcheck read the tile top far above
+       * the panel diffuse — the golden key plus the trim's bloom halo lift a
+       * small tile from every side. Deeper bronze so the body's own share of
+       * the read sits well under the haze; the halo cut lives in `neon`. */
+      panel: { tint: 0x191510 },
+      metal: { tint: 0x2e2416, metal: 0.03 },
+      grate: { tint: 0x272015 },
+      checker: { tint: 0x2d251a },
+      /* temple-2 walks kind-'ice' slabs (measured 1.1:1 as pale decor ice) —
+       * the walked ice goes dark like spire's, cut off from the sky it was
+       * transmitting and from most of its mirror gloss; the few decorative
+       * shards ride glass instead. */
+      /* round-2 re-measure: the 3.10 golden key re-warmed the dark slab to a
+       * mid warm grey and temple-2 c1 FAILed the screenshot gate — deeper
+       * still, and less of the mirror that carries the amber sky. */
+      ice: { tint: 0x101820, transmission: 0.04, env: 0.06,
+             clearcoat: 0.15, clearcoatRoughness: 0.60, specularIntensity: 0.08 },
       glass: { tint: 0xfff0d8 },
       obsidian: { tint: 0x4a3d2e },
       crystal: { emissive: 0xffd08a, attenuationColor: 0xb06a1a },
-      neon: { emissive: 0xffe0a0, emissiveIntensity: 2.8 },
-      emissive: { emissive: 0xffc35c, emissiveIntensity: 2.6 },
+      /* 2.8 gold wash was most of what the small vanish/pad tops rendered —
+       * trimmed so the stripe reads as a line, not as the tile's colour.
+       * Round-2 re-measure: at 2.1 the stripe's bloom halo still spilled a
+       * ~15 px cream ring onto a vanish tile's inset top and held temple-3 c0
+       * under the floor — 1.7 keeps the drawn-line glow (well above the 0.95
+       * bloom threshold) without painting the walked surface. */
+      neon: { emissive: 0xffe0a0, emissiveIntensity: 1.7 },
+      emissive: { emissive: 0xffc35c, emissiveIntensity: 2.1 },
       hazard: { emissive: 0xff1044, emissiveIntensity: 2.2 },
       conveyor: { emissive: 0xffc35c },
       lava: { emissiveIntensity: 3.2 },
-      rubber: { tint: 0x6a5840 },
-      wood: { tint: 0x655031 },
-      sand: { tint: 0x615033 },
+      rubber: { tint: 0x352d20 },
+      wood: { tint: 0x2f2517 },
+      sand: { tint: 0x2d2416 },
       cloud: { tint: 0xffffff },
     },
 

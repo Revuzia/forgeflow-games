@@ -1675,11 +1675,18 @@ function bakeUtilityTextures() {
  *   tint                hex, MULTIPLIED into the base colour
  *   color               hex, REPLACES the base colour
  *   rough / metal       signed deltas applied to the scalar factors
+ *                       (NOTE: on map-carrying materials the scalar is already
+ *                       1.0 and multiplies the map, so a positive rough delta
+ *                       is a NO-OP — use specularIntensity / env instead)
  *   roughness/metalness absolute values
  *   emissive            hex emissive colour
  *   emissiveIntensity   absolute
  *   env                 envMapIntensity multiplier
  *   sheenColor / attenuationColor / clearcoat / transmission / opacity
+ *   specularIntensity   absolute (physical materials) — the lever that
+ *                       actually kills a grazing-angle sky mirror on walked
+ *                       tops (readability round 2, 2026-08-31)
+ *   clearcoatRoughness  absolute (physical materials)
  */
 function applyOverride(mat, base, theme, key) {
   const o = (theme.materialOverrides && theme.materialOverrides[key]) || null;
@@ -1715,8 +1722,10 @@ function applyOverride(mat, base, theme, key) {
     if (o.attenuationColor !== undefined && mat.attenuationColor) mat.attenuationColor.set(o.attenuationColor);
     if (o.attenuationDistance !== undefined) mat.attenuationDistance = o.attenuationDistance;
     if (o.clearcoat !== undefined) mat.clearcoat = clamp01(o.clearcoat);
+    if (o.clearcoatRoughness !== undefined) mat.clearcoatRoughness = clamp01(o.clearcoatRoughness);
     if (o.transmission !== undefined) mat.transmission = clamp01(o.transmission);
     if (o.iridescence !== undefined) mat.iridescence = clamp01(o.iridescence);
+    if (o.specularIntensity !== undefined) mat.specularIntensity = Math.max(0, o.specularIntensity);
   }
   // capture the post-override intensity: tick() pulses relative to THIS value,
   // so a theme that dims or brightens its neon keeps that choice.

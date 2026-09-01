@@ -287,7 +287,13 @@ export function vanish(def, ctx) {
   };
   let plat = null;
   const bp = (ctx.builders && typeof ctx.builders.buildPlatform === 'function') ? ctx.builders.buildPlatform : buildPlatform;
-  try { plat = bp(platDef, ctx.theme); } catch (err) { plat = null; }
+  // ctx.mats MUST ride along: buildPlatform(def, theme, mats) only themes its
+  // body/panel materials when the registry is handed to it — without it every
+  // vanish slab in every world wore builders' untinted fallback bank
+  // (fb_panel #707d90), which is why vanish tiles measured 2:1 against the
+  // haze while the themed decks around them held 4:1+ (readability round 2,
+  // 2026-08-31; found by _harness/contrastcheck.py's live-material probe).
+  try { plat = bp(platDef, ctx.theme, ctx.mats); } catch (err) { plat = null; }
 
   const slab = new THREE.Group();
   shell.add(slab);
