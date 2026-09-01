@@ -1342,11 +1342,28 @@ export class Stage {
     return null;
   }
 
+  /**
+   * Resolve an authored `model` to a URL.
+   *
+   * The library form is `<theme>/<id>` (e.g. 'spire/torch') — which CONTAINS a
+   * slash, and the old rule "has a slash => use verbatim" therefore dropped the
+   * `assets/props/` prefix and resolved it against the PAGE
+   * (/games/ascendant/index.html), so every one of spire-2's 56 GLB props
+   * requested /games/ascendant/spire/*.glb, 404'd, and silently fell back to a
+   * procedural stand-in. The real models never rendered.
+   *
+   * Only a rooted or absolute path is passed through now; everything else is
+   * library-relative.
+   */
   _propUrl(model) {
-    if (model.indexOf('/') >= 0 || /\.(glb|gltf)$/i.test(model)) {
-      return /\.(glb|gltf)$/i.test(model) ? model : model + '.glb';
-    }
-    return 'assets/props/' + model + '.glb';
+    const m = String(model || '').trim();
+    if (!m) return '';
+    const withExt = /\.(glb|gltf)$/i.test(m) ? m : m + '.glb';
+    const rooted = /^[a-z][a-z0-9+.-]*:/i.test(m)   // http:, https:, data:, blob:
+      || m.charAt(0) === '/'
+      || m.startsWith('./') || m.startsWith('../')
+      || m.startsWith('assets/');
+    return rooted ? withExt : 'assets/props/' + withExt;
   }
 
   _loadProp(url) {
