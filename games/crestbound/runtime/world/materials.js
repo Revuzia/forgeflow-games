@@ -866,9 +866,46 @@ function installHookPreservingClone(mat) {
  *
  * `inject` (optional) = extra injectShader options (uniforms/defines/uv2Mul).
  */
+/* ===========================================================================
+ * Transmission is BANNED in this renderer — CONTRACT "Hard rules 4" (perf)
+ * ---------------------------------------------------------------------------
+ * `MeshPhysicalMaterial.transmission > 0` makes three.js render the ENTIRE
+ * opaque scene a second time into `_transmissionRenderTarget` inside a single
+ * `renderer.render()` call.  It is not one extra draw for the glass — it is a
+ * full duplicate of every draw call and every triangle in the frame, and it
+ * costs that whether the glass is one ice cube or a whole spire.
+ *
+ * Measured on verdant-1 (2026-09-02): 871 draws / 921k triangles with a single
+ * water/ice material in view, 437 draws / ~470k with transmission stripped —
+ * an exact halving, against a gate of 260 draws / 450k triangles.
+ *
+ * So the refractive family keeps its LOOK the cheap way: alpha + a strong
+ * environment term + clearcoat, which on this art direction (stylised, heavily
+ * bloomed, never a lens onto detailed geometry behind it) reads the same.
+ * `transmissionToAlpha` is the ONE place that translation happens.
+ */
+function transmissionToAlpha(params) {
+  if (!params || params.transmission === undefined) return params;
+  const t = Math.max(0, Math.min(1, params.transmission));
+  delete params.transmission;
+  delete params.thickness;
+  delete params.attenuationColor;
+  delete params.attenuationDistance;
+  if (t > 0.02) {
+    /* An opaque-ish solid at t=0.1 (cloud), a clear pane at t=0.9 (glass). */
+    const opacity = Math.max(0.18, 1 - t * 0.72);
+    if (params.opacity === undefined || params.opacity > opacity) params.opacity = opacity;
+    params.transparent = true;
+    params.depthWrite = t < 0.5;
+    params.envMapIntensity = (params.envMapIntensity || 1) * (1 + t * 0.55);
+  }
+  return params;
+}
+
 function assemble(key, maps, params, uvScale, inject) {
   const physical = !!params.__physical;
   delete params.__physical;
+  transmissionToAlpha(params);
 
   const def = {
     map: maps.map || null,
@@ -3430,7 +3467,18 @@ function applyOverride(mat, base, theme, key) {
     if (o.attenuationDistance !== undefined) mat.attenuationDistance = o.attenuationDistance;
     if (o.clearcoat !== undefined) mat.clearcoat = clamp01(o.clearcoat);
     if (o.clearcoatRoughness !== undefined) mat.clearcoatRoughness = clamp01(o.clearcoatRoughness);
-    if (o.transmission !== undefined) mat.transmission = clamp01(o.transmission);
+    /* A theme may not re-arm transmission either (see transmissionToAlpha):
+       one transmissive material in view doubles the whole frame. */
+    if (o.transmission !== undefined) {
+      const t = clamp01(o.transmission);
+      mat.transmission = 0;
+      if (t > 0.02) {
+        mat.opacity = Math.min(mat.opacity === undefined ? 1 : mat.opacity, Math.max(0.18, 1 - t * 0.72));
+        mat.transparent = true;
+        mat.depthWrite = t < 0.5;
+        mat.envMapIntensity = mat.envMapIntensity * (1 + t * 0.55);
+      }
+    }
     if (o.iridescence !== undefined) mat.iridescence = clamp01(o.iridescence);
     if (o.specularIntensity !== undefined) mat.specularIntensity = Math.max(0, o.specularIntensity);
   }

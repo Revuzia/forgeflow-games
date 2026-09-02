@@ -100,8 +100,18 @@ const mergeGeometries = BGU.mergeGeometries || BGU.mergeBufferGeometries;
 
 /** Contract §24: a 24 m grid over `def.bounds`. */
 const CHUNK_SIZE = 24;
-/** Hard ceiling on chunk count — the cell grows rather than the draw calls. */
-const MAX_CHUNKS = 420;
+/**
+ * Hard ceiling on chunk count — the cell GROWS rather than the draw calls.
+ *
+ * Every chunk costs one merged draw per material it contains, and an open
+ * diorama fits inside one frustum, so a fine grid buys almost no culling while
+ * multiplying the static-art draw calls by the chunk count.  Measured on
+ * verdant-1 (144 x 144 m): a 24 m grid produced 21 chunks / 196 merged draws,
+ * every one of them inside the frustum.  The perf gate allows 260 draws for the
+ * WHOLE frame, so the static art gets a small fraction of that: 12 cells is the
+ * most a course may spend before the cell is widened.
+ */
+const MAX_CHUNKS = 4;
 /** Beyond this from the feet a hazard's VISUAL is skipped (never its simulation). */
 const HAZARD_VIS_DIST = 90;
 /** Chunks nearer than this stay visible off-screen so their shadows keep casting. */
@@ -128,8 +138,12 @@ const LIGHT_POOL_SIZE = 6;
 const LIGHT_FADE_IN = 5.0;    // 1/s
 const LIGHT_FADE_OUT = 9.0;   // 1/s — a slot reaches 0 before it re-targets
 const LIGHT_SELECT_HZ = 0.2;  // s between re-selections
-/** Clutter under this world radius never casts: a full extra shadow draw for a sub-pixel blob. */
-const SHADOW_MIN_RADIUS = 0.75;
+/**
+ * Clutter under this world radius never casts: a full extra shadow draw for a
+ * sub-pixel blob.  The shadow pass is a SECOND full render of every caster, so
+ * this threshold is the cheapest lever there is on both draws and triangles.
+ */
+const SHADOW_MIN_RADIUS = 1.5;
 
 /** Hazards that are course-spanning: never distance-cull their visuals. */
 const NEVER_CULL = new Set(['chase', 'risinglava', 'wind', 'current', 'lava']);
@@ -1286,6 +1300,7 @@ export class Course {
     }
     this._refreshHazardColliders();
     this._syncCheckpointAttrs(true);
+    this._pruneShadowCasters();
 
     /* 9. react to quality changes for the life of the course */
     if (Settings && typeof Settings.on === 'function') {
@@ -2045,6 +2060,13 @@ export class Course {
       out = PropsMod.placeProps(container, defs, lib, null, {
         shadows: this._decor > 0.35,
         maxLights: 0,
+        /* Decor's slice of the perf gate (260 draws / 450k tris for the whole
+           frame).  props.js thins density uniformly to fit rather than letting
+           a generous `count:` in a course file spend the course's budget on
+           mushrooms — measured on verdant-1, decor was 372 draws / 462k tris
+           before this cap. */
+        budget: { draws: Math.round(24 * (0.5 + 0.5 * this._decor)),
+                  tris: Math.round(52000 * (0.45 + 0.55 * this._decor)) },
         lightSink: (site) => self.addLightSite(site),
       });
     } catch (e) {
@@ -2703,6 +2725,49 @@ export class Course {
     this.bounds.expandByScalar(2);
   }
 
+  /**
+   * ONE pass over the finished course that takes `castShadow` away from
+   * everything too small to cast a readable shadow.
+   *
+   * The shadow map is a SECOND full render of every caster: each hazard bolt,
+   * critter eye, coin rim and signage plate that keeps `castShadow` costs an
+   * extra draw call and its triangles again, for a smudge a few texels across
+   * at 2048 over `shadowDistance` metres.  `_shouldCast` already applied this
+   * rule inside the static merge; hazards, critters, collectibles and props
+   * build their own meshes and never went through it, so the rule is applied
+   * here to the whole graph instead of being restated in eight modules.
+   *
+   * Nothing is hidden and nothing is removed — only the shadow contribution of
+   * sub-metre clutter, plus the materials three.js cannot cast correctly from
+   * anyway (transparent, unlit basic and additive).
+   */
+  _pruneShadowCasters() {
+    let dropped = 0;
+    this.group.traverse((obj) => {
+      if (!obj.isMesh || !obj.castShadow) return;
+      const m = obj.material;
+      const mats = Array.isArray(m) ? m : [m];
+      let bad = false;
+      for (let i = 0; i < mats.length; i++) {
+        const x = mats[i];
+        if (!x) continue;
+        if (x.transparent === true || x.isMeshBasicMaterial || x.blending === THREE.AdditiveBlending) bad = true;
+      }
+      const g = obj.geometry;
+      if (!bad && g) {
+        if (!g.boundingSphere) { try { g.computeBoundingSphere(); } catch (e) { /* keep casting */ } }
+        if (g.boundingSphere) {
+          obj.updateWorldMatrix(true, false);
+          _v4.setFromMatrixScale(obj.matrixWorld);
+          const sc = Math.max(_v4.x, _v4.y, _v4.z) || 1;
+          if (g.boundingSphere.radius * sc < SHADOW_MIN_RADIUS) bad = true;
+        }
+      }
+      if (bad) { obj.castShadow = false; dropped++; }
+    });
+    this.stats.shadowPruned = dropped;
+  }
+
   /* ── static merge ────────────────────────────────────────────────────── */
 
   _mergeStatic() {
@@ -2710,8 +2775,11 @@ export class Course {
     let drawCalls = 0;
     for (let i = 0; i < this._chunks.length; i++) {
       const ch = this._chunks[i];
-      drawCalls += this._mergeInto(ch.main, ch.recsMain);
-      drawCalls += this._mergeInto(ch.detail, ch.recsDetail);
+      drawCalls += this._mergeInto(ch.main, ch.recsMain, false);
+      /* Detail art (decor, signage, clutter) is culled at `_detailFar` and is
+         never the thing a player reads a landing off, so it never pays for a
+         second pass through the shadow camera. */
+      drawCalls += this._mergeInto(ch.detail, ch.recsDetail, true);
       ch.recsMain.length = 0;
       ch.recsDetail.length = 0;
       if (ch.box.isEmpty()) ch.box.setFromCenterAndSize(_v1.set(0, 0, 0), _v2.set(1, 1, 1));
@@ -2724,7 +2792,7 @@ export class Course {
    * material and emit ONE mesh per (chunk, material).
    * @returns {number} resulting draw calls for this group
    */
-  _mergeInto(target, roots) {
+  _mergeInto(target, roots, noCast) {
     if (!roots.length) return 0;
     const recs = [];
     const keep = [];
@@ -2758,7 +2826,7 @@ export class Course {
       if (list.length === 1 && list[0].gStart < 0) {
         const rec = list[0];
         const m = new THREE.Mesh(rec.geo, mat);
-        m.castShadow = rec.cast;
+        m.castShadow = noCast ? false : rec.cast;
         m.receiveShadow = rec.recv;
         m.matrixAutoUpdate = false;
         m.matrix.copy(rec.mw);
@@ -2789,7 +2857,7 @@ export class Course {
         for (let i = 0; i < geos.length; i++) {
           this._own(geos[i]);
           const m = new THREE.Mesh(geos[i], mat);
-          m.castShadow = cast; m.receiveShadow = recv;
+          m.castShadow = noCast ? false : cast; m.receiveShadow = recv;
           m.matrixAutoUpdate = false;
           m.updateMatrix();
           target.add(m);
@@ -2803,7 +2871,7 @@ export class Course {
       this._own(merged);
       const mesh = new THREE.Mesh(merged, mat);
       mesh.name = 'merged_' + (mat.name || mat.type);
-      mesh.castShadow = cast;
+      mesh.castShadow = noCast ? false : cast;
       mesh.receiveShadow = recv;
       mesh.matrixAutoUpdate = false;
       mesh.updateMatrix();

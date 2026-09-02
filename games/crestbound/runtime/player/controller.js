@@ -105,9 +105,12 @@
  * -----------------------------------------------------------------------------
  * 4. ANALOG LAW (measured by _harness/feelcheck.py)
  * -----------------------------------------------------------------------------
- *  • speed target: mag < 0.15 → 0 · mag < 0.55 → speedWalk·(mag/0.55) ·
- *    else lerp(speedWalk, speedRun, (mag−0.55)/0.45). Keyboard ramps 0→1 over
- *    0.09 s in input.js, so a TAP walks.
+ *  • speed target (CONTRACT §0: "speedWalk 3.2 — stick magnitude 0.15..0.55",
+ *    "speedRun 9.0 — stick magnitude 1.0"): mag < 0.15 → 0 · 0.15→0.25 feathers
+ *    0 → speedWalk so the dead-band edge is not a step · 0.25..0.55 IS the walk
+ *    band and holds speedWalk flat · else lerp(speedWalk, speedRun,
+ *    (mag−0.55)/0.45). Keyboard ramps 0→1 over 0.09 s in input.js, so a TAP
+ *    (which peaks around 0.3–0.5) walks at exactly speedWalk.
  *  • turn rate: lerp(turnRateSlow, turnRateFast, sp/speedRun) — snappy slow,
  *    a wide arc at full run (radius ≈ speedRun/turnRateFast ≈ 2.1 m).
  *  • run-up 0 → 9 m/s = speedRun/accelGround = 0.214 s;
@@ -151,6 +154,13 @@ const MAX_FRAME_DT = 0.25;
 const MOVE_DEAD = 0.15;
 /** Stick magnitude at which the walk band ends and the run ramp begins. */
 const MOVE_WALK_TOP = 0.55;
+/**
+ * Stick magnitude at which the WALK is fully expressed. CONTRACT §0 gives
+ * `speedWalk` the magnitude BAND 0.15..0.55 (against `speedRun`'s single 1.0),
+ * so anything inside that band walks at speedWalk; 0.15 → 0.25 is only the
+ * feather off the dead-band edge, so the curve stays continuous (§11 ANALOG).
+ */
+const MOVE_WALK_FULL = 0.25;
 
 /** Ground speed above which "release the stick" reads as a skid, not a stop. */
 const SKID_SPEED = 4.0;
@@ -1057,12 +1067,18 @@ export class Player {
   }
 
   /**
-   * The analog speed curve (CONTRACT §11): a dead band, a walk band that scales
-   * linearly to `speedWalk`, then a run ramp to `speedRun`.
+   * The analog speed curve (CONTRACT §0 + §11): a dead band, a short feather
+   * off its edge, the WALK BAND (0.25..0.55 → `speedWalk`, flat — §0 gives
+   * speedWalk a magnitude band, not a single magnitude, which is what makes a
+   * light stick a controlled walk instead of an unusable creep), then the run
+   * ramp to `speedRun` at full deflection.
    */
   _speedTarget(mag) {
     if (mag < MOVE_DEAD) return 0;
-    if (mag < MOVE_WALK_TOP) return TUNE.speedWalk * (mag / MOVE_WALK_TOP);
+    if (mag < MOVE_WALK_FULL) {
+      return TUNE.speedWalk * ((mag - MOVE_DEAD) / (MOVE_WALK_FULL - MOVE_DEAD));
+    }
+    if (mag < MOVE_WALK_TOP) return TUNE.speedWalk;
     return lerp(TUNE.speedWalk, TUNE.speedRun, (mag - MOVE_WALK_TOP) / (1 - MOVE_WALK_TOP));
   }
 
@@ -1735,7 +1751,8 @@ export class Player {
 
     this._turnToward(dt, this._wx, this._wz, false);
 
-    const target = sw.speed * clamp(this._wmag, 0, 1);
+    const wm = clamp(this._wmag, 0, 1);
+    const target = sw.speed * wm;
     accelerateXZ(vel, this._wx, this._wz, target, sw.accel, dt);
 
     /* vertical: sink on crouch, buoyancy toward the surface, drag otherwise */
@@ -1746,9 +1763,26 @@ export class Player {
       vel.y += SWIM_BUOYANCY * dt;
     }
 
-    /* drag on all three axes — this is what makes water heavy */
+    /* Drag — what makes water heavy — but it must never fight the stick, or
+       the analog target could never be reached (CONTRACT §11: "analog surface
+       speed 4.5"; drag 2.2 against accel 8 pins a stick-held swim at
+       accel/drag = 3.64 m/s, which is what feelcheck measured). So the bleed
+       takes everything that is NOT commanded: the whole horizontal when the
+       stick is idle, otherwise the sideways component and any EXCESS over the
+       target (a dash, a current, a dive's carry) — never the target itself. */
     const f = Math.max(0, 1 - sw.drag * dt);
-    vel.x *= f; vel.z *= f;
+    if (wm <= 0) {
+      vel.x *= f; vel.z *= f;
+    } else {
+      const along = vel.x * this._wx + vel.z * this._wz;
+      const px = (vel.x - along * this._wx) * f;
+      const pz = (vel.z - along * this._wz) * f;
+      let a = along;
+      if (a > target) a = target + (a - target) * f;
+      else if (a < 0) a *= f;
+      vel.x = a * this._wx + px;
+      vel.z = a * this._wz + pz;
+    }
     vel.y *= f;
 
     /* Never float above the surface: at the waterline the vertical is clamped

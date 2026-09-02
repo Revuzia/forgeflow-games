@@ -828,8 +828,19 @@ export default {
      * leap. Sigil 8 and a wing hat are waiting on the island.
      * ===================================================================== */
 
-    { kind: 'building', style: 'tower', p: [38, r2(gy(38, -6) + 5.3), -6], s: [7.0, 10.6, 7.0], mat: 'plaster', tint: 0xe6dcc2, footing: 2.5, roof: 'cone', roofMat: 'wood', roofTint: TIMBER },
-    { kind: 'mill', p: MILL_HUB, arms: 4, len: MILL_LEN, period: 11.0, yaw: 0, deck: { w: 2.2, d: 1.6, t: 0.5 }, mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
+    // THE MILLER'S HOUSE. It used to stand ON the axle at [38, -6] with its floor
+    // 5.30 m in the AIR (`p` is a building's FLOOR, not its centre — builders.js
+    // lays the interior slab at local y −0.11 and raises the shell from 0 to H),
+    // where the sails swept straight through it and it covered the very patch of
+    // hilltop this beat needs left open. It is now a cottage on the flat ground
+    // north-east of the mill: clear of the sail disc (z >= −3.70 against the
+    // disc's −4.77) and outside the tower drum, with a pitched roof so it can
+    // never be mistaken for a platform.
+    { kind: 'building', style: 'cottage', p: [43.4, r2(gy(43.4, -1.4) - 0.25), -1.4], s: [4.6, 3.6, 4.6], mat: 'plaster', tint: 0xe6dcc2, footing: 2.5 },
+    // `dir: -1` so the arms turn the way this beat is written: an arm boarded at
+    // the bottom of the sweep reaches 3 o'clock in a QUARTER turn (2.75 s), not
+    // three quarters the long way over the top.
+    { kind: 'mill', p: MILL_HUB, arms: 4, len: MILL_LEN, period: 11.0, yaw: 0, dir: -1, deck: { w: 2.2, d: 1.6, t: 0.5 }, mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
     { kind: 'text', p: [38, r2(gy(38, -1.6) + 1.4), -1.6], rot: [0, 0, 0], text: 'RIDE AN ARM  ·  STEP OFF AT THE TOP OF THE SWING', size: 0.24, color: 0x6b5a3a },
 
     // THE FLOATING ISLAND. Top 25.20, near edge x = 49.50 — the arm sweep

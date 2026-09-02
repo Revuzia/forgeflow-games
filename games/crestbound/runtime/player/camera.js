@@ -36,7 +36,9 @@
  *  3. NEVER CLIP. Three whisker rays (centre, ±0.25 m along camera-right) are
  *     cast from the focus toward the desired camera position through
  *     `world.broadphase.raycast`. A hit pulls the camera in INSTANTLY to
- *     `t − collideRadius` (never below `minDist`); clearing eases back out over
+ *     `t − collideRadius` (floored at the near plane, NOT at `minDist` — that is
+ *     the player's zoom minimum and would hold the lens inside a close wall);
+ *     clearing eases back out over
  *     0.6 s so the camera never pumps. A fourth ray protects the shoulder
  *     offset itself, so pressing the hero into a wall cannot push the focus
  *     inside it. Under 2.2 m the hero fades (`player.heroFade` 0..1, read by
@@ -99,6 +101,14 @@ const WHISKER_M            = 0.25;
 const COLLIDE_OUT_LAMBDA   = 5.0;    // 95 % of the way back out in 0.6 s
 const COLLIDE_OUT_MAX_RATE = 12.0;   // m/s ceiling so a long pull-in never snaps out
 const NEAR_FADE_DIST       = 2.2;    // hero fades below this camera distance
+// Floor for the COLLISION pull-in only. `TUNE.cam.minDist` is the orbit/zoom
+// minimum — the closest the player may pull the camera themselves — and must
+// NOT clamp the whisker result: a wall 0.4 m behind the hero (hero pressed flat
+// against it) would then hold the lens 1.6 m back, i.e. on the far side of the
+// wall. CONTRACT §12 says "pull in to hit − collideRadius" with no floor, so the
+// only real floor is the renderer's near plane (engine DEFAULT_NEAR 0.05); the
+// hero is already fully faded by then (heroFade hits 1 at minDist).
+const COLLIDE_MIN_DIST     = 0.12;
 const DIST_LAMBDA          = 6.0;    // base distance changes (death pull-out) ease
 
 // fov
@@ -840,7 +850,9 @@ export class FollowCamera {
           if (cand < limit) limit = cand;
         }
       }
-      want = Math.max(C.minDist, limit);
+      // The whisker result overrides the zoom minimum: clamping to minDist here
+      // is what pushes the lens THROUGH a close wall. Floor at the near plane.
+      want = Math.max(COLLIDE_MIN_DIST, limit);
     }
 
     if (dt <= 0) { this._distColl = want; }

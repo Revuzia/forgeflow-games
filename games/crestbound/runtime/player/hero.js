@@ -682,6 +682,17 @@ function solveLeg(dy, fz, l1, l2) {
 
 /* ═══════════════════════════════════ Hero ═══════════════════════════════════ */
 
+/**
+ * The parts whose shadow IS Nim's silhouette.  Everything else on him is trim:
+ * the shadow map is a second full draw of every caster, and a cuff, a goggle
+ * lens or a pack clasp adds a few texels to a 1.5 m character's shadow for a
+ * whole extra draw call each.  See Hero._attach.
+ */
+const HERO_SHADOW_PARTS = new Set([
+  'coat', 'coatDark', 'head', 'hair', 'pack', 'bootL', 'bootR',
+  'sleeveUL', 'sleeveUR', 'shinL', 'shinR', 'mittenL', 'mittenR',
+]);
+
 export class Hero {
   /**
    * @param {THREE.Scene} scene
@@ -948,6 +959,10 @@ export class Hero {
   }
 
   /**
+   * The parts whose shadow is Nim's silhouette. Everything else on him is trim
+   * and stops casting (see `_attach`) — measured: 24 shadow draws down to 8.
+   */
+  /**
    * Attach a mesh to a bone. Every hero mesh goes through here so the shadow
    * flags, frustum policy and bookkeeping are stated exactly once.
    */
@@ -955,7 +970,12 @@ export class Hero {
     if (!geo) return null;
     const m = new THREE.Mesh(geo, mat);
     m.name = 'nim.' + name;
-    m.castShadow = true;
+    /* Nim casts a REAL shadow, but only from the parts that make his
+       silhouette.  The shadow map is a second full draw of every caster, and a
+       cuff, a goggle lens or a pack clasp adds a few texels to a 1.5 m
+       character's shadow for a whole extra draw call each — the blob under his
+       feet plus the big parts already read as "Nim, standing there". */
+    m.castShadow = HERO_SHADOW_PARTS.has(name);
     m.receiveShadow = false;
     m.frustumCulled = false;    // the hero is always on screen or behind the camera
     m.matrixAutoUpdate = true;

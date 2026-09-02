@@ -83,16 +83,21 @@ async (id) => {
   if (!G || !G.__dev) return {error: '__dev missing (?dev=1)'};
   const frame = () => new Promise(r => requestAnimationFrame(r));
   const t0 = performance.now();
+  const live = () => G.course && G.courseId === id && (G.state === 'playing' || G.state === 'keep');
   try { await G.__dev.goto(id); } catch (e) { return {error: 'goto threw: ' + e}; }
   const deadline = t0 + 30000;
-  while (performance.now() < deadline) {
-    if (G.course && G.courseId === id && (G.state === 'playing' || G.state === 'keep')) {
-      const loadMs = performance.now() - t0;
-      // one more frame so the first render of the new course is included
-      await frame();
-      return {loadMs: +loadMs.toFixed(1), courseId: G.courseId, state: G.state};
-    }
+  /* Poll on BOTH rAF and a timer: building a course blocks the main thread for
+     one long frame, so an rAF-only loop can wake up past the deadline and call
+     a course that is now live "never arrived". */
+  const tick = () => new Promise(r => { let done = false;
+    const fin = () => { if (!done) { done = true; r(); } };
+    requestAnimationFrame(fin); setTimeout(fin, 60); });
+  while (performance.now() < deadline && !live()) await tick();
+  if (live()) {
+    const loadMs = performance.now() - t0;
+    // one more frame so the first render of the new course is included
     await frame();
+    return {loadMs: +loadMs.toFixed(1), courseId: G.courseId, state: G.state};
   }
   return {error: 'never arrived (state ' + G.state + ', course ' + G.courseId + ')'};
 }

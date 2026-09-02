@@ -120,19 +120,21 @@ class BreakableHazard extends Hazard {
 
     // Six plank faces rather than one box: real thickness at the silhouette, and the crate
     // still reads as boards when the pound cracks it open.
-    const nPlank = Math.max(3, Math.round(w / 0.34));
+    /* Plank count is a silhouette read, not a detail level: four boards per
+       face already reads as "boards", and each one is a bevelled box. */
+    const nPlank = Math.min(4, Math.max(3, Math.round(w / 0.34)));
     for (let s = -1; s <= 1; s += 2) {
       for (let i = 0; i < nPlank; i++) {
         const u = (i + 0.5) / nPlank - 0.5;
-        parts.push(slab(w / nPlank * 0.94, h * 0.96, plankT, u * w, 0, s * (d * 0.5 - plankT * 0.5), 0.012, 0.5));
-        parts.push(slab(plankT, h * 0.96, d / nPlank * 0.94, s * (w * 0.5 - plankT * 0.5), 0, u * d, 0.012, 0.5));
+        parts.push(slab(w / nPlank * 0.94, h * 0.96, plankT, u * w, 0, s * (d * 0.5 - plankT * 0.5), 0.012, 0.18));
+        parts.push(slab(plankT, h * 0.96, d / nPlank * 0.94, s * (w * 0.5 - plankT * 0.5), 0, u * d, 0.012, 0.18));
       }
     }
     // top + bottom decking
     for (const s of [1, -1]) {
       for (let i = 0; i < nPlank; i++) {
         const u = (i + 0.5) / nPlank - 0.5;
-        parts.push(slab(w * 0.96, plankT, d / nPlank * 0.94, 0, s * (h * 0.5 - plankT * 0.5), u * d, 0.012, 0.5));
+        parts.push(slab(w * 0.96, plankT, d / nPlank * 0.94, 0, s * (h * 0.5 - plankT * 0.5), u * d, 0.012, 0.18));
       }
     }
     // corner posts

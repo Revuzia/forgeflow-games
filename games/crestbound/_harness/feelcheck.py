@@ -29,7 +29,8 @@ truth. If the tuning changes, the gate moves with it.
   pound_hang         crouch in the air                     TUNE.pound.hang +/- 0.03
   pound_fall         peak descent during the pound         >= 35 m/s
   poundjump_apex     jump inside pound.jumpWindow          EXACT.poundjumpApex +/- 0.10
-  coyote_early/late  jump 0.06 s / 0.14 s after a ledge    yes / no  (TUNE.coyote 0.09)
+  coyote_early/late  jump EVALUATED 0.06 / 0.14 s after    yes / no  (TUNE.coyote 0.09)
+                     the ledge (fall clock, not wall clock)
   buffer             jump 0.08 s BEFORE landing            jumps on landing
   land_keep_ratio    speed after landing / before          >= 0.90
   swim_speed         stick forward in water                TUNE.swim.speed +/- 0.3
@@ -70,6 +71,27 @@ HEADLESS_FLAGS = [f for f in FLAGS if not f.startswith("--use-angle")] + [
     "--use-gl=angle", "--use-angle=swiftshader"]
 
 STATE_JS = "globalThis.CRESTBOUND && CRESTBOUND.game && CRESTBOUND.game.state"
+
+
+def launch_headless(p):
+    """Headless, but on the REAL GPU (same rule as loopcheck.py).
+
+    Every row in this gate is a REAL-TIME measurement sampled once per
+    requestAnimationFrame: a 420 ms settle needs ~25 frames, a run-up needs
+    ~60. Under the bundled Chromium + SwiftShader this page presents ~0.4
+    frames/second, so `wait(420)` yields ONE frame, the hero has had 1/20 s of
+    simulation, and every precondition reports "not grounded" -- the gate would
+    be measuring the software rasterizer instead of the controller. Real Chrome
+    headless drives ANGLE/D3D11 on this box and measures the game. SwiftShader
+    stays as the fallback for a machine with no usable GPU, and says so.
+    """
+    try:
+        return p.chromium.launch(channel="chrome", headless=True, args=FLAGS)
+    except Exception as e:
+        print("headless: no hardware Chrome (%s) -> SwiftShader; the timing rows "
+              "will measure the software rasterizer, not the game" % str(e)[:120],
+              file=sys.stderr)
+        return p.chromium.launch(headless=True, args=HEADLESS_FLAGS)
 
 CLICK_JS = r"""() => {
   const words = ['NEW GAME', 'NEW RUN', 'CONTINUE', 'PLAY', 'START', 'BEGIN', 'ENTER'];
@@ -180,7 +202,7 @@ async () => {
 
   // Water: the live course's own if it has one (a pond/fountain is the real
   // article), otherwise a synthetic pool floating over the slab.
-  let waterCentre = null, waterSurfaceY = 0, waterSource = 'none', tempVolume = null;
+  let waterCentre = null, waterHalf = null, waterSurfaceY = 0, waterSource = 'none', tempVolume = null;
   const vols = (C.volumes || []);
   for (const v of vols) {
     if (!v || v.kind !== 'water') continue;
@@ -190,6 +212,7 @@ async () => {
     // big enough to swim 1 s at 4.5 m/s without hitting the far wall
     if (h && Math.min(h.x, h.z) < 3.5) continue;
     waterCentre = {x: c.x, y: c.y, z: c.z};
+    waterHalf = {x: h ? h.x : 4, y: h ? h.y : 1, z: h ? h.z : 4};
     waterSurfaceY = c.y + (h ? h.y : 1);
     waterSource = 'live course volume';
     break;
@@ -203,6 +226,7 @@ async () => {
         G.player.world.volumes.push(tempVolume);
       }
       waterCentre = {x: TEST.x + 40, y: TEST.y + 20, z: TEST.z + 40};
+      waterHalf = {x: 9, y: 6, z: 9};
       waterSurfaceY = TEST.y + 26;
       waterSource = 'synthetic pool';
     } catch (e) { waterSource = 'could not build a pool: ' + e; }
@@ -455,6 +479,14 @@ async () => {
   /* =======================================================================
    * 4. wall kick
    * ==================================================================== */
+  // Driven the way a player does it: run at the wall, jump, HOLD the stick into
+  // the wall (that is what makes a wallslide and what keeps the contact memory
+  // alive), and press jump once the hero is actually on the wall AND falling.
+  // TUNE.wallKick.minFall is the contract's own gate -- "you bonk a wall on the
+  // way up, you kick it on the way down" -- so a press fired the instant the
+  // capsule is airborne measures the refusal, not the kick. A wall contact also
+  // needs a NON-ZERO normal: wallN is (0,0,0) when there is no wall, and
+  // |0| < 0.4 would call empty air a wall.
   {
     const name = 'wallkick_vy';
     const okg = await reset(0, -34);          // 6 m in front of the wall at z-40
@@ -462,27 +494,41 @@ async () => {
     else {
       await runUp(0, -1, 500);                // run toward -Z, into the wall
       down(JUMP); await wait(120); up(JUMP);
-      // wait for wall contact, then kick
-      let contact = false;
-      const t0 = performance.now();
-      while (performance.now() - t0 < 1400) {
-        await frame(); syncP();
+      const onWall = () => {
         const n = P.wallN;
-        if (!P.grounded && (P.state === 'wallslide' || (n && Math.abs(n.y) < 0.4))) { contact = true; break; }
+        if (P.grounded) return false;
+        if (P.state === 'wallslide') return true;
+        if (!n) return false;
+        const flat = Math.hypot(n.x, n.z);
+        return flat > 0.5 && Math.abs(n.y) < 0.4;
+      };
+      let contact = false, ready = false, sawWall = '';
+      const t0 = performance.now();
+      while (performance.now() - t0 < 1600) {
+        stickWorld(0, -1, 1);                 // keep leaning into the wall
+        await frame(); syncP();
+        if (onWall()) {
+          contact = true;
+          if (!sawWall) sawWall = 'vy ' + P.vel.y.toFixed(2) + ' at contact';
+          if (P.vel.y <= TUNE.wallKick.minFall) { ready = true; break; }
+        }
+        if (P.grounded && contact) break;     // fell back to the floor: missed it
       }
-      if (!contact) { failWith(name, 'never registered a wall contact (state ' + P.state + ')');
-                      failWith('wallkick_away', 'never registered a wall contact'); }
-      else {
-        IN.__test.stick(0, 0);
+      if (!ready) {
+        const why = contact ? 'wall contact but never fell to minFall ' + TUNE.wallKick.minFall
+          + ' (state ' + P.state + ')' : 'never registered a wall contact (state ' + P.state + ')';
+        failWith(name, why); failWith('wallkick_away', why);
+      } else {
         down(JUMP);
-        let vy = -1e9, away = 0;
+        let vy = -1e9, away = 0, st = '';
         const t1 = performance.now();
         while (performance.now() - t1 < 320) {
           await frame(); syncP();
+          if (P.state === 'wallkick') st = 'wallkick';
           if (P.vel.y > vy) { vy = P.vel.y; away = spd(); }
         }
         up(JUMP);
-        record('wallkick_vy', +vy.toFixed(3), 'state ' + P.state);
+        record('wallkick_vy', +vy.toFixed(3), (st || 'state ' + P.state) + ', ' + sawWall);
         record('wallkick_away', +away.toFixed(3));
       }
     }
@@ -553,28 +599,76 @@ async () => {
    * ==================================================================== */
   // Walk off the slab's +X edge (x = TEST.x + HX) and jump after a delay. A
   // jump is proven by vy RISING, not by a state name.
+  //
+  // TIMING. The delay that matters is the one the CONTROLLER sees, not the one
+  // the harness slept: a press is consumed by the next input.update, and the
+  // rAF that first OBSERVES the fall is already up to a frame late. Sleeping
+  // 60 ms of wall clock therefore has the jump evaluated ~100 ms after the
+  // ledge and calls a correct 0.09 s coyote broken. So the clock here is the
+  // fall itself — after walking off with vy ~ 0 the hero is in free fall, so
+  // t = -vel.y / gravFall is exactly the time since the ledge — and the press
+  // is issued one frame EARLY so it lands at the intended `delayMs`. The
+  // measured evaluation time is reported with the row.
+  // Live rAF interval (engine.stats.frameMs is CPU time inside the frame, not
+  // the interval between them — under SwiftShader it reads 9 ms while frames
+  // arrive 2.5 s apart).
+  const measureFrameDt = async () => {
+    const ts = [];
+    for (let i = 0; i < 12; i++) { await frame(); ts.push(performance.now()); }
+    const d = [];
+    for (let i = 1; i < ts.length; i++) d.push(ts[i] - ts[i - 1]);
+    d.sort((a, b) => a - b);
+    return Math.min(120, Math.max(6, d[d.length >> 1])) / 1000;
+  };
+  const FRAME_DT = await measureFrameDt();
+  out.notes.frameDt = +(FRAME_DT * 1000).toFixed(1) + ' ms';
+  const frameDt = () => FRAME_DT;
   const tryCoyote = async (delayMs) => {
-    if (!(await reset(HX - 12, 0))) return null;
+    if (!(await reset(HX - 12, 0))) {
+      return {err: 'precondition failed: not grounded on the slab at (' + P.pos.x.toFixed(1)
+        + ', ' + P.pos.y.toFixed(1) + ', ' + P.pos.z.toFixed(1) + ') state ' + P.state
+        + (P.dead ? ' [dead]' : '')};
+    }
     stickWorld(1, 0, 1);
     const t0 = performance.now();
-    while (P.grounded && performance.now() - t0 < 3200) { await frame(); syncP(); }
-    if (P.grounded) { allUp(); return null; }             // never reached the edge
+    while (P.grounded && performance.now() - t0 < 3200) { stickWorld(1, 0, 1); await frame(); syncP(); }
+    if (P.grounded) {
+      const why = 'never walked off the slab edge (x ' + P.pos.x.toFixed(1) + ', speed '
+        + spd().toFixed(2) + ', state ' + P.state + ', stick mag ' + IN.move.mag.toFixed(2) + ')';
+      allUp(); return {err: why};
+    }
     IN.__test.stick(0, 0);
-    await wait(delayMs);
+    const tAir = () => Math.max(0, -P.vel.y) / TUNE.gravFall;   // seconds since the ledge
+    const want = delayMs / 1000;
+    const lead = frameDt();
+    const t1 = performance.now();
+    while (performance.now() - t1 < 1200) {
+      syncP();
+      if (tAir() >= want - lead) break;
+      await frame();
+    }
     syncP();
+    const at = tAir();
     const vy0 = P.vel.y;
-    down(JUMP); await wait(60); up(JUMP);
+    down(JUMP);
+    await frame(); syncP();
+    const evalAt = at + lead;
+    await wait(60); up(JUMP);
     syncP();
     const jumped = P.vel.y > vy0 + 3.0;
     allUp(); await wait(200);
-    return jumped;
+    return { jumped: jumped, at: at, evalAt: evalAt };
   };
   const early = await tryCoyote(60);
-  if (early === null) failWith('coyote_early', 'never walked off the slab edge');
-  else record('coyote_early', early ? 1 : 0, '60 ms after the ledge');
+  if (!early || early.err) failWith('coyote_early', (early && early.err) || 'precondition failed');
+  else record('coyote_early', early.jumped ? 1 : 0,
+              'pressed ' + (early.at * 1000).toFixed(0) + ' ms after the ledge, evaluated ~'
+              + (early.evalAt * 1000).toFixed(0) + ' ms (coyote ' + (TUNE.coyote * 1000).toFixed(0) + ' ms)');
   const late = await tryCoyote(140);
-  if (late === null) failWith('coyote_late', 'never walked off the slab edge');
-  else record('coyote_late', late ? 1 : 0, '140 ms after the ledge');
+  if (!late || late.err) failWith('coyote_late', (late && late.err) || 'precondition failed');
+  else record('coyote_late', late.jumped ? 1 : 0,
+              'pressed ' + (late.at * 1000).toFixed(0) + ' ms after the ledge, evaluated ~'
+              + (late.evalAt * 1000).toFixed(0) + ' ms');
 
   // Buffer: press 80 ms BEFORE the landing. The remaining time is exact
   // ballistics against the slab top (a dy/|vy| linearisation presses far too
@@ -615,22 +709,64 @@ async () => {
   /* =======================================================================
    * 8. swimming
    * ==================================================================== */
+  // The swim needs ROOM: `swim.speed` is reached in swim.speed/swim.accel ~
+  // 0.56 s, so a stroke started in the middle of a 4 m pool is still
+  // accelerating when it reaches the far side. Start on the up-stick edge of
+  // the pool's LONGER axis, swim across it, and only count frames still inside
+  // the water. The stick is re-driven every frame so the world direction stays
+  // fixed while the follow camera auto-yaws behind the hero (`stickWorld` is
+  // camera-relative, which is the real input path — a stick set once would
+  // curve as the camera swung).
   if (!waterCentre) failWith('swim_speed', 'no water anywhere: ' + waterSource);
   else {
     syncP(); allUp();
+    const HW = waterHalf || {x: 4, y: 1, z: 4};
+    const alongX = HW.x >= HW.z;
+    const span = (alongX ? HW.x : HW.z);
+    const dirX = alongX ? 1 : 0, dirZ = alongX ? 0 : 1;
+    const margin = Math.min(1.0, span * 0.2);
+    // Start in the MIDDLE of the pool: the edge is where the basin's stone rim
+    // is, and a capsule wedged in the rim measures 0 m/s. From the centre the
+    // hero has `span` metres of clear water, which is more than the
+    // speed/accel = 0.56 s ramp needs.
     P.__test.teleport(V3(waterCentre.x, waterCentre.y, waterCentre.z));
     P.__test.setVel(V3(0, 0, 0));
     await wait(500);
     syncP();
+    const inside = () => {
+      const dx = Math.abs(P.pos.x - waterCentre.x), dz = Math.abs(P.pos.z - waterCentre.z);
+      return !!P.inWater && dx <= HW.x - margin * 0.5 && dz <= HW.z - margin * 0.5;
+    };
     if (!P.inWater) {
       failWith('swim_speed', 'teleport into the ' + waterSource + ' did not put the player in water (state ' + P.state + ')');
     } else {
-      stickWorld(1, 0, 1);
-      await wait(900);
+      // Hold the stick until the stroke PLATEAUS (the analog target is a
+      // steady state, not a peak), then average the next frames. The ramp is
+      // swim.speed/swim.accel = 0.56 s; the ceiling is generous, the exit is
+      // the plateau itself.
+      const rampMs = (TUNE.swim.speed / TUNE.swim.accel) * 1000 + 900;
+      const t0 = performance.now();
+      let last = 0, flat = 0;
+      while (performance.now() - t0 < rampMs) {
+        stickWorld(dirX, dirZ, 1);
+        await frame(); syncP();
+        const v = spd();
+        if (Math.abs(v - last) < 0.02 && v > 0.5) { if (++flat >= 3) break; } else flat = 0;
+        last = v;
+      }
       let s = 0, n = 0;
-      for (let i = 0; i < 20; i++) { await frame(); syncP(); if (P.inWater) { s += spd(); n++; } }
-      if (n < 10) failWith('swim_speed', 'left the water during the sample');
-      else record('swim_speed', +(s / n).toFixed(3), waterSource + ', state ' + P.state);
+      for (let i = 0; i < 10; i++) {
+        stickWorld(dirX, dirZ, 1);
+        await frame(); syncP();
+        if (inside()) { s += spd(); n++; }
+      }
+      if (n < 6) failWith('swim_speed', 'left the water during the sample (crossed the '
+        + (2 * span).toFixed(1) + ' m pool; ' + n + ' usable frames)');
+      else if (s / n < 0.2) failWith('swim_speed', 'never moved: state ' + P.state
+        + ', stick mag ' + IN.move.mag.toFixed(2) + ', pos ' + P.pos.x.toFixed(1) + ','
+        + P.pos.y.toFixed(1) + ',' + P.pos.z.toFixed(1));
+      else record('swim_speed', +(s / n).toFixed(3), waterSource + ' ' + (2 * span).toFixed(1)
+        + ' m, state ' + P.state);
     }
     allUp(); await wait(200);
   }
@@ -755,7 +891,7 @@ def main() -> int:
     res = {}
     with sync_playwright() as p:
         if args.headless:
-            br = p.chromium.launch(headless=True, args=HEADLESS_FLAGS)
+            br = launch_headless(p)
         else:
             br = p.chromium.launch(channel="chrome", headless=False, args=FLAGS)
         pg = br.new_page(viewport={"width": 1100, "height": 700})

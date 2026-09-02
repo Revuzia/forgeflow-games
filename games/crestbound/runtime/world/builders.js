@@ -334,6 +334,18 @@ function fallbackMaterial(key, theme) {
   if (r.emissive !== undefined) { opts.emissive = r.emissive; opts.emissiveIntensity = r.emissiveIntensity; }
   if (r.phys) {
     for (const k in r.phys) opts[k] = r.phys[k];
+    /* Never `transmission` — it costs a second full render of the scene inside
+       one renderer.render() (see world/materials.js transmissionToAlpha). */
+    if (opts.transmission !== undefined) {
+      const t = Math.max(0, Math.min(1, opts.transmission));
+      delete opts.transmission; delete opts.thickness;
+      if (t > 0.02) {
+        const a = Math.max(0.18, 1 - t * 0.72);
+        opts.opacity = opts.opacity === undefined ? a : Math.min(opts.opacity, a);
+        opts.transparent = true;
+        opts.depthWrite = t < 0.5;
+      }
+    }
     m = new THREE.MeshPhysicalMaterial(opts);
   } else {
     m = new THREE.MeshStandardMaterial(opts);
@@ -1602,13 +1614,18 @@ export function buildRing(def, theme, mats) {
   const geo = GeoCache.get(key, () => {
     const parts = [];
     const push = (g, m) => parts.push({ geo: g, mat: m });
-    push(ringProfileGeometry(r, [tube, tube * 1.15, tube * 0.32], 56, 1.0), 0);
-    push(ringProfileGeometry(r - tube * 0.55, [tube * 0.16, tube * 0.62, tube * 0.06], 56, 1.6), 2);
-    push(ringProfileGeometry(r + tube * 0.78, [tube * 0.22, tube * 0.42, tube * 0.10], 56, 1.4), 1);
+    /* 24 radial segments, not 56: a 2.6 m hoop is ~90 px across at the distance
+       a ring line is flown, and a rings hazard builds EIGHT of them. */
+    push(ringProfileGeometry(r, [tube, tube * 1.15, tube * 0.32], 24, 1.0), 0);
+    push(ringProfileGeometry(r - tube * 0.55, [tube * 0.16, tube * 0.62, tube * 0.06], 24, 1.6), 2);
+    /* The outer rib and the eight bolts ride the BODY material, not `panel`:
+       an unused material slot is one fewer geometry group, and a rings hazard
+       builds eight hoops, so that slot was 8 draw calls for a shade of grey. */
+    push(ringProfileGeometry(r + tube * 0.78, [tube * 0.22, tube * 0.42, tube * 0.10], 24, 1.4), 0);
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * Math.PI * 2;
       push(xform(bevelBoxGeometry(tube * 0.9, tube * 2.5, tube * 0.55, tube * 0.12, 1.5),
-        Math.cos(a) * (r + tube * 0.5), Math.sin(a) * (r + tube * 0.5), 0, 0, 0, a + Math.PI * 0.5), 1);
+        Math.cos(a) * (r + tube * 0.5), Math.sin(a) * (r + tube * 0.5), 0, 0, 0, a + Math.PI * 0.5), 0);
     }
     for (let i = 0; i < struts; i++) {
       const a = Math.PI + (i - (struts - 1) * 0.5) * 0.55;

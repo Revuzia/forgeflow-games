@@ -257,14 +257,76 @@ function place(g, x, y, z, rx, ry, rz, sx, sy, sz) {
  * distinct material (draw calls = distinct materials). Part geometries are
  * consumed (disposed) — pass fresh geometries, never cached ones.
  */
+/**
+ * Coalescing key for a critter material.
+ *
+ * A critter's body is authored as a dozen small parts, each with its own flat
+ * colour — skin, belly, cheeks, snout, ear linings.  `mergeParts` emits ONE
+ * draw per distinct material, so a bumbler cost 13 draw calls and seven of
+ * them differed in nothing but `color`.  Any map-free, opaque standard
+ * material can carry its colour in a `color` ATTRIBUTE instead, letting every
+ * part in the same shading family share one material and one draw.
+ *
+ * Materials with textures (the world bank's copper/brass/wood), physical
+ * materials (eye whites, wings) and anything transparent are excluded: they
+ * differ in more than colour and keep their own group.
+ * Roughness and metalness are bucketed to 0.1 so "0.62 skin" and "0.60 belly"
+ * do not split the family over a difference nothing can see.
+ */
+function vcKey(m) {
+  if (!m || !m.isMeshStandardMaterial || m.isMeshPhysicalMaterial) return null;
+  if (m.map || m.normalMap || m.roughnessMap || m.metalnessMap || m.emissiveMap || m.alphaMap) return null;
+  if (m.transparent || m.side !== THREE.FrontSide) return null;
+  const r = Math.round((m.roughness || 0) * 10) / 10;
+  const mt = Math.round((m.metalness || 0) * 10) / 10;
+  const e = m.emissive ? m.emissive.getHexString() : '000000';
+  const ei = Math.round((m.emissiveIntensity || 0) * 20) / 20;
+  return 'vc:' + r + ':' + mt + ':' + e + ':' + ei;
+}
+
+/** The shared vertex-coloured material for a coalescing family. */
+function vcMat(m, key) {
+  let out = _matCache.get(key);
+  if (out) return out;
+  out = new THREE.MeshStandardMaterial({
+    color: 0xffffff, vertexColors: true,
+    roughness: Math.round((m.roughness || 0) * 10) / 10,
+    metalness: Math.round((m.metalness || 0) * 10) / 10,
+    emissive: m.emissive ? m.emissive.getHex() : 0x000000,
+    emissiveIntensity: m.emissiveIntensity || 0,
+  });
+  out.name = 'cb.critter.' + key;
+  _matCache.set(key, out);
+  return out;
+}
+
+const _WHITE = new THREE.Color(1, 1, 1);
+
+/** Write a flat colour into a geometry's `color` attribute (working space). */
+function bakeColor(g, col) {
+  const n = g.attributes.position.count;
+  const a = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { a[i * 3] = col.r; a[i * 3 + 1] = col.g; a[i * 3 + 2] = col.b; }
+  g.setAttribute('color', new THREE.BufferAttribute(a, 3));
+  return g;
+}
+
 function mergeParts(parts, name) {
+  /* Colour-only differences collapse into one vertex-coloured material — see
+     vcKey.  Everything else groups by material identity as before. */
   const byMat = [];
   for (let i = 0; i < parts.length; i++) {
     const p = parts[i];
+    const k = vcKey(p.m);
+    const mat = k ? vcMat(p.m, k) : p.m;
     let b = null;
-    for (let k = 0; k < byMat.length; k++) if (byMat[k].m === p.m) { b = byMat[k]; break; }
-    if (!b) { b = { m: p.m, gs: [] }; byMat.push(b); }
-    b.gs.push(normalizeAttrs(p.g));
+    for (let j = 0; j < byMat.length; j++) if (byMat[j].m === mat) { b = byMat[j]; break; }
+    if (!b) { b = { m: mat, gs: [] }; byMat.push(b); }
+    /* Every part gets a `color` attribute, white when it is not coalescing:
+       mergeGeometries refuses a batch whose inputs disagree on their attribute
+       set, and the multi-material merge below mixes both kinds. */
+    const g = normalizeAttrs(p.g);
+    b.gs.push(bakeColor(g, k ? p.m.color : _WHITE));
   }
   const geos = [], mats = [];
   for (let k = 0; k < byMat.length; k++) {

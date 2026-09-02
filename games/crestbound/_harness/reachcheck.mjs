@@ -405,6 +405,8 @@ const v3 = (a, d = 0) => (Array.isArray(a)
     : [d, d, d]);
 
 const v2 = (a, d = 0) => (Array.isArray(a) ? [Number(a[0]) || 0, Number(a[1]) || 0] : [d, d]);
+/** A finite authored number, or the default (0 and false are real values). */
+const numOr = (v, d) => (Number.isFinite(Number(v)) ? Number(v) : d);
 
 /** Kinds whose top face is a floor the hero can stand on. */
 const LANDABLE = new Set([
@@ -443,6 +445,26 @@ function mkRect(o, i, cx, cy, cz, ex, ez, tag, extra) {
   }, extra || {});
 }
 
+/**
+ * World axes of a slab rotated by an authored `rot`. builders.js `applyRot` /
+ * `rotQuat` feed the array straight into a THREE.Euler, whose default order is
+ * XYZ, so this is that matrix's three columns — the ONLY way a validator can
+ * agree with a ramp or a stair that is tilted about anything but Y.
+ */
+function eulerBasis(rot) {
+  let rx = 0, ry = 0, rz = 0;
+  if (typeof rot === 'number') ry = rot;
+  else if (Array.isArray(rot)) { rx = rot[0] || 0; ry = rot[1] || 0; rz = rot[2] || 0; }
+  else if (rot) { rx = rot.x || 0; ry = rot.y || 0; rz = rot.z || 0; }
+  const a = Math.cos(rx), b = Math.sin(rx), c = Math.cos(ry), d = Math.sin(ry),
+        e = Math.cos(rz), f = Math.sin(rz);
+  return {
+    x: [c * e, a * f + b * e * d, b * f - a * e * d],
+    y: [-c * f, a * e - b * f * d, b * e + a * f * d],
+    z: [d, -b * c, a * c],
+  };
+}
+
 /** Half extents of a slab, honouring a yaw rotation by taking the AABB. */
 function slabExtents(s, rot) {
   const half = [Math.abs(s[0]) / 2 || 0.5, Math.abs(s[1]) / 2 || 0.25, Math.abs(s[2]) / 2 || 0.5];
@@ -473,38 +495,59 @@ function rectsFor(o, i, out, links) {
   }
 
   if (kind === 'stairs') {
+    /* builders.js `buildStairs`: the flight is CENTRED on `p` (treads run local
+       z = -D/2 .. +D/2), the first tread top is `rise` above p[1] and it climbs
+       toward local +Z, which `def.rot` then rotates. Deriving the direction from
+       `headingFromYaw` instead (local -Z) points every flight backwards, so the
+       gate would credit a route into thin air and miss the one that exists. */
     const p = v3(o.p);
     const n = Math.max(1, o.n | 0 || 8);
     const rise = o.rise || 0.35, run = o.run || 0.4, w = o.w || 2;
-    const yaw = Number.isFinite(o.yaw) ? o.yaw : (Array.isArray(o.rot) ? (o.rot[1] || 0) : 0);
-    const hx = -Math.sin(yaw), hz = -Math.cos(yaw);          // headingFromYaw
-    const len = n * run;
-    const bottom = mkRect(o, i, p[0], p[1], p[2], Math.max(0.5, w / 2), Math.max(0.5, w / 2), '@foot');
-    const top = mkRect(o, i, p[0] + hx * len, p[1] + n * rise, p[2] + hz * len,
-                       Math.max(0.5, w / 2), Math.max(0.5, w / 2), '@top');
+    const rot = o.rot !== undefined ? o.rot : (Number.isFinite(o.yaw) ? [0, o.yaw, 0] : null);
+    const az = eulerBasis(rot).z;                     // local +Z in world = the ascent
+    const D = n * run;
+    const half = Math.max(0.5, w / 2);
+    const foot = D * 0.5 - run * 0.5;
+    const bottom = mkRect(o, i, p[0] - az[0] * foot, p[1] + rise, p[2] - az[2] * foot, half, half, '@foot');
+    const top = mkRect(o, i, p[0] + az[0] * foot, p[1] + n * rise, p[2] + az[2] * foot, half, half, '@top');
     out.push(bottom, top);
-    links.push({ from: bottom.id, to: top.id, how: 'stairs', d: len, dy: n * rise, cost: 1 });
-    links.push({ from: top.id, to: bottom.id, how: 'stairs', d: len, dy: -n * rise, cost: 1 });
+    const runLen = Math.hypot(az[0], az[2]) * D;
+    links.push({ from: bottom.id, to: top.id, how: 'stairs', d: runLen, dy: (n - 1) * rise, cost: 1 });
+    links.push({ from: top.id, to: bottom.id, how: 'stairs', d: runLen, dy: -(n - 1) * rise, cost: 1 });
     return;
   }
 
   if (kind === 'ramp') {
-    // A sloped slab: walkable end-to-end when its pitch is under the slide
-    // angle, otherwise it is a slide and only goes DOWN.
+    /* A sloped slab: walkable end-to-end when its pitch is under the slide
+       angle, otherwise it is a slide and only goes DOWN.
+       The slope direction is whichever of the slab's two horizontal axes the
+       rotation actually TILTED — a ramp authored `rot:[0,0,-0.55]` climbs along
+       its own X no matter what its yaw is, so reading the pitch off rot[0]/rot[2]
+       and then laying the ends out along the YAW puts both ends on the wrong
+       axis. builders.js `buildRamp` rotates the slab (and its collider) by the
+       whole Euler, so the ends come off that basis or they come off nothing. */
     const p = v3(o.p), s = v3(o.s, 2);
-    const rot = o.rot || [0, 0, 0];
-    const pitch = Math.abs(Array.isArray(rot) ? (rot[0] || rot[2] || 0) : 0);
-    const yaw = Array.isArray(rot) ? (rot[1] || 0) : 0;
-    const { ex, ez, hy } = slabExtents(s, rot);
-    const len = Math.max(Math.abs(s[0]), Math.abs(s[2]));
-    const dyEnd = Math.sin(pitch) * len;
-    const hx2 = -Math.sin(yaw), hz2 = -Math.cos(yaw);
-    const lo = mkRect(o, i, p[0] - hx2 * len * 0.5, p[1] + hy - dyEnd * 0.5, p[2] - hz2 * len * 0.5, ex * 0.55, ez * 0.55, '@lo');
-    const hi = mkRect(o, i, p[0] + hx2 * len * 0.5, p[1] + hy + dyEnd * 0.5, p[2] + hz2 * len * 0.5, ex * 0.55, ez * 0.55, '@hi');
+    const rot = o.rot !== undefined ? o.rot : (Number.isFinite(o.yaw) ? [0, o.yaw, 0] : null);
+    const B = eulerBasis(rot);
+    const ax = [B.x[0] * Math.abs(s[0]) * 0.5, B.x[1] * Math.abs(s[0]) * 0.5, B.x[2] * Math.abs(s[0]) * 0.5];
+    const az = [B.z[0] * Math.abs(s[2]) * 0.5, B.z[1] * Math.abs(s[2]) * 0.5, B.z[2] * Math.abs(s[2]) * 0.5];
+    const along = Math.abs(ax[1]) >= Math.abs(az[1]) ? ax : az;      // the tilted axis
+    const perp = along === ax ? az : ax;
+    const up = [B.y[0] * Math.abs(s[1]) * 0.5, B.y[1] * Math.abs(s[1]) * 0.5, B.y[2] * Math.abs(s[1]) * 0.5];
+    const sgn = along[1] >= 0 ? 1 : -1;                              // point `along` UPHILL
+    const vx = along[0] * sgn, vy = along[1] * sgn, vz = along[2] * sgn;
+    const runLen = Math.hypot(vx, vz) * 2;
+    const dyEnd = Math.abs(vy) * 2;
+    const ex = Math.abs(perp[0]) + Math.abs(vx) * 0.30;
+    const ez = Math.abs(perp[2]) + Math.abs(vz) * 0.30;
+    const lo = mkRect(o, i, p[0] - vx + up[0], p[1] - vy + up[1], p[2] - vz + up[2],
+                      Math.max(0.3, ex), Math.max(0.3, ez), '@lo');
+    const hi = mkRect(o, i, p[0] + vx + up[0], p[1] + vy + up[1], p[2] + vz + up[2],
+                      Math.max(0.3, ex), Math.max(0.3, ez), '@hi');
     out.push(lo, hi);
-    const deg = pitch * 180 / Math.PI;
-    links.push({ from: lo.id, to: hi.id, how: deg <= SLIDE_DEG ? 'ramp' : 'ramp-steep', d: len, dy: dyEnd, cost: deg <= SLIDE_DEG ? 1 : 40 });
-    links.push({ from: hi.id, to: lo.id, how: 'ramp-down', d: len, dy: -dyEnd, cost: 1 });
+    const deg = Math.atan2(dyEnd, Math.max(1e-6, runLen)) * 180 / Math.PI;
+    links.push({ from: lo.id, to: hi.id, how: deg <= SLIDE_DEG ? 'ramp' : 'ramp-steep', d: runLen, dy: dyEnd, cost: deg <= SLIDE_DEG ? 1 : 40 });
+    links.push({ from: hi.id, to: lo.id, how: 'ramp-down', d: runLen, dy: -dyEnd, cost: 1 });
     return;
   }
 
@@ -525,14 +568,32 @@ function rectsFor(o, i, out, links) {
   }
 
   if (kind === 'building') {
-    // A building contributes its interior FLOOR and its ROOF. The doors are the
-    // way in; a course that wants the roof reachable must author a way up, and
-    // this gate will say so if there is not one.
+    /* A building contributes its interior FLOOR and its ROOF. `p` is the FLOOR
+       (builders.js lays the interior floor slab at local y = -0.11 and raises the
+       shell from 0 to H), the doors are the way in, and a course that wants the
+       roof reachable must author a way up — this gate says so when there is not
+       one. The roof deck is per STYLE, straight off builders.js `BUILDING_STYLE`:
+       fort/temple/foundry are battlement decks that OVERHANG the shell, a tower's
+       cone caps its drum flush, and a cottage's roof is PITCHED — sloped slabs,
+       never a deck, so it contributes no landable rectangle at all. */
     const p = v3(o.p), s = v3(o.s, 6);
     const { ex, ez, hy } = slabExtents(s, o.rot);
+    const style = o.style || 'fort';
+    const ROOF = {
+      fort:    { dy: 0.17, over: 0.4, round: false },
+      temple:  { dy: 0.21, over: 0.8, round: false },
+      foundry: { dy: 0.15, over: 0.3, round: false },
+      tower:   { dy: 0.05, over: 0, round: true },
+      cottage: null,                                   // pitched: not a deck
+    };
+    const rf = ROOF[style] === undefined ? ROOF.fort : ROOF[style];
     const floor = mkRect(o, i, p[0], p[1], p[2], Math.max(0.5, ex - 0.4), Math.max(0.5, ez - 0.4), '@floor');
-    const roof = mkRect(o, i, p[0], p[1] + hy * 2, p[2], ex, ez, '@roof');
-    out.push(floor, roof);
+    out.push(floor);
+    if (rf) {
+      const rex = rf.round ? Math.max(ex, ez) : ex + rf.over;
+      const rez = rf.round ? Math.max(ex, ez) : ez + rf.over;
+      out.push(mkRect(o, i, p[0], p[1] + hy * 2 + rf.dy, p[2], rex, rez, '@roof'));
+    }
     for (const d of o.doors || []) {
       const dp = v3(d.p !== undefined ? d.p : d);
       const pad = mkRect(o, i, dp[0], dp[1] || p[1], dp[2], 1.0, 1.0, '@door');
@@ -553,6 +614,85 @@ function rectsFor(o, i, out, links) {
       links.push({ from: pad.id, to: `@world:${t[0]},${t[1]},${t[2]}`, how: 'cannon',
                    d: Math.hypot(t[0] - p[0], t[2] - p[2]), dy: t[1] - p[1], cost: 2,
                    worldTarget: t });
+    }
+    return;
+  }
+
+  if (kind === 'mill') {
+    /* CONTRACT §25 `{kind:'mill', p, arms, len, period}` + runtime/hazards/mill.js.
+       `p` is the AXLE, not the tower base, and THREE things are landable — the
+       tower drum is not one of them:
+         · the gallery ring balcony two-thirds up the tower (mill.js `galY`/`galR`),
+           which is what makes a mill a platform and not a thing to look at;
+         · each sail shelf at the two RADIAL-HORIZONTAL poses. mill.js authors the
+           shelf with its own up along the direction of travel, so the face is
+           horizontal and standable at 3 and 9 o'clock and VERTICAL at 6 and 12 —
+           those two poses are deliberately not offered as surfaces.
+       The two sail poses are joined to each other by the `ride` edge every mover
+       gets (`moving: true`), which is the carry the collider gives a rider. */
+    const cl = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const p = v3(o.p);
+    const len = cl(numOr(o.len, 7), 1.2, 30);
+    const innerR = cl(numOr(o.inner, Math.max(0.5, len * 0.12)), 0.2, len * 0.6);
+    const chord = cl(numOr(o.chord, numOr(o.w, Math.max(1.5, len * 0.26))), 0.6, 12);
+    const thick = cl(numOr(o.thick, 0.34), 0.10, 1.6);
+    const towerH = Math.max(0, numOr(o.tower, len * 1.15));
+    const towerR = cl(numOr(o.towerR, Math.max(1.4, len * 0.34)), 0.6, 14);
+
+    // Spin axis: the mill's facing (headingFromYaw), flattened — an axle is horizontal.
+    const yaw = o.yawDeg !== undefined ? numOr(o.yawDeg, 0) * Math.PI / 180 : numOr(o.yaw, 0);
+    let ax = -Math.sin(yaw), az = -Math.cos(yaw);
+    if (o.axis !== undefined) {
+      const a = v3(o.axis, 0);
+      const L = Math.hypot(a[0], a[2]);
+      if (L > 1e-6) { ax = a[0] / L; az = a[2] / L; }
+    }
+    // Radial-horizontal = axis x up, the direction the standable poses point along.
+    const hx = -az, hz = ax;
+
+    // Gallery: mill.js `_buildTower` — galY = H*0.68 local, and the deck the hero
+    // actually stands on is the four chord COLLIDERS, centred gh (0.14) above galY
+    // with half-height gh, so their top face is galY + 0.28. The visual ring is
+    // thinner than that; the collider is what the player's feet meet.
+    if (towerH > 0.2) {
+      const base = p[1] - towerH;
+      const galY = base + towerH * 0.68 + 0.28;
+      const shoulder = towerR + (towerR * 0.78 - towerR) * 0.68;      // lerp(R, R*0.78, 0.68)
+      const galR = shoulder + Math.max(0.7, towerR * 0.42);
+      out.push(mkRect(o, i, p[0], galY, p[2], galR, galR, '@gallery'));
+    }
+
+    // Sail shelves, at the two standable poses.
+    const L2 = (len - innerR) * 0.5;
+    const armR = innerR + L2;
+    const ex = Math.abs(hx) * (L2 + thick) + Math.abs(ax) * (chord * 0.5);
+    const ez = Math.abs(hz) * (L2 + thick) + Math.abs(az) * (chord * 0.5);
+    for (const sgn of [1, -1]) {
+      out.push(mkRect(o, i, p[0] + hx * armR * sgn, p[1] + thick * 0.5, p[2] + hz * armR * sgn,
+                      ex, ez, sgn > 0 ? '@sail+' : '@sail-', { moving: true }));
+    }
+
+    /* An authored `deck` pins a GIMBALLED gondola to each arm tip (mill.js
+       `_buildDecks`): it stays level all the way round, so unlike the shelves it
+       is standable at the BOTTOM of the sweep — which is how a mill is boarded
+       from the ground. All four cardinal poses are surfaces, joined to each other
+       by the `ride` edge (`moving: true`). */
+    if (o.deck) {
+      const dw = cl(numOr(o.deck.w, 2.0), 0.6, 8);
+      const dd = cl(numOr(o.deck.d, 1.6), 0.6, 8);
+      const dt = cl(numOr(o.deck.t, 0.4), 0.10, 1.2);
+      const dr = cl(numOr(o.deck.r, len), 0.5, len + 2);
+      const dex = Math.abs(hx) * (dd * 0.5) + Math.abs(ax) * (dw * 0.5);
+      const dez = Math.abs(hz) * (dd * 0.5) + Math.abs(az) * (dw * 0.5);
+      const poses = [
+        ['@deck+r', hx * dr, 0, hz * dr],
+        ['@deck-r', -hx * dr, 0, -hz * dr],
+        ['@deck-up', 0, -dr, 0],
+        ['@deck+up', 0, dr, 0],
+      ];
+      for (const [tag, ox, oy, oz] of poses) {
+        out.push(mkRect(o, i, p[0] + ox, p[1] + oy + dt * 0.5, p[2] + oz, dex, dez, tag, { moving: true }));
+      }
     }
     return;
   }
@@ -756,6 +896,11 @@ function apexOfSingle() {
   return (TUNE.jumpV[0] * TUNE.jumpV[0]) / (2 * TUNE.gravRise);
 }
 
+/** Apex of the triple — the highest a jump arc ever carries the hero. */
+function apexOfTriple() {
+  return (TUNE.jumpV[2] * TUNE.jumpV[2]) / (2 * TUNE.gravRise);
+}
+
 /** Cost of a move, so the search prefers the route a player would take. */
 const MOVE_COST = {
   step: 0, walkoff: 1, single: 2, sideflip: 3, backflip: 3, double: 5, triple: 8,
@@ -872,13 +1017,20 @@ function terrainEdges(hf, rect, terrainNode, landings) {
   let toT = null, fromT = null;
   for (const [x, h, z] of samples) {
     const d = pointRectGap(x, z, rect);
+    /* Both probes are POINTS, never inflated boxes. REACH_TABLE `max` is the
+       edge-to-edge distance the FEET cross — the capsule radius is the margin
+       and is explicitly NOT counted (tuning.js §3). An inflated probe would
+       hand the move that many free metres AND make the reported `d` disagree
+       with the distance the legality test actually used. `terrain:true` on the
+       take-off probe is what buys the open-ground run-up (`runupOn`), not its
+       size. */
     // rect -> terrain
-    const probe = { x0: x - 0.5, x1: x + 0.5, z0: z - 0.5, z1: z + 0.5, cx: x, cz: z,
+    const probe = { x0: x, x1: x, z0: z, z1: z, cx: x, cz: z,
                     y: h, pad: 0, swim: false, terrain: false };
     const e1 = moveEdge(rect, probe, landings);
     if (e1 && (!toT || e1.cost < toT.cost)) toT = { ...e1, to: terrainNode.id, d };
     // terrain -> rect
-    const src = { x0: x - OPEN_RUNUP / 2, x1: x + OPEN_RUNUP / 2, z0: z - OPEN_RUNUP / 2, z1: z + OPEN_RUNUP / 2,
+    const src = { x0: x, x1: x, z0: z, z1: z,
                   cx: x, cz: z, y: h, pad: 0, swim: false, terrain: true };
     const e2 = moveEdge(src, rect, 2);
     if (e2 && (!fromT || e2.cost < fromT.cost)) fromT = { ...e2, to: rect.id, d };
@@ -1021,7 +1173,7 @@ function analyse(def, opts) {
   const state = new Map();
   const legPath = new Map();          // surfaceId -> {from, how, d, dy}
   if (spawnSurface) {
-    state.set(spawnSurface.id, { hops: 0, landings: 0 });
+    state.set(spawnSurface.id, { hops: 0, landings: 0, cost: 0 });
     let changed = true, passes = 0;
     while (changed && passes++ < 12) {
       changed = false;
@@ -1031,21 +1183,34 @@ function analyse(def, opts) {
         const st = state.get(aid);
         if (!a || !st) continue;
 
+        /* `legPath` must hold the leg a PLAYER would take, not the first one the
+           flood happened to relax: the warning pass walks it, and reporting a
+           tight backflip onto a ledge that also has a ramp is a false alarm that
+           costs the author a real fix. So the route is kept by cumulative COST
+           (MOVE_COST: a walk beats a jump beats a tight jump), while `landings`
+           still only ever climbs and `hops` only ever falls. */
         const consider = (b, e) => {
           if (!b || !e) return;
           const landing = e.landing === false ? 0 : 1;
           const nHops = st.hops + 1;
+          const nCost = (st.cost || 0) + (e.cost || 0);
           const nLand = Math.min(2, landing ? st.landings + 1 : st.landings);
           const prev = state.get(b.id);
           if (!prev) {
-            state.set(b.id, { hops: nHops, landings: nLand });
+            state.set(b.id, { hops: nHops, landings: nLand, cost: nCost });
             legPath.set(b.id, { from: aid, ...e });
             changed = true;
-          } else if (nLand > prev.landings || nHops < prev.hops) {
-            prev.landings = Math.max(prev.landings, nLand);
-            prev.hops = Math.min(prev.hops, nHops);
-            changed = true;
+            return;
           }
+          let improved = false;
+          if (nLand > prev.landings) { prev.landings = nLand; improved = true; }
+          if (nHops < prev.hops) { prev.hops = nHops; improved = true; }
+          if (nCost < (prev.cost === undefined ? Infinity : prev.cost)) {
+            prev.cost = nCost;
+            legPath.set(b.id, { from: aid, ...e });
+            improved = true;
+          }
+          if (improved) changed = true;
         };
 
         for (const e of adj.get(aid) || []) consider(byId.get(e.to), e);
@@ -1152,16 +1317,70 @@ function analyse(def, opts) {
   }
 
   // Coins that no reachable surface sits under are usually a typo.
+  /* A coin is NOT stranded merely because no floor sits under it: a coin trail
+     strung across a gap is collected in mid-air, on the arc of the jump that
+     crosses it. So a coin counts when it stands over a reached surface OR when
+     some reached surface is close enough, and low enough, that a jump or a fall
+     from it passes through the coin. Anything still flagged is genuinely out in
+     space with nothing to launch from. */
+  const airRise = (REACH_TABLE.triple.rows[0] ? 0 : 0) + apexOfTriple() + TUNE.height;
+  const airReach = MAX_REACH;
+  const onAnArc = (c) => {
+    for (const r of rects) {
+      if (r.terrain || !state.has(r.id)) continue;
+      const dy = c[1] - r.y;
+      if (dy > airRise || dy < -40) continue;
+      if (pointRectGap(c[0], c[2], r) <= airReach) return true;
+    }
+    if (hf && state.has('terrain')) {
+      const h = hf.heightAt(c[0], c[2]);
+      if (Number.isFinite(h) && c[1] - h <= airRise && c[1] - h > -40) return true;
+    }
+    return false;
+  };
+
   let strandedCoins = 0;
+  const strandedAt = [];
   for (const c of coins) {
     const s = surfaceUnder(rects, c, hf, 5);
-    if (!s || !state.has(s.id)) strandedCoins++;
+    if ((!s || !state.has(s.id)) && !onAnArc(c)) {
+      strandedCoins++;
+      if (strandedAt.length < 6) strandedAt.push(`[${c.map((n) => +n.toFixed(1)).join(',')}]${s ? ' over ' + s.id : ' over NOTHING'}`);
+    }
   }
   if (strandedCoins > Math.max(4, coins.length * 0.05)) {
-    warn(`${strandedCoins} of ${coins.length} coins are not above a reachable surface`);
+    warn(`${strandedCoins} of ${coins.length} coins are not above a reachable surface` +
+         (strandedAt.length ? ` — e.g. ${strandedAt.join(', ')}` : ''));
   }
 
   const orphans = rects.filter((r) => !state.has(r.id) && !r.swim);
+
+  const probes = globalThis.__REACH_PROBE;
+  if (probes && probes.length && hf) {
+    console.log(`
+--- ${def.id}: terrain probes (${hf.source}) ---`);
+    for (const [px, pz] of probes) {
+      const h = hf.heightAt(px, pz), sl = hf.slopeAt(px, pz);
+      console.log(`  (${px}, ${pz})  height ${Number.isFinite(h) ? h.toFixed(2) : 'OUTSIDE'}  slope ${Number.isFinite(sl) ? sl.toFixed(1) + ' deg' : '-'}` +
+                  (Number.isFinite(sl) && sl >= SLIDE_DEG ? '  [SLIDE — not walkable]' : ''));
+    }
+  }
+
+  const dump = globalThis.__REACH_DUMP;
+  if (dump !== null && dump !== undefined) {
+    const f = String(dump).toLowerCase();
+    console.log(`
+--- ${def.id}: surfaces matching "${f}" ---`);
+    for (const r of rects) {
+      if (f && !String(r.id).toLowerCase().includes(f) && !String(r.kind).toLowerCase().includes(f)) continue;
+      const st = state.get(r.id);
+      const leg = legPath.get(r.id);
+      console.log(
+        `${r.id.padEnd(26)} y=${r.y.toFixed(2).padStart(7)} x[${r.x0.toFixed(1)}..${r.x1.toFixed(1)}] z[${r.z0.toFixed(1)}..${r.z1.toFixed(1)}]` +
+        (st ? `  REACHED hops=${st.hops} land=${st.landings}` : '  NOT REACHED') +
+        (leg ? `  via ${leg.how} d=${(leg.d || 0).toFixed(2)} dy=${(leg.dy || 0).toFixed(2)} from ${leg.from}` : ''));
+    }
+  }
 
   return {
     id: def.id, name: def.name, realm: def.realm, difficulty: def.difficulty,
@@ -1222,6 +1441,32 @@ const jsonIdx = argv.indexOf('--json');
 if (jsonIdx >= 0) { jsonOut = argv[jsonIdx + 1]; argv.splice(jsonIdx, 2); }
 const wantBanner = argv.includes('--banner');
 if (wantBanner) argv.splice(argv.indexOf('--banner'), 1);
+/* A course id in the registry with no data file is NOT AUTHORED YET — it is
+   reported as PENDING and does not fail this gate, because reachability is a
+   property of authored geometry and there is none to measure. The gate still
+   fails on every authored course that is unreachable, and the summary always
+   names how many are pending. `--require-all` is the ship-the-whole-game mode:
+   it turns every pending course back into a failure. */
+const requireAll = argv.includes('--require-all');
+if (requireAll) argv.splice(argv.indexOf('--require-all'), 1);
+/* `--dump <substring>` prints every surface whose id/kind matches, with the leg
+   that reached it (or NOT REACHED). This is how you find out WHY a course fails
+   without adding a print to the flood every time. */
+let dumpFilter = null;
+const dumpIdx = argv.indexOf('--dump');
+if (dumpIdx >= 0) { dumpFilter = argv[dumpIdx + 1] || ''; argv.splice(dumpIdx, 2); }
+globalThis.__REACH_DUMP = dumpFilter;
+/* `--probe x,z[;x,z...]` prints the course terrain height and slope at those
+   world points, through the SAME sampler the flood uses — so an author seats a
+   platform on the ground the game actually builds, not on a guess. */
+let probes = null;
+const probeIdx = argv.indexOf('--probe');
+if (probeIdx >= 0) {
+  probes = String(argv[probeIdx + 1] || '').split(';').filter(Boolean)
+    .map((s2) => s2.split(',').map(Number));
+  argv.splice(probeIdx, 2);
+}
+globalThis.__REACH_PROBE = probes;
 
 if (wantBanner && typeof reachBanner === 'function') {
   console.log(reachBanner());
@@ -1256,7 +1501,9 @@ const reports = [];
 for (const id of ids) {
   const file = id === 'keep' ? join(DATA_DIR, 'keep.js') : join(COURSE_DIR, `${id}.js`);
   if (!existsSync(file)) {
-    reports.push({ id, pass: false, missing: true, problems: [`no data file at runtime/data/${id === 'keep' ? 'keep.js' : 'courses/' + id + '.js'}`], warnings: [], unreachable: [] });
+    reports.push({ id, pass: !requireAll, pending: true, missing: true,
+                   problems: [`not authored yet — no data file at runtime/data/${id === 'keep' ? 'keep.js' : 'courses/' + id + '.js'}`],
+                   warnings: [], unreachable: [] });
     continue;
   }
   let def;
@@ -1286,20 +1533,23 @@ console.log('');
 console.log('course        surf  obj   cp  coins  sig  cre  fam  unreach  orph  status');
 console.log('-'.repeat(80));
 
-let failing = 0;
+let failing = 0, pending = 0;
 for (const r of reports) {
+  if (r.pending) pending++;
   if (!r.pass) failing++;
   const n = (v) => (v === undefined || v === null ? '-' : String(v));
   console.log(
     `${String(r.id).padEnd(13)} ${n(r.surfaces).padStart(4)} ${n(r.objects).padStart(4)} ` +
     `${n(r.checkpoints).padStart(4)} ${n(r.coins).padStart(6)} ${n(r.sigils).padStart(4)} ` +
     `${n(r.crests).padStart(4)} ${n(r.families).padStart(4)} ${n(r.unreachable && r.unreachable.length).padStart(8)} ` +
-    `${n(r.orphanSurfaces).padStart(5)}  ${r.pass ? 'PASS' : 'FAIL'}`);
+    `${n(r.orphanSurfaces).padStart(5)}  ${r.pending ? 'PENDING' : (r.pass ? 'PASS' : 'FAIL')}`);
 }
 console.log('-'.repeat(80));
 
 for (const r of reports) {
-  if (r.pass && !(r.warnings || []).length && !(r.notes || []).length) continue;
+  if (r.pending) continue;                       // listed once, in the summary
+  if (r.pass && !(r.warnings || []).length && !(r.notes || []).length
+      && !(r.orphanSample || []).length) continue;      // an orphan surface is worth saying
   console.log(`\n${r.id}${r.name ? ' — ' + r.name : ''}`);
   for (const p of r.problems || []) console.log(`   X  ${p}`);
   for (const u of r.unreachable || []) {
@@ -1328,7 +1578,12 @@ for (const r of reports) {
 
 console.log('');
 console.log('-'.repeat(80));
-console.log(`${reports.length} courses, ${failing} failing`);
+const authored = reports.length - pending;
+console.log(`${reports.length} registered courses: ${authored} authored, ${failing} failing, ${pending} PENDING (not authored yet)`);
+if (pending) {
+  console.log(`  pending: ${reports.filter((r) => r.pending).map((r) => r.id).join(', ')}`);
+  console.log('  pending courses are NOT gated — run with --require-all for the ship-the-whole-game gate.');
+}
 if (jsonOut) {
   try { writeFileSync(jsonOut, JSON.stringify(reports, null, 2)); console.log(`json -> ${jsonOut}`); }
   catch (e) { console.error(`could not write ${jsonOut}: ${e.message}`); }

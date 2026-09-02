@@ -396,26 +396,42 @@ function bar(w, h, d, x, y, z, rz) {
 }
 
 /**
+ * The same bar with square corners (12 triangles instead of ~100).
+ *
+ * Emboss bars are 2 cm proud of a 30 cm coin face and there are 121 coins in a
+ * course: at the distance a coin is ever read, a 3 mm bevel on the emboss is
+ * sub-pixel while the bevelled version costs ~600 of the coin's ~1440
+ * triangles.  The BLANK keeps its lathe bevel — that is the silhouette the
+ * doctrine is about; this is the engraving inside it.
+ */
+function flatBar(w, h, d, x, y, z, rz) {
+  const g = new THREE.BoxGeometry(w, h, d);
+  if (rz) g.rotateZ(rz);
+  g.translate(x, y, z);
+  return g;
+}
+
+/**
  * A rune glyph (ᛉ-like: stem + two raised arms) embossed on a face at depth z.
  * `s` scales the glyph, `flip` mirrors for the back face.
  */
 function runeParts(s, z, flip) {
   const zz = flip ? -z : z;
   const parts = [];
-  parts.push(bar(0.05 * s, 0.30 * s, 0.022, 0, 0, zz, 0));
-  parts.push(bar(0.045 * s, 0.17 * s, 0.022, -0.065 * s, 0.075 * s, zz, 0.62));
-  parts.push(bar(0.045 * s, 0.17 * s, 0.022, 0.065 * s, 0.075 * s, zz, -0.62));
+  parts.push(flatBar(0.05 * s, 0.30 * s, 0.022, 0, 0, zz, 0));
+  parts.push(flatBar(0.045 * s, 0.17 * s, 0.022, -0.065 * s, 0.075 * s, zz, 0.62));
+  parts.push(flatBar(0.045 * s, 0.17 * s, 0.022, 0.065 * s, 0.075 * s, zz, -0.62));
   return parts;
 }
 
 /** Four-point star emblem for the crest / sigil (crossed bars + a hub). */
 function starParts(s, z) {
   const parts = [];
-  parts.push(bar(0.07 * s, 0.44 * s, 0.05, 0, 0, z, 0));
-  parts.push(bar(0.07 * s, 0.44 * s, 0.05, 0, 0, z, Math.PI / 2));
-  parts.push(bar(0.055 * s, 0.30 * s, 0.045, 0, 0, z, Math.PI / 4));
-  parts.push(bar(0.055 * s, 0.30 * s, 0.045, 0, 0, z, -Math.PI / 4));
-  const hub = prismGeometry(0.075 * s, 0.06, 8, 1);
+  parts.push(flatBar(0.07 * s, 0.44 * s, 0.05, 0, 0, z, 0));
+  parts.push(flatBar(0.07 * s, 0.44 * s, 0.05, 0, 0, z, Math.PI / 2));
+  parts.push(flatBar(0.055 * s, 0.30 * s, 0.045, 0, 0, z, Math.PI / 4));
+  parts.push(flatBar(0.055 * s, 0.30 * s, 0.045, 0, 0, z, -Math.PI / 4));
+  const hub = prismGeometry(0.075 * s, 0.06, 6, 1);
   hub.rotateX(Math.PI / 2);
   hub.translate(0, 0, z);
   parts.push(hub);
@@ -433,9 +449,11 @@ function faceRing(r, hw, hh, ch, seg, z) {
 /** THE coin: blank + rim rings + embossed rune on both faces. One geometry. */
 function coinGeometry() {
   return cachedGeo('coin', () => {
-    const parts = [normalizeAttrs(coinBlank(COIN_R, COIN_H, 0.022, 28))];
-    parts.push(faceRing(COIN_R * 0.80, 0.014, 0.012, 0.004, 28, COIN_H / 2));
-    parts.push(faceRing(COIN_R * 0.80, 0.014, 0.012, 0.004, 28, -COIN_H / 2));
+    /* 12 lathe segments, not 28: a coin is ~0.3 m across and there are 121 of
+       them in one InstancedMesh, so every segment costs 121x. */
+    const parts = [normalizeAttrs(coinBlank(COIN_R, COIN_H, 0.022, 10))];
+    parts.push(faceRing(COIN_R * 0.80, 0.014, 0.012, 0.004, 10, COIN_H / 2));
+    parts.push(faceRing(COIN_R * 0.80, 0.014, 0.012, 0.004, 10, -COIN_H / 2));
     for (const p of runeParts(1.0, COIN_H / 2, false)) parts.push(p);
     for (const p of runeParts(1.0, COIN_H / 2, true)) parts.push(p);
     const g = mergeGeometries(parts.map(normalizeAttrs), false);
@@ -448,11 +466,11 @@ function coinGeometry() {
 /** The sigil: a heavier blank, double rim, star emblem on both faces. */
 function sigilGeometry() {
   return cachedGeo('sigil', () => {
-    const parts = [normalizeAttrs(coinBlank(SIGIL_R, SIGIL_H, 0.03, 32))];
-    parts.push(faceRing(SIGIL_R * 0.84, 0.018, 0.014, 0.005, 32, SIGIL_H / 2));
-    parts.push(faceRing(SIGIL_R * 0.84, 0.018, 0.014, 0.005, 32, -SIGIL_H / 2));
-    parts.push(faceRing(SIGIL_R * 0.60, 0.012, 0.012, 0.004, 32, SIGIL_H / 2));
-    parts.push(faceRing(SIGIL_R * 0.60, 0.012, 0.012, 0.004, 32, -SIGIL_H / 2));
+    const parts = [normalizeAttrs(coinBlank(SIGIL_R, SIGIL_H, 0.03, 16))];
+    parts.push(faceRing(SIGIL_R * 0.84, 0.018, 0.014, 0.005, 16, SIGIL_H / 2));
+    parts.push(faceRing(SIGIL_R * 0.84, 0.018, 0.014, 0.005, 16, -SIGIL_H / 2));
+    parts.push(faceRing(SIGIL_R * 0.60, 0.012, 0.012, 0.004, 16, SIGIL_H / 2));
+    parts.push(faceRing(SIGIL_R * 0.60, 0.012, 0.012, 0.004, 16, -SIGIL_H / 2));
     for (const p of starParts(0.72, SIGIL_H / 2 + 0.01)) parts.push(p);
     for (const p of starParts(0.72, -SIGIL_H / 2 - 0.01)) parts.push(p);
     const g = mergeGeometries(parts.map(normalizeAttrs), false);
@@ -547,7 +565,7 @@ function crestEnamelGeometry() {
 /** Ground light ring: a radial-UV disc for the glow shader. */
 function poolDiscGeometry() {
   return cachedGeo('pooldisc', () => {
-    const g = discGeometry(1.15, 40);
+    const g = discGeometry(1.15, 24);
     g.computeBoundingSphere();
     return g;
   });

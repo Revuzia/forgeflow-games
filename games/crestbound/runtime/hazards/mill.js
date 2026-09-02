@@ -95,6 +95,25 @@ class MillHazard extends Hazard {
     // Canonical(+Y) -> world(axis). Sails are authored in the canonical frame and the whole
     // spinner is oriented once, exactly like ./rotors.js.
     this.alignQ = new THREE.Quaternion().setFromUnitVectors(UPV, this.axis);
+    // The mill's fixed yaw: local -Z faces along the axle, so local +X is the RADIAL-HORIZONTAL
+    // (the direction a sail points at 3 o'clock). Tower, cap and gondolas all share it.
+    this.yawQ = new THREE.Quaternion().setFromAxisAngle(UPV, Math.atan2(-this.axis.x, -this.axis.z));
+
+    /* GONDOLA DECKS — `deck:{w, d, t, r?}`, optional.
+       A sail shelf's own up is the direction of travel, so it is horizontal at 3 and 9 o'clock
+       and VERTICAL at 6 and 12: a mill with bare sails can only be boarded level with its axle.
+       An authored `deck` pins a GIMBALLED platform to each arm tip — it stays horizontal through
+       the whole revolution, like a wheel gondola — which is what makes "jump on at the bottom of
+       the sweep and ride it round" a real move. `w` spans the axle, `d` runs along the arm (the
+       edge you step off), `t` is its thickness and `r` its radius from the axle (default `len`).
+       Still a closed form of theta, so DETERMINISM (CONTRACT §21) is untouched. */
+    const dk = def.deck;
+    this.deck = dk ? {
+      w: clamp(num(dk.w, 2.0), 0.6, 8),
+      d: clamp(num(dk.d, 1.6), 0.6, 8),
+      t: clamp(num(dk.t, 0.4), 0.10, 1.2),
+      r: clamp(num(dk.r, this.len), 0.5, this.len + 2),
+    } : null;
 
     this.armPhase = new Float64Array(this.arms);
     for (let i = 0; i < this.arms; i++) this.armPhase[i] = (i / this.arms) * TAU;
@@ -111,6 +130,7 @@ class MillHazard extends Hazard {
     this._buildTower();
     this._buildHub();
     this._buildSails(q);
+    this._buildDecks();
     this.reset(0);
   }
 
@@ -203,7 +223,7 @@ class MillHazard extends Hazard {
     timber.push(slab(0.9, 0.06, 1.3, 0, H + capR * 0.3, -capR * 2.5, 0.02, 0.6));
 
     // Orient the tower so its +Y is world up and its -Z faces the mill's facing.
-    const yawQ = new THREE.Quaternion().setFromAxisAngle(UPV, Math.atan2(-this.axis.x, -this.axis.z));
+    const yawQ = this.yawQ;
 
     this.tower = new THREE.Mesh(mergeAll(stone), hazMat(this.ctx, 'stone'));
     this.tower.castShadow = true;
@@ -449,6 +469,64 @@ class MillHazard extends Hazard {
   }
 
   /** The world radial direction of arm `i` at rotor angle `theta`. Allocation-free. */
+  /* ------------------------------------------------------------------------------------ */
+  /*  GONDOLA DECKS — the level platforms you actually ride                                 */
+  /* ------------------------------------------------------------------------------------ */
+  _buildDecks() {
+    this.deckMeshes = [];
+    this.deckColliders = [];
+    if (!this.deck) return;
+    const { w, d, t } = this.deck;
+
+    // One geometry, `arms` instances. Authored with X along the arm (the edge you step off),
+    // Z across the axle; `this.yawQ` puts that into world space and never changes again.
+    const parts = [];
+    parts.push(slab(d, t, w, 0, 0, 0, Math.min(0.06, t * 0.3)));                  // the deck plank
+    for (const sg of [1, -1]) {                                                    // kerb rails
+      parts.push(slab(d, t * 0.55, 0.12, 0, t * 0.55, sg * (w * 0.5 - 0.06), 0.02, 0.6));
+      parts.push(slab(0.12, t * 0.55, w, sg * (d * 0.5 - 0.06), t * 0.55, 0, 0.02, 0.6));
+    }
+    for (const sg of [1, -1]) {                                                    // hanger straps
+      parts.push(slab(0.12, t * 2.4, 0.12, 0, t * 1.5, sg * (w * 0.5 - 0.22), 0.02, 0.5));
+    }
+    const geo = mergeAll(parts);
+
+    // The stripe that says "this is where you stand" (CONTRACT hard rule 2).
+    const stripes = [];
+    for (const sg of [1, -1]) {
+      stripes.push(slab(d * 0.94, 0.035, 0.07, 0, t * 0.5 + 0.02, sg * (w * 0.5 - 0.16), 0.008, 0.4));
+    }
+    this.deckStripeMat = additiveMaterial(this.safeColor.getHex(), { cached: false, opacity: 0.7 });
+    this.own(this.deckStripeMat);
+    const stripeGeo = mergeAll(stripes);
+
+    const deckMat = hazMat(this.ctx, 'wood');
+    for (let i = 0; i < this.arms; i++) {
+      const m = new THREE.Mesh(geo, deckMat);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      m.quaternion.copy(this.yawQ);
+      this.add(m);
+      const st = new THREE.Mesh(stripeGeo, this.deckStripeMat);
+      st.renderOrder = 5;
+      st.quaternion.copy(this.yawQ);
+      this.add(st);
+      this.deckMeshes.push([m, st]);
+
+      const c = makeCollider({
+        center: this.hub,
+        half: _v.set(d * 0.5, t * 0.5, w * 0.5),
+        quat: this.yawQ,
+        surface: 'normal',
+        ref: this,
+        group: 'hazard',
+        props: { stepSfx: 'step_wood', stepRate: 1.0, mill: true, deck: true, arm: i },
+      });
+      this.colliders.push(c);
+      this.deckColliders.push(c);
+    }
+  }
+
   armDir(i, theta, out) {
     const a = this.armPhase[i] + theta;
     out.set(Math.cos(a), 0, -Math.sin(a)).applyQuaternion(this.alignQ);
@@ -497,6 +575,23 @@ class MillHazard extends Hazard {
       this._refreshBroad(c);
     }
 
+    // --- gondola decks: pinned to the tip, GIMBALLED (never rotate with the arm) --------------
+    if (this.deck) {
+      const R = this.deck.r;
+      const half = _v3.set(this.deck.d * 0.5, this.deck.t * 0.5, this.deck.w * 0.5);
+      for (let i = 0; i < this.arms; i++) {
+        this.armDir(i, theta, _v);
+        _v2.copy(this.hub).addScaledVector(_v, R);
+        const pair = this.deckMeshes[i];
+        pair[0].position.copy(_v2);
+        pair[1].position.copy(_v2);
+        const c = this.deckColliders[i];
+        setColliderBox(c, _v2, half, this.yawQ);
+        c.active = this.enabled;
+        this._refreshBroad(c);
+      }
+    }
+
     // --- tip dust ------------------------------------------------------------------------------
     const tipSpeed = Math.abs(this.omega) * this.len;
     for (let i = 0; i < this.moteCount; i++) {
@@ -534,7 +629,9 @@ class MillHazard extends Hazard {
       hazBurst(this.ctx, 'dust', this.hub, { count: 5, speed: 1.4, spread: this.innerR * 1.4 });
     }
     if (this._silent) return;
-    const rider = standingOn(resolvePlayer(this.ctx, player || this.__player), this.sailColliders, 0.28);
+    const ridable = this.deckColliders && this.deckColliders.length
+      ? this.sailColliders.concat(this.deckColliders) : this.sailColliders;
+    const rider = standingOn(resolvePlayer(this.ctx, player || this.__player), ridable, 0.28);
     if (rider && t - this._lastCreak > 0.45) {
       this._lastCreak = t;
       hazSfx(this.ctx, 'step_wood', {
@@ -567,7 +664,8 @@ class MillHazard extends Hazard {
  * `{kind:'mill', p:[HUB], arms?:int (default 4), len?:METRES (default 7),
  *   period:SECONDS PER REVOLUTION, phase?:FRACTION OF A REV, dir?:±1,
  *   yaw|yawDeg?, axis?:[x,y,z], chord?|w?:METRES, thick?:METRES, inner?:METRES,
- *   tower?:METRES (0 = no tower), towerR?:METRES}`
+ *   tower?:METRES (0 = no tower), towerR?:METRES,
+ *   deck?:{w, d, t, r?} (a GIMBALLED gondola at every arm tip — see the constructor)}`
  *
  * `p` is the AXLE, not the tower base — the tower is built `tower` metres DOWN from it. `period`
  * is SECONDS PER REVOLUTION and `phase` is a FRACTION of one (not seconds, not radians), exactly

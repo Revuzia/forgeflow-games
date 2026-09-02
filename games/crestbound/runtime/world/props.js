@@ -2741,6 +2741,54 @@ export function placeProps(stageGroup, defs, propLibrary, rng, opts) {
     }
   }
 
+  /* --- decor budget -------------------------------------------------------
+   *
+   * Decor is the single largest consumer of both draw calls and triangles in a
+   * built course (measured on verdant-1: 372 of 890 draws and 462k of 930k
+   * triangles came from the prop container), and it is the part of the frame a
+   * player never lands on.  The perf gate allows 260 draws / 450k triangles for
+   * the WHOLE frame, so decor gets a stated slice of that and thins itself to
+   * fit rather than silently spending the course's entire budget.
+   *
+   * Thinning is uniform across buckets — density drops evenly instead of one
+   * species vanishing — and every bucket keeps at least one instance, so no
+   * prop kind ever disappears from the course.
+   */
+  const budget = o.budget || null;
+  if (budget) {
+    const list = Array.from(buckets.values());
+    const triOf = (b) => {
+      const g = b.entry.parts[b.pi].geometry;
+      if (!g || !g.attributes || !g.attributes.position) return 0;
+      return (g.index ? g.index.count : g.attributes.position.count) / 3;
+    };
+    for (const b of list) b.tri = triOf(b);
+    const totalTris = () => list.reduce((s, b) => s + b.keep * b.tri, 0);
+    for (const b of list) b.keep = b.m.length;
+
+    if (Number.isFinite(budget.tris) && budget.tris > 0 && totalTris() > budget.tris) {
+      let lo = 0, hi = 1;
+      for (let it = 0; it < 24; it++) {
+        const f = (lo + hi) * 0.5;
+        for (const b of list) b.keep = Math.max(1, Math.round(b.m.length * f));
+        if (totalTris() > budget.tris) hi = f; else lo = f;
+      }
+      for (const b of list) b.keep = Math.max(1, Math.round(b.m.length * lo));
+      out.thinnedTris = true;
+    }
+
+    /* Draws: a prop kind's FIRST part is its body and is never dropped; the
+       trailing parts are trim (spots, bands, glints).  When the container is
+       still over its draw budget the trim goes, deepest part index first. */
+    if (Number.isFinite(budget.draws) && budget.draws > 0 && list.length > budget.draws) {
+      const trim = list.filter((b) => b.pi > 0).sort((a, b) => (b.pi - a.pi) || (a.m.length - b.m.length));
+      let over = list.length - budget.draws;
+      for (let i = 0; i < trim.length && over > 0; i++) { trim[i].keep = 0; over--; }
+      out.droppedTrim = true;
+    }
+    for (const b of list) if (b.keep < b.m.length) b.m.length = Math.max(0, b.keep);
+  }
+
   // --- commit instanced meshes ---------------------------------------------
   const instMat = new THREE.Matrix4();
   for (const b of buckets.values()) {
@@ -2756,8 +2804,11 @@ export function placeProps(stageGroup, defs, propLibrary, rng, opts) {
     im.instanceMatrix.needsUpdate = true;
     im.instanceMatrix.setUsage(THREE.StaticDrawUsage);
     const rad = part.geometry.boundingSphere ? part.geometry.boundingSphere.radius : b.entry.radius;
-    // small clutter never casts a shadow — feedback_forgeflow_games_fps
-    im.castShadow = shadows && rad >= 0.75 && b.entry.castShadow && part.material.transparent !== true;
+    /* Small clutter never casts a shadow — feedback_forgeflow_games_fps.  The
+       shadow pass is a SECOND full draw of every caster, so decor has to earn
+       it: 1.5 m is roughly "big enough that its shadow is a shape, not a
+       smudge" and matches world/course.js SHADOW_MIN_RADIUS. */
+    im.castShadow = shadows && rad >= 1.5 && b.entry.castShadow && part.material.transparent !== true;
     im.receiveShadow = shadows && part.material.transparent !== true;
     im.frustumCulled = true;
     im.computeBoundingSphere();

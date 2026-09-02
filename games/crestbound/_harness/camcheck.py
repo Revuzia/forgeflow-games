@@ -21,7 +21,7 @@ Checks (each prints PASS/FAIL; exit 1 on any FAIL):
   peek        hold the peek key -> camera.fov == TUNE.cam.peekFov (+/- 0.1)
 
     python camcheck.py                      # headed Chrome (rAF runs for real)
-    python camcheck.py --headless           # swiftshader, for CI boxes
+    python camcheck.py --headless           # real Chrome headless on the GPU
     python camcheck.py --course verdant-1   # __dev.goto(course) first
 
 Pattern: bootcheck.py (same FLAGS, wait for globalThis.CRESTBOUND). The test slab,
@@ -59,6 +59,28 @@ HEADLESS_FLAGS = [f for f in FLAGS if not f.startswith("--use-angle")] + [
 ]
 
 CHECK_NAMES = ["wall", "framing", "longjump", "dive", "occlusion", "recenter", "peek"]
+
+
+def launch_headless(p):
+    """Headless, but on the REAL GPU (same rule as feelcheck.py / loopcheck.py).
+
+    Every row in this gate is a REAL-TIME measurement sampled once per
+    requestAnimationFrame: the framing run needs 12 m of travel, the freeze runs
+    need a run-up past `longJump.minSpeed`, and the fov/recenter easings need
+    tens of frames to converge. Under the bundled Chromium + SwiftShader this
+    page presents ~0.4 frames/second, so a 5 s window yields TWO frames, the
+    hero has had 1/20 s of simulation, and the gate reports the software
+    rasterizer instead of the camera. Real Chrome headless drives ANGLE/D3D11 on
+    this box. SwiftShader stays as the fallback for a machine with no usable GPU,
+    and says so.
+    """
+    try:
+        return p.chromium.launch(channel="chrome", headless=True, args=FLAGS)
+    except Exception as e:
+        print("headless: no hardware Chrome (%s) -> SwiftShader; the timing rows "
+              "will measure the software rasterizer, not the game" % str(e)[:120],
+              file=sys.stderr)
+        return p.chromium.launch(headless=True, args=HEADLESS_FLAGS)
 
 # Generic title-screen leaver: any visible button whose text says PLAY / START /
 # NEW / CONTINUE / BEGIN, else Enter. Loops until game.state leaves title/loading.
@@ -207,10 +229,17 @@ async () => {
       const s = cs();
       const camX = s.pos[0];
       const wallDist = WALL_FACE - s.focus[0];
-      const ok = camX <= WALL_FACE - 0.05 && s.dist <= wallDist + 1e-3 && s.dist >= C.minDist - 1e-3;
+      // CONTRACT §12: "pull in to hit - collideRadius". No minDist floor: minDist
+      // (1.6) is the player's ZOOM minimum, and the hero pressed flat against the
+      // face leaves only ~0.43 m behind the focus, so requiring dist >= minDist
+      // here would demand the very clipping this row exists to forbid. What the
+      // contract does require: the lens stays on the near side of the wall face,
+      // pulled in to at most the wall distance, and never behind the near plane.
+      const NEAR_FLOOR = 0.05;                                   // engine DEFAULT_NEAR
+      const ok = camX <= WALL_FACE - 0.05 && s.dist <= wallDist + 1e-3 && s.dist >= NEAR_FLOOR;
       pass('wall', ok, {camX: +camX.toFixed(3), wallFace: WALL_FACE, dist: +s.dist.toFixed(3),
-                        wallDist: +wallDist.toFixed(3), minDist: C.minDist, distColl: +s.distColl.toFixed(3),
-                        raycast: !out.notes.noRaycast});
+                        wallDist: +wallDist.toFixed(3), nearFloor: NEAR_FLOOR, minDist: C.minDist,
+                        distColl: +s.distColl.toFixed(3), raycast: !out.notes.noRaycast});
     }
 
     // ================= 2. FRAMING: hero stays in the central 40 % ==========
@@ -439,7 +468,7 @@ def main() -> int:
 
     with sync_playwright() as p:
         if args.headless:
-            br = p.chromium.launch(headless=True, args=HEADLESS_FLAGS)
+            br = launch_headless(p)
         else:
             br = p.chromium.launch(channel="chrome", headless=False, args=FLAGS)
         pg = br.new_page(viewport={"width": args.width, "height": args.height})

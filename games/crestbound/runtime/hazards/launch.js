@@ -632,14 +632,19 @@ class RingsHazard extends Hazard {
       if (!mesh) mesh = this._fallbackRing();
       mesh.position.copy(p);
       mesh.quaternion.copy(quat);
+      /* A hoop hangs in mid-air over the route it marks: its shadow lands
+         nowhere the player reads, and eight of them are a second full pass of
+         the heaviest geometry in the course. */
+      mesh.castShadow = false;
       mesh.matrixAutoUpdate = false;
       mesh.updateMatrix();
       this.group.add(mesh);
 
       // Owned additive halo: buildRing's materials are shared/cached and must NOT be mutated,
       // so the lit state lives on a hoop of our own laid over the machined one.
-      const haloGeo = new THREE.TorusGeometry(this.radius * 1.012, Math.max(0.045, this.radius * 0.05), 6, 40);
+      const haloGeo = new THREE.TorusGeometry(this.radius * 1.012, Math.max(0.045, this.radius * 0.05), 4, 20);
       const halo = new THREE.Mesh(haloGeo, null);       // material assigned below (per ring)
+      halo.castShadow = false;
       halo.position.copy(p);
       halo.quaternion.copy(quat);
       halo.renderOrder = 6;
@@ -692,9 +697,9 @@ class RingsHazard extends Hazard {
   _fallbackRing() {
     const R = this.radius, tube = Math.max(0.10, R * 0.085);
     const parts = [];
-    parts.push(new THREE.TorusGeometry(R, tube, 8, 44));
-    parts.push(new THREE.TorusGeometry(R - tube * 0.55, tube * 0.30, 6, 40));
-    parts.push(new THREE.TorusGeometry(R + tube * 0.72, tube * 0.24, 6, 40));
+    parts.push(new THREE.TorusGeometry(R, tube, 6, 24));
+    parts.push(new THREE.TorusGeometry(R - tube * 0.55, tube * 0.30, 5, 20));
+    parts.push(new THREE.TorusGeometry(R + tube * 0.72, tube * 0.24, 5, 20));
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * Math.PI * 2;
       const g = bevelBox(tube * 0.9, tube * 2.4, tube * 0.6, tube * 0.14, 1.7, 0.6);
@@ -703,7 +708,7 @@ class RingsHazard extends Hazard {
       parts.push(g);
     }
     const m = new THREE.Mesh(mergeAll(parts), hazMat(this.ctx, 'copper'));
-    m.castShadow = true;
+    m.castShadow = false;
     m.receiveShadow = true;
     return m;
   }
