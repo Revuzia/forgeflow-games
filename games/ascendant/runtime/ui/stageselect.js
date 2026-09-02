@@ -330,9 +330,10 @@ export class StageSelect {
     this._loading = null;
     this._worlds = [];               // view models
     this._openWorld = null;
-    this._mode = 'worlds';
+    this._mode = 'worlds';               // 'worlds' -> 'stages' (levels) -> 'segs'
     this._wIndex = 0;
     this._tIndex = 0;
+    this._sIndex = 0;                    // focused stage chip inside a level
     this._resizeTimer = 0;
 
     this.el = el('div', 'asc-select asc-ui');
@@ -344,29 +345,36 @@ export class StageSelect {
     const eb = el('div', 'eyebrow'); eb.textContent = 'SELECT A TRIAL';
     const h2 = el('h2'); h2.textContent = 'STAGE SELECT';
     hl.appendChild(eb); hl.appendChild(h2);
+    /* This header used to read "CLEARED  14 / 101" with no unit, and the owner —
+       who had finished exactly ONE level — read it as fourteen clears. 14 is the
+       count of checkpoint STAGES; 1 is the count of LEVELS. Two facts, two
+       columns, each naming what it counts. */
     const tot = el('div', 'totals');
     this.totals = {};
-    for (const k of ['CLEARED', 'MEDALS', 'DEATHS', 'TIME']) {
+    for (const [key, label] of [
+      ['reached', 'STAGES CLEARED'],
+      ['levels', 'LEVELS COMPLETE'],
+      ['medals', 'MEDALS'],
+      ['deaths', 'DEATHS'],
+      ['time', 'TIME'],
+    ]) {
       const t = el('div', 'as-tot');
-      const kk = el('div', 'k'); kk.textContent = k;
+      const kk = el('div', 'k'); kk.textContent = label;
       const vv = el('div', 'v'); vv.textContent = '—';
       t.appendChild(kk); t.appendChild(vv);
       tot.appendChild(t);
-      this.totals[k] = vv;
+      this.totals[key] = vv;
     }
     head.appendChild(hl); head.appendChild(tot);
 
     this.body = el('div', 'as-body');
 
     const foot = el('div', 'as-foot');
-    const keys = el('div', 'keys');
-    keys.innerHTML =
-      '<span><b class="asc-kbd">↑</b><b class="asc-kbd">↓</b>WORLD</span>' +
-      '<span><b class="asc-kbd">ENTER</b>OPEN</span>' +
-      '<span><b class="asc-kbd">←</b><b class="asc-kbd">→</b>STAGE</span>' +
-      '<span><b class="asc-kbd">ESC</b>BACK</span>';
+    /* Repainted per mode by _paintKeys — the third depth (a level's individual
+       stages) is only reachable by keyboard if the footer says which key. */
+    this.keys = el('div', 'keys');
     const backBtn = makeButton('BACK', { cls: 'compact', onClick: () => this.close() });
-    foot.appendChild(keys); foot.appendChild(backBtn);
+    foot.appendChild(this.keys); foot.appendChild(backBtn);
 
     wrap.appendChild(head); wrap.appendChild(this.body); wrap.appendChild(foot);
     this.el.appendChild(wrap);
@@ -476,25 +484,54 @@ export class StageSelect {
       dotWrap.appendChild(dots); dotWrap.appendChild(band);
       const bestWrap = el('div', 'tbest none');
       row.appendChild(dotWrap); row.appendChild(bestWrap);
-      const stats = el('div', 'tstats');
-      const sd = el('span'); sd.innerHTML = icon('skull');
-      const sdT = document.createTextNode('0');
-      sd.appendChild(sdT);
-      const sc = el('span'); sc.innerHTML = icon('coin');
-      const scT = document.createTextNode('0');
-      sc.appendChild(scT);
-      const sp = el('span'); sp.innerHTML = icon('clock');
-      const spT = document.createTextNode('—');
-      sp.appendChild(spT);
-      stats.appendChild(sd); stats.appendChild(sc); stats.appendChild(sp);
 
-      bodyEl.appendChild(nm); bodyEl.appendChild(stagesLine); bodyEl.appendChild(row); bodyEl.appendChild(stats);
+      /* PROGRESS vs COMPLETION, stated separately and in words. "STAGES 7 – 12 ·
+         5 / 6 CLEARED" on a level the player never finished was read as "this
+         level is 5/6 done" — true of its stages, silent about the level. The
+         count and the completion verdict are different claims and now sit side
+         by side as two. */
+      const prog = el('div', 'tprog');
+      const progTxt = el('span', 'pt');
+      const progTag = el('span', 'ptag');
+      prog.appendChild(progTxt); prog.appendChild(progTag);
+
+      /* Per-stage entry points: one chip per checkpoint segment, labelled with
+         the GLOBAL stage number the HUD shows, so "start at STAGE 11" and the
+         "STAGE 11 / 101" readout in play are the same eleven. */
+      const segHead = el('div', 'tseghead');
+      segHead.textContent = 'START FROM STAGE';
+      const segs = el('div', 'tsegs');
+      const cap = el('div', 'tcap');
+
+      const stats = el('div', 'tstats');
+      const mkStat = (glyph, label) => {
+        const c = el('div', 'tstat');
+        const k = el('div', 'k');
+        k.innerHTML = icon(glyph);
+        k.appendChild(document.createTextNode(label));
+        const v = el('div', 'v');
+        const t = document.createTextNode('—');
+        v.appendChild(t);
+        c.appendChild(k); c.appendChild(v);
+        stats.appendChild(c);
+        return t;
+      };
+      /* Every number on this row used to be a bare icon and a figure — the
+         owner read "1/3" off it and could not tell what it counted. */
+      const sdT = mkStat('skull', 'DEATHS');
+      const scT = mkStat('coin', 'ORBS');
+      const spT = mkStat('clock', 'PAR TIME');
+
+      bodyEl.appendChild(nm); bodyEl.appendChild(stagesLine); bodyEl.appendChild(row);
+      bodyEl.appendChild(prog); bodyEl.appendChild(segHead); bodyEl.appendChild(segs);
+      bodyEl.appendChild(cap); bodyEl.appendChild(stats);
       tile.appendChild(cv); tile.appendChild(load); tile.appendChild(no);
       tile.appendChild(tick); tile.appendChild(bodyEl);
       vm.grid.appendChild(tile);
 
       const rec = {
         id, tile, cv, load, nm, stagesLine, dots, band, bestWrap, tick,
+        prog: progTxt, tag: progTag, segHead, segs, cap, segEls: [],
         deaths: sdT, coins: scT, par: spT,
         drawn: false, vm,
       };
@@ -567,17 +604,47 @@ export class StageSelect {
   }
 
   /**
-   * Global stages (checkpoint segments) cleared in one level. Reaching pad k
-   * means segments 0..k-1 are done — k segments; a cleared level counts all of
-   * them. Returns 0 when the numbering has not loaded.
+   * How many GLOBAL STAGES (checkpoint segments) of one level the player has
+   * finished. Standing on pad k means segments 0..k-1 are behind them — k of
+   * them; completing the level counts all of them, because the last segment
+   * ends at the finish gate. Returns 0 until the numbering loads.
+   *
+   * The arithmetic is unchanged and it is correct: at pad 5 of a six-segment
+   * level you have cleared five stages and are standing part-way through the
+   * sixth (which is why the chip for that sixth stage is OPEN while this says
+   * five). What was wrong was never the number — it was that the label said
+   * "CLEARED" without saying cleared WHAT, so a player counting levels read
+   * "14 CLEARED" as fourteen levels. Every caller now names the unit and
+   * states completion as a separate claim.
    */
-  _clearedSegments(stageId, rec) {
+  _stagesCleared(stageId, rec) {
     const num = stageNumbering();
     const e = num ? num.perStage.get(stageId) : null;
     if (!e) return 0;
     if (rec && rec.cleared) return e.segments;
     const k = rec ? Math.max(0, rec.cpIndex | 0) : 0;
     return Math.min(k, e.segments - 1);
+  }
+
+  /**
+   * Everything the per-stage chips need: the level's global numbering entry,
+   * whether it is completed, and the furthest checkpoint pad the save records.
+   * Pad k is startable iff the level is complete or k <= far — the SAVE decides,
+   * never the UI's own idea of progress.
+   */
+  _segInfo(stageId) {
+    const num = stageNumbering();
+    const e = num ? num.perStage.get(stageId) : null;
+    const r = this._rec(stageId);
+    const cleared = !!(r && r.cleared);
+    const far = r ? Math.max(0, r.cpIndex | 0) : 0;
+    return { e, cleared, far: e ? Math.min(far, e.segments - 1) : far };
+  }
+
+  _segUnlocked(stageId, k) {
+    if ((k | 0) <= 0) return true;
+    const s = this._segInfo(stageId);
+    return s.cleared || (k | 0) <= s.far;
   }
 
   refresh() {
@@ -590,41 +657,41 @@ export class StageSelect {
     } catch (e) { unlocked = null; }
 
     let medals = 0;
-    let clearedAll = 0;
-    let stageTotal = 0;
-    let clearedSegAll = 0;
+    let doneAll = 0;                 // LEVELS finished start-to-finish
+    let levelTotal = 0;
+    let clearedAll = 0;              // STAGES (checkpoint segments) cleared
     const numbering = stageNumbering();
 
     for (let i = 0; i < this._worlds.length; i++) {
       const vm = this._worlds[i];
       const ids = vm.world.stages || [];
-      stageTotal += ids.length;
+      levelTotal += ids.length;
       const locked = !!(unlocked && !unlocked.has(vm.world.id)) && i > 0;
       vm.locked = locked;
       vm.card.classList.toggle('is-locked', locked);
 
+      let done = 0;
       let cleared = 0;
-      let clearedSeg = 0;
       for (const id of ids) {
         const r = this._rec(id);
-        if (r && r.cleared) cleared++;
-        clearedSeg += this._clearedSegments(id, r);
+        if (r && r.cleared) done++;
+        cleared += this._stagesCleared(id, r);
         const def = this._defs.get(id);
         if (r && r.best != null && def && def.par && medalFor(r.best, def.par)) medals++;
       }
+      doneAll += done;
       clearedAll += cleared;
-      clearedSegAll += clearedSeg;
 
       /* Progress in global-stage units (obby convention: one checkpoint segment
          = one stage) once the numbering is in; level units until then. */
       const range = numbering ? worldStageRange(vm.world.id) : null;
       const pct = range && range.segments
-        ? clearedSeg / range.segments
-        : (ids.length ? cleared / ids.length : 0);
+        ? cleared / range.segments
+        : (ids.length ? done / ids.length : 0);
       vm.barFill.style.transform = 'scaleX(' + pct.toFixed(3) + ')';
       vm.lbl.textContent = range && range.segments
-        ? clearedSeg + ' / ' + range.segments
-        : cleared + ' / ' + ids.length;
+        ? cleared + ' / ' + range.segments + ' CLEARED'
+        : done + ' / ' + ids.length + ' COMPLETE';
 
       if (locked) {
         const prev = this._worlds[i - 1];
@@ -635,9 +702,22 @@ export class StageSelect {
         vm.wmeta.appendChild(rq);
         vm.glyph.innerHTML = icon('lock');
       } else {
-        vm.wmeta.textContent = range
-          ? 'STAGES ' + range.first + ' – ' + range.last + '  ·  ' + clearedSeg + ' CLEARED'
-          : ids.length + ' STAGES  ·  ' + cleared + ' CLEARED';
+        /* Three separate claims, three separate phrases: which global stages
+           this world spans, how many of them are cleared, and how many of its
+           LEVELS are actually complete. */
+        vm.wmeta.innerHTML = '';
+        const put = (txt, cls) => {
+          const s = el('span', cls || '');
+          s.textContent = txt;
+          vm.wmeta.appendChild(s);
+        };
+        if (range) {
+          put('STAGES ' + range.first + ' – ' + range.last);
+          put(cleared + ' / ' + range.segments + ' STAGES CLEARED');
+        } else {
+          put(ids.length + ' LEVELS');
+        }
+        put(done + ' / ' + ids.length + ' LEVELS COMPLETE', done >= ids.length ? 'good' : '');
         vm.glyph.textContent = String(i + 1).padStart(2, '0');
       }
 
@@ -646,12 +726,13 @@ export class StageSelect {
 
     let totals = null;
     try { totals = Save && typeof Save.totals === 'function' ? Save.totals() : null; } catch (e) { totals = null; }
-    this.totals.CLEARED.textContent = numbering
-      ? clearedSegAll + ' / ' + numbering.total
-      : clearedAll + ' / ' + stageTotal;
-    this.totals.MEDALS.textContent = String(medals);
-    this.totals.DEATHS.textContent = totals ? String(totals.deaths | 0) : '—';
-    this.totals.TIME.textContent = totals && totals.timeMs ? fmtMs(totals.timeMs) : '—';
+    this.totals.reached.textContent = numbering
+      ? clearedAll + ' / ' + numbering.total
+      : '—';
+    this.totals.levels.textContent = doneAll + ' / ' + levelTotal;
+    this.totals.medals.textContent = medals + ' / ' + levelTotal;
+    this.totals.deaths.textContent = totals ? String(totals.deaths | 0) : '—';
+    this.totals.time.textContent = totals && totals.timeMs ? fmtMs(totals.timeMs) : '—';
   }
 
   _refreshTiles(vm) {
@@ -665,16 +746,37 @@ export class StageSelect {
       /* global stage range for this level (obby convention) */
       const num = stageNumbering();
       const e = num ? num.perStage.get(rec.id) : null;
+      const done = !!(r && r.cleared);        // the LEVEL was run start-to-finish
       if (e) {
         rec.stagesLine.innerHTML = '';
         const b = el('b');
         b.textContent = e.segments > 1 ? 'STAGES ' + e.first + ' – ' + e.last : 'STAGE ' + e.first;
         rec.stagesLine.appendChild(b);
-        const done = this._clearedSegments(rec.id, r);
-        rec.stagesLine.appendChild(document.createTextNode('  ·  ' + done + ' / ' + e.segments + ' CLEARED'));
         rec.stagesLine.style.display = '';
+
+        /* `stagesDone` is a COUNT and `done` is a BOOLEAN about the level —
+           keep them named apart. They disagree constantly and on purpose: five
+           stages cleared, level not completed. */
+        const stagesDone = this._stagesCleared(rec.id, r);
+        rec.prog.textContent = stagesDone + ' / ' + e.segments + ' STAGES CLEARED';
+        rec.tag.textContent = done ? 'LEVEL COMPLETED' : 'NOT COMPLETED';
+        rec.tag.className = 'ptag ' + (done ? 'done' : 'todo');
+        rec.prog.parentNode.style.display = '';
+
+        this._buildSegs(rec, e.segments);
+        this._paintSegs(rec);
+        rec.segHead.style.display = vm.locked ? 'none' : '';
+        rec.segs.style.display = vm.locked ? 'none' : '';
+        rec.cap.style.display = vm.locked ? 'none' : '';
       } else {
+        /* Numbering not loaded yet (first moments after boot). Say nothing
+           rather than say a number that might be wrong — open() re-refreshes
+           the moment _ensureDefs resolves. */
         rec.stagesLine.style.display = 'none';
+        rec.prog.parentNode.style.display = 'none';
+        rec.segHead.style.display = 'none';
+        rec.segs.style.display = 'none';
+        rec.cap.style.display = 'none';
       }
 
       /* difficulty */
@@ -693,25 +795,28 @@ export class StageSelect {
         rec.band.style.display = 'none';
       }
 
-      /* best time + medal */
+      /* best time + medal. A best time only exists after a whole-level run, so
+         "NO TIME YET" is a fact about the clock, not a verdict on the level —
+         the completion verdict is the tag above and is stated in words. */
       rec.bestWrap.textContent = '';
       const best = r && r.best != null && isFinite(r.best) ? r.best : null;
       if (best != null) {
         const medal = def && def.par ? medalFor(best, def.par) : null;
         rec.bestWrap.className = 'tbest';
         if (medal) rec.bestWrap.appendChild(makeMedal(medal));
-        rec.bestWrap.appendChild(document.createTextNode(fmtMs(best)));
+        rec.bestWrap.appendChild(document.createTextNode('BEST ' + fmtMs(best)));
       } else {
         rec.bestWrap.className = 'tbest none';
-        rec.bestWrap.appendChild(document.createTextNode('NO TIME'));
+        rec.bestWrap.appendChild(document.createTextNode('NO TIME YET'));
       }
 
       rec.deaths.nodeValue = String(r ? (r.deaths | 0) : 0);
       const coinsGot = r && Array.isArray(r.coins) ? r.coins.length : 0;
       const coinsTot = def && Array.isArray(def.coins) ? def.coins.length : 0;
-      rec.coins.nodeValue = coinsGot + '/' + coinsTot;
+      rec.coins.nodeValue = coinsGot + ' / ' + coinsTot;
       rec.par.nodeValue = def && def.par ? fmtMs(def.par) : '—';
-      rec.tick.style.display = r && r.cleared ? '' : 'none';
+      rec.tick.style.display = done ? '' : 'none';
+      rec.tick.title = 'LEVEL COMPLETED';
 
       if (!rec.drawn && def) {
         rec.drawn = drawPreview(rec.cv, def, vm.pal);
@@ -719,6 +824,79 @@ export class StageSelect {
       } else if (!def) {
         rec.load.style.display = 'none';
       }
+    }
+  }
+
+  /* ======================================================================
+   * PER-STAGE ENTRY (resume inside a level)
+   * ====================================================================*/
+
+  /** One chip per checkpoint segment. Idempotent — rebuilt only if n changes. */
+  _buildSegs(rec, n) {
+    if (rec.segEls.length === n) return;
+    rec.segs.textContent = '';
+    rec.segEls.length = 0;
+    for (let k = 0; k < n; k++) {
+      const b = el('button', 'as-seg');
+      b.type = 'button';
+      b.tabIndex = -1;
+      const lab = el('span', 'n');
+      const lk = el('span', 'lk');
+      lk.innerHTML = icon('lock');
+      b.appendChild(lab); b.appendChild(lk);
+      /* The whole tile is clickable (= start the level from its first stage),
+         so a chip must not also fire that. */
+      b.addEventListener('click', (ev) => { ev.stopPropagation(); this._start(rec, k); });
+      b.addEventListener('mouseenter', () => this._caption(rec, k));
+      b.addEventListener('mouseleave', () => this._caption(rec, -1));
+      rec.segs.appendChild(b);
+      rec.segEls.push(b);
+    }
+  }
+
+  /** Paint chip state from the SAVE: done / furthest / locked. */
+  _paintSegs(rec) {
+    const s = this._segInfo(rec.id);
+    if (!s.e) return;
+    for (let k = 0; k < rec.segEls.length; k++) {
+      const b = rec.segEls[k];
+      const open = s.cleared || k <= s.far;
+      const here = !s.cleared && k === s.far;
+      b.className = 'as-seg' + (open ? (here ? ' here' : ' done') : ' locked');
+      b.querySelector('.n').textContent = String(s.e.first + k);
+      b.setAttribute('aria-label', open
+        ? 'Start at stage ' + (s.e.first + k)
+        : 'Stage ' + (s.e.first + k) + ' locked');
+      b.disabled = false;
+    }
+    this._caption(rec, -1);
+  }
+
+  /**
+   * The caption under the chip strip. It carries the two facts a player cannot
+   * infer from a number: why a chip is locked, and that starting past the first
+   * stage is a practice run that banks no time and no completion.
+   */
+  _caption(rec, k) {
+    const s = this._segInfo(rec.id);
+    if (!s.e) { rec.cap.textContent = ''; return; }
+    if (k < 0 || k >= rec.segEls.length) {
+      rec.cap.className = 'tcap';
+      rec.cap.textContent = s.cleared
+        ? 'ANY STAGE — THIS LEVEL IS COMPLETE'
+        : 'STAGES UP TO ' + (s.e.first + s.far) + ' ARE OPEN';
+      return;
+    }
+    const n = s.e.first + k;
+    if (!s.cleared && k > s.far) {
+      rec.cap.className = 'tcap warn';
+      rec.cap.textContent = 'STAGE ' + n + ' LOCKED · REACH IT IN A RUN FIRST';
+    } else if (k === 0) {
+      rec.cap.className = 'tcap ok';
+      rec.cap.textContent = 'STAGE ' + n + ' · FULL RUN — TIMED, COUNTS AS COMPLETE';
+    } else {
+      rec.cap.className = 'tcap ok';
+      rec.cap.textContent = 'STAGE ' + n + ' · PRACTICE — NO TIME, NO COMPLETION';
     }
   }
 
@@ -759,6 +937,7 @@ export class StageSelect {
       this._refreshTiles(vm);
       this._mode = fromClick ? 'worlds' : 'stages';
       this._tIndex = 0;
+      this._sIndex = 0;
       if (!fromClick) this._paintFocus();
       uiSfx(this.game, 'ui_ok');
       setTimeout(() => {
@@ -770,6 +949,31 @@ export class StageSelect {
       this._mode = 'worlds';
       uiSfx(this.game, 'ui_move');
     }
+    this._paintFocus();
+  }
+
+  /**
+   * Step into one level's stage chips. Focus lands on the FURTHEST stage the
+   * player reached, because that is what "resume" means — one keypress from
+   * the grid to carrying on where they stopped.
+   */
+  _enterSegs(rec) {
+    if (!rec || rec.vm.locked || !rec.segEls.length) return false;
+    const s = this._segInfo(rec.id);
+    this._mode = 'segs';
+    this._sIndex = s.cleared ? 0 : clamp(s.far, 0, rec.segEls.length - 1);
+    uiSfx(this.game, 'ui_ok');
+    this._caption(rec, this._sIndex);
+    this._paintFocus();
+    return true;
+  }
+
+  _leaveSegs() {
+    const vm = this._openWorld;
+    const rec = vm && vm.built ? vm.tiles[this._tIndex] : null;
+    if (rec) this._caption(rec, -1);
+    this._mode = 'stages';
+    uiSfx(this.game, 'ui_move');
     this._paintFocus();
   }
 
@@ -787,32 +991,81 @@ export class StageSelect {
     this._toggleWorld(vm, false);
   }
 
-  _pick(rec) {
+  /** Clicking the tile = start this level at its FIRST stage (unchanged). */
+  _pick(rec) { this._start(rec, 0); }
+
+  /**
+   * Start `rec` at checkpoint segment `k`. k = 0 is the ordinary whole-level
+   * run; k > 0 hands Game a descriptor so it spawns exactly where a respawn at
+   * pad k does (Game._spawnFor + stage.resetFrom — the same two calls the death
+   * loop makes, so hazard phase and facing are identical, not re-derived).
+   */
+  _start(rec, k) {
     if (rec.vm.locked) { this._toggleWorld(rec.vm, true); return; }
+    const cp = Math.max(0, k | 0);
+    if (cp > 0 && !this._segUnlocked(rec.id, cp)) {
+      uiSfx(this.game, 'ui_move');
+      const node = rec.segEls[cp] || rec.tile;
+      animateOnce(node, [
+        { transform: 'translateX(0)' }, { transform: 'translateX(-4px)', offset: 0.25 },
+        { transform: 'translateX(4px)', offset: 0.55 }, { transform: 'translateX(0)' },
+      ], { duration: 300 });
+      this._caption(rec, cp);
+      return;
+    }
     uiSfx(this.game, 'ui_ok');
-    const tile = rec.tile;
-    animateOnce(tile, [
+    animateOnce(rec.tile, [
       { transform: 'translateY(-3px) scale(1)' },
       { transform: 'translateY(-3px) scale(.96)', offset: 0.4 },
       { transform: 'translateY(-3px) scale(1)' },
     ], { duration: 220 });
     this.close(true);
-    uiAction(this.game, 'loadStage', rec.id);
+    uiAction(this.game, 'loadStage', cp > 0 ? { stageId: rec.id, startCp: cp } : rec.id);
+  }
+
+  /** Footer hints follow the depth the player is actually at. */
+  _paintKeys() {
+    const kbd = (k) => '<b class="asc-kbd">' + k + '</b>';
+    let html;
+    if (this._mode === 'worlds') {
+      html = '<span>' + kbd('↑') + kbd('↓') + 'WORLD</span>' +
+        '<span>' + kbd('ENTER') + 'OPEN</span>' +
+        '<span>' + kbd('ESC') + 'BACK</span>';
+    } else if (this._mode === 'stages') {
+      html = '<span>' + kbd('←') + kbd('→') + 'LEVEL</span>' +
+        '<span>' + kbd('ENTER') + 'PLAY FROM STAGE 1</span>' +
+        '<span>' + kbd('↓') + 'PICK A STAGE</span>' +
+        '<span>' + kbd('ESC') + 'BACK</span>';
+    } else {
+      html = '<span>' + kbd('←') + kbd('→') + 'STAGE</span>' +
+        '<span>' + kbd('ENTER') + 'START HERE</span>' +
+        '<span>' + kbd('↑') + 'LEVELS</span>' +
+        '<span>' + kbd('ESC') + 'BACK</span>';
+    }
+    if (this.keys.innerHTML !== html) this.keys.innerHTML = html;
   }
 
   _paintFocus() {
+    const inTiles = this._mode === 'stages' || this._mode === 'segs';
     for (const vm of this._worlds) {
       vm.card.classList.toggle('is-focus', this._mode === 'worlds' && vm.index === this._wIndex);
       if (!vm.built) continue;
       for (let i = 0; i < vm.tiles.length; i++) {
-        const on = this._mode === 'stages' && this._openWorld === vm && i === this._tIndex;
-        vm.tiles[i].tile.classList.toggle('is-focus', on);
+        const rec = vm.tiles[i];
+        const on = inTiles && this._openWorld === vm && i === this._tIndex;
+        rec.tile.classList.toggle('is-focus', on);
+        rec.tile.classList.toggle('is-segs', on && this._mode === 'segs');
+        for (let s = 0; s < rec.segEls.length; s++) {
+          rec.segEls[s].classList.toggle('is-focus',
+            on && this._mode === 'segs' && s === this._sIndex);
+        }
       }
     }
+    this._paintKeys();
     const vm = this._worlds[this._wIndex];
-    const node = this._mode === 'stages' && vm && vm.built && vm.tiles[this._tIndex]
-      ? vm.tiles[this._tIndex].tile
-      : (vm ? vm.head : null);
+    const rec = inTiles && vm && vm.built ? vm.tiles[this._tIndex] : null;
+    let node = vm ? vm.head : null;
+    if (rec) node = (this._mode === 'segs' && rec.segEls[this._sIndex]) || rec.tile;
     if (node) { try { node.scrollIntoView({ block: 'nearest' }); } catch (e) { /* ignore */ } }
   }
 
@@ -831,12 +1084,53 @@ export class StageSelect {
 
     if (k === 'Escape') {
       stop();
-      if (this._mode === 'stages') {
+      if (this._mode === 'segs') {
+        this._leaveSegs();
+      } else if (this._mode === 'stages') {
         this._mode = 'worlds';
         uiSfx(this.game, 'ui_move');
         this._paintFocus();
       } else {
         this.close();
+      }
+      return;
+    }
+
+    /* ---- stage chips (a level's individual checkpoint segments) ---- */
+    if (this._mode === 'segs') {
+      const vmS = this._openWorld;
+      const rec = vmS && vmS.built ? vmS.tiles[this._tIndex] : null;
+      if (!rec || !rec.segEls.length) { this._mode = 'stages'; this._paintFocus(); return; }
+      const n = rec.segEls.length;
+      if (k === 'ArrowRight' || k === 'd' || k === 'D' || k === 'Tab') {
+        stop();
+        const d = (k === 'Tab' && e.shiftKey) ? -1 : 1;
+        this._sIndex = k === 'Tab' ? (this._sIndex + d + n) % n : Math.min(n - 1, this._sIndex + 1);
+        uiSfx(this.game, 'ui_move');
+        this._caption(rec, this._sIndex);
+        this._paintFocus();
+        return;
+      }
+      if (k === 'ArrowLeft' || k === 'a' || k === 'A') {
+        stop();
+        this._sIndex = Math.max(0, this._sIndex - 1);
+        uiSfx(this.game, 'ui_move');
+        this._caption(rec, this._sIndex);
+        this._paintFocus();
+        return;
+      }
+      if (k === 'ArrowUp' || k === 'w' || k === 'W') { stop(); this._leaveSegs(); return; }
+      if (k === 'ArrowDown' || k === 's' || k === 'S') {
+        stop();
+        this._leaveSegs();
+        this._mode = 'worlds';
+        this._paintFocus();
+        return;
+      }
+      if (k === 'Enter' || k === ' ' || k === 'Spacebar') {
+        stop();
+        this._start(rec, this._sIndex);
+        return;
       }
       return;
     }
@@ -884,7 +1178,14 @@ export class StageSelect {
       if (idx === 0) { stop(); this._mode = 'worlds'; uiSfx(this.game, 'ui_move'); this._paintFocus(); return; }
       idx = Math.max(0, idx - 1); moved = true;
     } else if (k === 'ArrowDown' || k === 's' || k === 'S') {
-      if (idx + cols >= n) { stop(); this._mode = 'worlds'; uiSfx(this.game, 'ui_move'); this._paintFocus(); return; }
+      /* Down goes DEEPER first: into this level's individual stages. Only when
+         there are none (numbering not loaded, or a one-segment level) does it
+         fall back to the old "drop out to the world list" behaviour. */
+      if (idx + cols >= n) {
+        stop();
+        if (this._enterSegs(vm.tiles[idx])) return;
+        this._mode = 'worlds'; uiSfx(this.game, 'ui_move'); this._paintFocus(); return;
+      }
       idx = Math.min(n - 1, idx + cols); moved = true;
     } else if (k === 'ArrowUp' || k === 'w' || k === 'W') {
       if (idx - cols < 0) { stop(); this._mode = 'worlds'; uiSfx(this.game, 'ui_move'); this._paintFocus(); return; }
@@ -934,6 +1235,7 @@ export class StageSelect {
     }
     this._wIndex = startIdx;
     this._mode = 'worlds';
+    this._sIndex = 0;
 
     const cards = this.body.children;
     for (let i = 0; i < cards.length; i++) {
@@ -950,6 +1252,7 @@ export class StageSelect {
       for (const w of this._worlds) w.card.classList.toggle('is-open', w === vm);
       this._openWorld = vm;
       this._tIndex = 0;
+      this._sIndex = 0;
     }
     this._paintFocus();
 

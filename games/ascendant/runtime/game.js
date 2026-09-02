@@ -301,6 +301,12 @@ export class Game {
     this._spawnOut = { pos: new THREE.Vector3(), yaw: 0 };
     this._prevSelectState = 'paused';
     this._closingSelect = false;          // re-entry guard, see closeStageSelect
+    /* Checkpoint this stage was ENTERED at, when stage select resumed the player
+       part-way in (0 = a normal, whole-level run). A resumed run is a practice
+       run: it never sets a best time, never earns a medal and never ticks the
+       level COMPLETED, because the segments before `startCp` were not played.
+       Cleared by _fullStageReset (RESTART STAGE) — that run starts at the top. */
+    this._resumedFrom = 0;
 
     /* Stable physics-world handle handed to Player once and never replaced. */
     const self = this;
@@ -628,14 +634,26 @@ export class Game {
    * ====================================================================*/
 
   /**
-   * @param {string} stageId
-   * @param {{silent?:boolean, toTitle?:boolean, fromHub?:boolean}} [opts]
+   * @param {string|{stageId?:string, id?:string}} stageId  id, or a descriptor
+   *        carrying the options (uiAction only ever forwards ONE argument, and
+   *        stage select needs to say WHICH checkpoint to start at).
+   * @param {{silent?:boolean, toTitle?:boolean, fromHub?:boolean,
+   *          startCp?:number}} [opts]
    */
   async loadStage(stageId, opts) {
-    const o = opts || {};
+    /* Descriptor form: loadStage({stageId, startCp}). uiAction('loadStage', p)
+       calls this with a single argument, so a mid-level resume from stage
+       select can only arrive as one object. Unpack it before anything else, or
+       `String(stageId)` turns the descriptor into "[object Object]". */
+    let o = opts || {};
+    let want = stageId;
+    if (stageId && typeof stageId === 'object') {
+      o = stageId;
+      want = o.stageId || o.id;
+    }
     if (this._loading) return this;
     this._loading = true;
-    const id = String(stageId || HUB_ID);
+    const id = String(want || HUB_ID);
 
     try {
       /* ---- 1. freeze the world, THEN veil it ---- */
@@ -698,7 +716,15 @@ export class Game {
       const coinCount = (stage.coins && stage.coins.length) || 0;
       for (let i = 0; i < coinCount; i++) this._coinTaken[i] = false;
       this.coins = 0;
-      this.cpIndex = 0;
+      /* Resume-at-a-stage (stage select). The pad index is clamped to the pads
+         this level actually has; whether the player has EARNED it is stage
+         select's gate, not this one's — Game must still behave sanely if a
+         deep link asks for a pad nobody reached. The hub has no checkpoints, so
+         this collapses to 0 there. */
+      const wantCp = isNum(o.startCp) ? (o.startCp | 0) : 0;
+      const startCp = id === HUB_ID ? 0 : clamp(wantCp, 0, Math.max(0, cps.length - 1));
+      this._resumedFrom = startCp;
+      this.cpIndex = startCp;
       this.stageDeaths = 0;
       this.timeMs = 0;
       this._portals = this._resolvePortals(def, stage);
@@ -720,7 +746,7 @@ export class Game {
       /* The stage must track the FEET. Without this it falls back to the engine
          camera — 1.62 m too high for every pad, orb, cull and light test. */
       safe(() => stage.setPlayer(this.player), 'stage.setPlayer');
-      const sp = this._spawnFor(0);
+      const sp = this._spawnFor(startCp);
       safe(() => this.player.spawn(sp.pos, sp.yaw), 'player.spawn');
       this._ncPos.copy(this.player.pos);
       safe(() => this.camera && this.camera.setDeathCam(false), 'camera.setDeathCam');
@@ -736,6 +762,13 @@ export class Game {
          in ONE frame mid-death — measured at temple-1 cp3: +10 programs,
          +149 geometries, a 1712 ms frame. */
       safe(() => stage.warmup(this.engine.renderer, this.engine.camera), 'stage.warmup');
+      /* AFTER the warm-up, never before: warmup() walks resetFrom(0..n) to force
+         every lazy hazard mesh into existence and then calls reset(), which
+         rewinds the stage to cp -1 and clock 0. Seeding the resume before it
+         would be silently undone. This is the same call _performRespawn makes,
+         so a resume at pad k presents the identical hazard phase — and the
+         identical lit-pad state — as dying and respawning at pad k. */
+      if (startCp > 0) safe(() => stage.resetFrom(startCp), 'stage.resetFrom');
       safe(() => stage.update(0), 'stage.update(0)');
       safe(() => this.player.update(0), 'player.update(0)');
       safe(() => this.camera && this.camera.update(0), 'camera.update(0)');
@@ -1399,29 +1432,54 @@ export class Game {
     const ms = Math.round(this.timeMs);
     const rec = safe(() => this.save.stage(this.stageId), 'save.stage') || {};
     const prevBest = isNum(rec.best) ? rec.best : null;
-    const isBest = prevBest === null || ms < prevBest;
 
-    safe(() => this.save.clearStage(this.stageId, ms), 'save.clearStage');
-    if (isBest) { safe(() => this.save.setBest(this.stageId, ms), 'save.setBest'); this._bestMs = ms; }
+    /* A run that STARTED part-way in (stage select's resume) crossed the gate
+       without playing the segments before it, so it proves nothing about them.
+       It sets no best time, earns no medal and does not mark the level
+       COMPLETED — otherwise walking the last 20 m of a nine-stage level would
+       hand out a gold medal and tick every stage behind it as cleared, which is
+       exactly the overstated progress this UI was fixed to stop telling. The
+       checkpoints it DOES reach still bank normally through onCheckpoint. */
+    const partial = (this._resumedFrom | 0) > 0;
+    const isBest = !partial && (prevBest === null || ms < prevBest);
+
+    if (!partial) {
+      safe(() => this.save.clearStage(this.stageId, ms), 'save.clearStage');
+      if (isBest) { safe(() => this.save.setBest(this.stageId, ms), 'save.setBest'); this._bestMs = ms; }
+    }
 
     const def = (this.stage && this.stage.def) || {};
     const w = this.world;
+    const gnStart = partial ? globalStageOf(this.stageId, this._resumedFrom | 0) : null;
+    const gnAll = globalStageOf(this.stageId, 0);
     const summary = {
       stageId: this.stageId,
       stageName: def.name || String(this.stageId).toUpperCase(),
       worldName: (w && w.name) || '',
       timeMs: ms,
       best: isBest ? ms : prevBest,
-      prevBest,
+      prevBest: partial ? null : prevBest,
       isNewBest: isBest,
+      isRecord: isBest,
       par: isNum(def.par) ? def.par : 0,
-      underPar: isNum(def.par) ? ms <= def.par : false,
+      underPar: !partial && isNum(def.par) ? ms <= def.par : false,
       deaths: this.stageDeaths,
       totalDeaths: this.deaths,
       coins: this.coins,
       coinTotal: (this.stage && this.stage.coins && this.stage.coins.length) || 0,
       totalMs: Math.round(this.totalMs),
       isLastOfWorld: this._isLastOfWorld(),
+      /* Vocabulary shared with stage select: finishing a LEVEL completes it;
+         a resumed run only clears the STAGES it actually ran. */
+      partial,
+      kicker: partial ? 'STAGES CLEARED' : 'LEVEL COMPLETE',
+      stageRange: gnAll && gnAll.segments > 1
+        ? 'STAGES ' + gnAll.first + ' – ' + gnAll.last + ' / ' + gnAll.total
+        : (gnAll ? 'STAGE ' + gnAll.first + ' / ' + gnAll.total : ''),
+      ranRange: gnStart && gnAll
+        ? (gnStart.num >= gnAll.last ? 'RAN STAGE ' + gnAll.last
+          : 'RAN STAGES ' + gnStart.num + ' – ' + gnAll.last)
+        : '',
     };
     this._clearSummary = summary;
 
@@ -1579,6 +1637,9 @@ export class Game {
   _fullStageReset() {
     this._pendingFullReset = false;
     if (!this.stage) return;
+    /* RESTART STAGE puts the player back on the start pad, so this run IS a
+       whole-level run again even if the visit began as a mid-level resume. */
+    this._resumedFrom = 0;
     this.cpIndex = 0;
     this.timeMs = 0;
     this.stageDeaths = 0;
