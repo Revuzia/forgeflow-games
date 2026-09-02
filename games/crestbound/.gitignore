@@ -1,0 +1,6 @@
+# harness outputs and evidence — regenerated every run, never source
+_shots/
+_harness/*.json
+_harness/__pycache__/
+.playwright-mcp/
+*.pyc
