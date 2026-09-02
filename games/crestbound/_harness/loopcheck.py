@@ -398,10 +398,29 @@ async (opts) => {
   }
 
   // And the LIVE Keep agrees (the sign on the door is what the player reads).
+  // The crests above were written STRAIGHT into Save, behind the game's back, so
+  // give the Keep the same chance a returning player gives it: walk back in. The
+  // Keep resolves lock state per load and after each unlock sequence
+  // (game._resolveGates -> _refreshGateState), deliberately never per frame.
+  if (G.__dev && typeof G.__dev.goto === 'function') {
+    let reentered = false;
+    try { await G.__dev.goto('keep'); reentered = true; }
+    catch (e) { ok('re-enter THE KEEP after the save changes', false, String(e)); }
+    if (reentered) {
+      const home = await until(() => G.state === 'keep' && G.courseId === 'keep', 30000);
+      ok('re-enter THE KEEP after the save changes', home, home ? 'ok' : `state ${G.state} / course ${G.courseId}`);
+    }
+  }
   if (G.courseId === 'keep' && G.__dev && G.__dev.gates) {
     let live = null;
-    try { live = G.__dev.gates().map(g => ({course: g.course, unlocked: !!(g.unlocked || g.open),
-                                            requires: g.requires && g.requires.crests})); }
+    try {
+      live = G.__dev.gates().map(g => {
+        // `requires:{crests:N}` is the AUTHORED keep-data shape (contract §26);
+        // the RESOLVED live gate carries a plain number plus `locked`.
+        const req = (g.requires && typeof g.requires === 'object') ? g.requires.crests : g.requires;
+        return {course: g.course, unlocked: g.locked === false, requires: req};
+      });
+    }
     catch (e) { live = 'threw: ' + e; }
     R.notes.liveGates = live;
     if (Array.isArray(live)) {
@@ -413,6 +432,26 @@ async (opts) => {
   return R;
 }
 """
+
+
+def launch_headless(p):
+    """Headless, but on the REAL GPU.
+
+    This gate measures a real-time budget (CONTRACT §28: median <= 700 ms from
+    kill to controls restored). Under the bundled Chromium + SwiftShader the
+    page presents ~0.3 frames/second, so a 620 ms timeline that needs ~13 frames
+    takes ~30 s of wall clock and every timing row reports the rasterizer
+    instead of the game. Real Chrome headless drives ANGLE/D3D11 on this box at
+    ~28 fps, which measures the timeline. SwiftShader stays as the fallback for
+    a machine with no usable GPU -- and says so, because the timings it produces
+    are not the game's.
+    """
+    try:
+        return p.chromium.launch(channel="chrome", headless=True, args=FLAGS)
+    except Exception as e:
+        print("headless: no hardware Chrome (%s) -> SwiftShader; real-time rows "
+              "will measure the software rasterizer" % str(e)[:120], file=sys.stderr)
+        return p.chromium.launch(headless=True, args=HEADLESS_FLAGS)
 
 
 def wait_ready(pg, timeout=75, need_course=False):
@@ -526,7 +565,7 @@ def main() -> int:
 
     with sync_playwright() as p:
         if args.headless:
-            br = p.chromium.launch(headless=True, args=HEADLESS_FLAGS)
+            br = launch_headless(p)
         else:
             br = p.chromium.launch(channel="chrome", headless=False, args=FLAGS)
         pg = br.new_page(viewport={"width": 1280, "height": 720})
