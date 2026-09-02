@@ -803,7 +803,36 @@ function carryAndPush(sdt) {
     const c = cands[i];
     if (c.solid === false) continue;
     if (!c.isMoving()) continue;
-    if (mtv(c, TMPN) <= EPS) continue;
+    const depth = mtv(c, TMPN);
+    if (depth <= EPS) continue;
+
+    // A RIDER, NOT A VICTIM.
+    //
+    // mtv() already answers this correctly — minimum penetration, ties preferring
+    // Y "so a player wedged in a corner is stood up, not shoved out" — and the
+    // code below then THREW THAT AWAY and ejected along the deck's travel axis.
+    // A player standing on a moving deck sinks a hair into its top face every
+    // frame (gravity between resolves), which is an overlap, so every rider was
+    // treated as someone being swept into and got fired out the leading face by
+    // exitAlong(): on neon-2's shuttle that is half.x + radius = 2.25 m in ONE
+    // frame — measured 2.27 m, landing the player exactly 2.25 m past the deck
+    // centre, i.e. off the front edge and into the void. Because the push only
+    // runs for MOVING colliders, the deck held while it dwelt and dropped the
+    // player the instant it set off: "I can land on it until it starts moving
+    // back up, then the collider disappears."
+    //
+    // If the shallowest way out is upward, the player is ON this deck: resolve
+    // along the MTV, exactly as static ground does. The lateral-sweep case (a
+    // mover closing on the player from the side) still has a horizontal MTV and
+    // still takes the travel-axis path below.
+    if (TMPN.y > 0.5) {
+      pos.x += TMPN.x * depth;
+      pos.y += TMPN.y * depth;
+      pos.z += TMPN.z * depth;
+      pushed = true;
+      setPlayerBox();
+      continue;
+    }
 
     c.velocityAt(PC, TMPV);
     const ax = Math.abs(TMPV.x), ay = Math.abs(TMPV.y), az = Math.abs(TMPV.z);
