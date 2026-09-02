@@ -1550,9 +1550,6 @@ const HUD_CSS = `
 }
 .ah-fworld{ margin-top:6px; font-size:${UI_TOKENS.type.xs}px; letter-spacing:.34em;
   text-transform:uppercase; color:var(--ink-mute); }
-/* "STAGES 7 – 12 / 101", or on a resumed run "RAN STAGES 11 – 12" */
-.ah-frange{ margin-top:7px; font-family:var(--f-num); font-size:${UI_TOKENS.type['2xs']}px;
-  letter-spacing:.26em; text-transform:uppercase; color:var(--wc,var(--accent)); }
 .ah-frule{
   height:1px; margin:20px auto 18px; width:100%; transform-origin:center;
   background:linear-gradient(90deg,transparent,var(--accent),transparent); opacity:.7;
@@ -1568,9 +1565,6 @@ const HUD_CSS = `
   letter-spacing:.12em; color:var(--ink-dim); min-height:20px;
 }
 .ah-fsplit.ahead{ color:var(--ahead); } .ah-fsplit.behind{ color:var(--behind); }
-/* A resumed (mid-level) run: smaller, warning-coloured, and it wraps, because
-   the sentence matters more than the swagger. */
-.ah-fsplit.partial{ color:var(--finish); font-size:${UI_TOKENS.type.sm}px; letter-spacing:.18em; }
 .ah-frecord{
   display:inline-flex; align-items:center; gap:10px; margin-top:12px;
   padding:6px 16px; border-radius:var(--r-pill,999px);
@@ -1817,8 +1811,7 @@ const SELECT_CSS = `
   letter-spacing:.44em; text-transform:uppercase; color:var(--accent); margin-bottom:6px; }
 .as-head h2{ font-family:var(--f-display); font-size:${UI_TOKENS.type['2xl']}px; font-weight:700;
   letter-spacing:.08em; text-transform:uppercase; color:#fff; line-height:1; }
-.as-head .totals{ display:flex; flex-wrap:wrap; justify-content:flex-end; gap:10px 26px;
-  text-align:right; flex:0 1 auto; }
+.as-head .totals{ display:flex; gap:28px; text-align:right; flex:0 0 auto; }
 .as-tot .k{ font-family:var(--f-display); font-size:${UI_TOKENS.type['2xs']}px; font-weight:600;
   letter-spacing:.26em; text-transform:uppercase; color:var(--ink-mute); }
 .as-tot .v{ margin-top:3px; font-family:var(--f-num); font-size:${UI_TOKENS.type.lg}px; font-weight:700;
@@ -1868,15 +1861,11 @@ const SELECT_CSS = `
   letter-spacing:.11em; text-transform:uppercase; color:#fff; line-height:1.05;
 }
 .as-whead .wmeta{
-  margin-top:5px; display:flex; flex-wrap:wrap; align-items:center; gap:4px 14px;
+  margin-top:5px; display:flex; align-items:center; gap:14px;
   font-family:var(--f-num); font-size:${UI_TOKENS.type.xs}px; letter-spacing:.16em;
   text-transform:uppercase; color:var(--ink-mute);
 }
-/* Separate claims read as separate chips, not one run-on sentence. */
-.as-whead .wmeta > span + span::before{ content:'·'; margin-right:14px; opacity:.55; }
-.as-whead .wmeta .good{ color:var(--safe); }
 .as-whead .wmeta .req{ color:var(--finish); letter-spacing:.14em; }
-.as-whead .wmeta .req::before{ content:none !important; }
 .as-wprog{ width:120px; flex:0 0 120px; }
 .as-wprog .bar{ height:3px; border-radius:2px; background:rgba(0,0,0,.55); overflow:hidden; }
 .as-wprog .bar i{ display:block; height:100%; transform-origin:left center;
@@ -1894,9 +1883,7 @@ const SELECT_CSS = `
 .as-world.is-open .as-grid-wrap{ grid-template-rows:1fr; }
 .as-grid-inner{ overflow:hidden; }
 .as-grid{
-  /* 262px, not 238: the tile now carries a labelled stat row and a chip per
-     stage, and "DEATHS / ORBS / PAR TIME" has to read without truncating. */
-  display:grid; grid-template-columns:repeat(auto-fit,minmax(262px,1fr)); gap:12px;
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(238px,1fr)); gap:12px;
   padding:6px 18px 20px;
 }
 
@@ -1932,75 +1919,13 @@ const SELECT_CSS = `
 .as-tile .tbest{ font-family:var(--f-num); font-size:${UI_TOKENS.type.sm}px; font-weight:600;
   color:var(--ink-dim); letter-spacing:.06em; display:flex; align-items:center; gap:7px; }
 .as-tile .tbest.none{ color:var(--ink-mute); opacity:.65; }
-/* ---- level progress vs completion -------------------------------------- */
-.as-tile .tprog{
-  margin-top:9px; display:flex; align-items:center; justify-content:space-between; gap:8px;
-  font-family:var(--f-num); font-size:${UI_TOKENS.type['2xs']}px; font-weight:700;
-  letter-spacing:.16em; text-transform:uppercase;
-}
-.as-tile .tprog .pt{ color:var(--ink-dim); }
-.as-tile .tprog .ptag{
-  padding:2px 7px; border-radius:var(--r-sm); white-space:nowrap;
-  border:1px solid currentColor; letter-spacing:.14em;
-}
-.as-tile .tprog .ptag.done{ color:var(--safe); background:rgba(124,240,196,.10); }
-.as-tile .tprog .ptag.todo{ color:var(--ink-mute); background:rgba(255,255,255,.03); }
-
-/* ---- per-stage entry chips ---------------------------------------------- */
-.as-tile .tseghead{
-  margin-top:11px; font-family:var(--f-display); font-size:${UI_TOKENS.type['2xs']}px;
-  font-weight:600; letter-spacing:.30em; text-transform:uppercase; color:var(--ink-mute);
-}
-.as-tile .tsegs{ margin-top:6px; display:flex; flex-wrap:wrap; gap:5px; }
-.as-seg{
-  appearance:none; -webkit-appearance:none; cursor:pointer;
-  min-width:28px; height:26px; padding:0 6px; border-radius:var(--r-sm);
-  display:inline-flex; align-items:center; justify-content:center; gap:3px;
-  font-family:var(--f-num); font-size:${UI_TOKENS.type['2xs']}px; font-weight:700;
-  letter-spacing:.06em; line-height:1;
-  border:1px solid var(--stroke); background:rgba(255,255,255,.04); color:var(--ink-dim);
-  transition:transform .16s var(--e-snap), border-color .18s var(--e-out),
-             background .18s var(--e-out), color .18s var(--e-out);
-}
-.as-seg .lk{ display:none; }
-.as-seg .lk svg{ width:10px; height:10px; }
-.as-seg.done{ color:#04101a; border-color:var(--wc,var(--accent));
-  background:linear-gradient(150deg,var(--wc,var(--accent)),rgba(255,255,255,.55)); }
-.as-seg.here{ color:var(--wc,var(--accent)); border-color:var(--wc,var(--accent));
-  background:rgba(255,255,255,.06); box-shadow:0 0 16px -6px var(--wg,var(--accent-glow)); }
-/* Locked reads as locked, but the NUMBER still has to be legible — a player
-   needs to see which stage they are being told to go and reach. */
-.as-seg.locked{ color:var(--ink-mute); opacity:.72; cursor:not-allowed;
-  border-style:dashed; background:transparent; }
-.as-seg.locked .lk{ display:inline-flex; }
-.as-seg:hover:not(.locked){ transform:translateY(-2px); }
-.as-seg.is-focus{
-  outline:2px solid var(--wc,var(--accent)); outline-offset:2px;
-  box-shadow:0 0 22px -6px var(--wg,var(--accent-glow));
-}
-.as-tile .tcap{
-  margin-top:7px; min-height:24px; font-family:var(--f-num);
-  font-size:${UI_TOKENS.type['2xs']}px; letter-spacing:.10em; line-height:1.35;
-  text-transform:uppercase; color:var(--ink-mute);
-}
-.as-tile .tcap.ok{ color:var(--ink-dim); }
-.as-tile .tcap.warn{ color:var(--finish); }
-
-/* ---- LABELLED stat row (the unlabelled icons read as "1/3" to a player) -- */
 .as-tile .tstats{
-  margin-top:10px; display:grid; grid-template-columns:repeat(3,1fr); gap:8px;
-  padding-top:9px; border-top:1px solid var(--hair);
+  margin-top:7px; display:flex; align-items:center; gap:14px;
+  font-family:var(--f-num); font-size:${UI_TOKENS.type.xs}px; letter-spacing:.10em;
+  color:var(--ink-mute);
 }
-.as-tile .tstat .k{
-  display:flex; align-items:center; gap:4px;
-  font-family:var(--f-display); font-size:${UI_TOKENS.type['2xs']}px; font-weight:600;
-  letter-spacing:.16em; text-transform:uppercase; color:var(--ink-mute);
-}
-.as-tile .tstat .v{
-  margin-top:2px; font-family:var(--f-num); font-size:${UI_TOKENS.type.sm}px; font-weight:700;
-  letter-spacing:.04em; color:var(--ink-dim); white-space:nowrap;
-}
-.as-tile .tstats svg{ width:11px; height:11px; opacity:.7; flex:0 0 11px; }
+.as-tile .tstats span{ display:flex; align-items:center; gap:5px; }
+.as-tile .tstats svg{ width:13px; height:13px; opacity:.7; }
 .as-tile .tno{
   position:absolute; top:8px; left:9px; font-family:var(--f-num); font-size:${UI_TOKENS.type['2xs']}px;
   font-weight:700; letter-spacing:.20em; color:rgba(255,255,255,.75);

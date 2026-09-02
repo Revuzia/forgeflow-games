@@ -236,13 +236,9 @@ export class HUD {
     const card = el('div', 'ah-fcard asc-glass asc-scan');
 
     this.fKicker = el('div', 'ah-fk');
-    this.fKicker.textContent = 'LEVEL COMPLETE';
+    this.fKicker.textContent = 'STAGE CLEAR';
     this.fName = el('div', 'ah-fname');
     this.fWorld = el('div', 'ah-fworld');
-    /* Which global stages this level covers, and — on a resumed run — which of
-       them were actually played. Stage select and this card have to say the
-       same thing or the player is reading two different scoreboards. */
-    this.fRange = el('div', 'ah-frange');
     this.fRule = el('div', 'ah-frule');
 
     const time = el('div', 'ah-ftime');
@@ -285,7 +281,6 @@ export class HUD {
       '<i>·</i><b class="asc-kbd">ENTER</b> CONFIRM';
 
     card.appendChild(this.fKicker); card.appendChild(this.fName); card.appendChild(this.fWorld);
-    card.appendChild(this.fRange);
     card.appendChild(this.fRule); card.appendChild(time); card.appendChild(this.fSplit);
     card.appendChild(this.fRecord); card.appendChild(grid); card.appendChild(btns); card.appendChild(this.fHint);
     wrap.appendChild(card);
@@ -761,10 +756,8 @@ export class HUD {
     const num = globalStage | 0;
     if (num > 0) {
       this.tWord.nodeValue = 'STAGE ' + num;
-      /* Same word stage select uses for this number: a checkpoint means the
-         stage is REACHED, not that the level is complete. */
       this.nWordSub.textContent = (globalTotal | 0) > 0
-        ? 'REACHED · ' + num + ' / ' + (globalTotal | 0) : 'STAGE REACHED';
+        ? 'CHECKPOINT · ' + num + ' / ' + (globalTotal | 0) : 'CHECKPOINT';
     } else {
       this.tWord.nodeValue = 'CHECKPOINT';
       this.nWordSub.textContent = 'PROGRESS SAVED';
@@ -827,41 +820,26 @@ export class HUD {
   finish(summary) {
     const s = summary || {};
     const timeMs = Number(s.timeMs) || 0;
-    /* A PARTIAL run started mid-level from stage select. It skipped stages, so
-       its clock is not comparable to a whole-level time: no record, no split
-       against the best, no medal. Saying so on the card is the point — a player
-       who saw "GOLD" for walking the last 20 m would never trust the medal
-       again (and Game does not bank the time either). */
-    const partial = !!s.partial;
-    const prev = partial ? null
-      : (s.prevBest != null ? s.prevBest : (s.best != null && s.best < timeMs ? s.best : null));
-    const isRecord = partial ? false
-      : (s.isRecord != null ? !!s.isRecord : (prev == null || timeMs < prev));
+    const prev = s.prevBest != null ? s.prevBest : (s.best != null && s.best < timeMs ? s.best : null);
+    const isRecord = s.isRecord != null ? !!s.isRecord : (prev == null || timeMs < prev);
     const par = s.par != null ? s.par
       : (this.game && this.game.stage && this.game.stage.def ? this.game.stage.def.par : null);
-    const medal = partial ? null : (s.medal || medalFor(timeMs, par));
+    const medal = s.medal || medalFor(timeMs, par);
 
     this.fName.textContent = String(s.stageName || this._c.stage || 'STAGE');
     this.fWorld.textContent = String(s.worldName || this._c.world || '');
-    this.fKicker.textContent = s.kicker || (partial ? 'STAGES CLEARED' : 'LEVEL COMPLETE');
-
-    const range = partial ? String(s.ranRange || '') : String(s.stageRange || '');
-    this.fRange.textContent = range;
-    this.fRange.style.display = range ? '' : 'none';
+    this.fKicker.textContent = s.kicker || 'STAGE CLEAR';
 
     const st = splitTime(timeMs);
     this.fTimeBig.textContent = st.main;
     this.fTimeMs.textContent = st.frac;
 
-    if (partial) {
-      this.fSplit.textContent = 'PARTIAL RUN · NO TIME BANKED · LEVEL NOT COMPLETED';
-      this.fSplit.className = 'ah-fsplit partial';
-    } else if (prev != null && isFinite(prev)) {
+    if (prev != null && isFinite(prev)) {
       const d = timeMs - prev;
       this.fSplit.textContent = fmtSplit(d) + '  VS BEST';
       this.fSplit.className = 'ah-fsplit ' + (d <= 0 ? 'ahead' : 'behind');
     } else {
-      this.fSplit.textContent = 'FIRST COMPLETION';
+      this.fSplit.textContent = 'FIRST CLEAR';
       this.fSplit.className = 'ah-fsplit';
     }
     this.fRecord.style.display = isRecord && prev != null ? '' : 'none';
