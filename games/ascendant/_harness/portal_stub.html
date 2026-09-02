@@ -1,0 +1,80 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>ASCENDANT — portal bridge stub</title>
+<!--
+  A stand-in for the ForgeFlow Games portal page. It speaks exactly the part of
+  src/lib/gameBridge.ts that Ascendant uses:
+
+    game -> portal   {type:'forgeflow:save',  data, slot}
+    game -> portal   {type:'forgeflow:load',  slot, _reqId}
+    portal -> game   {type:'forgeflow:save_loaded', data, _reqId}   (echoes _reqId)
+
+  The "account row" lives in window.CLOUD (in place of the game_saves table) so a
+  test can seed it before the frame boots, or read back what the game pushed.
+  ?cloud=empty | null | rich chooses the seeded record.
+-->
+<style>
+  html,body{margin:0;background:#05080e;color:#cfe;font:13px/1.5 monospace}
+  #bar{padding:6px 10px;border-bottom:1px solid #234}
+  iframe{display:block;width:100%;height:calc(100vh - 34px);border:0}
+</style>
+<div id="bar">PORTAL STUB · <span id="st">boot</span></div>
+<iframe id="f" title="game"></iframe>
+<script>
+(function () {
+  var P = new URLSearchParams(location.search);
+  var mode = P.get('cloud') || 'null';
+
+  /* The account's stored record — the game_saves row. */
+  window.CLOUD = null;
+  if (mode === 'empty') window.CLOUD = { v: 1, at: 1, unlockAll: false, stages: {} };
+  if (mode === 'rich') {
+    window.CLOUD = {
+      v: 1, at: 1, unlockAll: false,
+      stages: {
+        'neon-1': { cleared: true, best: 42000, deaths: 3, coins: [0, 1], clears: 1,
+                    firstClearDate: '2026-01-01T00:00:00.000Z' },
+        'neon-2': { cleared: true, best: 61000, deaths: 9, coins: [2], clears: 1,
+                    firstClearDate: '2026-01-02T00:00:00.000Z' },
+        /* a stage this device has never played — it must arrive intact */
+        'neon-3': { cleared: true, best: 88000, deaths: 40, coins: [0, 4], clears: 1,
+                    firstClearDate: '2026-01-03T00:00:00.000Z' },
+      },
+    };
+  }
+
+  /* Every message the game sent, for assertions. */
+  window.SEEN = [];
+  window.LOADS = 0;
+  window.SAVES = 0;
+
+  var f = document.getElementById('f');
+  var st = document.getElementById('st');
+
+  window.addEventListener('message', function (ev) {
+    if (ev.source !== f.contentWindow) return;
+    var m = ev.data;
+    if (!m || typeof m !== 'object') return;
+    window.SEEN.push(m);
+
+    if (m.type === 'forgeflow:load') {
+      window.LOADS++;
+      /* ?cloud=silent — a SIGNED-OUT portal: gameBridge only answers when it
+         has a currentUserId, so the game must survive getting no reply at all. */
+      if (mode === 'silent') { st.textContent = 'cloud=silent (no reply) loads=' + window.LOADS; return; }
+      /* Async, like a Supabase round trip. Echo _reqId, reply to the frame. */
+      setTimeout(function () {
+        f.contentWindow.postMessage(
+          { type: 'forgeflow:save_loaded', data: window.CLOUD, _reqId: m._reqId }, '*');
+      }, 40);
+    }
+    if (m.type === 'forgeflow:save') {
+      window.SAVES++;
+      window.CLOUD = m.data;          // upsert into the account row
+    }
+    st.textContent = 'cloud=' + mode + ' loads=' + window.LOADS + ' saves=' + window.SAVES;
+  }, false);
+
+  f.src = '../index.html' + (P.get('q') ? '?' + P.get('q') : '');
+})();
+</script>

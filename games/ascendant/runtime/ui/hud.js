@@ -3,9 +3,10 @@
  * The in-game interface. DOM overlay in #hud (contract §20).
  *
  * Composition:
- *   top-left     world / GLOBAL stage number (obby convention: "STAGE 37 / 101",
- *                one checkpoint segment = one numbered stage) / level name +
- *                difficulty pips + difficulty band label
+ *   top-left     world name / stage name / "STAGE n OF 3" + difficulty pips
+ *                and band label. A world has THREE stages; the checkpoints
+ *                inside one are waypoints (the pips in the top-centre rail)
+ *                and are never numbered as stages.
  *   top-centre   progress rail, checkpoint pips, pace ghost
  *   top-right    stage timer, live split vs best, run total, stage best
  *   bottom-left  deaths, coins, speed ribbon
@@ -104,10 +105,9 @@ export class HUD {
     const E = this.nPlay;
 
     /* --- top-left ----------------------------------------------------- */
-    /* Obby convention: the GLOBAL stage number is the headline ("STAGE 37 / 101")
-       and the world / level name is secondary context. The big .ah-stage line
-       carries the global number while numbering is available, the level name
-       otherwise (and always in the hub). */
+    /* WORLD name, then the STAGE name as the headline, then "STAGE n OF 3".
+       Nothing here counts checkpoints — those are the pips on the progress
+       rail, and calling them stages is what made a 3-stage world read as 21. */
     const tl = el('div', 'ah-cluster ah-tl');
     this.nWorld = el('div', 'ah-world');
     this.tWorld = textNode(this.nWorld, '');
@@ -391,8 +391,7 @@ export class HUD {
       c.world = s.worldName;
       this.tWorld.nodeValue = String(s.worldName || '');
     }
-    /* Entrance animation fires on a LEVEL change only — the global stage number
-       also ticks up on every checkpoint, and that must not replay the slide. */
+    /* Entrance animation fires on a STAGE change only. */
     if (s.stageName !== undefined && s.stageName !== c.levelName) {
       c.levelName = s.stageName;
       animateOnce(this.nTL, [
@@ -400,21 +399,16 @@ export class HUD {
         { opacity: 1, transform: 'translateX(0) scale(var(--hud-scale))' },
       ], { duration: 460, easing: UI_TOKENS.ease.out });
     }
-    /* Headline: the global stage number (obby convention). Fallback (numbering
-       not loaded yet, or the hub): the level name, as before. */
-    const hasGlobal = (s.globalStage | 0) > 0 && (s.globalTotal | 0) > 0;
-    const bigTxt = hasGlobal
-      ? 'STAGE ' + (s.globalStage | 0) + ' / ' + (s.globalTotal | 0)
-      : String(s.stageName || '');
+    /* Headline: the STAGE's own name. */
+    const bigTxt = String(s.stageName || '');
     if (bigTxt !== c.stage) {
       c.stage = bigTxt;
       this.tStage.nodeValue = bigTxt;
     }
-    /* Secondary line: the level name under a global headline; the world-local
-       index when there is no numbering (never "STAGE 1 / 0" in the hub). */
-    const subTxt = hasGlobal
-      ? String(s.stageName || '')
-      : (s.stageIdx > 0 && s.stageCount > 0 ? 'STAGE ' + s.stageIdx + ' / ' + s.stageCount : '');
+    /* Secondary line: where this stage sits in its world. Blank in the hub. */
+    const subTxt = (s.stageIdx > 0 && s.stageCount > 0)
+      ? 'STAGE ' + s.stageIdx + ' OF ' + s.stageCount
+      : '';
     if (subTxt !== c.stageNum) { c.stageNum = subTxt; this.tStageNum.nodeValue = subTxt; }
 
     const diff = s.difficulty != null ? s.difficulty
@@ -730,16 +724,14 @@ export class HUD {
    * ====================================================================*/
 
   /**
-   * Full-screen ring wipe in the checkpoint colour + a stage-number wordmark.
-   * Obby convention: touching a checkpoint means entering a new global stage, so
-   * the wordmark is "STAGE 38" (with the total in the sub line). Called with no
-   * arguments — numbering not loaded — it falls back to the classic CHECKPOINT
-   * wordmark.
+   * Full-screen ring wipe in the checkpoint colour + the CHECKPOINT wordmark.
+   * A checkpoint is a waypoint inside the stage — it is never announced as a
+   * stage, and it is not save state (only crossing the finish clears a stage).
    *
-   * @param {number} [globalStage] global stage number just entered (1-based)
-   * @param {number} [globalTotal] total global stages in the game
+   * @param {number} [cpIndex] which checkpoint inside this stage (1-based)
+   * @param {number} [cpTotal] how many checkpoints this stage has
    */
-  checkpointFlash(globalStage, globalTotal) {
+  checkpointFlash(cpIndex, cpTotal) {
     const w = window.innerWidth || 1280;
     const h = window.innerHeight || 720;
     const target = (Math.sqrt(w * w + h * h) / 100) * 1.15;
@@ -753,15 +745,12 @@ export class HUD {
     ], { duration: 900, easing: 'linear', fill: 'forwards' });
 
     this.nWord.style.setProperty('--wc', 'var(--cp)');
-    const num = globalStage | 0;
-    if (num > 0) {
-      this.tWord.nodeValue = 'STAGE ' + num;
-      this.nWordSub.textContent = (globalTotal | 0) > 0
-        ? 'CHECKPOINT · ' + num + ' / ' + (globalTotal | 0) : 'CHECKPOINT';
-    } else {
-      this.tWord.nodeValue = 'CHECKPOINT';
-      this.nWordSub.textContent = 'PROGRESS SAVED';
-    }
+    const num = cpIndex | 0;
+    const tot = cpTotal | 0;
+    this.tWord.nodeValue = 'CHECKPOINT';
+    this.nWordSub.textContent = (num > 0 && tot > 0)
+      ? num + ' / ' + tot + ' · RESPAWN MOVED'
+      : 'RESPAWN MOVED';
     animateOnce(this.nWord, [
       { opacity: 0, transform: 'translate(-50%,-50%) scale(1.22)', filter: 'blur(6px)', easing: UI_TOKENS.ease.out },
       { opacity: 1, transform: 'translate(-50%,-50%) scale(1)', filter: 'blur(0)', offset: 0.24 },

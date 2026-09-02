@@ -1813,7 +1813,7 @@ const SELECT_CSS = `
   letter-spacing:.08em; text-transform:uppercase; color:#fff; line-height:1; }
 .as-head .totals{ display:flex; gap:28px; text-align:right; flex:0 0 auto; }
 .as-tot .k{ font-family:var(--f-display); font-size:${UI_TOKENS.type['2xs']}px; font-weight:600;
-  letter-spacing:.26em; text-transform:uppercase; color:var(--ink-mute); }
+  letter-spacing:.20em; text-transform:uppercase; color:var(--ink-mute); white-space:nowrap; }
 .as-tot .v{ margin-top:3px; font-family:var(--f-num); font-size:${UI_TOKENS.type.lg}px; font-weight:700;
   color:var(--ink); }
 .as-body{ flex:1 1 auto; overflow-y:auto; overflow-x:hidden; padding:18px 2px 8px;
@@ -1861,11 +1861,22 @@ const SELECT_CSS = `
   letter-spacing:.11em; text-transform:uppercase; color:#fff; line-height:1.05;
 }
 .as-whead .wmeta{
-  margin-top:5px; display:flex; align-items:center; gap:14px;
+  margin-top:5px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;
   font-family:var(--f-num); font-size:${UI_TOKENS.type.xs}px; letter-spacing:.16em;
   text-transform:uppercase; color:var(--ink-mute);
 }
-.as-whead .wmeta .req{ color:var(--finish); letter-spacing:.14em; }
+/* The unlock condition is a sentence, not a chip: let it use the row and wrap
+   on words. Without flex:1 1 auto it collapsed to one word per line. */
+.as-whead .wmeta .req{ color:var(--finish); letter-spacing:.14em;
+  flex:1 1 auto; min-width:0; line-height:1.5; }
+/* Narrow panes (the portal embed at phone width): stack the progress bar under
+   the world name so the lock sentence keeps the full width. */
+@media (max-width: 640px){
+  .as-whead{ flex-wrap:wrap; gap:10px 14px; padding:14px 16px; }
+  .as-whead .wt{ flex:1 1 140px; }
+  .as-wprog{ flex:1 1 100%; width:auto; order:4; }
+  .as-wprog .lbl{ text-align:left; }
+}
 .as-wprog{ width:120px; flex:0 0 120px; }
 .as-wprog .bar{ height:3px; border-radius:2px; background:rgba(0,0,0,.55); overflow:hidden; }
 .as-wprog .bar i{ display:block; height:100%; transform-origin:left center;
@@ -1913,11 +1924,23 @@ const SELECT_CSS = `
   font-weight:600; letter-spacing:.22em; text-transform:uppercase; color:var(--ink-mute);
 }
 .as-tile .tstages b{ color:var(--wc,var(--accent)); font-weight:700; }
+.as-tile .tstages.is-locked{ color:var(--finish); letter-spacing:.14em; white-space:normal;
+  line-height:1.45; }
+.as-tile .tlock{
+  position:absolute; top:6px; right:8px; width:18px; height:18px; color:var(--finish);
+  filter:drop-shadow(0 0 8px rgba(0,0,0,.85));
+}
+.as-tile.locked .tlock{ opacity:1; }
 .as-tile .trow{
   margin-top:8px; display:flex; align-items:center; justify-content:space-between; gap:8px;
 }
 .as-tile .tbest{ font-family:var(--f-num); font-size:${UI_TOKENS.type.sm}px; font-weight:600;
   color:var(--ink-dim); letter-spacing:.06em; display:flex; align-items:center; gap:7px; }
+/* Every readout on a tile carries its own word — no bare "1 / 3" anywhere. */
+.as-tile .tbest b{ font-size:${UI_TOKENS.type['2xs']}px; font-weight:700; letter-spacing:.20em;
+  color:var(--ink-mute); }
+.as-tile .tstats b{ font-size:${UI_TOKENS.type['2xs']}px; font-weight:700; letter-spacing:.18em;
+  color:var(--ink-mute); opacity:.85; }
 .as-tile .tbest.none{ color:var(--ink-mute); opacity:.65; }
 .as-tile .tstats{
   margin-top:7px; display:flex; align-items:center; gap:14px;
@@ -1935,7 +1958,8 @@ const SELECT_CSS = `
   position:absolute; top:6px; right:8px; width:19px; height:19px; color:var(--safe);
   filter:drop-shadow(0 0 8px rgba(124,240,196,.6));
 }
-.as-tile.locked{ cursor:not-allowed; opacity:.42; filter:grayscale(.75); }
+.as-tile.locked{ cursor:not-allowed; opacity:.52; filter:grayscale(.7); }
+.as-tile.locked .tlock{ filter:none; }
 .as-tile.locked:hover{ transform:none; animation:asc-lockshake .4s var(--e-out); }
 .as-tile .tload{
   position:absolute; inset:0 0 auto 0; height:104px; display:flex; align-items:center;

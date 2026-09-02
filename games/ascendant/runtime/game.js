@@ -28,7 +28,7 @@
 
 import * as THREE from 'three';
 
-import { WORLDS, HUB, getStage, loadStageNumbering, globalStageOf } from './data/index.js';
+import { WORLDS, HUB, getStage } from './data/index.js';
 import { Stage } from './world/stage.js';
 import { THEMES, applyTheme } from './world/themes.js';
 import { Player } from './player/controller.js';
@@ -320,17 +320,10 @@ export class Game {
     /* Reused HUD snapshot — HUD.update() is called every frame. */
     this._snap = {
       stageName: '', worldName: '', stageIdx: 0, stageCount: 0,
-      globalStage: 0, globalTotal: 0,
       timeMs: 0, totalMs: 0, deaths: 0, cpIndex: 0, cpCount: 0,
       progress01: 0, coins: 0, coinTotal: 0, best: null, speed: 0,
       state: 'loading', par: 0, difficulty: 1, isHub: true, pointerLocked: false,
     };
-
-    /* Global stage numbering (obby convention: one checkpoint segment = one
-       numbered stage). Derived from every stage def's checkpoint array, so it
-       loads them all once in the background — same cache getStage uses. The HUD
-       falls back to the world-local label until this resolves. */
-    loadStageNumbering().catch(() => { /* HUD falls back to world-local numbers */ });
 
     this._buildOverlays();
   }
@@ -634,8 +627,25 @@ export class Game {
   async loadStage(stageId, opts) {
     const o = opts || {};
     if (this._loading) return this;
-    this._loading = true;
     const id = String(stageId || HUB_ID);
+
+    /* SEQUENTIAL GATE. Stage 1 of an unlocked world is open; stage 2 needs
+       stage 1 CLEARED, stage 3 needs stage 2. Once unlocked a stage stays
+       unlocked, so entering one directly from stage select is always allowed.
+       Fails OPEN: a bug in the rule must never wall a player out of the game.
+       `opts.force` is the dev/harness bypass (__dev.goto, ?stage=). */
+    if (id !== HUB_ID && o.force !== true) {
+      let open = true;
+      try { open = this.save.isStageUnlocked(id) !== false; } catch (e) { open = true; }
+      if (!open) {
+        let why = 'LOCKED';
+        try { why = this.save.stageLockReason(id, (v) => this._displayName(v)) || 'LOCKED'; } catch (e) { /* ignore */ }
+        safe(() => this.hud && this.hud.toast('STAGE LOCKED', why, 'warn'), 'hud.toast');
+        return this;
+      }
+    }
+
+    this._loading = true;
 
     try {
       /* ---- 1. freeze the world, THEN veil it ---- */
@@ -913,16 +923,11 @@ export class Game {
 
     const worldName = isHub ? 'THE SANCTUM' : (w && w.name) || (def.world || '').toUpperCase();
     const idx = w ? w.stages.indexOf(def.id) + 1 : 0;
-    /* Obby convention: lead with the level's global stage range ("STAGES 7 - 12"),
-       falling back to the world-local index until the numbering has loaded. */
-    const gn = isHub ? null : globalStageOf(def.id, 0);
-    let label = worldName;
-    if (gn) {
-      label = worldName + '  ·  ' + (gn.segments > 1
-        ? 'STAGES ' + gn.first + ' – ' + gn.last : 'STAGE ' + gn.first) + ' / ' + gn.total;
-    } else if (idx > 0) {
-      label = worldName + '  ·  STAGE ' + idx + ' / ' + w.stages.length;
-    }
+    /* WORLD · STAGE n OF 3. A world holds three stages; the checkpoints inside
+       one are waypoints and are never numbered here. */
+    const label = (!isHub && idx > 0)
+      ? worldName + '  ·  STAGE ' + idx + ' OF ' + w.stages.length
+      : worldName;
 
     this.el.introWorld.textContent = label;
     this.el.introName.textContent = def.name || String(def.id || '').toUpperCase();
@@ -1332,13 +1337,12 @@ export class Game {
     this._recordCpClock(idx);
     if (this.stageId && this.stageId !== HUB_ID) safe(() => this.save.setCheckpoint(this.stageId, idx), 'save.setCheckpoint');
 
-    /* Obby convention: the checkpoint IS the stage. Flash + toast the global
-       stage number the player just entered; fall back to the per-stage count
-       when the numbering has not resolved yet. */
-    const gn = globalStageOf(this.stageId, idx);
-    safe(() => this.hud && this.hud.checkpointFlash(gn && gn.num, gn && gn.total), 'hud.checkpointFlash');
+    /* A checkpoint is a WAYPOINT inside this stage — never a numbered stage,
+       and never a save. It is announced as what it is. */
+    const cpTotal = Math.max(1, cps.length - 1);
+    safe(() => this.hud && this.hud.checkpointFlash(idx, cpTotal), 'hud.checkpointFlash');
     safe(() => this.hud && this.hud.toast(
-      gn ? 'STAGE ' + gn.num + ' / ' + gn.total : 'CHECKPOINT ' + idx + ' / ' + (cps.length - 1),
+      'CHECKPOINT ' + idx + ' / ' + cpTotal,
       fmtTime(this.timeMs / 1000), 'checkpoint'), 'hud.toast');
     safe(() => this.audio && this.audio.sfx('checkpoint'), 'audio.sfx');
     safe(() => this.camera && this.camera.dip(-0.06), 'camera.dip');
@@ -1684,6 +1688,23 @@ export class Game {
     return list;
   }
 
+  /**
+   * Display name for a world id or a stage id — the real name when its def is
+   * already cached, a tidied id otherwise. Only ever feeds lock copy.
+   */
+  _displayName(id) {
+    const w = this._worldById(id);
+    if (w) return w.name || w.id;
+    const st = this.stage && this.stage.def && this.stage.def.id === id ? this.stage.def : null;
+    if (st && st.name) return st.name;
+    const sel = this.stageSelect;
+    if (sel && typeof sel.stageName === 'function') {
+      const n = safe(() => sel.stageName(id), 'stageSelect.stageName');
+      if (n) return n;
+    }
+    return String(id).replace(/[-_]/g, ' ');
+  }
+
   _worldById(id) {
     if (!id || !WORLDS) return null;
     for (let i = 0; i < WORLDS.length; i++) if (WORLDS[i] && WORLDS[i].id === id) return WORLDS[i];
@@ -1696,7 +1717,12 @@ export class Game {
     if (unlocked.indexOf(worldId) !== -1) return null;
     const idx = WORLDS ? WORLDS.findIndex((w) => w && w.id === worldId) : -1;
     const prev = idx > 0 ? WORLDS[idx - 1] : null;
-    return prev ? 'CLEAR ' + (prev.name || prev.id).toUpperCase() + ' TO OPEN' : 'LOCKED';
+    if (!prev) return 'LOCKED';
+    /* TRUE of the rule actually enforced: ALL of the previous world, not some. */
+    const left = safe(() => this.save.stagesUntilUnlock(worldId), 'save.stagesUntilUnlock');
+    const n = (prev.stages && prev.stages.length) || 3;
+    return 'CLEAR ALL ' + n + ' STAGES OF ' + String(prev.name || prev.id).toUpperCase() +
+      (left > 0 ? '  ·  ' + left + ' TO GO' : '');
   }
 
   _firstUnclearedStage(world) {
@@ -1726,7 +1752,7 @@ export class Game {
         const w = pt.world;
         if (w && w.stages) {
           const n = w.stages.indexOf(pt.target) + 1;
-          if (n > 0) sub = 'STAGE ' + n + ' / ' + w.stages.length + '   ' + sub;
+          if (n > 0) sub = 'STAGE ' + n + ' OF ' + w.stages.length + '   ' + sub;
         }
       }
       pt.sub = pt.lockReason || sub;
@@ -2033,12 +2059,6 @@ export class Game {
     s.worldName = isHub ? 'HUB' : (w && w.name) || (def && def.world ? String(def.world).toUpperCase() : '');
     s.stageIdx = w ? w.stages.indexOf(this.stageId) + 1 : 0;
     s.stageCount = w ? w.stages.length : 0;
-    /* Global stage number (obby convention): the checkpoint segment the player is
-       in, numbered across the whole game. 0 until the numbering has loaded, and
-       always 0 in the hub — the HUD hides/falls back on 0. */
-    const gn = isHub ? null : globalStageOf(this.stageId, this.cpIndex);
-    s.globalStage = gn ? gn.num : 0;
-    s.globalTotal = gn ? gn.total : 0;
     s.timeMs = this.timeMs;
     s.totalMs = this.totalMs;
     s.deaths = this.deaths;
@@ -2184,7 +2204,7 @@ export class Game {
         if (!g.noclip && g.player && g.player.__test) g.player.__test.setVel(_v1.set(0, 0, 0));
         return g.noclip;
       },
-      goto(stageId) { return g.loadStage(String(stageId)); },
+      goto(stageId) { return g.loadStage(String(stageId), { force: true }); },
       tp(x, y, z) {
         if (!g.player) return null;
         _v1.set(+x || 0, +y || 0, +z || 0);

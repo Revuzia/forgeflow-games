@@ -10,7 +10,7 @@
 import { clamp } from '../core/util.js';
 import { Settings, QUALITY } from '../core/settings.js';
 import { Save } from '../core/save.js';
-import { WORLDS, stageNumbering } from '../data/index.js';
+import { WORLDS } from '../data/index.js';
 import {
   injectStyles, UI_TOKENS, UIRegistry, el, fmtMs, makeButton, makeSegmented,
   makeSlider, makeToggle, makeRow, animateOnce, FocusList, uiAction, uiSfx,
@@ -198,28 +198,13 @@ export class Menu {
     let totals = null;
     try { totals = Save && typeof Save.totals === 'function' ? Save.totals() : null; } catch (e) { totals = null; }
 
-    /* CLEARED counts GLOBAL stages (one checkpoint segment = one stage) from
-       stageNumbering() — the SAME source stage select uses, so the front door
-       and the grid can never disagree ("0 / 101", not "0 / 12"). Falls back
-       to level counts only until the numbering has loaded (the preload above
-       re-runs this refresh the moment it lands). */
-    let num = null;
-    try { num = typeof stageNumbering === 'function' ? stageNumbering() : null; } catch (e) { num = null; }
-    if (num && num.total) {
-      let seg = 0;
-      try {
-        for (const [id, e] of num.perStage) {
-          const st = Save.stage(id);
-          if (st && st.cleared) seg += e.segments;
-          else seg += Math.min(Math.max(0, st ? st.cpIndex | 0 : 0), e.segments - 1);
-        }
-      } catch (e) { seg = 0; }
-      this.tStats.CLEARED.textContent = seg + ' / ' + num.total;
-    } else {
-      let stageCount = 0;
-      try { for (const w of WORLDS || []) stageCount += (w.stages || []).length; } catch (e) { /* ignore */ }
-      this.tStats.CLEARED.textContent = ((totals && totals.cleared) | 0) + ' / ' + stageCount;
-    }
+    /* CLEARED counts STAGES whose finish was crossed, out of 12 — the same
+       number stage select shows, so the front door and the grid can never
+       disagree. A checkpoint is a waypoint inside a stage and is never
+       counted here. */
+    let stageCount = 0;
+    try { for (const w of WORLDS || []) stageCount += (w.stages || []).length; } catch (e) { /* ignore */ }
+    this.tStats.CLEARED.textContent = ((totals && totals.cleared) | 0) + ' / ' + stageCount;
 
     /* MEDALS needs the stage defs (par times) — stage select owns that cache. */
     let medals = null;

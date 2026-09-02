@@ -40,13 +40,14 @@ import { Mats } from './world/materials.js';
 import { Collider } from './world/collider.js';
 import { Audio } from './core/audio.js';
 import { Save } from './core/save.js';
+import { PortalSync } from './net/portalsync.js';
 import { Settings } from './core/settings.js';
 import { Input } from './core/input.js';
 import { ParticleSystem } from './fx/particles.js';
 import { Decals } from './fx/decals.js';
 import { Impacts } from './fx/impacts.js';
 import { Game } from './game.js';
-import { isStageId } from './data/index.js';
+import { isStageId, WORLDS } from './data/index.js';
 
 /* ---------------------------------------------------------------------------
  * URL parameters
@@ -524,7 +525,28 @@ async function main() {
   const audio = await phase(0.46, 'audio system', () => new Audio());
 
   /* ---- 5. save ---- */
-  await phase(0.53, 'save data', () => Save.load());
+  /* registerWorlds FIRST: without the authoritative stage lists Save cannot tell
+     which stage follows which, and the per-stage unlock rule silently opens
+     everything. Nothing called this before — the stage gate depends on it. */
+  await phase(0.53, 'save data', () => { Save.registerWorlds(WORLDS); return Save.load(); });
+
+  /* Account-tied progress. Inside the ForgeFlow Games portal the parent frame
+     is signed in and owns the storage, so we merge that account's stage
+     progress into the local save. Standalone (the CDN URL outside any iframe)
+     this resolves immediately and does nothing.
+
+     BOOT NEVER WAITS ON THE NETWORK. A signed-out portal answers a load with
+     silence, so awaiting the reply parked the loading bar for the full
+     timeout. Give the merge a short head start so a signed-in player usually
+     sees their real numbers on the title, then carry on regardless — a record
+     that lands later refreshes the UI through PortalSync.onMerged below. */
+  const cloudSync = PortalSync.start()
+    .then((r) => { if (r && r.merged) console.info('[ascendant] merged cloud progress for ' + r.stages + ' stage(s)'); })
+    .catch(() => {});
+  await phase(0.56, 'account progress', () => Promise.race([
+    cloudSync,
+    new Promise((res) => setTimeout(res, 1200)),
+  ]).catch(() => {}));
 
   /* ---- 6. input ---- */
   const input = await phase(0.59, 'input devices', () => {
@@ -585,6 +607,12 @@ async function main() {
 
   /* ---- 10. hand over ---- */
   setProgress(0.88, 'entering the sanctum');
+  /* A cloud record that arrives after the title has painted still shows up. */
+  PortalSync.onMerged = () => {
+    try { if (ui.stageSelect && ui.stageSelect.refresh) ui.stageSelect.refresh(); } catch (e) { /* ignore */ }
+    try { if (ui.menu && ui.menu._refreshTitle) ui.menu._refreshTitle(); } catch (e) { /* ignore */ }
+  };
+
   await paint();
   await game.boot();
 
@@ -636,6 +664,7 @@ function publishHandle(engine, game) {
     game,
     Settings,
     Save,
+    PortalSync,
     version: '1.0.0',
     /* Harness contract: feelcheck.py builds its measurement slab from
        ASCENDANT.Collider + ASCENDANT.THREE. Without these the probe's floor

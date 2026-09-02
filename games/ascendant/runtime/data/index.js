@@ -6,10 +6,13 @@
  * stages inside them, and the HUB. Nothing here touches Three.js — this module is pure
  * data plus a lazy loader, so it is safe to import from the UI, the harness or Node.
  *
- * CONTRACT §22. Exports: WORLDS, HUB, getStage(id), stageIndex(id), STAGE_COUNT —
- * plus the global stage numbering (obby convention: one checkpoint segment = one
- * numbered stage): loadStageNumbering(), stageNumbering(), globalStageOf(id, cp),
- * worldStageRange(worldId).
+ * CONTRACT §22. Exports: WORLDS, HUB, getStage(id), stageIndex(id), STAGE_COUNT.
+ *
+ * THERE IS NO GLOBAL STAGE NUMBERING HERE, deliberately. A WORLD holds three
+ * STAGES; a CHECKPOINT is a waypoint inside a stage and is never numbered as
+ * one. The old obby-convention helpers (loadStageNumbering / stageNumbering /
+ * globalStageOf / worldStageRange) counted every checkpoint as a stage and made
+ * Neon Dojo look like 21 levels; they are deleted, not orphaned.
  *
  * ---------------------------------------------------------------------------------
  * STAGE AUTHORING RULES  —  these bind EVERY stage file in runtime/data/stages/.
@@ -264,88 +267,6 @@ export function stageIndex(id) {
   };
 }
 
-/* -------------------------------------------------------------------------------- */
-/* GLOBAL STAGE NUMBERING (obby convention: the checkpoint segment IS the stage)     */
-/* -------------------------------------------------------------------------------- */
-/*
- * Industry obbies number every checkpoint-to-checkpoint segment as one global
- * "stage" and show that count constantly ("STAGE 37 / 101"). ASCENDANT's runtime
- * convention is that `def.checkpoints[0]` is the START PAD the player actually
- * spawns on (game.js `_spawnFor(0)` -> stage.spawnFor(0) -> checkpoints[0]), so a
- * level with N checkpoints contributes exactly N playable segments: cp0->cp1,
- * cp1->cp2, ..., cp[N-1]->finish. Standing at checkpoint k of a level means you
- * are playing global stage `first + k`.
- *
- * Everything here is DERIVED from the stage defs' checkpoint arrays — adding a
- * checkpoint to any stage file renumbers the whole game automatically. Nothing is
- * hardcoded. The defs load lazily, so the numbering is built once, asynchronously,
- * via loadStageNumbering(); stageNumbering() is the sync accessor (null until the
- * load resolves — callers must tolerate that for the first moments after boot).
- */
-
-let _numbering = null;
-let _numberingPromise = null;
-
-function _buildNumbering(defs) {
-  const perStage = new Map();
-  let acc = 0;
-  for (let i = 0; i < ALL_STAGE_IDS.length; i++) {
-    const id = ALL_STAGE_IDS[i];
-    const def = defs[i];
-    const segments = Math.max(1, (def && Array.isArray(def.checkpoints)) ? def.checkpoints.length : 1);
-    perStage.set(id, { first: acc + 1, last: acc + segments, segments });
-    acc += segments;
-  }
-  const perWorld = new Map();
-  for (const w of WORLDS) {
-    let first = Infinity, last = 0, segments = 0;
-    for (const id of w.stages) {
-      const e = perStage.get(id);
-      if (!e) continue;
-      if (e.first < first) first = e.first;
-      if (e.last > last) last = e.last;
-      segments += e.segments;
-    }
-    perWorld.set(w.id, { first: isFinite(first) ? first : 0, last, segments });
-  }
-  _numbering = { total: acc, perStage, perWorld };
-  return _numbering;
-}
-
-/** Load every stage def (cached — the same cache getStage uses) and build the map. */
-export function loadStageNumbering() {
-  if (!_numberingPromise) {
-    _numberingPromise = Promise.all(ALL_STAGE_IDS.map((id) => getStage(id)))
-      .then(_buildNumbering)
-      .catch((err) => { _numberingPromise = null; throw err; });
-  }
-  return _numberingPromise;
-}
-
-/** Sync accessor: {total, perStage: Map, perWorld: Map} or null until loaded. */
-export function stageNumbering() {
-  return _numbering;
-}
-
-/**
- * Global stage number for standing at checkpoint `cpIndex` of stage `id`.
- * @returns {{num:number, total:number, first:number, last:number, segments:number}|null}
- *          null for the hub, an unknown id, or before loadStageNumbering resolves.
- */
-export function globalStageOf(id, cpIndex) {
-  if (!_numbering) return null;
-  const e = _numbering.perStage.get(id);
-  if (!e) return null;
-  const k = Math.min(Math.max((cpIndex | 0), 0), e.segments - 1);
-  return { num: e.first + k, total: _numbering.total, first: e.first, last: e.last, segments: e.segments };
-}
-
-/** Global stage range for a world: {first, last, segments} or null. */
-export function worldStageRange(worldId) {
-  if (!_numbering) return null;
-  return _numbering.perWorld.get(worldId) || null;
-}
-
 /** World def by id, or null. */
 export function getWorld(worldId) {
   return WORLD_BY_ID.get(worldId) || null;
@@ -455,5 +376,4 @@ export function clearStageCache() {
 
 export default {
   WORLDS, HUB, STAGE_COUNT, ALL_STAGE_IDS, getStage, stageIndex, getWorld, worldOf,
-  loadStageNumbering, stageNumbering, globalStageOf, worldStageRange,
 };

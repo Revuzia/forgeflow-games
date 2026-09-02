@@ -10,7 +10,7 @@
 
 import { clamp } from '../core/util.js';
 import { Save } from '../core/save.js';
-import { WORLDS, getStage, loadStageNumbering, stageNumbering, worldStageRange } from '../data/index.js';
+import { WORLDS, getStage } from '../data/index.js';
 import { THEMES } from '../world/themes.js';
 import {
   injectStyles, UI_TOKENS, UIRegistry, el, icon, fmtMs, medalFor, makeDots, makeMedal,
@@ -346,9 +346,12 @@ export class StageSelect {
     hl.appendChild(eb); hl.appendChild(h2);
     const tot = el('div', 'totals');
     this.totals = {};
-    for (const k of ['CLEARED', 'MEDALS', 'DEATHS', 'TIME']) {
+    /* [key, on-screen label]. "STAGES CLEARED" counts STAGES whose finish was
+       crossed, out of 12 — never checkpoints. */
+    for (const [k, label] of [['CLEARED', 'STAGES CLEARED'], ['MEDALS', 'MEDALS'],
+      ['DEATHS', 'DEATHS'], ['TIME', 'BEST TOTAL']]) {
       const t = el('div', 'as-tot');
-      const kk = el('div', 'k'); kk.textContent = k;
+      const kk = el('div', 'k'); kk.textContent = label;
       const vv = el('div', 'v'); vv.textContent = '—';
       t.appendChild(kk); t.appendChild(vv);
       tot.appendChild(t);
@@ -461,11 +464,14 @@ export class StageSelect {
       const tick = el('div', 'tclear');
       tick.innerHTML = icon('tick');
       tick.style.display = 'none';
+      const lockBadge = el('div', 'tlock');
+      lockBadge.innerHTML = icon('lock');
+      lockBadge.style.display = 'none';
 
       const bodyEl = el('div', 'tbody');
       const nm = el('div', 'tname');
       nm.textContent = id;
-      /* global stage range for this level (obby convention) — filled on refresh */
+      /* "STAGE n OF 3 · CLEARED", or why this stage is locked. Filled on refresh. */
       const stagesLine = el('div', 'tstages');
       const row = el('div', 'trow');
       const dotWrap = el('span');
@@ -476,26 +482,32 @@ export class StageSelect {
       dotWrap.appendChild(dots); dotWrap.appendChild(band);
       const bestWrap = el('div', 'tbest none');
       row.appendChild(dotWrap); row.appendChild(bestWrap);
+      /* Every number on a tile carries its own word — the owner saw a bare
+         "1 / 3" and could not tell what it was counting. */
       const stats = el('div', 'tstats');
-      const sd = el('span'); sd.innerHTML = icon('skull');
-      const sdT = document.createTextNode('0');
-      sd.appendChild(sdT);
-      const sc = el('span'); sc.innerHTML = icon('coin');
-      const scT = document.createTextNode('0');
-      sc.appendChild(scT);
-      const sp = el('span'); sp.innerHTML = icon('clock');
-      const spT = document.createTextNode('—');
-      sp.appendChild(spT);
-      stats.appendChild(sd); stats.appendChild(sc); stats.appendChild(sp);
+      const stat = (iconName, label) => {
+        const sp = el('span');
+        sp.innerHTML = icon(iconName);
+        const k = el('b'); k.textContent = label;
+        sp.appendChild(k);
+        const t = document.createTextNode('—');
+        sp.appendChild(t);
+        return { node: sp, text: t };
+      };
+      const sd = stat('skull', 'DEATHS');
+      const sc = stat('coin', 'ORBS');
+      const sp = stat('clock', 'PAR');
+      stats.appendChild(sd.node); stats.appendChild(sc.node); stats.appendChild(sp.node);
 
       bodyEl.appendChild(nm); bodyEl.appendChild(stagesLine); bodyEl.appendChild(row); bodyEl.appendChild(stats);
       tile.appendChild(cv); tile.appendChild(load); tile.appendChild(no);
-      tile.appendChild(tick); tile.appendChild(bodyEl);
+      tile.appendChild(tick); tile.appendChild(lockBadge); tile.appendChild(bodyEl);
       vm.grid.appendChild(tile);
 
       const rec = {
-        id, tile, cv, load, nm, stagesLine, dots, band, bestWrap, tick,
-        deaths: sdT, coins: scT, par: spT,
+        id, tile, cv, load, nm, stagesLine, dots, band, bestWrap, tick, lockBadge,
+        deaths: sd.text, coins: sc.text, par: sp.text,
+        index: i, locked: false, lockWhy: '',
         drawn: false, vm,
       };
       tile.__activate = () => this._pick(rec);
@@ -525,9 +537,7 @@ export class StageSelect {
     });
     /* The global stage numbering derives from the same defs — resolve it inside
        the same load so refresh() always sees ranges once the defs are in. */
-    this._loading = Promise.all(jobs)
-      .then(() => loadStageNumbering().catch(() => {}))
-      .then(() => { this._loading = null; });
+    this._loading = Promise.all(jobs).then(() => { this._loading = null; });
     return this._loading;
   }
 
@@ -566,78 +576,63 @@ export class StageSelect {
     return null;
   }
 
-  /**
-   * Global stages (checkpoint segments) cleared in one level. Reaching pad k
-   * means segments 0..k-1 are done — k segments; a cleared level counts all of
-   * them. Returns 0 when the numbering has not loaded.
-   */
-  _clearedSegments(stageId, rec) {
-    const num = stageNumbering();
-    const e = num ? num.perStage.get(stageId) : null;
-    if (!e) return 0;
-    if (rec && rec.cleared) return e.segments;
-    const k = rec ? Math.max(0, rec.cpIndex | 0) : 0;
-    return Math.min(k, e.segments - 1);
+  /** Display name for a world or stage id — feeds the lock copy. */
+  _nameOf(id) {
+    for (const w of (WORLDS || [])) if (w && w.id === id) return w.name || w.id;
+    return this.stageName(id) || String(id).replace(/[-_]/g, ' ');
+  }
+
+  /** Is this stage enterable? Fails OPEN so a rule bug can never wall a player. */
+  _unlocked(stageId) {
+    try { return Save.isStageUnlocked(stageId) !== false; } catch (e) { return true; }
+  }
+
+  /** Why a stage is locked, in the words of the rule actually enforced. */
+  _lockWhy(stageId) {
+    try { return Save.stageLockReason(stageId, (v) => this._nameOf(v)) || ''; } catch (e) { return ''; }
   }
 
   refresh() {
-    let unlocked = null;
-    try {
-      if (Save && typeof Save.unlockedWorlds === 'function') {
-        const u = Save.unlockedWorlds();
-        if (Array.isArray(u) && u.length) unlocked = new Set(u);
-      }
-    } catch (e) { unlocked = null; }
-
     let medals = 0;
     let clearedAll = 0;
     let stageTotal = 0;
-    let clearedSegAll = 0;
-    const numbering = stageNumbering();
 
     for (let i = 0; i < this._worlds.length; i++) {
       const vm = this._worlds[i];
       const ids = vm.world.stages || [];
       stageTotal += ids.length;
-      const locked = !!(unlocked && !unlocked.has(vm.world.id)) && i > 0;
+      let worldOpen = true;
+      try { worldOpen = Save.isWorldUnlocked(vm.world.id) !== false; } catch (e) { worldOpen = true; }
+      const locked = !worldOpen && i > 0;
       vm.locked = locked;
       vm.card.classList.toggle('is-locked', locked);
 
       let cleared = 0;
-      let clearedSeg = 0;
       for (const id of ids) {
         const r = this._rec(id);
         if (r && r.cleared) cleared++;
-        clearedSeg += this._clearedSegments(id, r);
         const def = this._defs.get(id);
         if (r && r.best != null && def && def.par && medalFor(r.best, def.par)) medals++;
       }
       clearedAll += cleared;
-      clearedSegAll += clearedSeg;
 
-      /* Progress in global-stage units (obby convention: one checkpoint segment
-         = one stage) once the numbering is in; level units until then. */
-      const range = numbering ? worldStageRange(vm.world.id) : null;
-      const pct = range && range.segments
-        ? clearedSeg / range.segments
-        : (ids.length ? cleared / ids.length : 0);
+      /* Progress is measured in STAGES — three per world, twelve in the game. */
+      const pct = ids.length ? cleared / ids.length : 0;
       vm.barFill.style.transform = 'scaleX(' + pct.toFixed(3) + ')';
-      vm.lbl.textContent = range && range.segments
-        ? clearedSeg + ' / ' + range.segments
-        : cleared + ' / ' + ids.length;
+      vm.lbl.textContent = cleared + ' / ' + ids.length + ' STAGES CLEARED';
 
       if (locked) {
-        const prev = this._worlds[i - 1];
-        const req = prev ? 'CLEAR ' + (prev.world.name || prev.world.id) + ' TO UNLOCK' : 'LOCKED';
+        /* The message must be TRUE of the rule enforced: ALL of the previous
+           world, not "some of it". Save owns the sentence. */
+        const req = this._lockWhy(ids[0]) ||
+          'CLEAR THE PREVIOUS WORLD TO UNLOCK';
         vm.wmeta.innerHTML = '';
         const rq = el('span', 'req');
         rq.textContent = req;
         vm.wmeta.appendChild(rq);
         vm.glyph.innerHTML = icon('lock');
       } else {
-        vm.wmeta.textContent = range
-          ? 'STAGES ' + range.first + ' – ' + range.last + '  ·  ' + clearedSeg + ' CLEARED'
-          : ids.length + ' STAGES  ·  ' + cleared + ' CLEARED';
+        vm.wmeta.textContent = ids.length + ' STAGES  ·  ' + cleared + ' CLEARED';
         vm.glyph.textContent = String(i + 1).padStart(2, '0');
       }
 
@@ -646,9 +641,7 @@ export class StageSelect {
 
     let totals = null;
     try { totals = Save && typeof Save.totals === 'function' ? Save.totals() : null; } catch (e) { totals = null; }
-    this.totals.CLEARED.textContent = numbering
-      ? clearedSegAll + ' / ' + numbering.total
-      : clearedAll + ' / ' + stageTotal;
+    this.totals.CLEARED.textContent = clearedAll + ' / ' + stageTotal;
     this.totals.MEDALS.textContent = String(medals);
     this.totals.DEATHS.textContent = totals ? String(totals.deaths | 0) : '—';
     this.totals.TIME.textContent = totals && totals.timeMs ? fmtMs(totals.timeMs) : '—';
@@ -660,21 +653,30 @@ export class StageSelect {
       const r = this._rec(rec.id);
 
       rec.nm.textContent = def && def.name ? def.name : String(rec.id).toUpperCase();
-      rec.tile.classList.toggle('locked', vm.locked);
 
-      /* global stage range for this level (obby convention) */
-      const num = stageNumbering();
-      const e = num ? num.perStage.get(rec.id) : null;
-      if (e) {
-        rec.stagesLine.innerHTML = '';
-        const b = el('b');
-        b.textContent = e.segments > 1 ? 'STAGES ' + e.first + ' – ' + e.last : 'STAGE ' + e.first;
-        rec.stagesLine.appendChild(b);
-        const done = this._clearedSegments(rec.id, r);
-        rec.stagesLine.appendChild(document.createTextNode('  ·  ' + done + ' / ' + e.segments + ' CLEARED'));
-        rec.stagesLine.style.display = '';
+      /* PER-STAGE GATE. Stage 1 of an unlocked world is open; stage 2 needs
+         stage 1 cleared, stage 3 needs stage 2. Once unlocked it stays
+         unlocked, so a tile with no lock can always be entered directly. */
+      const open = !vm.locked && this._unlocked(rec.id);
+      rec.locked = !open;
+      rec.lockWhy = open ? '' : (this._lockWhy(rec.id) || 'LOCKED');
+      rec.tile.classList.toggle('locked', rec.locked);
+      rec.lockBadge.style.display = rec.locked ? '' : 'none';
+
+      /* Status line: where this stage sits in its world and whether its FINISH
+         has been crossed — or, when locked, exactly what opens it. */
+      rec.stagesLine.innerHTML = '';
+      rec.stagesLine.style.display = '';
+      if (rec.locked) {
+        rec.stagesLine.className = 'tstages is-locked';
+        rec.stagesLine.textContent = rec.lockWhy;
       } else {
-        rec.stagesLine.style.display = 'none';
+        rec.stagesLine.className = 'tstages';
+        const b = el('b');
+        b.textContent = 'STAGE ' + (rec.index + 1) + ' OF ' + (vm.world.stages || []).length;
+        rec.stagesLine.appendChild(b);
+        rec.stagesLine.appendChild(document.createTextNode(
+          '  ·  ' + (r && r.cleared ? 'CLEARED' : 'NOT CLEARED')));
       }
 
       /* difficulty */
@@ -693,23 +695,25 @@ export class StageSelect {
         rec.band.style.display = 'none';
       }
 
-      /* best time + medal */
+      /* best time + medal — labelled, so a bare number is never on its own */
       rec.bestWrap.textContent = '';
       const best = r && r.best != null && isFinite(r.best) ? r.best : null;
       if (best != null) {
         const medal = def && def.par ? medalFor(best, def.par) : null;
         rec.bestWrap.className = 'tbest';
         if (medal) rec.bestWrap.appendChild(makeMedal(medal));
+        const k = el('b'); k.textContent = 'BEST';
+        rec.bestWrap.appendChild(k);
         rec.bestWrap.appendChild(document.createTextNode(fmtMs(best)));
       } else {
         rec.bestWrap.className = 'tbest none';
-        rec.bestWrap.appendChild(document.createTextNode('NO TIME'));
+        rec.bestWrap.appendChild(document.createTextNode('NO BEST TIME'));
       }
 
       rec.deaths.nodeValue = String(r ? (r.deaths | 0) : 0);
       const coinsGot = r && Array.isArray(r.coins) ? r.coins.length : 0;
       const coinsTot = def && Array.isArray(def.coins) ? def.coins.length : 0;
-      rec.coins.nodeValue = coinsGot + '/' + coinsTot;
+      rec.coins.nodeValue = coinsGot + ' / ' + coinsTot;
       rec.par.nodeValue = def && def.par ? fmtMs(def.par) : '—';
       rec.tick.style.display = r && r.cleared ? '' : 'none';
 
@@ -789,6 +793,7 @@ export class StageSelect {
 
   _pick(rec) {
     if (rec.vm.locked) { this._toggleWorld(rec.vm, true); return; }
+    if (rec.locked) { this._refuse(rec); return; }
     uiSfx(this.game, 'ui_ok');
     const tile = rec.tile;
     animateOnce(tile, [
@@ -798,6 +803,17 @@ export class StageSelect {
     ], { duration: 220 });
     this.close(true);
     uiAction(this.game, 'loadStage', rec.id);
+  }
+
+  /** A locked stage shakes and repeats its (true) unlock condition. */
+  _refuse(rec) {
+    uiSfx(this.game, 'ui_move');
+    animateOnce(rec.tile, [
+      { transform: 'translateX(0)' }, { transform: 'translateX(-6px)', offset: 0.25 },
+      { transform: 'translateX(6px)', offset: 0.55 }, { transform: 'translateX(0)' },
+    ], { duration: 340 });
+    animateOnce(rec.stagesLine, [{ opacity: 1 }, { opacity: 0.25, offset: 0.5 }, { opacity: 1 }],
+      { duration: 480 });
   }
 
   _paintFocus() {

@@ -8,11 +8,22 @@
  * whole API keeps working against an in-memory store for the session, and
  * `Save.persistent` reports false so the UI can say so.
  *
- * World unlock rule (deliberately generous — a player is never hard-walled):
- *   world 0 is always unlocked; world N unlocks once world N-1 has >= 2 stages
- *   cleared.  Stage ids follow the contract's `<worldId>-<n>` convention, so
- *   world membership is derived from the id — save.js imports nothing.
- *   Game may call `Save.registerWorlds(WORLDS)` at boot for exact stage counts.
+ * PROGRESSION RULE (the owner's words: "stage 2 is unlocked by stage 1, stage 3
+ * is unlocked by stage 2 - per world. once unlocked, player accounts can access
+ * any stage they unlocked"):
+ *   - Stage 1 of a world is playable whenever that world is unlocked.
+ *   - Stage N+1 unlocks when stage N is CLEARED (finish crossed). `cleared` is
+ *     set only by clearStage(); reaching a checkpoint is NOT a clear.
+ *   - Once unlocked a stage stays unlocked and can be re-entered directly.
+ *   - World 1 is always open; world N unlocks when ALL stages of world N-1 are
+ *     cleared. Nothing here is "2 out of 3" any more — the lock copy on screen
+ *     has to be true of the rule actually enforced.
+ *   - MIGRATION CLAUSE: a stage the player has already STARTED (an attempt, a
+ *     death, a checkpoint, a time, an orb) stays unlocked even when the rule
+ *     above would close it, so existing partial progress is never stranded.
+ *   Stage ids follow the contract's `<worldId>-<n>` convention, so world
+ *   membership is derived from the id — save.js imports nothing.
+ *   Game may call `Save.registerWorlds(WORLDS)` at boot for the real stage lists.
  * ==========================================================================*/
 
 const KEY = 'ascendant.save.v1';
@@ -20,7 +31,6 @@ const BAK_KEY = 'ascendant.save.v1.bak';
 const SCHEMA_VERSION = 1;
 const WRITE_DEBOUNCE_MS = 320;
 const DEFAULT_STAGES_PER_WORLD = 3;
-const UNLOCK_THRESHOLD = 2;
 
 /** Fallback world order — matches contract §22. `registerWorlds` overrides it. */
 const DEFAULT_WORLD_ORDER = ['neon', 'foundry', 'spire', 'temple'];
@@ -323,6 +333,24 @@ function markDirty(type, payload) {
   if (type) emit(type, payload);
 }
 
+/** Ordered stage ids for a world — the registered list when Game supplied one. */
+function stagesOf(worldId) {
+  const listed = _worldStages[worldId];
+  return (listed && listed.length) ? listed : null;
+}
+
+/**
+ * A stage the player has actually ENTERED: an attempt, a death, a checkpoint, a
+ * recorded time, an orb, or a clear. Only the migration clause of the unlock
+ * rule reads this — a started stage is never re-locked underneath a player.
+ */
+function startedRec(rec) {
+  if (!rec) return false;
+  return !!rec.cleared || rec.best !== null || (rec.attempts | 0) > 0 ||
+    (rec.deaths | 0) > 0 || (rec.cpIndex | 0) > 0 ||
+    (Array.isArray(rec.coins) && rec.coins.length > 0) || (rec.playMs | 0) > 0;
+}
+
 function clearedCountIn(worldId) {
   const d = ensure();
   const listed = _worldStages[worldId];
@@ -464,6 +492,101 @@ export const Save = {
     this.flush();
     emit('import', { replaced: res.replaced, repairs: res.repairs.slice() });
     return true;
+  },
+
+  /* ------------------------------------------------- cloud sync (portal) */
+  /**
+   * The subset of the save that is worth syncing to a signed-in ForgeFlow
+   * account: STAGE PROGRESS ONLY. Deliberately excludes `cpIndex` — a waypoint
+   * inside a stage is not save state and must never travel between devices.
+   *
+   * @returns {{v:number, at:number, unlockAll:boolean, stages:object}}
+   */
+  exportProgress() {
+    const d = ensure();
+    const stages = Object.create(null);
+    /* Only real stages travel to the account row. The hub picks up a record as
+       soon as it is loaded and is never "cleared" — it is not progress. */
+    const known = Object.create(null);
+    for (let i = 0; i < _worldOrder.length; i++) {
+      const list = stagesOf(_worldOrder[i]);
+      if (list) for (let j = 0; j < list.length; j++) known[list[j]] = true;
+    }
+    const filtering = Object.keys(known).length > 0;
+    for (const id in d.stages) {
+      if (!Object.prototype.hasOwnProperty.call(d.stages, id)) continue;
+      if (filtering && !known[id]) continue;
+      const r = d.stages[id];
+      stages[id] = {
+        cleared: !!r.cleared,
+        best: r.best,
+        deaths: r.deaths | 0,
+        coins: r.coins.slice(),
+        attempts: r.attempts | 0,
+        clears: r.clears | 0,
+        playMs: r.playMs | 0,
+        firstClearDate: r.firstClearDate || null,
+      };
+    }
+    return { v: SCHEMA_VERSION, at: Date.now(), unlockAll: !!d.unlockAll, stages };
+  },
+
+  /**
+   * Fold a cloud record INTO the local save. Strictly additive — every field
+   * moves one way only:
+   *   cleared  OR      best    min      coins   union
+   *   deaths   max     attempts/clears/playMs  max
+   *   firstClearDate   earliest          unlockAll  OR
+   * `cpIndex` is ignored on purpose. An empty, missing or malformed record is a
+   * no-op: a cloud that knows nothing can never take progress away.
+   *
+   * @returns {{changed:boolean, stages:number}} what actually moved
+   */
+  mergeProgress(remote) {
+    if (!isObj(remote)) return { changed: false, stages: 0 };
+    const src = isObj(remote.stages) ? remote.stages : null;
+    const d = ensure();
+    let changed = false;
+    let touched = 0;
+
+    if (remote.unlockAll === true && !d.unlockAll) { d.unlockAll = true; changed = true; }
+
+    if (src) {
+      for (const id in src) {
+        if (!Object.prototype.hasOwnProperty.call(src, id)) continue;
+        const rs = src[id];
+        if (!isObj(rs)) continue;
+        const rec = this.stage(id);
+        let hit = false;
+
+        if (rs.cleared === true && !rec.cleared) { rec.cleared = true; hit = true; }
+        const rb = msOrNull(rs.best);
+        if (rb !== null && (rec.best === null || rb < rec.best)) { rec.best = rb; hit = true; }
+        const rd = posInt(rs.deaths, 0);
+        if (rd > rec.deaths) { rec.deaths = rd; hit = true; }
+        const ra = posInt(rs.attempts, 0);
+        if (ra > rec.attempts) { rec.attempts = ra; hit = true; }
+        const rc = posInt(rs.clears, 0);
+        if (rc > rec.clears) { rec.clears = rc; hit = true; }
+        const rp = posInt(rs.playMs, 0);
+        if (rp > rec.playMs) { rec.playMs = rp; hit = true; }
+        if (Array.isArray(rs.coins)) {
+          const before = rec.coins.length;
+          const union = uniqSortedInts(rec.coins.concat(uniqSortedInts(rs.coins, 512)), 512);
+          if (union.length !== before) { rec.coins = union; hit = true; }
+        }
+        if (typeof rs.firstClearDate === 'string' && rs.firstClearDate.length <= 40) {
+          if (!rec.firstClearDate || rs.firstClearDate < rec.firstClearDate) {
+            rec.firstClearDate = rs.firstClearDate; hit = true;
+          }
+        }
+        if (rec.cleared && !rec.firstClearDate) rec.firstClearDate = new Date().toISOString();
+        if (hit) { touched++; changed = true; }
+      }
+    }
+
+    if (changed) { markDirty('merge', { stages: touched }); this.flush(); }
+    return { changed, stages: touched };
   },
 
   /* ------------------------------------------------------ change events */
@@ -660,20 +783,40 @@ export const Save = {
   },
 
   /**
-   * World 0 always unlocked; world N unlocks when world N-1 has >= 2 cleared.
-   * The chain stops at the first locked world.
+   * World 1 always unlocked; world N unlocks when ALL stages of world N-1 are
+   * cleared. The chain stops at the first locked world. A world that holds a
+   * STARTED stage also stays open (migration clause) so partial progress made
+   * under the old, looser rule is never stranded behind a lock.
    */
   unlockedWorlds() {
     const d = ensure();
     if (d.unlockAll) return _worldOrder.slice();
     const out = [];
+    let chainOpen = true;
     for (let i = 0; i < _worldOrder.length; i++) {
-      if (i === 0) { out.push(_worldOrder[i]); continue; }
-      const prev = _worldOrder[i - 1];
-      if (clearedCountIn(prev) >= UNLOCK_THRESHOLD || this.worldCleared(prev)) out.push(_worldOrder[i]);
-      else break;
+      const id = _worldOrder[i];
+      if (i === 0) { out.push(id); continue; }
+      if (chainOpen && this.worldCleared(_worldOrder[i - 1])) { out.push(id); continue; }
+      chainOpen = false;
+      if (this.worldStarted(id)) out.push(id);   // already played — never re-lock
     }
     return out;
+  },
+
+  /** True when any stage of this world has been entered. */
+  worldStarted(worldId) {
+    const d = ensure();
+    const listed = stagesOf(worldId);
+    if (listed) {
+      for (let i = 0; i < listed.length; i++) if (startedRec(d.stages[listed[i]])) return true;
+      return false;
+    }
+    const prefix = worldId + '-';
+    for (const id in d.stages) {
+      if (!Object.prototype.hasOwnProperty.call(d.stages, id)) continue;
+      if (id.indexOf(prefix) === 0 && startedRec(d.stages[id])) return true;
+    }
+    return false;
   },
 
   isWorldUnlocked(worldId) {
@@ -685,8 +828,64 @@ export const Save = {
   stagesUntilUnlock(worldId) {
     const i = _worldOrder.indexOf(worldId);
     if (i <= 0) return 0;
-    const need = UNLOCK_THRESHOLD - clearedCountIn(_worldOrder[i - 1]);
+    const prev = _worldOrder[i - 1];
+    const listed = stagesOf(prev);
+    const total = listed ? listed.length : DEFAULT_STAGES_PER_WORLD;
+    const need = total - clearedCountIn(prev);
     return need > 0 ? need : 0;
+  },
+
+  /* ------------------------------------------------------ stage unlocking */
+  /** True when this stage has been entered at least once. */
+  stageStarted(stageId) { return startedRec(ensure().stages[String(stageId)]); },
+
+  /**
+   * Is this stage enterable? World unlocked AND (it is the world's first stage,
+   * OR the stage before it in the same world is CLEARED, OR the player has
+   * already started it). `unlockAll` opens everything.
+   */
+  isStageUnlocked(stageId) {
+    const id = String(stageId);
+    if (!id || id === 'hub') return true;
+    const d = ensure();
+    if (d.unlockAll) return true;
+    if (startedRec(d.stages[id])) return true;          // migration clause
+    const wid = worldOf(id);
+    if (!this.isWorldUnlocked(wid)) return false;
+    const listed = stagesOf(wid);
+    if (!listed) return true;                            // no world list -> no stage gating
+    const i = listed.indexOf(id);
+    if (i <= 0) return true;                             // unknown, or first of world
+    const prevRec = d.stages[listed[i - 1]];
+    return !!(prevRec && prevRec.cleared);
+  },
+
+  /**
+   * Why this stage is locked, as a sentence that is TRUE of the rule above.
+   * '' when the stage is open. `nameOf` maps a stage/world id to a display
+   * name (stage select passes one in); ids are used when it is absent.
+   */
+  stageLockReason(stageId, nameOf) {
+    const id = String(stageId);
+    if (this.isStageUnlocked(id)) return '';
+    const name = (v) => {
+      let n = null;
+      try { n = typeof nameOf === 'function' ? nameOf(v) : null; } catch (e) { n = null; }
+      return String(n || v).toUpperCase();
+    };
+    const wid = worldOf(id);
+    if (!this.isWorldUnlocked(wid)) {
+      const wi = _worldOrder.indexOf(wid);
+      const prevW = wi > 0 ? _worldOrder[wi - 1] : null;
+      if (!prevW) return 'LOCKED';
+      const need = this.stagesUntilUnlock(wid);
+      return 'CLEAR ALL ' + (stagesOf(prevW) || { length: DEFAULT_STAGES_PER_WORLD }).length +
+        ' STAGES OF ' + name(prevW) + ' TO UNLOCK  ·  ' + need + ' TO GO';
+    }
+    const listed = stagesOf(wid);
+    const i = listed ? listed.indexOf(id) : -1;
+    if (i > 0) return 'CLEAR ' + name(listed[i - 1]) + ' TO UNLOCK';
+    return 'LOCKED';
   },
 
   /** Dev/accessibility escape hatch. */
