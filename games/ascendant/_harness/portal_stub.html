@@ -11,7 +11,7 @@
 
   The "account row" lives in window.CLOUD (in place of the game_saves table) so a
   test can seed it before the frame boots, or read back what the game pushed.
-  ?cloud=empty | null | rich chooses the seeded record.
+  ?cloud=empty | null | rich | corrupt | silent chooses the seeded record.
 -->
 <style>
   html,body{margin:0;background:#05080e;color:#cfe;font:13px/1.5 monospace}
@@ -28,6 +28,11 @@
   /* The account's stored record — the game_saves row. */
   window.CLOUD = null;
   if (mode === 'empty') window.CLOUD = { v: 1, at: 1, unlockAll: false, stages: {} };
+  /* ?cloud=corrupt — a record we cannot parse (bad schema / future version).
+     The game must MERGE NOTHING and PUSH NOTHING: the portal upserts by
+     replacement, so a fresh device pushing its empty snapshot over an
+     unreadable row would delete a real account's progress. */
+  if (mode === 'corrupt') window.CLOUD = { v: 1, at: 1, stages: 'CORRUPTED-NOT-AN-OBJECT' };
   if (mode === 'rich') {
     window.CLOUD = {
       v: 1, at: 1, unlockAll: false,

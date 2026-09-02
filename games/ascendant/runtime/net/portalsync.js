@@ -139,17 +139,30 @@ export const PortalSync = {
     try { clearTimeout(p.timer); } catch (e) { /* ignore */ }
 
     let res = { changed: false, stages: 0 };
+    let readable = false;
     /* An absent / null / non-object record is the EMPTY CLOUD case: do nothing.
        mergeProgress is additive anyway, so this is belt and braces. */
     if (data && typeof data === 'object') {
-      try { res = Save.mergeProgress(data) || res; } catch (e) { res = { changed: false, stages: 0 }; }
+      try {
+        res = Save.mergeProgress(data) || res;
+        /* READABLE means we actually understood the record — not merely that a
+           reply arrived. A record whose `stages` is not an object (corrupted in
+           storage, or written by a future schema) merges to nothing, and that is
+           NOT permission to push over it. */
+        readable = !!data.stages && typeof data.stages === 'object';
+      } catch (e) { res = { changed: false, stages: 0 }; readable = false; }
     }
     this.status = timedOut ? 'idle' : 'synced';
     this.lastMerge = { at: Date.now(), changed: !!res.changed, stages: res.stages | 0, timedOut: !!timedOut };
 
-    /* If the cloud was behind (or empty) push what this device knows, so the
-       account catches up without waiting for the next clear. */
-    if (!timedOut) this.schedulePush();
+    /* If the cloud was behind (or genuinely empty) push what this device knows,
+       so the account catches up without waiting for the next clear.
+       NOT when the record was unreadable: the portal upserts by REPLACEMENT, so
+       pushing a fresh device's empty snapshot over a record we failed to parse
+       would delete a real account's progress. An unreadable record is the one
+       case where doing nothing is the only safe move — a later genuine clear
+       still pushes through schedulePush() on the save event. */
+    if (!timedOut && (readable || !data)) this.schedulePush();
     if (res.changed && typeof this.onMerged === 'function') {
       try { this.onMerged(this.lastMerge); } catch (e) { /* never break a sync */ }
     }
