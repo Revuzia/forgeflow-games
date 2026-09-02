@@ -12,6 +12,8 @@ edge cases one at a time:
 
   ride_linear      a full period on a ping-pong mover: no drift-off, no sink
   ride_circle      a full period on a spinning circular mover: ditto
+  ride_climb       neon-2's authored CLIMBING shuttle, home dwell to far pose:
+                   the rider tracks the deck, they do not slide off the back
   mover_launch     jumping off a mover inherits the documented 70% / 0.25 s
   conveyor         standing on a belt travels at power ONCE (not twice)
   conveyor_jump    jumping off a belt: no double speed, never stuck in it
@@ -57,7 +59,8 @@ FLAGS = ["--ignore-gpu-blocklist", "--use-angle=d3d11", "--disable-gpu-sandbox",
          "--autoplay-policy=no-user-gesture-required"]
 
 SCENARIOS = [
-    "ride_linear", "ride_circle", "ride_real_linear", "ride_real_circle", "mover_launch",
+    "ride_linear", "ride_circle", "ride_real_linear", "ride_real_circle", "ride_climb",
+    "mover_launch",
     "conveyor", "conveyor_jump", "ice",
     "step_up", "seams", "snap_on_jump",
     "crouch_ceiling", "wall_jump",
@@ -398,6 +401,22 @@ SETUP_JS = r"""async () => {
      500 ms mark (seen once at 4x CPU throttle: grounded_at_start false, then
      0 lost-ground frames for the whole ride) — the ride reads must not start
      on that frame. */
+  /* Spin frames until `m` is parked at its HOME pose (its authored `p`) and has
+     stopped — i.e. the start of the dwell, so a following ride() captures the
+     whole outbound leg. Returns the seconds waited, or -1 on timeout. */
+  PH.waitHome = async (m, maxSecs) => {
+    const cap = maxSecs === undefined ? 12 : maxSecs;
+    const t0 = PH.t;
+    while (PH.t - t0 < cap) {
+      const at = Math.abs(m.col.center.x - m.origin.x) < 1e-3
+              && Math.abs(m.col.center.y - m.origin.y) < 1e-3
+              && Math.abs(m.col.center.z - m.origin.z) < 1e-3;
+      if (at && !m.col.isMoving()) return +(PH.t - t0).toFixed(3);
+      await PH.frame();
+    }
+    return -1;
+  };
+
   PH.settleGround = async (maxMs, frames) => {
     const need = frames === undefined ? 3 : frames;
     const cap = maxMs === undefined ? 2500 : maxMs;
@@ -545,6 +564,49 @@ RUN_JS = r"""async (name) => {
     R.deck_speed = +(2 * Math.PI / per * rad).toFixed(3);
     const w = 2 * Math.PI / per;
     R.tangent_creep_predict_m = +(rad * (2 * per + 0.2) * 120 * Math.pow(w / 120, 2) / 2).toFixed(4);
+    R.dead = !!P().dead;
+    break;
+  }
+
+  // =====================================================================
+  case 'ride_climb': {
+    // neon-2's BEAT-3 shuttle, verbatim (runtime/data/stages/neon-2.js:211-217):
+    // 7 m along X and 1.4 m UP, period 7, sine ease, 0.8 s dwell at each pose.
+    // Built through the stage's own factory and ticked on the stage clock.
+    //
+    // THE CLIMB IS THE POINT. Every other ride scenario here is level, and a
+    // level deck never buries the rider: the player sinks a hair into it under
+    // gravity and the next resolve stands them back up flush. A deck that goes
+    // UP moves through the feet BEFORE the player integrates (movers tick first,
+    // game.js:1915 then :1919), so every frame of the climb begins with the
+    // player inside the deck — where probeDown, which only keeps surfaces whose
+    // lift is <= its probe depth, is blind. The carry was skipped on exactly
+    // those substeps: the rider received 49% of the deck's travel, slid 2.25 m
+    // back past the rear edge (deck half-X is 1.9 m), was run over by its own
+    // ride and fired 4.7 m forward by the lateral-sweep eject. The player report
+    // was "it carries me for a bit and then throws me".
+    //
+    // Ridden from the home dwell to the far pose — the trip the stage asks for.
+    const per = 7.0;
+    const m = PH.addRealMover({kind:'mover', p:[B.x, B.y, B.z], s:[3.8, 1, 4.4], mat:'metal',
+                               motion:{type:'linear', to:[B.x + 7, B.y + 1.4, B.z],
+                                       period:per, phase:0, ease:'sine', dwell:0.8}});
+    if (!m) { R.error = 'stage._buildHazard produced no mover'; break; }
+    R.real = true;
+    const top = m.col.center.y + m.col.half.y;
+    await PH.tp(m.col.center.x, top + 0.10, m.col.center.z, 500);
+    R.settled = await PH.settleGround();
+    R.grounded_at_start = !!P().grounded;
+    R.waited_for_home = await PH.waitHome(m, per + 2);
+    const y0 = P().pos.y;
+    // dwell 0.8 + climb 2.7 + a little of the far dwell = the whole outbound leg
+    Object.assign(R, await PH.ride(m, 0.52 * per, {period: per}));
+    R.rode_up_m = +(P().pos.y - y0).toFixed(3);
+    R.climb_m = 1.4;
+    R.deck_half_x = 1.9;
+    R.periods = 1;
+    // 7.1386 m of travel over the 2.7 s leg, sine-eased -> pi/2 x the mean.
+    R.peak_platform_speed = +(Math.PI / 2 * Math.hypot(7, 1.4) / (0.5 * per - 0.8)).toFixed(3);
     R.dead = !!P().dead;
     break;
   }
@@ -1215,6 +1277,44 @@ def v_ride_real_circle(r):
     return v_ride_circle(r)
 
 
+# A rider must track a CLIMBING deck, not merely survive it. 0.25 m is a
+# quarter of the way to the 1.9 m rear edge from the centre: comfortably above
+# the ~0.02 m the substep quantisation costs, and far below the 2.25 m of slip
+# that walked the player off the back before the carry learned to see a deck
+# that had risen into their feet.
+CLIMB_DRIFT_MAX = 0.25
+
+
+def v_ride_climb(r):
+    if r.get("real") is not True:
+        return False, "real mover was not built"
+    if not r.get("grounded_at_start"):
+        return False, "never landed on the mover"
+    if r.get("waited_for_home", -1) < 0:
+        return False, "the deck never reached its home dwell - the ride window is wrong"
+    bad = []
+    d = r.get("max_drift_m", 9)
+    if d > CLIMB_DRIFT_MAX:
+        bad.append("slid %.3f m from the spot it stood on (max %.2f) on a deck whose "
+                   "half-X is %.1f m, riding %.2f m/s at %.0f fps - a rider that far back "
+                   "goes off the rear edge"
+                   % (d, CLIMB_DRIFT_MAX, r.get("deck_half_x", 1.9),
+                      r.get("peak_platform_speed", 0), _fps(r)))
+    up = r.get("rode_up_m")
+    if up is None or abs(up - r.get("climb_m", 1.4)) > 0.10:
+        bad.append("rode up %s m, the deck climbs %.2f m" % (up, r.get("climb_m", 1.4)))
+    if r.get("max_sink_m", 9) > 0.03:
+        bad.append("sank %.3f m into the deck" % r["max_sink_m"])
+    if r.get("lost_ground_frames", 0) > max(3, 0.02 * r.get("samples", 1)):
+        bad.append("lost ground on %d/%d frames" % (r["lost_ground_frames"], r.get("samples", 0)))
+    if r.get("dead"):
+        bad.append("died")
+    return (not bad), "; ".join(bad) or ("drift %.3f m over the whole climb (%.2f m up, "
+                                         "%.2f m/s deck, %.0f fps), sink %.3f m"
+                                         % (d, up, r.get("peak_platform_speed", 0),
+                                            _fps(r), r.get("max_sink_m", 0)))
+
+
 def v_mover_launch(r):
     V = r.get("platform_speed", 5)
     bad = []
@@ -1413,6 +1513,7 @@ def v_bounce_apex(r):
 VERDICT = {
     "ride_linear": v_ride_linear, "ride_circle": v_ride_circle,
     "ride_real_linear": v_ride_real_linear, "ride_real_circle": v_ride_real_circle,
+    "ride_climb": v_ride_climb,
     "mover_launch": v_mover_launch, "conveyor": v_conveyor,
     "conveyor_jump": v_conveyor_jump, "ice": v_ice, "step_up": v_step_up,
     "seams": v_seams, "snap_on_jump": v_snap_on_jump,

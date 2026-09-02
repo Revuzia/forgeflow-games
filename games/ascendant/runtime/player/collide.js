@@ -24,6 +24,11 @@
  *    linVel — the derivative at t drifts by a*dt^2/2 a frame) and, for a
  *    spinning deck, an EXACT rotation about its axis (a tangent step creeps
  *    outward by (w*dt)^2/2 a substep and never comes back). See carryOn().
+ *    Who gets carried is decided by carryTarget(), and it asks the question
+ *    the ride actually turns on — "am I RESTING ON a mover right now" — which
+ *    a downward probe alone cannot answer, because a CLIMBING deck moves up
+ *    through the rider's feet before the player integrates and a probe is
+ *    blind to a surface it is already inside. See carryTarget().
  *
  * ORDER OF OPERATIONS, PER SUBSTEP
  * --------------------------------
@@ -784,15 +789,79 @@ function carryOn(gc, pos, sdt) {
   pos.z = cc.z + rz * c + cz * s + kz * kd * m;
 }
 
+/**
+ * The moving collider the player is RESTING ON this substep, or null.
+ *
+ * "Resting on" has to be answered two ways, because either one alone is blind:
+ *
+ *   1. probeDown(CARRY_DIST) — a deck within 10 cm BELOW the feet.
+ *   2. an overlap whose MTV points UP — a deck that has risen INTO the feet.
+ *
+ * (2) is not an edge case. It is the ordinary state of any deck with an upward
+ * component. Movers tick BEFORE the player and over the same dt (game.js:1915
+ * then :1919), so a climbing deck spends every single frame having just moved
+ * up through the rider's feet, and moveAndCollide starts with the player a
+ * hair inside it. probeDown cannot see that surface AT ALL: it drops the box
+ * by maxD and keeps only surfaces whose lift is <= maxD, and a penetration of
+ * d makes the lift maxD + d. So the carry — the whole ride — was skipped on
+ * exactly the substeps the deck was climbing, and the rider was left standing
+ * still in X while the deck slid out from under them.
+ *
+ * Measured on neon-2's BEAT-3 shuttle (7 m along X and 1.4 m up, period 7,
+ * sine ease, dwell 0.8) before this existed: of 160 substeps where the carry
+ * probe found nothing, 159 had a moving deck overlapping the player with an
+ * upward MTV (deepest 1.4 cm). The rider was carried 3.46 m of the deck's
+ * 7.00 m of X travel — 49% — slid 2.25 m back, off the rear edge (deck half-X
+ * 1.9 m), and was then run over by the deck and fired 4.7 m forward by the
+ * lateral-sweep eject below. Every substep that DID find the deck carried it
+ * exactly (carried 3.4605 m against a deck displacement of 3.4605 m over the
+ * same substeps, zero lost): the carry maths was never wrong, the question was.
+ *
+ * The gate this replaces was `CTX.grounded` — the PREVIOUS substep's ground
+ * result. On that same ride it cost zero carries (the blind probe accounted
+ * for all of the loss), so it is not what was breaking the ride; but it is
+ * still the wrong question, one resolve out of date, and asking the right one
+ * costs a probe that was already being run.
+ *
+ * A genuinely airborne player is excluded three times over: rising (a jump, a
+ * bounce pad) is never resting on anything — the same test groundProbe makes;
+ * past that, (1) reaches only 10 cm and (2) requires real penetration. A deck
+ * sweeping into the player from the SIDE has a horizontal MTV, is not resting
+ * contact, and still belongs to the push below.
+ */
+function carryTarget() {
+  if (CTX.vel.y > 1e-4) return null;            // rising: not resting on anything
+
+  // Whatever probeDown finds is what we are standing on, mover or not: a static
+  // floor flush with a deck still wins the tie and still means "not riding".
+  // Returning here also keeps the ordinary grounded substep at its old cost —
+  // the scan below is for the blind spot only, not for every step on solid rock.
+  probeDown(CARRY_DIST);
+  const gc = PROBE.collider;
+  if (gc !== null) return gc.isMoving() ? gc : null;
+
+  // Nothing below the feet at all — but the deck may have come up THROUGH them.
+  setPlayerBox();
+  const cands = queryCands(CAND_B);
+  let best = null, bestDepth = Infinity;
+  for (let i = 0; i < cands.length; i++) {
+    const c = cands[i];
+    if (c.solid === false) continue;
+    if (!c.isMoving()) continue;
+    const depth = mtv(c, TMPN);
+    if (depth <= EPS) continue;
+    if (TMPN.y < GROUND_NY) continue;           // beside it or under it, not on it
+    if (depth < bestDepth) { bestDepth = depth; best = c; }
+  }
+  return best;
+}
+
 function carryAndPush(sdt) {
   const pos = CTX.pos, r = CTX.res;
 
-  // --- carry: ride whatever we are standing on ---
-  if (CTX.grounded) {
-    probeDown(CARRY_DIST);
-    const gc = PROBE.collider;
-    if (gc !== null && gc.isMoving()) carryOn(gc, pos, sdt);
-  }
+  // --- carry: ride whatever we are RESTING ON ---
+  const carrier = carryTarget();
+  if (carrier !== null) carryOn(carrier, pos, sdt);
 
   // --- push: a mover sweeping into the player displaces them, never eats them ---
   setPlayerBox();
