@@ -346,8 +346,8 @@ export function rotor(def, ctx) {
   const matHazard = getMat(ctx, lethal ? 'hazard' : 'panel');
   const matDark = getMat(ctx, 'obsidian');
 
-  const trimMat = glowMat(ctx, lethal ? cKillGlow : cAccent, lethal ? 2.6 : 2.0, ownMats);
-  const edgeMat = glowMat(ctx, lethal ? cKill : cSafe, lethal ? 3.6 : 2.6, ownMats, { base: 0x05070b, metalness: 0.5 });
+  const trimMat = glowMat(ctx, lethal ? cKillGlow : cAccent, lethal ? 2.6 : 1.30, ownMats);
+  const edgeMat = glowMat(ctx, lethal ? cKill : cSafe, lethal ? 3.6 : 1.60, ownMats, { base: 0x05070b, metalness: 0.5 });
 
   // =========================================================================
   //  HUB + MOUNT  (static, lives on root)
@@ -850,8 +850,8 @@ export function rotor(def, ctx) {
 
     // emissive life: the hot edge breathes with the sweep, warnings never sleep
     const ph = (theta % TAU + TAU) % TAU;
-    edgeMat.emissiveIntensity = (lethal ? 3.0 : 2.0) + Math.sin(ph * arms) * 0.55 + Math.sin(t * 7.3) * 0.22;
-    trimMat.emissiveIntensity = (lethal ? 2.4 : 1.8) + Math.sin(t * 2.4) * 0.30;
+    edgeMat.emissiveIntensity = (lethal ? 3.0 : 1.30) + Math.sin(ph * arms) * 0.55 + Math.sin(t * 7.3) * 0.22;
+    trimMat.emissiveIntensity = (lethal ? 2.4 : 1.20) + Math.sin(t * 2.4) * 0.30;
 
     updateAudio(t, dt);
   };

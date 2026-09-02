@@ -346,7 +346,7 @@ export function pendulum(def, ctx) {
   const matDark = getMat(ctx, 'obsidian');
   const matStone = getMat(ctx, mode === 'ball' ? 'obsidian' : 'metal');
 
-  const trimMat = glowMat(ctx, cAccent, 1.8, ownMats);
+  const trimMat = glowMat(ctx, cAccent, 1.25, ownMats);
   const edgeMat = glowMat(ctx, cKillGlow, 3.4, ownMats, { base: 0x06080c, metalness: 0.55 });
 
   // =========================================================================
@@ -599,7 +599,7 @@ export function pendulum(def, ctx) {
       edgeMat.emissiveIntensity = 2.4 + Math.min(5.5, tipSpeed * 0.34) + Math.sin(t * 9.1) * 0.2;
     }
 
-    trimMat.emissiveIntensity = 1.5 + Math.sin(t * 2.6) * 0.30;
+    trimMat.emissiveIntensity = 1.10 + Math.sin(t * 2.6) * 0.30;
 
     // --- wind whoosh: it peaks exactly where |omega| does, at angle 0 ---------
     const sign = Math.sin(arg) >= 0 ? 1 : -1;

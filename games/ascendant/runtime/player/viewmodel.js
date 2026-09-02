@@ -641,7 +641,7 @@ export class Viewmodel {
       envMapIntensity: 0.6,
     });
     this.metalMat = new THREE.MeshStandardMaterial({
-      color: 0x9aa4b2,
+      color: 0x6d7684,
       normalMap: tex.metalNormal,
       roughnessMap: tex.metalRough,
       roughness: 0.25,
@@ -650,9 +650,9 @@ export class Viewmodel {
       normalScale: new THREE.Vector2(0.6, 0.6),
     });
     this.trimMat = new THREE.MeshStandardMaterial({
-      color: this._accent.clone().multiplyScalar(0.20),
+      color: this._accent.clone().multiplyScalar(0.38),
       emissive: this._accent.clone(),
-      emissiveIntensity: 2.3,
+      emissiveIntensity: 0.55,
       roughness: 0.34,
       metalness: 0.0,
       toneMapped: true,
@@ -822,7 +822,7 @@ export class Viewmodel {
    */
   _buildLights() {
     if (!this._sceneIsOverlay()) { this.lights = null; return; }
-    const key = new THREE.DirectionalLight(0xfff1dc, 2.35);
+    const key = new THREE.DirectionalLight(0xfff1dc, 1.60);
     key.position.set(0.62, 0.95, 0.30);
     key.castShadow = false;
     const keyT = new THREE.Object3D();
@@ -830,7 +830,7 @@ export class Viewmodel {
     key.target = keyT;
     this.root.add(key, keyT);
 
-    const rim = new THREE.DirectionalLight(this._accent.clone(), 2.0);
+    const rim = new THREE.DirectionalLight(this._accent.clone(), 1.00);
     rim.position.set(-0.85, 0.30, -1.15);
     rim.castShadow = false;
     const rimT = new THREE.Object3D();
@@ -841,7 +841,7 @@ export class Viewmodel {
     /* one hemisphere carrying BOTH the old hemi (0x3d556e/0x11151c @ 0.55) and
      * the old bounce directional (0x5f7fa8 @ 0.75, aimed up from below): the
      * bounce lives in the ground colour, lifted to match. */
-    const hemi = new THREE.HemisphereLight(0x3d556e, 0x2c3d55, 0.95);
+    const hemi = new THREE.HemisphereLight(0x3d556e, 0x2c3d55, 0.78);
     this.root.add(hemi);
 
     this.lights = { key, rim, hemi, bounce: null, ambient: null };
@@ -869,7 +869,7 @@ export class Viewmodel {
   setTheme(theme) {
     const accent = resolveAccent(theme);
     this._accent.set(accent);
-    this.trimMat.color.copy(this._accent).multiplyScalar(0.20);
+    this.trimMat.color.copy(this._accent).multiplyScalar(0.38);
     this.trimMat.emissive.copy(this._accent);
     this.metalMat.emissive.copy(this._accent).multiplyScalar(0.055);
     if (this.lights && this.lights.rim) {

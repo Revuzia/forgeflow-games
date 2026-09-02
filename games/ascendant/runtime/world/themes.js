@@ -139,12 +139,14 @@ export const THEMES = {
        * (2026-08-31 critic pass, all five themes.) */
       tint: [0.94, 0.97, 1.06],
     },
-    /* 1.05 @ 0.60 flooded the near field: the start pad's trim (emissive ~2.4+
-     * linear) filled the bottom third of the frame with one blown cyan wash and
-     * swallowed the gloves (neon-1_0/1_2, plain_neon-1_high). Threshold above
-     * diffuse range so only true emitters bloom; strength down to a halo, not
-     * a fog. The trim itself also came down (materialOverrides.neon). */
-    bloom: { strength: 0.70, radius: 0.62, threshold: 0.95 },
+    /* Neon is the darkest world, so it is the one where bloom hurts most.
+     * 0.70 @ 0.95 still had the near platform's edge stripe rendering as a
+     * blown WHITE bar whose halo repainted its own deck, and the glove cuffs
+     * as two haloed orbs owning the bottom of the frame (before/neon-2_0,
+     * the frame the owner sent). 0.50 @ 1.06 puts the threshold above every
+     * trim emissive in this theme: only lava, hazard and the sky lamps
+     * bloom at all. */
+    bloom: { strength: 0.50, radius: 0.58, threshold: 1.06 },
 
     palette: {
       safe: 0x5d7f9c, safeEdge: 0xc9f7ff,
@@ -182,11 +184,15 @@ export const THEMES = {
       glass: { tint: 0xbfe4ff },
       obsidian: { tint: 0xb0a8ff },
       crystal: { emissive: 0x22d3ee, attenuationColor: 0x1a6fa0 },
-      /* 3.8/3.0 under the old 0.60-threshold bloom was the near-field flood;
-       * 2.5/2.3 still clears the 0.95 threshold, so strips glow with a halo
-       * instead of erasing the bottom of the frame. */
-      neon: { emissive: 0x22d3ee, emissiveIntensity: 2.5 },
-      emissive: { emissive: 0x22d3ee, emissiveIntensity: 2.3 },
+      /* Round 4 (owner, third report of glare): 2.5/2.3 still cleared the
+       * threshold, and clearing it is the whole problem — a strip that
+       * blooms in a dark-adapted eye's darkest world is what blinds. At
+       * 1.60/1.50, under the 1.06 threshold, the strips read as lit strips
+       * and the halo is gone. Contrast against the indigo deck carries the
+       * read; lava/hazard are untouched and are now clearly the hottest
+       * things in frame. */
+      neon: { emissive: 0x22d3ee, emissiveIntensity: 1.60 },
+      emissive: { emissive: 0x22d3ee, emissiveIntensity: 1.50 },
       hazard: { emissive: 0xff2b5e, emissiveIntensity: 2.2 },
       conveyor: { emissive: 0x22d3ee },
       lava: { emissiveIntensity: 3.0 },
@@ -357,12 +363,12 @@ export const THEMES = {
       obsidian: { tint: 0x2e2a28, env: 0.12, clearcoat: 0.15,
                   clearcoatRoughness: 0.60, specularIntensity: 0.10 },
       crystal: { emissive: 0xff9a3c, attenuationColor: 0x8a2a00 },
-      /* 3.2 was most of what a vanish tile's trim halo painted onto its own
-       * small top through the 0.85 bloom threshold (round 3, the temple
-       * lesson): 1.8 keeps the drawn-line glow above threshold without
-       * repainting the walked surface. */
-      neon: { emissive: 0x9fe0ff, emissiveIntensity: 1.8 },
-      emissive: { emissive: 0xffb44a, emissiveIntensity: 3.0 },
+      /* Round 4: foundry's 2.8 threshold already kept most trim out of the
+       * bloom, so this world was never the blinding one — the cut is smaller
+       * (1.8 -> 1.35, 3.0 -> 1.90) and exists so the amber trim stops
+       * competing with the molten channels for "hottest thing on screen". */
+      neon: { emissive: 0x9fe0ff, emissiveIntensity: 1.35 },
+      emissive: { emissive: 0xffb44a, emissiveIntensity: 1.90 },
       hazard: { emissive: 0xff4a10, emissiveIntensity: 2.4 },
       /* Both mechanic surfaces were losing their hue to ACES clipping: the belt
        * rendered as a featureless yellow-white slab (its chevrons invisible at
@@ -528,11 +534,12 @@ export const THEMES = {
                clearcoat: 0.10, clearcoatRoughness: 0.55, specularIntensity: 0.08 },
       obsidian: { tint: 0x3a4e60 },
       crystal: { emissive: 0x9fe8ff, attenuationColor: 0x2f74b0 },
-      /* 3.2 gold flooded small tiles (vanish tops read 240+ cream through the
-       * bloom wash); the stripe still burns at 2.4 — it just stops owning the
-       * whole tile top. */
-      neon: { emissive: 0xffcf5c, emissiveIntensity: 2.4 },
-      emissive: { emissive: 0x6fd8ff, emissiveIntensity: 2.2 },
+      /* Round 4: spire is a BRIGHT-key world, so its trim never needed to be
+       * hot to be seen — it reads against dark basalt decks, not against the
+       * pale sky. 2.4 -> 1.60 costs nothing legible and stops the ice trim
+       * adding to an already high-key frame. */
+      neon: { emissive: 0xffcf5c, emissiveIntensity: 1.60 },
+      emissive: { emissive: 0x6fd8ff, emissiveIntensity: 1.50 },
       hazard: { emissive: 0xd6001c, emissiveIntensity: 2.4 },
       conveyor: { emissive: 0x6fd8ff },
       lava: { emissiveIntensity: 3.6 },
@@ -687,12 +694,11 @@ export const THEMES = {
       crystal: { emissive: 0xffd08a, attenuationColor: 0xb06a1a },
       /* 2.8 gold wash was most of what the small vanish/pad tops rendered —
        * trimmed so the stripe reads as a line, not as the tile's colour.
-       * Round-2 re-measure: at 2.1 the stripe's bloom halo still spilled a
-       * ~15 px cream ring onto a vanish tile's inset top and held temple-3 c0
-       * under the floor — 1.7 keeps the drawn-line glow (well above the 0.95
-       * bloom threshold) without painting the walked surface. */
-      neon: { emissive: 0xffe0a0, emissiveIntensity: 1.7 },
-      emissive: { emissive: 0xffc35c, emissiveIntensity: 2.1 },
+       * Round 4: same lesson as spire — golden hour is a bright key, so the
+       * gold trim is legible well below the 1.02 bloom threshold. 1.7 -> 1.30
+       * keeps the drawn line and removes the cream ring entirely. */
+      neon: { emissive: 0xffe0a0, emissiveIntensity: 1.30 },
+      emissive: { emissive: 0xffc35c, emissiveIntensity: 1.50 },
       hazard: { emissive: 0xff1044, emissiveIntensity: 2.2 },
       conveyor: { emissive: 0xffc35c },
       lava: { emissiveIntensity: 3.2 },
@@ -749,9 +755,10 @@ export const THEMES = {
       tint: [0.98, 0.99, 1.04],
     },
     /* 0.60 @ 0.70 turned the launch-pad ring into a solid white parallelogram
-     * with zero internal gradient (hub_0/hub_1). Threshold above the diffuse
-     * range: the ring keeps its violet gradient and blooms only at its core. */
-    bloom: { strength: 0.50, radius: 0.65, threshold: 0.92 },
+     * with zero internal gradient (hub_0/hub_1). Round 4 pushed the threshold
+     * past the trim emissives too (0.42 @ 1.00): the ring keeps its violet
+     * gradient, and the hub's violet strips light without haloing. */
+    bloom: { strength: 0.42, radius: 0.60, threshold: 1.00 },
 
     palette: {
       safe: 0x8e9cb5, safeEdge: 0xbfeaff,
@@ -778,9 +785,9 @@ export const THEMES = {
       /* the hub's primary dressing read as unlit purple blobs (hub_0): give the
        * cores real internal light and let the sky-based env probe (applyTheme
        * default) hand the transmission something to refract. */
-      crystal: { emissive: 0xb49aff, emissiveIntensity: 2.2, attenuationColor: 0x4a3a9a },
-      neon: { emissive: 0x9a7dff, emissiveIntensity: 2.6 },
-      emissive: { emissive: 0x9a7dff, emissiveIntensity: 2.4 },
+      crystal: { emissive: 0xb49aff, emissiveIntensity: 1.70, attenuationColor: 0x4a3a9a },
+      neon: { emissive: 0x9a7dff, emissiveIntensity: 1.70 },
+      emissive: { emissive: 0x9a7dff, emissiveIntensity: 1.60 },
       hazard: { emissive: 0xff2020, emissiveIntensity: 2.0 },
       conveyor: { emissive: 0x9a7dff },
       lava: { emissiveIntensity: 2.8 },

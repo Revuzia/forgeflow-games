@@ -382,7 +382,7 @@ export function vanish(def, ctx) {
       gz.translate(s * (size[0] / 2 - 0.04), size[1] * 0.5 + 0.005, 0);
       trimGeoms.push(gz);
     }
-    const tm = glowMat(ctx, cSafe, 2.4, ownMats);
+    const tm = glowMat(ctx, cSafe, 1.50, ownMats);
     skins.push({ mat: tm, baseColor: tm.color.clone(), baseEmissive: tm.emissive.clone(), baseEI: 2.4, trim: true });
     slab.add(partMesh(trimGeoms, tm, D, false, false));
   }
@@ -439,7 +439,7 @@ export function vanish(def, ctx) {
     D.push(eg);
     ghostGroup.add(new THREE.LineSegments(eg, ghostMat));
   }
-  const bracketMat = glowMat(ctx, cSafe, 3.0, ownMats, { base: 0x000000 });
+  const bracketMat = glowMat(ctx, cSafe, 1.90, ownMats, { base: 0x000000 });
   bracketMat.opacity = 0;
   {
     const br = [];
@@ -674,7 +674,7 @@ export function vanish(def, ctx) {
     const pulse = 0.28 + 0.30 * Math.sin(t * (5 + ret * 26)) * (0.4 + ret);
     ghostMat.opacity = gone * clamp01(0.22 + pulse * 0.7);
     bracketMat.opacity = gone * clamp01(0.34 + ret * 0.6);
-    bracketMat.emissiveIntensity = 1.6 + ret * 5.5;
+    bracketMat.emissiveIntensity = 1.15 + ret * 5.5;
     ghostGroup.visible = gone > 0.02;
   }
 

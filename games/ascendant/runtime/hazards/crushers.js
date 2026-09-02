@@ -471,7 +471,7 @@ export function crusher(def, ctx) {
     unit.group.add(partMesh(hazardParts, matHazard, D, true, false));
     unit.group.add(partMesh(glows, unit.warnMat, D, false, false));
     if (safeEdge.length) {
-      unit.safeMat = glowMat(ctx, cSafe, 2.2, ownMats, { base: 0x080b10 });
+      unit.safeMat = glowMat(ctx, cSafe, 1.45, ownMats, { base: 0x080b10 });
       unit.group.add(partMesh(safeEdge, unit.safeMat, D, false, false));
     }
 
@@ -704,7 +704,7 @@ export function crusher(def, ctx) {
       un.faceMat.emissiveIntensity = 0.7 + warn * (1.4 + strobe * 7.0);
       un.warnMat.emissive.copy(closing ? cKill : cIdle).lerp(cKill, Math.max(warn, closing ? 1 : 0));
       un.warnMat.emissiveIntensity = 0.45 + warn * 3.4 + (closing ? Math.min(4.0, speed * 0.22) : 0);
-      if (un.safeMat) un.safeMat.emissiveIntensity = closing ? 0.35 : (2.0 + Math.sin(t * 2.2) * 0.30);
+      if (un.safeMat) un.safeMat.emissiveIntensity = closing ? 0.35 : (1.35 + Math.sin(t * 2.2) * 0.30);
     }
 
     // slam / retract events (presentation only — never feeds the transform)

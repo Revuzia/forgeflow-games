@@ -435,7 +435,17 @@ function safeLandableGlow(color, theme) {
   return _hueDist(_sanHSL.h, killH) >= 45 / 360 ? accent : pal(theme, 'safeEdge');
 }
 
-/** Flat emissive band — bright enough to read at 25 m through fog. */
+/**
+ * Flat emissive band — bright enough to read at 25 m through fog.
+ *
+ * Round 4 (owner, third report of glare): the gain that feeds this from
+ * buildPlatform came down 2.6 -> 1.25. Legibility at 25 m is a CONTRAST
+ * property — the near-black keyline flanking every stripe (keylineMaterial)
+ * and the dark deck around it — not a raw-output one, and at 2.6 the near
+ * platform rendered as a blown white bar whose own halo repainted the deck
+ * it was supposed to mark. If a platform ever stops reading, raise the body
+ * albedo, not this.
+ */
 function emissiveMat(color, intensity, opts) {
   const o = opts || null;
   const side = (o && o.side) || THREE.FrontSide;
@@ -1037,8 +1047,8 @@ export function buildPlatform(def, theme, mats) {
   const glowColor = safeLandableGlow(gs.color, theme);
   const bodyMat = materialFor(bodyKey, theme, mats);
   const panelMat = materialFor(surface === 'ice' ? 'ice' : (bodyKey === 'grate' ? 'metal' : 'panel'), theme, mats);
-  const rimMat = emissiveMat(pal(theme, 'accent'), 0.85 * glow);
-  const stripeMat = emissiveMat(glowColor !== null ? glowColor : pal(theme, look[1]), 2.6 * glow * look[2]);
+  const rimMat = emissiveMat(pal(theme, 'accent'), 0.60 * glow);
+  const stripeMat = emissiveMat(glowColor !== null ? glowColor : pal(theme, look[1]), 1.25 * glow * look[2]);
   const underMat = materialFor('obsidian', theme, mats);
 
   const key = GeoCache.key('plat', w, h, d, faces.join(''));
@@ -1227,8 +1237,8 @@ export function buildBeam(def, theme, mats) {
   const beamGlowColor = safeLandableGlow(gs.color, theme);
   const bodyMat = materialFor((def && def.mat) || 'metal', theme, mats);
   const capMat = materialFor('panel', theme, mats);
-  const lineMat = emissiveMat(beamGlowColor !== null ? beamGlowColor : pal(theme, 'safeEdge'), 3.0 * glow);
-  const trimMat = emissiveMat(pal(theme, 'accent'), 0.9 * glow);
+  const lineMat = emissiveMat(beamGlowColor !== null ? beamGlowColor : pal(theme, 'safeEdge'), 1.60 * glow);
+  const trimMat = emissiveMat(pal(theme, 'accent'), 0.70 * glow);
   const alongX = w >= d;
 
   const key = GeoCache.key('beam', w, h, d, alongX ? 'x' : 'z');
@@ -1333,8 +1343,8 @@ export function buildPad(def, theme, mats) {
    * threshold (0.85-1.10); 1.7/0.9 still clears the thresholds so the core
    * glows with a halo, but its hue survives — the controlled-emissive rim the
    * round-2 spec demands. */
-  const ringMat = emissiveMat(pal(theme, 'pad'), 1.2 * glow);
-  const coreMat = pulseMat(tint, 1.7 * glow, 0.9 * glow, 3.4);
+  const ringMat = emissiveMat(pal(theme, 'pad'), 0.95 * glow);
+  const coreMat = pulseMat(tint, 1.30 * glow, 0.7 * glow, 3.4);
 
   const key = GeoCache.key('pad', r, height, isSpeed ? 's' : 'j');
   const geo = GeoCache.get(key, () => {
@@ -1426,7 +1436,7 @@ export function buildPillar(def, theme, mats) {
   const glow = gs.k;
   const bodyMat = materialFor((def && def.mat) || 'stone', theme, mats);
   const trimMat = materialFor('metal', theme, mats);
-  const bandMat = emissiveMat(gs.color !== null ? gs.color : pal(theme, 'accent'), 1.5 * glow);
+  const bandMat = emissiveMat(gs.color !== null ? gs.color : pal(theme, 'accent'), 1.15 * glow);
 
   const key = GeoCache.key('pillar', w, h, d, round ? 'r' : 's');
   const geo = GeoCache.get(key, () => {
@@ -1502,7 +1512,7 @@ export function buildWall(def, theme, mats) {
   const glow = gs.k;
   const bodyMat = materialFor((def && def.mat) || 'panel', theme, mats);
   const frameMat = materialFor('metal', theme, mats);
-  const seamMat = emissiveMat(gs.color !== null ? gs.color : pal(theme, 'accent'), 1.1 * glow);
+  const seamMat = emissiveMat(gs.color !== null ? gs.color : pal(theme, 'accent'), 0.90 * glow);
 
   const key = GeoCache.key('wall', w, h, d);
   const geo = GeoCache.get(key, () => {
@@ -1642,7 +1652,7 @@ export function buildArch(def, theme, mats) {
   const glow = gs.k;
   const bodyMat = materialFor((def && def.mat) || 'stone', theme, mats);
   const trimMat = materialFor('metal', theme, mats);
-  const lineMat = emissiveMat(gs.color !== null ? gs.color : pal(theme, 'accent'), 1.6 * glow);
+  const lineMat = emissiveMat(gs.color !== null ? gs.color : pal(theme, 'accent'), 1.20 * glow);
 
   const key = GeoCache.key('arch', w, h, d, pierW, rise);
   const geo = GeoCache.get(key, () => {

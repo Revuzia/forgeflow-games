@@ -301,7 +301,7 @@ function fallbackPlatform(size, ctx, D, matKey, surface, hz) {
     gz.translate(s * (size[0] / 2 - 0.03), size[1] * 0.5 + 0.01, 0);
     rail.push(gz);
   }
-  const stripeMat = glowMat(ctx, pal(ctx, 'safeEdge', pal(ctx, 'accent', 0x7ef0ff)), 2.2, hz.__mats);
+  const stripeMat = glowMat(ctx, pal(ctx, 'safeEdge', pal(ctx, 'accent', 0x7ef0ff)), 1.35, hz.__mats);
   grp.add(partMesh(rail, stripeMat, D, false, false));
   const col = new Collider({
     center: new THREE.Vector3(0, 0, 0),
@@ -517,9 +517,9 @@ export function mover(def, ctx) {
   const matPanel = getMat(ctx, 'panel');
   const matGrate = getMat(ctx, 'grate');
 
-  const trimMat = glowMat(ctx, cAccent, 2.4, ownMats);
-  const dirMat = glowMat(ctx, cSafe, 2.9, ownMats, { base: 0x05070b });
-  const thrustMat = glowMat(ctx, cAccent, 3.4, ownMats, { base: 0x04060a, roughness: 0.5 });
+  const trimMat = glowMat(ctx, cAccent, 1.50, ownMats);
+  const dirMat = glowMat(ctx, cSafe, 1.80, ownMats, { base: 0x05070b });
+  const thrustMat = glowMat(ctx, cAccent, 2.20, ownMats, { base: 0x04060a, roughness: 0.5 });
 
   // --- under-deck machinery (all hover types) --------------------------------
   const nacelles = [];
@@ -834,7 +834,7 @@ export function mover(def, ctx) {
       g.translate(sx * (size[0] * 0.5 - 0.20), size[1] * 0.5 + 0.03, sz * (size[2] * 0.5 - 0.20));
       studs.push(g);
     }
-    const mm = glowMat(ctx, cSafe, 1.6, ownMats, { base: 0x0a0d12 });
+    const mm = glowMat(ctx, cSafe, 1.20, ownMats, { base: 0x0a0d12 });
     const mesh = partMesh(studs, mm, D, false, false);
     shell.add(mesh);
     sinkStuds = mesh;
@@ -951,7 +951,7 @@ export function mover(def, ctx) {
       const it = 1.1 + Math.min(4.2, speed * 0.55) + Math.sin(t * 9.3) * 0.16;
       thrustMat.emissiveIntensity = it;
     }
-    trimMat.emissiveIntensity = 1.9 + Math.sin(t * 2.1) * 0.28;
+    trimMat.emissiveIntensity = 1.25 + Math.sin(t * 2.1) * 0.28;
 
     // oscillate: the shaft stretches from the housing to the deck. Orientation is
     // derived from the live offset (never a negative scale — that mirrors normals).
