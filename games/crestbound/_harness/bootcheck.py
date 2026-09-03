@@ -250,7 +250,18 @@ def main() -> int:
 
     with sync_playwright() as p:
         if args.headless:
-            br = p.chromium.launch(headless=True, args=HEADLESS_FLAGS)
+            # HARNESS_NOTES (measured on this box): headless *Chrome* with the
+            # d3d11 flags gets the real Intel UHD GPU; only the bundled Chromium
+            # needs SwiftShader, which is a CPU rasteriser -- an order of
+            # magnitude slower and a different tone response. Try the GPU first
+            # and keep SwiftShader as the documented fallback (perfcheck.py has
+            # done this since the perf pass; the other gates had not caught up).
+            try:
+                br = p.chromium.launch(channel="chrome", headless=True, args=FLAGS)
+            except Exception as _e:
+                print("headless: no hardware Chrome (%s) -> SwiftShader" % str(_e)[:120],
+                      file=sys.stderr)
+                br = p.chromium.launch(headless=True, args=HEADLESS_FLAGS)
         else:
             br = p.chromium.launch(channel="chrome", headless=False, args=FLAGS)
         pg = br.new_page(viewport={"width": args.width, "height": args.height})
@@ -334,7 +345,8 @@ def main() -> int:
 
     print("=" * 78)
     print("URL         : %s" % url)
-    print("mode        : %s" % ("HEADLESS (swiftshader)" if args.headless else "headed Chrome"))
+    print("mode        : %s" % ("HEADLESS (hardware Chrome, SwiftShader fallback)"
+                                if args.headless else "headed Chrome"))
     print("global      : %s" % ("YES" if state.get("hasGlobal") else "NO"))
     print("boot gone   : %s" % state.get("bootGone"))
     print("nogpu shown : %s" % state.get("nogpu"))

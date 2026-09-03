@@ -544,6 +544,17 @@ float cbHash12( vec2 p ) {
   p3 += dot( p3, p3.yzx + 33.33 );
   return fract( ( p3.x + p3.y ) * p3.z );
 }
+/* Value noise in world metres — the macro-variation field. Two octaves is all
+ * a de-tiler needs: it only has to be lower-frequency than the tile it hides. */
+float cbVnoise( vec2 p ) {
+  vec2 i = floor( p ), f = fract( p );
+  f = f * f * ( 3.0 - 2.0 * f );
+  float a = cbHash12( i );
+  float b = cbHash12( i + vec2( 1.0, 0.0 ) );
+  float c = cbHash12( i + vec2( 0.0, 1.0 ) );
+  float d = cbHash12( i + vec2( 1.0, 1.0 ) );
+  return mix( mix( a, b, f.x ), mix( c, d, f.x ), f.y );
+}
 float cbCaustic( vec2 p, float t ) {
   vec2 q = p;
   float c = 0.0;
@@ -594,6 +605,7 @@ function injectShader(mat, key, opts) {
   const D = {
     lava: !!defines.CB_LAVA, slope: !!defines.CB_SLOPE, rim: !!defines.CB_RIM,
     caustic: !!defines.CB_CAUSTIC, wind: !!defines.CB_WIND, shimmer: !!defines.CB_SHIMMER,
+    macro: !!defines.CB_MACRO,
   };
 
   mat.onBeforeCompile = function (shader) {
@@ -704,6 +716,7 @@ function injectShader(mat, key, opts) {
     if (D.lava) fHead += 'uniform float uCbTime;\nuniform vec2 uCbFlowA;\nuniform vec2 uCbFlowB;\n';
     if (D.slope) fHead += 'uniform sampler2D uCbBlendMap;\nuniform sampler2D uCbBlendNormal;\nuniform sampler2D uCbBlendOrm;\nuniform float uCbBlendScale;\nuniform vec2 uCbSlope;\n';
     if (D.rim) fHead += 'uniform vec4 uCbRim;\n';
+    if (D.macro) fHead += 'uniform vec4 uCbMacro;\n';
     if (D.caustic) fHead += 'uniform float uCbCausticTime;\nuniform float uCbCaustic;\nuniform vec4 uCbCausticParams;\nuniform vec3 uCbCausticColor;\n';
     if (D.shimmer) fHead += 'uniform float uCbTime;\nuniform float uShimmer;\nuniform vec3 uShimmerColor;\nuniform float uShimmerWidth;\n';
     shader.fragmentShader = fHead + shader.fragmentShader;
@@ -723,6 +736,37 @@ function injectShader(mat, key, opts) {
       diffuseColor.rgb = mix( diffuseColor.rgb, cbBlendCol.rgb, cbSlopeW );
     }
   #endif`;
+      }
+      if (D.macro) {
+        /* MACRO VARIATION — the de-tiler.
+         *
+         * A ground texture is a square that repeats every 1-3 m. From standing
+         * height you see 30-80 copies of that square at once, and the eye locks
+         * onto whatever the LOWEST surviving frequency inside the tile is — on
+         * the verdant meadow that was the worley clump field, and the meadow
+         * read as reptile scales (owner-observed, `_shots/verify_v1.png`).
+         * The bake-side fix (blade-led normals, macro patches in the albedo)
+         * removes the MOTIF; this removes the REPEAT, by modulating value and
+         * warmth with a world-space field that has no relationship to the tile:
+         *
+         *   uCbMacro = vec4( metres per macro cell, value swing,
+         *                    warm/cool swing, unused )
+         *
+         * ONE value-noise tap (4 hashes), no texture fetch, no per-frame
+         * allocation. A second octave was drafted and cut: this runs on the
+         * three highest-coverage materials in the game (grass, stone, marble)
+         * and the frame is already fill-bound at 1080p, so the de-tiler has to
+         * be the cheapest thing that works — and the repeat it hides lives at
+         * the LOW frequency, which one octave already covers. */
+        post += `
+  {
+    vec2 cbM = vCbW.xz / max( uCbMacro.x, 0.001 );
+    float cbMs = cbVnoise( cbM ) - 0.5;
+    diffuseColor.rgb *= 1.0 + cbMs * uCbMacro.y;
+    diffuseColor.rgb *= vec3( 1.0 + cbMs * uCbMacro.z,
+                              1.0 + cbMs * uCbMacro.z * 0.25,
+                              1.0 - cbMs * uCbMacro.z * 0.60 );
+  }`;
       }
       if (D.caustic) {
         /* Underwater light on a floor BELOW a water surface.
@@ -937,6 +981,23 @@ function assemble(key, maps, params, uvScale, inject) {
 }
 
 /** the three dirt maps + blend uniforms every slope-blended material shares */
+/**
+ * CB_MACRO defaults. `cell` is the macro period in world metres — it must be
+ * several times the material's own tile so it hides the repeat instead of
+ * becoming a new one. `value` is the ± brightness swing, `warm` the ± warm/cool
+ * swing. `spare` is reserved (the drafted second octave was cut for fill cost —
+ * see the CB_MACRO block in injectShader).
+ */
+function macroInject(cell, value, warm, spare, extra) {
+  const e = extra || {};
+  return Object.assign({}, e, {
+    defines: Object.assign({ CB_MACRO: true }, e.defines || null),
+    uniforms: Object.assign({
+      uCbMacro: { value: new THREE.Vector4(cell, value, warm, spare) },
+    }, e.uniforms || null),
+  });
+}
+
 function slopeInject(extra) {
   return Object.assign({
     defines: { CB_SLOPE: true },
@@ -1011,7 +1072,7 @@ function bakeStone() {
   return assemble('stone', maps, {
     color: 0xffffff, roughness: 1, metalness: 1,
     normalScale: new THREE.Vector2(1.05, 1.05), envMapIntensity: 0.6,
-  }, 0.34);
+  }, 0.34, macroInject(13.0, 0.19, 0.08, 0.35, { cacheKey: 'cb-stone-macro' }));
 }
 
 /* -------------------------------------------------------------- 4.2 panel */
@@ -1667,10 +1728,16 @@ function bakeWood() {
       const shade = hash2i(pi, 1, 9191);
 
       // grain rings: domain-warped, stretched along the plank
+      /* ROUND 2: the grain has to run ALONG the plank. `g * 11.0` against
+       * `u * 2.0` is a 5.5:1 noise-over-linear ratio, so the level sets closed
+       * into loops and every wooden surface in the game wore the same maze of
+       * worms (visible full-frame on the verdant sign, _shots/_r2a_verdant.png).
+       * Ten whole cycles across the tile keeps the wrap; the noise now only
+       * bends them. */
       const g = warpedFbmXY(u + off, pv + off * 3.0, 4, 2, 4, 0.55, 71 + pi * 37, 0.30);
-      let ring = frac(g * 11.0 + u * 2.0);   // 2 whole cycles across the tile -> wraps
+      let ring = frac(g * 2.10 + u * 10.0);   // 10 whole cycles across the tile -> wraps
       ring = Math.abs(ring - 0.5) * 2;
-      const grain = smoothstep(0.55, 0.95, ring);
+      const grain = smoothstep(0.52, 0.94, ring);
 
       // occasional knot
       const kx = 0.18 + off * 0.64, ky = 0.5;
@@ -1929,6 +1996,26 @@ function bakeDirt() {
  *     diffuse — grazing light bleeding through a thin blade. It is faded out
  *     by the slope weight (soil does not transmit) and is what stops a big
  *     hill from reading as painted cardboard at the silhouette.
+ *
+ * ROUND 1 VISUAL FIX — "the meadow reads as REPTILE SCALES"
+ * (owner-observed; measured on `_shots/verify_v1.png`, zoom
+ * `_shots/_zoom_grass.png`).  Three compounding causes, all here:
+ *
+ *   a) The worley CLUMP field was pushed hard into the HEIGHT map
+ *      (`clumpCore * 0.34` against a blade term of only 0.30), and the height
+ *      map became the normal map at strength 1.55 with `normalScale` 1.0.  Each
+ *      cell therefore lit as a rounded DOME with a dark seam — a scale.
+ *   b) The blade detail that was supposed to break those cells up lived at 128
+ *      cells/tile (~1.4 cm at 1.82 m per tile).  It mips away by ~3 m, leaving
+ *      ONLY the domes, so the further you looked the more it became lizard skin.
+ *   c) 11 clumps/tile put the cell pitch at ~16 cm — close enough to the tile
+ *      pitch to read as one regular lattice.
+ *
+ * The fix keeps the tuft IDEA and moves its energy out of the normal and into
+ * colour, adds a MID-frequency streak band (~9 x 34 cells, ~5-20 cm) that
+ * SURVIVES mipping and is the thing that actually reads as blades at 3-10 m,
+ * and adds a slow macro-patch field so a 140 m meadow varies at metre scale
+ * instead of repeating one motif.
  */
 function bakeGrass() {
   const n = SIZE_LG, B = bakeBuffers(n);
@@ -1939,37 +2026,52 @@ function bakeGrass() {
     for (let x = 0; x < n; x++) {
       const u = x / n, i = y * n + x, p = i * 4;
 
-      // clumps: which tuft this pixel belongs to, and how tall it stands
-      worley(u, v, 11, 7001);
+      // clumps: which tuft this pixel belongs to, and how tall it stands.
+      // 19 cells/tile (~9.5 cm) sits well off the tile pitch, so the cell field
+      // never resolves into one regular lattice the way 11 did.
+      worley(u, v, 19, 7001);
       const clumpId = W.id;
       const clumpCore = smoothstep(0.52, 0.06, W.f1);
       const clumpGap = 1 - smoothstep(0.0, 0.10, W.f2 - W.f1);
 
+      // MACRO patches: metre-scale drifts of species / dryness / mown-ness.
+      // This is what stops a 140 m meadow from being one motif repeated.
+      const patch = fbm(u, v, 2.5, 3, 0.55, 7601);
+      const patch2 = fbm(u, v, 5, 2, 0.5, 7643);
+
       // blades: streaks stretched along +V, tilted per clump so tufts fan out
       const tilt = (clumpId - 0.5) * 0.35;
+      // MID band (~5-20 cm) — the only blade signal that survives mipping at
+      // 3-10 m, and therefore the one that has to carry "grass" in the shot.
+      const tuft = fbmXY(u + v * tilt, v, 9, 34, 2, 0.55, 7513);
       const blades = fbmXY(u + v * tilt, v, 26, 128, 2, 0.5, 7103);
       const microBlade = vnoiseXY((u + v * tilt) * 96, v * 320, 96, 320, 7211);
-      const bladeH = blades * 0.7 + microBlade * 0.3;
+      const bladeH = tuft * 0.42 + blades * 0.40 + microBlade * 0.18;
 
       // thatch: dead matter at the base, visible in the gaps between tufts
       const thatch = fbm(u, v, 20, 3, 0.55, 7307);
       const litter = smoothstep(0.55, 0.9, thatch) * clumpGap;
 
-      B.h[i] = 0.40 + clumpCore * 0.34 + (bladeH - 0.5) * 0.30
-             - clumpGap * 0.16 + (thatch - 0.5) * 0.07;
+      // Height is now BLADE-led, not cell-led: the clump keeps a hint of relief
+      // so tufts still catch a rim, but it can no longer emboss a dome.
+      B.h[i] = 0.42 + clumpCore * 0.10 + (bladeH - 0.5) * 0.50
+             - clumpGap * 0.06 + (thatch - 0.5) * 0.07;
 
-      // hue axis: 0 = dry yellow-green, 1 = deep blue-green
-      const hue = clamp01(0.30 + clumpId * 0.55 + (blades - 0.5) * 0.35);
-      let r = lerp(0.252, 0.086, hue);
-      let g = lerp(0.336, 0.268, hue);
-      let b = lerp(0.088, 0.126, hue);
+      // hue axis: 0 = dry yellow-green, 1 = deep blue-green. The macro patch
+      // drives it as hard as the clump does, so colour varies at BOTH scales.
+      const hue = clamp01(0.20 + clumpId * 0.34 + (patch - 0.5) * 0.85
+                          + (patch2 - 0.5) * 0.30 + (tuft - 0.5) * 0.30);
+      let r = lerp(0.300, 0.115, hue);
+      let g = lerp(0.415, 0.325, hue);
+      let b = lerp(0.105, 0.150, hue);
       // blade tips catch light, blade roots go dark and cool
-      const tipLit = smoothstep(0.5, 0.95, bladeH) * (0.35 + 0.65 * clumpCore);
-      r += tipLit * 0.13; g += tipLit * 0.20; b += tipLit * 0.075;
+      const tipLit = smoothstep(0.44, 0.92, bladeH) * (0.42 + 0.58 * clumpCore);
+      r += tipLit * 0.150; g += tipLit * 0.225; b += tipLit * 0.080;
       const root = smoothstep(0.42, 0.02, bladeH);
-      r = lerp(r, 0.036, root * 0.55); g = lerp(g, 0.062, root * 0.55); b = lerp(b, 0.030, root * 0.55);
-      // straw litter in the gaps
-      r = lerp(r, 0.246, litter * 0.7); g = lerp(g, 0.206, litter * 0.7); b = lerp(b, 0.096, litter * 0.7);
+      r = lerp(r, 0.052, root * 0.45); g = lerp(g, 0.086, root * 0.45); b = lerp(b, 0.040, root * 0.45);
+      // straw litter in the gaps — dry patches, driven by the macro field too
+      const dry = clamp01(litter * 0.7 + smoothstep(0.62, 0.95, patch) * 0.35);
+      r = lerp(r, 0.318, dry); g = lerp(g, 0.276, dry); b = lerp(b, 0.128, dry);
       // rare clover / flower fleck — one pixel in ~1500, enough to sparkle
       const fl = hash2i(x, y, 7411);
       if (fl > 0.99935) { r = 0.92; g = 0.90; b = 0.66; }
@@ -1983,17 +2085,20 @@ function bakeGrass() {
     }
   }
 
-  bakeAO(B, 4, 0.52, 3.6, 0.48);
+  bakeAO(B, 4, 0.40, 3.6, 0.42);
 
+  /* 0.55 -> 0.72 uv/m (1.82 m -> 1.39 m per tile). A SMALLER tile with a
+   * blade-led normal reads as finer turf; the old big tile was what made the
+   * surviving low-frequency cells legible as individual plates. */
   const maps = {
-    map: upload(commitA(B), 'grass.albedo', true, 0.55),
-    orm: upload(commitO(B), 'grass.orm', false, 0.55),
-    normal: upload(heightToNormal(B.h, n, 1.55), 'grass.normal', false, 0.55),
+    map: upload(commitA(B), 'grass.albedo', true, 0.72),
+    orm: upload(commitO(B), 'grass.orm', false, 0.72),
+    normal: upload(heightToNormal(B.h, n, 0.85), 'grass.normal', false, 0.72),
   };
   return assemble('grass', maps, {
     color: 0xffffff, roughness: 1, metalness: 0,
-    normalScale: new THREE.Vector2(1.0, 1.0), envMapIntensity: 0.35,
-  }, 0.55, slopeInject({
+    normalScale: new THREE.Vector2(0.58, 0.58), envMapIntensity: 0.35,
+  }, 0.72, macroInject(9.5, 0.34, 0.11, 0.42, slopeInject({
     defines: { CB_SLOPE: true, CB_RIM: true },
     uniforms: {
       uCbBlendMap: { value: _tex.get('dirt.albedo') || null },
@@ -2004,8 +2109,8 @@ function bakeGrass() {
       // rgb = transmitted tint, a = strength
       uCbRim: { value: new THREE.Vector4(0.42, 0.72, 0.22, 0.55) },
     },
-    cacheKey: 'cb-grass',
-  }));
+    cacheKey: 'cb-grass-macro',
+  })));
 }
 
 /* --------------------------------------------------------------- 5.3 snow */
@@ -2730,7 +2835,17 @@ function bakePainting() {
 /* ------------------------------------------------------------- 5.12 marble */
 /** Polished statuary marble: sinuous grey veins with a gold secondary vein
  *  system, translucent-looking depth from a clearcoat over a low-roughness
- *  body, and calcite sparkle in the stone. */
+ *  body, and calcite sparkle in the stone.
+ *
+ *  TEXEL SCALE (round 1 visual fix — owner-observed on `_shots/keep/spawn.png`
+ *  and `_shots/keep/cp1.png`): marble shipped at `uvScale` 0.22, i.e. ONE tile
+ *  every 4.55 world metres, while the rest of the stone family sits at
+ *  2.4-3.3 m (stone 0.34, plaster 0.30, brick 0.42).  With only ~4.5 vein
+ *  cycles baked across a tile that put a single vein at ~1.0 m wide, so the
+ *  Keep floor read as a PHOTOGRAPH of marble blown up, not as stone.  Fixed on
+ *  both axes at once so the two multiply: the tile drops to 2.38 m (0.42, the
+ *  brick number) AND the vein systems roughly double in frequency.  Net vein
+ *  width ~1.0 m -> ~0.24 m, which is what a statuary slab actually looks like. */
 function bakeMarble() {
   const n = SIZE_LG, B = bakeBuffers(n);
   const A = B.imgA.data, O = B.imgO.data;
@@ -2740,30 +2855,51 @@ function bakeMarble() {
     for (let x = 0; x < n; x++) {
       const u = x / n, i = y * n + x, p = i * 4;
 
-      // primary veins: heavily domain-warped bands (the classic marble recipe)
-      const w1 = warpedFbm(u, v, 3, 5, 0.55, 16001, 0.85);
-      let band = frac(w1 * 4.0 + u * 1.0);
+      /* Primary veins. Real marble veining is DIRECTIONAL and sinuous; it is
+       * not an isotropic maze. The first pass of this fix raised the frequency
+       * without dropping the domain warp, and the floor came back as a
+       * high-contrast fingerprint labyrinth (`_shots/_zoom_after_marble.png`).
+       * Warp down (0.85 -> 0.55), a strong LINEAR term (u * 2.6) so the family
+       * runs one way, and the vein contrast pulled off near-black onto a real
+       * grey — a polished slab has soft grey veins, not ink lines. */
+      /* Pass 2 (`_shots/_zoom_v33_marble.png`): the SCALE was right but the
+       * CHARACTER was wrong — a dense allover field of wormy squiggles that
+       * read as worn concrete or camouflage. Real statuary marble is a mostly
+       * CLEAN field crossed by a FEW long veins running one way. So: warp down
+       * again (0.55 -> 0.30) with the linear term now dominant, and the vein
+       * thresholds raised hard so roughly 85 % of the slab is clean stone. */
+      /* Pass 3 (`_shots/_r2a_keep.png`): still a labyrinth. The reason is
+       * arithmetic, not taste — `w1 * 3.2` sweeps about as far across a tile as
+       * `u * 3.4 + v * 1.2` does, so the level sets of their SUM close into
+       * loops and the "directional" family became worms. The linear term has to
+       * DOMINATE for the veins to run one way; noise is only allowed to make
+       * them sinuous. 1.25 against 5.6 is a ~4.5:1 ratio, which is a vein. */
+      const w1 = warpedFbm(u, v, 4, 4, 0.50, 16001, 0.26);
+      let band = frac(w1 * 1.25 + u * 5.60 + v * 1.85);
       band = Math.abs(band - 0.5) * 2;
-      const vein = smoothstep(0.72, 0.99, band);
-      const veinSoft = smoothstep(0.40, 0.95, band);
+      const vein = smoothstep(0.905, 0.999, band);
+      const veinSoft = smoothstep(0.815, 0.990, band);
 
       // secondary gold vein system, sparser and finer
-      const w2 = warpedFbm(u, v, 5, 4, 0.5, 16111, 0.62);
-      let band2 = frac(w2 * 7.0 + v * 2.0);
+      const w2 = warpedFbm(u, v, 7, 4, 0.5, 16111, 0.50);
+      let band2 = frac(w2 * 11.0 + v * 3.4);
       band2 = Math.abs(band2 - 0.5) * 2;
       const gold = smoothstep(0.90, 1.0, band2) * smoothstep(0.35, 0.75, w1);
 
-      const calcite = fbm(u, v, 62, 2, 0.5, 16223);
+      const calcite = fbm(u, v, 96, 2, 0.5, 16223);
 
       B.h[i] = 0.5 + (veinSoft - 0.5) * 0.10 + (calcite - 0.5) * 0.05 - vein * 0.05;
 
-      // cool near-white body
-      let r = 0.868 + (calcite - 0.5) * 0.045;
-      let g = 0.872 + (calcite - 0.5) * 0.045;
-      let b = 0.868 + (calcite - 0.5) * 0.048;
-      // grey vein
-      r = lerp(r, 0.268, veinSoft * 0.35); g = lerp(g, 0.286, veinSoft * 0.35); b = lerp(b, 0.318, veinSoft * 0.35);
-      r = lerp(r, 0.148, vein * 0.72); g = lerp(g, 0.162, vein * 0.72); b = lerp(b, 0.192, vein * 0.72);
+      // warm near-white body — the Keep is a WARM stone hall, and a floor this
+      // large is the single biggest colour decision in the room
+      let r = 0.906 + (calcite - 0.5) * 0.040;
+      let g = 0.892 + (calcite - 0.5) * 0.040;
+      let b = 0.862 + (calcite - 0.5) * 0.044;
+      // grey vein — a soft mineral grey, not ink
+      /* A vein is a MINERAL, not an ink line: pulled up off 0.352 and blended
+       * less hard, because at 0.55 onto near-black the floor read as cracked. */
+      r = lerp(r, 0.628, veinSoft * 0.22); g = lerp(g, 0.632, veinSoft * 0.22); b = lerp(b, 0.652, veinSoft * 0.22);
+      r = lerp(r, 0.446, vein * 0.42); g = lerp(g, 0.454, vein * 0.42); b = lerp(b, 0.482, vein * 0.42);
       // gold vein
       r = lerp(r, 0.760, gold * 0.85); g = lerp(g, 0.582, gold * 0.85); b = lerp(b, 0.238, gold * 0.85);
       // calcite flecks
@@ -2771,25 +2907,31 @@ function bakeMarble() {
 
       A[p] = clamp01(r) * 255; A[p + 1] = clamp01(g) * 255; A[p + 2] = clamp01(b) * 255; A[p + 3] = 255;
       O[p] = 255;
-      O[p + 1] = clamp(0.14 + vein * 0.22 + (calcite - 0.5) * 0.06, 0.05, 0.55) * 255;
+      // a polished-but-walked floor: glossy enough to catch the shafts, matte
+      // enough to actually take the diffuse key (0.14 was a mirror, and a
+      // mirror in a dim hall renders as a dark floor)
+      O[p + 1] = clamp(0.24 + vein * 0.24 + (calcite - 0.5) * 0.06, 0.12, 0.62) * 255;
       O[p + 2] = clamp(gold * 0.85, 0, 1) * 255;    // only the gold vein is metal
       O[p + 3] = 255;
     }
   }
 
   const maps = {
-    map: upload(commitA(B), 'marble.albedo', true, 0.22),
-    orm: upload(commitO(B), 'marble.orm', false, 0.22),
-    normal: upload(heightToNormal(B.h, n, 0.55), 'marble.normal', false, 0.22),
+    map: upload(commitA(B), 'marble.albedo', true, 0.34),
+    orm: upload(commitO(B), 'marble.orm', false, 0.34),
+    normal: upload(heightToNormal(B.h, n, 0.26), 'marble.normal', false, 0.34),
   };
   return assemble('marble', maps, {
     __physical: true,
     color: 0xffffff, roughness: 1, metalness: 1,
-    clearcoat: 0.85, clearcoatRoughness: 0.055,
-    sheen: 0.20, sheenRoughness: 0.9, sheenColor: new THREE.Color(0xe4e8f0),
-    specularIntensity: 1.0, envMapIntensity: 1.15,
-    normalScale: new THREE.Vector2(0.45, 0.45),
-  }, 0.22);
+    /* clearcoat 0.85 + env 1.15 made the Keep floor a mirror for the cool
+     * sanctum sky, which is why a cream slab rendered purple-grey. Polished,
+     * not wet. */
+    clearcoat: 0.55, clearcoatRoughness: 0.075,
+    sheen: 0.16, sheenRoughness: 0.9, sheenColor: new THREE.Color(0xf0e8d8),
+    specularIntensity: 0.9, envMapIntensity: 0.72,
+    normalScale: new THREE.Vector2(0.20, 0.20),
+  }, 0.34, macroInject(14.0, 0.06, 0.04, 0.0, { cacheKey: 'cb-marble-macro' }));
 }
 
 /* --------------------------------------------------------------- 5.13 moss */

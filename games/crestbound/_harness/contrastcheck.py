@@ -208,10 +208,29 @@ def frame_mean_luma(path):
 
 def snap(pg, path):
     """Screenshot with the black-frame guard: a contention frame is evidence of
-    nothing, so retake before believing it."""
+    nothing, so retake before believing it.
+
+    The screenshot itself also gets an explicit, generous timeout and its own
+    retry. HARNESS_NOTES already records that browser gates false-fail when
+    several Chromes run at once; on a loaded box the headless swiftshader
+    rasteriser cannot deliver a 1280x720 frame inside Playwright's 30 s default
+    and the whole run dies on
+        `playwright._impl._errors.TimeoutError: Page.screenshot: Timeout 30000ms exceeded`
+    with no table printed. That is a harness fragility, not a contrast result —
+    the 3.5:1 CONTRACT floor is untouched."""
     last = 0.0
     for _ in range(BLACK_RETRIES + 1):
-        pg.screenshot(path=path)
+        shot = False
+        for a in range(3):
+            try:
+                pg.screenshot(path=path, timeout=180_000)
+                shot = True
+                break
+            except Exception as e:
+                print("  snap retry %d: %s" % (a + 1, str(e).splitlines()[0][:110]))
+                pg.wait_for_timeout(2500)
+        if not shot:
+            return False, 0.0
         last = frame_mean_luma(path)
         if last >= LUMA_FLOOR:
             return True, last
@@ -355,7 +374,18 @@ def main() -> int:
 
     with sync_playwright() as p:
         if args.headless:
-            br = p.chromium.launch(headless=True, args=HEADLESS_FLAGS)
+            # HARNESS_NOTES (measured on this box): headless *Chrome* with the
+            # d3d11 flags gets the real Intel UHD GPU; only the bundled Chromium
+            # needs SwiftShader, which is a CPU rasteriser -- an order of
+            # magnitude slower and a different tone response. Try the GPU first
+            # and keep SwiftShader as the documented fallback (perfcheck.py has
+            # done this since the perf pass; the other gates had not caught up).
+            try:
+                br = p.chromium.launch(channel="chrome", headless=True, args=FLAGS)
+            except Exception as _e:
+                print("headless: no hardware Chrome (%s) -> SwiftShader" % str(_e)[:120],
+                      file=sys.stderr)
+                br = p.chromium.launch(headless=True, args=HEADLESS_FLAGS)
         else:
             br = p.chromium.launch(channel="chrome", headless=False, args=FLAGS)
         pg = br.new_page(viewport={"width": args.width, "height": args.height})

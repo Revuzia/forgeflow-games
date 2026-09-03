@@ -69,11 +69,39 @@ const _col = new THREE.Color();
 const DEFAULT_FAR = 900;
 const DEFAULT_NEAR = 0.05;
 const MAX_DT = 1 / 20;
+/**
+ * Presentation clocks (death, cinematic, veil) run on the WALL delta. The cap
+ * is deliberately far above `MAX_DT`: a 1.4 s frame in a VISIBLE tab is a
+ * stall, and a stall is precisely what a presentation clock must not stretch —
+ * capping at a fraction of a second reintroduced the bug this fixes (a 620 ms
+ * death sequence taking 3 s because each frame could only advance it by the
+ * cap). One second still bounds a single pathological step.
+ */
+const MAX_PRESENT_DT = 1.0;
 
 /** rolling window for p99 (doctrine §3: report p99, not averages) */
 const P99_WINDOW = 120;
 /** a frame interval above this is a hitch (two missed 60 Hz vsyncs) */
 const HITCH_MS = 33.4;
+
+/**
+ * Map a QUALITY preset's `shadowFilter` onto a three shadow-map type.
+ *
+ * PCFSoftShadowMap is nine SHADOW TAPS EACH manually bilinear-interpolated —
+ * about four times the texture fetches of PCFShadowMap, per fragment, for the
+ * one shadow-casting light. `_harness/frameprobe.py` measured -5.29 ms on
+ * verdant-1 between PCFSoft and a single tap at 1920x1080. HIGH gets 'pcf',
+ * ULTRA keeps 'pcfsoft'.
+ *
+ * @param {object} q a QUALITY preset
+ * @returns {number} a three.js shadow-map type constant
+ */
+function shadowFilterType(q) {
+  const f = q && typeof q.shadowFilter === 'string' ? q.shadowFilter.toLowerCase() : 'pcfsoft';
+  if (f === 'basic') return THREE.BasicShadowMap;
+  if (f === 'pcf') return THREE.PCFShadowMap;
+  return THREE.PCFSoftShadowMap;
+}
 
 /** default shadow frustum when a theme does not say (metres, half-extent) */
 const SHADOW_DEFAULT = { extent: 40, bias: -0.0006, normalBias: 0.03 };
@@ -183,7 +211,7 @@ export class Engine {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;
     this.renderer.shadowMap.enabled = this.quality.shadowMap > 0;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = shadowFilterType(this.quality);
     this.renderer.shadowMap.autoUpdate = true;
     this.renderer.autoClear = true;
     this.renderer.setClearColor(0x0b0a16, 1);
@@ -237,6 +265,16 @@ export class Engine {
     this.elapsed = 0;
     /** this frame's clamped dt */
     this.dt = 0;
+    /**
+     * This frame's WALL delta — NOT clamped to `maxDt` (only to `MAX_PRESENT_DT`,
+     * which exists so a tab-away cannot teleport an animation). `dt` protects the
+     * SIMULATION from a long frame; a presentation clock (a death sequence, a
+     * cinematic, a veil tween) must run in real time or a 90 ms frame stretches
+     * a 620 ms sequence to 1.4 s. Those read `rawDt` / `rawMs`.
+     */
+    this.rawDt = 0;
+    /** `rawDt` in milliseconds. */
+    this.rawMs = 0;
     /** total frames rendered */
     this.frame = 0;
     this.running = false;
@@ -527,6 +565,11 @@ export class Engine {
       this.scene.background = this._bg;
     }
     this.renderer.setClearColor(this._bg, 1);
+    // A theme swap means a new world: the depth prepass re-scans for occluders
+    // on the next frame instead of waiting out its periodic rescan.
+    if (this.post && this.post.renderPass && this.post.renderPass.markDirty) {
+      this.post.renderPass.markDirty();
+    }
 
     /* ---- fog --------------------------------------------------------- */
     const fogSpec = t.fog;
@@ -802,7 +845,7 @@ export class Engine {
     this.quality = preset;
 
     this.renderer.shadowMap.enabled = preset.shadowMap > 0;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = shadowFilterType(preset);
     this._shadow.mapSize = preset.shadowMap | 0;
     this._configureShadow();
 
@@ -931,7 +974,13 @@ export class Engine {
       let dt = rawMs / 1000;
       this._last = now;
       if (!(dt > 0)) dt = 0;
-      else if (dt > MAX_DT) dt = MAX_DT;
+      /* Presentation clock first: real elapsed time, capped only against a
+         tab-away. Then the simulation clamp. */
+      let raw = dt;
+      if (raw > MAX_PRESENT_DT) raw = MAX_PRESENT_DT;
+      this.rawDt = raw;
+      this.rawMs = raw * 1000;
+      if (dt > MAX_DT) dt = MAX_DT;
 
       this.dt = dt;
       this.elapsed += dt;

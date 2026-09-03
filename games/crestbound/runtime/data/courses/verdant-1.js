@@ -306,9 +306,37 @@ function fenceRing(cx, cz, r, n, gapFrom, gapTo) {
 }
 
 /**
+ * KEEP-OUT VOLUMES. The dressing block below says "nothing lands inside the
+ * fort, the ring or the mill's sweep" — this is what makes that true. It was a
+ * comment and nothing else, and scatter 9005 (centre -22,-36, annulus 5..14)
+ * duly planted a tree at (-9.77, -33.30) with r 2.25: a 4.72 x 4.72 collider
+ * spanning y 9.09 .. 13.35 THROUGH the wall-kick shaft, which is why the shaft
+ * had no standable floor at the authored courtyard height and ROUTE B could
+ * not be performed at all. The margin is generous because a tree's collider is
+ * its trunk radius, not its point.
+ *
+ * Rects are [x0, x1, z0, z1] in world metres, already margined.
+ */
+const KEEPOUT = [
+  [-15.5, 15.5, -39.5, -8.5],   // BEAT 4: the fort, both towers and the kick shaft
+  [27.0, 49.0, -17.0, 5.0],     // BEAT 8: the mill's 9.50 m arm sweep about (38, -6)
+  [-11.5, 7.5, -63.5, -44.5],   // BEAT 9: the Warden's arena, r 7.0 about (-2, -54)
+];
+
+/** Is (x, z) inside any authored keep-out volume? */
+function blocked(x, z) {
+  for (let i = 0; i < KEEPOUT.length; i++) {
+    const k = KEEPOUT[i];
+    if (x >= k[0] && x <= k[1] && z >= k[2] && z <= k[3]) return true;
+  }
+  return false;
+}
+
+/**
  * Deterministic scatter over an annulus. `make(x, z, rnd, i)` returns the def.
  * Seeded by `hash2`, so the meadow dresses itself identically every load and
- * `reset()` never moves a tree (contract hard rule 3).
+ * `reset()` never moves a tree (contract hard rule 3). Points inside a KEEPOUT
+ * are dropped HERE rather than in each `make`, so no call site can forget.
  */
 function scatter(cx, cz, rIn, rOut, n, seed, make) {
   const out = [];
@@ -316,6 +344,7 @@ function scatter(cx, cz, rIn, rOut, n, seed, make) {
     const ang = hash2(i + 11, seed, seed) * Math.PI * 2;
     const rad = rIn + (rOut - rIn) * Math.sqrt(hash2(i + 71, seed * 3 + 5, seed));
     const x = cx + Math.cos(ang) * rad, z = cz + Math.sin(ang) * rad;
+    if (blocked(x, z)) continue;
     const d = make(x, z, hash2(i + 131, seed * 7 + 13, seed), i);
     if (d) out.push(d);
   }
@@ -405,7 +434,15 @@ export default {
     res: 1.0,
     surface: 'grass',
     heights: HEIGHTS,
-    grass: { density: 1.0, height: 0.42, color: GRASS },
+    /* ROUND 2 — the grass is now a CAMERA-LOCAL RING (terrain.js buildGrass):
+     * the CONTRACT §18 budget is spent on a 36 x 36 m tile that wraps around the
+     * viewer instead of being smeared at 1 blade/m2 over 19 600 m2, which is what
+     * made _shots/_v38_verdant.png read as confetti over painted ground. `density`
+     * is now blades per square metre and only sizes that tile; `height` can go
+     * back up because the blades are dense enough to be turf rather than objects.
+     * `cross: false` keeps the field at 2 triangles per blade on a course that is
+     * already over the 450 k budget. */
+    grass: { count: 18000, density: 26, height: 0.22, cross: false, color: 0x5f8f43 },
     // Mown paths: darker, shorter grass and no blades, so the eye is led even
     // though the course is open. These are the routes the coins follow.
     paths: [
@@ -759,7 +796,7 @@ export default {
     { kind: 'breakable', p: [-12, r2(gy(-12, -6) + 1.1), -6], s: [2.2, 2.2, 2.2], mat: 'wood', shape: 'cage', tint: 0x5a4128, drop: 'crest', openOn: 'gnasher-freed' },
     { kind: 'deco', kindOf: 'lantern', p: [-12, r2(gy(-12, -6) + 2.9), -6], s: [0.5, 0.7, 0.5], mat: 'metal', tint: GOLD },
     { kind: 'light', p: [-12, r2(gy(-12, -6) + 2.6), -6], color: GOLD, intensity: 6, distance: 12 },
-    { kind: 'deco', kindOf: 'stump', p: on(-4.4, -9.6, 0.3), s: [1.0, 0.7, 1.0], mat: 'wood', tint: 0x6b4a28 },
+    { kind: 'deco', kindOf: 'stump', p: on(-4.4, -9.6, 0.3), s: [1.0, 0.7, 1.0], mat: 'wood', tint: 0x6b4a28, count: 3, spread: 4.2, jitter: 0.30 },
 
     /* ========================================================================
      * BEAT 6 — THE POND
@@ -784,7 +821,7 @@ export default {
     // line) so the pond has an edge instead of a seam.
     ...scatter(-40, -8, 15.0, 17.5, 16, 6110, (x, z, rnd) => (
       gy(x, z) < 1.15 || gy(x, z) > 2.6 ? null
-        : { kind: 'deco', kindOf: 'plant', p: on(x, z, 0.35 + rnd * 0.3), s: [0.7, 0.9 + rnd * 0.8, 0.7], mat: 'leaves', tint: 0x5f8f45 }
+        : { kind: 'deco', kindOf: 'plant', p: on(x, z, 0.35 + rnd * 0.3), s: [0.7, 0.9 + rnd * 0.8, 0.7], mat: 'leaves', tint: 0x5f8f45, count: 4, spread: 2.2, jitter: 0.35 }
     )),
 
     /* ========================================================================
@@ -814,7 +851,7 @@ export default {
     { kind: 'rock', p: on(-33.4, 29.0, -0.6), r: 2.0, seed: 7204, mat: 'stone' },
     { kind: 'rock', p: on(-22.8, 28.4, -0.6), r: 1.7, seed: 7205, mat: 'stone' },
     ...scatter(-28, 30, 3.0, 7.0, 7, 7210, (x, z, rnd) => (
-      { kind: 'deco', kindOf: 'mushroom', p: on(x, z, 0.16), s: [0.4 + rnd * 0.35, 0.5 + rnd * 0.4, 0.4 + rnd * 0.35], mat: 'plaster', tint: 0xd9c8a6 }
+      { kind: 'deco', kindOf: 'mushroom', p: on(x, z, 0.16), s: [0.4 + rnd * 0.35, 0.5 + rnd * 0.4, 0.4 + rnd * 0.35], mat: 'plaster', tint: 0xd9c8a6, count: 6, spread: 1.5, jitter: 0.4 }
     )),
 
     /* ========================================================================
@@ -836,7 +873,9 @@ export default {
     // north-east of the mill: clear of the sail disc (z >= −3.70 against the
     // disc's −4.77) and outside the tower drum, with a pitched roof so it can
     // never be mistaken for a platform.
-    { kind: 'building', style: 'cottage', p: [43.4, r2(gy(43.4, -1.4) - 0.25), -1.4], s: [4.6, 3.6, 4.6], mat: 'plaster', tint: 0xe6dcc2, footing: 2.5 },
+    // p is the CENTRE of the s box (builders.js buildBuilding), so the base sits
+    // at p.y - 1.80: gy - 0.25, a quarter of a metre bedded into the meadow.
+    { kind: 'building', style: 'cottage', p: [43.4, r2(gy(43.4, -1.4) + 1.55), -1.4], s: [4.6, 3.6, 4.6], mat: 'plaster', tint: 0xe6dcc2, footing: 2.5 },
     // `dir: -1` so the arms turn the way this beat is written: an arm boarded at
     // the bottom of the sweep reaches 3 o'clock in a QUARTER turn (2.75 s), not
     // three quarters the long way over the top.
@@ -850,7 +889,7 @@ export default {
     { kind: 'deco', kindOf: 'pillar', p: [57.5, ISLAND_TOP + 1.0, -8.6], s: [0.9, 2.2, 0.9], mat: 'stone', tint: STONE },
     { kind: 'deco', kindOf: 'pillar', p: [57.5, ISLAND_TOP + 1.0, -3.4], s: [0.9, 2.2, 0.9], mat: 'stone', tint: STONE },
     { kind: 'tree', p: [59.4, ISLAND_TOP, -8.8], h: 4.2, r: 1.7, climbable: false, mat: 'bark', tint: 0x6b4a2a, leafTint: LEAF, seed: 811 },
-    { kind: 'deco', kindOf: 'flowerbed', p: [53.0, ISLAND_TOP + 0.1, -9.2], s: [3.0, 0.25, 2.2], mat: 'leaves', tint: FLOWER },
+    { kind: 'deco', kindOf: 'flowerbed', p: [53.0, ISLAND_TOP + 0.1, -9.2], s: [3.0, 0.25, 2.2], mat: 'leaves', tint: FLOWER, count: 5, spread: 3.4, jitter: 0.34 },
     { kind: 'light', p: [55.5, ISLAND_TOP + 3.0, -6], color: GOLD, intensity: 8, distance: 20 },
 
     /* ========================================================================
@@ -927,15 +966,15 @@ export default {
 
     ...scatter(6, 30, 4, 24, 12, 9101, (x, z, rnd) => (
       gy(x, z) < 1.7 ? null
-        : { kind: 'deco', kindOf: 'bush', p: on(x, z, 0.35), s: [1.1 + rnd, 0.8 + rnd * 0.6, 1.1 + rnd], mat: 'leaves', tint: 0x568c40 }
+        : { kind: 'deco', kindOf: 'bush', p: on(x, z, 0.35), s: [1.1 + rnd, 0.8 + rnd * 0.6, 1.1 + rnd], mat: 'leaves', tint: 0x568c40, count: 3, spread: 2.8, jitter: 0.32 }
     )),
     ...scatter(-30, 12, 4, 20, 8, 9102, (x, z, rnd) => (
       gy(x, z) < 1.7 ? null
-        : { kind: 'deco', kindOf: 'bush', p: on(x, z, 0.32), s: [1.0 + rnd, 0.7 + rnd * 0.6, 1.0 + rnd], mat: 'leaves', tint: 0x4f8a3c }
+        : { kind: 'deco', kindOf: 'bush', p: on(x, z, 0.32), s: [1.0 + rnd, 0.7 + rnd * 0.6, 1.0 + rnd], mat: 'leaves', tint: 0x4f8a3c, count: 3, spread: 2.6, jitter: 0.32 }
     )),
     ...scatter(20, -34, 6, 22, 8, 9103, (x, z, rnd) => (
       gy(x, z) < 1.7 ? null
-        : { kind: 'deco', kindOf: 'bush', p: on(x, z, 0.3), s: [0.9 + rnd, 0.7 + rnd * 0.5, 0.9 + rnd], mat: 'leaves', tint: 0x50864a }
+        : { kind: 'deco', kindOf: 'bush', p: on(x, z, 0.3), s: [0.9 + rnd, 0.7 + rnd * 0.5, 0.9 + rnd], mat: 'leaves', tint: 0x50864a, count: 3, spread: 2.4, jitter: 0.32 }
     )),
 
     ...scatter(-4, 30, 6, 26, 7, 9201, (x, z, rnd) => (
@@ -948,16 +987,41 @@ export default {
       gy(x, z) < 1.8 ? null : { kind: 'rock', p: on(x, z, -0.4), r: 1.0 + rnd * 1.6, seed: 9203 + x, mat: 'stone' }
     )),
 
-    { kind: 'deco', kindOf: 'flowerbed', p: on(-6.4, 38.0, 0.1), s: [3.4, 0.25, 2.4], mat: 'leaves', tint: FLOWER },
-    { kind: 'deco', kindOf: 'flowerbed', p: on(7.2, 35.6, 0.1), s: [2.8, 0.25, 3.0], mat: 'leaves', tint: 0xf0d24e },
-    { kind: 'deco', kindOf: 'flowerbed', p: on(-13.6, 27.4, 0.1), s: [3.0, 0.25, 2.2], mat: 'leaves', tint: 0xc7e0f5 },
-    { kind: 'deco', kindOf: 'flowerbed', p: on(12.4, 14.6, 0.1), s: [2.6, 0.25, 2.6], mat: 'leaves', tint: FLOWER },
-    { kind: 'deco', kindOf: 'flowerbed', p: on(-24.0, 2.4, 0.1), s: [3.2, 0.25, 2.4], mat: 'leaves', tint: 0xf0d24e },
-    { kind: 'deco', kindOf: 'flowerbed', p: on(21.0, 4.0, 0.1), s: [2.6, 0.25, 2.8], mat: 'leaves', tint: FLOWER },
+    { kind: 'deco', kindOf: 'flowerbed', p: on(-6.4, 38.0, 0.1), s: [3.4, 0.25, 2.4], mat: 'leaves', tint: FLOWER, count: 5, spread: 3.4, jitter: 0.34 },
+    { kind: 'deco', kindOf: 'flowerbed', p: on(7.2, 35.6, 0.1), s: [2.8, 0.25, 3.0], mat: 'leaves', tint: 0xf0d24e, count: 5, spread: 3.4, jitter: 0.34 },
+    { kind: 'deco', kindOf: 'flowerbed', p: on(-13.6, 27.4, 0.1), s: [3.0, 0.25, 2.2], mat: 'leaves', tint: 0xc7e0f5, count: 5, spread: 3.4, jitter: 0.34 },
+    { kind: 'deco', kindOf: 'flowerbed', p: on(12.4, 14.6, 0.1), s: [2.6, 0.25, 2.6], mat: 'leaves', tint: FLOWER, count: 5, spread: 3.4, jitter: 0.34 },
+    { kind: 'deco', kindOf: 'flowerbed', p: on(-24.0, 2.4, 0.1), s: [3.2, 0.25, 2.4], mat: 'leaves', tint: 0xf0d24e, count: 5, spread: 3.4, jitter: 0.34 },
+    { kind: 'deco', kindOf: 'flowerbed', p: on(21.0, 4.0, 0.1), s: [2.6, 0.25, 2.8], mat: 'leaves', tint: FLOWER, count: 5, spread: 3.4, jitter: 0.34 },
 
-    { kind: 'deco', kindOf: 'stump', p: on(9.6, 27.0, 0.28), s: [1.1, 0.65, 1.1], mat: 'wood', tint: 0x6b4a28 },
-    { kind: 'deco', kindOf: 'stump', p: on(-17.2, 20.4, 0.26), s: [1.0, 0.6, 1.0], mat: 'wood', tint: 0x6b4a28 },
-    { kind: 'deco', kindOf: 'stump', p: on(31.2, 20.0, 0.3), s: [1.2, 0.7, 1.2], mat: 'wood', tint: 0x6b4a28 },
+    { kind: 'deco', kindOf: 'stump', p: on(9.6, 27.0, 0.28), s: [1.1, 0.65, 1.1], mat: 'wood', tint: 0x6b4a28, count: 3, spread: 4.2, jitter: 0.30 },
+    { kind: 'deco', kindOf: 'stump', p: on(-17.2, 20.4, 0.26), s: [1.0, 0.6, 1.0], mat: 'wood', tint: 0x6b4a28, count: 3, spread: 4.2, jitter: 0.30 },
+    { kind: 'deco', kindOf: 'stump', p: on(31.2, 20.0, 0.3), s: [1.2, 0.7, 1.2], mat: 'wood', tint: 0x6b4a28, count: 3, spread: 4.2, jitter: 0.30 },
+
+    /* ROUND 2 — DECOR DENSITY (owner reject R11). Every deco def in this file
+     * was a single instance: 41 props across 16 kinds over a 140 x 140 m meadow,
+     * which is why the field read as a diorama with objects placed on it rather
+     * than as a place. props.js placeProps has supported per-def `count`/`spread`
+     * seeded scatter since it was written and nothing in the repo called it.
+     *
+     * This is perf-SAFE by construction: course.js hands placeProps a decor
+     * budget (52 k triangles / 24 draws) and placeProps thins every bucket
+     * uniformly to fit, keeping at least one of every kind. So asking for more
+     * spends the SAME triangles across more, smaller instances — which is
+     * exactly the trade a meadow wants — and cannot push the course over the
+     * perf gate. */
+    ...scatter(0, 6, 14, 58, 18, 33101, (x, z, rnd) => (
+      gy(x, z) < 1.4 ? null
+        : { kind: 'deco', kindOf: 'flowerbed', p: on(x, z, 0.08),
+            s: [1.5 + rnd * 1.4, 0.22, 1.4 + rnd * 1.2], mat: 'leaves',
+            tint: rnd > 0.62 ? 0xf0d24e : FLOWER, count: 4, spread: 3.0, jitter: 0.36 }
+    )),
+    ...scatter(0, 2, 10, 54, 16, 33203, (x, z, rnd) => (
+      gy(x, z) < 1.6 ? null
+        : { kind: 'deco', kindOf: 'plant', p: on(x, z, 0.24 + rnd * 0.2),
+            s: [0.6 + rnd * 0.4, 0.8 + rnd * 0.7, 0.6 + rnd * 0.4], mat: 'leaves',
+            tint: rnd > 0.5 ? 0x5f8f45 : 0x6f9f4f, count: 5, spread: 2.6, jitter: 0.38 }
+    )),
 
     // A meadow paddock behind spawn, so the diorama has a human edge.
     { kind: 'fence', a: on(-12, 50, 0), b: on(-4, 51, 0), mat: 'wood', tint: TIMBER },

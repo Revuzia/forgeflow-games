@@ -482,18 +482,43 @@ for (const px of [-9, 9]) {
   }
 }
 
-/* --- the five east windows: glazing, tracery, and the shafts they throw -- */
+/* --- the five east windows: glazing, tracery, and the shafts they throw --
+ *
+ * ROUND 1 VISUAL FIX — "the Keep is blown out" (owner-observed,
+ * `_shots/verify_keep.png`: mean luminance 0.640, 13.9 % of the frame over
+ * 0.90, 4.5 % clipped over 0.97, mean saturation 0.111 — a near-monochrome
+ * white frame where the contract asks for warm stone with amber window light
+ * and a cool blue fill). Four emitters stacked on one wall:
+ *
+ *   1. the glazing at `emissive: 0.55` over 9.5 m x 2.8 m, five times over;
+ *   2. three DAYLIGHT practicals at intensity 10 / range 26 sitting 1.4 m off
+ *      that same wall, so the wall itself was the brightest thing in the room;
+ *   3. five god-ray columns hanging 6.4 m ABOVE the floor (see procGodray:
+ *      they were vertical, not raked, so they never reached the floor and
+ *      instead stacked into a bank of horizontal white slats across the frame);
+ *   4. all of it under exposure 1.05 with a bloom threshold of 1.02.
+ *
+ * Here: the glazing drops to a plausible bright-but-not-molten value, the
+ * practicals move INTO the room and lose two thirds of their intensity (they
+ * are meant to be the bounce off the sill, not a second sun), and the shafts
+ * are re-hung from the window down to the floor with a rake that matches the
+ * theme key `dir` [-0.82, 0.42, 0.38] — a shaft now lands about 6 m inside the
+ * hall, which is what casts the long bars the theme comment promises.
+ * Exposure / bloom / ambient are in themes.js. */
 const WINDOWS = [];
 let WIN_LIT = 0;
 for (const [z0, z1] of [[-10.7, -7.86], [-6.06, -3.22], [-1.42, 1.42], [3.22, 6.06], [7.86, 10.7]]) {
   const zc = (z0 + z1) / 2, w = z1 - z0;
-  WINDOWS.push(deco('panel', [20.6, 6.05, zc], [0.30, 9.5, w - 0.16], { mat: 'glass', tint: DAYLIGHT, emissive: 0.55 }));
+  WINDOWS.push(deco('panel', [20.6, 6.05, zc], [0.30, 9.5, w - 0.16], { mat: 'glass', tint: DAYLIGHT, emissive: 0.18 }));
   WINDOWS.push(deco('archway', [20.15, 6.05, zc], [0.28, 9.5, w], { rot: [0, EAST, 0], mat: 'stone' }));
-  WINDOWS.push(deco('godray', [17.6, 6.4, zc - 1.1], [w * 0.9, 12.0, 7.4],
-    { rot: [0, EAST, 0], mat: 'emissive', tint: DAYLIGHT, opacity: 0.16, theme: 'keep' }));
+  /* the shaft: top pinned at the window (y 8.6), foot on the floor ~6 m west.
+   * `params.tilt` is metres of westward slide per metre of drop. */
+  WINDOWS.push(deco('godray', [19.4, 0.04, zc - 0.4], [w * 1.05, 8.6, 7.4],
+    { rot: [0, EAST, 0], theme: 'keep', tint: DAYLIGHT, opacity: 0.075,
+      params: { tilt: 0.72, spread: 2.35 } }));
   /* one practical per OTHER bay: five would be five real-time lights for one
      wall, and the shafts already carry the read. */
-  if (WIN_LIT++ % 2 === 0) WINDOWS.push(lamp([19.2, 7.4, zc], DAYLIGHT, 10.0, 26));
+  if (WIN_LIT++ % 2 === 0) WINDOWS.push(lamp([17.2, 6.6, zc], DAYLIGHT, 3.4, 15));
 }
 
 /* ===========================================================================
@@ -1074,7 +1099,11 @@ const TERRAIN = {
     ],
     ridges: [],
   },
-  grass: { density: 1.0, height: 0.32, color: 0x6faa4a },
+  /* ROUND 2: camera-local ring (terrain.js). `density` is blades/m2 and sizes
+   * the wrapping tile; `cross: false` halves the field's triangles — a crossed
+   * card buys nothing at this blade size and the Keep was 27 k triangles over
+   * the perf budget with it on. */
+  grass: { count: 9000, density: 26, height: 0.22, cross: false, color: 0x548036 },
   paths: [
     { pts: [[0, 14], [0, 24], [0, 25.8]], w: 3.4 },
     { pts: [[0, 35.2], [0, 41], [0, 47]], w: 3.4 },

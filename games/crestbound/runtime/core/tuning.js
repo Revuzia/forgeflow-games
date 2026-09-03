@@ -54,7 +54,16 @@ export const TUNE = {
   conveyorMax: 8.0,
   bounceDefaultApex: 4.0,
   // --- camera ---
-  cam: { dist: 6.8, minDist: 1.6, height: 1.55, shoulder: 0.35, fov: 58, fovRun: 63,
+  // CONTRACT NOTE (§12): `frameMin` is ADDITIVE to the cam block the contract
+  // pins — every key the contract lists keeps its contract value. It is the
+  // distance below which the hero stops being readable in frame, and it is what
+  // turns the collision solver's pull-in from a single response into a ranked
+  // one: past it, camera.js re-casts the whisker fan at bounded yaw offsets and
+  // slides AROUND the occluder, and only pulls in tight (floored at the near
+  // plane, exactly as §12 words it) when no bounded heading is clear. Without
+  // it any obstruction inside ~2 m of the focus deleted the player character.
+  cam: { dist: 6.8, minDist: 1.6, frameMin: 2.4, height: 1.55, shoulder: 0.35,
+         fov: 58, fovRun: 63,
          lagPos: 9, lagYaw: 5, autoYaw: 1.3, pitchMin: -0.55, pitchMax: 0.95,
          defaultPitch: 0.22, orbitSpeedKey: 2.4, orbitSpeedMouse: 0.0024,
          collideRadius: 0.35, recenterTime: 0.35, peekFov: 70 },

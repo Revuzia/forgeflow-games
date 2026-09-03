@@ -2027,10 +2027,28 @@ function procEmblem(themeId, o) {
  * and thins toward the floor), which is the opposite of the quad's default mapping.
  */
 const GODRAY_GAIN = 0.10;
+/**
+ * ROUND 1 VISUAL FIX (owner-observed: "the Keep is blown out", zoom
+ * `_shots/_zoom_keepwin.png`). Two defects, both here:
+ *
+ *   a) A god ray from a raking key is a SLANTED shaft: it leaves the window
+ *      high and lands on the floor well inside the room. This generator built
+ *      a strictly VERTICAL widening column, and keep.js compensated by lifting
+ *      it 6.4 m off the floor — so five windows' worth of 12 m columns hung in
+ *      the air ABOVE head height and read as a bank of horizontal white slats,
+ *      not as light. `tilt` (metres the foot slides per metre of drop, along
+ *      local +Z) shears the quad so the top stays pinned at the window and the
+ *      foot lands where the key actually points.
+ *   b) `p.gain` was the only intensity channel and course data had no way to
+ *      reach it (see `placeProps` — `def.params` was never populated by any
+ *      course, and keep.js's authored `opacity: 0.16` was silently dropped).
+ *      The alias in placeProps now delivers it.
+ */
 function procGodray(themeId, o) {
   const L = look(themeId);
   const p = o || {};
   const h = p.h || 6.0, w = p.w || 1.20, spread = p.spread === undefined ? 1.9 : p.spread;
+  const tilt = p.tilt === undefined ? 0 : p.tilt;
   const parts = [];
   const glow = getGlow(p.color || L.glow, {
     mode: 'shaft', power: 2.1, speed: 0.30,
@@ -2044,6 +2062,8 @@ function procGodray(themeId, o) {
       const y01 = pos.getY(v) + 0.5;                 // 0 at the base, 1 at the top
       pos.setX(v, pos.getX(v) * w * (1 + (1 - y01) * (spread - 1)));
       pos.setY(v, y01 * h);
+      // shear: the window end (y01 = 1) stays put, the floor end slides
+      pos.setZ(v, pos.getZ(v) + (1 - y01) * tilt * h);
       if (uv) uv.setXY(v, uv.getX(v), 1 - y01);      // 0 = the window, 1 = the floor
     }
     pos.needsUpdate = true;
@@ -2368,14 +2388,39 @@ function makeEntry(id, source, parts, targetH, spec) {
 }
 
 /** Build an entry straight from a procedural generator. */
+/**
+ * Load-time accounting for the prop pipeline, read by
+ * `_harness/_loadprofile.py`. Course load is gated at 1500 ms and prop work was
+ * measured at ~3.6 s of a cold load, so where inside that it goes is not a
+ * thing to guess at. Cheap enough to leave on: two counters and a clock read
+ * per prop KIND (not per instance), none of it in a per-frame path.
+ */
+export const PROP_STATS = { buildMs: 0, entries: 0, placeMs: 0, placed: 0, slowest: '' };
+
+/** Zero the counters (call before a load you want to attribute). */
+export function resetPropStats() {
+  PROP_STATS.buildMs = 0; PROP_STATS.entries = 0;
+  PROP_STATS.placeMs = 0; PROP_STATS.placed = 0; PROP_STATS.slowest = '';
+}
+
+const _pnow = (typeof performance !== 'undefined' && performance.now)
+  ? () => performance.now() : () => Date.now();
+let _slowestMs = 0;
+
 function buildProcEntry(id, themeId, spec) {
+  const t0 = _pnow();
   const gen = PROC[(spec && spec.proc) || id] || PROC.crate;
   const params = Object.assign({}, (spec && spec.params) || null);
   const res = gen(themeId, params);
-  return makeEntry(id, 'procedural', res.parts, (spec && spec.h) || 1, {
+  const out = makeEntry(id, 'procedural', res.parts, (spec && spec.h) || 1, {
     fit: spec && spec.fit, light: spec && spec.light, tags: spec && spec.tags,
     animated: res.animated, themeId,
   });
+  const ms = _pnow() - t0;
+  PROP_STATS.buildMs += ms;
+  PROP_STATS.entries++;
+  if (ms > _slowestMs) { _slowestMs = ms; PROP_STATS.slowest = id + ' ' + ms.toFixed(0) + 'ms'; }
+  return out;
 }
 
 /** Flatten a loaded glTF scene into {geometry, material} parts in world space. */
@@ -2458,9 +2503,43 @@ function flattenGltf(scene, maxAniso) {
  * @param {object} [opts] {basePath, timeoutMs}
  * @returns {Promise<object>} the prop library
  */
+/**
+ * Prop libraries, keyed by theme id.
+ *
+ * MEASURED (`_harness/_loadprofile.py`, verdant-1, 2026-09-02): building the
+ * library took **2920.8 ms of a 7226 ms course load** — by far the largest
+ * single phase — and it was redone from scratch on every `loadCourse`, even
+ * returning to a theme already visited. Almost none of that is file IO: four
+ * of the five realms ship no GLBs at all, so the time is `buildProcEntry`
+ * generating the same ~50 procedural prop geometries again.
+ *
+ * A library is template data: `placeProps` builds `InstancedMesh(part.geometry,
+ * part.material, n)` straight off it and its own `dispose()` only frees the
+ * per-instance buffers, so the entry geometries outlive any one course and are
+ * safe — in fact cheaper — to share. Nothing called `library.dispose()`
+ * before this, so those geometries were leaked once per load; now there is one
+ * set per theme for the life of the page. `disposeProps()` clears the cache.
+ *
+ * @type {Map<string, object>}
+ */
+const _libCache = new Map();
+
+/** Drop one theme's cached prop library (or all of them). */
+export function invalidatePropLibrary(themeId) {
+  if (themeId === undefined) {
+    for (const lib of _libCache.values()) { try { lib.dispose(); } catch (e) { /* best effort */ } }
+    _libCache.clear();
+    return;
+  }
+  const lib = _libCache.get(themeId);
+  if (lib) { try { lib.dispose(); } catch (e) { /* best effort */ } _libCache.delete(themeId); }
+}
+
 export async function loadProps(themeId, renderer, opts) {
   const o = opts || {};
   if (o.mats !== undefined) setPropsMaterials(o.mats);
+  const cached = _libCache.get(themeId);
+  if (cached && o.fresh !== true) return cached;
   const manifest = THEME_MANIFEST[themeId] || THEME_MANIFEST.keep;
   const maxAniso = (renderer && renderer.capabilities && renderer.capabilities.getMaxAnisotropy)
     ? Math.min(8, renderer.capabilities.getMaxAnisotropy()) : 4;
@@ -2485,9 +2564,13 @@ export async function loadProps(themeId, renderer, opts) {
   } catch (e) { /* no manifest: procedural */ }
   if (!shipped) shipped = new Set();
 
+  /* DEFERRED, not built: see the `lazy` note on makeLibrary. A course places a
+     handful of prop kinds; building all ~50 up front was 2.9 s of the load. */
+  const lazy = new Map();
+
   const jobs = manifest.map(async (spec) => {
     if (spec.procOnly || !shipped.has(spec.id)) {
-      entries.set(spec.id, buildProcEntry(spec.id, themeId, spec));
+      lazy.set(spec.id, spec);
       if (!spec.procOnly) missing.push(spec.id);
       return;
     }
@@ -2501,23 +2584,23 @@ export async function loadProps(themeId, renderer, opts) {
       }));
     } catch (e) {
       missing.push(spec.id);
-      entries.set(spec.id, buildProcEntry(spec.id, themeId, spec));
+      lazy.set(spec.id, spec);
     }
   });
   await Promise.all(jobs);
 
   // every procedural generator is also addressable by name, so a stage can ask
-  // for `model:'holosign'` in any theme
+  // for `model:'holosign'` in any theme — also deferred until asked for
   for (let i = 0; i < PROC_PROPS.length; i++) {
     const name = PROC_PROPS[i];
-    if (!entries.has(name)) {
-      entries.set(name, buildProcEntry(name, themeId, {
-        proc: name, h: PROC_DEFAULT_H[name] || 1, fit: PROC_DEFAULT_FIT[name],
-      }));
+    if (!entries.has(name) && !lazy.has(name)) {
+      lazy.set(name, { proc: name, h: PROC_DEFAULT_H[name] || 1, fit: PROC_DEFAULT_FIT[name] });
     }
   }
 
-  return makeLibrary(themeId, entries, missing);
+  const lib = makeLibrary(themeId, entries, missing, lazy);
+  _libCache.set(themeId, lib);
+  return lib;
 }
 
 /**
@@ -2553,11 +2636,12 @@ const PROC_DEFAULT_H = {
  */
 export function proceduralLibrary(themeId, mats) {
   if (mats !== undefined) setPropsMaterials(mats);
+  const cached = _libCache.get(themeId);
+  if (cached) return cached;
   const manifest = THEME_MANIFEST[themeId] || THEME_MANIFEST.keep;
   const entries = new Map();
-  for (let i = 0; i < manifest.length; i++) {
-    entries.set(manifest[i].id, buildProcEntry(manifest[i].id, themeId, manifest[i]));
-  }
+  const lazy = new Map();
+  for (let i = 0; i < manifest.length; i++) lazy.set(manifest[i].id, manifest[i]);
   for (let i = 0; i < PROC_PROPS.length; i++) {
     const name = PROC_PROPS[i];
     if (!entries.has(name)) {
@@ -2569,14 +2653,41 @@ export function proceduralLibrary(themeId, mats) {
   return makeLibrary(themeId, entries, manifest.map((s) => s.id));
 }
 
-function makeLibrary(themeId, entries, missing) {
+function makeLibrary(themeId, entries, missing, lazy) {
+  /**
+   * `lazy` holds prop SPECS that have not been turned into geometry yet.
+   *
+   * MEASURED (`_harness/_loadprofile.py`, verdant-1): building every manifest
+   * entry plus every generator in PROC_PROPS up front cost 2920.8 ms of a
+   * 7226 ms course load — the single largest phase of a load — and a course
+   * places a handful of prop kinds, not fifty. `placeProps` reaches the
+   * library only through `get(id)` / `procedural(id, …)`, so a prop is
+   * generated the first time something actually asks for it and never again.
+   */
+  const specs = lazy || new Map();
+
+  const realise = (id) => {
+    const hit = entries.get(id);
+    if (hit) return hit;
+    const spec = specs.get(id);
+    if (!spec) return null;
+    const e = buildProcEntry(id, themeId, spec);
+    entries.set(id, e);
+    specs.delete(id);
+    return e;
+  };
+
   return {
     theme: themeId,
     entries,
     missing,
-    get ids() { return Array.from(entries.keys()); },
-    has(id) { return entries.has(id); },
-    get(id) { return entries.get(id) || null; },
+    get ids() {
+      const out = Array.from(entries.keys());
+      for (const k of specs.keys()) if (out.indexOf(k) < 0) out.push(k);
+      return out;
+    },
+    has(id) { return entries.has(id) || specs.has(id); },
+    get(id) { return realise(id); },
 
     /**
      * A standalone, non-instanced copy of a prop. Pass `light:true` to attach a
@@ -2629,8 +2740,32 @@ function makeLibrary(themeId, entries, missing) {
         for (let i = 0; i < e.parts.length; i++) e.parts[i].geometry.dispose();
       }
       entries.clear();
+      specs.clear();
     },
   };
+}
+
+/**
+ * Authored deco intent -> procedural-generator params.
+ *
+ * `procedural(name, params, h)` has always taken a params object, but nothing
+ * ever built one: no course module in the repo writes `params:` (verified by
+ * grep across runtime/data), so every knob a generator exposed was dead and
+ * every generator ran on its defaults. keep.js's god rays are the case that
+ * made it visible — they authored `tint` and `opacity: 0.16` and got the
+ * hard-coded GODRAY_GAIN and the theme glow colour instead, which is half of
+ * why the Keep blew out.
+ *
+ * The two aliases below are the vocabulary course data already uses; anything
+ * under an explicit `params` still wins.
+ */
+function procParams(def) {
+  const explicit = def.params;
+  const out = {};
+  if (def.tint !== undefined) out.color = def.tint;
+  if (def.opacity !== undefined) out.gain = def.opacity;
+  if (explicit) for (const k in explicit) out[k] = explicit[k];
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -2674,6 +2809,7 @@ function makeLibrary(themeId, entries, missing) {
  *            instances:number, skipped:string[], dispose:function}}
  */
 export function placeProps(stageGroup, defs, propLibrary, rng, opts) {
+  const _t0 = _pnow();
   const o = opts || {};
   const sink = typeof o.lightSink === 'function' ? o.lightSink : null;
   const maxLights = o.maxLights === undefined ? 2 : o.maxLights;
@@ -2694,7 +2830,7 @@ export function placeProps(stageGroup, defs, propLibrary, rng, opts) {
     const id = def.model || def.kindOf;
     if (!id) continue;
     let entry = propLibrary.get(id);
-    if (!entry && PROC[id]) entry = propLibrary.procedural(id, def.params, def.h);
+    if (!entry && PROC[id]) entry = propLibrary.procedural(id, procParams(def), def.h);
     if (!entry) { if (out.skipped.indexOf(id) < 0) out.skipped.push(id); continue; }
 
     const p = def.p || [0, 0, 0];
@@ -2854,6 +2990,9 @@ export function placeProps(stageGroup, defs, propLibrary, rng, opts) {
     }
   }
 
+  PROP_STATS.placeMs += _pnow() - _t0;
+  PROP_STATS.placed += out.instances | 0;
+
   out.dispose = function () {
     for (let i = 0; i < out.meshes.length; i++) {
       const m = out.meshes[i];
@@ -2875,8 +3014,9 @@ export function placeProps(stageGroup, defs, propLibrary, rng, opts) {
   return out;
 }
 
-/** Release every cached prop material owned by this module. */
+/** Release every cached prop material AND prop library owned by this module. */
 export function disposeProps() {
+  invalidatePropLibrary();
   for (const m of _matCache.values()) m.dispose();
   _matCache.clear();
 }

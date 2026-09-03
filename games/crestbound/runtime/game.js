@@ -111,6 +111,12 @@ const GATE_REARM_R = 2.6;                 // must leave this far before a cancel
 const FEN_TALK_R = 2.6;
 const FEN_PROMPT_R = 4.5;
 
+/** Coins that buy a crest — contract §0 names. The ONE coin denominator. */
+const COINS_FOR_CREST = 100;
+
+/** Largest single presentation step, ms — matches engine.MAX_PRESENT_DT. */
+const MAX_PRESENT_MS = 1000;
+
 const COURSE_TOAST_MS = 2600;
 const ACTION_COOLDOWN = 380;              // ms — de-dupes key + event paths
 const POWER_DEFAULT_S = 30;
@@ -276,6 +282,7 @@ export class Game {
     this._prePauseState = 'playing';
     this._wasLockedAtPause = false;
     this._deathT = -1;                // <0 = no death sequence running
+    this._deathSeeded = false;        // first step owns the frame the kill landed in
     this._deathCause = 'void';
     this._deathSwapped = false;
     this._deathSoft = false;
@@ -538,6 +545,40 @@ export class Game {
       if (!g.CRESTBOUND) g.CRESTBOUND = { engine: this.engine, game: this, THREE, version: '0.1.0' };
       else { g.CRESTBOUND.game = this; g.CRESTBOUND.engine = this.engine; }
     } catch (e) { /* non-browser */ }
+  }
+
+  /* ======================================================================
+   * Live run counters — ONE scope, ONE denominator.
+   *
+   * The HUD chip, the pause header and the course-clear panel all used to read
+   * a different pair (live coins vs `save.coinsBest`, the 100-coin crest
+   * threshold vs the count of coins PLACED in the course), so one run could
+   * read 37/100, 0/100 and 0/121 on three surfaces at once. These two getters
+   * are the single source: what the player is holding RIGHT NOW, and the
+   * threshold that buys the coin crest.
+   * ====================================================================*/
+  /** Coins banked in the CURRENT visit (not the save's best). */
+  get coins() {
+    const c = this._collectibles;
+    return c && c.counts && isNum(c.counts.coins) ? c.counts.coins | 0 : 0;
+  }
+
+  /** Coins that buy this course's coin crest — the one denominator (default 100). */
+  get coinsGoal() {
+    const d = this.def;
+    if (d && Array.isArray(d.crests)) {
+      for (let i = 0; i < d.crests.length; i++) {
+        const cr = d.crests[i];
+        if (cr && cr.type === 'coins' && isNum(cr.threshold) && cr.threshold > 0) return cr.threshold | 0;
+      }
+    }
+    return COINS_FOR_CREST;
+  }
+
+  /** Sigils banked in the current visit. */
+  get sigils() {
+    const c = this._collectibles;
+    return c && c.counts && isNum(c.counts.sigils) ? c.counts.sigils | 0 : 0;
   }
 
   _suspendInput(on) {
@@ -1548,6 +1589,7 @@ export class Game {
     this._deathSoft = !isDeath;
     this._deathSwapped = false;
     this._deathIsRewinding = false;
+    this._deathSeeded = false;
     this._deathT = isDeath ? 0 : T_SOFT_START;
     this._timerRun = false;
     this._setPrompt('', '');
@@ -1649,7 +1691,19 @@ export class Game {
   }
 
   _stepDeath(ms) {
-    this._deathT += ms;
+    /* The death clock is ANCHORED to the kill instant, not to the frames after
+       it: the kill is detected below the presentation steppers, so the first
+       step also owns the part of that frame which had already elapsed. Without
+       this the sequence loses up to a whole frame — 18 ms at the perf budget,
+       but most of a second on a stalling frame, which is exactly where
+       `lastRespawnMs` (wall clock) used to overshoot its ceiling. */
+    if (this._deathSeeded) {
+      this._deathT += ms;
+    } else {
+      this._deathSeeded = true;
+      const since = nowMs() - this._deathStartedAt;
+      this._deathT += (isNum(since) && since > ms) ? Math.min(since, MAX_PRESENT_MS) : ms;
+    }
     const t = this._deathT;
 
     /* --- rewind ghost (90..310) --- */
@@ -1882,8 +1936,13 @@ export class Game {
       par: this.def && this.def.par && isNum(this.def.par[crestId]) ? this.def.par[crestId] : 0,
       underPar: this.def && this.def.par && isNum(this.def.par[crestId]) ? ms <= this.def.par[crestId] : false,
       crests: nowGot, crestsTotal: this._crestDefs.length || 7, crestTotal: total,
-      coins: this._collectibles && this._collectibles.counts ? this._collectibles.counts.coins | 0 : 0,
-      coinsTotal: this._collectibles && this._collectibles.counts ? this._collectibles.counts.coinsTotal | 0 : 0,
+      /* ONE scope (this run) and ONE denominator (the crest threshold) — the
+         same pair the HUD chip and the pause header show. `coinsPlaced` stays
+         for anything that wants the count authored into the course, but no
+         surface prints it as the coin goal. */
+      coins: this.coins,
+      coinsTotal: this.coinsGoal,
+      coinsPlaced: this._collectibles && this._collectibles.counts ? this._collectibles.counts.coinsTotal | 0 : 0,
       sigils: this._collectibles && this._collectibles.counts ? this._collectibles.counts.sigils | 0 : 0,
       deaths: this.courseDeaths, totalDeaths: this.deaths, sessionMs: Math.round(this.sessionMs),
       firstClear: !wasCleared,
@@ -2160,13 +2219,26 @@ export class Game {
     const rdt = isNum(dt) && dt > 0 ? Math.min(dt, 1 / 20) : 1 / 60;
     const rms = rdt * 1000;
 
+    /**
+     * PRESENTATION CLOCK — the WALL delta, not the simulation's clamped `dt`.
+     * The 1/20 s clamp exists to keep a long frame from launching the player
+     * through a wall; it has no business slowing a 620 ms death sequence down
+     * to 1.4 s on a 90 ms frame (which is exactly what it did: `lastRespawnMs`
+     * is wall-clock, the sequence was not). Everything the PLAYER WATCHES —
+     * death, cinematic, clear, gate-open, veil, impacts, decals, gate dwell —
+     * runs on `wdt`; everything that MOVES A BODY still runs on `rdt`.
+     */
+    const eng = this.engine;
+    const wdt = eng && isNum(eng.rawDt) && eng.rawDt > 0 ? eng.rawDt : rdt;
+    const wms = wdt * 1000;
+
     /* --- real-time sequences: frozen by a menu state and by nothing else --- */
     const uiFrozen = this.state === 'paused' || (this.menu && this.menu.isOpen && this.state !== 'title');
-    if (this._deathT >= 0 && !uiFrozen) this._stepDeath(rms);
-    if (this._cineT >= 0 && !uiFrozen) this._stepCinematic(rms);
-    if (this._clearT >= 0 && !uiFrozen) this._stepClear(rms);
-    if (this._gateOpenT >= 0 && !uiFrozen) this._stepGateOpen(rms);
-    if (this._veilDur > 0) this._stepVeil(rms);
+    if (this._deathT >= 0 && !uiFrozen) this._stepDeath(wms);
+    if (this._cineT >= 0 && !uiFrozen) this._stepCinematic(wms);
+    if (this._clearT >= 0 && !uiFrozen) this._stepClear(wms);
+    if (this._gateOpenT >= 0 && !uiFrozen) this._stepGateOpen(wms);
+    if (this._veilDur > 0) this._stepVeil(wms);
 
     const live = this._isLive();
     /* 'title' still simulates: the menu sits over a living Keep, not a photo. */
@@ -2204,7 +2276,7 @@ export class Game {
       this._checkDeath();
       this._checkCheckpointVolumes();
     }
-    this._updateGates(rdt);
+    this._updateGates(wdt);
     this._updateFen();
     this._pollPlayerState();
     this._pollMood();
@@ -2226,9 +2298,10 @@ export class Game {
       if (peek !== this._hideHeroForPeek) { this._hideHeroForPeek = peek; safe(() => this.hero.setVisible(!peek), 'hero.setVisible'); }
     }
 
-    /* Real dt: Impacts' cooldowns and its death machine are wall clocks. */
-    if (this.impacts && typeof this.impacts.update === 'function') this.impacts.update(rdt);
-    if (this.decals && typeof this.decals.update === 'function') this.decals.update(rdt);
+    /* WALL dt: Impacts' cooldowns and its death machine are wall clocks — they
+       must agree with the Game's death timeline, which is also wall-driven. */
+    if (this.impacts && typeof this.impacts.update === 'function') this.impacts.update(wdt);
+    if (this.decals && typeof this.decals.update === 'function') this.decals.update(wdt);
     if (this.fx && typeof this.fx.update === 'function') this.fx.update(sdt, this.engine.camera ? this.engine.camera.position : null);
 
     if (this.hud) this.hud.update(rdt, this._snapshot());
@@ -2406,15 +2479,22 @@ export class Game {
     this._veilA = v;
     if (!this.el) return;
     const el = this.el.veil;
-    if (this._veilMode === 'iris') {
+    const clear = v <= 0.001;
+    if (this._veilMode === 'iris' && !clear) {
+      /* The iris expresses coverage through the mask radius, so the plate stays
+         fully opaque while it is on screen. */
       el.style.opacity = '1';
       el.style.setProperty('--cb-ir', ((1 - v) * 100).toFixed(2) + '%');
       el.style.setProperty('--cb-ix', this._veilCx.toFixed(1) + '%');
       el.style.setProperty('--cb-iy', this._veilCy.toFixed(1) + '%');
     } else {
-      el.style.opacity = String(v);
+      /* A CLEARED veil is clear in every mode: display:none alone left an iris
+         plate sitting at opacity 1, so anything that so much as unhid the
+         element (or measured it) saw a full cover over a live course. */
+      el.style.opacity = clear ? '0' : String(v);
+      if (clear) el.style.setProperty('--cb-ir', '100%');
     }
-    el.style.display = v <= 0.001 ? 'none' : 'block';
+    el.style.display = clear ? 'none' : 'block';
   }
 
   _stepVeil(ms) {
@@ -2723,7 +2803,10 @@ const GAME_CSS = `
 #cb-cine .cb-cine-cap{position:absolute;left:6%;right:6%;bottom:12.5vh;text-align:left}
 #cb-cine .cb-cine-name{font:600 12px/1 var(--cb-ui-font);letter-spacing:.44em;color:var(--cb-accent);text-transform:uppercase;opacity:.95}
 #cb-cine .cb-cine-text{margin-top:10px;font:400 clamp(15px,1.6vw,20px)/1.45 var(--cb-ui-font);color:#f3e9d2;max-width:56ch;text-shadow:0 2px 10px rgba(0,0,0,.8)}
-#cb-cine .cb-cine-skip{position:absolute;right:6%;bottom:3.2vh;font:600 10px/1 var(--cb-ui-font);letter-spacing:.4em;color:#8f84b5;text-transform:uppercase;
+/* BOTTOM-CENTRE. The page-level control cluster (game_controls.js) is fixed at
+   bottom:8px right:8px on every ForgeFlow game page; at right:6% this hint's
+   last letter touched the fullscreen chip. The corner is reserved. */
+#cb-cine .cb-cine-skip{position:absolute;left:0;right:0;bottom:56px;text-align:center;font:600 10px/1 var(--cb-ui-font);letter-spacing:.4em;color:#8f84b5;text-transform:uppercase;
   animation:cb-breathe 2.1s ease-in-out infinite}
 @keyframes cb-breathe{0%,100%{opacity:.4}50%{opacity:1}}
 

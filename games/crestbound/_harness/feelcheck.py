@@ -141,7 +141,25 @@ async () => {
 
   const syncP = () => { if (G.player && G.player !== P) P = G.player; return P; };
   const frame = () => new Promise(r => requestAnimationFrame(r));
-  const wait = async (ms) => { const t = performance.now(); while (performance.now() - t < ms) await frame(); };
+  /* THE CLOCK IS GAME TIME, NOT WALL TIME. engine.js accumulates `elapsed` from
+     the CAPPED per-frame dt that game.update() is actually driven with, so under
+     a slow renderer wall time runs ahead of simulated time. Timing this harness
+     off performance.now() therefore made every duration it measures a function
+     of the machine's load: one slow headless run reported runup_time 0.524 s
+     (band 0.250), pound "no hang phase observed" and longjump 6.864 m from the
+     SAME build that measures 0.213 s / 0.198 s / 7.558 m when the frames arrive
+     on time. A gate that flips on load is not a gate. Every setup wait and every
+     measured duration below runs on simNow(); only measureFrameDt (which is ABOUT
+     the wall clock) and the runaway guards still read performance.now(). */
+  const ENG = A.engine;
+  const simNow = () => (ENG && Number.isFinite(ENG.elapsed)) ? ENG.elapsed * 1000 : performance.now();
+  const wait = async (ms) => {
+    const t = simNow(), w0 = performance.now();
+    while (simNow() - t < ms) {
+      if (performance.now() - w0 > ms * 12 + 4000) break;     // engine stopped: do not hang
+      await frame();
+    }
+  };
   const spd = () => Math.hypot(P.vel.x, P.vel.z);
   const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
 
@@ -238,7 +256,19 @@ async () => {
     syncP(); allUp();
     P.__test.teleport(V3(TEST.x + (dx || 0), TEST.y + 0.35, TEST.z + (dz || 0)));
     P.__test.setVel(V3(0, 0, 0));
-    await wait(420);
+    /* SETTLE ON THE EVENT, NOT ON THE CLOCK. The first reset of a run lands on
+       the frames right after the test slab is injected, when a shader compile
+       can stretch a single frame past 100 ms: a fixed 420 ms wall-clock wait
+       then covered only two or three SIMULATED frames and the hero was still
+       falling its 0.35 m when the precondition was read, which is what made
+       walk_speed report "not grounded on the slab at (0.0, 400.1, 600.0)"
+       while every later test on the same slab passed. Wait for `grounded` on a
+       frame budget, then give the landing lag its own settle. */
+    for (let i = 0; i < 120; i++) {
+      await frame(); syncP();
+      if (P.dead || P.grounded) break;
+    }
+    await wait(260);
     syncP();
     return !!P.grounded && !P.dead;
   };
@@ -254,8 +284,9 @@ async () => {
                 maxSpd: spd(), lastAirSpd: 0, leftAt: 0, landAt: 0, takeoff: null,
                 landing: null, states: [], preLandSpd: 0, postLandSpd: 0};
     const seen = Object.create(null);
-    const t0 = performance.now();
-    while (performance.now() - t0 < ms) {
+    const t0 = simNow(), w0 = performance.now();
+    while (simNow() - t0 < ms) {
+      if (performance.now() - w0 > ms * 12 + 4000) break;
       await frame(); syncP();
       const s = spd();
       if (!seen[P.state]) { seen[P.state] = 1; st.states.push(P.state); }
@@ -264,10 +295,10 @@ async () => {
       if (P.vel.y < st.minVy) st.minVy = P.vel.y;
       if (P.vel.y > st.maxVy) st.maxVy = P.vel.y;
       if (!P.grounded) {
-        if (!st.leftAt) { st.leftAt = performance.now(); st.takeoff = {x: P.pos.x, y: P.pos.y, z: P.pos.z}; }
+        if (!st.leftAt) { st.leftAt = simNow(); st.takeoff = {x: P.pos.x, y: P.pos.y, z: P.pos.z}; }
         st.lastAirSpd = s; st.preLandSpd = s;
-      } else if (st.leftAt && !st.landAt && performance.now() - st.leftAt > 50) {
-        st.landAt = performance.now();
+      } else if (st.leftAt && !st.landAt && simNow() - st.leftAt > 50) {
+        st.landAt = simNow();
         st.landing = {x: P.pos.x, y: P.pos.y, z: P.pos.z};
         st.postLandSpd = s;
         if (!stop) break;
@@ -326,13 +357,30 @@ async () => {
     if (P.grounded) {
       const before = spd();
       allUp();
-      const t0 = performance.now();
-      let stopped = false;
-      while (performance.now() - t0 < 1200) {
+      /* INTERPOLATE THE CROSSING. The sim advances in whole engine frames, so
+         reading "the first frame under 0.25 m/s" over-reports by up to one
+         frame of GAME time — and engine.js caps dt, so a slow renderer makes
+         that frame long: the same build measured 0.140 s and 0.148 s on quiet
+         runs and 0.180 s on a loaded one, purely from that quantisation. The
+         brake is a constant-rate move-toward, so the crossing between the
+         bracketing samples is exactly linear and interpolating it is reading
+         the model, not fudging the number. */
+      const t0 = simNow(), w0 = performance.now();
+      let stopped = false, tHit = t0, prevT = t0, prevS = before;
+      while (simNow() - t0 < 1200) {
+        if (performance.now() - w0 > 20000) break;            // engine stopped
         await frame(); syncP();
-        if (spd() < 0.25) { stopped = true; break; }
+        const sNow = spd(), tNow = simNow();
+        if (sNow < 0.25) {
+          const span = prevS - sNow;
+          const f = span > 1e-6 ? (prevS - 0.25) / span : 0;
+          tHit = prevT + (tNow - prevT) * (f < 0 ? 0 : (f > 1 ? 1 : f));
+          stopped = true;
+          break;
+        }
+        prevT = tNow; prevS = sNow;
       }
-      const dt = (performance.now() - t0) / 1000;
+      const dt = ((stopped ? tHit : simNow()) - t0) / 1000;
       if (!stopped) failWith('stop_time', 'still moving at ' + spd().toFixed(2) + ' m/s after ' + dt.toFixed(2) + ' s');
       else record('stop_time', +dt.toFixed(3), 'from ' + before.toFixed(2) + ' m/s');
     } else failWith('stop_time', 'not grounded at release');
@@ -341,12 +389,23 @@ async () => {
 
   if (await need('runup_time', -40, 0)) {
     const target = TUNE.speedRun * 0.95;
-    const t0 = performance.now();
+    /* Same crossing interpolation as stop_time: whole-frame sampling otherwise
+       over-reports the run-up by up to one (dt-capped) engine frame. */
+    const t0 = simNow(), w0 = performance.now();
     down(FWD);
-    let hit = null;
-    while (performance.now() - t0 < 1500) {
+    let hit = null, prevT = t0, prevS = spd();
+    while (simNow() - t0 < 1500) {
+      if (performance.now() - w0 > 25000) break;               // engine stopped
       await frame(); syncP();
-      if (spd() >= target) { hit = (performance.now() - t0) / 1000; break; }
+      const sNow = spd(), tNow = simNow();
+      if (sNow >= target) {
+        const span = sNow - prevS;
+        const f = span > 1e-6 ? (target - prevS) / span : 0;
+        const tc = prevT + (tNow - prevT) * (f < 0 ? 0 : (f > 1 ? 1 : f));
+        hit = (tc - t0) / 1000;
+        break;
+      }
+      prevT = tNow; prevS = sNow;
     }
     if (hit === null) failWith('runup_time', 'never reached ' + target.toFixed(2) + ' m/s (peaked at ' + spd().toFixed(2) + ')');
     else record('runup_time', +hit.toFixed(3));
@@ -503,8 +562,9 @@ async () => {
         return flat > 0.5 && Math.abs(n.y) < 0.4;
       };
       let contact = false, ready = false, sawWall = '';
-      const t0 = performance.now();
-      while (performance.now() - t0 < 1600) {
+      const t0 = simNow(), w0 = performance.now();
+      while (simNow() - t0 < 1600) {
+        if (performance.now() - w0 > 25000) break;             // engine stopped
         stickWorld(0, -1, 1);                 // keep leaning into the wall
         await frame(); syncP();
         if (onWall()) {
@@ -519,16 +579,33 @@ async () => {
           + ' (state ' + P.state + ')' : 'never registered a wall contact (state ' + P.state + ')';
         failWith(name, why); failWith('wallkick_away', why);
       } else {
+        /* SAMPLE THE LAUNCH INSIDE THE FRAME THAT FIRES IT. controller.js
+           _doWallKick() sets vel.y = wallKick.vy and then emits 'wallkick', so
+           a listener reads the launch exactly. Polling requestAnimationFrame
+           instead reads the frame AFTER the launch, which has already taken a
+           full step of gravRise off it: at the measured 22.8 ms headless frame
+           that is ~0.8-1.7 m/s and it made a correct 12.000 read as 10.300. */
+        let evVy = null, evAway = 0;
+        const onKick = () => {
+          if (evVy !== null) return;                 // first launch only
+          evVy = P.vel.y; evAway = spd();
+        };
+        const bus = P.events && typeof P.events.on === 'function' ? P.events : null;
+        if (bus) bus.on('wallkick', onKick);
         down(JUMP);
         let vy = -1e9, away = 0, st = '';
-        const t1 = performance.now();
-        while (performance.now() - t1 < 320) {
+        const t1 = simNow(), w1 = performance.now();
+        while (simNow() - t1 < 320) {
+          if (performance.now() - w1 > 12000) break;           // engine stopped
           await frame(); syncP();
           if (P.state === 'wallkick') st = 'wallkick';
           if (P.vel.y > vy) { vy = P.vel.y; away = spd(); }
         }
         up(JUMP);
-        record('wallkick_vy', +vy.toFixed(3), (st || 'state ' + P.state) + ', ' + sawWall);
+        if (bus && typeof bus.off === 'function') bus.off('wallkick', onKick);
+        const src = evVy === null ? 'rAF sample (no wallkick event seen)' : 'sampled on the wallkick event';
+        if (evVy !== null) { vy = evVy; away = evAway; }
+        record('wallkick_vy', +vy.toFixed(3), (st || 'state ' + P.state) + ', ' + sawWall + ', ' + src);
         record('wallkick_away', +away.toFixed(3));
       }
     }
@@ -545,7 +622,7 @@ async () => {
       const x0 = P.pos.x, z0 = P.pos.z;
       down(DIVE); await wait(60); up(DIVE);
       // run until the slide has fully stopped (or 3 s)
-      const f = await observe(3000, (s) => P.grounded && spd() < 0.4 && (performance.now() - (s.landAt || 0)) > 120);
+      const f = await observe(3000, (s) => P.grounded && spd() < 0.4 && (simNow() - (s.landAt || 0)) > 120);
       IN.__test.stick(0, 0);
       syncP();
       const d = Math.hypot(P.pos.x - x0, P.pos.z - z0);
@@ -567,13 +644,14 @@ async () => {
     syncP();
     down(CROUCH);                                  // pound = crouch while airborne
     // hang: velocity pinned near zero (the contract's 0.2 s spin)
-    const t0 = performance.now();
+    const t0 = simNow(), w0 = performance.now();
     let hangStart = 0, hangEnd = 0, minVy = 0;
-    while (performance.now() - t0 < 2600) {
+    while (simNow() - t0 < 2600) {
+      if (performance.now() - w0 > 30000) break;
       await frame(); syncP();
       const hanging = P.state === 'poundHang' || (Math.abs(P.vel.y) < 1.0 && !P.grounded && P.state !== 'jump1');
-      if (hanging && !hangStart) hangStart = performance.now();
-      if (hangStart && !hangEnd && (P.vel.y < -6 || P.state === 'poundFall')) hangEnd = performance.now();
+      if (hanging && !hangStart) hangStart = simNow();
+      if (hangStart && !hangEnd && (P.vel.y < -6 || P.state === 'poundFall')) hangEnd = simNow();
       if (P.vel.y < minVy) minVy = P.vel.y;
       if (P.grounded && hangEnd) break;
     }

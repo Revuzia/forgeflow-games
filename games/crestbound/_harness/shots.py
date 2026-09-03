@@ -107,8 +107,32 @@ STATIONS_JS = r"""
     seen.add(c.id);
     out.push({name: 'crest-' + c.id, kind: 'crest', p});
   }
+  /* VISTA stations — four wide establishing shots from the course bounds'
+   * horizontal corners, ~25 m out, looking at the bounds centre. These are the
+   * shots a critic judges "does this read as a PLACE" on: they see sky, fog
+   * bands, silhouette, decor density and light direction all at once, which no
+   * 8-metre over-the-shoulder station ever shows. */
+  const bb = C.bounds;
+  if (bb && bb.min && bb.max && isFinite(bb.min.x) && isFinite(bb.max.x)) {
+    const cx = (bb.min.x + bb.max.x) * 0.5;
+    const cy = (bb.min.y + bb.max.y) * 0.5;
+    const cz = (bb.min.z + bb.max.z) * 0.5;
+    const ex = Math.max(6, (bb.max.x - bb.min.x) * 0.5);
+    const ez = Math.max(6, (bb.max.z - bb.min.z) * 0.5);
+    const r  = Math.min(120, Math.max(25, Math.hypot(ex, ez) * 0.85));
+    const up = Math.max(6, (bb.max.y - bb.min.y) * 0.42);
+    const corners = [[-1,-1,'sw'], [1,-1,'se'], [1,1,'ne'], [-1,1,'nw']];
+    for (const [sx, sz, tag] of corners) {
+      out.push({
+        name: 'vista-' + tag, kind: 'vista',
+        p: {x: cx + sx * r * 0.7071, y: cy + up, z: cz + sz * r * 0.7071},
+        look: {x: cx, y: cy, z: cz},
+      });
+    }
+  }
   return {stations: out, courseId: G.courseId, theme: G.themeId,
-          name: (C.def && C.def.name) || G.courseId};
+          name: (C.def && C.def.name) || G.courseId,
+          bounds: bb ? {min:[bb.min.x,bb.min.y,bb.min.z], max:[bb.max.x,bb.max.y,bb.max.z]} : null};
 }
 """
 
@@ -125,6 +149,24 @@ async (o) => {
   if (G.state === 'paused') G.resume && G.resume();
 
   const st = o.st;
+  /* A crest station teleports the hero ONTO the crest — which COLLECTS it, fires
+   * the crest celebration and leaves the shutter photographing the "CREST ON THE
+   * RAMPARTS" card. Seven of verdant-1's twelve authored stations were that card
+   * (`_shots/verdant-1/crest-*.png`), i.e. the critic gate was judging a UI panel
+   * at 58 % of the course's stations and had never seen those set-pieces at all.
+   *
+   * Collection is suspended for the duration of the pose and restored after, so
+   * the crest, its pedestal and its halo are all still THERE to be photographed
+   * and no save state is written. The pickup logic itself is untouched. */
+  if (st.kind === 'crest') {
+    const col = G.course && G.course.collectibles;
+    if (col && typeof col.update === 'function' && !col.__cbPosePatched) {
+      col.__cbPoseOrig = col.update;
+      col.__cbPoseOwn = Object.prototype.hasOwnProperty.call(col, 'update');
+      col.__cbPosePatched = true;
+      col.update = function () {};
+    }
+  }
   // A crest hangs above its pedestal; standing the hero at the crest's own
   // height and letting gravity settle frames the pedestal AND the crest.
   const lift = st.kind === 'crest' ? 0.2 : 0.5;
@@ -158,6 +200,54 @@ async (o) => {
           camDist: cam ? +(cam.dist || 0).toFixed(2) : null};
 }
 """
+
+# Restore the collectibles update the crest stations suspend (above).
+UNPOSE_JS = """() => {
+  const G = globalThis.CRESTBOUND && globalThis.CRESTBOUND.game;
+  const col = G && G.course && G.course.collectibles;
+  if (col && col.__cbPosePatched) {
+    delete col.update;                       // fall back to the prototype method
+    if (col.__cbPoseOwn) col.update = col.__cbPoseOrig;
+    delete col.__cbPoseOrig;
+    delete col.__cbPoseOwn;
+    delete col.__cbPosePatched;
+    return true;
+  }
+  return false;
+}"""
+
+
+
+# A VISTA freezes the follow camera (cam.update -> no-op) and writes the engine
+# camera directly, so the game keeps rendering its own frame from a pose we own.
+# `__cbVistaRestore` puts the real camera back, so a vista never contaminates
+# the over-the-shoulder stations that follow.
+VISTA_JS = r"""
+async (o) => {
+  const A = globalThis.CRESTBOUND, G = A && A.game, THREE = A && A.THREE;
+  if (!G || !THREE || !G.cam || !G.engine || !G.engine.camera) return {error: 'no cam/engine'};
+  const frame = () => new Promise(r => requestAnimationFrame(r));
+  const cam = G.cam, C3 = G.engine.camera;
+  if (!globalThis.__cbVistaRestore) {
+    const orig = cam.update;
+    globalThis.__cbVistaRestore = () => { cam.update = orig; delete globalThis.__cbVistaRestore; };
+  }
+  cam.update = function () {};
+  const st = o.st, lk = st.look || {x: 0, y: 0, z: 0};
+  const apply = () => {
+    C3.position.set(st.p.x, st.p.y, st.p.z);
+    C3.up.set(0, 1, 0);
+    C3.lookAt(lk.x, lk.y, lk.z);
+    C3.updateMatrixWorld(true);
+  };
+  apply();
+  for (let k = 0; k < 26; k++) { apply(); await frame(); }
+  apply();
+  return {ok: true, p: [+C3.position.x.toFixed(1), +C3.position.y.toFixed(1), +C3.position.z.toFixed(1)]};
+}
+"""
+
+UNVISTA_JS = "() => { if (globalThis.__cbVistaRestore) globalThis.__cbVistaRestore(); return true; }"
 
 
 def leave_title(pg, timeout=45):
@@ -270,7 +360,18 @@ def main() -> int:
 
     with sync_playwright() as p:
         if args.headless:
-            br = p.chromium.launch(headless=True, args=HEADLESS_FLAGS)
+            # HARNESS_NOTES (measured on this box): headless *Chrome* with the
+            # d3d11 flags gets the real Intel UHD GPU; only the bundled Chromium
+            # needs SwiftShader, which is a CPU rasteriser -- an order of
+            # magnitude slower and a different tone response. Try the GPU first
+            # and keep SwiftShader as the documented fallback (perfcheck.py has
+            # done this since the perf pass; the other gates had not caught up).
+            try:
+                br = p.chromium.launch(channel="chrome", headless=True, args=FLAGS)
+            except Exception as _e:
+                print("headless: no hardware Chrome (%s) -> SwiftShader" % str(_e)[:120],
+                      file=sys.stderr)
+                br = p.chromium.launch(headless=True, args=HEADLESS_FLAGS)
         else:
             br = p.chromium.launch(channel="chrome", headless=False, args=FLAGS)
         pg = br.new_page(viewport={"width": args.width, "height": args.height})
@@ -326,13 +427,25 @@ def main() -> int:
             cdir = os.path.join(SHOTS, cid)
             os.makedirs(cdir, exist_ok=True)
             rows, sheet_items = [], []
-            for st in meta.get("stations", []):
+            stations = meta.get("stations", [])
+            # vistas last: they freeze the camera, so they must not precede a
+            # station that needs the real follow rig.
+            stations = ([s for s in stations if s.get("kind") != "vista"]
+                        + [s for s in stations if s.get("kind") == "vista"])
+            for st in stations:
                 try:
-                    info = pg.evaluate(POSE_JS, {"st": st, "dist": args.dist})
+                    if st.get("kind") == "vista":
+                        info = pg.evaluate(VISTA_JS, {"st": st})
+                    else:
+                        info = pg.evaluate(POSE_JS, {"st": st, "dist": args.dist})
                 except Exception as e:
                     rows.append({"station": st["name"], "error": str(e)[:160]})
                     continue
                 if not isinstance(info, dict) or info.get("error"):
+                    try:
+                        pg.evaluate(UNPOSE_JS)
+                    except Exception:
+                        pass
                     rows.append({"station": st["name"], "error": (info or {}).get("error", "?")})
                     continue
                 out = os.path.join(cdir, "%s.png" % st["name"])
@@ -341,12 +454,22 @@ def main() -> int:
                 except Exception as e:
                     rows.append({"station": st["name"], "error": "screenshot: %s" % str(e)[:120]})
                     continue
+                if st.get("kind") == "crest":
+                    try:
+                        pg.evaluate(UNPOSE_JS)
+                    except Exception:
+                        pass
                 taken.append(out)
                 sheet_items.append((st["name"], out))
                 rows.append({"station": st["name"], "kind": st.get("kind"),
                              "shot": out, "pose": info})
                 print("%s[%s] -> %s  drift %s  cam %s"
                       % (cid, st["name"], out, info.get("drift"), info.get("camDist")))
+            for _js in (UNPOSE_JS, UNVISTA_JS):
+                try:
+                    pg.evaluate(_js)
+                except Exception:
+                    pass
             sheet = None if args.no_contact else contact_sheet(
                 cdir, sheet_items, "%s — %s (%s)" % (cid, meta.get("name"), meta.get("theme")))
             report[cid] = {"name": meta.get("name"), "theme": meta.get("theme"),

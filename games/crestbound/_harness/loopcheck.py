@@ -468,9 +468,26 @@ def wait_ready(pg, timeout=75, need_course=False):
     return False
 
 
-def leave_title(pg, timeout=45):
+def leave_title(pg, timeout=45, boot_timeout=240):
     """Only 'keep'/'playing' counts: boot passes through 'loading' BEFORE the
-    title exists, so 'not title' would be a false positive on a raced click."""
+    title exists, so 'not title' would be a false positive on a raced click.
+
+    The `timeout` budget is for LEAVING the title, so it may not start until the
+    title exists: `CRESTBOUND.game` appears tens of seconds before the Keep has
+    finished building, and on a loaded box that swallowed the whole window and
+    the gate reported 'never left the title screen' for a game that had not yet
+    reached it. Waiting for the title first is a measurement fix, not a longer
+    budget for the thing being measured."""
+    boot_deadline = time.time() + boot_timeout
+    while time.time() < boot_deadline:
+        try:
+            st = pg.evaluate(STATE_JS)
+        except Exception:
+            st = None
+        if st in ("title", "keep", "playing"):
+            break
+        pg.wait_for_timeout(400)
+
     deadline = time.time() + timeout
     last = None
     while time.time() < deadline:

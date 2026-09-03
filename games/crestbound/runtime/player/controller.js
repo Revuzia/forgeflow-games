@@ -63,6 +63,9 @@
  *                →  dive           dive↓ and sp ≥ dive.minSpeed
  *                →  crouchwalk     crouch‸ and mag ≥ 0.15 (below longjump speed)
  *                →  slopeSlide     groundSlopeDeg > slideDeg (iceSlideDeg on ice)
+ *  run           →  bonk           grounded, wish·-wallN ≥ BONK_INTO_DOT and the
+ *                                   achieved speed collapsed under the stick's ask
+ *  bonk          →  run            stopped pressing / the wall let go
  *  skid          →  idle           sp ≤ SKID_SPEED   |  → run (mag ≥ 0.15)
  *  pivot         →  run            after PIVOT_TIME (facing snaps to wish)
  *                →  sideflip       jump↓ during the pivot
@@ -164,6 +167,17 @@ const MOVE_WALK_FULL = 0.25;
 
 /** Ground speed above which "release the stick" reads as a skid, not a stop. */
 const SKID_SPEED = 4.0;
+
+/* BONK — grounded, leaning into a wall, and going nowhere. `wish · -wallN`
+   must clear BONK_INTO_DOT (a genuine press, not a graze along the face), the
+   stick must be asking for real speed, and the achieved speed must have
+   collapsed to a fraction of that target. Without this the run cycle plays on
+   the spot against a wall for as long as the key is held. */
+const BONK_INTO_DOT = 0.50;
+const BONK_MIN_TARGET = 1.20;
+const BONK_SPEED_FRAC = 0.35;
+/** Pre-impact speed above which entering the bonk kicks up dust + a thump. */
+const BONK_IMPACT_SPEED = 2.0;
 /** Duration of the reversal skid. CONTRACT §11: "pivot (0.12 s skid)". */
 const PIVOT_TIME = 0.12;
 /** Speed under which a reversal is just a turn (CONTRACT §11: "at speed > 4"). */
@@ -253,7 +267,7 @@ const LAND_QUIET = 1.2;
 
 /** Every state the machine can be in. Exported for harnesses. */
 export const STATES = Object.freeze([
-  'idle', 'run', 'skid', 'pivot', 'crouch', 'crouchwalk',
+  'idle', 'run', 'skid', 'pivot', 'bonk', 'crouch', 'crouchwalk',
   'jump1', 'jump2', 'jump3', 'longjump', 'backflip', 'sideflip', 'fall',
   'dive', 'slide', 'slideRecover', 'wallslide', 'wallkick',
   'poundHang', 'poundFall', 'poundLand', 'land', 'hardLand', 'slopeSlide',
@@ -417,6 +431,7 @@ export class Player {
     this.anim = 'fall';
     this.animT = 0;
     this.speed = 0;
+    this._prevSpeed = 0;
     this.speedNorm = 0;
     this.leanX = 0;
     this.airborneT = 0;
@@ -628,6 +643,7 @@ export class Player {
     this.wallN.set(0, 0, 0);
 
     this.speed = 0;
+    this._prevSpeed = 0;
     this.speedNorm = 0;
     this.leanX = 0;
     this.airborneT = 0;
@@ -1024,6 +1040,7 @@ export class Player {
     const dx = pos.x - wasX, dz = pos.z - wasZ;
     const moved = hyp2(dx, dz);
     this.stats.distance += moved;
+    this._prevSpeed = this.speed;              // pre-collision speed, for bonk impact
     this.speed = hyp2(vel.x, vel.z);
 
     if (this.grounded) {
@@ -1587,8 +1604,8 @@ export class Player {
 
   /**
    * GROUND — the analog platformer model: the velocity is driven toward
-   * (facing × speedTarget) at `accelGround`, and toward zero at `decelGround`
-   * when the stick is released. A vector move-toward makes the numbers exact:
+   * (facing × speedTarget) at `accelGround`, and toward a LOWER target at
+   * `decelGround`. A vector move-toward makes the numbers exact:
    * 0 → 9 m/s in speedRun/accelGround = 0.214 s, 9 → 0 in 0.141 s.
    *
    * ICE is a different physics: a Quake projection accel with very low friction,
@@ -1652,7 +1669,16 @@ export class Player {
     headingFromYaw(this.facing, _fwd);
     const tx = target > 0 ? _fwd.x * target : 0;
     const tz = target > 0 ? _fwd.z * target : 0;
-    const rate = (target > 0 ? TUNE.accelGround : TUNE.decelGround) * dt;
+    /* BRAKING IS BRAKING. The rate is `decelGround` whenever the stick asks for
+       LESS speed than the hero is already carrying — not only when it asks for
+       zero. Keying off `target > 0` meant that while input.js's KEY_RAMP_DOWN
+       decayed the stick 1.000 -> 0.722 -> 0.444 -> 0.167 the hero was still
+       braking at accelGround (42.2 m/s2), which stretched release-to-rest from
+       the contract's 0.141 s to a measured 0.167 s / 0.729 m of slide.
+       `>=` (not `>`) keeps a steady-speed direction change on accelGround, so a
+       full-run turn is still the wide arc the movement bible asks for. */
+    const spNow = hyp2(vel.x, vel.z);
+    const rate = (target >= spNow ? TUNE.accelGround : TUNE.decelGround) * dt;
     const dx = tx - vel.x, dz = tz - vel.z;
     const d = hyp2(dx, dz);
     if (d <= rate || d < 1e-6) { vel.x = tx; vel.z = tz; }
@@ -2530,6 +2556,38 @@ export class Player {
   }
 
   /**
+   * Grounded, holding the stick INTO a wall, and the wall is winning. Reads the
+   * live contact normal (`wallN`, memory-held for WALL_MEM after the touch) and
+   * compares the achieved horizontal speed against what the stick is asking
+   * for — a graze along a face still runs, a head-on press bonks.
+   */
+  _pressingWall() {
+    if (this._wallT <= 0 || this._wmag <= 0) return false;
+    const n = this.wallN;
+    const nl = n.x * n.x + n.z * n.z;
+    if (nl < 0.25) return false;                       // no usable flat normal
+    const into = -(this._wx * n.x + this._wz * n.z);
+    if (into < BONK_INTO_DOT) return false;
+    const target = this._speedTarget(this._wmag);
+    if (target < BONK_MIN_TARGET) return false;
+    return hyp2(this.vel.x, this.vel.z) < target * BONK_SPEED_FRAC;
+  }
+
+  /** One-shot on entering the bonk: dust and a soft thump, scaled by the hit. */
+  _bonkEnter() {
+    const hit = this._prevSpeed;
+    this._ev('bonk', this.pos, this.wallN);
+    if (hit < BONK_IMPACT_SPEED) return;
+    const k = clamp(hit / TUNE.speedRun, 0.2, 1);
+    _fxOpt.strength = k;
+    _fxOpt.surface = this.surface;
+    _fxOpt.count = 5;
+    _fxOpt.speed = hit;
+    this._fxBurst('land', this.pos, _fxOpt);
+    this._sfx('land_soft', 0.35 + k * 0.35);
+  }
+
+  /**
    * Late resolution — the states that are a CONSEQUENCE of the physics rather
    * than of a button: idle/run/skid on the ground, fall in the air.
    */
@@ -2538,10 +2596,15 @@ export class Player {
     if (this.dead || st === 'cannon' || st === 'climb' || this.inWater) return;
 
     if (this.grounded) {
-      if (st === 'idle' || st === 'run' || st === 'skid' || st === 'crouch' || st === 'crouchwalk') {
+      if (st === 'idle' || st === 'run' || st === 'skid' || st === 'bonk' ||
+        st === 'crouch' || st === 'crouchwalk') {
         if (this.crouching) this._setState(this._wmag > 0 && this.speed > 0.4 ? 'crouchwalk' : 'crouch');
-        else if (this._wmag > 0) this._setState('run');
-        else this._setState(this.speed > SKID_SPEED ? 'skid' : 'idle');
+        else if (this._wmag > 0) {
+          if (this._pressingWall()) {
+            if (st !== 'bonk') this._bonkEnter();
+            this._setState('bonk');
+          } else this._setState('run');
+        } else this._setState(this.speed > SKID_SPEED ? 'skid' : 'idle');
       } else if (st === 'fall' || st === 'jump1' || st === 'jump2' || st === 'jump3' ||
         st === 'wallslide' || st === 'wallkick' || st === 'longjump' ||
         st === 'backflip' || st === 'sideflip' || st === 'fly' || st === 'climbKick') {
@@ -2553,7 +2616,8 @@ export class Player {
       if ((st === 'jump1' || st === 'jump2') && this.vel.y <= 0) this._setState('fall');
       else if ((st === 'backflip' || st === 'sideflip') && this.vel.y <= 0 && this.stateT > 0.25) this._setState('fall');
       else if (st === 'idle' || st === 'run' || st === 'skid' || st === 'pivot' ||
-        st === 'crouch' || st === 'crouchwalk' || st === 'land' || st === 'slideRecover') {
+        st === 'bonk' || st === 'crouch' || st === 'crouchwalk' || st === 'land' ||
+        st === 'slideRecover') {
         this._setState('fall');
       }
     }

@@ -188,19 +188,44 @@ const _matCache = new Map();
  * the coins are never grey.
  */
 function goldMaterial(theme, mats) {
-  let m = null;
-  try { m = getMaterial('gold', theme, mats); } catch (e) { m = null; }
-  if (m && m.isMaterial && /gold/i.test(m.name || '')) return m;
-  const key = 'gold';
+  const tid = (theme && theme.id) || 'default';
+  const key = 'gold:' + tid;
   let g = _matCache.get(key);
   if (g) return g;
-  g = new THREE.MeshPhysicalMaterial({
-    color: 0xf3c24f, metalness: 1.0, roughness: 0.24,
-    clearcoat: 0.35, clearcoatRoughness: 0.25,
-    emissive: 0x3d2606, emissiveIntensity: 0.32,
-    envMapIntensity: 1.25,
-  });
-  g.name = 'cb.gold.local';
+  /* ROUND 2 VISUAL FIX — "coin unmistakable" (CONTRACT §15 readability law) was
+   * not holding: `_shots/verdant-1/cp2.png` shows the coin line against a dark
+   * meadow as a row of dull brown discs. A pure metal reads only what it
+   * reflects, and a coin two thirds in shadow reflects almost nothing. Every
+   * other readability-critical surface in this game is self-lit (kill, ring,
+   * crest pedestal, checkpoint), so the coin gets the same treatment: the
+   * theme's own `palette.coin` hue at a low intensity — enough to hold the
+   * silhouette in shade, well under the bloom threshold so it does not become a
+   * blob. Cached PER THEME because the hue is the theme's.
+   *
+   * This is a CLONE of the material bank's gold, so the hammered facets, the
+   * anisotropic clearcoat and the box projection all survive; only the emission
+   * is new, and nothing else that uses 'gold' is touched. */
+  let base = null;
+  try { base = getMaterial('gold', theme, mats); } catch (e) { base = null; }
+  const coinHue = (theme && theme.palette && theme.palette.coin) || 0xffe27a;
+  if (base && base.isMaterial && /gold/i.test(base.name || '')) {
+    g = base.clone();
+  } else {
+    g = new THREE.MeshPhysicalMaterial({
+      color: 0xf3c24f, metalness: 1.0, roughness: 0.24,
+      clearcoat: 0.35, clearcoatRoughness: 0.25,
+      envMapIntensity: 1.25,
+    });
+  }
+  /* Emission has to lift the coin out of shade WITHOUT eating the hammered
+   * facets and the anisotropic clearcoat that make it read as metal. The first
+   * pass put the full pale `palette.coin` hue in at 0.55 and every coin came
+   * back a featureless cream blob (`_shots/_r2b_verdant.png`). A deep amber at
+   * a third of that intensity holds the silhouette in shadow and leaves the
+   * specular in charge everywhere else. */
+  g.emissive = new THREE.Color(coinHue).multiplyScalar(0.42);
+  g.emissiveIntensity = 0.30;
+  g.name = 'cb.gold.coin.' + tid;
   _matCache.set(key, g);
   return g;
 }

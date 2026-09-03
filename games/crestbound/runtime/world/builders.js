@@ -519,10 +519,17 @@ function glowMat(color, opts) {
   const key = 'g' + (color >>> 0).toString(16) + ':' + mode + ':' + speed + ':' + power + ':' + gain;
   let m = _emCache.get(key);
   if (m) return m;
+  /* ROUND 1 VISUAL FIX: a shaft quad with no LATERAL feather has a hard
+   * vertical edge, so five overlapping Keep window shafts read as a bank of
+   * white slats with ruled borders rather than as light in air
+   * (`_shots/_zoom_keepwin.png`). Feathering across u costs one smoothstep pair
+   * and is the difference between "volumetric" and "cardboard". */
   const shaftBody =
     'float a = pow(1.0 - clamp(vUvG.y, 0.0, 1.0), uPower);' +
     'float band = 0.55 + 0.45 * sin((vUvG.y * 9.0 - uTime * uSpeed * 2.4) * 3.14159);' +
-    'a *= mix(0.65, 1.0, band);';
+    'a *= mix(0.65, 1.0, band);' +
+    'a *= smoothstep(0.0, 0.30, vUvG.x) * smoothstep(1.0, 0.70, vUvG.x);' +
+    'a *= smoothstep(0.0, 0.10, vUvG.y);';
   const radialBody =
     'vec2 dd = vUvG * 2.0 - 1.0;' +
     'float rr = clamp(length(dd), 0.0, 1.0);' +
@@ -2853,7 +2860,21 @@ export function buildStairs(def, theme, mats) {
   const bodyMat = materialFor((def && def.mat) || look[0], theme, mats);
   const treadMat = materialFor(surface === 'ice' ? 'ice' : 'panel', theme, mats);
   const glowColor = safeLandableGlow(gs.color, theme);
-  const stripeMat = emissiveMat(glowColor !== null ? glowColor : pal(theme, look[1]), 2.4 * gs.k * look[2]);
+  /* ROUND 1 VISUAL FIX — "the Keep is blown out", the half of it that was NOT
+   * exposure (owner-observed; see `_shots/_zoom_after_slats.png`, taken after
+   * the exposure fix, where the bank of white bars survived).
+   *
+   * A flight emitted TWO self-lit bars per step at intensity 2.4 — a nose
+   * stripe and a full-width riser lip — so the Keep's grand stair put ~24
+   * horizontal light bars in one silhouette and read as a rack of fluorescent
+   * tubes rather than as stone. The readability law wants a visible lip on a
+   * jump-critical landing, and it is satisfied here by the nose stripe plus its
+   * dark keyline flanks (themes.js: "the keyline, not the luminance step,
+   * carries the separation at the lip"). So: the stripe drops to a value that
+   * reads as lit stone rather than as a lamp, and the riser lip goes back to
+   * being GEOMETRY — it still breaks up the vertical face, it just stops being
+   * the brightest thing in the room. Nothing is removed. */
+  const stripeMat = emissiveMat(glowColor !== null ? glowColor : pal(theme, look[1]), 1.05 * gs.k * look[2]);
   const railMat = materialFor('metal', theme, mats);
   const keyMat = keylineMaterial();
 
@@ -2874,8 +2895,9 @@ export function buildStairs(def, theme, mats) {
       const nz = zc - run * 0.5 + 0.055;
       push(xform(boxGeometry(w - 0.10, 0.016, 0.055, 1), 0, topY + 0.026, nz), 2);
       push(xform(boxGeometry(w - 0.10, 0.018, 0.022, 1), 0, topY + 0.025, nz - 0.040), 4);
-      // riser lip so the vertical face is not a flat wall
-      push(xform(boxGeometry(w - 0.06, Math.max(0.02, rise * 0.16), 0.02, 1), 0, topY - rise * 0.10, zc - run * 0.5 - 0.004), 2);
+      // riser lip so the vertical face is not a flat wall — BODY material, not
+      // the emissive stripe (see the stripeMat note above)
+      push(xform(boxGeometry(w - 0.06, Math.max(0.02, rise * 0.16), 0.02, 1), 0, topY - rise * 0.10, zc - run * 0.5 - 0.004), 0);
     }
     // stringer walls: a chamfered rail down each side, following the flight
     for (const sg of [-1, 1]) {
@@ -3648,11 +3670,16 @@ export function buildPainting(def, theme, mats) {
   mesh.updateMatrix();
   mesh.matrixAutoUpdate = false;
 
-  // the trigger sits in FRONT of the plate (local −Z is the facing direction)
-  headingLocal(yaw, _vA);
+  /* The trigger sits in FRONT of the plate — and the plate, its beads, its sill
+     and its lock sigil are all authored at local +Z, so the face is local +Z and
+     `heading(yaw)` (local −Z) points INTO the wall. Offsetting along the heading
+     buried the trigger in the masonry, where the player can never stand; the
+     course re-fits this slab to the room's floor (course.js _fitGateTrigger),
+     but it must start on the right side of the wall. */
+  headingLocal(yaw, _vA).multiplyScalar(-1);
   const volumes = [new Volume({
-    center: [p[0] + _vA.x * 0.9, p[1], p[2] + _vA.z * 0.9],
-    half: [Math.max(w, 1.2) * 0.5, h * 0.5, 0.95],
+    center: [p[0] + _vA.x * 0.62, p[1] - 0.9, p[2] + _vA.z * 0.62],
+    half: [Math.max(w, 1.2) * 0.5, h * 0.5 + 0.9, 0.7],
     quat: new THREE.Quaternion().setFromEuler(_eA.set(0, yaw, 0)),
     kind: 'trigger',
     props: { id: 'painting:' + course, gate: 'painting', course, requires: need, locked },
@@ -3875,10 +3902,12 @@ export function buildGateDoor(def, theme, mats) {
     colliders.push(c);
   }
 
-  headingLocal(yaw, _vA);
+  /* In FRONT of the leaves (local +Z), never behind them: `heading(yaw)` points
+     into the wall. course.js re-fits this to the room's floor. */
+  headingLocal(yaw, _vA).multiplyScalar(-1);
   const volumes = [new Volume({
-    center: [p[0] + _vA.x * 1.1, p[1] + h * 0.35, p[2] + _vA.z * 1.1],
-    half: [w * 0.5, h * 0.42, 1.1],
+    center: [p[0] + _vA.x * 0.72, p[1] + h * 0.35, p[2] + _vA.z * 0.72],
+    half: [w * 0.5, h * 0.55, 0.8],
     quat: _qA.clone(),
     kind: 'trigger',
     props: { id: 'gate:' + (course || need), gate: 'door', course, requires: need, locked },
@@ -4262,6 +4291,9 @@ export function buildCannon(def, theme, mats) {
  * along that wall); `def.windows` uses the same shape plus `y`.
  *
  * @param {object} def {kind:'building', p, s:[w,h,d], style, rot?, doors?, windows?, mat?}
+ *        `p` is the CENTRE of the s box (base = p.y - s.y/2), like every other p+s kind.
+ *        Opening `side` accepts '+z'|'-z'|'+x'|'-x' or the compass names
+ *        north|south|east|west (yaw 0 faces −Z, so −Z is north).
  * @returns {{mesh: THREE.Mesh, colliders: Collider[]}}
  */
 export function buildBuilding(def, theme, mats) {
@@ -4270,8 +4302,8 @@ export function buildBuilding(def, theme, mats) {
   const style = (def && def.style) || 'fort';
   const p = pos3(def);
   const T = (def && def.wall) || Math.max(0.36, Math.min(W, D) * 0.055);
-  const doors = (def && def.doors) || [{ side: '-z', x: 0, w: Math.min(2.2, W * 0.3), h: Math.min(3.0, H * 0.62) }];
-  const windows = (def && def.windows) || defaultWindows(style, W, H, D);
+  const doors = normSides((def && def.doors) || [{ side: '-z', x: 0, w: Math.min(2.2, W * 0.3), h: Math.min(3.0, H * 0.62) }]);
+  const windows = normSides((def && def.windows) || defaultWindows(style, W, H, D));
 
   const STYLE = BUILDING_STYLE[style] || BUILDING_STYLE.fort;
   const bodyMat = materialFor((def && def.mat) || STYLE.body, theme, mats);
@@ -4306,16 +4338,30 @@ export function buildBuilding(def, theme, mats) {
   mesh.name = 'building.' + style;
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  mesh.position.set(p[0], p[1], p[2]);
+
+  /* ORIGIN CONVENTION. `p` is the CENTRE of the authored `s` box — the same
+     convention every other p+s kind uses (platform, ramp, breakable, deco), and
+     the one the course files author against ("fort box: 9.00 .. 14.40" for
+     p.y 11.70, s.y 5.40). The composite above is modelled in LOCAL y 0..H with
+     its base at 0, so every local point is shifted down by H/2 before it is
+     rotated and offset by p. Building the shell base-relative and then placing
+     it centre-relative is what put verdant-1's fort 2.70 m too high, dropped a
+     solid interior-floor slab across the courtyard at y 11.48..11.70 (an
+     invisible ceiling 1.0 m over a standing hero) and left the wall-kick shaft
+     with no floor at all. */
+  const yOff = -H * 0.5;
+
+  const q = rotQuat(def && def.rot, new THREE.Quaternion());
+  _vA.set(0, yOff, 0).applyQuaternion(q);
+  mesh.position.set(p[0] + _vA.x, p[1] + _vA.y, p[2] + _vA.z);
   applyRot(mesh, def && def.rot);
   mesh.updateMatrix();
   mesh.matrixAutoUpdate = false;
 
-  const q = rotQuat(def && def.rot, new THREE.Quaternion());
   const colliders = [];
   for (let i = 0; i < built.walls.length; i++) {
     const b = built.walls[i];
-    _vA.set(b.cx, b.cy, b.cz).applyQuaternion(q);
+    _vA.set(b.cx, b.cy + yOff, b.cz).applyQuaternion(q);
     let wq = q;
     if (b.yaw) {                    // tower segments carry their own local yaw
       _eA.set(0, b.yaw, 0);
@@ -4326,7 +4372,7 @@ export function buildBuilding(def, theme, mats) {
       b.hx, b.hy, b.hz, wq === q ? q.clone() : wq, b.surface || 'normal', null, null));
   }
   // interior floor collider
-  _vA.set(0, -0.11, 0).applyQuaternion(q);
+  _vA.set(0, -0.11 + yOff, 0).applyQuaternion(q);
   colliders.push(makeCollider(p[0] + _vA.x, p[1] + _vA.y, p[2] + _vA.z,
     (W - T * 1.6) * 0.5, 0.11, (D - T * 1.6) * 0.5, q.clone(), 'normal', null, null));
   // roof: either one walkable deck, or a set of sloped slabs (a pitched roof)
@@ -4337,12 +4383,12 @@ export function buildBuilding(def, theme, mats) {
       _eA.set(sl.rx || 0, 0, 0);
       _qB.setFromEuler(_eA);
       const sq = new THREE.Quaternion().copy(q).multiply(_qB);
-      _vA.set(sl.cx, sl.cy, sl.cz).applyQuaternion(q);
+      _vA.set(sl.cx, sl.cy + yOff, sl.cz).applyQuaternion(q);
       colliders.push(makeCollider(p[0] + _vA.x, p[1] + _vA.y, p[2] + _vA.z,
         sl.hx, sl.hy, sl.hz, sq, 'normal', null, null));
     }
   } else if (rt) {
-    _vA.set(0, rt.y, 0).applyQuaternion(q);
+    _vA.set(0, rt.y + yOff, 0).applyQuaternion(q);
     colliders.push(makeCollider(p[0] + _vA.x, p[1] + _vA.y, p[2] + _vA.z,
       rt.hx, rt.hy, rt.hz, q.clone(), 'normal', null, null));
   }
@@ -4434,6 +4480,40 @@ function wallWithOpenings(push, walls, axis, sign, len, height, thick, offset, o
     cursor = Math.max(cursor, x1);
   }
   place(cursor, len * 0.5, 0, height, 0, false);
+}
+
+/**
+ * Openings are matched to walls by an EXACT side id ('+z' '-z' '+x' '-x'), so an
+ * author who writes the compass name gets a sealed box and no error. Course
+ * files do write compass names (verdant-1's fort authors its gate as
+ * side:'south'), which is how BAILEY FORT shipped with no gate at all and its
+ * courtyard — the mouth of the wall-kick shaft — unreachable from the meadow.
+ * Yaw 0 faces −Z, so −Z is north and +Z is south.
+ */
+const SIDE_ALIAS = {
+  north: '-z', south: '+z', east: '+x', west: '-x',
+  n: '-z', s: '+z', e: '+x', w: '-x',
+  '+z': '+z', '-z': '-z', '+x': '+x', '-x': '-x',
+};
+function normSides(list) {
+  if (!list || !list.length) return list || [];
+  let dirty = false;
+  for (let i = 0; i < list.length; i++) {
+    const o = list[i];
+    if (o && SIDE_ALIAS[o.side] !== o.side) { dirty = true; break; }
+  }
+  if (!dirty) return list;
+  const out = new Array(list.length);
+  for (let i = 0; i < list.length; i++) {
+    const o = list[i];
+    const side = o && SIDE_ALIAS[String(o.side).toLowerCase()];
+    if (!o || !side || side === o.side) { out[i] = o; continue; }
+    const c = {};
+    for (const k in o) c[k] = o[k];
+    c.side = side;
+    out[i] = c;
+  }
+  return out;
 }
 
 /** The four straight walls of a box building. */

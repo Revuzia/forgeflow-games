@@ -85,7 +85,10 @@ def launch_headless(p):
 # Generic title-screen leaver: any visible button whose text says PLAY / START /
 # NEW / CONTINUE / BEGIN, else Enter. Loops until game.state leaves title/loading.
 CLICK_JS = r"""() => {
-  const words = ['NEW GAME', 'NEW RUN', 'CONTINUE', 'PLAY', 'START', 'BEGIN', 'ENTER'];
+  // CONTINUE first: NEW GAME opens an ERASE-confirm page when a save exists,
+  // and the confirm's own buttons are what would then have to be answered
+  // (same ordering camshots.py already uses -- this file's order was a bug).
+  const words = ['CONTINUE', 'KEEP MY PROGRESS', 'NEW GAME', 'NEW RUN', 'PLAY', 'START', 'BEGIN', 'ENTER'];
   const btns = Array.from(document.querySelectorAll('button, [role=button], .btn'));
   for (const want of words) {
     for (const b of btns) {
@@ -429,8 +432,14 @@ async () => {
 """
 
 
-def leave_title(pg, timeout=40):
-    """Click PLAY (or press Enter) until game.state leaves title/loading."""
+def leave_title(pg, timeout=150):
+    """Click PLAY (or press Enter) until game.state leaves title/loading.
+
+    150 s, not 40: under Chrome contention this box has been observed to take
+    over a minute to boot the course, and the 40 s budget was reporting
+    'never left the title screen (state=keep)' -- i.e. it had ARRIVED, one poll
+    after the deadline. camshots.py already waits 150 s for the same event.
+    """
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:

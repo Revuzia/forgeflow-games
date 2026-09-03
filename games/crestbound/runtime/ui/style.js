@@ -84,6 +84,15 @@ export const UI_TOKENS = {
   palette: BASE_PALETTE,
   /** Course counts, fixed by the contract (§0 names). */
   counts: { crests: 7, sigils: 8, coins: 100 },
+  /**
+   * RESERVED BOTTOM-RIGHT CORNER, in px. Every ForgeFlow games page loads
+   * `game_controls.js`, which pins a fullscreen / mute / pause / bug cluster at
+   * `bottom:8px right:8px` OUTSIDE the canvas and outside this design system.
+   * Measured: four 26 px chips + 4 px gaps + 5 px padding ≈ 130 x 34, plus its
+   * 8 px inset. Nothing the game draws may enter this box — the death badge and
+   * the cinematic skip hint both used to sit inside it.
+   */
+  corner: { w: 152, h: 50 },
 };
 
 /* ---------------------------------------------------------------------------
@@ -1033,6 +1042,13 @@ const MENU_CSS = `
   scrollbar-width:thin; scrollbar-color:rgba(243,233,210,.18) transparent; }
 .cm-body::-webkit-scrollbar{ width:8px }
 .cm-body::-webkit-scrollbar-thumb{ background:rgba(243,233,210,.16); border-radius:4px }
+/* A page's own action buttons live OUTSIDE the scrolling body, between it and
+   the footer legend. Inside .cm-body the last button is clipped by the scroll
+   viewport's bottom edge and reads as a control sliced in half by the footer
+   bar (credits' BACK). flex:0 0 auto keeps this row whole at every height. */
+.cm-actions{ flex:0 0 auto; display:flex; gap:12px; padding:12px 24px 4px; position:relative; z-index:1;
+  border-top:1px solid var(--hair); }
+.cm-actions .cb-btn{ flex:1 1 auto; }
 .cm-foot{ display:flex; align-items:center; justify-content:space-between; gap:16px; padding:12px 30px 16px;
   border-top:1px solid var(--hair); font-size:${UI_TOKENS.type['2xs']}px; letter-spacing:.24em; text-transform:uppercase;
   color:var(--ink-mute); position:relative; z-index:1; font-family:var(--f-display); font-weight:700; }
@@ -1187,7 +1203,12 @@ const TRANS_CSS = `
 .ct-rewind .rw-lines i:nth-child(1){ top:22%; } .ct-rewind .rw-lines i:nth-child(2){ top:47%; }
 .ct-rewind .rw-lines i:nth-child(3){ top:71%; } .ct-rewind .rw-lines i:nth-child(4){ top:88%; }
 .ct-rewind.is-on .rw-lines i{ animation:cb-drift .5s linear infinite reverse; }
-.ct-rewind .rw-glyph{ position:absolute; right:34px; bottom:30px; display:flex; align-items:center; gap:8px;
+/* BOTTOM-CENTRE, not bottom-right: the page's own control cluster
+   (game_controls.js — fullscreen / mute / pause) is fixed at bottom:8px
+   right:8px on every ForgeFlow game page, and the badge was drawn straight on
+   top of it. The corner belongs to that cluster; the game keeps the centre. */
+.ct-rewind .rw-glyph{ position:absolute; left:0; right:0; bottom:${UI_TOKENS.corner.h + 6}px;
+  display:flex; align-items:center; justify-content:center; gap:8px;
   font-family:var(--f-display); font-weight:700; font-size:${UI_TOKENS.type.xs}px; letter-spacing:.42em;
   text-transform:uppercase; color:rgba(255,236,190,.85); text-shadow:0 1px 10px rgba(0,0,0,.9); }
 .ct-rewind .rw-glyph svg{ width:16px; height:16px; }

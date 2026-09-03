@@ -1,0 +1,22 @@
+theme: verdant
+slot       key       type                   color    map mean sRGB       rendered = c x map  tile err
+coat       cloth     MeshStandardMaterial   #d8532b  (0.12 0.19 0.22)    #190f09             0.3x    
+coatDark   cloth     MeshStandardMaterial   #a63a1c  (0.12 0.19 0.22)    #130a06             0.3x    
+trim       cloth     MeshStandardMaterial   #2c4a52  (0.12 0.19 0.22)    #050d12             0.1x    
+scarf      cloth     MeshStandardMaterial   #d53a2c  (0.12 0.19 0.22)    #190a09             0.4x    
+skin       plaster   MeshStandardMaterial   #f3cba4  (0.72 0.68 0.60)    #af8961             0.1x    
+hair       cloth     MeshStandardMaterial   #4a2f22  (0.12 0.19 0.22)    #080807             0.1x    
+boot       rubber    MeshStandardMaterial   #37312e  (0.09 0.10 0.11)    #050404             0.2x    
+metal      metal     MeshStandardMaterial   #b9c2cb  (0.50 0.53 0.56)    #5d6671             0.0x    
+gold       gold      MeshStandardMaterial   #d8b25c  (0.99 0.75 0.34)    #d6861f             0.0x    
+leather    leaves    MeshStandardMaterial   #7a5233  (0.12 0.22 0.06)    #0f1102             0.1x    
+rope       rope      MeshStandardMaterial   #c7ab7a  (0.35 0.29 0.19)    #453116             0.3x    
+blanket    cloth     MeshStandardMaterial   #cfd6c8  (0.12 0.19 0.22)    #18282c             0.1x    
+lens       glass     MeshStandardMaterial   #d1ddc8  (0.80 0.84 0.87)    #a7baad             0.0x    
+eyeWhite   plaster   MeshStandardMaterial   #fefefe  (0.72 0.68 0.60)    #b7ac97             0.0x    
+eyeDark    plaster   MeshStandardMaterial   #161b22  (0.72 0.68 0.60)    #0f1214             0.0x    
+wing       None      MeshBasicMaterial      #8fe05a  -                                               
+chrome     None      MeshStandardMaterial   #d6dde6  -                                               
+
+scarf: {"links": 7, "restSeg": 0.105, "restLength": 0.735, "maxTipSpan": 1.61, "maxSegment": 0.4547, "stretchPct": 219}
+page errors: []

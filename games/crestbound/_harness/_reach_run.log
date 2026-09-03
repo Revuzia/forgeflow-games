@@ -1,0 +1,28 @@
+
+CRESTBOUND reach check
+  envelope: single 4.52 m safe / 5.38 m max, triple 6.11 m safe, long jump 6.42 m safe
+  terrain sampler: terrain.js:sampleHeights
+
+course        surf  obj   cp  coins  sig  cre  fam  unreach  orph  status
+--------------------------------------------------------------------------------
+keep           258  520    5      0    0    0    3        0     0  PASS
+verdant-1       94  216    5    121    8    7   10        0     0  PASS
+verdant-2        -    -    -      -    -    -    -        0     -  PENDING
+verdant-3        -    -    -      -    -    -    -        0     -  PENDING
+ember-1          -    -    -      -    -    -    -        0     -  PENDING
+ember-2          -    -    -      -    -    -    -        0     -  PENDING
+ember-3          -    -    -      -    -    -    -        0     -  PENDING
+ember-4          -    -    -      -    -    -    -        0     -  PENDING
+rime-1           -    -    -      -    -    -    -        0     -  PENDING
+rime-2           -    -    -      -    -    -    -        0     -  PENDING
+rime-3           -    -    -      -    -    -    -        0     -  PENDING
+azure-1          -    -    -      -    -    -    -        0     -  PENDING
+azure-2          -    -    -      -    -    -    -        0     -  PENDING
+azure-3          -    -    -      -    -    -    -        0     -  PENDING
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+14 registered courses: 2 authored, 0 failing, 12 PENDING (not authored yet)
+  pending: verdant-2, verdant-3, ember-1, ember-2, ember-3, ember-4, rime-1, rime-2, rime-3, azure-1, azure-2, azure-3
+  pending courses are NOT gated — run with --require-all for the ship-the-whole-game gate.
+RESULT: OK

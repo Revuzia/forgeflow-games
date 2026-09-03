@@ -59,10 +59,11 @@ export const VERSION = '1.0.0';
 export const PAGES = ['title', 'pause', 'settings', 'controls', 'credits', 'confirm'];
 
 /**
- * Read a course's save record WITHOUT creating one. `Save.course(id)` mints a
- * fresh record on demand and marks the save dirty, so calling it just to render
- * a menu would invent "progress" for courses the player has never opened (and
- * make CONTINUE appear after merely looking at the title screen).
+ * A course's save record, or null when the player has never played it.
+ * `Save.course(id)` no longer mints a record on read (that is what made a
+ * virgin profile look like a saved game and put CONTINUE above NEW GAME), but
+ * it returns a shared EMPTY record for an unknown id — null is what the callers
+ * here want, so they can tell "never played" from "played and scored zero".
  * @returns {object|null}
  */
 function savedCourse(id, known) {
@@ -254,9 +255,16 @@ export class Menu {
     brand.textContent = 'CRESTBOUND';
     foot.appendChild(keys); foot.appendChild(brand);
 
-    panel.appendChild(head); panel.appendChild(body); panel.appendChild(foot);
+    /* Action row between the scrolling body and the footer legend. A button
+       parked at the end of `.cm-body` gets sliced by the scroll viewport's
+       bottom edge — the credits BACK button was drawn 40% visible above the
+       footer bar. Anything a page must always be able to press goes here. */
+    const actions = el('div', 'cm-actions');
+    actions.style.display = 'none';
+
+    panel.appendChild(head); panel.appendChild(body); panel.appendChild(actions); panel.appendChild(foot);
     page.appendChild(panel);
-    return { panel, head, hl, hr, h2, eyebrow: eb, body, foot };
+    return { panel, head, hl, hr, h2, eyebrow: eb, body, actions, foot };
   }
 
   /** A header stat cell (pause page + title). */
@@ -454,12 +462,18 @@ export class Menu {
 
     const rec = def ? savedCourse(def.id) : null;
     const crestsHere = rec && Array.isArray(rec.crests) ? rec.crests.length : 0;
-    const coinsBest = rec ? rec.coinsBest | 0 : 0;
+    /* LIVE run, not the save. TIME and DEATHS in this same row are the current
+       run's; reading `coinsBest` here printed "0 / 100" while the player stood
+       there holding 37. `game.coins` / `game.coinsGoal` are the single source
+       the HUD chip and the clear panel read too. */
+    const coinsNow = (this.game && typeof this.game.coins === 'number') ? this.game.coins | 0 : 0;
+    const coinsGoal = (this.game && typeof this.game.coinsGoal === 'number' && this.game.coinsGoal > 0)
+      ? this.game.coinsGoal | 0 : UI_TOKENS.counts.coins;
 
     this.pStats.CRESTS.v.textContent = isKeep
       ? (this._safeCrestTotal() + ' / ' + CREST_TOTAL)
       : (crestsHere + ' / ' + UI_TOKENS.counts.crests);
-    this.pStats.COINS.v.textContent = isKeep ? '—' : (coinsBest + ' / ' + UI_TOKENS.counts.coins);
+    this.pStats.COINS.v.textContent = isKeep ? '—' : (coinsNow + ' / ' + coinsGoal);
     this.pStats.TIME.v.textContent = g.timeMs != null ? fmtMs(g.timeMs) : '—';
     this.pStats.DEATHS.v.textContent = g.deaths != null ? String(g.deaths | 0) : '0';
     this.pStats.COINS.cell.style.display = isKeep ? 'none' : '';
@@ -641,15 +655,18 @@ export class Menu {
     });
     list.appendChild(makeRow('VIBRATION', 'Rumble on landings, crests and hits', this.cVibrate));
 
-    const reset = makeButton('RESET TO DEFAULTS', { onClick: () => this._resetSettings() });
-    reset.style.marginTop = '18px';
-    list.appendChild(reset);
-    const back = makeButton('BACK', { onClick: () => this._backOut() });
-    back.style.marginTop = '6px';
-    list.appendChild(back);
-
     ui.body.appendChild(list);
-    const nav = new FocusList(list, { columns: 1, onMove: () => uiSfx(this.game, 'ui_move') });
+
+    /* Action buttons live in the fixed row, NEVER at the end of the scrolling
+       list: down there the panel's scroll viewport slices them in half against
+       the footer legend, and a player who has not scrolled cannot reach BACK. */
+    const reset = makeButton('RESET TO DEFAULTS', { onClick: () => this._resetSettings() });
+    const back = makeButton('BACK', { primary: true, onClick: () => this._backOut() });
+    ui.actions.style.display = '';
+    ui.actions.appendChild(reset);
+    ui.actions.appendChild(back);
+
+    const nav = new FocusList(ui.panel, { columns: 1, onMove: () => uiSfx(this.game, 'ui_move') });
     nav.bindHover();
     this.nav.settings = nav;
   }
@@ -728,15 +745,16 @@ export class Menu {
       }
     }
 
-    const reset = makeButton('RESET TO DEFAULTS', { onClick: () => this._resetBindings() });
-    reset.style.marginTop = '18px';
-    list.appendChild(reset);
-    const back = makeButton('BACK', { onClick: () => this._backOut() });
-    back.style.marginTop = '6px';
-    list.appendChild(back);
-
     ui.body.appendChild(list);
-    const nav = new FocusList(list, { columns: 1, onMove: () => uiSfx(this.game, 'ui_move') });
+
+    /* Same rule as settings: the page's actions sit in the fixed row. */
+    const reset = makeButton('RESET TO DEFAULTS', { onClick: () => this._resetBindings() });
+    const back = makeButton('BACK', { primary: true, onClick: () => this._backOut() });
+    ui.actions.style.display = '';
+    ui.actions.appendChild(reset);
+    ui.actions.appendChild(back);
+
+    const nav = new FocusList(ui.panel, { columns: 1, onMove: () => uiSfx(this.game, 'ui_move') });
     nav.bindHover();
     this.nav.controls = nav;
   }
@@ -878,11 +896,12 @@ export class Menu {
     block('STUDIO', '<b>ForgeFlow Games</b><br>Version ' + VERSION);
     ui.body.appendChild(body);
 
-    const back = makeButton('BACK', { onClick: () => this._backOut() });
-    back.style.margin = '0 20px 10px';
-    ui.body.appendChild(back);
+    /* In the fixed action row, never at the end of the scrolling body. */
+    const back = makeButton('BACK', { primary: true, onClick: () => this._backOut() });
+    ui.actions.style.display = '';
+    ui.actions.appendChild(back);
 
-    const nav = new FocusList(ui.body, { columns: 1, onMove: () => uiSfx(this.game, 'ui_move') });
+    const nav = new FocusList(ui.panel, { columns: 1, onMove: () => uiSfx(this.game, 'ui_move') });
     nav.bindHover();
     this.nav.credits = nav;
   }

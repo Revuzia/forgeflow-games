@@ -59,7 +59,11 @@ BUDGET = {"drawCalls": 260, "tris": 450_000, "minFps": 55, "p99Ms": 28.0, "loadM
 STATE_JS = "globalThis.CRESTBOUND && CRESTBOUND.game && CRESTBOUND.game.state"
 
 CLICK_JS = r"""() => {
-  const words = ['NEW GAME', 'NEW RUN', 'CONTINUE', 'PLAY', 'START', 'BEGIN', 'ENTER'];
+  // CONTINUE first: with a save on disk, NEW GAME opens an ERASE-confirm page
+  // and the state never leaves 'title' -- which is exactly how this gate was
+  // failing ("the game never reached a live state"). camshots.py already orders
+  // it this way; camcheck.py and this file did not.
+  const words = ['CONTINUE', 'KEEP MY PROGRESS', 'NEW GAME', 'NEW RUN', 'PLAY', 'START', 'BEGIN', 'ENTER'];
   const btns = Array.from(document.querySelectorAll('button.cb-btn, button, [role=button], .btn'));
   for (const want of words) {
     for (const b of btns) {
@@ -200,7 +204,7 @@ async (opts) => {
 """
 
 
-def leave_title(pg, timeout=45):
+def leave_title(pg, timeout=150):
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
@@ -255,7 +259,19 @@ def main() -> int:
     results, pageerrs = {}, []
     with sync_playwright() as p:
         if args.headless:
-            br = p.chromium.launch(headless=True, args=HEADLESS_FLAGS)
+            # HARNESS_NOTES: real Chrome headless on this box drives ANGLE/D3D11 on
+            # the Intel UHD GPU. The bundled Chromium + SwiftShader path was
+            # hard-coded here, and at 1920x1080 it does not survive these scenes:
+            # measured twice, "Target page, context or browser has been closed" on
+            # BOTH courses, i.e. the gate reported OVER BUDGET having measured
+            # nothing. Prefer the GPU, keep SwiftShader as the stated fallback.
+            # (fps / p99 gating under --headless is unchanged -- still suppressed.)
+            try:
+                br = p.chromium.launch(channel="chrome", headless=True, args=FLAGS)
+            except Exception as _e:
+                print("headless: no hardware Chrome (%s) -> SwiftShader" % str(_e)[:120],
+                      file=sys.stderr)
+                br = p.chromium.launch(headless=True, args=HEADLESS_FLAGS)
         else:
             br = p.chromium.launch(channel="chrome", headless=False, args=FLAGS)
         pg = br.new_page(viewport={"width": args.width, "height": args.height})

@@ -1,0 +1,35 @@
+========================================================================================
+CRESTBOUND feel check — measured vs the game's own tuning
+water: live course volume   slab: [-70, 70, 397, 400, 530, 670]
+----------------------------------------------------------------------------------------
+measurement          measured  expected                 verdict note
+----------------------------------------------------------------------------------------
+walk_speed          3.200 m/s  want 3.200 +/- 0.300     OK     stick 0.40
+run_speed           9.000 m/s  want 9.000 +/- 0.200     OK     KeyW held
+runup_time            0.209 s  want <= 0.250            OK     rest -> 95 % run
+stop_time             0.168 s  want <= 0.160            FAIL   from 9.00 m/s
+apex1                 1.910 m  want 1.911 +/- 0.080     OK     jump1
+apex2                 2.601 m  want 2.601 +/- 0.080     OK     jump2
+apex3                 3.578 m  want 3.579 +/- 0.080     OK     jump3
+chain_break_apex      1.910 m  want 1.911 +/- 0.150     OK     states jump1 -> jump1
+jump_cut_ratio        0.600 x  want <= 0.600            OK     tap apex 1.15 m vs full 1.91 m
+longjump_dist         3.704 m  want >= 6.400            FAIL   states jump1,fall,land, apex 1.90 m
+backflip_apex         3.210 m  want 3.221 +/- 0.100     OK     states backflip,fall,land
+sideflip_apex         3.004 m  want 3.007 +/- 0.100     OK     states sideflip,fall,land
+wallkick_vy        12.000 m/s  want 12.000 +/- 1.000    OK     wallkick, vy 1.17 at contact, sampled on the
+wallkick_away       8.047 m/s  want 7.500 +/- 1.500     OK     
+dive_dist            17.399 m  want >= 6.000            OK     states dive,slide,slideRecover
+dive_states_ok          1.000  want YES                 OK     dive AND slide states
+pound_hang                - s  no measurement           FAIL   no hang phase observed (state crouch)
+pound_fall          0.190 m/s  want >= 35.000           FAIL   pound.fall 40
+poundjump_apex        1.909 m  want 2.882 +/- 0.100     FAIL   states jump1,fall,land
+coyote_early            1.000  want YES                 OK     pressed 29 ms after the ledge, evaluated ~68
+coyote_late             0.000  want NO                  OK     pressed 146 ms after the ledge, evaluated ~1
+buffer                  1.000  want YES                 OK     80 ms before landing
+land_keep_ratio       1.001 x  want >= 0.900            OK     8.99 -> 9.00 m/s
+swim_speed          4.500 m/s  want 4.500 +/- 0.300     OK     live course volume 8.4 m, state swim
+----------------------------------------------------------------------------------------
+jump chain states: ['jump1', 'jump2', 'jump3']
+VERDICT: FEEL FAILS (5 failing)
+RESULT: FAIL
+FEEL EXIT=1

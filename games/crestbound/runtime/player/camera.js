@@ -19,8 +19,12 @@
  *     damping (`TUNE.cam.lagPos`). At full run the focus trails by ~1 m, so the
  *     hero is always slightly ahead of centre in the direction of travel and the
  *     player sees where they are going. Vertical lag is SLOWER while airborne
- *     (a single jump does not bob the frame) but a large fall (> 2.5 m below
- *     the focus) catches up within 0.4 s so the landing is never off-screen.
+ *     (a single jump does not bob the frame) but a FALL — measured as metres
+ *     below the peak of the current arc, which no hop can reach — catches up
+ *     within 0.4 s, drops the focus and tips the lens down so the landing
+ *     target is in frame for the whole descent. The focus also eases down from
+ *     head height toward the chest as the lens closes, so a close camera
+ *     centres the hero instead of letting him slide off the bottom edge.
  *
  *  2. NEVER FIGHT THE PLAYER. Auto-yaw (easing the camera behind the run
  *     direction) only runs in 'follow' mode, only above 4 m/s, only after 1.2 s
@@ -33,16 +37,28 @@
  *     holds the PREVIOUS yaw for 0.15 s after a recenter so a mid-air stick
  *     input never flips direction under the player.
  *
- *  3. NEVER CLIP. Three whisker rays (centre, ±0.25 m along camera-right) are
- *     cast from the focus toward the desired camera position through
- *     `world.broadphase.raycast`. A hit pulls the camera in INSTANTLY to
- *     `t − collideRadius` (floored at the near plane, NOT at `minDist` — that is
- *     the player's zoom minimum and would hold the lens inside a close wall);
- *     clearing eases back out over
- *     0.6 s so the camera never pumps. A fourth ray protects the shoulder
+ *  3. NEVER CLIP — AND NEVER DELETE THE HERO. Seven whisker rays (five spread
+ *     ±0.50 m along camera-right, plus a vertical pair at chest height and above
+ *     the focus) are cast from the focus toward the desired camera position
+ *     through `world.broadphase.raycast`. Three rays at focus height missed any
+ *     occluder whose top sat between the chest and the focus, and any pillar
+ *     narrower than the whisker gap; the fan and the vertical pair close both.
+ *     A hit pulls the camera in to `t − collideRadius`, rate-limited so no
+ *     single frame can swallow metres of distance; clearing eases back out over
+ *     0.6 s so the camera never pumps. An eighth ray protects the shoulder
  *     offset itself, so pressing the hero into a wall cannot push the focus
- *     inside it. Under 2.2 m the hero fades (`player.heroFade` 0..1, read by
- *     hero.js) so the near plane never slices the model.
+ *     inside it.
+ *
+ *     Pull-in alone is NOT an occlusion response: past `TUNE.cam.frameMin` the
+ *     hero stops being readable, so below that the solver re-casts the fan at
+ *     bounded yaw offsets (±0.18 / 0.36 / 0.55 rad) and eases onto the cheapest
+ *     heading that frames him — sliding around a pillar rather than shoving the
+ *     lens into his back. When no bounded heading clears (hero flat against a
+ *     long wall) the tight pull-in still happens, floored only at the near
+ *     plane, exactly as CONTRACT §12 requires. The hero fades
+ *     (`player.heroFade` 0..1, read by hero.js) only under 1.25 m, where the
+ *     lens genuinely reaches the model, and the fade is CAPPED below 1 outside
+ *     peek/cinematic: a camera may ghost the player character, never erase it.
  *
  *  4. MOTION FEEL IN THE LENS. FOV eases from `fov` to `fovRun` with speed,
  *     +6° on long jump / dive, +4° underwater (and the post chain is told, for
@@ -93,23 +109,85 @@ const PITCH_RETURN_RATE    = 0.25;   // rad/s
 
 // focus lag
 const AIR_LAG_V            = 3.5;    // vertical lambda while airborne (no bob on a hop)
-const AIR_CATCHUP_DY       = 2.5;    // m: beyond this vertical error, catch up fast
+const AIR_CATCHUP_DY       = 2.5;    // m: RISING beyond this vertical error, catch up fast
 const AIR_CATCHUP_LAMBDA   = 7.5;    // e^-7.5·0.4 ≈ 5 % — settles within 0.4 s
+// A FALL is not a hop, and "metres below the peak of the CURRENT arc" separates
+// them exactly: the jump family never drops past its own apex, so a single jump
+// (apex 1.911 m) barely enters the FALL_LOOK band and a tower-roof fall crosses
+// it in ~0.35 s. Everything below ramps on that one measure, so nothing steps.
+// Without it the focus trails a long fall by v/AIR_LAG_V ≈ 7 m and the hero
+// rides the bottom edge for the whole descent (audit: fall arc at |ndcY| 0.95;
+// measured after: the same rampart fall arc peaks at 0.649).
+const FALL_CATCHUP_LAMBDA  = 14.0;   // vertical lambda at a FULL fall (lag = v/λ)
+const FALL_LOOK_M0         = 1.4;    // m below peak: the look-down bias starts
+const FALL_LOOK_M1         = 3.5;    // m below peak: the look-down bias is full
+const FALL_FOCUS_DROP      = 0.90;   // m the focus drops on a full fall (see the landing)
+const FALL_PITCH_LIFT      = 0.18;   // rad the lens tips down on a full fall
 
 // collision
-const WHISKER_M            = 0.25;
+const WHISKER_M            = 0.25;   // lateral spacing of the horizontal fan
+const WHISKER_N            = 2;      // → 5 horizontal rays at 0, ±0.25, ±0.50 m
+const WHISKER_DOWN_M       = 0.70;   // vertical probe at ~chest height (focus − 0.70)
+// The ceiling probe rides one collide-radius above the focus and reports its RAW
+// hit distance: `t − collideRadius` is only the right sphere clearance for a
+// surface square-on to the ray, and a ceiling is nearly PARALLEL to it, where the
+// correct answer is the offset probe's own t. (The old three-ray fan had no
+// ceiling probe at all and let the lens intersect any low roof it ducked under.)
+const WHISKER_UP_M         = 0.35;   // = TUNE.cam.collideRadius
 const COLLIDE_OUT_LAMBDA   = 5.0;    // 95 % of the way back out in 0.6 s
 const COLLIDE_OUT_MAX_RATE = 12.0;   // m/s ceiling so a long pull-in never snaps out
-const NEAR_FADE_DIST       = 2.2;    // hero fades below this camera distance
+// THE PULL-IN STAYS INSTANT, deliberately. The audit measured a single frame
+// deleting 5.70 m against a 1.5 m budget, and the obvious reading is "rate-limit
+// it" — but `want` IS the first blocked distance, so every metre between the
+// current distance and `want` is a metre with the lens ALREADY behind the
+// occluder. Easing that travel does not smooth a camera move, it renders N
+// frames from inside a wall. (Tried and reverted: an eased pull-in also made
+// camcheck's wall row unmeasurable, since the lens is inside the wall for the
+// whole ease.) What actually produced the audit's number was the DESTINATION —
+// 0.12 m, with the hero behind the lens, held for 1.6 s. The framing floor plus
+// the yaw slide fix that: the destination is now ~frameMin wherever any bounded
+// heading is clear, so the amplitude the player sees is bounded by the geometry
+// rather than by a rate cap that would have to clip to be honoured.
 // Floor for the COLLISION pull-in only. `TUNE.cam.minDist` is the orbit/zoom
 // minimum — the closest the player may pull the camera themselves — and must
 // NOT clamp the whisker result: a wall 0.4 m behind the hero (hero pressed flat
 // against it) would then hold the lens 1.6 m back, i.e. on the far side of the
 // wall. CONTRACT §12 says "pull in to hit − collideRadius" with no floor, so the
-// only real floor is the renderer's near plane (engine DEFAULT_NEAR 0.05); the
-// hero is already fully faded by then (heroFade hits 1 at minDist).
+// only real floor is the renderer's near plane (engine DEFAULT_NEAR 0.05).
 const COLLIDE_MIN_DIST     = 0.12;
 const DIST_LAMBDA          = 6.0;    // base distance changes (death pull-out) ease
+
+// Framing floor + yaw slide. `TUNE.cam.frameMin` is the distance below which the
+// hero stops being readable, so the solver treats a pull-in past it as a FAILURE
+// to be resolved by moving the lens sideways rather than by swallowing the hero:
+// it re-casts the fan at a handful of bounded yaw offsets and eases onto the
+// cheapest heading that frames him. A slide is only taken when it actually buys
+// clearance (SLIDE_GAIN_MIN), so the classic "hero flat against a long wall"
+// case — where no bounded heading can clear — still pulls the lens in tight
+// exactly as CONTRACT §12 requires, instead of spinning the world.
+const SLIDE_STEPS          = [0.18, 0.36, 0.55];   // rad, tried nearest-first, both signs
+const SLIDE_RATE           = 3.2;    // rad/s onto an avoidance heading
+const SLIDE_RELEASE_RATE   = 1.4;    // rad/s back to the player's heading
+const SLIDE_GAIN_MIN       = 0.25;   // m — a slide must buy at least this much
+const SLIDE_RELEASE_M      = 0.50;   // m hysteresis so the solver cannot hunt
+
+// hero fade. This must NEVER reach 1 outside peek/cinematic: a camera that makes
+// the player character 100 % invisible while the player still has full control is
+// not shippable (audit: 3 of 24 orbit headings at a rampart settled at 1.5 m with
+// heroFade 1.0 — a perfectly ordinary close camera, no near-plane risk at all).
+// Fading now begins only where the lens is genuinely about to slice the model.
+const FADE_START_DIST      = 1.25;   // m — above this the hero is fully solid
+const FADE_FULL_DIST       = 0.45;   // m — at/below this the fade is at its cap
+const HERO_FADE_MAX        = 0.75;   // ghosted, never gone
+
+// adaptive framing: the focus rides at head height at range and eases down to the
+// chest as the lens closes, so the hero is centred instead of sliding off the
+// bottom of the frame exactly when he is hardest to see.
+const FOCUS_LOW_D0         = 2.2;    // m — focus fully lowered at/below this dist
+const FOCUS_LOW_D1         = 4.5;    // m — focus at full head height at/above this
+const FOCUS_DROP_MAX       = 0.62;   // m (1.55 → 0.93, i.e. chest)
+const PITCH_ADAPT_LAMBDA   = 6.0;    // eases the derived pitch offset
+const CLOSE_PITCH_LIFT     = 0.10;   // rad added as the lens closes (never under a ceiling)
 
 // fov
 const FOV_LAMBDA           = 12;
@@ -173,6 +251,10 @@ const _look      = new THREE.Vector3();
 const _tmp       = new THREE.Vector3();
 const _tmp2      = new THREE.Vector3();
 const _fwdOut    = new THREE.Vector3();   // returned by `forwardFlat`
+const _cFwd      = new THREE.Vector3();   // candidate heading (clearance solver)
+const _cRight    = new THREE.Vector3();
+const _cDir      = new THREE.Vector3();
+const _cOrigin   = new THREE.Vector3();
 const _qA        = new THREE.Quaternion();
 const _hit       = { t: 0, normal: new THREE.Vector3(), collider: null };
 const _spring    = { x: 0, v: 0 };
@@ -284,9 +366,16 @@ export class FollowCamera {
     this._sensX        = 1;
     this._sensY        = 1;
 
-    // ── distance ──────────────────────────────────────────────────────────
+    // ── distance / framing solver ─────────────────────────────────────────
     this._distBase   = TUNE.cam.dist;          // eased base (death pull-out)
     this._distColl   = TUNE.cam.dist;          // collision-limited distance
+    this._yawSlide   = 0;                      // eased collision-avoidance yaw offset (rad)
+    this._slideWant  = 0;                      // its target this frame
+    this._limitCeil  = false;                  // the limiting whisker hit an underside
+    this._pitchAdapt = 0;                      // context-derived pitch offset (rad)
+    this._focusDrop  = 0;                      // context-derived focus-height drop (m)
+    this._airPeakY   = 0;                      // peak height of the current airborne arc
+    this._fallDepth  = 0;                      // m below that peak (0 while grounded)
 
     // ── recenter ──────────────────────────────────────────────────────────
     this._rcActive  = false;
@@ -345,7 +434,15 @@ export class FollowCamera {
     this.__test = {
       state() {
         return {
-          yaw: self.yaw, pitch: self.pitch, dist: self.dist, mode: self.mode, fov: self.fov,
+          // `yaw`/`pitch` are the POSED lens angles (orbit value + the solver's
+          // collision-avoidance slide / context-derived pitch), because that is
+          // what an audit of framing has to measure. The raw orbit values the
+          // player drives are reported alongside as yawOrbit/pitchOrbit.
+          yaw: wrapAngle(self.yaw + self._yawSlide), pitch: self._pitchAim(),
+          yawOrbit: self.yaw, pitchOrbit: self.pitch,
+          yawSlide: self._yawSlide, pitchAdapt: self._pitchAdapt, focusDrop: self._focusDrop,
+          fallDepth: self._fallDepth,
+          dist: self.dist, mode: self.mode, fov: self.fov,
           yawForMovement: self.yawForMovement,
           focus: [self._focus.x, self._focus.y, self._focus.z],
           pos: [self._pos.x, self._pos.y, self._pos.z],
@@ -360,8 +457,20 @@ export class FollowCamera {
           time: self._time,
         };
       },
-      setYaw(y) { self.yaw = wrapAngle(+y || 0); self._autoRate = 0; self._rcActive = false; },
-      setPitch(p) { self.pitch = clamp(+p || 0, TUNE.cam.pitchMin, TUNE.cam.pitchMax); },
+      // A test placement is a SNAP, not a nudge: it re-solves the collision /
+      // framing pose at dt = 0 so the very next frame is already settled,
+      // instead of leaving the harness to wait out an ease it did not ask for.
+      setYaw(y) {
+        self.yaw = wrapAngle(+y || 0);
+        self._autoRate = 0; self._rcActive = false;
+        self._yawSlide = 0; self._slideWant = 0;
+        self._resolveNow();
+      },
+      setPitch(p) {
+        self.pitch = clamp(+p || 0, TUNE.cam.pitchMin, TUNE.cam.pitchMax);
+        self._pitchAdapt = 0;
+        self._resolveNow();
+      },
     };
 
     this._snapToPlayer(true);
@@ -379,7 +488,7 @@ export class FollowCamera {
   /** Ease the yaw to directly behind the hero over `TUNE.cam.recenterTime`. */
   recenter() {
     if (this._deathOn || this._cine) return;
-    this._rcHoldYaw = this._rcActive ? this._rcHoldYaw : this.yaw;
+    this._rcHoldYaw = this._rcActive ? this._rcHoldYaw : wrapAngle(this.yaw + this._yawSlide);
     this._rcHoldT   = RECENTER_HOLD_S;
     this._rcActive  = true;
     this._rcT       = 0;
@@ -491,7 +600,7 @@ export class FollowCamera {
       const l = _fwdOut.length();
       if (l > 1e-5) return _fwdOut.multiplyScalar(1 / l);
     }
-    return headingFromYaw(this.yaw, _fwdOut);
+    return headingFromYaw(this.yaw + this._yawSlide, _fwdOut);
   }
 
   /**
@@ -503,7 +612,10 @@ export class FollowCamera {
   get yawForMovement() {
     if (this._rcHoldT > 0) return this._rcHoldYaw;
     if (this._cine) return this._yawMoveCine;
-    return this.yaw;
+    // The collision slide rotates the LENS, so it must rotate the movement frame
+    // with it or "forward" stops meaning "up the screen". It is frozen during a
+    // committed move (see `_updateDistance`), so it can never steer one.
+    return wrapAngle(this.yaw + this._yawSlide);
   }
 
   /** Camera world position (the value composed last frame). */
@@ -515,8 +627,25 @@ export class FollowCamera {
   get deathCam() { return this._deathOn; }
   get cinematicDone() { return this._cineDone; }
 
-  /** Snap the focus to the hero and the yaw behind them (course load / respawn). */
-  snapToPlayer() { this._clearTransients(); this._snapToPlayer(true); this._compose(0); }
+  /** Re-run the framing solver at dt = 0 and pose from it. */
+  _resolveNow() {
+    this._updateAdaptive(0);
+    this._updateFocus(0);
+    this._updateDistance(0);
+    this._compose(0);
+  }
+
+  /**
+   * Snap the focus to the hero and the yaw behind them (course load / respawn).
+   * The collision solver runs once at dt = 0 so the snapped pose is already
+   * resolved — a respawn must not start with the lens inside the nearest pillar
+   * and then ease its way out.
+   */
+  snapToPlayer() {
+    this._clearTransients();
+    this._snapToPlayer(true);
+    this._resolveNow();
+  }
 
   /* ─────────────────────────── main update ─────────────────────────── */
 
@@ -560,7 +689,8 @@ export class FollowCamera {
     // 7 ── pitch return ------------------------------------------------------
     this._updatePitchReturn(d);
 
-    // 8 ── focus lag ---------------------------------------------------------
+    // 8 ── adaptive framing (focus height + derived pitch), then the focus lag --
+    this._updateAdaptive(d);
     this._updateFocus(d);
 
     // 9 ── springs / shake ---------------------------------------------------
@@ -628,6 +758,9 @@ export class FollowCamera {
     this._shakeX = this._shakeY = this._shakeRoll = this._shakePitch = 0;
     this._rcActive = false; this._rcHoldT = 0;
     this._autoRate = 0;
+    this._yawSlide = 0; this._slideWant = 0;
+    this._pitchAdapt = 0; this._focusDrop = 0;
+    this._fallDepth = 0; this._limitCeil = false;
   }
 
   /** Put the focus on the hero now; optionally the yaw behind them too. */
@@ -639,6 +772,9 @@ export class FollowCamera {
       this.yaw = wrapAngle(p.facing);
       this.pitch = TUNE.cam.defaultPitch;
     }
+    this._yawSlide = 0; this._slideWant = 0;
+    this._pitchAdapt = 0; this._focusDrop = 0;
+    this._airPeakY = src.y; this._fallDepth = 0; this._limitCeil = false;
     headingFromYaw(this.yaw, _fwd);
     rightFromFwd(_fwd, _right);
     this._shoulder = TUNE.cam.shoulder;
@@ -731,6 +867,59 @@ export class FollowCamera {
     this.pitch += d > step ? step : (d < -step ? -step : d);
   }
 
+  /**
+   * The pitch the lens is actually posed at: the player's orbit pitch plus the
+   * context-derived offset. CONTRACT §12 calls the camera's elevation `pitch`;
+   * `this.pitch` stays the value the player drives (and that `_updatePitchReturn`
+   * eases home), so manual orbit and adaptive framing never fight each other.
+   */
+  _pitchAim() {
+    return clamp(this.pitch + this._pitchAdapt, TUNE.cam.pitchMin, TUNE.cam.pitchMax);
+  }
+
+  /**
+   * Derive the focus height and the pitch offset from CONTEXT — collided
+   * distance, how far the hero has fallen below the peak of this arc, and the
+   * resulting hero-vs-focus height error — rather than holding pitch at a
+   * constant `defaultPitch` forever (which put the chest at ndc −0.77 whenever
+   * the lens closed, and let the hero ride the bottom edge through every long
+   * fall). Both outputs are eased, so nothing steps.
+   */
+  _updateAdaptive(dt) {
+    const p = this.player;
+    const src = this._heroSrc();
+    const grounded = !!(p && (p.grounded || p.onGround));
+    const inWater  = !!(p && (p.inWater || p.submerged));
+
+    // fall depth = metres below the peak of the CURRENT airborne arc. A hop can
+    // never exceed its own apex, so this separates falls from the jump family.
+    if (!src) {
+      this._fallDepth = 0;
+    } else if (grounded || inWater) {
+      this._airPeakY = src.y;
+      this._fallDepth = 0;
+    } else {
+      if (src.y > this._airPeakY) this._airPeakY = src.y;
+      const fd = this._airPeakY - src.y;
+      this._fallDepth = fd > 0 ? fd : 0;
+    }
+
+    const cinematicish = this._peekOn || !!this._cine || this._deathOn;
+    const fallK  = smoothstep(FALL_LOOK_M0, FALL_LOOK_M1, this._fallDepth);
+    const closeK = 1 - smoothstep(FOCUS_LOW_D0, FOCUS_LOW_D1, this.dist);
+
+    // focus: head height at range, chest as the lens closes, lower again on a fall
+    let drop = cinematicish ? 0 : FOCUS_DROP_MAX * closeK + FALL_FOCUS_DROP * fallK;
+    this._focusDrop = dt > 0 ? damp(this._focusDrop, drop, PITCH_ADAPT_LAMBDA, dt) : drop;
+
+    // pitch: tip down into a fall, and lift as the lens closes — but NEVER when
+    // the pull-in was a ceiling, which is the one case where raising the camera
+    // drives it into the surface that is already limiting it.
+    let pitchWant = cinematicish ? 0 : FALL_PITCH_LIFT * fallK;
+    if (!cinematicish && !this._limitCeil) pitchWant += CLOSE_PITCH_LIFT * closeK;
+    this._pitchAdapt = dt > 0 ? damp(this._pitchAdapt, pitchWant, PITCH_ADAPT_LAMBDA, dt) : pitchWant;
+  }
+
   _updateFocus(dt) {
     const src = this._heroSrc();
     if (!src) return;
@@ -740,7 +929,7 @@ export class FollowCamera {
     rightFromFwd(_fwd, _right);
 
     // hero centre and shoulder-offset target
-    _heroC.set(src.x, src.y + TUNE.cam.height, src.z);
+    _heroC.set(src.x, src.y + TUNE.cam.height - this._focusDrop, src.z);
     _focusT.copy(_heroC).addScaledVector(_right, this._shoulder);
 
     if (!this._focusInit) { this._focus.copy(_focusT); this._focusInit = true; return; }
@@ -759,7 +948,16 @@ export class FollowCamera {
     let lamY = lam;
     if (!grounded && !inWater) {
       const dy = _focusT.y - this._focus.y;
-      lamY = Math.abs(dy) > AIR_CATCHUP_DY ? AIR_CATCHUP_LAMBDA : AIR_LAG_V;
+      // RISING: only a big error catches up fast, so a hop never bobs the frame.
+      // FALLING: the vertical lambda ramps from AIR_LAG_V to FALL_CATCHUP_LAMBDA
+      // with how far below this arc's peak the hero is — smooth, so there is no
+      // step, and zero for the whole jump family (which never falls past its own
+      // apex). At λ 14 a 25 m/s descent trails by 1.8 m instead of 7 m, which is
+      // the difference between seeing the landing and reading the sky.
+      lamY = dy > AIR_CATCHUP_DY
+        ? AIR_CATCHUP_LAMBDA
+        : lerp(AIR_LAG_V, FALL_CATCHUP_LAMBDA,
+               smoothstep(FALL_LOOK_M0, FALL_LOOK_M1, this._fallDepth));
     }
     this._focus.y = damp(this._focus.y, _focusT.y, lamY, dt);
   }
@@ -800,8 +998,57 @@ export class FollowCamera {
   }
 
   /**
+   * Whisker fan for ONE candidate heading → the closest legal camera distance
+   * along it. The FULL fan every time, candidates included: a cheaper ranking
+   * fan lies, and a heading picked on a lie stalls the slide half-resolved
+   * (measured — centre-ray-only ranking chose 0.18 rad against a 0.9 m pillar
+   * whose lateral whiskers were still blocked, leaving the lens at 1.21 m).
+   * `pose` records `_limitCeil` for the heading we will actually use.
+   * Allocation-free.
+   */
+  _clearance(bp, yawOff, pitch, want, pose) {
+    const R = TUNE.cam.collideRadius;
+    headingFromYaw(this.yaw + yawOff, _cFwd);
+    rightFromFwd(_cFwd, _cRight);
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    _cDir.set(-_cFwd.x * cp, sp, -_cFwd.z * cp);
+    const maxD = want + R;
+    let limit = want;
+    let ceil = false;
+
+    for (let i = -WHISKER_N; i <= WHISKER_N; i++) {
+      _cOrigin.copy(this._focus).addScaledVector(_cRight, i * WHISKER_M);
+      if (bp.raycast(_cOrigin, _cDir, maxD, _hit) && _hit.t - R < limit) {
+        limit = _hit.t - R; ceil = _hit.normal.y < -0.5;
+      }
+    }
+    // chest-height probe: catches an occluder whose TOP sits between the chest
+    // and the focus — invisible to a fan cast only at focus height.
+    _cOrigin.copy(this._focus); _cOrigin.y -= WHISKER_DOWN_M;
+    if (bp.raycast(_cOrigin, _cDir, maxD, _hit) && _hit.t - R < limit) {
+      limit = _hit.t - R; ceil = _hit.normal.y < -0.5;
+    }
+    // ceiling probe: offset by the collide radius, raw t (see WHISKER_UP_M).
+    _cOrigin.copy(this._focus); _cOrigin.y += WHISKER_UP_M;
+    if (bp.raycast(_cOrigin, _cDir, maxD, _hit) && _hit.t < limit) {
+      limit = _hit.t; ceil = _hit.normal.y < -0.5;
+    }
+
+    if (pose) this._limitCeil = ceil;
+    return limit;
+  }
+
+  /**
    * Desired distance = eased base (+1.5 m on death) + punch dip, then the
-   * whisker raycasts pull it in. Pull-in is instant; release eases out.
+   * whisker fan resolves it. THREE responses, in order of how little they cost
+   * the player: (1) if the fan is clear past `TUNE.cam.frameMin`, nothing
+   * happens; (2) if it is not, slide the lens sideways onto the cheapest bounded
+   * heading that IS clear, so the camera goes around the occluder instead of
+   * into the hero's back; (3) only when no bounded heading clears — the hero flat
+   * against a long wall — pull in tight, floored at the near plane, which is what
+   * CONTRACT §12 asks for and what `camcheck`'s wall row measures. The pull-in is
+   * rate-limited (it used to be instant, and one frame could delete 5.7 m);
+   * release still eases out over 0.6 s so the camera never pumps.
    */
   _updateDistance(dt) {
     const C = TUNE.cam;
@@ -812,24 +1059,22 @@ export class FollowCamera {
       // peek/cinematic do not orbit — hold the collision state at minimum so the
       // return eases out from the head rather than popping to full distance
       if (this._peekOn) this._distColl = C.minDist;
+      this._yawSlide = 0; this._slideWant = 0; this._limitCeil = false;
       this.dist = Math.max(C.minDist, this._distColl);
       return;
     }
 
     let want = Math.max(C.minDist, this._distBase + this._pDistX);
-
-    // geometry
-    headingFromYaw(this.yaw, _fwd);
-    rightFromFwd(_fwd, _right);
-    const cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
-    _dir.set(-_fwd.x * cp, sp, -_fwd.z * cp);          // unit: focus → camera
+    const pitch = this._pitchAim();
 
     const bp = this._broadphase();
     if (bp) {
       // (a) shoulder guard: hero centre → shoulder focus must be clear
       const src = this._heroSrc();
       if (src) {
-        _heroC.set(src.x, src.y + C.height, src.z);
+        headingFromYaw(this.yaw + this._yawSlide, _fwd);
+        rightFromFwd(_fwd, _right);
+        _heroC.set(src.x, src.y + C.height - this._focusDrop, src.z);
         let sh = C.shoulder;
         if (sh !== 0) {
           _tmp.copy(_right).multiplyScalar(Math.sign(sh));
@@ -840,23 +1085,48 @@ export class FollowCamera {
         this._shoulder = dt > 0 ? damp(this._shoulder, sh, 14, dt) : sh;
       }
 
-      // (b) three whiskers from the focus toward the desired position
-      const maxD = want + C.collideRadius;
-      let limit = want;
-      for (let i = -1; i <= 1; i++) {
-        _origin.copy(this._focus).addScaledVector(_right, i * WHISKER_M);
-        if (bp.raycast(_origin, _dir, maxD, _hit)) {
-          const cand = _hit.t - C.collideRadius;
-          if (cand < limit) limit = cand;
+      // (b) the honest, un-slid pose
+      const c0 = this._clearance(bp, 0, pitch, want, true);
+      const frozen = this._autoFrozen();
+      // (c) the framing floor never demands more than the distance we asked for
+      const floor = Math.min(C.frameMin, want);
+      let slideWant = 0;
+      if (c0 < floor && !this._limitCeil && !frozen) {
+        // cheapest deviation first, both signs, stop at the first that frames him
+        let bestOff = 0, bestClear = c0;
+        for (let k = 0; k < SLIDE_STEPS.length && bestClear < floor; k++) {
+          for (let sg = 0; sg < 2 && bestClear < floor; sg++) {
+            const off = sg === 0 ? SLIDE_STEPS[k] : -SLIDE_STEPS[k];
+            const c = this._clearance(bp, off, pitch, want, false);   // ranking, not the pose
+            if (c > bestClear + 1e-3) { bestClear = c; bestOff = off; }
+          }
         }
+        // a slide that buys nothing is just a camera spinning the world
+        if (bestClear >= c0 + SLIDE_GAIN_MIN) slideWant = bestOff;
+      } else if (this._yawSlide !== 0 && c0 < floor + SLIDE_RELEASE_M) {
+        slideWant = this._yawSlide;                 // hysteresis: hold, never hunt
       }
-      // The whisker result overrides the zoom minimum: clamping to minDist here
-      // is what pushes the lens THROUGH a close wall. Floor at the near plane.
+      this._slideWant = slideWant;
+
+      // (d) ease onto it — frozen during a committed move (CONTRACT §12).
+      // A SNAP (dt <= 0: course load, respawn) takes the heading immediately, so
+      // the very first frame after a respawn is already framed rather than
+      // starting inside a pillar and easing out of it.
+      if (dt <= 0) { this._yawSlide = slideWant; }
+      else if (!frozen && slideWant !== this._yawSlide) {
+        const rate = (slideWant === 0 ? SLIDE_RELEASE_RATE : SLIDE_RATE) * dt;
+        const dOff = slideWant - this._yawSlide;
+        this._yawSlide += dOff > rate ? rate : (dOff < -rate ? -rate : dOff);
+        if (Math.abs(this._yawSlide) < 1e-4) this._yawSlide = 0;
+      }
+
+      // (e) the distance along the heading we will actually pose at
+      const limit = this._yawSlide === 0 ? c0 : this._clearance(bp, this._yawSlide, pitch, want, true);
       want = Math.max(COLLIDE_MIN_DIST, limit);
     }
 
     if (dt <= 0) { this._distColl = want; }
-    else if (want < this._distColl) { this._distColl = want; }                     // pull in: instant
+    else if (want < this._distColl) { this._distColl = want; }                    // pull in: instant
     else {
       let next = damp(this._distColl, want, COLLIDE_OUT_LAMBDA, dt);              // ease back out
       const maxStep = COLLIDE_OUT_MAX_RATE * dt;
@@ -926,7 +1196,8 @@ export class FollowCamera {
       return;
     }
 
-    headingFromYaw(this.yaw, _fwd);
+    // the POSED heading: the orbit yaw plus the collision solver's slide
+    headingFromYaw(this.yaw + this._yawSlide, _fwd);
     rightFromFwd(_fwd, _right);
 
     if (this._peekOn) {
@@ -941,7 +1212,7 @@ export class FollowCamera {
       this._lookPt.set(this._pos.x + _fwd.x * cpp, this._pos.y + spp, this._pos.z + _fwd.z * cpp);
     } else {
       // orbit: focus − fwd·cos(pitch)·dist + up·sin(pitch)·dist
-      let pitch = this.pitch + this._pPitchX + this._shakePitch;
+      let pitch = this._pitchAim() + this._pPitchX + this._shakePitch;
       if (this._deathOn) {
         this._deathT = Math.min(1, this._deathT + dt / 0.5);
         pitch += DEATH_PITCH_LIFT * easeInOutSine(this._deathT);
@@ -1009,10 +1280,19 @@ export class FollowCamera {
 
   _updateOutputs(dt) {
     const p = this.player;
-    // hero fade: peek hides the hero; a close camera fades it before the near plane
+    // Hero fade. Peek is the ONLY follow-family mode that may hide the hero
+    // outright (it is first person — there is nothing to see but the inside of
+    // his head). Everywhere else the fade is a ghost, capped below 1: the lens
+    // may have to get closer than is comfortable, but a camera that leaves the
+    // player in full control of a character they cannot see is not shippable.
+    // It also starts far later than it used to — `minDist` (1.6 m) is the zoom
+    // minimum, a perfectly ordinary framing distance with no near-plane risk,
+    // and fading the hero to nothing there was the bug, not the safeguard.
     let fade = 0;
     if (this._peekOn) fade = 1;
-    else if (!this._cine) fade = 1 - smoothstep(TUNE.cam.minDist, NEAR_FADE_DIST, this.dist);
+    else if (!this._cine) {
+      fade = HERO_FADE_MAX * (1 - smoothstep(FADE_FULL_DIST, FADE_START_DIST, this.dist));
+    }
     this._heroFade = fade;
     if (p) p.heroFade = fade;
 

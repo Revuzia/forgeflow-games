@@ -568,11 +568,14 @@ function rectsFor(o, i, out, links) {
   }
 
   if (kind === 'building') {
-    /* A building contributes its interior FLOOR and its ROOF. `p` is the FLOOR
-       (builders.js lays the interior floor slab at local y = -0.11 and raises the
-       shell from 0 to H), the doors are the way in, and a course that wants the
-       roof reachable must author a way up — this gate says so when there is not
-       one. The roof deck is per STYLE, straight off builders.js `BUILDING_STYLE`:
+    /* A building contributes its interior FLOOR and its ROOF. `p` is the CENTRE
+       of the s box — the same convention every other p+s kind uses — so the
+       interior floor is at p.y - s.y/2 and the roof deck at p.y + s.y/2 (+ the
+       per-style deck lip). builders.js models the shell in local y 0..H and
+       shifts it down by H/2 at placement time. The doors are the way in, and a
+       course that wants the roof reachable must author a way up — this gate says
+       so when there is not one. The roof deck is per STYLE, straight off
+       builders.js `BUILDING_STYLE`:
        fort/temple/foundry are battlement decks that OVERHANG the shell, a tower's
        cone caps its drum flush, and a cottage's roof is PITCHED — sloped slabs,
        never a deck, so it contributes no landable rectangle at all. */
@@ -587,12 +590,12 @@ function rectsFor(o, i, out, links) {
       cottage: null,                                   // pitched: not a deck
     };
     const rf = ROOF[style] === undefined ? ROOF.fort : ROOF[style];
-    const floor = mkRect(o, i, p[0], p[1], p[2], Math.max(0.5, ex - 0.4), Math.max(0.5, ez - 0.4), '@floor');
+    const floor = mkRect(o, i, p[0], p[1] - hy, p[2], Math.max(0.5, ex - 0.4), Math.max(0.5, ez - 0.4), '@floor');
     out.push(floor);
     if (rf) {
       const rex = rf.round ? Math.max(ex, ez) : ex + rf.over;
       const rez = rf.round ? Math.max(ex, ez) : ez + rf.over;
-      out.push(mkRect(o, i, p[0], p[1] + hy * 2 + rf.dy, p[2], rex, rez, '@roof'));
+      out.push(mkRect(o, i, p[0], p[1] + hy + rf.dy, p[2], rex, rez, '@roof'));
     }
     for (const d of o.doors || []) {
       const dp = v3(d.p !== undefined ? d.p : d);

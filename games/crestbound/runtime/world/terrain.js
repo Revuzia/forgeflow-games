@@ -246,6 +246,9 @@ export function samplePaths(def) {
  * 2. Rendering — from here down, THREE is fair game.
  * ======================================================================== */
 
+/** CONTRACT §18 blade budget at quality 1.0 ("30k at high, 8k at low"). */
+const BLADE_BUDGET_MAX = 30000;
+
 /** ONE shared clock for every grass field in the scene. */
 const GRASS_TIME = { value: 0 };
 
@@ -273,14 +276,25 @@ function mulberry32(seed) {
 
 /** Blade-card geometry: two tapered quads crossed at 90°. 4 triangles. */
 function bladeGeometry(w, h, cross) {
-  const P = [], N = [], U = [];
+  const P = [], N = [], U = [], C = [];
   const half = w * 0.5, tip = w * 0.16;
+  /* ROOT-TO-TIP GRADIENT as a geometry colour attribute.
+   *
+   * three MULTIPLIES the geometry `color` attribute by `instanceColor`, so this
+   * costs nothing and needs no shader: the per-instance colour still carries
+   * species/height/patch variation, and this darkens every blade toward its
+   * root the way a real sward self-shadows. It also replaces the leaves TEXTURE
+   * the blade material used to sample — see bladeMaterial. */
   const card = (yaw) => {
     const c = Math.cos(yaw), s = Math.sin(yaw);
     const X = (v) => [c * v, 0, s * v];
     const b0 = X(-half), b1 = X(half), t0 = X(-tip), t1 = X(tip);
     const nx = -s, nz = c;
-    const push = (p, y, u, v) => { P.push(p[0], y, p[2]); N.push(nx, 0.45, nz); U.push(u, v); };
+    const push = (p, y, u, v) => {
+      P.push(p[0], y, p[2]); N.push(nx, 0.45, nz); U.push(u, v);
+      const k = 0.46 + 0.54 * v;              // v = 0 at the root, 1 at the tip
+      C.push(k, k * 1.03, k * 0.92);          // roots read cooler, tips warmer
+    };
     push(b0, 0, 0, 0); push(b1, 0, 1, 0); push(t1, h, 1, 1);
     push(b0, 0, 0, 0); push(t1, h, 1, 1); push(t0, h, 0, 1);
   };
@@ -290,6 +304,7 @@ function bladeGeometry(w, h, cross) {
   g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(P), 3));
   g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(N), 3));
   g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(U), 2));
+  g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(C), 3));
   g.computeBoundingSphere();
   return g;
 }
@@ -304,52 +319,143 @@ const _grassMats = new Map();
  * Sway is a two-band sine driven by the instance's world offset, scaled by
  * `pow(uv.y, 1.6)` so the root never moves and the tip whips.
  */
-function bladeMaterial(theme, mats, key) {
+function bladeMaterial(theme, mats, key, field) {
   const id = (theme && theme.id) || 'default';
-  const ck = 'blade|' + id + '|' + key;
+  const ck = 'blade|' + id + '|' + key + '|' + field.uid;
   let m = _grassMats.get(ck);
   if (m) return m;
-  const base = getMaterial('leaves', theme, mats);
+  /* NO MAP. This material sampled the theme's `leaves` ALBEDO across a 0..1 uv
+   * per blade — i.e. every 8 cm blade card showed the whole leaf-cluster atlas,
+   * including its near-black background. It copied `alphaTest: 0.45` from the
+   * leaves bake but NOT the alphaMap that bake puts its cutout in, so nothing
+   * was ever discarded and the field rendered as solid black spikes
+   * (`_shots/_v36_verdant.png`, the first frame in which these blades have ever
+   * been drawn at all — see the budget note in buildGrass). A 40 cm blade seen
+   * from 3 m needs a gradient and a normal, not a texture: colour now comes
+   * from the geometry gradient x the per-instance colour, which is cheaper and
+   * cannot fail this way. */
   m = new THREE.MeshStandardMaterial({
     color: 0xffffff,
-    map: (base && base.map) || null,
     roughness: 0.92,
     metalness: 0.0,
     side: THREE.DoubleSide,
     vertexColors: true,
   });
-  if (base && base.alphaTest) m.alphaTest = base.alphaTest;
+  /* ------------------------------------------------------------------------
+   * ROUND 2 — THE CAMERA-LOCAL RING.
+   *
+   * Round 1 fixed the budget bug (QUALITY.grass was read as an absolute count,
+   * so buildGrass returned null at every tier and the contract's instanced
+   * grass had never rendered). What that exposed is a DENSITY problem the
+   * budget cannot solve: 30 000 blades spread over a 140x140 m meadow is one
+   * blade per square metre, and `_shots/_v38_verdant.png` shows exactly that —
+   * pale triangles scattered like confetti over painted ground, which is worse
+   * than no grass at all.
+   *
+   * Turf needs ~20 blades/m2 where the camera is and none where it is not.
+   * So the instances no longer live at fixed world positions: they are a
+   * jittered lattice over a 2R x 2R tile that WRAPS around the camera in the
+   * vertex shader (`world = anchor + round((cam-anchor)/2R) * 2R`). The same
+   * 30 000 instances then cover 36x36 m at ~23 blades/m2 instead of 19 600 m2
+   * at 1. Cost: identical draw calls, identical triangles, one extra vertex
+   * texture fetch. Nothing allocates per frame — `cameraPosition` is a three
+   * built-in uniform, so there is not even a uniform to push.
+   *
+   * The ground under a wrapped blade is not known at build time, so the field
+   * ships as an RG16F texture: R = terrain height in metres, G = "lushness"
+   * (slope gate x path gate x authored exclusions x patch noise). G both culls
+   * (a blade on a path or a cliff collapses to a point, which the rasteriser
+   * throws away) and tints, so the field reads as a real sward with bare
+   * tracks rather than a uniform carpet.
+   * --------------------------------------------------------------------- */
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = GRASS_TIME;
+    sh.uniforms.uGrassField = { value: field.tex };
+    sh.uniforms.uFieldRect = { value: field.rect };   // originX, originZ, 1/sizeX, 1/sizeZ
+    sh.uniforms.uRing = { value: field.ring };        // half-size R, fade-start radius
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform float uTime;')
+      .replace('#include <common>', [
+        '#include <common>',
+        'uniform float uTime;',
+        'uniform sampler2D uGrassField;',
+        'uniform vec4 uFieldRect;',
+        'uniform vec2 uRing;',
+      ].join('\n'))
       .replace('#include <begin_vertex>', [
         '#include <begin_vertex>',
         '#ifdef USE_INSTANCING',
-        '  vec3 gOff = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);',
+        '  vec3 gAnchor = (modelMatrix * (instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0))).xyz;',
         '#else',
-        '  vec3 gOff = vec3(0.0);',
+        '  vec3 gAnchor = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;',
         '#endif',
-        'float gPh = dot(gOff, vec3(0.317, 0.113, 0.271));',
-        'float gW = pow(clamp(uv.y, 0.0, 1.0), 1.6);',
+        'vec2 gPeriod = vec2(uRing.x * 2.0);',
+        'vec2 gW2 = gAnchor.xz + floor((cameraPosition.xz - gAnchor.xz) / gPeriod + 0.5) * gPeriod;',
+        'vec2 gUv = (gW2 - uFieldRect.xy) * uFieldRect.zw;',
+        'vec2 gIn = step(vec2(0.0), gUv) * step(gUv, vec2(1.0));',
+        'vec2 gFld = texture2D(uGrassField, clamp(gUv, 0.0, 1.0)).rg;',
+        'float gLush = gFld.g * gIn.x * gIn.y;',
+        'float gDist = length(gW2 - cameraPosition.xz);',
+        'float gFade = 1.0 - smoothstep(uRing.y, uRing.x, gDist);',
+        'float gScale = smoothstep(0.14, 0.50, gLush) * gFade;',
+        'transformed *= gScale;',
+        '#ifdef USE_COLOR',
+        '  vColor.rgb *= mix(vec3(0.58, 0.56, 0.38), vec3(0.84, 0.88, 0.72), clamp(gLush, 0.0, 1.0));',
+        '#endif',
+        'float gPh = dot(vec3(gW2.x, 0.0, gW2.y), vec3(0.317, 0.113, 0.271));',
+        'float gWt = pow(clamp(uv.y, 0.0, 1.0), 1.6) * gScale;',
         'float gA = sin(uTime * 1.9 + gPh) * 0.5 + sin(uTime * 3.7 + gPh * 1.7) * 0.22;',
-        'transformed.x += gA * 0.16 * gW;',
-        'transformed.z += cos(uTime * 1.55 + gPh * 1.3) * 0.11 * gW;',
-        'transformed.y -= abs(gA) * 0.035 * gW;',
+        'transformed.x += gA * 0.16 * gWt;',
+        'transformed.z += cos(uTime * 1.55 + gPh * 1.3) * 0.11 * gWt;',
+        'transformed.y -= abs(gA) * 0.035 * gWt;',
+        'vec3 gDelta = vec3(gW2.x - gAnchor.x, gFld.r - gAnchor.y, gW2.y - gAnchor.z);',
+      ].join('\n'))
+      /* The wrap has to be applied AFTER the instance matrix (it is a world
+       * displacement, not an object-space one), so project_vertex is rebuilt
+       * rather than patched. worldpos_vertex is rebuilt from the same vec4 so
+       * shadow lookups and env sampling agree with where the blade actually is. */
+      .replace('#include <project_vertex>', [
+        'vec4 mvPosition = vec4(transformed, 1.0);',
+        '#ifdef USE_INSTANCING',
+        '  mvPosition = instanceMatrix * mvPosition;',
+        '#endif',
+        'vec4 gWorld = modelMatrix * mvPosition;',
+        'gWorld.xyz += gDelta;',
+        'mvPosition = viewMatrix * gWorld;',
+        'gl_Position = projectionMatrix * mvPosition;',
+      ].join('\n'))
+      .replace('#include <worldpos_vertex>', [
+        '#if defined( USE_ENVMAP ) || defined( DISTANCE ) || defined ( USE_SHADOWMAP ) || defined ( USE_TRANSMISSION ) || NUM_SPOT_LIGHT_COORDS > 0',
+        '  vec4 worldPosition = gWorld;',
+        '#endif',
       ].join('\n'));
   };
-  m.customProgramCacheKey = () => 'crestbound-grassblade';
+  m.customProgramCacheKey = () => 'crestbound-grassblade-ring';
   m.name = 'grass_blade';
   _grassMats.set(ck, m);
   return m;
 }
 
 /** Default per-surface look when the def does not override it. */
+/**
+ * These are VERTEX COLOURS, and a vertex colour MULTIPLIES the surface albedo —
+ * it is not the ground's colour, it is a modulation of it.
+ *
+ * ROUND 1 VISUAL FIX (owner-observed "the meadow is a flat dark green"; see
+ * `_shots/_v33_verdant.png` and the measured table — every verdant station came
+ * back COOL, R-B between -0.032 and -0.061, against a contract that asks for
+ * early morning). `grass.low` was 0x4a7a35 — RGB (0.29, 0.48, 0.21). Multiplied
+ * onto an already mid-value grass albedo it removed two thirds of the meadow's
+ * light before the light rig ever ran, and no amount of theme tinting or key
+ * intensity could put it back: the ground was being darkened at the vertex.
+ * The ramps now sit near 1.0 so they MODULATE (the albedo bake carries the
+ * colour, which is where the contract puts it), and each keeps its relative
+ * relationship — top brighter than low, dirt browner, path drier.
+ */
 const SURFACE_LOOK = {
-  grass: { top: 0x6ea043, low: 0x4a7a35, dirt: 0x6b5236, path: 0x7a6448, blade: 0x76ad4a, uvTile: 4.0 },
-  snow:  { top: 0xe7f1fa, low: 0xc0d4e6, dirt: 0x8fa2b4, path: 0xa9bccd, blade: 0xd6e6f2, uvTile: 5.0 },
-  sand:  { top: 0xd6bd8c, low: 0xbda274, dirt: 0x9c8258, path: 0xc4a97b, blade: 0xc9b071, uvTile: 4.5 },
-  dirt:  { top: 0x7a6144, low: 0x5d4a34, dirt: 0x4d3d2b, path: 0x6b5439, blade: 0x6f7a44, uvTile: 4.0 },
+  grass: { top: 0xc8e394, low: 0x9cc06c, dirt: 0xb59a72, path: 0xcbb188, blade: 0xa8d874, uvTile: 4.0 },
+  snow:  { top: 0xf4fbff, low: 0xd8e8f6, dirt: 0xa8bccd, path: 0xc2d4e2, blade: 0xe8f4ff, uvTile: 5.0 },
+  sand:  { top: 0xe8d3a6, low: 0xd0b98c, dirt: 0xb69a6e, path: 0xdcc294, blade: 0xdfc78a, uvTile: 4.5 },
+  dirt:  { top: 0xa8896a, low: 0x8a7050, dirt: 0x736046, path: 0x99805a, blade: 0x94a066, uvTile: 4.0 },
 };
 
 /**
@@ -448,11 +554,26 @@ export function buildTerrain(def, theme, mats, quality) {
       _col.lerp(dirtC, slopeK * 0.85);
       const pk = pathAt(wx, wz);
       if (pk > 0) _col.lerp(pathC, pk * 0.92);
-      // a whisper of per-vertex value noise so the field is never flat colour
+      /* Per-vertex variation. The old single ±0.05 value whisper left a 140 m
+       * meadow reading as ONE colour from the near field to the far hills, so
+       * there was no aerial perspective and no sense of a place with weather in
+       * it. Three bands now: a fine value noise, a ~14 m dry/lush patch field
+       * that shifts HUE (dry grass is warmer and yellower, lush is deeper and
+       * cooler), and a ~45 m swell so whole hillsides differ. All three are
+       * evaluated per VERTEX, not per pixel — free at render time. */
       const n = vnoise(wx * 0.21, wz * 0.21, 991) * 0.05;
-      col[k * 3] = Math.min(1, Math.max(0, _col.r + n));
-      col[k * 3 + 1] = Math.min(1, Math.max(0, _col.g + n));
-      col[k * 3 + 2] = Math.min(1, Math.max(0, _col.b + n));
+      const dry = (vnoise(wx * 0.072, wz * 0.072, 1777) - 0.5) * 2;   // ~14 m
+      const swell = (vnoise(wx * 0.022, wz * 0.022, 2333) - 0.5) * 2; // ~45 m
+      const warm = dry * 0.085 + swell * 0.055;
+      /* ROUND 2: the hue bands alone still left every distant hill at the SAME
+       * VALUE, which is what makes a big meadow read as one flat plastic green
+       * (`_shots/_r2a_verdant.png`). Aerial perspective needs whole hillsides to
+       * differ in lightness, not only in hue, so the ~45 m swell now also drives
+       * value — a light term, because this multiplies the albedo. */
+      const val = swell * 0.062 + dry * 0.022;
+      col[k * 3] = Math.min(1, Math.max(0, _col.r + n + val + warm * 1.00));
+      col[k * 3 + 1] = Math.min(1, Math.max(0, _col.g + n + val + warm * 0.42));
+      col[k * 3 + 2] = Math.min(1, Math.max(0, _col.b + n + val - warm * 0.55));
     }
   }
 
@@ -535,6 +656,7 @@ export function buildTerrain(def, theme, mats, quality) {
         if (grass.parent) grass.parent.remove(grass);
         grass.geometry.dispose();
         grass.dispose();
+        if (grass.userData.field && grass.userData.field.tex) grass.userData.field.tex.dispose();
       }
       heightfield.dispose();
     },
@@ -542,45 +664,139 @@ export function buildTerrain(def, theme, mats, quality) {
 }
 
 /**
- * Scatter the blade field. Poisson-ish jittered grid rejection: walk a jittered
- * lattice, reject a candidate whose slope exceeds 30° or that sits inside a
- * carved path or an authored exclusion, and stop at the quality budget.
+ * Bake the grass FIELD texture: R = terrain height (metres), G = lushness.
  *
- * Instances are placed in the terrain mesh's LOCAL space (which is world space —
- * the terrain mesh is never moved), tilted slightly with the ground normal so
- * blades on a slope lie along it instead of standing out of it like nails.
+ * Lushness is the whole placement rule set, resolved once on the heightfield's
+ * own grid instead of per blade: slope gate (the collider's normal, so the
+ * visual and the physics agree about what is walkable), carved paths, authored
+ * exclusions and a two-band patch noise. The vertex program reads it bilinearly
+ * at the blade's WRAPPED world position, which is the only place that position
+ * is known — see bladeMaterial.
+ *
+ * RG16F, LinearFilter: half-float is filterable in WebGL2 core, and 16-bit
+ * mantissa over a courses's height range is sub-centimetre.
+ */
+function buildGrassField(d, ctx, g) {
+  const hf = ctx.heightfield;
+  const nx = hf.nx, nz = hf.nz;
+  const exclude = g.exclude || [];
+  const maxSlopeCos = Math.cos((g.maxSlopeDeg === undefined ? 32 : g.maxSlopeDeg) * Math.PI / 180);
+  const half = THREE.DataUtils.toHalfFloat;
+  const data = new Uint16Array(nx * nz * 2);
+  for (let iz = 0; iz < nz; iz++) {
+    const z = hf.originZ + iz * hf.cellZ;
+    for (let ix = 0; ix < nx; ix++) {
+      const x = hf.originX + ix * hf.cellX;
+      const y = hf.heights[iz * nx + ix];
+      let lush = 1;
+      hf.normalAt(x, z, _norm);
+      // slope: fully lush on the flat, gone by ~12 deg past the gate
+      lush *= Math.max(0, Math.min(1, (_norm.y - maxSlopeCos) / 0.18));
+      // carved paths keep their bare track
+      lush *= 1 - Math.max(0, Math.min(1, (ctx.pathAt(x, z) - 0.04) / 0.16));
+      for (let e = 0; e < exclude.length; e++) {
+        const E = exclude[e];
+        const r = E.r || 1;
+        const dd = Math.hypot(x - E.p[0], z - E.p[1]);
+        lush *= Math.max(0, Math.min(1, (dd - r * 0.72) / (r * 0.42)));
+      }
+      /* Two patch bands: ~11 m clumps riding a ~34 m dry/lush swell.
+       * `vnoise` returns [-1, 1], NOT [0, 1] — taking it raw drove lushness
+       * negative over whole hillsides and left the meadow bald on one side of
+       * the frame and dense on the other (`_shots/_r2b_verdant.png`). Both
+       * bands are mapped to [0, 1] first, and the floor is high enough that no
+       * walkable ground is ever bare unless a path or a slope says so. */
+      const clump = vnoise(x * 0.092, z * 0.092, 4242) * 0.5 + 0.5;
+      const swell = vnoise(x * 0.029, z * 0.029, 8181) * 0.5 + 0.5;
+      lush *= 0.55 + 0.62 * clump * (0.45 + 0.72 * swell);
+      const o = (iz * nx + ix) * 2;
+      data[o] = half(y);
+      data[o + 1] = half(Math.max(0, Math.min(1, lush)));
+    }
+  }
+  const tex = new THREE.DataTexture(data, nx, nz, THREE.RGFormat, THREE.HalfFloatType);
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.generateMipmaps = false;
+  tex.needsUpdate = true;
+  tex.name = 'grassfield';
+  return tex;
+}
+
+let _fieldUid = 0;
+
+/**
+ * Build the blade field as a CAMERA-LOCAL RING (see bladeMaterial for why).
+ *
+ * The instances are a jittered lattice over one 2R x 2R tile centred on the
+ * world origin; the vertex program wraps each of them to the tile the camera is
+ * standing in and drops it onto the heightfield. So this function no longer
+ * cares where the terrain is, only how many blades there are and how big the
+ * tile is — and the density the player sees stops depending on how large the
+ * meadow happens to be.
  */
 function buildGrass(d, theme, mats, quality, ctx) {
   const cfg = d.grass;
   if (cfg === false || cfg === null) return null;
   const g = cfg || {};
+  /* CONTRACT §18 "30k at high, 8k at low": QUALITY.grass is a 0..1 SCALE on the
+   * blade count (settings.js:54), not the count itself. Reading it as an
+   * absolute count is what left this function returning null at every quality
+   * tier, on every course, since the module was written. */
+  const qScale = (quality && typeof quality.grass === 'number') ? quality.grass : 1;
+  /* The quality scale multiplies an authored `count` too — otherwise a course
+   * that pins a count silently opts out of the low/medium tiers. */
   const budget = Math.max(0, Math.round(
-    g.count !== undefined ? g.count : ((quality && quality.grass) !== undefined ? quality.grass : 12000)));
+    (g.count !== undefined ? g.count : BLADE_BUDGET_MAX) * Math.min(1, Math.max(0, qScale))));
   if (budget < 32) return null;
 
-  const density = g.density === undefined ? 1.6 : g.density;      // blades per m²
-  const bladeH = g.height === undefined ? 0.42 : g.height;
-  const bladeW = g.width === undefined ? 0.20 : g.width;
+  /* The ring shrinks with the budget so density stays put: a low-quality
+   * machine gets a smaller lawn, not a thinner one. 30k blades over 36x36 m is
+   * ~23/m2 before the lushness cull. */
+  const density = g.density === undefined ? 22 : g.density;         // blades per m²
+  const ring = Math.max(6, Math.min(g.ring === undefined ? 18 : g.ring,
+    Math.sqrt(budget / Math.max(1, density)) * 0.5));
+  const fade = ring * 0.74;
+
+  const bladeH = g.height === undefined ? 0.26 : g.height;
+  /* 0.20 m at the base against a 0.42 m height is a 1:2 spike, and instance
+   * scaling took it to 27 cm — which is what made the first render read as a
+   * field of caltrops rather than grass. A blade is roughly 1:5. */
+  const bladeW = g.width === undefined ? 0.075 : g.width;
   const cross = g.cross !== false;
-  const maxSlopeCos = Math.cos((g.maxSlopeDeg === undefined ? 30 : g.maxSlopeDeg) * Math.PI / 180);
-  const exclude = g.exclude || [];
 
-  const area = ctx.size[0] * ctx.size[1];
-  const wanted = Math.min(budget, Math.round(area * density));
-  if (wanted < 32) return null;
-
-  // jittered lattice sized to produce ~1.9x the wanted count before rejection
-  const cells = Math.max(4, Math.ceil(Math.sqrt(wanted * 1.9)));
-  const stepX = ctx.size[0] / cells, stepZ = ctx.size[1] / cells;
+  const wanted = budget;
+  const cells = Math.max(4, Math.ceil(Math.sqrt(wanted)));
+  const step = (ring * 2) / cells;
   const rnd = mulberry32((d.seed | 0) || 20260902);
 
+  /* Texel-centre mapping, not corner mapping. Height sample (i, j) sits at world
+   * origin + i*cell, but a texture lookup at uv lands on texel index
+   * uv*n - 0.5 — so a naive (x-origin)/size would read up to half a texel
+   * (0.5 m at res 1.0) off, which on a slope is blades hovering or buried. The
+   * half-texel is folded into the origin so the shader stays one madd. */
+  const hf = ctx.heightfield;
+  const field = {
+    uid: ++_fieldUid,
+    tex: buildGrassField(d, ctx, g),
+    rect: new THREE.Vector4(
+      hf.originX - hf.cellX * 0.5, hf.originZ - hf.cellZ * 0.5,
+      1 / (hf.nx * hf.cellX), 1 / (hf.nz * hf.cellZ)),
+    ring: new THREE.Vector2(ring, fade),
+  };
+
   const geo = bladeGeometry(bladeW, bladeH, cross);
-  const mat = bladeMaterial(theme, mats, cross ? 'x' : 'i');
+  const mat = bladeMaterial(theme, mats, cross ? 'x' : 'i', field);
   const im = new THREE.InstancedMesh(geo, mat, wanted);
   im.name = 'terrain.grass';
   im.castShadow = false;
   im.receiveShadow = true;
-  im.frustumCulled = true;
+  /* The ring follows the camera in the vertex program, so a bounding sphere
+   * computed from the authored anchors describes nowhere the blades actually
+   * are. It is always around the viewer by construction. */
+  im.frustumCulled = false;
 
   const tipC = new THREE.Color(g.color === undefined ? ctx.LOOK.blade : g.color);
   const rootC = new THREE.Color(ctx.LOOK.low);
@@ -588,53 +804,24 @@ function buildGrass(d, theme, mats, quality, ctx) {
   let n = 0;
   for (let j = 0; j < cells && n < wanted; j++) {
     for (let i = 0; i < cells && n < wanted; i++) {
-      const x = ctx.origin[0] + (i + rnd()) * stepX;
-      const z = ctx.origin[1] + (j + rnd()) * stepZ;
-
-      // slope gate (uses the COLLIDER's normal so the visual and the physics
-      // agree about what counts as walkable)
-      ctx.heightfield.normalAt(x, z, _norm);
-      if (_norm.y < maxSlopeCos) continue;
-
-      // path gate
-      if (ctx.pathAt(x, z) > 0.18) continue;
-
-      // authored exclusions (buildings, water, arena floors)
-      let skip = false;
-      for (let e = 0; e < exclude.length; e++) {
-        const E = exclude[e];
-        const dx = x - E.p[0], dz = z - E.p[1];
-        if (dx * dx + dz * dz < (E.r || 1) * (E.r || 1)) { skip = true; break; }
-      }
-      if (skip) continue;
-
-      const y = ctx.heightfield.heightAt(x, z);
-      if (!(y === y)) continue;                         // NaN outside the field
-
-      // patchiness: a second noise band thins the field into clumps
-      const patch = vnoise(x * 0.09, z * 0.09, 4242) * 0.5 + 0.5;
-      if (rnd() > 0.28 + patch * 0.82) continue;
-
-      // orient: yaw random, then lean with the ground normal
-      _q0.setFromUnitVectors(_up, _norm);
+      const x = -ring + (i + rnd()) * step;
+      const z = -ring + (j + rnd()) * step;
       const yaw = rnd() * Math.PI * 2;
-      const scale = 0.72 + rnd() * 0.62;
-      _s0.set(scale, scale * (0.8 + rnd() * 0.5), scale);
-      _v0.set(x, y, z);
+      const scale = 0.74 + rnd() * 0.66;
+      _s0.set(scale, scale * (0.78 + rnd() * 0.62), scale);
+      _v0.set(x, 0, z);
       _m0.makeRotationY(yaw);
-      _m1.makeRotationFromQuaternion(_q0);
-      _m0.premultiply(_m1);
       _m0.scale(_s0);
       _m0.setPosition(_v0);
       im.setMatrixAt(n, _m0);
-
-      // colour: height gradient + noise band, root darker than tip
-      const gh = (y - ctx.minH) / ctx.span;
-      _col.copy(rootC).lerp(tipC, 0.35 + gh * 0.5 + patch * 0.2);
+      // species variation only; the world-space lushness tint is applied in the
+      // vertex program, where the wrapped position is known.
+      const k = rnd();
+      _col.copy(rootC).lerp(tipC, 0.12 + k * 0.40);
       _colB.setRGB(
-        Math.min(1, _col.r * (0.86 + rnd() * 0.28)),
-        Math.min(1, _col.g * (0.86 + rnd() * 0.28)),
-        Math.min(1, _col.b * (0.86 + rnd() * 0.28)));
+        Math.min(1, _col.r * (0.88 + rnd() * 0.26)),
+        Math.min(1, _col.g * (0.88 + rnd() * 0.26)),
+        Math.min(1, _col.b * (0.88 + rnd() * 0.26)));
       im.setColorAt(n, _colB);
       n++;
     }
@@ -642,15 +829,16 @@ function buildGrass(d, theme, mats, quality, ctx) {
   if (n === 0) {
     geo.dispose();
     im.dispose();
+    field.tex.dispose();
     return null;
   }
   im.count = n;
   im.instanceMatrix.needsUpdate = true;
   im.instanceMatrix.setUsage(THREE.StaticDrawUsage);
   if (im.instanceColor) im.instanceColor.needsUpdate = true;
-  im.computeBoundingSphere();
   im.matrixAutoUpdate = false;
   im.updateMatrix();
+  im.userData.field = field;
   return im;
 }
 

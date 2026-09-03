@@ -263,8 +263,10 @@ export class CourseCard {
     /* --- save record --------------------------------------------------- */
     let rec = save || null;
     if (!rec && id) {
-      /* Never MINT a record just to look at a painting: Save.course() creates one
-         on demand, which would invent progress for a course nobody has entered. */
+      /* Never MINT a record just to look at a painting. Save.course() is a
+         non-mutating read now (it returns a shared empty record for a course
+         nobody has entered), but going through courseIds() keeps the intent
+         explicit and survives a future writer being added here. */
       try {
         const known = typeof Save.courseIds === 'function' ? Save.courseIds() : null;
         if (known && known.indexOf(String(id)) !== -1) rec = Save.course(id);

@@ -63,20 +63,23 @@ export const QUALITY = {
     aa: 'fxaa', smaa: false, ssao: false,
     particles: 0.35, decor: 0.3, shadowDistance: 28, grass: 0.27,
     anisotropy: 1, maxLights: 2,
+    prepass: true, shadowFilter: 'basic', shadowCasterRadius: 3.0,
   },
   medium: {
     id: 'medium', label: 'MEDIUM',
     dpr: 1.25, shadowMap: 1024, bloom: true, bloomScale: 0.5, bloomClamp: 12,
     aa: 'fxaa', smaa: false, ssao: false,
     particles: 0.6, decor: 0.6, shadowDistance: 45, grass: 0.55,
-    anisotropy: 2, maxLights: 4,
+    anisotropy: 2, maxLights: 3,
+    prepass: true, shadowFilter: 'pcf', shadowCasterRadius: 2.0,
   },
   high: {
     id: 'high', label: 'HIGH',
-    dpr: 1.5, shadowMap: 2048, bloom: true, bloomScale: 1, bloomClamp: 16,
+    dpr: 1.5, shadowMap: 2048, bloom: true, bloomScale: 0.5, bloomClamp: 16,
     aa: 'fxaa', smaa: false, ssao: false,
     particles: 1, decor: 1, shadowDistance: 70, grass: 1,
-    anisotropy: 4, maxLights: 6,
+    anisotropy: 2, maxLights: 4,
+    prepass: true, shadowFilter: 'pcf', shadowCasterRadius: 1.5,
   },
   ultra: {
     id: 'ultra', label: 'ULTRA',
@@ -84,8 +87,35 @@ export const QUALITY = {
     aa: 'smaa', smaa: true, ssao: true,
     particles: 1, decor: 1, shadowDistance: 110, grass: 1,
     anisotropy: 8, maxLights: 8,
+    prepass: true, shadowFilter: 'pcfsoft', shadowCasterRadius: 0.9,
   },
 };
+
+/**
+ * Fields added 2026-09-02 by the perf pass, all measured with
+ * `_harness/frameprobe.py` on the reference Intel UHD at 1920x1080:
+ *
+ *   prepass             run the depth prepass (post.js PrepassRenderPass). The
+ *                       frame shades 2.2-2.8 fragments per pixel without it
+ *                       (_harness/_overdraw.py); with it, verdant-1 went from
+ *                       11.4 to 22.6 fps on the perf gate.
+ *   shadowFilter        'basic' (1 tap) | 'pcf' (9 taps) | 'pcfsoft' (9 lerped
+ *                       taps, ~4x the fetches of 'pcf'). PCFSoft measured
+ *                       -5.29 ms against a single tap, which is real money on
+ *                       a frame that has to reach 18 ms.
+ *   shadowCasterRadius  world bounding radius below which a mesh stops casting
+ *                       a shadow. course.js already applied a flat 1.5 m rule; this makes it a tier
+ *                       knob, and HIGH keeps the 1.5 m it had, so HIGH's shadows
+ *                       are unchanged. The shadow pass draws 100 meshes /
+ *                       186k triangles on the Keep; a 0.7 m prop contributes a
+ *                       shadow nobody can see and costs a draw call in a
+ *                       260-draw budget.
+ *
+ * `bloomScale` at HIGH dropped 1 -> 0.5 (measured -4.6 ms), `anisotropy`
+ * 4 -> 2 (-3.7 ms) and `maxLights` 6 -> 4 (-9.4 ms for all six). No feature is
+ * removed at any tier: ULTRA keeps full-resolution bloom, 8x anisotropy,
+ * PCFSoft shadows and every caster.
+ */
 
 /** Ordered worst -> best, for the settings cycler and for auto-downgrade. */
 export const QUALITY_ORDER = ['low', 'medium', 'high', 'ultra'];

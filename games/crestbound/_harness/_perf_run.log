@@ -1,0 +1,20 @@
+====================================================================================================
+CRESTBOUND perf check — HEADLESS swiftshader (fps NOT gated), 1920x1080, quality high, 8 s per course
+budget: <= 260 draws, <= 450,000 tris, >= 55 fps, p99 <= 28 ms, load <= 1500 ms
+----------------------------------------------------------------------------------------------------
+course        draws      tris     fps   p99ms  load ms  hazard   coll  verdict
+----------------------------------------------------------------------------------------------------
+keep            375   515,557     0.3  3156.5 126782.7      13    302  OVER: draws,tris,load
+             spawn    p [0, 0.1, -1]           draws  371 tris   515,059 fps   2.4 p99 958.2
+             cp2      p [-14, -8, 4]           draws  230 tris   445,979 fps   0.3 p99 3156.5
+             cp3      p [0, 0.1, 16.4]         draws  375 tris   515,557 fps   1.2 p99 959.5
+verdant-1       464   540,601     0.6  2508.9  29802.7      11    326  OVER: draws,tris,load
+             spawn    p [0, 2, 40]             draws  464 tris   540,601 fps   2.5 p99   907
+             cp2      p [0, 9, -14]            draws  290 tris   451,783 fps   0.6 p99 2508.9
+             cp3      p [10, 14.4, -26]        draws  237 tris   425,935 fps   1.5 p99 1147.8
+----------------------------------------------------------------------------------------------------
+note: headless/swiftshader frame times are software-rasterised — fps and p99 are
+      REPORTED but never gated. Only a headed run on the reference machine gates them.
+VERDICT: OVER BUDGET (2 of 2 courses over budget)
+RESULT: FAIL
+PERF EXIT=1

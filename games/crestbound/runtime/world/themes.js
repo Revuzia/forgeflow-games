@@ -126,51 +126,111 @@ export const THEMES = {
     realmName: 'THE KEEP',
     timeOfDay: 'dusk',
     bg: 0x1a140e,
-    exposure: 1.05,
-    envIntensity: 0.85,
+    /* ROUND 1 VISUAL FIX — measured, not guessed. `_shots/verify_keep.png` at
+     * exposure 1.05 / envIntensity 0.85 / bloom threshold 1.02 came back at
+     * mean luminance 0.640, 13.9 % of pixels over 0.90, 4.5 % clipped over
+     * 0.97 and mean saturation 0.111; `_shots/keep/cp4.png` (the courtyard) was
+     * worse — 0.762 / 27.2 % / 9.8 % / 0.109, a white milk bath with no detail
+     * and no readable parapet edge. A warm stone interior lit by windows sits
+     * near 0.34-0.44 mean with under ~1 % clipped, and its colour comes from
+     * the AMBER key against the BLUE fill — neither of which can be seen once
+     * everything is at the top of the curve, which is exactly why the Keep read
+     * "neutral white/grey" instead of "warm stone". The four emitters that were
+     * over the ceiling are fixed in keep.js; these are the global ones. */
+    exposure: 0.84,
+    /* Raised with the sky darkening below: the dome is the Keep's only
+     * environment source, so halving its horizon would otherwise take the
+     * limestone down with it and leave the contrast ratio where it was. */
+    envIntensity: 0.66,
 
     /* Interior fog: short and warm. `near` is deliberately far enough out
      * that the room you stand in is crisp — the haze exists to give the far
      * end of the hall depth and to be the dark ground the decks read against. */
-    fog: { color: 0x2a2118, near: 14, far: 150, density: 0.0125, type: 'exp2' },
+    /* Density 0.0125 put only ~9 % haze on the far end of a 25 m hall, so the
+     * 'dark ground the decks read against' this comment promises did not
+     * exist: at cp1 the band behind the deck measured [117,95,84] — a fully
+     * lit far wall, BRIGHTER than the floor in front of it. 0.030 is what
+     * actually makes the depth of the hall recede. */
+    fog: { color: 0x2a2118, near: 10, far: 150, density: 0.030, type: 'exp2' },
 
     sky: {
       type: 'sanctum',
       params: {
-        top: 0x1f4f86, mid: 0x4f8cbe, horizon: 0xdcd0b4, bottom: 0x6f7f86,
-        horizonGlow: 0xffc98a, glowPower: 4.2, glowStrength: 0.75,
+        /* The Keep's courtyard and tower roof look straight at this dome, and
+         * at horizon 0xdcd0b4 + glowStrength 0.75 + intensity 0.85 the whole
+         * band was brighter than the limestone decks in front of it — the
+         * readability law inverted, and `_shots/keep/cp4.png` measured 27 % of
+         * the frame over 0.90 luminance. A dusk sanctum sky is a DEEP band
+         * with a warm rim, not a cream wall. */
+        /* ROUND 2 — R9, THE KEEP'S OUTDOOR FIGURE/GROUND.
+         *
+         * Measured (contrastcheck, headless Chrome on the real GPU, this
+         * session): keep cp4 — the courtyard/tower deck — read
+         * deck [162,144,109] against band [165,136,98] = 1.07:1 against a
+         * 3.5:1 law. Those are the SAME COLOUR: the parapet edge a player has
+         * to judge a jump against is invisible.
+         *
+         * The cause is structural, not a tint. The theme commits to "dark warm
+         * fog -> BRIGHT stone decks", which is right indoors — but the Keep has
+         * OUTDOOR stations, and out there the band behind a deck is not the fog,
+         * it is THIS DOME. A cream horizon (0x9c9078) with a 0.44 warm glow on
+         * top of it is brighter than limestone, so the figure/ground pair
+         * inverted the moment the player stepped into the courtyard. Round 1
+         * darkened this from 0xdcd0b4 and moved the ratio by 0.01, because the
+         * glow, the island rim and the cloud deck were all still sitting on top
+         * of it.
+         *
+         * A DUSK sanctum sky is a deep band with a thin warm rim over a dark
+         * sea, which is both the correct reading of `timeOfDay: 'dusk'` and the
+         * only shape that puts the decks on the bright side outdoors as well as
+         * in. envIntensity is raised alongside it so the decks do not simply
+         * follow the sky down. */
+        top: 0x0c2340, mid: 0x1f4166, horizon: 0x2b2823, bottom: 0x1a1f26,
+        horizonGlow: 0xe8a868, glowPower: 6.8, glowStrength: 0.11,
         sunDir: [-0.82, 0.22, 0.52], sunColor: 0xffe6bc,
-        sunSize: 0.0026, sunIntensity: 2.4, sunHalo: 0.35,
+        sunSize: 0.0030, sunIntensity: 2.0, sunHalo: 0.32,
         // the sanctum's signature: a faint rainbow arc + a ring of far islands
-        rainbowStrength: 0.30, rainbowRadius: 0.42, rainbowWidth: 0.055,
-        islandStrength: 0.75, islandCount: 22.0, islandHeight: 0.055,
-        islandColor: 0x2d3a4a, islandGlow: 0xffc07a, islandBand: 0.02,
-        ringStrength: 0.22, ringColor: 0xffe0b0,
-        cloudStrength: 0.35, cloudScale: 1.5, cloudSpeed: 0.006, cloudCoverage: 0.40,
+        rainbowStrength: 0.20, rainbowRadius: 0.42, rainbowWidth: 0.055,
+        islandStrength: 0.50, islandCount: 22.0, islandHeight: 0.055,
+        islandColor: 0x121a24, islandGlow: 0xc08850, islandBand: 0.02,
+        ringStrength: 0.12, ringColor: 0xa08466,
+        cloudStrength: 0.34, cloudScale: 1.5, cloudSpeed: 0.006, cloudCoverage: 0.40,
+        cloudLit: 0x8a7f6e, cloudShadow: 0x3a4250,
         starDensity: 0.0, starBrightness: 0.0, dither: 1.0,
-        sunPower: 90, haze: 0.80, intensity: 0.85,
+        sunPower: 90, haze: 0.28, intensity: 0.50,
       },
     },
 
     lights: {
       // the window key: low, raking, warm — this IS the shafts
-      key: { color: 0xffcf94, intensity: 2.65, dir: [-0.82, 0.42, 0.38] },
-      // cool bounce off the shadowed wall, so nothing goes brown-on-brown
-      fill: { color: 0x7096d6, intensity: 0.95, dir: [0.70, 0.46, -0.55] },
+      key: { color: 0xffc888, intensity: 2.35, dir: [-0.82, 0.42, 0.38] },
+      /* Cool bounce off the shadowed wall. It was 0.95 against a 2.65 key AND
+       * a 0.42 ambient AND a 0.62 hemi — a 26 % share that clipping then ate
+       * entirely, which is why no blue survived into the frame. Against the
+       * reduced ambient it is now the second-largest term and legible as a
+       * colour, which is the contract's "cool blue fill". */
+      fill: { color: 0x7d9bd0, intensity: 0.86, dir: [0.70, 0.46, -0.55] },
       // soft warm separation on the far edges of the paintings and pillars
-      rim: { color: 0xffe0b8, intensity: 1.35, dir: [0.18, 0.30, -0.94] },
-      ambient: { color: 0x3a2f26, intensity: 0.42 },
-      hemi: { skyColor: 0x54463a, groundColor: 0x1a1410, intensity: 0.62 },
+      rim: { color: 0xffe0b8, intensity: 1.05, dir: [0.18, 0.30, -0.94] },
+      /* Flat terms are what destroy an interior: they lift the shadows to meet
+       * the highlights and the room goes to one value. Halved. */
+      ambient: { color: 0x453529, intensity: 0.24 },
+      hemi: { skyColor: 0x6a5642, groundColor: 0x201a13, intensity: 0.38 },
     },
 
+    /* Warm/cool split lives in the grade too, not only in the lights: gain and
+     * tint pull the highlights amber and the shadows blue, and saturation goes
+     * up because the measured frame was at 0.111 — a colour-timed stone hall
+     * should sit around 0.22-0.30. */
     grade: {
-      lift: [0.012, 0.007, 0.002], gamma: [0.99, 1.00, 1.02], gain: [1.05, 1.00, 0.95],
-      saturation: 1.06, vignette: 0.34, chroma: 0.0009,
-      tint: [1.03, 1.00, 0.96],
+      lift: [0.010, 0.008, 0.014], gamma: [0.99, 1.00, 1.02], gain: [1.10, 1.005, 0.895],
+      saturation: 1.24, vignette: 0.38, chroma: 0.0009,
+      tint: [1.055, 1.00, 0.925],
     },
     /* Threshold above the diffuse range: the shafts, the painting shimmer and
-     * the crest pedestal bloom — the plaster does not. */
-    bloom: { strength: 0.55, radius: 0.62, threshold: 1.02 },
+     * the crest pedestal bloom — the plaster does not. 1.02 was BELOW the lit
+     * plaster, so the walls themselves bloomed and the hall went to white. */
+    bloom: { strength: 0.40, radius: 0.55, threshold: 1.32 },
 
     palette: {
       safe: 0xb9a888, safeEdge: 0xffdca0,
@@ -254,7 +314,13 @@ export const THEMES = {
     exposure: 1.06,
     envIntensity: 1.15,
 
-    fog: { color: 0x3a6178, near: 26, far: 320, density: 0.0040, type: 'exp2' },
+    /* The band a platform is silhouetted against is the treeline shadow. It was
+     * a cold slate BLUE, which is why the meadow read as an overcast grey-green
+     * afternoon rather than the contract's warm morning: the single largest
+     * colour in the frame after the grass was blue haze. Same luminance
+     * (0.354 -> 0.334 by hex arithmetic, so contrastcheck can only improve),
+     * hue moved to pine. */
+    fog: { color: 0x33604f, near: 26, far: 320, density: 0.0040, type: 'exp2' },
 
     sky: {
       type: 'day',
@@ -264,8 +330,8 @@ export const THEMES = {
         sunDir: [-0.62, 0.26, 0.74], sunColor: 0xfff0d0,
         sunSize: 0.0030, sunIntensity: 2.6, sunHalo: 0.40,
         // procedural cumulus layer baked into the dome (no extra mesh)
-        cumulusStrength: 0.95, cumulusScale: 2.05, cumulusSpeed: 0.0125,
-        cumulusCoverage: 0.46, cumulusSharp: 2.5, cumulusHeight: 0.16,
+        cumulusStrength: 0.95, cumulusScale: 1.75, cumulusSpeed: 0.0125,
+        cumulusCoverage: 0.52, cumulusSharp: 2.2, cumulusHeight: 0.16,
         cumulusLit: 0xfffaf0, cumulusShadow: 0x7f96b4,
         starDensity: 0.0, starBrightness: 0.0, dither: 1.0,
         sunPower: 110, haze: 0.65, intensity: 1.10,
@@ -273,11 +339,17 @@ export const THEMES = {
     },
 
     lights: {
-      key: { color: 0xffe0b4, intensity: 3.05, dir: [-0.62, 0.44, 0.65] },
-      fill: { color: 0x8fc0ff, intensity: 1.20, dir: [0.42, 0.82, -0.38] },
+      /* Morning means a WARM key and a warm bounce off the ground. The hemi
+       * ground term was 0x3e5a34 — a dark cold green — and it is the light
+       * every up-facing surface in a 140 m meadow receives, so it dragged the
+       * whole field toward bottle green (measured on `_shots/verdant-1/cp1.png`:
+       * mean sat 0.347 with essentially no warm content). Warmed, and the key
+       * pushed a touch more amber. */
+      key: { color: 0xffdca4, intensity: 3.15, dir: [-0.62, 0.44, 0.65] },
+      fill: { color: 0x8fc0ff, intensity: 1.10, dir: [0.42, 0.82, -0.38] },
       rim: { color: 0xfff2d8, intensity: 1.55, dir: [0.66, 0.16, -0.74] },
-      ambient: { color: 0x6f8a76, intensity: 0.40 },
-      hemi: { skyColor: 0x86b6e8, groundColor: 0x3e5a34, intensity: 0.85 },
+      ambient: { color: 0x7d8a68, intensity: 0.38 },
+      hemi: { skyColor: 0x8cbcec, groundColor: 0x5a6338, intensity: 0.82 },
     },
 
     grade: {
@@ -314,10 +386,10 @@ export const THEMES = {
      * up most of their env mirror, which under a 3.05 key was re-painting
      * every walked top with the pale sky regardless of tint. */
     materialOverrides: {
-      stone: { tint: 0xe8dcbc },
-      plaster: { tint: 0xf4ecd8 },
-      brick: { tint: 0xe0b494 },
-      panel: { tint: 0xd4c8a8 },
+      stone: { tint: 0xf2e8c8 },
+      plaster: { tint: 0xfaf3e2 },
+      brick: { tint: 0xe8bc9c },
+      panel: { tint: 0xdcd0b0 },
       metal: { tint: 0xc8c4b0, metalness: 0.30, env: 0.30 },
       grate: { tint: 0xbcb49c },
       checker: { tint: 0xdcd0b0 },

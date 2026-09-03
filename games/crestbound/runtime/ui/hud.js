@@ -867,7 +867,10 @@ export class HUD {
     const crests = s.crests != null ? s.crests | 0 : this._countGot();
     const crestsTotal = s.crestsTotal != null ? s.crestsTotal | 0 : CRESTS;
     const coins = s.coins != null ? s.coins | 0 : Math.max(0, c.coins);
-    const coinsTotal = s.coinsTotal != null ? s.coinsTotal | 0 : this._coinsThreshold();
+    /* ONE denominator everywhere: the crest threshold (100 unless the course
+       authors its own), never the count of coins PLACED in the course — the
+       clear panel used to print "0 / 121" beside a HUD chip reading "37 / 100". */
+    const coinsTotal = this._coinsThreshold();
     const sig = s.sigils != null ? s.sigils | 0 : Math.max(0, c.sigils);
     const sigTotal = s.sigilsTotal != null ? s.sigilsTotal | 0 : SIGILS;
     const deaths = s.deaths != null ? s.deaths | 0 : Math.max(0, c.deaths);

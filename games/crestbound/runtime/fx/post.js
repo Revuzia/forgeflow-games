@@ -767,6 +767,274 @@ class FXAAPass extends ShaderPass {
   }
 }
 
+/* ===========================================================================
+ * Depth prepass
+ * ======================================================================== */
+
+/**
+ * The layer big opaque occluders are put on so the depth prepass can render
+ * exactly them and nothing else. Layer 0 stays the "everything" layer, so an
+ * object is never REMOVED from the normal render by being tagged.
+ */
+export const CB_LAYER_OCCLUDER = 3;
+
+const _occScale = new THREE.Vector3();
+
+/** log-spaced radius histogram used to pick the prepass occluder cutoff */
+const OCC_BUCKETS = 64;
+const OCC_MIN_R = 0.25;
+const OCC_MAX_R = 4096;
+const _occHist = new Int32Array(OCC_BUCKETS);
+const _occHistTris = new Float64Array(OCC_BUCKETS);
+const OCC_LOG_LO = Math.log(OCC_MIN_R);
+const OCC_LOG_SPAN = Math.log(OCC_MAX_R) - OCC_LOG_LO;
+
+/** @param {number} r world radius -> bucket index */
+function occBucket(r) {
+  const t = (Math.log(r < OCC_MIN_R ? OCC_MIN_R : r) - OCC_LOG_LO) / OCC_LOG_SPAN;
+  const i = (t * OCC_BUCKETS) | 0;
+  return i < 0 ? 0 : (i >= OCC_BUCKETS ? OCC_BUCKETS - 1 : i);
+}
+
+/** @param {number} b bucket index -> the smallest radius that lands in it */
+function occBucketRadius(b) {
+  return Math.exp(OCC_LOG_LO + (b / OCC_BUCKETS) * OCC_LOG_SPAN);
+}
+
+/** @param {THREE.Mesh} o @returns {number} triangles this mesh submits per draw */
+function triCount(o) {
+  const g = o.geometry;
+  if (!g) return 0;
+  const idx = g.index;
+  const pos = g.attributes && g.attributes.position;
+  const n = idx ? idx.count : (pos ? pos.count : 0);
+  return ((n / 3) | 0) * (o.isInstancedMesh ? (o.count || 1) : 1);
+}
+
+/**
+ * MEASURED (2026-09-02, _harness/_overdraw.py, Intel UHD, 1920x1080):
+ *
+ *     course      coverage   rasterised/px   SHADED/px
+ *     verdant-1     91.5 %       3.52          2.22
+ *     keep         100.0 %       5.78          2.83
+ *
+ * Three.js already sorts the opaque list front-to-back, which is why "shaded"
+ * is well below "rasterised" -- but we were still running the full PBR fragment
+ * shader between 2.2 and 2.8 times for every pixel on screen, and
+ * `_harness/frameprobe.py` measured that PBR fragment shading is the single
+ * largest component of the frame (24-34 ms of a 41-59 ms frame; swapping every
+ * material for MeshBasicMaterial is worth -23.6 ms on verdant-1).
+ *
+ * So: render the large opaque occluders depth-only first, then shade with the
+ * depth buffer already populated. Three's default `depthFunc` is
+ * `LessEqualDepth`, so the visible surface still passes and everything behind
+ * it is killed by early-Z before the fragment shader runs.
+ *
+ * What is DELIBERATELY excluded from the prepass, and why -- each of these
+ * would put wrong depth in the buffer and punch holes in the frame:
+ *   - transparent materials (they must not occlude what shows through them);
+ *   - anything alpha-tested or alpha-mapped (the depth-only material does not
+ *     run the discard, so a leaf card would write its whole quad);
+ *   - CB_WIND materials (materials.js displaces those vertices in the vertex
+ *     shader; an override material does not reproduce the sway, so the depth
+ *     would be from the un-swayed pose);
+ *   - `depthWrite: false` materials (the sky dome, glows, decals);
+ *   - anything whose world bounding radius is below `minOccluderRadius` -- a
+ *     small prop occludes almost nothing and the prepass draw costs more than
+ *     the fragments it saves.
+ */
+class PrepassRenderPass extends RenderPass {
+  /** @param {THREE.Scene} scene @param {THREE.Camera} camera */
+  constructor(scene, camera) {
+    super(scene, camera);
+
+    /** turn the prepass off (a quality tier, or a debug A/B) */
+    this.prepass = true;
+    /**
+      * World bounding radius, metres, below which a mesh is not an occluder.
+      * MEASURED (frameprobe, verdant-1 spawn): at 2 m the prepass costs 156
+      * extra draws and 187k extra triangles for 49.3 ms/frame; at 16 m it
+      * costs 33 draws and 114k triangles for 45.4 ms. The big merged chunks
+      * and the terrain do essentially all of the occluding, so the threshold
+      * sits high and the draw-call budget keeps the difference.
+      */
+     this.minOccluderRadius = 10.0;
+    /** re-scan the scene for occluders every N frames (a course load, a hazard
+     *  that built its mesh late, a critter that spawned) */
+    this.rescanFrames = 45;
+    /**
+     * Hard cap on how many meshes the prepass draws. MEASURED: at a 10 m
+     * radius threshold the prepass added 121 draw calls to a 260-draw budget,
+     * for -11.19 ms. Occlusion is dominated by the few biggest surfaces, so
+     * the cap keeps the LARGEST candidates and drops the tail: the fill win
+     * survives, the draw budget does not pay for it twice.
+     */
+    this.maxOccluders = 48;
+    /**
+     * Hard cap on the TRIANGLES the prepass may resubmit.
+     *
+     * The perf gate budgets the whole frame at 450k triangles and both courses
+     * were inside it (keep 410k, verdant-1 448k) before the prepass existed.
+     * An unbounded prepass re-submitted every big occluder and pushed the
+     * frame to ~570k, turning a passing sub-budget into a failing one. The
+     * biggest-by-radius meshes are also the highest-triangle ones, so radius
+     * alone is not a safe selector: the cutoff has to satisfy the triangle
+     * budget as well as the draw-call cap, whichever binds first.
+     */
+    this.maxOccluderTris = 70000;
+
+    this._depthMat = new THREE.MeshBasicMaterial({ colorWrite: false });
+    this._depthMat.name = 'cb.prepass.depth';
+    this._frame = 0;
+    this._dirty = true;
+    /** how many meshes the last scan tagged (read by the harness) */
+    this.occluders = 0;
+    /** how many triangles those meshes resubmit (read by the harness) */
+    this.occluderTris = 0;
+  }
+
+  /** Force an occluder re-scan on the next frame (course load / theme swap). */
+  markDirty() {
+    this._dirty = true;
+    return this;
+  }
+
+  /** @private World bounding radius, or 0 when the mesh cannot be an occluder. */
+  _occluderRadius(o) {
+    if (!o.isMesh || o.isSkinnedMesh) return 0;
+    const geo = o.geometry;
+    if (!geo || !geo.attributes || !geo.attributes.position) return 0;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (let i = 0; i < mats.length; i++) {
+      const m = mats[i];
+      if (!m) return 0;
+      if (m.transparent || m.depthWrite === false || m.colorWrite === false) return 0;
+      if (m.alphaTest > 0 || m.alphaMap || m.alphaHash) return 0;
+      if (m.defines && (m.defines.CB_WIND || m.defines.CB_SHIMMER)) return 0;
+      if (m.displacementMap) return 0;
+    }
+    if (!geo.boundingSphere) geo.computeBoundingSphere();
+    if (!geo.boundingSphere) return 0;
+    _occScale.setFromMatrixScale(o.matrixWorld);
+    const s = Math.max(Math.abs(_occScale.x), Math.abs(_occScale.y), Math.abs(_occScale.z));
+    const r = geo.boundingSphere.radius * s;
+    return r >= this.minOccluderRadius ? r : 0;
+  }
+
+  /**
+   * @private Tag / untag the occluder layer across the whole scene, keeping at
+   * most `maxOccluders` — the LARGEST ones.
+   *
+   * The cutoff is found from a fixed 64-bucket log-radius histogram rather than
+   * by sorting a candidate list, so the scan allocates nothing after the first
+   * call (hard rule 5) even though it runs on a live frame.
+   */
+  _scan() {
+    const hist = _occHist;
+    const htri = _occHistTris;
+    hist.fill(0);
+    htri.fill(0);
+    const self = this;
+    let n = 0, allTris = 0;
+
+    this.scene.traverse(function (o) {
+      if (!o.isMesh) return;
+      const r = self._occluderRadius(o);
+      if (r <= 0) return;
+      const b = occBucket(r);
+      const t = triCount(o);
+      hist[b]++;
+      htri[b] += t;
+      n++;
+      allTris += t;
+    });
+
+    /* Walk the histogram from the largest bucket down and stop at whichever
+       budget binds first: the draw-call cap or the triangle cap. */
+    let cutoff = this.minOccluderRadius;
+    if (n > this.maxOccluders || allTris > this.maxOccluderTris) {
+      let kept = 0, keptTris = 0;
+      for (let b = OCC_BUCKETS - 1; b >= 0; b--) {
+        const nextN = kept + hist[b];
+        const nextT = keptTris + htri[b];
+        if (nextN > this.maxOccluders || nextT > this.maxOccluderTris) {
+          // this bucket busts a budget: the cutoff is the bucket above it
+          cutoff = occBucketRadius(b + 1);
+          break;
+        }
+        kept = nextN;
+        keptTris = nextT;
+      }
+    }
+
+    let tagged = 0;
+    let tris = 0;
+    this.scene.traverse(function (o) {
+      if (!o.isMesh) return;
+      const r = self._occluderRadius(o);
+      if (r > 0 && r >= cutoff) {
+        o.layers.enable(CB_LAYER_OCCLUDER);
+        tagged++;
+        tris += triCount(o);
+      } else o.layers.disable(CB_LAYER_OCCLUDER);
+    });
+
+    this.occluders = tagged;
+    this.occluderTris = tris;
+    this._dirty = false;
+  }
+
+  render(renderer, writeBuffer, readBuffer, deltaTime, maskActive) {
+    const bg = this.scene.background;
+    // A texture/cube background draws a box mesh INTO the opaque list, which the
+    // prepass would then have to reason about. Every theme uses a Color today;
+    // if that ever changes, fall back to the stock single-pass path rather than
+    // render something wrong.
+    if (!this.prepass || (bg && bg.isTexture)) {
+      return super.render(renderer, writeBuffer, readBuffer, deltaTime, maskActive);
+    }
+
+    if (this._dirty || (this._frame % this.rescanFrames) === 0) this._scan();
+    this._frame++;
+
+    const oldAutoClear = renderer.autoClear;
+    const oldAutoClearDepth = renderer.autoClearDepth;
+    const oldOverride = this.scene.overrideMaterial;
+    const camMask = this.camera.layers.mask;
+
+    renderer.autoClear = false;
+    renderer.setRenderTarget(this.renderToScreen ? null : readBuffer);
+    // One explicit clear for the whole frame: colour to the renderer's clear
+    // colour (engine.setTheme keeps that equal to the theme background), plus
+    // depth and stencil. Nothing after this may clear depth again.
+    renderer.clear(true, true, true);
+
+    /* ---- 1. depth only, occluders only --------------------------------- */
+    this.scene.background = null;
+    this.scene.overrideMaterial = this._depthMat;
+    this.camera.layers.set(CB_LAYER_OCCLUDER);
+    renderer.render(this.scene, this.camera);
+
+    /* ---- 2. shade, with early-Z already rejecting the hidden 55-65 % --- */
+    this.camera.layers.mask = camMask;
+    this.scene.overrideMaterial = oldOverride;
+    this.scene.background = bg;
+    // WebGLBackground force-clears whenever the background is a Color, using
+    // renderer.autoClearDepth -- which would wipe the prepass depth we just
+    // paid for. Colour and stencil may still clear; depth may not.
+    renderer.autoClearDepth = false;
+    renderer.render(this.scene, this.camera);
+
+    renderer.autoClearDepth = oldAutoClearDepth;
+    renderer.autoClear = oldAutoClear;
+  }
+
+  dispose() {
+    if (this._depthMat) this._depthMat.dispose();
+    if (super.dispose) super.dispose();
+  }
+}
+
 /**
  * Which anti-aliaser a preset wants.
  *
@@ -870,8 +1138,10 @@ export class Post {
     composer.setSize(w, h);
     this.composer = composer;
 
-    // 1 — world
-    this.renderPass = new RenderPass(this.scene, this.camera);
+    // 1 — world, with a depth prepass in front of it (see PrepassRenderPass:
+    //     we were shading every pixel 2.2-2.8 times)
+    this.renderPass = new PrepassRenderPass(this.scene, this.camera);
+    this.renderPass.prepass = q.prepass !== false;
     composer.addPass(this.renderPass);
 
     // 1.5 — ambient occlusion (ultra). Each ping-pong target gets its own

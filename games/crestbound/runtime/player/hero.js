@@ -181,11 +181,30 @@ const SQUASH_LAND = 0.85;
 const STRETCH_JUMP = 1.12;
 
 /**
+ * Height of the rig's ROTATION pivot above the soles, metres. Every flip, lean
+ * and topple turns about this point — the hips (`P.hipY` 0.66 less the small
+ * drop to the joint) — not about the feet. See `_applyRoot`.
+ */
+const RIG_PIVOT_Y = 0.62;
+
+/**
  * Boot sole contact points, foot-local metres from the ankle. These are the
  * geometry the sole clamp measures — keep them in step with _buildLegs().
  */
 const SOLE_TOE_Z = 0.185;
 const SOLE_HEEL_Z = 0.100;
+
+/**
+ * Eye placement, HEAD-LOCAL metres. The eyes are SPHERES sunk into the skull
+ * (centre inside the surface) rather than the flat 0.124 m discs the face audit
+ * found stuck on the front of the face: with `EYE_R` 0.046 and the centre
+ * 0.196 m out, the skull crops them to a ~0.056 m visible cap, which is a
+ * stylised eye set in a socket instead of a googly eye glued on.
+ */
+const EYE_X = 0.075;
+const EYE_Y = 0.010;
+const EYE_Z = -0.185;
+const EYE_R = 0.058;
 
 /** Idle "look around" fires after this many seconds of standing still. */
 const IDLE_LOOK_AFTER = 4.0;
@@ -218,7 +237,7 @@ const COL = {
   rope: 0xc7ab7a,
   metal: 0xb9c2cb,
   lens: 0x9fe8ff,
-  eyeWhite: 0xfefefe,
+  eyeWhite: 0xf7f1e6,
   eyePupil: 0x161b22,
   blanket: 0xcfd6c8,
   buckle: 0xd8b25c,
@@ -240,11 +259,28 @@ const MAT_FALLBACK = {
   rubber: { color: 0xffffff, roughness: 0.78, metalness: 0.0 },
   metal: { color: 0xffffff, roughness: 0.30, metalness: 0.92 },
   glass: { color: 0xffffff, roughness: 0.08, metalness: 0.0 },
-  leaves: { color: 0xffffff, roughness: 0.80, metalness: 0.0 },
+  wood: { color: 0xffffff, roughness: 0.80, metalness: 0.0 },
   rope: { color: 0xffffff, roughness: 0.95, metalness: 0.0 },
   plaster: { color: 0xffffff, roughness: 0.88, metalness: 0.0 },
   gold: { color: 0xffffff, roughness: 0.28, metalness: 0.95 },
   emissive: { color: 0xffffff, roughness: 1.0, metalness: 0.0 },
+};
+
+/**
+ * The size in METRES of the hero part each material dresses. This is half of
+ * the texel-scale contract: a world texture is baked for a fixed
+ * tiles-per-metre (`texture.repeat`, e.g. plaster 0.30 = one 3.3 m crack
+ * network per tile), hero UVs run 0..1 across a part, so the ONLY repeat that
+ * shows the pattern at world scale on a part `L` metres across is
+ * `L × sourceTilesPerMetre`. Hand-picking 1..4 here is what stretched a 3.3 m
+ * wall-crack network across a 0.50 m skull. Keep these in step with the
+ * geometry builders below (and with _harness/heromatcheck.py's PART_SIZE).
+ */
+const PART_M = {
+  coat: 0.58, coatDark: 0.58, trim: 0.20, scarf: 0.74,
+  skin: 0.50, hair: 0.30, boot: 0.30, metal: 0.16, gold: 0.05,
+  leather: 0.24, rope: 0.30, blanket: 0.23, lens: 0.10,
+  eyeWhite: 0.12, eyeDark: 0.06,
 };
 
 /** Bone table order. Index-addressable so the update loop never allocates. */
@@ -431,17 +467,39 @@ function mergeAll(list) {
  * without sharing its instance (the hero needs its own opacity for `heroFade`,
  * the vanish power and the metal swap).
  *
- * We read the library's baked maps and PBR constants and re-assemble a fresh
- * standard material on attribute UVs. When `mats` is unavailable — the module
- * is another author's slice and may be mid-write — the fallback table keeps
- * Nim looking like Nim rather than like an error.
+ * THREE RULES, all three learned from a material audit that scored Nim 2/10:
+ *
+ *  1. NEVER TINT THROUGH THE WORLD ALBEDO. three multiplies `color × map`, and
+ *     a world albedo is a *dyed* fabric/plaster/leaf image, not a white base:
+ *     the library's `cloth` mean is (0.12, 0.19, 0.22) dark teal, so an
+ *     authored coat of #d8532b rendered as #190f09 — 6 % of its luminance,
+ *     hue gone. The map is therefore rebuilt as a NEUTRAL VALUE map
+ *     (`detailTex`): the same weave/grain/wear signal, greyscale, normalised
+ *     about its own mean, so `color` survives exactly and the texture reads as
+ *     shading rather than as dye. The library's normal and roughness maps are
+ *     carried over untouched — they never tinted anything.
+ *
+ *  2. TEXEL SCALE COMES FROM THE PART, NOT FROM A HAND-PICKED NUMBER.
+ *     `opts.size` is the part's size in metres; the repeat is
+ *     `size × sourceTilesPerMetre`, which puts the pattern on Nim at exactly
+ *     the size it is on the world. See PART_M.
+ *
+ *  3. THE MATERIAL CLASS FOLLOWS THE SOURCE. If the library baked this key as
+ *     MeshPhysicalMaterial (cloth's sheen lobe, glass's clearcoat) the hero
+ *     gets a physical material and inherits those lobes, so cloth reads as
+ *     cloth and glass as glass instead of everything reading as one plastic.
+ *     TRANSMISSION IS THE ONE THING NOT INHERITED: it makes the renderer draw
+ *     the whole scene a second time into the transmission target — measured on
+ *     verdant-1 at 871 draws vs 437 (materials.js `transmissionToAlpha`) — so
+ *     the hero copies the world's own choice, alpha + clearcoat + envMap.
  *
  * @param {object} mats  the Mats singleton (or null)
  * @param {string} key   material key (contract §14)
  * @param {string} themeId
  * @param {object} opts  {color, roughness, metalness, emissive, emissiveIntensity,
- *                        repeat, transparent, opacity, side, flatShading}
- * @returns {THREE.MeshStandardMaterial}
+ *                        size, detail, transparent, opacity, side, flatShading,
+ *                        sheen, clearcoat, …}
+ * @returns {THREE.MeshStandardMaterial|THREE.MeshPhysicalMaterial}
  */
 function deriveMaterial(mats, key, themeId, opts) {
   const o = opts || {};
@@ -456,19 +514,47 @@ function deriveMaterial(mats, key, themeId, opts) {
     roughness: o.roughness !== undefined ? o.roughness : (src ? src.roughness : fb.roughness),
     metalness: o.metalness !== undefined ? o.metalness : (src ? src.metalness : fb.metalness),
   };
-  const m = new THREE.MeshStandardMaterial(def);
+  const physical = !!(o.physical || (src && src.isMeshPhysicalMaterial));
+  const m = physical ? new THREE.MeshPhysicalMaterial(def) : new THREE.MeshStandardMaterial(def);
 
-  // Carry the library's texture detail across, on our own UV repeat. Textures
-  // are cloned so the repeat we want cannot leak back into the world material.
+  // ---- texel scale: part metres × the source's own tiles-per-metre ---------
+  const size = numOr(o.size, 0.3);
+  const srcRep = (src && src.map && src.map.repeat && src.map.repeat.x) || 1;
+  const rep = clamp(size * srcRep, 0.02, 8);
+
   if (src) {
-    const rep = o.repeat === undefined ? 1 : o.repeat;
-    if (src.map) { m.map = cloneTex(src.map, rep); }
+    // albedo -> neutral detail (rule 1). If the canvas cannot be read back
+    // (tainted / DataTexture / no 2D context) we ship NO albedo map rather
+    // than a map that would eat the authored colour.
+    if (src.map) m.map = detailTex(src.map, rep, numOr(o.detail, 0.55));
     if (src.normalMap) {
       m.normalMap = cloneTex(src.normalMap, rep);
-      m.normalScale.set(0.7, 0.7);
+      m.normalScale.set(numOr(o.normalScale, 0.7), numOr(o.normalScale, 0.7));
     }
     if (src.roughnessMap) m.roughnessMap = cloneTex(src.roughnessMap, rep);
     if (src.metalnessMap) m.metalnessMap = m.roughnessMap || cloneTex(src.metalnessMap, rep);
+    m.envMapIntensity = numOr(o.envMapIntensity, numOr(src.envMapIntensity, 1));
+
+    // rule 3: inherit the source's surface LOBES (never its transmission)
+    if (physical) {
+      if (src.isMeshPhysicalMaterial) {
+        if (src.sheen) {
+          m.sheen = src.sheen;
+          m.sheenRoughness = src.sheenRoughness;
+          if (src.sheenColor) m.sheenColor.copy(src.sheenColor);
+        }
+        if (src.clearcoat) { m.clearcoat = src.clearcoat; m.clearcoatRoughness = src.clearcoatRoughness; }
+        m.specularIntensity = src.specularIntensity;
+        m.ior = src.ior;
+      }
+      if (o.sheen !== undefined) m.sheen = o.sheen;
+      if (o.sheenRoughness !== undefined) m.sheenRoughness = o.sheenRoughness;
+      if (o.sheenColor !== undefined) m.sheenColor.set(o.sheenColor);
+      if (o.clearcoat !== undefined) m.clearcoat = o.clearcoat;
+      if (o.clearcoatRoughness !== undefined) m.clearcoatRoughness = o.clearcoatRoughness;
+      if (o.specularIntensity !== undefined) m.specularIntensity = o.specularIntensity;
+      if (o.ior !== undefined) m.ior = o.ior;
+    }
   }
 
   if (o.emissive !== undefined) {
@@ -488,11 +574,12 @@ function deriveMaterial(mats, key, themeId, opts) {
 }
 
 const _texClones = new Map();
+const _texDetail = new Map();
 
 /** Clone a library texture once per (texture, repeat) and cache it. */
 function cloneTex(t, repeat) {
   if (!t) return null;
-  const id = (t.uuid || 'x') + '|' + repeat;
+  const id = (t.uuid || 'x') + '|' + repeat.toFixed(3);
   let c = _texClones.get(id);
   if (c) return c;
   c = t.clone();
@@ -502,6 +589,94 @@ function cloneTex(t, repeat) {
   c.needsUpdate = true;
   _texClones.set(id, c);
   return c;
+}
+
+/** Scratch canvas for the albedo readback. Construction-time only. */
+let _detailCv = null;
+let _detailCtx = null;
+
+/**
+ * Turn a world ALBEDO map into a neutral DETAIL map: greyscale, normalised so
+ * its mean sits at `DETAIL_BASE`, with the deviation from that mean scaled by
+ * `strength`. Multiplying an authored colour by this preserves the hue and
+ * ~86 % of the luminance while keeping every weave, crack and wear mark the
+ * bake produced.
+ *
+ * Built once per (texture, repeat, strength) at construction; the pixels are
+ * never touched again. Returns null when the source cannot be read back, and
+ * `deriveMaterial` then ships no albedo map at all — a flat authored colour is
+ * a far smaller error than a destroyed one.
+ */
+/*
+ * `DETAIL_BASE` is the sRGB grey the source's MEAN maps to, i.e. the albedo
+ * multiplier Nim's authored palette is rendered through. It is calibrated, not
+ * picked: the one hero material that was correctly exposed before this pass was
+ * the skin, whose `plaster` albedo mean was 0.72 sRGB (~0.48 linear) — a
+ * daylight-lit face at verdant's key 3.15 / exposure 1.06 sat just under clip
+ * at that multiplier. 0.74 puts skin back exactly where it read right and lands
+ * the coat's #d8532b at ~0.33 linear red: a rich orange that survives the sun
+ * instead of a white blob. A neutral 1.0 base blows every sunlit panel out.
+ */
+const DETAIL_BASE = 0.74;     // sRGB grey the mean maps to  (~0.50 linear)
+const DETAIL_N = 128;         // detail maps do not need the source's resolution
+
+function detailTex(src, repeat, strength) {
+  if (!src) return null;
+  const id = (src.uuid || 'x') + '|' + repeat.toFixed(3) + '|' + strength.toFixed(2);
+  const hit = _texDetail.get(id);
+  if (hit !== undefined) return hit;
+
+  let out = null;
+  try {
+    const img = src.image || (src.source && src.source.data);
+    if (img && (img.width || 0) > 0) {
+      if (!_detailCv) {
+        _detailCv = document.createElement('canvas');
+        _detailCv.width = DETAIL_N; _detailCv.height = DETAIL_N;
+        _detailCtx = _detailCv.getContext('2d', { willReadFrequently: true });
+      }
+      const ctx = _detailCtx;
+      ctx.clearRect(0, 0, DETAIL_N, DETAIL_N);
+      ctx.drawImage(img, 0, 0, DETAIL_N, DETAIL_N);
+      const id2 = ctx.getImageData(0, 0, DETAIL_N, DETAIL_N);
+      const d = id2.data;
+
+      // mean luminance of the source, in the space the pixels are stored in
+      let sum = 0;
+      for (let i = 0; i < d.length; i += 4) sum += d[i] * 0.30 + d[i + 1] * 0.59 + d[i + 2] * 0.11;
+      const mean = Math.max(1, sum / (d.length / 4));
+
+      const base = DETAIL_BASE * 255;
+      for (let i = 0; i < d.length; i += 4) {
+        const lum = d[i] * 0.30 + d[i + 1] * 0.59 + d[i + 2] * 0.11;
+        // ratio about the mean, softened, clamped so no texel can go black
+        const r = 1 + (lum / mean - 1) * strength;
+        const v = clamp(base * r, base * 0.58, 255);
+        d[i] = v; d[i + 1] = v; d[i + 2] = v; d[i + 3] = 255;
+      }
+      ctx.putImageData(id2, 0, 0);
+
+      // a fresh canvas per texture: CanvasTexture keeps a reference to it
+      const cv = document.createElement('canvas');
+      cv.width = DETAIL_N; cv.height = DETAIL_N;
+      cv.getContext('2d').drawImage(_detailCv, 0, 0);
+
+      out = new THREE.CanvasTexture(cv);
+      out.name = (src.name || 'tex') + '.nimDetail';
+      out.colorSpace = THREE.SRGBColorSpace;
+      out.wrapS = THREE.RepeatWrapping;
+      out.wrapT = THREE.RepeatWrapping;
+      out.anisotropy = src.anisotropy || 1;
+      out.generateMipmaps = true;
+      out.minFilter = THREE.LinearMipmapLinearFilter;
+      out.magFilter = THREE.LinearFilter;
+      out.repeat.set(repeat, repeat);
+      out.needsUpdate = true;
+    }
+  } catch (e) { out = null; }
+
+  _texDetail.set(id, out);
+  return out;
 }
 
 /* ═══════════════════════════════ shadow blob ═══════════════════════════════ */
@@ -917,31 +1092,88 @@ export class Hero {
     const t = this.themeId;
     const reg = (m) => { this._mats.push(m); return m; };
 
+    // `size` is the part's size in metres (PART_M) — it, not a hand-picked
+    // number, sets the texel scale. `detail` is how much of the source's own
+    // value variation survives into the neutral detail map: high on woven and
+    // grained parts, low on skin (a face is not a plaster wall).
     this.M = {
-      coat: reg(deriveMaterial(M, 'cloth', t, { color: COL.coat, roughness: 0.88, repeat: 2 })),
-      coatDark: reg(deriveMaterial(M, 'cloth', t, { color: COL.coatDark, roughness: 0.93, repeat: 2 })),
-      trim: reg(deriveMaterial(M, 'cloth', t, { color: COL.trim, roughness: 0.80, repeat: 3 })),
+      coat: reg(deriveMaterial(M, 'cloth', t, {
+        color: COL.coat, roughness: 0.88, size: PART_M.coat, detail: 0.60,
+        sheen: 0.42, sheenRoughness: 0.62, sheenColor: 0x7a3a22, specularIntensity: 0.30,
+      })),
+      coatDark: reg(deriveMaterial(M, 'cloth', t, {
+        color: COL.coatDark, roughness: 0.93, size: PART_M.coatDark, detail: 0.60,
+        sheen: 0.38, sheenRoughness: 0.70, sheenColor: 0x5d2816, specularIntensity: 0.26,
+      })),
+      trim: reg(deriveMaterial(M, 'cloth', t, {
+        color: COL.trim, roughness: 0.80, size: PART_M.trim, detail: 0.55,
+        sheen: 0.40, sheenRoughness: 0.58, sheenColor: 0x2f4c55, specularIntensity: 0.34,
+      })),
       scarf: reg(deriveMaterial(M, 'cloth', t, {
-        color: SCARF_DEFAULT, roughness: 0.95, repeat: 2, side: THREE.DoubleSide,
+        color: SCARF_DEFAULT, roughness: 0.95, size: PART_M.scarf, detail: 0.65,
+        side: THREE.DoubleSide,
+        sheen: 0.48, sheenRoughness: 0.52, sheenColor: 0x7c2a1e, specularIntensity: 0.28,
       })),
-      skin: reg(deriveMaterial(M, 'plaster', t, { color: COL.skin, roughness: 0.66, repeat: 1 })),
-      hair: reg(deriveMaterial(M, 'cloth', t, { color: COL.hair, roughness: 0.74, repeat: 2 })),
-      boot: reg(deriveMaterial(M, 'rubber', t, { color: COL.boot, roughness: 0.72, repeat: 2 })),
-      metal: reg(deriveMaterial(M, 'metal', t, { color: COL.metal, roughness: 0.28, metalness: 0.94, repeat: 2 })),
-      gold: reg(deriveMaterial(M, 'gold', t, { color: COL.buckle, roughness: 0.30, metalness: 0.90, repeat: 2 })),
-      leather: reg(deriveMaterial(M, 'leaves', t, { color: COL.leather, roughness: 0.78, repeat: 2 })),
-      rope: reg(deriveMaterial(M, 'rope', t, { color: COL.rope, roughness: 0.94, repeat: 4 })),
-      blanket: reg(deriveMaterial(M, 'cloth', t, { color: COL.blanket, roughness: 0.94, repeat: 3 })),
+      // Skin is the one place the library map is nearly suppressed: `plaster`
+      // is the Keep's wall bake, and even at world scale its crack network has
+      // no business on a face. It contributes pore-level value only.
+      skin: reg(deriveMaterial(M, 'plaster', t, {
+        color: COL.skin, roughness: 0.62, size: PART_M.skin, detail: 0.18,
+        normalScale: 0.25, physical: true, sheen: 0.22, sheenRoughness: 0.75,
+        sheenColor: 0x8a5a48, specularIntensity: 0.30, clearcoat: 0.08, clearcoatRoughness: 0.85,
+      })),
+      hair: reg(deriveMaterial(M, 'cloth', t, {
+        color: COL.hair, roughness: 0.70, size: PART_M.hair, detail: 0.70,
+        sheen: 0.55, sheenRoughness: 0.34, sheenColor: 0x3d2418, specularIntensity: 0.45,
+      })),
+      boot: reg(deriveMaterial(M, 'rubber', t, {
+        color: COL.boot, roughness: 0.86, size: PART_M.boot, detail: 0.65,
+        physical: true, clearcoat: 0.22, clearcoatRoughness: 0.60, specularIntensity: 0.45,
+      })),
+      metal: reg(deriveMaterial(M, 'metal', t, {
+        color: COL.metal, roughness: 0.28, metalness: 0.94, size: PART_M.metal, detail: 0.75,
+      })),
+      gold: reg(deriveMaterial(M, 'gold', t, {
+        color: COL.buckle, roughness: 0.30, metalness: 0.90, size: PART_M.gold, detail: 0.70,
+      })),
+      // Leather, not foliage: `leaves` is an alpha-cut canopy CARD baked GREEN
+      // (albedo mean 0.12, 0.22, 0.06) — it turned the pack black-green. `wood`
+      // is the library's organic grain and is what a waxed leather pack wants.
+      leather: reg(deriveMaterial(M, 'wood', t, {
+        color: COL.leather, roughness: 0.72, size: PART_M.leather, detail: 0.60,
+        physical: true, clearcoat: 0.28, clearcoatRoughness: 0.45, specularIntensity: 0.50,
+      })),
+      rope: reg(deriveMaterial(M, 'rope', t, {
+        color: COL.rope, roughness: 0.94, size: PART_M.rope, detail: 0.80, normalScale: 0.9,
+      })),
+      blanket: reg(deriveMaterial(M, 'cloth', t, {
+        color: COL.blanket, roughness: 0.94, size: PART_M.blanket, detail: 0.60,
+        sheen: 0.35, sheenRoughness: 0.68, sheenColor: 0x7e857a, specularIntensity: 0.22,
+      })),
+      // Glass the way the world does it (materials.js `transmissionToAlpha`):
+      // alpha + clearcoat + a hot env term. A real `transmission` here would
+      // re-draw the entire scene into the transmission target — the perf gate
+      // is 260 draws and that alone measured +434 on verdant-1.
       lens: reg(deriveMaterial(M, 'glass', t, {
-        color: COL.lens, roughness: 0.06, metalness: 0.10,
-        emissive: COL.lens, emissiveIntensity: 0.28,
-        transparent: true, opacity: 0.58,
+        color: COL.lens, roughness: 0.05, metalness: 0.0, size: PART_M.lens, detail: 0.35,
+        physical: true, clearcoat: 1.0, clearcoatRoughness: 0.04, ior: 1.45,
+        specularIntensity: 1.0, envMapIntensity: 1.8,
+        emissive: COL.lens, emissiveIntensity: 0.16,
+        transparent: true, opacity: 0.42, side: THREE.DoubleSide,
       })),
+      // The sclera is a WET EYE, not a lamp: the old emissive 0.55 is what made
+      // two 0.12 m discs read as stick-on googly eyes in every screenshot.
       eyeWhite: reg(deriveMaterial(M, 'plaster', t, {
-        color: COL.eyeWhite, roughness: 0.30,
-        emissive: 0xffffff, emissiveIntensity: 0.55,
+        color: COL.eyeWhite, roughness: 0.38, size: PART_M.eyeWhite, detail: 0.10,
+        normalScale: 0.15, physical: true, clearcoat: 0.16, clearcoatRoughness: 0.12,
+        specularIntensity: 0.45, envMapIntensity: 0.18,
+        emissive: 0xfff4e8, emissiveIntensity: 0.03,
       })),
-      eyeDark: reg(deriveMaterial(M, 'plaster', t, { color: COL.eyePupil, roughness: 0.24 })),
+      eyeDark: reg(deriveMaterial(M, 'plaster', t, {
+        color: COL.eyePupil, roughness: 0.30, size: PART_M.eyeDark, detail: 0.10,
+        normalScale: 0.15, physical: true, clearcoat: 0.20, clearcoatRoughness: 0.10,
+        specularIntensity: 0.45, envMapIntensity: 0.10,
+      })),
     };
 
     // Wing power — additive energy membrane. Built now, shown only on demand.
@@ -1073,8 +1305,8 @@ export class Hero {
     // jaw: a soft wedge under the front of the skull. This is the whole
     // difference between "a ball with eyes" and "a face".
     const jaw = place(
-      bevelBoxGeometry(R * 1.30, R * 0.52, R * 1.06, R * 0.22, 1),
-      0, -R * 0.60, -R * 0.10, 0.14, 0, 0,
+      limbGeo(0.075, 0.075, 0.001, seg, 4),
+      0, -0.115, -0.103, 0, 0, 0, 1.25, 0.80, 1.0,
     );
     // ears: two small discs so the profile silhouette is not a circle
     const ears = [];
@@ -1084,18 +1316,44 @@ export class Hero {
         s * (R * 0.94), R * 0.02, 0.010, 0, 0, s * 1.35,
       ));
     }
-    const nose = place(limbGeo(0.014, 0.026, 0.026, this._seg(10), 2), 0, -R * 0.14, -R * 0.98, 1.35, 0, 0);
+    // Nose: a real button, not the 14 mm nub the face audit found. A tapered
+    // bridge merged with a rounded tip, 5 cm across and 4 cm proud, so the
+    // three-quarter silhouette has something between the goggles and the chin.
+    const noseParts = [
+      place(bevelBoxGeometry(0.046, 0.058, 0.052, 0.020, 1), 0, -R * 0.15, -R * 0.90, 0.22, 0, 0),
+      place(limbGeo(0.024, 0.030, 0.014, this._seg(10), 3), 0, -R * 0.19, -R * 1.00, 1.42, 0, 0),
+    ];
+    // Cheeks: two soft pads that stop the lower face reading as a bare sphere.
+    // Sunk like the eyes are — the skull crops them to a ~7 cm pad standing
+    // 1.8 cm proud, which is a cheek, not a ball stuck on a ball.
+    for (const s of [1, -1]) {
+      noseParts.push(place(
+        limbGeo(0.042, 0.042, 0.001, this._seg(12), 3),
+        s * 0.098, -R * 0.28, -0.170,
+      ));
+    }
 
-    this._attach(head, mergeAll([skull, jaw, nose].concat(ears)), this.M.skin, 'head');
+    this._attach(head, mergeAll([skull, jaw].concat(noseParts, ears)), this.M.skin, 'head');
 
-    // --- hair tuft: three swept blades off the crown ---
+    // --- hair: blades SWEPT BACK off the crown ------------------------------
+    // They used to stand at −0.55 rad, which from the follow camera read as one
+    // black cone — a party hat. Swept to −1.25 they read as hair moving.
     const hair = [];
-    for (let i = 0; i < 3; i++) {
-      const a = (i - 1) * 0.42;
+    for (let i = 0; i < 5; i++) {
+      const a = (i - 2) * 0.34;
       hair.push(place(
-        bevelBoxGeometry(0.055 - i * 0.006, 0.115, 0.030, 0.012, 1),
-        Math.sin(a) * 0.055, R * 0.96 + 0.018, -0.035 - Math.cos(a) * 0.02,
-        -0.55, a, a * 0.4,
+        bevelBoxGeometry(0.040 - Math.abs(i - 2) * 0.005, 0.135, 0.026, 0.011, 1),
+        Math.sin(a) * 0.072, R * 0.90 + 0.012, -0.010 - Math.cos(a) * 0.012,
+        -1.25, a, a * 0.5,
+      ));
+    }
+    // A short fringe over the brow, so the face has a hairline to sit under.
+    for (let i = 0; i < 3; i++) {
+      const a = (i - 1) * 0.46;
+      hair.push(place(
+        bevelBoxGeometry(0.058, 0.070, 0.024, 0.010, 1),
+        Math.sin(a) * 0.108, R * 0.86, -R * 0.60 + Math.abs(a) * 0.030,
+        0.75, a * 0.6, a * 0.7,
       ));
     }
     // a back fringe so the crown is not bald from the follow camera
@@ -1113,8 +1371,25 @@ export class Hero {
     // brow line: a dark bar above each eye — the cheapest expression there is
     for (const s of [1, -1]) {
       hair.push(place(
-        bevelBoxGeometry(0.082, 0.020, 0.020, 0.006, 1),
-        s * 0.088, R * 0.10, -R * 0.94, 0.10, -s * 0.16, s * 0.14,
+        bevelBoxGeometry(0.076, 0.017, 0.018, 0.006, 1),
+        s * EYE_X, EYE_Y + 0.060, -R * 0.90, 0.10, -s * 0.16, s * 0.20,
+      ));
+    }
+
+    // --- the MOUTH. There was not one. A 12 cm smile arc in the same dark
+    //     brown as the brows and lashes, merged into that mesh, so a face the
+    //     camera stares at all game finally has three features instead of two.
+    for (let i = 0; i < 9; i++) {
+      const f = (i - 4) / 4;                       // −1 .. 1 across the mouth
+      const x = f * 0.048;
+      const y = -R * 0.40 + f * f * 0.016;         // corners lifted -> a smile
+      // ride the skull's own cross-section at this height, then stand proud of
+      // it so no segment can sink into the cheek
+      const rr = R * 0.875;
+      const z = -Math.sqrt(Math.max(0.001, rr * rr - x * x)) - 0.006;
+      hair.push(place(
+        bevelBoxGeometry(0.030, 0.014 - Math.abs(f) * 0.004, 0.018, 0.005, 1),
+        x, y, z, 0.16, 0, -f * 0.34,
       ));
     }
     this._attach(head, mergeAll(hair), this.M.hair, 'hair');
@@ -1151,23 +1426,28 @@ export class Hero {
 
     // --- eyes ------------------------------------------------------------
     // A pivot per feature so blink (scale) and look (rotate) never interfere.
+    // The pivot sits AT eye height so a blink collapses the lids in place.
     this._eyePivot = new THREE.Object3D();
     this._eyePivot.name = 'nim.eyes';
-    this._eyePivot.position.set(0, -R * 0.06, 0);
+    this._eyePivot.position.set(0, EYE_Y, 0);
     head.add(this._eyePivot);
 
     const eseg = this._seg(14);
     const sclera = [];
     const pupils = [];
     for (const s of [1, -1]) {
-      const ex = s * 0.096, ey = 0, ez = -R * 0.86;
+      const ex = s * EYE_X, ey = 0, ez = EYE_Z;
+      // eyeball: a real sphere, slightly flattened front-to-back, sunk in
       sclera.push(place(
-        limbGeo(0.062, 0.062, 0.004, eseg, 3),
-        ex, ey, ez, Math.PI * 0.5, 0, 0, 1.0, 1.0, 1.18,
+        limbGeo(EYE_R, EYE_R, 0.001, eseg, 4),
+        ex, ey, ez,
       ));
+      // Iris: a shallow cap that must PROTRUDE through the eyeball's front, or
+      // the sclera's own specular is all the camera sees (which is what made
+      // the eyes read as two chrome rings). 0.95 R puts its rim ~3 mm proud.
       pupils.push(place(
-        limbGeo(0.032, 0.032, 0.004, eseg, 3),
-        ex, ey - 0.004, ez - 0.030, Math.PI * 0.5, 0, 0, 1.0, 1.0, 1.10,
+        limbGeo(0.026, 0.026, 0.004, eseg, 3),
+        ex, ey, ez - EYE_R * 0.99, Math.PI * 0.5, 0, 0, 1.0, 1.0, 1.20,
       ));
     }
     this._sclera = this._attach(this._eyePivot, mergeAll(sclera), this.M.eyeWhite, 'sclera');
@@ -1600,13 +1880,35 @@ export class Hero {
       rig.userData.ry + this._flipYaw,
       rig.userData.rz + this._flipRoll,
     );
-    rig.position.set(0, rig.userData.oy, rig.userData.oz);
 
     this._squash = damp(this._squash, this._squashTgt, SQUASH_LAMBDA, dt);
     this._squashTgt = damp(this._squashTgt, 1, SQUASH_LAMBDA * 0.75, dt);
     const sy = this._squash;
     const sxz = 1 / Math.sqrt(Math.max(0.2, sy));       // preserve volume
     rig.scale.set(sxz, sy, sxz);
+
+    /*
+     * PIVOT. `rig` hangs off `root`, whose origin is the SOLE PLANE, so writing
+     * the rotation straight onto it span every flip and every root pitch around
+     * the boots: a jump3 somersault swung the whole body a full body-length
+     * BELOW the feet, and `_poseDead` toppled the corpse two metres off its own
+     * contact blob. A body rotates about its HIPS.
+     *
+     * Rather than re-parent (which would move the squash pivot off the feet and
+     * hide the rig transform from every harness that reads `hero.rig`), apply
+     * the pivot as a translation. For a pivot p in rig-local space, rotating
+     * about p instead of the origin is exactly
+     *      T = S·p − R·S·p
+     * which leaves T = 0 when R is identity — so a standing, leaning, squashing
+     * Nim is bit-identical to before, and only rotation moves the body about
+     * the hips. Squash still scales from the soles.
+     */
+    _v0.set(0, RIG_PIVOT_Y * sy, 0).applyEuler(rig.rotation);
+    rig.position.set(
+      -_v0.x,
+      RIG_PIVOT_Y * sy - _v0.y + rig.userData.oy,
+      -_v0.z + rig.userData.oz,
+    );
   }
 
   /**
@@ -1663,6 +1965,10 @@ export class Hero {
       case 'skid':
       case 'pivot':
         this._poseSkid(anim === 'pivot');
+        break;
+
+      case 'bonk':
+        this._poseBonk(t);
         break;
 
       case 'crouch':
@@ -1814,6 +2120,43 @@ export class Hero {
     } else {
       this._lookYaw = damp(this._lookYaw, 0, 6, Math.max(dt, 1 / 120));
     }
+  }
+
+  /**
+   * BONK — grounded, shoulder into a wall that will not move. A short recoil
+   * off the impact (the first 0.18 s), then a press: both palms flat on the
+   * wall, weight forward, boots scuffing at half the run cadence so the hero
+   * reads as TRYING rather than as a run cycle playing on the spot.
+   */
+  _poseBonk(t) {
+    const B = this.B;
+    const recoil = 1 - clamp01(t / 0.18);              // 1 -> 0 over the first 0.18 s
+    const ph = t * 7.0;                                // slow scuff cadence
+    const sc = Math.sin(ph);
+
+    this._rootPitch = 0.20 - recoil * 0.30;            // snap back, then lean in
+    this._rootY -= 0.05 + recoil * 0.06;
+
+    // palms on the wall, elbows out
+    B.upperArmR.tx = -1.42 - recoil * 0.25;
+    B.upperArmL.tx = -1.42 - recoil * 0.25;
+    B.upperArmR.tz = 0.46;
+    B.upperArmL.tz = -0.46;
+    B.lowerArmR.tx = 0.30;
+    B.lowerArmL.tx = 0.30;
+
+    // boots scuffing: a small, out-of-phase churn, never a full stride
+    B.upperLegR.tx = 0.10 + sc * 0.26;
+    B.upperLegL.tx = 0.10 - sc * 0.26;
+    B.lowerLegR.tx = -0.30 - clamp01(sc) * 0.34;
+    B.lowerLegL.tx = -0.30 - clamp01(-sc) * 0.34;
+    B.footR.tx = 0.24 - sc * 0.14;
+    B.footL.tx = 0.24 + sc * 0.14;
+
+    B.hips.ty = sc * 0.05;
+    B.spine.tx = 0.16;
+    B.chest.tx = 0.10 + recoil * 0.18;
+    B.head.tx = -0.28 - recoil * 0.10;                 // chin up, looking at the wall
   }
 
   /** Skid / pivot: lean AWAY from travel, arms flung out for balance. */
@@ -2130,21 +2473,39 @@ export class Hero {
     this._rootY += 0.10;
   }
 
-  /** Pound fall: fists down, legs straight, a rigid spear of a silhouette. */
+  /**
+   * Pound fall: a rigid spear driving at the floor. The previous version wrote
+   * 7–20° from rest and measured 6.3° rms against a settled idle — the only
+   * state in `posecheck` that collapsed into standing still, and the shots
+   * showed Nim upright with his arms at his sides at −40 m/s.
+   *
+   * The read now: arms locked straight and swept BACK past the hips, fists
+   * clenched, legs pressed together with the toes pointed hard, chest thrown
+   * open and the head down watching the impact — a diving arrowhead whose
+   * silhouette cannot be confused with anything else in the state table.
+   */
   _posePoundFall(t) {
     const B = this.B;
     this._flipYaw *= 0.55;
-    B.upperArmR.tx = 0.35; B.upperArmL.tx = 0.35;
-    B.upperArmR.tz = 0.42; B.upperArmL.tz = -0.42;
-    B.lowerArmR.tx = 0.20; B.lowerArmL.tx = 0.20;
-    B.upperLegR.tx = -0.12; B.upperLegL.tx = -0.12;
-    B.lowerLegR.tx = -0.08; B.lowerLegL.tx = -0.08;
-    B.footR.tx = -0.30; B.footL.tx = -0.30;
-    B.spine.tx = 0.10;
-    B.head.tx = -0.30;
-    this._rootPitch = 0.06;
+    // a slow residual roll off the hang spin, so the fall is never dead-static
+    const wob = Math.sin(t * 26) * 0.035;
+
+    B.upperArmR.tx = -1.02 + wob; B.upperArmL.tx = -1.02 - wob;
+    B.upperArmR.tz = 0.30; B.upperArmL.tz = -0.30;
+    B.lowerArmR.tx = -0.26; B.lowerArmL.tx = -0.26;      // elbows locked out
+    B.handR.tx = -0.50; B.handL.tx = -0.50;              // fists cocked back
+    B.shoulderR.tz = -0.16; B.shoulderL.tz = 0.16;       // shoulders squeezed
+
+    B.upperLegR.tx = -0.14; B.upperLegL.tx = -0.14;
+    B.upperLegR.tz = -0.035; B.upperLegL.tz = 0.035;     // ankles together
+    B.lowerLegR.tx = 0.10; B.lowerLegL.tx = 0.10;        // knees locked
+    B.footR.tx = -0.78; B.footL.tx = -0.78;              // toes pointed
+
+    B.spine.tx = -0.20; B.chest.tx = -0.14;              // chest thrown open
+    B.neck.tx = 0.30; B.head.tx = 0.42;                  // watching the ground
+
+    this._rootPitch = 0.13;
     this._rootY += 0.04;
-    void t;
   }
 
   /** Pound land: the shock crouch, then a fast pop back to standing. */
@@ -2288,13 +2649,22 @@ export class Hero {
     this._rootPitch = 0.22 + Math.sin(t * 18) * 0.03;      // fizzing on the fuse
   }
 
-  /** Dead: limp. Knees fold, arms drop, head lolls. */
+  /**
+   * Dead: limp. Knees fold, arms drop, head lolls.
+   *
+   * The topple is a rotation about the HIPS (see `_applyRoot`), so the numbers
+   * are the ones that put a 1.5 m body FLAT: −1.45 rad lays it prone with the
+   * hips at the pivot height, and the 0.42 m drop then sets the torso down at
+   * about its own half-thickness. The old −1.05 / −0.55 pair was tuned against
+   * a rotation about the soles and buried the corpse in the terrain 2–3 m from
+   * its own contact blob.
+   */
   _poseDead(t) {
     const B = this.B;
     const f = clamp01(t / 0.45);
-    this._rootPitch = -1.05 * f;
-    this._rootRoll += 0.35 * f;
-    this._rootY -= 0.55 * f;
+    this._rootPitch = -1.45 * f;
+    this._rootRoll += 0.40 * f;
+    this._rootY -= 0.42 * f;
     B.upperArmR.tx = -0.20 * f; B.upperArmL.tx = -0.10 * f;
     B.upperArmR.tz = 0.95 * f + 0.165; B.upperArmL.tz = -1.15 * f - 0.165;
     B.lowerArmR.tx = 0.30; B.lowerArmL.tx = 0.20;
@@ -2337,7 +2707,8 @@ export class Hero {
     }
 
     const w = clamp01(1 - this._speedN * 0.35) *
-      (a === 'idle' || a === 'run' || a === 'crouchwalk' || a === 'crouch' || a === 'land' ? 1 : 0.45);
+      (a === 'idle' || a === 'run' || a === 'crouchwalk' || a === 'crouch' || a === 'land' ||
+        a === 'bonk' ? 1 : 0.45);
     if (w <= 0.01) return;
 
     // Per-leg CONTACT weight. Pinning the swing leg to the ground plane is
@@ -2555,12 +2926,19 @@ export class Hero {
 
     // wind: the hero's own motion, plus a slow gust so a standing scarf lives
     const gust = Math.sin(this._breathe * 0.9) * 0.55 + Math.sin(this._breathe * 2.3) * 0.25;
-    const wx = -vx * SCARF_WIND * 9 + gust * 0.45;
+    const drape = 1.35 * (1 - this._speedN);
+    const wx = -vx * SCARF_WIND * 9 + gust * 0.45 + Math.cos(facing) * drape;
     const wy = -vy * SCARF_WIND * 3.2 + gust * 0.20;
-    const wz = -vz * SCARF_WIND * 9 + gust * 0.35;
+    const wz = -vz * SCARF_WIND * 9 + gust * 0.35 - Math.sin(facing) * drape;
 
     const h = Math.min(dt, 1 / 45);
     const h2 = h * h;
+
+    // A travelling ripple, phase-offset down the chain. Without it a strong
+    // wind term drives every particle the same way and an inextensible chain
+    // becomes a straight rod pointing downwind — the "rigid blade" read.
+    const flut = 0.55 + this._speedN * 2.6;
+    const flutT = this._breathe * 9.5;
 
     // integrate
     for (let i = 1; i < N; i++) {
@@ -2571,9 +2949,10 @@ export class Hero {
       let ivz = (pz - q[o + 2]) * SCARF_DAMP;
       // tip links are lighter, so they trail further
       const light = 0.7 + (i / N) * 0.6;
-      ivx += wx * h2 * light * 14;
-      ivy += (SCARF_GRAVITY + wy) * h2 * 14;
-      ivz += wz * h2 * light * 14;
+      const rip = Math.sin(flutT - i * 1.35) * flut * (i / N);
+      ivx += (wx + rip * 0.9) * h2 * light * 14;
+      ivy += (SCARF_GRAVITY + wy + rip * 1.6) * h2 * 14;
+      ivz += (wz - rip * 0.9) * h2 * light * 14;
       q[o] = px; q[o + 1] = py; q[o + 2] = pz;
       p[o] = px + ivx; p[o + 1] = py + ivy; p[o + 2] = pz + ivz;
     }
@@ -2581,32 +2960,69 @@ export class Hero {
     p[0] = ax; p[1] = ay; p[2] = az;
     q[0] = ax; q[1] = ay; q[2] = az;
 
-    // relax: segment length, then push out of the body sphere
+    /*
+     * RELAX. Order and gain both matter, and both were wrong: the body push-out
+     * ran AFTER the length pass inside the same iteration, so the LAST thing
+     * done to the chain every pass was to re-break the segment lengths — and
+     * the length pass itself only applied half the correction (×0.5), twice.
+     * Measured result: a 0.105 m link reaching 0.455 m (433 %) and a 0.735 m
+     * scarf spanning 1.61 m at a 9 m/s run. That is not cloth, it is an elastic
+     * band, and it rendered as a rigid blade and as a detached floating shard.
+     *
+     * Now: push out of the body FIRST, then project the lengths at full gain,
+     * so the length constraint is always the last word.
+     */
     _v1.setFromMatrixPosition(this.bones.chest.matrixWorld);
-    const iters = this.q === 0 ? 2 : 3;
+    const iters = this.q === 0 ? 4 : 8;
+    const bodyR2 = SCARF_BODY_R * SCARF_BODY_R;
     for (let k = 0; k < iters; k++) {
-      for (let i = 0; i < SCARF_LINKS; i++) {
-        const a = i * 3, b = (i + 1) * 3;
-        let ddx = p[b] - p[a], ddy = p[b + 1] - p[a + 1], ddz = p[b + 2] - p[a + 2];
-        const len = Math.sqrt(ddx * ddx + ddy * ddy + ddz * ddz) || 1e-6;
-        const corr = (len - SCARF_SEG) / len * 0.5;
-        ddx *= corr; ddy *= corr; ddz *= corr;
-        if (i > 0) { p[a] += ddx; p[a + 1] += ddy; p[a + 2] += ddz; }
-        else { ddx *= 2; ddy *= 2; ddz *= 2; }
-        p[b] -= ddx; p[b + 1] -= ddy; p[b + 2] -= ddz;
-      }
       // body sphere: the scarf may never sink into the coat
       for (let i = 1; i < N; i++) {
         const o = i * 3;
         const ex = p[o] - _v1.x, ey = p[o + 1] - _v1.y, ez = p[o + 2] - _v1.z;
         const d2 = ex * ex + ey * ey + ez * ez;
-        if (d2 < SCARF_BODY_R * SCARF_BODY_R && d2 > 1e-8) {
+        if (d2 < bodyR2 && d2 > 1e-8) {
           const d = Math.sqrt(d2);
           const push = (SCARF_BODY_R - d) / d;
           p[o] += ex * push; p[o + 1] += ey * push; p[o + 2] += ez * push;
         }
       }
+      for (let i = 0; i < SCARF_LINKS; i++) {
+        const a = i * 3, b = (i + 1) * 3;
+        let ddx = p[b] - p[a], ddy = p[b + 1] - p[a + 1], ddz = p[b + 2] - p[a + 2];
+        const len = Math.sqrt(ddx * ddx + ddy * ddy + ddz * ddz) || 1e-6;
+        const corr = (len - SCARF_SEG) / len;
+        ddx *= corr; ddy *= corr; ddz *= corr;
+        // the collar particle is pinned, so link 0 takes its whole correction
+        // on the far end
+        if (i > 0) {
+          p[a] += ddx * 0.5; p[a + 1] += ddy * 0.5; p[a + 2] += ddz * 0.5;
+          p[b] -= ddx * 0.5; p[b + 1] -= ddy * 0.5; p[b + 2] -= ddz * 0.5;
+        } else {
+          p[b] -= ddx; p[b + 1] -= ddy; p[b + 2] -= ddz;
+        }
+      }
       p[0] = ax; p[1] = ay; p[2] = az;
+    }
+
+    /*
+     * INEXTENSIBILITY, guaranteed. Gauss–Seidel converges toward the length
+     * constraint but never reaches it, and a scarf that stretches even 20 %
+     * reads as rubber. One follow-the-leader pass from the pinned collar
+     * outward clamps every link to AT MOST its rest length — O(7), no
+     * allocation, and it makes 100 % the hard ceiling on stretch rather than a
+     * number that depends on how violent the frame was.
+     */
+    for (let i = 1; i < N; i++) {
+      const a = (i - 1) * 3, b = i * 3;
+      const ddx = p[b] - p[a], ddy = p[b + 1] - p[a + 1], ddz = p[b + 2] - p[a + 2];
+      const len = Math.sqrt(ddx * ddx + ddy * ddy + ddz * ddz);
+      if (len > SCARF_SEG && len > 1e-6) {
+        const s = SCARF_SEG / len;
+        p[b] = p[a] + ddx * s;
+        p[b + 1] = p[a + 1] + ddy * s;
+        p[b + 2] = p[a + 2] + ddz * s;
+      }
     }
 
     this._writeScarfGeometry(ax, ay, az, facing);

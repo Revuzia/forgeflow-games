@@ -211,9 +211,26 @@ uniform float uCloudSharp;
  * every cell picks up a rim.
  * Returns rgb = cloud colour, a = coverage 0..1.
  */
+/**
+ * Cloud-deck projection. domeUv divides by d.y * 0.8 + 1.15, a denominator
+ * that never drops below 1.15 — so the whole horizon maps onto a circle of
+ * radius ~0.87 in uv, and at cloudScale 1.75 that is barely ONE noise cell
+ * around the entire 360 degrees. Near the horizon the field was therefore
+ * mathematically almost constant, which is why round 1's fade-in fix (bringing
+ * the deck down to 0.005 elevation) still produced a flat blue wall in every
+ * verdant station: there were no clouds down there to fade in.
+ *
+ * A cloud deck is a PLANE at altitude, so the correct projection is d.xz / d.y,
+ * clamped so the horizon stretches to a finite (large) value instead of
+ * infinity. That converges the cells at the horizon the way real cumulus does.
+ */
+vec2 cloudUv( vec3 d ) {
+  return d.xz / max( d.y + 0.055, 0.075 );
+}
+
 vec4 domeCumulus( vec3 d ) {
   if ( uCloudStrength <= 0.001 || d.y < 0.005 ) return vec4( 0.0 );
-  vec2 p = domeUv( d ) * uCloudScale;
+  vec2 p = cloudUv( d ) * uCloudScale;
   float t = uTime * uCloudSpeed;
 
   vec2 q = vec2( fbm3( p + vec2( 0.0, t ) ), fbm3( p + vec2( 3.3, -t * 0.8 ) ) );
@@ -222,8 +239,17 @@ vec4 domeCumulus( vec3 d ) {
   float edge = 1.0 - clamp( uCloudCoverage, 0.0, 0.98 );
   float cov = smoothstep( edge, edge + 0.24, f );
   cov = pow( clamp( cov, 0.0, 1.0 ), max( uCloudSharp, 0.1 ) );
-  // fade in off the horizon and thin out toward the zenith (perspective)
-  cov *= smoothstep( 0.01, 0.11, d.y ) * ( 1.0 - 0.45 * smoothstep( 0.45, 1.0, d.y ) );
+  /* Fade in off the horizon and thin out toward the zenith (perspective).
+   *
+   * ROUND 1 VISUAL FIX: the fade-in ran 0.01 -> 0.11 in d.y, which put the
+   * cloud deck entirely above ~6 degrees of elevation. A third-person
+   * platformer camera sits just above the hero and looks slightly DOWN, so the
+   * only sky in frame is the band under that — and every verdant station shot
+   * (_shots/verdant-1/spawn.png, cp1, cp4) came back with a flat gradient
+   * sky and no clouds at all. Real cumulus CONVERGES at the horizon; bringing
+   * the fade down to 0.005 -> 0.045 is both more correct and the difference
+   * between "a sky" and "a blue wall". */
+  cov *= smoothstep( 0.005, 0.045, d.y ) * ( 1.0 - 0.45 * smoothstep( 0.45, 1.0, d.y ) );
 
   float lit = smoothstep( 0.32, 0.90, f );
   vec3 col = mix( uCloudShadow, uCloudLit, lit );

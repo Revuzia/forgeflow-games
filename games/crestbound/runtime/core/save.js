@@ -317,6 +317,33 @@ function ensure() {
   return _data;
 }
 
+/**
+ * The record every READ of an unplayed course gets: a shared, empty one that is
+ * NOT stored. Reading a save must never write to it — `_refreshGateState()`
+ * looks up all 13 gates the moment the Keep loads, and when `course()` minted a
+ * record per lookup a player who had never pressed a button owned 13 "played"
+ * courses, so `totals().coursesPlayed` was 13, `_hasProgress()` was true, the
+ * title screen led with CONTINUE and NEW GAME asked to erase progress that did
+ * not exist. One object, reused: a per-read copy would allocate inside the
+ * frame loop (`_refreshCrestGot`).
+ */
+const BLANK_COURSE = freshCourse('');
+
+/** Live record for WRITING — created and stored on demand. Writers only. */
+function ensureCourse(courseId) {
+  const d = ensure();
+  const id = String(courseId);
+  let rec = d.courses[id];
+  if (!rec) { rec = freshCourse(id); d.courses[id] = rec; }
+  return rec;
+}
+
+/** True when a record holds anything a player actually did. */
+function courseTouched(r) {
+  return !!r && (r.crests.length > 0 || r.deaths > 0 || r.coinsBest > 0 || r.clears > 0 ||
+                 r.playMs > 0 || r.cleared === true || r.lastPlayed > 0);
+}
+
 function emit(type, payload) {
   if (_subs.length === 0) return;
   const evt = payload || {};
@@ -503,17 +530,25 @@ export const Save = {
 
   /* -------------------------------------------------------- course record */
   /**
-   * Live per-course record (created on demand). Contract shape
-   * {crests, coinsBest, cleared, deaths, bestMs} plus clears / playMs /
-   * lastPlayed / firstClearDate. Treat it as read-only — mutate through the
-   * methods so writes get scheduled and events fire.
+   * Per-course record. Contract shape {crests, coinsBest, cleared, deaths,
+   * bestMs} plus clears / playMs / lastPlayed / firstClearDate.
+   *
+   * READ-ONLY, and NON-MUTATING: a course with no record yet returns the shared
+   * empty record and NOTHING is stored, so merely rendering a menu or resolving
+   * the Keep's gates can no longer invent progress. Mutate through the methods
+   * (collectCrest / setCoinsBest / addDeath / setBestMs) — they create the real
+   * record, schedule the write and fire the event.
    */
   course(courseId) {
     const d = ensure();
-    const id = String(courseId);
-    let rec = d.courses[id];
-    if (!rec) { rec = freshCourse(id); d.courses[id] = rec; }
-    return rec;
+    const rec = d.courses[String(courseId)];
+    return rec || BLANK_COURSE;
+  },
+
+  /** Has this course ever been recorded (as opposed to merely looked at)? */
+  courseKnown(courseId) {
+    const d = ensure();
+    return has(d.courses, String(courseId));
   },
 
   /** Detached copy, safe to hand to UI code that mutates. */
@@ -549,7 +584,7 @@ export const Save = {
    * @returns {boolean}
    */
   collectCrest(courseId, crestId) {
-    const rec = this.course(courseId);
+    const rec = ensureCourse(courseId);
     const id = String(crestId);
     if (!idOk(id, MAX_CREST_ID_LEN)) return false;
     if (rec.crests.indexOf(id) !== -1) return false;
@@ -572,7 +607,7 @@ export const Save = {
 
   /** Raise (never lower) the coins-in-one-visit record. Returns the record value. */
   setCoinsBest(courseId, n) {
-    const rec = this.course(courseId);
+    const rec = ensureCourse(courseId);
     const v = posInt(n, 0);
     if (v <= rec.coinsBest) return rec.coinsBest;
     rec.coinsBest = v;
@@ -582,7 +617,7 @@ export const Save = {
   },
 
   addDeath(courseId) {
-    const rec = this.course(courseId);
+    const rec = ensureCourse(courseId);
     rec.deaths++;
     rec.lastPlayed = Date.now();
     markDirty('death', { courseId: rec.id, deaths: rec.deaths });
@@ -595,7 +630,7 @@ export const Save = {
    * @returns {boolean}
    */
   setBestMs(courseId, crestId, ms) {
-    const rec = this.course(courseId);
+    const rec = ensureCourse(courseId);
     const id = String(crestId);
     if (!idOk(id, MAX_CREST_ID_LEN)) return false;
     const t = msOrNull(ms);
@@ -684,7 +719,10 @@ export const Save = {
       crests += r.crests.length;
       deaths += r.deaths;
       coins += r.coinsBest;
-      played++;
+      /* Only a record with real activity counts as PLAYED. A record that exists
+         because something read it (an older save written before course() stopped
+         minting on read) must never make a virgin profile look like a saved game. */
+      if (courseTouched(r)) played++;
       if (r.cleared) cleared++;
       for (const k in r.bestMs) bestSum += r.bestMs[k];
     }
@@ -708,7 +746,7 @@ export const Save = {
     const d = ensure();
     d.totalPlaytimeMs += Math.round(t);
     if (courseId) {
-      const rec = this.course(courseId);
+      const rec = ensureCourse(courseId);
       rec.playMs += Math.round(t);
       rec.lastPlayed = Date.now();
     }

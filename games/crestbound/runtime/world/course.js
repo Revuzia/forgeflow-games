@@ -143,6 +143,12 @@ const LIGHT_SELECT_HZ = 0.2;  // s between re-selections
  * sub-pixel blob.  The shadow pass is a SECOND full render of every caster, so
  * this threshold is the cheapest lever there is on both draws and triangles.
  */
+/**
+ * Default world bounding radius below which a mesh stops casting a shadow.
+ * The active QUALITY preset's `shadowCasterRadius` overrides it per tier
+ * (settings.js); this constant is the value HIGH still uses, so making it a
+ * tier knob changed nothing about how HIGH looks.
+ */
 const SHADOW_MIN_RADIUS = 1.5;
 
 /** Hazards that are course-spanning: never distance-cull their visuals. */
@@ -178,6 +184,11 @@ const COURSE_KINDS = Object.freeze({ terrain: 1, water: 1, text: 1, light: 1 });
 
 /** Climbable kinds: a ladder Volume is synthesised when the builder ships none. */
 const CLIMB_KINDS = Object.freeze({ pole: 1, net: 1, tree: 1 });
+
+/** How far a gate's walk-in trigger reaches OUT of the frame, into the room.
+ *  The wall collider stops Nim ~0.38 m (his radius) short of the picture plane,
+ *  so anything shallower than that can never contain his feet. */
+const GATE_TRIGGER_DEPTH = 1.35;
 
 /* ── module-scope scratch — NO per-frame allocation below this line ──────── */
 const _v1 = new THREE.Vector3();
@@ -480,12 +491,23 @@ varying float vSeed;
 varying float vCore;
 varying float vDepth;
 varying float vAxisD;
+varying float vHeightM;
 void main(){
   vUv = uv; vState = aState; vSeed = aSeed;
   vec3 p = position;
   float grow = mix(0.60, 1.0, aState) + aPulse * 0.24;
   p.x *= grow; p.z *= grow;
-  p.y *= mix(0.52, 1.0, aState);
+  /* An UNLIT pad used to compress to 52 % of height. With the hero window
+   * below (fragment stage: nothing is drawn under ~3.6 m) that left a 4.8 m
+   * column with only its top 1.2 m eligible — and the cap term fades exactly
+   * there, so an un-reached checkpoint would have shown no shaft at all and
+   * stopped being a beacon. State is already carried by colour, by the 0.26
+   * alpha floor and by the radial grow; height need not carry it too. */
+  p.y *= mix(0.80, 1.0, aState);
+  /* METRES above the pad, AFTER the state scale. The fragment stage needs a
+   * real world height (not uv.y) to hold the hero window open at a fixed
+   * 3.4 m no matter whether the pad is lit (9.2 m tall) or dark (4.8 m). */
+  vHeightM = p.y;
   vec4 mv = modelViewMatrix * instanceMatrix * vec4(p, 1.0);
   vDepth = -mv.z;
   vec4 wo = modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
@@ -499,12 +521,31 @@ void main(){
 }`;
 
 /**
- * The two near-fades are load-bearing, not polish.  Standing ON a pad puts the
+ * The near-fades are load-bearing, not polish.  Standing ON a pad puts the
  * third-person camera INSIDE the cylinder; without the depth fade the near wall
  * paints the whole frame with an additive wash, and without the AXIS fade the
  * column's upper half (9 m tall, so 4-9 m away from a camera at the pad) arcs a
- * tinted dome across the top of the frame.  Both were measured on Ascendant and
- * ported with the numbers intact.
+ * tinted dome across the top of the frame.
+ *
+ * ROUND 1 VISUAL FIX (owner-observed, `_shots/verify_keep.png` +
+ * `_shots/verify_v1.png`): the ported Ascendant fades only fire when the camera
+ * is INSIDE the tube.  A third-person camera sits ~6.5 m behind the hero, so at
+ * the spawn pad `vAxisD` was ~6.5 and `vDepth` ~6 — BOTH fades read 1.0, the
+ * column stayed at full density, and because the old height profile
+ * (`pow(1-h, 1.65)`) peaked at h=0 the tube was BRIGHTEST at exactly hero
+ * height.  Nim was swallowed at every checkpoint station of both courses.
+ *
+ * Two changes, both at this generator:
+ *   1. HERO WINDOW — `vHeightM` is metres above the pad, and the column now
+ *      fades in across 2.05 m -> 3.60 m.  Nothing is drawn where the hero
+ *      stands; the shaft begins above his head and still reads as a pillar of
+ *      light across a bowl.  The ground read is carried by the ring, the
+ *      shockwave and the glyph, which are the silhouette the contract asks for.
+ *   2. ACTIVE-PAD CARVE-OUT — the axis fade widens from 1.5..3.2 m to
+ *      2.4..8.0 m, so the pad the player is standing on contributes almost
+ *      nothing while distant pads keep the full beacon.
+ * `fall` relaxes from 1.65 to 1.10 so the surviving upper shaft keeps its
+ * density instead of collapsing with the base it no longer draws.
  */
 const COLUMN_FRAG = `
 uniform vec3  uColorOff;
@@ -517,16 +558,28 @@ varying float vSeed;
 varying float vCore;
 varying float vDepth;
 varying float vAxisD;
+varying float vHeightM;
 void main(){
   float h = clamp(vUv.y, 0.0, 1.0);
-  float fall = pow(1.0 - h, 1.65);
+  float fall = pow(1.0 - h, 1.10);
   float cap  = smoothstep(1.0, 0.52, h);
   float band = 0.5 + 0.5 * sin(h * 21.0 - uTime * (1.05 + 2.6 * vState) + vSeed * 6.2831);
   float a = fall * cap * vCore * (0.70 + 0.30 * band);
   a *= mix(0.26, 1.0, vState) * uGain;
   a *= mix(1.0, 0.58, smoothstep(70.0, 250.0, vDepth));
   a *= smoothstep(0.35, 3.5, vDepth);
-  a *= smoothstep(1.5, 3.2, vAxisD);
+  /* the hero window: never draw the shaft at head height */
+  a *= smoothstep(2.05, 3.60, vHeightM);
+  /* ROUND 2 — the owner's literal instruction, which round 1 only half met:
+   * "ring + ground glow with NO FULL-HEIGHT PILLAR at the ACTIVE checkpoint."
+   * At 2.40..8.00 a third-person camera 6.5 m back still read 0.73, so the pad
+   * under the hero kept a 9 m tube that filled a quarter of the frame and
+   * washed the whole background to its own hue (_shots/_v38_verdant.png
+   * cropped to _shots/_zz_greenslab.png: the castle, the hills and the sky
+   * behind it are all tinted mint by it).  The station you are STANDING at now
+   * contributes nothing at all; the beacon fades up only once a pad is far
+   * enough away to be a navigation cue rather than a filter over the world. */
+  a *= smoothstep(9.00, 19.00, vAxisD);
   if (a <= 0.0025) discard;
   vec3 col = mix(uColorOff, uColorOn, vState);
   col *= 0.85 + 1.15 * vState + 0.30 * band;
@@ -2743,6 +2796,9 @@ export class Course {
    */
   _pruneShadowCasters() {
     let dropped = 0;
+    const q = (this.engine && this.engine.quality) || null;
+    const minR = (q && Number.isFinite(q.shadowCasterRadius))
+      ? q.shadowCasterRadius : SHADOW_MIN_RADIUS;
     this.group.traverse((obj) => {
       if (!obj.isMesh || !obj.castShadow) return;
       const m = obj.material;
@@ -2760,7 +2816,7 @@ export class Course {
           obj.updateWorldMatrix(true, false);
           _v4.setFromMatrixScale(obj.matrixWorld);
           const sc = Math.max(_v4.x, _v4.y, _v4.z) || 1;
-          if (g.boundingSphere.radius * sc < SHADOW_MIN_RADIUS) bad = true;
+          if (g.boundingSphere.radius * sc < minR) bad = true;
         }
       }
       if (bad) { obj.castShadow = false; dropped++; }
@@ -3026,10 +3082,52 @@ export class Course {
     const off = this.palette.checkpoint;
     const on = this.palette.checkpointOn;
 
-    /* 1. the physical pad (a real PBR material, tinted per instance) */
+    /* 1. the physical pad (a real PBR material, tinted per instance)
+     *
+     * ROUND 2 READABILITY FIX. `contrastcheck.py` samples the walked surface
+     * just below the hero's feet — and at a checkpoint station that surface is
+     * THIS DISC, not the floor. Measured (contrastcheck 17:56, every station of
+     * both courses): keep spawn deck [33,64,74] vs band [97,88,93] = 1.61:1,
+     * keep cp1 2.12, cp3 1.78, verdant cp1 [34,141,134] = 2.05 — i.e. the pad a
+     * player lands on is DARKER than the floor it sits in, at seven of ten
+     * stations, against a 3.5:1 law.
+     *
+     * The cause is the material, not the tint: `metal` has no diffuse albedo,
+     * so a metal disc is only what it reflects, and in a dim hall that is
+     * nothing — the same "a mirror in a dim hall renders as a dark floor"
+     * failure the marble bake hit. A checkpoint pad is a LANDABLE SURFACE, so
+     * it is now built out of the walked-surface family and tinted from
+     * `palette.safe`, which is the exact colour the readability law names as
+     * the bright half of the figure/ground pair. The checkpoint IDENTITY is
+     * carried where it always was: the ring, the shockwave, the glyph and the
+     * beacon, all in `checkpointOn`. */
     const baseGeo = chamferDisc(1.55, 0.14, 0.06, 44);
     this._own(baseGeo);
-    const baseMesh = new THREE.InstancedMesh(baseGeo, this._mat('metal'), n);
+    /* NO per-instance tint. `setColorAt` writes `instanceColor`, which three
+     * only multiplies into the albedo when the material also has
+     * `vertexColors: true` — and turning that on for a geometry with no `color`
+     * attribute makes WebGL feed the shader the default generic attribute
+     * (0,0,0), i.e. it BLACKENS the mesh. Measured both ways this session:
+     * untinted stone gave a light readable pad (`_shots/verdant-1/cp1.png`),
+     * the "tinted" version gave a dark green disc and dropped verdant cp1 from
+     * 2.53:1 to 1.10:1. The stone bank material already carries the theme's own
+     * walked-surface tint, which is the colour the readability law wants here. */
+    /* A checkpoint pad is a LANDING TARGET, and the readability law is measured
+     * exactly on it (contrastcheck samples the band under the hero's feet). A
+     * diffuse stone disc inside a hall lit to exposure 0.84 cannot be the bright
+     * half of any figure/ground pair — measured: keep cp1 deck [49,64,68]
+     * against a lit far wall at [117,95,84], i.e. the pad is the DARK half. So
+     * the pad carries a low self-lit floor in the theme's own `safe` hue: it
+     * reads in any light, in any room, without changing a single light in the
+     * rig, and it is well under every theme's bloom threshold so it lifts rather
+     * than glows. Cloned, never the shared bank material (the static merge uses
+     * that one), and owned by the course so it is disposed with it. */
+    const padMat = this._mat('stone').clone();
+    padMat.emissive = new THREE.Color(this.palette.safe);
+    padMat.emissiveIntensity = 0.55;
+    padMat.name = 'cb.cp.pad';
+    this._own(padMat);
+    const baseMesh = new THREE.InstancedMesh(baseGeo, padMat, n);
     baseMesh.castShadow = false;
     baseMesh.receiveShadow = true;
     baseMesh.frustumCulled = false;
@@ -3082,8 +3180,12 @@ export class Course {
     this._cpGlyph = glyphMesh;
 
     /* 5. the pillar of light — the silhouette that says CHECKPOINT across a bowl */
-    const colGeo = new THREE.CylinderGeometry(1.02, 1.30, 9.2, 22, 1, true);
-    colGeo.translate(0, 4.6, 0);
+    /* ROUND 2: 1.02/1.30 m over 9.2 m is a 2.6 m wide, 9 m tall wall of light —
+     * as a DISTANT beacon that is a slab, not a shaft.  A beacon reads by being
+     * tall and NARROW; halving the radius costs nothing and stops the far pads
+     * tinting whatever is behind them. */
+    const colGeo = new THREE.CylinderGeometry(0.52, 0.86, 8.6, 18, 1, true);
+    colGeo.translate(0, 4.3, 0);
     this._own(colGeo);
     this._cpAttachAttrs(colGeo);
     const colMat = this._fxMaterial(COLUMN_VERT, COLUMN_FRAG, {
@@ -3102,10 +3204,8 @@ export class Course {
       const cp = this.checkpoints[i];
       _m1.makeTranslation(cp.pos.x, cp.pos.y, cp.pos.z);
       for (let m = 0; m < meshes.length; m++) meshes[m].setMatrixAt(i, _m1);
-      baseMesh.setColorAt(i, _colScratch.copy(off).multiplyScalar(0.75));
     }
     for (let m = 0; m < meshes.length; m++) meshes[m].instanceMatrix.needsUpdate = true;
-    if (baseMesh.instanceColor) baseMesh.instanceColor.needsUpdate = true;
     this._cpMeshes = meshes;
 
     /* Restore this SESSION's checkpoint (Save.checkpoint is session-scoped by
@@ -3225,14 +3325,14 @@ export class Course {
     a.aState.needsUpdate = true;
     a.aPulse.needsUpdate = true;
     a.aAngle.needsUpdate = true;
-    if (withColor && this._cpBase) {
-      const off = this.palette.checkpoint, on = this.palette.checkpointOn;
-      for (let i = 0; i < cps.length; i++) {
-        _colScratch.copy(off).lerp(on, cps[i].state).multiplyScalar(0.75 + 0.6 * cps[i].state);
-        this._cpBase.setColorAt(i, _colScratch);
-      }
-      if (this._cpBase.instanceColor) this._cpBase.instanceColor.needsUpdate = true;
-    }
+    /* `withColor` used to re-tint the pad's instanceColor on lighting. That was
+     * always a no-op (the pad material has no `vertexColors`, so nothing reads
+     * the varying — see the pad note in _buildCheckpoints) and, now that the
+     * build no longer allocates instanceColor at all, the first such call would
+     * ALLOCATE it and change the shader permutation mid-play for no visible
+     * gain. The lit/unlit read is carried by the ring, shockwave, glyph and
+     * beacon, all of which key off `aState` in their own shaders. */
+    void withColor;
   }
 
   /**
@@ -3427,20 +3527,10 @@ export class Course {
       if (!volume && Array.isArray(built.volumes) && built.volumes.length) volume = built.volumes[0];
     }
 
-    /* The trigger volume: a thin slab standing in the doorway.  Walking INTO the
-       painting is the interaction, so it reaches a little in front of the frame. */
-    if (!volume) {
-      const fwd = _v1.set(-Math.sin(yaw), 0, -Math.cos(yaw));
-      try {
-        volume = new Volume({
-          center: [pos.x + fwd.x * 0.35, pos.y + h * 0.45, pos.z + fwd.z * 0.35],
-          half: [Math.max(0.7, w * 0.5), Math.max(1.1, h * 0.5), 0.75],
-          quat: [0, yaw, 0],
-          kind: 'trigger',
-          props: { gate: index, course: gd.course },
-        });
-      } catch (e) { volume = null; }
-    }
+    /* The trigger volume: a slab standing in the doorway, on the ROOM side,
+       reaching the floor the player walks in on.  Built (or re-fitted) here
+       because only the Course knows both the authored floor and the art. */
+    volume = this._fitGateTrigger(volume, gd, pos, yaw, w, h, index);
     if (volume) this._addVolume(volume, null);
 
     /* The seal: a shimmer plane in the opening while the gate is locked. */
@@ -3500,6 +3590,82 @@ export class Course {
     };
     if (setOpen) { try { setOpen(0); } catch (e) { /* art hook is optional */ } }
     return gate;
+  }
+
+  /**
+   * Fit a gate's walk-in trigger to the room in front of it.
+   *
+   * WHY THIS EXISTS. The builders place their trigger from the art's own frame
+   * of reference and cannot know two things the Course does: which side of the
+   * wall the room is on, and where its floor is. Left to them the verdant-1
+   * painting's slab sat 0.9 m BEHIND the picture plane (inside the masonry, and
+   * 0.33 m further in than the wall collider lets Nim reach) and floated 0.6 m
+   * above the floor — while `_updateGates` tests `volume.contains(player.pos)`,
+   * and `player.pos` is the FEET (contract §10). The dwell could therefore never
+   * accumulate: walking into the painting did nothing, and only KeyE opened the
+   * card, against contract §26.
+   *
+   * The slab this builds:
+   *   · protrudes IN FRONT of the frame (local +Z — the face the art is on, and
+   *     the side keep.js publishes as `exitP = p − heading(yaw) · 1.9`),
+   *   · spans from the walking floor (authored `exitP.y`, else a raycast, else a
+   *     generous drop below the frame) to the top of the frame,
+   *   · is a little wider than the frame so a shoulder counts as an entry.
+   *
+   * Build-time only — no per-frame allocation.
+   */
+  _fitGateTrigger(volume, gd, pos, yaw, w, h, index) {
+    /* Local +Z is the face of a painting/door (its plate, beads and sigil are
+       all authored at +z), and keep.js's `yaw` is the heading the player HAS
+       walking in, so −heading(yaw) = local +Z = back into the room. */
+    const fx = Math.sin(yaw), fz = Math.cos(yaw);
+
+    /* --- the floor in front of the gate ------------------------------- */
+    let floorY = NaN;
+    if (fin3(gd.exitP)) floorY = gd.exitP[1] - 0.05;
+    if (!fin(floorY) && fin(gd.floor)) floorY = gd.floor;
+    if (!fin(floorY) && this.broadphase && typeof this.broadphase.raycast === 'function') {
+      const org = _v1.set(pos.x + fx * 0.9, pos.y + h * 0.5, pos.z + fz * 0.9);
+      const dir = _v2.set(0, -1, 0);
+      const hit = { t: 0, normal: new THREE.Vector3(), collider: null, heightfield: null };
+      try {
+        if (this.broadphase.raycast(org, dir, h + 10, hit) && fin(hit.t)) floorY = org.y - hit.t;
+      } catch (e) { floorY = NaN; }
+    }
+    if (!fin(floorY)) floorY = pos.y - h * 0.5 - 1.2;
+
+    const top = pos.y + h * 0.5 + 0.15;
+    const bottom = Math.min(floorY - 0.20, pos.y - h * 0.5, top - 0.6);
+    const depth = GATE_TRIGGER_DEPTH;                 // metres in FRONT of the plane
+    const cx = pos.x + fx * (depth * 0.5 - 0.10);
+    const cz = pos.z + fz * (depth * 0.5 - 0.10);
+    const cy = (top + bottom) * 0.5;
+    const hx = Math.max(0.85, w * 0.5 + 0.15);
+    const hy = Math.max(0.6, (top - bottom) * 0.5);
+    const hz = depth * 0.5;
+
+    if (volume && volume.center && volume.half) {
+      volume.center.set(cx, cy, cz);
+      volume.half.set(hx, hy, hz);
+      if (volume.quat && typeof volume.quat.setFromEuler === 'function') {
+        _eulerHolder.rotation.set(0, yaw, 0);
+        volume.quat.copy(_eulerHolder.quaternion);
+      }
+      volume.kind = 'trigger';
+      volume.active = true;
+      if (typeof volume.update === 'function') volume.update();
+      return volume;
+    }
+
+    try {
+      return new Volume({
+        center: [cx, cy, cz],
+        half: [hx, hy, hz],
+        quat: [0, yaw, 0],
+        kind: 'trigger',
+        props: { gate: index, course: gd.course },
+      });
+    } catch (e) { return null; }
   }
 
   /** A framed panel with a shimmering surface — used when builders ship no painting. */
@@ -3934,6 +4100,15 @@ export class Course {
       const w = this.waters[i];
       if (!w.update) continue;
       try { w.update(this._time); } catch (e) { this._once('water', e); }
+    }
+    /* ROUND 2 — the grass has never swayed. terrain.js owns ONE shared wind
+     * clock and exports `setGrassTime`, and grep says nothing in `runtime/`
+     * outside terrain.js ever wrote it: the only writer is the terrain record's
+     * own `update(t)`, which no caller ever invoked. So CONTRACT §18's "wind
+     * sway shader" has been running at t = 0 since the module was written —
+     * a dead uniform, not a missing feature. Same visual clock as the water. */
+    if (this.terrains.length && typeof TerrainMod.setGrassTime === 'function') {
+      try { TerrainMod.setGrassTime(this._time); } catch (e) { this._once('grasstime', e); }
     }
   }
 

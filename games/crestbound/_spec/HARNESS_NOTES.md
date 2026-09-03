@@ -41,3 +41,39 @@ UnrealBloomPass, SMAAPass, OutputPass, MaskPass, Pass + FXAA/SMAA/Copy/Output sh
 ## Chrome contention
 Pointer-lock and fps checks false-fail when several headed Chromes run at once (learned on
 Ascendant). Run browser gates ONE at a time; parallel lanes must use headless.
+
+**Measured 2026-09-02, feel lane.** Even HEADLESS gates false-fail under contention if they
+time anything off the wall clock. With five other lanes' browser gates running, one
+`feelcheck.py --headless` run reported `runup_time 0.524 s` (band ≤ 0.250), `pound_hang`
+"no hang phase observed (state crouch)", `poundjump_apex 1.910` (want 2.882) and
+`longjump_dist 6.864 m`; the two runs on either side of it, same build, no code change,
+reported `0.213 s / 0.198 s / 2.882 / 7.558 m` and 0 failing. Cause: `engine.js` accumulates
+`elapsed` from a CAPPED per-frame dt, so under a slow renderer GAME time runs behind WALL
+time and every `performance.now()` duration inflates. feelcheck.py now times every setup
+wait and every measured duration off `CRESTBOUND.engine.elapsed` (`simNow()`), with
+wall-clock runaway guards; only `measureFrameDt` still reads `performance.now()`.
+Two consequences worth remembering: a wall-clock timeout in a browser harness is a bug, not
+a safety net; and a gate that flips green/red on machine load is not evidence either way —
+re-run before believing a regression.
+
+**RESIDUAL, still open (2026-09-02, feel lane).** The clock fix removes the timing
+DRIFT; it cannot fix the SIMULATION RESOLUTION. engine.js caps dt, so under a slow
+renderer one rendered frame advances a large slice of game time, and feelcheck drives its
+setup with `wait()` between key presses. When a press/release pair meant to span several
+frames collapses into ONE, the move never fires: a loaded run reported `longjump_dist
+3.704 m ... states jump1,fall,land` (the crouch never registered before the jump) and
+`pound_hang no hang phase observed (state crouch)` (the hero was still grounded when
+crouch went down) — moves whose code was not touched. Same build, quiet frames: 7.558 m
+and 0.190 s, 0 failing (measured three times: stop_time 0.148 / 0.140 / 0.137,
+wallkick_vy 12.000 every time).
+The real fix is the one `feelshots.py` already uses: `engine.stop()` and hand-step
+`game.update(1/60)` so the harness is independent of the renderer. That is a rewrite of
+feelcheck's driver, not a tuning change — do it before trusting a single feelcheck run
+taken while other browser gates are running.
+
+**Also measured 2026-09-02:** `feelshots.py --headless` launches with
+`--use-gl=angle --use-angle=swiftshader`, so its screenshots rasterise on the CPU. That is
+fine for its trajectories (it hand-steps `game.update(1/60)` and never times off the wall
+clock) but a full `feelshots.py` run WITH strips did not finish a single 8-frame move in 22
+minutes under contention. Use `--no-shots` for the numbers, and `--headed` when you need the
+strips.
