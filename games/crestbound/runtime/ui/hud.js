@@ -52,6 +52,19 @@ const RACE_LOW_MS = 10000;
 const POWER_LOW_S = 5;
 const RIBBON_MS = 3200;
 const TALLY_PEEK_MS = 3400;
+
+/* --- centre-screen announcement layer -----------------------------------
+ * .ch-ribbon (crest reveal) and .ch-word (checkpoint / death wordmark) are both
+ * absolutely centred, so two of them on screen at once is four superimposed
+ * lines and nothing legible. ONE announcement owns the centre at a time; the
+ * rest queue behind it by priority, and a higher priority takes the stage
+ * immediately (dying mid-celebration must read as dying).
+ * -------------------------------------------------------------------- */
+const ANN_PRI = { checkpoint: 1, crest: 2, death: 3 };
+const ANN_MAX_WAIT = 1200;   // ms a queued announcement will ever wait for the stage
+const ANN_STALE = 2600;      // ms after which a queued announcement is no longer news
+const ANN_TAIL_MS = 260;     // the authored fade-out we skip to when we cut one short
+const ANN_QUEUE_MAX = 2;
 const POWER_LABEL = { wing: 'WING', metal: 'METAL', vanish: 'VANISH' };
 const POWER_ICON = { wing: 'wing', metal: 'crest', vanish: 'sigil' };
 
@@ -74,7 +87,7 @@ export class HUD {
 
     /** last-written value cache — the whole point of a cheap HUD */
     this._c = {
-      realm: '', course: '', theme: null, crests: -1, crestsTotal: -1,
+      realm: '', course: '', theme: null, crests: -1, crestsTotal: -1, isKeep: null,
       coins: -1, coinsOf: -1, coinsFull: null, sigils: -1, sigilsTotal: -1, sigilsFull: null,
       timeRaw: -1, timeMain: '', timeFrac: '', sessionRaw: -1, session: '',
       deaths: -1, cpIndex: -2, cpCount: -1, cpOn: null,
@@ -93,6 +106,14 @@ export class HUD {
     this._toastQueue = [];
     this._deathTimers = [];
     this._tallyTimer = 0;
+
+    /* centre-stage announcement (see ANN_PRI) — exactly one at a time */
+    this._annKind = '';
+    this._annNode = null;
+    this._annAnims = [];
+    this._annTimer = 0;
+    this._annEndAt = 0;
+    this._annQueue = [];
     this._clearOpen = false;
     this._clearKeyHandler = null;
     this._clearResolve = null;
@@ -142,10 +163,22 @@ export class HUD {
       ul.appendChild(li);
       this._crestPips.push({ node, li, liPip, liTxt, id: null, got: false });
     }
+    /* THE HUB READS DIFFERENTLY. In a course the row is 7 pips = this course's
+       7 crests. The Keep has none of its own, so the pips asserted 7 empty
+       slots next to a '0 / 0' tally: two readouts contradicting each other and
+       neither meaning anything. In the Keep the pips are hidden and the tally
+       becomes the number the hub actually runs on — the save's crest total,
+       which is what every gate compares against (contract §29 crestTotal). */
+    const kLab = el('span', 'ch-tally-k');
+    kLab.textContent = 'CRESTS';
+    kLab.style.display = 'none';
+    pips.appendChild(kLab);
+    this.nTallyK = kLab;
     const tn = el('span', 'ch-tally-n');
     this.tTally = textNode(tn, '0 / ' + CRESTS);
     pips.appendChild(tn);
     namesInner.appendChild(ul); names.appendChild(namesInner);
+    this.nPips = pips; this.nNames = names;
     this.nTally.appendChild(pips); this.nTally.appendChild(names);
     tl.appendChild(this.nRealm); tl.appendChild(this.nCourse); tl.appendChild(this.nTally);
     E.appendChild(tl);
@@ -385,7 +418,17 @@ export class HUD {
    * VISIBILITY  (quiet during cinematics)
    * ====================================================================*/
 
-  setVisible(v) { this._visible = !!v; this._paintVisible(); }
+  /**
+   * Master visibility. Turning the HUD OFF is a state change (course load, Keep
+   * return, cinematic), and the centre-stage layers are siblings of .ch-play, so
+   * they must be struck too — otherwise a crest ribbon rides the whole load and
+   * is still on screen in the Keep. `hideFor()` is the death dip and must NOT.
+   */
+  setVisible(v) {
+    this._visible = !!v;
+    if (!this._visible) this._annClear(true);
+    this._paintVisible();
+  }
 
   /** Reason-scoped hide so the death sequence, menus and cinematics never fight. */
   hideFor(reason) { this._hidden.add(reason); this._paintVisible(); }
@@ -429,9 +472,21 @@ export class HUD {
       ], { duration: 460, easing: UI_TOKENS.ease.out });
     }
 
+    /* --- hub vs course: which collectible readouts mean anything ---------- */
+    /* `isKeep` has been in the snapshot since the hub existed (game.js sets it
+       every frame) and the HUD never read it, so the hub wore the whole course
+       cluster: 7 empty crest pips over '0 / 0', a coin chip counting to 100 in
+       a hub that places no coins, an empty sigil pill and a '—' checkpoint. */
+    const isKeep = !!s.isKeep;
+    if (isKeep !== c.isKeep) {
+      c.isKeep = isKeep;
+      this._setHubMode(isKeep);
+      c.crests = -1; c.crestsTotal = -1;      // force the tally text to rewrite
+    }
+
     /* --- crest tally ----------------------------------------------------- */
     const ids = s.crestIds;
-    if (Array.isArray(ids)) {
+    if (!isKeep && Array.isArray(ids)) {
       for (let i = 0; i < ids.length && i < CRESTS; i++) {
         const e = ids[i];
         if (!e) continue;
@@ -448,14 +503,22 @@ export class HUD {
         }
       }
     }
-    const crests = s.crests != null ? s.crests | 0 : this._countGot();
-    const crestsTotal = s.crestsTotal != null ? s.crestsTotal | 0 : CRESTS;
+    /* In the hub the pair is the SAVE's global total over every crest in the
+       game (game.js already publishes both, `crestTotal` / `crestGrandTotal`) —
+       the number the gates compare against. In a course it is this course's 7. */
+    const crests = isKeep
+      ? (s.crestTotal != null ? s.crestTotal | 0 : 0)
+      : (s.crests != null ? s.crests | 0 : this._countGot());
+    const crestsTotal = isKeep
+      ? (s.crestGrandTotal != null ? s.crestGrandTotal | 0 : 0)
+      : (s.crestsTotal != null ? s.crestsTotal | 0 : CRESTS);
     if (crests !== c.crests || crestsTotal !== c.crestsTotal) {
       c.crests = crests; c.crestsTotal = crestsTotal;
       this.tTally.nodeValue = crests + ' / ' + crestsTotal;
     }
 
-    /* --- coins (roll-up) ------------------------------------------------- */
+    /* --- coins / sigils (hub: hidden, so not even measured) --------------- */
+    if (!isKeep) {
     const coins = s.coins != null ? s.coins | 0 : 0;
     if (coins !== c.coins) {
       const up = c.coins >= 0 && coins > c.coins;
@@ -481,6 +544,7 @@ export class HUD {
       for (let i = 0; i < this._sigilPips.length; i++) this._sigilPips[i].set(i < sig, up && i === sig - 1);
       const full = sig >= sigTotal && sigTotal > 0;
       if (full !== c.sigilsFull) { c.sigilsFull = full; this.nSigils.classList.toggle('is-full', full); }
+    }
     }
 
     /* --- timers ---------------------------------------------------------- */
@@ -509,14 +573,18 @@ export class HUD {
     }
 
     /* --- checkpoint pip -------------------------------------------------- */
-    /* cpIndex is the 0-based index of the active checkpoint (Save.checkpoint →
-       int|null); null / undefined / −1 = none yet. */
+    /* `cpIndex` is the index into course.checkpoints[], where slot 0 IS the
+       spawn — so it is already the count of checkpoints REACHED (0 = none yet),
+       and `cpCount` is `checkpoints.length - 1`, the number of real ones. The
+       pip therefore renders it straight. Adding 1 here claimed "CHECKPOINT 1/4"
+       at the spawn, and put "2 / 4" on screen beside the toast that game.js was
+       raising for the same event as "CHECKPOINT 1 / 4". One fact, one number. */
     const cpCount = s.cpCount != null ? s.cpCount | 0 : 0;
     const cpIndex = s.cpIndex == null ? -1 : s.cpIndex | 0;
-    if (cpIndex !== c.cpIndex || cpCount !== c.cpCount) {
-      const on = cpIndex >= 0 && cpCount > 0;
+    if (!isKeep && (cpIndex !== c.cpIndex || cpCount !== c.cpCount)) {
+      const on = cpIndex > 0 && cpCount > 0;
       c.cpIndex = cpIndex; c.cpCount = cpCount;
-      this.tCp.nodeValue = on ? (Math.min(cpIndex + 1, cpCount)) + ' / ' + cpCount : (cpCount > 0 ? '0 / ' + cpCount : '—');
+      this.tCp.nodeValue = cpCount > 0 ? Math.min(Math.max(cpIndex, 0), cpCount) + ' / ' + cpCount : '—';
       if (on !== c.cpOn) { c.cpOn = on; this.nCp.classList.toggle('on', on); }
     }
 
@@ -613,7 +681,16 @@ export class HUD {
     return n;
   }
 
-  /** Coins-crest threshold from the course def (type 'coins' → threshold), else 100. */
+  /**
+   * Coins-crest threshold from the course def (type 'coins' → threshold).
+   *
+   * Returns 0 when the def declares NO coin crest — the honest answer, and the
+   * one the chip needs: the fallback used to be a flat 100 borrowed from the
+   * course rules, which is how the Keep (`coins: []`, no `crests` key at all)
+   * ended up printing '0 / 100'. Mirrors Game.coinsGoal — one rule, two
+   * surfaces; the clear panel, which only ever runs on a cleared COURSE, keeps
+   * its own 100 fallback.
+   */
   _coinsThreshold() {
     try {
       const d = this.game && this.game.course && this.game.course.def;
@@ -624,7 +701,25 @@ export class HUD {
         }
       }
     } catch (e) { /* ignore */ }
-    return COINS_FOR_CREST;
+    return 0;
+  }
+
+  /**
+   * Swap the top-left tally and the bottom-left collectible cluster between
+   * COURSE mode (7 crest pips + coins + sigils + checkpoint) and HUB mode
+   * (one global crest total, nothing else). Runs on the transition only.
+   */
+  _setHubMode(on) {
+    for (let i = 0; i < this._crestPips.length; i++) {
+      const n = this._crestPips[i].node;
+      if (n && n.style) n.style.display = on ? 'none' : '';
+    }
+    if (this.nNames) this.nNames.style.display = on ? 'none' : '';
+    if (this.nTallyK) this.nTallyK.style.display = on ? '' : 'none';
+    if (this.nCoins) this.nCoins.style.display = on ? 'none' : '';
+    if (this.nSigils) this.nSigils.style.display = on ? 'none' : '';
+    if (this.nCp) this.nCp.style.display = on ? 'none' : '';
+    if (on) this.expandCrests(false);
   }
 
   /** Bind the 7 pips to the current course's crest defs (id + name). Runs on course change. */
@@ -711,6 +806,107 @@ export class HUD {
   }
 
   /* ======================================================================
+   * CENTRE-STAGE ANNOUNCEMENTS  (crest ribbon / checkpoint / death wordmark)
+   *
+   * Every centred reveal goes through here, so two of them can never paint on
+   * top of each other. The stage holds one; a higher priority takes it away
+   * from a lower one on the spot; a lower one waits (never longer than
+   * ANN_MAX_WAIT — the live one is skipped to its own fade-out to make room)
+   * and is dropped entirely once it is older than ANN_STALE.
+   * ====================================================================*/
+
+  /**
+   * @param {string} kind 'checkpoint'|'crest'|'death'
+   * @param {number} ms   how long the reveal runs
+   * @param {function():HTMLElement} play writes the text, starts the WAAPI
+   *        animations (pushing each into this._annAnims) and returns the node.
+   */
+  _announce(kind, ms, play) {
+    const pri = ANN_PRI[kind] || 0;
+    if (this._annKind) {
+      const live = ANN_PRI[this._annKind] || 0;
+      if (pri >= live) this._annClear(false);      // same or better: take the stage now
+      else { this._annEnqueue(kind, ms, play, pri); return; }
+    }
+    this._annRun(kind, ms, play);
+  }
+
+  _annRun(kind, ms, play) {
+    this._annKind = kind;
+    this._annAnims.length = 0;
+    const node = play();
+    if (!node) { this._annKind = ''; this._annNext(); return; }
+    this._annNode = node;
+    node.classList.add('is-on');
+    this._annEndAt = (typeof performance !== 'undefined' ? performance.now() : Date.now()) + ms;
+    clearTimeout(this._annTimer);
+    this._annTimer = setTimeout(() => { this._annClear(false); this._annNext(); }, ms + 40);
+  }
+
+  _annEnqueue(kind, ms, play, pri) {
+    const q = this._annQueue;
+    const at = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    for (let i = q.length - 1; i >= 0; i--) if (q[i].kind === kind) q.splice(i, 1);
+    q.push({ kind, ms, play, pri, at });
+    q.sort((a, b) => (b.pri - a.pri) || (a.at - b.at));
+    while (q.length > ANN_QUEUE_MAX) q.pop();
+    /* Make room: skip the live reveal to its authored fade-out rather than let a
+       checkpoint wait out a 3.2 s ribbon (or cut it dead, which reads as a bug). */
+    const wait = this._annEndAt - at;
+    if (wait > ANN_MAX_WAIT) {
+      const skip = wait - ANN_MAX_WAIT;
+      for (let i = 0; i < this._annAnims.length; i++) {
+        const a = this._annAnims[i];
+        if (!a) continue;
+        try {
+          const dur = a.effect && a.effect.getTiming ? a.effect.getTiming().duration : 0;
+          if (typeof dur === 'number' && dur > 0) {
+            const t = typeof a.currentTime === 'number' ? a.currentTime : 0;
+            a.currentTime = Math.min(dur, Math.max(t, t + skip, dur - ANN_TAIL_MS));
+          }
+        } catch (e) { /* a finished animation throws on seek — nothing to skip */ }
+      }
+      this._annEndAt = at + ANN_MAX_WAIT;
+      clearTimeout(this._annTimer);
+      this._annTimer = setTimeout(() => { this._annClear(false); this._annNext(); }, ANN_MAX_WAIT + 40);
+    }
+  }
+
+  /** Take the stage down: cancel its animations, hide it, blank its text. */
+  _annClear(dropQueue) {
+    clearTimeout(this._annTimer);
+    this._annTimer = 0;
+    for (let i = 0; i < this._annAnims.length; i++) {
+      const a = this._annAnims[i];
+      if (a && typeof a.cancel === 'function') { try { a.cancel(); } catch (e) { /* already gone */ } }
+    }
+    this._annAnims.length = 0;
+    if (this._annNode) this._annNode.classList.remove('is-on');
+    this._annNode = null;
+    this._annKind = '';
+    this._annEndAt = 0;
+    /* Blank the words too: a hidden node still answers textContent, and a stale
+       "CREST CLAIMED" reported from the Keep is a real defect either way. */
+    this.tRibK.nodeValue = ''; this.tRibN.nodeValue = ''; this.tRibS.nodeValue = '';
+    this.tWord.nodeValue = ''; this.nWordSub.textContent = '';
+    if (dropQueue) this._annQueue.length = 0;
+  }
+
+  _annNext() {
+    const q = this._annQueue;
+    const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    while (q.length) {
+      const it = q.shift();
+      if (now - it.at > ANN_STALE) continue;        // no longer news
+      this._annRun(it.kind, it.ms, it.play);
+      return;
+    }
+  }
+
+  /** Public: the centre of the screen belongs to whatever comes next (state change). */
+  clearAnnounce() { this._annClear(true); }
+
+  /* ======================================================================
    * CREST REVEAL  (big centred ribbon)
    * ====================================================================*/
 
@@ -728,20 +924,26 @@ export class HUD {
       rec.liTxt.textContent = String(d.name).toUpperCase();
     }
     const n = this._countGot();
-    this.tRibK.nodeValue = d.type === 'boss' ? 'WARDEN FELLED' : d.type === 'race' ? 'RACE WON' : 'CREST CLAIMED';
-    this.tRibN.nodeValue = d.name ? String(d.name).toUpperCase() : 'A CREST';
-    this.tRibS.nodeValue = n + ' OF ' + CRESTS + (n >= CRESTS ? ' · COURSE COMPLETE' : '');
+    const kick = d.type === 'boss' ? 'WARDEN FELLED' : d.type === 'race' ? 'RACE WON' : 'CREST CLAIMED';
+    const name = d.name ? String(d.name).toUpperCase() : 'A CREST';
+    const sub = n + ' OF ' + CRESTS + (n >= CRESTS ? ' · COURSE COMPLETE' : '');
 
-    animateOnce(this.nRibbon, [
-      { opacity: 0, transform: 'translate(-50%,-50%) scale(.82)', filter: 'blur(6px)', easing: UI_TOKENS.ease.spring },
-      { opacity: 1, transform: 'translate(-50%,-50%) scale(1)', filter: 'blur(0)', offset: 0.14 },
-      { opacity: 1, transform: 'translate(-50%,-50%) scale(1.01)', filter: 'blur(0)', offset: 0.82, easing: UI_TOKENS.ease.in },
-      { opacity: 0, transform: 'translate(-50%,-52%) scale(1.04)', filter: 'blur(3px)' },
-    ], { duration: RIBBON_MS, easing: 'linear', fill: 'forwards' });
-    animateOnce(this.nRibbonEmblem, [
-      { transform: 'rotate(-90deg) scale(.4)' },
-      { transform: 'rotate(0) scale(1)' },
-    ], { duration: 700, easing: UI_TOKENS.ease.spring });
+    this._announce('crest', RIBBON_MS, () => {
+      this.tRibK.nodeValue = kick;
+      this.tRibN.nodeValue = name;
+      this.tRibS.nodeValue = sub;
+      this._annAnims.push(animateOnce(this.nRibbon, [
+        { opacity: 0, transform: 'translate(-50%,-50%) scale(.82)', filter: 'blur(6px)', easing: UI_TOKENS.ease.spring },
+        { opacity: 1, transform: 'translate(-50%,-50%) scale(1)', filter: 'blur(0)', offset: 0.14 },
+        { opacity: 1, transform: 'translate(-50%,-50%) scale(1.01)', filter: 'blur(0)', offset: 0.82, easing: UI_TOKENS.ease.in },
+        { opacity: 0, transform: 'translate(-50%,-52%) scale(1.04)', filter: 'blur(3px)' },
+      ], { duration: RIBBON_MS, easing: 'linear', fill: 'forwards' }));
+      this._annAnims.push(animateOnce(this.nRibbonEmblem, [
+        { transform: 'rotate(-90deg) scale(.4)' },
+        { transform: 'rotate(0) scale(1)' },
+      ], { duration: 700, easing: UI_TOKENS.ease.spring }));
+      return this.nRibbon;
+    });
 
     /* peek the tally names so the player sees which slot just filled */
     this.expandCrests(true);
@@ -769,15 +971,18 @@ export class HUD {
       { opacity: 0, transform: 'scale(' + target.toFixed(2) + ')', borderWidth: '1px' },
     ], { duration: 900, easing: 'linear', fill: 'forwards' });
 
-    this.nWord.style.setProperty('--wc', 'var(--cp)');
-    this.tWord.nodeValue = 'CHECKPOINT';
-    this.nWordSub.textContent = 'PROGRESS KEPT';
-    animateOnce(this.nWord, [
-      { opacity: 0, transform: 'translate(-50%,-50%) scale(1.22)', filter: 'blur(6px)', easing: UI_TOKENS.ease.out },
-      { opacity: 1, transform: 'translate(-50%,-50%) scale(1)', filter: 'blur(0)', offset: 0.24 },
-      { opacity: 1, transform: 'translate(-50%,-50%) scale(1.01)', filter: 'blur(0)', offset: 0.66, easing: UI_TOKENS.ease.in },
-      { opacity: 0, transform: 'translate(-50%,-50%) scale(1.05)', filter: 'blur(2px)' },
-    ], { duration: 900, easing: 'linear', fill: 'forwards' });
+    this._announce('checkpoint', 900, () => {
+      this.nWord.style.setProperty('--wc', 'var(--cp)');
+      this.tWord.nodeValue = 'CHECKPOINT';
+      this.nWordSub.textContent = 'PROGRESS KEPT';
+      this._annAnims.push(animateOnce(this.nWord, [
+        { opacity: 0, transform: 'translate(-50%,-50%) scale(1.22)', filter: 'blur(6px)', easing: UI_TOKENS.ease.out },
+        { opacity: 1, transform: 'translate(-50%,-50%) scale(1)', filter: 'blur(0)', offset: 0.24 },
+        { opacity: 1, transform: 'translate(-50%,-50%) scale(1.01)', filter: 'blur(0)', offset: 0.66, easing: UI_TOKENS.ease.in },
+        { opacity: 0, transform: 'translate(-50%,-50%) scale(1.05)', filter: 'blur(2px)' },
+      ], { duration: 900, easing: 'linear', fill: 'forwards' }));
+      return this.nWord;
+    });
     pulseClass(this.nCp, 'is-hit', 500);
     animateOnce(this.nCp, [{ transform: 'scale(1)' }, { transform: 'scale(1.12)', offset: 0.3 }, { transform: 'scale(1)' }],
       { duration: 480, easing: UI_TOKENS.ease.spring });
@@ -793,15 +998,21 @@ export class HUD {
       { opacity: 0 }, { opacity: 0.95, offset: 0.09 }, { opacity: 0.58, offset: 0.42 }, { opacity: 0 },
     ], { duration: 760, easing: 'linear', fill: 'forwards' });
 
-    this.nWord.style.setProperty('--wc', col);
-    this.tWord.nodeValue = info.label;
-    this.nWordSub.textContent = '';
-    animateOnce(this.nWord, [
-      { opacity: 0, transform: 'translate(-50%,-50%) scale(.9)', filter: 'blur(5px)', easing: UI_TOKENS.ease.out },
-      { opacity: 1, transform: 'translate(-50%,-50%) scale(1.02)', filter: 'blur(0)', offset: 0.18 },
-      { opacity: 1, transform: 'translate(-50%,-50%) scale(1.02)', filter: 'blur(0)', offset: 0.62, easing: UI_TOKENS.ease.in },
-      { opacity: 0, transform: 'translate(-50%,-50%) scale(1.05)', filter: 'blur(3px)' },
-    ], { duration: 760, easing: 'linear', fill: 'forwards' });
+    /* Dying outranks every other reveal: the queue is dropped, not deferred —
+       a "CHECKPOINT" that lands during the rewind is no longer true. */
+    this._annQueue.length = 0;
+    this._announce('death', 760, () => {
+      this.nWord.style.setProperty('--wc', col);
+      this.tWord.nodeValue = info.label;
+      this.nWordSub.textContent = '';
+      this._annAnims.push(animateOnce(this.nWord, [
+        { opacity: 0, transform: 'translate(-50%,-50%) scale(.9)', filter: 'blur(5px)', easing: UI_TOKENS.ease.out },
+        { opacity: 1, transform: 'translate(-50%,-50%) scale(1.02)', filter: 'blur(0)', offset: 0.18 },
+        { opacity: 1, transform: 'translate(-50%,-50%) scale(1.02)', filter: 'blur(0)', offset: 0.62, easing: UI_TOKENS.ease.in },
+        { opacity: 0, transform: 'translate(-50%,-50%) scale(1.05)', filter: 'blur(3px)' },
+      ], { duration: 760, easing: 'linear', fill: 'forwards' }));
+      return this.nWord;
+    });
 
     /* HUD dips for the 220 ms rewind + respawn (§28 budget ≤ 700 ms median). */
     for (const t of this._deathTimers) clearTimeout(t);
@@ -836,6 +1047,9 @@ export class HUD {
   courseClear(summary) {
     const s = summary || {};
     const c = this._c;
+    /* The panel owns the screen now — a crest ribbon still fading behind it
+       reads as ghost letters through the card. */
+    this._annClear(true);
     const timeMs = s.timeMs != null ? Number(s.timeMs) : c.timeRaw;
     const prev = s.prevBest != null ? s.prevBest : (s.bestMs != null && s.bestMs < timeMs ? s.bestMs : null);
     const isRecord = s.isRecord != null ? !!s.isRecord : (prev == null || timeMs < prev);
@@ -870,7 +1084,7 @@ export class HUD {
     /* ONE denominator everywhere: the crest threshold (100 unless the course
        authors its own), never the count of coins PLACED in the course — the
        clear panel used to print "0 / 121" beside a HUD chip reading "37 / 100". */
-    const coinsTotal = this._coinsThreshold();
+    const coinsTotal = this._coinsThreshold() || COINS_FOR_CREST;
     const sig = s.sigils != null ? s.sigils | 0 : Math.max(0, c.sigils);
     const sigTotal = s.sigilsTotal != null ? s.sigilsTotal | 0 : SIGILS;
     const deaths = s.deaths != null ? s.deaths | 0 : Math.max(0, c.deaths);
@@ -977,6 +1191,7 @@ export class HUD {
     padNav.release(this._padHandler);
     for (const t of this._deathTimers) clearTimeout(t);
     clearTimeout(this._tallyTimer);
+    this._annClear(true);
     this.clearToasts();
     if (this.el && this.el.parentNode) this.el.parentNode.removeChild(this.el);
     if (UIRegistry.hud === this) UIRegistry.hud = null;

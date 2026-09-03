@@ -44,6 +44,7 @@ for _s in (sys.stdout, sys.stderr):
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_URL = "http://localhost:8788/games/crestbound/index.html"
+CP_NUMBERS_JS = "() => {\n  const g = CRESTBOUND.game;\n  const chip = document.querySelector('#hud .ch-cp');\n  const toast = [...document.querySelectorAll('#hud .ch-toast .t1')]\n      .map(n => (n.textContent||'').trim())\n      .filter(t => /^CHECKPOINT\\s+\\d+\\s*\\/\\s*\\d+$/.test(t))[0] || null;\n  const m = toast ? toast.match(/(\\d+)\\s*\\/\\s*(\\d+)/) : null;\n  return { cpIndex: g.cpIndex, cpCount: Math.max(0, (g._cpCount|0) - 1),\n           chip: chip ? (chip.textContent||'').trim() : null,\n           toast: toast, toastN: m ? +m[1] : null, toastTot: m ? +m[2] : null };\n}"
 OUT_DIR = os.path.normpath(os.path.join(HERE, "..", "_shots", "ui"))
 
 # HARNESS_NOTES: plain headless Chrome reaches the real Intel UHD GPU over d3d11
@@ -500,9 +501,31 @@ def phase_play(pg, cap, url):
     ok("standing at the painting raises the walk-in prompt",
        bool(prompt and "show" in (prompt["cls"] or "") and prompt["text"]), json.dumps(prompt)[:220])
 
-    pg.keyboard.down("KeyW")
-    got, st = wait_state(pg, ("card",), 22)
-    pg.keyboard.up("KeyW")
+    # WALK in on the analog stick, STEERED at the painting every 100 ms.
+    # Holding a raw key assumes the movement frame equals `cam.yaw`; it does not —
+    # `yawForMovement` is `yaw + _yawSlide`, and the camera's wall-slide can sit
+    # ~0.5 rad off-axis, which sends a blind forward-hold diagonally into the wall
+    # (measured: 1 run in 6). A player steers; so does this. Real analog input via
+    # `input.__test.stick` (contract §4 calls it the analog injection point).
+    STEER_JS = """(g) => {
+      const G = CRESTBOUND.game, p = G.player, c = G.cam, i = G.input;
+      let dx = g.pos[0] - p.pos.x, dz = g.pos[2] - p.pos.z;
+      const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
+      const y = (c && typeof c.yawForMovement === 'number') ? c.yawForMovement : (c ? c.yaw : 0);
+      const fx = -Math.sin(y), fz = -Math.cos(y);   // camera forward (flat)
+      const rx = -fz,          rz =  fx;            // camera right
+      i.__test.stick(dx * rx + dz * rz, dx * fx + dz * fz);
+      return +L.toFixed(2);
+    }"""
+    got, st, t0 = False, None, time.time()
+    while time.time() - t0 < 22:
+        pg.evaluate(STEER_JS, gate)
+        st = pg.evaluate(STATE)
+        if st == "card":
+            got = True
+            break
+        pg.wait_for_timeout(100)
+    pg.evaluate("() => CRESTBOUND.game.input.__test.stick(0, 0)")
     how = "walked in"
     if not got:                      # fall back to the other real input path
         pg.keyboard.press("KeyE")
@@ -548,18 +571,25 @@ def phase_play(pg, cap, url):
     # ---- crest ribbon + course-clear panel -------------------------------
     pg.evaluate("() => CRESTBOUND.game.__dev.give('open')")
     cap.still("crest_ribbon_00.png")
+    # The ribbon must be a MOMENT, not a class name: the node has to be painted
+    # (computed opacity, not just offsetParent — `.ch-ribbon` lives in the DOM at
+    # opacity 0 between crests) and it has to carry the crest's own name.
     rib = pg.evaluate("""() => {
       const nodes = [...document.querySelectorAll('#hud *')].filter(n => {
         const c=(n.className&&n.className.baseVal!==undefined)?n.className.baseVal:String(n.className||'');
         return /ribbon|crest/i.test(c) && n.offsetParent!==null;
-      }).map(n=>({cls:(n.className.baseVal!==undefined?n.className.baseVal:n.className),
-                  text:(n.textContent||'').trim().slice(0,80)}));
+      }).map(n=>{ const cs=getComputedStyle(n);
+        return {cls:(n.className.baseVal!==undefined?n.className.baseVal:n.className),
+                op:+parseFloat(cs.opacity||'0').toFixed(3), vis:cs.visibility,
+                text:(n.textContent||'').trim().slice(0,80)}; });
       return { nodes, hudText:(document.getElementById('hud').innerText||'').trim().slice(0,400) };
     }""")
     R["ribbon"] = rib
-    ok("crest ribbon appears on collect",
-       any("ribbon" in (x["cls"] or "").lower() for x in rib["nodes"]),
-       json.dumps(rib["nodes"])[:320])
+    shown = [x for x in rib["nodes"] if "ribbon" in (x["cls"] or "").lower()
+             and x["op"] > 0.5 and x["vis"] != "hidden"]
+    named = [x for x in shown if "CREST" in (x["text"] or "").upper() and len((x["text"] or "")) > 12]
+    ok("crest ribbon appears on collect — painted, and it names the crest",
+       bool(named), json.dumps(shown or rib["nodes"])[:320])
     cap.still("crest_ribbon_01.png")
 
     wait_state(pg, ("clear",), 15)
@@ -618,6 +648,21 @@ def phase_play(pg, cap, url):
       return { nodes, hudText:(document.getElementById('hud').innerText||'').slice(0,300) }; }""")
     R["checkpoint"] = cpt
     ok("checkpoint gives visible HUD feedback", len(cpt["nodes"]) > 0, json.dumps(cpt["nodes"])[:320])
+    # One fact, one number: the persistent pip and the toast celebrating the SAME
+    # checkpoint must agree (the pip used to render cpIndex+1, so it read "2 / 4"
+    # beside a "CHECKPOINT 1 / 4" toast — and "1 / 4" while still on the spawn).
+    pg.wait_for_timeout(400)          # the pip is written by the next HUD update
+    cpn = pg.evaluate(CP_NUMBERS_JS)
+    R["cpNumbers"] = cpn
+    _chip = cpn.get("chip") or ""
+    _m = re.search(r"(\d+)\s*/\s*(\d+)", _chip)
+    _n = int(_m.group(1)) if _m else None
+    _t = int(_m.group(2)) if _m else None
+    ok("the checkpoint pip and the checkpoint toast agree (spawn reads 0)",
+       _n is not None and _n == cpn.get("toastN") and _t == cpn.get("toastTot")
+       and _n == (cpn.get("cpIndex") or 0),
+       "pip=%r toast=%r cpIndex=%s cpCount=%s"
+       % (_chip, cpn.get("toast"), cpn.get("cpIndex"), cpn.get("cpCount")))
     cap.still("checkpoint_00.png")
     cap.still("checkpoint_01.png")
     pg.wait_for_timeout(2200)
@@ -699,6 +744,17 @@ def death_strip(pg, cap):
       const g = CRESTBOUND.game;
       window.__dtrack = [];
       const veil = document.getElementById('cb-veil');
+      /* Sample the veil the way the GAME writes it, not the way a rAF happens to
+         catch it: at 8 fps the one fully-covered frame falls between rAF ticks. */
+      window.__veiltrack = [];
+      if (!g.__veilWrapped) {
+        g.__veilWrapped = true;
+        const orig = g._setVeil.bind(g);
+        g._setVeil = function (a, mode) {
+          window.__veiltrack.push({ dT: g._deathT, a: +(+a).toFixed(4), mode: mode || null });
+          return orig(a, mode);
+        };
+      }
       const t0 = performance.now();
       const tick = () => {
         const t = performance.now() - t0;
@@ -707,6 +763,8 @@ def death_strip(pg, cap):
           rewind:+(g._rewindK||0).toFixed(3),
           x:h?+h.x.toFixed(3):null, y:h?+h.y.toFixed(3):null, z:h?+h.z.toFixed(3):null,
           veil: veil ? +parseFloat(getComputedStyle(veil).opacity||'0').toFixed(3) : null,
+          ir: veil ? (getComputedStyle(veil).display === 'none' ? 100
+                : parseFloat(veil.style.getPropertyValue('--cb-ir') || '100')) : null,
           respawn: g.lastRespawnMs });
         if (t < 1500) requestAnimationFrame(tick);
       };
@@ -767,10 +825,28 @@ def death_strip(pg, cap):
        len(rew) >= 3 and dist > 0.4 and away > 0.35, json.dumps(
            {k: R["rewind"][k] for k in ("frames", "pathLen", "awayFromDeathPos")}))
 
+    # The iris expresses COVER through the mask radius, not through opacity —
+    # `_setVeil` pins opacity to 1 the moment the plate is shown at ANY coverage,
+    # so an opacity test can never fail. Cover = `--cb-ir` reaching 0 %.
     veils = [s.get("veil") for s in track if isinstance(s.get("dT"), (int, float)) and s["dT"] >= 0]
     R["veilPeak"] = max([v for v in veils if v is not None] or [0])
-    ok("the iris actually closes over the swap (veil reaches full cover)", R["veilPeak"] > 0.9,
-       "peak veil opacity %.3f" % R["veilPeak"])
+    irs = [s.get("ir") for s in track if isinstance(s.get("dT"), (int, float)) and s["dT"] >= 0
+           and isinstance(s.get("ir"), (int, float))]
+    vt = pg.evaluate("() => window.__veiltrack || []")
+    R["veilWrites"] = vt[-20:]
+    applied = [v["a"] for v in vt if isinstance(v.get("dT"), (int, float)) and v["dT"] >= 0]
+    if applied:
+        irs.append(round((1 - max(applied)) * 100, 2))
+    R["veilIrMin"] = min(irs) if irs else None
+    R["veilCleared"] = pg.evaluate("""() => { const v=document.getElementById('cb-veil');
+      if (!v) return null; const cs=getComputedStyle(v);
+      return {display:cs.display, opacity:+parseFloat(cs.opacity||'0').toFixed(3),
+              ir:v.style.getPropertyValue('--cb-ir')}; }""")
+    cleared = (R["veilCleared"] or {}).get("display") == "none" or               ((R["veilCleared"] or {}).get("opacity") or 0) < 0.02
+    ok("the iris really closes over the swap (mask radius reaches full cover) and clears after",
+       R["veilIrMin"] is not None and R["veilIrMin"] <= 2.0 and R["veilPeak"] > 0.9 and cleared,
+       "min mask radius %s%% (0%% = full cover), peak opacity %.3f, after=%s"
+       % (R["veilIrMin"], R["veilPeak"], json.dumps(R["veilCleared"])))
 
     resp = pg.evaluate("() => CRESTBOUND.game.lastRespawnMs")
     tl = pg.evaluate("() => CRESTBOUND.game.lastDeathTimeline || null")
