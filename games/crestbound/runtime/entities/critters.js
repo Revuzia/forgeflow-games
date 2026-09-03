@@ -346,9 +346,289 @@ function mergeParts(parts, name) {
   return mesh;
 }
 
+/* ═════════ ONE DRAW PER CREATURE: atlas + rigid-skin consolidation ═════════ */
 /**
- * A pair of eyes: merged sclera mesh + a 2-instance pupil mesh. Returns
- * {group, pupils, r, sep, look(x, y)} where look() nudges the pupils (googly).
+ * `mergeParts` above already collapses a creature's parts PER MATERIAL, and
+ * `vcKey` already folds colour-only differences into one vertex-coloured
+ * material. What neither can do is merge across BONES: three issues one draw
+ * per geometry group, and a jaw that hinges has to be its own object... unless
+ * the whole creature becomes ONE SkinnedMesh whose Skeleton is the pivot
+ * hierarchy it already had. Every vertex is weighted 1.0 to the pivot its part
+ * hung off, so `_pose()` keeps writing exactly the same rotations and the whole
+ * creature draws once.
+ *
+ * The material differences that survive `vcKey` — roughness, metalness and the
+ * world bank's textured keys (copper, cloth, metal, stone) — move into a shared
+ * ATLAS: one tile per (material, uv-box), per-part UV islands, pages for albedo,
+ * normal, roughness/metalness and clearcoat. The atlas is MODULE-LEVEL and
+ * deduplicated, so the three bumblers on a course pay for one set of tiles.
+ *
+ * WORLD MATERIALS ARE BOX-PROJECTED (materials.js injects world-position UVs),
+ * which is why they have no usable `uv` attribute here — and why a walking
+ * bumbler's brass hat currently swims through its own texture. `boxProjectUv`
+ * bakes the same projection into real UVs at build time, in OBJECT space: the
+ * pattern stops swimming and the part becomes atlas-able.
+ *
+ * Excluded, and still their own draw: anything transparent (skitter wings),
+ * additive/glow/sprite materials, strongly emissive parts (the merged material
+ * has no emissive map, which is what keeps the warden's damage FLASH working),
+ * and InstancedMeshes whose matrices move every frame (the gnasher's chain).
+ * A static InstancedMesh (spikes, teeth) is baked into the merge instead.
+ */
+
+const ATLAS_PAD = 6;
+
+const ATLAS_DEFAULT = {
+  map: '#ffffff',        // albedo: white = no modulation, colour is per-vertex
+  normalMap: '#8080ff',  // flat tangent normal
+  ormMap: '#00ffff',     // G = roughness 1, B = metalness 1 (base scalars are 1)
+  ccMap: '#000000',      // clearcoat 0
+};
+const ATLAS_SRGB = ['map'];
+
+class PartAtlas {
+  constructor(size, tile, pad) {
+    this.size = size | 0;
+    this.tile = tile | 0;
+    this.pad = pad === undefined ? ATLAS_PAD : pad;
+    this.inner = this.tile - this.pad * 2;
+    this.cols = Math.max(1, Math.floor(this.size / this.tile));
+    this.slots = this.cols * this.cols;
+    this.used = 0;
+    this.pages = Object.create(null);
+    this.cache = new Map();     // (material, uv box) -> slot, so clones share tiles
+    this.tex = null;
+    this.ok = true;
+  }
+
+  page(name) {
+    let p = this.pages[name];
+    if (p) return p;
+    let cv = null, ctx = null;
+    try {
+      cv = document.createElement('canvas');
+      cv.width = this.size; cv.height = this.size;
+      ctx = cv.getContext('2d', { willReadFrequently: true });
+    } catch (e) { ctx = null; }
+    if (!ctx) { this.ok = false; return null; }
+    ctx.fillStyle = ATLAS_DEFAULT[name] || '#000000';
+    ctx.fillRect(0, 0, this.size, this.size);
+    p = { cv, ctx };
+    this.pages[name] = p;
+    return p;
+  }
+
+  reserve() {
+    if (this.used >= this.slots) return null;
+    const i = this.used++;
+    const px = (i % this.cols) * this.tile;
+    const py = Math.floor(i / this.cols) * this.tile;
+    return {
+      px, py,
+      u0: (px + this.pad) / this.size,
+      v0: 1 - (py + this.pad + this.inner) / this.size,
+      du: this.inner / this.size,
+      dv: this.inner / this.size,
+    };
+  }
+
+  fill(name, slot, css) {
+    const p = this.page(name);
+    if (!p || !slot) return;
+    p.ctx.fillStyle = css;
+    p.ctx.fillRect(slot.px, slot.py, this.tile, this.tile);
+    this.dirty = true;
+  }
+
+  /** See hero.js: the tile's inner area holds exactly the region the part
+   *  sampled, the pad continues the same tiling so mips never bleed. */
+  drawTiled(name, slot, img, x0, x1, y0, y1) {
+    const p = this.page(name);
+    if (!p || !img || !slot) return false;
+    const dx = x1 - x0, dy = y1 - y0;
+    if (!(dx > 1e-9) || !(dy > 1e-9)) return false;
+    const sx = this.inner / dx, sy = this.inner / dy;
+    const i0 = Math.floor(x0 - this.pad / sx), i1 = Math.ceil(x1 + this.pad / sx);
+    const j0 = Math.floor(y0 - this.pad / sy), j1 = Math.ceil(y1 + this.pad / sy);
+    if ((i1 - i0) * (j1 - j0) > 512) return false;
+    const ctx = p.ctx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(slot.px, slot.py, this.tile, this.tile);
+    ctx.clip();
+    const ox = slot.px + this.pad, oy = slot.py + this.pad;
+    for (let i = i0; i < i1; i++) {
+      for (let j = j0; j < j1; j++) {
+        ctx.drawImage(img, ox + (i - x0) * sx, oy + (y1 - (j + 1)) * sy, sx, sy);
+      }
+    }
+    ctx.restore();
+    this.dirty = true;
+    return true;
+  }
+
+  mapTile(name, slot, fn) {
+    const p = this.pages[name];
+    if (!p || !slot) return;
+    let d = null;
+    try { d = p.ctx.getImageData(slot.px, slot.py, this.tile, this.tile); } catch (e) { return; }
+    fn(d.data);
+    p.ctx.putImageData(d, slot.px, slot.py);
+    this.dirty = true;
+  }
+
+  /** Re-encode one tile between linear and sRGB bytes (see hero.js). */
+  recode(name, slot, toSrgb) {
+    this.mapTile(name, slot, (d) => {
+      for (let k = 0; k < d.length; k += 4) {
+        for (let c = 0; c < 3; c++) {
+          const x = d[k + c] / 255;
+          d[k + c] = b255(toSrgb
+            ? (x <= 0.0031308 ? x * 12.92 : 1.055 * Math.pow(x, 1 / 2.4) - 0.055)
+            : (x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4)));
+        }
+      }
+    });
+  }
+
+  /**
+   * ONE texture per page, for the life of the atlas: every creature that shares
+   * this atlas shares the same GPU textures, and a tile painted after a material
+   * was built simply re-uploads the page the material is already pointing at.
+   */
+  build() {
+    if (!this.tex) this.tex = Object.create(null);
+    for (const name in this.pages) {
+      let t = this.tex[name];
+      if (!t) {
+        t = new THREE.CanvasTexture(this.pages[name].cv);
+        t.wrapS = THREE.ClampToEdgeWrapping;
+        t.wrapT = THREE.ClampToEdgeWrapping;
+        t.generateMipmaps = true;
+        t.minFilter = THREE.LinearMipmapLinearFilter;
+        t.magFilter = THREE.LinearFilter;
+        t.anisotropy = (this.mats && Number.isFinite(this.mats.anisotropy)) ? this.mats.anisotropy : 4;
+        t.colorSpace = ATLAS_SRGB.indexOf(name) >= 0 ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+        this.tex[name] = t;
+      }
+      if (this.dirty) t.needsUpdate = true;
+    }
+    this.dirty = false;
+    return this.tex;
+  }
+}
+
+/**
+ * One atlas per theme, shared by every creature on the course AND across course
+ * reloads — the tile cache is keyed by material CONTENT, not identity, so the
+ * warden's per-instance material clones (it owns copies so its hit flash cannot
+ * touch the shared bank) land on the tiles their originals already painted
+ * instead of burning 64 slots over a handful of reloads. If a theme's atlas
+ * does fill up, the next creature starts a fresh one rather than silently
+ * giving up on the merge.
+ */
+const _atlases = new Map();
+function critterAtlas(themeId) {
+  const key = String(themeId || 'keep');
+  let a = _atlases.get(key);
+  if (!a || a.used >= a.slots) { a = new PartAtlas(1024, 128); _atlases.set(key, a); }
+  return a;
+}
+
+/** Identity of a material's LOOK — clones and rebuilds share a tile. */
+function tileKey(m) {
+  const t = (x) => (x ? x.uuid : '-');
+  return [
+    m.type, m.color ? m.color.getHexString() : '-',
+    Math.round(fin(m.roughness, 1) * 100), Math.round(fin(m.metalness, 0) * 100),
+    Math.round(fin(m.clearcoat, 0) * 100), Math.round(fin(m.clearcoatRoughness, 0) * 100),
+    Math.round(fin(m.envMapIntensity, 1) * 100),
+    m.normalScale ? Math.round(m.normalScale.x * 100) : 100,
+    t(m.map), t(m.normalMap), t(m.roughnessMap), matRepeat(m).toFixed(3),
+  ].join('|');
+}
+
+function b255(x) { return Math.max(0, Math.min(255, Math.round(x * 255))); }
+
+function texImage(t) {
+  if (!t) return null;
+  const img = t.image;
+  return (img && typeof img.width === 'number' && img.width > 0) ? img : null;
+}
+
+function matRepeat(m) {
+  const t = m.map || m.normalMap || m.roughnessMap;
+  return (t && t.repeat && t.repeat.x) ? t.repeat.x : 1;
+}
+
+/** UV bounding box over a vertex RANGE, degenerate axes widened to a unit span. */
+function uvBox(g, out, start, count) {
+  const a = g.attributes && g.attributes.uv;
+  let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+  if (a) {
+    const arr = a.array;
+    const i0 = start || 0, n = i0 + (count === undefined ? a.count : count);
+    for (let i = i0; i < n; i++) {
+      const u = arr[i * 2], v = arr[i * 2 + 1];
+      if (!isFinite(u) || !isFinite(v)) continue;
+      if (u < u0) u0 = u;
+      if (u > u1) u1 = u;
+      if (v < v0) v0 = v;
+      if (v > v1) v1 = v;
+    }
+  }
+  if (!isFinite(u0)) { u0 = 0; u1 = 1; v0 = 0; v1 = 1; }
+  if (u1 - u0 < 1e-6) { const c = (u0 + u1) * 0.5; u0 = c - 0.5; u1 = c + 0.5; }
+  if (v1 - v0 < 1e-6) { const c = (v0 + v1) * 0.5; v0 = c - 0.5; v1 = c + 0.5; }
+  out.u0 = u0; out.u1 = u1; out.v0 = v0; out.v1 = v1;
+  return out;
+}
+
+/**
+ * Bake a BOX PROJECTION into a real `uv` attribute, in metres of object space.
+ * This is the same projection materials.js runs in the shader from world
+ * position — but frozen to the object, so the pattern stops sliding across a
+ * creature that walks. Per TRIANGLE (the geometries here are non-indexed), so
+ * the three corners always agree on an axis and no seam appears mid-face.
+ */
+function boxProjectUv(g) {
+  const pos = g.attributes.position;
+  if (!pos) return g;
+  const n = pos.count;
+  const p = pos.array;
+  const uv = new Float32Array(n * 2);
+  for (let t = 0; t < n; t += 3) {
+    const ax = p[t * 3], ay = p[t * 3 + 1], az = p[t * 3 + 2];
+    const bx = p[t * 3 + 3], by = p[t * 3 + 4], bz = p[t * 3 + 5];
+    const cx = p[t * 3 + 6], cy = p[t * 3 + 7], cz = p[t * 3 + 8];
+    const e1x = bx - ax, e1y = by - ay, e1z = bz - az;
+    const e2x = cx - ax, e2y = cy - ay, e2z = cz - az;
+    const nx = Math.abs(e1y * e2z - e1z * e2y);
+    const ny = Math.abs(e1z * e2x - e1x * e2z);
+    const nz = Math.abs(e1x * e2y - e1y * e2x);
+    let a0 = 0, a1 = 2;                       // +Y dominant: use X, Z
+    if (nx >= ny && nx >= nz) { a0 = 2; a1 = 1; }        // X dominant: Z, Y
+    else if (nz >= nx && nz >= ny) { a0 = 0; a1 = 1; }   // Z dominant: X, Y
+    for (let k = 0; k < 3; k++) {
+      const o = (t + k) * 3;
+      uv[(t + k) * 2] = p[o + a0];
+      uv[(t + k) * 2 + 1] = p[o + a1];
+    }
+  }
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  return g;
+}
+
+/** Does this material sample through the world-space box projection? */
+function isBoxProjected(m) {
+  return !!(m && m.userData && m.userData.cbKey);
+}
+
+/**
+ * A pair of eyes. The sclera is a merged mesh and each pupil rides its OWN
+ * pivot, so both fold into the creature's single skinned draw — the pupils used
+ * to be a 2-instance InstancedMesh, which is a whole draw call per creature for
+ * two 4 cm beads. `look()` now moves the pivots instead of instance matrices.
  * Eyes face +Z (the creature's forward is +Z in local space; yaw handles the rest).
  */
 function makeEyes(r, sep, x, y, z, tilt) {
@@ -362,31 +642,32 @@ function makeEyes(r, sep, x, y, z, tilt) {
   const sclera = mergeParts([{ g: sL, m: white }, { g: sR, m: white }], 'sclera');
   sclera.castShadow = false;
   group.add(sclera);
-  const pupilGeo = cached('pupil:' + r.toFixed(3), () => { const g = sphereGeo(r * 0.42, 10, 8); g.computeBoundingSphere(); return g; });
-  const pupils = new THREE.InstancedMesh(pupilGeo, pupilMat(), 2);
-  pupils.name = 'pupils';
-  pupils.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  pupils.castShadow = false;
-  pupils.frustumCulled = false;
-  group.add(pupils);
+  /* One PIVOT per pupil. A pivot is a bone the consolidation can skin to, so
+     the pupils cost nothing; an InstancedMesh could not be merged and cost a
+     whole draw call per creature. */
+  const pivL = new THREE.Object3D();
+  pivL.name = 'pupilL';
+  const pivR = new THREE.Object3D();
+  pivR.name = 'pupilR';
+  const pupilM = pupilMat();
+  for (const piv of [pivL, pivR]) {
+    const pm = new THREE.Mesh(sphereGeo(r * 0.42, 10, 8), pupilM);
+    pm.name = 'pupil';
+    pm.castShadow = false;
+    piv.add(pm);
+    group.add(piv);
+  }
   group.position.set(x, y, z);
   if (tilt) group.rotation.x = tilt;
   const eyes = {
-    group, pupils, r, sep, lx: 0, ly: 0,
+    group, pupilL: pivL, pupilR: pivR, r, sep, lx: 0, ly: 0,
     /** Place both pupils on the front of the sclera, offset by a look vector (−1..1). */
     look(lx, ly) {
       this.lx = lx; this.ly = ly;
       const px = clamp(lx, -1, 1) * r * 0.55, py = clamp(ly, -1, 1) * r * 0.5;
       const pz = Math.sqrt(Math.max(0.05 * r * r, r * r - px * px - py * py)) * 0.92;
-      _s0.set(1, 1, 1);
-      _q0.identity();
-      _v0.set(-sep * 0.5 + px, py, pz);
-      _m0.compose(_v0, _q0, _s0);
-      pupils.setMatrixAt(0, _m0);
-      _v0.set(sep * 0.5 + px, py, pz);
-      _m0.compose(_v0, _q0, _s0);
-      pupils.setMatrixAt(1, _m0);
-      pupils.instanceMatrix.needsUpdate = true;
+      pivL.position.set(-sep * 0.5 + px, py, pz);
+      pivR.position.set(sep * 0.5 + px, py, pz);
     },
   };
   eyes.look(0, 0);
@@ -586,6 +867,282 @@ export class Critter {
     return k;
   }
 
+  /* ---- one draw per creature -------------------------------------------- */
+
+  /**
+   * Fold one SUBTREE of the rig into a single rigidly-skinned mesh, parented to
+   * that subtree's own root so every group transform (`body.position/rotation/
+   * scale`, and `body.visible = false` on death) keeps working untouched.
+   *
+   * Vertices are baked into the subtree root's bind space and weighted 1.0 to
+   * the pivot they hung off; the pivots become the Skeleton. `bindMatrix` is
+   * identity and three's AttachedBindMode recomputes `bindMatrixInverse` from
+   * the mesh's own matrixWorld each frame, so the root's live transform cancels
+   * and what is left is exactly `pivot.world * pivotBindInverse * v` — the
+   * transform the scene graph was already applying.
+   *
+   * Never fatal: on any failure the subtree is left exactly as it was built.
+   *
+   * @param {THREE.Object3D} root  subtree to collapse
+   * @param {string} name          mesh name
+   * @returns {THREE.SkinnedMesh|null}
+   */
+  _mergeGroup(root, name, opts) {
+    if (!root || typeof document === 'undefined' || globalThis.CRESTBOUND_NOMERGE) return null;
+    const allowAlpha = !!(opts && opts.allowTransparent);
+    root.updateMatrixWorld(true);
+
+    /* ---- 1. which meshes may merge --------------------------------------- */
+    const ok = (m) => {
+      if (!m || !(m.isMeshStandardMaterial || m.isMeshPhysicalMaterial)) return false;
+      if (!allowAlpha && (m.transparent || m.side !== THREE.FrontSide)) return false;
+      if (m.alphaMap || m.emissiveMap) return false;
+      /* A hot emissive part stays its OWN draw. The merged material carries no
+         emissive map, and that is exactly what keeps a whole-body damage flash
+         (`emissive` written straight onto the material) working. */
+      if (allowAlpha) return true;    // single-material path: the material survives whole
+      const ei = fin(m.emissiveIntensity, 0);
+      return !(m.emissive && ei > 0 && (m.emissive.r + m.emissive.g + m.emissive.b) * ei > 0.02);
+    };
+    const parts = [];
+    const kept = new Map();        // multi-material mesh -> groups that did NOT merge
+    root.traverse((o) => {
+      if (!o.isMesh || o.isSkinnedMesh || !o.geometry) return;
+      if (o.isInstancedMesh && (o.instanceMatrix.usage === THREE.DynamicDrawUsage || !o.count)) return;
+      const inst = o.isInstancedMesh ? o : null;
+      const ms = Array.isArray(o.material) ? o.material : null;
+      if (!ms) {
+        if (!ok(o.material)) return;
+        parts.push({ mesh: o, geo: o.geometry, mat: o.material, bone: o.parent, inst, start: 0, count: -1 });
+        return;
+      }
+      /* `mergeParts` emits ONE mesh with one geometry GROUP per material — each
+         group is its own draw, so each group is its own merge candidate. A group
+         that cannot merge (the warden's hot emissive crest) is LEFT BEHIND: the
+         mesh keeps exactly that group and keeps drawing it, while the rest of
+         the mesh joins the merge. */
+      const groups = o.geometry.groups;
+      if (o.geometry.index || !groups || !groups.length) return;
+      const stay = [];
+      for (let i = 0; i < groups.length; i++) {
+        const m = ms[groups[i].materialIndex] || ms[0];
+        if (!ok(m)) { stay.push(groups[i]); continue; }
+        parts.push({ mesh: o, geo: o.geometry, mat: m, bone: o.parent, inst,
+                     start: groups[i].start, count: groups[i].count });
+      }
+      kept.set(o, stay);
+    });
+    if (parts.length < 2) return null;
+
+    /* ---- 2. geometry (with any static instances expanded) ---------------- */
+    const rootInv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+    const m4 = new THREE.Matrix4();
+    const mi = new THREE.Matrix4();
+    const m3 = new THREE.Matrix3();
+    const v = new THREE.Vector3();
+    const box = { u0: 0, u1: 1, v0: 0, v1: 1 };
+
+    let total = 0;
+    const uvDone = new Set();
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      if (p.geo.index) return null;
+      if ((isBoxProjected(p.mat) || !p.geo.attributes.uv) && !uvDone.has(p.geo)) {
+        uvDone.add(p.geo);
+        boxProjectUv(p.geo);
+      }
+      p.reps = p.inst ? p.inst.count : 1;
+      if (p.count < 0) p.count = p.geo.attributes.position.count;
+      p.n = p.count;
+      total += p.n * p.reps;
+    }
+
+    /* ---- 3. one tile per (material, uv box) ------------------------------ */
+    const single = parts.every((p) => p.mat === parts[0].mat);
+    // an atlas cannot carry a transparent/two-sided family: it would have to
+    // pick one blend mode for the lot. Those only merge when they already agree.
+    if (!single && allowAlpha) return null;
+    const atlas = single ? null : critterAtlas(this.theme && this.theme.id);
+    let anyCC = false, wAll = 0, envSum = 0, physical = false;
+    if (atlas) {
+      for (let i = 0; i < parts.length; i++) {
+        const p = parts[i];
+        const m = p.mat;
+        if (m.isMeshPhysicalMaterial) physical = true;
+        uvBox(p.geo, box, p.start, p.n);
+        p.span = Math.max(box.u1 - box.u0, box.v1 - box.v0);
+        p.u0 = box.u0; p.v0 = box.v0;
+        const key = tileKey(m) + '|' + p.u0.toFixed(3) + '|' + p.v0.toFixed(3) + '|' + p.span.toFixed(3);
+        let slot = atlas.cache.get(key);
+        if (!slot) {
+          slot = atlas.reserve();
+          if (!slot) return null;                       // atlas full: leave the rig alone
+          atlas.cache.set(key, slot);
+          const rep = matRepeat(m);
+          const x0 = p.u0 * rep, x1 = (p.u0 + p.span) * rep;
+          const y0 = p.v0 * rep, y1 = (p.v0 + p.span) * rep;
+
+          const im = texImage(m.map);
+          if (im && atlas.drawTiled('map', slot, im, x0, x1, y0, y1)
+              && m.map.colorSpace !== THREE.SRGBColorSpace) atlas.recode('map', slot, true);
+
+          const nm = texImage(m.normalMap);
+          if (nm && atlas.drawTiled('normalMap', slot, nm, x0, x1, y0, y1)) {
+            if (m.normalMap.colorSpace === THREE.SRGBColorSpace) atlas.recode('normalMap', slot, false);
+            const ns = (m.normalScale && m.normalScale.x !== undefined) ? m.normalScale.x : 1;
+            if (Math.abs(ns - 1) > 0.01) {
+              atlas.mapTile('normalMap', slot, (d) => {
+                for (let k = 0; k < d.length; k += 4) {
+                  d[k] = b255(0.5 + (d[k] / 255 - 0.5) * ns);
+                  d[k + 1] = b255(0.5 + (d[k + 1] / 255 - 0.5) * ns);
+                }
+              });
+            }
+          }
+
+          const rough = clamp(fin(m.roughness, 1), 0, 1);
+          const metal = clamp(fin(m.metalness, 0), 0, 1);
+          const om = texImage(m.roughnessMap);
+          if (om && atlas.drawTiled('ormMap', slot, om, x0, x1, y0, y1)) {
+            if (m.roughnessMap.colorSpace === THREE.SRGBColorSpace) atlas.recode('ormMap', slot, false);
+            atlas.mapTile('ormMap', slot, (d) => {
+              for (let k = 0; k < d.length; k += 4) {
+                d[k + 1] = b255((d[k + 1] / 255) * rough);
+                d[k + 2] = b255((d[k + 2] / 255) * metal);
+              }
+            });
+          } else {
+            atlas.fill('ormMap', slot, 'rgb(0,' + b255(rough) + ',' + b255(metal) + ')');
+          }
+
+          const cc = fin(m.clearcoat, 0);
+          if (cc > 0.002) atlas.fill('ccMap', slot, 'rgb(' + b255(cc) + ',' + b255(fin(m.clearcoatRoughness, 0)) + ',0)');
+        }
+        if (fin(m.clearcoat, 0) > 0.002) anyCC = true;
+        p.slot = slot;
+        wAll += p.n * p.reps;
+        envSum += fin(m.envMapIntensity, 1) * p.n * p.reps;
+      }
+      if (!atlas.ok) return null;
+    }
+
+    /* ---- 4. one buffer --------------------------------------------------- */
+    const pos = new Float32Array(total * 3);
+    const nor = new Float32Array(total * 3);
+    const uvs = new Float32Array(total * 2);
+    const cols = new Float32Array(total * 3);
+    const sIdx = new Uint16Array(total * 4);
+    const sWgt = new Float32Array(total * 4);
+    const bones = [];
+    let head = 0, cast = false;
+
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      let bi = bones.indexOf(p.bone);
+      if (bi < 0) { bi = bones.length; bones.push(p.bone); }
+      if (p.mesh.castShadow) cast = true;
+      const base = new THREE.Matrix4().multiplyMatrices(rootInv, p.mesh.matrixWorld);
+      const ap = p.geo.attributes.position.array;
+      const an = p.geo.attributes.normal ? p.geo.attributes.normal.array : null;
+      const au = p.geo.attributes.uv ? p.geo.attributes.uv.array : null;
+      const ac = (p.mat.vertexColors && p.geo.attributes.color) ? p.geo.attributes.color.array : null;
+      const mc = p.mat.color;
+      const sl = p.slot;
+      const bu = sl ? p.u0 : 0, bv = sl ? p.v0 : 0, isp = sl ? 1 / p.span : 1;
+
+      for (let r = 0; r < p.reps; r++) {
+        if (p.inst) { p.inst.getMatrixAt(r, mi); m4.multiplyMatrices(base, mi); } else { m4.copy(base); }
+        m3.getNormalMatrix(m4);
+        for (let k = 0; k < p.n; k++) {
+          const j = p.start + k;
+          const o3 = (head + k) * 3, o2 = (head + k) * 2, o4 = (head + k) * 4;
+          v.set(ap[j * 3], ap[j * 3 + 1], ap[j * 3 + 2]).applyMatrix4(m4);
+          pos[o3] = v.x; pos[o3 + 1] = v.y; pos[o3 + 2] = v.z;
+          if (an) {
+            v.set(an[j * 3], an[j * 3 + 1], an[j * 3 + 2]).applyMatrix3(m3).normalize();
+            nor[o3] = v.x; nor[o3 + 1] = v.y; nor[o3 + 2] = v.z;
+          } else { nor[o3 + 1] = 1; }
+          if (sl) {
+            const u = au ? au[j * 2] : bu;
+            const w = au ? au[j * 2 + 1] : bv;
+            uvs[o2] = sl.u0 + (u - bu) * isp * sl.du;
+            uvs[o2 + 1] = sl.v0 + (w - bv) * isp * sl.dv;
+          } else if (au) {
+            uvs[o2] = au[j * 2]; uvs[o2 + 1] = au[j * 2 + 1];
+          }
+          cols[o3] = sl ? mc.r * (ac ? ac[j * 3] : 1) : 1;
+          cols[o3 + 1] = sl ? mc.g * (ac ? ac[j * 3 + 1] : 1) : 1;
+          cols[o3 + 2] = sl ? mc.b * (ac ? ac[j * 3 + 2] : 1) : 1;
+          sIdx[o4] = bi;
+          sWgt[o4] = 1;
+        }
+        head += p.n;
+      }
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+    if (atlas) geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+    geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(sIdx, 4));
+    geo.setAttribute('skinWeight', new THREE.BufferAttribute(sWgt, 4));
+    geo.computeBoundingSphere();
+    if (geo.boundingSphere) geo.boundingSphere.radius *= 1.6;   // the pose leaves the bind box
+
+    /* ---- 5. one material ------------------------------------------------- */
+    let mat;
+    if (!atlas) {
+      mat = parts[0].mat;
+    } else {
+      const tex = atlas.build();
+      const def = {
+        color: 0xffffff, vertexColors: true, roughness: 1, metalness: 1,
+        envMapIntensity: wAll > 0 ? envSum / wAll : 1,
+      };
+      if (tex.map) def.map = tex.map;
+      if (tex.normalMap) def.normalMap = tex.normalMap;
+      if (tex.ormMap) { def.roughnessMap = tex.ormMap; def.metalnessMap = tex.ormMap; }
+      mat = (physical || anyCC) ? new THREE.MeshPhysicalMaterial(def) : new THREE.MeshStandardMaterial(def);
+      if (anyCC && tex.ccMap) {
+        mat.clearcoat = 1; mat.clearcoatMap = tex.ccMap;
+        mat.clearcoatRoughness = 1; mat.clearcoatRoughnessMap = tex.ccMap;
+      }
+      mat.name = 'cb.critter.' + this.kind + '.body';
+      this.own(mat);
+    }
+
+    /* ---- 6. the skinned mesh --------------------------------------------- */
+    const inverses = [];
+    for (let i = 0; i < bones.length; i++) {
+      inverses.push(new THREE.Matrix4().multiplyMatrices(rootInv, bones[i].matrixWorld).invert());
+    }
+    const skin = new THREE.SkinnedMesh(geo, mat);
+    skin.name = name || (this.kind + '_body');
+    skin.castShadow = cast;
+    skin.receiveShadow = false;
+    root.add(skin);
+    skin.bind(new THREE.Skeleton(bones, inverses), new THREE.Matrix4());
+
+    const retired = new Set();
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      if (retired.has(p.mesh)) continue;
+      retired.add(p.mesh);
+      const stay = kept.get(p.mesh);
+      if (stay && stay.length) {
+        // partial merge: the mesh survives, drawing only the groups left behind
+        p.mesh.geometry.groups = stay;
+        continue;
+      }
+      if (p.mesh.parent) p.mesh.parent.remove(p.mesh);
+      if (!p.mesh.geometry.userData.__shared) p.mesh.geometry.dispose();
+    }
+    if (!this._merged) this._merged = [];
+    this._merged.push(skin);
+    return skin;
+  }
+
   /* ---- GLTF path -------------------------------------------------------- */
 
   /**
@@ -606,8 +1163,11 @@ export class Critter {
       const lights = [];
       root.traverse((o) => { if (o.isLight) lights.push(o); });
       for (const l of lights) if (l.parent) l.parent.remove(l);
-      const aniso = (this.ctx.renderer && this.ctx.renderer.capabilities && this.ctx.renderer.capabilities.getMaxAnisotropy)
-        ? Math.min(8, this.ctx.renderer.capabilities.getMaxAnisotropy()) : 4;
+      /* The QUALITY tier owns anisotropy (materials.js `Mats.anisotropy`); the
+       * GPU's maximum is not a quality setting. Falls back to 4 only when the
+       * material library is not in the ctx (bare harness). */
+      const aniso = (this.ctx.mats && Number.isFinite(this.ctx.mats.anisotropy))
+        ? this.ctx.mats.anisotropy : 4;
       root.traverse((o) => {
         if (!o.isMesh) return;
         o.castShadow = true;
@@ -768,6 +1328,11 @@ class Gnasher extends Critter {
     this._build();
     this._buildChain();
     this._buildPost();
+    // ONE DRAW: the head (shell + jaws + teeth + spikes + eyes) and the post
+    // each collapse to a single skinned mesh; the CHAIN keeps its own instanced
+    // draw because its matrices are rewritten every frame.
+    this._mergeGroup(this.body, 'gnasher_body');
+    this._mergeGroup(this.postMesh, 'gnasher_post');
 
     this.bodyCol = this._solidBox(this.pos.x, this.pos.y, this.pos.z, GN_R * 0.85, GN_R * 0.85, GN_R * 0.85, 'normal', null);
     this.postCol = this._solidBox(this.post.x, this.post.y + 0.6, this.post.z, 0.22, 0.6, 0.22, 'normal', null);
@@ -967,10 +1532,12 @@ class Gnasher extends Critter {
     place(base, 0, 0.07, 0);
     const eye = ringProfileGeometry(0.11, [0.028, 0.028, 0.008], 10, 1);
     place(eye, 0, 1.15, 0, Math.PI / 2, 0, 0);
-    const postMesh = mergeParts([{ g: shaft, m: iron }, { g: cap, m: iron }, { g: ring, m: iron }, { g: eye, m: iron }, { g: base, m: stone }], 'post');
-    this.postMesh = postMesh;
-    postMesh.position.copy(this.post);
-    this.rig.add(postMesh);
+    const postGroup = new THREE.Group();
+    postGroup.name = 'post';
+    postGroup.add(mergeParts([{ g: shaft, m: iron }, { g: cap, m: iron }, { g: ring, m: iron }, { g: eye, m: iron }, { g: base, m: stone }], 'postShell'));
+    this.postMesh = postGroup;
+    postGroup.position.copy(this.post);
+    this.rig.add(postGroup);
   }
 
   _pose() {
@@ -1244,6 +1811,7 @@ class Bumbler extends Critter {
     this.pupilWobble = 0;
 
     this._build();
+    this._mergeGroup(this.body, 'bumbler_body');   // ONE DRAW
     this.col = this._solidBox(0, 0, 0, BM_R * 0.9, BM_R * 0.95, BM_R * 0.9, 'bounce', { power: 2.2 });
     this._placeAt(0);
     this._pose(0);
@@ -1488,6 +2056,8 @@ class Skitter extends Critter {
     this.hitCd = 0;
 
     this._build();
+    this._mergeGroup(this.body, 'skitter_body');                                   // ONE DRAW
+    this._mergeGroup(this.wingRoot, 'skitter_wings', { allowTransparent: true });  // + one for the wings
     this.col = this._solidBox(0, 0, 0, 0.34, 0.16, 0.34, 'bounce', { power: fin(d.bounce, 3) });
     this._reset();
     this._silent = false;
@@ -1546,10 +2116,17 @@ class Skitter extends Critter {
       w.castShadow = false;
       w.name = 'wing';
       piv.add(w);
-      body.add(piv);
+      wingRoot.add(piv);
       return piv;
     };
+    /* The four wing blades share one transparent DoubleSide material, and three
+       draws such a material TWICE (back faces, then front). Four blades was
+       eight draw calls per skitter; under one root they merge to one mesh. */
+    const wingRoot = new THREE.Group();
+    wingRoot.name = 'wings';
+    body.add(wingRoot);
     this.wings = [mkWing(-1, false), mkWing(1, false), mkWing(-1, true), mkWing(1, true)];
+    this.wingRoot = wingRoot;
     this.body = body;
     this.rig.add(body);
   }
@@ -1748,6 +2325,12 @@ class Warden extends Critter {
     this.poseT = new Float32Array(16);
 
     this._build();
+    /* ONE DRAW for the armour. The lantern, the shock ring, the dizzy stars and
+       the emissive crest stay their own draws: they are emissive or additive,
+       and the merged material deliberately carries no emissive map so the hit
+       FLASH (`emissive` written onto the material) still reddens the whole body. */
+    const wardenBody = this._mergeGroup(this.body, 'warden_body');
+    if (wardenBody) this.flashMats = [wardenBody.material];
     this.col = this._solidBox(this.pos.x, this.pos.y + 1.3, this.pos.z, 0.75, 1.3, 0.6, 'normal', null);
     this.kill = this._killSphere(this.pos.x, this.pos.y + 1.2, this.pos.z, WD_BODY_R, 'warden');
     this._pose(0);
@@ -2283,6 +2866,7 @@ class Fen extends Critter {
     this.lanternVel = 0;
 
     this._build();
+    this._mergeGroup(this.body, 'fen_body');   // ONE DRAW
     this.col = this._solidBox(this.pos.x, this.pos.y + 0.8, this.pos.z, 0.42, 0.8, 0.42, 'normal', null);
     this._pose(0);
     this._silent = false;

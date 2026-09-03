@@ -1519,6 +1519,270 @@ function solveLeg(dy, fz, l1, l2) {
   return _ik;
 }
 
+/* ══════════════════ ONE DRAW: atlas + rigid-skin consolidation ══════════════════ */
+/**
+ * three.js issues ONE DRAW PER GEOMETRY GROUP, so an articulated character
+ * built the honest way — one mesh per part, hung off the bone that moves it —
+ * costs one draw per (part x material). Nim measured 31 shaded + 14 shadow
+ * draws on verdant-1's spawn frame. Merging the parts is only legal if the
+ * merge keeps ARTICULATING, and that is exactly what RIGID SKINNING buys:
+ * every vertex is weighted 1.0 to the bone its part hung off, the existing
+ * Object3D rig BECOMES the Skeleton, the pose writers keep writing the same
+ * bone rotations they always did — and the whole body draws once.
+ *
+ * The other half is the material. Nim's parts differ in colour, roughness,
+ * metalness, normal-map strength and two physical lobes; ONE material can
+ * cover all of them only if every one of those differences moves into DATA:
+ *
+ *   colour              -> a `color` VERTEX ATTRIBUTE (three multiplies it in)
+ *   albedo detail       -> atlas page `map`,        per-part UV island
+ *   normal              -> atlas page `normalMap`,  normalScale pre-baked per tile
+ *   roughness/metalness -> atlas page `ormMap`,     G and B (what three reads)
+ *   clearcoat           -> atlas page `ccMap`,      R = amount, G = roughness
+ *   sheen               -> atlas page `sheenMap`,   RGB = sheenColor x sheen
+ *
+ * Every page shares ONE tile layout, so a single UV remap serves all of them,
+ * and a page that nothing writes is never allocated. What does NOT survive is
+ * anything three has no map for: `envMapIntensity`, `ior`, `specularIntensity`
+ * and `sheenRoughness` collapse to one vertex-weighted value each.
+ *
+ * ALPHA IS NEVER USED as a data channel. A 2D canvas stores premultiplied
+ * pixels, so packing an independent value into A silently destroys the RGB
+ * precision of any texel whose A is small. Every page here is opaque.
+ */
+
+/** Padding, in atlas pixels, around every tile — filled with the tile's OWN
+ *  continued tiling, so a mip level can blur into it without ever pulling in
+ *  a neighbouring part's texels. */
+const ATLAS_PAD = 8;
+
+/** What a tile means when nothing writes it. */
+const ATLAS_DEFAULT = {
+  map: '#ffffff',        // albedo detail: white = no modulation
+  normalMap: '#8080ff',  // flat tangent-space normal
+  ormMap: '#00ffff',     // G = roughness 1, B = metalness 1 (base scalars are 1)
+  ccMap: '#000000',      // clearcoat 0
+  sheenMap: '#000000',   // sheen colour black = no lobe
+  shrMap: '#ffffff',     // sheen ROUGHNESS lives in A; opaque white = 1
+};
+
+/** Pages whose bytes are sRGB-encoded colour (the rest are raw data). */
+const ATLAS_SRGB = ['map', 'sheenMap'];
+
+/** A grid-packed set of canvas pages that all share one tile layout. */
+class PartAtlas {
+  constructor(size, tile, pad) {
+    this.size = size | 0;
+    this.tile = tile | 0;
+    this.pad = pad === undefined ? ATLAS_PAD : pad;
+    this.inner = this.tile - this.pad * 2;
+    this.cols = Math.max(1, Math.floor(this.size / this.tile));
+    this.slots = this.cols * this.cols;
+    this.used = 0;
+    this.pages = Object.create(null);
+    this.ok = true;
+  }
+
+  /** Lazily create a page, pre-filled with its neutral value. */
+  page(name) {
+    let p = this.pages[name];
+    if (p) return p;
+    let cv = null, ctx = null;
+    try {
+      cv = document.createElement('canvas');
+      cv.width = this.size;
+      cv.height = this.size;
+      ctx = cv.getContext('2d', { willReadFrequently: true });
+    } catch (e) { ctx = null; }
+    if (!ctx) { this.ok = false; return null; }
+    ctx.imageSmoothingEnabled = true;
+    ctx.fillStyle = ATLAS_DEFAULT[name] || '#000000';
+    ctx.fillRect(0, 0, this.size, this.size);
+    p = { cv, ctx };
+    this.pages[name] = p;
+    return p;
+  }
+
+  /** Reserve one tile; returns its pixel origin and the UV rect of its inner area. */
+  reserve() {
+    if (this.used >= this.slots) return null;
+    const i = this.used++;
+    const px = (i % this.cols) * this.tile;
+    const py = Math.floor(i / this.cols) * this.tile;
+    return {
+      px, py,
+      u0: (px + this.pad) / this.size,
+      v0: 1 - (py + this.pad + this.inner) / this.size,
+      du: this.inner / this.size,
+      dv: this.inner / this.size,
+    };
+  }
+
+  /** Flat CSS-colour fill of a whole tile, padding included. */
+  fill(name, slot, css) {
+    const p = this.page(name);
+    if (!p || !slot) return;
+    p.ctx.fillStyle = css;
+    p.ctx.fillRect(slot.px, slot.py, this.tile, this.tile);
+  }
+
+  /**
+   * Flat fill that WRITES the alpha channel (`copy`, not `source-over`).
+   * Only ever used with RGB at full white, where the canvas's premultiplied
+   * round-trip is exact — see the ALPHA note in the header.
+   */
+  fillAlpha(name, slot, a) {
+    const p = this.page(name);
+    if (!p || !slot) return;
+    p.ctx.save();
+    /* `copy` replaces the destination across the WHOLE clip region, not just
+       the drawn rect — without this clip the first call wipes every tile
+       already painted on the page (measured: it turned Nim black). */
+    p.ctx.beginPath();
+    p.ctx.rect(slot.px, slot.py, this.tile, this.tile);
+    p.ctx.clip();
+    p.ctx.globalCompositeOperation = 'copy';
+    p.ctx.fillStyle = 'rgba(255,255,255,' + Math.max(0.02, Math.min(1, a)).toFixed(4) + ')';
+    p.ctx.fillRect(slot.px, slot.py, this.tile, this.tile);
+    p.ctx.restore();
+  }
+
+  /**
+   * Paint a TILING source image so the tile's inner area covers exactly the
+   * texture region [x0,x1] x [y0,y1] the part sampled, and the padding
+   * continues the same tiling. `y` is UV-up: both the source canvases and this
+   * atlas upload with flipY, so v = 1 is the TOP row of both and no flip is
+   * needed anywhere.
+   */
+  drawTiled(name, slot, img, x0, x1, y0, y1) {
+    const p = this.page(name);
+    if (!p || !img || !slot) return false;
+    const dx = x1 - x0, dy = y1 - y0;
+    if (!(dx > 1e-9) || !(dy > 1e-9)) return false;
+    const sx = this.inner / dx, sy = this.inner / dy;   // atlas px per texture unit
+    const i0 = Math.floor(x0 - this.pad / sx), i1 = Math.ceil(x1 + this.pad / sx);
+    const j0 = Math.floor(y0 - this.pad / sy), j1 = Math.ceil(y1 + this.pad / sy);
+    if ((i1 - i0) * (j1 - j0) > 512) return false;      // pathological repeat
+    const ctx = p.ctx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(slot.px, slot.py, this.tile, this.tile);
+    ctx.clip();
+    const ox = slot.px + this.pad, oy = slot.py + this.pad;
+    for (let i = i0; i < i1; i++) {
+      for (let j = j0; j < j1; j++) {
+        ctx.drawImage(img, ox + (i - x0) * sx, oy + (y1 - (j + 1)) * sy, sx, sy);
+      }
+    }
+    ctx.restore();
+    return true;
+  }
+
+  /**
+   * Re-encode one tile between linear and sRGB bytes. A page is sampled in ONE
+   * colour space; a source texture that was authored in the other one has to be
+   * converted as it lands, or its mid-tones shift.
+   */
+  recode(name, slot, toSrgb) {
+    this.mapTile(name, slot, (d) => {
+      for (let k = 0; k < d.length; k += 4) {
+        for (let c = 0; c < 3; c++) {
+          const x = d[k + c] / 255;
+          d[k + c] = b255(toSrgb
+            ? (x <= 0.0031308 ? x * 12.92 : 1.055 * Math.pow(x, 1 / 2.4) - 0.055)
+            : (x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4)));
+        }
+      }
+    });
+  }
+
+  /** In-place per-pixel pass over one tile (bakes normalScale, roughness gain). */
+  mapTile(name, slot, fn) {
+    const p = this.pages[name];
+    if (!p || !slot) return;
+    let d = null;
+    try { d = p.ctx.getImageData(slot.px, slot.py, this.tile, this.tile); } catch (e) { return; }
+    fn(d.data);
+    p.ctx.putImageData(d, slot.px, slot.py);
+  }
+
+  /** Upload every page that exists. */
+  build() {
+    const out = Object.create(null);
+    for (const name in this.pages) {
+      const t = new THREE.CanvasTexture(this.pages[name].cv);
+      t.wrapS = THREE.ClampToEdgeWrapping;
+      t.wrapT = THREE.ClampToEdgeWrapping;
+      t.generateMipmaps = true;
+      t.minFilter = THREE.LinearMipmapLinearFilter;
+      t.magFilter = THREE.LinearFilter;
+      t.anisotropy = 4;
+      t.colorSpace = ATLAS_SRGB.indexOf(name) >= 0 ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+      t.needsUpdate = true;
+      out[name] = t;
+    }
+    return out;
+  }
+
+  dispose() {
+    for (const name in this.pages) { this.pages[name].cv.width = 1; this.pages[name].cv.height = 1; }
+    this.pages = Object.create(null);
+  }
+}
+
+/** UV bounding box of a geometry, degenerate axes widened to a unit span. */
+function uvBox(g, out) {
+  const a = g.attributes && g.attributes.uv;
+  let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+  if (a) {
+    const arr = a.array, n = a.count;
+    for (let i = 0; i < n; i++) {
+      const u = arr[i * 2], v = arr[i * 2 + 1];
+      if (!isFinite(u) || !isFinite(v)) continue;
+      if (u < u0) u0 = u;
+      if (u > u1) u1 = u;
+      if (v < v0) v0 = v;
+      if (v > v1) v1 = v;
+    }
+  }
+  if (!isFinite(u0)) { u0 = 0; u1 = 1; v0 = 0; v1 = 1; }
+  if (u1 - u0 < 1e-6) { const c = (u0 + u1) * 0.5; u0 = c - 0.5; u1 = c + 0.5; }
+  if (v1 - v0 < 1e-6) { const c = (v0 + v1) * 0.5; v0 = c - 0.5; v1 = c + 0.5; }
+  out.u0 = u0; out.u1 = u1; out.v0 = v0; out.v1 = v1;
+  return out;
+}
+
+/** The drawable image behind a texture, or null. */
+function texImage(t) {
+  if (!t) return null;
+  const img = t.image;
+  if (!img) return null;
+  return (typeof img.width === 'number' && img.width > 0) ? img : null;
+}
+
+/** 0..1 -> a 0..255 byte. */
+function b255(x) { return Math.max(0, Math.min(255, Math.round(x * 255))); }
+
+/** A material's tiles-per-UV-unit, from whichever map it has. */
+function matRepeat(m) {
+  const t = m.map || m.normalMap || m.roughnessMap;
+  return (t && t.repeat && t.repeat.x) ? t.repeat.x : 1;
+}
+
+/**
+ * Reuse ONE update-range record per attribute so a per-frame partial upload
+ * allocates nothing (three empties `updateRanges` once it has uploaded them).
+ */
+function pushUpdateRange(attr, rec, start, count) {
+  const ur = attr.updateRanges;
+  if (ur && ur.length === 0) {
+    rec.start = start;
+    rec.count = count;
+    ur.push(rec);
+  }
+  attr.needsUpdate = true;
+}
+
 /* ═══════════════════════════════════ Hero ═══════════════════════════════════ */
 
 /**
@@ -1585,6 +1849,14 @@ export class Hero {
     this._scarfPrev = new Float32Array((SCARF_LINKS + 1) * 3);
     this._scarfInit = false;
     this._buildScarf();
+
+    // ---- one draw: atlas + rigid skin (see the header above Hero) --------
+    this._body = null;
+    this._atlas = null;
+    this._eyeRange = null;
+    this._scarfColStart = 0;
+    this._scarfColCount = 0;
+    this._merged = this._consolidate();
 
     // ---- shadow ----------------------------------------------------------
     this.shadowBlob = new ShadowBlob(scene, { radius: 0.50, maxDist: 7.0, opacity: 0.42 });
@@ -2517,6 +2789,329 @@ export class Hero {
     }
   }
 
+  /* ───────────────────── consolidation into one draw ───────────────────── */
+
+  /**
+   * Fold every OPAQUE part of the rig into ONE rigidly-skinned mesh with ONE
+   * material, backed by the atlas described at the top of this file.
+   *
+   * WHY IT IS STILL ARTICULATED. Each part's vertices are baked into ROOT-LOCAL
+   * bind space and weighted 1.0 to the bone the part used to hang off, and the
+   * rig's own Object3Ds become the Skeleton. `skinned = bone.world * bindInv *
+   * v` is then EXACTLY the transform the scene graph was applying — the pose
+   * writers, the flips, the squash on `rig` and the foot IK all keep working
+   * unchanged, because they still write the same bones.
+   *
+   * The scarf comes along as a DYNAMIC vertex range weighted to a bone that
+   * never moves: `_writeScarfGeometry` already produces ROOT-LOCAL positions,
+   * which is precisely what an identity bind reproduces, so its Float32Arrays
+   * simply become views into the merged buffers.
+   *
+   * Anything transparent (the goggle lens, the wing membranes) stays its own
+   * draw — three must sort those against the scene, and a merged opaque body
+   * cannot be sorted.
+   *
+   * Never fatal: on any failure the per-part meshes are left exactly as built.
+   * @returns {boolean} whether the merge happened
+   */
+  _consolidate() {
+    if (typeof document === "undefined" || globalThis.CRESTBOUND_NOMERGE) return false;
+    const root = this.root;
+    root.updateMatrixWorld(true);
+
+    /* ---- 1. which parts may merge ---------------------------------------- */
+    const keep = [];
+    const parts = [];
+    for (let i = 0; i < this._meshes.length; i++) {
+      const m = this._meshes[i];
+      const mat = m.material;
+      if (!m.parent || !m.geometry || !mat || mat.transparent || mat === this.M.wing) { keep.push(m); continue; }
+      parts.push({
+        mesh: m, geo: m.geometry, mat, bone: m.parent, dyn: false,
+        eye: (m === this._sclera || m === this._pupils),
+      });
+    }
+    if (parts.length < 2) return false;
+    // eyes last so setPower('metal') can spare them with one geometry group
+    parts.sort((a, b) => (a.eye ? 1 : 0) - (b.eye ? 1 : 0));
+
+    const statBone = new THREE.Object3D();
+    statBone.name = 'nim.staticBone';
+    root.add(statBone);
+    root.updateMatrixWorld(true);
+    if (this.scarfMesh && this.scarfMesh.geometry) {
+      parts.push({ mesh: this.scarfMesh, geo: this.scarfMesh.geometry, mat: this.M.scarf, bone: statBone, dyn: true, eye: false });
+    }
+
+    /* ---- 2. one atlas tile per part -------------------------------------- */
+    const atlas = new PartAtlas(1024, 128);
+    const box = { u0: 0, u1: 1, v0: 0, v1: 1 };
+    let anyCC = false, anySheen = false;
+    let wAll = 0, envSum = 0, specSum = 0, shRSum = 0, shRW = 0;
+
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      if (p.geo.index) p.geo = p.geo.toNonIndexed();
+      p.n = p.geo.attributes.position.count;
+      p.slot = atlas.reserve();
+      if (!p.slot) return false;                       // atlas full: leave the rig alone
+
+      const m = p.mat;
+      const rep = matRepeat(m);
+      uvBox(p.geo, box);
+      /* THE TILE IS SQUARE, SO THE REGION IT HOLDS MUST BE SQUARE TOO.
+         Fitting a non-square UV box to a square tile stretches the texture along
+         one axis — measured as visible banding across Nim's head, where the
+         lathe's v span is shorter than its u span. One shared `span` keeps the
+         u:v texel aspect exactly what the per-part material sampled, and also
+         keeps the derivative-based tangent frame (three builds TBN from dFdx of
+         the UVs) identical, which is what normal mapping reads. */
+      p.span = Math.max(box.u1 - box.u0, box.v1 - box.v0);
+      p.u0 = box.u0; p.v0 = box.v0;
+      const x0 = box.u0 * rep, x1 = (box.u0 + p.span) * rep;
+      const y0 = box.v0 * rep, y1 = (box.v0 + p.span) * rep;
+
+      const im = texImage(m.map);
+      if (im && atlas.drawTiled('map', p.slot, im, x0, x1, y0, y1)
+          && m.map.colorSpace !== THREE.SRGBColorSpace) {
+        atlas.recode('map', p.slot, true);          // linear source onto an sRGB page
+      }
+
+      const nm = texImage(m.normalMap);
+      if (nm && atlas.drawTiled('normalMap', p.slot, nm, x0, x1, y0, y1)) {
+        if (m.normalMap.colorSpace === THREE.SRGBColorSpace) atlas.recode('normalMap', p.slot, false);
+        const ns = (m.normalScale && m.normalScale.x !== undefined) ? m.normalScale.x : 1;
+        if (Math.abs(ns - 1) > 0.01) {
+          atlas.mapTile('normalMap', p.slot, (d) => {
+            for (let k = 0; k < d.length; k += 4) {
+              d[k] = b255(0.5 + (d[k] / 255 - 0.5) * ns);
+              d[k + 1] = b255(0.5 + (d[k + 1] / 255 - 0.5) * ns);
+            }
+          });
+        }
+      }
+
+      const rough = clamp01(numOr(m.roughness, 1));
+      const metal = clamp01(numOr(m.metalness, 0));
+      const om = texImage(m.roughnessMap);
+      if (om && atlas.drawTiled('ormMap', p.slot, om, x0, x1, y0, y1)) {
+        if (m.roughnessMap.colorSpace === THREE.SRGBColorSpace) atlas.recode('ormMap', p.slot, false);
+        atlas.mapTile('ormMap', p.slot, (d) => {
+          for (let k = 0; k < d.length; k += 4) {
+            d[k + 1] = b255((d[k + 1] / 255) * rough);
+            d[k + 2] = b255((d[k + 2] / 255) * metal);
+          }
+        });
+      } else {
+        atlas.fill('ormMap', p.slot, 'rgb(0,' + b255(rough) + ',' + b255(metal) + ')');
+      }
+
+      const cc = numOr(m.clearcoat, 0);
+      if (cc > 0.002) {
+        anyCC = true;
+        atlas.fill('ccMap', p.slot, 'rgb(' + b255(cc) + ',' + b255(numOr(m.clearcoatRoughness, 0)) + ',0)');
+      }
+      const sh = numOr(m.sheen, 0);
+      if (sh > 0.002 && m.sheenColor) {
+        anySheen = true;
+        _col0.copy(m.sheenColor).multiplyScalar(sh);
+        atlas.fill('sheenMap', p.slot, '#' + _col0.getHexString());
+        atlas.fillAlpha('shrMap', p.slot, numOr(m.sheenRoughness, 1));
+        shRSum += numOr(m.sheenRoughness, 1) * p.n;
+        shRW += p.n;
+      }
+
+      wAll += p.n;
+      envSum += numOr(m.envMapIntensity, 1) * p.n;
+      specSum += numOr(m.specularIntensity, 1) * p.n;
+    }
+    if (!atlas.ok) return false;
+
+    /* ---- 3. one geometry ------------------------------------------------- */
+    let total = 0;
+    for (let i = 0; i < parts.length; i++) total += parts[i].n;
+    const pos = new Float32Array(total * 3);
+    const nor = new Float32Array(total * 3);
+    const uvs = new Float32Array(total * 2);
+    const cols = new Float32Array(total * 3);
+    const sIdx = new Uint16Array(total * 4);
+    const sWgt = new Float32Array(total * 4);
+
+    const bones = [];
+    const rootInv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+    const m4 = new THREE.Matrix4();
+    const m3 = new THREE.Matrix3();
+    const v = new THREE.Vector3();
+    let head = 0, eyeStart = -1, eyeCount = 0, scarfStart = -1, scarfCount = 0;
+
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      let bi = bones.indexOf(p.bone);
+      if (bi < 0) { bi = bones.length; bones.push(p.bone); }
+
+      m4.multiplyMatrices(rootInv, p.mesh.matrixWorld);
+      m3.getNormalMatrix(m4);
+
+      const ap = p.geo.attributes.position.array;
+      const an = p.geo.attributes.normal ? p.geo.attributes.normal.array : null;
+      const au = p.geo.attributes.uv ? p.geo.attributes.uv.array : null;
+      const ac = p.geo.attributes.color ? p.geo.attributes.color.array : null;
+      const mc = p.mat.color;
+      const sl = p.slot;
+      const bu = p.u0, bv = p.v0, isp = 1 / p.span;    // the SAME square region the tile holds
+
+      for (let k = 0; k < p.n; k++) {
+        const o3 = (head + k) * 3, o2 = (head + k) * 2, o4 = (head + k) * 4;
+        v.set(ap[k * 3], ap[k * 3 + 1], ap[k * 3 + 2]).applyMatrix4(m4);
+        pos[o3] = v.x; pos[o3 + 1] = v.y; pos[o3 + 2] = v.z;
+        if (an) {
+          v.set(an[k * 3], an[k * 3 + 1], an[k * 3 + 2]).applyMatrix3(m3).normalize();
+          nor[o3] = v.x; nor[o3 + 1] = v.y; nor[o3 + 2] = v.z;
+        } else { nor[o3 + 1] = 1; }
+        const u = au ? au[k * 2] : bu;
+        const w = au ? au[k * 2 + 1] : bv;
+        uvs[o2] = sl.u0 + (u - bu) * isp * sl.du;
+        uvs[o2 + 1] = sl.v0 + (w - bv) * isp * sl.dv;
+        cols[o3] = mc.r * (ac ? ac[k * 3] : 1);
+        cols[o3 + 1] = mc.g * (ac ? ac[k * 3 + 1] : 1);
+        cols[o3 + 2] = mc.b * (ac ? ac[k * 3 + 2] : 1);
+        sIdx[o4] = bi;
+        sWgt[o4] = 1;
+      }
+      if (p.eye) { if (eyeStart < 0) eyeStart = head; eyeCount += p.n; }
+      if (p.dyn) { scarfStart = head; scarfCount = p.n; }
+      head += p.n;
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+    geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+    geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(sIdx, 4));
+    geo.setAttribute('skinWeight', new THREE.BufferAttribute(sWgt, 4));
+    if (scarfCount > 0) {
+      geo.attributes.position.setUsage(THREE.DynamicDrawUsage);
+      geo.attributes.normal.setUsage(THREE.DynamicDrawUsage);
+    }
+    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0.85, 0), 3.4);
+
+    /* ---- 4. one material ------------------------------------------------- */
+    const tex = atlas.build();
+    const def = {
+      color: 0xffffff, vertexColors: true,
+      roughness: 1, metalness: 1,
+      /* `envMapIntensity` and `specularIntensity` are the two lobe scalars three
+         gives no map slot for, so they become ONE vertex-count-weighted mean.
+         A per-vertex attribute + a shader patch carrying them per part WAS built
+         and measured (`_harness/_lane_final_ab.py`, one frozen verdant-1 frame,
+         merged and per-part meshes alive at once): the mean reproduces the
+         per-part hero to 1.008 whole-body luminance, the per-part patch to
+         0.910. The simpler thing is also the faithful one here, so it ships. */
+      envMapIntensity: wAll > 0 ? envSum / wAll : 1,
+    };
+    if (tex.map) def.map = tex.map;
+    if (tex.normalMap) def.normalMap = tex.normalMap;
+    if (tex.ormMap) { def.roughnessMap = tex.ormMap; def.metalnessMap = tex.ormMap; }
+    const mat = (anyCC || anySheen) ? new THREE.MeshPhysicalMaterial(def) : new THREE.MeshStandardMaterial(def);
+    if (anyCC) {
+      mat.clearcoat = 1;
+      mat.clearcoatMap = tex.ccMap;
+      mat.clearcoatRoughness = 1;
+      mat.clearcoatRoughnessMap = tex.ccMap;
+    }
+    if (anySheen) {
+      mat.sheen = 1;
+      mat.sheenColor.setRGB(1, 1, 1);
+      mat.sheenColorMap = tex.sheenMap;
+      /* sheenRoughness is the ONE lobe scalar that visibly matters per part —
+         Nim's skin is a broad 0.85 velvet and his coat a tighter 0.62, and an
+         average of the two flattens the face. `sheenRoughnessMap` reads .a, so
+         this page carries it in alpha over full-white RGB, where the canvas's
+         premultiplied round-trip is lossless. */
+      if (tex.shrMap) { mat.sheenRoughness = 1; mat.sheenRoughnessMap = tex.shrMap; }
+      else mat.sheenRoughness = shRW > 0 ? shRSum / shRW : 1;
+    }
+    if (mat.isMeshPhysicalMaterial) mat.specularIntensity = wAll > 0 ? specSum / wAll : 1;
+    mat.name = 'nim.body';
+    mat.userData.baseOpacity = 1;
+    mat.userData.baseColor = 0xffffff;
+    this._mats.push(mat);
+
+    /* ---- 5. the skinned mesh --------------------------------------------- */
+    const inverses = [];
+    for (let i = 0; i < bones.length; i++) {
+      inverses.push(new THREE.Matrix4().multiplyMatrices(rootInv, bones[i].matrixWorld).invert());
+    }
+    const body = new THREE.SkinnedMesh(geo, mat);
+    body.name = 'nim.body';
+    body.castShadow = true;
+    body.receiveShadow = false;
+    body.frustumCulled = false;
+    body.matrixAutoUpdate = true;
+    root.add(body);
+    body.bind(new THREE.Skeleton(bones, inverses), new THREE.Matrix4());
+
+    /* ---- 6. retire the per-part meshes ----------------------------------- */
+    /* `CB_KEEP_PARTS` leaves the ORIGINAL per-part meshes in the rig, hidden,
+       instead of retiring them. It is off in play and exists so a harness can
+       render the merged body and the meshes it replaced in the SAME frozen
+       frame and diff them — which is the only measurement that can tell a
+       material bug from run-to-run scene variance. See _harness/_lane_final_ab.py. */
+    const KEEP_PARTS = !!globalThis.CB_KEEP_PARTS;
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      if (KEEP_PARTS) { p.mesh.visible = false; continue; }
+      if (p.mesh.parent) p.mesh.parent.remove(p.mesh);
+      const gi = this._geos.indexOf(p.mesh.geometry);
+      if (gi >= 0) this._geos.splice(gi, 1);
+      if (p.mesh.geometry !== p.geo) p.geo.dispose();
+      p.mesh.geometry.dispose();
+      void 0;
+    }
+    this._geos.push(geo);
+    this._meshes = keep;
+    this._meshes.push(body);
+
+    this._body = body;
+    this._atlas = atlas;
+    /* Build metadata: which atlas tile each part landed in, and the texture
+       region that tile holds. Cheap to keep and it is the only way to audit an
+       atlas after the fact. */
+    this._atlasSlots = parts.map((p) => ({
+      name: p.mesh.name, slot: p.slot, rep: matRepeat(p.mat), mat: p.mat,
+      u0: p.u0, v0: p.v0, span: p.span,
+    }));
+    this._eyeRange = eyeCount > 0 ? { start: eyeStart, count: eyeCount } : null;
+    this._sclera = null;
+    this._pupils = null;
+
+    /* the scarf's own arrays become VIEWS into the merged buffers, so
+       `_writeScarfGeometry` keeps writing exactly what it wrote before */
+    if (scarfCount > 0) {
+      this._scarfPos = pos.subarray(scarfStart * 3, (scarfStart + scarfCount) * 3);
+      this._scarfNor = nor.subarray(scarfStart * 3, (scarfStart + scarfCount) * 3);
+      this._scarfRange = { pos: scarfStart * 3, count: scarfCount * 3 };
+      this._scarfURa = { start: 0, count: 0 };
+      this._scarfURb = { start: 0, count: 0 };
+      this._scarfColStart = scarfStart;
+      this._scarfColCount = scarfCount;
+    }
+    this._scarfGeo = geo;
+    if (this.scarfMesh) { this.scarfMesh = null; }
+    return true;
+  }
+
+  /** Re-bake the scarf's baked vertex colour after `setTheme` re-dyes it. */
+  _restainScarf() {
+    if (!this._body || !this._scarfColCount) return;
+    const a = this._body.geometry.attributes.color;
+    const arr = a.array, c = this.M.scarf.color;
+    const s = this._scarfColStart * 3, n = this._scarfColCount * 3;
+    for (let i = 0; i < n; i += 3) { arr[s + i] = c.r; arr[s + i + 1] = c.g; arr[s + i + 2] = c.b; }
+    a.needsUpdate = true;
+  }
+
   /**
    * The scarf ribbon. 7 quads, non-indexed, positions and normals rewritten in
    * place every frame from the Verlet chain. Parented to `root` (NOT `rig`) so
@@ -2550,6 +3145,7 @@ export class Hero {
     g.attributes.normal.setUsage(THREE.DynamicDrawUsage);
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 1, 0), 2.5);
 
+    this._scarfGeo = g;
     this.scarfMesh = new THREE.Mesh(g, this.M.scarf);
     this.scarfMesh.name = 'nim.scarf';
     this.scarfMesh.castShadow = true;
@@ -2588,6 +3184,8 @@ export class Hero {
     }
     this.M.scarf.color.copy(_col0);
     this.M.scarf.userData.baseColor = this.M.scarf.color.getHex();
+    // the merged body carries the scarf's colour as a baked vertex attribute
+    this._restainScarf();
 
     // Lenses pick up the realm accent so the goggles never read as dead glass.
     const acc = (def && def.palette && def.palette.crest !== undefined) ? def.palette.crest : COL.lens;
@@ -2633,6 +3231,25 @@ export class Hero {
     for (let i = 0; i < this._meshes.length; i++) {
       const m = this._meshes[i];
       if (m === this._sclera || m === this._pupils) continue;      // keep the face readable
+      if (m === this._body && this._eyeRange) {
+        /* The merged body is ONE draw with no groups; chrome splits it into
+           three ranges over two materials for as long as the power is up, so
+           the eyes stay flesh and readable. Off again = back to one draw. */
+        const g = m.geometry, e = this._eyeRange;
+        g.clearGroups();
+        if (chromeOn) {
+          const tail = g.attributes.position.count - (e.start + e.count);
+          if (e.start > 0) g.addGroup(0, e.start, 0);
+          g.addGroup(e.start, e.count, 1);
+          if (tail > 0) g.addGroup(e.start + e.count, tail, 0);
+          if (!m.userData.origMat) m.userData.origMat = m.material;
+          m.material = [this.M.chrome, m.userData.origMat];
+        } else if (m.userData.origMat) {
+          m.material = m.userData.origMat;
+          m.userData.origMat = null;
+        }
+        continue;
+      }
       if (chromeOn) {
         if (!m.userData.origMat) m.userData.origMat = m.material;
         m.material = this.M.chrome;
@@ -4422,9 +5039,16 @@ export class Hero {
       have = true;
     }
 
-    const g = this.scarfMesh.geometry;
-    g.attributes.position.needsUpdate = true;
-    g.attributes.normal.needsUpdate = true;
+    const g = this._scarfGeo;
+    if (this._scarfRange) {
+      /* The scarf is a slice of the merged body buffer: upload ONLY that slice,
+         through one reused range record apiece so the frame allocates nothing. */
+      pushUpdateRange(g.attributes.position, this._scarfURa, this._scarfRange.pos, this._scarfRange.count);
+      pushUpdateRange(g.attributes.normal, this._scarfURb, this._scarfRange.pos, this._scarfRange.count);
+    } else {
+      g.attributes.position.needsUpdate = true;
+      g.attributes.normal.needsUpdate = true;
+    }
     void ax; void ay; void az;
   }
 
@@ -4473,9 +5097,11 @@ export class Hero {
       if (m.transparent !== wantTrans) { m.transparent = wantTrans; m.needsUpdate = true; }
       m.depthWrite = o > 0.62;
     }
-    // fully faded: stop drawing entirely rather than paying for 26 invisible meshes
-    this.rig.visible = this._fade > 0.02;
-    this.scarfMesh.visible = this._fade > 0.02;
+    // fully faded: stop drawing entirely rather than paying for invisible meshes
+    const show = this._fade > 0.02;
+    this.rig.visible = show;
+    if (this._body) this._body.visible = show;
+    if (this.scarfMesh) this.scarfMesh.visible = show;
   }
 
   /* ───────────────────────────────── teardown ───────────────────────────────── */
@@ -4483,6 +5109,14 @@ export class Hero {
   dispose() {
     if (this.root.parent) this.root.parent.remove(this.root);
     this.shadowBlob.dispose();
+    if (this._body && this._body.material) {
+      const bm = this._body.material;
+      for (const k of ['map', 'normalMap', 'roughnessMap', 'clearcoatMap', 'sheenColorMap', 'sheenRoughnessMap']) {
+        if (bm[k] && bm[k].dispose) bm[k].dispose();
+      }
+      if (this._body.skeleton && this._body.skeleton.dispose) this._body.skeleton.dispose();
+    }
+    if (this._atlas) { this._atlas.dispose(); this._atlas = null; }
     for (let i = 0; i < this._geos.length; i++) {
       const g = this._geos[i];
       if (g && g.dispose) g.dispose();
