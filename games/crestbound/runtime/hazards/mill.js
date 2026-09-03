@@ -40,7 +40,11 @@ const _v3 = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 const _q2 = new THREE.Quaternion();
 const _m = new THREE.Matrix4();
+const _mSpin = new THREE.Matrix4();
+const _mDeck = new THREE.Matrix4();
 const UPV = new THREE.Vector3(0, 1, 0);
+const ONE_SCALE = new THREE.Vector3(1, 1, 1);
+const IDENT_Q = new THREE.Quaternion();
 
 /** A chamfered slab pre-translated into local space. */
 function slab(w, h, d, x, y, z, bevel = 0.02, detail = 1) {
@@ -225,27 +229,18 @@ class MillHazard extends Hazard {
     // Orient the tower so its +Y is world up and its -Z faces the mill's facing.
     const yawQ = this.yawQ;
 
-    this.tower = new THREE.Mesh(mergeAll(stone), hazMat(this.ctx, 'stone'));
-    this.tower.castShadow = true;
-    this.tower.receiveShadow = true;
-    this.tower.position.copy(base);
-    this.tower.quaternion.copy(yawQ);
-    this.add(this.tower);
-
-    this.timber = new THREE.Mesh(mergeAll(timber), hazMat(this.ctx, 'wood'));
-    this.timber.castShadow = true;
-    this.timber.receiveShadow = true;
-    this.timber.position.copy(base);
-    this.timber.quaternion.copy(yawQ);
-    this.add(this.timber);
-
-    this.trimMat = additiveMaterial(this.safeColor.getHex(), { cached: false, opacity: 0.6 });
-    this.own(this.trimMat);
-    this.trimMesh = new THREE.Mesh(mergeAll(trim), this.trimMat);
-    this.trimMesh.renderOrder = 5;
-    this.trimMesh.position.copy(base);
-    this.trimMesh.quaternion.copy(yawQ);
-    this.add(this.trimMesh);
+    /* BATCHED (hazards/batch.js): the tower, its timber and its safe-edge trim are STATIC, so
+       each is one part in the course-wide batch for its material and its pose is written once.
+       Same triangles, same materials, same shadows — one draw call shared with every other
+       hazard part of that material instead of three of its own. */
+    _m.compose(base, yawQ, ONE_SCALE);
+    this.towerPart = this.solidPart(hazMat(this.ctx, 'stone'), mergeAll(stone), true, true);
+    this.setPartMatrix(this.towerPart, _m);
+    this.timberPart = this.solidPart(hazMat(this.ctx, 'wood'), mergeAll(timber), true, true);
+    this.setPartMatrix(this.timberPart, _m);
+    this.trimPartRef = this.trimPart(mergeAll(trim));
+    this.setPartMatrix(this.trimPartRef, _m);
+    this.trimOpacity = 0.6;
 
     // ---- static colliders: the drum, and the gallery you can actually land on -------------
     this.colliders.push(makeCollider({
@@ -324,31 +319,25 @@ class MillHazard extends Hazard {
     glows.push(ring);
 
     for (const g of stat) g.applyQuaternion(this.alignQ);
-    this.hubStatic = new THREE.Mesh(mergeAll(stat), hazMat(this.ctx, 'wood'));
-    this.hubStatic.castShadow = true;
-    this.hubStatic.receiveShadow = true;
-    this.hubStatic.position.copy(this.hub);
-    this.add(this.hubStatic);
+    _m.compose(this.hub, IDENT_Q, ONE_SCALE);
+    this.hubStaticPart = this.solidPart(hazMat(this.ctx, 'wood'), mergeAll(stat), true, true);
+    this.setPartMatrix(this.hubStaticPart, _m);
 
+    /* The spinner is kept as a Group because the sail/deck maths reads its quaternion, but it
+       carries no meshes any more: its parts are batch instances re-posed from the SAME
+       `alignQ * yaw(theta)` every frame, so the determinism law is untouched. */
     this.spinner = new THREE.Group();
     this.spinner.position.copy(this.hub);
+    this.spinner.matrixAutoUpdate = false;
     this.add(this.spinner);
 
-    this.gear = new THREE.Mesh(mergeAll(spinParts), hazMat(this.ctx, 'copper'));
-    this.gear.castShadow = true;
-    this.gear.receiveShadow = true;
-    this.spinner.add(this.gear);
+    this.gearPart = this.solidPart(hazMat(this.ctx, 'copper'), mergeAll(spinParts), true, true);
+    this.indexPartRef = this.trimPart(mergeAll(glows));
+    this.indexOpacity = 0.7;
 
-    this.indexMat = additiveMaterial(this.accent.getHex(), { cached: false, opacity: 0.7 });
-    this.own(this.indexMat);
-    this.indexMesh = new THREE.Mesh(mergeAll(glows), this.indexMat);
-    this.indexMesh.renderOrder = 5;
-    this.spinner.add(this.indexMesh);
-
-    this.hubGlow = makeGlowSprite(this.accent.getHex(), R * 3.0, 0.10, 2.8);
-    this.own(this.hubGlow.material);
-    this.hubGlow.position.copy(this.hub);
-    this.add(this.hubGlow);
+    this.hubGlowPart = this.glowPart();
+    this.hubGlowSize = R * 3.0;
+    this.hubGlowOpacity = 0.10;
   }
 
   /* ------------------------------------------------------------------------------------ */
@@ -414,21 +403,10 @@ class MillHazard extends Hazard {
       for (const g of localStripe) { g.applyMatrix4(_m); stripes.push(g); }
     }
 
-    this.sailFrame = new THREE.Mesh(mergeAll(frame), hazMat(this.ctx, 'wood'));
-    this.sailFrame.castShadow = true;
-    this.sailFrame.receiveShadow = true;
-    this.spinner.add(this.sailFrame);
-
-    this.canvasMesh = new THREE.Mesh(mergeAll(canvas), hazMat(this.ctx, 'cloth'));
-    this.canvasMesh.castShadow = true;
-    this.canvasMesh.receiveShadow = true;
-    this.spinner.add(this.canvasMesh);
-
-    this.stripeMat = additiveMaterial(this.safeColor.getHex(), { cached: false, opacity: 0.65 });
-    this.own(this.stripeMat);
-    this.stripeMesh = new THREE.Mesh(mergeAll(stripes), this.stripeMat);
-    this.stripeMesh.renderOrder = 5;
-    this.spinner.add(this.stripeMesh);
+    this.sailPart = this.solidPart(hazMat(this.ctx, 'wood'), mergeAll(frame), true, true);
+    this.canvasPart = this.solidPart(hazMat(this.ctx, 'cloth'), mergeAll(canvas), true, true);
+    this.stripePartRef = this.trimPart(mergeAll(stripes));
+    this.stripeOpacity = 0.65;
 
     // ---- one solid shelf collider per sail -------------------------------------------------
     // half = (length/2 along the radial, thickness/2 along the shelf normal, chord/2 along the
@@ -496,21 +474,14 @@ class MillHazard extends Hazard {
     for (const sg of [1, -1]) {
       stripes.push(slab(d * 0.94, 0.035, 0.07, 0, t * 0.5 + 0.02, sg * (w * 0.5 - 0.16), 0.008, 0.4));
     }
-    this.deckStripeMat = additiveMaterial(this.safeColor.getHex(), { cached: false, opacity: 0.7 });
-    this.own(this.deckStripeMat);
+    this.deckStripeColorK = 0.7;      // additive trim strength, was the material's opacity
     const stripeGeo = mergeAll(stripes);
 
     const deckMat = hazMat(this.ctx, 'wood');
     for (let i = 0; i < this.arms; i++) {
-      const m = new THREE.Mesh(geo, deckMat);
-      m.castShadow = true;
-      m.receiveShadow = true;
-      m.quaternion.copy(this.yawQ);
-      this.add(m);
-      const st = new THREE.Mesh(stripeGeo, this.deckStripeMat);
-      st.renderOrder = 5;
-      st.quaternion.copy(this.yawQ);
-      this.add(st);
+      // `arms` identical gondolas: one geometry, one batch, one draw for all of them.
+      const m = this.solidPart(deckMat, geo, true, true);
+      const st = this.trimPart(stripeGeo.clone());
       this.deckMeshes.push([m, st]);
 
       const c = makeCollider({
@@ -556,6 +527,13 @@ class MillHazard extends Hazard {
     const theta = TAU * (t / this.period + this.phase) * this.dirSign;
 
     this.spinner.quaternion.copy(this.alignQ).multiply(_q2.setFromAxisAngle(UPV, theta));
+    // Re-pose every spinning batch part from that one quaternion (was: three child meshes of a
+    // Group three.js transformed for us; the numbers are identical).
+    _mSpin.compose(this.hub, this.spinner.quaternion, ONE_SCALE);
+    this.setPartMatrix(this.gearPart, _mSpin);
+    this.setPartMatrix(this.sailPart, _mSpin);
+    this.setPartMatrix(this.canvasPart, _mSpin);
+    this.setPartMatrix(this.indexPartRef, _mSpin);
 
     this.angVel = this.omega;
     this.angAxis.copy(this.axis);
@@ -583,8 +561,9 @@ class MillHazard extends Hazard {
         this.armDir(i, theta, _v);
         _v2.copy(this.hub).addScaledVector(_v, R);
         const pair = this.deckMeshes[i];
-        pair[0].position.copy(_v2);
-        pair[1].position.copy(_v2);
+        _mDeck.compose(_v2, this.yawQ, ONE_SCALE);
+        this.setPartMatrix(pair[0], _mDeck);
+        this.setPartMatrix(pair[1], _mDeck);
         const c = this.deckColliders[i];
         setColliderBox(c, _v2, half, this.yawQ);
         c.active = this.enabled;
@@ -614,10 +593,20 @@ class MillHazard extends Hazard {
 
     // --- readability ------------------------------------------------------------------------------
     const beat = 0.5 + 0.5 * Math.sin(theta * this.arms);
-    this.stripeMat.opacity = 0.44 + 0.22 * beat;
-    this.indexMat.opacity = 0.48 + 0.34 * (0.5 + 0.5 * Math.sin(theta * 3));
-    if (this.trimMat) this.trimMat.opacity = 0.38 + 0.20 * (0.5 + 0.5 * Math.sin(t * 1.9));
-    this.hubGlow.material.opacity = 0.07 + 0.05 * beat;
+    // Additive trim: colour x opacity in ONE per-instance write reproduces the per-material
+    // opacity the loose overlay meshes used to animate.
+    this.setPartColor(this.stripePartRef, this.safeColor, 0.44 + 0.22 * beat);
+    this.setPartColor(this.indexPartRef, this.accent, 0.48 + 0.34 * (0.5 + 0.5 * Math.sin(theta * 3)));
+    this.setPartColor(this.trimPartRef, this.safeColor, 0.38 + 0.20 * (0.5 + 0.5 * Math.sin(t * 1.9)));
+    if (this.deckMeshes) {
+      for (let i = 0; i < this.deckMeshes.length; i++) {
+        this.setPartColor(this.deckMeshes[i][1], this.safeColor, this.deckStripeColorK);
+      }
+    }
+    if (this.hubGlowPart) {
+      this.setPartGlow(this.hubGlowPart, this.hub, this.hubGlowSize);
+      this.setPartColor(this.hubGlowPart, this.accent, 0.07 + 0.05 * beat);
+    }
 
     // --- audio: one deep tick per revolution, plus a creak while somebody is riding ---------
     if (this.edge(this, '_lastRev', Math.floor(theta / TAU))) {

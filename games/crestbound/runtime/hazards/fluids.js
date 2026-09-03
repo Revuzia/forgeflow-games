@@ -31,6 +31,7 @@ const _q = new THREE.Quaternion();
 const _m = new THREE.Matrix4();
 const _s = new THREE.Vector3();
 const _box = new THREE.Box3();
+const CUR_ONE = new THREE.Vector3(1, 1, 1);
 const UPV = new THREE.Vector3(0, 1, 0);
 
 /** A chamfered slab pre-translated into local space. */
@@ -169,6 +170,9 @@ class CurrentHazard extends Hazard {
       uniforms: this.flowUniforms, vertexShader: FLOW_VERT, fragmentShader: FLOW_FRAG,
       transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
       side: THREE.DoubleSide, toneMapped: false, fog: true,
+      // three draws a transparent DoubleSide material TWICE (back faces, then front). Additive
+      // blending is commutative, so the second pass buys nothing and costs a draw call.
+      forceSinglePass: true,
     });
     this.own(mat);
     this.tube = new THREE.Mesh(geo, mat);
@@ -195,18 +199,14 @@ class CurrentHazard extends Hazard {
         rimParts.push(g);
       }
     }
-    this.rimMat = additiveMaterial(this.hotColor.getHex(), { cached: false, opacity: 0.55, side: THREE.DoubleSide });
-    this.own(this.rimMat);
-    this.rim = new THREE.Mesh(mergeAll(rimParts), this.rimMat);
-    this.rim.position.copy(this.center);
-    this.rim.quaternion.copy(this.orientQuat);
-    this.rim.renderOrder = 6;
-    this.add(this.rim);
+    // BATCHED (hazards/batch.js): the rims/chevrons and the outfall glow are additive
+    // readability overlays, so they join the one course-wide trim batch.
+    this.rimPart = this.trimPart(mergeAll(rimParts));
+    this.setPart(this.rimPart, this.center, this.orientQuat, CUR_ONE);
 
-    this.glow = makeGlowSprite(this.hotColor.getHex(), Math.max(this.extA, this.extB) * 2.2, 0.12, 2.8);
-    this.own(this.glow.material);
-    this.glow.position.copy(this.center).addScaledVector(this.dir, this.span * 0.5);
-    this.add(this.glow);
+    this.glowPos = this.center.clone().addScaledVector(this.dir, this.span * 0.5);
+    this.glowSize = Math.max(this.extA, this.extB) * 2.2;
+    this.glowRef = this.glowPart();
   }
 
   _buildMotes(q) {
@@ -326,9 +326,10 @@ class CurrentHazard extends Hazard {
     this.motes.instanceMatrix.needsUpdate = true;
 
     const breathe = 0.5 + 0.5 * Math.sin(t * 1.6);
-    this.rimMat.opacity = 0.40 + 0.22 * breathe;
+    this.setPartColor(this.rimPart, this.hotColor, 0.40 + 0.22 * breathe);
     this.moteMat.opacity = 0.42 + 0.22 * breathe;
-    this.glow.material.opacity = 0.08 + 0.06 * breathe;
+    this.setPartGlow(this.glowRef, this.glowPos, this.glowSize);
+    this.setPartColor(this.glowRef, this.hotColor, 0.08 + 0.06 * breathe);
     this.volume.active = this.enabled;
 
     // Direct push, for a controller that reads a per-frame acceleration instead of the Volume.

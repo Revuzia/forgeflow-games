@@ -39,7 +39,11 @@ const _v2 = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 const _q2 = new THREE.Quaternion();
 const _m = new THREE.Matrix4();
+const _m4 = new THREE.Matrix4();
 const _s = new THREE.Vector3();
+const ONE_SCALE = new THREE.Vector3(1, 1, 1);
+const _rs = new THREE.Vector3(1, 1, 1);
+const _sc = new THREE.Color();
 const _e = new THREE.Euler();
 const UPV = new THREE.Vector3(0, 1, 0);
 
@@ -170,32 +174,21 @@ class BreakableHazard extends Hazard {
       cracks.push(g);
     }
 
-    this.body = new THREE.Mesh(mergeAll(parts), hazMat(this.ctx, this.matKey));
-    this.body.castShadow = true;
-    this.body.receiveShadow = true;
-    this.body.position.copy(this.center);
-    this.body.quaternion.copy(this.quat);
-    this.add(this.body);
-
-    this.bandMesh = new THREE.Mesh(mergeAll(bands), hazMat(this.ctx, 'metal'));
-    this.bandMesh.castShadow = true;
-    this.bandMesh.position.copy(this.center);
-    this.bandMesh.quaternion.copy(this.quat);
-    this.add(this.bandMesh);
-
-    this.crackMat = additiveMaterial(this.crackColor.getHex(), { cached: false, opacity: 0.42 });
-    this.own(this.crackMat);
-    this.crackMesh = new THREE.Mesh(mergeAll(cracks), this.crackMat);
-    this.crackMesh.renderOrder = 5;
-    this.crackMesh.position.copy(this.center);
-    this.crackMesh.quaternion.copy(this.quat);
-    this.add(this.crackMesh);
+    /* BATCHED (hazards/batch.js). A crate is STATIC until it breaks, and every crate in a
+       course shares the same handful of materials, so each of the four parts becomes ONE
+       instance in a course-wide BatchedMesh: five crates cost the same draws as one. Breaking
+       is `setVisible(false)` on the instance, which is exactly what `.visible = false` did. */
+    _m4.compose(this.center, this.quat, ONE_SCALE);
+    this.bodyPart = this.solidPart(hazMat(this.ctx, this.matKey), mergeAll(parts), true, true);
+    this.setPartMatrix(this.bodyPart, _m4);
+    this.bandPart = this.solidPart(hazMat(this.ctx, 'metal'), mergeAll(bands), true, true);
+    this.setPartMatrix(this.bandPart, _m4);
+    this.crackPart = this.trimPart(mergeAll(cracks));
+    this.setPartMatrix(this.crackPart, _m4);
 
     // A hint of what is inside, visible only through the cracks.
-    this.coreGlow = makeGlowSprite(this.crackColor.getHex(), Math.min(w, d) * 1.5, 0.10, 3.0);
-    this.own(this.coreGlow.material);
-    this.coreGlow.position.copy(this.center);
-    this.add(this.coreGlow);
+    this.coreGlowPart = this.glowPart();
+    this.coreGlowSize = Math.min(w, d) * 1.5;
   }
 
   _buildShards(q) {
@@ -305,10 +298,10 @@ class BreakableHazard extends Hazard {
     this.time = t;
     const intact = this.intactAt(t);
 
-    this.body.visible = intact;
-    this.bandMesh.visible = intact;
-    this.crackMesh.visible = intact;
-    this.coreGlow.visible = intact;
+    this.setPartVisible(this.bodyPart, intact);
+    this.setPartVisible(this.bandPart, intact);
+    this.setPartVisible(this.crackPart, intact);
+    this.setPartVisible(this.coreGlowPart, intact);
     this.collider.active = this.enabled && intact;
 
     if (intact) {
@@ -317,8 +310,11 @@ class BreakableHazard extends Hazard {
       const reform = (this.breakT !== null && this.respawn > 0)
         ? clamp(1 - (t - this.breakT - this.respawn) / 0.5, 0, 1) : 0;
       const pulse = 0.5 + 0.5 * Math.sin(t * 2.2 + this.center.x * 0.7);
-      this.crackMat.opacity = 0.28 + 0.22 * pulse + reform * 0.6;
-      this.coreGlow.material.opacity = 0.07 + 0.06 * pulse + reform * 0.35;
+      this.setPartColor(this.crackPart, this.crackColor, 0.28 + 0.22 * pulse + reform * 0.6);
+      if (this.coreGlowPart) {
+        this.setPartGlow(this.coreGlowPart, this.center, this.coreGlowSize);
+        this.setPartColor(this.coreGlowPart, this.crackColor, 0.07 + 0.06 * pulse + reform * 0.35);
+      }
       if (this.shardMesh.visible) this.shardMesh.visible = false;
       return;
     }
@@ -463,41 +459,25 @@ class SinkerHazard extends Hazard {
       stripes.push(slab(st, 0.035, d * 0.96, s * (w * 0.5 - st * 0.6), h * 0.5 + 0.012, 0, 0.008, 0.4));
     }
 
-    this.deck = new THREE.Mesh(mergeAll(parts), hazMat(this.ctx, this.matKey));
-    this.deck.castShadow = true;
-    this.deck.receiveShadow = true;
-    this.group.add(this.deck);
-
-    this.bandMesh = new THREE.Mesh(mergeAll(bands), hazMat(this.ctx, 'metal'));
-    this.bandMesh.castShadow = true;
-    this.bandMesh.receiveShadow = true;
-    this.group.add(this.bandMesh);
-
-    this.studMat = new THREE.MeshStandardMaterial({
-      color: 0x0a0d12, emissive: this.safeColor.clone(), emissiveIntensity: 1.8,
-      roughness: 0.35, metalness: 0.25,
-    });
-    this.own(this.studMat);
-    this.studMesh = new THREE.Mesh(mergeAll(studs), this.studMat);
-    this.group.add(this.studMesh);
-
-    this.stripeMat = additiveMaterial(this.safeColor.getHex(), { cached: false, opacity: 0.7 });
-    this.own(this.stripeMat);
-    this.stripeMesh = new THREE.Mesh(mergeAll(stripes), this.stripeMat);
-    this.stripeMesh.renderOrder = 5;
-    this.group.add(this.stripeMesh);
+    /* BATCHED (hazards/batch.js). The raft, its ironwork, the warning studs and the safe-edge
+       stripe are four draws PER SINKER as loose meshes; as batch instances every sinker in the
+       course shares one draw per material. The parts move together, so they are re-posed from
+       the same `group.position` the meshes used to inherit. */
+    this.deckPart = this.solidPart(hazMat(this.ctx, this.matKey), mergeAll(parts), true, true);
+    this.bandPart = this.solidPart(hazMat(this.ctx, 'metal'), mergeAll(bands), true, true);
+    /* The studs were a dark body with an animated emissive; as additive trim only the GLOW
+       survives, which is the read that matters (and is kinder to the emissive-glare bar). */
+    this.studPart = this.trimPart(mergeAll(studs));
+    this.stripePart = this.trimPart(mergeAll(stripes));
 
     // A dust/spray ring parked at the REST height: as the deck drops away from it, the ring
     // marks the line the deck used to be at, which is what makes the drop legible from above.
     const ringGeo = new THREE.RingGeometry(Math.min(w, d) * 0.42, Math.min(w, d) * 0.62, 30, 1);
     ringGeo.rotateX(-Math.PI * 0.5);
-    this.ringMat = additiveMaterial(this.warnColor.getHex(), { cached: false, opacity: 0, side: THREE.DoubleSide });
-    this.own(this.ringMat);
-    this.ring = new THREE.Mesh(ringGeo, this.ringMat);
-    this.ring.renderOrder = 6;
-    this.ring.position.copy(this.center);
-    this.ring.position.y += this.size.y * 0.5 + 0.02;
-    this.add(this.ring);
+    this.ringPart = this.trimPart(ringGeo);
+    this.ringPos = this.center.clone();
+    this.ringPos.y += this.size.y * 0.5 + 0.02;
+    this.setPart(this.ringPart, this.ringPos, null, ONE_SCALE);
   }
 
   _buildCollider() {
@@ -564,6 +544,12 @@ class SinkerHazard extends Hazard {
       this.group.position.y += Math.sin(t * 57.1) * 0.014 * k;
     }
 
+    // The batched deck parts follow the same pose the Group used to hand to its children.
+    this.setPart(this.deckPart, this.group.position, null, ONE_SCALE);
+    this.setPart(this.bandPart, this.group.position, null, ONE_SCALE);
+    this.setPart(this.studPart, this.group.position, null, ONE_SCALE);
+    this.setPart(this.stripePart, this.group.position, null, ONE_SCALE);
+
     _v.set(this.center.x, this.center.y - this.depth, this.center.z);
     _v2.copy(this.size).multiplyScalar(0.5);
     setColliderBox(this.collider, _v, _v2);
@@ -572,12 +558,15 @@ class SinkerHazard extends Hazard {
     // --- readability ---------------------------------------------------------------------------
     const sunk = this.depth / this.depthMax;
     const heat = Math.max(warmup * (armed ? 1 : 0.85), sunk);
-    this.studMat.emissive.copy(this.safeColor).lerp(this.warnColor, clamp(heat * 1.25, 0, 1));
+    _sc.copy(this.safeColor).lerp(this.warnColor, clamp(heat * 1.25, 0, 1));
     const strobe = 0.5 + 0.5 * Math.sin(t * (3 + heat * 26));
-    this.studMat.emissiveIntensity = 1.4 + heat * (1.6 + strobe * 5.0);
-    this.stripeMat.opacity = 0.42 + 0.28 * (0.5 + 0.5 * Math.sin(t * 2.0)) - heat * 0.20;
-    this.ringMat.opacity = clamp(sunk * 0.55 + (armed ? 0.12 : 0), 0, 0.7);
-    this.ring.scale.setScalar(1 + sunk * 0.35);
+    // The old emissiveIntensity ran 1.4 -> 8.0; as additive trim that maps onto colour x k,
+    // scaled down to the 0..1 band the trim batch works in.
+    this.setPartColor(this.studPart, _sc, clamp((1.4 + heat * (1.6 + strobe * 5.0)) * 0.16, 0.18, 1.3));
+    this.setPartColor(this.stripePart, this.safeColor, 0.42 + 0.28 * (0.5 + 0.5 * Math.sin(t * 2.0)) - heat * 0.20);
+    this.setPartColor(this.ringPart, this.warnColor, clamp(sunk * 0.55 + (armed ? 0.12 : 0), 0, 0.7));
+    _rs.setScalar(1 + sunk * 0.35);
+    this.setPart(this.ringPart, this.ringPos, null, _rs);
 
     // --- one-shots -------------------------------------------------------------------------------
     if (this._silent) return;

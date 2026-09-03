@@ -32,6 +32,7 @@ import {
 // The world builders are authored by another slice; imported as a NAMESPACE so a missing
 // export degrades into a local procedural fallback instead of a hard link error.
 import * as builders from '../world/builders.js';
+import { trimWhiteUV, splitGeometryGroups } from './batch.js';
 
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
@@ -39,7 +40,38 @@ const _v3 = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 const _m = new THREE.Matrix4();
 const _s = new THREE.Vector3();
+const _c0 = new THREE.Color();
 const UPV = new THREE.Vector3(0, 1, 0);
+const ONE_SCALE = new THREE.Vector3(1, 1, 1);
+const _mtxInv = new THREE.Matrix4();
+const _mtxLocal = new THREE.Matrix4();
+
+/**
+ * Flatten a built prop into batchable parts: one entry per (mesh, material group), each with the
+ * node's transform baked in so the whole thing can be re-posed by a single instance matrix.
+ * @returns {Array<{geometry:THREE.BufferGeometry, material:THREE.Material, owned:boolean}>}
+ */
+function ringMeshParts(root) {
+  const out = [];
+  if (!root) return out;
+  root.updateMatrixWorld(true);
+  _mtxInv.copy(root.matrixWorld).invert();
+  root.traverse((o) => {
+    if (!o.isMesh || !o.geometry || !o.material) return;
+    _mtxLocal.copy(_mtxInv).multiply(o.matrixWorld);
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    const groups = (o.geometry.groups && o.geometry.groups.length > 1)
+      ? splitGeometryGroups(o.geometry)
+      : [{ geometry: o.geometry, materialIndex: 0 }];
+    for (const gp of groups) {
+      const g = gp.geometry.clone();
+      g.applyMatrix4(_mtxLocal);
+      const mi = Math.min(gp.materialIndex | 0, mats.length - 1);
+      out.push({ geometry: g, material: mats[mi] || mats[0], owned: true });
+    }
+  });
+  return out;
+}
 
 /** A chamfered slab pre-translated into local space. */
 function slab(w, h, d, x, y, z, bevel = 0.02, detail = 1) {
@@ -606,7 +638,46 @@ class RingsHazard extends Hazard {
     this.group = new THREE.Group();
     this.add(this.group);
 
-    const haloParts = [];
+    /* ONE DRAW FOR THE WHOLE CHAIN.
+       Every hoop is the same geometry at a different pose, so the chain is authored ONCE at the
+       origin and every hoop is an instance in the course-wide batch (hazards/batch.js): the
+       machined hoop joins the batch of its own copper/emissive material, the lit halo and the
+       route glow join the single additive trim batch. Measured before: 5 draws per visible hoop
+       (2 hoop groups + 2 halo passes for a transparent DoubleSide material + 1 glow sprite).
+       The pose maths below is unchanged — only where the triangles are submitted changed. */
+    const bs = this.batches;
+    this.pieces = [];        // {batch, ids:[…]} for the hoop bodies
+    this.haloBatch = null;
+    this.glowBatch = null;
+
+    let protoParts = null;   // [{geometry, material}] authored at the origin, hole along +Z
+    if (typeof builders.buildRing === 'function') {
+      try {
+        const built = builders.buildRing({
+          kind: 'rings', p: [0, 0, 0], r: this.radius,
+          tube: Math.max(0.10, this.radius * 0.085),
+          mat: 'copper', struts: 0, glow: 1, solid: false,
+        }, this.ctx && this.ctx.theme, this.ctx && this.ctx.mats);
+        if (built && built.mesh) protoParts = ringMeshParts(built.mesh);
+      } catch (e) { protoParts = null; }
+    }
+    if (!protoParts || protoParts.length === 0) {
+      const fb = this._fallbackRing();
+      protoParts = ringMeshParts(fb);
+    }
+
+    const haloGeo = new THREE.TorusGeometry(this.radius * 1.012, Math.max(0.045, this.radius * 0.05), 4, 20);
+    const glowGeo = bs ? bs.glowGeometry() : null;
+    if (bs) {
+      this.haloBatch = bs.trim();
+      this.glowBatch = bs.trim();
+      for (let k = 0; k < protoParts.length; k++) {
+        // A hoop hangs in mid-air over the route it marks: its shadow lands nowhere the player
+        // reads, and eight of them are a second full pass of the heaviest geometry here.
+        this.pieces.push({ batch: bs.solidFor(protoParts[k].material, false, true), ids: [] });
+      }
+    }
+
     for (let i = 0; i < this.count; i++) {
       const p = this.points[i];
       // Face the ring along the path: toward the next hoop (or back from the previous one).
@@ -619,58 +690,37 @@ class RingsHazard extends Hazard {
       const quat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
 
       let mesh = null;
-      if (typeof builders.buildRing === 'function') {
-        try {
-          const built = builders.buildRing({
-            kind: 'rings', p: [0, 0, 0], r: this.radius,
-            tube: Math.max(0.10, this.radius * 0.085),
-            mat: 'copper', struts: 0, glow: 1, solid: false,
-          }, this.ctx && this.ctx.theme, this.ctx && this.ctx.mats);
-          if (built && built.mesh) mesh = built.mesh;
-        } catch (e) { mesh = null; }
+      const ring = {
+        p: p.clone(), normal, quat, mesh: null, halo: null,
+        haloId: -1, glowId: -1, passedAt: null, plane: normal.dot(p),
+      };
+
+      if (bs) {
+        _m.compose(p, quat, ONE_SCALE);
+        for (let k = 0; k < this.pieces.length; k++) {
+          const pc = this.pieces[k];
+          const id = this.addBatchPart(pc.batch, protoParts[k].geometry);
+          pc.ids.push(id);
+          if (id >= 0) pc.batch.setMatrix(id, _m);
+        }
+        ring.haloId = this.addBatchPart(this.haloBatch, trimWhiteUV(haloGeo.clone()));
+        if (ring.haloId >= 0) this.haloBatch.setMatrix(ring.haloId, _m);
+        ring.glowId = glowGeo ? this.addBatchPart(this.glowBatch, glowGeo) : -1;
+      } else {
+        // No course batch (a bare harness ctx): keep the loose meshes so the hazard still draws.
+        mesh = this._fallbackRing();
+        mesh.position.copy(p);
+        mesh.quaternion.copy(quat);
+        mesh.castShadow = false;
+        mesh.matrixAutoUpdate = false;
+        mesh.updateMatrix();
+        this.group.add(mesh);
+        ring.mesh = mesh;
       }
-      if (!mesh) mesh = this._fallbackRing();
-      mesh.position.copy(p);
-      mesh.quaternion.copy(quat);
-      /* A hoop hangs in mid-air over the route it marks: its shadow lands
-         nowhere the player reads, and eight of them are a second full pass of
-         the heaviest geometry in the course. */
-      mesh.castShadow = false;
-      mesh.matrixAutoUpdate = false;
-      mesh.updateMatrix();
-      this.group.add(mesh);
-
-      // Owned additive halo: buildRing's materials are shared/cached and must NOT be mutated,
-      // so the lit state lives on a hoop of our own laid over the machined one.
-      const haloGeo = new THREE.TorusGeometry(this.radius * 1.012, Math.max(0.045, this.radius * 0.05), 4, 20);
-      const halo = new THREE.Mesh(haloGeo, null);       // material assigned below (per ring)
-      halo.castShadow = false;
-      halo.position.copy(p);
-      halo.quaternion.copy(quat);
-      halo.renderOrder = 6;
-      haloParts.push(halo);
-
-      this.rings.push({
-        p: p.clone(), normal, quat, mesh, halo,
-        haloMat: null, glow: null, passedAt: null, plane: normal.dot(p),
-      });
+      this.rings.push(ring);
     }
-
-    // One material per ring so each can light independently — 13 additive materials is nothing
-    // next to a per-ring geometry clone, and the "which hoop is next" read depends on it.
-    for (let i = 0; i < this.rings.length; i++) {
-      const r = this.rings[i];
-      r.haloMat = additiveMaterial(this.dimColor.getHex(), { cached: false, opacity: 0.35, side: THREE.DoubleSide });
-      this.own(r.haloMat);
-      r.halo.material = r.haloMat;
-      this.group.add(r.halo);
-
-      r.glow = makeGlowSprite(this.dimColor.getHex(), this.radius * 1.6, 0.10, 2.8);
-      this.own(r.glow.material);
-      r.glow.position.copy(r.p);
-      r.glow.renderOrder = 7;
-      this.group.add(r.glow);
-    }
+    haloGeo.dispose();
+    for (const pp of protoParts) { if (pp.owned) { try { pp.geometry.dispose(); } catch (e) { /* noop */ } } }
 
     // Guide motes drifting from hoop to hoop so the ROUTE is legible before you commit.
     const seg = this.count - 1;
@@ -787,11 +837,18 @@ class RingsHazard extends Hazard {
       const flare = r.passedAt !== null ? clamp(1 - (t - r.passedAt) / 0.45, 0, 1) : 0;
       const beat = 0.5 + 0.5 * Math.sin(t * (isNext ? 5.5 + urgency * 8 : 1.7) + i * 0.7);
       const lit = passed || this.done;
-      r.haloMat.color.copy(lit ? this.litColor : this.dimColor);
-      r.haloMat.opacity = (lit ? 0.55 : isNext ? 0.42 : 0.14) + beat * (isNext ? 0.32 : 0.10) + flare * 0.9;
-      r.glow.material.color.copy(r.haloMat.color);
-      r.glow.material.opacity = (lit ? 0.20 : isNext ? 0.18 : 0.05) + beat * 0.06 + flare * 0.55;
-      r.glow.scale.setScalar(this.radius * (1.5 + flare * 1.4));
+      _c0.copy(lit ? this.litColor : this.dimColor);
+      const haloOp = (lit ? 0.55 : isNext ? 0.42 : 0.14) + beat * (isNext ? 0.32 : 0.10) + flare * 0.9;
+      const glowOp = (lit ? 0.20 : isNext ? 0.18 : 0.05) + beat * 0.06 + flare * 0.55;
+      // Additive blending: colour x opacity is exactly what the per-material opacity used to do,
+      // so the batch reproduces the old look with one per-instance colour write.
+      if (r.haloId >= 0) this.haloBatch.setColor(r.haloId, _c0, haloOp);
+      if (r.glowId >= 0) {
+        const gs = this.radius * 1.6 * (1.5 + flare * 1.4) / 1.5;
+        _s.setScalar(gs);
+        this.glowBatch.setTRS(r.glowId, r.p, this.batches ? this.batches.billboardQuat() : null, _s);
+        this.glowBatch.setColor(r.glowId, _c0, glowOp);
+      }
     }
 
     // --- guide motes travel from hoop to hoop --------------------------------------------------

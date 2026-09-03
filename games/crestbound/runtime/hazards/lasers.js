@@ -27,6 +27,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Collider, KillVolume, Volume } from '../world/collider.js';
+import { hazBatch, trimWhiteUV } from './batch.js';
 import { Mats } from '../world/materials.js';
 import { clamp, lerp, smoothstep, mulberry32 } from '../core/util.js';
 
@@ -37,6 +38,7 @@ import { clamp, lerp, smoothstep, mulberry32 } from '../core/util.js';
 const _kv = new THREE.Vector3();
 const _kv2 = new THREE.Vector3();
 const _kq = new THREE.Quaternion();
+const _bbScale = new THREE.Vector3(1, 1, 1);
 const _km = new THREE.Matrix4();
 const _kc = new THREE.Color();
 const UP = new THREE.Vector3(0, 1, 0);
@@ -211,6 +213,11 @@ export function additiveMaterial(color, opts = {}) {
     blending: THREE.AdditiveBlending, depthWrite: false,
     depthTest: opts.depthTest !== false,
     side: opts.side || THREE.FrontSide,
+    /* three.js draws a TRANSPARENT DoubleSide material TWICE — back faces, then front — unless
+       this is set. Additive blending is commutative and writes no depth, so the two passes are
+       indistinguishable from one; measured on verdant-1's ring chain, that second pass was 7 of
+       the 36 hazard draws it cost. */
+    forceSinglePass: true,
     toneMapped: false,
     fog: false,
   });
@@ -902,10 +909,90 @@ export class Hazard {
     this._ambients = [];
     this._loops = [];        // HazLoop voices this hazard owns
     this._silent = true;     // suppresses one-shot effects during reset()/build
+    this._batchSet = undefined;   // resolved lazily by `get batches`
+    this._batchParts = null;      // flat [batch, id, batch, id, …] for dispose
   }
 
   /** Register a material/texture the hazard owns (shared Mats materials must NOT go here). */
   own(res) { if (res) this._owned.push(res); return res; }
+
+  /* --- DRAW BATCHING (hazards/batch.js) -------------------------------------------------------
+     three.js issues one draw per geometry group, so a hazard that merges its parts per material
+     still pays one draw per material PER OBJECT. `batches` is the course-wide BatchedMesh set:
+     parts added through `addBatchPart` share ONE draw call with every other hazard part that
+     uses the same material. Nothing about hazard STATE changes — a batched part is written from
+     the same numbers the loose mesh used, so the determinism law is untouched. */
+
+  /** The per-course batch set (retained on first use), or null when the ctx has no course. */
+  get batches() {
+    if (this._batchSet === undefined) {
+      this._batchSet = hazBatch(this.ctx) || null;
+      if (this._batchSet) {
+        this._batchSet.retain();
+        this._batchSet.ensureParent(this.mesh);
+      }
+    }
+    return this._batchSet;
+  }
+
+  /**
+   * Copy `geometry` into `batch` and remember the handle so dispose() can free it.
+   * @returns {number} part id, or -1 when the batch refused it (caller keeps a loose mesh)
+   */
+  addBatchPart(batch, geometry) {
+    if (!batch || !geometry) return -1;
+    const id = batch.add(geometry);
+    if (id >= 0) {
+      if (!this._batchParts) this._batchParts = [];
+      this._batchParts.push(batch, id);
+    }
+    return id;
+  }
+
+  /**
+   * Add `geometry` (world- or hazard-local, posed by `setPart*`) to the course batch that owns
+   * `material`. `castShadow` is a property of the BATCH, so a part that must not cast picks the
+   * non-casting twin automatically.
+   * @returns {{b:object,id:number}|null}
+   */
+  solidPart(material, geometry, castShadow, receiveShadow) {
+    const bs = this.batches;
+    if (!bs || !material || !geometry) return null;
+    const b = bs.solidFor(material, !!castShadow, receiveShadow !== false);
+    if (!b) return null;
+    const id = this.addBatchPart(b, geometry);
+    return id >= 0 ? { b, id } : null;
+  }
+
+  /** Add an additive READABILITY overlay (stripe / halo / crack / index band) to the trim batch. */
+  trimPart(geometry) {
+    const bs = this.batches;
+    if (!bs || !geometry) return null;
+    const b = bs.trim();
+    const id = this.addBatchPart(b, trimWhiteUV(geometry));
+    return id >= 0 ? { b, id } : null;
+  }
+
+  /** Add a camera-facing glow quad (the old `makeGlowSprite`) to the trim batch. */
+  glowPart() {
+    const bs = this.batches;
+    if (!bs) return null;
+    const b = bs.trim();
+    const id = this.addBatchPart(b, bs.glowGeometry());
+    return id >= 0 ? { b, id } : null;
+  }
+
+  setPart(part, pos, quat, scale) { if (part) part.b.setTRS(part.id, pos, quat, scale); }
+  setPartMatrix(part, m) { if (part) part.b.setMatrix(part.id, m); }
+  setPartColor(part, color, mul) { if (part) part.b.setColor(part.id, color, mul); }
+  setPartVisible(part, v) { if (part) part.b.setVisible(part.id, v); }
+  /** Face `part` at the camera at `pos`, scaled to `size` metres. */
+  setPartGlow(part, pos, size) {
+    if (!part) return;
+    const bs = this.batches;
+    _bbScale.setScalar(size);
+    part.b.setTRS(part.id, pos, bs ? bs.billboardQuat() : null, _bbScale);
+  }
 
   add(obj) { if (obj) this.mesh.add(obj); return obj; }
 
@@ -947,6 +1034,14 @@ export class Hazard {
     this._ambients.length = 0;
     for (const l of this._loops) { try { l.stop(160); } catch (e) { /* noop */ } }
     this._loops.length = 0;
+    if (this._batchParts) {
+      for (let i = 0; i < this._batchParts.length; i += 2) {
+        try { this._batchParts[i].remove(this._batchParts[i + 1]); } catch (e) { /* noop */ }
+      }
+      this._batchParts = null;
+    }
+    if (this._batchSet) { try { this._batchSet.release(); } catch (e) { /* noop */ } }
+    this._batchSet = null;
     disposeObject3D(this.mesh, true);         // geometries yes, materials handled below
     for (const r of this._owned) { try { r.dispose(); } catch (e) { /* noop */ } }
     this._owned.length = 0;

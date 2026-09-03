@@ -45,6 +45,7 @@ const _q = new THREE.Quaternion();
 const _chevFlip = new THREE.Quaternion();
 const _m = new THREE.Matrix4();
 const _s = new THREE.Vector3();
+const JP_ONE = new THREE.Vector3(1, 1, 1);
 const _e = new THREE.Euler();
 const _c = new THREE.Color();
 const UPV = new THREE.Vector3(0, 1, 0);
@@ -638,11 +639,11 @@ class JumpPadHazard extends Hazard {
       baseParts.push(slab(padR * 0.26, h * 0.3, padR * 0.26,
         Math.cos(a) * padR * 0.82, -h * 0.5 + h * 0.15, Math.sin(a) * padR * 0.82, 0.015));
     }
-    this.base = new THREE.Mesh(mergeAll(baseParts), hazMat(this.ctx, 'metal'));
-    this.base.castShadow = true;
-    this.base.receiveShadow = true;
-    this.base.position.copy(this.center);
-    this.add(this.base);
+    /* BATCHED (hazards/batch.js): every part of the pad joins the course-wide batch for its
+       material, so the pad's nine loose draws collapse into shared ones. Poses are written from
+       exactly the numbers the meshes used to hold. */
+    this.basePart = this.solidPart(hazMat(this.ctx, 'metal'), mergeAll(baseParts), true, true);
+    this.setPart(this.basePart, this.center, null, JP_ONE);
 
     // --- spring: a real helix, scaled in Y to compress -----------------------------------------
     const coilPts = [];
@@ -655,21 +656,23 @@ class JumpPadHazard extends Hazard {
       coilPts.push(new THREE.Vector3(Math.cos(a) * coilR, u * coilH, Math.sin(a) * coilR));
     }
     const coilGeo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(coilPts), 108, Math.max(0.018, padR * 0.055), 6, false);
-    this.spring = new THREE.Mesh(coilGeo, hazMat(this.ctx, 'metal'));
-    this.spring.castShadow = false;
-    this.spring.position.copy(this.center);
-    this.spring.position.y += -h * 0.5 + h * 0.30;
-    this.add(this.spring);
-    this.springBaseY = this.spring.position.y;
+    // castShadow stays FALSE, exactly as the loose spring mesh had it (it sits inside the
+    // housing and its shadow is never seen) — so it takes the non-casting metal batch.
+    this.springPart = this.solidPart(hazMat(this.ctx, 'metal'), coilGeo, false, true);
+    coilGeo.dispose();
+    this.springPos = this.center.clone();
+    this.springPos.y += -h * 0.5 + h * 0.30;
+    this.springBaseY = this.springPos.y;
+    this.springScale = new THREE.Vector3(1, 1, 1);
+    this.setPart(this.springPart, this.springPos, null, this.springScale);
 
     // --- bellows: three concentric rings that squash on trigger ---------------------------------
     const bellowGeo = new THREE.TorusGeometry(padR * 0.74, Math.max(0.02, padR * 0.085), 8, 22);
     bellowGeo.rotateX(Math.PI * 0.5);
-    this.bellows = new THREE.InstancedMesh(bellowGeo, hazMat(this.ctx, 'rubber'), 3);
-    this.bellows.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.bellows.castShadow = false;
-    this.bellows.frustumCulled = false;
-    this.add(this.bellows);
+    this.bellowParts = [];
+    // castShadow FALSE as before — three concentric rings inside the housing.
+    for (let i = 0; i < 3; i++) this.bellowParts.push(this.solidPart(hazMat(this.ctx, 'rubber'), bellowGeo, false, true));
+    bellowGeo.dispose();
     this.bellowsBaseY = this.center.y - h * 0.5 + h * 0.34;
     this.bellowsSpan = h * 0.42;
 
@@ -685,48 +688,36 @@ class JumpPadHazard extends Hazard {
     const grip = new THREE.CylinderGeometry(padR * 0.62, padR * 0.62, h * 0.06, 22);
     grip.translate(0, h * 0.11, 0);
     padParts.push(grip);
-    this.pad = new THREE.Mesh(mergeAll(padParts), hazMat(this.ctx, 'rubber'));
-    this.pad.castShadow = true;
-    this.pad.receiveShadow = true;
-    this.pad.position.copy(this.center);
-    this.pad.position.y = this.top - this.size.y * 0.10;
-    this.add(this.pad);
-    this.padBaseY = this.pad.position.y;
+    this.padPart = this.solidPart(hazMat(this.ctx, 'rubber'), mergeAll(padParts), true, true);
+    this.padPos = this.center.clone();
+    this.padPos.y = this.top - this.size.y * 0.10;
+    this.padBaseY = this.padPos.y;
+    this.setPart(this.padPart, this.padPos, null, JP_ONE);
 
     // --- emissive face + launch ring ------------------------------------------------------------
     const faceGeo = new THREE.CylinderGeometry(padR * 0.58, padR * 0.58, 0.018, 24);
-    this.faceMat = additiveMaterial(this.accent.getHex(), { cached: false, opacity: 0.75 });
-    this.own(this.faceMat);
-    this.face = new THREE.Mesh(faceGeo, this.faceMat);
-    this.face.renderOrder = 5;
-    this.add(this.face);
+    this.facePart = this.trimPart(faceGeo);
+    this.facePos = new THREE.Vector3();
 
     const ringGeo = new THREE.RingGeometry(padR * 0.7, padR * 0.98, 40, 1);
     ringGeo.rotateX(-Math.PI * 0.5);
-    this.ringMat = additiveMaterial(this.accent.getHex(), { cached: false, opacity: 0, side: THREE.DoubleSide });
-    this.own(this.ringMat);
-    this.ring = new THREE.Mesh(ringGeo, this.ringMat);
-    this.ring.renderOrder = 6;
-    this.ring.position.set(this.center.x, this.top + 0.03, this.center.z);
-    this.add(this.ring);
+    this.ringPart = this.trimPart(ringGeo);
+    this.ringPos = new THREE.Vector3(this.center.x, this.top + 0.03, this.center.z);
+    this.ringScale = new THREE.Vector3(1, 1, 1);
+    this.setPart(this.ringPart, this.ringPos, null, this.ringScale);
 
-    this.padGlow = makeGlowSprite(this.accent.getHex(), padR * 3.0, 0.22, 2.6);
-    this.own(this.padGlow.material);
-    this.padGlow.position.set(this.center.x, this.top + 0.12, this.center.z);
-    this.add(this.padGlow);
+    this.padGlowPart = this.glowPart();
+    this.padGlowPos = new THREE.Vector3(this.center.x, this.top + 0.12, this.center.z);
+    this.padGlowSize = padR * 3.0;
     this.padR = padR;
   }
 
   _buildArc() {
     this.arcCount = 11;
     const geo = new THREE.OctahedronGeometry(0.085, 0);
-    this.arcMat = additiveMaterial(this.accent.getHex(), { cached: false, opacity: 0.3 });
-    this.own(this.arcMat);
-    this.arcMesh = new THREE.InstancedMesh(geo, this.arcMat, this.arcCount);
-    this.arcMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.arcMesh.frustumCulled = false;
-    this.arcMesh.renderOrder = 5;
-    this.add(this.arcMesh);
+    this.arcParts = [];
+    for (let i = 0; i < this.arcCount; i++) this.arcParts.push(this.trimPart(geo.clone()));
+    geo.dispose();
     this._writeArc(this._arcSpeed);
   }
 
@@ -752,11 +743,8 @@ class JumpPadHazard extends Hazard {
         .setY(this.top + Math.max(y, -this.size.y));
       const fade = Math.sin(u * Math.PI) * 0.85 + 0.15;
       _s.setScalar(clamp(fade, 0.15, 1) * lerp(1.15, 0.55, u));
-      _q.identity();
-      _m.compose(_v, _q, _s);
-      this.arcMesh.setMatrixAt(i, _m);
+      this.setPart(this.arcParts[i], _v, null, _s);
     }
-    this.arcMesh.instanceMatrix.needsUpdate = true;
     this._arcSpeed = hSpeed;
   }
 
@@ -815,9 +803,11 @@ class JumpPadHazard extends Hazard {
     const idle = 0.035 * Math.sin(t * 1.8);
     const sink = compress * h * 0.30;
 
-    this.pad.position.y = this.padBaseY - sink + idle * h;
-    this.spring.scale.y = clamp(1 - compress * 0.42, 0.35, 1.1);
-    this.spring.position.y = this.springBaseY;
+    this.padPos.y = this.padBaseY - sink + idle * h;
+    this.setPart(this.padPart, this.padPos, null, JP_ONE);
+    this.springScale.set(1, clamp(1 - compress * 0.42, 0.35, 1.1), 1);
+    this.springPos.y = this.springBaseY;
+    this.setPart(this.springPart, this.springPos, null, this.springScale);
 
     for (let i = 0; i < 3; i++) {
       const u = (i + 1) / 4;
@@ -825,31 +815,30 @@ class JumpPadHazard extends Hazard {
       _v.set(this.center.x, y, this.center.z);
       const bulge = 1 + compress * 0.16 * (1 - u);
       _s.set(bulge, clamp(1 - compress * 0.3, 0.5, 1.2), bulge);
-      _q.identity();
-      _m.compose(_v, _q, _s);
-      this.bellows.setMatrixAt(i, _m);
+      this.setPart(this.bellowParts[i], _v, null, _s);
     }
-    this.bellows.instanceMatrix.needsUpdate = true;
 
     // face + glow breathe; ring blooms outward on launch
     const pulse = 0.5 + 0.5 * Math.sin(t * 2.6);
-    this.face.position.set(this.center.x, this.pad.position.y + h * 0.15, this.center.z);
-    this.faceMat.opacity = 0.45 + 0.30 * pulse + clamp(1 - age / 0.25, 0, 1) * 0.9;
-    this.padGlow.position.y = this.top + 0.12;
-    this.padGlow.material.opacity = 0.16 + 0.10 * pulse + clamp(1 - age / 0.3, 0, 1) * 0.5;
+    this.facePos.set(this.center.x, this.padPos.y + h * 0.15, this.center.z);
+    this.setPart(this.facePart, this.facePos, null, JP_ONE);
+    this.setPartColor(this.facePart, this.accent, 0.45 + 0.30 * pulse + clamp(1 - age / 0.25, 0, 1) * 0.9);
+    this.padGlowPos.y = this.top + 0.12;
+    this.setPartGlow(this.padGlowPart, this.padGlowPos, this.padGlowSize);
+    this.setPartColor(this.padGlowPart, this.accent, 0.16 + 0.10 * pulse + clamp(1 - age / 0.3, 0, 1) * 0.5);
 
     if (age >= 0 && age < 0.55) {
       const k = easeOutCubic(clamp(age / 0.55, 0, 1));
-      this.ring.visible = true;
-      this.ring.scale.setScalar(0.4 + k * 2.6);
-      this.ring.position.y = this.top + 0.03 + k * 1.3;
-      this.ringMat.opacity = (1 - k) * 0.8;
+      this.setPartVisible(this.ringPart, true);
+      this.ringScale.setScalar(0.4 + k * 2.6);
+      this.ringPos.set(this.center.x, this.top + 0.03 + k * 1.3, this.center.z);
+      this.setPart(this.ringPart, this.ringPos, null, this.ringScale);
+      this.setPartColor(this.ringPart, this.accent, (1 - k) * 0.8);
     } else {
-      this.ring.visible = false;
-      this.ringMat.opacity = 0;
+      this.setPartVisible(this.ringPart, false);
     }
 
-    this.arcMat.opacity = 0.14 + 0.10 * pulse;
+    for (let i = 0; i < this.arcCount; i++) this.setPartColor(this.arcParts[i], this.accent, 0.14 + 0.10 * pulse);
     this.collider.active = this.enabled;
   }
 
