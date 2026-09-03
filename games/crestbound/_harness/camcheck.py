@@ -5,7 +5,21 @@ at the layer the player sees, in a real Chrome, through REAL input events.
 Checks (each prints PASS/FAIL; exit 1 on any FAIL):
 
   wall        hero against a wall, camera behind it pointing INTO the wall ->
-              camera distance <= wall distance (whisker raycast pull-in, no clipping)
+              the lens stays on the near side of the face and its HORIZONTAL
+              reach is <= the wall distance (whisker raycast pull-in, no
+              clipping), while the framing distance is still >= TUNE.cam.minDist
+              and the hero is not faded out to buy it
+  shaft       hero inside a 3.30 m kick shaft (verdant-1 ROUTE B's geometry) with
+              the camera pointing at the wall he is pressed against, jumping ->
+              EVERY frame: camera distance >= TUNE.cam.minDist, the hero never
+              inside the near plane, the hero never faded out, the lens never
+              inside a shaft wall. This is the row that fails when the collision
+              pull-in answers a shaft by burying the lens in the hero: measured
+              before the shaft tier existed (_harness/_r3_shaftcam.py on the real
+              course), camera-to-head min 0.246 m, cam.dist floored at 0.120,
+              73/200 ladder frames closer than minDist and 20 inside the near
+              plane -- with occlusion reading 0 %, because a lens inside the hero
+              is not "occluded" by anything.
   framing     hero runs a 12 m line -> hero centre stays inside the central 40 %
               of the frame (|ndc| <= 0.4) the whole way (focus lag, hero leads)
   longjump    a long jump via real KeyboardEvents (crouch + jump at speed) with the
@@ -58,7 +72,7 @@ HEADLESS_FLAGS = [f for f in FLAGS if not f.startswith("--use-angle")] + [
     "--use-gl=angle", "--use-angle=swiftshader",
 ]
 
-CHECK_NAMES = ["wall", "framing", "longjump", "dive", "occlusion", "recenter", "peek"]
+CHECK_NAMES = ["wall", "shaft", "framing", "longjump", "dive", "occlusion", "recenter", "peek"]
 
 
 def launch_headless(p):
@@ -185,7 +199,22 @@ async () => {
                              half: new THREE.Vector3(WALL_HALF, 4, 10), surface:'stone', userData:'camcheck-wall'});
   const roof = new Collider({center: new THREE.Vector3(OCC_X, OCC_UNDER + OCC_HY, OCC_Z),
                              half: new THREE.Vector3(OCC_HX, OCC_HY, OCC_HZ), surface:'stone', userData:'camcheck-roof'});
-  const RIG = [slab, wall, roof];
+  // KICK SHAFT: verdant-1 ROUTE B's own dimensions (course def line 701 -- "the
+  // west tower is hollow, 3.30 m clear and 7.60 m tall"), four walls, open to
+  // the sky, standing on the slab well clear of the other rigs.
+  const SH_X = -45, SH_Z = TEST.z, SH_HALF = 1.65, SH_T = 0.5, SH_H = 4.0;
+  const SH_CY = TEST.y + SH_H;
+  const shWalls = [
+    new Collider({center: new THREE.Vector3(SH_X + SH_HALF + SH_T, SH_CY, SH_Z),
+                  half: new THREE.Vector3(SH_T, SH_H, SH_HALF + SH_T * 2), surface:'stone', userData:'camcheck-shaft+x'}),
+    new Collider({center: new THREE.Vector3(SH_X - SH_HALF - SH_T, SH_CY, SH_Z),
+                  half: new THREE.Vector3(SH_T, SH_H, SH_HALF + SH_T * 2), surface:'stone', userData:'camcheck-shaft-x'}),
+    new Collider({center: new THREE.Vector3(SH_X, SH_CY, SH_Z + SH_HALF + SH_T),
+                  half: new THREE.Vector3(SH_HALF + SH_T * 2, SH_H, SH_T), surface:'stone', userData:'camcheck-shaft+z'}),
+    new Collider({center: new THREE.Vector3(SH_X, SH_CY, SH_Z - SH_HALF - SH_T),
+                  half: new THREE.Vector3(SH_HALF + SH_T * 2, SH_H, SH_T), surface:'stone', userData:'camcheck-shaft-z'}),
+  ];
+  const RIG = [slab, wall, roof].concat(shWalls);
   for (const c of RIG) { if (typeof c.update === 'function') c.update(); }
   for (const bp of bps) for (const c of RIG) { bp.add(c); if (typeof bp.refresh === 'function') bp.refresh(c); }
   // visible stand-ins so a screenshot shows what was measured
@@ -197,6 +226,7 @@ async () => {
     mk(TEST.x, TEST.y - HY, TEST.z, HX, HY, HZ, 0x2e3a4a);
     mk(WALL_X, TEST.y + 3, TEST.z, WALL_HALF, 4, 10, 0x7a4a3a);
     mk(OCC_X, OCC_UNDER + OCC_HY, OCC_Z, OCC_HX, OCC_HY, OCC_HZ, 0x3a5a4a);
+    for (const c of shWalls) mk(c.center.x, c.center.y, c.center.z, c.half.x, c.half.y, c.half.z, 0x4a4a5a);
   }
   const cleanup = () => {
     allUp();
@@ -232,17 +262,85 @@ async () => {
       const s = cs();
       const camX = s.pos[0];
       const wallDist = WALL_FACE - s.focus[0];
-      // CONTRACT §12: "pull in to hit - collideRadius". No minDist floor: minDist
-      // (1.6) is the player's ZOOM minimum, and the hero pressed flat against the
-      // face leaves only ~0.43 m behind the focus, so requiring dist >= minDist
-      // here would demand the very clipping this row exists to forbid. What the
-      // contract does require: the lens stays on the near side of the wall face,
-      // pulled in to at most the wall distance, and never behind the near plane.
+      // CONTRACT §12: "pull in to hit - collideRadius", and never through it.
+      // WHAT THIS ROW ASSERTS, and what it used to. The old test was
+      // `dist <= wallDist`, which reads as "the lens did not go past the wall"
+      // only while the camera is HORIZONTAL: `dist` is the full 3-D radius, and
+      // what may not cross the face is its HORIZONTAL component. The two are the
+      // same number for a level camera and different ones the moment the solver
+      // answers this geometry by tilting (camera.js PITCH_STEPS), which is what
+      // it now does here -- the lens rides up over the hero at 2.55 m instead of
+      // jamming into his back at 0.43 m, with its horizontal offset still inside
+      // the wall. So the no-clipping claim is stated directly (the lens stays on
+      // the near side of the face, and its horizontal reach is at most the wall
+      // distance), and the row is STRENGTHENED with the two things the old
+      // behaviour could not deliver at this station: the framing distance is at
+      // least `minDist`, and the hero is not faded out to buy it.
       const NEAR_FLOOR = 0.05;                                   // engine DEFAULT_NEAR
-      const ok = camX <= WALL_FACE - 0.05 && s.dist <= wallDist + 1e-3 && s.dist >= NEAR_FLOOR;
+      const horiz = Math.hypot(s.pos[0] - s.focus[0], s.pos[2] - s.focus[2]);
+      const ok = camX <= WALL_FACE - 0.05 && horiz <= wallDist + 1e-3 &&
+                 s.dist >= NEAR_FLOOR && s.dist >= C.minDist - 1e-3 && (s.heroFade || 0) < 1e-3;
       pass('wall', ok, {camX: +camX.toFixed(3), wallFace: WALL_FACE, dist: +s.dist.toFixed(3),
-                        wallDist: +wallDist.toFixed(3), nearFloor: NEAR_FLOOR, minDist: C.minDist,
+                        horizReach: +horiz.toFixed(3), wallDist: +wallDist.toFixed(3),
+                        nearFloor: NEAR_FLOOR, minDist: C.minDist, heroFade: +(s.heroFade || 0).toFixed(3),
+                        pitchSlide: +s.pitchSlide.toFixed(3),
                         distColl: +s.distColl.toFixed(3), raycast: !out.notes.noRaycast});
+    }
+
+    // ================= 1b. SHAFT: a chimney is not a wall ===================
+    // The wall row above is the terminal case where NO pose frames the hero and
+    // the contract asks for a tight pull-in. A shaft is not that case: it is
+    // blocked at every YAW but wide open along its own axis, so there is always
+    // a legal pose and the solver has to find it (camera.js PITCH_STEPS). The
+    // hero stands pressed against one wall with the camera pointing at that same
+    // wall -- the configuration measured on verdant-1's ROUTE B -- and then
+    // jumps, because the ladder that produced the defect is a moving hero.
+    {
+      const shz = SH_Z + SH_HALF - (TUNE.radius || 0.38) - 0.05;   // back 0.43 m off the +Z wall
+      await place(SH_X, TEST.y, shz, 0);                           // yaw 0 faces -Z: camera at +Z, into the wall
+      cam.__test.setYaw(0);
+      cam.__test.setPitch(C.defaultPitch);
+      await wait(700);
+      const NEAR_FLOOR = 0.05;
+      let minDist = Infinity, minHead = Infinity, maxFade = 0, nearFrames = 0, inWall = 0, frames = 0;
+      let occRun = 0, occWorst = 0, tPrev = performance.now();
+      down('Space'); await frame(); await frame(); up('Space');
+      const t0 = performance.now();
+      while (performance.now() - t0 < 1600) {
+        await frame();
+        syncP();
+        const s = cs();
+        const rp = P.renderPos || P.pos;
+        const hx = rp.x, hy = rp.y + (TUNE.height || 1.5) * 0.8, hz = rp.z;
+        const hd = Math.hypot(s.pos[0] - hx, s.pos[1] - hy, s.pos[2] - hz);
+        minDist = Math.min(minDist, s.dist);
+        minHead = Math.min(minHead, hd);
+        maxFade = Math.max(maxFade, s.heroFade || 0);
+        if (hd < tcam.near + 0.35) nearFrames++;
+        // the lens must stay inside the shaft's clear interior, never in a wall
+        if (Math.abs(s.pos[0] - SH_X) > SH_HALF + 1e-3 || Math.abs(s.pos[2] - SH_Z) > SH_HALF + 1e-3) {
+          if (s.pos[1] < TEST.y + SH_H * 2) inWall++;
+        }
+        // continuous occlusion, in seconds, same rule as the occlusion row
+        const now = performance.now(), dtS = (now - tPrev) / 1000; tPrev = now;
+        let blocked = false;
+        if (bps[0] && typeof bps[0].raycast === 'function' && hd > 0.5) {
+          _v.set(hx - s.pos[0], hy - s.pos[1], hz - s.pos[2]).normalize();
+          const hit = {t: 0, normal: new THREE.Vector3(), collider: null};
+          blocked = !!bps[0].raycast({x: s.pos[0], y: s.pos[1], z: s.pos[2]}, _v, hd - 0.45, hit);
+        }
+        occRun = blocked ? occRun + dtS : 0;
+        occWorst = Math.max(occWorst, occRun);
+        frames++;
+      }
+      allUp();
+      const ok = frames > 40 && minDist >= C.minDist - 1e-3 && nearFrames === 0 &&
+                 inWall === 0 && maxFade < 1e-3 && occWorst <= 0.3;
+      pass('shaft', ok, {frames, minDist: +minDist.toFixed(3), minDistBudget: C.minDist,
+                         minHeadDist: +minHead.toFixed(3), nearFrames, lensInWallFrames: inWall,
+                         maxHeroFade: +maxFade.toFixed(3), worstOcclusion_s: +occWorst.toFixed(3),
+                         shaftClear_m: +(SH_HALF * 2).toFixed(2), pitchSlide: +cs().pitchSlide.toFixed(3)});
+      await wait(400);
     }
 
     // ================= 2. FRAMING: hero stays in the central 40 % ==========
@@ -314,9 +412,26 @@ async () => {
       await wait(900);
     };
 
-    // ---- 3. long jump: crouch + jump at speed ------------------------------
+    // ---- 3. long jump: crouch + jump at FULL RUN speed ---------------------
+    // The run-up target is the point of this row, and it used to be wrong.
+    // `python _harness/_ljprobe.py` (this session, real KeyboardEvents, a
+    // per-frame dump of input + controller): ONE frame of ControlLeft moves the
+    // hero from `run` at 8.05 m/s to `crouchwalk` at 5.38 m/s -- a 2.67 m/s
+    // cost, and crouch MUST precede jump by a frame for `_crouchHeld` to be
+    // latched. With the old target of `minSpeed + 1.0` (6.5 m/s) the hero was
+    // therefore at ~3.8 m/s when Space landed, under TUNE.longJump.minSpeed
+    // (5.50), so `_tryJump` took the plain-jump branch: the row reported
+    // {"triggered": false, "statesSeen": ["jump1","fall"]} on every run and
+    // asserted NOTHING about the yaw freeze it exists to prove. The cost is
+    // paid in wall-clock time, so the margin has to cover a slow frame too:
+    // running up to full speed first is what a player does before a long jump,
+    // and it leaves ~2.8 m/s of headroom over minSpeed.
+    // (Pressing both keys in the SAME frame was tried and is not the answer --
+    // the crouch press latch survives into the next 1/240 substep, where the
+    // hero is already airborne, and `_doPound` cancels the long jump: measured
+    // statesSeen ["poundHang","poundLand","crouchwalk"].)
     await freezeRun(
-      'longjump', TUNE.longJump.minSpeed + 1.0,
+      'longjump', Math.max(TUNE.speedRun - 0.5, TUNE.longJump.minSpeed + 3.0),
       async () => { down('ControlLeft'); await frame(); down('Space'); },
       async () => { await frame(); up('Space'); up('ControlLeft'); },
       ['longjump'], 0.15);

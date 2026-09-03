@@ -161,8 +161,8 @@ const STEP_PUFF = Object.freeze({
 const COLLECT_STYLE = Object.freeze({
   coin: { burst: 'coin', sfx: 'coin', gain: 0.72, stinger: null, pulse: 0, shake: 0, punch: 0, tint: 'coin' },
   sigil: { burst: 'sigil', sfx: 'sigil', gain: 0.85, stinger: null, pulse: 0.16, shake: 0.06, punch: 0, tint: 'sigil' },
-  crest: { burst: 'crest', sfx: 'crest', gain: 1.0, stinger: 'crest', pulse: 0.50, shake: 0.18, punch: 0.25, tint: 'crest' },
-  crestGrand: { burst: 'crestGrand', sfx: 'crest', gain: 1.0, stinger: 'crest', pulse: 0.85, shake: 0.30, punch: 0.45, tint: 'crest' },
+  crest: { burst: 'crest', sfx: 'crest', gain: 1.0, stinger: 'crest', pulse: 0.40, shake: 0.18, punch: 0.25, tint: 'crest' },
+  crestGrand: { burst: 'crestGrand', sfx: 'crest', gain: 1.0, stinger: 'crest', pulse: 0.62, shake: 0.30, punch: 0.45, tint: 'crest' },
 });
 
 /* landing bands — read from tuning.js so "hard" here is the same 22 m/s the

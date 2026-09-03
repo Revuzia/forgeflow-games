@@ -106,6 +106,76 @@ function shadowFilterType(q) {
 /** default shadow frustum when a theme does not say (metres, half-extent) */
 const SHADOW_DEFAULT = { extent: 40, bias: -0.0006, normalBias: 0.03 };
 
+/* ---------------------------------------------------------------------------
+ * SHADOW EDGE FADE — one global ShaderChunk patch, applied once at module load.
+ * ---------------------------------------------------------------------------
+ * Critic, `_shots/verdant-1/cp3.png` and `vista-ne.png`: "the terrain shadow
+ * ends on a straight hard-cut line with a visible brightness step — the
+ * cascade/shadow-frustum edge is showing as world geometry."
+ *
+ * That is exactly what it is. `followShadow()` slides one ortho frustum of
+ * +/- `extent` metres with the hero; three's `getShadow()` tests
+ * `inFrustum` as a HARD boolean, so every fragment inside the box takes its
+ * shadow and every fragment one texel outside takes none. Across an open
+ * meadow that boundary is a straight line drawn on the ground.
+ *
+ * Widening the frustum only moves the line and costs texel density everywhere.
+ * The fix is to stop the boundary being a step: fade the shadow term to
+ * "unshadowed" over the outer ~7 % of the map on each axis, and over the last
+ * slice of depth. A shadow that is already fading out is invisible when it
+ * ends. One smoothstep pair per shadow lookup, no extra texture reads, no new
+ * uniforms, and it applies to every light and every material in the game
+ * because it is patched in the chunk they all share.
+ *
+ * The replacement asserts: if a three upgrade reshapes `getShadow`, this throws
+ * at load instead of silently reverting to the hard edge.
+ */
+(function patchShadowEdgeFade() {
+  const CH = THREE.ShaderChunk;
+  const src = CH && CH.shadowmap_pars_fragment;
+  const FROM = '\t\treturn mix( 1.0, shadow, shadowIntensity );';
+  if (typeof src !== 'string' || src.indexOf(FROM) === -1) {
+    throw new Error('[Engine] shadowmap_pars_fragment no longer ends getShadow() with the ' +
+      'expected mix() - the shadow edge-fade patch is stale, re-derive it against three.');
+  }
+  const TO = [
+    '\t\t// CRESTBOUND: fade the shadow out at the frustum edge (see engine.js)',
+    '\t\tvec2 cbEdge = smoothstep( vec2( 0.0 ), vec2( 0.07 ), shadowCoord.xy )',
+    '\t\t            * smoothstep( vec2( 1.0 ), vec2( 0.93 ), shadowCoord.xy );',
+    '\t\tfloat cbFade = cbEdge.x * cbEdge.y * smoothstep( 1.0, 0.88, shadowCoord.z );',
+    '\t\tshadow = mix( 1.0, shadow, cbFade );',
+    FROM,
+  ].join('\n');
+  CH.shadowmap_pars_fragment = src.replace(FROM, TO);
+})();
+
+/* -- render scale (CONTRACT hard rule 4) -----------------------------------
+ * The frame on the reference machine is GPU FILL-bound: measured 2026-09-02
+ * with the GPU timer query, cost fits T = C + F*pixels with F between 78 and
+ * 91 % of the frame, and stacking every non-feature-deleting fill cut still
+ * left 40.99 ms (24.4 fps) at native 1920x1080 while the SAME chain at quarter
+ * pixels cost 19.71 ms (50.7 fps). Pixels are therefore the only lever with the
+ * range to reach the fps target, so the renderer owns an internal render scale
+ * -- the same knob as the pre-existing DPR <= 1.5 cap, applied below 1.0.
+ * The drawing buffer is allocated at `scale` x the CSS size; the canvas keeps
+ * its CSS size, so the compositor upscales on presentation and nothing that
+ * reads CSS pixels (pointer, DOM HUD, NDC) moves.
+ */
+/** Floor the dynamic controller may never go below, whatever the tier says. */
+const MIN_RENDER_SCALE = 0.45;
+/** How far either side of the tier value the dynamic controller may wander. */
+const RENDER_SCALE_BAND = 0.15;
+/** One step. Combined with STEP_PERIOD this is the "at most 0.05 per second". */
+const RENDER_SCALE_STEP = 0.05;
+/** Seconds between steps. */
+const RENDER_SCALE_STEP_PERIOD = 1.0;
+/** Seconds continuously above target before the controller raises again. */
+const RENDER_SCALE_RAISE_HOLD = 2.0;
+/** fps margin above target a raise needs, so it does not oscillate on the line. */
+const RENDER_SCALE_RAISE_MARGIN = 3;
+/** Default fps the dynamic controller holds. */
+const RENDER_SCALE_TARGET_FPS = 58;
+
 /* ===========================================================================
  * Procedural sky used as the PMREM source
  * ======================================================================== */
@@ -240,7 +310,54 @@ export class Engine {
 
     /* --------------------------------------------------------- pixel size */
     this._pr = Settings.pixelRatio();
-    this.renderer.setPixelRatio(this._pr);
+    /** @private the quality tier's authored render scale */
+    this._tierScale = clamp(numOr(this.quality.renderScale, 1), MIN_RENDER_SCALE, 1);
+    /**
+     * Fraction of CSS pixels the drawing buffer is allocated at. Read it; set it
+     * with `setRenderScale()`. `renderer.getPixelRatio()` is `_pr * renderScale`,
+     * which is what the post chain sizes its targets from.
+     * @type {number}
+     */
+    this.renderScale = this._tierScale;
+    /**
+     * Let the DYNAMIC controller move the scale.
+     *
+     * DEFAULT OFF, and the reason is measured, not preferred. `setRenderScale`
+     * has to resize the drawing buffer AND the post chain, and
+     * `EffectComposer.setSize()` reallocates every render target it owns (two
+     * ping-pong targets plus the bloom mip chain plus the AA pass). On the
+     * reference machine (Intel UHD / D3D11, 1920x1080, quality high) one step
+     * measured **141 / 151 / 179 / 179 / 646 ms** — a stall an order of
+     * magnitude worse than the ~4 ms of frame time the 0.05 step buys back, and
+     * long enough to swallow a queued input: with the controller on,
+     * `camcheck.py` failed its long-jump case twice in a row
+     * (`statesSeen: ["jump1","fall"], triggered: false` — the crouch never
+     * registered before the jump) and passed with it off
+     * (`statesSeen: ["longjump"], committed_s 0.419`).
+     *
+     * The controller itself is correct and stays here, tuned exactly as
+     * CONTRACT hard rule 4 specifies; what is missing under it is a post chain
+     * whose targets are allocated ONCE at the tier's maximum size and rendered
+     * into by viewport/scissor with the sampling UVs scaled to match — the
+     * standard dynamic-resolution technique, and a rewrite of fx/post.js rather
+     * than a tuning change. Until that lands, the TIER render scale (set once,
+     * at construction and on a quality change, behind the loading veil) is the
+     * shipping mechanism and this is opt-in with `?autoscale=1`.
+     */
+    this.renderScaleAuto = /[?&]autoscale=1/.test(
+      typeof location !== 'undefined' && location.search ? location.search : '');
+    /** fps the dynamic controller holds. */
+    this.renderScaleTargetFps = RENDER_SCALE_TARGET_FPS;
+    /**
+     * Optional predicate the GAME installs; while it returns true the scale is
+     * frozen. game.js hands it "the hero is airborne", because a resolution step
+     * mid-jump is the one moment a player can see the switch.
+     * @type {(() => boolean)|null}
+     */
+    this.renderScaleGuard = null;
+    this._scaleAccum = 0;
+    this._aboveT = 0;
+    this.renderer.setPixelRatio(this._pr * this.renderScale);
     this.renderer.setSize(size.w, size.h, true);
 
     /* --------------------------------------------------------- light rig */
@@ -565,11 +682,6 @@ export class Engine {
       this.scene.background = this._bg;
     }
     this.renderer.setClearColor(this._bg, 1);
-    // A theme swap means a new world: the depth prepass re-scans for occluders
-    // on the next frame instead of waiting out its periodic rescan.
-    if (this.post && this.post.renderPass && this.post.renderPass.markDirty) {
-      this.post.renderPass.markDirty();
-    }
 
     /* ---- fog --------------------------------------------------------- */
     const fogSpec = t.fog;
@@ -850,7 +962,13 @@ export class Engine {
     this._configureShadow();
 
     this._pr = Settings.pixelRatio();
-    this.renderer.setPixelRatio(this._pr);
+    this._tierScale = clamp(numOr(preset.renderScale, 1), MIN_RENDER_SCALE, 1);
+    /* A tier change re-seeds the scale at the tier value: the dynamic
+       controller's band is measured from the NEW tier, not carried over. */
+    this.renderScale = this._tierScale;
+    this._scaleAccum = 0;
+    this._aboveT = 0;
+    this.renderer.setPixelRatio(this._pr * this.renderScale);
     this.renderer.setSize(this.size.w, this.size.h, true);
 
     if (this.post) this.post.setQuality(preset);
@@ -893,6 +1011,72 @@ export class Engine {
   }
 
   /**
+   * Set the internal render scale (CONTRACT hard rule 4).
+   *
+   * The drawing buffer is resized; the canvas CSS size is NOT, so the browser
+   * upscales on presentation. `camera.aspect` is unchanged (it is a ratio of
+   * CSS pixels), and every full-screen pass resizes with it because
+   * `Post.resize()` reads `renderer.getPixelRatio()`.
+   *
+   * @param {number} v 0..1 fraction of CSS pixels
+   * @returns {Engine} this
+   */
+  setRenderScale(v) {
+    const next = clamp(numOr(v, this.renderScale), MIN_RENDER_SCALE, 1);
+    if (Math.abs(next - this.renderScale) < 0.004) return this;
+    this.renderScale = next;
+    this.renderer.setPixelRatio(this._pr * next);
+    this.renderer.setSize(this.size.w, this.size.h, true);
+    if (this.post) this.post.resize(this.size.w, this.size.h);
+    this.events.emit('renderscale', next);
+    return this;
+  }
+
+  /** The tier's authored render scale, before the dynamic controller. */
+  get tierRenderScale() { return this._tierScale; }
+
+  /**
+   * @private The DYNAMIC controller. Holds `renderScaleTargetFps` by moving the
+   * scale within RENDER_SCALE_BAND of the tier value, at most one
+   * RENDER_SCALE_STEP per RENDER_SCALE_STEP_PERIOD second, never while the
+   * game's guard says hold (airborne), and only raising after
+   * RENDER_SCALE_RAISE_HOLD seconds continuously above target.
+   *
+   * Allocation-free: four numbers and a comparison.
+   * @param {number} dt seconds of WALL time
+   */
+  _autoRenderScale(dt) {
+    if (!(dt > 0)) return;
+    const fps = this.stats.fps;
+    const target = this.renderScaleTargetFps;
+
+    if (fps >= target + RENDER_SCALE_RAISE_MARGIN) this._aboveT += dt;
+    else this._aboveT = 0;
+
+    this._scaleAccum += dt;
+    if (this._scaleAccum < RENDER_SCALE_STEP_PERIOD) return;
+
+    const lo = Math.max(MIN_RENDER_SCALE, this._tierScale - RENDER_SCALE_BAND);
+    const hi = Math.min(1, this._tierScale + RENDER_SCALE_BAND);
+    let want = this.renderScale;
+    if (fps < target) want = this.renderScale - RENDER_SCALE_STEP;
+    else if (this._aboveT >= RENDER_SCALE_RAISE_HOLD) want = this.renderScale + RENDER_SCALE_STEP;
+    if (want < lo) want = lo;
+    if (want > hi) want = hi;
+    if (Math.abs(want - this.renderScale) < 0.004) return;
+
+    if (this.renderScaleGuard !== null) {
+      let hold = false;
+      try { hold = !!this.renderScaleGuard(); } catch (err) { hold = false; }
+      if (hold) return;   // mid-jump: try again next second
+    }
+
+    this._scaleAccum = 0;
+    if (want > this.renderScale) this._aboveT = 0;
+    this.setRenderScale(want);
+  }
+
+  /**
    * Re-measure the container and push the new size into the camera, renderer
    * and post chain. Safe to call at any time; a no-op when nothing changed.
    */
@@ -908,7 +1092,7 @@ export class Engine {
 
     const aspect = s.w / s.h;
 
-    this.renderer.setPixelRatio(pr);
+    this.renderer.setPixelRatio(pr * this.renderScale);
     this.renderer.setSize(s.w, s.h, true);
 
     this.camera.aspect = aspect;
@@ -1013,6 +1197,7 @@ export class Engine {
 
       this.stats.frameMs = this._msAvg.push(nowMs() - t0);
       if (dt > 0) this.stats.fps = Math.round(this._fpsAvg.push(1 / dt));
+      if (this.renderScaleAuto) this._autoRenderScale(this.rawDt);
     };
 
     this._raf = requestAnimationFrame(tick);

@@ -430,6 +430,29 @@ const HAZARD_KINDS = new Set([
 const DECOR_KINDS = new Set(['deco', 'text', 'light', 'fence', 'painting', 'gatedoor', 'rings']);
 
 let RID = 0;
+/**
+ * Subtract axis-aligned XZ rectangles from rectangles — the same arithmetic as
+ * builders.js `rectSubtract`, kept here because this gate runs without three.js
+ * and cannot import the builder. Slivers under 5 cm are dropped.
+ */
+function rectSubtract(rects, holes) {
+  if (!holes || !holes.length) return rects;
+  let cur = rects;
+  for (const h of holes) {
+    const out = [];
+    for (const r of cur) {
+      if (h.x1 <= r.x0 || h.x0 >= r.x1 || h.z1 <= r.z0 || h.z0 >= r.z1) { out.push(r); continue; }
+      if (h.z0 > r.z0) out.push({ x0: r.x0, x1: r.x1, z0: r.z0, z1: h.z0 });
+      if (h.z1 < r.z1) out.push({ x0: r.x0, x1: r.x1, z0: h.z1, z1: r.z1 });
+      const z0 = Math.max(r.z0, h.z0), z1 = Math.min(r.z1, h.z1);
+      if (h.x0 > r.x0) out.push({ x0: r.x0, x1: h.x0, z0, z1 });
+      if (h.x1 < r.x1) out.push({ x0: h.x1, x1: r.x1, z0, z1 });
+    }
+    cur = out;
+  }
+  return cur.filter((r) => r.x1 - r.x0 > 0.05 && r.z1 - r.z0 > 0.05);
+}
+
 function mkRect(o, i, cx, cy, cz, ex, ez, tag, extra) {
   return Object.assign({
     id: `${i}:${o.kind}${tag || ''}#${RID++}`,
@@ -576,14 +599,18 @@ function rectsFor(o, i, out, links) {
        course that wants the roof reachable must author a way up — this gate says
        so when there is not one. The roof deck is per STYLE, straight off
        builders.js `BUILDING_STYLE`:
-       fort/temple/foundry are battlement decks that OVERHANG the shell, a tower's
+       temple/foundry are battlement decks that OVERHANG the shell, a tower's
        cone caps its drum flush, and a cottage's roof is PITCHED — sloped slabs,
-       never a deck, so it contributes no landable rectangle at all. */
+       never a deck, so it contributes no landable rectangle at all. A FORT's
+       roof is a RAMPART WALK: a ring of deck over the wall band whose top is the
+       authored wall top (dy 0), with the courtyard open to sky and an aperture
+       wherever `roofOpen` says a tower pierces it. Mirrors builders.js
+       `roofFort` / `roofOptsFor`; when that changes, this changes with it. */
     const p = v3(o.p), s = v3(o.s, 6);
     const { ex, ez, hy } = slabExtents(s, o.rot);
     const style = o.style || 'fort';
     const ROOF = {
-      fort:    { dy: 0.17, over: 0.4, round: false },
+      fort:    { dy: 0.0,  over: 0.4, round: false },
       temple:  { dy: 0.21, over: 0.8, round: false },
       foundry: { dy: 0.15, over: 0.3, round: false },
       tower:   { dy: 0.05, over: 0, round: true },
@@ -593,9 +620,33 @@ function rectsFor(o, i, out, links) {
     const floor = mkRect(o, i, p[0], p[1] - hy, p[2], Math.max(0.5, ex - 0.4), Math.max(0.5, ez - 0.4), '@floor');
     out.push(floor);
     if (rf) {
+      const ry = p[1] + hy + rf.dy;
       const rex = rf.round ? Math.max(ex, ez) : ex + rf.over;
       const rez = rf.round ? Math.max(ex, ez) : ez + rf.over;
-      out.push(mkRect(o, i, p[0], p[1] + hy + rf.dy, p[2], rex, rez, '@roof'));
+      // `wall` only — builders.js does NOT read the `wallThick` key some course
+      // files write (see the note at builders.js buildBuilding); mirroring the
+      // builder is the whole point of this block.
+      const T = o.wall || Math.max(0.36, Math.min(ex, ez) * 2 * 0.055);
+      const IX = ex - T - 0.4, IZ = ez - T - 0.4;
+      const ring = style === 'fort' && !o.roofSolid && IX >= 0.6 && IZ >= 0.6;
+      const bands = ring
+        ? [
+          { x0: p[0] - rex, x1: p[0] + rex, z0: p[2] - rez, z1: p[2] - IZ },
+          { x0: p[0] - rex, x1: p[0] + rex, z0: p[2] + IZ, z1: p[2] + rez },
+          { x0: p[0] - rex, x1: p[0] - IX, z0: p[2] - IZ, z1: p[2] + IZ },
+          { x0: p[0] + IX, x1: p[0] + rex, z0: p[2] - IZ, z1: p[2] + IZ },
+        ]
+        : [{ x0: p[0] - rex, x1: p[0] + rex, z0: p[2] - rez, z1: p[2] + rez }];
+      const holes = (o.roofOpen || []).map((h) => ({
+        x0: p[0] + (h.x || 0) - (h.w != null ? h.w : 2) * 0.5,
+        x1: p[0] + (h.x || 0) + (h.w != null ? h.w : 2) * 0.5,
+        z0: p[2] + (h.z || 0) - (h.d != null ? h.d : 2) * 0.5,
+        z1: p[2] + (h.z || 0) + (h.d != null ? h.d : 2) * 0.5,
+      }));
+      for (const r of rectSubtract(bands, holes)) {
+        out.push(mkRect(o, i, (r.x0 + r.x1) * 0.5, ry, (r.z0 + r.z1) * 0.5,
+          (r.x1 - r.x0) * 0.5, (r.z1 - r.z0) * 0.5, '@roof'));
+      }
     }
     for (const d of o.doors || []) {
       const dp = v3(d.p !== undefined ? d.p : d);

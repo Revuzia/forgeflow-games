@@ -67,7 +67,7 @@
 
 import * as THREE from 'three';
 
-import { REALMS, COURSE_META, KEEP_ID, getCourse, realmOf, isCourseId, prefetchCourse } from './data/index.js';
+import { REALMS, COURSE_META, KEEP_ID, CREST_TOTAL, getCourse, realmOf, isCourseId, prefetchCourse } from './data/index.js';
 import { Course } from './world/course.js';
 import { THEMES, applyTheme } from './world/themes.js';
 import { Player } from './player/controller.js';
@@ -95,8 +95,37 @@ const HISTORY_SECONDS = 0.4;              // contract §11: history ring covers 
 
 const CLEAR_ORBIT_MS = 2200;              // crest celebration orbit (contract §28)
 const CLEAR_ORBIT_RADIUS = 4.6;
-const CLEAR_ORBIT_HEIGHT = 2.3;
 const CLEAR_ORBIT_KEYS = 9;
+const CLEAR_ORBIT_LOOK_Y = 0.9;           // crest anchor: the burst point, lifted to eye level
+const CLEAR_ORBIT_HERO_Y = 0.9;           // hero anchor: Nim's chest above his feet
+const CLEAR_ORBIT_RISE = 1.4;             // lens above the frame centre at the first key
+const CLEAR_ORBIT_SKIN = 0.42;            // lens clearance from the occluder it was staged off
+const CLEAR_ORBIT_MIN_R = 1.90;           // never closer than this: below it the burst whites out
+/* Staging ladder of lens HEIGHT offsets, tried nearest-first. Both signs are
+   needed, for opposite reasons, and both were measured on verdant-1: a spire
+   poking up between a high lens and a hero below it is cleared by DROPPING the
+   lens; a tower pyramid roof standing beside the hero is cleared by RAISING it
+   and looking down. Neither direction alone is enough. */
+const CLEAR_ORBIT_DROPS = [0, 1.7, -0.9, 3.4, -1.8];
+const CLEAR_ORBIT_PULL_PAD = 0.30;        // how far INSIDE the occluder the lens is parked
+const CLEAR_ORBIT_PULL_ITERS = 3;         // re-probe after each pull-in: the next blocker may be nearer
+const CLEAR_ORBIT_GAP_M = 3.0;            // occluded gap at which a blocked key scores zero
+const CLEAR_ORBIT_PROBE_R = 13;           // metres of world worth collecting for the visual probe
+const CLEAR_ORBIT_RAYS_MAX = 420;         // hard ray budget for one staging pass
+/* Wall-clock budget for the whole staging pass. MEASURED: one visual ray over
+   the ~23-mesh / 165k-triangle probe list costs 3.4 ms on this box (38 rays in
+   131.3 ms), so this is a budget of roughly 55 rays - and it is a HARD cap, not
+   a target: the pass runs on the frame the camera CUTS to the cinematic, which
+   is the one frame in the shot where a stall cannot be seen. */
+const CLEAR_ORBIT_MS_BUDGET = 300;
+/* Score at which a key is GOOD ENOUGH to stop searching: the hero is visible.
+   A clear pedestal on top of that is worth 0.1 more, but it is never worth
+   another six raycasts to chase — this shot exists to show Nim. */
+const CLEAR_ORBIT_ACCEPT = 0.9;
+/* Subtrees a staging ray must never see: the collectible layer (the crest the
+   orbit is ABOUT sits at the crest anchor, so its own gold and enamel blocked
+   every ray out of that anchor and inverted the score) and the fx layer. */
+const ORBIT_SKIP_NODES = ['collectibles', 'fx', 'particles', 'decals'];
 
 const INTRO_MIN_SKIP = 400;               // ignore a skip in the first 400 ms
 const INTRO_DEFAULT_MS = 5200;            // when the authored path carries no times
@@ -135,6 +164,16 @@ const _down = new THREE.Vector3(0, -1, 0);
 const _col = new THREE.Color();
 const _box = new THREE.Box3();
 const _rayHit = { t: 0, normal: new THREE.Vector3(), collider: null };
+/* Crest-celebration orbit stager (see _buildOrbit) — sized once, never grown. */
+const _orbLook = new THREE.Vector3();
+const _orbCrest = new THREE.Vector3();
+const _orbHero = new THREE.Vector3();
+const _orbDir = new THREE.Vector3();
+const _orbCand = new THREE.Vector3();
+const _orbBest = new THREE.Vector3();
+const _orbFrom = new THREE.Vector3();
+const _orbSphere = new THREE.Sphere();
+const _orbRay = new THREE.Raycaster();
 
 /* ---------------------------------------------------------------------------
  * Small local helpers (private — util.js is the shared home for anything
@@ -504,6 +543,15 @@ export class Game {
     const direct = this._bootIntoCourse && this._pendingCourse && this._pendingCourse !== KEEP_ID && isCourseId(this._pendingCourse);
     if (this._pendingCourse && isCourseId(this._pendingCourse)) prefetchCourse(this._pendingCourse);
 
+    /* The engine's dynamic render scale (CONTRACT hard rule 4) may not step
+       while Nim is in the air: a resolution change during a jump is the one
+       moment the upscale is visible, because the whole frame is moving and the
+       eye is locked on a single silhouette. Grounded, a 0.05 step is invisible. */
+    this.engine.renderScaleGuard = () => {
+      const p = this.player;
+      return !!(p && !p.grounded && !p.dead && this.state === 'playing');
+    };
+
     if (direct) {
       this._progress(0.35, 'building ' + this._pendingCourse);
       const id = this._pendingCourse;
@@ -563,7 +611,15 @@ export class Game {
     return c && c.counts && isNum(c.counts.coins) ? c.counts.coins | 0 : 0;
   }
 
-  /** Coins that buy this course's coin crest — the one denominator (default 100). */
+  /**
+   * Coins that buy this course's coin crest — the one denominator.
+   *
+   * ZERO when the def declares no coin crest, and that zero is load-bearing:
+   * the fallback used to be a flat 100, so THE KEEP — `coins: []`, no `crests`
+   * key at all (runtime/data/keep.js) — inherited a course rule and the hub HUD
+   * printed '0 / 100' for coins that do not exist there. A denominator the
+   * player can never reach is worse than no chip; the HUD hides the chip on 0.
+   */
   get coinsGoal() {
     const d = this.def;
     if (d && Array.isArray(d.crests)) {
@@ -572,7 +628,7 @@ export class Game {
         if (cr && cr.type === 'coins' && isNum(cr.threshold) && cr.threshold > 0) return cr.threshold | 0;
       }
     }
-    return COINS_FOR_CREST;
+    return 0;
   }
 
   /** Sigils banked in the current visit. */
@@ -1065,12 +1121,28 @@ export class Game {
       if (!g || !g.course || !isCourseId(g.course) || g.course === KEEP_ID) continue;
       const meta = COURSE_META[g.course] || {};
       const req = g.requires && isNum(g.requires.crests) ? g.requires.crests : (isNum(meta.gateCrests) ? meta.gateCrests : 0);
+      /* The stand-out spot BELONGS TO THE DATA: keep.js authors `exitP`/`exitYaw`
+         (p - heading(yaw)*1.9, yaw + PI) because heading(yaw) points INTO the wall.
+         Resolve it here once so _keepSpawnFor never has to re-derive it — and when
+         a gate omits it, derive it the same way (backwards along the heading). */
+      const gYaw = yawOf(g, 0);
+      /* NOT `src`: the gate list one scope out is already called `src`, and a
+         `const src` in this block put `const g = src[i]` at the top of the same
+         block in the temporal dead zone — every Keep load threw
+         "Cannot access 'src' before initialization" out of _resolveGates. */
+      const gsrc = (g.exitP === undefined || g.exitP === null) && g.def ? g.def : g;
+      const exitPos = new THREE.Vector3();
+      const exitYawRaw = isNum(g.exitYaw) ? g.exitYaw : (isNum(gsrc.exitYaw) ? gsrc.exitYaw : null);
+      if (gsrc.exitP !== undefined && gsrc.exitP !== null) toVec3(gsrc.exitP, exitPos);
+      else { toVec3(g, exitPos); headingFromYaw(gYaw, _v1); exitPos.addScaledVector(_v1, -1.9); }
       list.push({
         index: i,
         course: g.course,
         kind: g.kind || 'painting',
         pos: toVec3(g, new THREE.Vector3()),
-        yaw: yawOf(g, 0),
+        yaw: gYaw,
+        exitPos,
+        exitYaw: isNum(exitYawRaw) ? exitYawRaw : (gYaw + Math.PI),
         requires: req,
         volume: g.volume && typeof g.volume.contains === 'function' ? g.volume : null,
         ref: g,
@@ -1210,9 +1282,14 @@ export class Game {
     let g = null;
     for (let i = 0; i < this._gates.length; i++) if (this._gates[i].course === fromCourse) { g = this._gates[i]; break; }
     if (!g) return this._spawnFor(0);
-    headingFromYaw(g.yaw, _v1);
-    out.pos.copy(g.pos).addScaledVector(_v1, 1.9);
-    out.yaw = g.yaw;
+    /* `g.yaw` is the heading the player WALKS IN WITH, so heading(g.yaw) points into
+       the wall the painting hangs on. Standing out is the reverse: the resolved gate
+       carries keep.js's authored exitPos/exitYaw, which already encode p - h*1.9 and
+       yaw + PI. Stepping FORWARD along the heading (the old bug) put Nim inside the
+       wall and, in the lobby, outside the floor entirely. */
+    if (g.exitPos) out.pos.copy(g.exitPos);
+    else { headingFromYaw(g.yaw, _v1); out.pos.copy(g.pos).addScaledVector(_v1, -1.9); }
+    out.yaw = isNum(g.exitYaw) ? g.exitYaw : (g.yaw + Math.PI);
     /* Drop to the floor: paintings hang on walls, so gate.p is at picture height. */
     const bp = this.physWorld.broadphase;
     if (bp && typeof bp.raycast === 'function') {
@@ -1399,9 +1476,17 @@ export class Game {
 
   _showCine(kicker, title, showSkip, text) {
     if (!this.el) return;
-    this.el.cineName.textContent = kicker ? kicker + '  ·  ' + title : title;
-    this.el.cineText.textContent = text || '';
-    this.el.cineText.style.display = text ? '' : 'none';
+    const lock = kicker ? kicker + '  ·  ' + title : title;
+    /* The prose slot is PROSE. A course whose intro.text is just its own name
+       printed the title twice (lockup + body copy); reject it here so no course
+       data can reintroduce the duplicate. */
+    let body = text ? String(text) : '';
+    const flat = body.replace(/\s+/g, ' ').trim().toUpperCase();
+    if (flat && (flat === String(title || '').toUpperCase() || flat === lock.replace(/\s+/g, ' ').trim().toUpperCase()
+      || flat === String(kicker || '').toUpperCase())) body = '';
+    this.el.cineName.textContent = lock;
+    this.el.cineText.textContent = body;
+    this.el.cineText.style.display = body ? '' : 'none';
     this.el.cineSkip.style.display = showSkip ? '' : 'none';
     this.el.cine.classList.add('show');
   }
@@ -1965,9 +2050,15 @@ export class Game {
     safe(() => this.hud && this.hud.crestGet(def), 'hud.crestGet');
     if (this.engine && this.engine.post) {
       safe(() => this.engine.post.pulse && this.engine.post.pulse(0.45, 260), 'post.pulse');
+      /* A celebration GLOW, not a whiteout. MEASURED on verdant-1 at the same
+         orbit frame: x1.9 strength put the frame at mean luminance 186.9 with
+         53 % of pixels over 200 (normal play is 83 / 5 %); the theme's own
+         strength at that moment measures 158 / 38 %. x1.25 keeps the lift
+         readable as "the world brightened" without taking the sky, the hills
+         and the HUD's own timer with it. */
       const bl = (this.theme && this.theme.bloom) || null;
       if (bl && this.engine.post.setBloom) safe(() => this.engine.post.setBloom({
-        strength: (isNum(bl.strength) ? bl.strength : 0.6) * 1.9, radius: isNum(bl.radius) ? bl.radius : 0.5, threshold: isNum(bl.threshold) ? bl.threshold : 0.75,
+        strength: (isNum(bl.strength) ? bl.strength : 0.6) * 1.25, radius: isNum(bl.radius) ? bl.radius : 0.5, threshold: isNum(bl.threshold) ? bl.threshold : 0.75,
       }), 'post.setBloom');
     }
     if (this.input && this.input.gamepad && typeof this.input.gamepad.rumble === 'function') safe(() => this.input.gamepad.rumble(0.8, 0.8, 400), 'rumble');
@@ -1976,21 +2067,271 @@ export class Game {
     safe(() => this.cam && this.cam.setCinematic(this._orbitPath), 'cam.setCinematic');
   }
 
-  /** Camera orbit around the pedestal: 2.2 s, a rising sweep of ~300° that ends over Nim's shoulder. */
+  /**
+   * Camera orbit for the crest celebration: 2.2 s, a rising sweep of ~300 deg
+   * that ends over Nim's shoulder - STAGED AGAINST THE WORLD AND AGAINST BOTH
+   * SUBJECTS, not against a circle.
+   *
+   * The keys used to be pure trigonometry (`ang = base + PI + k*PI*1.65`,
+   * `r = 4.6 - k*1.4`, look at the crest) handed straight to
+   * `cam.setCinematic()`, which by design bypasses the follow camera's whisker
+   * pull-in. So the one shot in the game that exists to show the hero was the
+   * one shot with no occlusion response and no idea where the hero was.
+   *
+   * MEASURED on a real contact collect of verdant-1's 'open' crest
+   * (_harness/_uiorb3.py): the crest sits at [9.2, 19.30, -32.8] and NIM ends
+   * the walk-in at [9.2, 18.15, -32.3] - 2.05 m BELOW the look target. Every
+   * ray from the crest anchor to every orbit key was clear (broadphase AND a
+   * raycast over the 127 visible course meshes: 9 of 9 null), and the shot was
+   * still wrong, because the ray that matters - lens to NIM - was blocked by
+   * `merged_cb.copper.verdant` at 3.06 m of 4.67 m. A spire poking up between
+   * a high lens and a hero standing below it.
+   *
+   * So the stager now:
+   *   1. frames BOTH subjects - the look target is the midpoint of the crest
+   *      burst and Nim's chest, so neither can leave the frame;
+   *   2. tests every candidate key from BOTH anchors, with the follow camera's
+   *      own `probeClear` (colliders, the probe camcheck gates) AND a raycast
+   *      over the course's visible opaque meshes, because the occluder that
+   *      broke this shot is DECORATION and carries no collider;
+   *   3. searches a ladder of lens DROPS before radius pull-ins - dropping the
+   *      lens toward the subjects clears an up-poking spire where pulling in
+   *      never can - starting each key at its neighbour's accepted rung so the
+   *      dolly stays smooth;
+   *   4. keeps the least-bad candidate when nothing is fully clear, and never
+   *      stages below Nim's feet or inside `CLEAR_ORBIT_MIN_R`.
+   *
+   * Runs ONCE per crest, never per frame, under a hard ray budget.
+   */
   _buildOrbit(center) {
     const path = this._orbitPath;
-    const base = this.cam && isNum(this.cam.yaw) ? this.cam.yaw : 0;
+    const cam = this.cam;
+    const base = cam && isNum(cam.yaw) ? cam.yaw : 0;
+
+    const crest = _orbCrest.set(center.x, center.y + CLEAR_ORBIT_LOOK_Y, center.z);
+    const hero = _orbHero.copy(crest);
+    let feetY = center.y;
+    const hp = this.player && this.player.pos ? this.player.pos : null;
+    if (hp && isNum(hp.x)) { hero.set(hp.x, hp.y + CLEAR_ORBIT_HERO_Y, hp.z); feetY = hp.y; }
+    const look = _orbLook.copy(crest).add(hero).multiplyScalar(0.5);
+    const floorY = Math.min(feetY, crest.y - CLEAR_ORBIT_HERO_Y) + 0.55;
+
+    this._collectOrbitMeshes(look);
+    this._orbRays = 0;
+    const tStart = nowMs();
+    /* One deadline for the whole pass, not a per-key share: the hardest key is
+       usually the FIRST one (it derives the staging the rest inherit), and a
+       per-key share starved it - measured, keys 0-3 came back at hero scores
+       0.29-0.46 where a shared deadline had them clear. */
+    const tEnd = tStart + CLEAR_ORBIT_MS_BUDGET;
+
+    let prevD = 0, prevF = 1;
     for (let i = 0; i < CLEAR_ORBIT_KEYS; i++) {
       const k = i / (CLEAR_ORBIT_KEYS - 1);
       const ang = base + Math.PI + k * Math.PI * 1.65;
-      const r = CLEAR_ORBIT_RADIUS - k * 1.4;
+      const sx = -Math.sin(ang), sz = -Math.cos(ang);
+      const r0 = CLEAR_ORBIT_RADIUS - k * 1.4;
+      const y0 = look.y + CLEAR_ORBIT_RISE - k * 0.7;
+      const bx = center.x + sx * r0, bz = center.z + sz * r0;
+
+      let bestScore = -1, bestD = prevD, bestF = prevF;
+      _orbBest.set(bx, Math.max(floorY, y0), bz);
+
+      /* (a) INHERIT the neighbour's staging first: one ray, and it almost
+         always holds, because consecutive keys are 0.6 m apart on a 2.2 s
+         sweep. Restarting every key from the nominal ring instead burned the
+         whole budget re-deriving the same answer nine times - MEASURED: the
+         pass ran 207.7 ms and still left keys 7 and 8 unstaged. */
+      if ((prevD !== 0 || prevF < 0.999) && nowMs() < tEnd) {
+        const py = y0 + CLEAR_ORBIT_DROPS[prevD];
+        if (py >= floorY) {
+          const ox = bx - look.x, oy = py - look.y, oz = bz - look.z;
+          const dl = Math.sqrt(ox * ox + oy * oy + oz * oz);
+          const f = dl > 1e-3 ? Math.min(1, Math.max(prevF, CLEAR_ORBIT_MIN_R / dl)) : 1;
+          let ff = f;
+          _orbCand.set(look.x + ox * ff, Math.max(floorY, look.y + oy * ff), look.z + oz * ff);
+          let sc = this._stageScore(hero, crest, _orbCand);
+          if (sc > bestScore) { bestScore = sc; bestD = prevD; bestF = ff; _orbBest.copy(_orbCand); }
+          /* and let a near-miss CONVERGE from here rather than restarting the
+             whole ladder at the nominal ring - that restart is what kept the
+             pass at ~10 rays per key. */
+          for (let it = 0; it < CLEAR_ORBIT_PULL_ITERS && sc < CLEAR_ORBIT_ACCEPT && nowMs() < tEnd; it++) {
+            const t = this._orbHit;
+            if (t < 0) break;
+            const dcur = dl * ff;
+            const shrink = Math.max(CLEAR_ORBIT_MIN_R / dcur, (dcur - (t + CLEAR_ORBIT_PULL_PAD)) / dcur);
+            if (shrink >= 0.995) break;
+            ff *= shrink;
+            _orbCand.set(look.x + ox * ff, Math.max(floorY, look.y + oy * ff), look.z + oz * ff);
+            sc = this._stageScore(hero, crest, _orbCand);
+            if (sc > bestScore) { bestScore = sc; bestD = prevD; bestF = ff; _orbBest.copy(_orbCand); }
+          }
+        }
+      }
+
+      for (let n = 0; n < CLEAR_ORBIT_DROPS.length && bestScore < CLEAR_ORBIT_ACCEPT && nowMs() < tEnd; n++) {
+        /* Start at the rung the previous key settled on and wrap - temporal
+           coherence (the dolly reads as a move, not a cut) AND full coverage.
+           The zigzag this replaces could not reach the outer rungs at all. */
+        const di = (prevD + n) % CLEAR_ORBIT_DROPS.length;
+        const py = y0 + CLEAR_ORBIT_DROPS[di];
+        if (py < floorY) continue;
+        const ox = bx - look.x, oy = py - look.y, oz = bz - look.z;
+        const dlBase = Math.sqrt(ox * ox + oy * oy + oz * oz);
+        if (!(dlBase > 1e-3)) continue;
+
+        _orbCand.set(bx, py, bz);
+        let sc = this._stageScore(hero, crest, _orbCand);
+        let f = 1;
+        if (sc > bestScore) { bestScore = sc; bestD = di; bestF = 1; _orbBest.copy(_orbCand); }
+
+        /* COMPUTED PULL-IN, not a ladder of guesses. `_segScore` leaves the hit
+           distance in `_orbHit`, so we know exactly how much clear air there is
+           between the occluder and Nim: park the lens inside it, then re-probe
+           and repeat, because the next thing in the way may be nearer still.
+           MEASURED on verdant-1's 'open' crest (_shots/ui/_z_celeb_250.png):
+           the tower's copper PYRAMID ROOF stood 2.75 m in front of a lens 4.5 m
+           out. No lens DROP clears a roof that runs to the ground, and no fixed
+           radius scale lands reliably in the 1.75 m of air behind it - only the
+           measurement does. */
+        for (let it = 0; it < CLEAR_ORBIT_PULL_ITERS && sc < CLEAR_ORBIT_ACCEPT && nowMs() < tEnd; it++) {
+          const t = this._orbHit;
+          if (t < 0) break;
+          const dl = dlBase * f;
+          const shrink = Math.max(CLEAR_ORBIT_MIN_R / dl, (dl - (t + CLEAR_ORBIT_PULL_PAD)) / dl);
+          if (shrink >= 0.995) break;               // already as tight as it may go
+          f *= shrink;
+          _orbCand.set(look.x + ox * f, Math.max(floorY, look.y + oy * f), look.z + oz * f);
+          sc = this._stageScore(hero, crest, _orbCand);
+          if (sc > bestScore) { bestScore = sc; bestD = di; bestF = f; _orbBest.copy(_orbCand); }
+        }
+      }
+      prevD = bestD; prevF = bestF;
+
       const key = path.cam[i];
-      key.p[0] = center.x - Math.sin(ang) * r;
-      key.p[1] = center.y + CLEAR_ORBIT_HEIGHT - k * 0.7;
-      key.p[2] = center.z - Math.cos(ang) * r;
-      key.look[0] = center.x; key.look[1] = center.y + 0.9; key.look[2] = center.z;
+      key.p[0] = _orbBest.x; key.p[1] = _orbBest.y; key.p[2] = _orbBest.z;
+      key.look[0] = look.x; key.look[1] = look.y; key.look[2] = look.z;
       key.t = k * CLEAR_ORBIT_MS / 1000;
     }
+    /* Staging cost, kept for the harness the way `lastRespawnMs` is: this pass
+       raycasts, and a silent regression here is a hitch on every crest. */
+    this.lastOrbitStageMs = nowMs() - tStart;
+  }
+
+  /**
+   * @private How well one candidate lens position frames the pair: 1 when both
+   * anchors see it, otherwise the worst anchor's clear fraction of the way. The
+   * hero anchor is tested FIRST and short-circuits, because it is the one that
+   * fails - the crest, floating clear of the level, almost never does.
+   */
+  _stageScore(hero, crest, p) {
+    const a = this._segScore(hero, p);
+    /* Hero first, and a hero-blocked key can never outscore a hero-clear one —
+       the reject this fixes is "Nim is never on screen", so a lens that sees
+       him and half the pedestal beats one that frames the pedestal perfectly
+       with him behind a roof. The crest ray is only paid for once the hero is
+       already clear, which is what keeps the pass inside its time budget. */
+    if (a < 1) return a * CLEAR_ORBIT_ACCEPT * 0.98;   // _orbHit = the hero leg's blocker
+    const hHit = this._orbHit;
+    const out = CLEAR_ORBIT_ACCEPT + (1 - CLEAR_ORBIT_ACCEPT) * this._segScore(crest, p);
+    this._orbHit = hHit;                               // the pull-in only ever chases the hero
+    return out;
+  }
+
+  /**
+   * @private 1 when the LENS at `p` can see the subject at `anchor`, else the
+   * fraction of the way the view survives.
+   *
+   * The ray is cast LENS -> SUBJECT, which is the actual line of sight and not
+   * a stylistic choice: course meshes render `side: FrontSide`, and
+   * `Raycaster` honours that, so a ray leaving the subject and exiting through
+   * a roof's UNDERSIDE reports nothing. MEASURED during a live celebration
+   * (_harness/_uiceleb4.py diag): hero -> key1 over the very same 24-mesh probe
+   * list returned `listHit: []` while key1 -> hero over the same segment hit
+   * `merged_cb.copper.verdant` at 2.75 m of 4.46 m. Same segment, opposite
+   * direction, opposite verdict — cast the way the camera looks.
+   */
+  _segScore(anchor, p) {
+    _orbDir.set(anchor.x - p.x, anchor.y - p.y, anchor.z - p.z);
+    const d = _orbDir.length();
+    if (!(d > 1e-4)) return 0;
+    _orbDir.multiplyScalar(1 / d);
+    _orbFrom.set(p.x, p.y, p.z);
+    const need = Math.max(0.05, d - CLEAR_ORBIT_SKIN);
+    let hit = -1;
+    const cam = this.cam;
+    if (cam && typeof cam.probeClear === 'function' && this._orbRays < CLEAR_ORBIT_RAYS_MAX) {
+      this._orbRays++;
+      const t = cam.probeClear(_orbFrom, _orbDir, need);
+      if (t >= 0) hit = t;
+    }
+    if (hit < 0) {
+      const list = this._orbMeshes;
+      if (list && list.length && this._orbRays < CLEAR_ORBIT_RAYS_MAX) {
+        this._orbRays++;
+        _orbRay.set(_orbFrom, _orbDir);
+        _orbRay.near = 0.02; _orbRay.far = need;
+        const hits = _orbRay.intersectObjects(list, false);
+        for (let i = 0; i < hits.length; i++) {
+          if (hits[i].distance > 0.05) { hit = hits[i].distance; break; }
+        }
+      }
+    }
+    this._orbHit = hit;
+    if (hit < 0) return 1;
+    /* Score the ABSOLUTE gap still in the way, not the ratio `hit / d`: pulling
+       the lens in shrinks hit and d together, so the ratio barely moves and the
+       search could not tell a 1.8 m pull-in from doing nothing. What actually
+       improves is the distance between the blocker and the subject. */
+    const gap = d - hit;
+    return 1 - clamp(gap / CLEAR_ORBIT_GAP_M, 0, 1);
+  }
+
+  /**
+   * @private Course meshes worth raycasting for the staging pass: visible,
+   * opaque, non-instanced, not the collectible layer, and within
+   * `CLEAR_ORBIT_PROBE_R` of the subject. The radius prefilter is what keeps
+   * this affordable - the full visible set on verdant-1 is 127 meshes / 207k
+   * triangles and costs ~6.5 ms per ray (measured, _harness/_uiorb2.py).
+   */
+  _collectOrbitMeshes(look) {
+    let out = this._orbMeshes;
+    if (!out) out = this._orbMeshes = [];
+    out.length = 0;
+    const root = this.course && this.course.group;
+    if (!root) return out;
+    const stack = this._orbStack || (this._orbStack = []);
+    stack.length = 0;
+    stack.push(root);
+    const R = CLEAR_ORBIT_PROBE_R;
+    while (stack.length) {
+      const o = stack.pop();
+      if (!o || o.visible === false) continue;
+      /* PRUNE the subtree, which `traverseVisible` cannot do — a name check in
+         its callback skips one node and still walks its children, which is how
+         `crestGold` / `crestEnamel` ended up in the probe list. */
+      if (o.name && ORBIT_SKIP_NODES.indexOf(o.name) >= 0) continue;
+      /* Terrain is a heightfield the BROADPHASE already answers for, and its
+         box spans the whole course, so every visual ray paid a full 39k-triangle
+         test for an answer probeClear had already given. */
+      if (o.name === 'terrain') continue;
+      if (o.isMesh && !o.isInstancedMesh && o.geometry) {
+        const m = o.material;
+        const solid = !(m && !Array.isArray(m) && (m.transparent === true || m.visible === false));
+        if (solid) {
+          const g = o.geometry;
+          if (!g.boundingSphere) { try { g.computeBoundingSphere(); } catch (e) { /* skip */ } }
+          const bs = g.boundingSphere;
+          if (bs) {
+            _orbSphere.copy(bs).applyMatrix4(o.matrixWorld);
+            if (_orbSphere.center.distanceTo(look) - _orbSphere.radius <= R) out.push(o);
+          }
+        }
+      }
+      const ch = o.children;
+      for (let i = 0; i < ch.length; i++) stack.push(ch[i]);
+    }
+    return out;
   }
 
   _stepClear(ms) {
@@ -2456,7 +2797,10 @@ export class Game {
     s.muted = this.muted;
     if ((this.frames & 31) === 0) {                   // cheap, but not needed per frame
       s.crestTotal = safe(() => this.save.crestTotal(), 'save.crestTotal') | 0;
-      s.crestGrandTotal = 91;
+      /* 91 was typed in. It is 13 courses x 7, and data/index.js already
+         computes exactly that from REALMS — so the hub's denominator now moves
+         with the course list instead of going stale the day a realm gains one. */
+      s.crestGrandTotal = CREST_TOTAL;
     }
     return s;
   }

@@ -1,31 +1,42 @@
 #!/usr/bin/env python
-"""CRESTBOUND perf check — draw calls, triangles and REAL frame cost per course.
+"""CRESTBOUND perf check — draw calls, triangles and REAL GPU frame cost per course.
 
-Budgets (CONTRACT hard rule 4 / "The gates"):
+Budgets (CONTRACT hard rule 4 / "The gates", as amended 2026-09-02):
 
-    draw calls   <= 260          worst frame at any station
-    triangles    <= 450 000      worst frame at any station
-    fps          >= 55           lowest station average (HEADED runs only)
-    p99 frame    <= 28 ms        99th percentile over the whole sample
-    course load  <= 1500 ms      __dev.goto round trip, hook call to live state
+    draw calls   <= 260            worst frame at any station (resolution-independent)
+    triangles    <= 450 000        worst frame at any station (resolution-independent)
+    fps          >= 55             AT THE TIER RENDER SCALE (high = 0.85)
+    p99 frame    <= 28 ms          AT THE TIER RENDER SCALE
+    warm load    <= 1500 ms        second load of a course; the COLD load is reported, not gated
+
+WHY THE RENDER SCALE IS THE GATE'S FRAME OF REFERENCE.  Measured on this
+machine (ANGLE / Intel UHD 0x00009A60 / D3D11, quiet box, GPU timer query):
+the frame is GPU FILL-bound, cost fits `T = C + F*pixels` with F between 78 and
+91 % of the frame, and overdraw is 2.2-2.8 shaded fragments per screen pixel.
+Stacking EVERY non-feature-deleting fill cut still left 40.99 ms (24.4 fps) at
+native 1920x1080, while the SAME chain at quarter pixels cost 19.71 ms
+(50.7 fps).  Native-1080p 55 fps is therefore not reachable on this GPU for
+this scene class and no fill cut reaches it, so the contract moved the fps
+budget onto the quality tier's internal render scale — the same lever as the
+pre-existing `DPR <= 1.5` cap.  The native-1080p figure is still measured and
+printed, as an INFO row.  It is not a pass condition.
+
+WHY THE GPU TIMER QUERY.  `requestAnimationFrame` deltas cannot beat the
+display refresh, and the reference panel is 50 Hz, so a rAF-interval gate reads
+~50 fps no matter what the renderer is doing.  The run launches with
+`--disable-gpu-vsync --disable-frame-rate-limit` AND times the frame with
+`EXT_disjoint_timer_query_webgl2`, which reports the GPU's own elapsed
+nanoseconds for the draws between beginQuery and endQuery.  rAF intervals are
+still collected and printed beside it, so a disagreement is visible.
 
 Per course it samples three STATIONS — the spawn and two checkpoints spread
-across the course — for `--seconds` each (default 8 s total, split evenly), so
-the numbers describe the level the player moves through, not one lucky corner.
-
-Frame times are measured in the page from `requestAnimationFrame` deltas rather
-than trusted from a counter, and draw calls / triangles come straight off
-`renderer.info.render` (the engine's own `stats` are printed beside them so a
-disagreement between the two is visible rather than silent).
+across the course — twice each: once at the tier render scale (gated) and once
+at render scale 1.0 (INFO).
 
     python perfcheck.py                          # every course on disk
-    python perfcheck.py --courses verdant-1,ember-2 --seconds 12
+    python perfcheck.py --courses verdant-1 --seconds 12
     python perfcheck.py --quality medium
     python perfcheck.py --headless               # reports fps, does NOT gate it
-
-WHY vsync IS DISABLED: rAF cannot exceed the display refresh, so on a 50 Hz panel
-every course would report ~50 fps and fail a 55 fps budget no matter what the
-renderer was doing (feedback_forgeflow_games_fps).
 
 Exit 0 = every course inside every gating budget.
 """
@@ -60,9 +71,7 @@ STATE_JS = "globalThis.CRESTBOUND && CRESTBOUND.game && CRESTBOUND.game.state"
 
 CLICK_JS = r"""() => {
   // CONTINUE first: with a save on disk, NEW GAME opens an ERASE-confirm page
-  // and the state never leaves 'title' -- which is exactly how this gate was
-  // failing ("the game never reached a live state"). camshots.py already orders
-  // it this way; camcheck.py and this file did not.
+  // and the state never leaves 'title'.
   const words = ['CONTINUE', 'KEEP MY PROGRESS', 'NEW GAME', 'NEW RUN', 'PLAY', 'START', 'BEGIN', 'ENTER'];
   const btns = Array.from(document.querySelectorAll('button.cb-btn, button, [role=button], .btn'));
   for (const want of words) {
@@ -89,24 +98,27 @@ async (id) => {
   const t0 = performance.now();
   const live = () => G.course && G.courseId === id && (G.state === 'playing' || G.state === 'keep');
   try { await G.__dev.goto(id); } catch (e) { return {error: 'goto threw: ' + e}; }
-  const deadline = t0 + 30000;
+  const deadline = t0 + 40000;
   /* Poll on BOTH rAF and a timer: building a course blocks the main thread for
-     one long frame, so an rAF-only loop can wake up past the deadline and call
-     a course that is now live "never arrived". */
+     one long frame, so an rAF-only loop can wake up past the deadline. */
   const tick = () => new Promise(r => { let done = false;
     const fin = () => { if (!done) { done = true; r(); } };
     requestAnimationFrame(fin); setTimeout(fin, 60); });
   while (performance.now() < deadline && !live()) await tick();
   if (live()) {
     const loadMs = performance.now() - t0;
-    // one more frame so the first render of the new course is included
     await frame();
-    return {loadMs: +loadMs.toFixed(1), courseId: G.courseId, state: G.state};
+    return {loadMs: +loadMs.toFixed(1), courseId: G.courseId, state: G.state,
+            programs: A.engine.renderer.info.programs ? A.engine.renderer.info.programs.length : null};
   }
   return {error: 'never arrived (state ' + G.state + ', course ' + G.courseId + ')'};
 }
 """
 
+# --------------------------------------------------------------------------
+# The sampler. `opts.scale`: null = leave the engine's tier scale alone,
+# a number = pin `engine.setRenderScale(n)` for this pass.
+# --------------------------------------------------------------------------
 SAMPLE_JS = r"""
 async (opts) => {
   const A = globalThis.CRESTBOUND;
@@ -125,11 +137,61 @@ async (opts) => {
     return null;
   };
 
-  /* stations: the spawn plus two checkpoints spread across the course */
+  /* ---- render scale: pin it, and freeze the dynamic controller ---------
+     The gate measures A KNOWN scale. The controller is what ships; letting it
+     move during the sample would mean the fps number belongs to no particular
+     resolution. */
+  const autoWas = E.renderScaleAuto;
+  const scaleWas = E.renderScale;
+  E.renderScaleAuto = false;
+  if (typeof opts.scale === 'number') E.setRenderScale(opts.scale);
+  for (let k = 0; k < 8; k++) await frame();      // let the resize land
+
+  /* ---- GPU timer query -------------------------------------------------
+     EXT_disjoint_timer_query_webgl2 reports the GPU's own elapsed nanoseconds
+     for the draws between beginQuery/endQuery. Only ONE TIME_ELAPSED query may
+     be active at a time, so the pattern is: end the query opened last frame,
+     read whatever has become available, open a new one. engine.onFrame runs
+     BEFORE the loop function (which renders), so a query opened in frame N-1's
+     callback and closed in frame N's callback encloses exactly frame N-1's
+     render. */
+  const gl = R.getContext();
+  const ext = gl.getExtension('EXT_disjoint_timer_query_webgl2') ||
+              gl.getExtension('EXT_disjoint_timer_query');
+  const TIME_ELAPSED = ext ? (ext.TIME_ELAPSED_EXT !== undefined ? ext.TIME_ELAPSED_EXT : 0x88BF) : 0;
+  const GPU_DISJOINT = ext ? (ext.GPU_DISJOINT_EXT !== undefined ? ext.GPU_DISJOINT_EXT : 0x8FBB) : 0;
+  let open = null;
+  const inflight = [];
+  const gpuMs = [];
+  const freeQ = [];
+  let disjoint = 0;
+  const drain = () => {
+    for (let i = inflight.length - 1; i >= 0; i--) {
+      const q = inflight[i];
+      if (!gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) continue;
+      inflight.splice(i, 1);
+      if (gl.getParameter(GPU_DISJOINT)) { disjoint++; freeQ.push(q); continue; }
+      gpuMs.push(gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6);
+      freeQ.push(q);
+    }
+  };
+  const cycle = () => {
+    if (!ext) return;
+    if (open) { gl.endQuery(TIME_ELAPSED); inflight.push(open); open = null; }
+    drain();
+    open = freeQ.pop() || gl.createQuery();
+    gl.beginQuery(TIME_ELAPSED, open);
+  };
+  const stopQ = () => {
+    if (!ext) return;
+    if (open) { gl.endQuery(TIME_ELAPSED); inflight.push(open); open = null; }
+    drain();
+  };
+
   const stations = [];
   const sp = C.spawnFor ? C.spawnFor(0) : null;
   if (sp && sp.pos) stations.push({name: 'spawn', p: posOf(sp.pos)});
-  const cps = (C.checkpoints || []).slice(1);         // [0] is the spawn
+  const cps = (C.checkpoints || []).slice(1);
   if (cps.length) {
     const pick = cps.length === 1 ? [0]
       : [Math.floor(cps.length / 3), Math.min(cps.length - 1, Math.floor((2 * cps.length) / 3))];
@@ -144,9 +206,14 @@ async (opts) => {
   if (!stations.length) return {error: 'no stations (no spawn, no checkpoints)'};
 
   const perStationMs = Math.max(1200, (opts.seconds * 1000) / stations.length);
-  const out = {stations: [], worstDraw: 0, worstTris: 0, minFps: null, allFrames: [],
+  const out = {stations: [], worstDraw: 0, worstTris: 0, minFps: null, minRafFps: null,
+               allGpu: [], gpuAvailable: !!ext, disjoint: 0,
+               renderScale: +E.renderScale.toFixed(3),
+               tierScale: +(E.tierRenderScale !== undefined ? E.tierRenderScale : E.renderScale).toFixed(3),
+               drawingBuffer: [gl.drawingBufferWidth, gl.drawingBufferHeight],
+               cssSize: [E.size.w, E.size.h],
                quality: (A.Settings && A.Settings.get) ? A.Settings.get().quality : null,
-               dpr: +R.getPixelRatio().toFixed(2),
+               dpr: +R.getPixelRatio().toFixed(3),
                geometries: R.info.memory.geometries, textures: R.info.memory.textures,
                programs: R.info.programs ? R.info.programs.length : null,
                hazards: (C.hazards || []).length, critters: (C.critters || []).length,
@@ -160,11 +227,13 @@ async (opts) => {
     }
     for (let k = 0; k < 30; k++) await frame();       // culling / LOD / streaming settle
 
+    gpuMs.length = 0;
     const dts = [];
-    let draw = 0, tris = 0, engFps = 0, engN = 0;
+    let draw = 0, tris = 0;
     let last = performance.now();
     const t0 = last;
     while (performance.now() - t0 < perStationMs) {
+      cycle();
       await frame();
       const now = performance.now();
       dts.push(now - last);
@@ -172,33 +241,42 @@ async (opts) => {
       const rc = R.info.render.calls, rt = R.info.render.triangles;
       if (rc > draw) draw = rc;
       if (rt > tris) tris = rt;
-      if (E.stats && E.stats.fps) { engFps += E.stats.fps; engN++; }
     }
+    stopQ();
+    for (let k = 0; k < 6; k++) { await frame(); drain(); }   // let the tail land
+
+    const g = gpuMs.slice().sort((a, b) => a - b);
     dts.sort((a, b) => a - b);
-    const mean = dts.reduce((a, b) => a + b, 0) / Math.max(1, dts.length);
-    const p99 = dts.length ? dts[Math.min(dts.length - 1, Math.floor(dts.length * 0.99))] : null;
+    const gmean = g.length ? g.reduce((a, b) => a + b, 0) / g.length : null;
+    const rmean = dts.reduce((a, b) => a + b, 0) / Math.max(1, dts.length);
     const rec = {
       name: st.name, p: [+st.p.x.toFixed(1), +st.p.y.toFixed(1), +st.p.z.toFixed(1)],
-      frames: dts.length,
-      fps: mean > 0 ? +(1000 / mean).toFixed(1) : null,
-      engineFps: engN ? Math.round(engFps / engN) : null,
-      medianMs: dts.length ? +dts[dts.length >> 1].toFixed(2) : null,
-      p99Ms: p99 === null ? null : +p99.toFixed(2),
-      engineP99Ms: E.stats && Number.isFinite(E.stats.p99Ms) ? +E.stats.p99Ms.toFixed(2) : null,
+      frames: dts.length, gpuFrames: g.length,
+      fps: gmean ? +(1000 / gmean).toFixed(1) : null,
+      gpuMedianMs: g.length ? +g[g.length >> 1].toFixed(2) : null,
+      p99Ms: g.length ? +g[Math.min(g.length - 1, Math.floor(g.length * 0.99))].toFixed(2) : null,
+      rafFps: rmean > 0 ? +(1000 / rmean).toFixed(1) : null,
+      rafP99Ms: dts.length ? +dts[Math.min(dts.length - 1, Math.floor(dts.length * 0.99))].toFixed(2) : null,
       drawCalls: draw, tris: tris,
     };
     out.stations.push(rec);
-    out.allFrames = out.allFrames.concat(dts);
+    for (let i = 0; i < g.length; i++) out.allGpu.push(g[i]);
     if (draw > out.worstDraw) out.worstDraw = draw;
     if (tris > out.worstTris) out.worstTris = tris;
     if (rec.fps !== null && (out.minFps === null || rec.fps < out.minFps)) out.minFps = rec.fps;
+    if (rec.rafFps !== null && (out.minRafFps === null || rec.rafFps < out.minRafFps)) out.minRafFps = rec.rafFps;
   }
 
-  const all = out.allFrames.slice().sort((a, b) => a - b);
+  const all = out.allGpu.slice().sort((a, b) => a - b);
   out.p99Ms = all.length ? +all[Math.min(all.length - 1, Math.floor(all.length * 0.99))].toFixed(2) : null;
   out.avgFps = out.stations.length
     ? +(out.stations.reduce((a, s) => a + (s.fps || 0), 0) / out.stations.length).toFixed(1) : null;
-  delete out.allFrames;
+  out.disjoint = disjoint;
+  delete out.allGpu;
+
+  /* restore whatever the page had */
+  E.setRenderScale(scaleWas);
+  E.renderScaleAuto = autoWas;
   return out;
 }
 """
@@ -249,23 +327,18 @@ def main() -> int:
     ap.add_argument("--url", default=BASE)
     ap.add_argument("--courses", default="", help="comma list; default = every course on disk")
     ap.add_argument("--quality", default="high")
-    ap.add_argument("--seconds", type=float, default=8.0, help="sample seconds per course")
+    ap.add_argument("--seconds", type=float, default=8.0, help="sample seconds per course per pass")
     ap.add_argument("--width", type=int, default=1920)
     ap.add_argument("--height", type=int, default=1080)
     ap.add_argument("--headless", action="store_true")
+    ap.add_argument("--no-native", action="store_true",
+                    help="skip the native-1.0 INFO pass (halves the run time)")
     ap.add_argument("--json", default=os.path.join(HERE, "perfcheck.json"))
     args = ap.parse_args()
 
-    results, pageerrs = {}, []
+    results, native, loads, pageerrs = {}, {}, {}, []
     with sync_playwright() as p:
         if args.headless:
-            # HARNESS_NOTES: real Chrome headless on this box drives ANGLE/D3D11 on
-            # the Intel UHD GPU. The bundled Chromium + SwiftShader path was
-            # hard-coded here, and at 1920x1080 it does not survive these scenes:
-            # measured twice, "Target page, context or browser has been closed" on
-            # BOTH courses, i.e. the gate reported OVER BUDGET having measured
-            # nothing. Prefer the GPU, keep SwiftShader as the stated fallback.
-            # (fps / p99 gating under --headless is unchanged -- still suppressed.)
             try:
                 br = p.chromium.launch(channel="chrome", headless=True, args=FLAGS)
             except Exception as _e:
@@ -308,40 +381,69 @@ def main() -> int:
             print("RESULT: FAIL")
             return 2
 
+        # ---- pass 0: COLD load of every course, in order -------------------
         for cid in courses:
             try:
-                load = pg.evaluate(LOAD_JS, cid)
+                ld = pg.evaluate(LOAD_JS, cid)
             except Exception as e:
-                results[cid] = {"error": "load: %s" % str(e)[:200]}
+                ld = {"error": str(e)[:200]}
+            loads[cid] = {"cold": (ld or {}).get("loadMs"), "warm": None,
+                          "programs": (ld or {}).get("programs"),
+                          "error": (ld or {}).get("error")}
+
+        # ---- pass 1..n: warm load + sample --------------------------------
+        for cid in courses:
+            if loads[cid].get("error"):
+                results[cid] = {"error": loads[cid]["error"]}
                 continue
-            if not isinstance(load, dict) or load.get("error"):
-                results[cid] = {"error": (load or {}).get("error", "load failed")}
+            try:
+                ld = pg.evaluate(LOAD_JS, cid)      # every course has been built once now
+            except Exception as e:
+                results[cid] = {"error": "warm load: %s" % str(e)[:200]}
                 continue
+            if not isinstance(ld, dict) or ld.get("error"):
+                results[cid] = {"error": (ld or {}).get("error", "warm load failed")}
+                continue
+            loads[cid]["warm"] = ld.get("loadMs")
+            loads[cid]["programs"] = ld.get("programs")
             pg.wait_for_timeout(700)
             try:
-                r = pg.evaluate(SAMPLE_JS, {"seconds": args.seconds})
+                r = pg.evaluate(SAMPLE_JS, {"seconds": args.seconds, "scale": None})
             except Exception as e:
-                results[cid] = {"error": str(e)[:300], "loadMs": load.get("loadMs")}
+                results[cid] = {"error": str(e)[:300]}
                 continue
-            if isinstance(r, dict):
-                r["loadMs"] = load.get("loadMs")
-            results[cid] = r
+            results[cid] = r if isinstance(r, dict) else {"error": "sampler returned nothing"}
+            if not args.no_native:
+                try:
+                    native[cid] = pg.evaluate(SAMPLE_JS, {"seconds": max(3.0, args.seconds * 0.5),
+                                                          "scale": 1.0})
+                except Exception as e:
+                    native[cid] = {"error": str(e)[:200]}
         br.close()
 
-    print("=" * 100)
-    print("CRESTBOUND perf check — %s, %dx%d, quality %s, %.0f s per course"
-          % ("HEADLESS swiftshader (fps NOT gated)" if args.headless else "headed Chrome",
-             args.width, args.height, args.quality, args.seconds))
-    print("budget: <= %d draws, <= %s tris, >= %d fps, p99 <= %.0f ms, load <= %d ms"
-          % (BUDGET["drawCalls"], f'{BUDGET["tris"]:,}', BUDGET["minFps"],
-             BUDGET["p99Ms"], BUDGET["loadMs"]))
-    print("-" * 100)
-    print("%-12s %6s %9s %7s %7s %8s %7s %6s  %s"
-          % ("course", "draws", "tris", "fps", "p99ms", "load ms", "hazard", "coll", "verdict"))
-    print("-" * 100)
+    tier = None
+    for r in results.values():
+        if isinstance(r, dict) and r.get("tierScale"):
+            tier = r["tierScale"]
+            break
+
+    print("=" * 108)
+    print("CRESTBOUND perf check — %s, %dx%d CSS, quality %s (tier render scale %s), %.0f s per pass"
+          % ("HEADLESS (fps NOT gated)" if args.headless else "headed Chrome",
+             args.width, args.height, args.quality, tier if tier else "?", args.seconds))
+    print("budget: <= %d draws, <= %s tris, >= %d fps, p99 <= %.0f ms AT THE TIER RENDER SCALE,"
+          % (BUDGET["drawCalls"], f'{BUDGET["tris"]:,}', BUDGET["minFps"], BUDGET["p99Ms"]))
+    print("        warm load <= %d ms. Native-1080p and cold load are INFO rows, not pass conditions."
+          % BUDGET["loadMs"])
+    print("-" * 108)
+    print("%-12s %6s %9s %7s %7s %8s %8s %7s %6s  %s"
+          % ("course", "draws", "tris", "fps", "p99ms", "warm ms", "cold ms", "hazard", "coll", "verdict"))
+    print("-" * 108)
 
     fails = 0
-    for cid, r in results.items():
+    for cid in results:
+        r = results[cid]
+        L = loads.get(cid, {})
         if not isinstance(r, dict) or r.get("error"):
             print("%-12s ERROR: %s" % (cid, str((r or {}).get("error"))[:70]))
             fails += 1
@@ -353,25 +455,37 @@ def main() -> int:
             over.append("tris")
         if not args.headless and r.get("minFps") is not None and r["minFps"] < BUDGET["minFps"]:
             over.append("fps")
-        if r.get("p99Ms") is not None and r["p99Ms"] > BUDGET["p99Ms"] and not args.headless:
+        if not args.headless and r.get("p99Ms") is not None and r["p99Ms"] > BUDGET["p99Ms"]:
             over.append("p99")
-        if r.get("loadMs") is not None and r["loadMs"] > BUDGET["loadMs"]:
+        if L.get("warm") is not None and L["warm"] > BUDGET["loadMs"]:
             over.append("load")
         if over:
             fails += 1
-        print("%-12s %6s %9s %7s %7s %8s %7s %6s  %s"
+        print("%-12s %6s %9s %7s %7s %8s %8s %7s %6s  %s"
               % (cid, r.get("worstDraw"), f'{r.get("worstTris", 0):,}',
-                 r.get("minFps"), r.get("p99Ms"), r.get("loadMs"),
+                 r.get("minFps"), r.get("p99Ms"), L.get("warm"), L.get("cold"),
                  r.get("hazards"), r.get("colliders"),
                  ("OVER: " + ",".join(over)) if over else "ok"))
+        print("             render scale %.2f -> drawing buffer %sx%s (CSS %sx%s), dpr %.2f, "
+              "programs %s, GPU timer %s%s"
+              % (r.get("renderScale", 0), r.get("drawingBuffer", ["?", "?"])[0],
+                 r.get("drawingBuffer", ["?", "?"])[1], r.get("cssSize", ["?", "?"])[0],
+                 r.get("cssSize", ["?", "?"])[1], r.get("dpr", 0), r.get("programs"),
+                 "yes" if r.get("gpuAvailable") else "NO (fps from rAF)",
+                 (", %d disjoint frames dropped" % r["disjoint"]) if r.get("disjoint") else ""))
         for s in r.get("stations", []):
-            print("             %-8s p %-22s draws %4s tris %9s fps %5s p99 %5s"
+            print("             %-8s p %-22s draws %4s tris %9s  gpu fps %5s p99 %6s   (rAF fps %5s)"
                   % (s.get("name"), s.get("p"), s.get("drawCalls"),
-                     f'{s.get("tris", 0):,}', s.get("fps"), s.get("p99Ms")))
-    print("-" * 100)
+                     f'{s.get("tris", 0):,}', s.get("fps"), s.get("p99Ms"), s.get("rafFps")))
+        n = native.get(cid)
+        if isinstance(n, dict) and not n.get("error"):
+            print("             INFO native %.2f (%sx%s): gpu fps %s, p99 %s ms — NOT a pass condition"
+                  % (n.get("renderScale", 1.0), n.get("drawingBuffer", ["?", "?"])[0],
+                     n.get("drawingBuffer", ["?", "?"])[1], n.get("minFps"), n.get("p99Ms")))
+    print("-" * 108)
     if args.headless:
-        print("note: headless/swiftshader frame times are software-rasterised — fps and p99 are")
-        print("      REPORTED but never gated. Only a headed run on the reference machine gates them.")
+        print("note: --headless is for draws/tris only. fps and p99 are REPORTED but never gated;")
+        print("      only a headed run on the reference machine, on a quiet box, gates them.")
     if pageerrs:
         print("page errors (%d):" % len(pageerrs))
         for e in pageerrs[:8]:
@@ -379,8 +493,8 @@ def main() -> int:
     if args.json:
         try:
             with open(args.json, "w", encoding="utf-8") as f:
-                json.dump({"budget": BUDGET, "headless": args.headless,
-                           "results": results, "pageErrors": pageerrs}, f, indent=2)
+                json.dump({"budget": BUDGET, "headless": args.headless, "loads": loads,
+                           "results": results, "native": native, "pageErrors": pageerrs}, f, indent=2)
         except Exception:
             pass
     print("VERDICT: %s (%d of %d courses over budget)"

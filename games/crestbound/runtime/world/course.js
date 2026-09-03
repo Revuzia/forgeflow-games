@@ -108,15 +108,47 @@ const CHUNK_SIZE = 24;
  * multiplying the static-art draw calls by the chunk count.  Measured on
  * verdant-1 (144 x 144 m): a 24 m grid produced 21 chunks / 196 merged draws,
  * every one of them inside the frustum.  The perf gate allows 260 draws for the
- * WHOLE frame, so the static art gets a small fraction of that: 12 cells is the
- * most a course may spend before the cell is widened.
+ * WHOLE frame, so the static art gets a small fraction of that.
+ *
+ * 2026-09-02, MEASURED with `_harness/drawprobe.py` (which wraps
+ * `renderer.renderBufferDirect` and attributes every draw of one frame): at
+ * MAX_CHUNKS = 4 the Keep spent 198 of its 373 draws inside chunk groups —
+ * 124 shaded + 74 shadow — and ALL FOUR chunks were inside the frustum at the
+ * spawn station, so the 4x multiplier on "one draw per material" bought nothing
+ * and cost ~3x.  A course's static art is one merged mesh per material either
+ * way; what chunking adds is the ability to cull a QUADRANT, which only pays on
+ * a course large enough that a quadrant leaves the frustum.  So the ceiling is
+ * 2 and the cell grows to meet it: a big course still gets a near/far split,
+ * a small one stops paying for a split it can never use.
  */
-const MAX_CHUNKS = 4;
+const MAX_CHUNKS = 2;
 /** Beyond this from the feet a hazard's VISUAL is skipped (never its simulation). */
 const HAZARD_VIS_DIST = 90;
 /** Chunks nearer than this stay visible off-screen so their shadows keep casting. */
 const SHADOW_KEEP = 34;
 const MAX_TEXT = 48;
+/* One atlas for every `kind:'text'` sign in a course: 2 columns x 24 rows of
+   1024 x 128 px in a 2048 x 3072 sheet, which covers MAX_TEXT with room to
+   spare. Signs render at a 84 px font into roughly 700-1000 x 144 px, so the
+   fit-inside-the-cell scale is ~0.89 and the glyphs stay crisp at reading
+   distance. */
+const TEXT_ATLAS_COLS = 2;
+const TEXT_ATLAS_ROWS = 24;
+const TEXT_ATLAS_CELL_W = 1024;
+const TEXT_ATLAS_CELL_H = 128;
+/* Glyph-sheet geometry for `kind:'text'`. TEXT_CANVAS_MAX is the widest sheet a
+   line may occupy — the font SHRINKS to fit it and is never CROPPED to it (see
+   _makeTextTexture). TEXT_PAD_EM is the margin, so no glyph is ever flush to
+   the plank edge; TEXT_MOUNT_OUT lifts the whole sign off whatever it is
+   mounted on so a post behind it cannot poke through the plate. */
+const TEXT_FS = 84;
+const TEXT_FS_MIN = 30;
+const TEXT_CANVAS_MAX = 2048;
+const TEXT_TRACK_EM = 0.060;
+const TEXT_PAD_EM = 0.52;
+const TEXT_LINE_EM = 1.22;
+const TEXT_PLATE_EM = 0.90;
+const TEXT_MOUNT_OUT = 0.14;
 const MAX_LIGHT_SITES = 96;
 
 /* ── the light budget ───────────────────────────────────────────────────────
@@ -852,8 +884,13 @@ export class Course {
     /* ---- internals ---- */
     this._built = false;
     this._disposed = false;
+    /** @private {{cnv,ctx,tex,mat,next}|null} the course's one sign-text atlas */
+    this._textAtlas = null;
     this._chunks = [];
     this._chunkMap = new Map();
+    /** @private detail-art cells: a FINE grid, independent of the main chunks */
+    this._detailCells = [];
+    this._detailMap = new Map();
     this._chunkSize = CHUNK_SIZE;
     this._gridOX = 0;
     this._gridOZ = 0;
@@ -1177,9 +1214,24 @@ export class Course {
           if (!fin3(o.a) || !fin3(o.b)) failObj(i, k, 'needs finite endpoints "a" and "b"');
           break;
         case 'fence':
-        case 'sandboard':
           if (!fin3(o.a) || !fin3(o.b)) failObj(i, k, 'needs finite endpoints "a" and "b"');
           break;
+        case 'sandboard': {
+          /* hazards/fluids.js SandboardHazard reads `pts` (a multi-segment run)
+             OR the `a`/`b` pair; the validator only knew the pair, so a legal
+             multi-segment chute was rejected at load. One chute authored as one
+             object instead of N is worth ~55 draw calls (see keep.js WYRM_CHUTE). */
+          const spts = Array.isArray(o.pts) ? o.pts : null;
+          if (spts) {
+            if (spts.length < 2) failObj(i, k, '"pts" needs at least 2 points');
+            else for (let pi = 0; pi < spts.length; pi++) {
+              if (!fin3(spts[pi])) failObj(i, k, '"pts[' + pi + ']" must be a finite [x,y,z]');
+            }
+          } else if (!fin3(o.a) || !fin3(o.b)) {
+            failObj(i, k, 'needs finite endpoints "a" and "b" (or a "pts" run)');
+          }
+          break;
+        }
         default:
           if (Course._routeOf(k) === 'builder' && o.p === undefined) {
             failObj(i, k, 'missing required field "p"');
@@ -1422,6 +1474,12 @@ export class Course {
       deco: colorOf(pal.deco, 0x6d7f96),
       water: colorOf(pal.water, 0x3aa6c8),
     };
+    /* How hard a checkpoint pad self-lights, per theme (see _buildCheckpoints).
+     * A NUMBER, not a colour, so it does not go through `colorOf`. The default
+     * is what a dim interior needs; a sunlit theme declares its own, because
+     * the same lift that rescues a candle-lit hall clips to white in a meadow. */
+    this._padGlow = (typeof pal.padGlow === 'number' && isFinite(pal.padGlow) && pal.padGlow >= 0)
+      ? pal.padGlow : 2.05;
     const key = theme.lights && theme.lights.key;
     this._keyDir = v3(key && key.dir, -0.45, 0.82, 0.36).normalize();
   }
@@ -1502,14 +1560,26 @@ export class Course {
     let cell = CHUNK_SIZE;
     const spanX = Math.max(1, maxX - minX);
     const spanZ = Math.max(1, maxZ - minZ);
-    while ((Math.ceil(spanX / cell) + 1) * (Math.ceil(spanZ / cell) + 1) > MAX_CHUNKS && cell < 400) {
+    /* Anchor the grid on the course's own minimum (not on a multiple of the
+       cell) so a span that FITS in one cell lands in ONE cell.
+       MEASURED BUG, 2026-09-02: the old form floored the origin to a multiple
+       of the cell and counted `(ceil(span/cell) + 1)^2` to allow for the
+       straddle that created. That `+ 1` has a floor of 2 per axis, so the
+       count could never drop below FOUR however far the cell grew — and both
+       shipped courses got exactly four chunks, all four inside the frustum at
+       every station, i.e. a 4x multiplier on "one merged draw per material"
+       for zero culling. Anchoring removes the straddle, so the count is the
+       honest `ceil(span/cell)` per axis and a small course really does
+       collapse to one chunk. */
+    while (Math.max(1, Math.ceil(spanX / cell)) * Math.max(1, Math.ceil(spanZ / cell)) > MAX_CHUNKS
+           && cell < 800) {
       cell *= 1.5;
     }
     this._chunkSize = cell;
-    /* Anchor the grid on the course's own minimum so a course centred far from
-       the origin does not waste half its cells on empty space. */
-    this._gridOX = Math.floor(minX / cell) * cell;
-    this._gridOZ = Math.floor(minZ / cell) * cell;
+    /* A hair of margin so an object sitting exactly on `minX` cannot fall into
+       the cell below through floating-point noise. */
+    this._gridOX = minX - cell * 1e-3;
+    this._gridOZ = minZ - cell * 1e-3;
   }
 
   _chunkFor(x, z) {
@@ -1544,21 +1614,57 @@ export class Course {
   }
 
   /**
-   * File a built object into its chunk.  `detail` art (decor, signage, small
-   * clutter) lives in a second sub-group culled at a much nearer distance than
-   * the structural art the player actually lands on.
+   * @private A cell of the DETAIL grid.
+   *
+   * Main art and detail art want opposite grids. Main art is one merged mesh
+   * per material and is needed wherever the camera looks, so a fine grid only
+   * multiplies its draw calls (see MAX_CHUNKS). Detail art is decor: it is
+   * culled by DISTANCE at `_detailFar`, and that cull is worth real triangles —
+   * but only if the grid is fine enough that "far" is a meaningful test.
+   * MEASURED 2026-09-02: collapsing both onto one coarse grid saved ~100 draws
+   * and cost ~40k triangles, because the whole course's decor became one mesh
+   * that is never far from anything. So they get separate grids: coarse for
+   * main, CHUNK_SIZE for detail.
+   */
+  _detailCellFor(x, z) {
+    const cell = CHUNK_SIZE;
+    const ix = Math.floor((x - this._gridOX) / cell);
+    const iz = Math.floor((z - this._gridOZ) / cell);
+    const key = (ix + 4096) * 16384 + (iz + 4096);
+    let dc = this._detailMap.get(key);
+    if (!dc) {
+      dc = {
+        key, ix, iz,
+        group: new THREE.Group(),
+        box: new THREE.Box3(),
+        recs: [],
+        visible: true,
+      };
+      dc.group.name = 'detail ' + ix + ',' + iz;
+      dc.group.matrixAutoUpdate = false;
+      this.group.add(dc.group);
+      this._detailMap.set(key, dc);
+      this._detailCells.push(dc);
+    }
+    return dc;
+  }
+
+  /**
+   * File a built object into its cell.  `detail` art (decor, signage, small
+   * clutter) goes on the fine grid and is culled at a much nearer distance
+   * than the structural art the player actually lands on.
    */
   _chunkAdd(obj, pos, detail) {
-    const ch = this._chunkFor(pos.x, pos.z);
-    (detail ? ch.detail : ch.main).add(obj);
+    const cell = detail ? this._detailCellFor(pos.x, pos.z) : this._chunkFor(pos.x, pos.z);
+    (detail ? cell.group : cell.main).add(obj);
     obj.updateMatrixWorld(true);
     try {
       _box1.setFromObject(obj);
-      if (!_box1.isEmpty()) ch.box.union(_box1);
-      else ch.box.expandByPoint(pos);
-    } catch (e) { ch.box.expandByPoint(pos); }
-    (detail ? ch.recsDetail : ch.recsMain).push(obj);
-    return ch;
+      if (!_box1.isEmpty()) cell.box.union(_box1);
+      else cell.box.expandByPoint(pos);
+    } catch (e) { cell.box.expandByPoint(pos); }
+    (detail ? cell.recs : cell.recsMain).push(obj);
+    return cell;
   }
 
   /* ── static object dispatch ──────────────────────────────────────────── */
@@ -1785,6 +1891,56 @@ export class Course {
     return m;
   }
 
+  /**
+   * Axis-aligned world footprints of every authored solid that stands ON the
+   * ground, for the grass field's occupancy mask (terrain.js buildGrassField).
+   *
+   * Buildings always count — their whole point is that they enclose a floor.
+   * A `platform` counts only when it is BROAD (>= 6 m2) and THICK enough to be
+   * a floor rather than a ledge, because a narrow ledge floating over the
+   * meadow should still have grass under it. Rotation is ignored on purpose:
+   * the mask is a fade, and a slightly generous footprint costs nothing.
+   *
+   * @returns {Array<{x0:number,z0:number,x1:number,z1:number,y:number,h:number,feather:number}>}
+   */
+  _groundFootprints() {
+    const out = [];
+    const objs = Array.isArray(this.def.objects) ? this.def.objects : [];
+    for (let i = 0; i < objs.length; i++) {
+      const o = objs[i];
+      if (!o || !o.p || !o.s) continue;
+      const isBuilding = o.kind === 'building';
+      const area = o.s[0] * o.s[2];
+      /* ROUND 5 — THE SWARD GREW THROUGH THE FORT APRON.
+       * Measured this session: `_shots/verdant-1/crest-wing.png` showed the
+       * courtyard paving crossed by evenly spaced dark-green horizontal lines,
+       * and hiding `terrain.grass` alone removed every one of them
+       * (`_shots/_probe_lines_all.png` vs `_shots/_probe_lines_nograss.png`) —
+       * blade cards standing at the heightfield height and poking straight
+       * through a stone deck that is laid ON that height.
+       * The occupancy list was the right mechanism and it simply did not cover
+       * enough kinds: only 'building' and 'platform' were tested, so the fort's
+       * ramps, aprons and stair landings — all of them stone laid flat on the
+       * meadow — were invisible to it. KIND is the wrong discriminator here.
+       * A wide, thin, near-ground solid IS a floor whatever it is called, and
+       * buildGrassField already gates on the terrain height being close to the
+       * solid's underside, so anything up in the air is rejected there. */
+      const isFloor = area >= 6 && o.s[0] >= 2 && o.s[2] >= 2 && o.s[1] <= 3.5 &&
+        o.kind !== 'terrain' && o.kind !== 'water' && o.kind !== 'light' &&
+        o.kind !== 'text' && o.kind !== 'deco';
+      if (!isBuilding && !isFloor) continue;
+      const pad = isBuilding ? (o.footing ? Math.min(1.2, o.footing * 0.35) : 0.35) : 0.1;
+      out.push({
+        x0: o.p[0] - o.s[0] * 0.5 - pad, x1: o.p[0] + o.s[0] * 0.5 + pad,
+        z0: o.p[2] - o.s[2] * 0.5 - pad, z1: o.p[2] + o.s[2] * 0.5 + pad,
+        y: o.p[1] - o.s[1] * 0.5,
+        h: Math.max(0.5, o.s[1]),
+        feather: isBuilding ? 0.5 : 0.35,
+      });
+    }
+    return out;
+  }
+
   /* ── terrain ─────────────────────────────────────────────────────────── */
 
   /**
@@ -1799,6 +1955,18 @@ export class Course {
       console.warn('[Course ' + this.id + '] world/terrain.js has no buildTerrain — objects[' + index +
                    '] (kind "terrain") skipped; the course will have no ground plane');
       return null;
+    }
+    /* GRASS OCCUPANCY. The blade field only ever knew about slope, carved
+     * paths and authored exclusion circles, so a full sward grew across the
+     * stone floor INSIDE the verdant fort (critic, `_shots/verdant-1/cp2.png`).
+     * Terrain is built FIRST — before any solid exists in the scene graph — so
+     * the footprints come from the authored object list instead, which is the
+     * generator-level source of truth for what is standing on the ground. */
+    const blocks = this._groundFootprints();
+    if (blocks.length) {
+      const g = (def.grass === false || def.grass === null) ? def.grass
+        : Object.assign({}, def.grass || null, { blocks });
+      def = Object.assign({}, def, { grass: g });
     }
     let out = null;
     try {
@@ -1890,7 +2058,7 @@ export class Course {
     const h = size * 1.02;
     const group = new THREE.Group();
 
-    const plateW = w + size * 0.7;
+    const plateW = w + size * TEXT_PLATE_EM;
     const plateH = h + size * 0.62;
     const plate = chamferBox(plateW, plateH, 0.08, 0.05);
     this._own(plate);
@@ -1906,14 +2074,23 @@ export class Course {
 
     const planeGeo = new THREE.PlaneGeometry(w, h);
     planeGeo.translate(0, 0.03, 0.055);
+    /* The glyphs live in a cell of the course's ONE sign atlas, so the quad
+       carries that cell's UV rect and every sign in the course shares a single
+       material -- which means the static merge collapses them all into one
+       draw. MEASURED (drawprobe, verdant-1): 30 signs were 30 unmergeable
+       draws, 30 distinct MeshBasicMaterials and 30 canvas textures before the
+       atlas. */
+    if (made.uv) {
+      const uv = planeGeo.attributes.uv;
+      const u0 = made.uv[0], v0 = made.uv[1], u1 = made.uv[2], v1 = made.uv[3];
+      for (let i = 0; i < uv.count; i++) {
+        uv.setXY(i, u0 + uv.getX(i) * (u1 - u0), v0 + uv.getY(i) * (v1 - v0));
+      }
+      uv.needsUpdate = true;
+    }
     this._own(planeGeo);
-    const planeMat = new THREE.MeshBasicMaterial({
-      map: made.tex, transparent: true, depthWrite: false,
-      toneMapped: false, side: THREE.FrontSide, fog: true,
-    });
-    this._own(planeMat);
-    const planeMesh = new THREE.Mesh(planeGeo, planeMat);
-    planeMesh.userData.noMerge = true;
+    const planeMesh = new THREE.Mesh(planeGeo, made.mat);
+    if (!made.uv) planeMesh.userData.noMerge = true;   // private-material fallback
     planeMesh.renderOrder = 3;
     group.add(planeMesh);
 
@@ -1928,30 +2105,69 @@ export class Course {
       const sp = this.def.spawn && fin3(this.def.spawn.p) ? this.def.spawn.p : null;
       group.rotation.y = sp ? Math.atan2(sp[0] - p.x, sp[2] - p.z) : 0;
     }
+    /* Stand the plate PROUD of its mount. A sign is authored at the same x/z as
+       the post or board that carries it, so the 0.08 m plate and a 0.16 m post
+       occupied the same slab of world and the post's silhouette cut through the
+       lettering — verdant-1's 'BAILEY MEADOW' lost its 'IL' to exactly that.
+       One shift along the facing normal, after the yaw is known, fixes every
+       sign in every course instead of nudging one authored coordinate. */
+    if (TEXT_MOUNT_OUT > 0) {
+      const yy = group.rotation.y;
+      group.position.x += Math.sin(yy) * TEXT_MOUNT_OUT;
+      group.position.z += Math.cos(yy) * TEXT_MOUNT_OUT;
+    }
 
     this.texts.push(group);
     this._chunkAdd(group, p, true);
     return null;
   }
 
+  /**
+   * Render one sign's lines into a glyph canvas, FITTING the text to the sheet.
+   *
+   * The width used to be `Math.min(2048, measured + pad*2)`, which does not fit
+   * anything — it CROPS. Every line is drawn centred at `(W - lw) / 2`, so a
+   * line measuring wider than 2048 px starts at a NEGATIVE x and loses its
+   * first and last glyphs off the canvas edges. MEASURED on verdant-1's
+   * teaching sign: the authored 'JUMP  ·  LAND AND JUMP AGAIN TO CHAIN A
+   * HIGHER ONE' shipped as 'UMP · LAND AND JUMP AGAIN TO CHAIN A HIGHER ON'
+   * — the game's primary teaching surface, truncated at both ends.
+   *
+   * Now the font size is SOLVED against the sheet: measure, and while the line
+   * does not fit inside `TEXT_CANVAS_MAX` minus the margin, scale the size down
+   * (tracking and padding scale with it) and measure again. The quad's aspect
+   * follows the fitted sheet, so a long line gets a longer plank at the same
+   * world glyph height. Nothing is ever cropped, and `TEXT_PAD_EM` keeps a real
+   * margin between the outermost glyph and the plank edge.
+   */
   _makeTextTexture(text, color) {
     if (typeof document === 'undefined') return null;
-    const lines = String(text).split('\n');
-    const fs = 84;
-    const pad = 30;
-    const track = 5;
+    const lines = String(text).split(String.fromCharCode(10));
     const cnv = document.createElement('canvas');
     const ctx = cnv.getContext('2d');
     if (!ctx) return null;
-    const font = '600 ' + fs + 'px Rajdhani, "Segoe UI", system-ui, -apple-system, sans-serif';
-    ctx.font = font;
+    const fontOf = (px) => '600 ' + px + 'px Rajdhani, "Segoe UI", system-ui, -apple-system, sans-serif';
+
+    let fs = TEXT_FS;
+    let track = fs * TEXT_TRACK_EM;
+    let pad = Math.round(fs * TEXT_PAD_EM);
     let maxW = 1;
-    for (let i = 0; i < lines.length; i++) {
-      const m = ctx.measureText(lines[i]).width + track * Math.max(0, lines[i].length - 1);
-      if (m > maxW) maxW = m;
+    for (let pass = 0; pass < 8; pass++) {
+      track = fs * TEXT_TRACK_EM;
+      pad = Math.round(fs * TEXT_PAD_EM);
+      ctx.font = fontOf(fs);
+      maxW = 1;
+      for (let i = 0; i < lines.length; i++) {
+        const m = ctx.measureText(lines[i]).width + track * Math.max(0, lines[i].length - 1);
+        if (m > maxW) maxW = m;
+      }
+      const budget = TEXT_CANVAS_MAX - pad * 2;
+      if (maxW <= budget || fs <= TEXT_FS_MIN) break;
+      fs = Math.max(TEXT_FS_MIN, Math.floor(fs * (budget / maxW) * 0.99));
     }
-    const W = Math.min(2048, Math.max(64, Math.ceil(maxW + pad * 2)));
-    const H = Math.max(32, Math.ceil(lines.length * fs * 1.22 + pad * 2));
+    const font = fontOf(fs);
+    const W = Math.max(64, Math.min(TEXT_CANVAS_MAX, Math.ceil(maxW + pad * 2)));
+    const H = Math.max(32, Math.ceil(lines.length * fs * TEXT_LINE_EM + pad * 2));
     cnv.width = W; cnv.height = H;
 
     const c2 = cnv.getContext('2d');
@@ -1963,7 +2179,7 @@ export class Course {
       const line = lines[i];
       const lw = c2.measureText(line).width + track * Math.max(0, line.length - 1);
       let x = (W - lw) * 0.5;
-      const y = pad + fs * 0.62 + i * fs * 1.22;
+      const y = pad + fs * 0.62 + i * fs * TEXT_LINE_EM;
       c2.shadowColor = hex;
       c2.shadowBlur = 22;
       c2.fillStyle = '#ffffff';
@@ -1983,12 +2199,87 @@ export class Course {
       }
       c2.globalAlpha = 1;
     }
+    /* Blit the finished glyph canvas into the course's sign atlas and hand the
+       caller a UV rect instead of a texture. One texture, one material, one
+       merged draw for every sign in the course. */
+    const slot = this._atlasSlot(cnv, W, H);
+    if (slot) return { mat: slot.mat, uv: slot.uv, aspect: W / H };
+
+    /* Atlas full (more than TEXT_ATLAS_CELLS signs): fall back to the old
+       private texture so the sign still reads, and accept its draw call. */
     const tex = new THREE.CanvasTexture(cnv);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 4;
     tex.needsUpdate = true;
     this._own(tex);
-    return { tex, aspect: W / H };
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex, transparent: true, depthWrite: false,
+      toneMapped: false, side: THREE.FrontSide, fog: true,
+    });
+    this._own(mat);
+    return { mat, uv: null, aspect: W / H };
+  }
+
+  /**
+   * @private Copy one rendered glyph canvas into the next free atlas cell.
+   *
+   * The atlas is TEXT_ATLAS_COLS x TEXT_ATLAS_ROWS cells of
+   * TEXT_ATLAS_CELL_W x TEXT_ATLAS_CELL_H pixels. The source is fitted INSIDE
+   * its cell preserving aspect (so the quad's `aspect` is still exact) and the
+   * returned rect is the fitted sub-region, not the whole cell.
+   *
+   * @param {HTMLCanvasElement} src @param {number} W @param {number} H
+   * @returns {{mat:THREE.Material, uv:number[]}|null} null when the atlas is full
+   */
+  _atlasSlot(src, W, H) {
+    if (typeof document === 'undefined') return null;
+    let A = this._textAtlas;
+    if (!A) {
+      const cnv = document.createElement('canvas');
+      cnv.width = TEXT_ATLAS_COLS * TEXT_ATLAS_CELL_W;
+      cnv.height = TEXT_ATLAS_ROWS * TEXT_ATLAS_CELL_H;
+      const ctx = cnv.getContext('2d');
+      if (!ctx) return null;
+      ctx.clearRect(0, 0, cnv.width, cnv.height);
+      const tex = new THREE.CanvasTexture(cnv);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 4;
+      tex.generateMipmaps = false;
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      this._own(tex);
+      const mat = new THREE.MeshBasicMaterial({
+        map: tex, transparent: true, depthWrite: false,
+        toneMapped: false, side: THREE.FrontSide, fog: true,
+      });
+      mat.name = 'cb.signatlas';
+      this._own(mat);
+      A = this._textAtlas = { cnv, ctx, tex, mat, next: 0 };
+    }
+    const i = A.next;
+    if (i >= TEXT_ATLAS_COLS * TEXT_ATLAS_ROWS) return null;
+    A.next++;
+
+    const col = i % TEXT_ATLAS_COLS;
+    const row = (i / TEXT_ATLAS_COLS) | 0;
+    const cx = col * TEXT_ATLAS_CELL_W;
+    const cy = row * TEXT_ATLAS_CELL_H;
+    const k = Math.min(TEXT_ATLAS_CELL_W / W, TEXT_ATLAS_CELL_H / H, 1);
+    const dw = Math.max(1, Math.round(W * k));
+    const dh = Math.max(1, Math.round(H * k));
+    A.ctx.clearRect(cx, cy, TEXT_ATLAS_CELL_W, TEXT_ATLAS_CELL_H);
+    A.ctx.drawImage(src, 0, 0, W, H, cx, cy, dw, dh);
+    A.tex.needsUpdate = true;
+
+    const aw = A.cnv.width, ah = A.cnv.height;
+    /* Half a texel in from each edge: with LinearFilter a UV exactly on the
+       boundary samples the neighbouring cell and puts a ghost letter on the
+       sign. */
+    const e = 0.5;
+    return {
+      mat: A.mat,
+      uv: [(cx + e) / aw, 1 - (cy + dh - e) / ah, (cx + dw - e) / aw, 1 - (cy + e) / ah],
+    };
   }
 
   /** Cached unlit glow material — shared, so signage and bulbs still merge. */
@@ -2248,12 +2539,32 @@ export class Course {
     const sites = this._glowSites;
     if (!sites.length) return;
 
+    /* ROUND 5 — THE LAMPS LIT NOTHING VERTICAL.
+     * Critic, `_shots/keep/cp2.png`: "the Keep's lamps light nothing — the
+     * orange lamp sprite sits on a wall measuring [24,13,20] with no falloff
+     * pool around it, so it reads as a decal, not a fixture."
+     * True, and the reason is that this field only ever baked a HALO (a camera-
+     * facing quad at the bulb) and a FLOOR POOL (a horizontal disc on whatever
+     * is under it). Every practical in the Keep is a wall sconce: the surface it
+     * is closest to, and the one a viewer looks at to decide whether the lamp is
+     * real, is the WALL BEHIND IT — and nothing was ever drawn there. A wall
+     * pool is now cast for each site by probing the four horizontal axes for a
+     * surface within a couple of metres and laying a vertical disc on the
+     * nearest one. It is the same four verts, the same shader and the same
+     * single draw call as the other two modes — the perf budget does not move.
+     * mode 2 = plane spanning Z/Y (a wall whose normal is +/-X);
+     * mode 3 = plane spanning X/Y (a wall whose normal is +/-Z). */
     const quads = [];
     for (let i = 0; i < sites.length; i++) {
       const g = sites[i];
       quads.push({ x: g.pos.x, y: g.pos.y, z: g.pos.z, size: g.halo, mode: 0, c: g.color });
       const fy = this._floorUnder(g.pos, g.pool * 2.4);
       if (fy !== null) quads.push({ x: g.pos.x, y: fy + 0.035, z: g.pos.z, size: g.pool, mode: 1, c: g.color });
+      const wall = this._wallBeside(g.pos, 2.2);
+      if (wall) {
+        quads.push({ x: wall.x, y: g.pos.y, z: wall.z, size: g.pool * 0.78,
+                     mode: wall.axis === 'x' ? 2 : 3, c: g.color });
+      }
     }
     if (!quads.length) return;
 
@@ -2295,7 +2606,8 @@ export class Course {
     const mat = new THREE.ShaderMaterial({
       uniforms: {
         uHaloGain: { value: 0.80 },
-        uPoolGain: { value: 0.40 },
+        uPoolGain: { value: 0.52 },
+        uWallGain: { value: 0.42 },
         uFogDensity: { value: fogDensity },
         uFogFar: { value: fogFar },
       },
@@ -2314,13 +2626,22 @@ export class Course {
         '  vTint = aTint;',
         '  vMode = aParam.y;',
         '  vec4 mv;',
-        '  if (aParam.y < 0.5) {',
+        '  float md = aParam.y;',
+        '  if (md < 0.5) {',                     // 0 halo: camera-facing
         '    mv = modelViewMatrix * vec4(position, 1.0);',
         '    mv.xy += aCorner * aParam.x;',
         '  } else {',
         '    vec3 wp = position;',
-        '    wp.x += aCorner.x * aParam.x;',
-        '    wp.z += aCorner.y * aParam.x;',
+        '    if (md < 1.5) {',                   // 1 floor pool: XZ plane
+        '      wp.x += aCorner.x * aParam.x;',
+        '      wp.z += aCorner.y * aParam.x;',
+        '    } else if (md < 2.5) {',            // 2 wall pool on a +/-X face: ZY
+        '      wp.z += aCorner.x * aParam.x;',
+        '      wp.y += aCorner.y * aParam.x;',
+        '    } else {',                          // 3 wall pool on a +/-Z face: XY
+        '      wp.x += aCorner.x * aParam.x;',
+        '      wp.y += aCorner.y * aParam.x;',
+        '    }',
         '    mv = modelViewMatrix * vec4(wp, 1.0);',
         '  }',
         '  float dist = -mv.z;',
@@ -2334,6 +2655,7 @@ export class Course {
       fragmentShader: [
         'uniform float uHaloGain;',
         'uniform float uPoolGain;',
+        'uniform float uWallGain;',
         'varying vec2 vCorner;',
         'varying vec3 vTint;',
         'varying float vMode;',
@@ -2342,7 +2664,9 @@ export class Course {
         '  float d = length(vCorner);',
         '  float a = 1.0 - clamp(d, 0.0, 1.0);',
         '  a = vMode < 0.5 ? pow(a, 2.6) : pow(a, 1.9);',
-        '  a *= vFog * (vMode < 0.5 ? uHaloGain : uPoolGain);',
+        // a wall pool is seen at every angle and has no foreshortening to dim
+        // it, so it carries less gain than the floor disc.
+        '  a *= vFog * (vMode < 0.5 ? uHaloGain : (vMode < 1.5 ? uPoolGain : uWallGain));',
         '  gl_FragColor = vec4(vTint * a, a);',
         '}',
       ].join('\n'),
@@ -2371,6 +2695,44 @@ export class Course {
    * when the fixture hangs over nothing — a light on a bridge rail with the void
    * beneath it must NOT paint a pool of light on empty air.  Terrain counts.
    */
+  /**
+   * The nearest vertical surface beside a light site, for its wall pool.
+   *
+   * Probes the four horizontal axes against the course's collider AABBs and
+   * returns the closest face within `maxDist`, as the point on that face plus
+   * which axis its normal runs along.  Build-time only, so the linear scan is
+   * the same cost as `_floorUnder`'s and nothing allocates per frame.
+   *
+   * @param {THREE.Vector3} p
+   * @param {number} maxDist
+   * @returns {{x:number, z:number, axis:'x'|'z'}|null}
+   */
+  _wallBeside(p, maxDist) {
+    let bestD = maxDist, out = null;
+    const cols = this._allColliders;
+    for (let i = 0; i < cols.length; i++) {
+      const c = cols[i];
+      const b = c && c.aabb;
+      if (!b || b.isEmpty()) continue;
+      if (p.y < b.min.y - 0.10 || p.y > b.max.y + 0.10) continue;
+      // -X / +X faces: the site must be within the slab's Z span
+      if (p.z >= b.min.z - 0.10 && p.z <= b.max.z + 0.10) {
+        let d = p.x - b.max.x;
+        if (d >= 0 && d < bestD) { bestD = d; out = { x: b.max.x + 0.03, z: p.z, axis: 'x' }; }
+        d = b.min.x - p.x;
+        if (d >= 0 && d < bestD) { bestD = d; out = { x: b.min.x - 0.03, z: p.z, axis: 'x' }; }
+      }
+      // -Z / +Z faces
+      if (p.x >= b.min.x - 0.10 && p.x <= b.max.x + 0.10) {
+        let d = p.z - b.max.z;
+        if (d >= 0 && d < bestD) { bestD = d; out = { x: p.x, z: b.max.z + 0.03, axis: 'z' }; }
+        d = b.min.z - p.z;
+        if (d >= 0 && d < bestD) { bestD = d; out = { x: p.x, z: b.min.z - 0.03, axis: 'z' }; }
+      }
+    }
+    return out;
+  }
+
   _floorUnder(p, maxDrop) {
     let best = -Infinity;
     const cols = this._allColliders;
@@ -2755,6 +3117,9 @@ export class Course {
       this.bounds.min.set(b.min[0], b.min[1], b.min[2]);
       this.bounds.max.set(b.max[0], b.max[1], b.max[2]);
     }
+    for (let i = 0; i < this._detailCells.length; i++) {
+      if (!this._detailCells[i].box.isEmpty()) this.bounds.union(this._detailCells[i].box);
+    }
     for (let i = 0; i < this._chunks.length; i++) {
       if (!this._chunks[i].box.isEmpty()) this.bounds.union(this._chunks[i].box);
     }
@@ -2827,8 +3192,14 @@ export class Course {
   /* ── static merge ────────────────────────────────────────────────────── */
 
   _mergeStatic() {
-    if (!this._chunks.length) return;
+    if (!this._chunks.length && !this._detailCells.length) return;
     let drawCalls = 0;
+    for (let i = 0; i < this._detailCells.length; i++) {
+      const dc = this._detailCells[i];
+      drawCalls += this._mergeInto(dc.group, dc.recs, true);
+      dc.recs.length = 0;
+      if (dc.box.isEmpty()) dc.box.setFromCenterAndSize(_v1.set(0, 0, 0), _v2.set(1, 1, 1));
+    }
     for (let i = 0; i < this._chunks.length; i++) {
       const ch = this._chunks[i];
       drawCalls += this._mergeInto(ch.main, ch.recsMain, false);
@@ -3124,7 +3495,41 @@ export class Course {
      * that one), and owned by the course so it is disposed with it. */
     const padMat = this._mat('stone').clone();
     padMat.emissive = new THREE.Color(this.palette.safe);
-    padMat.emissiveIntensity = 0.55;
+    /* ROUND 2 VISUAL — THE PAD WAS A BLOWN WHITE PUDDLE.
+     *
+     * Measured on `_shots/bootcheck.png` (verdant-1 spawn, headless, real GPU):
+     * frame mean luminance 0.313, and the pad under Nim's feet measured mean
+     * 0.802 with 9.4 % of its pixels over 0.95 — a featureless white disc 2.6x
+     * the value of everything around it, with the hero's boots dissolving into
+     * its near edge. `contrastcheck` read the same disc at 12.57:1 against a
+     * 3.5:1 law, i.e. it was over-shot by a factor of three and a half.
+     *
+     * Two causes, both here, both fixed at the generator:
+     *
+     *   1. A FLAT emissive term. `emissive` with no `emissiveMap` adds a
+     *      CONSTANT to every fragment, so the stone bake's slab joints, grain,
+     *      AO and normal are all buried under one uniform wash — the pad cannot
+     *      catch the key, cannot take the rim, cannot read as a material at
+     *      all. Binding the emissive to the albedo map makes the self-lit term
+     *      carry the SAME pattern the diffuse does, so the disc keeps its
+     *      mortar lines and its grain while it lifts.
+     *   2. ONE global intensity across five themes with wildly different
+     *      incident light. 1.14 is what a dim stone hall needs (keep: the pad
+     *      measures 0.53 and cp1's ratio is 3.77, so the Keep has no headroom
+     *      at all); it is roughly three times what a sunlit morning meadow
+     *      needs. The lift is therefore per theme, declared next to the palette
+     *      it is drawn from (`palette.padGlow` in themes.js) — the dim rooms
+     *      keep their floor, the bright ones stop clipping. */
+    padMat.emissiveMap = padMat.map || null;
+    /* 0.55 -> 0.88. contrastcheck samples the band under the hero's feet and
+     * at a station that band IS this disc, so the pad's own value is the left
+     * side of the readability ratio. Measured at 0.55: keep cp1 pad
+     * [167,148,113] against the hall floor 8 m behind it at [93,78,83] = 2.66:1
+     * against a 3.5:1 law — the pad and the floor it sits in were the same
+     * value. This is the ONE surface in the game whose whole job is to be
+     * unmistakable underfoot, and it stays well under every theme's bloom
+     * threshold, so it lifts rather than glows. */
+    padMat.emissiveIntensity = this._padGlow;
     padMat.name = 'cb.cp.pad';
     this._own(padMat);
     const baseMesh = new THREE.InstancedMesh(baseGeo, padMat, n);
@@ -3567,6 +3972,14 @@ export class Course {
       p: [pos.x, pos.y, pos.z],
       pos,
       yaw,
+      /* The Keep authors the STAND-OUT spot with the gate (keep.js makeGate:
+         `p - heading(yaw)*1.9` on the walking floor, and `yaw + PI`), because
+         `yaw` is the heading the player walks IN with and therefore points into
+         the wall. Carry it through: game.js returns the player here after a
+         course, and re-deriving it from `yaw` alone is how he ended up inside
+         the lobby wall with no floor under him. */
+      exitP: fin3(gd.exitP) ? [gd.exitP[0], gd.exitP[1], gd.exitP[2]] : null,
+      exitYaw: fin(gd.exitYaw) ? gd.exitYaw : yaw + Math.PI,
       w, h,
       requires,
       requiresCrests: requires,
@@ -4146,10 +4559,17 @@ export class Course {
       else if (d < SHADOW_KEEP) vis = true;
       else vis = haveFrustum ? _frustum.intersectsBox(ch.box) : true;
       if (vis !== ch.visible) { ch.visible = vis; ch.group.visible = vis; }
-      if (vis) {
-        const dv = d < detailFar;
-        if (dv !== ch.detailVisible) { ch.detailVisible = dv; ch.detail.visible = dv; }
-      }
+    }
+
+    const cells = this._detailCells;
+    for (let i = 0; i < cells.length; i++) {
+      const dc = cells[i];
+      const d = dc.box.distanceToPoint(_v1);
+      let vis;
+      if (d > detailFar) vis = false;
+      else if (d < SHADOW_KEEP) vis = true;
+      else vis = haveFrustum ? _frustum.intersectsBox(dc.box) : true;
+      if (vis !== dc.visible) { dc.visible = vis; dc.group.visible = vis; }
     }
   }
 
@@ -4422,6 +4842,11 @@ export class Course {
     } catch (e) { /* a warm-up must never break a load */ }
 
     const saved = [];
+    for (let i = 0; i < this._detailCells.length; i++) {
+      const dc = this._detailCells[i];
+      saved.push([dc, dc.visible, true]);
+      dc.visible = true; dc.group.visible = true;
+    }
     for (let i = 0; i < this._chunks.length; i++) {
       const ch = this._chunks[i];
       saved.push([ch, ch.visible, ch.detailVisible]);
@@ -4478,7 +4903,7 @@ export class Course {
     for (let i = 0; i < saved.length; i++) {
       const ch = saved[i][0];
       ch.visible = saved[i][1]; ch.group.visible = saved[i][1];
-      ch.detailVisible = saved[i][2]; ch.detail.visible = saved[i][2];
+      if (ch.detail) { ch.detailVisible = saved[i][2]; ch.detail.visible = saved[i][2]; }
     }
     for (let i = 0; i < hazVis.length; i++) hazVis[i][0].visible = hazVis[i][1];
   }
@@ -4679,6 +5104,8 @@ export class Course {
     this._matCache.clear();
     this._chunkMap.clear();
     this._chunks.length = 0;
+    this._detailMap.clear();
+    this._detailCells.length = 0;
     this._allColliders.length = 0;
     this._staticColliders.length = 0;
     this._mergeSources.clear();

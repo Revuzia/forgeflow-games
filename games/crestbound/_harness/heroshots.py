@@ -160,7 +160,9 @@ SEIZE_JS = r"""
     for (let k = 0; k < n; k++) {
       writeFields.call(p, sd);
       heroUpdate.call(this, sd, p);
-      if (H.t >= H.stopAt) { H.frozen = true; break; }
+      // epsilon: `steps` equal float parts can sum a hair under `target`,
+      // and one extra 1/60 s substep is 0.15 m of run distance.
+      if (H.t >= H.stopAt - 1e-9) { H.frozen = true; break; }
     }
   };
 
@@ -241,10 +243,17 @@ async (o) => {
   H.t = 0;
   for (let k = 0; k < 5; k++) await frame();        // ~1.0 s of settle
 
-  // now the real state
+  // now the real state.
+  // The hold is divided into an EXACT integer number of equal substeps, so the
+  // clock lands on `target` instead of overshooting by up to one substep. That
+  // overshoot is 1/60 s = 0.15 m of ground distance at a 9 m/s run, and it
+  // accumulates across shots: the six run-cycle frames came back at phases
+  // 1.44 / 0.62 / 0.78 / 1.94 / 4.09 / 0.95 rad instead of six even steps of
+  // 1.047 rad, which made an even stride look like a static shuffle.
   const target = Math.max(1 / 600, o.hold || 0);
-  H.subDt = Math.min(1 / 60, target / 8);
-  H.sub = Math.max(4, Math.min(60, Math.ceil(target / H.subDt / 14)));
+  const steps = Math.max(8, Math.ceil(target * 60));
+  H.subDt = target / steps;
+  H.sub = Math.max(4, Math.min(60, Math.ceil(steps / 14)));
   H.stopAt = target;
   H.anim = o.anim;
   H.grounded = !!o.grounded;
@@ -253,6 +262,10 @@ async (o) => {
   H.gravity = o.gravity || 0;
   H.t = 0;
   H.frozen = false;
+  // `_dist` is cumulative for the whole course, so the run-cycle phase a shot
+  // reaches depends on every shot before it. Zeroing it at the state edge makes
+  // the phase a pure function of (hold x speed) and the strip reproducible.
+  if (o.distReset) { G.hero._dist = 0; G.hero._phase = 0; }
 
   const deadline = performance.now() + 20000;
   let guard = 0;
@@ -409,6 +422,9 @@ def main():
     ap.add_argument("--radius", type=float, default=12.0)
     ap.add_argument("--clear", type=float, default=7.0, help="min metres from any checkpoint")
     ap.add_argument("--skip-extras", action="store_true")
+    ap.add_argument("--extras-only", action="store_true",
+                    help="skip the per-state battery, shoot only turntable / run "
+                         "cycle / silhouette / shadow / face")
     args = ap.parse_args()
 
     only = set(s.strip() for s in args.only.split(",")) if args.only else None
@@ -498,7 +514,7 @@ def main():
 
         state_paths = []
         for (nm, dur, ctx) in STATES:
-            if only and nm not in only:
+            if args.extras_only or (only and nm not in only):
                 continue
             for (ph, frac) in PHASES:
                 o = {
@@ -520,7 +536,7 @@ def main():
                 }
                 state_paths.append((nm + " " + ph, shot("%s_%s" % (nm, ph), o)))
 
-        if not args.skip_extras and not only:
+        if not args.skip_extras and (args.extras_only or not only):
             misc = []
             for i in range(8):
                 o = {"anim": "idle", "hold": 1.2 + i * 0.05, "grounded": 1,
@@ -530,11 +546,14 @@ def main():
                 misc.append(("turn %d deg" % (i * 45), shot("turntable_a%d" % i, o)))
 
             # one 1.90 m stride at 9 m/s = 0.2111 s; 6 evenly spaced frames.
+            # `distReset` zeroes the hero's cumulative ground distance at the
+            # state edge, so frame i sits at exactly phase i/6 of one stride.
             stride_t = 1.90 / 9.0
             for i in range(6):
                 o = {"anim": "run", "hold": 1.40 + stride_t * (i / 6.0), "grounded": 1,
                      "vx": 9.0, "vy": 0, "vz": 0, "from": "land", "fromGrounded": 1,
-                     "lift": 0.0, "facing": 0.0, "az": 78, "dist": 3.0, "el": 8, "aimY": 0.80}
+                     "lift": 0.0, "facing": 0.0, "az": 78, "dist": 3.0, "el": 8,
+                     "aimY": 0.80, "distReset": 1}
                 misc.append(("run f%d" % i, shot("runcycle_f%d" % i, o)))
 
             o = {"anim": "run", "hold": 1.0, "grounded": 1, "vx": 9.0, "vy": 0, "vz": 0,
@@ -563,8 +582,9 @@ def main():
 
             contact_sheet(misc, os.path.join(OUT, "_contact_misc.png"), "NIM — turntable / run cycle / reads")
 
-        contact_sheet(state_paths, os.path.join(OUT, "_contact_states.png"),
-                      "NIM — every controller state at 10/50/90 %", cols=9)
+        if state_paths:
+            contact_sheet(state_paths, os.path.join(OUT, "_contact_states.png"),
+                          "NIM — every controller state at 10/50/90 %", cols=9)
         report["errors"] = errs[:40]
         br.close()
 

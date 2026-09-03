@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """CRESTBOUND camera FEEL probe — a scripted ~25 s play session per course,
 driven with REAL KeyboardEvents, sampling the camera every frame and grabbing a
-screenshot every 0.5 s.
+screenshot every 0.5 s of game time.
 
 camcheck.py proves the seven contract assertions. This proves nothing by itself:
 it produces the EVIDENCE a human (or a critic lane) needs to answer "does it feel
@@ -15,15 +15,21 @@ like a AAA third-person camera over a real play session" —
   * fraction of a 3x3 view-ray grid hitting geometry within 2 m
                                                    (wall face filling the frame)
   * lens -> hero chest occlusion, per frame        (hero hidden)
-  * during every airborne arc, whether the landing surface is inside the frustum
-                                                   (jump readability)
+  * during every airborne arc, whether the surface under the hero is inside the
+    frustum                                        (jump readability)
 
-Route: each course is a list of SEGMENTS. A segment teleports Nim to an authored
-station (checkpoint / spawn — the only reliable way to reach a specific interior
-headlessly), snaps the camera, waits for the pose to settle, and then drives real
-keys for several seconds. Samples taken during the settle window are flagged
-`settling` and excluded from every pop / framing statistic, because the snap
-itself is a legitimate discontinuity.
+HAND-STEPPED (round 2). The round-1 driver ran off requestAnimationFrame and
+timed with performance.now(). HARNESS_NOTES records why that is not evidence:
+engine.js clamps dt, so on a loaded box one rendered frame advances a large slice
+of game time, key press/release pairs meant to span several frames collapse into
+one, and committed moves never fire. Measured on the r1 driver, this box: median
+dt 48-55 ms (≈20 fps), 24 of 315 and 84 of 403 samples survived the dt filter,
+and NOT ONE longjump/dive/pound fired in either course even though the routes
+command them. So this driver calls `engine.stop()` and advances the game by hand
+— `engine._frameCbs` then `game.update(1/60)`, which itself calls
+`engine.render()` — exactly like feelshots.py. Every sample is 16.667 ms of game
+time whatever the wall clock does, so pop magnitudes, arc lengths and move
+timings are comparable to a 60 fps play session and to each other.
 
     python camshots.py                  # both courses, headless (default)
     python camshots.py --headed
@@ -50,6 +56,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 SHOTS = os.path.join(ROOT, "_shots", "cam")
 DEFAULT_URL = "http://localhost:8788/games/crestbound/index.html?dev=1"
+DT = 1.0 / 60.0
 
 FLAGS = [
     "--ignore-gpu-blocklist",
@@ -137,23 +144,29 @@ ROUTES = {
 }
 
 # ---------------------------------------------------------------------------
-# The in-page driver. Installed once; started per course; polls its own samples.
+# The in-page driver. Installed per course; python pumps `__CAM.step(n)`.
 # ---------------------------------------------------------------------------
 DRIVER_JS = r"""
 (route) => {
   const A = globalThis.CRESTBOUND;
   if (!A || !A.game) return {error: 'no CRESTBOUND.game'};
-  const G = A.game, THREE = A.THREE;
+  const G = A.game, THREE = A.THREE, E = A.engine;
   const cam = G.cam || G.camera;
-  const tcam = A.engine && A.engine.camera;
+  const tcam = E && E.camera;
   if (!cam || !cam.__test) return {error: 'game.cam.__test missing'};
   if (!tcam) return {error: 'engine.camera missing'};
 
-  const S = globalThis.__CAMSHOTS = {samples: [], done: false, error: null, seg: '', mark: 0};
+  /* HAND-STEP: own the clock. See the module docstring. */
+  if (E.running) E.stop();
+  const DT = 1 / 60;
+  const F = s => Math.max(1, Math.round(s * 60));
+
+  const S = globalThis.__CAM = {
+    samples: [], done: false, error: null, seg: '', i: 0, total: 0,
+  };
 
   let P = G.player;
   const syncP = () => { if (G.player && G.player !== P) P = G.player; return P; };
-  const frame = () => new Promise(r => requestAnimationFrame(r));
   const target = () => document.querySelector('canvas') || document;
   const key = (type, code) => {
     const k = code === 'Space' ? ' ' : (code.startsWith('Key') ? code.slice(3).toLowerCase() : code);
@@ -163,12 +176,40 @@ DRIVER_JS = r"""
   const ALL = ['KeyW','KeyA','KeyS','KeyD','Space','ControlLeft','KeyC','KeyF','KeyZ','KeyG','KeyQ','KeyE','KeyV','KeyR'];
   const allUp = () => ALL.forEach(up);
 
+  /* ---- flatten the route into per-op frame counts ---------------------- */
+  const ops = [];
+  for (const seg of route) {
+    if (seg.at) {
+      ops.push({place: seg.at, seg: seg.name});
+      ops.push({keys: [], n: F(0.85), seg: seg.name, settle: true});
+    }
+    for (const act of (seg.acts || [])) {
+      const k = act[0];
+      if (k === 'wait') ops.push({keys: [], n: F(act[1]), seg: seg.name});
+      else if (k === 'hold') ops.push({keys: String(act[1]).split('+'), n: F(act[2]), seg: seg.name});
+      else if (k === 'tap') {
+        const n = act[2] | 0, gap = act[3] || 0.15;
+        for (let i = 0; i < n; i++) {
+          ops.push({keys: [act[1]], n: F(0.05), seg: seg.name});
+          ops.push({keys: [], n: F(gap), seg: seg.name});
+        }
+      } else if (k === 'combo') {
+        const c = act[1];
+        ops.push({keys: [c[0]], n: F(0.05), seg: seg.name});
+        ops.push({keys: c.slice(), n: F(act[2]), seg: seg.name});
+      }
+    }
+    ops.push({keys: [], n: F(0.4), seg: seg.name});
+  }
+  S.total = ops.reduce((a, o) => a + (o.n || 0), 0);
+
   const bp = (G.course && G.course.broadphase) ||
              (cam.world && (cam.world.broadphase || (cam.world.course && cam.world.course.broadphase))) || null;
   const canRay = !!(bp && typeof bp.raycast === 'function');
   const canQuery = !!(bp && typeof bp.query === 'function');
 
   const _v = new THREE.Vector3(), _c = new THREE.Vector3(), _d = new THREE.Vector3();
+  const _g = new THREE.Vector3(), _dn = new THREE.Vector3(0, -1, 0);
   const _hit = {t: 0, normal: new THREE.Vector3(), collider: null};
   const _box = new THREE.Box3();
   const qOut = [];
@@ -207,21 +248,26 @@ DRIVER_JS = r"""
     return hits / GRID.length;
   };
 
-  let lastT = performance.now(), lastDist = cam.dist, settleUntil = 0, segName = '';
-  /* The 3x3 wall-fill grid is 9 broadphase raycasts and the lens-in-solid test is
-     a broadphase query; marching the Keep's heightfield ten times per frame cost
-     more than the game itself (measured: 6 fps with them on every frame, vs the
-     game's real headless rate). They answer slow-moving questions, so they run on
-     a 6-frame stride and the last value is carried — 10 Hz is far finer than any
-     "the lens is buried in a wall" event lasts. */
-  const PROBE_STRIDE = 6;
-  let frameNo = 0, lastInSolid = null, lastWallFrac = null, probeNow = false;
+  /* JUMP READABILITY: the surface directly under the hero, and whether it is in
+     frame. During an arc this is the ground the player is about to meet. */
+  const groundVisible = (rp) => {
+    if (!canRay) return null;
+    try {
+      _g.set(rp.x, rp.y + 0.25, rp.z);
+      if (!bp.raycast(_g, _dn, 45, _hit)) return null;
+      _g.y -= _hit.t;
+      _v.copy(_g).project(tcam);
+      return (_v.z < 1 && Math.abs(_v.x) <= 0.95 && Math.abs(_v.y) <= 0.95) ? 1 : 0;
+    } catch (e) { return null; }
+  };
+
+  let lastDist = cam.dist, settle = false, segName = '', lastMode = cam.mode;
+  const PROBE_STRIDE = 3;
+  let frameNo = 0, lastInSolid = null, lastWallFrac = null;
 
   const sample = () => {
     syncP();
-    probeNow = (frameNo++ % PROBE_STRIDE) === 0;
-    const now = performance.now();
-    const dt = (now - lastT) / 1000; lastT = now;
+    const probeNow = (frameNo++ % PROBE_STRIDE) === 0;
     const cs = cam.__test.state();
     const rp = P.renderPos || P.pos;
     const chestY = rp.y + (P.height || 1.5) * 0.55;
@@ -238,21 +284,35 @@ DRIVER_JS = r"""
       } else occ = false;
     }
 
+    const grounded = !!(P.grounded || P.onGround);
+    const modeChanged = cs.mode !== lastMode;
+    lastMode = cs.mode;
+
+    const nx = _v.x, ny = _v.y;
     const s = {
-      t: +(now / 1000).toFixed(4), dt: +dt.toFixed(4), seg: segName,
-      settling: now < settleUntil,
+      i: S.i, t: +(S.i * DT).toFixed(4), dt: DT, seg: segName,
+      settling: settle,
       dist: +cs.dist.toFixed(4), dDist: +(cs.dist - lastDist).toFixed(4),
       yaw: +cs.yaw.toFixed(4), pitch: +cs.pitch.toFixed(4), mode: cs.mode,
+      modeChanged: modeChanged,
       fov: +cs.fov.toFixed(3),
-      heroNdcX: +_v.x.toFixed(4), heroNdcY: +_v.y.toFixed(4),
-      state: P.state, grounded: !!(P.grounded || P.onGround),
+      heroNdcX: Number.isFinite(nx) ? +nx.toFixed(4) : null,
+      heroNdcY: Number.isFinite(ny) ? +ny.toFixed(4) : null,
+      state: P.state, grounded: grounded,
       speed: +Math.hypot(P.vel.x, P.vel.z).toFixed(3),
       vy: +P.vel.y.toFixed(3),
       heroFade: +(cs.heroFade || 0).toFixed(3),
       autoRate: +(cs.autoRate || 0).toFixed(3), autoFrozen: !!cs.autoFrozen,
+      limitCeil: !!cs.limitCeil, limitFrame: !!cs.limitFrame,
+      dropBelow: +(cs.dropBelow || 0).toFixed(3),
+      fallLookK: +(cs.fallLookK || 0).toFixed(3),
+      lookAimK: +(cs.lookAimK || 0).toFixed(3),
+      yawSlide: +(cs.yawSlide || 0).toFixed(4), focusDrop: +(cs.focusDrop || 0).toFixed(3),
+      pitchAdapt: +(cs.pitchAdapt || 0).toFixed(4), distBase: +(cs.distBase || 0).toFixed(3),
       camY: +cs.pos[1].toFixed(3), focusY: +cs.focus[1].toFixed(3),
       heroY: +rp.y.toFixed(3),
       occluded: occ, inSolid: lastInSolid, wallFrac: lastWallFrac,
+      groundVis: grounded ? null : groundVisible(rp),
       probed: probeNow,
     };
     if (probeNow) {
@@ -262,68 +322,69 @@ DRIVER_JS = r"""
     }
     lastDist = cs.dist;
     S.samples.push(s);
-    S.mark = S.samples.length;
   };
 
-  const runFor = async (secs) => {
-    const t0 = performance.now();
-    while (performance.now() - t0 < secs * 1000) { await frame(); sample(); }
+  /* ---- one hand-stepped frame ------------------------------------------ */
+  const held = new Set();
+  const setKeys = (codes) => {
+    const want = new Set(codes);
+    for (const c of Array.from(held)) if (!want.has(c)) { up(c); held.delete(c); }
+    for (const c of want) if (!held.has(c)) { down(c); held.add(c); }
   };
 
-  const place = async (x, y, z, yaw) => {
-    syncP(); allUp();
-    P.__test.teleport(_v.set(x, y, z));
-    if (P.__test.setVel) P.__test.setVel(_v.set(0, 0, 0));
-    if (P.__test.setFacing) P.__test.setFacing(yaw);
-    if (typeof cam.snapToPlayer === 'function') cam.snapToPlayer();
-    cam.__test.setYaw(yaw);
-    settleUntil = performance.now() + 800;
-    lastDist = cam.dist;
-    await runFor(0.85);
-  };
-
-  (async () => {
-    try {
-      for (const seg of route) {
-        segName = S.seg = seg.name;
-        if (seg.at) await place(seg.at[0], seg.at[1], seg.at[2], seg.at[3]);
-        for (const act of (seg.acts || [])) {
-          const kind = act[0];
-          if (kind === 'wait') { allUp(); await runFor(act[1]); continue; }
-          if (kind === 'hold') {
-            const codes = String(act[1]).split('+');
-            codes.forEach(down);
-            await runFor(act[2]);
-            codes.forEach(up);
-            continue;
-          }
-          if (kind === 'tap') {
-            const n = act[2] | 0, gap = act[3] || 0.15;
-            for (let i = 0; i < n; i++) {
-              down(act[1]); await runFor(0.05); up(act[1]); await runFor(gap);
-            }
-            continue;
-          }
-          if (kind === 'combo') {
-            const codes = act[1];
-            down(codes[0]); await runFor(0.05); down(codes[1]);
-            await runFor(act[2]);
-            codes.forEach(up);
-            continue;
-          }
-        }
-        allUp();
-        await runFor(0.4);
-      }
-    } catch (e) {
-      S.error = String(e && e.stack || e);
-    } finally {
-      allUp();
-      S.done = true;
+  const advance = () => {
+    /* engine.start()'s tick, minus rAF: presentation clock, frame callbacks,
+       then the game loop (which itself calls engine.render). */
+    E.dt = DT; E.rawDt = DT; E.rawMs = DT * 1000;
+    E.elapsed += DT; E.frame++;
+    const cbs = E._frameCbs || [];
+    for (let i = 0; i < cbs.length; i++) {
+      try { cbs[i](DT, E.elapsed); } catch (e) { /* engine logs its own */ }
     }
-  })();
+    G.update(DT);
+    S.i++;
+  };
 
-  return {ok: true, canRay, canQuery, segs: route.length};
+  let opIdx = 0, opLeft = ops.length ? ops[0].n : 0;
+
+  S.step = (n) => {
+    for (let k = 0; k < n && opIdx < ops.length; k++) {
+      let op = ops[opIdx];
+      while (op && (op.place || !(opLeft > 0))) {
+        if (op.place) {
+          syncP(); allUp(); held.clear();
+          segName = S.seg = op.seg;
+          P.__test.teleport(_v.set(op.place[0], op.place[1], op.place[2]));
+          if (P.__test.setVel) P.__test.setVel(_v.set(0, 0, 0));
+          if (P.__test.setFacing) P.__test.setFacing(op.place[3]);
+          if (typeof cam.snapToPlayer === 'function') cam.snapToPlayer();
+          cam.__test.setYaw(op.place[3]);
+          lastDist = cam.dist; lastMode = cam.mode;
+        }
+        opIdx++;
+        if (opIdx >= ops.length) { op = null; break; }
+        op = ops[opIdx];
+        opLeft = op.n || 0;
+      }
+      if (!op) break;
+      segName = S.seg = op.seg;
+      settle = !!op.settle;
+      setKeys(op.keys || []);
+      try { advance(); } catch (e) { S.error = String(e && e.stack || e); }
+      sample();
+      opLeft--;
+    }
+    if (opIdx >= ops.length) { allUp(); held.clear(); S.done = true; }
+    return {i: S.i, total: S.total, done: S.done, seg: S.seg, err: S.error};
+  };
+
+  S.finish = () => {
+    allUp(); held.clear();
+    if (!E.running) E.start((dt) => G.update(dt));
+    return true;
+  };
+
+  return {ok: true, canRay, canQuery, segs: route.length, frames: S.total};
 }
 """
 
@@ -338,31 +399,28 @@ def wrap_pi(a):
 
 def analyse(samples):
     """Reduce the per-frame stream to the numbers the camera lane argues from."""
-    import math
-    live = [s for s in samples if not s["settling"] and s["dt"] <= 0.06]
+    live = [s for s in samples if not s["settling"]]
     if not live:
         return {"error": "no live samples"}
 
-    def seg_of(name):
-        return [s for s in live if s["seg"] == name]
+    # THIRD-PERSON framing statistics are only defined while the camera IS third
+    # person. 'peek' is first person from the head by contract (hero hidden,
+    # heroFade 1) so the chest projects behind the near plane — NDC there is not
+    # a framing failure, it is the mode working. Same for the single frame that
+    # ENTERS or LEAVES a mode: the distance jump is a mode change, not a
+    # collision pull-in.
+    tp = [s for s in live if s["mode"] in ("follow", "free")
+          and s["heroNdcX"] is not None and s["heroNdcY"] is not None]
+    popable = [s for s in live if not s["modeChanged"] and s["mode"] in ("follow", "free")]
 
-    # POP analysis, made framerate-independent — which matters, because this box
-    # runs the probe at whatever fps it can spare (see `medianDt_ms`).
-    #   * a PULL-IN is applied whole in one frame by design
-    #     (`_updateDistance`: "pull in: instant"), so its magnitude is the same
-    #     at 8 fps as at 60 and is directly comparable to the 1.5 m budget;
-    #   * a PUSH-OUT is rate-limited (COLLIDE_OUT_MAX_RATE 12 m/s) and eased
-    #     (lambda 5), so its per-FRAME size scales with dt and is meaningless
-    #     here — it is judged as a RATE instead.
     pulls = sorted(
         ({"seg": s["seg"], "t": s["t"], "dDist": s["dDist"], "dist": s["dist"],
-          "state": s["state"], "mode": s["mode"], "dt": s["dt"]}
-         for s in live if s["dDist"] < -1.5),
+          "state": s["state"], "mode": s["mode"]}
+         for s in popable if s["dDist"] < -1.5),
         key=lambda r: r["dDist"])
-    pushRates = [abs(s["dDist"]) / s["dt"] for s in live if s["dDist"] > 0 and s["dt"] > 0]
-    pops = pulls
+    pushRates = [abs(s["dDist"]) / s["dt"] for s in popable if s["dDist"] > 0 and s["dt"] > 0]
 
-    ndc_out = [s for s in live if abs(s["heroNdcX"]) > 0.4 or abs(s["heroNdcY"]) > 0.4]
+    ndc_out = [s for s in tp if abs(s["heroNdcX"]) > 0.4 or abs(s["heroNdcY"]) > 0.4]
     in_solid = [s for s in live if s["inSolid"] is True]
     wall_fill = [s for s in live if s["wallFrac"] is not None and s["wallFrac"] >= 0.78]
 
@@ -386,10 +444,11 @@ def analyse(samples):
                 if cur:
                     committed.append(cur)
                 cur = {"state": s["state"], "seg": s["seg"], "y0": s["yaw"],
-                       "maxYawDelta": 0.0, "frames": 0, "dur": 0.0}
+                       "maxYawDelta": 0.0, "frames": 0, "dur": 0.0, "frozen": 0}
             cur["maxYawDelta"] = max(cur["maxYawDelta"], abs(wrap_pi(s["yaw"] - cur["y0"])))
             cur["frames"] += 1
             cur["dur"] += s["dt"]
+            cur["frozen"] += 1 if s["autoFrozen"] else 0
         else:
             if cur:
                 committed.append(cur)
@@ -399,24 +458,30 @@ def analyse(samples):
     for c in committed:
         c["maxYawDelta"] = round(c["maxYawDelta"], 4)
         c["dur"] = round(c["dur"], 3)
+        c["frozenPct"] = round(100.0 * c["frozen"] / max(1, c["frames"]))
         c.pop("y0", None)
+        c.pop("frozen", None)
 
-    # airborne arcs: was the hero readable, and where did the frame sit
+    # airborne arcs: was the hero readable, and was the landing surface in frame
     arcs, arc = [], None
     for s in live:
         if not s["grounded"] and s["state"] not in ("swim", "swimIdle", "climb", "dead"):
             if arc is None:
                 arc = {"seg": s["seg"], "state": s["state"], "dur": 0.0, "n": 0,
                        "maxNdcY": 0.0, "maxNdcX": 0.0, "minPitch": 9, "maxPitch": -9,
-                       "occFrames": 0}
+                       "occFrames": 0, "groundVis": 0, "groundKnown": 0}
             arc["dur"] += s["dt"]
             arc["n"] += 1
-            arc["maxNdcY"] = max(arc["maxNdcY"], abs(s["heroNdcY"]))
-            arc["maxNdcX"] = max(arc["maxNdcX"], abs(s["heroNdcX"]))
+            if s["heroNdcY"] is not None:
+                arc["maxNdcY"] = max(arc["maxNdcY"], abs(s["heroNdcY"]))
+                arc["maxNdcX"] = max(arc["maxNdcX"], abs(s["heroNdcX"]))
             arc["minPitch"] = min(arc["minPitch"], s["pitch"])
             arc["maxPitch"] = max(arc["maxPitch"], s["pitch"])
             if s["occluded"]:
                 arc["occFrames"] += 1
+            if s["groundVis"] is not None:
+                arc["groundKnown"] += 1
+                arc["groundVis"] += s["groundVis"]
         else:
             if arc and arc["dur"] >= 0.25:
                 arcs.append(arc)
@@ -426,6 +491,8 @@ def analyse(samples):
     for a in arcs:
         for k in ("dur", "maxNdcY", "maxNdcX", "minPitch", "maxPitch"):
             a[k] = round(a[k], 3)
+        a["landingInFramePct"] = (round(100.0 * a["groundVis"] / a["groundKnown"])
+                                  if a["groundKnown"] else None)
 
     def stat(vals):
         if not vals:
@@ -442,36 +509,43 @@ def analyse(samples):
 
     per_seg = {}
     for name in sorted({s["seg"] for s in live}):
-        ss = seg_of(name)
+        ss = [s for s in live if s["seg"] == name]
+        st = [s for s in tp if s["seg"] == name]
+        sp = [s for s in popable if s["seg"] == name]
         per_seg[name] = {
             "frames": len(ss),
             "indoor": name in indoor_segs,
             "dist": stat([s["dist"] for s in ss]),
             "pitch": stat([s["pitch"] for s in ss]),
-            "ndcX": stat([abs(s["heroNdcX"]) for s in ss]),
-            "ndcY": stat([abs(s["heroNdcY"]) for s in ss]),
-            "pullIns>1.5m": sum(1 for s in ss if s["dDist"] < -1.5),
-            "pullIns>0.6m": sum(1 for s in ss if s["dDist"] < -0.6),
+            "ndcX": stat([abs(s["heroNdcX"]) for s in st]),
+            "ndcY": stat([abs(s["heroNdcY"]) for s in st]),
+            "pullIns>1.5m": sum(1 for s in sp if s["dDist"] < -1.5),
+            "pullIns>0.6m": sum(1 for s in sp if s["dDist"] < -0.6),
             "inSolidFrames": sum(1 for s in ss if s["inSolid"] is True),
             "wallFillFrames": sum(1 for s in ss if s["wallFrac"] is not None and s["wallFrac"] >= 0.78),
             "maxSpeed": round(max((s["speed"] for s in ss), default=0), 2),
+            "states": sorted({s["state"] for s in ss}),
         }
 
+    ndc_stat_x = stat([abs(s["heroNdcX"]) for s in tp])
+    ndc_stat_y = stat([abs(s["heroNdcY"]) for s in tp])
     return {
         "frames": len(live), "framesRaw": len(samples),
-        "medianDt_ms": round(1000 * sorted(s["dt"] for s in live)[len(live) // 2], 2),
+        "thirdPersonFrames": len(tp),
+        "gameSeconds": round(len(live) * (live[0]["dt"]), 2),
         "pullIns>1.5m": len(pulls), "worstPullIns": pulls[:12],
-        "pullIns>0.6m": sum(1 for s in live if s["dDist"] < -0.6),
+        "pullIns>0.6m": sum(1 for s in popable if s["dDist"] < -0.6),
         "pushOutRate_m_per_s": {"max": round(max(pushRates), 2) if pushRates else None,
                                 "cap": 12.0,
                                 "overCap": sum(1 for r in pushRates if r > 12.5)},
-        "pops>1.5m": len(pops),
         "distStat": stat([s["dist"] for s in live]),
-        "ndcXStat": stat([abs(s["heroNdcX"]) for s in live]),
-        "ndcYStat": stat([abs(s["heroNdcY"]) for s in live]),
+        "ndcXStat": ndc_stat_x,
+        "ndcYStat": ndc_stat_y,
         "framesOutsideCentral40pct": len(ndc_out),
+        "pctOutsideCentral40": round(100.0 * len(ndc_out) / max(1, len(tp)), 2),
         "worstNdc": sorted(({"seg": s["seg"], "x": s["heroNdcX"], "y": s["heroNdcY"],
-                             "state": s["state"], "dist": s["dist"]} for s in ndc_out),
+                             "state": s["state"], "dist": s["dist"], "vy": s["vy"]}
+                            for s in ndc_out),
                            key=lambda r: -max(abs(r["x"]), abs(r["y"])))[:10],
         "lensInsideSolidFrames": len(in_solid),
         "lensInsideSolidSegs": sorted({s["seg"] for s in in_solid}),
@@ -487,14 +561,10 @@ def analyse(samples):
 
 
 def run_course(page, course, shot_every, grab_shots, verbose=True):
-    """One pass of a course route.
+    """One hand-stepped pass of a course route.
 
-    `grab_shots=False` is the MEASUREMENT pass: a headless screenshot of a WebGL
-    canvas costs ~150 ms of compositor time and starves requestAnimationFrame
-    (measured: 4.8 fps with shots on, vs the game's real headless ~45), which
-    would turn every timing number into an artefact of the probe. So the route is
-    driven twice — once clean for the numbers, once with the camera roll for the
-    pictures — and only the clean pass feeds `analyse`.
+    Because the clock is ours, screenshots cost wall time only — they cannot
+    starve the simulation — so ONE pass produces both the numbers and the roll.
     """
     os.makedirs(SHOTS, exist_ok=True)
     route = ROUTES[course]
@@ -502,7 +572,8 @@ def run_course(page, course, shot_every, grab_shots, verbose=True):
     if course != "keep":
         page.evaluate("(id) => CRESTBOUND.game.__dev.goto(id)", course)
         t0 = time.time()
-        while time.time() - t0 < 30:
+        st = None
+        while time.time() - t0 < 60:
             st = page.evaluate(STATE_JS)
             cid = page.evaluate("CRESTBOUND.game.courseId")
             if st == "playing" and cid == course:
@@ -516,38 +587,35 @@ def run_course(page, course, shot_every, grab_shots, verbose=True):
     if started.get("error"):
         raise RuntimeError("driver: " + started["error"])
 
+    chunk = max(1, int(round(shot_every * 60)))
     shots, n = [], 0
     t0 = time.time()
-    poll_ms = int(shot_every * 1000) if grab_shots else 1000
-    while time.time() - t0 < 180:
-        st = page.evaluate("({done: __CAMSHOTS.done, err: __CAMSHOTS.error, "
-                           "n: __CAMSHOTS.samples.length, seg: __CAMSHOTS.seg})")
-        if grab_shots and st["n"] > 0:
+    while time.time() - t0 < 900:
+        st = page.evaluate("(n) => __CAM.step(n)", chunk)
+        if grab_shots:
             path = os.path.join(SHOTS, "%s_%03d.png" % (course, n))
             try:
                 page.screenshot(path=path, timeout=60000)
                 shots.append({"file": os.path.basename(path), "seg": st["seg"],
-                              "sampleIdx": st["n"] - 1})
+                              "frame": st["i"], "t": round(st["i"] / 60.0, 2)})
             except Exception as e:
                 shots.append({"file": None, "seg": st["seg"], "error": str(e)[:90]})
             n += 1
         if st["done"]:
-            if st["err"]:
-                print("  driver error: %s" % st["err"], file=sys.stderr)
             break
-        page.wait_for_timeout(poll_ms)
 
-    samples = page.evaluate("__CAMSHOTS.samples")
+    samples = page.evaluate("__CAM.samples")
+    err = page.evaluate("__CAM.error")
+    page.evaluate("__CAM.finish()")
     rep = analyse(samples)
     rep["course"] = course
     rep["shots"] = shots
-    rep["shotPass"] = grab_shots
-    rep["driverError"] = page.evaluate("__CAMSHOTS.error")
+    rep["driverError"] = err
     if verbose:
-        print("  %-10s frames=%d shots=%d pullIns>1.5m=%d ndcMax=(%.2f,%.2f) "
-              "inSolid=%d wallFill=%d worstOcc=%.2fs"
-              % (course, rep["frames"], len(shots), rep["pullIns>1.5m"],
-                 rep["ndcXStat"]["max"], rep["ndcYStat"]["max"],
+        print("  %-10s frames=%d (%.1f s game) shots=%d pullIns>1.5m=%d "
+              "ndcMax=(%.2f,%.2f) inSolid=%d wallFill=%d worstOcc=%.2fs"
+              % (course, rep["frames"], rep["gameSeconds"], len(shots),
+                 rep["pullIns>1.5m"], rep["ndcXStat"]["max"], rep["ndcYStat"]["max"],
                  rep["lensInsideSolidFrames"], rep["wallFillFrames"],
                  rep["worstOcclusionRun_s"]))
     return rep, samples
@@ -557,12 +625,16 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", default=DEFAULT_URL)
     ap.add_argument("--headed", action="store_true")
+    # accepted and ignored: headless IS the default. The lane runbook spells the
+    # command `camshots.py --headless`, and argparse must not fail that command.
+    ap.add_argument("--headless", action="store_true", help="explicit no-op (default)")
     ap.add_argument("--course", default=None, help="keep | verdant-1 (default: both)")
     ap.add_argument("--shot-every", type=float, default=0.5)
     ap.add_argument("--width", type=int, default=1280)
     ap.add_argument("--height", type=int, default=720)
     ap.add_argument("--samples", action="store_true", help="write the raw per-frame stream too")
     ap.add_argument("--no-shots", action="store_true", help="measurement pass only")
+    ap.add_argument("--out", default="camshots.json")
     args = ap.parse_args()
 
     courses = [args.course] if args.course else ["keep", "verdant-1"]
@@ -573,13 +645,9 @@ def main():
 
     os.makedirs(SHOTS, exist_ok=True)
     out = {"url": args.url, "viewport": [args.width, args.height],
-           "headless": not args.headed, "courses": {}}
+           "headless": not args.headed, "handStepped": True, "dt": DT, "courses": {}}
 
     with sync_playwright() as p:
-        # Chrome launch and the page itself both fail under contention on this box
-        # (HARNESS_NOTES: run browser gates ONE at a time; measured 22..60 live
-        # chrome.exe while other lanes ran). Back off rather than report a
-        # launch failure as a camera finding.
         browser, last = None, None
         for attempt in range(6):
             try:
@@ -611,7 +679,6 @@ def main():
         if nav is not True:
             raise RuntimeError("navigation never completed: %s" % nav)
 
-        # 1. the global appears (boot.js) --------------------------------------
         t0 = time.time()
         while time.time() - t0 < 120:
             try:
@@ -623,7 +690,6 @@ def main():
         if not page.evaluate("!!(globalThis.CRESTBOUND && CRESTBOUND.game)"):
             raise RuntimeError("globalThis.CRESTBOUND never appeared")
 
-        # 2. leave the title ---------------------------------------------------
         t0 = time.time()
         while time.time() - t0 < 150:
             st = page.evaluate(STATE_JS)
@@ -634,7 +700,6 @@ def main():
         if page.evaluate(STATE_JS) not in ("keep", "playing"):
             raise RuntimeError("never left the title (state=%s)" % page.evaluate(STATE_JS))
 
-        # 3. player + camera test surfaces exist -------------------------------
         t0 = time.time()
         while time.time() - t0 < 120:
             try:
@@ -649,13 +714,8 @@ def main():
         print("state after boot: %s" % page.evaluate(STATE_JS))
 
         for c in courses:
-            print("  [%s] measurement pass (no screenshots)" % c)
-            rep, samples = run_course(page, c, args.shot_every, grab_shots=False)
-            if not args.no_shots:
-                print("  [%s] screenshot pass" % c)
-                rep2, _ = run_course(page, c, args.shot_every, grab_shots=True, verbose=False)
-                rep["shots"] = rep2["shots"]
-                rep["shotPassFrames"] = rep2["frames"]
+            rep, samples = run_course(page, c, args.shot_every,
+                                      grab_shots=not args.no_shots)
             out["courses"][c] = rep
             if args.samples:
                 with open(os.path.join(SHOTS, "%s_samples.json" % c), "w", encoding="utf-8") as f:
@@ -663,7 +723,7 @@ def main():
         out["consoleErrors"] = errs
         browser.close()
 
-    dest = os.path.join(SHOTS, "camshots.json")
+    dest = os.path.join(SHOTS, args.out)
     with open(dest, "w", encoding="utf-8") as f:
         json.dump(out, f, indent=1)
     print("wrote %s" % dest)

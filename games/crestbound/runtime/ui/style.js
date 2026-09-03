@@ -669,6 +669,11 @@ const HUD_CSS = `
   display:inline-flex; flex-direction:column; align-items:flex-start;
 }
 .ch-tally .ch-pips{ display:flex; gap:5px; align-items:center; }
+.ch-tally .ch-pips .ch-tally-k{
+  font-family:var(--f-display); font-weight:700; font-size:${UI_TOKENS.type['2xs']}px; letter-spacing:.30em;
+  text-transform:uppercase; color:var(--ink-dim); text-shadow:0 1px 8px rgba(0,0,0,.8);
+}
+.ch-tally .ch-pips .ch-tally-k + .ch-tally-n{ margin-left:10px; }
 .ch-tally .ch-pips .ch-tally-n{
   margin-left:8px; font-family:var(--f-num); font-weight:700; font-size:${UI_TOKENS.type.sm}px;
   letter-spacing:.14em; color:var(--gold); text-shadow:0 1px 8px rgba(0,0,0,.8);
@@ -716,6 +721,16 @@ const HUD_CSS = `
 /* --- top-right: timers + deaths --------------------------------------- */
 .ch-tr{ top:22px; right:26px; text-align:right; transform-origin:top right; transform:scale(var(--hud-scale));
   display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+/* The timer used to be bare type. Over a white sky — or a celebration pulse —
+   white-on-white is unreadable, so it sits on its own plate like every other
+   readout. No backdrop blur here: this is the one panel that is on screen every
+   frame, and a flat translucent ground buys the same contrast for nothing. */
+.ch-timers{
+  display:inline-flex; flex-direction:column; align-items:flex-end; gap:2px;
+  padding:6px 12px 7px; border-radius:var(--r-md);
+  background:linear-gradient(180deg,rgba(20,14,30,.56),rgba(12,8,20,.66));
+  border:1px solid var(--hair); box-shadow:inset 0 1px 0 rgba(255,244,214,.14), 0 10px 30px -18px rgba(0,0,0,.9);
+}
 .ch-timer{
   font-family:var(--f-num); font-weight:700; line-height:.92; color:#fff;
   display:flex; align-items:baseline; justify-content:flex-end;
@@ -830,20 +845,23 @@ const HUD_CSS = `
 .ch-toast.k-sigil{ border-left-color:var(--sigil); } .ch-toast.k-sigil .ic{ color:var(--sigil); }
 
 /* --- crest ribbon (big centred reveal) -------------------------------- */
+/* The centre stage holds ONE reveal (hud.js _announce). Off-stage it is
+   display:none, so an idle layer can neither paint nor be read off the page. */
 .ch-ribbon{
   position:absolute; left:50%; top:38%; transform:translate(-50%,-50%);
-  display:flex; flex-direction:column; align-items:center; opacity:0; pointer-events:none;
+  display:none; flex-direction:column; align-items:center; opacity:0; pointer-events:none;
   z-index:${UI_TOKENS.z.ribbon}; width:min(760px,92vw);
 }
+.ch-ribbon.is-on{ display:flex; }
 .ch-ribbon .emblem{ position:relative; width:64px; height:64px; margin-bottom:10px; }
 .ch-ribbon .emblem::before{ content:''; position:absolute; inset:0; clip-path:var(--oct);
   background:linear-gradient(160deg,var(--gold-hot),var(--gold) 50%,var(--gold-dim)); }
 .ch-ribbon .emblem::after{ content:''; position:absolute; inset:6px; clip-path:var(--oct);
   background:rgba(20,14,30,.9); }
 .ch-ribbon .emblem i{ position:absolute; inset:16px; clip-path:var(--oct);
-  background:linear-gradient(160deg,#fff,var(--gold-hot)); z-index:1; box-shadow:0 0 22px var(--gold-hot); }
+  background:linear-gradient(160deg,#fff,var(--gold-hot)); z-index:1; box-shadow:0 0 14px var(--gold-hot); }
 .ch-ribbon .emblem .halo{ position:absolute; inset:-30px; border-radius:50%; clip-path:none;
-  background:radial-gradient(circle,rgba(233,195,107,.45),transparent 62%); z-index:0; }
+  background:radial-gradient(circle,rgba(233,195,107,.28),transparent 62%); z-index:0; }
 .ch-ribbon .band{
   position:relative; padding:12px 44px 14px; text-align:center;
   background:linear-gradient(90deg,transparent,rgba(40,30,48,.86) 14%,rgba(40,30,48,.86) 86%,transparent);
@@ -883,7 +901,9 @@ const HUD_CSS = `
   font-size:${UI_TOKENS.type['3xl']}px; letter-spacing:.30em; margin-left:.30em;
   color:#fff; opacity:0; pointer-events:none; white-space:nowrap; z-index:${UI_TOKENS.z.flash};
   text-shadow:0 0 40px var(--wc,var(--cp)), 0 4px 30px rgba(0,0,0,.7); text-align:center;
+  display:none;
 }
+.ch-word.is-on{ display:block; }
 .ch-word .sub{
   display:block; margin-top:10px; font-size:${UI_TOKENS.type.sm}px; font-weight:700;
   letter-spacing:.38em; margin-left:.38em; color:var(--wc,var(--cp)); opacity:.9;
@@ -1122,20 +1142,33 @@ const CARD_CSS = `
   background:linear-gradient(170deg,rgba(38,28,48,.96),rgba(22,16,32,.98)); border:1px solid rgba(0,0,0,.6); }
 .cc-paint{ position:relative; height:190px; overflow:hidden; }
 .cc-paint canvas{ display:block; width:100%; height:100%; }
-.cc-paint::after{ content:''; position:absolute; inset:0; pointer-events:none;
-  background:linear-gradient(180deg,rgba(0,0,0,0) 40%,rgba(22,16,32,.95) 100%), radial-gradient(120% 90% at 50% 40%,transparent 50%,rgba(0,0,0,.35)); }
+/* The scrim is a pseudo-element, so it paints LAST — over the lockup, which is
+   what turned a #fff title into mid-grey and let the painted landmark cut
+   through it. It belongs UNDER the type: z-index 1 for the scrim, 2 for the
+   text. The second stop is a tighter band right behind the lockup, so the
+   silhouette behind the title is darkened rather than the title itself. */
+.cc-paint::after{ content:''; position:absolute; inset:0; pointer-events:none; z-index:1;
+  background:linear-gradient(180deg,rgba(0,0,0,0) 28%,rgba(22,16,32,.62) 62%,rgba(16,11,25,.94) 100%),
+             radial-gradient(120% 90% at 50% 34%,transparent 46%,rgba(0,0,0,.38)); }
 .cc-paint .cc-glint{ position:absolute; top:-20%; bottom:-20%; width:30%; left:0; pointer-events:none;
   background:linear-gradient(90deg,transparent,rgba(255,244,214,.18),transparent); animation:cb-glint 3.8s var(--e-io) infinite; }
-.cc-paint .cc-title{ position:absolute; left:26px; right:26px; bottom:16px; }
+.cc-paint .cc-title{ position:absolute; left:26px; right:150px; bottom:16px; z-index:2; }
 .cc-paint .cc-realm{ text-shadow:0 1px 10px rgba(0,0,0,.9); }
 .cc-paint .cc-name{ margin-top:5px; font-family:var(--f-display); font-weight:700; text-transform:uppercase;
   font-size:clamp(24px,3.6vw,38px); letter-spacing:.06em; line-height:1; color:#fff;
-  text-shadow:0 2px 20px rgba(0,0,0,.9), 0 0 1px rgba(0,0,0,.9); }
+  text-shadow:0 2px 22px rgba(6,4,12,.98), 0 1px 3px rgba(6,4,12,.95), 0 0 1px rgba(6,4,12,.9); }
 .cc-paint .cc-subtitle{ margin-top:6px; font-family:var(--f-body); font-size:${UI_TOKENS.type.sm}px; color:var(--ink-dim);
   letter-spacing:.02em; text-shadow:0 1px 8px rgba(0,0,0,.9); }
-.cc-paint .cc-diff{ position:absolute; right:26px; bottom:18px; display:flex; flex-direction:column; align-items:flex-end; gap:5px; }
+/* DIFFICULTY sat unplated on the painted hill and vanished. Its own chip. */
+.cc-paint .cc-diff{ position:absolute; right:22px; bottom:16px; z-index:2;
+  display:flex; flex-direction:column; align-items:flex-end; gap:5px;
+  padding:6px 10px 7px; border-radius:var(--r-sm);
+  background:rgba(14,9,24,.62); border:1px solid var(--hair); }
 .cc-paint .cc-diff .k{ font-family:var(--f-display); font-size:${UI_TOKENS.type['2xs']}px; font-weight:700; letter-spacing:.3em;
-  text-transform:uppercase; color:var(--ink-mute); text-shadow:0 1px 8px rgba(0,0,0,.9); }
+  text-transform:uppercase; color:var(--ink-dim); text-shadow:0 1px 8px rgba(0,0,0,.9); }
+.cc-paint .cc-diff .cb-dots i{ background:rgba(243,233,210,.30); box-shadow:inset 0 0 0 1px rgba(243,233,210,.22); }
+.cc-paint .cc-diff .cb-dots i.on{ background:var(--gold); box-shadow:0 0 6px var(--gold-glow); }
+.cc-paint .cc-diff .cb-dots i.hot{ background:var(--danger); box-shadow:0 0 6px rgba(255,95,74,.6); }
 .cc-body{ padding:16px 24px 18px; }
 .cc-crests{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }
 .cc-slot{ display:flex; flex-direction:column; align-items:center; gap:7px; padding:9px 4px 8px; border-radius:var(--r-md);

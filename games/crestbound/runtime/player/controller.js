@@ -54,8 +54,9 @@
  *                →  jump1/2/3      jump↓ (buffer) — chain per tripleWindow
  *                →  backflip       crouch‸ + jump↓ and sp < 2
  *                →  fall           lost ground (coyote starts)
- *  run           →  idle           mag < 0.15 and sp ≤ SKID_SPEED
- *                →  skid           mag < 0.15 and sp > SKID_SPEED
+ *  run           →  idle           not braking and mag < 0.15
+ *                →  skid           BRAKING: sp > SKID_SPEED and the stick asks for
+ *                                   < min(speedWalk, sp − SKID_DROP)  [_braking()]
  *                →  pivot          dot(wish, vel) < reverseSnapDot and sp > 4
  *                →  jump1/2/3      jump↓
  *                →  longjump       crouch‸ + jump↓ and sp ≥ longJump.minSpeed
@@ -66,13 +67,16 @@
  *  run           →  bonk           grounded, wish·-wallN ≥ BONK_INTO_DOT and the
  *                                   achieved speed collapsed under the stick's ask
  *  bonk          →  run            stopped pressing / the wall let go
- *  skid          →  idle           sp ≤ SKID_SPEED   |  → run (mag ≥ 0.15)
- *  pivot         →  run            after PIVOT_TIME (facing snaps to wish)
+ *  skid          →  idle           no longer braking, mag < 0.15  |  → run (mag ≥ 0.15)
+ *  pivot         →  run            after PIVOT_TIME (facing SWEEPS to wish across it)
  *                →  sideflip       jump↓ during the pivot
  *  crouch(walk)  →  idle/run       crouch released
  *                →  longjump       jump↓ at sp ≥ longJump.minSpeed
  *                →  backflip       jump↓ at sp < 2
  *  jump1/jump2   →  fall           vy ≤ 0            (jump3 keeps its somersault)
+ *  (in air)                       horizontal speed is capped AND floored off the
+ *                                 launch speed — the stick may shed AIR_KEEP_FRAC
+ *                                 of it, never all of it
  *  jump1-3/fall  →  wallslide      wall |n.y|<0.4 held into, vy < 0
  *                →  wallkick       jump↓ within wallKick.window of a wall contact
  *                →  dive           dive↓ and sp ≥ dive.minSpeed
@@ -165,8 +169,38 @@ const MOVE_WALK_TOP = 0.55;
  */
 const MOVE_WALK_FULL = 0.25;
 
-/** Ground speed above which "release the stick" reads as a skid, not a stop. */
-const SKID_SPEED = 4.0;
+/**
+ * THE BRAKE POSE COVERS THE WHOLE BRAKE.
+ *
+ * `skid` used to need `_wmag === 0` AND `speed > 4.0`, and BOTH halves of that
+ * were unreachable from a keyboard. input.js ramps a released key down over
+ * KEY_RAMP_DOWN 0.06 s, so on a real KeyW release `_wmag` is still > 0 through
+ * speeds 7.930 → 6.860 → 5.790; by the time it reaches 0 the hero is already
+ * near 4.0 and crosses it one frame later. MEASURED (`_r3_run_stop_key.json`,
+ * f66-f74): `skid` held for EXACTLY ONE FRAME — 0.017 s — and the hero then
+ * played `idle` at 3.648, 2.576 and 1.504 m/s. 3.648 m/s is FASTER THAN THE
+ * FULL WALK (speedWalk 3.200): a hero standing still in pose while outrunning
+ * his own walk, 0.136 m of glide over four frames. Ice-skating, on the single
+ * most-used input in the game.
+ *
+ * The honest signal is the one `_groundMove` already brakes on — "the stick is
+ * asking for materially LESS than the hero is carrying" — not "the stick is at
+ * zero". Two clauses make it material, and each rules out a case that is NOT a
+ * brake:
+ *   • the ask is below a WALK (`speedWalk`). Easing off a run to walking pace
+ *     is a change of gear, not a skid, and — the case that matters — landing a
+ *     long jump at 17 m/s with the stick STILL HELD FORWARD is not a skid
+ *     either, though the hero sheds 8 m/s doing it. Both keep asking for
+ *     speedWalk or more, so both stay `run`.
+ *   • the ask falls at least `SKID_DROP` short of the carried speed, so a hero
+ *     already at the speed he is asking for never flickers into a brake pose.
+ * `SKID_SPEED` is then only how slow is too slow to be worth a pose — the FLOOR
+ * of the skid, not its trigger, which is why it drops from 4.0 (above walking
+ * pace!) to 1.0.
+ */
+const SKID_SPEED = 1.0;
+/** The stick must ask for at least this much less than the carried speed (m/s). */
+const SKID_DROP = 0.60;
 
 /* BONK — grounded, leaning into a wall, and going nowhere. `wish · -wallN`
    must clear BONK_INTO_DOT (a genuine press, not a graze along the face), the
@@ -178,6 +212,15 @@ const BONK_MIN_TARGET = 1.20;
 const BONK_SPEED_FRAC = 0.35;
 /** Pre-impact speed above which entering the bonk kicks up dust + a thump. */
 const BONK_IMPACT_SPEED = 2.0;
+/* BONK RECOIL (CONTRACT §11: "a recoil, a palms-on-the-wall press"). The wall
+   gives a fraction of the lost speed straight back along its normal. The cap is
+   deliberately below `BONK_SPEED_FRAC * speedRun` (3.15 m/s) so the rebound can
+   never lift the achieved speed back over the bonk test and flicker the state —
+   and the cooldown makes the impulse (and its dust) a one-shot per contact even
+   if the contact memory does lapse for a substep. */
+const BONK_RECOIL_FRAC = 0.25;
+const BONK_RECOIL_MAX = 2.2;
+const BONK_RECOIL_CD = 0.28;
 /** Duration of the reversal skid. CONTRACT §11: "pivot (0.12 s skid)". */
 const PIVOT_TIME = 0.12;
 /** Speed under which a reversal is just a turn (CONTRACT §11: "at speed > 4"). */
@@ -192,6 +235,37 @@ const CROUCH_SPEED_MUL = 0.5;
 
 /** Air-control multiplier while committed to a long jump or a dive (§11 ×0.35). */
 const COMMIT_AIR_CONTROL = 0.35;
+
+/**
+ * A LAUNCH IS A COMMITMENT — the floor the air-speed CAP has always implied.
+ *
+ * `_airMove` already derives a per-jump speed CAP from `_launchSpeed` ("speed
+ * carried in from a pad, a slope or a long jump is never clipped down"). It had
+ * no floor, and without one the stick can delete the launch outright: MEASURED
+ * (`_harness/fs_r3_all.json`, move 'aircontrol') a jump taken at 9 m/s with the
+ * stick fully reversed at f44 fell 8.991 -> 0.348 m/s in 22 frames (0.367 s,
+ * 23.4 m/s^2 — `accelAir` 22 at full authority) INSIDE a 0.633 s airtime. So no
+ * launch was ever a commitment and no mistimed jump was ever punished, which is
+ * the opposite of the momentum CONTRACT §11 opens with and what a jump-cube
+ * feels like.
+ *
+ * Two ways to fix it, and this is the surgical one. Cutting `accelAir` from 22
+ * to the ~20-25 % of `accelGround` the analog reference sits at (8.5-10.5) also
+ * guts STEERING — the small mid-air corrections that make a 3D platformer
+ * readable — and `accelAir` is a number CONTRACT §0 authors. A floor takes only
+ * what the defect is about: the player may still steer at full rate and may
+ * still shed a little over half the launch to the stick (from 9 m/s, down to
+ * 4.05), but the rest is momentum and the world's to take, not the stick's.
+ *
+ * It floors the RESULT OF THE PLAYER'S OWN ACCELERATION and nothing else: it
+ * only applies while the pre-step speed was already above the floor, so a wall
+ * contact, a bonk, a pound's zeroed velocity or a long airtime's drag can still
+ * carry the hero below it and the floor will not push him back up. `airDrag`
+ * runs after, so the published REACH_TABLE integration is untouched.
+ */
+const AIR_KEEP_FRAC = 0.45;
+/** Slack on the "did the WORLD slow him?" guard — one frame of air drag, no more. */
+const AIR_KEEP_EPS = 0.05;
 
 /** Wall contact memory. The kick window itself is TUNE.wallKick.window. */
 const WALL_MEM = 0.16;
@@ -488,6 +562,7 @@ export class Player {
     this._qsMash = 0;
     this._standGuardT = 0;
     this._stepDist = 0;
+    this._bonkCD = 0;           // one recoil per wall contact
 
     this._cutArmed = false;     // a cuttable jump is rising
     this._cutPending = false;   // released before jumpHoldMin — cut when it expires
@@ -674,6 +749,7 @@ export class Player {
     this._qsMash = 0;
     this._standGuardT = 0;
     this._stepDist = 0;
+    this._bonkCD = 0;
     this._cutArmed = false;
     this._cutPending = false;
     this._fellFromJump = false;
@@ -959,6 +1035,7 @@ export class Player {
     if (this._reverseT > 0) this._reverseT -= dt;
     if (this._strokeT > 0) this._strokeT -= dt;
     if (this._standGuardT > 0) this._standGuardT -= dt;
+    if (this._bonkCD > 0) this._bonkCD -= dt;
     if (this.stunT > 0) this.stunT -= dt;
     if (this._flyT > 0 && this._flyT < 1e8) {
       this._flyT -= dt;
@@ -1187,6 +1264,8 @@ export class Player {
 
     /* Timed states that expire on their own. */
     if (st === 'pivot' && this.stateT >= PIVOT_TIME) {
+      /* The sweep in `_groundMove` has already brought `facing` here; this is
+         the clamp that guarantees the exact heading on the exit frame. */
       if (this._wmag > 0) this.facing = yawFromHeading(this._wx, this._wz);
       this._setState(this._wmag > 0 ? 'run' : 'idle');
     } else if (st === 'land' && this.stateT >= TUNE.landLag) {
@@ -1338,6 +1417,17 @@ export class Player {
     this._jumpT = 0;
     this._cutArmed = !!cuttable;
     this._cutPending = false;
+    /* THE LAUNCH CONSUMES THE JUMP EDGES. `_preMove` (step 4) starts the move,
+       `_resolveJumpCut` (step 5) reads the release latch — so a release latched
+       for the PREVIOUS jump was still standing when the next one launched and
+       cut a full-held rise by `jumpCut` on its first frame. Chronologically a
+       release latched before this launch belongs to the button press before it
+       (you must let go before you can press again), so it is spent here.
+       Measured: land-frame release+re-press halved a 2.601 m double to 1.258 m;
+       the hole is one rendered frame, which is 16.7 ms at 60 fps but 88 ms — an
+       ordinary tap — at the frame rates the perf lane measures. */
+    this._jumpReleaseLatch = false;
+    this._jumpPressLatch = false;
     this._fellFromJump = true;       // hard landings only come from FALLS
     this._stepDist = 0;
     this.stats.jumps++;
@@ -1449,7 +1539,13 @@ export class Player {
     this.jumpCount = 1;
     this._chainT = 0;
     this._wallLockT = wk.lockout;
-    this._launch('wallkick', true);
+    /* NOT cuttable. CONTRACT §11's wall-kick line is "vy 12, away 7.5" with no
+       cut clause — the cut belongs to the jump family bullet — and long jump,
+       backflip, sideflip and pound-jump all launch uncuttable for the same
+       reason: they are committed moves whose reach the REACH_TABLE publishes.
+       Cuttable, the 5-frame tap that is the natural rhythm of a shaft halved vy
+       to 6 and the certified +2.0 m per kick measured 0.88-1.00 m. */
+    this._launch('wallkick', false);
     this.stats.wallKicks++;
     this.lastJumpKind = 'wallkick';
     this._ev('wallkick', this.pos, n);
@@ -1635,12 +1731,24 @@ export class Player {
       }
     }
 
-    /* The pivot itself: brake to a stop over PIVOT_TIME, no steering. */
+    /* The pivot itself: brake to a stop over PIVOT_TIME, no steering — but the
+       BODY whips through the turn while the feet slide. `facing` sweeps to the
+       wish across the REMAINING pivot time instead of being assigned in one
+       frame when the state expires; hero.js writes `root.rotation.y = facing`
+       raw, so the old end-of-state assignment rendered a 180 degree flip on a
+       single frame (back-to-camera at f70, front-to-camera at f72). CONTRACT
+       §11 asks for a skid, and a skid is a turn you can see happen. */
     if (st === 'pivot') {
       const sp = this.speed;
       const drop = this._pivotRate * dt;
       if (sp <= drop || sp < 1e-5) { vel.x = 0; vel.z = 0; }
       else { const k = (sp - drop) / sp; vel.x *= k; vel.z *= k; }
+      if (this._wmag > 0) {
+        const goal = yawFromHeading(this._wx, this._wz);
+        const left = Math.max(PIVOT_TIME - this.stateT, dt);
+        const rate = Math.abs(shortestAngle(this.facing, goal)) / left;
+        this.facing = moveTowardAngle(this.facing, goal, rate * dt);
+      }
       return;
     }
 
@@ -1687,9 +1795,10 @@ export class Player {
 
   /**
    * AIR — Quake projection acceleration (adds only the deficit along the wish
-   * axis, so a long jump is never braked by holding forward), a cap computed
-   * from the LAUNCH speed, and the same `airDrag` the published REACH_TABLE was
-   * integrated with, so the measured gaps match the authored ones.
+   * axis, so a long jump is never braked by holding forward), a cap AND A FLOOR
+   * computed from the LAUNCH speed (see AIR_KEEP_FRAC), and the same `airDrag`
+   * the published REACH_TABLE was integrated with, so the measured gaps match
+   * the authored ones.
    */
   _airMove(dt) {
     const vel = this.vel;
@@ -1712,6 +1821,28 @@ export class Player {
     /* Horizontal air drag, exactly as `simulateJump` integrates it. */
     const f = 1 - TUNE.airDrag * dt;
     vel.x *= f; vel.z *= f;
+
+    /* …and the floor the cap implies (AIR_KEEP_FRAC): the stick may shed a
+       little over half the launch, never the launch itself.
+
+       AFTER THE DRAG, AND WITH AN EPSILON ON THE GUARD, because both mistakes
+       leak. The guard exists so the floor only ever undoes the PLAYER'S braking:
+       a hero the world has already slowed (a wall, a bonk, a pound's zeroed
+       velocity) keeps his slow speed and the floor stays out of it. But applied
+       BEFORE the drag the floor restored exactly `keep` and the drag then took
+       0.008 m/s back off it, so the next frame's `pre` was under the floor and
+       the guard released it for good — measured, the reversal still ran 8.991 ->
+       0.521 m/s with the floor in, releasing at f059. Ordered this way the
+       clamp is the last word each frame and `pre` re-enters at exactly `keep`,
+       so the guard's epsilon is all the drift there is to absorb. */
+    const keep = this._launchSpeed * AIR_KEEP_FRAC;
+    if (keep > 1e-6 && pre > keep - AIR_KEEP_EPS) {
+      const post = hyp2(vel.x, vel.z);
+      if (post < keep) {
+        if (post > 1e-6) { const k = keep / post; vel.x *= k; vel.z *= k; }
+        else { headingFromYaw(this.facing, _fwd); vel.x = _fwd.x * keep; vel.z = _fwd.z * keep; }
+      }
+    }
   }
 
   /** SLOPE SLIDE — accelerate straight down the fall line, capped. */
@@ -2577,6 +2708,21 @@ export class Player {
   _bonkEnter() {
     const hit = this._prevSpeed;
     this._ev('bonk', this.pos, this.wallN);
+    /* RECOIL. CONTRACT §11 asks for "a recoil, a palms-on-the-wall press"; the
+       press was there (the rig settles 12.6 degrees back) but the wall gave
+       nothing back — speed went 9.000 -> 0.000 in one frame and x froze for as
+       long as the stick was held. The wall now returns a fraction of the lost
+       speed along its own normal. */
+    if (this._bonkCD <= 0) {
+      const n = this.wallN;
+      const nl = hyp2(n.x, n.z);
+      if (nl > 1e-3) {
+        const push = clamp(hit * BONK_RECOIL_FRAC, 0, BONK_RECOIL_MAX) / nl;
+        this.vel.x += n.x * push;
+        this.vel.z += n.z * push;
+      }
+      this._bonkCD = BONK_RECOIL_CD;
+    }
     if (hit < BONK_IMPACT_SPEED) return;
     const k = clamp(hit / TUNE.speedRun, 0.2, 1);
     _fxOpt.strength = k;
@@ -2585,6 +2731,20 @@ export class Player {
     _fxOpt.speed = hit;
     this._fxBurst('land', this.pos, _fxOpt);
     this._sfx('land_soft', 0.35 + k * 0.35);
+  }
+
+  /**
+   * Is the hero BRAKING — carrying real speed while the stick asks for
+   * materially less? This is the `skid` trigger (see SKID_SPEED for the
+   * measurement that produced both clauses). It reads the same quantity
+   * `_groundMove` brakes on, so the pose and the physics can never disagree
+   * about whether a brake is happening. Allocation-free.
+   */
+  _braking() {
+    if (this.speed <= SKID_SPEED) return false;
+    const target = this._wmag > 0 ? this._speedTarget(this._wmag) : 0;
+    const drop = this.speed - SKID_DROP;
+    return target < (drop < TUNE.speedWalk ? drop : TUNE.speedWalk);
   }
 
   /**
@@ -2599,12 +2759,13 @@ export class Player {
       if (st === 'idle' || st === 'run' || st === 'skid' || st === 'bonk' ||
         st === 'crouch' || st === 'crouchwalk') {
         if (this.crouching) this._setState(this._wmag > 0 && this.speed > 0.4 ? 'crouchwalk' : 'crouch');
+        else if (this._braking()) this._setState('skid');
         else if (this._wmag > 0) {
           if (this._pressingWall()) {
             if (st !== 'bonk') this._bonkEnter();
             this._setState('bonk');
           } else this._setState('run');
-        } else this._setState(this.speed > SKID_SPEED ? 'skid' : 'idle');
+        } else this._setState('idle');
       } else if (st === 'fall' || st === 'jump1' || st === 'jump2' || st === 'jump3' ||
         st === 'wallslide' || st === 'wallkick' || st === 'longjump' ||
         st === 'backflip' || st === 'sideflip' || st === 'fly' || st === 'climbKick') {

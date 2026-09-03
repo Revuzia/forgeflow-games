@@ -63,7 +63,7 @@ export const QUALITY = {
     aa: 'fxaa', smaa: false, ssao: false,
     particles: 0.35, decor: 0.3, shadowDistance: 28, grass: 0.27,
     anisotropy: 1, maxLights: 2,
-    prepass: true, shadowFilter: 'basic', shadowCasterRadius: 3.0,
+    shadowFilter: 'basic', shadowCasterRadius: 3.0, renderScale: 0.60,
   },
   medium: {
     id: 'medium', label: 'MEDIUM',
@@ -71,7 +71,7 @@ export const QUALITY = {
     aa: 'fxaa', smaa: false, ssao: false,
     particles: 0.6, decor: 0.6, shadowDistance: 45, grass: 0.55,
     anisotropy: 2, maxLights: 3,
-    prepass: true, shadowFilter: 'pcf', shadowCasterRadius: 2.0,
+    shadowFilter: 'pcf', shadowCasterRadius: 2.0, renderScale: 0.72,
   },
   high: {
     id: 'high', label: 'HIGH',
@@ -79,7 +79,7 @@ export const QUALITY = {
     aa: 'fxaa', smaa: false, ssao: false,
     particles: 1, decor: 1, shadowDistance: 70, grass: 1,
     anisotropy: 2, maxLights: 4,
-    prepass: true, shadowFilter: 'pcf', shadowCasterRadius: 1.5,
+    shadowFilter: 'pcf', shadowCasterRadius: 1.5, renderScale: 0.85,
   },
   ultra: {
     id: 'ultra', label: 'ULTRA',
@@ -87,7 +87,7 @@ export const QUALITY = {
     aa: 'smaa', smaa: true, ssao: true,
     particles: 1, decor: 1, shadowDistance: 110, grass: 1,
     anisotropy: 8, maxLights: 8,
-    prepass: true, shadowFilter: 'pcfsoft', shadowCasterRadius: 0.9,
+    shadowFilter: 'pcfsoft', shadowCasterRadius: 0.9, renderScale: 1.00,
   },
 };
 
@@ -95,10 +95,18 @@ export const QUALITY = {
  * Fields added 2026-09-02 by the perf pass, all measured with
  * `_harness/frameprobe.py` on the reference Intel UHD at 1920x1080:
  *
- *   prepass             run the depth prepass (post.js PrepassRenderPass). The
- *                       frame shades 2.2-2.8 fragments per pixel without it
- *                       (_harness/_overdraw.py); with it, verdant-1 went from
- *                       11.4 to 22.6 fps on the perf gate.
+ *   renderScale         CONTRACT hard rule 4. The fraction of CSS pixels the
+ *                       drawing buffer is allocated at; engine.js multiplies it
+ *                       into the device pixel ratio, so the canvas keeps its CSS
+ *                       size and the compositor upscales on presentation. The
+ *                       frame is GPU FILL-bound (T = C + F*pixels, F ~ 78-91 %),
+ *                       so this is the only lever with the range to reach the
+ *                       fps target on the reference Intel UHD. A DYNAMIC
+ *                       controller in engine.js moves within +/-0.15 of the
+ *                       tier value; see Engine.setRenderScale.
+ *                       (A depth PREPASS lived here for one pass and was
+ *                       reverted: +67k tris per course, both courses over the
+ *                       450k budget, and the frame stayed fill-bound.)
  *   shadowFilter        'basic' (1 tap) | 'pcf' (9 taps) | 'pcfsoft' (9 lerped
  *                       taps, ~4x the fetches of 'pcf'). PCFSoft measured
  *                       -5.29 ms against a single tap, which is real money on

@@ -1660,14 +1660,20 @@ const BURSTS = {
     BURSTS.crest(sys, x, y, z, { color: c });
     // a second, taller fountain and two more rings
     fountain(sys, x, y, z, c, 60, 10, 16, 0.8, 1.6, 2.6);
-    floorRing(sys, x, y, z, 0xffffff, 9.5, 0.7, 0.7, 1);
+    /* GRAND is bigger and GOLDER, not whiter. These two rings fire on the same
+       frame as crest()'s own 6.5 m ring, and the clear camera orbits at 4.6 m —
+       inside all three. A pure-white 9.5 m additive disc at alpha .7 therefore
+       filled the lens: MEASURED, with bloom off entirely, the celebration frame
+       still read mean luminance 143 / 36 % of pixels over 200 against 83 / 5 %
+       in normal play. Same sweep, same size, crest gold, a third of the load. */
+    floorRing(sys, x, y, z, c, 9.5, 0.8, 0.30, 0.34);
     sReset();
     S.sprite = SPRITE.RING;
     S.life = 0.9;
     S.size0 = 0.6;
-    S.size1 = 7.0;
-    colBoth(c); col0White(0.5);
-    S.alpha = 0.7;
+    S.size1 = 6.2;
+    colBoth(c); col0White(0.25);
+    S.alpha = 0.40;
     S.fade = FADE_HOLD;
     pushAdd(sys, x, y + 1.2, z, 0, 1.5, 0);
     // confetti — the one place in the game where colour is allowed to be loud
@@ -2512,16 +2518,30 @@ const AMBIENT = {
   },
   /* leaves tumbling down through the canopy */
   leaves: {
-    rate: 6, radius: 24, yBias: 'top', color: 0x8fb35a, themed: false,
+    /* ROUND 5 — THE LEAVES WERE WHITE CARDS.
+     * Critic, zoom `_shots/_r3_v1_shadowblade.png`: "the ambient leaf sprites
+     * read [180,177,165] in shadow vs [182,192,166] in light — i.e. identical
+     * ... it renders as a flat opaque near-white card".
+     * A particle is unlit by construction and that is fine; the bug is the
+     * LEVEL. These spawned at alpha 0.92 in a colour that is already a lit
+     * mid-green, so every card was painted at full strength over a ground that
+     * the tone map then rolled off — the sprite ended up ABOVE the meadow it is
+     * supposed to be falling through, in every lighting condition, which is
+     * exactly what makes it read as paper. The colour now carries the shading
+     * the sprite cannot receive: the spawn colour is scaled well down (a leaf
+     * seen against the sun is bright, one tumbling into grass is not), the
+     * alpha drops so the card takes some ground colour, and the size comes down
+     * to a leaf rather than a postcard. */
+    rate: 6, radius: 24, yBias: 'top', color: 0x6f8f42, themed: false,
     spawn(sys, x, y, z, color) {
       sReset();
       S.sprite = SPRITE.LEAF;
       S.life = rrange(4, 7);
-      S.size0 = rrange(0.06, 0.12);
+      S.size0 = rrange(0.045, 0.085);
       S.size1 = S.size0;
       S.aspect = 1.4;
-      colBoth(rnd() < 0.65 ? color : 0xc9a24a); col1Scale(0.75);
-      S.alpha = 0.92;
+      colBoth(rnd() < 0.65 ? color : 0x9c7a34); col0Scale(0.55); col1Scale(0.40);
+      S.alpha = 0.72;
       S.grav = 0.7;
       S.drag = 1.4;
       S.spin = rsym() * 3;

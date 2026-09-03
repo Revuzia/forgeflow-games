@@ -413,7 +413,10 @@ export default {
   bounds: { min: [-70, -8, -70], max: [70, 42, 70] },
 
   intro: {
-    text: 'BAILEY MEADOW',
+    /* PROSE, not the title — game.js already prints "VERDANT BAILEY · BAILEY
+       MEADOW" as the lockup above this line, and repeating the name here read
+       as a duplicate. One sentence that says where you are and what to do. */
+    text: 'The mown path runs down to the bridge, and the fort on the hill is missing a wall. Everything you can see, you can climb.',
     cam: [
       { p: [0, 26, 62], look: [0, 8, -20], t: 0 },
       { p: [22, 20, 26], look: [0, 11, -24], t: 2.6 },
@@ -442,7 +445,7 @@ export default {
      * back up because the blades are dense enough to be turf rather than objects.
      * `cross: false` keeps the field at 2 triangles per blade on a course that is
      * already over the 450 k budget. */
-    grass: { count: 18000, density: 26, height: 0.22, cross: false, color: 0x5f8f43 },
+    grass: { count: 18000, density: 44, height: 0.22, cross: false, color: 0x5f8f43 },
     // Mown paths: darker, shorter grass and no blades, so the eye is led even
     // though the course is open. These are the routes the coins follow.
     paths: [
@@ -539,7 +542,13 @@ export default {
     { p: on(-11, 34, 2.55), note: '1 — meadow, on the rock outcrop (2.19 + 1.5 rock + 1.05)' },
     { p: [-3.0, 1.90, 22.0], note: '2 — brook, on the stepping stone under the bridge (top 0.85)' },
     { p: [-5.5, 13.50, -17.2], note: '3 — fort courtyard, above the crate stack (top 12.60)' },
-    { p: [-10.0, WALL_TOP + 1.20, -34.2], note: '4 — the north-west merlon on the rampart' },
+    // 4 was at [-10.0, ·, -34.2], which is inside the west tower's shaft mouth
+    // (clear interior x -10.85..-7.55, z -34.45..-31.15). That only worked while
+    // the fort's roof was a solid lid over the courtyard; with the shaft open to
+    // sky it hung 6.60 m over the shaft floor. Moved 3.4 m east onto the north
+    // rampart walk itself, 1.20 m over the walk at 14.40 and 0.35 m clear of the
+    // merlon tops at 15.25, still the first thing you see coming out of the shaft.
+    { p: [-6.6, WALL_TOP + 1.20, -34.6], note: '4 — the north rampart walk, hard against the west tower' },
     { p: [-40.0, -0.45, -9.0], note: '5 — the bottom of the pond (floor -1.00, 1.85 m under)' },
     { p: [-28.0, 3.55, 25.4], note: '6 — the cave chamber (floor 2.20)' },
     { p: [14.0, 12.90, 32.0], note: '7 — the crown of the old oak (nest top 11.98)' },
@@ -676,7 +685,7 @@ export default {
      * lesson and sigil 7 at the top of it. Nothing about the tree is required.
      * ===================================================================== */
 
-    { kind: 'tree', p: on(14, 32, 0), h: 10.0, r: 3.4, climbable: true, mat: 'bark', tint: 0x6b4a2a, leafTint: LEAF, seed: 771 },
+    { kind: 'tree', p: on(14, 32, 0), h: 10.0, r: 3.4, climbable: true, mat: 'bark', tint: 0x9c7852, leafTint: LEAF, seed: 771 },
     // The crow's nest at the crown: top 11.88, sigil 7 floats 1.02 above it.
     { kind: 'platform', p: [14, r2(gy(14, 32) + 8.72), 32], s: [2.4, 0.4, 2.4], mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
     { kind: 'text', p: [16.6, r2(gy(16.6, 33.6) + 1.7), 33.6], rot: [0, -0.55, 0], text: 'PRESS INTO THE TRUNK TO CLIMB', size: 0.22, color: 0x4d6038 },
@@ -708,11 +717,36 @@ export default {
       kind: 'building', style: 'fort', p: [0, FORT_Y + 2.7, -24], s: [22, 5.4, 22],
       mat: 'stone', tint: STONE, wallThick: 2.0, footing: 2.0, rampart: true, merlons: true,
       doors: [{ side: 'south', w: 4.6, h: 5.0 }, { side: 'north', w: 3.0, h: 4.0 }],
+      // The west tower (ROUTE B) is built into the north-west corner and rises
+      // to 16.60, 2.2 m ABOVE the rampart walk, so the walk cannot run across
+      // it. This aperture takes the walk (and its merlons) off the tower's
+      // footprint and leaves the kick shaft open to sky. LOCAL coords: the
+      // shaft's clear interior is world x -10.85..-7.55, z -34.45..-31.15,
+      // i.e. local x -10.85..-7.55, z -10.45..-7.15; the hole clears it by
+      // 0.25 m on the courtyard sides and runs off the outer edge on the other
+      // two, so no lip of deck ever hangs over the shaft.
+      roofOpen: [{ x: -9.65, z: -9.45, w: 4.70, d: 5.10 }],
     },
 
     // --- the crest tower (east). Solid, 9.00 -> 17.55, corbelled cap at 18.15.
     { kind: 'building', style: 'tower', p: [TOWER_E[0], r2(FORT_Y + 8.55 / 2), TOWER_E[1]], s: [6.4, 8.55, 6.4], mat: 'stone', tint: STONE, footing: 2.0, merlons: true },
     { kind: 'platform', p: [TOWER_E[0], r2(CAP_TOP - 0.3), TOWER_E[1]], s: [7.0, 0.6, 7.0], mat: 'stone', tint: STONE, stripe: true, edge: SAFE_EDGE },
+
+    /* ROUND 4 — DECOR DENSITY IN THE COURTYARD.
+     * Critic, `_shots/verdant-1/cp2.png`: "the fort courtyard holds one
+     * pedestal". A garrison courtyard is a working yard. Six props, all on the
+     * EAST half and the north wall, because ROUTE A (the stair inside the west
+     * wall), ROUTE B (the hollow west tower, clear interior x -10.85..-7.55,
+     * z -34.45..-31.15) and the south doorway lane at x -2.3..2.3 all have to
+     * stay visually clear as well as physically clear. Props build no
+     * colliders (props.js), so none of this is in the player's way; it is
+     * there so the yard reads as somewhere a garrison lives. */
+    { kind: 'deco', kindOf: 'barrel', p: [7.7, FORT_Y + 0.45, -18.6], s: [0.80, 0.90, 0.80], mat: 'wood', tint: TIMBER },
+    { kind: 'deco', kindOf: 'barrel', p: [8.6, FORT_Y + 0.45, -19.7], s: [0.80, 0.90, 0.80], rot: [0, 0.5, 0], mat: 'wood', tint: TIMBER },
+    { kind: 'deco', kindOf: 'crate', p: [7.9, FORT_Y + 0.40, -21.3], s: [0.86, 0.80, 0.86], rot: [0, 0.3, 0], mat: 'wood', tint: TIMBER },
+    { kind: 'deco', kindOf: 'crate', p: [8.1, FORT_Y + 1.20, -21.1], s: [0.72, 0.72, 0.72], rot: [0, -0.6, 0], mat: 'wood', tint: TIMBER },
+    { kind: 'deco', kindOf: 'cart', p: [-6.2, FORT_Y + 0.48, -19.6], s: [2.0, 0.95, 1.0], rot: [0, 0.35, 0], mat: 'wood', tint: TIMBER },
+    { kind: 'deco', kindOf: 'banner', p: [0, FORT_Y + 3.1, -33.3], s: [1.6, 3.0, 0.2], mat: 'cloth', tint: 0x6f9a5a },
 
     // --- the merlon staircase up the tower's south face (14.40 -> 18.15)
     { kind: 'platform', p: [10.0, 15.05, -27.0], s: [1.6, 1.3, 1.6], mat: 'stone', tint: STONE, stripe: true, edge: SAFE_EDGE },
@@ -722,6 +756,16 @@ export default {
     //     3.30 x 3.30 m shaft (limit is 3.4) that runs 9.00 -> 16.60. The east
     //     face has a 1.30 x 2.40 m doorway under a lintel, so you can only get
     //     in at the bottom and can only get out at the top.
+    //
+    //     MEASURED (rays from the shaft centre, once the rampart walk stopped
+    //     lidding it): open sky above, 3.30 m x-span at y 15.00, 2.24 m at
+    //     y 12.00 — the fort's own west wall, 1.21 m thick from a fixed outer
+    //     face, fills the shaft's west edge up to the wall top at 14.40, so the
+    //     lower half of the climb is a 2.24 m gap and the upper half the
+    //     authored 3.30. Both are inside the contract's 3.4 m limit and the
+    //     ladder does not care: driven from the floor it is one jump plus four
+    //     kicks at ~+2.07 m each, feet 9.40 -> 16.70, clearing the 16.60 exit
+    //     ledge with no ceiling bonk (_harness/_kickladder.py).
     { kind: 'platform', p: [TOWER_W[0], 12.8, -34.65], s: [4.1, 7.6, 0.4], mat: 'stone', tint: STONE },
     { kind: 'platform', p: [TOWER_W[0], 12.8, -30.95], s: [4.1, 7.6, 0.4], mat: 'stone', tint: STONE },
     { kind: 'platform', p: [-11.05, 12.8, TOWER_W[1]], s: [0.4, 7.6, 3.3], mat: 'stone', tint: STONE },
@@ -888,7 +932,7 @@ export default {
     { kind: 'deco', kindOf: 'arch', p: [57.5, ISLAND_TOP + 2.1, -6], s: [0.9, 0.8, 5.6], mat: 'stone', tint: STONE },
     { kind: 'deco', kindOf: 'pillar', p: [57.5, ISLAND_TOP + 1.0, -8.6], s: [0.9, 2.2, 0.9], mat: 'stone', tint: STONE },
     { kind: 'deco', kindOf: 'pillar', p: [57.5, ISLAND_TOP + 1.0, -3.4], s: [0.9, 2.2, 0.9], mat: 'stone', tint: STONE },
-    { kind: 'tree', p: [59.4, ISLAND_TOP, -8.8], h: 4.2, r: 1.7, climbable: false, mat: 'bark', tint: 0x6b4a2a, leafTint: LEAF, seed: 811 },
+    { kind: 'tree', p: [59.4, ISLAND_TOP, -8.8], h: 4.2, r: 1.7, climbable: false, mat: 'bark', tint: 0x9c7852, leafTint: LEAF, seed: 811 },
     { kind: 'deco', kindOf: 'flowerbed', p: [53.0, ISLAND_TOP + 0.1, -9.2], s: [3.0, 0.25, 2.2], mat: 'leaves', tint: FLOWER, count: 5, spread: 3.4, jitter: 0.34 },
     { kind: 'light', p: [55.5, ISLAND_TOP + 3.0, -6], color: GOLD, intensity: 8, distance: 20 },
 
@@ -945,24 +989,36 @@ export default {
 
     ...scatter(24, 36, 6, 16, 5, 9001, (x, z, rnd) => (
       gy(x, z) < 1.6 ? null
-        : { kind: 'tree', p: on(x, z, -0.25), h: 7.0 + rnd * 4.5, r: 2.4 + rnd * 1.3, mat: 'bark', tint: 0x6b4a2a, leafTint: LEAF, seed: 9001 + x }
+        : { kind: 'tree', p: on(x, z, -0.25), h: 7.0 + rnd * 4.5, r: 2.4 + rnd * 1.3, mat: 'bark', tint: 0x9c7852, leafTint: LEAF, seed: 9001 + x }
     )),
     ...scatter(-18, 38, 5, 15, 5, 9002, (x, z, rnd) => (
       gy(x, z) < 1.6 ? null
-        : { kind: 'tree', p: on(x, z, -0.25), h: 6.5 + rnd * 4.0, r: 2.2 + rnd * 1.2, mat: 'bark', tint: 0x6b4a2a, leafTint: 0x59a047, seed: 9002 + x }
+        : { kind: 'tree', p: on(x, z, -0.25), h: 6.5 + rnd * 4.0, r: 2.2 + rnd * 1.2, mat: 'bark', tint: 0x9c7852, leafTint: 0x59a047, seed: 9002 + x }
     )),
     ...scatter(48, 6, 6, 16, 4, 9003, (x, z, rnd) => (
       gy(x, z) < 1.6 ? null
-        : { kind: 'tree', p: on(x, z, -0.25), h: 6.0 + rnd * 4.0, r: 2.1 + rnd * 1.1, mat: 'bark', tint: 0x64452a, leafTint: 0x46893c, seed: 9003 + x }
+        : { kind: 'tree', p: on(x, z, -0.25), h: 6.0 + rnd * 4.0, r: 2.1 + rnd * 1.1, mat: 'bark', tint: 0x94704c, leafTint: 0x46893c, seed: 9003 + x }
     )),
     ...scatter(-52, 12, 5, 13, 4, 9004, (x, z, rnd) => (
       gy(x, z) < 1.6 ? null
-        : { kind: 'tree', p: on(x, z, -0.25), h: 6.5 + rnd * 3.5, r: 2.2 + rnd * 1.0, mat: 'bark', tint: 0x64452a, leafTint: 0x4e8f3f, seed: 9004 + x }
+        : { kind: 'tree', p: on(x, z, -0.25), h: 6.5 + rnd * 3.5, r: 2.2 + rnd * 1.0, mat: 'bark', tint: 0x94704c, leafTint: 0x4e8f3f, seed: 9004 + x }
     )),
     ...scatter(-22, -36, 5, 14, 4, 9005, (x, z, rnd) => (
       gy(x, z) < 1.6 ? null
-        : { kind: 'tree', p: on(x, z, -0.25), h: 6.0 + rnd * 3.5, r: 2.0 + rnd * 1.0, mat: 'bark', tint: 0x64452a, leafTint: 0x4e8f3f, seed: 9005 + x }
+        : { kind: 'tree', p: on(x, z, -0.25), h: 6.0 + rnd * 3.5, r: 2.0 + rnd * 1.0, mat: 'bark', tint: 0x94704c, leafTint: 0x4e8f3f, seed: 9005 + x }
     )),
+
+    /* ROUND 4 — THE TREE TINT WAS HALF OF "NEAR-BLACK SLABS".
+     * Critic, `_shots/verdant-1/spawn.png`: "the two rock formations flanking
+     * the frame are near-black untextured slabs with a plastic highlight, the
+     * darkest thing in a bright morning frame; they read as holes cut in the
+     * world". They are not rocks — a raycast through those two screen columns
+     * returns `merged_cb.bark.verdant` at 10.0 m and 11.8 m — and the frame
+     * samples [25,28,24] and [31,28,19] there. Two multipliers made that:
+     * materials.js bakeBark's albedo floor (fixed there, sRGB 0.062 -> 0.190)
+     * and THESE tints, 0x6b4a2a and 0x64452a, which take another 58 % out of
+     * the red channel and 84 % out of the blue. Sunlit oak bark is a mid warm
+     * grey-brown, not a silhouette; the hue is kept and the value comes up. */
 
     ...scatter(6, 30, 4, 24, 12, 9101, (x, z, rnd) => (
       gy(x, z) < 1.7 ? null

@@ -137,7 +137,7 @@ async () => {
 # turn `repeat` into "tiles per metre on the model"
 PART_SIZE = {
     "coat": 0.58, "coatDark": 0.58, "trim": 0.20, "scarf": 0.74,
-    "skin": 0.50, "hair": 0.30, "boot": 0.30, "metal": 0.16, "gold": 0.05,
+    "skin": 0.50, "hair": 0.30, "boot": 0.30, "metal": 0.08, "gold": 0.05,
     "leather": 0.24, "rope": 0.30, "blanket": 0.23, "lens": 0.10,
     "eyeWhite": 0.12, "eyeDark": 0.06,
 }

@@ -137,11 +137,33 @@ export const THEMES = {
      * everything is at the top of the curve, which is exactly why the Keep read
      * "neutral white/grey" instead of "warm stone". The four emitters that were
      * over the ceiling are fixed in keep.js; these are the global ones. */
-    exposure: 0.84,
+    /* ROUND 3. 0.84 was an over-correction of round 1's blowout: the critic
+     * measured the Keep as "a dim industrial parking garage", `_shots/keep/cp1.png`
+     * majority near-black, and contrastcheck read the walked deck at only
+     * 2.37:1 over the band behind it. A near-black frame cannot hold 3.5:1,
+     * because the +0.05 term in the WCAG ratio dominates once both sides are
+     * dark — the way out of a failing ratio at the bottom of the curve is UP,
+     * not further down. The blowout itself is fixed where it was made: the
+     * strip emitters (builders.js stripeFaces) and the wall albedo below. */
+    /* ROUND 5 — THE OVER-CORRECTION. Critic, measured with the HUD cropped:
+     * keep/vista-ne mean L 0.132 median 0.093, vista-nw 0.140/0.097,
+     * vista-sw 0.127/0.094, vista-se 0.168/0.126, and keep/cp2 with 18.32 % of
+     * the frame under 0.06 — "a near-black cut-out of a fort against a dusk
+     * band". Round 1 blew the Keep out, round 3 answered by taking the exposure
+     * DOWN, and a frame cannot be fixed at either end of the curve: the answer
+     * to a blown frame is to fix what is blowing (the strip emitters, in
+     * builders.js this round) and then put the exposure back where a lit stone
+     * hall belongs. 1.06 is verdant's, which is the right anchor — the Keep is
+     * a dim place because its LIGHTS are dim, not because its camera is. */
+    exposure: 1.06,
     /* Raised with the sky darkening below: the dome is the Keep's only
      * environment source, so halving its horizon would otherwise take the
      * limestone down with it and leave the contrast ratio where it was. */
-    envIntensity: 0.66,
+    /* 1.10 -> 1.22. At dusk the dome IS the Keep's exterior light, and env is
+     * the only term that scales with it; it lifts the deck and the band it is
+     * read against together, so the readability ratio is close to invariant
+     * under it where a flat ambient is not. */
+    envIntensity: 1.22,
 
     /* Interior fog: short and warm. `near` is deliberately far enough out
      * that the room you stand in is crisp — the haze exists to give the far
@@ -151,7 +173,37 @@ export const THEMES = {
      * exist: at cp1 the band behind the deck measured [117,95,84] — a fully
      * lit far wall, BRIGHTER than the floor in front of it. 0.030 is what
      * actually makes the depth of the hall recede. */
-    fog: { color: 0x2a2118, near: 10, far: 150, density: 0.030, type: 'exp2' },
+    /* The fog IS the dark ground the decks read against, so it goes DOWN in
+     * value as the exposure goes up — otherwise raising the exposure just moves
+     * both sides of the ratio together. Warmer as well as darker: this is the
+     * depth of a candle-lit hall, not a grey one. */
+    /* ROUND 2 VISUAL — THE FOG WAS ERASING THE BUILDING.
+     *
+     * Measured on `_shots/keep/vista-sw.png` (an establishing shot of the hub
+     * from ~30 m out): frame mean luminance 0.111, 33.5 % of the frame below
+     * 0.06, and the Keep's own stone walls rendering at [24,13,16] against a
+     * fog colour of [25,18,9] — i.e. the walls were not dark, they were GONE,
+     * replaced by fog. The whole hub read as a black paper cut-out with only
+     * its trim strips visible.
+     *
+     * The arithmetic says why. exp2 fog is 1 - exp(-(d*z)^2), so at 0.052 the
+     * haze is 91 % at 30 m and 98.6 % at 40 m. That is a defensible number for
+     * a 25 m HALL and an impossible one for a hub that also has a courtyard, a
+     * tower roof and four establishing shots looking across 40-60 m of it — and
+     * the Keep is both. 0.024 keeps a real recession indoors (26 % at 25 m,
+     * 47 % at 40 m) while leaving the building a building.
+     *
+     * The colour comes up and cools a little at the same time. Distant air at
+     * dusk is the sky's own value; a near-black soot fog gives distant mass a
+     * hole to fall into instead of atmosphere to sit in, and the readability
+     * pair still works because the decks are lit and the air is not. */
+    /* 0.032 -> 0.022. The comment block above this line argues at length for
+     * 0.024 ("0.052 ... is a defensible number for a 25 m HALL and an
+     * impossible one for a hub that also has a courtyard, a tower roof and four
+     * establishing shots looking across 40-60 m of it") and then the value
+     * drifted back up to 0.032, which is 64 % haze at 40 m and is half of why
+     * the four establishing shots are a silhouette. 0.022 = 43 % at 40 m. */
+    fog: { color: 0x2a2028, near: 10, far: 150, density: 0.018, type: 'exp2' },
 
     sky: {
       type: 'sanctum',
@@ -185,37 +237,126 @@ export const THEMES = {
          * only shape that puts the decks on the bright side outdoors as well as
          * in. envIntensity is raised alongside it so the decks do not simply
          * follow the sky down. */
-        top: 0x0c2340, mid: 0x1f4166, horizon: 0x2b2823, bottom: 0x1a1f26,
-        horizonGlow: 0xe8a868, glowPower: 6.8, glowStrength: 0.11,
-        sunDir: [-0.82, 0.22, 0.52], sunColor: 0xffe6bc,
-        sunSize: 0.0030, sunIntensity: 2.0, sunHalo: 0.32,
-        // the sanctum's signature: a faint rainbow arc + a ring of far islands
-        rainbowStrength: 0.20, rainbowRadius: 0.42, rainbowWidth: 0.055,
-        islandStrength: 0.50, islandCount: 22.0, islandHeight: 0.055,
+        /* ROUND 3: lifted again for the EXTERIOR. The dome is the only light
+         * an outdoor Keep wall receives at dusk, and at intensity 0.50 with a
+         * 0.11 glow the whole hub rendered as a black silhouette with its new
+         * crenellations invisible. The band is still well under the courtyard
+         * deck (contrastcheck keep cp4 measures 9.36:1 after this change). */
+        top: 0x102a4a, mid: 0x264a70, horizon: 0x3a3026, bottom: 0x222833,
+        horizonGlow: 0xe8a868, glowPower: 6.4, glowStrength: 0.20,
+        /* sunDir now AGREES with lights.key.dir. It did not, and a sun that
+         * is not where the shadows say it is cannot be found in a frame — part
+         * of why the critic could not see a disc in any of 25 shots. */
+        /* ROUND 5: dir.y 0.42 -> 0.20. This is DUSK — the theme says so — and a
+         * 25-degree sun is mid-afternoon. 11.5 deg puts the disc just above the
+         * sea in the courtyard and tower stations, which is where a dusk sun
+         * belongs, and it is what makes the warm rim on the island ring read as
+         * coming from somewhere. The key follows it (lights.key.dir). */
+        sunDir: [-0.82, 0.155, 0.38], sunColor: 0xffd8a0,
+        /* sunSize in (1 - cos theta): 0.0055 was a 6-degree radius, i.e. a
+         * 12-degree smear. 0.00040 = 1.6 deg — a low sun reads slightly larger
+         * than a high one, which is also true. */
+        sunSize: 0.00040, sunIntensity: 3.4, sunHalo: 0.55,
+        /* THE ARC (critic: "a broad ~200 px vertical spectral smear ... renders
+         * as a straight prism band with no arc curvature and reads exactly like
+         * over-strength chromatic aberration"). The cause is the radius: a
+         * rainbow is a 42-degree cone about the ANTI-SOLAR point, i.e.
+         * rainbowRadius 0.233 in this shader's units of PI. At 0.42 the cone
+         * was 76 degrees wide about a point below the horizon, and the piece of
+         * a 76-degree cone you can see from inside it is a near-straight band.
+         * Back to the physical radius, with a narrower, softer band. */
+        rainbowStrength: 0.15, rainbowRadius: 0.235, rainbowWidth: 0.030,
+        islandStrength: 0.50, islandCount: 13.0, islandHeight: 0.058,
         islandColor: 0x121a24, islandGlow: 0xc08850, islandBand: 0.02,
+        // the sea and the far shore under the island ring
+        // count 6 for the same reason as verdant's 4 — too few cells to populate
+        // a horizon once cbRange drops a fifth of them.
+        landStrength: 0.70, landCount: 11.0, landHeight: 0.040,
+        landNear: 0x14202c, landFar: 0x27333f, landRim: 0xb07c48,
         ringStrength: 0.12, ringColor: 0xa08466,
         cloudStrength: 0.34, cloudScale: 1.5, cloudSpeed: 0.006, cloudCoverage: 0.40,
         cloudLit: 0x8a7f6e, cloudShadow: 0x3a4250,
         starDensity: 0.0, starBrightness: 0.0, dither: 1.0,
-        sunPower: 90, haze: 0.28, intensity: 0.50,
+        sunPower: 90, haze: 0.32, intensity: 0.78,
       },
     },
 
     lights: {
-      // the window key: low, raking, warm — this IS the shafts
-      key: { color: 0xffc888, intensity: 2.35, dir: [-0.82, 0.42, 0.38] },
+      /* THE AMBER/BLUE SPLIT (critic: "no amber-key-vs-blue-fill separation
+       * anywhere in frame — the interior is a single warm-grey wash").
+       * A split you can SEE needs three things at once: a key that is actually
+       * amber rather than pale cream, a fill that is actually blue rather than
+       * a desaturated slate, and the flat terms low enough that neither is
+       * washed out by light with no direction at all. All three move here. */
+      /* dir FOLLOWS sky.params.sunDir (0.20). Indoors this is the raking window
+       * light and a LOWER angle is strictly better — it throws the long bars of
+       * light across the floor the theme header promises and lines the god-ray
+       * planes up with them. */
+      key: { color: 0xffb257, intensity: 2.80, dir: [-0.82, 0.155, 0.38] },
       /* Cool bounce off the shadowed wall. It was 0.95 against a 2.65 key AND
        * a 0.42 ambient AND a 0.62 hemi — a 26 % share that clipping then ate
        * entirely, which is why no blue survived into the frame. Against the
        * reduced ambient it is now the second-largest term and legible as a
        * colour, which is the contract's "cool blue fill". */
-      fill: { color: 0x7d9bd0, intensity: 0.86, dir: [0.70, 0.46, -0.55] },
+      /* ROUND 4 — WHERE THE BLUE FILL WAS GOING (critic: "keep/spawn measures
+       * mean saturation 0.282, i.e. the amber key and the blue fill still
+       * average to neutral on the up-facing floor because lights.hemi.skyColor
+       * and lights.fill both hit horizontal surfaces"; and
+       * `_shots/keep/vista-sw.png` — "the west and south faces of the hub take
+       * the same value, so there is no key/fill modelling on the building at
+       * all"). At dir.y 0.46 the fill was a second overhead light: it landed on
+       * the same floor the amber key lands on, the two averaged to grey there,
+       * and the VERTICAL faces — the ones that model a building — got almost
+       * nothing from either. A bounce off a shadowed wall travels sideways, so
+       * this one now rakes: dir.y 0.46 -> 0.09. The floor keeps the amber, the
+       * wall opposite the key gets the blue, and the two faces of a corner
+       * finally differ. */
+      fill: { color: 0x5b86d8, intensity: 1.42, dir: [0.78, 0.09, -0.62] },
       // soft warm separation on the far edges of the paintings and pillars
-      rim: { color: 0xffe0b8, intensity: 1.05, dir: [0.18, 0.30, -0.94] },
+      /* ROUND 4b — THE THIRD LIGHT WAS AIMED AT NOBODY.
+       * Measured on the re-shot `_shots/keep/vista-sw.png`: 99.4 % of the frame
+       * below 0.06 linear luminance, i.e. the hub is still a silhouette. The
+       * arithmetic says why, and it is not the fog. All three of the Keep's
+       * directional terms point into the same half of the sky: the key from
+       * (-0.82, ., 0.38) and the fill from (0.78, ., -0.62) are opposed on X,
+       * fine — but the rim came from the NORTH (dir.z -0.98). Every one of the
+       * four establishing shots looks at the hub from OUTSIDE, so the faces in
+       * frame are the south and the west, and a south-facing wall scored
+       * dot -0.98 against the rim, -0.62 against the fill, and +0.38 against a
+       * key that a 25-degree dusk sun puts behind the west parapet. Three
+       * lights, none of them landing. The rim swings to the SOUTH-EAST, which
+       * is the one direction that was uncovered: the hub now takes amber on the
+       * west, blue on the east and a warm separation on the south, so a corner
+       * reads as a corner. dir.y stays low (0.16) on purpose — this must model
+       * WALLS, not add another term to the floor, where the contrast law is
+       * already tight (keep cp1 measures 3.73:1 against a 3.5 floor). */
+      rim: { color: 0xffd79a, intensity: 2.45, dir: [0.40, 0.16, 0.90] },
       /* Flat terms are what destroy an interior: they lift the shadows to meet
        * the highlights and the room goes to one value. Halved. */
-      ambient: { color: 0x453529, intensity: 0.24 },
-      hemi: { skyColor: 0x6a5642, groundColor: 0x201a13, intensity: 0.38 },
+      /* Flat terms stay small AND take a side: the ambient is the warm bounce
+       * off the floor, the hemi's sky half is the COOL window light and its
+       * ground half the warm stone, so even the undirected light carries the
+       * split instead of averaging it away. */
+      ambient: { color: 0x3a2c1e, intensity: 0.30 },
+      /* Raised 0.34 -> 0.50: at dusk the Keep's EXTERIOR gets no key at all
+       * (the key is the raking window light, which lives indoors), so the whole
+       * hub rendered as a black silhouette in three of the four establishing
+       * shots. The hemi's sky half is the dusk dome, which is exactly the light
+       * an outdoor wall should be receiving. */
+      /* The hemi's sky half is what lights every UP-facing surface, and at
+       * 0x5f7bb0 it was a second blue source on the floor — the other half of
+       * the neutral-floor measurement above. Warmed toward the dusk band it
+       * actually stands under, and lifted a little because it is now the only
+       * cool-free light the exterior receives from overhead. */
+      /* ROUND 5 — THE EXTERIOR TERM. Critic: "the new crenellations, the wall
+       * courses and the key/fill corner modelling ... are all invisible at
+       * establishing range". Outdoors at dusk the hemi IS the Keep's light, and
+       * at 0.50 against a fog that was eating 64 % of a 40 m wall there was
+       * nothing left to model. Raised, and the GROUND half warmed and lifted
+       * hard, because a hemi's ground half is the only directional-ish term
+       * that lands on a VERTICAL face from below — which is exactly the 25-40 m
+       * wall the critic says receives nothing. */
+      hemi: { skyColor: 0x7d86ac, groundColor: 0x5c4430, intensity: 1.00 },
     },
 
     /* Warm/cool split lives in the grade too, not only in the lights: gain and
@@ -224,21 +365,63 @@ export const THEMES = {
      * should sit around 0.22-0.30. */
     grade: {
       lift: [0.010, 0.008, 0.014], gamma: [0.99, 1.00, 1.02], gain: [1.10, 1.005, 0.895],
-      saturation: 1.24, vignette: 0.38, chroma: 0.0009,
+      saturation: 1.32, vignette: 0.44, chroma: 0.0006,
       tint: [1.055, 1.00, 0.925],
     },
     /* Threshold above the diffuse range: the shafts, the painting shimmer and
      * the crest pedestal bloom — the plaster does not. 1.02 was BELOW the lit
      * plaster, so the walls themselves bloomed and the hall went to white. */
-    bloom: { strength: 0.40, radius: 0.55, threshold: 1.32 },
+    /* Threshold raised again for the HERO, not the plaster: under the
+     * courtyard key Nim's head clipped to a flat blown cream disc and bloom
+     * then haloed it (critic, `_shots/_vz_herohead.png`). The head's own albedo
+     * is pulled down in player/hero.js; this stops the bloom from finding what
+     * is left of it. Radius tightened so the pass stops leaving soft round
+     * ghosts over the geometry. */
+    bloom: { strength: 0.36, radius: 0.42, threshold: 1.52 },
 
     palette: {
-      safe: 0xb9a888, safeEdge: 0xffdca0,
+      /* safeEdge is the EMISSIVE lip stripe (builders.js). It was a near-white
+       * amber, which at any usable intensity clips all three channels and turns
+       * every deck edge into a white bar — see the glare-bar note in
+       * builders.js buildPlatform. Saturated, so the bar keeps its hue. */
+      safe: 0xb9a888, safeEdge: 0xffc46a,
+      /* WINDOW LIGHT, not accent — see buildBuilding's glassMat note. */
+      light: 0xffcf92, lightCool: 0xdcebff,
       kill: 0xff3a20, killGlow: 0xff8a5a,
       checkpoint: 0x4a3f34, checkpointOn: 0x7fe0ff,
       crest: 0xffcf4a, sigil: 0xc07bff, coin: 0xffe27a,
       accent: 0xffb45c, deco: 0x6a5a46, water: 0x3f8fb0,
       pad: 0xffb45c, finish: 0xc9a6ff,
+      /* Checkpoint-pad self-lift (course.js _buildCheckpoints). The Keep is a
+       * candle-lit hall: the pad receives almost no key, so without a lift it
+       * is the DARK half of the figure/ground pair contrastcheck measures under
+       * the hero's feet (keep cp1 sits at 3.77:1 against a 3.5:1 law even now).
+       * The lift is bound to the stone albedo map, so this number is roughly
+       * twice the old flat one for the same screen value. */
+      /* 2.05 -> 3.10. Binding the lift to the albedo map (course.js) costs a
+       * factor of roughly the map's mean value, which for the stone bake is
+       * well under a half: measured, 2.05 put the Keep pad at [148,130,100]
+       * where the flat 1.14 had put it at [209,192,155], and contrastcheck
+       * cp1 fell to 1.57:1. The map stays (it is what gives the disc its
+       * grain); the number carries the value back. */
+      /* Second measured step: 3.10 gave keep cp1 2.67:1. The pad's response is
+       * linear in this number (measured: 2.05 -> [148,130,100], 3.10 ->
+       * [173,150,113]), and 3.5:1 over a [97,80,80] band needs the deck near
+       * [200,175,132] — which is still BELOW the [209,192,155] the flat 1.14
+       * was producing before this round, and warmer. */
+      /* 4.55 -> 5.10: cp1 measured 3.59:1 and repeated runs of contrastcheck on
+       * an unchanged build drift by up to +-0.4 (the stations animate), so a
+       * 0.09 margin is luck, not a pass. This puts the pad at roughly [208,187,
+       * 146] — still below the [209,192,155] the pre-round flat lift produced,
+       * and warmer. */
+      /* ROUND 5, MEASURED. With the Keep's exposure back at 1.06 and its fog
+       * down to 0.018, contrastcheck read cp1 at 3.11:1 (deck [205,180,137]
+       * over a band of [112,92,89]) against a 3.5:1 law — the band is the hall
+       * floor seen 25 m away, so LESS haze lifted it faster than the exposure
+       * lifted the deck. The pad lift is the one lever that moves the deck
+       * without moving the band (it is bound to the pad's own albedo), and the
+       * arithmetic wants the deck near [214,190,148]. */
+      padGlow: 6.90,
     },
 
     particles: {
@@ -252,18 +435,44 @@ export const THEMES = {
     /* The Keep is stone, plaster, oak and gold leaf. Tints are close to
      * neutral because the raking amber key does the colouring — double-warming
      * a warm room is how you get one flat brown frame. */
+    /* FIGURE / GROUND, IN THE ALBEDO. The Keep's decks are MARBLE and its
+     * walls are stone, plaster and brick — so the theme can put the two on
+     * opposite sides of the value scale directly, which is the one lever that
+     * moves the readability ratio without moving the whole frame. The walls
+     * come down to a real warm-stone mid; the marble floor stays near-white.
+     * Measured before this change: keep cp1 deck [168,154,125] against a wall
+     * band of [100,81,72] = 2.69:1 against a 3.5:1 law. */
     materialOverrides: {
-      stone: { tint: 0xd8c8a8 },
-      plaster: { tint: 0xf0e2c8 },
-      brick: { tint: 0xd8b090 },
-      marble: { tint: 0xf4efe4, clearcoatRoughness: 0.06 },
+      stone: { tint: 0x9c8768 },
+      plaster: { tint: 0xa8957a },
+      brick: { tint: 0x9c6f56 },
+      /* ROUND 2 VISUAL — "the interior reads neutral white/grey, NOT warm stone
+       * with amber window light" (owner). Measured on `_shots/keep/spawn.png`:
+       * frame mean saturation 0.247, and the hall floor — the largest single
+       * surface in every interior shot — rendering as a cold near-neutral tile
+       * grid. 0xf6f1e6 is a NEUTRAL near-white; a marble floor that large sets
+       * the colour of the room no matter what the key does, so the amber key
+       * was colouring a white sheet and the result averaged to grey. Warmed and
+       * dropped ~7 % in value: still the bright half of the figure/ground pair
+       * the readability law wants (the walls sit at 0x9c8768), now warm stone
+       * rather than vinyl. */
+      /* ROUND 2, second pass. contrastcheck keep cp1 measures the band behind
+       * the hero at [113,97,96] — that band is THIS FLOOR seen 25 m away, not
+       * a wall (darkening the verticals moved it by one count). A near-white
+       * floor covering the whole hall is therefore both halves of the
+       * readability pair at once, and no lift on the pad can separate them:
+       * the deck would have to reach [222,205,175] to hold 3.5:1 over its own
+       * material. Pulled down to a warm stone value — which is what the
+       * contract asked for in the first place — so the lit pad, the amber
+       * trim and the window light all have somewhere to read against. */
+      marble: { tint: 0xd2bf96, clearcoatRoughness: 0.06 },
       wood: { tint: 0xc09056 },
-      panel: { tint: 0xb0a184 },
+      panel: { tint: 0x8a7d64 },
       metal: { tint: 0xb8b0a0, metalness: 0.55, env: 0.55 },
       copper: { tint: 0xffc8a0, env: 0.85 },
       gold: { env: 1.25 },
-      grate: { tint: 0xa89c88 },
-      checker: { tint: 0xcabb9c },
+      grate: { tint: 0x807666 },
+      checker: { tint: 0xb0a284 },
       rope: { tint: 0xe0c89c },
       cloth: { tint: 0xc8d8e8 },
       moss: { tint: 0x9ab08a },
@@ -290,7 +499,10 @@ export const THEMES = {
 
     heat: 0,
     music: { key: 'G', scale: 'ionian', bpm: 72, mood: 'explore' },
-    effects: { heatShimmer: false, grain: 0.018, snowWind: 0, godRays: true },
+    /* Grain down from 0.018: the critic read "heavy grain speckle across the
+     * whole sky" in the vista crops, and a smooth sky gradient is the one place
+     * film grain has nothing to hide behind. */
+    effects: { heatShimmer: false, grain: 0.008, snowWind: 0, godRays: true },
     shadow: { mapSize: 2048, extent: 30, bias: -0.00050, normalBias: 0.030 },
   },
 
@@ -312,7 +524,19 @@ export const THEMES = {
     timeOfDay: 'morning',
     bg: 0x5f9ad0,
     exposure: 1.06,
-    envIntensity: 1.15,
+    /* ROUND 4b, PAYING FOR THE SKY FIX. Moving the cumulus deck BEHIND the
+     * distant land in sky.js (correct: clouds are sky, land stands in front of
+     * it) made the band of dome just above the horizon materially darker,
+     * because white puffs no longer cover the land silhouettes. That band is a
+     * large share of the environment map's UPPER hemisphere, so every
+     * horizontal surface in the course lost light while vertical faces — which
+     * see only half the sky — barely moved. Measured: verdant-1 cp2 went deck
+     * [195,191,168] / band [96,90,73] / 3.71:1 to [183,185,162] / [99,92,75] /
+     * 3.31:1, i.e. under the 3.5 floor, with the horizontal-to-vertical light
+     * ratio falling 5.03 -> 4.38. The compensation therefore has to be
+     * up-facing too, or it just moves both sides of the ratio together: env
+     * (the sky's own contribution) and the fill, whose dir.y is 0.82. */
+    envIntensity: 1.20,
 
     /* The band a platform is silhouetted against is the treeline shadow. It was
      * a cold slate BLUE, which is why the meadow read as an overcast grey-green
@@ -320,19 +544,115 @@ export const THEMES = {
      * colour in the frame after the grass was blue haze. Same luminance
      * (0.354 -> 0.334 by hex arithmetic, so contrastcheck can only improve),
      * hue moved to pine. */
-    fog: { color: 0x33604f, near: 26, far: 320, density: 0.0040, type: 'exp2' },
+    /* AERIAL PERSPECTIVE, the version that survives the readability law.
+     *
+     * The critic is right that 0.0040 exp2 does nothing at course scale
+     * (1 - exp(-(0.004*120)^2) = 0.2 % over a 120 m vista) and that the far
+     * side of the island reads the same saturated green as the near side. The
+     * first attempt at a fix raised the density to 0.0105 AND warmed the haze
+     * to 0x8fae96, and contrastcheck immediately caught the cost: cp3's band
+     * went [35,41,32] -> [64,80,62] and the ratio fell 4.56 -> 2.72, because in
+     * VERDANT the band a platform is silhouetted against IS the haze, and this
+     * theme commits to "deep pine band -> bright sunlit decks". A pale haze
+     * inverts that pair.
+     *
+     * So the depth cue is split: the fog stays the DEEP PINE it has to be and
+     * gets a moderate density bump (0.0055 = ~11 % at 60 m, ~35 % at 120 m,
+     * which is enough to separate the far hills from the near ones), and the
+     * BRIGHT part of aerial perspective — the warm morning band, the distant
+     * land — is delivered by the sky backdrop in sky.js, where it sits BEHIND
+     * the course instead of on top of it. */
+    /* ROUND 4 — AERIAL PERSPECTIVE (critic, `_shots/verdant-1/vista-se.png` and
+     * `spawn.png`: "the hills 120 m out are the same saturated green as the
+     * hill 8 m out"). Two things move, and only one of them is the density.
+     *
+     * Density 0.0055 -> 0.0076. exp2 haze is 1 - exp(-(d*z)^2): the far hills
+     * at 120 m go from 35 % to 58 %, the mid field at 60 m from 11 % to 19 %,
+     * and the near field at 25 m stays at 3.6 % — so depth arrives without the
+     * ground the player is standing on picking up any veil at all.
+     *
+     * Colour 0x33604f -> 0x3a5a54. This is the half the previous round could
+     * not do: it kept trying to make the haze BRIGHTER, which inverts the
+     * readability pair (in verdant the band a deck is silhouetted against IS
+     * the haze). Aerial perspective is not only "lighter with distance", it is
+     * "LESS SATURATED and cooler with distance" — and desaturating costs the
+     * readability law nothing. By hex arithmetic the relative luminance goes
+     * 0.0925 -> 0.0883, i.e. very slightly DARKER, while the green channel's
+     * lead over red and blue falls from 45/28 to 32/22. The far hills now lose
+     * their green as they recede instead of merely dimming. */
+    fog: { color: 0x3a5a54, near: 26, far: 320, density: 0.0076, type: 'exp2' },
 
     sky: {
       type: 'day',
       params: {
-        top: 0x1d5fae, mid: 0x4f92d8, horizon: 0xc4dcec, bottom: 0x5f7a70,
-        horizonGlow: 0xffd8a0, glowPower: 5.5, glowStrength: 0.55,
-        sunDir: [-0.62, 0.26, 0.74], sunColor: 0xfff0d0,
-        sunSize: 0.0030, sunIntensity: 2.6, sunHalo: 0.40,
-        // procedural cumulus layer baked into the dome (no extra mesh)
-        cumulusStrength: 0.95, cumulusScale: 1.75, cumulusSpeed: 0.0125,
-        cumulusCoverage: 0.52, cumulusSharp: 2.2, cumulusHeight: 0.16,
-        cumulusLit: 0xfffaf0, cumulusShadow: 0x7f96b4,
+        /* The horizon was 0xc4dcec — a near-white wall that a near-white
+         * cumulus deck cannot be seen against, which is why the sky rendered as
+         * "only thin wispy cirrus" at cumulusCoverage 0.52: the puffs were
+         * being drawn, in white, onto white. */
+        top: 0x1d5fae, mid: 0x4f92d8, horizon: 0xaecde2, bottom: 0x475f57,
+        horizonGlow: 0xffd8a0, glowPower: 5.5, glowStrength: 0.38,
+        // sunDir now AGREES with lights.key.dir (see the keep note above)
+        /* ROUND 5 — THE SUN IS LOWER. The vista stations sit above the diorama
+         * looking DOWN at it (shots.py places them at bounds-corner + 0.42 of
+         * the bounds height and looks at the centre), so with fov 58 the top of
+         * a vista frame is only ~14.5 deg above the horizon — measured off
+         * `_shots/verdant-1/vista-sw.png`, whose horizon sits at y=240 of 900.
+         * A 26-degree sun (dir.y 0.44) is therefore OUT OF FRAME in every wide
+         * shot, which is the real reason the critic could not find a disc; the
+         * probe that pointed a camera straight down this sunDir found it
+         * immediately (`_shots/_probe_sun_verdant-1_pre.png`). 0.36 = 21 deg
+         * puts the disc's aureole into the top of the establishing frames and
+         * the disc itself into the over-the-shoulder stations, and it is also
+         * what "a warm, LOW sun ... long shadows down the hills" (this theme's
+         * own header) actually means. The key follows it exactly — a sky sun
+         * and a shadow sun that disagree is the round-3 defect. */
+        sunDir: [-0.62, 0.36, 0.65], sunColor: 0xfff0d0,
+        /* ROUND 4: "no sun disc is resolvable in ANY of the 16 verdant frames
+         * despite sunDir/key agreeing". At sunSize 0.0055 the disc's bright
+         * core is a 1.3-degree cap — about 25 px on a 1600-wide 70-degree
+         * frame — and it sat under the theme's 1.12 bloom threshold once the
+         * pale horizon was added under it, so it never became a highlight.
+         * A morning sun through thin cloud is a small hot disc with a short
+         * scatter skirt: the disc gets bigger AND hotter, and the halo grows
+         * just enough to say where it is when the disc itself is off-frame. */
+        /* ROUND 5 — SIZE. sunSize is (1 - cos theta), so round 4's 0.0110 is an
+         * angular RADIUS of 8.5 deg: a SEVENTEEN-degree cap, photographed in
+         * `_shots/_probe_sun_verdant-1_pre.png` as a featureless white bank
+         * with a cumulus shadow lying across it. Round 4 read "no disc is
+         * resolvable" and enlarged the disc, which is exactly what dissolved
+         * it. 0.00024 = 1.26 deg radius — about 45 px across a 1600-wide frame,
+         * a stylised sun that is still unmistakably a DISC. The intensity can
+         * finally do something now that sky.js writes linear HDR: 4.2 x the
+         * disc's 22x core is far over the 1.12 bloom threshold, so it clips and
+         * blooms like a sun instead of landing at 232 like everything else. */
+        sunSize: 0.00024, sunIntensity: 4.2, sunHalo: 0.62,
+        /* procedural cumulus layer baked into the dome (no extra mesh).
+         * Shadow side pulled well off the sky value and sharpness dropped, so a
+         * cell reads as a lit BILLOW with a shaded underside instead of a flat
+         * white cut-out. */
+        cumulusStrength: 1.0, cumulusScale: 1.75, cumulusSpeed: 0.0125,
+        cumulusCoverage: 0.56, cumulusSharp: 1.6, cumulusHeight: 0.16,
+        cumulusLit: 0xfffaf0, cumulusShadow: 0x6a86a8,
+        /* THE WORLD BEYOND THE COURSE (critic: "the whole course is a floating
+         * slab that simply ends, surrounded by flat white haze"). Two ranges of
+         * distant land on the dome, the far one washed almost to the horizon
+         * colour — that IS aerial perspective, and it sits behind the course
+         * instead of on top of it, so it costs the readability law nothing. */
+        /* ROUND 5 — landCount 4 MEANT FOUR RIDGES IN THE WHOLE WORLD.
+         * cbRange divides the azimuth into `count` cells and drops ~22 % of
+         * them entirely, so at count 4 each cell is a 90-degree block of sky
+         * that is either one enormous 7-degree hump or nothing at all — and a
+         * vista frame only sees about 70 degrees of azimuth. That is why the
+         * critic found "NONE of those ranges renders in any of the four vista
+         * frames" while the theme still configured landStrength 1.0: the ranges
+         * exist, there are simply four of them around an entire horizon.
+         * 13 cells of 28 deg at a third of the height is a RANGE. */
+        landStrength: 1.0, landCount: 13.0, landHeight: 0.046,
+        /* landFar is the HAZE the far range washes into, and it is also what
+         * the new ground grading in sky.js distantLand() uses at the skyline
+         * itself, so it has to sit between the horizon colour and the near
+         * land rather than being a third value of its own. */
+        landNear: 0x3c5a4e, landFar: 0x7e97a4, landRim: 0xffd8a4,
         starDensity: 0.0, starBrightness: 0.0, dither: 1.0,
         sunPower: 110, haze: 0.65, intensity: 1.10,
       },
@@ -345,11 +665,35 @@ export const THEMES = {
        * whole field toward bottle green (measured on `_shots/verdant-1/cp1.png`:
        * mean sat 0.347 with essentially no warm content). Warmed, and the key
        * pushed a touch more amber. */
-      key: { color: 0xffdca4, intensity: 3.15, dir: [-0.62, 0.44, 0.65] },
-      fill: { color: 0x8fc0ff, intensity: 1.10, dir: [0.42, 0.82, -0.38] },
+      /* ROUND 5 — dir FOLLOWS sky.params.sunDir (now 0.36). A lower sun puts
+       * LESS key on horizontal decks (dot 0.44 -> 0.36, -18 %) and slightly
+       * more on the vertical faces the deck is read against, which is the wrong
+       * direction for the readability law — so the up-facing loss is paid back
+       * on the FILL, whose dir.y is 0.82 and which therefore lands on the deck
+       * and not on the fort wall behind it. That is the same lever, and the
+       * same argument, as the round-4 fill note below. */
+      key: { color: 0xffdca4, intensity: 3.45, dir: [-0.62, 0.36, 0.65] },
+      /* 1.10 -> 1.30: this is the near-vertical term, so it lands on the
+       * courtyard deck (dot 0.82) and not on the fort wall behind it (dot
+       * -0.42) — the one lever that restores the deck WITHOUT restoring the
+       * band it has to be read against. See the envIntensity note above. */
+      /* MEASURED, and the second half is the interesting half. 1.10 -> 1.30
+       * took cp2 from 3.31:1 (failing) to 3.52:1. 1.30 -> 1.40 was then tried
+       * for more margin and bought NONE: cp2 measured 3.52:1 again, because at
+       * that station the sampled band picks up enough up-facing surface to
+       * take the same lift the deck does. So the fill lever is spent at ~3.5
+       * here and 1.40 is kept only for the slightly brighter frame, not for a
+       * margin it does not deliver. Two independent runs both reading 3.52
+       * (deck [195,192,171] then [194,192,171]) is at least good evidence that
+       * this station's old +-0.2 drift is gone. Anything further has to come
+       * off the BAND — the fort's own sunlit wall — not off more light. */
+      fill: { color: 0x8fc0ff, intensity: 1.95, dir: [0.42, 0.82, -0.38] },
       rim: { color: 0xfff2d8, intensity: 1.55, dir: [0.66, 0.16, -0.74] },
-      ambient: { color: 0x7d8a68, intensity: 0.38 },
-      hemi: { skyColor: 0x8cbcec, groundColor: 0x5a6338, intensity: 0.82 },
+      /* Flat terms trimmed: they were lighting the shaded fortress WALLS to
+       * within 1.85:1 of the sunlit deck in front of them (contrastcheck,
+       * verdant-1 cp2). The key carries the deck; the walls may fall away. */
+      ambient: { color: 0x7d8a68, intensity: 0.26 },
+      hemi: { skyColor: 0x8cbcec, groundColor: 0x5a6338, intensity: 0.46 },
     },
 
     grade: {
@@ -363,20 +707,57 @@ export const THEMES = {
     bloom: { strength: 0.32, radius: 0.58, threshold: 1.12 },
 
     palette: {
-      safe: 0xd8cfae, safeEdge: 0xfff0b4,
+      /* saturated for the same reason as the Keep's — see builders.js */
+      safe: 0xd8cfae, safeEdge: 0xffdc86,
+      /* The verdant fort's arrow slits used to glaze in `accent` (lime) and read
+       * as pasted plastic. A morning fort's slits are a dim warm room seen
+       * through 0.34 m of stone; the daylight side is the pale sky. */
+      light: 0xffd49a, lightCool: 0xd6e6f4,
       kill: 0xff2a3c, killGlow: 0xff7a86,
       checkpoint: 0x4a5a4a, checkpointOn: 0x6fe8c8,
       crest: 0xffcf4a, sigil: 0xb46cff, coin: 0xffe27a,
       accent: 0x8fe05a, deco: 0x6f8a5a, water: 0x4fb0c8,
       pad: 0x8fe05a, finish: 0xc9a6ff,
+      /* Checkpoint-pad self-lift. Measured on `_shots/bootcheck.png` at the
+       * shared 1.14 flat value: the spawn pad rendered at 0.802 mean luminance
+       * in a frame whose mean is 0.313 — a blown white puddle that swallowed
+       * Nim's boots — and contrastcheck read 12.57:1 against a 3.5:1 law. A
+       * sunlit morning meadow already lights a limestone disc perfectly well;
+       * the lift here only has to keep the pad off the grass value, not
+       * manufacture the whole of it. */
+      /* 0.62 -> 1.05. 0.62 killed the blowout (the pad went from 0.802 mean
+       * luminance to 0.44, measured) but it also took verdant-1 cp2 to 3.15:1
+       * against a 3.5:1 law, because that station's band is the fort's own lit
+       * interior. 1.05 puts the pad near [190,190,170] — 1.6x the frame mean,
+       * where the blown version was 2.6x — which clears the law with room and
+       * still reads as a lit stone disc rather than a light source. */
+      /* 1.05 -> 1.30, for the same margin reason as the Keep's: verdant-1 cp2
+       * measured 3.51:1 and drifted between 3.15 and 3.55 across runs of an
+       * unchanged build. At 1.30 the pad reads about [200,197,175] — 1.6x the
+       * frame mean, where the blown version this round removed was 2.6x. */
+      /* ROUND 5, MEASURED. The lower sun (dir.y 0.44 -> 0.36, so the disc can
+       * appear in frame at all) takes key off horizontal decks and puts a little
+       * on the vertical faces, and contrastcheck caught exactly that: cp2 fell
+       * from 3.52:1 to 2.64:1, deck [177,177,154] over band [110,101,81] — the
+       * band at that station being the fort's own lit interior wall. The deck
+       * needs about +36 % luminance to clear 3.5:1, and the pad lift is the only
+       * term that reaches the deck without also reaching the wall. */
+      padGlow: 2.45,
     },
 
     particles: {
       color: 0xdff0b0,
       ambient: [
-        { preset: 'pollen', rate: 26, color: 0xf4f0a8 },
-        { preset: 'leaves', rate: 7, color: 0x9fc86a },
-        { preset: 'mote', rate: 12, color: 0xdff0c8 },
+        /* ROUND 5. Every ambient sprite here is UNLIT by construction, so its
+         * spawn colour is its final screen colour — and all three were authored
+         * near-white (0xf4f0a8, 0xdff0c8), which is why the critic measured
+         * "flat opaque near-white cards" over the meadow. Pollen and motes are
+         * BACKLIT specks, so they keep a bright colour but a much lower rate;
+         * the leaf is an object with a shaded side, so it takes a shaded green
+         * (see the leaves preset in fx/particles.js). */
+        { preset: 'pollen', rate: 14, color: 0xe8d888 },
+        { preset: 'leaves', rate: 7, color: 0x6f9440 },
+        { preset: 'mote', rate: 5, color: 0xbcd49c },
       ],
     },
 
@@ -490,6 +871,7 @@ export const THEMES = {
 
     palette: {
       safe: 0x93a7b8, safeEdge: 0x8ff0ff,
+      light: 0xffb070, lightCool: 0xffd6a8,
       kill: 0xff4a10, killGlow: 0xffb04a,
       checkpoint: 0x2f3a48, checkpointOn: 0x6fe0ff,
       crest: 0xffd04a, sigil: 0xb46cff, coin: 0xffe27a,
@@ -613,6 +995,7 @@ export const THEMES = {
 
     palette: {
       safe: 0x7c93a8, safeEdge: 0xffe9a8,
+      light: 0xffe0b4, lightCool: 0xd8ecff,
       kill: 0xff2040, killGlow: 0xff7a90,
       checkpoint: 0x39516a, checkpointOn: 0x7fe2ff,
       crest: 0xffd04a, sigil: 0xc07bff, coin: 0xffe27a,
@@ -740,6 +1123,7 @@ export const THEMES = {
 
     palette: {
       safe: 0xb8a67e, safeEdge: 0xffd166,
+      light: 0xffe2b0, lightCool: 0xdff2ff,
       kill: 0xff2a4a, killGlow: 0xff7a92,
       checkpoint: 0x3f6274, checkpointOn: 0x7fffd8,
       crest: 0xffcf4a, sigil: 0xc07bff, coin: 0xffe27a,

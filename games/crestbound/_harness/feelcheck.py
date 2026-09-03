@@ -33,6 +33,8 @@ truth. If the tuning changes, the gate moves with it.
                      the ledge (fall clock, not wall clock)
   buffer             jump 0.08 s BEFORE landing            jumps on landing
   land_keep_ratio    speed after landing / before          >= 0.90
+  idle_while_moving  `idle` pose while still moving         NO frame above speedWalk
+  air_keep_frac      min airborne speed / launch speed      >= 0.40 (full stick reversal)
   swim_speed         stick forward in water                TUNE.swim.speed +/- 0.3
 
 The test ground is a synthetic 140 x 140 m slab at y = 400, far above the course,
@@ -493,6 +495,74 @@ async () => {
     allUp(); await wait(250);
   }
 
+  /* ---- the brake POSE covers the brake ------------------------------------
+     CONTRACT §11 ANALOG. The hero may not stand in `idle` while still moving
+     faster than he can walk. Before the fix `skid` needed `_wmag === 0` AND
+     speed > 4.0, and a real KeyW release satisfies neither until the brake is
+     nearly over: MEASURED, `skid` lasted EXACTLY ONE FRAME (0.017 s) and the
+     hero then played `idle` at 3.648, 2.576 and 1.504 m/s — 3.648 m/s being
+     faster than `speedWalk` 3.200. This samples the whole brake and fails on
+     any frame that is `idle` above walking pace. */
+  if (await need('idle_while_moving', -45, 0)) {
+    await runUp(1, 0, 950);
+    syncP();
+    const before = spd();
+    if (!P.grounded || before < TUNE.speedRun * 0.8) {
+      failWith('idle_while_moving', 'not at full run on the ground (' + before.toFixed(2) + ' m/s)');
+    } else {
+      allUp();                                   // the player's own release
+      let bad = 0, worstSpd = 0, skidMin = Infinity, sawSkid = false;
+      const t0 = simNow(), w0 = performance.now();
+      while (simNow() - t0 < 1200) {
+        if (performance.now() - w0 > 20000) break;
+        await frame(); syncP();
+        const sNow = spd();
+        if (P.state === 'skid') { sawSkid = true; if (sNow < skidMin) skidMin = sNow; }
+        if (P.state === 'idle' && sNow > TUNE.speedWalk) {
+          bad++; if (sNow > worstSpd) worstSpd = sNow;
+        }
+        if (sNow < 0.25) break;
+      }
+      record('idle_while_moving', bad > 0 ? 1 : 0,
+             bad > 0
+               ? bad + ' frame(s) idle at up to ' + worstSpd.toFixed(3) + ' m/s (walk ' + TUNE.speedWalk + ')'
+               : 'skid held to ' + (sawSkid ? skidMin.toFixed(3) + ' m/s' : 'NO SKID STATE SEEN')
+                 + ', from ' + before.toFixed(2) + ' m/s');
+      if (!sawSkid) failWith('idle_while_moving', 'the brake never entered `skid` at all');
+    }
+    allUp(); await wait(250);
+  }
+
+  /* ---- a launch is a commitment -------------------------------------------
+     CONTRACT §11 momentum. Jump at a full run, then fully reverse the stick in
+     the air: the fraction of the launch speed the hero still carries at his
+     slowest airborne frame. Before the air-speed FLOOR (controller.js
+     AIR_KEEP_FRAC) a full reversal ran 8.991 -> 0.348 m/s in 0.367 s of a
+     0.633 s airtime — ratio 0.039, i.e. no launch was ever a commitment. */
+  if (await need('air_keep_frac', -45, 0)) {
+    const launch = await runUp(1, 0, 950);
+    if (launch < TUNE.speedRun * 0.8) {
+      failWith('air_keep_frac', 'only reached ' + launch.toFixed(2) + ' m/s before the jump');
+    } else {
+      down(JUMP);
+      await frame(); await frame(); await frame();
+      up(JUMP);
+      stickWorld(-1, 0, 1);                      // full reversal, held
+      let minAir = Infinity, airFrames = 0;
+      const t0 = simNow(), w0 = performance.now();
+      while (simNow() - t0 < 2500) {
+        if (performance.now() - w0 > 30000) break;
+        await frame(); syncP();
+        if (!P.grounded) { airFrames++; const sNow = spd(); if (sNow < minAir) minAir = sNow; }
+        else if (airFrames > 3) break;
+      }
+      if (airFrames < 4) failWith('air_keep_frac', 'never left the ground (' + airFrames + ' air frames)');
+      else record('air_keep_frac', +(minAir / launch).toFixed(3),
+                  launch.toFixed(2) + ' -> ' + minAir.toFixed(3) + ' m/s over ' + airFrames + ' air frames');
+    }
+    allUp(); await wait(250);
+  }
+
   /* =======================================================================
    * 3. long jump, backflip, sideflip
    * ==================================================================== */
@@ -911,6 +981,8 @@ def build_expectations(tune, exact, dive_max):
         band("coyote_late",      "false", 0, 0, "",       "140 ms after the ledge"),
         band("buffer",           "true",  1, 0, "",       "80 ms before landing"),
         band("land_keep_ratio",  "min",   0.90, 0, "x",   "speed kept through the landing"),
+        band("idle_while_moving", "false", 0, 0, "",   "no idle pose above walking pace"),
+        band("air_keep_frac",    "min",   0.40, 0, "x", "launch speed kept against a full air reversal"),
         band("swim_speed",       "about", swim.get("speed", 4.5), 0.30, "m/s", ""),
     ]
 

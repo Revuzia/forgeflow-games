@@ -454,11 +454,22 @@ def main() -> int:
                 except Exception as e:
                     rows.append({"station": st["name"], "error": "screenshot: %s" % str(e)[:120]})
                     continue
-                if st.get("kind") == "crest":
-                    try:
-                        pg.evaluate(UNPOSE_JS)
-                    except Exception:
-                        pass
+                # NOTE (2026-09-03): the crest suspension is NOT lifted here.
+                # It used to be, and that opened a race that destroys the very
+                # evidence this battery exists to produce: UNPOSE restores
+                # `collectibles.update` while the hero is still standing ON the
+                # crest he was just photographed with, and the frames that run
+                # between this evaluate() and the next station's POSE collect
+                # it. One collected crest fires the course-clear card, and every
+                # station after it photographs a UI panel instead of the course
+                # (measured this run: crest-secret, crest-sigils and crest-wing
+                # all came back as "CREST ON THE RAMPARTS / COURSE CLEAR").
+                # Whether it bites depends on how many frames fit in one round
+                # trip, i.e. on machine load, which is why it comes and goes.
+                # The suspension is course-wide now and is lifted once, after
+                # the last station (see the UNPOSE_JS/UNVISTA_JS pair below).
+                # Nothing else needs it: no station after a crest depends on
+                # collection running, and no save state is written either way.
                 taken.append(out)
                 sheet_items.append((st["name"], out))
                 rows.append({"station": st["name"], "kind": st.get("kind"),

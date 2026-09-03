@@ -74,6 +74,12 @@ uniform float uSunHalo;
 uniform float uStarDensity;
 uniform float uStarBrightness;
 uniform float uDither;
+uniform float uLandStrength;
+uniform float uLandCount;
+uniform float uLandHeight;
+uniform vec3  uLandNear;
+uniform vec3  uLandFar;
+uniform vec3  uLandRim;
 
 float hash12( vec2 p ) {
   vec3 p3 = fract( vec3( p.xyx ) * 0.1031 );
@@ -140,7 +146,16 @@ vec3 skyGradient( float y ) {
 }
 
 vec3 horizonGlow( vec3 d ) {
-  float band = pow( 1.0 - abs( d.y ), max( uGlowPower, 0.5 ) );
+  float band = pow( max( 1.0 - abs( d.y ), 0.0 ), max( uGlowPower, 0.5 ) );
+  /* ROUND 4 (critic, _shots/verdant-1/vista-se.png: "the horizon is a hard
+   * three-band artefact ... a pale grey-white ribbon ~50 px tall running the
+   * full frame width" sampled at x=700, y=258 [191,198,193] between two bands
+   * of dark green land). Using abs( d.y ) makes this band SYMMETRIC about the
+   * horizon, so the warm morning glow was painted just as strongly onto the
+   * dome BELOW the horizon — where the ground is. Air you can see through is
+   * above the skyline; below it you are looking at land, and the glow has to
+   * be gone by the time you get there. */
+  band *= smoothstep( -0.042, 0.006, d.y );
   vec3 hxz = vec3( d.x, 0.0, d.z );
   float hl = max( length( hxz ), 1e-4 );
   vec3 sxz = vec3( uSunDir.x, 0.0, uSunDir.z );
@@ -158,10 +173,207 @@ vec3 sunDisc( vec3 d ) {
   if ( uSunIntensity <= 0.0 ) return vec3( 0.0 );
   float sd = dot( d, uSunDir );
   float sz = max( uSunSize, 0.002 );
+  /* ROUND 3 (critic: "no sun disc is visible in ANY of the 25 shots"). Two
+   * reasons, both fixed here and in themes.js. The disc itself was a hard
+   * smoothstep with no bright core and no bloomable overshoot, so even when it
+   * WAS in frame it landed under the theme's bloom threshold and read as a
+   * pale smudge on a pale sky; and the sky's sunDir did not agree with the
+   * light rig's key direction, so the sun was not where the shadows said it
+   * was. The disc now carries a hot core well above 1.0 (that is what makes a
+   * sun a sun through a tonemapper) with a tight limb and a short forward
+   * scatter skirt, and it stays gone within a few degrees — the wide halo that
+   * blew out tens of degrees of dome is still not welcome. */
+  /* ROUND 5 — THE DISC WAS 17 DEGREES WIDE.
+   * 'uSunSize' is in units of (1 - cos theta), so round 4's 0.0110 is an
+   * angular RADIUS of acos(1 - 0.011) = 8.5 deg: a 17-degree cap. Photographed
+   * this session (_shots/_probe_sun_verdant-1_pre.png, camera pointed
+   * straight down the theme's own sunDir) that renders as a 350 px featureless
+   * white bank with a cumulus shadow lying across the middle of it — no limb,
+   * no core, nothing a viewer would call a sun. Round 4 read "no disc is
+   * resolvable" and made the disc BIGGER, which is what dissolved it into the
+   * halo. The real sun subtends 0.53 deg; the themes now author ~1.0-1.6 deg
+   * (a stylised sun, still a DISC), and the glare is rebuilt as a real
+   * aureole — a hot near-limb lobe of a few degrees over a wide, weak,
+   * atmospheric skirt — instead of one 14-degree pow(m,24) bank that swamped
+   * the disc it was supposed to be announcing.
+   *
+   * The core deliberately leaves the display range far behind (x22 the
+   * intensity): the dome now writes LINEAR HDR (see skyDitherL), so this is
+   * what the bloom threshold and the ACES shoulder are FOR. Under the old
+   * double tone map any value above ~1 was thrown away before bloom saw it. */
   float disc = smoothstep( 1.0 - sz, 1.0 - sz * 0.30, sd );
+  float limb = smoothstep( 1.0 - sz * 3.2, 1.0 - sz * 0.92, sd );
   float m = max( sd, 0.0 );
-  float halo = pow( m, 900.0 ) * 0.9 + pow( m, 300.0 ) * 0.30 + pow( m, 24.0 ) * uSunHalo * 0.45;
-  return uSunColor * ( disc * uSunIntensity + halo * uSunIntensity * 0.45 );
+  // aureole: tight forward-scatter lobe, then the wide weak atmospheric skirt
+  float glare = pow( m, 5000.0 ) * 1.10          // ~1.0 deg  — the flare core
+              + pow( m, 700.0 )  * 0.34          // ~2.7 deg
+              + pow( m, 90.0 )   * uSunHalo * 0.24   // ~7.6 deg aureole
+              + pow( m, 14.0 )   * uSunHalo * 0.07;  // ~19 deg sky brightening
+  return uSunColor * ( disc * uSunIntensity * 22.0 + limb * uSunIntensity * 1.30
+                     + glare * uSunIntensity );
+}
+
+/* ---------------------------------------------------------------------------
+ * DISTANT LAND — the world beyond the course.
+ * ---------------------------------------------------------------------------
+ * Critic, _shots/verdant-1/vista-sw.png: "the whole course is a floating slab
+ * that simply ends, surrounded by flat white haze — no distant land, no sea, no
+ * mountains". A diorama needs something behind it or the horizon is a wall, and
+ * the fog cannot supply that, because in VERDANT the fog band is also the dark
+ * ground the decks read against (see themes.js) — brightening it inverts the
+ * readability pair. So the depth goes BEHIND the course, on the dome.
+ *
+ * cbRidge is one jittered, gappy silhouette row: cells around the azimuth,
+ * each with its own centre offset, width, height and profile exponent, and a
+ * fraction of cells left EMPTY. That is the fix for the sanctum's "row of
+ * identical bread loaves on a razor line" as well — the old row put exactly one
+ * flat-topped hump dead centre in every cell, at the same size, forever.
+ */
+float cbRidge( float u, float seed, float hScale ) {
+  float i = floor( u );
+  float f = fract( u );
+  float r  = hash12( vec2( i, seed ) );
+  float r2 = hash12( vec2( i, seed + 4.0 ) );
+  float r3 = hash12( vec2( i, seed + 9.0 ) );
+  float r4 = hash12( vec2( i, seed + 21.0 ) );
+  // ~22 % of cells carry no land at all, so the row has gaps and groupings
+  if ( r4 < 0.22 ) return 0.0;
+  float w = 0.30 + 0.68 * r2;                 // width, in cell units
+  float c = 0.5 + ( r3 - 0.5 ) * ( 1.0 - w ); // centre, jittered inside the cell
+  float x = ( f - c ) / max( w * 0.5, 1e-3 );
+  if ( abs( x ) >= 1.0 ) return 0.0;
+  float sharp = 0.35 + 1.05 * r;              // cone .. plateau, per island
+  float prof = pow( max( 0.0, 1.0 - x * x ), sharp );
+  return prof * ( 0.20 + 0.80 * r * r ) * hScale;
+}
+
+/** Two offset rows summed — silhouettes overlap and merge into a real range. */
+float cbRange( vec3 d, float count, float seed, float hScale ) {
+  float u = domeAzimuth( d, count );
+  float a = cbRidge( u, seed, hScale );
+  float b = cbRidge( u * 0.53 + 7.31, seed + 51.0, hScale * 0.72 );
+  return max( a, b * 0.92 );
+}
+
+/**
+ * Two ranges of distant land sitting on the horizon: a FAR range washed almost
+ * to the haze colour and a NEARER one a little darker and taller, with a warm
+ * rim on the sun side. Returns rgb premultiplied by a in .a so the caller can
+ * composite in one mix.
+ */
+vec4 distantLand( vec3 d, vec3 skyCol ) {
+  if ( uLandStrength <= 0.001 ) return vec4( 0.0 );
+  float far = cbRange( d, uLandCount, 3.0, uLandHeight * 0.62 );
+  float near = cbRange( d, uLandCount * 0.47, 61.0, uLandHeight );
+  // a soft, hazy edge — a hard step here is the "razor line" the critic named
+  float aFar = smoothstep( far + 0.0075, far - 0.0075, d.y );
+  float aNear = smoothstep( near + 0.0090, near - 0.0090, d.y );
+  /* Above the horizon the two ridges are silhouettes; BELOW it the land is
+   * continuous, because that is where the ground you are standing on stops and
+   * the rest of the world has to keep going. Without this the dome under the
+   * horizon stayed the pale haze colour and the course read as a slab floating
+   * in milk (critic, _shots/verdant-1/vista-sw.png). */
+  float above = smoothstep( -0.060, 0.005, d.y );
+  /* ROUND 4 — THE HOLE IN THE HORIZON.
+   * The below term used to ramp 0.005 -> -0.060 while above was ALREADY falling
+   * over the same interval, so between roughly d.y = -0.005 and -0.030
+   * neither term reached 1, the land was part-transparent, and the pale sky
+   * plus the (then mirrored) horizon glow showed straight through it. That
+   * gap IS the pale ribbon the critic measured between two green bands. The
+   * ground begins AT the skyline, so this now reaches full opacity within
+   * about half a degree of it. */
+  float below = smoothstep( 0.006, -0.004, d.y );
+  /* ROUND 4b — BOTH RANGES LIVE IN THE HAZE.
+   * The first pass at this fixed the pale RIBBON but left the three-band
+   * structure, because the nearer range was painted at full uLandNear while
+   * the ground under the skyline was painted at uLandFar: a dark green ridge
+   * over a pale band over dark green again, measured down column x=700 of
+   * _shots/verdant-1/vista-se.png as [58,102,80] -> [134,163,169] ->
+   * [53,99,77]. Both of those ranges are kilometres away, so BOTH are mostly
+   * air; the only thing that separates them is how much. Then the ground below
+   * the skyline starts at exactly the nearer range's value and loses its haze
+   * as it comes toward you — which is what makes the join continuous instead
+   * of a seam. */
+  vec3 farC  = mix( uLandFar, uLandNear, 0.20 );
+  vec3 nearC = mix( uLandFar, uLandNear, 0.56 );
+  vec3 col = mix( farC, nearC, clamp( aNear, 0.0, 1.0 ) );
+  /* AERIAL PERSPECTIVE ON THE GROUND PLANE.
+   * Below the horizon you are looking at ground receding away from you, and
+   * uLandNear * 0.62 painted every bit of it - from the skyline to your own
+   * feet — one flat slab of saturated green, which is the other half of why
+   * the frame read as a broken skybox. Depth now runs haze -> local colour ->
+   * falling light: at the skyline the ground is as washed as the far ridge
+   * behind it, a few degrees down it recovers its own colour, and further down
+   * still it darkens the way a valley floor does. */
+  /* ROUND 5 — THE HORIZON TERMINATOR.
+   * Critic: "every wide frame is bisected by a dead-straight horizon
+   * TERMINATOR, below which the lower ~70 % of the frame is one flat teal slab
+   * ... a ~100-level drop across 15 px followed by a dead-flat field", measured
+   * down column x=1200 of _shots/verdant-1/vista-sw.png. Two separate
+   * mistakes made that edge, and both are fixed here.
+   *
+   * 1. THE GROUND STARTED AT ITS OWN COLOUR, not at the sky's. 'below' reaches
+   *    full opacity within half a degree of the skyline (correct — that is
+   *    what closed round 4's pale ribbon), but the colour it composited was
+   *    'nearC', a value chosen for a ridge KILOMETRES away and nothing to do
+   *    with the pale, glowing band immediately above the seam. So the first
+   *    pixel of ground was a hard step off the last pixel of sky. Aerial
+   *    perspective says the opposite: at zero degrees of depression you are
+   *    looking through an infinite column of air, so the ground IS the sky
+   *    colour there and only earns its own colour as it comes toward you. The
+   *    ramp therefore now starts from skyCol — the caller's fully composited
+   *    sky, glow and all — which makes the seam continuous BY CONSTRUCTION at
+   *    any theme, any time of day, without a matching constant to maintain.
+   *
+   * 2. THE FIELD HAD NO STRUCTURE. Below the ramp it was one flat wash. Real
+   *    distant ground carries relief and cloud shadow, so a low-frequency
+   *    two-octave field modulates value and warmth across it; it is small
+   *    (±7 %) because this is haze, but it is the difference between air and
+   *    a sheet of glass. */
+  float dn = max( -d.y, 0.0 );
+  vec3 ground = mix( nearC, uLandNear, smoothstep( 0.030, 0.260, dn ) );
+  ground = mix( ground, uLandNear * 0.66, smoothstep( 0.240, 0.700, dn ) );
+  // relief + cloud shadow on the ground plane, at ~2 and ~7 cells per turn
+  vec2 gp = d.xz / max( dn + 0.05, 0.02 );
+  float relief = fbm3( gp * 0.55 + vec2( 11.3, 4.7 ) ) - 0.5;
+  ground *= 1.0 + relief * 0.14 * smoothstep( 0.010, 0.120, dn );
+  ground = mix( ground, ground * vec3( 1.06, 1.0, 0.94 ), clamp( relief + 0.5, 0.0, 1.0 ) * 0.35 );
+  // the aerial ramp: sky colour AT the skyline -> haze -> local ground colour
+  /* The value the ground must MATCH at the seam is the sky ONE PIXEL ABOVE the
+   * skyline, not the sky in this (below-horizon) direction: horizonGlow()
+   * deliberately stops at d.y = 0.006, so sampling here would hand the ground a
+   * value already ~40 counts under the sky it has to join, which is most of
+   * what was left of the terminator after the first pass. Re-evaluating the
+   * gradient and the glow along the same AZIMUTH at the skyline costs one
+   * normalize and makes the join exact at any theme and any time of day. */
+  vec3 dH = normalize( vec3( d.x, 0.010, d.z ) );
+  vec3 seamSky = skyGradient( dH.y ) + horizonGlow( dH );
+  vec3 nearGround = mix( seamSky, ground, smoothstep( 0.0, 0.080, dn ) );
+  /* ...and the ramp has to REPLACE the ridge colour immediately, not over the
+   * next three degrees. Round 5a left col (which is the far/near RIDGE mix,
+   * a value for land kilometres away) showing through for the first 0.05 of
+   * d.y, which measured as a dark trough between the bright sky and the bright
+   * hazy ridge behind it: column x=1200 of vista-se read 213 at y=214, 110 at
+   * y=232 and back up to 170 at y=262. */
+  col = mix( col, nearGround, smoothstep( 0.006, -0.003, d.y ) );
+  /* THE SKYLINE ITSELF. Re-measured after the ramp above went in, column x=1200
+   * of vista-se still read 206 at y=215, 115 at y=227 and 222 at y=239: a
+   * 12-pixel DARK NOTCH exactly on the seam. It is the blend window — for the
+   * half-degree either side of d.y = 0 the composite is still carrying the
+   * RIDGE colour (farC/nearC, values chosen for land 20 km away), which is
+   * darker than the sky above it AND darker than the hazy ground below it.
+   * Physically nothing on the skyline can be darker than the air in front of
+   * it: at zero degrees the sight-line is infinite, so everything there is the
+   * sky. This paints the last degree either side with exactly that. */
+  float seam = 1.0 - smoothstep( 0.0, 0.018, abs( d.y ) );
+  col = mix( col, seamSky, seam * 0.88 );
+  float a = max( max( aFar * 0.72, aNear ) * above, below ) * uLandStrength;
+  // sun-side rim along the nearer ridge
+  vec3 sxz = normalize( vec3( uSunDir.x, 0.0, uSunDir.z ) + 1e-5 );
+  vec3 hxz = normalize( vec3( d.x, 0.0, d.z ) + 1e-5 );
+  float az = max( 0.0, dot( hxz, sxz ) );
+  col += uLandRim * exp( -abs( d.y - near ) * 260.0 ) * above * ( 0.30 + 0.70 * az );
+  return vec4( col, clamp( a, 0.0, 1.0 ) );
 }
 
 vec3 starField( vec3 d ) {
@@ -185,16 +397,42 @@ vec3 starField( vec3 d ) {
   return tint * ( on * core * tw * ( 0.35 + bright ) * uStarBrightness * sky );
 }
 
-/** ordered-ish dither: kills 8-bit banding across a big smooth gradient.
- *  Applied AFTER the tonemapping/colorspace includes (display-referred): in
- *  linear before ACES it is compressed below one display LSB exactly where
- *  banding shows most — the dark zenith. */
-vec3 skyDither( vec2 c ) {
-  return vec3( ( hash12( c ) - 0.5 ) * uDither * ( 1.6 / 255.0 ) );
+/* ROUND 5 — THE DOME WAS TONE MAPPED TWICE.
+ *
+ * Every dome shader used to end with '#include <tonemapping_fragment>' +
+ * '#include <colorspace_fragment>' and 'toneMapped: true'. Measured this
+ * session ('_harness/_vfxprobe.py'): the engine renders through an
+ * EffectComposer whose targets report 'texture.colorSpace = ''' (NoColorSpace)
+ * and 'type = 1016' (HalfFloat) — SCENE-REFERRED LINEAR HDR — and the chain is
+ * RenderPass -> ScaledBloomPass -> FinishPass -> FXAAPass, with FinishPass
+ * doing grade -> ACES -> sRGB exactly once for the whole frame (post.js).
+ *
+ * So the dome applied ACES into a buffer FinishPass then ACES'd again, and
+ * ACES CLAMPS TO 1.0. Three consequences, all of them measured by the critic:
+ *   - the sun could not exist. The disc term reaches ~13 in linear; the dome's
+ *     own ACES squashed it to 0.99, so it reached the bloom pass BELOW
+ *     verdant's 1.12 threshold and keep's 1.52. "Zero pixels above 235 in any
+ *     wide frame" is the arithmetic of a double tone map;
+ *   - the dome was double-compressed, which is what flattens a gradient into a
+ *     slab: two ACES curves in series have almost no slope left in the upper
+ *     mid-tones, so the horizon band and the air under it converge;
+ *   - the sky could not light the world correctly, because buildEnvCubemap()
+ *     renders THIS material into a HalfFloat cube for the PMREM, so it was
+ *     baking a display-referred image and calling it radiance.
+ *
+ * The dome now writes LINEAR HDR and FinishPass owns the transform. The same
+ * change is made in world/water.js and world/materials.js (the water surface).
+ */
+
+/** dither: kills banding across a big smooth gradient. Applied in LINEAR now,
+ *  so it is RELATIVE — a fixed 1.6/255 offset in scene-referred linear is a
+ *  visible speckle in the dark zenith and invisible at the bright horizon. */
+vec3 skyDitherL( vec3 col, vec2 c ) {
+  return col * ( 1.0 + ( hash12( c ) - 0.5 ) * uDither * 0.008 );
 }
 `;
 
-/** cumulus deck — shared by `day`, `sunset` and `sanctum` */
+/** cumulus deck — shared by day, sunset and sanctum */
 const FRAG_CLOUDS = /* glsl */`
 uniform vec3  uCloudLit;
 uniform vec3  uCloudShadow;
@@ -270,9 +508,7 @@ void main() {
   col += starField( d );
   col += sunDisc( d );
   gl_FragColor = vec4( max( col, vec3( 0.0 ) ), 1.0 );
-  #include <tonemapping_fragment>
-  #include <colorspace_fragment>
-  gl_FragColor.rgb += skyDither( gl_FragCoord.xy );
+  gl_FragColor.rgb = skyDitherL( gl_FragColor.rgb, gl_FragCoord.xy );
 }
 `;
 
@@ -287,6 +523,10 @@ void main() {
   // the sun sits BEHIND the cloud deck, so it is composited first
   col += sunDisc( d );
 
+  /* ROUND 4 — COMPOSITE ORDER. The deck used to be drawn AFTER the land, so
+   * white cumulus puffs rendered ON TOP of the dark green land band (critic,
+   * _shots/verdant-1/vista-se.png). Clouds are in the SKY; distant land stands
+   * in FRONT of the sky. Sky first, then the deck, then the veil, then land. */
   vec4 cl = domeCumulus( d );
   col = mix( col, cl.rgb, cl.a );
 
@@ -296,10 +536,11 @@ void main() {
   cir = smoothstep( 0.60, 0.95, cir ) * smoothstep( 0.10, 0.55, d.y );
   col = mix( col, mix( col, uCloudLit, 0.55 ), cir * 0.22 );
 
+  vec4 land = distantLand( d, col );
+  col = mix( col, land.rgb, land.a );
+
   gl_FragColor = vec4( max( col, vec3( 0.0 ) ), 1.0 );
-  #include <tonemapping_fragment>
-  #include <colorspace_fragment>
-  gl_FragColor.rgb += skyDither( gl_FragCoord.xy );
+  gl_FragColor.rgb = skyDitherL( gl_FragColor.rgb, gl_FragCoord.xy );
 }
 `;
 
@@ -329,9 +570,7 @@ void main() {
   col += sunDisc( d );
 
   gl_FragColor = vec4( max( col, vec3( 0.0 ) ), 1.0 );
-  #include <tonemapping_fragment>
-  #include <colorspace_fragment>
-  gl_FragColor.rgb += skyDither( gl_FragCoord.xy );
+  gl_FragColor.rgb = skyDitherL( gl_FragColor.rgb, gl_FragCoord.xy );
 }
 `;
 
@@ -424,9 +663,7 @@ void main() {
 
   col += sunDisc( d );
   gl_FragColor = vec4( max( col, vec3( 0.0 ) ), 1.0 );
-  #include <tonemapping_fragment>
-  #include <colorspace_fragment>
-  gl_FragColor.rgb += skyDither( gl_FragCoord.xy );
+  gl_FragColor.rgb = skyDitherL( gl_FragColor.rgb, gl_FragCoord.xy );
 }
 `;
 
@@ -473,9 +710,7 @@ void main() {
 
   col += sunDisc( d );
   gl_FragColor = vec4( max( col, vec3( 0.0 ) ), 1.0 );
-  #include <tonemapping_fragment>
-  #include <colorspace_fragment>
-  gl_FragColor.rgb += skyDither( gl_FragCoord.xy );
+  gl_FragColor.rgb = skyDitherL( gl_FragColor.rgb, gl_FragCoord.xy );
 }
 `;
 
@@ -493,22 +728,6 @@ uniform vec3  uIslandGlow;
 uniform float uIslandBand;
 uniform float uRingStrength;
 uniform vec3  uRingColor;
-
-/**
- * A rounded island silhouette profile around the horizon. 'u' is the azimuth
- * in island units; the return is the silhouette HEIGHT (in dome-y units) at
- * that azimuth, which the caller then compares against d.y.
- */
-float islandRow( float u, float seed, float hScale ) {
-  float i = floor( u );
-  float r = hash12( vec2( i, seed ) );
-  float w = 0.28 + 0.56 * hash12( vec2( i, seed + 4.0 ) );
-  float x = ( fract( u ) - 0.5 ) / max( w * 0.5, 1e-3 );
-  float inside = step( abs( x ), 1.0 );
-  // rounded, slightly flat-topped hump — a plateau island, not a cone
-  float prof = pow( max( 0.0, 1.0 - x * x ), 0.55 );
-  return inside * prof * ( 0.24 + 0.76 * r * r ) * hScale;
-}
 
 /**
  * The 42-degree bow around the ANTI-SOLAR point. uRainbowRadius is that
@@ -540,28 +759,43 @@ void main() {
   col += rainbowArc( d );
   col += sunDisc( d );
 
+  // ROUND 4: deck before land, for the reason given in FRAG_DAY.
   vec4 cl = domeCumulus( d );
   col = mix( col, cl.rgb, cl.a );
+
+  vec4 land = distantLand( d, col );
+  col = mix( col, land.rgb, land.a );
 
   // ---- the ring of floating islands -------------------------------------
   if ( uIslandStrength > 0.001 ) {
     float u = domeAzimuth( d, uIslandCount );
 
-    // the far range, sitting ON the horizon line
-    float H = islandRow( u, 7.0, uIslandHeight );
+    /* ROUND 3 (critic: "a row of identical bread loaves on a razor line —
+     * evenly spaced identical flattened domes, each with the same orange rim,
+     * on a perfectly straight hard horizon edge"). islandRow put exactly one
+     * flat-topped hump dead centre in every azimuth cell, every cell filled,
+     * one profile exponent for all of them, and cut them against the sky with a
+     * 0.006-wide step. cbRange jitters the centre, the width, the height and
+     * the profile, leaves ~22 % of cells empty and sums two offset rows so the
+     * silhouettes overlap; the cut is three times softer and the rim now varies
+     * with azimuth instead of ringing every island equally. */
+    float H = cbRange( d, uIslandCount, 7.0, uIslandHeight );
     float base = smoothstep( -uIslandBand - 0.05, -uIslandBand + 0.01, d.y );
-    float mass = smoothstep( H + 0.0030, H - 0.0030, d.y ) * base;
+    float mass = smoothstep( H + 0.0095, H - 0.0095, d.y ) * base;
     col = mix( col, uIslandColor, mass * uIslandStrength * 0.90 );
-    // sun-catching rim along the ridge line
-    float ridge = exp( -abs( d.y - H ) * 300.0 ) * base;
-    col += uIslandGlow * ridge * uIslandStrength * 0.50;
+    // sun-catching rim along the ridge line, strongest on the sun side
+    vec3 sxz2 = normalize( vec3( uSunDir.x, 0.0, uSunDir.z ) + 1e-5 );
+    vec3 hxz2 = normalize( vec3( d.x, 0.0, d.z ) + 1e-5 );
+    float az2 = max( 0.0, dot( hxz2, sxz2 ) );
+    float ridge = exp( -abs( d.y - H ) * 240.0 ) * base;
+    col += uIslandGlow * ridge * uIslandStrength * 0.50 * ( 0.25 + 0.85 * az2 );
 
     // the SECOND ring: small islands genuinely floating above the horizon,
     // rendered as soft lenses so they read as distant rock, not as sprites
     if ( uRingStrength > 0.001 ) {
       float u2 = u * 0.62 + 13.0;
       float y0 = uIslandHeight * 2.6 + 0.055;
-      float h2 = islandRow( u2, 23.0, uIslandHeight * 0.55 );
+      float h2 = cbRidge( u2, 23.0, uIslandHeight * 0.55 );
       float dy = abs( d.y - y0 );
       float lens = step( 0.0002, h2 ) * ( 1.0 - smoothstep( 0.0, h2 + 1e-4, dy ) );
       col = mix( col, uIslandColor, lens * uRingStrength * 0.85 );
@@ -571,9 +805,7 @@ void main() {
 
   col += starField( d );
   gl_FragColor = vec4( max( col, vec3( 0.0 ) ), 1.0 );
-  #include <tonemapping_fragment>
-  #include <colorspace_fragment>
-  gl_FragColor.rgb += skyDither( gl_FragCoord.xy );
+  gl_FragColor.rgb = skyDitherL( gl_FragColor.rgb, gl_FragCoord.xy );
 }
 `;
 
@@ -595,7 +827,7 @@ function V3(arr, x, y, z) {
   if (v.lengthSq() < 1e-9) v.set(0, 1, 0);
   return v.normalize();
 }
-/** first defined of two param names — `day` authors cumulus*, `sanctum` cloud* */
+/** first defined of two param names — day authors cumulus*, sanctum cloud* */
 function P(p, a, b) {
   if (p[a] !== undefined) return p[a];
   return p[b];
@@ -619,6 +851,17 @@ function commonUniforms(p) {
     uStarDensity: { value: N(p.starDensity, 0.0) },
     uStarBrightness: { value: N(p.starBrightness, 0.3) },
     uDither: { value: N(p.dither, 1.0) },
+    /* DISTANT LAND. landStrength 0 (the default) is the old behaviour
+     * exactly, so a theme opts in. landNear/landFar are the two depth
+     * planes: the far range should sit close to the horizon colour, because
+     * that IS aerial perspective, and the near one a little darker and cooler.
+     * landCount is ranges per full turn — low numbers give long ridges. */
+    uLandStrength: { value: N(p.landStrength, 0.0) },
+    uLandCount: { value: N(p.landCount, 9.0) },
+    uLandHeight: { value: N(p.landHeight, 0.055) },
+    uLandNear: { value: C(p.landNear, 0x6d8a86) },
+    uLandFar: { value: C(p.landFar, 0x9fb4bc) },
+    uLandRim: { value: C(p.landRim, 0xffd8a0) },
   };
 }
 
@@ -738,7 +981,8 @@ export class Sky extends THREE.Object3D {
       depthTest: false,
       transparent: false,
       fog: false,
-      toneMapped: true,
+      // LINEAR HDR out — post.js FinishPass owns grade -> ACES -> sRGB.
+      toneMapped: false,
     });
 
     const dome = new THREE.Mesh(domeGeo, domeMat);
@@ -851,9 +1095,7 @@ void main() {
   // motes drifting down the shaft
   float drift = grNoise( vec2( x * 2.2, vUvR.y * 5.5 - uTime * uSpeed ) );
   float a = across * along * ( 0.72 + 0.55 * drift ) * uIntensity;
-  gl_FragColor = vec4( uColor * a, a );
-  #include <tonemapping_fragment>
-  #include <colorspace_fragment>
+  gl_FragColor = vec4( uColor * a, a );   // linear HDR — FinishPass tone maps
 }
 `;
 
@@ -940,7 +1182,7 @@ export function makeGodRays(dir, color, opts) {
     depthTest: true,
     side: THREE.DoubleSide,
     fog: false,
-    toneMapped: true,
+    toneMapped: false,             // linear HDR — see the skyDitherL note
   });
 
   const mesh = new THREE.Mesh(geo, mat);

@@ -462,6 +462,92 @@ const LOBBY_SHELL = [
   box([-21.2, 21.2], [14.0, 15.0], [-15.0, 15.0], 'wood'),
 ];
 
+/* ===========================================================================
+ * 3b. THE OUTSIDE OF THE BUILDING
+ * ---------------------------------------------------------------------------
+ * ROUND 3 (critic, `_shots/keep/vista-sw.png` / `vista-nw.png` / `vista-ne.png`):
+ * "the hub is a cluster of dark brown untextured BOXES and one cylinder, with
+ * glowing edge strips run along every corner. No roof, no crenellations, no
+ * window openings, no buttresses, no stone read at all - it is a greybox with
+ * neon piping, and it is 90 % of the frame in three of the four establishing
+ * shots."
+ *
+ * Three of those are fixed elsewhere and one is fixed here:
+ *   - the neon piping was `stripeFaces` marking EVERY platform's +X face by
+ *     default, including walls and roof slabs (builders.js, round 3);
+ *   - the "untextured" read was the stone bake, which was a crazy-paving worley
+ *     crack network at a 2.9 m tile (materials.js, round 3: coursed ashlar at
+ *     1.39 m, plus a facing term so walls are not the same value as decks);
+ *   - the SILHOUETTE is this block. A castle is read at distance by its
+ *     skyline, and the Keep had none: the roof slab simply stopped at
+ *     y = 15.00 with a flat edge all the way round.
+ *
+ * So: a projecting cornice on all four sides, a crenellated parapet standing on
+ * it (merlon / embrasure / merlon, 2.8 m pitch), and buttresses down the two
+ * long walls with weathered offsets. Every piece is a `box()` on the shared
+ * `stone` material, so course.js's static merge folds them into the chunk that
+ * already exists - the skyline costs triangles, not draw calls.
+ *
+ * `stripe: false` on every one of them: these are architecture, and a leading
+ * edge highlight on a merlon is exactly the noise the critic was reading.
+ * ======================================================================== */
+
+const RX0 = -21.2, RX1 = 21.2;      // roof slab edges
+const RZ0 = -15.0, RZ1 = 15.0;
+const CORN = 14.60, CORN_T = 15.30; // cornice bottom / top
+const MERL = 16.55;                 // merlon top
+const EMBR = 15.75;                 // embrasure (the gap) top
+const OVER = 0.55;                  // how far the cornice oversails the wall
+
+const KEEP_SKYLINE = [
+  /* --- the cornice: one oversailing course all the way round ------------- */
+  box([RX0 - OVER, RX1 + OVER], [CORN, CORN_T], [RZ0 - OVER, RZ0], 'stone', { stripe: false, plain: true }),
+  box([RX0 - OVER, RX1 + OVER], [CORN, CORN_T], [RZ1, RZ1 + OVER], 'stone', { stripe: false, plain: true }),
+  box([RX0 - OVER, RX0], [CORN, CORN_T], [RZ0, RZ1], 'stone', { stripe: false, plain: true }),
+  box([RX1, RX1 + OVER], [CORN, CORN_T], [RZ0, RZ1], 'stone', { stripe: false, plain: true }),
+];
+
+/* the parapet: a continuous low wall with merlons standing on it */
+for (const [z0, z1] of [[RZ0 - 0.45, RZ0 + 0.25], [RZ1 - 0.25, RZ1 + 0.45]]) {
+  KEEP_SKYLINE.push(box([RX0 - 0.45, RX1 + 0.45], [CORN_T, EMBR], [z0, z1], 'stone', { stripe: false, plain: true }));
+}
+for (const [x0, x1] of [[RX0 - 0.45, RX0 + 0.25], [RX1 - 0.25, RX1 + 0.45]]) {
+  KEEP_SKYLINE.push(box([x0, x1], [CORN_T, EMBR], [RZ0 + 0.25, RZ1 - 0.25], 'stone', { stripe: false, plain: true }));
+}
+/* merlons along the two long (x) edges */
+for (let x = RX0 + 0.6; x <= RX1 - 1.6; x += 2.8) {
+  for (const [z0, z1] of [[RZ0 - 0.45, RZ0 + 0.25], [RZ1 - 0.25, RZ1 + 0.45]]) {
+    KEEP_SKYLINE.push(box([x, x + 1.4], [EMBR, MERL], [z0, z1], 'stone', { stripe: false, plain: true }));
+  }
+}
+/* merlons along the two short (z) edges */
+for (let z = RZ0 + 1.4; z <= RZ1 - 2.4; z += 2.8) {
+  for (const [x0, x1] of [[RX0 - 0.45, RX0 + 0.25], [RX1 - 0.25, RX1 + 0.45]]) {
+    KEEP_SKYLINE.push(box([x0, x1], [EMBR, MERL], [z, z + 1.4], 'stone', { stripe: false, plain: true }));
+  }
+}
+/* corner turrets: a little extra mass where two walls meet, which is what
+   stops a crenellated box reading as a crenellated box */
+for (const [cx0, cx1] of [[RX0 - 0.9, RX0 + 0.7], [RX1 - 0.7, RX1 + 0.9]]) {
+  for (const [cz0, cz1] of [[RZ0 - 0.9, RZ0 + 0.7], [RZ1 - 0.7, RZ1 + 0.9]]) {
+    KEEP_SKYLINE.push(box([cx0, cx1], [CORN, MERL + 0.7], [cz0, cz1], 'stone', { stripe: false, plain: true }));
+    KEEP_SKYLINE.push(box([cx0 - 0.2, cx1 + 0.2], [MERL + 0.7, MERL + 1.05], [cz0 - 0.2, cz1 + 0.2], 'stone', { stripe: false, plain: true }));
+  }
+}
+/* buttresses down the two long walls, with one weathered set-off each */
+for (const bz of [-10.4, -3.6, 3.6, 10.4]) {
+  for (const [bx0, bx1, dir] of [[RX0 - 1.15, RX0, -1], [RX1, RX1 + 1.15, 1]]) {
+    KEEP_SKYLINE.push(box([bx0, bx1], [0, 8.2], [bz - 0.8, bz + 0.8], 'stone', { stripe: false, plain: true }));
+    KEEP_SKYLINE.push(box([bx0 - dir * 0.42, bx1 - dir * 0.42], [8.2, 13.4], [bz - 0.7, bz + 0.7], 'stone', { stripe: false, plain: true }));
+    KEEP_SKYLINE.push(box([bx0 - dir * 0.42 - 0.12, bx1 - dir * 0.42 + 0.12], [13.4, 13.75], [bz - 0.82, bz + 0.82], 'stone', { stripe: false, plain: true }));
+  }
+}
+/* a string course two thirds up, so 15 m of wall has a horizontal to read */
+KEEP_SKYLINE.push(box([RX0 - 0.30, RX1 + 0.30], [9.30, 9.72], [RZ0 - 0.30, RZ0], 'stone', { stripe: false, plain: true }));
+KEEP_SKYLINE.push(box([RX0 - 0.30, RX1 + 0.30], [9.30, 9.72], [RZ1, RZ1 + 0.30], 'stone', { stripe: false, plain: true }));
+KEEP_SKYLINE.push(box([RX0 - 0.30, RX0], [9.30, 9.72], [RZ0, RZ1], 'stone', { stripe: false, plain: true }));
+KEEP_SKYLINE.push(box([RX1, RX1 + 0.30], [9.30, 9.72], [RZ0, RZ1], 'stone', { stripe: false, plain: true }));
+
 /* --- the crest mosaic Nim spawns on ------------------------------------- */
 const MOSAIC = [
   deco('emblem', [0, LOBBY + 0.02, -1.0], [13.6, 0.04, 13.6], { mat: 'marble', tint: 0x2b3a52 }),
@@ -514,7 +600,22 @@ for (const [z0, z1] of [[-10.7, -7.86], [-6.06, -3.22], [-1.42, 1.42], [3.22, 6.
   /* the shaft: top pinned at the window (y 8.6), foot on the floor ~6 m west.
    * `params.tilt` is metres of westward slide per metre of drop. */
   WINDOWS.push(deco('godray', [19.4, 0.04, zc - 0.4], [w * 1.05, 8.6, 7.4],
-    { rot: [0, EAST, 0], theme: 'keep', tint: DAYLIGHT, opacity: 0.075,
+    /* gain 0.075 -> 0.16. At 0.075 the shafts were mathematically present and
+     * visually absent — the critic found "zero shafts" in spawn, cp1 and cp3
+     * despite themes.js declaring godRays: true and CONTRACT SS16 promising
+     * them. Two crossed additive quads at 0.16 sum to 0.32 where they cross,
+     * which is under the 0.25-per-quad ceiling procGodray documents and is
+     * legible against the Keep's (now darker) interior. */
+    /* ROUND 4: 0.16 -> 0.27. The critic looked for these again this round
+       ("there are no sun shafts anywhere on either course although CONTRACT
+       SS16 promises a god-ray sprite for Keep windows") and still could not
+       find one. They ARE built — the defs are right here — but the theme's
+       interior went materially darker AND warmer since 0.16 was chosen, and a
+       pale DAYLIGHT shaft at 0.16 over a 0.95-exposure amber hall lands under
+       the bloom threshold and inside the fog, so it reads as a slightly less
+       dark patch of air. Two crossed quads at 0.27 sum to 0.54 where they
+       cross, which is the read this feature exists for. */
+    { rot: [0, EAST, 0], theme: 'keep', tint: DAYLIGHT, opacity: 0.27,
       params: { tilt: 0.72, spread: 2.35 } }));
   /* one practical per OTHER bay: five would be five real-time lights for one
      wall, and the shafts already carry the read. */
@@ -618,6 +719,38 @@ const LOBBY_DRESS = [
   deco('torch', [-4.9, LOBBY + 3.0, 13.1], [0.42, 1.0, 0.42], { mat: 'copper' }),
   deco('torch', [4.9, LOBBY + 3.0, 13.1], [0.42, 1.0, 0.42], { mat: 'copper' }),
   lamp([0, LOBBY + 3.6, 12.9], TORCH, 8.0, 16, 0.26),
+
+  /* ROUND 4 — DECOR DENSITY, WHERE THE CAMERA ACTUALLY LOOKS.
+   * Critic, `_shots/keep/spawn.png` and `cp1.png`: "the Keep's main hall is a
+   * ~30x20 m room containing a floor, walls, a stair block and nothing else —
+   * no furniture, no banners, no braziers, no clutter at human scale, so it
+   * reads as a transit concourse rather than a hub anyone lives in". The hall
+   * was NOT undressed — benches, chests, barrels, a statue and eight torches
+   * were already here — but every one of them sits at |x| >= 17.4, in the
+   * aisles, and the third-person camera looks straight down the middle. So the
+   * dressing moves inboard, onto the pier line and the stair flanks, where it
+   * is in frame. Props carry no colliders (props.js builds none), so none of
+   * this narrows a route; the spawn pad at [0, 0, -1] and the doorway lane at
+   * x -9..9 are both left clear. */
+  deco('brazier', [-7.6, LOBBY + 0.52, -7.4], [1.05, 1.15, 1.05], { mat: 'copper' }),
+  deco('brazier', [7.6, LOBBY + 0.52, -7.4], [1.05, 1.15, 1.05], { mat: 'copper' }),
+  lamp([-7.6, LOBBY + 1.5, -7.4], TORCH, 9.0, 15, 0.32),
+  lamp([7.6, LOBBY + 1.5, -7.4], TORCH, 9.0, 15, 0.32),
+  /* banners on the arcade piers — the vertical cloth accent a stone hall needs
+     to stop reading as a car park, and the one place a realm colour belongs
+     indoors. */
+  ...[[-14.2, VERDANT], [-9.4, AZURE], [9.4, EMBER], [14.2, RIME]].map(([px, tint]) =>
+    deco('banner', [px, LOBBY + 4.3, -10.15], [1.5, 2.9, 0.2], { mat: 'cloth', tint })),
+  /* a refectory table with its stools, off the walking lane but inside it */
+  deco('bench', [-10.6, LOBBY + 0.40, 3.6], [3.4, 0.80, 1.10],
+    { rot: [0, NORTH, 0], mat: 'wood', params: { heavy: true } }),
+  deco('stool', [-9.0, LOBBY + 0.26, 2.4], [0.46, 0.52, 0.46], { mat: 'wood' }),
+  deco('stool', [-9.2, LOBBY + 0.26, 4.9], [0.46, 0.52, 0.46], { rot: [0, 0.6, 0], mat: 'wood' }),
+  deco('crate', [-11.9, LOBBY + 0.38, 6.4], [0.82, 0.76, 0.82], { rot: [0, 0.3, 0], mat: 'wood' }),
+  deco('barrel', [11.6, LOBBY + 0.44, 4.2], [0.78, 0.88, 0.78], { mat: 'wood' }),
+  deco('barrel', [12.4, LOBBY + 0.44, 5.3], [0.78, 0.88, 0.78], { mat: 'wood' }),
+  deco('bookcase', [12.6, LOBBY + 1.25, -4.4], [2.4, 2.5, 0.55], { rot: [0, EAST, 0], mat: 'wood' }),
+  deco('statue', [-12.6, LOBBY, 8.6], [1.4, 2.3, 1.4], { rot: [0, SOUTH, 0], mat: 'marble' }),
 
   /* coffers under the roof slab, so 14 m of ceiling is not a blank plane */
   deco('beam', [0, 13.6, -1.0], [40.0, 0.7, 0.7], { mat: 'wood', count: 9, spread: [0, 0, 24], seed: 2201 }),
@@ -780,10 +913,19 @@ const UNDERCROFT = [
     deco('pillar', [0, UNDER + 2.4, z], [1.15, 4.8, 1.15], { mat: 'brick' }),
   ]),
 
-  /* the hay that catches whoever pounds the grate */
-  box([-15.2, -11.8], [-7.8, -6.8], [-0.7, 2.7], 'cloth',
-    { surface: 'bounce', props: { power: 0.5 }, glow: 0xc8a04a }),
-  deco('debris', [-13.5, -6.6, 1.0], [3.6, 0.5, 3.6], { mat: 'cloth', count: 7, spread: [3.0, 0.3, 3.0], seed: 4410, tint: 0xc9a755 }),
+  /* the hay that catches whoever pounds the grate.
+   * ROUND 5 — MATERIAL CHOICE. Critic, crop `_shots/_r3_keep_cp2_bar.png`:
+   * "the blue slab's surface is an unfiltered high-frequency blue/dark weave
+   * that aliases into visible moire at 8 m ... it reads as upholstery, not as
+   * anything in a warm stone Keep". It was 'cloth', and the Keep's cloth
+   * override is 0xc8d8e8 (a cool pale blue, correct for the arcade BANNERS this
+   * hall also has and wrong for a hay bed), and cloth's 1 m weave tile is the
+   * highest-frequency albedo in the library. 'rope' is the fibre material —
+   * twisted strands at a coarser pitch — and the Keep tints it 0xe0c89c, which
+   * is straw. */
+  box([-15.2, -11.8], [-7.8, -6.8], [-0.7, 2.7], 'rope',
+    { surface: 'bounce', props: { power: 0.5 }, glow: 0xc8a04a, tint: 0xd8b45c }),
+  deco('debris', [-13.5, -6.6, 1.0], [3.6, 0.5, 3.6], { mat: 'rope', count: 7, spread: [3.0, 0.3, 3.0], seed: 4410, tint: 0xd8b45c }),
 
   /* torch line along both long walls */
   ...[-8.5, -3.5, 1.5, 6.5].flatMap((z) => [
@@ -794,6 +936,18 @@ const UNDERCROFT = [
     lamp([z < -1 ? -16.4 : 16.4, UNDER + 3.0, z], TORCH, 9.0, 17, 0.3),
   ]),
   lamp([0, UNDER + 3.6, -9.4], EMBER, 11, 22, 0.16),
+
+  /* ROUND 4 — the cellar measured "31.3 % of the frame below 0.06 luminance,
+     mean luminance 0.130 ... a black box read only by its neon trim"
+     (`_shots/keep/cp2.png`). The four wall practicals are all at |x| = 16.4,
+     so the middle two thirds of a 35 m vault has no source at all. Two
+     braziers ON the floor put light where a player stands and give the frame
+     a warm anchor at human scale; they cost two point lights in a room that
+     was carrying five. */
+  deco('brazier', [-6.4, UNDER + 0.52, 2.2], [1.0, 1.1, 1.0], { mat: 'copper' }),
+  deco('brazier', [6.4, UNDER + 0.52, -4.2], [1.0, 1.1, 1.0], { mat: 'copper' }),
+  lamp([-6.4, UNDER + 1.5, 2.2], TORCH, 10.0, 16, 0.34),
+  lamp([6.4, UNDER + 1.5, -4.2], TORCH, 10.0, 16, 0.34),
 
   /* cellar clutter — a working undercroft, not a museum */
   deco('barrel', [14.6, UNDER + 0.44, -8.4], [0.78, 0.9, 0.78], { mat: 'wood' }),
@@ -901,15 +1055,23 @@ const WYRM_WALK = helix(0, 540, -7.80, 9.19, 24, (a0, y0, a1, y1) => {
   return ramp(s, e, WALK_W, 0.35, 'stone', { glow: EMBER });
 });
 
-/* THE RIDE — 12 sandboard chords back down the middle. */
-const WYRM_CHUTE = helix(180, -540, 9.00, 0.50, 12, (a0, y0, a1, y1) => ({
+/* THE RIDE — ONE sandboard whose `pts` trace 12 chords back down the middle.
+   Authored as twelve separate `kind:'sandboard'` objects until 2026-09-02; the
+   run is geometrically identical either way (SandboardHazard emits one OBB per
+   segment for both spellings) but twelve hazards meant twelve decks, twelve
+   berm banks, twelve marker rows, twelve stripe meshes and twelve spray
+   InstancedMeshes — 60 draw calls out of a 260-call frame budget, measured with
+   _harness/drawprobe.py. One multi-segment sandboard merges all of that into
+   five meshes and runs one hazard update instead of twelve. */
+const WYRM_CHUTE = [{
   kind: 'sandboard',
-  a: at(TC[0], TC[1], SLIDE_R, a0, y0),
-  b: at(TC[0], TC[1], SLIDE_R, a1, y1),
+  pts: helix(180, -540, 9.00, 0.50, 12,
+    (a0, y0) => at(TC[0], TC[1], SLIDE_R, a0, y0))
+    .concat([at(TC[0], TC[1], SLIDE_R, 180 - 540, 0.50)]),
   w: SLIDE_W,
   mat: 'wood',
   glow: EMBER,
-}));
+}];
 
 /* the run-out: through the shell, through the lobby's west arch, onto marble */
 WYRM_CHUTE.push(ramp([-25.2, 0.50, 8.0], [-17.8, 0.05, 8.0], 3.0, 0.4, 'wood', { glow: EMBER, stripe: true }));
@@ -1039,9 +1201,17 @@ const TOWER = [
 
   deco('banner', [-19.4, ROOF + 2.0, 34.8], [0.12, 3.0, 1.6], { rot: [0, EAST, 0], tint: AZURE }),
   deco('banner', [-14.6, ROOF + 2.0, 34.8], [0.12, 3.0, 1.6], { rot: [0, WEST, 0], tint: AZURE }),
-  deco('brazier', [-20.2, ROOF + 0.7, 32.9], [1.0, 1.4, 1.0], { mat: 'copper', tint: TORCH }),
-  deco('brazier', [-13.8, ROOF + 0.7, 32.9], [1.0, 1.4, 1.0], { mat: 'copper', tint: TORCH }),
-  lamp([-17.0, ROOF + 1.9, 32.9], TORCH, 11, 20, 0.28),
+  /* ROUND 3 (critic, `_shots/_vz_herohead.png`: "under the Keep courtyard key
+     the head is a flat blown cream circle ... it is the single brightest object
+     in frame"). The cause was not the hero material: `cp-tower` stands at
+     (-19.70, ROOF, 33.00) and this brazier stood at (-20.2, ROOF + 0.7, 32.9) —
+     0.5 m away and 0.65 m up, i.e. Nim was standing INSIDE a lit brazier, with
+     an 11-intensity practical 2.7 m from his skull. Both braziers move to the
+     aedicule end of the roof where they flank the azure door (which is what a
+     pair of braziers is for), and the practical loses a third of its punch. */
+  deco('brazier', [-20.2, ROOF + 0.7, 38.6], [1.0, 1.4, 1.0], { mat: 'copper', tint: TORCH }),
+  deco('brazier', [-13.8, ROOF + 0.7, 38.6], [1.0, 1.4, 1.0], { mat: 'copper', tint: TORCH }),
+  lamp([-17.0, ROOF + 1.9, 38.6], TORCH, 7.5, 18, 0.28),
   lamp([-17.0, 6.0, 35.0], AZURE, 7, 12),
   lamp([-17.0, ROOF + 2.6, 37.4], AZURE, 11, 18),
   sign([-17.0, 2.2, 31.6], SOUTH, 'WALL KICK', 0.40, AZURE),
@@ -1231,6 +1401,7 @@ export default {
 
   objects: [
     ...LOBBY_SHELL,
+    ...KEEP_SKYLINE,
     ...MOSAIC,
     ...PILLARS,
     ...WINDOWS,

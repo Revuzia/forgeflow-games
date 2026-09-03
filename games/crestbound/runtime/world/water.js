@@ -180,9 +180,12 @@ void main() {
 
   float alpha = clamp(mix(uOpacity, 1.0, max(fres * 0.75, foam)), 0.0, 1.0);
   alpha *= smoothstep(0.0, 0.04, depth + foam);
+  /* LINEAR HDR out — post.js FinishPass is the one and only tone map.
+     See the ROUND 5 note in world/sky.js: a custom ShaderMaterial that ACES'd
+     into the composer's half-float target was tone mapped twice, which clamps
+     every specular and fresnel highlight to 1.0 and is why the critic measured
+     the water as 'one uniform cyan quad with a single specular smear'. */
   gl_FragColor = vec4(max(col, vec3(0.0)), alpha);
-  #include <tonemapping_fragment>
-  #include <colorspace_fragment>
 }
 `;
 
@@ -267,7 +270,7 @@ export function fallbackWaterMaterial(theme, kind2, look) {
     transparent: true,
     depthWrite: false,
     side: THREE.DoubleSide,
-    toneMapped: true,
+    toneMapped: false,
   });
   m.name = 'water_fallback_' + K;
   m.userData.cbKey = 'water';

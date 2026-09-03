@@ -164,6 +164,28 @@ DRIVER_JS = r"""
       f: +(p.facing || 0).toFixed(4), jc: p.jumpCount | 0,
       wn: +Math.hypot(wn.x, wn.z).toFixed(3),
       cy: +F.camYaw().toFixed(4),
+      /* Hero RIG rotation (pitch/yaw/roll of the animated body under `root`).
+         The strips cannot resolve a 0.95 rad lean on an 80 px hero, and the
+         contract's long-jump superman / jump3 somersault / dive belly live
+         entirely in this number. */
+      rig: (() => {
+        try { const r = A.game.hero.rig.rotation;
+              return [+r.x.toFixed(3), +r.y.toFixed(3), +r.z.toFixed(3)]; }
+        catch (e) { return null; }
+      })(),
+      /* Hero CHEST projected to viewport pixels, so a strip can be cropped on
+         the hero instead of guessing: a 1.5 m hero at the follow distance is
+         ~80 px of a 675 px frame and is unreadable in a whole-frame contact
+         sheet. Null when the camera or renderer is not available. */
+      scr: (() => {
+        try {
+          const E = A.engine, cam = E && E.camera, r = E && E.renderer;
+          if (!cam || !r) return null;
+          const v = new A.THREE.Vector3(p.pos.x, p.pos.y + 0.9, p.pos.z).project(cam);
+          const sz = r.getSize(new A.THREE.Vector2());
+          return [Math.round((v.x * 0.5 + 0.5) * sz.x), Math.round((-v.y * 0.5 + 0.5) * sz.y)];
+        } catch (e) { return null; }
+      })(),
       /* why the controller did what it did */
       mv: [+IN().move.x.toFixed(3), +IN().move.y.toFixed(3), +IN().move.mag.toFixed(3)],
       wm: +(p._wmag || 0).toFixed(3),
@@ -234,6 +256,16 @@ DRIVER_JS = r"""
           F.setStick(0, S.wallSide < 0 ? 1 : -1, 1);                  // lean at the other wall
         }
       }
+    } else if (a === 'cutleak') {
+      /* Jump 1: press at f20, hold 30 frames. On the frame the hero touches
+         down again, release AND press in the same frame, then hold 30 frames. */
+      if (S.phase === undefined) { S.phase = 0; }
+      if (S.phase === 0 && F.i === 20) { F.press(JUMP); S.rel = F.i + 30; S.phase = 1; }
+      else if (S.phase === 1 && F.i >= S.rel && p.grounded) {
+        F.release(JUMP); F.press(JUMP); S.rel = F.i + 30; S.phase = 2;
+      } else if (S.phase === 1 && F.i >= S.rel && !p.grounded) {
+        /* still airborne: keep holding, do not release early */
+      } else if (S.phase === 2 && F.i >= S.rel) { F.release(JUMP); S.phase = 3; }
     } else if (a === 'aircontrol') {
       /* Run, jump, then FULLY reverse the stick in the air: how much of a bad
          launch can be saved, and does the hero feel weightless doing it. */
@@ -435,6 +467,16 @@ MOVES = [
          acts=[(0, "__FEEL.setStick(0,1,1)")],
          note="full run into the solid meadow dressing behind spawn, stick held"),
 
+    # DOES A RELEASE LEAK INTO THE NEXT LAUNCH? The hero jumps, lands, and on the
+    # landing frame the jump key is released and re-pressed in the SAME frame --
+    # the ordinary "tap-tap" rhythm of a chain or a wall-kick ladder. The second
+    # jump is then HELD for 30 frames, far past jumpHoldMin, so nothing about the
+    # second press asks for a cut. If apex 2 comes back short, the FIRST jump's
+    # release cut the SECOND jump.
+    dict(name="cutleak", place=MEADOW, frames=170, auto="cutleak",
+         acts=[(0, "__FEEL.setStick(0,-1,1)")],
+         note="jump, then release+re-press jump on the SAME landing frame, held 30 frames"),
+
     dict(name="aircontrol", place=MEADOW, frames=140, auto="aircontrol",
          acts=[(0, "__FEEL.setStick(0,-1,1)")],
          note="jump at full run, then fully reverse the stick in the air"),
@@ -553,7 +595,12 @@ def run_one(pg, mv, args, errors):
     acts = sorted(mv["acts"], key=lambda k: k[0])
     shots = []
     if not args.no_shots and name in SHOT_MOVES:
-        shots = [int(round(total * k / 8.0)) for k in range(8)]
+        # --shotframes lets a lane aim the 8 frames at the WINDOW it is judging
+        # (an even spread across a 170-frame move misses a 7-frame pivot entirely).
+        if getattr(args, 'shotframes', None):
+            shots = [max(0, min(total, int(v))) for v in args.shotframes.split(',')]
+        else:
+            shots = [int(round(total * k / 8.0)) for k in range(8)]
     bps = sorted(set([k[0] for k in acts] + shots + [total]))
 
     shot_n = 0
@@ -589,6 +636,8 @@ def main() -> int:
     ap.add_argument("--headed", action="store_true")
     ap.add_argument("--move", default=None, help="run one move only")
     ap.add_argument("--no-shots", action="store_true")
+    ap.add_argument("--shotframes", default=None,
+                    help="comma-separated frame numbers to shoot instead of the even 8-spread")
     ap.add_argument("--json", default=os.path.join(HERE, "feelshots.json"))
     ap.add_argument("--shotdir", default=os.path.join(ROOT, "_shots", "feel"))
     ap.add_argument("--width", type=int, default=1200)

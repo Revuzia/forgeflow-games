@@ -122,7 +122,7 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { bevelBoxGeometry, tubeGeometry, discGeometry } from '../world/builders.js';
+import { bevelBoxGeometry, discGeometry } from '../world/builders.js';
 // bevelBoxGeometry / tubeGeometry / discGeometry are the studio's shared
 // vocabulary (world/builders.js). Everything they do not cover — a lathe of an
 // authored profile, a tapered limb capsule — is built below in the SAME
@@ -171,14 +171,52 @@ const P = {
 const STRIDE_RUN = 1.90;
 const STRIDE_WALK = 1.10;
 
+/**
+ * Fold whole turns out of a flip angle. A completed turn is visually the
+ * identity, so when a driver lets go of a flip channel only the fraction still
+ * owed should unwind — otherwise a finished somersault plays a full circle
+ * BACKWARDS on the way out (measured: the backflip re-inverted the other way
+ * between f40 and f46). Idempotent: |a| < PI already folds to itself.
+ */
+function foldTurns(a) { return a - TAU * Math.round(a / TAU); }
+
 /** Blend rates — the contract's critically-damped spring constants. */
 const BONE_LAMBDA = 14;
 const ROOT_LAMBDA = 18;
 const SQUASH_LAMBDA = 13;
 
+/**
+ * Rate the CYCLIC layer's envelope fades in and out at.
+ *
+ * Why there is a second layer at all — measured, not guessed. `damp()` is a
+ * first-order low pass: fed a sinusoid at omega it returns
+ * `lambda / hypot(lambda, omega)` of the amplitude, lagging by
+ * `atan(omega/lambda)`. At the contract's full run (`TUNE.speedRun` 9.0 m/s
+ * over a `STRIDE_RUN` 1.90 m cycle) that is 4.74 Hz, omega = 29.8 rad/s, so a
+ * BONE_LAMBDA of 14 delivered only 0.426 of every authored amplitude, 64.8
+ * degrees late: the authored 0.80 rad leg swing arrived as 0.341 and the
+ * headline sprint read as a brisk walk (measured on the phase-exact run strip
+ * — upperArm peak 0.394 against a predicted 0.392).
+ *
+ * So periodic channels are written to `b.cx/cy/cz` and added AFTER the spring
+ * — undamped, therefore delivered at full amplitude and in phase — while the
+ * spring keeps doing the one job it is good at: blending between STATES. The
+ * envelope below is what crossfades the cyclic layer when the state changes;
+ * the oscillation inside it is never smoothed.
+ */
+const CYC_LAMBDA = 13;
+
 /** Squash / stretch extremes. */
 const SQUASH_LAND = 0.85;
 const STRETCH_JUMP = 1.12;
+
+/**
+ * Turns per second the ground pound keeps spinning at THROUGH THE FALL, on top
+ * of the full turn the 0.20 s hang already banked. CONTRACT §13 is "pound spin
+ * + fist"; the spin used to stop dead when the hang ended, which measured as
+ * hips roll 0.1 / −0.3 / 0.8 deg across the whole drop — a statue at 40 m/s.
+ */
+const POUND_SPIN_HZ = 2.4;
 
 /**
  * Height of the rig's ROTATION pivot above the soles, metres. Every flip, lean
@@ -191,23 +229,143 @@ const RIG_PIVOT_Y = 0.62;
  * Boot sole contact points, foot-local metres from the ankle. These are the
  * geometry the sole clamp measures — keep them in step with _buildLegs().
  */
-const SOLE_TOE_Z = 0.185;
-const SOLE_HEEL_Z = 0.100;
+const SOLE_TOE_Z = 0.186;
+const SOLE_HEEL_Z = 0.086;
 
 /**
- * Eye placement, HEAD-LOCAL metres. The eyes are SPHERES sunk into the skull
- * (centre inside the surface) rather than the flat 0.124 m discs the face audit
- * found stuck on the front of the face: with `EYE_R` 0.046 and the centre
- * 0.196 m out, the skull crops them to a ~0.056 m visible cap, which is a
- * stylised eye set in a socket instead of a googly eye glued on.
+ * Skull profile in units of `P.headR`, bottom-to-top: `[radiusMul, yMul]`.
+ * ONE source of truth. The skull lathe, the hair shell, the mouth arc and the
+ * eye sinking all read it, so a hair cap can never again close BELOW the crown
+ * (which is what left Nim bald from the follow camera) and an eyeball can never
+ * again be authored 9 mm OUTSIDE the surface it is supposed to sit in.
  */
-const EYE_X = 0.075;
-const EYE_Y = 0.010;
-const EYE_Z = -0.185;
-const EYE_R = 0.058;
+/**
+ * Historical: the LATHE profile the head used to be built from, kept because
+ * the header and the eye notes are measured against it. Nothing reads it any
+ * more — `headDirRadius` below replaced it (see the note there).
+ */
+const SKULL_LEGACY = [
+  [0.000, -0.96], [0.400, -0.90], [0.740, -0.66], [0.940, -0.28],
+  [1.000, 0.06], [0.950, 0.42], [0.740, 0.72], [0.400, 0.92], [0.000, 0.99],
+];
+void SKULL_LEGACY;
+
+/**
+ * HEAD SHAPE — one smooth radial field, no merged solids.
+ *
+ * ROUND 4 (critic, `_shots/hero/_r2_headzoom.png`): the head scored a hard
+ * reject for being LUMPY — "a shading crease runs temple → cheek → jaw", "the
+ * crown is dented", "three flesh-coloured lumps" (nose plus two cheek pads
+ * that read as warts), "ears are bare skin spheres … a fourth and fifth face
+ * lump". Every one of those is the SAME defect: the head was a lathe with four
+ * separate closed solids (jaw wedge, two cheek pads, two ear cylinders, a
+ * two-part nose) merged INTO it, and two intersecting closed surfaces meet at a
+ * hard crease with two sets of normals. No amount of tuning the pieces removes
+ * a crease that intersection geometry creates.
+ *
+ * So the skull, the jaw, the brow ridge and the nose are now ONE C1-continuous
+ * radial function `headDirRadius(d)` sampled on a sphere: the surface is
+ * `d · headDirRadius(d)`, normals come from central differences of that same
+ * function, and there is no seam anywhere on the face because there is no
+ * second surface. The cheek pads are gone entirely (the jaw term does that job
+ * smoothly); the ears are the only remaining separate part and they moved off
+ * the face to the silhouette, behind the widest point and below brow height.
+ */
+const HEAD_JAW = 0.040;      // metres of forward-and-down fullness (the chin)
+const HEAD_BROW = 0.0085;    // brow ridge over the eyes
+const NOSE_LAT = -0.26;      // nose axis latitude, rad below the head equator
+const NOSE_NY = Math.sin(NOSE_LAT);
+const NOSE_NZ = -Math.cos(NOSE_LAT);
+const NOSE_UY = Math.cos(NOSE_LAT);
+const NOSE_UZ = Math.sin(NOSE_LAT);
+/*
+ * The nose kernel is ASYMMETRIC, and that is the whole design. A symmetric
+ * bump 25 mm proud over a 140 mm base was measured on the first Round 4 build
+ * (`_shots/hero/_r3_headzoom.png`) and it VANISHED — at this stylisation a
+ * gentle swell with no shadow line under it is not a nose. A button nose reads
+ * because the BRIDGE blends up into the brow while the BASE drops off sharply
+ * enough to catch a shadow: the up half-angle is wide (0.24), the down half
+ * narrow (0.175). The FALLOFF matters as much as the amplitude: a
+ * `(1 - q)^1.8` kernel has zero slope at its rim, so it melts into the cheek
+ * and photographed as no nose at all even at 40 mm proud (`_r3_headzoom.png`,
+ * second Round 4 build). `1 - q^2.5` holds ~82 % of its height out to half
+ * radius and then leaves the surface at a finite, steep slope — a real base
+ * line for the light to break on, which is what a nose actually is.
+ * Extent: 100 mm wide, 100 mm tall, 48 mm proud, y in [-0.108, -0.005], so the
+ * TOP of it still lands below the eyes' lower rim — the constraint the
+ * pre-Round-4 face broke.
+ */
+const NOSE_AX = 0.200;       // kernel half-angle across the face
+const NOSE_AY_UP = 0.240;    // ...up toward the brow (blends)
+const NOSE_AY_DN = 0.175;    // ...down toward the lip (sharp, casts)
+const NOSE_H = 0.048;        // metres proud at the tip
+
+/**
+ * Eye placement. ROUND 4 rejects, in the critic's words: "small white ovals
+ * with an oversized black pupil, no iris colour and no catchlight, set ~60 %
+ * down the skull and roughly 2.5 eye-widths apart, with the nose landing
+ * BETWEEN them … vacant and squashed downward, the opposite of the Astro Bot /
+ * A Hat in Time eye placement (eyes high, large, wet)."
+ *
+ * Four numbers move together, and the visible LENS is what they are solved for
+ * rather than the ball. A ball of radius `EYE_R` sunk so that `EYE_PROUD`
+ * stands outside the skull shows a lens of radius
+ * `sqrt(EYE_PROUD·(2·EYE_R − EYE_PROUD))`:
+ *   old  0.042 ball, 7.3 mm proud → 23.7 mm lens radius, centres 148 mm apart
+ *        = 3.1 lens-widths of gap. Small, low, wide — the vacant read.
+ *   new  0.056 ball, 13.1 mm proud → 36 mm lens radius, centres 111 mm apart
+ *        = 1.55 lens-widths. Large, high, close.
+ * The sink is measured against the ACTUAL surface at build time (see
+ * `_buildHead`), not against a remembered radius, so the brow ridge and the jaw
+ * term can move without un-sinking the eyeballs.
+ */
+const EYE_YAW = 0.285;                      // rad off dead-ahead, per eye
+const EYE_R = 0.056;                        // eyeball radius
+const EYE_PROUD = 0.0131;                   // metres of ball outside the skull
+const EYE_Y = 0.036;                        // eye height, head-local metres
+const PUPIL_R = 0.0200;                     // iris cap radius on the eyeball
+const IRIS_INNER = 0.0092;                  // pupil radius inside the iris
+const IRIS_LIMBAL = 0.0182;                 // dark limbal ring starts here
+const GLINT_R = 0.0105;                     // catchlight bead
+
+/**
+ * Face furniture heights, head-local metres. They are stated together because
+ * they are solved together — the critic's "brows … floating a full eye-height
+ * above the eyes" and "the image-right brow clips the goggle strap" are the
+ * same failure, a face laid out feature by feature instead of as a stack.
+ * Measured clearances at these numbers, from the built geometry:
+ *   eye lens top      0.072   ─┐  7 mm
+ *   brow underside    0.079   ─┘
+ *   brow top          0.101   ─┐ 27 mm
+ *   goggle rim bottom 0.128   ─┘
+ *   goggle rim top    0.217   ─┐ 13 mm
+ *   hairline (front)  0.230   ─┘
+ */
+const BROW_Y = 0.086;
+const GOG_Y = 0.172;                        // goggle cup centre height
+const GOG_AZ = 0.380;                       // rad off dead-ahead, per cup
+const GOG_STRAP_Y0 = 0.150;
+const GOG_STRAP_Y1 = 0.205;
+
+/** Mouth: a swept LIP, one continuous tube — see `_buildHead`. */
+const MOUTH_Y = -0.145;
+const MOUTH_SWEEP = 0.300;                  // half the azimuth arc, rad
+const MOUTH_LIFT = 0.020;                   // how far the corners curl up
+
+/**
+ * How far the pupils may travel off centre, as a rotation about the HEAD axis.
+ * At the eye's 0.21 m radius this is 6.7 mm of slide — a dart. The old 0.34
+ * was 71 mm, which threw the irises clean off the eyeballs and is most of why
+ * they read as chrome rings rather than pupils.
+ */
+const PUPIL_LOOK_YAW = 0.042;
+const PUPIL_LOOK_PITCH = 0.036;
 
 /** Idle "look around" fires after this many seconds of standing still. */
 const IDLE_LOOK_AFTER = 4.0;
+
+/** Ceiling on the idle look-around head yaw, radians. */
+const LOOK_YAW_MAX = 0.58;
 
 /** Blink cadence, seconds. */
 const BLINK_MIN = 3.0;
@@ -220,38 +378,127 @@ const SCARF_SEG = 0.105;               // metres per link -> ~0.74 m of scarf
 const SCARF_GRAVITY = -15.5;
 const SCARF_DAMP = 0.965;              // velocity retention per Verlet step
 const SCARF_WIND = 0.115;              // how hard the hero's own velocity drags it
-const SCARF_BODY_R = 0.255;            // sphere the scarf may never enter
-const SCARF_W0 = 0.088;                // ribbon half-width at the collar
-const SCARF_W1 = 0.046;                // ...and at the tip
+const SCARF_BODY_R = 0.255;            // chest sphere the scarf may never enter
+/*
+ * HEAD sphere, and the anchor offset that goes with it.
+ *
+ * The chain used to be pinned at `bones.neck` + 0.04 Y with NO backward offset,
+ * and the ONLY body collider was the chest sphere. In every face-down or
+ * horizontal pose (land, swim, fly, longjump, dive) gravity therefore dragged
+ * the chain straight across the jaw: measured in five separate captures, where
+ * it rendered as a smooth white tapered blade out of Nim's mouth — a beak — and
+ * in dive_p90 as a V of both tails out of the face.
+ *
+ * Two fixes, both at the generator:
+ *  1. The collar is pinned BEHIND the neck (`SCARF_ANCHOR_BACK` along the neck
+ *     bone's own +Z, which is backward — yaw 0 faces −Z, contract §0), so the
+ *     chain starts on the nape and never on the throat.
+ *  2. A head sphere joins the chest sphere in the push-out pass, so no relaxed
+ *     particle can end up inside the skull, the muzzle or the goggles.
+ * The radius clears the nose (0.250 skull + 0.048 proud at the tip).
+ */
+const SCARF_HEAD_R = 0.265;
+const SCARF_ANCHOR_BACK = 0.135;       // metres behind the neck, neck-local +Z
+const SCARF_ANCHOR_UP = 0.030;         // ...and up, neck-local +Y
+const SCARF_ANCHOR_SIDE = 0.070;       // ...and off the centreline, neck-local +X
+/*
+ * Lateral bias, metres/s^2, toward the hero's RIGHT (the same side the existing
+ * `drape` term pushes). Anchoring on the nape and adding a head sphere put the
+ * chain 0.24-0.40 m clear of the face in WORLD space (measured, _hf_scarf.json)
+ * — but a chain that hangs in the hero's SAGITTAL plane still projects across
+ * the jaw from the front-three-quarter camera every gate photographs him from.
+ * A real scarf never hangs in that plane: it lies over a shoulder. This is the
+ * force that puts it there, and unlike `drape` it does not fade out at speed —
+ * speed is exactly when the prone states that failed occur.
+ */
+const SCARF_SIDE = 6.4;
+/**
+ * ROUND 4 (critic): "SCARF GEOMETRY reads as a flat rigid slab … a
+ * zero-thickness 7-quad DoubleSide ribbon … in profile it is a flat red plank
+ * glued down the chest to the waist — no fold, no taper read, no thickness."
+ * The verlet chain was explicitly cleared ("the chain itself is FINE"), so the
+ * fix is the SKIN, not the solver: the ribbon is now a four-sided prism with a
+ * real thickness that tapers to the tip and a twist that runs down the chain
+ * and increases with speed, so the cloth turns edge-on and back as it trails.
+ */
+const SCARF_W0 = 0.105;                // ribbon half-width at the collar
+const SCARF_W1 = 0.050;                // ...and at the tip
+const SCARF_H0 = 0.021;                // half-THICKNESS at the collar
+const SCARF_H1 = 0.009;                // ...and at the tip
+const SCARF_TWIST = 0.62;              // rad of twist accumulated down the chain
+const SCARF_FACES = 4;                 // sides of the prism
 
 /** Palette. The coat is the read-at-40-m silhouette colour; keep it hot. */
 const COL = {
   coat: 0xd8532b,        // warm orange-red
   coatDark: 0xa63a1c,    // shadowed panels / under-flap
   trim: 0x2c4a52,        // dark teal — mittens, collar, cuffs, knee caps
-  skin: 0xf3cba4,
-  skinShade: 0xe0ae86,
+  /* ROUND 3 (critic, `_shots/_vz_herohead.png`): under the Keep courtyard key
+   * the head rendered as a FLAT BLOWN CREAM DISC — no brow, no shading, no
+   * highlight rolloff — and it was the single brightest object in the frame, so
+   * bloom then haloed it. 0xf3cba4 is 0.95/0.80/0.64: at the top of the curve
+   * before any light is applied, so every bit of the sculpted brow, jaw and
+   * goggle shadow the model carries was being compressed into clip. Pulled down
+   * ~18 % in sRGB (~30 % in linear), which is where a mid-fair skin actually
+   * sits and leaves the whole shading range above it. */
+  skin: 0xc0916b,
+  skinShade: 0xa87a58,
   hair: 0x4a2f22,
   boot: 0x37312e,
   leather: 0x7a5233,
-  rope: 0xc7ab7a,
-  metal: 0xb9c2cb,
+  rope: 0x8a6f45,      // pack webbing. Was 0xc7ab7a, one step off the new cream scarf.
+  /* ROUND 4 (critic): "the rims render as a scribbled blue-white streak … the
+   * least convincing material on him". Two causes, both here: a COOL near-white
+   * albedo at metalness 0.94 mirrors the sky into a blown streak, and
+   * `PART_M.metal` 0.16 asked for a 16-tiles-per-part repeat on a 12 mm-wide
+   * lathe rim, which is the scribble. Warm brass at a lower metalness holds a
+   * readable specular instead of a mirror, and the texel scale moved with it. */
+  metal: 0x9d8148,
   lens: 0x9fe8ff,
   eyeWhite: 0xf7f1e6,
   eyePupil: 0x161b22,
+  // IRIS. The pupil mesh is vertex-coloured (one draw, three colours): a dark
+  // limbal ring at the rim, warm amber for the iris body, near-black for the
+  // pupil itself. The critic's "no iris colour" was literally true — the whole
+  // cap was one flat 0x161b22.
+  irisRim: 0x2b1a10,
+  iris: 0xa8621f,
+  irisIn: 0x6d3a12,
+  // A LIP, not a brow. The mouth used to be cut from the same dark-brown cloth
+  // as the brows and lashes and sat 5 cm under the nose, which read as a
+  // moustache in every close-up. Warm berry, clearly not hair.
+  lip: 0x9c4a3e,
   blanket: 0xcfd6c8,
   buckle: 0xd8b25c,
 };
 
-/** Scarf tint per realm — the one piece of Nim that changes with the world. */
+/**
+ * Scarf tint per realm — the one piece of Nim that changes with the world.
+ *
+ * ROUND 4 (critic): "SCARF DOES NOT READ — colour, not physics. COL.coat
+ * 0xd8532b vs SCARF_TINT.verdant = SCARF_DEFAULT = 0xd53a2c is a 1.16:1
+ * relative-luminance contrast ratio; on the one course that ships, the scarf is
+ * coat-camouflage." Measured: L(coat) = 0.210, L(old verdant scarf) = 0.196.
+ *
+ * The scarf is the accessory that has to separate from a hot orange coat AND
+ * from grass, stone and sky, from 2 m and from 20 m. Only VALUE does that at
+ * every distance, so every realm tint is now a high-luminance cloth carrying a
+ * realm HUE rather than a realm-saturated mid-tone. Measured L for the new
+ * verdant tint is 0.847 — a 3.45:1 ratio against the coat, up from 1.16:1.
+ * `_scarfContrast` below enforces the same floor on any palette-derived
+ * fallback, so a realm that never lands in this table cannot regress.
+ */
 const SCARF_TINT = {
-  keep: 0xf0d9a8,
-  verdant: 0xd53a2c,
-  ember: 0xffc23a,
-  rime: 0x92dcff,
-  azure: 0x7fe3d4,
+  keep: 0xf3ddac,
+  verdant: 0xeaf1dc,
+  ember: 0xffe9b8,
+  rime: 0xe4f2ff,
+  azure: 0xdcf6ee,
 };
-const SCARF_DEFAULT = 0xd53a2c;
+const SCARF_DEFAULT = 0xeaf1dc;
+
+/** Relative-luminance floor the scarf must clear against the coat. */
+const SCARF_MIN_LUM = 0.62;
 
 /** Fallback PBR for every material key, used when Mats cannot answer. */
 const MAT_FALLBACK = {
@@ -278,9 +525,9 @@ const MAT_FALLBACK = {
  */
 const PART_M = {
   coat: 0.58, coatDark: 0.58, trim: 0.20, scarf: 0.74,
-  skin: 0.50, hair: 0.30, boot: 0.30, metal: 0.16, gold: 0.05,
+  skin: 0.50, hair: 0.30, boot: 0.30, metal: 0.08, gold: 0.05,
   leather: 0.24, rope: 0.30, blanket: 0.23, lens: 0.10,
-  eyeWhite: 0.12, eyeDark: 0.06,
+  eyeWhite: 0.12, eyeDark: 0.06, lip: 0.10,
 };
 
 /** Bone table order. Index-addressable so the update loop never allocates. */
@@ -297,6 +544,7 @@ const BONE_NAMES = [
 
 const _v0 = new THREE.Vector3();
 const _v1 = new THREE.Vector3();
+const _v2 = new THREE.Vector3();
 const _q0 = new THREE.Quaternion();
 const _col0 = new THREE.Color();
 const _col1 = new THREE.Color();
@@ -312,6 +560,17 @@ const _rayHit = {
 
 /** Two-bone IK output. One shared record — read it before the next solve. */
 const _ik = { hip: 0, knee: 0, reached: false };
+
+/* Scarf ribbon scratch. `_writeScarfGeometry` runs every frame and must not
+ * allocate, so the two cross-section rings it ping-pongs between, their face
+ * normals, the corner offsets and the previous centre all live here. */
+const _scarfRingA = new Float64Array(12);
+const _scarfRingB = new Float64Array(12);
+const _scarfNorA = new Float64Array(12);
+const _scarfNorB = new Float64Array(12);
+const _scarfPrevC = new Float64Array(3);
+const _scarfCX = new Float64Array(4);
+const _scarfCN = new Float64Array(4);
 
 /* ═══════════════════════════ geometry primitives ═══════════════════════════ */
 /*
@@ -382,28 +641,42 @@ function latheGeo(pts, seg) {
       const r1 = pts[j + 1][0], y1 = pts[j + 1][1];
       const v0 = vAt[j], v1 = vAt[j + 1];
       if (r0 < 1e-5 && r1 < 1e-5) continue;
+      /*
+       * WINDING. Every one of these triples used to be emitted in the order
+       * that makes the face point INWARD — verified, not argued: a raycast
+       * fired at Nim's right eye from 0.8 m in front of his face reported its
+       * first FrontSide hit 41 mm BEHIND the eye centre (the far wall of the
+       * ball) and its second on the far wall of the SKULL, 0.43 m back. So
+       * every lathe part on the hero — skull, jaw, ears, cheeks, nose, eyes,
+       * coat, collar, belt, sleeves, thighs, shins, mittens, goggles — was
+       * rendering its INSIDE. The stored vertex normals are computed outward,
+       * which is why the shading looked plausible and nobody caught it; but a
+       * culled near wall cannot occlude anything, so the sunk eyeballs were
+       * drawn straight through the face and read as balls glued to it, and the
+       * cheeks, nose and jaw did the same. Second and third vertex swapped.
+       */
       if (r0 < 1e-5) {
         // bottom cap fan
         push(0, y0, pn[j][0], pn[j][1], a0, u0, v0);
-        push(r1, y1, pn[j + 1][0], pn[j + 1][1], a1, u1, v1);
         push(r1, y1, pn[j + 1][0], pn[j + 1][1], a0, u0, v1);
+        push(r1, y1, pn[j + 1][0], pn[j + 1][1], a1, u1, v1);
         continue;
       }
       if (r1 < 1e-5) {
         // top cap fan
         push(r0, y0, pn[j][0], pn[j][1], a0, u0, v0);
-        push(r0, y0, pn[j][0], pn[j][1], a1, u1, v0);
         push(0, y1, pn[j + 1][0], pn[j + 1][1], a0, u0, v1);
+        push(r0, y0, pn[j][0], pn[j][1], a1, u1, v0);
         continue;
       }
-      // quad -> two triangles, wound CCW seen from outside
+      // quad -> two triangles, wound CCW seen from OUTSIDE
       push(r0, y0, pn[j][0], pn[j][1], a0, u0, v0);
-      push(r0, y0, pn[j][0], pn[j][1], a1, u1, v0);
       push(r1, y1, pn[j + 1][0], pn[j + 1][1], a1, u1, v1);
+      push(r0, y0, pn[j][0], pn[j][1], a1, u1, v0);
 
       push(r0, y0, pn[j][0], pn[j][1], a0, u0, v0);
-      push(r1, y1, pn[j + 1][0], pn[j + 1][1], a1, u1, v1);
       push(r1, y1, pn[j + 1][0], pn[j + 1][1], a0, u0, v1);
+      push(r1, y1, pn[j + 1][0], pn[j + 1][1], a1, u1, v1);
     }
   }
 
@@ -422,12 +695,25 @@ function latheGeo(pts, seg) {
 function limbGeo(rTop, rBot, len, seg, rings) {
   const rr = Math.max(3, rings | 0);
   const pts = [];
-  // bottom hemisphere
-  for (let i = rr; i >= 1; i--) {
+  /*
+   * Bottom hemisphere, POLE FIRST.
+   *
+   * This loop used to run `i = rr … 1`, which emitted the cap equator-DOWNWARD
+   * — the opposite of the bottom-to-top order `latheGeo` winds against — and
+   * stopped one step short of `r = 0`, so it never closed. What every
+   * `limbGeo` part actually rendered was: a back-facing (therefore CULLED)
+   * lower hemisphere, a straight cone cutting the corner back up to the
+   * equator, and an open hole at the pole. A `limbGeo(r, r, 0.001, …)` sphere
+   * — every eyeball, cheek pad, nose tip, ear, knee cap and goggle rivet on
+   * Nim — was a hollow BOWL, which is most of why the eyes photographed as two
+   * lit domes stuck on the face with a seam across the middle instead of as
+   * balls sunk in a socket. Ascending order closes the cap (`latheGeo` fans an
+   * `r = 0` end) and costs 3 triangles per segment LESS than the fault did.
+   */
+  for (let i = 0; i <= rr; i++) {
     const a = (i / rr) * Math.PI * 0.5;
     pts.push([rBot * Math.sin(a), -len - rBot * Math.cos(a)]);
   }
-  pts.push([rBot, -len]);
   pts.push([rTop, 0]);
   // top hemisphere
   for (let i = 1; i <= rr; i++) {
@@ -436,6 +722,353 @@ function limbGeo(rTop, rBot, len, seg, rings) {
   }
   // profile runs bottom-to-top already
   return latheGeo(pts, seg);
+}
+
+/**
+ * Skull radius in METRES at a head-local height `y`, read off the one `SKULL`
+ * profile. 0 at or above the crown and below the chin. Construction-time only.
+ * @param {number} y @returns {number}
+ */
+function skullRadius(y) {
+  return headRadiusAtHeight(-Math.PI * 0.5, y);
+}
+
+/* ───────────────────────── the head, as one surface ───────────────────────── */
+/*
+ * `headDirRadius` is the ONLY description of Nim's head. Skull, jaw, chin, brow
+ * ridge and nose are additive terms in it, so the surface it defines is smooth
+ * everywhere and there is no intersection seam to shade as a crease. Everything
+ * that needs to sit ON the head — hair shell, mouth, brows, goggles, eyes —
+ * asks this function where the surface is instead of assuming a sphere.
+ * Construction time only; nothing here runs per frame.
+ */
+
+/** Radius, metres, along the unit direction (dx, dy, dz). Head-local. */
+function headDirRadius(dx, dy, dz) {
+  const R = P.headR;
+  const u = dy;
+  const dn = u < 0 ? -u : 0;
+  // base egg: widest just under the equator, crown a touch tighter
+  let r = R * (1 + 0.024 * (1 - u * u) - 0.030 * u - 0.020 * dn * dn);
+
+  const front = dz < 0 ? -dz : 0;
+  // chin + jaw: forward-and-down fullness, faded out at the very bottom pole so
+  // the chin is a curve and not a point
+  const jf = front * front * (3 - 2 * front);
+  const jd = dn * dn * Math.sqrt(dn) * (1 - smoothstep(0.86, 1.0, dn));
+  r += HEAD_JAW * jf * jd;
+
+  // brow ridge — a soft band above the eyes, front-facing only
+  const bw = (u - 0.215) / 0.150;
+  r += HEAD_BROW * jf * front * Math.exp(-bw * bw);
+
+  // nose: an anisotropic raised-cosine cap about a down-and-forward axis. AY is
+  // chosen so the kernel reaches zero BELOW the eyes.
+  const na = dy * NOSE_NY + dz * NOSE_NZ;
+  if (na > 0.30) {
+    const nu = dy * NOSE_UY + dz * NOSE_UZ;
+    const rawU = Math.atan2(nu, na);
+    const ar = Math.atan2(dx, na) / NOSE_AX;
+    const au = rawU / (rawU >= 0 ? NOSE_AY_UP : NOSE_AY_DN);
+    const q = ar * ar + au * au;
+    if (q < 1) r += NOSE_H * (1 - Math.pow(q, 2.5));
+  }
+  return r;
+}
+
+/* scratch for the head builders — construction time, reused so a 36x28 sphere
+ * does not allocate 3000 arrays while it is being sampled. */
+const _hp0 = [0, 0, 0];
+const _hp1 = [0, 0, 0];
+const _hp2 = [0, 0, 0];
+const _hp3 = [0, 0, 0];
+const _hp4 = [0, 0, 0];
+const _hn0 = [0, 0, 0];
+
+/**
+ * Surface point at (azimuth `a`, elevation `e`). Azimuth matches `latheGeo`:
+ * x = r·cos a, z = r·sin a, so the FACE is at a = −π/2.
+ */
+function headPoint(a, e, out) {
+  const ce = Math.cos(e), se = Math.sin(e);
+  const dx = ce * Math.cos(a), dy = se, dz = ce * Math.sin(a);
+  const r = headDirRadius(dx, dy, dz);
+  out[0] = dx * r; out[1] = dy * r; out[2] = dz * r;
+  return out;
+}
+
+/** Outward unit normal at (a, e), by central differences of `headPoint`. */
+function headNormal(a, e, out) {
+  const h = 0.006;
+  const lim = Math.PI * 0.5 - 1e-3;
+  const e0 = e > lim ? lim : (e < -lim ? -lim : e);
+  headPoint(a + h, e0, _hp1);
+  headPoint(a - h, e0, _hp2);
+  const eu = Math.min(lim, e0 + h), ed = Math.max(-lim, e0 - h);
+  headPoint(a, eu, _hp3);
+  headPoint(a, ed, _hp4);
+  const t1x = _hp1[0] - _hp2[0], t1y = _hp1[1] - _hp2[1], t1z = _hp1[2] - _hp2[2];
+  const t2x = _hp3[0] - _hp4[0], t2y = _hp3[1] - _hp4[1], t2z = _hp3[2] - _hp4[2];
+  let nx = t1y * t2z - t1z * t2y;
+  let ny = t1z * t2x - t1x * t2z;
+  let nz = t1x * t2y - t1y * t2x;
+  let l = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+  nx /= l; ny /= l; nz /= l;
+  headPoint(a, e0, _hp1);
+  if (nx * _hp1[0] + ny * _hp1[1] + nz * _hp1[2] < 0) { nx = -nx; ny = -ny; nz = -nz; }
+  out[0] = nx; out[1] = ny; out[2] = nz;
+  return out;
+}
+
+/** Elevation whose surface point sits at head-local height `y`, at azimuth `a`. */
+function headElevAtHeight(a, y) {
+  let lo = -Math.PI * 0.5, hi = Math.PI * 0.5;
+  for (let i = 0; i < 30; i++) {
+    const m = (lo + hi) * 0.5;
+    headPoint(a, m, _hp0);
+    if (_hp0[1] < y) lo = m; else hi = m;
+  }
+  return (lo + hi) * 0.5;
+}
+
+/** Cross-section radius (in the XZ plane) at azimuth `a`, height `y`. */
+function headRadiusAtHeight(a, y) {
+  headPoint(a, headElevAtHeight(a, y), _hp0);
+  return Math.hypot(_hp0[0], _hp0[2]);
+}
+
+/** Crown height, metres. Read once so the hair shell can close above it. */
+const HEAD_TOP = headDirRadius(0, 1, 0);
+
+/**
+ * The head, sampled off `headDirRadius`. Non-indexed with ANALYTIC normals, so
+ * adjacent triangles that share a parameter share a normal exactly and the
+ * surface shades smooth — which a `computeVertexNormals` on non-indexed
+ * geometry cannot do, and which is the other half of why the old head read as
+ * faceted and dented.
+ */
+function headGeo(seg, rings) {
+  const s = Math.max(10, seg | 0);
+  const n = Math.max(8, rings | 0);
+  const pos = [];
+  const nor = [];
+  const uv = [];
+  const lim = Math.PI * 0.5;
+  /*
+   * NON-UNIFORM azimuth. Uniform sampling spends as many columns on the back of
+   * the skull — a plain sphere — as on the nose, and at 36 columns the nose
+   * kernel got 2.5 of them, which is why the first Round 4 build shipped a face
+   * with no nose on it at all. Warping by `phi - W*sin(phi)` about the face
+   * azimuth raises local density by 1/(1 - W) = 1.82x at the nose and drops it
+   * to 0.69x at the nape, for exactly zero extra triangles.
+   */
+  const W = 0.45;
+  const aFace = -Math.PI * 0.5;
+  // t = 0 and t = 1 both land on the NAPE, so the u = 0 / u = 1 texture seam
+  // sits under the hair. Parameterising from the face put that seam on the
+  // cheek, and it photographed as a vertical line down the right of the face
+  // (`turntable_a0`, second Round 4 build) — the geometry closed exactly, the
+  // UVs did not.
+  const warp = (t) => {
+    const phi = t * TAU - Math.PI;
+    return aFace + phi - W * Math.sin(phi);
+  };
+  const emit = (i, j) => {
+    const a = warp(i / s);
+    const e = -lim + (j / n) * (2 * lim);
+    headPoint(a, e, _hp0);
+    headNormal(a, e, _hn0);
+    pos.push(_hp0[0], _hp0[1], _hp0[2]);
+    nor.push(_hn0[0], _hn0[1], _hn0[2]);
+    uv.push(i / s, j / n);
+  };
+  // winding matches latheGeo's (see the note there): j increases upward
+  for (let i = 0; i < s; i++) {
+    for (let j = 0; j < n; j++) {
+      emit(i, j); emit(i + 1, j + 1); emit(i + 1, j);
+      emit(i, j); emit(i, j + 1); emit(i + 1, j + 1);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  return g;
+}
+
+/**
+ * A closed tube swept along an arc that RIDES the head surface — the lip and
+ * the brows. Replaces the 17 separate bevel boxes the critic photographed as
+ * "a segmented caterpillar, not a lip": one continuous surface cannot show the
+ * seams between beads, because it has none.
+ *
+ * @param {number} a0,a1   azimuth range of the arc
+ * @param {(f:number)=>number} yAt      head-local height at f ∈ [−1, 1]
+ * @param {(f:number)=>number} halfW    half-height of the tube across the face
+ * @param {(f:number)=>number} halfH    half-thickness outward from the skull
+ * @param {number} lift    metres the tube centre stands off the surface
+ * @param {number} samples arc samples
+ * @param {number} ring    points around the tube
+ */
+function surfaceTubeGeo(a0, a1, yAt, halfW, halfH, lift, samples, ring) {
+  const N = Math.max(3, samples | 0);
+  const K = Math.max(4, ring | 0);
+  const cx = new Float64Array(N * 3);      // centre
+  const sx = new Float64Array(N * 3);      // "up the face" axis
+  const nx2 = new Float64Array(N * 3);     // outward axis
+  const hw = new Float64Array(N);
+  const hh = new Float64Array(N);
+
+  for (let i = 0; i < N; i++) {
+    const f = (i / (N - 1)) * 2 - 1;
+    const a = a0 + (a1 - a0) * (i / (N - 1));
+    const y = yAt(f);
+    const e = headElevAtHeight(a, y);
+    headPoint(a, e, _hp0);
+    headNormal(a, e, _hn0);
+    cx[i * 3] = _hp0[0] + _hn0[0] * lift;
+    cx[i * 3 + 1] = _hp0[1] + _hn0[1] * lift;
+    cx[i * 3 + 2] = _hp0[2] + _hn0[2] * lift;
+    nx2[i * 3] = _hn0[0]; nx2[i * 3 + 1] = _hn0[1]; nx2[i * 3 + 2] = _hn0[2];
+    hw[i] = halfW(f); hh[i] = halfH(f);
+  }
+  // side axis = normal x tangent, tangent from the centreline itself
+  for (let i = 0; i < N; i++) {
+    const ia = Math.max(0, i - 1) * 3, ib = Math.min(N - 1, i + 1) * 3;
+    let tx = cx[ib] - cx[ia], ty = cx[ib + 1] - cx[ia + 1], tz = cx[ib + 2] - cx[ia + 2];
+    const tl = Math.sqrt(tx * tx + ty * ty + tz * tz) || 1;
+    tx /= tl; ty /= tl; tz /= tl;
+    const nxi = nx2[i * 3], nyi = nx2[i * 3 + 1], nzi = nx2[i * 3 + 2];
+    let ux = nyi * tz - nzi * ty, uy = nzi * tx - nxi * tz, uz = nxi * ty - nyi * tx;
+    const ul = Math.sqrt(ux * ux + uy * uy + uz * uz) || 1;
+    sx[i * 3] = ux / ul; sx[i * 3 + 1] = uy / ul; sx[i * 3 + 2] = uz / ul;
+  }
+
+  const pos = [];
+  const nor = [];
+  const uv = [];
+  const pt = (i, k, o) => {
+    const th = (k / K) * TAU;
+    const c = Math.cos(th), si = Math.sin(th);
+    const wx = sx[i * 3] * hw[i] * c + nx2[i * 3] * hh[i] * si;
+    const wy = sx[i * 3 + 1] * hw[i] * c + nx2[i * 3 + 1] * hh[i] * si;
+    const wz = sx[i * 3 + 2] * hw[i] * c + nx2[i * 3 + 2] * hh[i] * si;
+    o[0] = cx[i * 3] + wx; o[1] = cx[i * 3 + 1] + wy; o[2] = cx[i * 3 + 2] + wz;
+    const l = Math.sqrt(wx * wx + wy * wy + wz * wz) || 1;
+    o[3] = wx / l; o[4] = wy / l; o[5] = wz / l;
+    return o;
+  };
+  const A = [0, 0, 0, 0, 0, 0];
+  const push = (i, k) => {
+    pt(i, k, A);
+    pos.push(A[0], A[1], A[2]);
+    nor.push(A[3], A[4], A[5]);
+    uv.push(k / K, i / (N - 1));
+  };
+  for (let i = 0; i < N - 1; i++) {
+    for (let k = 0; k < K; k++) {
+      push(i, k); push(i + 1, k + 1); push(i + 1, k);
+      push(i, k); push(i, k + 1); push(i + 1, k + 1);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  return g;
+}
+
+/** Scratch object used to orient a built geometry's +Y onto an arbitrary axis. */
+const _orient = new THREE.Object3D();
+
+/**
+ * Place `geo` (authored around +Y) so its +Y points along (nx, ny, nz) at
+ * (px, py, pz), with an optional spin about that axis. Construction-time only.
+ */
+function orientTo(geo, px, py, pz, nx, ny, nz, roll) {
+  _v0.set(nx, ny, nz).normalize();
+  _q0.setFromUnitVectors(UP, _v0);
+  _orient.quaternion.copy(_q0);
+  _orient.position.set(px, py, pz);
+  _orient.scale.set(1, 1, 1);
+  if (roll) _orient.rotateY(roll);
+  _orient.updateMatrix();
+  geo.applyMatrix4(_orient.matrix);
+  return geo;
+}
+
+/**
+ * HAIR SHELL — a skull-hugging cap whose HAIRLINE varies with azimuth: high at
+ * the front (the goggles live on the brow), low at the temples and lower still
+ * at the nape, with a ragged edge so the read is hair and not a bowl.
+ *
+ * This exists because a LATHE cannot do it. The cap it replaced was a lathe
+ * that closed at `r = 0` at `0.90 R` — 22 mm BELOW the 0.99 R crown — so the
+ * top of the skull came through it and, from the follow camera (26–34 degrees
+ * above and behind, the view the player has all game), Nim was a bald ivory egg
+ * with a brown patch at the back. Radius here is `skullRadius(y) + off`, so the
+ * shell can never sink into the head, and the last ring lands ABOVE the crown,
+ * so there is nothing left to be bald.
+ *
+ * @param {number} seg   azimuth segments
+ * @param {number} rings rings from hairline to crown
+ * @param {number} off   metres the shell stands off the skull
+ * @returns {THREE.BufferGeometry}
+ */
+function hairShellGeo(seg, rings, off) {
+  const R = P.headR;
+  const s = Math.max(8, seg | 0);
+  const n = Math.max(3, rings | 0);
+  const yTop = HEAD_TOP + 0.012;              // above the crown, whatever it is
+  const pos = [];
+  const uv = [];
+
+  /*
+   * ROUND 4 (critic): "HAIR is a scatter of chunky dark-brown blocks on the
+   * crown only. From the hairline down to the goggle strap the skull is bare
+   * skin, and from behind the whole back of the head is bare tan."
+   * Measured cause: this hairline ran `0.52 + 0.32·front` of R, so the NAPE sat
+   * at +0.20 R — the shell stopped 5 cm ABOVE the widest point and left the
+   * entire lower back of the skull bare from every camera behind Nim, which is
+   * the camera the player has all game. Measured at the new coefficients:
+   * front 0.60 R (a forehead for the goggles to sit on), temples 0.10 R, nape
+   * −0.60 R — hair closes below the ears and wraps the whole back of the head,
+   * which `turntable_a4` now shows.
+   *
+   * `latheGeo` convention: x = r·cos a, z = r·sin a, so the FACE is at
+   * sin a = −1 and `front` runs +1 (brow) .. −1 (nape).
+   */
+  const line = (a) => {
+    const front = -Math.sin(a);
+    return R * (0.10 + 0.60 * front - 0.10 * front * front
+      + 0.055 * Math.sin(a * 5 + 0.7)
+      + 0.032 * Math.sin(a * 8 - 1.1));
+  };
+  const px = [0, 0, 0, 0];
+  const ring = (a, j, out) => {
+    const t = j / n;
+    const y0 = line(a);
+    const y = y0 + (yTop - y0) * Math.pow(t, 0.80);
+    const r = headRadiusAtHeight(a, y) + off * (1 - t * t * t);
+    out[0] = Math.cos(a) * r; out[1] = y; out[2] = Math.sin(a) * r; out[3] = t;
+    return out;
+  };
+  const emit = (a, j) => { ring(a, j, px); pos.push(px[0], px[1], px[2]); uv.push(a / TAU, px[3]); };
+
+  // winding matches latheGeo's — outward-facing (see the note there)
+  for (let i = 0; i < s; i++) {
+    const a0 = (i / s) * TAU, a1 = ((i + 1) / s) * TAU;
+    for (let j = 0; j < n; j++) {
+      emit(a0, j); emit(a1, j + 1); emit(a1, j);
+      emit(a0, j); emit(a0, j + 1); emit(a1, j + 1);
+    }
+  }
+
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.computeVertexNormals();          // non-indexed -> faceted, which is the look
+  return g;
 }
 
 /** Translate/rotate/scale a geometry in place (construction-time only). */
@@ -698,9 +1331,24 @@ void main() {
   vec2 d = vUv - 0.5;
   float r = clamp(length(d) * 2.0, 0.0, 1.0);
   // two-lobe falloff: a dense core under the feet, a soft ambient skirt.
-  float core = 1.0 - smoothstep(0.0, mix(0.55, 0.95, uSoft), r);
-  float skirt = 1.0 - smoothstep(0.0, 1.0, r);
-  float a = (core * 0.72 + skirt * 0.45) * uOpacity;
+  /* ROUND 5 — THE BLOB WAS A HOLE IN THE GROUND.
+   * Critic, _shots/verdant-1/crest-coins.png (zoom _shots/_r3_v1_shadowblade.png
+   * at 6x): "shadows are black holes that nothing in them respects. Blob-shadow
+   * interior measures [11,20,13] (~0.07 lum) with a HARD aliased crescent edge,
+   * no penumbra and no coloured bounce at all — a morning meadow's shade should
+   * carry the sky's blue."
+   * Three things made that: the core lobe reached 0.72 alpha over an opacity of
+   * 0.60 (so 43 % of a near-black colour straight over the grass), the core's
+   * falloff at uSoft 0.25 is nearly a step, and the colour was the theme FOG at
+   * 13 % — a hole, not a shadow. Shade is not the absence of light: it is the
+   * SKY without the sun, so the tint now comes from the theme's own sky/fill
+   * (setTheme) and the alpha profile is a real penumbra — a squared core that
+   * never saturates over a wide skirt, so the edge has a gradient a couple of
+   * hundred millimetres wide instead of an aliased crescent. */
+  float core = 1.0 - smoothstep(0.0, mix(0.62, 1.05, uSoft), r);
+  core *= core;
+  float skirt = 1.0 - smoothstep(0.0, 1.10, r);
+  float a = (core * 0.56 + skirt * 0.30) * uOpacity;
   if (a <= 0.003) discard;
   gl_FragColor = vec4(uColor, a);
 }
@@ -722,13 +1370,17 @@ class ShadowBlob {
     this.radius = numOr(o.radius, 0.46);
     this.maxDist = numOr(o.maxDist, 7.0);
     this.maxOpacity = numOr(o.opacity, 0.60);
+    /* The SHADE COLOUR. A contact shadow is the ground lit by everything EXCEPT
+     * the key, which outdoors is a blue sky and indoors is the fill — never
+     * black. setTheme() overwrites this from the theme rig. */
+    this.shadeColor = new THREE.Color(0x2a3444);
 
     this.geo = discGeometry(1, 32);
     this.mat = new THREE.ShaderMaterial({
       uniforms: {
         uColor: { value: new THREE.Color(o.color === undefined ? 0x05070c : o.color) },
         uOpacity: { value: 0 },
-        uSoft: { value: 0.25 },
+        uSoft: { value: 0.58 },
       },
       vertexShader: BLOB_VERT,
       fragmentShader: BLOB_FRAG,
@@ -757,15 +1409,27 @@ class ShadowBlob {
   }
 
   setTheme(theme) {
-    // A cold blue hole under a hero standing in a furnace reads as a bug. Tint
-    // the blob toward the theme's own fog so it sits in the same light.
+    /* ROUND 5. This used to be `fog * 0.13` — a near-black version of the haze,
+     * which is why the critic measured the blob interior at [11,20,13] with "no
+     * coloured bounce at all". What actually lights a shadow is the FILL and the
+     * hemi sky: in verdant that is 0x8fc0ff at 1.76 over a 0x8cbcec hemi, i.e. a
+     * distinctly BLUE shade, and in ember it is the lava bounce. Mixing the
+     * theme's fill/hemi with its fog keeps a furnace shadow warm and a meadow
+     * shadow blue without a per-theme constant to maintain. The multiplier is
+     * far higher than 0.13 because the material's own alpha is what makes it a
+     * shadow — the COLOUR should be the colour of the light that is still
+     * arriving. */
+    const L = (theme && theme.lights) || null;
+    const fill = (L && L.fill && L.fill.color);
+    const hemi = (L && L.hemi && L.hemi.skyColor);
     const fog = theme && theme.fog && theme.fog.color;
-    if (fog !== undefined && fog !== null) {
-      _col0.set(fog);
-      this.mat.uniforms.uColor.value.copy(_col0).multiplyScalar(0.13);
-    } else {
-      this.mat.uniforms.uColor.value.set(0x05070c);
-    }
+    const bounce = (fill !== undefined && fill !== null) ? fill
+      : ((hemi !== undefined && hemi !== null) ? hemi : 0x4a6a90);
+    _col0.set(bounce);
+    if (hemi !== undefined && hemi !== null) _col1.set(hemi), _col0.lerp(_col1, 0.35);
+    if (fog !== undefined && fog !== null) _col1.set(fog), _col0.lerp(_col1, 0.42);
+    this.shadeColor.copy(_col0);
+    this.mat.uniforms.uColor.value.copy(_col0).multiplyScalar(0.40);
   }
 
   setVisible(v) {
@@ -923,7 +1587,7 @@ export class Hero {
     this._buildScarf();
 
     // ---- shadow ----------------------------------------------------------
-    this.shadowBlob = new ShadowBlob(scene, { radius: 0.46, maxDist: 7.0, opacity: 0.60 });
+    this.shadowBlob = new ShadowBlob(scene, { radius: 0.50, maxDist: 7.0, opacity: 0.42 });
 
     // ---- animator state --------------------------------------------------
     this._anim = 'idle';
@@ -943,6 +1607,15 @@ export class Hero {
     this._lookYaw = 0;
     this._lookPitch = 0;
     this._breathe = 0;
+    /* Cycle clocks for the two states that have no ground travel to drive
+       them. `_dist` only accumulates while GROUNDED, so a hero on a pole or on
+       a wall had a phase that never moved: climb and wallslide measured
+       identical to 3 dp at t = 0.05 / 0.25 / 0.5 and photographed as statues.
+       These integrate on their own, weighted by the motion the state does
+       have (climb rate, slide speed) with a floor so a held grip still
+       shifts. */
+    this._climbPh = 0;
+    this._wallPh = 0;
 
     this._squash = 1;
     this._squashTgt = 1;
@@ -952,12 +1625,26 @@ export class Hero {
     this._flipRoll = 0;
     this._flipYaw = 0;
     this._flipDecay = 0;
+    this._flipDrvX = false;
+    this._flipDrvY = false;
+    this._flipDrvZ = false;
+    this._rootPitchDrv = false;
 
     this._rootPitch = 0;
     this._rootRoll = 0;
     this._rootYaw = 0;
     this._rootY = 0;
     this._rootZ = 0;
+
+    // Cyclic layer (see CYC_LAMBDA). `_cycW` is the envelope; the three root
+    // channels are the periodic part of the bob, roll and pitch. They are HELD
+    // across a state change, not zeroed, so the envelope can fade a mid-stride
+    // pose out instead of snapping it to rest in one frame.
+    this._cycW = 0;
+    this._cycTgt = 0;
+    this._cycY = 0;
+    this._cycRoll = 0;
+    this._cycPitch = 0;
 
     this._ikW = 0;              // foot-plant IK blend weight
     this._groundN = new THREE.Vector3(0, 1, 0);
@@ -1053,7 +1740,9 @@ export class Hero {
       this._bones.push({
         name, o,
         rx: o.rotation.x, ry: o.rotation.y, rz: o.rotation.z,   // rest
-        tx: o.rotation.x, ty: o.rotation.y, tz: o.rotation.z,   // target
+        tx: o.rotation.x, ty: o.rotation.y, tz: o.rotation.z,   // sprung target
+        bx: o.rotation.x, by: o.rotation.y, bz: o.rotation.z,   // sprung BASE
+        cx: 0, cy: 0, cz: 0,                                    // cyclic delta
       });
     }
     /** name -> record, so pose writers read like prose. */
@@ -1083,6 +1772,7 @@ export class Hero {
     for (let i = 0; i < this._bones.length; i++) {
       const b = this._bones[i];
       b.rx = b.o.rotation.x; b.ry = b.o.rotation.y; b.rz = b.o.rotation.z;
+      b.bx = b.rx; b.by = b.ry; b.bz = b.rz;
     }
   }
 
@@ -1117,10 +1807,24 @@ export class Hero {
       // Skin is the one place the library map is nearly suppressed: `plaster`
       // is the Keep's wall bake, and even at world scale its crack network has
       // no business on a face. It contributes pore-level value only.
+      /* ROUND 3, second pass. Dropping the albedo alone did not clear the
+       * blown-disc read at the Keep courtyard (`_shots/_vz_herohead.png`): the
+       * head is a smooth sphere facing straight up at the dome, so a big part
+       * of what was clipping was the ENVIRONMENT term, not the diffuse. The
+       * skull is skin, not porcelain — it should barely mirror the sky at all.
+       * Albedo down again, envMapIntensity pinned low, roughness up, and the
+       * clearcoat (a wet/varnished layer on a face) removed. */
       skin: reg(deriveMaterial(M, 'plaster', t, {
-        color: COL.skin, roughness: 0.62, size: PART_M.skin, detail: 0.18,
-        normalScale: 0.25, physical: true, sheen: 0.22, sheenRoughness: 0.75,
-        sheenColor: 0x8a5a48, specularIntensity: 0.30, clearcoat: 0.08, clearcoatRoughness: 0.85,
+        // ...and once the head became ONE smooth surface, what was left of
+        // that crack network stopped hiding in the facets and photographed as
+        // leathery FOLDS running temple to jaw (`_r3_headzoom.png`). A face is
+        // not a plaster wall: the normal contribution drops 0.25 -> 0.07 and
+        // the value modulation 0.18 -> 0.09, which leaves pore-level grain and
+        // nothing structural.
+        color: COL.skin, roughness: 0.74, size: PART_M.skin, detail: 0.09,
+        normalScale: 0.07, physical: true, sheen: 0.18, sheenRoughness: 0.85,
+        sheenColor: 0x8a5a48, specularIntensity: 0.22, clearcoat: 0.0, clearcoatRoughness: 0.9,
+        envMapIntensity: 0.32,
       })),
       hair: reg(deriveMaterial(M, 'cloth', t, {
         color: COL.hair, roughness: 0.70, size: PART_M.hair, detail: 0.70,
@@ -1130,8 +1834,14 @@ export class Hero {
         color: COL.boot, roughness: 0.86, size: PART_M.boot, detail: 0.65,
         physical: true, clearcoat: 0.22, clearcoatRoughness: 0.60, specularIntensity: 0.45,
       })),
+      // Goggle brass. `metalness` 0.94 at `roughness` 0.28 is a MIRROR: on a
+      // 12 mm rim under an open sky that is a moving specular the width of the
+      // whole part, which is what photographed as "a scribbled blue-white
+      // streak". 0.80 / 0.42 keeps a metal response and lets the albedo show,
+      // and `detail` 0.75 -> 0.28 stops the library's machined grain from
+      // scribbling at the rim's texel density.
       metal: reg(deriveMaterial(M, 'metal', t, {
-        color: COL.metal, roughness: 0.28, metalness: 0.94, size: PART_M.metal, detail: 0.75,
+        color: COL.metal, roughness: 0.42, metalness: 0.80, size: PART_M.metal, detail: 0.28,
       })),
       gold: reg(deriveMaterial(M, 'gold', t, {
         color: COL.buckle, roughness: 0.30, metalness: 0.90, size: PART_M.gold, detail: 0.70,
@@ -1157,9 +1867,20 @@ export class Hero {
       lens: reg(deriveMaterial(M, 'glass', t, {
         color: COL.lens, roughness: 0.05, metalness: 0.0, size: PART_M.lens, detail: 0.35,
         physical: true, clearcoat: 1.0, clearcoatRoughness: 0.04, ior: 1.45,
-        specularIntensity: 1.0, envMapIntensity: 1.8,
-        emissive: COL.lens, emissiveIntensity: 0.16,
-        transparent: true, opacity: 0.42, side: THREE.DoubleSide,
+        specularIntensity: 1.0, envMapIntensity: 2.4,
+        // The lens is a DOME now, so the environment term does the work a flat
+        // disc could not: `emissive` drops from 0.16 to 0.04 (a self-lit lens
+        // is the "near-opaque pale disc" read, and it feeds the bloom that the
+        // owner has flagged on trim across several games) and the alpha opens
+        // up so the forehead reads THROUGH the glass.
+        emissive: COL.lens, emissiveIntensity: 0.04,
+        // FrontSide, and it is a DRAW CALL, not a preference: three.js renders
+        // a `transparent` + `DoubleSide` material in two passes (back faces,
+        // then front) unless `forceSinglePass`, and `_harness/drawprobe.py`
+        // duly recorded `nim.goggleLens` twice at 416 tris in a single frame.
+        // A closed dome sitting on the forehead has no back faces worth
+        // drawing, so this is one draw and half the fragments for nothing lost.
+        transparent: true, opacity: 0.30, side: THREE.FrontSide,
       })),
       // The sclera is a WET EYE, not a lamp: the old emissive 0.55 is what made
       // two 0.12 m discs read as stick-on googly eyes in every screenshot.
@@ -1169,12 +1890,34 @@ export class Hero {
         specularIntensity: 0.45, envMapIntensity: 0.18,
         emissive: 0xfff4e8, emissiveIntensity: 0.03,
       })),
+      // The IRIS. Matte, not a mirror: the old 0.30 roughness with a 0.20
+      // clearcoat put a broad specular in the middle of a 3 mm-proud ring and
+      // every close-up came back with two chrome donuts where the eyes belong.
+      // The catchlight is now a real GEOMETRIC bead in the sclera mesh, so the
+      // pupil itself is allowed to be flat black.
+      // The IRIS is vertex-coloured (limbal ring / iris / pupil in ONE draw),
+      // so the base colour is white and the geometry carries the palette.
       eyeDark: reg(deriveMaterial(M, 'plaster', t, {
-        color: COL.eyePupil, roughness: 0.30, size: PART_M.eyeDark, detail: 0.10,
-        normalScale: 0.15, physical: true, clearcoat: 0.20, clearcoatRoughness: 0.10,
-        specularIntensity: 0.45, envMapIntensity: 0.10,
+        color: 0xffffff, roughness: 0.46, size: PART_M.eyeDark, detail: 0.10,
+        normalScale: 0.15, physical: true, clearcoat: 0.22, clearcoatRoughness: 0.20,
+        specularIntensity: 0.35, envMapIntensity: 0.10,
+      })),
+      // Lips. A separate key so the mouth is not cut from brow-brown cloth.
+      lip: reg(deriveMaterial(M, 'plaster', t, {
+        color: COL.lip, roughness: 0.52, size: PART_M.lip, detail: 0.12,
+        normalScale: 0.20, physical: true, sheen: 0.20, sheenRoughness: 0.60,
+        sheenColor: 0x6d2a24, specularIntensity: 0.42,
+        clearcoat: 0.14, clearcoatRoughness: 0.30,
       })),
     };
+
+    // The iris rides 1.6 mm off a 42 mm ball. That is inside the depth
+    // buffer's noise at a 2.4 m portrait distance, so bias it forward rather
+    // than let a pupil flicker.
+    this.M.eyeDark.vertexColors = true;
+    this.M.eyeDark.polygonOffset = true;
+    this.M.eyeDark.polygonOffsetFactor = -2;
+    this.M.eyeDark.polygonOffsetUnits = -2;
 
     // Wing power — additive energy membrane. Built now, shown only on demand.
     this.M.wing = reg(new THREE.MeshBasicMaterial({
@@ -1262,8 +2005,15 @@ export class Hero {
     this._attach(chest, mergeAll(dark), this.M.coatDark, 'coatDark');
 
     // --- collar (a soft roll the scarf sits in) ---
+    // It used to run 1.062 .. 1.126 at a 0.086 .. 0.134 radius, which is
+    // entirely INSIDE a 0.50 m skull whose chin reaches down to 0.98: the only
+    // reason it was ever on screen is that the lathe winding was inverted and
+    // the head was not occluding anything. Dropped to the base of the head and
+    // widened past the coat's shoulder, so it is a teal roll under the chin
+    // instead of a draw call spent on geometry no camera can reach.
     const collar = latheGeo([
-      [0.086, 1.062 - cy], [0.128, 1.078 - cy], [0.134, 1.108 - cy], [0.104, 1.126 - cy], [0.078, 1.120 - cy],
+      [0.156, 0.998 - cy], [0.182, 1.010 - cy], [0.186, 1.030 - cy],
+      [0.168, 1.048 - cy], [0.130, 1.058 - cy],
     ], seg);
     this._attach(chest, collar, this.M.trim, 'collar');
 
@@ -1280,176 +2030,287 @@ export class Hero {
   }
 
   /**
-   * Head: a lathe sphere with a subtle jaw wedge merged in, goggles pushed up
-   * on the brow, big expressive eyes and a hair tuft. The eyes are the only
-   * emissive thing on Nim — they are what the player's eye tracks.
+   * Head. ONE smooth surface (`headGeo` off `headDirRadius`) carrying skull,
+   * jaw, chin, brow ridge and nose, plus swept-tube brows and lip that ride
+   * that surface, goggles pushed up onto the forehead, ears moved off the face
+   * to the silhouette, and big sunk eyes with a coloured iris and a real
+   * catchlight. Round 4 rewrite — see the notes on `headDirRadius`, `EYE_YAW`
+   * and `surfaceTubeGeo` for what each reject cost and why the fix is here.
    */
   _buildHead() {
-    const seg = this._seg(20);
     const head = this.bones.head;
     const R = P.headR;
 
-    // skull: slightly egg-shaped, wider at the cheeks than the crown
-    const skull = latheGeo([
-      [0.000, -R * 0.96],
-      [R * 0.40, -R * 0.90],
-      [R * 0.74, -R * 0.66],
-      [R * 0.94, -R * 0.28],
-      [R * 1.00, R * 0.06],
-      [R * 0.95, R * 0.42],
-      [R * 0.74, R * 0.72],
-      [R * 0.40, R * 0.92],
-      [0.000, R * 0.99],
-    ], seg);
+    /* ── the skull ─────────────────────────────────────────────────────────
+     * The head is the one part of Nim the camera stares at all game, so it
+     * gets the resolution: `headDirRadius`'s nose kernel is ~0.29 rad wide and
+     * needs at least four columns across it to read as a button rather than a
+     * facet. 36 x 28 at full quality is 4032 triangles — 0.9 % of the 450 k
+     * scene budget, and it buys a face with no seams in it.
+     */
+    const hseg = this._seg(36);
+    const skull = headGeo(hseg, Math.round(hseg * 0.84));
 
-    // jaw: a soft wedge under the front of the skull. This is the whole
-    // difference between "a ball with eyes" and "a face".
-    const jaw = place(
-      limbGeo(0.075, 0.075, 0.001, seg, 4),
-      0, -0.115, -0.103, 0, 0, 0, 1.25, 0.80, 1.0,
-    );
-    // ears: two small discs so the profile silhouette is not a circle
+    /* ── ears ──────────────────────────────────────────────────────────────
+     * ROUND 4 (critic): "EARS are bare untextured skin spheres stuck to the
+     * sides at brow height with no lobe, helix or attachment — visually a
+     * fourth and fifth face lump." Now a real shell — concha dish, helix rim,
+     * a back wall that buries into the skull — and, decisively, MOVED: 25 %
+     * behind the widest point and 5.5 cm BELOW the eyes, so it lands on the
+     * silhouette edge and never again inside the face.
+     */
+    const earPts = [
+      [0.0000, 0.0072], [0.0105, 0.0040], [0.0195, 0.0068], [0.0276, 0.0165],
+      [0.0330, 0.0262], [0.0366, 0.0220], [0.0356, 0.0072], [0.0286, -0.0092],
+      [0.0143, -0.0152], [0.0000, -0.0170],
+    ];
     const ears = [];
     for (const s of [1, -1]) {
-      ears.push(place(
-        limbGeo(0.030, 0.036, 0.030, this._seg(10), 2),
-        s * (R * 0.94), R * 0.02, 0.010, 0, 0, s * 1.35,
-      ));
-    }
-    // Nose: a real button, not the 14 mm nub the face audit found. A tapered
-    // bridge merged with a rounded tip, 5 cm across and 4 cm proud, so the
-    // three-quarter silhouette has something between the goggles and the chin.
-    const noseParts = [
-      place(bevelBoxGeometry(0.046, 0.058, 0.052, 0.020, 1), 0, -R * 0.15, -R * 0.90, 0.22, 0, 0),
-      place(limbGeo(0.024, 0.030, 0.014, this._seg(10), 3), 0, -R * 0.19, -R * 1.00, 1.42, 0, 0),
-    ];
-    // Cheeks: two soft pads that stop the lower face reading as a bare sphere.
-    // Sunk like the eyes are — the skull crops them to a ~7 cm pad standing
-    // 1.8 cm proud, which is a cheek, not a ball stuck on a ball.
-    for (const s of [1, -1]) {
-      noseParts.push(place(
-        limbGeo(0.042, 0.042, 0.001, this._seg(12), 3),
-        s * 0.098, -R * 0.28, -0.170,
-      ));
+      /* Height matters as much as depth. The first Round 4 ear sat at
+       * dy = -0.075 with a 10 mm sink: its top reached y = +0.023 while the
+       * hair shell's temple line at that azimuth is y = +0.009, so the hair
+       * covered it and `turntable_a2` showed no ear at all. dy = -0.185 puts
+       * the ear centre at y = -0.048 - between the eye (0.036) and the nose
+       * base (-0.106), where an ear actually belongs - and an 8 mm sink leaves
+       * the helix rim ~17 mm proud instead of 7. */
+      const ex = s * 0.958, ey = -0.185, ez = 0.220;
+      const el = Math.hypot(ex, ey, ez);
+      const dx = ex / el, dy = ey / el, dz = ez / el;
+      const er = headDirRadius(dx, dy, dz) - 0.008;
+      const g = latheGeo(earPts, this._seg(12));
+      g.scale(1.30, 1.0, 0.86);
+      ears.push(orientTo(g, dx * er, dy * er, dz * er, dx, dy, dz, 0));
     }
 
-    this._attach(head, mergeAll([skull, jaw].concat(noseParts, ears)), this.M.skin, 'head');
+    this._attach(head, mergeAll([skull].concat(ears)), this.M.skin, 'head');
 
-    // --- hair: blades SWEPT BACK off the crown ------------------------------
-    // They used to stand at −0.55 rad, which from the follow camera read as one
-    // black cone — a party hat. Swept to −1.25 they read as hair moving.
-    const hair = [];
+    // --- hair --------------------------------------------------------------
+    // The shell now runs from a 0.60 R forehead down to a -0.60 R nape (see
+    // `hairShellGeo`), so there is no bare skin behind the goggles from any
+    // camera. Blades, fringe and tufts are accents ON that shell, not a
+    // scatter of blocks on a bald head.
+    const hair = [hairShellGeo(this._seg(22), 6, 0.013)];
+
+    // blades swept back off the crown to break the 20 m outline
     for (let i = 0; i < 5; i++) {
       const a = (i - 2) * 0.34;
       hair.push(place(
-        bevelBoxGeometry(0.040 - Math.abs(i - 2) * 0.005, 0.135, 0.026, 0.011, 1),
-        Math.sin(a) * 0.072, R * 0.90 + 0.012, -0.010 - Math.cos(a) * 0.012,
+        bevelBoxGeometry(0.034 - Math.abs(i - 2) * 0.004, 0.150, 0.022, 0.009, 1),
+        Math.sin(a) * 0.072, R * 0.88 + 0.014, -0.010 - Math.cos(a) * 0.012,
         -1.25, a, a * 0.5,
       ));
     }
-    // A short fringe over the brow, so the face has a hairline to sit under.
-    for (let i = 0; i < 3; i++) {
-      const a = (i - 1) * 0.46;
+    // a fringe ON the hairline, above the goggles
+    for (let i = 0; i < 5; i++) {
+      const a = (i - 2) * 0.36;
       hair.push(place(
-        bevelBoxGeometry(0.058, 0.070, 0.024, 0.010, 1),
-        Math.sin(a) * 0.108, R * 0.86, -R * 0.60 + Math.abs(a) * 0.030,
-        0.75, a * 0.6, a * 0.7,
+        bevelBoxGeometry(0.050, 0.062, 0.022, 0.009, 1),
+        Math.sin(a) * 0.105, R * 0.885, -R * 0.50 + Math.abs(a) * 0.026,
+        0.62, a * 0.6, a * 0.7,
       ));
     }
-    // a back fringe so the crown is not bald from the follow camera
-    hair.push(place(
-      latheGeo([[R * 0.99, R * 0.10], [R * 1.02, R * 0.36], [R * 0.86, R * 0.66], [R * 0.52, R * 0.86], [0, R * 0.90]], seg),
-      0, 0, 0.012,
-    ));
-    // The goggle strap around the back of the skull is dark brown leather and
-    // the hair is dark brown cloth — merging them costs nothing visually and
-    // saves a whole draw call on the model the camera stares at all game.
-    hair.push(place(
-      latheGeo([[R * 1.01, R * 0.34], [R * 1.05, R * 0.40], [R * 1.05, R * 0.50], [R * 1.01, R * 0.56]], this._seg(14)),
-      0, 0, 0,
-    ));
-    // brow line: a dark bar above each eye — the cheapest expression there is
+    // sideburn wedges so the hairline meets the ears instead of stopping short
     for (const s of [1, -1]) {
       hair.push(place(
-        bevelBoxGeometry(0.076, 0.017, 0.018, 0.006, 1),
-        s * EYE_X, EYE_Y + 0.060, -R * 0.90, 0.10, -s * 0.16, s * 0.20,
+        bevelBoxGeometry(0.030, 0.075, 0.048, 0.012, 1),
+        s * 0.205, R * 0.10, -0.030, 0.06, 0, -s * 0.16,
       ));
     }
-
-    // --- the MOUTH. There was not one. A 12 cm smile arc in the same dark
-    //     brown as the brows and lashes, merged into that mesh, so a face the
-    //     camera stares at all game finally has three features instead of two.
-    for (let i = 0; i < 9; i++) {
-      const f = (i - 4) / 4;                       // −1 .. 1 across the mouth
-      const x = f * 0.048;
-      const y = -R * 0.40 + f * f * 0.016;         // corners lifted -> a smile
-      // ride the skull's own cross-section at this height, then stand proud of
-      // it so no segment can sink into the cheek
-      const rr = R * 0.875;
-      const z = -Math.sqrt(Math.max(0.001, rr * rr - x * x)) - 0.006;
+    // three tufts standing off the crown
+    for (let i = 0; i < 3; i++) {
+      const a = 1.9 + i * 1.5;
       hair.push(place(
-        bevelBoxGeometry(0.030, 0.014 - Math.abs(f) * 0.004, 0.018, 0.005, 1),
-        x, y, z, 0.16, 0, -f * 0.34,
+        bevelBoxGeometry(0.044, 0.104, 0.026, 0.010, 1),
+        Math.cos(a) * 0.100, R * 0.88, Math.sin(a) * 0.100,
+        -0.80 + i * 0.20, a, 0.28 - i * 0.16,
+      ));
+    }
+    // The goggle strap: a band that FOLLOWS the skull instead of a fixed-radius
+    // hoop floating off it. Dark brown leather, merged into the hair mesh —
+    // same colour, same bone, one draw call saved on the model the camera
+    // stares at all game.
+    const strapPts = [];
+    for (let i = 0; i <= 4; i++) {
+      const yy = GOG_STRAP_Y0 + (GOG_STRAP_Y1 - GOG_STRAP_Y0) * (i / 4);
+      const rr0 = headRadiusAtHeight(0, yy) + (i === 0 || i === 4 ? 0.016 : 0.021);
+      strapPts.push([rr0, yy]);
+    }
+    hair.push(latheGeo(strapPts, this._seg(18)));
+
+    /* ── brows ─────────────────────────────────────────────────────────────
+     * ROUND 4 (critic): "two dark-brown bars floating a full eye-height above
+     * the eyes over bare flesh, so they read as a second goggle strap … the
+     * image-right brow clips the goggle strap's lower edge." Measured: the bars
+     * sat at EYE_Y + 0.060 over a 0.042 eyeball — 18 mm of bare skin between
+     * eyeball top and brow. Now swept tubes that RIDE the skull 6 mm above the
+     * eye, arched, and tapered to points at both ends so they read as brows;
+     * and the goggles moved 6 cm up the forehead, so the nearest goggle edge is
+     * 27 mm clear of the brow top instead of touching it.
+     */
+    for (const s of [1, -1]) {
+      const az = -Math.PI * 0.5 + s * EYE_YAW;
+      hair.push(surfaceTubeGeo(
+        az - s * 0.175, az + s * 0.175,
+        (f) => BROW_Y + 0.009 * (1 - f * f) - 0.004 * f,
+        (f) => 0.0072 * Math.pow(Math.max(1e-3, 1 - f * f), 0.32),
+        (f) => 0.0055 * Math.pow(Math.max(1e-3, 1 - f * f), 0.32),
+        0.0020, 11, 6,
       ));
     }
     this._attach(head, mergeAll(hair), this.M.hair, 'hair');
 
-    // --- goggles pushed up on the brow ---
-    const gseg = this._seg(14);
-    const frames = [];
-    for (const s of [1, -1]) {
-      // frame ring: a lathe torus-ish cup
-      frames.push(place(
-        latheGeo([
-          [0.056, 0.000], [0.072, 0.004], [0.078, 0.026], [0.072, 0.044],
-          [0.056, 0.048], [0.052, 0.030], [0.052, 0.006],
-        ], gseg),
-        s * 0.098, R * 0.44, -R * 0.80, Math.PI * 0.5 - 0.30, 0, 0,
-      ));
-      // rivets — a real machined cylinder from the builders vocabulary
-      frames.push(place(tubeGeometry(0.011, 0.013, 0.014, 8, 1),
-        s * 0.160, R * 0.50, -R * 0.72, Math.PI * 0.5, 0, 0));
-    }
-    // bridge between the two cups
-    frames.push(place(bevelBoxGeometry(0.070, 0.024, 0.030, 0.008, 1), 0, R * 0.47, -R * 0.80, -0.30, 0, 0));
-    this._attach(head, mergeAll(frames), this.M.metal, 'goggleFrame');
+    /* ── the mouth ─────────────────────────────────────────────────────────
+     * ROUND 4 (critic): "a dark-berry strip whose individual quads are visible
+     * at close range — it reads as a segmented caterpillar, not a lip." It was
+     * 17 separate bevel boxes chained along an arc; overlapping them 3x hid the
+     * seams at 20 m and not at 0.6 m. One swept tube on the head surface has no
+     * seams to hide, and the corner taper is now a real taper rather than a
+     * shorter box.
+     */
+    this._attach(head, surfaceTubeGeo(
+      -Math.PI * 0.5 - MOUTH_SWEEP, -Math.PI * 0.5 + MOUTH_SWEEP,
+      (f) => MOUTH_Y + f * f * MOUTH_LIFT,
+      (f) => 0.0112 * Math.pow(Math.max(1e-3, 1 - f * f), 0.30),
+      (f) => 0.0066 * Math.pow(Math.max(1e-3, 1 - f * f), 0.30),
+      0.0022, 24, 7,
+    ), this.M.lip, 'mouth');
 
-    // lenses inside the cups
+    /* ── goggles, pushed up onto the forehead ──────────────────────────────
+     * ROUND 4 (critic): "GOGGLES read as painted-on, not as glass and metal:
+     * the lenses are near-opaque pale discs with no reflection or refraction,
+     * and the rims render as a scribbled blue-white streak." The rim is now a
+     * closed brass torus section (a rim has a cross-section; the old open
+     * 7-point cup did not), sitting on the surface at the angle the surface
+     * actually has, and the lens is a DOME — a curved lens rolls a highlight
+     * across itself as the head turns, which is the whole reason glass reads as
+     * glass. Colour and texel scale moved with it (see COL.metal).
+     */
+    const gseg = this._seg(16);
+    const frames = [];
     const lenses = [];
     for (const s of [1, -1]) {
-      lenses.push(place(
-        limbGeo(0.052, 0.052, 0.006, gseg, 2),
-        s * 0.098, R * 0.44, -R * 0.79, Math.PI * 0.5 - 0.30, 0, 0,
-      ));
+      const az = -Math.PI * 0.5 + s * GOG_AZ;
+      const e = headElevAtHeight(az, GOG_Y);
+      headPoint(az, e, _hp0);
+      headNormal(az, e, _hn0);
+      const px = _hp0[0], py = _hp0[1], pz = _hp0[2];
+      const nx = _hn0[0], ny = _hn0[1], nz = _hn0[2];
+
+      // rim: a closed cross-section swept round, so it has a real edge
+      frames.push(orientTo(latheGeo([
+        [0.0510, 0.000], [0.0600, -0.002], [0.0655, 0.006], [0.0645, 0.019],
+        [0.0575, 0.025], [0.0495, 0.019], [0.0470, 0.007], [0.0510, 0.000],
+      ], gseg), px + nx * 0.008, py + ny * 0.008, pz + nz * 0.008, nx, ny, nz, 0));
+
+      // rivet on the outboard side of each cup
+      const raz = -Math.PI * 0.5 + s * (GOG_AZ + 0.150);
+      const re = headElevAtHeight(raz, GOG_Y - 0.004);
+      headPoint(raz, re, _hp0);
+      headNormal(raz, re, _hn0);
+      frames.push(orientTo(limbGeo(0.0090, 0.0100, 0.004, 8, 2),
+        _hp0[0] + _hn0[0] * 0.012, _hp0[1] + _hn0[1] * 0.012, _hp0[2] + _hn0[2] * 0.012,
+        _hn0[0], _hn0[1], _hn0[2], 0));
+
+      // the dome
+      const lensPts = [[0.0525, 0.0000]];
+      for (let i = 6; i >= 0; i--) {
+        const t = i / 6;
+        lensPts.push([0.0525 * t, 0.0035 + 0.0165 * Math.sqrt(Math.max(0, 1 - t * t))]);
+      }
+      lenses.push(orientTo(latheGeo(lensPts, gseg),
+        px + nx * 0.008, py + ny * 0.008, pz + nz * 0.008, nx, ny, nz, 0));
     }
+    // bridge between the two cups
+    {
+      const e = headElevAtHeight(-Math.PI * 0.5, GOG_Y);
+      headPoint(-Math.PI * 0.5, e, _hp0);
+      headNormal(-Math.PI * 0.5, e, _hn0);
+      frames.push(orientTo(bevelBoxGeometry(0.062, 0.020, 0.026, 0.007, 1),
+        _hp0[0] + _hn0[0] * 0.010, _hp0[1] + _hn0[1] * 0.010, _hp0[2] + _hn0[2] * 0.010,
+        _hn0[0], _hn0[1], _hn0[2], 0));
+    }
+    this._attach(head, mergeAll(frames), this.M.metal, 'goggleFrame');
     this._attach(head, mergeAll(lenses), this.M.lens, 'goggleLens');
 
-    // --- eyes ------------------------------------------------------------
-    // A pivot per feature so blink (scale) and look (rotate) never interfere.
-    // The pivot sits AT eye height so a blink collapses the lids in place.
-    this._eyePivot = new THREE.Object3D();
-    this._eyePivot.name = 'nim.eyes';
-    this._eyePivot.position.set(0, EYE_Y, 0);
-    head.add(this._eyePivot);
-
-    const eseg = this._seg(14);
+    /* ── eyes ──────────────────────────────────────────────────────────────
+     * A pivot per feature so blink (scale) and look (rotate) never interfere.
+     * The ball is sunk against the ACTUAL surface (`headPoint` at the eye's own
+     * azimuth and height, then EYE_R − EYE_PROUD inward along the real normal),
+     * so the brow ridge and the jaw term can move without un-sinking it.
+     */
+    const eseg = this._seg(24);
     const sclera = [];
     const pupils = [];
+    let restY = 0;
     for (const s of [1, -1]) {
-      const ex = s * EYE_X, ey = 0, ez = EYE_Z;
-      // eyeball: a real sphere, slightly flattened front-to-back, sunk in
-      sclera.push(place(
-        limbGeo(EYE_R, EYE_R, 0.001, eseg, 4),
-        ex, ey, ez,
-      ));
-      // Iris: a shallow cap that must PROTRUDE through the eyeball's front, or
-      // the sclera's own specular is all the camera sees (which is what made
-      // the eyes read as two chrome rings). 0.95 R puts its rim ~3 mm proud.
-      pupils.push(place(
-        limbGeo(0.026, 0.026, 0.004, eseg, 3),
-        ex, ey, ez - EYE_R * 0.99, Math.PI * 0.5, 0, 0, 1.0, 1.0, 1.20,
-      ));
+      const az = -Math.PI * 0.5 + s * EYE_YAW;
+      const e = headElevAtHeight(az, EYE_Y);
+      headPoint(az, e, _hp0);
+      headNormal(az, e, _hn0);
+      const nx = _hn0[0], ny = _hn0[1], nz = _hn0[2];
+      const sink = EYE_R - EYE_PROUD;
+      const cx = _hp0[0] - nx * sink;
+      const cy = _hp0[1] - ny * sink;
+      const cz = _hp0[2] - nz * sink;
+      restY += cy * 0.5;
+
+      // a surface frame at the eye: N out, U up the face, S across it
+      let ux = -ny * nx, uy = 1 - ny * ny, uz = -ny * nz;
+      const ul = Math.hypot(ux, uy, uz) || 1;
+      ux /= ul; uy /= ul; uz /= ul;
+      const sx2 = ny * uz - nz * uy, sy2 = nz * ux - nx * uz, sz2 = nx * uy - ny * ux;
+
+      // the eyeball
+      sclera.push(place(limbGeo(EYE_R, EYE_R, 0.001, eseg, 5), cx, cy + 0.0005, cz));
+
+      /* CATCHLIGHT — a real bead of wet sclera standing ~3.4 mm proud of the
+       * iris at 14 degrees off the eye axis, so it straddles the iris and never
+       * washes out. The critic's "no catchlight" was measured, not impression:
+       * the old bead was GLINT_R 0.0055 at a radius INSIDE the iris cap, so the
+       * iris drew over it and what showed was a material specular. */
+      const gdx = nx * 0.970 + ux * 0.205 + sx2 * (s * 0.125);
+      const gdy = ny * 0.970 + uy * 0.205 + sy2 * (s * 0.125);
+      const gdz = nz * 0.970 + uz * 0.205 + sz2 * (s * 0.125);
+      const gl = Math.hypot(gdx, gdy, gdz) || 1;
+      const gd = EYE_R - 0.0055;
+      sclera.push(place(limbGeo(GLINT_R, GLINT_R, 0.001, this._seg(10), 3),
+        cx + (gdx / gl) * gd, cy + (gdy / gl) * gd + 0.0005, cz + (gdz / gl) * gd));
+
+      /* IRIS — a cap that CONFORMS to the eyeball, vertex-coloured so a dark
+       * limbal ring, a warm amber iris and a near-black pupil all ship in ONE
+       * draw call. Colours are assigned from the lathe's own axial radius
+       * BEFORE the cap is oriented, so they cannot drift with placement. */
+      const ER = EYE_R + 0.0016;
+      const irisPts = [[PUPIL_R, Math.sqrt(EYE_R * EYE_R - PUPIL_R * PUPIL_R) - 0.0018]];
+      const rr = [PUPIL_R, 0.0192, IRIS_LIMBAL, 0.0158, 0.0125, IRIS_INNER, 0.0086,
+        0.0060, 0.0032, 0.0000];
+      for (let i = 0; i < rr.length; i++) {
+        irisPts.push([rr[i], Math.sqrt(Math.max(1e-9, ER * ER - rr[i] * rr[i]))]);
+      }
+      const iris = latheGeo(irisPts, eseg);
+      const ip = iris.attributes.position.array;
+      const col = new Float32Array(ip.length);
+      for (let i = 0; i < ip.length; i += 3) {
+        const r2 = Math.hypot(ip[i], ip[i + 2]);
+        let hex;
+        if (r2 >= IRIS_LIMBAL) hex = COL.irisRim;
+        else if (r2 <= IRIS_INNER) hex = COL.eyePupil;
+        else hex = (r2 < (IRIS_INNER + IRIS_LIMBAL) * 0.5) ? COL.irisIn : COL.iris;
+        _col0.setHex(hex, THREE.SRGBColorSpace);
+        col[i] = _col0.r; col[i + 1] = _col0.g; col[i + 2] = _col0.b;
+      }
+      iris.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      pupils.push(orientTo(iris, cx, cy, cz, nx, ny, nz, 0));
     }
+
+    this._eyeRestY = restY;
+    this._eyePivot = new THREE.Object3D();
+    this._eyePivot.name = 'nim.eyes';
+    this._eyePivot.position.set(0, restY, 0);
+    head.add(this._eyePivot);
+    for (let i = 0; i < sclera.length; i++) sclera[i].translate(0, -restY, 0);
+    for (let i = 0; i < pupils.length; i++) pupils[i].translate(0, -restY, 0);
+
     this._sclera = this._attach(this._eyePivot, mergeAll(sclera), this.M.eyeWhite, 'sclera');
 
     this._pupilPivot = new THREE.Object3D();
@@ -1507,32 +2368,66 @@ export class Hero {
 
       this._attach(ul, limbGeo(0.098, 0.082, P.upperLeg, seg, 3), this.M.coat, 'thigh' + sfx);
 
-      // knee cap: reads the bend at 20 m
-      const knee = place(limbGeo(0.084, 0.084, 0.012, seg, 3), 0, -P.upperLeg + 0.006, -0.008);
-      this._attach(ul, knee, this.M.trim, 'knee' + sfx);
+      // Knee cap: reads the bend at 20 m. It is strapped over the joint and so
+      // rides the SHIN bone (whose origin IS the knee), which lets it merge
+      // into the shin's own trim mesh — two draw calls back, paid straight into
+      // the lip mesh the face needed. Same material, same bone, one draw.
+      const knee = place(limbGeo(0.084, 0.084, 0.012, seg, 3), 0, 0.006, -0.008);
+      const shin = limbGeo(0.078, 0.064, P.lowerLeg, seg, 3);
+      this._attach(ll, mergeAll([shin, knee]), this.M.trim, 'shin' + sfx);
 
-      this._attach(ll, limbGeo(0.078, 0.064, P.lowerLeg, seg, 3), this.M.trim, 'shin' + sfx);
-
-      // Boot: chamfered shell + toe cap + rolled cuff + tread sole, ALL merged
-      // into one rubber mesh. Four sub-parts, one draw call — the geometry is
-      // what reads at 20 m, not four separate greys.
+      /*
+       * BOOT. Chamfered shell + tapering vamp + rounded toe cap + rolled cuff +
+       * lace bars + a WAISTED sole with lugs, all merged into one rubber mesh:
+       * fourteen sub-parts, one draw call.
+       *
+       * What was wrong, measured off _r3z_boots.png (turntable_a1 / a5 /
+       * idle_p50): the sole was ONE slab, `bevelBox(bootW + 0.014, 0.034,
+       * bootL)` centred at z = −0.052 — span z ∈ [−0.202, +0.098] — under an
+       * upper that reached only [−0.171, +0.085]. It therefore overshot the
+       * toe by 31 mm and the heel by 13 mm with square, untapered edges, and
+       * its exposed TOP face caught the sky light as a flat tan plate. At 20 m
+       * and in every profile pose Nim stood on two planks.
+       *
+       * The sole is now three segments — forefoot, waist, heel — whose plan
+       * view is boot-shaped and whose extremes sit 1–2 mm INSIDE the upper's,
+       * so nothing overhangs anywhere and the only sole surface a camera can
+       * see is the welt edge. Keep SOLE_TOE_Z / SOLE_HEEL_Z in step with the
+       * forefoot's and heel's outer faces.
+       */
       const boot = [];
+      // ankle shell (z ∈ [−0.137, +0.085])
       boot.push(place(bevelBoxGeometry(P.bootW, P.bootH, P.bootL * 0.74, 0.038, 1), 0, -P.bootH * 0.5 + 0.016, -0.026));
-      boot.push(place(bevelBoxGeometry(P.bootW * 0.90, P.bootH * 0.74, P.bootL * 0.42, 0.045, 1), 0, -P.bootH * 0.5 + 0.006, -0.108));
+      // vamp: narrower and lower than the shell, so the boot tapers forward
+      boot.push(place(bevelBoxGeometry(0.150, 0.112, 0.110, 0.040, 1), 0, -0.078, -0.108));
+      // toe cap: smaller again and kicked up, so the tip reads as a round toe
+      boot.push(place(bevelBoxGeometry(0.116, 0.078, 0.062, 0.028, 1), 0, -0.086, -0.156, -0.16, 0, 0));
+      // rolled cuff
+      // 8 radial segments, not `seg`: the cuff is a 20 mm roll around a 0.09 m
+      // radius and reads identically at 8, for 24 fewer triangles per boot.
       boot.push(place(
-        latheGeo([[0.074, 0.006], [0.094, 0.018], [0.094, 0.052], [0.074, 0.062]], seg),
+        latheGeo([[0.074, 0.006], [0.094, 0.018], [0.094, 0.052], [0.074, 0.062]], 8),
         0, 0, -0.012,
       ));
-      // Sole slab sits 4 mm proud of the ground; the three tread ribs are the
-      // actual contact patch, bottoming at EXACTLY −bootH so a planted foot
-      // touches the ground plane instead of sinking through it.
-      boot.push(place(bevelBoxGeometry(P.bootW + 0.014, 0.034, P.bootL, 0.014, 1), 0, -P.bootH + 0.021, -0.052));
-      for (let i = 0; i < 3; i++) {
-        boot.push(place(
-          bevelBoxGeometry(P.bootW - 0.010, 0.012, 0.030, 0.005, 1),
-          0, -P.bootH + 0.006, -0.140 + i * 0.070,
-        ));
+      // two lace bars across the front of the ankle, 3 mm proud
+      for (let i = 0; i < 2; i++) {
+        boot.push(place(bevelBoxGeometry(0.146, 0.011, 0.012, 0.004, 1), 0, -0.018 - i * 0.030, -0.134));
       }
+      /*
+       * Sole: a forefoot pad and a heel block with a SHANK (a gap) between
+       * them — the plan view a real boot has, and 44 triangles cheaper than
+       * carrying a third segment across the waist. Both sit 4 mm proud of the
+       * ground; the tread lugs below are the actual contact patch, bottoming at
+       * EXACTLY −bootH so a planted foot touches the ground plane instead of
+       * sinking through it. Keep SOLE_TOE_Z / SOLE_HEEL_Z on their outer faces.
+       */
+      boot.push(place(bevelBoxGeometry(0.156, 0.030, 0.118, 0.013, 1), 0, -0.141, -0.126));  // forefoot
+      boot.push(place(bevelBoxGeometry(0.152, 0.034, 0.096, 0.013, 1), 0, -0.139, 0.036));   // heel
+      // lugs: two under the ball of the foot, one under the heel
+      for (let i = 0; i < 2; i++) {
+        boot.push(place(bevelBoxGeometry(0.140, 0.012, 0.028, 0.005, 1), 0, -P.bootH + 0.006, -0.160 + i * 0.054));
+      }
+      boot.push(place(bevelBoxGeometry(0.128, 0.012, 0.030, 0.005, 1), 0, -P.bootH + 0.006, 0.040));
       this._attach(ft, mergeAll(boot), this.M.boot, 'boot' + sfx);
     }
   }
@@ -1557,10 +2452,21 @@ export class Hero {
     );
     this._attach(chest, roll, this.M.blanket, 'blanket');
 
-    // straps: two over the shoulders, two lashing the roll
+    /* Straps: two over the shoulders, two lashing the roll.
+     *
+     * ROUND 4 (critic): "COLLAR — two cream tongues hang below the blue collar
+     * band, directly under the chin, and read as fangs or drool in every front
+     * shot." They are these straps. Measured: a 0.300 m box centred at world
+     * y 0.900 reaches y 1.050, and the coat lathe has necked in to r = 0.120
+     * by then — so at x = 0.118 the coat surface is at z = -0.022 while the
+     * strap sat at z = -0.115, leaving 9 cm of rope hanging in free air under
+     * the chin, cropped at the top by the teal collar. Shortened to 0.230 and
+     * dropped to y 0.860 so the strap ends 2.3 cm BELOW the collar and hugs
+     * the chest, where the coat radius (~0.199) actually contains it.
+     */
     const straps = [];
     for (const s of [1, -1]) {
-      straps.push(place(bevelBoxGeometry(0.048, 0.300, 0.024, 0.008, 1), s * 0.118, 0.900 - cy, -0.115, 0.30, 0, -s * 0.12));
+      straps.push(place(bevelBoxGeometry(0.046, 0.230, 0.022, 0.008, 1), s * 0.118, 0.860 - cy, -0.166, 0.06, 0, -s * 0.12));
       straps.push(place(bevelBoxGeometry(0.040, 0.026, 0.290, 0.008, 1), s * 0.118, 0.975 - cy, 0.060, 0.18, 0, 0));
       straps.push(place(bevelBoxGeometry(0.030, 0.150, 0.026, 0.006, 1), s * 0.072, 0.995 - cy, 0.234, 0, 0, 0));
     }
@@ -1617,17 +2523,23 @@ export class Hero {
    * squash and flips never stretch the cloth.
    */
   _buildScarf() {
-    const verts = SCARF_LINKS * 6;         // 7 quads * 2 tris * 3 verts
+    // 4 faces per link, 2 triangles each: a PRISM, not a plane. 168 vertices
+    // for the whole scarf — the cost of thickness is 126 extra vertices
+    // written per frame, and what it buys is the fold, the edge-on read and
+    // the taper the critic said the flat ribbon had none of.
+    const verts = SCARF_LINKS * SCARF_FACES * 6;
     this._scarfPos = new Float32Array(verts * 3);
     this._scarfNor = new Float32Array(verts * 3);
     this._scarfUv = new Float32Array(verts * 2);
 
     for (let i = 0; i < SCARF_LINKS; i++) {
       const v0 = i / SCARF_LINKS, v1 = (i + 1) / SCARF_LINKS;
-      const o = i * 12;
-      // tri A: (0,v0) (1,v0) (1,v1)   tri B: (0,v0) (1,v1) (0,v1)
-      const uvs = [0, v0, 1, v0, 1, v1, 0, v0, 1, v1, 0, v1];
-      for (let k = 0; k < 12; k++) this._scarfUv[o + k] = uvs[k];
+      for (let k = 0; k < SCARF_FACES; k++) {
+        const u0 = k / SCARF_FACES, u1 = (k + 1) / SCARF_FACES;
+        const o = (i * SCARF_FACES + k) * 12;
+        const uvs = [u0, v0, u1, v1, u1, v0, u0, v0, u0, v1, u1, v1];
+        for (let m = 0; m < 12; m++) this._scarfUv[o + m] = uvs[m];
+      }
     }
 
     const g = new THREE.BufferGeometry();
@@ -1665,6 +2577,15 @@ export class Hero {
         ? def.palette.accent : SCARF_DEFAULT;
     }
     _col0.set(tint);
+    /* A palette-derived fallback can be any value at all, and the one that
+     * shipped (verdant's accent) was a 1.16:1 luminance ratio against the coat
+     * — the scarf vanished. Lift anything below the floor toward white until
+     * it clears it: the hue survives, the read is guaranteed. */
+    for (let i = 0; i < 12; i++) {
+      const L = 0.2126 * _col0.r + 0.7152 * _col0.g + 0.0722 * _col0.b;
+      if (L >= SCARF_MIN_LUM) break;
+      _col0.lerp(_col1.setRGB(1, 1, 1), 0.18);
+    }
     this.M.scarf.color.copy(_col0);
     this.M.scarf.userData.baseColor = this.M.scarf.color.getHex();
 
@@ -1838,17 +2759,42 @@ export class Hero {
     this._rootY = 0;
     this._rootZ = 0;
     this._ikW = 0;
+    /* Per-frame OWNERSHIP of the driven channels. `_applyRoot` decays a flip
+       only on a frame no pose driver claimed it, and drives the root pitch
+       straight through (no spring) when a driver claims that. Cleared here, set
+       by the driver that writes the channel. */
+    this._flipDrvX = false;
+    this._flipDrvY = false;
+    this._flipDrvZ = false;
+    this._rootPitchDrv = false;
+    // NOT cleared: b.cx/cy/cz and the cyclic root channels. A writer that does
+    // not claim the layer this frame simply leaves `_cycTgt` at 0, and the
+    // envelope fades the last cyclic pose out over ~1/13 s.
+    this._cycTgt = 0;
   }
 
-  /** Integrate every bone toward its target with the contract's spring rate. */
+  /**
+   * Integrate every bone toward its target with the contract's spring rate,
+   * THEN add the cyclic layer on top — undamped, so a 4.7 Hz sprint arrives at
+   * the amplitude and the phase it was authored with (see CYC_LAMBDA).
+   *
+   * `b.bx/by/bz` is the sprung base kept apart from `b.o.rotation`, because the
+   * foot-plant IK writes the published rotation and a spring that read its own
+   * output back would fold the IK correction into the next frame's blend.
+   */
   _integrateBones(dt) {
     const B = this._bones;
+    this._cycW = damp(this._cycW, this._cycTgt, CYC_LAMBDA, dt);
+    const w = this._cycW;
     for (let i = 0; i < B.length; i++) {
       const b = B[i];
+      b.bx = damp(b.bx, b.tx, BONE_LAMBDA, dt);
+      b.by = dampAngle(b.by, b.ty, BONE_LAMBDA, dt);
+      b.bz = damp(b.bz, b.tz, BONE_LAMBDA, dt);
       const r = b.o.rotation;
-      r.x = damp(r.x, b.tx, BONE_LAMBDA, dt);
-      r.y = dampAngle(r.y, b.ty, BONE_LAMBDA, dt);
-      r.z = damp(r.z, b.tz, BONE_LAMBDA, dt);
+      r.x = b.bx + b.cx * w;
+      r.y = b.by + b.cy * w;
+      r.z = b.bz + b.cz * w;
     }
   }
 
@@ -1856,29 +2802,52 @@ export class Hero {
   _applyRoot(dt) {
     const rig = this.rig;
 
-    // sprung lean / bob
-    rig.userData.px = damp(numOr(rig.userData.px, 0), this._rootPitch, ROOT_LAMBDA, dt);
+    /* Sprung lean / bob. EXCEPT when a driver claims the pitch: the long jump
+       authors its own 0.16 s smoothstep to -0.95 rad, and pushing that through
+       the ROOT_LAMBDA=18 spring — starting from the run cycle's +0.20 lean —
+       delivered the superman silhouette at t = 0.37 s of a 0.45 s move, i.e. on
+       the DESCENT. A driven channel is written, not chased; the spring picks the
+       value back up from wherever the driver left it on the next state. */
+    rig.userData.px = this._rootPitchDrv
+      ? this._rootPitch
+      : damp(numOr(rig.userData.px, 0), this._rootPitch, ROOT_LAMBDA, dt);
     rig.userData.rz = damp(numOr(rig.userData.rz, 0), this._rootRoll, ROOT_LAMBDA, dt);
     rig.userData.ry = damp(numOr(rig.userData.ry, 0), this._rootYaw, ROOT_LAMBDA, dt);
     rig.userData.oy = damp(numOr(rig.userData.oy, 0), this._rootY, ROOT_LAMBDA, dt);
     rig.userData.oz = damp(numOr(rig.userData.oz, 0), this._rootZ, ROOT_LAMBDA, dt);
 
-    // flips decay out once the state that drove them is gone
+    /*
+     * FLIPS decay out once the state that drove them is gone — and ONLY then.
+     * The decay used to run on every frame `_flipDecay` was positive, including
+     * the frames the driver was writing the channel, because every driver
+     * re-arms `_flipDecay` while it drives. exp(-11*dt) = 0.832 per frame took
+     * 17 % of every driven turn back on the frame it was authored, so a TAU
+     * somersault peaked at 5.23 rad (83 %) and the triple landed nose-down.
+     * A channel no driver claimed this frame folds its whole turns out first
+     * (see `foldTurns`) and then unwinds the remainder, so a COMPLETED flip
+     * settles forward through the last few degrees and only an ABORTED one
+     * rotates back.
+     */
     if (this._flipDecay > 0) {
       const k = Math.exp(-11 * dt);
-      this._flipPitch *= k;
-      this._flipRoll *= k;
-      this._flipYaw *= k;
-      this._flipDecay -= dt;
+      let idle = true;
+      if (this._flipDrvX) idle = false; else this._flipPitch = foldTurns(this._flipPitch) * k;
+      if (this._flipDrvY) idle = false; else this._flipYaw = foldTurns(this._flipYaw) * k;
+      if (this._flipDrvZ) idle = false; else this._flipRoll = foldTurns(this._flipRoll) * k;
+      if (idle) this._flipDecay -= dt;
     }
 
     // NOTE the sign: `_flipPitch` is stated in the contract's units (+2π for a
     // jump3 somersault, −2π for a backflip) and negated here because a POSITIVE
     // rotation about +X tips the body BACKWARD in three's frame.
+    // The run's bob, body roll and lean pulse are CYCLIC and go on undamped for
+    // the same reason the bone cycles do: at 9.5 Hz (the 2x bob) a ROOT_LAMBDA
+    // of 18 passed 0.29 of the authored amplitude, so the sprint had no bounce.
+    const cw = this._cycW;
     rig.rotation.set(
-      rig.userData.px - this._flipPitch,
+      rig.userData.px - this._flipPitch + this._cycPitch * cw,
       rig.userData.ry + this._flipYaw,
-      rig.userData.rz + this._flipRoll,
+      rig.userData.rz + this._flipRoll + this._cycRoll * cw,
     );
 
     this._squash = damp(this._squash, this._squashTgt, SQUASH_LAMBDA, dt);
@@ -1906,7 +2875,7 @@ export class Hero {
     _v0.set(0, RIG_PIVOT_Y * sy, 0).applyEuler(rig.rotation);
     rig.position.set(
       -_v0.x,
-      RIG_PIVOT_Y * sy - _v0.y + rig.userData.oy,
+      RIG_PIVOT_Y * sy - _v0.y + rig.userData.oy + this._cycY * cw,
       -_v0.z + rig.userData.oz,
     );
   }
@@ -1990,7 +2959,7 @@ export class Hero {
       case 'slide': this._poseSlide(t); break;
       case 'slideRecover': this._poseSlideRecover(t); break;
 
-      case 'wallslide': this._poseWallslide(player); break;
+      case 'wallslide': this._poseWallslide(dt, player); break;
       case 'wallkick': this._poseWallkick(t); break;
 
       case 'poundHang': this._posePoundHang(t); break;
@@ -2006,7 +2975,7 @@ export class Hero {
       case 'swim': this._poseSwim(false, false); break;
       case 'swimDive': this._poseSwim(true, false); break;
 
-      case 'climb': this._poseClimb(); break;
+      case 'climb': this._poseClimb(dt, player); break;
       case 'climbKick': this._poseClimbKick(t); break;
 
       case 'cannon': this._poseCannon(t); break;
@@ -2033,8 +3002,18 @@ export class Hero {
     B.head.tz += -this._lean * 0.10;
     B.head.ty += this._lean * 0.22;                 // look where you are turning
 
-    if (this._grounded && anim !== 'crouch' && anim !== 'slide' && anim !== 'dive') {
-      this._rootPitch += sn * 0.20;                 // forward lean by speed
+    /*
+     * Forward lean by speed. The SIGN was wrong: `rig.rotation.x` is applied as
+     * a rotation about +X, which tips the body's +Y toward +Z — and +Z is
+     * BEHIND a hero whose yaw 0 faces −Z. So `+= sn * 0.20` leaned the sprint
+     * 11.5 degrees BACKWARD, against both the comment and the spine's own
+     * −0.13. (`_poseDive` −1.35 "nose down" and `_poseSlide` −1.50 "flat on the
+     * deck" are the two unambiguous witnesses for the sign.) Skid, pivot and
+     * bonk author their own stance out of the same speed and are excluded.
+     */
+    if (this._grounded && anim !== 'crouch' && anim !== 'slide' && anim !== 'dive' &&
+        anim !== 'skid' && anim !== 'pivot' && anim !== 'bonk' && anim !== 'slopeSlide') {
+      this._rootPitch -= sn * 0.24;                 // −pitch = nose forward
       this._rootY += -sn * 0.020;                   // ...and settle a little
     }
 
@@ -2057,33 +3036,66 @@ export class Hero {
 
     if (this._speed < 0.18) { this._poseIdle(0); return; }
 
+    /*
+     * Everything PERIODIC below is written to the cyclic channels (`cx/cy/cz`,
+     * `_cycY`, `_cycRoll`) and only the DC terms are sprung targets. The
+     * amplitudes are unchanged — they were always right; the 14 /s smoother was
+     * eating 57 % of them at the 4.74 Hz full-run cadence and lagging the rest
+     * by 65 degrees, which is why 9 m/s read as a stroll.
+     */
+    this._cycTgt = 1;
+
     // legs — opposite phase, knee flexes on the swing half
-    B.upperLegR.tx = s * amp;
-    B.upperLegL.tx = -s * amp;
-    B.lowerLegR.tx = -(0.10 + clamp01(-Math.sin(ph + 0.95)) * (0.55 + sn * 0.85));
-    B.lowerLegL.tx = -(0.10 + clamp01(-Math.sin(ph + 0.95 + Math.PI)) * (0.55 + sn * 0.85));
-    B.footR.tx = 0.14 - s * 0.22 * amp;
-    B.footL.tx = 0.14 + s * 0.22 * amp;
+    B.upperLegR.cx = s * amp;
+    B.upperLegL.cx = -s * amp;
+    B.lowerLegR.tx = -0.10;
+    B.lowerLegL.tx = -0.10;
+    B.lowerLegR.cx = -clamp01(-Math.sin(ph + 0.95)) * (0.55 + sn * 0.85);
+    B.lowerLegL.cx = -clamp01(-Math.sin(ph + 0.95 + Math.PI)) * (0.55 + sn * 0.85);
+    B.footR.tx = 0.14; B.footL.tx = 0.14;
+    B.footR.cx = -s * 0.22 * amp;
+    B.footL.cx = s * 0.22 * amp;
 
     // arms — contra to the legs, elbows pumping
-    B.upperArmR.tx = -s * armAmp;
-    B.upperArmL.tx = s * armAmp;
+    B.upperArmR.cx = -s * armAmp;
+    B.upperArmL.cx = s * armAmp;
     B.upperArmR.tz = 0.165 + sn * 0.10;
     B.upperArmL.tz = -0.165 - sn * 0.10;
-    B.lowerArmR.tx = 0.34 + clamp01(-s) * (0.30 + sn * 0.55);
-    B.lowerArmL.tx = 0.34 + clamp01(s) * (0.30 + sn * 0.55);
+    B.lowerArmR.tx = 0.34; B.lowerArmL.tx = 0.34;
+    B.lowerArmR.cx = clamp01(-s) * (0.30 + sn * 0.55);
+    B.lowerArmL.cx = clamp01(s) * (0.30 + sn * 0.55);
 
     // hips sway, shoulders counter-rotate — the difference between a walk and
     // a puppet slid along a rail
-    B.hips.ty = s * (0.06 + sn * 0.07);
-    B.hips.tz = c * 0.045 * sn;
-    B.chest.ty = -s * (0.07 + sn * 0.10);
-    B.spine.tx = -0.03 - sn * 0.10;
-    B.head.ty = s * 0.05;
+    B.hips.cy = s * (0.06 + sn * 0.07);
+    B.hips.cz = c * 0.045 * sn;
+    B.chest.cy = -s * (0.07 + sn * 0.10);
+    B.head.cy = s * 0.05;
 
-    // 2× vertical bob, plus a touch of body roll on the plant
-    this._rootY += Math.sin(ph * 2) * (0.010 + sn * 0.026) - sn * 0.012;
-    this._rootRoll += Math.sin(ph) * 0.035 * sn;
+    /* DRIVE. ROUND 4 (critic): "RUN TORSO DOES NOT LEAN — chest.x = 0.040 rad
+     * (2.3 degrees) at a 9.0 m/s full run … the limbs cycle correctly but with
+     * a vertical torso the profile read is an upright shuffle rather than a
+     * driving run." Measured and true: `_poseLocomotion` wrote `spine.tx` and
+     * nothing else in the pitch channel, and the chest bone was left at its
+     * rest 0.040 — the whole forward lean was the root's 0.24 rad, which tips
+     * the LEGS with the body and so reads as posture, not effort.
+     *
+     * The spine and chest now carry a real lean that scales with speed
+     * (-0.20 and -0.26 at a full run, 0.46 rad = 26 degrees of torso on top of
+     * the root's 14), and the neck counter-rotates so Nim still looks where he
+     * is going instead of at his boots — which is the actual shape of a sprint.
+     */
+    B.spine.tx = -0.035 - sn * 0.165;
+    B.chest.tx = -0.045 - sn * 0.215;
+    B.neck.tx = 0.050 + sn * 0.210;
+    B.head.tx = 0.045 + sn * 0.180;
+
+    // 2× vertical bob (now that it is delivered, it is worth having a flight
+    // phase in it), plus a touch of body roll on the plant
+    this._cycY = Math.sin(ph * 2) * (0.010 + sn * 0.034);
+    this._cycRoll = Math.sin(ph) * 0.050 * sn;
+    this._cycPitch = 0;
+    this._rootY += -sn * 0.012;
 
     if (crouched) {
       this._poseCrouchOverlay(0.55);
@@ -2113,7 +3125,9 @@ export class Hero {
       const lt = (this._idleT - IDLE_LOOK_AFTER) % 6.0;
       const w = smoothstep(0, 0.6, lt) * (1 - smoothstep(4.4, 5.4, lt));
       const dir = Math.sin(lt * 1.05);
-      B.head.ty += dir * 0.72 * w;
+      // clamped: past ~0.6 rad the far eye rides onto the head's silhouette
+      // edge, which is where a stuck-on eyeball announces itself
+      B.head.ty += dir * LOOK_YAW_MAX * w;
       B.head.tx += (0.10 - Math.abs(dir) * 0.16) * w;
       B.chest.ty += dir * 0.16 * w;
       this._lookYaw = dir * w;
@@ -2134,7 +3148,11 @@ export class Hero {
     const ph = t * 7.0;                                // slow scuff cadence
     const sc = Math.sin(ph);
 
-    this._rootPitch = 0.20 - recoil * 0.30;            // snap back, then lean in
+    // Sign, same defect as the run lean: +pitch is BACKWARD, so the old
+    // `0.20 − recoil*0.30` settled the hero leaning AWAY from the wall — a
+    // backward stumble with the arms spread, not the palms-on-the-wall press
+    // the pose is describing. −0.24 is weight forward, into the wall.
+    this._rootPitch = -0.24 + recoil * 0.38;           // snap back, then lean in
     this._rootY -= 0.05 + recoil * 0.06;
 
     // palms on the wall, elbows out
@@ -2156,14 +3174,16 @@ export class Hero {
     B.hips.ty = sc * 0.05;
     B.spine.tx = 0.16;
     B.chest.tx = 0.10 + recoil * 0.18;
-    B.head.tx = -0.28 - recoil * 0.10;                 // chin up, looking at the wall
+    B.head.tx = 0.26 + recoil * 0.10;                  // chin up, looking at the wall
   }
 
   /** Skid / pivot: lean AWAY from travel, arms flung out for balance. */
   _poseSkid(isPivot) {
     const B = this.B;
     const k = isPivot ? 1.0 : 0.75;
-    this._rootPitch = -0.34 * k;                      // lean back into the stop
+    // +pitch is BACKWARD (see the note in _writePose). The old −0.34 hunched
+    // the hero FORWARD over a skid he is supposed to be leaning away from.
+    this._rootPitch = 0.34 * k;                       // lean back into the stop
     this._rootY -= 0.10 * k;
     B.upperLegR.tx = 0.44 * k;
     B.upperLegL.tx = -0.30 * k;
@@ -2178,7 +3198,7 @@ export class Hero {
     B.lowerArmR.tx = 0.55;
     B.lowerArmL.tx = 0.70;
     B.chest.tx = -0.16 * k;
-    B.head.tx = 0.22 * k;
+    B.head.tx = -0.22 * k;                            // gaze level under the back lean
     if (isPivot) {
       B.hips.ty = this._lean * 0.35;
       B.chest.ty = -this._lean * 0.40;
@@ -2239,18 +3259,45 @@ export class Hero {
       // the turn always completes a hair before the landing frame.
       const air = Math.max(0.35, this._jumpAirTime(3));
       const f = clamp01(t / air);
-      this._flipPitch = TAU * smoothstep(0.02, 0.92, f);
+      /*
+       * CONSTANT angular velocity, not a smoothstep. `smoothstep(0.02, 0.92, f)`
+       * delivered 8 degrees of turn at f = 0.10 and a whole turn by f = 0.90, so
+       * the two moments a player actually reads — the take-off and the landing —
+       * both photographed as plain idle (measured: jump3_p10 and jump3_p90
+       * pixel-identical to idle_p50, hips pitch 0.0 deg for the whole first
+       * 0.5 s). A real somersault takes ALL of its angular momentum at take-off
+       * and then turns at a constant rate: 38 deg by p10, 345 deg by p90 —
+       * unmistakable flip information in every frame.
+       */
+      this._flipPitch = TAU * clamp01(f / 0.94);
+      this._flipDrvX = true;
       this._flipDecay = 0.35;
-      const tuck = Math.sin(Math.PI * clamp01(f * 1.12));
-      B.upperLegR.tx = 1.55 * tuck; B.upperLegL.tx = 1.45 * tuck;
-      B.lowerLegR.tx = -2.05 * tuck; B.lowerLegL.tx = -2.05 * tuck;
-      B.footR.tx = 0.55 * tuck; B.footL.tx = 0.55 * tuck;
-      B.upperArmR.tx = 0.85 * tuck; B.upperArmL.tx = 0.85 * tuck;
-      B.upperArmR.tz = 0.55; B.upperArmL.tz = -0.55;
-      B.lowerArmR.tx = 1.75 * tuck; B.lowerArmL.tx = 1.75 * tuck;
-      B.spine.tx = 0.42 * tuck;
-      B.chest.tx = 0.30 * tuck;
-      B.head.tx = -0.30 * tuck;
+      /*
+       * ...and three POSE phases, none of which is the rest pose. The old
+       * `tuck = sin(PI · f · 1.12)` is zero at BOTH ends by construction, which
+       * is why the launch and the landing were idle no matter what the tuck
+       * amplitudes were.
+       */
+      const launch = 1 - smoothstep(0, 0.24, f);     // the drive off the floor
+      const tuck = smoothstep(0.06, 0.34, f) * (1 - smoothstep(0.56, 0.84, f));
+      const land = smoothstep(0.58, 0.92, f);        // reaching for the floor
+      B.upperLegR.tx = -0.55 * launch + 1.55 * tuck + 0.72 * land;
+      B.upperLegL.tx = -0.48 * launch + 1.45 * tuck + 0.42 * land;
+      B.lowerLegR.tx = 0.10 * launch - 2.05 * tuck - 0.95 * land;
+      B.lowerLegL.tx = 0.10 * launch - 2.05 * tuck - 0.62 * land;
+      B.footR.tx = -0.55 * launch + 0.55 * tuck + 0.46 * land;
+      B.footL.tx = -0.55 * launch + 0.55 * tuck + 0.46 * land;
+      B.upperArmR.tx = 2.60 * launch + 0.85 * tuck - 1.35 * land;
+      B.upperArmL.tx = 2.60 * launch + 0.85 * tuck - 1.05 * land;
+      B.upperArmR.tz = 0.30 * launch + 0.55 * tuck + 1.42 * land;
+      B.upperArmL.tz = -0.30 * launch - 0.55 * tuck - 1.42 * land;
+      B.lowerArmR.tx = 0.24 * launch + 1.75 * tuck + 0.78 * land;
+      B.lowerArmL.tx = 0.24 * launch + 1.75 * tuck + 0.78 * land;
+      B.spine.tx = -0.30 * launch + 0.42 * tuck + 0.30 * land;
+      B.chest.tx = -0.16 * launch + 0.30 * tuck + 0.18 * land;
+      B.head.tx = 0.34 * launch - 0.30 * tuck - 0.46 * land;
+      this._rootPitch = -0.34 * launch - 0.30 * land;
+      this._rootY -= 0.16 * land;
     }
   }
 
@@ -2262,41 +3309,86 @@ export class Hero {
     return (v0 / TUNE.gravRise) + (v0 / TUNE.gravFall);
   }
 
-  /** Long jump: superman. Body flat, arms forward, legs trailing and together. */
+  /**
+   * Long jump: SUPERMAN. Body flat, ONE straight line from fingertips to toes.
+   *
+   * The old pose was neither a superman nor distinguishable from the dive:
+   * `upperArm.tx = −2.55` is up-and-BACK (a limb bone's tip goes to
+   * −L·sin(θ) in Z, so a NEGATIVE tx swings it behind the hero — the header's
+   * "positive = forward" convention), so both arms ended folded beside the ears,
+   * and `lowerLeg.tx = −0.28` with `upperLeg.tx = −0.40` left the knees visibly
+   * folded. Photographed at 54 degrees of body pitch that reads as a crouching
+   * man lying on his side, and it was pixel-for-pixel the dive.
+   *
+   * What a superman actually is, and what is authored here:
+   *   - body FLAT (−1.40 rad, 80 degrees), not merely leaning;
+   *   - arms in line with the spine and PAST the head (tx ≈ +2.95 → the hands
+   *     end up ahead of the crown), elbows locked straight;
+   *   - legs straight, together and trailing, knees locked, toes pointed;
+   *   - a shallow back arch and the chin UP, eyes on the landing.
+   * The dive (below) contradicts every one of those: steeper than flat, arms
+   * angled DOWN off the body line, head tucked between them, hips piked.
+   */
   _poseLongJump(t) {
     const B = this.B;
     const k = smoothstep(0, 0.16, t);
-    this._rootPitch = -0.95 * k;                   // nose down the arc
-    this._rootY += 0.10 * k;
-    B.upperArmR.tx = -2.55 * k; B.upperArmL.tx = -2.55 * k;
-    B.upperArmR.tz = 0.10; B.upperArmL.tz = -0.10;
-    B.lowerArmR.tx = 0.10 * k; B.lowerArmL.tx = 0.10 * k;
-    B.handR.tx = 0.05; B.handL.tx = 0.05;
-    B.upperLegR.tx = -0.40 * k; B.upperLegL.tx = -0.32 * k;
-    B.upperLegR.tz = 0.10; B.upperLegL.tz = -0.10;
-    B.lowerLegR.tx = -0.28 * k; B.lowerLegL.tx = -0.20 * k;
-    B.footR.tx = -0.35 * k; B.footL.tx = -0.35 * k;
-    B.spine.tx = -0.22 * k;
-    B.chest.tx = -0.18 * k;
-    B.head.tx = 0.42 * k;                          // eyes on the landing
+    this._rootPitch = -1.40 * k;                   // flat along the arc
+    this._rootPitchDrv = true;                     // driven, not sprung (see _applyRoot)
+    this._rootY += 0.32 * k;
+    // arms extended past the head, a hair apart so the skull stays readable
+    B.upperArmR.tx = 2.95 * k; B.upperArmL.tx = 2.95 * k;
+    B.upperArmR.tz = 0.30 * k; B.upperArmL.tz = -0.30 * k;
+    B.lowerArmR.tx = -0.06 * k; B.lowerArmL.tx = -0.06 * k;   // elbows locked
+    B.handR.tx = -0.10 * k; B.handL.tx = -0.10 * k;
+    B.shoulderR.tz = -0.14 * k; B.shoulderL.tz = 0.14 * k;    // shrugged forward
+    // legs locked straight and closed, in line with the spine
+    B.upperLegR.tx = -0.12 * k; B.upperLegL.tx = -0.12 * k;
+    B.upperLegR.tz = -0.035 * k; B.upperLegL.tz = 0.035 * k;  // ankles together
+    B.lowerLegR.tx = 0.06 * k; B.lowerLegL.tx = 0.06 * k;     // knees locked
+    B.footR.tx = -0.62 * k; B.footL.tx = -0.62 * k;           // toes pointed
+    B.spine.tx = -0.16 * k;                                    // shallow arch
+    B.chest.tx = -0.14 * k;
+    B.neck.tx = 0.32 * k;
+    B.head.tx = 0.92 * k;                          // chin UP, eyes on the landing
   }
 
-  /** Backflip: a full backward turn, tight tuck, arms crossed in. */
+  /**
+   * Backflip: a full BACKWARD turn, tight tuck, arms crossed in.
+   *
+   * Same two defects as jump3, same two fixes: the turn runs at a constant
+   * rate (so p10 and p90 carry real rotation instead of 8 deg and a completed
+   * circle), and the pose envelope has a LAUNCH and a LAND phase, so
+   * backflip_p10 and backflip_p90 stop being pixel-identical to idle_p50. The
+   * launch is the giveaway of a backflip specifically: arms thrown up and BACK
+   * over the head while the legs drive, the mirror of jump3's forward swing.
+   */
   _poseBackflip(t) {
     const B = this.B;
     const air = (TUNE.backflip.vy / TUNE.gravRise) + (TUNE.backflip.vy / TUNE.gravFall);
     const f = clamp01(t / Math.max(0.35, air));
-    this._flipPitch = -TAU * smoothstep(0.02, 0.90, f);
+    this._flipPitch = -TAU * clamp01(f / 0.94);
+    this._flipDrvX = true;
     this._flipDecay = 0.35;
-    const tuck = Math.sin(Math.PI * clamp01(f * 1.10));
-    B.upperLegR.tx = 1.65 * tuck; B.upperLegL.tx = 1.65 * tuck;
-    B.lowerLegR.tx = -2.15 * tuck; B.lowerLegL.tx = -2.15 * tuck;
-    B.footR.tx = 0.60 * tuck; B.footL.tx = 0.60 * tuck;
-    B.upperArmR.tx = 1.10 * tuck; B.upperArmL.tx = 1.10 * tuck;
-    B.upperArmR.tz = 0.42; B.upperArmL.tz = -0.42;
-    B.lowerArmR.tx = 2.05 * tuck; B.lowerArmL.tx = 2.05 * tuck;
-    B.spine.tx = 0.36 * tuck;
-    B.head.tx = -0.42 * tuck;
+    const launch = 1 - smoothstep(0, 0.24, f);
+    const tuck = smoothstep(0.06, 0.34, f) * (1 - smoothstep(0.56, 0.84, f));
+    const land = smoothstep(0.58, 0.92, f);
+    B.upperLegR.tx = -0.42 * launch + 1.65 * tuck + 0.66 * land;
+    B.upperLegL.tx = -0.42 * launch + 1.65 * tuck + 0.40 * land;
+    B.lowerLegR.tx = 0.12 * launch - 2.15 * tuck - 0.92 * land;
+    B.lowerLegL.tx = 0.12 * launch - 2.15 * tuck - 0.60 * land;
+    B.footR.tx = -0.50 * launch + 0.60 * tuck + 0.44 * land;
+    B.footL.tx = -0.50 * launch + 0.60 * tuck + 0.44 * land;
+    B.upperArmR.tx = -2.45 * launch + 1.10 * tuck - 1.25 * land;
+    B.upperArmL.tx = -2.45 * launch + 1.10 * tuck - 0.95 * land;
+    B.upperArmR.tz = 0.22 * launch + 0.42 * tuck + 1.48 * land;
+    B.upperArmL.tz = -0.22 * launch - 0.42 * tuck - 1.48 * land;
+    B.lowerArmR.tx = 0.30 * launch + 2.05 * tuck + 0.72 * land;
+    B.lowerArmL.tx = 0.30 * launch + 2.05 * tuck + 0.72 * land;
+    B.spine.tx = -0.34 * launch + 0.36 * tuck + 0.26 * land;
+    B.chest.tx = -0.18 * launch + 0.14 * tuck + 0.16 * land;
+    B.head.tx = -0.38 * launch - 0.42 * tuck - 0.42 * land;
+    this._rootPitch = 0.30 * launch - 0.26 * land;
+    this._rootY -= 0.14 * land;
   }
 
   /** Sideflip: a cartwheel about the roll axis, in the direction of the flip. */
@@ -2306,6 +3398,7 @@ export class Hero {
     const f = clamp01(t / Math.max(0.35, air));
     const dir = (player && numOr(player.flipDir, 0)) || (this._lean >= 0 ? 1 : -1);
     this._flipRoll = dir * TAU * smoothstep(0.02, 0.90, f);
+    this._flipDrvZ = true;
     this._flipDecay = 0.35;
     const tuck = Math.sin(Math.PI * clamp01(f * 1.10));
     B.upperLegR.tx = 0.95 * tuck; B.upperLegL.tx = 1.35 * tuck;
@@ -2350,22 +3443,37 @@ export class Hero {
     this._rootY += 0.06 + beat * 0.03;
   }
 
-  /** Dive: belly-first, arms speared forward, legs straight behind. */
+  /**
+   * Dive: BELLY FIRST, and deliberately the opposite read to the superman above.
+   *
+   * Same defect as the long jump before it — `upperArm.tx = −2.75` put both
+   * arms up and BEHIND the ears, not forward — plus the two states shared a
+   * silhouette. Every channel below now contradicts `_poseLongJump`:
+   *   superman  flat (−1.40)   arms in line past the head   back arched   chin UP
+   *   dive      steep (−1.86)  arms angled DOWN off the line head TUCKED  hips piked
+   * so the pair can be told apart from a thumbnail, at any yaw.
+   */
   _poseDive(t) {
     const B = this.B;
     const k = smoothstep(0, 0.12, t);
-    this._rootPitch = -1.35 * k;
-    this._rootY += 0.22 * k;
+    this._rootPitch = -1.86 * k;                   // past flat: head below the hips
+    this._rootY += 0.34 * k;
     this._rootZ += -0.06 * k;
-    B.upperArmR.tx = -2.75 * k; B.upperArmL.tx = -2.75 * k;
-    B.upperArmR.tz = 0.16; B.upperArmL.tz = -0.16;
-    B.lowerArmR.tx = 0.06; B.lowerArmL.tx = 0.06;
-    B.handR.tx = -0.20; B.handL.tx = -0.20;
-    B.upperLegR.tx = -0.30 * k; B.upperLegL.tx = -0.30 * k;
-    B.lowerLegR.tx = -0.22 * k; B.lowerLegL.tx = -0.34 * k;
-    B.footR.tx = -0.45; B.footL.tx = -0.45;
-    B.spine.tx = -0.26 * k;
-    B.head.tx = 0.55 * k;
+    // arms speared AHEAD and below the body line, hands close together
+    B.upperArmR.tx = 2.28 * k; B.upperArmL.tx = 2.28 * k;
+    B.upperArmR.tz = 0.10 * k; B.upperArmL.tz = -0.10 * k;
+    B.lowerArmR.tx = -0.04 * k; B.lowerArmL.tx = -0.04 * k;
+    B.handR.tx = 0.26 * k; B.handL.tx = 0.26 * k;      // knife-edge, leading
+    B.shoulderR.tz = -0.24 * k; B.shoulderL.tz = 0.24 * k;
+    // legs straight and trailing, but scissored — never the closed superman line
+    B.upperLegR.tx = -0.20 * k; B.upperLegL.tx = -0.06 * k;
+    B.upperLegR.tz = 0.17 * k; B.upperLegL.tz = -0.17 * k;
+    B.lowerLegR.tx = 0.02 * k; B.lowerLegL.tx = 0.02 * k;
+    B.footR.tx = -0.70 * k; B.footL.tx = -0.55 * k;
+    B.spine.tx = 0.30 * k;                             // piked, belly leading
+    B.chest.tx = 0.16 * k;
+    B.neck.tx = -0.22 * k;
+    B.head.tx = -0.26 * k;                             // head TUCKED between the arms
   }
 
   /** Belly slide: flat on the deck, one arm forward, one tucked, feet kicking. */
@@ -2403,7 +3511,7 @@ export class Hero {
    * Wall slide: brace against the wall. `player.wallN` is the wall's outward
    * normal, so the hero turns his back toward −wallN and reaches into it.
    */
-  _poseWallslide(player) {
+  _poseWallslide(dt, player) {
     const B = this.B;
     const n = player && player.wallN;
     // side of the body the wall is on, in hero-local space
@@ -2419,23 +3527,56 @@ export class Hero {
     const armNear = this._arms[ni], armFar = this._arms[fi];
     const legNear = this._legs[ni], legFar = this._legs[fi];
 
-    this._rootRoll += side * 0.20;
-    this._rootPitch = 0.12;
-    armNear.ua.tx = -1.85;
-    armNear.ua.tz = side * 1.15;
-    armNear.la.tx = 0.35;
-    armFar.ua.tx = -0.55;
-    armFar.ua.tz = -side * 0.35;
-    armFar.la.tx = 1.05;
-    legNear.ul.tx = 0.55;
-    legNear.ul.tz = side * 0.28;
-    legNear.ll.tx = -0.95;
-    legFar.ul.tx = -0.10;
-    legFar.ll.tx = -0.30;
-    B.footR.tx = 0.30; B.footL.tx = 0.30;
-    B.chest.tz = side * 0.22;
-    B.head.ty = side * 0.35;
-    B.head.tx = -0.10;
+    /*
+     * The old wall slide wrote NOTHING that varied with time, so all three
+     * captures were the same image (measured: hips pitch 6.9 deg / roll 11.5
+     * deg, constant), and it braced nothing: one arm out, the other down, both
+     * feet in the rest stance, body barely rolled. It read as "idle with an
+     * arm out".
+     *
+     * Now: the shoulders TURN to the wall, the body ROLLS hard into it, the
+     * near palm is flat on the wall high and the far hand low, the near boot is
+     * planted flat ON the wall plane with the knee driven out and the far leg
+     * trails straight down — and the whole thing judders, because a boot
+     * grinding down rock is stick-slip friction, not a lift descending.
+     */
+    this._wallPh += dt * (16.0 + this._speedN * 9.0);
+    if (this._wallPh > 1e4) this._wallPh -= 1e4;
+    const j = Math.sin(this._wallPh);                 // fast friction chatter
+    const slip = Math.sin(this._wallPh * 0.21);       // slow hand-over-hand slip
+
+    this._rootRoll += side * 0.44 + j * 0.028;        // pressed into the wall
+    this._rootYaw += -side * 0.36;                    // shoulders square to it
+    this._rootPitch = -0.10 + j * 0.018;
+    this._rootY += j * 0.014;
+
+    // near arm: forearm and palm flat on the wall, high, sliding down it
+    armNear.ua.tx = -0.95 - slip * 0.30;
+    armNear.ua.tz = side * (1.42 + slip * 0.10);
+    armNear.la.tx = 1.15;
+    armNear.hd.tz = side * 0.55;
+    // far arm: reaching across, fingertips on the wall low
+    armFar.ua.tx = -0.42;
+    armFar.ua.tz = side * 0.34;
+    armFar.la.tx = 1.38;
+    armFar.hd.tz = side * 0.30;
+    // near leg: boot planted FLAT on the wall, knee driven out
+    legNear.ul.tx = 0.62 + j * 0.045;
+    legNear.ul.tz = side * 0.66;
+    legNear.ll.tx = -0.78;
+    legNear.ft.tx = 0.12;
+    legNear.ft.tz = side * 0.42;
+    // far leg: straight, trailing down the wall, toe dragging
+    legFar.ul.tx = -0.24;
+    legFar.ul.tz = -side * 0.08;
+    legFar.ll.tx = -0.12;
+    legFar.ft.tx = 0.34;
+
+    B.spine.tz = side * 0.14;
+    B.chest.tz = side * 0.30;
+    B.chest.ty = -side * 0.24;                        // shoulder into the rock
+    B.head.ty = side * 0.48;                          // looking along the wall
+    B.head.tx = -0.24 + j * 0.02;                     // ...and up, for the kick
   }
 
   /** Wall kick: the coil-and-release off the wall, arms thrown up. */
@@ -2461,51 +3602,88 @@ export class Hero {
     const B = this.B;
     const f = clamp01(t / TUNE.pound.hang);
     this._flipYaw = TAU * smoothstep(0, 1, f);
+    this._flipDrvY = true;
     this._flipDecay = 0.25;
-    B.upperLegR.tx = 1.15; B.upperLegL.tx = 1.15;
-    B.lowerLegR.tx = -1.70; B.lowerLegL.tx = -1.70;
-    B.footR.tx = 0.55; B.footL.tx = 0.55;
-    B.upperArmR.tx = -2.45; B.upperArmL.tx = -2.45;
-    B.upperArmR.tz = 0.55; B.upperArmL.tz = -0.55;
-    B.lowerArmR.tx = 0.85; B.lowerArmL.tx = 0.85;
-    B.spine.tx = 0.22;
-    B.head.tx = -0.18;
-    this._rootY += 0.10;
+    // Knees snapped to the chest — a BALL, so the drop that follows reads as
+    // stored energy. The old hang wrote both arms symmetrically overhead at
+    // ±0.55 out and the legs only half-tucked, which photographed as a star.
+    B.upperLegR.tx = 1.78; B.upperLegL.tx = 1.66;
+    B.upperLegR.tz = 0.24; B.upperLegL.tz = -0.24;
+    B.lowerLegR.tx = -2.30; B.lowerLegL.tx = -2.30;
+    B.footR.tx = 0.62; B.footL.tx = 0.62;
+    // ONE fist cocked over the crown; the other arm folded across the chest, so
+    // the silhouette is asymmetric and points at the fist that is about to fall
+    B.upperArmR.tx = -2.66; B.upperArmR.tz = 0.36;   // out, so the head cannot hide it
+    B.lowerArmR.tx = 0.16; B.handR.tx = 0.38;
+    B.upperArmL.tx = -1.30; B.upperArmL.tz = -0.66;
+    B.lowerArmL.tx = 1.60; B.handL.tx = 0.30;
+    B.spine.tx = 0.34; B.chest.tx = 0.24;
+    B.head.tx = -0.30;
+    this._rootY += 0.16;
   }
 
   /**
-   * Pound fall: a rigid spear driving at the floor. The previous version wrote
-   * 7–20° from rest and measured 6.3° rms against a settled idle — the only
-   * state in `posecheck` that collapsed into standing still, and the shots
-   * showed Nim upright with his arms at his sides at −40 m/s.
+   * Pound fall: a FIST-DOWN drop. Both previous versions read as a man standing
+   * upright in mid-air with his arms out — the second one because its arms were
+   * swept back symmetrically at −1.02 with the legs locked straight, which from
+   * the front-three-quarter camera is exactly a star.
    *
-   * The read now: arms locked straight and swept BACK past the hips, fists
-   * clenched, legs pressed together with the toes pointed hard, chest thrown
-   * open and the head down watching the impact — a diving arrowhead whose
-   * silhouette cannot be confused with anything else in the state table.
+   * The read now: knees tucked, the whole rig pitched 17 degrees over the
+   * impact point, the right arm locked straight so the fist leads down the fall
+   * axis, the left elbow thrown high and back, and the head tucked onto the
+   * fist. Asymmetric, compact, and pointing at the floor — a silhouette that
+   * cannot be confused with anything else in the state table.
    */
   _posePoundFall(t) {
     const B = this.B;
-    this._flipYaw *= 0.55;
-    // a slow residual roll off the hang spin, so the fall is never dead-static
-    const wob = Math.sin(t * 26) * 0.035;
 
-    B.upperArmR.tx = -1.02 + wob; B.upperArmL.tx = -1.02 - wob;
-    B.upperArmR.tz = 0.30; B.upperArmL.tz = -0.30;
-    B.lowerArmR.tx = -0.26; B.lowerArmL.tx = -0.26;      // elbows locked out
-    B.handR.tx = -0.50; B.handL.tx = -0.50;              // fists cocked back
-    B.shoulderR.tz = -0.16; B.shoulderL.tz = 0.16;       // shoulders squeezed
+    /*
+     * SPIN. CONTRACT §13 asks for "pound spin + fist" and the previous build
+     * had neither during the fall: measured hips pitch −28.6 deg CONSTANT at
+     * t = 0.05 / 0.25 / 0.5 and roll 0.1 / −0.3 / 0.8 deg, i.e. a body frozen
+     * in mid-air. The hang's turn was dropped the instant the fall began.
+     *
+     * The drill spin therefore CONTINUES through the fall, driven (never
+     * sprung) off the state clock and picking up exactly where the hang's TAU
+     * left off, so there is no discontinuity at the state edge. It is what
+     * turns three identical stills into three different ones, and it is why
+     * the drive arm can be symmetric: at any yaw the silhouette is the same.
+     */
+    this._flipYaw = TAU * (1 + t * POUND_SPIN_HZ);
+    this._flipDrvY = true;
+    this._flipDecay = 0.30;
 
-    B.upperLegR.tx = -0.14; B.upperLegL.tx = -0.14;
-    B.upperLegR.tz = -0.035; B.upperLegL.tz = 0.035;     // ankles together
-    B.lowerLegR.tx = 0.10; B.lowerLegL.tx = 0.10;        // knees locked
-    B.footR.tx = -0.78; B.footL.tx = -0.78;              // toes pointed
+    // a fine judder on top, so even a single frame reads as violent
+    const wob = Math.sin(t * 26) * 0.030;
 
-    B.spine.tx = -0.20; B.chest.tx = -0.14;              // chest thrown open
-    B.neck.tx = 0.30; B.head.tx = 0.42;                  // watching the ground
+    /*
+     * FIST. Both arms are locked straight and driven down the FALL AXIS with
+     * the fists closed together ahead of the chest. The rig is pitched −0.95
+     * rad, so a limb at tx = +0.95 points at true world down and +1.34 is
+     * down-and-well-forward: the arms then stand 54 degrees OFF the torso
+     * axis, which is what actually reads. The old version put the body at
+     * −0.50 and one arm at +0.66 — 9 degrees off the torso, so the arm
+     * vanished inside the coat and the drop photographed as a man standing
+     * still in the air with his arms at his sides.
+     */
+    B.shoulderR.tz = -0.34; B.shoulderL.tz = 0.34;       // shoulders to the centreline
+    B.upperArmR.tx = 1.34 + wob; B.upperArmL.tx = 1.34 - wob;
+    B.upperArmR.tz = -0.18; B.upperArmL.tz = 0.18;       // forearms converging
+    B.lowerArmR.tx = 0.02; B.lowerArmL.tx = 0.02;        // elbows locked
+    B.handR.tx = 0.46; B.handL.tx = 0.46;                // knuckles cocked down
 
-    this._rootPitch = 0.13;
-    this._rootY += 0.04;
+    // heels snapped up behind — a tuck that does not crowd the fists
+    B.upperLegR.tx = 0.34; B.upperLegL.tx = 0.26;
+    B.upperLegR.tz = 0.20; B.upperLegL.tz = -0.20;
+    B.lowerLegR.tx = -2.30; B.lowerLegL.tx = -2.20;
+    B.footR.tx = 0.68; B.footL.tx = 0.68;
+
+    B.spine.tx = 0.34; B.chest.tx = 0.26;                // curled over the fists
+    B.neck.tx = -0.16; B.head.tx = -0.44;                // head tucked, eyes on the impact
+
+    this._rootPitch = -0.95;                             // −pitch = over the impact
+    this._rootRoll += wob * 0.8;
+    this._rootY += 0.06;
   }
 
   /** Pound land: the shock crouch, then a fast pop back to standing. */
@@ -2560,33 +3738,54 @@ export class Hero {
     const B = this.B;
     const t = this._breathe;
     if (idle) {
-      // treading water
+      /* TREADING. ROUND 4 (critic): "SWIM states are not strokes … the state
+       * sheet cannot separate them from idle at thumbnail size." The two water
+       * states now differ in the two things a thumbnail actually carries: BODY
+       * AXIS (upright here, prone below) and ARM PHASE (both arms sculling
+       * together here, strictly alternating below). */
       const s = Math.sin(t * 2.4);
-      this._rootPitch = -0.30;
-      B.upperArmR.tx = -1.20 + s * 0.30; B.upperArmL.tx = -1.20 - s * 0.30;
-      B.upperArmR.tz = 1.05; B.upperArmL.tz = -1.05;
-      B.lowerArmR.tx = 0.75; B.lowerArmL.tx = 0.75;
-      B.upperLegR.tx = 0.45 + s * 0.25; B.upperLegL.tx = 0.45 - s * 0.25;
-      B.lowerLegR.tx = -0.75; B.lowerLegL.tx = -0.75;
-      B.head.tx = 0.28;
-      this._rootY += Math.sin(t * 1.6) * 0.03;
+      const sc = Math.sin(t * 3.6);
+      this._rootPitch = -0.22;
+      // hands sculling out at chest height, palms sweeping in and out together
+      B.upperArmR.tx = -1.42; B.upperArmL.tx = -1.42;
+      B.upperArmR.tz = 1.18 + sc * 0.30; B.upperArmL.tz = -1.18 - sc * 0.30;
+      B.upperArmR.ty = -0.30 - sc * 0.35; B.upperArmL.ty = 0.30 + sc * 0.35;
+      B.lowerArmR.tx = 0.95; B.lowerArmL.tx = 0.95;
+      B.handR.tz = sc * 0.55; B.handL.tz = -sc * 0.55;
+      // eggbeater kick: knees out, shins scissoring out of phase
+      B.upperLegR.tx = 0.62 + s * 0.30; B.upperLegL.tx = 0.62 - s * 0.30;
+      B.upperLegR.tz = 0.46; B.upperLegL.tz = -0.46;
+      B.lowerLegR.tx = -1.05 - clamp01(s) * 0.30;
+      B.lowerLegL.tx = -1.05 - clamp01(-s) * 0.30;
+      B.footR.tx = 0.25; B.footL.tx = 0.25;
+      B.spine.tx = 0.10; B.chest.tx = 0.08;
+      B.head.tx = 0.30; B.head.ty = Math.sin(t * 0.8) * 0.35;
+      this._rootY += Math.sin(t * 1.6) * 0.035;
       return;
     }
     if (!submerged) {
-      // front crawl
+      /* FRONT CRAWL. Prone, and ROLLING: the body rotates toward the pulling
+       * arm and the head turns out of the water to breathe on that side. The
+       * roll is what makes a crawl read as a stroke at thumbnail size — an
+       * un-rolled prone body with symmetric arms is a superman pose. */
       const ph = t * 4.2;
-      const s = Math.sin(ph), c = Math.sin(ph + Math.PI);
-      this._rootPitch = -1.15;
+      const s = Math.sin(ph), c = -s;
+      this._rootPitch = -1.18;
+      this._rootRoll += s * 0.52;
       this._rootY += 0.18;
-      B.upperArmR.tx = -1.55 - s * 1.35; B.upperArmL.tx = -1.55 - c * 1.35;
-      B.upperArmR.tz = 0.35; B.upperArmL.tz = -0.35;
-      B.lowerArmR.tx = 0.45 + clamp01(s) * 0.55; B.lowerArmL.tx = 0.45 + clamp01(c) * 0.55;
-      B.upperLegR.tx = -0.15 + Math.sin(ph * 2) * 0.35;
-      B.upperLegL.tx = -0.15 - Math.sin(ph * 2) * 0.35;
+      // one arm reaching forward past the head, the other finishing the pull
+      B.upperArmR.tx = -1.55 - s * 1.45; B.upperArmL.tx = -1.55 - c * 1.45;
+      B.upperArmR.tz = 0.30 + clamp01(-s) * 0.55;
+      B.upperArmL.tz = -0.30 - clamp01(-c) * 0.55;
+      // high-elbow recovery on the arm that is out of the water
+      B.lowerArmR.tx = 0.30 + clamp01(-s) * 1.25 + clamp01(s) * 0.35;
+      B.lowerArmL.tx = 0.30 + clamp01(-c) * 1.25 + clamp01(c) * 0.35;
+      B.upperLegR.tx = -0.15 + Math.sin(ph * 2) * 0.42;
+      B.upperLegL.tx = -0.15 - Math.sin(ph * 2) * 0.42;
       B.lowerLegR.tx = -0.35; B.lowerLegL.tx = -0.35;
       B.footR.tx = -0.45; B.footL.tx = -0.45;
-      B.chest.ty = s * 0.28;
-      B.head.tx = 0.42; B.head.ty = s * 0.45;
+      B.chest.ty = s * 0.34;
+      B.head.tx = 0.42; B.head.ty = s * 0.80; B.head.tz = s * 0.30;
       return;
     }
     // frog kick, submerged: pull, tuck, snap, glide
@@ -2606,29 +3805,57 @@ export class Hero {
     B.head.tx = 0.35;
   }
 
-  /** Climb: alternating reach up a pole / net, driven by height gained. */
-  _poseClimb() {
+  /**
+   * Climb: alternating hand-over-hand up a pole or a net.
+   *
+   * Two defects, both fixed at the generator.
+   *
+   * 1. NO CYCLE. The phase was `this._dist * 3.4`, and `_dist` only accumulates
+   *    while GROUNDED — on a pole the hero is not grounded, so the phase never
+   *    moved: hips pitch 4.6 deg, roll 0.3 deg and handR.z 0.383 measured
+   *    IDENTICAL to 3 decimal places at t = 0.05, 0.25 and 0.5. A dedicated
+   *    clock now integrates off the climb RATE, with a floor so a held grip
+   *    still shifts its weight.
+   *
+   * 2. NO GRIP. `upperArm.tx = −2.35` swings a limb up and BEHIND the hero (the
+   *    tip goes to −L·sin θ in Z, so negative tx = backward — see the header),
+   *    which is why both hands measured BEHIND the back at z = +0.31 / +0.38
+   *    and the state sat 2 degrees away from `fall`: idle with an arm out. The
+   *    sign is flipped, so the hands close on something IN FRONT of the chest,
+   *    and the knees now pinch the pole instead of hanging.
+   */
+  _poseClimb(dt, player) {
     const B = this.B;
-    const ph = this._dist * 3.4;
-    const s = Math.sin(ph), c = Math.sin(ph + Math.PI);
-    this._rootPitch = 0.08;
-    B.upperArmR.tx = -2.35 - s * 0.55; B.upperArmL.tx = -2.35 - c * 0.55;
-    B.upperArmR.tz = 0.30; B.upperArmL.tz = -0.30;
-    B.lowerArmR.tx = 0.55 + clamp01(-s) * 0.75; B.lowerArmL.tx = 0.55 + clamp01(-c) * 0.75;
-    B.upperLegR.tx = 0.55 + c * 0.45; B.upperLegL.tx = 0.55 + s * 0.45;
-    B.upperLegR.tz = 0.30; B.upperLegL.tz = -0.30;
-    B.lowerLegR.tx = -1.05 - clamp01(c) * 0.35; B.lowerLegL.tx = -1.05 - clamp01(s) * 0.35;
-    B.footR.tx = 0.42; B.footL.tx = 0.42;
-    B.chest.ty = s * 0.20;
-    B.hips.ty = -s * 0.16;
-    B.head.tx = 0.16;
+    const vy = player && player.vel ? numOr(player.vel.y, 0) : 0;
+    this._climbPh += dt * (1.35 + Math.abs(vy) * 2.4);
+    if (this._climbPh > 1e4) this._climbPh -= 1e4;
+    const ph = this._climbPh;
+    const s = Math.sin(ph), c = -s;
+    // reach: the hand that is high is straight, the low one is hauling
+    this._rootPitch = -0.34;                 // chest pulled in to the pole
+    this._rootY += s * 0.045;                // the hitch of each pull
+    B.upperArmR.tx = 2.46 + s * 0.42; B.upperArmL.tx = 2.46 + c * 0.42;
+    B.upperArmR.tz = 0.26; B.upperArmL.tz = -0.26;      // grip WIDE of the face
+    B.lowerArmR.tx = 0.55 + clamp01(-s) * 0.85; B.lowerArmL.tx = 0.55 + clamp01(-c) * 0.85;
+    B.handR.tx = 0.45; B.handL.tx = 0.45;    // mittens closed round the pole
+    B.upperLegR.tx = 0.92 + c * 0.42; B.upperLegL.tx = 0.92 + s * 0.42;
+    B.upperLegR.tz = 0.42; B.upperLegL.tz = -0.42;      // knees pinching it
+    B.lowerLegR.tx = -1.30 - clamp01(c) * 0.40; B.lowerLegL.tx = -1.30 - clamp01(s) * 0.40;
+    B.footR.tx = 0.52; B.footL.tx = 0.52;
+    B.spine.tx = 0.12;
+    B.chest.ty = s * 0.24;
+    B.hips.ty = -s * 0.20;
+    B.head.tx = -0.26;                       // eyes up the pole
   }
 
   /** Kicking off a pole: a hard push away with both legs. */
   _poseClimbKick(t) {
     const B = this.B;
     const f = clamp01(t / 0.22);
-    B.upperArmR.tx = lerp(-2.35, -0.85, f); B.upperArmL.tx = lerp(-2.35, -0.85, f);
+    // starts from the climb's GRIP (arms forward, tx = +2.42) and throws them
+    // down and open as the legs fire — the old start of −2.35 was the arms-back
+    // pose the climb no longer holds, so the kick began with a 4.8 rad snap
+    B.upperArmR.tx = lerp(2.42, -0.85, f); B.upperArmL.tx = lerp(2.42, -0.85, f);
     B.upperArmR.tz = 0.75; B.upperArmL.tz = -0.75;
     B.lowerArmR.tx = 0.65; B.lowerArmL.tx = 0.65;
     B.upperLegR.tx = lerp(1.20, -0.30, f); B.upperLegL.tx = lerp(1.20, -0.30, f);
@@ -2878,15 +4105,17 @@ export class Hero {
 
     const open = 1 - closed * 0.94;
     this._eyePivot.scale.set(1, open, 1);
-    this._eyePivot.position.y = -P.headR * 0.06 - closed * 0.012;
+    this._eyePivot.position.y = this._eyeRestY - closed * 0.012;
 
-    // look toward the turn direction, with a little vertical from pitch
+    // Look toward the turn direction, with a little vertical from pitch. This
+    // pivot is at the HEAD origin, so a rotation here is an arc of radius 0.21:
+    // the old 0.34 rad slid the irises 71 mm and threw them off the eyeballs
+    // entirely. PUPIL_LOOK_* keep the dart inside the 47 mm lens.
     const wantX = clamp(this._lean, -1, 1) * 0.42 + this._lookYaw * 0.55;
     const wantY = clamp(-this._rootPitch * 0.8, -0.5, 0.5);
     this._pupilX = damp(this._pupilX, wantX, 11, dt);
     this._pupilY = damp(this._pupilY, wantY, 11, dt);
-    this._pupilPivot.rotation.set(this._pupilY * 0.30, this._pupilX * 0.34, 0);
-    this._pupilPivot.position.set(this._pupilX * 0.012, this._pupilY * 0.008, 0);
+    this._pupilPivot.rotation.set(this._pupilY * PUPIL_LOOK_PITCH, this._pupilX * PUPIL_LOOK_YAW, 0);
   }
 
   /* ─────────────────────────────── the scarf ─────────────────────────────── */
@@ -2902,9 +4131,25 @@ export class Hero {
     const p = this._scarfP;
     const q = this._scarfPrev;
 
-    // anchor at the collar, in world space
+    /*
+     * Anchor at the NAPE, in world space — not at the throat. The offset is
+     * taken in the NECK BONE'S OWN FRAME (its +Z column is "backward", its +Y
+     * column "up the spine") so it follows every pitch the body takes: prone in
+     * a longjump the anchor rides ABOVE the neck, which is exactly where a real
+     * collar sits and exactly what stops the chain falling across the face.
+     * The columns carry the rig's squash scale, so they are normalised.
+     */
+    const nm = this.bones.neck.matrixWorld.elements;
+    const uxl = Math.hypot(nm[0], nm[1], nm[2]) || 1;
+    const uyl = Math.hypot(nm[4], nm[5], nm[6]) || 1;
+    const uzl = Math.hypot(nm[8], nm[9], nm[10]) || 1;
     _v0.setFromMatrixPosition(this.bones.neck.matrixWorld);
-    const ax = _v0.x, ay = _v0.y + 0.04, az = _v0.z;
+    const ax = _v0.x + (nm[8] / uzl) * SCARF_ANCHOR_BACK + (nm[4] / uyl) * SCARF_ANCHOR_UP
+      + (nm[0] / uxl) * SCARF_ANCHOR_SIDE;
+    const ay = _v0.y + (nm[9] / uzl) * SCARF_ANCHOR_BACK + (nm[5] / uyl) * SCARF_ANCHOR_UP
+      + (nm[1] / uxl) * SCARF_ANCHOR_SIDE;
+    const az = _v0.z + (nm[10] / uzl) * SCARF_ANCHOR_BACK + (nm[6] / uyl) * SCARF_ANCHOR_UP
+      + (nm[2] / uxl) * SCARF_ANCHOR_SIDE;
 
     if (!this._scarfInit) {
       for (let i = 0; i < N; i++) {
@@ -2927,9 +4172,11 @@ export class Hero {
     // wind: the hero's own motion, plus a slow gust so a standing scarf lives
     const gust = Math.sin(this._breathe * 0.9) * 0.55 + Math.sin(this._breathe * 2.3) * 0.25;
     const drape = 1.35 * (1 - this._speedN);
-    const wx = -vx * SCARF_WIND * 9 + gust * 0.45 + Math.cos(facing) * drape;
+    // over the shoulder, always — see SCARF_SIDE
+    const side = SCARF_SIDE * (0.30 + this._speedN * 1.30) + drape;
+    const wx = -vx * SCARF_WIND * 9 + gust * 0.45 + Math.cos(facing) * side;
     const wy = -vy * SCARF_WIND * 3.2 + gust * 0.20;
-    const wz = -vz * SCARF_WIND * 9 + gust * 0.35 - Math.sin(facing) * drape;
+    const wz = -vz * SCARF_WIND * 9 + gust * 0.35 - Math.sin(facing) * side;
 
     const h = Math.min(dt, 1 / 45);
     const h2 = h * h;
@@ -2973,8 +4220,10 @@ export class Hero {
      * so the length constraint is always the last word.
      */
     _v1.setFromMatrixPosition(this.bones.chest.matrixWorld);
+    _v2.setFromMatrixPosition(this.bones.head.matrixWorld);
     const iters = this.q === 0 ? 4 : 8;
     const bodyR2 = SCARF_BODY_R * SCARF_BODY_R;
+    const headR2 = SCARF_HEAD_R * SCARF_HEAD_R;
     for (let k = 0; k < iters; k++) {
       // body sphere: the scarf may never sink into the coat
       for (let i = 1; i < N; i++) {
@@ -2984,6 +4233,26 @@ export class Hero {
         if (d2 < bodyR2 && d2 > 1e-8) {
           const d = Math.sqrt(d2);
           const push = (SCARF_BODY_R - d) / d;
+          p[o] += ex * push; p[o + 1] += ey * push; p[o + 2] += ez * push;
+        }
+      }
+      /* HEAD sphere. Without it the only thing between the chain and the jaw
+         was gravity, and gravity points at the face whenever the body is
+         horizontal.
+         It starts at i = 2, not i = 1. The collar is pinned on the nape, which
+         is INSIDE this sphere (0.138 m from the head bone), so pushing the
+         first two particles out would straighten the chain into a rod at the
+         one place a scarf should drape. They cannot reach the face anyway:
+         particle 2 is at most 0.210 m of chain from the anchor and the muzzle
+         is 0.408 m away from it. Every particle that CAN reach the face is
+         inside this pass. */
+      for (let i = 2; i < N; i++) {
+        const o = i * 3;
+        const ex = p[o] - _v2.x, ey = p[o + 1] - _v2.y, ez = p[o + 2] - _v2.z;
+        const d2 = ex * ex + ey * ey + ez * ez;
+        if (d2 < headR2 && d2 > 1e-8) {
+          const d = Math.sqrt(d2);
+          const push = (SCARF_HEAD_R - d) / d;
           p[o] += ex * push; p[o + 1] += ey * push; p[o + 2] += ez * push;
         }
       }
@@ -3040,14 +4309,21 @@ export class Hero {
     const nor = this._scarfNor;
     const rp = this.root.position;
     const cf = Math.cos(-facing), sf = Math.sin(-facing);
+    const ringA = _scarfRingA;
+    const ringB = _scarfRingB;
+    const norA = _scarfNorA;
+    const norB = _scarfNorB;
 
     // hero-local "right" used to break the degenerate case of a vertical scarf
-    const rx = cf * 1 + sf * 0, rz = -sf * 1 + cf * 0;
+    const rx = cf, rz = -sf;
 
-    // build local-space centreline into scratch, one link at a time
-    let px0 = 0, py0 = 0, pz0 = 0;
-    let sx0 = 0, sy0 = 0, sz0 = 0;
-    let nx0 = 0, ny0 = 0, nz0 = 0;
+    // Twist runs DOWN the chain and grows with speed, so the cloth turns
+    // edge-on and back as it trails. A flat ribbon cannot do this; a prism can,
+    // and it is the difference between "a red plank" and cloth.
+    const twSpeed = 0.55 + this._speedN * 1.5;
+    const twPhase = this._breathe * 3.1;
+
+    let cur = ringA, curN = norA, prev = ringB, prevN = norB;
     let have = false;
 
     for (let i = 0; i < N; i++) {
@@ -3067,56 +4343,82 @@ export class Hero {
         ty = wy2 - ly;
         tz = (-sf * wx2 + cf * wz2) - lz;
       } else if (have) {
-        tx = lx - px0; ty = ly - py0; tz = lz - pz0;
+        tx = lx - _scarfPrevC[0]; ty = ly - _scarfPrevC[1]; tz = lz - _scarfPrevC[2];
       }
       const tl = Math.sqrt(tx * tx + ty * ty + tz * tz) || 1;
       tx /= tl; ty /= tl; tz /= tl;
 
-      // side = tangent × up, falling back to hero-right when vertical
-      let sx = ty * 0 - tz * 1, sy = tz * 0 - tx * 0, sz = tx * 1 - ty * 0;
-      let sl = Math.sqrt(sx * sx + sy * sy + sz * sz);
+      // side = tangent x up, falling back to hero-right when vertical
+      let sx = -tz, sy = 0, sz = tx;
+      let sl = Math.sqrt(sx * sx + sz * sz);
       if (sl < 0.08) { sx = rx; sy = 0; sz = rz; sl = Math.sqrt(sx * sx + sz * sz) || 1; }
       sx /= sl; sy /= sl; sz /= sl;
 
-      // normal = side × tangent
-      const nx = sy * tz - sz * ty;
-      const ny = sz * tx - sx * tz;
-      const nz = sx * ty - sy * tx;
+      // normal = side x tangent
+      let nx = sy * tz - sz * ty;
+      let ny = sz * tx - sx * tz;
+      let nz = sx * ty - sy * tx;
 
-      const w = lerp(SCARF_W0, SCARF_W1, i / (N - 1));
+      // roll the (side, normal) frame about the tangent
+      const f01 = i / (N - 1);
+      const tw = SCARF_TWIST * f01
+        + twSpeed * 0.35 * Math.sin(twPhase - i * 0.85) * f01;
+      const ct = Math.cos(tw), st = Math.sin(tw);
+      const s2x = sx * ct - nx * st, s2y = sy * ct - ny * st, s2z = sz * ct - nz * st;
+      const n2x = nx * ct + sx * st, n2y = ny * ct + sy * st, n2z = nz * ct + sz * st;
 
-      if (have) {
-        // Emit the quad between the previous ring and this one, written
-        // straight into the typed arrays — an intermediate [] per link per
-        // frame would be 14 heap allocations a frame for nothing.
-        const oi = (i - 1) * 18;
-        const w0 = lerp(SCARF_W0, SCARF_W1, (i - 1) / (N - 1));
+      const w = lerp(SCARF_W0, SCARF_W1, f01);
+      const h = lerp(SCARF_H0, SCARF_H1, f01);
 
-        const a0x = px0 - sx0 * w0, a0y = py0 - sy0 * w0, a0z = pz0 - sz0 * w0;
-        const a1x = px0 + sx0 * w0, a1y = py0 + sy0 * w0, a1z = pz0 + sz0 * w0;
-        const b0x = lx - sx * w, b0y = ly - sy * w, b0z = lz - sz * w;
-        const b1x = lx + sx * w, b1y = ly + sy * w, b1z = lz + sz * w;
-
-        // tri A: a0, a1, b1
-        pos[oi] = a0x; pos[oi + 1] = a0y; pos[oi + 2] = a0z;
-        pos[oi + 3] = a1x; pos[oi + 4] = a1y; pos[oi + 5] = a1z;
-        pos[oi + 6] = b1x; pos[oi + 7] = b1y; pos[oi + 8] = b1z;
-        // tri B: a0, b1, b0
-        pos[oi + 9] = a0x; pos[oi + 10] = a0y; pos[oi + 11] = a0z;
-        pos[oi + 12] = b1x; pos[oi + 13] = b1y; pos[oi + 14] = b1z;
-        pos[oi + 15] = b0x; pos[oi + 16] = b0y; pos[oi + 17] = b0z;
-
-        nor[oi] = nx0; nor[oi + 1] = ny0; nor[oi + 2] = nz0;
-        nor[oi + 3] = nx0; nor[oi + 4] = ny0; nor[oi + 5] = nz0;
-        nor[oi + 6] = nx; nor[oi + 7] = ny; nor[oi + 8] = nz;
-        nor[oi + 9] = nx0; nor[oi + 10] = ny0; nor[oi + 11] = nz0;
-        nor[oi + 12] = nx; nor[oi + 13] = ny; nor[oi + 14] = nz;
-        nor[oi + 15] = nx; nor[oi + 16] = ny; nor[oi + 17] = nz;
+      // four corners of the cross-section, in order around it
+      const cxs = _scarfCX, cns = _scarfCN;
+      cxs[0] = w; cxs[1] = w; cxs[2] = -w; cxs[3] = -w;
+      cns[0] = h; cns[1] = -h; cns[2] = -h; cns[3] = h;
+      for (let k = 0; k < 4; k++) {
+        const k3 = k * 3;
+        cur[k3] = lx + s2x * cxs[k] + n2x * cns[k];
+        cur[k3 + 1] = ly + s2y * cxs[k] + n2y * cns[k];
+        cur[k3 + 2] = lz + s2z * cxs[k] + n2z * cns[k];
+      }
+      // face normals: the outward bisector of each edge of the section
+      for (let k = 0; k < 4; k++) {
+        const k2 = (k + 1) & 3;
+        const mx = (cxs[k] + cxs[k2]) * 0.5, mn = (cns[k] + cns[k2]) * 0.5;
+        let fx = s2x * mx + n2x * mn;
+        let fy = s2y * mx + n2y * mn;
+        let fz = s2z * mx + n2z * mn;
+        const fl = Math.sqrt(fx * fx + fy * fy + fz * fz) || 1;
+        const k3 = k * 3;
+        curN[k3] = fx / fl; curN[k3 + 1] = fy / fl; curN[k3 + 2] = fz / fl;
       }
 
-      px0 = lx; py0 = ly; pz0 = lz;
-      sx0 = sx; sy0 = sy; sz0 = sz;
-      nx0 = nx; ny0 = ny; nz0 = nz;
+      if (have) {
+        for (let k = 0; k < 4; k++) {
+          const k2 = (k + 1) & 3;
+          const oi = ((i - 1) * SCARF_FACES + k) * 18;
+          const a0 = k * 3, a1 = k2 * 3;
+          // tri A: prev[k], cur[k2], prev[k2]   tri B: prev[k], cur[k], cur[k2]
+          pos[oi] = prev[a0]; pos[oi + 1] = prev[a0 + 1]; pos[oi + 2] = prev[a0 + 2];
+          pos[oi + 3] = cur[a1]; pos[oi + 4] = cur[a1 + 1]; pos[oi + 5] = cur[a1 + 2];
+          pos[oi + 6] = prev[a1]; pos[oi + 7] = prev[a1 + 1]; pos[oi + 8] = prev[a1 + 2];
+          pos[oi + 9] = prev[a0]; pos[oi + 10] = prev[a0 + 1]; pos[oi + 11] = prev[a0 + 2];
+          pos[oi + 12] = cur[a0]; pos[oi + 13] = cur[a0 + 1]; pos[oi + 14] = cur[a0 + 2];
+          pos[oi + 15] = cur[a1]; pos[oi + 16] = cur[a1 + 1]; pos[oi + 17] = cur[a1 + 2];
+
+          const px = prevN[a0], py = prevN[a0 + 1], pz = prevN[a0 + 2];
+          const qx = curN[a0], qy = curN[a0 + 1], qz = curN[a0 + 2];
+          nor[oi] = px; nor[oi + 1] = py; nor[oi + 2] = pz;
+          nor[oi + 3] = qx; nor[oi + 4] = qy; nor[oi + 5] = qz;
+          nor[oi + 6] = px; nor[oi + 7] = py; nor[oi + 8] = pz;
+          nor[oi + 9] = px; nor[oi + 10] = py; nor[oi + 11] = pz;
+          nor[oi + 12] = qx; nor[oi + 13] = qy; nor[oi + 14] = qz;
+          nor[oi + 15] = qx; nor[oi + 16] = qy; nor[oi + 17] = qz;
+        }
+      }
+
+      _scarfPrevC[0] = lx; _scarfPrevC[1] = ly; _scarfPrevC[2] = lz;
+      const tmp = prev; prev = cur; cur = tmp;
+      const tmpN = prevN; prevN = curN; curN = tmpN;
       have = true;
     }
 

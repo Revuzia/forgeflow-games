@@ -620,8 +620,12 @@ export class CourseCard {
 
   /** Silhouetted realm landmark — the thing you recognise the painting by. */
   _landmark(ctx, w, h, P, rng) {
-    const x = w * (0.24 + rng() * 0.5);
-    const y = h * 0.74;
+    /* The lockup owns the bottom-left of the plate and the DIFFICULTY chip the
+       bottom-right, so the landmark lives in the clear band between them and
+       sits high enough that its silhouette never cuts through the title. The
+       seeded jitter stays — it just jitters inside the safe window now. */
+    const x = w * (0.60 + rng() * 0.18);
+    const y = h * 0.66;
     ctx.fillStyle = P.ridges[2];
     ctx.strokeStyle = 'rgba(255,240,200,.22)';
     ctx.lineWidth = 2;

@@ -88,6 +88,12 @@ const DEFAULT_PALETTE = {
    * up in EVERY world — pads now carry a per-theme colour that is NOT the
    * checkpoint armed signal. */
   pad: 0x4fb9ff,
+  /* THE LIGHT INSIDE A BUILDING. `light` is a lamp-lit room seen through
+   * glazing, `lightCool` the same room by daylight — both are LIGHT colours
+   * (near the white point, only tinted), never affordance colours. See the
+   * note on `glassMat` in buildBuilding. */
+  light: 0xffd8a2,
+  lightCool: 0xdfe9f2,
 };
 
 /** Read a palette colour from a ThemeDef, with a hard fallback. */
@@ -467,6 +473,8 @@ function safeLandableGlow(color, theme) {
   return _hueDist(_sanHSL.h, killH) >= 45 / 360 ? accent : pal(theme, 'safeEdge');
 }
 
+const _EM_WHITE = new THREE.Color(0xffffff);
+
 /** Flat emissive band — bright enough to read at 25 m through fog. */
 function emissiveMat(color, intensity, opts) {
   const o = opts || null;
@@ -475,10 +483,34 @@ function emissiveMat(color, intensity, opts) {
   const key = 'e' + (color >>> 0).toString(16) + ':' + intensity.toFixed(2) + ':' + side + ':' + opacity;
   let m = _emCache.get(key);
   if (m) return m;
+  /* ROUND 4 — WHY AN EMISSIVE BAND READ AS PLASTIC.
+   * Critic, `_shots/verdant-1/cp2.png`: "flat, fully saturated, unlit
+   * lime-green rectangles ... they read as pasted plastic panels, not as
+   * light". A real emitter above the display white point clips toward WHITE
+   * and keeps its hue only in the falloff and the bloom skirt; a band whose
+   * core is still fully saturated at intensity 2.4 is the signature of paint,
+   * not of light. So the core desaturates with intensity, and the intensity
+   * is trimmed by half the wash so the band emits about the same TOTAL light
+   * it did before — this is a hue/saturation change, not a brightness one
+   * (the glare-bar rule stands: trim is not a light source). */
+  /* ROUND 5 — THE WASH WAS EATING THE HUE OF THE ONE BAND THAT NEEDS IT.
+   * Critic, `_shots/keep/cp2.png` (crop `_shots/_r3_keep_cp2_bar.png`): "every
+   * landable lip carries a solid cream bar peaking [245,229,191] ... the stripe
+   * is also rendering near-white rather than the palette's 0xffc46a amber, so
+   * it has lost the hue the theme comment says it was saturated to keep."
+   * The round-4 wash starts at intensity 0.55 and reaches 34 % white by 2.25,
+   * so the LIP STRIPE — the single most colour-coded object in the frame — was
+   * the most desaturated thing the function produces. The wash exists for a
+   * real reason (a saturated 2.4-intensity slab reads as painted plastic), but
+   * that argument applies to LARGE emissive PANELS, not to a 9 cm line. It now
+   * starts above where lip stripes live and tops out lower, so a stripe keeps
+   * its amber and a hazard panel still clips toward white. */
+  const wash = Math.min(0.22, Math.max(0, (intensity - 1.35) * 0.20));
+  const core = new THREE.Color(color).lerp(_EM_WHITE, wash);
   m = new THREE.MeshStandardMaterial({
     color: 0x0b0f16,
-    emissive: color,
-    emissiveIntensity: intensity,
+    emissive: core,
+    emissiveIntensity: intensity * (1 - wash * 0.5),
     roughness: 0.35,
     metalness: 0.0,
     side,
@@ -500,7 +532,10 @@ function keylineMaterial() {
   let m = _emCache.get(key);
   if (m) return m;
   m = new THREE.MeshStandardMaterial({
-    color: 0x0a0d12,
+    /* Neutral-warm near-black, not the old cool 0x0a0d12: a yellow band between
+     * two BLUE-black flanks is hazard tape, which is exactly what the Keep read
+     * as. Same luminance, so the keyline still caps the bloom fringe. */
+    color: 0x110d09,
     roughness: 0.92,
     metalness: 0.05,
   });
@@ -1016,19 +1051,88 @@ function makeCollider(cx, cy, cz, hx, hy, hz, quat, surface, props, ref) {
   return c;
 }
 
-/** Which faces get the loud leading-edge stripe. +X is ALWAYS on (CONTRACT §10). */
+/** Which faces get the loud leading-edge stripe. */
 const FACE_KEYS = ['+x', '-x', '+z', '-z'];
+
+/**
+ * Is this solid a JUMP TARGET, i.e. something a player lines a landing up on?
+ *
+ * ROUND 3 (critic: "the Keep reads as a dim industrial parking garage — long
+ * linear fluorescent-tube strip emitters along every ceiling and edge, and
+ * yellow-and-black hazard floor striping"). The cause was this function's old
+ * default: `stripeFaces` returned `['+x']` for EVERY platform, authored or not.
+ * The Keep is built almost entirely out of `box()` calls — floor plates, wall
+ * slabs, ceiling slabs, piers, lintels — so every one of them wore a 0.12 m
+ * emissive band flanked by two near-black keylines on its +X face and its top.
+ * Hundreds of them. That is where the strip lights and the hazard tape came
+ * from, and it is also why the marking meant nothing: a stripe that is on the
+ * ceiling too is not a landing cue.
+ *
+ * CONTRACT §10 asks that every landing be visible from its take-off, not that
+ * every solid be striped. So the default now applies only to a solid that could
+ * BE a landing:
+ *   - a MASS (taller than it is wide, or over 1.6 m thick) is a wall, a pier or
+ *     a lintel — it is architecture, not a target;
+ *   - a TALL, NARROW upstand (0.7 m or less across and 0.8 m or more high) is a
+ *     balustrade, a rail or a kerb. This is the one that kept the Keep's
+ *     gallery reading as hazard tape after the first pass: the balustrades are
+ *     authored as 0.30 x 1.05 x 27.6 m solids, which is thin enough to slip
+ *     past the mass test and small enough in FOOTPRINT to slip past the plate
+ *     test, so every rail in the building wore a 27 m emissive line. A plank
+ *     beam you actually land on is thin in Y, not tall — hence the height
+ *     condition rather than a bare width one;
+ *   - a PLATE over ~36 m2 of top face is a floor or a roof, not a target you
+ *     aim at;
+ *   - everything else keeps the stripe.
+ * `stripe: true` / a face list / `stripe: false` all still mean exactly what
+ * they meant, so every authored marking is untouched.
+ */
+function isJumpTarget(def) {
+  const sz = def && def.s;
+  if (!sz) return true;
+  const w = sz[0] || 0, h = sz[1] || 0, d = sz[2] || 0;
+  if (h > 1.6 && h > Math.min(w, d) * 1.15) return false;   // wall / pier / mass
+  if (h >= 0.8 && Math.min(w, d) <= 0.7) return false;      // balustrade / upstand
+  if (w * d > 36) return false;                             // floor plate / roof
+  /* ROUND 4 (critic, `_shots/keep/cp1.png`: "the leading-edge stripes are
+   * applied along long straight FLOOR edges in the hall, where a continuous
+   * double yellow line on a pale tiled ground reads as parking-lot lane
+   * marking rather than as a platform lip. The stripe belongs on a lip you can
+   * fall off, not on every floor seam"). A room is assembled from several
+   * floor BAYS, and a 9 x 3 m bay is only 27 m2 — under the plate gate above —
+   * so every internal seam in the Keep's hall was drawing a leading edge. A
+   * slab that is long AND wide AND ankle-to-knee high is floor. A long NARROW
+   * slab (min side under 2.5 m) is still a ledge and still gets its stripe,
+   * which is the case this must not break. */
+  if (Math.max(w, d) >= 8 && Math.min(w, d) >= 2.5 && h <= 1.2) return false;
+  /* ROUND 5 (critic, `_shots/keep/cp3.png`: "keep/cp3's yellow ground lines
+   * read as parking-lot road markings across the courtyard"). The round-4 rule
+   * above only catches a bay that is LONG (>= 8 m); the Keep's courtyard is
+   * paved with 6 x 6 m plates, which are 36 m2 exactly — one square metre under
+   * the plate gate and 2 m short of the long-bay gate — so every one of them
+   * drew a leading edge and the courtyard came out as lane markings. A slab
+   * that is 3 m or more in BOTH horizontal axes and no taller than a kerb is
+   * ground you walk over, not a lip you aim at; nothing you have to JUDGE a
+   * landing onto is 3 m deep in its short axis as well as its long one. */
+  if (h <= 1.2 && Math.min(w, d) >= 3.0) return false;
+  return true;
+}
+
 function stripeFaces(def) {
   const s = def ? def.stripe : undefined;
   if (s === false) return [];                       // explicit opt-out
   if (s === true || s === 'all') return FACE_KEYS.slice();
-  const out = ['+x'];
   if (typeof s === 'string') {
+    const out = ['+x'];
     if (FACE_KEYS.indexOf(s) >= 0 && s !== '+x') out.push(s);
-  } else if (Array.isArray(s)) {
-    for (const f of s) if (FACE_KEYS.indexOf(f) >= 0 && out.indexOf(f) < 0) out.push(f);
+    return out;
   }
-  return out;
+  if (Array.isArray(s)) {
+    const out = ['+x'];
+    for (const f of s) if (FACE_KEYS.indexOf(f) >= 0 && out.indexOf(f) < 0) out.push(f);
+    return out;
+  }
+  return isJumpTarget(def) ? ['+x'] : [];
 }
 
 /** surface kind -> [body material key, stripe palette key, emissive gain]. */
@@ -1076,12 +1180,46 @@ export function buildPlatform(def, theme, mats) {
   const glowColor = safeLandableGlow(gs.color, theme);
   const bodyMat = materialFor(bodyKey, theme, mats);
   const panelMat = materialFor(surface === 'ice' ? 'ice' : (bodyKey === 'grate' ? 'metal' : 'panel'), theme, mats);
-  const rimMat = emissiveMat(pal(theme, 'accent'), 0.85 * glow);
-  const stripeMat = emissiveMat(glowColor !== null ? glowColor : pal(theme, look[1]), 2.6 * glow * look[2]);
+  /* ROUND 5 — THE SECOND STRIPE. Critic, crop `_shots/_r3_keep_cp2_bar.png`:
+   * "the slab in that crop carries TWO stripes at once (a wide cream bar on the
+   * top face and a second gold outline on the edge)". The gold outline is THIS
+   * material — an emissive accent rail run right round the top edge of every
+   * platform, at 0.85 gain, i.e. a second full-perimeter light source competing
+   * with the one marking that is supposed to mean something. It stays (it is
+   * what stops a deck top being a blank sheet) but it drops well under the lip
+   * stripe, so the lip is unambiguously the brightest line on the slab. */
+  const rimMat = emissiveMat(pal(theme, 'accent'), 0.10 * glow);
+  /* THE GLARE BAR (owner-repeated across this studio's games, and measured here
+   * on `_shots/keep/cp4.png`: the deck edges render as solid clipped white bars
+   * and the bank at the lower left goes to pure 255 white — 1.30 % of that frame
+   * over 0.90 luminance concentrated into a few strips, with every strip's HUE
+   * gone).
+   *
+   * The arithmetic: the stripe colour is `palette.safeEdge`, which is a near-white
+   * amber (keep 0xffdca0 = (1.00, 0.86, 0.63)). At intensity 2.6 that is
+   * (2.60, 2.24, 1.63) into the tonemapper, so ALL THREE channels saturate and
+   * the bar can only come out white — and then bloom, whose threshold sits at
+   * 1.52, spreads that white over the geometry it was meant to mark.
+   *
+   * A readable lip stripe is bright but KEEPS ITS COLOUR: the red channel may
+   * clip, the blue must not, so the core reads warm and the halo falls off amber
+   * instead of grey. 1.9 with a saturated (not near-white) safeEdge puts keep at
+   * (1.90, 1.46, 0.79) — still well over every diffuse surface in the frame, still
+   * over the bloom threshold on red so it glows, and no longer a white bar. */
+  /* ROUND 5. 1.9 still peaked at [245,229,191] against a Keep wall at [24,13,20]
+   * — a ~25x local step, i.e. the floor lip was the brightest object in the
+   * frame and read as hazard tape. Two things move together: the wall comes UP
+   * (themes.js keep exposure/hemi/fog this round) and the bar comes DOWN. At
+   * 1.25 with keep's 0xffc46a the stripe is (1.25, 0.96, 0.52) into the
+   * tonemapper: red just over the display range so the line still glows, blue
+   * at half, so it stays AMBER; and it now sits under the 1.52 bloom threshold
+   * rather than pouring a white fringe over the geometry it marks. */
+  const stripeMat = emissiveMat(glowColor !== null ? glowColor : pal(theme, look[1]), 1.05 * glow * look[2]);
   const underMat = materialFor('obsidian', theme, mats);
 
-  const key = GeoCache.key('plat', w, h, d, faces.join(''));
-  const geo = GeoCache.get(key, () => platformGeometry(w, h, d, faces));
+  const plain = !!(def && def.plain);
+  const key = GeoCache.key('plat', w, h, d, faces.join('') + (plain ? '|p' : ''));
+  const geo = GeoCache.get(key, () => platformGeometry(w, h, d, faces, plain));
 
   const mesh = new THREE.Mesh(geo, [bodyMat, panelMat, rimMat, stripeMat, underMat, keylineMaterial()]);
   mesh.name = 'platform';
@@ -1106,7 +1244,7 @@ export function buildPlatform(def, theme, mats) {
  * The platform art, in local space, centred on the slab.
  * Material slots: 0 body · 1 panel · 2 rim · 3 stripe · 4 underside · 5 keyline.
  */
-function platformGeometry(w, h, d, faces) {
+function platformGeometry(w, h, d, faces, plain) {
   const b = bevelFor(w, h, d);
   const hy = h * 0.5;
   const parts = [];
@@ -1114,6 +1252,20 @@ function platformGeometry(w, h, d, faces) {
 
   // --- 1. chamfered slab body ----------------------------------------------
   push(bevelBoxGeometry(w, h, d, b, 0.5), 0);
+
+  /* PLAIN: an architectural filler solid — a merlon, a cornice course, a
+   * buttress stage, a string course. It is masonry, not a landing, so it wants
+   * the chamfered block and nothing else.
+   *
+   * This exists because the full platform is expensive by design: recessed top
+   * panel, seam lines, four rim rails, corner studs, four corner caps, an
+   * underside plate, up to nine structural ribs, a spine and its accent line —
+   * about 250 triangles for the smallest box and far more for a long one. That
+   * is right for a deck a player lands on and looks up at from a fall; it is
+   * ~840 triangles each for the 63 pieces of the Keep's new skyline, which
+   * measured +53 k triangles on a course with 34 k of headroom. As `plain` the
+   * same 63 pieces cost 44 triangles each. */
+  if (plain) return assembleIndexed(parts, 6);
 
   // --- 2. recessed top panel, inset 0.06 m ---------------------------------
   const inset = 0.06;
@@ -1152,9 +1304,21 @@ function platformGeometry(w, h, d, faces) {
   // Every emissive band is FLANKED by 0.03 m near-black keylines (slot 5) so the
   // stripe stays a drawn line under bloom instead of a glow bank — the physical
   // lip must never hide inside its own marker's fringe.
-  const SW = 0.12;
+  // ROUND 5: 0.12 -> 0.085. A 12 cm band on a 0.6 m deck is a painted stripe;
+  // 8.5 cm is an inlaid brass line, which is what a lip marking should look
+  // like once it is no longer being asked to be the light source as well.
+  const SW = 0.085;
   const KW = 0.03;                                    // keyline width
-  const vH = Math.min(0.14, Math.max(0.05, h * 0.55));
+  /* ROUND 2 VISUAL — the vertical band was a PANEL, not a line.
+   * `_shots/keep/cp2.png`: at h*0.55 clamped to 0.14 m, a 0.30 m deck riser
+   * gets a 0.14 m emissive face — 47 % of the visible front of every platform
+   * painted solid saturated yellow. Six of them in one frame and the cellar
+   * reads as hazard tape, not as marked lips; the deck's own masonry never gets
+   * a chance to be seen. A leading edge is marked by a LINE: 0.22 h capped at
+   * 7.5 cm keeps the same signal (bright, continuous, visible from below on the
+   * approach) at a fifth of the area, which is also a fifth of the bloom the
+   * pass has to spread. */
+  const vH = Math.min(0.075, Math.max(0.035, h * 0.22));
   const eps = 0.004;
   const hasFace = (name) => faces.indexOf(name) >= 0;
   // one vertical face band + keyline underline, shared by both loops below
@@ -1615,7 +1779,7 @@ export function buildRing(def, theme, mats) {
   const bandMat = emissiveMat(
     (def && def.tint) ? pal(theme, def.tint)
       : (gs.color !== null ? gs.color : pal(theme, 'checkpointOn')),
-    2.4 * glow);
+    2.6 * glow);
 
   const key = GeoCache.key('ring', r, tube, struts);
   const geo = GeoCache.get(key, () => {
@@ -1625,10 +1789,16 @@ export function buildRing(def, theme, mats) {
        a ring line is flown, and a rings hazard builds EIGHT of them. */
     push(ringProfileGeometry(r, [tube, tube * 1.15, tube * 0.32], 24, 1.0), 0);
     push(ringProfileGeometry(r - tube * 0.55, [tube * 0.16, tube * 0.62, tube * 0.06], 24, 1.6), 2);
-    /* The outer rib and the eight bolts ride the BODY material, not `panel`:
-       an unused material slot is one fewer geometry group, and a rings hazard
-       builds eight hoops, so that slot was 8 draw calls for a shade of grey. */
-    push(ringProfileGeometry(r + tube * 0.78, [tube * 0.22, tube * 0.42, tube * 0.10], 24, 1.4), 0);
+    /* ROUND 4 (critic, `_shots/verdant-1/vista-se.png`: "the wing-ride rings
+       are dull bronze/olive tori with no emissive and no fresnel, bunched
+       mid-air; as an affordance they read as scrap"). Only the INNER rib was
+       lit, and it is the thinnest profile on the hoop — from a flight distance
+       it is under a pixel, so the ring read as raw metal reflecting a green
+       meadow. The OUTER rib moves onto the emissive band as well, which costs
+       nothing (it was already sharing a slot with the body) and gives the hoop
+       a lit silhouette from any angle instead of a lit hole seen face-on. The
+       eight bolts stay on the body: they are the metal read. */
+    push(ringProfileGeometry(r + tube * 0.78, [tube * 0.22, tube * 0.42, tube * 0.10], 24, 1.4), 2);
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * Math.PI * 2;
       push(xform(bevelBoxGeometry(tube * 0.9, tube * 2.5, tube * 0.55, tube * 0.12, 1.5),
@@ -1971,7 +2141,8 @@ export function edgeStripe(mesh, color, width, opts) {
   const o = opts || null;
   const W = width === undefined ? 0.12 : width;
   const faces = (o && o.faces && o.faces.length) ? o.faces : ['+x'];
-  const intensity = (o && o.intensity !== undefined) ? o.intensity : 2.6;
+  /* 2.6 -> 1.9: see the glare-bar note in buildPlatform. */
+  const intensity = (o && o.intensity !== undefined) ? o.intensity : 1.9;
 
   let geo = mesh.geometry;
   if (geo.userData.__shared) {
@@ -1986,7 +2157,8 @@ export function edgeStripe(mesh, color, width, opts) {
   if (!(w > 0 && d > 0)) { if (host !== geo) host.dispose(); return mesh; }
   const cx = (bb.max.x + bb.min.x) * 0.5, cz = (bb.max.z + bb.min.z) * 0.5;
   const topY = bb.max.y;
-  const vH = Math.min(0.14, Math.max(0.04, h * 0.5));
+  /* a LINE, not a panel — see the note in platformGeometry */
+  const vH = Math.min(0.075, Math.max(0.032, h * 0.22));
 
   const bands = [];
   const keys = [];   // dark keyline flanks (see keylineMaterial) — appended as their own group
@@ -2970,7 +3142,8 @@ export function buildRamp(def, theme, mats) {
   const bodyMat = materialFor(bodyKey, theme, mats);
   const panelMat = materialFor(surface === 'ice' ? 'ice' : 'panel', theme, mats);
   const rimMat = emissiveMat(pal(theme, 'accent'), 0.85 * gs.k);
-  const stripeMat = emissiveMat(glowColor !== null ? glowColor : pal(theme, look[1]), 2.6 * gs.k * look[2]);
+  /* 2.6 -> 1.9: see the glare-bar note in buildPlatform. */
+  const stripeMat = emissiveMat(glowColor !== null ? glowColor : pal(theme, look[1]), 1.9 * gs.k * look[2]);
   const underMat = materialFor('obsidian', theme, mats);
 
   const key = GeoCache.key('ramp', w, h, d, faces.join(''));
@@ -3012,7 +3185,30 @@ export function buildRamp(def, theme, mats) {
 export function buildTree(def, theme, mats) {
   const p = pos3(def);
   const h = (def && def.h) || 6.5;
-  const r = (def && def.r) || Math.max(0.16, h * 0.055);
+  /* ROUND 5 — THE TREES WERE CONES, NOT TREES.
+   *
+   * Critic, crop `_shots/_r3_v1_rock.png`: "the 12 m verdant spires are 'bark'
+   * world-box-projected onto a cone, so the grain smears into long diagonal
+   * streaks ... at ~2-3 m per repeat on a 12 m rock it reads as a brown painted
+   * pyramid". They are not rocks and bark is not box-projected (it is not in
+   * materials.js BOX_KEYS) — but the shape complaint is exactly right, and the
+   * cause is here. `def.r` was used verbatim as the TRUNK radius, and
+   * verdant-1's meadow authors `r: 2.1 - 3.7` for trees 6-11.5 m tall. A 9 m
+   * tree with a 2.4 m trunk radius is a 4.8 m thick column: a teepee. No bark
+   * texture at any scale survives being stretched round 15 m of circumference,
+   * which is the smearing the critic measured.
+   *
+   * `def.r` is now read as the tree's SPREAD — which is what a course author
+   * means by "how big is this tree" and what the canopy and the footprint
+   * should honour — and the trunk is derived from the HEIGHT, the way a trunk
+   * actually is. h*0.085 gives a 9 m tree a 0.77 m radius (a 1.5 m bole, a big
+   * old meadow oak), and the root flares still spread to the authored radius so
+   * the tree meets the ground on a buttressed base instead of a straight
+   * polygon cut. The canopy keeps the authored spread, so the SILHOUETTE and
+   * the shade the meadow was composed around do not change. */
+  const spread = (def && def.r) || Math.max(0.16, h * 0.055);
+  const r = Math.max(0.18, Math.min(spread, h * 0.085));
+  const flare = Math.max(r * 1.15, Math.min(spread, r * 2.6));
   const seed = ((def && def.seed) || 0) | 0;
   const climbable = !!(def && def.climbable);
   const rnd = rngFrom(seed * 2654435761 + 17);
@@ -3024,7 +3220,7 @@ export function buildTree(def, theme, mats) {
   const trimMat = emissiveMat(pal(theme, 'safeEdge'), 1.4);
 
   const cards = Math.max(6, Math.round((def && def.cards) || 26));
-  const key = GeoCache.key('tree', h, r, seed, cards, climbable ? 1 : 0);
+  const key = GeoCache.key('tree', h, r, spread, seed, cards, climbable ? 1 : 0);
   const built = cachedComposite(key, () => {
     const parts = [];
     const push = (g, m) => parts.push({ geo: g, mat: m });
@@ -3032,10 +3228,13 @@ export function buildTree(def, theme, mats) {
     // --- root flares -------------------------------------------------------
     for (let i = 0; i < 5; i++) {
       const a = (i / 5) * Math.PI * 2 + rnd() * 0.4;
-      const rr = r * (0.9 + rnd() * 0.5);
-      push(xform(tubeGeometry(r * 0.22, r * 0.62, rr * 2.2, 6, 1.4),
-        Math.cos(a) * rr * 0.8, rr * 0.55, Math.sin(a) * rr * 0.8,
-        Math.cos(a) * 0.55, 0, -Math.sin(a) * 0.55), 0);
+      // buttress out to the authored spread, tapering to nothing at the tip:
+      // this is the contact the critic missed ("a straight polygon cut where it
+      // meets the grass"), and it is also what keeps the base looking planted.
+      const rr = flare * (0.42 + rnd() * 0.30);
+      push(xform(tubeGeometry(r * 0.16, r * 0.70, rr * 2.4, 6, 1.4),
+        Math.cos(a) * rr * 0.85, rr * 0.42, Math.sin(a) * rr * 0.85,
+        Math.cos(a) * 0.72, 0, -Math.sin(a) * 0.72), 0);
     }
     // --- trunk: four leaning segments -------------------------------------
     const SEGS = 4;
@@ -3062,7 +3261,7 @@ export function buildTree(def, theme, mats) {
     }
     // --- canopy: 3 solid masses -------------------------------------------
     const canopyY = trunkH + h * 0.14;
-    const R0 = h * 0.30;
+    const R0 = Math.max(h * 0.30, spread * 1.05);   // the AUTHORED spread
     const LAYERS = [
       { y: canopyY - h * 0.10, r: R0 * 1.00, ox: cx * 0.9, oz: cz * 0.9 },
       { y: canopyY + h * 0.06, r: R0 * 0.86, ox: cx * 0.9 + (rnd() - 0.5) * R0 * 0.35, oz: cz * 0.9 + (rnd() - 0.5) * R0 * 0.35 },
@@ -3113,16 +3312,27 @@ export function buildTree(def, theme, mats) {
 
   const colliders = [];
   if (!def || def.solid !== false) {
+    /* The collider follows the TRUNK, not the authored spread — a fat invisible
+     * box round a slim bole is exactly the kind of wall a player blames on the
+     * game. It only ever SHRINKS relative to round 4, so no route that was
+     * legal before can have closed. */
+    const cr = Math.max(r * 1.05, 0.30);
     colliders.push(makeCollider(p[0], p[1] + built.trunkH * 0.5, p[2],
-      r * 1.05, built.trunkH * 0.5, r * 1.05, null, 'normal', null, null));
+      cr, built.trunkH * 0.5, cr, null, 'normal', null, null));
   }
 
   const volumes = [];
   if (climbable) {
     const top = built.trunkH + h * 0.06;
+    /* The grab box has to stay generous even though the bole is now slim: a
+     * climbable tree is a required route in verdant-1, and TUNE.climb.radius
+     * (0.55) alone round a 0.8 m trunk is a 2.7 m box a running hero can miss.
+     * The ORBIT radius, though, is the trunk — the hero must hug the bark, not
+     * circle three metres out in the air. */
+    const grab = TUNE.climb.radius + r + 0.9;
     volumes.push(new Volume({
       center: [p[0], p[1] + top * 0.5, p[2]],
-      half: [TUNE.climb.radius + r, top * 0.5, TUNE.climb.radius + r],
+      half: [grab, top * 0.5, grab],
       kind: 'ladder',
       props: { axis: 'pole', pole: [p[0], p[2]], top: p[1] + top, radius: r },
       ref: mesh,
@@ -3604,18 +3814,32 @@ export function buildPainting(def, theme, mats) {
   const woodMat = materialFor('wood', theme, mats);
   const matteMat = materialFor('cloth', theme, mats);
   const tex = paintingTexture(course, realm, theme);
+  /* ROUND 3 (critic: "the painting gates read as red warning roundels on grid
+   * panels, not paintings"). Two things were doing that.
+   *
+   *  1. A LOCKED gate wore `pal(theme, 'kill')` — the saturated hot red this
+   *     game reserves, in every theme, for the thing that kills you. The
+   *     theme's own colour law says kill sits >= 45 deg of hue from everything
+   *     landable AND is the only animated hot thing; painting a harmless locked
+   *     door in it is the one reading a player must never get wrong. A lock is
+   *     BRASS: the gate now wears the theme's `deco`/`accent` warm metal, and
+   *     the shape (ring + hasp + shackle) carries "locked" on its own.
+   *  2. The locked canvas sat at 0x54585f — a cold grey that erased the
+   *     landscape plate behind it, so the frame read as a blank panel with a
+   *     roundel bolted to it. It is now a warm dusk value with the plate still
+   *     legible: a painting seen by candlelight, waiting to be lit. */
   const canvasMat = new THREE.MeshStandardMaterial({
     map: tex || null,
-    color: locked ? 0x54585f : 0xffffff,
+    color: locked ? 0x8a7a63 : 0xffffff,
     roughness: 0.62,
     metalness: 0.02,
-    emissive: locked ? 0x000000 : 0x1a2028,
-    emissiveMap: locked ? null : (tex || null),
-    emissiveIntensity: locked ? 0 : 0.35,
+    emissive: locked ? 0x120c06 : 0x1a2028,
+    emissiveMap: tex || null,
+    emissiveIntensity: locked ? 0.10 : 0.35,
   });
   canvasMat.name = 'painting_' + course;
   const shimmerMat = locked
-    ? emissiveMat(pal(theme, 'kill'), 1.5)
+    ? emissiveMat(pal(theme, 'accent') || pal(theme, 'crest'), 0.55)
     : pulseMat(pal(theme, 'crest') || pal(theme, 'safeEdge'), 1.1, 0.55, 1.6);
 
   const key = GeoCache.key('painting', w, h, locked ? 1 : 0);
@@ -3953,7 +4177,18 @@ export function buildPedestal(def, theme, mats) {
 
   const stoneMat = materialFor((def && def.mat) || 'marble', theme, mats);
   const giltMat = materialFor('gold', theme, mats);
-  const runeMat = pulseMat(tint, 1.4, 0.8, 1.5);
+  /* ROUND 5 — THE RUNES WERE WHITE CARDS.
+   * Raycast probe this session (`_harness/_hitprobe.py`) put the small blown
+   * white rectangles the critic saw scattered round the crest pedestal in
+   * `_shots/verdant-1/crest-coins.png` on THIS material, at world (-5.50, 2.12,
+   * 41.43) — the four base runes. 1.4 base + 0.8 amp is 2.2 emissive of a warm
+   * limestone grey, i.e. all three channels clipped for a third of every pulse
+   * cycle: a rune cut into stone reads as light in a GROOVE, so it has to sit
+   * just above the lit stone around it, not four stops over it. Re-measured
+   * at 0.55/0.30 the runes still read [177,173,151] — a pale card on a mid-green
+   * meadow — so they come down again to 0.28/0.14, which is a glow you notice
+   * when you look at the pedestal and never from across the field. */
+  const runeMat = pulseMat(tint, 0.28, 0.14, 1.5);
   const glowM = glowMat(tint, { mode: 'radial', speed: 0.8, power: 1.5, gain: 0.85 });
 
   const key = GeoCache.key('pedestal', r, h);
@@ -3961,8 +4196,21 @@ export function buildPedestal(def, theme, mats) {
     const parts = [];
     const push = (g, m) => parts.push({ geo: g, mat: m });
     // stepped base + drum + cap, all one lathe
+    /* ROUND 5 — BURY THE BASE.
+     * The profile used to start at local y = 0, and every course places a
+     * pedestal with `on(x, z, 0)` — exactly ON the terrain — so the lathe's
+     * bottom CAP was coplanar with the ground. Two consequences, both visible
+     * in `_shots/verdant-1/crest-coins.png` and both confirmed by raycast
+     * (`_harness/_hitprobe.py` returned `merged_cb.stone.verdant` and `terrain`
+     * at the same point, y = 2.00): the two surfaces z-fight, and where the cap
+     * wins it renders as a ~1.9 m BLACK disc — a down-facing face gets no light
+     * from a sky-lit rig and is additionally multiplied by materials.js's
+     * wall/floor term. That black disc is the "shadow that is a black hole"
+     * the critic measured at [11,20,13]; it was never a shadow.
+     * Sinking the first ring 8 cm puts the cap under the ground where a plinth's
+     * footing belongs, so there is no coplanar pair and no unlit face in view. */
     push(latheProfileGeometry([
-      [0, 0], [r, 0], [r, h * 0.10], [r * 0.86, h * 0.16], [r * 0.84, h * 0.22],
+      [0, -0.08], [r * 1.02, -0.08], [r, h * 0.10], [r * 0.86, h * 0.16], [r * 0.84, h * 0.22],
       [r * 0.66, h * 0.30], [r * 0.62, h * 0.72], [r * 0.74, h * 0.82],
       [r * 0.92, h * 0.90], [r * 0.92, h * 0.97], [r * 0.80, h], [0, h],
     ], 26, 1.0), 0);
@@ -4301,6 +4549,16 @@ export function buildBuilding(def, theme, mats) {
   const W = s[0], H = s[1], D = s[2];
   const style = (def && def.style) || 'fort';
   const p = pos3(def);
+  /* Wall thickness. NOTE (open, deliberately NOT fixed here): course files write
+     `wallThick` — verdant-1's fort authors `wallThick: 2.0` — and only `wall` is
+     read, so that fort builds 1.21 m walls from the fallback. Honouring the
+     authored key was tried and REVERTED: the fort's west wall grows inward from
+     a fixed outer face, and verdant-1's wall-kick shaft is cut into that same
+     corner, so 2.0 m walls narrow the shaft's authored 3.30 m clear span to
+     1.45 m (measured by up-ray: the wall collider centre moves from x −10.40 to
+     −10.00, half 1.00). Reading the key needs the course's west tower re-authored
+     at the same time; until then the fallback is the width the shaft was tuned
+     against. */
   const T = (def && def.wall) || Math.max(0.36, Math.min(W, D) * 0.055);
   const doors = normSides((def && def.doors) || [{ side: '-z', x: 0, w: Math.min(2.2, W * 0.3), h: Math.min(3.0, H * 0.62) }]);
   const windows = normSides((def && def.windows) || defaultWindows(style, W, H, D));
@@ -4309,11 +4567,34 @@ export function buildBuilding(def, theme, mats) {
   const bodyMat = materialFor((def && def.mat) || STYLE.body, theme, mats);
   const trimMat = materialFor(STYLE.trim, theme, mats);
   const roofMat = materialFor(STYLE.roof, theme, mats);
-  const glassMat = emissiveMat(STYLE.win === 'warm' ? 0xffd08a : pal(theme, 'accent'), STYLE.win === 'warm' ? 1.5 : 1.1);
+  /* ROUND 4 (critic, `_shots/verdant-1/cp2.png`: "the fort's window slits ...
+   * are flat, fully saturated, unlit lime-green rectangles (palette.accent
+   * 0x8fe05a driven as emissive) — they read as pasted plastic panels, not as
+   * light"). The cause is this line: every style whose `win` was not 'warm'
+   * glazed its windows with the course's AFFORDANCE accent. A window is a hole
+   * with a lit room behind it — its colour is the light inside, and the accent
+   * is reserved for things the player is meant to act on. `palette.light` is
+   * that interior light per theme; a style may still ask for the accent by
+   * name when the fiction really is a glowing panel. */
+  const winKey = STYLE.win;
+  const glassMat = emissiveMat(
+    winKey === 'accent' ? pal(theme, 'accent')
+      : winKey === 'warm' ? pal(theme, 'light')
+      : pal(theme, 'lightCool'),
+    // 1.35 -> 1.15: at 1.35 the verdant fort's slits came back near-white
+    // (`_shots/verdant-1/cp2.png`, re-shot) — light, correctly, but hot.
+    /* ROUND 5: 1.15 -> 0.80. The round-4 note below was right that 1.35 came
+     * back near-white, and 1.15 still did, because emissiveMat's desaturation
+     * wash used to start at 0.55 — so the window's own warm hue was being
+     * bleached before the tone map ever saw it. That wash now starts at 1.35
+     * (see emissiveMat), so 0.80 gives a window that is clearly LIT and clearly
+     * AMBER, sitting just above the sunlit stone around it rather than over it. */
+    winKey === 'accent' ? 0.80 : 0.80);
   const floorMat = materialFor(STYLE.floor, theme, mats);
   const stripeMat = emissiveMat(pal(theme, 'safeEdge'), 2.3);
 
-  const sig = JSON.stringify([W, H, D, style, T, doors, windows]);
+  const roofOpts = roofOptsFor(def);
+  const sig = JSON.stringify([W, H, D, style, T, doors, windows, roofOpts]);
   const key = GeoCache.key('building', sig);
   const built = cachedComposite(key, () => {
     const parts = [];
@@ -4328,7 +4609,7 @@ export function buildBuilding(def, theme, mats) {
     // interior floor
     push(xform(bevelBoxGeometry(W - T * 1.6, 0.22, D - T * 1.6, 0.03, 0.7), 0, -0.11, 0), 4);
     // roof
-    const roofTop = STYLE.roofFn(push, W, H, D, T, STYLE);
+    const roofTop = STYLE.roofFn(push, W, H, D, T, STYLE, roofOpts);
     // plinth
     push(xform(bevelBoxGeometry(W + 0.5, 0.32, D + 0.5, 0.05, 0.7), 0, -0.16, 0), 1);
     return { geo: assembleIndexed(parts, 6), walls, roofTop };
@@ -4387,6 +4668,14 @@ export function buildBuilding(def, theme, mats) {
       colliders.push(makeCollider(p[0] + _vA.x, p[1] + _vA.y, p[2] + _vA.z,
         sl.hx, sl.hy, sl.hz, sq, 'normal', null, null));
     }
+  } else if (rt && rt.decks) {
+    // a rampart walk: one collider per surviving deck rectangle
+    for (let i = 0; i < rt.decks.length; i++) {
+      const dk = rt.decks[i];
+      _vA.set(dk.cx, dk.cy + yOff, dk.cz).applyQuaternion(q);
+      colliders.push(makeCollider(p[0] + _vA.x, p[1] + _vA.y, p[2] + _vA.z,
+        dk.hx, dk.hy, dk.hz, q.clone(), 'normal', null, null));
+    }
   } else if (rt) {
     _vA.set(0, rt.y + yOff, 0).applyQuaternion(q);
     colliders.push(makeCollider(p[0] + _vA.x, p[1] + _vA.y, p[2] + _vA.z,
@@ -4394,6 +4683,25 @@ export function buildBuilding(def, theme, mats) {
   }
   mesh.userData.def = def;
   return { mesh, colliders };
+}
+
+/**
+ * Roof options read off the def: `roofSolid` (keep a full-footprint lid) and
+ * `roofOpen: [{x, z, w, d}]` — apertures through the roof in LOCAL footprint
+ * coords (centre + size), for an authored tower or shaft that pierces the walk.
+ * Normalised to min/max here so the geometry cache key captures them.
+ */
+function roofOptsFor(def) {
+  const list = (def && def.roofOpen) || [];
+  const holes = [];
+  for (let i = 0; i < list.length; i++) {
+    const h = list[i];
+    if (!h) continue;
+    const x = h.x || 0, z = h.z || 0;
+    const hw = (h.w != null ? h.w : 2.0) * 0.5, hd = (h.d != null ? h.d : 2.0) * 0.5;
+    holes.push({ x0: x - hw, x1: x + hw, z0: z - hd, z1: z + hd });
+  }
+  return { solid: !!(def && def.roofSolid), holes };
 }
 
 /** Per-style material + roof recipes. */
@@ -4437,12 +4745,21 @@ function wallWithOpenings(push, walls, axis, sign, len, height, thick, offset, o
     const cw = x1 - x0, ch = y1 - y0;
     if (cw <= 1e-3 || ch <= 1e-3) return;
     const cx = (x0 + x1) * 0.5, cy = (y0 + y1) * 0.5;
-    const th = isGlass ? thick * 0.22 : thick;
+    const th = isGlass ? thick * 0.18 : thick;
     const g = isGlass
       ? boxGeometry(axis === 'x' ? cw : th, ch, axis === 'x' ? th : cw, 1.4)
       : bevelBoxGeometry(axis === 'x' ? cw : th, ch, axis === 'x' ? th : cw, 0.03, 0.75);
-    if (axis === 'x') xform(g, cx, cy, offset);
-    else xform(g, offset, cy, cx);
+    /* ROUND 5 — THE SLIT NEEDS A REVEAL. Critic, crop `_shots/_r3_v1_pave.png`:
+     * "the arrow-slit windows render as flat white bars ... and no glass or
+     * reveal". The trim below already frames the opening; what was missing is
+     * DEPTH — the glazing sat on the wall's own centre plane, so from outside it
+     * was flush with the masonry and read as a painted rectangle. A real arrow
+     * slit is a lit room seen down 0.34 m of stone: pushing the pane to the
+     * INNER third of the wall makes the jamb cast onto it, so the aperture is a
+     * hole with a bright thing behind it, which is what a window looks like. */
+    const zOff = isGlass ? offset - Math.sign(offset || 1) * thick * 0.30 : offset;
+    if (axis === 'x') xform(g, cx, cy, zOff);
+    else xform(g, zOff, cy, cx);
     push(g, slot);
     if (!isGlass) {
       walls.push({
@@ -4579,29 +4896,136 @@ function buildTowerShell(push, walls, W, H, D, T, doors, windows, STYLE) {
   }
 }
 
-/** Crenellated walkable roof. */
-function roofFort(push, W, H, D, T, STYLE) {
+/**
+ * Subtract axis-aligned XZ rectangles from a set of axis-aligned XZ rectangles.
+ * Build-time only (no per-frame use). Each hole splits an overlapped rect into
+ * at most four survivors: the strips north and south of it, then the strips west
+ * and east of it inside the hole's own z band. Slivers under 5 cm are dropped so
+ * a hole flush with an edge cannot leave a knife-edge collider.
+ */
+function rectSubtract(rects, holes) {
+  if (!holes || !holes.length) return rects;
+  let cur = rects;
+  for (let h = 0; h < holes.length; h++) {
+    const H = holes[h];
+    const out = [];
+    for (let i = 0; i < cur.length; i++) {
+      const r = cur[i];
+      if (H.x1 <= r.x0 || H.x0 >= r.x1 || H.z1 <= r.z0 || H.z0 >= r.z1) { out.push(r); continue; }
+      if (H.z0 > r.z0) out.push({ x0: r.x0, x1: r.x1, z0: r.z0, z1: H.z0 });
+      if (H.z1 < r.z1) out.push({ x0: r.x0, x1: r.x1, z0: H.z1, z1: r.z1 });
+      const z0 = Math.max(r.z0, H.z0), z1 = Math.min(r.z1, H.z1);
+      if (H.x0 > r.x0) out.push({ x0: r.x0, x1: H.x0, z0, z1 });
+      if (H.x1 < r.x1) out.push({ x0: H.x1, x1: r.x1, z0, z1 });
+    }
+    cur = out;
+  }
+  const keep = [];
+  for (let i = 0; i < cur.length; i++) {
+    const r = cur[i];
+    if (r.x1 - r.x0 > 0.05 && r.z1 - r.z0 > 0.05) keep.push(r);
+  }
+  return keep;
+}
+
+/** Is a local XZ point inside any aperture? */
+function inHoles(holes, x, z) {
+  for (let i = 0; i < holes.length; i++) {
+    const h = holes[i];
+    if (x > h.x0 && x < h.x1 && z > h.z0 && z < h.z1) return true;
+  }
+  return false;
+}
+
+/**
+ * Crenellated walkable roof — a RAMPART WALK, not a lid.
+ *
+ * A fort is walls round an open courtyard, so its deck is a ring over the wall
+ * band and the courtyard is open to sky. Building it as one slab across the
+ * whole footprint is what made verdant-1's fort a roofed box: it sealed the
+ * courtyard at the wall top, capped every jump inside the fort (a jump off the
+ * crate stack at 12.60 bonked at 14.40), and lidded the west tower's wall-kick
+ * shaft 4.80 m above its floor — so the kick ladder the course signs in-world
+ * ("KICK ONE WALL, THEN THE OTHER") could not be climbed at all: kick 1 gained
+ * the promised +2.07 m, kick 2 hit the ceiling. `roofSolid: true` on the def
+ * asks for the old full lid.
+ *
+ * The walk's TOP is the authored wall top H — the deck is inset into the wall,
+ * not stacked on it. Course files author "wall 9.00 -> 14.40, rampart walk
+ * 14.40" and put the stair landing, the outside ramp and the rampart checkpoint
+ * at exactly 14.40, so a deck standing ON H left a 0.34 m lip at the head of two
+ * of the three routes and shrank the authored 1.30 m merlon hops to 0.96 m.
+ *
+ * `roofOpen: [{x, z, w, d}]` on the def punches apertures through the walk where
+ * an authored tower pierces it — LOCAL footprint coords, centre + size, the same
+ * p+s convention as every other kind.
+ */
+function roofFort(push, W, H, D, T, STYLE, opts) {
   const deckH = 0.34;
-  push(xform(bevelBoxGeometry(W + 0.8, deckH, D + 0.8, 0.05, 0.8), 0, H + deckH * 0.5, 0), 2);
+  const top = H;                       // walk surface == the authored wall top
+  const cy = top - deckH * 0.5;
+  const holes = (opts && opts.holes) || [];
+  const OX = W * 0.5 + 0.4, OZ = D * 0.5 + 0.4;   // outer edge (0.4 m corbel)
+  const IX = W * 0.5 - T - 0.4, IZ = D * 0.5 - T - 0.4;  // inner lip of the walk
+  // A footprint too small to hold a walk (or an explicit ask) keeps the old lid.
+  const solid = !!(opts && opts.solid) || IX < 0.6 || IZ < 0.6;
+  const bands = solid
+    ? [{ x0: -OX, x1: OX, z0: -OZ, z1: OZ }]
+    : [
+      { x0: -OX, x1: OX, z0: -OZ, z1: -IZ },
+      { x0: -OX, x1: OX, z0: IZ, z1: OZ },
+      { x0: -OX, x1: -IX, z0: -IZ, z1: IZ },
+      { x0: IX, x1: OX, z0: -IZ, z1: IZ },
+    ];
+  const decks = [];
+  const deck = rectSubtract(bands, holes);
+  for (let i = 0; i < deck.length; i++) {
+    const r = deck[i];
+    const w = r.x1 - r.x0, d = r.z1 - r.z0;
+    const cx = (r.x0 + r.x1) * 0.5, cz = (r.z0 + r.z1) * 0.5;
+    push(xform(bevelBoxGeometry(w, deckH, d, 0.05, 0.8), cx, cy, cz), 2);
+    decks.push({ cx, cy, cz, hx: w * 0.5, hy: deckH * 0.5, hz: d * 0.5 });
+  }
   const merlon = 0.55, gap = 0.55;
   const ring = [
-    { axis: 'x', len: W + 0.8, off: (D + 0.8) * 0.5 - 0.28 },
-    { axis: 'x', len: W + 0.8, off: -(D + 0.8) * 0.5 + 0.28 },
-    { axis: 'z', len: D + 0.8, off: (W + 0.8) * 0.5 - 0.28 },
-    { axis: 'z', len: D + 0.8, off: -(W + 0.8) * 0.5 + 0.28 },
+    { axis: 'x', len: W + 0.8, off: OZ - 0.28 },
+    { axis: 'x', len: W + 0.8, off: -OZ + 0.28 },
+    { axis: 'z', len: D + 0.8, off: OX - 0.28 },
+    { axis: 'z', len: D + 0.8, off: -OX + 0.28 },
   ];
   for (const r of ring) {
     const n = Math.max(2, Math.floor(r.len / (merlon + gap)));
     for (let i = 0; i < n; i++) {
       const x = -r.len * 0.5 + (i + 0.5) * (r.len / n);
+      // no merlon standing on an aperture — a tower through the walk takes the
+      // crenellation with it rather than leaving a battlement floating in air
+      if (inHoles(holes, r.axis === 'x' ? x : r.off, r.axis === 'x' ? r.off : x)) continue;
       const g = bevelBoxGeometry(r.axis === 'x' ? merlon : 0.46, 0.85, r.axis === 'x' ? 0.46 : merlon, 0.04, 0.9);
-      if (r.axis === 'x') xform(g, x, H + deckH + 0.42, r.off); else xform(g, r.off, H + deckH + 0.42, x);
+      if (r.axis === 'x') xform(g, x, top + 0.42, r.off); else xform(g, r.off, top + 0.42, x);
       push(g, 2);
     }
   }
-  // safeEdge band around the walkable deck
-  push(xform(ringGeometry(Math.min(W, D) * 0.5 - 0.1, Math.min(W, D) * 0.5, 40, 1.2), 0, H + deckH + 0.005, 0), 5);
-  return { y: H + deckH * 0.5, hx: (W + 0.8) * 0.5, hy: deckH * 0.5, hz: (D + 0.8) * 0.5 };
+  if (solid) {
+    // safeEdge band around the walkable deck
+    push(xform(ringGeometry(Math.min(W, D) * 0.5 - 0.1, Math.min(W, D) * 0.5, 40, 1.2), 0, top + 0.005, 0), 5);
+  } else {
+    // safeEdge along the INNER lip — the edge you actually fall off, the drop
+    // into the courtyard. Corner pieces do not overlap (the x bands own the
+    // corners), so the stripes never z-fight.
+    const lip = 0.18;
+    const stripes = rectSubtract([
+      { x0: -OX, x1: OX, z0: -IZ - lip, z1: -IZ },
+      { x0: -OX, x1: OX, z0: IZ, z1: IZ + lip },
+      { x0: -IX - lip, x1: -IX, z0: -IZ, z1: IZ },
+      { x0: IX, x1: IX + lip, z0: -IZ, z1: IZ },
+    ], holes);
+    for (let i = 0; i < stripes.length; i++) {
+      const r = stripes[i];
+      push(xform(bevelBoxGeometry(r.x1 - r.x0, 0.03, r.z1 - r.z0, 0.01, 1.2),
+        (r.x0 + r.x1) * 0.5, top + 0.005, (r.z0 + r.z1) * 0.5), 5);
+    }
+  }
+  return { decks };
 }
 
 /** Pitched roof with gable ends, a ridge beam and a chimney. */

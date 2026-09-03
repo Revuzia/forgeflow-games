@@ -224,7 +224,22 @@ function goldMaterial(theme, mats) {
    * a third of that intensity holds the silhouette in shadow and leaves the
    * specular in charge everywhere else. */
   g.emissive = new THREE.Color(coinHue).multiplyScalar(0.42);
-  g.emissiveIntensity = 0.30;
+  g.emissiveIntensity = 0.26;
+  /* ROUND 4 (critic, `_shots/verdant-1/spawn.png`: "Coins are flat matte
+   * 12-gon discs ... with a visible faceted silhouette and no specular sweep").
+   * The segment count is NOT the fix: `coinGeometry` documents why a coin is a
+   * 10-segment lathe (121 instances x every segment) and the tri budget is a
+   * hard gate this round, so raising it would be paying for polish with frame
+   * time. What was actually missing is the SWEEP. A coin spins; ten flat facets
+   * under a tight specular lobe flash one after another as it turns, which is
+   * what makes minted metal read as metal and turns the faceting from a defect
+   * into the effect. The clone arrived with the material bank's hammered-plate
+   * roughness, which is right for a plate and far too broad for a coin — it
+   * smeared the ten highlights into one dull average, i.e. "flat matte". */
+  g.roughness = Math.min(g.roughness === undefined ? 0.18 : g.roughness, 0.18);
+  g.metalness = 1.0;
+  g.envMapIntensity = Math.max(g.envMapIntensity || 0, 1.55);
+  if ('clearcoat' in g) { g.clearcoat = 0.55; g.clearcoatRoughness = 0.14; }
   g.name = 'cb.gold.coin.' + tid;
   _matCache.set(key, g);
   return g;

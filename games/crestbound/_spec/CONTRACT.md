@@ -296,6 +296,15 @@ Movement bible — every line is measured by `_harness/feelcheck.py`:
   0.12 s) not a slow arc; keyboard taps walk. Braking uses `decelGround` whenever the stick
   asks for LESS than the current speed (not only at zero), so release-to-rest from a full
   run is ≤ 0.16 s even while a keyboard ramp-down decays the stick over 0.06 s.
+  THE BRAKE POSE COVERS THE BRAKE: `skid` is entered on DECELERATION (the stick
+  asking for materially less than the carried speed), not only at stick zero, and
+  holds down to `SKID_SPEED` — the hero is never in `idle` while still moving
+  faster than he can walk.
+- MOMENTUM — A LAUNCH IS A COMMITMENT: airborne horizontal speed is CAPPED and
+  FLOORED off the launch speed (`AIR_KEEP_FRAC`). The stick may steer at full
+  `airTurnRate` and shed a little over half the launch, never the launch itself;
+  only the world (a wall, a bonk, a pound) may take the rest. A mistimed jump is
+  therefore punished and no jump is ever cancelled in mid-air.
 - BONK: grounded and holding the stick into a wall that will not move (wish · −wallN ≥ 0.5)
   with the achieved speed collapsed under the stick's ask → the `bonk` state: a recoil, a
   palms-on-the-wall press with scuffing boots, impact dust and a thump. The run cycle never
@@ -335,6 +344,11 @@ export class FollowCamera {
   // orbit follow behind the hero with shoulder offset; position lag so the hero LEADS;
   // auto-yaw toward the run direction at `autoYaw` rad/s only when no manual orbit in last 1.2 s;
   // collision: broadphase.raycast from focus to desired pos, pull in to hit-collideRadius, ease back out over 0.6 s;
+  // a SHAFT (blocked at every yaw at once — a chimney narrower than 2*minDist) is
+  //   answered by TILTING, not by pulling in through the hero: over-the-head, then
+  //   up-the-shaft, so `dist` stays >= minDist wherever any pose can hold it. The
+  //   tilt is not frozen by the committed-move rule below — that rule is about YAW,
+  //   which steers; elevation steers nothing, and wall kicks are where it is needed;
   // during longjump/dive/wallkick/pound: freeze auto-yaw (never fight the player);
   // recenter (Z / stick click): ease behind the hero in `recenterTime`;
   // peek (hold G / LB): first-person from the head, hero hidden, look with orbit input;
@@ -617,8 +631,8 @@ combining ≥ 4 families).
 | reach | `node _harness/reachcheck.mjs` | every course: spawn→checkpoints→every `open` crest→every sigil is joined by legal moves (REACH_TABLE + approach run-ups); ≥ 3 checkpoints, ≥ 100 coins, 8 sigils, 7 crests, ≥ 6 hazard/critter families on non-tutorial courses |
 | boot | `python _harness/bootcheck.py [--headless]` | page boots clean: no console/page/shader errors; live engine state dumped; screenshot |
 | core loop | `python _harness/loopcheck.py` | keep → every course: every checkpoint fires, death rewinds+respawns ≤ 700 ms median at that checkpoint, coins/sigils/crests collect and SAVE, crest celebration completes, return to keep, gate unlock by crest total, hazards bit-identical at the same clock after reset |
-| feel | `python _harness/feelcheck.py` | §11 numbers driven through REAL KeyboardEvents (+ `__test.stick`): analog walk/run speeds, turn radius at speed, stop time, single/double/triple apexes + windows, long jump distance, backflip/sideflip apexes, wall kick, dive distance + slide, pound timing + pound-jump, coyote, buffer, swim speeds, slope slide |
-| camera | `python _harness/camcheck.py` | no clipping through walls (raycast pull-in), hero never occluded > 0.3 s, no auto-yaw during longjump/dive, recenter time, peek |
+| feel | `python _harness/feelcheck.py` | §11 numbers driven through REAL KeyboardEvents (+ `__test.stick`): analog walk/run speeds, turn radius at speed, stop time, single/double/triple apexes + windows, long jump distance, backflip/sideflip apexes, wall kick, dive distance + slide, pound timing + pound-jump, coyote, buffer, swim speeds, slope slide, the brake POSE covering the brake (`idle_while_moving`), and the launch commitment against a full air reversal (`air_keep_frac`) |
+| camera | `python _harness/camcheck.py` | no clipping through walls (raycast pull-in), hero never occluded > 0.3 s, no auto-yaw during longjump/dive, recenter time, peek, and the SHAFT station — a 3.30 m kick shaft (verdant-1 ROUTE B's own geometry) where every frame must hold `cam.dist >= TUNE.cam.minDist` with the hero outside the near plane and unfaded |
 | contrast | `python _harness/contrastcheck.py` | walked-surface vs fog band ≥ 3.5:1 at every checkpoint station, every theme |
 | perf | `python _harness/perfcheck.py` | ≤ 260 draws, ≤ 450k tris, ≥ 55 fps AND p99 ≤ 28 ms **at the tier render scale** (headed, reference machine, quiet box), warm course load ≤ 1.5 s. The gate also prints the native-1080p figure as INFO — it is not a pass condition. A run taken while other browser gates are running is not evidence: re-run quiet. |
 | critic | `python _harness/shots.py` + a critic agent | screenshots at authored stations per course, judged against the AAA rubric (below) |

@@ -274,10 +274,50 @@ function mulberry32(seed) {
   };
 }
 
-/** Blade-card geometry: two tapered quads crossed at 90°. 4 triangles. */
+/**
+ * Blade-card geometry.
+ *
+ * ROUND 3 (critic, `_shots/_vz_grass.png`): the blade was ONE tapered quad per
+ * card — a flat opaque trapezoid with a 0.16 w tip, i.e. a visible polygon edge
+ * cut straight across the top of every blade, no bend, no point. A field of
+ * them reads as paper confetti, which is exactly what the shot shows.
+ *
+ * A blade of grass is a tapered strip that comes to a POINT, and it leans. So
+ * each card is now ONE triangle: a full-width root closing to a single vertex
+ * at the tip, with that tip displaced along the blade's own width axis so the
+ * blade leans instead of standing to attention.
+ *
+ * The taper is GEOMETRIC, not alpha: an alpha-tested tip would cost a discard
+ * on every blade fragment and a sorted draw, and buys nothing a real point does
+ * not already give.
+ *
+ * It is also HALF the cost of the trapezoid it replaces. Measured with
+ * `_harness/drawprobe.py` on verdant-1: `terrain.grass` was 36 000 triangles as
+ * two-triangle cards (and 54 000 as the three-triangle curved version drafted
+ * first); as single triangles it is 18 000, against a 450 000 course budget the
+ * frame is already pressing. A blade seen from 3 m is four pixels wide — the
+ * silhouette is the whole read, and a point plus a lean is the silhouette.
+ */
 function bladeGeometry(w, h, cross) {
   const P = [], N = [], U = [], C = [];
-  const half = w * 0.5, tip = w * 0.16;
+  const half = w * 0.5;
+  /* The lean. `bendT` displaces the TIP along the blade's own width axis, so a
+   * field of them fans instead of standing to attention, and the tip also
+   * droops a little (yTip < h). */
+  /* ROUND 2 VISUAL (`_shots/bootcheck.png` cropped to `_shots/_vz2_grass.png`):
+   * the field read as PAPER DARTS, not grass — a scatter of hard-edged scalene
+   * wedges with a long straight hypotenuse. Two numbers made that shape:
+   *   - the lean was h * 0.34 = 7.5 cm at the authored height, i.e. the tip sat
+   *     a FULL ROOT-WIDTH to one side, so the near edge became a long diagonal
+   *     and the blade stopped being symmetric about anything;
+   *   - against a 7.5 cm root that lean is the same size as the blade, so at
+   *     the short end of the height draw the triangle was as wide as it was
+   *     tall — a caltrop, which is the very failure the width comment below
+   *     says it fixed.
+   * A blade of grass is a NARROW strip that leans by a fraction of its own
+   * length. The lean drops to 0.16 h and the root narrows (see `bladeW`), so
+   * the silhouette is a spike with a slight set to it instead of a dart. */
+  const bendT = h * 0.16, yTip = h * 0.96;
   /* ROOT-TO-TIP GRADIENT as a geometry colour attribute.
    *
    * three MULTIPLIES the geometry `color` attribute by `instanceColor`, so this
@@ -288,15 +328,22 @@ function bladeGeometry(w, h, cross) {
   const card = (yaw) => {
     const c = Math.cos(yaw), s = Math.sin(yaw);
     const X = (v) => [c * v, 0, s * v];
-    const b0 = X(-half), b1 = X(half), t0 = X(-tip), t1 = X(tip);
     const nx = -s, nz = c;
     const push = (p, y, u, v) => {
       P.push(p[0], y, p[2]); N.push(nx, 0.45, nz); U.push(u, v);
-      const k = 0.46 + 0.54 * v;              // v = 0 at the root, 1 at the tip
-      C.push(k, k * 1.03, k * 0.92);          // roots read cooler, tips warmer
+      // v = 0 at the root, 1 at the tip. The root end is darker AND cooler; the
+      // curve is squared so the darkening hugs the base instead of greying the
+      // whole blade.
+      /* Root darkening deepened (0.40 -> 0.26 at v=0): a blade that meets the
+       * ground at the same value as its own tip reads as a sticker lying on
+       * top of the terrain. The sward self-shadows hard at the base, and that
+       * gradient is the only contact cue an un-shadowed instanced field has. */
+      const k = 0.26 + 0.74 * (v * (0.55 + 0.45 * v));
+      C.push(k * 0.97, k * 1.05, k * 0.86);
     };
-    push(b0, 0, 0, 0); push(b1, 0, 1, 0); push(t1, h, 1, 1);
-    push(b0, 0, 0, 0); push(t1, h, 1, 1); push(t0, h, 0, 1);
+    const b0 = X(-half), b1 = X(half), tp = X(bendT);
+    // ONE triangle: a wide root that closes to a single vertex at the tip.
+    push(b0, 0, 0, 0); push(b1, 0, 1, 0); push(tp, yTip, 0.5, 1);
   };
   card(0);
   if (cross) card(Math.PI * 0.5);
@@ -399,7 +446,7 @@ function bladeMaterial(theme, mats, key, field) {
         'float gScale = smoothstep(0.14, 0.50, gLush) * gFade;',
         'transformed *= gScale;',
         '#ifdef USE_COLOR',
-        '  vColor.rgb *= mix(vec3(0.58, 0.56, 0.38), vec3(0.84, 0.88, 0.72), clamp(gLush, 0.0, 1.0));',
+        '  vColor.rgb *= mix(vec3(0.72, 0.58, 0.34), vec3(0.86, 0.94, 0.70), clamp(gLush, 0.0, 1.0));',
         '#endif',
         'float gPh = dot(vec3(gW2.x, 0.0, gW2.y), vec3(0.317, 0.113, 0.271));',
         'float gWt = pow(clamp(uv.y, 0.0, 1.0), 1.6) * gScale;',
@@ -407,7 +454,12 @@ function bladeMaterial(theme, mats, key, field) {
         'transformed.x += gA * 0.16 * gWt;',
         'transformed.z += cos(uTime * 1.55 + gPh * 1.3) * 0.11 * gWt;',
         'transformed.y -= abs(gA) * 0.035 * gWt;',
-        'vec3 gDelta = vec3(gW2.x - gAnchor.x, gFld.r - gAnchor.y, gW2.y - gAnchor.z);',
+        /* The base is SUNK 5 cm. The field texture is a bilinear read of a 1 m
+         * height grid, so on any curvature the interpolated height sits ABOVE
+         * the tessellated mesh and every blade in `_shots/_vz_grass.png` floated
+         * with a visible gap under it. Burying the root is both cheaper and more
+         * robust than matching the interpolation. */
+        'vec3 gDelta = vec3(gW2.x - gAnchor.x, gFld.r - gAnchor.y - 0.05, gW2.y - gAnchor.z);',
       ].join('\n'))
       /* The wrap has to be applied AFTER the instance matrix (it is a world
        * displacement, not an object-space one), so project_vertex is rebuilt
@@ -452,10 +504,25 @@ function bladeMaterial(theme, mats, key, field) {
  * relationship — top brighter than low, dirt browner, path drier.
  */
 const SURFACE_LOOK = {
-  grass: { top: 0xc8e394, low: 0x9cc06c, dirt: 0xb59a72, path: 0xcbb188, blade: 0xa8d874, uvTile: 4.0 },
-  snow:  { top: 0xf4fbff, low: 0xd8e8f6, dirt: 0xa8bccd, path: 0xc2d4e2, blade: 0xe8f4ff, uvTile: 5.0 },
-  sand:  { top: 0xe8d3a6, low: 0xd0b98c, dirt: 0xb69a6e, path: 0xdcc294, blade: 0xdfc78a, uvTile: 4.5 },
-  dirt:  { top: 0xa8896a, low: 0x8a7050, dirt: 0x736046, path: 0x99805a, blade: 0x94a066, uvTile: 4.0 },
+  /* `blade`/`bladeAlt`/`bladeDry` are the two ends of the SPECIES axis plus a
+   * straw pole. Round 2 shipped a single `blade` colour lerped 12-52 % onto
+   * `low`, which are 0x9cc06c and 0xa8d874 — the same lime — so every blade in
+   * the field was one hue (critic, `_shots/_vz_grass.png`). */
+  /* ROUND 2 VISUAL — the blades read as DECALS ON A SHEET
+   * (`_shots/verdant-1/spawn.png`, near field). Measured off that frame: the
+   * ground under the sward sits at [51,86,44] and the blades over it at
+   * roughly [200,225,110] — the blade albedo was about 2.5x the ground's, so
+   * every blade read as a bright sticker laid on a dark plastic surface rather
+   * than as the top of the sward it belongs to. A lawn seen from standing
+   * height is mostly BLADE, so the two must live within about a stop of each
+   * other. The bright species pole comes down (`blade`) and the ground bake
+   * comes up (materials.js bakeGrass) — half the correction from each end, so
+   * neither the species spread nor the ground's own colour range is lost. */
+  grass: { top: 0xc8e394, low: 0x9cc06c, dirt: 0xb59a72, path: 0xcbb188,
+           blade: 0xa2d066, bladeAlt: 0x4e7c38, bladeDry: 0xc8bc74, uvTile: 4.0 },
+  snow:  { top: 0xf4fbff, low: 0xd8e8f6, dirt: 0xa8bccd, path: 0xc2d4e2, bladeAlt: 0xc4d8ea, bladeDry: 0xf0f6ff, blade: 0xe8f4ff, uvTile: 5.0 },
+  sand:  { top: 0xe8d3a6, low: 0xd0b98c, dirt: 0xb69a6e, path: 0xdcc294, bladeAlt: 0xa88f52, bladeDry: 0xeddaa2, blade: 0xdfc78a, uvTile: 4.5 },
+  dirt:  { top: 0xa8896a, low: 0x8a7050, dirt: 0x736046, path: 0x99805a, bladeAlt: 0x5c6b38, bladeDry: 0xc0b478, blade: 0x94a066, uvTile: 4.0 },
 };
 
 /**
@@ -564,13 +631,27 @@ export function buildTerrain(def, theme, mats, quality) {
       const n = vnoise(wx * 0.21, wz * 0.21, 991) * 0.05;
       const dry = (vnoise(wx * 0.072, wz * 0.072, 1777) - 0.5) * 2;   // ~14 m
       const swell = (vnoise(wx * 0.022, wz * 0.022, 2333) - 0.5) * 2; // ~45 m
-      const warm = dry * 0.085 + swell * 0.055;
+      /* ROUND 4 — the only macro that SURVIVES DISTANCE.
+       * The critic measured (`_shots/verdant-1/vista-se.png`): "beyond the
+       * ~10 m camera-local grass ring the terrain is untextured saturated green
+       * ... no macro patches, no paths, no dirt blend, no value variation" over
+       * 100+ m of hillside. Every texture-space macro the material carries is
+       * mipped and aniso-averaged away at that range; a VERTEX attribute is
+       * not, because it is interpolated in screen space and never filtered. So
+       * the far-field variation has to live here, and the amplitudes below are
+       * the ones that reach the screen at 120 m. A third, ~90 m band is added
+       * so whole SIDES of the island differ, not only individual hills. */
+      const region = (vnoise(wx * 0.011, wz * 0.011, 3701) - 0.5) * 2;  // ~90 m
+      const warm = dry * 0.105 + swell * 0.078 + region * 0.062;
       /* ROUND 2: the hue bands alone still left every distant hill at the SAME
        * VALUE, which is what makes a big meadow read as one flat plastic green
        * (`_shots/_r2a_verdant.png`). Aerial perspective needs whole hillsides to
        * differ in lightness, not only in hue, so the ~45 m swell now also drives
        * value — a light term, because this multiplies the albedo. */
-      const val = swell * 0.062 + dry * 0.022;
+      /* Value spread roughly doubled AND extended to the ~90 m band. This is a
+       * multiplier on the albedo, so 0.13 of swing is the difference between
+       * "one plastic green" and hillsides that read as separate hillsides. */
+      const val = swell * 0.078 + dry * 0.030 + region * 0.055;
       col[k * 3] = Math.min(1, Math.max(0, _col.r + n + val + warm * 1.00));
       col[k * 3 + 1] = Math.min(1, Math.max(0, _col.g + n + val + warm * 0.42));
       col[k * 3 + 2] = Math.min(1, Math.max(0, _col.b + n + val - warm * 0.55));
@@ -680,6 +761,16 @@ function buildGrassField(d, ctx, g) {
   const hf = ctx.heightfield;
   const nx = hf.nx, nz = hf.nz;
   const exclude = g.exclude || [];
+  /* OCCUPANCY. `blocks` is a list of axis-aligned world footprints that stand
+   * ON the ground — course.js derives it from the authored static solids, so a
+   * building's floor plan is known here without terrain having to look at the
+   * scene graph. Without it a full sward grew across the stone floor INSIDE the
+   * verdant fort (critic, `_shots/verdant-1/cp2.png`): the blade field only ever
+   * consulted slope, paths and authored circles, none of which know that a room
+   * has been built on top of the meadow. Each entry is
+   * {x0, z0, x1, z1, y, h, feather}: the footprint, the height of its floor,
+   * how tall it is, and how far outside it the sward fades back in. */
+  const blocks = g.blocks || [];
   const maxSlopeCos = Math.cos((g.maxSlopeDeg === undefined ? 32 : g.maxSlopeDeg) * Math.PI / 180);
   const half = THREE.DataUtils.toHalfFloat;
   const data = new Uint16Array(nx * nz * 2);
@@ -699,6 +790,16 @@ function buildGrassField(d, ctx, g) {
         const r = E.r || 1;
         const dd = Math.hypot(x - E.p[0], z - E.p[1]);
         lush *= Math.max(0, Math.min(1, (dd - r * 0.72) / (r * 0.42)));
+      }
+      for (let b = 0; b < blocks.length && lush > 0.001; b++) {
+        const K = blocks[b];
+        // only a solid whose floor is near THIS ground kills the sward under it
+        if (y < K.y - 1.6 || y > K.y + K.h) continue;
+        const f = K.feather || 0.6;
+        const dx = Math.max(K.x0 - x, x - K.x1);
+        const dz = Math.max(K.z0 - z, z - K.z1);
+        const dd = Math.max(dx, dz);
+        lush *= Math.max(0, Math.min(1, (dd + f) / (f * 2)));
       }
       /* Two patch bands: ~11 m clumps riding a ~34 m dry/lush swell.
        * `vnoise` returns [-1, 1], NOT [0, 1] — taking it raw drove lushness
@@ -755,7 +856,13 @@ function buildGrass(d, theme, mats, quality, ctx) {
   /* The ring shrinks with the budget so density stays put: a low-quality
    * machine gets a smaller lawn, not a thinner one. 30k blades over 36x36 m is
    * ~23/m2 before the lushness cull. */
-  const density = g.density === undefined ? 22 : g.density;         // blades per m²
+  /* 22 -> 40 blades/m2. At 22 the field is the SPARSEST arrangement the count
+   * allows and `_shots/verdant-1/spawn.png` shows the result: bare ground
+   * between every tuft out to the horizon. Density is also what sets the ring
+   * radius below, so raising it does not cost one triangle — it spends the same
+   * instance budget on a smaller, denser lawn, which is the right trade when
+   * the frame is fill-bound and already at the triangle ceiling. */
+  const density = g.density === undefined ? 40 : g.density;         // blades per m²
   const ring = Math.max(6, Math.min(g.ring === undefined ? 18 : g.ring,
     Math.sqrt(budget / Math.max(1, density)) * 0.5));
   const fade = ring * 0.74;
@@ -764,11 +871,31 @@ function buildGrass(d, theme, mats, quality, ctx) {
   /* 0.20 m at the base against a 0.42 m height is a 1:2 spike, and instance
    * scaling took it to 27 cm — which is what made the first render read as a
    * field of caltrops rather than grass. A blade is roughly 1:5. */
-  const bladeW = g.width === undefined ? 0.075 : g.width;
+  /* 0.075 -> 0.040. 7.5 cm is a LEAF, not a blade: against the 0.22 m verdant-1
+   * height and the 0.52x low end of the height draw below it produced 1:1.5
+   * wedges. Real grass is nearer 1:10; at 4 cm the draw spans about 1:4 to
+   * 1:10, which is a blade at every height in the field. A course may still pin
+   * `grass.width` for a broad-leafed or bladed species. */
+  const bladeW = g.width === undefined ? 0.040 : g.width;
   const cross = g.cross !== false;
 
   const wanted = budget;
-  const cells = Math.max(4, Math.ceil(Math.sqrt(wanted)));
+  /* TUFTS, not a jittered lattice.
+   *
+   * Grass grows in CLUMPS. The old placement put exactly one blade in every
+   * cell of a sqrt(n) lattice, which is a Poisson-ish scatter with an enforced
+   * minimum spacing — the most evenly spread arrangement the count allows, and
+   * therefore the one that reads as the SPARSEST (`_shots/bootcheck.png`: even
+   * gaps of bare ground between single blades, ~26 per m2 spread so uniformly
+   * that no part of the field ever reads as mass).
+   *
+   * The same 18 000 instances gathered into tufts of six read as turf, because
+   * a tuft is an object the eye resolves as one plant and the gaps between
+   * tufts then look intentional instead of thin. It costs nothing: the same
+   * instance count, the same draw call, the same triangles. */
+  const tuft = Math.max(1, Math.min(12, g.tuft === undefined ? 6 : g.tuft | 0));
+  const tuftR = g.tuftRadius === undefined ? 0.085 : g.tuftRadius;
+  const cells = Math.max(4, Math.ceil(Math.sqrt(wanted / tuft)));
   const step = (ring * 2) / cells;
   const rnd = mulberry32((d.seed | 0) || 20260902);
 
@@ -798,32 +925,67 @@ function buildGrass(d, theme, mats, quality, ctx) {
    * are. It is always around the viewer by construction. */
   im.frustumCulled = false;
 
-  const tipC = new THREE.Color(g.color === undefined ? ctx.LOOK.blade : g.color);
-  const rootC = new THREE.Color(ctx.LOOK.low);
+  /* SPECIES DRAW. Three poles — a bright lime, a deep blue-green and a dry
+   * straw — so the field carries real hue variation instead of one lime that
+   * the geometry gradient then shades (critic, `_shots/_vz_grass.png`). A
+   * course that pins `grass.color` still gets its own bright pole; the other
+   * two come from the surface look, so the pin narrows the range, it does not
+   * flatten it. */
+  const tipC = new THREE.Color(ctx.LOOK.blade);
+  /* An authored `grass.color` anchors the DEEP end of the species draw, not the
+   * whole field: verdant-1 pins 0x5f8f43, and read as "the blade colour" that
+   * pin is what made every blade one hue. The surface look keeps supplying the
+   * bright and straw poles, so a course narrows the range without flattening
+   * it. `colorAlt`/`colorDry` override the other two poles explicitly. */
+  const altC = new THREE.Color(g.colorAlt !== undefined ? g.colorAlt
+    : (g.color !== undefined ? g.color
+      : (ctx.LOOK.bladeAlt === undefined ? ctx.LOOK.low : ctx.LOOK.bladeAlt)));
+  const dryC = new THREE.Color(g.colorDry === undefined
+    ? (ctx.LOOK.bladeDry === undefined ? ctx.LOOK.path : ctx.LOOK.bladeDry) : g.colorDry);
 
   let n = 0;
   for (let j = 0; j < cells && n < wanted; j++) {
     for (let i = 0; i < cells && n < wanted; i++) {
-      const x = -ring + (i + rnd()) * step;
-      const z = -ring + (j + rnd()) * step;
-      const yaw = rnd() * Math.PI * 2;
-      const scale = 0.74 + rnd() * 0.66;
-      _s0.set(scale, scale * (0.78 + rnd() * 0.62), scale);
-      _v0.set(x, 0, z);
-      _m0.makeRotationY(yaw);
-      _m0.scale(_s0);
-      _m0.setPosition(_v0);
-      im.setMatrixAt(n, _m0);
-      // species variation only; the world-space lushness tint is applied in the
-      // vertex program, where the wrapped position is known.
-      const k = rnd();
-      _col.copy(rootC).lerp(tipC, 0.12 + k * 0.40);
-      _colB.setRGB(
-        Math.min(1, _col.r * (0.88 + rnd() * 0.26)),
-        Math.min(1, _col.g * (0.88 + rnd() * 0.26)),
-        Math.min(1, _col.b * (0.88 + rnd() * 0.26)));
-      im.setColorAt(n, _colB);
-      n++;
+      const ax = -ring + (i + rnd()) * step;
+      const az = -ring + (j + rnd()) * step;
+      /* One plant: the whole tuft shares a species draw, a vigour and a lean,
+       * so it reads as a clump rather than six unrelated blades that happen to
+       * be near each other. */
+      const kSp = rnd();
+      _col.copy(altC).lerp(tipC, kSp * kSp);      // deep green -> bright lime
+      const dry = rnd();
+      if (dry > 0.86) _col.lerp(dryC, (dry - 0.86) * 4.6);   // ~14 % straw
+      const vigour = 0.72 + rnd() * 0.56;         // how well this plant is doing
+      const leanYaw = rnd() * Math.PI * 2;        // the tuft's own fan direction
+      for (let b = 0; b < tuft && n < wanted; b++) {
+        // even radial spread inside the tuft: sqrt keeps the disc uniform, so
+        // the clump has a filled centre instead of a ring.
+        const rr = Math.sqrt(rnd()) * tuftR;
+        const ra = rnd() * Math.PI * 2;
+        const x = ax + Math.cos(ra) * rr;
+        const z = az + Math.sin(ra) * rr;
+        // blades in one tuft fan around the plant's lean, they do not point
+        // in twelve unrelated directions.
+        const yaw = leanYaw + (rnd() - 0.5) * 2.4;
+        /* Height spread: the low end came up from 0.52 to 0.64 because a blade
+         * that short against its own width is a wedge, not a blade (see
+         * bladeGeometry). Tall seed-heads survive at the top of the draw. */
+        const scale = 0.82 + rnd() * 0.46;
+        _s0.set(scale, scale * vigour * (0.64 + rnd() * 1.06), scale);
+        _v0.set(x, 0, z);
+        _m0.makeRotationY(yaw);
+        _m0.scale(_s0);
+        _m0.setPosition(_v0);
+        im.setMatrixAt(n, _m0);
+        // species variation only; the world-space lushness tint is applied in
+        // the vertex program, where the wrapped position is known.
+        _colB.setRGB(
+          Math.min(1, _col.r * (0.80 + rnd() * 0.42)),
+          Math.min(1, _col.g * (0.82 + rnd() * 0.38)),
+          Math.min(1, _col.b * (0.78 + rnd() * 0.46)));
+        im.setColorAt(n, _colB);
+        n++;
+      }
     }
   }
   if (n === 0) {
