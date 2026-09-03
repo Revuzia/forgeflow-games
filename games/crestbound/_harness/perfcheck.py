@@ -5,9 +5,18 @@ Budgets (CONTRACT hard rule 4 / "The gates", as amended 2026-09-02):
 
     draw calls   <= 260            worst frame at any station (resolution-independent)
     triangles    <= 450 000        worst frame at any station (resolution-independent)
-    fps          >= 55             AT THE TIER RENDER SCALE (high = 0.85)
+    fps          >= 55             AT THE TIER RENDER SCALE (low 0.60 / medium 0.72 /
+                                   high 0.85 / ultra 1.00)
     p99 frame    <= 28 ms          AT THE TIER RENDER SCALE
     warm load    <= 1500 ms        second load of a course; the COLD load is reported, not gated
+
+WHICH TIER.  `--quality` now DEFAULTS TO EMPTY, which means "no ?quality=
+override — let settings.js detectQuality() choose", i.e. exactly what a player
+gets.  It used to default to `high`, so the gate measured a tier that this
+machine's auto-detect never actually picks; on the reference Intel UHD that is
+28.7/34.3 fps against a 55 fps budget.  Pass `--quality high` to pin a tier by
+hand.  The header line prints the GPU string, its class, and the tier
+detectQuality() chose, so every measurement says which machine it belongs to.
 
 WHY THE RENDER SCALE IS THE GATE'S FRAME OF REFERENCE.  Measured on this
 machine (ANGLE / Intel UHD 0x00009A60 / D3D11, quiet box, GPU timer query):
@@ -288,6 +297,38 @@ async (opts) => {
 """
 
 
+# WHICH MACHINE this measurement belongs to, and WHICH tier the game chose for
+# it. settings.js detectQuality() reads the GPU (WEBGL_debug_renderer_info) as
+# of 2026-09-03; before that it read only hardwareConcurrency/deviceMemory and
+# handed this 16-core box with an Intel UHD the `high` tier at 28.7 fps.
+MACHINE_JS = r"""() => {
+  const A = globalThis.CRESTBOUND;
+  const S = A && A.Settings;
+  const out = {
+    quality: S && S.get ? S.get().quality : null,
+    autoQuality: S && S.autoQuality ? S.autoQuality() : null,
+    tierScale: A && A.engine ? A.engine.tierRenderScale : null,
+    renderScaleAuto: A && A.engine ? !!A.engine.renderScaleAuto : null,
+    cores: navigator.hardwareConcurrency || null,
+    deviceMemory: navigator.deviceMemory || null,
+    renderer: null, vendor: null, gpuClass: null,
+  };
+  if (S && S.gpu) {
+    const g = S.gpu();
+    out.renderer = g.renderer; out.vendor = g.vendor; out.gpuClass = g.cls;
+  } else {
+    try {
+      const cv = document.createElement('canvas');
+      const gl = cv.getContext('webgl2') || cv.getContext('webgl');
+      const d = gl && gl.getExtension('WEBGL_debug_renderer_info');
+      if (d) { out.renderer = gl.getParameter(d.UNMASKED_RENDERER_WEBGL);
+               out.vendor = gl.getParameter(d.UNMASKED_VENDOR_WEBGL); }
+    } catch (e) { /* ignore */ }
+  }
+  return out;
+}"""
+
+
 def leave_title(pg, timeout=150):
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -332,7 +373,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="CRESTBOUND perf check")
     ap.add_argument("--url", default=BASE)
     ap.add_argument("--courses", default="", help="comma list; default = every course on disk")
-    ap.add_argument("--quality", default="high")
+    ap.add_argument("--quality", default="",
+                    help="pin a tier via ?quality=; DEFAULT EMPTY = let settings.js "
+                         "detectQuality() choose, which is what a player gets")
     ap.add_argument("--seconds", type=float, default=8.0, help="sample seconds per course per pass")
     ap.add_argument("--width", type=int, default=1920)
     ap.add_argument("--height", type=int, default=1080)
@@ -342,7 +385,7 @@ def main() -> int:
     ap.add_argument("--json", default=os.path.join(HERE, "perfcheck.json"))
     args = ap.parse_args()
 
-    results, native, loads, pageerrs = {}, {}, {}, []
+    results, native, loads, pageerrs, machine = {}, {}, {}, [], {}
     with sync_playwright() as p:
         if args.headless:
             try:
@@ -355,7 +398,8 @@ def main() -> int:
             br = p.chromium.launch(channel="chrome", headless=False, args=FLAGS)
         pg = br.new_page(viewport={"width": args.width, "height": args.height})
         pg.on("pageerror", lambda e: pageerrs.append(str(e)))
-        url = "%s?dev=1&quality=%s" % (args.url, args.quality)
+        url = ("%s?dev=1&quality=%s" % (args.url, args.quality)) if args.quality \
+            else ("%s?dev=1" % args.url)
         try:
             pg.goto(url, wait_until="load", timeout=60_000)
         except Exception as e:
@@ -378,6 +422,11 @@ def main() -> int:
             br.close()
             print("RESULT: FAIL")
             return 2
+
+        try:
+            machine = pg.evaluate(MACHINE_JS) or {}
+        except Exception as e:
+            machine = {"error": str(e)[:200]}
 
         courses = ([c.strip() for c in args.courses.split(",") if c.strip()]
                    if args.courses else courses_on_disk(pg))
@@ -433,10 +482,17 @@ def main() -> int:
             tier = r["tierScale"]
             break
 
+    qlabel = args.quality if args.quality else "%s (AUTO-DETECTED)" % (
+        machine.get("quality") or "?")
+
     print("=" * 108)
     print("CRESTBOUND perf check — %s, %dx%d CSS, quality %s (tier render scale %s), %.0f s per pass"
           % ("HEADLESS (fps NOT gated)" if args.headless else "headed Chrome",
-             args.width, args.height, args.quality, tier if tier else "?", args.seconds))
+             args.width, args.height, qlabel, tier if tier else "?", args.seconds))
+    print("machine: %s | vendor %s | class %s | %s cores | %s GB | detectQuality() -> %s"
+          % (machine.get("renderer") or "?", machine.get("vendor") or "?",
+             machine.get("gpuClass") or "?", machine.get("cores"),
+             machine.get("deviceMemory"), machine.get("autoQuality") or "?"))
     print("budget: <= %d draws, <= %s tris, >= %d fps, p99 <= %.0f ms AT THE TIER RENDER SCALE,"
           % (BUDGET["drawCalls"], f'{BUDGET["tris"]:,}', BUDGET["minFps"], BUDGET["p99Ms"]))
     print("        warm load <= %d ms. Native-1080p and cold load are INFO rows, not pass conditions."
@@ -499,7 +555,8 @@ def main() -> int:
     if args.json:
         try:
             with open(args.json, "w", encoding="utf-8") as f:
-                json.dump({"budget": BUDGET, "headless": args.headless, "loads": loads,
+                json.dump({"budget": BUDGET, "headless": args.headless,
+                           "qualityArg": args.quality, "machine": machine, "loads": loads,
                            "results": results, "native": native, "pageErrors": pageerrs}, f, indent=2)
         except Exception:
             pass

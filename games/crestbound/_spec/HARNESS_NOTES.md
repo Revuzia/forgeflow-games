@@ -139,3 +139,72 @@ equivalent. After blending the specular IBL toward `iblIrradiance *
 RECIPROCAL_PI` instead of toward black: mean 0.130, 0.58 % over 4/255, worst 78
 at the spawn, and 0.000 at every Keep station (nothing in the hub is past the
 40 m radius, so the LOD is an open-diorama lever and buys nothing indoors).
+
+## The quality detector never looked at the GPU (2026-09-03, quality lane)
+
+`runtime/core/settings.js detectQuality()` picked the starting tier from
+`navigator.hardwareConcurrency` and `navigator.deviceMemory` ONLY. This box
+reports **16 cores / 32 GB** and drives an **Intel UHD Graphics (0x00009A60)**,
+so the old heuristic returned `high` — render scale 0.85, measured 28.7 fps
+(keep) / 34.3 fps (verdant-1) — on hardware that runs the same scene at 65-74
+fps on `low`. The frame is GPU FILL-bound (CONTRACT hard rule 4); a CPU core
+count says nothing about how many pixels the part can shade, so it must not be
+the only vote.
+
+`detectQuality()` now reads `UNMASKED_RENDERER_WEBGL` off a throwaway WebGL
+context (`detectGPU()`, memoised, released with `WEBGL_lose_context`, no-op
+without a DOM so `modulecheck.mjs` still imports the file) and lets the GPU vote
+DOWN only:
+
+| GPU class | tier |
+|---|---|
+| software (SwiftShader, llvmpipe, WARP, no WebGL) | `low`, unconditionally |
+| integrated (Intel UHD/HD/Iris/Xe, AMD APU graphics, base Apple M, Mali/Adreno/PowerVR) | `low` |
+| unknown (masked renderer, e.g. `resistFingerprinting`) | at most `medium` |
+| discrete (GeForce/RTX/GTX/Quadro, Radeon RX/Pro, Intel Arc, Apple M Pro/Max/Ultra) | the old CPU/memory heuristic, unchanged |
+
+`classifyRenderer()` is exported and unit-testable; 29 real renderer strings
+pass, including the two that need ORDER to be right: `AMD Radeon RX Vega 8
+Graphics` is an APU (integrated) while `AMD Radeon RX Vega 56` is a card
+(discrete), and ANGLE writes `Intel(R) Arc(TM) A770`, whose `(R)` contains a
+WORD character — so `intel\W*arc` never matches a real ANGLE string and the
+patterns use `intel[^,]{0,20}\barc\b`.
+
+**Measured after the change, headed, quiet box, `python perfcheck.py` with NO
+`--quality`:**
+
+| course | tier | scale | draws | tris | fps | p99 ms | warm ms | verdict |
+|---|---|---|---|---|---|---|---|---|
+| keep | low (auto) | 0.60 | 179 | 398,191 | **66.5** | 19.84 | 1337 | ok |
+| verdant-1 | low (auto) | 0.60 | 191 | 430,291 | **73.1** | 18.06 | 1475 | ok |
+
+`PERF OK (0 of 2 courses over budget)`. Native-1080p INFO on the same run: keep
+28.2 fps, verdant-1 25.6 fps. `perfcheck.py --quality high` still pins 0.85 and
+still measures 29.0 / 34.7 fps — the tier is reachable by hand, it has just
+never met the gate on this GPU.
+
+`perfcheck.py --quality` now DEFAULTS TO EMPTY (= no `?quality=` override, i.e.
+what a player gets). It used to default to `high`, so the gate measured a tier
+the auto-detect never picks.
+
+## The dynamic render-scale controller could not rescue a wrong tier
+
+`engine.js _autoRenderScale()` clamped its low end to
+`max(0.45, tierScale - 0.15)`. From `high` that is 0.70 — still ~40 fps here —
+so a wrong STARTING TIER was unrecoverable in play: the controller sat at its
+floor, 15 fps under target, out of moves. The floor is now `MIN_RENDER_SCALE`
+(0.45) and the controller crosses tier boundaries DOWNWARD. The CEILING stays
+at the tier value: above it every composer target has to be reallocated
+(measured 141/151/179/179/646 ms stalls), which is what made this controller
+unshippable in the first place; below it a step is a uniform write into an
+already-allocated sub-rectangle.
+
+Measured with `?quality=high` and the controller live (30 s, keep): 0.85 -> 0.45
+in ~10 s, crossing the old 0.70 floor, never below 0.45. Measured with
+`?quality=ultra`, timestamps taken off the engine's own `renderscale` event:
+11 steps, 1.00 -> 0.45, **worst rate 0.0501 scale/s, zero violations** of the
+contract's `<= 0.05 per second`. The controller also warns ONCE when it crosses
+below `tier - 0.15` (`[Engine] render scale 0.65 is below the high tier band
+(0.70-0.85) — this machine wants a lower quality tier.`) and emits
+`renderscale-rescue`, so a bad guess is visible in a log and not only in the
+frame rate.

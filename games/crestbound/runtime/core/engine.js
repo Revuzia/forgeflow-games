@@ -163,7 +163,25 @@ const SHADOW_DEFAULT = { extent: 40, bias: -0.0006, normalBias: 0.03 };
  */
 /** Floor the dynamic controller may never go below, whatever the tier says. */
 const MIN_RENDER_SCALE = 0.45;
-/** How far either side of the tier value the dynamic controller may wander. */
+/**
+ * How far below the tier the controller may wander BEFORE it has to cross the
+ * next tier's scale. Kept as the comfort band it always was; it is no longer a
+ * hard stop.
+ *
+ * WHY IT IS NO LONGER A HARD STOP (2026-09-03). The band used to be the whole
+ * authority: from `high` (0.85) the controller could reach 0.70 and no further,
+ * which on the reference Intel UHD is ~40 fps — still 15 fps under target, with
+ * the controller pinned at its floor and out of moves. A wrong STARTING TIER
+ * was therefore unrecoverable in play. It now descends across tier boundaries
+ * to MIN_RENDER_SCALE, so a machine the detector guessed wrong about converges
+ * to a playable scale at the contract's rate limit (0.05/s, never mid-air) and
+ * climbs back to its tier value the moment the frame can afford it.
+ *
+ * The CEILING stays at the tier value on purpose: rendering ABOVE the tier means
+ * reallocating every composer target (measured 141/151/179/179/646 ms stalls —
+ * see setRenderScale), which is what made this controller unshippable in the
+ * first place. Below the tier every step is a uniform write.
+ */
 const RENDER_SCALE_BAND = 0.15;
 /** One step. Combined with STEP_PERIOD this is the "at most 0.05 per second". */
 const RENDER_SCALE_STEP = 0.05;
@@ -359,6 +377,8 @@ export class Engine {
     this.renderScaleGuard = null;
     this._scaleAccum = 0;
     this._aboveT = 0;
+    /** @private has the controller already reported crossing below the band? */
+    this._scaleRescued = false;
     /** @private the scale the drawing buffer and composer targets are SIZED at.
      *  Equal to the tier scale except while something has forced them larger
      *  (a quality change, the perf gate's native-1.0 INFO pass). */
@@ -974,6 +994,7 @@ export class Engine {
     this.renderScale = this._tierScale;
     this._scaleAccum = 0;
     this._aboveT = 0;
+    this._scaleRescued = false;
     this._allocScale = this._tierScale;
     this.renderer.setPixelRatio(this._pr * this.renderScale);
     this.renderer.setSize(this.size.w, this.size.h, true);
@@ -1091,11 +1112,19 @@ export class Engine {
     this._scaleAccum += dt;
     if (this._scaleAccum < RENDER_SCALE_STEP_PERIOD) return;
 
-    /* The band runs DOWNWARD from the tier only. Rendering ABOVE the tier would
-       mean allocating every composer target larger than the tier needs and
-       paying that in the post chain on every frame at the tier value -- the one
-       case that has to stay free (see setRenderScale). */
-    const lo = Math.max(MIN_RENDER_SCALE, this._tierScale - RENDER_SCALE_BAND);
+    /* DOWNWARD the controller may cross tier boundaries, all the way to
+       MIN_RENDER_SCALE: the starting tier is a GUESS (settings.js detectQuality
+       reads the GPU, but an unrecognised renderer is still a guess), and a
+       controller that can only reach 0.15 below a wrong guess just sits at its
+       floor missing the target. Every step below the tier is free -- the scene
+       moves into a sub-rectangle of buffers that are already allocated.
+
+       UPWARD it stops at the tier value. Rendering ABOVE the tier means
+       allocating every composer target larger than the tier needs and paying
+       that in the post chain on every frame at the tier value -- the one case
+       that has to stay free (see setRenderScale). `_tierScale - BAND` is still
+       where the controller sits in normal service; past it is the rescue. */
+    const lo = MIN_RENDER_SCALE;
     const hi = this._tierScale;
     let want = this.renderScale;
     if (fps < target) want = this.renderScale - RENDER_SCALE_STEP;
@@ -1113,6 +1142,18 @@ export class Engine {
     this._scaleAccum = 0;
     if (want > this.renderScale) this._aboveT = 0;
     this.setRenderScale(want);
+
+    /* Crossing BELOW the comfort band means the starting tier was too high for
+       this machine — the one fact the detector could not know. Say it once, so
+       a wrong guess is visible in a log instead of only in the frame rate. */
+    const comfort = this._tierScale - RENDER_SCALE_BAND;
+    if (!this._scaleRescued && this.renderScale < comfort - 0.004) {
+      this._scaleRescued = true;
+      console.warn('[Engine] render scale ' + this.renderScale.toFixed(2) +
+        ' is below the ' + this.quality.id + ' tier band (' + comfort.toFixed(2) +
+        '-' + this._tierScale.toFixed(2) + ') — this machine wants a lower quality tier.');
+      this.events.emit('renderscale-rescue', this.renderScale);
+    }
   }
 
   /**

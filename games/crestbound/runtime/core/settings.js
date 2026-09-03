@@ -144,11 +144,141 @@ export const CAM_MODES = ['follow', 'free'];
  * ======================================================================== */
 
 /**
+ * GPU CLASS. The single most important input to the starting tier, and the one
+ * this file used to ignore.
+ *
+ * WHY THIS EXISTS (measured 2026-09-03, reference machine). `detectQuality()`
+ * read `navigator.hardwareConcurrency` and `navigator.deviceMemory` ONLY. The
+ * reference box reports 16 cores / 32 GB — a "fast machine" by every CPU
+ * signal — and drives an **Intel UHD Graphics (0x00009A60)**, an integrated
+ * part. The old heuristic therefore returned `high` (render scale 0.85), and
+ * `_harness/perfcheck.py` measured that tier at **28.7 fps (keep) / 34.3 fps
+ * (verdant-1)**, while `low` (render scale 0.60) measured **65.0 / 74.1 fps**
+ * and passed every clause of the perf gate. The frame is GPU FILL-bound
+ * (CONTRACT hard rule 4); the CPU count says nothing at all about how many
+ * pixels the part can shade, so it must not be the only vote.
+ *
+ * @typedef {'software'|'integrated'|'discrete'|'unknown'} GpuClass
+ */
+
+/** software rasterisers and the "no real GPU" strings. NEVER above `low`. */
+const RE_SOFTWARE = /swiftshader|llvmpipe|softpipe|software\s*rasteriz|microsoft basic render|mesa offscreen|\bwarp\b|generic renderer|subzero/i;
+
+/**
+ * APU giveaways, tested BEFORE the discrete list because they collide with it:
+ * "AMD Radeon RX Vega 8 Graphics" is a Ryzen APU while "Radeon RX Vega 56" is a
+ * discrete card, and both contain "Radeon RX Vega". The small Vega numbers
+ * (3-11) are the on-die compute-unit counts; the big ones (56/64/20/…) are
+ * cards. "Radeon(TM) Graphics" with no model at all is always an APU.
+ */
+const RE_APU = /radeon\s*(\(tm\)\s*)?(rx\s*)?vega\s*(3|6|7|8|9|10|11)\b|radeon\s*(\(tm\)\s*)?graphics\b|\bapu\b|radeon\s*vega\s*mobile/i;
+
+/**
+ * Discrete parts. These KEEP the CPU/memory heuristic — a real GPU is exactly
+ * the case the old code was accidentally right about.
+ *
+ * Note `[^,]{0,20}` rather than `\W*` between a vendor and its family: ANGLE
+ * writes "Intel(R) Arc(TM) A770", and the `(R)` in the middle contains a WORD
+ * character, so `intel\W*arc` never matches a real ANGLE string.
+ */
+const RE_DISCRETE = /geforce|\brtx\b|\bgtx\b|quadro|\btitan\b|nvidia|\bfirepro\b|instinct|\bdg2\b|radeon\s*(\(tm\)\s*)?(rx|r9|r7\s*3\d\d|hd\s*[5-7]\d{3})|radeon\s*pro\s*(vega\s*)?\d|\bvega\s*(56|64)\b|intel[^,]{0,20}\barc\b|apple\s*m\d+\s*(pro|max|ultra)/i;
+
+/**
+ * Integrated / shared-memory parts. Intel UHD·HD·Iris·Xe·GMA, the base Apple
+ * M-series, and every mobile family. Matched AFTER the discrete list so
+ * "Radeon RX 6800", "Intel Arc A770" and "Apple M3 Max" do not fall in here.
+ */
+const RE_INTEGRATED = /intel[^,]{0,20}\b(hd|uhd|iris|xe|gma)\b|\bhd graphics\b|\buhd\b|\biris\b|\bmesa intel\b|apple\s*m\d+(?!\s*(pro|max|ultra))|\bmali\b|\badreno\b|\bpowervr\b|\bvivante\b|\bvideocore\b|tegra|\bgc\d{3,}\b/i;
+
+/**
+ * Classify an UNMASKED_RENDERER_WEBGL string.
+ * Order matters: software wins outright, then the APU strings that would
+ * otherwise read as discrete, then discrete, then the rest of integrated.
+ * @param {string} s renderer (+ vendor) string
+ * @returns {GpuClass}
+ */
+export function classifyRenderer(s) {
+  const t = String(s || '');
+  if (!t) return 'unknown';
+  if (RE_SOFTWARE.test(t)) return 'software';
+  if (RE_APU.test(t)) return 'integrated';
+  if (RE_DISCRETE.test(t)) return 'discrete';
+  if (RE_INTEGRATED.test(t)) return 'integrated';
+  return 'unknown';
+}
+
+/** @type {{renderer:string, vendor:string, unmasked:boolean, cls:GpuClass}|null} */
+let _gpu = null;
+
+/**
+ * Read the GPU off a THROWAWAY WebGL context (created, queried, and released
+ * with WEBGL_lose_context) and memoise the answer. Called once, before the
+ * real renderer exists, so it can never disturb it.
+ *
+ * Returns `{renderer:'', vendor:'', unmasked:false, cls:'unknown'}` wherever
+ * there is no DOM (the node module/link harness imports this file).
+ *
+ * @returns {{renderer:string, vendor:string, unmasked:boolean, cls:GpuClass}}
+ */
+export function detectGPU() {
+  if (_gpu) return _gpu;
+  const info = { renderer: '', vendor: '', unmasked: false, cls: 'unknown' };
+  try {
+    if (typeof document === 'undefined' || typeof document.createElement !== 'function') {
+      _gpu = info;                                  // node: no DOM, no probe
+      return info;
+    }
+    const cv = document.createElement('canvas');
+    cv.width = 1; cv.height = 1;
+    const gl = cv.getContext('webgl2') ||
+      cv.getContext('webgl') ||
+      cv.getContext('experimental-webgl');
+    if (!gl) {
+      /* No WebGL at all: whatever runs this is not going to shade 2 Mpixel. */
+      info.cls = 'software';
+      _gpu = info;
+      return info;
+    }
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    if (dbg) {
+      info.renderer = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '');
+      info.vendor = String(gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) || '');
+      info.unmasked = info.renderer.length > 0;
+    }
+    /* Firefox with privacy.resistFingerprinting, and any browser that drops the
+       extension, still answers the masked RENDERER — usually a useless
+       "WebKit WebGL", which classifies as 'unknown' and lands on `medium`. */
+    if (!info.renderer) info.renderer = String(gl.getParameter(gl.RENDERER) || '');
+    if (!info.vendor) info.vendor = String(gl.getParameter(gl.VENDOR) || '');
+    info.cls = classifyRenderer(info.renderer + ' ' + info.vendor);
+
+    const lose = gl.getExtension('WEBGL_lose_context');
+    if (lose) { try { lose.loseContext(); } catch (e) { /* ignore */ } }
+  } catch (e) {
+    /* A blocked or crashed context is itself a signal, but not a confident one. */
+    info.cls = 'unknown';
+  }
+  _gpu = info;
+  return info;
+}
+
+/**
  * Pick a sensible starting preset from what the browser will tell us.
  *
- * Deliberately conservative, and it never auto-selects `ultra` — ultra is an
- * opt-in "my machine is a desk heater" tier. A first-run player getting a
- * smooth 60 is worth far more than a first-run player getting prettier stutter.
+ * THE GPU VOTES FIRST, and it can only ever vote DOWN:
+ *   software    -> `low`, unconditionally (a CPU rasteriser shades nothing).
+ *   integrated  -> `low`. Measured: `high` is 28.7/34.3 fps on this exact part,
+ *                  `low` is 65.0/74.1 and passes the gate.
+ *   unknown     -> at most `medium`. Guessing HIGH costs a 28 fps first
+ *                  impression; guessing LOW costs a slightly softer image that
+ *                  the engine's dynamic render-scale controller raises back
+ *                  within seconds. The asymmetry is the whole argument.
+ *   discrete    -> the CPU/memory heuristic below, unchanged.
+ *
+ * Still deliberately conservative, and it still never auto-selects `ultra` —
+ * ultra is an opt-in "my machine is a desk heater" tier. Every tier remains
+ * reachable by hand from the settings menu (ui/menu.js reads QUALITY_ORDER),
+ * and `?quality=` overrides for one load.
  *
  * @returns {'low'|'medium'|'high'|'ultra'}
  */
@@ -165,6 +295,10 @@ export function detectQuality() {
 
     const isMobile = /Android|iPhone|iPad|iPod|IEMobile|Opera Mini/i.test(ua) ||
       (touch > 1 && /Macintosh/.test(ua) === false && /Windows NT/.test(ua) === false);
+
+    const gpu = detectGPU();
+    /* A software rasteriser is never anything but `low`, at any core count. */
+    if (gpu.cls === 'software') return 'low';
 
     let idx;                                        // index into QUALITY_ORDER
     if (isMobile) {
@@ -184,6 +318,10 @@ export function detectQuality() {
     if (mem > 0 && mem <= 4) idx--;
     // A very wide core count with plenty of RAM earns the top non-ultra tier.
     if (cores >= 12 && (mem === 0 || mem >= 8) && !isMobile) idx = Math.max(idx, 2);
+
+    /* ---- the GPU ceiling, applied LAST so nothing above can undo it ----- */
+    if (gpu.cls === 'integrated') idx = 0;          // shared-memory part: `low`
+    else if (gpu.cls !== 'discrete') idx = Math.min(idx, 1);   // unknown: `medium`
 
     return QUALITY_ORDER[clamp(idx, 0, 2)];
   } catch (e) {
@@ -410,6 +548,23 @@ export const Settings = {
   /** @returns {string} the active preset id */
   qualityId() {
     return ensure().quality;
+  },
+
+  /**
+   * What the GPU probe saw, for the HUD/debug panel and for every harness that
+   * has to report WHICH machine a measurement belongs to.
+   * @returns {{renderer:string, vendor:string, unmasked:boolean, cls:string}}
+   */
+  gpu() {
+    return detectGPU();
+  },
+
+  /**
+   * The tier auto-detect WOULD pick right now, regardless of what is stored.
+   * @returns {string}
+   */
+  autoQuality() {
+    return detectQuality();
   },
 
   /**
