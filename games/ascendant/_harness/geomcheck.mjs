@@ -495,9 +495,17 @@ function analyse(def) {
       let hi = Number.isFinite(sw.highest) ? sw.highest : sw.lowest;
       let lo = sw.lowest;
       for (const pt of points) {
-        const inX = Math.abs(pt.p[0] - sw.cx) <= sw.rx + PLAYER_R;
-        const inZ = Math.abs(pt.p[2] - sw.cz) <= sw.rz + PLAYER_R;
-        if (!inX || !inZ) continue;
+        const ddx = pt.p[0] - sw.cx, ddz = pt.p[2] - sw.cz;
+        // A y-axis sweeper traces a CIRCLE (rx === rz), so the box test
+        // |dx|<=r && |dz|<=r wrongly flags the deck CORNERS — the one place a
+        // player can legitimately stand. Use radial distance there; the thin-slab
+        // footprints (pendulum arc, vertical wheel) keep the box test.
+        const circular = Math.abs(sw.rx - sw.rz) < 1e-6;
+        if (circular) {
+          if (Math.hypot(ddx, ddz) > sw.rx + PLAYER_R) continue;
+        } else if (Math.abs(ddx) > sw.rx + PLAYER_R || Math.abs(ddz) > sw.rz + PLAYER_R) {
+          continue;
+        }
         // Pendulums: the blade is LOWEST at the swing centre and rises toward the
         // ends — evaluate at this point's real offset instead of the global
         // minimum, or a checkpoint near the end of the arc false-positives.

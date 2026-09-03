@@ -198,7 +198,15 @@ export default {
     // The catch gantry, across the sprint gap. Front at 8.64.
     { p: [148.2, 14.5, -6.0], yaw: 0, clockOffset: 84 },
     // Under the sweeper bar, at the foot of the back-leg. Front at 11.20.
-    { p: [176.6, 18.4, 5.4], yaw: 0, clockOffset: 100 },
+    /* CORNER, not the hub. This pad used to sit at [176.6, 18.4, 5.4] — the exact
+       x/z of the sweeper's hub two objects below — so a player respawning here
+       stood in the bar's path (arm y 18.88..19.22 vs a standing player 18.70..
+       20.50) and was hit again every 1.5 s, forever. 206 deaths on this stage.
+       The pad is now in the -x/-z corner, 3.34 m from the hub: clear of the
+       (shortened) 2.67 m arm reach plus the player's 0.35 m radius, with the
+       whole player footprint still on the deck (x 173.50..174.20 inside
+       173.4..179.8, z 3.15..3.85 inside 3.1..7.7). Facing +x, down-course. */
+    { p: [173.85, 18.4, 3.5], yaw: 0, clockOffset: 100 },
     // Out of the shaft: 28.3 is 4.8 m above the front's 23.5 ceiling, forever.
     { p: [184.2, 28.0, 0], yaw: 0, clockOffset: 120 },
     // The rim approach, before the ring.
@@ -564,7 +572,14 @@ export default {
     /* ============================================================================ */
 
     { kind: 'platform', p: [176.6, 18.2, 5.4], s: [6.4, 1, 4.6], mat: 'stone', glow: EDGE, stripe: true },  // CP4, top 18.70, gap 2.5 at +0.5
-    { kind: 'rotor', p: [176.6, 19.05, 5.4], style: 'bar', arms: 2, len: 3.0, thick: 0.34, period: 3.0, phase: 0.0, axis: [0, 1, 0] },
+    /* len 3.0 -> 2.5. The deck is 6.4 x 4.6 (half-diagonal 3.94), so a 3.0 m arm
+       reached 3.17 m and left only ~0.35 m of corner that a 0.35 m-radius player
+       could not actually fit inside — there was no safe square on the platform,
+       which is why the corner checkpoint above needs this too. At 2.5 the arm
+       reaches 2.67 m: it still sweeps the whole middle and still forces you to
+       the corners (the point of the obstacle), but the corners are now genuinely
+       standable. */
+    { kind: 'rotor', p: [176.6, 19.05, 5.4], style: 'bar', arms: 2, len: 2.5, thick: 0.34, period: 3.0, phase: 0.0, axis: [0, 1, 0] },
 
     { kind: 'platform', p: [182.2, 19.8, 10.4], s: [3.4, 1, 3.4], mat: 'panel', glow: EDGE, stripe: true },  // top 20.30, diagonal 1.22 at +1.6
     { kind: 'platform', p: [177.6, 21.3, 13.0], s: [4.0, 1, 3.0], mat: 'grate', glow: EDGE, stripe: true },  // top 21.80, BACK 0.9 at +1.5
