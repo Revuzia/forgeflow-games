@@ -144,6 +144,42 @@ const LAVA_U = {
 /** one clock for everything that breathes with time (leaves, caustics, water) */
 const TIME_U = { value: 0 };
 
+/* ---------------------------------------------------------------------------
+ * MATERIAL LOD — the far half of the frame does not need the whole BRDF.
+ *
+ * The frame is GPU FILL-bound and PBR fragment shading is its largest single
+ * component (CONTRACT hard rule 4; `_harness/frameprobe.py`). Most of what a
+ * standard material spends per fragment is invisible past a few dozen metres:
+ * the specular IBL lobe (`getIBLRadiance`, a `textureCubeUV` blend of two PMREM
+ * mips), the macro de-tiler's value noise, the facing term, the leaf/blade rim,
+ * the caustic field and the slope blend's three extra texture reads.
+ *
+ * `uCbLod = vec2( start metres, 1 / fade metres )`. Every gated term is
+ * multiplied by `1 - t` INSIDE its branch, so the term reaches zero exactly
+ * where the branch stops running and the switch cannot be seen — a hard cut
+ * would print a ring on the meadow at the LOD radius.
+ *
+ * Deliberately NOT gated: `map`, `normalMap` and the ORM read. Those use
+ * implicit derivatives, and a `texture2D` inside non-uniform control flow has
+ * undefined mip selection on the quads that straddle the boundary. The IBL
+ * path is safe because `textureCubeUV` selects its mip explicitly.
+ * ------------------------------------------------------------------------ */
+const LOD_START = 40;      // metres: full quality inside this
+const LOD_FADE = 25;       // metres of fade; the gate is fully in at START + FADE
+const LOD_U = { value: new THREE.Vector2(LOD_START, 1 / LOD_FADE) };
+
+/**
+ * Authored roughness at or above which a material takes the free IBL-specular
+ * path (see `_harness/_iblrough.py` for the derivation from three's own
+ * `getIBLRadiance` / `getIBLIrradiance`). 0.72 keeps every polished key -
+ * marble, metal, copper, gold, glass, ice, crystal, obsidian, neon - on the
+ * real lookup, and puts stone, plaster, brick, wood, bark, moss, cloth, rope,
+ * dirt, grass, snow and sand, which are most of the screen, on the identity.
+ * MEASURED (`_harness/_fillab.py`, keep/cp3/quality medium, 1382x777): the
+ * environment map as a whole is -2.74 ms of a 22.56 ms frame.
+ */
+const IBL_ROUGH_CUT = 0.72;
+
 /**
  * Slope-blend targets, in "1 - worldNormal.y" units. Full dirt lands exactly at
  * TUNE.slope.slideDeg so the colour is the affordance: brown ground slides.
@@ -173,6 +209,7 @@ export function mulberry32(seed) {
 }
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+const numOrAniso = (v, d) => (Number.isFinite(v) ? v : d);
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lerp = (a, b, t) => a + (b - a) * t;
 const frac = (v) => v - Math.floor(v);
@@ -587,7 +624,9 @@ float cbCaustic( vec2 p, float t ) {
  * skipped and the material falls back to attribute UVs.
  */
 function injectShader(mat, key, opts) {
-  const box = opts.box !== false;
+  let box = opts.box !== false;
+  let lod = opts.lod !== false;
+  const iblRough = !!opts.iblRough;
   const defines = opts.defines || {};
   const uvScale = opts.uvScale || 0.5;
   const u = (typeof opts.uniforms === 'function') ? null : (opts.uniforms || null);
@@ -623,9 +662,11 @@ function injectShader(mat, key, opts) {
       shader.uniforms.uCbFlowB = LAVA_U.uCbFlowB;
     }
     if (D.wind || D.shimmer) shader.uniforms.uCbTime = TIME_U;
+    if (lod) shader.uniforms.uCbLod = LOD_U;
 
     // ---- vertex -----------------------------------------------------------
     let vHead = '';
+    if (lod) vHead += 'varying float vCbDist;\n';
     if (box) vHead += 'uniform vec2 uCbUv;\nuniform float uCbUv2;\nuniform vec2 uCbFlow;\nvarying vec3 vCbW;\nvarying vec3 vCbN;\n';
     if (D.wind) vHead += 'uniform float uCbTime;\nuniform float uCbWind;\n';
 
@@ -649,15 +690,22 @@ function injectShader(mat, key, opts) {
       }
     }
 
-    if (box) {
-      const MARK = '#include <project_vertex>';
-      if (shader.vertexShader.indexOf(MARK) === -1) {
-        if (!_injectWarned) {
-          _injectWarned = true;
-          console.warn('[Mats] box-projection marker not found — falling back to attribute UVs');
-        }
-        return;
+    const MARK = '#include <project_vertex>';
+    if ((box || lod) && shader.vertexShader.indexOf(MARK) === -1) {
+      /* No marker means no world position and no view depth: drop BOTH the box
+       * projection and the LOD gate rather than ship a varying nothing writes. */
+      box = false; lod = false;
+      if (!_injectWarned) {
+        _injectWarned = true;
+        console.warn('[Mats] box-projection marker not found — falling back to attribute UVs');
       }
+      return;
+    }
+    if (lod) {
+      shader.vertexShader = shader.vertexShader.replace(MARK, MARK + `
+  vCbDist = - mvPosition.z;`);
+    }
+    if (box) {
       shader.vertexShader = vHead + shader.vertexShader.replace(MARK, MARK + `
   // --- CRESTBOUND world-space box projection -------------------------------
   // mirrors the batching/instancing chain that <project_vertex> applies, so an
@@ -714,6 +762,7 @@ function injectShader(mat, key, opts) {
 
     // ---- fragment ---------------------------------------------------------
     let fHead = GLSL_FRAG_HELPERS;
+    if (lod) fHead += 'varying float vCbDist;\nuniform vec2 uCbLod;\n';
     if (box) fHead += 'varying vec3 vCbW;\nvarying vec3 vCbN;\n';
     if (D.lava) fHead += 'uniform float uCbTime;\nuniform vec2 uCbFlowA;\nuniform vec2 uCbFlowB;\n';
     if (D.slope) fHead += 'uniform sampler2D uCbBlendMap;\nuniform sampler2D uCbBlendNormal;\nuniform sampler2D uCbBlendOrm;\nuniform float uCbBlendScale;\nuniform vec2 uCbSlope;\n';
@@ -727,6 +776,12 @@ function injectShader(mat, key, opts) {
     const MAP = '#include <map_fragment>';
     if (shader.fragmentShader.indexOf(MAP) !== -1) {
       let pre = '', post = '';
+      /* Distance LOD weight: 0 inside LOD_START, 1 past LOD_START + LOD_FADE.
+         Every gated term below multiplies by (1 - cbLodT) inside its branch, so
+         it is already zero where the branch stops running. */
+      pre += lod
+        ? '  float cbLodT = clamp( ( vCbDist - uCbLod.x ) * uCbLod.y, 0.0, 1.0 );\n'
+        : '  float cbLodT = 0.0;\n';
       // slope weight is declared before the map read so every later stage can use it
       pre += D.slope
         ? '  float cbSlopeW = smoothstep( uCbSlope.x, uCbSlope.y, 1.0 - clamp( normalize( vCbN ).y, 0.0, 1.0 ) );\n'
@@ -762,9 +817,13 @@ function injectShader(mat, key, opts) {
          * be the cheapest thing that works — and the repeat it hides lives at
          * the LOW frequency, which one octave already covers. */
         post += `
-  {
+  if ( cbLodT < 0.999 ) {
+    /* The de-tiler hides a REPEAT, and a repeat you cannot resolve is not a
+       repeat: past the LOD radius the tile is sub-pixel and the noise tap is
+       pure cost. Faded, not cut, so the radius is invisible. */
+    float cbMw = 1.0 - cbLodT;
     vec2 cbM = vCbW.xz / max( uCbMacro.x, 0.001 );
-    float cbMs = cbVnoise( cbM ) - 0.5;
+    float cbMs = ( cbVnoise( cbM ) - 0.5 ) * cbMw;
     diffuseColor.rgb *= 1.0 + cbMs * uCbMacro.y;
     diffuseColor.rgb *= vec3( 1.0 + cbMs * uCbMacro.z,
                               1.0 + cbMs * uCbMacro.z * 0.25,
@@ -791,10 +850,10 @@ function injectShader(mat, key, opts) {
         post += `
   {
     float cbBelow = uCbCausticParams.x - vCbW.y;
-    if ( uCbCaustic > 0.001 && cbBelow > 0.0 ) {
+    if ( uCbCaustic > 0.001 && cbBelow > 0.0 && cbLodT < 0.999 ) {
       float cbFade = smoothstep( 0.0, 0.6, cbBelow ) * exp( - cbBelow * 0.22 );
       float cbC = cbCaustic( vCbW.xz * uCbCausticParams.y, uCbCausticTime * uCbCausticParams.z );
-      diffuseColor.rgb += diffuseColor.rgb * uCbCausticColor * cbC * uCbCaustic * cbFade;
+      diffuseColor.rgb += diffuseColor.rgb * uCbCausticColor * cbC * uCbCaustic * cbFade * ( 1.0 - cbLodT );
     }
   }`;
       }
@@ -864,15 +923,80 @@ function injectShader(mat, key, opts) {
       }
     }
 
+    /* ---- IBL SPECULAR LOD ------------------------------------------------
+     * `<lights_fragment_maps>` is re-emitted here rather than wrapped, because
+     * only HALF of it may be gated: the diffuse `getIBLIrradiance` is what
+     * keeps a far surface at the right BRIGHTNESS, and dropping it would print
+     * a dark ring at the LOD radius. What is gated is the SPECULAR lobe,
+     * `getIBLRadiance` (and the clearcoat one) - a `textureCubeUV` blend of two
+     * PMREM mips, per fragment, for a reflection that at 30+ metres is a few
+     * pixels of sky already sitting behind the fog band.
+     * MEASURED (`_harness/_fillab.py`, keep/cp3/medium): the whole environment
+     * map is -1.31 ms of a 24.28 ms frame; on an open diorama, where most of
+     * the screen is past the radius, it is the larger share of that.
+     * `textureCubeUV` selects its mip EXPLICITLY, so unlike `normalMap` this is
+     * safe inside non-uniform control flow.
+     * The body is r172's chunk verbatim; if three is re-vendored, re-copy it. */
+    if (lod) {
+      const LM = '#include <lights_fragment_maps>';
+      if (shader.fragmentShader.indexOf(LM) !== -1) {
+        shader.fragmentShader = shader.fragmentShader.replace(LM, `
+  #if defined( RE_IndirectDiffuse )
+    #ifdef USE_LIGHTMAP
+      vec4 cbLightMapTexel = texture2D( lightMap, vLightMapUv );
+      irradiance += cbLightMapTexel.rgb * lightMapIntensity;
+    #endif
+    #if defined( USE_ENVMAP ) && defined( STANDARD ) && defined( ENVMAP_TYPE_CUBE_UV )
+      iblIrradiance += getIBLIrradiance( geometryNormal );
+    #endif
+  #endif
+  #if defined( USE_ENVMAP ) && defined( RE_IndirectSpecular )
+    ${iblRough ? `
+    /* ROUGH PATH: no second textureCubeUV. See IBL_ROUGH_CUT. */
+    #if defined( STANDARD ) && defined( ENVMAP_TYPE_CUBE_UV )
+      /* No distance term: this IS the cheap answer, and fading it would cost
+         energy for no saving (see _harness/_lodcontinuous.py). */
+      radiance += iblIrradiance * RECIPROCAL_PI;
+    #else
+      radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness );
+    #endif
+    #ifdef USE_CLEARCOAT
+      if ( cbLodT < 0.999 ) clearcoatRadiance += getIBLRadiance( geometryViewDir, geometryClearcoatNormal, material.clearcoatRoughness ) * ( 1.0 - cbLodT );
+    #endif` : `
+    /* SMOOTH path. Near: the real lookup. Far: the same cheap term the rough
+       materials use, so the surface keeps its ENERGY and loses only the
+       SHARPNESS of the reflection. Blended across the fade, so the radius is
+       continuous. */
+    if ( cbLodT < 0.999 ) {
+      vec3 cbIblCheap = iblIrradiance * RECIPROCAL_PI;
+      #ifdef USE_ANISOTROPY
+        radiance += mix( getIBLAnisotropyRadiance( geometryViewDir, geometryNormal, material.roughness, material.anisotropyB, material.anisotropy ), cbIblCheap, cbLodT );
+      #else
+        radiance += mix( getIBLRadiance( geometryViewDir, geometryNormal, material.roughness ), cbIblCheap, cbLodT );
+      #endif
+      #ifdef USE_CLEARCOAT
+        clearcoatRadiance += mix( getIBLRadiance( geometryViewDir, geometryClearcoatNormal, material.clearcoatRoughness ), cbIblCheap, cbLodT );
+      #endif
+    } else {
+      radiance += iblIrradiance * RECIPROCAL_PI;
+      #ifdef USE_CLEARCOAT
+        clearcoatRadiance += iblIrradiance * RECIPROCAL_PI;
+      #endif
+    }`}
+  #endif`);
+      }
+    }
+
     if (D.rim) {
       const AO = '#include <aomap_fragment>';
       if (shader.fragmentShader.indexOf(AO) !== -1) {
         shader.fragmentShader = shader.fragmentShader.replace(AO, AO + `
-  {
+  if ( cbLodT < 0.999 ) {
     // subsurface-ish rim: grazing light wraps through thin blades / leaves
     float cbNV = 1.0 - saturate( dot( geometryNormal, geometryViewDir ) );
     float cbF = cbNV * cbNV * cbNV;
-    reflectedLight.indirectDiffuse += diffuseColor.rgb * uCbRim.rgb * cbF * uCbRim.a * ( 1.0 - cbSlopeW );
+    reflectedLight.indirectDiffuse += diffuseColor.rgb * uCbRim.rgb * cbF * uCbRim.a
+                                    * ( 1.0 - cbSlopeW ) * ( 1.0 - cbLodT );
   }`);
       }
     }
@@ -905,7 +1029,7 @@ function injectShader(mat, key, opts) {
    * to this string in the same commit, or the new GLSL will silently inherit
    * the program of a material that does not have it.
    * ------------------------------------------------------------------ */
-  const shapeKey = 'cb#' + (box ? 'b' : '-') +
+  const shapeKey = 'cb#' + (box ? 'b' : '-') + (lod ? 'D' : '') + (iblRough ? 'Q' : '') +
     (D.lava ? 'L' : '') + (D.slope ? 'S' : '') + (D.rim ? 'R' : '') +
     (D.caustic ? 'C' : '') + (D.wind ? 'W' : '') + (D.shimmer ? 'H' : '') +
     (D.macro ? 'M' : '') + (D.face ? 'F' : '');
@@ -1014,7 +1138,13 @@ function assemble(key, maps, params, uvScale, inject) {
   mat.userData.baseEmissive = mat.emissiveIntensity || 0;
 
   const io = Object.assign({ box: BOX_KEYS.has(key), uvScale }, inject || {});
-  if (io.box || io.uniforms || io.defines) injectShader(mat, key, io);
+  /* A rough material's specular IBL is its diffuse IBL scaled by 1/PI (see the
+     IBL_ROUGH_CUT note); the injection reads this and drops the second
+     textureCubeUV. Decided from the AUTHORED roughness, so it is a compile-time
+     choice per material, not a per-fragment branch, and every material still
+     resolves to exactly one program. */
+  if (io.iblRough === undefined) io.iblRough = numOrAniso(mat.roughness, 1) >= IBL_ROUGH_CUT;
+  injectShader(mat, key, io);
   installHookPreservingClone(mat);
 
   _uvScale.set(key, uvScale);
@@ -3983,14 +4113,32 @@ export const Mats = {
    * `snow` and `sand`, because those three read its maps as their slope-blend
    * target out of the texture table at assemble time.
    */
-  init(renderer) {
+  init(renderer, quality) {
     if (_ready) return Mats;
     _renderer = renderer || null;
+    /* ANISOTROPY IS A TIER KNOB, NOT A HARDWARE MAXIMUM.
+     *
+     * settings.js has documented `anisotropy` as "texture anisotropy cap
+     * (materials.js)" since the perf pass, and its comment credits the HIGH
+     * tier's 4 -> 2 move with -3.7 ms. Nothing ever read it: this function took
+     * `renderer.capabilities.getMaxAnisotropy()` (16 on the reference Intel
+     * UHD) and clamped it to 8, so EVERY tier — low included — ran 8x AF on
+     * every map of every material, and the tier value was dead data.
+     * MEASURED 2026-09-03 (`_harness/frameprobe.py`, verdant-1 spawn, quality
+     * HIGH, 1920x1080): forcing every texture to anisotropy 1 was worth
+     * -3.18 ms on a 37.24 ms frame. That is the saving the preset was already
+     * promising and never delivering.
+     *
+     * `quality` is optional so the harnesses' bare `Mats.init(renderer)` still
+     * works; without it the old capability cap applies. */
+    let capMax = 8;
     try {
       if (renderer && renderer.capabilities && renderer.capabilities.getMaxAnisotropy) {
-        _aniso = Math.max(1, Math.min(8, renderer.capabilities.getMaxAnisotropy()));
+        capMax = Math.max(1, Math.min(16, renderer.capabilities.getMaxAnisotropy()));
       }
-    } catch (e) { _aniso = 4; }
+    } catch (e) { capMax = 4; }
+    const want = (quality && Number.isFinite(quality.anisotropy)) ? quality.anisotropy : Math.min(8, capMax);
+    _aniso = Math.max(1, Math.min(capMax, Math.round(want)));
 
     /* --- ported family ------------------------------------------------- */
     bakeStone();
@@ -4074,6 +4222,56 @@ export const Mats = {
 
   /** true when the key exists (harnesses check every contract name) */
   has(key) { return _base.has(key) || KEYS.indexOf(key) !== -1; },
+
+  /**
+   * The material-LOD radius, in metres. Past `start` the injected extras (macro
+   * de-tiler, rim, caustics) and the specular IBL fade out and stop being
+   * evaluated; they reach zero at `start + fade`, so the radius itself is not
+   * visible. One shared uniform - changing it costs nothing and recompiles
+   * nothing.
+   *
+   * `start <= 0` DISABLES the LOD (the radius is pushed past any course), which
+   * is what the ULTRA tier wants: it is the tier the contract allows to run
+   * under target.
+   *
+   * @param {number} start metres, or <= 0 to disable
+   * @param {number} [fade] metres of fade, default LOD_FADE
+   */
+  setLodDistance(start, fade) {
+    const st = numOrAniso(start, LOD_START);
+    const fd = Math.max(1, numOrAniso(fade, LOD_FADE));
+    LOD_U.value.set(st > 0 ? st : 1e6, 1 / fd);
+    return LOD_U.value.x;
+  },
+
+  /** metres at which the material LOD starts fading in (1e6 = disabled) */
+  get lodDistance() { return LOD_U.value.x; },
+
+  /**
+   * The anisotropy every map this module uploaded is filtered with — the
+   * QUALITY tier's `anisotropy`, resolved against the GPU's own maximum.
+   * Other modules that build textures (builders, props, critters, hero,
+   * collectibles, course) read THIS instead of hard-coding 4, so one tier
+   * change moves every map in the game.
+   */
+  get anisotropy() { return _aniso; },
+
+  /**
+   * Re-filter every owned map. Called on a live quality change; a no-op when
+   * the value has not moved, because `needsUpdate` on 100+ textures forces a
+   * full re-upload.
+   * @param {number} n
+   */
+  setAnisotropy(n) {
+    const v = Math.max(1, Math.min(16, Math.round(numOrAniso(n, _aniso))));
+    if (v === _aniso) return _aniso;
+    _aniso = v;
+    for (let i = 0; i < _owned.length; i++) {
+      const t = _owned[i];
+      if (t && t.anisotropy !== v) { t.anisotropy = v; t.needsUpdate = true; }
+    }
+    return _aniso;
+  },
 
   /** procedural texture by name — 'noise','grunge','sparkle','radial',
    *  'scratch','caustic','ring' plus every baked map as

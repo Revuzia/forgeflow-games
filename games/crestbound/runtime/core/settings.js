@@ -53,7 +53,12 @@ import { clamp, clamp01 } from './util.js';
  *   shadowDistance metres of shadow coverage the following frustum spans
  *   grass          0..1 scale on the terrain grass instance count
  *                  (terrain.js: 30k blades at 1.0, ~8k at 0.27)
- *   anisotropy     texture anisotropy cap (materials.js)
+ *   anisotropy     texture anisotropy cap (materials.js). WIRED 2026-09-03:
+ *                  this field existed and nothing read it, so every tier ran
+ *                  at the GPU's 8x cap (see Mats.init).
+ *   lodDistance    metres past which materials drop the injected extras and
+ *                  the specular IBL (materials.js Mats.setLodDistance).
+ *                  0 disables the LOD - ULTRA takes that.
  *   maxLights      soft budget on simultaneous dynamic point lights (themes.js)
  */
 export const QUALITY = {
@@ -62,7 +67,7 @@ export const QUALITY = {
     dpr: 1, shadowMap: 512, bloom: true, bloomScale: 0.25, bloomClamp: 12,
     aa: 'fxaa', smaa: false, ssao: false,
     particles: 0.35, decor: 0.3, shadowDistance: 28, grass: 0.27,
-    anisotropy: 1, maxLights: 2,
+    anisotropy: 1, maxLights: 2, lodDistance: 30,
     shadowFilter: 'basic', shadowCasterRadius: 3.0, renderScale: 0.60,
   },
   medium: {
@@ -70,7 +75,7 @@ export const QUALITY = {
     dpr: 1.25, shadowMap: 1024, bloom: true, bloomScale: 0.5, bloomClamp: 12,
     aa: 'fxaa', smaa: false, ssao: false,
     particles: 0.6, decor: 0.6, shadowDistance: 45, grass: 0.55,
-    anisotropy: 2, maxLights: 3,
+    anisotropy: 2, maxLights: 3, lodDistance: 35,
     shadowFilter: 'pcf', shadowCasterRadius: 2.0, renderScale: 0.72,
   },
   high: {
@@ -78,7 +83,7 @@ export const QUALITY = {
     dpr: 1.5, shadowMap: 2048, bloom: true, bloomScale: 0.5, bloomClamp: 16,
     aa: 'fxaa', smaa: false, ssao: false,
     particles: 1, decor: 1, shadowDistance: 70, grass: 1,
-    anisotropy: 2, maxLights: 4,
+    anisotropy: 2, maxLights: 4, lodDistance: 40,
     shadowFilter: 'pcf', shadowCasterRadius: 1.5, renderScale: 0.85,
   },
   ultra: {
@@ -86,7 +91,7 @@ export const QUALITY = {
     dpr: 1.5, shadowMap: 2048, bloom: true, bloomScale: 1, bloomClamp: 16,
     aa: 'smaa', smaa: true, ssao: true,
     particles: 1, decor: 1, shadowDistance: 110, grass: 1,
-    anisotropy: 8, maxLights: 8,
+    anisotropy: 8, maxLights: 8, lodDistance: 0,
     shadowFilter: 'pcfsoft', shadowCasterRadius: 0.9, renderScale: 1.00,
   },
 };

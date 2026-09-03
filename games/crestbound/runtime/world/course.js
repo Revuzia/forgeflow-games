@@ -155,9 +155,12 @@ const MAX_LIGHT_SITES = 96;
  * A `kind:'light'` object is a light SITE, not a THREE.PointLight.  Every site
  * gets a visible emissive bulb, a soft additive halo and a pool of light on the
  * floor beneath it — all baked into ONE extra draw call for the whole course
- * (`_buildGlowField`).  Only LIGHT_POOL_SIZE real PointLights ever exist; they
- * are allocated once, before the first render, and the per-frame budget only
- * ever MOVES and re-tints them.
+ * (`_buildGlowField`).  Only the TIER's `maxLights` real PointLights ever exist
+ * (LIGHT_POOL_SIZE is the ceiling); they are allocated once, before the first
+ * render, and the per-frame budget only ever MOVES and re-tints them.  Sizing
+ * the pool to the tier rather than always to 6 is what makes
+ * `QUALITY[*].maxLights` cost anything: an unlit slot still counts toward
+ * `NUM_POINT_LIGHTS` and is still evaluated per fragment (see _buildLightPool).
  *
  * Never add or remove a light from a live scene: three.js keys its program
  * cache on the light counts, so a light appearing mid-run recompiles every
@@ -1517,7 +1520,15 @@ export class Course {
        first render.  Raising quality mid-run therefore lights more of the pool,
        it never grows it. */
     const wantLights = fin(q.maxLights) ? q.maxLights : (decor >= 0.6 ? 3 : 2);
-    this._maxLights = Math.max(1, Math.min(LIGHT_POOL_SIZE, Math.round(wantLights)));
+    /* Before the pool exists this sizes it; afterwards it can only light more
+       of what was already allocated, never grow it (that would recompile). */
+    const ceiling = this._lightPool.length ? this._lightPool.length : LIGHT_POOL_SIZE;
+    this._maxLights = Math.max(1, Math.min(ceiling, Math.round(wantLights)));
+    /* The material-LOD radius is a tier knob too (settings.js `lodDistance`);
+       re-apply it here so a live quality change moves it with everything else. */
+    if (MatsMod && MatsMod.Mats && typeof MatsMod.Mats.setLodDistance === 'function') {
+      try { MatsMod.Mats.setLodDistance(q.lodDistance); } catch (e) { /* pre-init */ }
+    }
     const fogFar = (this.theme && this.theme.fog && fin(this.theme.fog.far)) ? this.theme.fog.far : 240;
     this._cullFar = Math.max(150, fogFar * (0.9 + 0.5 * decor));
     this._detailFar = Math.max(52, 96 * (0.55 + 0.55 * decor));
@@ -2517,7 +2528,25 @@ export class Course {
    * LIGHT_POOL_SIZE point lights and stays valid for the whole run.
    */
   _buildLightPool() {
-    for (let i = 0; i < LIGHT_POOL_SIZE; i++) {
+    /* SIZED TO THE TIER, ONCE.
+     *
+     * The pool used to be LIGHT_POOL_SIZE (6) lights at every quality tier, with
+     * `_maxLights` only deciding how many were faded UP. A PointLight at
+     * intensity 0 is still in the render list, so `NUM_POINT_LIGHTS` was 6 in
+     * every shader and every fragment in the game paid for six point-light
+     * evaluations however many were actually lit — settings.js has said
+     * `maxLights: 2` at LOW since the perf pass and it bought nothing.
+     * MEASURED 2026-09-03 (`_harness/_fillab.py`, keep/cp3/quality medium,
+     * 1382x777): hiding all six point lights was worth -3.20 ms on a 24.28 ms
+     * frame, the largest single non-resolution delta on that course.
+     *
+     * The pool is still allocated ONCE before the first render and never grows
+     * or shrinks afterwards, so the program cache is still built for a FIXED
+     * light count and nothing recompiles mid-run — which is the whole point of
+     * the note above. A quality change raises `_maxLights` only as far as the
+     * pool this course was built with (see `_applyQuality`). */
+    const n = Math.max(1, Math.min(LIGHT_POOL_SIZE, this._maxLights | 0));
+    for (let i = 0; i < n; i++) {
       const l = new THREE.PointLight(0xffffff, 0, 14, 2);
       l.name = 'cb.course.pointpool.' + i;
       l.castShadow = false;

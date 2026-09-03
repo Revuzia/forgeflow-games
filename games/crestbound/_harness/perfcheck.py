@@ -144,7 +144,13 @@ async (opts) => {
   const autoWas = E.renderScaleAuto;
   const scaleWas = E.renderScale;
   E.renderScaleAuto = false;
-  if (typeof opts.scale === 'number') E.setRenderScale(opts.scale);
+  /* Freezing the controller is not enough once it SHIPS ON (engine.js,
+     2026-09-03): it will already have walked the scale down inside its band by
+     the time the sampler runs, and a gate that measures wherever the controller
+     happened to stop is measuring no particular resolution. `scale: null` now
+     means "the TIER scale", which is what every line of this gate's output
+     claims it is measuring. */
+  E.setRenderScale(typeof opts.scale === 'number' ? opts.scale : E.tierRenderScale);
   for (let k = 0; k < 8; k++) await frame();      // let the resize land
 
   /* ---- GPU timer query -------------------------------------------------

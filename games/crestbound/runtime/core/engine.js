@@ -320,10 +320,12 @@ export class Engine {
      */
     this.renderScale = this._tierScale;
     /**
-     * Let the DYNAMIC controller move the scale.
+     * Let the DYNAMIC controller move the scale. DEFAULT ON;
+     * `?autoscale=0` turns it off. It shipped OFF until 2026-09-03,
+     * for a measured reason that has now been fixed rather than lived with.
      *
-     * DEFAULT OFF, and the reason is measured, not preferred. `setRenderScale`
-     * has to resize the drawing buffer AND the post chain, and
+     * WHAT THE REASON WAS. `setRenderScale`
+     * had to resize the drawing buffer AND the post chain, and
      * `EffectComposer.setSize()` reallocates every render target it owns (two
      * ping-pong targets plus the bloom mip chain plus the AA pass). On the
      * reference machine (Intel UHD / D3D11, 1920x1080, quality high) one step
@@ -335,16 +337,16 @@ export class Engine {
      * registered before the jump) and passed with it off
      * (`statesSeen: ["longjump"], committed_s 0.419`).
      *
-     * The controller itself is correct and stays here, tuned exactly as
-     * CONTRACT hard rule 4 specifies; what is missing under it is a post chain
-     * whose targets are allocated ONCE at the tier's maximum size and rendered
-     * into by viewport/scissor with the sampling UVs scaled to match — the
-     * standard dynamic-resolution technique, and a rewrite of fx/post.js rather
-     * than a tuning change. Until that lands, the TIER render scale (set once,
-     * at construction and on a quality change, behind the loading veil) is the
-     * shipping mechanism and this is opt-in with `?autoscale=1`.
+     * The fix the old comment asked for has landed: the composer targets are
+     * allocated ONCE at the tier's size and the SCENE is rendered into a
+     * sub-rectangle of them with viewport/scissor, brought back to full size by
+     * one blit whose sampling UVs are scaled to match
+     * (`Post.setRenderFraction`, `_harness/_subrect.py`). A step is now a
+     * uniform write, so the controller ships on. The band runs from the tier
+     * DOWNWARD only: above the tier the buffers really would have to grow, and
+     * that case still takes the old reallocating path.
      */
-    this.renderScaleAuto = /[?&]autoscale=1/.test(
+    this.renderScaleAuto = !/[?&]autoscale=0/.test(
       typeof location !== 'undefined' && location.search ? location.search : '');
     /** fps the dynamic controller holds. */
     this.renderScaleTargetFps = RENDER_SCALE_TARGET_FPS;
@@ -357,6 +359,10 @@ export class Engine {
     this.renderScaleGuard = null;
     this._scaleAccum = 0;
     this._aboveT = 0;
+    /** @private the scale the drawing buffer and composer targets are SIZED at.
+     *  Equal to the tier scale except while something has forced them larger
+     *  (a quality change, the perf gate's native-1.0 INFO pass). */
+    this._allocScale = this._tierScale;
     this.renderer.setPixelRatio(this._pr * this.renderScale);
     this.renderer.setSize(size.w, size.h, true);
 
@@ -968,10 +974,14 @@ export class Engine {
     this.renderScale = this._tierScale;
     this._scaleAccum = 0;
     this._aboveT = 0;
+    this._allocScale = this._tierScale;
     this.renderer.setPixelRatio(this._pr * this.renderScale);
     this.renderer.setSize(this.size.w, this.size.h, true);
 
-    if (this.post) this.post.setQuality(preset);
+    if (this.post) {
+      this.post.setRenderFraction(1);
+      this.post.setQuality(preset);
+    }
 
     this.events.emit('quality', preset);
     return this;
@@ -1025,6 +1035,31 @@ export class Engine {
     const next = clamp(numOr(v, this.renderScale), MIN_RENDER_SCALE, 1);
     if (Math.abs(next - this.renderScale) < 0.004) return this;
     this.renderScale = next;
+    const subrect = !!(this.post && typeof this.post.setRenderFraction === 'function');
+    /* FREE PATH. At or below the tier scale the buffers are already big enough:
+     * the SCENE moves into a sub-rectangle of them and one blit brings it back
+     * up (Post.setRenderFraction). Nothing is allocated, so a step costs a
+     * uniform write instead of the measured 141-646 ms of
+     * EffectComposer.setSize() -- which is what made this controller
+     * unshippable and what made camcheck's long jump drop a queued input. */
+    if (subrect && next <= this._tierScale + 0.004) {
+      /* If something forced the buffers ABOVE the tier (a quality change, the
+       * perf gate's native-1.0 pass), come back to the tier allocation first,
+       * or the fraction would be measured against a size nobody ships. */
+      if (Math.abs(this._allocScale - this._tierScale) > 0.004) {
+        this._allocScale = this._tierScale;
+        this.renderer.setPixelRatio(this._pr * this._tierScale);
+        this.renderer.setSize(this.size.w, this.size.h, true);
+        this.post.resize(this.size.w, this.size.h);
+      }
+      this.post.setRenderFraction(next / this._tierScale);
+      this.events.emit('renderscale', next);
+      return this;
+    }
+    /* ABOVE the tier: the buffers really do have to grow. Reallocating path,
+     * kept for quality changes and for the perf gate's native-1.0 INFO pass. */
+    if (subrect) this.post.setRenderFraction(1);
+    this._allocScale = next;
     this.renderer.setPixelRatio(this._pr * next);
     this.renderer.setSize(this.size.w, this.size.h, true);
     if (this.post) this.post.resize(this.size.w, this.size.h);
@@ -1056,8 +1091,12 @@ export class Engine {
     this._scaleAccum += dt;
     if (this._scaleAccum < RENDER_SCALE_STEP_PERIOD) return;
 
+    /* The band runs DOWNWARD from the tier only. Rendering ABOVE the tier would
+       mean allocating every composer target larger than the tier needs and
+       paying that in the post chain on every frame at the tier value -- the one
+       case that has to stay free (see setRenderScale). */
     const lo = Math.max(MIN_RENDER_SCALE, this._tierScale - RENDER_SCALE_BAND);
-    const hi = Math.min(1, this._tierScale + RENDER_SCALE_BAND);
+    const hi = this._tierScale;
     let want = this.renderScale;
     if (fps < target) want = this.renderScale - RENDER_SCALE_STEP;
     else if (this._aboveT >= RENDER_SCALE_RAISE_HOLD) want = this.renderScale + RENDER_SCALE_STEP;
@@ -1092,7 +1131,7 @@ export class Engine {
 
     const aspect = s.w / s.h;
 
-    this.renderer.setPixelRatio(pr * this.renderScale);
+    this.renderer.setPixelRatio(pr * this._allocScale);
     this.renderer.setSize(s.w, s.h, true);
 
     this.camera.aspect = aspect;

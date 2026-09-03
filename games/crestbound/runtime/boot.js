@@ -621,7 +621,11 @@ export async function main() {
   const engine = await phase(0.14, 'starting renderer', () => new Engine(containerEl));
 
   /* ---- 3. procedural materials (the one-time texture bake — slow phase) - */
-  await phase(0.26, 'baking materials', () => Mats.init(engine.renderer));
+  await phase(0.26, 'baking materials', () => {
+    Mats.init(engine.renderer, quality);
+    Mats.setLodDistance(quality.lodDistance);
+    return Mats;
+  });
 
   /* ---- 4. audio (context stays suspended until the first gesture) ------ */
   const audio = await phase(0.44, 'audio system', () => new Audio());

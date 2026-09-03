@@ -77,3 +77,65 @@ fine for its trajectories (it hand-steps `game.update(1/60)` and never times off
 clock) but a full `feelshots.py` run WITH strips did not finish a single 8-frame move in 22
 minutes under contention. Use `--no-shots` for the numbers, and `--headed` when you need the
 strips.
+
+## The frame-cost probe lied, and how (2026-09-03, fill lane)
+
+`frameprobe.py` reduces each configuration with the **MINIMUM** across repeats.
+A GPU timer query that comes back tiny therefore WINS the reduction. Measured
+on keep/cp3/quality medium: `aniso 1`, `no point lights`, `half res`,
+`scene only` and `ALL CUTS` all reduced to **1.20-1.40 ms (700-830 fps)** in one
+run whose `full chain` read 18.62 ms. Physically impossible, and enough to make
+every delta in that table meaningless.
+
+Two causes, both worth remembering:
+
+1. **`game.js` pauses on window blur** (`window.addEventListener('blur', () =>
+   this.pause('blur'))`). A headed Playwright window loses focus whenever
+   anything else opens, the paused frame renders almost nothing, and the probe
+   times it as a "configuration". Any browser harness that samples frame cost
+   must assert `game.state` is `playing`/`keep` for the frames it counts.
+2. **Recycled query objects plus dropping every disjoint result** returned ZERO
+   samples for whole configurations while a throwaway inline probe on the same
+   page and the same context read 23-29 ms.
+
+`_harness/_fillab.py` is the replacement: per-repeat MEDIANS reduced with a
+MEDIAN, a floor below which a sample is rejected as broken rather than
+believed, fresh query objects, a 24-frame tail drain, the pause guard, and a
+`calls > 20` sanity check. It prints how many samples it threw away.
+
+## The four-tier ladder, measured (2026-09-03, after the fill lane)
+
+Headed Chrome, quiet box, GPU timer query, 1920x1080 CSS, worst of three
+stations per course. `python perfcheck.py --quality <tier>`.
+
+| tier | scale | buffer | course | draws | tris | fps | p99 ms | warm ms |
+|---|---|---|---|---|---|---|---|---|
+| low | 0.60 | 1152x648 | keep | 179 | 398,185 | **65.0** | 20.89 | 1417 |
+| low | 0.60 | 1152x648 | verdant-1 | 191 | 430,283 | **74.1** | 18.49 | 1292 |
+| medium | 0.72 | 1382x777 | keep | 194 | 419,153 | 42.2 | 29.87 | 1708 |
+| medium | 0.72 | 1382x777 | verdant-1 | 199 | 442,653 | 49.0 | 25.79 | 2271 |
+| high | 0.85 | 1632x918 | keep | 205 | 441,457 | 28.7 | 40.08 | 2145 |
+| high | 0.85 | 1632x918 | verdant-1 | 210 | 468,571 | 34.3 | 35.36 | 1931 |
+| ultra | 1.00 | 1920x1080 | keep | 208 | 441,456 | 16.3 | 69.75 | 2874 |
+| ultra | 1.00 | 1920x1080 | verdant-1 | 219 | 482,296 | 18.5 | 59.96 | 2630 |
+
+**LOW is the tier that meets every clause of the perf gate on both courses** —
+draws, triangles, >= 55 fps, p99 <= 28 ms and warm load <= 1500 ms. Medium and
+high hold 42-49 and 29-34 fps; ultra is 16-19 and is the tier CONTRACT hard
+rule 4 explicitly allows to run under target on integrated graphics.
+
+Native-1080p INFO on the same run: keep 22.4 fps, verdant-1 26.1 fps (they were
+19.9 and 23.2 before this lane). The contract's "native-1080p 55 fps is not
+reachable on this GPU for this scene class" still holds and was not approached.
+
+## Is a shader LOD visible? Diff the frame, do not argue about it
+
+`_harness/_lodvisible.py` freezes the engine, renders ONE frame twice with only
+`Mats.setLodDistance()` changed, reads both back off the GPU and reports the
+per-channel difference. The first version of the material LOD failed it —
+verdant-1 spawn, mean 1.179/255, 10.51 % of pixels off by more than 4/255,
+worst pixel 125 — because it faded terms to ZERO instead of to their CHEAP
+equivalent. After blending the specular IBL toward `iblIrradiance *
+RECIPROCAL_PI` instead of toward black: mean 0.130, 0.58 % over 4/255, worst 78
+at the spawn, and 0.000 at every Keep station (nothing in the hub is past the
+40 m radius, so the LOD is an open-diorama lever and buys nothing indoors).

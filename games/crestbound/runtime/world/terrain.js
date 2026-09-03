@@ -381,10 +381,21 @@ function bladeMaterial(theme, mats, key, field) {
    * from 3 m needs a gradient and a normal, not a texture: colour now comes
    * from the geometry gradient x the per-instance colour, which is cheaper and
    * cannot fail this way. */
-  m = new THREE.MeshStandardMaterial({
+  /* LAMBERT, NOT STANDARD — measured, not preferred.
+   *
+   * The blade material carries no map, no normal map, metalness 0 and
+   * roughness 0.92: a MeshStandardMaterial evaluates a full GGX specular lobe
+   * and a PMREM `getIBLRadiance` per fragment to produce, at those parameters,
+   * very nearly pure Lambert diffuse. The field is 30 000 DOUBLE-SIDED cards
+   * wrapped into a 36 m ring AROUND THE CAMERA, so it is the single densest
+   * patch of near-field shaded fragments in the game — exactly the pixels a
+   * fill-bound frame can least afford to shade twice over.
+   * MeshLambertMaterial keeps colour, vertex colours, instancing, fog and
+   * shadow reception and drops the specular BRDF and the IBL radiance lookup.
+   * (`_harness/frameprobe.py`, verdant-1 spawn, quality high: PBR-vs-basic
+   * shading is 17.9 ms of a 37.24 ms frame — the largest single component.) */
+  m = new THREE.MeshLambertMaterial({
     color: 0xffffff,
-    roughness: 0.92,
-    metalness: 0.0,
     side: THREE.DoubleSide,
     vertexColors: true,
   });
