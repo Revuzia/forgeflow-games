@@ -578,8 +578,10 @@ float cbCaustic( vec2 p, float t ) {
  *                  (per-material uniforms, e.g. painting's shimmer)
  *   defines        GLSL #defines toggling optional blocks (CB_LAVA, CB_SLOPE,
  *                  CB_RIM, CB_CAUSTIC, CB_WIND, CB_SHIMMER)
- *   cacheKey       program cache key (materials sharing code + defines share
- *                  the program; uniforms are per material)
+ *
+ * The program cache key is DERIVED from `box` + `defines` (see the shapeKey
+ * note at the end of this function) — it is not an option. Materials with the
+ * same injection shape share one program; their uniforms stay per material.
  *
  * Defensive: if a chunk marker is missing (three rename) the injection is
  * skipped and the material falls back to attribute UVs.
@@ -876,7 +878,38 @@ function injectShader(mat, key, opts) {
     }
   };
 
-  mat.customProgramCacheKey = function () { return opts.cacheKey || ('cb-' + key); };
+  /* ------------------------------------------------------------------ *
+   * PROGRAM CACHE KEY = THE SHAPE OF THE INJECTION, NOT THE MATERIAL.
+   *
+   * three.js compiles one program per distinct cache key and `acquireProgram`
+   * matches on that key ALONE — it never compares shader source. So the key
+   * must name exactly the axes that change the GLSL above, and nothing else.
+   *
+   * Read the body of `onBeforeCompile`: every branch in it is `box` or one of
+   * the eight `D.*` flags. Nothing reads `key`, `uvScale`, a colour or a map —
+   * those are uniforms and three-side `parameters`, both of which are already
+   * per-material (`materialProperties.uniforms` is cloned per material, and
+   * map/physical/alphaTest/instancing all live in three's own half of the key).
+   *
+   * The old key was `'cb-' + key`, and `key` carries the THEME
+   * (`stone.keep`, `stone.verdant`), so every material forked a program per
+   * theme and per material name even though the emitted GLSL was byte-identical.
+   * MEASURED (`_harness/_progprobe.py`, verdant-1 after keep, 2026-09-03): 123
+   * programs live, of which the `cb.*` family alone held ~35 — one per
+   * key×theme. Nine hand-written `cacheKey:` overrides existed to paper over
+   * the theme half of that (`cb-stone-macro`, `cb-grass-macro`, …) and are now
+   * subsumed: two materials with the same injection shape share one program
+   * whatever they are called, whatever theme they belong to.
+   *
+   * ADDING AN INJECTION: if you add a branch to `onBeforeCompile`, add its flag
+   * to this string in the same commit, or the new GLSL will silently inherit
+   * the program of a material that does not have it.
+   * ------------------------------------------------------------------ */
+  const shapeKey = 'cb#' + (box ? 'b' : '-') +
+    (D.lava ? 'L' : '') + (D.slope ? 'S' : '') + (D.rim ? 'R' : '') +
+    (D.caustic ? 'C' : '') + (D.wind ? 'W' : '') + (D.shimmer ? 'H' : '') +
+    (D.macro ? 'M' : '') + (D.face ? 'F' : '');
+  mat.customProgramCacheKey = function () { return shapeKey; };
   return mat;
 }
 
@@ -1213,7 +1246,7 @@ function bakeStone() {
    * floor of the same material. 0.27 -> 0.215 measured [102,95,77] and 3.44:1;
    * 0.180 is the same lever taken past the 3.5 line with the +-0.4 run-to-run
    * drift this station is known to have, so the pass is a margin and not luck. */
-  }, 0.72, macroInject(9.0, 0.17, 0.075, 0.35, faceInject(0.180, { cacheKey: 'cb-stone-macro' })));
+  }, 0.72, macroInject(9.0, 0.17, 0.075, 0.35, faceInject(0.180)));
 }
 
 /* -------------------------------------------------------------- 4.2 panel */
@@ -1287,7 +1320,7 @@ function bakePanel() {
   return assemble('panel', maps, {
     color: 0xffffff, roughness: 1, metalness: 1,
     normalScale: new THREE.Vector2(1.0, 1.0), envMapIntensity: 1.0,
-  }, 0.5, faceInject(0.62, { cacheKey: 'cb-panel' }));
+  }, 0.5, faceInject(0.62));
 }
 
 /* -------------------------------------------------------------- 4.3 metal */
@@ -2296,7 +2329,6 @@ function bakeGrass() {
       // which reads as a uniform green glaze, not as light through a blade.
       uCbRim: { value: new THREE.Vector4(0.42, 0.72, 0.22, 0.28) },
     },
-    cacheKey: 'cb-grass-macro',
   })));
 }
 
@@ -2380,7 +2412,6 @@ function bakeSnow() {
     clearcoatNormalScale: new THREE.Vector2(0.55, 0.55),
   }, 0.28, slopeInject({
     uv2Mul: 14.0,
-    cacheKey: 'cb-snow',
     uniforms: {
       uCbBlendMap: { value: _tex.get('dirt.albedo') || null },
       uCbBlendNormal: { value: _tex.get('dirt.normal') || null },
@@ -2444,7 +2475,6 @@ function bakeSand() {
     normalScale: new THREE.Vector2(1.15, 1.15), envMapIntensity: 0.5,
   }, 0.55, slopeInject({
     defines: { CB_SLOPE: true, CB_CAUSTIC: true },
-    cacheKey: 'cb-sand',
     uniforms: {
       uCbBlendMap: { value: _tex.get('dirt.albedo') || null },
       uCbBlendNormal: { value: _tex.get('dirt.normal') || null },
@@ -2528,7 +2558,7 @@ function bakePlaster() {
   return assemble('plaster', maps, {
     color: 0xffffff, roughness: 1, metalness: 0,
     normalScale: new THREE.Vector2(0.85, 0.85), envMapIntensity: 0.40,
-  }, 0.68, faceInject(0.29, { cacheKey: 'cb-plaster' }));
+  }, 0.68, faceInject(0.29));
 }
 
 /* -------------------------------------------------------------- 5.6 brick */
@@ -2605,7 +2635,7 @@ function bakeBrick() {
   return assemble('brick', maps, {
     color: 0xffffff, roughness: 1, metalness: 0,
     normalScale: new THREE.Vector2(1.15, 1.15), envMapIntensity: 0.38,
-  }, 1.05, faceInject(0.31, { cacheKey: 'cb-brick' }));
+  }, 1.05, faceInject(0.31));
 }
 
 /* --------------------------------------------------------------- 5.7 bark */
@@ -2801,7 +2831,6 @@ function bakeLeaves() {
   }, 1.0, {
     box: false,
     defines: { CB_WIND: true, CB_RIM: true },
-    cacheKey: 'cb-leaves',
     uniforms: {
       uCbWind: { value: 0.085 },
       uCbRim: { value: new THREE.Vector4(0.52, 0.78, 0.26, 0.95) },
@@ -3026,7 +3055,6 @@ function bakePainting() {
   }, 1.0, {
     box: false,
     defines: { CB_SHIMMER: true },
-    cacheKey: 'cb-painting',
     /* PER-MATERIAL uniforms: a function, so every clone gets its own phase. */
     uniforms: function (mat) {
       let L = mat.userData.cbLocal;
@@ -3173,7 +3201,7 @@ function bakeMarble() {
     sheen: 0.16, sheenRoughness: 0.9, sheenColor: new THREE.Color(0xf0e8d8),
     specularIntensity: 0.9, envMapIntensity: 0.72,
     normalScale: new THREE.Vector2(0.55, 0.55),
-  }, 0.84, macroInject(11.0, 0.055, 0.035, 0.0, faceInject(0.38, { cacheKey: 'cb-marble-macro' })));
+  }, 0.84, macroInject(11.0, 0.055, 0.035, 0.0, faceInject(0.38)));
 }
 
 /* --------------------------------------------------------------- 5.13 moss */

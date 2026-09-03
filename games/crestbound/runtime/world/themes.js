@@ -1285,6 +1285,26 @@ export function applyTheme(engine, themeId, opts) {
   scene.add(group);
 
   /* ---- 4. the environment ---------------------------------------------- */
+  /* DO NOT CACHE THIS PROBE PER THEME — measured, 2026-09-03, load lane.
+   *
+   * It looks like free money: `buildEnvCubemap` is ~900 ms of a ~2.2 s WARM
+   * course load, a ThemeDef is static data, and the whole game only ever needs
+   * five probes. Caching it (plus the engine's own `setEnvironment` bake, which
+   * this line overwrites microseconds later) does take `applyTheme` from
+   * ~1200 ms to ~1.5 ms. It also makes the load SLOWER overall.
+   *
+   * `_harness/_warmsplit.py`, verdant-1, three consecutive builds on one box:
+   *   both probes cached   applyTheme    1.5 ms · warmup render 2126-2194 ms · load 2816-2839 ms
+   *   both probes rebaked  applyTheme ~1200 ms · warmup render  352- 384 ms · load 2094-2251 ms
+   * The 19 course-owned programs that die with a course and are rebuilt in
+   * `Course.warmup` cost ~19 ms each after the bakes and ~110 ms each without
+   * them — the bake is doing something for the shader compiler (a warm GL
+   * queue, a clocked-up GPU/CPU, or a shader-cache effect) that is worth more
+   * than the bake costs. Cause not isolated; the numbers are reproducible.
+   *
+   * If you want this 900 ms back, take it by killing the PROGRAM CHURN first
+   * (keep the course's material clones alive across a load), then re-measure
+   * with _warmsplit.py. Caching alone is a net loss. */
   const prevEnv = scene.environment;
   let env = null;
   if (renderer && wantSkyEnv) {

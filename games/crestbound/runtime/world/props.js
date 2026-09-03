@@ -2524,6 +2524,84 @@ function flattenGltf(scene, maxAniso) {
  */
 const _libCache = new Map();
 
+/**
+ * `assets/props/<theme>/index.json` → the Set of GLB basenames that theme ships,
+ * cached for the life of the page.
+ *
+ * WHY IT IS CACHED, AND WHY IT IS PREFETCHED — this is a LOAD-TIME fix, not a
+ * bandwidth one. `Course._build()` is one long synchronous block with exactly
+ * one `await` in it (`_buildPropBatch`), and until this cache existed that
+ * await was a real network round trip. A real round trip is a MACROTASK: the
+ * stack unwinds, the browser runs the rAF loop, and the engine renders the
+ * HALF-BUILT course — terrain, hazards and static art in the scene, but the
+ * course's six-strong point-light pool not yet allocated.
+ *
+ * MEASURED (`_harness/_awaitprobe.py`, verdant-1 cold, 2026-09-03): exactly
+ * THREE frames rendered inside that await and they cost **4570 ms** between
+ * them, taking the program count from 70 to 100 — first-visibility compiles of
+ * the whole course, at full 1080p, with the wrong light count. `numPointLights`
+ * is a shader cache-key axis, so every one of those programs was compiled at 0
+ * point lights and then compiled AGAIN at 6 once `_buildLightPool` ran.
+ *
+ * An `await` on an already-resolved promise is a MICROTASK, which does not let
+ * rAF run. So keeping the manifest in memory does not merely save the fetch: it
+ * removes the only yield in the build, and the course is never rendered until
+ * it is finished and lit.
+ *
+ * @type {Map<string, Set<string>>}
+ */
+const _shippedCache = new Map();
+/** in-flight manifest fetches, so two callers never fetch the same file twice */
+const _shippedPending = new Map();
+/** every theme whose manifest is worth having before its first course loads */
+const PREFETCH_THEMES = ['keep', 'verdant', 'ember', 'rime', 'azure'];
+let _prefetchStarted = false;
+
+/**
+ * Fetch one theme's shipped-GLB manifest, memoised. An absent or malformed
+ * `index.json` means "this theme is fully procedural" — exactly what a failed
+ * fetch used to mean — and is cached as an empty Set so it is never re-probed.
+ * @param {string} themeId
+ * @param {string} base
+ * @returns {Promise<Set<string>>}
+ */
+function fetchShipped(themeId, base) {
+  const hit = _shippedCache.get(themeId);
+  if (hit) return Promise.resolve(hit);
+  const inflight = _shippedPending.get(themeId);
+  if (inflight) return inflight;
+  const p = fetch(base + themeId + '/index.json', { cache: 'no-cache' })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((j) => (Array.isArray(j) ? new Set(j.map(String)) : new Set()))
+    .catch(() => new Set())
+    .then((set) => {
+      _shippedCache.set(themeId, set);
+      _shippedPending.delete(themeId);
+      return set;
+    });
+  _shippedPending.set(themeId, p);
+  return p;
+}
+
+/**
+ * Warm the manifest cache for every realm in the background.
+ *
+ * Called (once) from the first `loadProps`, which is the hub's — the hub is the
+ * only theme that ships GLBs, so its load is already waiting on real IO and
+ * four extra ~40-byte JSON files ride along inside that wait. By the time any
+ * realm course loads, its manifest is resident and its build never yields.
+ * Side-effect free at import (CONTRACT hard rule 6): nothing here runs until a
+ * caller asks for a prop library.
+ *
+ * @param {string} [base] asset root; defaults to `assets/props/`
+ * @returns {Promise<void>} resolves when every manifest is cached (never rejects)
+ */
+export function prefetchPropManifests(base) {
+  const root = base || new URL('../../assets/props/', import.meta.url).href;
+  _prefetchStarted = true;
+  return Promise.all(PREFETCH_THEMES.map((t) => fetchShipped(t, root))).then(() => undefined);
+}
+
 /** Drop one theme's cached prop library (or all of them). */
 export function invalidatePropLibrary(themeId) {
   if (themeId === undefined) {
@@ -2544,7 +2622,6 @@ export async function loadProps(themeId, renderer, opts) {
   const maxAniso = (renderer && renderer.capabilities && renderer.capabilities.getMaxAnisotropy)
     ? Math.min(8, renderer.capabilities.getMaxAnisotropy()) : 4;
   const base = o.basePath || new URL('../../assets/props/', import.meta.url).href;
-  const loader = new GLTFLoader();
 
   const entries = new Map();
   const missing = [];
@@ -2554,26 +2631,36 @@ export async function loadProps(themeId, renderer, opts) {
   // console error, which fails _harness/bootcheck.py's clean-boot gate — and four of the
   // five realms are fully procedural today. An absent/!array manifest means "no GLBs":
   // every entry falls to its procedural generator, exactly as a failed fetch used to.
-  let shipped = null;
-  try {
-    const r = await fetch(base + themeId + '/index.json', { cache: 'no-cache' });
-    if (r.ok) {
-      const j = await r.json();
-      if (Array.isArray(j)) shipped = new Set(j.map(String));
-    }
-  } catch (e) { /* no manifest: procedural */ }
-  if (!shipped) shipped = new Set();
+  //
+  // Resolved from `_shippedCache` WITHOUT awaiting when it is already resident —
+  // see the cache's own note: an await here is a macrotask that lets the engine
+  // render the half-built course, and that costs seconds, not milliseconds.
+  let shipped = _shippedCache.get(themeId) || null;
+  if (!shipped) {
+    /* First call of the page. Ride the one unavoidable wait and warm every
+       other realm's manifest inside it, so no LATER course load ever yields. */
+    if (!_prefetchStarted) prefetchPropManifests(base);
+    shipped = await fetchShipped(themeId, base);
+  }
+
+  /* Only construct a loader if this theme actually ships GLBs — a GLTFLoader is
+     cheap but it is also the only reason this function ever touches the network. */
+  const wanted = manifest.filter((s) => !s.procOnly && shipped.has(s.id));
+  const loader = wanted.length ? new GLTFLoader() : null;
 
   /* DEFERRED, not built: see the `lazy` note on makeLibrary. A course places a
      handful of prop kinds; building all ~50 up front was 2.9 s of the load. */
   const lazy = new Map();
 
-  const jobs = manifest.map(async (spec) => {
+  for (let i = 0; i < manifest.length; i++) {
+    const spec = manifest[i];
     if (spec.procOnly || !shipped.has(spec.id)) {
       lazy.set(spec.id, spec);
       if (!spec.procOnly) missing.push(spec.id);
-      return;
     }
+  }
+
+  const jobs = wanted.map(async (spec) => {
     const url = base + themeId + '/' + spec.id + '.glb';
     try {
       const gltf = await loader.loadAsync(url);
