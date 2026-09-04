@@ -1468,104 +1468,66 @@ export class BeamHazard extends Hazard {
     const S = clamp(this.radius / 0.09, 0.55, 2.2);
     const detail = this.units.length > 2 ? 0.5 : 1;
     const { housing, rotor, lens } = buildEmitterGeometry(S, detail);
-    const n = this.units.length * this.emitterEnds;
 
+    /* BATCHED (hazards/batch.js): every emitter pod's housing, rotor, lens, lamp and glow is a
+       batch instance — the pods of every beam in the course share one draw per material. They
+       are posed per frame from the same pod pos/dir the InstancedMesh matrices carried (a
+       sweep's pods follow `pivot`, so the pose is composed with the pivot's world transform). */
     const metal = hazMat(this.ctx, 'metal');
     const panel = hazMat(this.ctx, 'panel');
-
-    this.housingMesh = new THREE.InstancedMesh(housing, metal, n);
-    this.housingMesh.castShadow = true;
-    this.housingMesh.receiveShadow = true;
-    this.housingMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-
-    this.rotorMesh = new THREE.InstancedMesh(rotor || housing.clone(), panel, n);
-    this.rotorMesh.castShadow = false;
-    this.rotorMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-
-    const lensMat = additiveMaterial(this.color.getHex(), { cached: false, opacity: 1 });
-    this.own(lensMat);
-    this.lensMesh = new THREE.InstancedMesh(lens, lensMat, n);
-    this.lensMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.lensMesh.renderOrder = 5;
-
+    const rotorGeo = rotor || housing.clone();
     const lampGeo = new THREE.SphereGeometry(0.085 * S, 8, 6);
     lampGeo.translate(0.30 * S, -0.10 * S, 0.24 * S);
-    const lampMat = additiveMaterial(0xffb03a, { cached: false, opacity: 1 });
-    this.own(lampMat);
-    this.lampMesh = new THREE.InstancedMesh(lampGeo, lampMat, n);
-    this.lampMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.lampMesh.renderOrder = 5;
-    const white = new THREE.Color(1, 1, 1);
-    for (let i = 0; i < n; i++) {
-      this.lampMesh.setColorAt(i, white);
-      this.lensMesh.setColorAt(i, white);
-    }
+    this.lampColor = new THREE.Color(0xffb03a);
+    this.lensColor = this.color.clone();
+    this.glowColor = this.color.clone().lerp(new THREE.Color(0xffffff), 0.25);
+    /* the old point-sprite glow: aSize * (0.7 + 0.6 * inten) * 320 px at 1 m, on a ~980 px/m
+       projection -> ~0.33 x aSize metres, kept as a billboard quad in the trim batch */
+    this.glowSize = this.radius * 18 * 0.33;
 
     this.emitterPods = [];
     let idx = 0;
+    const mk = (u, pos, dir) => ({
+      unit: u, pos, dir, i: idx++,
+      housing: this.solidPart(metal, housing, true, true),
+      rotor: this.solidPart(panel, rotorGeo, false, true),
+      lens: this.trimPart(lens.clone()),
+      lamp: this.trimPart(lampGeo.clone()),
+      glow: this.glowPart(),
+      glowPos: new THREE.Vector3(),
+    });
     for (const u of this.units) {
       if (this.emitterEnds === 1) {
-        this.emitterPods.push({ unit: u, pos: bake ? u.a.clone() : new THREE.Vector3(0, 0, 0), dir: bake ? u.dir.clone() : new THREE.Vector3(0, 1, 0), i: idx++ });
+        this.emitterPods.push(mk(u, bake ? u.a.clone() : new THREE.Vector3(0, 0, 0), bake ? u.dir.clone() : new THREE.Vector3(0, 1, 0)));
       } else {
-        this.emitterPods.push({ unit: u, pos: u.a.clone(), dir: u.dir.clone(), i: idx++ });
-        this.emitterPods.push({ unit: u, pos: u.b.clone(), dir: u.dir.clone().negate(), i: idx++ });
+        this.emitterPods.push(mk(u, u.a.clone(), u.dir.clone()));
+        this.emitterPods.push(mk(u, u.b.clone(), u.dir.clone().negate()));
       }
     }
+    housing.dispose();
+    rotorGeo.dispose();
+    lens.dispose();
+    lampGeo.dispose();
     for (const pod of this.emitterPods) this._writePod(pod, 0);
-    this.housingMesh.instanceMatrix.needsUpdate = true;
-
-    const gp = new Float32Array(this.emitterPods.length * 3);
-    const gi = new Float32Array(this.emitterPods.length);
-    const gs = new Float32Array(this.emitterPods.length);
-    const gph = new Float32Array(this.emitterPods.length);
-    for (let i = 0; i < this.emitterPods.length; i++) {
-      const pod = this.emitterPods[i];
-      _u.tmp.copy(pod.pos).addScaledVector(pod.dir, this.radius * 3.2);
-      gp[i * 3] = _u.tmp.x; gp[i * 3 + 1] = _u.tmp.y; gp[i * 3 + 2] = _u.tmp.z;
-      gi[i] = 0;
-      gs[i] = this.radius * 18;
-      gph[i] = i * 1.37;
-    }
-    const glowGeo = new THREE.BufferGeometry();
-    glowGeo.setAttribute('position', new THREE.BufferAttribute(gp, 3));
-    glowGeo.setAttribute('aInten', new THREE.BufferAttribute(gi, 1));
-    glowGeo.setAttribute('aSize', new THREE.BufferAttribute(gs, 1));
-    glowGeo.setAttribute('aPhase', new THREE.BufferAttribute(gph, 1));
-    glowGeo.computeBoundingSphere();
-    const glowMatl = new THREE.ShaderMaterial({
-      uniforms: {
-        uTime: this.beamUniforms.uTime,
-        uMap: { value: glowTexture(2.4) },
-        uColor: { value: this.color.clone().lerp(new THREE.Color(0xffffff), 0.25) },
-      },
-      vertexShader: GLOW_VERT, fragmentShader: GLOW_FRAG,
-      transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
-      toneMapped: false, fog: false,
-    });
-    this.own(glowMatl);
-    this.glowPoints = new THREE.Points(glowGeo, glowMatl);
-    this.glowPoints.renderOrder = 7;
-    this.glowPoints.frustumCulled = false;
-    this.pivot.add(this.glowPoints);
-    this.glowAttr = glowGeo.getAttribute('aInten');
-
-    const host = bake ? this.mesh : this.pivot;
-    host.add(this.housingMesh);
-    host.add(this.rotorMesh);
-    host.add(this.lensMesh);
-    host.add(this.lampMesh);
   }
 
   _writePod(pod, spin) {
     _u.q.setFromUnitVectors(UP, pod.dir);
-    _u.m.compose(pod.pos, _u.q, _u.sc);
-    this.housingMesh.setMatrixAt(pod.i, _u.m);
-    this.lensMesh.setMatrixAt(pod.i, _u.m);
-    this.lampMesh.setMatrixAt(pod.i, _u.m);
+    _u.tmp.copy(pod.pos);
+    if (this.mode === 'sweep') {
+      // pods live under the swinging pivot: compose with its pose
+      _u.q.premultiply(this.pivot.quaternion);
+      _u.tmp.applyQuaternion(this.pivot.quaternion).add(this.pivot.position);
+    }
+    this.setPart(pod.housing, _u.tmp, _u.q, _u.sc);
+    this.setPart(pod.lens, _u.tmp, _u.q, _u.sc);
+    this.setPart(pod.lamp, _u.tmp, _u.q, _u.sc);
     _u.q2.setFromAxisAngle(UP, spin);
     _u.q2.premultiply(_u.q);
-    _u.m.compose(pod.pos, _u.q2, _u.sc);
-    this.rotorMesh.setMatrixAt(pod.i, _u.m);
+    this.setPart(pod.rotor, _u.tmp, _u.q2, _u.sc);
+    // the glow sits a little up the beam from the lens
+    _u.off.set(0, 1, 0).applyQuaternion(_u.q);
+    pod.glowPos.copy(_u.tmp).addScaledVector(_u.off, this.radius * 3.2);
   }
 
   _buildMotes(bake, particleScale) {
@@ -1729,6 +1691,7 @@ export class BeamHazard extends Hazard {
     if (this.moteAttr) this.moteAttr.needsUpdate = true;
 
     const spinAngle = t * 22;
+    const flick = 1.0 + 0.10 * Math.sin(t * 37.0);
     for (let i = 0; i < this.emitterPods.length; i++) {
       const pod = this.emitterPods[i];
       const u = pod.unit;
@@ -1739,24 +1702,20 @@ export class BeamHazard extends Hazard {
       const strobe = u.warn > 0
         ? (0.25 + 0.75 * (0.5 + 0.5 * Math.sin(t * (12 + 26 * u.warn))))
         : (u.inten > 0 ? 1 : 0.12);
-      _u.col.setScalar(clamp(strobe, 0.04, 1.6));
-      this.lampMesh.setColorAt(pod.i, _u.col);
-      _u.col.setScalar(clamp(0.12 + u.inten * 1.8 + u.warn * 0.5, 0, 2));
-      this.lensMesh.setColorAt(pod.i, _u.col);
+      this.setPartColor(pod.lamp, this.lampColor, clamp(strobe, 0.04, 1.6));
+      this.setPartColor(pod.lens, this.lensColor, clamp(0.12 + u.inten * 1.8 + u.warn * 0.5, 0, 2));
 
-      this.glowAttr.array[i] = clamp(u.inten * 0.95 + u.warn * 0.22, 0, 1);
+      // the pod glow: the old point sprite's `uColor * (1 + a * 1.6)` at alpha `a`
+      const a = clamp(u.inten * 0.95 + u.warn * 0.22, 0, 1);
+      this.setPartGlow(pod.glow, pod.glowPos, this.glowSize * (0.70 + 0.60 * a) * flick);
+      this.setPartColor(pod.glow, this.glowColor, (1.0 + a * 1.6) * a);
     }
-    this.housingMesh.instanceMatrix.needsUpdate = true;
-    this.rotorMesh.instanceMatrix.needsUpdate = true;
-    this.lensMesh.instanceMatrix.needsUpdate = true;
-    this.lampMesh.instanceMatrix.needsUpdate = true;
-    this.glowAttr.needsUpdate = true;
-    if (this.lampMesh.instanceColor) this.lampMesh.instanceColor.needsUpdate = true;
-    if (this.lensMesh.instanceColor) this.lensMesh.instanceColor.needsUpdate = true;
 
     this.beamMesh.visible = anyOn || anyLit;
     this.coreMesh.visible = this.beamMesh.visible;
     this.aimMesh.visible = anyWarn;
+    // the motes read as nothing while every unit is dark: skip their draw entirely (pure in t)
+    if (this.moteMesh) this.moteMesh.visible = anyLit || anyWarn;
   }
 }
 

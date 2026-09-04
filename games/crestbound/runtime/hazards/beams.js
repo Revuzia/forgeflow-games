@@ -30,6 +30,25 @@ const _m = new THREE.Matrix4();
 const _s = new THREE.Vector3();
 const _box = new THREE.Box3();
 const UPV = new THREE.Vector3(0, 1, 0);
+const ONE = new THREE.Vector3(1, 1, 1);
+const _IDENT = new THREE.Matrix4();
+const _spinQ = new THREE.Quaternion();
+const _smoke = new THREE.Color(0xbfc7d4);
+
+/**
+ * ONE shared scorch decal material for every flame vent in the game (a dark radial blot,
+ * normal-blended). Shared so the decals batch; never disposed by a hazard.
+ */
+let _scorchMat = null;
+function scorchMaterial() {
+  if (_scorchMat) return _scorchMat;
+  _scorchMat = new THREE.MeshBasicMaterial({
+    map: glowTexture(1.2), color: 0x120806, transparent: true, opacity: 0.75,
+    depthWrite: false, fog: true, side: THREE.DoubleSide, forceSinglePass: true,
+  });
+  _scorchMat.name = 'flame_scorch';
+  return _scorchMat;
+}
 
 /* ======================================================================================
    BEAM
@@ -137,43 +156,39 @@ class FlameHazard extends Hazard {
     lip.rotateX(Math.PI * 0.5);
     lip.translate(0, 0.72 * S, 0);
     mouthParts.push(lip);
+    /* BATCHED (hazards/batch.js): housing, rotor, scorch decal, pilot, flash and embers are
+       batch instances written from the same numbers the loose meshes carried. The jet itself
+       (a per-vent noise shader with its own reach uniform) stays a loose mesh, drawn only while
+       it is out. */
     // soot ring on the plate
     const geo = mergeAll(mouthParts);
     geo.applyQuaternion(this.quat);
     geo.translate(this.origin.x, this.origin.y, this.origin.z);
-    this.vent = new THREE.Mesh(geo, hazMat(this.ctx, 'metal'));
-    this.vent.castShadow = true;
-    this.vent.receiveShadow = true;
-    this.add(this.vent);
+    this.ventPart = this.solidPart(hazMat(this.ctx, 'metal'), geo, true, true);
+    geo.dispose();
+    this.setPartMatrix(this.ventPart, _IDENT);
     this.ventS = S;
     this.mouthOffset = 0.72 * S;
 
+    this.rotorPart = null;
     if (rotor) {
       rotor.applyQuaternion(this.quat);
-      this.rotor = new THREE.Mesh(rotor, hazMat(this.ctx, 'copper'));
-      this.rotor.position.copy(this.origin);
-      this.add(this.rotor);
+      this.rotorPart = this.solidPart(hazMat(this.ctx, 'copper'), rotor, true, true);
+      rotor.dispose();
     }
 
     // scorched halo on whatever the vent is mounted on
     const scorchGeo = new THREE.RingGeometry(0.66 * S, 1.35 * S, 28, 1);
     scorchGeo.rotateX(-Math.PI * 0.5);
     scorchGeo.applyQuaternion(this.quat);
-    this.scorchMat = new THREE.MeshBasicMaterial({
-      map: glowTexture(1.2), color: 0x120806, transparent: true, opacity: 0.75,
-      depthWrite: false, fog: true, side: THREE.DoubleSide,
-    });
-    this.own(this.scorchMat);
-    this.scorch = new THREE.Mesh(scorchGeo, this.scorchMat);
-    this.scorch.position.copy(this.origin).addScaledVector(this.dir, -0.60 * S + 0.012);
-    this.scorch.renderOrder = 2;
-    this.add(this.scorch);
+    this.scorchPart = this.solidPart(scorchMaterial(), scorchGeo, false, false);
+    scorchGeo.dispose();
+    _v.copy(this.origin).addScaledVector(this.dir, -0.60 * S + 0.012);
+    this.setPart(this.scorchPart, _v, null, ONE);
 
     // pilot light: a small glow that lives in the mouth so an idle vent is readable as one
-    this.pilot = makeGlowSprite(this.hotColor.getHex(), this.radius * 1.4, 0.25, 2.6);
-    this.own(this.pilot.material);
-    this.pilot.position.copy(this.origin).addScaledVector(this.dir, this.mouthOffset);
-    this.add(this.pilot);
+    this.pilotPart = this.glowPart();
+    this.pilotPos = this.origin.clone().addScaledVector(this.dir, this.mouthOffset);
   }
 
   _buildJet() {
@@ -217,11 +232,8 @@ class FlameHazard extends Hazard {
     this.add(this.jet);
 
     // mouth flash: swells on ignition
-    this.flash = makeGlowSprite(this.hotColor.getHex(), this.radius * 3.2, 0, 2.2);
-    this.own(this.flash.material);
-    this.flash.position.copy(this.origin).addScaledVector(this.dir, this.mouthOffset + this.radius * 0.5);
-    this.flash.renderOrder = 7;
-    this.add(this.flash);
+    this.flashPart = this.glowPart();
+    this.flashPos = this.origin.clone().addScaledVector(this.dir, this.mouthOffset + this.radius * 0.5);
   }
 
   _buildEmbers(q) {
@@ -229,13 +241,9 @@ class FlameHazard extends Hazard {
     const n = clamp(Math.round(this.len * 3 * clamp(q.particles, 0.2, 1)), 4, 36);
     this.emberCount = n;
     const g = new THREE.OctahedronGeometry(0.06, 0);
-    this.emberMat = additiveMaterial(this.hotColor.getHex(), { cached: false, opacity: 0.9 });
-    this.own(this.emberMat);
-    this.embers = new THREE.InstancedMesh(g, this.emberMat, n);
-    this.embers.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.embers.frustumCulled = false;
-    this.embers.renderOrder = 7;
-    this.add(this.embers);
+    this.emberParts = [];
+    for (let i = 0; i < n; i++) this.emberParts.push(this.trimPart(g.clone()));
+    g.dispose();
     const rnd = hazRandom(this.def, 313);
     this.emberData = [];
     this.latA = Math.abs(this.dir.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
@@ -293,21 +301,25 @@ class FlameHazard extends Hazard {
     this.jetUniforms.uReach.value = reach * gutter;
     this.jet.visible = reach > 0.003;
     const sinceOn = cs.state === 'on' ? cs.sinceOn : 99;
-    this.flash.material.opacity = clamp(1 - sinceOn / 0.22, 0, 1) * 0.9 + reach * 0.18;
-    this.flash.scale.setScalar(this.radius * (2.4 + reach * 1.6 + clamp(1 - sinceOn / 0.22, 0, 1) * 2.2));
+    this.setPartGlow(this.flashPart, this.flashPos, this.radius * (2.4 + reach * 1.6 + clamp(1 - sinceOn / 0.22, 0, 1) * 2.2));
+    this.setPartColor(this.flashPart, this.hotColor, clamp(1 - sinceOn / 0.22, 0, 1) * 0.9 + reach * 0.18);
 
     // pilot: breathes while idle, flickers hard during warn (the "about to breathe" tell)
     const flick = warn > 0 ? 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t * (14 + 30 * warn))) : 0.55 + 0.45 * Math.sin(t * 2.4);
-    this.pilot.material.opacity = clamp(0.12 + flick * (0.22 + warn * 0.6) + reach * 0.5, 0, 1);
-    this.pilot.scale.setScalar(this.radius * (1.2 + warn * 1.2 + reach * 0.8));
-    if (this.rotor) this.rotor.setRotationFromAxisAngle(this.dir, t * (3 + reach * 18 + warn * 9));
+    this.setPartGlow(this.pilotPart, this.pilotPos, this.radius * (1.2 + warn * 1.2 + reach * 0.8));
+    this.setPartColor(this.pilotPart, this.hotColor, clamp(0.12 + flick * (0.22 + warn * 0.6) + reach * 0.5, 0, 1));
+    if (this.rotorPart) {
+      _spinQ.setFromAxisAngle(this.dir, t * (3 + reach * 18 + warn * 9));
+      this.setPart(this.rotorPart, this.origin, _spinQ, ONE);
+    }
 
     // embers ride the visible jet
     const L = this.len * reach;
+    const emberK = (0.5 + 0.5 * reach) * 0.9;
     for (let i = 0; i < this.emberCount; i++) {
       const e = this.emberData[i];
       const u = (e.off + t * e.speed * 0.5) % 1;
-      if (L < 0.05 || u * this.len > L) { _m.makeScale(0, 0, 0); this.embers.setMatrixAt(i, _m); continue; }
+      if (L < 0.05 || u * this.len > L) { _m.makeScale(0, 0, 0); this.setPartMatrix(this.emberParts[i], _m); continue; }
       const a = e.ang + t * e.spin;
       const spread = e.rad * (0.4 + u * 1.4) * this.radius;
       _v.copy(this.origin).addScaledVector(this.dir, this.mouthOffset + u * this.len)
@@ -317,10 +329,9 @@ class FlameHazard extends Hazard {
       _s.setScalar(sc);
       _q.setFromAxisAngle(this.latA, a);
       _m.compose(_v, _q, _s);
-      this.embers.setMatrixAt(i, _m);
+      this.setPartMatrix(this.emberParts[i], _m);
+      this.setPartColor(this.emberParts[i], this.hotColor, emberK);
     }
-    this.embers.instanceMatrix.needsUpdate = true;
-    this.emberMat.opacity = 0.5 + 0.5 * reach;
     if (this.ambientHandle && this.ambientHandle.enabled !== undefined) this.ambientHandle.enabled = reach > 0.3;
 
     // kill capsule tracks the visible tongue; only arms once the jet is genuinely out
@@ -334,12 +345,12 @@ class FlameHazard extends Hazard {
 
     // one-shots on the cycle edges
     if (this.edge(this, '_lastWarn', cs.state === 'warn' ? cs.index : -1 - cs.index) && cs.state === 'warn') {
-      hazSfx(this.ctx, 'vanish_warn', { gain: 0.45, rate: 0.7, pos: this.pilot.position, ref: 8, max: 40 });
+      hazSfx(this.ctx, 'vanish_warn', { gain: 0.45, rate: 0.7, pos: this.pilotPos, ref: 8, max: 40 });
     }
     if (this.edge(this, '_lastOn', cs.state === 'on' ? cs.index : -1 - cs.index) && cs.state === 'on') {
-      hazSfx(this.ctx, 'wind', { gain: clamp(0.4 + this.len * 0.05, 0.4, 0.95), rate: 1.35, pos: this.pilot.position, ref: 9, max: 48 });
-      hazSfx(this.ctx, 'lava_bubble', { gain: 0.5, rate: 0.75, pos: this.pilot.position, ref: 9, max: 40 });
-      hazBurst(this.ctx, 'lavaPop', this.flash.position, { count: 14, speed: 4 + this.len * 0.4, color: this.hotColor.getHex(), dir: this.dir });
+      hazSfx(this.ctx, 'wind', { gain: clamp(0.4 + this.len * 0.05, 0.4, 0.95), rate: 1.35, pos: this.pilotPos, ref: 9, max: 48 });
+      hazSfx(this.ctx, 'lava_bubble', { gain: 0.5, rate: 0.75, pos: this.pilotPos, ref: 9, max: 40 });
+      hazBurst(this.ctx, 'lavaPop', this.flashPos, { count: 14, speed: 4 + this.len * 0.4, color: this.hotColor.getHex(), dir: this.dir });
     }
   }
 

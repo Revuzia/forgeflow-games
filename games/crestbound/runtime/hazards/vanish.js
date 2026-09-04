@@ -21,7 +21,8 @@ import * as THREE from 'three';
 import { Collider } from '../world/collider.js';
 import { buildPlatform } from '../world/builders.js';
 import { hazSfx, hazBurst, resolvePlayer, standingOn } from './lasers.js';
-import { chamferBox, partMesh, getMat, pal, glowMat } from './movers.js';
+import { chamferBox, getMat, pal } from './movers.js';
+import { BatchRig, trimK } from './batchkit.js';
 
 // ---------------------------------------------------------------------------
 // module-scope scratch
@@ -36,6 +37,7 @@ const _mat4 = new THREE.Matrix4();
 const _scl = new THREE.Vector3();
 const _UP = new THREE.Vector3(0, 1, 0);
 const _XAXIS = new THREE.Vector3(1, 0, 0);
+const _WHITE = new THREE.Color(1, 1, 1);
 const _TUMBLE = new THREE.Vector3(1, 0, 0.35).normalize();
 
 // global throttle so a wall of vanish platforms cannot machine-gun the mixer
@@ -120,6 +122,19 @@ export function vanish(def, ctx) {
   root.position.copy(origin);
   const shell = new THREE.Group();
   root.add(shell);
+  /* BATCHED (hazards/batchkit.js). The slab is the builder platform folded into the course
+     batches (one instance per material), the warn band / stripe / brackets are trim parts and
+     the flakes and crumble chunks are per-piece solid instances. `slab`/`shell` are still posed
+     from the pure cycle exactly as before; `rig.sync()` copies the pose out once per frame.
+     The old per-hazard material CLONES (opacity fade, colour lerp, emissive strobe) become:
+     a per-instance diffuse TINT toward the warn colour, additive trim colour for the strobe,
+     and the scale-out the slab already had for the fade (a batch instance has no opacity). */
+  const rig = new BatchRig(ctx, root);
+  /** every part that is "the slab" — hidden together when it reads gone */
+  const slabParts = [];
+  /** additive parts whose colour strobes with the telegraph: {part, color, baseEI} */
+  const strobeParts = [];
+  let warnPart = null;
 
   const hz = {
     kind: 'vanish', type: mode, def,
@@ -156,59 +171,20 @@ export function vanish(def, ctx) {
   const slab = new THREE.Group();
   shell.add(slab);
 
-  /** {mat, baseColor:Color, baseEmissive:Color, baseEI:number, trim:boolean} */
-  const skins = [];
-  let chunkMatSource = null;
-
-  function adoptMaterials(obj) {
-    const seen = new Map();
-    obj.traverse((o) => {
-      if (!o.isMesh && !o.isInstancedMesh) return;
-      const src = o.material;
-      if (Array.isArray(src)) {
-        const out = new Array(src.length);
-        for (let i = 0; i < src.length; i++) out[i] = adoptOne(src[i], seen);
-        o.material = out;
-      } else if (src) {
-        o.material = adoptOne(src, seen);
-      }
-    });
-  }
-  function adoptOne(src, seen) {
-    if (!src) return src;
-    let cl = seen.get(src);
-    if (cl) return cl;
-    try { cl = src.clone(); } catch (err) { cl = src; }
-    if (cl === src) return src;
-    cl.transparent = true;
-    cl.opacity = 1;
-    cl.depthWrite = true;
-    ownMats.push(cl);
-    const trim = !!(cl.emissive && (cl.emissive.r + cl.emissive.g + cl.emissive.b) > 0.06);
-    skins.push({
-      mat: cl,
-      baseColor: cl.color ? cl.color.clone() : new THREE.Color(0xffffff),
-      baseEmissive: cl.emissive ? cl.emissive.clone() : new THREE.Color(0x000000),
-      baseEI: num(cl.emissiveIntensity, 1),
-      trim,
-    });
-    if (!trim && !chunkMatSource) chunkMatSource = cl;
-    seen.set(src, cl);
-    return cl;
-  }
+  /** the slab's body material — the flakes and crumble chunks are cut from the same stock */
+  const bodyMat = getMat(ctx, def.mat || 'panel');
+  /** the slab's solid parts, tinted toward the warn colour during the telegraph */
+  const tintParts = [];
 
   if (plat && plat.mesh) {
-    slab.add(plat.mesh);
-    adoptMaterials(plat.mesh);
+    const parts = rig.adopt(plat.mesh, slab);
+    for (let i = 0; i < parts.length; i++) { slabParts.push(parts[i]); tintParts.push(parts[i]); }
   } else {
     const body = chamferBox(size[0], size[1], size[2], Math.min(0.10, size[1] * 0.34));
     const inset = chamferBox(size[0] * 0.80, size[1] * 0.34, size[2] * 0.80, 0.04);
     inset.translate(0, size[1] * 0.40, 0);
-    const bodyMat = getMat(ctx, def.mat || 'panel').clone();
-    bodyMat.transparent = true; ownMats.push(bodyMat);
-    skins.push({ mat: bodyMat, baseColor: bodyMat.color.clone(), baseEmissive: bodyMat.emissive ? bodyMat.emissive.clone() : new THREE.Color(0), baseEI: num(bodyMat.emissiveIntensity, 1), trim: false });
-    chunkMatSource = bodyMat;
-    slab.add(partMesh([body, inset], bodyMat, D, true, true));
+    const bodyPart = rig.solid(bodyMat, [body, inset], slab, true, true);
+    slabParts.push(bodyPart); tintParts.push(bodyPart);
     const trimGeoms = [];
     for (let s = -1; s <= 1; s += 2) {
       const gx = chamferBox(size[0] + 0.05, 0.05, 0.10, 0.02);
@@ -218,14 +194,11 @@ export function vanish(def, ctx) {
       gz.translate(s * (size[0] / 2 - 0.04), size[1] * 0.5 + 0.005, 0);
       trimGeoms.push(gz);
     }
-    const tm = glowMat(ctx, cSafe, 2.4, ownMats);
-    tm.transparent = true;
-    skins.push({ mat: tm, baseColor: tm.color.clone(), baseEmissive: tm.emissive.clone(), baseEI: 2.4, trim: true });
-    slab.add(partMesh(trimGeoms, tm, D, false, false));
+    const stripePart = rig.trim(trimGeoms, slab);
+    slabParts.push(stripePart);
+    strobeParts.push({ part: stripePart, color: cSafe, baseEI: 2.4 });
   }
 
-  const warnMat = glowMat(ctx, cWarn, 0.05, ownMats, { base: 0x0a0c11 });
-  warnMat.transparent = true;
   {
     const bandGeoms = [];
     const yb = -size[1] * 0.06;
@@ -237,7 +210,8 @@ export function vanish(def, ctx) {
       bz.translate(s * (size[0] * 0.5 + 0.006), yb, 0);
       bandGeoms.push(bz);
     }
-    slab.add(partMesh(bandGeoms, warnMat, D, false, false));
+    warnPart = rig.trim(bandGeoms, slab);
+    slabParts.push(warnPart);
   }
 
   const cols = (plat && Array.isArray(plat.colliders) && plat.colliders.length) ? plat.colliders.slice() : [];
@@ -275,9 +249,7 @@ export function vanish(def, ctx) {
     D.push(eg);
     ghostGroup.add(new THREE.LineSegments(eg, ghostMat));
   }
-  const bracketMat = glowMat(ctx, cSafe, 3.0, ownMats, { base: 0x000000 });
-  bracketMat.transparent = true;
-  bracketMat.opacity = 0;
+  let bracketPart = null;
   {
     const br = [];
     const L = Math.min(0.55, Math.min(size[0], size[2]) * 0.24), th = 0.055;
@@ -294,7 +266,8 @@ export function vanish(def, ctx) {
       gz.translate(px, py, pz - sz * L * 0.5);
       br.push(gz);
     }
-    ghostGroup.add(partMesh(br, bracketMat, D, false, false));
+    bracketPart = rig.trim(br, ghostGroup);
+    rig.setVisible(bracketPart, false);
   }
 
   // =========================================================================
@@ -312,21 +285,18 @@ export function vanish(def, ctx) {
     flakeSeed[o + 5] = 2.2 + rnd() * 4.4;
     flakeSeed[o + 6] = 0.55 + rnd() * 0.75;
   }
-  let flakeMesh = null;
+  const flakeParts = [];
+  let flakesShown = false;
   {
     const fg = chamferBox(0.20, 0.075, 0.20, 0.02);
-    D.push(fg);
-    const fm = (chunkMatSource ? chunkMatSource.clone() : getMat(ctx, def.mat || 'panel').clone());
-    fm.transparent = true; fm.opacity = 1; fm.depthWrite = true;
-    ownMats.push(fm);
-    flakeMesh = new THREE.InstancedMesh(fg, fm, FLAKES);
-    flakeMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    flakeMesh.castShadow = false;
-    flakeMesh.receiveShadow = false;
-    flakeMesh.frustumCulled = false;
-    flakeMesh.visible = false;
-    root.add(flakeMesh);
-    hz.__flakeMat = fm;
+    _mat4.makeScale(0, 0, 0);
+    for (let i = 0; i < FLAKES; i++) {
+      const part = rig.solid(bodyMat, fg.clone(), root, false, false);
+      rig.setLocal(part, _mat4);
+      rig.setVisible(part, false);
+      flakeParts.push(part);
+    }
+    fg.dispose();
   }
 
   // =========================================================================
@@ -334,7 +304,8 @@ export function vanish(def, ctx) {
   // =========================================================================
   const CH = 3;
   const CHUNKS = CH * CH;
-  let chunkMesh = null;
+  const chunkParts = [];
+  let chunksShown = false;
   const chunkSeed = new Float32Array(CHUNKS * 8);
   if (mode === 'crumble') {
     const cw = size[0] / CH, cd = size[2] / CH;
@@ -352,17 +323,14 @@ export function vanish(def, ctx) {
       chunkSeed[o + 7] = 0.86 + rnd() * 0.22;
     }
     const cg = chamferBox(cw * 0.94, size[1] * 0.94, cd * 0.94, Math.min(0.06, size[1] * 0.24));
-    D.push(cg);
-    const cm = (chunkMatSource ? chunkMatSource.clone() : getMat(ctx, def.mat || 'panel').clone());
-    cm.transparent = true; cm.opacity = 1; cm.depthWrite = true;
-    ownMats.push(cm);
-    chunkMesh = new THREE.InstancedMesh(cg, cm, CHUNKS);
-    chunkMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    chunkMesh.castShadow = true;
-    chunkMesh.frustumCulled = false;
-    chunkMesh.visible = false;
-    root.add(chunkMesh);
-    hz.__chunkMat = cm;
+    _mat4.makeScale(0, 0, 0);
+    for (let i = 0; i < CHUNKS; i++) {
+      const part = rig.solid(bodyMat, cg.clone(), root, true, true);
+      rig.setLocal(part, _mat4);
+      rig.setVisible(part, false);
+      chunkParts.push(part);
+    }
+    cg.dispose();
   }
 
   // =========================================================================
@@ -415,35 +383,32 @@ export function vanish(def, ctx) {
   // =========================================================================
   const _warnColor = new THREE.Color();
   const _tmpColor = new THREE.Color();
+  let _lastTintK = -1;
 
   function applySkins(t, vis, warnK) {
     const strobe = warnK > 0
       ? 0.5 + 0.5 * Math.sin(TAU * (3 * warnK * warnDur + 6 * warnK * warnK * warnDur))
       : 0;
-    for (let i = 0; i < skins.length; i++) {
-      const sk = skins[i];
-      const mat = sk.mat;
-      mat.opacity = vis;
-      mat.depthWrite = vis > 0.985;
-      if (mat.color) {
-        _tmpColor.copy(sk.baseColor).lerp(cWarn, warnK * 0.62);
-        mat.color.copy(_tmpColor);
-      }
-      if (mat.emissive) {
-        _warnColor.copy(sk.baseEmissive).lerp(cWarn, warnK);
-        mat.emissive.copy(_warnColor);
-        const idle = sk.trim ? (sk.baseEI * (0.86 + 0.16 * Math.sin(t * 2.3 + i))) : sk.baseEI;
-        mat.emissiveIntensity = idle + warnK * (1.2 + strobe * 5.4) * (sk.trim ? 1 : 0.42);
-      }
+    // The slab's diffuse tint toward the warn colour (the old per-clone `color` lerp). Written
+    // only when it changes: outside the telegraph it is a constant white.
+    const tintK = warnK * 0.62;
+    if (tintK !== _lastTintK) {
+      _lastTintK = tintK;
+      _tmpColor.copy(_WHITE).lerp(cWarn, tintK);
+      for (let i = 0; i < tintParts.length; i++) rig.setColor(tintParts[i], _tmpColor);
     }
-    warnMat.opacity = vis;
-    warnMat.emissiveIntensity = 0.05 + warnK * (1.0 + strobe * 8.5);
+    for (let i = 0; i < strobeParts.length; i++) {
+      const sk = strobeParts[i];
+      _warnColor.copy(sk.color).lerp(cWarn, warnK);
+      const idle = sk.baseEI * (0.86 + 0.16 * Math.sin(t * 2.3 + i));
+      rig.setColor(sk.part, _warnColor, trimK(idle + warnK * (1.2 + strobe * 5.4)));
+    }
+    rig.setColor(warnPart, cWarn, trimK(0.05 + warnK * (1.0 + strobe * 8.5)));
   }
 
   function updateFlakes() {
-    if (!flakeMesh) return;
     const show = (state === 1);
-    flakeMesh.visible = show;
+    if (show !== flakesShown) { flakesShown = show; rig.setVisibleAll(flakeParts, show); }
     if (!show) return;
     const W = (mode === 'crumble') ? CRACK : ((mode === 'flicker') ? Math.min(0.16, flickStep * 0.42) : warnDur);
     const el = stateK * W;
@@ -453,7 +418,7 @@ export function vanish(def, ctx) {
       const e = el - birth;
       if (e <= 0) {
         _mat4.makeScale(0, 0, 0);
-        flakeMesh.setMatrixAt(i, _mat4);
+        rig.setLocal(flakeParts[i], _mat4);
         continue;
       }
       _q.setFromAxisAngle(_UP, flakeSeed[o + 4] + flakeSeed[o + 5] * e);
@@ -467,15 +432,14 @@ export function vanish(def, ctx) {
       const sc = flakeSeed[o + 6] * clamp01(1 - e / (W * 1.6));
       _scl.set(sc, sc, sc);
       _mat4.compose(_a, _q, _scl);
-      flakeMesh.setMatrixAt(i, _mat4);
+      rig.setLocal(flakeParts[i], _mat4);
     }
-    flakeMesh.instanceMatrix.needsUpdate = true;
   }
 
   function updateChunks() {
-    if (!chunkMesh) return;
+    if (chunkParts.length === 0) return;
     const show = (state === 3);
-    chunkMesh.visible = show;
+    if (show !== chunksShown) { chunksShown = show; rig.setVisibleAll(chunkParts, show); }
     if (!show) return;
     const e = stateK * CHUNK_LIFE;
     for (let i = 0; i < CHUNKS; i++) {
@@ -491,10 +455,8 @@ export function vanish(def, ctx) {
       const sc = chunkSeed[o + 7] * clamp01(1.25 - stateK * 1.25);
       _scl.set(sc, sc, sc);
       _mat4.compose(_a, _q, _scl);
-      chunkMesh.setMatrixAt(i, _mat4);
+      rig.setLocal(chunkParts[i], _mat4);
     }
-    chunkMesh.instanceMatrix.needsUpdate = true;
-    if (hz.__chunkMat) hz.__chunkMat.opacity = clamp01(1.35 - stateK * 1.35);
   }
 
   function updateGhost(t, vis) {
@@ -507,9 +469,9 @@ export function vanish(def, ctx) {
     }
     const pulse = 0.28 + 0.30 * Math.sin(t * (5 + ret * 26)) * (0.4 + ret);
     ghostMat.opacity = gone * clamp01(0.22 + pulse * 0.7);
-    bracketMat.opacity = gone * clamp01(0.34 + ret * 0.6);
-    bracketMat.emissiveIntensity = 1.6 + ret * 5.5;
     ghostGroup.visible = gone > 0.02;
+    rig.setVisible(bracketPart, ghostGroup.visible);
+    rig.setColor(bracketPart, cSafe, trimK(1.6 + ret * 5.5) * gone * clamp01(0.34 + ret * 0.6));
   }
 
   // =========================================================================
@@ -581,7 +543,8 @@ export function vanish(def, ctx) {
 
     const sc = Math.max(0.0001, vis);
     slab.scale.set(sc, Math.max(0.0001, 0.10 + 0.90 * sc), sc);
-    slab.visible = vis > 0.012;
+    const slabVis = vis > 0.012;
+    if (slabVis !== slab.visible) { slab.visible = slabVis; rig.setVisibleAll(slabParts, slabVis); }
     applySkins(t, clamp01(vis), warnK);
 
     if (warnK > 0) {
@@ -609,6 +572,8 @@ export function vanish(def, ctx) {
       refreshBroad(c);
     }
 
+    rig.sync();
+
     if (state !== lastState) { onTransition(t, lastState, state, player); lastState = state; }
   };
 
@@ -617,9 +582,6 @@ export function vanish(def, ctx) {
     lastState = -1;
     shell.position.set(0, 0, 0);
     shell.rotation.z = 0;
-    if (chunkMesh) chunkMesh.visible = false;
-    if (flakeMesh) flakeMesh.visible = false;
-    if (hz.__chunkMat) hz.__chunkMat.opacity = 1;
     hz.update(num(t, 0), 0, null);
     lastState = state;
   };
@@ -628,11 +590,11 @@ export function vanish(def, ctx) {
 
   hz.dispose = function () {
     if (root.parent) root.parent.remove(root);
+    rig.dispose();
     for (const g of D) { try { g.dispose(); } catch (err) { /* ignore */ } }
     for (const mm of ownMats) { try { mm.dispose(); } catch (err) { /* ignore */ } }
-    if (chunkMesh) { try { chunkMesh.dispose(); } catch (err) { /* ignore */ } }
-    if (flakeMesh) { try { flakeMesh.dispose(); } catch (err) { /* ignore */ } }
-    D.length = 0; ownMats.length = 0; skins.length = 0;
+    D.length = 0; ownMats.length = 0; slabParts.length = 0; tintParts.length = 0;
+    strobeParts.length = 0; flakeParts.length = 0; chunkParts.length = 0;
     if (plat && typeof plat.dispose === 'function') { try { plat.dispose(); } catch (err) { /* ignore */ } }
     hz.colliders.length = 0;
     hz.kills.length = 0;

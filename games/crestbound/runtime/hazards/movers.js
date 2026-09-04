@@ -25,6 +25,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Collider, KillVolume } from '../world/collider.js';
 import { buildPlatform } from '../world/builders.js';
 import { hazSfx, hazBurst, resolvePlayer, standingOn, hazTex } from './lasers.js';
+import { BatchRig, trimK } from './batchkit.js';
 
 // ---------------------------------------------------------------------------
 // module-scope scratch — no per-frame heap allocation anywhere below
@@ -44,6 +45,7 @@ const _scale1 = new THREE.Vector3(1, 1, 1);
 const _UP = new THREE.Vector3(0, 1, 0);
 const _X = new THREE.Vector3(1, 0, 0);
 const _Z = new THREE.Vector3(0, 0, 1);
+const _studCol = new THREE.Color();
 
 // ---------------------------------------------------------------------------
 // small pure helpers
@@ -469,6 +471,10 @@ export function mover(def, ctx) {
   const shell = new THREE.Group();
   carrier.add(shell);
   root.add(carrier);
+  /* BATCHED (hazards/batchkit.js): the deck, its rig and every glow strip are instances in the
+     course batches. `carrier`/`shell`/`armGroup`/... are still posed from the pure samplers
+     exactly as before; `rig.sync()` copies their poses out once per frame. */
+  const rig = new BatchRig(ctx, root);
 
   const hz = {
     kind: 'mover', type, def,
@@ -483,7 +489,7 @@ export function mover(def, ctx) {
   };
 
   const deck = buildDeck(def, size, ctx, D, hz);
-  shell.add(deck.mesh);
+  rig.adopt(deck.mesh, shell);
   const plat = deck.plat;
   hz.colliders = deck.colliders;
 
@@ -494,10 +500,7 @@ export function mover(def, ctx) {
   const matPanel = getMat(ctx, 'panel');
   const matGrate = getMat(ctx, 'grate');
 
-  const trimMat = glowMat(ctx, cAccent, 2.4, ownMats);
-  const dirMat = glowMat(ctx, cSafe, 2.9, ownMats, { base: 0x05070b });
-  const thrustMat = glowMat(ctx, cAccent, 3.4, ownMats, { base: 0x04060a, roughness: 0.5 });
-
+  let thrustPart = null;
   const nacelles = [];
   function buildNacelles() {
     const hx = size[0] * 0.5 - 0.34, hz2 = size[2] * 0.5 - 0.34;
@@ -513,7 +516,7 @@ export function mover(def, ctx) {
       collar.translate(sx * hx, y - 0.06, sz * hz2);
       housings.push(collar);
     }
-    shell.add(partMesh(housings, matMetal, D, true, false));
+    rig.solid(matMetal, housings, shell, true, false);
 
     const cones = [];
     for (let i = 0; i < 4; i++) {
@@ -523,9 +526,8 @@ export function mover(def, ctx) {
       c1.translate(sx * hx, y - 0.42, sz * hz2);
       cones.push(c1);
     }
-    const glow = partMesh(cones, thrustMat, D, false, false);
-    shell.add(glow);
-    nacelles.push(glow);
+    thrustPart = rig.trim(cones, shell);
+    nacelles.push(thrustPart);
   }
 
   const chevrons = [];
@@ -562,16 +564,14 @@ export function mover(def, ctx) {
           rank.push(g);
         }
       }
-      const mm = dirMat.clone(); ownMats.push(mm);
-      chevGroup.add(partMesh(rank, mm, D, false, false));
-      chevrons.push(mm);
+      chevrons.push(rig.trim(rank, chevGroup));
     }
     shell.add(chevGroup);
   }
 
   let armGroup = null;
   let shaftGroup = null;
-  let shaftMesh = null;
+  let shaftNode = null;
   const shaftRings = [];
   const pistonAxis = axis.clone();
   let counterweight = null;
@@ -615,10 +615,8 @@ export function mover(def, ctx) {
       fl.translate(at.x + _d.x * (e2 ? 0.42 : -0.42), at.y + offY - 1.94, at.z + _d.z * (e2 ? 0.42 : -0.42));
       structural.push(fl);
     }
-    root.add(partMesh(structural, matMetal, D));
-    const gm = partMesh(glowStrips, trimMat, D, false, false);
-    root.add(gm);
-    railGlow.push(gm);
+    rig.solid(matMetal, structural, root, true, true);
+    railGlow.push(rig.trim(glowStrips, root));
 
     const car = [];
     const body = chamferBox(size[0] * 0.5, 0.30, size[2] * 0.5, 0.05);
@@ -631,7 +629,7 @@ export function mover(def, ctx) {
       collar.translate(_e.x * s * (half * 0.62 + 0.18), -size[1] * 0.5 - 0.20, _e.z * s * (half * 0.62 + 0.18));
       car.push(collar);
     }
-    shell.add(partMesh(car, matPanel, D, true, false));
+    rig.solid(matPanel, car, shell, true, false);
   }
 
   function buildHubRig() {
@@ -655,14 +653,14 @@ export function mover(def, ctx) {
     for (const g of boltRing(6, 0.62, 0.045, 0.10)) { g.rotateX(Math.PI / 2); g.translate(0, -colH - 0.02, 0); structural.push(g); }
     _q.setFromUnitVectors(_UP, axis);
     const hubGeoms = structural.map((g) => { g.applyQuaternion(_q); return g; });
-    root.add(partMesh(hubGeoms, matMetal, D));
+    rig.solid(matMetal, hubGeoms, root, true, true);
 
     const band = ringGeo(0.365, 0.032, 5, 18);
     band.rotateX(Math.PI / 2);
     band.translate(0, -0.02, 0);
     band.applyQuaternion(_q);
     glows.push(band);
-    root.add(partMesh(glows, trimMat, D, false, false));
+    railGlow.push(rig.trim(glows, root));
 
     armGroup = new THREE.Group();
     root.add(armGroup);
@@ -682,16 +680,14 @@ export function mover(def, ctx) {
     _e.crossVectors(bu, axis).normalize();
     _mat4.makeBasis(bu, axis, _e);
     for (const g of spokes) g.applyMatrix4(_mat4);
-    armGroup.add(partMesh(spokes, matPanel, D));
+    rig.solid(matPanel, spokes, armGroup, true, true);
 
     const sglow = [];
     const line = chamferBox(spokeLen * 0.86, 0.04, 0.05, 0.012);
     line.translate(spokeLen * 0.5 + 0.30, 0.13, 0);
     line.applyMatrix4(_mat4);
     sglow.push(line);
-    const gm2 = partMesh(sglow, trimMat, D, false, false);
-    armGroup.add(gm2);
-    railGlow.push(gm2);
+    railGlow.push(rig.trim(sglow, armGroup));
   }
 
   function buildPistonRig() {
@@ -711,24 +707,23 @@ export function mover(def, ctx) {
     structural.push(flange);
     for (const g of boltRing(8, 0.60, 0.04, 0.10)) { g.rotateX(Math.PI / 2); g.translate(0, -0.52, 0); structural.push(g); }
     for (const g of structural) g.applyQuaternion(_q);
-    root.add(partMesh(structural, matMetal, D));
+    rig.solid(matMetal, structural, root, true, true);
 
     shaftGroup = new THREE.Group();
     root.add(shaftGroup);
+    // the telescoping shaft: a unit cylinder on a node scaled along its axis every frame
     const sh = new THREE.CylinderGeometry(0.20, 0.20, 1, 10);
     sh.translate(0, 0.5, 0);
-    D.push(sh);
-    shaftMesh = new THREE.Mesh(sh, matGrate);
-    shaftMesh.castShadow = true;
-    shaftGroup.add(shaftMesh);
+    shaftNode = new THREE.Group();
+    shaftGroup.add(shaftNode);
+    rig.solid(matGrate, sh, shaftNode, true, true);
     for (let i = 0; i < 3; i++) {
       const rg = ringGeo(0.235, 0.045, 5, 12);
       rg.rotateX(Math.PI / 2);
-      D.push(rg);
-      const rm = new THREE.Mesh(rg, matMetal);
-      rm.castShadow = false;
-      shaftRings.push(rm);
-      shaftGroup.add(rm);
+      const rn = new THREE.Group();
+      shaftGroup.add(rn);
+      rig.solid(matMetal, rg, rn, false, true);
+      shaftRings.push(rn);
     }
   }
 
@@ -765,10 +760,8 @@ export function mover(def, ctx) {
 
     for (const g of structural) g.applyQuaternion(_q);
     for (const g of glows) g.applyQuaternion(_q);
-    root.add(partMesh(structural, matMetal, D));
-    const gm = partMesh(glows, trimMat, D, false, false);
-    root.add(gm);
-    railGlow.push(gm);
+    rig.solid(matMetal, structural, root, true, true);
+    railGlow.push(rig.trim(glows, root));
 
     counterweight = new THREE.Group();
     counterweight.quaternion.copy(_q);
@@ -782,10 +775,10 @@ export function mover(def, ctx) {
       b2.translate(-size[0] * 0.5 - 0.34, -0.30 + i * 0.30, 0);
       cw.push(b2);
     }
-    counterweight.add(partMesh(cw, matPanel, D));
+    rig.solid(matPanel, cw, counterweight, true, true);
   }
 
-  let sinkStuds = null, sinkStudMat = null;
+  let sinkStudPart = null;
   function buildSinkRig() {
     const studs = [];
     for (let i = 0; i < 4; i++) {
@@ -794,11 +787,7 @@ export function mover(def, ctx) {
       g.translate(sx * (size[0] * 0.5 - 0.20), size[1] * 0.5 + 0.03, sz * (size[2] * 0.5 - 0.20));
       studs.push(g);
     }
-    const mm = glowMat(ctx, cSafe, 1.6, ownMats, { base: 0x0a0d12 });
-    const mesh = partMesh(studs, mm, D, false, false);
-    shell.add(mesh);
-    sinkStuds = mesh;
-    sinkStudMat = mm;
+    sinkStudPart = rig.trim(studs, shell);
   }
 
   switch (type) {
@@ -883,7 +872,7 @@ export function mover(def, ctx) {
     for (let i = 0; i < chevrons.length; i++) {
       const k = fract(flow + (fwd > 0 ? -i : i) * 0.30);
       const pulse = 0.32 + 2.9 * Math.pow(Math.max(0, 1 - Math.abs(k - 0.25) * 3.1), 2);
-      chevrons[i].emissiveIntensity = pulse * (0.45 + Math.min(1.0, speed * 0.22));
+      rig.setColor(chevrons[i], cSafe, trimK(pulse * (0.45 + Math.min(1.0, speed * 0.22))));
     }
     if (chevGroup && !vertical) {
       _c.copy(hz.linVel);
@@ -899,11 +888,12 @@ export function mover(def, ctx) {
 
     if (nacelles.length) {
       const it = 1.1 + Math.min(4.2, speed * 0.55) + Math.sin(t * 9.3) * 0.16;
-      thrustMat.emissiveIntensity = it;
+      rig.setColor(thrustPart, cAccent, trimK(it));
     }
-    trimMat.emissiveIntensity = 1.9 + Math.sin(t * 2.1) * 0.28;
+    const trimI = trimK(1.9 + Math.sin(t * 2.1) * 0.28);
+    for (let i = 0; i < railGlow.length; i++) rig.setColor(railGlow[i], cAccent, trimI);
 
-    if (shaftGroup && shaftMesh) {
+    if (shaftGroup && shaftNode) {
       _c.subVectors(curPos, origin);
       const len = _c.length();
       if (len > 1e-4) {
@@ -911,7 +901,7 @@ export function mover(def, ctx) {
         shaftGroup.quaternion.setFromUnitVectors(_UP, _d);
       }
       const L = Math.max(0.05, len);
-      shaftMesh.scale.y = L;
+      shaftNode.scale.y = L;
       for (let i = 0; i < shaftRings.length; i++) {
         shaftRings[i].position.y = L * (0.22 + i * 0.28);
       }
@@ -932,17 +922,15 @@ export function mover(def, ctx) {
             Math.sin(el * 38.1) * 0.036 * k + Math.sin(el * 61.7) * 0.017 * k,
             Math.cos(el * 41.9) * 0.024 * k
           );
-          if (sinkStudMat) {
-            sinkStudMat.emissiveIntensity = 1.4 + 5.0 * k * (0.5 + 0.5 * Math.sin(el * (9 + 34 * k)));
-            sinkStudMat.emissive.copy(cSafe).lerp(cWarn, k);
-          }
+          _studCol.copy(cSafe).lerp(cWarn, k);
+          rig.setColor(sinkStudPart, _studCol, trimK(1.4 + 5.0 * k * (0.5 + 0.5 * Math.sin(el * (9 + 34 * k)))));
         } else {
           shell.position.set(0, 0, 0);
-          if (sinkStudMat) { sinkStudMat.emissiveIntensity = 5.4; sinkStudMat.emissive.copy(cWarn); }
+          rig.setColor(sinkStudPart, cWarn, trimK(5.4));
         }
       } else {
         shell.position.set(0, 0, 0);
-        if (sinkStudMat) { sinkStudMat.emissiveIntensity = 1.5 + Math.sin(t * 2.6) * 0.35; sinkStudMat.emissive.copy(cSafe); }
+        rig.setColor(sinkStudPart, cSafe, trimK(1.5 + Math.sin(t * 2.6) * 0.35));
       }
     }
   }
@@ -1008,6 +996,7 @@ export function mover(def, ctx) {
     }
 
     animate(t);
+    rig.sync();
   };
 
   hz.reset = function (t) {
@@ -1028,6 +1017,7 @@ export function mover(def, ctx) {
 
   hz.dispose = function () {
     if (root.parent) root.parent.remove(root);
+    rig.dispose();
     root.traverse((o) => { if (o.isMesh || o.isInstancedMesh) { o.geometry = null; o.material = null; } });
     for (const g of D) { try { g.dispose(); } catch (err) { /* ignore */ } }
     for (const mm of ownMats) { try { mm.dispose(); } catch (err) { /* ignore */ } }

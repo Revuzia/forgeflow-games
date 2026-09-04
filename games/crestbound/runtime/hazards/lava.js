@@ -30,6 +30,7 @@ const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _s = new THREE.Vector3();
 const _box = new THREE.Box3();
+const ONE = new THREE.Vector3(1, 1, 1);
 
 /* ======================================================================================
    SHARED MOLTEN SURFACE MATERIAL
@@ -310,13 +311,16 @@ class LavaHazard extends Hazard {
     skirtParts.push(placeSlab(this.size.x, 1.1, t, 0, dy, -this.halfZ + t * 0.5));
     skirtParts.push(placeSlab(t, 1.1, this.size.z - t * 2, this.halfX - t * 0.5, dy, 0));
     skirtParts.push(placeSlab(t, 1.1, this.size.z - t * 2, -this.halfX + t * 0.5, dy, 0));
+    /* BATCHED (hazards/batch.js): the skirt, the hot rim, the bubbles and the glow card are
+       batch instances re-posed from the surface height every frame; the molten surface keeps
+       its shared patched material (one draw per pool). */
     const skirtGeo = mergeAll(skirtParts);
+    this.skirtPart = null;
     if (skirtGeo) {
-      this.skirt = new THREE.Mesh(skirtGeo, hazMat(this.ctx, 'obsidian'));
-      this.skirt.castShadow = false;
-      this.skirt.receiveShadow = true;
-      this.skirt.position.set(this.center.x, this._surfaceY, this.center.z);
-      this.add(this.skirt);
+      this.skirtPart = this.solidPart(hazMat(this.ctx, 'obsidian'), skirtGeo, false, true);
+      skirtGeo.dispose();
+      _v.set(this.center.x, this._surfaceY, this.center.z);
+      this.setPart(this.skirtPart, _v, null, ONE);
     }
   }
 
@@ -333,12 +337,10 @@ class LavaHazard extends Hazard {
     parts.push(placeSlab(w, 0.05, this.size.z - w * 3, -ix, 0, 0, 0.34));
     const geo = mergeAll(parts);
     if (!geo) return;
-    this.rimMat = additiveMaterial(this.hotColor.getHex(), { cached: false, opacity: 0.9 });
-    this.own(this.rimMat);
-    this.rim = new THREE.Mesh(geo, this.rimMat);
-    this.rim.renderOrder = 4;
-    this.rim.position.set(this.center.x, this._surfaceY + 0.06, this.center.z);
-    this.add(this.rim);
+    this.rimPart = this.trimPart(geo);
+    geo.dispose();
+    _v.set(this.center.x, this._surfaceY + 0.06, this.center.z);
+    this.setPart(this.rimPart, _v, null, ONE);
   }
 
   _buildBubbles(q) {
@@ -353,12 +355,10 @@ class LavaHazard extends Hazard {
     collar.translate(0, -0.02, 0);
     domeParts.push(collar);
 
-    this.bubbleMesh = new THREE.InstancedMesh(mergeAll(domeParts), hazMat(this.ctx, 'lava'), n);
-    this.bubbleMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.bubbleMesh.castShadow = false;
-    this.bubbleMesh.receiveShadow = false;
-    this.bubbleMesh.frustumCulled = false;
-    this.add(this.bubbleMesh);
+    const domeGeo = mergeAll(domeParts);
+    this.bubbleParts = [];
+    for (let i = 0; i < n; i++) this.bubbleParts.push(this.solidPart(hazMat(this.ctx, 'lava'), domeGeo, false, false));
+    domeGeo.dispose();
 
     this.bubbles = [];
     for (let i = 0; i < n; i++) {
@@ -410,12 +410,9 @@ class LavaHazard extends Hazard {
     // Sized to the pool but CAPPED: an unbounded additive quad feeds the bloom bright-pass
     // across half the frame. The bounce read comes from the first couple of metres above the
     // surface; a tighter, dimmer card keeps it without the frame-wide flood.
-    this.glow = makeGlowSprite(this.hotColor.getHex(),
-      Math.min(Math.min(this.size.x, this.size.z) * 0.55, 10), 0.16, 3.4);
-    this.own(this.glow.material);
-    this.glow.position.set(this.center.x, this._surfaceY + 0.6, this.center.z);
-    this.glow.renderOrder = 3;
-    this.add(this.glow);
+    this.glowSize = Math.min(Math.min(this.size.x, this.size.z) * 0.55, 10);
+    this.glowRef = this.glowPart();
+    this.glowPos = new THREE.Vector3(this.center.x, this._surfaceY + 0.6, this.center.z);
   }
 
   _buildKill() {
@@ -477,11 +474,15 @@ class LavaHazard extends Hazard {
     this.lavaUniforms.uLavaTime.value = t;
 
     this.surface.position.y = y;
-    if (this.skirt) this.skirt.position.y = y;
-    if (this.rim) {
-      this.rim.position.y = y + 0.06;
+    if (this.skirtPart) {
+      _v.set(this.center.x, y, this.center.z);
+      this.setPart(this.skirtPart, _v, null, ONE);
+    }
+    if (this.rimPart) {
+      _v.set(this.center.x, y + 0.06, this.center.z);
+      this.setPart(this.rimPart, _v, null, ONE);
       const pulse = 0.62 + 0.38 * (0.5 + 0.5 * Math.sin(t * 1.9) * Math.sin(t * 0.77 + 1.3));
-      this.rimMat.opacity = pulse;
+      this.setPartColor(this.rimPart, this.hotColor, pulse * 0.9);
     }
 
     // light: deterministic multi-sine flicker, driving the course's shared site
@@ -490,9 +491,10 @@ class LavaHazard extends Hazard {
       this.lightSite.pos.y = y + 1.1;
       this.lightSite.base = this.baseLightIntensity * flick * (this.enabled === false ? 0 : 1);
     }
-    if (this.glow) {
-      this.glow.position.y = y + 0.6;
-      this.glow.material.opacity = 0.11 + 0.08 * flick;
+    if (this.glowRef) {
+      this.glowPos.y = y + 0.6;
+      this.setPartGlow(this.glowRef, this.glowPos, this.glowSize);
+      this.setPartColor(this.glowRef, this.hotColor, 0.11 + 0.08 * flick);
     }
 
     // kill volume tracks the surface
@@ -506,7 +508,6 @@ class LavaHazard extends Hazard {
   }
 
   _updateBubbles(t) {
-    const mesh = this.bubbleMesh;
     for (let i = 0; i < this.bubbles.length; i++) {
       const b = this.bubbles[i];
       const shifted = t + b.phase;
@@ -525,9 +526,7 @@ class LavaHazard extends Hazard {
       }
       b.pos.set(b.x, this._surfaceY + yOff, b.z);
       _s.setScalar(Math.max(0.0001, scale));
-      _q.identity();
-      _m.compose(b.pos, _q, _s);
-      mesh.setMatrixAt(i, _m);
+      this.setPart(this.bubbleParts[i], b.pos, null, _s);
 
       // pop: fires once per cycle at the collapse boundary
       const popIdx = Math.floor((shifted - b.period * 0.72) / b.period);
@@ -543,7 +542,6 @@ class LavaHazard extends Hazard {
         }
       }
     }
-    mesh.instanceMatrix.needsUpdate = true;
   }
 
   _updateAudioAndHud(t, dt, y, player) {

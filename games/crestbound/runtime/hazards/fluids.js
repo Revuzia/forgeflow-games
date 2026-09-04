@@ -501,18 +501,17 @@ class QuicksandHazard extends Hazard {
       g.translate(x + (rnd() - 0.5) * w, -0.06, z + (rnd() - 0.5) * w);
       parts.push(g);
     }
-    this.rim = new THREE.Mesh(mergeAll(parts), hazMat(this.ctx, 'stone'));
-    this.rim.castShadow = true;
-    this.rim.receiveShadow = true;
-    this.rim.position.set(this.center.x, this.surfaceY, this.center.z);
-    this.add(this.rim);
+    /* BATCHED (hazards/batch.js): the stone lip and the warning haze are batch instances
+       (the rippling sand surface keeps its own patched material — one draw per pool). */
+    const rimGeo = mergeAll(parts);
+    this.rimPart = this.solidPart(hazMat(this.ctx, 'stone'), rimGeo, true, true);
+    rimGeo.dispose();
+    _v.set(this.center.x, this.surfaceY, this.center.z);
+    this.setPart(this.rimPart, _v, null, CUR_ONE);
 
     // Warning haze right above the surface: dim, but unmistakable once you are in it.
-    this.haze = makeGlowSprite(this.warnColor.getHex(), Math.min(this.size.x, this.size.z) * 0.8, 0, 3.2);
-    this.own(this.haze.material);
-    this.haze.position.set(this.center.x, this.surfaceY + 0.5, this.center.z);
-    this.haze.renderOrder = 6;
-    this.add(this.haze);
+    this.hazePart = this.glowPart();
+    this.hazePos = new THREE.Vector3(this.center.x, this.surfaceY + 0.5, this.center.z);
   }
 
   _buildVolume() {
@@ -573,8 +572,8 @@ class QuicksandHazard extends Hazard {
     );
     this.sandUniforms.uQsPull.value = grip;
 
-    this.haze.material.opacity = grip * 0.22 + 0.02 * (0.5 + 0.5 * Math.sin(t * 1.3));
-    this.haze.scale.setScalar(Math.min(this.size.x, this.size.z) * (0.7 + grip * 0.35));
+    this.setPartGlow(this.hazePart, this.hazePos, Math.min(this.size.x, this.size.z) * (0.7 + grip * 0.35));
+    this.setPartColor(this.hazePart, this.warnColor, grip * 0.22 + 0.02 * (0.5 + 0.5 * Math.sin(t * 1.3)));
     this.volume.active = this.enabled;
 
     if (this._silent) return;

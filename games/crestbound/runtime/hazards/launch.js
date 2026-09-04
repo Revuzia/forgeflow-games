@@ -45,6 +45,9 @@ const UPV = new THREE.Vector3(0, 1, 0);
 const ONE_SCALE = new THREE.Vector3(1, 1, 1);
 const _mtxInv = new THREE.Matrix4();
 const _mtxLocal = new THREE.Matrix4();
+const _q2 = new THREE.Quaternion();
+const XAXIS = new THREE.Vector3(1, 0, 0);
+const SMOKE_COLOR = new THREE.Color(0xbfc7d4);
 
 /**
  * Flatten a built prop into batchable parts: one entry per (mesh, material group), each with the
@@ -229,13 +232,15 @@ class CannonHazard extends Hazard {
     quad.translate(0, -R * 0.2, R * 1.42);
     baseParts.push(quad);
 
+    /* BATCHED (hazards/batch.js): carriage, barrel, breech, bore, collar, flash, smoke ring,
+       ghost arc and landing marker are batch instances written from the same numbers the loose
+       meshes carried; the aiming parts follow `barrelGroup` (recoil) every frame. */
     // The carriage is yawed with the barrel but never pitched — a real gun carriage.
-    this.carriage = new THREE.Mesh(mergeAll(baseParts), hazMat(this.ctx, 'metal'));
-    this.carriage.castShadow = true;
-    this.carriage.receiveShadow = true;
-    this.carriage.position.copy(this.center);
-    this.carriage.quaternion.setFromAxisAngle(UPV, this.yaw);
-    this.add(this.carriage);
+    this.yawQuat = new THREE.Quaternion().setFromAxisAngle(UPV, this.yaw);
+    const carriageGeo = mergeAll(baseParts);
+    this.carriagePart = this.solidPart(hazMat(this.ctx, 'metal'), carriageGeo, true, true);
+    carriageGeo.dispose();
+    this.setPart(this.carriagePart, this.center, this.yawQuat, ONE_SCALE);
 
     // ---- BARREL (aims) ------------------------------------------------------------------------
     this.barrelGroup = new THREE.Group();
@@ -269,20 +274,20 @@ class CannonHazard extends Hazard {
       tubeParts.push(post);
     }
 
-    this.barrel = new THREE.Mesh(mergeAll(tubeParts), hazMat(this.ctx, 'copper'));
-    this.barrel.castShadow = true;
-    this.barrel.receiveShadow = true;
-    this.barrelGroup.add(this.barrel);
+    const tubeGeo = mergeAll(tubeParts);
+    this.barrelPart = this.solidPart(hazMat(this.ctx, 'copper'), tubeGeo, true, true);
+    tubeGeo.dispose();
 
     // The emitter housing from the shared kit doubles as the breech block.
     const em = buildEmitterGeometry(R * 1.15, 0.7);
+    this.breechPart = null;
+    this.breechRotorPart = null;
     if (em && em.housing) {
-      this.breech = new THREE.Mesh(em.housing, hazMat(this.ctx, 'metal'));
-      this.breech.castShadow = true;
-      this.barrelGroup.add(this.breech);
+      this.breechPart = this.solidPart(hazMat(this.ctx, 'metal'), em.housing, true, true);
+      em.housing.dispose();
       if (em.rotor) {
-        this.breechRotor = new THREE.Mesh(em.rotor, hazMat(this.ctx, 'panel'));
-        this.barrelGroup.add(this.breechRotor);
+        this.breechRotorPart = this.solidPart(hazMat(this.ctx, 'panel'), em.rotor, false, true);
+        em.rotor.dispose();
       }
       if (em.lens) em.lens.dispose();
     }
@@ -290,11 +295,8 @@ class CannonHazard extends Hazard {
     // Bore glow: the read that says "this end is where you come out".
     const boreGeo = new THREE.CylinderGeometry(R * 0.84, R * 0.84, 0.02, 24);
     boreGeo.translate(0, L * 1.02, 0);
-    this.boreMat = additiveMaterial(this.accent.getHex(), { cached: false, opacity: 0.55 });
-    this.own(this.boreMat);
-    this.bore = new THREE.Mesh(boreGeo, this.boreMat);
-    this.bore.renderOrder = 5;
-    this.barrelGroup.add(this.bore);
+    this.borePart = this.trimPart(boreGeo);
+    boreGeo.dispose();
 
     // A ring of chevrons around the breech mouth — the "step in here" invitation.
     const chevParts = [];
@@ -305,28 +307,21 @@ class CannonHazard extends Hazard {
       g.translate(Math.cos(a) * R * 1.22, -R * 0.55, Math.sin(a) * R * 1.22);
       chevParts.push(g);
     }
-    this.collarMat = additiveMaterial(this.accent.getHex(), { cached: false, opacity: 0.6 });
-    this.own(this.collarMat);
-    this.collar = new THREE.Mesh(mergeAll(chevParts), this.collarMat);
-    this.collar.renderOrder = 5;
-    this.collar.position.copy(this.center);
-    this.collar.quaternion.setFromAxisAngle(UPV, this.yaw);
-    this.add(this.collar);
+    const collarGeo = mergeAll(chevParts);
+    this.collarPart = this.trimPart(collarGeo);
+    collarGeo.dispose();
+    this.setPart(this.collarPart, this.center, this.yawQuat, ONE_SCALE);
 
-    // muzzle flash sprite
-    this.flash = makeGlowSprite(this.hotColor.getHex(), R * 5.0, 0, 2.2);
-    this.own(this.flash.material);
-    this.flash.position.copy(this.mouth);
-    this.flash.renderOrder = 7;
-    this.add(this.flash);
+    // muzzle flash
+    this.flashPart = this.glowPart();
+    this.flashPos = this.mouth.clone();
 
     // smoke ring that expands off the muzzle after a shot
     const ringGeo = new THREE.TorusGeometry(R * 1.0, R * 0.16, 6, 24);
-    this.smokeMat = additiveMaterial(0xbfc7d4, { cached: false, opacity: 0, side: THREE.DoubleSide });
-    this.own(this.smokeMat);
-    this.smoke = new THREE.Mesh(ringGeo, this.smokeMat);
-    this.smoke.renderOrder = 6;
-    this.add(this.smoke);
+    this.smokePart = this.trimPart(ringGeo);
+    ringGeo.dispose();
+    this.setPartVisible(this.smokePart, false);
+    this.smokeShown = false;
 
     // ---- physics: the machine is solid, the bore is not ------------------------------------
     // One collider on the carriage (so you can stand on it and climb in from above) and one on
@@ -353,20 +348,14 @@ class CannonHazard extends Hazard {
     // cannon is never a leap of faith. Deterministic: it is the closed-form trajectory.
     this.arcCount = 22;
     const geo = new THREE.OctahedronGeometry(0.10, 0);
-    this.arcMat = additiveMaterial(this.accent.getHex(), { cached: false, opacity: 0.22 });
-    this.own(this.arcMat);
-    this.arcMesh = new THREE.InstancedMesh(geo, this.arcMat, this.arcCount);
-    this.arcMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.arcMesh.frustumCulled = false;
-    this.arcMesh.renderOrder = 5;
-    this.add(this.arcMesh);
+    this.arcParts = [];
+    for (let i = 0; i < this.arcCount; i++) this.arcParts.push(this.trimPart(geo.clone()));
+    geo.dispose();
 
     // Impact marker at the landing point. Built BEFORE the first _writeArc(): that call parks
     // the marker on the solved landing point, so it has to exist by then.
-    this.marker = makeGlowSprite(this.accent.getHex(), Math.max(1.2, this.radius * 2.0), 0.18, 2.8);
-    this.own(this.marker.material);
-    this.marker.renderOrder = 6;
-    this.add(this.marker);
+    this.markerPart = this.glowPart();
+    this.markerSize = Math.max(1.2, this.radius * 2.0);
 
     this._writeArc();
   }
@@ -396,18 +385,15 @@ class CannonHazard extends Hazard {
       );
       const fade = Math.sin(u * Math.PI) * 0.8 + 0.2;
       _s.setScalar(clamp(fade, 0.2, 1) * lerp(1.2, 0.55, u));
-      _q.identity();
-      _m.compose(_v, _q, _s);
-      this.arcMesh.setMatrixAt(i, _m);
+      this.setPart(this.arcParts[i], _v, null, _s);
     }
-    this.arcMesh.instanceMatrix.needsUpdate = true;
     this.landing = this.landing || new THREE.Vector3();
     this.landing.set(
       this.center.x + this.aim.x * this.launchSpeed * total,
       this.center.y + ballisticY(vy, total),
       this.center.z + this.aim.z * this.launchSpeed * total,
     );
-    if (this.marker) this.marker.position.copy(this.landing);
+    if (this.markerPart) this.setPartGlow(this.markerPart, this.landing, this.markerSize);
   }
 
   _buildTrigger() {
@@ -506,33 +492,42 @@ class CannonHazard extends Hazard {
       }
     }
     this.barrelGroup.position.copy(this.center).addScaledVector(this.aim, -recoil * this.radius * 0.9);
-    if (this.breechRotor) this.breechRotor.setRotationFromAxisAngle(UPV, t * 1.4 + recoil * 6);
+    // the aiming parts follow the (recoiling) barrel group
+    this.setPart(this.barrelPart, this.barrelGroup.position, this.barrelQuat, ONE_SCALE);
+    this.setPart(this.breechPart, this.barrelGroup.position, this.barrelQuat, ONE_SCALE);
+    this.setPart(this.borePart, this.barrelGroup.position, this.barrelQuat, ONE_SCALE);
+    if (this.breechRotorPart) {
+      _q.setFromAxisAngle(UPV, t * 1.4 + recoil * 6).premultiply(this.barrelQuat);
+      this.setPart(this.breechRotorPart, this.barrelGroup.position, _q, ONE_SCALE);
+    }
 
     // --- loaded state: the barrel breathes and the arc brightens -------------------------------
     const loaded = !!this.loaded;
     const ready = this.readyAt(t);
     const pulse = 0.5 + 0.5 * Math.sin(t * (loaded ? 9.5 : 2.2));
-    this.boreMat.opacity = (loaded ? 0.75 : ready ? 0.45 : 0.14) + pulse * (loaded ? 0.25 : 0.14);
-    this.collarMat.opacity = (loaded ? 0.85 : ready ? 0.48 : 0.12) + pulse * 0.18;
-    this.arcMat.opacity = (loaded ? 0.55 : 0.16) + pulse * (loaded ? 0.22 : 0.06);
-    this.marker.material.opacity = (loaded ? 0.40 : 0.14) + pulse * 0.10;
-    this.marker.scale.setScalar(Math.max(1.2, this.radius * 2.0) * (1 + pulse * 0.12));
+    this.setPartColor(this.borePart, this.accent, (loaded ? 0.75 : ready ? 0.45 : 0.14) + pulse * (loaded ? 0.25 : 0.14));
+    this.setPartColor(this.collarPart, this.accent, (loaded ? 0.85 : ready ? 0.48 : 0.12) + pulse * 0.18);
+    const arcOp = (loaded ? 0.55 : 0.16) + pulse * (loaded ? 0.22 : 0.06);
+    for (let i = 0; i < this.arcCount; i++) this.setPartColor(this.arcParts[i], this.accent, arcOp);
+    this.setPartGlow(this.markerPart, this.landing, this.markerSize * (1 + pulse * 0.12));
+    this.setPartColor(this.markerPart, this.accent, (loaded ? 0.40 : 0.14) + pulse * 0.10);
 
     // --- muzzle flash + smoke ring ----------------------------------------------------------
     const age = this.firedT === null ? 99 : t - this.firedT;
-    this.flash.position.copy(this.mouth).addScaledVector(this.aim, this.radius * 0.5 - recoil * this.radius * 0.9);
-    this.flash.material.opacity = clamp(1 - age / 0.20, 0, 1) * 0.95;
-    this.flash.scale.setScalar(this.radius * (3.4 + clamp(1 - age / 0.20, 0, 1) * 4.0));
+    this.flashPos.copy(this.mouth).addScaledVector(this.aim, this.radius * 0.5 - recoil * this.radius * 0.9);
+    this.setPartGlow(this.flashPart, this.flashPos, this.radius * (3.4 + clamp(1 - age / 0.20, 0, 1) * 4.0));
+    this.setPartColor(this.flashPart, this.hotColor, clamp(1 - age / 0.20, 0, 1) * 0.95);
     if (age >= 0 && age < 0.75) {
       const k = smoothstep(0, 1, clamp(age / 0.75, 0, 1));
-      this.smoke.visible = true;
-      this.smoke.position.copy(this.mouth).addScaledVector(this.aim, 0.4 + k * 4.5);
-      this.smoke.quaternion.copy(this.barrelQuat).multiply(_q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI * 0.5));
-      this.smoke.scale.setScalar(0.5 + k * 2.6);
-      this.smokeMat.opacity = (1 - k) * 0.32;
-    } else if (this.smoke.visible) {
-      this.smoke.visible = false;
-      this.smokeMat.opacity = 0;
+      if (!this.smokeShown) { this.smokeShown = true; this.setPartVisible(this.smokePart, true); }
+      _v.copy(this.mouth).addScaledVector(this.aim, 0.4 + k * 4.5);
+      _q.copy(this.barrelQuat).multiply(_q2.setFromAxisAngle(XAXIS, Math.PI * 0.5));
+      _s.setScalar(0.5 + k * 2.6);
+      this.setPart(this.smokePart, _v, _q, _s);
+      this.setPartColor(this.smokePart, SMOKE_COLOR, (1 - k) * 0.32);
+    } else if (this.smokeShown) {
+      this.smokeShown = false;
+      this.setPartVisible(this.smokePart, false);
     }
 
     // --- auto-fire ----------------------------------------------------------------------------
@@ -563,7 +558,7 @@ class CannonHazard extends Hazard {
     this.firedT = null;
     this.loaded = null;
     this._loadT = null;
-    if (this.smoke) { this.smoke.visible = false; this.smokeMat.opacity = 0; }
+    if (this.smokeShown) { this.smokeShown = false; this.setPartVisible(this.smokePart, false); }
     super.reset(t);
   }
 }

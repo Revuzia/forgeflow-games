@@ -28,7 +28,8 @@
 import * as THREE from 'three';
 import { Collider, KillVolume } from '../world/collider.js';
 import { hazSfx, hazBurst, resolvePlayer } from './lasers.js';
-import { chamferBox, partMesh, mergeAll, getMat, pal, glowMat } from './movers.js';
+import { chamferBox, mergeAll, getMat, pal } from './movers.js';
+import { BatchRig, trimK } from './batchkit.js';
 
 // ---------------------------------------------------------------------------
 // module-scope scratch — zero per-frame heap allocation below this line
@@ -207,6 +208,11 @@ export function rotor(def, ctx) {
   root.position.copy(pivot);
   const spin = new THREE.Group();
   root.add(spin);
+  /* BATCHED (hazards/batchkit.js): hub, mount, arms, plates and every glow strip are instances
+     in the course batches; `spin` is still posed from theta(t) exactly as before and
+     `rig.sync()` copies the pose out once per frame. */
+  const rig = new BatchRig(ctx, root);
+  let edgePart = null, trimPart = null;
 
   const hz = {
     kind: 'rotor', type: style, def,
@@ -233,8 +239,8 @@ export function rotor(def, ctx) {
   const matHazard = getMat(ctx, lethal ? 'hazard' : 'panel');
   const matDark = getMat(ctx, 'obsidian');
 
-  const trimMat = glowMat(ctx, lethal ? cKillGlow : cAccent, lethal ? 2.6 : 2.0, ownMats);
-  const edgeMat = glowMat(ctx, lethal ? cKill : cSafe, lethal ? 3.6 : 2.6, ownMats, { base: 0x05070b, metalness: 0.5 });
+  const cTrim = lethal ? cKillGlow : cAccent;
+  const cEdge = lethal ? cKill : cSafe;
 
   // =========================================================================
   //  HUB + MOUNT  (static, lives on root)
@@ -316,8 +322,8 @@ export function rotor(def, ctx) {
 
     for (const g of structural) g.applyQuaternion(alignQ);
     for (const g of glows) g.applyQuaternion(alignQ);
-    root.add(partMesh(structural, matMetal, D, true, true));
-    root.add(partMesh(glows, trimMat, D, false, false));
+    rig.solid(matMetal, structural, root, true, true);
+    trimPart = rig.trim(glows, root);
   }
 
   // =========================================================================
@@ -371,9 +377,9 @@ export function rotor(def, ctx) {
     // NOTE: no applyQuaternion(alignQ) here — these live on `spin`, which is itself
     // oriented by alignQ every frame. Baking it in as well would rotate the art twice
     // while the colliders (derived from armDir) rotate once.
-    spin.add(partMesh(structural, matMetal, D, true, true));
-    spin.add(partMesh(plates, matGrate, D, true, true));
-    spin.add(partMesh(glows, edgeMat, D, false, false));
+    rig.solid(matMetal, structural, spin, true, true);
+    rig.solid(matGrate, plates, spin, true, true);
+    edgePart = rig.trim(glows, spin);
 
     for (let i = 0; i < arms; i++) {
       hz.colliders.push(new Collider({
@@ -448,10 +454,10 @@ export function rotor(def, ctx) {
       band.rotateY(phi);
       glows.push(band);
     }
-    spin.add(partMesh(structural, matMetal, D, true, true));
-    spin.add(partMesh(hazardParts, matHazard, D, true, true));
-    spin.add(partMesh(dark, matDark, D, true, false));
-    spin.add(partMesh(glows, edgeMat, D, false, false));
+    rig.solid(matMetal, structural, spin, true, true);
+    rig.solid(matHazard, hazardParts, spin, true, true);
+    rig.solid(matDark, dark, spin, true, false);
+    edgePart = rig.trim(glows, spin);
 
     for (let i = 0; i < arms; i++) {
       hz.colliders.push(new Collider({
@@ -508,9 +514,9 @@ export function rotor(def, ctx) {
     noseCollar.translate(0, thick * 0.7, 0);
     structural.push(noseCollar);
 
-    spin.add(partMesh(plates, matHazard, D, true, true));
-    spin.add(partMesh(structural, matMetal, D, true, false));
-    spin.add(partMesh(glows, edgeMat, D, false, false));
+    rig.solid(matHazard, plates, spin, true, true);
+    rig.solid(matMetal, structural, spin, true, false);
+    edgePart = rig.trim(glows, spin);
 
     for (let i = 0; i < arms; i++) hz.kills.push(makeCapsuleKV(killKind, hz, Math.max(thick, rootC * 0.30)));
   }
@@ -569,10 +575,10 @@ export function rotor(def, ctx) {
     hot.rotateX(Math.PI / 2);
     glows.push(hot);
 
-    spin.add(partMesh(structural, matMetal, D, true, false));
-    spin.add(partMesh(teeth, matGrate, D, true, false));
-    spin.add(partMesh(dark, matDark, D, false, false));
-    spin.add(partMesh(glows, edgeMat, D, false, false));
+    rig.solid(matMetal, structural, spin, true, false);
+    rig.solid(matGrate, teeth, spin, true, false);
+    rig.solid(matDark, dark, spin, false, false);
+    edgePart = rig.trim(glows, spin);
 
     // static shroud over the back of the blade
     const shroudGeoms = [];
@@ -584,8 +590,7 @@ export function rotor(def, ctx) {
     lip.translate(-sawR * 0.92, 0, 0);
     shroudGeoms.push(lip);
     for (const g of shroudGeoms) g.applyQuaternion(alignQ);
-    sawShroud = partMesh(shroudGeoms, matPanel, D, true, false);
-    root.add(sawShroud);
+    sawShroud = rig.solid(matPanel, shroudGeoms, root, true, false);
 
     // Analytic disc kill: three NESTED INSCRIBED boxes. A single box would over-reach
     // to 1.41R at the corners (unfair kills); a capsule of radius R would be a sphere.
@@ -751,10 +756,12 @@ export function rotor(def, ctx) {
       updateSparks(t, dt);
     }
 
-    // emissive life: the hot edge breathes with the sweep, warnings never sleep
+    // emissive life: the hot edge breathes with the sweep, warnings never sleep (the same
+    // curves as the loose glow materials carried, as additive trim colour)
     const ph = (theta % TAU + TAU) % TAU;
-    edgeMat.emissiveIntensity = (lethal ? 3.0 : 2.0) + Math.sin(ph * arms) * 0.55 + Math.sin(t * 7.3) * 0.22;
-    trimMat.emissiveIntensity = (lethal ? 2.4 : 1.8) + Math.sin(t * 2.4) * 0.30;
+    rig.setColor(edgePart, cEdge, trimK((lethal ? 3.0 : 2.0) + Math.sin(ph * arms) * 0.55 + Math.sin(t * 7.3) * 0.22));
+    rig.setColor(trimPart, cTrim, trimK((lethal ? 2.4 : 1.8) + Math.sin(t * 2.4) * 0.30));
+    rig.sync();
 
     updateAudio(t, dt);
   };
@@ -781,6 +788,7 @@ export function rotor(def, ctx) {
 
   hz.dispose = function () {
     if (root.parent) root.parent.remove(root);
+    rig.dispose();
     for (const g of D) { try { g.dispose(); } catch (err) { /* already gone */ } }
     for (const mm of ownMats) { try { mm.dispose(); } catch (err) { /* already gone */ } }
     D.length = 0; ownMats.length = 0;

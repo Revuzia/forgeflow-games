@@ -26,7 +26,8 @@
 import * as THREE from 'three';
 import { Collider, KillVolume } from '../world/collider.js';
 import { hazSfx, hazBurst, resolvePlayer } from './lasers.js';
-import { chamferBox, partMesh, getMat, pal, glowMat } from './movers.js';
+import { chamferBox, getMat, pal } from './movers.js';
+import { BatchRig, trimK } from './batchkit.js';
 
 // ---------------------------------------------------------------------------
 // module-scope scratch
@@ -196,6 +197,11 @@ export function pendulum(def, ctx) {
   root.add(pivotGroup);
   const armGroup = new THREE.Group();
   pivotGroup.add(armGroup);
+  /* BATCHED (hazards/batchkit.js): bearing, chain, spine, head and the hot edge are instances
+     in the course batches; `armGroup` is still posed from angle(t) and `rig.sync()` copies the
+     pose out once per frame. */
+  const rig = new BatchRig(ctx, root);
+  let trimPart = null, edgePart = null;
 
   const hz = {
     kind: 'pendulum', type: mode, def,
@@ -220,8 +226,6 @@ export function pendulum(def, ctx) {
   const matDark = getMat(ctx, 'obsidian');
   const matStone = getMat(ctx, mode === 'ball' ? 'obsidian' : 'metal');
 
-  const trimMat = glowMat(ctx, cAccent, 1.8, ownMats);
-  const edgeMat = glowMat(ctx, cKillGlow, 3.4, ownMats, { base: 0x06080c, metalness: 0.55 });
 
   // =========================================================================
   //  PIVOT BEARING (static)
@@ -255,8 +259,8 @@ export function pendulum(def, ctx) {
     band.translate(0, -brR * 1.9, 0);
     glows.push(band);
 
-    pivotGroup.add(partMesh(structural, matMetal, D, true, true));
-    pivotGroup.add(partMesh(glows, trimMat, D, false, false));
+    rig.solid(matMetal, structural, pivotGroup, true, true);
+    trimPart = rig.trim(glows, pivotGroup);
 
     hz.colliders.push(new Collider({
       center: pivot.clone(),
@@ -272,28 +276,26 @@ export function pendulum(def, ctx) {
   const chainTop = brR * 1.9;
   const headTop = (mode === 'ball') ? (armLen - ballR) : armLen;
   const chainLen = Math.max(0.25, headTop - chainTop);
-  let chainMesh = null;
   {
     const linkR = clamp(Math.max(th * 0.55, ballR * 0.14), 0.07, 0.30);
     const tube = linkR * 0.34;
     const spacing = linkR * 1.42;
     const count = Math.max(2, Math.min(64, Math.floor(chainLen / spacing)));
     const lg = ringGeo(linkR, tube, 5, 10);
-    D.push(lg);
-    chainMesh = new THREE.InstancedMesh(lg, matGrate, count);
-    chainMesh.castShadow = true;
-    chainMesh.receiveShadow = false;
-    chainMesh.frustumCulled = false;
+    // the links are rigid on the arm, so they bake into ONE batch part
+    const links = [];
     const step = chainLen / count;
     for (let i = 0; i < count; i++) {
       _a.set(0, -(chainTop + step * (i + 0.5)), 0);
       _q.setFromAxisAngle(_YA, (i & 1) ? Math.PI / 2 : 0);
       _scl.set(1, step / (linkR * 1.42) * 1.30, 1);
       _mat4.compose(_a, _q, _scl);
-      chainMesh.setMatrixAt(i, _mat4);
+      const g = lg.clone();
+      g.applyMatrix4(_mat4);
+      links.push(g);
     }
-    chainMesh.instanceMatrix.needsUpdate = true;
-    armGroup.add(chainMesh);
+    lg.dispose();
+    rig.solid(matGrate, links, armGroup, true, false);
 
     if (mode !== 'ball') {
       // rigid spine behind the chain so an axe reads as SWUNG, not dangled
@@ -307,7 +309,7 @@ export function pendulum(def, ctx) {
         r.translate(0, -(chainTop + chainLen * ((i + 0.5) / nR)), 0);
         spine.push(r);
       }
-      armGroup.add(partMesh(spine, matPanel, D, true, false));
+      rig.solid(matPanel, spine, armGroup, true, false);
     }
   }
 
@@ -349,9 +351,9 @@ export function pendulum(def, ctx) {
     hot.translate(0, cy, 0);
     glows.push(hot);
 
-    armGroup.add(partMesh(structural, matStone, D, true, true));
-    armGroup.add(partMesh(dark, matDark, D, true, false));
-    armGroup.add(partMesh(glows, edgeMat, D, false, false));
+    rig.solid(matStone, structural, armGroup, true, true);
+    rig.solid(matDark, dark, armGroup, true, false);
+    edgePart = rig.trim(glows, armGroup);
 
     // solid: an inscribed-ish box so the ball pushes without invisible corners
     ballCollider = new Collider({
@@ -398,9 +400,9 @@ export function pendulum(def, ctx) {
     ridge.translate(0, -armLen - h * 0.04, 0);
     dark.push(ridge);
 
-    armGroup.add(partMesh(structural, matStone, D, true, true));
-    armGroup.add(partMesh(dark, matDark, D, true, false));
-    armGroup.add(partMesh(glows, edgeMat, D, false, false));
+    rig.solid(matStone, structural, armGroup, true, true);
+    rig.solid(matDark, dark, armGroup, true, false);
+    edgePart = rig.trim(glows, armGroup);
 
     // Two analytic capsules: the seated head, and the blade body. Both run across the
     // span (local Z). The chain and spine above are untouched — the chain is SAFE.
@@ -458,7 +460,7 @@ export function pendulum(def, ctx) {
       setSphereKV(killA, _a);
       // solid at rest, deadly on the swing — "lethal on impact"
       killA.active = hz.enabled && tipSpeed > Math.max(3.2, armLen * 0.55);
-      edgeMat.emissiveIntensity = 0.8 + Math.min(6.0, tipSpeed * 0.30);
+      rig.setColor(edgePart, cKillGlow, trimK(0.8 + Math.min(6.0, tipSpeed * 0.30)));
     } else {
       _localA.set(0, headY, -spanA);
       _localB.set(0, headY, spanA);
@@ -474,10 +476,11 @@ export function pendulum(def, ctx) {
       setCapsuleKV(killB, _c, _d);
       killB.active = hz.enabled;
 
-      edgeMat.emissiveIntensity = 2.4 + Math.min(5.5, tipSpeed * 0.34) + Math.sin(t * 9.1) * 0.2;
+      rig.setColor(edgePart, cKillGlow, trimK(2.4 + Math.min(5.5, tipSpeed * 0.34) + Math.sin(t * 9.1) * 0.2));
     }
 
-    trimMat.emissiveIntensity = 1.5 + Math.sin(t * 2.6) * 0.30;
+    rig.setColor(trimPart, cAccent, trimK(1.5 + Math.sin(t * 2.6) * 0.30));
+    rig.sync();
 
     // --- wind whoosh: it peaks exactly where |omega| does, at angle 0 -------------
     const sign = Math.sin(arg) >= 0 ? 1 : -1;
@@ -533,7 +536,7 @@ export function pendulum(def, ctx) {
 
   hz.dispose = function () {
     if (root.parent) root.parent.remove(root);
-    if (chainMesh) { try { chainMesh.dispose(); } catch (err) { /* already gone */ } }
+    rig.dispose();
     for (const g of D) { try { g.dispose(); } catch (err) { /* already gone */ } }
     for (const mm of ownMats) { try { mm.dispose(); } catch (err) { /* already gone */ } }
     D.length = 0; ownMats.length = 0;

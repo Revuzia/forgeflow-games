@@ -170,24 +170,22 @@ class IceHazard extends Hazard {
 
     const w = this.size.x, h = this.size.y, d = this.size.z;
 
+    /* BATCHED (hazards/batch.js): slab, core, rim and crust are STATIC, so every ice deck in
+       the course shares one draw per material; poses are written once from the same
+       centre/quaternion the loose meshes carried. The sparkle Points stay loose (a Points
+       cloud cannot join a triangle batch). */
     // --- body: a bevelled ice slab with an inset frozen core --------------------------------
     const bodyGeo = bevelBox(w, h, d, Math.min(0.09, h * 0.3), 1.9);
-    this.body = new THREE.Mesh(bodyGeo, hazMat(ctx, 'ice'));
-    this.body.castShadow = true;
-    this.body.receiveShadow = true;
-    this.body.position.copy(this.center);
-    this.body.quaternion.copy(this.quat);
-    this.add(this.body);
+    this.bodyPart = this.solidPart(hazMat(ctx, 'ice'), bodyGeo, true, true);
+    bodyGeo.dispose();
+    this.setPart(this.bodyPart, this.center, this.quat, ONE);
 
     // A crystal core just under the deck: catches the key light and reads as depth, not paint.
     const coreGeo = bevelBox(w * 0.86, h * 0.55, d * 0.86, 0.05, 2.4);
     coreGeo.translate(0, -h * 0.08, 0);
-    this.core = new THREE.Mesh(coreGeo, hazMat(ctx, 'crystal'));
-    this.core.castShadow = false;
-    this.core.receiveShadow = false;
-    this.core.position.copy(this.center);
-    this.core.quaternion.copy(this.quat);
-    this.add(this.core);
+    this.corePart = this.solidPart(hazMat(ctx, 'crystal'), coreGeo, false, false);
+    coreGeo.dispose();
+    this.setPart(this.corePart, this.center, this.quat, ONE);
 
     // --- frosted edge: a cold rim strip on the top perimeter ---------------------------------
     const rimW = clamp(Math.min(w, d) * 0.035, 0.06, 0.24);
@@ -198,13 +196,10 @@ class IceHazard extends Hazard {
       slab(rimW, 0.03, d - rimW * 2, (w - rimW) * 0.5, top, 0, 0.008, 0.5),
       slab(rimW, 0.03, d - rimW * 2, -(w - rimW) * 0.5, top, 0, 0.008, 0.5),
     ];
-    this.rimMat = additiveMaterial(this.rimColor.getHex(), { cached: false, opacity: 0.55 });
-    this.own(this.rimMat);
-    this.rim = new THREE.Mesh(mergeAll(rimParts), this.rimMat);
-    this.rim.renderOrder = 4;
-    this.rim.position.copy(this.center);
-    this.rim.quaternion.copy(this.quat);
-    this.add(this.rim);
+    const rimGeo = mergeAll(rimParts);
+    this.rimPart = this.trimPart(rimGeo);
+    rimGeo.dispose();
+    this.setPart(this.rimPart, this.center, this.quat, ONE);
 
     // Frost crust: a ring of rime where the slab meets the world, so the edge reads at speed.
     // The y-stretch is capped at 1.8 — needle rime reads as a miniature spike bed lining a
@@ -225,11 +220,9 @@ class IceHazard extends Hazard {
     }
     const crustGeo = mergeAll(crustParts);
     if (crustGeo) {
-      this.crust = new THREE.Mesh(crustGeo, hazMat(ctx, 'crystal'));
-      this.crust.castShadow = false;
-      this.crust.position.copy(this.center);
-      this.crust.quaternion.copy(this.quat);
-      this.add(this.crust);
+      this.crustPart = this.solidPart(hazMat(ctx, 'crystal'), crustGeo, false, true);
+      crustGeo.dispose();
+      this.setPart(this.crustPart, this.center, this.quat, ONE);
     }
 
     this._buildSparkles(q, w, h, d);
@@ -286,7 +279,7 @@ class IceHazard extends Hazard {
     this.time = t;
     this.sparkUniforms.uTime.value = t;
     // Slow cold breathing on the rim so a frozen platform never looks like a static decal.
-    this.rimMat.opacity = 0.40 + 0.22 * (0.5 + 0.5 * Math.sin(t * 0.9 + this.center.x * 0.3));
+    this.setPartColor(this.rimPart, this.rimColor, 0.40 + 0.22 * (0.5 + 0.5 * Math.sin(t * 0.9 + this.center.x * 0.3)));
     this.collider.active = this.enabled;
   }
 
@@ -420,12 +413,13 @@ class ConveyorHazard extends Hazard {
       }
     }
 
+    /* BATCHED (hazards/batch.js): the frame, the rail arrows, every tread and every chevron
+       are batch instances; the treads and chevrons are re-posed each frame from exactly the
+       belt-loop numbers the InstancedMesh matrices used to carry. */
     const geo = mergeAll(parts);
-    this.frame = new THREE.Mesh(geo, hazMat(this.ctx, 'conveyor'));
-    this.frame.castShadow = true;
-    this.frame.receiveShadow = true;
-    this._orient(this.frame);
-    this.add(this.frame);
+    this.framePart = this.solidPart(hazMat(this.ctx, 'conveyor'), geo, true, true);
+    geo.dispose();
+    this._orientPart(this.framePart, false);
 
     // static direction arrows engraved into the rails
     const n = clamp(Math.round(L / 1.5), 2, 12);
@@ -447,26 +441,23 @@ class ConveyorHazard extends Hazard {
       // dark backing first, so the additive arrows read on the lit rail
       const backGeo = mergeAll(backParts);
       if (backGeo) {
-        const backing = new THREE.Mesh(backGeo, chevronBackingMaterial());
-        backing.renderOrder = 3;
-        this._orient(backing, this.power < 0);
-        this.add(backing);
+        const backPart = this.solidPart(chevronBackingMaterial(), backGeo, false, false);
+        backGeo.dispose();
+        this._orientPart(backPart, this.power < 0);
       }
-      this.arrowMat = additiveMaterial(this.accent.getHex(), { cached: false, opacity: 0.55 });
-      this.own(this.arrowMat);
-      const arrows = new THREE.Mesh(arrowGeo, this.arrowMat);
-      arrows.renderOrder = 4;
-      this._orient(arrows, this.power < 0);
-      this.add(arrows);
+      const arrowPart = this.trimPart(arrowGeo);
+      arrowGeo.dispose();
+      this._orientPart(arrowPart, this.power < 0);
+      this.setPartColor(arrowPart, this.accent, 0.55);
     }
   }
 
-  /** Place a belt-local mesh into world space (optionally flipped for a reversed belt). */
-  _orient(obj, flip) {
+  /** Pose a belt-local batch part into world space (optionally flipped for a reversed belt). */
+  _orientPart(part, flip) {
     _m.makeBasis(this.side, this.nrm, this.fwd);
-    obj.quaternion.setFromRotationMatrix(_m);
-    if (flip) obj.quaternion.multiply(_q.setFromAxisAngle(UPV, Math.PI));
-    obj.position.copy(this.center);
+    _q.setFromRotationMatrix(_m);
+    if (flip) _q.multiply(_chevFlip.setFromAxisAngle(UPV, Math.PI));
+    this.setPart(part, this.center, _q, ONE);
   }
 
   _buildTreads(q) {
@@ -488,12 +479,9 @@ class ConveyorHazard extends Hazard {
       parts.push(slab(W * 0.84, ribH, treadDepth * 0.16, 0, ribH * 0.5 + treadThick * 0.2, i * treadDepth * 0.28, 0.008, 0.34));
     }
     const geo = mergeAll(parts);
-    this.treadMesh = new THREE.InstancedMesh(geo, hazMat(this.ctx, 'metal'), count);
-    this.treadMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.treadMesh.castShadow = false;
-    this.treadMesh.receiveShadow = true;
-    this.treadMesh.frustumCulled = false;
-    this.add(this.treadMesh);
+    this.treadParts = [];
+    for (let i = 0; i < count; i++) this.treadParts.push(this.solidPart(hazMat(this.ctx, 'metal'), geo, false, true));
+    geo.dispose();
   }
 
   _buildChevrons() {
@@ -507,19 +495,15 @@ class ConveyorHazard extends Hazard {
     // instance matrix.
     const backGeo = chevronGeometry(this.beltWidth * 0.46, this.beltWidth * 0.38, 0.02);
     backGeo.translate(0, -0.006, 0);
-    this.chevBack = new THREE.InstancedMesh(backGeo, chevronBackingMaterial(), n);
-    this.chevBack.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.chevBack.frustumCulled = false;
-    this.chevBack.renderOrder = 4;
-    this.add(this.chevBack);
     const geo = chevronGeometry(this.beltWidth * 0.38, this.beltWidth * 0.30, 0.02);
-    this.chevMat = additiveMaterial(this.accent.getHex(), { cached: false, opacity: 0.7 });
-    this.own(this.chevMat);
-    this.chevMesh = new THREE.InstancedMesh(geo, this.chevMat, n);
-    this.chevMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.chevMesh.frustumCulled = false;
-    this.chevMesh.renderOrder = 5;
-    this.add(this.chevMesh);
+    this.chevBackParts = [];
+    this.chevParts = [];
+    for (let i = 0; i < n; i++) {
+      this.chevBackParts.push(this.solidPart(chevronBackingMaterial(), backGeo, false, false));
+      this.chevParts.push(this.trimPart(geo.clone()));
+    }
+    backGeo.dispose();
+    geo.dispose();
   }
 
   update(t) {
@@ -532,10 +516,8 @@ class ConveyorHazard extends Hazard {
       _v.addScaledVector(_v2, -this.treadInset);
       _m.makeBasis(this.side, _v2, _v3);
       _q.setFromRotationMatrix(_m);
-      _m.compose(_v, _q, ONE);
-      this.treadMesh.setMatrixAt(i, _m);
+      this.setPart(this.treadParts[i], _v, _q, ONE);
     }
-    this.treadMesh.instanceMatrix.needsUpdate = true;
 
     // Chevrons flow along the top run only, wrapping at the ends.
     const dirSign = this.power >= 0 ? 1 : -1;
@@ -551,13 +533,11 @@ class ConveyorHazard extends Hazard {
       _v.copy(this.fwd).multiplyScalar(z).addScaledVector(this.nrm, this.R + 0.045).add(this.center);
       const sc = clamp(fade, 0, 1);
       _s.set(sc, sc, sc);
-      _m.compose(_v, baseQ, _s);
-      this.chevMesh.setMatrixAt(i, _m);
-      this.chevBack.setMatrixAt(i, _m);
+      this.setPart(this.chevParts[i], _v, baseQ, _s);
+      this.setPart(this.chevBackParts[i], _v, baseQ, _s);
     }
-    this.chevMesh.instanceMatrix.needsUpdate = true;
-    this.chevBack.instanceMatrix.needsUpdate = true;
-    this.chevMat.opacity = 0.45 + 0.30 * (0.5 + 0.5 * Math.sin(t * 3.4));
+    const chevOp = 0.45 + 0.30 * (0.5 + 0.5 * Math.sin(t * 3.4));
+    for (let i = 0; i < this.chevCount; i++) this.setPartColor(this.chevParts[i], this.accent, chevOp);
 
     this.collider.active = this.enabled;
   }
@@ -909,54 +889,46 @@ class SpeedPadHazard extends Hazard {
     for (const sx of [1, -1]) {
       parts.push(slab(wid * 0.09, h * 0.7, len * 0.9, sx * wid * 0.43, h * 0.12, 0, 0.01));
     }
+    /* BATCHED (hazards/batch.js): body, lamps, chevrons, backings and the halo are batch
+       instances posed from the same numbers the loose meshes carried. */
     const geo = mergeAll(parts);
-    this.body = new THREE.Mesh(geo, hazMat(this.ctx, 'panel'));
-    this.body.castShadow = true;
-    this.body.receiveShadow = true;
     _m.makeBasis(_v2.copy(this.flat).cross(UPV).normalize().negate(), UPV, this.flat);
-    this.body.quaternion.setFromRotationMatrix(_m);
-    this.body.position.copy(this.center);
-    this.add(this.body);
-    this.baseQuat = this.body.quaternion.clone();
+    this.baseQuat = new THREE.Quaternion().setFromRotationMatrix(_m);
+    this.bodyPart = this.solidPart(hazMat(this.ctx, 'panel'), geo, true, true);
+    geo.dispose();
+    this.setPart(this.bodyPart, this.center, this.baseQuat, ONE);
 
     // side lamp strips
     const lampParts = [];
     for (const sx of [1, -1]) {
       lampParts.push(slab(wid * 0.045, 0.02, len * 0.86, sx * wid * 0.43, h * 0.5 + 0.006, 0, 0.006, 0.34));
     }
-    this.lampMat = additiveMaterial(this.accent.getHex(), { cached: false, opacity: 0.6 });
-    this.own(this.lampMat);
-    this.lamps = new THREE.Mesh(mergeAll(lampParts), this.lampMat);
-    this.lamps.renderOrder = 5;
-    this.lamps.quaternion.copy(this.baseQuat);
-    this.lamps.position.copy(this.center);
-    this.add(this.lamps);
+    const lampGeo = mergeAll(lampParts);
+    this.lampPart = this.trimPart(lampGeo);
+    lampGeo.dispose();
+    this.setPart(this.lampPart, this.center, this.baseQuat, ONE);
 
     // flowing chevrons, each on a dark backing plate (see chevronBackingMaterial)
     this.chevCount = clamp(Math.round(len / 0.55), 3, 16);
     this.chevSpacing = len / this.chevCount;
     const bg = chevronGeometry(wid * 0.58, wid * 0.42, 0.02);
     bg.translate(0, -0.006, 0);
-    this.chevBack = new THREE.InstancedMesh(bg, chevronBackingMaterial(), this.chevCount);
-    this.chevBack.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.chevBack.frustumCulled = false;
-    this.chevBack.renderOrder = 5;
-    this.add(this.chevBack);
     const cg = chevronGeometry(wid * 0.5, wid * 0.34, 0.02);
-    this.chevMat = additiveMaterial(this.accent.getHex(), { cached: false, opacity: 0.85 });
-    this.own(this.chevMat);
-    this.chevMesh = new THREE.InstancedMesh(cg, this.chevMat, this.chevCount);
-    this.chevMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.chevMesh.frustumCulled = false;
-    this.chevMesh.renderOrder = 6;
-    this.add(this.chevMesh);
+    this.chevBackParts = [];
+    this.chevParts = [];
+    for (let i = 0; i < this.chevCount; i++) {
+      this.chevBackParts.push(this.solidPart(chevronBackingMaterial(), bg, false, false));
+      this.chevParts.push(this.trimPart(cg.clone()));
+    }
+    bg.dispose();
+    cg.dispose();
 
     // Half-size, dim halo: at pad size the sprite fuses pad, lamps and chevrons into one
     // bloomed blob from 15 m — the telegraph must stay a drawn arrow field, not a light source.
-    this.glow = makeGlowSprite(this.accent.getHex(), Math.max(wid, len) * 0.6, 0.10, 2.8);
-    this.own(this.glow.material);
-    this.glow.position.set(this.center.x, this.top + 0.10, this.center.z);
-    this.add(this.glow);
+    this.glowPartRef = this.glowPart();
+    this.glowPos = new THREE.Vector3(this.center.x, this.top + 0.10, this.center.z);
+    this.glowSize = Math.max(wid, len) * 0.6;
+    this.setPartGlow(this.glowPartRef, this.glowPos, this.glowSize);
   }
 
   onTouch(info) {
@@ -1010,17 +982,16 @@ class SpeedPadHazard extends Hazard {
       _v.y = this.top + 0.02;
       const sc = clamp(Math.sin(u * Math.PI) * 1.25, 0.12, 1.1) * (1 + boost * 0.35);
       _s.set(sc, sc, sc);
-      _m.compose(_v, this.baseQuat, _s);
-      this.chevMesh.setMatrixAt(i, _m);
-      this.chevBack.setMatrixAt(i, _m);
+      this.setPart(this.chevParts[i], _v, this.baseQuat, _s);
+      this.setPart(this.chevBackParts[i], _v, this.baseQuat, _s);
     }
-    this.chevMesh.instanceMatrix.needsUpdate = true;
-    this.chevBack.instanceMatrix.needsUpdate = true;
 
     const pulse = 0.5 + 0.5 * Math.sin(t * 5.2);
-    this.chevMat.opacity = 0.55 + 0.28 * pulse + boost * 0.4;
-    this.lampMat.opacity = 0.32 + 0.18 * pulse + boost * 0.6;
-    this.glow.material.opacity = 0.08 + 0.04 * pulse + boost * 0.40;
+    const chevOp = 0.55 + 0.28 * pulse + boost * 0.4;
+    for (let i = 0; i < this.chevCount; i++) this.setPartColor(this.chevParts[i], this.accent, chevOp);
+    this.setPartColor(this.lampPart, this.accent, 0.32 + 0.18 * pulse + boost * 0.6);
+    this.setPartGlow(this.glowPartRef, this.glowPos, this.glowSize);
+    this.setPartColor(this.glowPartRef, this.accent, 0.08 + 0.04 * pulse + boost * 0.40);
     this.collider.active = this.enabled;
   }
 
@@ -1150,15 +1121,14 @@ class WindHazard extends Hazard {
     this.streakCount = n;
 
     // A stretched octahedron reads as a wind streak far better than a box does.
+    /* BATCHED (hazards/batch.js): every streak is a trim-batch instance, re-posed each frame
+       from the same closed-form ride the InstancedMesh used; its per-instance colour carries
+       the brightness x fade x material opacity the loose mesh used to multiply out. */
     const geo = new THREE.OctahedronGeometry(0.5, 0);
     geo.scale(0.055, 0.055, 1);
-    this.streakMat = additiveMaterial(this.accent.getHex(), { cached: false, opacity: 0.55 });
-    this.own(this.streakMat);
-    this.streaks = new THREE.InstancedMesh(geo, this.streakMat, n);
-    this.streaks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.streaks.frustumCulled = false;
-    this.streaks.renderOrder = 5;
-    this.add(this.streaks);
+    this.streakParts = [];
+    for (let i = 0; i < n; i++) this.streakParts.push(this.trimPart(geo.clone()));
+    geo.dispose();
 
     // Lateral basis for scattering the streaks across the volume's cross-section.
     this.latA = Math.abs(this.dir.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
@@ -1195,12 +1165,9 @@ class WindHazard extends Hazard {
     }
     const geo = mergeAll(parts);
     if (!geo) return;
-    this.edgeMat = additiveMaterial(this.accent.getHex(), { cached: false, opacity: 0.10 });
-    this.own(this.edgeMat);
-    this.edge = new THREE.Mesh(geo, this.edgeMat);
-    this.edge.position.copy(this.center);
-    this.edge.renderOrder = 4;
-    this.add(this.edge);
+    this.edgePart = this.trimPart(geo);
+    geo.dispose();
+    this.setPart(this.edgePart, this.center, null, ONE);
   }
 
   update(t, dt, player) {
@@ -1209,6 +1176,7 @@ class WindHazard extends Hazard {
     const span = this.span;
     const base = _v3.copy(this.center).addScaledVector(this.dir, -span * 0.5);
 
+    const streakOp = 0.35 + 0.22 * (0.5 + 0.5 * Math.sin(t * 1.7));
     for (let i = 0; i < this.streakCount; i++) {
       const s = this.streakData[i];
       const u = (s.off + t * s.speed * 0.22) % 1;
@@ -1218,15 +1186,10 @@ class WindHazard extends Hazard {
         .addScaledVector(this.latB, s.b);
       const fade = Math.min(1, Math.min(u, 1 - u) * 7);
       _s.set(1, 1, s.len * (0.5 + fade * 0.8));
-      _m.compose(_v, this.streakQuat, _s);
-      this.streaks.setMatrixAt(i, _m);
-      _c.setScalar(clamp(s.bright * fade, 0, 1));
-      this.streaks.setColorAt(i, _c);
+      this.setPart(this.streakParts[i], _v, this.streakQuat, _s);
+      this.setPartColor(this.streakParts[i], this.accent, clamp(s.bright * fade, 0, 1) * streakOp);
     }
-    this.streaks.instanceMatrix.needsUpdate = true;
-    if (this.streaks.instanceColor) this.streaks.instanceColor.needsUpdate = true;
-    this.streakMat.opacity = 0.35 + 0.22 * (0.5 + 0.5 * Math.sin(t * 1.7));
-    if (this.edgeMat) this.edgeMat.opacity = 0.07 + 0.05 * (0.5 + 0.5 * Math.sin(t * 1.1));
+    if (this.edgePart) this.setPartColor(this.edgePart, this.accent, 0.07 + 0.05 * (0.5 + 0.5 * Math.sin(t * 1.1)));
 
     this.volume.active = this.enabled;
 

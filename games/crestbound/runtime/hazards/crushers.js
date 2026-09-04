@@ -23,7 +23,8 @@
 import * as THREE from 'three';
 import { Collider, KillVolume } from '../world/collider.js';
 import { hazSfx, hazBurst, hazShake, resolvePlayer } from './lasers.js';
-import { chamferBox, partMesh, mergeAll, getMat, pal, glowMat } from './movers.js';
+import { chamferBox, mergeAll, getMat, pal } from './movers.js';
+import { BatchRig, trimK } from './batchkit.js';
 
 // ---------------------------------------------------------------------------
 // module-scope scratch
@@ -41,6 +42,7 @@ const _mat4 = new THREE.Matrix4();
 const _scl = new THREE.Vector3();
 const _UP = new THREE.Vector3(0, 1, 0);
 const _X = new THREE.Vector3(1, 0, 0);
+const _lampCol = new THREE.Color();
 
 let _lastCrushSfx = -1e9;
 
@@ -152,6 +154,10 @@ export function crusher(def, ctx) {
   const root = new THREE.Group();
   root.name = 'crusher:' + mode;
   root.position.copy(origin);
+  /* BATCHED (hazards/batchkit.js). Every plate, lamp, band and rod of every crusher in the
+     course is an instance in the shared per-material batches; the Groups below are still posed
+     exactly as before and `rig.sync()` copies their matrices out once per frame. */
+  const rig = new BatchRig(ctx, root);
 
   const hz = {
     kind: 'crusher', type: mode, def,
@@ -219,8 +225,8 @@ export function crusher(def, ctx) {
       sign, dir, frameQ, basePos: basePos.clone(), localBase,
       group: new THREE.Group(),                          // moving head
       collider: null, kill: null,
-      warnMat: null, faceMat: null, safeMat: null,
-      shaftGroup: null, shaftMesh: null, collarMesh: null, rodMesh: null,
+      warnPart: null, facePart: null, safePart: null,
+      shaftGroup: null, shaftNode: null, rodNode: null, collarParts: null,
       housingFace: 0,
     };
     root.add(unit.group);
@@ -313,15 +319,12 @@ export function crusher(def, ctx) {
     for (const g of glows) g.applyMatrix4(frameM);
     for (const g of safeEdge) g.applyMatrix4(frameM);
 
-    unit.warnMat = glowMat(ctx, cIdle, 0.5, ownMats, { base: 0x0a0c11 });
-    unit.group.add(partMesh(structural, matMetal, D, true, true));
-    unit.group.add(partMesh(dark, matRubber, D, false, false));
-    unit.group.add(partMesh(hazardParts, matHazard, D, true, false));
-    unit.group.add(partMesh(glows, unit.warnMat, D, false, false));
-    if (safeEdge.length) {
-      unit.safeMat = glowMat(ctx, cSafe, 2.2, ownMats, { base: 0x080b10 });
-      unit.group.add(partMesh(safeEdge, unit.safeMat, D, false, false));
-    }
+    rig.solid(matMetal, structural, unit.group, true, true);
+    rig.solid(matRubber, dark, unit.group, false, false);
+    rig.solid(matHazard, hazardParts, unit.group, true, false);
+    // the collar band and the safe-edge stripe were animated-emissive materials: additive trim
+    unit.warnPart = rig.trim(glows, unit.group);
+    if (safeEdge.length) unit.safePart = rig.trim(safeEdge, unit.group);
 
     // ---- HOUSING (static, behind the retracted head) -----------------------
     const housH = Math.max(1.0, sAlong * 1.15);
@@ -372,10 +375,9 @@ export function crusher(def, ctx) {
     const housingGrp = new THREE.Group();
     housingGrp.position.copy(localBase);
     root.add(housingGrp);
-    housingGrp.add(partMesh(hoStruct, matMetal, D, true, true));
-    housingGrp.add(partMesh(hoDark, matDark, D, false, false));
-    unit.faceMat = glowMat(ctx, cIdle, 1.2, ownMats, { base: 0x1a1206 });
-    housingGrp.add(partMesh(hoLights, unit.faceMat, D, false, false));
+    rig.solid(matMetal, hoStruct, housingGrp, true, true);
+    rig.solid(matDark, hoDark, housingGrp, false, false);
+    unit.facePart = rig.trim(hoLights, housingGrp);
 
     // ---- PISTON SHAFT (telescoping; a cylinder scaled along its own axis is
     //      geometrically exact, so only the collars need per-frame placement) --
@@ -387,19 +389,20 @@ export function crusher(def, ctx) {
     const shaftR = Math.min(0.34, faceMin * 0.16);
     const sg = new THREE.CylinderGeometry(shaftR, shaftR, 1, 14);
     sg.translate(0, 0.5, 0);
-    D.push(sg);
-    unit.shaftMesh = new THREE.Mesh(sg, matGrate);
-    unit.shaftMesh.castShadow = true;
-    unit.shaftGroup.add(unit.shaftMesh);
+    // the telescoping shaft is a unit cylinder on a node scaled along its own axis
+    unit.shaftNode = new THREE.Group();
+    unit.shaftGroup.add(unit.shaftNode);
+    rig.solid(matGrate, sg, unit.shaftNode, true, true);
 
     const cg = ringGeo(shaftR * 1.28, shaftR * 0.30, 6, 14);
     cg.rotateX(Math.PI / 2);
-    D.push(cg);
-    unit.collarMesh = new THREE.InstancedMesh(cg, matMetal, 4);
-    unit.collarMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    unit.collarMesh.castShadow = false;
-    unit.collarMesh.frustumCulled = false;
-    unit.shaftGroup.add(unit.collarMesh);
+    unit.collarParts = [];
+    for (let k = 0; k < 4; k++) {
+      const part = rig.solid(matMetal, cg.clone(), unit.shaftGroup, false, true);
+      rig.setLocal(part, _mat4.identity());
+      unit.collarParts.push(part);
+    }
+    cg.dispose();
 
     const rodR = Math.min(0.11, faceMin * 0.055);
     const rods = [];
@@ -411,13 +414,9 @@ export function crusher(def, ctx) {
       rg.translate(cx, 0, cz);
       rods.push(rg);
     }
-    const rodGeo = mergeAll(rods);
-    if (rodGeo) {
-      D.push(rodGeo);
-      unit.rodMesh = new THREE.Mesh(rodGeo, matPanel);
-      unit.rodMesh.castShadow = false;
-      unit.shaftGroup.add(unit.rodMesh);
-    }
+    unit.rodNode = new THREE.Group();
+    unit.shaftGroup.add(unit.rodNode);
+    rig.solid(matPanel, rods, unit.rodNode, false, true);
 
     // ---- physics ----------------------------------------------------------
     unit.collider = new Collider({
@@ -539,27 +538,27 @@ export function crusher(def, ctx) {
 
       // telescoping shaft
       const shaftLen = Math.max(0.04, unitShaftLength(un, dist));
-      un.shaftMesh.scale.y = shaftLen;
-      if (un.rodMesh) un.rodMesh.scale.y = shaftLen;
-      const cm = un.collarMesh;
+      un.shaftNode.scale.y = shaftLen;
+      un.rodNode.scale.y = shaftLen;
       for (let k = 0; k < 4; k++) {
         _a.set(0, shaftLen * (0.14 + k * 0.245), 0);
         _q.identity();
         _scl.set(1, 1, 1);
         _mat4.compose(_a, _q, _scl);
-        cm.setMatrixAt(k, _mat4);
+        rig.setLocal(un.collarParts[k], _mat4);
       }
-      cm.instanceMatrix.needsUpdate = true;
 
-      // lamps: amber idle -> hard red strobe as the slam arms, blazing on impact
+      // lamps: amber idle -> hard red strobe as the slam arms, blazing on impact. The same
+      // emissive curves as before, mapped onto additive trim colour (batchkit.trimK).
       const strobeHz = 2.2 + warn * warn * 16;
       const strobe = 0.5 + 0.5 * Math.sin(t * TAU * strobeHz);
-      un.faceMat.emissive.copy(cIdle).lerp(cKill, warn);
-      un.faceMat.emissiveIntensity = 0.7 + warn * (1.4 + strobe * 7.0);
-      un.warnMat.emissive.copy(closing ? cKill : cIdle).lerp(cKill, Math.max(warn, closing ? 1 : 0));
-      un.warnMat.emissiveIntensity = 0.45 + warn * 3.4 + (closing ? Math.min(4.0, speed * 0.22) : 0);
-      if (un.safeMat) un.safeMat.emissiveIntensity = closing ? 0.35 : (2.0 + Math.sin(t * 2.2) * 0.30);
+      _lampCol.copy(cIdle).lerp(cKill, warn);
+      rig.setColor(un.facePart, _lampCol, trimK(0.7 + warn * (1.4 + strobe * 7.0)));
+      _lampCol.copy(closing ? cKill : cIdle).lerp(cKill, Math.max(warn, closing ? 1 : 0));
+      rig.setColor(un.warnPart, _lampCol, trimK(0.45 + warn * 3.4 + (closing ? Math.min(4.0, speed * 0.22) : 0)));
+      if (un.safePart) rig.setColor(un.safePart, cSafe, trimK(closing ? 0.35 : (2.0 + Math.sin(t * 2.2) * 0.30)));
     }
+    rig.sync();
 
     // slam / retract events (presentation only — never feeds the transform)
     const slamNow = u >= 0.995;
@@ -594,9 +593,7 @@ export function crusher(def, ctx) {
 
   hz.dispose = function () {
     if (root.parent) root.parent.remove(root);
-    for (const un of units) {
-      if (un.collarMesh) { try { un.collarMesh.dispose(); } catch (err) { /* already gone */ } }
-    }
+    rig.dispose();
     for (const g of D) { try { g.dispose(); } catch (err) { /* already gone */ } }
     for (const mm of ownMats) { try { mm.dispose(); } catch (err) { /* already gone */ } }
     D.length = 0; ownMats.length = 0; units.length = 0;

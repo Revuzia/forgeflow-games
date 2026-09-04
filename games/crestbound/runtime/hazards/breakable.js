@@ -691,13 +691,12 @@ class SeesawHazard extends Hazard {
     }
 
     const geo = mergeAll(parts);
+    /* BATCHED (hazards/batch.js): fulcrum, plank, ironwork and stripes are batch instances;
+       the plank parts are re-posed every frame from the same pivot quaternion the Group used. */
     // Rotate the whole fulcrum so its local Z is the tilt axis.
-    this.fulcrum = new THREE.Mesh(geo, hazMat(this.ctx, 'stone'));
-    this.fulcrum.castShadow = true;
-    this.fulcrum.receiveShadow = true;
-    this.fulcrum.position.copy(this.center);
-    this.fulcrum.quaternion.copy(this.baseQuat);
-    this.add(this.fulcrum);
+    this.fulcrumPart = this.solidPart(hazMat(this.ctx, 'stone'), geo, true, true);
+    geo.dispose();
+    this.setPart(this.fulcrumPart, this.center, this.baseQuat, ONE_SCALE);
   }
 
   _buildPlank() {
@@ -738,21 +737,9 @@ class SeesawHazard extends Hazard {
       stripes.push(slab(L * 0.035, 0.035, w * 0.92, s * (L * 0.5 - L * 0.04), plankT * 0.5 + 0.012, 0, 0.008, 0.4));
     }
 
-    this.plank = new THREE.Mesh(mergeAll(parts), hazMat(this.ctx, this.matKey));
-    this.plank.castShadow = true;
-    this.plank.receiveShadow = true;
-    this.plankGroup.add(this.plank);
-
-    this.bandMesh = new THREE.Mesh(mergeAll(bands), hazMat(this.ctx, 'metal'));
-    this.bandMesh.castShadow = true;
-    this.bandMesh.receiveShadow = true;
-    this.plankGroup.add(this.bandMesh);
-
-    this.stripeMat = additiveMaterial(this.safeColor.getHex(), { cached: false, opacity: 0.7 });
-    this.own(this.stripeMat);
-    this.stripeMesh = new THREE.Mesh(mergeAll(stripes), this.stripeMat);
-    this.stripeMesh.renderOrder = 5;
-    this.plankGroup.add(this.stripeMesh);
+    this.plankPart = this.solidPart(hazMat(this.ctx, this.matKey), mergeAll(parts), true, true);
+    this.bandPart = this.solidPart(hazMat(this.ctx, 'metal'), mergeAll(bands), true, true);
+    this.stripePart = this.trimPart(mergeAll(stripes));
   }
 
   _buildCollider() {
@@ -804,6 +791,9 @@ class SeesawHazard extends Hazard {
     // (long, up, axis) is a right-handed basis.
     _q.setFromAxisAngle(this.axis, -this.angle);
     this.plankGroup.quaternion.copy(_q).multiply(this.baseQuat);
+    this.setPart(this.plankPart, this.center, this.plankGroup.quaternion, ONE_SCALE);
+    this.setPart(this.bandPart, this.center, this.plankGroup.quaternion, ONE_SCALE);
+    this.setPart(this.stripePart, this.center, this.plankGroup.quaternion, ONE_SCALE);
 
     _q2.copy(_q).multiply(this.baseQuat);
     _v.copy(this.center);
@@ -813,7 +803,7 @@ class SeesawHazard extends Hazard {
 
     // --- readability -----------------------------------------------------------------------
     const lean = Math.abs(this.angle) / this.maxTilt;
-    this.stripeMat.opacity = 0.40 + 0.26 * (0.5 + 0.5 * Math.sin(t * 2.1)) + lean * 0.24;
+    this.setPartColor(this.stripePart, this.safeColor, 0.40 + 0.26 * (0.5 + 0.5 * Math.sin(t * 2.1)) + lean * 0.24);
 
     // --- one-shots ---------------------------------------------------------------------------
     if (this._silent) return;
