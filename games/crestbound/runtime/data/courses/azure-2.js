@@ -307,13 +307,22 @@ export default {
     {
       id: 'boss', type: 'boss', name: 'THE WARDEN OF THE BELL',
       hint: 'Jump the shockwave, dodge the charge, pound its back.',
-      spawnAt: [0, BELL + 1.60, 0],
+      // Data lane 2026-09-05 (loop gate): (0, 0) is the BELL ROPE's column —
+      // the oscillating rope block (landable at 34.60) came down on a hero
+      // standing at the crest and crushed him (measured: mover box 36.08..36.48
+      // descending at 0.58 m/s, death 0.02 s after placement). 3.2 m off it.
+      spawnAt: [-2.5, BELL + 1.60, -2.0],
     },
     {
       id: 'race', type: 'race', name: 'THE HOUR RUN',
       hint: 'Causeway to the clock face in eighty seconds. Take the cog cart.',
-      start: [4.0, YARD, 18.0], finish: [-3.0, FACE, -6.0], limitMs: 80000,
-      spawnAt: [-3.0, FACE + 1.40, -6.0],
+      // Data lane 2026-09-05 (loop gate): the finish at (-3, -6) was 6.7 m
+      // from the axle — INSIDE the hour hand's 7.0 m sweep, 1.40 m over the
+      // deck: the hand CRUSHED the hero standing on his own finish plate
+      // (measured, deaths +1 at the station). Now the south-west corner of
+      // the face, 8.8 m out: the hand's tip passes 1.2 m short of the plate.
+      start: [4.0, YARD, 18.0], finish: [-6.2, FACE, 6.2], limitMs: 80000,
+      spawnAt: [-6.2, FACE + 1.40, 6.2],
     },
     {
       // The wing hat is on the bell deck; the ten rings spiral DOWN the
@@ -426,7 +435,7 @@ export default {
     { kind: 'text', p: [3.4, 2.16, 17.4], rot: [0, 0, 0], text: 'EASE THE STICK TO WALK  ·  ALL THE WAY TO RUN', size: 0.22, color: 0x3f6f80 },
     { kind: 'text', p: [3.4, 1.80, 17.4], rot: [0, 0, 0], text: 'THE TOWER TURNS ON A BEAT  ·  SO DO YOU', size: 0.22, color: 0x3f6f80 },
     { kind: 'deco', kindOf: 'sign', p: [3.4, 1.15, 17.4], s: [0.14, 1.7, 1.2], mat: 'metal', tint: IRON },
-    { kind: 'deco', kindOf: 'post', p: [3.4, 0.65, 17.4], s: [0.16, 1.3, 0.16], mat: 'metal', tint: IRON },
+    { kind: 'deco', kindOf: 'post', p: [3.4, 0.65, 16.95], s: [0.16, 1.3, 0.16], mat: 'metal', tint: IRON },
 
     // The pedestal the HUNDRED COINS crest rises from.
     { kind: 'pedestal', p: [-8.0, YARD, 20.0], mat: 'stone', tint: LIME, glow: GOLD },
@@ -842,14 +851,17 @@ export default {
     // The XII bracket the crest stands on, and the XI bracket sigil 8 hangs over.
     { kind: 'pedestal', p: [0, FACE, -7.4], mat: 'marble', tint: LIME, glow: GOLD },
     { kind: 'platform', p: deck(-7.5, 40.60, -7.5, [2.4, 0.4, 2.4]), s: [2.4, 0.4, 2.4], mat: 'metal', tint: BRASS, stripe: true, edge: SAFE_EDGE },
-    // The race finish plate.
-    { kind: 'platform', p: deck(-3.0, FACE, -6.0, [3.4, 0.2, 3.4]), s: [3.4, 0.2, 3.4], mat: 'metal', tint: PATINA },
-    { kind: 'text', p: [-3.0, FACE + 1.3, -6.0], rot: [0, 0, 0], text: 'THE HOUR RUN  ·  80s', size: 0.26, color: 0x2b6a7a },
+    // The race finish plate — the south-west corner, outside the hand's sweep
+    // (2026-09-05; see the crest's note).
+    { kind: 'platform', p: deck(-6.2, FACE, 6.2, [3.4, 0.2, 3.4]), s: [3.4, 0.2, 3.4], mat: 'metal', tint: PATINA },
+    { kind: 'text', p: [-6.2, FACE + 1.3, 7.8], rot: [0, Math.PI, 0], text: 'THE HOUR RUN  ·  80s', size: 0.26, color: 0x2b6a7a },   // faces the deck, behind the crest
 
     { kind: 'light', p: [0, FACE + 3.2, -6.0], color: GOLD, intensity: 11, distance: 22 },
     { kind: 'deco', kindOf: 'emblem', p: [0, 24.0, 10.9], s: [11.0, 11.0, 0.4], mat: 'glass', tint: GLASS },
-    { kind: 'deco', kindOf: 'statue', p: [-6.0, FACE + 1.3, 6.0], s: [1.2, 2.6, 1.2], mat: 'marble', tint: LIME, count: 3, spread: 7.0, jitter: 0.3 },
-    ...decoRing('gear', 0, FACE + 0.5, 0, 7.6, 8, [1.3, 0.35, 1.3], 'metal', BRASS, 0.2),
+    // The statues moved off the finish corner onto the east slab's south end;
+    // the gear ring is phased by an eighth-turn so no gear sits on the plate.
+    { kind: 'deco', kindOf: 'statue', p: [6.6, FACE + 1.3, 6.8], s: [1.2, 2.6, 1.2], mat: 'marble', tint: LIME, count: 3, spread: 3.6, jitter: 0.3 },
+    ...decoRing('gear', 0, FACE + 0.5, 0, 7.6, 8, [1.3, 0.35, 1.3], 'metal', BRASS, Math.PI / 8),
 
     /* ========================================================================
      * BEAT 13 — ROUND THE OUTSIDE  (the `wing` power overlay)
@@ -893,7 +905,9 @@ export default {
     { kind: 'bumbler', path: [[-6, G1, 6], [-6, G1, -6], [6, G1, -6], [-6, G1, 6]], speed: 1.8 },
     { kind: 'bumbler', path: [[6, G3, 6], [6, G3, -6], [0, G3, -6], [6, G3, 6]], speed: 1.7 },
     // CLOCKWORK MOTHS. One inside the tower's heart, one round the clock face.
-    { kind: 'skitter', p: [0, 21.0, 0], path: [[0, 20.0, 0], [0, 30.0, 0]], amp: 2.2, speed: 3.6 },
+    // 2026-09-05: patrol top 30 -> 26 (swing top 28.2): it used to pass through
+    // the wing crest at 30 and touch the bell deck's shaft mouth at 33.
+    { kind: 'skitter', p: [0, 21.0, 0], path: [[0, 20.0, 0], [0, 26.0, 0]], amp: 2.2, speed: 3.6 },
     { kind: 'skitter', p: [0, 44.0, 0], path: [[-9, 43.5, -9], [9, 45.5, 9]], amp: 1.8, speed: 4.0 },
     // THE WARDEN OF THE BELL. Three hits, on the flat of the bell deck, its
     // ring 6.50 m about the bell — the tower's own parapet is the wall its

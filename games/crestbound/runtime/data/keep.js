@@ -1303,7 +1303,12 @@ const FOUNTAIN_WATER = {
 const CHECKPOINTS = [
   { id: 'cp-lobby', name: 'THE LOBBY HALL', p: [0.0, LOBBY + 0.05, -1.0], yaw: WEST },
   { id: 'cp-gallery', name: 'THE GALLERY', p: [0.0, GAL + 0.05, -11.0], yaw: NORTH },
-  { id: 'cp-undercroft', name: 'THE UNDERCROFT', p: [-14.0, UNDER + 0.05, 4.0], yaw: NORTH },
+  /* Data lane 2026-09-05 (loop gate): [-14, 4] facing NORTH stood on the
+     spiral stair's outer tread (SPIN r 3.6: the respawn was shoved 0.51 m)
+     and put the follow camera INSIDE the stair 0.45 m behind the hero. Now
+     4.3 m off the stair's centre, 0.5 m south of the hay, facing WEST at the
+     iron door and the grate — the lens sits over the open cellar floor. */
+  { id: 'cp-undercroft', name: 'THE UNDERCROFT', p: [-14.0, UNDER + 0.05, 3.2], yaw: WEST },
   { id: 'cp-courtyard', name: 'THE COURTYARD', p: [0.0, 0.05, 16.4], yaw: SOUTH },
   { id: 'cp-tower', name: 'THE TOWER ROOF', p: [-19.7, ROOF + 0.05, 33.0], yaw: EAST },
 ];

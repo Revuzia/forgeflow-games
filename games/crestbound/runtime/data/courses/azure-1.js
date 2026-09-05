@@ -677,11 +677,18 @@ export default {
      * as a beach, shallow enough that walking down it is a walk.
      * ===================================================================== */
 
-    { kind: 'deco', kindOf: 'sign', p: on(3.4, 44, 1.15), s: [0.14, 1.7, 1.2], mat: 'stone', tint: LIME_D },
-    { kind: 'deco', kindOf: 'post', p: on(3.4, 44, 0.65), s: [0.16, 1.3, 0.16], mat: 'stone', tint: LIME_D },
-    { kind: 'text', p: [3.4, 4.95, 44], rot: [0, 0, 0], text: 'TIDEWELL TEMPLE', size: 0.58, color: 0x1c4a58 },
-    { kind: 'text', p: [3.4, 4.42, 44], rot: [0, 0, 0], text: 'JUMP AT THE SURFACE TO STROKE  ·  CROUCH TO SINK', size: 0.22, color: 0x2e6a78 },
-    { kind: 'text', p: [3.4, 4.05, 44], rot: [0, 0, 0], text: 'THE AIR RUNS OUT. THE COURSE DOES NOT.', size: 0.22, color: 0x2e6a78 },
+    /* Data lane 2026-09-05 (S4): the game boots at checkpoints[0], 2-4 m
+       AHEAD of `spawn`, so a board authored 3 m to the pad's right and level
+       with it stood nearer the camera than the hero and filled 40 % of the
+       first frame with its header running off the right edge. Every spawn
+       board now stands ~3 m ahead of the pad and ~4.5 m to its right — over
+       5 m from the hero, inside the frame, a third the size — and its post
+       stands 0.45 m BEHIND the text plate instead of through it. */
+    { kind: 'deco', kindOf: 'sign', p: on(4.4, 39.6, 1.15), s: [0.14, 1.7, 1.2], mat: 'stone', tint: LIME_D },
+    { kind: 'deco', kindOf: 'post', p: on(4.4, 39.15, 0.65), s: [0.16, 1.3, 0.16], mat: 'stone', tint: LIME_D },
+    { kind: 'text', p: [4.4, 4.95, 39.6], rot: [0, 0, 0], text: 'TIDEWELL TEMPLE', size: 0.58, color: 0x1c4a58 },
+    { kind: 'text', p: [4.4, 4.42, 39.6], rot: [0, 0, 0], text: 'JUMP AT THE SURFACE TO STROKE  ·  CROUCH TO SINK', size: 0.22, color: 0x2e6a78 },
+    { kind: 'text', p: [4.4, 4.05, 39.6], rot: [0, 0, 0], text: 'THE AIR RUNS OUT. THE COURSE DOES NOT.', size: 0.22, color: 0x2e6a78 },
 
     // The pedestal the HUNDRED COINS crest lands on when you finally hit 100.
     { kind: 'pedestal', p: on(-5.5, 42, 0), mat: 'stone', tint: LIME, glow: GOLD },
@@ -785,7 +792,11 @@ export default {
     { kind: 'deco', kindOf: 'lantern', p: [-5.6, 5.9, -10.2], s: [0.6, 0.9, 0.6], mat: 'metal', tint: GOLD },
     { kind: 'deco', kindOf: 'lantern', p: [5.6, 5.9, -10.2], s: [0.6, 0.9, 0.6], mat: 'metal', tint: GOLD },
     { kind: 'light', p: [0, 7.4, -11.0], color: 0xffe2b0, intensity: 9, distance: 22 },
-    { kind: 'text', p: [0, 6.9, -11.6], rot: [0, 0, 0], text: 'THE SEA GAVE THESE STEPS BACK', size: 0.26, color: 0xe6dcc2 },
+    // Data lane 2026-09-05 (S4): at (0, -11.6) this plate stood on the
+    // camera axis 4.4 m behind cp-terrace and 1.4 m off the race crest's
+    // station — the frame was the plate, Nim hidden behind it. Off to the
+    // right, out of both view lines.
+    { kind: 'text', p: [5.0, 6.9, -12.4], rot: [0, 0, 0], text: 'THE SEA GAVE THESE STEPS BACK', size: 0.26, color: 0xe6dcc2 },
 
     /* ========================================================================
      * BEAT 5 — THE TERRACE AND THE TEMPLE
@@ -815,7 +826,8 @@ export default {
     { kind: 'beam', a: [-10.5, TERRACE_Y + 0.9, -14.0], b: [10.5, TERRACE_Y + 0.9, -14.0], cycle: { on: 1.4, off: 3.0, warn: 0.9, phase: 0 }, radius: 0.20, color: BEAM_C },
     { kind: 'beam', a: [-13.0, TERRACE_Y + 0.9, -20.0], b: [-6.0, TERRACE_Y + 0.9, -20.0], cycle: { on: 1.4, off: 3.0, warn: 0.9, phase: 1.5 }, radius: 0.20, color: BEAM_C },
     { kind: 'beam', a: [6.0, TERRACE_Y + 0.9, -20.0], b: [13.0, TERRACE_Y + 0.9, -20.0], cycle: { on: 1.4, off: 3.0, warn: 0.9, phase: 2.9 }, radius: 0.20, color: BEAM_C },
-    { kind: 'text', p: [0, TERRACE_Y + 1.5, -12.6], rot: [0, 0, 0], text: 'THE LIGHT LINES BLINK BEFORE THEY BURN', size: 0.24, color: 0xe6dcc2 },
+    // 2026-09-05: off cp-terrace's camera axis (it hid Nim from the follow camera)
+    { kind: 'text', p: [-5.0, TERRACE_Y + 1.5, -12.6], rot: [0, 0, 0], text: 'THE LIGHT LINES BLINK BEFORE THEY BURN', size: 0.24, color: 0xe6dcc2 },
 
     // The terrace's furniture: three urns you can smash for coins, braziers
     // that give this deep colonnade a key of its own, and the sanctum banners.
@@ -1127,7 +1139,9 @@ export default {
     // GULLS. Skitters on sine paths — one working the reef bar, one quartering
     // the temple roof, which is what makes the sanctum feel high.
     { kind: 'skitter', p: [-10, 3.6, 22], path: [[-10, 3.6, 22], [12, 5.0, 28]], amp: 1.8, speed: 3.6 },
-    { kind: 'skitter', p: [0, 18.5, -24], path: [[-12, 18.0, -18], [12, 20.0, -30]], amp: 2.2, speed: 4.0 },
+    // 2026-09-05: raised 2 m — the swing's bottom (18 - 2.2) met the head of a
+    // hero standing on the crest dais (15.11 + 1.7) and crushed him.
+    { kind: 'skitter', p: [0, 20.5, -24], path: [[-12, 20.0, -18], [12, 22.0, -30]], amp: 2.2, speed: 4.0 },
     // THE WARDEN. Three hits, in the drained court on EXACTLY 1.60. The court's
     // own 40 deg rim is the wall its charge breaks itself on.
     { kind: 'warden', p: [0, COURT_Y, -48], arena: { c: [0, -48], r: 7.0 }, hp: 3, tint: 0x5f7a86 },

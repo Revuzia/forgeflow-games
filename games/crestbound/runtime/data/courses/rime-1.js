@@ -584,9 +584,16 @@ export default {
     // pillar were built inside the stone and a respawn landed on the pedestal top.
     // Now on the trodden track 3.5 m south of it, clear of the square bumbler's
     // patrol box (z 6..11) and under nothing (the pendulum bobs stay > 6 m up).
-    { id: 'cp-square', p: [0, VILLAGE_Y, 14.5], yaw: 0 },           // flat 4.70 — before the hillside
+    // Data lane 2026-09-05 (loop gate): at z 14.5 the pad stood 1 m off
+    // cottage 2's face and the follow camera (yaw 0 -> lens at z ~21) was
+    // INSIDE the cottage, tilted to a head-down close-up at 2.4 m. The pad
+    // is now in the open square past the pedestal, facing the drift lesson,
+    // with 6.6 m of clear square behind it.
+    { id: 'cp-square', p: [0, VILLAGE_Y, 3.0], yaw: 0 },            // flat 4.70 — before the hillside
     { id: 'cp-ledge', p: [14, LEDGE_Y, -22.0], yaw: 0.53 },         // flat 10.20 — before the gorge and the chapel track
-    { id: 'cp-green', p: [0, GREEN_Y, -40.5], yaw: 0 },             // flat 15.10 — before the tower
+    // Data lane 2026-09-05 (loop gate): 1.5 m deeper into the nave so the
+    // follow camera clears the south wall at 4.3 m instead of 2.85 m.
+    { id: 'cp-green', p: [0, GREEN_Y, -42.0], yaw: 0 },             // flat 15.10 — before the tower
   ],
 
   /* ------------------------------------------------------------------------
@@ -670,7 +677,7 @@ export default {
     // BEAT 2 — the trodden track up to the square. (8)
     ...trailCoins([[0, 31], [0, 24], [-1, 16], [0, 10]], 8, 1.1),
     // BEAT 3 — a ring round the square's pedestal. (8)
-    { ring: { c: [0, 0, 8], r: 3.8, n: 8, y: VILLAGE_Y + 1.1 } },
+    { ring: { c: [0, 0, 8], r: 3.0, n: 8, y: VILLAGE_Y + 1.1 } },   // r 3.0 (2026-09-05): clear of cp-square at z 3
     // BEAT 3 — the rooftop line, cap to cap. (6)
     { line: { a: [-9.0, CAP_TOP + 1.0, 16.0], b: [6.0, CAP_TOP + 1.0, 16.0], n: 4 } },
     { p: [9.5, r2(CAP_TOP + 1.2), 14.0] }, { p: [13.0, r2(CAP_TOP + 1.0), 13.0] },
@@ -733,11 +740,18 @@ export default {
      * is a hole and not a decal.
      * ===================================================================== */
 
-    { kind: 'deco', kindOf: 'sign', p: on(3.0, 58, 1.15), s: [0.14, 1.7, 1.2], mat: 'wood', tint: TIMBER },
-    { kind: 'deco', kindOf: 'post', p: on(3.0, 58, 0.65), s: [0.16, 1.3, 0.16], mat: 'wood', tint: 0x5c4630 },
-    { kind: 'text', p: [3.0, r2(TERRACE_Y + 1.95), 58], rot: [0, 0, 0], text: 'FROST COTTAGE', size: 0.60, color: 0x1f2f45 },
-    { kind: 'text', p: [3.0, r2(TERRACE_Y + 1.42), 58], rot: [0, 0, 0], text: 'ICE DOES NOT STOP WHEN YOU DO  ·  LET GO EARLY', size: 0.22, color: 0x3a5270 },
-    { kind: 'text', p: [3.0, r2(TERRACE_Y + 1.05), 58], rot: [0, 0, 0], text: 'POUND THE DARK PATCH  ·  CROUCH TO SINK', size: 0.22, color: 0x3a5270 },
+    /* Data lane 2026-09-05 (S4): the game boots at checkpoints[0], 2-4 m
+       AHEAD of `spawn`, so a board authored 3 m to the pad's right and level
+       with it stood nearer the camera than the hero and filled 40 % of the
+       first frame with its header running off the right edge. Every spawn
+       board now stands ~3 m ahead of the pad and ~4.5 m to its right — over
+       5 m from the hero, inside the frame, a third the size — and its post
+       stands 0.45 m BEHIND the text plate instead of through it. */
+    { kind: 'deco', kindOf: 'sign', p: on(5.2, 57.0, 1.15), s: [0.14, 1.7, 1.2], mat: 'wood', tint: TIMBER },
+    { kind: 'deco', kindOf: 'post', p: on(5.2, 56.55, 0.65), s: [0.16, 1.3, 0.16], mat: 'wood', tint: 0x5c4630 },
+    { kind: 'text', p: [5.2, r2(TERRACE_Y + 1.95), 57.0], rot: [0, 0, 0], text: 'FROST COTTAGE', size: 0.60, color: 0x1f2f45 },
+    { kind: 'text', p: [5.2, r2(TERRACE_Y + 1.42), 57.0], rot: [0, 0, 0], text: 'ICE DOES NOT STOP WHEN YOU DO  ·  LET GO EARLY', size: 0.22, color: 0x3a5270 },
+    { kind: 'text', p: [5.2, r2(TERRACE_Y + 1.05), 57.0], rot: [0, 0, 0], text: 'POUND THE DARK PATCH  ·  CROUCH TO SINK', size: 0.22, color: 0x3a5270 },
 
     // The sheet: west slab, east slab, and the two strips north and south of
     // the hole. Slab tops all EXACTLY 1.30.

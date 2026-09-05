@@ -642,8 +642,11 @@ export default {
     { kind: 'vanish', p: [-8, 36.3, 16], s: [3.0, 0.6, 3.0], mat: 'glass', cycle: { on: 2.4, off: 1.6, warn: 0.6, phase: 0 }, stripe: true, edge: SAFE_EDGE },
     { kind: 'vanish', p: [-8, 37.3, 10], s: [3.0, 0.6, 3.0], mat: 'glass', cycle: { on: 2.4, off: 1.6, warn: 0.6, phase: 0.8 }, stripe: true, edge: SAFE_EDGE },
 
-    { kind: 'text', p: [0, GARDEN_Y + 1.6, 18.4], rot: [0, 0, 0], text: 'THE LIGHT IS NOT A BRIDGE', size: 0.30, color: 0xffb0bd },
-    { kind: 'text', p: [0, GARDEN_Y + 1.2, 18.4], rot: [0, 0, 0], text: 'PRISMS SWING ON THEIR OWN COUNT  ·  WATCH ONE FULL PASS', size: 0.21, color: 0xbfe4ee },
+    // Data lane 2026-09-05 (S4): on the axis 4.4 m behind cp-gardens these
+    // two plates filled the frame between the camera and the pad. 5 m to
+    // the right of the pad, 2 m behind it.
+    { kind: 'text', p: [4.0, GARDEN_Y + 1.6, 12.0], rot: [0, 0, 0], text: 'THE LIGHT IS NOT A BRIDGE', size: 0.30, color: 0xffb0bd },
+    { kind: 'text', p: [4.0, GARDEN_Y + 1.2, 12.0], rot: [0, 0, 0], text: 'PRISMS SWING ON THEIR OWN COUNT  ·  WATCH ONE FULL PASS', size: 0.21, color: 0xbfe4ee },
     { kind: 'text', p: [-8, GARDEN_Y + 1.2, 19.4], rot: [0, -0.5, 0], text: 'A TILE REMEMBERS YOUR WEIGHT', size: 0.21, color: 0xbfe4ee },
     { kind: 'text', p: [16.8, GARDEN_Y + 1.3, 12], rot: [0, -1.2, 0], text: 'PAD  ·  ISLES  ·  CANNONS', size: 0.24, color: 0xbfe4ee },
     { kind: 'text', p: [-17.0, GARDEN_Y + 1.3, -4], rot: [0, 0.9, 0], text: 'PIER  ·  WINGS  ·  THE CLOUD BELOW', size: 0.24, color: 0xbfe4ee },
@@ -750,7 +753,10 @@ export default {
 
     { kind: 'text', p: [28, ISLE1_Y + 1.5, 5.6], rot: [0, Math.PI, 0], text: 'STEP IN THE BARREL  ·  IT AIMS ITSELF', size: 0.26, color: 0xe6f6ff },
     { kind: 'text', p: [28, ISLE1_Y + 1.1, 5.6], rot: [0, Math.PI, 0], text: 'THE SPOKES DO NOT STOP FOR A LANDING', size: 0.21, color: 0xbfe4ee },
-    { kind: 'text', p: [30, ISLE3_Y + 1.5, -44.4], rot: [0, Math.PI, 0], text: 'JUMP THE WAVE  ·  SIDESTEP THE CHARGE  ·  POUND ITS BACK', size: 0.22, color: 0xffb0bd },
+    // Data lane 2026-09-05 (S4): rot PI faced this plate OFF the isle's
+    // south edge, so cp-isle (yaw 0) stared at its blank back 1.4 m away.
+    // It now faces the isle from the pad's right, readable from the arena.
+    { kind: 'text', p: [33.5, ISLE3_Y + 1.5, -44.5], rot: [0, 0, 0], text: 'JUMP THE WAVE  ·  SIDESTEP THE CHARGE  ·  POUND ITS BACK', size: 0.22, color: 0xffb0bd },
 
     { kind: 'deco', kindOf: 'crystal', p: [22.6, ISLE1_Y + 0.7, -5], s: [1.1, 1.7, 1.1], mat: 'crystal', count: 5, spread: 3.0, jitter: 0.34 },
     { kind: 'deco', kindOf: 'crystal', p: [50, ISLE2_Y + 0.7, -20], s: [1.1, 1.7, 1.1], mat: 'crystal', count: 5, spread: 3.0, jitter: 0.34 },

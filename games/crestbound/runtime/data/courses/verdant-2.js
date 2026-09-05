@@ -535,7 +535,12 @@ export default {
     // The inner court (flat 19.00), BEFORE the Warden and the keep climb.
     // clockOffset 0 puts all three orbit movers at their +X pose, over the
     // middle walk, which is the pose the route is authored around.
-    { id: 'cp-court', p: [0, COURT_Y, 6.0], yaw: 0, clockOffset: 0 },
+    // Data lane 2026-09-05 (loop gate): at (0, 6) facing -Z the lens sat
+    // against the middle wall (jammed at 2.49 m; the court is 8.6 m to the
+    // wall's inner face and the keep fills the middle). The pad is now on the
+    // court's west side, 1.8 m off the keep's west face, facing the turret
+    // (ROUTE B's shaft) with 7 m of open court behind it.
+    { id: 'cp-court', p: [-6.0, COURT_Y, 0.5], yaw: 0, clockOffset: 0 },
   ],
 
   /* ------------------------------------------------------------------------

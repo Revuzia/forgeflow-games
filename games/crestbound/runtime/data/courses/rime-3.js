@@ -485,7 +485,12 @@ export default {
   checkpoints: [
     { id: 'cp-camp', p: [0, 2.2, 41], yaw: 0, clockOffset: 0 },
     { id: 'cp-westface', p: [-25.2, 3.4, 32.0], yaw: 2.55, clockOffset: 8 },
-    { id: 'cp-gorge', p: [-36.0, 6.6, -13.0], yaw: 3.35, clockOffset: 16 },
+    // Data lane 2026-09-05 (loop gate): at z -13.0 (and -11.9) every respawn
+    // was shoved 0.74-0.78 m north — not the bridge anchor (measured: no
+    // collider under the pad) but THE GUST: the wind volume over the crossing
+    // spans z -34..-10 and the pad stood inside it. Now 1 m outside the gust,
+    // still on the 6.60 flat; the sign moved ahead of it (below).
+    { id: 'cp-gorge', p: [-36.0, 6.6, -9.0], yaw: 3.35, clockOffset: 16 },
     { id: 'cp-bridge', p: [-23.8, 8.0, -30.7], yaw: 1.30, clockOffset: 26 },
     // Data lane 2026-09-04 (critic r2): this pad was at (21, 3), 5.0 m from the
     // cave gnasher's post — inside its 5.5 m chain, and the lunge passes
@@ -624,7 +629,7 @@ export default {
      * ===================================================================== */
 
     { kind: 'deco', kindOf: 'sign', p: on(3.4, 41, 1.15), s: [0.14, 1.7, 1.2], mat: 'wood', tint: TIMBER },
-    { kind: 'deco', kindOf: 'post', p: on(3.4, 41, 0.65), s: [0.16, 1.3, 0.16], mat: 'wood', tint: 0x6b5c50 },
+    { kind: 'deco', kindOf: 'post', p: on(3.4, 40.55, 0.65), s: [0.16, 1.3, 0.16], mat: 'wood', tint: 0x6b5c50 },
     { kind: 'text', p: [3.4, 3.95, 41], rot: [0, 0, 0], text: 'BLIZZARD PEAK', size: 0.58, color: 0x25405c },
     { kind: 'text', p: [3.4, 3.44, 41], rot: [0, 0, 0], text: 'THE WIND PUSHES  ·  LEAN INTO IT AND KEEP RUNNING', size: 0.22, color: 0x3d5b78 },
     { kind: 'text', p: [3.4, 3.08, 41], rot: [0, 0, 0], text: 'IT NEVER KILLS  ·  THE DROP DOES', size: 0.22, color: 0x3d5b78 },
@@ -745,8 +750,10 @@ export default {
      * frozen floor, which is ROUTE C, the ice cave and the secret.
      * ===================================================================== */
 
-    { kind: 'text', p: [-36.0, 8.4, -11.0], rot: [0, 3.35, 0], text: 'THE BRIDGE IS OLD  ·  THE PIER IS NOT', size: 0.24, color: 0x3d5b78 },
-    { kind: 'text', p: [-36.0, 8.0, -11.0], rot: [0, 3.35, 0], text: 'falling in is a way down, not a way out', size: 0.19, color: 0x50708c },
+    // 2026-09-05: beside the pad, facing it (-X), so the plates never sit on
+    // the camera axis whichever way the hero is turned at the pad.
+    { kind: 'text', p: [-32.4, 8.4, -9.0], rot: [0, -Math.PI / 2, 0], text: 'THE BRIDGE IS OLD  ·  THE PIER IS NOT', size: 0.24, color: 0x3d5b78 },
+    { kind: 'text', p: [-32.4, 8.0, -9.0], rot: [0, -Math.PI / 2, 0], text: 'falling in is a way down, not a way out', size: 0.19, color: 0x50708c },
 
     { kind: 'bridge', a: BR_A, b: BR_A_END, w: 3.0, sag: 0.24, mat: 'wood', tint: TIMBER, ropeTint: ROPE, stripe: true, edge: SAFE_EDGE },
     { kind: 'bridge', a: BR_B_START, b: BR_B, w: 3.0, sag: 0.22, mat: 'wood', tint: TIMBER, ropeTint: ROPE, stripe: true, edge: SAFE_EDGE },

@@ -586,7 +586,7 @@ export default {
     {
       id: 'sigils', type: 'sigils', name: 'EIGHT SIGILS OF THE HEIGHTS',
       hint: 'Riverbed, log, terrace, granary roof, gully crag, and three mills.',
-      spawnAt: [-2, GRANARY_Y + 1.45, -20],       // the granary terrace pedestal
+      spawnAt: [5, GRANARY_Y + 1.45, -21.5],      // the granary terrace pedestal (2026-09-05: off the east wall)
     },
     {
       id: 'coins', type: 'coins', name: 'A HUNDRED COINS', threshold: 100,
@@ -602,8 +602,11 @@ export default {
     {
       id: 'race', type: 'race', name: 'THE MILLRACE',
       hint: 'Wheat field to the mill yard. Sixty-five seconds. Take the long jumps.',
-      start: [0, FIELD_Y, 2.0], finish: [26, 23.60, -50.0], limitMs: 65000,
-      spawnAt: [26, 25.10, -50.0],
+      // Data lane 2026-09-05 (loop gate): the finish at (26, -50) was 2.83 m
+      // from mill 5's axis, INSIDE its 3.4 m tower; the lens jammed on the
+      // tower at 0.26 m. Now 6.7 m from the axis, south of the sail band.
+      start: [0, FIELD_Y, 2.0], finish: [23, 23.60, -56.5], limitMs: 65000,
+      spawnAt: [23, 25.10, -56.5],
     },
     {
       id: 'bell', type: 'race', name: 'THE BELL STAIR',
@@ -663,7 +666,7 @@ export default {
     { line: { a: [7.0, TERR_A_TOP + 1.05, 1.4], b: [7.0, TERR_A_TOP + 1.05, -5.0], n: 6 } },
     { line: { a: [10.0, TERR_B_TOP + 1.05, -1.0], b: [10.0, TERR_B_TOP + 1.05, -7.0], n: 6 } },
     // BEAT 4 — a ring around the granary pedestal. (8)
-    { ring: { c: [-2, 0, -20], r: 4.0, n: 8, y: GRANARY_Y + 1.1 } },
+    { ring: { c: [5, 0, -21.5], r: 3.2, n: 8, y: GRANARY_Y + 1.1 } },
     // BEAT 5 — the ridge stair, and the arc over the sack gully. (8 + 6)
     ...trailCoins([[-6, -19], [-6, -23], [-6, -27], [-4, -31]], 8, 1.2),
     ...arcCoins([9.0, 19.60, -22.0], [16.0, 20.10, -26.0], 1.4, 6),
@@ -708,7 +711,7 @@ export default {
      * ===================================================================== */
 
     { kind: 'deco', kindOf: 'sign', p: on(3.4, 51, 1.15), s: [0.14, 1.7, 1.2], mat: 'wood', tint: TIMBER },
-    { kind: 'deco', kindOf: 'post', p: on(3.4, 51, 0.65), s: [0.16, 1.3, 0.16], mat: 'wood', tint: 0x6b4a28 },
+    { kind: 'deco', kindOf: 'post', p: on(3.4, 50.55, 0.65), s: [0.16, 1.3, 0.16], mat: 'wood', tint: 0x6b4a28 },
     { kind: 'text', p: [3.4, 3.95, 51], rot: [0, 0, 0], text: 'WINDMILL HEIGHTS', size: 0.58, color: 0x2d3d1f },
     { kind: 'text', p: [3.4, 3.42, 51], rot: [0, 0, 0], text: 'EASE THE STICK TO WALK  ·  ALL THE WAY TO RUN', size: 0.22, color: 0x4d6038 },
     { kind: 'text', p: [3.4, 3.05, 51], rot: [0, 0, 0], text: 'LAND AND JUMP AGAIN TO CHAIN A HIGHER ONE', size: 0.22, color: 0x4d6038 },
@@ -853,7 +856,11 @@ export default {
     { kind: 'text', p: [-8, GRANARY_ROOF + 1.0, -11.2], rot: [0, 0, 0], text: 'POUND THE FLOOR', size: 0.26, color: 0x7a5a2a },
 
     // --- the pedestal the EIGHT SIGILS crest rises from.
-    { kind: 'pedestal', p: [-2, GRANARY_Y, -20], mat: 'stone', tint: STONE, glow: GOLD },
+    // Data lane 2026-09-05 (loop gate): the pedestal stood 1 m off the
+    // granary's east wall with the sack stair on its other side, so the
+    // follow camera had nowhere to be (lens 1.15 m into the wall). Now on the
+    // open half of the terrace, 3.5 m clear of the stair's first step.
+    { kind: 'pedestal', p: [5, GRANARY_Y, -21.5], mat: 'stone', tint: STONE, glow: GOLD },
     { kind: 'deco', kindOf: 'cage', p: [-13.8, GRANARY_Y + 1.0, -21.4], s: [1.6, 1.8, 1.6], mat: 'wood', tint: 0x5a4128 },
 
     /* ========================================================================
@@ -1070,23 +1077,28 @@ export default {
      * budget belongs to the mills.
      * ===================================================================== */
 
+    /* Data lane 2026-09-05 (S8): verdant-3 sat ON the 450k triangle line
+       (448,954 at the spawn, 451k at perfcheck's worst station). Dressing
+       only is thinned here — 3 flowerbed heads per clump instead of 4, 7+6
+       rocks instead of 10+8, 4+4+4 trees instead of 6+6+5 — nothing a
+       player stands on, collects or dodges. */
     ...scatter(0, 46, 8, 30, 14, 41001, (x, z, rnd) => (
       gy(x, z) < 1.6 ? null
         : { kind: 'deco', kindOf: 'flowerbed', p: on(x, z, 0.08),
             s: [1.5 + rnd * 1.4, 0.22, 1.4 + rnd * 1.2], mat: 'leaves',
-            tint: rnd > 0.6 ? 0xf0d24e : FLOWER, count: 4, spread: 3.0, jitter: 0.36 }
+            tint: rnd > 0.6 ? 0xf0d24e : FLOWER, count: 3, spread: 3.0, jitter: 0.36 }
     )),
     ...scatter(-6, 4, 10, 34, 16, 41002, (x, z, rnd) => (
       gy(x, z) < 1.6 ? null
         : { kind: 'deco', kindOf: 'plant', p: on(x, z, 0.30 + rnd * 0.2),
             s: [0.8 + rnd * 0.5, 1.0 + rnd * 0.8, 0.8 + rnd * 0.5], mat: 'leaves',
-            tint: rnd > 0.5 ? WHEAT : 0xc9a44e, count: 6, spread: 3.0, jitter: 0.4 }
+            tint: rnd > 0.5 ? WHEAT : 0xc9a44e, count: 4, spread: 3.0, jitter: 0.4 }
     )),
     ...scatter(-4, -36, 12, 34, 14, 41003, (x, z, rnd) => (
       gy(x, z) < 1.6 ? null
         : { kind: 'deco', kindOf: 'plant', p: on(x, z, 0.26 + rnd * 0.2),
             s: [0.7 + rnd * 0.4, 0.9 + rnd * 0.7, 0.7 + rnd * 0.4], mat: 'leaves',
-            tint: rnd > 0.45 ? 0xcfae56 : 0x8fae52, count: 6, spread: 2.8, jitter: 0.4 }
+            tint: rnd > 0.45 ? 0xcfae56 : 0x8fae52, count: 4, spread: 2.8, jitter: 0.4 }
     )),
     ...scatter(0, 20, 14, 46, 12, 41004, (x, z, rnd) => (
       gy(x, z) < 1.7 ? null
@@ -1098,35 +1110,44 @@ export default {
       gy(x, z) < 1.7 ? null
         : { kind: 'deco', kindOf: 'stump', p: on(x, z, 0.28),
             s: [1.0 + rnd * 0.3, 0.62, 1.0 + rnd * 0.3], mat: 'wood',
-            tint: 0x6b4a28, count: 3, spread: 4.0, jitter: 0.30 }
+            tint: 0x6b4a28, count: 1, spread: 4.0, jitter: 0.30 }
     )),
-    ...scatter(-2, 8, 16, 48, 10, 41006, (x, z, rnd) => (
+    ...scatter(-2, 8, 16, 48, 7, 41006, (x, z, rnd) => (
       gy(x, z) < 1.8 ? null : { kind: 'rock', p: on(x, z, -0.35), r: 0.9 + rnd * 1.5, seed: 41006 + Math.round(x), mat: 'stone' }
     )),
-    ...scatter(6, -40, 14, 34, 8, 41007, (x, z, rnd) => (
+    ...scatter(6, -40, 14, 34, 6, 41007, (x, z, rnd) => (
       gy(x, z) < 1.8 ? null : { kind: 'rock', p: on(x, z, -0.4), r: 1.0 + rnd * 1.7, seed: 41007 + Math.round(x), mat: 'stone' }
     )),
-    ...scatter(-40, 24, 8, 26, 6, 41008, (x, z, rnd) => (
+    ...scatter(-40, 24, 8, 26, 4, 41008, (x, z, rnd) => (
       gy(x, z) < 1.8 ? null
         : { kind: 'tree', p: on(x, z, -0.25), h: 6.5 + rnd * 4.0, r: 2.2 + rnd * 1.2, mat: 'bark', tint: 0x9c7852, leafTint: LEAF, seed: 41008 + Math.round(x) }
     )),
-    ...scatter(44, 22, 8, 26, 6, 41009, (x, z, rnd) => (
+    ...scatter(44, 22, 8, 26, 4, 41009, (x, z, rnd) => (
       gy(x, z) < 1.8 ? null
         : { kind: 'tree', p: on(x, z, -0.25), h: 6.0 + rnd * 4.0, r: 2.1 + rnd * 1.1, mat: 'bark', tint: 0x94704c, leafTint: 0x46893c, seed: 41009 + Math.round(x) }
     )),
-    ...scatter(-52, -18, 8, 22, 5, 41010, (x, z, rnd) => (
+    ...scatter(-52, -18, 8, 22, 4, 41010, (x, z, rnd) => (
       gy(x, z) < 1.8 ? null
         : { kind: 'tree', p: on(x, z, -0.25), h: 6.0 + rnd * 3.5, r: 2.0 + rnd * 1.0, mat: 'bark', tint: 0x94704c, leafTint: 0x4e8f3f, seed: 41010 + Math.round(x) }
     )),
 
     // Field hedges: the terraced-farm silhouette, and the only thing between
     // the cart tracks and the drop into the river.
-    ...fenceRun([[-24, 12], [-14, 9], [-4, 8], [6, 9], [16, 12]]),
+    /* Data lane 2026-09-05 (S8): buildFence spends ~1,200 triangles per 2.2 m
+       bay (a lathe cap and an iron ring on every post plus bevelled rails),
+       and the field hedge's four segments were 25.6k of the spawn frame
+       (detail cell 2,2: wood 14.2k + metal 11.4k, measured). The cart track
+       from the jetty to the wheat field crosses this hedge at x ~0, so the
+       middle segment is now a GATEWAY for the track (a hedge with a gap,
+       which the silhouette had no business closing), and the west ridge
+       hedge keeps its first bay only. */
+    ...fenceRun([[-24, 12], [-14, 9], [-6, 8.4]]),
+    ...fenceRun([[6, 9], [16, 12]]),
     /* Data lane 2026-09-04: the two ridge-side hedges run in two bays each
        instead of three (the river-drop hedge above keeps all four). Every
        fence post is a lathe cap + an iron ring (~170 triangles), so posts,
        not length, are what a hedge costs; the silhouette keeps its ends. */
-    ...fenceRun([[-26, -6], [-14, -9], [-2, -7]]),
+    ...fenceRun([[-26, -6], [-14, -9]]),
     ...fenceRun([[14, -12], [26, -15], [36, -20]]),
   ],
 

@@ -664,11 +664,18 @@ export default {
      * goes, and the whole course is legible from the first frame.
      * ===================================================================== */
 
-    { kind: 'deco', kindOf: 'sign', p: on(3.4, 42, 1.15), s: [0.14, 1.7, 1.3], mat: 'metal', tint: IRON },
-    { kind: 'deco', kindOf: 'post', p: on(3.4, 42, 0.65), s: [0.16, 1.3, 0.16], mat: 'metal', tint: IRON },
-    { kind: 'text', p: [3.4, r2(gy(3.4, 42) + 1.95), 42], rot: [0, 0, 0], text: 'MAGMA WORKS', size: 0.60, color: 0xf6cfa0 },
-    { kind: 'text', p: [3.4, r2(gy(3.4, 42) + 1.42), 42], rot: [0, 0, 0], text: 'THE VENTS FIRE ON A CYCLE  ·  WATCH ONE, THEN WALK', size: 0.22, color: 0xd8a878 },
-    { kind: 'text', p: [3.4, r2(gy(3.4, 42) + 1.05), 42], rot: [0, 0, 0], text: 'EVERY DECK IS IRON  ·  EVERYTHING ELSE IS FIRE', size: 0.22, color: 0xd8a878 },
+    /* Data lane 2026-09-05 (S4): the game boots at checkpoints[0], 2-4 m
+       AHEAD of `spawn`, so a board authored 3 m to the pad's right and level
+       with it stood nearer the camera than the hero and filled 40 % of the
+       first frame with its header running off the right edge. Every spawn
+       board now stands ~3 m ahead of the pad and ~4.5 m to its right — over
+       5 m from the hero, inside the frame, a third the size — and its post
+       stands 0.45 m BEHIND the text plate instead of through it. */
+    { kind: 'deco', kindOf: 'sign', p: on(4.4, 38.5, 1.15), s: [0.14, 1.7, 1.3], mat: 'metal', tint: IRON },
+    { kind: 'deco', kindOf: 'post', p: on(4.4, 38.05, 0.65), s: [0.16, 1.3, 0.16], mat: 'metal', tint: IRON },
+    { kind: 'text', p: [4.4, r2(gy(4.4, 38.5) + 1.95), 38.5], rot: [0, 0, 0], text: 'MAGMA WORKS', size: 0.60, color: 0xf6cfa0 },
+    { kind: 'text', p: [4.4, r2(gy(4.4, 38.5) + 1.42), 38.5], rot: [0, 0, 0], text: 'THE VENTS FIRE ON A CYCLE  ·  WATCH ONE, THEN WALK', size: 0.22, color: 0xd8a878 },
+    { kind: 'text', p: [4.4, r2(gy(4.4, 38.5) + 1.05), 38.5], rot: [0, 0, 0], text: 'EVERY DECK IS IRON  ·  EVERYTHING ELSE IS FIRE', size: 0.22, color: 0xd8a878 },
 
     // The pedestal the HUNDRED COINS crest rises from when you finally hit 100.
     { kind: 'pedestal', p: on(-6, 41, 0), mat: 'metal', tint: IRON, glow: GOLD },
@@ -690,7 +697,10 @@ export default {
     { kind: 'platform', p: [0, 0.5, 15], s: [28, 5.0, 10], mat: 'obsidian', tint: OBSIDIAN, stripe: true, edge: SAFE_EDGE },
     { kind: 'pedestal', p: [-6, QUAY_TOP, 16], mat: 'metal', tint: IRON, glow: GOLD },
     { kind: 'platform', p: [0, QUAY_TOP - 0.04, 18], s: [3.8, 0.2, 3.8], mat: 'panel', tint: BRASS },   // race start pad
-    { kind: 'text', p: [0, QUAY_TOP + 1.3, 18], rot: [0, 0, 0], text: 'THE POUR RUN  ·  60s', size: 0.26, color: BRASS },
+    // Data lane 2026-09-05 (S4): on the axis at z 18 this plate sat between
+    // the follow camera and cp-quay's pad (z 15) and hid Nim. Beside the
+    // start pad instead.
+    { kind: 'text', p: [3.4, QUAY_TOP + 1.3, 17.0], rot: [0, 0, 0], text: 'THE POUR RUN  ·  60s', size: 0.26, color: BRASS },
 
     // The catwalk spine, z -7 .. 11, 4.00 m wide.
     { kind: 'platform', p: [0, 2.85, 2], s: [4.0, 0.3, 18], mat: 'grate', tint: IRON, stripe: true, edge: SAFE_EDGE },

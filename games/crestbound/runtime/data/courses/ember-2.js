@@ -553,9 +553,16 @@ export default {
      * ===================================================================== */
 
     { kind: 'deco', kindOf: 'girders', p: on(3.4, 49, 0), s: [0.2, 2.0, 1.4], count: 3, spread: 1.6, jitter: 0.2, mat: 'metal', tint: IRON },
-    { kind: 'text', p: on(3.4, 49, 2.35), rot: [0, 0, 0], text: 'PISTON HALLS', size: 0.60, color: HOT },
-    { kind: 'text', p: on(3.4, 49, 1.85), rot: [0, 0, 0], text: 'EVERY PISTON KEEPS ITS OWN COUNT', size: 0.22, color: EMBER },
-    { kind: 'text', p: on(3.4, 49, 1.50), rot: [0, 0, 0], text: 'WATCH ONE  ·  THEN MOVE', size: 0.22, color: EMBER },
+    /* Data lane 2026-09-05 (S4): the game boots at checkpoints[0], 2-4 m
+       AHEAD of `spawn`, so a board authored 3 m to the pad's right and level
+       with it stood nearer the camera than the hero and filled 40 % of the
+       first frame with its header running off the right edge. Every spawn
+       board now stands ~3 m ahead of the pad and ~4.5 m to its right — over
+       5 m from the hero, inside the frame, a third the size — and its post
+       stands 0.45 m BEHIND the text plate instead of through it. */
+    { kind: 'text', p: on(5.0, 45.0, 2.35), rot: [0, 0, 0], text: 'PISTON HALLS', size: 0.60, color: HOT },
+    { kind: 'text', p: on(5.0, 45.0, 1.85), rot: [0, 0, 0], text: 'EVERY PISTON KEEPS ITS OWN COUNT', size: 0.22, color: EMBER },
+    { kind: 'text', p: on(5.0, 45.0, 1.50), rot: [0, 0, 0], text: 'WATCH ONE  ·  THEN MOVE', size: 0.22, color: EMBER },
 
     // The pedestal the HUNDRED COINS crest lands on.
     { kind: 'pedestal', p: on(-5, 51, 0), mat: 'metal', tint: IRON, glow: GOLD },

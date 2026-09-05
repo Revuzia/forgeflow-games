@@ -487,7 +487,10 @@ export default {
     { id: 'cp-meadow', p: [0, 2.0, 40], yaw: 0 },        // flat 2.00 — before the bridge
     { id: 'cp-brook', p: [0, 4.4, 9], yaw: 0 },          // flat 4.40 — after the hole, before the climb
     { id: 'cp-gate', p: [0, 9.0, -14], yaw: 0 },         // flat 9.00 — inside the fort gateway
-    { id: 'cp-rampart', p: [10.0, WALL_TOP, -26.0], yaw: Math.PI }, // the east rampart walk
+    // Data lane 2026-09-05 (loop gate): yaw PI put the follow camera inside
+    // the east crest tower (TOWER_E, solid to 17.55): the lens jammed at 2.4 m.
+    // yaw 0 faces the crest and the lens sits back over the walk.
+    { id: 'cp-rampart', p: [10.0, WALL_TOP, -26.0], yaw: 0 }, // the east rampart walk
     { id: 'cp-mill', p: [28, 9.6, 8], yaw: -0.9 },       // flat 9.60 — foot of the windmill hill
   ],
 
@@ -631,11 +634,18 @@ export default {
      * bridge, fort and windmill are all on screen before the first input.
      * ===================================================================== */
 
-    { kind: 'deco', kindOf: 'sign', p: on(3.0, 41, 1.15), s: [0.14, 1.7, 1.2], mat: 'wood', tint: TIMBER },
-    { kind: 'deco', kindOf: 'post', p: on(3.0, 41, 0.65), s: [0.16, 1.3, 0.16], mat: 'wood', tint: 0x6b4a28 },
-    { kind: 'text', p: [3.0, 3.95, 41], rot: [0, 0, 0], text: 'BAILEY MEADOW', size: 0.60, color: 0x2d3d1f },
-    { kind: 'text', p: [3.0, 3.42, 41], rot: [0, 0, 0], text: 'EASE THE STICK TO WALK  ·  ALL THE WAY TO RUN', size: 0.22, color: 0x4d6038 },
-    { kind: 'text', p: [3.0, 3.05, 41], rot: [0, 0, 0], text: 'JUMP  ·  LAND AND JUMP AGAIN TO CHAIN A HIGHER ONE', size: 0.22, color: 0x4d6038 },
+    /* Data lane 2026-09-05 (S4): the game boots at checkpoints[0], 2-4 m
+       AHEAD of `spawn`, so a board authored 3 m to the pad's right and level
+       with it stood nearer the camera than the hero and filled 40 % of the
+       first frame with its header running off the right edge. Every spawn
+       board now stands ~3 m ahead of the pad and ~4.5 m to its right — over
+       5 m from the hero, inside the frame, a third the size — and its post
+       stands 0.45 m BEHIND the text plate instead of through it. */
+    { kind: 'deco', kindOf: 'sign', p: on(4.5, 37, 1.15), s: [0.14, 1.7, 1.2], mat: 'wood', tint: TIMBER },
+    { kind: 'deco', kindOf: 'post', p: on(4.5, 36.55, 0.65), s: [0.16, 1.3, 0.16], mat: 'wood', tint: 0x6b4a28 },
+    { kind: 'text', p: [4.5, 3.95, 37], rot: [0, 0, 0], text: 'BAILEY MEADOW', size: 0.60, color: 0x2d3d1f },
+    { kind: 'text', p: [4.5, 3.42, 37], rot: [0, 0, 0], text: 'EASE THE STICK TO WALK  ·  ALL THE WAY TO RUN', size: 0.22, color: 0x4d6038 },
+    { kind: 'text', p: [4.5, 3.05, 37], rot: [0, 0, 0], text: 'JUMP  ·  LAND AND JUMP AGAIN TO CHAIN A HIGHER ONE', size: 0.22, color: 0x4d6038 },
 
     // The rock the first jump is for. Top 3.69; sigil 1 floats 1.05 above it,
     // so a walk-up-and-hop collects it and nothing else is required.

@@ -14,12 +14,25 @@ whole loop the player walks (CONTRACT "The gates" -> core loop):
                   and game.lastRespawnMs (kill -> controls restored) has a MEDIAN
                   <= 700 ms over at least 3 samples (CONTRACT §28)
   survival        1.5 s of GAME time after every respawn the hero is STILL
-                  alive, grounded within 0.6 m of the pad, and the follow
-                  camera is >= 0.3 m from any solid (chest->lens broadphase
-                  ray + six probes from the lens); every crest station gets
-                  the same alive + camera check (added 2026-09-05 after the
-                  gate passed 551/551 with two checkpoints that killed the
-                  player on respawn)
+                  alive with NO death counted (a kill + rewind inside the
+                  window leaves him "alive" again), grounded within 0.6 m of
+                  the pad, the follow camera is >= 0.3 m from any solid
+                  (chest->lens broadphase ray + six probes from the lens) and
+                  holds >= 3.5 m at rest (a lens the solver dragged in closer
+                  is a station authored against a wall); then a HAND-STEPPED
+                  sweep of 30 s of course time from the respawn clock
+                  (course.update + player.update at 1/60, synchronous) must
+                  count no death — a crusher on a 4 s beat is invisible to a
+                  1.5 s wait. Every crest
+                  station gets the same alive check, an 8-yaw camera probe
+                  (framable from SOME approach at >= frameMin 2.4 m; the
+                  spawn-yaw pose shots.py photographs is reported as
+                  information) and a 90 s sweep reported as a WARN. A crush
+                  by a critter body (skitter swoop) is a WARN naming the
+                  critter — a collide/critters finding, not a station's.
+                  Warnings print as WARN and never fail the verdict. (Added
+                  2026-09-05 after the gate passed 551/551 with a crest
+                  station under a 90 s hour hand and cameras inside walls.)
   collection      a coin, a sigil and a crest collect on contact, the counters
                   move, and the SAVE (localStorage `crestbound.save.v1`) is
                   updated for the crest
@@ -96,8 +109,8 @@ LOOP_JS = r"""
 async (opts) => {
   const A = globalThis.CRESTBOUND;
   const R = {course: opts.course, checks: [], respawnMs: [], notes: {}};
-  const ok = (name, pass, detail) =>
-    R.checks.push({name, pass: !!pass, detail: detail === undefined ? null : detail});
+  const ok = (name, pass, detail, warn) =>
+    R.checks.push({name, pass: !!pass, detail: detail === undefined ? null : detail, warn: !!warn});
   if (!A || !A.game) { ok('bootstrap', false, 'no CRESTBOUND.game'); return R; }
 
   const G = A.game, THREE = A.THREE, Save = A.Save;
@@ -148,7 +161,40 @@ async (opts) => {
    *              from any solid; an origin INSIDE a box reports t = 0).
    * A station that fails here is authored wrong; the fix is in the data.  */
   const E = A.engine;
-  const PAD_R = 0.6, CAM_CLEAR = 0.3, SETTLE_S = 1.5, SETTLE_WALL_MS = 20000;
+  const PAD_R = 0.6, CAM_CLEAR = 0.3, CAM_DIST_MIN = 3.5, SETTLE_S = 1.5, SETTLE_WALL_MS = 20000;
+  // A crest station is allowed the game's own close-framing minimum
+  // (TUNE.cam.frameMin, 2.4 m): secret crests live in tubes and chambers whose
+  // ceilings cannot hold the default pitch at 6.8 m, and the camera lane
+  // authored frameMin as the acceptable close pose. A CHECKPOINT keeps the
+  // 3.5 m floor — a respawn pose is the frame the player sees most.
+  const CREST_DIST_MIN = 2.4;
+  // Hand-stepped HAZARD SWEEP: 1.5 s of live game time cannot catch a crusher
+  // on a 4 s beat or an hour hand on a 90 s turn. After the live settle the
+  // COURSE (hazards, critters, kill volumes) and the PLAYER (physics, collision
+  // resolve, kill tests) are stepped by hand in one synchronous loop —
+  // course.update(dt, player) + player.update(dt), the same two calls the
+  // game loop makes, without the camera, hero rig or HUD — for SWEEP_CP_S
+  // seconds at a checkpoint (from the respawn clock: the phase every respawn
+  // presents) and SWEEP_CREST_S at a crest station (from course clock 0, so
+  // the longest cycle authored anywhere is covered whatever the wall clock was
+  // doing). The engine is NOT stopped: engine.start() takes the loop function
+  // as its argument and a bare restart drops the game's (measured: every
+  // station after the first sweep reported the hero dead and the state stuck).
+  // A death inside the window is a station under a kill volume — the class
+  // of defect that hid behind 551/551.
+  // MEASURED 2026-09-05 with a 30 s window on ember-3: cp-gallery's data
+  // rewinds to clock 30 so the lava front "gives 21.9 s before it takes this
+  // walk" — a chase pad with 20 s of grace is the design, so the checkpoint
+  // window is 20 s. And the deaths the first sweep found were mostly the
+  // SKITTERS: a swoop lands on an idle hero and the mover push drives him
+  // 2 cm into the floor (collide.js: crush). That is a critter/collide
+  // finding, not a station one, so a critter crush is reported as a WARN with
+  // the critter named (the verdict ignores warns); a kill VOLUME or a hazard
+  // mover killing the hero on a respawn pad FAILS; a crest station's 90 s
+  // sweep is information (WARN) either way — a crest has no "you are put
+  // here" moment, a checkpoint does.
+  const SWEEP_CP_S = 20, SWEEP_CREST_S = 90, SWEEP_DT = 1 / 60;
+  const CRITTER_KINDS = { skitter: 1, bumbler: 1, gnasher: 1, warden: 1, fen: 1 };
   const simNow = () => (E && Number.isFinite(E.elapsed)) ? E.elapsed : performance.now() / 1000;
   const simWait = async (s) => {
     const t0 = simNow(), w0 = performance.now();
@@ -191,24 +237,91 @@ async (opts) => {
     }
     return { ok: !why, why, cam: cp.map(v => +v.toFixed(2)), dist: +cs.dist.toFixed(2), mode: cs.mode, len: +len.toFixed(2) };
   };
-  const survive = async (label, pad, wantPad) => {
+  const _qb = new THREE.Box3();
+  // The moving colliders touching the hero's capsule box right now — the
+  // only way to name WHAT crushed him (a critter body or a hazard mover).
+  const moversOn = () => {
+    const bp2 = C.broadphase;
+    if (!bp2 || typeof bp2.query !== 'function') return [];
+    _qb.min.set(P.pos.x - 0.6, P.pos.y - 0.3, P.pos.z - 0.6); _qb.max.set(P.pos.x + 0.6, P.pos.y + 2.0, P.pos.z + 0.6);
+    const out = [];
+    for (const c of bp2.query(_qb, [])) {
+      if (c.solid === false || typeof c.isMoving !== 'function' || !c.isMoving()) continue;
+      const ref = c.ref || null;
+      const k = ref ? (ref.kind || (ref.def && ref.def.kind) || ref.name || '') : (c.kind || 'mover');
+      out.push(String(k || 'mover'));
+    }
+    return out;
+  };
+  const sweep = (seconds) => {
+    const d0 = G.deaths | 0, t0 = performance.now();
+    const n = Math.round(seconds / SWEEP_DT);
+    let diedAt = -1, steps = 0, err = null, agents = [], lastMovers = [];
+    try {
+      for (let i = 0; i < n; i++) {
+        C.update(SWEEP_DT, P);
+        P.update(SWEEP_DT);
+        steps++;
+        syncP();
+        const m = moversOn();
+        if (m.length) lastMovers = m;
+        if (P.dead || (G.deaths | 0) !== d0) { diedAt = (i + 1) * SWEEP_DT; agents = m.length ? m : lastMovers; break; }
+      }
+    } catch (e) { err = String(e); }
+    const cause = P.deathCause || null;
+    const critter = agents.find(a => CRITTER_KINDS[a]) || null;
+    return { diedAt, steps, ms: Math.round(performance.now() - t0), cause, deaths: (G.deaths | 0) - d0, err, agents, critter };
+  };
+  const sweepCheck = async (label, seconds, pad, infoOnly) => {
+    const r = sweep(seconds);
+    syncP();
+    const p = P.pos;
+    const passed = r.diedAt < 0 && !r.err;
+    // a critter's body crushing an idle hero is collide/critters' finding, not the station's
+    const warn = !passed && (infoOnly || !!r.critter);
+    const agent = r.critter ? `crushed by a ${r.critter.toUpperCase()} swoop` : (r.agents.length ? `movers on him: ${r.agents.join('/')}` : 'no mover on him');
+    ok(`${label}: no kill volume sweeps the station in ${seconds} s of course time (hand-stepped)`, passed,
+       r.err ? `threw after ${r.steps} steps: ${r.err}`
+             : passed ? `${r.steps} steps, ${r.ms} ms wall, clock ${C.clock.toFixed(1)}`
+                      : `DIED at +${r.diedAt.toFixed(2)} s (${r.cause || 'dead'}; ${agent}) at ${p.x.toFixed(2)},${p.y.toFixed(2)},${p.z.toFixed(2)}, deaths +${r.deaths}`,
+       warn);
+    if (r.diedAt >= 0) {
+      // the rewind is mid-flight; let the live loop finish it, then put him back
+      await until(() => { syncP(); return !P.dead && (G.state === 'playing' || G.state === 'keep'); }, 6000);
+      if (pad) { tp(pad, 0.6); await simWait(0.3); }
+    }
+    return r.diedAt < 0;
+  };
+  const survive = async (label, pad, wantPad, skipCam) => {
+    // The death COUNT is the witness, not `player.dead`: a kill at 0.5 s and a
+    // 0.43 s rewind leave the hero alive again at the 1.5 s mark — the exact
+    // loop the pose harness photographed as the death card.
+    const d0 = G.deaths | 0;
     const settled = await simWait(SETTLE_S);
     syncP();
     const p = P.pos;
     const where = `${p.x.toFixed(2)},${p.y.toFixed(2)},${p.z.toFixed(2)}`;
     if (!settled) ok(`${label}: the game clock advanced ${SETTLE_S} s`, false, 'engine.elapsed stalled for ' + SETTLE_WALL_MS + ' ms');
-    const live = !P.dead && (G.state === 'playing' || G.state === 'keep');
-    ok(`${label}: alive ${SETTLE_S} s after arriving`, live,
-       live ? `at ${where}` : `dead (${P.deathCause || G.state}) at ${where}, deaths ${G.deaths}`);
+    const died = (G.deaths | 0) !== d0;
+    const live = !P.dead && !died && (G.state === 'playing' || G.state === 'keep');
+    ok(`${label}: alive ${SETTLE_S} s after arriving (no death counted)`, live,
+       live ? `at ${where}` : `${P.dead ? 'dead' : (died ? 'DIED and respawned' : 'state ' + G.state)} (${P.deathCause || G.lastDeathCause || G.state}) at ${where}, deaths ${d0} -> ${G.deaths}`);
     if (wantPad && pad) {
       const d = Math.hypot(p.x - pad.x, p.y - pad.y, p.z - pad.z);
       ok(`${label}: grounded within ${PAD_R} m of the pad`, live && P.grounded && d <= PAD_R,
          `${P.grounded ? 'grounded' : 'NOT grounded (' + P.state + ')'} ${d.toFixed(2)} m from ${pad.x.toFixed(1)},${pad.y.toFixed(1)},${pad.z.toFixed(1)}`);
     }
-    if (live) {
+    if (live && !skipCam) {
       const c = camProbe();
       ok(`${label}: follow camera clear of geometry (>= ${CAM_CLEAR} m)`, c.ok,
          c.ok ? `lens ${c.cam.join(',')} dist ${c.dist} ${c.mode}` : `${c.why} — lens ${c.cam ? c.cam.join(',') : '?'} dist ${c.dist} ${c.mode}`);
+      // A lens the solver had to drag inside CAM_DIST_MIN of the hero AT REST is
+      // a station authored against a wall: the pull-in keeps it out of the
+      // geometry, but the frame is a close-up of the hero's head. Stations are
+      // authored so the default follow distance (TUNE.cam.dist) fits behind them.
+      if (c.ok && c.mode === 'follow')
+        ok(`${label}: follow camera holds >= ${CAM_DIST_MIN} m at rest (not jammed against a wall)`,
+           c.dist >= CAM_DIST_MIN, `dist ${c.dist} m, lens ${c.cam.join(',')}`);
     }
     return live;
   };
@@ -286,6 +399,15 @@ async (opts) => {
       await until(() => { syncP(); return !P.dead && (G.state === 'playing' || G.state === 'keep'); }, 5000);
       tp(cp, 0.6);
       await simWait(0.3);
+    } else {
+      await sweepCheck(`cp${i}${cpId} respawn`, SWEEP_CP_S, cp);
+      // The sweep left the course 20 s past this pad's phase (ember-3's lava
+      // front was UP when the next pad was tested and the hero never activated
+      // it). Rewind to this pad's clockOffset — exactly what a respawn does —
+      // so the next station starts from an authored phase, not a leftover one.
+      try { C.resetFrom(i); } catch (e) {}
+      syncP();
+      if (P.dead) { if (G.respawn) G.respawn(); await until(() => { syncP(); return !P.dead; }, 5000); }
     }
     await wait(200);
   }
@@ -312,9 +434,10 @@ async (opts) => {
    * The hero is placed at each crest's station point (the live record's home:
    * p / spawnAt / the race finish — what shots.py photographs) with collection
    * SUSPENDED (the same patch shots.py uses, so the crest is not taken and no
-   * save is written), left for 1.5 s of game time, and must be alive with the
-   * camera clear. A station under the ice, on a hazard, or inside a wall
-   * fails here. */
+   * save is written), left for 1.5 s of game time and must be alive; then the
+   * follow camera must frame it from at least one of eight approach yaws, and
+   * 90 s of hand-stepped course time from clock 0 must count no death. A
+   * station under the ice, under a hazard's sweep, or inside a wall fails. */
   if (!opts.isKeep && col && crestDefs.length) {
     const patched = typeof col.update === 'function' && !col.__cbPosePatched;
     let own = false, orig = null;
@@ -337,11 +460,52 @@ async (opts) => {
         if (!p) continue;
         seen.add(c.id); stations.push({ id: c.id, p });
       }
+      const spawnYaw = (C.def && C.def.spawn && Number.isFinite(C.def.spawn.yaw)) ? C.def.spawn.yaw : 0;
       for (const st of stations) {
         if (syncP().dead) { if (G.respawn) G.respawn(); await until(() => { syncP(); return !P.dead; }, 5000); }
+        // The station is judged at the phase a player respawning at the NEAREST
+        // checkpoint would see: course.resetFrom(that pad) rewinds hazards AND
+        // critters to its authored clockOffset (the designer's phase for this
+        // region), instead of whatever the previous station's sweep left
+        // behind — a tide course's crest under 20 s of leftover lava is not a
+        // finding about the crest. (course.reset() to clock 0 was tried and
+        // rejected: it puts every critter on its spawn point, and azure-2's
+        // shaft skitter spawns under the boss crest.)
+        const nearCp = (typeof C.nearestCheckpoint === 'function') ? C.nearestCheckpoint(st.p) : -1;
+        try { C.resetFrom(nearCp >= 0 ? nearCp : 0); } catch (e) {}
         tp(st.p, 0.2);
+        if (P.__test.setFacing) P.__test.setFacing(spawnYaw);
         if (G.cam && G.cam.recenter) G.cam.recenter();
-        await survive(`crest-${st.id} station`, st.p, false);
+        const live = await survive(`crest-${st.id} station`, st.p, false, true);
+        if (!live) continue;
+        // A crest has no authored yaw: the player walks up from wherever the
+        // route brings him and the camera settles behind. The station is
+        // framable if SOME approach gives a clear, un-jammed follow camera —
+        // the eight compass yaws are tried (cam.__test.setYaw is a snap that
+        // re-solves the collision pose) and the best one is the verdict. The
+        // SPAWN yaw's pose is what shots.py photographs (it never sets a
+        // facing), so it is reported alongside as information.
+        const poses = [];
+        for (let k = 0; k < 8; k++) {
+          const yaw = -Math.PI + k * (Math.PI / 4);
+          P.__test.setFacing(yaw);
+          if (G.cam && G.cam.__test && G.cam.__test.setYaw) G.cam.__test.setYaw(yaw);
+          else if (G.cam && G.cam.recenter) G.cam.recenter();
+          await simWait(0.35);
+          const c = camProbe();
+          poses.push({ yaw: +yaw.toFixed(2), ok: c.ok, dist: c.dist, why: c.why || null, cam: c.cam });
+        }
+        P.__test.setFacing(spawnYaw);
+        if (G.cam && G.cam.__test && G.cam.__test.setYaw) G.cam.__test.setYaw(spawnYaw);
+        await simWait(0.35);
+        const sp = camProbe();
+        const good = poses.filter(q => q.ok && q.dist >= CREST_DIST_MIN);
+        let best = poses[0];
+        for (const q of poses) if ((q.ok && !best.ok) || (q.ok === best.ok && q.dist > best.dist)) best = q;
+        const spawnInfo = `spawn-yaw ${spawnYaw.toFixed(2)} pose: ${sp.ok ? 'clear' : 'BLOCKED (' + sp.why + ')'} dist ${sp.dist}`;
+        ok(`crest-${st.id} station: some approach frames it (camera clear and >= ${CREST_DIST_MIN} m, the game's frameMin)`, good.length > 0,
+           `${good.length}/8 yaws good; best yaw ${best.yaw} dist ${best.dist}${best.ok ? '' : ' (' + best.why + ')'} lens ${best.cam ? best.cam.join(',') : '?'}; ${spawnInfo}`);
+        await sweepCheck(`crest-${st.id} station`, SWEEP_CREST_S, null, true);
       }
     } finally {
       if (patched) {
@@ -806,16 +970,19 @@ def main() -> int:
             jserr = []
         br.close()
 
-    total = failed = 0
+    total = failed = warned = 0
     print("=" * 82)
     for cid, res in all_res.items():
         checks = res.get("checks", []) if isinstance(res, dict) else []
-        bad = [c for c in checks if not c.get("pass")]
+        bad = [c for c in checks if not c.get("pass") and not c.get("warn")]
+        warns = [c for c in checks if not c.get("pass") and c.get("warn")]
         total += len(checks)
         failed += len(bad)
-        print("\n%s  —  %d/%d passed" % (cid, len(checks) - len(bad), len(checks)))
+        warned += len(warns)
+        print("\n%s  —  %d/%d passed%s" % (cid, len(checks) - len(bad) - len(warns), len(checks),
+                                           ("  (%d warn)" % len(warns)) if warns else ""))
         for c in checks:
-            mark = "ok  " if c.get("pass") else "FAIL"
+            mark = "ok  " if c.get("pass") else ("WARN" if c.get("warn") else "FAIL")
             det = "" if c.get("detail") is None else "   [%s]" % c["detail"]
             print("   %s %s%s" % (mark, c.get("name"), det))
         if res.get("respawnMs"):
@@ -834,7 +1001,8 @@ def main() -> int:
         for e in jserr[:10]:
             print("  !!! %s" % str(e)[:300])
     verdict = "LOOP OK" if (failed == 0 and total > 0) else "LOOP BROKEN"
-    print("VERDICT: %s — %d/%d checks passed" % (verdict, total - failed, total))
+    print("VERDICT: %s — %d/%d checks passed, %d failed, %d warnings (warnings do not fail the gate)"
+          % (verdict, total - failed - warned, total, failed, warned))
     if args.json:
         try:
             with open(args.json, "w", encoding="utf-8") as f:

@@ -567,8 +567,14 @@ export default {
     // reach and outside the aggro radius, on the east half of the forecourt —
     // the half the door is enterable from. yaw 1.40 faces the tomb door.
     { id: 'cp-tomb', p: on(10, -44.5, 0), yaw: 1.40, clockOffset: 0 },
-    // tier 3's deck — before the last flight, the capstone and the chute head
-    { id: 'cp-tier3', p: [-6.0, T3, -22.0], yaw: Math.PI, clockOffset: 3.0 },
+    // tier 3's deck — before the last flight, the capstone and the chute head.
+    // Data lane 2026-09-05 (loop gate): (-6, 16, -22) was INSIDE tier 4's
+    // 13 m block (x -6.5..6.5) under the chute head — every respawn shoved
+    // the hero 0.88 m west and the lens jammed at 2.34 m between the chute
+    // and tier 4's face. Now on the 4 m south ring of tier 3, 1.5 m clear of
+    // tier 4, 5.5 m east of the F4 foot, facing north-west at that flight;
+    // the lens hangs off the tier's south-east edge over tier 2's deck.
+    { id: 'cp-tier3', p: [8.0, T3, -13.5], yaw: 0.8, clockOffset: 3.0 },
     // flat 1.60 — the plaza's east lip, before the Warden
     { id: 'cp-plaza', p: on(-34, -12, 0), yaw: -1.95, clockOffset: 0 },
   ],
@@ -709,7 +715,7 @@ export default {
      * ===================================================================== */
 
     { kind: 'deco', kindOf: 'sign', p: on(3.2, 43, 1.15), s: [0.14, 1.7, 1.2], mat: 'wood', tint: 0x8a6a3c },
-    { kind: 'deco', kindOf: 'post', p: on(3.2, 43, 0.65), s: [0.16, 1.3, 0.16], mat: 'wood', tint: 0x6b4a28 },
+    { kind: 'deco', kindOf: 'post', p: on(3.2, 42.55, 0.65), s: [0.16, 1.3, 0.16], mat: 'wood', tint: 0x6b4a28 },
     { kind: 'text', p: on(3.2, 43, 1.95), rot: [0, 0, 0], text: 'SUNSCAR NECROPOLIS', size: 0.58, color: 0x5c4326 },
     { kind: 'text', p: on(3.2, 43, 1.42), rot: [0, 0, 0], text: 'THE SAND DRINKS  ·  KEEP MOVING, THEN JUMP OUT', size: 0.22, color: 0x6f5533 },
     { kind: 'text', p: on(3.2, 43, 1.05), rot: [0, 0, 0], text: 'POUND THE STONE AT ITS HEART TO DRAIN A POOL', size: 0.22, color: 0x6f5533 },

@@ -482,7 +482,11 @@ export default {
     // nothing but the walk back.
     { id: 'cp-plaza', p: [0, 1.6, 40], yaw: 0, clockOffset: 0 },
     { id: 'cp-geyser', p: [-34, 4.4, 4], yaw: 1.15, clockOffset: 0 },
-    { id: 'cp-bluff', p: [34, 5.6, 2], yaw: -1.05, clockOffset: 0 },
+    // Data lane 2026-09-05 (loop gate): yaw -1.05 put the follow camera's
+    // rest pose inside the shaft-gun cannon's collider (measured 3.03-3.48 m
+    // jammed). Facing the cannon — the bluff's own set piece, "CLIMB IN AND IT
+    // FIRES" — the lens sits back over open bluff at 6.8 m.
+    { id: 'cp-bluff', p: [34, 5.6, 2], yaw: 2.36, clockOffset: 0 },
     // The shaft entrance, on the 6.00 flat just inside the crack. clockOffset 0
     // gives 40 s of grace before the front leaves the floor — the whole of
     // BEAT 5 at a walk.
@@ -627,7 +631,7 @@ export default {
      * ===================================================================== */
 
     { kind: 'deco', kindOf: 'sign', p: on(3.2, 38, 1.15), s: [0.14, 1.7, 1.2], mat: 'metal', tint: IRON },
-    { kind: 'deco', kindOf: 'post', p: on(3.2, 38, 0.65), s: [0.16, 1.3, 0.16], mat: 'metal', tint: 0x5a534c },
+    { kind: 'deco', kindOf: 'post', p: on(3.2, 37.55, 0.65), s: [0.16, 1.3, 0.16], mat: 'metal', tint: 0x5a534c },
     { kind: 'text', p: [3.2, 3.95, 38], rot: [0, 0, 0], text: 'CINDER CHASE', size: 0.60, color: 0xf0d0a8 },
     { kind: 'text', p: [3.2, 3.42, 38], rot: [0, 0, 0], text: 'THE MOUNTAIN IS HOLLOW  ·  THE CRACK IS THE DOOR', size: 0.22, color: 0xc79a72 },
 
@@ -715,7 +719,10 @@ export default {
     },
     { kind: 'text', p: [30, 7.4, 9.2], rot: [0, 0, 0], text: 'CLIMB IN AND IT FIRES', size: 0.26, color: 0xc79a72 },
     { kind: 'text', p: [30, 6.9, 9.2], rot: [0, 0, 0], text: 'it aims through the tap-holes', size: 0.20, color: 0xa8825f },
-    { kind: 'deco', kindOf: 'pipe', p: on(27, 2, 0.9), s: [0.6, 1.8, 0.6], mat: 'metal', tint: IRON, count: 5, spread: 7.0, jitter: 0.4 },
+    // Data lane 2026-09-05 (loop gate): this pipe cluster (5 x 1.8 m, spread
+    // 7) sat exactly where cp-bluff's follow camera rests (lens ~28, 7, 5) and
+    // jammed it to 3.03 m. Moved 8 m south-west, off the view line.
+    { kind: 'deco', kindOf: 'pipe', p: on(24, -5, 0.9), s: [0.6, 1.8, 0.6], mat: 'metal', tint: IRON, count: 5, spread: 7.0, jitter: 0.4 },
     { kind: 'deco', kindOf: 'anvil', p: on(36, 8, 0.3), s: [1.0, 0.8, 0.7], mat: 'metal', tint: IRON, count: 3, spread: 5.5, jitter: 0.35 },
     { kind: 'light', p: [30, 8.4, 4], color: 0xffc077, intensity: 6, distance: 18 },
 

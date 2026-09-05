@@ -649,7 +649,9 @@ export default {
     // this trail used to start BEHIND the player, between hero and camera
     // (metre-wide pancakes in the first frame). It now enters from the side
     // and joins the path at the pad.
-    ...trailCoins([[-3.5, -24.2], [-1.0, -25.0], [1.8, -24.6], [4, -22.5]], 10, 1.1),
+    // 2026-09-05: re-routed round the pad's south side — two of these coins
+    // hung between the camera and the board's last line.
+    ...trailCoins([[-3.2, -27.5], [-0.5, -28.6], [2.6, -27.2], [5.5, -23.5]], 10, 1.1),
     // BEAT 2 — the upper flume, then the arc across GAP A. (6 + 5 + 6)
     deckLine(U0, U2, 6, 1.15),
     ...arcCoins(up(U2, 1.0), up(U3, 1.0), 1.3, 5),
@@ -719,7 +721,7 @@ export default {
        spawn: a `text` with rot y = θ faces (sin θ, cos θ), so θ = the spawn
        yaw points it straight back at the pad. */
     { kind: 'deco', kindOf: 'sign', p: on(-0.2, -22.6, 1.15), s: [0.14, 1.7, 1.2], rot: [0, -2.58, 0], mat: 'wood', tint: ROCK },
-    { kind: 'deco', kindOf: 'post', p: on(-0.2, -22.6, 0.65), s: [0.16, 1.3, 0.16], mat: 'wood', tint: 0x4c5462 },
+    { kind: 'deco', kindOf: 'post', p: on(0.04, -22.22, 0.65), s: [0.16, 1.3, 0.16], mat: 'wood', tint: 0x4c5462 },   // 0.45 m behind the plate
     { kind: 'text', p: [-0.2, r2(SHELF_Y + 1.95), -22.6], rot: [0, -2.58, 0], text: 'GLACIER SLIDE', size: 0.58, color: 0x123049 },
     { kind: 'text', p: [-0.2, r2(SHELF_Y + 1.42), -22.6], rot: [0, -2.58, 0], text: 'CROUCH AT SPEED TO TUCK  ·  THE ICE KEEPS THE REST', size: 0.22, color: 0x2c5878 },
     { kind: 'text', p: [-0.2, r2(SHELF_Y + 1.05), -22.6], rot: [0, -2.58, 0], text: 'THE CHUTE ONLY GOES DOWN. EVERYTHING ELSE GOES UP.', size: 0.22, color: 0x2c5878 },
@@ -954,7 +956,7 @@ export default {
     { kind: 'beam', a: [-37.8, 13.10, 0.0], b: [-22.2, 13.10, 0.0], cycle: { on: 1.6, off: 2.4, warn: 0.7, phase: 0.0 }, radius: 0.16, color: 0xff5a7a },
     { kind: 'beam', a: [-37.8, 13.10, 4.0], b: [-22.2, 13.10, 4.0], cycle: { on: 1.6, off: 2.4, warn: 0.7, phase: 1.3 }, radius: 0.16, color: 0xff5a7a },
     { kind: 'beam', a: [-37.8, 13.10, 8.0], b: [-22.2, 13.10, 8.0], cycle: { on: 1.6, off: 2.4, warn: 0.7, phase: 2.6 }, radius: 0.16, color: 0xff5a7a },
-    { kind: 'text', p: [-30.0, 13.6, 10.2], rot: [0, 3.14, 0], text: 'THE LIGHT COUNTS TO FOUR', size: 0.24, color: 0x9fd8ff },
+    { kind: 'text', p: [-27.4, 13.6, 10.2], rot: [0, 3.14, 0], text: 'THE LIGHT COUNTS TO FOUR', size: 0.24, color: 0x9fd8ff },   // 2026-09-05: off cp-cavern's axis
 
     // THE CRYSTAL, and the vanish stair it lights. Pound the crystal and the
     // four steps come up; they run on the course clock, so cp4's clockOffset
