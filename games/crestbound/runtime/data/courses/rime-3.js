@@ -1132,7 +1132,9 @@ export default {
     // which on a 35 deg slope in a 12 m/s^2 gale is quite enough.
     { kind: 'bumbler', path: [on(-6, 40), on(6, 38), on(2, 45), on(-6, 40)], speed: 1.5 },
     { kind: 'bumbler', path: [on(-12, -33), on(0, -36), on(10, -33), on(0, -36), on(-12, -33)], speed: 1.7 },
-    { kind: 'bumbler', path: [[20.5, TERRACE_Y, 5.0], [16.0, TERRACE_Y, 4.0], [15.5, TERRACE_Y, 0.0], [16.0, TERRACE_Y, 4.0], [20.5, TERRACE_Y, 5.0]], speed: 1.6 },
+    // (2026-09-04: the west waypoints pulled 1.5 m north so the waddle stays
+    // >= 1.3 m clear of the relocated cp-terrace ring at (16.5, 6.5))
+    { kind: 'bumbler', path: [[21.0, TERRACE_Y, 3.5], [16.5, TERRACE_Y, 2.5], [15.5, TERRACE_Y, 0.0], [16.5, TERRACE_Y, 2.5], [21.0, TERRACE_Y, 3.5]], speed: 1.6 },
     // SKITTERS — storm birds. One works the west face (it swoops at anyone on
     // a shelf), one patrols the gorge, one circles the cap.
     { kind: 'skitter', p: [-33, 12.0, 18], path: [[-30, 11.0, 26], [-38, 14.0, 6]], amp: 2.0, speed: 3.6 },
