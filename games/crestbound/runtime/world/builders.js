@@ -4337,7 +4337,16 @@ export function buildPedestal(def, theme, mats) {
    * meadow — so they come down again to 0.28/0.14, which is a glow you notice
    * when you look at the pedestal and never from across the field. */
   const runeMat = pulseMat(tint, 0.28, 0.14, 1.5);
-  const glowM = glowMat(tint, { mode: 'radial', speed: 0.8, power: 1.5, gain: 0.85 });
+  /* SIGNAGE LANE — the LIGHT is gold. Every course authors its pedestals as
+   * `{tint: STONE, glow: GOLD}` (verdant-1.js:643, ember-1.js:674) and the
+   * `glow` key was never read: the pool, sparkle and beam took `tint`, i.e.
+   * the pedestal's STONE grey — measured on `_shots/resume_verdant-1.png` as a
+   * white slab of light at the frame's left edge. The runes cut into the stone
+   * keep the tint; everything that is light takes `glow`, and falls back to
+   * the theme's crest gold, which is what the readability law names as the
+   * crest's one unmistakable colour. */
+  const light = (def && def.glow) || pal(theme, 'crest') || tint;
+  const glowM = glowMat(light, { mode: 'radial', speed: 0.8, power: 1.5, gain: 0.85 });
   /* SIGNAGE LANE — THE CREST SILHOUETTE.
    * The contract's readability law wants the crest to be the one unmistakable
    * object in any frame. The pedestal now carries three more reads, all in
@@ -4352,7 +4361,10 @@ export function buildPedestal(def, theme, mats) {
    *     distance (2.6..7 m) so it reads across a bowl and never stands as a
    *     pillar between the camera and the hero. `def.beam === false` opts out. */
   const beam = !(def && def.beam === false);
-  const beamM = glowMat(tint, { mode: 'beam', speed: 0.9, power: 1.35, gain: 0.55, near: [2.6, 7.0] });
+  /* gain 0.55 -> 0.40 and a narrower head (`_shots/sig1_v1_pedestal.png`: at
+   * 0.55 the gold beam was a saturated pillar the full height of the tree
+   * behind it; a beacon is a thread of light, not a column) */
+  const beamM = glowMat(light, { mode: 'beam', speed: 0.9, power: 1.55, gain: 0.40, near: [2.6, 7.0] });
 
   const key = GeoCache.key('pedestal', r, h, beam ? 'b' : 'nb');
   const geo = GeoCache.get(key, () => {
@@ -4409,7 +4421,7 @@ export function buildPedestal(def, theme, mats) {
     // the beam: uv.y runs 0 at the foot to 1 at the head, whatever its height
     if (beam) {
       const bh = 6.4;
-      const bg = tubeGeometry(0.24, 0.11, bh, 14, 1);
+      const bg = tubeGeometry(0.17, 0.10, bh, 14, 1);
       const posAttr = bg.attributes.position, uvAttr = bg.attributes.uv;
       for (let i = 0; i < posAttr.count; i++) {
         uvAttr.setXY(i, uvAttr.getX(i), (posAttr.getY(i) + bh * 0.5) / bh);

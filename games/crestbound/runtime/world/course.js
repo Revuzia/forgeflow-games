@@ -127,27 +127,38 @@ const HAZARD_VIS_DIST = 90;
 /** Chunks nearer than this stay visible off-screen so their shadows keep casting. */
 const SHADOW_KEEP = 34;
 const MAX_TEXT = 48;
-/* One atlas for every `kind:'text'` sign in a course: 2 columns x 24 rows of
-   1024 x 128 px in a 2048 x 3072 sheet, which covers MAX_TEXT with room to
-   spare. Signs render at a 84 px font into roughly 700-1000 x 144 px, so the
-   fit-inside-the-cell scale is ~0.89 and the glyphs stay crisp at reading
-   distance. */
-const TEXT_ATLAS_COLS = 2;
-const TEXT_ATLAS_ROWS = 24;
-const TEXT_ATLAS_CELL_W = 1024;
-const TEXT_ATLAS_CELL_H = 128;
-/* Glyph-sheet geometry for `kind:'text'`. TEXT_CANVAS_MAX is the widest sheet a
-   line may occupy — the font SHRINKS to fit it and is never CROPPED to it (see
-   _makeTextTexture). TEXT_PAD_EM is the margin, so no glyph is ever flush to
-   the plank edge; TEXT_MOUNT_OUT lifts the whole sign off whatever it is
-   mounted on so a post behind it cannot poke through the plate. */
-const TEXT_FS = 84;
-const TEXT_FS_MIN = 30;
-const TEXT_CANVAS_MAX = 2048;
-const TEXT_TRACK_EM = 0.060;
-const TEXT_PAD_EM = 0.52;
-const TEXT_LINE_EM = 1.22;
-const TEXT_PLATE_EM = 0.90;
+/* SIGNAGE (critic C10, owner O1: "in-world sign body text is illegible").
+ *
+ * The old bake was the mush at its source, three ways at once. MEASURED on
+ * verdant-1's spawn board (`_shots/sig0_v1_sign.png`, 0.60 scale, 6.5 m):
+ *   1. `size` was the height of the whole PADDED sheet, so a 0.22 m sub-line
+ *      carried ~0.07 m glyph caps — 6 px on the 648-line buffer at that range;
+ *   2. every sheet was squeezed into a 1024 x 128 atlas cell (k = 0.44 for a
+ *      two-liner), so the 84 px bake landed at ~37 px, then LinearFilter with
+ *      no mips aliased it further;
+ *   3. white glyphs with a 22 px colour blur on a mid wood plank — low contrast
+ *      and a soft edge before the renderer had touched it.
+ * Now: `size` is the glyph CAP height in metres; every sign is baked at
+ * TEXT_PPM texels per metre (0.22 m caps -> ~62 px, twice what they cover on
+ * the buffer at the 4 m read distance) and mips do the minification; the
+ * clauses are wrapped to TEXT_WRAP_CHARS so a line is a few big words, not a
+ * sentence; and the paint is cream-on-dark or dark-on-cream inside a shadowed
+ * inset. Signs mounted together (the header + its sub-lines, authored as
+ * stacked objects at one x/z) become ONE board. Sheets are shelf-packed into a
+ * 2048-wide POT atlas sized to what the course needs, still one material and
+ * one merged draw. */
+const TEXT_PPM = 280;
+const TEXT_ATLAS_W = 2048;
+const TEXT_ATLAS_MAX_H = 4096;
+const TEXT_ATLAS_PAD = 12;
+const TEXT_WRAP_CHARS = 24;
+const TEXT_GROUP_XZ = 0.45;
+const TEXT_GROUP_DY = 1.8;
+const TEXT_TRACK_EM = 0.035;
+const TEXT_CAP_EM = 0.70;       // cap height as a fraction of the font size
+const TEXT_LINE_PITCH = 1.34;   // line pitch in cap heights
+const TEXT_PAD_M = 0.15;        // panel margin, metres
+const TEXT_FRAME_M = 0.09;      // wood lip round the panel, metres
 const TEXT_MOUNT_OUT = 0.14;
 const MAX_LIGHT_SITES = 96;
 
@@ -234,6 +245,7 @@ const _box1 = new THREE.Box3();
 const _frustum = new THREE.Frustum();
 const _projScreen = new THREE.Matrix4();
 const _colScratch = new THREE.Color();
+const _colScratch2 = new THREE.Color();
 /** Borrowed only to convert an authored `rot` into a quaternion at build time. */
 const _eulerHolder = new THREE.Object3D();
 
@@ -621,6 +633,19 @@ void main(){
   gl_FragColor = vec4(col, a);
 }`;
 
+/* SIGNAGE LANE — THE STATION IS A PAVED RING, NOT A SPOTLIGHT (critic C3,
+ * owner O2/O5: "the emissive pad disc swallows Nim's contact shadow and reads
+ * as a spotlight"). The ring mesh now carries THREE parts in one geometry and
+ * one draw, told apart in the shader by their radius from the pad axis:
+ *   rune annulus  r 1.00..1.18  a flat inlaid ring of glowing rune ticks,
+ *                               thin, theme-coloured, breathing slowly;
+ *   rim torus     r ~1.42       the machined lip of the pad, a dim dash;
+ *   ground skirt  r 1.55..2.70  a soft additive pool on the walked surface
+ *                               round the pad, faded to nothing at its edge.
+ * Rendered UNDER Nim's contact blob (renderOrder 2 < the blob's 3) and never
+ * over the pad's centre, so the shadow he stands in survives. The activation
+ * pulse is a small swell, and the lit state BREATHES (~0.6 Hz) instead of
+ * flaring; an unlit pad sits at a third of the lit alpha. */
 const RING_VERT = `
 attribute float aState;
 attribute float aPulse;
@@ -631,19 +656,20 @@ varying float vState;
 varying float vPulse;
 varying float vSeed;
 varying float vDepth;
+varying float vRad;
+varying float vAng;
 void main(){
   vUv = uv; vState = aState; vPulse = aPulse; vSeed = aSeed;
   vec3 p = position;
-  float s = 1.0 + aPulse * 0.42 + aState * 0.05;
+  vRad = length(position.xz);
+  vAng = atan(position.z, position.x);
+  float s = 1.0 + aPulse * 0.16 + aState * 0.03;
   p.x *= s; p.z *= s;
-  p.y *= 1.0 + aPulse * 0.55;
   vec4 mv = modelViewMatrix * instanceMatrix * vec4(p, 1.0);
   vDepth = -mv.z;
   gl_Position = projectionMatrix * mv;
 }`;
 
-/* Peak gain is held near 2x on purpose: it clears every theme's bloom threshold
- * for a halo, but the ring keeps its HUE instead of clipping to white. */
 const RING_FRAG = `
 uniform vec3  uColorOff;
 uniform vec3  uColorOn;
@@ -653,13 +679,34 @@ varying float vState;
 varying float vPulse;
 varying float vSeed;
 varying float vDepth;
+varying float vRad;
+varying float vAng;
 void main(){
-  float dash = 0.5 + 0.5 * sin(vUv.x * 84.0 - uTime * (0.75 + 2.4 * vState) + vSeed * 6.2831);
-  float tube = 0.55 + 0.45 * sin(vUv.y * 6.2831);
-  float a = (0.34 + 0.66 * vState) * mix(0.48, 1.0, dash) * (0.7 + 0.3 * tube);
+  float breathe = 0.72 + 0.28 * sin(uTime * 1.15 + vSeed * 6.2831);
+  float lit = mix(0.30, 1.0, vState);
+  float a; float glow;
+  if (vRad < 1.30) {
+    /* the rune ring: 20 ticks, each a soft bar with a bright core */
+    float t = fract(vAng * 3.1831 + vSeed);            /* 20 per turn */
+    float tick = smoothstep(0.0, 0.16, t) * smoothstep(0.62, 0.40, t);
+    float drift = 0.5 + 0.5 * sin(vAng * 3.0 - uTime * (0.35 + 0.6 * vState) + vSeed * 6.2831);
+    a = lit * (0.20 + 0.80 * tick) * (0.70 + 0.30 * drift) * breathe * 0.92;
+    glow = 0.95 + 0.45 * tick + 0.55 * vState + 0.35 * vPulse;
+  } else if (vRad < 1.52) {
+    /* the rim: a slow dim dash on the machined lip */
+    float dash = 0.5 + 0.5 * sin(vAng * 14.0 - uTime * (0.55 + 1.6 * vState) + vSeed * 6.2831);
+    float tube = 0.55 + 0.45 * sin(vUv.y * 6.2831);
+    a = lit * mix(0.35, 1.0, dash) * (0.7 + 0.3 * tube) * 0.42;
+    glow = 0.80 + 0.45 * vState + 0.30 * vPulse + 0.20 * dash;
+  } else {
+    /* the ground skirt: a soft pool, quadratic falloff, well under bloom */
+    float soft = 1.0 - smoothstep(1.55, 2.70, vRad);
+    a = soft * soft * lit * (0.22 + 0.12 * breathe) * 0.60;
+    glow = 0.50 + 0.25 * vState;
+  }
   a *= mix(1.0, 0.65, smoothstep(80.0, 260.0, vDepth));
-  vec3 col = mix(uColorOff, uColorOn, vState);
-  col *= 0.90 + 0.85 * vState + 0.80 * vPulse + 0.28 * dash;
+  if (a <= 0.003) discard;
+  vec3 col = mix(uColorOff, uColorOn, vState) * glow;
   gl_FragColor = vec4(col, a);
 }`;
 
@@ -691,12 +738,15 @@ attribute float aPulse;
 attribute float aAngle;
 attribute float aSeed;
 uniform float uTime;
+uniform vec3  uHero;
 varying vec2  vUv;
 varying float vState;
 varying float vPulse;
 varying float vAxisD;
+varying float vHeroD;
+varying float vSeed;
 void main(){
-  vUv = uv; vState = aState; vPulse = aPulse;
+  vUv = uv; vState = aState; vPulse = aPulse; vSeed = aSeed;
   float c = cos(aAngle), s = sin(aAngle);
   vec3 p = position;
   vec3 r = vec3(p.x * c - p.z * s, p.y, p.x * s + p.z * c);
@@ -704,27 +754,37 @@ void main(){
   r.y += 0.34 + 0.30 * aState + 0.075 * sin(uTime * 1.5 + aSeed * 6.2831);
   vec4 wo = modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
   vAxisD = length(wo.xz - cameraPosition.xz);
+  vHeroD = length(wo.xz - uHero.xz);
   gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(r, 1.0);
 }`;
 
 /* The glyph floats a little under a standing player's chest.  At full gain it
  * becomes a floor-filling colour wash in every station screenshot, which is
  * exactly what `contrastcheck.py` measures, so it fades out as the camera
- * closes in; from approach range it still reads as the marker. */
+ * closes in; from approach range it still reads as the marker.
+ * SIGNAGE LANE: it also fades out under the HERO (0.9..2.3 m from the pad
+ * axis) — the marker says "come here", and once Nim is standing on the pad it
+ * has nothing to say and was only a wash over his boots and his shadow. It
+ * breathes slowly with the ring rather than flaring on the pulse. */
 const GLYPH_FRAG = `
 uniform sampler2D uMap;
 uniform vec3 uColorOff;
 uniform vec3 uColorOn;
+uniform float uTime;
 varying vec2  vUv;
 varying float vState;
 varying float vPulse;
 varying float vAxisD;
+varying float vHeroD;
+varying float vSeed;
 void main(){
   vec4 t = texture2D(uMap, vUv);
-  float a = t.a * (0.30 + 0.85 * vState) * (1.0 + 0.9 * vPulse);
+  float breathe = 0.78 + 0.22 * sin(uTime * 1.15 + vSeed * 6.2831);
+  float a = t.a * (0.22 + 0.62 * vState) * (1.0 + 0.40 * vPulse) * breathe;
   a *= smoothstep(1.3, 2.8, vAxisD);
+  a *= smoothstep(0.9, 2.3, vHeroD);
   if (a <= 0.004) discard;
-  vec3 col = mix(uColorOff, uColorOn, vState) * (0.80 + 0.90 * vState + 0.75 * vPulse);
+  vec3 col = mix(uColorOff, uColorOn, vState) * (0.80 + 0.80 * vState + 0.40 * vPulse);
   gl_FragColor = vec4(col, a);
 }`;
 
@@ -889,6 +949,9 @@ export class Course {
     this._disposed = false;
     /** @private {{cnv,ctx,tex,mat,next}|null} the course's one sign-text atlas */
     this._textAtlas = null;
+    /** @private sign boards grouped by mount (see _prepareTexts) */
+    this._textGroups = null;
+    this._textGroupOf = null;
     this._chunks = [];
     this._chunkMap = new Map();
     /** @private detail-art cells: a FINE grid, independent of the main chunks */
@@ -2068,54 +2131,364 @@ export class Course {
 
   /* ── in-world signage ────────────────────────────────────────────────── */
 
+  /**
+   * One BOARD per mount. Course data authors a header and its sub-lines as
+   * separate `text` objects stacked at one x/z (verdant-1's spawn: 'BAILEY
+   * MEADOW' at y 3.95 over two 0.22 m lines at 3.42 and 3.05). Baked as three
+   * planks they cannot each carry legible caps without overlapping, so the
+   * generator gathers them: the first `_buildText` call for a group builds the
+   * whole board, the others return null. Membership: within TEXT_GROUP_XZ in
+   * the plane, TEXT_GROUP_DY in height, and the same facing.
+   */
+  _prepareTexts() {
+    if (this._textGroups) return;
+    const groups = [];
+    const byIndex = new Map();
+    const objs = Array.isArray(this.def.objects) ? this.def.objects : [];
+    const yawOf = (o) => {
+      if (Array.isArray(o.rot) && fin(o.rot[1])) return o.rot[1];
+      if (fin(o.yaw)) return o.yaw;
+      return null;
+    };
+    for (let i = 0; i < objs.length; i++) {
+      const o = objs[i];
+      if (!o || o.kind !== 'text' || !fin3(o.p)) continue;
+      const yaw = yawOf(o);
+      let g = null;
+      for (let k = 0; k < groups.length; k++) {
+        const c = groups[k];
+        if (Math.abs(c.p[0] - o.p[0]) > TEXT_GROUP_XZ || Math.abs(c.p[2] - o.p[2]) > TEXT_GROUP_XZ) continue;
+        if (Math.abs(c.p[1] - o.p[1]) > TEXT_GROUP_DY) continue;
+        if ((c.yaw === null) !== (yaw === null)) continue;
+        if (c.yaw !== null && Math.abs(c.yaw - yaw) > 0.05) continue;
+        g = c; break;
+      }
+      if (!g) { g = { p: [o.p[0], o.p[1], o.p[2]], yaw, members: [], head: -1, built: false }; groups.push(g); }
+      g.members.push({ index: i, o });
+      byIndex.set(i, g);
+    }
+    for (let k = 0; k < groups.length; k++) {
+      const g = groups[k];
+      g.members.sort((a, b) => (b.o.p[1] - a.o.p[1]) || (a.index - b.index));
+      let head = g.members[0];
+      for (let m = 1; m < g.members.length; m++) {
+        const sm = fin(g.members[m].o.size) ? g.members[m].o.size : 0.42;
+        const sh = fin(head.o.size) ? head.o.size : 0.42;
+        if (sm > sh + 1e-6) head = g.members[m];
+      }
+      g.head = head.index;
+      g.headSize = fin(head.o.size) ? clamp(head.o.size, 0.12, 4) : 0.42;
+      g.headColor = colorOf(head.o.color, this.palette.accent.getHex());
+      g.mat = head.o.mat || 'wood';
+    }
+    this._textGroups = groups;
+    this._textGroupOf = byIndex;
+    this._bakeTextAtlas();
+  }
+
+  /** Split a sign's copy into board lines: clauses at ' · ', then word-wrap. */
+  _textLines(o) {
+    const out = [];
+    const size = fin(o.size) ? clamp(o.size, 0.12, 4) : 0.42;
+    const color = colorOf(o.color, this.palette.accent.getHex());
+    const raw = String(o.text).split(String.fromCharCode(10));
+    for (let r = 0; r < raw.length; r++) {
+      const clauses = raw[r].split(/\s+·\s+/);
+      for (let c = 0; c < clauses.length; c++) {
+        const words = clauses[c].trim().split(/\s+/).filter((w) => w.length);
+        if (!words.length) continue;
+        const total = clauses[c].trim().length;
+        if (total <= TEXT_WRAP_CHARS) { out.push({ text: words.join(' '), size, color }); continue; }
+        /* BALANCED wrap: as many lines as the width needs, each as close to
+           total/n as the word breaks allow — never a one-word orphan on the
+           last line ('THE VENTS FIRE ON A' / 'CYCLE', `_shots/sig1_e1_sign.png`) */
+        const n = Math.ceil(total / TEXT_WRAP_CHARS);
+        const target = total / n;
+        let line = '';
+        let made = 0;
+        for (let w = 0; w < words.length; w++) {
+          const cand = line ? line + ' ' + words[w] : words[w];
+          const left = words.length - w;               // words still to place, incl. this one
+          const linesLeft = n - made;
+          if (line && linesLeft > 1 && (cand.length > target + 1 || left <= linesLeft - 1)) {
+            out.push({ text: line, size, color }); made++; line = words[w];
+          } else line = cand;
+        }
+        if (line) out.push({ text: line, size, color });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Bake every board of the course and shelf-pack the sheets into one atlas.
+   * Runs once, before the first sign is built, so the atlas can be allocated
+   * at the height the course actually needs (POT, <= TEXT_ATLAS_MAX_H); a board
+   * that does not fit keeps a private texture and its own draw.
+   */
+  _bakeTextAtlas() {
+    if (typeof document === 'undefined') return;
+    const groups = this._textGroups;
+    const sheets = [];
+    for (let k = 0; k < groups.length; k++) {
+      const g = groups[k];
+      const bake = this._bakeBoard(g);
+      if (!bake) continue;
+      g.bake = bake;
+      sheets.push(g);
+    }
+    if (!sheets.length) return;
+    sheets.sort((a, b) => b.bake.H - a.bake.H);
+    /* shelf packing: rows of the tallest-first sheets, left to right */
+    const P = TEXT_ATLAS_PAD;
+    let x = P, y = P, rowH = 0;
+    for (let i = 0; i < sheets.length; i++) {
+      const b = sheets[i].bake;
+      if (x + b.W + P > TEXT_ATLAS_W) { x = P; y += rowH + P; rowH = 0; }
+      b.ax = x; b.ay = y;
+      x += b.W + P;
+      if (b.H > rowH) rowH = b.H;
+    }
+    let need = y + rowH + P;
+    let AH = 256;
+    while (AH < need && AH < TEXT_ATLAS_MAX_H) AH *= 2;
+    const cnv = document.createElement('canvas');
+    cnv.width = TEXT_ATLAS_W; cnv.height = AH;
+    const ctx = cnv.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, cnv.width, cnv.height);
+    let placed = 0;
+    for (let i = 0; i < sheets.length; i++) {
+      const b = sheets[i].bake;
+      if (b.ay + b.H + P > AH) { b.ax = -1; continue; }   // overflow: private texture
+      ctx.drawImage(b.cnv, b.ax, b.ay);
+      placed++;
+    }
+    const tex = new THREE.CanvasTexture(cnv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    tex.generateMipmaps = true;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.needsUpdate = true;
+    this._own(tex);
+    const mat = new THREE.MeshBasicMaterial({
+      map: tex, transparent: false, depthWrite: true,
+      toneMapped: false, side: THREE.FrontSide, fog: true,
+    });
+    mat.name = 'cb.signatlas';
+    this._own(mat);
+    this._textAtlas = { cnv, ctx, tex, mat, placed, height: AH };
+    const e = 0.5;
+    for (let i = 0; i < sheets.length; i++) {
+      const b = sheets[i].bake;
+      if (b.ax < 0) continue;
+      b.uv = [(b.ax + e) / TEXT_ATLAS_W, 1 - (b.ay + b.H - e) / AH,
+              (b.ax + b.W - e) / TEXT_ATLAS_W, 1 - (b.ay + e) / AH];
+    }
+  }
+
+  /**
+   * Paint one board: an opaque panel (cream, or dark wood when the authored
+   * ink is light), a shadowed inset with a bevel highlight, a hairline border,
+   * the header in a heavier cut with a rule under it, then the lines. Returns
+   * {cnv, W, H, wM, hM, lines} — pixels and metres.
+   */
+  _bakeBoard(g) {
+    const lines = [];
+    for (let m = 0; m < g.members.length; m++) {
+      const ls = this._textLines(g.members[m].o);
+      for (let i = 0; i < ls.length; i++) {
+        ls[i].head = g.members[m].index === g.head;
+        lines.push(ls[i]);
+      }
+    }
+    if (!lines.length) return null;
+    const cnv = document.createElement('canvas');
+    const ctx = cnv.getContext('2d');
+    if (!ctx) return null;
+    /* cap heights in metres: the header keeps a little of its authored size in
+       hand (0.60 -> 0.43 m), a body line is its size (0.22 -> 0.21 m) */
+    for (let i = 0; i < lines.length; i++) {
+      const L = lines[i];
+      L.cap = L.head ? L.size * 0.72 : L.size * 0.95;
+      L.fs = L.cap / TEXT_CAP_EM;                        // font size, metres
+      L.pitch = L.cap * TEXT_LINE_PITCH;
+    }
+    const fontOf = (px, head) => (head ? '800 ' : '700 ') + px + 'px Rajdhani, "Segoe UI", system-ui, -apple-system, sans-serif';
+    let ppm = TEXT_PPM;
+    let wM = 0, hM = 0;
+    for (let pass = 0; pass < 3; pass++) {
+      wM = 0; hM = TEXT_PAD_M * 2;
+      for (let i = 0; i < lines.length; i++) {
+        const L = lines[i];
+        ctx.font = fontOf(Math.round(L.fs * ppm), L.head);
+        const track = L.fs * TEXT_TRACK_EM;
+        L.wM = ctx.measureText(L.text).width / ppm + track * Math.max(0, L.text.length - 1);
+        if (L.wM > wM) wM = L.wM;
+        hM += L.pitch + (L.head ? L.cap * 0.42 : 0);
+      }
+      wM += TEXT_PAD_M * 2;
+      if (wM * ppm <= TEXT_ATLAS_W - TEXT_ATLAS_PAD * 2) break;
+      ppm = Math.floor((TEXT_ATLAS_W - TEXT_ATLAS_PAD * 2) / wM);
+    }
+    const W = Math.max(32, Math.ceil(wM * ppm));
+    const H = Math.max(32, Math.ceil(hM * ppm));
+    cnv.width = W; cnv.height = H;
+    const c = cnv.getContext('2d');
+
+    /* paint: dark ink on cream unless the authored header ink is light */
+    _colScratch.setHex(g.headColor.getHex());
+    const lum = 0.2126 * _colScratch.r + 0.7152 * _colScratch.g + 0.0722 * _colScratch.b;
+    const darkBoard = lum > 0.42;
+    const panel = darkBoard ? '#2a1e15' : '#efe3c4';
+    const panelHi = darkBoard ? '#3a2b1f' : '#f8efd6';
+    const panelLo = darkBoard ? '#1a120c' : '#d9c9a2';
+    c.fillStyle = panel;
+    c.fillRect(0, 0, W, H);
+    /* a faint paper/grain wash so the panel is not one flat value */
+    const gr = c.createLinearGradient(0, 0, W, H);
+    gr.addColorStop(0, panelHi); gr.addColorStop(0.5, panel); gr.addColorStop(1, panelLo);
+    c.globalAlpha = 0.55; c.fillStyle = gr; c.fillRect(0, 0, W, H); c.globalAlpha = 1;
+    /* shadowed inset: dark along the top and left, a bevel highlight bottom/right */
+    const ins = Math.max(4, Math.round(0.035 * ppm));
+    let sh = c.createLinearGradient(0, 0, 0, ins * 2.2);
+    sh.addColorStop(0, 'rgba(0,0,0,0.42)'); sh.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = sh; c.fillRect(0, 0, W, ins * 2.2);
+    sh = c.createLinearGradient(0, 0, ins * 2.2, 0);
+    sh.addColorStop(0, 'rgba(0,0,0,0.34)'); sh.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = sh; c.fillRect(0, 0, ins * 2.2, H);
+    sh = c.createLinearGradient(0, H, 0, H - ins * 1.6);
+    sh.addColorStop(0, 'rgba(255,255,255,0.22)'); sh.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = sh; c.fillRect(0, H - ins * 1.6, W, ins * 1.6);
+    /* hairline border in the ink */
+    const inkHex = (L) => {
+      _colScratch.setHex(L.color.getHex());
+      const l2 = 0.2126 * _colScratch.r + 0.7152 * _colScratch.g + 0.0722 * _colScratch.b;
+      if (darkBoard && l2 < 0.42) _colScratch.lerp(_colScratch2.setRGB(0.94, 0.89, 0.77), 0.75);
+      else if (!darkBoard && l2 > 0.30) _colScratch.lerp(_colScratch2.setRGB(0.16, 0.13, 0.09), 0.72);
+      return '#' + _colScratch.getHexString();
+    };
+    const headLine = lines.find((L) => L.head) || lines[0];
+    c.strokeStyle = inkHex(headLine);
+    c.globalAlpha = 0.55;
+    c.lineWidth = Math.max(2, Math.round(0.012 * ppm));
+    const bd = Math.round(0.075 * ppm);
+    c.strokeRect(bd, bd, W - bd * 2, H - bd * 2);
+    c.globalAlpha = 1;
+
+    /* the lines, centred; the header carries a rule beneath it */
+    c.textBaseline = 'alphabetic';
+    c.textAlign = 'left';
+    let y = TEXT_PAD_M * ppm;
+    for (let i = 0; i < lines.length; i++) {
+      const L = lines[i];
+      const fsPx = Math.round(L.fs * ppm);
+      c.font = fontOf(fsPx, L.head);
+      const track = L.fs * TEXT_TRACK_EM * ppm;
+      const lw = L.wM * ppm;
+      let x = (W - lw) * 0.5;
+      const base = y + (L.pitch - L.cap) * 0.5 * ppm + L.cap * ppm;
+      const ink = inkHex(L);
+      if (L.head) {
+        /* a 1-texel-per-3cm drop so the header lifts off the panel */
+        c.fillStyle = darkBoard ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.28)';
+        let xs = x;
+        const d = Math.max(1, Math.round(0.010 * ppm));
+        for (let ch = 0; ch < L.text.length; ch++) {
+          c.fillText(L.text[ch], xs + d, base + d);
+          xs += c.measureText(L.text[ch]).width + track;
+        }
+      }
+      c.fillStyle = ink;
+      for (let ch = 0; ch < L.text.length; ch++) {
+        c.fillText(L.text[ch], x, base);
+        x += c.measureText(L.text[ch]).width + track;
+      }
+      y += L.pitch * ppm;
+      if (L.head) {
+        const ry = y + L.cap * 0.12 * ppm;
+        c.globalAlpha = 0.65; c.fillStyle = ink;
+        c.fillRect((W - lw) * 0.5, ry, lw, Math.max(2, Math.round(0.014 * ppm)));
+        c.globalAlpha = 1;
+        y += L.cap * 0.42 * ppm;
+      }
+    }
+    return { cnv, W, H, wM, hM, ppm, ax: -1, ay: -1, uv: null };
+  }
+
   _buildText(o, index) {
     if (this.texts.length >= MAX_TEXT) return null;
-    const size = fin(o.size) ? clamp(o.size, 0.12, 4) : 0.42;
-    const col = colorOf(o.color, this.palette.accent.getHex());
-    const made = this._makeTextTexture(String(o.text), col);
-    if (!made) return null;
+    this._prepareTexts();
+    const g = this._textGroupOf ? this._textGroupOf.get(index) : null;
+    if (!g || g.head !== index || g.built) return null;
+    g.built = true;
+    const bake = g.bake;
+    if (!bake) return null;
 
-    const w = size * made.aspect * 1.02;
-    const h = size * 1.02;
+    let mat = null, uv = null;
+    if (bake.uv && this._textAtlas) { mat = this._textAtlas.mat; uv = bake.uv; }
+    else {
+      /* atlas overflow: a private sheet, one extra draw, still legible */
+      const tex = new THREE.CanvasTexture(bake.cnv);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 8;
+      tex.generateMipmaps = false;
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      tex.needsUpdate = true;
+      this._own(tex);
+      mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, side: THREE.FrontSide, fog: true });
+      this._own(mat);
+    }
+
+    const w = bake.wM, h = bake.hM;
     const group = new THREE.Group();
 
-    const plateW = w + size * TEXT_PLATE_EM;
-    const plateH = h + size * 0.62;
-    const plate = chamferBox(plateW, plateH, 0.08, 0.05);
+    /* the board: a chamfered wood plank a lip wider than the painted panel */
+    const plateW = w + TEXT_FRAME_M * 2;
+    const plateH = h + TEXT_FRAME_M * 2;
+    const plate = chamferBox(plateW, plateH, 0.09, 0.03);
     this._own(plate);
-    const plateMesh = new THREE.Mesh(plate, this._mat(o.mat || 'wood'));
+    const plateMesh = new THREE.Mesh(plate, this._mat(g.mat));
     plateMesh.castShadow = false;
     plateMesh.receiveShadow = true;
     group.add(plateMesh);
 
-    const bar = new THREE.BoxGeometry(plateW * 0.86, 0.028, 0.02);
-    bar.translate(0, -plateH * 0.5 + 0.075, 0.052);
+    /* the accent bar along the foot of the plank, in the authored ink */
+    const bar = new THREE.BoxGeometry(plateW * 0.86, 0.026, 0.02);
+    bar.translate(0, -plateH * 0.5 + 0.06, 0.055);
     this._own(bar);
-    group.add(new THREE.Mesh(bar, this._glowMat(col, 1.25)));
+    group.add(new THREE.Mesh(bar, this._glowMat(g.headColor, 1.15)));
 
+    /* the painted panel, set 1 cm into the plank face so the lip reads as a
+       frame; the bake's inset shadow does the rest */
     const planeGeo = new THREE.PlaneGeometry(w, h);
-    planeGeo.translate(0, 0.03, 0.055);
-    /* The glyphs live in a cell of the course's ONE sign atlas, so the quad
-       carries that cell's UV rect and every sign in the course shares a single
-       material -- which means the static merge collapses them all into one
-       draw. MEASURED (drawprobe, verdant-1): 30 signs were 30 unmergeable
-       draws, 30 distinct MeshBasicMaterials and 30 canvas textures before the
-       atlas. */
-    if (made.uv) {
-      const uv = planeGeo.attributes.uv;
-      const u0 = made.uv[0], v0 = made.uv[1], u1 = made.uv[2], v1 = made.uv[3];
-      for (let i = 0; i < uv.count; i++) {
-        uv.setXY(i, u0 + uv.getX(i) * (u1 - u0), v0 + uv.getY(i) * (v1 - v0));
+    planeGeo.translate(0, 0, 0.046);
+    if (uv) {
+      const a = planeGeo.attributes.uv;
+      for (let i = 0; i < a.count; i++) {
+        a.setXY(i, uv[0] + a.getX(i) * (uv[2] - uv[0]), uv[1] + a.getY(i) * (uv[3] - uv[1]));
       }
-      uv.needsUpdate = true;
+      a.needsUpdate = true;
     }
     this._own(planeGeo);
-    const planeMesh = new THREE.Mesh(planeGeo, made.mat);
-    if (!made.uv) planeMesh.userData.noMerge = true;   // private-material fallback
-    planeMesh.renderOrder = 3;
+    const planeMesh = new THREE.Mesh(planeGeo, mat);
+    if (!uv) planeMesh.userData.noMerge = true;
+    planeMesh.receiveShadow = false;
     group.add(planeMesh);
 
+    /* the board hangs where the group was authored: centred between the
+       header's top and the lowest line's foot */
+    let top = -Infinity, bot = Infinity;
+    for (let m = 0; m < g.members.length; m++) {
+      const mp = g.members[m].o.p;
+      const ms = fin(g.members[m].o.size) ? g.members[m].o.size : 0.42;
+      if (mp[1] + ms * 0.5 > top) top = mp[1] + ms * 0.5;
+      if (mp[1] - ms * 0.5 < bot) bot = mp[1] - ms * 0.5;
+    }
     const p = v3(o.p, 0, 0, 0);
+    p.y = (top + bot) * 0.5;
     group.position.copy(p);
     /* Open dioramas have no "incoming" direction, so a sign faces the authored
        yaw, or — with none — the course spawn, which is the one place every
@@ -2127,7 +2500,7 @@ export class Course {
       group.rotation.y = sp ? Math.atan2(sp[0] - p.x, sp[2] - p.z) : 0;
     }
     /* Stand the plate PROUD of its mount. A sign is authored at the same x/z as
-       the post or board that carries it, so the 0.08 m plate and a 0.16 m post
+       the post or board that carries it, so the plate and a 0.16 m post
        occupied the same slab of world and the post's silhouette cut through the
        lettering — verdant-1's 'BAILEY MEADOW' lost its 'IL' to exactly that.
        One shift along the facing normal, after the yaw is known, fixes every
@@ -2141,166 +2514,6 @@ export class Course {
     this.texts.push(group);
     this._chunkAdd(group, p, true);
     return null;
-  }
-
-  /**
-   * Render one sign's lines into a glyph canvas, FITTING the text to the sheet.
-   *
-   * The width used to be `Math.min(2048, measured + pad*2)`, which does not fit
-   * anything — it CROPS. Every line is drawn centred at `(W - lw) / 2`, so a
-   * line measuring wider than 2048 px starts at a NEGATIVE x and loses its
-   * first and last glyphs off the canvas edges. MEASURED on verdant-1's
-   * teaching sign: the authored 'JUMP  ·  LAND AND JUMP AGAIN TO CHAIN A
-   * HIGHER ONE' shipped as 'UMP · LAND AND JUMP AGAIN TO CHAIN A HIGHER ON'
-   * — the game's primary teaching surface, truncated at both ends.
-   *
-   * Now the font size is SOLVED against the sheet: measure, and while the line
-   * does not fit inside `TEXT_CANVAS_MAX` minus the margin, scale the size down
-   * (tracking and padding scale with it) and measure again. The quad's aspect
-   * follows the fitted sheet, so a long line gets a longer plank at the same
-   * world glyph height. Nothing is ever cropped, and `TEXT_PAD_EM` keeps a real
-   * margin between the outermost glyph and the plank edge.
-   */
-  _makeTextTexture(text, color) {
-    if (typeof document === 'undefined') return null;
-    const lines = String(text).split(String.fromCharCode(10));
-    const cnv = document.createElement('canvas');
-    const ctx = cnv.getContext('2d');
-    if (!ctx) return null;
-    const fontOf = (px) => '600 ' + px + 'px Rajdhani, "Segoe UI", system-ui, -apple-system, sans-serif';
-
-    let fs = TEXT_FS;
-    let track = fs * TEXT_TRACK_EM;
-    let pad = Math.round(fs * TEXT_PAD_EM);
-    let maxW = 1;
-    for (let pass = 0; pass < 8; pass++) {
-      track = fs * TEXT_TRACK_EM;
-      pad = Math.round(fs * TEXT_PAD_EM);
-      ctx.font = fontOf(fs);
-      maxW = 1;
-      for (let i = 0; i < lines.length; i++) {
-        const m = ctx.measureText(lines[i]).width + track * Math.max(0, lines[i].length - 1);
-        if (m > maxW) maxW = m;
-      }
-      const budget = TEXT_CANVAS_MAX - pad * 2;
-      if (maxW <= budget || fs <= TEXT_FS_MIN) break;
-      fs = Math.max(TEXT_FS_MIN, Math.floor(fs * (budget / maxW) * 0.99));
-    }
-    const font = fontOf(fs);
-    const W = Math.max(64, Math.min(TEXT_CANVAS_MAX, Math.ceil(maxW + pad * 2)));
-    const H = Math.max(32, Math.ceil(lines.length * fs * TEXT_LINE_EM + pad * 2));
-    cnv.width = W; cnv.height = H;
-
-    const c2 = cnv.getContext('2d');
-    c2.clearRect(0, 0, W, H);
-    c2.font = font;
-    c2.textBaseline = 'middle';
-    const hex = '#' + color.getHexString();
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const lw = c2.measureText(line).width + track * Math.max(0, line.length - 1);
-      let x = (W - lw) * 0.5;
-      const y = pad + fs * 0.62 + i * fs * TEXT_LINE_EM;
-      c2.shadowColor = hex;
-      c2.shadowBlur = 22;
-      c2.fillStyle = '#ffffff';
-      for (let ch = 0; ch < line.length; ch++) {
-        const g = line[ch];
-        c2.fillText(g, x, y);
-        x += c2.measureText(g).width + track;
-      }
-      c2.shadowBlur = 0;
-      x = (W - lw) * 0.5;
-      c2.fillStyle = hex;
-      c2.globalAlpha = 0.55;
-      for (let ch = 0; ch < line.length; ch++) {
-        const g = line[ch];
-        c2.fillText(g, x, y);
-        x += c2.measureText(g).width + track;
-      }
-      c2.globalAlpha = 1;
-    }
-    /* Blit the finished glyph canvas into the course's sign atlas and hand the
-       caller a UV rect instead of a texture. One texture, one material, one
-       merged draw for every sign in the course. */
-    const slot = this._atlasSlot(cnv, W, H);
-    if (slot) return { mat: slot.mat, uv: slot.uv, aspect: W / H };
-
-    /* Atlas full (more than TEXT_ATLAS_CELLS signs): fall back to the old
-       private texture so the sign still reads, and accept its draw call. */
-    const tex = new THREE.CanvasTexture(cnv);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = 4;
-    tex.needsUpdate = true;
-    this._own(tex);
-    const mat = new THREE.MeshBasicMaterial({
-      map: tex, transparent: true, depthWrite: false,
-      toneMapped: false, side: THREE.FrontSide, fog: true,
-    });
-    this._own(mat);
-    return { mat, uv: null, aspect: W / H };
-  }
-
-  /**
-   * @private Copy one rendered glyph canvas into the next free atlas cell.
-   *
-   * The atlas is TEXT_ATLAS_COLS x TEXT_ATLAS_ROWS cells of
-   * TEXT_ATLAS_CELL_W x TEXT_ATLAS_CELL_H pixels. The source is fitted INSIDE
-   * its cell preserving aspect (so the quad's `aspect` is still exact) and the
-   * returned rect is the fitted sub-region, not the whole cell.
-   *
-   * @param {HTMLCanvasElement} src @param {number} W @param {number} H
-   * @returns {{mat:THREE.Material, uv:number[]}|null} null when the atlas is full
-   */
-  _atlasSlot(src, W, H) {
-    if (typeof document === 'undefined') return null;
-    let A = this._textAtlas;
-    if (!A) {
-      const cnv = document.createElement('canvas');
-      cnv.width = TEXT_ATLAS_COLS * TEXT_ATLAS_CELL_W;
-      cnv.height = TEXT_ATLAS_ROWS * TEXT_ATLAS_CELL_H;
-      const ctx = cnv.getContext('2d');
-      if (!ctx) return null;
-      ctx.clearRect(0, 0, cnv.width, cnv.height);
-      const tex = new THREE.CanvasTexture(cnv);
-      tex.colorSpace = THREE.SRGBColorSpace;
-      tex.anisotropy = 4;
-      tex.generateMipmaps = false;
-      tex.minFilter = THREE.LinearFilter;
-      tex.magFilter = THREE.LinearFilter;
-      this._own(tex);
-      const mat = new THREE.MeshBasicMaterial({
-        map: tex, transparent: true, depthWrite: false,
-        toneMapped: false, side: THREE.FrontSide, fog: true,
-      });
-      mat.name = 'cb.signatlas';
-      this._own(mat);
-      A = this._textAtlas = { cnv, ctx, tex, mat, next: 0 };
-    }
-    const i = A.next;
-    if (i >= TEXT_ATLAS_COLS * TEXT_ATLAS_ROWS) return null;
-    A.next++;
-
-    const col = i % TEXT_ATLAS_COLS;
-    const row = (i / TEXT_ATLAS_COLS) | 0;
-    const cx = col * TEXT_ATLAS_CELL_W;
-    const cy = row * TEXT_ATLAS_CELL_H;
-    const k = Math.min(TEXT_ATLAS_CELL_W / W, TEXT_ATLAS_CELL_H / H, 1);
-    const dw = Math.max(1, Math.round(W * k));
-    const dh = Math.max(1, Math.round(H * k));
-    A.ctx.clearRect(cx, cy, TEXT_ATLAS_CELL_W, TEXT_ATLAS_CELL_H);
-    A.ctx.drawImage(src, 0, 0, W, H, cx, cy, dw, dh);
-    A.tex.needsUpdate = true;
-
-    const aw = A.cnv.width, ah = A.cnv.height;
-    /* Half a texel in from each edge: with LinearFilter a UV exactly on the
-       boundary samples the neighbouring cell and puts a ghost letter on the
-       sign. */
-    const e = 0.5;
-    return {
-      mat: A.mat,
-      uv: [(cx + e) / aw, 1 - (cy + dh - e) / ah, (cx + dw - e) / aw, 1 - (cy + e) / ah],
-    };
   }
 
   /** Cached unlit glow material — shared, so signage and bulbs still merge. */
@@ -3569,6 +3782,40 @@ export class Course {
      * unmistakable underfoot, and it stays well under every theme's bloom
      * threshold, so it lifts rather than glows. */
     padMat.emissiveIntensity = this._padGlow;
+    /* SIGNAGE LANE — A PAVED RING, NOT A SPOTLIGHT (critic C3, owner O2/O5).
+     * The theme's `padGlow` lift used to cover the whole disc at one value, so
+     * the pad was the brightest surface in the frame exactly where Nim stands,
+     * and no contact shadow could survive on it (`_shots/resume_verdant-1.png`,
+     * `_shots/resume_keep.png`: a white puddle under the hero, no shadow at all).
+     * The lift is now RADIAL: the outer paved band (r > 0.95 m) keeps the
+     * theme's full self-light and reads as the landing target; the centre
+     * disc keeps a fifth of it, so it is a lit stone floor that takes the key,
+     * the cast shadow and the blob. The identity moves to the inlaid rune
+     * ring (see RING_FRAG). Chained onto materials.js's own injection and its
+     * program cache key, so the box projection is kept and the program is not
+     * shared with an unmasked stone. */
+    {
+      const baseCompile = padMat.onBeforeCompile;
+      const baseKey = padMat.customProgramCacheKey;
+      padMat.onBeforeCompile = function (shader, renderer) {
+        if (typeof baseCompile === 'function') baseCompile.call(this, shader, renderer);
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>', '#include <common>\nvarying float vCbPadR;')
+          .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCbPadR = length(position.xz) * 0.6452;');
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <common>', '#include <common>\nvarying float vCbPadR;')
+          .replace('#include <emissivemap_fragment>',
+            '#include <emissivemap_fragment>\n' +
+            /* centre 0.45 (0.20 left the Keep's pad a black disc under a
+               teal ring — `_shots/sig1_keep_spawn.png` — the hub floor is lit
+               to exposure ~1 and the pad still has to be the bright half of
+               its own figure/ground pair); the paved band keeps the full lift */
+            'totalEmissiveRadiance *= mix(0.55, 1.0, smoothstep(0.50, 0.80, vCbPadR));');
+      };
+      padMat.customProgramCacheKey = function () {
+        return (typeof baseKey === 'function' ? baseKey.call(this) : '') + '|cbpad';
+      };
+    }
     padMat.name = 'cb.cp.pad';
     this._own(padMat);
     const baseMesh = new THREE.InstancedMesh(baseGeo, padMat, n);
@@ -3579,10 +3826,22 @@ export class Course {
     g.add(baseMesh);
     this._cpBase = baseMesh;
 
-    /* 2. the ring */
-    const ringGeo = new THREE.TorusGeometry(1.42, 0.055, 8, 76);
-    ringGeo.rotateX(-Math.PI / 2);
-    ringGeo.translate(0, 0.155, 0);
+    /* 2. the ring: rune annulus + rim torus + ground skirt, ONE geometry (see
+     *    the RING_VERT note) so the station still costs five draws. */
+    const rimGeo = new THREE.TorusGeometry(1.42, 0.045, 8, 76);
+    rimGeo.rotateX(-Math.PI / 2);
+    rimGeo.translate(0, 0.150, 0);
+    const runeGeo = new THREE.RingGeometry(1.00, 1.18, 80, 1);
+    runeGeo.rotateX(-Math.PI / 2);
+    runeGeo.translate(0, 0.146, 0);
+    const skirtGeo = new THREE.RingGeometry(1.55, 2.70, 56, 1);
+    skirtGeo.rotateX(-Math.PI / 2);
+    skirtGeo.translate(0, 0.035, 0);
+    let ringGeo = null;
+    try { ringGeo = mergeGeometries ? mergeGeometries([runeGeo, rimGeo, skirtGeo], false) : null; }
+    catch (e) { ringGeo = null; }
+    if (!ringGeo) ringGeo = rimGeo;
+    else { rimGeo.dispose(); runeGeo.dispose(); skirtGeo.dispose(); }
     this._own(ringGeo);
     this._cpAttachAttrs(ringGeo);
     const ringMat = this._fxMaterial(RING_VERT, RING_FRAG, {
@@ -3590,7 +3849,9 @@ export class Course {
     });
     const ringMesh = new THREE.InstancedMesh(ringGeo, ringMat, n);
     ringMesh.frustumCulled = false;
-    ringMesh.renderOrder = 6;
+    /* under the hero's contact blob (renderOrder 3): the glow never sits on
+       top of the shadow he stands in */
+    ringMesh.renderOrder = 2;
     g.add(ringMesh);
     this._cpRing = ringMesh;
 
@@ -3613,8 +3874,10 @@ export class Course {
     this._own(glyphGeo);
     this._cpAttachAttrs(glyphGeo);
     const glyphTex = this._makeGlyphTexture();
+    /* one Vector3, written per frame from the resolved player position */
+    this._cpHero = this._cpHero || new THREE.Vector3(1e6, 1e6, 1e6);
     const glyphMat = this._fxMaterial(GLYPH_VERT, GLYPH_FRAG, {
-      uTime: { value: 0 }, uMap: { value: glyphTex },
+      uTime: { value: 0 }, uMap: { value: glyphTex }, uHero: { value: this._cpHero },
       uColorOff: { value: off.clone() }, uColorOn: { value: on.clone() },
     });
     const glyphMesh = new THREE.InstancedMesh(glyphGeo, glyphMat, n);
@@ -3751,6 +4014,10 @@ export class Course {
       }
     }
     if (dirty) this._syncCheckpointAttrs(true);
+    if (this._cpHero) {
+      if (this._ppValid) this._cpHero.copy(this._pp);
+      else this._cpHero.set(1e6, 1e6, 1e6);
+    }
     if (this._cpRing) this._cpRing.material.uniforms.uTime.value = t;
     if (this._cpGlyph) this._cpGlyph.material.uniforms.uTime.value = t;
     if (this._cpColumn) this._cpColumn.material.uniforms.uTime.value = t;
@@ -4032,6 +4299,11 @@ export class Course {
       /** Game flips this whenever the crest total changes. */
       setLocked(v) {
         gate.locked = !!v;
+        /* SIGNAGE LANE: a painting swaps its plate (course name / "N CRESTS")
+           and shows or hides its lock sigil on the same flip. */
+        if (mesh && mesh.userData && typeof mesh.userData.setLockedArt === 'function') {
+          try { mesh.userData.setLockedArt(gate.locked); } catch (e) { /* art hook is optional */ }
+        }
         /* The trigger volume always reads: Game decides whether entering it
            opens the course card or shows the "N CRESTS" prompt.  Silencing it
            here would make a sealed gate un-promptable, which is worse than a
