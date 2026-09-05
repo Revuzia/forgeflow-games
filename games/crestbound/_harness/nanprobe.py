@@ -97,6 +97,7 @@ def main():
     ap.add_argument('--column', type=float, default=None, help='x fraction of a vertical luminance column to print')
     ap.add_argument('--quality', default='low')
     ap.add_argument('--out', default=None)
+    ap.add_argument('--settle', type=float, default=2.0, help='seconds to settle on the station before the reads')
     ap.add_argument('--width', type=int, default=1920); ap.add_argument('--height', type=int, default=1080)
     a = ap.parse_args()
     box = [float(v) for v in a.box.split(',')]
@@ -120,7 +121,7 @@ def main():
         else:
             pos = pg.evaluate(lv.STATION_JS, st)
         print('station', st, pos)
-        time.sleep(2.0)
+        time.sleep(a.settle)
         r = pg.evaluate(JS, {'box': box, 'column': a.column})
         out = a.out or ('_shots/%s/nanprobe_%s.png' % (a.course, st))
         pg.screenshot(path=out)
