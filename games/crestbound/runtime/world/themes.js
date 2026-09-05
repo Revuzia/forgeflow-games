@@ -259,7 +259,9 @@ export const THEMES = {
          * crenellations invisible. The band is still well under the courtyard
          * deck (contrastcheck keep cp4 measures 9.36:1 after this change). */
         top: 0x102a4a, mid: 0x264a70, horizon: 0x3a3026, bottom: 0x222833,
-        horizonGlow: 0xe8a868, glowPower: 6.4, glowStrength: 0.20,
+        /* LIGHT LANE 2026-09-04 (critic C4, keep cp4): glowStrength 0.20 ->
+         * 0.14 — the warm horizon band was the widest part of the glare. */
+        horizonGlow: 0xe8a868, glowPower: 6.4, glowStrength: 0.14,
         /* sunDir now AGREES with lights.key.dir. It did not, and a sun that
          * is not where the shadows say it is cannot be found in a frame — part
          * of why the critic could not see a disc in any of 25 shots. */
@@ -274,7 +276,7 @@ export const THEMES = {
          * than a high one, which is also true. */
         /* LIGHT LANE 2026-09-04 (critic C4): halo 0.55 -> 0.32, disc 3.4 ->
          * 2.6 — the dusk sun is a point with a rim, not a third of the frame. */
-        sunSize: 0.00040, sunIntensity: 2.6, sunHalo: 0.32,
+        sunSize: 0.00040, sunIntensity: 2.6, sunHalo: 0.18,
         /* THE ARC (critic: "a broad ~200 px vertical spectral smear ... renders
          * as a straight prism band with no arc curvature and reads exactly like
          * over-strength chromatic aberration"). The cause is the radius: a
@@ -295,7 +297,9 @@ export const THEMES = {
         cloudStrength: 0.34, cloudScale: 1.5, cloudSpeed: 0.006, cloudCoverage: 0.40,
         cloudLit: 0x8a7f6e, cloudShadow: 0x3a4250,
         starDensity: 0.0, starBrightness: 0.0, dither: 1.0,
-        sunPower: 90, haze: 0.32, intensity: 0.78,
+        /* LIGHT LANE 2026-09-04 (critic C4, keep cp4): haze 0.32 -> 0.22 — the
+         * dusk dome was a grey-yellow veil over the whole upper-left third. */
+        sunPower: 90, haze: 0.22, intensity: 0.78,
       },
     },
 
@@ -676,8 +680,20 @@ export const THEMES = {
          * cumulus deck cannot be seen against, which is why the sky rendered as
          * "only thin wispy cirrus" at cumulusCoverage 0.52: the puffs were
          * being drawn, in white, onto white. */
-        top: 0x1d5fae, mid: 0x4f92d8, horizon: 0xaecde2, bottom: 0x475f57,
-        horizonGlow: 0xffd8a0, glowPower: 5.5, glowStrength: 0.38,
+        /* horizon 0xaecde2 -> 0x92b6d2 (2026-09-04, image lane): with the fog
+         * band now darker than the dome, the dome's own near-white horizon was
+         * the one hard light band left at mid-frame in every vista (critic
+         * C9); a mid blue keeps the cumulus readable and lets a fogged ridge
+         * sit against it instead of under it. */
+        /* Second step (same lane, `_shots/imgab3_v1nw_sharp.png` sampled):
+         * the mid-frame band was still [198,209,214] with a DARK GREEN stripe
+         * [101,135,129] beyond it — that stripe is the dome's own `bottom`
+         * showing past the end of the heightfield, and the band is `horizon`
+         * plus the warm glow pushed over 1.0. Horizon and bottom now bracket
+         * the fogged far-terrain colour (fog.skyColor) so dome and terrain
+         * meet in ONE graded transition; the glow is a tint, not a wall. */
+        top: 0x1d5fae, mid: 0x4f92d8, horizon: 0x7fa6c4, bottom: 0x5a7570,
+        horizonGlow: 0xffd8a0, glowPower: 5.5, glowStrength: 0.22,
         // sunDir now AGREES with lights.key.dir (see the keep note above)
         /* ROUND 5 — THE SUN IS LOWER. The vista stations sit above the diorama
          * looking DOWN at it (shots.py places them at bounds-corner + 0.42 of
