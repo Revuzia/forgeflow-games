@@ -203,7 +203,14 @@ export const THEMES = {
      * establishing shots looking across 40-60 m of it") and then the value
      * drifted back up to 0.032, which is 64 % haze at 40 m and is half of why
      * the four establishing shots are a silhouette. 0.022 = 43 % at 40 m. */
-    fog: { color: 0x2a2028, near: 10, far: 150, density: 0.018, type: 'exp2' },
+    /* HEIGHT FOG (engine.js patchHeightFog, 2026-09-04): the band stays at the
+     * hero's own height (the contrast gate's measurement is untouched by
+     * construction); above it the hall's upper storeys and the courtyard's
+     * tower thin out toward a dusk-sky grey instead of sinking into the same
+     * warm soot as the floor, which is what gives the hub its height. */
+    fog: { color: 0x2a2028, near: 10, far: 150, density: 0.018, type: 'exp2',
+           heightBelow: 4, heightFalloff: 0.10, heightThin: 0.45, desat: 0.22,
+           skyColor: 0x4a4656, skyMix: 0.45 },
 
     sky: {
       type: 'sanctum',
@@ -365,6 +372,11 @@ export const THEMES = {
      * should sit around 0.22-0.30. */
     grade: {
       lift: [0.010, 0.008, 0.014], gamma: [0.99, 1.00, 1.02], gain: [1.10, 1.005, 0.895],
+      /* contrast (post.js, 2026-09-04): a gentle S about mid grey BEFORE the
+       * ACES shoulder. The owner's read of the low-tier frames was "low
+       * contrast, no bloom on emissives, no vignette" — this is the first of
+       * those three, and it lifts the deck/band ratio rather than lowering it. */
+      contrast: 1.06,
       saturation: 1.32, vignette: 0.44, chroma: 0.0006,
       tint: [1.055, 1.00, 0.925],
     },
@@ -377,7 +389,11 @@ export const THEMES = {
      * is pulled down in player/hero.js; this stops the bloom from finding what
      * is left of it. Radius tightened so the pass stops leaving soft round
      * ghosts over the geometry. */
-    bloom: { strength: 0.36, radius: 0.42, threshold: 1.52 },
+    /* 1.52 -> 1.30 / 0.36 -> 0.44 (2026-09-04): with the plaster no longer
+     * blooming (its emitters were fixed at the source in builders.js), the
+     * threshold can come down to where the sconces, the painting shimmer and
+     * the crest pedestal actually glow instead of merely being bright. */
+    bloom: { strength: 0.44, radius: 0.42, threshold: 1.30 },
 
     palette: {
       /* safeEdge is the EMISSIVE lip stripe (builders.js). It was a near-white
@@ -536,7 +552,10 @@ export const THEMES = {
      * ratio falling 5.03 -> 4.38. The compensation therefore has to be
      * up-facing too, or it just moves both sides of the ratio together: env
      * (the sky's own contribution) and the fill, whose dir.y is 0.82. */
-    envIntensity: 1.20,
+    /* 1.20 -> 1.00 (2026-09-04): the sky probe is the largest SHADOWLESS term
+     * on a flat deck under this 21-degree sun; trimming it is what lets a cast
+     * shadow read at all (see the key/fill note in `lights`). */
+    envIntensity: 1.00,
 
     /* The band a platform is silhouetted against is the treeline shadow. It was
      * a cold slate BLUE, which is why the meadow read as an overcast grey-green
@@ -580,7 +599,15 @@ export const THEMES = {
      * 0.0925 -> 0.0883, i.e. very slightly DARKER, while the green channel's
      * lead over red and blue falls from 45/28 to 32/22. The far hills now lose
      * their green as they recede instead of merely dimming. */
-    fog: { color: 0x3a5a54, near: 26, far: 320, density: 0.0076, type: 'exp2' },
+    /* HEIGHT FOG (engine.js patchHeightFog, 2026-09-04). The deep pine band
+     * above is kept EXACTLY at the hero's height — it is the dark ground the
+     * decks read against and contrastcheck measures. Above the hero the
+     * density thins and the fog colour slides toward the morning horizon, so
+     * the fort on its hill and the far ridges sit BEHIND the meadow in pale
+     * air instead of in the same green as the grass at Nim's feet. */
+    fog: { color: 0x3a5a54, near: 26, far: 320, density: 0.0076, type: 'exp2',
+           heightBelow: 3, heightFalloff: 0.075, heightThin: 0.65, desat: 0.40,
+           skyColor: 0x9dbfd2, skyMix: 0.80 },
 
     sky: {
       type: 'day',
@@ -672,7 +699,15 @@ export const THEMES = {
        * on the FILL, whose dir.y is 0.82 and which therefore lands on the deck
        * and not on the fort wall behind it. That is the same lever, and the
        * same argument, as the round-4 fill note below. */
-      key: { color: 0xffdca4, intensity: 3.45, dir: [-0.62, 0.36, 0.65] },
+      /* 2026-09-04 — WHERE THE SHADOWS WENT. Measured with `_harness/_visprobe.py`
+       * (shadow map dumped to `_shots/_v_shadowmap.png`, receiver debug in
+       * `_shots/_v_dbgshadow.png`): the shadow chain WORKS — Nim's shadow lands
+       * on the ground behind him — but at key 3.45 / fill 1.95 the fill (dir.y
+       * 0.82, i.e. a second, shadowless sun from overhead) put 1.60 units on a
+       * flat deck to the key's 1.28, so a shadow removed under a third of the
+       * light and read as nothing. Light moves from the fill to the key: flat
+       * decks keep ~90 % of their value, the lit/shadow ratio goes 1.8 -> 2.5. */
+      key: { color: 0xffdca4, intensity: 3.90, dir: [-0.62, 0.36, 0.65] },
       /* 1.10 -> 1.30: this is the near-vertical term, so it lands on the
        * courtyard deck (dot 0.82) and not on the fort wall behind it (dot
        * -0.42) — the one lever that restores the deck WITHOUT restoring the
@@ -687,7 +722,7 @@ export const THEMES = {
        * (deck [195,192,171] then [194,192,171]) is at least good evidence that
        * this station's old +-0.2 drift is gone. Anything further has to come
        * off the BAND — the fort's own sunlit wall — not off more light. */
-      fill: { color: 0x8fc0ff, intensity: 1.95, dir: [0.42, 0.82, -0.38] },
+      fill: { color: 0x8fc0ff, intensity: 1.45, dir: [0.42, 0.82, -0.38] },
       rim: { color: 0xfff2d8, intensity: 1.55, dir: [0.66, 0.16, -0.74] },
       /* Flat terms trimmed: they were lighting the shaded fortress WALLS to
        * within 1.85:1 of the sunlit deck in front of them (contrastcheck,
@@ -698,13 +733,18 @@ export const THEMES = {
 
     grade: {
       lift: [0.004, 0.006, 0.004], gamma: [1.00, 1.00, 1.00], gain: [1.02, 1.02, 0.99],
-      saturation: 1.10, vignette: 0.24, chroma: 0.0007,
+      contrast: 1.09,
+      saturation: 1.14, vignette: 0.30, chroma: 0.0007,
       tint: [1.01, 1.02, 0.99],
     },
     /* Morning is bright: only the sun, the crest gold and the trims may bloom.
      * A threshold under the lit-grass plateau turns the whole meadow into one
      * green wash. */
-    bloom: { strength: 0.32, radius: 0.58, threshold: 1.12 },
+    /* 1.12 -> 1.02 / 0.32 -> 0.40 (2026-09-04): the coins, rings, sigils and
+     * checkpoint pool sit between 1.0 and 1.5 in the HDR buffer; at 1.12 only
+     * their hottest texels crossed and the owner read "no bloom on emissives".
+     * Lit grass peaks ~0.7 and limestone ~0.95 under this key, both under. */
+    bloom: { strength: 0.40, radius: 0.58, threshold: 1.02 },
 
     palette: {
       /* saturated for the same reason as the Keep's — see builders.js */
@@ -830,7 +870,11 @@ export const THEMES = {
 
     /* Thin enough that EVERY LANDING IS VISIBLE FROM ITS TAKE-OFF: a platform
      * 30 m out must still silhouette against the molten sea. */
-    fog: { color: 0x2a100a, near: 10, far: 110, density: 0.0090, type: 'exp2' },
+    /* HEIGHT FOG (engine.js): the smoke band holds at deck height; the crown
+     * and the crane gantry above it thin toward the ember horizon band. */
+    fog: { color: 0x2a100a, near: 10, far: 110, density: 0.0090, type: 'exp2',
+           heightBelow: 3, heightFalloff: 0.08, heightThin: 0.55, desat: 0.15,
+           skyColor: 0x5a1c0c, skyMix: 0.70 },
 
     sky: {
       type: 'furnace',
@@ -859,6 +903,7 @@ export const THEMES = {
 
     grade: {
       lift: [0.020, 0.008, 0.002], gamma: [0.98, 1.00, 1.03], gain: [1.08, 1.00, 0.94],
+      contrast: 1.08,
       saturation: 1.14, vignette: 0.46, chroma: 0.0024,
       // gentle warm push, eased on blue so the cyan lips survive the grade
       tint: [1.04, 0.99, 0.95],
@@ -867,7 +912,15 @@ export const THEMES = {
      * half the frame at a luma the bright-pass would otherwise integrate into
      * an additive veil that no walked albedo can read through; only the vein
      * cores, the rims and the true emitters may bloom. */
-    bloom: { strength: 0.55, radius: 0.62, threshold: 2.60 },
+    /* `clamp` 12 -> 3.5 (2026-09-04, owner: "ember-1's furnace doorway is
+     * blown to a white slab"). The slab is the three `flame` curtains over the
+     * crucible (hazards/beams.js: additive, double-sided, ~2.2x their colour,
+     * three of them overlapping), which sit near 8 in the HDR buffer. The
+     * bloom bright-pass took every one of those units above 2.6 into the mip
+     * chain and flooded the whole opening white. Capping the bright-pass INPUT
+     * at 3.5 leaves the jets their own light and takes away the flood, so the
+     * three bars and the dark gaps between them read again. */
+    bloom: { strength: 0.50, radius: 0.62, threshold: 2.40, clamp: 3.5 },
 
     palette: {
       safe: 0x93a7b8, safeEdge: 0x8ff0ff,
@@ -959,7 +1012,11 @@ export const THEMES = {
 
     /* Dense — this is the theme where you cannot see the whole mountain — but
      * still thin enough that the next three landings silhouette. */
-    fog: { color: 0x28374f, near: 16, far: 190, density: 0.0072, type: 'exp2' },
+    /* HEIGHT FOG (engine.js): the dusk-blue band holds at deck height; the
+     * peaks above thin toward the aurora horizon's rose. */
+    fog: { color: 0x28374f, near: 16, far: 190, density: 0.0072, type: 'exp2',
+           heightBelow: 3, heightFalloff: 0.06, heightThin: 0.60, desat: 0.30,
+           skyColor: 0x6a5f80, skyMix: 0.65 },
 
     sky: {
       type: 'aurora',
@@ -986,12 +1043,13 @@ export const THEMES = {
 
     grade: {
       lift: [-0.004, -0.002, 0.006], gamma: [1.02, 1.01, 0.99], gain: [0.99, 1.00, 1.06],
-      saturation: 1.06, vignette: 0.34, chroma: 0.0011,
+      contrast: 1.06,
+      saturation: 1.08, vignette: 0.34, chroma: 0.0011,
       tint: [0.98, 1.00, 1.05],
     },
     /* The snow is legitimately bright; a threshold under it turns the whole
      * mountain into a white wash. Only the aurora, the sun and the trims. */
-    bloom: { strength: 0.40, radius: 0.60, threshold: 1.14 },
+    bloom: { strength: 0.44, radius: 0.60, threshold: 1.10 },
 
     palette: {
       safe: 0x7c93a8, safeEdge: 0xffe9a8,
@@ -1083,7 +1141,11 @@ export const THEMES = {
     exposure: 1.03,
     envIntensity: 1.25,
 
-    fog: { color: 0x1b4d61, near: 34, far: 380, density: 0.0034, type: 'exp2' },
+    /* HEIGHT FOG (engine.js): the deep teal band holds at deck height; the
+     * temple and the dune ridges above thin toward the noon horizon. */
+    fog: { color: 0x1b4d61, near: 34, far: 380, density: 0.0034, type: 'exp2',
+           heightBelow: 3, heightFalloff: 0.07, heightThin: 0.60, desat: 0.35,
+           skyColor: 0xa9d6e2, skyMix: 0.80 },
 
     sky: {
       type: 'sanctum',
@@ -1113,13 +1175,14 @@ export const THEMES = {
 
     grade: {
       lift: [0.000, 0.004, 0.008], gamma: [1.00, 1.00, 1.00], gain: [1.00, 1.02, 1.04],
-      saturation: 1.12, vignette: 0.22, chroma: 0.0006,
+      contrast: 1.08,
+      saturation: 1.12, vignette: 0.28, chroma: 0.0006,
       tint: [0.99, 1.01, 1.04],
     },
     /* Noon over water is the brightest scene in the game. Threshold above the
      * lit-limestone plateau AND above the sea's own specular field, or the
      * bright-pass integrates the whole sea into an additive veil. */
-    bloom: { strength: 0.34, radius: 0.56, threshold: 1.30 },
+    bloom: { strength: 0.40, radius: 0.56, threshold: 1.18 },
 
     palette: {
       safe: 0xb8a67e, safeEdge: 0xffd166,
@@ -1176,8 +1239,13 @@ export const THEMES = {
       snow: { tint: 0xf4fbff },
       rubber: { tint: 0xa0a49c },
       cloud: { tint: 0xffffff },
-      water: { shallow: 0x4fe4d4, deep: 0x063a56, foam: 0xf4ffff,
-               opacity: 0.80, depthFade: 6.0, shoreWidth: 1.8, crestFoam: 0.65 },
+      /* shallow 0x4fe4d4 -> 0x3fc9c4 (2026-09-04): the lagoon's body colour
+       * was a fully saturated cyan that the ripples then noised — the owner's
+       * "flat cyan noise". A lagoon over pale sand is a softer turquoise, and
+       * the SKY the surface now reflects (water.js skyAndSun) carries the
+       * brightness instead. */
+      water: { shallow: 0x3fc9c4, deep: 0x063a56, foam: 0xf4ffff,
+               opacity: 0.84, depthFade: 6.0, shoreWidth: 1.8, crestFoam: 0.65 },
       painting: { emissiveIntensity: 0.9 },
     },
 

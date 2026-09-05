@@ -101,9 +101,11 @@ export const KEEP_ID = 'keep';
  * (contract §26), and Save.unlockedGates() reads the same numbers, so the sign on
  * the door, the card and the unlock cinematic never disagree.
  *
- * Progression: 13 courses × 7 crests = 91 crests. Nine painting gates open in
- * the first 26; three late gates (ember-4, rime-3, azure-2) and the finale
- * (azure-3) sit behind 30 / 36 / 42 / 50. `difficulty` is 1..10.
+ * Progression: 13 courses × 7 crests = 91 crests. The gate totals and the
+ * difficulty ramp are the COURSES.md brief's, verbatim: 0 / 1 / 3 / 5 / 8 / 12
+ * / 15 / 18 / 22 / 26 / 30 / 35 / 40, with the Keep's CRESTWAY seal at 60
+ * (keep.js authors the same numbers; drift between the two was fixed
+ * 2026-09-04). `difficulty` is 1..10.
  */
 export const COURSE_META = {
   'verdant-1': {
@@ -127,61 +129,61 @@ export const COURSE_META = {
   'ember-1': {
     realm: 'ember', theme: 'ember', order: 1,
     name: 'MAGMA WORKS', subtitle: 'Catwalks over a molten floor',
-    difficulty: 3, gateCrests: 6,
+    difficulty: 4, gateCrests: 5,
     hook: 'Lava below, sinking platforms ahead, catwalks that do not care whether you make it.',
   },
   'ember-2': {
     realm: 'ember', theme: 'ember', order: 2,
     name: 'PISTON HALLS', subtitle: 'Crushers, pistons and conveyors',
-    difficulty: 4, gateCrests: 10,
+    difficulty: 5, gateCrests: 8,
     hook: 'Everything in the halls moves on a beat; learn the beat or learn the ceiling.',
   },
   'ember-3': {
     realm: 'ember', theme: 'ember', order: 3,
     name: 'CINDER CHASE', subtitle: 'Rising lava, rotating bars, a cannon',
-    difficulty: 5, gateCrests: 14,
+    difficulty: 6, gateCrests: 12,
     hook: 'The lava is climbing and the only way up is a cannon you have to aim yourself.',
   },
   'ember-4': {
     realm: 'ember', theme: 'ember', order: 4,
     name: 'SUNSCAR NECROPOLIS', subtitle: 'A pyramid drowned in sand',
-    difficulty: 7, gateCrests: 30,
+    difficulty: 6, gateCrests: 15,
     hook: 'Desert pyramid, quicksand, a sandboard run and a cannon into the tomb.',
   },
   'rime-1': {
     realm: 'rime', theme: 'rime', order: 1,
     name: 'FROST COTTAGE', subtitle: 'Snow slopes and a frozen pond',
-    difficulty: 4, gateCrests: 18,
+    difficulty: 5, gateCrests: 18,
     hook: 'Slope slides, ice underfoot and a cottage roof that is the only warm thing for miles.',
   },
   'rime-2': {
     realm: 'rime', theme: 'rime', order: 2,
     name: 'GLACIER SLIDE', subtitle: 'The long ice race',
-    difficulty: 5, gateCrests: 22,
+    difficulty: 6, gateCrests: 22,
     hook: 'One glacier, one timer, no brakes — the slide race the whole realm is named for.',
   },
   'rime-3': {
     realm: 'rime', theme: 'rime', order: 3,
     name: 'BLIZZARD PEAK', subtitle: 'Pendulums, mills and the Warden',
-    difficulty: 8, gateCrests: 36,
+    difficulty: 7, gateCrests: 26,
     hook: 'A mountain of pendulums and mills, and a Warden waiting at the summit.',
   },
   'azure-1': {
     realm: 'azure', theme: 'azure', order: 1,
     name: 'TIDEWELL TEMPLE', subtitle: 'Swim tunnels and currents',
-    difficulty: 5, gateCrests: 26,
+    difficulty: 7, gateCrests: 30,
     hook: 'Flooded temple: swim the tunnels, ride the currents, surface before the timer does.',
   },
   'azure-2': {
     realm: 'azure', theme: 'azure', order: 2,
     name: 'GEARHEART TOWER', subtitle: 'Clockwork rooms that turn',
-    difficulty: 8, gateCrests: 42,
+    difficulty: 8, gateCrests: 35,
     hook: 'Rotating rooms, seesaws and beams inside a tower that is itself a clock.',
   },
   'azure-3': {
     realm: 'azure', theme: 'azure', order: 3,
     name: 'PRISM RIDE', subtitle: 'Sky rails and the rainbow gauntlet',
-    difficulty: 10, gateCrests: 50,
+    difficulty: 10, gateCrests: 40,
     hook: 'Sky rails, wing rings and air currents into a finale that combines every family at once.',
   },
 };

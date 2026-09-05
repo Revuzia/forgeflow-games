@@ -254,11 +254,22 @@ export default {
     // start within 20 m of it.
     { id: 'cp-yard', p: [0, YARD, 20], yaw: 0, clockOffset: 0.0 },
     // Gallery 1, east walk. Before the vanish teeth over the open heart.
-    { id: 'cp-gearroom', p: [6.0, G1, -6.0], yaw: Math.PI, clockOffset: 2.0 },
+    // G2 validation 2026-09-04 (measured live, _harness/_g2_cpprobe.py): this pad
+    // sat ON the gallery-1 beam line (a [-8.6, G1+0.9, -6] -> b [8.6, G1+0.9, -6]),
+    // so every respawn was cut by the beam 1.6 s later, for ever. Now 6 m south
+    // on the same east walk, before the beam.
+    { id: 'cp-gearroom', p: [6.0, G1, 0.0], yaw: Math.PI, clockOffset: 2.0 },
     // Gallery 2, east walk. Before the turning room and the seesaw.
-    { id: 'cp-turning', p: [6.0, G2, 4.5], yaw: 0, clockOffset: 1.0 },
+    // G2 validation 2026-09-04 (measured live): at x 6 the pad was 7.5 m from the
+    // gallery-2 rotor hub (len 7.4, reach ~7.7 m) — the bar shoved a fresh respawn
+    // into the side of the vanish block at [4.6, G2, 7] and CRUSHED him at clock
+    // 1.2, nine times in five seconds. Now x 8, 9.2 m from the hub, still on the walk.
+    { id: 'cp-turning', p: [8.0, G2, 4.5], yaw: 0, clockOffset: 1.0 },
     // Gallery 3, west walk. Before the escapement's crushers and beams.
-    { id: 'cp-escapement', p: [-6.0, G3, -6.0], yaw: Math.PI, clockOffset: 3.5 },
+    // G2 validation 2026-09-04: [-6, G3, -6] was the gallery-3 rotor's own hub.
+    // Now the south end of the west walk, where the gallery-2 stairs land — 8 m
+    // from the hub, 2 m south of the G3 beam (z 0), clear of the crusher footprints.
+    { id: 'cp-escapement', p: [-6.0, G3, 2.0], yaw: Math.PI, clockOffset: 3.5 },
     // The bell deck's north-west corner — OUTSIDE the Warden's 6.5 m ring
     // (9.90 m from its centre) and 4.7 m from the sigil pedestal.
     { id: 'cp-bell', p: [-6.5, BELL, -7.5], yaw: Math.PI, clockOffset: 0.5 },

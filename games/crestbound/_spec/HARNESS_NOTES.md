@@ -208,3 +208,57 @@ below `tier - 0.15` (`[Engine] render scale 0.65 is below the high tier band
 (0.70-0.85) — this machine wants a lower quality tier.`) and emits
 `renderscale-rescue`, so a bad guess is visible in a log and not only in the
 frame rate.
+
+## Where the triangles go on a 144 m course (2026-09-04, group-1 validator)
+
+Measured with `_harness/_g1_triattr2.py` (engine stopped, one composer render
+per visibility toggle, `renderer.info.render.triangles` — the number the perf
+gate reads) and `_harness/_g1_batchgeo.py` (the live BatchedMesh geometry
+table), at the spawn station, auto tier. Three of six courses were over the
+450k triangle budget at rest, at committed HEAD (verdant-2 525k; the in-flight
+visual-lane edits did not cause it): verdant-2 513k, verdant-3 549k,
+ember-2 576k. Draw calls were fine everywhere (163-181).
+
+What a frame is made of (verdant-2 before any fix, 512.6k): static merge
+147k (73.5k main + 73.4k shadow — ONE chunk, so the 36 m shadow frustum
+renders the whole course's static art every frame), coins 69.9k (142 x 492,
+every coin drawn at full detail out to HIDE_RANGE = 150 m; 40-60 % of them
+beyond 60 m where a coin is five pixels wide), terrain 39.2k (fixed, every
+station of every course), water 30.8k (a 112 m moat at 0.9 m quads), hazard
+batches ~90k, Nim 24k (12k x 2 with shadow), grass 13.6k.
+
+The hazard batches' cost driver was `chamferBox` (hazards/movers.js): an
+ExtrudeGeometry of a rounded rect with 2-segment corner arcs plus a bevel
+costs 156-196 triangles whatever the box's size, and the factory hazards
+build their small trim out of it — ember-2's twelve crushers spent 3,260
+triangles EACH on twenty 6 x 7.5 cm cooling-vent slots (39,120 in one
+obsidian batch), plus collar bands, ribs, rims and safe-edge strips. On those
+parts the corner radius is 3-17 mm — sub-pixel at the tier scale.
+
+Fixes (all generator-level, nothing deleted, measured after each):
+- `chamferBox`: a plain bevelled rectangle (28 tris) when the corner radius
+  is under 2 cm; boxes with a visible radius are byte-identical.
+- coins: a second InstancedMesh with the 100-triangle blank for the far band
+  (ANIM_RANGE, > 46 m from the hero) and per-frame compaction so `count` is
+  the number drawn (a scale-0 instance still costs its full index range).
+- `def.chunks`: per-course ceiling for the static-merge chunk grid (default
+  MAX_CHUNKS = 2 unchanged for the Keep and verdant-1), so the shadow frustum
+  can cull quadrants. verdant-2 `4`, verdant-3 / ember-2 `9`.
+- verdant-2 moat `res: 1.4` (30.8k -> 12.8k; normals are analytic).
+
+Boot triangles: verdant-2 501k -> 433k (191 draws), ember-2 568k -> 429k
+(185 draws), verdant-3 547k -> 495k (200 draws) — STILL OVER. What is left
+on verdant-3 is authored art at the spawn: 4 mills x ~4 builder decks
+(69k with shadow), 3 conveyors x ~55 treads x 240 tris (42.7k), terrain
+39.2k, the spawn detail cell 28k, three static chunks 72k. The next generic
+levers, in order of yield: a terrain quadrant split or far-ring LOD (39k at
+every station, currently one mesh with no culling — terrain.js was under
+another lane's edit and was not touched), a `plain`-style far LOD for
+adopted hazard decks, fewer tread ribs (5 per tread now).
+
+Two harness facts learned on the way: `drawprobe.py` reports a BatchedMesh's
+ALLOCATED index capacity (131072/3 = 43,690, 262144/3 = 87,381 ...) as its
+triangle count, not what it drew — `renderer.info` after a real render is
+the number to trust; and a visibility-toggle probe on a RUNNING engine
+drifts by ~10k triangles between renders (coin/grass/animation), so stop
+the engine and render once per toggle.

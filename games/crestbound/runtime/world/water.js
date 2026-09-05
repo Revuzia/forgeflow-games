@@ -191,13 +191,23 @@ void main() {
 
 /** Theme-derived sky / sun colours, shared by both material paths. */
 function skyAndSun(theme) {
+  /* 2026-09-04: the reflection used to take the FOG colour as its horizon —
+   * in azure that is 0x1b4d61, a deep teal, so the fresnel term reflected a
+   * dark band and the lagoon read as a flat cyan sheet. Water reflects the
+   * SKY DOME the player sees; take the dome's own horizon/zenith and its sun
+   * (sky.params), and fall back to fog/bg only for a theme without a dome. */
+  const sp = (theme && theme.sky && theme.sky.params) || null;
   const fogC = (theme && theme.fog && theme.fog.color);
-  const horizon = (fogC !== undefined && fogC !== null) ? fogC
-    : ((theme && theme.bg !== undefined && theme.bg !== null) ? theme.bg : 0xbcd8ee);
-  const top = (theme && theme.bg !== undefined && theme.bg !== null) ? theme.bg : 0x2f6fc0;
+  const bg = (theme && theme.bg !== undefined && theme.bg !== null) ? theme.bg : null;
+  const horizon = (sp && sp.horizon !== undefined) ? sp.horizon
+    : ((fogC !== undefined && fogC !== null) ? fogC : (bg !== null ? bg : 0xbcd8ee));
+  const top = (sp && sp.mid !== undefined) ? sp.mid
+    : ((sp && sp.top !== undefined) ? sp.top : (bg !== null ? bg : 0x2f6fc0));
   const lights = (theme && theme.lights) || null;
-  const sunCol = (lights && lights.key && lights.key.color) || 0xfff2d8;
-  const dir = (lights && lights.key && lights.key.dir) || [-0.42, 0.86, 0.30];
+  const sunCol = (sp && sp.sunColor !== undefined) ? sp.sunColor
+    : ((lights && lights.key && lights.key.color) || 0xfff2d8);
+  const dir = (sp && Array.isArray(sp.sunDir)) ? sp.sunDir
+    : ((lights && lights.key && lights.key.dir) || [-0.42, 0.86, 0.30]);
   return { top, horizon, sunCol, dir };
 }
 

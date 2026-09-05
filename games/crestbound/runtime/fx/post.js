@@ -107,6 +107,7 @@ uniform float uTime;
 uniform vec3  uLift;
 uniform vec3  uGain;
 uniform vec3  uGammaInv;
+uniform float uContrast;
 uniform float uSaturation;
 uniform vec3  uTint;
 
@@ -245,6 +246,14 @@ void main() {
   col = max( col, vec3( 0.0 ) );
   col = pow( col, uGammaInv );
 
+  // ------------------------------------------------------------ contrast
+  // A gentle S about scene-linear mid grey (0.18), applied BEFORE the ACES
+  // shoulder so blacks go to black and the palette separates without the
+  // highlights clipping any earlier than they already do. Identity at 1.0.
+  if ( abs( uContrast - 1.0 ) > 0.001 ) {
+    col = 0.18 * pow( col * ( 1.0 / 0.18 ), vec3( uContrast ) );
+  }
+
   // ------------------------------------------------- saturation + tint
   float luma = dot( col, LUMA );
   col = mix( vec3( luma ), col, uSaturation );
@@ -354,6 +363,7 @@ export const GradeShader = {
     uLift: { value: new THREE.Vector3(0, 0, 0) },
     uGain: { value: new THREE.Vector3(1, 1, 1) },
     uGammaInv: { value: new THREE.Vector3(1, 1, 1) },
+    uContrast: { value: 1 },
     uSaturation: { value: 1 },
     uTint: { value: new THREE.Vector3(1, 1, 1) },
 
@@ -381,6 +391,7 @@ export const DEFAULT_GRADE = {
   lift: 0,
   gamma: 1,
   gain: 1,
+  contrast: 1.0,
   saturation: 1.04,
   vignette: 0.30,
   chroma: 0.28,
@@ -889,6 +900,77 @@ class FXAAPass extends ShaderPass {
   }
 }
 
+/* ===========================================================================
+ * Contrast-adaptive sharpening (after AA, on the encoded image)
+ * ======================================================================== */
+
+/**
+ * AMD-CAS-style sharpen. The tiers render BELOW native (CONTRACT hard rule 4:
+ * low 0.60) and the compositor's bilinear upscale is what turns world-sign
+ * text and every edge to mush (owner, `_shots/_before_visual/verdant-1/
+ * spawn.png`). Five taps of the finished LDR frame, a per-pixel amount that
+ * is large in flat-ish regions and ZERO across already-hard edges (so it never
+ * rings or haloes), applied AFTER FXAA so the anti-aliaser's own soft edges are
+ * restored rather than fought. One full-screen draw at buffer size.
+ */
+const SharpenShader = {
+  name: 'CrestboundSharpen',
+  uniforms: {
+    tDiffuse: { value: null },
+    uTexel: { value: new THREE.Vector2(1 / 1920, 1 / 1080) },
+    uSharp: { value: 0.5 },
+  },
+  vertexShader: /* glsl */`
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+}`,
+  fragmentShader: /* glsl */`
+uniform sampler2D tDiffuse;
+uniform vec2 uTexel;
+uniform float uSharp;
+varying vec2 vUv;
+void main() {
+  vec3 e = texture2D( tDiffuse, vUv ).rgb;
+  vec3 b = texture2D( tDiffuse, vUv + vec2( 0.0, -uTexel.y ) ).rgb;
+  vec3 d = texture2D( tDiffuse, vUv + vec2( -uTexel.x, 0.0 ) ).rgb;
+  vec3 f = texture2D( tDiffuse, vUv + vec2( uTexel.x, 0.0 ) ).rgb;
+  vec3 h = texture2D( tDiffuse, vUv + vec2( 0.0, uTexel.y ) ).rgb;
+  vec3 mn = min( min( min( b, d ), min( f, h ) ), e );
+  vec3 mx = max( max( max( b, d ), max( f, h ) ), e );
+  // contrast-adaptive amount: headroom above and below the local extremes
+  vec3 amp = clamp( min( mn, 1.0 - mx ) / max( mx, 1e-4 ), 0.0, 1.0 );
+  amp = sqrt( amp );
+  float peak = mix( 8.0, 5.0, clamp( uSharp, 0.0, 1.0 ) );
+  vec3 w = -amp / peak;
+  vec3 col = ( ( b + d + f + h ) * w + e ) / ( 4.0 * w + 1.0 );
+  gl_FragColor = vec4( clamp( mix( e, col, min( 1.0, uSharp * 1.6 ) ), 0.0, 1.0 ), 1.0 );
+}`,
+};
+
+class SharpenPass extends ShaderPass {
+  constructor() {
+    super(SharpenShader);
+    this.material.depthTest = false;
+    this.material.depthWrite = false;
+    this.material.toneMapped = false;
+    this.enabled = false;
+  }
+
+  /** @param {number} w @param {number} h drawing-buffer PIXELS */
+  setResolution(w, h) {
+    this.uniforms.uTexel.value.set(1 / Math.max(1, w), 1 / Math.max(1, h));
+  }
+
+  /** @param {number} v 0..1; below 0.02 the pass is skipped entirely */
+  setStrength(v) {
+    const s = clamp(numOr(v, 0), 0, 1);
+    this.uniforms.uSharp.value = s;
+    this.enabled = s >= 0.02;
+  }
+}
+
 /**
  * Which anti-aliaser a preset wants.
  *
@@ -949,8 +1031,11 @@ export class Post {
     /** @type {FinishPass|null} */      this.finishPass = null;
     /** @type {SMAAPass|null} */        this.smaaPass = null;
     /** @type {FXAAPass|null} */        this.fxaaPass = null;
+    /** @type {SharpenPass|null} */     this.sharpenPass = null;
     /** @type {THREE.DepthTexture[]} depth attachments created for the AO pass */
     this._depthTextures = [];
+    /** CAS strength the engine asked for (survives a chain rebuild) */
+    this._sharpen = 0;
 
     // Persistent state so a quality rebuild does not lose the theme's look.
     this._grade = Object.assign({}, DEFAULT_GRADE);
@@ -1065,6 +1150,13 @@ export class Post {
       this.fxaaPass.setResolution(dw, dh);
       composer.addPass(this.fxaaPass);
     }
+
+    // 5 — contrast-adaptive sharpening, LAST: restores the edges the AA and the
+    //     sub-native render scale soften. Disabled (zero draws) at strength 0.
+    this.sharpenPass = new SharpenPass();
+    this.sharpenPass.setResolution(dw, dh);
+    this.sharpenPass.setStrength(this._sharpen);
+    composer.addPass(this.sharpenPass);
   }
 
   /** @private Dispose every pass and both composer targets. */
@@ -1093,6 +1185,18 @@ export class Post {
     this.finishPass = null;
     this.smaaPass = null;
     this.fxaaPass = null;
+    this.sharpenPass = null;
+  }
+
+  /**
+   * Contrast-adaptive sharpening strength, 0..1. The engine drives this from
+   * the render scale (`Engine._pushSharpen`): the further below native the
+   * frame is drawn, the more of the upscale's softness this buys back.
+   * @param {number} v01
+   */
+  setSharpen(v01) {
+    this._sharpen = clamp(numOr(v01, 0), 0, 1);
+    if (this.sharpenPass) this.sharpenPass.setStrength(this._sharpen);
   }
 
   /* ------------------------------------------------------------------ */
@@ -1124,6 +1228,7 @@ export class Post {
     cur.lift = pickAny(src.lift, DEFAULT_GRADE.lift);
     cur.gamma = pickAny(src.gamma, DEFAULT_GRADE.gamma);
     cur.gain = pickAny(src.gain, DEFAULT_GRADE.gain);
+    cur.contrast = clamp(numOr(src.contrast, DEFAULT_GRADE.contrast), 0.5, 2);
     cur.saturation = clamp(numOr(src.saturation, DEFAULT_GRADE.saturation), 0, 4);
     cur.vignette = clamp(numOr(src.vignette, DEFAULT_GRADE.vignette), 0, 1.5);
     cur.vignetteSoft = clamp(numOr(src.vignetteSoft, DEFAULT_GRADE.vignetteSoft), 0.05, 1.05);
@@ -1145,6 +1250,7 @@ export class Post {
       1 / Math.max(0.05, _scratchVec3.z),
     );
 
+    u.uContrast.value = cur.contrast;
     u.uSaturation.value = cur.saturation;
     u.uVignette.value = cur.vignette;
     u.uVignetteSoft.value = cur.vignetteSoft;
@@ -1307,6 +1413,7 @@ export class Post {
     // carry uniforms that setSize does not touch.
     if (this.finishPass) this.finishPass.setResolution(this.width * pr, this.height * pr);
     if (this.fxaaPass) this.fxaaPass.setResolution(this.width * pr, this.height * pr);
+    if (this.sharpenPass) this.sharpenPass.setResolution(this.width * pr, this.height * pr);
     if (this.upscalePass) {
       this.upscalePass.setBufferSize(this.width * pr, this.height * pr);
       this.upscalePass.setFraction(this._frac);
@@ -1438,6 +1545,7 @@ export class Post {
       speedLines: this._speedLines, pulse: this._pulseAmt, time: this.time,
       passes: this.composer ? this.composer.passes.length : 0,
       aa: aaMode(this.quality), bloom: !!this.bloomPass, ssao: !!this.aoPass,
+      sharpen: this._sharpen,
     };
   }
 

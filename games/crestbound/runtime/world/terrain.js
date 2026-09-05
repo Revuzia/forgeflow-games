@@ -746,6 +746,12 @@ export function buildTerrain(def, theme, mats, quality) {
       mat.dispose();
       if (grass) {
         if (grass.parent) grass.parent.remove(grass);
+        const far = grass.userData.far;
+        if (far) {
+          if (far.parent) far.parent.remove(far);
+          far.geometry.dispose();
+          far.dispose();
+        }
         grass.geometry.dispose();
         grass.dispose();
         if (grass.userData.field && grass.userData.field.tex) grass.userData.field.tex.dispose();
@@ -874,41 +880,22 @@ function buildGrass(d, theme, mats, quality, ctx) {
    * instance budget on a smaller, denser lawn, which is the right trade when
    * the frame is fill-bound and already at the triangle ceiling. */
   const density = g.density === undefined ? 40 : g.density;         // blades per m²
-  const ring = Math.max(6, Math.min(g.ring === undefined ? 18 : g.ring,
-    Math.sqrt(budget / Math.max(1, density)) * 0.5));
+  /* The NEAR ring is sized from ITS share of the budget (see the TWO RINGS
+   * note below), so its density is the authored one whatever the far ring
+   * spends. */
+  const nearShare = g.nearShare === undefined ? 0.55 : Math.min(1, Math.max(0, g.nearShare));
+  const nearCount = Math.round(budget * nearShare);
+  const farCount = budget - nearCount;
+  const ring = Math.max(5, Math.min(g.ring === undefined ? 18 : g.ring,
+    Math.sqrt(nearCount / Math.max(1, density)) * 0.5));
   const fade = ring * 0.74;
 
-  const bladeH = g.height === undefined ? 0.26 : g.height;
-  /* 0.20 m at the base against a 0.42 m height is a 1:2 spike, and instance
-   * scaling took it to 27 cm — which is what made the first render read as a
-   * field of caltrops rather than grass. A blade is roughly 1:5. */
-  /* 0.075 -> 0.040. 7.5 cm is a LEAF, not a blade: against the 0.22 m verdant-1
+  /* Blade proportions live in buildGrassRing (`grass.height`, `grass.width`):
+   * 0.075 -> 0.040. 7.5 cm is a LEAF, not a blade: against the 0.22 m verdant-1
    * height and the 0.52x low end of the height draw below it produced 1:1.5
    * wedges. Real grass is nearer 1:10; at 4 cm the draw spans about 1:4 to
    * 1:10, which is a blade at every height in the field. A course may still pin
    * `grass.width` for a broad-leafed or bladed species. */
-  const bladeW = g.width === undefined ? 0.040 : g.width;
-  const cross = g.cross !== false;
-
-  const wanted = budget;
-  /* TUFTS, not a jittered lattice.
-   *
-   * Grass grows in CLUMPS. The old placement put exactly one blade in every
-   * cell of a sqrt(n) lattice, which is a Poisson-ish scatter with an enforced
-   * minimum spacing — the most evenly spread arrangement the count allows, and
-   * therefore the one that reads as the SPARSEST (`_shots/bootcheck.png`: even
-   * gaps of bare ground between single blades, ~26 per m2 spread so uniformly
-   * that no part of the field ever reads as mass).
-   *
-   * The same 18 000 instances gathered into tufts of six read as turf, because
-   * a tuft is an object the eye resolves as one plant and the gaps between
-   * tufts then look intentional instead of thin. It costs nothing: the same
-   * instance count, the same draw call, the same triangles. */
-  const tuft = Math.max(1, Math.min(12, g.tuft === undefined ? 6 : g.tuft | 0));
-  const tuftR = g.tuftRadius === undefined ? 0.085 : g.tuftRadius;
-  const cells = Math.max(4, Math.ceil(Math.sqrt(wanted / tuft)));
-  const step = (ring * 2) / cells;
-  const rnd = mulberry32((d.seed | 0) || 20260902);
 
   /* Texel-centre mapping, not corner mapping. Height sample (i, j) sits at world
    * origin + i*cell, but a texture lookup at uv lands on texel index
@@ -924,6 +911,66 @@ function buildGrass(d, theme, mats, quality, ctx) {
       1 / (hf.nx * hf.cellX), 1 / (hf.nz * hf.cellZ)),
     ring: new THREE.Vector2(ring, fade),
   };
+
+  /* TWO RINGS (2026-09-04, owner: "grass sparse ... a few blade clumps").
+   *
+   * One ring at one density is the wrong shape for a third-person camera:
+   * the 8 m around the hero want ~40 blades/m2 and the field out to 25 m wants
+   * to READ as a sward without paying for it. So the budget is split — a NEAR
+   * ring (about half the blades, dense, real blades) and a FAR ring (the rest,
+   * spread to `farRing` metres at a few blades per m2 but each blade a third
+   * larger, so the coverage reads at distance where a 4 cm blade is
+   * sub-pixel). Both wrap around the camera in the vertex program; both fade
+   * at their rim; the far ring overlaps the near one so there is no hole. Cost
+   * is ONE extra draw call and zero extra triangles over the same budget. */
+  const farRing = Math.max(ring + 4, g.farRing === undefined ? 24 : g.farRing);
+
+  const near = buildGrassRing(nearCount, ring, 1.0, d, theme, mats, ctx, field);
+  if (!near) { field.tex.dispose(); return null; }
+  if (farCount >= 64) {
+    const fieldFar = { uid: ++_fieldUid, tex: field.tex, rect: field.rect,
+                       ring: new THREE.Vector2(farRing, farRing * 0.72) };
+    const far = buildGrassRing(farCount, farRing, 1.35, d, theme, mats, ctx, fieldFar);
+    if (far) {
+      far.name = 'terrain.grass.far';
+      far.userData.noMerge = true;
+      far.userData.sharedFieldTex = true;
+      near.add(far);
+      near.userData.far = far;
+    }
+  }
+  return near;
+}
+
+/**
+ * One camera-local blade ring: `count` instances on a jittered tuft lattice
+ * over a 2*ring square, blades scaled by `sizeMul`.
+ * @private
+ */
+function buildGrassRing(wanted, ring, sizeMul, d, theme, mats, ctx, field) {
+  if (wanted < 32) return null;
+  const g = d.grass || {};
+  const bladeH = (g.height === undefined ? 0.26 : g.height) * sizeMul;
+  const bladeW = (g.width === undefined ? 0.040 : g.width) * sizeMul;
+  const cross = g.cross !== false;
+  /* TUFTS, not a jittered lattice.
+   *
+   * Grass grows in CLUMPS. The old placement put exactly one blade in every
+   * cell of a sqrt(n) lattice, which is a Poisson-ish scatter with an enforced
+   * minimum spacing — the most evenly spread arrangement the count allows, and
+   * therefore the one that reads as the SPARSEST (`_shots/bootcheck.png`: even
+   * gaps of bare ground between single blades, ~26 per m2 spread so uniformly
+   * that no part of the field ever reads as mass).
+   *
+   * The same 18 000 instances gathered into tufts of six read as turf, because
+   * a tuft is an object the eye resolves as one plant and the gaps between
+   * tufts then look intentional instead of thin. It costs nothing: the same
+   * instance count, the same draw call, the same triangles. */
+  const tuft = Math.max(1, Math.min(12, g.tuft === undefined ? 6 : g.tuft | 0));
+  const tuftR = (g.tuftRadius === undefined ? 0.085 : g.tuftRadius) * sizeMul;
+  const cells = Math.max(4, Math.ceil(Math.sqrt(wanted / tuft)));
+  const step = (ring * 2) / cells;
+  const rnd = mulberry32(((d.seed | 0) || 20260902) + field.uid * 7919);
 
   const geo = bladeGeometry(bladeW, bladeH, cross);
   const mat = bladeMaterial(theme, mats, cross ? 'x' : 'i', field);
@@ -1002,7 +1049,6 @@ function buildGrass(d, theme, mats, quality, ctx) {
   if (n === 0) {
     geo.dispose();
     im.dispose();
-    field.tex.dispose();
     return null;
   }
   im.count = n;

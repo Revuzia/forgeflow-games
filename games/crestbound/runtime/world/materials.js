@@ -647,6 +647,7 @@ function injectShader(mat, key, opts) {
     lava: !!defines.CB_LAVA, slope: !!defines.CB_SLOPE, rim: !!defines.CB_RIM,
     caustic: !!defines.CB_CAUSTIC, wind: !!defines.CB_WIND, shimmer: !!defines.CB_SHIMMER,
     macro: !!defines.CB_MACRO, face: !!defines.CB_FACE,
+    detail: !!defines.CB_DETAIL, foliage: !!defines.CB_FOLIAGE,
   };
 
   mat.onBeforeCompile = function (shader) {
@@ -769,6 +770,7 @@ function injectShader(mat, key, opts) {
     if (D.rim) fHead += 'uniform vec4 uCbRim;\n';
     if (D.macro) fHead += 'uniform vec4 uCbMacro;\n';
     if (D.face) fHead += 'uniform vec2 uCbFace;\n';
+    if (D.detail) fHead += 'uniform vec2 uCbDetail;\n';
     if (D.caustic) fHead += 'uniform float uCbCausticTime;\nuniform float uCbCaustic;\nuniform vec4 uCbCausticParams;\nuniform vec3 uCbCausticColor;\n';
     if (D.shimmer) fHead += 'uniform float uCbTime;\nuniform float uShimmer;\nuniform vec3 uShimmerColor;\nuniform float uShimmerWidth;\n';
     shader.fragmentShader = fHead + shader.fragmentShader;
@@ -870,20 +872,56 @@ function injectShader(mat, key, opts) {
     }
   #endif`);
       }
+    }
+
+    /* ---- NORMAL: slope blend, DETAIL NORMAL, foliage bend ---------------
+     * One rebuild of <normal_fragment_maps> for the three injections that
+     * touch the shading normal, so they compose instead of fighting over the
+     * same marker. */
+    if (D.slope || D.detail || D.foliage) {
       const NM = '#include <normal_fragment_maps>';
       if (shader.fragmentShader.indexOf(NM) !== -1) {
-        shader.fragmentShader = shader.fragmentShader.replace(NM, `
+        let body = NM;
+        if (D.slope || D.detail) {
+          body = `
   #ifdef USE_NORMALMAP_TANGENTSPACE
-    vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;
+    vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;` +
+    (D.slope ? `
     if ( cbSlopeW > 0.001 ) {
       vec3 cbMapN2 = texture2D( uCbBlendNormal, vNormalMapUv * uCbBlendScale ).xyz * 2.0 - 1.0;
       mapN = normalize( mix( mapN, cbMapN2, cbSlopeW ) );
-    }
+    }` : '') +
+    (D.detail ? `
+    /* DETAIL NORMAL (2026-09-04): the same normal map read again at a second,
+       higher frequency and ADDED in tangent space, so ground and stone carry
+       micro-relief under the key light where the primary tile is a few
+       texels per metre. Near field only — past the LOD radius the tile is
+       sub-pixel and the tap is pure cost. */
+    if ( cbLodT < 0.999 ) {
+      vec2 cbDn = texture2D( normalMap, vNormalMapUv * uCbDetail.x ).xy * 2.0 - 1.0;
+      mapN.xy += cbDn * ( uCbDetail.y * ( 1.0 - cbLodT ) );
+    }` : '') + `
     mapN.xy *= normalScale;
     normal = normalize( tbn * mapN );
   #else
     ${'#include <normal_fragment_maps>'}
-  #endif`);
+  #endif`;
+        }
+        if (D.foliage) {
+          /* FOLIAGE NORMAL BEND (2026-09-04, owner: "distant trees are black
+             cutouts"). A canopy card's own normal points sideways or DOWN on
+             half its area, and no light in the rig lands there. Real foliage
+             scatters light through itself, and every stylised renderer since
+             Wind Waker fakes that the same way: pull the shading normal toward
+             WORLD UP so the mass is lit like the sunlit dome it approximates.
+             `viewMatrix[1]` is world +Y in view space — no extra uniform. */
+          body += `
+  {
+    vec3 cbUpV = normalize( viewMatrix[ 1 ].xyz );
+    normal = normalize( mix( normal, cbUpV, 0.55 ) );
+  }`;
+        }
+        shader.fragmentShader = shader.fragmentShader.replace(NM, body);
       }
     }
 
@@ -1032,7 +1070,7 @@ function injectShader(mat, key, opts) {
   const shapeKey = 'cb#' + (box ? 'b' : '-') + (lod ? 'D' : '') + (iblRough ? 'Q' : '') +
     (D.lava ? 'L' : '') + (D.slope ? 'S' : '') + (D.rim ? 'R' : '') +
     (D.caustic ? 'C' : '') + (D.wind ? 'W' : '') + (D.shimmer ? 'H' : '') +
-    (D.macro ? 'M' : '') + (D.face ? 'F' : '');
+    (D.macro ? 'M' : '') + (D.face ? 'F' : '') + (D.detail ? 'N' : '') + (D.foliage ? 'T' : '');
   mat.customProgramCacheKey = function () { return shapeKey; };
   return mat;
 }
@@ -1193,6 +1231,22 @@ function faceInject(wallMul, extra) {
     defines: Object.assign({ CB_FACE: true }, e.defines || null),
     uniforms: Object.assign({
       uCbFace: { value: new THREE.Vector2(wallMul, 0) },
+    }, e.uniforms || null),
+  });
+}
+
+/**
+ * DETAIL NORMAL — a second, higher-frequency read of the material's own normal
+ * map (see the CB_DETAIL block in injectShader). `mul` is the uv multiplier
+ * (how many detail tiles per primary tile), `strength` the tangent-space xy
+ * weight. Composes with slope/macro/face injections.
+ */
+function detailInject(mul, strength, extra) {
+  const e = extra || {};
+  return Object.assign({}, e, {
+    defines: Object.assign({ CB_DETAIL: true }, e.defines || null),
+    uniforms: Object.assign({
+      uCbDetail: { value: new THREE.Vector2(mul, strength) },
     }, e.uniforms || null),
   });
 }
@@ -1376,7 +1430,7 @@ function bakeStone() {
    * floor of the same material. 0.27 -> 0.215 measured [102,95,77] and 3.44:1;
    * 0.180 is the same lever taken past the 3.5 line with the +-0.4 run-to-run
    * drift this station is known to have, so the pass is a margin and not luck. */
-  }, 0.72, macroInject(9.0, 0.17, 0.075, 0.35, faceInject(0.180)));
+  }, 0.72, macroInject(9.0, 0.17, 0.075, 0.35, detailInject(4.7, 0.42, faceInject(0.180))));
 }
 
 /* -------------------------------------------------------------- 4.2 panel */
@@ -2280,7 +2334,7 @@ function bakeDirt() {
   return assemble('dirt', maps, {
     color: 0xffffff, roughness: 1, metalness: 0,
     normalScale: new THREE.Vector2(1.1, 1.1), envMapIntensity: 0.30,
-  }, 0.45);
+  }, 0.45, detailInject(4.3, 0.40));
 }
 
 /* -------------------------------------------------------------- 5.2 grass */
@@ -2446,7 +2500,7 @@ function bakeGrass() {
      * critic was looking. 26 m survives the mip chain at range and still reads
      * as weather rather than as tiling up close, and the amplitude goes up
      * with it because this is now the only albedo variation the far field has. */
-  }, 0.72, macroInject(26.0, 0.46, 0.15, 0.42, slopeInject({
+  }, 0.72, macroInject(26.0, 0.46, 0.15, 0.42, detailInject(5.3, 0.55, slopeInject({
     defines: { CB_SLOPE: true, CB_RIM: true },
     uniforms: {
       uCbBlendMap: { value: _tex.get('dirt.albedo') || null },
@@ -2459,7 +2513,7 @@ function bakeGrass() {
       // which reads as a uniform green glaze, not as light through a blade.
       uCbRim: { value: new THREE.Vector4(0.42, 0.72, 0.22, 0.28) },
     },
-  })));
+  }))));
 }
 
 /* --------------------------------------------------------------- 5.3 snow */
@@ -2540,7 +2594,7 @@ function bakeSnow() {
     specularIntensity: 0.85, envMapIntensity: 0.85,
     normalScale: new THREE.Vector2(0.75, 0.75),
     clearcoatNormalScale: new THREE.Vector2(0.55, 0.55),
-  }, 0.28, slopeInject({
+  }, 0.28, detailInject(6.0, 0.30, slopeInject({
     uv2Mul: 14.0,
     uniforms: {
       uCbBlendMap: { value: _tex.get('dirt.albedo') || null },
@@ -2549,7 +2603,7 @@ function bakeSnow() {
       uCbBlendScale: { value: 1.6 },
       uCbSlope: { value: new THREE.Vector2(SLOPE_START, SLOPE_END) },
     },
-  }));
+  })));
 }
 
 /* --------------------------------------------------------------- 5.4 sand */
@@ -2603,7 +2657,7 @@ function bakeSand() {
   return assemble('sand', maps, {
     color: 0xffffff, roughness: 1, metalness: 0,
     normalScale: new THREE.Vector2(1.15, 1.15), envMapIntensity: 0.5,
-  }, 0.55, slopeInject({
+  }, 0.55, detailInject(4.1, 0.45, slopeInject({
     defines: { CB_SLOPE: true, CB_CAUSTIC: true },
     uniforms: {
       uCbBlendMap: { value: _tex.get('dirt.albedo') || null },
@@ -2621,7 +2675,7 @@ function bakeSand() {
       uCbCausticColor: { value: new THREE.Color(0.55, 0.86, 0.92) },
       uCbCausticTime: TIME_U,
     },
-  }));
+  })));
 }
 
 /* ------------------------------------------------------------ 5.5 plaster */
@@ -2960,7 +3014,7 @@ function bakeLeaves() {
     normalScale: new THREE.Vector2(0.85, 0.85), envMapIntensity: 0.45,
   }, 1.0, {
     box: false,
-    defines: { CB_WIND: true, CB_RIM: true },
+    defines: { CB_WIND: true, CB_RIM: true, CB_FOLIAGE: true },
     uniforms: {
       uCbWind: { value: 0.085 },
       uCbRim: { value: new THREE.Vector4(0.52, 0.78, 0.26, 0.95) },
@@ -3702,9 +3756,13 @@ float cbwNoise( vec2 p ) {
 /** two counter-scrolling ripple octaves -> a detail normal the Gerstner mesh
  *  is far too coarse to carry. Returns a tangent-space-ish perturbation. */
 vec2 cbRippleGrad( vec2 p, float t ) {
-  float e = 0.15;
-  vec2 a = p * 1.7 + vec2( t * 0.21, -t * 0.15 );
-  vec2 b = p * 3.9 - vec2( t * 0.34, t * 0.27 );
+  /* 2026-09-04: 1.7 / 3.9 cycles per metre at a 0.60 render scale was
+     sub-pixel noise — the owner's "flat cyan noise" on the azure lagoon. Wind
+     ripples on a lagoon are 0.5-2 m; the octaves are lowered to where a
+     pixel can resolve them, and the caller fades them with distance. */
+  float e = 0.22;
+  vec2 a = p * 0.62 + vec2( t * 0.17, -t * 0.12 );
+  vec2 b = p * 1.55 - vec2( t * 0.26, t * 0.21 );
   float h  = cbwNoise( a ) * 0.6 + cbwNoise( b ) * 0.4;
   float hx = cbwNoise( a + vec2( e, 0.0 ) ) * 0.6 + cbwNoise( b + vec2( e, 0.0 ) ) * 0.4;
   float hz = cbwNoise( a + vec2( 0.0, e ) ) * 0.6 + cbwNoise( b + vec2( 0.0, e ) ) * 0.4;
@@ -3717,9 +3775,13 @@ void main() {
   vec3 V = normalize( cameraPosition - vCbWorld );
   vec3 N = normalize( vCbNormal );
 
-  // detail ripples ride on top of the analytic wave normal
+  // detail ripples ride on top of the analytic wave normal, and fade with
+  // distance so the far surface goes glassy and MIRRORS the sky instead of
+  // shimmering at sub-pixel frequency
+  float cbWd = length( cameraPosition - vCbWorld );
+  float cbRf = 1.0 / ( 1.0 + cbWd * 0.035 );
   vec2 g = cbRippleGrad( vCbUv, uTime );
-  N = normalize( N + vec3( -g.x, 0.0, -g.y ) * uRipple );
+  N = normalize( N + vec3( -g.x, 0.0, -g.y ) * ( uRipple * cbRf ) );
 
   float ndv = clamp( dot( N, V ), 0.0, 1.0 );
   float fres = clamp( uFresnelBias + ( 1.0 - uFresnelBias ) * pow( 1.0 - ndv, uFresnelPower ), 0.0, 1.0 );
@@ -3748,9 +3810,14 @@ void main() {
   vec3 col = mix( body, sky, fres );
 
   /* ---- sun glint -------------------------------------------------------- */
+  // a tight mirror lobe (the disc) over a broad, dimmer one (the glitter path
+  // the ripples scatter it into) — the second is what reads as "sunlit water"
+  // from a camera that is not standing in the mirror direction.
   vec3 H = normalize( normalize( uSunDir ) + V );
-  float spec = pow( clamp( dot( N, H ), 0.0, 1.0 ), max( uGloss, 4.0 ) );
-  col += uSunColor * spec * ( 0.35 + 0.65 * fres ) * 2.2;
+  float ndh = clamp( dot( N, H ), 0.0, 1.0 );
+  float spec = pow( ndh, max( uGloss, 4.0 ) );
+  float glit = pow( ndh, 26.0 );
+  col += uSunColor * ( spec * 2.2 + glit * 0.22 ) * ( 0.35 + 0.65 * fres );
 
   /* ---- foam ------------------------------------------------------------- */
   // shore band: a hard-ish line that breaks up with the ripple field

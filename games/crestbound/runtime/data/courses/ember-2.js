@@ -368,6 +368,11 @@ export default {
   spawn: { p: [0, 6.0, 54], yaw: 0 },
   killY: -12,
   bounds: { min: [-70, -16, -70], max: [70, 46, 70] },
+  /* Static-merge chunk ceiling (course.js _computeChunkGrid; default 2 -> this
+   * 144 m course collapsed to ONE chunk, so the 36 m sun-shadow frustum drew the
+   * whole static merge every frame). 4 = 2 x 2 quadrants: measured 2026-09-04,
+   * group-1 validator, see the note in course.js. */
+  chunks: 9,
 
   intro: {
     text: 'The engine never stopped. Twelve pistons keep three different counts, the belts feed a sorter nobody watches, and the flywheel at the far end is still turning fast enough to carry you.',

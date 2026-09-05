@@ -1859,7 +1859,9 @@ export class Hero {
     this._merged = this._consolidate();
 
     // ---- shadow ----------------------------------------------------------
-    this.shadowBlob = new ShadowBlob(scene, { radius: 0.50, maxDist: 7.0, opacity: 0.42 });
+    /* opacity 0.42 -> 0.56 (2026-09-04): the contact blob is the one shadow
+     * that survives a glowing checkpoint pad under Nim's boots. */
+    this.shadowBlob = new ShadowBlob(scene, { radius: 0.50, maxDist: 7.0, opacity: 0.56 });
 
     // ---- animator state --------------------------------------------------
     this._anim = 'idle';
@@ -3037,6 +3039,7 @@ export class Hero {
     mat.userData.baseOpacity = 1;
     mat.userData.baseColor = 0xffffff;
     this._mats.push(mat);
+    this._installRim(mat);
 
     /* ---- 5. the skinned mesh --------------------------------------------- */
     const inverses = [];
@@ -3046,7 +3049,12 @@ export class Hero {
     const body = new THREE.SkinnedMesh(geo, mat);
     body.name = 'nim.body';
     body.castShadow = true;
-    body.receiveShadow = false;
+    /* VISUAL PASS 2026-09-04: the body RECEIVES as well. With the sun's frustum
+     * now hero-following at ~3.5 cm texels (engine.js), Nim's head shadows his
+     * own chest and the backpack shadows the coat — the self-occlusion that
+     * separates a lit character from a decal. The header's "receiveShadow off"
+     * note dates from the 18 cm-texel map, where this was only acne. */
+    body.receiveShadow = true;
     body.frustumCulled = false;
     body.matrixAutoUpdate = true;
     root.add(body);
@@ -3100,6 +3108,44 @@ export class Hero {
     this._scarfGeo = geo;
     if (this.scarfMesh) { this.scarfMesh = null; }
     return true;
+  }
+
+  /**
+   * FRESNEL RIM on the ONE body material (owner, 2026-09-04: "no key-light
+   * direction or rim on the hero ... the single biggest pasted-on tell").
+   *
+   * One `onBeforeCompile` on the merged material, two uniforms, one program:
+   * a grazing-angle term (`(1 - N.V)^3`) weighted toward the side facing the
+   * theme's RIM light, added to the indirect specular so it is LIGHT, not
+   * albedo-tinted — the coat's dark teal trim rims as brightly as the orange
+   * coat does. The colour/direction come from the ThemeDef's `lights.rim`
+   * via `setTheme`, so the halo agrees with the rig's actual back light and no
+   * program is compiled per theme (the values are uniform writes).
+   * @param {THREE.Material} mat
+   */
+  _installRim(mat) {
+    const rimU = this._rimU || (this._rimU = {
+      uCbHeroRim: { value: new THREE.Vector4(1, 0.95, 0.85, 0.9) },
+      uCbHeroRimDir: { value: new THREE.Vector3(0.15, 0.35, -0.92).normalize() },
+    });
+    mat.onBeforeCompile = (shader) => {
+      shader.uniforms.uCbHeroRim = rimU.uCbHeroRim;
+      shader.uniforms.uCbHeroRimDir = rimU.uCbHeroRimDir;
+      const AO = '#include <aomap_fragment>';
+      if (shader.fragmentShader.indexOf(AO) === -1) return;
+      shader.fragmentShader = 'uniform vec4 uCbHeroRim;\nuniform vec3 uCbHeroRimDir;\n' +
+        shader.fragmentShader.replace(AO, AO + `
+  {
+    // CRESTBOUND hero rim (player/hero.js _installRim)
+    float cbNV = 1.0 - saturate( dot( geometryNormal, geometryViewDir ) );
+    float cbF = cbNV * cbNV * cbNV;
+    vec3 cbRd = normalize( ( viewMatrix * vec4( uCbHeroRimDir, 0.0 ) ).xyz );
+    float cbBack = saturate( dot( geometryNormal, cbRd ) * 0.55 + 0.45 );
+    reflectedLight.indirectSpecular += uCbHeroRim.rgb * ( cbF * cbBack * uCbHeroRim.a );
+  }`);
+    };
+    mat.customProgramCacheKey = () => 'cb-hero-rim';
+    mat.needsUpdate = true;
   }
 
   /** Re-bake the scarf's baked vertex colour after `setTheme` re-dyes it. */
@@ -3196,6 +3242,20 @@ export class Hero {
 
     // Wing energy matches the realm too.
     if (def && def.palette && def.palette.accent !== undefined) this.M.wing.color.set(def.palette.accent);
+
+    // The fresnel rim takes the theme's own back light (see _installRim).
+    if (this._rimU) {
+      const R = def && def.lights && def.lights.rim;
+      const K = def && def.lights && def.lights.key;
+      _col0.set(R && R.color !== undefined ? R.color : 0xfff2d8);
+      const strength = R && typeof R.intensity === 'number' ? Math.min(1.4, 0.35 + R.intensity * 0.30) : 0.8;
+      this._rimU.uCbHeroRim.value.set(_col0.r, _col0.g, _col0.b, strength);
+      const d = (R && Array.isArray(R.dir) && R.dir.length >= 3) ? R.dir
+        : (K && Array.isArray(K.dir) && K.dir.length >= 3 ? [K.dir[2], 0.35, -K.dir[0]] : [0.15, 0.35, -0.92]);
+      this._rimU.uCbHeroRimDir.value.set(d[0], d[1], d[2]);
+      if (this._rimU.uCbHeroRimDir.value.lengthSq() < 1e-8) this._rimU.uCbHeroRimDir.value.set(0.15, 0.35, -0.92);
+      this._rimU.uCbHeroRimDir.value.normalize();
+    }
 
     this.shadowBlob.setTheme(def);
   }

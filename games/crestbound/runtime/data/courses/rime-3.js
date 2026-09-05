@@ -544,7 +544,7 @@ export default {
     { p: [30.0, MILL_E_GAL + 1.34, -6.0], note: '3 — the east mill\'s gallery balcony (17.96)' },
     { p: [-26.2, 8.70, -21.2], note: '4 — over vanish tile 3, 13 m of air under it' },
     { p: [-24.5, 1.50, -17.5], note: '5 — the ice cave behind the frozen fall (floor 0.10)' },
-    { p: [15.2, TERRACE_Y + 1.60, -2.0], note: '6 — the crusher cave, past the third hammer' },
+    { p: [15.2, TERRACE_Y + 1.60, -2.0], note: '6 — the ice block on the chimney floor, past the third hammer (top 20.00)' },
     { p: [14.8, 33.70, -13.2], note: '7 — the guard spire beside the viaduct (top 32.30)' },
     { p: [-6.0, 39.00, -9.0], note: '8 — the ice pinnacle over the shrine (top 37.60)' },
   ],
@@ -915,6 +915,13 @@ export default {
     { kind: 'platform', p: [15.0, 23.60, -0.1], s: [3.0, 8.0, 0.6], mat: 'stone', tint: STONE },
     { kind: 'platform', p: [15.0, 27.30, -2.0], s: [3.4, 0.8, 3.4], mat: 'stone', tint: STONE, stripe: true, edge: SAFE_EDGE },
     { kind: 'text', p: [17.6, 21.2, -2.0], rot: [0, -1.5708, 0], text: 'ONE JUMP, FOUR KICKS', size: 0.21, color: 0xd8e8f6 },
+    // THE ICE BLOCK on the chimney floor that sigil 6 stands over (top 20.00,
+    // a 0.4 m step; the ladder above it is now 7.70 m: one jump + three kicks).
+    // Authored because the reach gate anchors a target with no surface under it
+    // to the terrain NODE and measures its rise against the field's MEAN height
+    // (reachcheck.mjs surfaceUnder / `rise: p[1] - s.y`): it reported this sigil
+    // 8.79 m over a floor it is 1.60 m over. A real top face is what it reads.
+    { kind: 'platform', p: [15.2, TERRACE_Y + 0.20, -2.0], s: [1.2, 0.4, 1.2], mat: 'ice', tint: ICE, stripe: true, edge: SAFE_EDGE },
 
     // The three hammers, on thirds of one 3.2 s beat.
     { kind: 'crusher', p: [23.0, 22.60, -2.0], s: [3.0, 1.4, 4.0], axis: [0, -1, 0], travel: 2.6, period: 3.2, phase: 0.0, dwell: 0.3, mat: 'ice', tint: ICE },

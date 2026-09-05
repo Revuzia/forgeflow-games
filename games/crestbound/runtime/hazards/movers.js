@@ -101,6 +101,26 @@ function roundedRectShape(w, h, r) {
   return s;
 }
 
+/**
+ * Below this corner radius the rounded-rect profile is replaced by a plain
+ * rectangle (the edge BEVEL stays — a chamferBox is never a naked box).
+ *
+ * MEASURED 2026-09-04 (group-1 validator, `_harness/_g1_batchgeo.py` on the
+ * live BatchedMesh geometry table): the rounded profile costs 156-196
+ * triangles per box whatever its size, and the factory hazards build their
+ * TRIM out of it — a crusher's twenty 6 x 7.5 cm cooling-vent slots were one
+ * 3,260-triangle obsidian part (x12 crushers = 39,120 on ember-2), its collar
+ * bands, ribs, rims and safe-edge strips another ~1,300 per head, a mover
+ * deck's planks 5,478 per platform on verdant-3. On those parts the corner
+ * radius (`min(iw, ih) * 0.24`) is 3-17 mm: at the tier render scale that is
+ * under four pixels from three metres away, i.e. it never reaches the
+ * screen, while the tessellation reached the triangle gate on three of six
+ * courses (verdant-2 513k, verdant-3 549k, ember-2 576k against 450k). A
+ * plain bevelled rectangle is 28 triangles. Boxes with a visible radius
+ * (bodies, housings, decks, slabs) are untouched: same profile, same count.
+ */
+const CHAMFER_ROUND_MIN_R = 0.02;
+
 /** Chamfered box centred on the origin. w→X, h→Y, d→Z. Real bevels, smooth normals. */
 export function chamferBox(w, h, d, bev = 0.05, seg = 1) {
   const b = Math.max(0.004, Math.min(bev, Math.min(w, h, d) * 0.30));
@@ -108,12 +128,25 @@ export function chamferBox(w, h, d, bev = 0.05, seg = 1) {
   const ih = Math.max(0.002, h - 2 * b);
   const dep = Math.max(0.002, d - 2 * b);
   const r = Math.min(0.16, Math.min(iw, ih) * 0.24);
-  const g = new THREE.ExtrudeGeometry(roundedRectShape(iw, ih, r), {
+  const shape = r < CHAMFER_ROUND_MIN_R ? rectShape(iw, ih) : roundedRectShape(iw, ih, r);
+  const g = new THREE.ExtrudeGeometry(shape, {
     depth: dep, bevelEnabled: true, bevelThickness: b, bevelSize: b,
     bevelOffset: 0, bevelSegments: seg, curveSegments: seg + 1, steps: 1,
   });
   g.translate(0, 0, -dep / 2);
   return g;
+}
+
+/** Plain rectangle profile for `chamferBox` when the corner radius is sub-pixel. */
+function rectShape(w, h) {
+  const s = new THREE.Shape();
+  const x = -w / 2, y = -h / 2;
+  s.moveTo(x, y);
+  s.lineTo(x + w, y);
+  s.lineTo(x + w, y + h);
+  s.lineTo(x, y + h);
+  s.closePath();
+  return s;
 }
 
 /** Chevron / arrow-head plate lying in XZ, pointing +Z, thickness t. */

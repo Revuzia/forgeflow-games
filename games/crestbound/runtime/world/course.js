@@ -1571,6 +1571,16 @@ export class Course {
     let cell = CHUNK_SIZE;
     const spanX = Math.max(1, maxX - minX);
     const spanZ = Math.max(1, maxZ - minZ);
+    /* Per-course ceiling (`def.chunks`, default MAX_CHUNKS). MEASURED 2026-09-04
+       (group-1 validator, `_harness/_g1_triattr2.py`, engine stopped, one
+       composer render per toggle): every 144 m course collapsed to ONE chunk,
+       so the sun's 36 m shadow frustum rendered the whole static merge every
+       frame — 73k of verdant-2's 97k shadow triangles, 39k of verdant-3's 65k,
+       52k of ember-2's 88k — and the main pass could never drop the half of
+       the course behind the camera. A course big enough for a quadrant to
+       leave a frustum opts into more chunks in its DATA; the Keep and the
+       tutorial course keep the measured default. */
+    const maxChunks = Math.max(1, Math.min(16, (this.def.chunks | 0) || MAX_CHUNKS));
     /* Anchor the grid on the course's own minimum (not on a multiple of the
        cell) so a span that FITS in one cell lands in ONE cell.
        MEASURED BUG, 2026-09-02: the old form floored the origin to a multiple
@@ -1582,7 +1592,7 @@ export class Course {
        for zero culling. Anchoring removes the straddle, so the count is the
        honest `ceil(span/cell)` per axis and a small course really does
        collapse to one chunk. */
-    while (Math.max(1, Math.ceil(spanX / cell)) * Math.max(1, Math.ceil(spanZ / cell)) > MAX_CHUNKS
+    while (Math.max(1, Math.ceil(spanX / cell)) * Math.max(1, Math.ceil(spanZ / cell)) > maxChunks
            && cell < 800) {
       cell *= 1.5;
     }

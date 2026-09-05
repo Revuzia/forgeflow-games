@@ -449,6 +449,11 @@ export default {
   spawn: { p: [0, 2.30, 57], yaw: 0 },
   killY: -24,
   bounds: { min: [-68, -14, -68], max: [68, 44, 68] },
+  /* Static-merge chunk ceiling (course.js _computeChunkGrid; default 2 -> this
+   * 144 m course collapsed to ONE chunk, so the 36 m sun-shadow frustum drew the
+   * whole static merge every frame). 4 = 2 x 2 quadrants: measured 2026-09-04,
+   * group-1 validator, see the note in course.js. */
+  chunks: 4,
 
   intro: {
     text: 'Three walls climb the knoll, and the moat has swallowed the road. Whatever is chained at the gate has been waiting a long time.',
@@ -497,6 +502,13 @@ export default {
       // so the plane is hidden by the shore rather than clipped by it.
       kind: 'water', kind2: 'lake',
       p: [0, WATER_Y - 3.5, 0], s: [112, 7.0, 112],
+      /* res 1.4 m (default 0.9): the moat is 112 m square, and at 0.9 m quads it
+       * was 30,752 triangles — a third of the whole spawn frame's budget
+       * overage (measured 2026-09-04, group-1 validator: spawn 513k vs 450k).
+       * Wave shading is per-pixel (analytic normals in the water shader), so
+       * the quad size only samples the Gerstner heave; the shortest wave
+       * (2.2 m) was already under-sampled at 0.9 m. 1.4 m -> 12,800 tris. */
+      res: 1.4,
       tint: WATER_C,
     },
   ],

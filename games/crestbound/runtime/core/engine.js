@@ -149,6 +149,85 @@ const SHADOW_DEFAULT = { extent: 40, bias: -0.0006, normalBias: 0.03 };
   CH.shadowmap_pars_fragment = src.replace(FROM, TO);
 })();
 
+/* ---------------------------------------------------------------------------
+ * HEIGHT FOG + AERIAL PERSPECTIVE — one global ShaderChunk patch (2026-09-04).
+ * ---------------------------------------------------------------------------
+ * Owner, on `_shots/_before_visual/verdant-1/spawn.png`: "no atmospheric
+ * depth (the fort/temple are as sharp as the foreground, distant trees are
+ * black cutouts)". three's fog is a function of VIEW DISTANCE only, and every
+ * theme's fog colour is the dark band the readability law needs BEHIND a deck
+ * (themes.js) — so raising its density to get depth just paints the play space
+ * with the band, which is the trade every earlier round lost.
+ *
+ * The patch splits the two jobs by HEIGHT. Every fogged fragment carries its
+ * world Y (`vCbFogY`, recovered in the vertex chunk from the view-space
+ * position with the camera's rotation transposed — one dot product, no extra
+ * matrix). The fog density is scaled by `exp(-(y - base) * falloff)` above a
+ * base that FOLLOWS THE HERO'S FEET (`followShadow` writes it every frame), so
+ * the deck the player is judging keeps exactly the density and colour the
+ * contrast gate measures, while a fort roof, a temple or a treeline ABOVE the
+ * hero thins out and its fog colour slides toward the SKY HORIZON — which is
+ * what aerial perspective looks like. Far fragments also lose saturation
+ * before they take the fog colour (`uCbFogH.w`), the half of aerial
+ * perspective that costs the readability law nothing.
+ *
+ * Uniforms are two shared Float32Arrays: three's `cloneUniforms` copies every
+ * Vector/Color by value but keeps a typed array BY REFERENCE, so one write in
+ * `setTheme`/`followShadow` reaches every program in the game without a
+ * per-material walk, and `setValueV4f` uploads a typed array directly. They
+ * are appended to `UniformsLib.fog` (late merges — materials.js's water) and
+ * to every ShaderLib entry that already carries `fogColor`.
+ */
+/** [ baseY, falloff 1/m, heightThin 0..1, distanceDesat 0..1 ] */
+const CB_FOG_H = new Float32Array([0, 0.07, 0.6, 0.35]);
+/** [ r, g, b, skyMix 0..1 ] — the horizon colour high fog fades toward */
+const CB_FOG_SKY = new Float32Array([0.6, 0.7, 0.8, 0.0]);
+/** how far below the hero's feet the full-density fog base sits (metres) */
+const FOG_BASE_BELOW_DEFAULT = 3.0;
+
+(function patchHeightFog() {
+  const CH = THREE.ShaderChunk;
+  const pv = CH.fog_pars_vertex, fv = CH.fog_vertex;
+  const pf = CH.fog_pars_fragment, ff = CH.fog_fragment;
+  const V_FROM = 'vFogDepth = - mvPosition.z;';
+  const F_FROM = 'gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );';
+  if (typeof pv !== 'string' || typeof fv !== 'string' || typeof pf !== 'string' || typeof ff !== 'string' ||
+      fv.indexOf(V_FROM) === -1 || ff.indexOf(F_FROM) === -1 ||
+      ff.indexOf('float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );') === -1 ||
+      ff.indexOf('float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );') === -1) {
+    throw new Error('[Engine] three fog chunks no longer match — the height-fog patch is stale, re-derive it.');
+  }
+  CH.fog_pars_vertex = pv.replace('varying float vFogDepth;', 'varying float vFogDepth;\n\tvarying float vCbFogY;');
+  CH.fog_vertex = fv.replace(V_FROM, V_FROM +
+    '\n\t// CRESTBOUND: world Y from the view-space position (camera rotation transposed), see engine.js' +
+    '\n\tvCbFogY = dot( viewMatrix[ 1 ].xyz, mvPosition.xyz ) + cameraPosition.y;');
+  CH.fog_pars_fragment = pf.replace('varying float vFogDepth;',
+    'varying float vFogDepth;\n\tvarying float vCbFogY;\n\tuniform vec4 uCbFogH;\n\tuniform vec4 uCbFogSky;');
+  CH.fog_fragment = ff
+    .replace('float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );',
+      'float cbFogD = fogDensity * cbFogDens;\n\t\tfloat fogFactor = 1.0 - exp( - cbFogD * cbFogD * vFogDepth * vFogDepth );')
+    .replace('float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );',
+      'float fogFactor = smoothstep( fogNear, fogFar / max( cbFogDens, 0.05 ), vFogDepth );')
+    .replace('#ifdef USE_FOG', '#ifdef USE_FOG' +
+      '\n\t// CRESTBOUND height fog: full density at/below the hero, thinning above (engine.js)' +
+      '\n\tfloat cbFogHgt = exp( - max( vCbFogY - uCbFogH.x, 0.0 ) * uCbFogH.y );' +
+      '\n\tfloat cbFogDens = mix( 1.0, cbFogHgt, uCbFogH.z );')
+    .replace(F_FROM,
+      'vec3 cbFogCol = mix( fogColor, uCbFogSky.rgb, uCbFogSky.a * ( 1.0 - cbFogHgt ) );' +
+      '\n\tfloat cbFogL = dot( gl_FragColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );' +
+      '\n\tgl_FragColor.rgb = mix( gl_FragColor.rgb, vec3( cbFogL ), uCbFogH.w * fogFactor );' +
+      '\n\tgl_FragColor.rgb = mix( gl_FragColor.rgb, cbFogCol, fogFactor );');
+
+  const add = (u) => {
+    if (!u || !u.fogColor) return;
+    if (!u.uCbFogH) u.uCbFogH = { value: CB_FOG_H };
+    if (!u.uCbFogSky) u.uCbFogSky = { value: CB_FOG_SKY };
+  };
+  add(THREE.UniformsLib.fog);
+  const lib = THREE.ShaderLib;
+  for (const k in lib) add(lib[k] && lib[k].uniforms);
+})();
+
 /* -- render scale (CONTRACT hard rule 4) -----------------------------------
  * The frame on the reference machine is GPU FILL-bound: measured 2026-09-02
  * with the GPU timer query, cost fits T = C + F*pixels with F between 78 and
@@ -392,6 +471,7 @@ export class Engine {
     /* ---------------------------------------------------------------- post */
     /** @type {Post} */
     this.post = new Post(this.renderer, this.scene, this.camera, this.size, this.quality);
+    this._pushSharpen();
 
     /* ------------------------------------------------------------ timing */
     /** @type {THREE.Clock} */
@@ -572,9 +652,13 @@ export class Engine {
     this._focus = new THREE.Vector3(0, 0, 0);
     /** set by followShadow() each frame; render() falls back to the camera when it is not */
     this._shadowFollowed = false;
+    /** metres below the followed position the full-density fog base sits */
+    this._fogBelow = FOG_BASE_BELOW_DEFAULT;
 
     this._shadow = {
       extent: SHADOW_DEFAULT.extent,
+      /** the theme's authored half-extent; `extent` is this capped by the tier */
+      themeExtent: SHADOW_DEFAULT.extent,
       bias: SHADOW_DEFAULT.bias,
       normalBias: SHADOW_DEFAULT.normalBias,
       mapSize: this.quality.shadowMap | 0,
@@ -593,6 +677,18 @@ export class Engine {
     const sh = this._shadow;
     const sun = this.sun;
     const size = sh.mapSize | 0;
+    /* TIGHT, HERO-FOLLOWING FRUSTUM (2026-09-04). The theme authors a
+     * half-extent for the whole diorama (30-50 m); at 1024 that is a 6-10 cm
+     * texel and at 512 an 18 cm one, which is why no station shot at the low
+     * tier showed a shadow under Nim. The tier's `shadowDistance` now CAPS the
+     * half-extent (0.64 x: low 28 -> 18 m, medium 45 -> 29 m, high 70 -> 45 m,
+     * ultra 110 -> the theme's own), and because the box follows the hero
+     * (`followShadow`, texel-snapped) the play space always has the sharpest
+     * texels the map can give. Geometry outside the box is unshadowed and the
+     * boundary is faded by the edge patch above, so a smaller box is never a
+     * visible line — only a cheaper and sharper one. */
+    const cap = numOr(this.quality && this.quality.shadowDistance, 0) * 0.64;
+    sh.extent = cap > 8 ? Math.min(sh.themeExtent, Math.max(12, cap)) : sh.themeExtent;
     sun.castShadow = size > 0;
     if (size > 0) {
       if (sun.shadow.mapSize.x !== size || sun.shadow.mapSize.y !== size) {
@@ -646,6 +742,9 @@ export class Engine {
   followShadow(pos) {
     if (!pos) return this;
     _v3a.set(numOr(pos.x, 0), numOr(pos.y, 0), numOr(pos.z, 0));
+    // the height-fog base rides a few metres under the hero's feet (see the
+    // HEIGHT FOG patch): one typed-array write reaches every fogged program.
+    CB_FOG_H[0] = _v3a.y - this._fogBelow;
 
     const tex = this._shadow.texelWorld;
     if (tex > 0) {
@@ -734,6 +833,23 @@ export class Engine {
         this.scene.fog.far = Math.max(near + 1, far);
       }
     }
+    /* ---- height fog + aerial perspective (see the HEIGHT FOG patch) ------
+     *   fog.heightBelow   metres under the hero's feet the full-density base sits
+     *   fog.heightFalloff 1/m — how fast the density thins above the base
+     *   fog.heightThin    0..1 — fraction of the density that thins with height
+     *   fog.desat         0..1 — saturation lost by a fully fogged fragment
+     *   fog.skyColor      the horizon colour high, far fragments fog toward
+     *   fog.skyMix        0..1 — how far the high fog colour goes toward it
+     * Defaults keep the theme's authored band at the hero's own height, so the
+     * contrast gate's measurement is unchanged by construction. */
+    this._fogBelow = clamp(numOr(dig(t, 'fog.heightBelow', FOG_BASE_BELOW_DEFAULT), FOG_BASE_BELOW_DEFAULT), 0, 40);
+    CB_FOG_H[1] = clamp(numOr(dig(t, 'fog.heightFalloff', 0.07), 0.07), 0, 2);
+    CB_FOG_H[2] = clamp(numOr(dig(t, 'fog.heightThin', 0.6), 0.6), 0, 1);
+    CB_FOG_H[3] = clamp(numOr(dig(t, 'fog.desat', 0.35), 0.35), 0, 1);
+    CB_FOG_H[0] = this._focus.y - this._fogBelow;
+    readColor(dig(t, 'fog.skyColor', dig(t, 'sky.params.horizon', bgSpec)), 0x8fb0c8, _col);
+    CB_FOG_SKY[0] = _col.r; CB_FOG_SKY[1] = _col.g; CB_FOG_SKY[2] = _col.b;
+    CB_FOG_SKY[3] = fogSpec === null ? 0 : clamp(numOr(dig(t, 'fog.skyMix', 0.7), 0.7), 0, 1);
 
     /* ---- exposure ---------------------------------------------------- */
     this.renderer.toneMappingExposure = clamp(numOr(t.exposure, 1.0), 0.05, 4);
@@ -770,7 +886,7 @@ export class Engine {
 
     /* ---- shadow frustum --------------------------------------------- */
     const sh = this._shadow;
-    sh.extent = clamp(numOr(dig(t, 'shadow.extent', SHADOW_DEFAULT.extent), SHADOW_DEFAULT.extent), 8, 200);
+    sh.themeExtent = clamp(numOr(dig(t, 'shadow.extent', SHADOW_DEFAULT.extent), SHADOW_DEFAULT.extent), 8, 200);
     sh.bias = clamp(numOr(dig(t, 'shadow.bias', SHADOW_DEFAULT.bias), SHADOW_DEFAULT.bias), -0.01, 0.01);
     sh.normalBias = clamp(numOr(dig(t, 'shadow.normalBias', SHADOW_DEFAULT.normalBias), SHADOW_DEFAULT.normalBias), 0, 0.5);
     this._configureShadow();
@@ -1002,10 +1118,23 @@ export class Engine {
     if (this.post) {
       this.post.setRenderFraction(1);
       this.post.setQuality(preset);
+      this._pushSharpen();
     }
 
     this.events.emit('quality', preset);
     return this;
+  }
+
+  /**
+   * @private Contrast-adaptive sharpening strength for the post chain, scaled
+   * by how far below native the frame is rendered: at the LOW tier's 0.60 the
+   * compositor's bilinear upscale is what turns sign text to mush, and CAS at
+   * the buffer size before that upscale is the cheapest perceived-sharpness
+   * the tier can buy (~0.3 ms). At 1.0 only a whisper remains.
+   */
+  _pushSharpen() {
+    if (!this.post || typeof this.post.setSharpen !== 'function') return;
+    this.post.setSharpen(clamp(0.12 + (1 - this.renderScale) * 1.45, 0, 0.85));
   }
 
   /** @private Settings subscriber. */
@@ -1074,6 +1203,7 @@ export class Engine {
         this.post.resize(this.size.w, this.size.h);
       }
       this.post.setRenderFraction(next / this._tierScale);
+      this._pushSharpen();
       this.events.emit('renderscale', next);
       return this;
     }
@@ -1084,6 +1214,7 @@ export class Engine {
     this.renderer.setPixelRatio(this._pr * next);
     this.renderer.setSize(this.size.w, this.size.h, true);
     if (this.post) this.post.resize(this.size.w, this.size.h);
+    this._pushSharpen();
     this.events.emit('renderscale', next);
     return this;
   }

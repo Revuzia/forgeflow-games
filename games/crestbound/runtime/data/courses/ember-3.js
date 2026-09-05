@@ -548,7 +548,7 @@ export default {
     { p: [32.0, 2.8, 30.5], note: '1 — the basalt plug in the east lava pool (top 1.50)' },
     { p: [-44.0, 13.3, 6.0], note: '2 — the tall geyser pillar, jump-pad only (top 12.00)' },
     { p: [44.0, 10.1, 6.0], note: '3 — the bluff crag, out over the drop (top 8.80)' },
-    { p: [-6.0, 7.50, -28.0], note: '4 — the shaft floor behind the vents (ground 6.00)' },
+    { p: [-6.0, 7.50, -28.0], note: '4 — the slag block on the shaft floor behind the vents (top 6.50)' },
     { p: [16.0, 16.1, -20.0], note: '5 — the outer tip of the cannon balcony (top 14.80)' },
     { p: [15.0, 23.9, -20.0], note: '6 — the lava tube, past the crust (floor 22.60)' },
     { p: [-10.5, 32.0, -12.0], note: '7 — the head of the wall-kick chimney (top 30.70)' },
@@ -804,6 +804,13 @@ export default {
     { kind: 'flame', p: [-6, COURT_Y, -22], dir: [0, 1, 0], len: 5.0, radius: 0.9, cycle: { on: 1.5, off: 2.5, warn: 0.9, phase: 0 }, color: EMBER },
     { kind: 'flame', p: [-9, COURT_Y, -28], dir: [0, 1, 0], len: 5.0, radius: 0.9, cycle: { on: 1.5, off: 2.5, warn: 0.9, phase: 1.3 }, color: EMBER },
     { kind: 'flame', p: [-3, COURT_Y, -30], dir: [0, 1, 0], len: 5.0, radius: 0.9, cycle: { on: 1.5, off: 2.5, warn: 0.9, phase: 2.6 }, color: EMBER },
+    // THE SLAG BLOCK sigil 4 stands over (top 6.50, a 0.5 m step off the floor,
+    // 2.2 m clear of every vent's 0.9 m jet). It is here because the reach gate
+    // anchors a target with no authored surface under it to the terrain NODE and
+    // measures its rise against the field's MEAN height (reachcheck.mjs
+    // surfaceUnder / `rise: p[1] - s.y`), which reported the sigil 4.85 m over a
+    // floor it is 1.50 m over; a real top face under it is what the gate reads.
+    { kind: 'platform', p: [-6.0, COURT_Y + 0.25, -28.0], s: [1.6, 0.5, 1.6], mat: 'obsidian', tint: BASALT_HI, stripe: true, edge: SAFE_EDGE },
     { kind: 'deco', kindOf: 'lavaRock', p: [-9.5, COURT_Y + 0.4, -18], s: [1.5, 1.1, 1.5], mat: 'obsidian', tint: SLAG, count: 6, spread: 11.0, jitter: 0.45 },
     { kind: 'deco', kindOf: 'debris', p: [7.5, COURT_Y + 0.3, -30], s: [1.2, 0.7, 1.2], mat: 'metal', tint: 0x554b45, count: 5, spread: 8.0, jitter: 0.5 },
     { kind: 'light', p: [0, 10.0, -20], color: EMBER, intensity: 10, distance: 30 },

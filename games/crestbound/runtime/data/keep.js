@@ -371,26 +371,26 @@ const G = [
   makeGate({ course: 'verdant-2', crests: 1, p: [LX0, LOBBY + 2.5, -1.0], yaw: WEST, floor: LOBBY, kind: 'painting', tint: VERDANT, label: 'GNASHER FORT' }),
   makeGate({ course: 'verdant-3', crests: 3, p: [LX0, LOBBY + 2.5, 4.0], yaw: WEST, floor: LOBBY, kind: 'painting', tint: VERDANT, label: 'WINDMILL HEIGHTS' }),
 
-  /* EMBER FOUNDRY — undercroft, north wall, lit by torches. ember-4 is one of
-     the three late seals: visible, readable, and shut until 30 crests. */
-  makeGate({ course: 'ember-1', crests: 6, p: [-12.0, UNDER + 2.5, UZ0], yaw: NORTH, floor: UNDER, kind: 'painting', tint: EMBER, label: 'MAGMA WORKS', w: 3.0, h: 3.2 }),
-  makeGate({ course: 'ember-2', crests: 10, p: [-4.5, UNDER + 2.5, UZ0], yaw: NORTH, floor: UNDER, kind: 'painting', tint: EMBER, label: 'PISTON HALLS', w: 3.0, h: 3.2 }),
-  makeGate({ course: 'ember-3', crests: 14, p: [4.5, UNDER + 2.5, UZ0], yaw: NORTH, floor: UNDER, kind: 'painting', tint: EMBER, label: 'CINDER CHASE', w: 3.0, h: 3.2 }),
-  makeGate({ course: 'ember-4', crests: 30, p: [12.0, UNDER + 2.5, UZ0], yaw: NORTH, floor: UNDER, kind: 'painting', tint: EMBER, label: 'SUNSCAR NECROPOLIS', w: 3.0, h: 3.2 }),
+  /* EMBER FOUNDRY — undercroft, north wall, lit by torches. Gate totals are
+     the COURSES.md brief's: 5 / 8 / 12 / 15 (drift fixed 2026-09-04). */
+  makeGate({ course: 'ember-1', crests: 5, p: [-12.0, UNDER + 2.5, UZ0], yaw: NORTH, floor: UNDER, kind: 'painting', tint: EMBER, label: 'MAGMA WORKS', w: 3.0, h: 3.2 }),
+  makeGate({ course: 'ember-2', crests: 8, p: [-4.5, UNDER + 2.5, UZ0], yaw: NORTH, floor: UNDER, kind: 'painting', tint: EMBER, label: 'PISTON HALLS', w: 3.0, h: 3.2 }),
+  makeGate({ course: 'ember-3', crests: 12, p: [4.5, UNDER + 2.5, UZ0], yaw: NORTH, floor: UNDER, kind: 'painting', tint: EMBER, label: 'CINDER CHASE', w: 3.0, h: 3.2 }),
+  makeGate({ course: 'ember-4', crests: 15, p: [12.0, UNDER + 2.5, UZ0], yaw: NORTH, floor: UNDER, kind: 'painting', tint: EMBER, label: 'SUNSCAR NECROPOLIS', w: 3.0, h: 3.2 }),
 
-  /* RIME SPIRE — the long hall upstairs; rime-3 seals its far end. */
+  /* RIME SPIRE — the long hall upstairs; rime-3 seals its far end (18 / 22 / 26). */
   makeGate({ course: 'rime-1', crests: 18, p: [HX0, GAL + 2.5, -20.0], yaw: WEST, floor: GAL, kind: 'painting', tint: RIME }),
   makeGate({ course: 'rime-2', crests: 22, p: [HX0, GAL + 2.5, -28.0], yaw: WEST, floor: GAL, kind: 'painting', tint: RIME }),
-  makeGate({ course: 'rime-3', crests: 36, p: [0.0, GAL + 2.5, HZ0], yaw: NORTH, floor: GAL, kind: 'painting', tint: RIME, w: 4.2, h: 4.4 }),
+  makeGate({ course: 'rime-3', crests: 26, p: [0.0, GAL + 2.5, HZ0], yaw: NORTH, floor: GAL, kind: 'painting', tint: RIME, w: 4.2, h: 4.4 }),
 
   /* AZURE SANCTUM — out in the courtyard, in stained glass and stone. */
-  makeGate({ course: 'azure-1', crests: 26, p: [YX1, 2.40, 30.0], yaw: EAST, floor: 0, kind: 'glass', tint: AZURE, w: 3.2, h: 4.4, label: 'TIDEWELL TEMPLE' }),
-  makeGate({ course: 'azure-2', crests: 42, p: [YX0, 2.40, 22.0], yaw: WEST, floor: 0, kind: 'glass', tint: AZURE, w: 3.2, h: 4.4, label: 'GEARHEART TOWER' }),
+  makeGate({ course: 'azure-1', crests: 30, p: [YX1, 2.40, 30.0], yaw: EAST, floor: 0, kind: 'glass', tint: AZURE, w: 3.2, h: 4.4, label: 'TIDEWELL TEMPLE' }),
+  makeGate({ course: 'azure-2', crests: 35, p: [YX0, 2.40, 22.0], yaw: WEST, floor: 0, kind: 'glass', tint: AZURE, w: 3.2, h: 4.4, label: 'GEARHEART TOWER' }),
   /* azure-3 is set into the BACK wall of the roof aedicule (z 38.40), not its
      mouth, so the door has 1.20 m of masonry behind it and the player walks a
      step and a half into the niche before it triggers — no accidental entries
      while circling the parapet. */
-  makeGate({ course: 'azure-3', crests: 50, p: [-17.0, ROOF + 1.70, 38.4], yaw: SOUTH, floor: ROOF, kind: 'door', tint: AZURE, w: 2.8, h: 3.4, label: 'PRISM RIDE' }),
+  makeGate({ course: 'azure-3', crests: 40, p: [-17.0, ROOF + 1.70, 38.4], yaw: SOUTH, floor: ROOF, kind: 'door', tint: AZURE, w: 2.8, h: 3.4, label: 'PRISM RIDE' }),
 ];
 
 const GATE_OBJECTS = G.map((g) => g.obj);

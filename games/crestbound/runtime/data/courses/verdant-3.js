@@ -458,6 +458,11 @@ export default {
   spawn: { p: [0, 2.0, 54], yaw: 0 },
   killY: -20,
   bounds: { min: [-70, -22, -70], max: [70, 54, 70] },
+  /* Static-merge chunk ceiling (course.js _computeChunkGrid; default 2 -> this
+   * 144 m course collapsed to ONE chunk, so the 36 m sun-shadow frustum drew the
+   * whole static merge every frame). 4 = 2 x 2 quadrants: measured 2026-09-04,
+   * group-1 validator, see the note in course.js. */
+  chunks: 9,
 
   intro: {
     /* One sentence: where you are, and what the course is about. game.js

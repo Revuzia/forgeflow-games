@@ -62,21 +62,32 @@ import { clamp, clamp01 } from './util.js';
  *   maxLights      soft budget on simultaneous dynamic point lights (themes.js)
  */
 export const QUALITY = {
+  /* VISUAL PASS 2026-09-04 (owner: "no cast shadow under Nim ... the image is
+   * FLAT"). The LOW tier — the tier the reference Intel UHD auto-detects — had
+   * a 512 shadow map spread over a +/-46 m theme frustum (18 cm texels, one
+   * tap) and dropped every caster under 3 m: measured on `_shots/_before_visual/
+   * verdant-1/spawn.png`, not one cast shadow in the frame, hero included.
+   * A shadow map is depth-only and the frustum now FOLLOWS THE HERO at
+   * `shadowDistance * 0.64` metres (engine.js `_configureShadow`), so 1024 over
+   * +/-18 m is 3.5 cm texels — a real contact shadow — and casters outside the
+   * box are frustum-culled by three before they cost a draw. PCF (9 taps) at
+   * the 0.60 render scale was measured affordable; 'basic' left a 3.5 cm texel
+   * staircase on every edge. */
   low: {
     id: 'low', label: 'LOW',
-    dpr: 1, shadowMap: 512, bloom: true, bloomScale: 0.25, bloomClamp: 12,
+    dpr: 1, shadowMap: 1024, bloom: true, bloomScale: 0.25, bloomClamp: 12,
     aa: 'fxaa', smaa: false, ssao: false,
-    particles: 0.35, decor: 0.3, shadowDistance: 28, grass: 0.27,
+    particles: 0.35, decor: 0.3, shadowDistance: 28, grass: 0.80,
     anisotropy: 1, maxLights: 2, lodDistance: 30,
-    shadowFilter: 'basic', shadowCasterRadius: 3.0, renderScale: 0.60,
+    shadowFilter: 'pcf', shadowCasterRadius: 1.2, renderScale: 0.60,
   },
   medium: {
     id: 'medium', label: 'MEDIUM',
     dpr: 1.25, shadowMap: 1024, bloom: true, bloomScale: 0.5, bloomClamp: 12,
     aa: 'fxaa', smaa: false, ssao: false,
-    particles: 0.6, decor: 0.6, shadowDistance: 45, grass: 0.55,
+    particles: 0.6, decor: 0.6, shadowDistance: 45, grass: 0.85,
     anisotropy: 2, maxLights: 3, lodDistance: 35,
-    shadowFilter: 'pcf', shadowCasterRadius: 2.0, renderScale: 0.72,
+    shadowFilter: 'pcf', shadowCasterRadius: 1.5, renderScale: 0.72,
   },
   high: {
     id: 'high', label: 'HIGH',

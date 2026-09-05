@@ -503,6 +503,30 @@ function coinGeometry() {
   });
 }
 
+/**
+ * THE far coin: the same 10-segment blank, no rims and no rune. 100 triangles
+ * against the near coin's 492.
+ *
+ * MEASURED 2026-09-04 (group-1 validator, `_harness/_g1_scenestat.py`): at
+ * the spawn of every course the whole set was drawn at full detail — 142
+ * coins x 492 = 69,864 triangles on verdant-2, 57k on verdant-3, 55k on
+ * ember-2 — while 40-60 % of them sat beyond 60 m from the camera, where a
+ * 0.26 m coin is five pixels wide at the tier render scale and its 2 cm
+ * emboss is sub-pixel. HIDE_RANGE (150 m) hid at most two of them. Coins in
+ * the far band (`ANIM_RANGE`, where the update already stops animating them)
+ * now draw from a second InstancedMesh carrying this blank; `_flushCoins()`
+ * compacts both meshes so `count` is the number actually drawn — a hidden or
+ * collected coin costs nothing instead of a scale-0 instance's full index
+ * range (renderer.info counted those, and so did the perf gate).
+ */
+function coinFarGeometry() {
+  return cachedGeo('coinFar', () => {
+    const g = normalizeAttrs(coinBlank(COIN_R, COIN_H, 0.022, 10));
+    g.computeBoundingSphere();
+    return g;
+  });
+}
+
 /** The sigil: a heavier blank, double rim, star emblem on both faces. */
 function sigilGeometry() {
   return cachedGeo('sigil', () => {
@@ -836,6 +860,10 @@ export class Collectibles {
       this._cDirty[i] = 1;
     }
 
+    // Every coin's current pose, by coin index. `_flushCoins()` compacts these
+    // into the near/far meshes each time any of them changes.
+    this._cMat = new Float32Array(n * 16);
+
     const geo = coinGeometry();
     const mat = goldMaterial(this.theme, this.mats);
     const mesh = new THREE.InstancedMesh(geo, mat, Math.max(1, n));
@@ -847,15 +875,69 @@ export class Collectibles {
     this.coinMesh = mesh;
     this.group.add(mesh);
 
+    // the far band draws the 100-triangle blank (see coinFarGeometry)
+    const far = new THREE.InstancedMesh(coinFarGeometry(), mat, Math.max(1, n));
+    far.name = 'coins.far';
+    far.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    far.castShadow = false;
+    far.receiveShadow = false;
+    far.count = 0;
+    this.coinFarMesh = far;
+    this.group.add(far);
+
     // seed every matrix once (static pose) so far coins are correct before the first update
     for (let i = 0; i < n; i++) this._writeCoinMatrix(i, 0, 1);
-    mesh.instanceMatrix.needsUpdate = true;
     if (n > 0) {
-      mesh.computeBoundingSphere();
-      if (mesh.boundingSphere) mesh.boundingSphere.radius += MAGNET_R + 1.5;
+      // One bounding sphere over every HOME position for both meshes: the
+      // instance buffers are compacted per frame, so a sphere computed from
+      // them would shrink to whatever happens to be drawn right now.
+      const box = new THREE.Box3();
+      for (let i = 0; i < n; i++) box.expandByPoint(_v0.set(this._cHome[i * 3], this._cHome[i * 3 + 1], this._cHome[i * 3 + 2]));
+      const sphere = new THREE.Sphere();
+      box.getBoundingSphere(sphere);
+      sphere.radius += MAGNET_R + 1.5 + COIN_R;
+      mesh.boundingSphere = sphere;
+      far.boundingSphere = sphere.clone();
     } else {
       mesh.visible = false;
+      far.visible = false;
     }
+    this._flushCoins();
+  }
+
+  /**
+   * Compact the per-coin poses into the near and far meshes. A coin draws from
+   * exactly one of them (its LOD band, `_cDirty`: 1 near, 0 far) or from
+   * neither (hidden band, or collected). Allocation-free; called only when a
+   * pose or a band changed, and from build/reset.
+   */
+  _flushCoins() {
+    const n = this.coinCount;
+    const near = this.coinMesh, far = this.coinFarMesh;
+    if (!near || !far) return;
+    const src = this._cMat, state = this._cState, band = this._cDirty;
+    const na = near.instanceMatrix.array, fa = far.instanceMatrix.array;
+    let k = 0, j = 0;
+    for (let i = 0; i < n; i++) {
+      const s = state[i];
+      if (s === 0) continue;                       // collected
+      const b = band[i];
+      if (b === 2 && s !== 2) continue;            // hidden band (a popping coin still shows)
+      const o = i * 16;
+      if (b === 0 && s !== 2) {
+        const d = j * 16;
+        for (let c = 0; c < 16; c++) fa[d + c] = src[o + c];
+        j++;
+      } else {
+        const d = k * 16;
+        for (let c = 0; c < 16; c++) na[d + c] = src[o + c];
+        k++;
+      }
+    }
+    near.count = k;
+    far.count = j;
+    near.instanceMatrix.needsUpdate = true;
+    far.instanceMatrix.needsUpdate = true;
   }
 
   /** Compose one coin instance matrix: home + offset, spin about Y, bob, scale. */
@@ -866,7 +948,7 @@ export class Collectibles {
     _q0.setFromAxisAngle(UP, t * 2.6 + ph);
     _s0.set(scale, scale, scale);
     _m0.compose(_v0, _q0, _s0);
-    this.coinMesh.setMatrixAt(i, _m0);
+    _m0.toArray(this._cMat, i * 16);
   }
 
   /* ------------------------------------------------------------------ *
@@ -1188,7 +1270,6 @@ export class Collectibles {
     if (!n) return;
     const home = this._cHome, off = this._cOff, vel = this._cVel;
     const state = this._cState, pop = this._cPop, dirty = this._cDirty;
-    const mesh = this.coinMesh;
     let any = false;
     const tyTarget = py + midY;
     const reach = (cap ? cap.r : TUNE.radius) + COIN_R * 0.9;
@@ -1265,7 +1346,7 @@ export class Collectibles {
       this._writeCoinMatrix(i, t, 1);
       any = true;
     }
-    if (any) mesh.instanceMatrix.needsUpdate = true;
+    if (any) this._flushCoins();
   }
 
   _takeCoin(i, x, y, z) {
@@ -1553,7 +1634,7 @@ export class Collectibles {
       if (i < 0 || i >= this.coinCount || this._cState[i] !== 1) return false;
       const i3 = i * 3;
       this._takeCoin(i, this._cHome[i3] + this._cOff[i3], this._cHome[i3 + 1] + this._cOff[i3 + 1], this._cHome[i3 + 2] + this._cOff[i3 + 2]);
-      this.coinMesh.instanceMatrix.needsUpdate = true;
+      this._flushCoins();
       return true;
     }
     if (kind === 'sigil') {
@@ -1652,7 +1733,7 @@ export class Collectibles {
       this._cVel[i3] = this._cVel[i3 + 1] = this._cVel[i3 + 2] = 0;
       this._writeCoinMatrix(i, 0, 1);
     }
-    if (this.coinCount) this.coinMesh.instanceMatrix.needsUpdate = true;
+    if (this.coinCount) this._flushCoins();
     this.counts.coins = 0;
 
     for (let i = 0; i < this.sigilCount; i++) {
