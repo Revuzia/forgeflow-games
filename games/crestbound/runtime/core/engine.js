@@ -65,6 +65,8 @@ const _lUp = new THREE.Vector3();
 const _camPos = new THREE.Vector3();
 const _UP = new THREE.Vector3(0, 1, 0);
 const _col = new THREE.Color();
+const _col2 = new THREE.Color();
+const _col3 = new THREE.Color();
 
 const DEFAULT_FAR = 900;
 const DEFAULT_NEAR = 0.05;
@@ -216,6 +218,31 @@ const FOG_BASE_BELOW_DEFAULT = 3.0;
  * darker than itself instead of dissolving into the sanctum sky.
  */
 const SKYMIX_ALT_LO = 15, SKYMIX_ALT_HI = 25, SKYMIX_ALT_MAX = 0.35;
+/**
+ * DISTANCE GLOW (2026-09-05, atmosphere lane, S5). Owner on ember-1 spawn /
+ * vista-nw and ember-4 spawn / vista-ne: "mid/far ground is flat black
+ * silhouettes on a flat red sky — no red-orange distance fog, no separation".
+ * Every ember fog colour (band, sky, aerial) is DARKER than the furnace dome's
+ * horizon, so a catwalk 90 m out fogged to near-black and read as a cutout on
+ * the red. This term warms the FOG COLOUR with view distance: from
+ * `fog.glowNear` m the colour a fragment fogs toward slides from
+ * `fog.glowColorNear` to `fog.glowColorFar` by `fog.glowFar` m, weighted by
+ * `fog.glowStrength` and thinned overhead by `fog.glowHeightFalloff` (1/m
+ * above the hero's band — the glow is ground haze lit from below, not a lid).
+ * It touches ONLY the colour, never the fog factor, and is zero inside
+ * glowNear, so the readability band contrastcheck measures (a deck within
+ * ~40 m) is untouched by construction. Default strength is 0 — a theme opts in
+ * — except a `furnace` sky, whose defaults are derived from its own
+ * horizon/horizonGlow params in setTheme (the ember realm is the case).
+ * [ nearR, nearG, nearB, nearDist m ]
+ */
+const CB_FOG_GA = new Float32Array([0.36, 0.10, 0.04, 55]);
+/** [ farR, farG, farB, farDist m ] */
+const CB_FOG_GB = new Float32Array([0.55, 0.16, 0.05, 125]);
+/** [ strength 0..1, heightFalloff 1/m, 0, 0 ] */
+const CB_FOG_GK = new Float32Array([0.0, 0.02, 0, 0]);
+/** furnace-sky derived defaults: mix(horizon, horizonGlow, k) for the two colours */
+const FOG_GLOW_FURNACE = Object.freeze({ nearMix: 0.14, farMix: 0.38, near: 55, far: 125, strength: 0.85, heightFalloff: 0.02 });
 
 (function patchHeightFog() {
   const CH = THREE.ShaderChunk;
@@ -235,7 +262,8 @@ const SKYMIX_ALT_LO = 15, SKYMIX_ALT_HI = 25, SKYMIX_ALT_MAX = 0.35;
     '\n\tvCbFogY = dot( viewMatrix[ 1 ].xyz, mvPosition.xyz ) + cameraPosition.y;');
   CH.fog_pars_fragment = pf.replace('varying float vFogDepth;',
     'varying float vFogDepth;\n\tvarying float vCbFogY;\n\tuniform vec4 uCbFogH;\n\tuniform vec4 uCbFogSky;' +
-    '\n\tuniform vec4 uCbFogAer;\n\tuniform vec4 uCbFogK;');
+    '\n\tuniform vec4 uCbFogAer;\n\tuniform vec4 uCbFogK;' +
+    '\n\tuniform vec4 uCbFogGA;\n\tuniform vec4 uCbFogGB;\n\tuniform vec4 uCbFogGK;');
   CH.fog_fragment = ff
     .replace('float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );',
       'float cbFogD = fogDensity * cbFogDens;\n\t\tfloat fogFactor = 1.0 - exp( - cbFogD * cbFogD * vFogDepth * vFogDepth );')
@@ -255,6 +283,10 @@ const SKYMIX_ALT_LO = 15, SKYMIX_ALT_HI = 25, SKYMIX_ALT_MAX = 0.35;
       'fogFactor = min( fogFactor, mix( 1.0, uCbFogK.z, smoothstep( 0.0, 0.5, 1.0 - exp( - max( vCbFogY - uCbFogK.w, 0.0 ) * uCbFogH.y ) ) ) );' +
       // altitude term, CAPPED: a station 30-50 m up must not fog to pure sky
       '\n\tvec3 cbFogCol = mix( fogColor, uCbFogSky.rgb, uCbFogSky.a * min( 1.0 - cbFogHgt, uCbFogK.x ) );' +
+      // DISTANCE GLOW (see CB_FOG_GA): the fog COLOUR warms with view distance
+      // beyond glowNear, thinned overhead; the fog factor is untouched
+      '\n\tfloat cbGlowT = smoothstep( uCbFogGA.w, uCbFogGB.w, vFogDepth );' +
+      '\n\tcbFogCol = mix( cbFogCol, mix( uCbFogGA.rgb, uCbFogGB.rgb, cbGlowT ), cbGlowT * uCbFogGK.x * exp( - max( vCbFogY - uCbFogH.x, 0.0 ) * uCbFogGK.y ) );' +
       // aerial perspective: slow plain-exponential band toward a colour darker than the horizon
       '\n\tfloat cbAer = ( 1.0 - exp( - vFogDepth * uCbFogAer.w ) ) * uCbFogK.y;' +
       '\n\tfloat cbFogL = dot( gl_FragColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );' +
@@ -268,6 +300,9 @@ const SKYMIX_ALT_LO = 15, SKYMIX_ALT_HI = 25, SKYMIX_ALT_MAX = 0.35;
     if (!u.uCbFogSky) u.uCbFogSky = { value: CB_FOG_SKY };
     if (!u.uCbFogAer) u.uCbFogAer = { value: CB_FOG_AER };
     if (!u.uCbFogK) u.uCbFogK = { value: CB_FOG_K };
+    if (!u.uCbFogGA) u.uCbFogGA = { value: CB_FOG_GA };
+    if (!u.uCbFogGB) u.uCbFogGB = { value: CB_FOG_GB };
+    if (!u.uCbFogGK) u.uCbFogGK = { value: CB_FOG_GK };
   };
   add(THREE.UniformsLib.fog);
   const lib = THREE.ShaderLib;
@@ -933,6 +968,29 @@ export class Engine {
      *                     may take (default 0.72: far hills keep 28 % of their
      *                     lit colour, see CB_FOG_K); 1 restores the old wall */
     CB_FOG_K[2] = clamp(numOr(dig(t, 'fog.farCap', FOG_FAR_CAP_DEFAULT), FOG_FAR_CAP_DEFAULT), 0.2, 1);
+    /*   fog.glowColorNear / glowColorFar / glowNear / glowFar / glowStrength /
+     *   glowHeightFalloff — the DISTANCE GLOW (see CB_FOG_GA). A furnace sky
+     *   derives every unset value from its own horizon + horizonGlow; any
+     *   other sky defaults to strength 0 (off). */
+    {
+      const furnace = dig(t, 'sky.type', '') === 'furnace';
+      const G = FOG_GLOW_FURNACE;
+      readColor(dig(t, 'sky.params.horizon', 0x461409), 0x461409, _col);
+      readColor(dig(t, 'sky.params.horizonGlow', 0xff4a10), 0xff4a10, _col2);
+      const nearSpec = dig(t, 'fog.glowColorNear', null);
+      if (nearSpec !== null && nearSpec !== undefined) readColor(nearSpec, 0x5a1a08, _col3);
+      else _col3.copy(_col).lerp(_col2, G.nearMix);
+      CB_FOG_GA[0] = _col3.r; CB_FOG_GA[1] = _col3.g; CB_FOG_GA[2] = _col3.b;
+      const farSpec = dig(t, 'fog.glowColorFar', null);
+      if (farSpec !== null && farSpec !== undefined) readColor(farSpec, 0x8a2a10, _col3);
+      else _col3.copy(_col).lerp(_col2, G.farMix);
+      CB_FOG_GB[0] = _col3.r; CB_FOG_GB[1] = _col3.g; CB_FOG_GB[2] = _col3.b;
+      const near = clamp(numOr(dig(t, 'fog.glowNear', G.near), G.near), 1, 1000);
+      CB_FOG_GA[3] = near;
+      CB_FOG_GB[3] = Math.max(near + 1, clamp(numOr(dig(t, 'fog.glowFar', G.far), G.far), 2, 2000));
+      CB_FOG_GK[0] = fogSpec === null ? 0 : clamp(numOr(dig(t, 'fog.glowStrength', furnace ? G.strength : 0), 0), 0, 1);
+      CB_FOG_GK[1] = clamp(numOr(dig(t, 'fog.glowHeightFalloff', G.heightFalloff), G.heightFalloff), 0, 1);
+    }
 
     /* ---- exposure ---------------------------------------------------- */
     this.renderer.toneMappingExposure = clamp(numOr(t.exposure, 1.0), 0.05, 4);

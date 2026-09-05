@@ -12,3 +12,4 @@ _harness/*.png
 _harness/_*.py
 _harness/_*.mjs
 _harness/_*.sh
+_harness/_*

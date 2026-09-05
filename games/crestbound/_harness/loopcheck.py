@@ -13,6 +13,13 @@ whole loop the player walks (CONTRACT "The gates" -> core loop):
                   hero is alive again AT that checkpoint, the death is counted,
                   and game.lastRespawnMs (kill -> controls restored) has a MEDIAN
                   <= 700 ms over at least 3 samples (CONTRACT §28)
+  survival        1.5 s of GAME time after every respawn the hero is STILL
+                  alive, grounded within 0.6 m of the pad, and the follow
+                  camera is >= 0.3 m from any solid (chest->lens broadphase
+                  ray + six probes from the lens); every crest station gets
+                  the same alive + camera check (added 2026-09-05 after the
+                  gate passed 551/551 with two checkpoints that killed the
+                  player on respawn)
   collection      a coin, a sigil and a crest collect on contact, the counters
                   move, and the SAVE (localStorage `crestbound.save.v1`) is
                   updated for the crest
@@ -124,6 +131,88 @@ async (opts) => {
     P.__test.teleport(V3(p.x, p.y + (dy === undefined ? 0.6 : dy), p.z));
     P.__test.setVel(V3(0, 0, 0)); };
 
+  /* ---- SURVIVAL + CAMERA CLEARANCE (the blind spot, 2026-09-05) -----------
+   * This gate passed 551/551 while two checkpoints killed the player on
+   * respawn: it asserted the hero was alive the FRAME controls came back and
+   * never looked again. A pad inside a gnasher's arc, a station authored
+   * under the ice, a camera that starts inside a cottage wall — all invisible
+   * to it. So after every respawn (and at every crest station) the hero is
+   * left alone for 1.5 s of GAME time (engine.elapsed — wall-clock durations
+   * inflate under a slow renderer, HARNESS_NOTES) and then:
+   *   alive      !player.dead, state still live
+   *   grounded   player.grounded, within PAD_R of the pad (checkpoints only —
+   *              a crest hovers over its pedestal / water / the wing line)
+   *   camera     a broadphase ray from the hero's chest to the follow camera
+   *              reaches the lens (no solid between them), and six 0.3 m
+   *              probes from the lens hit nothing (the lens is >= CAM_CLEAR
+   *              from any solid; an origin INSIDE a box reports t = 0).
+   * A station that fails here is authored wrong; the fix is in the data.  */
+  const E = A.engine;
+  const PAD_R = 0.6, CAM_CLEAR = 0.3, SETTLE_S = 1.5, SETTLE_WALL_MS = 20000;
+  const simNow = () => (E && Number.isFinite(E.elapsed)) ? E.elapsed : performance.now() / 1000;
+  const simWait = async (s) => {
+    const t0 = simNow(), w0 = performance.now();
+    while (simNow() - t0 < s) {
+      if (performance.now() - w0 > SETTLE_WALL_MS) return false;
+      await frame();
+    }
+    return true;
+  };
+  const _ro = V3(0, 0, 0), _rd = V3(0, 0, 0);
+  const _rh = { t: 0, normal: V3(0, 1, 0), point: V3(0, 0, 0), collider: null, heightfield: null };
+  const solidName = (h) => h.collider ? ((h.collider.ref && (h.collider.ref.kind || h.collider.ref.name)) || h.collider.surface || 'box')
+                         : (h.heightfield ? 'terrain' : '?');
+  const camProbe = () => {
+    const cam = G.cam, bp = G.course && G.course.broadphase;
+    if (!cam || !cam.__test || !bp || typeof bp.raycast !== 'function') return { ok: false, why: 'no cam.__test / broadphase' };
+    const cs = cam.__test.state();
+    const cp = cs.pos;
+    const P0 = syncP().pos;
+    _ro.set(P0.x, P0.y + 0.9, P0.z);                     // chest
+    _rd.set(cp[0] - _ro.x, cp[1] - _ro.y, cp[2] - _ro.z);
+    const len = _rd.length();
+    let why = null;
+    if (len > 1e-3) {
+      _rd.multiplyScalar(1 / len);
+      if (bp.raycast(_ro, _rd, len, _rh) && _rh.t < len - CAM_CLEAR) {
+        why = `solid (${solidName(_rh)}) ${_rh.t.toFixed(2)} m from the hero on a ${len.toFixed(2)} m line to the lens`;
+      }
+    }
+    if (!why) {
+      const dirs = [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+      for (const d of dirs) {
+        _ro.set(cp[0], cp[1], cp[2]); _rd.set(d[0], d[1], d[2]);
+        if (bp.raycast(_ro, _rd, CAM_CLEAR, _rh)) {
+          why = `solid (${solidName(_rh)}) ${_rh.t.toFixed(2)} m from the lens along ${d.join(',')}` +
+                (_rh.t <= 1e-3 ? ' (lens INSIDE it)' : '');
+          break;
+        }
+      }
+    }
+    return { ok: !why, why, cam: cp.map(v => +v.toFixed(2)), dist: +cs.dist.toFixed(2), mode: cs.mode, len: +len.toFixed(2) };
+  };
+  const survive = async (label, pad, wantPad) => {
+    const settled = await simWait(SETTLE_S);
+    syncP();
+    const p = P.pos;
+    const where = `${p.x.toFixed(2)},${p.y.toFixed(2)},${p.z.toFixed(2)}`;
+    if (!settled) ok(`${label}: the game clock advanced ${SETTLE_S} s`, false, 'engine.elapsed stalled for ' + SETTLE_WALL_MS + ' ms');
+    const live = !P.dead && (G.state === 'playing' || G.state === 'keep');
+    ok(`${label}: alive ${SETTLE_S} s after arriving`, live,
+       live ? `at ${where}` : `dead (${P.deathCause || G.state}) at ${where}, deaths ${G.deaths}`);
+    if (wantPad && pad) {
+      const d = Math.hypot(p.x - pad.x, p.y - pad.y, p.z - pad.z);
+      ok(`${label}: grounded within ${PAD_R} m of the pad`, live && P.grounded && d <= PAD_R,
+         `${P.grounded ? 'grounded' : 'NOT grounded (' + P.state + ')'} ${d.toFixed(2)} m from ${pad.x.toFixed(1)},${pad.y.toFixed(1)},${pad.z.toFixed(1)}`);
+    }
+    if (live) {
+      const c = camProbe();
+      ok(`${label}: follow camera clear of geometry (>= ${CAM_CLEAR} m)`, c.ok,
+         c.ok ? `lens ${c.cam.join(',')} dist ${c.dist} ${c.mode}` : `${c.why} — lens ${c.cam ? c.cam.join(',') : '?'} dist ${c.dist} ${c.mode}`);
+    }
+    return live;
+  };
+
   /* ---- 1. the course loaded and IS the requested one --------------------- */
   const C = G.course;
   if (!C) { ok('course loaded', false, 'game.course is null'); return R; }
@@ -188,6 +277,16 @@ async (opts) => {
     const rp = syncP().pos;
     ok(`cp${i} respawns AT the checkpoint`, near(rp, cp, 4.0),
        `player ${rp.x.toFixed(1)},${rp.y.toFixed(1)},${rp.z.toFixed(1)} vs cp ${cp.x.toFixed(1)},${cp.y.toFixed(1)},${cp.z.toFixed(1)}`);
+    // The blind spot: is he STILL alive, on the pad, with a clear camera, 1.5 s later?
+    const cpId = (cps[i].id || cps[i].def && cps[i].def.id) ? ` (${cps[i].id || cps[i].def.id})` : '';
+    const alive = await survive(`cp${i}${cpId} respawn`, cp, true);
+    if (!alive) {
+      // put him back so the next station is measured from a live hero
+      if (G.respawn) G.respawn();
+      await until(() => { syncP(); return !P.dead && (G.state === 'playing' || G.state === 'keep'); }, 5000);
+      tp(cp, 0.6);
+      await simWait(0.3);
+    }
     await wait(200);
   }
 
@@ -207,6 +306,51 @@ async (opts) => {
     const med = good.length ? good[(good.length - 1) >> 1] : null;
     R.notes.respawnMedian = med;
     ok(`median respawn <= ${opts.budget} ms`, med !== null && med <= opts.budget, med);
+  }
+
+  /* ---- 3b. every CREST station is survivable, with a clear camera --------
+   * The hero is placed at each crest's station point (the live record's home:
+   * p / spawnAt / the race finish — what shots.py photographs) with collection
+   * SUSPENDED (the same patch shots.py uses, so the crest is not taken and no
+   * save is written), left for 1.5 s of game time, and must be alive with the
+   * camera clear. A station under the ice, on a hazard, or inside a wall
+   * fails here. */
+  if (!opts.isKeep && col && crestDefs.length) {
+    const patched = typeof col.update === 'function' && !col.__cbPosePatched;
+    let own = false, orig = null;
+    if (patched) {
+      orig = col.update; own = Object.prototype.hasOwnProperty.call(col, 'update');
+      col.__cbPosePatched = true; col.update = function () {};
+    }
+    try {
+      const seen = new Set();
+      const stations = [];
+      for (const c of col.crests || []) {
+        const id = c && (c.id || (c.def && c.def.id));
+        const p = c && posOf(c.home);
+        if (!id || !p || seen.has(id)) continue;
+        seen.add(id); stations.push({ id, p });
+      }
+      for (const c of crestDefs) {
+        if (!c || seen.has(c.id)) continue;
+        const p = posOf(c.p || c.spawnAt || c.finish || null);
+        if (!p) continue;
+        seen.add(c.id); stations.push({ id: c.id, p });
+      }
+      for (const st of stations) {
+        if (syncP().dead) { if (G.respawn) G.respawn(); await until(() => { syncP(); return !P.dead; }, 5000); }
+        tp(st.p, 0.2);
+        if (G.cam && G.cam.recenter) G.cam.recenter();
+        await survive(`crest-${st.id} station`, st.p, false);
+      }
+    } finally {
+      if (patched) {
+        delete col.update;
+        if (own) col.update = orig;
+        delete col.__cbPosePatched;
+      }
+    }
+    if (syncP().dead) { if (G.respawn) G.respawn(); await until(() => { syncP(); return !P.dead; }, 5000); }
   }
 
   /* ---- 4. collection: coin, sigil, crest — counters AND save ------------- */
