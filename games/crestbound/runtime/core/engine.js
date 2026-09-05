@@ -192,7 +192,7 @@ const CB_FOG_SKY = new Float32Array([0.6, 0.7, 0.8, 0.0]);
  */
 const CB_FOG_AER = new Float32Array([0.5, 0.6, 0.7, 0.0]);
 /**
- * [ skyCap 0..1, aerialStrength 0..1, farCap 0..1, 0 ] — skyCap bounds the
+ * [ skyCap 0..1, aerialStrength 0..1, farCap 0..1, capFromY m ] — skyCap bounds the
  * altitude term; farCap (2026-09-04, image lane r2, critic "the horizon is a
  * hard milky band, the far hills a flat white-green band with zero detail")
  * is the MOST fog a fragment ABOVE the hero's band may take, so a far hill,
@@ -202,9 +202,11 @@ const CB_FOG_AER = new Float32Array([0.5, 0.6, 0.7, 0.0]);
  * measures) are untouched by construction: the cap eases in with the same
  * height term that thins the density.
  */
-const CB_FOG_K = new Float32Array([0.6, 1.0, 0.72, 0.0]);
+const CB_FOG_K = new Float32Array([0.6, 1.0, 0.72, 4.0]);
 /** default ceiling on the fog a fragment above the band may take (`fog.farCap`) */
 const FOG_FAR_CAP_DEFAULT = 0.72;
+/** metres above the hero's feet where the far cap starts to ease in (CB_FOG_K[3]) */
+const FOG_CAP_ABOVE = 4.0;
 /** how far below the hero's feet the full-density fog base sits (metres) */
 const FOG_BASE_BELOW_DEFAULT = 3.0;
 /**
@@ -246,7 +248,11 @@ const SKYMIX_ALT_LO = 15, SKYMIX_ALT_HI = 25, SKYMIX_ALT_MAX = 0.35;
     .replace(F_FROM,
       // FAR CAP: above the band the fog may not exceed farCap, so far hills and
       // roofs keep (1 - farCap) of their lit colour; at/below the band no change
-      'fogFactor = min( fogFactor, mix( 1.0, uCbFogK.z, smoothstep( 0.0, 0.5, 1.0 - cbFogHgt ) ) );' +
+      // The ramp is measured from uCbFogK.w = the hero's FEET + FOG_CAP_ABOVE, not
+      // from the fog base (which sits heightBelow m under the feet): a roof or
+      // deck at the hero's own height is the readability band and stays uncapped
+      // (measured: keep cp4 fell 2.38 -> 1.20:1 when the ramp started at the base).
+      'fogFactor = min( fogFactor, mix( 1.0, uCbFogK.z, smoothstep( 0.0, 0.5, 1.0 - exp( - max( vCbFogY - uCbFogK.w, 0.0 ) * uCbFogH.y ) ) ) );' +
       // altitude term, CAPPED: a station 30-50 m up must not fog to pure sky
       '\n\tvec3 cbFogCol = mix( fogColor, uCbFogSky.rgb, uCbFogSky.a * min( 1.0 - cbFogHgt, uCbFogK.x ) );' +
       // aerial perspective: slow plain-exponential band toward a colour darker than the horizon
@@ -790,6 +796,8 @@ export class Engine {
     // the height-fog base rides a few metres under the hero's feet (see the
     // HEIGHT FOG patch): one typed-array write reaches every fogged program.
     CB_FOG_H[0] = _v3a.y - this._fogBelow;
+    // the far cap's ramp starts FOG_CAP_ABOVE m over the feet (see CB_FOG_K)
+    CB_FOG_K[3] = _v3a.y + FOG_CAP_ABOVE;
     // ALTITUDE CAP on the sky mix (critic r1, azure-3 white-out): a station
     // 30-53 m up saw everything above the hero fog toward the sanctum sky at
     // skyMix 0.6 and the deck lost its far edge in white. Above SKYMIX_ALT_LO
@@ -904,6 +912,7 @@ export class Engine {
     CB_FOG_H[2] = clamp(numOr(dig(t, 'fog.heightThin', 0.6), 0.6), 0, 1);
     CB_FOG_H[3] = clamp(numOr(dig(t, 'fog.desat', 0.35), 0.35), 0, 1);
     CB_FOG_H[0] = this._focus.y - this._fogBelow;
+    CB_FOG_K[3] = this._focus.y + FOG_CAP_ABOVE;
     readColor(dig(t, 'fog.skyColor', dig(t, 'sky.params.horizon', bgSpec)), 0x8fb0c8, _col);
     CB_FOG_SKY[0] = _col.r; CB_FOG_SKY[1] = _col.g; CB_FOG_SKY[2] = _col.b;
     CB_FOG_SKY[3] = fogSpec === null ? 0 : clamp(numOr(dig(t, 'fog.skyMix', 0.7), 0.7), 0, 1);
