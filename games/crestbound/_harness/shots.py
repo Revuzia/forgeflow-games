@@ -377,7 +377,10 @@ def main() -> int:
         pg = br.new_page(viewport={"width": args.width, "height": args.height})
         pg.on("pageerror", lambda e: pageerrs.append(str(e)))
         try:
-            pg.goto("%s?dev=1&quality=%s" % (args.url, args.quality),
+            # autoscale=0 pins the tier's render scale: the dynamic controller
+            # steps a headless run to 0.45 within seconds (image lane, 2026-09-04),
+            # and a critic must judge the frame the player sees, not that one.
+            pg.goto("%s?dev=1&quality=%s&autoscale=0" % (args.url, args.quality),
                     wait_until="load", timeout=60_000)
         except Exception as e:
             print("NAVIGATION FAILED: %s" % e, file=sys.stderr)

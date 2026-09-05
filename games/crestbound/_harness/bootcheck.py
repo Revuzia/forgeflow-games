@@ -242,6 +242,13 @@ def main() -> int:
         url += "?dev=1"
     if args.course:
         url += "&course=%s" % args.course
+    # PIN the tier's render scale (2026-09-04, image lane): the dynamic
+    # controller steps a headless run down to 0.45 within a few seconds
+    # (measured: renderScale 0.45 at keep/spawn while the tier is 0.60), and a
+    # frame at 0.45 is one the player at 66 fps never sees. The fps this
+    # harness prints is informational; the perf gate is perfcheck.py.
+    if "autoscale=" not in url:
+        url += "&autoscale=0"
 
     msgs, errors = [], []
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)

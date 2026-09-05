@@ -628,10 +628,21 @@ export const THEMES = {
      * slow plain-exponential tint + desaturation that grades the MID-ground
      * long before the readability band bites (owner O3). The readability band
      * (`color`, `density`) is untouched: contrastcheck measures it. */
-    fog: { color: 0x3a5a54, near: 26, far: 320, density: 0.0076, type: 'exp2',
-           heightBelow: 3, heightFalloff: 0.075, heightThin: 0.65, desat: 0.46,
-           skyColor: 0x7c9fb4, skyMix: 0.70, skyCap: 0.65,
-           aerialColor: 0x7898a6, aerialDensity: 0.0042, aerialStrength: 0.55 },
+    /* GRADED, not a wall (2026-09-04, image lane, read at the vista-nw /
+     * vista-se stations, `_shots/imgab_v1nw_sharp.png`): at 0.0076 the band
+     * was 44 % at 100 m and 73 % at 150 m, toward a sky mix LIGHTER than the
+     * terrain, so the whole mid-ground sat under one milky value with a
+     * hard white band at mid-frame — and the far ring, being HIGHER than the
+     * fog base, thinned out of the fog and came back as a dark green rim
+     * beyond the haze (aerial perspective inverted). Density 0.0058 (29 % at
+     * 100 m, 53 % at 150 m, 74 % at 200 m, 95 % at 300 m); the height term
+     * thins less and slower so far ridges stay in the band; the sky mix and
+     * the aerial tint are both DARKER than the dome's horizon so a ridge ends
+     * as a silhouette against it; desat eased so the meadow keeps its green. */
+    fog: { color: 0x3f5f5c, near: 26, far: 320, density: 0.0058, type: 'exp2',
+           heightBelow: 3, heightFalloff: 0.035, heightThin: 0.35, desat: 0.34,
+           skyColor: 0x6a8ea4, skyMix: 0.45, skyCap: 0.50,
+           aerialColor: 0x6b8a9a, aerialDensity: 0.0032, aerialStrength: 0.50 },
 
     sky: {
       type: 'day',
@@ -772,7 +783,12 @@ export const THEMES = {
      * Lit grass peaks ~0.7 and limestone ~0.95 under this key, both under. */
     /* knee 0.5 (post.js soft-knee): the coins/rings at 1.0-1.5 glow softly,
      * the sun and the crest gold glow hard, lit grass (~0.7) stays clean. */
-    bloom: { strength: 0.55, radius: 0.58, threshold: 0.98, knee: 0.5 },
+    /* 0.98/0.5 -> 1.20/0.35 (2026-09-04, image lane): with the knee the ramp
+     * ran 0.49-1.47, so the sky dome at ~1.0 fed 13 % of half the frame into
+     * the mip chain — a veil over the whole upper half of every vista. The
+     * ramp is now 0.78-1.62: the dome at 1.0 feeds 3 %, a coin at 1.4 still
+     * feeds 23 % and glows, the sun and the crest gold bloom hard. */
+    bloom: { strength: 0.55, radius: 0.58, threshold: 1.20, knee: 0.35 },
 
     palette: {
       /* saturated for the same reason as the Keep's — see builders.js */
@@ -1195,7 +1211,10 @@ export const THEMES = {
     realmName: 'AZURE SANCTUM',
     timeOfDay: 'noon',
     bg: 0x2a7fb4,
-    exposure: 1.03,
+    /* 1.03 -> 0.97 (2026-09-04, image lane): noon over marble is the
+     * brightest scene in the game and its walked deck sat over 1.0 in HDR
+     * with the bloom off (`_shots/imgab_az3b_nobloom.png`, deck mean 171). */
+    exposure: 0.97,
     envIntensity: 1.25,
 
     /* HEIGHT FOG (engine.js): the deep teal band holds at deck height; the
@@ -1254,7 +1273,19 @@ export const THEMES = {
      * bright-pass integrates the whole sea into an additive veil. */
     /* knee 0.4 (post.js soft-knee): the lit marble just over 1.0 no longer
      * feeds its whole value to the mip chain (critic C1's bloom half). */
-    bloom: { strength: 0.45, radius: 0.56, threshold: 1.20, knee: 0.4 },
+    /* 1.20 -> 1.55 / 0.45 -> 0.40 (2026-09-04, image lane, MEASURED with
+     * `_harness/_img_ab.py --course azure-3 --station spawn --variants
+     * sharp,nobloom,nofog,nofogbloom`): at the 30 m spawn the bloom pass alone
+     * lifted the sky band 104 -> 162 and the mid-ground decks 161 -> 199
+     * (8-bit means), while the fog contributed ~1/255 — critic C1's
+     * "white-out" was the bright-pass integrating half a frame of sanctum
+     * sky and lit marble (both 1.2-1.5 in HDR) into an additive veil. Above
+     * 1.55 only the sun, the crest gold, the sigils and the trims bloom. */
+    /* Second step 1.55 -> 1.80 / 0.38: at 1.55 the pass still lifted the sky
+     * band +28 and the mid decks +17 (8-bit means), so the sanctum dome sits
+     * ABOVE 1.55 in HDR; the veil has to go before anything in this realm
+     * can hold the readability law's 3.5:1. */
+    bloom: { strength: 0.38, radius: 0.56, threshold: 1.80, knee: 0.4 },
 
     palette: {
       safe: 0xb8a67e, safeEdge: 0xffd166,

@@ -1169,7 +1169,11 @@ export class Engine {
    */
   _pushSharpen() {
     if (!this.post || typeof this.post.setSharpen !== 'function') return;
-    this.post.setSharpen(clamp(0.12 + (1 - this.renderScale) * 1.45, 0, 0.85));
+    /* 0.60 -> 0.46, 0.45 -> 0.60, 0.72 -> 0.35, 1.0 -> 0.08. The earlier
+     * 0.12 + (1 - s) * 1.45 put 0.70 on the LOW tier, and at a 1.67x
+     * upscale that strength drew the source texel grid onto every edge
+     * (`_shots/imgab_keep_sharp_crop.png` vs `_s40_crop.png`, 2026-09-04). */
+    this.post.setSharpen(clamp(0.08 + (1 - this.renderScale) * 0.95, 0, 0.62));
   }
 
   /** @private Settings subscriber. */

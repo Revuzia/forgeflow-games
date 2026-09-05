@@ -131,6 +131,7 @@ uniform float uVignetteSoft;
 uniform float uChroma;
 uniform float uHiKnee;
 uniform float uHiRange;
+uniform float uHueHold;
 
 uniform float uPulse;
 uniform vec3  uPulseColor;
@@ -331,12 +332,16 @@ void main() {
   // plaster wall (under the knee) is untouched. Range is the asymptote above
   // the knee: knee + range is the brightest scene value that can still reach
   // display white.
+  // hw is how far into the roll-off this pixel is (0 under the knee, -> 1
+  // at the asymptote); the tone-map block below uses it to hold the HUE.
+  float hw = 0.0;
   {
     float hm = max( col.r, max( col.g, col.b ) );
     if ( hm > uHiKnee ) {
       float he = hm - uHiKnee;
       float hc = uHiKnee + he * uHiRange / ( uHiRange + he );
       col *= hc / hm;
+      hw = he / ( uHiRange + he );
     }
   }
 
@@ -347,6 +352,20 @@ void main() {
 
   #ifdef ACES_FILMIC_TONE_MAPPING
     gl_FragColor.rgb = ACESFilmicToneMapping( gl_FragColor.rgb );
+    // HUE HOLD (2026-09-04, image lane). ACES is PER CHANNEL: it compresses
+    // the strong channel harder than the weak ones, so a rolled-off flame at
+    // (3.9, 1.95, 0.49) still came out cream-white (owner O5, critic C2 — the
+    // three curtains read as a white slab, the Keep lantern as a white pool).
+    // For the pixels the roll-off engaged, blend toward the colour scaled by
+    // the tone curve of its LUMINANCE (channel ratios intact, the strong
+    // channel allowed to clip), so a hot core is orange-white with the
+    // halo's falloff around it, and a sun disc stays warm. Under the knee
+    // (hw = 0) this is a no-op, so nothing lit and ordinary changes.
+    if ( hw > 0.0 && uHueHold > 0.0 ) {
+      float hl = max( dot( col, LUMA ), 1e-4 );
+      vec3 hh = col * ( ACESFilmicToneMapping( vec3( hl ) ).r / hl );
+      gl_FragColor.rgb = mix( gl_FragColor.rgb, min( hh, vec3( 1.0 ) ), hw * uHueHold );
+    }
   #elif defined( AGX_TONE_MAPPING )
     gl_FragColor.rgb = AgXToneMapping( gl_FragColor.rgb );
   #elif defined( NEUTRAL_TONE_MAPPING )
@@ -393,6 +412,7 @@ export const GradeShader = {
     uChroma: { value: 0.28 },
     uHiKnee: { value: 1.8 },
     uHiRange: { value: 2.8 },
+    uHueHold: { value: 0.85 },
 
     uPulse: { value: 0 },
     uPulseColor: { value: new THREE.Vector3(1, 1, 1) },
@@ -424,6 +444,9 @@ export const DEFAULT_GRADE = {
    * `highlightKnee` compress toward knee + highlightRange */
   highlightKnee: 1.8,
   highlightRange: 2.8,
+  /* 0..1 — how far the rolled-off highlights keep their hue through ACES
+   * (see the HUE HOLD block in GRADE_FRAG); 0 is stock per-channel ACES */
+  hueHold: 0.85,
 };
 
 /**
@@ -1057,21 +1080,29 @@ void main() {
     col = e;
 
     // ---- RCAS: contrast-adaptive, limited, clamped ---------------------
+    // The five sharpen taps are ALL bilinear (centre included) so the
+    // Laplacian is taken from one consistent kernel; the sharpening DELTA
+    // is then added to the Catmull-Rom sample. The first version used the
+    // bicubic centre against bilinear neighbours, and that kernel mismatch
+    // — plus a 0.70 strength — drew the 0.60 source texel grid onto every
+    // edge (_shots/imgab_keep_sharp_crop.png: a blocky, painterly Nim).
     if ( uSharp > 0.001 ) {
+      vec3 c = fetchP( vUv );
       vec3 b = fetchP( vUv + vec2( 0.0, -inv.y ) );
       vec3 d = fetchP( vUv + vec2( -inv.x, 0.0 ) );
       vec3 g = fetchP( vUv + vec2( inv.x, 0.0 ) );
       vec3 h = fetchP( vUv + vec2( 0.0, inv.y ) );
-      vec3 mn = min( min( min( b, d ), min( g, h ) ), e );
-      vec3 mx = max( max( max( b, d ), max( g, h ) ), e );
+      vec3 mn = min( min( min( b, d ), min( g, h ) ), c );
+      vec3 mx = max( max( max( b, d ), max( g, h ) ), c );
       // headroom below and above the local extremes; both are ~0 across a
       // hard edge (mn -> 0, mx -> 1), which is what keeps the pass halo-free
       vec3 hitMin = mn / ( 4.0 * mx + 1e-4 );
       vec3 hitMax = ( 1.0 - mx ) / ( 4.0 * mn - 4.0 - 1e-4 );
       vec3 lobeRGB = max( -hitMin, hitMax );
       float lobe = max( -0.1875, min( max( lobeRGB.r, max( lobeRGB.g, lobeRGB.b ) ), 0.0 ) ) * uSharp;
-      col = ( lobe * ( b + d + g + h ) + e ) / ( 4.0 * lobe + 1.0 );
-      col = clamp( col, mn, mx );
+      vec3 sharp = ( lobe * ( b + d + g + h ) + c ) / ( 4.0 * lobe + 1.0 );
+      // the bicubic's own small overshoot is caught by the same clamp
+      col = clamp( e + ( sharp - c ), mn, mx );
     }
   }
 
@@ -1425,6 +1456,7 @@ export class Post {
     cur.tint = src.tint === undefined ? DEFAULT_GRADE.tint : src.tint;
     cur.highlightKnee = clamp(numOr(src.highlightKnee, DEFAULT_GRADE.highlightKnee), 0.5, 24);
     cur.highlightRange = clamp(numOr(src.highlightRange, DEFAULT_GRADE.highlightRange), 0.1, 40);
+    cur.hueHold = clamp(numOr(src.hueHold, DEFAULT_GRADE.hueHold), 0, 1);
 
     if (this.presentPass) this.presentPass.setGrain(cur.grain);
 
@@ -1449,6 +1481,7 @@ export class Post {
     u.uChroma.value = cur.chroma;
     u.uHiKnee.value = cur.highlightKnee;
     u.uHiRange.value = cur.highlightRange;
+    u.uHueHold.value = cur.hueHold;
 
     tintMultiplier(cur.tint, u.uTint.value);
   }
