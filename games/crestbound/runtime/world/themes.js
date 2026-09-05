@@ -396,6 +396,12 @@ export const THEMES = {
        * key is BEHIND Nim at spawn, so without this the side the player sees
        * is lit by nothing but the fill. Amber, ~3:1 under the key. */
       heroFill: { color: 0xffc98a, intensity: 0.95, sky: 0.40 },
+      /* LIGHT LANE r2 (owner O5 "Nim unlit from the front" in the Keep; the
+       * window key is behind him at the spawn): a modest portrait key, 0.40 x
+       * the 2.45 key, so the face and coat front model instead of going flat.
+       * Kept well under ember's 1.6 — the courtyard key already sits near
+       * clip on his head (hero.js COL.skin note). */
+      heroKey: { intensity: 0.40 },
       /* LIGHT LANE r1 (critic "NO RIM in any of the 147 frames"): the hero's
        * stylised silhouette band (player/hero.js _installRim). `intensity` is
        * the camera-pinned rim in the dome's colour, `back` the share the theme
@@ -815,8 +821,20 @@ export const THEMES = {
        * the SKY without the sun, so the hemi's sky half carries it — blue from
        * above, warm grass-bounce from below — at 0.82, which holds the key at
        * a cinematic ~4.7:1 while the terminator becomes a gradient. */
-      ambient: { color: 0x7d8a68, intensity: 0.36 },
-      hemi: { skyColor: 0x8cbcec, groundColor: 0x6e7444, intensity: 0.82 },
+      /* LIGHT LANE r2 (critic: verdant-3 spawn/cp1/cp2 "the shaded side of
+       * every hill is still a near-black cutout"). MEASURED with
+       * `_harness/_light_r2probe.py` at verdant-3 spawn on the dark band
+       * (300,150,700,350 in the 1600x900 frame, base [54,74,48]): hemi 0 ->
+       * [60,76,51] (no change), hemi x24 -> [63,111,56], key 0 -> [26,51,40],
+       * env 0 -> [39,54,33]. The band is KEY-LIT and still dark: its value is
+       * the slope-blended dirt albedo x the vertex ramp x the facing term
+       * (world/terrain.js + materials.js, the surface lane), not the rig.
+       * The rig's share is still lifted — hemi 0.82 -> 1.10 with a lighter
+       * warm ground bounce, ambient 0.36 -> 0.42 — so the shade of a hill that
+       * DOES face away from the key holds ~30 % of the lit value; the dirt
+       * albedo lift the critic names is the surface lane's half. */
+      ambient: { color: 0x7d8a68, intensity: 0.42 },
+      hemi: { skyColor: 0x8cbcec, groundColor: 0x7a8250, intensity: 1.10 },
       heroFill: { color: 0xe8eefc, intensity: 1.10, sky: 0.35 },
       /* a morning sky rim over a sunlit coat has to clear the key (3.90) */
       heroRim: { intensity: 1.70, back: 0.80 },
@@ -1016,8 +1034,19 @@ export const THEMES = {
        * lava, 0.90 -> 1.10, so catwalk undersides and Nim's underside glow —
        * readable, not blown (the key is 2.15 over it). */
       ambient: { color: 0x3a1a0c, intensity: 0.50 },
-      hemi: { skyColor: 0x4a2c20, groundColor: 0xff4a0a, intensity: 1.10 },
-      heroFill: { color: 0xffb070, intensity: 0.80, sky: 0.40 },
+      /* LIGHT LANE r2 (critic: ember-1 crest-boss/crest-coins "Nim is a black
+       * silhouette with only a thin red rim"): the sky half goes from soot to
+       * a smoky amber that the furnace glow would actually put on the top of
+       * a head, and the hero gets his OWN key — see heroKey. */
+      hemi: { skyColor: 0x6a3c2a, groundColor: 0xff4a0a, intensity: 1.10 },
+      /* Measured (`_harness/_light_r2probe.py`, ember-1 crest-boss): the camera
+       * fill at 0.80 put ~0.5 units on the coat — a dark red, not orange; 1.40
+       * with a warmer colour is the flat base the portrait key models on. */
+      heroFill: { color: 0xffb878, intensity: 1.40, sky: 0.40 },
+      /* The portrait key (player/hero.js _installRim): 1.6x the theme key, as
+       * heroRim already scales per theme. Camera-pinned upper-front-left and
+       * wrapped, so the coat reads ORANGE against the lava from any angle. */
+      heroKey: { intensity: 1.6 },
       /* the soot dome is lifted in hero.js; the amber back light does the rest */
       heroRim: { intensity: 1.40, back: 1.10 },
     },
@@ -1176,13 +1205,23 @@ export const THEMES = {
 
     lights: {
       key: { color: 0xcfe4ff, intensity: 2.35, dir: [0.24, 0.90, 0.36] },
-      fill: { color: 0x5f88c8, intensity: 1.05, dir: [-0.40, 0.48, -0.78] },
+      /* LIGHT LANE r2 (critic: rime-1 crest-bell, rime-2 vistas "the rime
+       * hills render as smooth dark-navy plastic blobs — shaded sides
+       * near-black"). MEASURED with `_harness/_light_r2probe.py` at rime-1
+       * crest-bell on the hill (500,220,900,400): base [77,117,141], key 0 ->
+       * [55,96,117], fill/hemi/ambient 0 -> within 1/255 of base. The hill's
+       * SHADE is not lit by the rig's soft terms at their old values, so all
+       * three come up: fill 1.05 -> 1.35, hemi 0.95 -> 1.30 with the sky half
+       * at an aurora bounce (0x5a7cb4, the >= 0x2e3f66 floor the critic set),
+       * ambient 0.52 -> 0.62. The plastic hotspot (snow clearcoat roughness)
+       * and the drift/sparkle detail are world/materials.js — surface lane. */
+      fill: { color: 0x5f88c8, intensity: 1.35, dir: [-0.40, 0.48, -0.78] },
       // the last pink light on the ridge — the one warm thing in the theme
       rim: { color: 0xffa8c0, intensity: 2.05, dir: [0.76, 0.10, -0.64] },
       /* LIGHT LANE 2026-09-04: a snowfield's shade is lit by the whole dusk
        * dome and by the snow itself — the brightest bounce in the game. */
-      ambient: { color: 0x2c3d55, intensity: 0.52 },
-      hemi: { skyColor: 0x486a96, groundColor: 0x9fb0c4, intensity: 0.95 },
+      ambient: { color: 0x2c3d55, intensity: 0.62 },
+      hemi: { skyColor: 0x5a7cb4, groundColor: 0xaabcd0, intensity: 1.30 },
       heroFill: { color: 0xdde8ff, intensity: 0.85, sky: 0.35 },
       heroRim: { intensity: 1.50, back: 0.95 },
     },
@@ -1330,15 +1369,25 @@ export const THEMES = {
     lights: {
       key: { color: 0xfff4dc, intensity: 3.20, dir: [0.18, 0.94, -0.30] },
       // the sea bounce: strong, cyan, from low and to the side
-      fill: { color: 0x5fd8e8, intensity: 1.45, dir: [-0.55, 0.12, 0.82] },
+      /* LIGHT LANE r2 (critic: azure-1 crest-open/cp1/spawn "the big dune
+       * behind the crest is a pure black cutout"). MEASURED with
+       * `_harness/_light_r2probe.py` at crest-open on the dune face
+       * (400,300,650,450): fill 0 -> [40,56,61] from [77,82,65], hemi 0 ->
+       * [29,54,65], amb 0 -> [31,55,66], key 0 -> [72,78,62]. The dune's
+       * camera side faces AWAY from the noon key and is lit by the sea-bounce
+       * fill and the hemi — so those are the levers: fill 1.45 -> 1.85, hemi
+       * 1.20 -> 1.45 with a paler sky half, ambient 0.56 -> 0.66. The key still
+       * leads a lit face by ~2:1. (The sand's own wrap term the critic asks for
+       * lives in world/terrain.js — the surface lane.) */
+      fill: { color: 0x5fd8e8, intensity: 1.85, dir: [-0.55, 0.12, 0.82] },
       rim: { color: 0xdff6ff, intensity: 1.60, dir: [-0.22, 0.24, -0.95] },
       /* LIGHT LANE 2026-09-04 (owner O3 "the Azure hills are pure black
        * cutouts"): noon over water has the brightest sky and the brightest
        * sea-bounce of any theme, so its shade is the LEAST black — hemi 0.95
        * -> 1.20 and the ambient up a step keep every hill's far side a lit
        * cyan-grey; the key at 3.20 still leads by ~2.7:1. */
-      ambient: { color: 0x5f96a8, intensity: 0.56 },
-      hemi: { skyColor: 0x8fd0f0, groundColor: 0x2f9fb8, intensity: 1.20 },
+      ambient: { color: 0x5f96a8, intensity: 0.66 },
+      hemi: { skyColor: 0x9ad8f4, groundColor: 0x3fa8c0, intensity: 1.45 },
       heroFill: { color: 0xfff0d8, intensity: 0.95, sky: 0.30 },
       heroRim: { intensity: 1.60, back: 0.75 },
     },

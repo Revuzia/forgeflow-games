@@ -3214,16 +3214,34 @@ export class Hero {
        *               light count and the shader permutation do not change. */
       uCbHeroSky: { value: new THREE.Vector4(0.56, 0.72, 0.95, 0.35) },
       uCbHeroFill: { value: new THREE.Vector4(1, 0.95, 0.88, 0.9) },
+      /* LIGHT LANE r2 (critic: ember-1 crest-boss "Nim is a black silhouette
+       * with only a thin red rim - no key on the coat"). Measured with
+       * `_harness/_light_r2probe.py` at that station: the rig's key (2.15,
+       * dir.y 0.95, i.e. overhead) puts nothing on a coat panel facing the
+       * camera (key0 changed the coat by 1/255), and TRIPLING the straight-on
+       * camera fill moved the pack by +7 - a flat fill on a dark albedo is a
+       * flat dark. What a showcase does is give the character his own KEY: a
+       * camera-pinned portrait light, upper-front-left in view space, wrapped
+       * so it rolls off across the coat instead of stopping at a terminator.
+       *   uCbHeroKey    rgb = colour, a = intensity in DirectionalLight units
+       *                 (themes.js `lights.heroKey.intensity` x the theme key)
+       *   uCbHeroKeyDir VIEW-space direction toward the light. Default 0 =
+       *                 off, so a theme that does not declare heroKey renders
+       *                 exactly as before. */
+      uCbHeroKey: { value: new THREE.Vector4(1, 0.95, 0.85, 0.0) },
+      uCbHeroKeyDir: { value: new THREE.Vector3(-0.45, 0.62, 0.64).normalize() },
     });
     mat.onBeforeCompile = (shader) => {
       shader.uniforms.uCbHeroRim = rimU.uCbHeroRim;
       shader.uniforms.uCbHeroRimDir = rimU.uCbHeroRimDir;
       shader.uniforms.uCbHeroSky = rimU.uCbHeroSky;
       shader.uniforms.uCbHeroFill = rimU.uCbHeroFill;
+      shader.uniforms.uCbHeroKey = rimU.uCbHeroKey;
+      shader.uniforms.uCbHeroKeyDir = rimU.uCbHeroKeyDir;
       const AO = '#include <aomap_fragment>';
       if (shader.fragmentShader.indexOf(AO) === -1) return;
       shader.fragmentShader = 'uniform vec4 uCbHeroRim;\nuniform vec3 uCbHeroRimDir;\n' +
-        'uniform vec4 uCbHeroSky;\nuniform vec4 uCbHeroFill;\n' +
+        'uniform vec4 uCbHeroSky;\nuniform vec4 uCbHeroFill;\nuniform vec4 uCbHeroKey;\nuniform vec3 uCbHeroKeyDir;\n' +
         shader.fragmentShader.replace(AO, AO + `
   {
     // CRESTBOUND hero rim + sky back light + camera fill (player/hero.js _installRim)
@@ -3253,9 +3271,18 @@ export class Hero {
     // camera-side wrapped lambert, albedo-tinted like a real diffuse term
     float cbWrap = saturate( dot( geometryNormal, geometryViewDir ) * 0.55 + 0.45 );
     reflectedLight.indirectDiffuse += diffuseColor.rgb * uCbHeroFill.rgb * ( cbWrap * uCbHeroFill.a * RECIPROCAL_PI );
+    // LIGHT LANE r2: the hero's own portrait KEY (see _installRim). View-space
+    // direction, so it is on the side of him the player sees whichever way he
+    // or the rig faces; wrapped 0.35 so the roll-off crosses the whole coat
+    // panel and the far flank falls to the fill, never to black. A direct
+    // term (it is a key), albedo-tinted like every diffuse term.
+    if ( uCbHeroKey.a > 0.001 ) {
+      float cbKw = saturate( dot( geometryNormal, uCbHeroKeyDir ) * 0.65 + 0.35 );
+      reflectedLight.directDiffuse += diffuseColor.rgb * uCbHeroKey.rgb * ( cbKw * uCbHeroKey.a * RECIPROCAL_PI );
+    }
   }`);
     };
-    mat.customProgramCacheKey = () => 'cb-hero-rim3';
+    mat.customProgramCacheKey = () => 'cb-hero-rim4';
     mat.needsUpdate = true;
   }
 
@@ -3405,6 +3432,25 @@ export class Hero {
       const keyI = K && typeof K.intensity === 'number' ? K.intensity : 2.2;
       const fillI = F && typeof F.intensity === 'number' ? Math.max(0, Math.min(4, F.intensity)) : Math.max(0.5, Math.min(1.4, keyI * 0.30));
       this._rimU.uCbHeroFill.value.set(_col0.r, _col0.g, _col0.b, fillI);
+
+      /* LIGHT LANE r2: the portrait key, `lights.heroKey` in themes.js -
+       *   intensity  multiplier of the theme KEY's intensity (ember 1.6, as the
+       *              critic asked; 0 / absent = off, the r1 look exactly)
+       *   color      optional; default = the key colour pulled 30 % to white
+       *   dir        optional VIEW-space [x, y, z] toward the light
+       * Uniform writes only - no program is compiled per theme. */
+      const HK = def && def.lights && def.lights.heroKey;
+      const keyMul = HK && typeof HK.intensity === 'number' ? Math.max(0, Math.min(3, HK.intensity)) : 0;
+      if (HK && HK.color !== undefined) _col0.set(HK.color);
+      else {
+        _col0.set(K && K.color !== undefined ? K.color : 0xffffff);
+        _col0.lerp(_col1.setRGB(1, 1, 1), 0.30);
+      }
+      this._rimU.uCbHeroKey.value.set(_col0.r, _col0.g, _col0.b, keyMul * keyI);
+      const kd = (HK && Array.isArray(HK.dir) && HK.dir.length >= 3) ? HK.dir : [-0.45, 0.62, 0.64];
+      this._rimU.uCbHeroKeyDir.value.set(kd[0], kd[1], kd[2]);
+      if (this._rimU.uCbHeroKeyDir.value.lengthSq() < 1e-8) this._rimU.uCbHeroKeyDir.value.set(-0.45, 0.62, 0.64);
+      this._rimU.uCbHeroKeyDir.value.normalize();
     }
 
     this.shadowBlob.setTheme(def);
