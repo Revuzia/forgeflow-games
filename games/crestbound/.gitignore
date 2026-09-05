@@ -8,3 +8,7 @@ _harness/*.log
 _harness/_*.log
 _harness/_hzshots/
 _harness/*.png
+# scratch probes written by lanes — never source (tracked ones stay tracked)
+_harness/_*.py
+_harness/_*.mjs
+_harness/_*.sh
