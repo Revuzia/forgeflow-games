@@ -1024,6 +1024,15 @@ export default {
     {
       kind: 'rings', r: 2.8, tint: AURORA, mat: 'gold',
       pts: Array.from({ length: 14 }, (_, i) => {
+        /* The LAST ring. The spiral's own closing point is [0, 6.2, 44]: four
+           metres over the camp, three metres in front of the spawn camera, so
+           its halo filled the top of the first frame of the course (12-course
+           validation, 2026-09-04). It now sits east of and BEHIND the camp
+           camera (16.7 m from cp-camp, 13.9 m from the authored spawn): from
+           ring 12 at [20.9, 8.8, 35.9] that is 18.4 m out for 2.8 m down —
+           gentler than the 21 m / 2.6 m every other step asks — and the
+           glide home to the pedestal at [-5, 3.55, 41] is 20 m for 2.5 m. */
+        if (i === 13) return [12.0, 6.0, 52.0];
         const a = (90 + i * (360 / 13)) * Math.PI / 180;   // one full turn over 14 rings
         const rad = 10 + i * (38 / 13);
         return [r2(Math.cos(a) * rad), r2(40 - i * (33.8 / 13)), r2(-4 + Math.sin(a) * rad)];

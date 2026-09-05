@@ -496,7 +496,11 @@ export default {
    * --------------------------------------------------------------------- */
   coins: [
     // BEAT 1 — the loading ramp out of the apron. (10)
-    ...trailCoins([[0, 55], [-2, 50], [1, 46], [0, 43]], 10, 1.1),
+    // Data lane 2026-09-04: the game boots at checkpoints[0], not `spawn`, so
+    // this trail used to start BEHIND the player, between hero and camera
+    // (metre-wide pancakes in the first frame). It now enters from the side
+    // and joins the path at the pad.
+    ...trailCoins([[-7, 52], [-4, 49], [-1.5, 46.5], [0, 43]], 10, 1.1),
     // BEAT 2 — one line down each of the three piston lanes. Take a lane and
     // commit; the coins are the only thing telling you where the lane IS. (18)
     { line: { a: [LANE[0], 7.1, 40], b: [LANE[0], 7.1, 16], n: 6 } },

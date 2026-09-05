@@ -434,8 +434,11 @@ export default {
   coins: [
     // BEAT 1 — the run out of spawn to the north lip, and a ring round the
     // coin pedestal. (6 + 6)
-    { line: { a: [0, STATION_Y + 1.1, 46], b: [0, STATION_Y + 1.1, 36], n: 6 } },
-    { ring: { c: [0, 0, 44], r: 4.0, n: 6, y: STATION_Y + 1.1 } },
+    // Data lane 2026-09-04: the game boots at cp-station (z 40), not `spawn`
+    // (z 48); the line and the pedestal ring sat around the CAMERA. The line
+    // now runs from the pad to the north lip; the ring moved to the east arm.
+    { line: { a: [0, STATION_Y + 1.1, 39], b: [0, STATION_Y + 1.1, 33.5], n: 6 } },
+    { ring: { c: [21, 0, 42], r: 4.0, n: 6, y: STATION_Y + 1.1 } },
     // BEAT 1 — the sunken isle: the secret pays in coins as well as a crest. (5)
     { ring: { c: [0, 0, 68], r: 3.6, n: 5, y: SECRET_Y + 1.1 } },
     // BEAT 2 — an arc over each sleeper gap: 1.30 m peaks, which is where a

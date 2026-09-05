@@ -645,7 +645,11 @@ export default {
    * --------------------------------------------------------------------- */
   coins: [
     // BEAT 1 — out of spawn, past the pedestals, to the chute mouth. (10)
-    ...trailCoins([[0, -30], [2, -27], [3, -24], [4, -22.5]], 10, 1.1),
+    // Data lane 2026-09-04: the game boots at checkpoints[0], not `spawn`, so
+    // this trail used to start BEHIND the player, between hero and camera
+    // (metre-wide pancakes in the first frame). It now enters from the side
+    // and joins the path at the pad.
+    ...trailCoins([[-3.5, -24.2], [-1.0, -25.0], [1.8, -24.6], [4, -22.5]], 10, 1.1),
     // BEAT 2 — the upper flume, then the arc across GAP A. (6 + 5 + 6)
     deckLine(U0, U2, 6, 1.15),
     ...arcCoins(up(U2, 1.0), up(U3, 1.0), 1.3, 5),
@@ -708,11 +712,17 @@ export default {
      * both pedestals, the race pad and the peak you will come back for.
      * ===================================================================== */
 
-    { kind: 'deco', kindOf: 'sign', p: on(2.6, -28.4, 1.15), s: [0.14, 1.7, 1.2], mat: 'wood', tint: ROCK },
-    { kind: 'deco', kindOf: 'post', p: on(2.6, -28.4, 0.65), s: [0.16, 1.3, 0.16], mat: 'wood', tint: 0x4c5462 },
-    { kind: 'text', p: [2.6, r2(SHELF_Y + 1.95), -28.4], rot: [0, 0, 0], text: 'GLACIER SLIDE', size: 0.58, color: 0x123049 },
-    { kind: 'text', p: [2.6, r2(SHELF_Y + 1.42), -28.4], rot: [0, 0, 0], text: 'CROUCH AT SPEED TO TUCK  ·  THE ICE KEEPS THE REST', size: 0.22, color: 0x2c5878 },
-    { kind: 'text', p: [2.6, r2(SHELF_Y + 1.05), -28.4], rot: [0, 0, 0], text: 'THE CHUTE ONLY GOES DOWN. EVERYTHING ELSE GOES UP.', size: 0.22, color: 0x2c5878 },
+    /* Data lane 2026-09-04. The game boots at cp-summit [0, 30, -26] facing yaw
+       -2.58 (south-east, down the chute), so a board at (2.6, -28.4) with rot 0
+       stood BEHIND the player showing the camera its blank back (12-course
+       validation shot). Now 2.8 m ahead on the right kerb, yawed to face the
+       spawn: a `text` with rot y = θ faces (sin θ, cos θ), so θ = the spawn
+       yaw points it straight back at the pad. */
+    { kind: 'deco', kindOf: 'sign', p: on(-0.2, -22.6, 1.15), s: [0.14, 1.7, 1.2], rot: [0, -2.58, 0], mat: 'wood', tint: ROCK },
+    { kind: 'deco', kindOf: 'post', p: on(-0.2, -22.6, 0.65), s: [0.16, 1.3, 0.16], mat: 'wood', tint: 0x4c5462 },
+    { kind: 'text', p: [-0.2, r2(SHELF_Y + 1.95), -22.6], rot: [0, -2.58, 0], text: 'GLACIER SLIDE', size: 0.58, color: 0x123049 },
+    { kind: 'text', p: [-0.2, r2(SHELF_Y + 1.42), -22.6], rot: [0, -2.58, 0], text: 'CROUCH AT SPEED TO TUCK  ·  THE ICE KEEPS THE REST', size: 0.22, color: 0x2c5878 },
+    { kind: 'text', p: [-0.2, r2(SHELF_Y + 1.05), -22.6], rot: [0, -2.58, 0], text: 'THE CHUTE ONLY GOES DOWN. EVERYTHING ELSE GOES UP.', size: 0.22, color: 0x2c5878 },
 
     // The two pedestals the SIGILS and HUNDRED COINS crests rise from.
     { kind: 'pedestal', p: on(0, -34, 0), mat: 'ice', tint: ICE, glow: GOLD },
@@ -1163,7 +1173,10 @@ export default {
     // WADDLERS on the summit shelf and the mesa. Side contact is knockback and
     // a 0.4 s stun, never death (contract §23) — which on a shelf with a 14 m
     // flume off the end of it is quite enough consequence.
-    { kind: 'bumbler', path: [on(-5, -26), on(5, -26), on(6, -33), on(-5, -33), on(-5, -26)], speed: 1.5, tint: 0x2b4c72 },
+    // Data lane 2026-09-04: this loop ran THROUGH cp-summit [0, -26] — the
+    // validation shot caught the hero already shoved 2.2 m off the pad at
+    // 2.7 m/s, three seconds after boot. Now it circles the shelf pedestal.
+    { kind: 'bumbler', path: [on(-4, -31), on(4, -31), on(4, -36), on(-4, -36), on(-4, -31)], speed: 1.5, tint: 0x2b4c72 },
     { kind: 'bumbler', path: [on(32, -4), on(39, -5), on(39, -10), on(32, -8), on(32, -4)], speed: 1.6, tint: 0x2b4c72 },
     { kind: 'bumbler', path: [on(-2, 30), on(8, 31), on(9, 24), on(-2, 25), on(-2, 30)], speed: 1.4, tint: 0x2b4c72 },
     // SNOW OWLS. One patrols the high span of the flume and swoops at anyone

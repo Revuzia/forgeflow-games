@@ -462,7 +462,11 @@ export default {
    * 144 m course collapsed to ONE chunk, so the 36 m sun-shadow frustum drew the
    * whole static merge every frame). 4 = 2 x 2 quadrants: measured 2026-09-04,
    * group-1 validator, see the note in course.js. */
-  chunks: 9,
+  /* Data lane 2026-09-04: 9 -> 16 (the course.js ceiling). Measured at the
+   * spawn with _harness/_g1_triattr2.py: the centre column's two static
+   * chunks drew 54.6k triangles, 24 of them shadow-cast, because a 46 m cell
+   * cannot leave the 36 m shadow frustum; 35 m cells can. */
+  chunks: 16,
 
   intro: {
     /* One sentence: where you are, and what the course is about. game.js
@@ -485,7 +489,12 @@ export default {
     kind: 'terrain',
     origin: [-70, -70],
     size: [140, 140],
-    res: 1.0,
+    /* 1.25 m samples (was 1.0): 39.2k -> 25.3k triangles at EVERY station,
+       the single largest fixed cost on the course. HEIGHTS is a closed-form
+       function, so the flats the checkpoints and pads sit on are sampled
+       exactly at any grid pitch; reachcheck re-walks the whole course on
+       the same def (data lane, 2026-09-04). */
+    res: 1.25,
     surface: 'grass',
     heights: HEIGHTS,
     /* The grass is a camera-local ring (terrain.js buildGrass): `density` is
@@ -516,6 +525,10 @@ export default {
       kind: 'water', kind2: 'lake',
       p: [0, RIVER_Y - 3.0, 27], s: [140, 6.0, 26],
       flow: [1.0, 0], tint: WATER_C,
+      /* 1.4 m quads (the verdant-2 moat precedent): normals are analytic, so
+         the mesh only has to carry the Gerstner displacement — 9.0k -> ~3.7k
+         triangles at every station (data lane, measured 2026-09-04). */
+      res: 1.4,
     },
   ],
 
@@ -628,7 +641,11 @@ export default {
    * --------------------------------------------------------------------- */
   coins: [
     // BEAT 1 — the cart track out of spawn, down to the quay. (10)
-    ...trailCoins([[0, 56], [-2, 50], [1, 46], [0, 40]], 10, 1.1),
+    // Data lane 2026-09-04: the game boots at checkpoints[0], not `spawn`, so
+    // this trail used to start BEHIND the player, between hero and camera
+    // (metre-wide pancakes in the first frame). It now enters from the side
+    // and joins the path at the pad.
+    ...trailCoins([[-7, 46], [-4, 44], [-1.5, 41.5], [0, 39]], 10, 1.1),
     // BEAT 1 — a ring in the paddock behind the pedestal, for looking around. (6)
     { ring: { c: [-12, 0, 50], r: 3.6, n: 6, y: 3.20 } },
     // BEAT 2 — the arc across the first log gap. Peak 1.3 m, which is where a
@@ -1105,8 +1122,12 @@ export default {
     // Field hedges: the terraced-farm silhouette, and the only thing between
     // the cart tracks and the drop into the river.
     ...fenceRun([[-24, 12], [-14, 9], [-4, 8], [6, 9], [16, 12]]),
-    ...fenceRun([[-26, -6], [-18, -9], [-10, -9], [-2, -7]]),
-    ...fenceRun([[14, -12], [22, -14], [30, -16], [36, -20]]),
+    /* Data lane 2026-09-04: the two ridge-side hedges run in two bays each
+       instead of three (the river-drop hedge above keeps all four). Every
+       fence post is a lathe cap + an iron ring (~170 triangles), so posts,
+       not length, are what a hedge costs; the silhouette keeps its ends. */
+    ...fenceRun([[-26, -6], [-14, -9], [-2, -7]]),
+    ...fenceRun([[14, -12], [26, -15], [36, -20]]),
   ],
 
   /* ------------------------------------------------------------------------

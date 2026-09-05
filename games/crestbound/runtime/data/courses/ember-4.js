@@ -634,7 +634,11 @@ export default {
    * --------------------------------------------------------------------- */
   coins: [
     // BEAT 1 — the caravan road out of the camp, over the saddle. (10)
-    ...trailCoins([[0, 53], [-3, 46], [-8, 40], [-14, 36]], 10, 1.1),
+    // Data lane 2026-09-04: the game boots at checkpoints[0], not `spawn`, so
+    // this trail used to start BEHIND the player, between hero and camera
+    // (metre-wide pancakes in the first frame). It now enters from the side
+    // and joins the path at the pad.
+    ...trailCoins([[-3, 46.4], [-6, 43], [-10, 39], [-14, 36]], 10, 1.1),
     // BEAT 1 — an ARC straight across the west pool: the price of sigil 1. (6)
     ...arcCoins([-25.0, 2.3, 34.0], [-15.0, 2.3, 34.0], 1.8, 6),
     // BEAT 1 — the same over the east pool, so the lesson lands twice. (6)

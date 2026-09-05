@@ -605,7 +605,11 @@ export default {
    * --------------------------------------------------------------------- */
   coins: [
     // BEAT 1 — the mown path from spawn down to the water. (10)
-    ...trailCoins([[0, 57], [-2, 53], [1, 50], [0, 47]], 10, 1.1),
+    // Data lane 2026-09-04: the game boots at checkpoints[0], not `spawn`, so
+    // this trail used to start BEHIND the player, between hero and camera
+    // (metre-wide pancakes in the first frame). It now enters from the side
+    // and joins the path at the pad.
+    ...trailCoins([[-5.5, 55.5], [-2, 53.4], [1, 50], [0, 47]], 10, 1.1),
     // BEAT 2 — the arc over each causeway gap; peak 1.2 m, exactly where a held
     // single jump puts you. (4 + 4)
     ...arcCoins([0, QUAY_TOP + 1.0, 44.7], [0, QUAY_TOP + 1.0, 43.0], 1.2, 4),

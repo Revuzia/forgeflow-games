@@ -346,7 +346,9 @@ export default {
    * --------------------------------------------------------------------- */
   coins: [
     // BEAT 1 — the causeway from spawn to the portal. (10)
-    { line: { a: [0, 1.20, 30], b: [0, 1.20, 15], n: 10 } },
+    // Data lane 2026-09-04: the game boots at cp-yard (z 20), not `spawn` (z 30);
+    // half this line hung between hero and camera. Now from the pad to the yard.
+    { line: { a: [0, 1.20, 17.5], b: [0, 1.20, 4.5], n: 10 } },
     // BEAT 1 — a ring around the great yard cog. (8)
     { ring: { c: [-16, 0, 14], r: 4.0, n: 8, y: 1.60 } },
     // BEAT 1 — down the chain belt, against the belt. (6)
@@ -415,11 +417,16 @@ export default {
     { kind: 'platform', p: deck(-37.4, 1.40, 0, [1.2, 1.4, 76]), s: [1.2, 1.4, 76], mat: 'stone', tint: LIME },
     { kind: 'platform', p: deck(37.4, 1.40, 0, [1.2, 1.4, 76]), s: [1.2, 1.4, 76], mat: 'stone', tint: LIME },
 
-    { kind: 'text', p: [3.4, 2.70, 28], rot: [0, 0, 0], text: 'GEARHEART TOWER', size: 0.60, color: 0x2b4c5c },
-    { kind: 'text', p: [3.4, 2.16, 28], rot: [0, 0, 0], text: 'EASE THE STICK TO WALK  ·  ALL THE WAY TO RUN', size: 0.22, color: 0x3f6f80 },
-    { kind: 'text', p: [3.4, 1.80, 28], rot: [0, 0, 0], text: 'THE TOWER TURNS ON A BEAT  ·  SO DO YOU', size: 0.22, color: 0x3f6f80 },
-    { kind: 'deco', kindOf: 'sign', p: [3.4, 1.15, 28], s: [0.14, 1.7, 1.2], mat: 'metal', tint: IRON },
-    { kind: 'deco', kindOf: 'post', p: [3.4, 0.65, 28], s: [0.16, 1.3, 0.16], mat: 'metal', tint: IRON },
+    /* The spawn signs. The game boots at checkpoints[0] (game.js _spawnFor(0)),
+       which is cp-yard at z 20, not `spawn` at z 30 — so at z 28 this board
+       stood 8 m BEHIND the player's back on the first frame (data lane,
+       _harness/_data_spawnscan.mjs, 2026-09-04: "signs<=6m: NONE"). Now 2.6 m
+       ahead of cp-yard on the causeway's right kerb, facing the spawn. */
+    { kind: 'text', p: [3.4, 2.70, 17.4], rot: [0, 0, 0], text: 'GEARHEART TOWER', size: 0.60, color: 0x2b4c5c },
+    { kind: 'text', p: [3.4, 2.16, 17.4], rot: [0, 0, 0], text: 'EASE THE STICK TO WALK  ·  ALL THE WAY TO RUN', size: 0.22, color: 0x3f6f80 },
+    { kind: 'text', p: [3.4, 1.80, 17.4], rot: [0, 0, 0], text: 'THE TOWER TURNS ON A BEAT  ·  SO DO YOU', size: 0.22, color: 0x3f6f80 },
+    { kind: 'deco', kindOf: 'sign', p: [3.4, 1.15, 17.4], s: [0.14, 1.7, 1.2], mat: 'metal', tint: IRON },
+    { kind: 'deco', kindOf: 'post', p: [3.4, 0.65, 17.4], s: [0.16, 1.3, 0.16], mat: 'metal', tint: IRON },
 
     // The pedestal the HUNDRED COINS crest rises from.
     { kind: 'pedestal', p: [-8.0, YARD, 20.0], mat: 'stone', tint: LIME, glow: GOLD },

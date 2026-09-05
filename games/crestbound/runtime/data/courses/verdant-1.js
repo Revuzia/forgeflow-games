@@ -562,7 +562,11 @@ export default {
    * --------------------------------------------------------------------- */
   coins: [
     // BEAT 1 — the mown path out of spawn, over the swell, to the bridge. (10)
-    ...trailCoins([[0, 45], [-2, 40], [1, 36], [0, 32]], 10, 1.1),
+    // Data lane 2026-09-04: the game boots at checkpoints[0], not `spawn`, so
+    // this trail used to start BEHIND the player, between hero and camera
+    // (metre-wide pancakes in the first frame). It now enters from the side
+    // and joins the path at the pad.
+    ...trailCoins([[-5, 43], [-2, 40.6], [1, 36], [0, 32]], 10, 1.1),
     // BEAT 1 — an ARC over the meadow rock: the first thing that asks for a jump. (6)
     ...arcCoins(on(-14, 34, 1.0), on(-8, 34, 1.0), 1.6, 6),
     // BEAT 2 — the arc across the hole in the bridge. Peak 1.4 m, which is

@@ -614,7 +614,11 @@ export default {
    * --------------------------------------------------------------------- */
   coins: [
     // BEAT 1 — the causeway off the shore to the wading shelf. (10)
-    ...trailCoins([[0, 47], [-1, 42], [1, 38], [0, 34]], 10, 1.1),
+    // Data lane 2026-09-04: the game boots at checkpoints[0], not `spawn`, so
+    // this trail used to start BEHIND the player, between hero and camera
+    // (metre-wide pancakes in the first frame). It now enters from the side
+    // and joins the path at the pad.
+    ...trailCoins([[-4.5, 44], [-1.5, 42], [1, 38], [0, 34]], 10, 1.1),
     // BEAT 1 — the arc off the shelf into the water: the first dive. (6)
     ...arcCoins(on(0, 32, 1.0), [0, -0.6, 26], 1.4, 6),
     // BEAT 2 — a ring on the outer reef bar, just under the surface. (8)

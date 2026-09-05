@@ -1107,7 +1107,10 @@ export default {
       telegraph: 0.5, tint: 0x3a4a5c,
     },
     // BUMBLERS in scarves. Side contact = knockback, not death (contract §23).
-    { kind: 'bumbler', path: [[-4, TERRACE_Y, 60], [4, TERRACE_Y, 62], [2, TERRACE_Y, 65], [-4, TERRACE_Y, 60]], speed: 1.4 },
+    // Data lane 2026-09-04: this loop ran 1.5-6.5 m BEHIND cp-shore, i.e. through
+    // the spawn camera's corridor — the validation shot has it filling the
+    // bottom-right of the first frame. Same shore, now east of the pad.
+    { kind: 'bumbler', path: [[7, TERRACE_Y, 60], [12, TERRACE_Y, 62], [11, TERRACE_Y, 66], [6, TERRACE_Y, 65], [7, TERRACE_Y, 60]], speed: 1.4 },
     { kind: 'bumbler', path: [[-5, VILLAGE_Y, 6], [5, VILLAGE_Y, 6], [5, VILLAGE_Y, 11], [-5, VILLAGE_Y, 11], [-5, VILLAGE_Y, 6]], speed: 1.6 },
     { kind: 'bumbler', path: [[-5, GREEN_Y, -47], [-3, GREEN_Y, -51], [-6, GREEN_Y, -50], [-5, GREEN_Y, -47]], speed: 1.5 },
     // SNOW OWLS. One over the lake (it swoops at anyone on the ice), one
