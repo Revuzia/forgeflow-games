@@ -1323,34 +1323,32 @@ void main() {
 `;
 
 const BLOB_FRAG = /* glsl */`
-uniform vec3  uColor;
-uniform float uOpacity;
-uniform float uSoft;     // 0 = hard disc, 1 = pure gradient
+uniform vec3  uColor;    // the MULTIPLIER at full coverage: the sky-lit shade, luminance ~0.30
+uniform float uOpacity;  // coverage 0..1 (fades with altitude)
+uniform float uSoft;     // 0 = contact (flat plateau + short penumbra), 1 = airborne gradient
 varying vec2 vUv;
 void main() {
   vec2 d = vUv - 0.5;
   float r = clamp(length(d) * 2.0, 0.0, 1.0);
-  // two-lobe falloff: a dense core under the feet, a soft ambient skirt.
-  /* ROUND 5 — THE BLOB WAS A HOLE IN THE GROUND.
-   * Critic, _shots/verdant-1/crest-coins.png (zoom _shots/_r3_v1_shadowblade.png
-   * at 6x): "shadows are black holes that nothing in them respects. Blob-shadow
-   * interior measures [11,20,13] (~0.07 lum) with a HARD aliased crescent edge,
-   * no penumbra and no coloured bounce at all — a morning meadow's shade should
-   * carry the sky's blue."
-   * Three things made that: the core lobe reached 0.72 alpha over an opacity of
-   * 0.60 (so 43 % of a near-black colour straight over the grass), the core's
-   * falloff at uSoft 0.25 is nearly a step, and the colour was the theme FOG at
-   * 13 % — a hole, not a shadow. Shade is not the absence of light: it is the
-   * SKY without the sun, so the tint now comes from the theme's own sky/fill
-   * (setTheme) and the alpha profile is a real penumbra — a squared core that
-   * never saturates over a wide skirt, so the edge has a gradient a couple of
-   * hundred millimetres wide instead of an aliased crescent. */
-  float core = 1.0 - smoothstep(0.0, mix(0.62, 1.05, uSoft), r);
-  core *= core;
-  float skirt = 1.0 - smoothstep(0.0, 1.10, r);
-  float a = (core * 0.56 + skirt * 0.30) * uOpacity;
-  if (a <= 0.003) discard;
-  gl_FragColor = vec4(uColor, a);
+  /* LIGHT LANE r1 (critic C3 "NO CAST SHADOW UNDER NIM at the checkpoint pads",
+   * "never suppress the contact blob over the pad - instead MULTIPLY it so the
+   * darkest point under the feet is <= 0.55 of the pad albedo").
+   *
+   * The old blob was an alpha-blended disc of a dark colour at 0.48 peak alpha:
+   * on a self-lit pad that is a 15 % dip the ACES curve then compresses to
+   * nothing, and its core fell to a quarter strength 35 cm from the centre.
+   * This one is a MULTIPLIER (MultiplyBlending: dst * src): the ground keeps
+   * its own texture, its emissive lift and everything the ring adds, and is
+   * darkened toward the shade colour by coverage. Coverage is a PLATEAU under
+   * the feet (r < ~0.45 of the radius - the boots and the AO they cast) with a
+   * real penumbra outside it, so the point 0.3 m behind the heels is still
+   * inside the plateau. Airborne (uSoft -> 1) the plateau shrinks to a point
+   * and the whole disc becomes a soft gradient, as before. */
+  float core = 1.0 - smoothstep(mix(0.44, 0.0, uSoft), mix(0.98, 1.0, uSoft), r);
+  float skirt = 1.0 - smoothstep(0.50, 1.0, r);
+  float a = clamp(core * 0.86 + skirt * 0.14, 0.0, 1.0) * uOpacity;
+  if (a <= 0.004) discard;
+  gl_FragColor = vec4(mix(vec3(1.0), uColor, a), 1.0);
 }
 `;
 
@@ -1359,6 +1357,9 @@ void main() {
  * Its whole job is to answer "where will I land" one frame before the player
  * asks, so it is projected by a real raycast and never a fixed plane.
  */
+/** Luminance of the contact shadow's multiplier at full coverage (see BLOB_FRAG). */
+const BLOB_SHADE_LUM = 0.30;
+
 class ShadowBlob {
   /**
    * @param {THREE.Scene} scene
@@ -1385,6 +1386,9 @@ class ShadowBlob {
       vertexShader: BLOB_VERT,
       fragmentShader: BLOB_FRAG,
       transparent: true,
+      /* dst * src: a shade, not a paint (see BLOB_FRAG). Alpha is (ZERO,
+       * SRC_ALPHA) with src.a = 1, so the target's alpha is untouched. */
+      blending: THREE.MultiplyBlending,
       depthWrite: false,
       depthTest: true,
       side: THREE.DoubleSide,
@@ -1411,6 +1415,58 @@ class ShadowBlob {
     this._op = 0;
     this._scale = this.radius * 2;
     this._hit = false;
+    /* checkpoint pad footprint (see _padTop): read once per course off the
+     * pad InstancedMesh's geometry, so a re-authored plinth is followed */
+    this._padMesh = null;
+    this._padR = 1.55;
+    this._padH = 0.14;
+  }
+
+  /**
+   * LIGHT LANE r1 - WHY THE BLOB NEVER SHOWED ON A CHECKPOINT PAD.
+   * Measured (`_harness/_light_probe.py`, verdant-1 cp1): the broadphase ray
+   * lands on the deck the pad sits on (y 4.40, where the controller stands),
+   * but the pad is a 0.14 m plinth with no collider (course.js chamferDisc),
+   * so its TOP is at 4.54 and the blob at 4.42 was 12 cm INSIDE the stone,
+   * failing the depth test everywhere. Nim's boots stand 12-14 cm inside the
+   * plinth for the same reason (out of this lane: the pad needs a collider or a
+   * flush height). Until then the contact lifts itself to the pad top whenever
+   * the feet are inside a pad's footprint - the physics world publishes the
+   * checkpoints, and the pad's own geometry gives the radius/height.
+   * Allocation-free after the first course.
+   * @returns {number} the ground height the blob should sit on
+   */
+  _padTop(x, z, gy, world) {
+    const cps = world && world.checkpoints;
+    if (!cps || !cps.length) return gy;
+    const course = world.course;
+    const base = course && course._cpBase ? course._cpBase : null;
+    if (base !== this._padMesh) {
+      this._padMesh = base;
+      let r = 1.55, h = 0.14;
+      try {
+        const g = base && base.geometry;
+        if (g) {
+          if (!g.boundingBox) g.computeBoundingBox();
+          const bb = g.boundingBox;
+          if (bb && isFinite(bb.max.x) && isFinite(bb.max.y)) { r = Math.max(0.5, bb.max.x); h = Math.max(0, bb.max.y); }
+        }
+      } catch (e) { /* keep the defaults */ }
+      this._padR = r; this._padH = h;
+    }
+    if (this._padH <= 0.005) return gy;
+    const r2 = this._padR * this._padR;
+    let top = gy;
+    for (let i = 0; i < cps.length; i++) {
+      const p = cps[i] && cps[i].pos;
+      if (!p) continue;
+      const dx = x - p.x, dz = z - p.z;
+      if (dx * dx + dz * dz > r2) continue;
+      if (Math.abs(gy - p.y) > 0.5) continue;      // a pad on another floor
+      const t = p.y + this._padH;
+      if (t > top) top = t;
+    }
+    return top;
   }
 
   setTheme(theme) {
@@ -1434,7 +1490,14 @@ class ShadowBlob {
     if (hemi !== undefined && hemi !== null) _col1.set(hemi), _col0.lerp(_col1, 0.35);
     if (fog !== undefined && fog !== null) _col1.set(fog), _col0.lerp(_col1, 0.42);
     this.shadeColor.copy(_col0);
-    this.mat.uniforms.uColor.value.copy(_col0).multiplyScalar(0.40);
+    /* The uniform is the MULTIPLIER at full coverage, so its luminance IS the
+     * darkest the ground can go under the feet. 0.30: a pad at HDR 1.2 lands
+     * at ~0.36, which ACES + sRGB put ~30 % under the lit pad in the frame -
+     * the contact the critic asked to measure. The hue stays the sky's. */
+    const lum = 0.2126 * _col0.r + 0.7152 * _col0.g + 0.0722 * _col0.b;
+    if (lum > 1e-4) _col0.multiplyScalar(BLOB_SHADE_LUM / lum);
+    _col0.r = Math.min(0.9, _col0.r); _col0.g = Math.min(0.9, _col0.g); _col0.b = Math.min(0.9, _col0.b);
+    this.mat.uniforms.uColor.value.copy(_col0);
   }
 
   setVisible(v) {
@@ -1468,8 +1531,10 @@ class ShadowBlob {
     }
 
     // Where the ray met the world, and how far above it we are.
-    const gy = pos.y + 0.30 - _rayHit.t;
-    const n = _rayHit.normal;
+    let gy = pos.y + 0.30 - _rayHit.t;
+    let n = _rayHit.normal;
+    const padTop = this._padTop(pos.x, pos.z, gy, world);
+    if (padTop > gy) { gy = padTop; n = UP; }
     const dist = Math.max(0, pos.y - gy);
     const t = clamp01(dist / this.maxDist);
     const fade = 1 - smoothstep(0, 1, t);
@@ -1866,7 +1931,10 @@ export class Hero {
     // ---- shadow ----------------------------------------------------------
     /* opacity 0.42 -> 0.56 (2026-09-04): the contact blob is the one shadow
      * that survives a glowing checkpoint pad under Nim's boots. */
-    this.shadowBlob = new ShadowBlob(scene, { radius: 0.50, maxDist: 7.0, opacity: 0.56 });
+    /* LIGHT LANE r1: 0.50 m / 0.56 -> 0.62 m / 1.0. The blob is now a
+     * multiplier with a plateau (BLOB_FRAG), so "opacity" is full coverage
+     * under the feet and the radius is the AO reach, not a paint radius. */
+    this.shadowBlob = new ShadowBlob(scene, { radius: 0.62, maxDist: 7.0, opacity: 1.0 });
 
     // ---- animator state --------------------------------------------------
     this._anim = 'idle';
@@ -3158,22 +3226,36 @@ export class Hero {
         'uniform vec4 uCbHeroSky;\nuniform vec4 uCbHeroFill;\n' +
         shader.fragmentShader.replace(AO, AO + `
   {
-    // CRESTBOUND hero rim + sky fresnel + camera fill (player/hero.js _installRim)
-    float cbNV = 1.0 - saturate( dot( geometryNormal, geometryViewDir ) );
-    // (1-NV)^2, not ^3: at the low tier's 0.60 scale a cubic rim is a one-pixel
-    // line the upsample erases; the square is a 2-3 px band that survives it.
-    float cbF = cbNV * cbNV;
+    // CRESTBOUND hero rim + sky back light + camera fill (player/hero.js _installRim)
+    // The SMOOTH normal, not the bump-perturbed one: a rim that follows the
+    // weave of the coat is a scribble, a rim that follows the silhouette is a rim.
+    vec3 cbN = normalize( nonPerturbedNormal );
+    float cbNV = saturate( dot( cbN, geometryViewDir ) );
+    // LIGHT LANE r1 (critic: "Nim has NO RIM in any of the 147 frames"). The old
+    // (1-NV)^2 fresnel was full only in the last ~4 % of the silhouette radius,
+    // which at the 0.60 tier scale is under one pixel. This is a stylised BAND:
+    // full over the outer fifth of the radius (N.V < 0.45), gone by N.V 0.80.
+    float cbF = smoothstep( 0.20, 0.55, 1.0 - cbNV );
+    // the theme's own back light gives the rim its side (world direction)
     vec3 cbRd = normalize( ( viewMatrix * vec4( uCbHeroRimDir, 0.0 ) ).xyz );
-    float cbBack = saturate( dot( geometryNormal, cbRd ) * 0.55 + 0.45 );
+    float cbBack = saturate( dot( cbN, cbRd ) * 0.5 + 0.5 );
     reflectedLight.indirectSpecular += uCbHeroRim.rgb * ( cbF * cbBack * uCbHeroRim.a );
-    // sky fresnel: the same grazing term, ungated, in the dome's own colour
-    reflectedLight.indirectSpecular += uCbHeroSky.rgb * ( cbF * cbNV * uCbHeroSky.a );
+    // a CAMERA-PINNED back light, upper-right-behind in view space, in the
+    // dome's colour: the hair light and the shoulder rim are on screen whichever
+    // way Nim or the rig happens to face
+    vec3 cbPin = normalize( vec3( 0.42, 0.62, -0.66 ) );
+    float cbPinW = saturate( dot( cbN, cbPin ) * 0.65 + 0.35 );
+    // 40 % albedo-tinted: light, so the dark teal trim still rims, but the
+    // near-black hair takes a third less, so the hair light is a fringe and
+    // not a white cap (r1 crops, keep/verdant)
+    vec3 cbTint = mix( vec3( 1.0 ), saturate( diffuseColor.rgb * 2.2 ), 0.4 );
+    reflectedLight.indirectSpecular += uCbHeroSky.rgb * cbTint * ( cbF * cbPinW * uCbHeroSky.a );
     // camera-side wrapped lambert, albedo-tinted like a real diffuse term
     float cbWrap = saturate( dot( geometryNormal, geometryViewDir ) * 0.55 + 0.45 );
     reflectedLight.indirectDiffuse += diffuseColor.rgb * uCbHeroFill.rgb * ( cbWrap * uCbHeroFill.a * RECIPROCAL_PI );
   }`);
     };
-    mat.customProgramCacheKey = () => 'cb-hero-rim2';
+    mat.customProgramCacheKey = () => 'cb-hero-rim3';
     mat.needsUpdate = true;
   }
 
@@ -3277,7 +3359,12 @@ export class Hero {
       const R = def && def.lights && def.lights.rim;
       const K = def && def.lights && def.lights.key;
       _col0.set(R && R.color !== undefined ? R.color : 0xfff2d8);
-      const strength = R && typeof R.intensity === 'number' ? Math.min(1.4, 0.35 + R.intensity * 0.30) : 0.8;
+      /* `lights.heroRim` (themes.js): `back` = the theme back light's share of
+       * the band, `intensity` = the camera-pinned sky rim. Both are HDR adds
+       * on the coat's indirect specular before ACES. */
+      const HR = def && def.lights && def.lights.heroRim;
+      const strength = HR && typeof HR.back === 'number' ? Math.max(0, Math.min(3, HR.back))
+        : (R && typeof R.intensity === 'number' ? Math.min(1.2, 0.25 + R.intensity * 0.25) : 0.7);
       this._rimU.uCbHeroRim.value.set(_col0.r, _col0.g, _col0.b, strength);
       const d = (R && Array.isArray(R.dir) && R.dir.length >= 3) ? R.dir
         : (K && Array.isArray(K.dir) && K.dir.length >= 3 ? [K.dir[2], 0.35, -K.dir[0]] : [0.15, 0.35, -0.92]);
@@ -3300,7 +3387,14 @@ export class Hero {
         _col0.lerp(_col1.setRGB(1, 1, 1), 0.22);
       }
       const F = def && def.lights && def.lights.heroFill;
-      const skyStrength = F && typeof F.sky === 'number' ? Math.max(0, Math.min(1.2, F.sky)) : 0.35;
+      // lift the dome colour to a rim that can read over a sunlit coat
+      for (let i = 0; i < 6; i++) {
+        const L = 0.2126 * _col0.r + 0.7152 * _col0.g + 0.0722 * _col0.b;
+        if (L >= 0.55) break;
+        _col0.lerp(_col1.setRGB(1, 1, 1), 0.25);
+      }
+      const skyStrength = HR && typeof HR.intensity === 'number' ? Math.max(0, Math.min(4, HR.intensity))
+        : (F && typeof F.sky === 'number' ? Math.max(0, Math.min(1.2, F.sky)) * 3.5 : 1.3);
       this._rimU.uCbHeroSky.value.set(_col0.r, _col0.g, _col0.b, skyStrength);
       if (F && F.color !== undefined) _col0.set(F.color);
       else {

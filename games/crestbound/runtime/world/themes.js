@@ -396,6 +396,12 @@ export const THEMES = {
        * key is BEHIND Nim at spawn, so without this the side the player sees
        * is lit by nothing but the fill. Amber, ~3:1 under the key. */
       heroFill: { color: 0xffc98a, intensity: 0.95, sky: 0.40 },
+      /* LIGHT LANE r1 (critic "NO RIM in any of the 147 frames"): the hero's
+       * stylised silhouette band (player/hero.js _installRim). `intensity` is
+       * the camera-pinned rim in the dome's colour, `back` the share the theme
+       * back light adds on its own side. The Keep's dome is a dim dusk band, so
+       * the pinned rim carries most of it. */
+      heroRim: { intensity: 1.55, back: 0.90 },
     },
 
     /* Warm/cool split lives in the grade too, not only in the lights: gain and
@@ -812,6 +818,8 @@ export const THEMES = {
       ambient: { color: 0x7d8a68, intensity: 0.36 },
       hemi: { skyColor: 0x8cbcec, groundColor: 0x6e7444, intensity: 0.82 },
       heroFill: { color: 0xe8eefc, intensity: 1.10, sky: 0.35 },
+      /* a morning sky rim over a sunlit coat has to clear the key (3.90) */
+      heroRim: { intensity: 1.70, back: 0.80 },
     },
 
     grade: {
@@ -1010,6 +1018,8 @@ export const THEMES = {
       ambient: { color: 0x3a1a0c, intensity: 0.50 },
       hemi: { skyColor: 0x4a2c20, groundColor: 0xff4a0a, intensity: 1.10 },
       heroFill: { color: 0xffb070, intensity: 0.80, sky: 0.40 },
+      /* the soot dome is lifted in hero.js; the amber back light does the rest */
+      heroRim: { intensity: 1.40, back: 1.10 },
     },
 
     grade: {
@@ -1174,6 +1184,7 @@ export const THEMES = {
       ambient: { color: 0x2c3d55, intensity: 0.52 },
       hemi: { skyColor: 0x486a96, groundColor: 0x9fb0c4, intensity: 0.95 },
       heroFill: { color: 0xdde8ff, intensity: 0.85, sky: 0.35 },
+      heroRim: { intensity: 1.50, back: 0.95 },
     },
 
     grade: {
@@ -1329,6 +1340,7 @@ export const THEMES = {
       ambient: { color: 0x5f96a8, intensity: 0.56 },
       hemi: { skyColor: 0x8fd0f0, groundColor: 0x2f9fb8, intensity: 1.20 },
       heroFill: { color: 0xfff0d8, intensity: 0.95, sky: 0.30 },
+      heroRim: { intensity: 1.60, back: 0.75 },
     },
 
     grade: {
