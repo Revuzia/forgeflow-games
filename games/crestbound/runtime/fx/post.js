@@ -382,6 +382,11 @@ void main() {
     // the roll-off is already fully held (the old linear hw*0.85 left the
     // jets 40 % per-channel ACES = the cream slab); the white drift is
     // hw^3, so only a value far past the asymptote goes white-hot.
+    // r2 (critic: "crest gold still clips to a white ball"): the drift is
+    // now smoothstep(0.55, 1, hw) x 0.75 — a crest at ~10x (hw 0.74) drifts
+    // 28 % toward hhL instead of 41 %, a 22x sun (hw 0.87) 60 % instead of
+    // 66 %, and NOTHING reaches fully white through this path: gold stays
+    // gold, the sun stays a warm disc.
     // Every term is NaN-proof: col is >= 0 and finite (scrubbed above), the
     // divisors are floored, and a NaN k (defensive) skips the hold.
     if ( hw > 0.0 && uHueHold > 0.0 ) {
@@ -393,7 +398,7 @@ void main() {
       if ( kM == kM && kL == kL ) {
         vec3 hhM = cp * kM;
         vec3 hhL = min( cp * kL, vec3( 1.0 ) );
-        vec3 hh = mix( hhM, hhL, hw * hw * hw );
+        vec3 hh = mix( hhM, hhL, smoothstep( 0.55, 1.0, hw ) * 0.75 );
         float hwt = smoothstep( 0.0, 0.35, hw ) * uHueHold;
         gl_FragColor.rgb = mix( gl_FragColor.rgb, hh, hwt );
       }
@@ -495,6 +500,38 @@ export const DEFAULT_BLOOM = { strength: 0.62, radius: 0.55, threshold: 0.85, kn
  * through the mip chain. Presets may LOWER it via `quality.bloomClamp`.
  */
 export const DEFAULT_BLOOM_CLAMP = 16;
+
+/**
+ * The bloom input ceiling as a multiple of the theme's bloom THRESHOLD
+ * (2026-09-04, image lane r2). A fixed ceiling of 12-16 let ONE hot surface
+ * feed the mip chain ten times the threshold: the keep's dusk sun disc (a 22x
+ * core, clamped to 12 over a 1.30 threshold) put 10.7 units into every mip,
+ * and at the coarse end (weights .14 / .045, ~60 x 34 texels) that is a
+ * +0.27 linear lift over the WHOLE frame — the grey-yellow veil that crushed
+ * courtyard/tower contrast at keep cp3/cp4/vista-se, the pink-white halo that
+ * veiled rime vista-nw, and the white ball the verdant crest bloomed into.
+ * Bounding the input at 2x the threshold bounds the energy above the
+ * threshold at 1x it: a halo is still a halo (an emitter at 2x threshold
+ * blooms exactly as before), but nothing can bloom harder than that, so the
+ * coarse-mip veil is at most 0.045 x strength x threshold ~ 0.03 and the sun
+ * keeps a disc, not a frame. Same lever as the lamp/crest rejects' "emissive
+ * core below 2x the theme bloom threshold", enforced where every emitter
+ * meets the bloom instead of per fixture. `quality.bloomClamp` and
+ * `ThemeDef.bloom.clamp` still apply as further MINIMA.
+ */
+export const BLOOM_CLAMP_OVER_THRESHOLD = 2.0;
+
+/**
+ * @private the bloom bright-pass ceiling actually installed: the preset's, the
+ * theme's and 2x the threshold, whichever is lowest (never below 1).
+ * @param {object|null} quality @param {{threshold:number, clamp:number}} bloom
+ */
+function effectiveBloomClamp(quality, bloom) {
+  const preset = numOr(quality && quality.bloomClamp, DEFAULT_BLOOM_CLAMP);
+  const theme = numOr(bloom && bloom.clamp, DEFAULT_BLOOM_CLAMP);
+  const overThr = Math.max(1, numOr(bloom && bloom.threshold, DEFAULT_BLOOM.threshold) * BLOOM_CLAMP_OVER_THRESHOLD);
+  return Math.max(1, Math.min(preset, theme, overThr));
+}
 
 /** Underwater tint per theme water colour is derived from this when unset. */
 export const DEFAULT_WATER_TINT = 0x4dc7dc;
@@ -1371,8 +1408,8 @@ export class Post {
         new THREE.Vector2(dw, dh),
         this._bloom.strength, this._bloom.radius, this._bloom.threshold,
         numOr(q.bloomScale, 0.5),
-        // min, not override: a preset clamps harder, never disables (see setBloom)
-        Math.min(numOr(q.bloomClamp, DEFAULT_BLOOM_CLAMP), numOr(this._bloom.clamp, DEFAULT_BLOOM_CLAMP)),
+        // min, not override: preset / theme / 2x threshold, whichever clamps hardest (see setBloom)
+        effectiveBloomClamp(q, this._bloom),
       );
       composer.addPass(this.bloomPass);
     }
@@ -1576,8 +1613,9 @@ export class Post {
     p.radius = cur.radius;
     p.threshold = cur.threshold;
     p.setKnee(cur.knee);
-    // The preset may clamp HARDER than the default but can never disable it.
-    p.setInputClamp(Math.min(numOr(this.quality && this.quality.bloomClamp, cur.clamp), cur.clamp));
+    // The preset may clamp HARDER than the default but can never disable it,
+    // and the ceiling never exceeds 2x the threshold (BLOOM_CLAMP_OVER_THRESHOLD).
+    p.setInputClamp(effectiveBloomClamp(this.quality, cur));
   }
 
   /**

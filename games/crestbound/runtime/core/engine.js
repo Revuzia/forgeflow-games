@@ -191,8 +191,20 @@ const CB_FOG_SKY = new Float32Array([0.6, 0.7, 0.8, 0.0]);
  * against the dome instead of dissolving into a haze wall (critic C9).
  */
 const CB_FOG_AER = new Float32Array([0.5, 0.6, 0.7, 0.0]);
-/** [ skyCap 0..1, aerialStrength 0..1, 0, 0 ] — skyCap bounds the altitude term */
-const CB_FOG_K = new Float32Array([0.6, 1.0, 0.0, 0.0]);
+/**
+ * [ skyCap 0..1, aerialStrength 0..1, farCap 0..1, 0 ] — skyCap bounds the
+ * altitude term; farCap (2026-09-04, image lane r2, critic "the horizon is a
+ * hard milky band, the far hills a flat white-green band with zero detail")
+ * is the MOST fog a fragment ABOVE the hero's band may take, so a far hill,
+ * a fort roof or a ziggurat tier keeps `1 - farCap` of its own lit colour and
+ * ends as a graded silhouette against the dome instead of dissolving into it.
+ * Fragments at or below the band (the walked deck, the band contrastcheck
+ * measures) are untouched by construction: the cap eases in with the same
+ * height term that thins the density.
+ */
+const CB_FOG_K = new Float32Array([0.6, 1.0, 0.72, 0.0]);
+/** default ceiling on the fog a fragment above the band may take (`fog.farCap`) */
+const FOG_FAR_CAP_DEFAULT = 0.72;
 /** how far below the hero's feet the full-density fog base sits (metres) */
 const FOG_BASE_BELOW_DEFAULT = 3.0;
 /**
@@ -232,8 +244,11 @@ const SKYMIX_ALT_LO = 15, SKYMIX_ALT_HI = 25, SKYMIX_ALT_MAX = 0.35;
       '\n\tfloat cbFogHgt = exp( - max( vCbFogY - uCbFogH.x, 0.0 ) * uCbFogH.y );' +
       '\n\tfloat cbFogDens = mix( 1.0, cbFogHgt, uCbFogH.z );')
     .replace(F_FROM,
+      // FAR CAP: above the band the fog may not exceed farCap, so far hills and
+      // roofs keep (1 - farCap) of their lit colour; at/below the band no change
+      'fogFactor = min( fogFactor, mix( 1.0, uCbFogK.z, smoothstep( 0.0, 0.5, 1.0 - cbFogHgt ) ) );' +
       // altitude term, CAPPED: a station 30-50 m up must not fog to pure sky
-      'vec3 cbFogCol = mix( fogColor, uCbFogSky.rgb, uCbFogSky.a * min( 1.0 - cbFogHgt, uCbFogK.x ) );' +
+      '\n\tvec3 cbFogCol = mix( fogColor, uCbFogSky.rgb, uCbFogSky.a * min( 1.0 - cbFogHgt, uCbFogK.x ) );' +
       // aerial perspective: slow plain-exponential band toward a colour darker than the horizon
       '\n\tfloat cbAer = ( 1.0 - exp( - vFogDepth * uCbFogAer.w ) ) * uCbFogK.y;' +
       '\n\tfloat cbFogL = dot( gl_FragColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );' +
@@ -905,6 +920,10 @@ export class Engine {
     CB_FOG_AER[0] = _col.r; CB_FOG_AER[1] = _col.g; CB_FOG_AER[2] = _col.b;
     CB_FOG_AER[3] = fogSpec === null ? 0 : clamp(numOr(dig(t, 'fog.aerialDensity', 0), 0), 0, 0.2);
     CB_FOG_K[1] = clamp(numOr(dig(t, 'fog.aerialStrength', 1.0), 1.0), 0, 1);
+    /*   fog.farCap        0..1 — the most fog a fragment above the hero's band
+     *                     may take (default 0.72: far hills keep 28 % of their
+     *                     lit colour, see CB_FOG_K); 1 restores the old wall */
+    CB_FOG_K[2] = clamp(numOr(dig(t, 'fog.farCap', FOG_FAR_CAP_DEFAULT), FOG_FAR_CAP_DEFAULT), 0.2, 1);
 
     /* ---- exposure ---------------------------------------------------- */
     this.renderer.toneMappingExposure = clamp(numOr(t.exposure, 1.0), 0.05, 4);
