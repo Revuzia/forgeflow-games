@@ -137,6 +137,7 @@ APPLY_JS = r"""
      Catmull-Rom + RCAS at the engine's strength. */
   if (P.presentPass) {
     P.presentPass.setPlain(cfg.present === 'plain');
+    if (P.presentPass.setCubic) P.presentPass.setCubic(cfg.present !== 'bilinear');
     if (P.setSharpen) P.setSharpen(cfg.present === 'nosharp' ? 0 : W.sharpen);
   }
   return true;
@@ -202,7 +203,7 @@ RESTORE_JS = r"""
   if (W.nmaps.length) { for (const e of W.nmaps) { e[0].normalMap = e[1]; e[0].needsUpdate = true; } W.nmaps.length = 0; }
   if (W.hidden.length) { for (const o of W.hidden) o.visible = true; W.hidden.length = 0; }
   E.scene.overrideMaterial = null;
-  if (P.presentPass) { P.presentPass.setPlain(false); if (P.setSharpen) P.setSharpen(W.sharpen); }
+  if (P.presentPass) { P.presentPass.setPlain(false); if (P.presentPass.setCubic) P.presentPass.setCubic(true); if (P.setSharpen) P.setSharpen(W.sharpen); }
   R.setOpaqueSort(null); }
 """
 
@@ -214,6 +215,7 @@ CONFIGS = [
     ("full", {}),
     ("present plain", {"present": "plain"}),
     ("present nosharp", {"present": "nosharp"}),
+    ("present bilinear", {"present": "bilinear"}),
     ("-bloom", {"off": BLOOM}),
     ("-finish", {"off": GRADE}),
     ("-AA", {"off": AA}),

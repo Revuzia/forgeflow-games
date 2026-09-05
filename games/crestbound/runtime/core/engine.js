@@ -1174,6 +1174,8 @@ export class Engine {
      * upscale that strength drew the source texel grid onto every edge
      * (`_shots/imgab_keep_sharp_crop.png` vs `_s40_crop.png`, 2026-09-04). */
     this.post.setSharpen(clamp(0.08 + (1 - this.renderScale) * 0.95, 0, 0.62));
+    // bicubic base above LOW; the LOW tier takes the 5-tap bilinear base (Post.setCubic)
+    if (typeof this.post.setCubic === 'function') this.post.setCubic(this._tierScale > 0.65);
   }
 
   /** @private Settings subscriber. */

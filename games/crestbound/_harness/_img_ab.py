@@ -108,6 +108,8 @@ VARIANT_JS = r"""async (v) => {
   else if (v === 'nosharp') { pp.setPlain(false); P.setSharpen(0); }
   else if (v === 'sharp') { pp.setPlain(false); P.setSharpen(base); }
   else if (/^s\d+$/.test(v)) { pp.setPlain(false); P.setSharpen(parseInt(v.slice(1), 10) / 100); }
+  else if (v === 'bilin') { pp.setPlain(false); if (pp.setCubic) pp.setCubic(false); P.setSharpen(base); }
+  else if (v === 'cubic') { pp.setPlain(false); if (pp.setCubic) pp.setCubic(true); P.setSharpen(base); }
   else if (v === 'nobloom' || v === 'nofog' || v === 'nofogbloom' || v === 'restore') {
     /* attribution probes: which stage makes a frame white */
     const S = E.scene;

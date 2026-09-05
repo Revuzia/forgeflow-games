@@ -1022,6 +1022,8 @@ const PresentShader = {
     uGrain: { value: 0.02 },
     uTime: { value: 0 },
     uPlain: { value: 0 },
+    /** 1 = Catmull-Rom base, 0 = bilinear base under the RCAS (A/B + ladder) */
+    uCubic: { value: 1 },
   },
   vertexShader: /* glsl */`
 varying vec2 vUv;
@@ -1036,6 +1038,7 @@ uniform float uSharp;
 uniform float uGrain;
 uniform float uTime;
 uniform float uPlain;
+uniform float uCubic;
 varying vec2 vUv;
 
 const vec3 LUMA_P = vec3( 0.2126, 0.7152, 0.0722 );
@@ -1057,6 +1060,12 @@ void main() {
   if ( uPlain > 0.5 ) {
     col = fetchP( vUv );
   } else {
+    vec3 e;
+    if ( uCubic < 0.5 ) {
+      // bilinear base (A/B + the cheaper ladder step): the RCAS below does
+      // the sharpening, the bicubic's extra four taps are skipped
+      e = fetchP( vUv );
+    } else {
     // ---- Catmull-Rom, 5 bilinear taps ----------------------------------
     vec2 sp = vUv * uSrc.xy;
     vec2 t1 = floor( sp - 0.5 ) + 0.5;
@@ -1070,13 +1079,14 @@ void main() {
     vec2 p0 = ( t1 - 1.0 ) * inv;
     vec2 p3 = ( t1 + 2.0 ) * inv;
     vec2 p12 = ( t1 + o12 ) * inv;
-    vec3 e = fetchP( p12 ) * ( w12.x * w12.y );
+    e = fetchP( p12 ) * ( w12.x * w12.y );
     e += fetchP( vec2( p12.x, p0.y ) ) * ( w12.x * w0.y );
     e += fetchP( vec2( p0.x, p12.y ) ) * ( w0.x * w12.y );
     e += fetchP( vec2( p3.x, p12.y ) ) * ( w3.x * w12.y );
     e += fetchP( vec2( p12.x, p3.y ) ) * ( w12.x * w3.y );
     float ws = w12.x * w12.y + w12.x * w0.y + w0.x * w12.y + w3.x * w12.y + w12.x * w3.y;
     e /= ws;
+    }
     col = e;
 
     // ---- RCAS: contrast-adaptive, limited, clamped ---------------------
@@ -1153,6 +1163,11 @@ class PresentPass extends ShaderPass {
   /** @param {boolean} on one bilinear tap instead of the sharp upsample (A/B) */
   setPlain(on) { this.uniforms.uPlain.value = on ? 1 : 0; }
 
+  /** @param {boolean} on Catmull-Rom base (true) or bilinear base (false) under the RCAS */
+  setCubic(on) { this.uniforms.uCubic.value = on ? 1 : 0; }
+
+  get cubic() { return this.uniforms.uCubic.value > 0.5; }
+
   get plain() { return this.uniforms.uPlain.value > 0.5; }
 }
 
@@ -1223,6 +1238,8 @@ export class Post {
     this._depthTextures = [];
     /** RCAS strength the engine asked for (survives a chain rebuild) */
     this._sharpen = 0;
+    /** Catmull-Rom (true) or bilinear (false) base under the RCAS (survives a rebuild) */
+    this._cubic = true;
     /**
      * Fraction of the renderer's pixel ratio the composer targets are
      * allocated at — the tier's renderScale. The canvas stays native; the
@@ -1352,6 +1369,7 @@ export class Post {
     this.presentPass = new PresentPass();
     this.presentPass.setSize(dw, dh);
     this.presentPass.setSharpness(this._sharpen);
+    this.presentPass.setCubic(this._cubic);
     this.presentPass.setGrain(this._grade.grain);
     composer.addPass(this.presentPass);
   }
@@ -1394,6 +1412,23 @@ export class Post {
   setSharpen(v01) {
     this._sharpen = clamp(numOr(v01, 0), 0, 1);
     if (this.presentPass) this.presentPass.setSharpness(this._sharpen);
+  }
+
+  /**
+   * The base filter under the RCAS. MEASURED 2026-09-04 (`_harness/_fillab.py
+   * --quality low --only "full,present plain,present bilinear"`, keep/spawn,
+   * 1280x720, GPU timer, sibling lanes' Chromes running so +/-0.5 ms noise):
+   * Catmull-Rom + RCAS +0.63 / +1.17 ms over the plain blit in two runs, the
+   * bilinear base + RCAS within noise of it (-0.29); in the A/B crops
+   * (`_shots/imgab4_keep_cubic_crop.png` vs `_bilin_crop.png`) the two are
+   * indistinguishable at 1.67x. The LOW tier — the one that has to hold
+   * 55 fps on a fill-bound frame — therefore runs the 5-tap bilinear base;
+   * the tiers above keep the bicubic (the engine decides, `_pushSharpen`).
+   * @param {boolean} on
+   */
+  setCubic(on) {
+    this._cubic = !!on;
+    if (this.presentPass) this.presentPass.setCubic(this._cubic);
   }
 
   /**
@@ -1783,6 +1818,7 @@ export class Post {
       internal: this.composer && this.composer.renderTarget1
         ? [this.composer.renderTarget1.width, this.composer.renderTarget1.height] : null,
       plain: !!(this.presentPass && this.presentPass.plain),
+      cubic: this._cubic,
     };
   }
 
