@@ -75,6 +75,15 @@ const POP_T = 0.26;
 /** Beyond this distance coins keep a static pose (no per-frame matrix work). */
 const ANIM_RANGE = 46;
 const ANIM_RANGE2 = ANIM_RANGE * ANIM_RANGE;
+/* ROUND 3 (2026-09-04, surface lane, data reject "verdant-3 484,748 tris at
+ * the spawn"): measured with _harness/_g1_triattr2.py, the near coin mesh was
+ * 33.4k triangles at the verdant-3 spawn (48 x 696) — a coin between 14 and
+ * 46 m is 8-26 px wide in the 0.60 buffer and its 2 cm rune emboss is
+ * sub-pixel, so those draw the rimmed BLANK (same profile, 10 segments —
+ * round to within a pixel at 12 m) while still spinning and bobbing:
+ * the DETAIL band is the rune, the ANIM band is the motion. */
+const DETAIL_RANGE = 12;
+const DETAIL_RANGE2 = DETAIL_RANGE * DETAIL_RANGE;
 /** Beyond this distance coins are hidden entirely. */
 const HIDE_RANGE = 150;
 const HIDE_RANGE2 = HIDE_RANGE * HIDE_RANGE;
@@ -434,8 +443,9 @@ function cachedGeo(key, factory) {
  * 24 segments. The far blank (`coinFarGeometry`) is the SAME profile at 12,
  * so the band swap is invisible.
  *
- * Triangles: near 24 seg x 12 profile spans x 2 = 576 (+72 for the rune) —
- * against 492 before; far 12 x 8 x 2 = 192 against 100.
+ * Triangles: near 24 seg x 13 profile spans x 2 = 624 (+72 for the rune) —
+ * against 492 before; far 10 x 7 x 2 = 140 against 100 (r3: the far blank
+ * also serves the 14-46 m animated band, see DETAIL_RANGE).
  */
 function coinBlank(r, h, bevel, seg, lite) {
   const b = Math.min(bevel, h * 0.42, r * 0.2);
@@ -443,9 +453,11 @@ function coinBlank(r, h, bevel, seg, lite) {
   const P = THREE.Vector2;
   const pts = lite
     ? [
-      new P(0, -hi), new P(r * 0.80, -hi), new P(r * 0.80, -hi), new P(r * 0.88, -h / 2),
+      // r3: no duplicated points — the hard field/rim edge is sub-pixel past
+      // 14 m and each duplicate cost a zero-area span (48 tris per coin)
+      new P(0, -hi), new P(r * 0.80, -hi), new P(r * 0.88, -h / 2),
       new P(r, -h / 2 + b), new P(r, h / 2 - b),
-      new P(r * 0.88, h / 2), new P(r * 0.80, hi), new P(r * 0.80, hi), new P(0, hi),
+      new P(r * 0.88, h / 2), new P(r * 0.80, hi), new P(0, hi),
     ]
     : [
       new P(0, -hi), new P(r * 0.78, -hi),
@@ -571,7 +583,7 @@ function coinGeometry() {
  */
 function coinFarGeometry() {
   return cachedGeo('coinFar', () => {
-    const g = normalizeAttrs(coinBlank(COIN_R, COIN_H, 0.024, 12, true));
+    const g = normalizeAttrs(coinBlank(COIN_R, COIN_H, 0.024, 10, true));
     g.computeBoundingSphere();
     return g;
   });
@@ -956,7 +968,8 @@ export class Collectibles {
 
   /**
    * Compact the per-coin poses into the near and far meshes. A coin draws from
-   * exactly one of them (its LOD band, `_cDirty`: 1 near, 0 far) or from
+   * exactly one of them (its LOD band, `_cDirty`: 1 near detailed, 3 near
+   * blank (animated, beyond DETAIL_RANGE), 0 far static blank) or from
    * neither (hidden band, or collected). Allocation-free; called only when a
    * pose or a band changed, and from build/reset.
    */
@@ -973,7 +986,7 @@ export class Collectibles {
       const b = band[i];
       if (b === 2 && s !== 2) continue;            // hidden band (a popping coin still shows)
       const o = i * 16;
-      if (b === 0 && s !== 2) {
+      if ((b === 0 || b === 3) && s !== 2) {
         const d = j * 16;
         for (let c = 0; c < 16; c++) fa[d + c] = src[o + c];
         j++;
@@ -1360,7 +1373,8 @@ export class Collectibles {
         if (dirty[i] !== 0) { this._writeCoinMatrix(i, 0, 1); dirty[i] = 0; any = true; }
         continue;
       }
-      dirty[i] = 1;
+      // band: 1 = detailed near coin, 3 = animated blank (14-46 m)
+      dirty[i] = (d2 > DETAIL_RANGE2) ? 3 : 1;
 
       // magnet: glide toward the capsule centre inside MAGNET_R
       const mx = px - x, my = tyTarget - y, mz = pz - z;

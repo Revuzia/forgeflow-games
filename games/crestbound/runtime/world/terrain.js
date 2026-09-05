@@ -34,6 +34,19 @@
  * triangles indexed, 154 k unindexed) and is the ONE place in the runtime that
  * is allowed to be indexed — it is never fed to `mergeStatic`.
  *
+ * ROUND 3 (2026-09-04, surface lane, data reject "verdant-3 484,748 tris at
+ * the spawn ... world/terrain.js (one 39k mesh, no quadrant culling)"): the
+ * ground is now a GRID OF CHUNKS (up to 4 x 4, ~36 m each, `def.chunks` caps
+ * the count), each a THREE.LOD holding a full-resolution mesh and a quarter-
+ * resolution far mesh. Three frustum-culls every chunk on its own bounding
+ * sphere and swaps the far level in past LOD_NEAR + the chunk's half-
+ * diagonal (so no coarse triangle is ever nearer than ~34 m). The far index
+ * is STITCHED: every chunk border keeps its full-resolution edge vertices
+ * (a fan around the coarse cell's centre), so a coarse chunk beside a fine
+ * one shares every edge vertex and there is no T-junction crack. The
+ * heightfield collider is untouched — it samples the same array at full
+ * resolution whatever the renderer shows.
+ *
  * @module runtime/world/terrain
  */
 
@@ -643,6 +656,44 @@ const SURFACE_LOOK_THEME = {
                   lushDry: 0x8a7a70, lushWet: 0xa09890, amb: 0.30 },
 };
 
+/* ---------------------------------------------------------------------------
+ * Heightfield registry — the ground for water.js's shoreline bake.
+ *
+ * course.js hands `buildWater` the authored def only, never the terrain it
+ * built moments earlier, so a water body could not know where its banks were
+ * (ROUND 3: the foam band was the box rim, buried under the banks). Every
+ * heightfield this module builds is registered here; `terrainGroundAt(x, z)`
+ * answers from the NEWEST field covering the point, and an entry leaves when
+ * its chunk geometry is disposed (course teardown disposes every geometry).
+ * ------------------------------------------------------------------------ */
+const _hfRegistry = [];
+const LOD_NEAR = 30;          // metres: no far-level triangle nearer than this
+const CHUNK_TARGET = 36;      // metres per chunk (grid = ceil(size / this), <= 4)
+
+function registerHeightfield(hf, geo) {
+  _hfRegistry.push(hf);
+  if (_hfRegistry.length > 12) _hfRegistry.shift();
+  if (geo && typeof geo.addEventListener === 'function') {
+    geo.addEventListener('dispose', () => {
+      const k = _hfRegistry.indexOf(hf);
+      if (k !== -1) _hfRegistry.splice(k, 1);
+    });
+  }
+}
+
+/**
+ * Ground height at world (x, z) from the most recently built terrain that
+ * covers it; NaN when no registered heightfield does. Pure read, no
+ * allocation — safe to call per vertex at build time.
+ */
+export function terrainGroundAt(x, z) {
+  for (let i = _hfRegistry.length - 1; i >= 0; i--) {
+    const g = _hfRegistry[i].heightAt(x, z);
+    if (g === g) return g;
+  }
+  return NaN;
+}
+
 /**
  * Build the ground.
  *
@@ -654,8 +705,9 @@ const SURFACE_LOOK_THEME = {
  * @param {object} theme ThemeDef (palette + colour grade)
  * @param {object} [mats] the shared Mats service (CONTRACT §14)
  * @param {object} [quality] QUALITY entry — `grass` is the blade budget
- * @returns {{mesh: THREE.Mesh, heightfield: Heightfield, grass: THREE.InstancedMesh|null,
+ * @returns {{mesh: THREE.Group, heightfield: Heightfield, grass: THREE.InstancedMesh|null,
  *            bounds: THREE.Box3, sample: function, update: function, dispose: function}}
+ *   `mesh` is a Group of THREE.LOD chunks (ROUND 3); `heightfield.ref` points at it.
  */
 export function buildTerrain(def, theme, mats, quality) {
   const d = def || {};
@@ -777,33 +829,6 @@ export function buildTerrain(def, theme, mats, quality) {
     }
   }
 
-  const idxArr = (count > 65535) ? new Uint32Array((nx - 1) * (nz - 1) * 6)
-                                 : new Uint16Array((nx - 1) * (nz - 1) * 6);
-  let w = 0;
-  for (let j = 0; j < nz - 1; j++) {
-    for (let i = 0; i < nx - 1; i++) {
-      const a = j * nx + i, b = a + 1, c = a + nx, e = c + 1;
-      // split each quad along its SHORTER diagonal: a ridge crossing a quad the
-      // wrong way is the classic "terrain has a staircase artefact" bug
-      if (Math.abs(heights[a] - heights[e]) <= Math.abs(heights[b] - heights[c])) {
-        idxArr[w++] = a; idxArr[w++] = c; idxArr[w++] = e;
-        idxArr[w++] = a; idxArr[w++] = e; idxArr[w++] = b;
-      } else {
-        idxArr[w++] = a; idxArr[w++] = c; idxArr[w++] = b;
-        idxArr[w++] = b; idxArr[w++] = c; idxArr[w++] = e;
-      }
-    }
-  }
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  geo.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
-  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  geo.setIndex(new THREE.BufferAttribute(idxArr, 1));
-  geo.computeBoundingBox();
-  geo.computeBoundingSphere();
-
   // --- material -----------------------------------------------------------
   // Cloned so `vertexColors` cannot leak onto every other user of the shared
   // surface material. materials.js preserves its shader hook across clone().
@@ -812,13 +837,143 @@ export function buildTerrain(def, theme, mats, quality) {
   mat.vertexColors = true;
   mat.name = 'terrain_' + surfaceKey;
 
-  const mesh = new THREE.Mesh(geo, mat);
+  // --- chunk grid of LODs (ROUND 3, see the PERF note in the header) -------
+  const chunkCap = Math.max(1, Math.min(16, (d.chunks | 0) || 16));
+  let gridN = Math.max(1, Math.min(4, Math.ceil(Math.max(size[0], size[1]) / CHUNK_TARGET)));
+  while (gridN > 1 && gridN * gridN > chunkCap) gridN--;
+
+  const mesh = new THREE.Group();
   mesh.name = 'terrain';
-  mesh.castShadow = false;         // a ground plane casting onto itself is only acne
-  mesh.receiveShadow = true;
   mesh.matrixAutoUpdate = false;
   mesh.updateMatrix();
   mesh.userData.def = def;
+  const chunkGeos = [];
+
+  for (let cj = 0; cj < gridN; cj++) {
+    const j0 = Math.floor((nz - 1) * cj / gridN), j1 = Math.floor((nz - 1) * (cj + 1) / gridN);
+    for (let ci = 0; ci < gridN; ci++) {
+      const i0 = Math.floor((nx - 1) * ci / gridN), i1 = Math.floor((nx - 1) * (ci + 1) / gridN);
+      if (i1 <= i0 || j1 <= j0) continue;
+      const lw = i1 - i0 + 1, lh = j1 - j0 + 1, lc = lw * lh;
+
+      // chunk centre = its AABB centre; the LOD distance is measured from it
+      let mnY = Infinity, mxY = -Infinity;
+      for (let j = j0; j <= j1; j++) {
+        for (let i = i0; i <= i1; i++) {
+          const h = heights[j * nx + i];
+          if (h < mnY) mnY = h;
+          if (h > mxY) mxY = h;
+        }
+      }
+      const ccx = origin[0] + (i0 + i1) * 0.5 * cellX;
+      const ccz = origin[1] + (j0 + j1) * 0.5 * cellZ;
+      const ccy = (mnY + mxY) * 0.5;
+
+      const lpos = new Float32Array(lc * 3), lnrm = new Float32Array(lc * 3);
+      const luv = new Float32Array(lc * 2), lcol = new Float32Array(lc * 3);
+      for (let j = j0; j <= j1; j++) {
+        for (let i = i0; i <= i1; i++) {
+          const k = j * nx + i, l = (j - j0) * lw + (i - i0);
+          lpos[l * 3] = pos[k * 3] - ccx; lpos[l * 3 + 1] = pos[k * 3 + 1] - ccy; lpos[l * 3 + 2] = pos[k * 3 + 2] - ccz;
+          lnrm[l * 3] = nrm[k * 3]; lnrm[l * 3 + 1] = nrm[k * 3 + 1]; lnrm[l * 3 + 2] = nrm[k * 3 + 2];
+          luv[l * 2] = uv[k * 2]; luv[l * 2 + 1] = uv[k * 2 + 1];
+          lcol[l * 3] = col[k * 3]; lcol[l * 3 + 1] = col[k * 3 + 1]; lcol[l * 3 + 2] = col[k * 3 + 2];
+        }
+      }
+
+      // local vertex index of grid (i, j); heights are read from the global array
+      const L = (i, j) => (j - j0) * lw + (i - i0);
+      const H = (i, j) => heights[j * nx + i];
+      // one quad (ia,ja)-(ib,jb), split along its SHORTER diagonal: a ridge
+      // crossing a quad the wrong way is the classic terrain staircase bug
+      const pushQuad = (out, ia, ja, ib, jb) => {
+        const qa = L(ia, ja), qb = L(ib, ja), qc = L(ia, jb), qe = L(ib, jb);
+        if (Math.abs(H(ia, ja) - H(ib, jb)) <= Math.abs(H(ib, ja) - H(ia, jb))) {
+          out.push(qa, qc, qe, qa, qe, qb);
+        } else {
+          out.push(qa, qc, qb, qb, qc, qe);
+        }
+      };
+
+      // FULL resolution
+      const fine = [];
+      for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) pushQuad(fine, i, j, i + 1, j + 1);
+
+      // FAR level: stride 2 inside, stitched to the full-resolution edge on
+      // every chunk border (a fan around the coarse cell's centre vertex)
+      const coarse = [];
+      for (let j = j0; j < j1; j += 2) {
+        const jb = Math.min(j + 2, j1), jm = (jb - j === 2) ? j + 1 : -1;
+        for (let i = i0; i < i1; i += 2) {
+          const ib = Math.min(i + 2, i1), im = (ib - i === 2) ? i + 1 : -1;
+          if (im < 0 || jm < 0) {
+            // a 1-wide strip at the far edge: the fine cells, exactly
+            for (let jj = j; jj < jb; jj++) for (let ii = i; ii < ib; ii++) pushQuad(coarse, ii, jj, ii + 1, jj + 1);
+            continue;
+          }
+          const border = (i === i0) || (ib === i1) || (j === j0) || (jb === j1);
+          if (!border) { pushQuad(coarse, i, j, ib, jb); continue; }
+          const M = L(im, jm);
+          // ring A -> C -> D -> B -> A (the +Y winding of pushQuad), with the
+          // edge midpoint inserted on every border edge
+          const ring = [L(i, j)];
+          if (i === i0) ring.push(L(i, jm));
+          ring.push(L(i, jb));
+          if (jb === j1) ring.push(L(im, jb));
+          ring.push(L(ib, jb));
+          if (ib === i1) ring.push(L(ib, jm));
+          ring.push(L(ib, j));
+          if (j === j0) ring.push(L(im, j));
+          ring.push(L(i, j));
+          for (let q = 0; q < ring.length - 1; q++) coarse.push(M, ring[q], ring[q + 1]);
+        }
+      }
+
+      const IdxT = (lc > 65535) ? Uint32Array : Uint16Array;
+      const geoF = new THREE.BufferGeometry();
+      geoF.setAttribute('position', new THREE.BufferAttribute(lpos, 3));
+      geoF.setAttribute('normal', new THREE.BufferAttribute(lnrm, 3));
+      geoF.setAttribute('uv', new THREE.BufferAttribute(luv, 2));
+      geoF.setAttribute('color', new THREE.BufferAttribute(lcol, 3));
+      geoF.setIndex(new THREE.BufferAttribute(new IdxT(fine), 1));
+      geoF.computeBoundingBox();
+      geoF.computeBoundingSphere();
+
+      // the far geometry SHARES the attribute objects (uploaded once) and
+      // carries only its own index + the same bounds
+      const geoC = new THREE.BufferGeometry();
+      geoC.setAttribute('position', geoF.attributes.position);
+      geoC.setAttribute('normal', geoF.attributes.normal);
+      geoC.setAttribute('uv', geoF.attributes.uv);
+      geoC.setAttribute('color', geoF.attributes.color);
+      geoC.setIndex(new THREE.BufferAttribute(new IdxT(coarse), 1));
+      geoC.boundingBox = geoF.boundingBox.clone();
+      geoC.boundingSphere = geoF.boundingSphere.clone();
+
+      const near = new THREE.Mesh(geoF, mat);
+      near.name = 'terrain.' + ci + ',' + cj;
+      near.castShadow = false;         // a ground plane casting onto itself is only acne
+      near.receiveShadow = true;
+      near.matrixAutoUpdate = false;
+      const far = new THREE.Mesh(geoC, mat);
+      far.name = 'terrain.' + ci + ',' + cj + '.far';
+      far.castShadow = false;
+      far.receiveShadow = true;
+      far.matrixAutoUpdate = false;
+
+      const lod = new THREE.LOD();
+      lod.name = 'terrain.chunk.' + ci + ',' + cj;
+      lod.position.set(ccx, ccy, ccz);
+      lod.matrixAutoUpdate = false;
+      lod.updateMatrix();
+      const halfDiag = 0.5 * Math.hypot((i1 - i0) * cellX, (j1 - j0) * cellZ, mxY - mnY);
+      lod.addLevel(near, 0);
+      lod.addLevel(far, LOD_NEAR + halfDiag, 0.06);
+      lod.userData.noMerge = true;
+      mesh.add(lod);
+      chunkGeos.push(geoF, geoC);
+    }
+  }
 
   // --- collider -----------------------------------------------------------
   const heightfield = new Heightfield({
@@ -829,6 +984,7 @@ export function buildTerrain(def, theme, mats, quality) {
     id: d.id || 'terrain',
     ref: mesh,
   });
+  registerHeightfield(heightfield, chunkGeos[0] || null);
 
   // --- grass --------------------------------------------------------------
   const grass = buildGrass(d, theme, mats, quality, {
@@ -850,7 +1006,8 @@ export function buildTerrain(def, theme, mats, quality) {
     /** Drive the wind. `t` is the course clock in seconds. */
     update(t) { GRASS_TIME.value = t; },
     dispose() {
-      geo.dispose();
+      for (let i = 0; i < chunkGeos.length; i++) chunkGeos[i].dispose();
+      chunkGeos.length = 0;
       mat.dispose();
       if (grass) {
         if (grass.parent) grass.parent.remove(grass);
@@ -1221,6 +1378,7 @@ export function setGrassTime(t) { GRASS_TIME.value = t; }
 
 /** Release the cached blade materials (level teardown). */
 export function disposeTerrain() {
+  _hfRegistry.length = 0;
   for (const m of _grassMats.values()) m.dispose();
   _grassMats.clear();
 }

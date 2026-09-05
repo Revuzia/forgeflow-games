@@ -986,6 +986,10 @@ function injectShader(mat, key, opts) {
        it for the grain so the bank is not a plastic plane. */
     {
       float cbRipW = smoothstep( uCbRipFade.x, uCbRipFade.y, 1.0 - clamp( normalize( vCbN ).y, 0.0, 1.0 ) );
+      /* r3: the ripple also fades with DISTANCE — fully gone at uCbRipFade.w
+         metres (25 m), so a far dune is its base albedo under the key and
+         never a corduroy shimmer at the tier scale */` + (lod ? `
+      cbRipW = max( cbRipW, smoothstep( uCbRipFade.w * 0.32, uCbRipFade.w, vCbDist ) );` : '') + `
       mapN.xy *= mix( 1.0, uCbRipFade.z, cbRipW );
     }` : '') + `
     mapN.xy *= normalScale;
@@ -2758,24 +2762,32 @@ function bakeSand() {
       const u = x / n, i = y * n + x, p = i * 4;
 
       const drift = fbm(u, v, 3, 3, 0.55, 2626);           // dune swell
-      const warp = fbm(u, v, 6, 2, 0.5, 2727);             // ripple wander
-      // along-wind coordinate: integer counts on both axes keep the tile
-      // seamless; the crest lines run perpendicular to (5, 3)
-      const along = u * 5 + v * 3;
-      const ph = (along + (warp - 0.5) * 0.60) * Math.PI * 2;
+      /* ROUND 3 (2026-09-04, surface lane, critic r2 "the sand renders as a
+       * regular honeycomb cell pattern"): TWO crossing sine trains ((5,3) and
+       * (2,-4)) are an egg-crate — their sum is a lattice of bumps, and a
+       * lattice of bumps lit by a key is a honeycomb. Ripples are ONE train.
+       * The field is now ANISOTROPIC noise: 5 crests per tile across the
+       * wind (0.36 m period) and only 1-2 cells along the crest (4:1 stretch,
+       * fbmXY), used as the PHASE of a single asymmetric sine, so every crest
+       * is a long broken line and no two are parallel for more than a metre.
+       * Two octaves: the main train and a half-period, third-amplitude train
+       * on the same axis. Nothing crosses it. */
+      const wander = fbmXY(u, v, 2, 5, 2, 0.5, 2727);      // slow along u, 0.36 m across v
+      const amp = 0.55 + 0.45 * fbmXY(u, v, 1, 3, 2, 0.5, 2828);   // crests break and rejoin
+      const ph = (v * 5 + (wander - 0.5) * 1.30) * Math.PI * 2;
       // asymmetric profile: a gentle stoss slope, a short steep lee face
-      let rip = Math.sin(ph) + 0.32 * Math.sin(ph * 2 + 0.9);
-      // a second, weaker ripple train from a cross-wind so the field is not
-      // one set of parallel rules (owner shot _shots/azure-1/cp4.png)
-      const ph2 = (u * 2 - v * 4 + (drift - 0.5) * 0.8) * Math.PI * 2;
-      rip = rip * 0.78 + Math.sin(ph2) * 0.30;
+      let rip = (Math.sin(ph) + 0.32 * Math.sin(ph * 2 + 0.9)) * amp;
+      const wander2 = fbmXY(u, v, 3, 10, 2, 0.5, 2929);
+      const ph2 = (v * 10 + u * 1 + (wander2 - 0.5) * 1.6) * Math.PI * 2;
+      rip = rip * 0.80 + Math.sin(ph2) * 0.22 * amp;
       const ripple = 0.5 + 0.5 * rip / 1.32;
       const grain = fbm(u, v, 110, 2, 0.5, 4747);           // sand grain
       const grain2 = vnoise(u, v, 230, 4848);
-      const damp = smoothstep(0.66, 0.90, fbm(u, v, 5, 3, 0.55, 1010));
+      // damp patches: fewer and softer (the r2 frames read them as dark cells)
+      const damp = smoothstep(0.74, 0.94, fbm(u, v, 3, 3, 0.55, 1010));
       const pale = fbm(u, v, 2, 3, 0.6, 1212);              // warm/pale macro
 
-      B.h[i] = 0.5 + (drift - 0.5) * 0.34 + (ripple - 0.5) * 0.20
+      B.h[i] = 0.5 + (drift - 0.5) * 0.34 + (ripple - 0.5) * 0.17
              + (grain - 0.5) * 0.07 + (grain2 - 0.5) * 0.035;
 
       // warm golden sand; the macro slides it between a pale wind-blown crest
@@ -2793,7 +2805,7 @@ function bakeSand() {
       // lee faces gather a touch of darker, cooler shade
       const lee = smoothstep(0.0, -0.6, shade);
       r = lerp(r, r * 0.86, lee * 0.3); g = lerp(g, g * 0.88, lee * 0.3); b = lerp(b, b * 0.94, lee * 0.3);
-      r = lerp(r, r * 0.60, damp); g = lerp(g, g * 0.58, damp); b = lerp(b, b * 0.60, damp);
+      r = lerp(r, r * 0.74, damp); g = lerp(g, g * 0.72, damp); b = lerp(b, b * 0.74, damp);
       // mica sparkle
       if (hash2i(x, y, 8181) > 0.9962) { r = 1.0; g = 0.98; b = 0.90; }
 
@@ -2815,7 +2827,7 @@ function bakeSand() {
   return assemble('sand', maps, {
     color: 0xffffff, roughness: 1, metalness: 0,
     normalScale: new THREE.Vector2(0.95, 0.95), envMapIntensity: 0.5,
-  }, 0.55, macroInject(16.0, 0.20, 0.10, 0, detailInject(7.0, 0.22, slopeInject({
+  }, 0.55, macroInject(16.0, 0.20, 0.10, 0, detailInject(4.0, 0.11, slopeInject({
     defines: { CB_SLOPE: true, CB_CAUSTIC: true, CB_RIPFADE: true },
     uniforms: {
       uCbBlendMap: { value: _tex.get('dirt.albedo') || null },
@@ -2825,8 +2837,10 @@ function bakeSand() {
       uCbBlendTint: { value: new THREE.Vector3(1.10, 1.06, 1.00) },
       uCbSlope: { value: new THREE.Vector2(SLOPE_START, SLOPE_END) },
       /* ripple normal fades from 12 deg, gone by 22 deg (1 - cos), 0.30 kept
-       * for the grain; the dirt slope blend takes over well above that */
-      uCbRipFade: { value: new THREE.Vector4(1 - Math.cos(12 * Math.PI / 180), 1 - Math.cos(22 * Math.PI / 180), 0.30, 0) },
+       * for the grain; the dirt slope blend takes over well above that.
+       * .w = metres at which the ripple normal has fully faded to the base
+       * (the r3 "fade to the base albedo past 25 m" rule; starts 8 m in). */
+      uCbRipFade: { value: new THREE.Vector4(1 - Math.cos(12 * Math.PI / 180), 1 - Math.cos(22 * Math.PI / 180), 0.30, 25.0) },
       /* Caustics. `uCbCaustic` is a plain float strength so water.js's
        * `linkCaustics(mats, 'sand', strength)` drives it directly; the geometry
        * of the effect lives in `uCbCausticParams` (waterSurfaceY, worldScale,
@@ -2867,42 +2881,57 @@ function bakeBasalt() {
     for (let x = 0; x < n; x++) {
       const u = x / n, i = y * n + x, p = i * 4;
 
-      // plates
-      worley(u, v, 7, 9101);
-      const f1 = W.f1, f2 = W.f2, id = W.id;
-      const crackW = 0.040 + fbm(u, v, 9, 2, 0.5, 9202) * 0.030;
-      const crack = 1 - smoothstep(0.0, crackW, f2 - f1);              // inside the crack
-      const crackRim = (1 - smoothstep(crackW, crackW * 2.6, f2 - f1)) * (1 - crack);
-      // fine secondary cracks across the plates
-      worley(u, v, 19, 9303);
-      const crack2 = (1 - smoothstep(0.0, 0.020, W.f2 - W.f1)) * (1 - crack) * (hash2i(x >> 5, y >> 5, 9909) > 0.35 ? 1 : 0);
-      const plateTilt = (id - 0.5) * 0.14;
-      const swirl = warpedFbm(u, v, 10, 3, 0.55, 9404, 0.25);
+      /* ROUND 3 (2026-09-04, surface lane, critic r2 "the ember dunes are
+       * smooth chocolate mounds with cells ... a regular honeycomb"): the
+       * worley plate field WAS the honeycomb — 26 cm cells at a fixed world
+       * scale, each lit as a dome with a dark seam, on every dune out to the
+       * horizon. The ember floor is now BLACK VOLCANIC SAND: the same one-
+       * axis anisotropic ripple train as `sand` (4:1 stretch, 0.36 m period,
+       * two octaves, nothing crossing it), pale ash drifts in the hollows,
+       * grit, and the lava kept only as SPARSE EMBER CRACKS — a ridged
+       * (1 - |noise|) crease field, thin and branching, gated to ~8 % of the
+       * tile so the floor still belongs to the realm without a lattice. */
+      const drift = fbm(u, v, 3, 3, 0.55, 9101);           // dune swell
+      const wander = fbmXY(u, v, 2, 5, 2, 0.5, 9202);
+      const amp = 0.55 + 0.45 * fbmXY(u, v, 1, 3, 2, 0.5, 9303);
+      const ph = (v * 5 + (wander - 0.5) * 1.30) * Math.PI * 2;
+      let rip = (Math.sin(ph) + 0.32 * Math.sin(ph * 2 + 0.9)) * amp;
+      const wander2 = fbmXY(u, v, 3, 10, 2, 0.5, 9404);
+      const ph2 = (v * 10 + u * 1 + (wander2 - 0.5) * 1.6) * Math.PI * 2;
+      rip = rip * 0.80 + Math.sin(ph2) * 0.22 * amp;
+      const ripple = 0.5 + 0.5 * rip / 1.32;
       const grit = fbm(u, v, 96, 2, 0.5, 9505);
-      const ash = smoothstep(0.58, 0.90, fbm(u, v, 4, 3, 0.55, 9606)) * (1 - crack);
+      const grit2 = vnoise(u, v, 210, 9515);
+      const ash = smoothstep(0.62, 0.92, fbm(u, v, 4, 3, 0.55, 9606));
+      // ember cracks: ridged creases, gated to sparse patches
+      const crease = ridged(u, v, 6, 3, 0.5, 9707);
+      const gate = smoothstep(0.50, 0.72, fbm(u, v, 3, 2, 0.55, 9808));
+      const crack = smoothstep(0.58, 0.86, crease) * gate;
+      const crackRim = smoothstep(0.40, 0.60, crease) * gate * (1 - crack);
 
-      B.h[i] = 0.55 + plateTilt + (swirl - 0.5) * 0.10 + (grit - 0.5) * 0.05
-             - crack * 0.42 - crack2 * 0.12 + ash * 0.03;
+      B.h[i] = 0.5 + (drift - 0.5) * 0.30 + (ripple - 0.5) * 0.17
+             + (grit - 0.5) * 0.06 + (grit2 - 0.5) * 0.03 + ash * 0.02 - crack * 0.22;
 
-      // dark grey basalt; plates vary warm/cool, tops carry pale ash
-      const tone = 0.085 + id * 0.050 + (swirl - 0.5) * 0.035 + (grit - 0.5) * 0.030;
-      let r = tone * 1.04, g = tone * 0.95, b = tone * 0.98;
-      r = lerp(r, 0.34, ash * 0.40); g = lerp(g, 0.31, ash * 0.40); b = lerp(b, 0.30, ash * 0.40);
-      // scorched plate rims
-      r = lerp(r, 0.030, crackRim * 0.55); g = lerp(g, 0.022, crackRim * 0.55); b = lerp(b, 0.020, crackRim * 0.55);
-      // crack interiors near-black — the emissive fills them
-      r = lerp(r, 0.020, crack * 0.90); g = lerp(g, 0.012, crack * 0.90); b = lerp(b, 0.010, crack * 0.90);
-      r = lerp(r, 0.030, crack2 * 0.60); g = lerp(g, 0.024, crack2 * 0.60); b = lerp(b, 0.022, crack2 * 0.60);
+      // black volcanic sand: warm-dark, the crests catch a hair more light
+      const shade = (ripple - 0.5) * 2;
+      let r = 0.115 + (drift - 0.5) * 0.045 + shade * 0.014 + (grit - 0.5) * 0.050 + (grit2 - 0.5) * 0.025;
+      let g = 0.100 + (drift - 0.5) * 0.038 + shade * 0.011 + (grit - 0.5) * 0.042 + (grit2 - 0.5) * 0.021;
+      let b = 0.098 + (drift - 0.5) * 0.034 + shade * 0.008 + (grit - 0.5) * 0.038 + (grit2 - 0.5) * 0.019;
+      // pale ash drifts
+      r = lerp(r, 0.36, ash * 0.42); g = lerp(g, 0.33, ash * 0.42); b = lerp(b, 0.32, ash * 0.42);
+      // scorched crease rims, near-black crease floors (the emissive fills them)
+      r = lerp(r, 0.035, crackRim * 0.45); g = lerp(g, 0.026, crackRim * 0.45); b = lerp(b, 0.022, crackRim * 0.45);
+      r = lerp(r, 0.020, crack * 0.85); g = lerp(g, 0.012, crack * 0.85); b = lerp(b, 0.010, crack * 0.85);
 
       A[p] = clamp01(r) * 255; A[p + 1] = clamp01(g) * 255; A[p + 2] = clamp01(b) * 255; A[p + 3] = 255;
       O[p] = 255;
-      O[p + 1] = clamp(0.64 + ash * 0.28 - crack * 0.30 + (grit - 0.5) * 0.08, 0.22, 1) * 255;
+      O[p + 1] = clamp(0.82 + ash * 0.14 - crack * 0.30 + (grit - 0.5) * 0.08, 0.30, 1) * 255;
       O[p + 2] = 0;
       O[p + 3] = 255;
 
-      // lava in the cracks: hot core, red rim; the fine cracks glow dimly
-      const flow = fbm(u, v, 14, 2, 0.5, 9707);
-      const heat = clamp01(crack * (0.60 + 0.40 * flow) + crackRim * 0.22 + crack2 * 0.30);
+      // lava in the creases: hot core, red rim
+      const flow = fbm(u, v, 14, 2, 0.5, 9909);
+      const heat = clamp01(crack * (0.65 + 0.35 * flow) + crackRim * 0.18);
       const core = smoothstep(0.62, 1.0, heat);
       E[p] = clamp01(heat * 1.00) * 255;
       E[p + 1] = clamp01(heat * 0.30 + core * 0.42) * 255;
@@ -2911,20 +2940,20 @@ function bakeBasalt() {
     }
   }
 
-  bakeAO(B, 5, 0.52, 3.2, 0.50);
+  bakeAO(B, 5, 0.62, 2.4, 0.62);
 
   const maps = {
     map: upload(commitA(B), 'basalt.albedo', true, 0.55),
     orm: upload(commitO(B), 'basalt.orm', false, 0.55),
-    normal: upload(heightToNormal(B.h, n, 1.5), 'basalt.normal', false, 0.55),
+    normal: upload(heightToNormal(B.h, n, 1.10), 'basalt.normal', false, 0.55),
     emissive: upload(commitE(B), 'basalt.emissive', true, 0.55),
   };
   return assemble('basalt', maps, {
     color: 0xffffff, roughness: 1, metalness: 0,
     emissive: 0xffffff, emissiveIntensity: 1.7,
-    normalScale: new THREE.Vector2(1.05, 1.05), envMapIntensity: 0.30,
-  }, 0.55, macroInject(11.0, 0.22, 0.08, 0, detailInject(5.0, 0.32, slopeInject({
-    defines: { CB_SLOPE: true, CB_VEIN: true },
+    normalScale: new THREE.Vector2(0.95, 0.95), envMapIntensity: 0.30,
+  }, 0.55, macroInject(11.0, 0.22, 0.08, 0, detailInject(4.0, 0.11, slopeInject({
+    defines: { CB_SLOPE: true, CB_VEIN: true, CB_RIPFADE: true },
     uniforms: {
       uCbBlendMap: { value: _tex.get('dirt.albedo') || null },
       uCbBlendNormal: { value: _tex.get('dirt.normal') || null },
@@ -2932,6 +2961,7 @@ function bakeBasalt() {
       uCbBlendScale: { value: 1.0 },
       uCbBlendTint: { value: new THREE.Vector3(0.50, 0.44, 0.42) },
       uCbSlope: { value: new THREE.Vector2(SLOPE_START, SLOPE_END) },
+      uCbRipFade: { value: new THREE.Vector4(1 - Math.cos(12 * Math.PI / 180), 1 - Math.cos(22 * Math.PI / 180), 0.30, 25.0) },
     },
   }), 0.37, 0.26)));
 }
@@ -3804,44 +3834,46 @@ function bakeCopper() {
       const bow = Math.sin(fu * Math.PI);
       const sheetTone = clamp01(courseTone * 0.7 + hash2i(sheetId + courseId * 7, courseId, 18099) * 0.3);
 
-      // verdigris: 0.4 m cells that thicken along the battens, thin on crowns
-      worley(u, v, 4, 18111);
-      const cell = W.f1, cellId = W.id;
-      const drift = fbm(u, v, 3, 3, 0.55, 18211);
-      const mottle = fbm(u, v, 12, 3, 0.5, 18311);
-      let crust = smoothstep(0.30, 0.78, (1 - cell * 0.9) * 0.55 + cellId * 0.20 + drift * 0.35 + (mottle - 0.5) * 0.25);
-      // the crust follows the COURSE: it gathers under the battens (lip) and
-      // alternates in weight row by row, so the rows read at any distance
-      crust = clamp01(crust + lip * 0.45 * (0.5 + 0.5 * drift) - bow * 0.12 + (courseTone - 0.5) * 0.30);
+      /* ROUND 3 (2026-09-04, surface lane, critic r2 "the patina is red
+       * BLOTCHES over teal (reads as bloodstain), still a smear at 0.60"):
+       * the salmon-copper `bare` patches were ~35 % of the sheet in 0.4 m
+       * worley cells, and at the tier scale a saturated red island in a
+       * green field IS a stain whatever its shape. A weathered copper roof is
+       * verdigris edge to edge; bare metal survives only where water runs
+       * fastest — the batten crowns and the seam lips. So: patina = TEAL-
+       * GREEN ONLY, 0x4f8a7a (chalky, sunlit) -> 0x2e5c55 (deep, damp) on a
+       * 0.53 m tileable mottle (3 cells per 1.6 m tile — nothing under 4 cm,
+       * nothing that aliases at the tier scale), and the copper term is a
+       * MUTED bronze confined to crowns and seams at ~8 % coverage. */
+      const drift = fbm(u, v, 3, 3, 0.55, 18211);          // 0.53 m mottle
+      const mottle = fbm(u, v, 9, 2, 0.5, 18311);          // 18 cm mottle
       const crumb = fbm(u, v, 48, 3, 0.5, 18411);
       const bl = brush[i];
-      const bare = clamp01(1 - crust);
+      // 0 = chalky pale green, 1 = deep blue-green; damp gathers under every
+      // batten (lip) and alternates in weight row by row
+      const tone = clamp01(drift * 0.70 + mottle * 0.30 + lip * 0.30 - bow * 0.06 + (courseTone - 0.5) * 0.18);
+      const crown = clamp01(batten * 0.85 + rib * 0.55);
 
       B.h[i] = 0.5 + batten * 0.26 + rib * 0.16 - lip * 0.06 + bow * 0.05
-             + crust * 0.05 + (crumb - 0.5) * 0.06 * crust + bl * 0.03;
+             + (drift - 0.5) * 0.05 + (crumb - 0.5) * 0.05 + bl * 0.02;
 
-      // metal: warm salmon copper (per-course/sheet tone draw); crust: blue-green carbonate
-      let r = lerp(0.128, lerp(0.56, 0.78, sheetTone), bare);
-      let g = lerp(0.418, lerp(0.29, 0.42, sheetTone), bare);
-      let b = lerp(0.352, lerp(0.17, 0.26, sheetTone), bare);
-      r += bl * 0.050 * bare; g += bl * 0.034 * bare; b += bl * 0.022 * bare;
-      // crust colour varies per cell from pale chalky green to deep blue-green
-      const tone = cellId * 0.6 + crumb * 0.4;
-      r = lerp(r, r * (0.80 + tone * 0.5), crust * 0.6);
-      g = lerp(g, g * (0.88 + tone * 0.35), crust * 0.6);
-      b = lerp(b, b * (0.92 + tone * 0.30), crust * 0.6);
-      // dark pitting under the crust
-      const pit = smoothstep(0.86, 0.98, crumb) * crust;
-      r = lerp(r, 0.046, pit * 0.7); g = lerp(g, 0.096, pit * 0.7); b = lerp(b, 0.086, pit * 0.7);
-      // battens and rib crowns: the most weathered metal on the roof — bright, bare
-      const crown = Math.max(batten, rib * 0.8);
-      r = lerp(r, 0.80, crown * 0.6); g = lerp(g, 0.46, crown * 0.6); b = lerp(b, 0.30, crown * 0.6);
+      // the verdigris field: 0x4f8a7a -> 0x2e5c55
+      let r = lerp(0.310, 0.180, tone);
+      let g = lerp(0.541, 0.361, tone);
+      let b = lerp(0.478, 0.333, tone);
+      r += (crumb - 0.5) * 0.030 + bl * 0.012; g += (crumb - 0.5) * 0.040 + bl * 0.014; b += (crumb - 0.5) * 0.034 + bl * 0.012;
+      // dark pitting in the deep patina
+      const pit = smoothstep(0.88, 0.98, crumb) * tone;
+      r = lerp(r, 0.070, pit * 0.6); g = lerp(g, 0.150, pit * 0.6); b = lerp(b, 0.135, pit * 0.6);
+      // battens and seam crowns: the only bare metal — a muted bronze, per-sheet tone
+      const br = lerp(0.42, 0.52, sheetTone), bg = lerp(0.27, 0.33, sheetTone), bb = lerp(0.18, 0.22, sheetTone);
+      r = lerp(r, br, crown * 0.62); g = lerp(g, bg, crown * 0.62); b = lerp(b, bb, crown * 0.62);
       // the lip shadow under every batten: the band the eye counts
-      r *= 1 - lip * 0.42; g *= 1 - lip * 0.42; b *= 1 - lip * 0.42;
+      r *= 1 - lip * 0.38; g *= 1 - lip * 0.38; b *= 1 - lip * 0.38;
 
       A[p] = clamp01(r) * 255; A[p + 1] = clamp01(g) * 255; A[p + 2] = clamp01(b) * 255; A[p + 3] = 255;
-      O[p + 1] = clamp(lerp(0.92, 0.30, bare) - bl * 0.08 * bare + pit * 0.06 - crown * 0.08, 0.10, 1) * 255;
-      O[p + 2] = clamp(Math.max(bare, crown * 0.9) * 0.96, 0, 1) * 255;
+      O[p + 1] = clamp(0.82 - crown * 0.30 + pit * 0.06 - bl * 0.03 + tone * 0.06, 0.10, 1) * 255;
+      O[p + 2] = clamp(crown * 0.75, 0, 1) * 255;
       O[p + 3] = 255;
     }
   }
@@ -3980,6 +4012,14 @@ const WATER_U = {
   /* only read under #define CB_WATER_DEPTH (water.js supplies a depth target) */
   uDepthTex: { value: null },
   uDepthParams: { value: new THREE.Vector4(0.1, 1000, 1 / 1280, 1 / 720) },
+  /* ROUND 3 (2026-09-04, surface lane): the SKY-DOME REFLECTION. water.js
+   * hands every surface the scene's PMREM environment (engine.setEnvironment)
+   * through `mesh.onBeforeRender`, which also sets `material.envMap` so three
+   * emits the CUBEUV defines; the shader samples it with textureCubeUV — no
+   * extra pass, one fetch per fragment. uEnvIntensity mirrors
+   * scene.environmentIntensity. Per clone (deep-copied), never shared. */
+  uEnvMap: { value: null },
+  uEnvIntensity: { value: 1.0 },
 };
 
 const WATER_VERT = /* glsl */`
@@ -3994,10 +4034,13 @@ varying vec3  vCbWorld;
 varying vec3  vCbNormal;
 varying vec2  vCbUv;
 varying float vCbCrest;
-varying float vCbShore;
+/* .x = SHALLOWNESS (1 at the waterline, 0 uDepthFade metres deep)
+ * .y = horizontal metres to the nearest DRY ground (0 on the line, >= 4 = open
+ *      water) — baked by water.js from the course heightfield (ROUND 3) */
+varying vec2  vCbShore;
 
 #ifdef CB_WATER_SHORE
-  attribute float aShore;
+  attribute vec2 aShore;
 #endif
 
 #include <fog_pars_vertex>
@@ -4047,7 +4090,7 @@ void main() {
   #ifdef CB_WATER_SHORE
     vCbShore = aShore;
   #else
-    vCbShore = 0.0;
+    vCbShore = vec2( 0.0, 8.0 );
   #endif
 
   vec4 mvPosition = viewMatrix * vec4( disp, 1.0 );
@@ -4073,6 +4116,8 @@ uniform vec3  uSunColor;
 uniform vec3  uSkyTop;
 uniform vec3  uSkyHorizon;
 uniform float uOpacity;
+uniform sampler2D uEnvMap;
+uniform float uEnvIntensity;
 
 #ifdef CB_WATER_DEPTH
   uniform sampler2D uDepthTex;
@@ -4083,7 +4128,12 @@ varying vec3  vCbWorld;
 varying vec3  vCbNormal;
 varying vec2  vCbUv;
 varying float vCbCrest;
-varying float vCbShore;
+varying vec2  vCbShore;
+
+/* three's PMREM sampler — compiled in only when material.envMap is a CubeUV
+   texture (the ENVMAP_TYPE_CUBE_UV + CUBEUV_* defines come from three's own
+   program prefix, because water.js sets material.envMap). */
+#include <cube_uv_reflection_fragment>
 
 float cbwHash( vec2 p ) {
   vec3 p3 = fract( vec3( p.xyx ) * 0.1031 );
@@ -4103,16 +4153,9 @@ float cbwNoise( vec2 p ) {
 
 /** RIPPLE HEIGHT FIELD — two scrolling value-noise octaves (0.45 and 1.4 m
  *  wind ripples) summed into ONE height, then differentiated so the result is
- *  the slope of a real surface and not two unrelated noises stuffed into a
- *  normal. 2026-09-04 (surface lane, owner O4 "cyan TV static"): the previous
- *  version returned (hx - h, hz - h) / 0.22 — a gradient of up to ±2.3 per
- *  metre — and added it to the unit normal at uRipple 0.55, i.e. the shading
- *  normal was thrown up to ±50° per fragment at texel frequency. Every term
- *  downstream (fresnel, sky mix, glint) then sampled a different direction
- *  per pixel, which at a 0.60 render scale IS static. The slope is now scaled
- *  to an amplitude in metres (uRipple * 0.045) over a wavelength that a 0.60
- *  pixel resolves, so neighbouring pixels share a normal and the surface
- *  reads as a sheet with ripples ON it. */
+ *  the slope of a real surface. Amplitude is metres (uRipple * 0.05) over a
+ *  wavelength the 0.60 buffer resolves, so neighbouring pixels share a normal
+ *  and the surface reads as a sheet with ripples ON it (round 1, owner O4). */
 float cbRippleH( vec2 p, float t ) {
   vec2 a = p * 0.72 + vec2( t * 0.11, -t * 0.08 );
   vec2 b = p * 2.20 - vec2( t * 0.19, t * 0.15 );
@@ -4123,38 +4166,44 @@ float cbRippleH( vec2 p, float t ) {
 
 void main() {
   vec3 V = normalize( cameraPosition - vCbWorld );
-  vec3 N = normalize( vCbNormal );
-  // under the surface the mesh is seen from below: flip so fresnel/sky agree
-  if ( ! gl_FrontFacing ) N = - N;
+  vec3 Nw = normalize( vCbNormal );                 // the Gerstner wave normal
+  if ( ! gl_FrontFacing ) Nw = - Nw;                // seen from below: flip
 
-  /* ---- detail ripples ---------------------------------------------------- */
-  // fade with distance so the far surface goes glassy and MIRRORS the sky
-  // instead of shimmering at sub-pixel frequency
   float cbWd = length( cameraPosition - vCbWorld );
+
+  /* ---- detail ripples (near field; the far surface goes glassy) --------- */
   float cbRf = 1.0 / ( 1.0 + cbWd * 0.030 );
-  float rAmp = uRipple * 0.045 * cbRf;               // metres of ripple height
+  float rAmp = uRipple * 0.05 * cbRf;
   float e = 0.18;
   float h0 = cbRippleH( vCbUv, uTime );
   float hx = cbRippleH( vCbUv + vec2( e, 0.0 ), uTime );
   float hz = cbRippleH( vCbUv + vec2( 0.0, e ), uTime );
   vec3 rN = normalize( vec3( -( hx - h0 ) * rAmp / e, 1.0, -( hz - h0 ) * rAmp / e ) );
-  // compose: the ripple normal is defined about +Y, the wave normal is near +Y
-  N = normalize( N + vec3( rN.x, 0.0, rN.z ) * 1.0 );
+  vec3 N = normalize( Nw + vec3( rN.x, 0.0, rN.z ) );
 
-  /* ROUND 2 (2026-09-04, surface lane, critic "no fresnel darkening toward
-     the horizon, the near water is the same value as the far"). Schlick with
-     F0 0.02, power 5 — the real curve, not a softened one — against the
-     GEOMETRIC wave normal for the sky mix: the ripple normal was feeding the
-     fresnel too, so every ripple flipped a fragment between body and sky at
-     texel frequency and the near/far gradient averaged into one value. The
-     ripples keep the glint (below), which is where they belong. */
-  /* The fresnel normal FLATTENS with distance (6 -> 28 m). At a grazing view
-     every Gerstner back-slope hits fres ~1 (sky, opaque) and every front
-     slope shows the body/floor, so a shelf 30 m out was one white bar per
-     crest — the barcode in _shots/azure-1/crest-metal.png. A distant lake
-     averages those slopes inside a pixel anyway; this does it explicitly. */
-  vec3 Ng = normalize( mix( normalize( vCbNormal ), vec3( 0.0, 1.0, 0.0 ), smoothstep( 6.0, 28.0, cbWd ) ) );
-  if ( ! gl_FrontFacing ) Ng = - Ng;
+  /* ---- ROUND 3 (surface lane, critic r2 "GIANT white foam blobs", "matte
+     blue plastic bumps with no reflection") --------------------------------
+     The blobs were never foam: they were the analytic sky (a near-white
+     horizon colour) switched in by a pow-5 fresnel on the raw Gerstner normal,
+     so every wave back-slope flipped to a white patch the size of half a
+     wavelength. Two changes:
+       1. The reflection is the scene's PMREM sky dome (textureCubeUV at a
+          soft mip), sampled along a reflected direction whose normal is the
+          wave normal blended toward +Y with distance — a smooth field with
+          no hard slope-to-slope steps, and it carries the dome's own sun
+          glow, so the sea is lit from the sky it sits under.
+       2. Schlick, F0 0.02, power 5, on that same smoothed normal. Fresnel
+          DARKENS the near water (the body shows through) and brightens it
+          toward the horizon, which is the gradient every real lake shows. */
+  float cbFlat = smoothstep( 4.0, 22.0, cbWd );
+  /* The fresnel WEIGHT comes off the mean plane (the wave normal pulled 80 %
+     toward +Y even at the hero's feet, fully flat by 22 m): a pow-5 term on a
+     15-degree Gerstner slope at a grazing view flips 0.05 -> 1.0 across one
+     wave, which IS the white-blob field (r2 shoot). The waves still show —
+     through the reflection DIRECTION (Nr, smooth in the blurred dome) and
+     the glint — which is how a real lake reads them. */
+  vec3 Ng = normalize( mix( Nw, vec3( 0.0, 1.0, 0.0 ), 0.80 + 0.20 * cbFlat ) );
+  vec3 Nr = normalize( mix( N, vec3( 0.0, 1.0, 0.0 ), 0.45 + 0.45 * cbFlat ) );   // reflection normal
   float ndv = clamp( dot( Ng, V ), 0.0, 1.0 );
   float f0 = clamp( uFresnelBias, 0.0, 0.05 );
   float fres = clamp( f0 + ( 1.0 - f0 ) * pow( 1.0 - ndv, max( uFresnelPower, 4.0 ) ), 0.0, 1.0 );
@@ -4169,88 +4218,81 @@ void main() {
     float fragZ  = ( 2.0 * zNear * zFar ) / ( zFar + zNear - ( gl_FragCoord.z * 2.0 - 1.0 ) * ( zFar - zNear ) );
     depth = clamp( ( sceneZ - fragZ ) / max( uDepthFade, 0.05 ), 0.0, 1.0 );
   #else
-    depth = clamp( 1.0 - vCbShore, 0.0, 1.0 );
+    depth = clamp( 1.0 - vCbShore.x, 0.0, 1.0 );
+  #endif
+  float depthM = depth * max( uDepthFade, 0.5 );          // metres of water
+  float shoreD = vCbShore.y;                              // metres to dry ground
+
+  /* ---- body colour: shallow tint is the last 1.6 m before the shore ----- */
+  vec3 body = mix( uShallow, uDeep, smoothstep( 0.0, 1.6, depthM ) );
+
+  /* ---- sky reflection --------------------------------------------------- */
+  vec3 R = reflect( -V, Nr );
+  R.y = max( R.y, 0.035 );                 // a lake never mirrors the ground
+  vec3 Ls = normalize( uSunDir );
+  vec3 refl;
+  #ifdef ENVMAP_TYPE_CUBE_UV
+    // soft mip: a water surface is a slightly hazy mirror, and the blur is
+    // what keeps the dome's sun disc from aliasing on the wave slopes
+    refl = textureCubeUV( uEnvMap, R, 0.30 ).rgb * uEnvIntensity;
+    // soft-knee: the dome is HDR (sun halo, horizon glow); the mirror of it
+    // must never print white — the hot highlight is the glint's job below
+    float cbRm = max( refl.r, max( refl.g, refl.b ) );
+    refl *= 1.0 / max( 1.0, cbRm );
+  #else
+    float rUp = clamp( R.y, 0.0, 1.0 );
+    refl = mix( uSkyHorizon, uSkyTop, pow( rUp, 0.42 ) );
+    refl += uSunColor * pow( clamp( dot( R, Ls ), 0.0, 1.0 ), 6.0 ) * 0.30;
   #endif
 
-  /* ---- body colour: shallow over deep by depth --------------------------- */
-  // depth in METRES (the attribute ramps over uDepthFade). The shallow tint is
-  // what you see through waist-deep water; past ~2.5 m the body is the deep
-  // colour, and from there on only the sky reflection changes with distance —
-  // which is the near-dark / far-sky gradient every real lake shows.
-  float depthM = depth * max( uDepthFade, 0.5 );
-  // 1.4 m: the shallow tint is the last metre before the shore; a 2.5 m ramp
-  // kept the whole azure shelf at the bright shallow colour (round-2 shoot)
-  vec3 body = mix( uShallow, uDeep, smoothstep( 0.0, 1.4, depthM ) );
+  vec3 col = mix( body, refl, fres );
 
-  /* ---- sky reflection (analytic dome: horizon -> zenith + sun glow) ------ */
-  vec3 R = reflect( -V, N );
-  vec3 Ls = normalize( uSunDir );
-  float rUp = clamp( R.y, 0.0, 1.0 );
-  // 0.55 -> 0.42: the horizon colour of a bright dome (azure 0xbfe4ee) is
-  // near-white, and at the angles a standing player sees water the old
-  // curve kept the reflection on it; the zenith blue now takes over sooner
-  vec3 sky = mix( uSkyHorizon, uSkyTop, pow( rUp, 0.42 ) );
-  // the bright patch of dome around the sun that every water surface shows
-  float sunGlow = pow( clamp( dot( R, Ls ), 0.0, 1.0 ), 6.0 );
-  sky += uSunColor * sunGlow * 0.30;
-
-  vec3 col = mix( body, sky, fres );
-
-  /* ---- sun glint --------------------------------------------------------- */
-  // Blinn-Phong on the rippled normal: a tight, HOT mirror lobe (the glitter
-  // path — bright enough to bloom) over a broad dim one so the surface reads
-  // as sunlit from a camera that is not standing in the mirror direction
+  /* ---- sun glint: Blinn-Phong 200 on the rippled normal ----------------- */
+  // a tight HOT lobe (the glitter, near field — cbRh dies by ~15 m so the far
+  // surface is never single-pixel speckle at a 0.60 render scale) over a
+  // broad dim lobe that reads as "sunlit" from any camera
+  /* r3 shoot (_shots/verdant-3/spawn.png, sun behind the camera): the lobe
+     on the FULL wave normal painted one solid white band across every
+     Gerstner slope that faced the half vector — the "giant foam blobs" were
+     this. The glint normal keeps only HALF the wave tilt plus the ripples,
+     the lobe is Blinn 200 (a 4-degree cone the 2-4 degree ripples break into
+     sparkle), and its energy is a third of what it was. */
   vec3 H = normalize( Ls + V );
-  float ndh = clamp( dot( N, H ), 0.0, 1.0 );
-  // the hot lobe fades with distance exactly as the ripples do (cbRf): far
-  // out, a tight lobe on a rippled normal is single-pixel speckle at a 0.60
-  // render scale — the "TV static" half of owner O4. Near, it glitters.
-  // ROUND 2: the hot lobe on the GEOMETRIC wave normal at 30 m was painting
-  // one white bar per Gerstner crest across the shelf (the "barcode" in
-  // _shots/azure-1/crest-metal.png); it now dies by ~15 m (cbRh) and the far
-  // surface keeps only the broad, dim lobe, which is what a distant lake does.
+  vec3 Nh = normalize( N - Nw * 0.5 + vec3( 0.0, 0.5, 0.0 ) );
+  float ndh = clamp( dot( Nh, H ), 0.0, 1.0 );
   float cbRh = 1.0 / ( 1.0 + cbWd * 0.12 );
-  float spec = pow( ndh, max( uGloss, 8.0 ) ) * cbRh;
-  float glit = pow( ndh, 18.0 );
+  float spec = pow( ndh, max( uGloss, 200.0 ) ) * cbRh;
+  float glit = pow( ndh, 24.0 );
   float sunUp = clamp( Ls.y * 4.0, 0.0, 1.0 );      // no glint from a sun below the horizon
-  col += uSunColor * ( spec * 2.0 + glit * 0.10 ) * ( 0.30 + 0.70 * fres ) * sunUp;
+  col += uSunColor * ( spec * 0.75 + glit * 0.06 ) * ( 0.30 + 0.70 * fres ) * sunUp;
 
-  /* ---- foam: the shore band ONLY ----------------------------------------- */
-  // a broken, moving line where the water meets the ground; whitecaps are
-  // reserved for open sea (uCrestFoam is 0 for lakes and pools — water.js)
-  /* SHORE BAND IN METRES (2026-09-04, surface lane). depth ramps over
-     uDepthFade metres (azure-1: 5-6 m), so a band written in depth units
-     (0.30 x shoreWidth = 0.54) foamed every fragment over water shallower
-     than ~3 m — the pale slab across the whole lagoon shelf in
-     _shots/surface2_azure-1.png that read as milk, not water. The band is
-     now uShoreWidth metres of DEPTH (capped at 1.2 m) back from the
-     waterline, whatever the body's fade distance. */
-  /* ROUND 2: a 0.6 m SOFT, NOISE-BROKEN edge (cap 0.8 m) — the noise moves
-     the edge in and out along the shore instead of tinting a band of it, so
-     what reads is a lapping line, never a stripe. Whitecaps stay off the
-     shallows (they need > 1.5 m of water to form). */
-  float cbShoreM = clamp( uShoreWidth, 0.3, 0.8 );
+  /* ---- foam: the SHORE BAND only (+ whitecaps on open sea) -------------- */
+  // ROUND 3: foam is where the water meets the GROUND — vCbShore.y is metres
+  // to the nearest dry sample, so a 20 m wading shelf 0.5 m deep is water,
+  // not milk, and the lapping line sits on the bank whatever the fade depth.
+  float cbShoreM = clamp( uShoreWidth, 0.3, 1.2 );
   float churn = cbwNoise( vCbUv * 1.7 + vec2( uTime * 0.28, -uTime * 0.19 ) );
   float churn2 = cbwNoise( vCbUv * 4.1 - vec2( uTime * 0.21, uTime * 0.33 ) );
-  // foam = shallowness x noise, thresholded: a lapping edge of PATCHES, never
-  // a solid band — a shelf that is 0.5 m deep for 20 m is water, not milk
-  float shoreK = 1.0 - clamp( depthM / cbShoreM, 0.0, 1.0 );
-  // MULTIPLICATIVE: shallowness gates the noise, it never adds to it, so a
-  // wading lake 0.5 m deep for 20 m (verdant-3) is patched at its EDGE only
-  float shoreFoam = smoothstep( 0.30, 0.70, shoreK * smoothstep( 0.42, 0.82, churn * 0.7 + churn2 * 0.3 ) );
-  float caps = smoothstep( 0.86, 0.99, vCbCrest * ( 0.70 + 0.40 * churn ) ) * uCrestFoam
-             * smoothstep( 1.0, 2.5, depthM );
+  // the band breathes in and out along the bank (a wash, not a stripe)
+  float lap = 0.5 + 0.5 * sin( uTime * 1.35 + shoreD * 5.0 + churn * 4.0 );
+  float band = 1.0 - smoothstep( 0.10, cbShoreM * ( 0.55 + 0.45 * lap ), shoreD );
+  float shoreFoam = band * smoothstep( 0.36, 0.72, churn * 0.65 + churn2 * 0.35 + band * 0.25 )
+                  * ( 1.0 - smoothstep( 0.9, 1.4, depthM ) );
+  // the wet line itself: a thin bright edge on the last 12 cm
+  shoreFoam = max( shoreFoam, ( 1.0 - smoothstep( 0.0, 0.12, shoreD ) ) * 0.8 );
+  // whitecaps: only where uCrestFoam > 0 (open sea), only on the very top of
+  // a crest, noise-gated to ~10-15 % coverage, only in > 1.5 m of water
+  float caps = smoothstep( 0.90, 0.99, vCbCrest * ( 0.72 + 0.34 * churn ) ) * uCrestFoam
+             * smoothstep( 0.35, 0.65, churn2 ) * smoothstep( 1.2, 2.5, depthM );
   float foam = clamp( shoreFoam + caps, 0.0, 1.0 );
 
-  col = mix( col, uFoam, foam * 0.75 );
+  col = mix( col, uFoam, foam * 0.80 );
 
-  /* ---- alpha: depth fade — 0.35 at the waterline, uOpacity by 1.5 m ------ */
-  float alpha = mix( 0.35, uOpacity, smoothstep( 0.0, 1.5, depthM ) );
-  alpha = clamp( max( alpha, max( fres, foam ) ), 0.0, 1.0 );
+  /* ---- alpha: depth fade — 0.30 at the waterline, uOpacity by 1.2 m ------ */
+  float alpha = mix( 0.30, uOpacity, smoothstep( 0.0, 1.2, depthM ) );
+  alpha = clamp( max( alpha, max( fres * 0.9, foam ) ), 0.0, 1.0 );
 
-  /* LINEAR HDR out — see the ROUND 5 double-tone-map note in world/sky.js.
-     ACES here clamped every glint and fresnel rim to 1.0 before FinishPass
-     ever saw them, which is what flattened the water to one cyan sheet. */
+  /* LINEAR HDR out — see the ROUND 5 double-tone-map note in world/sky.js. */
   gl_FragColor = vec4( max( col, vec3( 0.0 ) ), alpha );
 
   #include <fog_fragment>

@@ -37,6 +37,16 @@
  * It is free at runtime and — unlike a depth fade — it stays correct when the
  * camera is UNDER the surface.
  *
+ * ROUND 3 (2026-09-04, surface lane, critic r2 "GIANT white foam blobs ... no
+ * sky reflection"): `aShore` is now a vec2. `.x` is the shallowness above;
+ * `.y` is the HORIZONTAL distance in metres to the nearest DRY ground, so the
+ * shader can put foam on the bank (< ~1 m from the line) and nowhere else —
+ * a 20 m wading shelf 0.5 m deep is water, not milk. course.js never passes
+ * a heightfield, so the ground comes from terrain.js's registry of the
+ * heightfields it built for this course (`terrainGroundAt`). The reflection is
+ * the scene's PMREM sky dome, handed to the material by `mesh.onBeforeRender`
+ * (see `waterBeforeRender`).
+ *
  * FLOW. `def.flow = [x, z]` (metres/second) scrolls the surface detail AND
  * emits a second `Volume` of kind `'current'`, so what you see pushing you is
  * literally what pushes you.
@@ -51,6 +61,7 @@
 
 import * as THREE from 'three';
 import { Volume } from './collider.js';
+import { terrainGroundAt } from './terrain.js';
 
 /* ---------------------------------------------------------------------------
  * shared clock + local fallback bank
@@ -58,6 +69,39 @@ import { Volume } from './collider.js';
 
 /** Fallback clock, used when this module built the material itself. */
 const WATER_TIME = { value: 0 };
+
+/** Shore-distance bake: sample rings (metres) and the 8 compass directions. */
+const SHORE_FAR = 4.0;
+const SHORE_RINGS = [0.3, 0.6, 0.9, 1.25, 1.7, 2.3, 3.0, 4.0];
+const SHORE_DIR = (() => {
+  const a = new Float32Array(16);
+  for (let k = 0; k < 8; k++) { a[k * 2] = Math.cos(k * Math.PI / 4); a[k * 2 + 1] = Math.sin(k * Math.PI / 4); }
+  return a;
+})();
+
+/**
+ * ROUND 3: hand the surface the scene's PMREM sky dome. Runs right before the
+ * draw (three calls object.onBeforeRender ahead of setProgram, so a changed
+ * envMap recompiles on the same draw). Setting `material.envMap` is what makes
+ * three emit USE_ENVMAP + ENVMAP_TYPE_CUBE_UV + the CUBEUV_* size defines for
+ * this ShaderMaterial; the shader samples the texture through its own
+ * `uEnvMap` uniform. One compare per frame, zero allocation. Module-level so
+ * every water mesh shares the one function object.
+ */
+function waterBeforeRender(renderer, scene, camera, geometry, material) {
+  const u = material.uniforms;
+  if (!u) return;
+  const env = (scene && scene.environment) ? scene.environment : null;
+  if (material.envMap !== env) {
+    material.envMap = env;
+    if (u.uEnvMap) u.uEnvMap.value = env;
+    material.needsUpdate = true;
+  }
+  if (u.uEnvIntensity) {
+    const k = (scene && typeof scene.environmentIntensity === 'number') ? scene.environmentIntensity : 1;
+    u.uEnvIntensity.value = k;
+  }
+}
 
 const _fallbackMats = new Map();
 const _themedMats = new Map();
@@ -94,12 +138,12 @@ uniform vec4  uWaveB;
 uniform vec4  uWaveC;
 uniform float uAmp;
 uniform vec2  uFlow;
-attribute float aShore;
+attribute vec2 aShore;
 varying vec3  vW;
 varying vec3  vN;
 varying vec2  vUvW;
 varying float vCrest;
-varying float vShore;
+varying vec2  vShore;
 
 vec3 gerst(vec4 w, vec3 p, float t, inout vec3 tang, inout vec3 bino) {
   vec2 d = normalize(w.xy + vec2(1e-5, 1e-5));
@@ -149,7 +193,7 @@ varying vec3  vW;
 varying vec3  vN;
 varying vec2  vUvW;
 varying float vCrest;
-varying float vShore;
+varying vec2  vShore;
 
 float wh(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -171,22 +215,29 @@ void main() {
   if (!gl_FrontFacing) N = -N;
 
   vec3 V = normalize(cameraPosition - vW);
-  float fres = clamp(0.035 + (1.0 - 0.035) * pow(1.0 - clamp(dot(N, V), 0.0, 1.0), 4.2), 0.0, 1.0);
+  // Schlick F0 0.02 on the smooth wave normal (the ripples keep the glint)
+  vec3 Ng = normalize(vN);
+  if (!gl_FrontFacing) Ng = -Ng;
+  float ndv = clamp(dot(Ng, V), 0.0, 1.0);
+  float fres = clamp(0.02 + 0.98 * pow(1.0 - ndv, 5.0), 0.0, 1.0);
 
-  float depth = clamp(1.0 - vShore, 0.0, 1.0);
+  float depth = clamp(1.0 - vShore.x, 0.0, 1.0);
+  float shoreD = vShore.y;
   vec3 body = mix(uShallow, uDeep, depth * depth);
   vec3 R = reflect(-V, N);
-  vec3 sky = mix(uSkyHorizon, uSkyTop, clamp(R.y * 1.35, 0.0, 1.0));
+  R.y = max(R.y, 0.035);
+  vec3 sky = mix(uSkyHorizon, uSkyTop, pow(clamp(R.y, 0.0, 1.0), 0.42));
   vec3 col = mix(body, sky, fres);
 
   vec3 H = normalize(normalize(uSunDir) + V);
   col += uSunColor * pow(clamp(dot(N, H), 0.0, 1.0), max(uGloss, 4.0)) * (0.35 + 0.65 * fres) * 2.2;
 
-  float shoreBand = 1.0 - smoothstep(0.0, clamp(uShoreWidth * 0.35, 0.02, 1.0), depth);
+  // foam: the bank only (shoreD metres from dry ground) + sea whitecaps
   float churn = wn(vUvW * 2.6 + vec2(uTime * 0.35, -uTime * 0.22));
-  float foam = clamp(smoothstep(0.28, 0.92, shoreBand * (0.55 + 0.75 * churn))
-                   + smoothstep(0.72, 0.98, vCrest * (0.65 + 0.55 * churn)) * uCrestFoam, 0.0, 1.0);
-  col = mix(col, uFoam, foam);
+  float band = 1.0 - smoothstep(0.10, clamp(uShoreWidth, 0.3, 1.2), shoreD);
+  float foam = clamp(band * smoothstep(0.30, 0.72, churn + band * 0.25)
+                   + smoothstep(0.90, 0.99, vCrest * (0.72 + 0.34 * churn)) * uCrestFoam * smoothstep(0.4, 0.7, churn), 0.0, 1.0);
+  col = mix(col, uFoam, foam * 0.8);
 
   float alpha = clamp(mix(uOpacity, 1.0, max(fres * 0.75, foam)), 0.0, 1.0);
   alpha *= smoothstep(0.0, 0.04, depth + foam);
@@ -317,6 +368,8 @@ export function fallbackWaterMaterial(theme, kind2, look) {
       uSkyTop: { value: new THREE.Color(0x2f6fc0) },
       uSkyHorizon: { value: new THREE.Color(0xbcd8ee) },
       uOpacity: { value: L.opacity },
+      uEnvMap: { value: null },
+      uEnvIntensity: { value: 1.0 },
     },
     vertexShader: FALLBACK_VERT,
     fragmentShader: FALLBACK_FRAG,
@@ -417,30 +470,55 @@ export function buildWater(def, theme, mats) {
   const plane = new THREE.PlaneGeometry(sx, sz, segX, segZ);
   plane.rotateX(-Math.PI / 2);                     // into the XZ plane, +Y up
 
-  // --- the aShore attribute ------------------------------------------------
-  // materials.js reads it as SHALLOWNESS: `depth = 1 - aShore`, so
-  //   aShore = 1 at the waterline, 0 in water `fade` metres deep.
+  // --- the aShore attribute (vec2) -----------------------------------------
+  // materials.js reads .x as SHALLOWNESS: `depth = 1 - aShore.x`, so
+  //   aShore.x = 1 at the waterline, 0 in water `fade` metres deep;
+  // and .y as the horizontal METRES to the nearest dry ground (ROUND 3): the
+  // foam band lives on the bank, whatever the body's fade depth or shelf.
   const posAttr = plane.attributes.position;
   const n = posAttr.count;
-  const aShore = new Float32Array(n);
+  const aShore = new Float32Array(n * 2);
   const hf = d.heightfield || null;
-  const sampleY = (typeof d.sampleY === 'function') ? d.sampleY : null;
+  // ground: the def's own heightfield / sampler first, then the heightfields
+  // terrain.js built for this course (course.js passes neither)
+  const sampleY = (typeof d.sampleY === 'function') ? d.sampleY : terrainGroundAt;
+  const groundAt = (x, z) => {
+    let g = NaN;
+    if (hf && typeof hf.heightAt === 'function') g = hf.heightAt(x, z);
+    if (!(g === g)) g = sampleY(x, z);
+    return g;
+  };
   const cx = p[0], cz = p[2];
   const invFade = 1 / Math.max(0.05, fade);
   let anyGround = false;
+  const dryY = surfaceY - 0.03;
+  const isDry = (x, z) => { const g = groundAt(x, z); return g === g && g >= dryY; };
   for (let i = 0; i < n; i++) {
     const wx = posAttr.getX(i) + cx;
     const wz = posAttr.getZ(i) + cz;
-    let g = NaN;
-    if (hf && typeof hf.heightAt === 'function') g = hf.heightAt(wx, wz);
-    if (!(g === g) && sampleY) g = sampleY(wx, wz);
+    const g = groundAt(wx, wz);
     if (g === g) {
       anyGround = true;
       const depth = surfaceY - g;
       const k = 1 - depth * invFade;
-      aShore[i] = k < 0 ? 0 : (k > 1 ? 1 : k);
+      aShore[i * 2] = k < 0 ? 0 : (k > 1 ? 1 : k);
+      // distance to dry ground: rings of 8 samples out to 4 m; the first ring
+      // with a dry sample is the distance (vertices sit 0.9-1.4 m apart, so
+      // the line interpolates between them)
+      let sd = SHORE_FAR;
+      if (depth <= 0.03) sd = 0;
+      else {
+        for (let r = 0; r < SHORE_RINGS.length && sd === SHORE_FAR; r++) {
+          const rad = SHORE_RINGS[r];
+          for (let k8 = 0; k8 < 8; k8++) {
+            if (isDry(wx + SHORE_DIR[k8 * 2] * rad, wz + SHORE_DIR[k8 * 2 + 1] * rad)) { sd = rad; break; }
+          }
+        }
+      }
+      aShore[i * 2 + 1] = sd;
     } else {
-      aShore[i] = 0;                                // no ground = treat as deep
+      aShore[i * 2] = 0;                            // no ground = treat as deep
+      aShore[i * 2 + 1] = SHORE_FAR;
     }
   }
   // A body with no ground reference still gets a shoreline: ramp at the RIM, so
@@ -452,10 +530,11 @@ export function buildWater(def, theme, mats) {
       const lx = Math.abs(posAttr.getX(i)), lz = Math.abs(posAttr.getZ(i));
       const dEdge = Math.min(sx * 0.5 - lx, sz * 0.5 - lz);
       const k = 1 - dEdge * invRim;
-      aShore[i] = k < 0 ? 0 : (k > 1 ? 1 : k);
+      aShore[i * 2] = k < 0 ? 0 : (k > 1 ? 1 : k);
+      aShore[i * 2 + 1] = dEdge < 0 ? 0 : (dEdge > SHORE_FAR ? SHORE_FAR : dEdge);
     }
   }
-  plane.setAttribute('aShore', new THREE.BufferAttribute(aShore, 1));
+  plane.setAttribute('aShore', new THREE.BufferAttribute(aShore, 2));
   plane.computeBoundingBox();
   plane.computeBoundingSphere();
 
@@ -470,6 +549,7 @@ export function buildWater(def, theme, mats) {
   mesh.userData.def = def;
   mesh.userData.surfaceY = surfaceY;
   mesh.userData.noMerge = true;
+  mesh.onBeforeRender = waterBeforeRender;
 
   // --- volumes ------------------------------------------------------------
   const volume = new Volume({
