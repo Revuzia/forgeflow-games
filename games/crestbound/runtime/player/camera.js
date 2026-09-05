@@ -101,6 +101,7 @@ import {
   easeInOutSine, moveTowardAngle,
 } from '../core/util.js';
 import { Settings as SettingsSingleton } from '../core/settings.js';
+import { Collider, rayBoxT } from '../world/collider.js';
 
 /* ───────────────────────────── constants ───────────────────────────── */
 
@@ -200,6 +201,11 @@ const COLLIDE_OUT_MAX_RATE = 12.0;   // m/s ceiling so a long pull-in never snap
 const COLLIDE_IN_MAX_RATE  = 24.0;   // m/s floor rate for a small gap
 const COLLIDE_IN_MAX_STEP  = 1.00;   // m — hard per-frame ceiling (any dt)
 const COLLIDE_IN_MAX_S     = 0.10;   // s — the whole gap is closed within this
+// How long an eased pull-in may WAIT on the far side of a body that moved between
+// the lens and the hero before it cuts to the fan's answer on the hero's side
+// (see the STALL note in _updateDistance). Under the CONTRACT's 0.3 s occlusion
+// budget with the cut itself and one frame of slack.
+const COLLIDE_STALL_MAX_S  = 0.15;
 // THE PULL-IN STAYS INSTANT, deliberately. The audit measured a single frame
 // deleting 5.70 m against a 1.5 m budget, and the obvious reading is "rate-limit
 // it" — but `want` IS the first blocked distance, so every metre between the
@@ -632,6 +638,356 @@ function rightFromFwd(fwd, out) {
   return out;
 }
 
+/* ───────────────────────────── CAMERA OCCLUDERS ─────────────────────────────
+ * What the fan casts against is the course broadphase: every SOLID collider plus
+ * the heightfields — exactly the set the PLAYER collides with. That set is not
+ * what is DRAWN. Measured 2026-09-05 (_harness/_cam_probe.py, then the camcheck
+ * station rows, before this block existed) at the S3 stations:
+ *   azure-1 cp4          the lens INSIDE the sluice mover's batched body (odd
+ *                        crossing parity on `cb.metal.azure#batched`): the mover's
+ *                        collider is its 0.5 m deck, its drawn body is deck + skirt.
+ *   verdant-3 crest-race a visual ray head→lens hit `cb.stone.verdant#batched#8`
+ *                        (the mill tower drum) in 29/30 samples while the
+ *                        broadphase ray was clear: mill.js authors the drum
+ *                        collider at 0.80 R, so 0.2 R of curved stone stands
+ *                        between the hero and a lens the fan believes is in air.
+ *   ember-4 cp3          the lens in a slot between the tier slab (0.38 m) and
+ *                        the sandboard rail's un-collided banks.
+ * Rotor pedestals, mover skirts, mill drums, crusher housings — hazard bodies
+ * whose drawn envelope is bigger than their collider — and large instanced props
+ * with no collider at all are opaque to the player's eye and invisible to the
+ * fan. This set closes that gap at the GENERATOR: it is rebuilt from the
+ * course's own scene graph on every course change, so any hazard part that is
+ * drawn opaque is a camera occluder without the hazard knowing about it.
+ *
+ * Records are real `Collider`s (group 'camera', solid:false) that are NEVER
+ * registered in the broadphase: the player cannot block on them, and the fan's
+ * embedded-origin logic (`containsPoint`, `boxExitT`) works on them unchanged.
+ *   - batched hazard parts (hazards/batch.js BatchedMesh instances) of hazards
+ *     that own at least one solid collider: an ORIENTED box from the geometry's
+ *     local bounds and the instance matrix, re-posed on any frame the matrix
+ *     changes (movers, rotors, mills), visibility mirrored (vanish, breakables).
+ *     Non-solid hazards (rings, beams, lava) are skipped: a ring's box is mostly
+ *     the air the hero flies through.
+ *   - loose (un-batched) opaque hazard meshes up to OCC_LOOSE_MAX_M along their
+ *     longest side: a bigger one is a world-authored rail or track whose axis
+ *     box is mostly air (ember-4's sandboard measured 33 × 18 × 12 m).
+ *   - instanced props (world/props.js) whose instance box is a THICK object.
+ * A course that publishes `cameraOccluders` (Colliders, or {min,max} boxes) is
+ * honoured first; the scene walk is the fallback that needs nothing from it.
+ *
+ * Per frame: `refresh()` re-poses moving records (a 16-double matrix compare,
+ * no allocation), `cull()` keeps the records within the fan's reach of the
+ * focus, `_ray()` tests those after the broadphase. Nothing here allocates after
+ * `rebuild()`, which runs once per course change.
+ */
+const OCC_MIN_EXTENT_M     = 0.45;   // batched part: a longest side under this is a bolt/rung, never a wall
+const OCC_LOOSE_MAX_M      = 6.0;    // loose mesh: a longest side over this is a rail/track (box mostly air)
+const OCC_PROP_MAX_MIN_M   = 1.5;    // instanced prop: its longest side must reach this…
+const OCC_PROP_MIN_MIN_M   = 0.45;   // …and its shortest side this (a fence panel is not a wall)
+const OCC_NEAR_PAD_M       = 2.0;    // cull-radius slack over the fan's reach
+// A hollow shape's box is mostly air. MEASURED 2026-09-05, verdant-3 cp-yard,
+// yaw 1.83: the mill's four sails are ONE batched wood part whose box is
+// 8.6 × 15.5 × 15 m — the whole sail disc — and it stood 1.71 m from the focus,
+// so the camera tilted to 0.92 rad and pulled to 1.74 m against a wall of air
+// (camsweep min 3.23 m before). The sails already have one collider per arm.
+// A part CLAIMED by a hazard (Hazard API) is kept only while its box volume is
+// under OCC_VOLUME_RATIO × the hazard's largest collider box (the drum part is
+// 1.6 × its 0.80 R collider and stays; the sail disc is 4.0 × and goes); an
+// UNCLAIMED part (a BatchRig body: mover decks, crusher heads, rotor hubs) is
+// kept up to OCC_UNCLAIMED_MAX_M on its longest side.
+const OCC_VOLUME_RATIO     = 3.0;
+const OCC_UNCLAIMED_MAX_M  = 8.0;
+const OCC_MIN_HALF_M       = 0.01;
+
+// ── THE LENS SPHERE, not only the ray ────────────────────────────────────────
+// The fan is rays: a box BESIDE the ray that never crosses it is invisible to it,
+// and the lens sphere (collideRadius) can end up overlapping a slab corner in open
+// air. Measured 2026-09-05, verdant-3 crest-sigils with the camera in front of the
+// hero: the fan settled at 6.52 m (a hit at 6.87) with the lens 0.06 m outside a
+// pedestal tier's +x face and 0.08 m under its bottom — 0.10 m from a 2.8 m slab,
+// every frame, for a whole heading. `_sphereClear` asks the broadphase (and the
+// occluder set) for the nearest oriented-box distance at the posed lens, and
+// when it is under the radius `_deepestSphereClear` walks the pull-in inward to
+// the deepest distance that is clear — floored at `frameMin` (the framing floor
+// exists precisely so a chest-height obstacle cannot drag the focus down into a
+// self-locking collapse), and falling back to the fan's own answer when nothing
+// along the heading is clear, so it can never be worse than the fan.
+const SPHERE_EPS_M         = 0.02;   // m — the sphere test asks for collideRadius minus this
+const SPHERE_FREE_N        = 8;      // coarse samples from the fan's answer inward…
+const SPHERE_BISECT_N      = 4;      // …then bisect the first clear/blocked pair (3 cm at 6 m)
+const _sphBox    = new THREE.Box3();
+const _sphCands  = [];
+
+const _occM4   = new THREE.Matrix4();
+const _occP    = new THREE.Vector3();
+const _occQ    = new THREE.Quaternion();
+const _occS    = new THREE.Vector3();
+const _occBox  = new THREE.Box3();
+const _occC    = new THREE.Vector3();
+const _occN    = new THREE.Vector3();
+
+/** Drawn with depth, no blending, no alpha: the eye cannot see through it. */
+function matOpaque(m) {
+  if (!m) return false;
+  if (Array.isArray(m)) {
+    if (!m.length) return false;
+    for (let i = 0; i < m.length; i++) if (!matOpaque(m[i])) return false;
+    return true;
+  }
+  return m.visible !== false && !m.transparent && m.depthWrite !== false && !m.wireframe &&
+         (m.blending === undefined || m.blending === THREE.NormalBlending) &&
+         (typeof m.opacity !== 'number' || m.opacity >= 0.99);
+}
+
+class CamOccluders {
+  constructor() {
+    this.course = null;
+    /** @type {Collider[]} every record, static and dynamic */
+    this.items = [];
+    /** dynamic records {c, mesh, iid, lbox, cache}: batched instances re-posed per frame */
+    this.dyn = [];
+    /** indices into `items` within the fan's reach this frame (sized at rebuild) */
+    this.near = null;
+    this.nearCount = 0;
+    /** true when the course published its own list */
+    this.published = false;
+    /** rebuild scratch: BatchedMesh → Map(instance id → owning hazard is solid) */
+    this._claims = new Map();
+  }
+
+  /** Track the live course: rebuild on identity change only. */
+  sync(course) {
+    if (course === this.course) return;
+    this.rebuild(course);
+  }
+
+  rebuild(course) {
+    this.course = course || null;
+    this.items.length = 0;
+    this.dyn.length = 0;
+    this.nearCount = 0;
+    this.published = false;
+    if (!course) { this.near = null; return; }
+    const pub = course.cameraOccluders;
+    if (Array.isArray(pub) && pub.length) {
+      for (let i = 0; i < pub.length; i++) this._addPublished(pub[i]);
+      this.published = true;
+    } else {
+      /* Two batching paths exist in hazards/: the Hazard API (`solidPart`, recorded
+         in `h._batchParts` — mill, surfaces, launch, beams, lava, fluids, lasers,
+         breakable) and hazards/batchkit.js BatchRig (movers, crushers, rotors,
+         pendulum, vanish), whose rig is a closure local the hazard object never
+         exposes. MEASURED 2026-09-05: azure-1's three sluice movers reported
+         `_batchParts` 0 parts each, so a walk of the hazards alone left every mover
+         deck OUT of this set and the fan blind to the body that hid the hero.
+         So: the hazards CLAIM what they can (and a non-solid family — rings, beams,
+         lava — takes its parts out), then every instance of every opaque batch in
+         the course that nobody excluded is an occluder. An unclaimed instance is a
+         BatchRig part, and every BatchRig family is a solid body. */
+      const claimed = this._claims;
+      claimed.clear();
+      const hz = course.hazards;
+      if (Array.isArray(hz)) for (let i = 0; i < hz.length; i++) this._addHazard(hz[i], claimed);
+      if (course.group && typeof course.group.traverse === 'function') {
+        course.group.traverse((o) => {
+          if (!o.isBatchedMesh || !matOpaque(o.material)) return;
+          const m = claimed.get(o);
+          const info = o._instanceInfo || [];
+          for (let iid = 0; iid < info.length; iid++) {
+            if (!info[iid] || !info[iid].active) continue;
+            const s = m ? m.get(iid) : undefined;
+            if (s && !s.solid) continue;               // a non-solid family's part
+            this._addBatched(o, iid, s ? s.vol : -1);
+          }
+        });
+        this._addProps(course.group);
+      }
+      claimed.clear();
+    }
+    this.near = new Int32Array(this.items.length);
+  }
+
+  _addPublished(o) {
+    if (!o) return;
+    if (typeof o.containsPoint === 'function' && o.half && o.center) { this.items.push(o); return; }
+    const mn = o.min, mx = o.max;
+    if (!mn || !mx) return;
+    const c = new Collider({
+      center: [(mn.x + mx.x) * 0.5, (mn.y + mx.y) * 0.5, (mn.z + mx.z) * 0.5],
+      half: [Math.max(OCC_MIN_HALF_M, (mx.x - mn.x) * 0.5), Math.max(OCC_MIN_HALF_M, (mx.y - mn.y) * 0.5),
+             Math.max(OCC_MIN_HALF_M, (mx.z - mn.z) * 0.5)],
+      group: 'camera', solid: false, surface: 'normal',
+    });
+    c.userData = 'cam-occluder';
+    this.items.push(c);
+  }
+
+  /**
+   * One course hazard record ({h, colliders, …} from world/course.js, or a bare
+   * Hazard): CLAIM its Hazard-API batch parts in `claimed` (mesh → Map(iid →
+   * solid)), so a non-solid family's parts are excluded from the batch walk in
+   * `rebuild()`, and add its loose opaque meshes when it is a solid body.
+   */
+  _addHazard(rec, claimed) {
+    const h = rec && (rec.h || rec);
+    if (!h) return;
+    const solids = (rec.colliders && rec.colliders.length) ? rec.colliders : h.colliders;
+    let anySolid = false, volMax = 0;
+    if (solids) {
+      for (let i = 0; i < solids.length; i++) {
+        const c = solids[i];
+        if (!c || c.solid === false || !c.half) continue;
+        anySolid = true;
+        const v = 8 * c.half.x * c.half.y * c.half.z;
+        if (v > volMax) volMax = v;
+      }
+    }
+    const parts = h._batchParts;
+    if (parts && claimed) {
+      const claim = { solid: anySolid, vol: volMax };   // rebuild-time only
+      for (let i = 0; i + 1 < parts.length; i += 2) {
+        const b = parts[i], iid = parts[i + 1];
+        const mesh = b && b.mesh;
+        if (!mesh || !(iid >= 0)) continue;
+        let m = claimed.get(mesh);
+        if (!m) { m = new Map(); claimed.set(mesh, m); }
+        m.set(iid, claim);
+      }
+    }
+    if (!anySolid) return;
+    if (h.mesh && typeof h.mesh.traverse === 'function') {
+      h.mesh.traverse((o) => {
+        if (o.isMesh && !o.isInstancedMesh && !o.isBatchedMesh && o.visible && o.geometry && matOpaque(o.material)) this._addLoose(o);
+      });
+    }
+  }
+
+  /** `volMax`: the owning hazard's largest collider box volume (m³), or -1 when unclaimed. */
+  _addBatched(mesh, iid, volMax) {
+    const info = mesh._instanceInfo && mesh._instanceInfo[iid];
+    if (!info || !info.active) return;
+    let gid;
+    try { gid = mesh.getGeometryIdAt(iid); mesh.getBoundingBoxAt(gid, _occBox); }
+    catch (e) { return; }
+    if (_occBox.isEmpty()) return;
+    const sx = _occBox.max.x - _occBox.min.x, sy = _occBox.max.y - _occBox.min.y, sz = _occBox.max.z - _occBox.min.z;
+    const mx = Math.max(sx, sy, sz);
+    if (mx < OCC_MIN_EXTENT_M) return;
+    // the local box ignores instance scale; hazard parts are authored at scale 1
+    if (volMax >= 0 ? sx * sy * sz > OCC_VOLUME_RATIO * Math.max(volMax, 1) : mx > OCC_UNCLAIMED_MAX_M) return;
+    const c = new Collider({ center: [0, 0, 0], half: [0.5, 0.5, 0.5], group: 'camera', solid: false, surface: 'normal' });
+    c.userData = 'cam-occluder';
+    c.ref = mesh; c.props = { iid };               // provenance for the harnesses
+    const rec = { c, mesh, iid, lbox: _occBox.clone(), cache: new Float64Array(16) };
+    rec.cache[0] = NaN;                          // never equal: the first refresh poses it
+    this._poseBatched(rec);
+    this.items.push(c);
+    this.dyn.push(rec);
+  }
+
+  /** Re-pose one batched record from its instance matrix; no-op while the matrix holds. */
+  _poseBatched(rec) {
+    const mesh = rec.mesh, iid = rec.iid, c = rec.c;
+    const info = mesh._instanceInfo && mesh._instanceInfo[iid];
+    if (!info || !info.active || !mesh.visible) { c.active = false; return; }
+    c.active = !!info.visible;
+    if (!c.active) return;
+    mesh.getMatrixAt(iid, _occM4);
+    const e = _occM4.elements, cache = rec.cache;
+    let same = true;
+    for (let k = 0; k < 16; k++) if (cache[k] !== e[k]) { same = false; break; }
+    if (same) return;
+    for (let k = 0; k < 16; k++) cache[k] = e[k];
+    _occM4.premultiply(mesh.matrixWorld);
+    _occM4.decompose(_occP, _occQ, _occS);
+    const lb = rec.lbox;
+    _occC.set((lb.min.x + lb.max.x) * 0.5, (lb.min.y + lb.max.y) * 0.5, (lb.min.z + lb.max.z) * 0.5).applyMatrix4(_occM4);
+    c.center.copy(_occC);
+    c.half.set(
+      Math.max(OCC_MIN_HALF_M, (lb.max.x - lb.min.x) * 0.5 * Math.abs(_occS.x)),
+      Math.max(OCC_MIN_HALF_M, (lb.max.y - lb.min.y) * 0.5 * Math.abs(_occS.y)),
+      Math.max(OCC_MIN_HALF_M, (lb.max.z - lb.min.z) * 0.5 * Math.abs(_occS.z)));
+    c.quat.copy(_occQ);
+    c.update();
+  }
+
+  /** A loose, un-batched opaque mesh (hazard hubs, doors, pedestals). Static. */
+  _addLoose(o) {
+    const g = o.geometry;
+    if (!g.boundingBox) { try { g.computeBoundingBox(); } catch (e) { return; } }
+    const lb = g.boundingBox;
+    if (!lb || lb.isEmpty()) return;
+    o.updateWorldMatrix(true, false);
+    _occM4.copy(o.matrixWorld).decompose(_occP, _occQ, _occS);
+    const sx = (lb.max.x - lb.min.x) * Math.abs(_occS.x);
+    const sy = (lb.max.y - lb.min.y) * Math.abs(_occS.y);
+    const sz = (lb.max.z - lb.min.z) * Math.abs(_occS.z);
+    const mx = Math.max(sx, sy, sz);
+    if (mx < OCC_MIN_EXTENT_M || mx > OCC_LOOSE_MAX_M) return;
+    this._pushStatic(lb, _occM4, sx, sy, sz);
+  }
+
+  /** Instanced props under the course group: only THICK objects. Static. */
+  _addProps(group) {
+    group.traverse((o) => {
+      if (!o.isInstancedMesh || !o.visible || !o.geometry || !matOpaque(o.material)) return;
+      const g = o.geometry;
+      if (!g.boundingBox) { try { g.computeBoundingBox(); } catch (e) { return; } }
+      const lb = g.boundingBox;
+      if (!lb || lb.isEmpty()) return;
+      o.updateWorldMatrix(true, false);
+      const n = o.count | 0;
+      for (let i = 0; i < n; i++) {
+        o.getMatrixAt(i, _occM4);
+        _occM4.premultiply(o.matrixWorld);
+        _occM4.decompose(_occP, _occQ, _occS);
+        const sx = (lb.max.x - lb.min.x) * Math.abs(_occS.x);
+        const sy = (lb.max.y - lb.min.y) * Math.abs(_occS.y);
+        const sz = (lb.max.z - lb.min.z) * Math.abs(_occS.z);
+        if (Math.max(sx, sy, sz) < OCC_PROP_MAX_MIN_M || Math.min(sx, sy, sz) < OCC_PROP_MIN_MIN_M) continue;
+        this._pushStatic(lb, _occM4, sx, sy, sz);
+      }
+    });
+  }
+
+  /** `_occM4` is already decomposed into `_occQ`; `m` is the full world matrix of the box. */
+  _pushStatic(lb, m, sx, sy, sz) {
+    _occC.set((lb.min.x + lb.max.x) * 0.5, (lb.min.y + lb.max.y) * 0.5, (lb.min.z + lb.max.z) * 0.5).applyMatrix4(m);
+    const c = new Collider({
+      center: _occC,
+      half: [Math.max(OCC_MIN_HALF_M, sx * 0.5), Math.max(OCC_MIN_HALF_M, sy * 0.5), Math.max(OCC_MIN_HALF_M, sz * 0.5)],
+      quat: _occQ, group: 'camera', solid: false, surface: 'normal',
+    });
+    c.userData = 'cam-occluder';
+    this.items.push(c);
+  }
+
+  /** Per frame: follow the moving parts. Allocation-free. */
+  refresh() {
+    const dyn = this.dyn;
+    for (let i = 0; i < dyn.length; i++) this._poseBatched(dyn[i]);
+  }
+
+  /** Per frame: the records whose AABB lies within `radius` of (fx, fy, fz). Allocation-free. */
+  cull(fx, fy, fz, radius) {
+    const items = this.items, near = this.near;
+    let n = 0;
+    if (!near) { this.nearCount = 0; return; }
+    const r2 = radius * radius;
+    for (let i = 0; i < items.length; i++) {
+      const c = items[i];
+      if (!c.active) continue;
+      const a = c.aabb;
+      const dx = a.min.x > fx ? a.min.x - fx : (fx > a.max.x ? fx - a.max.x : 0);
+      const dy = a.min.y > fy ? a.min.y - fy : (fy > a.max.y ? fy - a.max.y : 0);
+      const dz = a.min.z > fz ? a.min.z - fz : (fz > a.max.z ? fz - a.max.z : 0);
+      if (dx * dx + dy * dy + dz * dz <= r2) near[n++] = i;
+    }
+    this.nearCount = n;
+  }
+}
+
 /* ───────────────────────────── FollowCamera ───────────────────────────── */
 
 export class FollowCamera {
@@ -682,6 +1038,7 @@ export class FollowCamera {
     // ── distance / framing solver ─────────────────────────────────────────
     this._distBase   = TUNE.cam.dist;          // eased base (death pull-out)
     this._distColl   = TUNE.cam.dist;          // collision-limited distance
+    this._stallT     = 0;                      // s the eased pull-in has waited behind a moved body
     this._yawSlide   = 0;                      // eased collision-avoidance yaw offset (rad)
     this._slideWant  = 0;                      // its target this frame
     this._pitchSlide = 0;                      // eased SHAFT-tier pitch offset (rad, see PITCH_STEPS)
@@ -753,9 +1110,13 @@ export class FollowCamera {
 
     // ── test surface ──────────────────────────────────────────────────────
     const self = this;
+    /** camera occluders (see CamOccluders): the drawn envelopes the fan must also respect */
+    this._occ = new CamOccluders();
+
     this.__test = {
       state() {
         return {
+          occluders: self._occ.items.length, occNear: self._occ.nearCount, occPublished: self._occ.published,
           // `yaw`/`pitch` are the POSED lens angles (orbit value + the solver's
           // collision-avoidance slide / context-derived pitch), because that is
           // what an audit of framing has to measure. The raw orbit values the
@@ -1505,7 +1866,7 @@ export class FollowCamera {
     for (let i = 0; i <= EMBED_SKIP_MAX; i++) {
       const rem = maxD - travelled;
       if (!(rem > 0)) return -1;
-      if (!bp.raycast(_pOrigin, dir, rem, _hit)) return -1;
+      if (!this._ray(bp, _pOrigin, dir, rem, _hit)) return -1;
       if (_hit.t > EMBED_EPS_M) {
         this._probeCeil = _hit.normal.y < -0.5;
         return travelled + _hit.t;
@@ -1553,6 +1914,10 @@ export class FollowCamera {
    */
   _updateDistance(dt) {
     const C = TUNE.cam;
+    // The camera-occluder set tracks the live course, follows its moving parts and
+    // is culled to the fan's reach BEFORE any probe below asks the world (also on a
+    // dt = 0 snap, so a respawn or test placement never solves against a stale set).
+    this._syncOccluders();
     const baseWant = this._deathOn ? C.dist + DEATH_PULL_M : C.dist;
     this._distBase = dt > 0 ? damp(this._distBase, baseWant, DIST_LAMBDA, dt) : baseWant;
 
@@ -1712,6 +2077,13 @@ export class FollowCamera {
 
       // (e) the distance along the heading we will actually pose at
       want = Math.max(COLLIDE_MIN_DIST, cPose);
+      // (f) the lens SPHERE at that distance, not only the ray to it (see
+      // SPHERE_EPS_M): pull in to the deepest sphere-clear distance, never below
+      // the framing floor and never past what the fan already answered.
+      const sphFloor = Math.min(C.frameMin, want);
+      if (want > sphFloor && !this._sphereClear(bp, want, pitch)) {
+        want = this._deepestSphereClear(bp, sphFloor, want, pitch);
+      }
     } else {
       this._limitLens = want;      // no broadphase: nothing limits the lens
     }
@@ -1732,12 +2104,44 @@ export class FollowCamera {
       // minDist 1.6) on an occluder the ease was already handling, bypassing
       // COLLIDE_IN_MAX_STEP entirely. The honest destination is the DEEPEST
       // distance along this heading at which the lens is still in open air.
-      else if (bp && this._lensEmbedded(bp, next, pitch)) next = this._deepestFree(bp, want, next, pitch);
+      else if (bp && this._lensEmbedded(bp, next, pitch)) {
+        const free = this._deepestFree(bp, want, next, pitch);
+        // A STALL: the deepest free distance is on the FAR side of a solid that
+        // now stands between the lens and `want` — a body that moved INTO the line
+        // of sight (measured 2026-09-05, azure-1 cp4 with the camera on the sluice
+        // side: the mover deck rises through the focus→lens line and the eased
+        // lens waited outside it for 0.82 s with the hero hidden; CONTRACT budgets
+        // 0.3 s). Waiting is right for a crossing that clears in a few frames and
+        // wrong past that: after COLLIDE_STALL_MAX_S the lens takes the fan's own
+        // answer (`want`, on the hero's side of the body) in one cut. Inside a
+        // solid is never an option; hidden for longer than the budget is not one
+        // either.
+        if (free > want + 1e-3) {
+          this._stallT += dt;
+          next = this._stallT >= COLLIDE_STALL_MAX_S ? want : free;
+        } else {
+          next = free;
+        }
+      } else {
+        this._stallT = 0;
+      }
+      if (next <= want) this._stallT = 0;
       this._distColl = next;
     } else {
+      this._stallT = 0;
       let next = damp(this._distColl, want, COLLIDE_OUT_LAMBDA, dt);              // ease back out
       const maxStep = COLLIDE_OUT_MAX_RATE * dt;
       if (next - this._distColl > maxStep) next = this._distColl + maxStep;
+      // A body that moved INTO a resting lens (a sail sweeping past, a deck
+      // rising under it, a slab the hero's head is sunk into so the fan's
+      // embedded-origin rule skipped it — measured 2026-09-05, ember-4 cp3: the
+      // lens sat INSIDE the sandboard's 6 × 0.5 m collider for 200 frames at
+      // both flanks, `dist` 1.38..2.67) is not something the fan, which only
+      // asks along the line from the focus, can see. One ray per frame at the
+      // posed lens catches it, and the answer is the deepest open-air distance
+      // on the hero's side — taken whole, because a lens inside a solid is worse
+      // than a cut.
+      if (bp && this._lensEmbedded(bp, next, pitch)) next = this._deepestFree(bp, COLLIDE_MIN_DIST, next, pitch);
       this._distColl = next;
     }
     this.dist = this._distColl;
@@ -1759,7 +2163,7 @@ export class FollowCamera {
     const pz = this._focus.z - _cFwd.z * cp * d;
     _pOrigin.set(px, py, pz);
     _cDir.set(0, -1, 0);
-    if (!bp.raycast(_pOrigin, _cDir, EMBED_EPS_M * 2, _hit)) return false;
+    if (!this._ray(bp, _pOrigin, _cDir, EMBED_EPS_M * 2, _hit)) return false;
     if (_hit.t > EMBED_EPS_M) return false;
     const c = _hit.collider;
     if (c && typeof c.containsPoint === 'function') return !!c.containsPoint(_pOrigin);
@@ -1783,11 +2187,95 @@ export class FollowCamera {
   _deepestFree(bp, lo, hi, pitch) {
     const span = hi - lo;
     if (!(span > 0)) return lo;
+    let blocked = hi;
     for (let i = 1; i < EMBED_FREE_N; i++) {
       const d = hi - span * (i / EMBED_FREE_N);
-      if (!this._lensEmbedded(bp, d, pitch)) return d;
+      if (!this._lensEmbedded(bp, d, pitch)) {
+        // The coarse sample is up to span/EMBED_FREE_N (0.8 m on a full pull-in)
+        // deeper than the solid's face; bisect back toward the blocked sample so
+        // the lens leaves the solid by centimetres, not by most of a metre
+        // (measured 2026-09-05, rime-2 cp4 front heading: a one-frame dip to
+        // 0.87 m from a 4.3 m pose when a yaw slide eased the lens into an ice
+        // block's corner and the guard took the coarse sample).
+        let free = d;
+        for (let k = 0; k < SPHERE_BISECT_N; k++) {
+          const mid = (blocked + free) * 0.5;
+          if (this._lensEmbedded(bp, mid, pitch)) blocked = mid; else free = mid;
+        }
+        return free;
+      }
+      blocked = d;
     }
     return lo;
+  }
+
+  /**
+   * Is the lens SPHERE at distance `d` along the posed heading clear of every
+   * solid collider, every camera occluder and the ground? Oriented-box distance
+   * (`Collider.distanceToPoint`) against the broadphase cells the sphere touches,
+   * so a sail's mostly-air world AABB does not count. Allocation-free: one shared
+   * query box and one shared candidate array, emptied before returning.
+   */
+  _sphereClear(bp, d, pitch) {
+    headingFromYaw(this.yaw + this._yawSlide, _cFwd);
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const px = this._focus.x - _cFwd.x * cp * d;
+    const py = this._focus.y + sp * d;
+    const pz = this._focus.z - _cFwd.z * cp * d;
+    _pOrigin.set(px, py, pz);
+    const R = TUNE.cam.collideRadius - SPHERE_EPS_M;
+    _sphBox.min.set(px - R, py - R, pz - R);
+    _sphBox.max.set(px + R, py + R, pz + R);
+    let clear = true;
+    if (typeof bp.query === 'function') {
+      const cands = bp.query(_sphBox, _sphCands);
+      for (let i = 0; i < cands.length && clear; i++) {
+        const c = cands[i];
+        if (!c || c.solid === false || !c.active || typeof c.distanceToPoint !== 'function') continue;
+        if (c.distanceToPoint(_pOrigin) < R) clear = false;
+      }
+      _sphCands.length = 0;
+    }
+    if (clear) {
+      const occ = this._occ, near = occ.near, items = occ.items;
+      for (let k = 0; k < occ.nearCount && clear; k++) {
+        if (items[near[k]].distanceToPoint(_pOrigin) < R) clear = false;
+      }
+    }
+    if (clear) {
+      const hfs = bp.heightfields;
+      if (hfs) for (let i = 0; i < hfs.length && clear; i++) {
+        const hf = hfs[i];
+        if (!hf.active || typeof hf.heightAt !== 'function') continue;
+        const h = hf.heightAt(px, pz);
+        if (h === h && py - h < R) clear = false;
+      }
+    }
+    return clear;
+  }
+
+  /**
+   * The deepest distance in [lo, hi] at which the lens sphere is clear, walking
+   * inward from `hi` (the fan's answer, known blocked) in SPHERE_FREE_N steps and
+   * bisecting the first blocked/clear pair SPHERE_BISECT_N times so the result
+   * does not step visibly as the hero moves. `hi` when nothing along the heading
+   * is clear — the fan's answer is never made worse.
+   */
+  _deepestSphereClear(bp, lo, hi, pitch) {
+    const span = hi - lo;
+    if (!(span > 0)) return hi;
+    let blocked = hi, clearD = -1;
+    for (let i = 1; i <= SPHERE_FREE_N; i++) {
+      const d = hi - span * (i / SPHERE_FREE_N);
+      if (this._sphereClear(bp, d, pitch)) { clearD = d; break; }
+      blocked = d;
+    }
+    if (clearD < 0) return hi;
+    for (let i = 0; i < SPHERE_BISECT_N; i++) {
+      const mid = (blocked + clearD) * 0.5;
+      if (this._sphereClear(bp, mid, pitch)) clearD = mid; else blocked = mid;
+    }
+    return clearD;
   }
 
   _broadphase() {
@@ -1795,6 +2283,49 @@ export class FollowCamera {
     if (!w) return null;
     const bp = w.broadphase || (w.course && w.course.broadphase) || null;
     return (bp && typeof bp.raycast === 'function') ? bp : null;
+  }
+
+  /**
+   * THE camera's world query: the broadphase (every solid collider + heightfield —
+   * what the player collides with) and then the camera-occluder set (what is
+   * DRAWN opaque and bigger than, or without, a collider — see CamOccluders).
+   * Same contract as `Broadphase.raycast`: `out.t` is the nearest hit or `maxD`,
+   * an origin inside a box is the degenerate hit t = 0 with the normal back along
+   * the ray. Every probe in this file goes through here. Allocation-free.
+   */
+  _ray(bp, origin, dir, maxD, out) {
+    let hit = bp.raycast(origin, dir, maxD, out);
+    const occ = this._occ;
+    const n = occ.nearCount;
+    if (n > 0) {
+      const items = occ.items, near = occ.near;
+      let best = hit ? out.t : maxD;
+      for (let k = 0; k < n; k++) {
+        const c = items[near[k]];
+        const t = rayBoxT(c, origin, dir, best, _occN);
+        if (t >= 0 && t < best) {
+          best = t; hit = true;
+          out.t = t; out.collider = c; out.heightfield = null;
+          if (out.normal) out.normal.copy(_occN);
+        }
+      }
+    }
+    return hit;
+  }
+
+  /** Track the course, re-pose the moving occluders, cull to the fan's reach around the focus. */
+  _syncOccluders() {
+    const w = this.world;
+    let course = null;
+    if (w) course = (w.hazards && w.group && w.broadphase) ? w : (w.course || null);
+    const occ = this._occ;
+    occ.sync(course);
+    if (!occ.items.length) { occ.nearCount = 0; return; }
+    occ.refresh();
+    const C = TUNE.cam;
+    const reach = C.dist + DEATH_PULL_M + C.collideRadius + Math.abs(C.shoulder) +
+                  WHISKER_N * WHISKER_M + WHISKER_DOWN_M + OCC_NEAR_PAD_M;
+    occ.cull(this._focus.x, this._focus.y, this._focus.z, reach);
   }
 
   /**
@@ -1820,6 +2351,10 @@ export class FollowCamera {
   probeClear(origin, dir, maxD) {
     const bp = this._broadphase();
     if (!bp || !(maxD > 0)) return -1;
+    // a staging probe starts wherever its subject is, not at the focus: cull the
+    // occluder set around IT (the next _updateDistance re-culls around the focus)
+    this._syncOccluders();
+    if (this._occ.items.length) this._occ.cull(origin.x, origin.y, origin.z, maxD + TUNE.cam.collideRadius);
     return this._castOccluder(bp, origin, dir, maxD);
   }
 
