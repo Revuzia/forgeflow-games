@@ -334,6 +334,18 @@ void main() {
   // display white.
   // hw is how far into the roll-off this pixel is (0 under the knee, -> 1
   // at the asymptote); the tone-map block below uses it to hold the HUE.
+  // NaN / Inf SCRUB, BEFORE the roll-off (critic r1 "pure-black NaN splats on
+  // the brightest emissives"). The HDR buffer is half-float: a lava streak, a
+  // sconce-flame sprite or a crest icon under bloom can arrive as +Inf, and
+  // Inf fed into he * uHiRange / ( uHiRange + he ) is Inf/Inf = NaN, which
+  // then poisons hw, the hue hold and ACES into a black splat (measured with
+  // the toggle probe: roll-off disabled -> 0 black pixels). A NaN already in
+  // the buffer is scrubbed to the ceiling (it was born hot, not dark), then
+  // the clamp bounds every channel to [0, uClampHi] so nothing below can
+  // overflow. isnan() is GLSL ES 3.00 (WebGL2), which the renderer requires.
+  col = mix( col, vec3( uClampHi ), vec3( isnan( col ) ) );
+  col = clamp( col, vec3( 0.0 ), vec3( uClampHi ) );
+
   float hw = 0.0;
   {
     float hm = max( col.r, max( col.g, col.b ) );
@@ -344,8 +356,6 @@ void main() {
       hw = he / ( uHiRange + he );
     }
   }
-
-  col = min( col, vec3( uClampHi ) );
 
   // ------------------------------------------------- tone map + encode
   gl_FragColor = vec4( col, 1.0 );
@@ -361,10 +371,32 @@ void main() {
     // channel allowed to clip), so a hot core is orange-white with the
     // halo's falloff around it, and a sun disc stays warm. Under the knee
     // (hw = 0) this is a no-op, so nothing lit and ordinary changes.
+    //
+    // r1 rework (critic C2 still white/pink; NaN splats): two held colours.
+    //   hhM — the colour scaled so its MAX channel rides the tone curve: the
+    //         channel ratios survive intact and nothing clips, so a (8,4,1)
+    //         jet lands orange (0.98, 0.49, 0.12), never cream.
+    //   hhL — scaled by the tone curve of its LUMINANCE, the strong channel
+    //         allowed to clip: whiter, for the hottest cores only.
+    // The hold weight is smoothstep(hw) so a pixel a third of the way into
+    // the roll-off is already fully held (the old linear hw*0.85 left the
+    // jets 40 % per-channel ACES = the cream slab); the white drift is
+    // hw^3, so only a value far past the asymptote goes white-hot.
+    // Every term is NaN-proof: col is >= 0 and finite (scrubbed above), the
+    // divisors are floored, and a NaN k (defensive) skips the hold.
     if ( hw > 0.0 && uHueHold > 0.0 ) {
-      float hl = max( dot( col, LUMA ), 1e-4 );
-      vec3 hh = col * ( ACESFilmicToneMapping( vec3( hl ) ).r / hl );
-      gl_FragColor.rgb = mix( gl_FragColor.rgb, min( hh, vec3( 1.0 ) ), hw * uHueHold );
+      vec3 cp = max( col, vec3( 0.0 ) );
+      float hm2 = max( max( cp.r, max( cp.g, cp.b ) ), 1e-3 );
+      float hl = max( dot( cp, LUMA ), 1e-3 );
+      float kM = ACESFilmicToneMapping( vec3( hm2 ) ).r / hm2;
+      float kL = ACESFilmicToneMapping( vec3( hl ) ).r / hl;
+      if ( kM == kM && kL == kL ) {
+        vec3 hhM = cp * kM;
+        vec3 hhL = min( cp * kL, vec3( 1.0 ) );
+        vec3 hh = mix( hhM, hhL, hw * hw * hw );
+        float hwt = smoothstep( 0.0, 0.35, hw ) * uHueHold;
+        gl_FragColor.rgb = mix( gl_FragColor.rgb, hh, hwt );
+      }
     }
   #elif defined( AGX_TONE_MAPPING )
     gl_FragColor.rgb = AgXToneMapping( gl_FragColor.rgb );

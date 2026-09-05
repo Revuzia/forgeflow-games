@@ -195,6 +195,13 @@ const CB_FOG_AER = new Float32Array([0.5, 0.6, 0.7, 0.0]);
 const CB_FOG_K = new Float32Array([0.6, 1.0, 0.0, 0.0]);
 /** how far below the hero's feet the full-density fog base sits (metres) */
 const FOG_BASE_BELOW_DEFAULT = 3.0;
+/**
+ * Altitude cap on the height-fog SKY MIX (critic r1, azure-3): the effective
+ * `skyMix * skyCap` eases from the theme's value at SKYMIX_ALT_LO m to at most
+ * SKYMIX_ALT_MAX by SKYMIX_ALT_HI m, so a deck 30-53 m up keeps a fog band
+ * darker than itself instead of dissolving into the sanctum sky.
+ */
+const SKYMIX_ALT_LO = 15, SKYMIX_ALT_HI = 25, SKYMIX_ALT_MAX = 0.35;
 
 (function patchHeightFog() {
   const CH = THREE.ShaderChunk;
@@ -768,6 +775,18 @@ export class Engine {
     // the height-fog base rides a few metres under the hero's feet (see the
     // HEIGHT FOG patch): one typed-array write reaches every fogged program.
     CB_FOG_H[0] = _v3a.y - this._fogBelow;
+    // ALTITUDE CAP on the sky mix (critic r1, azure-3 white-out): a station
+    // 30-53 m up saw everything above the hero fog toward the sanctum sky at
+    // skyMix 0.6 and the deck lost its far edge in white. Above SKYMIX_ALT_LO
+    // the effective mix is eased down so that skyMix * cap <= SKYMIX_ALT_MAX
+    // by SKYMIX_ALT_HI; at ground stations nothing changes. Two scalar
+    // writes, no allocation.
+    {
+      const alt = _v3a.y;
+      const t = alt <= SKYMIX_ALT_LO ? 0 : alt >= SKYMIX_ALT_HI ? 1 : (alt - SKYMIX_ALT_LO) / (SKYMIX_ALT_HI - SKYMIX_ALT_LO);
+      const capHi = Math.min(this._fogSkyCapTheme, SKYMIX_ALT_MAX / Math.max(CB_FOG_SKY[3], 1e-3));
+      CB_FOG_K[0] = this._fogSkyCapTheme + (capHi - this._fogSkyCapTheme) * t;
+    }
 
     const tex = this._shadow.texelWorld;
     if (tex > 0) {
@@ -879,6 +898,7 @@ export class Engine {
      *   fog.aerialDensity 1/m of the slow band (default 0 = off)
      *   fog.aerialStrength 0..1 — how far the band may go toward its colour */
     CB_FOG_K[0] = clamp(numOr(dig(t, 'fog.skyCap', 1.0), 1.0), 0, 1);
+    this._fogSkyCapTheme = CB_FOG_K[0];   // followShadow() eases it down with altitude
     const aerSpec = dig(t, 'fog.aerialColor', null);
     if (aerSpec !== null && aerSpec !== undefined) readColor(aerSpec, 0x6f8fa4, _col);
     else _col.multiplyScalar(0.78);
