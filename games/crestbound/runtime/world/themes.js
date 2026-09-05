@@ -272,7 +272,9 @@ export const THEMES = {
         /* sunSize in (1 - cos theta): 0.0055 was a 6-degree radius, i.e. a
          * 12-degree smear. 0.00040 = 1.6 deg — a low sun reads slightly larger
          * than a high one, which is also true. */
-        sunSize: 0.00040, sunIntensity: 3.4, sunHalo: 0.55,
+        /* LIGHT LANE 2026-09-04 (critic C4): halo 0.55 -> 0.32, disc 3.4 ->
+         * 2.6 — the dusk sun is a point with a rim, not a third of the frame. */
+        sunSize: 0.00040, sunIntensity: 2.6, sunHalo: 0.32,
         /* THE ARC (critic: "a broad ~200 px vertical spectral smear ... renders
          * as a straight prism band with no arc curvature and reads exactly like
          * over-strength chromatic aberration"). The cause is the radius: a
@@ -308,7 +310,11 @@ export const THEMES = {
        * light and a LOWER angle is strictly better — it throws the long bars of
        * light across the floor the theme header promises and lines the god-ray
        * planes up with them. */
-      key: { color: 0xffb257, intensity: 2.80, dir: [-0.82, 0.155, 0.38] },
+      /* LIGHT LANE 2026-09-04 (critic C4 "sun glare fills the upper-left
+       * third ... crushes courtyard/tower contrast"): 2.80 -> 2.45, and the
+       * dome's disc/halo trimmed with it (sky.params). The amber stays; the
+       * flood does not. */
+      key: { color: 0xffb257, intensity: 2.45, dir: [-0.82, 0.155, 0.38] },
       /* Cool bounce off the shadowed wall. It was 0.95 against a 2.65 key AND
        * a 0.42 ambient AND a 0.62 hemi — a 26 % share that clipping then ate
        * entirely, which is why no blue survived into the frame. Against the
@@ -353,7 +359,10 @@ export const THEMES = {
        * off the floor, the hemi's sky half is the COOL window light and its
        * ground half the warm stone, so even the undirected light carries the
        * split instead of averaging it away. */
-      ambient: { color: 0x3a2c1e, intensity: 0.30 },
+      /* LIGHT LANE 2026-09-04 (owner O5 "near-black upper half"): the flat
+       * floor comes up a step and warms — it is the amber bounce off the
+       * marble, and it is the only thing that reaches the vault. */
+      ambient: { color: 0x4a3622, intensity: 0.42 },
       /* Raised 0.34 -> 0.50: at dusk the Keep's EXTERIOR gets no key at all
        * (the key is the raking window light, which lives indoors), so the whole
        * hub rendered as a black silhouette in three of the four establishing
@@ -372,7 +381,17 @@ export const THEMES = {
        * hard, because a hemi's ground half is the only directional-ish term
        * that lands on a VERTICAL face from below — which is exactly the 25-40 m
        * wall the critic says receives nothing. */
-      hemi: { skyColor: 0x7d86ac, groundColor: 0x5c4430, intensity: 1.00 },
+      /* LIGHT LANE 2026-09-04 (owner O5, critic C4): the hall is a TALL AMBER
+       * ROOM with a cool blue fill. Its ceiling and upper walls face DOWN and
+       * sideways, so the only light they can take is the hemi's GROUND half —
+       * which was a dim 0x5c4430. Warmed and lifted hard (the amber bounce off
+       * a lit marble floor), the sky half kept cool so the split survives;
+       * 1.00 -> 1.30 because 40 % of the frame was under 0.06 luminance. */
+      hemi: { skyColor: 0x7d86ac, groundColor: 0x9a6438, intensity: 1.30 },
+      /* Hero-only camera-side fill (player/hero.js _installRim): the Keep's
+       * key is BEHIND Nim at spawn, so without this the side the player sees
+       * is lit by nothing but the fill. Amber, ~3:1 under the key. */
+      heroFill: { color: 0xffc98a, intensity: 0.95, sky: 0.40 },
     },
 
     /* Warm/cool split lives in the grade too, not only in the lights: gain and
@@ -452,7 +471,13 @@ export const THEMES = {
        * lifted the deck. The pad lift is the one lever that moves the deck
        * without moving the band (it is bound to the pad's own albedo), and the
        * arithmetic wants the deck near [214,190,148]. */
-      padGlow: 6.90,
+      /* LIGHT LANE 2026-09-04 (owner O5 "blown white pool", critic C3 "no
+       * cast shadow under Nim ... the emissive pad disc swallows the contact"):
+       * 6.90 was a self-lit disc SEVEN times its own albedo — nothing the sun
+       * removed could read on it, and the disc clipped white. 1.70 keeps the
+       * pad the bright half of the readability pair against a 0x2a2028 fog
+       * while the shadow map and the contact blob land on it again. */
+      padGlow: 1.70,
     },
 
     particles: {
@@ -762,8 +787,15 @@ export const THEMES = {
       /* Flat terms trimmed: they were lighting the shaded fortress WALLS to
        * within 1.85:1 of the sunlit deck in front of them (contrastcheck,
        * verdant-1 cp2). The key carries the deck; the walls may fall away. */
-      ambient: { color: 0x7d8a68, intensity: 0.26 },
-      hemi: { skyColor: 0x8cbcec, groundColor: 0x5a6338, intensity: 0.46 },
+      /* LIGHT LANE 2026-09-04 (critic C6 "the shaded side of every hill is a
+       * flat near-black cutout with a hard terminator — hemi 0.46 / ambient
+       * 0.26 far too low for a 3.90 key"): the shade of a morning meadow is
+       * the SKY without the sun, so the hemi's sky half carries it — blue from
+       * above, warm grass-bounce from below — at 0.82, which holds the key at
+       * a cinematic ~4.7:1 while the terminator becomes a gradient. */
+      ambient: { color: 0x7d8a68, intensity: 0.36 },
+      hemi: { skyColor: 0x8cbcec, groundColor: 0x6e7444, intensity: 0.82 },
+      heroFill: { color: 0xe8eefc, intensity: 1.10, sky: 0.35 },
     },
 
     grade: {
@@ -826,7 +858,10 @@ export const THEMES = {
        * band at that station being the fort's own lit interior wall. The deck
        * needs about +36 % luminance to clear 3.5:1, and the pad lift is the only
        * term that reaches the deck without also reaching the wall. */
-      padGlow: 2.45,
+      /* LIGHT LANE 2026-09-04 (critic C3): 2.45 -> 1.25 — under a 3.90 key
+       * the pad needs almost no self-light, and at 2.45 it was hiding the
+       * shadow the sun lays on it. */
+      padGlow: 1.25,
     },
 
     particles: {
@@ -950,8 +985,15 @@ export const THEMES = {
       // THE LAVA — a bounce light from under the floor
       fill: { color: 0xff5a12, intensity: 1.95, dir: [0.08, -1.00, 0.16] },
       rim: { color: 0xffb060, intensity: 2.25, dir: [-0.58, 0.28, -0.76] },
-      ambient: { color: 0x2e1509, intensity: 0.40 },
-      hemi: { skyColor: 0x2b1a12, groundColor: 0xff4a0a, intensity: 0.90 },
+      /* LIGHT LANE 2026-09-04 (owner O2 "in Ember he is a dark silhouette",
+       * contract §15 "red-orange UP-LIGHT bounce from the lava"): the sky half
+       * of the hemi was 0x2b1a12 — soot — so the top of every head, deck and
+       * catwalk took nothing; lifted to a smoky amber. The GROUND half is the
+       * lava, 0.90 -> 1.10, so catwalk undersides and Nim's underside glow —
+       * readable, not blown (the key is 2.15 over it). */
+      ambient: { color: 0x3a1a0c, intensity: 0.50 },
+      hemi: { skyColor: 0x4a2c20, groundColor: 0xff4a0a, intensity: 1.10 },
+      heroFill: { color: 0xffb070, intensity: 0.80, sky: 0.40 },
     },
 
     grade: {
@@ -986,6 +1028,9 @@ export const THEMES = {
 
     palette: {
       safe: 0x93a7b8, safeEdge: 0x8ff0ff,
+      /* LIGHT LANE 2026-09-04 (critic C3): explicit, under the 2.05 default,
+       * so the sun's shadow and the contact blob read on the pad. */
+      padGlow: 1.60,
       light: 0xffb070, lightCool: 0xffd6a8,
       kill: 0xff4a10, killGlow: 0xffb04a,
       checkpoint: 0x2f3a48, checkpointOn: 0x6fe0ff,
@@ -1108,8 +1153,11 @@ export const THEMES = {
       fill: { color: 0x5f88c8, intensity: 1.05, dir: [-0.40, 0.48, -0.78] },
       // the last pink light on the ridge — the one warm thing in the theme
       rim: { color: 0xffa8c0, intensity: 2.05, dir: [0.76, 0.10, -0.64] },
-      ambient: { color: 0x2c3d55, intensity: 0.44 },
-      hemi: { skyColor: 0x486a96, groundColor: 0x9fb0c4, intensity: 0.72 },
+      /* LIGHT LANE 2026-09-04: a snowfield's shade is lit by the whole dusk
+       * dome and by the snow itself — the brightest bounce in the game. */
+      ambient: { color: 0x2c3d55, intensity: 0.52 },
+      hemi: { skyColor: 0x486a96, groundColor: 0x9fb0c4, intensity: 0.95 },
+      heroFill: { color: 0xdde8ff, intensity: 0.85, sky: 0.35 },
     },
 
     grade: {
@@ -1126,6 +1174,9 @@ export const THEMES = {
 
     palette: {
       safe: 0x7c93a8, safeEdge: 0xffe9a8,
+      /* LIGHT LANE 2026-09-04 (critic C3): explicit, under the 2.05 default,
+       * so the sun's shadow and the contact blob read on the pad. */
+      padGlow: 1.40,
       light: 0xffe0b4, lightCool: 0xd8ecff,
       kill: 0xff2040, killGlow: 0xff7a90,
       checkpoint: 0x39516a, checkpointOn: 0x7fe2ff,
@@ -1254,8 +1305,14 @@ export const THEMES = {
       // the sea bounce: strong, cyan, from low and to the side
       fill: { color: 0x5fd8e8, intensity: 1.45, dir: [-0.55, 0.12, 0.82] },
       rim: { color: 0xdff6ff, intensity: 1.60, dir: [-0.22, 0.24, -0.95] },
-      ambient: { color: 0x5f96a8, intensity: 0.44 },
-      hemi: { skyColor: 0x8fd0f0, groundColor: 0x2f9fb8, intensity: 0.95 },
+      /* LIGHT LANE 2026-09-04 (owner O3 "the Azure hills are pure black
+       * cutouts"): noon over water has the brightest sky and the brightest
+       * sea-bounce of any theme, so its shade is the LEAST black — hemi 0.95
+       * -> 1.20 and the ambient up a step keep every hill's far side a lit
+       * cyan-grey; the key at 3.20 still leads by ~2.7:1. */
+      ambient: { color: 0x5f96a8, intensity: 0.56 },
+      hemi: { skyColor: 0x8fd0f0, groundColor: 0x2f9fb8, intensity: 1.20 },
+      heroFill: { color: 0xfff0d8, intensity: 0.95, sky: 0.30 },
     },
 
     grade: {
@@ -1289,6 +1346,9 @@ export const THEMES = {
 
     palette: {
       safe: 0xb8a67e, safeEdge: 0xffd166,
+      /* LIGHT LANE 2026-09-04 (critic C3): explicit, under the 2.05 default,
+       * so the sun's shadow and the contact blob read on the pad. */
+      padGlow: 1.15,
       light: 0xffe2b0, lightCool: 0xdff2ff,
       kill: 0xff2a4a, killGlow: 0xff7a92,
       checkpoint: 0x3f6274, checkpointOn: 0x7fffd8,

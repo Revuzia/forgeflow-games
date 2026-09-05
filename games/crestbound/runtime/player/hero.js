@@ -1395,7 +1395,12 @@ class ShadowBlob {
 
     this.mesh = new THREE.Mesh(this.geo, this.mat);
     this.mesh.name = 'nim.shadowBlob';
-    this.mesh.renderOrder = 3;
+    /* LIGHT LANE 2026-09-04 (critic C3 "the emissive pad disc swallows the
+     * contact"): the checkpoint ring is an additive mesh at renderOrder 6, so
+     * at 3 the blob was drawn FIRST and the ring's glow was added over it. 7
+     * puts the contact on top of everything transparent under Nim's feet. The
+     * pad's self-light itself is capped per theme (`palette.padGlow`). */
+    this.mesh.renderOrder = 7;
     this.mesh.frustumCulled = false;
     this.mesh.castShadow = false;
     this.mesh.receiveShadow = false;
@@ -3127,24 +3132,48 @@ export class Hero {
     const rimU = this._rimU || (this._rimU = {
       uCbHeroRim: { value: new THREE.Vector4(1, 0.95, 0.85, 0.9) },
       uCbHeroRimDir: { value: new THREE.Vector3(0.15, 0.35, -0.92).normalize() },
+      /* LIGHT LANE 2026-09-04 (owner O2 "Nim is unlit ... no key on the face,
+       * no rim"): two more uniform-only terms on the same program.
+       *   uCbHeroSky  rgb = the theme's SKY colour, a = strength (~0.35): an
+       *               omnidirectional fresnel so the silhouette edge always
+       *               carries a cool sky rim whichever way the rig's back light
+       *               happens to point — view-dependent, zero draw cost.
+       *   uCbHeroFill rgb = a theme-tinted fill, a = intensity in the same
+       *               units as a DirectionalLight: a wrapped lambert from the
+       *               CAMERA side, so whatever face of Nim the player sees is
+       *               never the unlit one (the Keep's key is behind him at
+       *               spawn). It is a material term, not a scene light, so the
+       *               light count and the shader permutation do not change. */
+      uCbHeroSky: { value: new THREE.Vector4(0.56, 0.72, 0.95, 0.35) },
+      uCbHeroFill: { value: new THREE.Vector4(1, 0.95, 0.88, 0.9) },
     });
     mat.onBeforeCompile = (shader) => {
       shader.uniforms.uCbHeroRim = rimU.uCbHeroRim;
       shader.uniforms.uCbHeroRimDir = rimU.uCbHeroRimDir;
+      shader.uniforms.uCbHeroSky = rimU.uCbHeroSky;
+      shader.uniforms.uCbHeroFill = rimU.uCbHeroFill;
       const AO = '#include <aomap_fragment>';
       if (shader.fragmentShader.indexOf(AO) === -1) return;
       shader.fragmentShader = 'uniform vec4 uCbHeroRim;\nuniform vec3 uCbHeroRimDir;\n' +
+        'uniform vec4 uCbHeroSky;\nuniform vec4 uCbHeroFill;\n' +
         shader.fragmentShader.replace(AO, AO + `
   {
-    // CRESTBOUND hero rim (player/hero.js _installRim)
+    // CRESTBOUND hero rim + sky fresnel + camera fill (player/hero.js _installRim)
     float cbNV = 1.0 - saturate( dot( geometryNormal, geometryViewDir ) );
-    float cbF = cbNV * cbNV * cbNV;
+    // (1-NV)^2, not ^3: at the low tier's 0.60 scale a cubic rim is a one-pixel
+    // line the upsample erases; the square is a 2-3 px band that survives it.
+    float cbF = cbNV * cbNV;
     vec3 cbRd = normalize( ( viewMatrix * vec4( uCbHeroRimDir, 0.0 ) ).xyz );
     float cbBack = saturate( dot( geometryNormal, cbRd ) * 0.55 + 0.45 );
     reflectedLight.indirectSpecular += uCbHeroRim.rgb * ( cbF * cbBack * uCbHeroRim.a );
+    // sky fresnel: the same grazing term, ungated, in the dome's own colour
+    reflectedLight.indirectSpecular += uCbHeroSky.rgb * ( cbF * cbNV * uCbHeroSky.a );
+    // camera-side wrapped lambert, albedo-tinted like a real diffuse term
+    float cbWrap = saturate( dot( geometryNormal, geometryViewDir ) * 0.55 + 0.45 );
+    reflectedLight.indirectDiffuse += diffuseColor.rgb * uCbHeroFill.rgb * ( cbWrap * uCbHeroFill.a * RECIPROCAL_PI );
   }`);
     };
-    mat.customProgramCacheKey = () => 'cb-hero-rim';
+    mat.customProgramCacheKey = () => 'cb-hero-rim2';
     mat.needsUpdate = true;
   }
 
@@ -3255,6 +3284,33 @@ export class Hero {
       this._rimU.uCbHeroRimDir.value.set(d[0], d[1], d[2]);
       if (this._rimU.uCbHeroRimDir.value.lengthSq() < 1e-8) this._rimU.uCbHeroRimDir.value.set(0.15, 0.35, -0.92);
       this._rimU.uCbHeroRimDir.value.normalize();
+
+      /* LIGHT LANE: sky fresnel from the dome / hemi sky, camera fill from the
+       * theme's own `lights.heroFill` ({color, intensity}) — declared per theme
+       * in themes.js; the fallback is the key colour pulled toward the hemi sky
+       * at ~30 % of the key's intensity, i.e. a cinematic ~3-4:1 key:fill. */
+      const H = def && def.lights && def.lights.hemi;
+      const skySpec = (H && H.skyColor !== undefined) ? H.skyColor
+        : (def && def.sky && def.sky.params && def.sky.params.top !== undefined ? def.sky.params.top : 0x8fb8f0);
+      _col0.set(skySpec);
+      // lift a dark dome (ember's soot sky) so the rim is still a rim
+      for (let i = 0; i < 6; i++) {
+        const L = 0.2126 * _col0.r + 0.7152 * _col0.g + 0.0722 * _col0.b;
+        if (L >= 0.30) break;
+        _col0.lerp(_col1.setRGB(1, 1, 1), 0.22);
+      }
+      const F = def && def.lights && def.lights.heroFill;
+      const skyStrength = F && typeof F.sky === 'number' ? Math.max(0, Math.min(1.2, F.sky)) : 0.35;
+      this._rimU.uCbHeroSky.value.set(_col0.r, _col0.g, _col0.b, skyStrength);
+      if (F && F.color !== undefined) _col0.set(F.color);
+      else {
+        _col0.set(K && K.color !== undefined ? K.color : 0xffffff);
+        _col1.set(skySpec);
+        _col0.lerp(_col1, 0.35);
+      }
+      const keyI = K && typeof K.intensity === 'number' ? K.intensity : 2.2;
+      const fillI = F && typeof F.intensity === 'number' ? Math.max(0, Math.min(4, F.intensity)) : Math.max(0.5, Math.min(1.4, keyI * 0.30));
+      this._rimU.uCbHeroFill.value.set(_col0.r, _col0.g, _col0.b, fillI);
     }
 
     this.shadowBlob.setTheme(def);
