@@ -71,9 +71,12 @@ export const WATER_LOOK = {
   /* 2026-09-04 (surface lane, O4/C8): whitecaps OFF for still water — a lake
    * or a pool foams only where it meets the ground. `crestFoam` stays on the
    * sea. `amp` is written for every non-pool body (one ocean per course). */
-  lake: { deep: 0x0d3a4a, shallow: 0x4fbfc4, foam: 0xeaf9ff, amp: 0.42, shoreWidth: 1.35, crestFoam: 0.0, ripple: 0.55, opacity: 0.86, fade: 3.0, gloss: 240 },
-  sea:  { deep: 0x07293f, shallow: 0x2f9fc0, foam: 0xf2fbff, amp: 1.05, shoreWidth: 2.20, crestFoam: 0.70, ripple: 0.70, opacity: 0.90, fade: 5.0, gloss: 200 },
-  pool: { deep: 0x125a63, shallow: 0x76e2dd, foam: 0xffffff, amp: 0.18, shoreWidth: 0.70, crestFoam: 0.0, ripple: 0.40, opacity: 0.72, fade: 1.6, gloss: 280 },
+  /* `shoreWidth` is METRES OF DEPTH back from the waterline (materials.js
+   * WATER_FRAG caps it at 1.2 m); `gloss` 240/200/280 -> 140/120/160: the
+   * glint lobe broadened so it reads at a 0.60 render scale (O4). */
+  lake: { deep: 0x0d3a4a, shallow: 0x4fbfc4, foam: 0xeaf9ff, amp: 0.42, shoreWidth: 0.9, crestFoam: 0.0, ripple: 0.55, opacity: 0.86, fade: 3.0, gloss: 140 },
+  sea:  { deep: 0x07293f, shallow: 0x2f9fc0, foam: 0xf2fbff, amp: 1.05, shoreWidth: 1.2, crestFoam: 0.70, ripple: 0.70, opacity: 0.90, fade: 5.0, gloss: 120 },
+  pool: { deep: 0x125a63, shallow: 0x76e2dd, foam: 0xffffff, amp: 0.18, shoreWidth: 0.5, crestFoam: 0.0, ripple: 0.40, opacity: 0.72, fade: 1.6, gloss: 160 },
 };
 
 /* ---------------------------------------------------------------------------

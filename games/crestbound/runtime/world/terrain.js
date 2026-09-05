@@ -338,7 +338,12 @@ function bladeGeometry(w, h, cross) {
        * ground at the same value as its own tip reads as a sticker lying on
        * top of the terrain. The sward self-shadows hard at the base, and that
        * gradient is the only contact cue an un-shadowed instanced field has. */
-      const k = 0.26 + 0.74 * (v * (0.55 + 0.45 * v));
+      /* 2026-09-04 (surface lane, C11 "a scatter of isolated yellow-green
+       * spikes"): 0.26 -> 0.44. At a 0.60 render scale a blade is 2-4 px wide
+       * and the mip/average of a card whose lower half sits at a quarter of
+       * its tip value is a DARK spike whatever the tip does. The contact cue
+       * survives at 0.44 (the root is still half a stop under the tip). */
+      const k = 0.44 + 0.56 * (v * (0.55 + 0.45 * v));
       C.push(k * 0.97, k * 1.05, k * 0.86);
     };
     const b0 = X(-half), b1 = X(half), tp = X(bendT);
@@ -435,6 +440,34 @@ function bladeMaterial(theme, mats, key, field) {
     sh.uniforms.uBladeUp = { value: field.up };       // 0..1 pull of the shading normal toward world up
     sh.uniforms.uLushDry = { value: field.lushDry };  // tint at lushness 0 (bare, dry)
     sh.uniforms.uLushWet = { value: field.lushWet };  // tint at lushness 1
+    sh.uniforms.uRingAhead = { value: field.ahead };  // metres the ring centre leads the camera
+    sh.uniforms.uGrassAmb = { value: field.amb };     // sky irradiance the Lambert blade lacks
+    /* FRAGMENT (2026-09-04, surface lane, C11 / rime "dark grey spikes on
+     * white snow"). Two things made half the field black:
+     *   1. DOUBLE_SIDED: three flips the shading normal on every back-facing
+     *      fragment (`normal *= faceDirection`), and a blade seen from behind
+     *      then points its normal DOWN - away from the key, away from the
+     *      hemi's sky half, into nothing. A blade of grass is not a wall: it
+     *      is lit as a strand of the sward whichever face the camera sees, so
+     *      the flip is removed (the vertex stage already pulls the normal
+     *      toward world up).
+     *   2. Lambert has no image-based irradiance. The snow, sand and grass
+     *      UNDER the blades are MeshStandard and take the sky's PMREM
+     *      irradiance (rime: most of the light there is); the blades took
+     *      only the analytic lights and sat a stop or two darker than the
+     *      ground they grow from. `uGrassAmb` is that missing sky term,
+     *      computed once per theme in buildGrass (no texture fetch). */
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 uGrassAmb;')
+      .replace('#include <normal_fragment_begin>', [
+        'float faceDirection = gl_FrontFacing ? 1.0 : - 1.0;',
+        'vec3 normal = normalize( vNormal );',
+        'vec3 nonPerturbedNormal = normal;',
+      ].join('\n'))
+      .replace('#include <lights_fragment_maps>', [
+        '#include <lights_fragment_maps>',
+        'irradiance += uGrassAmb;',
+      ].join('\n'));
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', [
         '#include <common>',
@@ -446,6 +479,7 @@ function bladeMaterial(theme, mats, key, field) {
         'uniform float uBladeUp;',
         'uniform vec3 uLushDry;',
         'uniform vec3 uLushWet;',
+        'uniform float uRingAhead;',
       ].join('\n'))
       /* SHADING NORMAL (2026-09-04, surface lane, C11): a blade card's normal
        * points SIDEWAYS, so half the field faced away from the key and the
@@ -465,12 +499,23 @@ function bladeMaterial(theme, mats, key, field) {
         '  vec3 gAnchor = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;',
         '#endif',
         'vec2 gPeriod = vec2(uRing.x * 2.0);',
-        'vec2 gW2 = gAnchor.xz + floor((cameraPosition.xz - gAnchor.xz) / gPeriod + 0.5) * gPeriod;',
+        /* THE RING LEADS THE CAMERA (2026-09-04, surface lane, C11). A
+         * third-person camera sits ~8 m BEHIND the hero, so a ring centred
+         * on the camera had its dense core in the empty air behind the
+         * player and its fade band exactly where the hero stands. The
+         * centre now sits `uRingAhead` metres along the camera's forward
+         * axis (the world-space camera Z axis read straight off the view
+         * matrix; no extra uniform), so the sward is densest around the
+         * hero and extends ahead where the player is looking. */
+        'vec3 gFwd = -vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2]);',
+        'float gFl = length(gFwd.xz);',
+        'vec2 gCen = cameraPosition.xz + (gFl > 1e-4 ? gFwd.xz / gFl : vec2(0.0)) * uRingAhead;',
+        'vec2 gW2 = gAnchor.xz + floor((gCen - gAnchor.xz) / gPeriod + 0.5) * gPeriod;',
         'vec2 gUv = (gW2 - uFieldRect.xy) * uFieldRect.zw;',
         'vec2 gIn = step(vec2(0.0), gUv) * step(gUv, vec2(1.0));',
         'vec2 gFld = texture2D(uGrassField, clamp(gUv, 0.0, 1.0)).rg;',
         'float gLush = gFld.g * gIn.x * gIn.y;',
-        'float gDist = length(gW2 - cameraPosition.xz);',
+        'float gDist = length(gW2 - gCen);',
         'float gFade = 1.0 - smoothstep(uRing.y, uRing.x, gDist);',
         'float gScale = smoothstep(0.14, 0.50, gLush) * gFade;',
         'transformed *= gScale;',
@@ -562,19 +607,26 @@ const SURFACE_LOOK = {
    * the surface at mid-distance (what the far blade ring fades into); `up`
    * is the blade normal's pull toward world up; `width`/`tuft`/`tuftRadius`
    * are the blade-shape defaults a course may still override in `grass`. */
+  /* `amb` is the blade's share of the SKY irradiance (see the fragment patch
+   * in bladeMaterial): a multiplier on the theme's sky colour x envIntensity.
+   * Snow takes most of its light from the sky, grass a third of it (the grass
+   * bake itself only runs envMapIntensity 0.14). `width` 0.062 -> 0.085: a
+   * 6 cm blade at 3 m is under two pixels at the tier scale; a broader blade
+   * with the root gradient is what reads as a sward. `up` 0.55 -> 0.80 with
+   * the back-face flip gone: the field is lit like the lawn it grows from. */
   grass: { top: 0xc8e394, low: 0x9cc06c, dirt: 0xd2b892, path: 0xcbb188,
-           blade: 0x84bc58, bladeAlt: 0x4e7c38, bladeDry: 0xc4b66c, uvTile: 4.0,
-           ground: 0x4c8a34, groundFade: 0.85, up: 0.55, width: 0.062, tuft: 8, tuftRadius: 0.11,
-           lushDry: 0xb89457, lushWet: 0xc7f0b3 },
+           blade: 0x88c05c, bladeAlt: 0x5a8c40, bladeDry: 0xc8ba70, uvTile: 4.0,
+           ground: 0x4c8a34, groundFade: 0.85, up: 0.80, width: 0.085, tuft: 8, tuftRadius: 0.12,
+           lushDry: 0xb89457, lushWet: 0xc4eab0, amb: 0.30 },
   snow:  { top: 0xf4fbff, low: 0xd8e8f6, dirt: 0xbcccd8, path: 0xc2d4e2, bladeAlt: 0xd4e2f0, bladeDry: 0xf6f9ff, blade: 0xeef6ff, uvTile: 5.0,
-           ground: 0xdde8f2, groundFade: 0.90, up: 0.85, width: 0.050, tuft: 10, tuftRadius: 0.075,
-           lushDry: 0xd0dcea, lushWet: 0xffffff },
+           ground: 0xdde8f2, groundFade: 0.90, up: 0.92, width: 0.075, tuft: 10, tuftRadius: 0.09,
+           lushDry: 0xd0dcea, lushWet: 0xffffff, amb: 1.0 },
   sand:  { top: 0xe8d3a6, low: 0xd0b98c, dirt: 0xc8ab7c, path: 0xdcc294, bladeAlt: 0xa88f52, bladeDry: 0xeddaa2, blade: 0xdfc78a, uvTile: 4.5,
-           ground: 0xc9ad78, groundFade: 0.85, up: 0.55, width: 0.055, tuft: 7, tuftRadius: 0.10,
-           lushDry: 0xc4a874, lushWet: 0xd8e8a8 },
+           ground: 0xc9ad78, groundFade: 0.85, up: 0.75, width: 0.070, tuft: 7, tuftRadius: 0.10,
+           lushDry: 0xc4a874, lushWet: 0xd8e8a8, amb: 0.55 },
   dirt:  { top: 0xa8896a, low: 0x8a7050, dirt: 0x8a7458, path: 0x99805a, bladeAlt: 0x5c6b38, bladeDry: 0xc0b478, blade: 0x94a066, uvTile: 4.0,
-           ground: 0x8a7050, groundFade: 0.85, up: 0.55, width: 0.055, tuft: 7, tuftRadius: 0.10,
-           lushDry: 0xb89457, lushWet: 0xc7f0b3 },
+           ground: 0x8a7050, groundFade: 0.85, up: 0.75, width: 0.070, tuft: 7, tuftRadius: 0.10,
+           lushDry: 0xb89457, lushWet: 0xc7f0b3, amb: 0.35 },
 };
 
 /**
@@ -587,8 +639,8 @@ const SURFACE_LOOK = {
 const SURFACE_LOOK_THEME = {
   'ember:sand': { top: 0xf4f0ec, low: 0xdcd6d0, dirt: 0xb0a49c, path: 0xe6dfd8,
                   blade: 0x6a5c54, bladeAlt: 0x3b332e, bladeDry: 0x7a6a58,
-                  ground: 0x2c2624, groundFade: 0.85, up: 0.55, width: 0.050, tuft: 6, tuftRadius: 0.09,
-                  lushDry: 0x8a7a70, lushWet: 0xa09890 },
+                  ground: 0x2c2624, groundFade: 0.85, up: 0.75, width: 0.060, tuft: 6, tuftRadius: 0.09,
+                  lushDry: 0x8a7a70, lushWet: 0xa09890, amb: 0.30 },
 };
 
 /**
@@ -909,6 +961,25 @@ function groundOf(LOOK, g) {
 }
 
 /**
+ * The sky irradiance a Lambert blade is missing (see the fragment patch in
+ * bladeMaterial), as a colour in three's `irradiance` units: PI x the sky
+ * dome's mid colour x the theme's envIntensity x the surface's share `k`.
+ * Falls back to the hemi sky colour, then to a neutral grey-blue, so a theme
+ * without a dome still gets a lift. Built once per field - never per frame.
+ */
+function skyIrradianceOf(theme, k) {
+  const sp = (theme && theme.sky && theme.sky.params) || null;
+  const hemi = (theme && theme.lights && theme.lights.hemi) || null;
+  const hex = (sp && sp.mid !== undefined) ? sp.mid
+    : ((sp && sp.horizon !== undefined) ? sp.horizon
+      : ((hemi && hemi.skyColor !== undefined) ? hemi.skyColor : 0x8fa8c0));
+  const env = (theme && typeof theme.envIntensity === 'number') ? theme.envIntensity : 1;
+  const c = new THREE.Color(hex);
+  const m = Math.PI * env * Math.max(0, k);
+  return new THREE.Vector3(c.r * m, c.g * m, c.b * m);
+}
+
+/**
  * Build the blade field as a CAMERA-LOCAL RING (see bladeMaterial for why).
  *
  * The instances are a jittered lattice over one 2R x 2R tile centred on the
@@ -942,7 +1013,9 @@ function buildGrass(d, theme, mats, quality, ctx) {
    * radius below, so raising it does not cost one triangle — it spends the same
    * instance budget on a smaller, denser lawn, which is the right trade when
    * the frame is fill-bound and already at the triangle ceiling. */
-  const density = g.density === undefined ? 40 : g.density;         // blades per m²
+  /* 40 -> 56 default: with the ring centre leading the camera (uRingAhead)
+   * the same near budget spends itself on the metres around the HERO. */
+  const density = g.density === undefined ? 56 : g.density;         // blades per m²
   /* The NEAR ring is sized from ITS share of the budget (see the TWO RINGS
    * note below), so its density is the authored one whatever the far ring
    * spends. */
@@ -980,6 +1053,8 @@ function buildGrass(d, theme, mats, quality, ctx) {
     up: (g.up === undefined ? (ctx.LOOK.up === undefined ? 0.55 : ctx.LOOK.up) : g.up),
     lushDry: new THREE.Color(g.lushDry !== undefined ? g.lushDry : (ctx.LOOK.lushDry === undefined ? 0xb89457 : ctx.LOOK.lushDry)),
     lushWet: new THREE.Color(g.lushWet !== undefined ? g.lushWet : (ctx.LOOK.lushWet === undefined ? 0xc7f0b3 : ctx.LOOK.lushWet)),
+    ahead: ring * 0.55,
+    amb: skyIrradianceOf(theme, g.amb !== undefined ? g.amb : (ctx.LOOK.amb === undefined ? 0.35 : ctx.LOOK.amb)),
   };
 
   /* TWO RINGS (2026-09-04, owner: "grass sparse ... a few blade clumps").
@@ -1001,7 +1076,8 @@ function buildGrass(d, theme, mats, quality, ctx) {
     const fieldFar = { uid: ++_fieldUid, tex: field.tex, rect: field.rect,
                        ring: new THREE.Vector2(farRing, farRing * 0.60),
                        ground: field.ground, up: field.up,
-                       lushDry: field.lushDry, lushWet: field.lushWet };
+                       lushDry: field.lushDry, lushWet: field.lushWet,
+                       ahead: farRing * 0.45, amb: field.amb };
     const far = buildGrassRing(farCount, farRing, 1.35, d, theme, mats, ctx, fieldFar);
     if (far) {
       far.name = 'terrain.grass.far';

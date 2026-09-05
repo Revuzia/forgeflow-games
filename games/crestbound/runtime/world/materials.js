@@ -3836,7 +3836,7 @@ const WATER_U = {
   uRipple: { value: 0.55 },
   uFresnelPower: { value: 5.0 },
   uFresnelBias: { value: 0.022 },
-  uGloss: { value: 240.0 },
+  uGloss: { value: 140.0 },
   uSunDir: { value: new THREE.Vector3(-0.42, 0.86, 0.30) },
   uSunColor: { value: new THREE.Color(0xfff2d8) },
   uSkyTop: { value: new THREE.Color(0x2f6fc0) },
@@ -4033,7 +4033,10 @@ void main() {
   vec3 R = reflect( -V, N );
   vec3 Ls = normalize( uSunDir );
   float rUp = clamp( R.y, 0.0, 1.0 );
-  vec3 sky = mix( uSkyHorizon, uSkyTop, pow( rUp, 0.55 ) );
+  // 0.55 -> 0.42: the horizon colour of a bright dome (azure 0xbfe4ee) is
+  // near-white, and at the angles a standing player sees water the old
+  // curve kept the reflection on it; the zenith blue now takes over sooner
+  vec3 sky = mix( uSkyHorizon, uSkyTop, pow( rUp, 0.42 ) );
   // the bright patch of dome around the sun that every water surface shows
   float sunGlow = pow( clamp( dot( R, Ls ), 0.0, 1.0 ), 6.0 );
   sky += uSunColor * sunGlow * 0.30;
@@ -4046,15 +4049,26 @@ void main() {
   // as sunlit from a camera that is not standing in the mirror direction
   vec3 H = normalize( Ls + V );
   float ndh = clamp( dot( N, H ), 0.0, 1.0 );
-  float spec = pow( ndh, max( uGloss, 8.0 ) );
-  float glit = pow( ndh, 22.0 );
+  // the hot lobe fades with distance exactly as the ripples do (cbRf): far
+  // out, a tight lobe on a rippled normal is single-pixel speckle at a 0.60
+  // render scale — the "TV static" half of owner O4. Near, it glitters.
+  float spec = pow( ndh, max( uGloss, 8.0 ) ) * ( 0.25 + 0.75 * cbRf );
+  float glit = pow( ndh, 18.0 );
   float sunUp = clamp( Ls.y * 4.0, 0.0, 1.0 );      // no glint from a sun below the horizon
-  col += uSunColor * ( spec * 3.2 + glit * 0.16 ) * ( 0.25 + 0.75 * fres ) * sunUp;
+  col += uSunColor * ( spec * 2.6 + glit * 0.14 ) * ( 0.30 + 0.70 * fres ) * sunUp;
 
   /* ---- foam: the shore band ONLY ----------------------------------------- */
   // a broken, moving line where the water meets the ground; whitecaps are
   // reserved for open sea (uCrestFoam is 0 for lakes and pools — water.js)
-  float shoreBand = 1.0 - smoothstep( 0.0, clamp( uShoreWidth * 0.30, 0.02, 1.0 ), depth );
+  /* SHORE BAND IN METRES (2026-09-04, surface lane). depth ramps over
+     uDepthFade metres (azure-1: 5-6 m), so a band written in depth units
+     (0.30 x shoreWidth = 0.54) foamed every fragment over water shallower
+     than ~3 m — the pale slab across the whole lagoon shelf in
+     _shots/surface2_azure-1.png that read as milk, not water. The band is
+     now uShoreWidth metres of DEPTH (capped at 1.2 m) back from the
+     waterline, whatever the body's fade distance. */
+  float cbShoreW = clamp( min( uShoreWidth, 1.2 ) / max( uDepthFade, 0.5 ), 0.03, 0.6 );
+  float shoreBand = 1.0 - smoothstep( 0.0, cbShoreW, depth );
   float churn = cbwNoise( vCbUv * 1.7 + vec2( uTime * 0.28, -uTime * 0.19 ) );
   float churn2 = cbwNoise( vCbUv * 4.1 - vec2( uTime * 0.21, uTime * 0.33 ) );
   float shoreFoam = smoothstep( 0.36, 0.86, shoreBand * ( 0.50 + 0.55 * churn + 0.25 * churn2 ) );
