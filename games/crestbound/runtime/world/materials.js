@@ -603,15 +603,23 @@ float cbVnoise( vec2 p ) {
   float d = cbHash12( i + vec2( 1.0, 1.0 ) );
   return mix( mix( a, b, f.x ), mix( c, d, f.x ), f.y );
 }
+/* CAUSTIC NET (2026-09-04, surface lane, critic "the shore band is a barcode
+   of white/yellow painted stripes"). The old field summed three sines that
+   all ran along ONE direction (1, 1.3) and peaked at +2.5x diffuse, so the
+   sand under every shallow shelf carried parallel blown bands that showed
+   straight through a 0.35-alpha surface — the stripes were on the FLOOR, not
+   the water. Each octave now turns 60 deg, so the bright lines cross into the
+   hexagonal net real caustics make, and the peak is +1.3x. */
 float cbCaustic( vec2 p, float t ) {
   vec2 q = p;
   float c = 0.0;
+  const mat2 cbR60 = mat2( 0.5, -0.8660254, 0.8660254, 0.5 );
   for ( int i = 0; i < 3; i ++ ) {
     float fi = float( i );
-    q += vec2( sin( q.y * 1.7 + t * 0.9 + fi ), cos( q.x * 1.5 - t * 0.7 + fi * 1.3 ) ) * 0.35;
-    c += abs( sin( q.x + q.y * 1.3 + t + fi * 0.7 ) );
+    q = cbR60 * q + vec2( sin( t * 0.6 + fi * 1.7 ), cos( t * 0.5 - fi * 1.1 ) ) * 0.25;
+    c += abs( sin( q.x * 1.9 + t * 0.8 + fi * 0.7 ) );
   }
-  return pow( clamp( 1.0 - c / 3.0, 0.0, 1.0 ), 4.0 ) * 2.5;
+  return pow( clamp( 1.0 - c / 3.0, 0.0, 1.0 ), 3.0 ) * 1.3;
 }
 `;
 
@@ -660,7 +668,7 @@ function injectShader(mat, key, opts) {
     caustic: !!defines.CB_CAUSTIC, wind: !!defines.CB_WIND, shimmer: !!defines.CB_SHIMMER,
     macro: !!defines.CB_MACRO, face: !!defines.CB_FACE,
     detail: !!defines.CB_DETAIL, foliage: !!defines.CB_FOLIAGE,
-    vein: !!defines.CB_VEIN,
+    vein: !!defines.CB_VEIN, ripfade: !!defines.CB_RIPFADE,
   };
 
   mat.onBeforeCompile = function (shader) {
@@ -777,8 +785,9 @@ function injectShader(mat, key, opts) {
     // ---- fragment ---------------------------------------------------------
     let fHead = GLSL_FRAG_HELPERS;
     if (lod) fHead += 'varying float vCbDist;\nuniform vec2 uCbLod;\n';
-    if (box) fHead += 'varying vec3 vCbW;\nvarying vec3 vCbN;\n';
+    if (box) fHead += 'varying vec3 vCbW;\nvarying vec3 vCbN;\nuniform vec2 uCbUv;\nuniform float uCbUv2;\nuniform vec2 uCbFlow;\n';
     if (D.lava) fHead += 'uniform float uCbTime;\nuniform vec2 uCbFlowA;\nuniform vec2 uCbFlowB;\n';
+    if (D.ripfade) fHead += 'uniform vec4 uCbRipFade;\n';
     if (D.slope) fHead += 'uniform sampler2D uCbBlendMap;\nuniform sampler2D uCbBlendNormal;\nuniform sampler2D uCbBlendOrm;\nuniform float uCbBlendScale;\nuniform vec3 uCbBlendTint;\nuniform vec2 uCbSlope;\n';
     if (D.rim) fHead += 'uniform vec4 uCbRim;\n';
     if (D.macro) fHead += 'uniform vec4 uCbMacro;\n';
@@ -788,6 +797,52 @@ function injectShader(mat, key, opts) {
     if (D.shimmer) fHead += 'uniform float uCbTime;\nuniform float uShimmer;\nuniform vec3 uShimmerColor;\nuniform float uShimmerWidth;\n';
     if (D.vein && !D.lava && !D.shimmer) fHead += 'uniform float uCbTime;\n';
     shader.fragmentShader = fHead + shader.fragmentShader;
+
+    /* PER-FRAGMENT PROJECTION AXIS (2026-09-04, surface lane, critic C5 "the
+     * tower roof cone is a red/teal vertical smear").
+     *
+     * The vertex stage picks the projection axis from the vertex normal and
+     * writes the chosen world coordinate pair into the UV varyings. On a flat-
+     * shaded box every vertex of a face agrees and the interpolated UV is
+     * exact. On a CONE (or a dome, a boulder, a lathe) the normal sits close
+     * to the pick boundary — a 53 deg roof cone has |n.y| 0.60 against a
+     * horizontal magnitude of 0.80 split across x/z, so around the drum the
+     * winning axis flips y -> x -> z -> x every few facets — and a triangle
+     * whose corners picked DIFFERENT axes interpolates between two unrelated
+     * coordinate spaces. The texture is then stretched across the whole facet
+     * into one continuous streak: exactly the smear the critic photographed
+     * (_shots/verdant-1/cp3.png, crest-open.png). No bake fixes that; the
+     * predecessor's standing-seam rewrite could not, because the streak is
+     * the UV, not the texture.
+     *
+     * The pick therefore moves to the fragment stage: the same rule, run on
+     * the interpolated normal, so a facet that straddles a boundary gets a
+     * clean one-pixel seam instead of a stretch. The varyings are still
+     * written by the vertex stage; the `#define`s below simply redirect every
+     * chunk (three's and ours) that reads them to the per-fragment pair. A
+     * face whose vertices all agree produces the identical UV (world position
+     * interpolates linearly, the pick is the same), so boxes, decks and walls
+     * do not change by a pixel. Cost: one normalize and two compares per
+     * fragment, zero extra fetches — the frame is FILL-bound, not ALU-bound. */
+    if (box) {
+      const MAIN = 'void main() {';
+      const mi = shader.fragmentShader.indexOf(MAIN);
+      if (mi !== -1) {
+        shader.fragmentShader = shader.fragmentShader.slice(0, mi + MAIN.length) + `
+  vec3 cbNf = abs( normalize( vCbN ) );
+  vec2 cbUvF = ( cbNf.y >= cbNf.x && cbNf.y >= cbNf.z ) ? vCbW.xz : ( ( cbNf.x >= cbNf.z ) ? vCbW.zy : vCbW.xy );
+  cbUvF = cbUvF * uCbUv + uCbFlow;
+  vec2 cbUvF2 = cbUvF * uCbUv2;
+  #define vMapUv cbUvF
+  #define vNormalMapUv cbUvF
+  #define vRoughnessMapUv cbUvF
+  #define vMetalnessMapUv cbUvF
+  #define vEmissiveMapUv cbUvF
+  #define vAlphaMapUv cbUvF
+  #define vClearcoatNormalMapUv cbUvF2
+` + shader.fragmentShader.slice(mi + MAIN.length);
+      }
+    }
 
     const MAP = '#include <map_fragment>';
     if (shader.fragmentShader.indexOf(MAP) !== -1) {
@@ -894,11 +949,11 @@ function injectShader(mat, key, opts) {
      * One rebuild of <normal_fragment_maps> for the three injections that
      * touch the shading normal, so they compose instead of fighting over the
      * same marker. */
-    if (D.slope || D.detail || D.foliage) {
+    if (D.slope || D.detail || D.foliage || D.ripfade) {
       const NM = '#include <normal_fragment_maps>';
       if (shader.fragmentShader.indexOf(NM) !== -1) {
         let body = NM;
-        if (D.slope || D.detail) {
+        if (D.slope || D.detail || D.ripfade) {
           body = `
   #ifdef USE_NORMALMAP_TANGENTSPACE
     vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;` +
@@ -921,6 +976,17 @@ function injectShader(mat, key, opts) {
         vec2 cbDl = texture2D( normalMap, vNormalMapUv * uCbDetail.z ).xy * 2.0 - 1.0;
         mapN.xy += cbDl * ( uCbDetail.w * ( 1.0 - cbLodT ) );
       }
+    }` : '') +
+    (D.ripfade ? `
+    /* RIPPLE FADE ON SLOPES (2026-09-04, surface lane, critic "sand reads as
+       corduroy on the hills"). Wind ripples form on the flat and on the gentle
+       stoss side of a dune; on a 20 deg face the sand is slipping and the
+       surface is a SMOOTH slope. The baked ripple normal is faded toward the
+       geometric normal past uCbRipFade.x (1 - n.y), gone by .y, keeping .z of
+       it for the grain so the bank is not a plastic plane. */
+    {
+      float cbRipW = smoothstep( uCbRipFade.x, uCbRipFade.y, 1.0 - clamp( normalize( vCbN ).y, 0.0, 1.0 ) );
+      mapN.xy *= mix( 1.0, uCbRipFade.z, cbRipW );
     }` : '') + `
     mapN.xy *= normalScale;
     normal = normalize( tbn * mapN );
@@ -1113,7 +1179,7 @@ function injectShader(mat, key, opts) {
     (D.lava ? 'L' : '') + (D.slope ? 'S' : '') + (D.rim ? 'R' : '') +
     (D.caustic ? 'C' : '') + (D.wind ? 'W' : '') + (D.shimmer ? 'H' : '') +
     (D.macro ? 'M' : '') + (D.face ? 'F' : '') + (D.detail ? 'N' : '') + (D.foliage ? 'T' : '') +
-    (D.vein ? 'V' : '');
+    (D.vein ? 'V' : '') + (D.ripfade ? 'P' : '');
   mat.customProgramCacheKey = function () { return shapeKey; };
   return mat;
 }
@@ -2716,12 +2782,17 @@ function bakeSand() {
       // and a deeper ochre hollow
       let r = lerp(0.600, 0.700, pale), g = lerp(0.492, 0.600, pale), b = lerp(0.330, 0.430, pale);
       const shade = (ripple - 0.5) * 2;                    // -1 lee .. +1 crest
-      r += (drift - 0.5) * 0.10 + shade * 0.052 + (grain - 0.5) * 0.070 + (grain2 - 0.5) * 0.035;
-      g += (drift - 0.5) * 0.085 + shade * 0.042 + (grain - 0.5) * 0.060 + (grain2 - 0.5) * 0.030;
-      b += (drift - 0.5) * 0.060 + shade * 0.022 + (grain - 0.5) * 0.045 + (grain2 - 0.5) * 0.022;
+      /* 2026-09-04 (surface lane, critic "corduroy on slopes"): the ripple's
+       * COLOUR term is halved. The lit normal carries the ripple on the flat,
+       * where it belongs; the baked shade cannot be faded by slope in the
+       * shader (the normal can — CB_RIPFADE), so it must be quiet enough that
+       * a hillside under the faded normal does not still read as stripes. */
+      r += (drift - 0.5) * 0.10 + shade * 0.026 + (grain - 0.5) * 0.070 + (grain2 - 0.5) * 0.035;
+      g += (drift - 0.5) * 0.085 + shade * 0.021 + (grain - 0.5) * 0.060 + (grain2 - 0.5) * 0.030;
+      b += (drift - 0.5) * 0.060 + shade * 0.011 + (grain - 0.5) * 0.045 + (grain2 - 0.5) * 0.022;
       // lee faces gather a touch of darker, cooler shade
       const lee = smoothstep(0.0, -0.6, shade);
-      r = lerp(r, r * 0.86, lee * 0.5); g = lerp(g, g * 0.88, lee * 0.5); b = lerp(b, b * 0.94, lee * 0.5);
+      r = lerp(r, r * 0.86, lee * 0.3); g = lerp(g, g * 0.88, lee * 0.3); b = lerp(b, b * 0.94, lee * 0.3);
       r = lerp(r, r * 0.60, damp); g = lerp(g, g * 0.58, damp); b = lerp(b, b * 0.60, damp);
       // mica sparkle
       if (hash2i(x, y, 8181) > 0.9962) { r = 1.0; g = 0.98; b = 0.90; }
@@ -2745,7 +2816,7 @@ function bakeSand() {
     color: 0xffffff, roughness: 1, metalness: 0,
     normalScale: new THREE.Vector2(0.95, 0.95), envMapIntensity: 0.5,
   }, 0.55, macroInject(16.0, 0.20, 0.10, 0, detailInject(7.0, 0.22, slopeInject({
-    defines: { CB_SLOPE: true, CB_CAUSTIC: true },
+    defines: { CB_SLOPE: true, CB_CAUSTIC: true, CB_RIPFADE: true },
     uniforms: {
       uCbBlendMap: { value: _tex.get('dirt.albedo') || null },
       uCbBlendNormal: { value: _tex.get('dirt.normal') || null },
@@ -2753,6 +2824,9 @@ function bakeSand() {
       uCbBlendScale: { value: 1.1 },
       uCbBlendTint: { value: new THREE.Vector3(1.10, 1.06, 1.00) },
       uCbSlope: { value: new THREE.Vector2(SLOPE_START, SLOPE_END) },
+      /* ripple normal fades from 12 deg, gone by 22 deg (1 - cos), 0.30 kept
+       * for the grain; the dirt slope blend takes over well above that */
+      uCbRipFade: { value: new THREE.Vector4(1 - Math.cos(12 * Math.PI / 180), 1 - Math.cos(22 * Math.PI / 180), 0.30, 0) },
       /* Caustics. `uCbCaustic` is a plain float strength so water.js's
        * `linkCaustics(mats, 'sand', strength)` drives it directly; the geometry
        * of the effect lives in `uCbCausticParams` (waterSurfaceY, worldScale,
@@ -3585,9 +3659,18 @@ function bakeMoss() {
     for (let x = 0; x < n; x++) {
       const u = x / n, i = y * n + x, p = i * 4;
 
-      worley(u, v, 15, 17003);
-      const cushion = smoothstep(0.58, 0.02, W.f1);
-      const gap = 1 - smoothstep(0.0, 0.075, W.f2 - W.f1);
+      /* 2026-09-04 (surface lane, critic: "the verdant-3 crest meadow reads
+       * as reptile scales" — _shots/verdant-3/crest-open.png; that platform
+       * is `mat: 'moss'`). The cushions were 8 cm worley domes at height 0.44
+       * with a -0.24 gap trench, baked to a 1.45 normal at scale 1.05: every
+       * cell lit as a rounded plate with a dark seam = scales. Moss cushions
+       * are a VELVET — the cushion is a colour-and-nap event, not relief. The
+       * cell count goes 15 -> 23 (5.4 cm, off the scale the eye resolves as a
+       * lattice at 3 m), the cushion relief drops to 0.12 with no trench, and
+       * the nap carries the normal at a third of the old strength. */
+      worley(u, v, 23, 17003);
+      const cushion = smoothstep(0.62, 0.06, W.f1);
+      const gap = 1 - smoothstep(0.0, 0.10, W.f2 - W.f1);
       const cid = W.id;
 
       const nap = fbm(u, v, 90, 2, 0.5, 17111);          // the velvet nap
@@ -3597,9 +3680,9 @@ function bakeMoss() {
       worley(u, v, 44, 17317);
       const stalk = smoothstep(0.09, 0.0, W.f1) * (hash2i(x >> 2, y >> 2, 17419) > 0.90 ? 1 : 0);
 
-      B.h[i] = 0.34 + cushion * 0.44 - gap * 0.24 + (nap - 0.5) * 0.12 + stalk * 0.22;
+      B.h[i] = 0.42 + cushion * 0.12 - gap * 0.05 + (nap - 0.5) * 0.11 + stalk * 0.12;
 
-      const shade = clamp01(cushion * 1.2 - gap * 0.8);
+      const shade = clamp01(0.30 + cushion * 0.62 - gap * 0.28);
       let r = lerp(0.028, 0.146, shade);
       let g = lerp(0.062, 0.286, shade);
       let b = lerp(0.030, 0.108, shade);
@@ -3624,14 +3707,14 @@ function bakeMoss() {
   const maps = {
     map: upload(commitA(B), 'moss.albedo', true, 0.80),
     orm: upload(commitO(B), 'moss.orm', false, 0.80),
-    normal: upload(heightToNormal(B.h, n, 1.45), 'moss.normal', false, 0.80),
+    normal: upload(heightToNormal(B.h, n, 0.95), 'moss.normal', false, 0.80),
   };
   return assemble('moss', maps, {
     __physical: true,
     color: 0xffffff, roughness: 1, metalness: 0,
     sheen: 0.85, sheenRoughness: 0.55, sheenColor: new THREE.Color(0x8fc48a),
     specularIntensity: 0.30, envMapIntensity: 0.30,
-    normalScale: new THREE.Vector2(1.05, 1.05),
+    normalScale: new THREE.Vector2(0.72, 0.72),
   }, 0.80);
 }
 
@@ -3654,59 +3737,111 @@ function bakeMoss() {
  * already sits at (stone 1.39, plaster 1.47, marble 1.19, brick 0.95, moss
  * 1.25), so trim and roof agree at range.
  */
+/**
+ * ROUND 2 (2026-09-04, surface lane, critic C5 NOT FIXED): the standing-seam
+ * bake above still read as a streak on the cone, for two reasons, both now
+ * handled:
+ *   1. The UV itself was the streak — see the PER-FRAGMENT PROJECTION AXIS
+ *      note in injectShader. Fixed there; this bake could never fix it.
+ *   2. Everything in the sheet bake was VERTICAL and FINE: 1.7 cm ribs, rain
+ *      streaks at 2.8 cm, brushed scratches at 90 deg. At 0.60 render scale
+ *      on a 4 m cone all of it mips into one anisotropic smear with nothing
+ *      horizontal to stop the eye running down it.
+ * The roof is now COURSED sheets, the way a real copper roof is laid: a seam
+ * ring (batten + lip) every 0.80 m of height, sheets 0.40 m wide with their
+ * vertical seams staggered half a sheet on alternate courses, verdigris in
+ * 0.4 m cells (worley, not streaks) that gather along the battens, and bare
+ * salmon copper on the sheet crowns. Tile 1.60 m (uvScale 0.625) = two
+ * courses x four sheets. With V on world Y on every wall-facing projection
+ * the battens are RINGS on a cone/spire/dome and BANDS on a wall, and every
+ * feature is >= 4 cm so the 0.60 buffer resolves it at roof distance.
+ */
 function bakeCopper() {
   const n = SIZE_LG, B = bakeBuffers(n);
   const A = B.imgA.data, O = B.imgO.data;
-  const SHEETS = 3;
-  // brushed along the sheet (vertical in the projection)
-  const brush = maskScratches(n, { seed: 18013, count: 720, angle: 90, jitter: 3, minLen: 0.5, maxLen: 1.8, minW: 0.4, maxW: 1.0 });
+  const COURSES = 2, SHEETS = 4;
+  /* Measured on the first round-2 shoot (_shots/surface_cone_A.png vs
+   * _shots/verdant-1/cp3.png): a 5 cm batten is a clean ring at 3 m and a
+   * sub-pixel line at the cp3 camera (the cone is ~200 px tall in the 0.60
+   * buffer, so 5 cm is half a pixel and the mip chain averages it away),
+   * while the 4 cm vertical ribs and the cell crust — AREA features — survive
+   * and the roof still reads vertical. The band therefore has to be an area
+   * feature too: every COURSE carries its own sheet tone (alternate rows a
+   * stop apart, the way copper shingling weathers row by row), the lip
+   * shadow under each batten is a 12 cm gradient, and the vertical seams are
+   * demoted to hairlines. */
+  const BATTEN = 0.07 / 1.60;                // 7 cm batten, in tile units
+  const LIPW = 0.12 / 1.60;                  // 12 cm shadow gradient under it
+  const RIBW = 0.03 / 1.60;                  // 3 cm vertical seam hairline
+  // a light brushing along the sheet, coarse enough to survive the mip chain
+  const brush = maskScratches(n, { seed: 18013, count: 260, angle: 90, jitter: 4, minLen: 0.3, maxLen: 1.2, minW: 0.8, maxW: 1.8 });
 
   for (let y = 0; y < n; y++) {
     const v = y / n;
     for (let x = 0; x < n; x++) {
       const u = x / n, i = y * n + x, p = i * 4;
 
-      const su = u * SHEETS;
+      // courses: which 0.8 m band, and the batten at its lower edge
+      const cv = v * COURSES;
+      const courseId = Math.floor(cv);
+      const fv = cv - courseId;
+      const battenD = Math.min(fv, 1 - fv) / COURSES;           // tile units from the ring
+      const batten = 1 - smoothstep(BATTEN * 0.6, BATTEN, battenD);
+      // shadow under the lip: only BELOW the batten (fv small = just under the
+      // ring above), a 12 cm gradient so it survives the mip chain at range
+      const below = fv < 0.5 ? fv / COURSES : 1;              // tile units below the ring above
+      const lip = (1 - smoothstep(BATTEN, BATTEN + LIPW, below)) * (1 - batten);
+      // per-course sheet tone: alternate rows weather a stop apart
+      const courseTone = hash2i(courseId, 3, 18077);
+
+      // sheets: staggered half a sheet on alternate courses
+      const su = u * SHEETS + (courseId & 1 ? 0.5 : 0.0);
       const sheetId = Math.floor(su);
       const fu = su - sheetId;
-      const seamD = Math.min(fu, 1 - fu);                       // 0 at the seam
-      const rib = 1 - smoothstep(0.0, 0.040, seamD);            // the standing rib
-      const valley = (1 - smoothstep(0.040, 0.13, seamD)) * (1 - rib);
-      const sheetTone = hash2i(sheetId, Math.floor(v * 2), 18099);
+      const seamD = Math.min(fu, 1 - fu) / SHEETS;
+      const rib = (1 - smoothstep(RIBW * 0.5, RIBW, seamD)) * (1 - batten) * 0.6;
+      // each sheet bows very slightly between its seams
+      const bow = Math.sin(fu * Math.PI);
+      const sheetTone = clamp01(courseTone * 0.7 + hash2i(sheetId + courseId * 7, courseId, 18099) * 0.3);
 
-      // verdigris: rain streaks DOWN the sheet (high U frequency, low V), plus
-      // slow drifts, plus what gathers in the seam valleys
-      const streak = fbmXY(u, v, 44, 5, 3, 0.55, 18111);
-      const drift = fbm(u, v, 4, 3, 0.55, 18211);
-      const drip = smoothstep(0.58, 0.92, fbmXY(u, v, 24, 3, 2, 0.5, 18311));
-      const crust = clamp01(smoothstep(0.48, 0.86, streak * 0.55 + drift * 0.45)
-                          + drip * 0.55 + valley * 0.45 * (0.4 + 0.6 * drift));
-      const crumb = fbm(u, v, 64, 3, 0.5, 18411);
+      // verdigris: 0.4 m cells that thicken along the battens, thin on crowns
+      worley(u, v, 4, 18111);
+      const cell = W.f1, cellId = W.id;
+      const drift = fbm(u, v, 3, 3, 0.55, 18211);
+      const mottle = fbm(u, v, 12, 3, 0.5, 18311);
+      let crust = smoothstep(0.30, 0.78, (1 - cell * 0.9) * 0.55 + cellId * 0.20 + drift * 0.35 + (mottle - 0.5) * 0.25);
+      // the crust follows the COURSE: it gathers under the battens (lip) and
+      // alternates in weight row by row, so the rows read at any distance
+      crust = clamp01(crust + lip * 0.45 * (0.5 + 0.5 * drift) - bow * 0.12 + (courseTone - 0.5) * 0.30);
+      const crumb = fbm(u, v, 48, 3, 0.5, 18411);
       const bl = brush[i];
       const bare = clamp01(1 - crust);
 
-      B.h[i] = 0.5 + rib * 0.24 - valley * 0.05 + crust * 0.06 + (crumb - 0.5) * 0.08 * crust
-             + bl * 0.035 + (streak - 0.5) * 0.02;
+      B.h[i] = 0.5 + batten * 0.26 + rib * 0.16 - lip * 0.06 + bow * 0.05
+             + crust * 0.05 + (crumb - 0.5) * 0.06 * crust + bl * 0.03;
 
-      // metal: warm salmon copper (per-sheet tone draw); crust: blue-green carbonate
-      let r = lerp(0.128, lerp(0.66, 0.74, sheetTone), bare);
-      let g = lerp(0.418, lerp(0.35, 0.40, sheetTone), bare);
-      let b = lerp(0.352, lerp(0.21, 0.25, sheetTone), bare);
+      // metal: warm salmon copper (per-course/sheet tone draw); crust: blue-green carbonate
+      let r = lerp(0.128, lerp(0.56, 0.78, sheetTone), bare);
+      let g = lerp(0.418, lerp(0.29, 0.42, sheetTone), bare);
+      let b = lerp(0.352, lerp(0.17, 0.26, sheetTone), bare);
       r += bl * 0.050 * bare; g += bl * 0.034 * bare; b += bl * 0.022 * bare;
-      // crust colour varies from pale chalky green to deep blue-green
-      const tone = crumb;
+      // crust colour varies per cell from pale chalky green to deep blue-green
+      const tone = cellId * 0.6 + crumb * 0.4;
       r = lerp(r, r * (0.80 + tone * 0.5), crust * 0.6);
       g = lerp(g, g * (0.88 + tone * 0.35), crust * 0.6);
       b = lerp(b, b * (0.92 + tone * 0.30), crust * 0.6);
       // dark pitting under the crust
       const pit = smoothstep(0.86, 0.98, crumb) * crust;
       r = lerp(r, 0.046, pit * 0.7); g = lerp(g, 0.096, pit * 0.7); b = lerp(b, 0.086, pit * 0.7);
-      // the rib crown is the most weathered metal on the roof: bright, bare
-      r = lerp(r, 0.78, rib * 0.55); g = lerp(g, 0.44, rib * 0.55); b = lerp(b, 0.28, rib * 0.55);
+      // battens and rib crowns: the most weathered metal on the roof — bright, bare
+      const crown = Math.max(batten, rib * 0.8);
+      r = lerp(r, 0.80, crown * 0.6); g = lerp(g, 0.46, crown * 0.6); b = lerp(b, 0.30, crown * 0.6);
+      // the lip shadow under every batten: the band the eye counts
+      r *= 1 - lip * 0.42; g *= 1 - lip * 0.42; b *= 1 - lip * 0.42;
 
       A[p] = clamp01(r) * 255; A[p + 1] = clamp01(g) * 255; A[p + 2] = clamp01(b) * 255; A[p + 3] = 255;
-      O[p + 1] = clamp(lerp(0.92, 0.28, bare) - bl * 0.10 * bare + pit * 0.06 - rib * 0.08, 0.10, 1) * 255;
-      O[p + 2] = clamp(Math.max(bare, rib * 0.9) * 0.96, 0, 1) * 255;
+      O[p + 1] = clamp(lerp(0.92, 0.30, bare) - bl * 0.08 * bare + pit * 0.06 - crown * 0.08, 0.10, 1) * 255;
+      O[p + 2] = clamp(Math.max(bare, crown * 0.9) * 0.96, 0, 1) * 255;
       O[p + 3] = 255;
     }
   }
@@ -3714,14 +3849,14 @@ function bakeCopper() {
   bakeAO(B, 4, 0.60, 3.0, 0.60);
 
   const maps = {
-    map: upload(commitA(B), 'copper.albedo', true, 0.80),
-    orm: upload(commitO(B), 'copper.orm', false, 0.80),
-    normal: upload(heightToNormal(B.h, n, 1.35), 'copper.normal', false, 0.80),
+    map: upload(commitA(B), 'copper.albedo', true, 0.625),
+    orm: upload(commitO(B), 'copper.orm', false, 0.625),
+    normal: upload(heightToNormal(B.h, n, 1.25), 'copper.normal', false, 0.625),
   };
   return assemble('copper', maps, {
     color: 0xffffff, roughness: 1, metalness: 1,
     normalScale: new THREE.Vector2(0.95, 0.95), envMapIntensity: 1.35,
-  }, 0.80);
+  }, 0.625);
 }
 
 /* --------------------------------------------------------------- 5.15 rope */
@@ -4004,11 +4139,25 @@ void main() {
   float hz = cbRippleH( vCbUv + vec2( 0.0, e ), uTime );
   vec3 rN = normalize( vec3( -( hx - h0 ) * rAmp / e, 1.0, -( hz - h0 ) * rAmp / e ) );
   // compose: the ripple normal is defined about +Y, the wave normal is near +Y
-  N = normalize( N + vec3( rN.x, 0.0, rN.z ) * 1.35 );
+  N = normalize( N + vec3( rN.x, 0.0, rN.z ) * 1.0 );
 
-  float ndv = clamp( dot( N, V ), 0.0, 1.0 );
-  // Schlick, F0 = uFresnelBias (0.02-0.035 for water)
-  float fres = clamp( uFresnelBias + ( 1.0 - uFresnelBias ) * pow( 1.0 - ndv, uFresnelPower ), 0.0, 1.0 );
+  /* ROUND 2 (2026-09-04, surface lane, critic "no fresnel darkening toward
+     the horizon, the near water is the same value as the far"). Schlick with
+     F0 0.02, power 5 — the real curve, not a softened one — against the
+     GEOMETRIC wave normal for the sky mix: the ripple normal was feeding the
+     fresnel too, so every ripple flipped a fragment between body and sky at
+     texel frequency and the near/far gradient averaged into one value. The
+     ripples keep the glint (below), which is where they belong. */
+  /* The fresnel normal FLATTENS with distance (6 -> 28 m). At a grazing view
+     every Gerstner back-slope hits fres ~1 (sky, opaque) and every front
+     slope shows the body/floor, so a shelf 30 m out was one white bar per
+     crest — the barcode in _shots/azure-1/crest-metal.png. A distant lake
+     averages those slopes inside a pixel anyway; this does it explicitly. */
+  vec3 Ng = normalize( mix( normalize( vCbNormal ), vec3( 0.0, 1.0, 0.0 ), smoothstep( 6.0, 28.0, cbWd ) ) );
+  if ( ! gl_FrontFacing ) Ng = - Ng;
+  float ndv = clamp( dot( Ng, V ), 0.0, 1.0 );
+  float f0 = clamp( uFresnelBias, 0.0, 0.05 );
+  float fres = clamp( f0 + ( 1.0 - f0 ) * pow( 1.0 - ndv, max( uFresnelPower, 4.0 ) ), 0.0, 1.0 );
 
   /* ---- how much water is under this pixel ------------------------------- */
   float depth = 1.0;                       // 1 = deep, 0 = the shore line
@@ -4024,10 +4173,14 @@ void main() {
   #endif
 
   /* ---- body colour: shallow over deep by depth --------------------------- */
-  // a square-root ramp so the shallow tint holds over the first metre and the
-  // deep colour owns everything past the fade — the read is "waist deep here,
-  // bottomless there", which is the whole readability job of this surface
-  vec3 body = mix( uShallow, uDeep, sqrt( depth ) );
+  // depth in METRES (the attribute ramps over uDepthFade). The shallow tint is
+  // what you see through waist-deep water; past ~2.5 m the body is the deep
+  // colour, and from there on only the sky reflection changes with distance —
+  // which is the near-dark / far-sky gradient every real lake shows.
+  float depthM = depth * max( uDepthFade, 0.5 );
+  // 1.4 m: the shallow tint is the last metre before the shore; a 2.5 m ramp
+  // kept the whole azure shelf at the bright shallow colour (round-2 shoot)
+  vec3 body = mix( uShallow, uDeep, smoothstep( 0.0, 1.4, depthM ) );
 
   /* ---- sky reflection (analytic dome: horizon -> zenith + sun glow) ------ */
   vec3 R = reflect( -V, N );
@@ -4052,10 +4205,15 @@ void main() {
   // the hot lobe fades with distance exactly as the ripples do (cbRf): far
   // out, a tight lobe on a rippled normal is single-pixel speckle at a 0.60
   // render scale — the "TV static" half of owner O4. Near, it glitters.
-  float spec = pow( ndh, max( uGloss, 8.0 ) ) * ( 0.25 + 0.75 * cbRf );
+  // ROUND 2: the hot lobe on the GEOMETRIC wave normal at 30 m was painting
+  // one white bar per Gerstner crest across the shelf (the "barcode" in
+  // _shots/azure-1/crest-metal.png); it now dies by ~15 m (cbRh) and the far
+  // surface keeps only the broad, dim lobe, which is what a distant lake does.
+  float cbRh = 1.0 / ( 1.0 + cbWd * 0.12 );
+  float spec = pow( ndh, max( uGloss, 8.0 ) ) * cbRh;
   float glit = pow( ndh, 18.0 );
   float sunUp = clamp( Ls.y * 4.0, 0.0, 1.0 );      // no glint from a sun below the horizon
-  col += uSunColor * ( spec * 2.6 + glit * 0.14 ) * ( 0.30 + 0.70 * fres ) * sunUp;
+  col += uSunColor * ( spec * 2.0 + glit * 0.10 ) * ( 0.30 + 0.70 * fres ) * sunUp;
 
   /* ---- foam: the shore band ONLY ----------------------------------------- */
   // a broken, moving line where the water meets the ground; whitecaps are
@@ -4067,19 +4225,28 @@ void main() {
      _shots/surface2_azure-1.png that read as milk, not water. The band is
      now uShoreWidth metres of DEPTH (capped at 1.2 m) back from the
      waterline, whatever the body's fade distance. */
-  float cbShoreW = clamp( min( uShoreWidth, 1.2 ) / max( uDepthFade, 0.5 ), 0.03, 0.6 );
-  float shoreBand = 1.0 - smoothstep( 0.0, cbShoreW, depth );
+  /* ROUND 2: a 0.6 m SOFT, NOISE-BROKEN edge (cap 0.8 m) — the noise moves
+     the edge in and out along the shore instead of tinting a band of it, so
+     what reads is a lapping line, never a stripe. Whitecaps stay off the
+     shallows (they need > 1.5 m of water to form). */
+  float cbShoreM = clamp( uShoreWidth, 0.3, 0.8 );
   float churn = cbwNoise( vCbUv * 1.7 + vec2( uTime * 0.28, -uTime * 0.19 ) );
   float churn2 = cbwNoise( vCbUv * 4.1 - vec2( uTime * 0.21, uTime * 0.33 ) );
-  float shoreFoam = smoothstep( 0.36, 0.86, shoreBand * ( 0.50 + 0.55 * churn + 0.25 * churn2 ) );
-  float caps = smoothstep( 0.86, 0.99, vCbCrest * ( 0.70 + 0.40 * churn ) ) * uCrestFoam;
+  // foam = shallowness x noise, thresholded: a lapping edge of PATCHES, never
+  // a solid band — a shelf that is 0.5 m deep for 20 m is water, not milk
+  float shoreK = 1.0 - clamp( depthM / cbShoreM, 0.0, 1.0 );
+  // MULTIPLICATIVE: shallowness gates the noise, it never adds to it, so a
+  // wading lake 0.5 m deep for 20 m (verdant-3) is patched at its EDGE only
+  float shoreFoam = smoothstep( 0.30, 0.70, shoreK * smoothstep( 0.42, 0.82, churn * 0.7 + churn2 * 0.3 ) );
+  float caps = smoothstep( 0.86, 0.99, vCbCrest * ( 0.70 + 0.40 * churn ) ) * uCrestFoam
+             * smoothstep( 1.0, 2.5, depthM );
   float foam = clamp( shoreFoam + caps, 0.0, 1.0 );
 
-  col = mix( col, uFoam, foam * 0.85 );
+  col = mix( col, uFoam, foam * 0.75 );
 
-  /* ---- alpha: depth fade — transparent at the waterline, uOpacity deep ---- */
-  float alpha = mix( 0.12, uOpacity, smoothstep( 0.0, 0.60, depth ) );
-  alpha = clamp( mix( alpha, 1.0, max( fres * 0.80, foam ) ), 0.0, 1.0 );
+  /* ---- alpha: depth fade — 0.35 at the waterline, uOpacity by 1.5 m ------ */
+  float alpha = mix( 0.35, uOpacity, smoothstep( 0.0, 1.5, depthM ) );
+  alpha = clamp( max( alpha, max( fres, foam ) ), 0.0, 1.0 );
 
   /* LINEAR HDR out — see the ROUND 5 double-tone-map note in world/sky.js.
      ACES here clamped every glint and fresnel rim to 1.0 before FinishPass
