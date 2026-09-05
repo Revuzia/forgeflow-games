@@ -2873,7 +2873,12 @@ function procParams(def) {
  *   count           copies (default 1)
  *   spread          scatter radius in metres (default 0 = exactly at p)
  *   seed            per-def seed; omit and the def's position hashes into one
- *   rot             fixed yaw in radians; omit for a random yaw
+ *   rot             fixed yaw in radians; omit for a random yaw — except the
+ *                   ALIGNED props (sign, holosign): a text plate is baked at the
+ *                   same x/z facing the authored yaw (or +Z), so its post must
+ *                   stand at exactly that yaw, unjittered and untilted, or the
+ *                   post cuts through the lettering (regress 2026-09-05:
+ *                   ember-1 / azure-1 spawn boards)
  *   jitter          scale jitter, 0..1 (default 0.18)
  *   yJitter         vertical jitter in metres (default 0)
  *   light           false to suppress this def's point lights
@@ -2895,6 +2900,9 @@ function procParams(def) {
  * @returns {{meshes:THREE.InstancedMesh[], lights:THREE.PointLight[], sites:object[],
  *            instances:number, skipped:string[], dispose:function}}
  */
+/** Props whose orientation is load-bearing (they carry a baked text plate). */
+const ALIGNED_PROPS = new Set(['sign', 'holosign']);
+
 export function placeProps(stageGroup, defs, propLibrary, rng, opts) {
   const _t0 = _pnow();
   const o = opts || {};
@@ -2928,7 +2936,8 @@ export function placeProps(stageGroup, defs, propLibrary, rng, opts) {
     const count = Math.max(1, Math.min(256, def.count || 1));
     const spread = def.spread || 0;
     const baseScale = def.scale || 1;
-    const jitter = def.jitter === undefined ? 0.18 : def.jitter;
+    const aligned = ALIGNED_PROPS.has(id);
+    const jitter = def.jitter === undefined ? (aligned ? 0 : 0.18) : def.jitter;
     const yJit = def.yJitter || 0;
 
     for (let i = 0; i < count; i++) {
@@ -2937,11 +2946,17 @@ export function placeProps(stageGroup, defs, propLibrary, rng, opts) {
       const x = (p[0] || 0) + Math.cos(a) * r;
       const z = (p[2] || 0) + Math.sin(a) * r;
       const y = (p[1] || 0) + (yJit ? (rand() - 0.5) * 2 * yJit : 0);
-      const yaw = def.rot !== undefined && def.rot !== null
-        ? (typeof def.rot === 'number' ? def.rot : (def.rot[1] || 0)) + (rand() - 0.5) * 0.35
-        : rand() * Math.PI * 2;
+      const rotYaw = def.rot !== undefined && def.rot !== null
+        ? (typeof def.rot === 'number' ? def.rot : (def.rot[1] || 0)) : null;
+      /* the RNG is drawn the same number of times either way, so an aligned
+         prop does not change the scatter of every def after it */
+      const rYaw = rand();
+      const yaw = aligned
+        ? (rotYaw === null ? 0 : rotYaw)
+        : (rotYaw !== null ? rotYaw + (rYaw - 0.5) * 0.35 : rYaw * Math.PI * 2);
       const s = baseScale * (1 + (rand() - 0.5) * 2 * jitter);
-      const tilt = (rand() - 0.5) * (def.tilt === undefined ? 0.05 : def.tilt);
+      const rTilt = rand();
+      const tilt = aligned ? 0 : (rTilt - 0.5) * (def.tilt === undefined ? 0.05 : def.tilt);
 
       _v0.set(x, y, z);
       _q0.setFromEuler(new THREE.Euler(tilt, yaw, tilt * 0.6));

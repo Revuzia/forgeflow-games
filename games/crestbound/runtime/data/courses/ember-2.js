@@ -811,7 +811,13 @@ export default {
 
     // THE CROWN. A 12 m deck on a single column, top 34.90; the open crest
     // stands 1.60 m above it. The column is what the Warden's charge breaks on.
-    { kind: 'pillar', p: [0, 27.35, -50], s: [3.0, 14.1, 3.0], mat: 'metal', tint: COPPER, glow: HOT },
+    // A pillar's p.y is its FOOT (builders.buildPillar stacks base, shaft and
+    // cap up from y = 0, and the collider follows): 20.30 -> 34.40, under the
+    // deck. Authored at 27.35 (its centre) it stood 27.35 -> 41.45 and rose 6.5 m
+    // THROUGH the crown deck, on the crest's footprint — regress 2026-09-05,
+    // loopcheck ember-2 'a crest collects on contact' (the hero was shoved off
+    // the crest by the column).
+    { kind: 'pillar', p: [0, 20.3, -50], s: [3.0, 14.1, 3.0], mat: 'metal', tint: COPPER, glow: HOT },
     { kind: 'platform', p: [0, 34.4, -50], s: [10.0, 1.0, 10.0], mat: 'metal', tint: IRON, stripe: true, edge: SAFE_EDGE },
 
     // THE LIFT. 20.90 -> 34.30 centre, i.e. deck 21.50 -> 34.90 — level with the

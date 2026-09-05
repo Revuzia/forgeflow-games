@@ -262,3 +262,52 @@ triangle count, not what it drew — `renderer.info` after a real render is
 the number to trust; and a visibility-toggle probe on a RUNNING engine
 drifts by ~10k triangles between renders (coin/grass/animation), so stop
 the engine and render once per toggle.
+
+## A perf run is only evidence if the GPU engine was idle (2026-09-05, regress pass)
+
+Headed `perfcheck.py` (auto tier, 0.60) after the five visual lanes read keep
+**38.7 fps** and verdant-1 **43.2 fps** — "14 of 14 courses over budget" — against the
+66.5 / 73.1 recorded above. Before blaming the lanes, the pre-run checkpoint
+8a6b9359 was served from a side directory and measured in the same session:
+**keep 42.8 fps** (spawn 46.5 / cp2 48.4 / cp3 42.8). Same code that read 66.5 the
+day before. `Get-Counter '\GPU Engine(*)\Utilization Percentage'` explained it: the
+owner's own Chrome GPU process (pid 16912, child of the default-profile Chrome
+9148) held **~31 % of the 3D engine** at rest, dwm another 10 %. That Chrome is not a
+harness instance and was not killed.
+
+Paired numbers on the same loaded box: base 42.8 -> HEAD 39.3 fps on keep, i.e. the
+lanes cost ~2 ms of a ~24 ms frame. `_fillab.py` at 5 repeats (keep cp2, low):
+PresentPass RCAS/5-tap vs a plain blit **-1.78 ms** (the O1 sharpness buy), FXAA
+-1.02 ms, all post -1.73 ms. A 3-repeat run of the same table had shown FXAA at
+-5.55 ms — timer noise on a contended GPU; do not act on a fillab delta from fewer
+than 5 repeats while the GPU counter shows another process above ~5 %.
+
+Two rules: (1) sample the GPU-engine counter BEFORE a perf run and record it with
+the table; (2) attribute a regression with a same-session PAIRED run of the last
+known-good commit (`git archive <sha> games/crestbound | tar -x -C games/_bisect/x`,
+then `perfcheck.py --url .../games/_bisect/x/games/crestbound/index.html --courses
+keep --no-native`) — never against a number measured on another day.
+
+Also measured this pass: `perfcheck` reports "render scale 0.60 -> drawing buffer
+1920x1080" since the image lane — the composer targets are 1152x648, only the
+PresentPass writes native pixels; the line is correct, not a scale bug. perfcheck's
+worst-of-three triangle count for verdant-3 is 451,360 (spawn) while bootcheck's
+spawn read 448,086 — the animated coin detail band swings ~3k either side of the
+budget line, so verdant-3 is ON the 450k line, not safely under it.
+
+## Two data traps found by the loop gate (2026-09-05)
+
+`kind:'pillar'` p.y is the pillar's FOOT (builders.buildPillar stacks base, shaft,
+cap from y = 0 and the collider follows). ember-2 authored its crown column at its
+centre, so a 3 m copper column stood 27.35 -> 41.45 THROUGH the crown deck on the
+open crest's footprint; loopcheck's stand-under teleport was shoved 1.88 m
+sideways and 'a crest collects on contact' failed (4 checks). Probe:
+`_harness/_rg_colprobe.py <course> x,y,z` lists broadphase colliders in a box.
+
+`placeProps` gave every prop without `rot` a RANDOM yaw and every prop a 0.18
+scale / tilt jitter — including `kindOf:'sign'`, whose text plate is baked at a
+fixed yaw at the same x/z. The post spun in front of the lettering on the ember-1
+and azure-1 spawn boards. ALIGNED_PROPS (sign, holosign) now take the authored yaw
+or +Z, unjittered. Text boards are also capped at TEXT_MAX_LINE_M = 3.7 m per line:
+the 0.60 m 'BAILEY MEADOW' header measured 6.1 m and covered Nim from the spawn
+camera.

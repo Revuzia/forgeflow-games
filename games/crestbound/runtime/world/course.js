@@ -160,6 +160,12 @@ const TEXT_LINE_PITCH = 1.34;   // line pitch in cap heights
 const TEXT_PAD_M = 0.15;        // panel margin, metres
 const TEXT_FRAME_M = 0.09;      // wood lip round the panel, metres
 const TEXT_MOUNT_OUT = 0.14;
+/* Widest painted line, metres. `size` is a CAP height, so an authored 0.60 m
+   header ('BAILEY MEADOW', 13 glyphs) measured 6.1 m and the board it made,
+   centred 3 m beside the spawn pad, covered Nim from the spawn camera
+   (regress 2026-09-05, verdant-1 / azure-1 / ember-1). A line wider than this
+   is shrunk to fit; body lines wrap at TEXT_WRAP_CHARS and never reach it. */
+const TEXT_MAX_LINE_M = 3.7;
 const MAX_LIGHT_SITES = 96;
 
 /* ── the light budget ───────────────────────────────────────────────────────
@@ -2316,6 +2322,18 @@ export class Course {
       L.pitch = L.cap * TEXT_LINE_PITCH;
     }
     const fontOf = (px, head) => (head ? '800 ' : '700 ') + px + 'px Rajdhani, "Segoe UI", system-ui, -apple-system, sans-serif';
+    /* a line wider than the board may be is scaled down to fit it */
+    for (let i = 0; i < lines.length; i++) {
+      const L = lines[i];
+      ctx.font = fontOf(Math.round(L.fs * TEXT_PPM), L.head);
+      const w = ctx.measureText(L.text).width / TEXT_PPM + L.fs * TEXT_TRACK_EM * Math.max(0, L.text.length - 1);
+      if (w > TEXT_MAX_LINE_M) {
+        const k = TEXT_MAX_LINE_M / w;
+        L.cap *= k;
+        L.fs = L.cap / TEXT_CAP_EM;
+        L.pitch = L.cap * TEXT_LINE_PITCH;
+      }
+    }
     let ppm = TEXT_PPM;
     let wM = 0, hM = 0;
     for (let pass = 0; pass < 3; pass++) {
