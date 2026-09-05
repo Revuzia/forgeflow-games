@@ -344,9 +344,14 @@ function haloMaterial(color) {
   const ctx = cnv.getContext('2d');
   if (ctx) {
     const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-    g.addColorStop(0.0, 'rgba(255,255,255,0.95)');
-    g.addColorStop(0.18, 'rgba(255,255,255,0.55)');
-    g.addColorStop(0.5, 'rgba(255,255,255,0.14)');
+    /* S6 (readability lane 2026-09-05, verdant-1 crest-boss / crest-sigils): a
+     * 0.95 white core at opacity 0.55, ADDED over gold that already sits at 1-2
+     * in HDR under the key, is what bloomed the crest into a white ball with a
+     * pink halo. The sprite keeps its colour (the realm hue) and loses the
+     * white-hot centre: the core is a soft glow, not a second sun. */
+    g.addColorStop(0.0, 'rgba(255,255,255,0.62)');
+    g.addColorStop(0.18, 'rgba(255,255,255,0.34)');
+    g.addColorStop(0.5, 'rgba(255,255,255,0.10)');
     g.addColorStop(1.0, 'rgba(255,255,255,0)');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, size, size);
@@ -354,7 +359,7 @@ function haloMaterial(color) {
   const tex = new THREE.CanvasTexture(cnv);
   tex.colorSpace = THREE.SRGBColorSpace;
   m = new THREE.SpriteMaterial({
-    map: tex, color, transparent: true, opacity: 0.55,
+    map: tex, color, transparent: true, opacity: 0.34,
     blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false,
   });
   m.name = 'cb.halo.' + key;
@@ -1131,10 +1136,25 @@ export class Collectibles {
     this.counts.crestsTotal = defs.length;
 
     const realm = this.colors.realm;
-    const goldMat = goldMaterial(this.theme, this.mats);
+    /* S6 (readability lane 2026-09-05): the crest wore the COIN gold — env 1.7 x the
+     * theme's gold.env, roughness 0.16 — and at 20 m under a day sky its mirror
+     * highlight sat far over the bloom threshold, so the coarse mips bloomed it
+     * into a white ball (`_shots/verdant-1/crest-sigils.png`). The crest gets its
+     * own clone: a duller, warmer gold whose reflection stays under the ceiling;
+     * coins keep the bright material the owner has already seen. One material,
+     * same shader permutation, no per-frame cost. */
+    const coinGold = goldMaterial(this.theme, this.mats);
+    const goldMat = coinGold.clone();
+    goldMat.envMapIntensity = Math.min(coinGold.envMapIntensity || 1, 0.95);
+    goldMat.roughness = Math.max(coinGold.roughness || 0, 0.34);
+    if ('clearcoat' in goldMat) { goldMat.clearcoat = 0.25; goldMat.clearcoatRoughness = 0.35; }
+    goldMat.emissive = new THREE.Color(realm).multiplyScalar(0.55);
+    goldMat.emissiveIntensity = 0.45;
+    goldMat.name = (coinGold.name || 'cb.gold') + '.crest';
+    this._own && this._own(goldMat);
     const enamel = enamelMaterial(realm);
     const ghost = ghostMaterial(realm);
-    const glow = getGlow(realm, { mode: 'radial', speed: 0.7, power: 2.2, gain: 0.85 });
+    const glow = getGlow(realm, { mode: 'radial', speed: 0.7, power: 2.2, gain: 0.62 });
     const halo = haloMaterial(realm);
 
     for (let i = 0; i < defs.length; i++) {

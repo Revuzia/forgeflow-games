@@ -1023,10 +1023,18 @@ export const THEMES = {
     },
 
     lights: {
-      key: { color: 0xcfe2ff, intensity: 2.15, dir: [0.22, 0.95, -0.22] },
+      /* READABILITY LANE 2026-09-05: nine ember stations measured their cold-steel
+       * decks at [36-68] against near-black bands ([15-53, 1-20, 0-16]); the
+       * deck side of the pair comes up: cool key 2.15 -> 2.60, hemi sky warmer and
+       * a step stronger, and the steel tints below out of the mid-grey trap. */
+      /* _rd_lightprobe.py at ember-4 cp2 (2026-09-05): deck 2.09:1 as-is, 2.64 under
+       * sun x2, 3.20 under sun x3, 2.56 under rim x2; hemi/ambient/fill/env x2 moved
+       * it by < 0.1. The decks answer the KEY and the RIM only — so those are the
+       * two that move (a further step, not the x3 that would refloor the realm). */
+      key: { color: 0xcfe2ff, intensity: 3.20, dir: [0.22, 0.95, -0.22] },
       // THE LAVA — a bounce light from under the floor
       fill: { color: 0xff5a12, intensity: 1.95, dir: [0.08, -1.00, 0.16] },
-      rim: { color: 0xffb060, intensity: 2.25, dir: [-0.58, 0.28, -0.76] },
+      rim: { color: 0xffb060, intensity: 2.70, dir: [-0.58, 0.28, -0.76] },
       /* LIGHT LANE 2026-09-04 (owner O2 "in Ember he is a dark silhouette",
        * contract §15 "red-orange UP-LIGHT bounce from the lava"): the sky half
        * of the hemi was 0x2b1a12 — soot — so the top of every head, deck and
@@ -1038,7 +1046,7 @@ export const THEMES = {
        * silhouette with only a thin red rim"): the sky half goes from soot to
        * a smoky amber that the furnace glow would actually put on the top of
        * a head, and the hero gets his OWN key — see heroKey. */
-      hemi: { skyColor: 0x6a3c2a, groundColor: 0xff4a0a, intensity: 1.10 },
+      hemi: { skyColor: 0x8a5c48, groundColor: 0xff4a0a, intensity: 1.25 },
       /* Measured (`_harness/_light_r2probe.py`, ember-1 crest-boss): the camera
        * fill at 0.80 put ~0.5 units on the coat — a dark red, not orange; 1.40
        * with a warmer colour is the flat base the portrait key models on. */
@@ -1082,7 +1090,7 @@ export const THEMES = {
     bloom: { strength: 0.55, radius: 0.62, threshold: 2.20, knee: 0.4, clamp: 4.5 },
 
     palette: {
-      safe: 0x93a7b8, safeEdge: 0x8ff0ff,
+      safe: 0xb8c8d8, safeEdge: 0x8ff0ff,
       /* LIGHT LANE 2026-09-04 (critic C3): explicit, under the 2.05 default,
        * so the sun's shadow and the contact blob read on the pad. */
       padGlow: 1.60,
@@ -1112,11 +1120,11 @@ export const THEMES = {
      * grazing-angle env mirror, which was repainting every tile top with the
      * fogged sea regardless of albedo. */
     materialOverrides: {
-      stone: { tint: 0x8a94a0 },
-      panel: { tint: 0x8892a0 },
-      metal: { tint: 0x98a4b0, metalness: 0.22, env: 0.18 },
-      grate: { tint: 0x8c98a4, metalness: 0.18, env: 0.15 },
-      checker: { tint: 0x9aa4b0 },
+      stone: { tint: 0xc0ccd8 },
+      panel: { tint: 0xc0ccd8 },
+      metal: { tint: 0xd0dce8, metalness: 0.10, env: 0.30 },
+      grate: { tint: 0xc4d0dc, metalness: 0.08, env: 0.24 },
+      checker: { tint: 0xc8d2dc },
       brick: { tint: 0x7a5a4c },
       plaster: { tint: 0x9a8f80 },
       marble: { tint: 0xa8aab0, clearcoat: 0.35, clearcoatRoughness: 0.35 },
@@ -1127,7 +1135,7 @@ export const THEMES = {
       gold: { env: 1.05 },
       rope: { tint: 0x8a7458 },
       cloth: { tint: 0x9fb4c4 },
-      obsidian: { tint: 0x2e2a28, env: 0.14, clearcoat: 0.18,
+      obsidian: { tint: 0x4a4644, env: 0.14, clearcoat: 0.18,
                   clearcoatRoughness: 0.58, specularIntensity: 0.12 },
       ice: { tint: 0xffd6b8, transmission: 0.18, env: 0.20 },
       glass: { tint: 0xffd8bc, env: 0.35 },
@@ -1184,22 +1192,34 @@ export const THEMES = {
      * slow plain-exponential tint + desaturation that grades the MID-ground
      * long before the readability band bites (owner O3). The readability band
      * (`color`, `density`) is untouched: contrastcheck measures it. */
-    fog: { color: 0x28374f, near: 16, far: 190, density: 0.0072, type: 'exp2',
+    /* READABILITY LANE 2026-09-05. contrastcheck read nine rime stations between
+     * 1.00 and 1.70:1 — pale snow/ice decks ([137-204, 158-220, 194-241]) against a
+     * band that was NOT the deep dusk blue this fog promises but the dome's own
+     * horizon at [107-171, 160-200, 221-235]: horizon 0x4a6084 under a 0.75 haze
+     * and a 0.55 pink glow rendered as a pale sky at eye level. The band goes to
+     * the dusk blue the theme commits to (sky.params below), the far-geometry sky
+     * mix and aerial tint follow it, and the fog thickens a step (0.0072 ->
+     * 0.0090: 17 % -> 25 % at 60 m) so mid-distance ice slabs recede. */
+    fog: { color: 0x28374f, near: 16, far: 190, density: 0.0090, type: 'exp2',
            heightBelow: 3, heightFalloff: 0.06, heightThin: 0.60, desat: 0.35,
-           skyColor: 0x3f4a66, skyMix: 0.60, skyCap: 0.70,
-           aerialColor: 0x3a4a68, aerialDensity: 0.0059, aerialStrength: 0.55 },
+           skyColor: 0x2c3a56, skyMix: 0.60, skyCap: 0.70,
+           aerialColor: 0x2e3e5a, aerialDensity: 0.0059, aerialStrength: 0.55 },
 
     sky: {
       type: 'aurora',
       params: {
-        top: 0x0d1a34, mid: 0x1e3560, horizon: 0x4a6084, bottom: 0x1a2436,
-        horizonGlow: 0xff9fb4, glowPower: 6.5, glowStrength: 0.55,
+        top: 0x0d1a34, mid: 0x1e3560, horizon: 0x2e4266, bottom: 0x121a2c,
+        horizonGlow: 0xff9fb4, glowPower: 6.5, glowStrength: 0.38,
         sunDir: [0.76, 0.06, -0.64], sunColor: 0xffb0c0,
-        sunSize: 0.0022, sunIntensity: 1.5, sunHalo: 0.28,
+        /* S6 (rime-1/rime-2 vista-nw): sunIntensity 1.5 put a 33x core into the
+         * frame (sky.js disc = 22 x intensity) — a white ball with a pink halo
+         * whatever the bloom did. 0.32 keeps the core near 7 so ACES holds the
+         * pink; the disc shrinks to a low dusk sun and the halo thins with it. */
+        sunSize: 0.0012, sunIntensity: 0.32, sunHalo: 0.20,
         auroraA: 0x4affc8, auroraB: 0x7f9cff,
         auroraSpeed: 0.055, auroraHeight: 0.42, auroraStrength: 0.85, auroraBands: 3.0,
         starDensity: 0.70, starBrightness: 0.60, dither: 1.0,
-        sunPower: 70, haze: 0.75, intensity: 0.95,
+        sunPower: 70, haze: 0.45, intensity: 0.92,
       },
     },
 
@@ -1267,9 +1287,9 @@ export const THEMES = {
      * "obviously bright" deck still measures 1.2:1. The frost sparkle and the
      * fracture normals carry the ice read instead. */
     materialOverrides: {
-      stone: { tint: 0xc0d0e0 },
-      panel: { tint: 0xb8c8da },
-      metal: { tint: 0xc0ccdc, metalness: 0.22, env: 0.20 },
+      stone: { tint: 0xd4e2f0 },
+      panel: { tint: 0xcad8e8 },
+      metal: { tint: 0xd0dcec, metalness: 0.22, env: 0.20 },
       grate: { tint: 0xb0bece },
       checker: { tint: 0xc4d2e2 },
       snow: { tint: 0xffffff },
@@ -1291,7 +1311,7 @@ export const THEMES = {
       cloth: { tint: 0xc4d8ec },
       copper: { tint: 0xc4d0cc, env: 0.65 },
       gold: { env: 1.15 },
-      obsidian: { tint: 0x4a5a68 },
+      obsidian: { tint: 0x62748a },
       rubber: { tint: 0x8a94a0 },
       crystal: { emissive: 0x9fe8ff, attenuationColor: 0x2f74b0 },
       neon: { emissive: 0x7fe2ff, emissiveIntensity: 2.3 },
@@ -1344,16 +1364,23 @@ export const THEMES = {
      * slow plain-exponential tint + desaturation that grades the MID-ground
      * long before the readability band bites (owner O3). The readability band
      * (`color`, `density`) is untouched: contrastcheck measures it. */
+    /* READABILITY LANE 2026-09-05. azure-3's pale marble decks ([219-234, 234-240,
+     * 225-236]) measured 1.25-1.49:1 against a band of [172-233, 200-209, 207] — the
+     * dome's near-white horizon (0xbfe4ee + a 0.60 cyan glow + 0.55 haze), not the
+     * deep teal sea the theme commits to. The horizon band deepens toward the sea
+     * (sky.params), the far-geometry sky mix and aerial tint follow it. azure-2's
+     * steel decks (2.97 / 3.42:1) take the other side of the pair: paler, less
+     * metallic, more sky in them (materialOverrides.metal/panel/grate). */
     fog: { color: 0x1b4d61, near: 34, far: 380, density: 0.0034, type: 'exp2',
            heightBelow: 3, heightFalloff: 0.07, heightThin: 0.60, desat: 0.40,
-           skyColor: 0x7fb4c4, skyMix: 0.60, skyCap: 0.50,
-           aerialColor: 0x78aab8, aerialDensity: 0.0036, aerialStrength: 0.50 },
+           skyColor: 0x3d7a92, skyMix: 0.60, skyCap: 0.50,
+           aerialColor: 0x4f8aa0, aerialDensity: 0.0036, aerialStrength: 0.50 },
 
     sky: {
       type: 'sanctum',
       params: {
-        top: 0x1a5fa8, mid: 0x3f92d4, horizon: 0xbfe4ee, bottom: 0x1b5c74,
-        horizonGlow: 0xa8f0ff, glowPower: 5.0, glowStrength: 0.60,
+        top: 0x1a5fa8, mid: 0x3f92d4, horizon: 0x4690ae, bottom: 0x14485e,
+        horizonGlow: 0xa8f0ff, glowPower: 5.0, glowStrength: 0.30,
         sunDir: [0.18, 0.92, -0.35], sunColor: 0xfffaf0,
         sunSize: 0.0026, sunIntensity: 3.0, sunHalo: 0.45,
         rainbowStrength: 0.55, rainbowRadius: 0.46, rainbowWidth: 0.070,
@@ -1362,7 +1389,7 @@ export const THEMES = {
         ringStrength: 0.42, ringColor: 0xbfeaff,
         cloudStrength: 0.55, cloudScale: 1.8, cloudSpeed: 0.009, cloudCoverage: 0.34,
         starDensity: 0.0, starBrightness: 0.0, dither: 1.0,
-        sunPower: 140, haze: 0.55, intensity: 1.20,
+        sunPower: 140, haze: 0.35, intensity: 1.20,
       },
     },
 
@@ -1453,9 +1480,9 @@ export const THEMES = {
       plaster: { tint: 0xf4e8cc },
       marble: { tint: 0xf8f4ea, clearcoat: 0.70, clearcoatRoughness: 0.10 },
       brick: { tint: 0xe0b08c },
-      panel: { tint: 0xd4c4a0 },
-      metal: { tint: 0xc8c8bc, metalness: 0.28, env: 0.26 },
-      grate: { tint: 0xbcbcb0 },
+      panel: { tint: 0xe4d4b0 },
+      metal: { tint: 0xe8e8e0, metalness: 0.18, env: 0.42 },
+      grate: { tint: 0xd8d8cc },
       checker: { tint: 0xdcd0b4 },
       wood: { tint: 0xd0a070 },
       bark: { tint: 0xb09880 },
