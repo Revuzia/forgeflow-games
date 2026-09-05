@@ -10,12 +10,27 @@
  *   BloomPass                       (quality.bloom) at quality.bloomScale
  *   FinishPass                      lift/gamma/gain, saturation, theme tint,
  *                                   radial vignette, radius-scaled chromatic
- *                                   aberration, animated film grain, flash
- *                                   pulse, damage vignette, heat shimmer,
- *                                   UNDERWATER tint + wobble + caustic vignette,
- *                                   SPEED LINES (radial streaks + radial blur),
- *                                   THEN ACES tone map + sRGB encode
- *   FXAAPass | SMAAPass             (quality.aa) — runs on the ENCODED image
+ *                                   aberration, flash pulse, damage vignette,
+ *                                   heat shimmer, UNDERWATER tint + wobble +
+ *                                   caustic vignette, SPEED LINES (radial
+ *                                   streaks + radial blur), hue-preserving
+ *                                   HIGHLIGHT compression, THEN ACES tone map
+ *                                   + sRGB encode
+ *   FXAAPass | SMAAPass             (quality.aa) — runs on the ENCODED image,
+ *                                   still at the INTERNAL (tier) resolution
+ *   PresentPass                     the ONLY pass at NATIVE resolution: a
+ *                                   Catmull-Rom upsample of the internal
+ *                                   buffer with an RCAS-style contrast-
+ *                                   adaptive sharpen folded into the same
+ *                                   fetch, then film grain + output dither at
+ *                                   native so neither is upscaled into dirt.
+ *
+ * TWO RESOLUTIONS (2026-09-04, image lane). Every composer target is allocated
+ * at `renderer pixel ratio x internalScale` (the tier's renderScale — 0.60 at
+ * LOW, CONTRACT hard rule 4); the CANVAS is native. Before this the drawing
+ * buffer itself was 0.60 and the browser compositor did a plain bilinear
+ * upscale on presentation — the whole world read low-res next to a crisp DOM
+ * HUD (owner, O1). The upscale is now ours, it is bicubic, and it sharpens.
  *
  * Ported from Ascendant (first-person obby). What changed and why:
  *
@@ -114,7 +129,8 @@ uniform vec3  uTint;
 uniform float uVignette;
 uniform float uVignetteSoft;
 uniform float uChroma;
-uniform float uGrain;
+uniform float uHiKnee;
+uniform float uHiRange;
 
 uniform float uPulse;
 uniform vec3  uPulseColor;
@@ -306,15 +322,22 @@ void main() {
     col += uPulseColor * uPulse * ( 0.30 + 0.70 * fall ) * ( 0.22 + 0.78 * head );
   }
 
-  // -------------------------------------------------------------- grain
-  // Animated dither in linear space, weighted so it is present in the mids
-  // and shadows and never crawls across a blown highlight.
-  if ( uGrain > 0.0001 ) {
-    vec2 gp = gl_FragCoord.xy + vec2( fract( uTime * 61.70 ) * 733.0, fract( uTime * 37.31 ) * 941.0 );
-    float g = hash21( gp );
-    float l2 = dot( col, LUMA );
-    col += ( g - 0.5 ) * uGrain * ( 0.30 + min( l2, 1.40 ) );
-    col = max( col, vec3( 0.0 ) );
+  // ------------------------------------------------ highlight compression
+  // HUE-PRESERVING roll-off ABOVE the knee, before the ACES shoulder. ACES
+  // desaturates as it clips: a flame at (8, 4, 1) came out as a flat white
+  // slab (owner O5 / critic C2). Scaling the whole colour by a Reinhard on its
+  // BRIGHTEST channel keeps the channel ratios — so the core of a flame is an
+  // orange-white with its own falloff, the sun stays a warm disc, and a lit
+  // plaster wall (under the knee) is untouched. Range is the asymptote above
+  // the knee: knee + range is the brightest scene value that can still reach
+  // display white.
+  {
+    float hm = max( col.r, max( col.g, col.b ) );
+    if ( hm > uHiKnee ) {
+      float he = hm - uHiKnee;
+      float hc = uHiKnee + he * uHiRange / ( uHiRange + he );
+      col *= hc / hm;
+    }
   }
 
   col = min( col, vec3( uClampHi ) );
@@ -340,10 +363,8 @@ void main() {
     gl_FragColor = sRGBTransferOETF( gl_FragColor );
   #endif
 
-  // ------------------------------------------------- output dither
-  // +/- half an LSB in DISPLAY space, after the OETF — the only place a dither
-  // can actually break up 8-bit banding in the sky domes and fog bands.
-  gl_FragColor.rgb += ( hash21( gl_FragCoord.xy + vec2( fract( uTime * 13.7 ) * 511.0 ) ) - 0.5 ) * ( 1.2 / 255.0 );
+  // Film grain and the output dither live in PresentPass now: applied here
+  // they would be upscaled with the frame and read as dirt (image lane).
 }
 `;
 
@@ -370,7 +391,8 @@ export const GradeShader = {
     uVignette: { value: 0.30 },
     uVignetteSoft: { value: 0.55 },
     uChroma: { value: 0.28 },
-    uGrain: { value: 0.020 },
+    uHiKnee: { value: 1.8 },
+    uHiRange: { value: 2.8 },
 
     uPulse: { value: 0 },
     uPulseColor: { value: new THREE.Vector3(1, 1, 1) },
@@ -398,6 +420,10 @@ export const DEFAULT_GRADE = {
   tint: null,
   grain: 0.020,
   vignetteSoft: 0.55,
+  /* hue-preserving highlight roll-off (see GRADE_FRAG): scene values above
+   * `highlightKnee` compress toward knee + highlightRange */
+  highlightKnee: 1.8,
+  highlightRange: 2.8,
 };
 
 /**
@@ -405,7 +431,7 @@ export const DEFAULT_GRADE = {
  * checkpoint pools sit well above 1.0 in the HDR buffer and glow; lit plaster,
  * grass and stone peak around 0.6–0.8 under the day key and stay clean.
  */
-export const DEFAULT_BLOOM = { strength: 0.62, radius: 0.55, threshold: 0.85 };
+export const DEFAULT_BLOOM = { strength: 0.62, radius: 0.55, threshold: 0.85, knee: 0.5 };
 
 /**
  * Ceiling on what the bloom bright-pass may read from the HDR scene buffer.
@@ -670,26 +696,39 @@ class ScaledBloomPass extends UnrealBloomPass {
         'uniform — the coarse-mip attenuation is stale, re-derive it.');
     }
     bf[2] = 0.42; bf[3] = 0.14; bf[4] = 0.045;
-    this._installInputClamp(clamp(numOr(inputClamp, DEFAULT_BLOOM_CLAMP), 1, 1e6));
+    this._installPrefilter(clamp(numOr(inputClamp, DEFAULT_BLOOM_CLAMP), 1, 1e6));
   }
 
   /**
-   * Clamp what the bright pass is allowed to see. A single half-float-max
-   * texel does not stay a dot through a blur: it is spread across the frame
-   * and ADDED back, and the whole image saturates. A clamp on the bloom INPUT
-   * is the standard guard (Unity and Unreal both ship one). It costs one
-   * instruction and makes the pass resolution-independent.
+   * The bright-pass PREFILTER: a firefly clamp, then a SOFT-KNEE threshold.
+   *
+   * Clamp: a single half-float-max texel does not stay a dot through a blur;
+   * it is spread across the frame and ADDED back, and the whole image
+   * saturates. A clamp on the bloom INPUT is the standard guard (Unity and
+   * Unreal both ship one). It costs one instruction and makes the pass
+   * resolution-independent.
+   *
+   * Knee (2026-09-04, image lane): the stock LuminosityHighPass is a 0.01-wide
+   * smoothstep — a pixel a hair over the threshold feeds its WHOLE value into
+   * the mip chain, so three overlapping flame curtains at ~8 became one white
+   * slab and a 1.3 plaster wall under a 1.30 threshold flipped between "no
+   * glow" and "the hall is white" on the exposure's third decimal (critic C2,
+   * owner O5). This is Unity's knee: only the energy ABOVE the threshold
+   * blooms, ramping in quadratically across `knee x threshold` around it, so
+   * a crest at 1.4 glows softly, a sun at 6 glows hard, and nothing steps.
+   * `uBloomKnee` 0 is a hard subtractive threshold, not the stock behaviour.
    *
    * @private @param {number} ceiling
    */
-  _installInputClamp(ceiling) {
+  _installPrefilter(ceiling) {
     const mat = this.materialHighPassFilter;
     if (!mat) throw new Error('[Post] UnrealBloomPass has no materialHighPassFilter to clamp');
 
     const from = 'vec4 texel = texture2D( tDiffuse, vUv );';
-    if (mat.fragmentShader.indexOf(from) === -1) {
-      throw new Error('[Post] LuminosityHighPassShader no longer starts with the expected ' +
-        'texel fetch — the bloom input clamp is stale, re-derive it.');
+    const fromKnee = 'float alpha = smoothstep( luminosityThreshold, luminosityThreshold + smoothWidth, v );';
+    if (mat.fragmentShader.indexOf(from) === -1 || mat.fragmentShader.indexOf(fromKnee) === -1) {
+      throw new Error('[Post] LuminosityHighPassShader no longer has the expected texel fetch / ' +
+        'smoothstep threshold — the bloom prefilter patch is stale, re-derive it.');
     }
     const to = [
       'vec4 texel = texture2D( tDiffuse, vUv );',
@@ -697,12 +736,28 @@ class ScaledBloomPass extends UnrealBloomPass {
       'texel.rgb = mix( vec3( 0.0 ), texel.rgb, vec3( equal( texel.rgb, texel.rgb ) ) );',
       'texel.rgb = clamp( texel.rgb, vec3( 0.0 ), vec3( uBloomClamp ) );',
     ].join('\n');
+    const toKnee = [
+      '// CRESTBOUND soft knee (post.js _installPrefilter): only the energy above',
+      '// the threshold blooms, ramping in over knee*threshold around it.',
+      'float cbKnee = luminosityThreshold * uBloomKnee;',
+      'float cbSoft = clamp( v - luminosityThreshold + cbKnee, 0.0, 2.0 * cbKnee );',
+      'cbSoft = cbSoft * cbSoft / ( 4.0 * cbKnee + 1e-4 );',
+      'float alpha = max( cbSoft, v - luminosityThreshold ) / max( v, 1e-4 );',
+    ].join('\n');
 
-    mat.fragmentShader = ('uniform float uBloomClamp;\n' +
-      mat.fragmentShader.replace(from, to));
+    mat.fragmentShader = ('uniform float uBloomClamp;\nuniform float uBloomKnee;\n' +
+      mat.fragmentShader.replace(from, to).replace(fromKnee, toKnee));
     mat.uniforms.uBloomClamp = { value: ceiling };
+    mat.uniforms.uBloomKnee = { value: DEFAULT_BLOOM.knee };
     this.highPassUniforms.uBloomClamp = mat.uniforms.uBloomClamp;
+    this.highPassUniforms.uBloomKnee = mat.uniforms.uBloomKnee;
     mat.needsUpdate = true;
+  }
+
+  /** @param {number} k 0..1 knee width as a fraction of the threshold */
+  setKnee(k) {
+    const u = this.materialHighPassFilter && this.materialHighPassFilter.uniforms.uBloomKnee;
+    if (u) u.value = clamp(numOr(k, DEFAULT_BLOOM.knee), 0, 1);
   }
 
   /** @param {number} v the highest value bloom may see */
@@ -901,24 +956,49 @@ class FXAAPass extends ShaderPass {
 }
 
 /* ===========================================================================
- * Contrast-adaptive sharpening (after AA, on the encoded image)
+ * Present: Catmull-Rom upsample + RCAS sharpen + grain, at NATIVE resolution
  * ======================================================================== */
 
 /**
- * AMD-CAS-style sharpen. The tiers render BELOW native (CONTRACT hard rule 4:
- * low 0.60) and the compositor's bilinear upscale is what turns world-sign
- * text and every edge to mush (owner, `_shots/_before_visual/verdant-1/
- * spawn.png`). Five taps of the finished LDR frame, a per-pixel amount that
- * is large in flat-ish regions and ZERO across already-hard edges (so it never
- * rings or haloes), applied AFTER FXAA so the anti-aliaser's own soft edges are
- * restored rather than fought. One full-screen draw at buffer size.
+ * The last pass, and the only one that runs at the canvas's native size.
+ *
+ * WHY (owner O1, 2026-09-04): the tiers render BELOW native (CONTRACT hard
+ * rule 4: LOW is 0.60), and until this pass the drawing buffer itself was the
+ * small one — the browser compositor did a plain bilinear stretch on
+ * presentation, and there was nothing in the chain that could touch the
+ * result. The whole world read low-res next to a crisp DOM HUD; the old CAS
+ * pass ran at the SMALL size and was then blurred by that same stretch.
+ *
+ * WHAT: the composer's targets stay at the tier scale (every pass before this
+ * one costs exactly what it did); this one full-screen draw reads the finished
+ * LDR frame and writes the canvas:
+ *
+ *   1. Catmull-Rom (bicubic) upsample — five bilinear taps (Jimenez's
+ *      optimisation, the four corner taps dropped and the weights
+ *      renormalised). Sharper than bilinear and no smear along diagonals.
+ *   2. RCAS-style contrast-adaptive sharpen (AMD FSR 1.0 RCAS), folded into
+ *      the same shader: four more bilinear taps one SOURCE texel away, the
+ *      lobe limited by the local min/max so it is ZERO across an edge that is
+ *      already hard (no halo), full in flat-ish detail (sign glyphs, grass,
+ *      mortar), and the result clamped to the neighbourhood so it can never
+ *      ring — the Catmull-Rom's own small overshoot is caught by the same
+ *      clamp.
+ *   3. Film grain and the +/-0.5 LSB output dither, at NATIVE pixels — grain
+ *      at the render size upscaled with the frame reads as dirt.
+ *
+ * `plain` (A/B + harness) reduces the pass to one bilinear tap so the cost and
+ * the look of the sharp path can be measured against a plain blit.
  */
-const SharpenShader = {
-  name: 'CrestboundSharpen',
+const PresentShader = {
+  name: 'CrestboundPresent',
   uniforms: {
     tDiffuse: { value: null },
-    uTexel: { value: new THREE.Vector2(1 / 1920, 1 / 1080) },
-    uSharp: { value: 0.5 },
+    /** internal buffer: w, h, 1/w, 1/h */
+    uSrc: { value: new THREE.Vector4(1152, 648, 1 / 1152, 1 / 648) },
+    uSharp: { value: 0.0 },
+    uGrain: { value: 0.02 },
+    uTime: { value: 0 },
+    uPlain: { value: 0 },
   },
   vertexShader: /* glsl */`
 varying vec2 vUv;
@@ -928,47 +1008,121 @@ void main() {
 }`,
   fragmentShader: /* glsl */`
 uniform sampler2D tDiffuse;
-uniform vec2 uTexel;
+uniform vec4  uSrc;
 uniform float uSharp;
+uniform float uGrain;
+uniform float uTime;
+uniform float uPlain;
 varying vec2 vUv;
+
+const vec3 LUMA_P = vec3( 0.2126, 0.7152, 0.0722 );
+
+float hashP( vec2 p ) {
+  vec3 p3 = fract( vec3( p.xyx ) * 0.1031 );
+  p3 += dot( p3, p3.yzx + 33.33 );
+  return fract( ( p3.x + p3.y ) * p3.z );
+}
+
+vec3 fetchP( vec2 uv ) {
+  return texture2D( tDiffuse, uv ).rgb;
+}
+
 void main() {
-  vec3 e = texture2D( tDiffuse, vUv ).rgb;
-  vec3 b = texture2D( tDiffuse, vUv + vec2( 0.0, -uTexel.y ) ).rgb;
-  vec3 d = texture2D( tDiffuse, vUv + vec2( -uTexel.x, 0.0 ) ).rgb;
-  vec3 f = texture2D( tDiffuse, vUv + vec2( uTexel.x, 0.0 ) ).rgb;
-  vec3 h = texture2D( tDiffuse, vUv + vec2( 0.0, uTexel.y ) ).rgb;
-  vec3 mn = min( min( min( b, d ), min( f, h ) ), e );
-  vec3 mx = max( max( max( b, d ), max( f, h ) ), e );
-  // contrast-adaptive amount: headroom above and below the local extremes
-  vec3 amp = clamp( min( mn, 1.0 - mx ) / max( mx, 1e-4 ), 0.0, 1.0 );
-  amp = sqrt( amp );
-  float peak = mix( 8.0, 5.0, clamp( uSharp, 0.0, 1.0 ) );
-  vec3 w = -amp / peak;
-  vec3 col = ( ( b + d + f + h ) * w + e ) / ( 4.0 * w + 1.0 );
-  gl_FragColor = vec4( clamp( mix( e, col, min( 1.0, uSharp * 1.6 ) ), 0.0, 1.0 ), 1.0 );
+  vec2 inv = uSrc.zw;
+  vec3 col;
+
+  if ( uPlain > 0.5 ) {
+    col = fetchP( vUv );
+  } else {
+    // ---- Catmull-Rom, 5 bilinear taps ----------------------------------
+    vec2 sp = vUv * uSrc.xy;
+    vec2 t1 = floor( sp - 0.5 ) + 0.5;
+    vec2 f = sp - t1;
+    vec2 w0 = f * ( -0.5 + f * ( 1.0 - 0.5 * f ) );
+    vec2 w1 = 1.0 + f * f * ( -2.5 + 1.5 * f );
+    vec2 w2 = f * ( 0.5 + f * ( 2.0 - 1.5 * f ) );
+    vec2 w3 = f * f * ( -0.5 + 0.5 * f );
+    vec2 w12 = w1 + w2;
+    vec2 o12 = w2 / w12;
+    vec2 p0 = ( t1 - 1.0 ) * inv;
+    vec2 p3 = ( t1 + 2.0 ) * inv;
+    vec2 p12 = ( t1 + o12 ) * inv;
+    vec3 e = fetchP( p12 ) * ( w12.x * w12.y );
+    e += fetchP( vec2( p12.x, p0.y ) ) * ( w12.x * w0.y );
+    e += fetchP( vec2( p0.x, p12.y ) ) * ( w0.x * w12.y );
+    e += fetchP( vec2( p3.x, p12.y ) ) * ( w3.x * w12.y );
+    e += fetchP( vec2( p12.x, p3.y ) ) * ( w12.x * w3.y );
+    float ws = w12.x * w12.y + w12.x * w0.y + w0.x * w12.y + w3.x * w12.y + w12.x * w3.y;
+    e /= ws;
+    col = e;
+
+    // ---- RCAS: contrast-adaptive, limited, clamped ---------------------
+    if ( uSharp > 0.001 ) {
+      vec3 b = fetchP( vUv + vec2( 0.0, -inv.y ) );
+      vec3 d = fetchP( vUv + vec2( -inv.x, 0.0 ) );
+      vec3 g = fetchP( vUv + vec2( inv.x, 0.0 ) );
+      vec3 h = fetchP( vUv + vec2( 0.0, inv.y ) );
+      vec3 mn = min( min( min( b, d ), min( g, h ) ), e );
+      vec3 mx = max( max( max( b, d ), max( g, h ) ), e );
+      // headroom below and above the local extremes; both are ~0 across a
+      // hard edge (mn -> 0, mx -> 1), which is what keeps the pass halo-free
+      vec3 hitMin = mn / ( 4.0 * mx + 1e-4 );
+      vec3 hitMax = ( 1.0 - mx ) / ( 4.0 * mn - 4.0 - 1e-4 );
+      vec3 lobeRGB = max( -hitMin, hitMax );
+      float lobe = max( -0.1875, min( max( lobeRGB.r, max( lobeRGB.g, lobeRGB.b ) ), 0.0 ) ) * uSharp;
+      col = ( lobe * ( b + d + g + h ) + e ) / ( 4.0 * lobe + 1.0 );
+      col = clamp( col, mn, mx );
+    }
+  }
+
+  // ---- grain + dither, native ------------------------------------------
+  if ( uGrain > 0.0001 ) {
+    vec2 gp = gl_FragCoord.xy + vec2( fract( uTime * 61.70 ) * 733.0, fract( uTime * 37.31 ) * 941.0 );
+    float gr = hashP( gp ) - 0.5;
+    float l = dot( col, LUMA_P );
+    // strongest in the mids, a quarter at black and at white
+    col += gr * uGrain * ( 0.25 + 0.75 * ( 1.0 - abs( 2.0 * l - 1.0 ) ) );
+  }
+  col += ( hashP( gl_FragCoord.xy + vec2( fract( uTime * 13.7 ) * 511.0 ) ) - 0.5 ) * ( 1.2 / 255.0 );
+
+  gl_FragColor = vec4( clamp( col, 0.0, 1.0 ), 1.0 );
 }`,
 };
 
-class SharpenPass extends ShaderPass {
+class PresentPass extends ShaderPass {
   constructor() {
-    super(SharpenShader);
+    super(PresentShader);
     this.material.depthTest = false;
     this.material.depthWrite = false;
     this.material.toneMapped = false;
-    this.enabled = false;
+    // always on: it is the pass that writes the canvas
+    this.enabled = true;
   }
 
-  /** @param {number} w @param {number} h drawing-buffer PIXELS */
-  setResolution(w, h) {
-    this.uniforms.uTexel.value.set(1 / Math.max(1, w), 1 / Math.max(1, h));
+  /**
+   * EffectComposer.setSize hands every pass the INTERNAL buffer size; that is
+   * the source this pass upsamples from.
+   * @param {number} w @param {number} h internal buffer pixels
+   */
+  setSize(w, h) {
+    const W = Math.max(1, Math.round(w));
+    const H = Math.max(1, Math.round(h));
+    this.uniforms.uSrc.value.set(W, H, 1 / W, 1 / H);
   }
 
-  /** @param {number} v 0..1; below 0.02 the pass is skipped entirely */
-  setStrength(v) {
-    const s = clamp(numOr(v, 0), 0, 1);
-    this.uniforms.uSharp.value = s;
-    this.enabled = s >= 0.02;
-  }
+  /** @param {number} v 0..1 RCAS strength; 0 skips the sharpen taps */
+  setSharpness(v) { this.uniforms.uSharp.value = clamp(numOr(v, 0), 0, 1); }
+
+  /** @param {number} v 0..0.12 film grain */
+  setGrain(v) { this.uniforms.uGrain.value = clamp(numOr(v, 0), 0, 0.12); }
+
+  /** @param {number} t seconds */
+  setTime(t) { this.uniforms.uTime.value = t; }
+
+  /** @param {boolean} on one bilinear tap instead of the sharp upsample (A/B) */
+  setPlain(on) { this.uniforms.uPlain.value = on ? 1 : 0; }
+
+  get plain() { return this.uniforms.uPlain.value > 0.5; }
 }
 
 /**
@@ -1008,8 +1162,10 @@ export class Post {
    * @param {THREE.Camera} camera          main world camera
    * @param {{w:number,h:number}} size     CSS pixels
    * @param {object} quality               a QUALITY preset from core/settings.js
+   * @param {number} [internalScale=1]     fraction of the renderer's pixel
+   *                                       ratio the chain renders at
    */
-  constructor(renderer, scene, camera, size, quality) {
+  constructor(renderer, scene, camera, size, quality, internalScale) {
     if (!renderer) throw new Error('Post: a WebGLRenderer is required');
 
     this.renderer = renderer;
@@ -1031,11 +1187,17 @@ export class Post {
     /** @type {FinishPass|null} */      this.finishPass = null;
     /** @type {SMAAPass|null} */        this.smaaPass = null;
     /** @type {FXAAPass|null} */        this.fxaaPass = null;
-    /** @type {SharpenPass|null} */     this.sharpenPass = null;
+    /** @type {PresentPass|null} */     this.presentPass = null;
     /** @type {THREE.DepthTexture[]} depth attachments created for the AO pass */
     this._depthTextures = [];
-    /** CAS strength the engine asked for (survives a chain rebuild) */
+    /** RCAS strength the engine asked for (survives a chain rebuild) */
     this._sharpen = 0;
+    /**
+     * Fraction of the renderer's pixel ratio the composer targets are
+     * allocated at — the tier's renderScale. The canvas stays native; the
+     * PresentPass bridges the two. See the file header.
+     */
+    this._scale = clamp(numOr(internalScale, 1), 0.1, 1);
 
     // Persistent state so a quality rebuild does not lose the theme's look.
     this._grade = Object.assign({}, DEFAULT_GRADE);
@@ -1071,7 +1233,9 @@ export class Post {
   /** @private */
   _build() {
     const q = this.quality;
-    const pr = this.renderer.getPixelRatio();
+    // INTERNAL pixel ratio: the renderer's (native canvas) times the tier
+    // scale. Every target and every pass below the PresentPass lives here.
+    const pr = this.renderer.getPixelRatio() * this._scale;
     const w = this.width;
     const h = this.height;
 
@@ -1151,12 +1315,14 @@ export class Post {
       composer.addPass(this.fxaaPass);
     }
 
-    // 5 — contrast-adaptive sharpening, LAST: restores the edges the AA and the
-    //     sub-native render scale soften. Disabled (zero draws) at strength 0.
-    this.sharpenPass = new SharpenPass();
-    this.sharpenPass.setResolution(dw, dh);
-    this.sharpenPass.setStrength(this._sharpen);
-    composer.addPass(this.sharpenPass);
+    // 5 — PRESENT, LAST and always on: the internal buffer -> the native
+    //     canvas through a Catmull-Rom upsample with RCAS folded in, plus the
+    //     grain and the output dither at native pixels.
+    this.presentPass = new PresentPass();
+    this.presentPass.setSize(dw, dh);
+    this.presentPass.setSharpness(this._sharpen);
+    this.presentPass.setGrain(this._grade.grain);
+    composer.addPass(this.presentPass);
   }
 
   /** @private Dispose every pass and both composer targets. */
@@ -1185,7 +1351,7 @@ export class Post {
     this.finishPass = null;
     this.smaaPass = null;
     this.fxaaPass = null;
-    this.sharpenPass = null;
+    this.presentPass = null;
   }
 
   /**
@@ -1196,8 +1362,26 @@ export class Post {
    */
   setSharpen(v01) {
     this._sharpen = clamp(numOr(v01, 0), 0, 1);
-    if (this.sharpenPass) this.sharpenPass.setStrength(this._sharpen);
+    if (this.presentPass) this.presentPass.setSharpness(this._sharpen);
   }
+
+  /**
+   * The fraction of the renderer's pixel ratio the chain renders at. Changing
+   * it REALLOCATES every composer target (the engine only calls this on a
+   * quality change and on the perf gate's native-1.0 INFO pass; the dynamic
+   * controller steps below the tier through `setRenderFraction`, which
+   * allocates nothing).
+   * @param {number} s 0.1..1
+   */
+  setInternalScale(s) {
+    const next = clamp(numOr(s, this._scale), 0.1, 1);
+    if (Math.abs(next - this._scale) < 1e-4) return;
+    this._scale = next;
+    this.resize(this.width, this.height);
+  }
+
+  /** the fraction of the renderer's pixel ratio the composer targets are sized at */
+  get internalScale() { return this._scale; }
 
   /* ------------------------------------------------------------------ */
   /* configuration                                                       */
@@ -1216,7 +1400,11 @@ export class Post {
    * @param {number} [g.vignette]             0..1 corner darkening.
    * @param {number} [g.vignetteSoft]         where the vignette starts, 0..1.
    * @param {number} [g.chroma]               0..1 aberration strength.
-   * @param {number} [g.grain]                0..0.1 film grain.
+   * @param {number} [g.grain]                0..0.1 film grain (PresentPass, native).
+   * @param {number} [g.highlightKnee]        scene value the hue-preserving
+   *                                          highlight roll-off starts at.
+   * @param {number} [g.highlightRange]       how far above the knee the
+   *                                          roll-off's asymptote sits.
    * @param {*} [g.tint]  a colour (hex number, '#rrggbb', [r,g,b] or
    *                      THREE.Color) used as a per-channel MULTIPLIER, or
    *                      {color, amount} to blend it toward neutral.
@@ -1235,6 +1423,10 @@ export class Post {
     cur.chroma = clamp(numOr(src.chroma, DEFAULT_GRADE.chroma), 0, 3);
     cur.grain = clamp(numOr(src.grain, DEFAULT_GRADE.grain), 0, 0.12);
     cur.tint = src.tint === undefined ? DEFAULT_GRADE.tint : src.tint;
+    cur.highlightKnee = clamp(numOr(src.highlightKnee, DEFAULT_GRADE.highlightKnee), 0.5, 24);
+    cur.highlightRange = clamp(numOr(src.highlightRange, DEFAULT_GRADE.highlightRange), 0.1, 40);
+
+    if (this.presentPass) this.presentPass.setGrain(cur.grain);
 
     const pass = this.finishPass;
     if (!pass) return;
@@ -1255,7 +1447,8 @@ export class Post {
     u.uVignette.value = cur.vignette;
     u.uVignetteSoft.value = cur.vignetteSoft;
     u.uChroma.value = cur.chroma;
-    u.uGrain.value = cur.grain;
+    u.uHiKnee.value = cur.highlightKnee;
+    u.uHiRange.value = cur.highlightRange;
 
     tintMultiplier(cur.tint, u.uTint.value);
   }
@@ -1265,6 +1458,7 @@ export class Post {
    * @param {number} [b.strength]  0..3
    * @param {number} [b.radius]    0..1
    * @param {number} [b.threshold] luminance above which a pixel blooms
+   * @param {number} [b.knee]      0..1 soft-knee width as a fraction of the threshold
    * @param {number} [b.clamp]     input ceiling
    */
   setBloom(b) {
@@ -1273,6 +1467,7 @@ export class Post {
     cur.strength = clamp(numOr(src.strength, DEFAULT_BLOOM.strength), 0, 4);
     cur.radius = clamp(numOr(src.radius, DEFAULT_BLOOM.radius), 0, 2);
     cur.threshold = clamp(numOr(src.threshold, DEFAULT_BLOOM.threshold), 0, 8);
+    cur.knee = clamp(numOr(src.knee, DEFAULT_BLOOM.knee), 0, 1);
     cur.clamp = clamp(numOr(src.clamp, DEFAULT_BLOOM_CLAMP), 1, 1e6);
 
     const p = this.bloomPass;
@@ -1280,6 +1475,7 @@ export class Post {
     p.strength = cur.strength;
     p.radius = cur.radius;
     p.threshold = cur.threshold;
+    p.setKnee(cur.knee);
     // The preset may clamp HARDER than the default but can never disable it.
     p.setInputClamp(Math.min(numOr(this.quality && this.quality.bloomClamp, cur.clamp), cur.clamp));
   }
@@ -1406,14 +1602,15 @@ export class Post {
     this.height = Math.max(1, Math.round(numOr(h, this.height)));
     if (!this.composer) return;
 
-    const pr = this.renderer.getPixelRatio();
+    // internal pixel ratio (see _build); the canvas itself is the renderer's
+    const pr = this.renderer.getPixelRatio() * this._scale;
     this.composer.setPixelRatio(pr);
     this.composer.setSize(this.width, this.height);
-    // composer.setSize() already pushed the new size into every pass; these two
-    // carry uniforms that setSize does not touch.
+    // composer.setSize() already pushed the new size into every pass (the
+    // PresentPass reads its source size from that); these carry uniforms that
+    // setSize does not touch.
     if (this.finishPass) this.finishPass.setResolution(this.width * pr, this.height * pr);
     if (this.fxaaPass) this.fxaaPass.setResolution(this.width * pr, this.height * pr);
-    if (this.sharpenPass) this.sharpenPass.setResolution(this.width * pr, this.height * pr);
     if (this.upscalePass) {
       this.upscalePass.setBufferSize(this.width * pr, this.height * pr);
       this.upscalePass.setFraction(this._frac);
@@ -1449,10 +1646,13 @@ export class Post {
    * nothing leaks a render target. Grade, bloom and every eased amount survive.
    *
    * @param {object} q a QUALITY preset
+   * @param {number} [internalScale] the new tier's render scale (one
+   *                                 reallocation instead of two)
    */
-  setQuality(q) {
+  setQuality(q, internalScale) {
     const next = q || this.quality;
     const prev = this.quality;
+    if (internalScale !== undefined) this._scale = clamp(numOr(internalScale, this._scale), 0.1, 1);
     const structural =
       !this.composer ||
       !!next.bloom !== !!prev.bloom ||
@@ -1518,6 +1718,7 @@ export class Post {
     this._speedLines = damp(this._speedLines, this._speedLinesTarget, 12.0, d);
     if (Math.abs(this._speedLines - this._speedLinesTarget) < 0.0015) this._speedLines = this._speedLinesTarget;
 
+    if (this.presentPass) this.presentPass.setTime(this.time);
     if (pass) {
       pass.setTime(this.time);
       pass.setPulse(pulseV, this._pulseR, this._pulseG, this._pulseB);
@@ -1545,7 +1746,10 @@ export class Post {
       speedLines: this._speedLines, pulse: this._pulseAmt, time: this.time,
       passes: this.composer ? this.composer.passes.length : 0,
       aa: aaMode(this.quality), bloom: !!this.bloomPass, ssao: !!this.aoPass,
-      sharpen: this._sharpen,
+      sharpen: this._sharpen, internalScale: this._scale,
+      internal: this.composer && this.composer.renderTarget1
+        ? [this.composer.renderTarget1.width, this.composer.renderTarget1.height] : null,
+      plain: !!(this.presentPass && this.presentPass.plain),
     };
   }
 

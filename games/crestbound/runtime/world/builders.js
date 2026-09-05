@@ -551,9 +551,24 @@ function glowMat(color, opts) {
   const speed = (o && o.speed !== undefined) ? o.speed : 1;
   const power = (o && o.power !== undefined) ? o.power : 1.6;
   const gain = (o && o.gain !== undefined) ? o.gain : 1;
-  const key = 'g' + (color >>> 0).toString(16) + ':' + mode + ':' + speed + ':' + power + ':' + gain;
+  /* `near: [a, b]` — fade the glow out by HORIZONTAL distance from the camera
+   * (metres), replacing the default 0.9..2.6 m sphere. The crest beam uses it:
+   * a beacon must vanish before it can stand between the camera and the hero. */
+  const near = (o && Array.isArray(o.near) && o.near.length === 2) ? o.near : null;
+  const key = 'g' + (color >>> 0).toString(16) + ':' + mode + ':' + speed + ':' + power + ':' + gain +
+    (near ? ':n' + near[0] + ',' + near[1] : '');
   let m = _emCache.get(key);
   if (m) return m;
+  /* SIGNAGE LANE — the crest BEAM. A thin vertical tube whose density follows
+   * the view angle against its radial normal (a cylinder of light is densest
+   * through its axis and vanishes at its rim), banded slowly, and faded by
+   * horizontal camera distance so the pad the hero stands on never carries a
+   * pillar in front of him. Merge-safe: everything is computed in WORLD space. */
+  const beamBody =
+    'float a = pow(1.0 - clamp(vUvG.y, 0.0, 1.0), uPower);' +
+    'a *= smoothstep(0.0, 0.06, vUvG.y);' +
+    'float band = 0.72 + 0.28 * sin((vUvG.y * 5.0 - uTime * uSpeed * 1.4) * 3.14159);' +
+    'a *= band * vCoreG;';
   /* ROUND 1 VISUAL FIX: a shaft quad with no LATERAL feather has a hard
    * vertical edge, so five overlapping Keep window shafts read as a bank of
    * white slats with ruled borders rather than as light in air
@@ -581,18 +596,25 @@ function glowMat(color, opts) {
     vertexShader:
       'varying vec2 vUvG;\n' +
       'varying vec3 vWG;\n' +
-      'void main(){ vUvG = uv; vec4 wp = modelMatrix * vec4(position, 1.0); vWG = wp.xyz; gl_Position = projectionMatrix * viewMatrix * wp; }',
+      'varying float vCoreG;\n' +
+      'void main(){ vUvG = uv; vec4 wp = modelMatrix * vec4(position, 1.0); vWG = wp.xyz;' +
+      ' vec3 nw = normalize(mat3(modelMatrix) * normal); vec3 vd = normalize(cameraPosition - wp.xyz);' +
+      ' float ax = abs(dot(nw, vd)); vCoreG = pow(ax, 1.4) + 0.08 * pow(1.0 - ax, 3.0);' +
+      ' gl_Position = projectionMatrix * viewMatrix * wp; }',
     fragmentShader:
       'uniform vec3 uColor; uniform float uTime, uSpeed, uPower, uGain;\n' +
       'varying vec2 vUvG;\n' +
       'varying vec3 vWG;\n' +
-      'void main(){\n' + (mode === 'shaft' ? shaftBody : radialBody) + '\n' +
+      'varying float vCoreG;\n' +
+      'void main(){\n' + (mode === 'shaft' ? shaftBody : (mode === 'beam' ? beamBody : radialBody)) + '\n' +
       '  a *= uGain;\n' +
       // Standing ON a pad puts the camera inside this additive volume: without
       // a near fade its walls painted the whole frame with the glow colour
       // (round-2 toggle probe, 2026-08-31 — same failure the checkpoint beam
       // fixed with its vDepth fade). Beyond ~2.6 m it is a no-op.
-      '  a *= smoothstep(0.9, 2.6, distance(vWG, cameraPosition));\n' +
+      (near
+        ? '  a *= smoothstep(' + near[0].toFixed(2) + ', ' + near[1].toFixed(2) + ', distance(vWG.xz, cameraPosition.xz));\n'
+        : '  a *= smoothstep(0.9, 2.6, distance(vWG, cameraPosition));\n') +
       '  if (a < 0.004) discard;\n' +
       '  gl_FragColor = vec4(uColor * (0.85 + 0.35 * a), a);\n' +
       '}',
@@ -858,6 +880,28 @@ export function discGeometry(radius, sides) {
       _U.push(p[0] / (radius * 2) + 0.5, p[2] / (radius * 2) + 0.5);
     }
   }
+  return endGeo();
+}
+
+/**
+ * A vertical diamond in the XY plane (half-width `hw`, half-height `hh`) with
+ * UVs normalised over its own box, so a radial glow shader lights its centre
+ * and fades to its four tips: two of these crossed make a four-point sparkle.
+ */
+function starQuadGeometry(hw, hh) {
+  beginGeo();
+  const n = [0, 0, 1];
+  const c = [0, 0, 0], t = [0, hh, 0], b = [0, -hh, 0], l = [-hw, 0, 0], r = [hw, 0, 0];
+  const tri = (p0, p1, p2) => {
+    const tr = [p0, p1, p2];
+    for (let k = 0; k < 3; k++) {
+      const p = tr[k];
+      _P.push(p[0], p[1], p[2]);
+      _N.push(n[0], n[1], n[2]);
+      _U.push(p[0] / (hw * 2) + 0.5, p[1] / (hh * 2) + 0.5);
+    }
+  };
+  tri(c, r, t); tri(c, t, l); tri(c, l, b); tri(c, b, r);
   return endGeo();
 }
 
@@ -3616,8 +3660,9 @@ export function buildBridge(def, theme, mats) {
  * recognises a course from across the Keep, so each realm gets a distinct
  * skyline, palette and light.
  */
-function paintingTexture(courseId, realm, theme) {
-  const key = 'paint|' + courseId + '|' + realm;
+function paintingTexture(courseId, realm, theme, plaque, tint) {
+  const label = plaque ? String(plaque) : '';
+  const key = 'paint|' + courseId + '|' + realm + '|' + label + '|' + (tint === undefined ? '' : (tint >>> 0).toString(16));
   return canvasTexture(key, 512, (ctx, n) => {
     const P = REALM_PLATE[realm] || REALM_PLATE.verdant;
     // sky
@@ -3673,6 +3718,46 @@ function paintingTexture(courseId, realm, theme) {
       ctx.fillRect(0, y, n, 1.5);
     }
     ctx.globalAlpha = 1;
+    /* SIGNAGE LANE — the course's colour key: a thin wash of the realm tint the
+     * Keep authors on the gate, so the four verdant frames read green from the
+     * lobby door and the ember ones read furnace-orange from the stair. */
+    if (tint !== undefined && tint !== null) {
+      ctx.globalAlpha = 0.10;
+      ctx.fillStyle = cssHex(tint);
+      ctx.fillRect(0, 0, n, n);
+      ctx.globalAlpha = 1;
+    }
+    /* The PLAQUE, baked into the canvas so it costs no draw: a gilt plate along
+     * the lower edge reading the course name on a lit painting, or "N CRESTS"
+     * on a sealed one. Bold, dark on gilt, ~0.28 m tall glyphs on a 3 m plate —
+     * readable from the gate's own stand-out spot and from across the lobby. */
+    if (label) {
+      const px = n * 0.14, py = n * 0.855, pw = n * 0.72, ph = n * 0.115;
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.fillRect(px - 3, py - 3, pw + 6, ph + 8);
+      const g = ctx.createLinearGradient(0, py, 0, py + ph);
+      g.addColorStop(0, '#e8c86a');
+      g.addColorStop(0.5, '#c9a24a');
+      g.addColorStop(1, '#8c6a22');
+      ctx.fillStyle = g;
+      ctx.fillRect(px, py, pw, ph);
+      ctx.strokeStyle = 'rgba(60,40,10,0.85)';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(px + 1.5, py + 1.5, pw - 3, ph - 3);
+      ctx.strokeStyle = 'rgba(255,240,200,0.45)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(px + 5, py + 5, pw - 10, ph - 10);
+      ctx.fillStyle = '#2a1a08';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      let fs = Math.round(ph * 0.66);
+      ctx.font = '700 ' + fs + 'px Rajdhani, Bahnschrift, "Segoe UI", sans-serif';
+      while (fs > 10 && ctx.measureText(label).width > pw * 0.88) {
+        fs -= 2;
+        ctx.font = '700 ' + fs + 'px Rajdhani, Bahnschrift, "Segoe UI", sans-serif';
+      }
+      ctx.fillText(label, px + pw * 0.5, py + ph * 0.54);
+    }
   });
 }
 
@@ -3813,7 +3898,17 @@ export function buildPainting(def, theme, mats) {
   const giltMat = materialFor('gold', theme, mats);
   const woodMat = materialFor('wood', theme, mats);
   const matteMat = materialFor('cloth', theme, mats);
-  const tex = paintingTexture(course, realm, theme);
+  /* SIGNAGE LANE — two plates per painting, swapped on the SAME material when
+   * Game flips the lock (userData.setLockedArt): the lit plate carries the
+   * course name on its plaque, the sealed plate "N CRESTS". Swapping a map on
+   * a material whose defines do not change is a texture bind, not a recompile,
+   * and no draw is added for the plaque. */
+  const tint = (def && def.tint !== undefined) ? def.tint : undefined;
+  const label = (def && def.label) ? String(def.label) : '';
+  const plate = (def && def.plate) ? String(def.plate) : (need > 0 ? need + ' CREST' + (need === 1 ? '' : 'S') : '');
+  const texOpen = paintingTexture(course, realm, theme, label, tint);
+  const texLocked = paintingTexture(course, realm, theme, plate || label, tint);
+  const tex = locked ? texLocked : texOpen;
   /* ROUND 3 (critic: "the painting gates read as red warning roundels on grid
    * panels, not paintings"). Two things were doing that.
    *
@@ -3828,21 +3923,43 @@ export function buildPainting(def, theme, mats) {
    *     landscape plate behind it, so the frame read as a blank panel with a
    *     roundel bolted to it. It is now a warm dusk value with the plate still
    *     legible: a painting seen by candlelight, waiting to be lit. */
+  /* A sealed plate used to sit on emissive 0x120c06 x 0.10 — nothing — so in
+   * the undercroft's torchlight the plaque was a dark rectangle. It now keeps a
+   * warm dusk self-light (0x6a5a44 x 0.22 of the plate's own image): the
+   * landscape stays "seen by candlelight" and the "N CRESTS" plate reads. */
   const canvasMat = new THREE.MeshStandardMaterial({
     map: tex || null,
     color: locked ? 0x8a7a63 : 0xffffff,
     roughness: 0.62,
     metalness: 0.02,
-    emissive: locked ? 0x120c06 : 0x1a2028,
+    emissive: locked ? 0x6a5a44 : 0x1a2028,
     emissiveMap: tex || null,
-    emissiveIntensity: locked ? 0.10 : 0.35,
+    emissiveIntensity: locked ? 0.22 : 0.35,
   });
   canvasMat.name = 'painting_' + course;
-  const shimmerMat = locked
-    ? emissiveMat(pal(theme, 'accent') || pal(theme, 'crest'), 0.55)
-    : pulseMat(pal(theme, 'crest') || pal(theme, 'safeEdge'), 1.1, 0.55, 1.6);
+  /* The SHIMMER SWEEP: a soft diagonal highlight band that crosses a LIT
+   * painting every ~13 s, like varnish catching a moving lantern — the "this
+   * one is open" read from across the lobby. Driven by the builders' shared
+   * FX_TIME uniform, gated by uSweep so a sealed plate stays still. */
+  const sweep = { value: locked ? 0.0 : 1.0 };
+  canvasMat.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = FX_TIME;
+    shader.uniforms.uSweep = sweep;
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uTime;\nuniform float uSweep;')
+      .replace('#include <emissivemap_fragment>',
+        '#include <emissivemap_fragment>\n' +
+        '{\n' +
+        '  float sw = fract(uTime * 0.075);\n' +
+        '  float d = vMapUv.x * 0.80 + vMapUv.y * 0.45 - sw * 2.1 + 0.42;\n' +
+        '  float band = smoothstep(0.0, 0.11, d) * smoothstep(0.24, 0.13, d);\n' +
+        '  totalEmissiveRadiance += vec3(0.22, 0.20, 0.16) * band * uSweep;\n' +
+        '}');
+  };
+  canvasMat.customProgramCacheKey = () => 'crestbound-paintsweep';
+  const brassMat = emissiveMat(pal(theme, 'accent') || pal(theme, 'crest'), 0.55);
 
-  const key = GeoCache.key('painting', w, h, locked ? 1 : 0);
+  const key = GeoCache.key('painting', w, h, 2);
   const geo = GeoCache.get(key, () => {
     const parts = [];
     const push = (g, m) => parts.push({ geo: g, mat: m });
@@ -3873,19 +3990,28 @@ export function buildPainting(def, theme, mats) {
     plate.translate(0, 0, 0.04);
     push(toStandardGeometry(plate), 3);
     plate.dispose();
-    // shimmer sill / lock sigil
-    if (locked) {
-      push(xform(ringProfileGeometry(Math.min(w, h) * 0.20, [0.05, 0.09, 0.02], 20, 1.4), 0, 0, 0.10, Math.PI * 0.5, 0, 0), 4);
-      push(xform(bevelBoxGeometry(0.34, 0.44, 0.10, 0.03, 1.6), 0, -0.06, 0.11), 4);
-      push(xform(tubeGeometry(0.13, 0.13, 0.10, 12, 1.4), 0, 0.16, 0.11, Math.PI * 0.5, 0, 0), 4);
-    } else {
-      push(xform(boxGeometry(w - 0.16, 0.022, 0.02, 1), 0, -(h - 0.16) * 0.5 - 0.02, 0.055), 4);
-      push(xform(boxGeometry(w - 0.16, 0.022, 0.02, 1), 0, (h - 0.16) * 0.5 + 0.02, 0.055), 4);
-    }
+    // brass sill beads top and bottom of the plate (both states)
+    push(xform(boxGeometry(w - 0.16, 0.022, 0.02, 1), 0, -(h - 0.16) * 0.5 - 0.02, 0.055), 4);
+    push(xform(boxGeometry(w - 0.16, 0.022, 0.02, 1), 0, (h - 0.16) * 0.5 + 0.02, 0.055), 4);
+    // the crest finial: a small pediment and a gilt octagon on the top rail —
+    // the crest motif the whole game is about, on the door it opens
+    push(xform(bevelBoxGeometry(0.62, 0.09, fd * 0.8, 0.02, 1.6), 0, (h + fw) * 0.5 + fw * 0.5 + 0.045, 0), 0);
+    push(xform(prismGeometry(0.15, 0.06, 8, 1), 0, (h + fw) * 0.5 + fw * 0.5 + 0.20, fd * 0.5 - 0.02, Math.PI * 0.5, Math.PI / 8, 0), 0);
     return assembleIndexed(parts, 5);
   });
+  /* The lock sigil (ring + hasp + shackle) is its OWN child mesh so the live
+   * lock state can show and hide it without rebuilding the frame. Same draw
+   * count as the old baked group: one brass draw either way. */
+  const lockGeo = GeoCache.get(GeoCache.key('paintlock', w, h), () => {
+    const parts = [];
+    const push = (g, m) => parts.push({ geo: g, mat: m });
+    push(xform(ringProfileGeometry(Math.min(w, h) * 0.20, [0.05, 0.09, 0.02], 20, 1.4), 0, 0, 0.10, Math.PI * 0.5, 0, 0), 0);
+    push(xform(bevelBoxGeometry(0.34, 0.44, 0.10, 0.03, 1.6), 0, -0.06, 0.11), 0);
+    push(xform(tubeGeometry(0.13, 0.13, 0.10, 12, 1.4), 0, 0.16, 0.11, Math.PI * 0.5, 0, 0), 0);
+    return assembleIndexed(parts, 1);
+  });
 
-  const mesh = new THREE.Mesh(geo, [giltMat, woodMat, matteMat, canvasMat, shimmerMat]);
+  const mesh = new THREE.Mesh(geo, [giltMat, woodMat, matteMat, canvasMat, brassMat]);
   mesh.name = 'painting:' + course;
   mesh.castShadow = false;
   mesh.receiveShadow = true;
@@ -3893,6 +4019,29 @@ export function buildPainting(def, theme, mats) {
   mesh.rotation.set(0, yaw, 0);
   mesh.updateMatrix();
   mesh.matrixAutoUpdate = false;
+
+  const lock = new THREE.Mesh(lockGeo, brassMat);
+  lock.name = 'painting.lock';
+  lock.visible = locked;
+  lock.castShadow = false;
+  lock.receiveShadow = true;
+  lock.userData.noMerge = true;
+  lock.updateMatrix();
+  lock.matrixAutoUpdate = false;
+  mesh.add(lock);
+
+  /** Live lock state, flipped by course.js _updateGates from Game's crest total. */
+  mesh.userData.setLockedArt = (v) => {
+    const L = !!v;
+    lock.visible = L;
+    const t = L ? texLocked : texOpen;
+    canvasMat.map = t || null;
+    canvasMat.emissiveMap = t || null;
+    canvasMat.color.setHex(L ? 0x8a7a63 : 0xffffff);
+    canvasMat.emissive.setHex(L ? 0x6a5a44 : 0x1a2028);
+    canvasMat.emissiveIntensity = L ? 0.22 : 0.35;
+    sweep.value = L ? 0.0 : 1.0;
+  };
 
   /* The trigger sits in FRONT of the plate — and the plate, its beads, its sill
      and its lock sigil are all authored at local +Z, so the face is local +Z and
@@ -3912,7 +4061,6 @@ export function buildPainting(def, theme, mats) {
   // the wall the painting hangs on is solid; the painting itself is not.
   mesh.userData.def = def;
   mesh.userData.gate = { kind: 'painting', course, requires: need, locked };
-  if (locked && need > 0) mesh.userData.captionTexture = captionTexture(need + ' CRESTS', pal(theme, 'crest') || 0xffd76a, 0x14171f);
   return { mesh, colliders: [], volumes };
 }
 
@@ -4190,8 +4338,23 @@ export function buildPedestal(def, theme, mats) {
    * when you look at the pedestal and never from across the field. */
   const runeMat = pulseMat(tint, 0.28, 0.14, 1.5);
   const glowM = glowMat(tint, { mode: 'radial', speed: 0.8, power: 1.5, gain: 0.85 });
+  /* SIGNAGE LANE — THE CREST SILHOUETTE.
+   * The contract's readability law wants the crest to be the one unmistakable
+   * object in any frame. The pedestal now carries three more reads, all in
+   * materials it already draws (the sparkle and the ground pool share the top
+   * disc's radial glow; the beam is the ONE new material):
+   *   - a ground POOL: the outer skirt of a radial disc laid round the footing,
+   *     so the pedestal sits in a soft warm light on the walked surface;
+   *   - a SPARKLE: two crossed diamonds with radial UVs just above the cap — a
+   *     four-point glint that breathes with the pool;
+   *   - a BEAM: a thin 6.4 m tube of light rising through the crest, densest
+   *     through its axis, banded slowly, and faded out by horizontal camera
+   *     distance (2.6..7 m) so it reads across a bowl and never stands as a
+   *     pillar between the camera and the hero. `def.beam === false` opts out. */
+  const beam = !(def && def.beam === false);
+  const beamM = glowMat(tint, { mode: 'beam', speed: 0.9, power: 1.35, gain: 0.55, near: [2.6, 7.0] });
 
-  const key = GeoCache.key('pedestal', r, h);
+  const key = GeoCache.key('pedestal', r, h, beam ? 'b' : 'nb');
   const geo = GeoCache.get(key, () => {
     const parts = [];
     const push = (g, m) => parts.push({ geo: g, mat: m });
@@ -4232,10 +4395,32 @@ export function buildPedestal(def, theme, mats) {
     push(xform(ringGeometry(r * 0.52, r * 0.78, 32, 1.4), 0, h + 0.004, 0), 1);
     // the glow pool on top (radial UV disc)
     push(xform(discGeometry(r * 0.86, 32), 0, h + 0.02, 0), 3);
-    return assembleIndexed(parts, 4);
+    // the ground pool: the soft outer skirt of a radial disc round the footing
+    {
+      const skirt = new THREE.RingGeometry(r * 1.45, r * 2.35, 40, 1);
+      skirt.rotateX(-Math.PI / 2);
+      skirt.translate(0, 0.02, 0);
+      push(toStandardGeometry(skirt), 3);
+      skirt.dispose();
+    }
+    // the sparkle: a four-point star of two crossed diamonds, radial UVs
+    push(xform(starQuadGeometry(0.15, 0.60), 0, h + 0.38, 0, 0, 0, 0), 3);
+    push(xform(starQuadGeometry(0.15, 0.60), 0, h + 0.38, 0, 0, Math.PI * 0.5, 0), 3);
+    // the beam: uv.y runs 0 at the foot to 1 at the head, whatever its height
+    if (beam) {
+      const bh = 6.4;
+      const bg = tubeGeometry(0.24, 0.11, bh, 14, 1);
+      const posAttr = bg.attributes.position, uvAttr = bg.attributes.uv;
+      for (let i = 0; i < posAttr.count; i++) {
+        uvAttr.setXY(i, uvAttr.getX(i), (posAttr.getY(i) + bh * 0.5) / bh);
+      }
+      uvAttr.needsUpdate = true;
+      push(xform(bg, 0, h + 0.55 + bh * 0.5, 0), 4);
+    }
+    return assembleIndexed(parts, 5);
   });
 
-  const mesh = new THREE.Mesh(geo, [stoneMat, giltMat, runeMat, glowM]);
+  const mesh = new THREE.Mesh(geo, [stoneMat, giltMat, runeMat, glowM, beamM]);
   mesh.name = 'pedestal';
   mesh.castShadow = true;
   mesh.receiveShadow = true;

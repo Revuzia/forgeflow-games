@@ -68,9 +68,12 @@ const _themedMats = new Map();
  * a sea rolls.
  */
 export const WATER_LOOK = {
-  lake: { deep: 0x0d3a4a, shallow: 0x4fbfc4, foam: 0xeaf9ff, amp: 0.55, shoreWidth: 1.35, crestFoam: 0.45, ripple: 0.55, opacity: 0.86, fade: 3.0, gloss: 220 },
-  sea:  { deep: 0x07293f, shallow: 0x2f9fc0, foam: 0xf2fbff, amp: 1.15, shoreWidth: 2.20, crestFoam: 0.80, ripple: 0.70, opacity: 0.90, fade: 5.0, gloss: 180 },
-  pool: { deep: 0x125a63, shallow: 0x76e2dd, foam: 0xffffff, amp: 0.22, shoreWidth: 0.70, crestFoam: 0.18, ripple: 0.40, opacity: 0.72, fade: 1.6, gloss: 260 },
+  /* 2026-09-04 (surface lane, O4/C8): whitecaps OFF for still water — a lake
+   * or a pool foams only where it meets the ground. `crestFoam` stays on the
+   * sea. `amp` is written for every non-pool body (one ocean per course). */
+  lake: { deep: 0x0d3a4a, shallow: 0x4fbfc4, foam: 0xeaf9ff, amp: 0.42, shoreWidth: 1.35, crestFoam: 0.0, ripple: 0.55, opacity: 0.86, fade: 3.0, gloss: 240 },
+  sea:  { deep: 0x07293f, shallow: 0x2f9fc0, foam: 0xf2fbff, amp: 1.05, shoreWidth: 2.20, crestFoam: 0.70, ripple: 0.70, opacity: 0.90, fade: 5.0, gloss: 200 },
+  pool: { deep: 0x125a63, shallow: 0x76e2dd, foam: 0xffffff, amp: 0.18, shoreWidth: 0.70, crestFoam: 0.0, ripple: 0.40, opacity: 0.72, fade: 1.6, gloss: 280 },
 };
 
 /* ---------------------------------------------------------------------------
@@ -211,15 +214,45 @@ function skyAndSun(theme) {
   return { top, horizon, sunCol, dir };
 }
 
+/**
+ * Resolve the look for one body: kind2 defaults <- the THEME's
+ * `materialOverrides.water` <- the def's own `look`.
+ *
+ * 2026-09-04 (surface lane, O4 "cyan TV static"): this used to write
+ * `palette.water` into uDeep unconditionally. `palette.water` is the theme's
+ * ACCENT water colour (azure: 0x3fd2c8, a saturated cyan) — it was never meant
+ * to be the deep body, and the theme author's own `materialOverrides.water.deep`
+ * (azure 0x063a56) was being clobbered by it, so the lagoon was one bright
+ * cyan sheet with no depth ramp at all. The theme override now wins; the
+ * palette colour is only the SHALLOW fallback for a theme without one.
+ */
+function resolveLook(theme, kind2, look) {
+  const K = kind2 || 'lake';
+  const o = (theme && theme.materialOverrides && theme.materialOverrides.water) || null;
+  const pal = (theme && theme.palette) || null;
+  const L = Object.assign({}, WATER_LOOK[K] || WATER_LOOK.lake);
+  if (pal && pal.water !== undefined && pal.water !== null && !(o && o.shallow !== undefined)) L.shallow = pal.water;
+  if (o) {
+    for (const k of ['deep', 'shallow', 'foam', 'opacity', 'shoreWidth', 'crestFoam', 'ripple', 'gloss']) {
+      if (o[k] !== undefined) L[k] = o[k];
+    }
+    if (typeof o.depthFade === 'number') L.fade = o.depthFade;
+    if (typeof o.amp === 'number') L.amp = o.amp;
+  }
+  if (look) Object.assign(L, look);
+  // whitecaps belong to open SEA only (owner O4: foam only at the shore band);
+  // a theme's crestFoam still applies to its seas, never to a lake or a pool
+  if (K !== 'sea' && !(look && look.crestFoam !== undefined)) L.crestFoam = 0;
+  return L;
+}
+
 /** Write the per-body look onto whichever material we ended up with. */
 function applyLook(mat, theme, L, flow) {
   const u = mat.uniforms;
   if (!u) return mat;
   const S = skyAndSun(theme);
-  const pal = (theme && theme.palette) || null;
-  const deep = (pal && pal.water !== undefined && pal.water !== null) ? pal.water : L.deep;
   const set = (k, v) => { if (u[k] && u[k].value && u[k].value.isColor) u[k].value.setHex(v); };
-  set('uDeep', deep);
+  set('uDeep', L.deep);
   set('uShallow', L.shallow);
   set('uFoam', L.foam);
   set('uSkyTop', S.top);
@@ -238,8 +271,9 @@ function applyLook(mat, theme, L, flow) {
     u.uFlow.value.set(flow ? flow[0] : 0, flow ? flow[1] : 0);
   }
   // uAmp is SHARED with every other body in materials.js's water (one ocean,
-  // one wave set), so only a body that explicitly asks may retune it.
-  if (u.uAmp && L.ownAmp) u.uAmp.value = L.amp;
+  // one wave set). A pool never retunes it (a basin must not flatten the lake
+  // it sits beside); a lake or sea does, unless a body opts out.
+  if (u.uAmp && (L.ownAmp || (L.kind2 !== 'pool' && L.ownAmp !== false))) u.uAmp.value = L.amp;
   return mat;
 }
 
@@ -253,7 +287,8 @@ export function fallbackWaterMaterial(theme, kind2, look) {
   const ck = id + '|' + K + (look ? '|' + JSON.stringify(look) : '');
   let m = _fallbackMats.get(ck);
   if (m) return m;
-  const L = Object.assign({}, WATER_LOOK[K] || WATER_LOOK.lake, look || null);
+  const L = resolveLook(theme, K, look);
+  L.kind2 = K;
   m = new THREE.ShaderMaterial({
     uniforms: {
       uTime: WATER_TIME,
@@ -269,6 +304,7 @@ export function fallbackWaterMaterial(theme, kind2, look) {
       uCrestFoam: { value: L.crestFoam },
       uRipple: { value: L.ripple },
       uGloss: { value: L.gloss },
+      uDepthFade: { value: L.fade },
       uSunDir: { value: new THREE.Vector3(-0.42, 0.86, 0.30) },
       uSunColor: { value: new THREE.Color(0xfff2d8) },
       uSkyTop: { value: new THREE.Color(0x2f6fc0) },
@@ -299,7 +335,8 @@ export function fallbackWaterMaterial(theme, kind2, look) {
  */
 function resolveMaterial(theme, mats, kind2, look) {
   const K = kind2 || 'lake';
-  const L = Object.assign({}, WATER_LOOK[K] || WATER_LOOK.lake, look || null);
+  const L = resolveLook(theme, K, look);
+  L.kind2 = K;
   const themeId = (theme && theme.id) || 'default';
   const ck = themeId + '|' + K + (look ? '|' + JSON.stringify(look) : '');
 

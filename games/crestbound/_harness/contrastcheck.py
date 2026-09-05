@@ -98,11 +98,14 @@ STATIONS_JS = r"""
   };
   const out = [];
   const sp = C.spawnFor ? C.spawnFor(0) : null;
-  if (sp && sp.pos) out.push({name: 'spawn', gates: false, p: posOf(sp.pos)});
+  if (sp && sp.pos) out.push({name: 'spawn', gates: false, p: posOf(sp.pos),
+                              yaw: (typeof sp.yaw === 'number') ? sp.yaw : 0});
   (C.checkpoints || []).forEach((c, i) => {
     if (i === 0) return;                       // checkpoints[0] IS the spawn
     const p = posOf(c);
-    if (p) out.push({name: 'cp' + i, gates: true, p});
+    if (p) out.push({name: 'cp' + i, gates: true, p,
+                     yaw: (typeof c.yaw === 'number') ? c.yaw : 0,
+                     padR: (typeof c.radius === 'number') ? c.radius : 2.15});
   });
   return {stations: out, theme: G.themeId, courseId: G.courseId,
           name: (C.def && C.def.name) || G.courseId};
@@ -121,9 +124,13 @@ async (st) => {
   syncP();
   if (!P || !P.__test) return {error: 'no player.__test'};
 
+  const yaw = (typeof st.yaw === 'number' && isFinite(st.yaw)) ? st.yaw : 0;
   const put = () => {
     P.__test.teleport(new THREE.Vector3(st.p.x, st.p.y + 0.5, st.p.z));
     P.__test.setVel(new THREE.Vector3(0, 0, 0));
+    /* Face the authored course direction, so the camera recenters BEHIND the
+       hero and "ahead of the checkpoint" is the ground the player looks at. */
+    if (P.__test.setFacing) P.__test.setFacing(yaw);
   };
   put();
   if (G.cam && G.cam.recenter) G.cam.recenter();
@@ -152,10 +159,52 @@ async (st) => {
   const feet = project(st.p.x, st.p.y, st.p.z);
   const head = project(P.pos.x, P.pos.y + 1.5, P.pos.z);
   const heroFeet = project(P.pos.x, P.pos.y, P.pos.z);
+
+  /* THE DECK WINDOW (critic C13). The old window was a screen rectangle just
+     below the projected feet — which, through a third-person camera that sits
+     behind and above the hero, is the hero's own legs and the checkpoint's
+     glowing torus, not the walked surface. Sample a band of WORLD points
+     0.8-2.0 m AHEAD of the station along the course direction (yaw 0 faces
+     -Z: forward = (-sin, -cos), right = (cos, -sin)), spread 1.6 m either
+     side, project each through the live camera, and let Python reject any
+     that fall inside the hero's screen box. Points on the pad's lit ring
+     (torus at 1.42 m, course.js _buildCheckpoints) are rejected in WORLD
+     space here, so the ring's glow never enters the median. */
+  const fwx = -Math.sin(yaw), fwz = -Math.cos(yaw);
+  const rtx = Math.cos(yaw), rtz = -Math.sin(yaw);
+  const RING_R = 1.42, RING_HALF = 0.20;
+  const samples = [];
+  const NA = 7, NL = 13;
+  for (let ia = 0; ia < NA; ia++) {
+    const a = st.aheadFrom + (st.aheadTo - st.aheadFrom) * (ia / (NA - 1));
+    for (let il = 0; il < NL; il++) {
+      const l = -st.halfWidth + 2 * st.halfWidth * (il / (NL - 1));
+      const wx = st.p.x + fwx * a + rtx * l, wz = st.p.z + fwz * a + rtz * l;
+      const dr = Math.hypot(wx - st.p.x, wz - st.p.z);
+      if (Math.abs(dr - RING_R) < RING_HALF) continue;      // the torus glow
+      const s = project(wx, st.p.y, wz);
+      if (s.behind) continue;
+      samples.push([Math.round(s.x), Math.round(s.y)]);
+    }
+  }
+  /* The hero's screen box: feet to head, +-0.45 m of shoulder, so his body,
+     scarf and blob shadow never land in the deck median. */
+  const hb = [
+    project(P.pos.x - rtx * 0.45, P.pos.y, P.pos.z - rtz * 0.45),
+    project(P.pos.x + rtx * 0.45, P.pos.y, P.pos.z + rtz * 0.45),
+    project(P.pos.x - rtx * 0.45, P.pos.y + 1.75, P.pos.z - rtz * 0.45),
+    project(P.pos.x + rtx * 0.45, P.pos.y + 1.75, P.pos.z + rtz * 0.45),
+    project(P.pos.x - fwx * 0.45, P.pos.y, P.pos.z - fwz * 0.45),
+    project(P.pos.x + fwx * 0.45, P.pos.y + 1.75, P.pos.z + fwz * 0.45),
+  ];
+  const heroBox = {
+    x0: Math.min(...hb.map(q => q.x)) - 6, x1: Math.max(...hb.map(q => q.x)) + 6,
+    y0: Math.min(...hb.map(q => q.y)) - 6, y1: Math.max(...hb.map(q => q.y)) + 6,
+  };
   return {
     ok: true,
     w: Math.round(rect.width), h: Math.round(rect.height),
-    feet, head, heroFeet,
+    feet, head, heroFeet, samples, heroBox, yaw,
     heroPx: Math.round(Math.abs(heroFeet.y - head.y)),
     theme: G.themeId, state: G.state,
     fog: (E.scene && E.scene.fog) ? '#' + E.scene.fog.color.getHexString() : null,
@@ -301,8 +350,33 @@ def courses_on_disk(pg):
     return out
 
 
+def deck_median(px, w, h, samples, hero_box, patch=2):
+    """Median RGB over the projected deck samples: a (2*patch+1)^2 pixel patch
+    around every world sample that is on screen and OUTSIDE the hero's screen
+    box. Returns (rgb, pixels used, samples used, samples rejected as hero)."""
+    rs, gs, bs = [], [], []
+    used = rejected = 0
+    hx0, hx1 = hero_box.get("x0", -1e9), hero_box.get("x1", -1e9)
+    hy0, hy1 = hero_box.get("y0", -1e9), hero_box.get("y1", -1e9)
+    for sx, sy in samples:
+        if not (0 <= sx < w and 0 <= sy < h):
+            continue
+        if hx0 <= sx <= hx1 and hy0 <= sy <= hy1:
+            rejected += 1
+            continue
+        used += 1
+        for y in range(max(0, sy - patch), min(h, sy + patch + 1)):
+            for x in range(max(0, sx - patch), min(w, sx + patch + 1)):
+                p = px[x, y]
+                rs.append(p[0]); gs.append(p[1]); bs.append(p[2])
+    if not rs:
+        return None, 0, used, rejected
+    return (median(rs), median(gs), median(bs)), len(rs), used, rejected
+
+
 def measure(png, info, args, crop_path=None):
-    """Deck band (just below the feet) vs fog band (55 % height, far side)."""
+    """Deck band (0.8-2.0 m AHEAD of the station, hero and pad ring rejected)
+    vs fog band (55 % height, far side)."""
     from PIL import Image
     im = Image.open(png).convert("RGB")
     w, h = im.size
@@ -312,12 +386,16 @@ def measure(png, info, args, crop_path=None):
     if not (0 <= fx < w) or not (0 <= fy < h) or info["feet"].get("behind"):
         return {"status": "offscreen", "feet": [round(fx, 1), round(fy, 1)]}
 
-    dh = max(10, int(h * args.deck_from))
-    dh2 = max(dh + 8, int(h * args.deck_to))
-    half = max(12, int(w * args.deck_width * 0.5))
-    deck, npx = band_median(px, w, h, fx - half, fx + half, fy + dh, fy + dh2)
-    if deck is None or npx < 40:
-        return {"status": "no-deck-pixels", "feet": [round(fx, 1), round(fy, 1)]}
+    samples = info.get("samples") or []
+    hero_box = info.get("heroBox") or {}
+    deck, npx, used, rejected = deck_median(px, w, h, samples, hero_box)
+    if deck is None or used < args.min_samples:
+        return {"status": "no-deck-pixels", "feet": [round(fx, 1), round(fy, 1)],
+                "deckSamples": used, "heroRejected": rejected,
+                "detail": "%d of %d samples usable (%d in hero box)" % (used, len(samples), rejected)}
+    onscreen = [s for s in samples if 0 <= s[0] < w and 0 <= s[1] < h]
+    sx0 = min(s[0] for s in onscreen); sx1 = max(s[0] for s in onscreen)
+    sy0 = min(s[1] for s in onscreen); sy1 = max(s[1] for s in onscreen)
 
     fog_y0 = int(h * (args.fog_at - 0.02))
     fog_y1 = int(h * (args.fog_at + 0.02))
@@ -335,8 +413,19 @@ def measure(png, info, args, crop_path=None):
     ld, lf = luminance(deck), luminance(fog)
     if crop_path:
         try:
-            im.crop((max(0, int(fx - half)), max(0, int(fy + dh)),
-                     min(w, int(fx + half)), min(h, int(fy + dh2)))).save(crop_path)
+            from PIL import ImageDraw
+            dbg = im.copy()
+            d = ImageDraw.Draw(dbg)
+            hb = hero_box
+            if hb:
+                d.rectangle([hb["x0"], hb["y0"], hb["x1"], hb["y1"]], outline=(255, 0, 0))
+            for sx, sy in onscreen:
+                inside = hb and hb["x0"] <= sx <= hb["x1"] and hb["y0"] <= sy <= hb["y1"]
+                d.rectangle([sx - 1, sy - 1, sx + 1, sy + 1],
+                            outline=(255, 0, 0) if inside else (0, 255, 0))
+            pad = 40
+            dbg.crop((max(0, sx0 - pad), max(0, sy0 - pad),
+                      min(w, sx1 + pad), min(h, sy1 + pad))).save(crop_path)
         except Exception:
             pass
     return {
@@ -344,7 +433,9 @@ def measure(png, info, args, crop_path=None):
         "deckRgb": [int(v) for v in deck], "fogRgb": [int(v) for v in fog],
         "deckLum": round(ld, 4), "fogLum": round(lf, 4),
         "ratio": round(contrast(ld, lf), 2),
-        "deckPixels": npx, "fogPixels": fn, "fogSide": side,
+        "deckPixels": npx, "deckSamples": used, "heroRejected": rejected,
+        "fogPixels": fn, "fogSide": side,
+        "deckWindow": [int(sx0), int(sy0), int(sx1), int(sy1)],
         "feet": [round(fx, 1), round(fy, 1)],
     }
 
@@ -356,12 +447,14 @@ def main() -> int:
     ap.add_argument("--floor", type=float, default=FLOOR)
     ap.add_argument("--width", type=int, default=1280)
     ap.add_argument("--height", type=int, default=720)
-    ap.add_argument("--deck-from", type=float, default=0.020,
-                    help="top of the deck band, as a fraction of frame height below the feet")
-    ap.add_argument("--deck-to", type=float, default=0.060,
-                    help="bottom of the deck band, same units")
-    ap.add_argument("--deck-width", type=float, default=0.12,
-                    help="deck band width as a fraction of frame width")
+    ap.add_argument("--ahead-from", type=float, default=0.8,
+                    help="near edge of the deck band, metres AHEAD of the station along its yaw")
+    ap.add_argument("--ahead-to", type=float, default=2.0,
+                    help="far edge of the deck band, metres ahead")
+    ap.add_argument("--band-half-width", type=float, default=1.6,
+                    help="lateral half-width of the deck band, metres")
+    ap.add_argument("--min-samples", type=int, default=20,
+                    help="fewest usable deck samples (of 91) before the station is NO SAMPLE")
     ap.add_argument("--fog-at", type=float, default=0.55,
                     help="fog band centre as a fraction of frame height")
     ap.add_argument("--save-crops", action="store_true")
@@ -438,6 +531,9 @@ def main() -> int:
 
             rows = []
             for st in meta.get("stations", []):
+                st["aheadFrom"] = args.ahead_from
+                st["aheadTo"] = args.ahead_to
+                st["halfWidth"] = args.band_half_width
                 try:
                     info = pg.evaluate(POSE_JS, st)
                 except Exception as e:

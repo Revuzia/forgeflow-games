@@ -208,9 +208,18 @@ export const THEMES = {
      * construction); above it the hall's upper storeys and the courtyard's
      * tower thin out toward a dusk-sky grey instead of sinking into the same
      * warm soot as the floor, which is what gives the hub its height. */
+    /* AERIAL PERSPECTIVE + DARK-HORIZON FOG (engine.js, post.js — image lane,
+     * 2026-09-04). `skyColor` is now DARKER than the dome's horizon so a far
+     * silhouette keeps contrast against the sky instead of dissolving into a
+     * haze wall (critic C9); `skyCap` bounds the altitude term so a station
+     * 30-50 m up does not fog to pure sky (critic C1); the `aerial*` band is a
+     * slow plain-exponential tint + desaturation that grades the MID-ground
+     * long before the readability band bites (owner O3). The readability band
+     * (`color`, `density`) is untouched: contrastcheck measures it. */
     fog: { color: 0x2a2028, near: 10, far: 150, density: 0.018, type: 'exp2',
-           heightBelow: 4, heightFalloff: 0.10, heightThin: 0.45, desat: 0.22,
-           skyColor: 0x4a4656, skyMix: 0.45 },
+           heightBelow: 4, heightFalloff: 0.10, heightThin: 0.45, desat: 0.26,
+           skyColor: 0x2f2b38, skyMix: 0.45, skyCap: 0.70,
+           aerialColor: 0x2a2430, aerialDensity: 0.0070, aerialStrength: 0.50 },
 
     sky: {
       type: 'sanctum',
@@ -379,6 +388,9 @@ export const THEMES = {
       contrast: 1.06,
       saturation: 1.32, vignette: 0.44, chroma: 0.0006,
       tint: [1.055, 1.00, 0.925],
+      /* amber interior: the sconces and the lantern pool roll off to a warm
+       * core with a visible falloff instead of a blown white blob (owner O5) */
+      highlightKnee: 1.6, highlightRange: 2.4, grain: 0.018,
     },
     /* Threshold above the diffuse range: the shafts, the painting shimmer and
      * the crest pedestal bloom — the plaster does not. 1.02 was BELOW the lit
@@ -393,7 +405,10 @@ export const THEMES = {
      * blooming (its emitters were fixed at the source in builders.js), the
      * threshold can come down to where the sconces, the painting shimmer and
      * the crest pedestal actually glow instead of merely being bright. */
-    bloom: { strength: 0.44, radius: 0.42, threshold: 1.30 },
+    /* knee 0.5 (post.js soft-knee prefilter, 2026-09-04): only the energy
+     * ABOVE 1.30 blooms, so the lit plaster at ~1.2 contributes a whisper
+     * instead of flipping the hall white; strength up to keep the sconces. */
+    bloom: { strength: 0.56, radius: 0.42, threshold: 1.30, knee: 0.5 },
 
     palette: {
       /* safeEdge is the EMISSIVE lip stripe (builders.js). It was a near-white
@@ -605,9 +620,18 @@ export const THEMES = {
      * density thins and the fog colour slides toward the morning horizon, so
      * the fort on its hill and the far ridges sit BEHIND the meadow in pale
      * air instead of in the same green as the grass at Nim's feet. */
+    /* AERIAL PERSPECTIVE + DARK-HORIZON FOG (engine.js, post.js — image lane,
+     * 2026-09-04). `skyColor` is now DARKER than the dome's horizon so a far
+     * silhouette keeps contrast against the sky instead of dissolving into a
+     * haze wall (critic C9); `skyCap` bounds the altitude term so a station
+     * 30-50 m up does not fog to pure sky (critic C1); the `aerial*` band is a
+     * slow plain-exponential tint + desaturation that grades the MID-ground
+     * long before the readability band bites (owner O3). The readability band
+     * (`color`, `density`) is untouched: contrastcheck measures it. */
     fog: { color: 0x3a5a54, near: 26, far: 320, density: 0.0076, type: 'exp2',
-           heightBelow: 3, heightFalloff: 0.075, heightThin: 0.65, desat: 0.40,
-           skyColor: 0x9dbfd2, skyMix: 0.80 },
+           heightBelow: 3, heightFalloff: 0.075, heightThin: 0.65, desat: 0.46,
+           skyColor: 0x7c9fb4, skyMix: 0.70, skyCap: 0.65,
+           aerialColor: 0x7898a6, aerialDensity: 0.0042, aerialStrength: 0.55 },
 
     sky: {
       type: 'day',
@@ -732,10 +756,12 @@ export const THEMES = {
     },
 
     grade: {
-      lift: [0.004, 0.006, 0.004], gamma: [1.00, 1.00, 1.00], gain: [1.02, 1.02, 0.99],
+      /* warm-bright morning: a touch of gold in the gain, cool-neutral floor */
+      lift: [0.005, 0.006, 0.004], gamma: [1.00, 1.00, 1.00], gain: [1.04, 1.02, 0.97],
       contrast: 1.09,
-      saturation: 1.14, vignette: 0.30, chroma: 0.0007,
+      saturation: 1.16, vignette: 0.30, chroma: 0.0007,
       tint: [1.01, 1.02, 0.99],
+      highlightKnee: 1.9, highlightRange: 3.0, grain: 0.016,
     },
     /* Morning is bright: only the sun, the crest gold and the trims may bloom.
      * A threshold under the lit-grass plateau turns the whole meadow into one
@@ -744,7 +770,9 @@ export const THEMES = {
      * checkpoint pool sit between 1.0 and 1.5 in the HDR buffer; at 1.12 only
      * their hottest texels crossed and the owner read "no bloom on emissives".
      * Lit grass peaks ~0.7 and limestone ~0.95 under this key, both under. */
-    bloom: { strength: 0.40, radius: 0.58, threshold: 1.02 },
+    /* knee 0.5 (post.js soft-knee): the coins/rings at 1.0-1.5 glow softly,
+     * the sun and the crest gold glow hard, lit grass (~0.7) stays clean. */
+    bloom: { strength: 0.55, radius: 0.58, threshold: 0.98, knee: 0.5 },
 
     palette: {
       /* saturated for the same reason as the Keep's — see builders.js */
@@ -872,9 +900,18 @@ export const THEMES = {
      * 30 m out must still silhouette against the molten sea. */
     /* HEIGHT FOG (engine.js): the smoke band holds at deck height; the crown
      * and the crane gantry above it thin toward the ember horizon band. */
+    /* AERIAL PERSPECTIVE + DARK-HORIZON FOG (engine.js, post.js — image lane,
+     * 2026-09-04). `skyColor` is now DARKER than the dome's horizon so a far
+     * silhouette keeps contrast against the sky instead of dissolving into a
+     * haze wall (critic C9); `skyCap` bounds the altitude term so a station
+     * 30-50 m up does not fog to pure sky (critic C1); the `aerial*` band is a
+     * slow plain-exponential tint + desaturation that grades the MID-ground
+     * long before the readability band bites (owner O3). The readability band
+     * (`color`, `density`) is untouched: contrastcheck measures it. */
     fog: { color: 0x2a100a, near: 10, far: 110, density: 0.0090, type: 'exp2',
-           heightBelow: 3, heightFalloff: 0.08, heightThin: 0.55, desat: 0.15,
-           skyColor: 0x5a1c0c, skyMix: 0.70 },
+           heightBelow: 3, heightFalloff: 0.08, heightThin: 0.55, desat: 0.20,
+           skyColor: 0x3a1208, skyMix: 0.60, skyCap: 0.70,
+           aerialColor: 0x3a1a10, aerialDensity: 0.0083, aerialStrength: 0.50 },
 
     sky: {
       type: 'furnace',
@@ -902,11 +939,16 @@ export const THEMES = {
     },
 
     grade: {
-      lift: [0.020, 0.008, 0.002], gamma: [0.98, 1.00, 1.03], gain: [1.08, 1.00, 0.94],
-      contrast: 1.08,
-      saturation: 1.14, vignette: 0.46, chroma: 0.0024,
+      /* hot, contrasty red-orange with DEEP blacks: the lift comes down, the
+       * red gain goes up, the S steepens */
+      lift: [0.012, 0.004, 0.000], gamma: [0.98, 1.00, 1.03], gain: [1.10, 0.99, 0.92],
+      contrast: 1.12,
+      saturation: 1.18, vignette: 0.46, chroma: 0.0024,
       // gentle warm push, eased on blue so the cyan lips survive the grade
       tint: [1.04, 0.99, 0.95],
+      /* the flame curtains (~8 in HDR) roll off to an orange-white core with
+       * their own gradient instead of a clipped white rectangle (critic C2) */
+      highlightKnee: 1.5, highlightRange: 2.4, grain: 0.022,
     },
     /* Threshold well ABOVE the fogged lava plateau. The sea legitimately fills
      * half the frame at a luma the bright-pass would otherwise integrate into
@@ -920,7 +962,11 @@ export const THEMES = {
      * chain and flooded the whole opening white. Capping the bright-pass INPUT
      * at 3.5 leaves the jets their own light and takes away the flood, so the
      * three bars and the dark gaps between them read again. */
-    bloom: { strength: 0.50, radius: 0.62, threshold: 2.40, clamp: 3.5 },
+    /* knee 0.4 (post.js soft-knee, 2026-09-04): the bright pass now feeds
+     * only the energy ABOVE the threshold, so the clamp can come up 3.5 -> 4.5
+     * and the flame jets still put ~2.3 into the mip chain (was 3.5 of pure
+     * slab); the sea plateau under 2.2 contributes nothing. */
+    bloom: { strength: 0.55, radius: 0.62, threshold: 2.20, knee: 0.4, clamp: 4.5 },
 
     palette: {
       safe: 0x93a7b8, safeEdge: 0x8ff0ff,
@@ -1014,9 +1060,18 @@ export const THEMES = {
      * still thin enough that the next three landings silhouette. */
     /* HEIGHT FOG (engine.js): the dusk-blue band holds at deck height; the
      * peaks above thin toward the aurora horizon's rose. */
+    /* AERIAL PERSPECTIVE + DARK-HORIZON FOG (engine.js, post.js — image lane,
+     * 2026-09-04). `skyColor` is now DARKER than the dome's horizon so a far
+     * silhouette keeps contrast against the sky instead of dissolving into a
+     * haze wall (critic C9); `skyCap` bounds the altitude term so a station
+     * 30-50 m up does not fog to pure sky (critic C1); the `aerial*` band is a
+     * slow plain-exponential tint + desaturation that grades the MID-ground
+     * long before the readability band bites (owner O3). The readability band
+     * (`color`, `density`) is untouched: contrastcheck measures it. */
     fog: { color: 0x28374f, near: 16, far: 190, density: 0.0072, type: 'exp2',
-           heightBelow: 3, heightFalloff: 0.06, heightThin: 0.60, desat: 0.30,
-           skyColor: 0x6a5f80, skyMix: 0.65 },
+           heightBelow: 3, heightFalloff: 0.06, heightThin: 0.60, desat: 0.35,
+           skyColor: 0x3f4a66, skyMix: 0.60, skyCap: 0.70,
+           aerialColor: 0x3a4a68, aerialDensity: 0.0059, aerialStrength: 0.55 },
 
     sky: {
       type: 'aurora',
@@ -1042,14 +1097,16 @@ export const THEMES = {
     },
 
     grade: {
-      lift: [-0.004, -0.002, 0.006], gamma: [1.02, 1.01, 0.99], gain: [0.99, 1.00, 1.06],
-      contrast: 1.06,
-      saturation: 1.08, vignette: 0.34, chroma: 0.0011,
-      tint: [0.98, 1.00, 1.05],
+      /* cold blue with the one pink rim: blue floor, blue gain, red held */
+      lift: [-0.004, -0.002, 0.008], gamma: [1.02, 1.01, 0.99], gain: [0.98, 1.00, 1.08],
+      contrast: 1.07,
+      saturation: 1.06, vignette: 0.34, chroma: 0.0011,
+      tint: [0.97, 1.00, 1.06],
+      highlightKnee: 1.8, highlightRange: 2.8, grain: 0.020,
     },
     /* The snow is legitimately bright; a threshold under it turns the whole
      * mountain into a white wash. Only the aurora, the sun and the trims. */
-    bloom: { strength: 0.44, radius: 0.60, threshold: 1.10 },
+    bloom: { strength: 0.55, radius: 0.60, threshold: 1.05, knee: 0.5 },
 
     palette: {
       safe: 0x7c93a8, safeEdge: 0xffe9a8,
@@ -1143,9 +1200,18 @@ export const THEMES = {
 
     /* HEIGHT FOG (engine.js): the deep teal band holds at deck height; the
      * temple and the dune ridges above thin toward the noon horizon. */
+    /* AERIAL PERSPECTIVE + DARK-HORIZON FOG (engine.js, post.js — image lane,
+     * 2026-09-04). `skyColor` is now DARKER than the dome's horizon so a far
+     * silhouette keeps contrast against the sky instead of dissolving into a
+     * haze wall (critic C9); `skyCap` bounds the altitude term so a station
+     * 30-50 m up does not fog to pure sky (critic C1); the `aerial*` band is a
+     * slow plain-exponential tint + desaturation that grades the MID-ground
+     * long before the readability band bites (owner O3). The readability band
+     * (`color`, `density`) is untouched: contrastcheck measures it. */
     fog: { color: 0x1b4d61, near: 34, far: 380, density: 0.0034, type: 'exp2',
-           heightBelow: 3, heightFalloff: 0.07, heightThin: 0.60, desat: 0.35,
-           skyColor: 0xa9d6e2, skyMix: 0.80 },
+           heightBelow: 3, heightFalloff: 0.07, heightThin: 0.60, desat: 0.40,
+           skyColor: 0x7fb4c4, skyMix: 0.60, skyCap: 0.50,
+           aerialColor: 0x78aab8, aerialDensity: 0.0036, aerialStrength: 0.50 },
 
     sky: {
       type: 'sanctum',
@@ -1174,15 +1240,21 @@ export const THEMES = {
     },
 
     grade: {
-      lift: [0.000, 0.004, 0.008], gamma: [1.00, 1.00, 1.00], gain: [1.00, 1.02, 1.04],
+      /* clean cyan-gold noon: cool floor, warm-gold highlights */
+      lift: [0.000, 0.004, 0.010], gamma: [1.00, 1.00, 1.00], gain: [1.04, 1.02, 0.99],
       contrast: 1.08,
-      saturation: 1.12, vignette: 0.28, chroma: 0.0006,
-      tint: [0.99, 1.01, 1.04],
+      saturation: 1.14, vignette: 0.28, chroma: 0.0006,
+      tint: [1.00, 1.01, 1.03],
+      /* the marble decks sit over 1.0 in HDR under this key (measured,
+       * `_harness/_vc_whiteper_azure-3_cp2.json`): roll them off early */
+      highlightKnee: 1.6, highlightRange: 2.6, grain: 0.016,
     },
     /* Noon over water is the brightest scene in the game. Threshold above the
      * lit-limestone plateau AND above the sea's own specular field, or the
      * bright-pass integrates the whole sea into an additive veil. */
-    bloom: { strength: 0.40, radius: 0.56, threshold: 1.18 },
+    /* knee 0.4 (post.js soft-knee): the lit marble just over 1.0 no longer
+     * feeds its whole value to the mip chain (critic C1's bloom half). */
+    bloom: { strength: 0.45, radius: 0.56, threshold: 1.20, knee: 0.4 },
 
     palette: {
       safe: 0xb8a67e, safeEdge: 0xffd166,

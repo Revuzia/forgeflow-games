@@ -78,6 +78,7 @@ SETUP_JS = r"""
   W.sunShadow = E.sun ? E.sun.castShadow : false;
   W.shadowEnabled = R.shadowMap.enabled;
   W.pr = R.getPixelRatio();
+  W.sharpen = (P.state && typeof P.state.sharpen === 'number') ? P.state.sharpen : 0;
   W.env = E.scene.environment;
   W.pointLights = []; E.scene.traverse(o => { if (o.isPointLight || o.isSpotLight) W.pointLights.push(o); });
   W.texes = []; E.scene.traverse(o => { if (!o.isMesh) return;
@@ -131,6 +132,13 @@ APPLY_JS = r"""
   } else E.scene.overrideMaterial = null;
   const pr = cfg.pr || W.pr;
   if (Math.abs(R.getPixelRatio() - pr) > 1e-3) { E.setRenderScale(pr / (W.pr / E.renderScale)); }
+  /* PresentPass A/B (image lane): 'plain' = one bilinear tap (the old
+     compositor stretch, in-chain); 'nosharp' = Catmull-Rom only; default =
+     Catmull-Rom + RCAS at the engine's strength. */
+  if (P.presentPass) {
+    P.presentPass.setPlain(cfg.present === 'plain');
+    if (P.setSharpen) P.setSharpen(cfg.present === 'nosharp' ? 0 : W.sharpen);
+  }
   return true;
 }
 """
@@ -194,6 +202,7 @@ RESTORE_JS = r"""
   if (W.nmaps.length) { for (const e of W.nmaps) { e[0].normalMap = e[1]; e[0].needsUpdate = true; } W.nmaps.length = 0; }
   if (W.hidden.length) { for (const o of W.hidden) o.visible = true; W.hidden.length = 0; }
   E.scene.overrideMaterial = null;
+  if (P.presentPass) { P.presentPass.setPlain(false); if (P.setSharpen) P.setSharpen(W.sharpen); }
   R.setOpaqueSort(null); }
 """
 
@@ -203,6 +212,8 @@ AA = ["FXAAPass", "SMAAPass"]
 
 CONFIGS = [
     ("full", {}),
+    ("present plain", {"present": "plain"}),
+    ("present nosharp", {"present": "nosharp"}),
     ("-bloom", {"off": BLOOM}),
     ("-finish", {"off": GRADE}),
     ("-AA", {"off": AA}),
@@ -231,6 +242,8 @@ def main() -> int:
     ap.add_argument("--height", type=int, default=1080)
     ap.add_argument("--only", default="", help="comma list of config names to run")
     ap.add_argument("--json", default="")
+    ap.add_argument("--headless", action="store_true",
+                    help="headless Chrome on the real GPU (HARNESS_NOTES: d3d11 headless keeps the Intel UHD)")
     args = ap.parse_args()
 
     want = [c.strip() for c in args.only.split(",") if c.strip()]
@@ -241,7 +254,7 @@ def main() -> int:
     bad = {}
     meta = {}
     with sync_playwright() as p:
-        br = p.chromium.launch(channel="chrome", headless=False, args=FLAGS)
+        br = p.chromium.launch(channel="chrome", headless=args.headless, args=FLAGS)
         pg = br.new_page(viewport={"width": args.width, "height": args.height})
         pg.goto("%s?dev=1&quality=%s" % (BASE, args.quality), wait_until="load", timeout=60_000)
         for _ in range(150):

@@ -109,17 +109,28 @@ const KEYS = [
   'rubber', 'conveyor', 'cloud',
   'grass', 'dirt', 'plaster', 'brick', 'bark', 'leaves', 'snow', 'water',
   'gold', 'cloth', 'painting', 'marble', 'moss', 'copper', 'rope',
+  'basalt',
 ];
 
 /** materials whose UVs come from world-space box projection */
 const BOX_KEYS = new Set([
   'stone', 'metal', 'panel', 'grate', 'ice', 'glass', 'emissive', 'lava',
   'obsidian', 'crystal', 'wood', 'sand', 'neon', 'checker', 'rubber', 'cloud',
-  'grass', 'dirt', 'plaster', 'brick', 'snow', 'marble', 'moss', 'copper',
+  'grass', 'dirt', 'plaster', 'brick', 'snow', 'marble', 'moss', 'copper', 'basalt',
 ]);
 
 /** the heightfield materials: blend toward dirt with slope (contract §14/§18) */
-const SLOPE_KEYS = new Set(['grass', 'snow', 'sand']);
+const SLOPE_KEYS = new Set(['grass', 'snow', 'sand', 'basalt']);
+
+/**
+ * Per-theme GROUND VARIANTS. `Mats.get(key, themeId)` resolves `key` through
+ * this table before cloning, so course data that authors `surface: 'sand'` on
+ * an ember course gets the realm's own floor (bakeBasalt) without the data or
+ * the theme override table changing. Only the material changes: the collider
+ * surface id, the caustic uniforms and every other reader of 'sand' are
+ * untouched.
+ */
+const GROUND_VARIANT = { sand: { ember: 'basalt' } };
 
 let _renderer = null;
 let _ready = false;
@@ -630,6 +641,7 @@ function injectShader(mat, key, opts) {
   const defines = opts.defines || {};
   const uvScale = opts.uvScale || 0.5;
   const u = (typeof opts.uniforms === 'function') ? null : (opts.uniforms || null);
+  if (u && defines.CB_SLOPE && !u.uCbBlendTint) u.uCbBlendTint = { value: new THREE.Vector3(1, 1, 1) };
   if (box) {
     const bu = {
       uCbUv: { value: new THREE.Vector2(uvScale, uvScale) },
@@ -648,6 +660,7 @@ function injectShader(mat, key, opts) {
     caustic: !!defines.CB_CAUSTIC, wind: !!defines.CB_WIND, shimmer: !!defines.CB_SHIMMER,
     macro: !!defines.CB_MACRO, face: !!defines.CB_FACE,
     detail: !!defines.CB_DETAIL, foliage: !!defines.CB_FOLIAGE,
+    vein: !!defines.CB_VEIN,
   };
 
   mat.onBeforeCompile = function (shader) {
@@ -662,7 +675,7 @@ function injectShader(mat, key, opts) {
       shader.uniforms.uCbFlowA = LAVA_U.uCbFlowA;
       shader.uniforms.uCbFlowB = LAVA_U.uCbFlowB;
     }
-    if (D.wind || D.shimmer) shader.uniforms.uCbTime = TIME_U;
+    if (D.wind || D.shimmer || D.vein) shader.uniforms.uCbTime = TIME_U;
     if (lod) shader.uniforms.uCbLod = LOD_U;
 
     // ---- vertex -----------------------------------------------------------
@@ -766,13 +779,14 @@ function injectShader(mat, key, opts) {
     if (lod) fHead += 'varying float vCbDist;\nuniform vec2 uCbLod;\n';
     if (box) fHead += 'varying vec3 vCbW;\nvarying vec3 vCbN;\n';
     if (D.lava) fHead += 'uniform float uCbTime;\nuniform vec2 uCbFlowA;\nuniform vec2 uCbFlowB;\n';
-    if (D.slope) fHead += 'uniform sampler2D uCbBlendMap;\nuniform sampler2D uCbBlendNormal;\nuniform sampler2D uCbBlendOrm;\nuniform float uCbBlendScale;\nuniform vec2 uCbSlope;\n';
+    if (D.slope) fHead += 'uniform sampler2D uCbBlendMap;\nuniform sampler2D uCbBlendNormal;\nuniform sampler2D uCbBlendOrm;\nuniform float uCbBlendScale;\nuniform vec3 uCbBlendTint;\nuniform vec2 uCbSlope;\n';
     if (D.rim) fHead += 'uniform vec4 uCbRim;\n';
     if (D.macro) fHead += 'uniform vec4 uCbMacro;\n';
     if (D.face) fHead += 'uniform vec2 uCbFace;\n';
-    if (D.detail) fHead += 'uniform vec2 uCbDetail;\n';
+    if (D.detail) fHead += 'uniform vec4 uCbDetail;\n';
     if (D.caustic) fHead += 'uniform float uCbCausticTime;\nuniform float uCbCaustic;\nuniform vec4 uCbCausticParams;\nuniform vec3 uCbCausticColor;\n';
     if (D.shimmer) fHead += 'uniform float uCbTime;\nuniform float uShimmer;\nuniform vec3 uShimmerColor;\nuniform float uShimmerWidth;\n';
+    if (D.vein && !D.lava && !D.shimmer) fHead += 'uniform float uCbTime;\n';
     shader.fragmentShader = fHead + shader.fragmentShader;
 
     const MAP = '#include <map_fragment>';
@@ -793,7 +807,9 @@ function injectShader(mat, key, opts) {
   #ifdef USE_MAP
     if ( cbSlopeW > 0.001 ) {
       vec4 cbBlendCol = texture2D( uCbBlendMap, vMapUv * uCbBlendScale );
-      diffuseColor.rgb = mix( diffuseColor.rgb, cbBlendCol.rgb, cbSlopeW );
+      // uCbBlendTint lifts (grass: a sunlit bank) or darkens (basalt: scoria)
+      // the shared dirt target per material — the blend never goes to black
+      diffuseColor.rgb = mix( diffuseColor.rgb, cbBlendCol.rgb * uCbBlendTint, cbSlopeW );
     }
   #endif`;
       }
@@ -900,6 +916,11 @@ function injectShader(mat, key, opts) {
     if ( cbLodT < 0.999 ) {
       vec2 cbDn = texture2D( normalMap, vNormalMapUv * uCbDetail.x ).xy * 2.0 - 1.0;
       mapN.xy += cbDn * ( uCbDetail.y * ( 1.0 - cbLodT ) );
+      // LOW octave: the same map at a larger tile = hillside relief at 10 m
+      if ( uCbDetail.w > 0.0 ) {
+        vec2 cbDl = texture2D( normalMap, vNormalMapUv * uCbDetail.z ).xy * 2.0 - 1.0;
+        mapN.xy += cbDl * ( uCbDetail.w * ( 1.0 - cbLodT ) );
+      }
     }` : '') + `
     mapN.xy *= normalScale;
     normal = normalize( tbn * mapN );
@@ -940,6 +961,27 @@ function injectShader(mat, key, opts) {
     // molten channels are smoother and less metallic than the frozen crust
     roughnessFactor = mix( roughnessFactor, 0.30, lavaHeat * 0.85 );
   #endif`);
+      }
+    }
+
+    if (D.vein) {
+      /* LAVA VEINS (basalt): the emissive mask stays in its cracks (no scroll)
+         and breathes — a slow whole-floor swell times a faster local pulse
+         keyed off world position, so neighbouring cracks are out of phase and
+         the floor reads as a living crust. Fades out with the slope blend (a
+         scoria bank does not glow) — cbSlopeW is declared in the map block. */
+      const EM = '#include <emissivemap_fragment>';
+      if (shader.fragmentShader.indexOf(EM) !== -1) {
+        shader.fragmentShader = shader.fragmentShader.replace(EM, EM + `
+  {
+    float cbVs = 0.80 + 0.20 * sin( uCbTime * 0.45 + vCbW.x * 0.05 );
+    float cbVl = 0.72 + 0.28 * sin( uCbTime * 1.35 + vCbW.x * 0.41 + vCbW.z * 0.33 );
+    // HEAT MASK: a ~9 m world-space field — some crust has cooled to dark
+    // glass, some is still molten underneath, so the floor is not one even
+    // orange lattice (owner shot _shots/surface_ember-4.png).
+    float cbVm = 0.18 + 0.82 * smoothstep( 0.32, 0.72, cbVnoise( vCbW.xz * 0.11 ) );
+    totalEmissiveRadiance *= cbVs * cbVl * cbVm * ( 1.0 - cbSlopeW );
+  }`);
       }
     }
 
@@ -1070,7 +1112,8 @@ function injectShader(mat, key, opts) {
   const shapeKey = 'cb#' + (box ? 'b' : '-') + (lod ? 'D' : '') + (iblRough ? 'Q' : '') +
     (D.lava ? 'L' : '') + (D.slope ? 'S' : '') + (D.rim ? 'R' : '') +
     (D.caustic ? 'C' : '') + (D.wind ? 'W' : '') + (D.shimmer ? 'H' : '') +
-    (D.macro ? 'M' : '') + (D.face ? 'F' : '') + (D.detail ? 'N' : '') + (D.foliage ? 'T' : '');
+    (D.macro ? 'M' : '') + (D.face ? 'F' : '') + (D.detail ? 'N' : '') + (D.foliage ? 'T' : '') +
+    (D.vein ? 'V' : '');
   mat.customProgramCacheKey = function () { return shapeKey; };
   return mat;
 }
@@ -1241,12 +1284,17 @@ function faceInject(wallMul, extra) {
  * (how many detail tiles per primary tile), `strength` the tangent-space xy
  * weight. Composes with slope/macro/face injections.
  */
-function detailInject(mul, strength, extra) {
+function detailInject(mul, strength, extra, loMul, loStrength) {
   const e = extra || {};
+  /* 2026-09-04: an optional SECOND, LOW-frequency octave (`loMul` < 1 reads
+   * the normal map at a LARGER tile) so a hillside carries 3-5 m relief at
+   * 10 m where the primary tile has already averaged flat. Near field only,
+   * one extra fetch, and only for materials that pass it (grass, sand, snow,
+   * basalt) — everything else keeps the two-tap cost. */
   return Object.assign({}, e, {
     defines: Object.assign({ CB_DETAIL: true }, e.defines || null),
     uniforms: Object.assign({
-      uCbDetail: { value: new THREE.Vector2(mul, strength) },
+      uCbDetail: { value: new THREE.Vector4(mul, strength, loMul || 0, loStrength || 0) },
     }, e.uniforms || null),
   });
 }
@@ -2306,9 +2354,14 @@ function bakeDirt() {
 
       // damp umber in the hollows, dusty ochre on the crowns
       const crown = clamp01((B.h[i] - 0.42) * 2.1);
-      let r = lerp(0.132, 0.318, crown);
-      let g = lerp(0.098, 0.238, crown);
-      let b = lerp(0.068, 0.156, crown);
+      /* 2026-09-04 (surface lane, critic C6 "the shaded side of every hill is
+       * a flat near-black cutout"): this is the slope-blend TARGET of grass,
+       * snow and sand, so its value IS the value of every hillside past the
+       * slide angle. 0.13-0.32 under a 0.46 hemi is black. Lifted to a lit
+       * ochre rock (0.21-0.43): a sun-baked bank, not wet compost. */
+      let r = lerp(0.212, 0.432, crown);
+      let g = lerp(0.164, 0.338, crown);
+      let b = lerp(0.112, 0.228, crown);
       r += (clod - 0.5) * 0.075; g += (clod - 0.5) * 0.058; b += (clod - 0.5) * 0.038;
       r += (grit - 0.5) * 0.045; g += (grit - 0.5) * 0.038; b += (grit - 0.5) * 0.028;
       // pebbles are cool grey minerals, not soil
@@ -2507,13 +2560,15 @@ function bakeGrass() {
       uCbBlendNormal: { value: _tex.get('dirt.normal') || null },
       uCbBlendOrm: { value: _tex.get('dirt.orm') || null },
       uCbBlendScale: { value: 0.82 },
+      // the bank goes to LIT rock: warm, a stop up from the shared dirt bake
+      uCbBlendTint: { value: new THREE.Vector3(1.18, 1.10, 0.98) },
       uCbSlope: { value: new THREE.Vector2(SLOPE_START, SLOPE_END) },
       // rgb = transmitted tint, a = strength
       // rim translucency halved: at 100 m every hillside was rimmed at once,
       // which reads as a uniform green glaze, not as light through a blade.
       uCbRim: { value: new THREE.Vector4(0.42, 0.72, 0.22, 0.28) },
     },
-  }))));
+  }), 0.31, 0.42)));
 }
 
 /* --------------------------------------------------------------- 5.3 snow */
@@ -2601,9 +2656,10 @@ function bakeSnow() {
       uCbBlendNormal: { value: _tex.get('dirt.normal') || null },
       uCbBlendOrm: { value: _tex.get('dirt.orm') || null },
       uCbBlendScale: { value: 1.6 },
+      uCbBlendTint: { value: new THREE.Vector3(1.12, 1.10, 1.08) },
       uCbSlope: { value: new THREE.Vector2(SLOPE_START, SLOPE_END) },
     },
-  })));
+  }), 0.40, 0.30));
 }
 
 /* --------------------------------------------------------------- 5.4 sand */
@@ -2613,57 +2669,89 @@ function bakeSnow() {
  * carries the CAUSTIC injection: `water.js` writes `uCbCaustic` (surfaceY,
  * strength, scale, speed) on this key's shared uniforms, and every sand
  * surface BELOW that height picks up the moving light of the water above it.
+ *
+ * 2026-09-04 (surface lane, critic C7 "vermiculated worm / fingerprint
+ * pattern at 0.60"): the old ripple was a sine at 14 crests per 1.82 m tile
+ * (13 cm) warped by a 7-cell fbm, baked at strength 1.6 into the normal and
+ * then read AGAIN at 4.1x by the detail octave — a 3 cm contour field under a
+ * 3 cm contour field, which at a 0.60 render scale aliases into worms. Real
+ * dune ripples are 25-40 cm apart, run ACROSS a prevailing wind, and have an
+ * asymmetric profile (long stoss slope, short steep lee face). The ripple is
+ * now 5.8 crests per tile (~31 cm) on a fixed wind axis with a gentle tileable
+ * warp, the normal carries the ripple at a third of the old strength, the
+ * detail octave reads GRAIN (7x, weak) plus a LOW octave for dune swell, and
+ * the colour gains a warm/pale macro so a 100 m beach is not one ochre.
  */
 function bakeSand() {
-  const n = SIZE_MD, B = bakeBuffers(n);
+  const n = SIZE_LG, B = bakeBuffers(n);
   const A = B.imgA.data, O = B.imgO.data;
 
   for (let y = 0; y < n; y++) {
     const v = y / n;
     for (let x = 0; x < n; x++) {
       const u = x / n, i = y * n + x, p = i * 4;
-      const drift = fbm(u, v, 4, 4, 0.55, 2626);
-      const rippleP = u * 14 + (drift - 0.5) * 7 + v * 3.0;
-      const ripple = 0.5 + 0.5 * Math.sin(rippleP * Math.PI * 2);
-      const grit = fbm(u, v, 90, 2, 0.5, 4747);
-      const damp = smoothstep(0.62, 0.86, fbm(u, v, 7, 3, 0.55, 1010));
 
-      // the wind-ripple field DOMINATES the height: under a flat fill a dune
-      // whose structure lives only in the albedo reads as uniform speckle.
-      B.h[i] = 0.5 + (drift - 0.5) * 0.40 + (ripple - 0.5) * 0.34 + (grit - 0.5) * 0.10;
+      const drift = fbm(u, v, 3, 3, 0.55, 2626);           // dune swell
+      const warp = fbm(u, v, 6, 2, 0.5, 2727);             // ripple wander
+      // along-wind coordinate: integer counts on both axes keep the tile
+      // seamless; the crest lines run perpendicular to (5, 3)
+      const along = u * 5 + v * 3;
+      const ph = (along + (warp - 0.5) * 0.60) * Math.PI * 2;
+      // asymmetric profile: a gentle stoss slope, a short steep lee face
+      let rip = Math.sin(ph) + 0.32 * Math.sin(ph * 2 + 0.9);
+      // a second, weaker ripple train from a cross-wind so the field is not
+      // one set of parallel rules (owner shot _shots/azure-1/cp4.png)
+      const ph2 = (u * 2 - v * 4 + (drift - 0.5) * 0.8) * Math.PI * 2;
+      rip = rip * 0.78 + Math.sin(ph2) * 0.30;
+      const ripple = 0.5 + 0.5 * rip / 1.32;
+      const grain = fbm(u, v, 110, 2, 0.5, 4747);           // sand grain
+      const grain2 = vnoise(u, v, 230, 4848);
+      const damp = smoothstep(0.66, 0.90, fbm(u, v, 5, 3, 0.55, 1010));
+      const pale = fbm(u, v, 2, 3, 0.6, 1212);              // warm/pale macro
 
-      let r = 0.560, g = 0.462, b = 0.318;
-      const shade = (ripple - 0.5) * 2;               // -1 trough .. +1 crest
-      r += (drift - 0.5) * 0.14 + shade * 0.075 + (grit - 0.5) * 0.05;
-      g += (drift - 0.5) * 0.12 + shade * 0.062 + (grit - 0.5) * 0.045;
-      b += (drift - 0.5) * 0.085 + shade * 0.040 + (grit - 0.5) * 0.035;
-      r = lerp(r, r * 0.58, damp); g = lerp(g, g * 0.56, damp); b = lerp(b, b * 0.58, damp);
+      B.h[i] = 0.5 + (drift - 0.5) * 0.34 + (ripple - 0.5) * 0.20
+             + (grain - 0.5) * 0.07 + (grain2 - 0.5) * 0.035;
+
+      // warm golden sand; the macro slides it between a pale wind-blown crest
+      // and a deeper ochre hollow
+      let r = lerp(0.600, 0.700, pale), g = lerp(0.492, 0.600, pale), b = lerp(0.330, 0.430, pale);
+      const shade = (ripple - 0.5) * 2;                    // -1 lee .. +1 crest
+      r += (drift - 0.5) * 0.10 + shade * 0.052 + (grain - 0.5) * 0.070 + (grain2 - 0.5) * 0.035;
+      g += (drift - 0.5) * 0.085 + shade * 0.042 + (grain - 0.5) * 0.060 + (grain2 - 0.5) * 0.030;
+      b += (drift - 0.5) * 0.060 + shade * 0.022 + (grain - 0.5) * 0.045 + (grain2 - 0.5) * 0.022;
+      // lee faces gather a touch of darker, cooler shade
+      const lee = smoothstep(0.0, -0.6, shade);
+      r = lerp(r, r * 0.86, lee * 0.5); g = lerp(g, g * 0.88, lee * 0.5); b = lerp(b, b * 0.94, lee * 0.5);
+      r = lerp(r, r * 0.60, damp); g = lerp(g, g * 0.58, damp); b = lerp(b, b * 0.60, damp);
       // mica sparkle
-      if (hash2i(x, y, 8181) > 0.9955) { r = 1.0; g = 0.98; b = 0.90; }
+      if (hash2i(x, y, 8181) > 0.9962) { r = 1.0; g = 0.98; b = 0.90; }
 
-      A[p] = r * 255; A[p + 1] = g * 255; A[p + 2] = b * 255; A[p + 3] = 255;
+      A[p] = clamp01(r) * 255; A[p + 1] = clamp01(g) * 255; A[p + 2] = clamp01(b) * 255; A[p + 3] = 255;
       O[p] = 255;
-      O[p + 1] = clamp(0.95 - damp * 0.22 + (grit - 0.5) * 0.06, 0.45, 1) * 255;
+      O[p + 1] = clamp(0.96 - damp * 0.24 + (grain - 0.5) * 0.06, 0.45, 1) * 255;
       O[p + 2] = 0;
       O[p + 3] = 255;
     }
   }
 
+  bakeAO(B, 5, 0.62, 2.4, 0.66);
+
   const maps = {
     map: upload(commitA(B), 'sand.albedo', true, 0.55),
     orm: upload(commitO(B), 'sand.orm', false, 0.55),
-    normal: upload(heightToNormal(B.h, n, 1.6), 'sand.normal', false, 0.55),
+    normal: upload(heightToNormal(B.h, n, 1.05), 'sand.normal', false, 0.55),
   };
   return assemble('sand', maps, {
     color: 0xffffff, roughness: 1, metalness: 0,
-    normalScale: new THREE.Vector2(1.15, 1.15), envMapIntensity: 0.5,
-  }, 0.55, detailInject(4.1, 0.45, slopeInject({
+    normalScale: new THREE.Vector2(0.95, 0.95), envMapIntensity: 0.5,
+  }, 0.55, macroInject(16.0, 0.20, 0.10, 0, detailInject(7.0, 0.22, slopeInject({
     defines: { CB_SLOPE: true, CB_CAUSTIC: true },
     uniforms: {
       uCbBlendMap: { value: _tex.get('dirt.albedo') || null },
       uCbBlendNormal: { value: _tex.get('dirt.normal') || null },
       uCbBlendOrm: { value: _tex.get('dirt.orm') || null },
       uCbBlendScale: { value: 1.1 },
+      uCbBlendTint: { value: new THREE.Vector3(1.10, 1.06, 1.00) },
       uCbSlope: { value: new THREE.Vector2(SLOPE_START, SLOPE_END) },
       /* Caustics. `uCbCaustic` is a plain float strength so water.js's
        * `linkCaustics(mats, 'sand', strength)` drives it directly; the geometry
@@ -2675,7 +2763,103 @@ function bakeSand() {
       uCbCausticColor: { value: new THREE.Color(0.55, 0.86, 0.92) },
       uCbCausticTime: TIME_U,
     },
-  })));
+  }), 0.37, 0.30)));
+}
+
+/* ------------------------------------------------------------- 5.4b basalt */
+/**
+ * THE EMBER FLOOR — cracked basalt plates with LAVA IN THE CRACKS.
+ *
+ * 2026-09-04 (surface lane, owner O6 "the Ember foreground is a featureless
+ * brown plane"): every ember course authors its terrain as `surface: 'sand'`
+ * and the theme tints that sand 0x8a8070 — scorched grit, which under the
+ * furnace sky is a brown nothing. `Mats.get('sand', 'ember')` now resolves to
+ * THIS key (see GROUND_VARIANT in `get()`), so the same authored data gets a
+ * floor that belongs to the realm: cooled crust broken into worley plates,
+ * ash dusting on the plate tops, and an EMISSIVE mask painted only inside the
+ * cracks — hot white-orange at the core, red at the rim — pulsed in the
+ * shader by the shared clock (`CB_VEIN`, no scrolling: the veins must stay in
+ * their cracks). Peak emissive 1.7 keeps every vein under ember's 2.40 bloom
+ * threshold so the floor glows without joining the flame white-out (C2).
+ * Slope-blends to a DARKENED dirt (uCbBlendTint) so a basalt hillside goes to
+ * dark scoria, not to a brown meadow bank.
+ */
+function bakeBasalt() {
+  const n = SIZE_LG, B = bakeBuffers(n);
+  const A = B.imgA.data, O = B.imgO.data, E = B.imgE.data;
+
+  for (let y = 0; y < n; y++) {
+    const v = y / n;
+    for (let x = 0; x < n; x++) {
+      const u = x / n, i = y * n + x, p = i * 4;
+
+      // plates
+      worley(u, v, 7, 9101);
+      const f1 = W.f1, f2 = W.f2, id = W.id;
+      const crackW = 0.040 + fbm(u, v, 9, 2, 0.5, 9202) * 0.030;
+      const crack = 1 - smoothstep(0.0, crackW, f2 - f1);              // inside the crack
+      const crackRim = (1 - smoothstep(crackW, crackW * 2.6, f2 - f1)) * (1 - crack);
+      // fine secondary cracks across the plates
+      worley(u, v, 19, 9303);
+      const crack2 = (1 - smoothstep(0.0, 0.020, W.f2 - W.f1)) * (1 - crack) * (hash2i(x >> 5, y >> 5, 9909) > 0.35 ? 1 : 0);
+      const plateTilt = (id - 0.5) * 0.14;
+      const swirl = warpedFbm(u, v, 10, 3, 0.55, 9404, 0.25);
+      const grit = fbm(u, v, 96, 2, 0.5, 9505);
+      const ash = smoothstep(0.58, 0.90, fbm(u, v, 4, 3, 0.55, 9606)) * (1 - crack);
+
+      B.h[i] = 0.55 + plateTilt + (swirl - 0.5) * 0.10 + (grit - 0.5) * 0.05
+             - crack * 0.42 - crack2 * 0.12 + ash * 0.03;
+
+      // dark grey basalt; plates vary warm/cool, tops carry pale ash
+      const tone = 0.085 + id * 0.050 + (swirl - 0.5) * 0.035 + (grit - 0.5) * 0.030;
+      let r = tone * 1.04, g = tone * 0.95, b = tone * 0.98;
+      r = lerp(r, 0.34, ash * 0.40); g = lerp(g, 0.31, ash * 0.40); b = lerp(b, 0.30, ash * 0.40);
+      // scorched plate rims
+      r = lerp(r, 0.030, crackRim * 0.55); g = lerp(g, 0.022, crackRim * 0.55); b = lerp(b, 0.020, crackRim * 0.55);
+      // crack interiors near-black — the emissive fills them
+      r = lerp(r, 0.020, crack * 0.90); g = lerp(g, 0.012, crack * 0.90); b = lerp(b, 0.010, crack * 0.90);
+      r = lerp(r, 0.030, crack2 * 0.60); g = lerp(g, 0.024, crack2 * 0.60); b = lerp(b, 0.022, crack2 * 0.60);
+
+      A[p] = clamp01(r) * 255; A[p + 1] = clamp01(g) * 255; A[p + 2] = clamp01(b) * 255; A[p + 3] = 255;
+      O[p] = 255;
+      O[p + 1] = clamp(0.64 + ash * 0.28 - crack * 0.30 + (grit - 0.5) * 0.08, 0.22, 1) * 255;
+      O[p + 2] = 0;
+      O[p + 3] = 255;
+
+      // lava in the cracks: hot core, red rim; the fine cracks glow dimly
+      const flow = fbm(u, v, 14, 2, 0.5, 9707);
+      const heat = clamp01(crack * (0.60 + 0.40 * flow) + crackRim * 0.22 + crack2 * 0.30);
+      const core = smoothstep(0.62, 1.0, heat);
+      E[p] = clamp01(heat * 1.00) * 255;
+      E[p + 1] = clamp01(heat * 0.30 + core * 0.42) * 255;
+      E[p + 2] = clamp01(heat * 0.04 + core * 0.22) * 255;
+      E[p + 3] = 255;
+    }
+  }
+
+  bakeAO(B, 5, 0.52, 3.2, 0.50);
+
+  const maps = {
+    map: upload(commitA(B), 'basalt.albedo', true, 0.55),
+    orm: upload(commitO(B), 'basalt.orm', false, 0.55),
+    normal: upload(heightToNormal(B.h, n, 1.5), 'basalt.normal', false, 0.55),
+    emissive: upload(commitE(B), 'basalt.emissive', true, 0.55),
+  };
+  return assemble('basalt', maps, {
+    color: 0xffffff, roughness: 1, metalness: 0,
+    emissive: 0xffffff, emissiveIntensity: 1.7,
+    normalScale: new THREE.Vector2(1.05, 1.05), envMapIntensity: 0.30,
+  }, 0.55, macroInject(11.0, 0.22, 0.08, 0, detailInject(5.0, 0.32, slopeInject({
+    defines: { CB_SLOPE: true, CB_VEIN: true },
+    uniforms: {
+      uCbBlendMap: { value: _tex.get('dirt.albedo') || null },
+      uCbBlendNormal: { value: _tex.get('dirt.normal') || null },
+      uCbBlendOrm: { value: _tex.get('dirt.orm') || null },
+      uCbBlendScale: { value: 1.0 },
+      uCbBlendTint: { value: new THREE.Vector3(0.50, 0.44, 0.42) },
+      uCbSlope: { value: new THREE.Vector2(SLOPE_START, SLOPE_END) },
+    },
+  }), 0.37, 0.26)));
 }
 
 /* ------------------------------------------------------------ 5.5 plaster */
@@ -3452,36 +3636,63 @@ function bakeMoss() {
 }
 
 /* ------------------------------------------------------------- 5.14 copper */
-/** Brushed copper going to verdigris: bright metal on the wear paths, green
- *  carbonate crust in the sheltered areas, with the crust dielectric and the
- *  bare metal metalness-1 — the metalness MAP is what sells oxidation. */
+/**
+ * STANDING-SEAM COPPER — roof sheets going to verdigris.
+ *
+ * 2026-09-04 (surface lane, critic C5 "the tower roof cone is a red/teal
+ * patina smear"): the old bake was a blotch field (5-cell fbm + 11-cell warped
+ * fbm) at uvScale 0.45, i.e. 0.2-0.45 m amorphous patches on a 2.2 m tile
+ * with nothing DIRECTIONAL in it. Projected onto a 3 m cone at 0.60 render
+ * scale the patches mip into the smear the critic saw, because no structure
+ * in the texture said "roof". A copper roof is SHEETS: 0.42 m standing seams
+ * running ridge-to-eave, verdigris that STREAKS DOWN the sheet with the rain
+ * and gathers in the seam valleys, and bare salmon metal on the sheet crowns
+ * where the weather polishes it. The box projection puts V on world Y for
+ * every wall-facing surface, so the seams and the streaks run downhill on a
+ * cone, a spire or a dome without any per-object UVs. uvScale 0.45 -> 0.80
+ * (1.25 m tile = three 0.42 m sheets) — the metres-per-tile every stone key
+ * already sits at (stone 1.39, plaster 1.47, marble 1.19, brick 0.95, moss
+ * 1.25), so trim and roof agree at range.
+ */
 function bakeCopper() {
   const n = SIZE_LG, B = bakeBuffers(n);
   const A = B.imgA.data, O = B.imgO.data;
-  const brush = maskScratches(n, { seed: 18013, count: 620, angle: 8, jitter: 4, minLen: 0.4, maxLen: 1.6, minW: 0.4, maxW: 1.1 });
+  const SHEETS = 3;
+  // brushed along the sheet (vertical in the projection)
+  const brush = maskScratches(n, { seed: 18013, count: 720, angle: 90, jitter: 3, minLen: 0.5, maxLen: 1.8, minW: 0.4, maxW: 1.0 });
 
   for (let y = 0; y < n; y++) {
     const v = y / n;
     for (let x = 0; x < n; x++) {
       const u = x / n, i = y * n + x, p = i * 4;
 
-      const patchA = fbm(u, v, 5, 4, 0.55, 18111);
-      const patchB = warpedFbm(u, v, 11, 4, 0.5, 18211, 0.42);
-      const crust = clamp01(smoothstep(0.44, 0.78, patchA) * 0.85 + smoothstep(0.62, 0.90, patchB) * 0.55);
-      const crumb = fbm(u, v, 52, 3, 0.5, 18311);
+      const su = u * SHEETS;
+      const sheetId = Math.floor(su);
+      const fu = su - sheetId;
+      const seamD = Math.min(fu, 1 - fu);                       // 0 at the seam
+      const rib = 1 - smoothstep(0.0, 0.040, seamD);            // the standing rib
+      const valley = (1 - smoothstep(0.040, 0.13, seamD)) * (1 - rib);
+      const sheetTone = hash2i(sheetId, Math.floor(v * 2), 18099);
+
+      // verdigris: rain streaks DOWN the sheet (high U frequency, low V), plus
+      // slow drifts, plus what gathers in the seam valleys
+      const streak = fbmXY(u, v, 44, 5, 3, 0.55, 18111);
+      const drift = fbm(u, v, 4, 3, 0.55, 18211);
+      const drip = smoothstep(0.58, 0.92, fbmXY(u, v, 24, 3, 2, 0.5, 18311));
+      const crust = clamp01(smoothstep(0.48, 0.86, streak * 0.55 + drift * 0.45)
+                          + drip * 0.55 + valley * 0.45 * (0.4 + 0.6 * drift));
+      const crumb = fbm(u, v, 64, 3, 0.5, 18411);
       const bl = brush[i];
+      const bare = clamp01(1 - crust);
 
-      // bright wear paths cut THROUGH the crust
-      const wear = smoothstep(0.60, 0.90, fbmXY(u, v, 4, 14, 3, 0.55, 18413));
-      const bare = clamp01(1 - crust + wear * 0.9);
+      B.h[i] = 0.5 + rib * 0.24 - valley * 0.05 + crust * 0.06 + (crumb - 0.5) * 0.08 * crust
+             + bl * 0.035 + (streak - 0.5) * 0.02;
 
-      B.h[i] = 0.5 + crust * 0.20 + (crumb - 0.5) * 0.14 * crust + bl * 0.05 - wear * 0.06;
-
-      // metal: warm salmon copper; crust: blue-green carbonate
-      let r = lerp(0.128, 0.706, bare);
-      let g = lerp(0.412, 0.372, bare);
-      let b = lerp(0.352, 0.230, bare);
-      r += bl * 0.055 * bare; g += bl * 0.036 * bare; b += bl * 0.024 * bare;
+      // metal: warm salmon copper (per-sheet tone draw); crust: blue-green carbonate
+      let r = lerp(0.128, lerp(0.66, 0.74, sheetTone), bare);
+      let g = lerp(0.418, lerp(0.35, 0.40, sheetTone), bare);
+      let b = lerp(0.352, lerp(0.21, 0.25, sheetTone), bare);
+      r += bl * 0.050 * bare; g += bl * 0.034 * bare; b += bl * 0.022 * bare;
       // crust colour varies from pale chalky green to deep blue-green
       const tone = crumb;
       r = lerp(r, r * (0.80 + tone * 0.5), crust * 0.6);
@@ -3490,10 +3701,12 @@ function bakeCopper() {
       // dark pitting under the crust
       const pit = smoothstep(0.86, 0.98, crumb) * crust;
       r = lerp(r, 0.046, pit * 0.7); g = lerp(g, 0.096, pit * 0.7); b = lerp(b, 0.086, pit * 0.7);
+      // the rib crown is the most weathered metal on the roof: bright, bare
+      r = lerp(r, 0.78, rib * 0.55); g = lerp(g, 0.44, rib * 0.55); b = lerp(b, 0.28, rib * 0.55);
 
       A[p] = clamp01(r) * 255; A[p + 1] = clamp01(g) * 255; A[p + 2] = clamp01(b) * 255; A[p + 3] = 255;
-      O[p + 1] = clamp(lerp(0.92, 0.26, bare) - bl * 0.10 * bare + pit * 0.06, 0.10, 1) * 255;
-      O[p + 2] = clamp(bare * 0.96, 0, 1) * 255;
+      O[p + 1] = clamp(lerp(0.92, 0.28, bare) - bl * 0.10 * bare + pit * 0.06 - rib * 0.08, 0.10, 1) * 255;
+      O[p + 2] = clamp(Math.max(bare, rib * 0.9) * 0.96, 0, 1) * 255;
       O[p + 3] = 255;
     }
   }
@@ -3501,14 +3714,14 @@ function bakeCopper() {
   bakeAO(B, 4, 0.60, 3.0, 0.60);
 
   const maps = {
-    map: upload(commitA(B), 'copper.albedo', true, 0.45),
-    orm: upload(commitO(B), 'copper.orm', false, 0.45),
-    normal: upload(heightToNormal(B.h, n, 1.25), 'copper.normal', false, 0.45),
+    map: upload(commitA(B), 'copper.albedo', true, 0.80),
+    orm: upload(commitO(B), 'copper.orm', false, 0.80),
+    normal: upload(heightToNormal(B.h, n, 1.35), 'copper.normal', false, 0.80),
   };
   return assemble('copper', maps, {
     color: 0xffffff, roughness: 1, metalness: 1,
     normalScale: new THREE.Vector2(0.95, 0.95), envMapIntensity: 1.35,
-  }, 0.45);
+  }, 0.80);
 }
 
 /* --------------------------------------------------------------- 5.15 rope */
@@ -3619,11 +3832,11 @@ const WATER_U = {
   uFoam: { value: new THREE.Color(0xeafcff) },
   uShoreWidth: { value: 1.35 },
   uDepthFade: { value: 4.5 },
-  uCrestFoam: { value: 0.55 },
+  uCrestFoam: { value: 0.0 },
   uRipple: { value: 0.55 },
-  uFresnelPower: { value: 4.2 },
-  uFresnelBias: { value: 0.035 },
-  uGloss: { value: 220.0 },
+  uFresnelPower: { value: 5.0 },
+  uFresnelBias: { value: 0.022 },
+  uGloss: { value: 240.0 },
   uSunDir: { value: new THREE.Vector3(-0.42, 0.86, 0.30) },
   uSunColor: { value: new THREE.Color(0xfff2d8) },
   uSkyTop: { value: new THREE.Color(0x2f6fc0) },
@@ -3753,20 +3966,22 @@ float cbwNoise( vec2 p ) {
   return mix( mix( a, b, f.x ), mix( c, d, f.x ), f.y );
 }
 
-/** two counter-scrolling ripple octaves -> a detail normal the Gerstner mesh
- *  is far too coarse to carry. Returns a tangent-space-ish perturbation. */
-vec2 cbRippleGrad( vec2 p, float t ) {
-  /* 2026-09-04: 1.7 / 3.9 cycles per metre at a 0.60 render scale was
-     sub-pixel noise — the owner's "flat cyan noise" on the azure lagoon. Wind
-     ripples on a lagoon are 0.5-2 m; the octaves are lowered to where a
-     pixel can resolve them, and the caller fades them with distance. */
-  float e = 0.22;
-  vec2 a = p * 0.62 + vec2( t * 0.17, -t * 0.12 );
-  vec2 b = p * 1.55 - vec2( t * 0.26, t * 0.21 );
-  float h  = cbwNoise( a ) * 0.6 + cbwNoise( b ) * 0.4;
-  float hx = cbwNoise( a + vec2( e, 0.0 ) ) * 0.6 + cbwNoise( b + vec2( e, 0.0 ) ) * 0.4;
-  float hz = cbwNoise( a + vec2( 0.0, e ) ) * 0.6 + cbwNoise( b + vec2( 0.0, e ) ) * 0.4;
-  return vec2( hx - h, hz - h ) / e;
+/** RIPPLE HEIGHT FIELD — two scrolling value-noise octaves (0.45 and 1.4 m
+ *  wind ripples) summed into ONE height, then differentiated so the result is
+ *  the slope of a real surface and not two unrelated noises stuffed into a
+ *  normal. 2026-09-04 (surface lane, owner O4 "cyan TV static"): the previous
+ *  version returned (hx - h, hz - h) / 0.22 — a gradient of up to ±2.3 per
+ *  metre — and added it to the unit normal at uRipple 0.55, i.e. the shading
+ *  normal was thrown up to ±50° per fragment at texel frequency. Every term
+ *  downstream (fresnel, sky mix, glint) then sampled a different direction
+ *  per pixel, which at a 0.60 render scale IS static. The slope is now scaled
+ *  to an amplitude in metres (uRipple * 0.045) over a wavelength that a 0.60
+ *  pixel resolves, so neighbouring pixels share a normal and the surface
+ *  reads as a sheet with ripples ON it. */
+float cbRippleH( vec2 p, float t ) {
+  vec2 a = p * 0.72 + vec2( t * 0.11, -t * 0.08 );
+  vec2 b = p * 2.20 - vec2( t * 0.19, t * 0.15 );
+  return cbwNoise( a ) * 0.68 + cbwNoise( b ) * 0.32;
 }
 
 #include <fog_pars_fragment>
@@ -3774,16 +3989,25 @@ vec2 cbRippleGrad( vec2 p, float t ) {
 void main() {
   vec3 V = normalize( cameraPosition - vCbWorld );
   vec3 N = normalize( vCbNormal );
+  // under the surface the mesh is seen from below: flip so fresnel/sky agree
+  if ( ! gl_FrontFacing ) N = - N;
 
-  // detail ripples ride on top of the analytic wave normal, and fade with
-  // distance so the far surface goes glassy and MIRRORS the sky instead of
-  // shimmering at sub-pixel frequency
+  /* ---- detail ripples ---------------------------------------------------- */
+  // fade with distance so the far surface goes glassy and MIRRORS the sky
+  // instead of shimmering at sub-pixel frequency
   float cbWd = length( cameraPosition - vCbWorld );
-  float cbRf = 1.0 / ( 1.0 + cbWd * 0.035 );
-  vec2 g = cbRippleGrad( vCbUv, uTime );
-  N = normalize( N + vec3( -g.x, 0.0, -g.y ) * ( uRipple * cbRf ) );
+  float cbRf = 1.0 / ( 1.0 + cbWd * 0.030 );
+  float rAmp = uRipple * 0.045 * cbRf;               // metres of ripple height
+  float e = 0.18;
+  float h0 = cbRippleH( vCbUv, uTime );
+  float hx = cbRippleH( vCbUv + vec2( e, 0.0 ), uTime );
+  float hz = cbRippleH( vCbUv + vec2( 0.0, e ), uTime );
+  vec3 rN = normalize( vec3( -( hx - h0 ) * rAmp / e, 1.0, -( hz - h0 ) * rAmp / e ) );
+  // compose: the ripple normal is defined about +Y, the wave normal is near +Y
+  N = normalize( N + vec3( rN.x, 0.0, rN.z ) * 1.35 );
 
   float ndv = clamp( dot( N, V ), 0.0, 1.0 );
+  // Schlick, F0 = uFresnelBias (0.02-0.035 for water)
   float fres = clamp( uFresnelBias + ( 1.0 - uFresnelBias ) * pow( 1.0 - ndv, uFresnelPower ), 0.0, 1.0 );
 
   /* ---- how much water is under this pixel ------------------------------- */
@@ -3792,7 +4016,6 @@ void main() {
     vec2 sUv = gl_FragCoord.xy * uDepthParams.zw;
     float dz = texture2D( uDepthTex, sUv ).x;
     float zNear = uDepthParams.x, zFar = uDepthParams.y;
-    // perspective depth -> view-space distance
     float sceneZ = ( 2.0 * zNear * zFar ) / ( zFar + zNear - ( dz * 2.0 - 1.0 ) * ( zFar - zNear ) );
     float fragZ  = ( 2.0 * zNear * zFar ) / ( zFar + zNear - ( gl_FragCoord.z * 2.0 - 1.0 ) * ( zFar - zNear ) );
     depth = clamp( ( sceneZ - fragZ ) / max( uDepthFade, 0.05 ), 0.0, 1.0 );
@@ -3800,39 +4023,49 @@ void main() {
     depth = clamp( 1.0 - vCbShore, 0.0, 1.0 );
   #endif
 
-  /* ---- body colour: shallow tint over deep tint by depth ---------------- */
-  vec3 body = mix( uShallow, uDeep, depth * depth );
+  /* ---- body colour: shallow over deep by depth --------------------------- */
+  // a square-root ramp so the shallow tint holds over the first metre and the
+  // deep colour owns everything past the fade — the read is "waist deep here,
+  // bottomless there", which is the whole readability job of this surface
+  vec3 body = mix( uShallow, uDeep, sqrt( depth ) );
 
-  /* ---- sky reflection (analytic — cheaper than a probe, always agrees) --- */
+  /* ---- sky reflection (analytic dome: horizon -> zenith + sun glow) ------ */
   vec3 R = reflect( -V, N );
-  vec3 sky = mix( uSkyHorizon, uSkyTop, clamp( R.y * 1.35, 0.0, 1.0 ) );
+  vec3 Ls = normalize( uSunDir );
+  float rUp = clamp( R.y, 0.0, 1.0 );
+  vec3 sky = mix( uSkyHorizon, uSkyTop, pow( rUp, 0.55 ) );
+  // the bright patch of dome around the sun that every water surface shows
+  float sunGlow = pow( clamp( dot( R, Ls ), 0.0, 1.0 ), 6.0 );
+  sky += uSunColor * sunGlow * 0.30;
 
   vec3 col = mix( body, sky, fres );
 
-  /* ---- sun glint -------------------------------------------------------- */
-  // a tight mirror lobe (the disc) over a broad, dimmer one (the glitter path
-  // the ripples scatter it into) — the second is what reads as "sunlit water"
-  // from a camera that is not standing in the mirror direction.
-  vec3 H = normalize( normalize( uSunDir ) + V );
+  /* ---- sun glint --------------------------------------------------------- */
+  // Blinn-Phong on the rippled normal: a tight, HOT mirror lobe (the glitter
+  // path — bright enough to bloom) over a broad dim one so the surface reads
+  // as sunlit from a camera that is not standing in the mirror direction
+  vec3 H = normalize( Ls + V );
   float ndh = clamp( dot( N, H ), 0.0, 1.0 );
-  float spec = pow( ndh, max( uGloss, 4.0 ) );
-  float glit = pow( ndh, 26.0 );
-  col += uSunColor * ( spec * 2.2 + glit * 0.22 ) * ( 0.35 + 0.65 * fres );
+  float spec = pow( ndh, max( uGloss, 8.0 ) );
+  float glit = pow( ndh, 22.0 );
+  float sunUp = clamp( Ls.y * 4.0, 0.0, 1.0 );      // no glint from a sun below the horizon
+  col += uSunColor * ( spec * 3.2 + glit * 0.16 ) * ( 0.25 + 0.75 * fres ) * sunUp;
 
-  /* ---- foam ------------------------------------------------------------- */
-  // shore band: a hard-ish line that breaks up with the ripple field
-  float shoreBand = 1.0 - smoothstep( 0.0, clamp( uShoreWidth * 0.35, 0.02, 1.0 ), depth );
-  float churn = cbwNoise( vCbUv * 2.6 + vec2( uTime * 0.35, -uTime * 0.22 ) );
-  float shoreFoam = smoothstep( 0.28, 0.92, shoreBand * ( 0.55 + 0.75 * churn ) );
-  // whitecaps on the wave crests
-  float caps = smoothstep( 0.72, 0.98, vCbCrest * ( 0.65 + 0.55 * churn ) ) * uCrestFoam;
+  /* ---- foam: the shore band ONLY ----------------------------------------- */
+  // a broken, moving line where the water meets the ground; whitecaps are
+  // reserved for open sea (uCrestFoam is 0 for lakes and pools — water.js)
+  float shoreBand = 1.0 - smoothstep( 0.0, clamp( uShoreWidth * 0.30, 0.02, 1.0 ), depth );
+  float churn = cbwNoise( vCbUv * 1.7 + vec2( uTime * 0.28, -uTime * 0.19 ) );
+  float churn2 = cbwNoise( vCbUv * 4.1 - vec2( uTime * 0.21, uTime * 0.33 ) );
+  float shoreFoam = smoothstep( 0.36, 0.86, shoreBand * ( 0.50 + 0.55 * churn + 0.25 * churn2 ) );
+  float caps = smoothstep( 0.86, 0.99, vCbCrest * ( 0.70 + 0.40 * churn ) ) * uCrestFoam;
   float foam = clamp( shoreFoam + caps, 0.0, 1.0 );
 
-  col = mix( col, uFoam, foam );
+  col = mix( col, uFoam, foam * 0.85 );
 
-  float alpha = clamp( mix( uOpacity, 1.0, max( fres * 0.75, foam ) ), 0.0, 1.0 );
-  // never let a knife-thin shore edge show the geometry seam under it
-  alpha *= smoothstep( 0.0, 0.04, depth + foam );
+  /* ---- alpha: depth fade — transparent at the waterline, uOpacity deep ---- */
+  float alpha = mix( 0.12, uOpacity, smoothstep( 0.0, 0.60, depth ) );
+  alpha = clamp( mix( alpha, 1.0, max( fres * 0.80, foam ) ), 0.0, 1.0 );
 
   /* LINEAR HDR out — see the ROUND 5 double-tone-map note in world/sky.js.
      ACES here clamped every glint and fresnel rim to 1.0 before FinishPass
@@ -4231,6 +4464,7 @@ export const Mats = {
     bakeGrass();
     bakeSnow();
     bakeSand();
+    bakeBasalt();
     bakePlaster();
     bakeBrick();
     bakeBark();
@@ -4269,6 +4503,9 @@ export const Mats = {
     }
     const theme = (themeId && THEMES && THEMES[themeId]) ? THEMES[themeId] : null;
     if (!theme) return base;
+
+    const vk = GROUND_VARIANT[key] && GROUND_VARIANT[key][theme.id];
+    if (vk && _base.has(vk)) { key = vk; base = _base.get(vk); }
 
     const ck = key + '|' + theme.id;
     let m = _themed.get(ck);

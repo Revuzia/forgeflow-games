@@ -182,6 +182,17 @@ const SHADOW_DEFAULT = { extent: 40, bias: -0.0006, normalBias: 0.03 };
 const CB_FOG_H = new Float32Array([0, 0.07, 0.6, 0.35]);
 /** [ r, g, b, skyMix 0..1 ] — the horizon colour high fog fades toward */
 const CB_FOG_SKY = new Float32Array([0.6, 0.7, 0.8, 0.0]);
+/**
+ * AERIAL PERSPECTIVE band (2026-09-04, image lane) — [ r, g, b, density 1/m ].
+ * A second, SLOW, plain-exponential band that starts long before the
+ * readability band and tints toward a colour DARKER than the sky horizon, so
+ * the mid-ground is graded (owner O3: "the fort on the hill, the hills and the
+ * mid-ground sit at one flat value") and a far ridge ends as a silhouette
+ * against the dome instead of dissolving into a haze wall (critic C9).
+ */
+const CB_FOG_AER = new Float32Array([0.5, 0.6, 0.7, 0.0]);
+/** [ skyCap 0..1, aerialStrength 0..1, 0, 0 ] — skyCap bounds the altitude term */
+const CB_FOG_K = new Float32Array([0.6, 1.0, 0.0, 0.0]);
 /** how far below the hero's feet the full-density fog base sits (metres) */
 const FOG_BASE_BELOW_DEFAULT = 3.0;
 
@@ -202,7 +213,8 @@ const FOG_BASE_BELOW_DEFAULT = 3.0;
     '\n\t// CRESTBOUND: world Y from the view-space position (camera rotation transposed), see engine.js' +
     '\n\tvCbFogY = dot( viewMatrix[ 1 ].xyz, mvPosition.xyz ) + cameraPosition.y;');
   CH.fog_pars_fragment = pf.replace('varying float vFogDepth;',
-    'varying float vFogDepth;\n\tvarying float vCbFogY;\n\tuniform vec4 uCbFogH;\n\tuniform vec4 uCbFogSky;');
+    'varying float vFogDepth;\n\tvarying float vCbFogY;\n\tuniform vec4 uCbFogH;\n\tuniform vec4 uCbFogSky;' +
+    '\n\tuniform vec4 uCbFogAer;\n\tuniform vec4 uCbFogK;');
   CH.fog_fragment = ff
     .replace('float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );',
       'float cbFogD = fogDensity * cbFogDens;\n\t\tfloat fogFactor = 1.0 - exp( - cbFogD * cbFogD * vFogDepth * vFogDepth );')
@@ -213,15 +225,21 @@ const FOG_BASE_BELOW_DEFAULT = 3.0;
       '\n\tfloat cbFogHgt = exp( - max( vCbFogY - uCbFogH.x, 0.0 ) * uCbFogH.y );' +
       '\n\tfloat cbFogDens = mix( 1.0, cbFogHgt, uCbFogH.z );')
     .replace(F_FROM,
-      'vec3 cbFogCol = mix( fogColor, uCbFogSky.rgb, uCbFogSky.a * ( 1.0 - cbFogHgt ) );' +
+      // altitude term, CAPPED: a station 30-50 m up must not fog to pure sky
+      'vec3 cbFogCol = mix( fogColor, uCbFogSky.rgb, uCbFogSky.a * min( 1.0 - cbFogHgt, uCbFogK.x ) );' +
+      // aerial perspective: slow plain-exponential band toward a colour darker than the horizon
+      '\n\tfloat cbAer = ( 1.0 - exp( - vFogDepth * uCbFogAer.w ) ) * uCbFogK.y;' +
       '\n\tfloat cbFogL = dot( gl_FragColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );' +
-      '\n\tgl_FragColor.rgb = mix( gl_FragColor.rgb, vec3( cbFogL ), uCbFogH.w * fogFactor );' +
+      '\n\tgl_FragColor.rgb = mix( gl_FragColor.rgb, vec3( cbFogL ), uCbFogH.w * max( fogFactor, cbAer ) );' +
+      '\n\tgl_FragColor.rgb = mix( gl_FragColor.rgb, uCbFogAer.rgb, cbAer );' +
       '\n\tgl_FragColor.rgb = mix( gl_FragColor.rgb, cbFogCol, fogFactor );');
 
   const add = (u) => {
     if (!u || !u.fogColor) return;
     if (!u.uCbFogH) u.uCbFogH = { value: CB_FOG_H };
     if (!u.uCbFogSky) u.uCbFogSky = { value: CB_FOG_SKY };
+    if (!u.uCbFogAer) u.uCbFogAer = { value: CB_FOG_AER };
+    if (!u.uCbFogK) u.uCbFogK = { value: CB_FOG_K };
   };
   add(THREE.UniformsLib.fog);
   const lib = THREE.ShaderLib;
@@ -236,9 +254,12 @@ const FOG_BASE_BELOW_DEFAULT = 3.0;
  * pixels cost 19.71 ms (50.7 fps). Pixels are therefore the only lever with the
  * range to reach the fps target, so the renderer owns an internal render scale
  * -- the same knob as the pre-existing DPR <= 1.5 cap, applied below 1.0.
- * The drawing buffer is allocated at `scale` x the CSS size; the canvas keeps
- * its CSS size, so the compositor upscales on presentation and nothing that
- * reads CSS pixels (pointer, DOM HUD, NDC) moves.
+ * The COMPOSER's targets are allocated at `scale` x the drawing buffer; the
+ * drawing buffer itself stays native (2026-09-04, image lane — it used to be
+ * the small one, and the browser compositor's bilinear stretch was the last
+ * thing the frame went through). `Post`'s PresentPass brings the internal
+ * frame up to the canvas with a Catmull-Rom upsample and an RCAS sharpen, and
+ * nothing that reads CSS pixels (pointer, DOM HUD, NDC) moves.
  */
 /** Floor the dynamic controller may never go below, whatever the tier says. */
 const MIN_RENDER_SCALE = 0.45;
@@ -411,8 +432,9 @@ export class Engine {
     this._tierScale = clamp(numOr(this.quality.renderScale, 1), MIN_RENDER_SCALE, 1);
     /**
      * Fraction of CSS pixels the drawing buffer is allocated at. Read it; set it
-     * with `setRenderScale()`. `renderer.getPixelRatio()` is `_pr * renderScale`,
-     * which is what the post chain sizes its targets from.
+     * with `setRenderScale()`. `renderer.getPixelRatio()` stays `_pr` (the
+     * canvas is native); the post chain sizes its targets from `_pr` times
+     * its internal scale (`Post.internalScale`).
      * @type {number}
      */
     this.renderScale = this._tierScale;
@@ -458,11 +480,12 @@ export class Engine {
     this._aboveT = 0;
     /** @private has the controller already reported crossing below the band? */
     this._scaleRescued = false;
-    /** @private the scale the drawing buffer and composer targets are SIZED at.
-     *  Equal to the tier scale except while something has forced them larger
-     *  (a quality change, the perf gate's native-1.0 INFO pass). */
+    /** @private the scale the composer targets are SIZED at (the drawing
+     *  buffer is native). Equal to the tier scale except while something has
+     *  forced them larger (a quality change, the perf gate's native-1.0 INFO
+     *  pass). */
     this._allocScale = this._tierScale;
-    this.renderer.setPixelRatio(this._pr * this.renderScale);
+    this.renderer.setPixelRatio(this._pr);
     this.renderer.setSize(size.w, size.h, true);
 
     /* --------------------------------------------------------- light rig */
@@ -470,7 +493,7 @@ export class Engine {
 
     /* ---------------------------------------------------------------- post */
     /** @type {Post} */
-    this.post = new Post(this.renderer, this.scene, this.camera, this.size, this.quality);
+    this.post = new Post(this.renderer, this.scene, this.camera, this.size, this.quality, this._allocScale);
     this._pushSharpen();
 
     /* ------------------------------------------------------------ timing */
@@ -850,6 +873,18 @@ export class Engine {
     readColor(dig(t, 'fog.skyColor', dig(t, 'sky.params.horizon', bgSpec)), 0x8fb0c8, _col);
     CB_FOG_SKY[0] = _col.r; CB_FOG_SKY[1] = _col.g; CB_FOG_SKY[2] = _col.b;
     CB_FOG_SKY[3] = fogSpec === null ? 0 : clamp(numOr(dig(t, 'fog.skyMix', 0.7), 0.7), 0, 1);
+    /*   fog.skyCap        0..1 — ceiling on the altitude term of the sky mix
+     *   fog.aerialColor   the aerial-perspective tint (default: skyColor x 0.78,
+     *                     i.e. darker than the horizon so silhouettes hold)
+     *   fog.aerialDensity 1/m of the slow band (default 0 = off)
+     *   fog.aerialStrength 0..1 — how far the band may go toward its colour */
+    CB_FOG_K[0] = clamp(numOr(dig(t, 'fog.skyCap', 1.0), 1.0), 0, 1);
+    const aerSpec = dig(t, 'fog.aerialColor', null);
+    if (aerSpec !== null && aerSpec !== undefined) readColor(aerSpec, 0x6f8fa4, _col);
+    else _col.multiplyScalar(0.78);
+    CB_FOG_AER[0] = _col.r; CB_FOG_AER[1] = _col.g; CB_FOG_AER[2] = _col.b;
+    CB_FOG_AER[3] = fogSpec === null ? 0 : clamp(numOr(dig(t, 'fog.aerialDensity', 0), 0), 0, 0.2);
+    CB_FOG_K[1] = clamp(numOr(dig(t, 'fog.aerialStrength', 1.0), 1.0), 0, 1);
 
     /* ---- exposure ---------------------------------------------------- */
     this.renderer.toneMappingExposure = clamp(numOr(t.exposure, 1.0), 0.05, 4);
@@ -1112,12 +1147,12 @@ export class Engine {
     this._aboveT = 0;
     this._scaleRescued = false;
     this._allocScale = this._tierScale;
-    this.renderer.setPixelRatio(this._pr * this.renderScale);
+    this.renderer.setPixelRatio(this._pr);
     this.renderer.setSize(this.size.w, this.size.h, true);
 
     if (this.post) {
       this.post.setRenderFraction(1);
-      this.post.setQuality(preset);
+      this.post.setQuality(preset, this._allocScale);
       this._pushSharpen();
     }
 
@@ -1126,11 +1161,11 @@ export class Engine {
   }
 
   /**
-   * @private Contrast-adaptive sharpening strength for the post chain, scaled
-   * by how far below native the frame is rendered: at the LOW tier's 0.60 the
-   * compositor's bilinear upscale is what turns sign text to mush, and CAS at
-   * the buffer size before that upscale is the cheapest perceived-sharpness
-   * the tier can buy (~0.3 ms). At 1.0 only a whisper remains.
+   * @private RCAS strength for the PresentPass, scaled by how far below native
+   * the frame is rendered: at the LOW tier's 0.60 the upscale is what turns
+   * sign text to mush, and a contrast-adaptive sharpen folded into that same
+   * upscale is the cheapest perceived-sharpness the tier can buy. At 1.0 only
+   * a whisper remains.
    */
   _pushSharpen() {
     if (!this.post || typeof this.post.setSharpen !== 'function') return;
@@ -1173,10 +1208,11 @@ export class Engine {
   /**
    * Set the internal render scale (CONTRACT hard rule 4).
    *
-   * The drawing buffer is resized; the canvas CSS size is NOT, so the browser
-   * upscales on presentation. `camera.aspect` is unchanged (it is a ratio of
-   * CSS pixels), and every full-screen pass resizes with it because
-   * `Post.resize()` reads `renderer.getPixelRatio()`.
+   * The composer's targets are resized; the drawing buffer and the canvas are
+   * NOT — `Post`'s PresentPass upsamples to them. `camera.aspect` is unchanged
+   * (it is a ratio of CSS pixels), and every internal pass resizes with the
+   * targets because `Post.resize()` reads `renderer.getPixelRatio()` times
+   * the internal scale.
    *
    * @param {number} v 0..1 fraction of CSS pixels
    * @returns {Engine} this
@@ -1198,22 +1234,19 @@ export class Engine {
        * or the fraction would be measured against a size nobody ships. */
       if (Math.abs(this._allocScale - this._tierScale) > 0.004) {
         this._allocScale = this._tierScale;
-        this.renderer.setPixelRatio(this._pr * this._tierScale);
-        this.renderer.setSize(this.size.w, this.size.h, true);
-        this.post.resize(this.size.w, this.size.h);
+        this.post.setInternalScale(this._tierScale);
       }
       this.post.setRenderFraction(next / this._tierScale);
       this._pushSharpen();
       this.events.emit('renderscale', next);
       return this;
     }
-    /* ABOVE the tier: the buffers really do have to grow. Reallocating path,
-     * kept for quality changes and for the perf gate's native-1.0 INFO pass. */
+    /* ABOVE the tier: the composer targets really do have to grow.
+     * Reallocating path, kept for quality changes and for the perf gate's
+     * native-1.0 INFO pass. The drawing buffer is native already. */
     if (subrect) this.post.setRenderFraction(1);
     this._allocScale = next;
-    this.renderer.setPixelRatio(this._pr * next);
-    this.renderer.setSize(this.size.w, this.size.h, true);
-    if (this.post) this.post.resize(this.size.w, this.size.h);
+    if (this.post) this.post.setInternalScale(next);
     this._pushSharpen();
     this.events.emit('renderscale', next);
     return this;
@@ -1303,7 +1336,8 @@ export class Engine {
 
     const aspect = s.w / s.h;
 
-    this.renderer.setPixelRatio(pr * this._allocScale);
+    // native drawing buffer; the composer's internal scale lives in Post
+    this.renderer.setPixelRatio(pr);
     this.renderer.setSize(s.w, s.h, true);
 
     this.camera.aspect = aspect;

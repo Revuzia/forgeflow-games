@@ -431,6 +431,10 @@ function bladeMaterial(theme, mats, key, field) {
     sh.uniforms.uGrassField = { value: field.tex };
     sh.uniforms.uFieldRect = { value: field.rect };   // originX, originZ, 1/sizeX, 1/sizeZ
     sh.uniforms.uRing = { value: field.ring };        // half-size R, fade-start radius
+    sh.uniforms.uGround = { value: field.ground };    // rgb = the rendered ground colour, a = fade strength
+    sh.uniforms.uBladeUp = { value: field.up };       // 0..1 pull of the shading normal toward world up
+    sh.uniforms.uLushDry = { value: field.lushDry };  // tint at lushness 0 (bare, dry)
+    sh.uniforms.uLushWet = { value: field.lushWet };  // tint at lushness 1
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', [
         '#include <common>',
@@ -438,6 +442,20 @@ function bladeMaterial(theme, mats, key, field) {
         'uniform sampler2D uGrassField;',
         'uniform vec4 uFieldRect;',
         'uniform vec2 uRing;',
+        'uniform vec4 uGround;',
+        'uniform float uBladeUp;',
+        'uniform vec3 uLushDry;',
+        'uniform vec3 uLushWet;',
+      ].join('\n'))
+      /* SHADING NORMAL (2026-09-04, surface lane, C11): a blade card's normal
+       * points SIDEWAYS, so half the field faced away from the key and the
+       * hemi's sky half, and read as dark spikes on a lit lawn (and as grey
+       * spikes on rime's snow). A sward is lit like the ground it grows from:
+       * the normal is pulled toward world up (instance matrices are yaw +
+       * scale, so object up IS world up). Grass 0.55, snow tufts 0.85. */
+      .replace('#include <beginnormal_vertex>', [
+        '#include <beginnormal_vertex>',
+        'objectNormal = normalize(mix(objectNormal, vec3(0.0, 1.0, 0.0), uBladeUp));',
       ].join('\n'))
       .replace('#include <begin_vertex>', [
         '#include <begin_vertex>',
@@ -457,7 +475,16 @@ function bladeMaterial(theme, mats, key, field) {
         'float gScale = smoothstep(0.14, 0.50, gLush) * gFade;',
         'transformed *= gScale;',
         '#ifdef USE_COLOR',
-        '  vColor.rgb *= mix(vec3(0.72, 0.58, 0.34), vec3(0.86, 0.94, 0.70), clamp(gLush, 0.0, 1.0));',
+        /* The lushness tint is PER SURFACE (2026-09-04): it was a hard-coded
+         * straw-to-lime ramp, which painted rime's snow tufts and ember's ash
+         * tufts brown-green (owner shot `_shots/surface_before_rime-2.png`:
+         * dark spikes on white snow). */
+        '  vColor.rgb *= mix(uLushDry, uLushWet, clamp(gLush, 0.0, 1.0));',
+        /* FAR FADE INTO THE GROUND (C11: "the far ring does not read as a
+         * sward at 20 m"). Past the fade-start radius every blade's colour
+         * slides toward the rendered ground colour, so the ring's edge is a
+         * change of TEXTURE, not of colour, and disappears. */
+        '  vColor.rgb = mix(vColor.rgb, uGround.rgb, smoothstep(uRing.y * 0.55, uRing.x, gDist) * uGround.a);',
         '#endif',
         'float gPh = dot(vec3(gW2.x, 0.0, gW2.y), vec3(0.317, 0.113, 0.271));',
         'float gWt = pow(clamp(uv.y, 0.0, 1.0), 1.6) * gScale;',
@@ -529,11 +556,39 @@ const SURFACE_LOOK = {
    * other. The bright species pole comes down (`blade`) and the ground bake
    * comes up (materials.js bakeGrass) — half the correction from each end, so
    * neither the species spread nor the ground's own colour range is lost. */
-  grass: { top: 0xc8e394, low: 0x9cc06c, dirt: 0xb59a72, path: 0xcbb188,
-           blade: 0xa2d066, bladeAlt: 0x4e7c38, bladeDry: 0xc8bc74, uvTile: 4.0 },
-  snow:  { top: 0xf4fbff, low: 0xd8e8f6, dirt: 0xa8bccd, path: 0xc2d4e2, bladeAlt: 0xc4d8ea, bladeDry: 0xf0f6ff, blade: 0xe8f4ff, uvTile: 5.0 },
-  sand:  { top: 0xe8d3a6, low: 0xd0b98c, dirt: 0xb69a6e, path: 0xdcc294, bladeAlt: 0xa88f52, bladeDry: 0xeddaa2, blade: 0xdfc78a, uvTile: 4.5 },
-  dirt:  { top: 0xa8896a, low: 0x8a7050, dirt: 0x736046, path: 0x99805a, bladeAlt: 0x5c6b38, bladeDry: 0xc0b478, blade: 0x94a066, uvTile: 4.0 },
+  /* 2026-09-04 (surface lane, C6/C11): `dirt` lifted a stop (0xb59a72 ->
+   * 0xd2b892) — it multiplies the shared dirt bake, and the product was the
+   * near-black terminator on every hill. `ground` is the RENDERED colour of
+   * the surface at mid-distance (what the far blade ring fades into); `up`
+   * is the blade normal's pull toward world up; `width`/`tuft`/`tuftRadius`
+   * are the blade-shape defaults a course may still override in `grass`. */
+  grass: { top: 0xc8e394, low: 0x9cc06c, dirt: 0xd2b892, path: 0xcbb188,
+           blade: 0x84bc58, bladeAlt: 0x4e7c38, bladeDry: 0xc4b66c, uvTile: 4.0,
+           ground: 0x4c8a34, groundFade: 0.85, up: 0.55, width: 0.062, tuft: 8, tuftRadius: 0.11,
+           lushDry: 0xb89457, lushWet: 0xc7f0b3 },
+  snow:  { top: 0xf4fbff, low: 0xd8e8f6, dirt: 0xbcccd8, path: 0xc2d4e2, bladeAlt: 0xd4e2f0, bladeDry: 0xf6f9ff, blade: 0xeef6ff, uvTile: 5.0,
+           ground: 0xdde8f2, groundFade: 0.90, up: 0.85, width: 0.050, tuft: 10, tuftRadius: 0.075,
+           lushDry: 0xd0dcea, lushWet: 0xffffff },
+  sand:  { top: 0xe8d3a6, low: 0xd0b98c, dirt: 0xc8ab7c, path: 0xdcc294, bladeAlt: 0xa88f52, bladeDry: 0xeddaa2, blade: 0xdfc78a, uvTile: 4.5,
+           ground: 0xc9ad78, groundFade: 0.85, up: 0.55, width: 0.055, tuft: 7, tuftRadius: 0.10,
+           lushDry: 0xc4a874, lushWet: 0xd8e8a8 },
+  dirt:  { top: 0xa8896a, low: 0x8a7050, dirt: 0x8a7458, path: 0x99805a, bladeAlt: 0x5c6b38, bladeDry: 0xc0b478, blade: 0x94a066, uvTile: 4.0,
+           ground: 0x8a7050, groundFade: 0.85, up: 0.55, width: 0.055, tuft: 7, tuftRadius: 0.10,
+           lushDry: 0xb89457, lushWet: 0xc7f0b3 },
+};
+
+/**
+ * Per-THEME overrides of the surface look, keyed `themeId:surface`. The ember
+ * courses author `surface: 'sand'` and materials.js resolves that key to its
+ * BASALT floor for the ember theme (GROUND_VARIANT); a sand-coloured vertex
+ * ramp multiplied onto black basalt would tint the cooled crust ochre, so the
+ * ramp goes near-neutral here and the tufts become dead ash-grass.
+ */
+const SURFACE_LOOK_THEME = {
+  'ember:sand': { top: 0xf4f0ec, low: 0xdcd6d0, dirt: 0xb0a49c, path: 0xe6dfd8,
+                  blade: 0x6a5c54, bladeAlt: 0x3b332e, bladeDry: 0x7a6a58,
+                  ground: 0x2c2624, groundFade: 0.85, up: 0.55, width: 0.050, tuft: 6, tuftRadius: 0.09,
+                  lushDry: 0x8a7a70, lushWet: 0xa09890 },
 };
 
 /**
@@ -555,7 +610,8 @@ export function buildTerrain(def, theme, mats, quality) {
   const origin = d.origin || [0, 0];
   const size = d.size || [96, 96];
   const surfaceKey = d.surface || 'grass';
-  const LOOK = Object.assign({}, SURFACE_LOOK[surfaceKey] || SURFACE_LOOK.grass, d.look || null);
+  const LOOK = Object.assign({}, SURFACE_LOOK[surfaceKey] || SURFACE_LOOK.grass,
+    (theme && theme.id && SURFACE_LOOK_THEME[theme.id + ':' + surfaceKey]) || null, d.look || null);
 
   // --- resolution ---------------------------------------------------------
   // Hard ceiling: 200 k quads. A course that asks for more gets a coarser grid
@@ -845,6 +901,13 @@ function buildGrassField(d, ctx, g) {
 
 let _fieldUid = 0;
 
+/** The rendered ground colour the far ring fades into, as a vec4 (rgb, strength). */
+function groundOf(LOOK, g) {
+  const c = new THREE.Color(g.ground !== undefined ? g.ground : (LOOK.ground !== undefined ? LOOK.ground : LOOK.low));
+  const k = g.groundFade !== undefined ? g.groundFade : (LOOK.groundFade === undefined ? 0.85 : LOOK.groundFade);
+  return new THREE.Vector4(c.r, c.g, c.b, k);
+}
+
 /**
  * Build the blade field as a CAMERA-LOCAL RING (see bladeMaterial for why).
  *
@@ -883,7 +946,10 @@ function buildGrass(d, theme, mats, quality, ctx) {
   /* The NEAR ring is sized from ITS share of the budget (see the TWO RINGS
    * note below), so its density is the authored one whatever the far ring
    * spends. */
-  const nearShare = g.nearShare === undefined ? 0.55 : Math.min(1, Math.max(0, g.nearShare));
+  /* 0.55 -> 0.62: the near ring is where the sward is READ (C11); the far
+   * ring now fades into the ground colour, so it needs fewer blades to do
+   * its job of breaking the ring edge. */
+  const nearShare = g.nearShare === undefined ? 0.62 : Math.min(1, Math.max(0, g.nearShare));
   const nearCount = Math.round(budget * nearShare);
   const farCount = budget - nearCount;
   const ring = Math.max(5, Math.min(g.ring === undefined ? 18 : g.ring,
@@ -910,6 +976,10 @@ function buildGrass(d, theme, mats, quality, ctx) {
       hf.originX - hf.cellX * 0.5, hf.originZ - hf.cellZ * 0.5,
       1 / (hf.nx * hf.cellX), 1 / (hf.nz * hf.cellZ)),
     ring: new THREE.Vector2(ring, fade),
+    ground: groundOf(ctx.LOOK, g),
+    up: (g.up === undefined ? (ctx.LOOK.up === undefined ? 0.55 : ctx.LOOK.up) : g.up),
+    lushDry: new THREE.Color(g.lushDry !== undefined ? g.lushDry : (ctx.LOOK.lushDry === undefined ? 0xb89457 : ctx.LOOK.lushDry)),
+    lushWet: new THREE.Color(g.lushWet !== undefined ? g.lushWet : (ctx.LOOK.lushWet === undefined ? 0xc7f0b3 : ctx.LOOK.lushWet)),
   };
 
   /* TWO RINGS (2026-09-04, owner: "grass sparse ... a few blade clumps").
@@ -929,7 +999,9 @@ function buildGrass(d, theme, mats, quality, ctx) {
   if (!near) { field.tex.dispose(); return null; }
   if (farCount >= 64) {
     const fieldFar = { uid: ++_fieldUid, tex: field.tex, rect: field.rect,
-                       ring: new THREE.Vector2(farRing, farRing * 0.72) };
+                       ring: new THREE.Vector2(farRing, farRing * 0.60),
+                       ground: field.ground, up: field.up,
+                       lushDry: field.lushDry, lushWet: field.lushWet };
     const far = buildGrassRing(farCount, farRing, 1.35, d, theme, mats, ctx, fieldFar);
     if (far) {
       far.name = 'terrain.grass.far';
@@ -951,7 +1023,11 @@ function buildGrassRing(wanted, ring, sizeMul, d, theme, mats, ctx, field) {
   if (wanted < 32) return null;
   const g = d.grass || {};
   const bladeH = (g.height === undefined ? 0.26 : g.height) * sizeMul;
-  const bladeW = (g.width === undefined ? 0.040 : g.width) * sizeMul;
+  /* 0.040 -> per-surface (grass 0.062): at 4 cm a blade at 3 m is under two
+   * pixels wide at the tier scale and the field read as a scatter of
+   * hairlines (C11). A broader blade with the root-to-tip gradient carries
+   * the sward; the tuft count goes up with it so clumps read as plants. */
+  const bladeW = (g.width === undefined ? (ctx.LOOK.width === undefined ? 0.055 : ctx.LOOK.width) : g.width) * sizeMul;
   const cross = g.cross !== false;
   /* TUFTS, not a jittered lattice.
    *
@@ -966,8 +1042,8 @@ function buildGrassRing(wanted, ring, sizeMul, d, theme, mats, ctx, field) {
    * a tuft is an object the eye resolves as one plant and the gaps between
    * tufts then look intentional instead of thin. It costs nothing: the same
    * instance count, the same draw call, the same triangles. */
-  const tuft = Math.max(1, Math.min(12, g.tuft === undefined ? 6 : g.tuft | 0));
-  const tuftR = (g.tuftRadius === undefined ? 0.085 : g.tuftRadius) * sizeMul;
+  const tuft = Math.max(1, Math.min(12, (g.tuft === undefined ? (ctx.LOOK.tuft === undefined ? 7 : ctx.LOOK.tuft) : g.tuft) | 0));
+  const tuftR = (g.tuftRadius === undefined ? (ctx.LOOK.tuftRadius === undefined ? 0.10 : ctx.LOOK.tuftRadius) : g.tuftRadius) * sizeMul;
   const cells = Math.max(4, Math.ceil(Math.sqrt(wanted / tuft)));
   const step = (ring * 2) / cells;
   const rnd = mulberry32(((d.seed | 0) || 20260902) + field.uid * 7919);

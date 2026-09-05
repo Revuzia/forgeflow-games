@@ -60,7 +60,7 @@ import { Collider } from '../world/collider.js';
  * ======================================================================== */
 
 /** Coin disc radius / thickness (metres). */
-const COIN_R = 0.26, COIN_H = 0.07;
+const COIN_R = 0.25, COIN_H = 0.075;
 /** Sigil disc radius / thickness. */
 const SIGIL_R = 0.40, SIGIL_H = 0.10;
 /** Crest half-width (0.9 m across). */
@@ -224,7 +224,7 @@ function goldMaterial(theme, mats) {
    * a third of that intensity holds the silhouette in shadow and leaves the
    * specular in charge everywhere else. */
   g.emissive = new THREE.Color(coinHue).multiplyScalar(0.42);
-  g.emissiveIntensity = 0.26;
+  g.emissiveIntensity = 0.30;
   /* ROUND 4 (critic, `_shots/verdant-1/spawn.png`: "Coins are flat matte
    * 12-gon discs ... with a visible faceted silhouette and no specular sweep").
    * The segment count is NOT the fix: `coinGeometry` documents why a coin is a
@@ -236,26 +236,47 @@ function goldMaterial(theme, mats) {
    * into the effect. The clone arrived with the material bank's hammered-plate
    * roughness, which is right for a plate and far too broad for a coin — it
    * smeared the ten highlights into one dull average, i.e. "flat matte". */
-  g.roughness = Math.min(g.roughness === undefined ? 0.18 : g.roughness, 0.18);
+  g.roughness = Math.min(g.roughness === undefined ? 0.16 : g.roughness, 0.16);
   g.metalness = 1.0;
-  g.envMapIntensity = Math.max(g.envMapIntensity || 0, 1.55);
-  if ('clearcoat' in g) { g.clearcoat = 0.55; g.clearcoatRoughness = 0.14; }
+  g.envMapIntensity = Math.max(g.envMapIntensity || 0, 1.7);
+  /* 2026-09-04 (surface lane): the clearcoat normal on the bank's gold is a
+   * brushed field stretched on one axis (materials.js bakeGold) — that is the
+   * anisotropic sweep; a rounded rim at 24 segments is what lets it read. */
+  if ('clearcoat' in g) { g.clearcoat = 0.62; g.clearcoatRoughness = 0.12; }
   g.name = 'cb.gold.coin.' + tid;
   _matCache.set(key, g);
   return g;
 }
 
-/** Crimson-gold for the sigils: gold body with a hot ember core. */
-function sigilMaterial() {
+/**
+ * Crimson-gold for the sigils: the material bank's hammered gold (facets,
+ * anisotropic clearcoat) tinted toward old rose, with a hot crimson core.
+ * 2026-09-04: this was a flat MeshPhysicalMaterial with no maps — the one
+ * unmistakable collectible after the crest had the least surface of anything
+ * in the game. Same treatment as the coin now.
+ */
+function sigilMaterial(theme, mats) {
   const key = 'sigil';
   let m = _matCache.get(key);
   if (m) return m;
-  m = new THREE.MeshPhysicalMaterial({
-    color: 0xe0a43a, metalness: 1.0, roughness: 0.28,
-    clearcoat: 0.55, clearcoatRoughness: 0.2,
-    emissive: 0xb0142e, emissiveIntensity: 0.55,
-    envMapIntensity: 1.2,
-  });
+  let base = null;
+  try { base = getMaterial('gold', theme, mats); } catch (e) { base = null; }
+  if (base && base.isMaterial && /gold/i.test(base.name || '')) {
+    m = base.clone();
+    m.color.set(0xe8b070);
+  } else {
+    m = new THREE.MeshPhysicalMaterial({
+      color: 0xe0a43a, metalness: 1.0, roughness: 0.22,
+      clearcoat: 0.55, clearcoatRoughness: 0.2,
+      envMapIntensity: 1.2,
+    });
+  }
+  m.roughness = Math.min(m.roughness === undefined ? 0.2 : m.roughness, 0.2);
+  m.metalness = 1.0;
+  m.envMapIntensity = Math.max(m.envMapIntensity || 0, 1.5);
+  if ('clearcoat' in m) { m.clearcoat = 0.6; m.clearcoatRoughness = 0.14; }
+  m.emissive = new THREE.Color(0xb0142e);
+  m.emissiveIntensity = 0.55;
   m.name = 'cb.sigil';
   _matCache.set(key, m);
   return m;
@@ -397,20 +418,48 @@ function cachedGeo(key, factory) {
 }
 
 /**
- * Bevelled disc (a minted coin blank) via a lathe profile, revolved about Y,
- * then stood upright so its faces look along ±Z. Non-indexed + flat normals:
- * the rim reads as machined facets, the faces stay flat.
+ * A MINTED COIN BLANK via a lathe profile, revolved about Y, then stood upright
+ * so its faces look along ±Z.
+ *
+ * 2026-09-04 (surface lane, owner O6 "metre-wide flat pancakes", critic C12
+ * "chunky pixel-edged flat discs with facet aliasing at 3-6 m"): the blank was
+ * a 10-segment lathe with a 2 cm chamfer, `toNonIndexed()` + flat normals, so
+ * the rim was ten hard facets and the face one flat plate — a pancake. A coin
+ * reads as a coin from its RIM: a raised border standing proud of a recessed
+ * field, a rounded bevel that carries a highlight sweep as it turns, and a
+ * silhouette with no visible polygon at the distance it is collected. The
+ * profile now carries the rim and a three-point arc bevel, the lathe keeps
+ * its SMOOTH normals around the circumference (the duplicated profile points
+ * at the field/rim step keep that edge hard), and the near coin revolves at
+ * 24 segments. The far blank (`coinFarGeometry`) is the SAME profile at 12,
+ * so the band swap is invisible.
+ *
+ * Triangles: near 24 seg x 12 profile spans x 2 = 576 (+72 for the rune) —
+ * against 492 before; far 12 x 8 x 2 = 192 against 100.
  */
-function coinBlank(r, h, bevel, seg) {
-  const b = Math.min(bevel, h * 0.45, r * 0.3);
-  const pts = [
-    new THREE.Vector2(0, -h / 2), new THREE.Vector2(r - b, -h / 2), new THREE.Vector2(r, -h / 2 + b),
-    new THREE.Vector2(r, h / 2 - b), new THREE.Vector2(r - b, h / 2), new THREE.Vector2(0, h / 2),
-  ];
+function coinBlank(r, h, bevel, seg, lite) {
+  const b = Math.min(bevel, h * 0.42, r * 0.2);
+  const hi = h * 0.5 - Math.min(0.012, h * 0.16);    // the recessed field
+  const P = THREE.Vector2;
+  const pts = lite
+    ? [
+      new P(0, -hi), new P(r * 0.80, -hi), new P(r * 0.80, -hi), new P(r * 0.88, -h / 2),
+      new P(r, -h / 2 + b), new P(r, h / 2 - b),
+      new P(r * 0.88, h / 2), new P(r * 0.80, hi), new P(r * 0.80, hi), new P(0, hi),
+    ]
+    : [
+      new P(0, -hi), new P(r * 0.78, -hi),
+      new P(r * 0.78, -hi), new P(r * 0.84, -h / 2), new P(r * 0.93, -h / 2),
+      new P(r * 0.985, -h / 2 + b * 0.35), new P(r, -h / 2 + b),
+      new P(r, h / 2 - b), new P(r * 0.985, h / 2 - b * 0.35),
+      new P(r * 0.93, h / 2), new P(r * 0.84, h / 2), new P(r * 0.78, hi),
+      new P(r * 0.78, hi), new P(0, hi),
+    ];
   const lathe = new THREE.LatheGeometry(pts, seg);
+  // keep the lathe's smooth circumferential normals (no computeVertexNormals:
+  // that would flatten every segment back into a facet)
   const g = lathe.toNonIndexed();
   lathe.dispose();
-  g.computeVertexNormals();
   g.rotateX(Math.PI / 2);
   return g;
 }
@@ -486,16 +535,13 @@ function faceRing(r, hw, hh, ch, seg, z) {
   return g;
 }
 
-/** THE coin: blank + rim rings + embossed rune on both faces. One geometry. */
+/** THE coin: rimmed blank + embossed rune on both faces. One geometry. */
 function coinGeometry() {
   return cachedGeo('coin', () => {
-    /* 12 lathe segments, not 28: a coin is ~0.3 m across and there are 121 of
-       them in one InstancedMesh, so every segment costs 121x. */
-    const parts = [normalizeAttrs(coinBlank(COIN_R, COIN_H, 0.022, 10))];
-    parts.push(faceRing(COIN_R * 0.80, 0.014, 0.012, 0.004, 10, COIN_H / 2));
-    parts.push(faceRing(COIN_R * 0.80, 0.014, 0.012, 0.004, 10, -COIN_H / 2));
-    for (const p of runeParts(1.0, COIN_H / 2, false)) parts.push(p);
-    for (const p of runeParts(1.0, COIN_H / 2, true)) parts.push(p);
+    const parts = [normalizeAttrs(coinBlank(COIN_R, COIN_H, 0.024, 24, false))];
+    const hi = COIN_H / 2 - Math.min(0.012, COIN_H * 0.16);
+    for (const p of runeParts(0.95, hi, false)) parts.push(p);
+    for (const p of runeParts(0.95, hi, true)) parts.push(p);
     const g = mergeGeometries(parts.map(normalizeAttrs), false);
     for (const p of parts) p.dispose();
     g.computeBoundingSphere();
@@ -504,8 +550,8 @@ function coinGeometry() {
 }
 
 /**
- * THE far coin: the same 10-segment blank, no rims and no rune. 100 triangles
- * against the near coin's 492.
+ * THE far coin: the same rimmed profile at 12 segments, no rune. 192
+ * triangles against the near coin's ~650.
  *
  * MEASURED 2026-09-04 (group-1 validator, `_harness/_g1_scenestat.py`): at
  * the spawn of every course the whole set was drawn at full detail — 142
@@ -518,25 +564,28 @@ function coinGeometry() {
  * compacts both meshes so `count` is the number actually drawn — a hidden or
  * collected coin costs nothing instead of a scale-0 instance's full index
  * range (renderer.info counted those, and so did the perf gate).
+ *
+ * The far blank used to be a plain 10-gon chamfered disc, visibly different
+ * from the rimmed near coin, so the band edge was a pop (critic C12 "the
+ * far-band blank shows inside the animation range"). Same profile now.
  */
 function coinFarGeometry() {
   return cachedGeo('coinFar', () => {
-    const g = normalizeAttrs(coinBlank(COIN_R, COIN_H, 0.022, 10));
+    const g = normalizeAttrs(coinBlank(COIN_R, COIN_H, 0.024, 12, true));
     g.computeBoundingSphere();
     return g;
   });
 }
 
-/** The sigil: a heavier blank, double rim, star emblem on both faces. */
+/** The sigil: a heavier rimmed blank, an inner ring, star emblem on both faces. */
 function sigilGeometry() {
   return cachedGeo('sigil', () => {
-    const parts = [normalizeAttrs(coinBlank(SIGIL_R, SIGIL_H, 0.03, 16))];
-    parts.push(faceRing(SIGIL_R * 0.84, 0.018, 0.014, 0.005, 16, SIGIL_H / 2));
-    parts.push(faceRing(SIGIL_R * 0.84, 0.018, 0.014, 0.005, 16, -SIGIL_H / 2));
-    parts.push(faceRing(SIGIL_R * 0.60, 0.012, 0.012, 0.004, 16, SIGIL_H / 2));
-    parts.push(faceRing(SIGIL_R * 0.60, 0.012, 0.012, 0.004, 16, -SIGIL_H / 2));
-    for (const p of starParts(0.72, SIGIL_H / 2 + 0.01)) parts.push(p);
-    for (const p of starParts(0.72, -SIGIL_H / 2 - 0.01)) parts.push(p);
+    const parts = [normalizeAttrs(coinBlank(SIGIL_R, SIGIL_H, 0.034, 24, false))];
+    const hi = SIGIL_H / 2 - Math.min(0.012, SIGIL_H * 0.16);
+    parts.push(faceRing(SIGIL_R * 0.58, 0.014, 0.012, 0.004, 20, hi));
+    parts.push(faceRing(SIGIL_R * 0.58, 0.014, 0.012, 0.004, 20, -hi));
+    for (const p of starParts(0.72, hi + 0.01)) parts.push(p);
+    for (const p of starParts(0.72, -hi - 0.01)) parts.push(p);
     const g = mergeGeometries(parts.map(normalizeAttrs), false);
     for (const p of parts) p.dispose();
     g.computeBoundingSphere();
@@ -980,7 +1029,7 @@ export class Collectibles {
       this._sState[i] = 1;
     }
 
-    const mat = sigilMaterial();
+    const mat = sigilMaterial(this.theme, this.mats);
     this.sigilMat = mat;
     const mesh = new THREE.InstancedMesh(sigilGeometry(), mat, SIGILS_TOTAL);
     mesh.name = 'sigils';
