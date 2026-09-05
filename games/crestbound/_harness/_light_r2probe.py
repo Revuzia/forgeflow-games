@@ -40,8 +40,8 @@ VARIANTS = {
     "hsky0":  "H._rimU.uCbHeroSky.value.w = 0; H._rimU.uCbHeroRim.value.w = 0;",
     "shadow0": "E.sun.castShadow = false;",
     "hkey0":  "H._rimU.uCbHeroKey.value.w = 0;",
-    "noslope": "E.scene.traverse(o => { if (!o.isMesh || o.name !== 'terrain') return; const u = E.renderer.properties.get(o.material).uniforms; if (u && u.uCbSlope && !globalThis.__cbSlopeSaved) { globalThis.__cbSlopeSaved = [u.uCbSlope.value.x, u.uCbSlope.value.y]; u.uCbSlope.value.set(10, 11); } });",
-    "blend3": "E.scene.traverse(o => { if (!o.isMesh || o.name !== 'terrain') return; const u = E.renderer.properties.get(o.material).uniforms; if (u && u.uCbBlendTint && !globalThis.__cbTintSaved) { globalThis.__cbTintSaved = [u.uCbBlendTint.value.x, u.uCbBlendTint.value.y, u.uCbBlendTint.value.z]; u.uCbBlendTint.value.multiplyScalar(3); } });",
+    "noslope": "E.scene.traverse(o => { if (!o.isMesh || o.name.indexOf('terrain') !== 0) return; const u = E.renderer.properties.get(o.material).uniforms; if (u && u.uCbSlope) { if (!globalThis.__cbSlopeSaved) globalThis.__cbSlopeSaved = [u.uCbSlope.value.x, u.uCbSlope.value.y]; u.uCbSlope.value.set(10, 11); } });",
+    "blend3": "E.scene.traverse(o => { if (!o.isMesh || o.name.indexOf('terrain') !== 0) return; const u = E.renderer.properties.get(o.material).uniforms; if (u && u.uCbBlendTint) { if (!globalThis.__cbTintSaved) globalThis.__cbTintSaved = [u.uCbBlendTint.value.x, u.uCbBlendTint.value.y, u.uCbBlendTint.value.z]; u.uCbBlendTint.value.multiplyScalar(3); } });",
     "hkey2":  "H._rimU.uCbHeroKey.value.w *= 2;",
     "fog0":   "E.scene.fog.density = 0;",
     "aer0":   "E.scene.traverse(o => { if (!o.isMesh) return; const u = E.renderer.properties.get(Array.isArray(o.material) ? o.material[0] : o.material).uniforms; if (u && u.uCbFogAer && !globalThis.__cbAerSaved) { globalThis.__cbAerSaved = [u.uCbFogAer.value[3], u.uCbFogSky.value[3], u.uCbFogH.value[3]]; u.uCbFogAer.value[3] = 0; u.uCbFogSky.value[3] = 0; u.uCbFogH.value[3] = 0; } });",
@@ -71,7 +71,7 @@ RESTORE_JS = r"""
   E.scene.fog.density = s.fogd;
   if (globalThis.__cbAerSaved) { const sv = globalThis.__cbAerSaved; E.scene.traverse(o => { if (!o.isMesh) return; const u = E.renderer.properties.get(Array.isArray(o.material) ? o.material[0] : o.material).uniforms; if (u && u.uCbFogAer) { u.uCbFogAer.value[3] = sv[0]; u.uCbFogSky.value[3] = sv[1]; u.uCbFogH.value[3] = sv[2]; } }); delete globalThis.__cbAerSaved; }
   if (H && H._rimU) { H._rimU.uCbHeroKey.value.w = s.hkey; }
-  E.scene.traverse(o => { if (!o.isMesh || o.name !== 'terrain') return; const u = E.renderer.properties.get(o.material).uniforms; if (!u) return;
+  E.scene.traverse(o => { if (!o.isMesh || o.name.indexOf('terrain') !== 0) return; const u = E.renderer.properties.get(o.material).uniforms; if (!u) return;
     if (globalThis.__cbSlopeSaved && u.uCbSlope) u.uCbSlope.value.set(globalThis.__cbSlopeSaved[0], globalThis.__cbSlopeSaved[1]);
     if (globalThis.__cbTintSaved && u.uCbBlendTint) u.uCbBlendTint.value.set(globalThis.__cbTintSaved[0], globalThis.__cbTintSaved[1], globalThis.__cbTintSaved[2]); });
   delete globalThis.__cbSlopeSaved; delete globalThis.__cbTintSaved;
