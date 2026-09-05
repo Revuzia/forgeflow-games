@@ -161,6 +161,11 @@ const HEIGHTS = {
     { p: [0, -58], r: 26, h: 4.0 },     // the tomb court                 (cp3)
     { p: [-40, -14], r: 15, h: 1.6 },   // the sunken plaza               (cp5)
     { p: [40, 6], r: 12, h: 4.4 },      // the obelisk terrace
+    // cp-tomb's pad (data lane, critic r2). The forecourt east of the sigil
+    // pedestal already sits at 3.97..4.00 between the apron and tomb-court
+    // flats; this pins it EXACTLY 4.00 under the pad ring (both neighbours are
+    // 4.00, so nothing else moves).
+    { p: [10, -44.5], r: 6, h: 4.0 },
   ],
   noise: { amp: 2.4, freq: 0.038, octaves: 2 },
 };
@@ -553,8 +558,15 @@ export default {
     { id: 'cp-dunes', p: on(0, 47, 0), yaw: 0, clockOffset: 0 },
     // flat 5.16 — before the beam gate and the cannon
     { id: 'cp-pylons', p: on(0, 14, 0), yaw: 0, clockOffset: 0 },
-    // flat 4.00 — the tomb forecourt, before the gnasher and the whole gauntlet
-    { id: 'cp-tomb', p: on(0, -45, 0), yaw: 0, clockOffset: 0 },
+    // flat 4.00 — the tomb forecourt, before the gnasher and the whole gauntlet.
+    // Data lane 2026-09-04 (critic r2): this pad was at (0, -45), 4.74 m from
+    // the gnasher's post — INSIDE its 5.0 m chain (bite reach 6.0 m, aggro
+    // 6.6 m), so every respawn here was a death 0.5 s later (measured: GNASHED
+    // at 473 ms, three deaths in a row in the pose harness). It now stands east
+    // of the sigil pedestal, 14.5 m from the post: 8.5 m outside the bite
+    // reach and outside the aggro radius, on the east half of the forecourt —
+    // the half the door is enterable from. yaw 1.40 faces the tomb door.
+    { id: 'cp-tomb', p: on(10, -44.5, 0), yaw: 1.40, clockOffset: 0 },
     // tier 3's deck — before the last flight, the capstone and the chute head
     { id: 'cp-tier3', p: [-6.0, T3, -22.0], yaw: Math.PI, clockOffset: 3.0 },
     // flat 1.60 — the plaza's east lip, before the Warden

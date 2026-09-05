@@ -724,14 +724,21 @@ export default {
      * BEAT 3 — THE GNASHER GATE
      * Two jaws on 5.5 m chains, one either side of the road, their posts 3.5 m
      * behind them so the danger discs overlap across the lane: there is a safe
-     * line up the middle and it is 3 m wide. Five coins sit inside the west
+     * line up the middle and it is 3 m wide.
+     * Data lane 2026-09-04 (critic r2): the posts stood 6.0 m off the centre
+     * line, which made the lane 1 m, not 3 — and cp-bailey, ON that line at
+     * the posts' own z, was 6.0 m from each post against a 6.5 m bite reach:
+     * every respawn there was GNASHED 0.6 s later. Posts at 7.0 m (14 m apart)
+     * give the 3 m lane the text promises, keep the net, the gate stair's foot
+     * and the jump pad inside the discs, still cover the door's edges, and put
+     * the pad 0.5 m outside the bite reach and outside aggro range at rest. Five coins sit inside the west
      * disc at eye level — see them from safety, then decide.
      * Pound the WEST post three times and the chain gives; the cage beside the
      * causeway stair springs, and the secret crest is inside it.
      * ===================================================================== */
 
-    { kind: 'deco', kindOf: 'post', p: on(-6.0, 26.5, 1.1), s: [0.34, 2.2, 0.34], mat: 'wood', tint: 0x6b4a28 },
-    { kind: 'deco', kindOf: 'post', p: on(6.0, 26.5, 1.1), s: [0.34, 2.2, 0.34], mat: 'wood', tint: 0x6b4a28 },
+    { kind: 'deco', kindOf: 'post', p: on(-7.0, 26.5, 1.1), s: [0.34, 2.2, 0.34], mat: 'wood', tint: 0x6b4a28 },
+    { kind: 'deco', kindOf: 'post', p: on(7.0, 26.5, 1.1), s: [0.34, 2.2, 0.34], mat: 'wood', tint: 0x6b4a28 },
     { kind: 'text', p: on(0, 30.6, 1.7), rot: [0, 0, 0], text: 'POUND THE WEST POST  ·  THREE TIMES', size: 0.26, color: 0x7a2f2f },
     { kind: 'text', p: on(0, 30.6, 1.3), rot: [0, 0, 0], text: 'they can only reach so far', size: 0.20, color: 0x4d6038 },
 
@@ -1052,18 +1059,18 @@ export default {
    * CRITTERS
    * --------------------------------------------------------------------- */
   critters: [
-    // THE TWO JAWS. Posts 3.50 m behind each head and 6.00 m apart across the
-    // road, chains of 5.50 m: the two danger discs overlap the lane but leave a
-    // walkable 3 m down the middle. Only the WEST one's post is wired to the
+    // THE TWO JAWS. Posts 3.50 m behind each head and 14.00 m apart across the
+    // road (7.00 m off the centre line — see BEAT 3), chains of 5.50 m: the two
+    // danger discs overlap the lane but leave a walkable 3 m down the middle. Only the WEST one's post is wired to the
     // cage — the east one is there so you cannot tell which until you look.
     {
-      kind: 'gnasher', p: [-6.0, 6.20, 23.0], chain: 5.5,
-      post: [-6.0, 5.57, 26.5], postHits: 3, trigger: 'gnasher-freed',
+      kind: 'gnasher', p: [-7.0, 6.20, 23.0], chain: 5.5,
+      post: [-7.0, 5.40, 26.5], postHits: 3, trigger: 'gnasher-freed',
       telegraph: 0.5, tint: 0x3c4450,
     },
     {
-      kind: 'gnasher', p: [6.0, 6.20, 23.0], chain: 5.5,
-      post: [6.0, 5.57, 26.5], postHits: 3, trigger: 'gnasher-east-freed',
+      kind: 'gnasher', p: [7.0, 6.20, 23.0], chain: 5.5,
+      post: [7.0, 5.40, 26.5], postHits: 3, trigger: 'gnasher-east-freed',
       telegraph: 0.5, tint: 0x3c4450,
     },
     // BUMBLERS. Side contact is knockback, not death (contract §23). Four, all

@@ -487,7 +487,13 @@ export default {
     { id: 'cp-westface', p: [-25.2, 3.4, 32.0], yaw: 2.55, clockOffset: 8 },
     { id: 'cp-gorge', p: [-36.0, 6.6, -13.0], yaw: 3.35, clockOffset: 16 },
     { id: 'cp-bridge', p: [-23.8, 8.0, -30.7], yaw: 1.30, clockOffset: 26 },
-    { id: 'cp-terrace', p: [21.0, TERRACE_Y, 3.0], yaw: 3.60, clockOffset: 36 },
+    // Data lane 2026-09-04 (critic r2): this pad was at (21, 3), 5.0 m from the
+    // cave gnasher's post — inside its 5.5 m chain, and the lunge passes
+    // straight through the cave's south wall: every respawn here was GNASHED
+    // 0.6 s later. Now on the terrace's south-west, 9.6 m from the post (4.1 m
+    // outside the bite reach, outside aggro range), on the flat's level core
+    // (max 0.05 m of relief under the ring). yaw -0.70 faces the cave mouth.
+    { id: 'cp-terrace', p: [16.5, TERRACE_Y, 6.5], yaw: -0.70, clockOffset: 36 },
     { id: 'cp-gate', p: [10.6, GATE_TOP, -4.2], yaw: Math.PI / 2, clockOffset: 46 },
   ],
 
@@ -599,7 +605,8 @@ export default {
    * --------------------------------------------------------------------- */
   powers: [
     { kind: 'wing', p: [2.0, 36.30, 4.0], duration: 30 },
-    { kind: 'wing', p: [17.0, TERRACE_Y + 1.2, 5.0], duration: 30 },
+    // (moved 2026-09-04 from (17, 5): that is inside the relocated cp-terrace's ring)
+    { kind: 'wing', p: [14.0, TERRACE_Y + 1.2, 2.5], duration: 30 },
   ],
 
   /* ------------------------------------------------------------------------
