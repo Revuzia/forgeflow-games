@@ -87,6 +87,18 @@ const MAX_LOOK_RAD_PER_SEC = 42;
 const LOCK_SETTLE_EVENTS = 3;
 
 /**
+ * How long after a lock acquisition an implausible event is still treated as
+ * cursor warp rather than a hand.
+ *
+ * The count window above assumes the warp arrives in the first few events. It
+ * does not reliably: measured landing AFTER three ordinary moves had already
+ * spent the window, where it fell through to the clamp and was applied as a
+ * full 28.6 deg jump — measured arriving ~366 ms after the lock. A time window
+ * outlasts the burst either way; outside it, warp does not happen.
+ */
+const LOCK_SETTLE_MS = 600;
+
+/**
  * How long a pause-bound keypress keeps explaining a pointer-lock loss.
  * Chrome drops the lock asynchronously — measured at 20-40 ms after the ESC
  * keydown on a healthy frame, and well past 250 ms on a loaded one — so the
@@ -290,6 +302,7 @@ export class Input {
     this._mouseDX = 0;
     this._mouseDY = 0;
     this._lockSettle = 0;          // mousemove events still inside the post-lock window
+    this._lockSettleUntil = 0;     // ...and the wall-clock end of that window
     this.lockCount = 0;            // pointer-lock acquisitions this session
     /** Look events refused or bounded, for diagnostics — lookcheck reads these. */
     this.lookDrops = { untrusted: 0, settle: 0, clamped: 0, frame: 0 };
@@ -653,18 +666,35 @@ export class Input {
       const capPx = MAX_EVENT_RAD / (RAD_PER_PX * this.sensitivity);
       const implausible = dx > capPx || dx < -capPx || dy > capPx || dy < -capPx;
 
-      /* Post-lock settle window — see LOCK_SETTLE_EVENTS. */
+      /* Post-lock settle window — see LOCK_SETTLE_EVENTS and LOCK_SETTLE_MS. */
       if (this._lockSettle > 0) {
         const first = this._lockSettle === LOCK_SETTLE_EVENTS;
         this._lockSettle--;
         if (first || implausible) { this.lookDrops.settle++; return; }
+      } else if (implausible && this._lockSettleUntil > 0 &&
+                 (IS_BROWSER ? performance.now() : 0) < this._lockSettleUntil) {
+        this.lookDrops.settle++;
+        return;
       }
 
+      /* Outside the warp window an implausible event is BOUNDED, not dropped:
+         a frame hitch coalesces real motion into one big event, and discarding
+         it loses input the hand actually made.
+
+         Inside the window the opposite holds, which is why the settle branches
+         above return rather than fall through here. Clamping warp does not
+         discard it — it converts the cursor-warp distance into the LARGEST
+         jump the game allows (MAX_EVENT_RAD, 28.6 deg) and applies it.
+         Measured before this split: entering play and clicking once, sending
+         no mouse movement at all, threw the view +32.8 deg of pitch and
+         -49.6 deg of yaw, and a few lock acquisitions walked the pitch to the
+         +/-89 clamp — the view pinned at the sky, mouse apparently dead. */
       if (implausible) {
         this.lookDrops.clamped++;
         if (dx > capPx) dx = capPx; else if (dx < -capPx) dx = -capPx;
         if (dy > capPx) dy = capPx; else if (dy < -capPx) dy = -capPx;
       }
+
       this._mouseDX += dx;
       this._mouseDY += dy;
     };
@@ -689,6 +719,7 @@ export class Input {
       if (now) {
         this._mouseDX = 0; this._mouseDY = 0;
         this._lockSettle = LOCK_SETTLE_EVENTS;
+        this._lockSettleUntil = (IS_BROWSER ? performance.now() : 0) + LOCK_SETTLE_MS;
         this.lockCount++;
         this._emit('lock');
       } else {
