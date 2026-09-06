@@ -1,0 +1,22 @@
+{
+  "title": "Crestbound",
+  "short_description": "Crestbound — a third-person analog 3D platformer. Run, triple-jump, long-jump, wall-kick and ground-pound through four realms of open courses, hunting seven Crests in every one.",
+  "description": "CRESTBOUND is a third-person platformer built around the thing those games live or die on: how it feels to move.\n\nNim runs on an analog curve — ease the stick to walk, push it all the way to run — and turns tight when slow, wide when fast. Land and jump again to chain a higher one, then a third with a flip. Crouch at speed for a long jump that stays low and fast. Crouch from a stand for a backflip. Reverse and jump for a sideflip. Dive into a belly slide and cancel it with a hop. Kick off a wall, ground-pound through a crate, slide a steep slope and jump out of it, swim, climb a pole. Nothing floats: the jump apex arrives in a third of a second, and the camera never fights you mid-flight.\n\nThe Keep is a real place, not a menu. Walk its hall, its basement, its upstairs wing and its courtyard, and step into a painting to enter a course. Every course is an open diorama with multiple routes, hidden lines and a set-piece — a hill fort with a chained Gnasher, a foundry of sinking slag and piston halls, a frozen village and a glacier chute, a flooded temple, a clockwork tower, and a rainbow road above the clouds.\n\nSeven Crests hide in every course, and each one is a different kind of challenge: one out in the open for whoever routes well, eight Sigils on the risky lines, a hundred coins, a secret behind something you have to break, a Warden to outfight, a race against the clock, and a power hat.\n\nCheckpoints are frequent, death rewinds the last moments and puts you back in well under a second, and the hazards run on a fixed clock — so the gauntlet that killed you presents exactly the same timing on the next attempt. You learn it, then you beat it.",
+  "genre": "platformer",
+  "sub_genre": "third-person-analog-3d",
+  "difficulty": "medium",
+  "controls_keyboard": "WASD move (tap = walk, hold = run) · SPACE jump (tap again on landing to chain a double, then a triple) · CTRL/C crouch · CTRL+SPACE at speed = long jump · CTRL+SPACE from a stand = backflip · F dive · CTRL in the air = ground pound · SPACE on a wall = wall kick · Q/E orbit camera · Z recenter · G first-person peek · E talk/interact · R restart course · T back to checkpoint · ESC pause",
+  "tags": [
+    "platformer",
+    "3d",
+    "third-person",
+    "analog",
+    "collectathon",
+    "singleplayer",
+    "exploration",
+    "precision",
+    "adventure",
+    "open-course"
+  ],
+  "status": "unpublished"
+}

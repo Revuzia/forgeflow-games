@@ -1,0 +1,28 @@
+{
+  "title": "CRESTBOUND",
+  "slug": "crestbound",
+  "genre": "third-person-analog-3d-platformer",
+  "renderer": "three",
+  "tagline": "Seven Crests to a course. Four realms. One very good jump.",
+  "view": { "width": 1280, "height": 720, "background": "#0b0a16" },
+  "howToPlay": [
+    "WASD moves Nim on an analog curve — a tap walks, a hold runs. Turning is tight at walking speed and wide at a full run, so line up a fast approach before a long gap.",
+    "SPACE jumps. Land and press it again straight away to chain a double jump, then a third, higher one with a flip. The chain breaks if you wait, so keep the rhythm.",
+    "Hold CROUCH (CTRL or C) and jump while running for a LONG JUMP — low, fast, and the furthest you can travel. From a standstill the same input is a BACKFLIP, straight up.",
+    "F is a DIVE. In the air it stretches a jump; on the ground it becomes a belly slide you can cancel with another jump.",
+    "Press CROUCH in mid-air for a GROUND POUND — it breaks crates, triggers switches, and a jump right after it launches you higher than anything else.",
+    "Jump into a wall and press SPACE to WALL KICK off it. Narrow shafts are meant to be climbed by alternating kicks.",
+    "Q and E orbit the camera, Z snaps it behind you, and G peeks in first person when you want to judge a drop.",
+    "Every course hides SEVEN CRESTS: one in the open, one for eight Sigils, one for a hundred coins, a secret, a Warden, a race, and a power hat. Grab any of them and the course is cleared — the rest are yours to come back for.",
+    "Crests unlock the Keep's paintings. The more you find, the deeper into the castle you get."
+  ],
+  "tips": [
+    "The triple jump is the highest jump in the game and the answer to most ledges you think you cannot reach.",
+    "The long jump is the answer to most gaps you think you cannot cross — take a straight run-up first.",
+    "Hazards run on a fixed clock, not on luck. Watch one full cycle before you commit and it will present the same timing every attempt.",
+    "Sigils always sit on the risky line: the ledge you would not normally take, the tree top, the pond floor.",
+    "Death rewinds you to the last checkpoint in under a second, and checkpoints sit right before the hard parts. Trying the bold route costs almost nothing.",
+    "If a jump keeps failing, add a dive to it — diving out of a jump carries you noticeably further."
+  ],
+  "credits": "Built by ForgeFlow Labs. Procedural Web Audio score, procedural PBR materials, no third-party game assets."
+}
