@@ -596,6 +596,25 @@ export class Input {
     return false;
   }
 
+  /**
+   * Is this a MOBILE device — a phone or a tablet — as opposed to a machine
+   * that merely accepts touch?
+   *
+   * `(any-pointer: fine)` is the question that separates them: it is true when
+   * SOME attached pointer is fine (a mouse, a trackpad), which every laptop
+   * has and no phone does. A touchscreen laptop answers true and is therefore
+   * not mobile, however many times its screen is touched.
+   *
+   * Used only to gate the on-screen controls (see _armTouch). A real phone
+   * still gets them at construction from _detectCoarsePointer.
+   */
+  _isMobileDevice() {
+    try {
+      if (window.matchMedia && window.matchMedia('(any-pointer: fine)').matches) return false;
+    } catch (e) { return false; }
+    return true;
+  }
+
   _attach() {
     const dom = this.dom;
 
@@ -1042,6 +1061,13 @@ export class Input {
   _armTouch() {
     this.touchSeen = true;
     if (this.hasTouch) return;
+    /* The on-screen stick and buttons are for MOBILE, not for every machine
+       that can register a touch. A touchscreen laptop has a real mouse or
+       trackpad, and one stray tap of its screen used to swap that player onto
+       phone controls permanently — there is no path back, hasTouch never
+       clears. `touchSeen` above still records that a touch happened, for
+       anyone who wants to know; it just no longer rebuilds the UI. */
+    if (!this._isMobileDevice()) return;
     this.hasTouch = true;
     this._buildTouchUI();
     this._emit('touch', true);

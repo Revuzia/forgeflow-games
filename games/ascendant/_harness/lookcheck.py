@@ -42,9 +42,9 @@ Sequence (main browser, plain mouse context):
                 must not drive look
 Then two fresh-browser touch probes:
     laptop      touch-CAPABLE but fine-pointer (a touchscreen laptop with a
-                mouse): input.hasTouch must be false until a touch is SEEN,
-                a mouse click must take lock, and script-dispatched touches
-                must move nothing
+                mouse): a mouse click must take lock, script-dispatched touches
+                must move nothing, and touching the screen must NOT raise the
+                phone controls — those are for mobile only
     phone       coarse-pointer context: a REAL (CDP) touch drag must still
                 turn the view — the trusted-only guard must not break touch
 
@@ -822,8 +822,10 @@ def touch_probe(p, args, fails):
         if moved > QUIET_EPS_RAD:
             fails.append("laptop: script-dispatched (untrusted) touch events turned the view %.2f deg"
                          % deg(moved))
-        if not s1["hasTouch"]:
-            fails.append("laptop: a touch was seen but touch mode did not arm (hasTouch still false)")
+        if s1["hasTouch"] or s1["touchUI"]:
+            fails.append("laptop: touching a fine-pointer machine raised the phone controls "
+                         "(hasTouch=%s touchUI=%s) — the on-screen stick is for mobile only"
+                         % (s1["hasTouch"], s1["touchUI"]))
     finally:
         ctx.close()
         br.close()
