@@ -108,6 +108,15 @@ class BreakableHazard extends Hazard {
     /** Course-clock timestamp of the break, or null while intact. */
     this.breakT = null;
     this._paid = false;
+    /**
+     * True once the PLAYER has broken this crate (a pound, a dive, a slide). A
+     * respawn reset (`reset(t, true)` from course.resetFrom) keeps a solved crate
+     * broken: the hole you opened stays open for the session, so a death never
+     * re-seals a secret over your head (azure-2's well grate re-closed on the
+     * checkpoint reset and the counterweight crushed the rider against it).
+     * Only a FULL course reset (restart) re-arms it.
+     */
+    this._solved = false;
 
     this._buildBody();
     this._buildShards(q);
@@ -271,6 +280,7 @@ class BreakableHazard extends Hazard {
     if (!this.intactAt(this.time)) return;
     this.breakT = this.time;
     this._paid = false;
+    this._solved = true;
     this._payout(player);
   }
 
@@ -285,13 +295,24 @@ class BreakableHazard extends Hazard {
     this._paid = true;
     if (this.drop === 'coins') {
       _v2.copy(this.center); _v2.y += this.size.y * 0.25;
-      hazDropCoins(this.ctx, _v2, this.dropCount);
+      /* Coins land in a ring OUTSIDE the crate's footprint, on the ground beside
+         it: the crate's collider is still solid this frame, so a ring inside the
+         footprint would snap to the crate's TOP and hang there once it is gone. */
+      const spread = Math.max(this.size.x, this.size.z) * 0.5 + 0.45;
+      const col = (this.ctx && this.ctx.collectibles) || (this.ctx && this.ctx.course && this.ctx.course.collectibles) || null;
+      if (col && typeof col.spawnCoins === 'function') {
+        try { col.spawnCoins(_v2, this.dropCount, spread); } catch (e) { hazDropCoins(this.ctx, _v2, this.dropCount); }
+      } else hazDropCoins(this.ctx, _v2, this.dropCount);
     } else if (this.drop === 'crest') {
       hazStinger(this.ctx, 'unlock');
-      hazTrigger(this.ctx, this.triggerId, { kind: 'breakable', p: [this.center.x, this.center.y, this.center.z], player: !!player });
-    } else {
-      hazTrigger(this.ctx, this.triggerId, { kind: 'breakable', p: [this.center.x, this.center.y, this.center.z] });
     }
+    /* THE TRIGGER FIRES WHATEVER THE DROP. A coin crate that also names a
+       trigger (azure-1's tide pedestal: `trigger:'tide-drawn', drop:'coins'`;
+       rime-1's ice plug: `trigger:'ice-hole-open', drop:'coins'`) used to pay
+       its coins and never fire — the sluice beat and the 'ice-hole-open' flag
+       were unreachable. A nameless coin crate still fires its positional id,
+       which nothing listens for; that is harmless. */
+    hazTrigger(this.ctx, this.triggerId, { kind: 'breakable', p: [this.center.x, this.center.y, this.center.z], player: !!player });
   }
 
   update(t) {
@@ -345,14 +366,23 @@ class BreakableHazard extends Hazard {
     this.shardMesh.instanceMatrix.needsUpdate = true;
   }
 
-  reset(t) {
+  /**
+   * @param {number} t     course clock to place at
+   * @param {boolean} [soft]  true for a RESPAWN reset (course.resetFrom): a crate the
+   *   player already broke stays broken; false/absent for a FULL reset (restart), which
+   *   re-arms everything.
+   */
+  reset(t, soft) {
     this.breakT = null;
     this._paid = false;
+    if (!soft) this._solved = false;
     this.shardMesh.visible = false;
     super.reset(t);
     // A cage its trigger already opened must NOT reform on a checkpoint reset — the crest
     // it was holding is already out in the world, and a re-solidified cage would swallow it.
-    if (this._openFired) { this.breakT = t; this._paid = true; }
+    // The same for a crate the player solved: the shard cloud is long gone (age is measured
+    // from `t`), the collider stays off, and the payout is marked spent.
+    if (this._openFired || (soft && this._solved)) { this.breakT = t - 60; this._paid = true; }
   }
 
   dispose() {

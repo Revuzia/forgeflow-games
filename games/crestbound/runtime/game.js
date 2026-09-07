@@ -774,9 +774,12 @@ export class Game {
     bindEvent(p.events, 'death', (cause) => this.onDeath(typeof cause === 'string' ? cause : 'void'));
     bindEvent(p.events, 'checkpoint', (i) => this.onCheckpoint(i | 0));
     bindEvent(p.events, 'collect', (kind, id) => this._onPlayerCollect(kind, id));
-    bindEvent(p.events, 'cannonEnter', () => {
+    bindEvent(p.events, 'cannonEnter', (def) => {
       safe(() => this.audio && this.audio.sfx('ui_move'), 'audio.sfx');
-      safe(() => this.hud && this.hud.toast('AIM', 'JUMP TO FIRE', 'info'), 'hud.toast');
+      /* A self-aiming cannon (hazards/launch.js `autoFire`) fires on its own a beat after
+         boarding; only a free-aim one asks for the jump. */
+      const auto = !!(def && isNum(def.autoFire) && def.autoFire > 0);
+      safe(() => this.hud && this.hud.toast(auto ? 'LOADED' : 'AIM', auto ? 'HOLD ON' : 'JUMP TO FIRE', 'info'), 'hud.toast');
     });
     bindEvent(p.events, 'ringPass', () => safe(() => this.audio && this.audio.sfx('ring_pass'), 'audio.sfx'));
     bindEvent(p.events, 'land', (speed, surface, hard) => {
@@ -789,6 +792,10 @@ export class Game {
     });
     bindEvent(p.events, 'poundLand', (pos) => {
       if (this.impacts && typeof this.impacts.pound === 'function') safe(() => this.impacts.pound(pos || p.pos), 'impacts.pound');
+      /* The controller told the collider it landed on; the Course fans the shock out to
+         every breakable and critter within TUNE.pound.shockRadius (CONTRACT §11 / §21). */
+      const c = this.course;
+      if (c && typeof c.onPoundLand === 'function') safe(() => c.onPoundLand(pos || p.pos, p), 'course.onPoundLand');
     });
   }
 
@@ -811,6 +818,12 @@ export class Game {
         safe(() => this.hud && this.hud.toast('A HUNDRED COINS', 'A CREST APPEARS', 'success'), 'hud.toast');
       });
       bindEvent(col.events, 'power', (id, dur) => this._givePower(id, dur));
+      /* A `power` crest refuses a hero without its hat (contract §22). Say why, or the
+         refusal reads as a broken pickup. Collectibles rate-limits this to one per 1.5 s. */
+      bindEvent(col.events, 'crestLocked', (def) => {
+        const need = def && def.power ? String(def.power).toUpperCase() : 'THE RIGHT';
+        safe(() => this.hud && this.hud.toast(def && def.name ? String(def.name) : 'SEALED CREST', 'NEEDS THE ' + need + ' HAT', 'locked'), 'hud.toast');
+      });
     }
     if (course && course.events) {
       bindEvent(course.events, 'checkpoint', (i) => this.onCheckpoint(i | 0));
@@ -900,6 +913,7 @@ export class Game {
 
       /* ---- 6. per-course bookkeeping ---- */
       this.cpIndex = isNum(o.cpIndex) ? clamp(o.cpIndex | 0, 0, Math.max(0, (course.checkpoints || EMPTY_ARRAY).length - 1)) : 0;
+      this._clockArm = true;            // consumed by _handOverControl (course clock = the checkpoint's)
       this.timeMs = 0;
       this.courseDeaths = 0;
       this._prevPlayerDead = false;
@@ -1559,7 +1573,12 @@ export class Game {
     const f = this._fen;
     if (!f || this.state !== 'keep' || !this.player || this._gateNear !== -1) { this._fenNear = false; return; }
     const pp = this.player.pos;
-    const pos = f.ref && f.ref.mesh && f.ref.mesh.position ? f.ref.mesh.position : f.pos;
+    /* Where Fen STANDS is the critter's `pos` (entities/critters.js poses his body
+       there every frame); his `mesh` is a Group left at the origin, so reading
+       `mesh.position` put the talk radius on the spawn pad — the prompt showed at
+       spawn, 27 m from him, and E did nothing at his side (playtest K5 / K6). */
+    const rp = f.ref && f.ref.pos;
+    const pos = (rp && isNum(rp.x) && isNum(rp.z)) ? rp : f.pos;
     const dx = pp.x - pos.x, dz = pp.z - pos.z, dy = pp.y - pos.y;
     const d2 = dx * dx + dz * dz;
     const near = d2 < FEN_PROMPT_R * FEN_PROMPT_R && dy < 3 && dy > -3;
@@ -1650,6 +1669,16 @@ export class Game {
 
   _handOverControl() {
     const isKeep = this.courseId === KEEP_ID;
+    /* THE COURSE CLOCK STARTS WHEN THE PLAYER DOES. The load's warm-up, the intro
+       cinematic and the course card all simulate (the world must move behind them), so
+       by the first playable frame the clock had already run 11-31 s on ember-3 — a
+       course whose whole design is a 40 s head start on rising lava (playtest ember-3
+       #2). Rewind ONCE per load to the checkpoint's authored clockOffset — the same
+       phase a respawn presents — so the first frame of control is the authored one. */
+    if (!isKeep && this._clockArm && this.course && typeof this.course.resetFrom === 'function') {
+      this._clockArm = false;
+      safe(() => this.course.resetFrom(this.cpIndex), 'course.resetFrom');
+    }
     this.state = isKeep ? 'keep' : 'playing';
     this._timerRun = true;
     this._suspendInput(false);

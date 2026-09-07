@@ -72,6 +72,7 @@ import * as WaterMod from './water.js';
 import * as HazardLib from '../hazards/index.js';
 import * as CollectiblesMod from '../entities/collectibles.js';
 import * as CrittersMod from '../entities/critters.js';
+import { TUNE } from '../core/tuning.js';
 
 /* ── dependency handles ─────────────────────────────────────────────────────
  * Namespace imports throughout: a sibling that ships a symbol late produces one
@@ -124,6 +125,8 @@ const CHUNK_SIZE = 24;
 const MAX_CHUNKS = 2;
 /** Beyond this from the feet a hazard's VISUAL is skipped (never its simulation). */
 const HAZARD_VIS_DIST = 90;
+/** Seconds inside a cannon's breech trigger before a WALK-IN boards it (a press boards at once). */
+const CANNON_BOARD_DWELL = 0.10;
 /** Chunks nearer than this stay visible off-screen so their shadows keep casting. */
 const SHADOW_KEEP = 34;
 const MAX_TEXT = 48;
@@ -999,6 +1002,8 @@ export class Course {
     this._warnedBuilders = new Set();
     this._warnedCameraFallback = false;
     this._triggered = new Set();
+    /** @private hazard records of kind 'cannon' (the ones with a breech trigger to watch) */
+    this._cannons = [];
     this._time = 0;              // visual clock (drives FX shaders; never gameplay)
     this._quality = null;
     this._decor = 1;
@@ -3165,8 +3170,10 @@ export class Course {
       cullable: !NEVER_CULL.has(o.kind),
       far: false, broken: false, errCount: 0,
       cx: 0, cy: 0, cz: 0, radius: 4,
+      dwell: 0, armed: true,        // cannon boarding (see _updateCannons)
     };
     this.hazards.push(rec);
+    if ((o.kind === 'cannon' || h.kind === 'cannon') && h.volume) this._cannons.push(rec);
     return rec;
   }
 
@@ -4687,6 +4694,7 @@ export class Course {
 
     this._detectStand();
     this._updateHazards(dt, p);
+    this._updateCannons(dt, p);
     this._updateCritters(dt, p);
     this._updateWaters(dt);
     this._updateCulling(dt);
@@ -4821,6 +4829,102 @@ export class Course {
         if (typeof k.update === 'function') k.update();
       }
     }
+  }
+
+  /**
+   * CANNONS (hazards/launch.js). Nothing in the runtime ever read the trigger Volume a
+   * cannon publishes — `grep enterCannon runtime/` found only the controller's own
+   * definition — so no cannon in the game could be boarded (playtest: azure-2, azure-3,
+   * ember-3, ember-4, verdant-3). The Course is the one place that knows the player,
+   * the input AND the hazard, so it seats the hero: walk into the breech (a short dwell,
+   * so a player crossing the carriage is not swallowed) or press interact / jump inside
+   * it, and the controller's `enterCannon(def)` takes over. A boarded cannon re-arms only
+   * after the hero has LEFT its trigger, so the shot never re-boards on the way out.
+   */
+  _updateCannons(dt, player) {
+    const cs = this._cannons;
+    if (!cs.length || !player || player.dead || !this._ppValid) return;
+    if (player.state === 'cannon') return;
+    const g = this.game;
+    if (g && g.state && g.state !== 'playing' && g.state !== 'keep') return;
+    const inp = g ? g.input : null;
+    const pressed = !!(inp && (inp.interactPressed || inp.jumpPressed));
+    _v1.set(this._pp.x, this._pp.y + 0.6, this._pp.z);
+    for (let i = 0; i < cs.length; i++) {
+      const rec = cs[i];
+      const h = rec.h;
+      const vol = h.volume;
+      if (rec.broken || !h.enabled || !vol || !vol.active) continue;
+      let inside = false;
+      try { inside = !!vol.contains(_v1); } catch (e) { inside = false; }
+      if (!inside) { rec.dwell = 0; rec.armed = true; continue; }
+      if (!rec.armed) continue;
+      if (typeof h.readyAt === 'function' && !h.readyAt(this.clock)) continue;
+      rec.dwell += dt;
+      if (pressed || rec.dwell >= CANNON_BOARD_DWELL) {
+        rec.dwell = 0;
+        rec.armed = false;
+        this._boardCannon(h, player);
+      }
+    }
+  }
+
+  _boardCannon(h, player) {
+    if (typeof player.enterCannon !== 'function') return false;
+    const d = h.boardDef || h;
+    try { player.enterCannon(d); } catch (e) { this._once('cannon.enter', e); return false; }
+    if (typeof h.enter === 'function') { try { h.enter(player); } catch (e) { /* the clunk is optional */ } }
+    return true;
+  }
+
+  /**
+   * POUND SHOCK (CONTRACT §11: a pound "breaks breakable colliders"; §21: a breakable
+   * answers "a pound landing on / within shockRadius of this crate"). The controller only
+   * tells the collider it LANDED ON — a wall panel, a hay bale, a cage or a coral wall you
+   * pound BESIDE never heard about it, which is why the glyph wall, the hay wall, the
+   * portcullis and the sunken cage were all unbreakable in play. The Course knows every
+   * hazard and critter, so it fans the shock out: every `breakable` whose collider lies
+   * within TUNE.pound.shockRadius of the landing point (in XZ, and neither below the feet
+   * nor above the head) and every critter (they judge their own radius). The collider the
+   * hero stands on is skipped — the controller already notified its owner.
+   * Called by Game from the player's 'poundLand' event. Allocation-free.
+   */
+  onPoundLand(pos, player) {
+    if (!pos || !fin(pos.x) || !fin(pos.z)) return 0;
+    const R = TUNE.pound.shockRadius;
+    const R2 = R * R;
+    const gc = (player && player.grounded && player.groundCollider) ? player.groundCollider : null;
+    const gref = gc ? gc.ref : null;
+    let hits = 0;
+    const hz = this.hazards;
+    for (let i = 0; i < hz.length; i++) {
+      const rec = hz[i];
+      if (rec.broken) continue;
+      const h = rec.h;
+      if (rec.kind !== 'breakable' && h.kind !== 'breakable') continue;   // aliases resolve on the hazard
+      if (!h.enabled || typeof h.onPound !== 'function' || h === gref) continue;
+      const cs = rec.colliders;
+      let near = false;
+      for (let j = 0; j < cs.length && !near; j++) {
+        const c = cs[j];
+        if (!c || !c.active || c === gc) continue;
+        const b = c.aabb;
+        if (!b) continue;
+        if (b.max.y < pos.y - 0.6 || b.min.y > pos.y + 2.2) continue;
+        const dx = Math.max(b.min.x - pos.x, 0, pos.x - b.max.x);
+        const dz = Math.max(b.min.z - pos.z, 0, pos.z - b.max.z);
+        near = dx * dx + dz * dz <= R2;
+      }
+      if (!near) continue;
+      try { h.onPound(player, pos); hits++; } catch (e) { this._hazardError(rec, e); }
+    }
+    const cr = this.critters;
+    for (let i = 0; i < cr.length; i++) {
+      const c = cr[i];
+      if (!c || c.enabled === false || typeof c.onPound !== 'function' || c === gref) continue;
+      try { c.onPound(player, pos); } catch (e) { this._once('critter.pound:' + (c.kind || i), e); }
+    }
+    return hits;
   }
 
   _refreshHazardColliders() {
@@ -5090,24 +5194,33 @@ export class Course {
     const cp = idx >= 0 ? this.checkpoints[idx] : null;
     this.clock = (cp && fin(cp.clockOffset)) ? cp.clockOffset : 0;
     this.setCheckpointIndex(idx, true);
-    this._resetHazards(this.clock);
+    /* SOFT: a breakable the player already opened stays open (a solved secret persists
+       for the session — azure-2's well grate re-sealed over the rider's head). */
+    this._resetHazards(this.clock, true);
     this._resetCritters();
     this._resetPowers();
     /* NO collectibles.reset() here — see the doc comment. */
   }
 
-  /** Re-arm crumble/vanish tiles, un-sink sinkers, rewind chasers. */
-  _resetHazards(t) {
+  /**
+   * Re-arm crumble/vanish tiles, un-sink sinkers, rewind chasers.
+   * @param {number} t     course clock to place every hazard at
+   * @param {boolean} [soft]  a RESPAWN reset (resetFrom): hazards that keep a solved
+   *   state across deaths (breakables) are told so; a FULL reset re-arms everything.
+   */
+  _resetHazards(t, soft) {
     /* Forget the last stand: a player still grounded on a re-armed tile after a
        reset must re-trigger it next frame, not ride it for free. */
     this._standOn = null;
+    const sft = !!soft;
     for (let i = 0; i < this.hazards.length; i++) {
       const rec = this.hazards[i];
       const h = rec.h;
       rec.broken = false;
+      rec.dwell = 0; rec.armed = true;
       if (typeof h.rearm === 'function') { try { h.rearm(t); } catch (e) { /* optional */ } }
       if (typeof h.reset === 'function') {
-        try { h.reset(t); } catch (e) { this._hazardError(rec, e); continue; }
+        try { h.reset(t, sft); } catch (e) { this._hazardError(rec, e); continue; }
       }
       /* `reset(t)` must place it exactly where `update(t)` would; calling update
          makes that true even for a hazard that only moves inside update(). */
@@ -5467,6 +5580,7 @@ export class Course {
     this.killVolumes.length = 0;
     this.volumes.length = 0;
     this.hazards.length = 0;
+    this._cannons.length = 0;
     this.critters.length = 0;
     this.checkpoints.length = 0;
     this.gates.length = 0;

@@ -48,6 +48,8 @@ const _mtxLocal = new THREE.Matrix4();
 const _q2 = new THREE.Quaternion();
 const XAXIS = new THREE.Vector3(1, 0, 0);
 const SMOKE_COLOR = new THREE.Color(0xbfc7d4);
+/** A self-aiming cannon (one with a `target`) fires this long after the hero climbs in. */
+const CANNON_AUTOFIRE_S = 1.1;
 
 /**
  * Flatten a built prop into batchable parts: one entry per (mesh, material group), each with the
@@ -100,6 +102,31 @@ export function ballisticY(vy, t) {
 }
 
 /**
+ * HORIZONTAL FLIGHT UNDER THE CONTROLLER'S AIR DRAG. player/controller.js `_airMove` scales the
+ * horizontal velocity by `(1 - TUNE.airDrag * dt)` every substep — the same drag the published
+ * REACH_TABLE was integrated with — so a shot fired at `vx` covers `vx * (1 - e^(-k t)) / k`
+ * metres in `t` seconds, not `vx * t`. A solver that ignores it lands every cannon shot short
+ * of its authored target by the drag's share of the range (11 % on a 2 s flight); these two
+ * helpers are the closed form of what the hero actually flies.
+ */
+const AIR_K = Math.max(0, TUNE.airDrag || 0);
+
+/** Horizontal distance after `t` seconds launched at `vx` m/s (no stick input). */
+export function ballisticX(vx, t) {
+  if (AIR_K < 1e-6) return vx * t;
+  return vx * (1 - Math.exp(-AIR_K * t)) / AIR_K;
+}
+
+/** Seconds to cover `range` metres launched at `vx` m/s; NaN when the drag stops it short. */
+export function flightTimeForRange(vx, range) {
+  if (!(vx > 1e-4)) return NaN;
+  if (AIR_K < 1e-6) return range / vx;
+  const u = 1 - range * AIR_K / vx;
+  if (!(u > 1e-6)) return NaN;
+  return -Math.log(u) / AIR_K;
+}
+
+/**
  * The launch SPEED (m/s along the aim) that lands a shot fired at `pitch` radians on a target
  * `range` metres away horizontally and `dy` metres up (+) or down (−).
  *
@@ -113,7 +140,9 @@ export function solveSpeedForTarget(range, dy, pitch, vMax = 80) {
   const yAt = (v) => {
     const vx = v * cosP;
     if (vx < 1e-4) return -1e9;
-    return ballisticY(v * Math.sin(pitch), range / vx);
+    const t = flightTimeForRange(vx, range);
+    if (!Number.isFinite(t)) return -1e9;          // the drag parks it short of the range
+    return ballisticY(v * Math.sin(pitch), t);
   };
   let lo = 1, hi = vMax;
   if (yAt(hi) < dy) return NaN;                  // out of range at any legal speed
@@ -159,9 +188,24 @@ class CannonHazard extends Hazard {
     this.loaded = null;
     this._loadT = null;
     this.cooldown = Math.max(0.1, num(def.cooldown, 0.8));
-    /** Seconds after loading before the cannon fires itself (0 = never; the player fires). */
-    this.autoFire = Math.max(0, num(def.autoFire, 0));
+    /**
+     * Seconds after loading before the cannon fires itself (0 = never; the player fires).
+     * A cannon with an authored `target` AIMS ITSELF, and every sign on one says so ("CLIMB IN
+     * AND IT FIRES", "STEP IN — THE PYLONS DO THE AIMING"): it defaults to firing on its own
+     * a beat after the hero climbs in. A free-aim cannon (yaw/pitch/power) waits for JUMP.
+     */
+    this.autoFire = Math.max(0, num(def.autoFire, this.target ? CANNON_AUTOFIRE_S : 0));
     this._lastEnter = null;
+
+    /**
+     * What the CONTROLLER's `enterCannon(def)` takes: park point (the breech, so the launch
+     * origin is the solver's origin), the solved aim, the solved speed and a ref back here for
+     * the `onFire` callback. One object per cannon, allocated once, never per frame.
+     */
+    this.boardDef = {
+      p: this.center, yaw: this.yaw, pitch: this.pitch, power: this.launchSpeed,
+      ref: this, autoFire: this.autoFire, id: def.id || 'cannon', target: this.target,
+    };
 
     this._buildBarrel(q);
     this._buildArc();
@@ -323,9 +367,13 @@ class CannonHazard extends Hazard {
     this.setPartVisible(this.smokePart, false);
     this.smokeShown = false;
 
-    // ---- physics: the machine is solid, the bore is not ------------------------------------
-    // One collider on the carriage (so you can stand on it and climb in from above) and one on
-    // the barrel's mid-section (so it reads as a real obstacle rather than a hologram).
+    // ---- physics: the carriage is solid, the barrel is not --------------------------------
+    // One SOLID collider on the carriage (so you can stand on it and walk up to the breech).
+    // The barrel keeps a collider for the camera and the probes but is NOT solid to the hero:
+    // the shipped solid barrel sat right across the middle of the entry trigger, so from every
+    // side the hero bonked 2 m short of the breech and no cannon in the game could be boarded
+    // (playtest: azure-2, azure-3 x3, ember-3, ember-4, verdant-3). A cannon you climb INTO
+    // cannot also be a wall you bounce OFF; the shot leaves along the bore for the same reason.
     this.colliders.push(makeCollider({
       center: _v.copy(this.center).setY(this.center.y - R * 0.95),
       half: _v2.set(R * 1.6, R * 0.55, R * 1.6),
@@ -337,8 +385,8 @@ class CannonHazard extends Hazard {
       center: _v,
       half: _v2.set(R * 0.95, L * 0.5, R * 0.95),
       quat: this.barrelQuat,
-      surface: 'nostick', ref: this, group: 'hazard',
-      props: { stepSfx: 'step_metal', stepRate: 1.0 },
+      surface: 'nostick', ref: this, group: 'hazard', solid: false,
+      props: { stepSfx: 'step_metal', stepRate: 1.0, cannonBarrel: true },
     });
     this.colliders.push(this.barrelCollider);
   }
@@ -364,11 +412,13 @@ class CannonHazard extends Hazard {
   _writeArc() {
     const vy = this.aim.y * this.launchSpeed;
     const hs = Math.hypot(this.aim.x, this.aim.z) * this.launchSpeed;
+    const hl = hs > 1e-6 ? 1 / hs : 0;                 // unit horizontal aim = aim.xz * hl
     // Flight time: to the target when one is authored, else until it falls 12 m below the muzzle.
     let total;
     if (this.target && this.targetReachable && hs > 1e-3) {
       _v.subVectors(this.target, this.center);
-      total = Math.hypot(_v.x, _v.z) / hs;
+      total = flightTimeForRange(hs, Math.hypot(_v.x, _v.z));
+      if (!Number.isFinite(total)) total = Math.hypot(_v.x, _v.z) / hs;
     } else {
       const tr = Math.max(0, vy) / TUNE.gravRise;
       const apex = (vy * vy) / (2 * TUNE.gravRise);
@@ -378,20 +428,22 @@ class CannonHazard extends Hazard {
     for (let i = 0; i < this.arcCount; i++) {
       const u = (i + 1) / (this.arcCount + 1);
       const tt = u * total;
+      const x = ballisticX(hs, tt);                    // metres along the horizontal aim
       _v.set(
-        this.center.x + this.aim.x * this.launchSpeed * tt,
+        this.center.x + this.aim.x * hl * x,
         this.center.y + ballisticY(vy, tt),
-        this.center.z + this.aim.z * this.launchSpeed * tt,
+        this.center.z + this.aim.z * hl * x,
       );
       const fade = Math.sin(u * Math.PI) * 0.8 + 0.2;
       _s.setScalar(clamp(fade, 0.2, 1) * lerp(1.2, 0.55, u));
       this.setPart(this.arcParts[i], _v, null, _s);
     }
     this.landing = this.landing || new THREE.Vector3();
+    const xl = ballisticX(hs, total);
     this.landing.set(
-      this.center.x + this.aim.x * this.launchSpeed * total,
+      this.center.x + this.aim.x * hl * xl,
       this.center.y + ballisticY(vy, total),
-      this.center.z + this.aim.z * this.launchSpeed * total,
+      this.center.z + this.aim.z * hl * xl,
     );
     if (this.markerPart) this.setPartGlow(this.markerPart, this.landing, this.markerSize);
   }
@@ -441,12 +493,23 @@ class CannonHazard extends Hazard {
   }
 
   /**
-   * FIRE. Hands the hero `launchVelocity()` through whichever API the controller exposes, pops
-   * the muzzle and announces it. Safe to call when nothing is loaded (it just fires blank).
+   * FIRE. When the hero is SEATED by the controller (`player.state === 'cannon'` with this
+   * cannon as its `_cannon.ref`), the controller owns the launch: `_fireCannon()` computes the
+   * shot from the seated aim and calls back `onFire()`, which is where the bang lives. Any
+   * other body (a harness, a test double) gets the velocity handed to it directly. Safe to call
+   * when nothing is loaded (it just fires blank).
    */
   fire(player) {
     const pl = player || (this.loaded && this.loaded.pos ? this.loaded : null)
       || resolvePlayer(this.ctx, this.__player);
+
+    if (pl && pl.state === 'cannon' && pl._cannon && pl._cannon.ref === this &&
+        typeof pl._fireCannon === 'function') {
+      try { pl._fireCannon(); } catch (e) { /* the controller owns its own errors */ }
+      if (this.loaded) this.onFire(pl);          // the controller did not call back: bang anyway
+      return true;
+    }
+
     this.firedT = this.time;
     this.loaded = null;
     this._loadT = null;
@@ -467,14 +530,31 @@ class CannonHazard extends Hazard {
       }
     }
 
+    this._bang(pl || null);
+    return true;
+  }
+
+  /**
+   * The CONTROLLER's callback from `_fireCannon()` (CONTRACT §11: the controller owns the
+   * `cannon` state and the flight). The hero has already been launched along the seated aim;
+   * this side records the shot, clears the breech and pops the muzzle. Idempotent per shot.
+   */
+  onFire(player) {
+    if (!this.loaded && this.firedT !== null && this.time - this.firedT < 0.05) return;
+    this.firedT = this.time;
+    this.loaded = null;
+    this._loadT = null;
+    this._bang(player || null);
+  }
+
+  _bang(pl) {
     if (!this._silent) {
       hazSfx(this.ctx, 'cannon_fire', { gain: 1, rate: clamp(1.25 - this.launchSpeed * 0.006, 0.75, 1.25), pos: this.mouth, ref: 14, max: 90 });
       hazBurst(this.ctx, 'spark', this.mouth, { count: 26, speed: 11, dir: this.aim, color: this.hotColor.getHex() });
       hazBurst(this.ctx, 'dust', this.mouth, { count: 16, speed: 5, dir: this.aim });
       hazShake(this.ctx, 0.45, 220);
     }
-    hazEvent(this.ctx, 'cannonFire', this, pl || null);
-    return true;
+    hazEvent(this.ctx, 'cannonFire', this, pl);
   }
 
   update(t, dt, player) {

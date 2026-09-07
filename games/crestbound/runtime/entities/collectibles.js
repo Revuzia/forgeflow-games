@@ -65,6 +65,26 @@ const COIN_R = 0.25, COIN_H = 0.075;
 const SIGIL_R = 0.40, SIGIL_H = 0.10;
 /** Crest half-width (0.9 m across). */
 const CREST_R = 0.45;
+/**
+ * Crest pickup envelope. The old test was a 0.83 m sphere-vs-capsule check, so a
+ * crest 1.34 m over its dais, 1.23 m from where the dais stops you, could only be
+ * taken by dropping onto it from above (playtest azure-1 sanctum, azure-2 XII,
+ * azure-3 Grand Pedestal — "the file says it is a walk-up"). A crest is a trophy
+ * the size of the hero's torso: within CREST_REACH_XZ of the capsule axis in the
+ * ground plane, and from CREST_REACH_DOWN below the feet to CREST_REACH_UP above
+ * the head, walking up to its pedestal takes it. A crest more than ~2.3 m over
+ * the floor beside it still asks for the jump.
+ */
+const CREST_REACH_XZ = 1.0, CREST_REACH_DOWN = 0.4, CREST_REACH_UP = 0.8;
+/**
+ * Dropped coins (a smashed crate, a squished bumbler) come from a pre-allocated
+ * RESERVE of instances appended to the course's coin arrays — a payout never
+ * allocates and never grows the instanced meshes. The oldest live drop is
+ * recycled once the reserve is spent. Not part of `coinsTotal`.
+ */
+const COIN_RESERVE = 24;
+/** Seconds a dropped coin takes to scale in and settle on its ring spot. */
+const COIN_SPAWN_T = 0.32;
 /** Coins glide toward the hero inside this radius. CONTRACT §22. */
 const MAGNET_R = 1.3;
 const MAGNET_R2 = MAGNET_R * MAGNET_R;
@@ -894,15 +914,19 @@ export class Collectibles {
     const defs = Array.isArray(this.def.coins) ? this.def.coins : [];
     for (let i = 0; i < defs.length; i++) expandCoinEntry(defs[i], pts);
     const n = pts.length;
-    this.coinCount = n;
+    const cap = n + COIN_RESERVE;
+    /** Authored coins are [0, _coinAuthored); the drop reserve is [_coinAuthored, coinCount). */
+    this._coinAuthored = n;
+    this._coinDropNext = 0;
+    this.coinCount = cap;
     this.counts.coinsTotal = n;
 
-    this._cHome = new Float32Array(n * 3);
-    this._cOff = new Float32Array(n * 3);   // magnet displacement from home
-    this._cVel = new Float32Array(n * 3);   // magnet velocity
-    this._cPhase = new Float32Array(n);
-    this._cState = new Uint8Array(n);       // 0 collected, 1 live, 2 popping
-    this._cPop = new Float32Array(n);       // pop timer
+    this._cHome = new Float32Array(cap * 3);
+    this._cOff = new Float32Array(cap * 3);   // magnet displacement from home
+    this._cVel = new Float32Array(cap * 3);   // magnet velocity
+    this._cPhase = new Float32Array(cap);
+    this._cState = new Uint8Array(cap);       // 0 collected/unused, 1 live, 2 popping, 3 spawning (a drop)
+    this._cPop = new Float32Array(cap);       // pop / spawn timer
     // LOD band the coin's matrix was last written for (tri-state, NOT a bool):
     //   0 = far band  — static pose written once, no per-frame matrix work
     //   1 = near band — animated every frame (bob + spin + magnet)
@@ -910,7 +934,7 @@ export class Collectibles {
     // The band is compared, never toggled, so a coin that starts outside
     // HIDE_RANGE is hidden on its very first update instead of only after it
     // has passed through the middle band.
-    this._cDirty = new Uint8Array(n);
+    this._cDirty = new Uint8Array(cap);
 
     for (let i = 0; i < n; i++) {
       const p = pts[i].p;
@@ -925,14 +949,21 @@ export class Collectibles {
       this._cState[i] = 1;
       this._cDirty[i] = 1;
     }
+    for (let i = n; i < cap; i++) {
+      // the drop reserve: parked far below the world, unused (state 0), hidden band
+      this._cHome[i * 3] = 0; this._cHome[i * 3 + 1] = -9999; this._cHome[i * 3 + 2] = 0;
+      this._cPhase[i] = ((i * 0.6180339887) % 1) * TAU;
+      this._cState[i] = 0;
+      this._cDirty[i] = 2;
+    }
 
     // Every coin's current pose, by coin index. `_flushCoins()` compacts these
     // into the near/far meshes each time any of them changes.
-    this._cMat = new Float32Array(n * 16);
+    this._cMat = new Float32Array(cap * 16);
 
     const geo = coinGeometry();
     const mat = goldMaterial(this.theme, this.mats);
-    const mesh = new THREE.InstancedMesh(geo, mat, Math.max(1, n));
+    const mesh = new THREE.InstancedMesh(geo, mat, Math.max(1, cap));
     mesh.name = 'coins';
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     mesh.castShadow = false;
@@ -942,7 +973,7 @@ export class Collectibles {
     this.group.add(mesh);
 
     // the far band draws the 100-triangle blank (see coinFarGeometry)
-    const far = new THREE.InstancedMesh(coinFarGeometry(), mat, Math.max(1, n));
+    const far = new THREE.InstancedMesh(coinFarGeometry(), mat, Math.max(1, cap));
     far.name = 'coins.far';
     far.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     far.castShadow = false;
@@ -953,6 +984,7 @@ export class Collectibles {
 
     // seed every matrix once (static pose) so far coins are correct before the first update
     for (let i = 0; i < n; i++) this._writeCoinMatrix(i, 0, 1);
+    for (let i = n; i < cap; i++) this._writeCoinMatrix(i, 0, 0);
     if (n > 0) {
       // One bounding sphere over every HOME position for both meshes: the
       // instance buffers are compacted per frame, so a sphere computed from
@@ -1363,6 +1395,24 @@ export class Collectibles {
       const i3 = i * 3;
       const x = home[i3] + off[i3], y = home[i3 + 1] + off[i3 + 1], z = home[i3 + 2] + off[i3 + 2];
 
+      if (s === 3) {
+        // a DROP spawning in: flies from where it was paid out (vel holds that offset)
+        // to its ring spot on the ground while scaling up; then it is an ordinary coin
+        pop[i] += dt / COIN_SPAWN_T;
+        if (pop[i] >= 1) {
+          state[i] = 1; pop[i] = 0;
+          off[i3] = off[i3 + 1] = off[i3 + 2] = 0;
+          vel[i3] = vel[i3 + 1] = vel[i3 + 2] = 0;
+          this._writeCoinMatrix(i, t, 1);
+        } else {
+          const k = easeOutCubic(pop[i]);
+          off[i3] = vel[i3] * (1 - k); off[i3 + 1] = vel[i3 + 1] * (1 - k) + (1 - k) * k * 0.9; off[i3 + 2] = vel[i3 + 2] * (1 - k);
+          this._writeCoinMatrix(i, t, 0.25 + 0.75 * k);
+        }
+        any = true;
+        continue;
+      }
+
       if (s === 2) {
         // take pop: scale 1 → 1.45 → 0
         pop[i] += dt / POP_T;
@@ -1430,6 +1480,61 @@ export class Collectibles {
       any = true;
     }
     if (any) this._flushCoins();
+  }
+
+  /**
+   * Drop `n` coins around `pos` (a smashed crate, a squished bumbler) — CONTRACT §25
+   * `drop:'coins'`. This method did not exist: `hazDropCoins` looked for it, fell back
+   * to `course.dropCoins`, which looked for it again and emitted an event nobody heard,
+   * so no crate in the game ever paid out. Coins take a free reserve slot (or recycle the
+   * oldest drop), land in a ring of radius `spread` on the ground under the spot, scale
+   * in over COIN_SPAWN_T and are then ordinary coins (magnet, take, tally, combo).
+   * Allocation-free. Returns the number placed.
+   */
+  spawnCoins(pos, n, spread) {
+    const want = fin(n) ? Math.max(0, Math.min(COIN_RESERVE, Math.round(n))) : 0;
+    if (!want || !pos) return 0;
+    const px = fin(pos.x) ? pos.x : 0, py = fin(pos.y) ? pos.y : 0, pz = fin(pos.z) ? pos.z : 0;
+    const r = fin(spread) ? Math.max(0.35, spread) : 0.55;
+    const first = this._coinAuthored, cap = this.coinCount;
+    const home = this._cHome, off = this._cOff, vel = this._cVel, state = this._cState;
+    const pop = this._cPop, dirty = this._cDirty;
+    const near = this.coinMesh, far = this.coinFarMesh;
+    const a0 = (this._coinDropNext * 0.37) % TAU;
+    let placed = 0;
+    for (let k = 0; k < want; k++) {
+      let slot = -1;
+      for (let i = first; i < cap; i++) if (state[i] === 0) { slot = i; break; }
+      if (slot < 0) slot = first + (this._coinDropNext % COIN_RESERVE);   // recycle the oldest
+      this._coinDropNext = (this._coinDropNext + 1) | 0;
+      const a = a0 + (k / want) * TAU;
+      const x = px + Math.cos(a) * r, z = pz + Math.sin(a) * r;
+      // settle on the ground beside the payer; never onto a floor far below it
+      let y = py;
+      const gy = this._groundY(x, py, z);
+      if (isFinite(gy) && gy > py - 3.0 && gy < py + 1.2) y = gy + 0.55;
+      const i3 = slot * 3;
+      home[i3] = x; home[i3 + 1] = y; home[i3 + 2] = z;
+      // spawn flight: start at the payer, arrive at home (see state 3 in _updateCoins)
+      vel[i3] = px - x; vel[i3 + 1] = (py + 0.35) - y; vel[i3 + 2] = pz - z;
+      off[i3] = vel[i3]; off[i3 + 1] = vel[i3 + 1]; off[i3 + 2] = vel[i3 + 2];
+      state[slot] = 3; pop[slot] = 0; dirty[slot] = 1;
+      this._writeCoinMatrix(slot, this.time, 0.25);
+      if (near) {
+        _v0.set(x, y, z);
+        if (near.boundingSphere) near.boundingSphere.expandByPoint(_v0);
+        else near.boundingSphere = new THREE.Sphere(_v0.clone(), 3);
+        if (far) {
+          if (far.boundingSphere) far.boundingSphere.expandByPoint(_v0);
+          else far.boundingSphere = new THREE.Sphere(_v0.clone(), 3);
+        }
+        near.visible = true;
+        if (far) far.visible = true;
+      }
+      placed++;
+    }
+    if (placed) this._flushCoins();
+    return placed;
   }
 
   _takeCoin(i, x, y, z) {
@@ -1549,8 +1654,11 @@ export class Collectibles {
 
   _updateCrests(dt, t, player, alive, px, py, pz, cap) {
     const n = this.crests.length;
-    const reach = (cap ? cap.r : TUNE.radius) + CREST_R * 0.85;
+    const capR = cap ? cap.r : TUNE.radius;
+    const reach = capR + CREST_REACH_XZ;
     const reach2 = reach * reach;
+    const feetY = cap ? cap.a.y - capR : py;
+    const headY = cap ? cap.b.y + capR : py + TUNE.height;
     for (let i = 0; i < n; i++) {
       const c = this.crests[i];
       if (c.lockedCd > 0) c.lockedCd -= dt;
@@ -1589,12 +1697,13 @@ export class Collectibles {
         c.pool.scale.set(ps, 1, ps);
       }
 
-      // collect
+      // collect: a walk-up envelope (see CREST_REACH_*), not a sphere-vs-capsule graze
       if (!alive || !cap) continue;
       const cx = c.root.position.x, cy = c.root.position.y, cz = c.root.position.z;
       const dx = cx - px, dz = cz - pz;
-      if (dx * dx + dz * dz > 9) continue;
-      if (segPointDistSq(cap.a, cap.b, cx, cy, cz) < reach2) {
+      const dxz2 = dx * dx + dz * dz;
+      if (dxz2 > 9) continue;
+      if (dxz2 <= reach2 && cy >= feetY - CREST_REACH_DOWN && cy <= headY + CREST_REACH_UP) {
         if (c.type === 'power') {
           const need = c.def.power;
           const has = player.power === need || (player.power && player.power.id === need);
@@ -1789,6 +1898,17 @@ export class Collectibles {
   /** Convenience for the boss crest. */
   onBossDown() { return this.trigger('warden-down'); }
 
+  /**
+   * The race clock for the HUD snap (game.js reads `collectibles.raceMs`): the running
+   * or frozen time in ms while a race is live / just finished, else -1. The snap read
+   * this field before it existed, so the HUD never showed a race and every start pad
+   * looked dead (playtest ember-4 E4-15).
+   */
+  get raceMs() {
+    const r = this.race;
+    return (r.active || r.done) ? r.ms : -1;
+  }
+
   /** Sync the ghost set from the Save (call after Game writes a crest). */
   refreshSave() {
     const saved = this._savedCrests();
@@ -1811,11 +1931,14 @@ export class Collectibles {
 
     for (let i = 0; i < this.coinCount; i++) {
       const i3 = i * 3;
-      this._cState[i] = 1; this._cPop[i] = 0; this._cDirty[i] = 1;
+      const authored = i < this._coinAuthored;
+      this._cState[i] = authored ? 1 : 0; this._cPop[i] = 0; this._cDirty[i] = authored ? 1 : 2;
       this._cOff[i3] = this._cOff[i3 + 1] = this._cOff[i3 + 2] = 0;
       this._cVel[i3] = this._cVel[i3 + 1] = this._cVel[i3 + 2] = 0;
-      this._writeCoinMatrix(i, 0, 1);
+      if (!authored) { this._cHome[i3] = 0; this._cHome[i3 + 1] = -9999; this._cHome[i3 + 2] = 0; }
+      this._writeCoinMatrix(i, 0, authored ? 1 : 0);
     }
+    this._coinDropNext = 0;
     if (this.coinCount) this._flushCoins();
     this.counts.coins = 0;
 

@@ -1722,7 +1722,10 @@ class Gnasher extends Critter {
   /** Pounding the post within 1.2 m sinks it; three pounds free the gnasher. */
   onPound(player, pos) {
     if (this.freed || this.state === 'gone') return;
-    const p = pos || (player && (player.pos || player.position));
+    /* `pos` is a Vector3 from the Course's pound shock; the controller's direct
+       notify passes the COLLIDER it landed on in this slot, which has no `.x` —
+       NaN fell through every radius test below and counted as a hit. */
+    const p = (pos && Number.isFinite(pos.x) && Number.isFinite(pos.z)) ? pos : (player && (player.pos || player.position));
     if (!p) return;
     const dx = p.x - this.post.x, dz = p.z - this.post.z;
     if (dx * dx + dz * dz > 1.2 * 1.2) return;
@@ -1997,7 +2000,10 @@ class Bumbler extends Critter {
   }
 
   onPound(player, pos) {
-    const p = pos || (player && (player.pos || player.position));
+    /* `pos` is a Vector3 from the Course's pound shock; the controller's direct
+       notify passes the COLLIDER it landed on in this slot, which has no `.x` —
+       NaN fell through every radius test below and counted as a hit. */
+    const p = (pos && Number.isFinite(pos.x) && Number.isFinite(pos.z)) ? pos : (player && (player.pos || player.position));
     if (!p || this.state !== 'walk') return;
     const dx = p.x - this.pos.x, dz = p.z - this.pos.z;
     if (dx * dx + dz * dz <= 1.6 * 1.6 && Math.abs(p.y - this.pos.y) < 2.0) this._squish(player, false);
@@ -2256,7 +2262,10 @@ class Skitter extends Critter {
   }
 
   onPound(player, pos) {
-    const p = pos || (player && (player.pos || player.position));
+    /* `pos` is a Vector3 from the Course's pound shock; the controller's direct
+       notify passes the COLLIDER it landed on in this slot, which has no `.x` —
+       NaN fell through every radius test below and counted as a hit. */
+    const p = (pos && Number.isFinite(pos.x) && Number.isFinite(pos.z)) ? pos : (player && (player.pos || player.position));
     if (!p) return;
     if (Math.hypot(p.x - this.pos.x, p.z - this.pos.z) < 1.4 && Math.abs(p.y - this.pos.y) < 1.5) {
       this.stagger = 1; this.swoopCd = 3.0;
@@ -2803,7 +2812,10 @@ class Warden extends Critter {
   /** Pounding the exposed back while dizzy lands a hit. */
   onPound(player, pos) {
     if (this.state !== 'dizzy') return;
-    const p = pos || (player && (player.pos || player.position));
+    /* `pos` is a Vector3 from the Course's pound shock; the controller's direct
+       notify passes the COLLIDER it landed on in this slot, which has no `.x` —
+       NaN fell through every radius test below and counted as a hit. */
+    const p = (pos && Number.isFinite(pos.x) && Number.isFinite(pos.z)) ? pos : (player && (player.pos || player.position));
     if (!p) return;
     headingFromYaw(this.yaw, _v0);
     const bx = this.pos.x - _v0.x * 0.8, bz = this.pos.z - _v0.z * 0.8;
