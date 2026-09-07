@@ -398,3 +398,52 @@ water mesh hidden and with caustics zeroed (`_shots/play_wl_caustic/`); not the
 water shader. Loop gate on the eight water courses: 611/612, 0 failed, respawn
 median 421 ms. Draws/tris at spawn after: keep 197/420k, verdant-3 239/443k,
 every other water course unchanged, all inside 260/450k.
+
+## Water pass 2: the box is not the water, and a teleport into a hill is not a swim (2026-09-07, water lane)
+
+**The geometry checkpoint 22523345 reverted the Keep basin's bed.** `keep.js`'s
+`heights: lawnHeights({...})` (the rectangular pit under the parterre, so the
+marble slab at -1.30 is the ground) went back to the bare recipe; `_wl_audit.py`
+read the interior bed at -0.00 / mean 0.07 again (pass 1 after: -1.30 / -1.06)
+and K10 "crouch never sinks" was back. Restored; the audit's `terrain-only`
+line now prints the bed under every body (keep: 64/64 cells water, deepest -2.2)
+so the next overwrite is caught by a number, not a playtest.
+
+**The wade release (`water.js shapeVolumeToBed`).** A water def's box is an
+authoring convenience: its top IS the swim surface, and verdant-1's brook box
+holds 1312 bank cells out of 1512 (terrain-only grid). A hero whose feet the bed
+had lifted to 1 cm under the surface still counted as swimming: measured with
+real input (`_wl_replay.py v1_wade_out`, `v1_brook_exits`), holding W north at
+the bank crept east along z 19.8 with feet ON the bed at 0.24-0.30 for 15 s, and
+a hands-off floater was still `swimIdle` at x 40.8 after 15 s with 2 cm of water
+under him — the course's "the channel shallows and you walk out" never happened.
+The Volume's `overlapsCapsule` / `contains` are now wrapped so a point is water
+only where the terrain under it is >= `WADE_DEPTH` (0.5 m) below the surface, or
+is more than 1.2 m above it (collide.js `HF_LIFT_MAX`: an authored under-terrain
+space, not a bed). After: the hands-off drift is released `idle` on the sand at
+x 37.9 after 12 s (frame `_shots/play_wl_p3/28_v1_drift_end.png`, boots in the
+shallows), W + SPACE from mid-channel is out and running at x 40.4 in 6 s, keep /
+verdant-3 stations unchanged, every body keeps its swimmable core (terrain-only
+water cells: keep 64, v1 brook 200 / pond 404, v2 2610, v3 2166, e2 899, r1 376,
+r2 127, az1 3080), draws/tris identical.
+
+**The verdant-1 "falls out of the world" BLOCKER is a teleport into the hill.**
+The tester dropped at `[x, 0.4, 18]`; the terrain there is 1.91 / 2.71 / 2.96 /
+2.08 / 2.95 / 7.04 (x -20..30), so the hero started 1.5-6.6 m INSIDE the bank —
+past `HF_LIFT_MAX`, i.e. in what collide.js treats as authored under-terrain
+space — swam through it at the float line and left the box's north face into the
+void (reproduced: 5 deaths in 5 on the current tree, identical to the report).
+No swim reaches that state: from mid-channel the bed lifts a swimmer onto the
+bank every time. What IS real there is the bank's pitch: 0.14 at z 20 and 2.71 at
+z 18 on x = 0 is 52 deg, over `slope.slideDeg` 38, so the release hands the hero
+to the land model and the land model slides him back in (`v1_wade_out` W-only:
+released `slopeSlide` at (7.02, -0.12, 19.98) at 1.5 s, swimming again at 1.8 s).
+Data (verdant-1 terrain), not a water-volume fact; the downstream shallows are
+the exit that works.
+
+**Underwater grade, proven one-liner.** With `CRESTBOUND.game.cam.setPost(
+CRESTBOUND.engine.post)` injected in the Keep station, `post._underwaterTarget`
+read 0.9999 / uniform 0.9934 while submerged (frame `05_keep_crouch_held_grade_
+wired.png`: blue tint, caustic light on the marble) and the verdant-2 moat frame
+in the same page read 0.998. Nothing in game.js calls it yet (grep `cam.setPost`
+= 0 hits) — camera/integration lane.

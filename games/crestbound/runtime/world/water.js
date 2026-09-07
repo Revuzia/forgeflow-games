@@ -52,6 +52,22 @@
  * emits a second `Volume` of kind `'current'`, so what you see pushing you is
  * literally what pushes you.
  *
+ * WADE RELEASE (water lane pass 2, 2026-09-07). The authored box is a
+ * convenience: verdant-1's brook box holds 308 dry interior samples out of
+ * 378, and its top IS the swim surface, so a hero whose feet the bed has
+ * lifted to 1 cm under the surface still counted as swimming — the tester's
+ * "still swimming at x 24.6 ... does not touch ground until x is about 40",
+ * and, holding W at the north bank, a wader creeping east along z 19.8 with
+ * his feet ON the bed at 0.24-0.30 for 15 s (`_harness/_wl_replay.py
+ * v1_wade_out`). The Volume is therefore SHAPED TO THE BED: a point counts as
+ * water only where the terrain under it is at least `WADE_DEPTH` below the
+ * surface. Shallower than that is bank — the land model takes over, boots
+ * under the water, and the course's own promise ("the channel shallows and
+ * you walk out") is what happens. Terrain more than BED_LIFT above the point
+ * is an authored under-terrain space (collide.js HF_LIFT_MAX) and is not the
+ * bed, so a cave pool under a lawn stays water. `def.wade` overrides the
+ * depth; `wade: 0` keeps the plain box.
+ *
  * CAUSTICS. materials.js's `sand` (and `dirt`) bakes carry a caustic injection
  * driven by the shared uniform `uCbCaustic = (surfaceY, strength, scale,
  * speed)`. `buildWater` writes it, so every sand surface below the water picks
@@ -102,6 +118,47 @@ function waterBeforeRender(renderer, scene, camera, geometry, material) {
     const k = (scene && typeof scene.environmentIntensity === 'number') ? scene.environmentIntensity : 1;
     u.uEnvIntensity.value = k;
   }
+}
+
+/**
+ * Wade release: metres of water under the FEET below which the box is bank,
+ * not water (knee-to-thigh on a 1.5 m hero). The float line is 0.93 m under
+ * the surface (controller FLOAT_FRAC), so a bed between 0.5 and 0.93 is still
+ * swum, standing on it; under 0.5 the hero walks.
+ */
+export const WADE_DEPTH = 0.5;
+/** collide.js HF_LIFT_MAX: terrain further above the feet than this is an authored under-terrain space. */
+const BED_LIFT = 1.2;
+
+/**
+ * Shape a water Volume to its bed (see WADE RELEASE above). Wraps the two
+ * tests collide.js runs on every substep — `overlapsCapsule(cap)` and
+ * `contains(feet)` — so that the box answers "water" only where the terrain
+ * under the point sits at least the wade depth below the surface (or is not
+ * this hero's bed at all). Closures are built once per body; a call samples
+ * the heightfield (bilinear, no allocation) and nothing else.
+ */
+function shapeVolumeToBed(volume, groundAt, releaseY) {
+  const baseContains = Volume.prototype.contains;
+  const baseOverlaps = Volume.prototype.overlapsCapsule;
+  const isWater = (x, y, z) => {
+    const g = groundAt(x, z);
+    if (!(g === g)) return true;                 // no terrain here: the box is the water
+    if (g < releaseY) return true;               // deep enough to swim
+    return g > y + BED_LIFT;                     // bank — unless it is a ceiling over an authored space
+  };
+  volume.contains = function (p) {
+    return baseContains.call(this, p) && isWater(p.x, p.y, p.z);
+  };
+  volume.overlapsCapsule = function (cap) {
+    if (!baseOverlaps.call(this, cap)) return false;
+    const a = cap.a, b = cap.b;
+    if (!a || !b) return true;
+    const f = a.y <= b.y ? a : b;                // the feet end of the capsule
+    return isWater(f.x, f.y, f.z);
+  };
+  volume.bedReleaseY = releaseY;
+  return volume;
 }
 
 const _fallbackMats = new Map();
@@ -469,6 +526,7 @@ function resolveMaterial(theme, mats, kind2, look) {
  *   {kind:'water', p:[x,y,z] (CENTRE of the water BOX), s:[sx,sy,sz],
  *    flow?:[x,z] m/s, kind2?:'lake'|'sea'|'pool', res?:metres per quad,
  *    surfaceY?:number, fade?:metres, look?:{}, caustics?:false|string[],
+ *    wade?:metres (terrain shallower than this under the feet is bank, default WADE_DEPTH; 0 = plain box),
  *    heightfield?:Heightfield, sampleY?:(x,z)=>number, id?:string}
  * @param {object} theme ThemeDef
  * @param {object} [mats] the shared Mats service (CONTRACT §14)
@@ -589,13 +647,15 @@ export function buildWater(def, theme, mats) {
   mesh.onBeforeRender = waterBeforeRender;
 
   // --- volumes ------------------------------------------------------------
+  const wade = (d.wade === undefined) ? WADE_DEPTH : (+d.wade || 0);
   const volume = new Volume({
     center: [cx, p[1], cz],
     half: [sx * 0.5, sy * 0.5, sz * 0.5],
     kind: 'water',
-    props: { surfaceY, kind2, flow: flow || null, id: d.id || ('water:' + kind2) },
+    props: { surfaceY, kind2, flow: flow || null, id: d.id || ('water:' + kind2), wade: (anyGround ? wade : 0) },
     ref: mesh,
   });
+  if (anyGround && wade > 0) shapeVolumeToBed(volume, groundAt, surfaceY - wade);
 
   let current = null;
   if (flow) {

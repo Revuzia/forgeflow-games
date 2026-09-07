@@ -1292,13 +1292,73 @@ const CRESTWAY_VAULT = [
  * .slideDeg, so you can run anywhere without sliding.
  * ======================================================================== */
 
+/**
+ * The lawn's height sampler (water lane 2026-09-07, playtest K10 "crouch never
+ * sinks — y stayed 0.00 ... the pool floor is at -1.30").
+ *
+ * The parterre is a marble basin whose floor slab tops out at WATER_BOT
+ * (-1.30), but the courtyard heightfield ran level straight through it
+ * (`flats` are discs, and a disc that levelled the square basin would trench
+ * the lawn outside its walls). A swimmer therefore stood on grass 0.95 m under
+ * the surface and had nothing to dive into. This evaluates the same recipe
+ * terrain.js's `sampleHeights` does — base, domed hills, flats with a
+ * dead-level 55 % core and a cosine skirt; the Keep has no ridges and no
+ * noise — and then carves a RECTANGULAR pit under the basin: |x| < 4.5,
+ * |z - FZ| < 4.5, floor WATER_BOT - 0.90 = -2.20. The grid is 1.0 m from
+ * (YX0, LZ1) = (-24, 13.8), so the pit's samples are x -4..4 and z FZ-4..FZ+4
+ * and its one-cell slopes lie under the wall boxes or beneath the floor slab
+ * (-1.80..-1.30): at the inner faces the terrain is under the marble. Inside
+ * the basin the collision ground is max(box floor, heightfield) = the marble
+ * at -1.30. MIRRORS terrain.js sampleHeights (c): if that recipe changes,
+ * this follows. (A data module cannot import terrain.js: reachcheck.mjs loads
+ * course files under plain node with no import map for `three`.)
+ *
+ * Water lane pass 2 (2026-09-07): the geometry checkpoint 22523345 dropped this
+ * wrapper (`heights:` went back to the bare recipe) and the audit read the bed
+ * at -0.00 again — K10 regressed. Restored; `_harness/_wl_audit.py` proves the
+ * bed (interior deepest must read WATER_BOT, not 0).
+ */
+function lawnHeights(recipe) {
+  const base = recipe.base === undefined ? 0 : recipe.base;
+  const hills = recipe.hills || [];
+  const flats = recipe.flats || [];
+  const bump = (t) => (t >= 1 ? 0 : (t <= 0 ? 1 : 0.5 * (1 + Math.cos(Math.PI * t))));
+  const PIT_HALF = 4.5, PIT_Y = WATER_BOT - 0.90;
+  return function (x, z) {
+    if (Math.abs(x) < PIT_HALF && Math.abs(z - FZ) < PIT_HALF) return PIT_Y;
+    let y = base;
+    for (let i = 0; i < hills.length; i++) {
+      const H = hills[i];
+      const r = H.r || 1;
+      const dx = x - H.p[0], dz = z - H.p[1];
+      const dd = Math.sqrt(dx * dx + dz * dz);
+      if (dd < r) {
+        const k = bump(dd / r);
+        y += (H.h || 0) * (H.sharp ? k : k * k * (3 - 2 * k));
+      }
+    }
+    for (let i = 0; i < flats.length; i++) {
+      const F = flats[i];
+      const r = F.r || 1;
+      const dx = x - F.p[0], dz = z - F.p[1];
+      const dd = Math.sqrt(dx * dx + dz * dz);
+      if (dd < r) {
+        const t = dd / r;
+        const k = t <= 0.55 ? 1 : bump((t - 0.55) / 0.45);
+        y += ((F.h === undefined ? y : F.h) - y) * k;
+      }
+    }
+    return y;
+  };
+}
+
 const TERRAIN = {
   kind: 'terrain',
   origin: [YX0, YZ0],
   size: [YX1 - YX0, YZ1 - YZ0],
   res: 1.0,
   surface: 'grass',
-  heights: {
+  heights: lawnHeights({
     seed: 8801,
     base: 0.0,
     hills: [
@@ -1318,7 +1378,7 @@ const TERRAIN = {
       { p: [-22.5, 15.5], r: 5.0, h: 0.0 },     // the wyrm turret's skirt
     ],
     ridges: [],
-  },
+  }),
   /* ROUND 2: camera-local ring (terrain.js). `density` is blades/m2 and sizes
    * the wrapping tile; `cross: false` halves the field's triangles — a crossed
    * card buys nothing at this blade size and the Keep was 27 k triangles over
@@ -1339,6 +1399,11 @@ const FOUNTAIN_WATER = {
   s: [8.4, WATER_TOP - WATER_BOT, 8.4],
   kind2: 'pool',
   surfaceY: WATER_TOP,
+  /* 0.15 m of freeboard under the 1.10 rim. A `pool` ripples at water.js's
+     WATER_LOOK.pool amplitude (0.18 -> 0.09 m crests); until the water lane
+     gave every body its own uAmp this basin heaved at the base 1.0 -> 0.49 m
+     crests, i.e. the surface rode 0.34 m ABOVE the rim (owner screenshot 3).
+     The bed is the marble slab at WATER_BOT — see lawnHeights() above. */
 };
 
 /* ===========================================================================
