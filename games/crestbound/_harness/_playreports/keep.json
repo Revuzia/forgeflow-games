@@ -1,0 +1,182 @@
+{
+ "area": "keep",
+ "run": "playtest pass B, 2026-09-06/07, committed HEAD c8d9faa7. Drivers _harness/_play_keepB1..B18.py, shots _shots/play_keep*/. Headless Chrome, ?dev=1&quality=low&autoscale=0, real KeyboardEvents through window.",
+ "defects": [
+  {
+   "id": "K1",
+   "where": "THE GRAND DOUBLE STAIR — all three flights. West flight foot at [-13.00, 0.00, -3.82], east flight at [13.00, 0.00, -3.82], middle flight from the landing at [0.00, 2.70, -8.72].",
+   "did": "Walked north from the spawn pad to the foot of the west flight and held W for 4.2 s; same on the east flight; then stood on the landing and held W south up the middle flight. Then tried run+jump, a triple-jump chain and a wall kick against the west face.",
+   "happened": "EVERY FLIGHT IS BUILT BACKWARDS — the tallest step is at the end you approach from, so all three are walls and Nim just bonks. Live collider stacks: WEST FLIGHT north-to-south = z -8.34..-7.88 top y 0.30 / -7.88..-7.42 y 0.60 / ... / -4.66..-4.20 top y 2.70, so the 2.70 m top step faces the lobby and the 0.30 m bottom step is buried against the landing. MIDDLE FLIGHT north-to-south = z -8.34..-7.88 top y 6.30 / ... / -3.28..-2.82 top y 3.00, so it presents a 3.60 m face to anyone standing on the 2.70 m landing and its low end is 3.30 m below the 6.30 m gallery. TUNE.stepUp is 0.45. Play confirms it: 4.2 s of W on each flank flight left y at 0.00, state 'bonk' then 'idle'; 3.6 s of W south from the landing left y at 2.70, state 'bonk'. Run+jump, a triple chain and a wall kick against the west face all ended at y 0.00 — there is no workaround. THE LANDING, THE GALLERY, THE LONG HALL, THE LIBRARY NOOK, OLD FEN AND THE THREE RIME GATES ARE UNREACHABLE ON FOOT.",
+   "should": "Walking into a flight carries Nim up 0.30 m risers without pressing jump, exactly as keep.js promises ('Nim glides up without ever pressing jump'). Fix belongs in buildStairs — the flight rises against its authored rot[1], not with it — not in keep.js.",
+   "png": "_shots/play_keep/06_stairW_at_foot.png (Nim facing a blank marble wall with the handrails running along its top), _shots/play_keep/02_lobby_look_north.png, _shots/play_keepB/01_stairwall_runjump.png",
+   "owner_item": "P6 — this is the owner's 'i cant reach the main stairs'"
+  },
+  {
+   "id": "K2",
+   "where": "THE COURTYARD — the whole 50 x 35 m lawn heightfield, and the fountain water at [0, 0.95, 30].",
+   "did": "Walked out of the south doors onto the lawn, then listed every terrain and water mesh the live course had built.",
+   "happened": "EVERY TERRAIN QUADRANT AND THE FOUNTAIN WATER ARE BUILT TWICE, COINCIDENT. The scene holds two complete sets — terrain.0,0 / 1,0 / 0,1 / 1,1 with their .far LODs, identical bounding boxes, both visible — two grass instancers, and two 'water.pool' meshes both at bbox [-4.2, 0.95, 25.8]..[4.2, 0.95, 34.2]. The cause is in the data wiring: def.terrain is set AND def.objects also contains a kind:'terrain' entry; def.waters has one entry AND def.objects also contains a kind:'water' entry, so course.js builds each one a second time. Two coplanar ground meshes z-fight (the streaky banding the owner photographed) and two coincident transparent water planes double the alpha, which is why the pool reads as a flat opaque cyan sheet with no ripple and no shore foam.",
+   "should": "One terrain, one water. Either drop the duplicate entries from def.objects or make course.js skip terrain/water kinds it has already built from def.terrain/def.waters.",
+   "png": "_shots/play_keepB7/06_seam_along.png, _shots/play_keepB8/03_fountain_close_statue.png",
+   "owner_item": "P7 and P8"
+  },
+  {
+   "id": "K3",
+   "where": "The lobby's south doorway, z 13.0 to 15.0 across the full width.",
+   "did": "Stood in the doorway at [0, 0, 13.0] and sampled the terrain heightfield under the lobby floor.",
+   "happened": "The courtyard heightfield spans z 13..48 and reads height 0.000 at z 13.0 / 13.5 / 14.0 / 14.5 / 15.0, while the lobby's own floor slab there has top y 0.00 — the grass surface and the paved floor are EXACTLY COPLANAR for a 2 m band right where a player walks out. That is a second, independent source of the ground-texture banding, on top of the doubled terrain in K2.",
+   "should": "The heightfield should start where the paving stops (z 15), or the apron should sit a few centimetres proud of it.",
+   "png": "_shots/play_keepB9/02_lobby_south_end_down.png",
+   "owner_item": "P7"
+  },
+  {
+   "id": "K4",
+   "where": "THE COURTYARD — the two AZURE stained-glass gates at [26, 2.4, 30] and [-24, 2.4, 22], and the AZURE SANCTUM door at [-17, 14.3, 38.4] on the tower roof.",
+   "did": "Walked up to each on foot and measured the built mesh's world bounding box.",
+   "happened": "All three gatedoors are drawn with p.y as the SILL instead of the CENTRE. azure-1 and azure-2 'gate.surround' measure y 2.40..7.30 over a lawn at y 0.00 — 2.40 m of blank curtain wall under the door, so the glass hangs flat on the wall above head height with nothing to stand on. azure-3 measures y 14.30..18.20 while the tower roof deck is 12.60, so its threshold is 1.70 m up, and its name plate ('gate.plate') sits at y 17.46..18.12, five metres over the player's head and unreadable. The paintings prove the bug is in the builder and not the data: ember-1's painting mesh is y -7.35..-3.34, correctly centred on its authored p.y of -5.50.",
+   "should": "A gatedoor's p.y is its centre like every other kind: azure-1/2 span y 0.20..4.60 (a door you can walk through off the lawn) and azure-3 spans 12.60..16.00, standing on the roof.",
+   "png": "_shots/play_keepB9/16_azure1_gate.png (Nim on the lawn under a door that starts above his head), _shots/play_keepB9/11_tower_from_the_lawn.png",
+   "owner_item": "P9 — the owner's 'some gates for new worlds on walls ... high up and unreachable, with broken sign text'"
+  },
+  {
+   "id": "K5",
+   "where": "THE GALLERY, library nook — Old Fen at [17, 6.35, -21].",
+   "did": "Walked to Fen, stood 1.2 m / 2.0 m / 3.5 m away, pressed E four times at each distance, and diffed the whole page text before and after.",
+   "happened": "NOTHING HAPPENS. The 'E OLD FEN TALK' prompt is on screen, but E produces no dialogue, no state change and no new DOM node — the only thing that changes between the before and after page dumps is the clock and the fps. game._npcs is an empty array. His lines exist in the data ('Walk it first. Push the stick gently and you stroll; push it home and you run.' / 'Land and jump again straight away, then again. Three jumps, each one taller than the last' / 'Already moving? Crouch, then jump.') so the Keep's entire tutorial voice is written and unreachable.",
+   "should": "E next to Fen opens his dialogue and steps through the lines.",
+   "png": "_shots/play_keepB13/01_fen_before.png, _shots/play_keepB13/02_fen_after.png, _shots/play_keepB11/20_fen_approach.png",
+   "owner_item": "P11"
+  },
+  {
+   "id": "K6",
+   "where": "THE LOBBY, on the spawn pad at [0.00, 0.00, -1.00], from the first frame after NEW GAME — and everywhere else in the hub.",
+   "did": "Pressed NEW GAME, looked at the screen, pressed E.",
+   "happened": "The interact prompt 'E OLD FEN / TALK' is already drawn under Nim on the spawn pad. Old Fen is 27.01 m away, one floor up, behind the gallery deck. Pressing E does nothing. The prompt is in the page text at every position I sampled in the hub, so it is not range-gated at all.",
+   "should": "The prompt appears only within talking range with line of sight, and only for an interaction that actually fires.",
+   "png": "_shots/play_keep/02_lobby_look_north.png, _shots/play_keep/04_lobby_spawn.png",
+   "owner_item": "P11"
+  },
+  {
+   "id": "K7",
+   "where": "THE GALLERY, library nook, standing 1.2 m from Old Fen at [18.20, 6.30, -21.00].",
+   "did": "Walked up to Fen and stood still.",
+   "happened": "The follow camera collapses to dist 1.94 and ends up INSIDE Nim's head: the frame is the back of his skull and Fen's torso, looking almost straight down at the floorboards. You cannot see the NPC you are standing in front of. Note that this PASSES camcheck, whose rule is dist >= TUNE.cam.minDist (1.60) — the number is legal and the frame is unusable, which is exactly the class of bug the owner is complaining about. Walking through interiors is fine by comparison (measured camDist over ten frames: library nook 5.14-6.79, long hall 5.44-6.80, undercroft 6.31-6.80, gallery west leg 6.75-6.80) — the collapse happens when you STOP near geometry.",
+   "should": "In a tight interior the camera tilts over the head rather than pushing through it, and the hero never fills the frame.",
+   "png": "_shots/play_keepB13/01_fen_before.png, _shots/play_keepB14/06_cam_at_fen.png, _shots/play_keepB14/07_balcony_standing.png",
+   "owner_item": "P10 — 'camera gets buggy and hard to look around when inside a structure'"
+  },
+  {
+   "id": "K8",
+   "where": "THE LOBBY, standing on the secret grate at [-13.50, 0.00, 0.92] facing north.",
+   "did": "Walked onto the grate and stood still.",
+   "happened": "The 'THE UNDERCROFT / mind the stair' sign board stands between the camera and the hero and hides Nim completely — a flat white plate filling the middle of the screen. The camera neither pulled in nor tilted, and this was a standing frame, not a passing one.",
+   "should": "The camera pulls in or the sign fades; camcheck's own rule is that the hero is never occluded for more than 0.3 s.",
+   "png": "_shots/play_keepB/06_grate_standing_on_it.png",
+   "owner_item": "P10"
+  },
+  {
+   "id": "K9",
+   "where": "THE COURTYARD, the climbable tree at [-13, 0, 20] — all four courtyard trees behave the same.",
+   "did": "Stood on the lawn at [-13, 0.3, 24] and walked north toward the doors, pressing nothing but W.",
+   "happened": "The trunk captured Nim and hoisted him to [-12.99, 2.65, 20.93], state 'climb'. The walk ended there, 2.65 m up a tree he never asked to climb. The ladder Volume is far larger than the 0.52 m trunk.",
+   "should": "Walking past a tree walks past it; climbing needs Nim to press into the trunk (TUNE.climb.radius is 0.55).",
+   "png": "_shots/play_keepB9/07_tree_walked_past.png, _shots/play_keepB9/08_tree_climb.png",
+   "owner_item": "P6 / P11"
+  },
+  {
+   "id": "K10",
+   "where": "THE COURTYARD, swimming in the parterre at [0, 0.24, 26.6].",
+   "did": "Swam into the pool and held CROUCH (C) for 1.5 s — which is what the sign at the pool edge tells you to do: 'deep enough to swim — crouch to dive'.",
+   "happened": "Nothing sank. y stayed 0.00 for the whole hold, 'submerged' stayed false, the state only dropped from 'swim' to 'swimIdle'. The pool floor is at -1.30, so there is 1.30 m to sink into.",
+   "should": "Crouch sinks at TUNE.swim.sink and Nim goes under, as the sign promises and as the underwater post-processing expects.",
+   "png": "_shots/play_keepB7/11_fountain_dived.png",
+   "owner_item": "P3 / P11"
+  },
+  {
+   "id": "K11",
+   "where": "THE COURTYARD, the fountain statue at [0, 0.60, 30] — authored as deco('statue', ..., {mat:'marble', tint:0xdfe9f2}).",
+   "did": "Swam to the middle of the parterre and looked at it from the south and the east.",
+   "happened": "It renders as a plain dark-brown corrugated slab standing in the water — no figure, no marble, none of the authored pale blue. It is the centrepiece of the room the game uses to teach swimming and it looks like a packing crate.",
+   "should": "A marble statue that reads as a statue, in the authored colour.",
+   "png": "_shots/play_keepB8/03_fountain_close_statue.png, _shots/play_keepB9/04_statue_from_south.png",
+   "owner_item": "P6"
+  },
+  {
+   "id": "K12",
+   "where": "THE GALLERY, library nook — Old Fen's model.",
+   "did": "Stood next to him and looked.",
+   "happened": "OLD FEN IS A NAKED PRIMITIVE: a pale pink cone for a robe, a pink sphere for a head, a smaller cone for a hat, a stick and a yellow disc. No face, no arms, no articulation, no material variation. CONTRACT hard rule 1 forbids naked primitives and requires critters (CRITTERS includes 'fen') to be articulated and multi-part. He is the hub's only character and the game's tutorial voice.",
+   "should": "A built, articulated caretaker in keeping with Nim's own construction quality.",
+   "png": "_shots/play_keepB11/20_fen_approach.png",
+   "owner_item": "P6 / contract"
+  },
+  {
+   "id": "K13",
+   "where": "THE WYRM STAIR turret, west of the lobby, standing on the ramp at [-30.00, 7.27, 12.50].",
+   "did": "Teleported into the turret and looked around from the ramp.",
+   "happened": "The 540-degree walking ramp reads as a helix of disconnected striped slabs floating in a near-black faceted shaft. The drum interior has effectively no light, the ramp has no visible risers, soffit or newel, and every tread carries a bright yellow safe-edge stripe. This is the 'dark broken understructure' look the owner photographed. The same treatment on the undercroft spiral stair (which does work) makes it read as scattered debris hanging over a void rather than as a staircase.",
+   "should": "Light the turret interior, give the helix a soffit/newel so it reads as built, and drop the safe-edge stripe from walk-on treads — keep.js's own convention says walk-on floors never get one 'or the highlight stops meaning anything'.",
+   "png": "_shots/play_keepB14/12_ramps_from_outside.png, _shots/play_keepB/01_well_from_lobby.png, _shots/play_keepB/04_well_from_undercroft.png",
+   "owner_item": "P6 — 'broken stairs' / 'dark broken understructure'"
+  },
+  {
+   "id": "K14",
+   "where": "THE GALLERY balcony at [0, 6.30, 14.20], looking south at the garden loft.",
+   "did": "Stood on the balcony where the sign says 'crouch, then jump, at a full run' and looked at the jump I was being asked to make.",
+   "happened": "A hanging red banner fills the doorway and hides the garden loft completely — you are told to long-jump a 6 m gap at a target you cannot see. (The jump itself works: from a 9.00 m/s run-up, crouch+jump landed on the loft at [0, 6.30, 26.19]. An 8.40 m/s run-up fell into the courtyard.)",
+   "should": "The landing platform is visible from the take-off.",
+   "png": "_shots/play_keepB14/08_balcony_looking_at_the_loft.png, _shots/play_keepB14/10_longjump_attempt1.png",
+   "owner_item": "P6 / P11"
+  },
+  {
+   "id": "K15",
+   "where": "Dev tooling — CRESTBOUND.game.__dev.unlockAll(), used from the Keep.",
+   "did": "Called it and re-read every gate.",
+   "happened": "It is a NO-OP. It returns without throwing, save.crestTotal() stays 0, and all twelve sealed gates stay unlocked=false sealed=true. The dispatch tells playtest agents to use exactly this to travel, so every future playtest of a gated course is blocked by it. Workaround that does work: call save.collectCrest(course, id) for all 13 courses x 7 crest ids — that gives 91 crests and unlocks all 13 gates immediately.",
+   "should": "unlockAll() unlocks the gates.",
+   "png": "n/a — _harness/_play_keepB15.json holds the before/after gate table",
+   "owner_item": "P11 (blocks playtesting)"
+  },
+  {
+   "id": "K16",
+   "where": "THE GALLERY deck around [0, 6.30, -11] and the balcony at [0, 6.30, 14.2].",
+   "did": "Arrived on the gallery and looked around; saw the same object again on the balcony.",
+   "happened": "A thin dark-red rod/plank lies half-sunk in the deck in both places, with no base and no visible purpose — it reads as a dropped prop rather than dressing. Minor, but it is the kind of thing behind the owner's 'extra objects'.",
+   "should": "Either seat it as a real prop or remove it.",
+   "png": "_shots/play_keepB11/01_gallery_arrival.png, _shots/play_keepB14/07_balcony_standing.png",
+   "owner_item": "P6"
+  },
+  {
+   "id": "K17",
+   "where": "The tower roof at [-17, 12.65, 37] — the azure-3 gate trigger.",
+   "did": "Landed on the tower roof after unlocking the save.",
+   "happened": "The PRISM RIDE course card pops the instant you arrive on the roof deck, 1.4 m before the door and without walking into anything — the trigger volume (y 11.85..16.15) covers the whole roof. The reward for a wall-kick climb is a modal dialog instead of a moment standing on the roof.",
+   "should": "The trigger sits at the door, not over the roof.",
+   "png": "_shots/play_keepB18/02_azure3_walkin.png",
+   "owner_item": "P11 (minor)"
+  }
+ ],
+ "worked": [
+  "P0 IS CLOSED on this build. Held W for 1.4 s at state 'title' and the hero moved 0.00 m — the title-screen input leak is gone. NEW GAME puts the game in state 'keep'.",
+  "All 13 gates report real booleans: verdant-1 unlocked=true sealed=false, the other 12 unlocked=false sealed=true.",
+  "GATE ENTRY WORKS END TO END. Walking into verdant-1 raises the BAILEY MEADOW card and ENTER loads verdant-1. With the save unlocked, verdant-2 -> GNASHER FORT -> loads verdant-2, ember-2 -> PISTON HALLS -> ember-2, rime-2 -> GLACIER SLIDE -> rime-2, azure-1 -> TIDEWELL TEMPLE -> azure-1, azure-3 -> PRISM RIDE. Every gate advertises and loads the right course. The owner's blocker does not reproduce.",
+  "Every SEALED gate explains itself by name and price the moment you walk into it: GNASHER FORT 1 CREST, WINDMILL HEIGHTS 3, MAGMA WORKS 5, PISTON HALLS 8, CINDER CHASE 12, SUNSCAR NECROPOLIS 15, FROST COTTAGE 18, GLACIER SLIDE 22, BLIZZARD PEAK 26, TIDEWELL TEMPLE 30.",
+  "The four EMBER paintings are all reachable by walking the undercroft floor, and all four raise their own toast.",
+  "The secret grate works: jump then ground pound at [-13.5, 0, 0.9] breaks through and drops you into the undercroft, and the undercroft checkpoint fires.",
+  "The 23-tread spiral stair between the undercroft and the lobby is fully walkable in BOTH directions — climbed y -7.67 to the top tread at -0.33 and stepped east onto the lobby floor at 0.00. It is the only working vertical link in the building.",
+  "The gallery walkway does close its loop, around the NORTH side of the void (z -13.80..-8.34 at x -5..5). The south side is correctly severed by the stair slot and its balustrades — that is authored, not a bug.",
+  "Swimming works: jumping the 1.10 m rim lands you in the water, the swim states drive, and a surface hop gets you back out over the rim (measured out at y 1.10 after four tries). The water surface mesh is at y 0.95, correctly 0.15 m BELOW the 1.10 m rim — the 'overflowing' look is the doubled mesh in K2, not a wrong height.",
+  "The balcony -> garden loft long jump works and is tuned right: 8.40 m/s of run-up falls short, 9.00 m/s clears the 6.00 m gap and lands on the loft.",
+  "The wall-kick tower is climbable across its 3.0 m x-axis — reached y 6.96, past the 3.23 and 6.43 ledges. Kicking along the 5.65 m z-axis correctly does nothing, since that span is wider than the 3.4 m shaft limit.",
+  "The course card is genuinely good: realm tag, difficulty pips, seven named crest slots, coin/time/death tallies, keyboard AND gamepad hints. The CRESTWAY gate at the end of the courtyard is a real set-piece.",
+  "Nothing in the Keep killed me in any of the eighteen runs, including a 12 m fall off the tower and an 8 m drop down the open stair well — the 'the hub cannot kill you' promise holds.",
+  "No console or page errors in any run."
+ ],
+ "blocked": [
+  "The WYRM STAIR sandboard chute (the ride back down into the lobby) and its three coins — I walked the turret ramp but never rode the chute; it needs a driver that can hold a line down a corkscrew.",
+  "The iron door at [-17.5, -5.9, 8] (10 crests, opens on the WYRM STAIR) — never walked into it, so I cannot say whether it opens or where it puts you.",
+  "The CRESTWAY at [0, 2.8, 48] (60 crests) — I had 91 crests in the save but never walked into it.",
+  "Mouse-look sign, sensitivity and the controls screen (P1/P2) — my driver only ever sent KeyboardEvents, so I cannot confirm or deny the input lane's fixes from this pass.",
+  "Gamepad."
+ ]
+}
