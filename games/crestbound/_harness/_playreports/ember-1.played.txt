@@ -1,0 +1,75 @@
+EMBER-1 "MAGMA WORKS" — what I actually did, in order.
+
+I drove the shipped page headless at ?dev=1&quality=low&autoscale=0 through
+_harness/_play_e1.py + _play_e1b.py (thirteen scripted segments, real
+KeyboardEvents through window, player.__test.state() sampled every 110-250 ms,
+119 PNGs into _shots/play_ember-1/). Every segment clicked NEW GAME on the real
+title, called __dev.unlockAll(), then entered ember-1 through the real loader at
+a named checkpoint. Teleports were used only to travel; every station was then
+walked on foot.
+
+BEAT 1 — THE SHORE. Spawned at (0, 4.60, 45) on the yard flat. Read the MAGMA
+WORKS board (legible from the pad and from 3 m). Walked the swept track north
+picking up the trail coins, then off-track west to (-8.4, 3.06, 35.9) to look at
+the shore and the lake edge, then back to the quay.
+
+BEAT 2 — THE QUAY AND THE FLAME CATWALK. Took cp-quay. Looked at the quay
+pedestal and the race-start board. Stood at the catwalk mouth (z 12 and z 10.6)
+and forced the vent cycle to clock 0.2 / 1.6 / 2.9 / 3.6 and to a firing/idle
+pair, photographing each. Walked straight into vent 1 with the clock at 0 and
+died at clock 0.70 (deaths 0 -> 1) - the warn window held all the way to the
+jet. Froze the hazards and pushed north from twelve different z positions to
+find out whether the vent props block the deck (they do not), then queried the
+broadphase: four colliders in the whole catwalk band, none of them a vent.
+Finally ran the spine three times from the quay at clock 1.5 / 2.6 / 3.4 —
+crossed once, died twice, both times running into a jet already lit. Stood
+still at (0, 3.00, 0) for nine seconds between vents 2 and 3 with the bumbler
+patrolling: nothing.
+
+BEAT 2 (cont.) — THE JUNCTION AND THE IRON HAT. Took cp-junction. Read the
+raft board. Walked on to the METAL HAT at (-4, 3.90, -9): power flipped from
+null to metal, helmet on, 20 s HUD timer.
+
+BEAT 3 — THE RAFT FIELD. Four attempts. Two raft-by-raft hops from (0, -11)
+and two continuous run-and-jump crossings from (0, -12.4). All four ended in
+the lava between the junction and rafts 1-4. Stood on R1 at (4.4, 2.85, -16)
+and let it take me down: it sank and INCINERATED me. A fifth attempt from the
+proper approach lane (x 4.4, five and a half metres of straight run-up) was
+queued as segment 2d.
+
+BEAT 4 — THE SMELTER. Took cp-smelter. Read both belt boards. Stood on the
+green jump pad and measured the launch (vel 4.41, 15.92, 7.86 — it fires).
+Stood on the belt with no input at all and was carried off the deck and killed.
+Stood on it holding W west for fourteen seconds and did not move at all. Forced
+the crusher through its beat at clock 0.1 / 1.6 / 2.4. Pounded a breakable
+crate from above.
+
+BEAT 5 — THE EAST GANTRY (ROUTE B). Stood at the gantry head at (40, 6, 16),
+forced both pulse beams through their cycle, then ran the 25 m from z 15 to
+z -9.93 at full speed through both beam lines: no deaths, six coins. Tried to
+walk to sigil 8 on the pylon spur and fell in the 1.2 m gap (it needs a hop).
+
+BEAT 6 — THE CRUCIBLE AND THE FLUE (ROUTE C). Took cp-crucible. Walked toward
+the flue and ran into the west wall twice looking for the 1.4 m door. Read (or
+tried to read) the KICK ONE WALL sign. Stood on the flue floor at (-8.1, 6.40,
+-34) and played the authored climb — one jump plus four alternating wall kicks —
+six times; best height 8.80 m of the 9.00 m needed, and I ended back on the
+floor.
+
+BEAT 7 — THE POUR. Stood on the level-3 walk at (-9, 15.40, -30.4) and at
+(-6.03, 15.00, -30.4) and forced the 30 s pour through warn / on / mid / off.
+Stood in the pour lane at (0, 15.00, -30.4) and was killed at clock 30.15.
+Walked the walk east to (6, 15, -30.4) to look at the sweeping chain bar.
+
+BEAT 8 — THE CROWN. Reached the crane gantry twice; both times the approach
+put me over the crucible's open mouth instead and I fell inside the vessel, and
+walked its floor at y 6.00 looking for a way out. Walked the RIM from
+(-5.2, 22.0, -38) south to (-5.23, 21.60, -32.74), taking three rim coins.
+Looked at the bucket orbit from the crown at clock 0 / 2 / 4.
+
+BEAT 9 — THE SLAG PIT. Crossed the chain bridge from (-16, 6.6, -34), walked
+to (-26, -34) and then right up to the Warden at (-30.84, 6.00, -34) — close
+enough to clip into it — and stood completely still for five seconds.
+
+BEAT 10 — THE IRON HAT AND THE ISLET. Re-entered at cp-junction, took the hat
+and set off west across the lava for the islet at (-26, 1.90, -14).
