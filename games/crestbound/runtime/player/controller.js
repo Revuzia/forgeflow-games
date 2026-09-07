@@ -430,6 +430,41 @@ const CLEAR_INSET_Y = 0.03;
 /** Land impact under this is silent (no thump, no dust). */
 const LAND_QUIET = 1.2;
 
+/**
+ * A climb that is pressing UP and gaining less than CLIMB_STALL_RISE metres
+ * for CLIMB_STALL seconds is under something and must top out or let go — it
+ * may never go on writing a rise into a ceiling. (Playtest rime-1 #18.)
+ */
+const CLIMB_STALL = 0.22;
+const CLIMB_STALL_RISE = 0.01;
+/**
+ * After a climb TOPS OUT, the same ladder Volume is refused for this long (or
+ * until the hero lands). Without it the step-off at the top is a trap: the
+ * hero leaves the climb with his feet still a few centimetres inside the
+ * volume, `_volumes` re-grabs him on the very next substep, `_startClimb`
+ * zeroes his velocity, `_climbMove` sees his head above the volume top and
+ * steps him off again -- measured on rime-1's pine as a 15 cm loop between
+ * y 12.25 and 12.40 that ran for every one of the 280 frames left in the
+ * probe, hands on the stick. (Playtest rime-1 #18, the hang in mid-air.)
+ */
+const CLIMB_REGRAB_LOCK = 0.45;
+/**
+ * NEVER GRAB A LADDER YOU WOULD BE STEPPED STRAIGHT OFF.
+ *
+ * `_climbMove` ends a climb the moment the hero's HEAD clears the volume's top
+ * (`pos.y + height > top + CLIMB_TOP_CLEAR`). So a grab made when the top is
+ * already within a body height of the feet is a grab that lasts one substep,
+ * and if the hero is standing on the ledge at the top of the ladder — the
+ * crow's nest slab on a climbable tree — grab and step-off alternate forever:
+ * measured on verdant-1's pine (nest top 11.88, ladder volume top 13.46,
+ * 13.46 - 1.5 - 0.15 = 11.81, i.e. BELOW the slab) as a climb/fall flicker
+ * between y 11.94 and 12.24 that ran for 589 of the probe's 597 frames with W
+ * held. The grab therefore uses the SAME threshold as the step-off, so the two
+ * can never disagree: a ladder is only worth grabbing while there is more than
+ * a body height of it left above your feet.
+ */
+const CLIMB_TOP_CLEAR = 0.15;
+
 /** Every state the machine can be in. Exported for harnesses. */
 export const STATES = Object.freeze([
   'idle', 'run', 'skid', 'pivot', 'bonk', 'crouch', 'crouchwalk',
@@ -672,6 +707,10 @@ export class Player {
     this._ringSeen = null;
     this._climbVol = null;
     this._climbAngle = 0;
+    this._climbY = 0;          // last y the climb actually gained from
+    this._climbStallT = 0;     // seconds pressing UP with no rise
+    this._climbLockVol = null; // ladder refused after a top-out
+    this._climbLockT = 0;
     this._cannon = null;
     this._flyT = 0;
 
@@ -1163,6 +1202,10 @@ export class Player {
     if (this._reverseT > 0) this._reverseT -= dt;
     if (this._strokeT > 0) this._strokeT -= dt;
     if (this._standGuardT > 0) this._standGuardT -= dt;
+    if (this._climbLockT > 0) {
+      this._climbLockT -= dt;
+      if (this._climbLockT <= 0) this._climbLockVol = null;
+    }
     if (this._bonkCD > 0) this._bonkCD -= dt;
     if (this._boostT > 0) this._boostT -= dt;
     if (this._crouchGraceT > 0) this._crouchGraceT -= dt;
@@ -2249,13 +2292,73 @@ export class Player {
 
     /* Top of the climb: step off onto the ledge. */
     const top = props && isFinite(props.top) ? props.top : v.aabb.max.y;
-    if (this.pos.y + this.height > top + 0.15 && this._inMoveY > 0.2) {
+    if (this.pos.y + this.height > top + CLIMB_TOP_CLEAR && this._inMoveY > 0.2) {
       headingFromYaw(this.facing, _fwd);
       vel.x += _fwd.x * 2.4;
       vel.z += _fwd.z * 2.4;
       vel.y = 3.0;
+      this._lockClimb(v);
       this._endClimb();
+      return;
     }
+
+    /* A climb that presses UP and gets nowhere is under something. */
+    if (this._inMoveY > 0.2) {
+      if (this.pos.y - this._climbY > CLIMB_STALL_RISE) {
+        this._climbY = this.pos.y;
+        this._climbStallT = 0;
+      } else {
+        this._climbStallT += dt;
+        if (this._climbStallT >= CLIMB_STALL) { this._climbStallT = 0; this._climbTopOut(); }
+      }
+    } else {
+      this._climbY = this.pos.y;
+      this._climbStallT = 0;
+    }
+  }
+
+  /**
+   * TOP OUT — haul over the lip the climb is stuck under.
+   *
+   * Playtest rime-1 #18, "THE CLIMB RUNS OUT SHORT OF THE NEST AND THEN NIM
+   * HANGS IN THE AIR". The crow's nest on a climbable tree is a solid slab
+   * across the trunk (rime-1's pine: y 11.67..12.07, 2.4 m square, centred on
+   * the trunk at (-16, 20); verdant-1's is the same). A climber's HEAD meets
+   * its underside — feet 10.17 — and `_climbMove` went on writing vel.y = +2.6
+   * into it for as long as the player held up: measured 593 of 597 frames in
+   * `climb` at exactly y 10.17 with vy 0 and W held, i.e. forever.
+   *
+   * On a ladder your hands are at head height, so a lip whose TOP is within a
+   * step of your hands is a lip you can haul yourself over — the resolver's
+   * own step-up rule, measured from the hands instead of the feet. If the body
+   * fits up there, take it and land on it. If it does not (a real overhang),
+   * keep the grip: the hero is holding a pole he cannot pass, which is honest,
+   * and jump still kicks him off it.
+   */
+  _climbTopOut() {
+    const res = this._lastRes;
+    const c = res ? res.ceilingCollider : null;
+    const ab = c && c.aabb;
+    if (!ab || c.solid === false || c.active === false) return;
+    const top = ab.max.y;
+    const reach = this.height + TUNE.stepUp;
+    if (!(top > this.pos.y) || top - this.pos.y > reach) return;
+    const y = top + 1e-3;
+    if (!this._capsuleClear(this.pos.x, y, this.pos.z, this.radius, this.height)) return;
+    this.pos.y = y;
+    this.vel.set(0, 0, 0);
+    /* `_endClimb` leaves him in `fall` one substep above the lip; the ground
+       probe finds the lip on that substep and the normal landing path runs, so
+       the land pose, the dust and the 'land' event are the ordinary ones. */
+    this._lockClimb(this._climbVol);
+    this._endClimb();
+  }
+
+  /** Refuse this ladder until the hero lands or CLIMB_REGRAB_LOCK expires. */
+  _lockClimb(v) {
+    if (!v) return;
+    this._climbLockVol = v;
+    this._climbLockT = CLIMB_REGRAB_LOCK;
   }
 
   /** Kick off a pole/net: away from it and up (climb.kickV = [away, up]). */
@@ -2277,6 +2380,8 @@ export class Player {
   _startClimb(v) {
     if (this._climbVol === v) return;
     this._climbVol = v;
+    this._climbY = this.pos.y;
+    this._climbStallT = 0;
     this.vel.set(0, 0, 0);
     this.jumpCount = 0;
     this._chainT = 0;
@@ -2543,6 +2648,11 @@ export class Player {
     this._launchSpeed = 0;
     this._wallT = 0;
     this._wallLockT = 0;
+    /* A hero standing on the ledge he topped out onto may grab the pole again
+       the moment he presses into it: the lock is only there to stop the
+       step-off from re-grabbing itself in mid-air. */
+    this._climbLockT = 0;
+    this._climbLockVol = null;
     this._cutArmed = false;
     this._cutPending = false;
     this._qsMash = 0;
@@ -2921,7 +3031,13 @@ export class Player {
     }
 
     /* ---- ladder ------------------------------------------------------- */
-    const lad = res ? res.ladder : null;
+    let lad = res ? res.ladder : null;
+    if (lad && lad === this._climbLockVol && this._climbLockT > 0) lad = null;
+    if (lad && this.state !== 'climb') {
+      const lp = lad.props || null;
+      const ltop = lp && isFinite(lp.top) ? lp.top : lad.aabb.max.y;
+      if (!(ltop > this.pos.y + this.height + CLIMB_TOP_CLEAR)) lad = null;
+    }
     if (lad && this.state !== 'climbKick' && !this.inWater) {
       /* Grab when airborne, or when pushing into it from the ground. */
       const pushing = this._wmag > 0.3;

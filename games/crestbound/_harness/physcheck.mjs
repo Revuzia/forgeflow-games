@@ -784,6 +784,65 @@ console.log(`  body r=${TUNE.radius} h=${TUNE.height} stepUp=${TUNE.stepUp}  sna
   bp.remove(ground);
 }
 
+
+// ── 21. THE TOP OF A CLIMB — a real Player up a real pole into a real nest ──
+// Playtest rime-1 #18: "THE CLIMB RUNS OUT SHORT OF THE NEST AND THEN NIM HANGS
+// IN THE AIR". Two mechanisms, both measured live before this test existed:
+//   (a) the crow's nest is a SOLID slab across the top of the trunk, so a
+//       climber's head meets its underside and `_climbMove` went on writing
+//       vel.y = +climb.speed into it forever (593 of 597 frames at one y);
+//   (b) once he is past it, the ladder Volume still reaches above the slab, so
+//       a hero STANDING on the nest was re-grabbed, stepped straight off by the
+//       head-clears-the-top rule, landed, and was grabbed again — an endless
+//       climb/fall flicker (589 of 597 frames on verdant-1's pine).
+// This drives the real controller against the real geometry: ground at 3, a
+// pole ladder Volume 3 -> 12.27, and the nest slab 11.67..12.07 across it.
+{
+  const { Player } = await import(pathToFileURL(join(ROOT, 'runtime', 'player', 'controller.js')).href);
+  const X = 900, Z = 900;                       // far from every other fixture
+  const NEST_TOP = 12.07, NEST_BOT = 11.67, VOL_TOP = 12.27, GY = 3.0;
+  const gnd = bp.add(new Collider({ center: [X, GY - 1, Z], half: [8, 1, 8], surface: 'grass' }));
+  const trunk = bp.add(new Collider({ center: [X, (GY + NEST_BOT) / 2, Z], half: [0.32, (NEST_BOT - GY) / 2, 0.32], surface: 'bark' }));
+  const nest = bp.add(new Collider({ center: [X, (NEST_BOT + NEST_TOP) / 2, Z], half: [1.2, (NEST_TOP - NEST_BOT) / 2, 1.2], surface: 'wood' }));
+  const ladder = new Volume({ center: [X, (GY + VOL_TOP) / 2, Z], half: [1.7, (VOL_TOP - GY) / 2, 1.7],
+    kind: 'ladder', props: { pole: [X, Z], top: VOL_TOP } });
+  const treeWorld = { broadphase: bp, killVolumes: [], volumes: [ladder] };
+
+  // a stub Input: W held, nothing else (contract §4 shape)
+  const held = { suspended: false, move: { x: 0, y: 1, mag: 1 }, look: { dx: 0, dy: 0 },
+    jump: false, jumpPressed: false, jumpReleased: false, jumpHeld: false,
+    crouch: false, crouchPressed: false, dive: false, divePressed: false,
+    pound: false, poundPressed: false, recenterPressed: false, peek: false,
+    interactPressed: false, pausePressed: false, restartPressed: false,
+    toCheckpointPressed: false, camTogglePressed: false, gamepad: { connected: false } };
+
+  const pl = new Player(treeWorld, held, null, null, null);
+  pl.spawn(new THREE.Vector3(X + 1.6, GY, Z), Math.atan2(-(-1), -0));   // face -X, into the trunk
+  pl.facing = Math.PI * 0.5;                                            // -X
+  const seen = [];
+  let topped = -1;
+  for (let i = 0; i < 900; i++) {                 // 15 s at 60 Hz
+    pl.update(1 / 60);
+    seen.push(pl.state);
+    if (topped < 0 && pl.grounded && pl.pos.y >= NEST_TOP - 0.02) topped = i;
+  }
+  check('climb top-out: the hero reaches the nest slab and stands on it',
+    topped >= 0, `y ${pl.pos.y.toFixed(2)} state ${pl.state} after 900 frames (nest top ${NEST_TOP})`);
+  // no flicker: over the 3 s AFTER topping out, climb must not restart on the
+  // nest more than a couple of times (a grab-and-step-off loop toggles ~30x/s)
+  if (topped >= 0) {
+    const tail = seen.slice(topped, topped + 180);
+    let starts = 0;
+    for (let i = 1; i < tail.length; i++) if (tail[i] === 'climb' && tail[i - 1] !== 'climb') starts++;
+    check('climb top-out: standing on the nest does not re-grab the pole',
+      starts <= 2, `${starts} climb re-entries in the 3 s after topping out`);
+  }
+  // and the climb itself must be a climb, not a hang: at least a metre gained
+  check('climb top-out: the climb actually carried him up the trunk',
+    seen.filter((s) => s === 'climb').length > 30, `${seen.filter((s) => s === 'climb').length} climb frames`);
+  bp.remove(gnd); bp.remove(trunk); bp.remove(nest);
+}
+
 // ── report ───────────────────────────────────────────────────────────────────
 console.log('\n' + '-'.repeat(70));
 console.log(`${passed + failed} checks, ${failed} failing`);
