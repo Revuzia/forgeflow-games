@@ -547,6 +547,7 @@ export class Player {
     this.coyoteT = 0;
     this.bufferT = 0;
     this._chainT = 0;           // triple-jump chain window
+    this._chainSpeed = 0;       // PEAK horizontal speed inside that window
     this._wallT = 0;            // wall contact memory
     this._wallLockT = 0;        // wall-kick lockout
     this._noGroundT = 0;
@@ -734,6 +735,7 @@ export class Player {
     this.coyoteT = 0;
     this.bufferT = 0;
     this._chainT = 0;
+    this._chainSpeed = 0;
     this._wallT = 0;
     this._wallLockT = 0;
     this._noGroundT = 0;
@@ -1023,7 +1025,10 @@ export class Player {
     this.stateT += dt;
     if (this.coyoteT > 0) this.coyoteT -= dt;
     if (this.bufferT > 0) this.bufferT -= dt;
-    if (this._chainT > 0) { this._chainT -= dt; if (this._chainT <= 0) this.jumpCount = 0; }
+    if (this._chainT > 0) {
+      this._chainT -= dt;
+      if (this._chainT <= 0) { this.jumpCount = 0; this._chainSpeed = 0; }
+    }
     if (this._wallT > 0) this._wallT -= dt;
     if (this._wallLockT > 0) this._wallLockT -= dt;
     if (this._noGroundT > 0) this._noGroundT -= dt;
@@ -1119,6 +1124,15 @@ export class Player {
     this.stats.distance += moved;
     this._prevSpeed = this.speed;              // pre-collision speed, for bonk impact
     this.speed = hyp2(vel.x, vel.z);
+
+    /* THE CHAIN REMEMBERS THE RUN, NOT THE INSTANT. `_chainSpeed` is a peak
+       hold across the open chain window, seeded in `_onLand` from the speed
+       carried INTO the landing. Sampling `this.speed` at the press instead
+       (what shipped before P4) meant `decelGround` had already eaten the run:
+       8.46 -> 3.66 m/s in 60 ms, 0.99 m/s in 120 ms, so a player who eased off
+       the stick as he landed could never chain. Peak-holding also lets a hero
+       who lands SLOW and accelerates inside the window earn the triple. */
+    if (this._chainT > 0 && this.speed > this._chainSpeed) this._chainSpeed = this.speed;
 
     if (this.grounded) {
       this.airborneT = 0;
@@ -1435,18 +1449,31 @@ export class Player {
   }
 
   /**
-   * Single / double / triple. The chain advances only when the previous landing
-   * was recent (`tripleWindow`) AND the hero is moving (`tripleMinSpeed`); any
-   * landing that is not promptly followed by a jump resets it.
+   * Single / double / triple. The chain advances when the previous landing was
+   * recent (`tripleWindow`, 0.45 s) and — for the 2 → 3 step only — the hero
+   * was RUNNING somewhere inside that window. Any landing that is not promptly
+   * followed by a jump resets it.
+   *
+   * P4 (owner playtest 2026-09-06): the two gates that made this move
+   * unperformable by a human are both fixed here and in tuning.js. The speed
+   * test reads `_chainSpeed` — the PEAK across the open window, seeded from the
+   * landing — not `this.speed`, which the 64 m/s² brake has already flattened
+   * by the time a person can press. And the 1 → 2 step (`chainMinSpeed` 0) has
+   * no speed bar at all, so the double is not a hidden move. `bufferT` reaches
+   * this same path, so a press up to `TUNE.buffer` BEFORE the landing chains
+   * instead of being eaten (verified: a press 40 and 80 ms early comes out
+   * jumpCount 2).
    */
   _doJump() {
     let n = 1;
-    if (this._chainT > 0 && this.jumpCount >= 1 && this.jumpCount < 3 &&
-      this.speed >= TUNE.tripleMinSpeed) {
-      n = this.jumpCount + 1;
+    if (this._chainT > 0 && this.jumpCount >= 1 && this.jumpCount < 3) {
+      const need = this.jumpCount === 1 ? TUNE.chainMinSpeed : TUNE.tripleMinSpeed;
+      const carried = this._chainSpeed > this.speed ? this._chainSpeed : this.speed;
+      if (carried >= need) n = this.jumpCount + 1;
     }
     this.jumpCount = n;
     this._chainT = 0;
+    this._chainSpeed = 0;
     this.vel.y = TUNE.jumpV[n - 1];
     this._launch(n === 1 ? 'jump1' : (n === 2 ? 'jump2' : 'jump3'), true);
     this.lastJumpKind = n === 1 ? 'single' : (n === 2 ? 'double' : 'triple');
@@ -2341,14 +2368,21 @@ export class Player {
     }
 
     /* Triple-jump chain: the window opens on EVERY landing; jumping inside it
-       at speed advances the chain, letting it lapse resets to a single. */
+       advances the chain, letting it lapse resets to a single. The speed the
+       chain judges is seeded HERE, from the run the hero carried into the
+       landing — `this.speed` is last substep's (airborne) value and `vel` is
+       what survived the sweep, so take whichever is larger and let the peak
+       hold in `_step` raise it if he accelerates inside the window. */
     this._chainT = TUNE.tripleWindow;
+    const carried = hyp2(this.vel.x, this.vel.z);
+    this._chainSpeed = carried > this.speed ? carried : this.speed;
 
     if (hard) {
       this._setState('hardLand');
       this.vel.x *= 0.35; this.vel.z *= 0.35;
       this.jumpCount = 0;
       this._chainT = 0;
+      this._chainSpeed = 0;
     } else if (this._fellFromJump || impact > LAND_QUIET) {
       this._setState('land');
     } else {
@@ -2789,9 +2823,11 @@ export class Player {
   /** Harness override — real moves fire for real; anything else is set flat. */
   _force(name) {
     switch (name) {
-      case 'jump1': this.jumpCount = 0; this._chainT = 0; this._doJump(); return;
-      case 'jump2': this.jumpCount = 1; this._chainT = TUNE.tripleWindow; this.speed = Math.max(this.speed, TUNE.tripleMinSpeed); this._doJump(); return;
-      case 'jump3': this.jumpCount = 2; this._chainT = TUNE.tripleWindow; this.speed = Math.max(this.speed, TUNE.tripleMinSpeed); this._doJump(); return;
+      case 'jump1': this.jumpCount = 0; this._chainT = 0; this._chainSpeed = 0; this._doJump(); return;
+      case 'jump2': this.jumpCount = 1; this._chainT = TUNE.tripleWindow;
+        this._chainSpeed = Math.max(this.speed, TUNE.tripleMinSpeed); this._doJump(); return;
+      case 'jump3': this.jumpCount = 2; this._chainT = TUNE.tripleWindow;
+        this._chainSpeed = Math.max(this.speed, TUNE.tripleMinSpeed); this._doJump(); return;
       case 'longjump': this._doLongJump(); return;
       case 'backflip': this._doBackflip(); return;
       case 'sideflip': this._doSideflip(); return;

@@ -37,8 +37,34 @@ export const TUNE = {
   jumpV: [11.4, 13.3, 15.6],
   jumpCut: 0.5,
   jumpHoldMin: 0.06,
-  tripleWindow: 0.30,
-  tripleMinSpeed: 4.0,
+  /* THE CHAIN, WIDENED FOR A HUMAN (owner playtest 2026-09-06, P4).
+     MEASURED BEFORE THIS CHANGE on the real key path (KeyW held, Space
+     dispatched as a real KeyboardEvent): a double fired on 4 of 14 honest
+     attempts (28.6 %), and on 1 of 7 when the player eased off the stick as
+     they landed. Two independent rejections, both invisible to the old
+     feelcheck rows — which pinned the analog stick at magnitude 1 and pressed
+     ~40 ms after the landing frame, i.e. exactly the two things a human does
+     not do:
+       1. THE WINDOW. `_chainT` is seeded on the landing frame and has already
+          lost a substep by the time the harness can read it (0.2917 of 0.30),
+          and a press is consumed on the FOLLOWING frame — so a nominal 0.30 s
+          window was ~0.27 s of real reaction time. A press 280 ms after the
+          landing read `_chainT -0.0000` and came out a single (apex 1.91).
+       2. THE SPEED GATE. `tripleMinSpeed` was sampled AT THE PRESS, and
+          `decelGround` (64 m/s²) takes the hero from 8.46 m/s to 3.66 m/s in
+          60 ms and 0.99 m/s in 120 ms. Anyone who stops pushing forward as
+          they land — the ordinary way you land facing a ledge — was under the
+          bar before they could press.
+     `tripleWindow` is now an ordinary platformer 0.45 s. The speed sample is a
+     PEAK HOLD across the window, seeded from the speed carried INTO the
+     landing (controller `_chainSpeed`), never an instant. And the 1 → 2 step
+     carries no speed requirement at all (`chainMinSpeed` 0), so the double is
+     discoverable; the 2 → 3 step keeps one, so the triple stays a RUNNING
+     move. NOTHING about the launch changes: apexes are still 1.91 / 2.60 /
+     3.58 m and the published REACH_TABLE is untouched. */
+  tripleWindow: 0.45,          // seconds after landing to chain the next jump
+  chainMinSpeed: 0.0,          // peak speed in the window needed for 1 -> 2 (free)
+  tripleMinSpeed: 4.0,         // peak speed in the window needed for 2 -> 3
   coyote: 0.09, buffer: 0.11,
   landLag: 0.05, hardLandLag: 0.20, hardLandSpeed: 22,
   longJump: { vy: 8.5, fwd: 17.0, minSpeed: 5.5 },

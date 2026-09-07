@@ -19,7 +19,15 @@ truth. If the tuning changes, the gate moves with it.
   runup_time         rest -> 95 % of run speed             <= 0.25 s
   stop_time          release at full run -> rest           <= 0.16 s
   apex1/2/3          Space, tap-tap-tap with the chain     EXACT single/double/triple apex +/- 0.08
-  chain_break_apex   a 0.45 s pause before the 2nd jump    back to apex1 (tripleWindow enforced)
+  chain_break_apex   a tripleWindow+0.25 s pause            back to apex1 (tripleWindow enforced)
+  human_double_120   press 120 ms after the LANDING FRAME   EXACT double apex (P4)
+  human_double_200   press 200 ms after the landing frame   EXACT double apex
+  human_double_280   press 280 ms after the landing frame   EXACT double apex
+  human_double_decel 200 ms, forward RELEASED on landing    EXACT double apex
+  human_double_walk  200 ms, approached at a walk           EXACT double apex
+  human_double_buffered  press 60 ms BEFORE landing         EXACT double apex (buffer -> chain)
+  human_triple_apex  three presses at a 200 ms rhythm       EXACT triple apex
+  human_double_rate  8 honest attempts, 3 approach speeds   >= 0.95 chained
   jump_cut_ratio     50 ms tap vs full hold                <= 0.60
   longjump_dist      crouch + jump at run                  >= 6.4 m flat
   backflip_apex      crouch + jump from rest               EXACT.backflipApex +/- 0.10
@@ -456,12 +464,193 @@ async () => {
   }
   await wait(300);
 
-  // tripleWindow enforcement: a 0.45 s pause after landing breaks the chain, so
-  // the SECOND jump must be a single again.
-  const broken = await chain(2, 450);
+  // tripleWindow enforcement: a pause LONGER than the window breaks the chain,
+  // so the SECOND jump must be a single again. The pause is derived from TUNE
+  // (window + 250 ms) - it was hard-coded at 450 ms, which stopped proving
+  // anything the moment P4 widened tripleWindow from 0.30 to 0.45.
+  const breakPause = Math.round(TUNE.tripleWindow * 1000) + 250;
+  const broken = await chain(2, breakPause);
   if (!broken || broken.err) failWith('chain_break_apex', (broken && broken.err) || 'precondition failed');
-  else record('chain_break_apex', broken.apexes[1], 'states ' + broken.states.join(' -> '));
+  else record('chain_break_apex', broken.apexes[1],
+              breakPause + ' ms pause; states ' + broken.states.join(' -> '));
   await wait(300);
+
+  /* =======================================================================
+   * 2b. THE CHAIN A HUMAN ACTUALLY PERFORMS - P4, owner playtest 2026-09-06
+   * ====================================================================
+   * The rows above pin the analog stick at magnitude 1 and press ~40 ms after
+   * the landing frame. A person does NEITHER, and that is exactly why they
+   * passed while the owner could not get a double at all: measured on the real
+   * key path before the fix, a double fired on 4 of 14 honest attempts, and on
+   * 1 of 7 when the player eased off the stick as he landed. A row that only
+   * goes green on frame-perfect timing is not evidence, so these rows press
+   * LATE (120 / 200 / 280 / 360 / 420 ms after the landing FRAME), press while
+   * decelerating, press out of a WALK, and press EARLY (into the buffer).
+   */
+  /**
+   * Run the chain the way a player does: real KeyW (or a 0.45 stick for a
+   * walk), Space held through each flight, and every press timed from the
+   * LANDING FRAME of the jump before it. `delays[0]` is ignored (the first
+   * jump goes as soon as the run-up is done).
+   */
+  const humanChain = async (approach, delays) => {
+    /* START IN THE MIDDLE. KeyW is CAMERA-relative (contract §4), so unlike the
+       `chain` rows above -- which drive `stickWorld(1,0)` and therefore always
+       run along world +X -- a keyboard run heads wherever the camera happens to
+       point. From 45 m off centre a three-jump chain (~30 m of travel) can leave
+       the 140 m slab and never land, which is what "jump 3 never landed" was.
+       From the centre, +15 m in z, the nearest edge and the kick wall are both
+       more than 50 m away in every heading. */
+    if (!(await reset(0, 15))) return {err: 'not grounded on the slab'};
+    if (approach === 'walk') { stickWorld(1, 0, 0.45); await wait(1250); }
+    else { down(FWD); await wait(950); }
+    syncP();
+    const approachSpd = +spd().toFixed(2);
+    const kinds = [], apexes = [], notes = [];
+    for (let k = 0; k < delays.length; k++) {
+      if (k > 0) {
+        // 'decel' = the ordinary way anyone lands facing a ledge: stop pushing
+        // forward the moment the feet touch. decelGround (64 m/s2) then takes
+        // 8.5 m/s to under 1 m/s inside 120 ms.
+        if (approach === 'decel') { up(FWD); IN.__test.stick(0, 0); }
+        await wait(delays[k]);
+      }
+      syncP();
+      const y0 = P.pos.y, cT = +(P._chainT || 0).toFixed(3), sN = +spd().toFixed(2);
+      const jc = P.jumpCount;
+      down(JUMP);
+      const f = await observe(2600, (s) => !!s.landAt);
+      up(JUMP);
+      kinds.push(P.lastJumpKind);
+      apexes.push(+(f.peakY - y0).toFixed(3));
+      notes.push('press at chainT ' + cT.toFixed(3) + ' s, jumpCount ' + jc +
+                 ', speed ' + sN.toFixed(2) + ' m/s');
+      if (!f.landAt) {
+        const where = '(' + P.pos.x.toFixed(1) + ', ' + P.pos.y.toFixed(1) + ', '
+                    + P.pos.z.toFixed(1) + ')' + (P.dead ? ' [dead]' : '');
+        allUp();
+        return {kinds, apexes, notes, approachSpd,
+                err: 'jump ' + (k + 1) + ' never landed, ended at ' + where};
+      }
+    }
+    allUp();
+    return {kinds, apexes, notes, approachSpd};
+  };
+
+  // One sweep drives the three timing rows, the decel row, the walk row AND
+  // the success rate. Every delay here is inside TUNE.tripleWindow, so every
+  // one of them MUST come out a double.
+  // Every delay is a real human reaction AND leaves >= 70 ms of margin inside
+  // TUNE.tripleWindow -- `wait()` quantises up to a whole rendered frame, so a
+  // 420 ms sample measured chainT 0.000 at the press and came out a single.
+  // The window EDGE is already proven by `chain_break_apex`; these rows are
+  // about the band a person actually presses in.
+  const SWEEP = [['run', 120], ['run', 200], ['run', 280], ['run', 360],
+                 ['decel', 120], ['decel', 200], ['decel', 280], ['walk', 200]];
+  const sweep = [];
+  for (const pair of SWEEP) {
+    const r = await humanChain(pair[0], [0, pair[1]]);
+    sweep.push({mode: pair[0], d: pair[1], r: r});
+    await wait(220);
+  }
+  out.notes.humanSweep = sweep.map((e) => e.mode + '@' + e.d + ' -> ' +
+    (e.r && !e.r.err ? (e.r.kinds[1] + ' ' + e.r.apexes[1] + ' m (' + e.r.notes[1] + ')')
+                     : ('ERR ' + ((e.r && e.r.err) || '?'))));
+
+  const pick = (mode, d) => {
+    for (const e of sweep) if (e.mode === mode && e.d === d) return e.r;
+    return null;
+  };
+  const rowFrom = (name, mode, d) => {
+    const r = pick(mode, d);
+    if (!r || r.err) failWith(name, (r && r.err) || 'precondition failed');
+    else record(name, r.apexes[1], r.kinds.join(' -> ') + '; ' + r.notes[1] +
+                '; approach ' + r.approachSpd + ' m/s');
+  };
+  rowFrom('human_double_120', 'run', 120);
+  rowFrom('human_double_200', 'run', 200);
+  rowFrom('human_double_280', 'run', 280);
+  rowFrom('human_double_decel', 'decel', 200);
+  rowFrom('human_double_walk', 'walk', 200);
+
+  // THE NUMBER THE OWNER'S COMPLAINT IS ABOUT: of nine honest attempts spread
+  // across the whole window and three approach speeds, how many chained?
+  {
+    let got = 0, tot = 0;
+    const missed = [];
+    for (const e of sweep) {
+      tot++;
+      const k = e.r && !e.r.err ? e.r.kinds[1] : null;
+      if (k === 'double' || k === 'triple') got++;
+      else missed.push(e.mode + '@' + e.d + 'ms=' + (k || 'ERR'));
+    }
+    record('human_double_rate', +(got / tot).toFixed(3),
+           got + ' of ' + tot + ' honest attempts chained' +
+           (missed.length ? '; missed ' + missed.join(', ') : ''));
+  }
+
+  // The full human TRIPLE: three presses at a 200 ms rhythm, which is a rhythm
+  // a person can hold. The owner's decision (P5) is that the triple STAYS, so
+  // this row is what proves it is reachable without frame-perfect timing.
+  {
+    const t3 = await humanChain('run', [0, 200, 200]);
+    if (!t3 || t3.err) failWith('human_triple_apex', (t3 && t3.err) || 'precondition failed');
+    else record('human_triple_apex', t3.apexes[2], t3.kinds.join(' -> ') + '; ' + t3.notes[2]);
+    await wait(250);
+  }
+
+  // The BUFFER must FEED the chain, not eat the press: a jump pressed 60 ms
+  // BEFORE the landing has to come out a double off that landing.
+  if (await need('human_double_buffered', 0, 15)) {
+    down(FWD); await wait(950); syncP();
+    down(JUMP); await wait(110); up(JUMP);
+    let t0 = simNow(), w0 = performance.now();
+    while (P.grounded && simNow() - t0 < 900) {
+      if (performance.now() - w0 > 12000) break;
+      await frame(); syncP();
+    }
+    if (P.grounded) failWith('human_double_buffered', 'the first jump never left the ground');
+    else {
+      let pressed = false;
+      t0 = simNow(); w0 = performance.now();
+      while (simNow() - t0 < 2500) {
+        if (performance.now() - w0 > 30000) break;
+        await frame(); syncP();
+        if (P.grounded) break;
+        if (P.vel.y < 0) {
+          // exact ballistics against the slab top, as the `buffer` row does
+          const dy = Math.max(0, P.pos.y - TEST.y), sv = -P.vel.y;
+          const tt = (Math.sqrt(sv * sv + 2 * TUNE.gravFall * dy) - sv) / TUNE.gravFall * 1000;
+          if (tt <= 60) { down(JUMP); pressed = true; break; }
+        }
+      }
+      if (!pressed) failWith('human_double_buffered', 'never got inside the 60 ms window before landing');
+      else {
+        /* MEASURE AGAINST THE SLAB, NOT AGAINST A POLLED "LANDING FRAME". The
+           buffered jump is resolved in the SAME physics frame as the touchdown
+           (`_onLand` opens the chain window, the next substep's `_preMove`
+           spends the buffer), so a JS poll for `P.grounded` can miss the
+           landing entirely -- it did, and the row read 0.000 m while its own
+           note said the jump came out a double. The slab TOP is exactly TEST.y,
+           and at the moment of the press the hero is 0.08 m above it, so the
+           peak of whatever fires is the apex. */
+        let launched = false, peak = -Infinity;
+        t0 = simNow(); w0 = performance.now();
+        while (simNow() - t0 < 2600) {
+          if (performance.now() - w0 > 30000) break;
+          await frame(); syncP();
+          if (P.pos.y > peak) peak = P.pos.y;
+          if (!launched) { if (P.vel.y > 4) launched = true; }
+          else if (P.grounded) break;
+        }
+        up(JUMP);
+        if (!launched) failWith('human_double_buffered', 'the buffered press never fired a jump');
+        else record('human_double_buffered', +(peak - TEST.y).toFixed(3),
+                    'pressed 60 ms early -> ' + P.lastJumpKind);
+      }
+    }
+    allUp(); await wait(250);
+  }
 
   /* ---- jump cut: a short tap must not reach the full apex ---------------- */
   if (await need('jump_cut_ratio')) {
@@ -965,7 +1154,25 @@ def build_expectations(tune, exact, dive_max):
         band("apex2",            "about", e.get("doubleApex", 2.60), 0.08, "m", "double"),
         band("apex3",            "about", e.get("tripleApex", 3.58), 0.08, "m", "triple"),
         band("chain_break_apex", "about", e.get("singleApex", 1.91), 0.15, "m",
-             "a %.2f s pause breaks the chain" % (t.get("tripleWindow", 0.30) + 0.15)),
+             "a %.2f s pause breaks the chain" % (t.get("tripleWindow", 0.45) + 0.25)),
+        # --- P4: the chain a HUMAN performs. Every one of these presses is
+        #     LATE by frame standards and every one must still give a double.
+        band("human_double_120",  "about", e.get("doubleApex", 2.60), 0.08, "m",
+             "press 120 ms after the landing frame, running"),
+        band("human_double_200",  "about", e.get("doubleApex", 2.60), 0.08, "m",
+             "press 200 ms after the landing frame, running"),
+        band("human_double_280",  "about", e.get("doubleApex", 2.60), 0.08, "m",
+             "press 280 ms after the landing frame, running"),
+        band("human_double_decel", "about", e.get("doubleApex", 2.60), 0.08, "m",
+             "press 200 ms after landing having LET GO of forward"),
+        band("human_double_walk", "about", e.get("doubleApex", 2.60), 0.08, "m",
+             "press 200 ms after landing out of a WALK"),
+        band("human_double_buffered", "about", e.get("doubleApex", 2.60), 0.10, "m",
+             "press 60 ms BEFORE landing (the buffer feeds the chain)"),
+        band("human_triple_apex", "about", e.get("tripleApex", 3.58), 0.10, "m",
+             "three presses at a 200 ms rhythm"),
+        band("human_double_rate", "min",   0.95, 0, "x",
+             "share of honest human attempts (120-360 ms) that chained"),
         band("jump_cut_ratio",   "max",   0.60, 0, "x",    "50 ms tap / full hold"),
         band("longjump_dist",    "min",   6.40, 0, "m",    "crouch+jump at run"),
         band("backflip_apex",    "about", e.get("backflipApex", 3.22), 0.10, "m", ""),
