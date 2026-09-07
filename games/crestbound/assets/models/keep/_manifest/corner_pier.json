@@ -1,0 +1,77 @@
+{
+ "name": "corner_pier",
+ "file": "corner_pier.glb",
+ "kind": "architecture",
+ "bytes": 161656,
+ "tris": 876,
+ "tris_budget": 3000,
+ "tris_ok": true,
+ "bones": 0,
+ "clips": [],
+ "bounds": {
+  "min": [
+   -0.65,
+   0.0,
+   -0.65
+  ],
+  "max": [
+   0.65,
+   4.0,
+   0.65
+  ],
+  "size": [
+   1.3,
+   4.0,
+   1.3
+  ]
+ },
+ "pivot": "base centre of the 1.0 m square footprint",
+ "front": "+Z (glTF) \u2014 the face that looks into the room",
+ "materials": [
+  "corner_pier"
+ ],
+ "nodes": [
+  "corner_pier"
+ ],
+ "textures": {
+  "atlas": 1024,
+  "maps": [
+   "albedo (sRGB, webp)",
+   "normal (tangent, OpenGL +Y, webp)",
+   "orm (R=occlusion G=roughness B=metallic, webp)"
+  ]
+ },
+ "notes": [
+  "1.0 x 1.0 x 4.0 m; quoins alternate long/short every 0.48 m course; stack for taller corners"
+ ],
+ "reimport": {
+  "meshes": [
+   "corner_pier"
+  ],
+  "tris": 876,
+  "bones": 0,
+  "clips": [],
+  "images": [
+   [
+    "corner_pier_albedo",
+    1024,
+    1024
+   ],
+   [
+    "corner_pier_normal",
+    1024,
+    1024
+   ],
+   [
+    "corner_pier_orm",
+    1024,
+    1024
+   ]
+  ],
+  "materials": [
+   "corner_pier"
+  ]
+ },
+ "reimport_ok": true,
+ "seconds": 230.5
+}

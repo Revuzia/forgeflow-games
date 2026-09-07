@@ -1,0 +1,77 @@
+{
+ "name": "newel",
+ "file": "newel.glb",
+ "kind": "prop",
+ "bytes": 77608,
+ "tris": 944,
+ "tris_budget": 1500,
+ "tris_ok": true,
+ "bones": 0,
+ "clips": [],
+ "bounds": {
+  "min": [
+   -0.21,
+   0.0,
+   -0.21
+  ],
+  "max": [
+   0.21,
+   1.245,
+   0.21
+  ],
+  "size": [
+   0.42,
+   1.245,
+   0.42
+  ]
+ },
+ "pivot": "base centre; 0.42 m footprint, 1.245 m tall (the keep.js post is 1.24)",
+ "front": "+Z (glTF) \u2014 the face that looks into the room",
+ "materials": [
+  "newel"
+ ],
+ "nodes": [
+  "newel"
+ ],
+ "textures": {
+  "atlas": 512,
+  "maps": [
+   "albedo (sRGB, webp)",
+   "normal (tangent, OpenGL +Y, webp)",
+   "orm (R=occlusion G=roughness B=metallic, webp)"
+  ]
+ },
+ "notes": [
+  "square newel with recessed panels, gilt collar and an acorn finial"
+ ],
+ "reimport": {
+  "meshes": [
+   "newel"
+  ],
+  "tris": 944,
+  "bones": 0,
+  "clips": [],
+  "images": [
+   [
+    "newel_albedo",
+    512,
+    512
+   ],
+   [
+    "newel_normal",
+    512,
+    512
+   ],
+   [
+    "newel_orm",
+    512,
+    512
+   ]
+  ],
+  "materials": [
+   "newel"
+  ]
+ },
+ "reimport_ok": true,
+ "seconds": 141.5
+}

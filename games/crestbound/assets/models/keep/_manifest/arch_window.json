@@ -1,0 +1,80 @@
+{
+ "name": "arch_window",
+ "file": "arch_window.glb",
+ "kind": "architecture",
+ "bytes": 299928,
+ "tris": 2308,
+ "tris_budget": 3000,
+ "tris_ok": true,
+ "bones": 0,
+ "clips": [],
+ "bounds": {
+  "min": [
+   -1.15,
+   0.0,
+   -0.33
+  ],
+  "max": [
+   1.15,
+   3.577,
+   0.33
+  ],
+  "size": [
+   2.3,
+   3.577,
+   0.66
+  ]
+ },
+ "pivot": "base centre of the opening (1.4 m clear, 3.2 m to the apex), sill on the floor line",
+ "front": "+Z (glTF) \u2014 the face that looks into the room",
+ "materials": [
+  "arch_window",
+  "arch_window_glass_day"
+ ],
+ "nodes": [
+  "arch_window"
+ ],
+ "textures": {
+  "atlas": 1024,
+  "maps": [
+   "albedo (sRGB, webp)",
+   "normal (tangent, OpenGL +Y, webp)",
+   "orm (R=occlusion G=roughness B=metallic, webp)"
+  ]
+ },
+ "notes": [
+  "lancet with a mullion + trefoil head and a daylight glass slot (emissive, own material) - the god-ray window",
+  "the glass sits 0.06 m behind the wall plane; the exporter names its material arch_window_glass_day"
+ ],
+ "reimport": {
+  "meshes": [
+   "arch_window"
+  ],
+  "tris": 2308,
+  "bones": 0,
+  "clips": [],
+  "images": [
+   [
+    "arch_window_albedo",
+    1024,
+    1024
+   ],
+   [
+    "arch_window_normal",
+    1024,
+    1024
+   ],
+   [
+    "arch_window_orm",
+    1024,
+    1024
+   ]
+  ],
+  "materials": [
+   "arch_window",
+   "arch_window_glass_day"
+  ]
+ },
+ "reimport_ok": true,
+ "seconds": 72.4
+}

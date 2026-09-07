@@ -1,0 +1,78 @@
+{
+ "name": "wall_panel",
+ "file": "wall_panel.glb",
+ "kind": "architecture",
+ "bytes": 659948,
+ "tris": 1976,
+ "tris_budget": 3000,
+ "tris_ok": true,
+ "bones": 0,
+ "clips": [],
+ "bounds": {
+  "min": [
+   -2.0,
+   0.0,
+   -0.0
+  ],
+  "max": [
+   2.0,
+   4.0,
+   0.42
+  ],
+  "size": [
+   4.0,
+   4.0,
+   0.42
+  ]
+ },
+ "pivot": "base centre of the BACK plane: place it on a wall face; the relief stands 0.34-0.40 m proud (glTF +Z)",
+ "front": "+Z (glTF) \u2014 the face that looks into the room",
+ "materials": [
+  "wall_panel"
+ ],
+ "nodes": [
+  "wall_panel"
+ ],
+ "textures": {
+  "atlas": 2048,
+  "maps": [
+   "albedo (sRGB, webp)",
+   "normal (tangent, OpenGL +Y, webp)",
+   "orm (R=occlusion G=roughness B=metallic, webp)"
+  ]
+ },
+ "notes": [
+  "4.0 x 4.0 m facing panel, 8 courses running bond, boss course at 2.5-3.0 m, string course at 3.0 m",
+  "tile it along X every 4.0 m; the back plane at z=0 is unbevelled so a neighbour butts clean"
+ ],
+ "reimport": {
+  "meshes": [
+   "wall_panel"
+  ],
+  "tris": 1976,
+  "bones": 0,
+  "clips": [],
+  "images": [
+   [
+    "wall_panel_albedo",
+    2048,
+    2048
+   ],
+   [
+    "wall_panel_normal",
+    2048,
+    2048
+   ],
+   [
+    "wall_panel_orm",
+    2048,
+    2048
+   ]
+  ],
+  "materials": [
+   "wall_panel"
+  ]
+ },
+ "reimport_ok": true,
+ "seconds": 165.5
+}

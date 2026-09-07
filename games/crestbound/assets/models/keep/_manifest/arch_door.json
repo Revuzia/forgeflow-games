@@ -1,0 +1,78 @@
+{
+ "name": "arch_door",
+ "file": "arch_door.glb",
+ "kind": "architecture",
+ "bytes": 527364,
+ "tris": 1600,
+ "tris_budget": 3000,
+ "tris_ok": true,
+ "bones": 0,
+ "clips": [],
+ "bounds": {
+  "min": [
+   -1.98,
+   0.0,
+   -0.43
+  ],
+  "max": [
+   1.98,
+   4.742,
+   0.43
+  ],
+  "size": [
+   3.96,
+   4.742,
+   0.86
+  ]
+ },
+ "pivot": "base centre of the opening (2.8 m clear, 4.2 m to the apex); the surround is 0.7 m deep, centred on the wall plane",
+ "front": "+Z (glTF) \u2014 the face that looks into the room",
+ "materials": [
+  "arch_door"
+ ],
+ "nodes": [
+  "arch_door"
+ ],
+ "textures": {
+  "atlas": 2048,
+  "maps": [
+   "albedo (sRGB, webp)",
+   "normal (tangent, OpenGL +Y, webp)",
+   "orm (R=occlusion G=roughness B=metallic, webp)"
+  ]
+ },
+ "notes": [
+  "two-centred pointed arch, 7 voussoirs a side, keystone, impost + plinth mouldings, hood moulding",
+  "fits keep.js IRON_DOOR (w 2.8, h 4.2) and the buildGateDoor jamb collider (0.5 m jambs)"
+ ],
+ "reimport": {
+  "meshes": [
+   "arch_door"
+  ],
+  "tris": 1600,
+  "bones": 0,
+  "clips": [],
+  "images": [
+   [
+    "arch_door_albedo",
+    2048,
+    2048
+   ],
+   [
+    "arch_door_normal",
+    2048,
+    2048
+   ],
+   [
+    "arch_door_orm",
+    2048,
+    2048
+   ]
+  ],
+  "materials": [
+   "arch_door"
+  ]
+ },
+ "reimport_ok": true,
+ "seconds": 378.1
+}
