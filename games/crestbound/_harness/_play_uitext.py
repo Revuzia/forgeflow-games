@@ -16,6 +16,12 @@ the PNG a human reads. Stations:
   azure3  #0 R tilts the camera and nothing restarts; Backspace restarts
           #7 the station board is inside the boot frame
   ember3  #5 the cp-court hint board is inside the frame and reads whole
+  lights  every course: every authored {kind:'light'} site got a fixture
+          (course._fixtureLog vs def.objects), mount histogram, draws/tris
+
+K5 rule (game.js, interactions pass 2): FEN_PROMPT_R == FEN_TALK_R (3.2 m) -
+the prompt appears ONLY inside the interact radius, so 3.5 m must show nothing
+and E must do nothing there.
 """
 import json, os, sys, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -122,19 +128,25 @@ def station_keep():
         res(not pr["show"], "K6 interact prompt hidden on the spawn pad", json.dumps(pr) + " " + png)
 
         # K5 — Fen: prompt inside range, E talks (1.2 m and 2.0 m); 3.5 m reported
+        FEN_DIST_JS = """() => { const G = CRESTBOUND.game, f = G._fen; if (!f) return null;
+          const rp = f.ref && f.ref.pos; const pos = (rp && isFinite(rp.x)) ? rp : f.pos; const pp = G.player.pos;
+          return { d: +Math.hypot(pp.x - pos.x, pp.z - pos.z).toFixed(2), fen: [+pos.x.toFixed(2), +pos.y.toFixed(2), +pos.z.toFixed(2)] }; }"""
         for d in (1.2, 2.0, 3.5):
             P.tp(17.0 + d, 6.35, -21.0); P.wait(700); P.face(17.0, -21.0); P.wait(500)
             pr = P.js(PROMPT_JS)
+            fd = P.js(FEN_DIST_JS)
             before = len(P.js(TOASTS_JS))
             P.tap("E", 90); P.wait(500)
             toasts = P.js(TOASTS_JS)
             talked = any((t.get("t1") or "").upper().find("FEN") >= 0 for t in toasts[before:]) or len(toasts) > before
             png = P.shot("K5_fen_%sm" % str(d).replace(".", "_"))
-            if d <= 2.6:
-                res(pr["show"] and talked, "K5 Fen at %.1f m: prompt shown and E talks" % d,
+            if d <= 3.0:
+                res(pr["show"] and talked, "K5 Fen at %.1f m (measured %s): prompt shown and E talks" % (d, fd and fd["d"]),
                     "prompt=%s toasts=%s %s" % (json.dumps(pr), json.dumps(toasts[-1:]), png))
             else:
-                P.say("  info Fen at 3.5 m: prompt=%s talked=%s (prompt radius 4.5, talk radius 2.6 — game.js)" % (json.dumps(pr), talked))
+                # prompt radius == talk radius (3.2 m): outside it NOTHING shows and E does nothing
+                res((not pr["show"]) and (not talked), "K5 Fen at %.1f m (measured %s): no prompt outside the interact radius, E silent" % (d, fd and fd["d"]),
+                    "prompt=%s talked=%s %s" % (json.dumps(pr), talked, png))
             P.wait(1200)
         P.tp(0, 0.1, -1.0); P.wait(600)
         pr = P.js(PROMPT_JS)
@@ -250,6 +262,13 @@ def station_rime2():
         P.tp(0.9, 30.05, -25.2); P.wait(500); P.face(-0.2, -22.6); P.wait(800)
         png2 = P.shot("r2_01_spawn_board_close")
         P.say("  read", png, png2)
+        # #0 the BEAT 1 lantern (geometry lane hung it from a post): the light site over it has a fixture
+        log = P.js("() => CRESTBOUND.game.course._fixtureLog")
+        site = [f for f in log if abs(f["p"][0] + 4.2) < 0.4 and abs(f["p"][2] + 22.6) < 0.4]
+        res(bool(site), "#0 BEAT 1 lantern light site got a fixture", json.dumps(site))
+        P.tp(-0.6, 30.05, -18.6); P.wait(500); P.face(-4.2, -22.6); P.wait(800)
+        png3 = P.shot("r2_00_lantern_post")
+        P.say("  read", png3)
         res(not [c for c in P.console if 'error' in c.lower()], "rime-2: no console errors", str(P.console[:3]))
 
 
@@ -311,10 +330,40 @@ def station_ember3():
         res(not [c for c in P.console if 'error' in c.lower()], "ember-3: no console errors", str(P.console[:3]))
 
 
+COURSES = ['keep', 'verdant-1', 'verdant-2', 'verdant-3', 'ember-1', 'ember-2', 'ember-3', 'ember-4',
+           'rime-1', 'rime-2', 'rime-3', 'azure-1', 'azure-2', 'azure-3']
+
+CENSUS_JS = """() => { const C = CRESTBOUND.game.course; const objs = C.def.objects || [];
+  let authored = 0, off = 0; const bare = [];
+  for (const o of objs) { if (!o || o.kind !== 'light') continue;
+    if (o.fixture === false || o.fixture === 'none') off++; else authored++; }
+  const hist = {}; for (const f of (C._fixtureLog || [])) { hist[f.mount] = (hist[f.mount] || 0) + 1; if (f.mount === 'lantern') bare.push(f.p.map(v => +v.toFixed(1))); }
+  const st = CRESTBOUND.engine.stats || {};
+  return { id: C.id, authored, off, sites: C.lights ? C.lights.length : null, fixtures: (C._fixtureLog || []).length,
+           hist, cageOnly: bare, draws: st.drawCalls, tris: st.tris }; }"""
+
+
+def station_lights():
+    """Every course: every authored {kind:'light'} that is not fixture:'none'
+    must have produced exactly one fixture (bulb + lamp), i.e. no bare ball
+    anywhere, not only rime-3's camp light."""
+    for cid in COURSES:
+        url = URL if cid == 'keep' else course_url(cid)
+        with Play("uitext_lights", url=url) as P:
+            if cid == 'keep':
+                P.click_title()
+            P.wait(1500)
+            info = P.js(CENSUS_JS)
+            res(info["fixtures"] == info["authored"] and info["sites"] == info["authored"],
+                "%s: %d/%d authored lights have a fixture (sites %s, mounts %s)" % (cid, info["fixtures"], info["authored"], info["sites"], json.dumps(info["hist"])),
+                "cage-only sites %s draws %s tris %s" % (json.dumps(info["cageOnly"]), info["draws"], info["tris"]))
+            res(not [c for c in P.console if 'error' in c.lower()], "%s: no console errors" % cid, str(P.console[:3]))
+
+
 if __name__ == "__main__":
     which = sys.argv[1] if len(sys.argv) > 1 else "all"
     stations = {"keep": station_keep, "rime3": station_rime3, "rime2": station_rime2,
-                "azure3": station_azure3, "ember3": station_ember3}
+                "azure3": station_azure3, "ember3": station_ember3, "lights": station_lights}
     order = list(stations) if which == "all" else [which]
     for k in order:
         print("\n==== STATION", k, flush=True)
@@ -323,7 +372,7 @@ if __name__ == "__main__":
         except Exception as e:
             res(False, "station %s crashed" % k, repr(e))
     fails = [r for r in RESULTS if not r["ok"]]
-    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_play_uitext.json")
+    out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "_play_uitext%s.json" % ("" if which == "all" else "_" + which))
     with open(out, "w", encoding="utf-8") as f:
         json.dump(RESULTS, f, indent=1)
     print("\nUITEXT REPLAY: %d pass / %d fail -> %s" % (len(RESULTS) - len(fails), len(fails), out))

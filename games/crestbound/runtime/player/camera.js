@@ -229,6 +229,25 @@ const COLLIDE_STALL_MAX_S  = 0.15;
 const COLLIDE_MIN_DIST     = 0.12;
 const DIST_LAMBDA          = 6.0;    // base distance changes (death pull-out) ease
 
+// ── CAMERA-TRANSPARENT BODIES ────────────────────────────────────────────────
+// The fan casts against what the PLAYER collides with, and two kinds of that set
+// are not walls to a camera: CRITTERS (actors — a skitter diving through the line
+// of sight, a gnasher lunging past) and thin MOVING BARS (a rotor arm, a
+// turning-room bar, a swinging chain: a hazard body whose two smaller half
+// extents are both under ROD_HALF_MAX). MEASURED 2026-09-07, azure-2 great cog,
+// hero standing beside it, hands off (`_harness/_cam_replay.py azure2_cog`): as
+// the 0.55 m arm swept the focus→lens line the fan pulled the lens 6.8 → 0.12 m
+// (the near-plane floor), the hero faded to 1 (first-person commit), the tilt
+// tier flailed −0.77..+1.15 rad and for 3 frames the lens was INSIDE the arm —
+// the playtest's "flat blue-grey frame, no world, no hero" (azure-2 #1) is the
+// inside of that arm's back faces, and the "top of Nim's head" frames are the
+// tier at 1.47 rad looking over it. A bar crossing the line hides the hero for a
+// fraction of a second; a camera that answers it by collapsing onto his face
+// hides him for the whole sweep and shows the inside of the bar on the way. So
+// the FAN ignores them; the lens SPHERE and the embedded-lens guard do not (a bar
+// that reaches the lens still dips it out of the way rather than clipping).
+const ROD_HALF_MAX         = 0.30;   // m — a box side under this is 'thin'; two thin sides = a bar
+
 // A PROBE ORIGIN CAN START INSIDE A SOLID, and the fan used to take the answer
 // literally. `Broadphase.raycast` reports an origin inside a box as the
 // degenerate hit `t = 0, normal = −dir` (collider.js `rayBox`: "origin inside"),
@@ -363,6 +382,30 @@ const SLIDE_STEP_LOSS      = 0.60;   // m — a step may not cost more clearance
 // never make the camera tilt where it did not have to.
 const PITCH_STEPS          = [0.22, 0.45, 0.68, 0.92, 1.20, 1.45];  // rad above the aim pitch
 const PITCH_ABS_MAX        = 1.47;   // rad — hard cap on the posed pitch under this tier
+// A ROOM is not a shaft. The steep steps (1.20 / 1.45 — the lens straight over
+// the hero's head) are the answer to a chimney the fan cannot frame at ANY yaw;
+// against a wall, a bookcase, a low corner of a room they put the top of the
+// hero's helmet in the middle of the frame with the floor around it and nothing
+// else (playtest: keep #6 the reading nook "INSIDE Nim's head, looking almost
+// straight down at the floorboards", rime-3 #21 the ice chamber "a hard top-down
+// shot of the top of Nim's head", verdant-2 #27). So the tier only climbs past
+// PITCH_ROOM_STEPS when the FULL yaw ladder (SLIDE_STEPS, both signs) failed to
+// reach the tier's own goal — i.e. the hero is boxed in at every heading, which
+// is what a shaft IS. A room gets at most the 0.68 lift (a high over-the-shoulder
+// shot that still shows the floor AHEAD of the hero) and then the honest pull-in
+// with the ghost fade — which is the pose a player can LOOK AROUND from: tilt the
+// mouse up and the lens sits behind the head looking into the room.
+const PITCH_ROOM_STEPS     = 3;      // PITCH_STEPS[0..2] anywhere; [3..5] only in a shaft
+// A SHAFT is a place no heading of the full yaw ladder can reach out of: the
+// best of the twelve, measured at the PLAYER'S pitch, is under this. A 3.2 m
+// chimney read from a corner reaches 3.56 m along its diagonal (rime-1 bell
+// tower); a room corner reaches its far wall along either of its own walls.
+// Measured at the player's pitch and never the tilted one: against a ceiling a
+// tilt makes every heading read blocked, and a verdict taken there licenses the
+// very tilt that produced it (keep long hall, fort corner, undercroft — all
+// grounded, `limitCeil`, 1.1-1.3 rad, before this was separated out).
+const SHAFT_REACH_M        = 4.0;
+const PITCH_ROOM_RATE      = 3.5;    // rad/s onto a room tilt (the shaft rate is a snap by design)
 const PITCH_ARM_M          = 0.35;   // m above minDist at which the search starts looking
 // THE TIER TAKES THE CHEAPEST TILT THAT WORKS, and "works" is `minDist` plus a
 // margin — NOT the framing floor. Searching to `frameMin` 2.4 m is what pushed
@@ -552,6 +595,9 @@ const _qA        = new THREE.Quaternion();
 const _hit       = { t: 0, normal: new THREE.Vector3(), collider: null, heightfield: null };
 const _DOWN      = new THREE.Vector3(0, -1, 0);   // never mutated (drop probe)
 const _spring    = { x: 0, v: 0 };
+const _rayBox    = new THREE.Box3();               // the camera's own ray march (see _ray)
+const _rayCands  = [];
+const _hfHit     = { t: 0, normal: new THREE.Vector3(), collider: null, heightfield: null };
 
 /**
  * Exact free response of a critically damped 2nd-order system.
@@ -635,6 +681,25 @@ function boxExitT(c, ox, oy, oz, dx, dy, dz) {
 }
 
 /** camera-right for a yaw about +Y: fwd × up. */
+/**
+ * Is this collider invisible to the whisker FAN? Critters, and thin bars that
+ * belong to a hazard (they move). See ROD_HALF_MAX. Static thin things — poles,
+ * chains, rails, the low treads of a flight — stay walls to the fan: the yaw
+ * slide goes around a pillar, and a lens is never eased through a tread.
+ */
+function camTransparent(c) {
+  const g = c.group;
+  if (g === 'critter') return true;
+  if (g !== 'hazard') return false;
+  const h = c.half;
+  if (!h) return false;
+  let thin = 0;
+  if (h.x < ROD_HALF_MAX) thin++;
+  if (h.y < ROD_HALF_MAX) thin++;
+  if (h.z < ROD_HALF_MAX) thin++;
+  return thin >= 2;
+}
+
 function rightFromFwd(fwd, out) {
   out.set(-fwd.z, 0, fwd.x);
   return out;
@@ -708,9 +773,9 @@ const OCC_MIN_HALF_M       = 0.01;
 // air. Measured 2026-09-05, verdant-3 crest-sigils with the camera in front of the
 // hero: the fan settled at 6.52 m (a hit at 6.87) with the lens 0.06 m outside a
 // pedestal tier's +x face and 0.08 m under its bottom — 0.10 m from a 2.8 m slab,
-// every frame, for a whole heading. `_sphereClear` asks the broadphase (and the
+// every frame, for a whole heading. `_sphereClearAt` asks the broadphase (and the
 // occluder set) for the nearest oriented-box distance at the posed lens, and
-// when it is under the radius `_deepestSphereClear` walks the pull-in inward to
+// when it is under the radius `_deepestSphereClearAt` walks the pull-in inward to
 // the deepest distance that is clear — floored at `frameMin` (the framing floor
 // exists precisely so a chest-height obstacle cannot drag the focus down into a
 // self-locking collapse), and falling back to the fan's own answer when nothing
@@ -1045,6 +1110,7 @@ export class FollowCamera {
     this._slideWant  = 0;                      // its target this frame
     this._pitchSlide = 0;                      // eased SHAFT-tier pitch offset (rad, see PITCH_STEPS)
     this._pitchWant  = 0;                      // its target this frame
+    this._shaft      = false;                  // the full yaw ladder found no heading: a chimney (see PITCH_ROOM_STEPS)
     this._limitCeil  = false;                  // the limiting whisker hit an underside
     this._limitFrame = false;                  // the limiter was the CHEST (framing) probe
     this._limitLens  = TUNE.cam.dist;          // LENS-only limit (framing probe excluded)
@@ -1126,7 +1192,7 @@ export class FollowCamera {
           yaw: wrapAngle(self.yaw + self._yawSlide), pitch: self._pitchAim(),
           yawOrbit: self.yaw, pitchOrbit: self.pitch,
           yawSlide: self._yawSlide, pitchAdapt: self._pitchAdapt, focusDrop: self._focusDrop,
-          pitchSlide: self._pitchSlide, pitchWant: self._pitchWant,
+          pitchSlide: self._pitchSlide, pitchWant: self._pitchWant, shaft: self._shaft,
           limitCeil: self._limitCeil, limitFrame: self._limitFrame,
           fallDepth: self._fallDepth, dropBelow: self._dropBelow,
           fallLookK: self._fallLookK, lookAimK: self._lookAimK,
@@ -1447,7 +1513,7 @@ export class FollowCamera {
     this._rcActive = false; this._rcHoldT = 0;
     this._autoRate = 0;
     this._yawSlide = 0; this._slideWant = 0;
-    this._pitchSlide = 0; this._pitchWant = 0;
+    this._pitchSlide = 0; this._pitchWant = 0; this._shaft = false;
     this._pitchAdapt = 0; this._focusDrop = 0;
     this._fallDepth = 0; this._limitCeil = false;
     this._limitFrame = false; this._limitLens = TUNE.cam.dist;
@@ -1465,7 +1531,7 @@ export class FollowCamera {
       this.pitch = TUNE.cam.defaultPitch;
     }
     this._yawSlide = 0; this._slideWant = 0;
-    this._pitchSlide = 0; this._pitchWant = 0;
+    this._pitchSlide = 0; this._pitchWant = 0; this._shaft = false;
     this._pitchAdapt = 0; this._focusDrop = 0;
     this._airPeakY = src.y; this._fallDepth = 0; this._limitCeil = false;
     this._limitFrame = false; this._limitLens = TUNE.cam.dist;
@@ -1554,10 +1620,24 @@ export class FollowCamera {
       const speed = this._heroSpeed();
       const idle = this._time - this._lastManualT;
       if (speed > AUTO_MIN_SPEED && idle >= MANUAL_IDLE_S && !this._autoFrozen()) {
-        const v = this.player.vel;
-        const runYaw = v ? yawFromHeading(v.x, v.z) : this.yaw;
-        const delta = shortestAngle(this.yaw, runYaw);
-        if (Math.abs(delta) < AUTO_TOWARD_DEADZONE) { want = 1; target = runYaw; }
+        // The direction the HERO IS STEERING — his facing, which the controller
+        // turns toward the stick — not his world velocity. MEASURED (surfaces
+        // lane, rime-3 west face, `_sf2_probe.py r3disc`): with the wind off, a
+        // hero holding W from (-28, 26) drifted 27-32 m west in 5 s, heading 0 →
+        // 74-90°, grounded the whole way; with the camera pinned the heading
+        // held within 7°. The cross-slope deflects the velocity, the camera
+        // eased behind the deflected velocity, "forward" turned with it, the
+        // velocity deflected further: a loop closed through the world. The
+        // facing is the stick expressed in the camera's frame, so following it
+        // closes the loop on the player's intent instead. Compared against the
+        // POSED heading (orbit + collision slide), which is what "forward" is.
+        const p = this.player;
+        const v = p.vel;
+        const runYaw = (typeof p.facing === 'number' && isFinite(p.facing))
+          ? p.facing
+          : (v ? yawFromHeading(v.x, v.z) : this.yaw);
+        const delta = shortestAngle(this.yaw + this._yawSlide, runYaw);
+        if (Math.abs(delta) < AUTO_TOWARD_DEADZONE) { want = 1; target = wrapAngle(this.yaw + delta); }
       }
     }
     // rate ramps in / out with lagYaw → S-curve start and stop, never a step
@@ -1835,11 +1915,18 @@ export class FollowCamera {
       if (t >= 0 && t - R < lensLimit) lensLimit = t - R;
     }
     // ceiling probe: offset by the collide radius — still the lens sphere, so
-    // still unfloored — and reports its RAW hit distance (see WHISKER_UP_M).
+    // still unfloored — and reports its RAW hit distance against an UNDERSIDE
+    // (see WHISKER_UP_M: the offset is the radius). Against a wall it is one
+    // more lens ray and takes the radius off like the others — the raw distance
+    // put the lens centre exactly on the wall's face (measured: keep undercroft
+    // west wall, `clear 0.00` at dist 2.11).
     _cOrigin.copy(this._focus); _cOrigin.y += WHISKER_UP_M;
     t = this._castOccluder(bp, _cOrigin, _cDir, maxD);
-    if (t >= 0 && t < limit) { limit = t; ceil = this._probeCeil; }
-    if (t >= 0 && t < lensLimit) lensLimit = t;
+    if (t >= 0) {
+      const tu = this._probeCeil ? t : t - R;
+      if (tu < limit) { limit = tu; ceil = this._probeCeil; }
+      if (tu < lensLimit) lensLimit = tu;
+    }
 
     // ── FRAMING PROBE: chest height, 0.70 m BELOW the lens path — twice the
     // collide radius, so it is not the lens sphere and a hit on it is not a
@@ -1868,6 +1955,21 @@ export class FollowCamera {
       if (framed < limit) { limit = framed; ceil = this._probeCeil; frame = true; }
     }
 
+    // ── THE LENS SPHERE on this heading, not only the rays to it (see
+    // SPHERE_EPS_M). This used to run on the POSED heading only, and only above
+    // `frameMin`. MEASURED 2026-09-07 (`_cam_replay.py`, keep undercroft west
+    // wall, keep long hall, verdant-1 fort corner, azure-1 cistern jamb): a
+    // heading that runs ALONG a wall the focus stands 0.3 m from is never hit
+    // by a ray — the whisker on the wall side starts inside it and steps
+    // through, the rest run parallel to its face — so the fan answered 2-6 m
+    // and the lens sat ON the face (`clear 0.00`), which the near plane cuts
+    // open. The sphere sees it; and asking it of EVERY candidate is what lets
+    // the yaw ladder rank a heading that hugs a wall below one that leaves it.
+    // Nothing clear along the heading = the heading is worth nothing: the walk
+    // returns its floor, not the fan's answer.
+    if (limit > COLLIDE_MIN_DIST && !this._sphereClearAt(bp, yawOff, pitch, limit)) {
+      limit = this._deepestSphereClearAt(bp, yawOff, pitch, COLLIDE_MIN_DIST, limit);
+    }
     if (pose) { this._limitCeil = ceil; this._limitFrame = frame; this._limitLens = lensLimit; }
     return limit;
   }
@@ -2000,7 +2102,9 @@ export class FollowCamera {
           const held = this._clearance(bp, bestOff, pitch, want, false);
           if (held > bestClear + 1e-3) bestClear = held; else bestOff = 0;
         }
-        // cheapest deviation first, both signs, stop at the first that frames him
+        // cheapest deviation first, both signs, stop at the first that frames him.
+        // The WIDE steps are for a hero moving too fast to orbit out of it
+        // himself; a standing hero would watch the world spin (the owner's "spin").
         const wide = c0 < FADE_START_DIST && this._heroSpeed() > AUTO_MIN_SPEED;
         const nTry = wide ? SLIDE_STEPS.length : SLIDE_BOUNDED_N;
         for (let k = 0; k < nTry && bestClear < floor; k++) {
@@ -2016,6 +2120,31 @@ export class FollowCamera {
         slideWant = this._yawSlide;                 // hysteresis: hold, never hunt
       }
       this._slideWant = slideWant;
+
+      // THE TILT TIER'S ARMING POSE AND THE SHAFT VERDICT — both at the PLAYER'S
+      // pitch (`pitchBase`), never the tilted one (see SHAFT_REACH_M), on the
+      // heading we are on. The verdict is re-measured on every armed frame,
+      // whatever froze the yaw ladder above: a chimney is a chimney while the
+      // hero kicks up it, and a room stays a room while he stands in its corner.
+      const pitchBase = clamp(this.pitch + this._pitchAdapt, C.pitchMin, C.pitchMax);
+      const cBase = (this._yawSlide === 0 && pitchBase === pitch)
+        ? c0
+        : this._clearance(bp, this._yawSlide, pitchBase, want, false);
+      const armed = cBase < C.minDist + PITCH_ARM_M;
+      const shaftGoal = C.minDist + PITCH_TARGET_M;
+      if (!armed) {
+        this._shaft = false;
+      } else {
+        let reach = cBase;
+        for (let k = 0; k < SLIDE_STEPS.length && reach < SHAFT_REACH_M; k++) {
+          for (let sg = 0; sg < 2 && reach < SHAFT_REACH_M; sg++) {
+            const off = sg === 0 ? SLIDE_STEPS[k] : -SLIDE_STEPS[k];
+            const c = this._clearance(bp, off, pitchBase, want, false);
+            if (c > reach) reach = c;
+          }
+        }
+        this._shaft = reach < SHAFT_REACH_M;
+      }
 
       // (d) ease onto it — frozen during a committed move (CONTRACT §12).
       // A SNAP (dt <= 0: course load, respawn) takes the heading immediately, so
@@ -2047,64 +2176,87 @@ export class FollowCamera {
         }
       }
 
-      // (d2) THE SHAFT TIER. The clearance on the heading we will actually pose
-      // at — after the yaw ease, so the tier answers the pose and not a heading
-      // the camera is only passing through.
-      let cPose = this._yawSlide === 0 ? c0 : this._clearance(bp, this._yawSlide, pitch, want, true);
+      // (d2) THE TILT TIER — on the heading we will actually pose at (after the
+      // yaw ease), and measured against the PLAYER'S OWN pitch (`pitchBase`), not
+      // the tilted one. The old test compared the TILTED pose against the release
+      // band, which by construction it never clears while the tilt is what holds
+      // the distance up — so a tilt taken once held for as long as the hero stood
+      // there, whatever the player did with the mouse (keep #6, rime-3 #21: "no
+      // way to look forward from inside the chamber"). Now: the tier ARMS when the
+      // player's pose is blocked, HOLDS a tilt only while that pose stays blocked
+      // and the tilt still works, and hands the camera back the moment the
+      // player's own aim is clear again.
       let pitchWant = 0;
-      if (cPose < C.minDist + PITCH_ARM_M) {
-        // No yaw heading the slide may take can frame him: the geometry is a
-        // SHAFT, not a wall, and the axes it is open along are the ones the
-        // ordinary fan never asks about.
-        const goal = C.minDist + PITCH_TARGET_M;
+      if (armed) {
         // Over-the-head first (+), up-the-shaft second (−), smallest tilt first,
         // and stop at the first that reaches the goal: the tier takes the
-        // CHEAPEST pose that works, never the steepest one available.
-        let bestOff = 0, bestClear = cPose;
-        for (let k = 0; k < PITCH_STEPS.length && bestClear < goal; k++) {
-          for (let sg = 0; sg < 2 && bestClear < goal; sg++) {
-            const off = sg === 0 ? PITCH_STEPS[k] : -PITCH_STEPS[k];
-            const pc = clamp(pitch + off, -PITCH_ABS_MAX, PITCH_ABS_MAX);
-            const real = pc - pitch;
-            if (real > -1e-3 && real < 1e-3) continue;            // clamped to where we already are
-            const c = this._clearance(bp, this._yawSlide, pc, want, false);
-            if (c > bestClear + 1e-3) { bestClear = c; bestOff = real; }
+        // CHEAPEST pose that works, never the steepest one available. The steep
+        // steps exist for a SHAFT (see PITCH_ROOM_STEPS); a room gets the lift.
+        // The steep steps are a SHAFT's — or an airborne hero's: a wall kick is
+        // where the over-the-head pose is needed (CONTRACT §12), and a kick
+        // ladder is a hero pressed into a CORNER of the chimney, from which the
+        // full yaw ladder finds a diagonal that frames him and so calls the
+        // chimney a room (measured: rime-1 bell tower, hero 0.38 m from the west
+        // wall and 0.48 m from the north, the −1.35 heading clear to 3.56 m —
+        // and the capped tilt then pulled the lens to 0.12 m for 1.6 s of the
+        // climb). A grounded hero in a room corner gets the room lift; the
+        // moment he jumps the tier may climb over him.
+        const pl = this.player;
+        const airborne = !!(pl && !(pl.grounded || pl.onGround) && !(pl.inWater || pl.submerged));
+        const steep = this._shaft || airborne;
+        const nSteps = steep ? PITCH_STEPS.length : PITCH_ROOM_STEPS;
+        const capRad = PITCH_STEPS[nSteps - 1] + 1e-3;
+        // A tilt that is still working is KEPT (no hunting between steps) — but
+        // not a steep one the hero has since LANDED with in a room: the
+        // undercroft fall carried 1.47 rad down the well onto the floor, and a
+        // held tilt is what turned it into a standing top-down.
+        let held = -1;
+        if (this._pitchSlide !== 0 && Math.abs(this._pitchSlide) <= capRad) {
+          const pc = clamp(pitchBase + this._pitchSlide, -PITCH_ABS_MAX, PITCH_ABS_MAX);
+          held = this._clearance(bp, this._yawSlide, pc, want, false);
+        }
+        if (held >= C.minDist) {
+          pitchWant = this._pitchSlide;             // hysteresis: a tilt that still works is kept
+        } else {
+          let bestOff = 0, bestClear = cBase;
+          for (let k = 0; k < nSteps && bestClear < shaftGoal; k++) {
+            for (let sg = 0; sg < 2 && bestClear < shaftGoal; sg++) {
+              const off = sg === 0 ? PITCH_STEPS[k] : -PITCH_STEPS[k];
+              const pc = clamp(pitchBase + off, -PITCH_ABS_MAX, PITCH_ABS_MAX);
+              const real = pc - pitchBase;
+              if (real > -1e-3 && real < 1e-3) continue;          // clamped to where we already are
+              const c = this._clearance(bp, this._yawSlide, pc, want, false);
+              if (c > bestClear + 1e-3) { bestClear = c; bestOff = real; }
+            }
           }
+          // A tilt that does not actually rescue the frame is just a camera
+          // moving for its own sake: it must reach minDist AND buy real
+          // clearance over the pose we are already in.
+          if (bestClear >= C.minDist && bestClear >= cBase + PITCH_SLIDE_GAIN_MIN) pitchWant = bestOff;
         }
-        // A tilt or a swing that does not actually rescue the frame is just a
-        // camera moving for its own sake: it must reach minDist AND buy real
-        // clearance over the pose we are already in.
-        if (bestClear >= C.minDist && bestClear >= cPose + PITCH_SLIDE_GAIN_MIN) {
-          pitchWant = this._pitchSlide + bestOff;
-        }
-      } else if (this._pitchSlide !== 0 && cPose < floor + PITCH_RELEASE_M) {
+      } else if (this._pitchSlide !== 0 && cBase < shaftGoal + PITCH_RELEASE_M) {
         pitchWant = this._pitchSlide;               // hysteresis: hold, never hunt
       }
       this._pitchWant = pitchWant;
       if (dt <= 0) { this._pitchSlide = pitchWant; }
       else if (pitchWant !== this._pitchSlide) {
-        const pr = (pitchWant === 0 ? PITCH_RELEASE_RATE : PITCH_SLIDE_RATE) * dt;
+        const onRate = (this._shaft || Math.abs(pitchWant) > PITCH_STEPS[PITCH_ROOM_STEPS - 1] + 1e-3) ? PITCH_SLIDE_RATE : PITCH_ROOM_RATE;
+        const pr = (pitchWant === 0 ? PITCH_RELEASE_RATE : onRate) * dt;
         const dP = pitchWant - this._pitchSlide;
         this._pitchSlide += dP > pr ? pr : (dP < -pr ? -pr : dP);
         if (this._pitchSlide > -1e-4 && this._pitchSlide < 1e-4) this._pitchSlide = 0;
       }
-      // …and re-solve at the pitch we will POSE at, so the fan that decides the
-      // distance and the fan the lens is placed by are never a frame apart.
+      // …and solve the distance at the pitch we will POSE at, so the fan that
+      // decides the distance and the fan the lens is placed by are never a frame
+      // apart. `pose` = true: this is the fan whose limiter kind the adaptive
+      // framing reads (`_limitCeil`, `_limitFrame`).
       const pAim = this._pitchAim();
-      if (pAim !== pitch) {
-        pitch = pAim;
-        cPose = this._clearance(bp, this._yawSlide, pitch, want, true);
-      }
+      let cPose = (pAim === pitch && this._yawSlide === 0) ? c0 : this._clearance(bp, this._yawSlide, pAim, want, true);
+      pitch = pAim;
 
-      // (e) the distance along the heading we will actually pose at
+      // (e) the distance along the heading we will actually pose at — the fan's
+      // answer already includes the lens sphere walk (see `_clearance`).
       want = Math.max(COLLIDE_MIN_DIST, cPose);
-      // (f) the lens SPHERE at that distance, not only the ray to it (see
-      // SPHERE_EPS_M): pull in to the deepest sphere-clear distance, never below
-      // the framing floor and never past what the fan already answered.
-      const sphFloor = Math.min(C.frameMin, want);
-      if (want > sphFloor && !this._sphereClear(bp, want, pitch)) {
-        want = this._deepestSphereClear(bp, sphFloor, want, pitch);
-      }
     } else {
       this._limitLens = want;      // no broadphase: nothing limits the lens
     }
@@ -2125,8 +2277,13 @@ export class FollowCamera {
       // minDist 1.6) on an occluder the ease was already handling, bypassing
       // COLLIDE_IN_MAX_STEP entirely. The honest destination is the DEEPEST
       // distance along this heading at which the lens is still in open air.
-      else if (bp && this._lensEmbedded(bp, next, pitch)) {
-        const free = this._deepestFree(bp, want, next, pitch);
+      else if (bp && !this._sphereClearAt(bp, this._yawSlide, pitch, next)) {
+        // The EASED lens position is judged by the same sphere the fan's answer
+        // was: the point-in-box test let the ease SLIDE the lens along a hugged
+        // wall's face on its way in (measured: keep undercroft west wall, six
+        // frames at `clear 0.00` between 6.8 m and the 0.12 m the fan had
+        // answered — the near plane cut the wall open for all six).
+        const free = this._deepestSphereClearAt(bp, this._yawSlide, pitch, want, next);
         // A STALL: the deepest free distance is on the FAR side of a solid that
         // now stands between the lens and `want` — a body that moved INTO the line
         // of sight (measured 2026-09-05, azure-1 cp4 with the camera on the sluice
@@ -2162,7 +2319,9 @@ export class FollowCamera {
       // posed lens catches it, and the answer is the deepest open-air distance
       // on the hero's side — taken whole, because a lens inside a solid is worse
       // than a cut.
-      if (bp && this._lensEmbedded(bp, next, pitch)) next = this._deepestFree(bp, COLLIDE_MIN_DIST, next, pitch);
+      if (bp && !this._sphereClearAt(bp, this._yawSlide, pitch, next)) {
+        next = this._deepestSphereClearAt(bp, this._yawSlide, pitch, COLLIDE_MIN_DIST, next);
+      }
       this._distColl = next;
     }
     this.dist = this._distColl;
@@ -2184,7 +2343,7 @@ export class FollowCamera {
     const pz = this._focus.z - _cFwd.z * cp * d;
     _pOrigin.set(px, py, pz);
     _cDir.set(0, -1, 0);
-    if (!this._ray(bp, _pOrigin, _cDir, EMBED_EPS_M * 2, _hit)) return false;
+    if (!this._ray(bp, _pOrigin, _cDir, EMBED_EPS_M * 2, _hit, true)) return false;
     if (_hit.t > EMBED_EPS_M) return false;
     const c = _hit.collider;
     if (c && typeof c.containsPoint === 'function') return !!c.containsPoint(_pOrigin);
@@ -2237,8 +2396,8 @@ export class FollowCamera {
    * so a sail's mostly-air world AABB does not count. Allocation-free: one shared
    * query box and one shared candidate array, emptied before returning.
    */
-  _sphereClear(bp, d, pitch) {
-    headingFromYaw(this.yaw + this._yawSlide, _cFwd);
+  _sphereClearAt(bp, yawOff, pitch, d) {
+    headingFromYaw(this.yaw + yawOff, _cFwd);
     const cp = Math.cos(pitch), sp = Math.sin(pitch);
     const px = this._focus.x - _cFwd.x * cp * d;
     const py = this._focus.y + sp * d;
@@ -2279,22 +2438,24 @@ export class FollowCamera {
    * The deepest distance in [lo, hi] at which the lens sphere is clear, walking
    * inward from `hi` (the fan's answer, known blocked) in SPHERE_FREE_N steps and
    * bisecting the first blocked/clear pair SPHERE_BISECT_N times so the result
-   * does not step visibly as the hero moves. `hi` when nothing along the heading
-   * is clear — the fan's answer is never made worse.
+   * does not step visibly as the hero moves. `lo` when nothing along the heading
+   * is clear: a heading the sphere cannot live on anywhere is not a heading (the
+   * yaw ladder then ranks it last; on the posed heading it is the honest
+   * near-plane pull-in of CONTRACT §12).
    */
-  _deepestSphereClear(bp, lo, hi, pitch) {
+  _deepestSphereClearAt(bp, yawOff, pitch, lo, hi) {
     const span = hi - lo;
-    if (!(span > 0)) return hi;
+    if (!(span > 0)) return lo;
     let blocked = hi, clearD = -1;
     for (let i = 1; i <= SPHERE_FREE_N; i++) {
       const d = hi - span * (i / SPHERE_FREE_N);
-      if (this._sphereClear(bp, d, pitch)) { clearD = d; break; }
+      if (this._sphereClearAt(bp, yawOff, pitch, d)) { clearD = d; break; }
       blocked = d;
     }
-    if (clearD < 0) return hi;
+    if (clearD < 0) return lo;
     for (let i = 0; i < SPHERE_BISECT_N; i++) {
       const mid = (blocked + clearD) * 0.5;
-      if (this._sphereClear(bp, mid, pitch)) clearD = mid; else blocked = mid;
+      if (this._sphereClearAt(bp, yawOff, pitch, mid)) clearD = mid; else blocked = mid;
     }
     return clearD;
   }
@@ -2314,23 +2475,63 @@ export class FollowCamera {
    * an origin inside a box is the degenerate hit t = 0 with the normal back along
    * the ray. Every probe in this file goes through here. Allocation-free.
    */
-  _ray(bp, origin, dir, maxD, out) {
-    let hit = bp.raycast(origin, dir, maxD, out);
+  _ray(bp, origin, dir, maxD, out, all) {
+    out.t = maxD; out.collider = null; out.heightfield = null;
+    if (!(maxD > 0)) return false;
+    // ── boxes: the broadphase's own cell query, walked HERE so the camera can
+    // leave out what is not a wall to it (see camTransparent). `all` = true is
+    // the embedded-lens guard asking, and to that every body counts.
+    const ox = origin.x, oy = origin.y, oz = origin.z;
+    const ex = ox + dir.x * maxD, ey = oy + dir.y * maxD, ez = oz + dir.z * maxD;
+    _rayBox.min.set(Math.min(ox, ex) - 1e-3, Math.min(oy, ey) - 1e-3, Math.min(oz, ez) - 1e-3);
+    _rayBox.max.set(Math.max(ox, ex) + 1e-3, Math.max(oy, ey) + 1e-3, Math.max(oz, ez) + 1e-3);
+    let best = maxD, hit = false;
+    if (typeof bp.query === 'function') {
+      const cands = bp.query(_rayBox, _rayCands);
+      for (let i = 0; i < cands.length; i++) {
+        const c = cands[i];
+        if (c.solid === false) continue;
+        if (!all && camTransparent(c)) continue;
+        const t = rayBoxT(c, origin, dir, best, _occN);
+        if (t >= 0 && t < best) {
+          best = t; hit = true;
+          out.collider = c; out.heightfield = null;
+          if (out.normal) out.normal.copy(_occN);
+        }
+      }
+      _rayCands.length = 0;
+    } else {
+      hit = bp.raycast(origin, dir, maxD, out);
+      best = hit ? out.t : maxD;
+    }
+    // ── heightfields
+    const hfs = bp.heightfields;
+    if (hfs) for (let i = 0; i < hfs.length; i++) {
+      const hf = hfs[i];
+      if (!hf.active || typeof hf.raycast !== 'function') continue;
+      const t = hf.raycast(origin, dir, best, _hfHit);
+      if (t >= 0 && t < best) {
+        best = t; hit = true;
+        out.collider = null; out.heightfield = hf;
+        if (out.normal) out.normal.copy(_hfHit.normal);
+      }
+    }
+    // ── the camera-occluder set (drawn bodies; see CamOccluders)
     const occ = this._occ;
     const n = occ.nearCount;
     if (n > 0) {
       const items = occ.items, near = occ.near;
-      let best = hit ? out.t : maxD;
       for (let k = 0; k < n; k++) {
         const c = items[near[k]];
         const t = rayBoxT(c, origin, dir, best, _occN);
         if (t >= 0 && t < best) {
           best = t; hit = true;
-          out.t = t; out.collider = c; out.heightfield = null;
+          out.collider = c; out.heightfield = null;
           if (out.normal) out.normal.copy(_occN);
         }
       }
     }
+    out.t = hit ? best : maxD;
     return hit;
   }
 
@@ -2569,6 +2770,14 @@ export class FollowCamera {
     if (fx && fx.post && typeof fx.post.setUnderwater === 'function') { this._post = fx.post; return fx.post; }
     const w = this.world;
     if (w && w.post && typeof w.post.setUnderwater === 'function') { this._post = w.post; return w.post; }
+    // The Game's physics-world handle carries the Game, and the Game the engine
+    // whose post chain owns `setUnderwater`. MEASURED (water lane, 2026-09-07):
+    // nothing ever called `cam.setPost(engine.post)`, `player.fx` is the
+    // ParticleSystem, so `post._underwaterTarget` read 0 with `submerged` true
+    // at every station — no underwater grade anywhere in the game.
+    const g = w && w.game;
+    const ep = g && g.engine && g.engine.post;
+    if (ep && typeof ep.setUnderwater === 'function') { this._post = ep; return ep; }
     return null;
   }
 

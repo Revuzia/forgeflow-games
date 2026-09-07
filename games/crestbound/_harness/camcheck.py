@@ -60,6 +60,24 @@ Checks (each prints PASS/FAIL; exit 1 on any FAIL):
               azure-1 cp4 (lens inside the sluice mover's body) and verdant-3
               crest-race (mill tower drum, collider inscribed at 0.80 R).
 
+  interiors   (camera lane, 2026-09-07 -- owner P10) thirteen `course/@name` rows
+              INSIDE structures (INTERIOR_STATIONS): the keep's reading nook, long
+              hall and undercroft, the fort interior, the turning room and the
+              great cog (a 7.4 m bar sweeping through the line of sight), the
+              ice chamber, the middle wall walk, the sunken isle -- the four-
+              heading sampler plus the ROOM rules (hero on screen every frame,
+              never erased outside the near-plane commit, posed pitch <=
+              ROOM_PITCH_MAX: no top-of-the-helmet shot in a room); three REAL
+              kick shafts (the bell tower, the cistern, verdant-2's) driven by the
+              testers' own W + Space loop through real KeyboardEvents; and a
+              DEATH in the gear yard (the death cam shows the drawn hero, lens
+              clear, follow camera back within DEATH_RECOVER_FRAMES of the swap).
+              Measured before the lane (`_harness/_cam_replay.py --out before`):
+              the great cog collapsed the lens 6.8 -> 0.12 m and INTO the arm
+              (the playtest's flat-blue frame), the nook / ice cave / isle sat at
+              1.3-1.47 rad over the hero's head, the hall and the fort corner put
+              the lens ON a wall face (`clear 0.00`) six frames at a time.
+
 Pattern: bootcheck.py (same FLAGS, wait for globalThis.CRESTBOUND). The test slab,
 wall and occlusion roof are synthetic Colliders added to the live course broadphase
 far above the course (feelcheck's proven y=400 slab), then removed. A hidden/occluded browser
@@ -67,6 +85,7 @@ pane pauses rAF and makes a healthy game look broken — headed is the default.
 """
 import argparse
 import json
+import math
 import os
 import sys
 import time
@@ -185,6 +204,7 @@ async () => {
   try { TUNE = (await import(new URL('runtime/core/tuning.js', location.href).href)).TUNE; }
   catch (e) { return {error:'could not import tuning.js: ' + e}; }
   const C = TUNE.cam;
+  const ROOM_PITCH_MAX = __ROOM_PITCH_MAX__;      // substituted by camcheck.py (see INTERIOR_STATIONS)
   out.notes.tune = C;
 
   // ---- game state ----------------------------------------------------------
@@ -300,11 +320,25 @@ async () => {
       // least `minDist`, and the hero is not faded out to buy it.
       const NEAR_FLOOR = 0.05;                                   // engine DEFAULT_NEAR
       const horiz = Math.hypot(s.pos[0] - s.focus[0], s.pos[2] - s.focus[2]);
+      // REVISED 2026-09-07 (camera lane, owner P10). The 2026-09-05 version of
+      // this row ALSO demanded `dist >= minDist` and `heroFade == 0` here, and
+      // the solver met them by tilting to 1.42 rad — the top of the hero's
+      // helmet in the middle of the frame with floor around it, which is the
+      // frame the playtest photographed in the keep's reading nook and rime-3's
+      // ice chamber and the owner calls "buggy and hard to look around". A flat
+      // wall is not a shaft (the fan can leave it at any heading along the
+      // wall), so the room rule applies: the lens may lift at most to
+      // ROOM_PITCH_MAX and then pulls in — ghosting the hero, and committing to
+      // first person only inside his model. What this row still proves: the lens
+      // never crosses the face, its horizontal reach stays inside the wall
+      // distance, it never sits closer than the near plane, and the pose is not
+      // a top-down.
       const ok = camX <= WALL_FACE - 0.05 && horiz <= wallDist + 1e-3 &&
-                 s.dist >= NEAR_FLOOR && s.dist >= C.minDist - 1e-3 && (s.heroFade || 0) < 1e-3;
+                 s.dist >= NEAR_FLOOR && s.pitch <= ROOM_PITCH_MAX + 1e-3;
       pass('wall', ok, {camX: +camX.toFixed(3), wallFace: WALL_FACE, dist: +s.dist.toFixed(3),
                         horizReach: +horiz.toFixed(3), wallDist: +wallDist.toFixed(3),
                         nearFloor: NEAR_FLOOR, minDist: C.minDist, heroFade: +(s.heroFade || 0).toFixed(3),
+                        pitch: +s.pitch.toFixed(3), roomPitchMax: ROOM_PITCH_MAX, shaft: !!s.shaft,
                         pitchSlide: +s.pitchSlide.toFixed(3),
                         distColl: +s.distColl.toFixed(3), raycast: !out.notes.noRaycast});
     }
@@ -576,6 +610,45 @@ async () => {
 DEFAULT_STATIONS = [
     "azure-1/cp4", "rime-2/cp4", "verdant-3/crest-race", "verdant-3/crest-sigils", "ember-4/cp3",
 ]
+
+# ---------------------------------------------------------------------------
+# INTERIOR STATIONS (camera lane, 2026-09-07 — owner P10 "camera gets buggy and
+# hard to look around when inside a structure" + the playtest's camera defects).
+# Authored points INSIDE structures, `course/@name`. Three modes:
+#   still  the four-heading sampler above, plus the INTERIOR rules: the hero is
+#          on screen every frame, never ERASED (fade 1 only inside the model —
+#          the near-plane commit), and the posed pitch never climbs past
+#          ROOM_PITCH_MAX (no top-of-the-helmet shot in a room; the steep tier
+#          belongs to a shaft — camera.js PITCH_ROOM_STEPS).
+#   kick   a real shaft: the testers' loop (aim at one wall, W + Space, then the
+#          other wall …) through real KeyboardEvents; every frame the lens is
+#          outside the walls, the hero is not erased, occlusion <= 0.3 s, and the
+#          framing distance holds minDist (the synthetic shaft row's rule) —
+#          dips under it may not last longer than KICK_UNDER_MAX_S.
+#   death  player.kill(cause) where the hero stands; every frame of the death
+#          sequence shows the drawn hero on screen with the lens clear of solids
+#          and the hero not erased, and the camera is back behind him within
+#          DEATH_RECOVER_FRAMES of the respawn.
+INTERIOR_STATIONS = {
+    "keep/@nook":         dict(p=(16.0, 6.3, -21.0), yaw=-math.pi / 2, mode="still", note="the reading nook, 1 m from Old Fen (playtest keep #6)"),
+    "keep/@hall":         dict(p=(0.0, 6.3, -25.0), yaw=0.0, mode="still", note="the long hall, 12 m wide, 4 m ceiling"),
+    "keep/@undercroft":   dict(p=(-8.0, -8.0, -4.0), yaw=0.0, mode="still", note="the undercroft vault, 4.8 m ceiling"),
+    "verdant-1/@fort":    dict(p=(-9.4, 9.08, -30.4), yaw=0.0, mode="still", note="a corner of the fort interior (playtest verdant-1)"),
+    "rime-1/@belfry":     dict(p=(0.0, 15.1, -47.0), yaw=0.0, mode="kick", walls=((0.0, -49.0), (0.0, -45.0)), note="the bell tower shaft, 3.20 m clear (rime-1 #2)"),
+    "azure-1/@cistern":   dict(p=(0.0, 5.0, -34.5), yaw=math.pi / 2, mode="kick", walls=((-2.5, -34.5), (2.5, -34.5)), note="the cistern shaft, 3.20 m clear (azure-1 #4)"),
+    "verdant-2/@kickshaft": dict(p=(-7.4, 18.6, -7.4), yaw=math.pi, mode="kick", walls=((-7.4, -9.0), (-7.4, -5.8)), note="the wall-kick shaft floor (verdant-2 #27)"),
+    "verdant-2/@midwalk": dict(p=(8.2, 21.4, -3.0), yaw=0.0, mode="still", note="the middle wall walk (verdant-2 #27)"),
+    "azure-2/@turning":   dict(p=(-6.0, 17.0, 4.0), yaw=0.0, mode="still", note="the turning room, the 7.4 m floor bar sweeping (owner: a clockwork room)"),
+    "azure-2/@cog":       dict(p=(-11.0, 0.0, 14.0), yaw=0.0, mode="still", note="beside the great cog, its arm sweeping through the line of sight (azure-2 #1)"),
+    "azure-2/@cogdeath":  dict(p=(-19.0, 0.0, 8.0), yaw=0.0, mode="death", cause="crush", note="a death in the gear yard: the death cam shows the hero and the cause"),
+    "rime-3/@icecave":    dict(p=(-24.5, 0.1, -17.5), yaw=math.pi / 2, mode="still", note="the ice chamber behind the frozen fall (rime-3 #21)"),
+    "azure-3/@isle":      dict(p=(0.0, 21.0, 64.4), yaw=0.0, mode="still", note="the sunken isle beside the crest cage (azure-3 #1)"),
+}
+DEFAULT_STATIONS += list(INTERIOR_STATIONS.keys())
+ROOM_PITCH_MAX = 1.05           # rad — posed pitch cap in a room: defaultPitch 0.22 + the 0.68 room lift + the close lift
+KICK_UNDER_MAX_S = 0.30         # s — a dip under minDist in a real shaft may not last longer than this
+DEATH_RECOVER_FRAMES = 40       # frames after the respawn swap by which the follow camera is back behind the hero
+INTERIOR_LIFT = 0.30            # m the hero is dropped from onto the station point
 STATION_SETTLE_FRAMES = 45      # per heading, ~0.75 s at the auto tier
 STATION_FRAMES = 100            # sampled per heading after the settle (4 headings ~ a 6 s mover cycle)
 STATION_VIS_EVERY = 5           # the per-triangle visual ray is sampled every Nth frame
@@ -652,7 +725,7 @@ async (o) => {
     delete col.__ccOrig; delete col.__ccOwn; patched = false;
   };
 
-  const lift = st.kind === 'crest' ? 0.2 : 0.5;
+  const lift = st.kind === 'crest' ? 0.2 : (st.kind === 'interior' ? o.interiorLift : 0.5);
   const _v = new THREE.Vector3();
   const put = () => {
     syncP();
@@ -773,6 +846,9 @@ async (o) => {
     let worstGameRun = 0, worstVisRun = 0;
     const lastCenter = new Map();                 // collider -> its centre last frame (motion detection)
     let minDist = Infinity, maxDist = 0, maxFade = 0, offscreen = 0;
+    // INTERIOR rules (see INTERIOR_STATIONS): the posed pitch, and 'erased' = the
+    // hero faded to nothing while the lens was NOT inside his model.
+    let maxPitch = -Infinity, erased = 0, maxPitchAt = null;
     for (let hi = 0; hi < headings.length; hi++) {
       const yaw = base + headings[hi];
       if (cam.__test && cam.__test.setYaw) { cam.__test.setYaw(yaw); cam.__test.setPitch(TUNE.cam.defaultPitch); }
@@ -865,7 +941,10 @@ async (o) => {
         H.dist[0] = Math.min(H.dist[0], s.dist); H.dist[1] = Math.max(H.dist[1], s.dist);
         maxFade = Math.max(maxFade, s.heroFade || 0);
         ndc.set(rp.x, rp.y + (TUNE.height || 1.5) * 0.5, rp.z).project(tcam);
-        if (Math.abs(ndc.x) > 1 || Math.abs(ndc.y) > 1) offscreen++;
+        if (Math.abs(ndc.x) > 1 || Math.abs(ndc.y) > 1 || ndc.z > 1) offscreen++;
+        const pp = (typeof s.pitch === 'number') ? s.pitch : 0;
+        if (pp > maxPitch) { maxPitch = pp; maxPitchAt = {k, yawOff: H.yawOff, dist: +s.dist.toFixed(2), pitchSlide: +(s.pitchSlide || 0).toFixed(2), shaft: !!s.shaft, lens: camPos.toArray().map(v => +v.toFixed(2))}; }
+        if ((s.heroFade || 0) >= 0.999 && s.dist >= o.fpDist + 0.05) erased++;
       }
       H.minClear = H.minClear === Infinity ? null : +H.minClear.toFixed(3);
       H.gameRun = +H.gameRun.toFixed(3); H.visRun = +H.visRun.toFixed(3);
@@ -876,8 +955,11 @@ async (o) => {
     dbl.dispose();
     const occ = cam.__test && cam.__test.state ? cam.__test.state() : {};
     const OCC_BUDGET_S = 0.3;
-    const ok = frames > 30 * headings.length && solidViol === 0 && worstGameRun <= OCC_BUDGET_S && worstVisRun <= OCC_BUDGET_S;
+    const interior = st.kind === 'interior';
+    const roomOk = !interior || (offscreen === 0 && erased === 0 && maxPitch <= o.roomPitchMax);
+    const ok = frames > 30 * headings.length && solidViol === 0 && worstGameRun <= OCC_BUDGET_S && worstVisRun <= OCC_BUDGET_S && roomOk;
     return {ok, frames, deadFrames, headings: headings.length, solidViolFrames: solidViol,
+            interior, maxPitch: +maxPitch.toFixed(3), roomPitchMax: o.roomPitchMax, maxPitchAt, erasedFrames: erased,
             gameHitFrames, worstGameRun_s: +worstGameRun.toFixed(3), visHitSamples, visSamples, worstVisRun_s: +worstVisRun.toFixed(3),
             occBudget_s: OCC_BUDGET_S,
             minSolidClear_m: minClear === Infinity ? null : +minClear.toFixed(3), minClearBudget_m: minClearBudget,
@@ -891,6 +973,200 @@ async (o) => {
     return {error: String(e && e.stack || e)};
   } finally {
     unpatch();
+  }
+}
+"""
+
+
+# A REAL shaft: the testers' kick loop through real KeyboardEvents (rime-1 beat 8,
+# azure-1 ROUTE C). Placement uses the __test surface; every kick is a key.
+KICK_JS = r"""
+async (o) => {
+  const A = globalThis.CRESTBOUND, G = A && A.game, THREE = A && A.THREE;
+  if (!G || !THREE) return {error: 'no game/THREE'};
+  const frame = () => new Promise(r => requestAnimationFrame(r));
+  let P = G.player;
+  const syncP = () => { if (G.player && G.player !== P) P = G.player; return P; };
+  const cam = G.cam || G.camera, tcam = A.engine && A.engine.camera, C = G.course;
+  if (!cam || !tcam || !C || !C.broadphase) return {error: 'no cam / engine.camera / course.broadphase'};
+  if (G.state === 'paused' && G.resume) G.resume();
+  const st = o.st;
+  let TUNE;
+  try { TUNE = (await import(new URL('runtime/core/tuning.js', location.href).href)).TUNE; }
+  catch (e) { return {error: 'could not import tuning.js: ' + e}; }
+  const target = () => document.querySelector('canvas') || document;
+  const key = (type, code) => {
+    const k = code === 'Space' ? ' ' : (code.startsWith('Key') ? code.slice(3).toLowerCase() : code);
+    target().dispatchEvent(new KeyboardEvent(type, {code, key: k, bubbles: true, cancelable: true}));
+  };
+  const down = c => key('keydown', c), up = c => key('keyup', c);
+  const allUp = () => ['KeyW', 'Space'].forEach(up);
+  const _v = new THREE.Vector3();
+  const face = (x, z) => {
+    syncP();
+    const yaw = Math.atan2(-(x - P.pos.x), -(z - P.pos.z));
+    if (P.__test.setFacing) P.__test.setFacing(yaw);
+    cam.__test.setYaw(yaw);
+  };
+  const camPos = new THREE.Vector3(), head = new THREE.Vector3(), dir = new THREE.Vector3(), ndc = new THREE.Vector3();
+  const items = C.broadphase.items || [];
+  let frames = 0, minDist = Infinity, maxFade = 0, erased = 0, offscreen = 0, solidViol = 0, minClear = Infinity;
+  let underRun = 0, worstUnder = 0, gameRun = 0, worstGame = 0, maxY = -Infinity, tPrev = performance.now();
+  let nearestSolid = null, minDistAt = null;
+  const sample = () => {
+    syncP();
+    frames++;
+    const now = performance.now(), dtS = Math.min(0.05, (now - tPrev) / 1000); tPrev = now;
+    const s = cam.__test.state();
+    tcam.getWorldPosition(camPos);
+    const rp = P.renderPos || P.pos;
+    if (rp.y > maxY) maxY = rp.y;
+    head.set(rp.x, rp.y + (TUNE.height || 1.5) * 0.9, rp.z);
+    let clear = Infinity, what = null;
+    for (let i = 0; i < items.length; i++) {
+      const c = items[i];
+      if (!c || !c.active || c.solid === false || c.group === 'critter' || c.group === 'hazard') continue;
+      const d = typeof c.distanceToPoint === 'function' ? c.distanceToPoint(camPos) : Infinity;
+      if (d < clear) { clear = d; what = c; }
+    }
+    if (clear < minClear) { minClear = clear; nearestSolid = what ? {center: what.center.toArray().map(v => +v.toFixed(2)), half: what.half.toArray().map(v => +v.toFixed(2)), lens: camPos.toArray().map(v => +v.toFixed(2))} : null; }
+    if (clear < o.minClear) solidViol++;
+    if (s.dist < minDist) { minDist = s.dist; minDistAt = {frame: frames, dist: +s.dist.toFixed(2), pitchSlide: +(s.pitchSlide || 0).toFixed(2), yawSlide: +(s.yawSlide || 0).toFixed(2), shaft: !!s.shaft, hero: [+rp.x.toFixed(2), +rp.y.toFixed(2), +rp.z.toFixed(2)], state: P.state}; }
+    maxFade = Math.max(maxFade, s.heroFade || 0);
+    if ((s.heroFade || 0) >= 0.999 && s.dist >= o.fpDist + 0.05) erased++;
+    ndc.set(rp.x, rp.y + (TUNE.height || 1.5) * 0.5, rp.z).project(tcam);
+    if (Math.abs(ndc.x) > 1 || Math.abs(ndc.y) > 1 || ndc.z > 1) offscreen++;
+    underRun = s.dist < TUNE.cam.minDist - 1e-3 ? underRun + dtS : 0;
+    if (underRun > worstUnder) worstUnder = underRun;
+    dir.copy(camPos).sub(head);
+    const len = dir.length();
+    let gHit = false;
+    if (len > 0.3 && typeof cam.probeClear === 'function') {
+      dir.multiplyScalar(1 / len);
+      if (cam.probeClear(head, dir, len - 0.05) >= 0) gHit = true;
+    }
+    gameRun = gHit ? gameRun + dtS : 0;
+    if (gameRun > worstGame) worstGame = gameRun;
+  };
+  try {
+    syncP();
+    P.__test.teleport(_v.set(st.p.x, st.p.y + o.interiorLift, st.p.z));
+    if (P.__test.setVel) P.__test.setVel(_v.set(0, 0, 0));
+    if (typeof st.yaw === 'number' && P.__test.setFacing) P.__test.setFacing(st.yaw);
+    if (cam.mode !== 'follow' && 'mode' in cam) cam.mode = 'follow';
+    if (typeof cam.snapToPlayer === 'function') cam.snapToPlayer();
+    for (let k = 0; k < o.settle; k++) await frame();
+    const A0 = st.walls[0], B0 = st.walls[1];
+    face(A0[0], A0[1]);
+    down('Space'); await frame(); await frame(); up('Space');
+    for (let k = 0; k < 12; k++) { await frame(); sample(); }
+    for (let i = 0; i < o.kicks; i++) {
+      const w = (i % 2 === 0) ? A0 : B0;
+      face(w[0], w[1]);
+      down('KeyW');
+      for (let k = 0; k < 8; k++) { await frame(); sample(); }
+      down('Space');
+      for (let k = 0; k < 4; k++) { await frame(); sample(); }
+      up('Space');
+      for (let k = 0; k < 12; k++) { await frame(); sample(); }
+      up('KeyW');
+      for (let k = 0; k < 3; k++) { await frame(); sample(); }
+      if (P.dead) break;
+    }
+    allUp();
+    for (let k = 0; k < 20; k++) { await frame(); sample(); }
+    const ok = frames > 60 && solidViol === 0 && erased === 0 && offscreen === 0 &&
+               worstGame <= 0.3 && worstUnder <= o.kickUnderMax;
+    return {ok, mode: 'kick', frames, kicks: o.kicks, climbed_m: +(maxY - st.p.y).toFixed(2),
+            minDist: +minDist.toFixed(3), minDistBudget: TUNE.cam.minDist, worstUnderMinDist_s: +worstUnder.toFixed(3), kickUnderMax_s: o.kickUnderMax,
+            minSolidClear_m: minClear === Infinity ? null : +minClear.toFixed(3), minClearStill_m: o.minClear, solidViolFrames: solidViol,
+            maxHeroFade: +maxFade.toFixed(3), erasedFrames: erased, heroOffscreenFrames: offscreen,
+            worstGameRun_s: +worstGame.toFixed(3), nearestSolid, minDistAt, diedOnStation: !!P.dead};
+  } catch (e) {
+    return {error: String(e && e.stack || e)};
+  } finally {
+    allUp();
+  }
+}
+"""
+
+# A DEATH where the hero stands: the death cam must show the drawn hero (the
+# rewind ghost is the hero mesh, not player.pos) with the lens clear of solids,
+# and the follow camera must be back behind him right after the swap.
+DEATH_JS = r"""
+async (o) => {
+  const A = globalThis.CRESTBOUND, G = A && A.game, THREE = A && A.THREE;
+  if (!G || !THREE) return {error: 'no game/THREE'};
+  const frame = () => new Promise(r => requestAnimationFrame(r));
+  let P = G.player;
+  const syncP = () => { if (G.player && G.player !== P) P = G.player; return P; };
+  const cam = G.cam || G.camera, tcam = A.engine && A.engine.camera, C = G.course;
+  if (!cam || !tcam || !C || !C.broadphase) return {error: 'no cam / engine.camera / course.broadphase'};
+  if (G.state === 'paused' && G.resume) G.resume();
+  const st = o.st;
+  let TUNE;
+  try { TUNE = (await import(new URL('runtime/core/tuning.js', location.href).href)).TUNE; }
+  catch (e) { return {error: 'could not import tuning.js: ' + e}; }
+  const _v = new THREE.Vector3();
+  const camPos = new THREE.Vector3(), ndc = new THREE.Vector3();
+  const items = C.broadphase.items || [];
+  const heroPos = () => (G.hero && G.hero.root && G.hero.root.position) ? G.hero.root.position : P.pos;
+  const measure = () => {
+    syncP();
+    const s = cam.__test.state();
+    tcam.getWorldPosition(camPos);
+    const hp = heroPos();
+    let clear = Infinity;
+    for (let i = 0; i < items.length; i++) {
+      const c = items[i];
+      if (!c || !c.active || c.solid === false || c.group === 'critter') continue;
+      const d = typeof c.distanceToPoint === 'function' ? c.distanceToPoint(camPos) : Infinity;
+      if (d < clear) clear = d;
+    }
+    ndc.set(hp.x, hp.y + (TUNE.height || 1.5) * 0.5, hp.z).project(tcam);
+    const off = Math.abs(ndc.x) > 1 || Math.abs(ndc.y) > 1 || ndc.z > 1;
+    return {mode: s.mode, dist: +s.dist.toFixed(2), fade: +(s.heroFade || 0).toFixed(2), clear: clear === Infinity ? null : +clear.toFixed(2), off,
+            hero: [+hp.x.toFixed(2), +hp.y.toFixed(2), +hp.z.toFixed(2)], ndc: [+ndc.x.toFixed(2), +ndc.y.toFixed(2)], g: G.state, dT: G._deathT};
+  };
+  try {
+    syncP();
+    P.__test.teleport(_v.set(st.p.x, st.p.y + o.interiorLift, st.p.z));
+    if (P.__test.setVel) P.__test.setVel(_v.set(0, 0, 0));
+    if (typeof st.yaw === 'number' && P.__test.setFacing) P.__test.setFacing(st.yaw);
+    if (cam.mode !== 'follow' && 'mode' in cam) cam.mode = 'follow';
+    if (typeof cam.snapToPlayer === 'function') cam.snapToPlayer();
+    for (let k = 0; k < o.settle; k++) await frame();
+    const d0 = G.deaths;
+    if (typeof P.kill === 'function') P.kill(st.cause || 'crush'); else if (G.onDeath) G.onDeath(st.cause || 'crush');
+    const dead = [];
+    let deadFrames = 0, offDead = 0, solidDead = 0, erasedDead = 0, modeDead = 0, minClearDead = Infinity, minDistDead = Infinity;
+    let sawDead = false, afterFrames = -1, recovered = null;
+    for (let k = 0; k < 400; k++) {
+      await frame();
+      const m = measure();
+      if (m.g === 'dead') {
+        sawDead = true; deadFrames++;
+        if (m.off) offDead++;
+        if (m.clear !== null && m.clear < o.minClear) solidDead++;
+        if (m.fade >= 0.999 && m.dist >= o.fpDist + 0.05) erasedDead++;
+        if (deadFrames > 1 && m.mode !== 'death') modeDead++;
+        if (m.clear !== null && m.clear < minClearDead) minClearDead = m.clear;
+        if (m.dist < minDistDead) minDistDead = m.dist;
+        if (dead.length < 40) dead.push(m);
+      } else if (sawDead) {
+        if (afterFrames < 0) afterFrames = 0; else afterFrames++;
+        if (recovered === null && m.mode === 'follow' && m.dist >= 2.0 && !m.off) recovered = afterFrames;
+        if (afterFrames >= o.recoverFrames) break;
+      } else if (k > 120) break;
+    }
+    const deaths = G.deaths - d0;
+    const ok = deaths === 1 && deadFrames >= 6 && offDead === 0 && solidDead === 0 && erasedDead === 0 && modeDead === 0 &&
+               recovered !== null && recovered <= o.recoverFrames;
+    return {ok, mode: 'death', cause: st.cause || 'crush', deaths, deadFrames, deadOffscreenFrames: offDead, deadSolidViolFrames: solidDead,
+            deadErasedFrames: erasedDead, deadNotDeathModeFrames: modeDead, minSolidClearDead_m: minClearDead === Infinity ? null : +minClearDead.toFixed(3),
+            deadDist: [+minDistDead.toFixed(2)], recoveredAfterFrames: recovered, recoverBudget: o.recoverFrames, sample: dead.filter((_, i) => i % 4 === 0)};
+  } catch (e) {
+    return {error: String(e && e.stack || e)};
   }
 }
 """
@@ -934,16 +1210,37 @@ def run_stations(pg, stations, settle, frames, vis_every, min_clear, shots_dir):
             table = {"error": str(e)}
         for n in names:
             row = "%s/%s" % (cid, n)
-            st = table.get(n) if isinstance(table, dict) else None
-            if not st:
-                out[row] = {"error": "station %s not found on %s (have %s)" % (n, cid, sorted(k for k in (table or {}) if k != "error")[:12])}
-                continue
+            opts = {"settle": settle, "frames": frames, "visEvery": vis_every, "minClear": min_clear,
+                    "minClearMoving": STATION_MIN_CLEAR_MOVING_M, "interiorLift": INTERIOR_LIFT,
+                    "roomPitchMax": ROOM_PITCH_MAX, "fpDist": 0.30, "kickUnderMax": KICK_UNDER_MAX_S,
+                    "kicks": 10, "recoverFrames": DEATH_RECOVER_FRAMES}
+            if n.startswith("@"):
+                spec = INTERIOR_STATIONS.get(row)
+                if not spec:
+                    out[row] = {"error": "unknown interior station %s (have %s)" % (row, sorted(INTERIOR_STATIONS)[:16])}
+                    continue
+                st = {"name": n, "kind": "interior", "p": {"x": spec["p"][0], "y": spec["p"][1], "z": spec["p"][2]},
+                      "yaw": spec.get("yaw"), "walls": [list(w) for w in spec.get("walls", ())], "cause": spec.get("cause")}
+                js = {"still": STATION_JS, "kick": KICK_JS, "death": DEATH_JS}[spec.get("mode", "still")]
+                # a dead hero (the placement landed in a hazard) is respawned before the row runs
+                try:
+                    if pg.evaluate("!!(CRESTBOUND.game.player && CRESTBOUND.game.player.dead)"):
+                        pg.evaluate("CRESTBOUND.game.respawn && CRESTBOUND.game.respawn()")
+                        pg.wait_for_timeout(1500)
+                except Exception:
+                    pass
+            else:
+                st = table.get(n) if isinstance(table, dict) else None
+                js = STATION_JS
+                if not st:
+                    out[row] = {"error": "station %s not found on %s (have %s)" % (n, cid, sorted(k for k in (table or {}) if k != "error")[:12])}
+                    continue
             try:
-                res = pg.evaluate(STATION_JS, {"st": st, "settle": settle, "frames": frames,
-                                               "visEvery": vis_every, "minClear": min_clear,
-                                               "minClearMoving": STATION_MIN_CLEAR_MOVING_M})
+                res = pg.evaluate(js, dict(opts, st=st))
             except Exception as e:
                 res = {"error": str(e)[:400]}
+            if isinstance(res, dict) and n.startswith("@"):
+                res["note"] = INTERIOR_STATIONS[row].get("note")
             if shots_dir:
                 try:
                     pg.screenshot(path=os.path.join(shots_dir, "camcheck_%s_%s.png" % (cid, n)))
@@ -1070,7 +1367,7 @@ def main() -> int:
             res = {"checks": {}, "notes": {"skipped": "stations-only"}}
         else:
             try:
-                res = pg.evaluate(MEASURE_JS)
+                res = pg.evaluate(MEASURE_JS.replace("__ROOM_PITCH_MAX__", repr(ROOM_PITCH_MAX)))
             except Exception as e:
                 res = {"error": str(e)}
             try:
@@ -1118,15 +1415,16 @@ def main() -> int:
             continue
         ok = bool(r.get("ok"))
         fails += 0 if ok else 1
-        keep = {k: r[k] for k in ("frames", "headings", "solidViolFrames", "gameHitFrames", "worstGameRun_s",
+        keep = {k: r[k] for k in ("mode", "frames", "headings", "solidViolFrames", "gameHitFrames", "worstGameRun_s",
                                   "visHitSamples", "visSamples", "worstVisRun_s", "occBudget_s",
                                   "minSolidClear_m", "camDist", "maxHeroFade", "heroOffscreenFrames", "drift",
-                                  "repinned", "diedOnStation", "occluders", "occNear") if k in r}
+                                  "repinned", "diedOnStation", "occluders", "occNear",
+                                  "maxPitch", "erasedFrames", "climbed_m", "minDist", "worstUnderMinDist_s",
+                                  "deaths", "deadFrames", "deadOffscreenFrames", "deadSolidViolFrames", "deadErasedFrames",
+                                  "deadNotDeathModeFrames", "minSolidClearDead_m", "deadDist", "recoveredAfterFrames") if k in r}
         if not ok:
-            keep["nearestSolid"] = r.get("nearestSolid")
-            keep["worstGameHit"] = r.get("worstGameHit")
-            keep["worstVisualHit"] = r.get("worstVisualHit")
-            keep["perHeading"] = r.get("perHeading")
+            for k in ("nearestSolid", "worstGameHit", "worstVisualHit", "perHeading", "maxPitchAt", "minDistAt", "sample"):
+                if k in r: keep[k] = r[k]
         print("  station %-24s %s  %s" % (row, "PASS" if ok else "FAIL", json.dumps(keep, sort_keys=True)))
     if res.get("error"):
         print("-" * 72)
