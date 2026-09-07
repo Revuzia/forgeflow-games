@@ -1,0 +1,194 @@
+{
+ "area": "rime-1",
+ "defects": [
+  {
+   "where": "rime-1 BEAT 1, THE ICE PLUG at (5.0, 1.30, 42.0) -- the hole, sigil 1, the six lake-bed coins and the whole swim lesson behind it",
+   "did": "dumped every collider in the plug's footprint from the live broadphase, then stood on the plug and pounded it",
+   "happened": "THE POUND WORKS AND THE HOLE STILL DOES NOT OPEN. Hand-stepped, engine stopped: the pound fires cleanly (poundHang at y 2.77 -> poundLand at y 1.30) and the plug's collider genuinely deactivates -- it disappears from the broadphase dump. But the plug (x 3.5..6.5, z 40.5..43.5) is entirely DOUBLE-COVERED by the two ice strips that were meant to sit north and south of it: the south strip runs x 3.5..6.5, z 31.0..42.5 and the north strip x 3.5..6.5, z 42.5..57.0, both with top 1.30, so between them they fill the plug's whole 3 m span. The dump AFTER the pound still shows both strips solid and active across the footprint, and the player stands at y 1.30 grounded with inWater=0 for every frame that follows. You break the ice and you are standing on ice.",
+   "should": "the strips must stop AT the plug, not run under it: south z 31.0..40.5 (centre 35.75, sz 9.5) and north z 43.5..57.0 (centre 50.25, sz 13.5). As authored they are centred at z 36.75/sz 11.5 and z 49.75/sz 14.5, i.e. 2.0 m and 1.0 m of overlap. Until that is fixed BEAT 1 has NO payload: sigil 1, the six lake-bed coins, the dive to the lake bed and the 'CROUCH TO SINK' verb the spawn board teaches are all unreachable, and the course's opening lesson is a dead end.",
+   "png": "_shots/play_rime1/06_b1b_hole_approach.png",
+   "note": "MEASURED broadphase dump BEFORE the pound (x 3..7, z 39..45), every entry top=1.30, solid, active: [ice x -13..3.5, z 31..57] | [ice x 3.5..6.5, z 31..42.5] | [BREAKABLE x 3.5..6.5, z 40.5..43.5, surface 'normal'] | [ice x 3.5..6.5, z 42.5..57] | [ice x 6.5..13, z 31..57]. AFTER the pound the breakable is gone and the other four are unchanged. The save flag 'ice-hole-open' is still null after the pound, so the trigger the SECRET-style bookkeeping hangs off never fires either. Separately: the plug's collider reports surface 'normal' while every slab around it is 'ice', so the one tile in the middle of a frozen lake grips like stone and a skating player stops dead on it."
+  },
+  {
+   "where": "rime-1 BEAT 8, THE BELL TOWER DOORWAY -- the east face at x 1.8, opening z -47.3..-46.25, y 15.10..17.50. This is the ONLY way into the shaft, and the shaft is the only way to the course's OPEN CREST.",
+   "did": "stood on the green at (4.5, 15.40, -46.9), aimed at the shaft's centre (0, -47.0) and ran at the door, re-aiming every 20 frames the way a player steers",
+   "happened": "NEVER GOT IN. After 300 frames Nim is stopped dead at (2.38, 15.10, -47.0) with wall contact, 2.38 m short -- x 2.38 is exactly the outer face of the east wall (x 1.6..2.0) plus the 0.38 m body radius, so he is pressed flat against the tower's outside, not standing in the doorway. The opening is 1.05 m wide for a 0.76 m capsule: the player has to thread it within 0.145 m either side, and a natural running line clips the jamb and bonks.",
+   "should": "the door needs to be wide enough to run through -- 1.6-1.8 m of clear opening, or a funnel/chamfer on the jamb that steers a running player in. As it stands the course's OPEN CREST ('CREST IN THE BELFRY'), the wing hat beside it and sigil 7 on the wall-tops are all behind a door I could not walk through.",
+   "png": "_shots/play_rime1b/06_r2_shaft_inside.png",
+   "note": "the shaft ITSELF is fine -- teleported into it, the wall-kick climb worked (see the 'worked' list). This is the door, not the tower. Worth re-running from two or three different approach angles before calling it absolute; one straight run at it failed."
+  },
+  {
+   "where": "rime-1 BEAT 8, THE BELL TOWER SHAFT -- 3.20 m clear, walls 15.10 to 23.10 at (0, -47)",
+   "did": "wall-kicked up the shaft, alternating walls, and watched the follow camera the whole way",
+   "happened": "the camera collapses closer to Nim than the contract's floor. TUNE.cam.minDist is 1.60; measured distances inside the shaft bottom out at 1.44 and 1.46 (the eight smallest samples were 1.44, 1.46, 1.56, 1.63, 1.73, 1.76, 1.82, 1.90). At 1.44 m the lens is inside the hero's personal space in a 3.2 m stone box -- exactly the 'camera gets buggy and hard to look around when inside a structure' the owner reported.",
+   "should": "hold dist >= minDist in this shaft the way camcheck's SHAFT station already demands in verdant-1's 3.30 m kick shaft -- by TILTING over the head and up the shaft rather than pulling in. rime-1's shaft is 3.20 m, 10 cm NARROWER than the one the gate tests, and nothing in the gate set looks at it.",
+   "png": "_shots/play_rime1b/04_step_shaft_top.png"
+  },
+  {
+   "where": "rime-1 BEAT 1, standing on the ICE PLUG at (5.0, ~1.30, 42.0) -- the 3x3 m dark tile the spawn board tells you to pound",
+   "did": "walked onto the plug and stood still on it, exactly as a player does while lining up the pound",
+   "happened": "YOU DIE. Hooked game.onDeath and hand-stepped the game (engine stopped, game.update(1/60) driven frame by frame so a contended box cannot fake the result): standing motionless on the plug for a few seconds produces cause='crush' at (5.06, 1.23, 42.09), the hero goes to state 'dead' and respawns at cp-shore 17.2 m away. Reproduced twice -- the same thing happened in the very first hand-stepped run, where he was yanked from [5, 1.30, 42] back to [0, 1.40, 58.5] while idle and grounded.",
+   "should": "the plug is the course's first lesson. Walking onto it must be safe; only the pound should do anything. A crush death on the tutorial tile with no telegraph, no hazard art and no warning is the single worst thing on this course.",
+   "png": "_shots/play_rime1/07_b1b_on_plug.png",
+   "note": "the crush is at y 1.23, i.e. 7 cm BELOW the plug's authored top of 1.30, so he is being squeezed INTO it. Suspect the ice sheet: the plug (z 40.5..43.5) is authored between two ice strips whose spans are z 31.0..42.5 and z 42.5..57.0 -- both of which run UNDER the plug rather than up to it, so the plug's whole footprint is double-covered by solid ice. Collider dump pending in _harness/_r1ice.txt."
+  },
+  {
+   "where": "rime-1 BEAT 1, anywhere on the frozen lake -- measured at (5, 1.30, 42), (0, 1.37, 50) and (-8, 1.37, 44)",
+   "did": "stood perfectly still on the ice, hands off the controls entirely (stick at zero, no keys), for 4-10 seconds",
+   "happened": "SOMETHING KNOCKS YOU OFF YOUR FEET WHILE YOU ARE NOT TOUCHING THE CONTROLS. The per-frame track at (5, 1.30, 42) is dead still for 235 frames (3.9 s) and then, in one sample, goes 'fall' at (5.34, 1.40, 41.99) -- lifted 0.10 m -- then 'land' at (6.18, 1.30, 41.94), then skids out to (7.32, 1.30, 41.85) and stops: 2.32 m of travel from a standing start, all from a single sudden event. Same thing at (0,50): ended 2.96 m away. Same at (-8,44): 3.59 m. The identical test on snow at the north shore and in the village square moves you 0.00 m. It is a SHOVE, not a drift, and the only mobile thing over the lake is the snow owl (skitter) on path [-8,5.0,50] to [8,6.4,38], which the course notes say 'swoops at anyone on the ice'.",
+   "should": "a flyer that dives out of a dusk sky onto a player holding no key at all, with no wind-up the player can see from the ground and no shadow on the ice, is not a fair hazard -- and on ice it is worse, because the knock then carries you 2-3.5 m you did not ask for. Give the swoop a visible telegraph and a shadow, or make it only threaten a player who is moving. It also lands you in the crush described above: on the plug the same shove is what pushes you into the doubled colliders.",
+   "png": "_shots/play_rime1/05_b1_ice_drift.png",
+   "note": "no death from the swoop itself (deaths: [] across all three stations), so it is knockback, not a kill -- which is the right call; the problem is that it is invisible and unavoidable."
+  },
+  {
+   "where": "rime-1 BEAT 1, the frozen lake, walking the trodden line onto the ice plug at (5.0, 1.30, 42..44), default follow camera behind at yaw 0",
+   "did": "walked south down the coin line onto the dark patch, the way the spawn board tells you to ('POUND THE DARK PATCH')",
+   "happened": "the 'THIN ICE' text board is authored at [5.0, 2.70, 45.6] -- on the exact walked line into the hole, at Nim's head height. From the follow camera it COMPLETELY covers the hero: only his boots and a sliver of red jacket show under the board (see the zoom). It also stands between the camera and the plug on the approach, so from 6 m out at (5.0, 1.30, 48.0) the 'dark patch' you are told to find is behind the sign that names it.",
+   "should": "move the board off the walked line (west or east of the hole, turned to face the shore approach) or drop it to knee height. The camera never pulls in for it because it is a `deco` with no collider (see the camera defect below), so the sign will keep winning against the hero wherever the player stands.",
+   "png": "_shots/play_rime1/zz_crop_ice_domes.png",
+   "note": "also 07_b1b_on_plug.png (only boots visible), 08_b1b_after_pound.png (only the top of his hood visible), 06_b1b_hole_approach.png (the plug hidden behind the sign from the approach)."
+  },
+  {
+   "where": "rime-1, anywhere near an authored `deco` board or post -- measured at the spawn, camera orbited to yaw 1.79 while standing on cp-shore (0, 1.40, 58.5)",
+   "did": "orbited the camera round the hero on the spawn pad, which puts the lens at about (4.7, 2.95, 57.4) -- inside the FROST COTTAGE board at (5.2, 2.55, 57.0)",
+   "happened": "the frame fills with the board's unlit black back face, an enormous black wedge covering the right half of the screen with the hero half hidden behind it. A broadphase query of the box (4.0..6.5 x, 55.5..58.5 z, 0..5 y) returns ONLY the two ice slabs -- the sign is not a collider at all, so camera.js's raycast pull-in has nothing to hit and the lens goes straight through the board.",
+   "should": "either give sign/board decos a camera-only collider so the follow camera pulls in, or exclude the camera volume from board placement. Right now every text board on the course is a black-out waiting for the player to orbit into it, and camcheck cannot see it because it only tests walls.",
+   "png": "_shots/play_rime1/zz_crop_cam_in_sign.png",
+   "note": "full frame at 04_b1_cp_shore.png. rime-1 has 20+ text/sign decos."
+  },
+  {
+   "where": "rime-1, the whole frozen lake and every open snow field -- ambient snow particles",
+   "did": "just stood on the ice and looked at it",
+   "happened": "the ambient snow renders as dozens of large (~0.5-1 m) soft white billboards sitting AT ground level all over the ice and the snow, not as weather in the air. At the zoom they are unmistakably camera-facing quads with a radial alpha, and the ones seen edge-on form horizontal white BANDS lying across the lake. Confirmed they are particles, not props: a scene query for meshes inside the ice (|x|<12.5, |z-44|<12.5, y 1.2..4.5) returns no `props:snowdrift` instances at all, while `fx.particles` is a live 226-instance quad mesh.",
+   "should": "snowfall should read as falling flakes at eye level and above, not as objects resting on the surface. As it is, the lake looks strewn with cotton wool, the puffs camouflage the one thing the player is hunting (the dark ice plug), and they are the first thing anyone will point at.",
+   "png": "_shots/play_rime1/zz_crop_ice_domes.png",
+   "note": "also visible on every snow surface: 01_b1_spawn.png, 05_b1_ice_drift.png, 03_b1_sign_close.png."
+  },
+  {
+   "where": "rime-1, the village square (0, 4.70, 4.4) -- the authored `cart` deco (the sledge)",
+   "did": "loaded rime-1 at all; the warning fires on every course load",
+   "happened": "console warning: '[Course rime-1] props.js had no entry for: cart'. The sledge authored at [4.6, 5.15, 4.4] is silently dropped -- one of the four pieces of set dressing that make the square read as a lived-in village never appears.",
+   "should": "props.js grows a 'cart' builder, or the course stops asking for one. A prop kind that resolves to nothing should fail the build, not emit a warning nobody reads.",
+   "png": "_shots/play_rime1/01_b1_spawn.png"
+  },
+  {
+   "where": "rime-1 BEAT 3, the village -- the four plaster cottages, the bell gantry and the old pine, seen from the spawn and from the north shore",
+   "did": "looked at the village, which is the course's landmark and the thing the spawn camera frames",
+   "happened": "the cottages render almost black. Measured off the spawn frame: cottage plaster wall rgb(58,76,106) L=0.071 and rgb(55,71,97) L=0.062, cottage roof rgb(43,59,88) L=0.043, against the snow immediately in front of them at rgb(174,196,222) L=0.538. That is a 4.9-6.3:1 contrast DEFICIT -- the walls sit 12x darker than their authored albedo (PLASTER 0xe8e2d6, a near-white cream, L~0.78). The bronze bells (BELL 0xd9a441) and the pine read as black shapes too. A snowed-in village of white cottages reads as a row of black sheds.",
+   "should": "the village needs fill/bounce -- a hemisphere or ambient term that lifts a shaded north-lit plaster wall to something like 0.2-0.3 L, or the sun turned so the cottage faces the player sees are not pure shadow. contrastcheck.py only measures WALKED surface vs the fog band, so nothing in the gate set ever looks at a building face; this passed every gate and still looks wrong.",
+   "png": "_shots/play_rime1/zz_crop_rings_sky.png",
+   "note": "measurement taken from _shots/play_rime1/01_b1_spawn.png with a per-patch sRGB relative-luminance average."
+  },
+  {
+   "where": "rime-1, the whole map -- THE OWL'S ROAD ring overlay (10 rings, y 7..27), visible from the very first frame",
+   "did": "stood on the spawn pad and looked at the course",
+   "happened": "all ten wing-power rings are drawn from the moment the course loads, before the player has any idea what they are or has the wing hat (which is in the belfry, at the far end of the course). They are big bright aurora-cyan tori hanging over the village and the hillside and they dominate the skyline of what the intro calls a village snowed in. Ten glowing hoops are the first thing you see, not the lake or the chapel.",
+   "should": "either hold the rings back until the wing hat is taken (they are an overlay for a power the player does not have yet), or draw them as a faint ghost that only lights up with the hat on. Verified they do not intersect terrain -- every ring is 5.6-20.4 m clear of the ground under it -- so this is a staging/readability call, not broken geometry.",
+   "png": "_shots/play_rime1/zz_crop_rings_sky.png"
+  },
+  {
+   "where": "rime-1 BEAT 4, THE BARN YARD -- standing at its exact centre (-21.0, 5.00, 4.0), which is where the yard flat is authored (flats entry {p:[-21,4], r:8, h:5.0})",
+   "did": "stood still in the middle of the barn yard for 10 seconds with no input, the way a player does while working out what the barn wants",
+   "happened": "killed by the Gnasher: onDeath cause='gnasher' at (-21, 5.00, 4.0), respawn back at cp-square 21 m away. The post is at (-19.0, 8.6) with chain 5.5, and the yard's centre is 5.02 m from it -- inside. Measured against the rest of the yard: the stair foot (-17.7, 6.4) is 2.56 m from the post, and two of the four fence waypoints, (-17,12) at 3.94 m and (-22,12) at 4.53 m, are inside the chain too. The course's own comment says the reach 'covers the door and the foot of the stair, NOT the fence' -- it covers the fence, the yard's centre and the whole approach from the square.",
+   "should": "the yard needs somewhere to stand. Either shorten the chain (a 3.5 m chain still covers the door and the stair foot and leaves the yard's centre and the fence line safe), or move the post nearer the door. As it is there is no place in the barn yard to read the puzzle from, and the sign 3 m away says 'it can only reach so far'.",
+   "png": "_shots/play_rime1/zz_crop_rings_sky.png",
+   "note": "measured by hand-stepping the game with game.onDeath hooked; see _harness/_r1death.txt. The route to the SECRET crest (the barn stair) starts 2.56 m from the post, so the only way to the loft runs through the lethal zone."
+  },
+  {
+   "where": "rime-1 BEAT 4, THE HAY WALL on the loft gantry (-27.2, 8.40..10.50, z 2.4..3.4) -- the only thing between the player and the SECRET crest 'WHAT THE BARN KEEPS'",
+   "did": "walked the whole intended route -- stair foot (-17.3, 5.0, 6.4) up the barn stair to (-22.8, 8.40, 6.75), along the eaves walk to (-25.9, 8.40, 6.73), onto the loft gantry at (-27.7, 8.40, 4.41), up to the hay -- then ground-pounded it three times, then tried to walk past it",
+   "happened": "THE SECRET CREST IS UNREACHABLE. Nim ends jammed at (-26.47, 8.40, 3.78) with wall contact, and three clean ground pounds from there leave the hay wall's collider active:true, broken:false, the hay-wall-broken flag unset and crests still 0. Then the walk past it ran 200 frames and finished at (-27.22, 8.40, 3.78) -- it did not move at all. The wall neither breaks nor lets you through.",
+   "should": "the pound has to break it. The same input demonstrably shatters the ice plug's collider on the lake, so either the shock is not reaching this one from where a player can stand on a 1.8 m wide gantry, or the approach jams him against the gantry's east lip (he stopped at x -26.47 on a gantry spanning x -28.1..-26.3) before he is ever centred on it.",
+   "png": "_shots/play_rime1b/10_r2_hay_before.png",
+   "note": "worth one more attempt standing dead centre at x -27.2 before calling it absolute -- but a player walking the gantry naturally ends where I ended."
+  },
+  {
+   "where": "rime-1 BEAT 6, THE VANISHING ICE BRIDGE -- six 2.8 x 2.8 m tiles from (20.25, 10.62, -25.21) to (32.75, 12.78, -32.29)",
+   "did": "stood on the ledge's SE corner at (19.44, 10.82, -25.02), aimed at the knoll (34, -33) and ran across, re-aiming as I went. All six tiles were up (none had vanished).",
+   "happened": "FELL OFF BETWEEN TILE 2 AND TILE 3 into the gorge: run (19.45) -> run (21.29, 11.25, -27.15) -> fall at (22.47, 11.23, -28.52) -> wallslide -> down to the gorge floor at y 3.97. The tiles are AXIS-ALIGNED 2.8 m squares whose centres step (2.5, -1.42) along a diagonal, so consecutive tiles overlap by only 0.30 m in x and 1.38 m in z. The bridge is really a diagonal staircase of squares with a 30 cm gate at every joint, and a 0.76 m wide body cannot walk the straight line the bridge's own coin line follows.",
+   "should": "yaw each tile to face along the run so the joint is the full 2.8 m, or overlap them properly along the diagonal. As authored, walking the bridge the way the coins lead you drops you in the gorge on the second joint -- and this is the required crossing for THE BELL RUN's 20-second finish on the knoll.",
+   "png": "_shots/play_rime1b/03_step_shaft_floor.png",
+   "note": "measured tile centres: [20.25,10.62,-25.21] [22.75,11.05,-26.62] [25.25,11.48,-28.04] [27.75,11.92,-29.46] [30.25,12.35,-30.87] [32.75,12.78,-32.29], each s [2.8, 0.4, 2.8]."
+  },
+  {
+   "where": "rime-1 BEAT 6, THE GEYSER PAD at the head of the gorge -- pad block (23.3, top 4.90, -27.9), jumppad on it at 5.04, sign 'STAND ON IT' at (23.3, 6.6, -25.4)",
+   "did": "dropped into the gorge and walked at the pad from the north, the way the sign points",
+   "happened": "BONKED ON IT AND STOPPED. The gorge floor there is y 3.15, the pad block's top is 4.90, so its north face is a 1.67 m wall -- nearly four times TUNE.stepUp (0.45). Nim ran into it, entered the bonk state and stayed bonking for 30+ frames at (22.56, 3.23, -26.32), then went idle and never moved again. Apex reached: 3.23 m. He never touched the jumppad, never launched, and the 8.5 m boost that is the gorge's way back up to the ledge (10.20) is not available from the floor.",
+   "should": "the pad needs a step up onto it, or the block should be flush with the floor. The STAND ON IT sign sits 3.4 m above the head of a player on the gorge floor and points at a wall he cannot climb; if you fall in the gorge, the intended escape does not work.",
+   "png": "_shots/play_rime1b/03_step_shaft_floor.png",
+   "note": "the six coins authored in a ring at y 6.00 round the pad are 2.8 m above the gorge floor, so they too are only collectable from a pad top you cannot reach."
+  },
+  {
+   "where": "rime-1 BEAT 6, THE CHUTE off the hillside ledge -- launch block (17.0, 11.40, -23.8), chute lip (22.2, 5.80, -29.0), jump ledge (26.4, 7.00, -32.4) with sigil 6 over it",
+   "did": "stood on the launch block, rode the chute down the way the coin arc leads, and jumped at the lip",
+   "happened": "MISSED THE JUMP LEDGE. The jump put Nim into a wallslide against the gorge wall at (24.52, 6.14, -32.47), and he then slid back DOWN to the gorge floor at y 3.98 -- sigil 6 not collected, and now stranded in the gorge because the geyser pad (above) does not work. The chute is also not a clean ride: the state track alternates fall/run/slopeSlide (frames 45-80 are airborne OVER the slab) instead of holding slopeSlide, so the speed you reach the lip with is not the speed the arc was authored for.",
+   "should": "the ride should stay in contact with the slab so lip speed is predictable, and the authored gap (1.9 m on, 1.2 m up) should be makeable from it. As it stands, taking the chute costs you the ledge, the sigil and the way back out.",
+   "png": "_shots/play_rime1b/03_step_shaft_floor.png"
+  },
+  {
+   "where": "rime-1, THE GNASHER's reach again -- the FIRST STEP of the village rooftop route, snow block 1 at (-14.6, 5.90, 11.8), 15 m from the barn and on the far side of the yard fence",
+   "did": "stood in the square at the foot of the roof stair (-14.6, 4.65, 9.4) and hopped up onto snow block 1, the way the 'THE ROOFS ARE A ROAD' sign 1.4 m away tells you to",
+   "happened": "died mid-hop and respawned at cp-shore: the next sample has Nim at (0, 1.30, 51.19), out on the frozen lake 42 m from where he jumped, and the two hops after it report the same. Snow block 1 is 5.44 m from the gnasher's post at (-19.0, 8.6) and the chain is 5.5 -- inside the reach by 6 cm. The whole rooftop line (a signposted village-side detour carrying sigil 2 and sigil 4) starts on a tile the barn dog can hit.",
+   "should": "shorten the chain. This is the third separate place the 5.5 m radius reaches something it should not -- the yard's centre, two of the four fence posts, and now the first step of the roof route. A 3.5 m chain still covers the barn door and the stair foot, which is what the course comment says it is for.",
+   "png": "_shots/play_rime1/zz_crop_rings_sky.png",
+   "note": "the death cause was not captured in this particular scene (the roofs driver does not hook onDeath), but the respawn at cp-shore is unambiguous and the gnasher is the only killer within 6 m."
+  },
+  {
+   "where": "rime-1 BEAT 8, THE OWL'S ROAD ring 0 at (0, 27.0, -48.0), r 2.6 -- directly over the bell tower's wall-kick shaft mouth",
+   "did": "wall-kicked up the shaft and came out of the top at (-0.50, 23.45, -47.88)",
+   "happened": "a giant aurora-cyan hoop is wrapped round the moment of arrival. Ring 0 sits 1 m north of the tower's centre and 3.9 m above the wall tops, so its 5.2 m diameter hangs over and around the shaft mouth: the frame at the top of the climb is a wall of teal torus with Nim inside it, and the ring visibly runs into the tower's masonry on both sides. Its y span (24.4..29.6) and z span (-50.6..-45.4) also cross the belfry's copper roof panel at (0, 26.15, -50.9), s [5.6, 0.3, 4.2].",
+   "should": "the ring road should not be threaded through the building that holds the course's main crest. Move ring 0 clear of the tower and check the whole ring line against BUILDINGS -- I verified earlier that all ten rings clear the TERRAIN by 5.6-20.4 m, which is exactly why this one slipped through: nothing checks them against authored geometry.",
+   "png": "_shots/play_rime1b/zz_ring_through_tower.png"
+  },
+  {
+   "where": "rime-1 BEAT 3, THE OLD PINE at (-16, 20) -- the climbable tree with the crow's nest platform and SIGIL 3 at its crown",
+   "did": "walked at the trunk from (-16, 2.45, 23.4) and held forward, exactly as the sign 3 m away says: 'PRESS INTO THE TRUNK TO CLIMB'",
+   "happened": "THE CLIMB RUNS OUT 3 M SHORT OF THE NEST AND THEN NIM HANGS IN THE AIR. The climb state engages properly and carries him up 3.14 -> 4.22 -> 5.31 -> 6.39 -> 7.47 -> 8.66 -> 8.88, and then it just stops: he drops out of `climb` into `fall` at y 9.00 and stays in `fall` at y 8.91-9.01, drifting less than a metre, for the next 200 frames (3.3 s) without ever coming down. Highest point reached: 9.01. The ladder Volume on the pine is centred at y 5.83 with half-height 3.06, i.e. it spans 2.77..8.89 -- 6.1 m of a 9 m trunk -- while the crow's nest platform is authored at gy+8.80 and sigil 3 at gy+9.00+1.30, both around y 11.9-13.4. There is nothing to climb for the last three metres.",
+   "should": "the ladder volume has to reach the nest -- span the whole trunk, or put the nest at the top of the volume. Sigil 3 is currently uncollectable by the method the course signposts, and the hang-in-mid-air at the top of the volume is a stuck state a player has to jump or restart out of.",
+   "png": "_shots/play_rime1/01_b1_spawn.png",
+   "note": "measured ladder volume from the live course: ['ladder', -16, 5.83, 20, half 2.21, 3.06, 2.21]."
+  },
+  {
+   "where": "rime-1 BEAT 7, THE CHAPEL TRACK -- the authored trodden-snow path and its coin line, waypoints [12,-25] [8,-29] [4,-33] [0,-37] [2,-42] [2.8,-46.5]",
+   "did": "walked the required route from the village square all the way to the chapel green, leg by leg, following the trodden track exactly as it is drawn on the snow",
+   "happened": "THE PATH WALKS YOU INTO THE CHAPEL WALL. Every leg up to (0, 14.45, -36.6) arrived cleanly, and then the next leg -- toward the green at (2, -42), which is where the track decal goes -- ended at (2.83, 14.29, -36.62) after 320 frames of `bonk`, `pivot` and `run`: 5.44 m short, having moved sideways and not one metre south. The nave is a 12 x 5.5 x 8 building at (-2, -41), i.e. x -8..4 and z -45..-37, so the path's own waypoint (2, -42) is INSIDE the chapel and the segment (0,-37) -> (2,-42) runs straight through its south wall. The coin trail stops dead at (0,-37) for the same reason.",
+   "should": "route the track round the nave -- east of x 4 or west of x -8 -- and take the coin line with it. The green, cp5, the tower and the course's OPEN CREST are all past this point; the player CAN walk round the building, but the one visual guide the course gives him points at a wall.",
+   "png": "_shots/play_rime1b/31_r2_green.png",
+   "note": "an earlier leg also stalled: 'walk -> (8.0, -29.0) ended [10.33, 10.93, -28.17] d=2.47 DID NOT ARRIVE'."
+  },
+  {
+   "where": "rime-1, the saturated magenta / lime-green marker VFX -- seen on THE LAKE RUN start pad at (0, 1.36, 55) and again as a bright magenta plume standing over the ice on the east side of the lake",
+   "did": "looked at the lake from the spawn and from the plug",
+   "happened": "two separate hot-magenta plumes and a lime-green outlined octagon sit on a course whose whole palette is snow white, ice blue, aurora green-cyan, gold and bronze. On a dusk snowfield they are the most saturated thing in frame by a wide margin and they read as debug overlays rather than as course furniture.",
+   "should": "tint the race/marker VFX from the theme palette (checkpoint / accent / crest) the way the checkpoint pads already are -- those look right.",
+   "png": "_shots/play_rime1b/01_r2_on_plug.png",
+   "note": "the ambient snow quads are visible in the same frame as flat white slivers lying ON the ice at assorted angles rather than as camera-facing flakes -- see the particle defect above."
+  }
+ ],
+ "worked": [
+  "THE SPAWN READS. From the start pad the 'FROST COTTAGE / ICE DOES NOT STOP WHEN YOU DO / LET GO EARLY / POUND THE DARK PATCH / CROUCH TO SINK' board is large, crisp and legible without moving the camera, and it teaches all three of the course's verbs in one look (01_b1_spawn.png). The 'THE LAKE RUN 60s', 'THIN ICE' and 'THE OWL'S ROAD ENDS HERE' boards are all legible from a player's standing distance too -- the sign typography on this course is genuinely good.",
+  "THE ICE IS THE LESSON AND IT WORKS. Ran onto the sheet at 8.46 m/s and released W: Nim coasted 4.60 m before stopping, surface reported 'ice' the whole way, against a sub-metre stop on snow. The first thing the course promises is the first thing it does (05_b1_ice_drift.png).",
+  "THE GROUND POUND ITSELF IS CLEAN. Hand-stepped frame by frame: jump1 rises to y 2.94 over 16 frames, then poundHang holds for 11 frames (0.18 s, against TUNE.pound.hang 0.20), then poundLand, then idle. The move fires reliably off a Space tap plus KeyC and never got stuck. Do not touch it.",
+  "CHECKPOINTS AND THE DEATH RESPAWN WORK. Dying at the barn yard put Nim back at cp-square (0, 4.70, 3.0); dying on the ice plug put him back at cp-shore (0, 1.40, 58.5). The right checkpoint every time, and the course carried on without a rebuild.",
+  "STANDING STILL ON SNOW KEEPS YOU PUT. The same 10-second hands-off test that drifts you 3 m on the ice moves you 0.00 m at the north shore (0, 1.40, 30) and 0.00 m in the village square (0, 4.70, 3). Ground movement at rest is solid; the drift is specific to the lake.",
+  "THE HUD IS NOT A DEBUG OVERLAY. Coin counter with the /100 target, eight sigil pips, the checkpoint pip reading 0/4, the crest tally and the session timer all read at a glance and stay out of the way (01_b1_spawn.png).",
+  "NIM AND THE CHECKPOINT PADS LOOK RIGHT. The hero reads clearly against snow at follow distance -- red jacket, white scarf, hood, backpack, chunky boots -- and the checkpoint pad's blue-and-white ring is an unmistakable silhouette on a white course (zz_crop_cam_in_sign.png).",
+  "COINS AND THE COIN LINE READ WELL on the ice -- gold against pale blue, and the ring round the hole does make you circle it rather than skate into it, exactly as the course notes intend.",
+  "THE DRIFT IS THE BEST THING ON THE COURSE. From the cornice at (-6, 9.60, -13.4) a step forward puts Nim straight into slopeSlide at a measured 41.3 degrees, he rides the packed snow 3 m down to the lip in one continuous slide, and a jump at the lip launches him clean. The slope lesson works exactly as the course notes describe it, and a sigil went 0 -> 1 on the way.",
+  "THE WALL-KICK CLIMB WORKS. Dropped into the bell tower shaft at (0, 15.10, -47) and kicked alternate walls: y 15.10 -> 15.87 -> 16.29 -> 17.75 -> 18.40 -> 19.58 -> 22.36 -> 23.46, clearing the 23.10 belfry deck. The states read correctly on the way up (jump2, wallslide, wallkick, sideflip) and it never got stuck.",
+  "THE BARN CLIMB WALKS CLEANLY. Stair foot -> up the ten risers -> the eaves walk -> the loft gantry all arrived on a plain run with no jumping: y 5.34 -> 6.70 -> 7.38 -> 7.72 -> 8.40, and the eaves/gantry corner (which looked tight on paper) is walkable.",
+  "THE DEATH REWIND IS FAST. The HUD reported respawn 481 ms after the gnasher kill -- inside the contract's 700 ms median and 950 ms ceiling.",
+  "THE CREST FACE SET PIECE RUNS. From the shelf at (0, 40.40, -79) a step forward puts Nim down the 43-52 degree face at up to 17.28 m/s through the coin gates, over the kicker and onto the green -- 25 m of descent in 3.9 s with the slopeSlide/fall states reading correctly the whole way. It is the best-feeling thing on the course after the drift.",
+  "SIGIL 4 (the bell gap) AND SIGIL 8 (the crest shelf) BOTH COLLECT ON CONTACT -- the sigil counter went 1 -> 2 crossing between the bells and 2 -> 3 standing on the shelf, with the grand-collect behaviour firing normally.",
+  "THE PINE CLIMB ITSELF ENGAGES CORRECTLY -- walking into the trunk puts Nim straight into the `climb` state and carries him up 6 m at a steady rate; the verb works, it is only the volume's height that is wrong.",
+  "THE REQUIRED WALK FROM THE SQUARE TO THE HILLSIDE LEDGE IS SOLID. square (0, 4.70, 3) -> (2.5, 4.70, -2.0) -> (6.3, 6.29, -8.3) -> (10.0, 8.60, -13.9) -> (13.4, 10.20, -19.8) -> cp-ledge (14.3, 10.20, -22.7), every leg arriving within 1.2 m on a plain run with no jumping, and cp4 fired on the way. The hillside gradient really is a walk, as the course claims.",
+  "CHECKPOINTS FIRE ALONG THE ROUTE -- the HUD's cp counter reached 3 by the time the walk got to the ledge, without any special handling."
+ ],
+ "blocked": [
+  "THE RUN WAS FOUGHT FOR. Five other lanes were driving headless Chrome at the same time; the box sat at 100 % CPU with 80-115 chrome processes and the local server (serve_nocache.py, single-threaded) starved badly enough that one page failed a dynamic import outright -- 'TypeError: Failed to fetch dynamically imported module: .../runtime/data/courses/rime-1.js'. Four driver runs had their browser killed mid-run. Everything reported here was measured with the engine STOPPED and game.update(1/60) hand-stepped, so the numbers are frames and are not affected by the load; but the coverage below is thinner than it should be, and the drivers (_harness/_r1play2.py, _r1step.py, _r1death.py) are committed so any of it can be re-run on a quiet box.",
+  "THE SLEIGH LIFT WAS NOT RIDDEN. The mover's mesh is not exposed on the hazard object (h.mesh is null -- it is inside a BatchedMesh), so my driver could not find where the sleigh was in its 18 s cycle to board it. The lift, the ride up to the crest shelf, and stepping off at the top are untested.",
+  "THE KICKER AT THE BOTTOM OF THE CREST FACE WAS NOT JUMPED. I rode the face at up to 17.28 m/s and over the kicker, but my driver never pressed jump at the lip, so whether the intended belfry landing works is untested. Without the jump you land on the green at 15.10 and bonk into the tower's north wall -- which is the documented failure case, not evidence against the kicker.",
+  "THE TWO RACES (THE LAKE RUN, 60 s; THE BELL RUN, 20 s) and the WING / OWL'S ROAD ring run were not attempted -- all three need the belfry, and the tower door defeated me.",
+  "OLD FEN, the keep caretaker NPC, is not on this course (rime-1 authors no npcs), so there was nobody to talk to here."
+ ]
+}
