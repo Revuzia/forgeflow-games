@@ -355,6 +355,13 @@ export class Game {
     this._gateDwell = 0;
     this._gateArmed = true;
     this._gateSuppressed = -1;
+    this._gateCrestTotal = -1;
+    /* Reused probe for Save.isGateUnlocked — the save wants a {requires:{crests}}
+       shaped object and this path runs on every save event. */
+    this._gateReqProbe = { requires: { crests: 0 } };
+    this._gateRefusedIdx = -1;        // the sealed gate we have already refused
+    this._saveSub = null;             // Save.on subscription (live gate refresh)
+    this._devNoSuspendHeld = false;   // ?dev=1 suspension immunity, parked at the title
     this._fen = null;                 // Old Fen record in the Keep
     this._fenLine = 0;
     this._fenNear = false;
@@ -666,6 +673,18 @@ export class Game {
     const inp = this.input;
     if (!inp) return;
     const want = this._uiOwnsInput();
+    /* THE TITLE IS A HARD SUSPEND.
+     * `?dev=1` sets `input.devNoSuspend`, which makes `setSuspended(true)` a
+     * no-op so a harness can drive the hero while a menu is up. That is right
+     * everywhere except behind the TITLE: measured 2026-09-06, holding A on the
+     * title screen walked Nim 2.64 m across the Keep, and NEW GAME then started
+     * the run from wherever he had wandered — a player exploring a hub the game
+     * did not yet consider started, which is exactly how a session ends up in a
+     * state where nothing works. Park the immunity while the title is up and
+     * hand it back the moment it comes down. */
+    const hard = want && this.state === 'title';
+    if (hard && inp.devNoSuspend) { this._devNoSuspendHeld = true; inp.devNoSuspend = false; }
+    else if (this._devNoSuspendHeld && !hard) { this._devNoSuspendHeld = false; inp.devNoSuspend = true; }
     if (!!inp.suspended !== want) this._suspendInput(want);
   }
 
@@ -1149,18 +1168,74 @@ export class Game {
         label: meta.name || String(g.course).toUpperCase(),
         realmName: (realmOf(g.course) || {}).name || '',
         locked: true,
+        /* Mirrors, written only by _refreshGateState. A caller that reaches for
+           `unlocked` must never get `undefined` — see course.js _makeGate. */
+        unlocked: false,
+        sealed: true,
         sub: '',
       });
     }
+    /* Both of these index INTO the list just rebuilt above; a value carried over
+       from the previous hub would silence, or refuse, the wrong painting. */
+    this._gateRefusedIdx = -1;
+    this._gateSuppressed = -1;
     this._refreshGateState();
+    this._watchSave();
   }
 
-  /** Lock state resolved per Keep load and after every unlock — never per frame. */
+  /**
+   * The Keep's gates follow the SAVE, not the hub's load order.
+   *
+   * Save.on fires on every crest, unlock, reset and import, so a crest picked
+   * up in the hub, an `unlockAll()` from the pause menu and a wiped save all
+   * reach the doors immediately instead of on the next hub load. One
+   * subscription for the life of the Game; `dispose()` drops it.
+   */
+  _watchSave() {
+    if (this._saveSub || !this.save || typeof this.save.on !== 'function') return;
+    const self = this;
+    this._saveSub = (evt) => {
+      const t = evt && evt.type;
+      if (t !== 'crest' && t !== 'unlock' && t !== 'reset' && t !== 'import' && t !== 'load') return;
+      if (!self._gates.length) return;
+      safe(() => self._refreshGateState(), 'refreshGateState');
+    };
+    safe(() => this.save.on(this._saveSub), 'save.on');
+  }
+
+  /** Contract-facing: recompute every gate's lock state from the save right now. */
+  refreshGates() { this._refreshGateState(); return this._gates; }
+
+  /**
+   * Lock state resolved per Keep load, on every save change and after every
+   * unlock — never per frame.
+   *
+   * TWO THINGS THIS USED TO GET WRONG, both measured 2026-09-06 by
+   * `_harness/gatecheck.py` against committed HEAD:
+   *
+   *  1. It compared `crestTotal()` to `requires` DIRECTLY and never asked the
+   *     save whether the gate was open, so `Save.unlockAll(true)` — the
+   *     accessibility / dev escape hatch — opened 13 of 13 gates in the save
+   *     and 1 of 13 in the game the player was standing in.
+   *  2. It only ran on a hub LOAD, so crests written while the player stood in
+   *     the Keep left every gate stale until he left and came back.
+   *
+   * `Save.isGateUnlocked` is the one authority (it also honours `unlockAll`),
+   * and it is asked through a reused probe object so this stays allocation-free.
+   */
   _refreshGateState() {
     const total = safe(() => this.save.crestTotal(), 'save.crestTotal') | 0;
+    this._gateCrestTotal = total;
+    const probe = this._gateReqProbe;
     for (let i = 0; i < this._gates.length; i++) {
       const g = this._gates[i];
-      g.locked = total < g.requires;
+      probe.requires.crests = g.requires;
+      const open = (this.save && typeof this.save.isGateUnlocked === 'function')
+        ? safe(() => this.save.isGateUnlocked(probe), 'save.isGateUnlocked')
+        : total >= g.requires;
+      g.locked = !open;
+      g.unlocked = !g.locked;
+      g.sealed = g.locked;
       const rec = safe(() => this.save.course(g.course), 'save.course');
       const n = rec && Array.isArray(rec.crests) ? rec.crests.length : 0;
       const bestOpen = rec && rec.bestMs && isNum(rec.bestMs.open) ? rec.bestMs.open : null;
@@ -1192,21 +1267,63 @@ export class Game {
     }
 
     /* A cancelled card leaves the player standing in the gate: keep it disarmed
-       until they walk clear, or the card would pop straight back up. */
+       until they walk clear, or the card would pop straight back up.
+     *
+     * "CLEAR" IS THE DOORWAY, NOT A RADIUS. This tested `bestD > GATE_REARM_R²`
+     * — 2.6 m from the PICTURE — and the Keep hangs its paintings in alcoves
+     * whose walking floor stops well inside that: keep.js's own stand-out spot
+     * is 1.9 m out (d² = 3.61 against a 6.76 threshold), and the undercroft
+     * bays are shallower still. So cancelling a course card KILLED that gate
+     * for as long as the player stayed in front of it: the painting showed its
+     * name, the prompt showed its crests, and walking into it did nothing —
+     * the owner's "I can't seem to even play the first world". Measured
+     * 2026-09-06 by gatecheck.py: with every other gate fix already in, 25
+     * checks still failed and ALL 25 were "walk-in raises the course card" on
+     * a gate the player had cancelled once and was still standing in front of.
+     * All 25 went green on this change alone. Re-arm on stepping OUT OF THE
+     * TRIGGER, which is a place the player can actually reach. */
     if (this._gateSuppressed !== -1) {
-      if (near !== this._gateSuppressed || bestD > GATE_REARM_R * GATE_REARM_R) this._gateSuppressed = -1;
+      if (near !== this._gateSuppressed) this._gateSuppressed = -1;
+      else {
+        const sg = this._gates[this._gateSuppressed];
+        const stillIn = sg && sg.volume
+          ? !!safe(() => sg.volume.contains(pp), 'gate.contains')
+          : bestD <= GATE_REARM_R * GATE_REARM_R;
+        if (!stillIn) this._gateSuppressed = -1;
+      }
     }
 
     if (near !== this._gateNear) {
       this._gateNear = near;
       this._gateDwell = 0;
+      this._gateRefusedIdx = -1;
       if (near === -1) { if (!this._fenNear) this._setPrompt('', ''); }
     }
     if (near === -1) return;
 
     const g = this._gates[near];
     this._setPrompt(g.label, g.sub, g.locked);
-    if (g.locked || this._gateSuppressed === near) { this._gateDwell = 0; return; }
+    if (g.locked) {
+      this._gateDwell = 0;
+      /* A SEALED GATE MUST ANSWER. The ambient prompt is easy to walk past;
+         actually pressing INTO the seal used to do nothing at all, which reads
+         as a broken door rather than a locked one. Say it once, out loud, and
+         re-arm only when the player leaves this gate. */
+      const insideSealed = g.volume
+        ? !!safe(() => g.volume.contains(pp), 'gate.contains')
+        : bestD <= GATE_ENTER_R * GATE_ENTER_R;
+      if (insideSealed && this._gateRefusedIdx !== near) {
+        this._gateRefusedIdx = near;
+        const have = this._gateCrestTotal | 0;
+        safe(() => this.audio && this.audio.sfx('ui_back'), 'audio.sfx');
+        safe(() => this.hud && this.hud.toast(g.label + ' IS SEALED',
+          Math.max(0, g.requires - have) + ' MORE CREST' + ((g.requires - have) === 1 ? '' : 'S') +
+          '  ·  ' + have + ' / ' + g.requires, 'locked'), 'hud.toast');
+      }
+      return;
+    }
+    this._gateRefusedIdx = -1;
+    if (this._gateSuppressed === near) { this._gateDwell = 0; return; }
 
     let inside;
     if (g.volume) inside = !!safe(() => g.volume.contains(pp), 'gate.contains');
@@ -1542,6 +1659,21 @@ export class Game {
       return;
     }
     if (this.courseId === KEEP_ID && this.course) {
+      /* NEW GAME STARTS AT THE START. The title screen sits over a LIVE Keep
+         (the attract camera drifts over a running hub), so the hero object has
+         been standing there the whole time — and any path that let input reach
+         him, ?dev=1 included, left him somewhere else. A new run must begin on
+         the Keep's authored spawn whatever happened behind the menu. */
+      if (fresh && this.player) {
+        const sp = this._spawnFor(0);
+        if (sp && sp.pos) {
+          safe(() => this.player.respawn(sp.pos, sp.yaw), 'player.respawn');
+          if (this.cam) {
+            if (isNum(sp.yaw)) this.cam.yaw = sp.yaw;
+            safe(() => this.cam.recenter && this.cam.recenter(), 'cam.recenter');
+          }
+        }
+      }
       this._handOverControl();
       this._queueGateUnlocks(false);
       if (fresh) safe(() => this.hud && this.hud.toast('THE KEEP', 'FIND THE PAINTINGS', 'course'), 'hud.toast');
@@ -3099,6 +3231,8 @@ export class Game {
       if (window.__PAUSE__ && window.__PAUSE__.isPaused) delete window.__PAUSE__;
     }
     if (this.settings && this._settingsSub && typeof this.settings.off === 'function') safe(() => this.settings.off(this._settingsSub), 'settings.off');
+    if (this.save && this._saveSub && typeof this.save.off === 'function') safe(() => this.save.off(this._saveSub), 'save.off');
+    this._saveSub = null;
     this._clearColliderDebug();
     this._disposeCourse();
     safe(() => this.audio && this.audio.stopAll(), 'audio.stopAll');

@@ -239,8 +239,11 @@ const CLIMB_KINDS = Object.freeze({ pole: 1, net: 1, tree: 1 });
 
 /** How far a gate's walk-in trigger reaches OUT of the frame, into the room.
  *  The wall collider stops Nim ~0.38 m (his radius) short of the picture plane,
- *  so anything shallower than that can never contain his feet. */
-const GATE_TRIGGER_DEPTH = 1.35;
+ *  so anything shallower than that can never contain his feet.  1.5 m leaves
+ *  ~1.0 m of usable band once the wall, the frame and Nim's radius are paid
+ *  for — a walk-in a human hits at a run — while staying short of the 1.9 m
+ *  stand-out spot keep.js authors, so crossing the aisle never opens a card. */
+const GATE_TRIGGER_DEPTH = 1.50;
 
 /* ── module-scope scratch — NO per-frame allocation below this line ──────── */
 const _v1 = new THREE.Vector3();
@@ -4313,10 +4316,22 @@ export class Course {
       sealMat,
       setOpen,
       locked: true,
+      /* THE SAME FACT, UNDER THE THREE NAMES CALLERS ACTUALLY REACH FOR.
+         `locked` was the only one that existed, so every probe, harness and
+         sibling module that asked `gate.unlocked` got `undefined` — falsy, i.e.
+         "sealed" — and a build where all 13 gates were correctly resolved read
+         as a build where none of them could ever open (measured 2026-09-06:
+         `_gateprobe2.py` reported `unlocked: null, sealed: null` for all 13).
+         An undefined boolean on a state object is a trap; these mirrors are
+         written by `setLocked` and by nothing else. */
+      unlocked: false,
+      sealed: true,
       lockT: 1,
       /** Game flips this whenever the crest total changes. */
       setLocked(v) {
         gate.locked = !!v;
+        gate.unlocked = !gate.locked;
+        gate.sealed = gate.locked;
         /* SIGNAGE LANE: a painting swaps its plate (course name / "N CRESTS")
            and shows or hides its lock sigil on the same flip. */
         if (mesh && mesh.userData && typeof mesh.userData.setLockedArt === 'function') {
@@ -4376,13 +4391,23 @@ export class Course {
     }
     if (!fin(floorY)) floorY = pos.y - h * 0.5 - 1.2;
 
-    const top = pos.y + h * 0.5 + 0.15;
-    const bottom = Math.min(floorY - 0.20, pos.y - h * 0.5, top - 0.6);
+    /* THE SLAB IS FITTED TO THE PLAYER, NOT TO THE PICTURE. `_updateGates`
+       tests `volume.contains(player.pos)` and `player.pos` is the FEET, so what
+       matters is the band around the WALKING FLOOR, not the frame's centre.
+       The old fit reached only 0.20 m below the floor and 0.15 m above the
+       frame: on the undercroft and roof gates that left a 0.19 m margin under
+       the feet, and any step, lip or slope under the approach dropped the
+       player out of the bottom of his own doorway. Floor − 0.75 m up to at
+       least chest height above it (and never less than the frame) gives the
+       margin, and 1.5 m of depth gives a walk-in that a human can hit at a
+       run without giving one that catches someone crossing the aisle. */
+    const top = Math.max(pos.y + h * 0.5 + 0.15, floorY + 2.40);
+    const bottom = Math.min(floorY - 0.75, pos.y - h * 0.5, top - 0.6);
     const depth = GATE_TRIGGER_DEPTH;                 // metres in FRONT of the plane
     const cx = pos.x + fx * (depth * 0.5 - 0.10);
     const cz = pos.z + fz * (depth * 0.5 - 0.10);
     const cy = (top + bottom) * 0.5;
-    const hx = Math.max(0.85, w * 0.5 + 0.15);
+    const hx = Math.max(1.05, w * 0.5 + 0.25);
     const hy = Math.max(0.6, (top - bottom) * 0.5);
     const hz = depth * 0.5;
 
