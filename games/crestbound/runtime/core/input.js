@@ -154,7 +154,15 @@ const MENU_ACTIONS = Object.freeze({ pause: 1, mute: 1, fullscreen: 1, dev: 1, c
 /** Default remappable bindings, by KeyboardEvent.code (layout independent). */
 export const DEFAULT_BINDINGS = Object.freeze({
   moveForward: ['KeyW', 'ArrowUp'], moveBack: ['KeyS', 'ArrowDown'], moveLeft: ['KeyA', 'ArrowLeft'], moveRight: ['KeyD', 'ArrowRight'],
-  jump: ['Space'], crouch: ['ControlLeft', 'KeyC', 'ShiftLeft'], dive: ['KeyF', 'KeyX'], pound: ['ControlLeft', 'KeyC'],
+  /* CROUCH/POUND lead with KeyC, not Ctrl. The contract lists the same three
+     codes; only the ORDER changed, and the order is what the player is told and
+     what they reach for. Holding Ctrl in a browser turns every subsequent click
+     into a ctrl-click (a new tab from any link, a context menu on macOS) and no
+     page can clear that — the modifier is the OS's, not ours. Ctrl stays bound
+     as an alternate for anyone whose hands already know it, and its keydown
+     default is swallowed below, but slot 0 — the key the CONTROLS page prints
+     and the LONG JUMP / BACKFLIP / GROUND POUND rows compose from — is C. */
+  jump: ['Space'], crouch: ['KeyC', 'ControlLeft', 'ShiftLeft'], dive: ['KeyF', 'KeyX'], pound: ['KeyC', 'ControlLeft'],
   orbitLeft: ['KeyQ'], orbitRight: ['KeyE'], orbitUp: ['KeyR'], orbitDown: ['KeyV'], recenter: ['KeyZ'], peek: ['KeyG'],
   interact: ['KeyE'], pause: ['Escape'], restart: ['KeyR'], toCheckpoint: ['KeyT'], mute: ['KeyM'], fullscreen: ['F11'], dev: ['Backquote'], camToggle: ['KeyB'],
 });
@@ -162,10 +170,19 @@ export const DEFAULT_BINDINGS = Object.freeze({
 const BINDINGS_KEY = 'crestbound.bindings.v1';
 const SETTINGS_KEY = 'crestbound.settings';
 
-/** Codes whose browser default we swallow while the game owns the page. */
+/**
+ * Codes whose browser default we swallow while the game owns the page.
+ *
+ * ControlLeft/ControlRight are here because they are bound to CROUCH/POUND: the
+ * game must be the only thing that reacts to them. Be honest about the limit —
+ * `preventDefault()` on a modifier keydown does NOT clear the modifier the OS
+ * hands to the next click, so this alone cannot stop a ctrl-click; that is why
+ * KeyC is the PRIMARY crouch binding above. What it does buy is that the key
+ * itself never triggers a browser default while the canvas has focus.
+ */
 const SWALLOW = Object.freeze({
   Space: 1, Tab: 1, ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1,
-  Backquote: 1, F11: 1,
+  Backquote: 1, F11: 1, ControlLeft: 1, ControlRight: 1,
 });
 
 /** Mouse button → binding code, precomputed so event handlers never concatenate. */

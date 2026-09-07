@@ -87,8 +87,10 @@
  *
  * Coordinate conventions (CONTRACT): yaw 0 faces −Z, +yaw is counter-clockwise
  * from above; `headingFromYaw` is the ONE conversion. `pitch` is the camera's
- * ELEVATION above the focus (positive = camera above, looking down).
- * `input.look` is in radians and already sens+invert scaled (CONTRACT §4).
+ * ELEVATION above the focus (positive = camera above, looking down) — so a
+ * mouse pushed AWAY from the player (look.dy < 0) DECREASES pitch, dropping the
+ * lens and tilting the view up. `input.look` is in radians and already
+ * sens+invert scaled (CONTRACT §4).
  *
  * The camera is posed in WORLD space: it must be a root-level object (parent
  * = scene or none). No per-frame heap allocation: every temporary is hoisted.
@@ -1507,9 +1509,28 @@ export class FollowCamera {
     }
     // mouse right → orbit right (camera swings clockwise seen from above = −yaw)
     this.yaw = wrapAngle(this.yaw - dx);
-    // mouse forward (dy < 0) → camera rises (pitch up)
+    /**
+     * PITCH IS THE LENS'S ELEVATION, NOT THE AIM. `_pose` puts the lens at
+     * `focus + up·sin(pitch)·dist` (and `_clearance` casts along the same
+     * `sin/cos`), so a LARGER pitch lifts the camera and points it DOWN at the
+     * hero. Pushing the mouse away from you (`dy < 0`) therefore has to LOWER
+     * pitch: the lens drops behind Nim and the view tilts up.
+     *
+     * This line used to SUBTRACT dy, which raised the lens on a forward push —
+     * measured on the live build (`_harness/inputcheck.py`, drag 160 px up):
+     * camera forward.y −0.2182 → −0.5679 and the lens climbing 3.03 → 5.41 m.
+     * That is what the owner played and reported as "mouse look is inverted",
+     * with `Settings.invertY` already false: the option was never the bug, the
+     * sign was. The clamp band corroborates it — `pitchMin −0.55 / pitchMax
+     * 0.95` only makes sense for a camera that looks further DOWN than up, and
+     * under the old sign it delivered exactly the opposite.
+     *
+     * The `_peekOn` branch above uses the OPPOSITE formula on purpose:
+     * `_peekPitch` is a first-person AIM (`lookPt.y = pos.y + sin(peekPitch)`),
+     * where larger IS up. Two conventions, two signs; only this one was wrong.
+     */
     if (dy !== 0) {
-      this.pitch = clamp(this.pitch - dy, TUNE.cam.pitchMin, TUNE.cam.pitchMax);
+      this.pitch = clamp(this.pitch + dy, TUNE.cam.pitchMin, TUNE.cam.pitchMax);
       this._pitchIdleT = 0;
     }
   }

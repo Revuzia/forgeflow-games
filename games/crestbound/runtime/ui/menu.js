@@ -26,8 +26,10 @@
  *   settings  quality · camera mode · sensitivity X/Y · invert X/Y · volumes ·
  *             timer · HUD scale · vibration · reduced motion — every row bound
  *             straight to core/settings.js and pushed into the live systems
- *   controls  the WHOLE moveset as a keyboard + gamepad glyph table; the rows
- *             that map to a real bindable action are rebindable in place
+ *   controls  a MOUSE LOOK block (invert X/Y + sensitivity X/Y, mirrored with
+ *             the settings page) over the WHOLE moveset as a keyboard + gamepad
+ *             glyph table; the rows that map to a real bindable action rebind in
+ *             place, and the derived rows re-letter themselves from them
  *   credits   who made it and what it is made of
  *   confirm   a narrow yes/no gate that resolves a Promise
  *
@@ -606,7 +608,7 @@ export class Menu {
     this.cSensX = makeSlider({
       min: sx.min, max: sx.max, step: sx.step, value: clamp(Number(s.camSensX) || 1, sx.min, sx.max),
       format: (v) => v.toFixed(2),
-      onChange: (v) => this._set({ camSensX: v }),
+      onChange: (v) => { this._set({ camSensX: v }); this._paintFeel(); },
     });
     list.appendChild(makeRow('SENSITIVITY X', null, this.cSensX));
 
@@ -614,19 +616,19 @@ export class Menu {
     this.cSensY = makeSlider({
       min: sy.min, max: sy.max, step: sy.step, value: clamp(Number(s.camSensY) || 1, sy.min, sy.max),
       format: (v) => v.toFixed(2),
-      onChange: (v) => this._set({ camSensY: v }),
+      onChange: (v) => { this._set({ camSensY: v }); this._paintFeel(); },
     });
     list.appendChild(makeRow('SENSITIVITY Y', null, this.cSensY));
 
     this.cInvX = makeToggle({
       value: !!s.invertX,
-      onChange: (v) => { uiSfx(this.game, 'ui_ok'); this._set({ invertX: v }); },
+      onChange: (v) => { uiSfx(this.game, 'ui_ok'); this._set({ invertX: v }); this._paintFeel(); },
     });
     list.appendChild(makeRow('INVERT X', null, this.cInvX));
 
     this.cInvY = makeToggle({
       value: !!s.invertY,
-      onChange: (v) => { uiSfx(this.game, 'ui_ok'); this._set({ invertY: v }); },
+      onChange: (v) => { uiSfx(this.game, 'ui_ok'); this._set({ invertY: v }); this._paintFeel(); },
     });
     list.appendChild(makeRow('INVERT Y', null, this.cInvY));
 
@@ -686,10 +688,7 @@ export class Menu {
     this.cTimer.set(s.showTimer !== false);
     this.cReduce.set(!!s.reduceMotion);
     this.cCamMode.set(s.camMode || 'follow');
-    this.cSensX.set(Number(s.camSensX) || 1);
-    this.cSensY.set(Number(s.camSensY) || 1);
-    this.cInvX.set(!!s.invertX);
-    this.cInvY.set(!!s.invertY);
+    this._paintFeel();
     this.cMaster.set(s.master != null ? Number(s.master) : 0.8);
     this.cMusic.set(s.music != null ? Number(s.music) : 0.6);
     this.cSfx.set(s.sfx != null ? Number(s.sfx) : 0.9);
@@ -704,9 +703,71 @@ export class Menu {
   _buildControls() {
     const p = this._page('controls', 'cm-controls-page');
     const ui = this._panel(p, 'INPUT MAP', 'CONTROLS', 'wide', [
-      [['↑', '↓'], 'NAVIGATE'], [['ENTER'], 'REBIND'], [['ESC'], 'BACK'],
+      [['↑', '↓'], 'NAVIGATE'], [['←', '→'], 'ADJUST'], [['ENTER'], 'REBIND'], [['ESC'], 'BACK'],
     ]);
     this.controlsUI = ui;
+
+    /**
+     * MOUSE LOOK LIVES HERE, NOT ONLY UNDER SETTINGS.
+     *
+     * The owner played the live build, wanted to flip the look inversion, opened
+     * CONTROLS, found a table he could not change, and reported "no usable
+     * controls screen". The toggles existed the whole time — one page away,
+     * under SETTINGS, where nobody hunting for a CONTROL goes. Both pages now
+     * carry the same four rows bound to the same `Settings` keys, and
+     * `_paintFeel()` keeps them in step whichever page moved one.
+     */
+    const feel = el('div', 'cm-list');
+    const ft = el('div', 'cm-group-title');
+    ft.textContent = 'MOUSE LOOK';
+    feel.appendChild(ft);
+    const s0 = this._s();
+    const rng0 = (key, dflt) => {
+      const r = (RANGES && RANGES[key]) || null;
+      return { min: r && r.min != null ? r.min : dflt.min, max: r && r.max != null ? r.max : dflt.max,
+        step: r && r.step != null ? r.step : dflt.step };
+    };
+    const sx0 = rng0('camSensX', { min: 0.15, max: 4, step: 0.05 });
+    this.kSensX = makeSlider({
+      min: sx0.min, max: sx0.max, step: sx0.step,
+      value: clamp(Number(s0.camSensX) || 1, sx0.min, sx0.max),
+      format: (v) => v.toFixed(2),
+      onChange: (v) => { this._set({ camSensX: v }); this._paintFeel(); },
+    });
+    feel.appendChild(makeRow('SENSITIVITY X', 'How far the view turns per centimetre of mouse', this.kSensX));
+    const sy0 = rng0('camSensY', { min: 0.15, max: 4, step: 0.05 });
+    this.kSensY = makeSlider({
+      min: sy0.min, max: sy0.max, step: sy0.step,
+      value: clamp(Number(s0.camSensY) || 1, sy0.min, sy0.max),
+      format: (v) => v.toFixed(2),
+      onChange: (v) => { this._set({ camSensY: v }); this._paintFeel(); },
+    });
+    feel.appendChild(makeRow('SENSITIVITY Y', null, this.kSensY));
+    this.kInvX = makeToggle({
+      value: !!s0.invertX,
+      onChange: (v) => { uiSfx(this.game, 'ui_ok'); this._set({ invertX: v }); this._paintFeel(); },
+    });
+    feel.appendChild(makeRow('INVERT X', 'Push the mouse right and the view turns LEFT', this.kInvX));
+    this.kInvY = makeToggle({
+      value: !!s0.invertY,
+      onChange: (v) => { uiSfx(this.game, 'ui_ok'); this._set({ invertY: v }); this._paintFeel(); },
+    });
+    feel.appendChild(makeRow('INVERT Y', 'Push the mouse away and the view looks DOWN', this.kInvY));
+    ui.body.appendChild(feel);
+
+    /* Say out loud that the table is editable — the rows look like a legend
+       until you know they are not, which is the other half of "could not
+       rebind anything". */
+    const howto = el('div', 'cm-ctlhow');
+    /* Inline: ui/style.js is another module's file and this one line of copy is
+       not worth a shared class. Matches the panel's own muted body type. */
+    howto.style.cssText =
+      'margin:10px 2px 4px;font-size:11px;line-height:1.5;letter-spacing:.04em;' +
+      'text-transform:uppercase;opacity:.62;max-width:62ch';
+    howto.textContent =
+      'CLICK A ROW (or highlight it and press ENTER), then press the key you want. ESC cancels. ' +
+      'Greyed rows are combinations — they re-letter themselves from the keys above them.';
+    ui.body.appendChild(howto);
 
     const head = el('div', 'cm-ctlhead');
     for (const t of ['MOVE / ACTION', 'KEYBOARD', 'CONTROLLER']) {
@@ -757,6 +818,26 @@ export class Menu {
     const nav = new FocusList(ui.panel, { columns: 1, onMove: () => uiSfx(this.game, 'ui_move') });
     nav.bindHover();
     this.nav.controls = nav;
+  }
+
+  /**
+   * Keep the MOUSE LOOK rows on the CONTROLS page and the camera rows on the
+   * SETTINGS page showing the same four values. Both write through `_set()`, so
+   * whichever page moved one, the other must be repainted before it is seen.
+   * Cheap: four widget writes, only on a change or a page open.
+   */
+  _paintFeel() {
+    const s = this._s();
+    const sx = Number(s.camSensX) || 1;
+    const sy = Number(s.camSensY) || 1;
+    if (this.kSensX) this.kSensX.set(sx);
+    if (this.kSensY) this.kSensY.set(sy);
+    if (this.kInvX) this.kInvX.set(!!s.invertX);
+    if (this.kInvY) this.kInvY.set(!!s.invertY);
+    if (this.cSensX) this.cSensX.set(sx);
+    if (this.cSensY) this.cSensY.set(sy);
+    if (this.cInvX) this.cInvX.set(!!s.invertX);
+    if (this.cInvY) this.cInvY.set(!!s.invertY);
   }
 
   /** The live Input, or null (the page still renders the defaults, read-only). */
@@ -1001,7 +1082,7 @@ export class Menu {
     if (id === 'title') this._refreshTitle();
     else if (id === 'pause') this._refreshPause();
     else if (id === 'settings') this._refreshSettings();
-    else if (id === 'controls') this._paintBindings();
+    else if (id === 'controls') { this._paintBindings(); this._paintFeel(); }
 
     const nav = this.nav[id];
     if (nav && id !== 'confirm') { nav.refresh(); nav.index = -1; nav.focusIndex(0, true); }
