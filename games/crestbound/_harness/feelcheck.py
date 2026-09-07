@@ -44,6 +44,8 @@ truth. If the tuning changes, the gate moves with it.
   idle_while_moving  `idle` pose while still moving         NO frame above speedWalk
   air_keep_frac      min airborne speed / launch speed      >= 0.40 (full stick reversal)
   swim_speed         stick forward in water                TUNE.swim.speed +/- 0.3
+  surface_hop        Space TAP while floating              surfaceJumpV^2 / (2 gravRise) +/- 0.10 (1.19 m)
+  surface_hop_dry    inWater during the hop's rise         never (the hop is a jump, not a stroke)
 
 The test ground is a synthetic 140 x 140 m slab at y = 400, far above the course,
 with one wall for the kick and (when the live course has no water) one pool. They
@@ -1106,6 +1108,42 @@ async () => {
         + ' m, state ' + P.state);
     }
     allUp(); await wait(200);
+
+    /* ---- the surface hop: SPACE while floating is a JUMP out of the water ---
+       The hero floats up to his line, a real Space TAP fires the hop, and the
+       rise is measured against apexFor(swim.surfaceJumpV). Two things this
+       proves that shipped broken (water lane, _wl_hopprobe): the rise itself
+       (it read 0.10 m: the next frame's water overlap counted as a fresh entry
+       and the waterline clamp quartered the climb), and that the hero is OUT
+       of the water for the whole rise (`surface_hop_dry`), so gravity and air
+       control — not the swim model — own the arc. A tap must give the full
+       height: the hop is not cuttable. */
+    syncP(); allUp();
+    P.__test.teleport(V3(waterCentre.x, waterCentre.y, waterCentre.z));
+    P.__test.setVel(V3(0, 0, 0));
+    await wait(1600);                        // buoyancy brings him to the float line
+    syncP();
+    if (!P.inWater) {
+      failWith('surface_hop', 'not in water after floating (state ' + P.state + ')');
+      failWith('surface_hop_dry', 'no hop');
+    } else {
+      if (P.submerged) { down(JUMP); await wait(60); up(JUMP); await wait(900); syncP(); }   // a stroke first
+      const y0 = P.pos.y, st0 = P.state;
+      down(JUMP); await wait(90); up(JUMP);  // a TAP
+      let peak = y0, wet = 0, rising = 0, kind = null, back = false;
+      const hop0 = simNow();
+      while (simNow() - hop0 < 1400) {
+        await frame(); syncP();
+        if (kind === null) kind = P.lastJumpKind || P.state;
+        if (P.pos.y > peak) peak = P.pos.y;
+        if (P.vel.y > 0.05) { rising++; if (P.inWater) wet++; }
+        if (P.inWater && P.vel.y <= 0 && rising > 3) { back = true; break; }
+      }
+      record('surface_hop', +(peak - y0).toFixed(3), 'from ' + st0 + ' at y ' + y0.toFixed(2)
+        + ', launch ' + kind + ', ' + rising + ' rising frames, back in the water: ' + back);
+      record('surface_hop_dry', (rising > 3 && wet === 0) ? 1 : 0, wet + ' of ' + rising + ' rising frames still inWater');
+    }
+    allUp(); await wait(300);
   }
 
   /* ---- tear the test ground down ------------------------------------------ */
@@ -1191,6 +1229,11 @@ def build_expectations(tune, exact, dive_max):
         band("idle_while_moving", "false", 0, 0, "",   "no idle pose above walking pace"),
         band("air_keep_frac",    "min",   0.40, 0, "x", "launch speed kept against a full air reversal"),
         band("swim_speed",       "about", swim.get("speed", 4.5), 0.30, "m/s", ""),
+        # the hop out of the water is a real jump: apex = v^2 / (2 gravRise) off the float line
+        band("surface_hop",      "about",
+             round(swim.get("surfaceJumpV", 9.0) ** 2 / (2.0 * t.get("gravRise", 34.0)), 3), 0.10, "m",
+             "Space TAP while floating; not cuttable"),
+        band("surface_hop_dry",  "true",  1, 0, "",       "out of the water for the whole rise"),
     ]
 
 

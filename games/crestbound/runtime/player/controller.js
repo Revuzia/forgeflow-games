@@ -328,14 +328,54 @@ const STEP_CROUCH_MUL = 1.35;
 const HIST_N = 24;
 const HIST_DT = 1 / 60;
 
-/** Swim: gentle upward drift when submerged and idle (buoyancy, not a stroke). */
-const SWIM_BUOYANCY = 0.6;
+/**
+ * Swim: gentle upward drift when under the float line and idle (buoyancy,
+ * not a stroke). Against `swim.drag` 2.2 the terminal rise is accel / drag:
+ * 0.6 gave 0.27 m/s — a hero who came off a river bank 0.3 m under his line
+ * took ~1.6 s to float up, and a surface hop pressed before that launched
+ * from the low point and fell short of verdant-3's log lips. 1.2 = 0.55 m/s,
+ * under a second to the line; a crouch still sinks (it takes precedence).
+ */
+const SWIM_BUOYANCY = 1.2;
 /** Minimum time between strokes so mashing does not rocket you. */
 const STROKE_CD = 0.42;
 /** How long the plunge state holds after entering water fast. */
 const SWIM_DIVE_TIME = 0.45;
 /** Head clearance fraction used to decide "submerged". */
 const HEAD_FRAC = 0.86;
+/**
+ * Where the water sits on a FLOATING hero: buoyancy lifts him until this
+ * point of the body reaches the surface, and the waterline clamp holds it
+ * there. It used to be HEAD_FRAC — the water at his chin, feet 1.29 m under
+ * the surface — which put the top of the 9 m/s surface hop (apex 1.19 m) a
+ * hand's breadth BELOW the surface: the Keep's 0.15 m rim needed the mantle
+ * at the very top of the arc and verdant-3's 0.60 m log lips were out of
+ * reach from the water altogether (playtest V3-03, "should climb onto it").
+ * The shoulders (0.62 h, feet 0.93 m under) put the hop's apex 0.26 m over
+ * the surface and the wading step-up reaches 0.71 m over it; `submerged`
+ * (the camera's underwater read, the stroke-vs-hop branch) stays head-based.
+ */
+const FLOAT_FRAC = 0.62;
+/**
+ * Fastest a hero coming back down from a surface hop re-enters the water. He
+ * left from the float line and lands back on it; letting the full fall speed
+ * (~10 m/s after a 1.19 m drop) through would be a `swimDive` plunge and, at
+ * 0.6 m/s² of buoyancy, seconds of bobbing back up after every missed hop.
+ */
+const HOP_REENTRY_V = 1.5;
+/**
+ * THE METAL HAT IN WATER — "TOO HEAVY TO FLOAT · HEAVY ENOUGH TO POUND"
+ * (azure-1's tidewell sign; verdant-2's drowned crest on the moat floor).
+ * `player.power === 'metal'` turns the water into slow air: no swim model,
+ * gravity as on land (so the jump family keeps its apexes) with the fall
+ * capped at HEAVY_SINK_MAX, the ground model on the bed at HEAVY_WATER_MOVE
+ * of its speed, and the pound allowed. Until 2026-09-07 the hat set nothing
+ * but an id: a hatted hero floated like anyone else, the well's coral wall
+ * could never be pounded and the moat crest never reached (interactions and
+ * water lanes' residuals).
+ */
+const HEAVY_SINK_MAX = 9.0;
+const HEAVY_WATER_MOVE = 0.6;
 
 /** Quicksand: sink rate and movement penalty (CONTRACT §11 "sink 0.6 m/s"). */
 const QUICKSAND_SINK = 0.6;
@@ -743,6 +783,7 @@ export class Player {
 
     this.inWater = null;
     this.submerged = false;
+    this._hopping = false;
     this.wallN.set(0, 0, 0);
 
     this.speed = 0;
@@ -853,6 +894,9 @@ export class Player {
 
   /** Set the active power hat id (collectibles read `player.power`). */
   setPower(id) { this.power = id || null; }
+
+  /** The metal hat is on: too heavy to float, heavy enough to pound (see HEAVY_*). */
+  _heavy() { return this.power === 'metal'; }
 
   dispose() {
     if (this.events && typeof this.events.clear === 'function') {
@@ -1358,7 +1402,7 @@ export class Player {
 
     /* Ground pound: crouch/pound pressed while airborne, and not already
        committed to a dive. A dive press in the same frame wins (§11). */
-    if (this._poundPressLatch && !this._divePressLatch && !this.grounded && !this.inWater &&
+    if (this._poundPressLatch && !this._divePressLatch && !this.grounded && (!this.inWater || this._heavy()) &&
       st !== 'poundHang' && st !== 'poundFall' && st !== 'climb' && st !== 'cannon' && st !== 'dive') {
       this._doPound();
       return;
@@ -1366,7 +1410,7 @@ export class Player {
 
     /* Dive: ground or air, at speed. */
     if (this._divePressLatch && st !== 'dive' && st !== 'slide' && st !== 'poundHang' && st !== 'poundFall') {
-      if (this.inWater) this._doSwimDash();
+      if (this.inWater && !this._heavy()) this._doSwimDash();
       else if (this.speed >= TUNE.dive.minSpeed || (!this.grounded && this.speed >= TUNE.dive.minSpeed * 0.6)) this._doDive();
     }
 
@@ -1383,8 +1427,8 @@ export class Player {
   _tryJump() {
     const st = this.state;
 
-    /* --- water ------------------------------------------------------- */
-    if (this.inWater) {
+    /* --- water (a hatted hero jumps off the bed like anywhere else) ---- */
+    if (this.inWater && !this._heavy()) {
       if (!this.submerged) this._doSurfaceHop();
       else this._doStroke();
       this.bufferT = 0;
@@ -1745,7 +1789,11 @@ export class Player {
   _locomotion(dt) {
     const st = this.state;
 
-    if (this.inWater) { this._swimMove(dt); return; }
+    if (this.inWater) {
+      if (!this._heavy()) { this._swimMove(dt); return; }
+      /* The metal hat: the swim states are wrong for a hero on the bed. */
+      if (st === 'swim' || st === 'swimIdle' || st === 'swimDive') this._setState(this.grounded ? 'idle' : 'fall');
+    }
     if (st === 'climb') { this._climbMove(dt); return; }
     if (NO_LOCOMOTION[st] === 1) {
       /* Pound / stun states: no steering at all, but a pound plunge holds its
@@ -1826,6 +1874,7 @@ export class Player {
     let target = this._speedTarget(this._wmag);
     if (this.crouching && target > TUNE.speedWalk * CROUCH_SPEED_MUL * 2) target *= CROUCH_SPEED_MUL;
     if (this._inQuicksand) target *= QUICKSAND_MOVE;
+    if (this.inWater) target *= HEAVY_WATER_MOVE;          // only a hatted hero walks a bed
     if (st === 'land') target *= 0.85;          // the 0.05 s landing dip
     /* SPEED PAD HOLD (BOOST_TIME): the pad's power is the floor of the target,
        stick or no stick, easing back to a run over the last BOOST_FADE. */
@@ -1995,10 +2044,12 @@ export class Player {
     accelerateXZ(vel, this._wx, this._wz, target, sw.accel, dt);
 
     /* vertical: sink on crouch, buoyancy toward the surface, drag otherwise */
+    const sy = this._waterSurfaceY;
+    const floatPt = this.pos.y + this.height * FLOAT_FRAC;
     if (this._crouchHeld) {
       if (vel.y > -sw.sink) vel.y -= sw.accel * dt;
       if (vel.y < -sw.sink) vel.y = -sw.sink;
-    } else if (this.submerged) {
+    } else if (isFinite(sy) ? floatPt < sy : this.submerged) {
       vel.y += SWIM_BUOYANCY * dt;
     }
 
@@ -2029,10 +2080,8 @@ export class Player {
 
     /* Never float above the surface: at the waterline the vertical is clamped
        so the hero bobs instead of launching. */
-    const sy = this._waterSurfaceY;
     if (isFinite(sy)) {
-      const head = this.pos.y + this.height * HEAD_FRAC;
-      if (head > sy && vel.y > 0) vel.y *= 0.25;
+      if (floatPt > sy && vel.y > 0) vel.y *= 0.25;
     }
 
     if (this.state !== 'swimDive') this._setState(this._wmag > 0 || Math.abs(vel.y) > 0.6 ? 'swim' : 'swimIdle');
@@ -2063,13 +2112,34 @@ export class Player {
     this._fxBurst('bubbles', this.pos);
   }
 
-  /** Surfaced + jump: hop clean out of the water. */
+  /**
+   * Surfaced + jump: hop clean out of the water.
+   *
+   * A hop is a JUMP, and it has to be allowed to be one. The hero floats with
+   * the water at his chin (feet HEAD_FRAC * height = 1.29 m under the
+   * surface), so for the whole 1.19 m rise the capsule is still inside the
+   * water Volume. Before `_hopping`, the very next frame's overlap counted as
+   * a fresh ENTRY: `_readVolumes` saw water with `inWater` null, set
+   * `swimDive` off the 9 m/s "entry speed", and `_swimMove`'s waterline clamp
+   * quartered the rise every substep — measured (water lane, _wl_hopprobe):
+   * vel.y 2.14 for one frame, then 0, a 0.10 m rise, 0 of 6 exits over the
+   * Keep's 0.15 m rim, and verdant-3's swimmer "breaching and dropping back
+   * into exactly the same spot" against log A. The latch keeps the hero
+   * airborne — gravity, air control, and the wading step-up so a rim within
+   * stepUp of the feet at the top of the hop is mantled — until the hop is
+   * over: he has landed on something, left the volume, or come back down far
+   * enough to dip his head, which is the re-entry (and a gentle one).
+   */
   _doSurfaceHop() {
     this.vel.y = TUNE.swim.surfaceJumpV;
     this.jumpCount = 1;
     this.inWater = null;
     this.submerged = false;
-    this._launch('jump1', true);
+    this._hopping = true;
+    /* Not cuttable: a hop is a fixed-height move like the backflip, and a
+       keyboard TAP is how it is pressed — cut by jumpCut on release, a tapped
+       hop topped out at 0.6 m and missed the Keep rim by centimetres. */
+    this._launch('jump1', false);
     this.lastJumpKind = 'surface';
     this._ev('surface', this.pos);
     this._ev('jump', 'surface', this.pos);
@@ -2172,10 +2242,17 @@ export class Player {
   _grav(h) {
     if (h <= 0) return;
     const st = this.state;
-    if (this.inWater || st === 'climb' || st === 'cannon' ||
+    if (st === 'climb' || st === 'cannon' ||
       st === 'poundHang' || st === 'poundFall' || st === 'dead') return;
 
     const vel = this.vel;
+    if (this.inWater) {
+      if (!this._heavy()) return;
+      /* The metal hat: land gravity, but the water caps the fall. */
+      vel.y = applyGravity(vel.y, h, this._rising);
+      if (vel.y < -HEAVY_SINK_MAX) vel.y = -HEAVY_SINK_MAX;
+      return;
+    }
     if (st === 'wallslide') {
       vel.y = applyGravity(vel.y, h * WALL_SLIDE_GRAV, false);
       if (vel.y < -WALL_SLIDE_MAX) vel.y = -WALL_SLIDE_MAX;
@@ -2210,7 +2287,7 @@ export class Player {
     /* A swimmer is never grounded, so without this the resolver refused the
        step-up and a hero wading out pressed against the first tread above
        the waterline forever (azure-1's great stair). */
-    cs.inWater = !!this.inWater;
+    cs.inWater = !!this.inWater || this._hopping;
     cs.stepUp = TUNE.stepUp;
     /* Never re-snap onto the ledge we just left, and never on a launch frame. */
     cs.wantSnap = this.grounded && this.vel.y <= 0.01 && this._noGroundT <= 0;
@@ -2578,10 +2655,13 @@ export class Player {
       }
     }
 
-    /* Slope slide: past the threshold for this surface the hero loses grip. */
+    /* Slope slide: past the threshold for this surface the hero loses grip.
+       Not in water: a swimmer whose feet touch a steep bed is carried by the
+       water, not by the bed — verdant-3's river bank (slopeSlide, then the
+       slide blocked by log A's face) pinned a swimmer at zero velocity. */
     const lim = surface === 'ice' ? TUNE.slope.iceSlideDeg : TUNE.slope.slideDeg;
     const st = this.state;
-    if (this.groundSlopeDeg > lim) {
+    if (this.groundSlopeDeg > lim && !this.inWater) {
       if (st !== 'slopeSlide' && st !== 'slide' && st !== 'dive' && st !== 'poundLand' && st !== 'hardLand') {
         this._setState('slopeSlide');
       }
@@ -2627,20 +2707,48 @@ export class Player {
     this._lastRes = res;
 
     /* ---- water ------------------------------------------------------- */
-    const water = res ? res.inWater : null;
+    let water = res ? res.inWater : null;
     const wasWater = this.inWater;
+    if (this._hopping) {
+      /* A surface hop in progress (see _doSurfaceHop): the overlap is the
+         water he jumped out of, not an entry. The hop lasts the whole RISE —
+         wet or dry, so the wading step-up is still open at the top of the
+         arc where a lip within stepUp of the feet is mantled — and ends when
+         he lands, falls clear of the volume (a plain fall), or comes back
+         down to the float line (a gentle re-entry). */
+      if (this.grounded) {
+        this._hopping = false;
+      } else if (this.vel.y > 0) {
+        water = null;
+      } else if (!water) {
+        this._hopping = false;
+      } else {
+        const sy = res && isFinite(res.waterSurfaceY) ? res.waterSurfaceY : NaN;
+        const floatPt = this.pos.y + this.height * FLOAT_FRAC;
+        if (isFinite(sy) && floatPt > sy) {
+          water = null;
+        } else {
+          /* Back at the float line: land in the water, do not plunge. */
+          this._hopping = false;
+          if (this.vel.y < -HOP_REENTRY_V) this.vel.y = -HOP_REENTRY_V;
+        }
+      }
+    }
     this.inWater = water || null;
     this._waterSurfaceY = res && isFinite(res.waterSurfaceY) ? res.waterSurfaceY : NaN;
 
     if (water && !wasWater) {
       const enterSpeed = Math.abs(this.vel.y);
-      this._setState(enterSpeed > 6 ? 'swimDive' : 'swimIdle');
+      const heavy = this._heavy();
+      if (!heavy) this._setState(enterSpeed > 6 ? 'swimDive' : 'swimIdle');
+      else if (!this.grounded) this._setState('fall');
       this.jumpCount = 0;
       this._chainT = 0;
       this._cutArmed = false;
       this._fellFromJump = false;
       /* Entering fast plunges you; entering slow just wets your boots. */
-      if (this.vel.y < -TUNE.swim.diveV) this.vel.y = -TUNE.swim.diveV;
+      if (!heavy && this.vel.y < -TUNE.swim.diveV) this.vel.y = -TUNE.swim.diveV;
+      else if (heavy && this.vel.y < -HEAVY_SINK_MAX) this.vel.y = -HEAVY_SINK_MAX;
       this._ev('splash', true, this.pos);
       this._sfx('splash');
       _fxOpt.strength = clamp(enterSpeed / 20, 0.25, 1.2);
@@ -2893,7 +3001,7 @@ export class Player {
    */
   _postState() {
     const st = this.state;
-    if (this.dead || st === 'cannon' || st === 'climb' || this.inWater) return;
+    if (this.dead || st === 'cannon' || st === 'climb' || (this.inWater && !this._heavy())) return;
 
     if (this.grounded) {
       if (st === 'idle' || st === 'run' || st === 'skid' || st === 'bonk' ||
@@ -3075,6 +3183,7 @@ export class Player {
 Player.prototype._launchSpeed = 0;
 Player.prototype._inQuicksand = false;
 Player.prototype._waterSurfaceY = NaN;
+Player.prototype._hopping = false;
 Player.prototype._lastRes = null;
 Player.prototype._cannonPitch = 0.6;
 Player.prototype._leanPrevFacing = undefined;
