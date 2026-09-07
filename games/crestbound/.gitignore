@@ -13,3 +13,5 @@ _harness/_*.py
 _harness/_*.mjs
 _harness/_*.sh
 _harness/_*
+assets/models/*/_turntable/
+assets/models/*/_work/

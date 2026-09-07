@@ -65,7 +65,7 @@ DEV_ONLY_DIRS = {
     # driftwake, …). `_shots` alone is 352 MB of PNG evidence in ascendant, and
     # `_harness` is our Playwright gate suite — neither belongs on a public CDN,
     # and `_spec` is the internal module contract.
-    "_harness", "_shots", "_spec", "_tools", "_wip", "_attic",
+    "_harness", "_shots", "_spec", "_tools", "_wip", "_attic", "_turntable", "_manifest", "_work",
     ".playwright-mcp", ".grokui-inbox",
 }
 # Individual dev artefacts that can sit at a game's root.
