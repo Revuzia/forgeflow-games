@@ -1,0 +1,67 @@
+=== BOOT ===
+Traceback (most recent call last):
+  File "C:\Users\TestRun\Claude Claw\forgeflow-games\games\crestbound\_harness\_play_windmill.py", line 10, in <module>
+    st = pl.state(); pl.say("boot state:", json.dumps(st))
+  File "C:\Users\TestRun\Claude Claw\forgeflow-games\games\crestbound\_harness\_playlib.py", line 87, in state
+    return self.js("""() => { const G = CRESTBOUND.game, P = G.player;
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      const s = P && P.__test ? P.__test.state() : null;
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<12 lines>...
+        cardOpen: !!document.querySelector('.cb-card.on'),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        menuOpen: !!(G.menu && G.menu.isOpen) }; }""")
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\TestRun\Claude Claw\forgeflow-games\games\crestbound\_harness\_playlib.py", line 69, in js
+    return self.pg.evaluate(expr, arg) if arg is not None else self.pg.evaluate(expr)
+                                                               ~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\Users\TestRun\AppData\Local\Programs\Python\Python313\Lib\site-packages\playwright\sync_api\_generated.py", line 8566, in evaluate
+    self._sync(
+    ~~~~~~~~~~^
+        self._impl_obj.evaluate(expression=expression, arg=mapping.to_impl(arg))
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\TestRun\AppData\Local\Programs\Python\Python313\Lib\site-packages\playwright\_impl\_sync_base.py", line 115, in _sync
+    return task.result()
+           ~~~~~~~~~~~^^
+  File "C:\Users\TestRun\AppData\Local\Programs\Python\Python313\Lib\site-packages\playwright\_impl\_page.py", line 464, in evaluate
+    return await self._main_frame.evaluate(expression, arg)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\TestRun\AppData\Local\Programs\Python\Python313\Lib\site-packages\playwright\_impl\_frame.py", line 320, in evaluate
+    await self._channel.send(
+    ...<6 lines>...
+    )
+  File "C:\Users\TestRun\AppData\Local\Programs\Python\Python313\Lib\site-packages\playwright\_impl\_connection.py", line 69, in send
+    return await self._connection.wrap_api_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\TestRun\AppData\Local\Programs\Python\Python313\Lib\site-packages\playwright\_impl\_connection.py", line 559, in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+playwright._impl._errors.Error: Page.evaluate: ReferenceError: CRESTBOUND is not defined
+    at eval (eval at evaluate (:290:30), <anonymous>:1:19)
+    at UtilityScript.evaluate (<anonymous>:297:18)
+    at UtilityScript.<anonymous> (<anonymous>:1:44)
+, "camDist": 6.8, "camPos": null, "crests": 0, "cardOpen": false, "menuOpen": false} events [] deaths []
+  standing STILL beside it for 5 s...
+  still-stand trail: [([-2.87, 1.9, 44.1], 'idle'), ([-2.87, 1.9, 44.1], 'idle'), ([-2.87, 1.9, 44.1], 'idle'), ([-2.87, 1.9, 44.1], 'idle')] deaths 0 -> 0
+  trying to squish the bumbler (jump on it)
+  -> {"gstate": "playing", "course": "verdant-3", "pos": [-2.44, 2.3, 37.32], "vel": [0, -0.19, 0], "pstate": "idle", "grounded": true, "facing": -0.064, "surface": "normal", "inWater": false, "submerged": false, "climbing": false, "camYaw": -0.064, "camPitch": 0.22, "camDist": 6.79, "camPos": null, "crests": 0, "cardOpen": false, "menuOpen": false} events ['jump:single', 'land:8.3'] snap {"coins": 4, "sigils": 0, "crests": 0, "cp": 0, "raceMs": null, "deaths": 0, "power": null}
+
+=== BEAT 2  THE QUAY AND THE LOG CROSSING ===
+  walk_to [0, 42] (cp-riverbank) -> [-1.59, 2.3, 38.96] d=3.43 DID NOT ARRIVE
+  snap {"coins": 4, "sigils": 0, "crests": 0, "cp": 0, "raceMs": null, "deaths": 0, "power": null} events []
+  walk_to [0, 38.5] (quay north edge) -> [-0.27, 2.3, 38.58] d=0.28 ARRIVED
+  at the quay: {"gstate": "playing", "course": "verdant-3", "pos": [-0.25, 2.3, 38.57], "vel": [0, -0.19, 0], "pstate": "idle", "grounded": true, "facing": -1.291, "surface": "normal", "inWater": false, "submerged": false, "climbing": false, "camYaw": -1.291, "camPitch": 0.22, "camDist": 6.8, "camPos": null, "crests": 0, "cardOpen": false, "menuOpen": false}
+  sinker logs: [{"p": [0, 0.95, 32.5], "h": [1.8, 0.25, 1.8]}, {"p": [0, 0.95, 25.8], "h": [1.8, 0.25, 1.8]}, {"p": [7.5, 0.95, 30.6], "h": [1.7, 0.25, 1.7]}, {"p": [13, 0.95, 28.4], "h": [1.7, 0.25, 1.7]}, {"p": [18, 0.95, 26], "h": [1.7, 0.25, 1.7]}]
+  JUMPING the quay->log gap with a real held jump...
+  jump trail: [([0.01, 3.79, 33.88], 'fall', False), ([0.06, 3.43, 32.99], 'fall', False), ([0.1, 2.62, 32.09], 'fall', False), ([0.18, 1.2, 30.79], 'land', True), ([0.22, 1.13, 29.92], 'fall', False), ([0.3, 0.4, 28.65], 'swimDive', False), ([0.51, -0.3, 27.98], 'swimDive', False), ([0.88, -0.81, 27.98], 'swimDive', False), ([1.35, -1.16, 27.88], 'swim', False), ([1.9, -1.4, 27.58], 'swim', False)]
+  landed: {"gstate": "playing", "course": "verdant-3", "pos": [3.92, -1.74, 26.79], "vel": [4.43, -0.28, -0.92], "pstate": "swimIdle", "grounded": false, "facing": -0.18, "surface": "normal", "inWater": true, "submerged": true, "climbing": false, "camYaw": -0.72, "camPitch": 0.22, "camDist": 3.6, "camPos": null, "crests": 0, "cardOpen": false, "menuOpen": false} events ['jump:single', 'land:15.058333333333325', 'splash:true']
+  STANDING on the log — does it sink? 6 s sample
+  sink trail: [([8.62, -1.68, 26.42], 'swimIdle', False, True), ([9.9, -1.62, 26.4], 'swimIdle', False, True), ([11.61, -1.52, 26.39], 'swimIdle', False, True), ([13.39, -1.42, 26.38], 'swimIdle', False, True), ([14.75, -1.34, 26.38], 'swimIdle', False, True), ([16.57, -1.23, 26.38], 'swimIdle', False, True), ([18.05, -1.15, 26.38], 'swimIdle', False, True), ([19.76, -1.05, 26.38], 'swimIdle', False, True), ([21.35, -0.95, 26.38], 'swimIdle', False, True), ([23.25, -0.84, 26.38], 'swimIdle', False, True), ([24.99, -0.74, 26.38], 'swimIdle', False, True), ([26.85, -0.69, 26.38], 'swimIdle', False, True)]
+  events [] deaths []
+wrote C:\Users\TestRun\Claude Claw\forgeflow-games\games\crestbound\_harness\_play_windmill_s1.json
+CONSOLE: []
+EXIT=0

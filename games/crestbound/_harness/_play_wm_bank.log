@@ -1,0 +1,54 @@
+IN COURSE: {"gstate": "playing", "course": "verdant-3", "pos": [0, 1.9, 42], "vel": [0, -0.19, 0], "pstate": "idle", "grounded": true, "facing": 0, "surface": "grass", "inWater": false, "submerged": false, "climbing": false, "camYaw": 0.078, "camPitch": 0.22, "camDist": 3.12, "camPos": null, "crests": 0, "cardOpen": false, "menuOpen": false}
+=== THE LIVE HEIGHTFIELD along the cart track x = 0, z = 22 -> 0 ===
+  [[22, -0.58], [21.5, -0.02], [21, 0.55], [20.5, 1.12], [20, 1.69], [19.5, 2.25], [19, 2.8], [18.5, 3.33], [18, 3.83], [17.5, 4.34], [17, 4.77], [16.5, 5.21], [16, 5.6], [15.5, 5.93], [15, 6.27], [14.5, 6.51], [14, 6.75], [13.5, 6.98], [13, 7.19], [12.5, 7.39], [12, 7.65], [11.5, 7.9], [11, 8.24], [10.5, 8.66], [10, 9.08], [9.5, 9.42], [9, 9.76], [8.5, 9.99], [8, 10.09], [7.5, 10.2], [7, 10.2], [6.5, 10.2], [6, 10.2], [5.5, 10.2], [5, 10.2], [4.5, 10.2], [4, 10.2], [3.5, 10.2], [3, 10.2], [2.5, 10.2], [2, 10.2], [1.5, 10.2], [1, 10.2], [0.5, 10.2], [0, 10.2], [-0.5, 10.2], [-1, 10.2]]
+  STEEPEST 0.5 m step on the required cart track: 48.7 deg  (z 21.5 -> 21.0, y -0.02 -> 0.55).  TUNE.slope.slideDeg = 38.
+  bands over 38 deg:
+    z 22.0 -> 21.5   -0.58 -> -0.02   48.2 deg
+    z 21.5 -> 21.0   -0.02 -> 0.55   48.7 deg
+    z 21.0 -> 20.5   0.55 -> 1.12   48.7 deg
+    z 20.5 -> 20.0   1.12 -> 1.69   48.7 deg
+    z 20.0 -> 19.5   1.69 -> 2.25   48.2 deg
+    z 19.5 -> 19.0   2.25 -> 2.80   47.7 deg
+    z 19.0 -> 18.5   2.80 -> 3.33   46.7 deg
+    z 18.5 -> 18.0   3.33 -> 3.83   45.0 deg
+    z 18.0 -> 17.5   3.83 -> 4.34   45.6 deg
+    z 17.5 -> 17.0   4.34 -> 4.77   40.7 deg
+    z 17.0 -> 16.5   4.77 -> 5.21   41.3 deg
+    z 11.0 -> 10.5   8.24 -> 8.66   40.0 deg
+    z 10.5 -> 10.0   8.66 -> 9.08   40.0 deg
+
+=== ATTEMPT 1  stand on cp-northbank and just hold W (what a player does) ===
+  start: {"p": [0, 2.62, 20.4], "st": "land", "sp": 0, "gr": true, "surf": "normal"}
+  8 s of held W: [[[0, 2.6, 20.17], "run", 4.2], [[-0.0, 2.85, 18.96], "slopeSlide", 2.68], [[-0.01, 2.96, 18.85], "slopeSlide", 1.58], [[-0.01, 3.02, 18.8], "slopeSlide", 0.38], [[-0.03, 2.63, 19.16], "slopeSlide", 3.9], [[-0.04, 2.6, 19.39], "run", 0.35], [[-0.05, 2.7, 19.08], "slopeSlide", 0.22], [[-0.09, 2.61, 19.3], "run", 3.54], [[-0.19, 2.6, 19.49], "pivot", 0], [[-0.19, 2.6, 19.23], "run", 4.55], [[-0.2, 2.78, 19.02], "slopeSlide", 0.26], [[-0.3, 2.6, 19.46], "pivot", 1.36], [[-0.3, 2.63, 19.15], "slopeSlide", 2.05], [[-0.44, 2.6, 19.47], "pivot", 0], [[-0.44, 2.71, 19.07], "slopeSlide", 0.94], [[-0.58, 2.6, 19.41], "run", 2.1], [[-0.6, 2.63, 19.14], "slopeSlide", 1.4], [[-0.73, 2.6, 19.47], "pivot", 0], [[-0.74, 2.72, 19.06], "slopeSlide", 0.4], [[-0.75, 2.68, 19.09], "slopeSlide", 0.92]]
+  -> {"p": [-0.76, 2.6, 19.17], "st": "idle", "sp": 0, "gr": true, "surf": "normal"} events ['checkpoint:1', 'collect:checkpoint', 'land:7.474999999999', 'slide', 'slide', 'slide', 'slide', 'slide', 'slide', 'slide', 'slide', 'slide', 'slide', 'slide', 'slide', 'slide', 'slide', 'slide', 'slide', 'slide', 'slide', 'slide', 'slide', 'slide', 'slide', 'slide', 'slide', 'slide', 'slide', 'slide', 'slide'] deaths []
+
+=== ATTEMPT 2  run at it and JUMP (slope.recoverJumpV = 10.5) ===
+  jumping up it: [[[-0.29, 3.93, 19.93], "jump1"], [[-0.29, 4, 19.23], "fall"], [[-0.29, 3.18, 18.64], "slopeSlide"], [[-0.32, 3.65, 19.41], "jump1"], [[-0.36, 3.79, 19.76], "fall"], [[-0.51, 2.96, 20.06], "fall"], [[-1.24, 3.57, 20.01], "jump1"], [[-1.67, 3.8, 19.68], "jump1"], [[-2.21, 3.41, 18.99], "fall"], [[-4.24, 3.55, 19.35], "fall"], [[-5.56, 2.22, 19.38], "slopeSlide"], [[-6.32, 1.38, 20.12], "slopeSlide"], [[-7.15, 1.31, 21.11], "jump1"], [[-9.09, 1.66, 22.84], "fall"], [[-10.71, 0.83, 24.21], "fall"], [[-14.21, -0.36, 27.57], "swimDive"], [[-14.88, -0.36, 29.42], "swim"], [[-14.77, -0.36, 30.64], "swim"], [[-13.95, -0.27, 32.24], "swimDive"], [[-13.36, -0.27, 32.93], "swimDive"]]
+  -> {"p": [-12.27, -0.27, 33.86], "st": "swimIdle", "sp": 3.97, "gr": false, "surf": "normal"} events ['land:7.474999999999', 'slide', 'jump:single', 'land:8.3', 'slide', 'slide', 'jump:slope', 'land:10.48333333333', 'jump:single', 'land:7.916666666666', 'slide', 'slide', 'jump:slope', 'land:10.09999999999', 'slide', 'slide', 'slide', 'jump:slope', 'splash:true', 'surface', 'jump:surface', 'splash:true', 'surface', 'jump:surface', 'splash:true']
+
+=== ATTEMPT 3  try either side of the track: x = -8 and x = +8 ===
+  x= -8.0 -> {"p": [14.16, -2.59, 26.5], "st": "swimIdle", "sp": 6.83, "gr": false, "surf": "normal"}  (needs z < 10 and grounded to count)
+  x= +8.0 -> {"p": [29.66, -0.04, 22.19], "st": "swimIdle", "sp": 5.96, "gr": false, "surf": "normal"}  (needs z < 10 and grounded to count)
+  x=-16.0 -> {"p": [0.62, -1.06, 23.43], "st": "swimIdle", "sp": 6.16, "gr": false, "surf": "normal"}  (needs z < 10 and grounded to count)
+  x=+16.0 -> {"p": [39.68, 0.06, 22.57], "st": "swimIdle", "sp": 6.53, "gr": false, "surf": "normal"}  (needs z < 10 and grounded to count)
+
+=== ATTEMPT 4  from the top down: is it a one-way slide? ===
+  wheat field: {"p": [1.15, 10.2, 6.01], "st": "idle", "sp": 0, "gr": true, "surf": "grass"}
+  walking DOWN the bank -> {"p": [9.97, 6.14, 15.24], "st": "idle", "sp": 0.26, "gr": true, "surf": "grass"} events ['surface', 'splash:true', 'land:4.986452592186', 'surface', 'splash:true', 'land:5.676013027777', 'surface', 'splash:true', 'land:5.174442980353', 'surface', 'splash:true', 'land:6', 'surface', 'land:8.333333333333'] deaths []
+  now turn round and walk back UP:
+  -> {"p": [-6.21, 10.05, 6.09], "st": "idle", "sp": 0.08, "gr": true, "surf": "grass"} events ['slide', 'land:0.048752429051']
+
+=== ARE THE MILLS ACTUALLY TURNING? sample every mill's lowest deck twice ===
+  t0: {"clock": 35.1, "mills": [{"axis": [-18, 21.6, -16], "period": 10.5, "lowest": [-18, 16.58, -19.29], "ncol": 13}, {"axis": [-22, 29.86, -34], "period": 12, "lowest": [-18.81, 23.63, -34], "ncol": 13}, {"axis": [-34, 28, -44], "period": 13.5, "lowest": [-31.7, 24.82, -44], "ncol": 9}, {"axis": [28, 35.6, -48], "period": 9, "lowest": [26.93, 25.66, -48], "ncol": 17}]}
+  t1: {"clock": 35.99, "mills": [{"axis": [-18, 21.6, -16], "period": 10.5, "lowest": [-18, 16.22, -13.35], "ncol": 13}, {"axis": [-22, 29.86, -34], "period": 12, "lowest": [-21.95, 22.86, -34], "ncol": 13}, {"axis": [-34, 28, -44], "period": 13.5, "lowest": [-35.98, 24.62, -44], "ncol": 9}, {"axis": [28, 35.6, -48], "period": 9, "lowest": [32.92, 26.89, -48], "ncol": 17}]}
+   mill 1 axis [-18, 21.6, -16] period 10.5 : lowest deck moved 5.95 m in 0.89 s
+   mill 2 axis [-22, 29.86, -34] period 12 : lowest deck moved 3.23 m in 0.89 s
+   mill 3 axis [-34, 28, -44] period 13.5 : lowest deck moved 4.28 m in 0.89 s
+   mill 4 axis [28, 35.6, -48] period 9 : lowest deck moved 6.11 m in 0.89 s
+
+=== RIDE MILL 1 THE WAY A PLAYER WOULD: stand where its deck passes and wait ===
+  mill 1 lowest deck now at [-18, 16.22, -13.35]
+  8 s on mill 1: [[[-18, 15.9, -18.24], "fall", false], [[-18, 15.85, -18.23], "idle", true], [[-18, 15.85, -18.23], "idle", true], [[-18, 15.85, -18.23], "idle", true], [[-18, 16.04, -18.83], "idle", true], [[-18, 16.22, -19.41], "idle", true], [[-18, 16.38, -19.91], "idle", true], [[-18, 16.83, -20.5], "idle", true], [[-18, 17.37, -21.05], "idle", true], [[-18, 17.75, -21.35], "idle", true], [[-18, 18.3, -21.7], "idle", true], [[-18, 18.74, -21.93], "idle", true], [[-18, 19.43, -22.22], "idle", true], [[-18, 19.93, -22.39], "idle", true], [[-18, 20.76, -22.55], "idle", true], [[-18, 21.29, -22.59], "idle", true], [[-18, 22.19, -22.56], "idle", true], [[-18, 22.96, -22.46], "idle", true], [[-18, 23.77, -22.34], "fall", false], [[-18, 24.14, -22.2], "fall", false]]
+  -> {"p": [-18, 24.29, -22.13], "st": "fall", "sp": 0, "gr": false, "surf": "normal"} events ['land:9.008874927656', 'land:5.174999999999', 'land:1.644337202214', 'land:0.575', 'land:0.575', 'land:0.575', 'land:0.575', 'land:0.575'] deaths []
+wrote C:\Users\TestRun\Claude Claw\forgeflow-games\games\crestbound\_harness\_play_wm_bank.json
+CONSOLE: []
