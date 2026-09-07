@@ -168,6 +168,9 @@ const HEIGHTS = {
     { p: [28, 8], r: 12, h: 9.6, core: 0.16 },     // mill-hill terrace       (cp5)
     { p: [-28, 28], r: 7, h: 2.2 },                // cave apron
     { p: [-2, -54], r: 11, h: 16.4, core: 0.3 },   // the Warden's ring
+    /* GEOMETRY LANE (playtest verdant-1 BEAT 9): the ground fell 1.35 m across
+       the jump pad's own 2.8 m footprint. A pad-sized level under it. */
+    { p: [13, -47], r: 3.2, h: 11.94 },            // the ridge jump pad
   ],
   noise: { amp: 0.30, freq: 0.045 },
 };
@@ -728,7 +731,10 @@ export default {
      * ===================================================================== */
 
     {
-      kind: 'building', style: 'fort', p: [0, FORT_Y + 2.7, -24], s: [22, 5.4, 22],
+      /* GEOMETRY LANE (playtest verdant-1 courtyard): the interior floor sat
+         EXACTLY on the plateau flat (9.00) and the two z-fought across the
+         whole courtyard. 8 cm proud: a threshold at the doors, no fight. */
+      kind: 'building', style: 'fort', p: [0, FORT_Y + 2.78, -24], s: [22, 5.4, 22],
       mat: 'stone', tint: STONE, wallThick: 2.0, footing: 2.0, rampart: true, merlons: true,
       doors: [{ side: 'south', w: 4.6, h: 5.0 }, { side: 'north', w: 3.0, h: 4.0 }],
       // The west tower (ROUTE B) is built into the north-west corner and rises

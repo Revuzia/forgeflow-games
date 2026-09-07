@@ -4236,10 +4236,20 @@ function headingLocal(yaw, out) {
  * @returns {{mesh: THREE.Group, colliders: Collider[], volumes: Volume[]}}
  */
 export function buildGateDoor(def, theme, mats) {
-  const p = pos3(def);
+  const pc = pos3(def);
   const yaw = (def && def.yaw) || 0;
   const w = (def && def.w) || 3.4;
   const h = (def && def.h) || 4.6;
+  /* GEOMETRY LANE 2026-09-07 (playtest K4, owner P9 "gates on walls, high up
+     and unreachable, with broken sign text"). `p` is the CENTRE of the opening,
+     the same convention as buildPainting and every other kind in the data
+     format (keep.js: "p = CENTRE of a thing"). This builder used p.y as the
+     SILL, so the Keep's azure-1/2 doors, authored at y 2.40 over a lawn at
+     0.00, were drawn 2.40..7.30 — glass hanging on a blank curtain wall above
+     head height — and azure-3's plate sat five metres over the roof. Measured
+     before: 'gate.surround' azure-1 y 2.40..7.30, azure-3 y 14.30..18.20.
+     Everything below is built from `y0`, the sill, which is now p.y - h/2. */
+  const p = [pc[0], pc[1] - h * 0.5, pc[2]];
   const need = (def && def.requires && def.requires.crests) || 0;
   const locked = def && def.locked !== undefined ? !!def.locked : need > 0;
   const course = (def && def.course) || null;

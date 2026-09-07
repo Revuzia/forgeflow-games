@@ -744,7 +744,10 @@ export default {
     { kind: 'deco', kindOf: 'flagpole', p: on(-8.4, -33.0, 0), s: [0.12, 4.4, 0.12], mat: 'metal', tint: 0x8fa8c0 },
     { kind: 'deco', kindOf: 'banner', p: on(-8.4, -33.0, 2.6), s: [0.08, 2.4, 1.3], mat: 'cloth', tint: 0x2b4c72 },
     { kind: 'deco', kindOf: 'crate', p: on(-4.2, -22.6, 0.5), s: [0.9, 0.9, 0.9], mat: 'wood', tint: 0x6b5a48, count: 3, spread: 2.2, jitter: 0.22 },
-    { kind: 'deco', kindOf: 'lantern', p: on(-4.2, -22.6, 2.0), s: [0.5, 0.7, 0.5], mat: 'metal', tint: WARM },
+    /* GEOMETRY LANE (playtest rime-2 BEAT 1): the lantern floated 2 m over
+       the snow with nothing under it. It hangs from a post now. */
+    { kind: 'deco', kindOf: 'flagpole', p: on(-4.2, -22.6, 0), s: [0.14, 2.3, 0.14], mat: 'metal', tint: 0x6b7482 },
+    { kind: 'deco', kindOf: 'lantern', p: on(-4.2, -22.6, 1.85), s: [0.5, 0.7, 0.5], mat: 'metal', tint: WARM },
     { kind: 'light', p: on(-4.2, -22.6, 2.2), color: WARM, intensity: 6, distance: 14 },
 
     /* ========================================================================

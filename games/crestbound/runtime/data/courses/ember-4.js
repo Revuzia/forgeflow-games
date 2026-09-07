@@ -799,10 +799,25 @@ export default {
      * flight is entered at a walk and never with a jump.
      * ===================================================================== */
 
-    { kind: 'platform', p: [0, 6.00, -22], s: [40, 4.0, 40], mat: 'stone', tint: CASING, stripe: true, edge: SAFE_EDGE },
-    { kind: 'platform', p: [0, 10.00, -22], s: [30, 4.0, 30], mat: 'stone', tint: CASING, stripe: true, edge: SAFE_EDGE },
-    { kind: 'platform', p: [0, 14.00, -22], s: [21, 4.0, 21], mat: 'stone', tint: CASING, stripe: true, edge: SAFE_EDGE },
-    { kind: 'platform', p: [0, 17.80, -22], s: [13, 3.6, 13], mat: 'stone', tint: CASING, stripe: true, edge: SAFE_EDGE },
+    /* GEOMETRY LANE 2026-09-07 (playtest E4-1, BLOCKER — the owner's "odd
+     * stairs but i cant reach the main stairs" on this course). Each flight's
+     * last four treads sat INSIDE the tier it climbs to: F1 runs z 1.22..-4.28
+     * and tier 1's south face stood at z -2.00, so a walking hero jammed on
+     * the fifth riser at (0, 6.40, -1.62) with 4 m of casing in front of him
+     * (live colliders, all four flights). The tiers are therefore built as
+     * three casings each — west, east, and north of a 5.2 m SLOT down which
+     * the stair rises, cut from the face back to the flight's top tread — so
+     * the ceremonial stair is recessed into the pyramid the way a real one
+     * is, and every tread is in open air. Slot backs (z): -4.30 / -9.30 /
+     * -13.80 / -18.80, each 2 cm past the flight's top tread. */
+    ...[[6.00, 4.0, 40, -4.30], [10.00, 4.0, 30, -9.30], [14.00, 4.0, 21, -13.80], [17.80, 3.6, 13, -18.80]].flatMap(([y, h, sz, slotZ]) => {
+      const half = sz / 2, S = 2.6, z0 = -22 - half;
+      return [
+        { kind: 'platform', p: [-(half + S) / 2, y, -22], s: [half - S, h, sz], mat: 'stone', tint: CASING, stripe: true, edge: SAFE_EDGE },
+        { kind: 'platform', p: [(half + S) / 2, y, -22], s: [half - S, h, sz], mat: 'stone', tint: CASING, stripe: true, edge: SAFE_EDGE },
+        { kind: 'platform', p: [0, y, (z0 + slotZ) / 2], s: [2 * S, h, slotZ - z0], mat: 'stone', tint: CASING, stripe: true, edge: SAFE_EDGE },
+      ];
+    }),
     // The capstone, in two hops rather than one 2.50 m rise (see the header).
     { kind: 'platform', p: [0, 20.15, -22], s: [7.6, 1.1, 7.6], mat: 'marble', tint: BONE, stripe: true, edge: SAFE_EDGE },
     { kind: 'platform', p: [0, 21.40, -22], s: [5.0, 1.4, 5.0], mat: 'gold', tint: GOLD, stripe: true, edge: SAFE_EDGE },

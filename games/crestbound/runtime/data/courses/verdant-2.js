@@ -169,7 +169,15 @@ const HEIGHTS = {
     // level core begins — that is what keeps the terraces terraces.
     { p: [0, 0], r: 54, h: -6.0 },   // THE MOAT BASIN  (level core r < 29.7)
     { p: [0, 0], r: 42, h: 7.0 },    // THE OUTER BAILEY (level core r < 23.1)
-    { p: [0, 0], r: 24, h: 14.0 },   // the middle shelf (level core r < 13.2)
+    /* GEOMETRY LANE 2026-09-07 (playtest V2-17 SOFT-LOCK, V2-08 BLOCKER).
+       r 24 put this flat's skirt UNDER the outer wall: the middle scarp ran
+       36-45 deg straight into the wall's inner face at r 20, so anyone who
+       fell inside the wall slid to its foot and stayed there (measured at
+       (20.02, 9.10, 0) and the NW corner — no death, no exit), and the ground
+       at the north door stood 3 m over its sill. At r 20.5 the skirt dies at
+       the wall: r 18..20 is a 22-37 deg band (walkable) and the corners are
+       shallow bowls up to the bailey's 7.0. */
+    { p: [0, 0], r: 20.5, h: 14.0 },   // the middle shelf (level core r < 11.3)
     { p: [0, 0], r: 15, h: 19.0 },   // THE INNER COURT  (level core r < 8.25)
     // The spawn meadow. h matches the natural ground there (2.27–2.32) so the
     // flat's rim is invisible: it only takes the noise out from under the feet
@@ -792,7 +800,12 @@ export default {
     {
       kind: 'building', style: 'fort', p: [0, 8.0, 0], s: [46, 8.0, 46],
       mat: 'stone', tint: STONE_OLD, wall: 2.6, footing: 6.0, rampart: true, merlons: true,
-      doors: [{ side: 'south', w: 5.0, h: 5.4 }, { side: 'north', w: 3.4, h: 4.2 }],
+      /* Doors are cut from the EXTERIOR grade, not the 4.00 interior floor:
+         the grand gate stair passes the south gateway at 7.9..10.0 and a hero
+         outside the north door stands at 7.15 — both bonked the old lintels
+         (9.4 / 8.2). `y` is the opening's centre above the floor (builders
+         buildBoxShell), so south = 6.7..11.7 and north = 5.1..9.1 in world y. */
+      doors: [{ side: 'south', w: 5.0, y: 5.2, h: 5.0 }, { side: 'north', w: 3.4, y: 3.1, h: 4.0 }],
       // THE BREACH. The aperture is 6.00 m deep against a 3.33 m band, which is
       // deliberate: a shallower hole leaves a 0.43 m sliver of deck along the
       // walk's inner edge (rectSubtract keeps it, and so does builders.js), and
@@ -915,7 +928,9 @@ export default {
      * way over the top.
      * ===================================================================== */
 
-    { kind: 'mill', p: [-16.0, 20.0, 0], arms: 4, len: 6.2, period: 11.0, yaw: 0, dir: -1, tower: 7.13, towerR: 2.11, chord: 1.9, thick: 0.34, deck: { w: 2.2, d: 1.6, t: 0.4 }, mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
+    /* tower 7.13 -> 9.70: the ground under the drum at (-16, 0) is 10.4 with
+       the re-terraced scarp (was 12.9) — same axle, same sweep, longer drum */
+    { kind: 'mill', p: [-16.0, 20.0, 0], arms: 4, len: 6.2, period: 11.0, yaw: 0, dir: -1, tower: 9.70, towerR: 2.11, chord: 1.9, thick: 0.34, deck: { w: 2.2, d: 1.6, t: 0.4 }, mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
     { kind: 'text', p: [-16.0, 14.6, 3.4], rot: [0, 0, 0], text: 'STEP ON AT THE BOTTOM  ·  STEP OFF AT THE SIDE', size: 0.22, color: 0x6b5a3a },
     { kind: 'light', p: [-16.0, 22.0, 0], color: GOLD, intensity: 6, distance: 18 },
 
@@ -933,7 +948,13 @@ export default {
     { kind: 'breakable', p: [0, 19.20, 9.4], s: [3.6, 4.0, 0.6], mat: 'metal', tint: IRON, shape: 'grate', drop: 'coins', dropCount: 6, trigger: 'portcullis-up' },
     { kind: 'text', p: [0, 17.0, 12.6], rot: [0, 0, 0], text: 'POUND THE PORTCULLIS', size: 0.28, color: 0xd8c79a },
     { kind: 'text', p: [0, 16.6, 12.6], rot: [0, 0, 0], text: 'PORTCULLIS DASH STARTS HERE  ·  50s', size: 0.20, color: 0x7a5a2a },
-    { kind: 'platform', p: [0, 18.26, 10.4], s: [4.0, 0.2, 2.2], mat: 'stone', tint: 0xd8c79a },   // the race start pad
+    /* GEOMETRY LANE (V2-32): the pad ran z 9.3..11.5, i.e. it sat on the
+       stair's last THREE treads (17.4 / 17.7 / 18.0) and met a climber as a
+       1.0 m face at z 11.5 — measured stop (0, 17.23, 11.88), the capsule
+       against it. It now spans z 9.3..10.6: its south edge is over the top
+       tread (18.24, a 0.12 m step) and its north half sits in the doorway,
+       whose ground is the crown's own skirt (18.2..18.9), not the 17.20 slab. */
+    { kind: 'platform', p: [0, 18.26, 9.95], s: [4.0, 0.2, 1.3], mat: 'stone', tint: 0xd8c79a },   // the race start pad
     { kind: 'deco', kindOf: 'buttress', p: [-3.0, 15.4, 12.0], s: [4.0, 3.0, 0.5], rot: [0, Math.PI / 2, 0], mat: 'stone', tint: STONE },
     { kind: 'deco', kindOf: 'buttress', p: [3.0, 15.4, 12.0], s: [4.0, 3.0, 0.5], rot: [0, Math.PI / 2, 0], mat: 'stone', tint: STONE },
 

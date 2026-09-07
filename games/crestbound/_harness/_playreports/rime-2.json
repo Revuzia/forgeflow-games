@@ -20,13 +20,6 @@
    "severity": "low"
   },
   {
-   "where": "rime-2 BEAT 1->2, spawn (0,30,-26) yaw -2.58 to the chute mouth U0 (4, 29.4, -22)",
-   "did": "held W from the checkpoint pad on the authored spawn facing and nothing else - the most literal reading of 'the chute only goes down'",
-   "happened": "ended at [11.99, 2.1, -4.27] on snow in state skid, not on the flume",
-   "should": "the spawn facing is authored to aim at the chute mouth, so walking forward should feed the hero onto the ice",
-   "png": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_rime2_mouth\\04_E3_missed_mouth.png"
-  },
-  {
    "where": "rime-2 BEAT 1 -> BEAT 2, from the start position (0, 30, -26) on the authored spawn facing yaw -2.58, to the chute mouth U0 (4, 29.4, -22)",
    "did": "held W and nothing else, on the facing the game itself hands you at the start. No camera work, no jump. This is the most literal reading of the course's own sign: THE CHUTE ONLY GOES DOWN.",
    "happened": "the hero ran 5 m, clipped the extreme south-west corner of the flume's mouth deck and walked straight off the side of the mountain: trail (3.2, 30.1, -20.9) run -> (5.2, 28.5, -17.7) FALLING -> hardLand at (10.2, 5.1, -9.6). A 25 m fall in under 3 s, no death, no checkpoint - and the entire 120 m flume, the race, and 5 of the 8 beats are now above you. The way back is the whole course.",
@@ -71,21 +64,6 @@
    "severity": "low"
   },
   {
-   "where": "rime-2 BEAT 2, GAP B on the lower flume (land at (32.9, 11.0, 13.7))",
-   "did": "ran the deck and jumped at the lip",
-   "happened": "missed the landing and fell to [41.3, 1.55, 57.72]",
-   "should": "GAP B is authored as a single-jump gap with the run-up paid for",
-   "png": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_rime2_gapbc\\02_GAPB_land.png"
-  },
-  {
-   "where": "rime-2 BEAT 2, the upper flume ridden end to end (mouth 4,29.4,-22 -> mid station 38,17.3,-6.5)",
-   "did": "started on the mouth deck, held W, aimed the camera at each deck point in turn and took one jump at the GAP A lip - the intended luge line",
-   "happened": "came off the ice at [20.17, 2.97, -0.4] (state idle, surface snow), deaths 0",
-   "should": "the flume is the course's set piece and its whole promise is that it carries you; a clean line should reach the mid station",
-   "png": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_rime2_upper2\\21_K3_upper_failed.png",
-   "severity": "high"
-  },
-  {
    "where": "rime-2 BEAT 2, TURN 1 of the upper flume - the berm at (10.49, 27.55, -15.15), 6.0 m long, against a 9 m turn (U1 11,26.6,-18 -> U2 20,23.8,-19.5)",
    "did": "rode the flume from the chute mouth three times - steering at the next deck point, holding crouch (the TUCK the spawn sign asks for), and looking one point ahead - at 10-12 m/s, which is what the chute gives you after 20 m of 19-degree ice",
    "happened": "all three runs slid off the OUTSIDE of TURN 1 and fell about 14 m onto the glacier: ends [[15.97, 6.5, -11.69], [20.27, 12.1, -18.32], [26.58, 12.48, -20.32]]. The ice carries the drift past the downstream end of the berm - the berm spans about x 7.5 to x 13.4 while the turn's outside edge runs on to x 20, so the last 6.6 m of the turn has no wall on it, and that is exactly where a rider at flume speed arrives.",
@@ -128,13 +106,6 @@
    "severity": "HIGH"
   },
   {
-   "where": "rime-2 BEAT 4, the static serac stair on the west ice face (-26.4,3.3,21.6 up to -29.8,10.5,14.4)",
-   "did": "ran at each serac and pressed Space twice (the double jump the course sign asks for)",
-   "happened": "failed on step 1 - ended at [-34.02, 1.37, 19.97]",
-   "should": "the comment calls these the course's one deliberate learn-the-double wall and the only static way up the face",
-   "png": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_rime2_peak4\\09_77_serac_failed.png"
-  },
-  {
    "where": "rime-2 BEAT 8, ROUTE A's first hop - block 1 (6.40, top 35.35, -46.00) to block 2 (5.20, top 36.80, -49.72): 3.90 m centre to centre, +1.45 m of rise, blocks 2.8 m square, 11 m of air underneath",
    "did": "eight attempts across two sessions - five with fixed run-ups (180 / 260 / 340 / 420 ms of W, and one W+Space+Space double) and three firing the jump on POSITION at the block's lip, which is the technique that clears GAP A and GAP C on the flume first time",
    "happened": "not one landed on block 2. The landings scatter either side of it and never on it: three ended at (3.88, 33.90, -47.95), 0.38 m SHORT of block 2's near edge and 3 m below it on the ground, and four overflew it to z -51.3, -52.7, -54.7 and -54.8, up to five metres past, one of them landing on a ROUTE C block instead. The pattern is a window I could not find: at walking speed the hop falls short, and W reaches the full 9 m/s run in about a quarter of a second, at which point a single jump carries five to nine metres over a 2.8 m target.",
@@ -151,14 +122,6 @@
    "png": "_shots/play_rime2_hops/U_hops.png, _shots/play_rime2_peak3/S_res_260.png, _shots/play_rime2_west/76_serac_step1.png",
    "severity": "HIGH",
    "note": "the distances also scatter badly - two of twelve measurements came out at 5.94 m and 21.60 m with the same inputs as neighbours that gave 3.12 m and 4.53 m, so the same key press does not reliably produce the same hop"
-  },
-  {
-   "where": "rime-2 BEAT 5, the vanish crystal stair - four crystal steps at (-30, tops 13.55 / 15.35 / 17.15 / 18.95, z +0.6 / -1.0 alternating), cycle on 4.0 off 2.0 warn 0.8, phases 0 / 0.6 / 1.2 / 1.8",
-   "did": "jumped the stair one step at a time from the cavern floor beside the crystal, aiming at each step in turn",
-   "happened": "got 0 of 4 steps before missing - ended at [-29.89, 12.11, -2.62]",
-   "should": "the comment says each 1.80 m rise is inside a single jump (apex 1.91 m) and this stair is the only way to the roof hole, the wing hat and the wing crest",
-   "png": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_rime2_cavern2\\07_V8_vanish_failed.png",
-   "severity": "high"
   },
   {
    "where": "rime-2 BEAT 2, the head of the LOWER flume - the mesa lip L0 (34, 17.2, -2) into TURN 5 at L1 (33, 14.6, 4.5), a 21.6 degree ice pitch against TUNE.slope.iceSlideDeg of 20",

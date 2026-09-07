@@ -8,7 +8,15 @@ This probe clicks NEW GAME, then holds W with the camera aimed at the verdant-1
 painting, re-aiming every 120 ms the way a player steers with the mouse, and
 reports whether the course card comes up and how far he got if it did not.
 
-    python _harness/spawnwalk.py [--headless]
+    python _harness/spawnwalk.py [--headless] [--course <id>]
+
+`--course` walks to ANY gate from the authored spawn, W only, no teleport. The
+three VERDANT paintings are in line of sight of the spawn; every other gate is
+behind a stair, so ROUTES below carries the waypoints a player would steer
+through (the flank flight, the landing, the upper flight, the spiral, the
+courtyard doors). Between waypoints the steering is exactly the same: the
+camera is aimed at the next point and W is held. azure-3 (the tower roof) is
+reached by wall kicks, not by walking, and is not in this table.
 """
 import argparse
 import json
@@ -27,15 +35,40 @@ FLAGS = ["--ignore-gpu-blocklist", "--use-angle=d3d11", "--disable-gpu-sandbox",
          "--enable-gpu-rasterization", "--disable-features=CalculateNativeWinOcclusion",
          "--autoplay-policy=no-user-gesture-required"]
 
-AIM = r"""(course) => {
+# Waypoints from the Keep's authored spawn (0, 0.05, 3.0) to each gate's own
+# stand-out spot. Every point is on a walking floor; the flights are climbed
+# by holding W into them (TUNE.stepUp 0.45 against 0.30 / 0.333 risers).
+# A waypoint is (x, z) or (x, z, yTop): the third value is the tread height it
+# stands on — a walker already BELOW it (he took the treads faster than the
+# list) skips it instead of climbing back round the spiral for it.
+_SPIRAL = [(-9.6, 6.9)] + [
+    (round(-13.5 + 2.25 * __import__("math").cos(__import__("math").radians(-22.5 * i)), 2),
+     round(7.5 + 2.25 * __import__("math").sin(__import__("math").radians(-22.5 * i)), 2),
+     round(-i / 3.0, 2))
+    for i in range(1, 24, 2)] + [(-9.5, 7.6, -7.9), (-8.0, -3.0)]
+_GRAND = [(-13.0, 2.0), (-13.0, -4.0), (-13.0, -9.5), (0.0, -10.5), (0.0, -1.4), (8.5, -1.4), (8.5, -11.5), (0.0, -12.5)]
+_YARD = [(0.0, 12.0), (0.0, 19.4)]
+ROUTES = {
+    'ember-1': _SPIRAL, 'ember-2': _SPIRAL, 'ember-3': _SPIRAL, 'ember-4': _SPIRAL,
+    'rime-1': _GRAND + [(0.0, -19.0)], 'rime-2': _GRAND + [(0.0, -19.0), (-6.0, -27.0)],
+    'rime-3': _GRAND + [(0.0, -19.0), (0.0, -30.0)],
+    # the courtyard trees at (13.5, 19.4) and (7.8, 25.6) grab a walker who brushes
+    # the trunk; both legs stay > 3.5 m from them
+    'azure-1': _YARD + [(6.0, 21.0), (14.0, 25.0), (21.0, 30.0)],
+    'azure-2': _YARD + [(-6.0, 21.0), (-14.0, 22.0), (-20.0, 22.0)],
+}
+
+AIM = r"""([course, wp]) => {
   const G = CRESTBOUND.game;
   const g = (G._gates || []).find(x => x.course === course);
   if (!g || !G.cam) return null;
-  // Steer at the gate's stand-out spot until we are close, then at the picture.
+  // Steer at the next waypoint if one is given, else at the gate's stand-out
+  // spot until we are close, then at the picture.
   const p = G.player.pos;
   const dOut = Math.hypot(g.exitPos.x - p.x, g.exitPos.z - p.z);
-  const tx = dOut > 1.2 ? g.exitPos.x : g.pos.x;
-  const tz = dOut > 1.2 ? g.exitPos.z : g.pos.z;
+  let tx = dOut > 1.2 ? g.exitPos.x : g.pos.x;
+  let tz = dOut > 1.2 ? g.exitPos.z : g.pos.z;
+  if (wp) { tx = wp[0]; tz = wp[1]; }
   const dx = tx - p.x, dz = tz - p.z;
   if (dx * dx + dz * dz < 1e-4) return null;
   const yaw = Math.atan2(-dx, -dz);
@@ -52,6 +85,12 @@ PROBE = r"""(course) => {
   return {
     state: G.state,
     cardOpen: !!document.querySelector('.cb-card.on'),
+    // a SEALED gate never raises the card: it answers with a toast naming the
+    // course and its crest price, and that is the gate doing its job
+    // (a fixed-position toast has no offsetParent, so test its computed style)
+    toast: [...document.querySelectorAll('.cb-toast')].filter(e => { const cs = getComputedStyle(e);
+        return cs.display !== 'none' && cs.visibility !== 'hidden' && parseFloat(cs.opacity) > 0.05; })
+      .map(e => (e.textContent || '').trim().replace(/\s+/g, ' ')).join(' | '),
     pos: [+p.x.toFixed(2), +p.y.toFixed(2), +p.z.toFixed(2)],
     toGate: g ? +Math.hypot(g.pos.x - p.x, g.pos.z - p.z).toFixed(2) : null,
     grounded: !!G.player.grounded,
@@ -64,8 +103,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--headless", action="store_true")
     ap.add_argument("--course", default="verdant-1")
-    ap.add_argument("--budget", type=float, default=18.0, help="seconds of walking")
+    ap.add_argument("--budget", type=float, default=0.0, help="seconds of walking (default 18, or 60 on a routed gate)")
     args = ap.parse_args()
+    if not args.budget:
+        args.budget = 60.0 if args.course in ROUTES else 18.0
 
     with sync_playwright() as p:
         br = p.chromium.launch(channel="chrome", headless=args.headless, args=FLAGS)
@@ -86,12 +127,18 @@ def main():
         start = pg.evaluate(PROBE, args.course)
         print("start:", json.dumps(start))
 
+        route = list(ROUTES.get(args.course, []))
+        if route:
+            print("route: %d waypoints" % len(route))
+        wp = route.pop(0) if route else None
+        wp_t = 0.0
         pg.keyboard.down("w")
         t0 = time.time()
         best = start["toGate"]
         out = start
         stuck_at = None
         stuck_t = 0.0
+        sealed_toast = ""
         # A player who walks into the side of something does not stand there
         # pressing forward: he slides along it. Hold a strafe key for 0.7 s,
         # alternating sides, whenever forward progress stops. Without this the
@@ -104,8 +151,23 @@ def main():
         detours = []
         while time.time() - t0 < args.budget:
             pg.wait_for_timeout(120)
-            pg.evaluate(AIM, args.course)
+            pg.evaluate(AIM, [args.course, wp])
             out = pg.evaluate(PROBE, args.course)
+            if wp is not None:
+                # a waypoint counts as passed within 1.3 m (or when the walk has
+                # gone by it); progress is measured to the WAYPOINT while one is up
+                dwp = ((out["pos"][0] - wp[0]) ** 2 + (out["pos"][2] - wp[1]) ** 2) ** 0.5
+                wp_t += 0.12
+                below = len(wp) > 2 and out["pos"][1] < wp[2] - 0.45
+                if dwp < 1.3 or below or wp_t > 9.0:
+                    if wp_t > 9.0:
+                        print("   waypoint %s not reached in 9 s (at %s, %.2f m off) - going on" % (wp, out["pos"], dwp))
+                    wp = route.pop(0) if route else None
+                    wp_t = 0.0
+                    best = out["toGate"]
+                    stuck_at = None
+                    stuck_t = 0.0
+                    continue
             if out["toGate"] is not None and out["toGate"] < best - 0.05:
                 best = out["toGate"]
                 stuck_at = None
@@ -125,6 +187,9 @@ def main():
                     stuck_at = None
             if out["state"] == "card" or out["cardOpen"]:
                 break
+            if out["toGate"] is not None and out["toGate"] < 1.2 and ("SEALED" in out["toast"] or "CREST" in out["toast"]):
+                sealed_toast = out["toast"]
+                break
         pg.keyboard.up("w")
         if detours:
             print("detours (a player sliding along what he bumped):")
@@ -132,12 +197,16 @@ def main():
                 print("   strafe %s at %s, %.2f m from the painting" % (d[0], d[1], d[2]))
         pg.wait_for_timeout(300)
         out = pg.evaluate(PROBE, args.course)
-        entered = out["state"] == "card" or out["cardOpen"]
+        entered = out["state"] == "card" or out["cardOpen"] or bool(sealed_toast)
+        if sealed_toast:
+            print("sealed gate answered: %s" % sealed_toast)
         print("end:  ", json.dumps(out))
         print("walked %s -> %s m from the painting in %.1f s" % (start["toGate"], best, time.time() - t0))
         if not entered and stuck_at:
             print("stalled at %s for %.1f s" % (stuck_at, stuck_t))
-        print("SPAWN WALK: %s" % ("ENTERED THE COURSE CARD" if entered else "NEVER REACHED THE GATE"))
+        if not entered and wp is not None:
+            print("never finished the route: next waypoint was %s" % (wp,))
+        print("SPAWN WALK: %s" % (("SEALED GATE REACHED, TOAST NAMES IT" if sealed_toast else "ENTERED THE COURSE CARD") if entered else "NEVER REACHED THE GATE"))
         br.close()
     return 0 if entered else 1
 

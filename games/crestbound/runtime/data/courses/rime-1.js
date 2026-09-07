@@ -994,9 +994,13 @@ export default {
     { kind: 'platform', p: [-1.8, r2(GREEN_Y + 4.0), -47.2], s: [0.4, 8.0, 4.4], mat: 'stone', tint: STONE },
     { kind: 'platform', p: [0, r2(GREEN_Y + 4.0), -48.8], s: [3.2, 8.0, 0.4], mat: 'stone', tint: STONE },
     { kind: 'platform', p: [0, r2(GREEN_Y + 4.0), -45.2], s: [3.2, 8.0, 0.4], mat: 'stone', tint: STONE },
-    { kind: 'platform', p: [1.8, r2(GREEN_Y + 4.0), -48.35], s: [0.4, 8.0, 2.1], mat: 'stone', tint: STONE },
-    { kind: 'platform', p: [1.8, r2(GREEN_Y + 4.0), -45.75], s: [0.4, 8.0, 1.0], mat: 'stone', tint: STONE },
-    { kind: 'platform', p: [1.8, r2(GREEN_Y + 2.4 + 5.6 / 2), -46.75], s: [0.4, 5.6, 1.1], mat: 'stone', tint: STONE },
+    /* GEOMETRY LANE 2026-09-07 (playtest rime-1 BEAT 8): the doorway was
+       1.05 m for a 0.76 m capsule — a running line clipped the jamb and bonked
+       flat against the tower every time (stopped at x 2.38, 300 frames). The
+       opening is 1.80 m now (z -47.70..-45.90), the same 2.40 m tall. */
+    { kind: 'platform', p: [1.8, r2(GREEN_Y + 4.0), -48.55], s: [0.4, 8.0, 1.7], mat: 'stone', tint: STONE },
+    { kind: 'platform', p: [1.8, r2(GREEN_Y + 4.0), -45.575], s: [0.4, 8.0, 0.65], mat: 'stone', tint: STONE },
+    { kind: 'platform', p: [1.8, r2(GREEN_Y + 2.4 + 5.6 / 2), -46.8], s: [0.4, 5.6, 1.8], mat: 'stone', tint: STONE },
     // The shaft floor, flush with the green (a real rect for the reach gate).
     { kind: 'platform', p: [0, r2(GREEN_Y - 0.25), -47.0], s: [3.2, 0.5, 3.2], mat: 'stone', tint: 0xa8b4c2 },
     // THE BELFRY DECK on the north face, top 23.10.

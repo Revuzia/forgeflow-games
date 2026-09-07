@@ -130,7 +130,13 @@ function lamp(p, color, intensity, distance, flicker) {
   return d;
 }
 
-/** Floating signage. `yaw` is the direction the READER is walking. */
+/**
+ * Floating signage. `yaw` is the heading the board FACES — i.e. from the board
+ * toward its reader (a sign on the north wall faces SOUTH). The text plane is
+ * local +Z and a heading of 0 is -Z, hence the +PI. (This comment used to say
+ * "the direction the reader is walking", which is the opposite, and four
+ * boards were authored to it and faced their walls — signcheck 'faces-away'.)
+ */
 function sign(p, yaw, text, size, color) {
   return { kind: 'text', p, rot: [0, yaw + Math.PI, 0], text, size, color };
 }
@@ -256,7 +262,16 @@ const WALL = 1.2;
 
 /* Gallery walkway is 4.0 m deep; the void it rings is what you look down into. */
 const GIN = 16.0;                    // |x| of the gallery's inner edge
-const VOID_Z0 = -2.82;               // top of the grand stair == void north edge
+/* GEOMETRY LANE 2026-09-07 (playtest K1 follow-up, owner P6 "i cant reach the
+   main stairs"). The upper flight climbs SOUTH out of the landing and tops out
+   at z -2.82 — and the void's north edge was ALSO z -2.82, so the head of the
+   grand stair was a 9 m wide cliff: rails on both sides, nothing ahead but a
+   6.3 m drop back to the mosaic. Walked and measured: W held from the landing
+   ended at [0.89, 0.00, -1.38] on the lobby floor. The void edge now sits
+   2.82 m south of the flight top: a HEAD LANDING with the deck legs on both
+   sides and a balustrade in front, which is what an imperial stair arrives at. */
+const STAIR_TOP_Z = -2.82;           // where the upper flight tops out (12 x 0.46 from -8.34)
+const VOID_Z0 = 0.00;                // void north edge = the head landing's balustrade
 const VOID_Z1 = 8.80;                // south run's inner edge
 
 /* Undercroft footprint (inner faces). */
@@ -412,7 +427,7 @@ const IRON_DOOR = makeSeal({
 });
 
 const CRESTWAY = makeSeal({
-  id: 'finale', crests: 60, p: [0.0, 2.80, YZ1], yaw: SOUTH,
+  id: 'finale', crests: 60, p: [0.0, 3.20, YZ1], yaw: SOUTH,
   w: 6.4, h: 6.4, style: 'glass', tint: KEEPGOLD, opens: 'crestway',
   label: 'THE CRESTWAY', sub: 'WHAT THE KEEP WAS BUILT AROUND',
 });
@@ -556,11 +571,15 @@ KEEP_SKYLINE.push(box([RX0 - 0.30, RX0], [9.30, 9.72], [RZ0, RZ1], 'stone', { st
 KEEP_SKYLINE.push(box([RX1, RX1 + 0.30], [9.30, 9.72], [RZ0, RZ1], 'stone', { stripe: false, plain: true }));
 
 /* --- the crest mosaic Nim spawns on ------------------------------------- */
+/* The mosaic (and the spawn on it, and the candle-wheel over it) sits in the
+   MIDDLE of the void, z 3.0: the deck now reaches z 0.0 and a spawn at the old
+   z -1.0 would stand under the gallery soffit instead of under 14 m of hall. */
+const MOSAIC_Z = 3.0;
 const MOSAIC = [
-  deco('emblem', [0, LOBBY + 0.02, -1.0], [13.6, 0.04, 13.6], { mat: 'marble', tint: 0x2b3a52 }),
-  deco('emblem', [0, LOBBY + 0.03, -1.0], [9.6, 0.04, 9.6], { rot: [0, Math.PI / 4, 0], mat: 'gold', tint: KEEPGOLD }),
-  deco('emblem', [0, LOBBY + 0.04, -1.0], [4.4, 0.04, 4.4], { mat: 'emissive', tint: KEEPGOLD }),
-  deco('emblem', [0, LOBBY + 0.05, -1.0], [2.1, 0.04, 2.1], { rot: [0, Math.PI / 4, 0], mat: 'copper', tint: 0xd8a45c }),
+  deco('emblem', [0, LOBBY + 0.02, MOSAIC_Z], [12.0, 0.04, 12.0], { mat: 'marble', tint: 0x2b3a52 }),
+  deco('emblem', [0, LOBBY + 0.03, MOSAIC_Z], [9.0, 0.04, 9.0], { rot: [0, Math.PI / 4, 0], mat: 'gold', tint: KEEPGOLD }),
+  deco('emblem', [0, LOBBY + 0.04, MOSAIC_Z], [4.4, 0.04, 4.4], { mat: 'emissive', tint: KEEPGOLD }),
+  deco('emblem', [0, LOBBY + 0.05, MOSAIC_Z], [2.1, 0.04, 2.1], { rot: [0, Math.PI / 4, 0], mat: 'copper', tint: 0xd8a45c }),
 ];
 
 /* --- four banner pillars standing in the lobby void --------------------- */
@@ -664,10 +683,13 @@ const RAILS = [
   box([-16.3, -16.0], [GAL, GAL + 1.05], [VOID_Z0, VOID_Z1], 'marble'),
   box([16.0, 16.3], [GAL, GAL + 1.05], [VOID_Z0, VOID_Z1], 'marble'),
   box([-16.0, 16.0], [GAL, GAL + 1.05], [VOID_Z1, VOID_Z1 + 0.3], 'marble'),
-  box([-16.0, -5.0], [GAL, GAL + 1.05], [VOID_Z0 - 0.3, VOID_Z0], 'marble'),
-  box([5.0, 16.0], [GAL, GAL + 1.05], [VOID_Z0 - 0.3, VOID_Z0], 'marble'),
-  box([-5.3, -5.0], [GAL, GAL + 1.05], [-8.34, VOID_Z0], 'marble'),
-  box([5.0, 5.3], [GAL, GAL + 1.05], [-8.34, VOID_Z0], 'marble'),
+  /* the north edge is one continuous run now — the head landing in front of
+     the flight top is fenced like every other edge over the void */
+  box([-16.0, 16.0], [GAL, GAL + 1.05], [VOID_Z0 - 0.3, VOID_Z0], 'marble'),
+  /* the two runs that fence the stair slot stop at the flight TOP, so the head
+     landing opens onto the deck legs on both sides */
+  box([-5.3, -5.0], [GAL, GAL + 1.05], [-8.34, STAIR_TOP_Z], 'marble'),
+  box([5.0, 5.3], [GAL, GAL + 1.05], [-8.34, STAIR_TOP_Z], 'marble'),
 ];
 for (let i = 0; i < 9; i++) {
   const z = VOID_Z0 + (VOID_Z1 - VOID_Z0) * (i / 8);
@@ -677,6 +699,7 @@ for (let i = 0; i < 9; i++) {
 for (let i = 0; i < 9; i++) {
   const x = -16 + 4 * i;
   RAILS.push(deco('post', [x, GAL + 0.62, VOID_Z1 + 0.15], [0.5, 1.24, 0.5], { mat: 'marble' }));
+  RAILS.push(deco('post', [x, GAL + 0.62, VOID_Z0 - 0.15], [0.5, 1.24, 0.5], { mat: 'marble' }));
 }
 
 /* The gallery deck itself: a full loop around the void, 4 m wide, its soffit
@@ -692,6 +715,9 @@ const GALLERY = [
      doorway at x -9 .. 9 has a floor and the landing below keeps 2.90 m of
      headroom (5.60 soffit against a 2.70 landing). */
   box([-5.0, 5.0], [GAL_UNDER, GAL], [-13.8, -8.34], 'marble'),
+  /* THE HEAD LANDING: the deck the upper flight actually arrives on, from its
+     top tread to the void's balustrade (STAIR_TOP_Z .. VOID_Z0). */
+  box([-5.0, 5.0], [GAL_UNDER, GAL], [STAIR_TOP_Z, VOID_Z0], 'marble'),
 ];
 
 /* ===========================================================================
@@ -700,8 +726,8 @@ const GALLERY = [
 
 const LOBBY_DRESS = [
   /* candle-wheel over the mosaic: the room's key practical light */
-  deco('chandelier', [0, 10.4, -1.0], [5.4, 2.2, 5.4], { mat: 'copper', tint: KEEPGOLD }),
-  lamp([0, 9.6, -1.0], KEEPGOLD, 28, 40, 0.05),
+  deco('chandelier', [0, 10.4, MOSAIC_Z], [5.4, 2.2, 5.4], { mat: 'copper', tint: KEEPGOLD }),
+  lamp([0, 9.6, MOSAIC_Z], KEEPGOLD, 28, 40, 0.05),
 
   /* the west aisle, where the three VERDANT paintings hang */
   deco('bench', [-18.0, LOBBY + 0.32, -8.6], [2.2, 0.64, 0.72], { rot: [0, WEST, 0], mat: 'wood' }),
@@ -749,13 +775,17 @@ const LOBBY_DRESS = [
   ...[[-14.2, VERDANT], [-9.4, AZURE], [9.4, EMBER], [14.2, RIME]].map(([px, tint]) =>
     deco('banner', [px, LOBBY + 4.3, -10.15], [1.5, 2.9, 0.2], { mat: 'cloth', tint })),
   /* a refectory table with its stools, off the walking lane but inside it */
-  deco('bench', [-10.6, LOBBY + 0.40, 3.6], [3.4, 0.80, 1.10],
+  /* GEOMETRY LANE: the table moved to the EAST pier line. With the spawn at
+     z 3.0 the west table stood exactly on the line from the mosaic to the
+     WINDMILL HEIGHTS painting, and props carry no colliders — the player would
+     walk through it. */
+  deco('bench', [10.6, LOBBY + 0.40, 3.6], [3.4, 0.80, 1.10],
     { rot: [0, NORTH, 0], mat: 'wood', params: { heavy: true } }),
-  deco('stool', [-9.0, LOBBY + 0.26, 2.4], [0.46, 0.52, 0.46], { mat: 'wood' }),
-  deco('stool', [-9.2, LOBBY + 0.26, 4.9], [0.46, 0.52, 0.46], { rot: [0, 0.6, 0], mat: 'wood' }),
-  deco('crate', [-11.9, LOBBY + 0.38, 6.4], [0.82, 0.76, 0.82], { rot: [0, 0.3, 0], mat: 'wood' }),
-  deco('barrel', [11.6, LOBBY + 0.44, 4.2], [0.78, 0.88, 0.78], { mat: 'wood' }),
-  deco('barrel', [12.4, LOBBY + 0.44, 5.3], [0.78, 0.88, 0.78], { mat: 'wood' }),
+  deco('stool', [9.0, LOBBY + 0.26, 2.4], [0.46, 0.52, 0.46], { mat: 'wood' }),
+  deco('stool', [9.2, LOBBY + 0.26, 4.9], [0.46, 0.52, 0.46], { rot: [0, 0.6, 0], mat: 'wood' }),
+  deco('crate', [11.9, LOBBY + 0.38, 6.4], [0.82, 0.76, 0.82], { rot: [0, 0.3, 0], mat: 'wood' }),
+  deco('barrel', [13.6, LOBBY + 0.44, 7.6], [0.78, 0.88, 0.78], { mat: 'wood' }),
+  deco('barrel', [14.4, LOBBY + 0.44, 8.7], [0.78, 0.88, 0.78], { mat: 'wood' }),
   deco('bookcase', [12.6, LOBBY + 1.25, -4.4], [2.4, 2.5, 0.55], { rot: [0, EAST, 0], mat: 'wood' }),
   deco('statue', [-12.6, LOBBY, 8.6], [1.4, 2.3, 1.4], { rot: [0, SOUTH, 0], mat: 'marble' }),
 
@@ -764,10 +794,17 @@ const LOBBY_DRESS = [
   deco('beam', [0, 13.2, -1.0], [0.6, 0.6, 27.0], { mat: 'wood', count: 7, spread: [34, 0, 0], seed: 2202 }),
 
   /* signage — the only tutorial text the Keep needs downstairs */
-  sign([0, LOBBY + 5.9, -12.9], SOUTH, 'THE KEEP', 1.05, 0xf6e6c2),
-  sign([0, LOBBY + 5.1, -12.9], SOUTH, 'EVERY PAINTING IS A DOOR', 0.30, 0x9c8a6e),
-  sign([-19.5, LOBBY + 4.9, -1.0], WEST, 'VERDANT BAILEY', 0.46, VERDANT),
-  sign([0, LOBBY + 5.9, 13.4], NORTH, 'TO THE COURTYARD', 0.40, 0xbfd9c2),
+  /* GEOMETRY LANE (K16): 'THE KEEP' was a 4.0 m board centred at y 5.9 on
+     the north wall — it stood THROUGH the gallery deck (5.60..6.30) and its
+     top 1.4 m lay on the deck as a bare wooden plank. Both lines now hang over
+     the hall doorway's head (11.3..14.0), where 14 m of wall was blank. */
+  sign([0, LOBBY + 12.75, -13.2], SOUTH, 'THE KEEP', 0.62, 0xf6e6c2),
+  sign([0, LOBBY + 11.85, -13.2], SOUTH, 'EVERY PAINTING IS A DOOR', 0.28, 0x9c8a6e),
+  sign([-19.5, LOBBY + 4.9, -1.0], EAST, 'VERDANT BAILEY', 0.46, VERDANT),
+  /* 'TO THE COURTYARD' sat at y 5.9 in front of the door head, so its plank's
+     top edge broke the surface of the south deck (the balcony-door 'rod'). It
+     hangs in the top of the 5.2 m doorway now, 3.9 m of headroom under it. */
+  sign([0, LOBBY + 4.65, 13.3], NORTH, 'TO THE COURTYARD', 0.40, 0xbfd9c2),
   sign([-13.5, LOBBY + 2.3, 4.4], SOUTH, 'THE UNDERCROFT', 0.36, EMBER),
   sign([-13.5, LOBBY + 1.8, 4.4], SOUTH, 'mind the stair', 0.20, 0x8d7a5e),
 ];
@@ -811,8 +848,8 @@ const LONG_HALL = [
   lamp([0, GAL + 2.2, -33.4], 0x9fd8ff, 11, 20, 0.22),
   lamp([0, GAL + 3.4, -21.0], 0xffe0b0, 12, 24),
 
-  sign([0, GAL + 4.6, -14.4], NORTH, 'RIME SPIRE', 0.52, RIME),
-  sign([-11.7, GAL + 4.6, -24.0], WEST, 'THE LONG HALL', 0.34, 0x9c8a6e),
+  sign([0, GAL + 4.6, -14.4], SOUTH, 'RIME SPIRE', 0.52, RIME),
+  sign([-11.7, GAL + 4.6, -24.0], EAST, 'THE LONG HALL', 0.34, 0x9c8a6e),
 ];
 
 const LIBRARY = [
@@ -850,18 +887,24 @@ const LIBRARY = [
  * ======================================================================== */
 
 const BALCONY = [
-  box([-4.5, 4.5], [GAL_UNDER, GAL], [13.8, 17.2], 'stone', { stripe: true, glow: KEEPGOLD }),
+  /* stripe on the LIP only: `true` striped all four edges, and the north one
+     lay along the doorway threshold as a bare bar on the deck (K16). */
+  box([-4.5, 4.5], [GAL_UNDER, GAL], [13.8, 17.2], 'stone', { stripe: '+z', glow: KEEPGOLD }),
   box([-4.8, -4.5], [GAL, GAL + 0.85], [13.8, 17.2], 'marble'),
   box([4.5, 4.8], [GAL, GAL + 0.85], [13.8, 17.2], 'marble'),
   deco('post', [-4.65, GAL + 0.72, 17.05], [0.62, 1.44, 0.62], { mat: 'marble' }),
   deco('post', [4.65, GAL + 0.72, 17.05], [0.62, 1.44, 0.62], { mat: 'marble' }),
   deco('banner', [-4.3, GAL + 2.4, 15.0], [0.12, 3.0, 1.6], { rot: [0, EAST, 0], tint: AZURE }),
   deco('banner', [4.3, GAL + 2.4, 15.0], [0.12, 3.0, 1.6], { rot: [0, WEST, 0], tint: AZURE }),
-  sign([0, GAL + 2.3, 14.6], SOUTH, 'LONG JUMP', 0.44, KEEPGOLD),
-  sign([0, GAL + 1.75, 14.6], SOUTH, 'crouch, then jump, at a full run', 0.22, 0x9c8a6e),
+  /* GEOMETRY LANE (K14): these two boards hung IN the balcony doorway at head
+     height and hid the garden loft from the one place you long-jump at it.
+     They hang on the gallery's south wall beside the door now, and face the
+     player walking out. */
+  sign([-5.6, GAL + 2.35, 13.4], NORTH, 'LONG JUMP', 0.44, KEEPGOLD),
+  sign([-5.6, GAL + 1.8, 13.4], NORTH, 'crouch, then jump, at a full run', 0.22, 0x9c8a6e),
 
   /* the loft, its piers, and the net you climb back up (or down) */
-  box([-4.5, 4.5], [GAL_UNDER, GAL], [23.2, 27.2], 'stone', { stripe: true, glow: KEEPGOLD }),
+  box([-4.5, 4.5], [GAL_UNDER, GAL], [23.2, 27.2], 'stone', { stripe: '-z', glow: KEEPGOLD }),
   box([-4.8, -4.5], [GAL, GAL + 0.85], [23.2, 27.2], 'marble'),
   box([4.5, 4.8], [GAL, GAL + 0.85], [23.2, 27.2], 'marble'),
   box([-4.8, 4.8], [GAL, GAL + 0.85], [27.2, 27.5], 'marble'),
@@ -972,8 +1015,8 @@ const UNDERCROFT = [
   deco('chain', [-9.4, UNDER + 2.6, 6.4], [0.9, 1.8, 0.9], { mat: 'metal', fit: 'max' }),
   deco('lantern', [2.0, UNDER + 1.5, 8.8], [0.44, 0.74, 0.44], { mat: 'copper' }),
 
-  sign([0, UNDER + 4.0, -10.8], NORTH, 'EMBER FOUNDRY', 0.48, EMBER),
-  sign([-17.2, UNDER + 3.6, 8.0], WEST, 'SEALED', 0.34, 0x8c5f3a),
+  sign([0, UNDER + 4.0, -10.8], SOUTH, 'EMBER FOUNDRY', 0.48, EMBER),
+  sign([-17.2, UNDER + 3.6, 8.0], EAST, 'SEALED', 0.34, 0x8c5f3a),
 ];
 
 /* --- the spiral stair down (23 treads, 1.5 turns, 8.00 m) ---------------- */
@@ -1249,67 +1292,13 @@ const CRESTWAY_VAULT = [
  * .slideDeg, so you can run anywhere without sliding.
  * ======================================================================== */
 
-/**
- * The lawn's height sampler (water lane 2026-09-07, playtest K10 "crouch never
- * sinks — y stayed 0.00 ... the pool floor is at -1.30").
- *
- * The parterre is a marble basin whose floor slab tops out at WATER_BOT
- * (-1.30), but the courtyard heightfield ran level straight through it
- * (`flats` are discs, and a disc that levelled the square basin would trench
- * the lawn outside its walls). A swimmer therefore stood on grass 0.95 m under
- * the surface and had nothing to dive into. This evaluates the same recipe
- * terrain.js's `sampleHeights` does — base, domed hills, flats with a
- * dead-level 55 % core and a cosine skirt; the Keep has no ridges and no
- * noise — and then carves a RECTANGULAR pit under the basin: |x| < 4.5,
- * |z - FZ| < 4.5, floor WATER_BOT - 0.90 = -2.20. The grid is 1.0 m from
- * (YX0, LZ1) = (-24, 13.8), so the pit's samples are x -4..4 and z 25.8..33.8
- * and its one-cell slopes lie under the wall boxes (4.2..5.2 / 24.8..25.8) or
- * beneath the floor slab (-1.80..-1.30): at the inner faces the terrain is
- * -1.78 (x 4.2) and -1.35 (z 34.2), both under the marble. Inside the basin
- * the collision ground is max(box floor, heightfield) = the marble at -1.30.
- * MIRRORS terrain.js sampleHeights (c): if that recipe changes, this follows.
- */
-function lawnHeights(recipe) {
-  const base = recipe.base === undefined ? 0 : recipe.base;
-  const hills = recipe.hills || [];
-  const flats = recipe.flats || [];
-  const bump = (t) => (t >= 1 ? 0 : (t <= 0 ? 1 : 0.5 * (1 + Math.cos(Math.PI * t))));
-  const PIT_HALF = 4.5, PIT_Y = WATER_BOT - 0.90;
-  return function (x, z) {
-    if (Math.abs(x) < PIT_HALF && Math.abs(z - FZ) < PIT_HALF) return PIT_Y;
-    let y = base;
-    for (let i = 0; i < hills.length; i++) {
-      const H = hills[i];
-      const r = H.r || 1;
-      const dx = x - H.p[0], dz = z - H.p[1];
-      const dd = Math.sqrt(dx * dx + dz * dz);
-      if (dd < r) {
-        const k = bump(dd / r);
-        y += (H.h || 0) * (H.sharp ? k : k * k * (3 - 2 * k));
-      }
-    }
-    for (let i = 0; i < flats.length; i++) {
-      const F = flats[i];
-      const r = F.r || 1;
-      const dx = x - F.p[0], dz = z - F.p[1];
-      const dd = Math.sqrt(dx * dx + dz * dz);
-      if (dd < r) {
-        const t = dd / r;
-        const k = t <= 0.55 ? 1 : bump((t - 0.55) / 0.45);
-        y += ((F.h === undefined ? y : F.h) - y) * k;
-      }
-    }
-    return y;
-  };
-}
-
 const TERRAIN = {
   kind: 'terrain',
   origin: [YX0, YZ0],
   size: [YX1 - YX0, YZ1 - YZ0],
   res: 1.0,
   surface: 'grass',
-  heights: lawnHeights({
+  heights: {
     seed: 8801,
     base: 0.0,
     hills: [
@@ -1329,7 +1318,7 @@ const TERRAIN = {
       { p: [-22.5, 15.5], r: 5.0, h: 0.0 },     // the wyrm turret's skirt
     ],
     ridges: [],
-  }),
+  },
   /* ROUND 2: camera-local ring (terrain.js). `density` is blades/m2 and sizes
    * the wrapping tile; `cross: false` halves the field's triangles — a crossed
    * card buys nothing at this blade size and the Keep was 27 k triangles over
@@ -1350,10 +1339,6 @@ const FOUNTAIN_WATER = {
   s: [8.4, WATER_TOP - WATER_BOT, 8.4],
   kind2: 'pool',
   surfaceY: WATER_TOP,
-  /* 0.15 m of freeboard under the 1.10 rim. A `pool` ripples at water.js's
-     WATER_LOOK.pool amplitude (0.18 -> 0.09 m crests); until the water lane
-     gave every body its own uAmp this basin heaved at the base 1.0 -> 0.49 m
-     crests, i.e. the surface rode 0.34 m ABOVE the rim (owner screenshot 3). */
 };
 
 /* ===========================================================================
@@ -1366,7 +1351,7 @@ const FOUNTAIN_WATER = {
  * ======================================================================== */
 
 const CHECKPOINTS = [
-  { id: 'cp-lobby', name: 'THE LOBBY HALL', p: [0.0, LOBBY + 0.05, -1.0], yaw: WEST },
+  { id: 'cp-lobby', name: 'THE LOBBY HALL', p: [0.0, LOBBY + 0.05, MOSAIC_Z], yaw: WEST },
   { id: 'cp-gallery', name: 'THE GALLERY', p: [0.0, GAL + 0.05, -11.0], yaw: NORTH },
   /* Data lane 2026-09-05 (loop gate): [-14, 4] facing NORTH stood on the
      spiral stair's outer tread (SPIN r 3.6: the respawn was shoved 0.51 m)
@@ -1450,7 +1435,7 @@ export default {
   /* Nim arrives on the crest mosaic looking west, straight down the aisle at
      the three VERDANT paintings — the first thing a new player sees is the
      first thing they can do. */
-  spawn: { p: [0.0, LOBBY + 0.05, -1.0], yaw: WEST },
+  spawn: { p: [0.0, LOBBY + 0.05, MOSAIC_Z], yaw: WEST },
 
   /* Nothing in the Keep kills. This sits 32 m below the undercroft floor and
      exists only so a `?dev=1` noclip that leaves the building still recovers. */
@@ -1494,6 +1479,10 @@ export default {
     ...GATE_OBJECTS,
     IRON_DOOR,
     CRESTWAY,
+    /* TERRAIN and FOUNTAIN_WATER are NOT repeated here: course.js builds
+       `def.terrain` and every `def.waters[]` itself, and listing them again in
+       `objects` built each one twice, coincident (K2 — the z-fighting lawn and
+       the opaque pool the owner photographed). */
   ],
 
   /* Morning light, long shadows, dust in the window shafts. */

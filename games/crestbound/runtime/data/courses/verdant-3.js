@@ -511,6 +511,14 @@ export default {
       { pts: [[-2, -20], [-6, -26], [-4, -32]], w: 2.8 },                 // granary -> ridge
       { pts: [[-4, -32], [8, -38], [20, -44], [26, -46]], w: 3.0 },       // ridge -> mill yard
       { pts: [[-8, -32], [-20, -36], [-32, -42]], w: 2.4 },               // ridge -> mills 2 & 3
+      /* GEOMETRY LANE (V3-22): terrain.js suppresses blades where a path is
+         carved (`lush *= 1 - pathAt`), so a trodden patch under each pad and
+         pedestal that stands off the cart tracks keeps the grass out of the
+         stone: cp-granary, both pedestals, and mill 3's jump pad. */
+      { pts: [[4, -12.3], [4, -15.7]], w: 4.4 },                          // cp-granary
+      { pts: [[5, -19.9], [5, -23.1]], w: 3.6 },                          // the sigils pedestal
+      { pts: [[-6, 49.6], [-6, 52.4]], w: 3.6 },                          // the coins pedestal
+      { pts: [[-30, -42.6], [-30, -45.4]], w: 3.8 },                      // mill 3's jump pad
     ],
   },
 
@@ -868,6 +876,14 @@ export default {
     { kind: 'platform', p: [-0.4, 18.05, -15.6], s: [2.8, 0.7, 2.8], mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
     { kind: 'platform', p: [-0.4, 19.65, -13.6], s: [2.8, 0.7, 2.8], mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
     { kind: 'platform', p: [-1.6, 21.25, -12.0], s: [3.4, 0.7, 2.8], mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
+    /* GEOMETRY LANE (V3-18): each ledge is CARRIED — a joist back into the
+       gable (its east face is x = -2.0) and a raking strut under it, so the
+       stair reads as a sack hoist bolted to the granary rather than five
+       slabs in the air. Plain wood, no stripe: they are structure, not steps. */
+    ...[[-0.4, 14.85, -19.6], [-0.4, 16.45, -17.6], [-0.4, 18.05, -15.6], [-0.4, 19.65, -13.6], [-1.6, 21.25, -12.0]].flatMap(([x, y, z]) => [
+      { kind: 'platform', p: [x - 0.9, y - 0.52, z], s: [x + 1.4 + 2.0, 0.34, 0.34], mat: 'wood', tint: TIMBER, stripe: false, plain: true },
+      { kind: 'platform', p: [x - 0.7, y - 1.35, z], s: [2.9, 0.26, 0.26], rot: [0, 0, 0.62], mat: 'wood', tint: TIMBER, stripe: false, plain: true },
+    ]),
 
     // --- MILL 1. yaw PI/2 lays the axle along -X, so the sail disc is the
     //     Z-Y plane at x = -18: it sweeps z -24..-12 and y 15.6..27.6, which
@@ -1071,16 +1087,28 @@ export default {
      * against the asymmetric gravity, so it lands on the sky platform deck.
      * ===================================================================== */
 
+    /* GEOMETRY LANE 2026-09-07 (playtest V3-30, owner "extra objects").
+     * The six decks were 0.6 m slabs hung at one height each over a hillside
+     * that rises 2-7 m along them: LJ1's south end floated 0.7 m and its north
+     * end was buried; LJ2's landing was INSIDE the hill (ground 18.6..20.8
+     * against a deck at 15.4) and LJ3's gap was a hummock 1.1 m ABOVE its
+     * runway. Every deck is now a timber CRIB — one box, the same triangle
+     * cost, its top 0.35 m over the highest ground under it and its foot 0.4 m
+     * into the lowest — and LJ2 / LJ3 run along the mill ridge's contour at
+     * z -50 / -56 (measured against terrainHeightAt: runway ground 18.6..21.1
+     * and 18.1..20.5, gap ground 1.9-2.0 m under the deck), where a deck can
+     * stand on legs of under 3 m instead of eight. Long-jump distances are
+     * unchanged: 8.0 m of runway, a 4.0 m gap, a 4.0 m landing. */
     // LONG JUMP 1 — over the gully mouth on the wheat terrace. Runway 8.0 m.
-    { kind: 'platform', p: [18.0, 12.30, 0.0], s: [3.6, 0.6, 8.0], mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
-    { kind: 'platform', p: [18.0, 12.30, -10.0], s: [3.6, 0.6, 4.0], mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
-    { kind: 'text', p: [18.0, 14.2, 3.2], rot: [0, 0, 0], text: 'CROUCH + JUMP AT SPEED  ·  LONG JUMP', size: 0.24, color: 0x6b5a3a },
-    // LONG JUMP 2 — across the sack gully, north lip to south lip. Runway 8.0 m.
-    { kind: 'platform', p: [26.0, 15.40, -20.0], s: [3.6, 0.6, 8.0], mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
-    { kind: 'platform', p: [26.0, 15.40, -30.0], s: [3.6, 0.6, 4.0], mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
-    // LONG JUMP 3 — the last straight into the yard. Runway 8.0 m.
-    { kind: 'platform', p: [12.0, 22.40, -36.0], s: [3.6, 0.6, 8.0], mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
-    { kind: 'platform', p: [12.0, 22.40, -46.0], s: [3.6, 0.6, 4.0], mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
+    { kind: 'platform', p: [18.0, 13.10, 0.0], s: [3.6, 3.40, 8.0], mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
+    { kind: 'platform', p: [18.0, 14.10, -10.0], s: [3.6, 1.40, 4.0], mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
+    { kind: 'text', p: [18.0, 16.4, 3.2], rot: [0, 0, 0], text: 'CROUCH + JUMP AT SPEED  ·  LONG JUMP', size: 0.24, color: 0x6b5a3a },
+    // LONG JUMP 2 — west to east along the ridge crest. Runway 8.0 m (x -8..0), gap x 0..4.
+    { kind: 'platform', p: [-4.0, 19.85, -50.0], s: [8.0, 3.20, 3.6], mat: 'wood', tint: TIMBER, stripe: '+x', edge: SAFE_EDGE },
+    { kind: 'platform', p: [6.0, 20.15, -50.0], s: [4.0, 2.60, 3.6], mat: 'wood', tint: TIMBER, stripe: '-x', edge: SAFE_EDGE },
+    // LONG JUMP 3 — back east to west on the crest behind it. Runway x 0..8, gap x -4..0.
+    { kind: 'platform', p: [4.0, 19.30, -56.0], s: [8.0, 3.20, 3.6], mat: 'wood', tint: TIMBER, stripe: '-x', edge: SAFE_EDGE },
+    { kind: 'platform', p: [-6.0, 19.55, -56.0], s: [4.0, 2.70, 3.6], mat: 'wood', tint: TIMBER, stripe: '+x', edge: SAFE_EDGE },
 
     { kind: 'text', p: [0, FIELD_Y + 1.3, 2.0], rot: [0, 0, 0], text: 'THE MILLRACE  ·  65s', size: 0.26, color: 0x7a5a2a },
 
@@ -1177,7 +1205,10 @@ export default {
        middle segment is now a GATEWAY for the track (a hedge with a gap,
        which the silhouette had no business closing), and the west ridge
        hedge keeps its first bay only. */
-    ...fenceRun([[-24, 12], [-14, 9], [-6, 8.4]]),
+    /* GEOMETRY LANE (V3-19): the hedge was three 8-10 m straight bays over a
+       fall of 1.25 m; the posts are seated every 2.5 m now so no bay leaves
+       the ground at the valley lip. */
+    ...fenceRun([[-24, 12], [-21.5, 11.25], [-19, 10.5], [-16.5, 9.75], [-14, 9], [-11.3, 8.8], [-8.7, 8.6], [-6, 8.4]]),
     ...fenceRun([[6, 9], [16, 12]]),
     /* Data lane 2026-09-04: the two ridge-side hedges run in two bays each
        instead of three (the river-drop hedge above keeps all four). Every
