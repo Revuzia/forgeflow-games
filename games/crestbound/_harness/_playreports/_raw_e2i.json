@@ -1,0 +1,394 @@
+{
+ "log": [
+  "boot state: keep",
+  "goto ember-2 cp=None -> playing ember-2 [0, 6, 47]",
+  "seesaw south end: {\"t\": 26.85, \"st\": \"playing\", \"p\": [8, 20.3, -14.9], \"v\": [0, -0.19, 0], \"ps\": \"idle\", \"gnd\": true, \"jc\": 0, \"sp\": 0, \"surf\": \"normal\", \"water\": false, \"sub\": false, \"deaths\": 0, \"cp\": 2, \"crests\": 0, \"coins\": 0, \"sig\": 0, \"cam\": [-3.14, 0.22, 6.73]}",
+  "SEESAW: [8, 20.3, -14.9] -> [8.31, 8.72, -36.51] ; y 5.23..20.30 ; states ['fall', 'hardLand', 'run'] ; deaths 0",
+  "seesaw tilt now: {\"ang\": null, \"rotz\": 0, \"mrot\": null}",
+  "grate went at player y=8.9 ps=fall",
+  "after grate 1 vanished: [8, 6.08, 1.5] ps=idle deaths=0",
+  "cp-core: {\"t\": 54.5, \"st\": \"playing\", \"p\": [0, 10, -44], \"v\": [0, -0.19, 0], \"ps\": \"idle\", \"gnd\": true, \"jc\": 0, \"sp\": 0, \"surf\": \"normal\", \"water\": false, \"sub\": false, \"deaths\": 0, \"cp\": 4, \"crests\": 0, \"coins\": 1, \"sig\": 0, \"cam\": [0, 0.22, 6.77]}",
+  "flywheel gondolas: [{\"phase\": 0, \"r\": 6.9, \"per\": 6, \"cur\": [-8.84, 34.6, -50], \"top\": 34.85}, {\"phase\": 0.5, \"r\": 6.9, \"per\": 6, \"cur\": [-12.16, 21.2, -50], \"top\": 21.45}]",
+  "on the flywheel deck: [4, 20.44, -49.02] idle normal",
+  "  gondola board try 1: at jump [-12.61, 9.45, -49.46] -> 2.2 s later [-13.06, 9.36, -49.88] ps=idle deaths=0 ",
+  "  gondola board try 2: at jump [-11.81, 9.57, -47.51] -> 2.2 s later [-12.01, 9.54, -47.72] ps=idle deaths=0 ",
+  "  gondola board try 3: at jump [-10.97, 10.62, -46.63] -> 2.2 s later [-11.51, 9.62, -47.35] ps=idle deaths=0 ",
+  "  gondola board try 4: at jump [-12.11, 9.53, -48.09] -> 2.2 s later [-12.54, 9.45, -48.59] ps=idle deaths=0 "
+ ],
+ "res": {
+  "seesaw": {
+   "a": [
+    8,
+    20.3,
+    -14.9
+   ],
+   "b": [
+    8.31,
+    8.72,
+    -36.51
+   ],
+   "ymin": 5.23,
+   "ymax": 20.3,
+   "states": [
+    "fall",
+    "hardLand",
+    "run"
+   ],
+   "path": [
+    [
+     27.16,
+     [
+      8,
+      20.3,
+      -15.13
+     ],
+     "run"
+    ],
+    [
+     27.36,
+     [
+      8,
+      20.3,
+      -16.67
+     ],
+     "run"
+    ],
+    [
+     27.56,
+     [
+      8,
+      20.3,
+      -18.47
+     ],
+     "run"
+    ],
+    [
+     27.66,
+     [
+      8,
+      20.05,
+      -19.37
+     ],
+     "fall"
+    ],
+    [
+     27.76,
+     [
+      8,
+      19.34,
+      -20.27
+     ],
+     "fall"
+    ],
+    [
+     27.86,
+     [
+      8,
+      18.17,
+      -21.17
+     ],
+     "fall"
+    ],
+    [
+     28.25,
+     [
+      8,
+      9.16,
+      -24.69
+     ],
+     "fall"
+    ],
+    [
+     28.35,
+     [
+      8,
+      5.73,
+      -25.59
+     ],
+     "fall"
+    ],
+    [
+     28.45,
+     [
+      8,
+      5.23,
+      -25.69
+     ],
+     "hardLand"
+    ],
+    [
+     28.55,
+     [
+      8,
+      5.23,
+      -25.69
+     ],
+     "hardLand"
+    ],
+    [
+     28.64,
+     [
+      8,
+      5.25,
+      -25.76
+     ],
+     "run"
+    ],
+    [
+     28.69,
+     [
+      8,
+      5.31,
+      -25.89
+     ],
+     "run"
+    ],
+    [
+     28.74,
+     [
+      8,
+      5.37,
+      -26.09
+     ],
+     "run"
+    ],
+    [
+     28.89,
+     [
+      7.99,
+      5.66,
+      -27.11
+     ],
+     "run"
+    ],
+    [
+     28.98,
+     [
+      7.99,
+      5.83,
+      -27.86
+     ],
+     "run"
+    ],
+    [
+     29.03,
+     [
+      7.99,
+      5.92,
+      -28.31
+     ],
+     "run"
+    ],
+    [
+     29.08,
+     [
+      7.98,
+      6.02,
+      -28.76
+     ],
+     "run"
+    ],
+    [
+     29.18,
+     [
+      7.98,
+      6.26,
+      -29.66
+     ],
+     "run"
+    ],
+    [
+     29.23,
+     [
+      7.99,
+      6.39,
+      -30.11
+     ],
+     "run"
+    ],
+    [
+     29.28,
+     [
+      7.99,
+      6.56,
+      -30.56
+     ],
+     "run"
+    ],
+    [
+     29.48,
+     [
+      8.04,
+      7.3,
+      -32.36
+     ],
+     "run"
+    ],
+    [
+     29.53,
+     [
+      8.05,
+      7.5,
+      -32.81
+     ],
+     "run"
+    ],
+    [
+     29.63,
+     [
+      8.1,
+      7.87,
+      -33.71
+     ],
+     "run"
+    ],
+    [
+     29.68,
+     [
+      8.12,
+      8.04,
+      -34.16
+     ],
+     "run"
+    ],
+    [
+     29.78,
+     [
+      8.18,
+      8.35,
+      -35.06
+     ],
+     "run"
+    ],
+    [
+     29.88,
+     [
+      8.25,
+      8.6,
+      -35.95
+     ],
+     "run"
+    ]
+   ],
+   "deaths": 0
+  },
+  "seesaw_tilt": {
+   "ang": null,
+   "rotz": 0,
+   "mrot": null
+  },
+  "grate_cycle": {
+   "warn_png": null,
+   "gone_png": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_e2i\\02_03_grate_GONE.png",
+   "after": [
+    8,
+    6.08,
+    1.5
+   ],
+   "ps": "idle",
+   "deaths": 0
+  },
+  "gondolas": [
+   {
+    "phase": 0,
+    "r": 6.9,
+    "per": 6,
+    "cur": [
+     -8.84,
+     34.6,
+     -50
+    ],
+    "top": 34.85
+   },
+   {
+    "phase": 0.5,
+    "r": 6.9,
+    "per": 6,
+    "cur": [
+     -12.16,
+     21.2,
+     -50
+    ],
+    "top": 21.45
+   }
+  ],
+  "flywheel_deck": {
+   "p": [
+    4,
+    20.44,
+    -49.02
+   ],
+   "ps": "idle",
+   "surf": "normal"
+  },
+  "gondola_board": [
+   {
+    "try": 1,
+    "at_jump": [
+     -12.61,
+     9.45,
+     -49.46
+    ],
+    "after": [
+     -13.06,
+     9.36,
+     -49.88
+    ],
+    "ps": "idle",
+    "riding": false,
+    "deaths": 0
+   },
+   {
+    "try": 2,
+    "at_jump": [
+     -11.81,
+     9.57,
+     -47.51
+    ],
+    "after": [
+     -12.01,
+     9.54,
+     -47.72
+    ],
+    "ps": "idle",
+    "riding": false,
+    "deaths": 0
+   },
+   {
+    "try": 3,
+    "at_jump": [
+     -10.97,
+     10.62,
+     -46.63
+    ],
+    "after": [
+     -11.51,
+     9.62,
+     -47.35
+    ],
+    "ps": "idle",
+    "riding": false,
+    "deaths": 0
+   },
+   {
+    "try": 4,
+    "at_jump": [
+     -12.11,
+     9.53,
+     -48.09
+    ],
+    "after": [
+     -12.54,
+     9.45,
+     -48.59
+    ],
+    "ps": "idle",
+    "riding": false,
+    "deaths": 0
+   }
+  ]
+ },
+ "console": [
+  "warning: [Course ember-2] props.js had no entry for: girders, pipes, slabs, antennae, fins"
+ ]
+}

@@ -1,0 +1,527 @@
+{
+ "log": [
+  "boot state: keep",
+  "goto ember-2 cp=None -> playing ember-2 [0, 6, 47]",
+  "meshes over the flywheel deck (y 22..42):",
+  "    {\"name\": \"cb.sky.dome\", \"mat\": \"ShaderMaterial\", \"dt\": false, \"dw\": false, \"tr\": false, \"ro\": -1000, \"c\": [-4.3, 23.4, -57.1], \"s\": [900, 900, 900]}",
+  "    {\"name\": \"merged_cb.panel.ember\", \"mat\": \"MeshStandardMaterial\", \"dt\": true, \"dw\": true, \"tr\": false, \"ro\": 0, \"c\": [2.6, 22.6, -50], \"s\": [21.7, 24.5, 16.6]}",
+  "    {\"name\": \"merged_em_effc44d:1.50:0:1\", \"mat\": \"MeshStandardMaterial\", \"dt\": true, \"dw\": true, \"tr\": false, \"ro\": 0, \"c\": [0, 32, -50], \"s\": [4.1, 4.9, 4.1]}",
+  "    {\"name\": \"crestGold\", \"mat\": \"MeshPhysicalMaterial\", \"dt\": true, \"dw\": true, \"tr\": false, \"ro\": 0, \"c\": [0, 36.7, -50], \"s\": [0.9, 0.9, 0.6]}",
+  "    {\"name\": \"crestHalo\", \"mat\": \"SpriteMaterial\", \"dt\": true, \"dw\": false, \"tr\": true, \"ro\": 0, \"c\": [0, 36.7, -50], \"s\": [1.6, 1.9, 0.8]}",
+  "    {\"name\": \"crestPool\", \"mat\": \"ShaderMaterial\", \"dt\": true, \"dw\": false, \"tr\": true, \"ro\": 0, \"c\": [0, 34.9, -50], \"s\": [2.3, 0, 2.3]}",
+  "    {\"name\": \"skitter_wings\", \"mat\": \"MeshPhysicalMaterial\", \"dt\": true, \"dw\": false, \"tr\": true, \"ro\": 0, \"c\": [12.7, 28.7, -45.7], \"s\": [0.5, 0.3, 1.2]}",
+  "    {\"name\": \"skitter_body\", \"mat\": \"MeshPhysicalMaterial\", \"dt\": true, \"dw\": true, \"tr\": false, \"ro\": 0, \"c\": [12.7, 28.6, -45.7], \"s\": [1.1, 0.5, 0.7]}",
+  "    {\"name\": \"Sprite\", \"mat\": \"SpriteMaterial\", \"dt\": true, \"dw\": false, \"tr\": true, \"ro\": 0, \"c\": [4.6, 22.6, -50], \"s\": [0.1, 0.9, 0.9]}",
+  "    {\"name\": \"headShell\", \"mat\": null, \"dt\": null, \"dw\": null, \"tr\": null, \"ro\": 0, \"c\": [3.8, 23.5, -50], \"s\": [0.9, 1.1, 0.9]}",
+  "meshes on the north catwalk line (y 18..23, z 6..-40):",
+  "    {\"name\": \"hz_batch:cb.metal.ember#batched\", \"vis\": true, \"fc\": false, \"c\": [-4, 18, -10], \"s\": [41, 34, 99.1]}",
+  "    {\"name\": \"hz_batch:em_effb44a:0.10:0:1#batched\", \"vis\": true, \"fc\": false, \"c\": [-6, 19, -14.5], \"s\": [31.9, 31.8, 89.9]}",
+  "    {\"name\": \"hz_batch:em_e8ff0ff:1.05:0:1#batched\", \"vis\": true, \"fc\": false, \"c\": [-6, 19.1, -14.5], \"s\": [32, 31.7, 90]}",
+  "    {\"name\": \"hz_batch:cb.obsidian.ember#batched\", \"vis\": true, \"fc\": false, \"c\": [-6, 18.4, -14.5], \"s\": [31.8, 30.5, 89.8]}",
+  "    {\"name\": \"hz_batch:em_keyline#batched\", \"vis\": true, \"fc\": false, \"c\": [-6, 19.1, -14.5], \"s\": [32, 31.7, 90]}",
+  "    {\"name\": \"hz_batch:cb.stone.ember#batched\", \"vis\": true, \"fc\": false, \"c\": [8, 19.3, -16.5], \"s\": [2.9, 2.2, 2.9]}",
+  "    {\"name\": \"LineSegments\", \"vis\": true, \"fc\": true, \"c\": [8, 20.1, 1.5], \"s\": [4, 0.4, 2.4]}",
+  "    {\"name\": \"LineSegments\", \"vis\": true, \"fc\": true, \"c\": [8, 20.1, -4.5], \"s\": [4, 0.4, 2.4]}",
+  "    {\"name\": \"LineSegments\", \"vis\": true, \"fc\": true, \"c\": [8, 20.1, -10.5], \"s\": [4, 0.4, 2.4]}",
+  "    {\"name\": \"LineSegments\", \"vis\": true, \"fc\": true, \"c\": [2, 20.1, -29], \"s\": [4, 0.4, 2.6]}",
+  "    {\"name\": \"Mesh\", \"vis\": true, \"fc\": true, \"c\": [8, 21.1, 5.8], \"s\": [2.5, 0, 0]}",
+  "    {\"name\": \"merged_cb.metal.ember\", \"vis\": true, \"fc\": true, \"c\": [-0.7, 19.1, -38.2], \"s\": [17.4, 31.7, 39.6]}",
+  "    {\"name\": \"merged_em_effb44a:0.10:0:1\", \"vis\": true, \"fc\": true, \"c\": [-1.9, 18.8, -36.6], \"s\": [15.1, 32.2, 36.6]}",
+  "    {\"name\": \"merged_em_e8ff0ff:1.05:0:1\", \"vis\": true, \"fc\": true, \"c\": [2, 19.1, -37.1], \"s\": [23, 31.7, 37.7]}",
+  "    {\"name\": \"merged_cb.obsidian.ember\", \"vis\": true, \"fc\": true, \"c\": [-1.9, 18.3, -36.6], \"s\": [15, 31.1, 36.5]}",
+  "    {\"name\": \"merged_em_keyline\", \"vis\": true, \"fc\": true, \"c\": [2, 19.1, -37.1], \"s\": [23, 31.7, 37.6]}",
+  "    {\"name\": \"coins.far\", \"vis\": true, \"fc\": true, \"c\": [5.1, 18.7, -1.1], \"s\": [36.4, 35.2, 105.4]}",
+  "    {\"name\": \"sigils\", \"vis\": true, \"fc\": false, \"c\": [9.8, 18.9, -8.5], \"s\": [40.9, 35.7, 83.8]}",
+  "    {\"name\": \"sigilBadgePlates\", \"vis\": true, \"fc\": false, \"c\": [9.8, 19.5, -8.6], \"s\": [40.7, 35.3, 83.3]}",
+  "    {\"name\": \"sigilBadgeNumerals\", \"vis\": true, \"fc\": false, \"c\": [9.8, 19.5, -8.6], \"s\": [40.7, 35.2, 83.2]}"
+ ],
+ "res": {
+  "overhead": [
+   {
+    "name": "cb.sky.dome",
+    "mat": "ShaderMaterial",
+    "dt": false,
+    "dw": false,
+    "tr": false,
+    "ro": -1000,
+    "c": [
+     -4.3,
+     23.4,
+     -57.1
+    ],
+    "s": [
+     900,
+     900,
+     900
+    ]
+   },
+   {
+    "name": "merged_cb.panel.ember",
+    "mat": "MeshStandardMaterial",
+    "dt": true,
+    "dw": true,
+    "tr": false,
+    "ro": 0,
+    "c": [
+     2.6,
+     22.6,
+     -50
+    ],
+    "s": [
+     21.7,
+     24.5,
+     16.6
+    ]
+   },
+   {
+    "name": "merged_em_effc44d:1.50:0:1",
+    "mat": "MeshStandardMaterial",
+    "dt": true,
+    "dw": true,
+    "tr": false,
+    "ro": 0,
+    "c": [
+     0,
+     32,
+     -50
+    ],
+    "s": [
+     4.1,
+     4.9,
+     4.1
+    ]
+   },
+   {
+    "name": "crestGold",
+    "mat": "MeshPhysicalMaterial",
+    "dt": true,
+    "dw": true,
+    "tr": false,
+    "ro": 0,
+    "c": [
+     0,
+     36.7,
+     -50
+    ],
+    "s": [
+     0.9,
+     0.9,
+     0.6
+    ]
+   },
+   {
+    "name": "crestHalo",
+    "mat": "SpriteMaterial",
+    "dt": true,
+    "dw": false,
+    "tr": true,
+    "ro": 0,
+    "c": [
+     0,
+     36.7,
+     -50
+    ],
+    "s": [
+     1.6,
+     1.9,
+     0.8
+    ]
+   },
+   {
+    "name": "crestPool",
+    "mat": "ShaderMaterial",
+    "dt": true,
+    "dw": false,
+    "tr": true,
+    "ro": 0,
+    "c": [
+     0,
+     34.9,
+     -50
+    ],
+    "s": [
+     2.3,
+     0,
+     2.3
+    ]
+   },
+   {
+    "name": "skitter_wings",
+    "mat": "MeshPhysicalMaterial",
+    "dt": true,
+    "dw": false,
+    "tr": true,
+    "ro": 0,
+    "c": [
+     12.7,
+     28.7,
+     -45.7
+    ],
+    "s": [
+     0.5,
+     0.3,
+     1.2
+    ]
+   },
+   {
+    "name": "skitter_body",
+    "mat": "MeshPhysicalMaterial",
+    "dt": true,
+    "dw": true,
+    "tr": false,
+    "ro": 0,
+    "c": [
+     12.7,
+     28.6,
+     -45.7
+    ],
+    "s": [
+     1.1,
+     0.5,
+     0.7
+    ]
+   },
+   {
+    "name": "Sprite",
+    "mat": "SpriteMaterial",
+    "dt": true,
+    "dw": false,
+    "tr": true,
+    "ro": 0,
+    "c": [
+     4.6,
+     22.6,
+     -50
+    ],
+    "s": [
+     0.1,
+     0.9,
+     0.9
+    ]
+   },
+   {
+    "name": "headShell",
+    "mat": null,
+    "dt": null,
+    "dw": null,
+    "tr": null,
+    "ro": 0,
+    "c": [
+     3.8,
+     23.5,
+     -50
+    ],
+    "s": [
+     0.9,
+     1.1,
+     0.9
+    ]
+   }
+  ],
+  "catwalk_meshes": [
+   {
+    "name": "hz_batch:cb.metal.ember#batched",
+    "vis": true,
+    "fc": false,
+    "c": [
+     -4,
+     18,
+     -10
+    ],
+    "s": [
+     41,
+     34,
+     99.1
+    ]
+   },
+   {
+    "name": "hz_batch:em_effb44a:0.10:0:1#batched",
+    "vis": true,
+    "fc": false,
+    "c": [
+     -6,
+     19,
+     -14.5
+    ],
+    "s": [
+     31.9,
+     31.8,
+     89.9
+    ]
+   },
+   {
+    "name": "hz_batch:em_e8ff0ff:1.05:0:1#batched",
+    "vis": true,
+    "fc": false,
+    "c": [
+     -6,
+     19.1,
+     -14.5
+    ],
+    "s": [
+     32,
+     31.7,
+     90
+    ]
+   },
+   {
+    "name": "hz_batch:cb.obsidian.ember#batched",
+    "vis": true,
+    "fc": false,
+    "c": [
+     -6,
+     18.4,
+     -14.5
+    ],
+    "s": [
+     31.8,
+     30.5,
+     89.8
+    ]
+   },
+   {
+    "name": "hz_batch:em_keyline#batched",
+    "vis": true,
+    "fc": false,
+    "c": [
+     -6,
+     19.1,
+     -14.5
+    ],
+    "s": [
+     32,
+     31.7,
+     90
+    ]
+   },
+   {
+    "name": "hz_batch:cb.stone.ember#batched",
+    "vis": true,
+    "fc": false,
+    "c": [
+     8,
+     19.3,
+     -16.5
+    ],
+    "s": [
+     2.9,
+     2.2,
+     2.9
+    ]
+   },
+   {
+    "name": "LineSegments",
+    "vis": true,
+    "fc": true,
+    "c": [
+     8,
+     20.1,
+     1.5
+    ],
+    "s": [
+     4,
+     0.4,
+     2.4
+    ]
+   },
+   {
+    "name": "LineSegments",
+    "vis": true,
+    "fc": true,
+    "c": [
+     8,
+     20.1,
+     -4.5
+    ],
+    "s": [
+     4,
+     0.4,
+     2.4
+    ]
+   },
+   {
+    "name": "LineSegments",
+    "vis": true,
+    "fc": true,
+    "c": [
+     8,
+     20.1,
+     -10.5
+    ],
+    "s": [
+     4,
+     0.4,
+     2.4
+    ]
+   },
+   {
+    "name": "LineSegments",
+    "vis": true,
+    "fc": true,
+    "c": [
+     2,
+     20.1,
+     -29
+    ],
+    "s": [
+     4,
+     0.4,
+     2.6
+    ]
+   },
+   {
+    "name": "Mesh",
+    "vis": true,
+    "fc": true,
+    "c": [
+     8,
+     21.1,
+     5.8
+    ],
+    "s": [
+     2.5,
+     0,
+     0
+    ]
+   },
+   {
+    "name": "merged_cb.metal.ember",
+    "vis": true,
+    "fc": true,
+    "c": [
+     -0.7,
+     19.1,
+     -38.2
+    ],
+    "s": [
+     17.4,
+     31.7,
+     39.6
+    ]
+   },
+   {
+    "name": "merged_em_effb44a:0.10:0:1",
+    "vis": true,
+    "fc": true,
+    "c": [
+     -1.9,
+     18.8,
+     -36.6
+    ],
+    "s": [
+     15.1,
+     32.2,
+     36.6
+    ]
+   },
+   {
+    "name": "merged_em_e8ff0ff:1.05:0:1",
+    "vis": true,
+    "fc": true,
+    "c": [
+     2,
+     19.1,
+     -37.1
+    ],
+    "s": [
+     23,
+     31.7,
+     37.7
+    ]
+   },
+   {
+    "name": "merged_cb.obsidian.ember",
+    "vis": true,
+    "fc": true,
+    "c": [
+     -1.9,
+     18.3,
+     -36.6
+    ],
+    "s": [
+     15,
+     31.1,
+     36.5
+    ]
+   },
+   {
+    "name": "merged_em_keyline",
+    "vis": true,
+    "fc": true,
+    "c": [
+     2,
+     19.1,
+     -37.1
+    ],
+    "s": [
+     23,
+     31.7,
+     37.6
+    ]
+   },
+   {
+    "name": "coins.far",
+    "vis": true,
+    "fc": true,
+    "c": [
+     5.1,
+     18.7,
+     -1.1
+    ],
+    "s": [
+     36.4,
+     35.2,
+     105.4
+    ]
+   },
+   {
+    "name": "sigils",
+    "vis": true,
+    "fc": false,
+    "c": [
+     9.8,
+     18.9,
+     -8.5
+    ],
+    "s": [
+     40.9,
+     35.7,
+     83.8
+    ]
+   },
+   {
+    "name": "sigilBadgePlates",
+    "vis": true,
+    "fc": false,
+    "c": [
+     9.8,
+     19.5,
+     -8.6
+    ],
+    "s": [
+     40.7,
+     35.3,
+     83.3
+    ]
+   },
+   {
+    "name": "sigilBadgeNumerals",
+    "vis": true,
+    "fc": false,
+    "c": [
+     9.8,
+     19.5,
+     -8.6
+    ],
+    "s": [
+     40.7,
+     35.2,
+     83.2
+    ]
+   }
+  ]
+ },
+ "console": [
+  "warning: [Course ember-2] props.js had no entry for: girders, pipes, slabs, antennae, fins"
+ ]
+}

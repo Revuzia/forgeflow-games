@@ -1,0 +1,190 @@
+{
+ "log": [
+  "boot state: keep",
+  "goto ember-2 cp=None -> playing ember-2 [0, 6, 47]",
+  "gondola samples: 354 frames over 12.29 s of course clock",
+  "BOARDING WINDOWS (deck within a 1.45 m hop and its edge within 1.6 m of the roof edge):",
+  "   58.38 -> 58.82  = 0.44 s",
+  "   61.40 -> 61.78  = 0.38 s",
+  "   64.38 -> 64.79  = 0.41 s",
+  "   67.38 -> 67.79  = 0.41 s",
+  "mean window 0.409 s across 4 passes",
+  "  try 1: missed the gondola ([-6.74, 10, -47.19])",
+  "  try 2: BOARDED at [-4.36, 30.34, -49.96]",
+  "     ride: jumped-at None -> [0, 10, -44] ps=idle CROWN=False deaths=2  ymax 32.48",
+  "  try 3: missed the gondola ([-18.3, 7.81, -48.93])",
+  "  try 4: missed the gondola ([-19.08, 7.47, -50])",
+  "  try 5: missed the gondola ([-4.4, 20.3, -50])",
+  "  try 6: missed the gondola ([-5.57, 10, -45.5])",
+  "  run_to [-13.4, 29.2] up to the seventh wall -> [-12.97, 6.03, 31.38] d=2.22 NOT-ARRIVED STUCK deaths+0",
+  "at the wall: [-12.97, 6.03, 31.38] idle",
+  "  wall pound 1: {\"broken\": false, \"active\": true} hero [-12.97, 6.03, 31.38] ps=idle deaths=3",
+  "  wall pound 2: {\"broken\": false, \"active\": false} hero [-12.97, 6.03, 31.38] ps=idle deaths=3"
+ ],
+ "res": {
+  "board_windows": [
+   [
+    58.38,
+    58.82,
+    0.44
+   ],
+   [
+    61.4,
+    61.78,
+    0.38
+   ],
+   [
+    64.38,
+    64.79,
+    0.41
+   ],
+   [
+    67.38,
+    67.79,
+    0.41
+   ]
+  ],
+  "window_mean": 0.409,
+  "rides": [
+   {
+    "try": 1,
+    "boarded": false,
+    "end": [
+     -6.74,
+     10,
+     -47.19
+    ]
+   },
+   {
+    "try": 2,
+    "boarded": true,
+    "jumped_at": null,
+    "end": [
+     0,
+     10,
+     -44
+    ],
+    "ps": "idle",
+    "on_crown": false,
+    "deaths": 2,
+    "ymax": 32.48,
+    "path": [
+     [
+      57.45,
+      [
+       -4.61,
+       31.01,
+       -49.96
+      ],
+      "idle"
+     ],
+     [
+      57.57,
+      [
+       -4.87,
+       31.89,
+       -49.96
+      ],
+      "idle"
+     ],
+     [
+      57.67,
+      [
+       -5.11,
+       32.48,
+       -49.96
+      ],
+      "dead"
+     ],
+     [
+      57.77,
+      [
+       -5.11,
+       32.48,
+       -49.96
+      ],
+      "dead"
+     ],
+     [
+      57.89,
+      [
+       -5.11,
+       32.48,
+       -49.96
+      ],
+      "dead"
+     ],
+     [
+      57.97,
+      [
+       -5.11,
+       32.48,
+       -49.96
+      ],
+      "dead"
+     ],
+     [
+      54.04,
+      [
+       0,
+       10,
+       -44
+      ],
+      "fall"
+     ]
+    ]
+   },
+   {
+    "try": 3,
+    "boarded": false,
+    "end": [
+     -18.3,
+     7.81,
+     -48.93
+    ]
+   },
+   {
+    "try": 4,
+    "boarded": false,
+    "end": [
+     -19.08,
+     7.47,
+     -50
+    ]
+   },
+   {
+    "try": 5,
+    "boarded": false,
+    "end": [
+     -4.4,
+     20.3,
+     -50
+    ]
+   },
+   {
+    "try": 6,
+    "boarded": false,
+    "end": [
+     -5.57,
+     10,
+     -45.5
+    ]
+   }
+  ],
+  "seventh_wall": {
+   "wall": {
+    "broken": false,
+    "active": false
+   },
+   "end": [
+    -12.97,
+    6.03,
+    31.38
+   ],
+   "deaths": 3
+  }
+ },
+ "console": [
+  "warning: [Course ember-2] props.js had no entry for: girders, pipes, slabs, antennae, fins"
+ ]
+}
