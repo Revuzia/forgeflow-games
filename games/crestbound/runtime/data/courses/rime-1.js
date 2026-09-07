@@ -856,10 +856,14 @@ export default {
     // The stair: 10 risers of 0.34 m up the barn's south face, climbing WEST
     // (ascent direction (-1, 0) => rot.y = atan2(-1, 0) = -PI/2), foot at
     // x -17.9, top at x -21.5, then a step onto the gantry.
-    { kind: 'stairs', p: [-19.7, BARN_Y, 6.4], w: 1.6, rise: 0.34, run: 0.40, n: 10, rot: [0, -1.5708, 0], mat: 'wood', tint: TIMBER },
+    // GEOMETRY LANE pass 2 (movement lane replay: a hero drifting to z 5.88
+    // bumped his head on tread 8 under the eave, whose slab reaches z 6.02 at
+    // y >= 8.97). The flight and the eaves walk sit 0.6 m further south
+    // (z 6.2..7.8), so the capsule never enters the eave's overhang.
+    { kind: 'stairs', p: [-19.7, BARN_Y, 7.0], w: 1.6, rise: 0.34, run: 0.40, n: 10, rot: [0, -1.5708, 0], mat: 'wood', tint: TIMBER },
     // The eaves walk along the south face (top 8.40) from the stair head to
     // the corner, then the loft gantry along the west gable, 1.8 m wide, 7 m.
-    { kind: 'platform', p: [-24.0, r2(BARN_Y + 3.20), 6.4], s: [5.0, 0.4, 1.6], mat: 'wood', tint: TIMBER },
+    { kind: 'platform', p: [-24.8, r2(BARN_Y + 3.20), 7.0], s: [6.6, 0.4, 1.6], mat: 'wood', tint: TIMBER },
     { kind: 'platform', p: [-27.2, r2(BARN_Y + 3.20), 3.0], s: [1.8, 0.4, 7.0], mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
     { kind: 'deco', kindOf: 'post', p: [-27.6, r2(BARN_Y + 1.5), 6.2], s: [0.22, 3.0, 0.22], mat: 'wood', tint: 0x5c4630, count: 3, spread: 6.0, jitter: 0.1 },
     // The hay wall. Fills the gantry across its width.

@@ -123,10 +123,22 @@ function deco(kindOf, p, s, extra) {
   return d;
 }
 
-/** A practical lamp. */
-function lamp(p, color, intensity, distance, flicker) {
+/**
+ * A practical lamp. `fixture` is course.js's light-fixture override
+ * ('none' | 'post' | 'hang' | 'wall' | 'lantern'; default auto). GEOMETRY LANE
+ * 2026-09-07: the auto rule (a floor within 4.8 m -> a POST) planted lamp
+ * posts in the courtyard doorway, in the middle of the parterre and on the
+ * garden loft's landing zone, and put a bare bulb beside every torch and
+ * lantern that already carried its light (frames _shots/play_geo_before/
+ * 23_C1, 24_C2, 13_B1). A lamp that has a carrier deco is authored ON it
+ * with fixture 'none'; a free lamp says what holds it. `span` is the chain /
+ * bracket length when the mount has nothing to measure against.
+ */
+function lamp(p, color, intensity, distance, flicker, fixture, span) {
   const d = { kind: 'light', p, color, intensity, distance };
   if (flicker) d.flicker = flicker;
+  if (fixture) d.fixture = fixture;
+  if (span !== undefined) d.span = span;
   return d;
 }
 
@@ -199,6 +211,7 @@ function spiralStep(cx, cz, rIn, rOut, deg, topY, thick, arcW, mat) {
     s: [rOut - rIn, thick, arcW],
     rot: [0, -a, 0],
     mat,
+    stripe: false,   // a walk-on tread, not a landing (K13)
   };
 }
 
@@ -301,7 +314,14 @@ const SH_X0 = -18.5, SH_X1 = -15.5;                        // shaft: 3.00 m wide
 const SH_Z0 = 33.2, SH_Z1 = 36.5;                          // shaft: 3.30 m deep
 
 /* The fountain: a square water parterre so the water Volume fits it exactly. */
-const FZ = 30.0;                     // centre z (x is 0)
+/* GEOMETRY LANE 2026-09-07 (owner P6 "a stair block ... standing in water",
+   frames _shots/play_geo_before/25_C3, 26_C4): at FZ 30 the basin ran z
+   24.8..35.2, so the garden loft (z 23.2..27.2) overhung it by 1.4 m and the
+   loft's two south piers (z 25.6..26.8) stood IN the pool. The parterre sits
+   2 m further south now: its north rim (26.8) is flush with those piers and
+   the loft stands on the lawn. Every parterre number below is derived from
+   FZ, FOUNT_IN and FOUNT_OUT so this cannot drift again. */
+const FZ = 32.0;                     // centre z (x is 0)
 const FOUNT_IN = 4.20, FOUNT_OUT = 5.20;
 const WATER_TOP = 0.95, WATER_BOT = -1.30;
 
@@ -362,6 +382,10 @@ function makeGate(o) {
       style: o.kind, locked, requires: { crests: o.crests }, tint: o.tint,
       label: o.label,
       plate: o.crests > 0 ? o.crests + ' CREST' + (o.crests === 1 ? '' : 'S') : '',
+      /* metres the walk-in trigger reaches out from the door face (builders
+         buildGateDoor; default 1.52). The roof door's 1.5 m niche opens 0.4 m
+         from the shaft hatch, so its default fired on arrival (K17). */
+      reach: o.reach,
     };
   const gate = {
     course: o.course, kind: o.kind, p: o.p.slice(), yaw: o.yaw,
@@ -391,7 +415,12 @@ const G = [
   /* VERDANT BAILEY — lobby, west aisle, straight ahead of the spawn mosaic. */
   makeGate({ course: 'verdant-1', crests: 0, p: [LX0, LOBBY + 2.5, -6.0], yaw: WEST, floor: LOBBY, kind: 'painting', tint: VERDANT, label: 'BAILEY MEADOW' }),
   makeGate({ course: 'verdant-2', crests: 1, p: [LX0, LOBBY + 2.5, -1.0], yaw: WEST, floor: LOBBY, kind: 'painting', tint: VERDANT, label: 'GNASHER FORT' }),
-  makeGate({ course: 'verdant-3', crests: 3, p: [LX0, LOBBY + 2.5, 4.0], yaw: WEST, floor: LOBBY, kind: 'painting', tint: VERDANT, label: 'WINDMILL HEIGHTS' }),
+  /* z 4.0 -> 3.0 (geometry lane pass 2, _harness/_geo_walktrail.py): the walk
+     from the mosaic (z 3.0) to a stand at z 4.0 ran the capsule's north edge
+     along z 3.9 — into the END of the spiral well's north balustrade at
+     x -9.7 (bonk, 0 m/s, and the probe's side-step went down the stairwell).
+     At z 3.0 the straight line clears the rail (z 3.8..4.0) by 0.42 m. */
+  makeGate({ course: 'verdant-3', crests: 3, p: [LX0, LOBBY + 2.5, 3.0], yaw: WEST, floor: LOBBY, kind: 'painting', tint: VERDANT, label: 'WINDMILL HEIGHTS' }),
 
   /* EMBER FOUNDRY — undercroft, north wall, lit by torches. Gate totals are
      the COURSES.md brief's: 5 / 8 / 12 / 15 (drift fixed 2026-09-04). */
@@ -412,7 +441,7 @@ const G = [
      mouth, so the door has 1.20 m of masonry behind it and the player walks a
      step and a half into the niche before it triggers — no accidental entries
      while circling the parapet. */
-  makeGate({ course: 'azure-3', crests: 40, p: [-17.0, ROOF + 1.70, 38.4], yaw: SOUTH, floor: ROOF, kind: 'door', tint: AZURE, w: 2.8, h: 3.4, label: 'PRISM RIDE' }),
+  makeGate({ course: 'azure-3', crests: 40, p: [-17.0, ROOF + 1.70, 38.4], yaw: SOUTH, floor: ROOF, kind: 'door', tint: AZURE, w: 2.8, h: 3.4, label: 'PRISM RIDE', reach: 1.0 }),
 ];
 
 const GATE_OBJECTS = G.map((g) => g.obj);
@@ -590,7 +619,7 @@ for (const px of [-9, 9]) {
     PILLARS.push(deco('banner', [px + (px < 0 ? 1.05 : -1.05), LOBBY + 9.1, pz], [0.14, 4.6, 2.6],
       { rot: [0, px < 0 ? EAST : WEST, 0], tint: pz < 0 ? VERDANT : AZURE }));
     PILLARS.push(deco('torch', [px + (px < 0 ? 1.15 : -1.15), LOBBY + 3.5, pz], [0.42, 1.0, 0.42], { mat: 'copper' }));
-    PILLARS.push(lamp([px + (px < 0 ? 1.5 : -1.5), LOBBY + 4.0, pz], TORCH, 5.2, 13, 0.24));
+    PILLARS.push(lamp([px + (px < 0 ? 1.25 : -1.25), LOBBY + 4.05, pz], TORCH, 5.2, 13, 0.24, 'none'));
   }
 }
 
@@ -727,15 +756,15 @@ const GALLERY = [
 const LOBBY_DRESS = [
   /* candle-wheel over the mosaic: the room's key practical light */
   deco('chandelier', [0, 10.4, MOSAIC_Z], [5.4, 2.2, 5.4], { mat: 'copper', tint: KEEPGOLD }),
-  lamp([0, 9.6, MOSAIC_Z], KEEPGOLD, 28, 40, 0.05),
+  lamp([0, 9.6, MOSAIC_Z], KEEPGOLD, 28, 40, 0.05, 'none'),
 
   /* the west aisle, where the three VERDANT paintings hang */
   deco('bench', [-18.0, LOBBY + 0.32, -8.6], [2.2, 0.64, 0.72], { rot: [0, WEST, 0], mat: 'wood' }),
   deco('bench', [-18.0, LOBBY + 0.32, 1.6], [2.2, 0.64, 0.72], { rot: [0, WEST, 0], mat: 'wood' }),
   deco('lantern', [-19.1, LOBBY + 1.55, -3.5], [0.42, 0.72, 0.42], { mat: 'copper' }),
   deco('lantern', [-19.1, LOBBY + 1.55, 1.5], [0.42, 0.72, 0.42], { mat: 'copper' }),
-  lamp([-18.4, LOBBY + 2.1, -3.5], TORCH, 8.0, 15, 0.2),
-  lamp([-18.4, LOBBY + 2.1, 1.5], TORCH, 8.0, 15, 0.2),
+  lamp([-18.9, LOBBY + 1.95, -3.5], TORCH, 8.0, 15, 0.2, 'none'),
+  lamp([-18.9, LOBBY + 1.95, 1.5], TORCH, 8.0, 15, 0.2, 'none'),
 
   /* the east aisle, under the windows */
   deco('bench', [18.2, LOBBY + 0.32, -6.0], [2.4, 0.64, 0.72], { rot: [0, EAST, 0], mat: 'wood' }),
@@ -751,7 +780,7 @@ const LOBBY_DRESS = [
   deco('crate', [5.6, LOBBY + 0.38, 12.7], [0.86, 0.76, 0.86], { rot: [0, -0.3, 0], mat: 'wood' }),
   deco('torch', [-4.9, LOBBY + 3.0, 13.1], [0.42, 1.0, 0.42], { mat: 'copper' }),
   deco('torch', [4.9, LOBBY + 3.0, 13.1], [0.42, 1.0, 0.42], { mat: 'copper' }),
-  lamp([0, LOBBY + 3.6, 12.9], TORCH, 8.0, 16, 0.26),
+  lamp([4.9, LOBBY + 3.55, 13.0], TORCH, 8.0, 16, 0.26, 'none'),
 
   /* ROUND 4 — DECOR DENSITY, WHERE THE CAMERA ACTUALLY LOOKS.
    * Critic, `_shots/keep/spawn.png` and `cp1.png`: "the Keep's main hall is a
@@ -767,8 +796,8 @@ const LOBBY_DRESS = [
    * x -9..9 are both left clear. */
   deco('brazier', [-7.6, LOBBY + 0.52, -7.4], [1.05, 1.15, 1.05], { mat: 'copper' }),
   deco('brazier', [7.6, LOBBY + 0.52, -7.4], [1.05, 1.15, 1.05], { mat: 'copper' }),
-  lamp([-7.6, LOBBY + 1.5, -7.4], TORCH, 9.0, 15, 0.32),
-  lamp([7.6, LOBBY + 1.5, -7.4], TORCH, 9.0, 15, 0.32),
+  lamp([-7.6, LOBBY + 1.5, -7.4], TORCH, 9.0, 15, 0.32, 'none'),
+  lamp([7.6, LOBBY + 1.5, -7.4], TORCH, 9.0, 15, 0.32, 'none'),
   /* banners on the arcade piers — the vertical cloth accent a stone hall needs
      to stop reading as a car park, and the one place a realm colour belongs
      indoors. */
@@ -838,15 +867,15 @@ const LONG_HALL = [
     deco('pillar', [11.4, GAL + 2.75, z], [1.0, 5.5, 1.0], { mat: 'stone' }),
     deco('lantern', [-11.2, GAL + 2.4, z], [0.42, 0.72, 0.42], { mat: 'copper' }),
   ]),
-  lamp([-10.4, GAL + 2.7, -19.5], TORCH, 7.0, 16, 0.18),
-  lamp([-10.4, GAL + 2.7, -29.5], TORCH, 7.0, 16, 0.18),
+  lamp([-11.0, GAL + 2.5, -17.5], TORCH, 7.0, 16, 0.18, 'none'),
+  lamp([-11.0, GAL + 2.5, -27.5], TORCH, 7.0, 16, 0.18, 'none'),
 
   /* rime-3 gets a proper terminus: a lit alcove at the end of the hall */
   deco('archway', [0, GAL, -34.5], [7.4, 5.4, 0.8], { mat: 'stone', tint: RIME }),
   deco('brazier', [-3.9, GAL + 0.75, -33.4], [1.05, 1.5, 1.05], { mat: 'metal', tint: RIME }),
   deco('brazier', [3.9, GAL + 0.75, -33.4], [1.05, 1.5, 1.05], { mat: 'metal', tint: RIME }),
-  lamp([0, GAL + 2.2, -33.4], 0x9fd8ff, 11, 20, 0.22),
-  lamp([0, GAL + 3.4, -21.0], 0xffe0b0, 12, 24),
+  lamp([3.9, GAL + 1.7, -33.4], 0x9fd8ff, 11, 20, 0.22, 'none'),
+  lamp([0, GAL + 3.4, -21.0], 0xffe0b0, 12, 24, 0, 'hang'),
 
   sign([0, GAL + 4.6, -14.4], SOUTH, 'RIME SPIRE', 0.52, RIME),
   sign([-11.7, GAL + 4.6, -24.0], EAST, 'THE LONG HALL', 0.34, 0x9c8a6e),
@@ -871,7 +900,7 @@ const LIBRARY = [
   deco('chest', [13.2, GAL + 0.34, -17.2], [1.1, 0.68, 0.72], { mat: 'wood' }),
   deco('lantern', [17.0, GAL + 1.9, -21.0], [0.5, 0.8, 0.5], { mat: 'copper' }),
   deco('panel', [20.7, GAL + 2.5, -19.0], [0.26, 3.0, 2.4], { mat: 'glass', tint: DAYLIGHT, emissive: 0.4 }),
-  lamp([17.6, GAL + 2.4, -20.4], 0xffd79a, 12, 20, 0.12),
+  lamp([17.0, GAL + 2.15, -21.0], 0xffd79a, 12, 20, 0.12, 'none'),
   sign([16.6, GAL + 3.3, -25.3], SOUTH, 'THE READING NOOK', 0.30, 0xc0a97e),
 ];
 
@@ -910,11 +939,11 @@ const BALCONY = [
   box([-4.8, 4.8], [GAL, GAL + 0.85], [27.2, 27.5], 'marble'),
   ...[[-3.4, 24.2], [3.4, 24.2], [-3.4, 26.2], [3.4, 26.2]].map(([x, z]) =>
     deco('pillar', [x, 2.8, z], [1.15, 5.6, 1.15], { mat: 'stone' })),
-  { kind: 'net', p: [4.66, 3.35, 25.2], s: [3.6, 5.9, 0.22], rot: [0, WEST, 0], face: [1, 0, 0], climb: true, mat: 'rope' },
+  { kind: 'net', p: [4.66, 3.35, 24.6], s: [3.6, 5.9, 0.22], rot: [0, WEST, 0], face: [1, 0, 0], climb: true, mat: 'rope' },
   deco('bench', [-2.6, GAL + 0.32, 25.6], [2.2, 0.64, 0.72], { rot: [0, EAST, 0], mat: 'wood' }),
   deco('lantern', [3.6, GAL + 1.6, 26.6], [0.48, 0.78, 0.48], { mat: 'copper' }),
   deco('chest', [2.4, GAL + 0.34, 24.0], [1.1, 0.68, 0.72], { rot: [0, SOUTH, 0], mat: 'wood' }),
-  lamp([0, GAL + 2.2, 25.2], TORCH, 8, 16, 0.16),
+  lamp([3.6, GAL + 1.95, 26.6], TORCH, 8, 16, 0.16, 'none'),
   sign([0, GAL + 2.1, 26.9], NORTH, 'THE GARDEN LOFT', 0.32, KEEPGOLD),
 ];
 
@@ -975,6 +1004,15 @@ const UNDERCROFT = [
    * is straw. */
   box([-15.2, -11.8], [-7.8, -6.8], [-0.7, 2.7], 'rope',
     { surface: 'bounce', props: { power: 0.5 }, glow: 0xc8a04a, tint: 0xd8b45c }),
+  /* GEOMETRY LANE 2026-09-07: the pile is a 1.00 m block (TUNE.stepUp 0.45)
+     standing square across the walk from the spiral's foot to the EMBER
+     paintings — spawnwalk.py's ember routes bonked on its south face for 9 s
+     before a strafe found the way round. Two 0.40 m shoulders of spilled hay
+     on each walked side make it a mound you step over. */
+  box([-15.2, -11.8], [-7.8, -7.2], [2.7, 3.5], 'rope', { stripe: false, tint: 0xd8b45c }),
+  box([-15.2, -11.8], [-7.8, -7.6], [3.5, 4.3], 'rope', { stripe: false, tint: 0xd8b45c }),
+  box([-15.2, -11.8], [-7.8, -7.2], [-1.5, -0.7], 'rope', { stripe: false, tint: 0xd8b45c }),
+  box([-15.2, -11.8], [-7.8, -7.6], [-2.3, -1.5], 'rope', { stripe: false, tint: 0xd8b45c }),
   deco('debris', [-13.5, -6.6, 1.0], [3.6, 0.5, 3.6], { mat: 'rope', count: 7, spread: [3.0, 0.3, 3.0], seed: 4410, tint: 0xd8b45c }),
 
   /* torch line along both long walls */
@@ -983,7 +1021,7 @@ const UNDERCROFT = [
     deco('torch', [17.1, UNDER + 2.6, z], [0.44, 1.05, 0.44], { rot: [0, EAST, 0], mat: 'copper' }),
     /* one practical per bay, alternating walls — eight point lights in one
        cellar is a shader cost, not a lighting design */
-    lamp([z < -1 ? -16.4 : 16.4, UNDER + 3.0, z], TORCH, 9.0, 17, 0.3),
+    lamp([z < -1 ? -16.7 : 16.7, UNDER + 3.05, z], TORCH, 9.0, 17, 0.3, 'none'),
   ]),
   lamp([0, UNDER + 3.6, -9.4], EMBER, 11, 22, 0.16),
 
@@ -996,8 +1034,8 @@ const UNDERCROFT = [
      was carrying five. */
   deco('brazier', [-6.4, UNDER + 0.52, 2.2], [1.0, 1.1, 1.0], { mat: 'copper' }),
   deco('brazier', [6.4, UNDER + 0.52, -4.2], [1.0, 1.1, 1.0], { mat: 'copper' }),
-  lamp([-6.4, UNDER + 1.5, 2.2], TORCH, 10.0, 16, 0.34),
-  lamp([6.4, UNDER + 1.5, -4.2], TORCH, 10.0, 16, 0.34),
+  lamp([-6.4, UNDER + 1.5, 2.2], TORCH, 10.0, 16, 0.34, 'none'),
+  lamp([6.4, UNDER + 1.5, -4.2], TORCH, 10.0, 16, 0.34, 'none'),
 
   /* cellar clutter — a working undercroft, not a museum */
   deco('barrel', [14.6, UNDER + 0.44, -8.4], [0.78, 0.9, 0.78], { mat: 'wood' }),
@@ -1025,8 +1063,27 @@ for (let i = 1; i <= 23; i++) {
   SPIRAL.push(spiralStep(SPIN[0], SPIN[1], SP_RI, SP_RO, -22.5 * i, LOBBY - i * (8 / 24), 0.5, 1.15, 'stone'));
 }
 SPIRAL.push(deco('pillar', [SPIN[0], UNDER + 4.2, SPIN[1]], [1.8, 8.4, 1.8], { mat: 'stone' }));
-SPIRAL.push(deco('rail', [SPIN[0], LOBBY + 0.55, SPIN[1]], [SP_RO * 2 + 0.4, 1.1, SP_RO * 2 + 0.4], { mat: 'metal', hollow: true }));
-SPIRAL.push(lamp([SPIN[0], LOBBY - 3.2, SPIN[1]], TORCH, 12, 22, 0.22));
+/* GEOMETRY LANE 2026-09-07 (wayfinding; frames _shots/play_geo_before/
+   03_L3, 36_R2). The well is a 7 x 7 m, 8 m deep hole in the lobby floor one
+   metre from the WINDMILL HEIGHTS stand-out spot, and its only guard was a
+   single 7.6 m `rail` deco (no collider) laid across it. spawnwalk.py's
+   walk to that painting slid off the wall into the undercroft, and a real
+   walk from the painting toward the well fell straight in (R2: ended at
+   y -8). Four marble balustrades with colliders now ring the hole; the EAST
+   side stays open between z 4.8 and 7.6, which is where the top tread
+   (i = 1, -22.5 deg, outer end at (-10.17, -0.33, 6.12)) meets the floor. */
+const WELL_X0 = -17.0, WELL_X1 = -10.0, WELL_Z0 = 4.0, WELL_Z1 = 11.0;
+const WELL_RAIL = 0.30, WELL_RAIL_H = 1.05;
+SPIRAL.push(box([WELL_X0 - WELL_RAIL, WELL_X1 + WELL_RAIL], [LOBBY, LOBBY + WELL_RAIL_H], [WELL_Z0 - 0.20, WELL_Z0], 'marble', { stripe: false }));   // the north run is 0.20 thick: it stands beside the walk to the third painting
+SPIRAL.push(box([WELL_X0 - WELL_RAIL, WELL_X1 + WELL_RAIL], [LOBBY, LOBBY + WELL_RAIL_H], [WELL_Z1, WELL_Z1 + WELL_RAIL], 'marble', { stripe: false }));
+SPIRAL.push(box([WELL_X0 - WELL_RAIL, WELL_X0], [LOBBY, LOBBY + WELL_RAIL_H], [WELL_Z0, WELL_Z1], 'marble', { stripe: false }));
+SPIRAL.push(box([WELL_X1, WELL_X1 + WELL_RAIL], [LOBBY, LOBBY + WELL_RAIL_H], [WELL_Z0, 4.8], 'marble', { stripe: false }));
+SPIRAL.push(box([WELL_X1, WELL_X1 + WELL_RAIL], [LOBBY, LOBBY + WELL_RAIL_H], [7.6, WELL_Z1], 'marble', { stripe: false }));
+for (const [px, pz] of [[WELL_X0 - 0.15, WELL_Z0 - 0.15], [WELL_X1 + 0.15, WELL_Z0 - 0.15], [WELL_X0 - 0.15, WELL_Z1 + 0.15], [WELL_X1 + 0.15, WELL_Z1 + 0.15], [WELL_X1 + 0.15, 4.8], [WELL_X1 + 0.15, 7.6]]) {
+  SPIRAL.push(deco('post', [px, LOBBY + 0.62, pz], [0.5, 1.24, 0.5], { mat: 'marble' }));
+}
+/* the stairwell lantern hangs on a chain from the lobby floor's level */
+SPIRAL.push(lamp([SPIN[0], LOBBY - 3.2, SPIN[1]], TORCH, 12, 22, 0.22, 'hang', 3.2));
 
 /* --- the secret grate: only a ground pound opens it ---------------------- */
 const GRATE_OBJ = {
@@ -1065,13 +1122,21 @@ const TURRET = [
   box([-22.0, -17.5], [UNDER, UNDER_CEIL], [9.4, 9.6], 'brick'),
   box([-22.0, -17.5], [-3.8, UNDER_CEIL], [6.4, 9.6], 'brick'),
   deco('torch', [-19.8, UNDER + 2.5, 6.9], [0.44, 1.05, 0.44], { mat: 'copper' }),
-  lamp([-19.8, UNDER + 3.0, 7.2], EMBER, 7, 12, 0.34),
+  lamp([-19.8, UNDER + 3.0, 7.0], EMBER, 7, 12, 0.34, 'none'),
 
   /* the chute mouth landing where the walk hands over to the ride */
   box([TC[0] - 5.2, TC[0] - 1.2], [8.70, 9.05], [TC[1] - 1.6, TC[1] + 1.6], 'wood', { stripe: true, glow: EMBER }),
   deco('archway', [TC[0] - 2.6, 9.05, TC[1]], [3.0, 2.9, 0.7], { rot: [0, EAST, 0], mat: 'stone', tint: EMBER }),
   lamp([TC[0] - 3.2, 10.4, TC[1]], EMBER, 12, 20, 0.2),
   sign([TC[0] - 3.4, 10.9, TC[1]], EAST, 'THE WYRM STAIR', 0.36, EMBER),
+
+  /* the newel: a column up the drum's axis, inside the chute's 0.90 m inner
+     radius, so the helix has something it turns around (K13) */
+  deco('pillar', [TC[0], 1.6, TC[1]], [1.5, 20.4, 1.5], { mat: 'stone' }),
+  /* two more practicals on the drum wall, 2.2 m over the walk at 135 and 315
+     degrees (the walk is at -3.55 and 2.10 there) */
+  lamp([TC[0] + Math.cos(135 * D2R) * 5.5, -1.35, TC[1] + Math.sin(135 * D2R) * 5.5], TORCH, 8, 15, 0.3, 'wall'),
+  lamp([TC[0] + Math.cos(315 * D2R) * 5.5, 4.30, TC[1] + Math.sin(315 * D2R) * 5.5], TORCH, 8, 15, 0.3, 'wall'),
 
   /* conical cap and a lamp at the top so the drum reads from the courtyard */
   deco('archway', [TC[0], 12.6, TC[1]], [14.4, 4.6, 14.4], { mat: 'wood', tint: 0x6b4a2e }),
@@ -1102,7 +1167,13 @@ const WYRM_WALK = helix(0, 540, -7.80, 9.19, 24, (a0, y0, a1, y1) => {
   const ext = (a1 - a0) * 0.06;
   const s = at(TC[0], TC[1], WALK_R, a0 - ext, y0 - (y1 - y0) * 0.06);
   const e = at(TC[0], TC[1], WALK_R, a1 + ext, y1 + (y1 - y0) * 0.06);
-  return ramp(s, e, WALK_W, 0.35, 'stone', { glow: EMBER });
+  /* GEOMETRY LANE 2026-09-07 (playtest K13, owner "dark broken
+     understructure"): every chord wore the jump-critical safe-edge stripe on
+     all four edges and was a 0.35 m plate, so the walk read as a helix of
+     floating striped slabs. The chords are 0.90 m slabs now with no stripe
+     (walk-on floors never get one — the convention at the top of this file),
+     the drum has a newel and two more lamps (TURRET). */
+  return ramp(s, e, WALK_W, 0.90, 'stone', { stripe: false, glow: 0.05 });   // glow 0.05: the accent rim at 4 % (buildRamp has no `plain`)
 });
 
 /* THE RIDE — ONE sandboard whose `pts` trace 12 chords back down the middle.
@@ -1126,7 +1197,7 @@ const WYRM_CHUTE = [{
 /* the run-out: through the shell, through the lobby's west arch, onto marble */
 WYRM_CHUTE.push(ramp([-25.2, 0.50, 8.0], [-17.8, 0.05, 8.0], 3.0, 0.4, 'wood', { glow: EMBER, stripe: true }));
 WYRM_CHUTE.push(deco('archway', [-20.6, 0.0, 8.0], [3.4, 4.6, 1.4], { rot: [0, EAST, 0], mat: 'stone' }));
-WYRM_CHUTE.push(lamp([-19.0, 2.6, 8.0], EMBER, 8, 14, 0.2));
+WYRM_CHUTE.push(lamp([-19.0, 2.6, 8.0], EMBER, 8, 14, 0.2, 'hang'));
 
 /* three KEEP COINS on the ride, floating a metre over the chute */
 const CHUTE_COINS = [0.18, 0.5, 0.82].map((t) => {
@@ -1149,7 +1220,7 @@ const CHUTE_COINS = [0.18, 0.5, 0.82].map((t) => {
 const COURTYARD = [
   /* apron at the doors, flush with the lobby floor */
   box([-13.0, 13.0], [-0.7, 0.0], [13.8, 19.0], 'stone'),
-  box([-3.2, 3.2], [-0.72, -0.02], [19.0, 24.0], 'stone'),                  // the path to the water
+  box([-3.2, 3.2], [-0.72, -0.02], [19.0, FZ - FOUNT_OUT], 'stone'),        // the path to the water
 
   /* curtain wall */
   box([26.0, 27.2], [0.0, 8.0], [13.8, 49.2], 'stone'),
@@ -1169,24 +1240,25 @@ const COURTYARD = [
     deco('archway', [-22.9, 3.4, z + 2.0], [0.9, 2.2, 3.6], { rot: [0, WEST, 0], mat: 'stone' }),
   ]),
   ...[18.0, 26.0, 34.0, 42.0].map((z) => deco('lantern', [24.6, 2.9, z], [0.5, 0.82, 0.5], { mat: 'copper' })),
-  lamp([24.2, 3.4, 22.0], TORCH, 9, 20, 0.2),
-  lamp([24.2, 3.4, 38.0], TORCH, 9, 20, 0.2),
-  lamp([-22.6, 3.4, 32.0], TORCH, 8, 18, 0.2),
+  lamp([24.2, 3.4, 22.0], TORCH, 9, 20, 0.2, 'wall'),
+  lamp([24.2, 3.4, 38.0], TORCH, 9, 20, 0.2, 'wall'),
+  lamp([-22.6, 3.4, 32.0], TORCH, 8, 18, 0.2, 'wall'),
 
   /* --- the parterre ---------------------------------------------------- */
-  box([-5.2, 5.2], [-1.80, WATER_BOT], [24.8, 35.2], 'marble'),
-  box([-5.2, 5.2], [WATER_BOT, 1.10], [24.8, 25.8], 'marble'),
-  box([-5.2, 5.2], [WATER_BOT, 1.10], [34.2, 35.2], 'marble'),
-  box([-5.2, -4.2], [WATER_BOT, 1.10], [25.8, 34.2], 'marble'),
-  box([4.2, 5.2], [WATER_BOT, 1.10], [25.8, 34.2], 'marble'),
-  box([-1.2, 1.2], [WATER_BOT, 0.60], [28.8, 31.2], 'marble'),               // the jet plinth
+  box([-FOUNT_OUT, FOUNT_OUT], [-1.80, WATER_BOT], [FZ - FOUNT_OUT, FZ + FOUNT_OUT], 'marble'),
+  box([-FOUNT_OUT, FOUNT_OUT], [WATER_BOT, 1.10], [FZ - FOUNT_OUT, FZ - FOUNT_IN], 'marble'),
+  box([-FOUNT_OUT, FOUNT_OUT], [WATER_BOT, 1.10], [FZ + FOUNT_IN, FZ + FOUNT_OUT], 'marble'),
+  box([-FOUNT_OUT, -FOUNT_IN], [WATER_BOT, 1.10], [FZ - FOUNT_IN, FZ + FOUNT_IN], 'marble'),
+  box([FOUNT_IN, FOUNT_OUT], [WATER_BOT, 1.10], [FZ - FOUNT_IN, FZ + FOUNT_IN], 'marble'),
+  box([-1.2, 1.2], [WATER_BOT, 0.60], [FZ - 1.2, FZ + 1.2], 'marble'),       // the jet plinth
   deco('statue', [0, 0.60, FZ], [2.0, 3.2, 2.0], { mat: 'marble', tint: 0xdfe9f2 }),
   deco('crystal', [0, 4.3, FZ], [0.9, 1.4, 0.9], { mat: 'crystal', tint: AZURE }),
-  ...[[-5.2, 24.8], [5.2, 24.8], [-5.2, 35.2], [5.2, 35.2]].map(([x, z]) =>
+  ...[[-FOUNT_OUT, FZ - FOUNT_OUT], [FOUNT_OUT, FZ - FOUNT_OUT], [-FOUNT_OUT, FZ + FOUNT_OUT], [FOUNT_OUT, FZ + FOUNT_OUT]].map(([x, z]) =>
     deco('brazier', [x, 1.5, z], [1.0, 1.4, 1.0], { mat: 'copper', tint: TORCH })),
-  lamp([0, 3.2, FZ], AZURE, 16, 28, 0.1),
-  sign([0, 2.5, 25.4], SOUTH, 'THE PARTERRE', 0.36, AZURE),
-  sign([0, 2.0, 25.4], SOUTH, 'deep enough to swim — crouch to dive', 0.20, 0x7f9dbd),
+  /* the crystal over the jet is the light's carrier: no post in the pool */
+  lamp([0, 4.3, FZ], AZURE, 16, 28, 0.1, 'none'),
+  sign([0, 2.5, FZ - 4.6], SOUTH, 'THE PARTERRE', 0.36, AZURE),
+  sign([0, 2.0, FZ - 4.6], SOUTH, 'deep enough to swim — crouch to dive', 0.20, 0x7f9dbd),
 
   /* --- planting, rocks and fences -------------------------------------- */
   { kind: 'tree', p: [-13.0, 0.0, 20.0], h: 7.6, r: 0.52, climbable: true, mat: 'bark' },
@@ -1204,7 +1276,7 @@ const COURTYARD = [
   deco('bush', [-16.0, 0.3, 24.0], [1.6, 1.1, 1.6], { count: 7, spread: [8.0, 0, 8.0], seed: 9013 }),
   deco('bush', [17.0, 0.3, 22.0], [1.6, 1.1, 1.6], { count: 6, spread: [7.0, 0, 6.0], seed: 9014 }),
   deco('bench', [-6.4, 0.32, 22.6], [2.4, 0.64, 0.74], { rot: [0, SOUTH, 0], mat: 'wood' }),
-  deco('bench', [6.4, 0.32, 37.6], [2.4, 0.64, 0.74], { rot: [0, NORTH, 0], mat: 'wood' }),
+  deco('bench', [7.0, 0.32, FZ + FOUNT_OUT + 1.4], [2.4, 0.64, 0.74], { rot: [0, NORTH, 0], mat: 'wood' }),
   deco('barrel', [22.6, 0.44, 17.0], [0.78, 0.9, 0.78], { mat: 'wood' }),
   deco('crate', [21.6, 0.4, 17.8], [0.82, 0.8, 0.82], { rot: [0, 0.4, 0], mat: 'wood' }),
 
@@ -1261,7 +1333,7 @@ const TOWER = [
      pair of braziers is for), and the practical loses a third of its punch. */
   deco('brazier', [-20.2, ROOF + 0.7, 38.6], [1.0, 1.4, 1.0], { mat: 'copper', tint: TORCH }),
   deco('brazier', [-13.8, ROOF + 0.7, 38.6], [1.0, 1.4, 1.0], { mat: 'copper', tint: TORCH }),
-  lamp([-17.0, ROOF + 1.9, 38.6], TORCH, 7.5, 18, 0.28),
+  lamp([-17.0, ROOF + 1.9, 38.6], TORCH, 7.5, 18, 0.28, 'none'),
   lamp([-17.0, 6.0, 35.0], AZURE, 7, 12),
   lamp([-17.0, ROOF + 2.6, 37.4], AZURE, 11, 18),
   sign([-17.0, 2.2, 31.6], SOUTH, 'WALL KICK', 0.40, AZURE),
@@ -1277,7 +1349,7 @@ const CRESTWAY_VAULT = [
   box([-7.6, 7.6], [7.2, 8.0], [48.0, 59.2], 'marble'),
   { kind: 'pedestal', p: [0, 0.0, 54.0], mat: 'gold', tint: KEEPGOLD },
   deco('crystal', [0, 2.6, 54.0], [1.2, 2.0, 1.2], { mat: 'crystal', tint: KEEPGOLD }),
-  lamp([0, 4.2, 54.0], KEEPGOLD, 16, 22, 0.08),
+  lamp([0, 4.2, 54.0], KEEPGOLD, 16, 22, 0.08, 'none'),
   ...[-4.6, 4.6].map((x) => deco('pillar', [x, 2.6, 52.0], [1.1, 5.2, 1.1], { mat: 'marble' })),
 ];
 
@@ -1369,7 +1441,7 @@ const TERRAIN = {
     ],
     flats: [
       { p: [0.0, 16.5], r: 13.0, h: 0.0 },      // the apron and the doors
-      { p: [0.0, 30.0], r: 10.5, h: 0.0 },      // the parterre
+      { p: [0.0, FZ], r: 10.5, h: 0.0 },        // the parterre
       { p: [0.0, 25.2], r: 7.0, h: 0.0 },       // under the garden loft
       { p: [-17.0, 36.0], r: 8.0, h: 0.0 },     // the tower's footing
       { p: [0.0, 45.0], r: 7.5, h: 0.0 },       // the walk to the Crestway
@@ -1385,11 +1457,11 @@ const TERRAIN = {
    * the perf budget with it on. */
   grass: { count: 9000, density: 26, height: 0.22, cross: false, color: 0x548036 },
   paths: [
-    { pts: [[0, 14], [0, 24], [0, 25.8]], w: 3.4 },
-    { pts: [[0, 35.2], [0, 41], [0, 47]], w: 3.4 },
-    { pts: [[-5.6, 30], [-12, 32], [-17, 34]], w: 2.6 },
-    { pts: [[5.6, 30], [16, 30], [23, 30]], w: 2.4 },
-    { pts: [[-5.6, 26], [-14, 23], [-22, 22]], w: 2.4 },
+    { pts: [[0, 14], [0, 24], [0, FZ - FOUNT_OUT - 1.0]], w: 3.4 },
+    { pts: [[0, FZ + FOUNT_OUT], [0, 41], [0, 47]], w: 3.4 },
+    { pts: [[-FOUNT_OUT - 0.4, FZ], [-12, 33], [-17, 34]], w: 2.6 },
+    { pts: [[FOUNT_OUT + 0.4, FZ], [16, 31], [23, 30]], w: 2.4 },
+    { pts: [[-FOUNT_OUT - 0.4, FZ - 4], [-14, 23.5], [-22, 22]], w: 2.4 },
   ],
 };
 
@@ -1556,7 +1628,7 @@ export default {
     fog: { near: 22, far: 240 },
     particles: [
       { preset: 'mote', rate: 0.55, box: { p: [0, 6, 0], s: [40, 13, 26] } },
-      { preset: 'pollen', rate: 0.35, box: { p: [0, 3, 30], s: [48, 8, 34] } },
+      { preset: 'pollen', rate: 0.35, box: { p: [0, 3, FZ], s: [48, 8, 34] } },
     ],
     wind: 0.35,
   },

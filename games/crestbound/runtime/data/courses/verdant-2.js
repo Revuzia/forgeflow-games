@@ -179,6 +179,19 @@ const HEIGHTS = {
        shallow bowls up to the bailey's 7.0. */
     { p: [0, 0], r: 20.5, h: 14.0 },   // the middle shelf (level core r < 11.3)
     { p: [0, 0], r: 15, h: 19.0 },   // THE INNER COURT  (level core r < 8.25)
+    /* GEOMETRY LANE pass 2 (movement lane replay of the CAUSEWAY STAIR:
+       BLOCKED at tread 12/20, lifted off the treads at (0, 3.48, 29.8) and
+       slope-slid into the moat). The outer bailey's cosine skirt runs 6.63 at
+       z 25 -> -0.72 at z 34 and stood 0.1..0.5 m ABOVE treads 7-12, and the
+       contract's ground = max(box, terrain) put the hero on a 40 deg face.
+       Two things: the flight is raised 0.70 (below), and a CUTTING is carved
+       under it — four discs down the centre line, each 1.35 m under the
+       raised tread over its centre (0.60 under the lowest tread its level
+       core carries), r 3.4 so the core spans the flight. SOUTHERNMOST LAST:
+       a later flat wins where two overlap, so the lower disc always wins and
+       a skirt can only ever pull the ground DOWN toward its neighbour. */
+    ...[27.59, 29.46, 31.33, 33.2].map((z) =>
+      ({ p: [0, z], r: 3.4, h: +(6.95 - 0.8 * (z - 25.69) - 1.35).toFixed(2) })),
     // The spawn meadow. h matches the natural ground there (2.27–2.32) so the
     // flat's rim is invisible: it only takes the noise out from under the feet
     // of a hero who has not been given the controls yet.
@@ -543,7 +556,7 @@ export default {
     // full height, so the run back over them is the run you just learned.
     { id: 'cp-quay', p: [0, QUAY_TOP, 32.6], yaw: 0, clockOffset: 0 },
     // The gate-house forecourt slab on the outer bailey, BEFORE the wall climb.
-    { id: 'cp-bailey', p: [0, 6.55, 26.4], yaw: 0, clockOffset: 0 },
+    { id: 'cp-bailey', p: [0, 6.55, 24.9], yaw: 0, clockOffset: 0 },   // geometry lane pass 2: on the pad's north strip, not the stair head
     // The outer rampart walk, BEFORE the breach. clockOffset 0.0 puts cart 1
     // (phase 0) at the WEST lip — you can board on the frame you respawn.
     { id: 'cp-rampart', p: [0, OUTER_WALK, 21.7], yaw: Math.PI, clockOffset: 0 },
@@ -575,7 +588,7 @@ export default {
     {
       id: 'coins', type: 'coins', name: 'A HUNDRED COINS', threshold: 100,
       hint: '118 are lying about the knoll. You can miss eighteen.',
-      spawnAt: [3.6, 8.00, 26.4],                 // the bailey pedestal
+      spawnAt: [3.0, 8.00, 26.9],                 // the bailey pedestal (geometry lane pass 2)
     },
     {
       id: 'secret', type: 'secret', name: 'WHAT THE WEST JAW GUARDS',
@@ -776,7 +789,11 @@ export default {
      * reads; deriving it from headingFromYaw instead points every flight
      * backwards). Bottom tread 0.55 at z 33.00, top 6.25 at z 25.88.
      * --------------------------------------------------------------------- */
-    { kind: 'stairs', p: [0, 0.25, 29.44], w: 4.2, rise: 0.30, run: 0.375, n: 20, rot: [0, Math.PI, 0], mat: 'stone', tint: STONE_OLD },
+    /* GEOMETRY LANE pass 2: 0.70 higher (base 0.95: treads 1.25 .. 6.95),
+       so every tread clears the skirt under it by >= 0.3 m even before the
+       cutting above — the quay (1.55) buries the first tread, the bailey pad
+       (6.55) is a 0.40 m step off the top one. */
+    { kind: 'stairs', p: [0, 0.95, 29.44], w: 4.2, rise: 0.30, run: 0.375, n: 20, rot: [0, Math.PI, 0], mat: 'stone', tint: STONE_OLD },
     { kind: 'deco', kindOf: 'buttress', p: on(3.2, 29.0, 1.2), s: [4.4, 2.4, 0.5], rot: [0, Math.PI / 2, 0], mat: 'stone', tint: STONE_OLD },
 
     /* ========================================================================
@@ -843,8 +860,14 @@ export default {
 
     // --- the gate-house forecourt (cp-bailey stands here) and the pedestal the
     //     HUNDRED COINS crest rises from.
-    { kind: 'platform', p: [0, 6.15, 26.4], s: [7.4, 0.8, 4.4], mat: 'stone', tint: STONE, stripe: true, edge: SAFE_EDGE },
-    { kind: 'pedestal', p: [3.6, 6.55, 26.4], mat: 'stone', tint: STONE, glow: GOLD },
+    /* GEOMETRY LANE pass 2: this pad ran z 24.2..28.6 at 5.75..6.55 — over
+       the causeway stair's treads 13-20 (z 28.69..25.69, tops 4.15..6.25),
+       burying its head. It is three pieces now: a strip north of the top
+       tread (z 24.2..25.7) and two wings beside the 4.2 m flight. */
+    { kind: 'platform', p: [0, 6.15, 24.95], s: [7.4, 0.8, 1.5], mat: 'stone', tint: STONE, stripe: true, edge: SAFE_EDGE },
+    { kind: 'platform', p: [-2.9, 6.15, 27.15], s: [1.6, 0.8, 2.9], mat: 'stone', tint: STONE, stripe: true, edge: SAFE_EDGE },
+    { kind: 'platform', p: [2.9, 6.15, 27.15], s: [1.6, 0.8, 2.9], mat: 'stone', tint: STONE, stripe: true, edge: SAFE_EDGE },
+    { kind: 'pedestal', p: [3.0, 6.55, 26.9], mat: 'stone', tint: STONE, glow: GOLD },
 
     // --- THE BREACH CARTS. Three linear movers on the same 16.00 m rail across
     //     the aperture, phase-staggered by a third of a period, decks at 12.15

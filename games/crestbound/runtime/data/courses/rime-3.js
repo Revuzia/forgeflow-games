@@ -991,12 +991,19 @@ export default {
     { kind: 'stairs', p: [13.8, 27.42, -6.3], w: 2.6, rise: 0.28, run: 0.38, n: 13, rot: [0, -2.808, 0], mat: 'stone', tint: STONE },
     { kind: 'deco', kindOf: 'buttress', p: [13.8, 24.4, -6.3], s: [2.0, 6.0, 0.6], rot: [0, -2.808, 0], mat: 'stone', tint: STONE },
 
-    { kind: 'platform', p: [12.4, 30.70, -9.8], s: [3.4, 0.8, 3.4], mat: 'stone', tint: STONE, stripe: true, edge: SAFE_EDGE },
+    { kind: 'platform', p: [11.45, 30.70, -10.3], s: [5.3, 0.8, 4.4], mat: 'stone', tint: STONE, stripe: true, edge: SAFE_EDGE },   // z -12.5..-8.1: P2's foot (10.83, -10.64) has 1.9 m of landing behind it
     { kind: 'deco', kindOf: 'pillar', p: [12.4, 27.6, -9.8], s: [1.2, 6.4, 1.2], mat: 'stone', tint: STONE },
 
-    /* Flight P2, ascent direction (-0.2217, 0.9752) => rot.y = -0.2236 rad. */
-    { kind: 'stairs', p: [11.4, 30.80, -6.4], w: 2.6, rise: 0.30, run: 0.34, n: 14, rot: [0, -0.2236, 0], mat: 'stone', tint: STONE },
-    { kind: 'deco', kindOf: 'buttress', p: [11.4, 27.6, -6.4], s: [2.0, 6.4, 0.6], rot: [0, -0.2236, 0], mat: 'stone', tint: STONE },
+    /* Flight P2, ascent direction (-0.2217, 0.9752) => rot.y = -0.2236 rad.
+     * GEOMETRY LANE pass 2 (movement lane replay: BLOCKED at tread 10/14,
+     * 33.80): the flight topped out at z -4.08, 1.9 m INSIDE the shrine gate
+     * landing (z -6.0..-2.4, 34.3..35.1), so its last four treads were under
+     * the slab. Shifted 1.92 m down its own axis and 1.1 m west so that its
+     * top tread (35.00) meets the landing's south edge at z -6.0 and its
+     * body clears P1's top tread (x 11.8..14.2 at z -8.6); the P1 landing is
+     * widened west (x 8.8..14.1) to carry P2's foot at (10.83, -10.64). */
+    { kind: 'stairs', p: [10.3, 30.80, -8.32], w: 2.6, rise: 0.30, run: 0.34, n: 14, rot: [0, -0.2236, 0], mat: 'stone', tint: STONE },
+    { kind: 'deco', kindOf: 'buttress', p: [10.3, 27.6, -8.32], s: [2.0, 6.4, 0.6], rot: [0, -0.2236, 0], mat: 'stone', tint: STONE },
 
     // THE SHRINE GATE. cp6 stands on it; the Warden's arena starts four metres
     // west of it, which is the whole point of putting a checkpoint here.

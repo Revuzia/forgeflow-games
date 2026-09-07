@@ -702,7 +702,12 @@ export default {
      * ===================================================================== */
 
     { kind: 'stairs', p: [18.5, 6.0, 22], n: 20, rise: 0.35, run: 0.40, w: 3.0, rot: [0, Math.PI, 0], mat: 'grate', tint: IRON, stripe: true, edge: SAFE_EDGE },
-    { kind: 'platform', p: [21.0, 12.7, 17.0], s: [8.0, 0.6, 4.0], mat: 'grate', tint: IRON, stripe: true, edge: SAFE_EDGE },
+    /* GEOMETRY LANE pass 2 (movement lane replay: flight 1 BLOCKED at tread
+       18/20 under the landing slab): the landing ran z 15..19 and the flight
+       tops out at z 18.0, so its last 2.5 treads were under 0.1 m of grate.
+       The landing's south edge is the top tread's north edge now (z 14..18);
+       flight 2's foot (z 18.0) starts at the landing's edge. */
+    { kind: 'platform', p: [21.0, 12.7, 16.0], s: [8.0, 0.6, 4.0], mat: 'grate', tint: IRON, stripe: true, edge: SAFE_EDGE },
     { kind: 'stairs', p: [23.0, 13.0, 22], n: 20, rise: 0.35, run: 0.40, w: 3.0, rot: [0, 0, 0], mat: 'grate', tint: IRON, stripe: true, edge: SAFE_EDGE },
     // The stair head, and cp3: 3.50 m clear of the top tread, so no beam on the hero.
     { kind: 'platform', p: [18.0, 20.0, 26.0], s: [8.0, 0.6, 3.2], mat: 'grate', tint: IRON, stripe: true, edge: SAFE_EDGE },
@@ -817,9 +822,20 @@ export default {
 
     { kind: 'building', style: 'foundry', p: [0, 15, -50], s: [16, 10, 16], mat: 'metal', tint: IRON, footing: 2.5, doors: [{ side: '+z', w: 5.0, h: 4.5, p: [0, CORE_Y, -41.5] }] },
 
-    // THE STAIR. Bottom tread 10.35 at z -43.9, top 20.50 at z -56.1, both at
-    // x 12 — outside the drum (x +-8), landing 2.20 m short of the roof edge.
-    { kind: 'stairs', p: [12, 10.0, -50], n: 30, rise: 0.35, run: 0.42, w: 3.0, rot: [0, Math.PI, 0], mat: 'grate', tint: IRON, stripe: true, edge: SAFE_EDGE },
+    // THE STAIR. Top 20.50 at z -56.1, at x 12 — outside the drum (x +-8).
+    // GEOMETRY LANE pass 2 (movement lane replay: 'floats 0.84 m above the
+    // 9.16 approach ground and has no deck at its top'): the engine pad's
+    // 10.00 flat ends 8.8 m from (0,-50) and the foot at (12, -43.9) stands on
+    // the 9.19 skirt (measured), so the first tread was a 1.19 m step; and the
+    // top tread was 2.2 m of air from the roof edge (x 8.3). Three more treads
+    // from 8.95 (first tread 9.30) and a grate landing bridging the top tread
+    // to the flywheel deck (20.30, a 0.2 m step down).
+    { kind: 'stairs', p: [12, 8.95, -49.17], n: 33, rise: 0.35, run: 0.42, w: 3.0, rot: [0, Math.PI, 0], mat: 'grate', tint: IRON, stripe: true, edge: SAFE_EDGE },
+    // (replay: a single 4.4 m landing at z -57.5..-54.5 covered treads 31-33
+    // and blocked the hero at tread 30 — the landing is two pieces now, WEST
+    // of the flight and NORTH of its top tread, never over a tread.)
+    { kind: 'platform', p: [8.95, 20.2, -56.2], s: [3.1, 0.6, 3.2], mat: 'grate', tint: IRON, stripe: true, edge: SAFE_EDGE },
+    { kind: 'platform', p: [10.45, 20.2, -57.8], s: [6.1, 0.6, 3.0], mat: 'grate', tint: IRON, stripe: true, edge: SAFE_EDGE },
 
     // THE CROWN. A 12 m deck on a single column, top 34.90; the open crest
     // stands 1.60 m above it. The column is what the Warden's charge breaks on.

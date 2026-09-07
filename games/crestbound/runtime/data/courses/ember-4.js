@@ -808,9 +808,21 @@ export default {
      * three casings each — west, east, and north of a 5.2 m SLOT down which
      * the stair rises, cut from the face back to the flight's top tread — so
      * the ceremonial stair is recessed into the pyramid the way a real one
-     * is, and every tread is in open air. Slot backs (z): -4.30 / -9.30 /
-     * -13.80 / -18.80, each 2 cm past the flight's top tread. */
-    ...[[6.00, 4.0, 40, -4.30], [10.00, 4.0, 30, -9.30], [14.00, 4.0, 21, -13.80], [17.80, 3.6, 13, -18.80]].flatMap(([y, h, sz, slotZ]) => {
+     * is, and every tread is in open air.
+     *
+     * GEOMETRY LANE pass 2 (movement lane replay on the slot tree: F1 CLIMBED,
+     * F2 blocked at tread 9/10, F4 at 8/9). The flights OVERLAPPED: F3's first
+     * tread block (12.00..12.40, z -8.28..-7.73) stood over F2's treads 9-10,
+     * and F4's over F3's, so a hero on the ninth riser had the next flight's
+     * foot in his chest. And with F4 topping out at z -18.78 the capstone's
+     * south face (-18.2) was inside its top tread. There is 18.5 m of run
+     * between F1's foot and a stand in front of the capstone, and four
+     * 0.55 m flights need 21.45, so F2..F4 run 0.45 (still 0.40 risers, still
+     * TUNE.stepUp-safe) and each foot starts EXACTLY where the flight below
+     * tops out: F1 1.22 -> -4.28, F2 -> -8.78, F3 -> -13.28, F4 -> -17.33,
+     * leaving 0.87 m of tier 4 before the capstone. Slot backs (z): -4.30 /
+     * -8.80 / -13.30 / -17.35, each 2 cm past the flight's top tread. */
+    ...[[6.00, 4.0, 40, -4.30], [10.00, 4.0, 30, -8.80], [14.00, 4.0, 21, -13.30], [17.80, 3.6, 13, -17.35]].flatMap(([y, h, sz, slotZ]) => {
       const half = sz / 2, S = 2.6, z0 = -22 - half;
       return [
         { kind: 'platform', p: [-(half + S) / 2, y, -22], s: [half - S, h, sz], mat: 'stone', tint: CASING, stripe: true, edge: SAFE_EDGE },
@@ -823,9 +835,9 @@ export default {
     { kind: 'platform', p: [0, 21.40, -22], s: [5.0, 1.4, 5.0], mat: 'gold', tint: GOLD, stripe: true, edge: SAFE_EDGE },
 
     { kind: 'stairs', p: [0, 4.00, -1.53], w: 5.0, rise: 0.40, run: 0.55, n: 10, rot: [0, Math.PI, 0], mat: 'stone', tint: CORE_ST },
-    { kind: 'stairs', p: [0, 8.00, -6.53], w: 5.0, rise: 0.40, run: 0.55, n: 10, rot: [0, Math.PI, 0], mat: 'stone', tint: CORE_ST },
-    { kind: 'stairs', p: [0, 12.00, -11.03], w: 5.0, rise: 0.40, run: 0.55, n: 10, rot: [0, Math.PI, 0], mat: 'stone', tint: CORE_ST },
-    { kind: 'stairs', p: [0, 16.00, -16.30], w: 5.0, rise: 0.40, run: 0.55, n: 9, rot: [0, Math.PI, 0], mat: 'stone', tint: CORE_ST },
+    { kind: 'stairs', p: [0, 8.00, -6.53], w: 5.0, rise: 0.40, run: 0.45, n: 10, rot: [0, Math.PI, 0], mat: 'stone', tint: CORE_ST },
+    { kind: 'stairs', p: [0, 12.00, -11.03], w: 5.0, rise: 0.40, run: 0.45, n: 10, rot: [0, Math.PI, 0], mat: 'stone', tint: CORE_ST },
+    { kind: 'stairs', p: [0, 16.00, -15.305], w: 5.0, rise: 0.40, run: 0.45, n: 9, rot: [0, Math.PI, 0], mat: 'stone', tint: CORE_ST },
 
     /* ROUTE C — THE FALLEN CASING BLOCKS, on the east corner. Nine toppled
      * blocks, every rise between 1.20 and 1.60 m and every horizontal gap zero

@@ -798,7 +798,13 @@ export default {
 
     // --- ROUTE A: the grand stair, 18 risers of 0.30 m up the inside of the
     //     west wall, and a landing that bridges its top onto the walk.
-    { kind: 'stairs', p: [-7.6, FORT_Y, -16.4], w: 2.6, rise: 0.30, run: 0.36, n: 18, yaw: 0, mat: 'stone', tint: STONE },
+    //     GEOMETRY LANE pass 2 (movement lane replay: BLOCKED at tread 14/18,
+    //     13.20, bonk): `yaw: 0` is rot.y 0 to buildStairs, which ascends
+    //     world +Z (SOUTH), so the flight climbed AWAY from its landing and
+    //     ran its top four treads into the south wall (z -15..-13). It climbs
+    //     north now (yaw PI), foot z -16.22 on the courtyard floor, top tread
+    //     ending at z -22.7 = the landing's south edge.
+    { kind: 'stairs', p: [-7.6, FORT_Y, -19.46], w: 2.6, rise: 0.30, run: 0.36, n: 18, yaw: Math.PI, mat: 'stone', tint: STONE },
     { kind: 'platform', p: [-8.9, r2(WALL_TOP - 0.15), -23.8], s: [3.4, 0.3, 2.2], mat: 'stone', tint: STONE },
 
     // --- ROUTE C: the fallen ramp outside the east wall. Foot 9.29, top 14.40
@@ -851,7 +857,14 @@ export default {
      * 0.5 s of crouch before every lunge (critters.js), which is the whole fight.
      * ===================================================================== */
 
-    ...fenceRing(-8, -7, 8.6, 12, 0.9, 2.3),
+    /* GEOMETRY LANE pass 2 (stair replay, `others` at the fort stair's foot):
+       this ring's north arc (r 8.6 about (-8, -7)) runs THROUGH the fort's
+       south wall (z -15..-13) and 0.6 m into its courtyard — two rotated
+       fence planks stood inside the fort at (-9.07, -15.31) and (-6.92,
+       -15.31), across the grand stair's foot. The three segments whose
+       midpoint lies inside the wall line (mid z < -12.5: 240, 270 and 300
+       degrees) are dropped; the ring stops at the masonry on both sides. */
+    ...fenceRing(-8, -7, 8.6, 12, 0.9, 2.3).filter((f) => (f.a[2] + f.b[2]) / 2 >= -12.5),
     { kind: 'text', p: [-8.0, r2(gy(-8, 1.6) + 1.6), 1.6], rot: [0, 0, 0], text: 'POUND THE POST  ·  THREE TIMES', size: 0.26, color: 0x7a2f2f },
     { kind: 'text', p: [-8.0, r2(gy(-8, 1.6) + 1.2), 1.6], rot: [0, 0, 0], text: 'it can only reach so far', size: 0.20, color: 0x4d6038 },
 

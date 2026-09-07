@@ -756,9 +756,12 @@ export default {
     // the field, and the only rising one.
     { kind: 'platform', p: [31, 3.0, -21], s: [6, 1.2, 6], mat: 'obsidian', tint: OBSIDIAN, stripe: true, edge: SAFE_EDGE },
     // ... and the stair off it, because a 2.40 m climb on a REQUIRED line is a
-    // stair, not a backflip. Eight risers of 0.30: foot 3.90 at z -23.43, head
-    // 6.00 at z -26.58, which lands on the smelter deck's south edge.
-    { kind: 'stairs', p: [31, LAND_TOP, -25.0], w: 3.0, rise: 0.30, run: 0.45, n: 8, yaw: Math.PI, mat: 'metal', tint: IRON },
+    // stair, not a backflip. Eight risers of 0.30 x 0.60: foot 3.90 at
+    // z -23.2, head 6.00 at z -28.0 = the smelter deck's south edge.
+    // GEOMETRY LANE pass 2 (movement lane replay: CLIMBED, then walked off a
+    // 1.2 m gap into the lava — the 0.45 run topped out at z -26.8 and the
+    // deck starts at -28.0). The run is 0.60 so the head meets the deck.
+    { kind: 'stairs', p: [31, LAND_TOP, -25.6], w: 3.0, rise: 0.30, run: 0.60, n: 8, yaw: Math.PI, mat: 'metal', tint: IRON },
 
     /* ========================================================================
      * BEAT 4 — THE SMELTER
@@ -871,7 +874,13 @@ export default {
      * waiting at the head of it.
      * ===================================================================== */
 
-    { kind: 'stairs', p: [11, DECK_TOP, -37], w: 3.0, rise: 0.30, run: 0.42, n: 30, yaw: 0, mat: 'metal', tint: IRON },
+    /* GEOMETRY LANE pass 2 (movement lane replay: BLOCKED at tread 2, then
+       carried off the yard's east edge): the flight stood at x 9.5..12.5 with
+       the base yard deck ending at x 10, so two thirds of its foot hung over
+       the lava; and its last four treads ran under the level-3 walk (z -31.9..
+       -28.9, 14.4..15.0). Now x 6.5..9.5 on the deck, 0.5 m off the vessel's
+       east wall (x 6.0), topping out at z -31.9 = the walk's north edge. */
+    { kind: 'stairs', p: [8.0, DECK_TOP, -38.2], w: 3.0, rise: 0.30, run: 0.42, n: 30, yaw: 0, mat: 'metal', tint: IRON },
     { kind: 'platform', p: [0, 14.7, -30.4], s: [25, 0.6, 3.0], mat: 'grate', tint: IRON, stripe: true, edge: SAFE_EDGE },
     { kind: 'deco', kindOf: 'rail', p: [0, WALK3 + 0.5, -28.9], s: [24.0, 1.0, 0.12], mat: 'metal', tint: IRON },
 
@@ -926,8 +935,23 @@ export default {
      * a 22 s turn, carrying a coin arc. NOTHING required is on them.
      * ===================================================================== */
 
-    { kind: 'stairs', p: [-11.5, WALK3, -36], w: 3.0, rise: 0.30, run: 0.42, n: 34, yaw: Math.PI, mat: 'metal', tint: IRON },
+    /* GEOMETRY LANE pass 2: the foot stood at z -28.86, four centimetres
+       SOUTH of the level-3 walk's edge (z -28.9) — its first tread hung over
+       the void and no tread within stepUp of the walk was beside it (tread 2
+       is +0.60), so the flight had no entry at all. Foot at z -29.36 now, so
+       tread 1 (15.30) lies inside the walk's z range and a hero on the walk
+       steps west onto it; and a 1.9 m landing south of the walk carries the
+       foot so an approach from the south stands on something too. */
+    { kind: 'stairs', p: [-11.5, WALK3, -36.5], w: 3.0, rise: 0.30, run: 0.42, n: 34, yaw: Math.PI, mat: 'metal', tint: IRON },
+    { kind: 'platform', p: [-11.5, 14.7, -27.95], s: [3.0, 0.6, 1.9], mat: 'grate', tint: IRON, stripe: true, edge: SAFE_EDGE },
     { kind: 'platform', p: [-3.5, 24.9, -40.6], s: [13, 0.6, 3.6], mat: 'metal', tint: BRASS, stripe: true, edge: SAFE_EDGE },
+    /* GEOMETRY LANE pass 2 (movement lane replay: walked off the top into
+       the void). The flight tops out at (-11.5, 25.2, -43.14) BESIDE the
+       gantry deck (x -10..3, z -42.4..-38.8), 0.7 m south of its corner: a
+       hero holding W steps off the top tread into 25 m of air. An L-shaped
+       landing at the head now carries him east onto the deck. */
+    { kind: 'platform', p: [-11.5, 24.9, -44.57], s: [3.0, 0.6, 1.86], mat: 'metal', tint: BRASS, stripe: true, edge: SAFE_EDGE },
+    { kind: 'platform', p: [-9.0, 24.9, -43.95], s: [2.0, 0.6, 3.1], mat: 'metal', tint: BRASS, stripe: true, edge: SAFE_EDGE },
     { kind: 'deco', kindOf: 'chain', p: [-4.0, 26.1, -40.6], s: [0.2, 2.2, 0.2], mat: 'metal', tint: 0x3c3f45 },
     { kind: 'deco', kindOf: 'gear', p: [-9.4, CROWN + 1.2, -40.6], s: [2.0, 2.0, 0.4], rot: [0, 1.57, 0], mat: 'metal', tint: BRASS },
     { kind: 'deco', kindOf: 'cables', p: [-3.5, CROWN + 1.6, -40.6], s: [10.0, 0.8, 0.3], mat: 'metal', tint: 0x2e2a2e },

@@ -4258,7 +4258,10 @@ export function buildGateDoor(def, theme, mats) {
   const woodMat = materialFor('wood', theme, mats);
   const ironMat = materialFor('metal', theme, mats);
   const giltMat = materialFor('gold', theme, mats);
-  const sigilMat = locked ? pulseMat(pal(theme, 'kill'), 1.6, 0.8, 1.3)
+  /* GEOMETRY LANE 2026-09-07: a sealed door wore `pal(theme, 'kill')` — the hot
+     red every theme reserves for what kills you — on a harmless locked door
+     (buildPainting dropped the same read in round 3: "a lock is BRASS"). */
+  const sigilMat = locked ? pulseMat(pal(theme, 'accent') || pal(theme, 'crest'), 1.3, 0.55, 1.2)
                           : pulseMat(pal(theme, 'checkpointOn'), 1.4, 0.6, 1.1);
 
   const group = new THREE.Group();
@@ -4396,7 +4399,16 @@ export function buildGateDoor(def, theme, mats) {
     const plate = new THREE.Mesh(toStandardGeometry(pg), plateMat);
     pg.dispose();
     plate.name = 'gate.plate';
-    plate.position.set(0, h - rise + rise * 0.55 + 0.55, 0.52);
+    /* GEOMETRY LANE 2026-09-07 (owner P9 "broken sign text", frame
+       _shots/play_geo_before/27_C5_azure1_gate.png: '30 CRESTS' read as
+       'U CREST'). The plate hung at pierH + 0.55*rise + 0.55 — ABOVE the arch
+       crown for every Keep door (azure-1: 4.36 against h 4.40) — at z 0.52,
+       three centimetres in front of the keystone's 0.49 face and BEHIND the
+       voussoirs' 0.86 depth once the plate back (0.40..0.52) was counted, so
+       the arch stones cut the lettering. It sits in the TYMPANUM now (0.38 of
+       the rise above the spring: inside the intrados at its own corners for
+       every w/h the Keep authors) and clear in front of the keystone. */
+    plate.position.set(0, (h - rise) + rise * 0.38, 0.64);
     plate.updateMatrix();
     plate.matrixAutoUpdate = false;
     group.add(plate);
@@ -4404,7 +4416,7 @@ export function buildGateDoor(def, theme, mats) {
     const back = new THREE.Mesh(
       GeoCache.get(GeoCache.key('gate.plateback', pw, ph), () => bevelBoxGeometry(pw + 0.18, ph + 0.16, 0.12, 0.025, 1.4)),
       materialFor('obsidian', theme, mats));
-    back.position.set(0, plate.position.y, 0.46);
+    back.position.set(0, plate.position.y, 0.57);
     back.updateMatrix();
     back.matrixAutoUpdate = false;
     group.add(back);
@@ -4435,9 +4447,14 @@ export function buildGateDoor(def, theme, mats) {
   /* In FRONT of the leaves (local +Z), never behind them: `heading(yaw)` points
      into the wall. course.js re-fits this to the room's floor. */
   headingLocal(yaw, _vA).multiplyScalar(-1);
+  /* `reach` (data, metres the trigger extends out from the door face; default
+     1.52 = the old 0.72 + 0.8). The Keep's roof door sits in a 1.5 m niche
+     whose mouth is 0.4 m from the shaft hatch, so the default fired on a hero
+     who had just climbed out (playtest K17); keep.js authors reach 1.0 there. */
+  const reach = (def && isFinite(def.reach) && def.reach > 0.3) ? def.reach : 1.52;
   const volumes = [new Volume({
-    center: [p[0] + _vA.x * 0.72, p[1] + h * 0.35, p[2] + _vA.z * 0.72],
-    half: [w * 0.5, h * 0.55, 0.8],
+    center: [p[0] + _vA.x * reach * 0.5, p[1] + h * 0.35, p[2] + _vA.z * reach * 0.5],
+    half: [w * 0.5, h * 0.55, reach * 0.5],
     quat: _qA.clone(),
     kind: 'trigger',
     props: { id: 'gate:' + (course || need), gate: 'door', course, requires: need, locked },

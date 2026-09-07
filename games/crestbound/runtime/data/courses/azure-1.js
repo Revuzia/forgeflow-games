@@ -587,7 +587,12 @@ export default {
     {
       id: 'race', type: 'race', name: 'THE TIDE GAUNTLET',
       hint: 'Shoal to the head of the great stair through ten rings. 60 seconds.',
-      start: [0, SHOAL_Y, 12], finish: [0, STAIR_TOP_Y, -10.5], limitMs: 60000,
+      /* GEOMETRY LANE 2026-09-07: the finish plate (1.74 x 0.08 m at
+         finish.y + 0.04) sat on the great stair's last two treads and was a
+         0.62 m ceiling over tread 33 — the mantle from 4.99 to 5.30 failed for
+         headroom (movement lane replay: BLOCKED at tread 33/35). It stands on
+         the terrace now, 1.8 m past the top tread (high end z -10.69). */
+      start: [0, SHOAL_Y, 12], finish: [0, TERRACE_Y, -12.5], limitMs: 60000,
       spawnAt: [0, TERRACE_Y + 1.45, -13.0],
     },
     {

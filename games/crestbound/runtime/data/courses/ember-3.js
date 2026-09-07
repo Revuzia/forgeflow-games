@@ -982,10 +982,17 @@ export default {
      * the yaw is written as an Euler here — reachcheck accepts either.)
      * ===================================================================== */
 
+    /* GEOMETRY LANE pass 2 (movement lane replay: F1 BLOCKED at tread 39/45,
+       17.40). F2 stacked directly over F1 (both x -19.5..-15.5) and its
+       blocks are solid from 19.20 down, so F1's last six treads had under
+       1.5 m of headroom. The drum face is x -15 (measured), so F2 steps OUT
+       to x -23.7..-19.7 — a switchback gantry beside F1 rather than over it —
+       and both landings widen to x -24..-15 to carry the turn (L2 also runs
+       to z -13 so F2's top tread meets it). */
     { kind: 'stairs', p: [-17.5, 5.7, -19], rot: [0, Math.PI, 0], w: 4.0, rise: 0.30, run: 0.40, n: 45, mat: 'metal', tint: IRON, surface: 'metal' },
-    { kind: 'platform', p: [-17.5, 18.9, -30.5], s: [5, 0.6, 5], mat: 'grate', tint: IRON, stripe: true, edge: SAFE_EDGE },
-    { kind: 'stairs', p: [-17.5, 19.2, -21.5], rot: [0, 0, 0], w: 4.0, rise: 0.30, run: 0.40, n: 44, mat: 'metal', tint: IRON, surface: 'metal' },
-    { kind: 'platform', p: [-17.5, 32.1, -9.5], s: [5, 0.6, 5], mat: 'grate', tint: IRON, stripe: true, edge: SAFE_EDGE },
+    { kind: 'platform', p: [-19.5, 18.9, -30.5], s: [9, 0.6, 5], mat: 'grate', tint: IRON, stripe: true, edge: SAFE_EDGE },
+    { kind: 'stairs', p: [-21.7, 19.2, -21.5], rot: [0, 0, 0], w: 4.0, rise: 0.30, run: 0.40, n: 44, mat: 'metal', tint: IRON, surface: 'metal' },
+    { kind: 'platform', p: [-19.5, 32.1, -10.0], s: [9, 0.6, 6], mat: 'grate', tint: IRON, stripe: true, edge: SAFE_EDGE },
     { kind: 'stairs', p: [-17.5, 32.4, -6.0], rot: [0, 0, 0], w: 4.0, rise: 0.30, run: 0.40, n: 12, mat: 'metal', tint: IRON, surface: 'metal' },
     { kind: 'text', p: [-16.4, COURT_Y + 1.6, -9.0], rot: [0, -1.5708, 0], text: 'THE LONG WAY IS THE DRY WAY', size: 0.22, color: 0xc79a72 },
     { kind: 'deco', kindOf: 'rail', p: [-19.6, 12.0, -20], s: [0.1, 1.0, 6.0], mat: 'metal', tint: IRON, count: 5, spread: 16.0, jitter: 0.0 },

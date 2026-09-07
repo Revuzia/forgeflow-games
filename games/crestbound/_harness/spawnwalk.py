@@ -86,11 +86,16 @@ PROBE = r"""(course) => {
     state: G.state,
     cardOpen: !!document.querySelector('.cb-card.on'),
     // a SEALED gate never raises the card: it answers with a toast naming the
-    // course and its crest price, and that is the gate doing its job
-    // (a fixed-position toast has no offsetParent, so test its computed style)
-    toast: [...document.querySelectorAll('.cb-toast')].filter(e => { const cs = getComputedStyle(e);
-        return cs.display !== 'none' && cs.visibility !== 'hidden' && parseFloat(cs.opacity) > 0.05; })
+    // course ('<LABEL> IS SEALED') and an ambient prompt carrying its crest
+    // price ('N CRESTS TO OPEN'), and that is the gate doing its job. The
+    // toasts are `.ch-toast` and the prompt is `#cb-prompt.show` — the same
+    // two selectors gatecheck.py reads (this probe used `.cb-toast`, which
+    // matches nothing, so every sealed gate read as 'never reached' even with
+    // the hero pressed against its plate — measured 2026-09-07 on 11 gates).
+    toast: [...document.querySelectorAll('.ch-toast')]
       .map(e => (e.textContent || '').trim().replace(/\s+/g, ' ')).join(' | '),
+    prompt: (() => { const el = document.getElementById('cb-prompt');
+      return (el && el.classList.contains('show')) ? (el.textContent || '').trim().replace(/\s+/g, ' ') : ''; })(),
     pos: [+p.x.toFixed(2), +p.y.toFixed(2), +p.z.toFixed(2)],
     toGate: g ? +Math.hypot(g.pos.x - p.x, g.pos.z - p.z).toFixed(2) : null,
     grounded: !!G.player.grounded,
@@ -187,8 +192,11 @@ def main():
                     stuck_at = None
             if out["state"] == "card" or out["cardOpen"]:
                 break
-            if out["toGate"] is not None and out["toGate"] < 1.2 and ("SEALED" in out["toast"] or "CREST" in out["toast"]):
-                sealed_toast = out["toast"]
+            # the OPEN gate's ambient prompt also carries 'CRESTS 0 / 7', so only
+            # the refusal toast ('<LABEL> IS SEALED') or the sealed prompt's
+            # 'TO OPEN' counts
+            if out["toGate"] is not None and out["toGate"] < 1.2 and ("SEALED" in out["toast"] or "TO OPEN" in out["prompt"]):
+                sealed_toast = out["toast"] or out["prompt"]
                 break
         pg.keyboard.up("w")
         if detours:

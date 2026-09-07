@@ -190,6 +190,18 @@ const HEIGHTS = {
     { p: [-4, -30], r: 10, h: 19.20 },  // the ridge path midpoint cp4 (19.13)
     { p: [26, -46], r: 12, h: 23.60 },  // THE MILL YARD          cp5  (23.69)
     { p: [-34, -44], r: 8, h: 20.00 },  // the mill-3 pad              (19.84)
+    /* GEOMETRY LANE pass 2 — THE RIDGE STAIR'S CUTTING. Six discs down the
+       flight's centre line (x -6), each 1.34 m under the tread over its
+       centre so the lowest tread its 1.0 m level core carries still clears
+       the ground by 0.45; r 1.8 keeps the skirt to 0.8 m either side of the
+       2.0 m flight. SOUTHERNMOST LAST (a later flat wins, so the lower disc
+       wins and a skirt only ever pulls the ground DOWN), then two CAP discs
+       listed last of all: the ridge (19.20) restored from z -27.2 north so the
+       top tread steps onto solid ridge, and the terrace (13.60) restored at
+       the foot so the first tread is a 0.32 m step, not a 0.52. */
+    ...[[-26.4, 17.70], [-25.6, 16.74], [-24.6, 16.10], [-23.6, 15.14], [-22.6, 14.18], [-21.6, 13.22]].map(([z, h]) => ({ p: [-6, z], r: 1.8, h })),
+    { p: [-6, -28.3], r: 2.0, h: 19.20 },   // ridge cap
+    { p: [-6, -19.9], r: 1.6, h: 13.60 },   // terrace cap
   ],
 };
 
@@ -759,7 +771,13 @@ export default {
     // 0.33 from a foot 0.60 m UNDER the surface (feet at -0.03 step 0.36 onto the
     // first tread) to the deck, on the jetty's east half, clear of log B (x
     // -1.8..1.8). `p` is the foot floor and footprint centre; rot PI ascends -Z.
-    { kind: 'stairs', p: [3.2, 0.0, 24.3], w: 2.4, rise: 0.33, run: 0.40, n: 8, rot: [0, Math.PI, 0], mat: 'stone', tint: STONE },
+    // GEOMETRY LANE pass 2: a swimmer floats with his feet 0.93 m under the
+    // surface (controller FLOAT_FRAC), so the lowest tread at +0.33 was a
+    // 0.66 m step for W alone (movement lane: 'a hop is required'). Two more
+    // treads, the first at -0.33, and W alone walks out of the river.
+    // (3.4 m wide, x 2.0..5.4: the 2.8 m/s current carries a wader ~0.5 m east
+    // while his feet are still under the surface on the first three treads.)
+    { kind: 'stairs', p: [3.7, -0.66, 24.7], w: 3.4, rise: 0.33, run: 0.40, n: 10, rot: [0, Math.PI, 0], mat: 'stone', tint: STONE },
 
     // The two logs on the required line. delay 1.5 s is long enough to read
     // and short enough to punish dawdling; a pound skips the delay entirely.
@@ -823,8 +841,15 @@ export default {
 
     // The stair off the first deck onto the second. builders.js reads `rot`,
     // never `yaw`: [0, PI, 0] turns local +Z (the ascent) to world -Z, i.e.
-    // uphill. 9 risers of 0.30 => 11.00 -> 12.80, first tread 11.30.
-    { kind: 'stairs', p: [-3.0, TERR_A_TOP, -6.2], w: 3.0, rise: 0.30, run: 0.36, n: 9, rot: [0, Math.PI, 0], mat: 'stone', tint: STONE },
+    // uphill.
+    // GEOMETRY LANE pass 2 (movement lane replay: bonk at (-3, 11.00, -3.62)
+    // on deck B's south face before tread 1): the flight's footprint
+    // z -7.82..-4.58 lay entirely INSIDE deck B (z -12..-4, top 12.30), its
+    // first four treads buried in the slab and its 13.70 top 1.4 m over the
+    // deck it serves. Four 0.325 risers now stand in front of deck B's face:
+    // foot z -2.4 on deck A (11.00), top tread 12.30 flush with deck B at
+    // z -4.0; x -3.75..-1.35 clears the west belt (x <= -3.8) and the pad.
+    { kind: 'stairs', p: [-2.55, TERR_A_TOP, -3.2], w: 2.4, rise: 0.325, run: 0.40, n: 4, rot: [0, Math.PI, 0], mat: 'stone', tint: STONE },
 
     // A jump pad ON the lower deck: 4.0 m of apex, AIMED 0.34 north (controller
     // _padAim keeps the apex and adds ~6 m/s along the tilt), so hands-off it
@@ -921,7 +946,22 @@ export default {
      * ===================================================================== */
 
     // 17 risers of 0.32: base 13.60, first tread 13.92, top 19.04.
-    { kind: 'stairs', p: [-6, GRANARY_Y, -22.6], w: 3.2, rise: 0.32, run: 0.36, n: 17, rot: [0, Math.PI, 0], mat: 'stone', tint: STONE, rail: true },
+    // GEOMETRY LANE pass 2 (movement lane replay: bonk at (-6, 14.24, -19.62)
+    // on the granary wall): the foot stood at z -19.54, INSIDE the granary
+    // (its north wall is z -20.5..-20.0), so treads 2-3 ran through masonry.
+    // Foot at z -20.6 now, 0.1 m clear of the wall; top at -26.72 on the
+    // granary -> ridge path (which passes (-6, -26)). The sacks still cross
+    // treads 3 and 14.
+    // ... and measured on the way (heightfield along x -6: 13.6 at z -20,
+    // 14.2 at -21, 15.8 at -22, 17.3 at -23, 18.6 at -24, 19.2 from -25): the
+    // ridge bank rises 5.6 m over five metres, 1.4 per metre against the
+    // flight's 0.89, so from the second metre the ground stood ABOVE the
+    // treads and the contract's ground = max(box, terrain) put a climber on
+    // a 48 deg face. The flight runs in a CUTTING now (the `flats` discs
+    // below the terrain recipe), is 2.0 m wide so the discs' level cores
+    // span it, and is 18 risers so its top tread (19.36) meets the ridge
+    // (19.20) as a 0.16 m step either way.
+    { kind: 'stairs', p: [-6, GRANARY_Y, -23.84], w: 2.0, rise: 0.32, run: 0.36, n: 18, rot: [0, Math.PI, 0], mat: 'stone', tint: STONE, rail: true },
     // The cart ramp: 13.90 at the foot, 19.10 at the head, over 9.0 m of run
     // = 30.0 deg, comfortably under the 38 deg slide angle.
     {
