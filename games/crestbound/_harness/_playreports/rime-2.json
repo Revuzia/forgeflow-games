@@ -1,0 +1,260 @@
+{
+ "area": "rime-2",
+ "played": "I played GLACIER SLIDE (rime-2) through the real flow - title, NEW GAME, unlock, and the real course loader - across about twenty-five headless sessions, driving real KeyboardEvents and screenshotting every event. Route: (1) BEAT 1, the summit shelf: read the GLACIER SLIDE board from the spawn pad and again from a metre away, walked to both pedestals and the LUGE race pad, stood still four seconds beside the bumbler's patrol loop, then held W on the authored spawn facing to see where the course sends you. (2) BEAT 2, the flume: rode the upper run from the chute mouth three separate ways (steering at each deck point, holding the crouch the sign asks for, and looking one point ahead), jumped GAP A on its own eleven times, ran the TURN 3 ice wheel eleven times at four course-clock phases three ways - plain, crouched and jumping - dropped onto one of its arms to see whether it can really be ridden, then rode the lower run from the mesa lip and jumped GAP B and GAP C. Measured what crouching at speed on ice actually does against the same stretch without it. (3) BEAT 3/4, the lake and the west ice face: spawned at cp-lake, walked 20 m west to the foot of the face, waited for the ice lift at the bottom of its travel and rode it up and back down, then attacked the four static seracs nineteen times with every jump technique I could produce. (4) BEAT 5, the crystal cavern: walked in from the apron through the beam lanes, stood in lane 1 for six seconds, pounded the crystal and climbed the vanish stair, looked at the Warden in its room. (5) BEAT 6, the crevasse: crossed the vanish snow bridges from the approach ledge three times at three run-ups, stood under the hanging icicle, dropped to the shaft floor and tried to wall-kick out four times - twice hammering the button, twice with a disciplined rhythm - sampling every 55-60 ms. (6) BEAT 8, the peak: walked the trodden path from the shelf toward the peak, then tried ROUTE A's serac spiral twenty-four times from block 1, and finally teleported to the cap to check the crest itself collects. Along the way I measured a twelve-point table of how far a jump actually travels against how long W is held, because every climb on this course turned on it. THE ANSWER TO THE QUESTION I WAS ASKED: on this course ice is LOST CONTROL, not lost grip. On the upper flume you keep steering authority and the ice just carries you wide - that would be lost grip - but the TURN 1 berm stops 6.6 m before the corner does, so the drift has nothing to catch it and every ride ended 14 m below on the glacier. On the lower flume it is worse: the 21.6-degree head pitch is over TUNE.slope.iceSlideDeg, so you are in slopeSlide at the 16 m/s slide cap within a second of touching the lip, where the stick does not steer at all, and TURN 5 arrives six metres later. The player never gets an input that matters.",
+ "defects": [
+  {
+   "where": "rime-2 BEAT 1, the summit shelf, the lantern beside the GLACIER SLIDE board (deco lantern authored at (-4.2, ground+2.0, -22.6))",
+   "did": "stood on the spawn checkpoint pad at (0, 30, -26) and looked at the signboard, which is the first thing the course shows you",
+   "happened": "a lit lantern hangs in mid-air about 2 m over open snow with nothing holding it - no post, no chain, no bracket, no wall. It is the brightest object in the frame and it is floating.",
+   "should": "a lantern needs a post, a hook or a wall; the crate stack next to it sits on the ground correctly, so the lantern reads as an object that lost its mount",
+   "png": "_shots/play_rime2_shelf/z_lantern.png (crop of 01_01_spawn.png)",
+   "severity": "medium",
+   "note": "this is the same class the owner called 'extra objects' in the Keep (P6)"
+  },
+  {
+   "where": "rime-2 BEAT 1, the GLACIER SLIDE signboard (two `text` objects at y+1.42 and y+1.05)",
+   "did": "read the board from the spawn pad and again from 1 m away",
+   "happened": "the two body lines each wrap to 2 and 3 lines against the 3.7 m line cap, so five lines pack into a 0.37 m band with no gap and read as one paragraph; the sentence breaks mid-phrase as 'THE CHUTE ONLY / GOES DOWN.' and the last line 'EVERYTHING ELSE GOES UP.' runs to both inner edges of the plate",
+   "should": "the two sentences are separate thoughts and were authored one line apart on the assumption of one line each; either shorten them to fit one line, or space the boards for the wrapped height",
+   "png": "_shots/play_rime2_shelf/z_sign.png (crop of 01_01_spawn.png)",
+   "severity": "low"
+  },
+  {
+   "where": "rime-2 BEAT 1->2, spawn (0,30,-26) yaw -2.58 to the chute mouth U0 (4, 29.4, -22)",
+   "did": "held W from the checkpoint pad on the authored spawn facing and nothing else - the most literal reading of 'the chute only goes down'",
+   "happened": "ended at [11.99, 2.1, -4.27] on snow in state skid, not on the flume",
+   "should": "the spawn facing is authored to aim at the chute mouth, so walking forward should feed the hero onto the ice",
+   "png": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_rime2_mouth\\04_E3_missed_mouth.png"
+  },
+  {
+   "where": "rime-2 BEAT 1 -> BEAT 2, from the start position (0, 30, -26) on the authored spawn facing yaw -2.58, to the chute mouth U0 (4, 29.4, -22)",
+   "did": "held W and nothing else, on the facing the game itself hands you at the start. No camera work, no jump. This is the most literal reading of the course's own sign: THE CHUTE ONLY GOES DOWN.",
+   "happened": "the hero ran 5 m, clipped the extreme south-west corner of the flume's mouth deck and walked straight off the side of the mountain: trail (3.2, 30.1, -20.9) run -> (5.2, 28.5, -17.7) FALLING -> hardLand at (10.2, 5.1, -9.6). A 25 m fall in under 3 s, no death, no checkpoint - and the entire 120 m flume, the race, and 5 of the 8 beats are now above you. The way back is the whole course.",
+   "should": "walking forward off the start pad should feed the hero onto the ice. The authored spawn (0,30,-30) does aim at the middle of the mouth, but the game boots at checkpoints[0] (0,30,-26), 4 m closer to the lip, on the SAME yaw - and from there the same heading crosses the deck's near edge 0.76 of the way to its south-west corner and runs out of deck immediately.",
+   "png": "_shots/play_rime2_mouth/01_E0_spawn_facing.png (the first frame), _shots/play_rime2_mouth/02_E1_forward_4.png (already falling, deck visibly 2 m to the right)",
+   "severity": "HIGH",
+   "note": "the flume is not visible at all from the start frame - the shelf snow curves up and the only things in view are the signboard, two crates and the floating lantern - so the player has no read that the ice is 2 m to their right, and no read that the ground ends"
+  },
+  {
+   "where": "rime-2 BEAT 2, the ice wheel at TURN 3 (rotor [33, 21.90, -24.5], arms 2, len 4.2, period 4.4; deck top 20.60, chute 5.20 m wide)",
+   "did": "ran the deck through the wheel from a safe start 5 m short of it, at four course-clock phases, three ways - plain run, run holding crouch, and run with a jump timed at the bar",
+   "happened": "7 of 11 attempts ended in a CRUSH death (cause 'crush'): run@1.1 at [32.04, 21.04, -23.02]; run@3.3 at [32.02, 21, -23.66]; crouch@0.0 at [32.02, 20.96, -24.25]; crouch@1.1 at [32.02, 21.01, -23.58]; crouch@3.3 at [32.04, 21.04, -23.06]; jump@1.1 at [34.49, 22.14, -26.65]; jump@3.3 at [34.67, 22.14, -26.64]. The arms are 4.2 m long, so the swept disc is 8.4 m across on a 5.2 m chute - it covers the deck from berm to berm, there is no lane past it, and the bar's underside sits about 1.05 m over a deck a 1.50 m hero is standing on.",
+   "should": "the course comment promises 'a RIDEABLE solid... a timing puzzle, not a trap'. Death by crush from a decorative-looking ice bar on a slick 14-degree ramp, where the player has just committed to a jump, is a trap. Either the arms should shove/carry on contact or the bar needs enough clearance to duck.",
+   "png": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_rime2_wheel6\\09_J_wheel_summary.png",
+   "severity": "HIGH",
+   "note": "proven separately: dropping ONTO an arm does work - the hero stands on it and is carried round (33.06,22.15,-26.71) -> (30.79,22.15,-24.46)"
+  },
+  {
+   "where": "rime-2 BEAT 2, the mid station on the east mesa - the PEDESTAL at (36, 17, -6) (kind pedestal, mat 'ice', tint ICE, glow AURORA), beside the cp-mesa checkpoint 2 m away",
+   "did": "died on the flume, respawned at the mid station and looked at the pad I was standing on",
+   "happened": "the pedestal renders as a ring of GREEN GRASS with brown/orange DIRT crumbling round its rim and a teal pool in the middle, standing on thin legs above the snow with daylight visible underneath, and its rim cuts into the checkpoint disc 2 m away so the two round pads intersect. On a glacier at 17 m, in a course whose palette is snow-white, ice-blue and gold, it reads like a piece of meadow was dropped on the mountain. (The checkpoint itself is fine - a blue/white chequer with a teal ring, confirmed again at cp-cavern.)",
+   "should": "a pedestal authored mat:'ice', tint ICE should render as ice; and it should sit on the snow, not on legs, and not intersect the checkpoint beside it",
+   "png": "_shots/play_rime2_lower/z_pads.png (crop of 04_lower_12.png)",
+   "severity": "medium",
+   "note": "identified by depth ordering in _shots/play_rime2_lower/04_lower_12.png (camera yaw 2.80 looks toward +z, so the nearer, lower disc is the one at z=-6)"
+  },
+  {
+   "where": "rime-2, the trodden path the terrain carves from the mesa toward the east seracs (terrain paths, pts [36,-8] -> [18,-20], w 2.8)",
+   "did": "stood on the mid station and looked south-west across the snow",
+   "happened": "the path renders as a near-black navy ellipse with a hard teal rim and a puffy white halo where it meets the snow - a dark stain on the glacier, not a track",
+   "should": "a trodden path should be a subtle tonal change in the snow; this one is the darkest thing in the frame and its edge is a hard blend seam",
+   "png": "_shots/play_rime2_lower/z_dark.png (crop of 04_lower_12.png)",
+   "severity": "medium",
+   "note": "same class as owner item P7 - ground textures overlapping badly"
+  },
+  {
+   "where": "rime-2, both text boards on the flume line - the spawn board (0,31.x,-22.6) and HALF WAY on the mesa (35, 18.3, -1.2)",
+   "did": "read them from where a player stands",
+   "happened": "every multi-word line wraps mid-sentence against the line-length cap: 'THE CHUTE ONLY / GOES DOWN.' at the spawn and 'HALF WAY / THE SECOND / HALF IS FASTER' on the mesa",
+   "should": "the copy needs to be written to the line length that actually renders, or the boards need to be wider",
+   "png": "_shots/play_rime2_lower/03_lower_06.png, _shots/play_rime2_shelf/z_sign.png",
+   "severity": "low"
+  },
+  {
+   "where": "rime-2 BEAT 2, GAP B on the lower flume (land at (32.9, 11.0, 13.7))",
+   "did": "ran the deck and jumped at the lip",
+   "happened": "missed the landing and fell to [41.3, 1.55, 57.72]",
+   "should": "GAP B is authored as a single-jump gap with the run-up paid for",
+   "png": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_rime2_gapbc\\02_GAPB_land.png"
+  },
+  {
+   "where": "rime-2 BEAT 2, the upper flume ridden end to end (mouth 4,29.4,-22 -> mid station 38,17.3,-6.5)",
+   "did": "started on the mouth deck, held W, aimed the camera at each deck point in turn and took one jump at the GAP A lip - the intended luge line",
+   "happened": "came off the ice at [20.17, 2.97, -0.4] (state idle, surface snow), deaths 0",
+   "should": "the flume is the course's set piece and its whole promise is that it carries you; a clean line should reach the mid station",
+   "png": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_rime2_upper2\\21_K3_upper_failed.png",
+   "severity": "high"
+  },
+  {
+   "where": "rime-2 BEAT 2, TURN 1 of the upper flume - the berm at (10.49, 27.55, -15.15), 6.0 m long, against a 9 m turn (U1 11,26.6,-18 -> U2 20,23.8,-19.5)",
+   "did": "rode the flume from the chute mouth three times - steering at the next deck point, holding crouch (the TUCK the spawn sign asks for), and looking one point ahead - at 10-12 m/s, which is what the chute gives you after 20 m of 19-degree ice",
+   "happened": "all three runs slid off the OUTSIDE of TURN 1 and fell about 14 m onto the glacier: ends [[15.97, 6.5, -11.69], [20.27, 12.1, -18.32], [26.58, 12.48, -20.32]]. The ice carries the drift past the downstream end of the berm - the berm spans about x 7.5 to x 13.4 while the turn's outside edge runs on to x 20, so the last 6.6 m of the turn has no wall on it, and that is exactly where a rider at flume speed arrives.",
+   "should": "the flume is the course's whole set piece and TURN 1 is its FIRST corner; the berm should cover the corner it belongs to. Steering back onto the deck had no authority against the ice - this reads as lost CONTROL, not lost grip.",
+   "png": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_rime2_upper3\\08_M_turn1_summary.png",
+   "severity": "HIGH"
+  },
+  {
+   "where": "rime-2 BEAT 1/2, the spawn sign's instruction 'CROUCH AT SPEED TO TUCK  -  THE ICE KEEPS THE REST'",
+   "did": "ran the flume deck at speed and held crouch (C), the exact thing the course's opening sign teaches, then ran the identical stretch without it",
+   "happened": "crouching does nothing on the ice: top speed 6.00 m/s crouched vs 6.39 m/s plain, and the hero's states while crouched were ['crouchwalk', 'fall', 'jump1'] - a crouch-walk, no tuck, no speed, no pose",
+   "should": "the first sign in the course teaches a verb; the verb should exist. Either give the crouch a tuck on ice (a faster, lower, committed slide) or stop the sign promising one.",
+   "png": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_rime2_tuck\\03_N_tuck_nothing.png",
+   "severity": "medium"
+  },
+  {
+   "where": "rime-2 BEAT 6, THE WALL-KICK SHAFT at (-13, -21): floor 14.40, exit ledge 23.00, 3.20 m clear, 8.80 m tall",
+   "did": "climbed it four separate times from the shaft floor - twice hammering Space at every wall contact (29 and 28 kicks fired), once with a disciplined rhythm (jump, hold into the wall, ONE Space the instant the hero grabs it, respect the 0.28 s lockout, alternate walls), sampling every 55-60 ms throughout",
+   "happened": "never got out. Best height across four attempts was y 20.80, 2.2 m under the 23.00 exit ledge. The mechanic itself works - wallslide and wallkick both appear in the state trace, and one clean kick from y 15.80 bought +3.31 m - but the ladder tops out around 20.8 and the hero drops back to the floor.",
+   "should": "the course budgets 1 jump + 4 kicks (feet 14.80 -> 24.31, 1.31 m of margin). This shaft is the ONLY way out of the crevasse and the required line to cp5, sigil 7 and the seracs back up to the summit shelf; a player who drops in and cannot kick out is in a hole with no exit and no death to reset him.",
+   "png": "_shots/play_rime2_crev2/ (O0_floor, O0_end, O1_end), _shots/play_rime2_crev3/ (Q0_floor, Q1_kick_1, Q2_end)",
+   "severity": "HIGH",
+   "note": "the exit-ledge slab (p [-9.6, 22.65, -20], s [7.6, 0.7, 5.0]) reaches x -13.4, so it caps the eastern 2 m of the 3.2 m well between y 22.30 and 23.00 - a climber on that side meets its underside before its top, leaving only a 1.2 m wide strip of the well that actually opens to the sky"
+  },
+  {
+   "where": "rime-2 BEAT 6, the bottom of the wall-kick shaft, the corner at about (-14.2, 15.0, -19.8)",
+   "did": "failed a wall-kick ladder and fell back down the shaft - three separate runs",
+   "happened": "all three runs ended at exactly the same place in exactly the same state: (-14.22, 15.01, -19.78), state slopeSlide, 0.6 m ABOVE the shaft floor whose top is 14.40, wedged where the west and south wall slabs meet (the hero's 0.38 m radius touches both faces). He is not grounded on anything visible and he is not falling - he is pinned in a permanent slide against a corner.",
+   "should": "a hero who falls back down a shaft should land on its floor, upright, ready to try again",
+   "png": "_shots/play_rime2_crev3/Q2_end.png, _shots/play_rime2_crev2/O0_end.png",
+   "severity": "HIGH",
+   "note": "reproduced 3 of 3 times to the centimetre, so it is geometry, not chance"
+  },
+  {
+   "where": "rime-2 BEAT 8, the walk from the summit shelf to the foot of ROUTE A (the terrain draws a trodden path (0,-34) -> (0,-40) -> (0,-46), w 3.0, and the header calls ROUTE A 'the line the gate walks')",
+   "did": "stood on the shelf at (0, 30.2, -36) facing the peak and held W for 6 seconds - straight up the authored path",
+   "happened": "the hero never got past z -39.6: he goes into slopeSlide on the spire's flank (14 of 34 samples were slopeSlide) and slides back down. The shelf flat holds the ground at 30.4 out to about z -43, and the ground then climbs to 34.3 at the first ROUTE A block (6.4, 34.65, -46) - roughly 4 m of rise in 3 m, past the 38-degree slide threshold.",
+   "should": "ROUTE A is the course's guaranteed static route to the open crest ('always works, never needs a moving platform, and is the line the gate walks'), and there is a painted path on the ground leading to it. If the last stretch to its first block cannot be walked, the guaranteed route is not reachable on foot.",
+   "png": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_rime2_peak2\\07_R3_cannot_reach_route_a.png",
+   "severity": "HIGH"
+  },
+  {
+   "where": "rime-2 BEAT 4, the static serac stair on the west ice face (-26.4,3.3,21.6 up to -29.8,10.5,14.4)",
+   "did": "ran at each serac and pressed Space twice (the double jump the course sign asks for)",
+   "happened": "failed on step 1 - ended at [-34.02, 1.37, 19.97]",
+   "should": "the comment calls these the course's one deliberate learn-the-double wall and the only static way up the face",
+   "png": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_rime2_peak4\\09_77_serac_failed.png"
+  },
+  {
+   "where": "rime-2 BEAT 8, ROUTE A's first hop - block 1 (6.40, top 35.35, -46.00) to block 2 (5.20, top 36.80, -49.72): 3.90 m centre to centre, +1.45 m of rise, blocks 2.8 m square, 11 m of air underneath",
+   "did": "eight attempts across two sessions - five with fixed run-ups (180 / 260 / 340 / 420 ms of W, and one W+Space+Space double) and three firing the jump on POSITION at the block's lip, which is the technique that clears GAP A and GAP C on the flume first time",
+   "happened": "not one landed on block 2. The landings scatter either side of it and never on it: three ended at (3.88, 33.90, -47.95), 0.38 m SHORT of block 2's near edge and 3 m below it on the ground, and four overflew it to z -51.3, -52.7, -54.7 and -54.8, up to five metres past, one of them landing on a ROUTE C block instead. The pattern is a window I could not find: at walking speed the hop falls short, and W reaches the full 9 m/s run in about a quarter of a second, at which point a single jump carries five to nine metres over a 2.8 m target.",
+   "should": "ROUTE A is the course's guaranteed static route to the open crest - the header calls it the one that 'always works' and 'the line the gate walks'. A required step should not need a speed a keyboard cannot hold.",
+   "png": "_shots/play_rime2_peak3/ (S_setup_*, S_res_*), _shots/play_rime2_peak4/ (T_lip_*)",
+   "severity": "HIGH",
+   "note": "the same overshoot killed the west ice face: from serac 1 at (-26.4, top 3.30, 21.6) the W+Space+Space the course's own sign asks for ('LAND AND JUMP AGAIN - DOUBLE JUMP') flew the hero 7.6 m to (-34.02, 1.37, 19.97), past a serac 2 that is only 2.87 m away"
+  },
+  {
+   "where": "rime-2 - the climb back, every beat of it: BEAT 4 west ice face (2.42-2.87 m steps at +2.40 m), BEAT 7 east serac spiral (3.14 m), BEAT 8 ROUTE A (3.90 m at +1.45 m)",
+   "did": "measured what a jump actually covers: stood on the flat lake ice and jumped twelve times with run-ups of 0, 90, 150, 220, 300 and 450 ms, single and double, recording launch speed and the distance travelled before landing",
+   "happened": "a SINGLE jump covers 2.62 m from a standing start and 2.89 - 3.25 m off any run-up a small block allows (measured launch speeds only reach about 3 m/s on the flat). A DOUBLE covers 4.53 - 6.50 m. ROUTE A's required 3.90 m step sits in the dead zone BETWEEN them: the single lands 0.4 - 0.8 m short (which is exactly where three of my ROUTE A attempts ended, at (3.88, 33.90, -47.95)) and the double flies 1 - 5 m past it. The west face is the mirror problem - its steps are only 2.42-2.87 m apart but rise 2.40 m, so the single cannot make the height (apex 1.91 m) and the double, which can, travelled 7.6 m at a 2.87 m target and put the hero on the ground 9 m below.",
+   "should": "a required stair over an 11 m drop should be inside one move's envelope with margin, not between two moves' envelopes. This is one number away from working: bring ROUTE A's step down toward 3.2 m, or widen the blocks so the landing has slack.",
+   "png": "_shots/play_rime2_hops/U_hops.png, _shots/play_rime2_peak3/S_res_260.png, _shots/play_rime2_west/76_serac_step1.png",
+   "severity": "HIGH",
+   "note": "the distances also scatter badly - two of twelve measurements came out at 5.94 m and 21.60 m with the same inputs as neighbours that gave 3.12 m and 4.53 m, so the same key press does not reliably produce the same hop"
+  },
+  {
+   "where": "rime-2 BEAT 5, the vanish crystal stair - four crystal steps at (-30, tops 13.55 / 15.35 / 17.15 / 18.95, z +0.6 / -1.0 alternating), cycle on 4.0 off 2.0 warn 0.8, phases 0 / 0.6 / 1.2 / 1.8",
+   "did": "jumped the stair one step at a time from the cavern floor beside the crystal, aiming at each step in turn",
+   "happened": "got 0 of 4 steps before missing - ended at [-29.89, 12.11, -2.62]",
+   "should": "the comment says each 1.80 m rise is inside a single jump (apex 1.91 m) and this stair is the only way to the roof hole, the wing hat and the wing crest",
+   "png": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_rime2_cavern2\\07_V8_vanish_failed.png",
+   "severity": "high"
+  },
+  {
+   "where": "rime-2 BEAT 2, the head of the LOWER flume - the mesa lip L0 (34, 17.2, -2) into TURN 5 at L1 (33, 14.6, 4.5), a 21.6 degree ice pitch against TUNE.slope.iceSlideDeg of 20",
+   "did": "stood on the mesa lip and rode the lower run the way the mid-station sign invites you to ('HALF WAY - THE SECOND HALF IS FASTER'), holding W and aiming the camera at each deck point in turn, with a jump ready for each gap",
+   "happened": "the hero entered slopeSlide the instant he touched the lip and accelerated to 16.0 m/s - exactly TUNE.slope.maxSpeed - in about a second. In slopeSlide the stick does not steer, so when the deck turned right at TURN 5 he carried straight on and left the ice at (33.2, 12.6, 12.0), falling 11 m onto the snow. He reached the lake by running along the ground, not by riding.",
+   "should": "a luge chute should take grip away, not the wheel. Being pinned in a no-steer slide at the slide cap six metres before the first corner is lost CONTROL, not lost grip - the player never gets an input that matters.",
+   "png": "_shots/play_rime2_cavern2/09_L0_lower_lip.png and the L1_* ride strip in the same directory",
+   "severity": "HIGH",
+   "note": "the upper flume fails the same way for a different reason - there the hero keeps steering authority but the TURN 1 berm ends 6.6 m before the corner does"
+  },
+  {
+   "where": "rime-2 BEAT 4, the west ice face - serac 1 (-26.4, top 3.30, 21.6) to serac 2 (-27.6, top 5.70, 19.0): 2.87 m across, +2.40 m of rise, blocks 3.0 m square, 2 m of air below",
+   "did": "nineteen attempts at this one step: W held for 360 ms with a double (the technique the course's own sign asks for: 'LAND AND JUMP AGAIN - DOUBLE JUMP'), then 0/90/170 ms single and double with W released before the jump, then 40/80/120/160/240 ms doubles with W held through the flight for air steering",
+   "happened": "not one landed on serac 2. The step is caught between two moves: a single jump apexes at 1.91 m and cannot make the 2.40 m of rise at all, while a double (apex 2.60 m) can make the height but carried the hero 4.5 to 7.6 m across a 2.87 m gap. The one 360 ms attempt put him on the ground 9 m below at (-34.02, 1.37, 19.97).",
+   "should": "the comment calls this 'the course's one deliberate learn-the-double wall' and the only static way up the face - the mover lift beside it is explicitly not allowed to be a dependency. If the single cannot make the height and the double cannot stop, there is no move that fits.",
+   "png": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_rime2_fair2\\11_X_west_failed.png",
+   "severity": "HIGH"
+  },
+  {
+   "where": "rime-2 BEAT 8, ROUTE A - block 1 (6.40, top 35.35, -46.00) to block 2 (5.20, top 36.80, -49.72): 3.90 m across, +1.45 m of rise, blocks 2.8 m square, 11 m of air below",
+   "did": "nineteen attempts across three sessions: fixed run-ups of 180/260/340/420 ms with W held, a double, three jumps fired on POSITION at the block's lip (the technique that clears the flume's GAP A and GAP C first time), six with W released before the jump, and five short taps of 40/80/120/160/240 ms with air steering held",
+   "happened": "not one landed on block 2. The misses cluster in two piles: 0.4 m SHORT at (3.88, 33.90, -47.95), and 1.6 to 5 m LONG at z -51.3, -52.7, -54.7, -54.8 - one of them on a ROUTE C block instead. Measured on flat ice, the shortest single jump a keyboard produces is 2.62 m and a double is 4.53 m or more, so a 3.90 m step falls in the gap between them.",
+   "should": "ROUTE A is the course's guaranteed static route to the open crest - the header calls it the one that 'always works' and 'the line the gate walks'. With the shelf-to-peak walk also sliding you back (measured separately), I found no route to BEAT 8 at all.",
+   "png": "C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_rime2_fair2\\12_X_routeA_failed.png",
+   "severity": "HIGH"
+  },
+  {
+   "where": "rime-2 BEAT 6, the vanish snow bridges - approach ledge (-25.4, top 17.60, -7.8) then four snow slabs 3.16 m apart at +0.60 m (tops 17.80 / 18.40 / 19.00 / 19.60), cycle on 3.2 off 1.8 warn 0.7, phases 0 / 0.5 / 1.0 / 1.5, with 11 m of air underneath",
+   "did": "crossed them from the approach ledge with one hop per bridge, run-ups of 120, 200 and 300 ms of W, three times through",
+   "happened": "the best crossing reached bridge 2 of 4 and then fell into the hollow on bridge 3 (deaths 0 -> 1). The run-ups either side of 200 ms do not miss by a little, they miss by everything: 120 ms of W moved the hero 0.8 m against a 3.26 m step and left him standing on the ledge, and 300 ms threw him 10 m past bridge 1 to (-15.78, 4.93, -10.51), on the floor of the hollow.",
+   "should": "a bridge line over an 11 m drop should have a landing window you can feel. Here the window between 'the jump does not move you' and 'the jump throws you off the far end' is about a tenth of a second of held W.",
+   "png": "_shots/play_rime2_bridges2/ (Z0_ledge_200, Z1_200_bridge_1..3, Z1_300_bridge_1)",
+   "severity": "high"
+  },
+  {
+   "where": "rime-2, the movement itself, measured on this course - it is what makes every climb in BEATS 4, 6, 7 and 8 feel unfair",
+   "did": "measured jump distance against how long W was held before the jump, on flat lake ice and again on the crevasse ledge",
+   "happened": "the distance a jump covers is hypersensitive to a few tens of milliseconds of run-up. On the crevasse ledge: 120 ms of W = 0.8 m travelled, 200 ms = a clean 3.2 m landing, 300 ms = 10 m and a death. On the lake: standing still = 2.62 m, and the twelve-measurement table scatters (two of twelve came out at 5.94 m and 21.60 m with the same inputs as neighbours that gave 3.12 m and 4.53 m). There is no walk-speed hop: the smallest jump a keyboard can produce is 2.62 m.",
+   "should": "a platformer whose stairs are 2.4-3.9 m apart needs a hop the player can aim. Either the analog ramp needs a real walk band you can hold, or every climb on this course needs to be built for the jump that actually exists.",
+   "png": "_shots/play_rime2_hops/U_hops.png",
+   "severity": "HIGH",
+   "note": "this is the single root cause behind the west ice face, ROUTE A, the snow bridges and (probably) the east serac spiral all failing"
+  },
+  {
+   "where": "rime-2, the slopeSlide animation - seen on the spire's south face, on the shelf's north skirt at (3.2, 30.7, -38.1), and on the glacier under the flume",
+   "did": "fell off the flume and off the shelf several times and watched the hero slide",
+   "happened": "slopeSlide renders as a scarecrow: arms straight out to the sides just below horizontal, legs straight and apart, torso bolt upright, no lean, no crouch, no edge. It reads as an un-posed T-pose, and it is the pose the player spends most of his time in on this course because every fall ends in a long slide. The run and jump poses in the same session are properly animated, so it is this state specifically.",
+   "should": "a slide down a 40-degree ice face wants a braced, leaning, low pose - the hero should look like he is fighting it",
+   "png": "_shots/play_rime2_peak/z_slidepose.png (crop of 02_A1_route_a_foot.png), also _shots/play_rime2_shelf/03_03_sign_close.png and _shots/play_rime2_upper/03_upper_12.png",
+   "severity": "medium"
+  },
+  {
+   "where": "rime-2, the spire's shadowed flanks - the south face below the shelf and the north skirt between the shelf and the peak",
+   "did": "slid down the south face after walking off the shelf, and walked north toward the peak",
+   "happened": "the shadowed snow renders as a near-black navy wall with a hard, bright edge where the lit snow stops. In _shots/play_rime2_shelf/03_03_sign_close.png the entire frame is that flat dark field with no horizon and no landmark - the player is moving at speed and can see nothing but a wall. In _shots/play_rime2_peak/02_A1_route_a_foot.png the slope you are about to climb is darker than the sky behind it.",
+   "should": "CONTRACT section 15's readability law asks for the walked surface to be at least 3.5:1 against the fog band behind it; here the walked surface is the darker of the two, and it is snow",
+   "png": "_shots/play_rime2_shelf/03_03_sign_close.png, _shots/play_rime2_peak/02_A1_route_a_foot.png",
+   "severity": "medium"
+  }
+ ],
+ "worked": [
+  "rime-2 loads from the Keep flow (title -> NEW GAME -> unlockAll -> goto) and drops the hero on the summit shelf at [0, 30, -26], grounded on snow",
+  "rime-2 loads through the real flow (title -> NEW GAME -> unlockAll -> __dev.goto) and spawns grounded on the summit shelf at (0, 30, -26), surface snow, HUD live (coins 0/100, 8 sigil pips, CHECKPOINT 0/4)",
+  "the GLACIER SLIDE board is legible from the spawn pad without walking to it - big header, good contrast on the cream plate",
+  "standing completely still for 4 s beside the shelf bumbler's patrol loop moved the hero 0.00 m - the patroller does not shove an idle player (this was a real defect on this shelf once and it is fixed)",
+  "the flume itself looks superb in motion (shot 02_E1_forward_4.png): big ice deck panels with bright cream leading-edge stripes, ice pylons carrying it over the glacier, coin arcs tracing the racing line, and the pinnacle and the lake read clearly in the distance",
+  "a 25 m fall off the shelf is a hardLand, not a death - the course's 'there is no fall damage, the punishment is the climb' promise holds (deaths stayed 0)",
+  "GAP A (4.84 m gap in the upper flume) clears with one timed jump off a running approach - landed at [31.99, 21.13, -21.99]",
+  "you really can RIDE the ice wheel - dropping onto an arm leaves the hero standing on it and carried round ([33.06, 22.15, -26.71] -> [30.79, 22.15, -24.46])",
+  "you really can RIDE the ice wheel: dropping onto the top of an arm from 1 m up leaves the hero standing on it, grounded, and carried a quarter turn round ((33.06, 22.15, -26.71) -> (30.79, 22.15, -24.46) in 3.4 s)",
+  "GAP A, the 4.84 m gap in the upper flume, clears with one timed Space off the running deck approach - landed on U3 at (31.99, 21.13, -21.99)",
+  "death and respawn on the flume is fast and clean: the dev panel read respawn 513 ms and the hero was back on the cp-summit pad, upright and controllable",
+  "the checkpoint is unmistakable at distance: the lit pad throws a tall teal light column you can see from anywhere on the mesa, and the HUD pip updates to CHECKPOINT 1/4 the moment you touch it",
+  "the shelf bumbler and the mesa bumbler are readable, charming and clearly non-lethal - a green waddler in a bowler hat that stands beside the checkpoint and does not attack",
+  "GAP C on the lower flume clears with a single timed jump (landed [12.58, 5.42, 19.01])",
+  "the open crest on the peak collects on contact and fires the course-clear flow (crests 1 -> 1, state clear)",
+  "the open crest on the peak collects the moment you touch it and fires the course-clear flow (game state went to 'clear')",
+  "the cp-lake checkpoint loads and spawns cleanly on the frozen lake at (3.73, 1, 25.54), and walking 20 m west across the lake ice to the foot of the west face arrived within 0.10 m of the target",
+  "the cavern beam lanes really kill - standing in lane 1 died within 6 s (deaths 2 -> 3)",
+  "the crystal cavern beam lanes really are lethal - standing on the cavern floor in lane 1 died inside 6 s, and walking in from the mouth toward the crystal also died on a beam, so they are a hazard and not decoration",
+  "the vanish crystal stair (step 1: 1.6 m across, +1.35 m) DOES land, with ['0 ms single', '70 ms single'] (six techniques tried: 0/70/130/170/200/280 ms of W, single and double, releasing W before the jump)",
+  "the west-face ice lift works exactly as an elevator should: standing on the block at the bottom carried the hero from y 3.12 up to 12.70 and back down again, grounded the whole way - the quick way up to the cavern apron is solid",
+  "the four vanish snow bridges' first two slabs cross cleanly with a 200 ms run-up and one hop each, and the snow-white slabs with cream leading-edge stripes read well against the blue hollow"
+ ],
+ "blocked": [
+  "The two hanging icicles over the lower flume (pendulums at (34.6, 19.6, 2.0) and (22, 13.6, 18.1)) - I could never get the hero to STAND under one. The deck there is the 21.6-degree head of the lower run, so every placement went into slopeSlide and left the flume before the icicle came round. Their kill capsules do sit on the deck line (measured: pendA capsule centres y 15.97 and 14.68 against a deck at 15.60; pendB y 10.50 and 9.45 against a deck at 7.53, which is 1.9 to 3.0 m ABOVE a 1.5 m hero's head and looks like it may never touch him) - somebody should check pendB specifically.",
+  "The breakable 'wrong-coloured wall' on the outside of TURN 5, the secret chute behind it, and the pinnacle cap with sigil 3 - never reached, because both flume runs threw me off before TURN 5.",
+  "The Warden of the crystal cavern - confirmed alive in its room with hp 3 and one kill volume, but never fought: I died on the beam lanes walking in, and the vanish stair to the roof was only cleared one step.",
+  "GAP B on the lower flume - never isolated cleanly, because I could not stay on the deck long enough to arrive at it at a sensible speed. GAP A and GAP C both pass with one timed jump.",
+  "The LUGE race crest (start pad (4, 30, -23) to finish (-4.5, 1, 27) in 45 s) - not completed, for the same reason: no ride of mine reached the lake on the ice.",
+  "BEAT 7, the east serac spiral, and the peak's ROUTE B ice lift and ROUTE C north spur - not driven; I spent the budget on ROUTE A because the course calls it the route that always works.",
+  "The melt pool dive, the heaving floes, the geyser jump pad, the ice fall and the sigils - outside my assigned area (the chute and the climb back), left for the lake/water lane."
+ ],
+ "notes": [
+  "measured hop distances on the flat lake ice: [[0, false, 0.0, 2.62], [0, true, 1.22, 6.5], [90, false, 2.43, 2.89], [90, true, 1.96, 4.69], [150, false, 2.2, 3.02], [150, true, 2.49, 5.34], [220, false, 2.9, 3.25], [220, true, 2.3, 4.53], [300, false, 3.04, 3.12], [300, true, 2.99, 21.6], [450, false, 2.63, 5.94], [450, true, 2.66, 6.3]] (runup ms, double?, launch m/s, distance m). The shortest single jump I could produce with a keyboard was 2.62 m; this course's required climbs step 2.42 - 3.90 m."
+ ],
+ "evidence_dir": "games/crestbound/_shots/play_rime2_evidence/ holds a compressed jpg of every frame cited below (1.7 MB, 20 files); the full-resolution PNG strips are under _shots/play_rime2_<phase>/ (286 MB). Neither is committed - _shots/ is gitignored as harness output.",
+ "driver": "games/crestbound/_harness/_play_rime2.py - run a phase with: python _harness/_play_rime2.py <phase>[,<phase>...]  (phases: shelf lip mouth upper upper2 upper3 gapa gapbc wheel3 wheel4 wheel5 wheel6 tuck lower lower2 pend probe west cavern cavern2 crevasse crev2 crev3 bridges bridges2 close peak peak2 peak3 peak4 hops fair fair2 race ice)"
+}
