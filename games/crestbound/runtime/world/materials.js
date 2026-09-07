@@ -3985,7 +3985,8 @@ function bakeRope() {
  *   uShoreWidth depth in metres over which the foam edge fades out
  *   uDepthFade  metres of water over which uShallow -> uDeep
  *   uSunDir / uSunColor / uSkyTop / uSkyHorizon   the reflection environment
- *   uOpacity    surface alpha at normal incidence (fresnel drives it up)
+ *   uOpacity    the deepest water's CEILING alpha: it still hands (1 - uOpacity) of the bed through
+ *   uAbsorb     Beer-Lambert absorption per metre of eye path (the see-through model)
  */
 const WATER_U = {
   uTime: TIME_U,
@@ -4004,6 +4005,9 @@ const WATER_U = {
   uFresnelPower: { value: 5.0 },
   uFresnelBias: { value: 0.022 },
   uGloss: { value: 140.0 },
+  /* water lane 2026-09-07: Beer-Lambert absorption per metre of eye path (see
+   * WATER_FRAG SEE-THROUGH). 0.32 = a clear lake; a sea 0.26; a basin 0.5. */
+  uAbsorb: { value: 0.32 },
   uSunDir: { value: new THREE.Vector3(-0.42, 0.86, 0.30) },
   uSunColor: { value: new THREE.Color(0xfff2d8) },
   uSkyTop: { value: new THREE.Color(0x2f6fc0) },
@@ -4111,6 +4115,7 @@ uniform float uRipple;
 uniform float uFresnelPower;
 uniform float uFresnelBias;
 uniform float uGloss;
+uniform float uAbsorb;
 uniform vec3  uSunDir;
 uniform vec3  uSunColor;
 uniform vec3  uSkyTop;
@@ -4162,14 +4167,31 @@ float cbRippleH( vec2 p, float t ) {
   return cbwNoise( a ) * 0.68 + cbwNoise( b ) * 0.32;
 }
 
+/** The sky as the surface sees it: the scene's PMREM dome at a soft mip when
+ *  three compiled it in (water.js hands it over in onBeforeRender), the
+ *  analytic gradient otherwise. The soft-knee keeps an HDR sun halo or a lit
+ *  cloud from printing white — the hot highlight is the glint's job. */
+vec3 cbSky( vec3 R, float mip ) {
+  vec3 refl;
+  #ifdef ENVMAP_TYPE_CUBE_UV
+    refl = textureCubeUV( uEnvMap, R, mip ).rgb * uEnvIntensity;
+    float cbRm = max( refl.r, max( refl.g, refl.b ) );
+    refl *= 1.0 / max( 1.0, cbRm );
+  #else
+    float rUp = clamp( R.y, 0.0, 1.0 );
+    refl = mix( uSkyHorizon, uSkyTop, pow( rUp, 0.42 ) );
+    refl += uSunColor * pow( clamp( dot( R, normalize( uSunDir ) ), 0.0, 1.0 ), 6.0 ) * 0.30;
+  #endif
+  return refl;
+}
+
 #include <fog_pars_fragment>
 
 void main() {
   vec3 V = normalize( cameraPosition - vCbWorld );
   vec3 Nw = normalize( vCbNormal );                 // the Gerstner wave normal
-  if ( ! gl_FrontFacing ) Nw = - Nw;                // seen from below: flip
-
   float cbWd = length( cameraPosition - vCbWorld );
+  vec3 Ls = normalize( uSunDir );
 
   /* ---- detail ripples (near field; the far surface goes glassy) --------- */
   float cbRf = 1.0 / ( 1.0 + cbWd * 0.030 );
@@ -4180,33 +4202,6 @@ void main() {
   float hz = cbRippleH( vCbUv + vec2( 0.0, e ), uTime );
   vec3 rN = normalize( vec3( -( hx - h0 ) * rAmp / e, 1.0, -( hz - h0 ) * rAmp / e ) );
   vec3 N = normalize( Nw + vec3( rN.x, 0.0, rN.z ) );
-
-  /* ---- ROUND 3 (surface lane, critic r2 "GIANT white foam blobs", "matte
-     blue plastic bumps with no reflection") --------------------------------
-     The blobs were never foam: they were the analytic sky (a near-white
-     horizon colour) switched in by a pow-5 fresnel on the raw Gerstner normal,
-     so every wave back-slope flipped to a white patch the size of half a
-     wavelength. Two changes:
-       1. The reflection is the scene's PMREM sky dome (textureCubeUV at a
-          soft mip), sampled along a reflected direction whose normal is the
-          wave normal blended toward +Y with distance — a smooth field with
-          no hard slope-to-slope steps, and it carries the dome's own sun
-          glow, so the sea is lit from the sky it sits under.
-       2. Schlick, F0 0.02, power 5, on that same smoothed normal. Fresnel
-          DARKENS the near water (the body shows through) and brightens it
-          toward the horizon, which is the gradient every real lake shows. */
-  float cbFlat = smoothstep( 4.0, 22.0, cbWd );
-  /* The fresnel WEIGHT comes off the mean plane (the wave normal pulled 80 %
-     toward +Y even at the hero's feet, fully flat by 22 m): a pow-5 term on a
-     15-degree Gerstner slope at a grazing view flips 0.05 -> 1.0 across one
-     wave, which IS the white-blob field (r2 shoot). The waves still show —
-     through the reflection DIRECTION (Nr, smooth in the blurred dome) and
-     the glint — which is how a real lake reads them. */
-  vec3 Ng = normalize( mix( Nw, vec3( 0.0, 1.0, 0.0 ), 0.80 + 0.20 * cbFlat ) );
-  vec3 Nr = normalize( mix( N, vec3( 0.0, 1.0, 0.0 ), 0.45 + 0.45 * cbFlat ) );   // reflection normal
-  float ndv = clamp( dot( Ng, V ), 0.0, 1.0 );
-  float f0 = clamp( uFresnelBias, 0.0, 0.05 );
-  float fres = clamp( f0 + ( 1.0 - f0 ) * pow( 1.0 - ndv, max( uFresnelPower, 4.0 ) ), 0.0, 1.0 );
 
   /* ---- how much water is under this pixel ------------------------------- */
   float depth = 1.0;                       // 1 = deep, 0 = the shore line
@@ -4223,40 +4218,78 @@ void main() {
   float depthM = depth * max( uDepthFade, 0.5 );          // metres of water
   float shoreD = vCbShore.y;                              // metres to dry ground
 
+  /* ======================================================================
+     THE UNDERSIDE — the camera is below the surface (water lane, 2026-09-07,
+     playtest V2-03 / V3-11 / verdant-1 "a flat opaque cream slab with hard
+     polygon edges, cut off by a razor-straight seam"). The old path flipped
+     the normal and ran the SAME shading, so from below the eye saw the
+     analytic horizon at full fresnel plus the shore foam: a cream ceiling.
+     From under water a surface is a dark mirror of the deep everywhere
+     except SNELL'S WINDOW — the ~97 degree cone straight up through which
+     the sky refracts in — and it wears no foam and no glint of its own.
+     ====================================================================== */
+  if ( ! gl_FrontFacing ) {
+    vec3 Nd = -normalize( mix( N, vec3( 0.0, 1.0, 0.0 ), 0.5 ) );   // points DOWN, at the eye
+    vec3 Rr = refract( -V, Nd, 1.333 );                               // water -> air; zero on TIR
+    float tir = 1.0 - step( 1e-4, dot( Rr, Rr ) );
+    vec3 Ru = normalize( Rr + vec3( 0.0, 1e-3, 0.0 ) );
+    vec3 skyB = cbSky( Ru, 0.55 );
+    float win = ( 1.0 - tir ) * pow( clamp( Ru.y, 0.0, 1.0 ), 0.35 );
+    vec3 colB = mix( uDeep * 0.85, skyB * 0.92, win );
+    float sunB = pow( clamp( dot( Ru, Ls ), 0.0, 1.0 ), 48.0 ) * ( 1.0 - tir );
+    colB += uSunColor * sunB * 0.6;
+    float alphaB = mix( 0.62, 0.42, win );
+    gl_FragColor = vec4( max( colB, vec3( 0.0 ) ), alphaB );
+    #include <fog_fragment>
+    return;
+  }
+
+  /* ---- fresnel off the mean plane (a pow-5 term on the raw Gerstner slope
+     flips 0.05 -> 1.0 across one wave at a grazing view, which was the r2
+     white-blob field) ------------------------------------------------------ */
+  float cbFlat = smoothstep( 4.0, 22.0, cbWd );
+  vec3 Ng = normalize( mix( Nw, vec3( 0.0, 1.0, 0.0 ), 0.80 + 0.20 * cbFlat ) );
+  /* Reflection normal (water lane 2026-09-07, V2-02 "an obvious repeating
+     pattern ... poured cream"): 45 % flattening let the 7.5 m Gerstner slope
+     steer the mirror between the dome's cream cloud deck and its blue sky once
+     per wave — wide diagonal bands at any low view. 62 % near / 92 % far keeps
+     the swing under ~5 degrees; the ripples (N) still break the mirror. */
+  vec3 Nr = normalize( mix( N, vec3( 0.0, 1.0, 0.0 ), 0.62 + 0.30 * cbFlat ) );   // reflection normal
+  float ndv = clamp( dot( Ng, V ), 0.0, 1.0 );
+  float f0 = clamp( uFresnelBias, 0.0, 0.05 );
+  float fres = clamp( f0 + ( 1.0 - f0 ) * pow( 1.0 - ndv, max( uFresnelPower, 4.0 ) ), 0.0, 1.0 );
+
   /* ---- body colour: shallow tint is the last 1.6 m before the shore ----- */
   vec3 body = mix( uShallow, uDeep, smoothstep( 0.0, 1.6, depthM ) );
 
-  /* ---- sky reflection --------------------------------------------------- */
+  /* ======================================================================
+     SEE-THROUGH (water lane, 2026-09-07, owner P8 "an opaque blue slab laid
+     on top of the beach ... the 6.4 m tidewell directly under you is
+     completely invisible"). The bed is already in the frame under this
+     pixel (opaque geometry, drawn first); what the water does is ATTENUATE
+     it. Beer-Lambert over the eye ray's slanted path through the column:
+     T = exp( -depth / cos(view) * uAbsorb ). Straight down into 1 m of
+     lake water (uAbsorb 0.32) 73 % of the bed survives; at 3 m, 38 %; at a
+     grazing view the path is long and the column takes it all — which is
+     exactly the gradient every real lake shows. uOpacity is now the CEILING:
+     the deepest water still hands (1 - uOpacity) of the bed through.
+     Blend weights, exactly: out = refl*fres + body*(1-fres)*(1-T) + bed*(1-fres)*T
+     ====================================================================== */
+  float ndvT = max( abs( V.y ), 0.10 );
+  float pathM = depthM / ndvT;
+  float T = exp( -pathM * max( uAbsorb, 0.02 ) ) * ( 1.0 - fres );
+  T = max( T, ( 1.0 - clamp( uOpacity, 0.0, 1.0 ) ) * ( 1.0 - fres ) );
+  float alpha = 1.0 - T;
+
+  /* ---- sky reflection: the dome at a soft mip, so a lit cumulus is a glow
+     on the water and not a cream blob with a silhouette (V3-11, V2-02) ----- */
   vec3 R = reflect( -V, Nr );
   R.y = max( R.y, 0.035 );                 // a lake never mirrors the ground
-  vec3 Ls = normalize( uSunDir );
-  vec3 refl;
-  #ifdef ENVMAP_TYPE_CUBE_UV
-    // soft mip: a water surface is a slightly hazy mirror, and the blur is
-    // what keeps the dome's sun disc from aliasing on the wave slopes
-    refl = textureCubeUV( uEnvMap, R, 0.30 ).rgb * uEnvIntensity;
-    // soft-knee: the dome is HDR (sun halo, horizon glow); the mirror of it
-    // must never print white — the hot highlight is the glint's job below
-    float cbRm = max( refl.r, max( refl.g, refl.b ) );
-    refl *= 1.0 / max( 1.0, cbRm );
-  #else
-    float rUp = clamp( R.y, 0.0, 1.0 );
-    refl = mix( uSkyHorizon, uSkyTop, pow( rUp, 0.42 ) );
-    refl += uSunColor * pow( clamp( dot( R, Ls ), 0.0, 1.0 ), 6.0 ) * 0.30;
-  #endif
+  vec3 refl = cbSky( R, 0.58 );
 
-  vec3 col = mix( body, refl, fres );
+  vec3 col = ( refl * fres + body * max( alpha - fres, 0.0 ) ) / max( alpha, 1e-3 );
 
   /* ---- sun glint: Blinn-Phong 200 on the rippled normal ----------------- */
-  // a tight HOT lobe (the glitter, near field — cbRh dies by ~15 m so the far
-  // surface is never single-pixel speckle at a 0.60 render scale) over a
-  // broad dim lobe that reads as "sunlit" from any camera
-  /* r3 shoot (_shots/verdant-3/spawn.png, sun behind the camera): the lobe
-     on the FULL wave normal painted one solid white band across every
-     Gerstner slope that faced the half vector — the "giant foam blobs" were
-     this. The glint normal keeps only HALF the wave tilt plus the ripples,
-     the lobe is Blinn 200 (a 4-degree cone the 2-4 degree ripples break into
-     sparkle), and its energy is a third of what it was. */
   vec3 H = normalize( Ls + V );
   vec3 Nh = normalize( N - Nw * 0.5 + vec3( 0.0, 0.5, 0.0 ) );
   float ndh = clamp( dot( Nh, H ), 0.0, 1.0 );
@@ -4264,36 +4297,40 @@ void main() {
   float spec = pow( ndh, max( uGloss, 200.0 ) ) * cbRh;
   float glit = pow( ndh, 24.0 );
   float sunUp = clamp( Ls.y * 4.0, 0.0, 1.0 );      // no glint from a sun below the horizon
-  col += uSunColor * ( spec * 0.75 + glit * 0.06 ) * ( 0.30 + 0.70 * fres ) * sunUp;
+  vec3 glint = uSunColor * ( spec * 0.75 + glit * 0.06 ) * ( 0.30 + 0.70 * fres ) * sunUp;
+  // a highlight is light ADDED to the frame: it raises the coverage it rides on
+  float gl = clamp( dot( glint, vec3( 0.3333 ) ), 0.0, 0.9 );
+  float alphaG = max( alpha, gl );
+  col = ( col * alpha + glint ) / max( alphaG, 1e-3 );
+  alpha = alphaG;
 
   /* ---- foam: the SHORE BAND only (+ whitecaps on open sea) -------------- */
-  // ROUND 3: foam is where the water meets the GROUND — vCbShore.y is metres
-  // to the nearest dry sample, so a 20 m wading shelf 0.5 m deep is water,
-  // not milk, and the lapping line sits on the bank whatever the fade depth.
-  float cbShoreM = clamp( uShoreWidth, 0.3, 1.2 );
+  // foam is where the water meets the GROUND — vCbShore.y is metres to the
+  // nearest dry sample. Water lane 2026-09-07: the band is capped at 0.8 m
+  // and dies by 0.75 m of depth, the wet line is 8 cm at half strength, and
+  // the whole layer sits at 0.7 — the old 0.8-strength 12 cm line plus a
+  // 1.2 m band painted every knee-deep shelf of the verdant-3 river white.
+  float cbShoreM = clamp( uShoreWidth, 0.25, 0.8 );
   float churn = cbwNoise( vCbUv * 1.7 + vec2( uTime * 0.28, -uTime * 0.19 ) );
   float churn2 = cbwNoise( vCbUv * 4.1 - vec2( uTime * 0.21, uTime * 0.33 ) );
-  // the band breathes in and out along the bank (a wash, not a stripe)
   float lap = 0.5 + 0.5 * sin( uTime * 1.35 + shoreD * 5.0 + churn * 4.0 );
-  float band = 1.0 - smoothstep( 0.10, cbShoreM * ( 0.55 + 0.45 * lap ), shoreD );
-  float shoreFoam = band * smoothstep( 0.36, 0.72, churn * 0.65 + churn2 * 0.35 + band * 0.25 )
-                  * ( 1.0 - smoothstep( 0.9, 1.4, depthM ) );
-  // the wet line itself: a thin bright edge on the last 12 cm
-  shoreFoam = max( shoreFoam, ( 1.0 - smoothstep( 0.0, 0.12, shoreD ) ) * 0.8 );
-  // whitecaps: only where uCrestFoam > 0 (open sea), only on the very top of
-  // a crest, noise-gated to ~10-15 % coverage, only in > 1.5 m of water
+  float band = 1.0 - smoothstep( 0.06, cbShoreM * ( 0.55 + 0.45 * lap ), shoreD );
+  float shoreFoam = band * smoothstep( 0.40, 0.75, churn * 0.65 + churn2 * 0.35 + band * 0.20 )
+                  * ( 1.0 - smoothstep( 0.30, 0.75, depthM ) );
+  shoreFoam = max( shoreFoam, ( 1.0 - smoothstep( 0.0, 0.08, shoreD ) ) * 0.5 );
   float caps = smoothstep( 0.90, 0.99, vCbCrest * ( 0.72 + 0.34 * churn ) ) * uCrestFoam
              * smoothstep( 0.35, 0.65, churn2 ) * smoothstep( 1.2, 2.5, depthM );
-  float foam = clamp( shoreFoam + caps, 0.0, 1.0 );
+  float foam = clamp( shoreFoam + caps, 0.0, 1.0 ) * 0.7;
+  // foam is a layer OVER the water: out = foam*uFoam + (1-foam)*(water over bed)
+  float alphaF = foam + ( 1.0 - foam ) * alpha;
+  col = ( uFoam * foam + col * alpha * ( 1.0 - foam ) ) / max( alphaF, 1e-3 );
+  alpha = alphaF;
 
-  col = mix( col, uFoam, foam * 0.80 );
-
-  /* ---- alpha: depth fade — 0.30 at the waterline, uOpacity by 1.2 m ------ */
-  float alpha = mix( 0.30, uOpacity, smoothstep( 0.0, 1.2, depthM ) );
-  alpha = clamp( max( alpha, max( fres * 0.9, foam ) ), 0.0, 1.0 );
+  // the plane's own edge on dry ground vanishes (it is buried there anyway)
+  alpha *= smoothstep( 0.0, 0.02, depth + foam );
 
   /* LINEAR HDR out — see the ROUND 5 double-tone-map note in world/sky.js. */
-  gl_FragColor = vec4( max( col, vec3( 0.0 ) ), alpha );
+  gl_FragColor = vec4( max( col, vec3( 0.0 ) ), clamp( alpha, 0.0, 1.0 ) );
 
   #include <fog_fragment>
 }
@@ -4594,6 +4631,7 @@ function _waterFor(theme) {
     if (typeof o.ripple === 'number') m.uniforms.uRipple.value = o.ripple;
     if (typeof o.crestFoam === 'number') m.uniforms.uCrestFoam.value = o.crestFoam;
     if (typeof o.gloss === 'number') m.uniforms.uGloss.value = o.gloss;
+    if (typeof o.absorb === 'number') m.uniforms.uAbsorb.value = o.absorb;
   }
   return m;
 }

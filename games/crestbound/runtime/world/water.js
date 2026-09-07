@@ -21,8 +21,9 @@
  * instance (materials.js §14) and this module is its CONSUMER, not a second
  * implementation: we clone it per body — materials.js's water `clone()` keeps
  * the clock and the wave SHAPE shared by reference while handing each body its
- * own colour uniforms — enable its `CB_WATER_SHORE` define, and feed it the
- * `aShore` attribute it is waiting for. A local Gerstner material exists ONLY
+ * own colour uniforms and (water lane 2026-09-07) its OWN amplitude `uAmp`, so
+ * a basin ripples where a lake rolls — enable its `CB_WATER_SHORE` define, and
+ * feed it the `aShore` attribute it is waiting for. A local Gerstner material exists ONLY
  * as the standalone fallback for a caller with no Mats service (harnesses, unit
  * tests); it speaks the same attribute so the two paths cannot diverge.
  *
@@ -122,9 +123,13 @@ export const WATER_LOOK = {
    * 0.6 m edge where the water meets the ground, not a band. `gloss`
    * 240/200/280 -> 140/120/160: the glint lobe broadened so it reads at a
    * 0.60 render scale (O4). */
-  lake: { deep: 0x0d3a4a, shallow: 0x4fbfc4, foam: 0xeaf9ff, amp: 0.42, shoreWidth: 0.6, crestFoam: 0.0, ripple: 0.55, opacity: 0.86, fade: 3.0, gloss: 140 },
-  sea:  { deep: 0x07293f, shallow: 0x2f9fc0, foam: 0xf2fbff, amp: 1.05, shoreWidth: 0.7, crestFoam: 0.70, ripple: 0.70, opacity: 0.90, fade: 5.0, gloss: 120 },
-  pool: { deep: 0x125a63, shallow: 0x76e2dd, foam: 0xffffff, amp: 0.18, shoreWidth: 0.4, crestFoam: 0.0, ripple: 0.40, opacity: 0.72, fade: 1.6, gloss: 160 },
+  /* `absorb` (water lane 2026-09-07) is Beer-Lambert absorption per metre of
+   * EYE PATH through the column — the see-through model in materials.js
+   * WATER_FRAG: the bed survives exp(-depth/cos(view)*absorb). A clear lake
+   * hands 73 % of a 1 m bed through straight down; a basin is murkier. */
+  lake: { deep: 0x0d3a4a, shallow: 0x4fbfc4, foam: 0xeaf9ff, amp: 0.42, shoreWidth: 0.6, crestFoam: 0.0, ripple: 0.55, opacity: 0.86, fade: 3.0, gloss: 140, absorb: 0.32 },
+  sea:  { deep: 0x07293f, shallow: 0x2f9fc0, foam: 0xf2fbff, amp: 1.05, shoreWidth: 0.7, crestFoam: 0.70, ripple: 0.70, opacity: 0.90, fade: 5.0, gloss: 120, absorb: 0.26 },
+  pool: { deep: 0x125a63, shallow: 0x76e2dd, foam: 0xffffff, amp: 0.18, shoreWidth: 0.4, crestFoam: 0.0, ripple: 0.40, opacity: 0.72, fade: 1.6, gloss: 160, absorb: 0.50 },
 };
 
 /* ---------------------------------------------------------------------------
@@ -184,6 +189,8 @@ uniform float uShoreWidth;
 uniform float uCrestFoam;
 uniform float uRipple;
 uniform float uGloss;
+uniform float uDepthFade;
+uniform float uAbsorb;
 uniform vec3  uSunDir;
 uniform vec3  uSunColor;
 uniform vec3  uSkyTop;
@@ -206,47 +213,69 @@ float wn(vec2 p) {
   return mix(mix(wh(i), wh(i + vec2(1.0, 0.0)), f.x),
              mix(wh(i + vec2(0.0, 1.0)), wh(i + vec2(1.0, 1.0)), f.x), f.y);
 }
+vec3 sky(vec3 R) {
+  return mix(uSkyHorizon, uSkyTop, pow(clamp(R.y, 0.0, 1.0), 0.42))
+       + uSunColor * pow(clamp(dot(R, normalize(uSunDir)), 0.0, 1.0), 6.0) * 0.30;
+}
 
 void main() {
-  vec3 N = normalize(vN);
+  vec3 Nw = normalize(vN);
   float r1 = wn(vUvW * 2.1 + uTime * 0.20);
   float r2 = wn(vUvW * 5.3 - uTime * 0.14);
-  N = normalize(N + vec3((r1 - 0.5) * uRipple * 0.5, 0.0, (r2 - 0.5) * uRipple * 0.5));
-  if (!gl_FrontFacing) N = -N;
-
+  vec3 N = normalize(Nw + vec3((r1 - 0.5) * uRipple * 0.5, 0.0, (r2 - 0.5) * uRipple * 0.5));
   vec3 V = normalize(cameraPosition - vW);
-  // Schlick F0 0.02 on the smooth wave normal (the ripples keep the glint)
-  vec3 Ng = normalize(vN);
-  if (!gl_FrontFacing) Ng = -Ng;
-  float ndv = clamp(dot(Ng, V), 0.0, 1.0);
-  float fres = clamp(0.02 + 0.98 * pow(1.0 - ndv, 5.0), 0.0, 1.0);
+  vec3 Ls = normalize(uSunDir);
 
   float depth = clamp(1.0 - vShore.x, 0.0, 1.0);
+  float depthM = depth * max(uDepthFade, 0.5);
   float shoreD = vShore.y;
-  vec3 body = mix(uShallow, uDeep, depth * depth);
+
+  // the underside: a dark mirror of the deep outside Snell's window (same
+  // model as materials.js WATER_FRAG, analytic sky)
+  if (!gl_FrontFacing) {
+    vec3 Nd = -normalize(mix(N, vec3(0.0, 1.0, 0.0), 0.5));
+    vec3 Rr = refract(-V, Nd, 1.333);
+    float tir = 1.0 - step(1e-4, dot(Rr, Rr));
+    vec3 Ru = normalize(Rr + vec3(0.0, 1e-3, 0.0));
+    float win = (1.0 - tir) * pow(clamp(Ru.y, 0.0, 1.0), 0.35);
+    vec3 colB = mix(uDeep * 0.85, sky(Ru) * 0.92, win);
+    colB += uSunColor * pow(clamp(dot(Ru, Ls), 0.0, 1.0), 48.0) * (1.0 - tir) * 0.6;
+    gl_FragColor = vec4(max(colB, vec3(0.0)), mix(0.62, 0.42, win));
+    return;
+  }
+
+  // Schlick F0 0.02 on the smooth wave normal (the ripples keep the glint)
+  float ndv = clamp(dot(Nw, V), 0.0, 1.0);
+  float fres = clamp(0.02 + 0.98 * pow(1.0 - ndv, 5.0), 0.0, 1.0);
+
+  vec3 body = mix(uShallow, uDeep, smoothstep(0.0, 1.6, depthM));
+  // see-through: Beer-Lambert over the slanted eye path (materials.js WATER_FRAG)
+  float pathM = depthM / max(abs(V.y), 0.10);
+  float T = exp(-pathM * max(uAbsorb, 0.02)) * (1.0 - fres);
+  T = max(T, (1.0 - clamp(uOpacity, 0.0, 1.0)) * (1.0 - fres));
+  float alpha = 1.0 - T;
+
   vec3 R = reflect(-V, N);
   R.y = max(R.y, 0.035);
-  vec3 sky = mix(uSkyHorizon, uSkyTop, pow(clamp(R.y, 0.0, 1.0), 0.42));
-  vec3 col = mix(body, sky, fres);
+  vec3 col = (sky(R) * fres + body * max(alpha - fres, 0.0)) / max(alpha, 1e-3);
 
-  vec3 H = normalize(normalize(uSunDir) + V);
-  col += uSunColor * pow(clamp(dot(N, H), 0.0, 1.0), max(uGloss, 4.0)) * (0.35 + 0.65 * fres) * 2.2;
+  vec3 H = normalize(Ls + V);
+  vec3 glint = uSunColor * pow(clamp(dot(N, H), 0.0, 1.0), max(uGloss, 4.0)) * (0.35 + 0.65 * fres) * 2.2;
+  float gl = clamp(dot(glint, vec3(0.3333)), 0.0, 0.9);
+  float alphaG = max(alpha, gl);
+  col = (col * alpha + glint) / max(alphaG, 1e-3);
+  alpha = alphaG;
 
   // foam: the bank only (shoreD metres from dry ground) + sea whitecaps
   float churn = wn(vUvW * 2.6 + vec2(uTime * 0.35, -uTime * 0.22));
-  float band = 1.0 - smoothstep(0.10, clamp(uShoreWidth, 0.3, 1.2), shoreD);
-  float foam = clamp(band * smoothstep(0.30, 0.72, churn + band * 0.25)
-                   + smoothstep(0.90, 0.99, vCrest * (0.72 + 0.34 * churn)) * uCrestFoam * smoothstep(0.4, 0.7, churn), 0.0, 1.0);
-  col = mix(col, uFoam, foam * 0.8);
-
-  float alpha = clamp(mix(uOpacity, 1.0, max(fres * 0.75, foam)), 0.0, 1.0);
-  alpha *= smoothstep(0.0, 0.04, depth + foam);
-  /* LINEAR HDR out — post.js FinishPass is the one and only tone map.
-     See the ROUND 5 note in world/sky.js: a custom ShaderMaterial that ACES'd
-     into the composer's half-float target was tone mapped twice, which clamps
-     every specular and fresnel highlight to 1.0 and is why the critic measured
-     the water as 'one uniform cyan quad with a single specular smear'. */
-  gl_FragColor = vec4(max(col, vec3(0.0)), alpha);
+  float band = 1.0 - smoothstep(0.06, clamp(uShoreWidth, 0.25, 0.8), shoreD);
+  float foam = clamp(band * smoothstep(0.40, 0.75, churn + band * 0.20) * (1.0 - smoothstep(0.30, 0.75, depthM))
+                   + smoothstep(0.90, 0.99, vCrest * (0.72 + 0.34 * churn)) * uCrestFoam * smoothstep(0.4, 0.7, churn), 0.0, 1.0) * 0.7;
+  float alphaF = foam + (1.0 - foam) * alpha;
+  col = (uFoam * foam + col * alpha * (1.0 - foam)) / max(alphaF, 1e-3);
+  alpha = alphaF * smoothstep(0.0, 0.02, depth + foam);
+  /* LINEAR HDR out — post.js FinishPass is the one and only tone map. */
+  gl_FragColor = vec4(max(col, vec3(0.0)), clamp(alpha, 0.0, 1.0));
 }
 `;
 
@@ -291,7 +320,7 @@ function resolveLook(theme, kind2, look) {
   const L = Object.assign({}, WATER_LOOK[K] || WATER_LOOK.lake);
   if (pal && pal.water !== undefined && pal.water !== null && !(o && o.shallow !== undefined)) L.shallow = pal.water;
   if (o) {
-    for (const k of ['deep', 'shallow', 'foam', 'opacity', 'shoreWidth', 'crestFoam', 'ripple', 'gloss']) {
+    for (const k of ['deep', 'shallow', 'foam', 'opacity', 'shoreWidth', 'crestFoam', 'ripple', 'gloss', 'absorb']) {
       if (o[k] !== undefined) L[k] = o[k];
     }
     if (typeof o.depthFade === 'number') L.fade = o.depthFade;
@@ -325,13 +354,17 @@ function applyLook(mat, theme, L, flow) {
   if (u.uOpacity) u.uOpacity.value = L.opacity;
   if (u.uGloss) u.uGloss.value = L.gloss;
   if (u.uDepthFade) u.uDepthFade.value = L.fade;
+  if (u.uAbsorb && typeof L.absorb === 'number') u.uAbsorb.value = L.absorb;
   if (u.uFlow && u.uFlow.value && u.uFlow.value.isVector2) {
     u.uFlow.value.set(flow ? flow[0] : 0, flow ? flow[1] : 0);
   }
-  // uAmp is SHARED with every other body in materials.js's water (one ocean,
-  // one wave set). A pool never retunes it (a basin must not flatten the lake
-  // it sits beside); a lake or sea does, unless a body opts out.
-  if (u.uAmp && (L.ownAmp || (L.kind2 !== 'pool' && L.ownAmp !== false))) u.uAmp.value = L.amp;
+  // uAmp is PER BODY (water lane 2026-09-07). materials.js's water clone()
+  // re-attaches the shared amplitude so every surface is one ocean, and a
+  // pool therefore never got its 0.18: the Keep's parterre inherited the
+  // base 1.0 and heaved 0.49 m over a 0.15 m freeboard (owner screenshot 3,
+  // playtest K2 "the surface sits above the rim"). resolveMaterial hands
+  // each body its own uAmp object; the wave SHAPE (uWaveA/B/C) stays shared.
+  if (u.uAmp) u.uAmp.value = L.amp;
   return mat;
 }
 
@@ -363,6 +396,7 @@ export function fallbackWaterMaterial(theme, kind2, look) {
       uRipple: { value: L.ripple },
       uGloss: { value: L.gloss },
       uDepthFade: { value: L.fade },
+      uAbsorb: { value: L.absorb === undefined ? 0.32 : L.absorb },
       uSunDir: { value: new THREE.Vector3(-0.42, 0.86, 0.30) },
       uSunColor: { value: new THREE.Color(0xfff2d8) },
       uSkyTop: { value: new THREE.Color(0x2f6fc0) },
@@ -416,6 +450,9 @@ function resolveMaterial(theme, mats, kind2, look) {
       // shore-enabled clone must not be able to share a compiled program with a
       // shore-less one, so widen the key by the define we just added.
       m.customProgramCacheKey = function () { return 'cb-water-shore'; };
+      // this body's OWN amplitude (the clone re-attached the shared one)
+      m.uniforms.uAmp = { value: L.amp };
+      if (!m.uniforms.uAbsorb) m.uniforms.uAbsorb = { value: L.absorb === undefined ? 0.32 : L.absorb };
       m.needsUpdate = true;
       applyLook(m, theme, L, null);
       _themedMats.set(ck, m);

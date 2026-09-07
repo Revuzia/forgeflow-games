@@ -550,12 +550,17 @@ export default {
 
   waters: [
     {
-      // THE MELT POOL. Surface 0.90, floor -2.60 => 3.50 m deep, which is a real
+      // THE MELT POOL. Surface 0.84, floor -2.60 => 3.44 m deep, which is a real
       // dive and a real surfacing. The box is buried on every edge: the lake ice
-      // stands at 1.00 all round the basin's 7.5 m rim, 0.10 m above the water
-      // line, so the plane is hidden by the lip rather than clipped by it.
+      // stands at 0.92-1.00 all round the basin's 7.5 m rim (water lane audit
+      // 2026-09-07: 0.92 at x -5.5, z 39.5..43.5), so the surface sits 0.06 m
+      // under the lowest lip and, at a melt pool's 0.10 amplitude (0.05 m
+      // crests), never breaks through it. At the lake amplitude (0.42 -> 0.21 m
+      // crests) 39 of 128 rim samples were under the crest line.
       kind: 'water', kind2: 'lake',
       p: [-13, r2(WATER_Y - 1.75), 42], s: [15, 3.5, 15],
+      surfaceY: r2(WATER_Y - 0.06),
+      look: { amp: 0.10 },
       tint: 0x2f7ea8,
     },
   ],

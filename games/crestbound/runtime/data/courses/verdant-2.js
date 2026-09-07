@@ -510,6 +510,13 @@ export default {
        * (2.2 m) was already under-sampled at 0.9 m. 1.4 m -> 12,800 tris. */
       res: 1.4,
       tint: WATER_C,
+      /* Water lane 2026-09-07: see-through water shows the moat FLOOR (V2-02
+         asked for exactly that), and the floor's sand-ripple bake reads as bold
+         cream bands from the water line (`_shots/play_wl_caustic/02_moat_water_
+         hidden.png`: the bands are on the bare bed, caustics off or on). 0.42/m
+         keeps the 2.76 m floor visible straight down (31 %) and lets the bands
+         fade toward the far bank instead of striping the whole moat. */
+      look: { absorb: 0.42 },
     },
   ],
 

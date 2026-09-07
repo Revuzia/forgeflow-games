@@ -311,3 +311,90 @@ and azure-1 spawn boards. ALIGNED_PROPS (sign, holosign) now take the authored y
 or +Z, unjittered. Text boards are also capped at TEXT_MAX_LINE_M = 3.7 m per line:
 the 0.60 m 'BAILEY MEADOW' header measured 6.1 m and covered Nim from the spawn
 camera.
+
+## Water: a second scene pass does not fit, and what the audit found (2026-09-07, water lane)
+
+**Official Water.js / Water2.js (a Reflector and/or a Refractor) re-render the
+scene into a texture every frame.** `_harness/_wl_refractcost.py` measures that
+pass on the shipping tier: the full frame, then the full frame plus ONE extra
+`renderer.render(scene, camera)` into a small target from an `engine.onFrame`
+hook, inside the same GPU timer query `_fillab.py` uses (5 repeats, medians,
+headless d3d11 = the real Intel UHD, azure-1 cp2, auto tier 0.60):
+
+| config | ms | delta | fps |
+|---|---|---|---|
+| full | 19.85 | — | 50.4 |
+| + pass 512×288 | 25.06 | **+5.21** | 39.9 |
+| + pass 384×216 | 24.00 | **+4.15** | 41.7 |
+| + pass 256×144 | 23.69 | **+3.84** | 42.2 |
+
+The delta barely moves with the target size, so the pass is paid in
+re-submitted draws and vertices (~190 draws / 300k triangles), not fill: a
+target too coarse to show a submerged structure still costs 19 % of the frame,
+and a 55 fps gate has 18.2 ms to spend in total. A layer-restricted Refractor
+would shed draws, not the terrain and static-merge vertex work that dominates.
+Verdict: the vendored r172 water objects stay unvendored; the analytic shader
+in `materials.js` (`WATER_FRAG`) carries the look. (The 19.85 ms "full" was
+taken while other lanes' gates were running; the deltas are paired, the
+absolute is not a perf-gate number.)
+
+**`_harness/_wl_audit.py` — every water body, live.** For each course with
+water it reads the body's `surfaceY`, the Gerstner crest height it can reach
+(Σ steepness·uAmp/k over the three waves), the ground around the box perimeter
+(broadphase raycast, boxes + heightfields), the interior bed, and the baked
+`aShore` statistics. What it found before the lane's fixes:
+
+- Keep parterre: built TWICE (two `water.pool` meshes, two volumes — `objects`
+  listed `FOUNTAIN_WATER` and `TERRAIN` on top of `waters:`/`terrain:`);
+  `uAmp` 1.00 (a `pool` never wrote its 0.18 because the amplitude uniform was
+  shared by reference across every body) → 0.49 m crests over a 0.15 m
+  freeboard, 72/72 rim samples under the crest line — the owner's "surface
+  above the rim"; and the bed was the lawn heightfield at y 0.00 (K10: crouch
+  sank 0.60 → 0.00 and stopped). After: one body, uAmp 0.18, crests 0.088 m,
+  0/72 under the crest, bed −1.30 (the marble), crouch 0.06 → −1.28.
+- rime-2 melt pool: lip 0.92–1.00 vs surface 0.90 + 0.21 m lake crests → 39/128
+  rim samples under the crest line. After (surfaceY 0.84, amp 0.10): 0.
+- Every other lake/moat/brook/channel: box edges buried (min perimeter ground
+  0.23–3.5 m above the surface). verdant-3's east end (x = 70) is the terrain
+  edge itself — by design.
+- The verdant-3 "white sheet" mid-river was NOT foam-on-crests: the tester
+  was resting on a 0.45 m-deep shelf between the logs (feet y 0.15, surface
+  0.60), and the shore rule painted every knee-deep strip near dry ground
+  white (0.8-strength wet line + a 1.2 m band). The cream blobs elsewhere are
+  the PMREM cloud reflection at mip 0.30 — now mip 0.50, and the foam layer is
+  0.7 × (an 8 cm half-strength line + a ≤ 0.8 m band that dies by 0.75 m depth).
+
+**Two swim defects live outside the water files; evidence in
+`_harness/_wl_hopprobe.py`:**
+
+1. SPACE on a SURFACED swimmer never fires the contract's `surfaceJumpV` hop.
+   Keep parterre, floating (`swimIdle`, `submerged false`), tap SPACE, sample
+   every rendered frame: state → `swimDive`, `vel.y` 2.14 for one frame then
+   0, rise **0.10 m** (9.0 m/s should give ~1.19 m), 30/30 frames still
+   `inWater`. That is why 0/6 surface hops clear the 1.10 m rim and why V3-03
+   "breaches and drops back into exactly the same spot" against log A.
+   Owner: controller.js (jump routing while `inWater`, and `_swimMove`'s
+   waterline clamp re-entering on the next frame).
+2. The underwater grade never fires: `cam._resolvePost()` returns null —
+   `player.fx` is the `ParticleSystem` (no `setUnderwater`, no `.post`) and
+   nobody calls `cam.setPost(engine.post)`, although `engine.post.setUnderwater`
+   exists. `post._underwaterTarget` reads 0 with `submerged true` at every
+   station (Keep bed, verdant-3 bed, verdant-2 moat, verdant-1 brook). One
+   line in game.js after the FollowCamera is built: `this.cam.setPost(this.engine.post)`.
+   Until then "underwater" is the water plane's own underside (Snell's window,
+   dark mirror outside it) and nothing else.
+
+**Replayed after the fixes (`_harness/_wl_replay.py`, `_shots/play_wl_after*/`):**
+Keep: hop in from the lawn ok; crouch 0.60 → −1.19 (submerged) — K10 sinks; 0/6
+surface hops leave the pool (the hop defect above). verdant-3: the "milk" near
+the logs is now clear water over a pale sand shelf; from the bed the surface is
+a translucent ceiling with Snell's window; sigil 1 IS reached by crouch + hold
+west against the 2.8 m/s current (sigils 0 → 1 in 4 s; crouch alone drifts
+10 m east, which is what the tester did). azure-1: the tidewell chamber and its
+lit doorway read through 6.4 m of lagoon from directly above (absorb 0.18).
+verdant-2 at the water line: the "obvious repeating pattern" of cream bands is
+the moat BED's sand-ripple bake seen through clear water — unchanged with the
+water mesh hidden and with caustics zeroed (`_shots/play_wl_caustic/`); not the
+water shader. Loop gate on the eight water courses: 611/612, 0 failed, respawn
+median 421 ms. Draws/tris at spawn after: keep 197/420k, verdant-3 239/443k,
+every other water course unchanged, all inside 260/450k.

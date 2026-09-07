@@ -524,6 +524,11 @@ export default {
       kind: 'water', kind2: 'lake',
       p: [0, -6.5, 4], s: [80, 13, 68],
       res: 1.4, tint: WATER_C, fade: 5.0,
+      /* Water lane 2026-09-07 (owner P8 "the 6.4 m tidewell directly under you
+         is completely invisible"): a tropical lagoon absorbs ~0.18/m of eye
+         path, so straight down through the tidewell 34 % of the bowl, its sigil
+         and its coins still reach the eye; the lake default (0.32) hands 15 %. */
+      look: { absorb: 0.18 },
     },
   ],
 
