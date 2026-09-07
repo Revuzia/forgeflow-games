@@ -1,0 +1,296 @@
+{
+ "area": "verdant-2 GNASHER FORT",
+ "defects": [
+  {
+   "id": "V2-01",
+   "where": "verdant-2, the spawn / cp-shore (0, 2.30, 53) and the whole south shore up to the quay (0, 1.55, 48)",
+   "did": "Booted the course and just stood at the spawn, then walked the mown path north to the south quay - the opening 15 seconds, no input tricks.",
+   "happened": "The 'GNASHER FORT' text board (objects text at [3.2, 4.25/3.72/3.35, 52], the deco sign at on(3.2,52,1.15) s [0.14,1.7,1.2]) renders as a billboard roughly 4.5 m wide and 2.5 m tall standing 3.2 m to the player's right and 1 m in front of the spawn ring. From the spawn it eats the right 30% of the viewport; from the quay 8 m further north it eats 45% and completely hides the east half of the fort, the east gnasher and the gate stair.",
+   "should": "The course-name board should read from the spawn without covering the level. Either shrink it to the TEXT_MAX_LINE_M budget the harness notes already record (3.7 m per line) and drop the two 0.22 sub-lines to one, or move it off the camera line (e.g. x -6..-8, or set back to z 55 behind the spawn ring) so the fort is unobstructed.",
+   "png": "games/crestbound/_shots/play_gnasher/01_00_spawn.png ; games/crestbound/_shots/play_gnasher2/02_south_quay.png"
+  },
+  {
+   "id": "V2-02",
+   "where": "verdant-2, the moat, everywhere - most visible from the south quay (0,1.55,48) and from the water at (7,-0.9,41)",
+   "did": "Walked to the quay and looked at the moat; then swam in it and looked back at the shore.",
+   "happened": "The near band of the moat surface renders as opaque chalky white/pale-cyan marbled swirls with hard edges and an obvious repeating pattern - it reads as poured cream, not water. Where that band ends there is a HARD HORIZONTAL SEAM into a flat grey-blue sheet with completely different shading; the two are the same plane. From water level the flat far band visually rides over the top of the north quay's stones.",
+   "should": "One continuous water surface with a smooth near-to-far falloff, translucent enough to see the moat floor at -2.76, and no hard band boundary. r172 ships Water.js / Water2.js / WaterMesh.js / Reflector.js in the same vendored three version - use them (owner P8).",
+   "png": "games/crestbound/_shots/play_gnasher2/02_south_quay.png ; games/crestbound/_shots/play_gnasher2/04_sinker_A.png"
+  },
+  {
+   "id": "V2-03",
+   "where": "verdant-2, the moat, seen from IN the water anywhere (measured at (11.66,-1.25,41.44) and (0,-1.38,39.34))",
+   "did": "Ran north off the south quay and missed the first sinker, exactly as a first-time player does, and stayed in the water.",
+   "happened": "There is NO underwater treatment at all. The camera sits at the water line and the bottom 55% of the screen becomes a flat opaque cream/mint slab with hard polygon edges, cut off from the rest of the frame by a razor-straight horizontal seam right across the viewport. The hero is washed out to near-white and is drawn THROUGH the surface rather than under it. No tint, no fog, no caustics, no surface-seen-from-below.",
+   "should": "Swimming should read as swimming: a tinted, fogged underwater view with the surface visible above you as a translucent ceiling, and the hero not blown out. This is the same r172 Water.js/WaterMesh.js swap the owner asked for in P8.",
+   "png": "games/crestbound/_shots/play_p4/01_1_fell_in.png"
+  },
+  {
+   "id": "V2-04",
+   "where": "verdant-2, the causeway lane, centre line x=0 at z 43.0 (between the south quay's north edge z 44.7 and sinker A at z 41.6)",
+   "did": "Ran north off the south quay toward sinker A along the centre line, the authored route.",
+   "happened": "The hero hit an invisible-from-above stone column and entered 'wallslide' at (0, 0.92, 43.38) then (0, 0.32, 43.38) before dropping in the water. It is the BEAT-10 moat-floor dressing pillar authored at p [0, -1.6, 43.0] s [1.0, 2.2, 1.0]: deco pillars stack UPWARD from p.y (the same p.y-is-the-foot trap the harness notes already record for kind:'pillar'), so it runs -1.6 to +0.6 and stands 0.6 m proud of the water in the middle of the 3.1 m causeway gap the player is supposed to jump.",
+   "should": "Moat-floor dressing must be under the water. Either drop it to a foot of -2.76 (the floor) so its cap sits below y=0, or move it off the x=0 causeway line. Right now it is a stub the player trips over on the course's first jump.",
+   "png": "games/crestbound/_shots/play_p4/01_1_fell_in.png (the trail is in _harness/_play_gnasher_p4.json step 1)"
+  },
+  {
+   "id": "V2-05",
+   "where": "verdant-2, the iron hat on the south quay (4.6, 1.60, 46.8) and the whole moat",
+   "did": "Took the iron hat (HUD showed METAL 25 s), then walked straight off the quay into the moat and held forward for 7 s, sampling every 400 ms.",
+   "happened": "The hat does nothing. With METAL active the hero entered the water at y -2.45 and FLOATED BACK UP to -1.99 in swimIdle, grounded false, drifting east on the current - identical to the same run with no hat (y -1.78 rising to -1.29). He never sinks and never walks the moat floor. Reading the code to confirm what I saw: player.power is assigned in game.js _givePower and the only other mention of this.power in player/controller.js is the declaration at line 531 and setPower() at line 820 - nothing in the movement code reads it.",
+   "should": "The course's own sign says 'IRON SINKS' and the crest hint says 'Take the iron hat on the shore. It sinks. Walk the moat floor.' Wearing metal should make the hero sink to the moat floor at -2.76 and walk it as ground for the 25 s, and the current should be survivable down there. As shipped the sign and the hint both lie to the player.",
+   "png": "games/crestbound/_shots/play_p4/06_5_metal_water.png"
+  },
+  {
+   "id": "V2-06",
+   "where": "verdant-2, THE DROWNED CREST at (0, -1.40, 39.5)",
+   "did": "Swam to the crest on the surface, with no hat needed, about 20 seconds after spawning.",
+   "happened": "The crest collected while the hero was in state 'swim' at y -1.38, floating - the ordinary swim depth. COURSE CLEAR card came up: 'THE DROWNED CREST', 1/7 crests, 6 coins, 0 sigils, 0 deaths, 0:35. The entire power beat (take the hat, sink, walk the floor at -2.76, beat the current) is bypassed; the crest sits exactly at swim-float depth.",
+   "should": "A power crest should require the power. Put the drowned crest on the moat FLOOR (about -2.4 or lower, under the 34 x 10 m current box) so it is only reachable by a hero the iron hat has actually sunk - which also gives V2-05's fix something to be for.",
+   "png": "games/crestbound/_shots/play_p4/07_6_drowned_crest.png"
+  },
+  {
+   "id": "V2-07",
+   "where": "verdant-2, the moat current volume (authored p [0,-1.40,39.5] s [34,2.8,10], dir +X, power 2.6)",
+   "did": "Floated with zero input for 8 s from (-8, ?, 39.5); then held forward due WEST from x 12.5 for 8 s.",
+   "happened": "Zero input drifts you +11.1 m east in 8 s. Holding forward straight into the current for 8 s nets 1.57 m of westward progress (12.54 -> 10.97, about 0.20 m/s) and the first 1.5 s actually LOSES a metre. A player who falls in on the west side of the causeway cannot swim back to where they fell in; they can only be flushed east and land somewhere else.",
+   "should": "Either the swim speed must clearly beat the current (the course comment claims 'gentle (2.6 m/s against a 4.5 m/s swim)') or the current box must not cover the causeway the player crosses. As it stands the causeway's punishment for a missed jump is not 'a swim', it is 'a ride to somewhere else'.",
+   "png": "games/crestbound/_shots/play_p4/03_3_swim_west.png"
+  },
+  {
+   "id": "V2-08",
+   "severity": "BLOCKER",
+   "where": "verdant-2, BOTH doors of the outer wall - the south gateway at (0, ~8, 23.0) at the top of the grand gate stair, and the north door at (0, ~7, -23.0). building style 'fort' p [0,8,0] s [46,8,46] footing 6.0, doors [{side:'south',w:5.0,h:5.4},{side:'north',w:3.4,h:4.2}]",
+   "did": "Pushed north into the south gateway from the bailey at five separate x offsets (-2.0, -1.0, 0.0, +1.0, +2.0) across the door's authored 5 m width, six seconds each. Then pushed SOUTH through the same gateway from INSIDE the fort at (0, 4.4, 18.0). Then did the same pair on the north door.",
+   "happened": "From OUTSIDE, every one of the five approaches stopped on the identical pixel - (x, 8.19, 23.38) - with a bonk and no way through; the x=-2.0 approach was eaten by the west gnasher on the way. From INSIDE at floor level the hero walked straight OUT through the same gateway and kept going into the moat at (10.86, -0.96, 42.24). The north door behaves identically: out from (0,4.4,-18) all the way to (-0.5,-1.23,-41.2), but pushing in from outside stops dead at (-0.04, 7.06, -23.38). So the doors ARE cut - they are cut relative to the building's INTERIOR floor (4.00), while the exterior grade outside the wall is 6.85-7.06 and the grand gate stair lifts you to 8.19. The hero's head is above the lintel (south door opening 4.00-9.40; north door 4.00-8.20) and he bonks on the masonry above it. In the screenshot that reads exactly as a bricked-up arch.",
+   "should": "Cut a building's doors from the EXTERIOR grade on each side, not only from the interior floor, or sink the grand gate stair so it arrives at the doorway's sill instead of 4.19 m above it. This is the course's stated main line - the design comment calls the grand gate stair 'the long way, and the only route that never asks for timing', running 'through the outer wall's own 5.00 m south gateway'. As shipped nothing can walk INTO the fort through either door, so the portcullis, the inner court, the Warden, the keep, the roof crest and the race are all unreachable by the intended route.",
+   "png": "games/crestbound/_shots/play_p6/05_3_grand_stair_before.png ; games/crestbound/_shots/play_p6/06_3_grand_stair_after.png ; games/crestbound/_shots/play_p11/01_A_south_door.png ; games/crestbound/_shots/play_p11/04_C_north_out.png"
+  },
+  {
+   "id": "V2-09",
+   "severity": "BLOCKER",
+   "where": "verdant-2, the CAUSEWAY STAIR from cp-quay (0,1.55,32.6) up to the bailey (objects: stairs p [0,0.25,29.44] w 4.2 rise 0.30 run 0.375 n 20)",
+   "did": "Stood on the north quay checkpoint, faced the stair and held forward for 12 s, sampling the ground normal every 300 ms.",
+   "happened": "The hero gets about 2.2 m up (y 1.60 to a max of 3.82), the ground normal tips past the slide threshold, he enters slopeSlide then wallslide, is thrown off the west side and ends swimming in the moat at (-18.62, -1.09, 39.0) - 18.6 m from where he started, back at square one. 15 slide events. Ground angles sampled on the way up: 40.6, 42.7, 43.0, 43.7, 43.8, 44.3, 44.8 degrees.",
+   "should": "The flight must be climbable. Its own comment authors it at 38.7 deg and TUNE.slope.slideDeg is 38, so even the authored angle is over the slide limit before the collider adds anything, and the surface the hero actually samples reads 40-45 deg. Reduce the pitch under 38 (more run per riser) or give stairs discrete step colliders that never report a slope.",
+   "png": "games/crestbound/_shots/play_p6/01_1_causeway_stair_before.png ; games/crestbound/_shots/play_p6/02_1_causeway_stair_after.png"
+  },
+  {
+   "id": "V2-10",
+   "severity": "BLOCKER",
+   "where": "verdant-2, the KEEP GALLERY STAIR on the keep east face (objects: stairs p [6.4,18.70,1.68] rise 0.30 run 0.357 n 14) - ROUTE A to the roof crest",
+   "did": "Stood in the inner court at (6.4,19.2,4.4), faced the stair, held forward 12 s.",
+   "happened": "The hero reaches the top tread (y 22.90) but cannot make the 0.40 m step onto the gallery deck at 23.05; he enters slopeSlide, is thrown off, and ends at (7.62, 17.42, -7.62) standing on a 45.9 deg grass face BELOW the court, still sliding. 68 slide events in 12 seconds.",
+   "should": "ROUTE A is the non-timing route to the open crest on the roof. Authored at 40.04 deg it is over slideDeg 38 so it slides, and the step from the top tread onto the gallery has to be a step rather than a lip that bounces you off.",
+   "png": "games/crestbound/_shots/play_p6/07_4_gallery_stair_before.png ; games/crestbound/_shots/play_p6/08_4_gallery_stair_after.png"
+  },
+  {
+   "id": "V2-11",
+   "where": "verdant-2, the ROUTE A gate stair (x 10.0 to 3.4 at z 24.4) and the NET at on(6.0, 23.6, 0), which occupy the same footprint",
+   "did": "Started at the stair foot (10.0,7.2,24.4) and held forward for 12 s.",
+   "happened": "The hero does reach the top (y 11.89 against the 12.00 walk) but the run logged climbStart 59 times and climbEnd 59 times in twelve seconds - the hero flickers in and out of the rope-climb state about five times a second the whole way up, because the net's climb volume (x 4..8, z 23.6) overlaps the stair (x 6.70, z 24.4). He then died at the top.",
+   "should": "One surface, one state. Move the net off the stair footprint (the wall face is 46 m wide) or shrink its climb volume so the stair is never inside it. A 5 Hz state flicker is visible and it makes the animation and the camera judder.",
+   "png": "games/crestbound/_shots/play_p6/03_2_gate_stair_before.png ; games/crestbound/_shots/play_p6/04_2_gate_stair_after.png"
+  },
+  {
+   "id": "V2-12",
+   "where": "verdant-2, the BAILEY RING - the authored mown path terrain.paths [[-8,25],[-16,18],[-20,6]] (west) around the outer wall",
+   "did": "Stood on the painted path at (-8, 6.6, 25.0) and held forward along it toward (-16, 18) for 12 s.",
+   "happened": "37 slide events. The hero runs a few metres on 13 deg ground, then the path crosses 38-42.6 deg terrain, he goes into slopeSlide and is carried 44 m to (-20.02, 5.35, -18.82), still standing on a 35.7 deg face. The mown path is painted across ground the hero cannot walk on.",
+   "should": "A path decal is a promise. Terrace the knoll under the two bailey ring paths so the walking line stays under 38 deg, or move the paths onto the terraces that already exist (flats at 0/7/14/21).",
+   "png": "games/crestbound/_shots/play_p6/09_5_bailey_ring_before.png ; games/crestbound/_shots/play_p6/10_5_bailey_ring_after.png"
+  },
+  {
+   "id": "V2-13",
+   "where": "verdant-2, the GNASHER GATE, the WEST POST at (-7.0, 5.40, 26.5) and the SECRET crest it guards",
+   "did": "Did what the course sign says - POUND THE WEST POST . THREE TIMES. Approached the post and pounded, five separate attempts.",
+   "happened": "Two attempts ended in death before a pound landed: the west gnasher reaches the post (its head sits 3.5 m away on a 5.5 m chain and the course comment itself puts the bite reach at 6.5 m). The attempts that survived slid off the bailey into the moat (5 slide events each) instead of staying on the post. After five tries the save flag gnasher-freed was still false, so the cage at (-4.2,4.60,29.8) never opened and the SECRET crest is unobtainable. The sign directly above the post reads 'they can only reach so far'. They reach the post.",
+   "should": "If the post is the answer to the puzzle it has to be poundable from somewhere the jaws cannot reach, and the ground around it has to hold the player. Either pull the post outside the 6.5 m bite disc or make the pound land from above the disc.",
+   "png": "games/crestbound/_shots/play_p5/ 5_pound_1..5 ; log games/crestbound/_harness/_play_gnasher_p5.json"
+  },
+  {
+   "id": "V2-14",
+   "where": "verdant-2, the coins-crest pedestal at (3.6, 6.55, 26.4) on the bailey forecourt",
+   "did": "Stood at the foot of the grand gate stair looking north.",
+   "happened": "The pedestal fires a hard-edged, fully opaque yellow light column straight up out of the top of the frame. No falloff, no softening, no cap; it clips through the outer wall stonework and at the bailey it is the brightest thing on screen by a wide margin - brighter than the crest it is advertising.",
+   "should": "A beacon should read as a beacon, not as a solid yellow post. Soften the column, fade it with height, and let the wall occlude it.",
+   "png": "games/crestbound/_shots/play_p6/05_3_grand_stair_before.png (right edge) ; 06_3_grand_stair_after.png"
+  },
+  {
+   "id": "V2-15",
+   "severity": "BLOCKER",
+   "where": "verdant-2, THE BREACH in the outer rampart walk at z -22.5 (building roofOpen [{x:0,z:-22.5,w:14.0,d:6.0}]) and the three mover carts on it",
+   "did": "Walked the rampart walk to the west lip of the breach at (-9.58, 12.00, -22.40) and then held forward straight across it to x +0.29.",
+   "happened": "There is no breach. The hero walked the whole 10 m across at y 12.00, grounded, state idle the entire way. The screenshot shows the flagstone deck running unbroken from the RIDE ONE sign right past the carts; the three timber carts are sitting ON TOP of an intact floor. The aperture was never cut.",
+   "should": "The design's own comment predicted this exact failure - 'a shallower hole leaves a 0.43 m sliver of deck along the walk's inner edge ... that sliver is a walkable bridge across the breach that makes the carts decoration'. Cut the 14 x 6 m hole so the carts are the crossing.",
+   "png": "games/crestbound/_shots/play_p7/09_4_breach_west_lip.png"
+  },
+  {
+   "id": "V2-16",
+   "severity": "BLOCKER",
+   "where": "verdant-2, THE PORTCULLIS - breakable grate p [0, 19.20, 9.4] s [3.6,4.0,0.6] shape grate, at the middle wall's south doorway",
+   "did": "Three separate attacks: four ground pounds from the race pad at (0,18.36,10.08) directly in front of it (pound and poundLand fired every time); two ground pounds standing on top of it at (0,21.40,9.4) (pound and poundLand fired); a running dive into it from the pad. Then, in a separate run, pushed into it from the COURT side (north to south) from (0,19.3,6.0).",
+   "happened": "Nothing. The save flag portcullis-up stayed false through all seven attacks, the grate never broke, no coins dropped, and walking forward afterwards is still blocked at z 10.08. The grate renders correctly with the yellow breakable X on it, so the player is told to pound it and pounding it does nothing. From the court side it blocks too: the hero stops at (0, 18.89, 8.72), 0.38 m short of the grate's north face, and portcullis-up is still false. So it is solid from both sides and breaks from neither.",
+   "should": "The course sign says POUND THE PORTCULLIS and the race crest ('PORTCULLIS DASH STARTS HERE . 50s') begins on the pad in front of it. With the grate inert the inner court, the Warden, the sigil pedestal, the race and the keep are all sealed off from this side.",
+   "png": "games/crestbound/_shots/play_p8/10_4_portcullis_before.png ; games/crestbound/_shots/play_p8/12_4_through.png ; games/crestbound/_shots/play_p9/ 1_pc_above and 1_pc_dive"
+  },
+  {
+   "id": "V2-17",
+   "severity": "SOFT-LOCK",
+   "where": "verdant-2, the inner face of the outer wall - reproduced at (20.02, 9.10, 0.00) under the vanish flight, and at (-20.02, 4.71, -20.02) at the north-west inside corner",
+   "did": "(a) Stood on the first vanishing flagstone at (19.6,13.40,0) until it cycled off, and fell. (b) Walked west along the bailey toward the mill.",
+   "happened": "Both times the hero landed in the gap between the outer wall's inner face (x or z = 20.00) and the knoll scarp behind it, went into slopeSlide on a 42.6 deg / 39.4 deg face, and STOPPED MOVING. Five run-and-jump attempts moved him 0.11 m and he was still in slopeSlide. Left alone for a further 14 s with no input he never moved and never died - 135 slide events and no progress. There is no death, no respawn and no way out: the run is over and the player has to restart the course.",
+   "should": "No geometry may trap the player with no exit. Either fill the gutter between the wall's inner face and the scarp, or make the slide actually carry the hero down to somewhere he can stand, or put a kill volume there so the checkpoint takes over.",
+   "png": "games/crestbound/_shots/play_p8/03_1_vanish_top.png ; games/crestbound/_shots/play_p8/09_3_mill_ride.png"
+  },
+  {
+   "id": "V2-18",
+   "where": "verdant-2, the same wedge at (20.02, 9.10, 0.00) - the CAMERA",
+   "did": "Got wedged as in V2-17 and looked at the screen.",
+   "happened": "The camera collapses to zero distance and ends up INSIDE Nim's head. The whole frame is the inside of the hero's skull - the backs of the goggles, the inner surface of the helmet and the hair seen from within - with a dark wall behind. The player cannot see anything at all. It also shows the head has no interior, so the camera sees straight through the shell.",
+   "should": "This is the owner's P10 in its worst form. The follow camera needs a minimum distance and a fade-out (or a hero cutaway) when it is pushed inside the hero, and it must never end up behind the head's near faces.",
+   "png": "games/crestbound/_shots/play_p8/03_1_vanish_top.png"
+  },
+  {
+   "id": "V2-19",
+   "where": "verdant-2, the ROTOR BAR on the middle walk's east band at (9.0, 21.95, 0.0)",
+   "did": "Stood STILL on the middle walk beside the east rotor and did nothing for 9 s.",
+   "happened": "The bar walked me sideways along the walk - z 0.4, 0.5, 0.68, 1.05, 1.27, 1.50 - then off the edge at z 1.95, and I fell and DIED. I never pressed a key. The design comment says of these bars 'They do not kill. They push.' On a 2.80 m walkway 19 m above the bailey, a push is a kill.",
+   "should": "Either give the walk a parapet where the rotors sweep, or make the bar's shove stop at the walk's edge, or shorten the arms so the sweep cannot reach the lip. A hazard that kills a player who has not touched the controls is not difficulty 2.",
+   "png": "games/crestbound/_shots/play_p8/06_2_rotor_east.png (the respawn at cp-shore right after)"
+  },
+  {
+   "id": "V2-20",
+   "where": "verdant-2, THE WARDEN at (0, 19.00, 3.0) in the inner court, hp 3, arena r 6.4",
+   "did": "Walked up to the Warden, then stood 2.78 m from it doing absolutely nothing for 10 s, sampling every 350 ms.",
+   "happened": "It cycled 'roar' then 'idle' and never attacked. No shockwave, no charge, no contact damage, hp stayed 3, 0 deaths. Its own sign in the court reads 'JUMP THE WAVE . DODGE THE CHARGE . POUND ITS BACK' and none of those three things happened.",
+   "should": "The boss crest is one of the seven. The Warden needs its shockwave and charge cycle live, and it must be able to hurt a player who is standing in its arena.",
+   "png": "games/crestbound/_shots/play_p9/ 2_warden and 2_warden_after"
+  },
+  {
+   "id": "V2-21",
+   "where": "verdant-2, holding forward into any wall - reproduced against the middle wall's inner face at (0.55, 19.00, -7.62)",
+   "did": "Held forward into the middle wall for 9 s.",
+   "happened": "The hero enters the 'bonk' state and STAYS in it for as long as forward is held - 28 consecutive samples of state 'bonk' over nine seconds, while the bonk EVENT fired only once. He is head-bonking on a loop against a wall he is simply standing next to.",
+   "should": "Walking into a wall should settle into idle/push, not hold the head-impact state indefinitely. It looks broken and it is the single most common thing a player does by accident.",
+   "png": "games/crestbound/_shots/play_p8/05_2_rotor_after.png"
+  },
+  {
+   "id": "V2-22",
+   "where": "verdant-2, the ROUTE C JUMP PAD at (-8.0, ~6.5, 24.5) on the bailey",
+   "did": "Landed on the pad from the bailey and let it fire.",
+   "happened": "The pad throws the hero straight up into the outer wall's south face: fall at (-7.76,12.84,25.02), then wallslide at (-8.16,10.80,23.79), fall, wallslide again at (-9.87,6.76,23.40), and dead at (-10.89,6.34,23.38). Two bounce events and a death in one launch. The landing area is inside the west gnasher's bite disc, so even when you come down alive, you come down inside the jaws.",
+   "should": "The design calls this ROUTE C onto the rampart walk at 12.00. As shipped it is a launcher into a wall followed by a gnasher. Move the pad out from under the wall's overhang so the 6.02 m of horizontal reach actually lands on the walk, and put the landing outside the bite disc.",
+   "png": "games/crestbound/_shots/play_p7/03_2_pad_before.png ; games/crestbound/_shots/play_p7/04_2_pad_after.png"
+  },
+  {
+   "id": "V2-23",
+   "where": "verdant-2, the knoll's south scarp between the moat and the bailey (roughly z 30-46, the whole face below the fort)",
+   "did": "Looked at it from the spawn and from the south quay, and walked on it repeatedly during the stair and post tests.",
+   "happened": "The scarp is a single bare brown dirt wall with a razor-hard, visibly stair-stepped edge against the green grass on top and no transition band at all, and the dirt texture is smeared vertically (stretched UVs on a near-vertical face). The blue skitter critter is clipped INTO the slope, and the secret cage (the breakable crate with the yellow X) is half-buried in it rather than standing beside the causeway stair.",
+   "should": "This is the owner's P7 'buggy textures on the ground where they overlap' on this course. Blend the grass into the scarp (a transition band, rocks along the seam, triplanar on the steep faces) and lift the cage and the skitter path clear of the terrain.",
+   "png": "games/crestbound/_shots/play_p8/06_2_rotor_east.png"
+  },
+  {
+   "id": "V2-24",
+   "where": "verdant-2, the rampart walk at (-9.58, 12.00, -22.40) beside the breach, and the corner braziers at (+-21.7, 13.0, +-21.7)",
+   "did": "Stood on the north rampart and looked along it.",
+   "happened": "Two things. (a) The 'RIDE ONE . OR WALK THE LONG WAY ROUND' sign is a black-and-gold billboard about 4 m wide planted in the middle of the 3.4 m walkway, blocking the view west along the walk. (b) The braziers render as a flat orange disc facing the camera on a bare brown post - no bowl, no flame, no depth - with a small maroon disc floating above; from a few metres they read as road signs. There are also thin neon-green emissive hairlines running along the cart rail and the walk's edge, and a small green translucent triangle floating beside the carts, which look like debug geometry.",
+   "should": "Signs belong beside a walkway, not on it. The brazier needs a real bowl and a flame billboard, not one facing disc. The green rail lines and the triangle should be removed or given a material that belongs in a stone fort.",
+   "png": "games/crestbound/_shots/play_p7/09_4_breach_west_lip.png"
+  },
+  {
+   "id": "V2-25",
+   "where": "verdant-2, seen from the outer rampart walk at (-21.70, 12.00, -12.18) and from the breach",
+   "did": "Stood on the rampart and looked out over the moat and the meadow.",
+   "happened": "The distance renders as a stack of flat horizontal bands with hard edges: sky, then a pale grey-green strip, then a second pale strip, then flat green meadow, with no gradient anywhere and no atmospheric falloff. The horizon reads as coloured stripes rather than a horizon. The bailey interior below is a bare flat dark-green plane with nothing on it.",
+   "should": "Give the far field a real distance fade so sky, water and ground blend, and dress the outer bailey's interior - from the rampart it is the largest thing on screen and it is empty.",
+   "png": "games/crestbound/_shots/play_p7/08_3_nw_walk.png"
+  },
+  {
+   "id": "V2-26",
+   "severity": "BLOCKER",
+   "where": "verdant-2, THE WALL-KICK SHAFT in the keep's north-west turret, floor (-7.4, 18.60, -7.4), exit ledge 27.00 - ROUTE B to the roof crest",
+   "did": "Ten wall-kick attempts driven properly: run into one wall, jump, then jump AGAIN while wallsliding, alternating walls. The state at the second jump was 'wallslide' on nine of the ten attempts, so the input was right.",
+   "happened": "Nine wallkick events fired and the hero gained NOTHING. The highest y reached in the whole run was 18.76 - sixteen centimetres above the 18.60 floor, against the 8.40 m the ledge needs. Every kick pushed him about 1.3 m sideways and dropped him straight back to the floor; the shaft is 3.20 m wide so he never reaches the opposite wall to chain. 11 bonks in ten attempts.",
+   "should": "The design budgets 'one jump (1.91) plus four kicks (2.12 each) covers 10.39'. Measured, a kick buys 0.16 m of height and 1.3 m of reach in a 3.2 m shaft, so the chain can never start. Narrow the shaft to what a kick can actually cross, or give the kick its authored rise.",
+   "png": "games/crestbound/_shots/play_p10/01_A_shaft_floor.png ; games/crestbound/_shots/play_p10/02_A_shaft_after.png"
+  },
+  {
+   "id": "V2-27",
+   "severity": "BLOCKER",
+   "where": "verdant-2, THE ORBIT RING - three circle movers about (0,-3) at radii 7.4 / 6.6 / 5.8, decks 22.55 / 24.30 / 25.80, periods 13 / 11 / 9 s. The course's named set-piece ('THREE RINGS . ONE STEP EACH').",
+   "did": "Stood on the middle walk at (8.20, 21.40, -3.00) - dead centre of the east boarding band the design names (|x| 7.60..10.40) - and waited 20 seconds, sampling every 400 ms. That is more than one full revolution of the outer ring.",
+   "happened": "No platform ever arrived. y never left 21.40, the state never left 'idle', there was no land event on a mover, and nothing came within reach. The hero was also slowly pushed 2.4 m east (8.20 -> 10.64) by something invisible while standing still.",
+   "should": "The design says the outermost ring passes over the west and east bands of the middle walk as a 1.40 m step. Either the rings are not running or their radius misses the walk. As it stands the set-piece and the third route to the roof do not exist in play.",
+   "png": "games/crestbound/_shots/play_p10/03_B_orbit_wait.png ; games/crestbound/_shots/play_p10/04_B_orbit_after.png"
+  },
+  {
+   "id": "V2-28",
+   "severity": "CAMERA",
+   "where": "verdant-2 - reproduced in three separate narrow places: the wall-kick shaft floor (-7.4,18.60,-7.4), the middle wall walk (8.20,21.40,-3.00), and wedged at the outer wall (20.02,9.10,0)",
+   "did": "Simply stood in each of those three spots and looked at the screen.",
+   "happened": "The follow camera collapses. In the shaft camera distance measured 0.12-0.29 m for the whole ten-kick run and the frame was filled with the floor slab with the hero entirely off-screen. On the middle walk the camera sank INTO the flagstones - the whole screen is paving and only a sliver of the hero shows at the top edge. Wedged at the outer wall the camera ended up inside Nim's head. In all three the player cannot see the hero, the platform or the hazard.",
+   "should": "This is the owner's P10 and it is not limited to interiors - any narrow slot with geometry behind the hero does it. The camera needs a hard minimum distance, a floor-penetration clamp, and a hero fade when it is forced closer than that.",
+   "png": "games/crestbound/_shots/play_p10/01_A_shaft_floor.png ; games/crestbound/_shots/play_p10/03_B_orbit_wait.png ; games/crestbound/_shots/play_p8/03_1_vanish_top.png"
+  },
+  {
+   "id": "V2-29",
+   "where": "verdant-2, the inner court at cp-court (-6.0, 19.00, 0.5) and the 'KICK ONE WALL, THEN THE OTHER' sign at (-5.2, 20.2, -6.6)",
+   "did": "Stood on the court checkpoint and read the signs from where the player actually arrives.",
+   "happened": "Two problems. (a) The wall-kick instruction sign is half-buried in the turret's stone pillar - the left third of the board is inside the masonry, so from the checkpoint it reads '...E WALL / ...E OTHER'. (b) The 'inner court' is a 4 m alley between the middle wall and the keep's drum, not the 16.5 m crown the design describes, and the Warden's arena (r 6.4, so 12.8 m across) does not fit in it.",
+   "should": "Pull the sign clear of the pillar and face it at the checkpoint. Widen the court, or shrink the keep drum, so the boss arena the data actually authors has room to happen.",
+   "png": "games/crestbound/_shots/play_p9/03_2_court.png"
+  },
+  {
+   "id": "V2-30",
+   "where": "verdant-2, seen from outside the fort at (40,20,0) and (0,24,-44)",
+   "did": "Flew round the fort and looked at it from the east and the north.",
+   "happened": "Several things read as unfinished. The six vanishing flagstones hang in mid-air over a bare slope with no arcade under them and against a background the same colour, so they are hard to see. The whole 46 x 46 m outer bailey interior is a flat dark-green plane with nothing on it - the biggest single surface in the level. The outer wall's long faces are near-black while its corner towers are cream, so the fort reads as two different buildings. The merlons are a row of small dark drums. The mill has no sails - four bare sticks on a squat drum. The keep's roof is a dark teal cone. A bright neon-green line runs the full length of the north rampart (the cart rail) and another down the east side. There are loose dark boxes and beams around the keep base with nothing under them.",
+   "should": "Dress the bailey, unify the wall's stone, put sails on the mill, build the arcade under the flagstones, and take the green rail lines out or give them a stone/iron material.",
+   "png": "games/crestbound/_shots/play_p10/15_E_from_east.png ; games/crestbound/_shots/play_p10/16_E_from_north.png"
+  },
+  {
+   "id": "V2-31",
+   "where": "verdant-2, the whole course - frame rate",
+   "did": "Read the debug readout in every screenshot across ten runs, headless Chrome on the Intel UHD at quality low, render scale 0.60, autoscale off.",
+   "happened": "fps sat at 20-28 for the entire playthrough with p99 between 139 ms and 480 ms. Draws 82-211 and triangles 227k-401k are inside budget, so it is not a draw-call or triangle problem. NOTE the caveat from HARNESS_NOTES: a perf number is only evidence if the GPU engine was idle, and I did not sample the GPU counter, so treat this as an observation to re-measure rather than a regression.",
+   "should": "Re-measure with perfcheck on a quiet box before acting. If it holds, 20-28 fps on the tier the auto-detect picks is well under the 55 fps the perf gate wants.",
+   "png": "every shot in games/crestbound/_shots/play_p6..play_p10 carries the readout"
+  },
+  {
+   "id": "V2-32",
+   "where": "verdant-2, between the middle wall's south doorway (floor 17.20) and the race-start pad at (0, 18.26, 10.4) s [4.0,0.2,2.2]",
+   "did": "Pushed north from (0, y, 12.0) at three different start heights (17.6, 18.4, 19.4), six seconds each.",
+   "happened": "All three collapsed to the same place: (0, 17.23, 11.88), stopped. The race pad's deck at 18.36 is a 1.13 m step above the 17.20 floor and, approached on foot, its south face acts as a wall - the hero cannot walk onto the pad that starts the PORTCULLIS DASH.",
+   "should": "Either bring the pad down flush with the 17.20 threshold or bevel/ramp its south edge, so the player who arrives through the middle doorway can step onto the race start rather than bumping into it."
+  }
+ ],
+ "worked": [
+  "Entering the course from the Keep with __dev.goto('verdant-2') lands on cp-shore (0,2.30,53) facing -Z with the causeway, the moat and the keep's flagpole all on screen - the read from the spawn is correct apart from the sign that covers it.",
+  "The mown path, the coin breadcrumb trail and the checkpoint ring at the spawn all render and the coins collect on contact (5 coins picked up walking the path, HUD counted 5/100).",
+  "Signs are legible from where a player stands: 'IT IS ONLY WATER' at the shore reads clearly at walking distance.",
+  "The metal power pickup on the quay works and the HUD shows a METAL bar counting down from 25 s.",
+  "You CAN get out of the moat: swimming to the south shore and pushing forward + jump into the bank put the hero back on land in one attempt (swimDive at (9.76,-0.07,44.38) -> run, grounded, dry at (8.79,0.61,46.15)).",
+  "Diving (hold crouch) does reach the moat floor and the hero stands on it - grounded true, submerged true at y -2.35.",
+  "Coins collect on contact underwater and on the shore; the HUD coin counter tracks correctly (the momentary white blob over the digit in one frame is the coin-pop animation, not a defect - it read '5 / 100' cleanly a second later).",
+  "The COURSE CLEAR card for a crest renders correctly (title, realm, 7 crest pips, time, FIRST CLEAR, crest/coin/sigil/death tallies, STAY / RETURN TO KEEP with keyboard hints).",
+  "THE GNASHER GATE LANE IS FAIR AND IT WORKS. Standing still in the 3 m lane at (0, 6.64, 25.09) for 14 s, both chained gnashers cycled idle -> telegraph -> lunge -> recover, the west one lunged to within 1.77 m, and neither ever hit me: 0 deaths. The telegraph is readable and the safe line down the middle is real.",
+  "Walking deliberately into the west gnasher disc at (-6, 24) kills you promptly and fairly, and the respawn puts you back on cp-bailey.",
+  "The ROUTE A gate stair (35.17 deg, the only flight authored under the 38 deg slide limit) is the one flight the hero can actually climb: y 7.20 to 11.89 against a 12.00 walk.",
+  "Sigil 2 over sinker A collects while you cross the causeway (sigil count went 0 to 1 on the run).",
+  "Checkpoints fire on contact: cp-quay and cp-bailey both registered, and the respawn after a gnasher death used cp-bailey correctly.",
+  "The outer rampart walk itself is good: I walked the south band, the SW corner and the west band at y 12.00 with no slide and no death, the flagstones and merlons read well, the cream safe-edge stripe on the inner lip is legible, and sigil 3 on the SW corner merlon collected on a walk-up.",
+  "Sigils on the rampart work: sigil 3 (SW corner) and a second sigil on the north band both collected by walking, 2 of 8 in one lap.",
+  "The keep roof and the OPEN crest work: standing on the deck at (0,27.43,-3) and hopping collected the crest on the flagpole plinth and raised the COURSE CLEAR card.",
+  "The vanish flagstones do cycle correctly - the first stone held me for exactly its 3.4 s solid phase (clock 2.5 to 4.0) and then went, which is the lesson the beat is trying to teach.",
+  "The two chained gnashers, the bumblers on the terraces and the Warden are all present, alive and animating, and the gnasher telegraph -> lunge -> recover cycle is readable.",
+  "The COURSE CLEAR card, the checkpoint HUD (0/4 through 3/4), the coin counter, the sigil pip row and the crest pips all update correctly.",
+  "Wall kicks DO fire when driven correctly - nine wallkick events in ten attempts - so the input and the state machine are fine; it is the height and the shaft width that are wrong.",
+  "The four checkpoints all fire and the HUD walks 0/4 to 4/4; cp-court's ring and its 'CHECKPOINT 4 / 4' toast are clean and readable.",
+  "Noclip and __dev.goto/tp are reliable, and the course reloads and re-runs its clock correctly after every death and respawn.",
+  "No console errors and no page errors were logged in ANY of the ten runs - console was empty every time."
+ ],
+ "blocked": [],
+ "played": "I played GNASHER FORT (verdant-2) across eleven headless runs at ?dev=1&quality=low&autoscale=0, driving real KeyboardEvents through the window and sampling player.__test.state() every 200-400 ms, with 90 screenshots which I read. Route: booted onto cp-shore at (0,2.30,53), stood still to see whether the spawn bumbler could hurt me (it cannot), read the GNASHER FORT board and the shore signs, walked the mown path north picking up the coin trail to the south quay, took the iron hat, and ran the causeway - where I clipped a stone pillar standing proud of the water on the centre line and fell in. In the moat I swam, dived to the floor, measured the current with no input and then against it, collected THE DROWNED CREST while floating (no hat needed), and climbed out on the south bank. I crossed the sinkers, stood in the gnasher gate's middle lane for fourteen seconds while both jaws lunged at me, walked deliberately into the west jaw to check the death is fair, and tried five times to pound the west post the sign tells you to pound. I then tried every route up: the causeway stair, the ROUTE A gate stair, the net, the jump pad, the grand gate stair and the outer wall's two doors. I walked the outer rampart ring past the SW corner sigil and straight across the breach, watched the carts, stood on the first vanishing flagstone until it went, rode nothing on the mill, stood still beside both rotor bars, pounded the portcullis from in front, from on top, from the court side and with a dive, met the Warden and stood in its arena doing nothing for ten seconds, wall-kicked the keep shaft ten times, took the OPEN crest on the roof, waited twenty seconds on the orbit ring's boarding band, and finally flew round the fort from four sides to look at it. I touched every checkpoint, every sign, every gate, both gnashers, the Warden, three bumblers, both skitters, the water, the metal power, 17 coins, 3 sigils and 2 crests."
+}
