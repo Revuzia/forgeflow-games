@@ -164,7 +164,14 @@ export const DEFAULT_BINDINGS = Object.freeze({
      and the LONG JUMP / BACKFLIP / GROUND POUND rows compose from — is C. */
   jump: ['Space'], crouch: ['KeyC', 'ControlLeft', 'ShiftLeft'], dive: ['KeyF', 'KeyX'], pound: ['KeyC', 'ControlLeft'],
   orbitLeft: ['KeyQ'], orbitRight: ['KeyE'], orbitUp: ['KeyR'], orbitDown: ['KeyV'], recenter: ['KeyZ'], peek: ['KeyG'],
-  interact: ['KeyE'], pause: ['Escape'], restart: ['KeyR'], toCheckpoint: ['KeyT'], mute: ['KeyM'], fullscreen: ['F11'], dev: ['Backquote'], camToggle: ['KeyB'],
+  /* RESTART lives on Backspace, NOT on R. The contract's first table bound
+     `restart:['KeyR']` next to `orbitUp:['KeyR']`, so the documented camera-up
+     key wiped the run: playtest azure-3 #0 held R for half a second to look at
+     the sanctum arc and got 'COURSE RESTARTED', clock 2.79 s -> 0.60 s, hero
+     back on cp-station. A key that destroys progress must never share a code
+     with a key you hold to look around; `_loadBindings` also scrubs the old
+     conflict out of a layout saved before this change. */
+  interact: ['KeyE'], pause: ['Escape'], restart: ['Backspace'], toCheckpoint: ['KeyT'], mute: ['KeyM'], fullscreen: ['F11'], dev: ['Backquote'], camToggle: ['KeyB'],
 });
 
 const BINDINGS_KEY = 'crestbound.bindings.v1';
@@ -183,7 +190,19 @@ const SETTINGS_KEY = 'crestbound.settings';
 const SWALLOW = Object.freeze({
   Space: 1, Tab: 1, ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1,
   Backquote: 1, F11: 1, ControlLeft: 1, ControlRight: 1,
+  Backspace: 1,   // restart — older browsers navigate BACK on a bare Backspace
 });
+
+/**
+ * Actions a RESTART code may never share: the camera keys you hold to look
+ * around and the movement keys you hold to walk. `_loadBindings` strips any
+ * such code out of a saved `restart` list (the pre-2026-09-07 default put R on
+ * both orbitUp and restart, and that layout persists in localStorage).
+ */
+const RESTART_EXCLUSIVE_OF = Object.freeze([
+  'orbitLeft', 'orbitRight', 'orbitUp', 'orbitDown',
+  'moveForward', 'moveBack', 'moveLeft', 'moveRight',
+]);
 
 /** Mouse button → binding code, precomputed so event handlers never concatenate. */
 const MOUSE_CODES = Object.freeze(['Mouse0', 'Mouse1', 'Mouse2', 'Mouse3', 'Mouse4']);
@@ -259,6 +278,7 @@ export function codeLabel(code) {
     case 'AltLeft': return 'L Alt';
     case 'AltRight': return 'R Alt';
     case 'Escape': return 'Esc';
+    case 'Backspace': return 'Backspace';
     case 'Backquote': return '`';
     case 'Tab': return 'Tab';
     case 'Enter': return 'Enter';
@@ -476,6 +496,23 @@ export class Input {
         }
       }
     } catch (e) { /* private mode / corrupt JSON: defaults stand */ }
+    /* A layout saved before 2026-09-07 carries `restart:['KeyR']` beside
+       `orbitUp:['KeyR']`; tilting the camera restarted the course. Scrub any
+       restart code that a look/move action also owns, and fall back to the
+       shipped default when nothing is left. */
+    const rs = out.restart;
+    if (Array.isArray(rs)) {
+      const clean = [];
+      for (let k = 0; k < rs.length; k++) {
+        let shared = false;
+        for (let j = 0; j < RESTART_EXCLUSIVE_OF.length && !shared; j++) {
+          const other = out[RESTART_EXCLUSIVE_OF[j]];
+          shared = !!(other && other.indexOf(rs[k]) !== -1);
+        }
+        if (!shared) clean.push(rs[k]);
+      }
+      out.restart = clean.length ? clean : DEFAULT_BINDINGS.restart.slice();
+    }
     return out;
   }
 

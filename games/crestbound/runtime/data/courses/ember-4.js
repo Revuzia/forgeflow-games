@@ -767,7 +767,10 @@ export default {
     //     of the off window — a kill volume never arms during `warn`
     //     (hazards/index.js, the cycle law), so the warning is always survivable.
     { kind: 'beam', a: [-7.4, 6.4, 10.4], b: [7.4, 6.4, 10.4], cycle: { on: 1.5, off: 2.3, warn: 0.6, phase: 0 }, radius: 0.20, color: DUSK },
-    { kind: 'text', p: on(-3.2, 16.2, 1.5), rot: [0, 0, 0], text: 'THE LIGHT BURNS  ·  CROSS ON THE DARK', size: 0.24, color: 0x6f5533 },
+    //     UI lane 2026-09-07: 2.2 m BEHIND cp-pylons it filled 7 % of the
+    //     checkpoint frame and ran off its edge (signcheck runs-off-frame); now
+    //     1.6 m ahead of the pad, left of the walking line, before the beam.
+    { kind: 'text', p: on(-4.6, 12.4, 1.5), rot: [0, 0, 0], text: 'THE LIGHT BURNS  ·  CROSS ON THE DARK', size: 0.24, color: 0x6f5533 },
 
     // --- THE CANNON. Breech seated on the terrace between the pylons.
     { kind: 'cannon', p: on(0, 6.4, 0.55), yaw: 0, target: [5.5, 12.6, -9.5], r: 1.1, len: 3.4, cooldown: 1.2, mat: 'copper', tint: 0xb07a3c, id: 'pylon-cannon' },

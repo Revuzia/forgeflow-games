@@ -3389,13 +3389,24 @@ export function buildTree(def, theme, mats) {
 
   const volumes = [];
   if (climbable) {
-    const top = built.trunkH + h * 0.06;
-    /* The grab box has to stay generous even though the bole is now slim: a
-     * climbable tree is a required route in verdant-1, and TUNE.climb.radius
-     * (0.55) alone round a 0.8 m trunk is a 2.7 m box a running hero can miss.
-     * The ORBIT radius, though, is the trunk — the hero must hug the bark, not
-     * circle three metres out in the air. */
-    const grab = TUNE.climb.radius + r + 0.9;
+    /* THE CLIMB REACHES THE CROWN. The grab volume used to stop at
+     * trunkH + 0.06 h = 0.68 h, and every climbable tree in the game puts its
+     * reward ABOVE that: verdant-1's oak nests sigil 7 at 0.96 h, rime-1's pine
+     * its crow's nest at ~1.0 h. Playtests verdant-1 #15 and rime-1 #18 both
+     * climbed cleanly to 0.68 h and then fell out of `climb` with the nest
+     * three metres overhead. The volume now spans the whole authored height
+     * plus a body's worth, so a climb ends on the platform at the top, never in
+     * the air below it. The canopy has no collider, so climbing through it is
+     * free. */
+    const top = h + 0.5;
+    /* The grab box stays generous — a climbable tree is a required route in
+     * verdant-1 and TUNE.climb.radius (0.55) alone round a slim bole is a box a
+     * running hero can miss — but no longer 0.9 m over the contract's radius:
+     * playtest keep K9 walked past a courtyard tree at 1.9 m and was hoisted
+     * into `climb` without ever touching the trunk. +0.35 keeps a run at the
+     * bark inside the box and leaves a walk beside the tree alone. The ORBIT
+     * radius is the trunk — the hero hugs the bark, not the air. */
+    const grab = TUNE.climb.radius + r + 0.35;
     volumes.push(new Volume({
       center: [p[0], p[1] + top * 0.5, p[2]],
       half: [grab, top * 0.5, grab],
@@ -3406,6 +3417,121 @@ export function buildTree(def, theme, mats) {
   }
   mesh.userData.def = def;
   return { mesh, colliders, volumes };
+}
+
+// ---------------------------------------------------------------------------
+// LIGHT FIXTURE
+// ---------------------------------------------------------------------------
+/**
+ * The lamp AROUND an authored `{kind:'light'}` site. course.js draws every
+ * light site as an emissive bulb plus a baked halo, which is correct for the
+ * light and wrong for the eye: playtest rime-3 #2 read the camp light as "a
+ * bare orange glowing ball hanging in mid-air 2.6 m above the snow with no
+ * torch, brazier or lamp under it". A light needs a cause, so every site now
+ * gets a fixture, chosen by what the course has put near it:
+ *
+ *   mount:'post'    a standing lamp — plinth on the floor, tapered iron shaft,
+ *                   collar, the cage on top      (open ground, terraces, decks)
+ *   mount:'hang'    a ceiling plate and a chain down to the cage  (under a roof)
+ *   mount:'wall'    a wall plate and a bracket arm out to the cage (beside a wall)
+ *   mount:'lantern' the cage alone                     (nothing near: mid-air rigging)
+ *
+ * The cage is a four-post box lantern round the bulb — the same silhouette as
+ * props.js's hanging lantern — so a light reads as a lantern from any distance
+ * and the bulb's glow is seen THROUGH glass, not floating. Geometry is built
+ * around the origin with the bulb at (0,0,0); `def.p` places it. No collider:
+ * lamps are dressing, like every prop (props.js), and never in the route.
+ *
+ * @param {object} def {p, mount:'post'|'hang'|'wall'|'lantern', span?, side?:{x,z}, scale?}
+ *                     span = metres from the bulb to the mount (floor below,
+ *                     ceiling above, or wall face), side = the unit direction
+ *                     from the bulb toward the wall for 'wall'
+ * @returns {{mesh: THREE.Mesh, colliders: Collider[]}}
+ */
+export function buildLightFixture(def, theme, mats) {
+  const p = pos3(def);
+  const mount = (def && def.mount) || 'lantern';
+  const span = Math.max(0, (def && def.span) || 0);
+  const sc = Math.max(0.6, Math.min(1.8, (def && def.scale) || 1));
+  const sx = def && def.side ? (def.side.x || 0) : 0;
+  const sz = def && def.side ? (def.side.z || 0) : 0;
+  const yaw = (mount === 'wall' && (sx || sz)) ? Math.atan2(sx, sz) : 0;
+
+  const metal = materialFor('metal', theme, mats);
+  const glass = materialFor('glass', theme, mats);
+  const trim = emissiveMat(pal(theme, 'accent'), 0.9);
+
+  const key = GeoCache.key('lightfix', mount, span, sc);
+  const geo = GeoCache.get(key, () => {
+    const parts = [];
+    const push = (g, m) => parts.push({ geo: g, mat: m });
+    const hw = 0.115 * sc, hh = 0.30 * sc;     // cage half-width, half-height
+
+    // --- the cage: four posts, top cap, bottom plate, glass, two rims ------
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.PI * 0.25;
+      push(xform(boxGeometry(0.022 * sc, hh * 2, 0.022 * sc, 2.0),
+        Math.cos(a) * hw, 0, Math.sin(a) * hw, 0, -a, 0), 0);
+    }
+    push(xform(tubeGeometry(0.05 * sc, 0.175 * sc, 0.14 * sc, 4, 1.2), 0, hh + 0.06 * sc, 0, 0, Math.PI * 0.25, 0), 0);
+    push(xform(tubeGeometry(0.165 * sc, 0.150 * sc, 0.055 * sc, 4, 1.4), 0, -hh - 0.02 * sc, 0, 0, Math.PI * 0.25, 0), 0);
+    push(xform(tubeGeometry(0.108 * sc, 0.108 * sc, hh * 1.85, 4, 1.0), 0, 0, 0, 0, Math.PI * 0.25, 0), 1);
+    push(xform(ringProfileGeometry(0.125 * sc, [0.014, 0.010, 0.004], 4, 1.8), 0, hh - 0.015 * sc, 0, 0, Math.PI * 0.25, 0), 0);
+    push(xform(ringProfileGeometry(0.125 * sc, [0.014, 0.010, 0.004], 4, 1.8), 0, -hh + 0.015 * sc, 0, 0, Math.PI * 0.25, 0), 0);
+    // a finial so the top reads as a lantern from below
+    push(xform(tubeGeometry(0.0, 0.03 * sc, 0.09 * sc, 6, 1.0), 0, hh + 0.17 * sc, 0), 0);
+
+    if (mount === 'post' && span > 0.6) {
+      // --- a standing lamp: plinth, tapered shaft, collar under the cage ----
+      const floorY = -span;
+      push(xform(tubeGeometry(0.16 * sc, 0.24 * sc, 0.14, 8, 1.2), 0, floorY + 0.07, 0), 0);
+      push(xform(tubeGeometry(0.10 * sc, 0.13 * sc, 0.10, 8, 1.2), 0, floorY + 0.19, 0), 0);
+      const shaftTop = -hh - 0.09 * sc;
+      const shaftH = Math.max(0.2, shaftTop - (floorY + 0.24));
+      push(xform(tubeGeometry(0.038 * sc, 0.058 * sc, shaftH, 8, 1.0), 0, floorY + 0.24 + shaftH * 0.5, 0), 0);
+      push(xform(tubeGeometry(0.075 * sc, 0.060 * sc, 0.06, 8, 1.4), 0, shaftTop - 0.02, 0), 0);
+      // a slim accent band on the collar — the fixture is a practical, it may glow a little
+      push(xform(ringProfileGeometry(0.066 * sc, [0.010, 0.008, 0.004], 8, 1.6), 0, shaftTop + 0.005, 0), 2);
+      // a grip band halfway up a tall post breaks the shaft's length
+      if (shaftH > 1.6) push(xform(tubeGeometry(0.062 * sc, 0.062 * sc, 0.05, 8, 1.4), 0, floorY + 0.24 + shaftH * 0.5, 0), 0);
+    } else if (mount === 'hang' && span > 0.2) {
+      // --- a ceiling plate and a chain of links down to the finial ----------
+      const ceilY = span;
+      push(xform(tubeGeometry(0.09 * sc, 0.11 * sc, 0.03, 8, 1.2), 0, ceilY - 0.015, 0), 0);
+      const y0 = hh + 0.24 * sc, y1 = ceilY - 0.03;
+      const n = Math.max(1, Math.floor((y1 - y0) / 0.055));
+      for (let i = 0; i < n; i++) {
+        push(xform(ringProfileGeometry(0.028, [0.009, 0.009, 0.003], 8, 2.0),
+          0, y0 + i * 0.055, 0, i % 2 ? Math.PI * 0.5 : 0, 0, Math.PI * 0.5), 0);
+      }
+    } else if (mount === 'wall' && span > 0.05) {
+      // --- a wall plate and a bracket arm to a hook over the cage -----------
+      // local +Z points at the wall (the mesh is yawed so this meets def.side)
+      const wallZ = span;
+      push(xform(bevelBoxGeometry(0.16 * sc, 0.26 * sc, 0.03, 0.006, 1.2), 0, hh + 0.10 * sc, wallZ - 0.015), 0);
+      const armL = Math.max(0.12, wallZ - 0.02);
+      push(xform(boxGeometry(0.03 * sc, 0.03 * sc, armL, 1.2), 0, hh + 0.22 * sc, wallZ - armL * 0.5), 0);
+      // a diagonal stay under the arm, wall to arm tip
+      const stayL = Math.hypot(armL * 0.8, 0.18 * sc);
+      push(xform(boxGeometry(0.022 * sc, 0.022 * sc, stayL, 1.2), 0, hh + 0.13 * sc, wallZ - armL * 0.4,
+        -Math.atan2(0.18 * sc, armL * 0.8), 0, 0), 0);
+      // two links from the arm tip to the finial
+      push(xform(ringProfileGeometry(0.028, [0.009, 0.009, 0.003], 8, 2.0), 0, hh + 0.20 * sc, 0, Math.PI * 0.5, 0, Math.PI * 0.5), 0);
+      push(xform(ringProfileGeometry(0.028, [0.009, 0.009, 0.003], 8, 2.0), 0, hh + 0.245 * sc, 0, 0, 0, Math.PI * 0.5), 0);
+    }
+    return assembleIndexed(parts, 3);
+  });
+
+  const mesh = new THREE.Mesh(geo, [metal, glass, trim]);
+  mesh.name = 'lightfixture';
+  mesh.castShadow = false;
+  mesh.receiveShadow = true;
+  mesh.position.set(p[0], p[1], p[2]);
+  mesh.rotation.y = yaw;
+  mesh.updateMatrix();
+  mesh.matrixAutoUpdate = false;
+  mesh.userData.def = def;
+  return { mesh, colliders: [] };
 }
 
 // ---------------------------------------------------------------------------

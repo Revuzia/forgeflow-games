@@ -904,6 +904,15 @@ const HUD_CSS = `
   display:none;
 }
 .ch-word.is-on{ display:block; }
+/* The DEATH cause: a solid plate under the word so 'FELL' / 'CRUSHED' reads on
+   any frame the death camera lands on (playtest rime-3 #5 — bare white text
+   in the dark centre of the rewind ring was a faint grey smear). */
+.ch-word.is-death{
+  color:#fff; padding:14px 30px 16px 40px; border-radius:16px;
+  background:rgba(10,7,18,.80); border:1px solid var(--wc,var(--danger));
+  box-shadow:0 0 0 1px rgba(0,0,0,.55), 0 10px 40px rgba(0,0,0,.6), 0 0 34px var(--wc,var(--danger));
+  text-shadow:0 2px 6px rgba(0,0,0,.95), 0 0 22px var(--wc,var(--danger));
+}
 .ch-word .sub{
   display:block; margin-top:10px; font-size:${UI_TOKENS.type.sm}px; font-weight:700;
   letter-spacing:.38em; margin-left:.38em; color:var(--wc,var(--cp)); opacity:.9;
@@ -1240,10 +1249,16 @@ const TRANS_CSS = `
    (game_controls.js — fullscreen / mute / pause) is fixed at bottom:8px
    right:8px on every ForgeFlow game page, and the badge was drawn straight on
    top of it. The corner belongs to that cluster; the game keeps the centre. */
-.ct-rewind .rw-glyph{ position:absolute; left:0; right:0; bottom:${UI_TOKENS.corner.h + 6}px;
+/* The REWIND badge is the second thing a dead player must read (rime-3 #5
+   called it "dimmer still"): a pill with its own dark ground, sm type, full
+   cream — not a 10 px whisper over whatever the frame holds. */
+.ct-rewind .rw-glyph{ position:absolute; left:50%; bottom:${UI_TOKENS.corner.h + 6}px;
+  transform:translateX(-50%); width:max-content;
   display:flex; align-items:center; justify-content:center; gap:8px;
-  font-family:var(--f-display); font-weight:700; font-size:${UI_TOKENS.type.xs}px; letter-spacing:.42em;
-  text-transform:uppercase; color:rgba(255,236,190,.85); text-shadow:0 1px 10px rgba(0,0,0,.9); }
+  padding:7px 16px 7px 12px; border-radius:999px;
+  background:rgba(10,7,18,.72); border:1px solid rgba(255,236,190,.30);
+  font-family:var(--f-display); font-weight:700; font-size:${UI_TOKENS.type.sm}px; letter-spacing:.42em;
+  text-transform:uppercase; color:#fff2d2; text-shadow:0 1px 10px rgba(0,0,0,.9); }
 .ct-rewind .rw-glyph svg{ width:16px; height:16px; }
 `;
 

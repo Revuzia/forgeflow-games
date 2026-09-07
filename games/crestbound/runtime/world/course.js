@@ -169,7 +169,115 @@ const TEXT_MOUNT_OUT = 0.14;
    (regress 2026-09-05, verdant-1 / azure-1 / ember-1). A line wider than this
    is shrunk to fit; body lines wrap at TEXT_WRAP_CHARS and never reach it. */
 const TEXT_MAX_LINE_M = 3.7;
+/* FIT BEFORE WRAP (playtest rime-2 #1/#6: 'THE CHUTE ONLY / GOES DOWN.' and
+   'HALF WAY / THE SECOND / HALF IS FASTER'). A clause was wrapped by a CHARACTER
+   count (24) whatever it measured, so a 25-glyph sentence broke mid-phrase and
+   the pieces packed into one paragraph. Now a clause is a thought — a '·'
+   segment or a sentence — and it stays on ONE line whenever it fits the board
+   at >= TEXT_FIT_MIN of its authored cap (the bake shrinks it); only a clause
+   wider than that wraps, by MEASURED width, into balanced lines. */
+const TEXT_FIT_MIN = 0.74;
+/** Cap heights of air between two authored body boards merged into one plate. */
+const TEXT_MEMBER_GAP = 0.55;
 const MAX_LIGHT_SITES = 96;
+
+/**
+ * One authored coin entry -> world points, the shapes entities/collectibles.js
+ * expands (`p`, `ring`, `arc`, `line`, `grid`; a ring/arc centre is `[x, z]`
+ * with `y` the height, or `[x, y, z]` with `y` an offset). Build-time only.
+ */
+function expandCoinDef(e) {
+  const out = [];
+  if (!e) return out;
+  const centre = (src, y) => {
+    if (Array.isArray(src) && src.length === 2) return [+src[0] || 0, fin(y) ? y : 0, +src[1] || 0];
+    const c = v3(src, 0, 0, 0);
+    return [c.x, c.y + (fin(y) ? y : 0), c.z];
+  };
+  if (e.p) { const p = v3(e.p, 0, 0, 0); out.push([p.x, p.y, p.z]); }
+  else if (e.ring) {
+    const r = e.ring, c = centre(r.c, r.y), n = Math.max(1, Math.round(fin(r.n) ? r.n : 8)), rad = fin(r.r) ? r.r : 2;
+    const a0 = fin(r.from) ? r.from : 0;
+    for (let i = 0; i < n; i++) { const a = a0 + (i / n) * Math.PI * 2; out.push([c[0] + Math.cos(a) * rad, c[1], c[2] + Math.sin(a) * rad]); }
+  } else if (e.arc) {
+    const r = e.arc, c = centre(r.c, r.y), n = Math.max(1, Math.round(fin(r.n) ? r.n : 6)), rad = fin(r.r) ? r.r : 3;
+    const a0 = fin(r.a0) ? r.a0 : 0, a1 = fin(r.a1) ? r.a1 : Math.PI, rise = fin(r.rise) ? r.rise : 0;
+    for (let i = 0; i < n; i++) {
+      const t = n === 1 ? 0.5 : i / (n - 1);
+      const a = a0 + (a1 - a0) * t;
+      out.push([c[0] + Math.cos(a) * rad, c[1] + rise * Math.sin(t * Math.PI), c[2] + Math.sin(a) * rad]);
+    }
+  } else if (e.line) {
+    const l = e.line, a = v3(l.a, 0, 0, 0), b = v3(l.b, 0, 0, 0), n = Math.max(1, Math.round(fin(l.n) ? l.n : 5));
+    for (let i = 0; i < n; i++) {
+      const t = n === 1 ? 0.5 : i / (n - 1);
+      out.push([a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t]);
+    }
+  }
+  /* any other shape (a bare array, a `grid`) builds no coin in collectibles.js
+     either, so it can never sit on a plate and is left exactly as authored */
+  return out;
+}
+
+/** The one sign font; `head` is the heavier cut the header uses. */
+function textFont(px, head) {
+  return (head ? '800 ' : '700 ') + px + 'px Rajdhani, "Segoe UI", system-ui, -apple-system, sans-serif';
+}
+
+/* ── SIGNS NEVER HIDE NIM ─────────────────────────────────────────────────────
+ * A text board is a `deco` with no collider, so the follow camera never pulls
+ * in for it, and a board on the walked line stands between the lens and the
+ * hero: keep K8 ('THE UNDERCROFT' plate filling the frame on the grate),
+ * rime-1 #5 ('THIN ICE' at head height on the line into the hole), azure-3 #6
+ * (the cart sign), rime-3 #6. Moving each board is a course edit that fixes
+ * one instance; this fixes the class. Every sign material — the shared atlas
+ * and the per-course plank clone — carries a screen-door fade: a fragment
+ * inside SIGN_OCC_RADIUS of the camera->hero line, nearer the lens than the
+ * hero, is discarded through a 4x4 Bayer mask. Two Vector3 uniforms are
+ * written per frame (`_updateSignOcclusion`); nothing allocates. A board
+ * behind or beside the hero is untouched, and a board the player walks up to
+ * read is never between the lens and Nim, so it is never faded. */
+const SIGN_OCC_RADIUS = 0.95;   // m round the camera->hero line
+const SIGN_OCC_HERO_Y = 0.80;   // m above the feet the line aims at (the chest)
+const SIGN_OCC_VERT_DECL = 'varying vec3 vCbSignWP;\n';
+const SIGN_OCC_VERT_MAIN = '\n  vCbSignWP = (modelMatrix * vec4(transformed, 1.0)).xyz;\n';
+const SIGN_OCC_FRAG_DECL =
+  'uniform vec3 uCbSignHero;\nuniform vec3 uCbSignCam;\nuniform vec2 uCbSignOcc;\nvarying vec3 vCbSignWP;\n' +
+  'float cbSignBayer2(vec2 a) { a = floor(a); return fract(a.x * 0.5 + a.y * a.y * 0.75); }\n' +
+  'float cbSignBayer4(vec2 a) { return cbSignBayer2(0.5 * a) * 0.25 + cbSignBayer2(a); }\n';
+const SIGN_OCC_FRAG_MAIN =
+  '\n  if (uCbSignOcc.y > 0.5) {\n' +
+  '    vec3 cbAb = uCbSignHero - uCbSignCam;\n' +
+  '    float cbL2 = max(dot(cbAb, cbAb), 1e-4);\n' +
+  '    float cbT = dot(vCbSignWP - uCbSignCam, cbAb) / cbL2;\n' +
+  '    if (cbT > 0.02 && cbT < 0.985) {\n' +
+  '      float cbD = length(vCbSignWP - (uCbSignCam + cbAb * cbT));\n' +
+  '      float cbCover = 1.0 - smoothstep(uCbSignOcc.x * 0.55, uCbSignOcc.x, cbD);\n' +
+  '      if (cbCover > cbSignBayer4(gl_FragCoord.xy) + 0.02) discard;\n' +
+  '    }\n  }\n';
+
+/** Splice the occluder fade into a compiled shader (idempotent per shader). */
+function injectSignOcc(shader, u) {
+  shader.uniforms.uCbSignHero = u.hero;
+  shader.uniforms.uCbSignCam = u.cam;
+  shader.uniforms.uCbSignOcc = u.occ;
+  const MAIN = 'void main() {';
+  const V = '#include <begin_vertex>';
+  let vs = shader.vertexShader;
+  if (vs.indexOf('vCbSignWP') === -1) {
+    vs = vs.replace(MAIN, SIGN_OCC_VERT_DECL + MAIN);
+    vs = vs.indexOf(V) !== -1 ? vs.replace(V, V + SIGN_OCC_VERT_MAIN)
+                              : vs.replace('#include <project_vertex>', SIGN_OCC_VERT_MAIN + '#include <project_vertex>');
+    shader.vertexShader = vs;
+  }
+  let fs = shader.fragmentShader;
+  if (fs.indexOf('vCbSignWP') === -1) {
+    fs = fs.replace(MAIN, SIGN_OCC_FRAG_DECL + MAIN);
+    const F = '#include <clipping_planes_fragment>';
+    fs = fs.indexOf(F) !== -1 ? fs.replace(F, F + SIGN_OCC_FRAG_MAIN) : fs.replace(MAIN, MAIN + SIGN_OCC_FRAG_MAIN);
+    shader.fragmentShader = fs;
+  }
+}
 
 /* ── the light budget ───────────────────────────────────────────────────────
  * A `kind:'light'` object is a light SITE, not a THREE.PointLight.  Every site
@@ -964,6 +1072,16 @@ export class Course {
     /** @private sign boards grouped by mount (see _prepareTexts) */
     this._textGroups = null;
     this._textGroupOf = null;
+    /** @private a 2D context for measuring sign lines before the bake */
+    this._measureCtx = null;
+    /** @private the occluder-fade uniforms every sign material shares (see SIGN_OCC_*) */
+    this._signOcc = null;
+    /** @private per-course plank material clones carrying the occluder fade, by key */
+    this._signPlankMats = new Map();
+    /** @private `{kind:'light'}` sites awaiting a fixture once the colliders exist */
+    this._lightFixtures = [];
+    /** @private what each light site was given (build-time record for the harness) */
+    this._fixtureLog = [];
     this._chunks = [];
     this._chunkMap = new Map();
     /** @private detail-art cells: a FINE grid, independent of the main chunks */
@@ -1468,7 +1586,9 @@ export class Course {
     this._buildVoidVolume();
     /* The pool and the glow field are allocated BEFORE the first render and
        never touched again — see the LIGHT_POOL_SIZE note.  The glow field needs
-       the colliders, so it comes after every builder and hazard. */
+       the colliders, so it comes after every builder and hazard; so does the
+       lamp round each light, which reads the same colliders for its mount. */
+    this._buildLightFixtures();
     this._buildLightPool();
     this._buildGlowField();
     this._mergeStatic();
@@ -2201,34 +2321,61 @@ export class Course {
   }
 
   /** Split a sign's copy into board lines: clauses at ' · ', then word-wrap. */
-  _textLines(o) {
+  /** Painted width of `text` at cap height `capM`, in metres (see _bakeBoard). */
+  _measureLineM(text, capM, head) {
+    let ctx = this._measureCtx;
+    if (ctx === null) {
+      try {
+        const c = document.createElement('canvas');
+        c.width = 8; c.height = 8;
+        ctx = c.getContext('2d') || false;
+      } catch (e) { ctx = false; }
+      this._measureCtx = ctx;
+    }
+    const fs = capM / TEXT_CAP_EM;
+    if (!ctx) return text.length * fs * 0.56 + fs * TEXT_TRACK_EM * Math.max(0, text.length - 1);
+    ctx.font = textFont(Math.round(fs * TEXT_PPM), head);
+    return ctx.measureText(text).width / TEXT_PPM + fs * TEXT_TRACK_EM * Math.max(0, text.length - 1);
+  }
+
+  /**
+   * One authored `text` object -> painted lines. A clause ('·' segment or a
+   * sentence) stays on one line while it fits the board at >= TEXT_FIT_MIN of
+   * its cap; a wider one wraps by measured width into balanced lines, never a
+   * one-word orphan ('THE VENTS FIRE ON A' / 'CYCLE', `_shots/sig1_e1_sign.png`).
+   * `head` selects the header cut, whose glyphs measure a little wider.
+   */
+  _textLines(o, head) {
     const out = [];
     const size = fin(o.size) ? clamp(o.size, 0.12, 4) : 0.42;
     const color = colorOf(o.color, this.palette.accent.getHex());
+    const cap = head ? size * 0.72 : size * 0.95;         // mirrors _bakeBoard's cap rule
     const raw = String(o.text).split(String.fromCharCode(10));
     for (let r = 0; r < raw.length; r++) {
       const clauses = raw[r].split(/\s+·\s+/);
       for (let c = 0; c < clauses.length; c++) {
-        const words = clauses[c].trim().split(/\s+/).filter((w) => w.length);
-        if (!words.length) continue;
-        const total = clauses[c].trim().length;
-        if (total <= TEXT_WRAP_CHARS) { out.push({ text: words.join(' '), size, color }); continue; }
-        /* BALANCED wrap: as many lines as the width needs, each as close to
-           total/n as the word breaks allow — never a one-word orphan on the
-           last line ('THE VENTS FIRE ON A' / 'CYCLE', `_shots/sig1_e1_sign.png`) */
-        const n = Math.ceil(total / TEXT_WRAP_CHARS);
-        const target = total / n;
-        let line = '';
-        let made = 0;
-        for (let w = 0; w < words.length; w++) {
-          const cand = line ? line + ' ' + words[w] : words[w];
-          const left = words.length - w;               // words still to place, incl. this one
-          const linesLeft = n - made;
-          if (line && linesLeft > 1 && (cand.length > target + 1 || left <= linesLeft - 1)) {
-            out.push({ text: line, size, color }); made++; line = words[w];
-          } else line = cand;
+        const sentences = clauses[c].split(/(?<=[.!?])\s+(?=\S)/);
+        for (let s = 0; s < sentences.length; s++) {
+          const words = sentences[s].trim().split(/\s+/).filter((w) => w.length);
+          if (!words.length) continue;
+          const text = words.join(' ');
+          const wM = this._measureLineM(text, cap, head);
+          if (wM <= TEXT_MAX_LINE_M / TEXT_FIT_MIN) { out.push({ text, size, color }); continue; }
+          const n = Math.ceil(wM / TEXT_MAX_LINE_M);
+          const target = wM / n;
+          let line = '';
+          let made = 0;
+          for (let w = 0; w < words.length; w++) {
+            const cand = line ? line + ' ' + words[w] : words[w];
+            const left = words.length - w;               // words still to place, incl. this one
+            const linesLeft = n - made;
+            const candW = line ? this._measureLineM(cand, cap, head) : 0;
+            if (line && linesLeft > 1 && (candW > target * 1.06 || left <= linesLeft - 1)) {
+              out.push({ text: line, size, color }); made++; line = words[w];
+            } else line = cand;
+          }
+          if (line) out.push({ text: line, size, color });
         }
-        if (line) out.push({ text: line, size, color });
       }
     }
     return out;
@@ -2292,6 +2439,7 @@ export class Course {
     });
     mat.name = 'cb.signatlas';
     this._own(mat);
+    this._signOccApply(mat);
     this._textAtlas = { cnv, ctx, tex, mat, placed, height: AH };
     const e = 0.5;
     for (let i = 0; i < sheets.length; i++) {
@@ -2311,9 +2459,14 @@ export class Course {
   _bakeBoard(g) {
     const lines = [];
     for (let m = 0; m < g.members.length; m++) {
-      const ls = this._textLines(g.members[m].o);
+      const isHead = g.members[m].index === g.head;
+      const ls = this._textLines(g.members[m].o, isHead);
       for (let i = 0; i < ls.length; i++) {
-        ls[i].head = g.members[m].index === g.head;
+        ls[i].head = isHead;
+        /* A member is one authored thought; two body members sharing a plate
+           get a breath of air between them so two sentences never read as one
+           paragraph (rime-2 #1: five lines in one 0.37 m band). */
+        ls[i].gap = (i === 0 && m > 0 && !isHead) ? 1 : 0;
         lines.push(ls[i]);
       }
     }
@@ -2329,7 +2482,7 @@ export class Course {
       L.fs = L.cap / TEXT_CAP_EM;                        // font size, metres
       L.pitch = L.cap * TEXT_LINE_PITCH;
     }
-    const fontOf = (px, head) => (head ? '800 ' : '700 ') + px + 'px Rajdhani, "Segoe UI", system-ui, -apple-system, sans-serif';
+    const fontOf = textFont;
     /* a line wider than the board may be is scaled down to fit it */
     for (let i = 0; i < lines.length; i++) {
       const L = lines[i];
@@ -2352,7 +2505,7 @@ export class Course {
         const track = L.fs * TEXT_TRACK_EM;
         L.wM = ctx.measureText(L.text).width / ppm + track * Math.max(0, L.text.length - 1);
         if (L.wM > wM) wM = L.wM;
-        hM += L.pitch + (L.head ? L.cap * 0.42 : 0);
+        hM += L.pitch + (L.head ? L.cap * 0.42 : 0) + (L.gap ? L.cap * TEXT_MEMBER_GAP : 0);
       }
       wM += TEXT_PAD_M * 2;
       if (wM * ppm <= TEXT_ATLAS_W - TEXT_ATLAS_PAD * 2) break;
@@ -2409,6 +2562,7 @@ export class Course {
     let y = TEXT_PAD_M * ppm;
     for (let i = 0; i < lines.length; i++) {
       const L = lines[i];
+      if (L.gap) y += L.cap * TEXT_MEMBER_GAP * ppm;
       const fsPx = Math.round(L.fs * ppm);
       c.font = fontOf(fsPx, L.head);
       const track = L.fs * TEXT_TRACK_EM * ppm;
@@ -2466,17 +2620,19 @@ export class Course {
       this._own(tex);
       mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, side: THREE.FrontSide, fog: true });
       this._own(mat);
+      this._signOccApply(mat);
     }
 
     const w = bake.wM, h = bake.hM;
     const group = new THREE.Group();
 
-    /* the board: a chamfered wood plank a lip wider than the painted panel */
+    /* the board: a chamfered wood plank a lip wider than the painted panel —
+       on the course's own plank material, which carries the occluder fade */
     const plateW = w + TEXT_FRAME_M * 2;
     const plateH = h + TEXT_FRAME_M * 2;
     const plate = chamferBox(plateW, plateH, 0.09, 0.03);
     this._own(plate);
-    const plateMesh = new THREE.Mesh(plate, this._mat(g.mat));
+    const plateMesh = new THREE.Mesh(plate, this._signPlankMat(g.mat));
     plateMesh.castShadow = false;
     plateMesh.receiveShadow = true;
     group.add(plateMesh);
@@ -2536,10 +2692,145 @@ export class Course {
       group.position.x += Math.sin(yy) * TEXT_MOUNT_OUT;
       group.position.z += Math.cos(yy) * TEXT_MOUNT_OUT;
     }
+    /* Where the plate ended up, for the coin keep-out (`_coinKeepOut`). */
+    {
+      const yy = group.rotation.y;
+      g.placed = {
+        cx: group.position.x, cy: group.position.y, cz: group.position.z,
+        nx: Math.sin(yy), nz: Math.cos(yy), ux: Math.cos(yy), uz: -Math.sin(yy),
+        hw: plateW * 0.5, hh: plateH * 0.5,
+      };
+    }
 
     this.texts.push(group);
     this._chunkAdd(group, p, true);
     return null;
+  }
+
+  /* ── COINS NEVER SIT ON THE LETTERING ──────────────────────────────────
+   * Playtest rime-3 #4: "a gold coin from the camp coin trail floats directly
+   * in front of the lettering and covers the D in 'COME DOWN HERE' from every
+   * angle". `_harness/signcheck.mjs` finds the same on 12 of 13 courses — a
+   * coin trail follows the walked line and the sign stands beside it at head
+   * height, so a coin lands in the reader's sight band. A rule, not thirty
+   * data edits: after the boards are placed, any coin inside a plate's sight
+   * band (in front of it, within its silhouette) is moved by the smallest step
+   * that leaves the band — LOWERED under the plate when there is floor for it
+   * (a trail coin keeps its line), else SLID past the plate's edge, else RAISED
+   * over it. Runs once at build; only the affected entries are expanded. */
+  _coinKeepOut(defCoins) {
+    const groups = this._textGroups;
+    if (!Array.isArray(defCoins) || !defCoins.length || !groups || !groups.length) return defCoins;
+    const boards = [];
+    for (let i = 0; i < groups.length; i++) if (groups[i].placed) boards.push(groups[i].placed);
+    if (!boards.length) return defCoins;
+
+    const FRONT = 3.0, LAT = 0.15, VER = 0.25, CLEAR = 0.5;
+    const hitBoard = (x, y, z) => {
+      for (let b = 0; b < boards.length; b++) {
+        const B = boards[b];
+        const dx = x - B.cx, dy = y - B.cy, dz = z - B.cz;
+        const front = dx * B.nx + dz * B.nz;
+        if (front < 0.05 || front > FRONT) continue;
+        if (Math.abs(dx * B.ux + dz * B.uz) > B.hw + LAT) continue;
+        if (Math.abs(dy) > B.hh + VER) continue;
+        return B;
+      }
+      return null;
+    };
+    const pt = _v1;
+    const moveOut = (q, B, snap) => {
+      /* 1. lower it under the plate, on a trail that keeps its line */
+      if (!snap) {
+        const ly = B.cy - B.hh - VER - CLEAR;
+        pt.set(q[0], ly, q[2]);
+        const floor = this._floorUnder(pt, 6);
+        if (floor !== null && ly - floor >= 0.4 && !hitBoard(q[0], ly, q[2])) { q[1] = ly; return 1; }
+      }
+      /* 2. slide it past the nearer edge of the plate */
+      const along = (q[0] - B.cx) * B.ux + (q[2] - B.cz) * B.uz;
+      const sgn = along >= 0 ? 1 : -1;
+      const shift = sgn * (B.hw + LAT + CLEAR) - along;
+      const sx = q[0] + B.ux * shift, sz = q[2] + B.uz * shift;
+      if (!hitBoard(sx, q[1], sz)) { q[0] = sx; q[2] = sz; return 2; }
+      /* 3. raise it over the plate */
+      q[1] = B.cy + B.hh + VER + CLEAR;
+      return 3;
+    };
+
+    let out = null, moved = 0;
+    for (let i = 0; i < defCoins.length; i++) {
+      const e = defCoins[i];
+      const pts = expandCoinDef(e);
+      let any = false;
+      for (let k = 0; k < pts.length && !any; k++) any = !!hitBoard(pts[k][0], pts[k][1], pts[k][2]);
+      if (!any) { if (out) out.push(e); continue; }
+      if (!out) out = defCoins.slice(0, i);
+      const snap = !!(e && (e.snap || e.ground));
+      for (let k = 0; k < pts.length; k++) {
+        const q = pts[k];
+        const B = hitBoard(q[0], q[1], q[2]);
+        if (B) { moveOut(q, B, snap); moved++; }
+        out.push(snap ? { p: q, snap: true } : { p: q });
+      }
+    }
+    if (moved) console.info('[Course ' + this.id + '] ' + moved + ' coin' + (moved === 1 ? '' : 's') +
+                            ' moved out of a sign\'s sight band (see _coinKeepOut)');
+    return out || defCoins;
+  }
+
+  /**
+   * Give a sign material the occluder fade (see SIGN_OCC_*). Chains any hook
+   * the material already carries (materials.js box projection) and forks its
+   * program key so the injected GLSL never inherits an un-injected program.
+   */
+  _signOccApply(mat) {
+    if (!mat || !mat.isMaterial) return mat;
+    let u = this._signOcc;
+    if (!u) {
+      u = this._signOcc = {
+        hero: { value: new THREE.Vector3() },
+        cam: { value: new THREE.Vector3() },
+        occ: { value: new THREE.Vector2(SIGN_OCC_RADIUS, 0) },
+      };
+    }
+    const baseCompile = typeof mat.onBeforeCompile === 'function' ? mat.onBeforeCompile : null;
+    const baseKey = typeof mat.customProgramCacheKey === 'function' ? mat.customProgramCacheKey : null;
+    mat.onBeforeCompile = function (shader, renderer) {
+      if (baseCompile) baseCompile.call(this, shader, renderer);
+      injectSignOcc(shader, u);
+    };
+    mat.customProgramCacheKey = function () { return (baseKey ? String(baseKey.call(this)) : '') + '|cbsignocc'; };
+    mat.needsUpdate = true;
+    return mat;
+  }
+
+  /** The course's own clone of a plank material, carrying the occluder fade. */
+  _signPlankMat(key) {
+    let m = this._signPlankMats.get(key);
+    if (m) return m;
+    const base = this._mat(key);
+    let c = null;
+    try { c = base && typeof base.clone === 'function' ? base.clone() : null; } catch (e) { c = null; }
+    if (!c || !c.isMaterial) return base;
+    c.name = (base.name || String(key)) + '.sign';
+    this._own(c);
+    this._signOccApply(c);
+    this._signPlankMats.set(key, c);
+    return c;
+  }
+
+  /** Per frame: the camera->hero line the sign fade keys off. Two vector copies. */
+  _updateSignOcclusion() {
+    const u = this._signOcc;
+    if (!u) return;
+    const cam = this.engine && this.engine.camera;
+    const p = this._playerRef;
+    if (!cam || !p || !p.pos || !fin(p.pos.x)) { u.occ.value.y = 0; return; }
+    u.hero.value.set(p.pos.x, p.pos.y + SIGN_OCC_HERO_Y, p.pos.z);
+    if (cam.parent) u.cam.value.setFromMatrixPosition(cam.matrixWorld);
+    else u.cam.value.copy(cam.position);
+    u.occ.value.y = 1;
   }
 
   /** Cached unlit glow material — shared, so signage and bulbs still merge. */
@@ -2725,7 +3016,83 @@ export class Course {
       flicker: o.flicker, seed: index * 37.13,
     });
     site.bulb = bulb;
+    /* The lamp round the bulb is built once every collider exists
+       (`_buildLightFixtures`), because which lamp it is depends on what the
+       course put near the site: a floor, a ceiling, a wall, or nothing. */
+    this._lightFixtures.push({ o, pos: p });
     return null;
+  }
+
+  /**
+   * A FIXTURE FOR EVERY LIGHT (playtest rime-3 #2: "a bare orange glowing ball
+   * hangs in mid-air 2.6 m above the snow with no torch, brazier or lamp under
+   * it"). The bulb and its halo are the light; this is its cause. The mount is
+   * chosen from the geometry round the site, in this order:
+   *   a ceiling within 1.6 m above   -> 'hang'   (plate + chain)
+   *   a wall within 0.9 m beside     -> 'wall'   (plate + bracket arm)
+   *   a floor within 4.8 m below     -> 'post'   (plinth + shaft + collar)
+   *   nothing                         -> 'lantern' (the cage alone)
+   * Authors override with `fixture:'none'|'post'|'hang'|'wall'|'lantern'` and
+   * `fixtureScale`. Runs after every builder and hazard, before the merge, so
+   * the lamp costs no draw of its own.
+   */
+  _buildLightFixtures() {
+    const q = this._lightFixtures;
+    if (!q || !q.length) return;
+    const fn = Builders.buildLightFixture;
+    if (typeof fn !== 'function') { q.length = 0; return; }
+    for (let i = 0; i < q.length; i++) {
+      const o = q[i].o, p = q[i].pos;
+      if (o.fixture === false || o.fixture === 'none') continue;
+      const want = typeof o.fixture === 'string' ? o.fixture : 'auto';
+      let mount = 'lantern', span = 0, side = null;
+      const ceil = (want === 'auto' || want === 'hang') ? this._ceilingOver(p, want === 'hang' ? 6 : 1.6) : null;
+      const wall = (want === 'auto' || want === 'wall') ? this._wallBeside(p, want === 'wall' ? 2.5 : 0.9) : null;
+      const floor = (want === 'auto' || want === 'post') ? this._floorUnder(p, want === 'post' ? 9 : 4.8) : null;
+      if ((want === 'auto' || want === 'hang') && ceil !== null && ceil - p.y >= 0.35) {
+        mount = 'hang'; span = ceil - p.y;
+      } else if ((want === 'auto' || want === 'wall') && wall) {
+        const dx = wall.x - p.x, dz = wall.z - p.z;
+        span = Math.hypot(dx, dz);
+        if (span > 0.04) { mount = 'wall'; side = { x: dx / span, z: dz / span }; }
+      } else if ((want === 'auto' || want === 'post') && floor !== null && p.y - floor >= 0.9) {
+        mount = 'post'; span = p.y - floor;
+      } else if (want !== 'auto' && fin(o.span)) {
+        mount = want; span = o.span;
+      }
+      let built = null;
+      try {
+        built = fn({ p: [p.x, p.y, p.z], mount, span, side, scale: fin(o.fixtureScale) ? o.fixtureScale : 1 },
+                   this.theme, this.mats);
+      } catch (e) {
+        if (!this._warnedBuilders.has('lightfixture')) {
+          this._warnedBuilders.add('lightfixture');
+          console.error('[Course ' + this.id + '] buildLightFixture threw', e);
+        }
+        built = null;
+      }
+      if (built && built.mesh) this._chunkAdd(built.mesh, p, true);
+      /* build-time only: what each site got, for the harness (`course._fixtureLog`) */
+      this._fixtureLog.push({ mount, span: Math.round(span * 100) / 100, p: [p.x, p.y, p.z] });
+    }
+    q.length = 0;
+  }
+
+  /** Lowest collider underside over `p` within `maxRise`, or null (mirror of _floorUnder). */
+  _ceilingOver(p, maxRise) {
+    let best = Infinity;
+    const cols = this._allColliders;
+    for (let i = 0; i < cols.length; i++) {
+      const c = cols[i];
+      const b = c && c.aabb;
+      if (!b || b.isEmpty()) continue;
+      if (p.x < b.min.x - 0.25 || p.x > b.max.x + 0.25) continue;
+      if (p.z < b.min.z - 0.25 || p.z > b.max.z + 0.25) continue;
+      const bot = b.min.y;
+      if (bot < p.y + 0.08 || bot > p.y + maxRise) continue;
+      if (bot < best) best = bot;
+    }
+    return best === Infinity ? null : best;
   }
 
   /**
@@ -3294,8 +3661,16 @@ export class Course {
       return;
     }
     let col = null;
+    /* The coin list the collectibles build from is the authored one with any
+       coin in a sign's sight band moved out of it (`_coinKeepOut`); every other
+       field of the def is the def's own. */
+    let colDef = this.def;
     try {
-      col = new Ctor(this.def, {
+      const coins = this._coinKeepOut(this.def.coins);
+      if (coins !== this.def.coins) colDef = Object.assign({}, this.def, { coins });
+    } catch (e) { this._once('coinKeepOut', e); colDef = this.def; }
+    try {
+      col = new Ctor(colDef, {
         group: this.group, scene: this.engine ? this.engine.scene : null,
         mats: this.mats, theme: this.theme, themeId: this.themeId,
         fx: this.fx, audio: this.audio, save: this.save,
@@ -4702,6 +5077,7 @@ export class Course {
     this._updateCheckpoints(dt);
     this._updateGates(dt);
     this._updatePowers(dt);
+    this._updateSignOcclusion();
 
     if (this.collectibles && typeof this.collectibles.update === 'function') {
       try { this.collectibles.update(dt, p); } catch (e) { this._once('collectibles', e); }

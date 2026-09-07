@@ -61,6 +61,8 @@ const TALLY_PEEK_MS = 3400;
  * immediately (dying mid-celebration must read as dying).
  * -------------------------------------------------------------------- */
 const ANN_PRI = { checkpoint: 1, crest: 2, death: 3 };
+/** The death cause stays on stage this long — past the 220 ms rewind and the respawn. */
+const DEATH_WORD_MS = 1100;
 const ANN_MAX_WAIT = 1200;   // ms a queued announcement will ever wait for the stage
 const ANN_STALE = 2600;      // ms after which a queued announcement is no longer news
 const ANN_TAIL_MS = 260;     // the authored fade-out we skip to when we cut one short
@@ -881,7 +883,7 @@ export class HUD {
       if (a && typeof a.cancel === 'function') { try { a.cancel(); } catch (e) { /* already gone */ } }
     }
     this._annAnims.length = 0;
-    if (this._annNode) this._annNode.classList.remove('is-on');
+    if (this._annNode) { this._annNode.classList.remove('is-on'); this._annNode.classList.remove('is-death'); }
     this._annNode = null;
     this._annKind = '';
     this._annEndAt = 0;
@@ -1001,16 +1003,26 @@ export class HUD {
     /* Dying outranks every other reveal: the queue is dropped, not deferred —
        a "CHECKPOINT" that lands during the rewind is no longer true. */
     this._annQueue.length = 0;
-    this._announce('death', 760, () => {
+    /* THE CAUSE MUST READ. Playtest rime-3 #5: 'FELL' was a faint grey word
+       inside the dark centre of the rewind ring. Two reasons — the word sat at
+       full opacity for only 44 % of a 760 ms reveal (137..471 ms), so most
+       death frames caught it fading in or out; and it was bare white text over
+       whatever the death camera happened to frame. Now it holds for the whole
+       rewind (opaque from 10 % to 82 % of DEATH_WORD_MS, which outlasts the
+       220 ms rewind and the respawn) and `.is-death` gives it a solid dark
+       plate with a rim in the cause colour, so it reads on snow, lava and void
+       alike. */
+    this._announce('death', DEATH_WORD_MS, () => {
       this.nWord.style.setProperty('--wc', col);
       this.tWord.nodeValue = info.label;
       this.nWordSub.textContent = '';
+      this.nWord.classList.add('is-death');
       this._annAnims.push(animateOnce(this.nWord, [
         { opacity: 0, transform: 'translate(-50%,-50%) scale(.9)', filter: 'blur(5px)', easing: UI_TOKENS.ease.out },
-        { opacity: 1, transform: 'translate(-50%,-50%) scale(1.02)', filter: 'blur(0)', offset: 0.18 },
-        { opacity: 1, transform: 'translate(-50%,-50%) scale(1.02)', filter: 'blur(0)', offset: 0.62, easing: UI_TOKENS.ease.in },
+        { opacity: 1, transform: 'translate(-50%,-50%) scale(1.02)', filter: 'blur(0)', offset: 0.10 },
+        { opacity: 1, transform: 'translate(-50%,-50%) scale(1.02)', filter: 'blur(0)', offset: 0.82, easing: UI_TOKENS.ease.in },
         { opacity: 0, transform: 'translate(-50%,-50%) scale(1.05)', filter: 'blur(3px)' },
-      ], { duration: 760, easing: 'linear', fill: 'forwards' }));
+      ], { duration: DEATH_WORD_MS, easing: 'linear', fill: 'forwards' }));
       return this.nWord;
     });
 

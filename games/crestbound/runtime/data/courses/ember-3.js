@@ -771,8 +771,15 @@ export default {
     // --- the court: the pedestal the EIGHT SIGILS crest rises from, and the
     //     sign that teaches the one mechanic this course is built on.
     { kind: 'pedestal', p: [-6, COURT_Y, -8], mat: 'obsidian', tint: BASALT, glow: GOLD },
-    { kind: 'text', p: [3.4, COURT_Y + 2.0, -4], rot: [0, 0, 0], text: 'WHEN THE LAVA RISES  ·  PRESS  T', size: 0.28, color: 0xffb060 },
-    { kind: 'text', p: [3.4, COURT_Y + 1.5, -4], rot: [0, 0, 0], text: 'it only falls when you go back to the pad', size: 0.20, color: 0xc79a72 },
+    //     Inside the court, ahead-right of cp-court (0, -6) and seen through the
+    //     door: at [3.4, -4] it stood 2 m BEHIND the pad, off its axis, and the
+    //     follow camera framed it as a plate running off the right edge of a
+    //     1280 viewport (playtest ember-3 #5). The sub-line now names what
+    //     falls.
+    //     x 2.8 keeps the whole plate inside the door's sightline from the pad
+    //     (the south wall's east jamb at x 3 hid the right half at x 3.8).
+    { kind: 'text', p: [2.8, COURT_Y + 2.0, -13.5], rot: [0, 0, 0], text: 'WHEN THE LAVA RISES  ·  PRESS  T', size: 0.28, color: 0xffb060 },
+    { kind: 'text', p: [2.8, COURT_Y + 1.5, -13.5], rot: [0, 0, 0], text: 'the lava falls back when you stand on the pad', size: 0.20, color: 0xc79a72 },
     { kind: 'deco', kindOf: 'brazier', p: [-3.4, COURT_Y + 1.1, -5.4], s: [0.8, 1.8, 0.8], mat: 'metal', tint: EMBER },
     { kind: 'deco', kindOf: 'brazier', p: [3.4, COURT_Y + 1.1, -5.4], s: [0.8, 1.8, 0.8], mat: 'metal', tint: EMBER },
     { kind: 'deco', kindOf: 'buttress', p: [-15.8, COURT_Y + 1.4, -14], s: [1.0, 2.8, 4.4], mat: 'obsidian', tint: BASALT, count: 3, spread: 12.0, jitter: 0.0 },

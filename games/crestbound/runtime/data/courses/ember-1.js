@@ -700,7 +700,11 @@ export default {
     // Data lane 2026-09-05 (S4): on the axis at z 18 this plate sat between
     // the follow camera and cp-quay's pad (z 15) and hid Nim. Beside the
     // start pad instead.
-    { kind: 'text', p: [3.4, QUAY_TOP + 1.3, 17.0], rot: [0, 0, 0], text: 'THE POUR RUN  ·  60s', size: 0.26, color: BRASS },
+    // UI lane 2026-09-07: beside-and-behind the pad it filled 6 % of the
+    // cp-quay frame 4.6 m from the lens and was cut by the frame edge
+    // (_harness/signcheck.mjs runs-off-frame). Ahead of the pad, at the quay's
+    // north edge, it sits inside the follow camera's frame and reads whole.
+    { kind: 'text', p: [3.6, QUAY_TOP + 1.3, 11.0], rot: [0, 0, 0], text: 'THE POUR RUN  ·  60s', size: 0.26, color: BRASS },
 
     // The catwalk spine, z -7 .. 11, 4.00 m wide.
     { kind: 'platform', p: [0, 2.85, 2], s: [4.0, 0.3, 18], mat: 'grate', tint: IRON, stripe: true, edge: SAFE_EDGE },

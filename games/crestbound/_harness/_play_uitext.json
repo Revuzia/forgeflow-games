@@ -1,0 +1,27 @@
+[
+ {
+  "ok": true,
+  "what": "#2 the camp light has a mount",
+  "detail": "[{\"mount\": \"post\", \"span\": 2.6, \"p\": [0, 4.8, 43.4]}]"
+ },
+ {
+  "ok": true,
+  "what": "#4 no coin sits in any plate's sight band (114 authored coins)",
+  "detail": "[]"
+ },
+ {
+  "ok": true,
+  "what": "#6 'LEAN WEST' shows its plate face to cp-westface",
+  "detail": "cream pixels 0.101 in the centre window C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_uitext_rime3\\04_r3_06_leanwest_from_cp.png"
+ },
+ {
+  "ok": true,
+  "what": "#5 death cause 'FELL' drawn on its dark plate while dead",
+  "detail": "[{\"text\": \"FELL\", \"on\": true, \"death\": true, \"bg\": \"rgba(10, 7, 18, 0.8)\", \"color\": \"rgb(255, 255, 255)\", \"opacity\": \"0\"}] C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_uitext_rime3\\06_r3_05_death_120.png"
+ },
+ {
+  "ok": true,
+  "what": "rime-3: no console errors",
+  "detail": "[]"
+ }
+]

@@ -165,8 +165,12 @@ export const DEFAULT_BINDINGS = { // KeyboardEvent.code
   moveForward:['KeyW','ArrowUp'], moveBack:['KeyS','ArrowDown'], moveLeft:['KeyA','ArrowLeft'], moveRight:['KeyD','ArrowRight'],
   jump:['Space'], crouch:['ControlLeft','KeyC','ShiftLeft'], dive:['KeyF','KeyX'], pound:['ControlLeft','KeyC'],  // pound = crouch while airborne
   orbitLeft:['KeyQ'], orbitRight:['KeyE'], orbitUp:['KeyR'], orbitDown:['KeyV'], recenter:['KeyZ'], peek:['KeyG'],
-  interact:['KeyE'], pause:['Escape'], restart:['KeyR'], toCheckpoint:['KeyT'], mute:['KeyM'], fullscreen:['F11'], dev:['Backquote'], camToggle:['KeyB'],
+  interact:['KeyE'], pause:['Escape'], restart:['Backspace'], toCheckpoint:['KeyT'], mute:['KeyM'], fullscreen:['F11'], dev:['Backquote'], camToggle:['KeyB'],
 };
+// RESTART is Backspace (gamepad: Back/Select). It was KeyR until 2026-09-07 — the same
+// code as orbitUp — so holding the documented camera-up key wiped the run (playtest
+// azure-3 #0). RULE: a run-destroying action never shares a code with a held look or
+// move action; input.js `_loadBindings` scrubs such a code out of a saved layout.
 export class Input {
   constructor(domElement);
   update(dt);                 // once per frame BEFORE player.update

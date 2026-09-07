@@ -507,10 +507,15 @@ export default {
 
     { kind: 'pedestal', p: [0, STATION_Y, 44], mat: 'marble', tint: GOLD, glow: GOLD },
 
-    { kind: 'deco', kindOf: 'sign', p: [3.4, STATION_Y + 1.1, 41], s: [0.14, 1.9, 1.3], mat: 'metal' },
-    { kind: 'text', p: [3.4, STATION_Y + 3.9, 41], rot: [0, 0, 0], text: 'PRISM LINE', size: 0.62, color: 0xe6f6ff },
-    { kind: 'text', p: [3.4, STATION_Y + 3.35, 41], rot: [0, 0, 0], text: 'TWO STONES ACROSS  ·  OR RIDE A CART', size: 0.22, color: 0xbfe4ee },
-    { kind: 'text', p: [3.4, STATION_Y + 2.98, 41], rot: [0, 0, 0], text: 'THE CARTS KEEP THEIR OWN CLOCK  ·  WAIT FOR ONE', size: 0.22, color: 0xbfe4ee },
+    // The briefing board stands AHEAD of cp-station (z 40), not beside it: at
+    // [3.4, 41] it was 1 m behind the pad and 1.4 m off its axis, so the boot
+    // frame showed the right third of the screen as plate with its lines cut
+    // by the frame edge — 'TWO STONES ACRO' (playtest azure-3 #7). Four metres
+    // up the deck it sits inside the follow camera's frame and reads whole.
+    { kind: 'deco', kindOf: 'sign', p: [5.2, STATION_Y + 1.1, 36.2], s: [0.14, 1.9, 1.3], mat: 'metal' },
+    { kind: 'text', p: [5.2, STATION_Y + 3.9, 36.2], rot: [0, 0, 0], text: 'PRISM LINE', size: 0.62, color: 0xe6f6ff },
+    { kind: 'text', p: [5.2, STATION_Y + 3.35, 36.2], rot: [0, 0, 0], text: 'TWO STONES ACROSS  ·  OR RIDE A CART', size: 0.22, color: 0xbfe4ee },
+    { kind: 'text', p: [5.2, STATION_Y + 2.98, 36.2], rot: [0, 0, 0], text: 'THE CARTS KEEP THEIR OWN CLOCK  ·  WAIT FOR ONE', size: 0.22, color: 0xbfe4ee },
     { kind: 'text', p: [-6.0, STATION_Y + 1.5, 53.4], rot: [0, Math.PI, 0], text: 'NOTHING BELOW THE SOUTH LIP', size: 0.24, color: 0xa8d8ea },
     { kind: 'text', p: [-6.0, STATION_Y + 1.1, 53.4], rot: [0, Math.PI, 0], text: 'which is not the same as nothing there', size: 0.19, color: 0x8fb8c8 },
 
@@ -579,7 +584,10 @@ export default {
       motion: { type: 'linear', to: [11, 33.65, 22], period: 14, phase: 0.5, ease: 'sine', dwell: 1.6 },
       stripe: true, edge: SAFE_EDGE,
     },
-    { kind: 'text', p: [-11, 33.1, 31.6], rot: [0, 0, 0], text: 'STAND STILL AND IT CARRIES YOU', size: 0.22, color: 0xbfe4ee },
+    // Beside the boarding line on the deck's north-west corner, not mounted on
+    // the cart's own south edge at head height — a rider stood behind it and
+    // saw only a plate where the sleepers should be (playtest azure-3 #6).
+    { kind: 'text', p: [-13.2, STATION_Y + 1.5, 35.2], rot: [0, 0, 0], text: 'STAND STILL AND IT CARRIES YOU', size: 0.22, color: 0xbfe4ee },
 
     // Rail pylons under the crossing, so the sleepers read as a structure and
     // not as two floating dice. Decor builds no colliders (props.js).
@@ -860,9 +868,13 @@ export default {
       mat: 'void', p: [0, 0, -65], s: [110, 1, 14], color: 0x7f3fd8,
     },
 
-    { kind: 'text', p: [-40, ROAD[0].y + 1.7, -57.4], rot: [0, -Math.PI / 2, 0], text: 'THE GAUNTLET', size: 0.52, color: 0xe6f6ff },
-    { kind: 'text', p: [-40, ROAD[0].y + 1.25, -57.4], rot: [0, -Math.PI / 2, 0], text: 'TILES  ·  HAMMERS  ·  SPOKES  ·  WIND', size: 0.22, color: 0xbfe4ee },
-    { kind: 'text', p: [-40, ROAD[0].y + 0.9, -57.4], rot: [0, -Math.PI / 2, 0], text: 'THE CLOUD ONLY RISES', size: 0.21, color: 0xffb0bd },
+    // UI lane 2026-09-07: at x -40 the stack stood 3 m BEHIND cp-gauntlet
+    // (x -37, facing +x), 3.5 m from the lens, filling 10 % of the frame and
+    // cut by its edge (signcheck runs-off-frame). Six metres ahead of the pad
+    // on the deck's north side it faces the arriving player and reads whole.
+    { kind: 'text', p: [-31, ROAD[0].y + 1.7, -58.2], rot: [0, -Math.PI / 2, 0], text: 'THE GAUNTLET', size: 0.52, color: 0xe6f6ff },
+    { kind: 'text', p: [-31, ROAD[0].y + 1.25, -58.2], rot: [0, -Math.PI / 2, 0], text: 'TILES  ·  HAMMERS  ·  SPOKES  ·  WIND', size: 0.22, color: 0xbfe4ee },
+    { kind: 'text', p: [-31, ROAD[0].y + 0.9, -58.2], rot: [0, -Math.PI / 2, 0], text: 'THE CLOUD ONLY RISES', size: 0.21, color: 0xffb0bd },
     { kind: 'text', p: [12.5, 58.4, -57.4], rot: [0, 0, 0], text: 'HAMMERS KEEP TIME  ·  SO CAN YOU', size: 0.22, color: 0xbfe4ee },
     { kind: 'text', p: [27, 57.7, -57.4], rot: [0, 0, 0], text: 'STAND ON IT', size: 0.24, color: 0xbfe4ee },
 

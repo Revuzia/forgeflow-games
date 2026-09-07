@@ -688,7 +688,15 @@ export default {
     { kind: 'wind', p: [-34.0, 10.5, 13.0], s: [16, 12, 20], dir: [-1, 0, 0], power: 11.0 },
     { kind: 'wind', p: [-35.0, 12.0, -3.0], s: [16, 12, 18], dir: [-0.97, 0, -0.24], power: 12.0 },
 
-    { kind: 'text', p: [-25.2, 5.2, 29.6], rot: [0, 2.55, 0], text: 'LEAN WEST  ·  THE LEDGES ARE CUT WIDE FOR IT', size: 0.24, color: 0x3d5b78 },
+    // A text plate's rot is the direction its FACE points (+Z at 0), not a
+    // heading. Authored at [-25.2, 29.6] rot 2.55 this board stood ON the
+    // walked line 2.4 m north of cp-westface and showed its plank to everyone
+    // arriving from the camp (playtest rime-3 #6 — "a solid black panel, not
+    // one letter readable"); turned to face the pad it then stood between the
+    // respawn camera and Nim instead. Off the line, 3.4 m west of the pad,
+    // facing east-south-east, it is read from the pad, from the respawn frame
+    // and from the trodden path in — and it hides nothing.
+    { kind: 'text', p: on(-28.6, 30.6, 1.6), rot: [0, 0.93, 0], text: 'LEAN WEST  ·  THE LEDGES ARE CUT WIDE FOR IT', size: 0.24, color: 0x3d5b78 },
 
     // --- the four carved shelves. A is a walk-on (no stripe); B, C and D are
     //     jumped to, so every one of them wears the leading edge.
