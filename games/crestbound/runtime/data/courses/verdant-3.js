@@ -639,7 +639,7 @@ export default {
     { p: [18.0, LOG_TOP + 1.40, 26.0], note: '2 — on the downstream log, which sinks while you decide' },
     { p: [12.0, TERR_B_TOP + 1.35, -4.0], note: '3 — the far end of the upper hay deck, against the belt' },
     { p: [-8.0, GRANARY_ROOF + 1.40, -16.0], note: '4 — the granary roof (deck 21.60): ride a sail or climb the sack stair' },
-    { p: [16.0, 20.50, -26.0], note: '5 — the crag in the sack gully (crag top 19.10), between two swinging sacks' },
+    { p: [15.65, 20.50, -25.78], note: '5 — the crag in the sack gully (crag top 19.10), between two swinging sacks' },
     { p: [-22.0, 29.00, -34.0], note: '6 — mill 2s gallery balcony (27.58)' },
     { p: [-30.08, 29.50, -44.0], note: '7 — mill 3s sail shelf at 3 oclock (28.17) — ride it round' },
     { p: [28.0, MILL5_GALLERY + 1.46, -48.0], note: '8 — THE GREAT MILLs gallery (32.04), halfway up the scaffold' },
@@ -677,7 +677,7 @@ export default {
     { ring: { c: [5, 0, -21.5], r: 3.2, n: 8, y: GRANARY_Y + 1.1 } },
     // BEAT 5 — the ridge stair, and the arc over the sack gully. (8 + 6)
     ...trailCoins([[-6, -19], [-6, -23], [-6, -27], [-4, -31]], 8, 1.2),
-    ...arcCoins([9.0, 19.60, -22.0], [16.0, 20.10, -26.0], 1.4, 6),
+    ...arcCoins([9.0, 19.60, -22.0], [15.65, 20.10, -25.78], 1.4, 6),
     // BEAT 6 — the ridge path west to mills 2 and 3. (8)
     ...trailCoins([[-6, -32], [-16, -35], [-26, -39], [-33, -43]], 8, 1.2),
     // BEAT 6 — a ring on mill 3's gallery, the reward for finding the jump pad. (6)
@@ -936,14 +936,20 @@ export default {
     { kind: 'pendulum', p: [-6, 23.90, -25.4], len: 3.4, ampDeg: 46, period: 4.0, phaseCycles: 0.5, axis: 'x', mode: 'ball', radius: 0.85, mat: 'cloth', tint: WHEAT },
     { kind: 'text', p: [-6, GRANARY_Y + 1.5, -18.2], rot: [0, 0, 0], text: 'THE SACKS SWING ON A COUNT OF FOUR', size: 0.23, color: 0x7a5a2a },
 
-    // --- the sack gully crossing. Crag tops 17.70 / 19.10 / 20.30; gaps
-    //     3.20 m at +1.40 and 3.20 m at +1.20, both inside the single jump's
-    //     3.28 m safe reach at +1.60.
+    // --- the sack gully crossing. Crag tops 17.70 / 19.10 / 20.30.
+    //     SURFACES LANE (playtest V3-28): the gaps were quoted as 3.20 m but
+    //     MEASURED along the crag-to-crag line at 3.42 m (+1.40) and 2.76 m
+    //     (+1.20) — the first is outside the single jump's own 3.28 m safe
+    //     reach, so only a full-run launch AT the lip (coyote included)
+    //     landed; a launch 0.6 m before the lip died short. Crags 2 and 3
+    //     pulled in along their lines: 3.01 m at +1.40 and 2.36 m at +1.20.
+    //     Sigil 5, the coin arc and both sacks moved with them (each sack
+    //     still hangs over the middle of its gap).
     { kind: 'platform', p: [9.6, 16.90, -22.0], s: [3.4, 1.6, 3.4], mat: 'stone', tint: 0x9a9384, stripe: true, edge: SAFE_EDGE },
-    { kind: 'platform', p: [16.0, 18.30, -26.0], s: [3.6, 1.6, 3.6], mat: 'stone', tint: 0x9a9384, stripe: true, edge: SAFE_EDGE },
-    { kind: 'platform', p: [22.0, 19.50, -29.4], s: [3.6, 1.6, 3.6], mat: 'stone', tint: 0x9a9384, stripe: true, edge: SAFE_EDGE },
-    { kind: 'pendulum', p: [12.8, 24.20, -24.0], len: 3.8, ampDeg: 52, period: 3.4, phaseCycles: 0.25, axis: 'z', mode: 'ball', radius: 0.85, mat: 'cloth', tint: WHEAT },
-    { kind: 'pendulum', p: [19.0, 25.40, -27.7], len: 3.8, ampDeg: 52, period: 3.4, phaseCycles: 0.75, axis: 'z', mode: 'ball', radius: 0.85, mat: 'cloth', tint: WHEAT },
+    { kind: 'platform', p: [15.65, 18.30, -25.78], s: [3.6, 1.6, 3.6], mat: 'stone', tint: 0x9a9384, stripe: true, edge: SAFE_EDGE },
+    { kind: 'platform', p: [21.3, 19.50, -29.0], s: [3.6, 1.6, 3.6], mat: 'stone', tint: 0x9a9384, stripe: true, edge: SAFE_EDGE },
+    { kind: 'pendulum', p: [12.6, 24.20, -23.9], len: 3.8, ampDeg: 52, period: 3.4, phaseCycles: 0.25, axis: 'z', mode: 'ball', radius: 0.85, mat: 'cloth', tint: WHEAT },
+    { kind: 'pendulum', p: [18.5, 25.40, -27.4], len: 3.8, ampDeg: 52, period: 3.4, phaseCycles: 0.75, axis: 'z', mode: 'ball', radius: 0.85, mat: 'cloth', tint: WHEAT },
 
     /* ========================================================================
      * BEAT 6 — THE RIDGE PATH

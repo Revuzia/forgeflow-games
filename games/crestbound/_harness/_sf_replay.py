@@ -14,8 +14,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _e2lib import E2
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, "_playreports", "_sf_replay.json")
-URL = "http://localhost:8788/games/crestbound/index.html?dev=1&quality=low&autoscale=0"
+OUT = os.environ.get("SFOUT") or os.path.join(HERE, "_playreports", "_sf_replay.json")
+URL = os.environ.get("SFURL") or "http://localhost:8788/games/crestbound/index.html?dev=1&quality=low&autoscale=0"
 NORTH, WEST, SOUTH, EAST = 0.0, math.pi / 2, math.pi, -math.pi / 2
 
 RES = {}
@@ -105,6 +105,11 @@ def e2pads(p):
         out.push({p:h.def.p, s:h.def.s, dir:h.def.dir, power:h.def.power});
       return out; }""")
     out = []
+    if os.environ.get("NOCRITTERS") == "1":
+        # pad 0's plate is inside the sorter gnasher's bite (its lunge phase decides whether a placement
+        # survives): park every critter so the PAD is what gets measured.
+        n = p.js("() => { let n = 0; for (const c of (CRESTBOUND.game.course.critters || [])) { c.update = function () {}; for (const k of (c.kills || [])) k.active = false; for (const col of (c.colliders || [])) col.active = false; n++; } return n; }")
+        p.say("  critters PARKED: %s" % n)
     for i, pad in enumerate(pads):
         px, py, pz = pad["p"]
         if i == 0:
@@ -585,8 +590,11 @@ def main():
             try:
                 STATIONS[name](p)
             except Exception as e:
+                import traceback
+                tb = traceback.format_exc()
                 p.say("  !! station %s raised %r" % (name, e))
-                RES[name + "_error"] = repr(e)
+                p.say(tb)
+                RES[name + "_error"] = repr(e) + " | " + tb
                 dump()
         RES["console"] = p.console[:30]
         dump()

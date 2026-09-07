@@ -363,6 +363,38 @@ const FLOAT_FRAC = 0.62;
  * 0.6 m/s² of buoyancy, seconds of bobbing back up after every missed hop.
  */
 const HOP_REENTRY_V = 1.5;
+
+/**
+ * FEET PLANTED IN A GALE. A 'wind' Volume's `power` is m/s² and an airborne
+ * hero takes all of it (rime-3 free fall measured -8.05 against -8.28
+ * authored). On the GROUND the same push is a DRIFT IN POSITION — the belt's
+ * path (step 10 of the substep), never a velocity — of power × this many
+ * seconds: rime-3's own "9 -> 12 m/s² of lateral acceleration against a 9 m/s
+ * run, so you drift about a metre a second if you stop steering and you lose
+ * nothing at all if you keep leaning". Pumped into the velocity instead, the
+ * ground move-toward only shrank the lateral error ~4 % per substep while the
+ * hero was still accelerating (1.8 m/s of deflection by the first stride), and
+ * the follow camera's auto-yaw then chased the deflected heading, turning W
+ * downwind with it: a hands-off run along the west face measured 27.6 m of
+ * lateral drift in 5 s (5.5 m/s, grounded 90 % of the samples), the run's
+ * heading swung 75 degrees west and ended in the gorge. A drift in position
+ * leaves the run heading, the camera and the animation exactly where the
+ * stick put them; leaning a few degrees upwind cancels it.
+ */
+const GROUND_WIND_DRIFT_S = 0.11;
+
+/**
+ * AIR CURRENT ON WINGS. A 'current' Volume is a FLOW (m/s). In water the swim
+ * model runs relative to it; a FLYING hero (state 'fly', the wing glide) is
+ * gripped by it instead: each substep the velocity component along the
+ * current's 3-D axis is pulled toward the current's power at this rate (1/s),
+ * never above it, and the cross components are left alone — azure-3's three
+ * sky currents "push you along the spiral, so a glide that would have died
+ * short of hoop 9 gets there, and a glide that fights them does not". A plain
+ * jump through one is untouched: the pier's sigil-3 triple lives inside
+ * current 1's box.
+ */
+const AIR_CURRENT_GRIP = 2.0;
 /**
  * THE METAL HAT IN WATER — "TOO HEAVY TO FLOAT · HEAVY ENOUGH TO POUND"
  * (azure-1's tidewell sign; verdant-2's drowned crest on the moat floor).
@@ -667,6 +699,10 @@ export class Player {
         runs on velocity RELATIVE to this, so a floater drifts at exactly the
         authored power and a swimmer beats it by swim.speed - power. */
     this._flow = new THREE.Vector3();
+    /** `_flow` is an AIR current gripping a flying hero (see AIR_CURRENT_GRIP). */
+    this._flowAir = false;
+    /** Grounded wind drift (m/s, XZ) applied in POSITION (GROUND_WIND_DRIFT_S). */
+    this._windDrift = new THREE.Vector3();
 
     /* ── reused sub-objects (never reallocated) ────────────────────────── */
     this._headPos = new THREE.Vector3();
@@ -825,6 +861,8 @@ export class Player {
     this._crouchGraceT = 0;
     this._crouchSpeed = 0;
     this._flow.set(0, 0, 0);
+    this._flowAir = false;
+    this._windDrift.set(0, 0, 0);
     this._cutArmed = false;
     this._cutPending = false;
     this._fellFromJump = false;
@@ -860,6 +898,8 @@ export class Player {
     this.vel.set(0, 0, 0);
     this._wind.set(0, 0, 0);
     this._flow.set(0, 0, 0);
+    this._flowAir = false;
+    this._windDrift.set(0, 0, 0);
     this._boostT = 0;
     this._crouchGraceT = 0;
     this._impulse.set(0, 0, 0);
@@ -1172,8 +1212,10 @@ export class Player {
        player at twice the deck speed in Ascendant. Only the belt and the
        post-departure launch are ours. */
     if (this.grounded) {
-      pos.x += _pushPrev.x * dt;
-      pos.z += _pushPrev.z * dt;
+      /* The belt's push and, feet planted in a gale, the wind's DRIFT
+         (GROUND_WIND_DRIFT_S) — both in position, neither in the velocity. */
+      pos.x += (_pushPrev.x + this._windDrift.x) * dt;
+      pos.z += (_pushPrev.z + this._windDrift.z) * dt;
     } else if (this._launchT > 0) {
       const k = this._launchT / LAUNCH_TIME;
       pos.x += _launchV.x * k * dt;
@@ -1967,6 +2009,25 @@ export class Player {
       if (post < keep) {
         if (post > 1e-6) { const k = keep / post; vel.x *= k; vel.z *= k; }
         else { headingFromYaw(this.facing, _fwd); vel.x = _fwd.x * keep; vel.z = _fwd.z * keep; }
+      }
+    }
+
+    /* AIR CURRENT on wings (`_flowAir`, set by _readVolumes only while
+       flying): the component along the current's axis is pulled toward the
+       current's speed at AIR_CURRENT_GRIP, never above it; the rest is the
+       glider's own. Last word of the substep so the cap and the floor above
+       (both about the LAUNCH) never claw the carry back. */
+    if (this._flowAir) {
+      const fx = this._flow.x, fy = this._flow.y, fz = this._flow.z;
+      const pw = Math.sqrt(fx * fx + fy * fy + fz * fz);
+      if (pw > 1e-6) {
+        const along = (vel.x * fx + vel.y * fy + vel.z * fz) / pw;
+        if (along < pw) {
+          let k = AIR_CURRENT_GRIP * dt;
+          if (k > 1) k = 1;
+          const add = (pw - along) * k / pw;
+          vel.x += fx * add; vel.y += fy * add; vel.z += fz * add;
+        }
       }
     }
   }
@@ -2792,6 +2853,7 @@ export class Player {
        drift against the course's own "about a metre a second"). `falloff`
        is the hazard's soft edge, so entering a volume is a swell, not a slap. */
     const wind = res ? res.wind : null;
+    this._windDrift.x = 0; this._windDrift.z = 0;
     if (wind && wind.props) {
       readVec(wind.props.dir, _dir, 0, 1, 0);
       let power = isFinite(wind.props.power) ? wind.props.power : 8;
@@ -2802,9 +2864,22 @@ export class Player {
       const l = _dir.length();
       if (l > 1e-6 && power !== 0) {
         _dir.multiplyScalar(power / l);
-        this.vel.x += _dir.x * dt;
-        this.vel.y += _dir.y * dt;
-        this.vel.z += _dir.z * dt;
+        if (this.grounded && !this.inWater) {
+          /* Feet planted: a DRIFT in position next substep (step 10), so the
+             run heading — and the camera that follows it — stay put. Scaled
+             by the stick: a hero standing still plants his feet and is not
+             pushed off a windy pad (loopcheck: rime-3 cp-gorge / cp-bridge
+             and azure-3 cp-gauntlet-mid respawn INSIDE a gale and must stay
+             within 0.6 m of the pad); "if you stop steering" is the runner
+             who does not lean, not the hero who stopped. */
+          const wm = this._wmag > 1 ? 1 : this._wmag;
+          this._windDrift.x = _dir.x * GROUND_WIND_DRIFT_S * wm;
+          this._windDrift.z = _dir.z * GROUND_WIND_DRIFT_S * wm;
+        } else {
+          this.vel.x += _dir.x * dt;
+          this.vel.y += _dir.y * dt;
+          this.vel.z += _dir.z * dt;
+        }
       }
       if (this._ambT <= 0) { this._ambT = 0.4; this._sfx('wind', 0.35); }
     }
@@ -2819,17 +2894,29 @@ export class Player {
        cross-swimmer is carried sideways at power while making full speed. */
     const cur = res ? res.current : null;
     this._flow.set(0, 0, 0);
-    if (cur && cur.props && this.inWater) {
+    this._flowAir = false;
+    const flying = !this.inWater && this.state === 'fly' && this._flyT > 0;
+    if (cur && cur.props && (this.inWater || flying)) {
       readVec(cur.props.dir, _dir, 0, 0, -1);
       let power = isFinite(cur.props.power) ? cur.props.power : 4;
       if (typeof cur.props.falloff === 'function') {
         const k = +cur.props.falloff(this.pos);
         if (isFinite(k)) power *= clamp(k, 0, 1);
       }
-      const l = hyp2(_dir.x, _dir.z);
-      if (l > 1e-6 && power !== 0) {
-        this._flow.x = _dir.x / l * power;
-        this._flow.z = _dir.z / l * power;
+      if (flying) {
+        /* An AIR current keeps its vertical: azure-3's sky currents climb.
+           Applied by `_airMove` as a grip (AIR_CURRENT_GRIP). */
+        const l3 = _dir.length();
+        if (l3 > 1e-6 && power !== 0) {
+          this._flow.set(_dir.x / l3 * power, _dir.y / l3 * power, _dir.z / l3 * power);
+          this._flowAir = true;
+        }
+      } else {
+        const l = hyp2(_dir.x, _dir.z);
+        if (l > 1e-6 && power !== 0) {
+          this._flow.x = _dir.x / l * power;
+          this._flow.z = _dir.z / l * power;
+        }
       }
     }
 
