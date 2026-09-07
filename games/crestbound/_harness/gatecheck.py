@@ -408,6 +408,130 @@ def check_gate(pg, g, full_enter):
                back["state"] == "keep", "state=%r" % back["state"])
 
 
+# ------------------------------------------------------------- gate GEOMETRY
+# The walk-in tests prove a gate can be entered from the three angles the
+# harness drives.  These two prove the PLACEMENT that makes that possible, so a
+# painting moved onto a blank wall, hung too high, or given a trigger sunk into
+# the masonry fails HERE, with the reason, instead of failing as a mysteriously
+# silent walk.
+
+# Nine points across the doorway at FEET height on the authored walking floor
+# (`_updateGates` tests `volume.contains(player.pos)` and `player.pos` is the
+# feet -- contract §10), plus one point half a metre INSIDE the wall.
+DOORWAY = r"""(course) => {
+  const G = CRESTBOUND.game;
+  const g = (G._gates || []).find(x => x.course === course);
+  if (!g) return null;
+  if (!g.volume) return { volume: false };
+  const fx = Math.sin(g.yaw), fz = Math.cos(g.yaw);     // out of the wall, into the room
+  const lx = Math.cos(g.yaw), lz = -Math.sin(g.yaw);    // along the wall
+  const y = g.exitPos.y + 0.02;                         // the floor he walks in on
+  const front = [], miss = [];
+  for (const d of [0.35, 0.75, 1.15]) {
+    for (const lat of [-0.85, 0, 0.85]) {
+      const x = g.pos.x + fx * d + lx * lat, z = g.pos.z + fz * d + lz * lat;
+      const inside = !!g.volume.contains({ x: x, y: y, z: z });
+      front.push(inside);
+      if (!inside) miss.push([+d.toFixed(2), +lat.toFixed(2)]);
+    }
+  }
+  const back = !!g.volume.contains({ x: g.pos.x - fx * 0.5, y: y, z: g.pos.z - fz * 0.5 });
+  return {
+    volume: true, front: front, miss: miss, insideWall: back,
+    width: +(g.volume.half.x * 2).toFixed(2), depth: +(g.volume.half.z * 2).toFixed(2),
+    span: [+(g.volume.center.y - g.volume.half.y).toFixed(2),
+           +(g.volume.center.y + g.volume.half.y).toFixed(2)],
+    floor: +g.exitPos.y.toFixed(2),
+  };
+}"""
+
+DROP = r"""(course) => {
+  const G = CRESTBOUND.game;
+  const g = (G._gates || []).find(x => x.course === course);
+  if (!g) return null;
+  G.player.__test.teleport({ x: g.exitPos.x, y: g.exitPos.y + 0.60, z: g.exitPos.z });
+  G.player.__test.setVel({ x: 0, y: 0, z: 0 });
+  return [+g.exitPos.x.toFixed(2), +g.exitPos.y.toFixed(2), +g.exitPos.z.toFixed(2)];
+}"""
+
+LANDED = r"""() => ({
+  grounded: !!CRESTBOUND.game.player.grounded,
+  y: +CRESTBOUND.game.player.pos.y.toFixed(2),
+  pos: [+CRESTBOUND.game.player.pos.x.toFixed(2), +CRESTBOUND.game.player.pos.y.toFixed(2),
+        +CRESTBOUND.game.player.pos.z.toFixed(2)],
+})"""
+
+
+def check_geometry(pg, gates, want):
+    print("\n== GATE PLACEMENT ==")
+    pg.evaluate(SET_CRESTS, 0)
+    pg.wait_for_timeout(SETTLE_MS)
+    for g in gates:
+        course = g["course"]
+        if want and course not in want:
+            continue
+        d = pg.evaluate(DOORWAY, course)
+        if not d or not d.get("volume"):
+            ok("%s: has a walk-in trigger volume" % course, False, "no Volume on the resolved gate")
+            continue
+        ok("%s: the trigger covers the doorway at foot height" % course, not d["miss"],
+           "floor y=%s, trigger spans y %s, %.2f m wide x %.2f m deep; missed (out,lat) %s"
+           % (d["floor"], d["span"], d["width"], d["depth"], d["miss"]))
+        ok("%s: the trigger is in FRONT of the wall, not inside it" % course, not d["insideWall"],
+           "a point 0.5 m behind the picture plane is inside the trigger")
+        ok("%s: the trigger is walk-in sized (>= 2.0 m x >= 1.2 m)" % course,
+           d["width"] >= 2.0 and d["depth"] >= 1.2, "%.2f m x %.2f m" % (d["width"], d["depth"]))
+
+        stand = pg.evaluate(DROP, course)
+        pg.wait_for_timeout(900)
+        r = pg.evaluate(LANDED)
+        ok("%s: there is floor to stand on in front of it" % course,
+           bool(r["grounded"]) and abs(r["y"] - stand[1]) <= 0.7,
+           "dropped at the authored stand-out spot %s and ended %s (grounded=%s)"
+           % (stand, r["pos"], r["grounded"]))
+
+
+# The reward shot for unlocking a world. `_startGateOpen` builds a three-key
+# push toward the picture; every key must be on the side of the wall the PLAYER
+# is on. Measured 2026-09-06 by `_harness/_gatecam.py`: it stepped forwards
+# along `heading(yaw)` -- which points INTO the wall -- so all 13 unlock
+# cinematics played from outside the building, over blank exterior masonry, with
+# the painting off screen (`_shots/gatecam_verdant-2.png`).
+UNLOCK_SHOT = r"""(course) => {
+  const G = CRESTBOUND.game;
+  const g = (G._gates || []).find(x => x.course === course);
+  if (!g) return null;
+  G._startGateOpen(g);
+  const ox = g.exitPos.x - g.pos.x, oz = g.exitPos.z - g.pos.z;
+  const keys = G._gatePath.cam.map(k => [+k.p[0].toFixed(2), +k.p[1].toFixed(2), +k.p[2].toFixed(2)]);
+  const side = keys.map(k => +(((k[0] - g.pos.x) * ox + (k[2] - g.pos.z) * oz)).toFixed(2));
+  const dolly = +Math.hypot(keys[0][0] - keys[2][0], keys[0][2] - keys[2][2]).toFixed(2);
+  G._endGateOpen(true);
+  return { keys: keys, side: side, dolly: dolly, floor: +g.exitPos.y.toFixed(2) };
+}"""
+
+
+def check_unlock_shots(pg, gates, want):
+    print("\n== GATE-OPENS CINEMATIC ==")
+    for g in gates:
+        course = g["course"]
+        if want and course not in want:
+            continue
+        r = pg.evaluate(UNLOCK_SHOT, course)
+        pg.wait_for_timeout(140)
+        if not r:
+            ok("%s: unlock shot builds" % course, False, "no gate")
+            continue
+        ok("%s: the unlock shot films from the room, not through the wall" % course,
+           min(r["side"]) > 0,
+           "keyframes %s are behind the picture plane (dot %s)" % (r["keys"], r["side"]))
+        ok("%s: the unlock shot is above the walking floor" % course,
+           all(k[1] > r["floor"] + 0.5 for k in r["keys"]),
+           "floor y=%s, keyframe heights %s" % (r["floor"], [k[1] for k in r["keys"]]))
+        ok("%s: the unlock shot actually pushes in" % course, r["dolly"] >= 1.0,
+           "the camera travels only %.2f m" % r["dolly"])
+
+
 def check_unlock_all(pg):
     """The accessibility / dev hatch must actually open the doors."""
     pg.evaluate(SET_CRESTS, 0)
@@ -475,6 +599,9 @@ def main():
 
             gates = pg.evaluate(GATE_TABLE)
             ok("the Keep resolves all 13 course gates", len(gates) == 13, "found %d" % len(gates))
+
+            check_geometry(pg, gates, want)
+            check_unlock_shots(pg, gates, want)
             for g in gates:
                 if want and g["course"] not in want:
                     continue

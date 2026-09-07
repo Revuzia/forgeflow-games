@@ -137,6 +137,8 @@ const GATE_PROMPT_R = 4.2;                // show the prompt
 const GATE_ENTER_R = 1.45;                // walk-in radius (when the gate has no Volume)
 const GATE_ENTER_DWELL = 0.16;            // seconds inside ENTER_R to trigger
 const GATE_REARM_R = 2.6;                 // must leave this far before a cancelled gate re-arms
+const GATE_CAM_BACK = 7.5;                // unlock cinematic: metres back into the ROOM
+const GATE_CAM_MIN = 3.2;                 // ... and the least a shallow bay may give it
 const FEN_TALK_R = 2.6;
 const FEN_PROMPT_R = 4.5;
 
@@ -1444,13 +1446,49 @@ export class Game {
     this._gateOpenBurst = false;
     this._timerRun = false;
     this._setPrompt('', '');
-    /* Camera: a slow push toward the door from a spot in the room. */
+    /* Camera: a slow push toward the door FROM A SPOT IN THE ROOM.
+     *
+     * THE SIGN. `headingFromYaw(g.yaw)` is the direction the player walks IN,
+     * so it points INTO the wall the painting hangs on — which is why keep.js
+     * authors `exitP = p − heading·1.9` and why `_keepSpawnFor` (one function
+     * up) steps BACKWARDS along it. This function stepped forwards, and put
+     * every one of the thirteen unlock cinematics outside the building:
+     * measured 2026-09-06, 13 of 13 keyframes landed
+     * behind the picture plane (verdant-1's first key at x −27.5 against a west
+     * wall whose inner face is x −20 and whose outer face is −21.2), and
+     * `_shots/gatecam_verdant-2.png` is the reward moment for unlocking a world
+     * playing over a blank slab of exterior masonry with the painting off
+     * screen. Same room side as the player, and the pull-back is clamped to
+     * whatever the room actually gives so a shallow bay cannot push the camera
+     * through the wall behind it. `gatecheck.py check_unlock_shots` holds all
+     * three properties (room side, above the floor, actually dollies). */
     headingFromYaw(g.yaw, _v1);
+    _v1.set(-_v1.x, 0, -_v1.z);                     // out of the wall, into the room
+    /* THE SHOT IS ANCHORED TO THE FLOOR, NOT TO THE PICTURE. Heights taken off
+       `g.pos` put the undercroft keys at y −3.10 against a vault soffit at
+       −3.20 (keep.js UNDER_CEIL): a camera in the ceiling. `exitPos` is the
+       walking floor gatecheck.py proves a player can stand on, so a height
+       above it is a height in the room whatever storey the gate is on. */
+    const hasExit = !!(g.exitPos && isNum(g.exitPos.y));
+    const floorY = hasExit ? g.exitPos.y : g.pos.y - 1.9;
+    const outFromExit = GATE_CAM_BACK - 1.9;        // exitPos is already 1.9 m out
+    let back = GATE_CAM_BACK;
+    const bp = this.physWorld && this.physWorld.broadphase;
+    if (hasExit && bp && typeof bp.raycast === 'function') {
+      /* Cast at chest height from the spot gatecheck.py proves has floor: a hit
+         means the room is shallower than the shot wants, so pull the whole push
+         in rather than start it inside whatever is standing there. */
+      _v2.set(g.exitPos.x, floorY + 1.6, g.exitPos.z);
+      const hit = safe(() => bp.raycast(_v2, _v1, outFromExit + 0.8, _rayHit), 'broadphase.raycast');
+      if (hit && isNum(_rayHit.t)) back = clamp(1.9 + _rayHit.t - 0.7, GATE_CAM_MIN, GATE_CAM_BACK);
+    }
+    const near = Math.max(GATE_CAM_MIN * 0.85, back * 0.59);   // 4.4 / 7.5 of the pull-back
+    const mid = (back + near) * 0.5;
     const path = this._gatePath;
     const k0 = path.cam[0], k1 = path.cam[1], k2 = path.cam[2];
-    k0.p[0] = g.pos.x + _v1.x * 7.5; k0.p[1] = g.pos.y + 2.4; k0.p[2] = g.pos.z + _v1.z * 7.5;
-    k1.p[0] = g.pos.x + _v1.x * 5.2; k1.p[1] = g.pos.y + 1.6; k1.p[2] = g.pos.z + _v1.z * 5.2;
-    k2.p[0] = g.pos.x + _v1.x * 4.4; k2.p[1] = g.pos.y + 1.3; k2.p[2] = g.pos.z + _v1.z * 4.4;
+    k0.p[0] = g.pos.x + _v1.x * back; k0.p[1] = floorY + 2.60; k0.p[2] = g.pos.z + _v1.z * back;
+    k1.p[0] = g.pos.x + _v1.x * mid;  k1.p[1] = floorY + 2.05; k1.p[2] = g.pos.z + _v1.z * mid;
+    k2.p[0] = g.pos.x + _v1.x * near; k2.p[1] = floorY + 1.70; k2.p[2] = g.pos.z + _v1.z * near;
     for (let i = 0; i < 3; i++) { path.cam[i].look[0] = g.pos.x; path.cam[i].look[1] = g.pos.y + 0.6; path.cam[i].look[2] = g.pos.z; }
     k0.t = 0; k1.t = GATE_OPEN_BURST_AT / 1000; k2.t = GATE_OPEN_MS / 1000;
     path.text = g.label;

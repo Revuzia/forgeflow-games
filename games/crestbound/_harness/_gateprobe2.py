@@ -1,4 +1,15 @@
-"""Click through the title like a player, then list every gate and walk into verdant-1's."""
+"""Click through the title like a player, then list every gate and walk into verdant-1's.
+
+CAUTION, and the reason this file was corrected on 2026-09-06. The first version
+teleported to `trigger.center + (0, -0.5, +3.0)` and held W. `+Z` is only "out of
+the wall" for a gate whose yaw is 0, and the Keep hangs verdant-1 on its WEST wall
+(yaw = +PI/2): the teleport landed the hero 3 m SIDEWAYS along the same wall and W
+drove him into the masonry, where he moved 0.2 m and stopped. The probe reported
+"walking into verdant-1 does nothing", which was true of the probe and not of the
+game, and that false alarm is what opened the P0 pass. It now stands on the gate's
+own authored `exitPos` and aims the camera at the picture, the way `gatecheck.py`
+does. `gatecheck.py` is the GATE; this file stays as the quick eyeball.
+"""
 import sys, json
 from playwright.sync_api import sync_playwright
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -30,15 +41,29 @@ with sync_playwright() as p:
     print("GATES (%d):"%len(gates))
     for g in gates: print("  ",json.dumps(g))
     v1=[g for g in gates if g["course"]=="verdant-1"]
-    if v1 and v1[0]["c"]:
-        c=v1[0]["c"]
-        print("walking into verdant-1 gate at",c)
-        pg.evaluate("""(c)=>{const P=CRESTBOUND.game.player;P.__test.teleport({x:c[0],y:c[1]-0.5,z:c[2]+3.0});}""",c)
+    if v1:
+        # Stand where the Keep says a player stands to face this picture, and look
+        # at it. `exitPos` is p - heading(yaw)*1.9 on the walking floor (keep.js
+        # makeGate), so it is out in the ROOM whatever wall the gate hangs on.
+        start=pg.evaluate("""()=>{
+          const G=CRESTBOUND.game, g=(G._gates||[]).find(x=>x.course==='verdant-1');
+          if(!g) return null;
+          G.player.__test.teleport({x:g.exitPos.x,y:g.exitPos.y+0.12,z:g.exitPos.z});
+          G.player.__test.setVel({x:0,y:0,z:0});
+          const yaw=Math.atan2(-(g.pos.x-g.exitPos.x),-(g.pos.z-g.exitPos.z));
+          G.player.__test.setFacing(yaw);
+          if(G.cam){G.cam.yaw=yaw;G.cam._rcHoldT=0;}
+          return {from:[+g.exitPos.x.toFixed(2),+g.exitPos.y.toFixed(2),+g.exitPos.z.toFixed(2)],
+                  gate:[+g.pos.x.toFixed(2),+g.pos.y.toFixed(2),+g.pos.z.toFixed(2)],yaw:+yaw.toFixed(3)};}""")
+        print("walking into verdant-1 from",json.dumps(start))
         pg.wait_for_timeout(500)
-        for _ in range(60):
-            pg.keyboard.down("w"); pg.wait_for_timeout(60)
-        pg.keyboard.up("w"); pg.wait_for_timeout(3000)
+        pg.keyboard.down("w")
+        for _ in range(30):
+            pg.wait_for_timeout(120)
+            if pg.evaluate("()=>CRESTBOUND.game.state==='card'"): break
+        pg.keyboard.up("w"); pg.wait_for_timeout(1200)
         after=pg.evaluate("""()=>({state:CRESTBOUND.game.state,course:CRESTBOUND.game.course&&CRESTBOUND.game.course.def.id,
+            cardOpen:!!document.querySelector('.cb-card.on'),
             pos:[+CRESTBOUND.game.player.pos.x.toFixed(1),+CRESTBOUND.game.player.pos.y.toFixed(1),+CRESTBOUND.game.player.pos.z.toFixed(1)]})""")
         print("AFTER WALK:",json.dumps(after))
         pg.screenshot(path="_shots/gateprobe2.png")
