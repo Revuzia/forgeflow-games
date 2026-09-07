@@ -836,6 +836,28 @@ export function buildTerrain(def, theme, mats, quality) {
   const mat = baseMat.clone();
   mat.vertexColors = true;
   mat.name = 'terrain_' + surfaceKey;
+  /* THE GROUND YIELDS TO WHATEVER IS LAID ON IT (2026-09-07, render lane,
+   * owner screenshot 3 / playtest K3, azure-1 P7, rime-1/2 ice sheets).
+   *
+   * Authors put a paved apron, a court floor, an ice sheet or a checkpoint
+   * plinth ON a terrain flat by giving the slab's top the flat's height — so
+   * the slab top and the heightfield are the SAME plane over the whole
+   * footprint (the sweep `_harness/_rn_sweep.mjs` counts 10 such solids across
+   * the game, the Keep apron alone 26 x 5.2 m of it). Two coplanar surfaces
+   * resolve by depth-buffer noise: the streaky, camera-dependent bands the
+   * owner photographed. Isolated with `_harness/_rn_seam.py` (engine frozen,
+   * one frame per toggle, read back off the GPU): hiding the grass changed
+   * nothing; sinking the terrain 2 mm removed every band; polygonOffset on
+   * this material reproduced the sunk frame to the pixel (0.000 % of pixels
+   * differ). So the terrain is pushed back by one depth slope + one unit,
+   * which is below anything a player can see (it is a depth-buffer bias,
+   * the mesh does not move) and is enough for the depth test to pick the
+   * slab everywhere the two planes coincide. A slab authored BELOW the
+   * ground still loses, as it should: the bias is smaller than any authored
+   * gap. Terrain-only, so no other material's depth changes. */
+  mat.polygonOffset = true;
+  mat.polygonOffsetFactor = 1;
+  mat.polygonOffsetUnits = 1;
 
   // --- chunk grid of LODs (ROUND 3, see the PERF note in the header) -------
   const chunkCap = Math.max(1, Math.min(16, (d.chunks | 0) || 16));
@@ -901,6 +923,20 @@ export function buildTerrain(def, theme, mats, quality) {
 
       // FAR level: stride 2 inside, stitched to the full-resolution edge on
       // every chunk border (a fan around the coarse cell's centre vertex)
+      /* THE ODD STRIP WAS NOT STITCHED (2026-09-07, render lane, playtest
+       * rime-3 "dead-straight bright hairlines across the snow"). A chunk
+       * with an ODD cell count on an axis ends in a 1-wide strip of FINE
+       * cells (the `im < 0 || jm < 0` branch), and that strip has a vertex
+       * at every row — but the coarse cell beside it only inserted an edge
+       * midpoint on the CHUNK border, so along the strip's inner edge the
+       * coarse quad ran corner-to-corner past a vertex the strip used: a
+       * T-junction, and wherever the ground curves the two surfaces part by
+       * the sagitta and the sky shows through as a hairline. Measured live
+       * with `_harness/_rn_tjunction.py` before this change: every chunk on
+       * every course (rime-3 34 per chunk, azure-1 13, the Keep 20 / 9 —
+       * 1650 across five courses), each one on a strip column or row. An
+       * edge now takes its midpoint whenever the surface BEYOND it is full
+       * resolution: the chunk border, or a strip left by an odd count. */
       const coarse = [];
       for (let j = j0; j < j1; j += 2) {
         const jb = Math.min(j + 2, j1), jm = (jb - j === 2) ? j + 1 : -1;
@@ -911,19 +947,20 @@ export function buildTerrain(def, theme, mats, quality) {
             for (let jj = j; jj < jb; jj++) for (let ii = i; ii < ib; ii++) pushQuad(coarse, ii, jj, ii + 1, jj + 1);
             continue;
           }
-          const border = (i === i0) || (ib === i1) || (j === j0) || (jb === j1);
-          if (!border) { pushQuad(coarse, i, j, ib, jb); continue; }
+          const left = (i === i0), right = (ib === i1) || (i1 - ib === 1);
+          const bottom = (j === j0), top = (jb === j1) || (j1 - jb === 1);
+          if (!(left || right || bottom || top)) { pushQuad(coarse, i, j, ib, jb); continue; }
           const M = L(im, jm);
           // ring A -> C -> D -> B -> A (the +Y winding of pushQuad), with the
-          // edge midpoint inserted on every border edge
+          // edge midpoint inserted on every edge that faces fine geometry
           const ring = [L(i, j)];
-          if (i === i0) ring.push(L(i, jm));
+          if (left) ring.push(L(i, jm));
           ring.push(L(i, jb));
-          if (jb === j1) ring.push(L(im, jb));
+          if (top) ring.push(L(im, jb));
           ring.push(L(ib, jb));
-          if (ib === i1) ring.push(L(ib, jm));
+          if (right) ring.push(L(ib, jm));
           ring.push(L(ib, j));
-          if (j === j0) ring.push(L(im, j));
+          if (bottom) ring.push(L(im, j));
           ring.push(L(i, j));
           for (let q = 0; q < ring.length - 1; q++) coarse.push(M, ring[q], ring[q + 1]);
         }
