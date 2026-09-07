@@ -55,10 +55,41 @@
  *    linVel — the derivative at t drifts by a*dt^2/2 a frame) and, for a
  *    spinning deck, an EXACT rotation about its axis (a tangent step creeps
  *    outward by (w*dt)^2/2 a substep and never comes back). See carryOn().
+ *  - A moving platform pushes the player, it never eats them — and it never
+ *    KILLS them unless it really has them in a vice. A mover that overlaps
+ *    the capsule (a) is BOARDED if its top is within stepUp of the feet and
+ *    there is headroom (the trolley that arrives at shin height is stepped
+ *    onto, not ploughed by), else (b) shoves the player out the SHORTEST way
+ *    (the minimum-translation vector, a few centimetres a substep — never the
+ *    full exit distance, which for a rotated 5 m arm is metres and tunnelled
+ *    the player through floors), else, when that shove lands in static
+ *    geometry, (c) shoves AHEAD of the mover's own horizontal motion by the
+ *    true oriented exit distance, provided that leaves the player out of
+ *    every static and, for a grounded player, still over ground (a bar never
+ *    pushes a standing hero off a walkway edge). A LATERAL squeeze that has
+ *    no free direction is resolved by letting the mover pass through — the
+ *    hero is never reported crushed by a sideways sweep. `crushed` is
+ *    reported ONLY for a VERTICAL squeeze — a descending head against the
+ *    floor, a rising deck against a ceiling — and only once the mover has
+ *    driven CRUSH_SQUEEZE (0.30 m) into the body seated against the static,
+ *    measured (settleStatics), not assumed. Critter bodies (group 'critter':
+ *    bumbler, skitter, warden, gnasher) push and are stood on but NEVER
+ *    crush: what touching them does is the critter's own business.
+ *  - Stairs are climbed by SWIMMERS too. A hero wading out of water is not
+ *    grounded, so the mantle used to be refused and he pressed against the
+ *    first tread above the waterline forever (azure-1's great stair, the
+ *    course's required spine). `state.inWater` opens the step-up.
+ *  - An oriented box is never contacted through a WORLD-axis gap. The
+ *    oriented narrow phase is a three-axis SAT on the box's own axes, which
+ *    is necessary, not sufficient: a pitched roof slab whose world AABB is a
+ *    centimetre clear of the hero (inside QUERY_MARGIN) still reported an
+ *    overlap on its own tilted axes and refused a stair mantle under an eave.
+ *    The hero's box is world-aligned, so its three axes are the world axes
+ *    and a world-AABB separation is an exact separating axis: checked first.
  *
  * ORDER OF OPERATIONS, PER SUBSTEP
  * --------------------------------
- *   1. moving-platform carry + push (and the crush test)
+ *   1. moving-platform carry + board / shove (and the vertical-squeeze test)
  *   2. sweep X, resolve
  *   3. sweep Z, resolve
  *   4. sweep Y, resolve            (step-up runs inside 2 and 3)
@@ -83,6 +114,9 @@
  *    heightfield will not re-ground a rising hero on that frame.
  *  - Pass `state.poundFalling = true` during the pound descent; it is echoed
  *    back and used to prioritise a breakable ground contact in `breakable`.
+ *  - Pass `state.inWater = true` (or `wading`) while swimming: the step-up
+ *    then works without a ground contact, so the hero can wade out onto a
+ *    tread or a kerb within stepUp of the feet.
  *  - After the call, `Scratch.cap` (from world/collider.js) holds the player's
  *    capsule for the resolved position, so a hazard/collectible test can reuse
  *    it without rebuilding one. `result.kill` is already the first volume that hit.
@@ -99,7 +133,7 @@
  *   surface             string  ground surface key ('normal' when airborne)
  *   surfaceProps        object|null
  *   stepped             boolean  a step-up happened this call
- *   crushed             boolean  squashed between a mover and static geometry
+ *   crushed             boolean  VERTICALLY squeezed ≥ CRUSH_SQUEEZE between a mover and a static
  *   hitVel              THREE.Vector3   velocity on entry (impact speed for landings)
  *   kill                KillVolume|null
  *   inWater             Volume|null
@@ -135,6 +169,13 @@ const ENTRY_POS = new THREE.Vector3();
 
 const CAND_A = [];   // nesting level 0 — sweeps, depenetrate, carry
 const CAND_B = [];   // nesting level 1 — step-up clearance, ground probe, crush
+/**
+ * Movers the push phase decided must PASS THROUGH the hero this substep (a
+ * sideways sweep with no free direction: pinned against a wall, or at a
+ * walkway edge). The sweeps and depenetrate skip them, or they would finish
+ * the shove the push phase refused — off the ledge, into the wall.
+ */
+const PASS = [];
 const RAY_CANDS = [];
 const RAY_BOX = new THREE.Box3();
 
@@ -152,8 +193,28 @@ const CONTACT_GAP = 0.035;
 const SNAP_DIST = 0.18;
 /** Carry probe depth — how far below the feet a platform still carries you. */
 const CARRY_DIST = 0.10;
-/** Static overlap after a mover push that means the player has been squashed. */
+/**
+ * How far a deck may have RISEN INTO the feet since last substep and still be
+ * the deck you are standing on. A rising platform moves before the rider does
+ * (hazards update once a frame; the rider once a substep), so at the top of
+ * every substep its top sits a few millimetres above the feet. The carry probe
+ * rejected that as "not below the feet", the board path then lifted the hero
+ * out — and never moved him along: azure-3's cart, rising 0.7 m/s while
+ * travelling 2.3 m/s, slid out from under a standing rider in 3.4 s.
+ */
+const CARRY_SINK = 0.06;
+/** Static overlap a mover shove may leave behind (the sweeps clean up less than this). */
 const CRUSH_DEPTH = 0.02;
+/**
+ * A VERTICAL squeeze this deep — the mover driven this far into a body that
+ * is already seated against static geometry — is a crush. Anything shallower
+ * is a contact the sweeps and depenetrate keep resolving frame after frame.
+ */
+const CRUSH_SQUEEZE = 0.30;
+/** Longest lateral shove a mover may deliver in one substep (ahead of its motion). */
+const SHOVE_MAX = 1.2;
+/** A grounded hero shoved sideways must still have ground within this below his feet. */
+const SHOVE_DROP = 0.6;
 /** How far a wall may be from the player's shoulder and still count as touched. */
 const FEELER = 0.045;
 /** Box slope steeper than this (normal.y) is a wall, not ground. Heightfields are exempt. */
@@ -262,6 +323,7 @@ const CTX = {
   allowSnap: true,
   wantSnap: null,
   poundFalling: false,
+  wading: false,
 };
 
 /** Filled by axisContact(). */
@@ -345,6 +407,18 @@ function queryCands(buf) {
 }
 
 /**
+ * World-AABB separation between the player box (PC/PH) and collider `c`.
+ * The player box is world-aligned, so this is the SAT on the player's own
+ * three axes — exact, and the guard the oriented narrow phase lacks.
+ */
+function aabbClear(c) {
+  const b = c.aabb;
+  return b.max.x - (PC.x - PH.x) <= EPS || (PC.x + PH.x) - b.min.x <= EPS ||
+         b.max.y - (PC.y - PH.y) <= EPS || (PC.y + PH.y) - b.min.y <= EPS ||
+         b.max.z - (PC.z - PH.z) <= EPS || (PC.z + PH.z) - b.min.z <= EPS;
+}
+
+/**
  * Minimum translation vector between the player box (PC/PH) and a collider.
  * @returns {number} penetration depth (0 when not overlapping); `outN` is the
  *          unit world normal pointing from the collider toward the player.
@@ -362,6 +436,7 @@ function mtv(c, outN) {
     outN.set(0, 0, dz >= 0 ? 1 : -1);
     return oz;
   }
+  if (aabbClear(c)) return 0;
   inflatedHalf(c, PH, HE);
   c.toLocal(PC, LP);
   const o0 = HE.x - Math.abs(LP.x); if (o0 <= EPS) return 0;
@@ -414,6 +489,7 @@ function axisContact(c, axis, sgn) {
   }
 
   // ---- oriented box: work in the collider's local frame ----
+  if (aabbClear(c)) return false;
   inflatedHalf(c, PH, HE);
   c.toLocal(PC, LP);
   const o0 = HE.x - Math.abs(LP.x); if (o0 <= EPS) return false;
@@ -459,22 +535,33 @@ function axisContact(c, axis, sgn) {
   return true;
 }
 
-/** Distance the player must travel along world axis `A` (sign `dir`) to leave `c`. */
+/**
+ * Distance the player must travel along world axis `A` (sign `dir`) to leave
+ * `c`. For an oriented box this is solved on the box's OWN axes (the first
+ * local slab the move exits), not on its world AABB — the AABB of a 5 m arm
+ * turned 45° is 7 m wide and once threw a rider metres across a yard.
+ */
 function exitAlong(c, A, dir) {
-  let cen, h;
-  if (c.axisAligned) {
-    cen = A === 0 ? c.center.x : (A === 1 ? c.center.y : c.center.z);
-    h = (A === 0 ? c.half.x : (A === 1 ? c.half.y : c.half.z));
-  } else {
-    const b = c.aabb;
-    const mn = A === 0 ? b.min.x : (A === 1 ? b.min.y : b.min.z);
-    const mx = A === 0 ? b.max.x : (A === 1 ? b.max.y : b.max.z);
-    cen = (mn + mx) * 0.5;
-    h = (mx - mn) * 0.5;
-  }
-  h += A === 0 ? PH.x : (A === 1 ? PH.y : PH.z);
   const p = A === 0 ? PC.x : (A === 1 ? PC.y : PC.z);
-  return h - dir * (p - cen);
+  if (c.axisAligned) {
+    const cen = A === 0 ? c.center.x : (A === 1 ? c.center.y : c.center.z);
+    let h = (A === 0 ? c.half.x : (A === 1 ? c.half.y : c.half.z));
+    h += A === 0 ? PH.x : (A === 1 ? PH.y : PH.z);
+    return h - dir * (p - cen);
+  }
+  inflatedHalf(c, PH, HE);
+  c.toLocal(PC, LP);
+  let best = Infinity;
+  for (let j = 0; j < 3; j++) {
+    const av = j === 0 ? c.ax : (j === 1 ? c.ay : c.az);
+    const k = dir * (A === 0 ? av.x : (A === 1 ? av.y : av.z));   // d(local j) / d(travel)
+    if (k > -1e-6 && k < 1e-6) continue;
+    const l = j === 0 ? LP.x : (j === 1 ? LP.y : LP.z);
+    const h = j === 0 ? HE.x : (j === 1 ? HE.y : HE.z);
+    const t = k > 0 ? (h - l) / k : (-h - l) / k;                 // both non-negative while overlapping
+    if (t < best) best = t;
+  }
+  return best === Infinity ? -1 : best;
 }
 
 function addWall(nx, ny, nz, c) {
@@ -531,7 +618,7 @@ function classifyContact(nx, ny, nz, c) {
  */
 function tryStepUp(c) {
   const r = CTX.res, pos = CTX.pos, vel = CTX.vel;
-  if (!(CTX.grounded || r.grounded)) return false;
+  if (!(CTX.grounded || r.grounded || CTX.wading)) return false;
 
   const top = c.aabb.max.y;
   const rise = top - pos.y;
@@ -594,6 +681,7 @@ function sweepAxis(axis, delta) {
     for (let i = 0; i < cands.length; i++) {
       const c = cands[i];
       if (c.solid === false) continue;
+      if (PASS.length !== 0 && PASS.indexOf(c) >= 0) continue;
       if (!axisContact(c, axis, sgn)) continue;
       const mag = CONTACT.push < 0 ? -CONTACT.push : CONTACT.push;
       let take = false;
@@ -653,6 +741,7 @@ function depenetrate() {
     for (let i = 0; i < cands.length; i++) {
       const c = cands[i];
       if (c.solid === false) continue;
+      if (PASS.length !== 0 && PASS.indexOf(c) >= 0) continue;
       const d = mtv(c, TMPN);
       if (d <= EPS) continue;
       // Smallest penetration first: the minimum-translation principle. It also
@@ -684,7 +773,8 @@ function depenetrate() {
  * Fills PROBE. Restores `pos.y` before returning — this never moves anything.
  * PROBE.gap is the distance from the feet down to that surface.
  */
-function probeDown(maxD) {
+function probeDown(maxD, sink) {
+  const over = sink > 0 ? sink : 0;
   PROBE.hit = false; PROBE.lift = 0; PROBE.gap = maxD;
   PROBE.collider = null; PROBE.nx = 0; PROBE.ny = 1; PROBE.nz = 0;
 
@@ -712,6 +802,7 @@ function probeDown(maxD) {
       lift = hy - dy;
       area = ox * oz;
     } else {
+      if (aabbClear(c)) continue;
       inflatedHalf(c, PH, HE);
       c.toLocal(PC, LP);
       const o0 = HE.x - Math.abs(LP.x); if (o0 <= EPS) continue;
@@ -736,7 +827,7 @@ function probeDown(maxD) {
       area = (ow > 0 ? ow : 0) * (od > 0 ? od : 0);
     }
 
-    if (lift < 0 || lift > maxD + EPS) continue;
+    if (lift < 0 || lift > maxD + over + EPS) continue;
     let take = false;
     if (best === null) take = true;
     else if (lift > bestLift + 1e-4) take = true;                    // higher surface wins
@@ -908,6 +999,7 @@ function wallFeeler() {
   for (let i = 0; i < cands.length; i++) {
     const c = cands[i];
     if (c.solid === false) continue;
+    if (PASS.length !== 0 && PASS.indexOf(c) >= 0) continue;
     if (c.aabb.max.y <= stepTop) continue;      // a step, not a wall
     if (mtv(c, TMPN) <= EPS) continue;
     if (TMPN.y >= GROUND_NY || TMPN.y <= -GROUND_NY) continue;
@@ -981,55 +1073,144 @@ function carryOn(gc, pos, sdt) {
   pos.z = cc.z + rz * c + cz * s + kz * kd * m;
 }
 
+/** Deepest penetration into any STATIC solid at the current player box. */
+function staticDepth() {
+  const cands = queryCands(CAND_B);
+  let worst = 0;
+  for (let i = 0; i < cands.length; i++) {
+    const c = cands[i];
+    if (c.solid === false || c.isMoving()) continue;
+    const d = mtv(c, TMPN);
+    if (d > worst) worst = d;
+  }
+  return worst;
+}
+
+/**
+ * Seat the player against the STATIC world only (minimum translation, ≤ 4
+ * iterations, no contact classification). Used to measure a vertical squeeze:
+ * how far a mover has driven into a body that has nowhere static to go.
+ */
+function settleStatics() {
+  const pos = CTX.pos;
+  for (let iter = 0; iter < 4; iter++) {
+    setPlayerBox();
+    const cands = queryCands(CAND_B);
+    let best = null, bestDepth = Infinity, bnx = 0, bny = 0, bnz = 0;
+    for (let i = 0; i < cands.length; i++) {
+      const c = cands[i];
+      if (c.solid === false || c.isMoving()) continue;
+      const d = mtv(c, TMPN);
+      if (d <= EPS) continue;
+      if (d < bestDepth - 1e-6 || (d < bestDepth + 1e-6 && best !== null && c.id < best.id)) {
+        bestDepth = d; best = c; bnx = TMPN.x; bny = TMPN.y; bnz = TMPN.z;
+      }
+    }
+    if (best === null) break;
+    pos.x += bnx * bestDepth; pos.y += bny * bestDepth; pos.z += bnz * bestDepth;
+  }
+  setPlayerBox();
+}
+
 function carryAndPush(sdt) {
   const pos = CTX.pos, r = CTX.res;
 
-  // --- carry: ride whatever we are standing on ---
+  // --- carry: ride whatever we are standing on (even if it rose into the feet) ---
   if (CTX.grounded) {
-    probeDown(CARRY_DIST);
+    probeDown(CARRY_DIST, CARRY_SINK);
     const gc = PROBE.collider;
     if (gc !== null && gc.isMoving()) carryOn(gc, pos, sdt);
   }
 
   // --- push: a mover sweeping into the player displaces them, never eats them ---
+  PASS.length = 0;
   setPlayerBox();
   const cands = queryCands(CAND_A);
-  let pushed = false;
+  let seated = false;
 
   for (let i = 0; i < cands.length; i++) {
     const c = cands[i];
     if (c.solid === false) continue;
     if (!c.isMoving()) continue;
-    if (mtv(c, TMPN) <= EPS) continue;
+    let depth = mtv(c, TMPN);
+    if (depth <= EPS) {
+      // Last substep's depenetrate may have chosen the STATIC side of a squeeze
+      // (left the hero a little inside the floor, clear of the head above him).
+      // Seat him against the world once and look again, or a slow crusher
+      // would never measure as a squeeze.
+      if (seated) continue;
+      seated = true;
+      settleStatics();
+      depth = mtv(c, TMPN);
+      if (depth <= EPS) continue;
+    }
+    const nx = TMPN.x, ny = TMPN.y, nz = TMPN.z;
+    const critter = c.group === 'critter';
 
+    // (a) BOARD: a deck within stepUp of the feet, with headroom, is stepped onto.
+    if (!critter && tryStepUp(c)) {
+      r.stepped = true;
+      r.contacts++;
+      setPlayerBox();
+      continue;
+    }
+
+    // (b) SHOVE the shortest way out — a few centimetres, the mover's advance.
+    // Accepted only if it lands in FREE space (at most CRUSH_DEPTH inside any
+    // static, which the sweeps clean up — never settled out the far side of a
+    // wall) and, for a grounded hero shoved sideways, still over ground: a bar
+    // sweeping a walkway walks him to the edge and no further (verdant-2's
+    // middle-walk rotor, azure-2's turning room), then passes through.
+    const sx = pos.x, sy = pos.y, sz = pos.z;
+    pos.x += nx * depth; pos.y += ny * depth; pos.z += nz * depth;
+    setPlayerBox();
+    let ok = staticDepth() <= CRUSH_DEPTH;
+    if (ok && CTX.grounded && ny < GROUND_NY) {
+      probeDown(SHOVE_DROP);
+      ok = PROBE.hit;
+      setPlayerBox();
+    }
+    if (ok) { r.contacts++; continue; }
+    pos.x = sx; pos.y = sy; pos.z = sz;
+    setPlayerBox();
+
+    // The short way out is blocked by the world. Which way is the mover going?
     c.velocityAt(PC, TMPV);
     const ax = Math.abs(TMPV.x), ay = Math.abs(TMPV.y), az = Math.abs(TMPV.z);
-    let A, av;
-    if (ay >= ax && ay >= az) { A = 1; av = TMPV.y; }
-    else if (ax >= az) { A = 0; av = TMPV.x; }
-    else { A = 2; av = TMPV.z; }
-    if (Math.abs(av) < 1e-4) continue;
+    if (ay >= ax && ay >= az) {
+      // VERTICAL: a head coming down on a standing hero, a deck lifting him
+      // into a ceiling. Seat him against the static world and measure how far
+      // the mover has driven into him. Only a real squeeze is a crush.
+      settleStatics();
+      const squeeze = mtv(c, TMPN);
+      if (!critter && squeeze >= CRUSH_SQUEEZE) r.crushed = true;
+      r.contacts++;
+      continue;
+    }
 
+    // (c) LATERAL: shove ahead of the mover's motion by the true exit distance,
+    // if that leaves the hero out of every static and (grounded) over ground.
+    const A = ax >= az ? 0 : 2;
+    const av = A === 0 ? TMPV.x : TMPV.z;
+    if (Math.abs(av) < 1e-4) continue;
     const dir = av > 0 ? 1 : -1;
     const mag = exitAlong(c, A, dir);
-    if (mag <= 0 || mag > 8) continue;
-
-    if (A === 0) pos.x += dir * mag;
-    else if (A === 1) pos.y += dir * mag;
-    else pos.z += dir * mag;
-    pushed = true;
-    setPlayerBox();
-  }
-
-  // --- crush: the displacement itself was blocked by static geometry ---
-  if (pushed) {
-    const c2 = queryCands(CAND_B);
-    for (let i = 0; i < c2.length; i++) {
-      const c = c2[i];
-      if (c.solid === false) continue;
-      if (c.isMoving()) continue;
-      if (mtv(c, TMPN) > CRUSH_DEPTH) { r.crushed = true; break; }
+    if (mag > 0 && mag <= SHOVE_MAX) {
+      if (A === 0) pos.x += dir * mag; else pos.z += dir * mag;
+      setPlayerBox();
+      let free = staticDepth() <= CRUSH_DEPTH;     // free space only: never through a wall
+      if (free && CTX.grounded) {
+        probeDown(SHOVE_DROP);
+        free = PROBE.hit;
+        setPlayerBox();
+      }
+      if (free) { r.contacts++; continue; }
+      pos.x = sx; pos.y = sy; pos.z = sz;
+      setPlayerBox();
     }
+    // Pinned sideways with nowhere to go: the mover passes through this
+    // substep — the sweeps and depenetrate leave it alone. Never a kill.
+    if (PASS.length < 8) PASS.push(c);
   }
 }
 
@@ -1144,6 +1325,7 @@ export function moveAndCollide(state, world, dt) {
   CTX.allowSnap = state.jumped !== true && state.jumpedThisFrame !== true && state.justJumped !== true;
   CTX.wantSnap = (typeof state.wantSnap === 'boolean') ? state.wantSnap : null;
   CTX.poundFalling = r.poundFalling;
+  CTX.wading = state.inWater === true || state.wading === true;
 
   if (CTX.bp === null && CTX.list === null && CTX.hfs === null) {
     // No world to collide with — free flight rather than a frozen player.
@@ -1380,7 +1562,8 @@ export function capsuleFor(state, out) {
 
 /** The snap/contact constants, exported so harnesses assert against the real values. */
 export const COLLIDE_CONST = Object.freeze({
-  SNAP_DIST, CONTACT_GAP, CARRY_DIST, HF_LIFT_MAX, GROUND_NY, FEELER, STEP_CLEAR,
+  SNAP_DIST, CONTACT_GAP, CARRY_DIST, CARRY_SINK, HF_LIFT_MAX, GROUND_NY, FEELER, STEP_CLEAR,
+  CRUSH_DEPTH, CRUSH_SQUEEZE, SHOVE_MAX, SHOVE_DROP,
 });
 
 function numOr(v, d) { return (typeof v === 'number' && isFinite(v)) ? v : d; }

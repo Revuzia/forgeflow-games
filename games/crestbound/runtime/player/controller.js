@@ -2149,6 +2149,10 @@ export class Player {
     cs.grounded = this.grounded;
     cs.jumped = this._jumpedThisStep;
     cs.poundFalling = this.state === 'poundFall';
+    /* A swimmer is never grounded, so without this the resolver refused the
+       step-up and a hero wading out pressed against the first tread above
+       the waterline forever (azure-1's great stair). */
+    cs.inWater = !!this.inWater;
     cs.stepUp = TUNE.stepUp;
     /* Never re-snap onto the ledge we just left, and never on a launch frame. */
     cs.wantSnap = this.grounded && this.vel.y <= 0.01 && this._noGroundT <= 0;

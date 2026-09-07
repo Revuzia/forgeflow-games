@@ -13,7 +13,13 @@
  *
  * World: floor box · 0.4 m ledge · 0.6 m ledge · wall · 30° ramp box ·
  *        heightfield hill (20° plane) · water volume · lava kill volume ·
- *        moving platform (linear + spinning) · low ceiling.
+ *        moving platform (linear + spinning) · low ceiling ·
+ *        REAL flights of stairs from builders.buildStairs (the Keep's 0.30/0.46
+ *        and ember-4's 0.40/0.55, walked at run speed — a synthetic single
+ *        0.4 m step passed for weeks while nine courses' flights did not) ·
+ *        a pool with a kerb (a swimmer wades out) · a pitched eave a
+ *        centimetre clear of a mantling hero · movers that board / shove /
+ *        squeeze / pass through, and a critter body that never crushes.
  *
  * Exit 0 = every assertion holds.
  */
@@ -55,6 +61,11 @@ const C = await import(pathToFileURL(join(ROOT, 'runtime', 'world', 'collider.js
 const P = await import(pathToFileURL(join(ROOT, 'runtime', 'player', 'collide.js')).href);
 const { Collider, KillVolume, Volume, Heightfield, Broadphase } = C;
 const { moveAndCollide, sweepGround, COLLIDE_CONST } = P;
+const B = await import(pathToFileURL(join(ROOT, 'runtime', 'world', 'builders.js')).href);
+const TH = await import(pathToFileURL(join(ROOT, 'runtime', 'world', 'themes.js')).href);
+/* builders' fallback material bank paints procedural textures on a canvas the
+   shim does not have; a Mats stub keeps the GEOMETRY and COLLIDERS real. */
+const MATS = { get: () => new THREE.MeshStandardMaterial() };
 
 // ── tiny assertion kit ───────────────────────────────────────────────────────
 let passed = 0, failed = 0;
@@ -361,6 +372,25 @@ console.log(`  body r=${TUNE.radius} h=${TUNE.height} stepUp=${TUNE.stepUp}  sna
   check('mover: never lost ground while riding', lost === 0, `lost ${lost}`);
   check('mover: feet stay on the deck', near(st.pos.y, 2.0, 1e-9));
 
+  // a deck that RISES while it travels (azure-3's cart: +0.7 m/s up, 2.3 m/s along) — the deck
+  // moves before the rider each substep, so its top sits inside the feet when the carry probes
+  {
+    const ref2 = { linVel: new THREE.Vector3(0, 0.7, -2.3) };
+    const cart = bp.add(new Collider({ center: [-11, 31.15, 30], half: [2.2, 0.35, 1.6], ref: ref2 }));
+    const st3 = makeState(-11, 31.5, 30);
+    st3.grounded = true;
+    let lost3 = 0, boarded = 0;
+    for (let i = 0; i < 360; i++) {
+      cart.center.y += 0.7 * DT; cart.center.z += -2.3 * DT; cart.update();
+      const r = step(st3, world, 0, 0);
+      if (!r.grounded) lost3++;
+      if (r.stepped) boarded++;
+    }
+    check('mover rising: carried exactly on a deck that climbs while it travels (no drift off the back)', near(st3.pos.z - cart.center.z, 0, 1e-6) && near(st3.pos.y, cart.aabb.max.y, 2e-3), `dz=${(st3.pos.z - cart.center.z).toFixed(4)} feet-top=${(st3.pos.y - cart.aabb.max.y).toFixed(4)}`);
+    check('mover rising: never lost ground, never re-boarded', lost3 === 0 && boarded === 0, `lost ${lost3} boarded ${boarded}`);
+    bp.remove(cart);
+  }
+
   // spinning deck: radius from the pivot must be preserved (exact rotation, not a tangent step)
   const st2 = makeState(64, 0, 60);
   st2.grounded = true;
@@ -485,6 +515,273 @@ console.log(`  body r=${TUNE.radius} h=${TUNE.height} stepUp=${TUNE.stepUp}  sna
     'inQuicksand', 'wind', 'ladder', 'stepUpBlocked'];
   const missing = keys.filter((k) => !(k in a));
   check('result: every CONTRACT §10 field present', missing.length === 0, missing.join(','));
+}
+
+// ── 12. REAL flights of stairs, walked with the resolver at run speed ────────
+// buildStairs makes one chamfered block per step, ascending toward the flight's
+// LOCAL +Z (rot.y = PI => world -Z). The Keep's grand stair is 0.30 x 0.46 x 9;
+// ember-4's ceremonial flights are 0.40 x 0.55 (the tallest riser authored,
+// under the 0.45 stepUp). Every riser must be taken by a walking hero with no
+// jump, at a WALK and at a RUN, staying grounded on every substep, and a
+// `yaw`-only def must build the same flight as the equivalent `rot`.
+{
+  const flights = [
+    { label: 'keep 0.30/0.46 x9', x: 200, rise: 0.30, run: 0.46, n: 9, w: 4.0 },
+    { label: 'ember-4 0.40/0.55 x10', x: 220, rise: 0.40, run: 0.55, n: 10, w: 5.0 },
+    { label: 'verdant-3 0.32/0.36 x17', x: 240, rise: 0.32, run: 0.36, n: 17, w: 3.2 },
+  ];
+  const added = [];
+  for (const f of flights) {
+    // floor at the foot, a landing at the top, the flight between (ascends -Z)
+    added.push(bp.add(new Collider({ center: [f.x, -0.5, 6], half: [6, 0.5, 4] })));
+    const D = f.n * f.run, top = f.n * f.rise;
+    added.push(bp.add(new Collider({ center: [f.x, top - 0.5, -D / 2 - 4], half: [6, 0.5, 4] })));
+    const built = B.buildStairs({ kind: 'stairs', p: [f.x, 0, 0], w: f.w, rise: f.rise, run: f.run, n: f.n, rot: [0, Math.PI, 0], mat: 'stone', rail: true }, TH.THEMES.keep, MATS);
+    for (const c of built.colliders) added.push(bp.add(c));
+    check(`stairs ${f.label}: buildStairs made one collider per step`, built.colliders.length === f.n, `${built.colliders.length}`);
+    const lowest = built.colliders[0], highest = built.colliders[f.n - 1];
+    check(`stairs ${f.label}: rot PI ascends toward -Z (first tread nearest +Z)`, lowest.center.z > highest.center.z && near(lowest.aabb.max.y, f.rise, 1e-9) && near(highest.aabb.max.y, top, 1e-9),
+      `z ${lowest.center.z.toFixed(2)} -> ${highest.center.z.toFixed(2)}, tops ${lowest.aabb.max.y.toFixed(2)} / ${highest.aabb.max.y.toFixed(2)}`);
+
+    for (const [mode, vz] of [['walk', -TUNE.speedWalk], ['run', -TUNE.speedRun]]) {
+      const st = makeState(f.x, 0, D / 2 + 1.0);
+      st.grounded = true;
+      const N = Math.ceil((D + 2.5) / (-vz) / DT) + 20;
+      let lost = 0, firstAir = -1, reachedAt = -1, stepped = 0, crushed = 0, walls = 0;
+      for (let i = 0; i < N; i++) {
+        const r = step(st, world, 0, vz);
+        if (!r.grounded) { lost++; if (firstAir < 0) firstAir = i; }
+        if (r.stepped) stepped++;
+        if (r.crushed) crushed++;
+        if (r.walls.length) walls++;
+        if (reachedAt < 0 && st.pos.y >= top - 1e-6 && st.pos.z < -D / 2) reachedAt = i;
+        if (reachedAt >= 0) break;
+      }
+      check(`stairs ${f.label} @${mode}: reached the top landing (y ${top.toFixed(2)})`, reachedAt >= 0, `y=${st.pos.y.toFixed(3)} z=${st.pos.z.toFixed(2)} after ${N} substeps, stepped ${stepped}x`);
+      check(`stairs ${f.label} @${mode}: grounded on every substep (no micro-falls)`, lost === 0, `lost ${lost}, first at substep ${firstAir}`);
+      check(`stairs ${f.label} @${mode}: every riser was a step, never a wall`, walls === 0 && stepped >= f.n, `walls ${walls} stepped ${stepped}`);
+      check(`stairs ${f.label} @${mode}: never crushed`, crushed === 0);
+    }
+  }
+  // `yaw` alone must orient the flight exactly as `rot: [0, yaw, 0]` does
+  {
+    const a = B.buildStairs({ kind: 'stairs', p: [0, 0, 0], w: 3, rise: 0.3, run: 0.45, n: 8, yaw: Math.PI }, TH.THEMES.ember, MATS);
+    const b = B.buildStairs({ kind: 'stairs', p: [0, 0, 0], w: 3, rise: 0.3, run: 0.45, n: 8, rot: [0, Math.PI, 0] }, TH.THEMES.ember, MATS);
+    let same = true;
+    for (let i = 0; i < 8; i++) if (a.colliders[i].center.distanceTo(b.colliders[i].center) > 1e-9) same = false;
+    check('stairs: a `yaw`-only def builds the same colliders as `rot` (ember-1 authored yaw)', same, `first step z ${a.colliders[0].center.z.toFixed(3)} vs ${b.colliders[0].center.z.toFixed(3)}`);
+    const rampA = B.buildRamp({ kind: 'ramp', p: [0, 0, 0], s: [4, 0.5, 6], yaw: Math.PI / 2 }, TH.THEMES.ember, MATS);
+    check('ramp: `yaw` honoured on the collider', !rampA.colliders[0].axisAligned && near(Math.abs(rampA.colliders[0].az.x), 1, 1e-9));
+  }
+  for (const c of added) bp.remove(c);
+}
+
+// ── 13. a swimmer wades OUT onto a tread (step-up without ground) ────────────
+// azure-1's great stair: you arrive swimming and the first tread above the
+// waterline is a wall unless the mantle works for a hero who is not grounded.
+{
+  // pool: floor at -2, water surface 0, a kerb (top 0.3) on its +X edge, a taller one (0.6) further along
+  const poolFloor = bp.add(new Collider({ center: [300, -2.5, 0], half: [4, 0.5, 4] }));
+  const kerb = bp.add(new Collider({ center: [304.5, 0.15, 0], half: [0.5, 0.15, 2] }));
+  const kerbHigh = bp.add(new Collider({ center: [304.5, 0.3, 6], half: [0.5, 0.3, 2] }));
+  const pool = new Volume({ center: [302, -1, 2], half: [2, 1, 6], kind: 'water' });
+  const wworld = { broadphase: bp, killVolumes: [], volumes: [pool] };
+  const st = makeState(303.4, -0.1, 0);        // floating, feet 0.1 under the surface, 0.22 m from the kerb face
+  st.grounded = false; st.inWater = true;
+  let mantled = -1, r = null;
+  for (let i = 0; i < 40; i++) { st.vel.set(3, 0, 0); r = moveAndCollide(st, wworld, DT); if (r.stepped && mantled < 0) mantled = i; }
+  check('wade: a swimmer moving into a 0.3 m kerb is mantled onto it', mantled >= 0 && st.pos.y >= 0.3 - 1e-6, `y=${st.pos.y.toFixed(3)} x=${st.pos.x.toFixed(3)} stepped at ${mantled}`);
+  check('wade: reported grounded on the kerb', r.grounded && r.groundCollider === kerb);
+  const st2 = makeState(303.4, -0.1, 6);
+  st2.grounded = false; st2.inWater = true;
+  for (let i = 0; i < 40; i++) { st2.vel.set(3, 0, 0); moveAndCollide(st2, wworld, DT); }
+  check('wade: a 0.6 m kerb is still a wall to a swimmer', st2.pos.y < 0.0 && near(st2.pos.x, 304 - TUNE.radius, 1e-6), `y=${st2.pos.y.toFixed(3)} x=${st2.pos.x.toFixed(3)}`);
+  const st3 = makeState(303.4, -0.1, 0);
+  st3.grounded = false;                         // NOT in water, NOT grounded: airborne — no mantle
+  for (let i = 0; i < 10; i++) { st3.vel.set(3, 0, 0); moveAndCollide(st3, { broadphase: bp, killVolumes: [], volumes: [] }, DT); }
+  check('wade: an airborne hero (not swimming) still does not mantle', st3.pos.y < 0.3 - 1e-6, `y=${st3.pos.y.toFixed(3)}`);
+  bp.remove(poolFloor); bp.remove(kerb); bp.remove(kerbHigh);
+}
+
+// ── 14. a pitched eave a centimetre clear of the hero must not block a mantle ─
+// rime-1's barn stair: the roof slab BESIDE the flight, pitched down toward
+// it, had its world AABB 1 cm clear of the hero (inside QUERY_MARGIN) while
+// its own tilted-axis SAT said "overlap", and the mantle onto tread 8 was
+// refused on the flight's centre line. Real numbers: slab half [4.95, 0.13,
+// 2.42] at 34°, AABB z max 6.02 vs the hero's box min 6.03, head 0.25 above
+// the AABB's min y — the tilted SAT overlaps 7 mm on the slab's slope axis.
+{
+  const floor2 = bp.add(new Collider({ center: [400, -0.5, 0], half: [4, 0.5, 6] }));
+  const s1 = bp.add(new Collider({ center: [400, 0.15, 0.0], half: [1.5, 0.15, 0.23] }));   // tread 1 top 0.30, z -0.23..0.23
+  const s2 = bp.add(new Collider({ center: [400, 0.30, -0.46], half: [1.5, 0.30, 0.23] }));  // tread 2 top 0.60, z -0.69..-0.23
+  // the roof beside the flight on its -X side, pitched 34° about Z so its LOW eave faces the hero
+  const pitch = 34 / DEG;
+  const roof = new Collider({ center: [0, 0, 0], half: [2.42, 0.13, 3], quat: [0, 0, -pitch] });
+  roof.update();
+  // The hero meets tread 2's riser with his centre at z = -0.23 + 0.38 = 0.15; raised onto it
+  // his box spans x 399.62..400.38, y 0.601..2.101. Eave AABB max x = 399.61, min y = head - 0.25.
+  roof.center.set(0, 0, 0.15); roof.update();
+  roof.center.x += (399.62 - 0.01) - roof.aabb.max.x;
+  roof.center.y += (2.101 - 0.25) - roof.aabb.min.y;
+  roof.update();
+  bp.add(roof);
+  // fixture sanity: the slab's own 3-axis SAT says overlap at the raised pose, the world AABB says clear
+  {
+    const PHt = new THREE.Vector3(TUNE.radius, TUNE.height / 2, TUNE.radius);
+    const PCt = new THREE.Vector3(400, 0.601 + TUNE.height / 2, 0.15);
+    const HEt = new THREE.Vector3(), LPt = new THREE.Vector3();
+    C.inflatedHalf(roof, PHt, HEt); roof.toLocal(PCt, LPt);
+    const satO = Math.min(HEt.x - Math.abs(LPt.x), HEt.y - Math.abs(LPt.y), HEt.z - Math.abs(LPt.z));
+    const gap = Math.max((PCt.x - PHt.x) - roof.aabb.max.x, roof.aabb.min.y - (PCt.y + PHt.y));
+    check('eave fixture: the tilted-axis SAT alone reports an overlap the world AABB rules out', satO > C.EPS && gap >= 0.009, `SAT overlap ${satO.toFixed(4)} m, AABB gap ${gap.toFixed(4)} m`);
+  }
+  const st = makeState(400, 0.3, 0.6);
+  st.grounded = true;
+  let mantled = -1, blocked = 0;
+  for (let i = 0; i < 40; i++) { const r = step(st, world, 0, -3); if (r.stepped && mantled < 0) mantled = i; if (r.stepUpBlocked) blocked++; if (st.pos.y >= 0.6 - 1e-6) break; }
+  check('eave: the mantle onto tread 2 is NOT refused by a slab that is clear on a world axis', mantled >= 0 && near(st.pos.y, 0.6 + COLLIDE_CONST.STEP_CLEAR, 1e-6) && blocked === 0, `y=${st.pos.y.toFixed(3)} stepUpBlocked ${blocked}x`);
+  // slide the eave 5 cm toward the hero so it really overlaps his raised head: refused, as it should be
+  roof.center.x += 0.05; roof.update();
+  const st2 = makeState(400, 0.3, 0.6);
+  st2.grounded = true;
+  let blocked2 = 0;
+  for (let i = 0; i < 40; i++) { const r = step(st2, world, 0, -3); if (r.stepUpBlocked) blocked2++; }
+  check('eave: a slab that really overlaps the raised head refuses the mantle (stepUpBlocked)', blocked2 > 0 && st2.pos.y < 0.6, `y=${st2.pos.y.toFixed(3)} stepUpBlocked ${blocked2}x`);
+  bp.remove(floor2); bp.remove(s1); bp.remove(s2); bp.remove(roof);
+}
+
+// ── 15. movers: board, shove, pass through, vertical squeeze, critter ─────────
+{
+  const ground = bp.add(new Collider({ center: [500, -0.5, 0], half: [10, 0.5, 10] }));
+  const mv = (c, vx, vy, vz) => { c.center.x += vx * DT; c.center.y += vy * DT; c.center.z += vz * DT; c.update(); };
+
+  // (a) a trolley deck 0.45 above the floor arrives from +X: the hero BOARDS it and is carried
+  {
+    const ref = { linVel: new THREE.Vector3(-2, 0, 0) };
+    const deck = bp.add(new Collider({ center: [502.5, 0.225, 0], half: [1.5, 0.225, 1.5], ref }));
+    const st = makeState(500, 0, 0); st.grounded = true;
+    let boarded = -1, carried = 0, crushed = 0;
+    for (let i = 0; i < 240; i++) {
+      mv(deck, -2, 0, 0);
+      const r = step(st, world, 0, 0);
+      if (r.crushed) crushed++;
+      if (boarded < 0 && r.stepped) boarded = i;
+      if (boarded >= 0 && r.grounded && r.groundCollider === deck && near(r.platformVel.x, -2, 1e-9)) carried++;
+    }
+    check('mover board: a deck within stepUp arriving at the shins is stepped onto, not ploughed', boarded >= 0 && near(st.pos.y, 0.45, 2e-3), `y=${st.pos.y.toFixed(3)} boarded at ${boarded}`);
+    check('mover board: then carried on it (platformVel -2, riding)', carried > 100 && st.pos.x < 499, `carried ${carried} substeps, x=${st.pos.x.toFixed(2)}`);
+    check('mover board: never crushed', crushed === 0);
+    bp.remove(deck);
+  }
+
+  // (b) a chest-high bar sweeping +Z across open floor SHOVES the standing hero ahead of it
+  {
+    const ref = { linVel: new THREE.Vector3(0, 0, 3.5) };
+    const bar = bp.add(new Collider({ center: [500, 1.6, -0.9], half: [2.5, 0.25, 0.27], ref }));  // y 1.35..1.85
+    const st = makeState(500, 0, 0); st.grounded = true;
+    let crushed = 0, maxJump = 0, lost = 0, prevZ = st.pos.z;
+    for (let i = 0; i < 120; i++) {
+      mv(bar, 0, 0, 3.5);
+      const r = step(st, world, 0, 0);
+      if (r.crushed) crushed++;
+      if (!r.grounded) lost++;
+      maxJump = Math.max(maxJump, Math.abs(st.pos.z - prevZ)); prevZ = st.pos.z;
+    }
+    const front = bar.center.z + bar.half.z + TUNE.radius;
+    check('mover shove: a bar at chest height pushes the hero along the floor, never crushes', crushed === 0 && near(st.pos.z, front, 0.05), `z=${st.pos.z.toFixed(3)} bar front+r=${front.toFixed(3)} crushed ${crushed}`);
+    check('mover shove: the shove is the bar advance per substep, never a throw', maxJump <= 3.5 * DT + 0.05, `max ${maxJump.toFixed(4)} m/substep`);
+    check('mover shove: stays on his feet on the floor', lost === 0 && near(st.pos.y, 0, 1e-6), `lost ${lost} y=${st.pos.y.toFixed(4)}`);
+    bp.remove(bar);
+  }
+
+  // (c) the same bar pushing him against a wall: pinned laterally = the bar passes through, no kill
+  {
+    const wall = bp.add(new Collider({ center: [500, 1.5, 2.0], half: [3, 1.5, 0.5] }));   // face at z 1.5
+    const ref = { linVel: new THREE.Vector3(0, 0, 3.5) };
+    const bar = bp.add(new Collider({ center: [500, 1.6, -0.9], half: [2.5, 0.25, 0.27], ref }));
+    const st = makeState(500, 0, 0); st.grounded = true;
+    let crushed = 0, worstZ = -Infinity, finite = true;
+    for (let i = 0; i < 180; i++) {
+      mv(bar, 0, 0, 3.5);
+      const r = step(st, world, 0, 0);
+      if (r.crushed) crushed++;
+      if (st.pos.z > worstZ) worstZ = st.pos.z;
+      if (!isFinite(st.pos.x + st.pos.y + st.pos.z)) finite = false;
+    }
+    check('mover pinned: a sideways sweep against a wall NEVER reports crushed', crushed === 0, `crushed ${crushed}x`);
+    check('mover pinned: the hero is never pushed through the wall (bar passed through; ≤ CRUSH_DEPTH transient)', finite && worstZ <= 1.5 - TUNE.radius + COLLIDE_CONST.CRUSH_DEPTH + 0.01 && bar.center.z > st.pos.z + 1, `max z ${worstZ.toFixed(4)} wall face-r ${(1.5 - TUNE.radius).toFixed(4)} bar z ${bar.center.z.toFixed(2)}`);
+    check('mover pinned: still standing on the floor afterwards', near(st.pos.y, 0, 1e-6) && st.grounded);
+    bp.remove(wall); bp.remove(bar);
+  }
+
+  // (d) a descending head on a standing hero: pushed against the floor, crushed only at CRUSH_SQUEEZE
+  {
+    const ref = { linVel: new THREE.Vector3(0, -1.5, 0) };
+    const head = bp.add(new Collider({ center: [500, 2.6, 0], half: [1.5, 0.25, 1.5], ref }));   // bottom at 2.35
+    const st = makeState(500, 0, 0); st.grounded = true;
+    let crushedAt = -1, minY = Infinity, bottomAtCrush = NaN;
+    for (let i = 0; i < 400; i++) {
+      mv(head, 0, -1.5, 0);
+      const r = step(st, world, 0, 0);
+      minY = Math.min(minY, st.pos.y);
+      if (r.crushed && crushedAt < 0) { crushedAt = i; bottomAtCrush = head.center.y - head.half.y; break; }
+    }
+    const H = TUNE.height;
+    check('mover squeeze: a descending head DOES crush a standing hero', crushedAt >= 0, `never crushed; head bottom now ${(head.center.y - head.half.y).toFixed(3)}`);
+    check(`mover squeeze: crushed only once driven ${COLLIDE_CONST.CRUSH_SQUEEZE} m into the body (head bottom ~ ${(H - COLLIDE_CONST.CRUSH_SQUEEZE).toFixed(2)})`,
+      crushedAt >= 0 && near(bottomAtCrush, H - COLLIDE_CONST.CRUSH_SQUEEZE, 0.03), `bottom ${bottomAtCrush.toFixed(3)}`);
+    check('mover squeeze: the hero was never driven through the floor', minY >= -0.03, `min y ${minY.toFixed(4)}`);
+    bp.remove(head);
+  }
+
+  // (e) a critter body diving onto the hero never crushes him
+  {
+    const ref = { linVel: new THREE.Vector3(0, -9, 0) };
+    const bird = bp.add(new Collider({ center: [500, 3.2, 0], half: [0.34, 0.16, 0.34], ref, group: 'critter', surface: 'bounce' }));
+    const st = makeState(500, 0, 0); st.grounded = true;
+    let crushed = 0, minY = Infinity;
+    for (let i = 0; i < 60; i++) { mv(bird, 0, -9, 0); const r = step(st, world, 0, 0); if (r.crushed) crushed++; minY = Math.min(minY, st.pos.y); }
+    check('critter: a skitter diving through a standing hero never reports crushed', crushed === 0 && bird.center.y < 0.5, `crushed ${crushed}x bird y ${bird.center.y.toFixed(2)}`);
+    check('critter: the hero stays on the floor', minY >= -0.03, `min y ${minY.toFixed(4)}`);
+    bp.remove(bird);
+  }
+
+  // (f) a bar sweeping a hero standing at a ledge edge does not push him off it
+  {
+    const ledge = bp.add(new Collider({ center: [600, -0.5, 0], half: [2, 0.5, 4] }));    // x 598..602, void beyond
+    const ref = { linVel: new THREE.Vector3(3, 0, 0) };
+    const bar = bp.add(new Collider({ center: [599.4, 1.6, 0], half: [0.27, 0.25, 3], ref }));
+    const st = makeState(601.6, 0, 0); st.grounded = true;
+    let crushed = 0, maxX = -Infinity, offGround = 0;
+    for (let i = 0; i < 120; i++) { mv(bar, 3, 0, 0); const r = step(st, world, 0, 0); if (r.crushed) crushed++; maxX = Math.max(maxX, st.pos.x); if (!r.grounded) offGround++; }
+    check('mover ledge: a sweep never shoves a standing hero off a walkway edge', maxX <= 602 + TUNE.radius - 1e-6 && offGround === 0 && crushed === 0, `max x ${maxX.toFixed(3)} (edge 602) off-ground ${offGround} crushed ${crushed}`);
+    bp.remove(ledge); bp.remove(bar);
+  }
+
+  // (g) an oriented (turning) arm: the exit distance is solved on the arm's own axes - never a throw
+  {
+    const ref = { angVel: 0.9, angAxis: new THREE.Vector3(0, 1, 0), angCenter: new THREE.Vector3(700, 0, 0) };
+    const arm = new Collider({ center: [702.75, 1.6, 0], half: [2.75, 0.25, 0.27], ref, quat: [0, 0, 0] });
+    bp.add(arm);
+    const floor3 = bp.add(new Collider({ center: [700, -0.5, 0], half: [8, 0.5, 8] }));
+    const st = makeState(703, 0, 0.8); st.grounded = true;     // beside the arm's path, on open floor
+    let crushed = 0, maxJump = 0, ang = 0;
+    const px = st.pos.x, pz = st.pos.z;
+    for (let i = 0; i < 240; i++) {
+      ang += 0.9 * DT;
+      arm.quat.setFromAxisAngle(ref.angAxis, ang);
+      arm.center.set(700 + 2.75 * Math.cos(ang), 1.6, -2.75 * Math.sin(ang));   // velocityAt sign convention: w x r
+      arm.update();
+      const bx = st.pos.x, bz = st.pos.z;
+      const r = step(st, world, 0, 0);
+      if (r.crushed) crushed++;
+      maxJump = Math.max(maxJump, Math.hypot(st.pos.x - bx, st.pos.z - bz));
+    }
+    check('rotor arm: a turning arm shoves, never crushes on open floor', crushed === 0, `crushed ${crushed}x`);
+    check('rotor arm: no substep displaced the hero more than a shove', maxJump <= 0.9 * 2.75 * DT + 0.6, `max ${maxJump.toFixed(3)} m (moved ${Math.hypot(st.pos.x - px, st.pos.z - pz).toFixed(2)} m total)`);
+    bp.remove(arm); bp.remove(floor3);
+  }
+  bp.remove(ground);
 }
 
 // ── report ───────────────────────────────────────────────────────────────────

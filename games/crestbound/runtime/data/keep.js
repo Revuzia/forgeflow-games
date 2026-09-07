@@ -143,8 +143,15 @@ function sign(p, yaw, text, size, color) {
  * Every riser is checked against TUNE.stepUp (0.45) by the geometry check.
  */
 function stairs(p, w, rise, run, n, yaw, mat, extra) {
+  /* buildStairs ascends toward its LOCAL +Z, which at rot.y = 0 is world +Z
+     (SOUTH) — the opposite of the heading convention above (yaw 0 faces -Z).
+     Every course authors flights against the builder; this helper promised
+     "yaw = the heading the flight CLIMBS toward", and until the +PI below
+     every Keep flight was built backwards: the 2.70 m top step faced the
+     lobby and the 0.30 m bottom step was buried against the landing (K1).
+     Same trick sign() uses two helpers up. */
   const d = {
-    kind: 'stairs', p, w, rise, run, n, rot: [0, yaw, 0], mat,
+    kind: 'stairs', p, w, rise, run, n, rot: [0, yaw + Math.PI, 0], mat,
     top: +(p[1] + n * rise).toFixed(3), len: +(n * run).toFixed(3),
   };
   if (extra) for (const k in extra) d[k] = extra[k];

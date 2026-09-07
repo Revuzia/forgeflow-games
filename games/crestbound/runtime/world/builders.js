@@ -3063,6 +3063,13 @@ function leafCardMaterial(tint) {
  * @param {object} [mats] shared Mats service
  * @returns {{mesh: THREE.Mesh, colliders: Collider[]}}
  */
+function stairsRot(def) {
+  if (!def) return undefined;
+  if (def.rot !== undefined && def.rot !== null) return def.rot;
+  if (typeof def.yaw === 'number' && isFinite(def.yaw)) return def.yaw;
+  return undefined;
+}
+
 export function buildStairs(def, theme, mats) {
   const w = (def && def.w) || size3(def, 3.2, 0, 0)[0] || 3.2;
   const rise = (def && def.rise) || 0.32;
@@ -3138,12 +3145,26 @@ export function buildStairs(def, theme, mats) {
   mesh.receiveShadow = true;
   const p = pos3(def);
   mesh.position.set(p[0], p[1], p[2]);
-  applyRot(mesh, def && def.rot);
+  /* `yaw` is honoured when `rot` is absent — course.js accepts either spelling
+     for every other object, and ember-1 authored all three of its flights with
+     `yaw: Math.PI`; ignoring it built them ascending the wrong way, into open
+     air at one end and a deck face at the other. Mesh and colliders take the
+     SAME rotation so the flight you see is the flight you climb. */
+  const rot = stairsRot(def);
+  applyRot(mesh, rot);
   mesh.updateMatrix();
   mesh.matrixAutoUpdate = false;
 
+  /* Authors may publish `top` (the y the flight arrives at) so the geometry
+     can be checked against the intent — the Keep does. Disagreement is a data
+     error worth a console line, never a silent flight to the wrong storey. */
+  if (def && typeof def.top === 'number' && Math.abs(def.top - (p[1] + n * rise)) > 0.02) {
+    console.warn('[builders] stairs at [' + p.join(', ') + ']: def.top ' + def.top +
+      ' but ' + n + ' x ' + rise + ' from ' + p[1] + ' arrives at ' + (p[1] + n * rise).toFixed(3));
+  }
+
   // one collider per step (CONTRACT §17) — the player STEPS up stairs
-  const q = rotQuat(def && def.rot, new THREE.Quaternion());
+  const q = rotQuat(rot, new THREE.Quaternion());
   const colliders = [];
   for (let i = 0; i < n; i++) {
     const topY = (i + 1) * rise;
@@ -3199,12 +3220,13 @@ export function buildRamp(def, theme, mats) {
   mesh.receiveShadow = true;
   const p = pos3(def);
   mesh.position.set(p[0], p[1], p[2]);
-  applyRot(mesh, def && def.rot);
+  const rot = stairsRot(def);   // same `rot` | `yaw` acceptance as the stairs
+  applyRot(mesh, rot);
   mesh.updateMatrix();
   mesh.matrixAutoUpdate = false;
 
   const collider = makeCollider(p[0], p[1], p[2], w * 0.5, h * 0.5, d * 0.5,
-    rotQuat(def && def.rot, new THREE.Quaternion()), surface, (def && def.props) || null, null);
+    rotQuat(rot, new THREE.Quaternion()), surface, (def && def.props) || null, null);
   mesh.userData.collider = collider;
   mesh.userData.def = def;
   return { mesh, colliders: [collider] };
