@@ -83,6 +83,17 @@ def pound(P, tag=""):
     return seen
 
 
+def walk(P, x, z, **kw):
+    """_playlib.walk_to stops after its FIRST 220 ms sample whenever game.state is
+    'playing' (its stop_on_card list was written for the Keep, where the state is
+    'keep'), so every course walk in the first replay was a 220 ms step, and a
+    'DID NOT ARRIVE' 2 m short of a cannon was the driver, not a bonk. Courses walk
+    with stop_on_card off; the Keep keeps it (the card is what a Keep walk is for)."""
+    if "stop_on_card" not in kw:
+        kw["stop_on_card"] = P.js("() => CRESTBOUND.game.state === 'keep'")
+    return P.walk_to(x, z, **kw)
+
+
 def brk_at(P, x, z, tol=0.6):
     for b in P.js(JS_BREAKABLES):
         if abs(b["p"][0] - x) < tol and abs(b["p"][2] - z) < tol:
@@ -138,10 +149,16 @@ def st_rime1(P):
     after = P.js(JS_COINS); drops = P.js(JS_DROPS)
     check("rime1.plug.coins_drop", after > before or drops > 0, "coins %d -> %d, live dropped coins %s" % (before, after, drops))
     P.shot("rime1_plug_after")
+    # THE HOLE IS A HOLE: with the plug gone, crouch on its spot and the hero must sink
+    # into the lake (the tester found two ice strips still covering the footprint)
+    P.tp(5.0, 1.6, 42.0); P.wait(500)
+    P.down("C"); P.wait(1600); P.up("C"); P.wait(200)
+    st = P.state()
+    check("rime1.plug.hole_opens", st["inWater"] or st["pos"][1] < 1.0, "pos=%s state=%s inWater=%s surface=%s" % (st["pos"], st["pstate"], st["inWater"], st["surface"]))
     # HAY WALL on the loft gantry: pound from where a player stands beside it
     safe_tp(P, -27.2, 8.9, 4.4, freeze=True, tag="hay gantry")
     P.face(-27.2, 2.9)
-    r = P.walk_to(-27.2, 3.2, tol=0.9, max_ms=3000, tag="to the hay")
+    r = walk(P, -27.2, 3.2, tol=0.9, max_ms=3000, tag="to the hay")
     c0 = P.js(JS_CRESTS)
     tr = pound(P, "hay wall")
     b = brk_at(P, -27.2, 2.9)
@@ -183,7 +200,7 @@ def st_az1(P):
     goto(P, "azure-1")
     P.tp(0.0, 14.4, -20.0); P.wait(800)
     c0 = P.js(JS_CRESTS)
-    r = P.walk_to(0.0, -24.0, tol=0.9, max_ms=4000, tag="walk at the crest")
+    r = walk(P, 0.0, -24.0, tol=0.9, max_ms=4000, tag="walk at the crest")
     st1 = P.state()
     got_walk = P.js(JS_CRESTS) > c0 or st1["gstate"] in ("clear", "card")
     if not got_walk:
@@ -215,19 +232,35 @@ def st_az2(P):
     # XII pedestal crest (0, 40.52, -7.4): walk at it from the deck
     safe_tp(P, 0.0, 40.2, -5.6, freeze=True, tag="XII pedestal")
     c0 = P.js(JS_CRESTS)
-    r = P.walk_to(0.0, -7.4, tol=0.9, max_ms=3500, tag="walk at the XII crest")
+    r = walk(P, 0.0, -7.4, tol=0.9, max_ms=3500, tag="walk at the XII crest")
     unfreeze(P)
     st = P.state()
     check("az2.xii_crest.walkup_collects", P.js(JS_CRESTS) > c0 or st["gstate"] in ("clear", "card"), "pos=%s state=%s" % (st["pos"], st["gstate"]))
     # MAINTENANCE CANNON (-5, -10.4, -8.5): walk in from the platform (top -11)
     goto(P, "azure-2")
-    P.tp(-2.0, -10.6, -8.5); P.wait(700)
+    # the cannon platform is x -6.5..-3.5 (top -11.00): start ON it, 1 m from the breech
+    safe_tp(P, -3.9, -10.6, -8.5, freeze=True, tag="cannon platform")
     cannon_station(P, "az2.cannon", -5.0, -8.5, expect=None)
+    unfreeze(P)
+
+
+JS_CAGE = "() => { const r=(CRESTBOUND.game.course.hazards||[]).find(r=>r.def&&r.def.kind==='breakable'&&r.def.trigger==='sunken-vault'); return r?r.def.p:null; }"
+JS_OPEN_CREST = "() => { const c=(CRESTBOUND.game.course.collectibles.crests||[]).find(c=>c.id==='open'); return c?[c.home.x,c.home.y,c.home.z]:null; }"
+JS_CANNON_TGT = "(id) => { const r=(CRESTBOUND.game.course.hazards||[]).find(r=>r.def&&r.def.kind==='cannon'&&(r.def.id===id||id===null)); return r&&r.def.target?r.def.target:null; }"
+JS_WING_HAT = "(x) => { const ps=(CRESTBOUND.game.course.powers||[]).filter(r=>r.kind==='wing'); const r=(x===null?null:ps.find(r=>Math.abs(r.pos.x-x)<1))||ps[0]; return r?[r.pos.x,r.pos.y,r.pos.z]:null; }"
+JS_POWER = "() => CRESTBOUND.game.power ? CRESTBOUND.game.power.id : null"
+JS_FEN = "() => { const c=(CRESTBOUND.game.course.critters||[]).find(c=>c.kind==='fen'); return c?[c.pos.x,c.pos.y,c.pos.z]:null; }"
+JS_PROMPT = "() => { const e=document.getElementById('cb-prompt'); return {show:e&&e.classList.contains('show'), text:e?e.textContent.trim().replace(/\\s+/g,' '):null}; }"
+
+
+def cannon_target(P, cid):
+    t = P.js(JS_CANNON_TGT, cid)
+    return tuple(t) if t else None
 
 
 def cannon_station(P, name, bx, bz, expect=None, press_e=True):
     """Walk into the breech at (bx, bz); report whether the hero boards and flies."""
-    r = P.walk_to(bx, bz, tol=0.7, max_ms=4000, tag="into the cannon")
+    r = walk(P, bx, bz, tol=0.7, max_ms=4000, tag="into the cannon")
     st = P.state()
     boarded = st["pstate"] == "cannon"
     if not boarded and press_e:
@@ -284,24 +317,30 @@ def st_az3(P):
     P.wait(1800)
     after = P.js(JS_COINS); drops = P.js(JS_DROPS)
     check("az3.crate.coins_drop", after > before or drops > 0, "coins %d -> %d, live dropped coins %s" % (before, after, drops))
-    # cage on the sunken isle (0, 22.2, 68): pound beside it on the isle deck
-    P.tp(0.0, 21.2, 65.6); P.wait(700)
-    P.walk_to(0.0, 66.6, tol=0.6, max_ms=2500, tag="to the cage face")
+    # cage on the sunken isle: the surfaces lane moved the isle 2 m nearer, the cage is
+    # now (0, 22.2, 66) - read its live spot and pound beside it on the isle deck
+    cg = P.js(JS_CAGE)
+    cz = cg[2] if cg else 66.0
+    P.tp(0.0, 21.2, cz - 3.4); P.wait(700)
+    walk(P, 0.0, cz - 1.4, tol=0.6, max_ms=2500, tag="to the cage face")
     c0 = P.js(JS_CRESTS)
     pound(P, "beside the cage")
-    b = brk_at(P, 0.0, 68.0)
+    b = brk_at(P, 0.0, cz)
     check("az3.cage.breaks_from_beside", b and b["intact"] is False, json.dumps(b))
     P.shot("az3_cage_after")
-    # GRAND PEDESTAL walk-up (42, 60.6, -64)
-    safe_tp(P, 39.2, 59.2, -64.0, tag="grand pedestal")
+    # GRAND PEDESTAL walk-up (42, SANCTUM_Y + 1.6, -64) - read the open crest's live spot
+    oc = P.js(JS_OPEN_CREST)
+    gy = (oc[1] - 1.6) if oc else 54.0
+    safe_tp(P, 39.2, gy + 0.2, -64.0, tag="grand pedestal")
     c0 = P.js(JS_CRESTS)
-    r = P.walk_to(42.0, -64.0, tol=0.8, max_ms=4000, tag="walk at the grand pedestal")
+    r = walk(P, 42.0, -64.0, tol=0.8, max_ms=4000, tag="walk at the grand pedestal")
     st = P.state()
     check("az3.grand_crest.walkup_collects", P.js(JS_CRESTS) > c0 or st["gstate"] in ("clear", "card"), "pos=%s state=%s" % (st["pos"], st["gstate"]))
-    # CANNON isle-1-2 at (30, 39, -3) -> target (46, 44.6, -16)
+    # CANNON isle-1-2 at (30, ISLE1_Y + 1, -3) -> its authored target
     goto(P, "azure-3")
+    tgt = cannon_target(P, "isle-1-2")
     P.tp(26.0, 38.2, -3.0); P.wait(700)
-    cannon_station(P, "az3.cannon1", 30.0, -3.0, expect=(46.0, 44.6, -16.0))
+    cannon_station(P, "az3.cannon1", 30.0, -3.0, expect=tgt)
 
 
 def st_e3(P):
@@ -328,7 +367,7 @@ def st_e3(P):
     # buried pad coin at cp-plaza (0, 1.6, 40)
     before = P.js(JS_COINS)
     P.tp(0.0, 2.0, 41.5); P.wait(500)
-    P.walk_to(0.0, 39.0, tol=0.5, max_ms=2500, tag="across the cp pad")
+    walk(P, 0.0, 39.0, tol=0.5, max_ms=2500, tag="across the cp pad")
     P.wait(800)
     after = P.js(JS_COINS)
     near = P.js("""() => { const C=CRESTBOUND.game.course.collectibles, P=CRESTBOUND.game.player; const out=[];
@@ -338,7 +377,7 @@ def st_e3(P):
     check("e3.pad_coin.collects", all(c["st"] != 1 for c in near) and len(near) > 0, "coins %d -> %d near=%s" % (before, after, json.dumps(near)))
     # SHAFT-GUN cannon (30, 5.6, 6) -> target (13.5, 15.6, -20)
     P.tp(30.0, 5.2, 10.0); P.wait(700)
-    cannon_station(P, "e3.cannon", 30.0, 6.0, expect=(13.5, 15.6, -20.0))
+    cannon_station(P, "e3.cannon", 30.0, 6.0, expect=cannon_target(P, "shaft-gun") or (13.5, 15.6, -20.0))
 
 
 def st_e4(P):
@@ -354,7 +393,7 @@ def st_e4(P):
     check("e4.drain.coins_drop", after > before or drops > 0, "coins %d -> %d, live dropped coins %s" % (before, after, drops))
     # GLYPH WALL (0, 5.5, -64.5) half [2.8,1.5,0.45]: pound 0.5 m off its face
     safe_tp(P, 0.0, 4.8, -62.0, freeze=True, tag="glyph wall")
-    P.walk_to(0.0, -63.6, tol=0.5, max_ms=2500, tag="to the glyph wall")
+    walk(P, 0.0, -63.6, tol=0.5, max_ms=2500, tag="to the glyph wall")
     c0 = P.js(JS_CRESTS)
     pound(P, "glyph wall")
     b = brk_at(P, 0.0, -64.5)
@@ -371,7 +410,7 @@ def st_e4(P):
     # PYLON CANNON breech (0, 5.03, 6.4) -> target (5.5, 12.6, -9.5)
     goto(P, "ember-4")
     safe_tp(P, 0.0, 5.4, 9.5, tag="pylon cannon")
-    cannon_station(P, "e4.cannon", 0.0, 6.4, expect=(5.5, 12.6, -9.5))
+    cannon_station(P, "e4.cannon", 0.0, 6.4, expect=cannon_target(P, "pylon-cannon") or (5.5, 12.6, -9.5))
     # BUMBLER pound from above: find a live bumbler
     bp = P.js("""() => { const c=(CRESTBOUND.game.course.critters||[]).find(c=>c.kind==='bumbler'&&c.state==='walk'); return c?[c.pos.x,c.pos.y,c.pos.z]:null; }""")
     if bp:
@@ -386,7 +425,7 @@ def st_v2(P):
     goto(P, "verdant-2")
     # PORTCULLIS (0, 19.2, 9.4) s [3.6,4,0.6]: pound in front of it on the race pad (0,18.36,10.08)
     P.tp(0.0, 18.8, 11.5); P.wait(700)
-    P.walk_to(0.0, 10.0, tol=0.5, max_ms=2500, tag="to the portcullis")
+    walk(P, 0.0, 10.0, tol=0.5, max_ms=2500, tag="to the portcullis")
     pound(P, "portcullis")
     b = brk_at(P, 0.0, 9.4)
     check("v2.portcullis.breaks_from_front", b and b["intact"] is False, json.dumps(b))
@@ -396,11 +435,21 @@ def st_v2(P):
     P.js("() => CRESTBOUND.game.__dev.setClock(0)")
     gn = P.js("""() => { const g=(CRESTBOUND.game.course.critters||[]).filter(c=>c.kind==='gnasher'); return g.map(c=>({post:[c.post.x,c.post.y,c.post.z], pounds:c.pounds, freed:c.freed})); }""")
     P.say("   gnashers: %s" % json.dumps(gn))
+    # A REAL pound each time: dropped in from 3 m up with C held the instant he is airborne
+    # (a tp 0.5 m over the ground lands before the crouch registers -> a grounded crouch,
+    # never a pound). The west gnasher's bite reaches the post (V2-12, data lane): its
+    # kill volume is parked for the replay so the pound count itself can be read.
+    P.js("() => { for (const c of (CRESTBOUND.game.course.critters||[])) if (c.kind==='gnasher' && c.kill) c.kill.active = false; }")
+    traces = []
     for i in range(3):
-        P.tp(-7.9, 6.2, 26.5); P.wait(300)
-        P.down("C"); P.wait(1000); P.up("C"); P.wait(600)
+        P.tp(-7.9, 8.6, 26.5)
+        P.down("C"); P.wait(900); P.up("C"); P.wait(500)
+        traces.append(P.js("() => CRESTBOUND.game.player.state"))
+        gp = P.js("""() => (CRESTBOUND.game.course.critters||[]).filter(c=>c.kind==='gnasher').map(c=>c.pounds)""")
+        P.say("   post pound %d: pounds=%s pos=%s" % (i + 1, gp, P.pos()))
     gn2 = P.js("""() => (CRESTBOUND.game.course.critters||[]).filter(c=>c.kind==='gnasher').map(c=>({pounds:c.pounds, freed:c.freed}))""")
     check("v2.gnasher_post.three_pounds_free", any(g["freed"] for g in gn2), json.dumps(gn2))
+    check("v2.gnasher_post.cage_opens", "gnasher-freed" in P.js(JS_TRIG), json.dumps(P.js(JS_TRIG)))
     # DROWNED CREST (0, -1.4, 39.5) type power 'metal': no hat -> locked; hat -> collect
     goto(P, "verdant-2")
     P.js("() => { CRESTBOUND.game._clearPower && CRESTBOUND.game._clearPower(); }")
@@ -410,7 +459,9 @@ def st_v2(P):
     P.tp(0.0, -1.5, 39.5); P.wait(1200)
     st = P.state()
     locked = P.js("() => { const C=CRESTBOUND.game.course.collectibles; const c=(C.crests||[]).find(c=>c.type==='power'); return c ? {lockedCd:c.lockedCd, taken:c.taken} : null; }")
-    check("v2.drowned.locked_without_hat", P.js(JS_CRESTS) == c0 and st["gstate"] not in ("clear", "card") and locked and locked["lockedCd"] > 0, "pos=%s state=%s power=%s crest=%s" % (st["pos"], st["gstate"], P.js("() => CRESTBOUND.game.player.power"), json.dumps(locked)))
+    # locked = the crest is NOT taken and no clear fired while the hero overlapped it (the
+    # 1.5 s lockedCd refusal timer has usually decayed by the time this line runs)
+    check("v2.drowned.locked_without_hat", P.js(JS_CRESTS) == c0 and st["gstate"] not in ("clear", "card") and locked and not locked["taken"], "pos=%s state=%s power=%s crest=%s" % (st["pos"], st["gstate"], P.js("() => CRESTBOUND.game.player.power"), json.dumps(locked)))
     P.js("() => CRESTBOUND.game.__dev.power('metal', 30)")
     P.wait(300)
     P.tp(0.0, -1.5, 39.5); P.wait(1500)
@@ -432,7 +483,7 @@ def st_v3(P):
     # BELL (4, 20.6, -30) 1.7x2x1.7: pound beside it
     goto(P, "verdant-3")
     P.tp(4.0, 20.0, -27.6); P.wait(700)
-    P.walk_to(4.0, -28.6, tol=0.5, max_ms=2500, tag="to the bell")
+    walk(P, 4.0, -28.6, tol=0.5, max_ms=2500, tag="to the bell")
     pound(P, "bell")
     b = brk_at(P, 4.0, -30.0)
     check("v3.bell.breaks_from_beside", b and b["intact"] is False, json.dumps(b))
@@ -457,7 +508,7 @@ def st_keep(P):
     check("keep.no_fen_prompt_on_spawn", not (pr["show"] and pr["text"] and "FEN" in pr["text"].upper()), json.dumps(pr))
     # walk to Fen (17, 6.35, -21) and press E
     P.tp(19.5, 6.4, -21.0); P.wait(800)
-    P.walk_to(18.3, -21.0, tol=0.5, max_ms=2500, tag="up to Old Fen")
+    walk(P, 18.3, -21.0, tol=0.5, max_ms=2500, tag="up to Old Fen")
     P.wait(400)
     pr = P.js("() => { const e=document.getElementById('cb-prompt'); return {show:e&&e.classList.contains('show'), text:e?e.textContent.trim().replace(/\\s+/g,' '):null}; }")
     check("keep.fen_prompt_near_fen", pr["show"] and "FEN" in (pr["text"] or "").upper(), json.dumps(pr))
@@ -469,8 +520,76 @@ def st_keep(P):
     P.shot("keep_fen_talk")
 
 
+def st_wing(P):
+    # azure-3 wing hat (-26, 36.5, -10) over the pier deck (35.4): walk under it, no jump
+    goto(P, "azure-3")
+    P.js("() => { CRESTBOUND.game._clearPower && CRESTBOUND.game._clearPower(); }")
+    hp = P.js(JS_WING_HAT, None)
+    P.say("   azure-3 wing hat at %s" % json.dumps(hp))
+    safe_tp(P, hp[0], hp[1] - 1.0, hp[2] + 3.0, freeze=True, tag="wing pier")
+    walk(P, hp[0], hp[2], tol=0.45, max_ms=3000, tag="under the wing hat")
+    P.wait(400)
+    pw = P.js(JS_POWER)
+    check("az3.wing_hat.taken_on_foot", pw == "wing", "power=%s pos=%s" % (pw, P.pos()))
+    P.shot("az3_wing_hat")
+    unfreeze(P)
+    # verdant-1 fort-court wing hat (3, FORT_Y + 1, -21)
+    goto(P, "verdant-1")
+    P.js("() => { CRESTBOUND.game._clearPower && CRESTBOUND.game._clearPower(); }")
+    hp = P.js(JS_WING_HAT, 3.0)
+    P.say("   verdant-1 wing hat at %s" % json.dumps(hp))
+    safe_tp(P, hp[0], hp[1] - 0.9, hp[2] + 3.0, freeze=True, tag="fort court hat")
+    walk(P, hp[0], hp[2], tol=0.45, max_ms=3000, tag="under the fort hat")
+    P.wait(400)
+    pw = P.js(JS_POWER)
+    check("v1.wing_hat.taken_on_foot", pw == "wing", "power=%s pos=%s" % (pw, P.pos()))
+    unfreeze(P)
+
+
+def st_e1(P):
+    goto(P, "ember-1")
+    # the two ingot crates on the smelter belt deck: stand on top and pound
+    for x in (34.6, 43.0):
+        b0 = brk_at(P, x, -31.5)
+        top = (b0["p"][1] + 0.55) if b0 else 7.4
+        safe_tp(P, x, top + 0.3, -31.5, freeze=True, tag="ingot crate")
+        before = P.js(JS_COINS)
+        pound(P, "ingot crate x%s" % x)
+        b = brk_at(P, x, -31.5)
+        check("e1.crate_x%s.breaks" % int(x), b and b["intact"] is False, json.dumps(b))
+        P.wait(1500)
+        after = P.js(JS_COINS); drops = P.js(JS_DROPS)
+        check("e1.crate_x%s.coins_drop" % int(x), after > before or drops > 0, "coins %d -> %d, live dropped coins %s" % (before, after, drops))
+        unfreeze(P)
+
+
+def st_fenr(P):
+    # the prompt radius equals the talk radius: at 3.0 m the prompt shows AND E talks; at 3.5 m neither
+    P.js("() => CRESTBOUND.game.returnToKeep()")
+    for _ in range(60):
+        P.wait(400)
+        s = P.state()
+        if s["course"] == "keep" and s["gstate"] == "keep":
+            break
+    P.wait(1000)
+    fp = P.js(JS_FEN)
+    P.say("   Fen at %s" % json.dumps(fp))
+    for d, want in ((3.0, True), (3.5, False)):
+        P.tp(fp[0] + d, fp[1] + 0.1, fp[2]); P.wait(700)
+        pr = P.js(JS_PROMPT)
+        shown = bool(pr["show"] and "FEN" in (pr["text"] or "").upper())
+        line0 = P.js("() => CRESTBOUND.game._fenLine")
+        P.tap("E", 120); P.wait(600)
+        line1 = P.js("() => CRESTBOUND.game._fenLine")
+        talked = line1 > line0
+        q = P.pos()
+        check("keep.fen_%sm.prompt_%s" % (d, "shown" if want else "hidden"), shown == want, json.dumps(pr))
+        check("keep.fen_%sm.E_%s" % (d, "talks" if want else "silent"), talked == want, "fenLine %s -> %s d=%.2f" % (line0, line1, math.hypot(q[0] - fp[0], q[2] - fp[2])))
+
+
 STATIONS = {"rime1": st_rime1, "az1": st_az1, "az2": st_az2, "az3": st_az3, "e3": st_e3,
-            "e4": st_e4, "v2": st_v2, "v3": st_v3, "keep": st_keep}
+            "e4": st_e4, "v2": st_v2, "v3": st_v3, "keep": st_keep,
+            "wing": st_wing, "e1": st_e1, "fenr": st_fenr}
 
 
 def main():

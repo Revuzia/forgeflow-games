@@ -374,9 +374,16 @@ class CannonHazard extends Hazard {
     // side the hero bonked 2 m short of the breech and no cannon in the game could be boarded
     // (playtest: azure-2, azure-3 x3, ember-3, ember-4, verdant-3). A cannon you climb INTO
     // cannot also be a wall you bounce OFF; the shot leaves along the bore for the same reason.
+    // THE CARRIAGE COLLIDER IS THE PLINTH, NOT A KERB. The visible plinth spans
+    // y -1.225R..-0.675R under the breech; the collider used to be 0.55R tall about
+    // -0.95R, i.e. its top sat 0.3R ABOVE the plinth. On azure-3's isle cannons (R 1.1,
+    // breech 1.0 m over the deck) that put a 0.56 m step across the approach — over
+    // TUNE.stepUp 0.45 — so the hero bonked 2.1 m short of the breech from every side
+    // (replay: stop at x 27.86 against the collider face at 28.24). The plinth top is
+    // 0.26 m over that deck: a step, walkable, and exactly what the art shows.
     this.colliders.push(makeCollider({
       center: _v.copy(this.center).setY(this.center.y - R * 0.95),
-      half: _v2.set(R * 1.6, R * 0.55, R * 1.6),
+      half: _v2.set(R * 1.6, R * 0.275, R * 1.6),
       surface: 'normal', ref: this, group: 'hazard',
       props: { stepSfx: 'step_metal', stepRate: 1.0 },
     }));

@@ -127,6 +127,8 @@ const MAX_CHUNKS = 2;
 const HAZARD_VIS_DIST = 90;
 /** Seconds inside a cannon's breech trigger before a WALK-IN boards it (a press boards at once). */
 const CANNON_BOARD_DWELL = 0.10;
+/** Power-hat pickup: the capsule heights (above the feet) tested against the hat's volume. */
+const POWER_PICK_MID = 0.75, POWER_PICK_HEAD = 1.45;
 /** Chunks nearer than this stay visible off-screen so their shadows keep casting. */
 const SHADOW_KEEP = 34;
 const MAX_TEXT = 48;
@@ -4998,10 +5000,18 @@ export class Course {
       if (r.ringMat) { r.ringMat.uniforms.uTime.value = t; r.ringMat.uniforms.uState.value = r.state; }
 
       if (r.taken || !havePP || r.state < 0.6) continue;
+      /* THE HAT IS TAKEN BY THE BODY, NOT BY THE FEET. `_pp` is the hero's FEET; the
+         volume is 2.3 m tall centred on the hat, so a hat authored 1.1 m over its deck
+         (azure-3's wing pier: hat 36.5, deck 35.4 -> volume floor 35.45) sat 5 cm above
+         the feet of a hero standing right under it and never fired (playtest azure-3
+         #11/#18, verdant-1 #16 "walking the hat leaves game.power null"). Test the
+         capsule — feet, chest and head — against the volume. */
       let inside;
       if (r.volume && typeof r.volume.contains === 'function') {
         _v2.set(px, py, pz);
         inside = r.volume.contains(_v2);
+        if (!inside) { _v2.y = py + POWER_PICK_MID; inside = r.volume.contains(_v2); }
+        if (!inside) { _v2.y = py + POWER_PICK_HEAD; inside = r.volume.contains(_v2); }
       } else {
         const dx = px - r.pos.x, dz = pz - r.pos.z, dy = py - r.pos.y;
         inside = dx * dx + dz * dz < 0.9 && dy > -1.3 && dy < 1.6;
@@ -5519,8 +5529,42 @@ export class Course {
     if (this.collectibles && typeof this.collectibles.trigger === 'function') {
       try { this.collectibles.trigger(id); } catch (e) { /* never break the sim */ }
     }
+    this._disableHazardsOn(id);
     this.events.emit('trigger', id, payload);
     return true;
+  }
+
+  /**
+   * A hazard whose def names this trigger as its `disableOn` (alias `drainOn`) is
+   * switched OFF when the trigger fires: volumes/kills/colliders inactive, mesh
+   * hidden, `enabled` false — and it STAYS off for the session (a respawn reset
+   * re-runs the hazard's own reset, so `_resetHazards` re-applies this list).
+   * This is the hook a "pound the stone to drain the pool" beat needs (playtest
+   * ember-4 E4-3: the drain stone broke and the quicksand stayed): the data wires
+   * `{kind:'quicksand', ..., drainOn:'west-drain'}` to `{kind:'breakable', ...,
+   * trigger:'west-drain'}`. Idempotent; allocation-free.
+   */
+  _disableHazardsOn(id) {
+    const hz = this.hazards;
+    for (let i = 0; i < hz.length; i++) {
+      const rec = hz[i];
+      const d = rec.def;
+      if (!d) continue;
+      const on = d.disableOn !== undefined ? d.disableOn : d.drainOn;
+      if (on !== id) continue;
+      this._setHazardOff(rec);
+    }
+  }
+
+  _setHazardOff(rec) {
+    const h = rec.h;
+    rec.off = true;
+    h.enabled = false;
+    if (h.mesh) h.mesh.visible = false;
+    if (typeof h.setEnabled === 'function') { try { h.setEnabled(false); } catch (e) { /* optional */ } }
+    for (let j = 0; j < rec.colliders.length; j++) rec.colliders[j].active = false;
+    for (let j = 0; j < rec.volumes.length; j++) rec.volumes[j].active = false;
+    for (let j = 0; j < rec.kills.length; j++) rec.kills[j].active = false;
   }
 
   /** Coins from a squished bumbler or a smashed crate. */
@@ -5594,6 +5638,16 @@ export class Course {
       const h = rec.h;
       rec.broken = false;
       rec.dwell = 0; rec.armed = true;
+      /* A hazard a trigger switched off (`disableOn`) stays off across respawns —
+         the trigger set is kept on a soft reset — and comes back on a FULL reset,
+         where `_triggered` is cleared first. */
+      if (rec.off) {
+        if (sft) continue;
+        rec.off = false;
+        h.enabled = true;
+        if (h.mesh) h.mesh.visible = true;
+        if (typeof h.setEnabled === 'function') { try { h.setEnabled(true); } catch (e) { /* optional */ } }
+      }
       if (typeof h.rearm === 'function') { try { h.rearm(t); } catch (e) { /* optional */ } }
       if (typeof h.reset === 'function') {
         try { h.reset(t, sft); } catch (e) { this._hazardError(rec, e); continue; }

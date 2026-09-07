@@ -139,8 +139,10 @@ const GATE_ENTER_DWELL = 0.16;            // seconds inside ENTER_R to trigger
 const GATE_REARM_R = 2.6;                 // must leave this far before a cancelled gate re-arms
 const GATE_CAM_BACK = 7.5;                // unlock cinematic: metres back into the ROOM
 const GATE_CAM_MIN = 3.2;                 // ... and the least a shallow bay may give it
-const FEN_TALK_R = 2.6;
-const FEN_PROMPT_R = 4.5;
+/* ONE radius: the prompt shows exactly where E works. They were 2.6 / 4.5, so at
+   3.5 m 'E OLD FEN / TALK' was on screen and E did nothing (ui-text lane residual). */
+const FEN_TALK_R = 3.2;
+const FEN_PROMPT_R = FEN_TALK_R;
 
 /** Coins that buy a crest — contract §0 names. The ONE coin denominator. */
 const COINS_FOR_CREST = 100;
@@ -2576,8 +2578,15 @@ export class Game {
     this._clearCardUp = false;
     this._clearDef = null;
     this._fovPull = 0;
-    /* THE CARD COMES DOWN WITH THE SEQUENCE — every exit funnels through here. */
-    safe(() => this.hud && this.hud.hideCourseClear && this.hud.hideCourseClear(), 'hud.hideCourseClear');
+    /* THE CARD COMES DOWN WITH THE SEQUENCE — every exit funnels through here. The HUD's
+       method is `hideClear()`; this called a `hideCourseClear` that never existed, so a
+       course load while the card was up (dev goto, a menu exit) left the clear panel over
+       live play (playtest azure-3 #29: state 'playing' with the modal still on screen). */
+    safe(() => {
+      if (!this.hud) return;
+      if (typeof this.hud.hideClear === 'function') this.hud.hideClear();
+      else if (typeof this.hud.hideCourseClear === 'function') this.hud.hideCourseClear();
+    }, 'hud.hideClear');
     safe(() => this.cam && this.cam.setCinematic(null), 'cam.setCinematic');
     if (this.engine && this.engine.post && this.engine.post.setBloom && this.theme && this.theme.bloom) {
       safe(() => this.engine.post.setBloom(this.theme.bloom), 'post.setBloom');
