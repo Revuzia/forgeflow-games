@@ -652,14 +652,19 @@ export default {
      * stand to read the belts.
      * ===================================================================== */
 
-    { kind: 'conveyor', p: [-7, 6.3, 3], s: [16, 0.6, 4], dir: [1, 0, 0], power: 5.0, mat: 'conveyor', tint: IRON, stripe: true, edge: SAFE_EDGE },
-    { kind: 'conveyor', p: [7, 6.3, -1], s: [16, 0.6, 4], dir: [-1, 0, 0], power: 5.0, mat: 'conveyor', tint: IRON, stripe: true, edge: SAFE_EDGE },
-    { kind: 'conveyor', p: [0, 6.3, -1], s: [4, 0.6, 14], dir: [0, 0, -1], power: 4.0, mat: 'conveyor', tint: COPPER, stripe: true, edge: SAFE_EDGE },
+    // The belts are RECESSED: centre 6.00 with a 0.60 m body puts the deck top at 6.30,
+    // a 0.30 m kerb off the 6.00 floor — inside TUNE.stepUp (0.45), so the sorter is
+    // entered by WALKING into it. Centred at 6.30 they stood 0.60 m proud and the
+    // playtest (E2-1) bonked off every belt at a dead stop: "you can never get onto a
+    // belt from the floor" — the set piece's premise, unreachable on foot.
+    { kind: 'conveyor', p: [-7, 6.0, 3], s: [16, 0.6, 4], dir: [1, 0, 0], power: 5.0, mat: 'conveyor', tint: IRON, stripe: true, edge: SAFE_EDGE },
+    { kind: 'conveyor', p: [7, 6.0, -1], s: [16, 0.6, 4], dir: [-1, 0, 0], power: 5.0, mat: 'conveyor', tint: IRON, stripe: true, edge: SAFE_EDGE },
+    { kind: 'conveyor', p: [0, 6.0, -1], s: [4, 0.6, 14], dir: [0, 0, -1], power: 4.0, mat: 'conveyor', tint: COPPER, stripe: true, edge: SAFE_EDGE },
 
-    // Crates riding the belts. Bases sit on the belt tops (6.60).
-    { kind: 'breakable', p: [-9, 7.5, 3], s: [1.8, 1.8, 1.8], mat: 'metal', tint: SLAG, drop: 'coins', dropCount: 4 },
-    { kind: 'breakable', p: [8, 7.5, -1], s: [1.8, 1.8, 1.8], mat: 'metal', tint: SLAG, drop: 'coins', dropCount: 4 },
-    { kind: 'breakable', p: [0, 7.5, -6], s: [1.8, 1.8, 1.8], mat: 'metal', tint: SLAG, drop: 'coins', dropCount: 4 },
+    // Crates riding the belts. Bases sit on the belt tops (6.30).
+    { kind: 'breakable', p: [-9, 7.2, 3], s: [1.8, 1.8, 1.8], mat: 'metal', tint: SLAG, drop: 'coins', dropCount: 4 },
+    { kind: 'breakable', p: [8, 7.2, -1], s: [1.8, 1.8, 1.8], mat: 'metal', tint: SLAG, drop: 'coins', dropCount: 4 },
+    { kind: 'breakable', p: [0, 7.2, -6], s: [1.8, 1.8, 1.8], mat: 'metal', tint: SLAG, drop: 'coins', dropCount: 4 },
 
     // The sorter sweep: a solid two-armed bar at knee height, one turn per 5 s.
     { kind: 'rotor', p: [-12, 7.6, -3], style: 'bar', arms: 2, len: 5.0, thick: 0.45, height: 0.6, period: 5.0, axis: 'y', mat: 'metal', tint: COPPER, stripe: true, edge: SAFE_EDGE },

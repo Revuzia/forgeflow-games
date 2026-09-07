@@ -289,6 +289,25 @@ const LAUNCH_KEEP = 0.70;
 /** Speed pad / bounce pad re-trigger guards. */
 const SPEEDPAD_CD = 0.35;
 const BOUNCE_CD = 0.06;
+/**
+ * SPEED PAD BOOST HOLD. A pad SETS the velocity to its power, but the ground
+ * model brakes toward the stick's own target (9 m/s at full run) at
+ * `decelGround`, so a 12 m/s launch was back at 9.00 within 47 ms — the
+ * ember-2 playtest sampled every 200 ms and never saw the authored 11/12.
+ * While the hold runs, the pad's speed is the FLOOR of the ground target
+ * (fading back to `speedRun` over the last BOOST_FADE seconds), and it holds
+ * even with the stick released — "the plate does the running for you".
+ */
+const BOOST_TIME = 1.0;
+const BOOST_FADE = 0.35;
+/**
+ * CROUCH GRACE for the long jump. Crouching bleeds speed at ~45 m/s², so the
+ * `speed >= longJump.minSpeed` test was only true for ~78 ms after the crouch
+ * went down; a human's crouch-then-jump takes 80-150 ms and silently became a
+ * jump1 (verdant-1 playtest, owner P3). The speed the hero HAD when the
+ * crouch went down stands in for this long — the jump buffer's own idea.
+ */
+const CROUCH_GRACE = 0.18;
 
 /** Ground-pound landing stun (CONTRACT §11: "0.12 s stun"). */
 const POUND_STUN = 0.12;
@@ -564,6 +583,10 @@ export class Player {
     this._standGuardT = 0;
     this._stepDist = 0;
     this._bonkCD = 0;           // one recoil per wall contact
+    this._boostT = 0;           // speed-pad hold (BOOST_TIME)
+    this._boostSpeed = 0;       // the pad's power, floor of the ground target while held
+    this._crouchGraceT = 0;     // long-jump grace after the crouch press (CROUCH_GRACE)
+    this._crouchSpeed = 0;      // the speed carried INTO that crouch press
 
     this._cutArmed = false;     // a cuttable jump is rising
     this._cutPending = false;   // released before jumpHoldMin — cut when it expires
@@ -600,6 +623,10 @@ export class Player {
     /* ── external forces ───────────────────────────────────────────────── */
     this._wind = new THREE.Vector3();
     this._impulse = new THREE.Vector3();
+    /** Water FLOW (m/s) at the hero from a 'current' Volume — the swim model
+        runs on velocity RELATIVE to this, so a floater drifts at exactly the
+        authored power and a swimmer beats it by swim.speed - power. */
+    this._flow = new THREE.Vector3();
 
     /* ── reused sub-objects (never reallocated) ────────────────────────── */
     this._headPos = new THREE.Vector3();
@@ -752,6 +779,11 @@ export class Player {
     this._standGuardT = 0;
     this._stepDist = 0;
     this._bonkCD = 0;
+    this._boostT = 0;
+    this._boostSpeed = 0;
+    this._crouchGraceT = 0;
+    this._crouchSpeed = 0;
+    this._flow.set(0, 0, 0);
     this._cutArmed = false;
     this._cutPending = false;
     this._fellFromJump = false;
@@ -786,6 +818,9 @@ export class Player {
     this.deathCause = cause || 'void';
     this.vel.set(0, 0, 0);
     this._wind.set(0, 0, 0);
+    this._flow.set(0, 0, 0);
+    this._boostT = 0;
+    this._crouchGraceT = 0;
     this._impulse.set(0, 0, 0);
     _carryPrev.set(0, 0, 0);
     _pushPrev.set(0, 0, 0);
@@ -986,6 +1021,10 @@ export class Player {
       if (inp.jumpReleased) this._jumpReleaseLatch = true;
       this._jumpHeld = !!inp.jump;
       this._crouchHeld = !!inp.crouch;
+      /* The crouch EDGE remembers the run it interrupted (CROUCH_GRACE): the
+         long-jump test reads this speed while the grace runs, so crouch-then-
+         jump at a human's pace still fires the move the sign teaches. */
+      if (inp.crouchPressed) { this._crouchGraceT = CROUCH_GRACE; this._crouchSpeed = this.speed; }
       if (inp.divePressed) this._divePressLatch = true;
       /* pound and crouch share ControlLeft/KeyC in DEFAULT_BINDINGS; input.js
          already ORs them into `pound`. A dive press in the same frame WINS
@@ -1041,6 +1080,8 @@ export class Player {
     if (this._strokeT > 0) this._strokeT -= dt;
     if (this._standGuardT > 0) this._standGuardT -= dt;
     if (this._bonkCD > 0) this._bonkCD -= dt;
+    if (this._boostT > 0) this._boostT -= dt;
+    if (this._crouchGraceT > 0) this._crouchGraceT -= dt;
     if (this.stunT > 0) this.stunT -= dt;
     if (this._flyT > 0 && this._flyT < 1e8) {
       this._flyT -= dt;
@@ -1387,8 +1428,10 @@ export class Player {
     /* --- grounded (or inside coyote time) ----------------------------- */
     if (this.grounded || this.coyoteT > 0) {
       if (this._crouchHeld) {
-        if (this.speed >= TUNE.longJump.minSpeed) this._doLongJump();
-        else if (this.speed < BACKFLIP_MAX_SPEED) this._doBackflip();
+        /* CROUCH_GRACE: judge the move on the run the crouch interrupted. */
+        const sp = (this._crouchGraceT > 0 && this._crouchSpeed > this.speed) ? this._crouchSpeed : this.speed;
+        if (sp >= TUNE.longJump.minSpeed) this._doLongJump();
+        else if (sp < BACKFLIP_MAX_SPEED) this._doBackflip();
         else this._doJump();
       } else if (this._reverseT > 0 && this.speed >= PIVOT_MIN_SPEED * 0.5) {
         this._doSideflip();
@@ -1784,6 +1827,13 @@ export class Player {
     if (this.crouching && target > TUNE.speedWalk * CROUCH_SPEED_MUL * 2) target *= CROUCH_SPEED_MUL;
     if (this._inQuicksand) target *= QUICKSAND_MOVE;
     if (st === 'land') target *= 0.85;          // the 0.05 s landing dip
+    /* SPEED PAD HOLD (BOOST_TIME): the pad's power is the floor of the target,
+       stick or no stick, easing back to a run over the last BOOST_FADE. */
+    if (this._boostT > 0) {
+      const k = this._boostT >= BOOST_FADE ? 1 : this._boostT / BOOST_FADE;
+      const bs = TUNE.speedRun + (this._boostSpeed - TUNE.speedRun) * k;
+      if (bs > target) target = bs;
+    }
 
     this._turnToward(dt, this._wx, this._wz, false);
 
@@ -1935,6 +1985,11 @@ export class Player {
 
     this._turnToward(dt, this._wx, this._wz, false);
 
+    /* The whole model below is RELATIVE TO THE WATER (`_flow`, see
+       _readVolumes): strip the flow here, add it back at the end. */
+    const flow = this._flow;
+    vel.x -= flow.x; vel.z -= flow.z;
+
     const wm = clamp(this._wmag, 0, 1);
     const target = sw.speed * wm;
     accelerateXZ(vel, this._wx, this._wz, target, sw.accel, dt);
@@ -1968,6 +2023,9 @@ export class Player {
       vel.z = a * this._wz + pz;
     }
     vel.y *= f;
+
+    /* …and the water carries all of it. */
+    vel.x += flow.x; vel.z += flow.z;
 
     /* Never float above the surface: at the waterline the vertical is clamped
        so the hero bobs instead of launching. */
@@ -2429,6 +2487,7 @@ export class Player {
     if (surface === 'bounce') {
       const apex = (props && isFinite(props.power)) ? props.power : TUNE.bounceDefaultApex;
       this.vel.y = Math.max(launchVelocityForApex(apex), TUNE.pound.bounceV);
+      this._padAim(props, this.vel.y);
       this._launch('jump1', false);
       this._skipGravHalf = true;    // post-sweep launch: it owes only ONE half-step
       this._ev('bounce', apex, this.pos);
@@ -2459,12 +2518,31 @@ export class Player {
     } catch (err) { /* a hazard threw: the sim goes on */ }
   }
 
+  /**
+   * A jump pad's `dir` (surfaces.js publishes it, default straight up) AIMS the
+   * launch: the vertical part stays the apex `vy`, and a tilted dir adds the
+   * horizontal that keeps the launch vector along `dir`. Facing follows, and
+   * the air cap is seeded so `_airMove` never clips the throw. A vertical pad
+   * (every pad authored before verdant-2's ROUTE C) is untouched.
+   */
+  _padAim(props, vy) {
+    readVec(props && props.dir, _dir, 0, 1, 0);
+    const h = hyp2(_dir.x, _dir.z);
+    if (h < 1e-3 || _dir.y < 0.2) return;
+    const k = vy / _dir.y;
+    this.vel.x = _dir.x * k;
+    this.vel.z = _dir.z * k;
+    this.facing = yawFromHeading(_dir.x, _dir.z);
+    this._launchSpeed = h * k;
+  }
+
   /** Bounce pads, speed pads and the slope threshold, evaluated on contact. */
   _surfaceEffects(surface, props, preVy) {
     if (surface === 'bounce' && preVy <= 0.01 && this._bounceCD <= 0 && this.state !== 'poundLand') {
       const apex = (props && isFinite(props.power)) ? props.power : TUNE.bounceDefaultApex;
       /* `launchVelocityForApex` uses gravRise, so the apex is EXACTLY `power`. */
       this.vel.y = launchVelocityForApex(this._jumpHeld ? apex * 1.25 : apex);
+      this._padAim(props, this.vel.y);
       this._bounceCD = BOUNCE_CD;
       this.jumpCount = 0;
       this._chainT = 0;
@@ -2492,6 +2570,9 @@ export class Player {
         if (Math.abs(_dir.x) + Math.abs(_dir.z) > 1e-4) this.facing = yawFromHeading(_dir.x, _dir.z);
         this._speedCD = SPEEDPAD_CD;
         this._launchSpeed = hyp2(this.vel.x, this.vel.z);
+        /* Hold the pad's speed against the ground brake (BOOST_TIME). */
+        this._boostT = BOOST_TIME;
+        this._boostSpeed = this._launchSpeed;
         this._sfx('jump1');
         this._fxBurst('spark', this.pos);
       }
@@ -2596,12 +2677,22 @@ export class Player {
     }
 
     /* ---- wind --------------------------------------------------------- */
+    /* THE ONE WIND PATH. `power` is m/s² (hazards TRAP 3), applied here from
+       the 'wind' Volume the collision layer reports — surfaces.js no longer
+       ALSO drives `addWind()` for the same hazard, which had every gale
+       landing twice (rime-3's 9-12 m/s² west face measured as 1.9 m/s of
+       drift against the course's own "about a metre a second"). `falloff`
+       is the hazard's soft edge, so entering a volume is a swell, not a slap. */
     const wind = res ? res.wind : null;
     if (wind && wind.props) {
       readVec(wind.props.dir, _dir, 0, 1, 0);
-      const power = isFinite(wind.props.power) ? wind.props.power : 8;
+      let power = isFinite(wind.props.power) ? wind.props.power : 8;
+      if (typeof wind.props.falloff === 'function') {
+        const k = +wind.props.falloff(this.pos);
+        if (isFinite(k)) power *= clamp(k, 0, 1);
+      }
       const l = _dir.length();
-      if (l > 1e-6) {
+      if (l > 1e-6 && power !== 0) {
         _dir.multiplyScalar(power / l);
         this.vel.x += _dir.x * dt;
         this.vel.y += _dir.y * dt;
@@ -2610,17 +2701,27 @@ export class Player {
       if (this._ambT <= 0) { this._ambT = 0.4; this._sfx('wind', 0.35); }
     }
 
-    /* ---- current (swim push) ------------------------------------------ */
+    /* ---- current: the water MOVES ------------------------------------- */
+    /* `power` is m/s (TRAP 3) — a FLOW, not a force. It used to be pumped
+       into the velocity as 3 x power m/s² of acceleration with no relation to
+       the swim model, so a swimmer against azure-1's 3.2 m/s reef band was
+       carried BACKWARD at +0.8 m/s while a floater sat still. `_swimMove`
+       now runs on velocity relative to `_flow`: a floater drifts at exactly
+       the authored power, a swimmer beats it by swim.speed - power, and a
+       cross-swimmer is carried sideways at power while making full speed. */
     const cur = res ? res.current : null;
+    this._flow.set(0, 0, 0);
     if (cur && cur.props && this.inWater) {
       readVec(cur.props.dir, _dir, 0, 0, -1);
-      const power = isFinite(cur.props.power) ? cur.props.power : 4;
-      const l = _dir.length();
-      if (l > 1e-6) {
-        _dir.multiplyScalar(power / l);
-        this.vel.x += _dir.x * dt * 3;
-        this.vel.y += _dir.y * dt * 3;
-        this.vel.z += _dir.z * dt * 3;
+      let power = isFinite(cur.props.power) ? cur.props.power : 4;
+      if (typeof cur.props.falloff === 'function') {
+        const k = +cur.props.falloff(this.pos);
+        if (isFinite(k)) power *= clamp(k, 0, 1);
+      }
+      const l = hyp2(_dir.x, _dir.z);
+      if (l > 1e-6 && power !== 0) {
+        this._flow.x = _dir.x / l * power;
+        this._flow.z = _dir.z / l * power;
       }
     }
 
@@ -2780,6 +2881,7 @@ export class Player {
    */
   _braking() {
     if (this.speed <= SKID_SPEED) return false;
+    if (this._boostT > 0) return false;        // a pad hold is not a brake
     const target = this._wmag > 0 ? this._speedTarget(this._wmag) : 0;
     const drop = this.speed - SKID_DROP;
     return target < (drop < TUNE.speedWalk ? drop : TUNE.speedWalk);

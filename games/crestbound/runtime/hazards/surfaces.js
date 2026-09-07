@@ -1193,19 +1193,16 @@ class WindHazard extends Hazard {
 
     this.volume.active = this.enabled;
 
-    // The push itself. `Player.addWind()` is a per-frame acceleration the controller clears
-    // every update, and Course.update() runs BEFORE Player.update(), so a value written here
-    // is consumed in the same frame. Kept as a direct call because it is the cheapest path
-    // that always works — the Volume in `volumes` is the contract path.
+    // THE PUSH IS THE VOLUME'S. The controller reads `CollisionResult.wind` (props dir, power,
+    // falloff) and integrates `power` m/s² once per substep — that is the CONTRACT §9/§21 path.
+    // This hazard used to ALSO drive `Player.addWind()` every frame "as the cheapest path that
+    // always works", and the controller honoured BOTH: every gale landed twice. rime-3's west
+    // face (9-12 m/s² authored, "about a metre a second of drift") measured 1.9 m/s and blew a
+    // shelf-to-shelf hop 3.6 m off its target (playtest 2026-09-05). `inside` is still measured
+    // here for the audio bed and the screen smear; the force itself is applied exactly once.
     const pl = resolvePlayer(this.ctx, player || this.__player);
     let inside = 0;
     if (pl && pl.pos && this.box.containsPoint(pl.pos)) inside = this.falloffAt(pl.pos);
-    if (inside > 0 && this.enabled && pl && typeof pl.addWind === 'function') {
-      const f = this.power * inside;
-      pl.addWind(this.dir.x * f, this.dir.y * f, this.dir.z * f);
-      this._pushedTo = pl;
-      this._pushedAt = t;
-    }
 
     // Audible bed: nearest point of the volume to the ear, louder once you are inside it.
     const ear = resolveListener(this.ctx);

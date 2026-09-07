@@ -74,14 +74,14 @@
  *     gardens -> the wing pier        3.00 m at +1.40 m   (safe 3.48)
  *     wing pier -> the wing landing   2.00 m at +1.60 m   (safe 3.28)
  *     sky mast top -> wing landing    1.08 m at  0.00 m   (safe 4.52)
- *   REQUIRED, run-up-backed (the last column of the CONTRACT §0 table; each
- *   one is a TRIPLE and each take-off deck is stated with its straight chord):
- *     road start -> road mid          2.00 m at +3.00 m   (20 m of deck; 4.46)
- *     road mid   -> road east         2.00 m at +3.00 m   (28 m of deck; 4.46)
- *     road east  -> the sanctum       3.00 m at +3.00 m   (24 m of deck; 4.46)
+ *   REQUIRED, single-jump-safe FROM A RUN (each take-off deck gives tens of
+ *   metres of straight chord; they were +3.00 m triples until 2026-09-07):
+ *     road start -> road mid          2.00 m at +1.40 m   (safe 3.48)
+ *     road mid   -> road east         2.00 m at +1.40 m   (safe 3.48)
+ *     road east  -> the sanctum       3.00 m at +1.20 m   (safe 3.68)
  *   OPTIONAL, the risky lines:
- *     station -> the sunken isle      8.00 m at -9.00 m   long jump, safe 9.82
- *                                     off 20 m of straight deck
+ *     station -> the sunken isle      6.00 m at -9.00 m   long jump (14.7 m of
+ *                                     flight at that drop) off 20 m of deck
  *     wing pier -> the sigil perch    3.30 m at +2.00 m   triple, 10 m chord
  *     the three gauntlet tiles        1.98 / 2.80 / 2.80 m at +1.00 m, on a
  *                                     2.2 s solid / 1.5 s gone cycle
@@ -229,7 +229,7 @@ function pathCoins(pts, n) {
 // BEAT 1 — the station. One cloud anchor 28 x 20 m plus two arms, top EXACTLY
 // 30.00, and 20 m of straight deck behind the south lip for the long jump.
 const STATION_Y = 30.0;
-const SECRET_Y = 21.0;        // the isle under it: an 8.00 m gap on a -9.00 m drop
+const SECRET_Y = 21.0;        // the isle under it: a 6.00 m gap on a -9.00 m drop
 
 // BEAT 2 — two sleepers, 3.2 m square, tops 31.50 / 32.80. A 3.2 m deck only
 // affords a 3.2 m run-up, so ONLY a single jump is offered from one; every gap
@@ -274,14 +274,20 @@ const RAMP_LEN = r2(Math.hypot(28, 13));
 const RAMP_PITCH = r2(Math.asin(13 / Math.hypot(28, 13)) * 1000) / 1000;
 
 // BEAT 7 — the road. Four decks, all 10 m deep about z = -62, tops climbing
-// 50 -> 53 -> 56 -> 59 across 99 m of x. NOTHING WALKABLE IN THE CHASE'S
+// 50 -> 51.4 -> 52.8 -> 54 across 99 m of x. NOTHING WALKABLE IN THE CHASE'S
 // Z-BAND SITS BELOW 50.00 (see the header note): the cloud parks at 47.50.
+// The rises were +3.00 / +3.00 / +3.00 — a TRIPLE each, and the playtest could
+// not land one in twelve tries (frame-accurate chain, second landing has to sit
+// inside a metre of an unmarked lip over a 42 m drop, three times running).
+// Every rise is now inside the SINGLE jump's safe reach from a run: 2.00 m at
+// +1.40 (safe 3.48) twice, then 3.00 m at +1.20 (safe 3.68). Everything that
+// sat on a deck moved down with it; nothing was removed.
 const ROAD = [
   { name: 'start', x: -37, sx: 20, y: 50.0 },   // x -47..-27
-  { name: 'mid', x: -11, sx: 28, y: 53.0 },     // x -25..  3   gap 2.00 at +3.00
-  { name: 'east', x: 17, sx: 24, y: 56.0 },     // x   5.. 29   gap 2.00 at +3.00
+  { name: 'mid', x: -11, sx: 28, y: 51.4 },     // x -25..  3   gap 2.00 at +1.40
+  { name: 'east', x: 17, sx: 24, y: 52.8 },     // x   5.. 29   gap 2.00 at +1.40
 ];
-const SANCTUM_Y = 59.0;                          // x  32.. 52   gap 3.00 at +3.00
+const SANCTUM_Y = 54.0;                          // x  32.. 52   gap 3.00 at +1.20
 const CLOUD_TOP = 47.5;
 
 // BEAT 7 — the three gauntlet vanish tiles, on a line 8 m NORTH of the road so
@@ -420,10 +426,10 @@ export default {
     { p: [-11, 35.4, 22], note: '1 — over cart A at the north end of its run (deck top 34.00)' },
     { p: [-34, 27.5, -6], note: '2 — the cloud shelf, 4.00 m from the Gnasher post on a 6 m chain (top 26.00)' },
     { p: [-36, 38.9, -10], note: '3 — the prism perch off the wing pier (top 37.40)' },
-    { p: [4, 22.4, 71], note: '4 — the sunken isle under the station (top 21.00)' },
+    { p: [4, 22.4, 69], note: '4 — the sunken isle under the station (top 21.00)' },
     { p: [56, 46.9, -16], note: '5 — the perch off cannon isle 2 (top 45.40)' },
     { p: [15, 37.5, 0], note: '6 — the garden prism, 1.83 m outside the third blade (top 36.00)' },
-    { p: [12.5, 57.6, -62], note: '7 — between the two prism hammers (road east deck, top 56.00)' },
+    { p: [12.5, 54.4, -62], note: '7 — between the two prism hammers (road east deck, top 52.80)' },
     { p: [-12, 54.4, -70], note: '8 — over the last gauntlet vanish tile (top 53.00)' },
   ],
 
@@ -440,7 +446,7 @@ export default {
     { line: { a: [0, STATION_Y + 1.1, 39], b: [0, STATION_Y + 1.1, 33.5], n: 6 } },
     { ring: { c: [21, 0, 42], r: 4.0, n: 6, y: STATION_Y + 1.1 } },
     // BEAT 1 — the sunken isle: the secret pays in coins as well as a crest. (5)
-    { ring: { c: [0, 0, 68], r: 3.6, n: 5, y: SECRET_Y + 1.1 } },
+    { ring: { c: [0, 0, 66], r: 3.6, n: 5, y: SECRET_Y + 1.1 } },
     // BEAT 2 — an arc over each sleeper gap: 1.30 m peaks, which is where a
     // held single jump actually puts you. (4 + 4 + 4)
     ...arcCoins([0, 31.1, 33.2], [0, 32.6, 27.0], 1.3, 4),
@@ -473,8 +479,8 @@ export default {
     // the mid and east decks. (5 + 5 + 6 + 5)
     { line: { a: [-45, 51.1, -62], b: [-29, 51.1, -62], n: 5 } },
     ...pathCoins([[-24, 52.1, GTILE_Z], [-12, 54.1, GTILE_Z]], 5),
-    { line: { a: [-23, 54.1, -62], b: [1, 54.1, -62], n: 6 } },
-    { line: { a: [7, 57.1, -62], b: [27, 57.1, -62], n: 5 } },
+    { line: { a: [-23, 52.5, -62], b: [1, 52.5, -62], n: 6 } },
+    { line: { a: [7, 53.9, -62], b: [27, 53.9, -62], n: 5 } },
     // BEAT 8 — a ring round the Grand Pedestal. (5)
     { ring: { c: [42, 0, -64], r: 5.0, n: 5, y: SANCTUM_Y + 1.1 } },
   ],
@@ -538,23 +544,30 @@ export default {
     { kind: 'breakable', p: [-23.4, STATION_Y + 0.6, 43.2], s: [1.2, 1.2, 1.2], mat: 'wood', shape: 'crate', drop: 'coins' },
 
     /* --- THE SECRET: the sunken isle -------------------------------------
-     * The station's south lip is at z = 54 and the isle's north edge at z = 62,
-     * with the deck 9.00 m above it: a MEASURED 8.00 m gap on a -9.00 m drop.
-     * A long jump is safe to 9.82 m at that drop (tuning.js REACH_TABLE) and
-     * the station gives 20 m of straight run-up, so it goes; a dive off the
-     * peak of an ordinary jump does it too — which is the brief's "long jump +
-     * dive" exactly. Nothing points at it. The only clues are a sign saying
-     * there is nothing below the lip, and a lantern you can see over the edge.
+     * The station's south lip is at z = 54 and the isle's north edge at z = 60,
+     * with the deck 9.00 m above it: a MEASURED 6.00 m gap on a -9.00 m drop.
+     * A long jump flies 14.7 m at that drop (tuning.js simulateJump; the table's
+     * -4 m row already says 9.82 safe), so it lands from anywhere in the last
+     * EIGHT metres of deck — a player who crouch-jumps at the "NOTHING BELOW"
+     * sign (z 53.4) or three strides before it is on the isle. It used to start
+     * at z 62 (8.00 m): playtest 2026-09-05 fired the long jump 11 m early, ran
+     * off the lip in a plain fall and died, and called the take-off "within a
+     * metre of an unmarked edge over a 22 m drop". A flush inlay strip along the
+     * lip now marks the take-off line without pointing at what is below. A dive
+     * off the peak of an ordinary jump still does it too — the brief's "long
+     * jump + dive". The only other clues are the sign and a lantern you can see
+     * over the edge.
      */
-    slab(0, SECRET_Y, 68, 12, 12, { mat: 'cloud' }),            // x -6..6, z 62..74
+    { kind: 'platform', p: [0, r2(STATION_Y - 0.04), 53.3], s: [20.0, 0.2, 1.2], mat: 'panel', stripe: false },
+    slab(0, SECRET_Y, 66, 12, 12, { mat: 'cloud' }),            // x -6..6, z 60..72
     {
-      kind: 'breakable', p: [0, SECRET_Y + 1.2, 68], s: [2.4, 2.4, 2.4],
+      kind: 'breakable', p: [0, SECRET_Y + 1.2, 66], s: [2.4, 2.4, 2.4],
       mat: 'glass', shape: 'cage', drop: 'crest',
       trigger: 'sunken-vault', openOn: 'sunken-vault',
     },
-    { kind: 'deco', kindOf: 'lantern', p: [0, SECRET_Y + 3.0, 68], s: [0.6, 0.8, 0.6], mat: 'metal' },
-    { kind: 'deco', kindOf: 'crystal', p: [-3.4, SECRET_Y + 0.6, 71.4], s: [1.0, 1.5, 1.0], mat: 'crystal', count: 4, spread: 2.4, jitter: 0.36 },
-    { kind: 'light', p: [0, SECRET_Y + 2.6, 68], color: GOLD, intensity: 7, distance: 14 },
+    { kind: 'deco', kindOf: 'lantern', p: [0, SECRET_Y + 3.0, 66], s: [0.6, 0.8, 0.6], mat: 'metal' },
+    { kind: 'deco', kindOf: 'crystal', p: [-3.4, SECRET_Y + 0.6, 69.4], s: [1.0, 1.5, 1.0], mat: 'crystal', count: 4, spread: 2.4, jitter: 0.36 },
+    { kind: 'light', p: [0, SECRET_Y + 2.6, 66], color: GOLD, intensity: 7, distance: 14 },
 
     /* ========================================================================
      * BEAT 2 — THE VOID CROSSING
@@ -797,17 +810,16 @@ export default {
     /* ========================================================================
      * BEAT 7 — THE GAUNTLET  (the set piece)
      * 99 m of rainbow road in FOUR long decks, all 10 m deep about z = -62,
-     * tops 50 -> 53 -> 56 -> 59. The hazards live ON the decks; the decks
-     * themselves are joined by three measured triples, each with tens of
-     * metres of straight approach behind it:
+     * tops 50 -> 51.4 -> 52.8 -> 54. The hazards live ON the decks; the decks
+     * themselves are joined by three measured SINGLE jumps from a run:
      *
-     *   start (x -47..-27) -> mid  (x -25..3)   2.00 m at +3.00 m, 20 m chord
-     *   mid   (x -25..3)   -> east (x 5..29)    2.00 m at +3.00 m, 28 m chord
-     *   east  (x 5..29)    -> sanctum (x 32..)  3.00 m at +3.00 m, 24 m chord
+     *   start (x -47..-27) -> mid  (x -25..3)   2.00 m at +1.40 m  (safe 3.48)
+     *   mid   (x -25..3)   -> east (x 5..29)    2.00 m at +1.40 m  (safe 3.48)
+     *   east  (x 5..29)    -> sanctum (x 32..)  3.00 m at +1.20 m  (safe 3.68)
      *
-     * Triple-safe at +3.00 m is 4.46 m, so all three sit at least 1.4 m inside
-     * the envelope; the CONTRACT §0 run-up column wants >= 6 m of straight
-     * approach for a triple and the shortest deck here gives twenty.
+     * They were +3.00 m triples (see the ROAD note): the chain's own 5.5 m
+     * stride put the second landing past the lip every time, so the finale
+     * was gated on a move the playtest could not land in twelve attempts.
      *
      * What makes it a finale is that five families are live at once on every
      * metre: vanish tiles on the parallel line, hammers on a 3 s count, a
@@ -835,27 +847,27 @@ export default {
     /* PRISM HAMMERS on the east deck. `p` is the RETRACTED centre and a
      * crusher is lethal ONLY on the driving face while it drives
      * (hazards/index.js), so a parked hammer is a shelf. Retracted centre
-     * 61.20 with a 2.40 m body puts the face 4.00 m over the deck; `travel`
-     * 4.00 brings it down to EXACTLY the deck top at 56.00, so it slams the
+     * 58.00 with a 2.40 m body puts the face 4.00 m over the deck; `travel`
+     * 4.00 brings it down to EXACTLY the deck top at 52.80, so it slams the
      * floor and never clips through it. Opposite phases on a 3 s period: the
      * deck is never fully covered, and the count is audible before it is
      * visible — which is why sigil 7 can live between them. */
-    { kind: 'crusher', p: [10, 61.2, -62], s: [3.4, 2.4, 5.0], axis: [0, -1, 0], travel: 4.0, period: 3.0, phase: 0, dwell: 0.5, mat: 'crystal' },
-    { kind: 'crusher', p: [15, 61.2, -62], s: [3.4, 2.4, 5.0], axis: [0, -1, 0], travel: 4.0, period: 3.0, phase: 0.5, dwell: 0.5, mat: 'crystal' },
+    { kind: 'crusher', p: [10, 58.0, -62], s: [3.4, 2.4, 5.0], axis: [0, -1, 0], travel: 4.0, period: 3.0, phase: 0, dwell: 0.5, mat: 'crystal' },
+    { kind: 'crusher', p: [15, 58.0, -62], s: [3.4, 2.4, 5.0], axis: [0, -1, 0], travel: 4.0, period: 3.0, phase: 0.5, dwell: 0.5, mat: 'crystal' },
 
     // The rotor: len 3.0 about x = 21 on a deck spanning x 5..29, so the lanes
     // at x 5..18 and x 24..29 are always clear. You can wait it out; the cloud
     // in your peripheral vision says do not.
-    { kind: 'rotor', p: [21, 56.4, -62], style: 'windmill', arms: 3, len: 3.0, period: 4.2, axis: 'y' },
+    { kind: 'rotor', p: [21, 53.2, -62], style: 'windmill', arms: 3, len: 3.0, period: 4.2, axis: 'y' },
 
     // The friendly line onto the sanctum. `power` is TARGET APEX IN METRES:
-    // 5.5 clears the +2.70 m rise with 6.94 m of reach against a 3.50 m gap.
-    { kind: 'jumppad', p: [27, 56.15, -62], s: [3.0, 0.3, 3.0], power: 5.5, dir: [0, 1, 0], mat: 'rubber' },
+    // 5.5 clears the +1.20 m rise with room to spare against a 3.50 m gap.
+    { kind: 'jumppad', p: [27, 52.95, -62], s: [3.0, 0.3, 3.0], power: 5.5, dir: [0, 1, 0], mat: 'rubber' },
 
     // Wind across the road's lips: `power` is m/s^2 (TRAP 3). It never pushes
     // you off a deck you are standing still on; it bends every jump you make.
     { kind: 'wind', p: [-20, 53.5, -62], s: [54, 8, 9], dir: [0, 0, 1], power: 5.5 },
-    { kind: 'wind', p: [20, 58.5, -62], s: [34, 8, 9], dir: [0, 0, -1], power: 5.0 },
+    { kind: 'wind', p: [20, 55.3, -62], s: [34, 8, 9], dir: [0, 0, -1], power: 5.0 },
 
     /* THE RISING CLOUD. axis 'y', from 22.00 to 47.50 at 0.45 m/s after 12 s,
      * so it is level with the road's underside 68.7 s in and then PARKS. Its
@@ -875,14 +887,14 @@ export default {
     { kind: 'text', p: [-31, ROAD[0].y + 1.7, -58.2], rot: [0, -Math.PI / 2, 0], text: 'THE GAUNTLET', size: 0.52, color: 0xe6f6ff },
     { kind: 'text', p: [-31, ROAD[0].y + 1.25, -58.2], rot: [0, -Math.PI / 2, 0], text: 'TILES  ·  HAMMERS  ·  SPOKES  ·  WIND', size: 0.22, color: 0xbfe4ee },
     { kind: 'text', p: [-31, ROAD[0].y + 0.9, -58.2], rot: [0, -Math.PI / 2, 0], text: 'THE CLOUD ONLY RISES', size: 0.21, color: 0xffb0bd },
-    { kind: 'text', p: [12.5, 58.4, -57.4], rot: [0, 0, 0], text: 'HAMMERS KEEP TIME  ·  SO CAN YOU', size: 0.22, color: 0xbfe4ee },
-    { kind: 'text', p: [27, 57.7, -57.4], rot: [0, 0, 0], text: 'STAND ON IT', size: 0.24, color: 0xbfe4ee },
+    { kind: 'text', p: [12.5, 55.2, -57.4], rot: [0, 0, 0], text: 'HAMMERS KEEP TIME  ·  SO CAN YOU', size: 0.22, color: 0xbfe4ee },
+    { kind: 'text', p: [27, 54.5, -57.4], rot: [0, 0, 0], text: 'STAND ON IT', size: 0.24, color: 0xbfe4ee },
 
     { kind: 'deco', kindOf: 'crystal', p: [-34, 50.4, -66.4], s: [1.1, 1.7, 1.1], mat: 'crystal', count: 6, spread: 5.0, jitter: 0.34, yJitter: 1.4 },
-    { kind: 'deco', kindOf: 'crystal', p: [-4, 53.4, -57.6], s: [1.1, 1.7, 1.1], mat: 'crystal', count: 6, spread: 5.0, jitter: 0.34, yJitter: 1.4 },
-    { kind: 'deco', kindOf: 'arch', p: [-11, 60.0, -62], s: [1.2, 1.0, 11.0], rot: [0, Math.PI / 2, 0], mat: 'marble' },
+    { kind: 'deco', kindOf: 'crystal', p: [-4, 51.8, -57.6], s: [1.1, 1.7, 1.1], mat: 'crystal', count: 6, spread: 5.0, jitter: 0.34, yJitter: 1.4 },
+    { kind: 'deco', kindOf: 'arch', p: [-11, 58.4, -62], s: [1.2, 1.0, 11.0], rot: [0, Math.PI / 2, 0], mat: 'marble' },
     { kind: 'deco', kindOf: 'rail', p: [-37, 51.4, -58.6], s: [10.0, 1.0, 0.2], mat: 'copper', count: 2, spread: 3.0, jitter: 0.06 },
-    { kind: 'light', p: [-11, 58.4, -62], color: 0x7fffd8, intensity: 9, distance: 28 },
+    { kind: 'light', p: [-11, 56.8, -62], color: 0x7fffd8, intensity: 9, distance: 28 },
 
     /* ========================================================================
      * BEAT 8 — THE SANCTUM
@@ -922,7 +934,7 @@ export default {
     // BUMBLERS. Side contact is knockback, not death (contract §23) — which on
     // a road with no railings is quite enough.
     { kind: 'bumbler', path: [[-12, GARDEN_Y, 12], [10, GARDEN_Y, 12], [10, GARDEN_Y, -2], [-12, GARDEN_Y, -2], [-12, GARDEN_Y, 12]], speed: 1.7, color: 0x6fb3d8 },
-    { kind: 'bumbler', path: [[-20, 53.0, -60], [0, 53.0, -60], [0, 53.0, -64], [-20, 53.0, -64], [-20, 53.0, -60]], speed: 1.9, color: 0x6fb3d8 },
+    { kind: 'bumbler', path: [[-20, 51.4, -60], [0, 51.4, -60], [0, 51.4, -64], [-20, 51.4, -64], [-20, 51.4, -60]], speed: 1.9, color: 0x6fb3d8 },
     // SKITTERS — the prism birds. One works the void crossing, one the rings.
     { kind: 'skitter', p: [0, 36.6, 26], path: [[-8, 36.6, 30], [8, 38.4, 20]], amp: 1.8, speed: 3.6, color: 0x9f7fe0 },
     { kind: 'skitter', p: [-38, 43.0, -18], path: [[-28, 42.0, -8], [-50, 45.0, -28]], amp: 2.2, speed: 4.0, color: 0x9f7fe0 },

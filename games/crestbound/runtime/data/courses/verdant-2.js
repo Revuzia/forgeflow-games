@@ -774,10 +774,12 @@ export default {
      * THREE independent ways up onto the walk, all static:
      *   A  THE GATE STAIR  outside the south-east face, 35.3 deg, always works.
      *   B  THE NET         5.00 m of rope on the south face, climb speed 2.6.
-     *   C  THE JUMP PAD    a 6.20 m apex off the bailey: launch 6.65 -> 12.85,
-     *                      landing on the walk at 12.00 (measured horizontal
-     *                      reach 6.02 m against a 0.00 m gap — the pad is
-     *                      under the walk's own overhang).
+     *   C  THE JUMP PAD    a 9.00 m apex off the bailey at (-8, 24.5), tilted
+     *                      0.06 north (dir [0, 0.998, -0.06]): feet reach 15.5,
+     *                      clear the 12.85 merlon tops at the apex, and a
+     *                      hands-off hero comes down on the walk's outer band
+     *                      (forward stick: mid-walk). Was apex 6.20, which
+     *                      topped out 0.14 m UNDER the merlons — the pad's note.
      * ===================================================================== */
 
     {
@@ -803,8 +805,20 @@ export default {
     { kind: 'text', p: on(6.0, 26.8, 1.5), rot: [0, 0, 0], text: 'PRESS INTO THE NET TO CLIMB', size: 0.22, color: 0x4d6038 },
 
     // --- ROUTE C: the jump pad. `power` is a TARGET APEX IN METRES (hazards
-    //     TRAP 3), not a velocity: 6.20 m off a 6.51 m deck reaches 12.71.
-    { kind: 'jumppad', p: on(-8.0, 24.5, 0.14), s: [3.0, 0.28, 3.0], power: 6.2, dir: [0, 1, 0], mat: 'rubber', tint: 0x54c47a },
+    //     TRAP 3), not a velocity, and `dir` AIMS the launch (controller
+    //     _padAim: the vertical stays the apex, the tilt adds the horizontal).
+    //     Playtest V2-22: with a 6.20 m apex the hero rose to 12.71 — 0.14 m
+    //     UNDER the 12.85 merlon tops (0.85 m battlements on the walk's outer
+    //     lip, builders.js) — and was thrown into the wall, wall-slid, and died.
+    //     The knoll gives no ground both above 5.8 and outside the west
+    //     gnasher's 5.5 m chain (measured grid 2026-09-07: everything 7 m from
+    //     the post is the moat scarp), so the pad stays here and THROWS HIGHER:
+    //     apex 9.0 puts the feet at 15.5, and the 0.06 tilt (1.5 m/s north) has
+    //     the capsule reach the merlon face only after it is 14.7 up, clears the
+    //     tops at the apex and comes down on the walk's outer band at z ~22.8
+    //     hands-off; a forward stick lands mid-walk at z ~21. `dir` is the
+    //     controller's _padAim: the vertical part stays the apex.
+    { kind: 'jumppad', p: on(-8.0, 24.5, 0.14), s: [3.0, 0.28, 3.0], power: 9.0, dir: [0, 0.998, -0.06], mat: 'rubber', tint: 0x54c47a },
     { kind: 'text', p: on(-8.0, 27.6, 1.3), rot: [0, 0, 0], text: 'STAND ON IT', size: 0.24, color: 0x4d6038 },
 
     // --- the gate-house forecourt (cp-bailey stands here) and the pedestal the

@@ -745,6 +745,13 @@ export default {
 
     { kind: 'platform', p: [0, QUAY_TOP - 0.75, 39.1], s: [8.0, 1.5, 3.2], mat: 'stone', tint: STONE, stripe: true, edge: SAFE_EDGE },
     { kind: 'platform', p: [0, JETTY_TOP - 1.30, 21.0], s: [9.0, 2.6, 3.4], mat: 'stone', tint: STONE, stripe: true, edge: SAFE_EDGE },
+    // THE LANDING STAGE. The jetty's south face is 2.0 m of stone over the water:
+    // a swimmer who beats the current back to it (replayed 2026-09-07: reached
+    // z 23.08 and drifted along the face) had nothing to climb. Eight risers of
+    // 0.33 from a foot 0.60 m UNDER the surface (feet at -0.03 step 0.36 onto the
+    // first tread) to the deck, on the jetty's east half, clear of log B (x
+    // -1.8..1.8). `p` is the foot floor and footprint centre; rot PI ascends -Z.
+    { kind: 'stairs', p: [3.2, 0.0, 24.3], w: 2.4, rise: 0.33, run: 0.40, n: 8, rot: [0, Math.PI, 0], mat: 'stone', tint: STONE },
 
     // The two logs on the required line. delay 1.5 s is long enough to read
     // and short enough to punish dawdling; a pound skips the delay entirely.
@@ -759,7 +766,13 @@ export default {
 
     // The current. Gentle, pushing downstream toward the shallow east exit —
     // it teaches "water moves" without drowning anyone.
-    { kind: 'current', p: [0, RIVER_Y - 1.6, 27], s: [136, 3.4, 12.0], dir: [1, 0, 0], power: 3.4 },
+    // `power` is a FLOW in m/s (the water moves; controller _swimMove runs relative
+    // to it). 2.8 against swim.speed 4.5 leaves 1.7 m/s of upstream authority, so
+    // the north jetty is swum to by aiming a little west of it, and sigil 1 on
+    // the bed is sunk onto by holding west while crouching. At 3.4 the playtest
+    // (V3-09/V3-10) could reach neither: the jetty was missed by 15 m and the
+    // sigil by 12.7 m — "a ride to somewhere else", not the lesson promised.
+    { kind: 'current', p: [0, RIVER_Y - 1.6, 27], s: [136, 3.4, 12.0], dir: [1, 0, 0], power: 2.8 },
 
     // Stone piers of the mill leat, solved from the quay deck down to the real
     // riverbed rather than eyeballed.
@@ -791,19 +804,32 @@ export default {
     { kind: 'conveyor', p: [7.0, TERR_A_TOP + 0.15, -2.0], s: [5.0, 0.3, 8.4], dir: [0, 0, 1], power: 5.0, mat: 'cloth', tint: WHEAT },
     { kind: 'conveyor', p: [10.0, TERR_B_TOP + 0.15, -8.0], s: [5.0, 0.3, 7.4], dir: [0, 0, 1], power: 5.5, mat: 'cloth', tint: WHEAT },
     { kind: 'conveyor', p: [-6.0, TERR_A_TOP + 0.15, -2.0], s: [4.4, 0.3, 8.4], dir: [0, 0, -1], power: 4.0, mat: 'cloth', tint: 0xc9a44e },
+    // THE BELT'S TOP STEP. The lower belt (top 11.30, z -6.2..2.2) runs its last
+    // 2.2 m UNDER deck B (top 12.30, z -12..-4): a hero who beats it north at the
+    // designed 4.0 m/s hits deck B's 1.00 m south face — over TUNE.stepUp — and
+    // bonks (playtest V3-05: "never sustaining a run"; replayed 2026-09-07 at
+    // exactly 4.0 m/s north until the wall at z -3.6). Three snow-free risers of
+    // 0.34 x 0.40 on the belt's back, foot on the belt top at z -2.8, top tread
+    // flush with deck B at z -4.0: "RUN THROUGH THEM" now ends on the deck.
+    { kind: 'stairs', p: [7.0, TERR_A_TOP + 0.30, -3.4], w: 4.6, rise: 0.34, run: 0.40, n: 3, rot: [0, Math.PI, 0], mat: 'stone', tint: STONE },
 
     // The stair off the first deck onto the second. builders.js reads `rot`,
     // never `yaw`: [0, PI, 0] turns local +Z (the ascent) to world -Z, i.e.
     // uphill. 9 risers of 0.30 => 11.00 -> 12.80, first tread 11.30.
     { kind: 'stairs', p: [-3.0, TERR_A_TOP, -6.2], w: 3.0, rise: 0.30, run: 0.36, n: 9, rot: [0, Math.PI, 0], mat: 'stone', tint: STONE },
 
-    // A jump pad on the lower deck: 4.0 m of apex puts you on the upper deck
-    // without touching a belt, for anyone who would rather not fight one.
-    { kind: 'jumppad', p: [-9.0, TERR_A_TOP + 0.14, -3.0], s: [2.6, 0.28, 2.6], power: 4.0, dir: [0, 1, 0], mat: 'rubber', tint: 0x54c47a },
+    // A jump pad ON the lower deck: 4.0 m of apex, AIMED 0.34 north (controller
+    // _padAim keeps the apex and adds ~6 m/s along the tilt), so hands-off it
+    // lands on the upper deck at about (0.5, 12.30, -6) — clear of the terrace
+    // stair (x -4.5..-1.5) and 8.3 m from the gnasher post at (-7, -9.6), whose
+    // 5.5 m chain the old pad's landing line at x -9 ran straight through
+    // (playtest V3-17: 'death:gnasher' a storey below the post). That pad also
+    // stood at x -9, two metres WEST of deck A's own edge (x -7).
+    { kind: 'jumppad', p: [0.5, TERR_A_TOP + 0.14, -1.0], s: [2.6, 0.28, 2.6], power: 4.0, dir: [0, 0.94, -0.34], mat: 'rubber', tint: 0x54c47a },
 
     { kind: 'text', p: [0, TERR_A_TOP + 1.6, 2.4], rot: [0, 0, 0], text: 'THE BELTS RUN DOWNHILL  ·  RUN THROUGH THEM', size: 0.24, color: 0x6b5a3a },
-    { kind: 'text', p: [-9.0, TERR_A_TOP + 1.3, -0.4], rot: [0, 0, 0], text: 'STAND ON IT', size: 0.22, color: 0x4d6038 },
-    { kind: 'deco', kindOf: 'crate', p: [-2.0, TERR_A_TOP + 0.4, 0.6], s: [0.9, 0.8, 0.9], rot: [0, 0.3, 0], mat: 'wood', tint: TIMBER, count: 3, spread: 2.6, jitter: 0.3 },
+    { kind: 'text', p: [0.5, TERR_A_TOP + 1.3, 1.4], rot: [0, 0, 0], text: 'STAND ON IT', size: 0.22, color: 0x4d6038 },
+    { kind: 'deco', kindOf: 'crate', p: [3.6, TERR_A_TOP + 0.4, 1.2], s: [0.9, 0.8, 0.9], rot: [0, 0.3, 0], mat: 'wood', tint: TIMBER, count: 3, spread: 2.6, jitter: 0.3 },
     { kind: 'deco', kindOf: 'barrel', p: [-4.6, TERR_B_TOP + 0.45, -9.4], s: [0.8, 0.9, 0.8], mat: 'wood', tint: TIMBER, count: 3, spread: 2.4, jitter: 0.3 },
 
     /* ========================================================================
@@ -993,16 +1019,26 @@ export default {
     // the sails ever reach (25.60), so it can never be swept.
     { kind: 'platform', p: [22, 24.20, -48], s: [4.0, 1.2, 3.0], mat: 'stone', tint: STONE, stripe: true, edge: SAFE_EDGE },
 
-    // --- ROUTE A, the scaffold. Row south (z -45.7..-42.7) and row north
-    //     (z -40.9..-37.9), climbing in a zig-zag: 24.60 · 26.00 · 27.40 ·
-    //     28.80 · 30.20 · 31.60, then the gallery at 32.04 (a 2.78 m step at
-    //     +0.44). Slab tops are p[1] + s[1]/2 with s[1] = 1.4.
-    { kind: 'platform', p: [17.0, 23.90, -44.2], s: [3.4, 1.4, 3.0], mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
-    { kind: 'platform', p: [17.0, 25.30, -39.4], s: [3.4, 1.4, 3.0], mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
-    { kind: 'platform', p: [22.8, 26.70, -39.4], s: [3.4, 1.4, 3.0], mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
-    { kind: 'platform', p: [22.8, 28.10, -44.2], s: [3.4, 1.4, 3.0], mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
-    { kind: 'platform', p: [28.6, 29.50, -44.2], s: [3.4, 1.4, 3.0], mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
-    { kind: 'platform', p: [28.6, 30.90, -39.4], s: [3.4, 1.4, 3.0], mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
+    // --- ROUTE A, the scaffold. Row south (z -46.5..-42.7) and row north
+    //     (z -40.5..-36.7), climbing in a zig-zag: 24.60 · 26.00 · 27.40 ·
+    //     28.80 · 30.20 · 31.60, then the gallery at 32.04 (3.2 m at +0.44).
+    //     Slab tops are p[1] + s[1]/2 with s[1] = 1.4. The row-to-row gaps are
+    //     2.20 m at +1.40 and the same-row hops 2.40 m at +1.40 (single-safe
+    //     3.48 at that rise — FROM THE LIP AT A RUN). Two things the playtest
+    //     (V3-35) and its replay taught: (1) the ledges are 3.8 m deep, not
+    //     3.0, so a hero has 3.4 m of tread behind the lip, a full run 1 m in
+    //     — at 3.0 m the tester jumped from the middle at half speed and fell
+    //     0.4 m short; (2) a rise of 1.40 needs the gap to be LONGER than 1.8:
+    //     the capsule met the far ledge's face after 1.42 m of travel at only
+    //     +1.39 m of rise (1 cm under the top) and wall-slid onto it. At 2.2 m
+    //     the rise is 1.61 where the face is met. The south row stops at
+    //     -46.5, 0.2 m short of the sail band (-49.3..-46.7).
+    { kind: 'platform', p: [17.0, 23.90, -44.6], s: [3.4, 1.4, 3.8], mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
+    { kind: 'platform', p: [17.0, 25.30, -38.6], s: [3.4, 1.4, 3.8], mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
+    { kind: 'platform', p: [22.8, 26.70, -38.6], s: [3.4, 1.4, 3.8], mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
+    { kind: 'platform', p: [22.8, 28.10, -44.6], s: [3.4, 1.4, 3.8], mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
+    { kind: 'platform', p: [28.6, 29.50, -44.6], s: [3.4, 1.4, 3.8], mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
+    { kind: 'platform', p: [28.6, 30.90, -38.6], s: [3.4, 1.4, 3.8], mat: 'wood', tint: TIMBER, stripe: true, edge: SAFE_EDGE },
     // Gallery -> sky platform: two crag ledges east of the sweep. G1 tops at
     // 33.50 (1.46 m over the gallery, 1.88 m across), G2 at 34.90 (+1.40 at
     // 1.90 m), then the deck at 35.90 is a 1.00 m step with the footprints

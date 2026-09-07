@@ -922,6 +922,15 @@ export default {
     // its corners clear the 66 deg walls: apex 8.5 m, straight up, 4.9 m from
     // the ledge's core (the pad's reach at a 5.3 m rise is 8.2 m).
     { kind: 'platform', p: [23.3, 4.40, -27.9], s: [2.4, 1.0, 2.4], mat: 'snow', tint: SNOW },
+    // The block's north face is a 1.5 m wall off the gorge floor — three times
+    // TUNE.stepUp — so a player who fell in walked at the STAND ON IT sign and
+    // bonked (playtest 2026-09-05). The floor DIPS toward the block (measured
+    // 2026-09-07 along x 23.3: z -24 4.74 · -24.5 4.33 · -25 3.92 · -26 3.56 ·
+    // -27 3.41), so the flight starts up on the slope at 4.40 and runs level-ish
+    // to the block top at 4.90: five 0.10 x 0.42 treads, every one above the
+    // floor under it. `p` is the flight's foot floor and footprint centre, rot
+    // PI ascends toward -Z (south, onto the block).
+    { kind: 'stairs', p: [23.3, 4.40, -25.65], w: 2.2, rise: 0.10, run: 0.42, n: 5, rot: [0, Math.PI, 0], mat: 'snow', tint: SNOW },
     { kind: 'jumppad', p: [23.3, 5.04, -27.9], s: [2.4, 0.28, 2.4], power: 8.5, dir: [0, 1, 0], mat: 'rubber', tint: 0x54c4d8 },
     { kind: 'text', p: [23.3, 6.6, -25.4], rot: [0, 0, 0], text: 'STAND ON IT', size: 0.24, color: 0x3a5270 },
     // Four sinking snow pads up to the knoll: tops 8.50 / 10.00 / 11.50 /
