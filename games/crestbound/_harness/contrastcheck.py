@@ -174,9 +174,35 @@ async (st) => {
        hero and "ahead of the checkpoint" is the ground the player looks at. */
     if (P.__test.setFacing) P.__test.setFacing(yaw);
   };
+  /* A FROZEN WORLD, SETTLED IN. The frame has to be the same frame twice or the
+     row is a mood: the checkpoint pad PULSES (CONTRACT §15 asks it to), the deck
+     band sits partly on it, and hazards, coins and water all animate. Two sweeps
+     of an unedited tree disagreed by up to 0.73 (ember-4 cp1 read deck
+     [81,81,89] then [117,110,113]).
+
+     The clock is pinned BEFORE the settle, not after. Pinning it after was worse
+     than not pinning it: CONTRACT §21 makes every hazard a pure function of the
+     course clock, so jumping the clock at the end teleports azure-2's rotating
+     rooms and ember-2's crushers out from under a hero who settled somewhere
+     else (azure-2 cp3 read deck [192,186,177] one way and [36,107,91] the
+     other). Stop the loop, pin both clocks, and hand-step game.update(1/60):
+     the hero, the camera ease, the hazards, the pad phase and the water are all
+     one deterministic configuration, and the screenshot and the depth pass see
+     the SAME frame instead of two moving ones. */
+  const PHASE = 12.0, DT = 1 / 60;
+  const pin = () => {
+    try { if (typeof E.elapsed === 'number') E.elapsed = PHASE; } catch (e) {}
+    try { if (G.course && typeof G.course.clock === 'number') G.course.clock = PHASE; } catch (e) {}
+  };
+  const step = (n) => {
+    for (let k = 0; k < n; k++) { pin(); try { G.update(DT); } catch (e) {} }
+  };
+  try { if (E.running && typeof E.stop === 'function') E.stop(); } catch (e) {}
+  await frame();                    // let the in-flight rAF drain
+  pin();
   put();
   if (G.cam && G.cam.recenter) G.cam.recenter();
-  for (let k = 0; k < 50; k++) await frame();        // lighting / LOD / camera ease
+  step(60);                         // lighting / LOD / camera ease, deterministically
 
   // A station on a conveyor or a slope carries the hero away during the settle;
   // re-pin once and give the frame a short second settle, or the "station" shot
@@ -184,7 +210,7 @@ async (st) => {
   syncP();
   if (Math.hypot(P.pos.x - st.p.x, P.pos.y - (st.p.y + 0.5), P.pos.z - st.p.z) > 2.0) {
     put();
-    for (let k = 0; k < 16; k++) await frame();
+    step(20);
   }
   syncP();
   if (P.dead) return {error: 'the hero died on the station'};
@@ -240,21 +266,6 @@ async (st) => {
   const deckDepth = _sd.length ? _sd[_sd.length >> 1] : 0;
   const deckDepthMax = _sd.length ? _sd[_sd.length - 1] : 0;
 
-  /* FREEZE THE FRAME. Everything above settles the pose with real rAF frames;
-     from here the frame must be the SAME frame twice. The checkpoint pad
-     PULSES (CONTRACT §15 asks it to), the deck band sits partly on it, and the
-     hazards, coins and water all move — so two runs of an unedited course
-     disagreed by up to 0.73 (ember-4 cp1 read deck [81,81,89] then
-     [117,110,113], ratio 2.49 then 3.22). Stop the loop, pin both clocks to a
-     constant, and hand-step a fixed number of frames: the screenshot and the
-     depth pass then see one deterministic frame instead of two moving ones. */
-  const PHASE = 12.0, STEPS = 3, DT = 1 / 60;
-  try { if (E.running && typeof E.stop === 'function') E.stop(); } catch (e) {}
-  for (let k = 0; k < STEPS; k++) {
-    try { if (typeof E.elapsed === 'number') E.elapsed = PHASE; } catch (e) {}
-    try { if (G.course && typeof G.course.clock === 'number') G.course.clock = PHASE; } catch (e) {}
-    try { G.update(DT); } catch (e) {}
-  }
   const frozen = !E.running;
   /* The hero's screen box: feet to head, +-0.45 m of shoulder, so his body,
      scarf and blob shadow never land in the deck median. */
