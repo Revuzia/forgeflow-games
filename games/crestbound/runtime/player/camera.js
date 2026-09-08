@@ -247,6 +247,26 @@ const DIST_LAMBDA          = 6.0;    // base distance changes (death pull-out) e
 // the FAN ignores them; the lens SPHERE and the embedded-lens guard do not (a bar
 // that reaches the lens still dips it out of the way rather than clipping).
 const ROD_HALF_MAX         = 0.30;   // m — a box side under this is 'thin'; two thin sides = a bar
+// A BAR IS PUSHED PAST, NOT PULLED AWAY FROM. Ignoring these bodies in the fan
+// and then letting the lens SPHERE answer them looked right and was not: when
+// the bar lies ALONG the heading every distance on it is inside the bar, the
+// walk has nothing clear to return and the pose collapses to the near plane.
+// MEASURED at azure-2's great cog with the hero riding the arm (camcheck
+// `@cog`, heading 0): `dist` 0.16, `heroFade` 1.00, `minSolidClear 0.000`
+// against the 2.83 x 0.25 x 0.28 m arm, and one frame with the hero outside the
+// frustum. So the sphere ignores them at every distance too, and the POSED lens
+// is stepped sideways/up out of the body instead — a 0.28 m-thick arm needs at
+// most a 0.45 m step, and the aim is recomputed after it, so the hero stays
+// framed at the distance the fan actually chose.
+const SOFT_PUSH_STEPS      = [0.15, 0.30, 0.45, 0.60];   // m, tried in order, both signs on right then up
+// The push only has to keep the NEAR PLANE out of the body, not the whole
+// collide radius: the radius is the pull-in solver's margin, and asking for it
+// here made the step 0.60 m for a 0.28 m-thick arm — a visible sideways offset
+// to answer a bar that is two pixels wide. Twice the engine near plane (0.05)
+// is what stops the frame being cut open. MEASURED: with the radius as the
+// test, the 0.45 m ladder could not clear the great cog's arm at all and the
+// lens stayed inside it (`minSolidClear 0.000`, 2 frames).
+const SOFT_PUSH_CLEAR_M    = 0.10;
 
 // A PROBE ORIGIN CAN START INSIDE A SOLID, and the fan used to take the answer
 // literally. `Broadphase.raycast` reports an origin inside a box as the
@@ -297,12 +317,68 @@ const EMBED_FREE_N         = 8;      // samples when backing an embedded ease of
 //     reason. It is also what keeps the authored "hero flat against a long
 //     wall" terminal case (CONTRACT §12, camcheck's wall row) exactly as it is:
 //     that hero is at rest, so the wide tier never opens there.
-const SLIDE_STEPS          = [0.18, 0.36, 0.55, 0.75, 1.05, 1.35];  // rad, nearest-first, both signs
+//   * …AND THE BLIND CASE, added 2026-09-07 (owner P10, "the camera gets buggy
+//     and hard to look around when inside a structure"). MEASURED at the
+//     verdant-1 fort corner, hero standing still at (−9.11, 9.08, −30.37)
+//     (`_harness/_cam9_field.py v1_fortE` — the solver's OWN `_clearance` over a
+//     yaw × pitch grid): the un-slid heading answers 0.13 m, the whole bounded
+//     set (±0.18/±0.36/±0.55) answers 0.21-0.32 m — under SLIDE_GAIN_MIN, so no
+//     slide was taken at all — and +1.05 rad answers the FULL 6.80 m. The camera
+//     therefore sat at 0.14 m INSIDE Nim's head for as long as the player held
+//     that heading (frame `_shots/play_cam_b9/26_fort_corner_look_afterE.png`:
+//     the inside of the hero's skull and backpack fill the frame at 26 % opacity
+//     — the ghost is a translucent SHELL, not a hidden hero, so the close band
+//     0.30-1.25 m is the least usable pose in the game). Being swung is a cost;
+//     being blinded is not a pose. So when the un-slid answer is under
+//     SLIDE_WIDE_BLIND_M — the lens inside the hero's own model envelope — the
+//     wide tier opens for a STANDING hero too. The authored "flat against a long
+//     wall" terminal case is untouched: a long wall leaves every heading along it
+//     open, so `c0` there is a metre or more and the blind tier never arms.
+const SLIDE_WIDE_BLIND_M   = 1.00;   // m — under this the lens is inside the hero: widen whatever his speed
+// The wide set reaches PAST the shoulder. MEASURED (`_cam9_field.py a3_isle`,
+// azure-3's sunken isle under the crest cage): every heading from −1.35 to +1.35
+// answers ≤ 0.15 m and ±1.90 answers the full 6.80 m. A ladder that stops at
+// 1.35 rad cannot see the door behind the hero, and the old ladder's own
+// verdict — "no heading reaches out, so this is a shaft" — was then wrong, which
+// is what tilted the isle camera to 1.24 rad (a top-down of Nim's helmet).
+const SLIDE_STEPS          = [0.18, 0.36, 0.55, 0.75, 1.05, 1.35, 1.90, 2.50, 3.14];  // rad, nearest-first, both signs
 const SLIDE_BOUNDED_N      = 3;      // the first N are always available
 const SLIDE_RATE           = 3.2;    // rad/s onto an avoidance heading
+// …and a FASTER one while the pose it is leaving cannot hold the lens outside
+// geometry at all. The ease exists so a swing reads as a camera move rather than
+// a cut, and there is nothing to read while the lens is inside a wall: MEASURED
+// at azure-2's great cog, the hero carried against the tower's west face
+// (camcheck `@cog`, heading 0), the ladder was at `yawSlide 0.33` of a ~2 rad
+// answer with `dist 0.17`, `heroFade 1` and the lens 0.05 m INSIDE the 8.8 x 34
+// x 1.8 m wall for four frames. At 12 rad/s the same swing costs one.
+const SLIDE_RATE_BLIND     = 12.0;   // rad/s while the un-slid pose is inside the hero
 const SLIDE_RELEASE_RATE   = 1.4;    // rad/s back to the player's heading
 const SLIDE_GAIN_MIN       = 0.25;   // m — a slide must buy at least this much
 const SLIDE_RELEASE_M      = 0.50;   // m hysteresis so the solver cannot hunt
+// ── THE SOFT TIER: a body that HIDES the hero without being a wall to the lens.
+// Making critters and sweeping bars invisible to the fan (see camTransparent)
+// stopped them collapsing the camera — and left nobody answering the thing they
+// actually do, which is stand in front of the hero. MEASURED 2026-09-07
+// (`_harness/_cam9_occ.py keep_nook a2_cog`, and camcheck's own visual budget):
+// in the Keep's reading nook, heading π, Old Fen is a live broadphase collider
+// (`group 'critter'`, half 0.42 × 0.80 × 0.42) 0.52 m along a 3.79 m line of
+// sight — camcheck read 2.553 s of hidden hero against a 0.300 s budget; beside
+// azure-2's great cog, heading 0, the sweeping arm (`group 'hazard'`, half
+// 2.83 × 0.25 × 0.28 — two thin sides, so already fan-transparent) hid him for
+// 1.896 s. The answer is neither a pull-in nor a collapse: it is a SMALL yaw
+// step onto a heading that frames him just as far away and has nobody standing
+// in it. Armed only after the body has held the line for SOFT_OCC_ARM_S (a
+// skitter crossing the frame is not a camera event), handed back after
+// SOFT_OCC_RELEASE_S clear, bounded to the same ±0.55 rad set a hard slide gets
+// when the hero is standing, and never taken at the cost of distance.
+// 0.16 s of arming plus a 0.55 rad ease at SLIDE_RATE (0.17 s) is 0.33 s before
+// the step lands, which does not fit inside the CONTRACT's 0.3 s occlusion
+// budget: MEASURED at azure-2's great cog with the hero riding the arm, the body
+// test read a 0.338 s run of fully hidden hero on an otherwise clean row. Six
+// frames is enough to tell a crossing skitter from a body that has parked.
+const SOFT_OCC_ARM_S       = 0.10;   // s hidden before the camera steps aside
+const SOFT_OCC_RELEASE_S   = 0.40;   // s clear before it steps back
+const SOFT_OCC_MIN_D       = 0.55;   // m — under this the lens is at the hero: nothing can 'hide' him
 // …and a second, sharper guard on the same failure. The hysteresis above is
 // measured on the UN-SLID heading, which says nothing about the headings the
 // ease PASSES THROUGH on its way home. Measured (probe `_harness/_camjam.py`,
@@ -537,6 +613,9 @@ const RECENTER_HOLD_S      = 0.15;   // yawForMovement keeps the old yaw this lo
 // death
 const DEATH_ORBIT_RATE     = 0.3;    // rad/s
 const DEATH_PULL_M         = 1.5;
+const DEATH_FOLLOW_K       = 0.5;    // the focus rides half way to the hero…
+const DEATH_FOLLOW_MAX_M   = 2.2;    // …and never further than this from the death point
+const DEATH_SEP_PULL_K     = 0.8;    // extra pull-out per metre of separation, capped by the same
 const DEATH_PITCH_LIFT     = 0.12;   // rad, eased in
 const RESPAWN_SNAP_DIST    = 3.0;    // m the hero moved during death → treat as respawn
 
@@ -969,12 +1048,27 @@ class CamOccluders {
     _occM4.premultiply(mesh.matrixWorld);
     _occM4.decompose(_occP, _occQ, _occS);
     const lb = rec.lbox;
+    // A DEGENERATE INSTANCE IS NOT AN OCCLUDER. An instance can be posed at
+    // (or near) zero scale — a vanish platform mid-fade, a body a course reset
+    // has not re-placed yet — and the clamp below then builds a 2 cm cube whose
+    // oriented-box inverse is numerically singular, so `rayBoxT` answers t = 0
+    // for rays that come nowhere near it. MEASURED at the azure-2 respawn
+    // (`state().snapInfo`): the fan's centre whisker from the focus (0.35, 1.55,
+    // 20) reported `hitT 0` against a `group 'camera'` record with half
+    // (0.01, 0.01, 0.01) centred at (7.40, 0.05, 6.00) — 20 m away — and the
+    // camera posed `dist 0.12` at the hero's own respawn. `rebuild()` already
+    // refuses parts under OCC_MIN_EXTENT_M as bolts and rungs; a record that
+    // SHRINKS below it is the same thing and goes inactive until it grows back.
+    const ex = (lb.max.x - lb.min.x) * Math.abs(_occS.x);
+    const ey = (lb.max.y - lb.min.y) * Math.abs(_occS.y);
+    const ez = (lb.max.z - lb.min.z) * Math.abs(_occS.z);
+    if (Math.max(ex, ey, ez) < OCC_MIN_EXTENT_M) { c.active = false; return; }
     _occC.set((lb.min.x + lb.max.x) * 0.5, (lb.min.y + lb.max.y) * 0.5, (lb.min.z + lb.max.z) * 0.5).applyMatrix4(_occM4);
     c.center.copy(_occC);
     c.half.set(
-      Math.max(OCC_MIN_HALF_M, (lb.max.x - lb.min.x) * 0.5 * Math.abs(_occS.x)),
-      Math.max(OCC_MIN_HALF_M, (lb.max.y - lb.min.y) * 0.5 * Math.abs(_occS.y)),
-      Math.max(OCC_MIN_HALF_M, (lb.max.z - lb.min.z) * 0.5 * Math.abs(_occS.z)));
+      Math.max(OCC_MIN_HALF_M, ex * 0.5),
+      Math.max(OCC_MIN_HALF_M, ey * 0.5),
+      Math.max(OCC_MIN_HALF_M, ez * 0.5));
     c.quat.copy(_occQ);
     c.update();
   }
@@ -1111,6 +1205,9 @@ export class FollowCamera {
     this._pitchSlide = 0;                      // eased SHAFT-tier pitch offset (rad, see PITCH_STEPS)
     this._pitchWant  = 0;                      // its target this frame
     this._shaft      = false;                  // the full yaw ladder found no heading: a chimney (see PITCH_ROOM_STEPS)
+    this._softOff    = 0;                       // SOFT tier: yaw step held around a critter / sweeping bar
+    this._softBlockT = 0;                       // s the un-slid heading has been hidden by one
+    this._softClearT = 0;                       // s it has been clear
     this._limitCeil  = false;                  // the limiting whisker hit an underside
     this._limitFrame = false;                  // the limiter was the CHEST (framing) probe
     this._limitLens  = TUNE.cam.dist;          // LENS-only limit (framing probe excluded)
@@ -1154,8 +1251,13 @@ export class FollowCamera {
     // ── death ─────────────────────────────────────────────────────────────
     this._deathOn    = false;
     this._deathT     = 0;
+    this._deathSep   = 0;                       // m between the death point and the hero now
     this._deathFocus = new THREE.Vector3();
     this._deathHero  = new THREE.Vector3();
+    this._heroLast   = new THREE.Vector3();     // teleport detector (see update step 0)
+    this._heroSeen   = false;
+    this._snapN      = 0;                       // teleport snaps taken (harness)
+    this._snapInfo   = null;                    // what the last one resolved to (harness)
 
     // ── cinematic ─────────────────────────────────────────────────────────
     this._cine       = null;                   // normalised path (see setCinematic)
@@ -1192,6 +1294,7 @@ export class FollowCamera {
           yaw: wrapAngle(self.yaw + self._yawSlide), pitch: self._pitchAim(),
           yawOrbit: self.yaw, pitchOrbit: self.pitch,
           yawSlide: self._yawSlide, pitchAdapt: self._pitchAdapt, focusDrop: self._focusDrop,
+          softOff: self._softOff, softBlockT: self._softBlockT,
           pitchSlide: self._pitchSlide, pitchWant: self._pitchWant, shaft: self._shaft,
           limitCeil: self._limitCeil, limitFrame: self._limitFrame,
           fallDepth: self._fallDepth, dropBelow: self._dropBelow,
@@ -1207,6 +1310,7 @@ export class FollowCamera {
           recentering: self._rcActive, recenterT: self._rcT, holdT: self._rcHoldT,
           heroFade: self._heroFade, underwater: self._underwater,
           peek: self._peekOn, death: self._deathOn,
+          deathPoint: [self._deathHero.x, self._deathHero.y, self._deathHero.z], deathSep: self._deathSep, snapN: self._snapN, snapInfo: self._snapInfo,
           cinematic: !!self._cine, cinematicT: self._cineT, cinematicDone: self._cineDone,
           time: self._time,
         };
@@ -1407,6 +1511,88 @@ export class FollowCamera {
     const d = clamp(+dt || 0, 0, DT_MAX);
     this._time += d;
 
+    // 0 ── A TELEPORT IS A CUT, NOT A MOVE. The hero can leave one place and
+    // appear in another between two frames — a respawn, a checkpoint warp, a
+    // painting entry — and a camera that treats that as motion spends the next
+    // frames solving against the geometry it was left standing in. MEASURED
+    // (camcheck `azure-2/@cogdeath`): `setDeathCam(false)` snaps, but game.js
+    // moves the hero to the spawn AFTER it, so for the tail of the dead state
+    // the lens was still in the gear yard with the hero 24 m away — `dist` 0.36,
+    // `heroFade` 0.90 and the hero at NDC y −2.62, i.e. the "no hero" death
+    // frames of the playtest. Nothing in the game moves 3 m in one frame
+    // (180 m/s at 60 Hz), so this cannot fire on real motion.
+    const tp = this._heroSrc();
+    if (tp) {
+      if (this._heroSeen) {
+        const jump = _tmp.set(tp.x, tp.y, tp.z).distanceTo(this._heroLast);
+        if (jump > RESPAWN_SNAP_DIST) {
+          this._snapN++;
+          // The death cam's subject has just left: a hero who teleports has been
+          // respawned, so the sequence is over whoever calls `setDeathCam` and
+          // whenever. Leaving it on for the frames in between is what put the
+          // focus in the gear yard with the hero at the spawn — the fan then
+          // solved against the machinery 24 m away and collapsed (measured:
+          // `_distColl` 0.12 easing out at 0.24 m/frame for eight frames, hero
+          // at NDC y −2.62, `heroFade` 0.90).
+          this._deathOn = false; this._deathT = 0; this._deathSep = 0;
+          if (!this._cine) this.mode = this._peekOn ? 'peek' : this._camMode;
+          this._clearTransients();
+          this._snapToPlayer(true);
+          // …and RESOLVE it here, at dt = 0, exactly as the public snapToPlayer
+          // does: a snap whose pose is only solved by the tail of this same
+          // update inherits whatever the pre-teleport frame left behind.
+          this._resolveNow();
+          // A SNAP DOES NOT INHERIT A ONE-FRAME COLLAPSE. The frame of a
+          // teleport is a cut: the course has just re-placed its hazards at the
+          // checkpoint clock and their colliders are re-posed around the hero,
+          // so a fan answer taken inside it is not evidence about the new place.
+          // MEASURED at the azure-2 respawn (camcheck `@cogdeath`,
+          // `state().snapInfo`): the snap resolved `dist 0.12` with
+          // `limitLens −0.35` — a lens whisker reporting a surface AT the focus
+          // — while the same focus, yaw and pitch settle at 6.80 m on all
+          // eighteen headings and all eight pitches (`_cam9_field.py azure-2
+          // 0 0 20 0`). Left alone it eased back out over 0.45 s from 0.36 m,
+          // ghosting the hero (`heroFade` 0.91 / 0.68 / 0.38 / 0.09) for the
+          // first four frames of his own respawn. The framing floor is the pose
+          // to hold instead of the near plane: it is never a ghosted hero, and
+          // if the hero really did land somewhere tight the ordinary pull-in
+          // takes it back inside COLLIDE_IN_MAX_S on the very next frame.
+          if (this._distColl < TUNE.cam.frameMin) {
+            this._distColl = TUNE.cam.frameMin;
+            this.dist = TUNE.cam.frameMin;
+            this._compose(0);
+          }
+          // what the snap actually resolved to, for the harness (a snap that
+          // poses collapsed is a defect and this says where and against what)
+          this._snapInfo = {n: this._snapN, from: [this._heroLast.x, this._heroLast.y, this._heroLast.z],
+                            to: [tp.x, tp.y, tp.z], focus: [this._focus.x, this._focus.y, this._focus.z],
+                            dist: this._distColl, limitLens: this._limitLens,
+                            ceil: this._limitCeil, frame: this._limitFrame, yaw: this.yaw, pitch: this._pitchAim()};
+          {
+            const bpS = this._broadphase();
+            if (bpS) {
+              headingFromYaw(this.yaw, _cFwd);
+              const pS = this._pitchAim(), cpS = Math.cos(pS), spS = Math.sin(pS);
+              _cDir.set(-_cFwd.x * cpS, spS, -_cFwd.z * cpS);
+              _cOrigin.copy(this._focus);
+              if (this._ray(bpS, _cOrigin, _cDir, TUNE.cam.dist, _hit, true)) {
+                const hc = _hit.collider;
+                this._snapInfo.hitT = _hit.t;
+                this._snapInfo.hit = hc
+                  ? {c: [hc.center.x, hc.center.y, hc.center.z], h: [hc.half.x, hc.half.y, hc.half.z],
+                     g: hc.group || 'world', ref: hc.ref ? (hc.ref.kind || (hc.ref.def && hc.ref.def.kind) || null) : null}
+                  : (_hit.heightfield ? {hf: _hit.heightfield.id || 'hf'} : {occluder: true});
+              } else this._snapInfo.hit = null;
+            }
+          }
+          // `_deathHero` / `_deathFocus` are NOT moved: `_deathHero` is where he
+          // DIED (the cause stands at it) and the harness frames the cause from it.
+        }
+      }
+      this._heroLast.set(tp.x, tp.y, tp.z);
+      this._heroSeen = true;
+    }
+
     const input = this.input;
     const suspended = !!(input && input.suspended);
 
@@ -1514,6 +1700,7 @@ export class FollowCamera {
     this._autoRate = 0;
     this._yawSlide = 0; this._slideWant = 0;
     this._pitchSlide = 0; this._pitchWant = 0; this._shaft = false;
+    this._softOff = 0; this._softBlockT = 0; this._softClearT = 0;
     this._pitchAdapt = 0; this._focusDrop = 0;
     this._fallDepth = 0; this._limitCeil = false;
     this._limitFrame = false; this._limitLens = TUNE.cam.dist;
@@ -1532,6 +1719,7 @@ export class FollowCamera {
     }
     this._yawSlide = 0; this._slideWant = 0;
     this._pitchSlide = 0; this._pitchWant = 0; this._shaft = false;
+    this._softOff = 0; this._softBlockT = 0; this._softClearT = 0;
     this._pitchAdapt = 0; this._focusDrop = 0;
     this._airPeakY = src.y; this._fallDepth = 0; this._limitCeil = false;
     this._limitFrame = false; this._limitLens = TUNE.cam.dist;
@@ -1794,7 +1982,27 @@ export class FollowCamera {
     _focusT.copy(_heroC).addScaledVector(_right, this._shoulder);
 
     if (!this._focusInit) { this._focus.copy(_focusT); this._focusInit = true; return; }
-    if (this._deathOn) { this._focus.copy(this._deathFocus); return; }
+    if (this._deathOn) {
+      // THE DEATH CAM HAS TO SHOW TWO THINGS: the hero, and what killed him.
+      // Freezing the focus on the death point shows the cause and loses the
+      // hero the moment he keeps moving — a void death drops him out of the
+      // bottom of the frame (measured, `_cam_replay.py azure2_cog`: 24 of 30
+      // dead frames offscreen, hero NDC y down to −5.24). So the focus sits
+      // between the two, and never leaves the death point by more than
+      // DEATH_FOLLOW_MAX_M, which is what keeps the cause in shot.
+      this._focus.copy(this._deathFocus);
+      const dsrc = this._heroSrc();
+      if (dsrc) {
+        _tmp.set(dsrc.x, dsrc.y + TUNE.cam.height, dsrc.z).sub(this._deathFocus);
+        const sep = _tmp.length();
+        if (sep > 1e-4) {
+          const step = Math.min(sep * DEATH_FOLLOW_K, DEATH_FOLLOW_MAX_M);
+          this._focus.addScaledVector(_tmp, step / sep);
+          this._deathSep = sep;
+        } else this._deathSep = 0;
+      } else this._deathSep = 0;
+      return;
+    }
     if (dt <= 0) return;
 
     const grounded = !!(p && (p.grounded || p.onGround));
@@ -1968,10 +2176,161 @@ export class FollowCamera {
     // Nothing clear along the heading = the heading is worth nothing: the walk
     // returns its floor, not the fan's answer.
     if (limit > COLLIDE_MIN_DIST && !this._sphereClearAt(bp, yawOff, pitch, limit)) {
-      limit = this._deepestSphereClearAt(bp, yawOff, pitch, COLLIDE_MIN_DIST, limit);
+      limit = this._deepestSphereClearAt(bp, yawOff, pitch, COLLIDE_MIN_DIST, limit, pose);
     }
     if (pose) { this._limitCeil = ceil; this._limitFrame = frame; this._limitLens = lensLimit; }
     return limit;
+  }
+
+  /**
+   * Step the POSED lens out of any camera-transparent body it is sitting inside
+   * (see SOFT_PUSH_STEPS). Sideways first (camera-right, both signs), then up:
+   * a bar is thin, so the shortest way out is across it, and moving along the
+   * camera's own right/up axes keeps the hero where he was in frame. The aim is
+   * set after this in `_compose`, so the hero stays centred either way.
+   * Allocation-free; returns true when it moved the lens.
+   */
+  _pushOutSoft() {
+    const bp = this._broadphase();
+    if (!bp || typeof bp.query !== 'function') return false;
+    const R = SOFT_PUSH_CLEAR_M;
+    if (!this._softAt(bp, this._pos.x, this._pos.y, this._pos.z, R)) return false;
+    // six directions in the camera's own frame — across the bar first (right),
+    // then over/under it, then along the view axis, which is where a bar that
+    // lies ALONG the heading is thinnest.
+    for (let i = 0; i < SOFT_PUSH_STEPS.length; i++) {
+      const m = SOFT_PUSH_STEPS[i];
+      for (let k = 0; k < 6; k++) {
+        let dx = 0, dy = 0, dz = 0;
+        if (k === 0)      { dx =  _right.x * m; dz =  _right.z * m; }
+        else if (k === 1) { dx = -_right.x * m; dz = -_right.z * m; }
+        else if (k === 2) { dy =  m; }
+        else if (k === 3) { dy = -m; }
+        else if (k === 4) { dx =  _fwd.x * m; dz =  _fwd.z * m; }
+        else              { dx = -_fwd.x * m; dz = -_fwd.z * m; }
+        // …and NEVER into something the fan already answered. A step that
+        // clears the bar and lands in the wall behind it is not a fix: measured
+        // at the great cog with the hero carried against the tower's west face,
+        // the sideways step put the lens 0.073 m from an 8.8 x 34 m wall it had
+        // been 0.63 m clear of.
+        if (!this._softAt(bp, this._pos.x + dx, this._pos.y + dy, this._pos.z + dz, R) &&
+            !this._hardAt(bp, this._pos.x + dx, this._pos.y + dy, this._pos.z + dz, TUNE.cam.collideRadius)) {
+          this._pos.x += dx; this._pos.y += dy; this._pos.z += dz;
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /** Is any SOLID (non-transparent) body or occluder within `r` of this point? */
+  _hardAt(bp, x, y, z, r) {
+    _pOrigin.set(x, y, z);
+    _sphBox.min.set(x - r, y - r, z - r);
+    _sphBox.max.set(x + r, y + r, z + r);
+    let hit = false;
+    const cands = bp.query(_sphBox, _sphCands);
+    for (let i = 0; i < cands.length; i++) {
+      const c = cands[i];
+      if (!c || c.active === false || c.solid === false) continue;
+      if (camTransparent(c)) continue;
+      if (typeof c.distanceToPoint === 'function' && c.distanceToPoint(_pOrigin) < r) { hit = true; break; }
+    }
+    _sphCands.length = 0;
+    if (hit) return true;
+    const occ = this._occ, near = occ.near, items = occ.items;
+    for (let k = 0; k < occ.nearCount; k++) {
+      const c = items[near[k]];
+      if (c.active === false) continue;
+      if (c.distanceToPoint(_pOrigin) < r) return true;
+    }
+    return false;
+  }
+
+  /** Is any camera-transparent body within `r` of this point? Allocation-free. */
+  _softAt(bp, x, y, z, r) {
+    _pOrigin.set(x, y, z);
+    _sphBox.min.set(x - r, y - r, z - r);
+    _sphBox.max.set(x + r, y + r, z + r);
+    const cands = bp.query(_sphBox, _sphCands);
+    let hit = false;
+    for (let i = 0; i < cands.length; i++) {
+      const c = cands[i];
+      if (!c || c.active === false || c.solid === false) continue;
+      if (!camTransparent(c)) continue;
+      if (typeof c.distanceToPoint === 'function' && c.distanceToPoint(_pOrigin) < r) { hit = true; break; }
+    }
+    _sphCands.length = 0;
+    return hit;
+  }
+
+  /**
+   * Is a CAMERA-TRANSPARENT body (a critter, a thin moving bar — see
+   * `camTransparent`) standing on the line of sight this heading would pose at?
+   * These are exactly the bodies the fan is told to ignore, so this is the only
+   * probe that can see them, and its answer never shortens a distance — it only
+   * decides whether the SOFT tier steps aside (see SOFT_OCC_ARM_S).
+   * Allocation-free: the shared ray box and candidate array, emptied on return.
+   */
+  _softBlocked(bp, yawOff, pitch, d) {
+    if (!bp || !(d > SOFT_OCC_MIN_D) || typeof bp.query !== 'function') return false;
+    headingFromYaw(this.yaw + yawOff, _cFwd);
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    // FROM THE HERO'S HEAD, not the focus. The focus rides at `cam.height`
+    // (1.55 m) — ABOVE the top of a 1.5 m hero — so a rim at head height is
+    // under every ray this file casts and the camera cannot see the thing that
+    // is hiding him. MEASURED (`_harness/_cam9_vis.py azure-2 -11 0 14 0 0`):
+    // riding the great cog's arm, the arm's own rim crosses the head→lens line
+    // 0.33-1.10 m out (hit y 1.43-1.67 against a head at 1.35) while the
+    // focus→lens line at y 1.55 sails over it — camcheck read 1.979 s of hidden
+    // hero with the fan reporting the full 6.80 m and nothing wrong.
+    const px = this.player;
+    const hp = px && px.headPos;
+    const src = hp || this._heroSrc();
+    if (src === hp && hp) _cOrigin.copy(hp);
+    else if (src) _cOrigin.set(src.x, src.y + TUNE.height * 0.9, src.z);
+    else _cOrigin.copy(this._focus);
+    _cDir.set(this._focus.x - _cFwd.x * cp * d - _cOrigin.x,
+              this._focus.y + sp * d - _cOrigin.y,
+              this._focus.z - _cFwd.z * cp * d - _cOrigin.z);
+    const segLen = _cDir.length();
+    if (!(segLen > SOFT_OCC_MIN_D)) return false;
+    _cDir.multiplyScalar(1 / segLen);
+    d = segLen;
+    const ox = _cOrigin.x, oy = _cOrigin.y, oz = _cOrigin.z;
+    const ex = ox + _cDir.x * d, ey = oy + _cDir.y * d, ez = oz + _cDir.z * d;
+    _rayBox.min.set(Math.min(ox, ex) - 1e-3, Math.min(oy, ey) - 1e-3, Math.min(oz, ez) - 1e-3);
+    _rayBox.max.set(Math.max(ox, ex) + 1e-3, Math.max(oy, ey) + 1e-3, Math.max(oz, ez) + 1e-3);
+    const cands = bp.query(_rayBox, _rayCands);
+    let hit = false;
+    for (let i = 0; i < cands.length; i++) {
+      const c = cands[i];
+      if (!c || c.active === false || c.solid === false) continue;
+      if (!camTransparent(c)) continue;
+      const t = rayBoxT(c, _cOrigin, _cDir, d, _occN);
+      if (t >= 0 && t < d) { hit = true; break; }
+    }
+    _rayCands.length = 0;
+    return hit;
+  }
+
+  /**
+   * How far the LENS could get along one heading, centre ray only, capped at
+   * `maxD`. Used by the SHAFT VERDICT, which asks a yes/no question of eighteen
+   * headings every armed frame and cannot afford eighteen full fans. Same
+   * embedded-origin rule as the fan (`_castOccluder`), same collide-radius
+   * subtraction, never negative. Allocation-free.
+   */
+  _reachProbe(bp, yawOff, pitch, maxD) {
+    const R = TUNE.cam.collideRadius;
+    headingFromYaw(this.yaw + yawOff, _cFwd);
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    _cDir.set(-_cFwd.x * cp, sp, -_cFwd.z * cp);
+    _cOrigin.copy(this._focus);
+    const t = this._castOccluder(bp, _cOrigin, _cDir, maxD + R);
+    if (t < 0) return maxD;
+    const d = t - R;
+    return d > 0 ? d : 0;
   }
 
   /**
@@ -2041,7 +2400,9 @@ export class FollowCamera {
     // is culled to the fan's reach BEFORE any probe below asks the world (also on a
     // dt = 0 snap, so a respawn or test placement never solves against a stale set).
     this._syncOccluders();
-    const baseWant = this._deathOn ? C.dist + DEATH_PULL_M : C.dist;
+    const baseWant = this._deathOn
+      ? C.dist + DEATH_PULL_M + Math.min(this._deathSep, DEATH_FOLLOW_MAX_M) * DEATH_SEP_PULL_K
+      : C.dist;
     this._distBase = dt > 0 ? damp(this._distBase, baseWant, DIST_LAMBDA, dt) : baseWant;
 
     if (this._peekOn || this._cine) {
@@ -2091,7 +2452,17 @@ export class FollowCamera {
       // the heading that clears the chest probe put the LENS inside the keep's
       // stairwell. A parapet across the hero's waist is the cheaper failure.
       let slideWant = 0;
-      if (c0 < floor && !this._limitCeil && !frozen) {
+      // …AND THE CEILING GATE IS NOT ABSOLUTE. A ceiling limiter normally means a
+      // sideways step buys nothing (the same soffit is over every heading), which
+      // is what `!_limitCeil` is for — but under a low overhang it also FROZE the
+      // ladder while the hero was being ghosted. MEASURED (verdant-2 middle wall
+      // walk, camcheck `@midwalk` heading +1.57): `limitCeil true`, the pose held
+      // 0.72 m and `heroFade` 0.55 with the hero's chest outside the frustum for
+      // 4 frames, while heading −1.57 answered 2.88 m and 3.14 answered the full
+      // 6.80. So when the un-slid pose is inside the hero's own envelope
+      // (SLIDE_WIDE_BLIND_M) the ladder runs anyway; the gain test below is what
+      // still refuses a step that buys nothing, ceiling or no ceiling.
+      if (c0 < floor && (!this._limitCeil || c0 < SLIDE_WIDE_BLIND_M) && !frozen) {
         // The heading we are ALREADY on is the first candidate, not zero: while
         // the un-slid pose stays blocked, an avoidance heading that is still
         // working must not be dropped just because the search that found it
@@ -2105,7 +2476,8 @@ export class FollowCamera {
         // cheapest deviation first, both signs, stop at the first that frames him.
         // The WIDE steps are for a hero moving too fast to orbit out of it
         // himself; a standing hero would watch the world spin (the owner's "spin").
-        const wide = c0 < FADE_START_DIST && this._heroSpeed() > AUTO_MIN_SPEED;
+        const wide = c0 < FADE_START_DIST &&
+                     (this._heroSpeed() > AUTO_MIN_SPEED || c0 < SLIDE_WIDE_BLIND_M);
         const nTry = wide ? SLIDE_STEPS.length : SLIDE_BOUNDED_N;
         for (let k = 0; k < nTry && bestClear < floor; k++) {
           for (let sg = 0; sg < 2 && bestClear < floor; sg++) {
@@ -2118,6 +2490,48 @@ export class FollowCamera {
         if (bestClear >= c0 + SLIDE_GAIN_MIN) slideWant = bestOff;
       } else if (this._yawSlide !== 0 && c0 < floor + SLIDE_RELEASE_M) {
         slideWant = this._yawSlide;                 // hysteresis: hold, never hunt
+      }
+
+      // (c2) THE SOFT TIER (see SOFT_OCC_ARM_S) — only where the hard tier asked
+      // for nothing, because a wall always outranks an actor. It steps sideways
+      // around a body that HIDES the hero without being a wall to the lens, and
+      // it may never cost distance: a candidate has to frame him at least as far
+      // away as the heading we are on.
+      const softD = Math.max(COLLIDE_MIN_DIST, Math.min(c0, want));
+      const homeSoft = !frozen && this._softBlocked(bp, 0, pitch, softD);
+      const sdt = dt > 0 ? dt : 0;
+      if (homeSoft) { this._softBlockT += sdt; this._softClearT = 0; }
+      else { this._softClearT += sdt; this._softBlockT = 0; }
+      if (frozen || slideWant !== 0) {
+        this._softOff = 0;
+      } else if (this._softOff !== 0) {
+        // A HELD SOFT HEADING IS RE-EARNED EVERY FRAME. The world moves: the
+        // heading that was open when the tier stepped onto it is a wall two
+        // seconds later, and the hard tier will not take it back because the
+        // UN-SLID pose is fine. MEASURED at azure-2's great cog (the hero rides
+        // the rotating arm, so the whole room turns around him): a soft step
+        // held through the rotation put the lens inside the hub — camcheck read
+        // `minSolidClear 0.000`, `camDist 0.12` and `heroFade 1` where the same
+        // station had read a clean 3.88-6.80 m a run earlier.
+        const cHold = this._clearance(bp, this._softOff, pitch, want, false);
+        if (cHold < Math.min(c0, floor) - SLIDE_GAIN_MIN) this._softOff = 0;
+        else if (!homeSoft && this._softClearT >= SOFT_OCC_RELEASE_S) this._softOff = 0;
+        else slideWant = this._softOff;
+      } else if (this._softBlockT >= SOFT_OCC_ARM_S) {
+        const need = Math.min(c0, floor) - 1e-3;
+        // one step wider than a standing HARD slide: the body in the way is
+        // usually near the hero (Old Fen at 1.05 m subtends 0.38 rad; the cog
+        // arm's rim at 0.4 m subtends 0.56), so ±0.55 rad only just misses.
+        for (let k = 0; k <= SLIDE_BOUNDED_N && this._softOff === 0; k++) {
+          for (let sg = 0; sg < 2 && this._softOff === 0; sg++) {
+            const off = sg === 0 ? SLIDE_STEPS[k] : -SLIDE_STEPS[k];
+            const c = this._clearance(bp, off, pitch, want, false);
+            if (c < need) continue;
+            const d = Math.max(COLLIDE_MIN_DIST, Math.min(c, want));
+            if (!this._softBlocked(bp, off, pitch, d)) this._softOff = off;
+          }
+        }
+        if (this._softOff !== 0) slideWant = this._softOff;
       }
       this._slideWant = slideWant;
 
@@ -2135,11 +2549,19 @@ export class FollowCamera {
       if (!armed) {
         this._shaft = false;
       } else {
+        // ONE CENTRE RAY PER HEADING, not the whole fan. The verdict is a yes/no
+        // question — "can ANY heading reach out of here" — over a ladder that now
+        // sweeps the full circle (SLIDE_STEPS), i.e. 18 headings; eighteen full
+        // fans is ~150 broadphase queries a frame in exactly the tight rooms that
+        // are already the worst case. A centre ray over-estimates reach slightly
+        // (the whiskers are what catch a corner), and that error is in the SAFE
+        // direction here: it calls fewer places shafts, and a shaft verdict is
+        // what unlocks the steep over-the-head tilt the playtest photographed.
         let reach = cBase;
         for (let k = 0; k < SLIDE_STEPS.length && reach < SHAFT_REACH_M; k++) {
           for (let sg = 0; sg < 2 && reach < SHAFT_REACH_M; sg++) {
             const off = sg === 0 ? SLIDE_STEPS[k] : -SLIDE_STEPS[k];
-            const c = this._clearance(bp, off, pitchBase, want, false);
+            const c = this._reachProbe(bp, off, pitchBase, SHAFT_REACH_M);
             if (c > reach) reach = c;
           }
         }
@@ -2152,7 +2574,8 @@ export class FollowCamera {
       // starting inside a pillar and easing out of it.
       if (dt <= 0) { this._yawSlide = slideWant; }
       else if (!frozen && slideWant !== this._yawSlide) {
-        const rate = (slideWant === 0 ? SLIDE_RELEASE_RATE : SLIDE_RATE) * dt;
+        const onRate = (c0 < SLIDE_WIDE_BLIND_M) ? SLIDE_RATE_BLIND : SLIDE_RATE;
+        const rate = (slideWant === 0 ? SLIDE_RELEASE_RATE : onRate) * dt;
         const dOff = slideWant - this._yawSlide;
         const next = this._yawSlide + (dOff > rate ? rate : (dOff < -rate ? -rate : dOff));
         // only into air the lens can live in (see SLIDE_STEP_LOSS). MEASURED
@@ -2215,29 +2638,56 @@ export class FollowCamera {
           const pc = clamp(pitchBase + this._pitchSlide, -PITCH_ABS_MAX, PITCH_ABS_MAX);
           held = this._clearance(bp, this._yawSlide, pc, want, false);
         }
-        if (held >= C.minDist) {
-          pitchWant = this._pitchSlide;             // hysteresis: a tilt that still works is kept
-        } else {
-          let bestOff = 0, bestClear = cBase;
-          for (let k = 0; k < nSteps && bestClear < shaftGoal; k++) {
-            for (let sg = 0; sg < 2 && bestClear < shaftGoal; sg++) {
-              const off = sg === 0 ? PITCH_STEPS[k] : -PITCH_STEPS[k];
-              const pc = clamp(pitchBase + off, -PITCH_ABS_MAX, PITCH_ABS_MAX);
-              const real = pc - pitchBase;
-              if (real > -1e-3 && real < 1e-3) continue;          // clamped to where we already are
-              const c = this._clearance(bp, this._yawSlide, pc, want, false);
-              if (c > bestClear + 1e-3) { bestClear = c; bestOff = real; }
-            }
+        // THE TILT WE ARE ON IS A CANDIDATE, NOT A VERDICT. Two rules used to
+        // fight here. (1) The tier accepted a tilt only if it reached `minDist`,
+        // so where the best tilt bought 1.14 m instead of 0.13 m it took NOTHING
+        // and the lens stayed inside the hero (measured, verdant-1 fort corner,
+        // `_cam9_field.py v1_fortE`: pitch 1.45 answers 3.54 m while the pose sat
+        // at 0.14 m). (2) The HOLD then short-circuited the search entirely, so a
+        // mediocre tilt taken early was kept for the rest of the climb: measured
+        // in azure-1's cistern (a 2 m shaft — no yaw heading can hold more than
+        // 0.65 m, so the tilt is the ONLY answer), camcheck's kick row sat at
+        // `pitchSlide 0.78` for frames 161-174 with `dist` 0.38-0.57 and
+        // `heroFade` 0.70-1.00, while the 1.20/1.45 steps put the lens straight
+        // up the shaft where 1.6 m fits.
+        // So: SEED the search with the held tilt and let it run every frame. The
+        // incumbent only loses to a step that beats it by PITCH_SLIDE_GAIN_MIN,
+        // which is the same margin that lets a tilt in at all — that is what
+        // stops the hunt the hold was written for, without freezing the answer.
+        let bestOff = 0, bestClear = cBase;
+        if (held > bestClear) { bestClear = held; bestOff = this._pitchSlide; }
+        for (let k = 0; k < nSteps && bestClear < shaftGoal; k++) {
+          for (let sg = 0; sg < 2 && bestClear < shaftGoal; sg++) {
+            const off = sg === 0 ? PITCH_STEPS[k] : -PITCH_STEPS[k];
+            const pc = clamp(pitchBase + off, -PITCH_ABS_MAX, PITCH_ABS_MAX);
+            const real = pc - pitchBase;
+            if (real > -1e-3 && real < 1e-3) continue;          // clamped to where we already are
+            if (real === bestOff) continue;                     // the incumbent, already scored
+            const c = this._clearance(bp, this._yawSlide, pc, want, false);
+            if (c > bestClear + PITCH_SLIDE_GAIN_MIN) { bestClear = c; bestOff = real; }
           }
-          // A tilt that does not actually rescue the frame is just a camera
-          // moving for its own sake: it must reach minDist AND buy real
-          // clearance over the pose we are already in.
-          if (bestClear >= C.minDist && bestClear >= cBase + PITCH_SLIDE_GAIN_MIN) pitchWant = bestOff;
         }
+        // A tilt that does not actually rescue the frame is just a camera moving
+        // for its own sake: it has to buy real clearance over the untilted pose.
+        if (bestOff !== 0 && bestClear >= cBase + PITCH_SLIDE_GAIN_MIN) pitchWant = bestOff;
       } else if (this._pitchSlide !== 0 && cBase < shaftGoal + PITCH_RELEASE_M) {
         pitchWant = this._pitchSlide;               // hysteresis: hold, never hunt
       }
       this._pitchWant = pitchWant;
+      // A TILT EASED THROUGH THE BLIND BAND IS SIX WASTED FRAMES. The ramp is
+      // 9 rad/s, so a 1.2 rad shaft tilt takes ~0.11 s — and the lens spends the
+      // whole of it at the pull-in floor with the hero erased, because the
+      // distance can only recover as the tilt arrives. MEASURED (camcheck kick
+      // row, rime-1 bell tower, frames 94-100): `pitchSlide` 0.18 → 1.18 with
+      // `dist` 0.12 / 0.12 / 0.12 / 0.13 / 0.16 / 0.24 and `heroFade` 1.00 for
+      // every one of them, then 1.20 m the moment the tilt landed. There is
+      // nothing on screen for a pitch pop to spoil while the lens is inside the
+      // hero, so when the untilted pose is inside his envelope the tier takes
+      // the tilt whole. Above that band it eases as before.
+      if (dt > 0 && pitchWant !== this._pitchSlide && armed && cBase < SLIDE_WIDE_BLIND_M &&
+          Math.abs(pitchWant) > Math.abs(this._pitchSlide)) {
+        this._pitchSlide = pitchWant;
+      }
       if (dt <= 0) { this._pitchSlide = pitchWant; }
       else if (pitchWant !== this._pitchSlide) {
         const onRate = (this._shaft || Math.abs(pitchWant) > PITCH_STEPS[PITCH_ROOM_STEPS - 1] + 1e-3) ? PITCH_SLIDE_RATE : PITCH_ROOM_RATE;
@@ -2320,7 +2770,7 @@ export class FollowCamera {
       // on the hero's side — taken whole, because a lens inside a solid is worse
       // than a cut.
       if (bp && !this._sphereClearAt(bp, this._yawSlide, pitch, next)) {
-        next = this._deepestSphereClearAt(bp, this._yawSlide, pitch, COLLIDE_MIN_DIST, next);
+        next = this._deepestSphereClearAt(bp, this._yawSlide, pitch, COLLIDE_MIN_DIST, next, true);
       }
       this._distColl = next;
     }
@@ -2404,6 +2854,17 @@ export class FollowCamera {
     const pz = this._focus.z - _cFwd.z * cp * d;
     _pOrigin.set(px, py, pz);
     const R = TUNE.cam.collideRadius - SPHERE_EPS_M;
+    // A CAMERA-TRANSPARENT BODY MAY DIP THE LENS, NEVER COLLAPSE IT. The fan
+    // ignores critters and thin moving bars (see camTransparent) and the sphere
+    // was left to catch the one that actually reaches the lens — which is right
+    // until the bar lies ALONG the heading, when EVERY distance on it is inside
+    // the bar and the walk has nothing clear to return. MEASURED at azure-2's
+    // great cog with the hero riding the arm: the 5.66 m arm swung into line and
+    // the pose went to 0.12 m, `heroFade` 1, `minSolidClear 0.000` — the lens
+    // inside the arm, which is the playtest's flat blue-grey frame (azure-2 #1).
+    // So below the framing floor a transparent body is not a reason to be
+    // anywhere: it dips the lens to `frameMin` and is then ignored. A WALL is
+    // untouched — it is not transparent — and still pulls in to the near plane.
     _sphBox.min.set(px - R, py - R, pz - R);
     _sphBox.max.set(px + R, py + R, pz + R);
     let clear = true;
@@ -2412,6 +2873,7 @@ export class FollowCamera {
       for (let i = 0; i < cands.length && clear; i++) {
         const c = cands[i];
         if (!c || c.solid === false || !c.active || typeof c.distanceToPoint !== 'function') continue;
+        if (camTransparent(c)) continue;                 // answered by the push-out, not by the pull-in
         if (c.distanceToPoint(_pOrigin) < R) clear = false;
       }
       _sphCands.length = 0;
@@ -2419,7 +2881,9 @@ export class FollowCamera {
     if (clear) {
       const occ = this._occ, near = occ.near, items = occ.items;
       for (let k = 0; k < occ.nearCount && clear; k++) {
-        if (items[near[k]].distanceToPoint(_pOrigin) < R) clear = false;
+        const c = items[near[k]];
+        if (c.active === false) continue;
+        if (c.distanceToPoint(_pOrigin) < R) clear = false;
       }
     }
     if (clear) {
@@ -2435,6 +2899,52 @@ export class FollowCamera {
   }
 
   /**
+   * The same query as `_sphereClearAt`, answering HOW FAR the posed lens stands
+   * from the nearest solid rather than whether it clears the radius — no early
+   * exit, so it is the slower of the two and is only asked on the LEAST-BAD
+   * fallback path (see `_deepestSphereClearAt`), never in the ranking loops.
+   * Allocation-free.
+   */
+  _sphereGapAt(bp, yawOff, pitch, d) {
+    headingFromYaw(this.yaw + yawOff, _cFwd);
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const px = this._focus.x - _cFwd.x * cp * d;
+    const py = this._focus.y + sp * d;
+    const pz = this._focus.z - _cFwd.z * cp * d;
+    _pOrigin.set(px, py, pz);
+    const R = TUNE.cam.collideRadius;
+    _sphBox.min.set(px - R, py - R, pz - R);
+    _sphBox.max.set(px + R, py + R, pz + R);
+    let gap = Infinity;
+    if (typeof bp.query === 'function') {
+      const cands = bp.query(_sphBox, _sphCands);
+      for (let i = 0; i < cands.length; i++) {
+        const c = cands[i];
+        if (!c || c.solid === false || !c.active || typeof c.distanceToPoint !== 'function') continue;
+        if (camTransparent(c)) continue;                 // same rule as _sphereClearAt
+        const g = c.distanceToPoint(_pOrigin);
+        if (g < gap) gap = g;
+      }
+      _sphCands.length = 0;
+    }
+    const occ = this._occ, near = occ.near, items = occ.items;
+    for (let k = 0; k < occ.nearCount; k++) {
+      const c = items[near[k]];
+      if (c.active === false) continue;
+      const g = c.distanceToPoint(_pOrigin);
+      if (g < gap) gap = g;
+    }
+    const hfs = bp.heightfields;
+    if (hfs) for (let i = 0; i < hfs.length; i++) {
+      const hf = hfs[i];
+      if (!hf.active || typeof hf.heightAt !== 'function') continue;
+      const h = hf.heightAt(px, pz);
+      if (h === h) { const g = py - h; if (g < gap) gap = g; }
+    }
+    return gap === Infinity ? 1e6 : gap;
+  }
+
+  /**
    * The deepest distance in [lo, hi] at which the lens sphere is clear, walking
    * inward from `hi` (the fan's answer, known blocked) in SPHERE_FREE_N steps and
    * bisecting the first blocked/clear pair SPHERE_BISECT_N times so the result
@@ -2443,7 +2953,7 @@ export class FollowCamera {
    * yaw ladder then ranks it last; on the posed heading it is the honest
    * near-plane pull-in of CONTRACT §12).
    */
-  _deepestSphereClearAt(bp, yawOff, pitch, lo, hi) {
+  _deepestSphereClearAt(bp, yawOff, pitch, lo, hi, bestIfNone) {
     const span = hi - lo;
     if (!(span > 0)) return lo;
     let blocked = hi, clearD = -1;
@@ -2452,7 +2962,25 @@ export class FollowCamera {
       if (this._sphereClearAt(bp, yawOff, pitch, d)) { clearD = d; break; }
       blocked = d;
     }
-    if (clearD < 0) return lo;
+    // NOTHING along this heading is clear. For a RANKING that is the answer —
+    // the heading is worth its floor and the ladder puts it last. For the pose
+    // we are about to take it is not: returning the floor is the 0.12 m collapse
+    // the owner photographed, and it is chosen over a distance on the same
+    // heading where the sphere was only 4 cm short. So the pose asks for the
+    // LEAST-BAD sample instead: the one whose lens stands furthest from anything
+    // solid. (Measured, verdant-2 middle wall walk: the un-slid heading's whole
+    // [0.12, 6.80] span reads blocked while a rail sweeps past it, and the floor
+    // was taken every frame for 100 frames.)
+    if (clearD < 0) {
+      if (!bestIfNone) return lo;
+      let bestD = lo, bestGap = -Infinity;
+      for (let i = 0; i <= SPHERE_FREE_N; i++) {
+        const d = lo + span * (i / SPHERE_FREE_N);
+        const g = this._sphereGapAt(bp, yawOff, pitch, d);
+        if (g > bestGap) { bestGap = g; bestD = d; }
+      }
+      return bestD;
+    }
     for (let i = 0; i < SPHERE_BISECT_N; i++) {
       const mid = (blocked + clearD) * 0.5;
       if (this._sphereClearAt(bp, yawOff, pitch, mid)) clearD = mid; else blocked = mid;
@@ -2523,6 +3051,7 @@ export class FollowCamera {
       const items = occ.items, near = occ.near;
       for (let k = 0; k < n; k++) {
         const c = items[near[k]];
+        if (c.active === false) continue;          // a record posed inactive this frame
         const t = rayBoxT(c, origin, dir, best, _occN);
         if (t >= 0 && t < best) {
           best = t; hit = true;
@@ -2673,6 +3202,11 @@ export class FollowCamera {
         this._lookPt.copy(this._focus);
       }
     }
+
+    // ── PUSH THE LENS OUT OF A CAMERA-TRANSPARENT BODY (see SOFT_PUSH_STEPS).
+    // Only these bodies: a wall is answered by the fan and the sphere walk long
+    // before the lens reaches it. Never in peek (the lens is the hero's eye).
+    if (!this._peekOn) this._pushOutSoft();
 
     // shake translation in camera-right / up
     this._pos.addScaledVector(_right, this._shakeX);
