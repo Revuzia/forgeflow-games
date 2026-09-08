@@ -928,6 +928,21 @@ export default {
       // INSIDE the south doorway rather than under it, and so the portcullis
       // fills an opening that starts on the stair's last tread.
       doors: [{ side: 'south', w: 3.6, h: 4.0 }],
+      /* ROUTE B's north-west TURRET pierces this wall-walk. Without this
+         aperture the rampart deck (21.06 .. 21.40) lidded the shaft 2.46 m
+         above its own 18.60 floor: measured with `_mv_shaftroof.py verdant-2
+         -7.4,18.60,-7.4 1.6`, every cell of the shaft with x <= -7.60 or
+         z <= -7.60 read a ceiling at 21.06, and `_mv_kickladder.py` topped out
+         at 19.557 m — 0.96 m of the 8.40 m the exit ledge needs (playtest
+         verdant-2 #25, BLOCKER). The kick chain itself was never at fault: the
+         same ladder climbs 2.07 m per kick in the contract's own 3.20 m
+         chimney. `roofOpen` is builders.js's existing aperture list (roofFort
+         subtracts it from the deck rectangles, their colliders, the merlons
+         and the safeEdge stripes), so the walk now goes AROUND the turret on
+         its 1.0 m outer ledge the way a real wall-walk does, and nothing is
+         deleted: the turret's own four slabs (18.60 .. 27.40) are what fills
+         the hole. Footprint = the turret's outer face, x/z -9.4 .. -5.4. */
+      roofOpen: [{ x: SHAFT_C[0], z: SHAFT_C[1], w: 4.0, d: 4.0 }],
     },
 
     // --- the east flight. Tops 13.40 / 14.90 / 16.40 / 17.90 / 19.40 / 20.90,

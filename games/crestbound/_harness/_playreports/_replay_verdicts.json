@@ -66,8 +66,8 @@
   }
  },
  "totals": {
-  "fixed": 122,
-  "stillReproduces": 126,
+  "fixed": 130,
+  "stillReproduces": 118,
   "couldNotTest": 67
  },
  "byClass": {
@@ -1365,9 +1365,9 @@
    ],
    "where": "azure-3 BEAT 5 - the WARDEN on cannon isle 3, arena centre (30, 52, -34), r 7.0.",
    "originally": "The Warden never wakes: state stays 'dormant', hp 3, alive true, enabled true, throughout - and its 'boss' crest therefore never spawns. Meanwhile SOMETHING on that isle killed me three times while I was walking around i",
-   "verdict": "STILL REPRODUCES",
-   "evidenceSource": "mechanism probe (probe3)",
-   "evidence": "the warden is still a statue: 4 s standing at its authored position leaves state 'dormant', hp 3 -- {\"i\": 0, \"at\": [30, 52, -34], \"posFrom\": \"def\", \"before\": \"dormant\", \"after\": {\"state\": \"dormant\", \"hp\": 3, \"alive\": true}, \"standing\": [0, 30, 40], \"deaths\": \"1->1\", \"woke\": false}",
+   "verdict": "FIXED",
+   "evidenceSource": "blocker-verify pass, real input",
+   "evidence": "_lc_fight.py, real input: dormant -> roar -> stompTele -> stomp -> chargeTele -> charge -> dizzy -> hit -> death -> dead; seven hp transitions across two hero deaths, boss KILLED, boss crest collected (crests 1). The lethal 'windmill' rotor that killed anyone standing in the ring in 0.60 s became a solid 'bar' in a53c6a62.",
    "probeStation": "19.0",
    "frame": "_shots\\play_probe_azure-3\\17_19_0.png"
   },
@@ -2014,9 +2014,9 @@
    ],
    "where": "ember-1 BEAT 9, the slag pit, standing at (-30.84, 6.00, -34.00) - inside the Warden's 9 m arena, about 1.2 m from it and visibly clipping into its body",
    "originally": "NOTHING. Two frames 4.73 s apart (course clock 13.65 and 18.38) show the Warden in the identical pose at the identical position with Nim's head and back intersecting its torso. No telegraph, no stomp shockwave, no charge",
-   "verdict": "STILL REPRODUCES",
-   "evidenceSource": "mechanism probe (probe3)",
-   "evidence": "the warden is still a statue: 4 s standing at its authored position leaves state 'dormant', hp 3 -- {\"i\": 0, \"at\": [-32, 6, -34], \"posFrom\": \"def\", \"before\": \"dormant\", \"after\": {\"state\": \"dormant\", \"hp\": 3, \"alive\": true}, \"standing\": [-32, 6, -33.02], \"deaths\": \"0->0\", \"woke\": false}",
+   "verdict": "FIXED",
+   "evidenceSource": "blocker-verify pass, real input",
+   "evidence": "_bl_fight2.py, real input: the Warden ran roar -> stompTele -> stomp -> chargeTele -> charge -> dizzy -> hit -> death -> dead; three pounds landed (hp 3 -> 2 -> 1 -> 0) at (-39.01,6,-37.13), (-28.60,6,-40.81), (-26.57,6,-40.05); boss crest collected (crests 0 -> 1); zero hero deaths. (_lc_fight.py's earlier ember-1 run showed the same telegraph set but spent its budget in a respawn loop: its recovery walks 78 m of lava field inside a 9 s budget. That is the driver, not the boss.)",
    "probeStation": "21.0",
    "frame": "_shots\\play_probe_ember-1\\17_21_0.png"
   },
@@ -2903,9 +2903,9 @@
    "signature": [],
    "where": "ember-4 BEAT 4 - the BREAKABLE glyph wall at (0, 5.50, -64.5), the trigger for the 'secret' crest WHAT THE GLYPH WALL KEEPS.",
    "originally": "The wall never breaks. Its collider (0, 5.50, -64.5) half [2.80, 1.50, 0.45] is unchanged after every attempt and crests stay 0, so the secret crest never spawns. Standing on the panel is impossible: its top is 7.00 and ",
-   "verdict": "STILL REPRODUCES",
-   "evidenceSource": "mechanism probe (probe3)",
-   "evidence": "three real ground pounds (poundHang/poundFall/poundLand observed) still do not break it -- {\"i\": 2, \"p\": [0, 5.5, -64.5], \"drop\": \"crest\", \"after\": {\"broken\": false, \"cols\": 1}, \"pounded\": true, \"states\": [\"fall\", \"poundHang\", \"poundLand\", \"crouch\", \"idle\", \"fall\", \"poundHang\", \"poundLand\", \"crouch\", \"idle\", \"fall\", \"poundHang\", \"poundLand\", \"crouch\", \"idle\"], \"coins\": \"1->1\", \"crests\": \"",
+   "verdict": "FIXED",
+   "evidenceSource": "blocker-verify pass, real input",
+   "evidence": "_lc_walls.py, real input: dashed the beam window to (0, 4, -63.67), pounded (jump1 -> poundHang -> poundFall -> poundLand); the glyph wall at [0, 5.50, -64.5] went broken false -> true, collider active true -> false, trigger 'glyph-wall' fired; walked into the secret chamber and crests went 0 -> 1 (WHAT THE GLYPH WALL KEEPS), deaths 0.",
    "probeStation": "10.0",
    "frame": "_shots\\play_probe_ember-4\\13_10_0.png"
   },
@@ -2966,9 +2966,9 @@
    ],
    "where": "ember-4 BEAT 7 - the WARDEN in the sunken plaza, standing at (-42, 1.60, -18).",
    "originally": "The Warden is a statue. Its live state is `dormant`, hp stays 3, its single kill volume (a 1 m box at (-42, 2.80, -18)) is `active: false`. No stomp, no charge, no shockwave, no HUD warden bar, no boss music, no damage i",
-   "verdict": "STILL REPRODUCES",
-   "evidenceSource": "mechanism probe (probe3)",
-   "evidence": "the warden is still a statue: 4 s standing at its authored position leaves state 'dormant', hp 3 -- {\"i\": 0, \"at\": [-42, 1.6, -18], \"posFrom\": \"def\", \"before\": \"dormant\", \"after\": {\"state\": \"dormant\", \"hp\": 3, \"alive\": true}, \"standing\": [-42, 1.6, -17.02], \"deaths\": \"0->0\", \"woke\": false}",
+   "verdict": "FIXED",
+   "evidenceSource": "blocker-verify pass, real input",
+   "evidence": "_lc_fight.py, real input: dormant/idle -> roar -> stompTele -> stomp -> chargeTele -> charge -> dizzy -> hit -> death -> dead; three pounds, boss KILLED, boss crest collected (crests 1), zero hero deaths.",
    "probeStation": "13.0",
    "frame": "_shots\\play_probe_ember-4\\14_13_0.png"
   },
@@ -4807,9 +4807,9 @@
    "signature": [],
    "where": "verdant-1 BAILEY MEADOW / anywhere on flat ground - LONG JUMP (crouch+jump at speed). Measured on the open meadow line x=-2, z=50 running north at a full 9.00 m/s.",
    "originally": "The long jump only fires inside a window of about 78 ms after the crouch goes down. Crouching bleeds speed at ~45 m/s2: 9.00 m/s at the press, 7.93 after 17 ms, 5.80 after 50 ms, 4.50 after 100 ms. TUNE.longJump.minSpeed",
-   "verdict": "STILL REPRODUCES",
-   "evidenceSource": "replay frame, read",
-   "evidence": "probe5 long-jump window, real KeyboardEvents, SPACE pressed 0 / 60 / 110 / 180 / 260 ms after the crouch key at a full 9.00 m/s: the 'longjump' state fires ONLY in the 60-110 ms band on 9 of the 10 courses where a run-up exists (rime-1 also fires at 180 ms). At 0 ms and at 180 ms+ it silently downgrades to a plain jump -- verdant-1 measured 13.02/13.13 m when it fires vs 9.71/13.37 m when it does not. The narrow window the tester measured is still there, and it is global, not local to verdant-1.",
+   "verdict": "FIXED",
+   "evidenceSource": "blocker-verify pass, real input",
+   "evidence": "inputcheck.py (real KeyboardEvents, engine stopped, game.update(1/60) hand-stepped): longjump_C_held_through_runup and longjump_C_human_reaction both PASS. feelcheck longjump_human_order: 20 of 20 attempts fired a longjump at 6.40/6.40/5.91/6.40 m/s, shortest 7.287 m; crouch_run_speed 6.400 m/s banded against TUNE.longJump.minSpeed 5.50. Fixed by 9155f8bd (CROUCH_RUN_CAP replaced the 0.5 crouch factor that settled a full stick at 4.50 m/s).",
    "probeStation": null,
    "frame": null
   },
@@ -4994,9 +4994,9 @@
    ],
    "where": "verdant-1 BAILEY MEADOW / BEAT 7, THE CAVE. The mossy breakable wall is at [-28, 3.60, 30.8] (a 3.0 x 2.8 doorway filling y 2.20..5.00, z 30.5..31.1).",
    "originally": "THE CAVE CANNOT BE ENTERED. Three boulder colliders are parked across the doorway and they overlap: [-33.28..-29.92, 3.69..6.58, 30.52..33.88], [-29.84..-26.96, 3.14..5.62, 31.96..34.84] and [-26.44..-22.76, 2.72..5.88, ",
-   "verdict": "STILL REPRODUCES",
-   "evidenceSource": "mechanism probe (probe3)",
-   "evidence": "three real ground pounds (poundHang/poundFall/poundLand observed) still do not break it -- {\"i\": 4, \"p\": [-28, 3.6, 30.8], \"drop\": \"coins\", \"after\": {\"broken\": false, \"cols\": 1}, \"pounded\": true, \"states\": [\"fall\", \"poundHang\", \"poundLand\", \"crouch\", \"idle\", \"fall\", \"poundHang\", \"poundLand\", \"crouch\", \"idle\", \"fall\", \"poundHang\", \"poundLand\", \"crouch\", \"idle\"], \"coins\": \"17->17\", \"crests\"",
+   "verdict": "FIXED",
+   "evidenceSource": "blocker-verify pass, real input",
+   "evidence": "_lc_walls.py, real input: walked the ground lane to the doorway at (-27.95, 2.21, 31.54), jump1 -> poundHang -> poundFall -> poundLand; the breakable at [-28, 3.60, 30.8] went broken false -> true, its collider active true -> false, trigger 'breakable@-28.00,3.60,30.80' fired; walked into the cave and took sigil 0 -> 1 and coin 0 -> 1, deaths 0.",
    "probeStation": "10.0",
    "frame": "_shots\\play_probe_verdant-1\\05_10_0.png"
   },
@@ -5054,9 +5054,9 @@
    "signature": [],
    "where": "verdant-1 BAILEY MEADOW / BEAT 9, THE WARDEN, arena centred [-2, 16.40, -54] radius 7.0.",
    "originally": "THE WARDEN NEVER WAKES AND IS NOT VISIBLE. Its state stays dormant with hp 3 at every sample across 27 seconds of a player standing in and moving round its ring. The overhead shot shows the fenced ring with Nim alone in ",
-   "verdict": "STILL REPRODUCES",
-   "evidenceSource": "mechanism probe (probe3)",
-   "evidence": "the warden is still a statue: 4 s standing at its authored position leaves state 'dormant', hp 3 -- {\"i\": 0, \"at\": [-2, 16.4, -54], \"posFrom\": \"def\", \"before\": \"dormant\", \"after\": {\"state\": \"dormant\", \"hp\": 3, \"alive\": true}, \"standing\": [-2, 16.4, -53.02], \"deaths\": \"0->0\", \"woke\": false}",
+   "verdict": "FIXED",
+   "evidenceSource": "blocker-verify pass, real input",
+   "evidence": "_bl_fight2.py, real input: dormant -> roar -> stompTele -> stomp -> chargeTele -> charge -> dizzy -> hit -> death -> dead; three pounds landed (hp 3 -> 2 -> 1 -> 0) at (-5.01,16.4,-50.28), (-1.67,16.4,-59.07), (3.09,16.4,-53.65); boss crest collected (crests 0 -> 1); zero hero deaths. The wake predicate was fixed by the arena-centre [x,z] read in a53c6a62.",
    "probeStation": "13.0",
    "frame": "_shots\\play_probe_verdant-1\\07_13_0.png"
   },
@@ -5615,9 +5615,9 @@
    ],
    "where": "verdant-2, THE WALL-KICK SHAFT in the keep's north-west turret, floor (-7.4, 18.60, -7.4), exit ledge 27.00 - ROUTE B to the roof crest",
    "originally": "Nine wallkick events fired and the hero gained NOTHING. The highest y reached in the whole run was 18.76 - sixteen centimetres above the 18.60 floor, against the 8.40 m the ledge needs. Every kick pushed him about 1.3 m ",
-   "verdict": "STILL REPRODUCES",
-   "evidenceSource": "replay frame, read",
-   "evidence": "camcheck --headless station verdant-2/@kickshaft, driving the tester's own W+Space kick loop, reports climbed_m 6.92 against the 8.40 m the ledge needs. The 'nine kicks gained NOTHING (0.16 m)' number is no longer true, but the ledge -- and the crest behind it -- is still not reached by this route.",
+   "verdict": "FIXED",
+   "evidenceSource": "blocker-verify pass, real input",
+   "evidence": "This pass. The kick chain was never at fault (feelcheck wallkick_ladder_m: 2.07 m per kick in the contract's 3.20 m chimney); the fort's rampart walkway lidded the turret at 21.06, 2.46 m over the 18.60 floor, and _mv_kickladder.py topped out at 19.557 m. verdant-2's middle fort now declares builders.js's existing aperture list, roofOpen [{x:-7.4,z:-7.4,w:4,d:4}]. After: _mv_shaftroof.py reads open sky over the whole chimney; _mv_kickladder.py climbs 19.544 -> 21.618 -> 23.681 -> 25.755 (+2.07 m per kick), maxY 27.872 vs the 27.00 ledge, reached true; _bl_shaftexit.py lands the hero GROUNDED on the exit ledge at (-11.44, 27.00, -7.62), alive.",
    "probeStation": "25.0",
    "frame": "_shots\\play_probe_verdant-2\\26_25_0.png"
   },
@@ -6428,6 +6428,79 @@
     "FIXED": 30,
     "STILL REPRODUCES": 65,
     "COULD NOT TEST": 67
+   }
+  },
+  {
+   "pass": "blocker-verify",
+   "date": "2026-09-08",
+   "harness": [
+    "_lc_walls.py — pound each locked wall and walk through the hole",
+    "_lc_fight.py / _bl_fight2.py — fight every Warden to death, recovering from a hero death by re-approaching on foot",
+    "_mv_shaftroof.py / _mv_kickladder.py / _bl_shaftexit.py — the verdant-2 ROUTE B chimney: ceiling, ladder, and the landing on the exit ledge",
+    "inputcheck.py + feelcheck.py — the held-C long jump at human timing"
+   ],
+   "reMeasured": 8,
+   "outcome": {
+    "FIXED": 8,
+    "STILL REPRODUCES": 0,
+    "COULD NOT TEST": 0
+   },
+   "changed": [
+    {
+     "key": "verdant-1#01",
+     "was": "STILL REPRODUCES",
+     "now": "FIXED"
+    },
+    {
+     "key": "verdant-1#10",
+     "was": "STILL REPRODUCES",
+     "now": "FIXED"
+    },
+    {
+     "key": "verdant-1#13",
+     "was": "STILL REPRODUCES",
+     "now": "FIXED"
+    },
+    {
+     "key": "verdant-2#25",
+     "was": "STILL REPRODUCES",
+     "now": "FIXED"
+    },
+    {
+     "key": "ember-4#10",
+     "was": "STILL REPRODUCES",
+     "now": "FIXED"
+    },
+    {
+     "key": "ember-4#13",
+     "was": "STILL REPRODUCES",
+     "now": "FIXED"
+    },
+    {
+     "key": "ember-1#21",
+     "was": "STILL REPRODUCES",
+     "now": "FIXED"
+    },
+    {
+     "key": "azure-3#19",
+     "was": "STILL REPRODUCES",
+     "now": "FIXED"
+    }
+   ],
+   "gates": {
+    "box": "NOT QUIET. Get-Counter '\\\\GPU Engine(*engtype_3D)\\\\Utilization Percentage' read 47.41 % foreign 3D busy with ZERO chrome.exe alive before the perf run (dwm 42.92, WUDFHost 2.89, claude 1.60); 65.66 % after, with the owner's own Chrome (12 processes, opened by Claude.exe for a Google auth page) alive and untouched.",
+    "modulecheck": "66 modules, 0 failing",
+    "physcheck": "176 checks, 0 failing",
+    "reachcheck --require-all": "14 courses authored, 0 failing, RESULT OK (3 INFO orphan surfaces: ember-1 rock#90, azure-3 crusher#45/#46)",
+    "gatecheck": "342 passed, 0 failed (911 s, headed)",
+    "spawnwalk": "12 of 12 routable gates walked from the authored Keep spawn; verdant-1 raised the course card, the other eleven named their own sealed crest count",
+    "inputcheck --headed": "0 of 37 failing; longjump_C_held_through_runup, longjump_C_human_reaction and longjump_C_tapped_at_speed all PASS",
+    "bootcheck": "14 of 14 BOOT CLEAN (keep + 13 courses, headed); every course inside 260 draws / 450k tris at its boot station",
+    "loopcheck": "1117/1119 passed, 0 failed, 2 warnings (ember-3 crest-sigils lava at +38.45 s, rime-2 crest-boss Warden swoop at +20.75 s); respawn medians 422-444 ms against a 700 ms budget",
+    "feelcheck": "FEEL OK, 0 failing; longjump_dist 7.558 m, human_longjump 20 of 20, shortest 7.287 m, crouch_run_speed 6.400 m/s, wallkick_ladder 14.121 m in 6 kicks",
+    "camcheck": "CAMERA OK, 0 failing incl. all 13 interior stations (re-run). The first sweep failed verdant-2/@midwalk on heroOffscreenFrames 4; the SAME station failed the pre-change tree on a different metric (worstGameRun_s 0.371) and PASSES isolated on both trees, so it is a load/phase flake, not the aperture.",
+    "contrastcheck": "KNOWN RED, unchanged. UNREADABLE, 42 of 62 gated checkpoint stations under the 3.5:1 law. verdant-2's five ratios moved 3.09->3.12 / 1.02->1.09 / 1.26->1.24 / 1.63->1.63 / 2.13->2.19 against the previous run, i.e. not moved.",
+    "perfcheck": "KNOWN RED, CONTAMINATED. OVER BUDGET 14 of 14 on a box already 47 % spoken for. Every course is inside 260 draws / 450k tris; the shortfall is fps/p99/warm-load. PAIRED same-session attribution: keep 41.0 -> 43.1 fps on BYTE-IDENTICAL geometry (194 draws / 413,764 tris both sides) = a +/-2 fps noise floor, and verdant-2 40.4 -> 38.4 fps (215 draws both sides, +352 tris) sits inside it. The tree costs nothing; the box is the shortfall."
    }
   }
  ]

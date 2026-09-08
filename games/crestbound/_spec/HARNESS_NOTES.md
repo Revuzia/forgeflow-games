@@ -832,3 +832,122 @@ verified: on ember-1 it repeatedly landed IN a flame vent (three of its frames a
 the death screen), on keep#11 it landed on a roof above Old Fen, and on elevated
 stations it often lands on the ground below the walkway. Giving `look()` the
 `goto_verify` treatment is the obvious next fix.
+
+## The turret was roofed by its own fort, and builders.js already had the lever (2026-09-08, blocker-verify pass)
+
+The moveset lane left verdant-2 ROUTE B as a DATA OWNER'S CALL: the north-west
+turret's wall-kick chimney (floor 18.60, exit ledge 27.00) is planted inside the
+middle fort's own footprint, and the fort's rampart walkway slabs lid it at
+**21.06** — 2.46 m over the shaft floor. Re-measured unchanged at the start of
+this pass (`_mv_shaftroof.py verdant-2 -7.4,18.60,-7.4 1.6`: 21.06 over every
+cell with x <= -7.60 or z <= -7.60) and the ladder confirmed it
+(`_mv_kickladder.py`: maxY **19.557**, 0.957 m of the 8.40 m needed, kick 1 fires
+and is erased, kick 2 never gets a contact).
+
+The fix is data, and the generator already carried it. `builders.js roofOptsFor`
++ `roofFort` accept **`roofOpen: [{x, z, w, d}]`** — "apertures through the roof
+in LOCAL footprint coords … for an authored tower or shaft that pierces the
+walk" — and `rectSubtract` applies them to the deck rectangles, the colliders
+built from those same rectangles, the merlons and the safeEdge stripes.
+verdant-2's middle fort now declares the turret's own outer face:
+
+    roofOpen: [{ x: SHAFT_C[0], z: SHAFT_C[1], w: 4.0, d: 4.0 }]   // x/z -9.4 .. -5.4
+
+Measured after, same three tools, nothing else changed:
+
+| | before | after |
+|---|---|---|
+| ceiling over the chimney | 21.06 | open sky |
+| `_mv_kickladder.py` maxY | 19.557 | **27.872** (need 27.00, `reached: true`) |
+| kicks | 1 fired, then erased | 19.544 → 21.618 → 23.681 → 25.755, **+2.07 m each** |
+| `_bl_shaftexit.py` landing | — | **grounded on the exit ledge at (-11.44, 27.00, -7.62)**, alive |
+| verdant-2 boot | not sampled this session | 212 draws / 411,000 tris, BOOTS CLEAN |
+| reachcheck | PASS | PASS (14/14, RESULT OK) |
+
+Nothing was deleted to get it: the hole is exactly the turret's own footprint, the
+turret's four slabs (18.60 .. 27.40) fill it, and the walk still rings the fort on
+the 1.0 m outer strip that survives outside the turret — which is what a wall-walk
+does when it meets a corner turret. It also restores authored content that the lid
+had swallowed: four of the chimney's five stacked coins (y 22.0, 23.6, 25.2, 26.8,
+"one per kick") were above the deck.
+
+**The lesson is the search order.** Three fixes were on the table and two of them
+were course surgery (move the shaft, or raise its floor and republish ROUTE B as
+5.60 m). The one that shipped was a five-token data line, because the builder had
+already been given an aperture list by whoever authored `roofOptsFor` — grep the
+generator for the knob before redesigning the content it generates.
+
+## A boss that will not die may be a driver that cannot get back (2026-09-08, blocker-verify pass)
+
+`_lc_fight.py` fights each Warden and, on a hero death, waits 2.4 s and re-walks
+`walk_to(arena, max_ms=9000)`. ember-1's arena is ~78 m from its checkpoint, so
+that walk can never arrive: the ember-1 run logged **16 hero deaths, cause lava,
+all at [0, 4.6, 41]** (the respawn pad, not the arena), 2 hits, `killed false` —
+which reads exactly like "the boss cannot be killed". `_bl_fight2.py` changes one
+thing, the recovery: teleport to the arena APPROACH and walk the last stretch in
+on foot. Same build, same beat loop, minutes later:
+
+| course | states | hits | killed | hero deaths | crest |
+|---|---|---|---|---|---|
+| ember-1 | roar/stompTele/stomp/chargeTele/charge/dizzy/hit/death/dead | 3 | **true** | **0** | 1 |
+| verdant-1 | same set | 3 | **true** | **0** | 1 |
+| ember-4 | same set | 3 | true | 0 | 1 |
+| azure-3 | same set | 7 | true | 2 (void) | 1 |
+
+Before reporting a fight as unwinnable, check whether the harness ever stood in
+the ring: a death loop 78 m away is evidence about the recovery path only.
+
+## The gate sweep of 2026-09-08 (blocker-verify pass), and what the box did to it
+
+Headed, one Chrome at a time, on the tree that carries the turret aperture.
+
+| gate | result |
+|---|---|
+| modulecheck | 66 modules, **0 failing** |
+| physcheck | 176 checks, **0 failing** |
+| reachcheck --require-all | 14 authored, **0 failing**, RESULT OK (3 INFO orphans: ember-1 rock#90, azure-3 crusher#45/#46) |
+| gatecheck | **342 passed, 0 failed** (911 s) |
+| spawnwalk | **12 of 12** routable gates walked from the authored Keep spawn |
+| inputcheck --headed | **0 of 37 failing** |
+| bootcheck | **14 of 14 BOOT CLEAN**, every course inside 260 draws / 450k tris |
+| loopcheck | **1117/1119, 0 failed**, 2 warnings; respawn medians 422-444 ms (budget 700) |
+| feelcheck | **FEEL OK, 0 failing** |
+| camcheck | **CAMERA OK, 0 failing** incl. all 13 interior stations |
+| contrastcheck | **KNOWN RED** — 42 of 62 gated stations under 3.5:1 |
+| perfcheck | **KNOWN RED, CONTAMINATED** — OVER BUDGET 14 of 14 |
+
+**camcheck's one failure was a flake, and the paired run is what proved it.** The
+first full sweep failed `verdant-2/@midwalk` on `heroOffscreenFrames 4`. Rather
+than attribute that to the aperture two courses' width away, the pre-change tree
+was extracted (`git archive HEAD games/crestbound | tar -x -C games/_bisect/blbase`)
+and the same station driven on both:
+
+| tree | in the 400-frame sweep | isolated |
+|---|---|---|
+| base (no aperture) | FAIL, `worstGameRun_s` **0.371**, offscreen 0 | PASS (offscreen 0, gameRun 0.24) |
+| this tree | FAIL, offscreen **4**, `worstGameRun_s` 0.1 | PASS x2 (offscreen 0, gameRun 0.00) |
+
+Two different metrics on two trees, both green in isolation: the station samples
+four headings across course clock 12 - 24 s while a 7 s-period rotor bar sweeps
+the walk, so which frame the arm is in front of is a function of how long the
+page took to settle. **A failure whose METRIC changes between trees is a flake,
+not a regression.** The full camcheck re-run read CAMERA OK, 0 failing.
+
+**perfcheck: the box, measured, not assumed.** `Get-Counter '\GPU Engine(*engtype_3D)\
+Utilization Percentage'` **before** the run, with **zero chrome.exe alive**: dwm
+42.92 % (two adapters), WUDFHost 2.89 %, claude 1.60 % = **47.41 % of the 3D engine
+already spoken for**. After: 65.66 %, and by then the owner's own Chrome (12
+processes, opened by Claude.exe on a Google auth page) was alive — left strictly
+alone. Every course is INSIDE the geometry budget (worst draws 249 of 260,
+verdant-3; worst triangles 447,290 of 450,000, verdant-3); the whole shortfall is
+fps / p99 / warm load. Attributed with the same-session paired run the rules above
+demand:
+
+| course | base (pre-aperture) | this tree | delta |
+|---|---|---|---|
+| keep | 194 draws / 413,764 tris / **41.0** fps / p99 30.66 / warm 1604 ms | 194 / 413,764 / **43.1** / 30.24 / 1566 | +2.1 fps on BYTE-IDENTICAL geometry |
+| verdant-2 | 215 / 412,076 / **40.4** / 33.00 / 1752 | 215 / 412,428 / **38.4** / 33.67 / 1872 | -2.0 fps, +352 tris |
+
+The Keep is the control: not one triangle differs between those two runs and it
+still moved 2.1 fps, so +-2 fps IS the noise floor on this box — and verdant-2's
+-2.0 sits inside it, at identical draw calls. The aperture costs nothing.
