@@ -54,11 +54,14 @@ for side, sx in (("L", -1), ("R", 1)):
 b.capsule("upperarm_L", 0.085, 0.16, (-0.29, -0.31, 1.08), "upperarm_L", robe, seg=12, rot=(14, -14, 0), rings=2)
 b.capsule("forearm_L", 0.08, 0.16, (-0.35, -0.38, 0.86), "forearm_L", robe, seg=12, rot=(28, -10, 0), rings=2)
 b.torus("cuff_L", 0.085, 0.018, (-0.375, -0.42, 0.77), "forearm_L", trim, seg_major=16, seg_minor=5, rot=(28, -10, 0))
-b.sphere("hand_L", 0.068, (-0.39, -0.45, 0.70), "hand_L", skin, seg=12, rings=8, scale=(1, 1, 1.15))
+# mitten hands, not balls: a squashed ovoid along the forearm plus a thumb lobe (CONTRACT: "mitten hands")
+b.sphere("hand_L", 0.068, (-0.39, -0.45, 0.70), "hand_L", skin, seg=12, rings=8, scale=(0.95, 1.0, 1.35))
+b.sphere("thumb_L", 0.030, (-0.34, -0.46, 0.74), "hand_L", skin, seg=8, rings=6, scale=(1.0, 1.0, 1.25))
 b.capsule("upperarm_R", 0.085, 0.16, (0.29, -0.32, 1.09), "upperarm_R", robe, seg=12, rot=(20, 14, 0), rings=2)
 b.capsule("forearm_R", 0.08, 0.16, (0.36, -0.44, 0.92), "forearm_R", robe, seg=12, rot=(62, 4, 0), rings=2)
 b.torus("cuff_R", 0.085, 0.018, (0.40, -0.52, 0.88), "forearm_R", trim, seg_major=16, seg_minor=5, rot=(62, 4, 0))
-b.sphere("hand_R", 0.068, (0.42, -0.55, 0.86), "hand_R", skin, seg=12, rings=8, scale=(1.1, 1.1, 1.0))
+b.sphere("hand_R", 0.068, (0.42, -0.55, 0.86), "hand_R", skin, seg=12, rings=8, scale=(1.0, 1.05, 1.30))
+b.sphere("thumb_R", 0.030, (0.37, -0.56, 0.90), "hand_R", skin, seg=8, rings=6, scale=(1.0, 1.0, 1.25))
 
 # ---- staff + hook + lantern ---------------------------------------------------------------------------------------
 SX, SY = 0.42, -0.56
@@ -95,7 +98,10 @@ beard = b.lathe("beard", [(0, -0.42), (0.05, -0.38), (0.095, -0.26), (0.125, -0.
 b.soft_weights(beard, [("beard", 0.9), ("beard", 1.10), ("head", 1.30), ("head", 1.4)])
 # hood: shell around the head, face cut open, draped down the back
 hood = b.lathe("hood", [(0, -0.02), (0.235, -0.02), (0.255, 0.10), (0.235, 0.20), (0.13, 0.26), (0, 0.27)], HC + Vector((0, 0.03, -0.03)), "hood", hoodm, seg=26)
-b.cut(hood, b.cutter("hood_cut", (0.5, 0.4, 0.5), HC + Vector((0, -0.34, 0.02))))
+# The face opening is cut with an ELLIPSOID, not a box. A box cutter left four straight rim
+# edges and two 45-degree corners across the front of a 26-segment dome, which is what made
+# the hood read as a faceted slab in _turntable/fen_tt_00.png rather than as cloth.
+b.cut(hood, b.cutter_sphere("hood_cut", 0.30, HC + Vector((0, -0.30, 0.03)), scale=(0.80, 1.0, 0.88)))
 b.capsule("drape", 0.19, 0.20, (0, -0.10, 1.20), "chest", hoodm, seg=14, rot=(-28, 0, 0), rings=2)
 
 # ---- satchel + strap --------------------------------------------------------------------------------------------------

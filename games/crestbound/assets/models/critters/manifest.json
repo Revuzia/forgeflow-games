@@ -1,7 +1,7 @@
 {
   "kit": "critters",
   "game": "crestbound",
-  "generated": "2026-09-08T12:43:54",
+  "generated": "2026-09-08T12:52:24",
   "generator": "_tools/blender/critters/build_all.py (Blender 5.1.2 headless, bpy only)",
   "conventions": {
     "up": "+Y",
@@ -23,7 +23,7 @@
       },
       {
         "name": "fen",
-        "tris": 6986,
+        "tris": 7274,
         "limit": 8000,
         "ok": true,
         "atlas_px": 2048,
@@ -70,10 +70,10 @@
         "atlas_ok": true
       }
     ],
-    "textures_mb": 20.98,
+    "textures_mb": 21.44,
     "textures_limit_mb": 24,
     "textures_ok": true,
-    "glb_mb": 23.18
+    "glb_mb": 23.65
   },
   "assets": [
     {
@@ -170,7 +170,7 @@
       "name": "fen",
       "file": "fen.glb",
       "kind": "npc",
-      "tris": 6986,
+      "tris": 7274,
       "bones": 24,
       "bone_names": [
         "root",
@@ -241,7 +241,7 @@
         "orm": "textures/fen_orm.png"
       },
       "atlas_px": 2048,
-      "file_bytes": 8998960,
+      "file_bytes": 9466400,
       "states": {
         "idle": "idle",
         "talk": "talk"

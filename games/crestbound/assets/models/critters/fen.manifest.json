@@ -1,10 +1,10 @@
 {
   "name": "fen",
   "file": "fen.glb",
-  "file_bytes": 8998960,
-  "tris": 6986,
-  "tris_blender": 6986,
-  "verts": 3597,
+  "file_bytes": 9466400,
+  "tris": 7274,
+  "tris_blender": 7274,
+  "verts": 3745,
   "bones": 24,
   "bone_names": [
     "root",
@@ -101,6 +101,6 @@
     "_turntable/fen_closeup.png"
   ],
   "contact_sheet": "_turntable/fen_clips.png",
-  "bake_seconds": 120.6,
-  "build_seconds": 136.1
+  "bake_seconds": 125.7,
+  "build_seconds": 139.7
 }

@@ -557,14 +557,23 @@ class Builder:
         return self._finish(ob, name, bone, mat, (0, 0, 0), (0, 0, 0), (1, 1, 1), True, 0, 0, 0, angle=60)
 
     # ---- booleans ---------------------------------------------------------------------------
-    def cut(self, target, cutter, op='DIFFERENCE'):
-        """Boolean `target` by `cutter` (cutter is consumed). Exact solver; both must be closed."""
+    def cut(self, target, cutter, op='DIFFERENCE', smooth_deg=40.0):
+        """Boolean `target` by `cutter` (cutter is consumed). Exact solver; both must be closed.
+
+        The EXACT solver hands back a re-tessellated mesh whose faces carry the CUTTER's flat
+        shading, so a smooth lathe comes out of a boolean faceted — that is why Old Fen's hood
+        (a 26-segment lathe with the face cut open) rendered as an octagonal slab. If the target
+        was smooth going in, re-apply smooth-by-angle coming out."""
+        was_smooth = any(pl.use_smooth for pl in target.data.polygons)
         activate(target)
         md = target.modifiers.new("bool", 'BOOLEAN')
         md.operation = op
         md.solver = 'EXACT'
         md.object = cutter
         bpy.ops.object.modifier_apply(modifier="bool")
+        if was_smooth and smooth_deg:
+            activate(target)
+            bpy.ops.object.shade_smooth_by_angle(angle=math.radians(smooth_deg))
         if cutter in self.parts:
             self.parts.remove(cutter)
         bpy.data.objects.remove(cutter, do_unlink=True)
