@@ -154,7 +154,14 @@ def st_rime1(P):
     P.tp(5.0, 1.6, 42.0); P.wait(500)
     P.down("C"); P.wait(1600); P.up("C"); P.wait(200)
     st = P.state()
-    check("rime1.plug.hole_opens", st["inWater"] or st["pos"][1] < 1.0, "pos=%s state=%s inWater=%s surface=%s" % (st["pos"], st["pstate"], st["inWater"], st["surface"]))
+    over = P.js("""() => { const bp=CRESTBOUND.game.course.broadphase; const list=[];
+      bp.query({min:{x:3.6,y:0.6,z:40.6}, max:{x:6.4,y:2.0,z:43.4}}, list);
+      return list.filter(c=>c.active && c.solid!==false).map(c=>({surface:c.surface,
+        min:[+c.aabb.min.x.toFixed(2),+c.aabb.min.y.toFixed(2),+c.aabb.min.z.toFixed(2)],
+        max:[+c.aabb.max.x.toFixed(2),+c.aabb.max.y.toFixed(2),+c.aabb.max.z.toFixed(2)]})); }""")
+    check("rime1.plug.hole_opens", st["inWater"] or st["pos"][1] < 1.0,
+          "pos=%s state=%s inWater=%s surface=%s | still solid over the footprint: %s"
+          % (st["pos"], st["pstate"], st["inWater"], st["surface"], json.dumps(over)))
     # HAY WALL on the loft gantry: pound from where a player stands beside it
     safe_tp(P, -27.2, 8.9, 4.4, freeze=True, tag="hay gantry")
     P.face(-27.2, 2.9)
@@ -249,6 +256,20 @@ JS_OPEN_CREST = "() => { const c=(CRESTBOUND.game.course.collectibles.crests||[]
 JS_CANNON_TGT = "(id) => { const r=(CRESTBOUND.game.course.hazards||[]).find(r=>r.def&&r.def.kind==='cannon'&&(r.def.id===id||id===null)); return r&&r.def.target?r.def.target:null; }"
 JS_WING_HAT = "(x) => { const ps=(CRESTBOUND.game.course.powers||[]).filter(r=>r.kind==='wing'); const r=(x===null?null:ps.find(r=>Math.abs(r.pos.x-x)<1))||ps[0]; return r?[r.pos.x,r.pos.y,r.pos.z]:null; }"
 JS_POWER = "() => CRESTBOUND.game.power ? CRESTBOUND.game.power.id : null"
+JS_POST_GROUND = """(p) => { const T=CRESTBOUND.THREE, bp=CRESTBOUND.game.course.broadphase;
+  const o=new T.Vector3(), d=new T.Vector3(0,-1,0), out={t:0, normal:new T.Vector3(), collider:null};
+  let best=null;
+  for (const off of [[0.8,0],[-0.8,0],[1.2,0],[-1.2,0],[0,0.8],[0,-0.8],[0.8,-0.8],[-0.8,-0.8]]) {
+    o.set(p[0]+off[0], p[1]+8, p[2]+off[1]);
+    let hit=false; try { hit = bp.raycast(o, d, 40, out); } catch(e){}
+    if (!hit) continue;
+    const surf = out.collider ? out.collider.surface : null;
+    if (surf === 'bounce') continue;
+    const y = o.y - out.t;
+    if (Math.abs(y - p[1]) > 2.0) continue;
+    if (!best || Math.abs(y - p[1]) < Math.abs(best.y - p[1])) best = {dx:off[0], dz:off[1], y:+y.toFixed(2), surf};
+  }
+  return best; }"""
 JS_FEN = "() => { const c=(CRESTBOUND.game.course.critters||[]).find(c=>c.kind==='fen'); return c?[c.pos.x,c.pos.y,c.pos.z]:null; }"
 JS_PROMPT = "() => { const e=document.getElementById('cb-prompt'); return {show:e&&e.classList.contains('show'), text:e?e.textContent.trim().replace(/\\s+/g,' '):null}; }"
 
@@ -273,13 +294,19 @@ def cannon_station(P, name, bx, bz, expect=None, press_e=True):
     # let it auto-fire, or fire it
     fired = False
     peak = None
-    for i in range(70):
+    # SAMPLE THE FLIGHT, NOT THE AFTERMATH. This loop used to run all 70 iterations (4.2 s)
+    # whatever happened, so `lands` was read seconds after touchdown — after a skid down a
+    # slope. azure-3's isle read 6.01 m that way and 0.45 m when the sample stops at the
+    # landing (_ix_cannons.py). It now follows the arc and stops the frame he is grounded.
+    for i in range(90):
         P.wait(60)
-        s = P.js("() => { const P=CRESTBOUND.game.player; return {st:P.state, y:+P.pos.y.toFixed(2), x:+P.pos.x.toFixed(2), z:+P.pos.z.toFixed(2), vy:+P.vel.y.toFixed(1)}; }")
+        s = P.js("() => { const P=CRESTBOUND.game.player; return {st:P.state, g:!!P.grounded, y:+P.pos.y.toFixed(2), x:+P.pos.x.toFixed(2), z:+P.pos.z.toFixed(2), vy:+P.vel.y.toFixed(1)}; }")
         if s["st"] != "cannon":
             fired = True
             if peak is None or s["y"] > peak["y"]:
                 peak = s
+            if s["g"] or s["st"] == "dead":
+                break
         if i == 25 and not fired:
             P.tap("SPACE", 120)
     if not fired:
@@ -292,11 +319,11 @@ def cannon_station(P, name, bx, bz, expect=None, press_e=True):
                 if peak is None or s["y"] > peak["y"]:
                     peak = s
     check(name + ".fires", fired, "peak=%s" % json.dumps(peak))
-    # land
-    for i in range(80):
-        P.wait(80)
+    # land (already there in the common case — this only covers a long tail)
+    for i in range(60):
         if P.js("() => CRESTBOUND.game.player.grounded || CRESTBOUND.game.player.dead"):
             break
+        P.wait(80)
     s = P.state()
     d = None
     if expect:
@@ -343,26 +370,44 @@ def st_az3(P):
     cannon_station(P, "az3.cannon1", 30.0, -3.0, expect=tgt)
 
 
+# THE FIRST PLAYABLE FRAME cannot be caught by a python poll: every `P.js` round trip costs
+# tens of ms and the load itself takes seconds, so the old loop sampled 16-25 s after the
+# hand-over and printed that as "the clock at hand-over" (a harness artifact: the same build
+# reads 0.02 s when the frame is sampled in-page). This recorder runs INSIDE the page on
+# requestAnimationFrame and keeps the first frame whose state is `playing`.
+CLOCK_REC = """() => { const G=CRESTBOUND.game; window.__ckFirst=null;
+  const step = () => { const c=G.course;
+    if (!window.__ckFirst && G.state==='playing' && c && c.def && c.def.id===window.__ckWant)
+      window.__ckFirst={state:G.state, course:c.def.id, clock:+c.clock.toFixed(3)};
+    requestAnimationFrame(step); };
+  requestAnimationFrame(step); }"""
+
+
+def clock_at_handover(P, course, start):
+    """Arm the in-page recorder, run `start()`, return the first playable frame."""
+    P.js("(c) => { window.__ckWant = c; }", course)
+    P.js(CLOCK_REC)
+    start()
+    for _ in range(200):
+        P.wait(250)
+        if P.js("() => !!window.__ckFirst"):
+            break
+    return P.js("() => window.__ckFirst")
+
+
 def st_e3(P):
     # CLOCK at hand-over: fresh load WITH the intro (flags cleared), then via goto
     P.js("() => { try { CRESTBOUND.game.save.flags.set('intro:ember-3', false); } catch(e){} }")
-    P.js("() => CRESTBOUND.game.loadCourse('ember-3', {})")
-    first = None
-    for _ in range(400):
-        P.wait(25)
-        s = P.js("() => ({st:CRESTBOUND.game.state, c:CRESTBOUND.game.course&&CRESTBOUND.game.course.def.id, clk:CRESTBOUND.game.course?CRESTBOUND.game.course.clock:null})")
-        if s["c"] == "ember-3" and s["st"] == "playing":
-            first = s; break
-    check("e3.clock_at_handover_with_intro", first and first["clk"] is not None and first["clk"] < 1.0, json.dumps(first))
+    first = clock_at_handover(P, "ember-3", lambda: P.js("() => CRESTBOUND.game.loadCourse('ember-3', {})"))
+    check("e3.clock_at_handover_with_intro", bool(first) and first["clock"] is not None and first["clock"] < 1.0, json.dumps(first))
     goto(P, "azure-1")
-    P.js("() => CRESTBOUND.game.__dev.goto('ember-3')")
-    first = None
-    for _ in range(400):
-        P.wait(25)
-        s = P.js("() => ({st:CRESTBOUND.game.state, c:CRESTBOUND.game.course&&CRESTBOUND.game.course.def.id, clk:CRESTBOUND.game.course?CRESTBOUND.game.course.clock:null})")
-        if s["c"] == "ember-3" and s["st"] == "playing":
-            first = s; break
-    check("e3.clock_at_handover_goto", first and first["clk"] is not None and first["clk"] < 1.0, json.dumps(first))
+    first = clock_at_handover(P, "ember-3", lambda: P.js("() => CRESTBOUND.game.__dev.goto('ember-3')"))
+    check("e3.clock_at_handover_goto", bool(first) and first["clock"] is not None and first["clock"] < 1.0, json.dumps(first))
+    for _ in range(60):
+        P.wait(250)
+        s = P.state()
+        if s["course"] == "ember-3" and s["gstate"] == "playing":
+            break
     P.wait(1500)
     # buried pad coin at cp-plaza (0, 1.6, 40)
     before = P.js(JS_COINS)
@@ -439,17 +484,32 @@ def st_v2(P):
     # (a tp 0.5 m over the ground lands before the crouch registers -> a grounded crouch,
     # never a pound). The west gnasher's bite reaches the post (V2-12, data lane): its
     # kill volume is parked for the replay so the pound count itself can be read.
+    # Parking `kill.active` is not enough: the critter's own update re-arms it every frame,
+    # so the hero was bitten at the post and respawned at cp (pos [0, 2.3, 53] three times).
+    # Freezing the hazards holds the whole course still; the pound shock still reaches the
+    # critter, because Game dispatches it from the player's 'poundLand' event.
     P.js("() => { for (const c of (CRESTBOUND.game.course.critters||[])) if (c.kind==='gnasher' && c.kill) c.kill.active = false; }")
-    traces = []
+    P.js("() => CRESTBOUND.game.__dev.freezeHazards(true)")
+    # The old station dropped the hero 3 m onto the 35 deg bank the post stands on and he
+    # slid into the moat every time (pounds 0 with the mechanism working: measured 0.78 /
+    # 0.86 / 1.18 m all COUNT). The stand point is now MEASURED with a downward broadphase
+    # ray beside the post, skipping the bounce pad north of it, then settled and pounded.
+    post = (gn[0]["post"] if gn else [-7, 5.65, 26.5])
+    ground = P.js(JS_POST_GROUND, post)
+    P.say("   stand point beside the post: %s" % json.dumps(ground))
     for i in range(3):
-        P.tp(-7.9, 8.6, 26.5)
-        P.down("C"); P.wait(900); P.up("C"); P.wait(500)
-        traces.append(P.js("() => CRESTBOUND.game.player.state"))
+        if ground:
+            P.tp(post[0] + ground["dx"], ground["y"] + 0.25, post[2] + ground["dz"])
+        else:
+            P.tp(post[0] + 0.8, post[1] + 0.25, post[2])
+        P.wait(900)
+        pound(P, "post %d" % (i + 1))
         gp = P.js("""() => (CRESTBOUND.game.course.critters||[]).filter(c=>c.kind==='gnasher').map(c=>c.pounds)""")
         P.say("   post pound %d: pounds=%s pos=%s" % (i + 1, gp, P.pos()))
     gn2 = P.js("""() => (CRESTBOUND.game.course.critters||[]).filter(c=>c.kind==='gnasher').map(c=>({pounds:c.pounds, freed:c.freed}))""")
     check("v2.gnasher_post.three_pounds_free", any(g["freed"] for g in gn2), json.dumps(gn2))
     check("v2.gnasher_post.cage_opens", "gnasher-freed" in P.js(JS_TRIG), json.dumps(P.js(JS_TRIG)))
+    unfreeze(P)
     # DROWNED CREST (0, -1.4, 39.5) type power 'metal': no hat -> locked; hat -> collect
     goto(P, "verdant-2")
     P.js("() => { CRESTBOUND.game._clearPower && CRESTBOUND.game._clearPower(); }")
@@ -574,17 +634,25 @@ def st_fenr(P):
     P.wait(1000)
     fp = P.js(JS_FEN)
     P.say("   Fen at %s" % json.dumps(fp))
-    for d, want in ((3.0, True), (3.5, False)):
+    # ONE RADIUS: the prompt shows exactly where E works. Assert on the MEASURED distance,
+    # not the intended one - Old Fen's own body collider shoves a hero teleported to 3.5 m
+    # back to 2.62 m, which is INSIDE the radius, so "prompt shown, E talks" there is right
+    # and the old station was failing its own teleport.
+    for d in (3.0, 6.0):
         P.tp(fp[0] + d, fp[1] + 0.1, fp[2]); P.wait(700)
+        q = P.pos()
+        dist = math.hypot(q[0] - fp[0], q[2] - fp[2])
         pr = P.js(JS_PROMPT)
         shown = bool(pr["show"] and "FEN" in (pr["text"] or "").upper())
         line0 = P.js("() => CRESTBOUND.game._fenLine")
         P.tap("E", 120); P.wait(600)
         line1 = P.js("() => CRESTBOUND.game._fenLine")
         talked = line1 > line0
-        q = P.pos()
-        check("keep.fen_%sm.prompt_%s" % (d, "shown" if want else "hidden"), shown == want, json.dumps(pr))
-        check("keep.fen_%sm.E_%s" % (d, "talks" if want else "silent"), talked == want, "fenLine %s -> %s d=%.2f" % (line0, line1, math.hypot(q[0] - fp[0], q[2] - fp[2])))
+        near = dist <= 3.2
+        check("keep.fen_at_%sm.prompt_matches_distance" % d, shown == near,
+              "measured d=%.2f (radius 3.2) prompt=%s %s" % (dist, shown, json.dumps(pr)))
+        check("keep.fen_at_%sm.E_matches_prompt" % d, talked == shown,
+              "measured d=%.2f prompt=%s talked=%s fenLine %s -> %s" % (dist, shown, talked, line0, line1))
 
 
 STATIONS = {"rime1": st_rime1, "az1": st_az1, "az2": st_az2, "az3": st_az3, "e3": st_e3,

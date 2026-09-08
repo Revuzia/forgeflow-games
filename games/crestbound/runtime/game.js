@@ -94,6 +94,10 @@ const T_SOFT_START = T_REWIND_END - 20;   // manual "to checkpoint" skips hit + 
 const HISTORY_SECONDS = 0.4;              // contract §11: history ring covers 0.4 s at 60 Hz
 
 const CLEAR_ORBIT_MS = 2200;              // crest celebration orbit (contract §28)
+/* Longest the celebration will keep simulating a hero who was airborne when he took
+   the crest, so he lands instead of hanging in the frame (see onCrest / _update). A
+   1.2 s fall is 15 m under gravFall — deeper than any authored crest drop. */
+const CLEAR_SETTLE_MS = 1200;
 const CLEAR_ORBIT_RADIUS = 4.6;
 const CLEAR_ORBIT_KEYS = 9;
 const CLEAR_ORBIT_LOOK_Y = 0.9;           // crest anchor: the burst point, lifted to eye level
@@ -335,6 +339,8 @@ export class Game {
     this._rewindBuf = new Float32Array(4 * 64);   // x,y,z,facing × up to 64 samples (0.4 s @ 60 Hz = 24)
     this._rewindK = 0;                // 0..1 desaturate amount currently applied
     this._clearT = -1;
+    /** ms of body simulation still owed to a crest taken in mid-air (see _update). */
+    this._clearSettle = 0;
     this._clearDef = null;
     this._clearSummary = null;
     this._clearResolved = false;
@@ -2202,6 +2208,14 @@ export class Game {
     /* ---- the celebration ---- */
     this.state = 'clear';
     this._clearT = 0;
+    /* A CREST TAKEN IN MID-AIR MUST STILL LAND. `_clearT >= 0` freezes player.update, so a
+       crest collected on the way down left Nim hanging in `fall` inside the geometry until
+       the card was dismissed (playtest verdant-3 V3-02: pound the granary mezzanine, the
+       secret crest spawns in the cellar and is taken mid-fall, hero frozen at y 15.2 with
+       vy -13.6; the drowned crest in verdant-2 is taken at a run). The celebration now owes
+       the BODY its arc: input stays suspended, so he simply falls, lands, and the orbit
+       plays over a hero standing on the floor. */
+    this._clearSettle = (this.player && this.player.grounded === false && !this.player.dead) ? CLEAR_SETTLE_MS : 0;
     this._clearDef = def;
     this._clearResolved = false;
     this._timerRun = false;
@@ -2575,6 +2589,7 @@ export class Game {
   _endClear(silent) {
     if (this._clearT < 0 && !silent) return;
     this._clearT = -1;
+    this._clearSettle = 0;
     this._clearCardUp = false;
     this._clearDef = null;
     this._fovPull = 0;
@@ -2809,9 +2824,17 @@ export class Game {
 
     const frozen = this._deathT >= 0 || this._cineT >= 0 || this._clearT >= 0 || this._gateOpenT >= 0 || !simulating || simBlocked || this.state === 'card';
 
-    if (this.player && !frozen) {
+    /* The clear celebration owes a mid-air hero his landing (see onCrest). The body runs
+       with input suspended until he is grounded, dead, or the budget is spent; nothing else
+       about `frozen` changes, so death checks and checkpoints stay off during the orbit. */
+    if (this._clearSettle > 0) {
+      this._clearSettle -= wms;
+      if (!this.player || this.player.grounded || this.player.dead || this._clearT < 0) this._clearSettle = 0;
+    }
+    const bodyFrozen = frozen && !(this._clearT >= 0 && this._clearSettle > 0);
+    if (this.player && !bodyFrozen) {
       this.player.update(sdt);
-      this._stepPower(sdt);
+      if (!frozen) this._stepPower(sdt);
     }
     if (this.noclip && this.player && live) this._stepNoclip(rdt);
 

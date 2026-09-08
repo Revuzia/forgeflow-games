@@ -1719,7 +1719,7 @@ class Gnasher extends Critter {
     return false;
   }
 
-  /** Pounding the post within 1.2 m sinks it; three pounds free the gnasher. */
+  /** Pounding the post within the pound's own shock radius sinks it; three pounds free it. */
   onPound(player, pos) {
     if (this.freed || this.state === 'gone') return;
     /* `pos` is a Vector3 from the Course's pound shock; the controller's direct
@@ -1727,8 +1727,16 @@ class Gnasher extends Critter {
        NaN fell through every radius test below and counted as a hit. */
     const p = (pos && Number.isFinite(pos.x) && Number.isFinite(pos.z)) ? pos : (player && (player.pos || player.position));
     if (!p) return;
+    /* THE POST ANSWERS THE POUND THE PLAYER ACTUALLY HAS. The radius was 1.2 m from the
+       post's AXIS — with a 0.22 m post and a 0.38 m capsule that is "land the shock at its
+       foot", and verdant-2 stands both posts on a 35 deg bank between a bounce pad and the
+       moat: measured this session, a real pound counted at 0.78 / 0.86 / 1.18 m and was
+       ignored at 1.61 m from the only flat footing beside the post. TUNE.pound.shockRadius
+       is the distance a pound reaches (CONTRACT §0) and the same number Course.onPoundLand
+       uses to fan the shock out, so the post uses it too. */
+    const R = TUNE.pound.shockRadius;
     const dx = p.x - this.post.x, dz = p.z - this.post.z;
-    if (dx * dx + dz * dz > 1.2 * 1.2) return;
+    if (dx * dx + dz * dz > R * R) return;
     if (Math.abs(p.y - this.post.y) > 2.0) return;
     this.pounds++;
     this.postSink = Math.min(1.2, this.pounds * 0.4);

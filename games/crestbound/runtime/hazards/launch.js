@@ -50,6 +50,25 @@ const XAXIS = new THREE.Vector3(1, 0, 0);
 const SMOKE_COLOR = new THREE.Color(0xbfc7d4);
 /** A self-aiming cannon (one with a `target`) fires this long after the hero climbs in. */
 const CANNON_AUTOFIRE_S = 1.1;
+/**
+ * How far above the breech the hero SITS while loaded.
+ *
+ * The controller parks his FEET on the board point and clears `grounded`; but
+ * `collide.js` snaps to ground within 0.18 m and `_onLand` fires the instant the sweep
+ * reports ground under a seated hero (the cannon guard at `vel.y <= 0` does not save him
+ * because a seated hero's velocity is exactly zero). ember-3's shaft gun is sunk to its
+ * breech — the court floor is at y 5.60 and so is `def.p` — so boarding it seated the hero
+ * ON the floor, `_onLand` threw him out of the `cannon` state on the first frame, and the
+ * hazard was left `loaded` forever: `readyAt()` refused every later attempt and the cannon
+ * was dead for the rest of the run (playtest ember-3: "press E at the shaft gun, nothing
+ * happens"; measured this session: inside=true, armed=false, ready=false, loaded=true,
+ * firedT=null, player idle at the breech). 0.45 m is over twice the snap distance, and the
+ * ballistics stay exact because the target solve and the ghost arc are computed from the
+ * SEAT — the point the hero actually flies from — not from the breech centre.
+ */
+const CANNON_SEAT_LIFT = 0.45;
+/** Grace before an unclaimed `loaded` latch is released (see `_pollLoaded`). */
+const CANNON_LOAD_GRACE = 0.6;
 
 /**
  * Flatten a built prop into batchable parts: one entry per (mesh, material group), each with the
@@ -164,6 +183,9 @@ class CannonHazard extends Hazard {
     const q = qualityOf(ctx);
 
     this.center = v3(def.p, 0, 0, 0);            // the BREECH (where the hero climbs in)
+    /** Where the hero's feet sit while loaded, and therefore the LAUNCH ORIGIN. */
+    this.seat = this.center.clone();
+    this.seat.y += CANNON_SEAT_LIFT;
     this.radius = clamp(num(def.r, 0.85), 0.4, 3);
     this.barrelLen = clamp(num(def.len, this.radius * 4.2), 1.2, 14);
 
@@ -198,12 +220,12 @@ class CannonHazard extends Hazard {
     this._lastEnter = null;
 
     /**
-     * What the CONTROLLER's `enterCannon(def)` takes: park point (the breech, so the launch
-     * origin is the solver's origin), the solved aim, the solved speed and a ref back here for
+     * What the CONTROLLER's `enterCannon(def)` takes: park point (the SEAT, which is the
+     * launch origin the solver used), the solved aim, the solved speed and a ref back here for
      * the `onFire` callback. One object per cannon, allocated once, never per frame.
      */
     this.boardDef = {
-      p: this.center, yaw: this.yaw, pitch: this.pitch, power: this.launchSpeed,
+      p: this.seat, yaw: this.yaw, pitch: this.pitch, power: this.launchSpeed,
       ref: this, autoFire: this.autoFire, id: def.id || 'cannon', target: this.target,
     };
 
@@ -219,11 +241,31 @@ class CannonHazard extends Hazard {
     this.mouth = this.mouth || new THREE.Vector3();
 
     if (this.target) {
-      _v.subVectors(this.target, this.center);
+      /* Solve from the SEAT: that is where the hero's feet are when the shot leaves, so
+         it is the origin the arc must be integrated from (the breech centre is 0.45 m
+         lower and would land every shot long by the drop). */
+      _v.subVectors(this.target, this.seat);
       _v2.set(_v.x, 0, _v.z);
       const range = _v2.length();
       if (range > 0.05) this.yaw = Math.atan2(-_v2.x, -_v2.z);   // §: yawFromHeading
-      const solved = solveSpeedForTarget(range, _v.y, this.pitch);
+      let solved = solveSpeedForTarget(range, _v.y, this.pitch);
+      /* A TARGET IS A PROMISE. `target` already overrides yaw and power; when the authored
+         PITCH cannot reach it at any legal speed, the elevation quadrant on the carriage is
+         what a gun crew would crank, so the cannon raises its own barrel to the shallowest
+         pitch that does reach. MEASURED: azure-2's maintenance cannon is authored pitchDeg 64
+         at a target 20.0 m up and 8.6 m out — an elevation of 67 deg, which no 64 deg shot
+         can make at any speed (the bisection returns NaN, `targetReachable` was false and the
+         shot fell back to `power` 26, apex 8.05 m, and dropped the rider back down the shaft).
+         Nothing is invented: the pitch only ever goes UP, never past the authoring clamp, and
+         a target that is unreachable at every elevation still falls back to `power`. */
+      if (!Number.isFinite(solved) && range > 0.05) {
+        for (let i = 1; i <= 24; i++) {
+          const pitch = this.pitch + i * (1.45 - this.pitch) / 24;
+          if (pitch <= this.pitch) break;
+          const v = solveSpeedForTarget(range, _v.y, pitch);
+          if (Number.isFinite(v)) { this.pitch = pitch; solved = v; this.pitchRaised = true; break; }
+        }
+      }
       this.launchSpeed = Number.isFinite(solved) ? solved : this.power;
       this.targetReachable = Number.isFinite(solved);
     } else {
@@ -419,11 +461,18 @@ class CannonHazard extends Hazard {
   _writeArc() {
     const vy = this.aim.y * this.launchSpeed;
     const hs = Math.hypot(this.aim.x, this.aim.z) * this.launchSpeed;
-    const hl = hs > 1e-6 ? 1 / hs : 0;                 // unit horizontal aim = aim.xz * hl
+    /* UNIT horizontal aim = aim.xz / |aim.xz|. This divided by `hs` — |aim.xz| times the
+       launch SPEED — so every ghost marker and the landing marker were drawn at 1/speed of
+       their real distance: measured on the shipping build, all five self-aiming cannons put
+       their landing marker 0.4-0.6 m from the breech instead of 23-33 m away on the pad
+       ("a cannon is never a leap of faith" — this file's own promise — showed the arc
+       collapsed onto the barrel). */
+    const hxz = Math.hypot(this.aim.x, this.aim.z);
+    const hl = hxz > 1e-6 ? 1 / hxz : 0;
     // Flight time: to the target when one is authored, else until it falls 12 m below the muzzle.
     let total;
     if (this.target && this.targetReachable && hs > 1e-3) {
-      _v.subVectors(this.target, this.center);
+      _v.subVectors(this.target, this.seat);
       total = flightTimeForRange(hs, Math.hypot(_v.x, _v.z));
       if (!Number.isFinite(total)) total = Math.hypot(_v.x, _v.z) / hs;
     } else {
@@ -437,9 +486,9 @@ class CannonHazard extends Hazard {
       const tt = u * total;
       const x = ballisticX(hs, tt);                    // metres along the horizontal aim
       _v.set(
-        this.center.x + this.aim.x * hl * x,
-        this.center.y + ballisticY(vy, tt),
-        this.center.z + this.aim.z * hl * x,
+        this.seat.x + this.aim.x * hl * x,
+        this.seat.y + ballisticY(vy, tt),
+        this.seat.z + this.aim.z * hl * x,
       );
       const fade = Math.sin(u * Math.PI) * 0.8 + 0.2;
       _s.setScalar(clamp(fade, 0.2, 1) * lerp(1.2, 0.55, u));
@@ -448,9 +497,9 @@ class CannonHazard extends Hazard {
     this.landing = this.landing || new THREE.Vector3();
     const xl = ballisticX(hs, total);
     this.landing.set(
-      this.center.x + this.aim.x * hl * xl,
-      this.center.y + ballisticY(vy, total),
-      this.center.z + this.aim.z * hl * xl,
+      this.seat.x + this.aim.x * hl * xl,
+      this.seat.y + ballisticY(vy, total),
+      this.seat.z + this.aim.z * hl * xl,
     );
     if (this.markerPart) this.setPartGlow(this.markerPart, this.landing, this.markerSize);
   }
@@ -551,7 +600,57 @@ class CannonHazard extends Hazard {
     this.firedT = this.time;
     this.loaded = null;
     this._loadT = null;
+    /* A SELF-AIMING CANNON AIMS ITSELF (CONTRACT §21 + every sign on one: "CLIMB IN AND IT
+       FIRES", "it aims through the tap-holes", "THE PYLONS DO THE AIMING"). The controller
+       fires along the hero's FACING, and the `cannon` state lets the stick swing that facing
+       at CANNON_AIM rad/s — so a player who walks in holding forward drags the aim off the
+       solved bearing during the 1.1 s auto-fire beat and the shot misses the pad the ghost arc
+       is drawn on. MEASURED this session (walk in on W, read the launch frame): ember-4
+       -0.333 rad solved -> -0.080 fired, landed 4.25 m off its target; verdant-3 -1.333 ->
+       -0.920, landed in the gorge 33 m off; azure-3 -0.888 -> -0.928, 1.5 m off. A cannon
+       with a reachable authored target therefore OVERRIDES the shot with its own solution:
+       same speed, the solved bearing, and the hero pointed down the bore. Free-aim cannons
+       (yaw/pitch/power, no target) still fly exactly where the player aimed them. */
+    if (player && (this.autoFire > 0 || (this.target && this.targetReachable))) {
+      this.launchVelocity(_v);
+      if (player.vel && typeof player.vel.copy === 'function') player.vel.copy(_v);
+      else if (player.__test && typeof player.__test.setVel === 'function') player.__test.setVel(_v);
+      if (typeof player.setFacing === 'function') player.setFacing(this.yaw);
+      else if (player.__test && typeof player.__test.setFacing === 'function') player.__test.setFacing(this.yaw);
+      else if (Number.isFinite(player.facing)) player.facing = this.yaw;
+    }
     this._bang(player || null);
+  }
+
+  /**
+   * Release a `loaded` latch nobody is claiming. `enter()` marks the cannon loaded and
+   * `readyAt()` then refuses every boarding until it fires — so ANY way the hero leaves the
+   * `cannon` state without firing (a mis-seat, a death, a checkpoint teleport, a menu that
+   * respawns him) used to kill the cannon for the rest of the run. Pure bookkeeping: it never
+   * fires the shot, so determinism (§21) is untouched.
+   */
+  _pollLoaded() {
+    if (!this.loaded || this._loadT === null) return;
+    const pl = (this.loaded && this.loaded.pos) ? this.loaded : resolvePlayer(this.ctx, this.__player);
+    /* No controller to ask (a hazard unit test, a headless driver that called `enter()`
+       itself) — leave the latch alone rather than cancelling a shot nobody can see. */
+    if (!pl || typeof pl.state !== 'string') return;
+    if (pl.state === 'cannon' && pl._cannon && pl._cannon.ref === this) {
+      /* A LOADED CANNON HOLDS YOU. The seated hero is still swept by the collision
+         resolver, so a cannon standing on anything that moves carries him out of the
+         breech during the auto-fire beat: MEASURED on ember-2, whose gun stands on the
+         foundry's moving deck — the shot left from (-11.47, 6.82, 0.08) instead of the
+         seat (-14, 6.82, -2), 3.2 m down-belt, and landed 16.9 m off a target the solver
+         had hit exactly. Re-parking every frame also makes the launch origin identical to
+         the solver's origin, which is what §21's determinism law asks of this hazard. */
+      if (pl.pos && typeof pl.pos.copy === 'function') pl.pos.copy(this.seat);
+      if (pl.prevPos && typeof pl.prevPos.copy === 'function') pl.prevPos.copy(this.seat);
+      if (pl.vel && typeof pl.vel.set === 'function') pl.vel.set(0, 0, 0);
+      return;
+    }
+    if (this.time - this._loadT < CANNON_LOAD_GRACE) return;
+    this.loaded = null;
+    this._loadT = null;
   }
 
   _bang(pl) {
@@ -567,6 +666,7 @@ class CannonHazard extends Hazard {
   update(t, dt, player) {
     this.time = t;
     if (player) this.__player = player;
+    this._pollLoaded();
 
     // --- recoil: pure in (t - firedT) --------------------------------------------------------
     let recoil = 0;
