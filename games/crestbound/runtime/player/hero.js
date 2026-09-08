@@ -122,6 +122,7 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { bevelBoxGeometry, discGeometry } from '../world/builders.js';
 // bevelBoxGeometry / tubeGeometry / discGeometry are the studio's shared
 // vocabulary (world/builders.js). Everything they do not cover — a lathe of an
@@ -560,6 +561,53 @@ const _rayHit = {
 
 /** Two-bone IK output. One shared record — read it before the next solve. */
 const _ik = { hip: 0, knee: 0, reached: false };
+
+/* ═══════════════════════════ the modelled NIM ═══════════════════════════ */
+/**
+ * `assets/models/nim/nim.glb` — Nim, built headless in Blender FROM THE NUMBERS
+ * IN THIS FILE (`_tools/blender/nim/`): the proportions table `P`, the palette,
+ * the goggle/brow/mouth constants, the boot and pack builders. Its manifest is
+ * explicit about the contract between the two:
+ *
+ *   "RIG: bone names and hierarchy are hero.js's exactly ... Path (a): create
+ *    hero.bones[name] from the skinned skeleton by bone name and the existing
+ *    pose code drives this mesh unchanged."
+ *
+ * THAT IS THE PATH TAKEN. The mesh is not animated by clips: the GLB's bones
+ * are REPLACED, one for one and by name, with the Object3Ds this file already
+ * poses, so every behaviour in §13 keeps running on the modelled body — the
+ * per-state pose writers, the critically-damped bone springs, the undamped
+ * cyclic layer, the two-bone foot IK and its sole clamp, the verlet scarf, the
+ * blink and look-at, squash/stretch about `RIG_PIVOT_Y`, the fresnel rim and
+ * the contact blob. Not one pose number changes; the 34 clips the GLB also
+ * carries are the fallback the runtime does not need (`nim.glb` clip list).
+ *
+ * The bind pose agrees to the millimetre because it was generated from `P`
+ * (manifest `bone_world_bind`: hips 0.66, chest 0.94, neck 1.10, head 1.22,
+ * shoulders +-0.185/0.995, foot 0.16 — this file's numbers), and every joint has
+ * an IDENTITY rest rotation, so the rest rotations `_buildSkeleton` writes on
+ * top land exactly as they do on the procedural parts.
+ *
+ * Three bone names have no counterpart here and are kept from the GLB:
+ * `hairTuft`, the eyeball/iris pair, and `scarf1..7` — the last driven from the
+ * verlet particles (`_writeScarfBones`), which is the same simulation that used
+ * to rewrite the ribbon's vertices.
+ */
+const NIM_URL = 'nim/nim.glb';
+/** GLB bone name -> what drives it here ('' = keep the GLB's own object). */
+const NIM_BONE_ALIAS = { rig: '@rig', eyes: '@eyes' };
+/**
+ * The iris caps sit at the eyeball centres, so the same dart needs a bigger
+ * angle than `_pupilPivot`'s rotation about the head origin. The manifest
+ * publishes the conversion: "0.16 rad here == hero.js's 0.042 rad".
+ */
+const NIM_PUPIL_K = 0.16 / PUPIL_LOOK_YAW;
+const _nimQ = new THREE.Quaternion();
+const _nimQ2 = new THREE.Quaternion();
+const _nimV = new THREE.Vector3();
+const _nimV2 = new THREE.Vector3();
+const _nimS = new THREE.Vector3(1, 1, 1);
+const _nimBox = new THREE.Box3();
 
 /* Scarf ribbon scratch. `_writeScarfGeometry` runs every frame and must not
  * allocate, so the two cross-section rings it ping-pongs between, their face
@@ -2013,6 +2061,13 @@ export class Hero {
     // rest pose is the reference every pose writer diffs against
     this._captureRest();
     this.setTheme('keep');
+
+    /* The modelled Nim. Fired, never awaited — the procedural body above is a
+       complete, playable hero and stays the fallback (see `_loadNim`). */
+    this.glb = null;
+    this.glbActive = false;
+    this.modelReady = null;
+    this._loadNim();
   }
 
   /* ───────────────────────────── construction ───────────────────────────── */
@@ -3345,6 +3400,222 @@ export class Hero {
    * Realm dress. Accepts a ThemeDef (contract §15) or a bare theme id.
    * The scarf takes the realm colour; the blob takes the realm's fog.
    */
+
+  /* ══════════════════════════ the modelled NIM ══════════════════════════ */
+
+  /**
+   * Fetch `assets/models/nim/nim.glb` and adopt it. Fired from the constructor
+   * and NEVER awaited: Nim is fully playable as his procedural self from frame
+   * one and swaps the moment the bytes land (CONTRACT hard rule 6). `?nonim=1`
+   * is the A/B lever.
+   * @returns {Promise<boolean>|null} resolves true when the mesh is live
+   */
+  _loadNim() {
+    if (typeof document === 'undefined' || globalThis.CB_NO_NIM_GLB) return null;
+    if (typeof location !== 'undefined' && location.search
+        && location.search.indexOf('nonim=1') >= 0) return null;
+    let url;
+    try { url = new URL('../../assets/models/' + NIM_URL, import.meta.url).href; } catch (e) { return null; }
+    this.modelReady = new GLTFLoader().loadAsync(url).then((gltf) => {
+      this._adoptNim(gltf);
+      return this.glbActive;
+    }).catch((e) => {
+      console.warn('[hero] nim.glb did not load; procedural Nim kept -', e && e.message);
+      return false;
+    });
+    return this.modelReady;
+  }
+
+  /**
+   * Replace the GLB's skeleton with THIS rig, bone for bone and by name, then
+   * hang its skinned meshes off `root`. After this call the modelled Nim is
+   * driven by exactly the code that drove the procedural one - see the note at
+   * `NIM_URL`. Never fatal: any shortfall leaves the procedural body alone.
+   */
+  _adoptNim(gltf) {
+    const src = gltf && (gltf.scene || (gltf.scenes && gltf.scenes[0]));
+    if (!src || this._disposed) return;
+    src.updateMatrixWorld(true);
+
+    const skins = [];
+    src.traverse((o) => { if (o.isSkinnedMesh && o.skeleton && o.geometry) skins.push(o); });
+    if (!skins.length) { console.warn('[hero] nim.glb carries no skinned mesh'); return; }
+    const skel = skins[0].skeleton;
+
+    /* ---- 1. bone map: this file's transforms win, by name ---------------- */
+    const bones = [];
+    const kept = [];
+    const slot = new Map();
+    for (let i = 0; i < skel.bones.length; i++) {
+      const b = skel.bones[i];
+      const alias = NIM_BONE_ALIAS[b.name];
+      let target = null;
+      if (alias === '@rig') target = this.rig;
+      else if (alias === '@eyes') target = this._eyePivot;
+      else target = this.bones[b.name] || null;
+      if (target) {
+        /* The GLB's bind IS this file's `P` table, so these agree already -
+           copied anyway so a future divergence lands as a pose, not a tear. */
+        target.position.copy(b.position);
+      } else {
+        target = b;
+        kept.push(b);
+      }
+      bones.push(target);
+      slot.set(b, i);
+    }
+    if (!bones.length || !this.bones.hips) return;
+
+    /* ---- 2. re-parent the bones with no counterpart here ----------------- */
+    /* Pre-order, so a parent is in place before its child is moved. */
+    const order = [];
+    src.traverse((o) => { if (o.isBone) order.push(o); });
+    for (let i = 0; i < order.length; i++) {
+      const b = order[i];
+      if (kept.indexOf(b) < 0) continue;
+      const gp = b.parent;
+      const gi = gp ? slot.get(gp) : undefined;
+      const np = (gi === undefined) ? this.rig : bones[gi];
+      if (np && b.parent !== np) np.add(b);
+    }
+
+    /* ---- 3. the scarf chain is DRIVEN, not parented ---------------------- */
+    /* `_updateScarf` solves 8 particles in WORLD space and each link bone's
+       world matrix is written straight from them (`_writeScarfBones`), so the
+       chain must not be recomposed from a parent. `matrixWorldAutoUpdate =
+       false` makes `root.updateMatrixWorld(true)` walk past them without
+       overwriting what the verlet wrote; three's Skeleton reads
+       `bone.matrixWorld` and nothing else. */
+    const scarf = [];
+    const scarfRest = [];
+    for (let i = 1; i <= SCARF_LINKS; i++) {
+      const g = this._nimBone(order, 'scarf' + i);
+      if (g) scarf.push(g);
+    }
+    for (let i = 0; i < scarf.length; i++) {
+      const b = scarf[i];
+      b.matrixAutoUpdate = false;
+      b.matrixWorldAutoUpdate = false;
+      /* Rest direction of link i = the LOCAL offset of the next link (every GLB
+         joint has an identity rest rotation, so a bone-local offset IS a
+         root-local direction). The tail link has no child and reuses its own
+         offset, which the manifest's `scarf_rest` puts 1.3 degrees away from
+         the true tail direction. */
+      const nxt = scarf[i + 1];
+      const v = new THREE.Vector3();
+      v.copy(nxt ? nxt.position : b.position);
+      if (v.lengthSq() < 1e-10) v.set(0, -1, 0);
+      scarfRest.push(v.normalize());
+    }
+
+    /* ---- 4. one skeleton, the source's own bind inverses ----------------- */
+    const newSkel = new THREE.Skeleton(bones, skel.boneInverses);
+    const aniso = (this.mats && Number.isFinite(this.mats.anisotropy)) ? this.mats.anisotropy : 4;
+    const mats = [];
+    for (let i = 0; i < skins.length; i++) {
+      const m = skins[i];
+      const bind = m.bindMatrix.clone();
+      m.removeFromParent();
+      m.position.set(0, 0, 0);
+      m.quaternion.identity();
+      m.scale.set(1, 1, 1);
+      m.matrixAutoUpdate = true;
+      m.frustumCulled = false;          // the hero is never culled (nor was the merge)
+      m.castShadow = true;
+      m.receiveShadow = true;
+      this.root.add(m);
+      m.bind(newSkel, bind);
+      const list = Array.isArray(m.material) ? m.material : [m.material];
+      for (let k = 0; k < list.length; k++) {
+        const mm = list[k];
+        if (!mm || mats.indexOf(mm) >= 0) continue;
+        this._repairNimMaterial(mm, aniso);
+        mm.userData.baseOpacity = numOr(mm.opacity, 1);
+        mm.userData.baseColor = mm.color ? mm.color.getHex() : 0xffffff;
+        mats.push(mm);
+        this._mats.push(mm);
+        if (!mm.transparent) this._installRim(mm);   // the coat and the scarf rim
+      }
+      this._meshes.push(m);
+    }
+
+    /* ---- 5. retire the procedural art ------------------------------------ */
+    /* Hidden, not deleted: `setPower('metal')`, the fade and every harness that
+       reads `hero._body` keep working, and `?nonim=1` still renders it. */
+    const retired = [];
+    for (let i = 0; i < this._meshes.length; i++) {
+      const m = this._meshes[i];
+      if (skins.indexOf(m) >= 0) continue;
+      if (m.material === this.M.wing) continue;      // the power wings stay ours
+      if (m.visible) { m.visible = false; retired.push(m); }
+    }
+
+    this.glb = {
+      meshes: skins, skeleton: newSkel, kept, retired, mats, scarf, scarfRest,
+      pupils: [this._nimBone(order, 'pupilR'), this._nimBone(order, 'pupilL')],
+      scarfMat: null, lensMat: null,
+    };
+    for (let i = 0; i < mats.length; i++) {
+      const n = mats[i].name || '';
+      if (/scarf/i.test(n)) this.glb.scarfMat = mats[i];
+      if (/lens|glass/i.test(n)) this.glb.lensMat = mats[i];
+    }
+    this.glbActive = true;
+
+    /* The rest pose is unchanged (step 1 copied the positions and the GLB
+       carried no rest rotations), but re-capturing makes that a fact rather
+       than a claim, and the theme has to repaint the new scarf and lens slots. */
+    this._captureRest();
+    this.setTheme(this.theme || this.themeId);
+    this._fadeApplied = -1;
+    if (this.power) { const p = this.power; this.power = null; this.setPower(p); }
+  }
+
+  /** First bone in `list` with this name. */
+  _nimBone(list, name) {
+    for (let i = 0; i < list.length; i++) if (list[i].name === name) return list[i];
+    return null;
+  }
+
+  /** GAME_DOCTRINE material repair for the adopted mesh. */
+  _repairNimMaterial(m, aniso) {
+    if (m.map) { m.map.colorSpace = THREE.SRGBColorSpace; m.map.anisotropy = aniso; }
+    for (const k of ['normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'alphaMap']) {
+      if (m[k]) { m[k].colorSpace = THREE.NoColorSpace; m[k].anisotropy = aniso; }
+    }
+    if (m.emissiveMap) m.emissiveMap.colorSpace = THREE.SRGBColorSpace;
+    if (!m.metalnessMap && m.metalness > 0.9) m.metalness = 0.0;
+    if (!m.roughnessMap && (m.roughness === undefined || m.roughness > 0.98)) m.roughness = 0.8;
+    m.envMapIntensity = 1.0;
+    m.shadowSide = THREE.FrontSide;
+    if (String(m.name || '').indexOf('nim.') !== 0) m.name = 'nim.' + (m.name || 'mat');
+  }
+
+  /**
+   * Drive the 7 scarf link bones from the verlet particles. World matrix per
+   * link = translate(particle i) x rotate(rest direction -> current direction),
+   * both in world space; the rest direction is carried through the root's YAW
+   * only, so the rig's squash never reaches the cloth - the same rule the
+   * ribbon writer kept. Zero allocation.
+   */
+  _writeScarfBones() {
+    const g = this.glb;
+    if (!g || !g.scarf.length) return;
+    const p = this._scarfP;
+    const q = this.root.quaternion;
+    for (let i = 0; i < g.scarf.length; i++) {
+      const a = i * 3, b = (i + 1) * 3;
+      _nimV.set(p[b] - p[a], p[b + 1] - p[a + 1], p[b + 2] - p[a + 2]);
+      if (_nimV.lengthSq() < 1e-10) _nimV.set(0, -1, 0);
+      _nimV.normalize();
+      _nimV2.copy(g.scarfRest[i]).applyQuaternion(q);
+      _nimQ.setFromUnitVectors(_nimV2, _nimV);
+      _nimQ2.multiplyQuaternions(_nimQ, q);
+      _nimV2.set(p[a], p[a + 1], p[a + 2]);
+      g.scarf[i].matrixWorld.compose(_nimV2, _nimQ2, _nimS);
+    }
+  }
+
   setTheme(theme) {
     const def = (theme && typeof theme === 'object') ? theme : null;
     const id = def ? (def.id || 'keep') : String(theme || 'keep');
@@ -3370,6 +3641,15 @@ export class Hero {
     this.M.scarf.userData.baseColor = this.M.scarf.color.getHex();
     // the merged body carries the scarf's colour as a baked vertex attribute
     this._restainScarf();
+    /* THE MODELLED SCARF IS ITS OWN PRIMITIVE, so the realm tint is one colour
+       write on that material (nim.glb manifest: "the scarf faces are their own
+       material ... so the realm tint is material.color on that primitive
+       alone"). Without this the wrap and the ribbon ship at the atlas's white
+       and the scarf reads as a bandage. */
+    if (this.glb && this.glb.scarfMat) {
+      this.glb.scarfMat.color.copy(_col0);
+      this.glb.scarfMat.userData.baseColor = this.glb.scarfMat.color.getHex();
+    }
 
     // Lenses pick up the realm accent so the goggles never read as dead glass.
     const acc = (def && def.palette && def.palette.crest !== undefined) ? def.palette.crest : COL.lens;
@@ -3377,6 +3657,11 @@ export class Hero {
     this.M.lens.color.copy(_col1);
     this.M.lens.emissive.copy(_col1);
     this.M.lens.userData.baseColor = this.M.lens.color.getHex();
+    if (this.glb && this.glb.lensMat) {
+      this.glb.lensMat.color.copy(_col1);
+      if (this.glb.lensMat.emissive) this.glb.lensMat.emissive.copy(_col1);
+      this.glb.lensMat.userData.baseColor = this.glb.lensMat.color.getHex();
+    }
 
     // Wing energy matches the realm too.
     if (def && def.palette && def.palette.accent !== undefined) this.M.wing.color.set(def.palette.accent);
@@ -4989,6 +5274,23 @@ export class Hero {
     this._pupilX = damp(this._pupilX, wantX, 11, dt);
     this._pupilY = damp(this._pupilY, wantY, 11, dt);
     this._pupilPivot.rotation.set(this._pupilY * PUPIL_LOOK_PITCH, this._pupilX * PUPIL_LOOK_YAW, 0);
+
+    /* THE MODELLED IRISES sit at the eyeball centres, not on the head axis, so
+       the same dart is a bigger angle — `NIM_PUPIL_K` is the manifest's own
+       conversion. The blink is already covered: the GLB's `eyes` joint IS
+       `_eyePivot`, which the two lines above scale and drop. The eye subtree's
+       world matrices are refreshed here rather than left to next frame, so a
+       blink is not a frame late on the mesh three's Skeleton samples. */
+    const g = this.glb;
+    if (g) {
+      const rx = this._pupilY * PUPIL_LOOK_PITCH * NIM_PUPIL_K;
+      const ry = this._pupilX * PUPIL_LOOK_YAW * NIM_PUPIL_K;
+      for (let i = 0; i < g.pupils.length; i++) {
+        const b = g.pupils[i];
+        if (b) b.rotation.set(rx, ry, 0);
+      }
+      this._eyePivot.updateMatrixWorld(true);
+    }
   }
 
   /* ─────────────────────────────── the scarf ─────────────────────────────── */
@@ -5167,7 +5469,8 @@ export class Hero {
       }
     }
 
-    this._writeScarfGeometry(ax, ay, az, facing);
+    if (this.glbActive) this._writeScarfBones();
+    else this._writeScarfGeometry(ax, ay, az, facing);
   }
 
   /**
@@ -5356,15 +5659,40 @@ export class Hero {
     // fully faded: stop drawing entirely rather than paying for invisible meshes
     const show = this._fade > 0.02;
     this.rig.visible = show;
-    if (this._body) this._body.visible = show;
-    if (this.scarfMesh) this.scarfMesh.visible = show;
+    const g = this.glb;
+    if (g) {
+      /* The procedural body was RETIRED, not deleted — re-showing it here would
+         put two Nims in the frame (the merge inside the model). Only the
+         adopted meshes answer the fade. */
+      for (let i = 0; i < g.meshes.length; i++) g.meshes[i].visible = show;
+      if (this._body) this._body.visible = false;
+    } else {
+      if (this._body) this._body.visible = show;
+      if (this.scarfMesh) this.scarfMesh.visible = show;
+    }
   }
 
   /* ───────────────────────────────── teardown ───────────────────────────────── */
 
   dispose() {
+    this._disposed = true;
     if (this.root.parent) this.root.parent.remove(this.root);
     this.shadowBlob.dispose();
+    if (this.glb) {
+      for (let i = 0; i < this.glb.meshes.length; i++) {
+        const m = this.glb.meshes[i];
+        if (m.geometry && m.geometry.dispose) m.geometry.dispose();
+        if (m.skeleton && m.skeleton.dispose) m.skeleton.dispose();
+      }
+      for (let i = 0; i < this.glb.mats.length; i++) {
+        const mm = this.glb.mats[i];
+        for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap']) {
+          if (mm[k] && mm[k].dispose) mm[k].dispose();
+        }
+      }
+      this.glb = null;
+      this.glbActive = false;
+    }
     if (this._body && this._body.material) {
       const bm = this._body.material;
       for (const k of ['map', 'normalMap', 'roughnessMap', 'clearcoatMap', 'sheenColorMap', 'sheenRoughnessMap']) {
@@ -5436,6 +5764,7 @@ Hero.__test = {
       fade: +h._fade.toFixed(3),
       power: h.power,
       theme: h.themeId,
+      glb: !!h.glbActive,
       meshes: h._meshes.length,
       scarfTip: [
         +h._scarfP[SCARF_LINKS * 3].toFixed(3),

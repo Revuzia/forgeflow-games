@@ -762,13 +762,29 @@ export class Critter {
     this.seed = hashString((this.ctx.courseId || 'course') + ':' + kind + ':' + idx);
     this.rng = mulberry32(this.seed);
 
-    // GLTF path (optional)
-    this.model = null;
+    // GLTF path — the modelled actor (§9b). Fired, never awaited.
+    this.model = null;          // the fitted holder Group under `this.body`
+    this.modelRoot = null;      // the cloned GLB scene inside it
     this.mixer = null;
     this._clips = null;
     this._clipState = '';
     this._clipAction = null;
-    if (this.def.model) this._loadModel(this.def.model);
+    this._clipSpec = null;
+    this._procHidden = null;    // procedural meshes the model replaced
+    this._modelMats = null;
+    this._modelFit = 1;
+    this._modelOffY = 0;
+    this._procOn = false;
+    this._unsquash = false;
+    this._clipMissing = false;
+    this._far = false;
+    this._castMeshes = [];
+    this._casting = true;
+    this._lodOut2 = 1e9;
+    this._lodIn2 = 1e9;
+    const spec = (this.def.model === false || actorsDisabled())
+      ? null : CRITTER_MODELS[kind];
+    if (spec) this._loadModel(typeof this.def.model === 'string' ? this.def.model : spec.file, spec);
   }
 
   /* ---- context helpers -------------------------------------------------- */
@@ -1150,80 +1166,169 @@ export class Critter {
    * the model arrives; behaviour and collision are unchanged. Epoch-guarded so a
    * disposed creature never receives a late load (doctrine §4).
    */
-  _loadModel(file) {
-    const epoch = ++this._epoch;
-    let url;
-    try { url = new URL('../../assets/critters/' + file, import.meta.url).href; } catch (e) { return; }
-    const loader = new GLTFLoader();
-    loader.loadAsync(url).then((gltf) => {
-      if (epoch !== this._epoch) return;
-      const root = gltf.scene || (gltf.scenes && gltf.scenes[0]);
-      if (!root) return;
-      // strip embedded lights — theme lighting is ours (doctrine §3)
-      const lights = [];
-      root.traverse((o) => { if (o.isLight) lights.push(o); });
-      for (const l of lights) if (l.parent) l.parent.remove(l);
-      /* The QUALITY tier owns anisotropy (materials.js `Mats.anisotropy`); the
-       * GPU's maximum is not a quality setting. Falls back to 4 only when the
-       * material library is not in the ctx (bare harness). */
+  _loadModel(file, spec) {
+    if (typeof document === 'undefined' || globalThis.CRESTBOUND_NOMERGE) return;
+    const epoch = this._epoch;
+    _actorLoad(file).then((src) => {
+      if (!src || epoch !== this._epoch) return;
+      const host = this.body || this.rig;
+      if (!host) return;
       const aniso = (this.ctx.mats && Number.isFinite(this.ctx.mats.anisotropy))
         ? this.ctx.mats.anisotropy : 4;
+
+      const c = cloneActor(src.scene);
+      const root = c.root;
+      for (let i = 0; i < c.materials.length; i++) repairActorMaterial(c.materials[i], aniso);
+      const castMeshes = [];
       root.traverse((o) => {
         if (!o.isMesh) return;
         o.castShadow = true;
         o.receiveShadow = false;
-        if (o.isSkinnedMesh) o.frustumCulled = false;   // bind-pose bounds lie
-        const mats = Array.isArray(o.material) ? o.material : [o.material];
-        for (const m of mats) {
-          if (!m) continue;
-          if (m.map) { m.map.colorSpace = THREE.SRGBColorSpace; m.map.anisotropy = aniso; }
-          if (m.emissiveMap) m.emissiveMap.colorSpace = THREE.SRGBColorSpace;
-          for (const k of ['normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'alphaMap']) {
-            if (m[k]) { m[k].colorSpace = THREE.NoColorSpace; m[k].anisotropy = aniso; }
-          }
-          if (m.isMeshStandardMaterial || m.isMeshPhysicalMaterial) m.envMapIntensity = 1.0;
-          m.shadowSide = THREE.FrontSide;
-        }
+        castMeshes.push(o);
       });
-      // fit to the creature's natural height
+      this._castMeshes = castMeshes;
+      this._casting = true;
+
+      /* Fit: the model's BASE goes to `spec.offsetY` in the procedural body's
+         own local frame, and its height to the creature's natural height. Both
+         numbers come from the creature's `_build()`, never from the GLB. */
       const box = new THREE.Box3().setFromObject(root);
       const h = Math.max(1e-3, box.max.y - box.min.y);
-      const want = fin(this.def.scale, 0) || this.naturalHeight || 1;
-      const s = fin(this.def.scale, 0) ? this.def.scale : want / h;
-      root.scale.setScalar(s);
-      root.position.y -= box.min.y * s;
-      this.model = root;
-      this.mesh.add(root);
-      this.rig.visible = false;
-      if (gltf.animations && gltf.animations.length) {
+      const want = fin(this.def.scale, 0) || spec.height || this.naturalHeight || 1;
+      const fit = want / h;
+      const nh = Math.max(0.2, want);
+      const dOut = nh * ACTOR_PX_K / ACTOR_PX_OUT, dIn = nh * ACTOR_PX_K / ACTOR_PX_IN;
+      this._lodOut2 = dOut * dOut;
+      this._lodIn2 = dIn * dIn;
+      root.position.y -= box.min.y * fit;
+      root.scale.setScalar(1);
+
+      const holder = new THREE.Group();
+      holder.name = 'actor_' + this.kind;
+      holder.position.y = fin(spec.offsetY, 0);
+      holder.scale.setScalar(fit);
+      holder.add(root);
+
+      /* The procedural body is the collision truth and stays in the graph — it
+         is only stopped from DRAWING, so `body.visible = false` (the gnasher's
+         'gone', the warden's sink) still hides the whole creature, and a state
+         with no clip can hand the frame straight back to it. */
+      const hidden = [];
+      host.traverse((o) => {
+        if (o === holder) return;
+        if ((o.isMesh || o.isSprite || o.isPoints) && o.visible) { o.visible = false; hidden.push(o); }
+      });
+      this._procHidden = hidden;
+      this._procOn = false;
+      this._unsquash = !!spec.unsquash;
+
+      host.add(holder);
+      this.model = holder;
+      this.modelRoot = root;
+      this._modelMats = c.materials;
+      this._modelFit = fit;
+      this._modelOffY = fin(spec.offsetY, 0);
+      this._clipSpec = spec;
+
+      if (src.animations.length) {
         this.mixer = new THREE.AnimationMixer(root);
-        this._clips = gltf.animations;
-        this._playClip(this._clipState || 'idle', 0);
+        this._clips = src.animations;
+        const st = this._clipState || 'idle';
+        this._clipState = '';
+        this._playClip(st, 0);
       }
+      this._onModelReady(c);
       this.events.emit('model', this);
     }).catch((e) => {
-      console.warn('[critters] model "' + file + '" failed to load; procedural body kept', e && e.message);
+      /* A throw inside this handler used to vanish into an unhandled rejection
+         and the creature just stayed procedural — which reads exactly like a
+         missing file. Say it out loud. */
+      console.warn('[critters] ' + this.kind + ' model wiring failed; procedural body kept —',
+        (e && e.message) || e);
     });
   }
 
-  /** Cross-fade to the clip that best matches an animation state. */
-  _playClip(state, fade) {
-    this._clipState = state;
-    if (!this.mixer || !this._clips) return;
-    const names = CLIP_MAP[state] || CLIP_MAP.idle;
-    let clip = null;
-    for (let i = 0; i < names.length && !clip; i++) {
-      for (let k = 0; k < this._clips.length; k++) {
-        if (this._clips[k].name.toLowerCase().indexOf(names[i]) >= 0) { clip = this._clips[k]; break; }
+  /** Subclass hook: the model and its per-instance materials are live. */
+  _onModelReady(/* clone */) {}
+
+  /** Resolve an animation state to a clip in THIS model, or null. */
+  _clipFor(state) {
+    if (!this._clips) return null;
+    const named = this._clipSpec && this._clipSpec.clips && this._clipSpec.clips[state];
+    if (named) {
+      for (let k = 0; k < this._clips.length; k++) if (this._clips[k].name === named) return this._clips[k];
+    }
+    const names = CLIP_MAP[state];
+    if (names) {
+      for (let i = 0; i < names.length; i++) {
+        for (let k = 0; k < this._clips.length; k++) {
+          if (this._clips[k].name.toLowerCase().indexOf(names[i]) >= 0) return this._clips[k];
+        }
       }
     }
-    if (!clip) clip = this._clips[0];
+    return null;
+  }
+
+  /**
+   * Cross-fade to the clip for an animation state.
+   *
+   * A state this model has NO clip for shows the PROCEDURAL pose for as long as
+   * the state lasts, rather than freezing the model in the previous clip's last
+   * frame — a frozen creature reads as a bug, a procedural one reads as the
+   * creature it always was.
+   */
+  _playClip(state, fade) {
+    const same = this._clipState === state;
+    this._clipState = state;
+    if (!this.mixer || !this._clips) return;
+    const clip = this._clipFor(state);
+    if (!clip) { this._clipMissing = true; this._syncActor(); return; }
+    this._clipMissing = false;
+    this._syncActor();
     const action = this.mixer.clipAction(clip);
-    if (this._clipAction === action) return;
-    if (this._clipAction) this._clipAction.fadeOut(fade === undefined ? 0.18 : fade);
-    action.reset().fadeIn(fade === undefined ? 0.18 : fade).play();
-    if (state === 'death' || state === 'hit') { action.setLoop(THREE.LoopOnce, 1); action.clampWhenFinished = true; }
+    const once = !!(this._clipSpec && this._clipSpec.once && this._clipSpec.once[state]);
+    if (once) { action.setLoop(THREE.LoopOnce, 1); action.clampWhenFinished = true; }
+    else { action.setLoop(THREE.LoopRepeat, Infinity); action.clampWhenFinished = false; }
+    if (this._clipAction === action) {
+      // re-entering the same state restarts a one-shot; a loop keeps its phase
+      if (once || !same) action.reset().play();
+      return;
+    }
+    if (this._clipAction) this._clipAction.fadeOut(fade === undefined ? 0.14 : fade);
+    action.reset().fadeIn(fade === undefined ? 0.14 : fade).play();
     this._clipAction = action;
+  }
+
+  /**
+   * Resolve which body draws. The procedural one is shown when this state has
+   * no clip (rule 4) or when the creature is past the LOD band — never both
+   * bodies at once, and never neither.
+   */
+  _syncActor() {
+    if (!this.model || !this._procHidden) return;
+    const on = this._clipMissing || this._far;
+    if (this._procOn === on) return;
+    this._procOn = on;
+    this.model.visible = !on;
+    const h = this._procHidden;
+    for (let i = 0; i < h.length; i++) h[i].visible = on;
+  }
+
+  /** Screen-height band, with hysteresis. Reads the camera's world position only. */
+  _lod() {
+    const cam = this.camera;
+    if (!cam || !this.model) return;
+    const e = cam.matrixWorld.elements;
+    const dx = this.pos.x - e[12], dy = this.pos.y - e[13], dz = this.pos.z - e[14];
+    const d2 = dx * dx + dy * dy + dz * dz;
+    const far = this._far ? (d2 > this._lodIn2) : (d2 > this._lodOut2);
+    if (far !== this._far) { this._far = far; this._syncActor(); }
+    const cast = d2 <= ACTOR_SHADOW_M2;
+    if (cast !== this._casting) {
+      this._casting = cast;
+      const cm = this._castMeshes;
+      for (let i = 0; i < cm.length; i++) cm[i].castShadow = cast;
+    }
   }
 
   /* ---- lifecycle -------------------------------------------------------- */
@@ -1231,6 +1336,28 @@ export class Critter {
   update(dt, player) {
     this.time += dt;
     if (this.mixer) this.mixer.update(dt);
+    /*
+     * THE SQUASH IS PAID FOR ONCE. The creature's own `_pose()` writes a squash
+     * onto `body.scale` (the gnasher's telegraph crouch, the bumbler's squish)
+     * and the AUTHORED CLIP for that state carries the same squash — applying
+     * both flattens the creature twice. Where a clip covers it the holder
+     * cancels the group scale; where it does not (the skitter's hit stagger,
+     * which has no clip) the group scale is left to do its job. Zero allocation,
+     * one frame behind the pose, which is 1/60 s of a 0.3 s transition.
+     */
+    if (this.model) this._lod();
+    const holder = this.model;
+    if (holder && this._unsquash) {
+      const h = holder.parent;
+      if (h) {
+        const s = h.scale, f = this._modelFit;
+        holder.scale.set(
+          f / (Math.abs(s.x) > 1e-4 ? s.x : 1),
+          f / (Math.abs(s.y) > 1e-4 ? s.y : 1),
+          f / (Math.abs(s.z) > 1e-4 ? s.z : 1),
+        );
+      }
+    }
   }
 
   /** Deterministic reset: clock 0, rng re-seeded, subclasses restore pose. */
@@ -1261,7 +1388,11 @@ export class Critter {
     for (const c of this.colliders) if (c._bp && typeof c._bp.remove === 'function') c._bp.remove(c);
     this.colliders.length = 0;
     this.kills.length = 0;
-    if (this.mixer) { this.mixer.stopAllAction(); this.mixer = null; }
+    if (this.mixer) { this.mixer.stopAllAction(); this.mixer.uncacheRoot(this.modelRoot); this.mixer = null; }
+    if (this._modelMats) { for (const m of this._modelMats) { try { m.dispose(); } catch (e) { /* noop */ } } }
+    this._modelMats = null;
+    this._procHidden = null;
+    this.modelRoot = null;
     this.model = null;
   }
 }
@@ -1661,7 +1792,7 @@ class Gnasher extends Critter {
         /* Reached the stake (or dropped off this floor) DURING the telegraph:
            the lunge is called off, which is what makes running in on the post a
            real answer rather than a race the player cannot win. */
-        if (!canBite) { this.state = 'recover'; this.stateT = GN_RECOVER * 0.55; this.jaw = 0; this.kill.active = false; break; }
+        if (!canBite) { this.state = 'recover'; this.stateT = GN_RECOVER * 0.55; this.jaw = 0; this.kill.active = false; this._playClip('recover'); break; }
         if (u >= 1) {
           this.state = 'lunge'; this.stateT = 0;
           this.lungeFrom.copy(this.pos);
@@ -1700,7 +1831,7 @@ class Gnasher extends Critter {
           this._sfx('crusher_slam', this.pos, 1.3, 0.7);   // jaws snap
           this._burst('spark', this.pos, 0xffd27a, 0.6);
           this._shake(0.12, 160);
-          this._playClip('idle');
+          this._playClip('recover');
         }
         break;
       }
@@ -1715,7 +1846,7 @@ class Gnasher extends Critter {
           this.pos.z += (this.rest.z - this.pos.z) * k;
         }
         this.pos.y = this.groundY + GN_R;
-        if (u >= 1) { this.state = 'idle'; this.stateT = 0; this.idleHopT = 1.0 + this.rng(); }
+        if (u >= 1) { this.state = 'idle'; this.stateT = 0; this.idleHopT = 1.0 + this.rng(); this._playClip('idle'); }
         break;
       }
       case 'freed': {
@@ -1822,7 +1953,7 @@ class Gnasher extends Critter {
     this.events.emit('pound', this.pounds, this);
     if (this.pounds >= GN_POUNDS_TO_FREE) {
       this.freed = true;
-      this.state = 'freed'; this.stateT = 0; this.boundT = 0;
+      this.state = 'freed'; this.stateT = 0; this.boundT = 0; this._playClip('freed');
       this.kill.active = false;
       this.postCol.active = false;
       // bound away from the hero
@@ -2719,6 +2850,22 @@ class Warden extends Critter {
     this.kill.update();
   }
 
+  /**
+   * THE HIT FLASH IS A READ. `flashMats` was the retired procedural merge, so a
+   * modelled warden would take three hits with no confirmation at all. Every
+   * per-instance atlas material of THIS warden joins the list (the authored
+   * glow slots — eye slits, lantern, back gem — are left alone: they are
+   * already hot and the gem is the pound target).
+   */
+  _onModelReady(clone) {
+    if (!this.flashMats) this.flashMats = [];
+    for (let i = 0; i < clone.materials.length; i++) {
+      const m = clone.materials[i];
+      if (!m || !m.emissive || ACTOR_GLOW_SLOTS.test(m.name || '')) continue;
+      this.flashMats.push(m);
+    }
+  }
+
   _enter(state) {
     this.state = state; this.stateT = 0;
     this.hud.phase = state;
@@ -2731,15 +2878,18 @@ class Warden extends Critter {
         break;
       case 'stompTele':
         this._sfx('vanish_warn', this.pos, 0.6, 0.8);
-        this._playClip('telegraph');
+        this._playClip('stompTele');
+        break;
+      case 'stomp':
+        this._playClip('stomp');
         break;
       case 'chargeTele':
         this._sfx('step_stone', this.pos, 0.5, 1);
-        this._playClip('telegraph');
+        this._playClip('chargeTele');
         break;
       case 'charge':
         this._sfx('warden_roar', this.pos, 1.3, 0.8);
-        this._playClip('walk');
+        this._playClip('charge');
         break;
       case 'dizzy':
         this._sfx('warden_hit', this.pos, 0.6, 1);
@@ -3164,7 +3314,7 @@ class Fen extends Critter {
   update(dt, player) {
     super.update(dt, player);
     if (!this.enabled) return;
-    if (this.talkT > 0) this.talkT -= dt;
+    if (this.talkT > 0) { this.talkT -= dt; if (this.talkT <= 0) this._playClip('idle'); }
     if (player) {
       const pp = player.pos || player.position;
       const dx = pp.x - this.pos.x, dz = pp.z - this.pos.z;
@@ -3181,6 +3331,22 @@ class Fen extends Critter {
     this._pose(dt);
   }
 
+  /**
+   * THE KEEP'S OWN DIALOGUE PATH. `game.js _talkToFen` owns the line, the toast
+   * and the cooldown, and then calls `ref.talk()` on the critter it paired the
+   * npc record with (game.js:1576 / :1577) — a method Fen never had, so the
+   * only visible reaction to E was the toast and the caretaker himself did not
+   * move. This is the same beat `interact()` plays, without re-speaking a line
+   * the HUD has already put on screen.
+   */
+  talk() {
+    this.talkT = 0.35;
+    this.near = true;
+    this._playClip('talk');
+    this.events.emit('say', null, this);
+    return true;
+  }
+
   /** Speak the next line (cycles). Returns the line spoken, or null when out of range. */
   interact(player) {
     if (player) {
@@ -3190,6 +3356,7 @@ class Fen extends Critter {
     const line = this.lines[this.lineIx % this.lines.length];
     this.lineIx++;
     this.talkT = 0.35;
+    this._playClip('talk');
     try { if (typeof this.ctx.say === 'function') this.ctx.say(line, this); } catch (e) { /* noop */ }
     this._sfx('ui_move', this.pos, 0.9, 0.5);
     this.events.emit('say', line, this);
@@ -3204,6 +3371,249 @@ class Fen extends Critter {
     this.eyes.look(0, 0);
     this._playClip('idle', 0);
   }
+}
+
+/* ===========================================================================
+ * 9b. THE MODELLED ACTORS  (assets/models/critters/*.glb)
+ * ======================================================================== */
+/**
+ * The art lane built one rigged GLB per creature in Blender (`_tools/blender/
+ * critters/build_all.py`), authored TO THIS FILE: every clip length matches the
+ * behaviour constant that governs it (warden `stomp_telegraph` 0.5833 s against
+ * `WD_STOMP_TELE` 0.6, `dizzy` 2.5 against `WD_DIZZY` 2.5, `charge_telegraph`
+ * 0.7917 against `WD_CHARGE_TELE` 0.8), and every model's pivot is its base.
+ *
+ * THE RULES THIS SUBSYSTEM KEEPS
+ *  1. **The art changes what is DRAWN, never what is SOLID or lethal.** Not one
+ *     Collider, KillVolume, telegraph duration, `onPound`/`onDive` hook or
+ *     state transition below this line is touched by the model path. The
+ *     creature's own `_pose()` still writes `body.position/rotation/scale`; the
+ *     model rides that transform, so the loop gate's hazard-determinism rows
+ *     and the Warden's three-hit fight see exactly the frame they saw before.
+ *  2. **One GLB per FILE, once, for the life of the page.** `_actorLoad`
+ *     memoises the fetch+parse; every instance gets a skinned CLONE that shares
+ *     the source geometry and textures. Four bumblers on a course are one
+ *     download and one buffer upload.
+ *  3. **Nothing waits.** The load is fired from the constructor and never
+ *     awaited: a creature is fully playable as its procedural body from frame
+ *     one and swaps when the bytes land (CONTRACT hard rule 6).
+ *  4. **A state with no clip shows the PROCEDURAL pose, not a frozen model.**
+ *     `_playClip` resolves per-kind name → CLIP_MAP substring → nothing; on
+ *     nothing it hands that state back to the rig rather than leaving the
+ *     creature standing still in the wrong pose.
+ *  5. **Embedded lights stripped, materials repaired, per-INSTANCE material
+ *     clones** so the Warden's hit flash reddens one warden and not the bank.
+ */
+
+/** `?noactors=1` — the A/B lever, resolved once (never per creature). */
+let _actorOffFlag = null;
+function actorsDisabled() {
+  if (_actorOffFlag === null) {
+    _actorOffFlag = !!globalThis.CRESTBOUND_NOACTORS
+      || (typeof location !== 'undefined' && !!location.search
+          && location.search.indexOf('noactors=1') >= 0);
+  }
+  return _actorOffFlag;
+}
+
+/**
+ * kind → {file, height, offsetY, clips, once}
+ *   `height`   metres the model is fitted to (the creature's naturalHeight)
+ *   `offsetY`  where the model's BASE sits in the procedural body's own local
+ *              frame — the gnasher's group origin is its ball CENTRE, the
+ *              bumbler's is its centre of mass, the warden's and Fen's are
+ *              their soles. Measured against each `_build()`, then read off a
+ *              frame (see the lane report).
+ *   `clips`    animation-state → EXACT clip name in that GLB
+ *   `once`     states whose clip plays once and clamps instead of looping
+ */
+const CRITTER_MODELS = {
+  gnasher: {
+    file: 'gnasher.glb', height: GN_R * 2, offsetY: -GN_R,
+    clips: { idle: 'idle', telegraph: 'telegraph_windup', attack: 'lunge', recover: 'recover', freed: 'freed' },
+    once: { attack: 1, telegraph: 1, freed: 1 }, unsquash: 1,
+  },
+  bumbler: {
+    file: 'bumbler.glb', height: BM_R * 2.2, offsetY: -BM_R * 0.92,
+    clips: { walk: 'waddle_walk', idle: 'waddle_walk', squish: 'squish_flat', respawn: 'respawn' },
+    once: { squish: 1, respawn: 1 }, unsquash: 1,
+  },
+  skitter: {
+    file: 'skitter.glb', height: 0.6, offsetY: -0.30,
+    clips: { walk: 'fly', idle: 'fly', attack: 'swoop_attack' },
+    once: { attack: 1 },
+  },
+  warden: {
+    file: 'warden.glb', height: 2.7, offsetY: 0,
+    clips: {
+      idle: 'idle', dormant: 'idle', roar: 'roar',
+      stompTele: 'stomp_telegraph', stomp: 'stomp_attack_slam',
+      chargeTele: 'charge_telegraph', charge: 'charge_run', walk: 'charge_run',
+      dizzy: 'dizzy', hit: 'hit', death: 'death',
+    },
+    once: { roar: 1, stompTele: 1, stomp: 1, chargeTele: 1, hit: 1, death: 1 },
+  },
+  fen: {
+    file: 'fen.glb', height: 1.70, offsetY: 0,
+    clips: { idle: 'idle', talk: 'talk' },
+    once: { talk: 1 },
+  },
+};
+
+/**
+ * ACTOR LOD — the modelled body near, the procedural body far.
+ *
+ * The GLBs are 5.5-7.9k triangles each against procedural bodies of 2-3k, and a
+ * course carries seven of them: measured at the verdant-3 spawn, wiring every
+ * critter took the frame from 447,290 to 476,984 triangles, past the 450k
+ * budget on the two courses that were already on the line (verdant-2 and
+ * verdant-3). Nothing is deleted to get them back — the creature is DRAWN in
+ * its cheaper representation once it is far enough away that the difference is
+ * a handful of pixels, exactly as coins.js swaps to its blank past ANIM_RANGE.
+ * The near band is wider than the sun's hero-following shadow frustum, so every
+ * creature you can fight, squish or be bitten by is the modelled one, and the
+ * band has hysteresis so walking the boundary cannot flicker.
+ */
+/**
+ * THE BAND IS IN PIXELS, NOT METRES. A flat distance threshold is the wrong
+ * ruler for creatures whose heights span 0.6 m (skitter) to 2.7 m (warden): at
+ * 24 m the skitter is fourteen pixels tall and the Warden is sixty-six, so one
+ * number either swaps the boss out while you are still reading its telegraph or
+ * pays full price for a bug you cannot see. The swap distance is therefore
+ * derived from the creature's own `naturalHeight` and a screen-height floor:
+ *
+ *     d(px) = height * REF_H / (px * 2 * tan(fov/2))
+ *
+ * measured against `TUNE.cam.fov` and a nominal 720-line screen (NOT the live
+ * drawing buffer, so changing the render scale can never pop an LOD). With
+ * 18 px out / 22 px in that is: skitter 21.7 m, bumbler 33.2 m, gnasher 39.7 m,
+ * Old Fen 61.4 m, Warden 97.5 m — i.e. the Warden is modelled anywhere you can
+ * see its arena and the 0.6 m bug stops being a 7,510-triangle bug once it is
+ * a smudge.
+ */
+const ACTOR_PX_OUT = 18, ACTOR_PX_IN = 22, ACTOR_REF_H = 720;
+const ACTOR_PX_K = ACTOR_REF_H / (2 * Math.tan((TUNE.cam.fov * Math.PI / 180) / 2));
+/**
+ * SHADOW LOD. A modelled actor inside the sun's hero-following frustum is drawn
+ * TWICE — measured on verdant-3, the 25.7 m skitter cost 15,292 triangles for a
+ * 7,510-triangle model. Past `ACTOR_SHADOW_M` the creature's cast shadow is a
+ * few pixels of ground, so only the near band pays for it; the creature itself
+ * is unchanged and every shadow you can stand next to is still there.
+ */
+const ACTOR_SHADOW_M = 18, ACTOR_SHADOW_M2 = ACTOR_SHADOW_M * ACTOR_SHADOW_M;
+
+const ACTOR_URL = new URL('../../assets/models/critters/', import.meta.url).href;
+/** file -> Promise<{scene, animations}> — one fetch and one parse per page. */
+const _actorSrc = new Map();
+/** Counters the harness reads. */
+export const ACTOR_STATS = { requested: 0, loaded: 0, cloned: 0, failed: [], off: false };
+
+function _actorLoad(file) {
+  let p = _actorSrc.get(file);
+  if (p) return p;
+  ACTOR_STATS.requested++;
+  const loader = new GLTFLoader();
+  p = loader.loadAsync(ACTOR_URL + file).then((gltf) => {
+    const scene = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+    if (!scene) throw new Error('no scene in ' + file);
+    /* strip embedded lights — the theme owns the lighting (GAME_DOCTRINE) */
+    const lights = [];
+    scene.traverse((o) => { if (o.isLight) lights.push(o); });
+    for (let i = 0; i < lights.length; i++) if (lights[i].parent) lights[i].parent.remove(lights[i]);
+    scene.updateMatrixWorld(true);
+    /* PAD THE BOUNDS, DO NOT DISABLE CULLING. A skinned mesh's bind-pose sphere
+       is too small once a clip swings a limb, but `frustumCulled = false` makes
+       every critter on a 150 m course draw every frame — the opposite of what
+       the perf budget wants. One padded sphere per SHARED geometry keeps the
+       cull and covers the animation. */
+    const seen = new Set();
+    scene.traverse((o) => {
+      if (!o.isMesh || !o.geometry || seen.has(o.geometry)) return;
+      seen.add(o.geometry);
+      const g = o.geometry;
+      /* every clone points at THIS buffer — `Critter.dispose()` must not free
+         it when one creature goes away */
+      g.userData.__shared = true;
+      if (!g.boundingSphere) g.computeBoundingSphere();
+      if (g.boundingSphere) g.boundingSphere.radius *= 1.8;
+      if (!g.boundingBox) g.computeBoundingBox();
+    });
+    ACTOR_STATS.loaded++;
+    return { scene, animations: gltf.animations || [] };
+  }).catch((e) => {
+    ACTOR_STATS.failed.push(file + ': ' + (e && e.message));
+    console.warn('[critters] actor "' + file + '" failed to load; procedural body kept', e && e.message);
+    return null;
+  });
+  _actorSrc.set(file, p);
+  return p;
+}
+
+/**
+ * Deep-clone a loaded scene INCLUDING its skinning. `Object3D.clone()` copies a
+ * SkinnedMesh's `skeleton` BY REFERENCE, so every clone would be driven by the
+ * first instance's bones; this rebinds each clone to its own cloned bones with
+ * the source's `boneInverses` (which are bind-pose data and are shared safely).
+ * Geometry and textures stay shared; MATERIALS are cloned per instance so a
+ * per-creature material write (the Warden's hit flash) touches one creature.
+ */
+function cloneActor(src) {
+  const dst = src.clone(true);
+  const sList = [], dList = [];
+  src.traverse((o) => sList.push(o));
+  dst.traverse((o) => dList.push(o));
+  const map = new Map();
+  for (let i = 0; i < sList.length; i++) map.set(sList[i], dList[i]);
+  const mats = new Map();
+  for (let i = 0; i < sList.length; i++) {
+    const s = sList[i], d = dList[i];
+    if (!s.isMesh) continue;
+    const src2 = Array.isArray(s.material) ? s.material : [s.material];
+    const out = [];
+    for (let k = 0; k < src2.length; k++) {
+      const m = src2[k];
+      if (!m) { out.push(m); continue; }
+      let c = mats.get(m);
+      if (!c) { c = m.clone(); c.name = m.name; mats.set(m, c); }
+      out.push(c);
+    }
+    d.material = Array.isArray(s.material) ? out : out[0];
+    if (!s.isSkinnedMesh) continue;
+    const sk = s.skeleton;
+    const bones = [];
+    for (let k = 0; k < sk.bones.length; k++) bones.push(map.get(sk.bones[k]) || sk.bones[k]);
+    d.bind(new THREE.Skeleton(bones, sk.boneInverses), s.bindMatrix);
+  }
+  ACTOR_STATS.cloned++;
+  return { root: dst, materials: Array.from(mats.values()) };
+}
+
+/**
+ * Repair one actor material (GAME_DOCTRINE: "the exporter's materials are wrong,
+ * every time"). Colour spaces, anisotropy from the QUALITY tier, and emissive
+ * OFF unless the slot was AUTHORED as a glow (`*_glow`, `*_gem`, `*_wing`).
+ */
+const ACTOR_GLOW_SLOTS = /_(glow|gem|ember|rune)$/;
+function repairActorMaterial(m, aniso) {
+  if (!m) return;
+  if (m.map) { m.map.colorSpace = THREE.SRGBColorSpace; m.map.anisotropy = aniso; }
+  if (m.emissiveMap) { m.emissiveMap.colorSpace = THREE.SRGBColorSpace; m.emissiveMap.anisotropy = aniso; }
+  for (const k of ['normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'alphaMap']) {
+    if (m[k]) { m[k].colorSpace = THREE.NoColorSpace; m[k].anisotropy = aniso; }
+  }
+  if (!m.metalnessMap && m.metalness > 0.9) m.metalness = 0.0;
+  if (!m.roughnessMap && (m.roughness === undefined || m.roughness > 0.98)) m.roughness = 0.8;
+  if (!ACTOR_GLOW_SLOTS.test(m.name || '')) {
+    if (m.emissive && m.emissiveIntensity > 0 && !m.emissiveMap) {
+      // an authored tint is kept; an exporter's white 1.0 is not
+      if (m.emissive.r > 0.9 && m.emissive.g > 0.9 && m.emissive.b > 0.9) m.emissive.setHex(0x000000);
+    }
+  } else {
+    m.emissiveIntensity = Math.min(m.emissiveIntensity === undefined ? 1 : m.emissiveIntensity, 1.6);
+    m.toneMapped = true;
+  }
+  m.envMapIntensity = 1.0;
+  m.shadowSide = THREE.FrontSide;
 }
 
 /* ===========================================================================
