@@ -1,0 +1,2806 @@
+{
+ "generated": "_untest_groups.py",
+ "primary": {
+  "battery-too-generic": 22,
+  "frame-claim": 32,
+  "no-position": 25,
+  "needs-savestate": 8,
+  "needs-phase": 21,
+  "unreachable": 12,
+  "no-position(parseable)": 28,
+  "behind-blocker": 9,
+  "needs-2-inputs": 5
+ },
+ "anyOf": {
+  "battery-too-generic": 22,
+  "frame-claim": 58,
+  "no-position": 25,
+  "needs-phase": 38,
+  "needs-2-inputs": 14,
+  "needs-savestate": 15,
+  "no-position(parseable)": 53,
+  "unreachable": 12,
+  "behind-blocker": 12
+ },
+ "rows": [
+  {
+   "key": "azure-1#05",
+   "course": "azure-1",
+   "cls": "water/swim",
+   "primary": "battery-too-generic",
+   "groups": [
+    "battery-too-generic"
+   ],
+   "stations": [
+    [
+     -1.78,
+     1.53,
+     39.44
+    ],
+    [
+     -8.04,
+     1.99,
+     -46.28
+    ]
+   ]
+  },
+  {
+   "key": "azure-1#10",
+   "course": "azure-1",
+   "cls": "clock/reset",
+   "primary": "battery-too-generic",
+   "groups": [
+    "battery-too-generic"
+   ],
+   "stations": [
+    [
+     0.0,
+     0.74,
+     12.5
+    ]
+   ]
+  },
+  {
+   "key": "azure-1#11",
+   "course": "azure-1",
+   "cls": "clock/reset",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     0.0,
+     5.0,
+     -12.5
+    ]
+   ]
+  },
+  {
+   "key": "azure-1#12",
+   "course": "azure-1",
+   "cls": "geometry",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     -8.0,
+     2.0,
+     -46.0
+    ],
+    [
+     -14.0,
+     4.95,
+     -22.0
+    ]
+   ]
+  },
+  {
+   "key": "azure-1#14",
+   "course": "azure-1",
+   "cls": "collectibles",
+   "primary": "no-position",
+   "groups": [
+    "no-position",
+    "needs-phase",
+    "needs-2-inputs"
+   ],
+   "stations": []
+  },
+  {
+   "key": "azure-1#16",
+   "course": "azure-1",
+   "cls": "pads/belts/currents",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     3.5,
+     0.74,
+     13.0
+    ]
+   ]
+  },
+  {
+   "key": "azure-1#18",
+   "course": "azure-1",
+   "cls": "signs/HUD",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     0.0,
+     5.0,
+     -35.72
+    ]
+   ]
+  },
+  {
+   "key": "azure-2#03",
+   "course": "azure-2",
+   "cls": "collectibles",
+   "primary": "needs-savestate",
+   "groups": [
+    "needs-savestate",
+    "needs-phase"
+   ],
+   "stations": [
+    [
+     0.0,
+     -12.0,
+     -5.0
+    ],
+    [
+     0.0,
+     -10.6,
+     -5.0
+    ]
+   ]
+  },
+  {
+   "key": "azure-2#05",
+   "course": "azure-2",
+   "cls": "clock/reset",
+   "primary": "no-position",
+   "groups": [
+    "no-position"
+   ],
+   "stations": []
+  },
+  {
+   "key": "azure-2#08",
+   "course": "azure-2",
+   "cls": "idle-crush",
+   "primary": "battery-too-generic",
+   "groups": [
+    "battery-too-generic"
+   ],
+   "stations": [
+    [
+     4.3,
+     15.4,
+     -4.3
+    ]
+   ]
+  },
+  {
+   "key": "azure-2#09",
+   "course": "azure-2",
+   "cls": "pads/belts/currents",
+   "primary": "needs-phase",
+   "groups": [
+    "no-position(parseable)",
+    "needs-phase"
+   ],
+   "stations": [
+    [
+     -11.0,
+     0.0,
+     11.18
+    ],
+    [
+     -8.62,
+     9.0,
+     -2.92
+    ],
+    [
+     -8.62,
+     9.0,
+     -2.0
+    ]
+   ]
+  },
+  {
+   "key": "azure-2#12",
+   "course": "azure-2",
+   "cls": "clock/reset",
+   "primary": "unreachable",
+   "groups": [
+    "no-position(parseable)",
+    "unreachable"
+   ],
+   "stations": [
+    [
+     6.6,
+     33.0,
+     -6.6
+    ]
+   ]
+  },
+  {
+   "key": "azure-2#15",
+   "course": "azure-2",
+   "cls": "collectibles",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)"
+   ],
+   "stations": [
+    [
+     0.0,
+     0.0,
+     0.0
+    ]
+   ]
+  },
+  {
+   "key": "azure-2#16",
+   "course": "azure-2",
+   "cls": "collectibles",
+   "primary": "needs-savestate",
+   "groups": [
+    "needs-savestate",
+    "needs-phase"
+   ],
+   "stations": [
+    [
+     0.0,
+     35.6,
+     0.0
+    ]
+   ]
+  },
+  {
+   "key": "azure-3#03",
+   "course": "azure-3",
+   "cls": "long-jump gaps",
+   "primary": "no-position",
+   "groups": [
+    "no-position",
+    "needs-2-inputs"
+   ],
+   "stations": []
+  },
+  {
+   "key": "azure-3#04",
+   "course": "azure-3",
+   "cls": "pads/belts/currents",
+   "primary": "unreachable",
+   "groups": [
+    "no-position(parseable)",
+    "unreachable"
+   ],
+   "stations": [
+    [
+     0.0,
+     21.0,
+     63.0
+    ]
+   ]
+  },
+  {
+   "key": "azure-3#06",
+   "course": "azure-3",
+   "cls": "signs/HUD",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     -11.0,
+     31.15,
+     30.0
+    ],
+    [
+     -11.0,
+     33.1,
+     31.6
+    ]
+   ]
+  },
+  {
+   "key": "azure-3#07",
+   "course": "azure-3",
+   "cls": "pads/belts/currents",
+   "primary": "battery-too-generic",
+   "groups": [
+    "battery-too-generic"
+   ],
+   "stations": [
+    [
+     0.0,
+     30.0,
+     40.0
+    ]
+   ]
+  },
+  {
+   "key": "azure-3#14",
+   "course": "azure-3",
+   "cls": "signs/HUD",
+   "primary": "needs-phase",
+   "groups": [
+    "no-position(parseable)",
+    "needs-phase"
+   ],
+   "stations": [
+    [
+     -37.0,
+     50.0,
+     -62.0
+    ]
+   ]
+  },
+  {
+   "key": "azure-3#15",
+   "course": "azure-3",
+   "cls": "collectibles",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)",
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     0.0,
+     0.0,
+     6.0
+    ]
+   ]
+  },
+  {
+   "key": "azure-3#16",
+   "course": "azure-3",
+   "cls": "signs/HUD",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     -14.0,
+     34.0,
+     5.0
+    ]
+   ]
+  },
+  {
+   "key": "azure-3#18",
+   "course": "azure-3",
+   "cls": "signs/HUD",
+   "primary": "needs-savestate",
+   "groups": [
+    "no-position(parseable)",
+    "needs-savestate"
+   ],
+   "stations": [
+    [
+     -26.0,
+     36.5,
+     -10.0
+    ]
+   ]
+  },
+  {
+   "key": "azure-3#21",
+   "course": "azure-3",
+   "cls": "long-jump gaps",
+   "primary": "no-position",
+   "groups": [
+    "no-position",
+    "needs-savestate",
+    "needs-phase"
+   ],
+   "stations": []
+  },
+  {
+   "key": "azure-3#26",
+   "course": "azure-3",
+   "cls": "collectibles",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)",
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     33.0,
+     59.0,
+     -64.0
+    ]
+   ]
+  },
+  {
+   "key": "azure-3#28",
+   "course": "azure-3",
+   "cls": "pads/belts/currents",
+   "primary": "needs-phase",
+   "groups": [
+    "needs-phase",
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     30.0,
+     52.0,
+     -43.0
+    ]
+   ]
+  },
+  {
+   "key": "ember-1#00",
+   "course": "ember-1",
+   "cls": "clock/reset",
+   "primary": "needs-phase",
+   "groups": [
+    "needs-phase",
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     0.0,
+     3.0,
+     10.6
+    ]
+   ]
+  },
+  {
+   "key": "ember-1#02",
+   "course": "ember-1",
+   "cls": "clock/reset",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     0.0,
+     4.6,
+     41.0
+    ]
+   ]
+  },
+  {
+   "key": "ember-1#03",
+   "course": "ember-1",
+   "cls": "geometry",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     -8.4,
+     3.06,
+     35.9
+    ]
+   ]
+  },
+  {
+   "key": "ember-1#05",
+   "course": "ember-1",
+   "cls": "signs/HUD",
+   "primary": "behind-blocker",
+   "groups": [
+    "no-position(parseable)",
+    "behind-blocker"
+   ],
+   "stations": [
+    [
+     0.0,
+     4.5,
+     -12.8
+    ]
+   ]
+  },
+  {
+   "key": "ember-1#07",
+   "course": "ember-1",
+   "cls": "camera",
+   "primary": "no-position",
+   "groups": [
+    "no-position",
+    "needs-phase"
+   ],
+   "stations": []
+  },
+  {
+   "key": "ember-1#08",
+   "course": "ember-1",
+   "cls": "collectibles",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     0.0,
+     4.6,
+     45.0
+    ],
+    [
+     -8.4,
+     3.06,
+     35.9
+    ]
+   ]
+  },
+  {
+   "key": "ember-1#12",
+   "course": "ember-1",
+   "cls": "signs/HUD",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     -10.1,
+     8.6,
+     -33.4
+    ]
+   ]
+  },
+  {
+   "key": "ember-1#13",
+   "course": "ember-1",
+   "cls": "geometry",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     -12.0,
+     6.0,
+     -30.0
+    ]
+   ]
+  },
+  {
+   "key": "ember-1#14",
+   "course": "ember-1",
+   "cls": "long-jump gaps",
+   "primary": "no-position",
+   "groups": [
+    "no-position",
+    "needs-2-inputs"
+   ],
+   "stations": []
+  },
+  {
+   "key": "ember-1#15",
+   "course": "ember-1",
+   "cls": "camera",
+   "primary": "needs-2-inputs",
+   "groups": [
+    "needs-2-inputs"
+   ],
+   "stations": [
+    [
+     -8.1,
+     6.4,
+     -34.0
+    ]
+   ]
+  },
+  {
+   "key": "ember-1#16",
+   "course": "ember-1",
+   "cls": "geometry",
+   "primary": "no-position",
+   "groups": [
+    "no-position",
+    "frame-claim"
+   ],
+   "stations": []
+  },
+  {
+   "key": "ember-1#17",
+   "course": "ember-1",
+   "cls": "camera",
+   "primary": "needs-phase",
+   "groups": [
+    "needs-phase"
+   ],
+   "stations": [
+    [
+     -9.0,
+     15.4,
+     -30.4
+    ]
+   ]
+  },
+  {
+   "key": "ember-1#19",
+   "course": "ember-1",
+   "cls": "signs/HUD",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)"
+   ],
+   "stations": [
+    [
+     -9.4,
+     16.7,
+     -29.0
+    ]
+   ]
+  },
+  {
+   "key": "ember-1#20",
+   "course": "ember-1",
+   "cls": "camera",
+   "primary": "no-position",
+   "groups": [
+    "no-position",
+    "frame-claim"
+   ],
+   "stations": []
+  },
+  {
+   "key": "ember-1#22",
+   "course": "ember-1",
+   "cls": "water/swim",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     -32.0,
+     5.5,
+     -34.0
+    ]
+   ]
+  },
+  {
+   "key": "ember-1#24",
+   "course": "ember-1",
+   "cls": "idle-crush",
+   "primary": "needs-phase",
+   "groups": [
+    "needs-phase",
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     41.0,
+     8.5,
+     -37.0
+    ]
+   ]
+  },
+  {
+   "key": "ember-1#25",
+   "course": "ember-1",
+   "cls": "stairs",
+   "primary": "battery-too-generic",
+   "groups": [
+    "battery-too-generic"
+   ],
+   "stations": [
+    [
+     -12.0,
+     6.0,
+     -30.0
+    ]
+   ]
+  },
+  {
+   "key": "ember-1#26",
+   "course": "ember-1",
+   "cls": "camera",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)"
+   ],
+   "stations": [
+    [
+     -4.0,
+     6.0,
+     -40.49
+    ]
+   ]
+  },
+  {
+   "key": "ember-1#27",
+   "course": "ember-1",
+   "cls": "camera",
+   "primary": "no-position",
+   "groups": [
+    "no-position",
+    "frame-claim"
+   ],
+   "stations": []
+  },
+  {
+   "key": "ember-1#28",
+   "course": "ember-1",
+   "cls": "signs/HUD",
+   "primary": "needs-phase",
+   "groups": [
+    "needs-phase"
+   ],
+   "stations": [
+    [
+     40.0,
+     6.0,
+     16.0
+    ]
+   ]
+  },
+  {
+   "key": "ember-1#31",
+   "course": "ember-1",
+   "cls": "clock/reset",
+   "primary": "no-position",
+   "groups": [
+    "no-position",
+    "frame-claim"
+   ],
+   "stations": []
+  },
+  {
+   "key": "ember-2#00",
+   "course": "ember-2",
+   "cls": "pads/belts/currents",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)"
+   ],
+   "stations": [
+    [
+     0.0,
+     6.0,
+     15.0
+    ]
+   ]
+  },
+  {
+   "key": "ember-2#04",
+   "course": "ember-2",
+   "cls": "geometry",
+   "primary": "behind-blocker",
+   "groups": [
+    "needs-phase",
+    "behind-blocker"
+   ],
+   "stations": [
+    [
+     8.0,
+     20.0,
+     9.0
+    ]
+   ]
+  },
+  {
+   "key": "ember-2#05",
+   "course": "ember-2",
+   "cls": "camera",
+   "primary": "needs-phase",
+   "groups": [
+    "needs-phase"
+   ],
+   "stations": [
+    [
+     -10.5,
+     27.9,
+     -50.0
+    ]
+   ]
+  },
+  {
+   "key": "ember-2#06",
+   "course": "ember-2",
+   "cls": "camera",
+   "primary": "needs-phase",
+   "groups": [
+    "needs-phase",
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     8.0,
+     20.3,
+     12.0
+    ]
+   ]
+  },
+  {
+   "key": "ember-2#07",
+   "course": "ember-2",
+   "cls": "idle-crush",
+   "primary": "no-position",
+   "groups": [
+    "no-position",
+    "needs-phase"
+   ],
+   "stations": []
+  },
+  {
+   "key": "ember-2#08",
+   "course": "ember-2",
+   "cls": "stairs",
+   "primary": "no-position",
+   "groups": [
+    "no-position",
+    "needs-phase"
+   ],
+   "stations": []
+  },
+  {
+   "key": "ember-2#09",
+   "course": "ember-2",
+   "cls": "camera",
+   "primary": "needs-phase",
+   "groups": [
+    "no-position(parseable)",
+    "needs-phase"
+   ],
+   "stations": [
+    [
+     0.0,
+     20.5,
+     38.0
+    ]
+   ]
+  },
+  {
+   "key": "ember-2#10",
+   "course": "ember-2",
+   "cls": "camera",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     8.0,
+     21.6,
+     5.6
+    ]
+   ]
+  },
+  {
+   "key": "ember-2#11",
+   "course": "ember-2",
+   "cls": "camera",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     -5.4,
+     20.3,
+     -50.0
+    ]
+   ]
+  },
+  {
+   "key": "ember-2#12",
+   "course": "ember-2",
+   "cls": "pads/belts/currents",
+   "primary": "battery-too-generic",
+   "groups": [
+    "battery-too-generic"
+   ],
+   "stations": [
+    [
+     -8.0,
+     1.6,
+     -14.0
+    ],
+    [
+     64.0,
+     2.2,
+     13.0
+    ]
+   ]
+  },
+  {
+   "key": "ember-3#00",
+   "course": "ember-3",
+   "cls": "collectibles",
+   "primary": "needs-phase",
+   "groups": [
+    "needs-phase"
+   ],
+   "stations": [
+    [
+     0.0,
+     22.1,
+     -20.0
+    ]
+   ]
+  },
+  {
+   "key": "ember-3#02",
+   "course": "ember-3",
+   "cls": "clock/reset",
+   "primary": "no-position",
+   "groups": [
+    "no-position",
+    "needs-savestate",
+    "needs-phase"
+   ],
+   "stations": []
+  },
+  {
+   "key": "ember-3#04",
+   "course": "ember-3",
+   "cls": "pads/belts/currents",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     -44.0,
+     8.2,
+     6.0
+    ],
+    [
+     -42.0,
+     7.0,
+     -4.0
+    ]
+   ]
+  },
+  {
+   "key": "ember-4#01",
+   "course": "ember-4",
+   "cls": "water/swim",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)"
+   ],
+   "stations": [
+    [
+     -20.0,
+     0.0,
+     34.0
+    ],
+    [
+     18.0,
+     0.0,
+     28.0
+    ],
+    [
+     0.0,
+     0.0,
+     -56.0
+    ]
+   ]
+  },
+  {
+   "key": "ember-4#03",
+   "course": "ember-4",
+   "cls": "stairs",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     0.0,
+     4.6,
+     1.5
+    ]
+   ]
+  },
+  {
+   "key": "ember-4#06",
+   "course": "ember-4",
+   "cls": "long-jump gaps",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)"
+   ],
+   "stations": [
+    [
+     24.0,
+     5.5,
+     -30.0
+    ],
+    [
+     24.0,
+     5.5,
+     -33.0
+    ]
+   ]
+  },
+  {
+   "key": "ember-4#08",
+   "course": "ember-4",
+   "cls": "clock/reset",
+   "primary": "behind-blocker",
+   "groups": [
+    "needs-phase",
+    "behind-blocker"
+   ],
+   "stations": [
+    [
+     0.0,
+     4.6,
+     -52.2
+    ],
+    [
+     0.0,
+     4.6,
+     -56.0
+    ]
+   ]
+  },
+  {
+   "key": "ember-4#11",
+   "course": "ember-4",
+   "cls": "idle-crush",
+   "primary": "behind-blocker",
+   "groups": [
+    "no-position(parseable)",
+    "needs-phase",
+    "behind-blocker"
+   ],
+   "stations": [
+    [
+     5.4,
+     0.0,
+     -48.5
+    ]
+   ]
+  },
+  {
+   "key": "ember-4#12",
+   "course": "ember-4",
+   "cls": "collectibles",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)"
+   ],
+   "stations": [
+    [
+     -9.8,
+     8.1,
+     -54.6
+    ]
+   ]
+  },
+  {
+   "key": "ember-4#15",
+   "course": "ember-4",
+   "cls": "collectibles",
+   "primary": "battery-too-generic",
+   "groups": [
+    "battery-too-generic"
+   ],
+   "stations": [
+    [
+     -4.5,
+     3.02,
+     38.6
+    ]
+   ]
+  },
+  {
+   "key": "ember-4#17",
+   "course": "ember-4",
+   "cls": "water/swim",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)",
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     -20.0,
+     0.0,
+     34.0
+    ]
+   ]
+  },
+  {
+   "key": "keep#02",
+   "course": "keep",
+   "cls": "geometry",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)",
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     0.0,
+     0.0,
+     13.0
+    ]
+   ]
+  },
+  {
+   "key": "keep#05",
+   "course": "keep",
+   "cls": "cannon/interact",
+   "primary": "needs-savestate",
+   "groups": [
+    "needs-savestate"
+   ],
+   "stations": [
+    [
+     0.0,
+     0.0,
+     -1.0
+    ]
+   ]
+  },
+  {
+   "key": "keep#08",
+   "course": "keep",
+   "cls": "geometry",
+   "primary": "battery-too-generic",
+   "groups": [
+    "battery-too-generic"
+   ],
+   "stations": [
+    [
+     -13.0,
+     0.0,
+     20.0
+    ]
+   ]
+  },
+  {
+   "key": "keep#09",
+   "course": "keep",
+   "cls": "water/swim",
+   "primary": "needs-2-inputs",
+   "groups": [
+    "needs-2-inputs"
+   ],
+   "stations": [
+    [
+     0.0,
+     0.24,
+     26.6
+    ]
+   ]
+  },
+  {
+   "key": "keep#10",
+   "course": "keep",
+   "cls": "water/swim",
+   "primary": "needs-savestate",
+   "groups": [
+    "needs-savestate",
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     0.0,
+     0.6,
+     30.0
+    ]
+   ]
+  },
+  {
+   "key": "keep#11",
+   "course": "keep",
+   "cls": "cannon/interact",
+   "primary": "no-position",
+   "groups": [
+    "no-position",
+    "needs-savestate"
+   ],
+   "stations": []
+  },
+  {
+   "key": "keep#13",
+   "course": "keep",
+   "cls": "long-jump gaps",
+   "primary": "needs-2-inputs",
+   "groups": [
+    "needs-2-inputs"
+   ],
+   "stations": [
+    [
+     0.0,
+     6.3,
+     14.2
+    ]
+   ]
+  },
+  {
+   "key": "keep#15",
+   "course": "keep",
+   "cls": "geometry",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     0.0,
+     6.3,
+     -11.0
+    ],
+    [
+     0.0,
+     6.3,
+     14.2
+    ]
+   ]
+  },
+  {
+   "key": "keep#16",
+   "course": "keep",
+   "cls": "cannon/interact",
+   "primary": "needs-savestate",
+   "groups": [
+    "needs-savestate"
+   ],
+   "stations": [
+    [
+     -17.0,
+     12.65,
+     37.0
+    ]
+   ]
+  },
+  {
+   "key": "rime-1#01",
+   "course": "rime-1",
+   "cls": "collectibles",
+   "primary": "unreachable",
+   "groups": [
+    "no-position(parseable)",
+    "needs-savestate",
+    "unreachable",
+    "behind-blocker"
+   ],
+   "stations": [
+    [
+     1.8,
+     15.1,
+     -47.3
+    ]
+   ]
+  },
+  {
+   "key": "rime-1#03",
+   "course": "rime-1",
+   "cls": "pound",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)"
+   ],
+   "stations": [
+    [
+     5.0,
+     1.3,
+     42.0
+    ]
+   ]
+  },
+  {
+   "key": "rime-1#05",
+   "course": "rime-1",
+   "cls": "camera",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)"
+   ],
+   "stations": [
+    [
+     5.0,
+     2.7,
+     45.6
+    ],
+    [
+     5.0,
+     1.3,
+     48.0
+    ]
+   ]
+  },
+  {
+   "key": "rime-1#06",
+   "course": "rime-1",
+   "cls": "camera",
+   "primary": "needs-phase",
+   "groups": [
+    "needs-phase"
+   ],
+   "stations": [
+    [
+     0.0,
+     1.4,
+     58.5
+    ]
+   ]
+  },
+  {
+   "key": "rime-1#07",
+   "course": "rime-1",
+   "cls": "water/swim",
+   "primary": "no-position",
+   "groups": [
+    "no-position",
+    "frame-claim"
+   ],
+   "stations": []
+  },
+  {
+   "key": "rime-1#09",
+   "course": "rime-1",
+   "cls": "geometry",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)",
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     58.0,
+     76.0,
+     106.0
+    ],
+    [
+     55.0,
+     71.0,
+     97.0
+    ],
+    [
+     43.0,
+     59.0,
+     88.0
+    ]
+   ]
+  },
+  {
+   "key": "rime-1#10",
+   "course": "rime-1",
+   "cls": "geometry",
+   "primary": "no-position",
+   "groups": [
+    "no-position",
+    "needs-savestate"
+   ],
+   "stations": []
+  },
+  {
+   "key": "rime-1#12",
+   "course": "rime-1",
+   "cls": "collectibles",
+   "primary": "unreachable",
+   "groups": [
+    "no-position(parseable)",
+    "needs-savestate",
+    "needs-2-inputs",
+    "unreachable"
+   ],
+   "stations": [
+    [
+     -26.47,
+     8.4,
+     3.78
+    ],
+    [
+     -27.22,
+     8.4,
+     3.78
+    ]
+   ]
+  },
+  {
+   "key": "rime-1#13",
+   "course": "rime-1",
+   "cls": "collectibles",
+   "primary": "needs-phase",
+   "groups": [
+    "needs-phase"
+   ],
+   "stations": [
+    [
+     20.25,
+     10.62,
+     -25.21
+    ],
+    [
+     32.75,
+     12.78,
+     -32.29
+    ]
+   ]
+  },
+  {
+   "key": "rime-1#17",
+   "course": "rime-1",
+   "cls": "collectibles",
+   "primary": "battery-too-generic",
+   "groups": [
+    "battery-too-generic"
+   ],
+   "stations": [
+    [
+     0.0,
+     27.0,
+     -48.0
+    ]
+   ]
+  },
+  {
+   "key": "rime-1#18",
+   "course": "rime-1",
+   "cls": "collectibles",
+   "primary": "needs-2-inputs",
+   "groups": [
+    "no-position(parseable)",
+    "needs-2-inputs"
+   ],
+   "stations": [
+    [
+     -16.0,
+     0.0,
+     20.0
+    ]
+   ]
+  },
+  {
+   "key": "rime-1#19",
+   "course": "rime-1",
+   "cls": "collectibles",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)"
+   ],
+   "stations": [
+    [
+     12.0,
+     0.0,
+     -25.0
+    ],
+    [
+     8.0,
+     0.0,
+     -29.0
+    ],
+    [
+     4.0,
+     0.0,
+     -33.0
+    ]
+   ]
+  },
+  {
+   "key": "rime-1#20",
+   "course": "rime-1",
+   "cls": "water/swim",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     0.0,
+     1.36,
+     55.0
+    ]
+   ]
+  },
+  {
+   "key": "rime-2#00",
+   "course": "rime-2",
+   "cls": "signs/HUD",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)",
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     -4.2,
+     2.0,
+     -22.6
+    ]
+   ]
+  },
+  {
+   "key": "rime-2#01",
+   "course": "rime-2",
+   "cls": "signs/HUD",
+   "primary": "no-position",
+   "groups": [
+    "no-position",
+    "frame-claim"
+   ],
+   "stations": []
+  },
+  {
+   "key": "rime-2#04",
+   "course": "rime-2",
+   "cls": "clock/reset",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     36.0,
+     17.0,
+     -6.0
+    ]
+   ]
+  },
+  {
+   "key": "rime-2#05",
+   "course": "rime-2",
+   "cls": "geometry",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)",
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     36.0,
+     0.0,
+     -8.0
+    ],
+    [
+     18.0,
+     0.0,
+     -20.0
+    ]
+   ]
+  },
+  {
+   "key": "rime-2#06",
+   "course": "rime-2",
+   "cls": "signs/HUD",
+   "primary": "battery-too-generic",
+   "groups": [
+    "battery-too-generic"
+   ],
+   "stations": [
+    [
+     35.0,
+     18.3,
+     -1.2
+    ]
+   ]
+  },
+  {
+   "key": "rime-2#07",
+   "course": "rime-2",
+   "cls": "signs/HUD",
+   "primary": "behind-blocker",
+   "groups": [
+    "needs-2-inputs",
+    "behind-blocker",
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     10.49,
+     27.55,
+     -15.15
+    ]
+   ]
+  },
+  {
+   "key": "rime-2#08",
+   "course": "rime-2",
+   "cls": "signs/HUD",
+   "primary": "no-position",
+   "groups": [
+    "no-position",
+    "needs-2-inputs"
+   ],
+   "stations": []
+  },
+  {
+   "key": "rime-2#09",
+   "course": "rime-2",
+   "cls": "collectibles",
+   "primary": "unreachable",
+   "groups": [
+    "no-position(parseable)",
+    "needs-2-inputs",
+    "unreachable"
+   ],
+   "stations": [
+    [
+     -13.0,
+     14.4,
+     -21.0
+    ]
+   ]
+  },
+  {
+   "key": "rime-2#11",
+   "course": "rime-2",
+   "cls": "geometry",
+   "primary": "behind-blocker",
+   "groups": [
+    "no-position(parseable)",
+    "behind-blocker"
+   ],
+   "stations": [
+    [
+     0.0,
+     0.0,
+     -34.0
+    ],
+    [
+     0.0,
+     0.0,
+     -40.0
+    ],
+    [
+     0.0,
+     0.0,
+     -46.0
+    ]
+   ]
+  },
+  {
+   "key": "rime-2#12",
+   "course": "rime-2",
+   "cls": "long-jump gaps",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)"
+   ],
+   "stations": [
+    [
+     6.4,
+     35.35,
+     -46.0
+    ],
+    [
+     5.2,
+     36.8,
+     -49.72
+    ]
+   ]
+  },
+  {
+   "key": "rime-2#13",
+   "course": "rime-2",
+   "cls": "long-jump gaps",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)"
+   ],
+   "stations": [
+    [
+     3.88,
+     33.9,
+     -47.95
+    ]
+   ]
+  },
+  {
+   "key": "rime-2#15",
+   "course": "rime-2",
+   "cls": "long-jump gaps",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)"
+   ],
+   "stations": [
+    [
+     -26.4,
+     3.3,
+     21.6
+    ],
+    [
+     -27.6,
+     5.7,
+     19.0
+    ]
+   ]
+  },
+  {
+   "key": "rime-2#16",
+   "course": "rime-2",
+   "cls": "long-jump gaps",
+   "primary": "unreachable",
+   "groups": [
+    "no-position(parseable)",
+    "unreachable"
+   ],
+   "stations": [
+    [
+     6.4,
+     35.35,
+     -46.0
+    ],
+    [
+     5.2,
+     36.8,
+     -49.72
+    ]
+   ]
+  },
+  {
+   "key": "rime-2#17",
+   "course": "rime-2",
+   "cls": "long-jump gaps",
+   "primary": "needs-phase",
+   "groups": [
+    "no-position(parseable)",
+    "needs-phase"
+   ],
+   "stations": [
+    [
+     -25.4,
+     17.6,
+     -7.8
+    ]
+   ]
+  },
+  {
+   "key": "rime-2#18",
+   "course": "rime-2",
+   "cls": "stairs",
+   "primary": "no-position",
+   "groups": [
+    "no-position"
+   ],
+   "stations": []
+  },
+  {
+   "key": "rime-2#19",
+   "course": "rime-2",
+   "cls": "geometry",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     3.2,
+     30.7,
+     -38.1
+    ]
+   ]
+  },
+  {
+   "key": "rime-2#20",
+   "course": "rime-2",
+   "cls": "geometry",
+   "primary": "no-position",
+   "groups": [
+    "no-position",
+    "frame-claim"
+   ],
+   "stations": []
+  },
+  {
+   "key": "rime-3#00",
+   "course": "rime-3",
+   "cls": "camera",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     0.0,
+     2.2,
+     46.0
+    ],
+    [
+     0.35,
+     5.37,
+     47.64
+    ]
+   ]
+  },
+  {
+   "key": "rime-3#01",
+   "course": "rime-3",
+   "cls": "camera",
+   "primary": "needs-savestate",
+   "groups": [
+    "no-position(parseable)",
+    "needs-savestate"
+   ],
+   "stations": [
+    [
+     12.0,
+     6.0,
+     52.0
+    ]
+   ]
+  },
+  {
+   "key": "rime-3#08",
+   "course": "rime-3",
+   "cls": "collectibles",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)",
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     -27.6,
+     -0.8,
+     -19.0
+    ],
+    [
+     -26.7,
+     -0.8,
+     -16.5
+    ]
+   ]
+  },
+  {
+   "key": "rime-3#09",
+   "course": "rime-3",
+   "cls": "geometry",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     -36.59,
+     6.6,
+     -14.71
+    ]
+   ]
+  },
+  {
+   "key": "rime-3#11",
+   "course": "rime-3",
+   "cls": "long-jump gaps",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)"
+   ],
+   "stations": [
+    [
+     -29.0,
+     4.15,
+     26.0
+    ],
+    [
+     -32.6,
+     5.2,
+     20.0
+    ]
+   ]
+  },
+  {
+   "key": "rime-3#14",
+   "course": "rime-3",
+   "cls": "pads/belts/currents",
+   "primary": "needs-phase",
+   "groups": [
+    "no-position(parseable)",
+    "needs-phase"
+   ],
+   "stations": [
+    [
+     30.0,
+     12.65,
+     -6.0
+    ]
+   ]
+  },
+  {
+   "key": "rime-3#15",
+   "course": "rime-3",
+   "cls": "stairs",
+   "primary": "no-position",
+   "groups": [
+    "no-position",
+    "needs-phase",
+    "needs-2-inputs"
+   ],
+   "stations": []
+  },
+  {
+   "key": "rime-3#17",
+   "course": "rime-3",
+   "cls": "geometry",
+   "primary": "battery-too-generic",
+   "groups": [
+    "battery-too-generic"
+   ],
+   "stations": [
+    [
+     -8.0,
+     8.2,
+     -36.0
+    ],
+    [
+     8.0,
+     8.9,
+     -34.0
+    ]
+   ]
+  },
+  {
+   "key": "rime-3#18",
+   "course": "rime-3",
+   "cls": "cannon/interact",
+   "primary": "behind-blocker",
+   "groups": [
+    "no-position(parseable)",
+    "needs-savestate",
+    "behind-blocker"
+   ],
+   "stations": [
+    [
+     4.4,
+     35.58,
+     -7.78
+    ],
+    [
+     4.79,
+     17.85,
+     -24.49
+    ],
+    [
+     2.0,
+     35.6,
+     6.0
+    ]
+   ]
+  },
+  {
+   "key": "rime-3#20",
+   "course": "rime-3",
+   "cls": "stairs",
+   "primary": "needs-2-inputs",
+   "groups": [
+    "no-position(parseable)",
+    "needs-2-inputs"
+   ],
+   "stations": [
+    [
+     10.41,
+     33.8,
+     -6.38
+    ]
+   ]
+  },
+  {
+   "key": "rime-3#22",
+   "course": "rime-3",
+   "cls": "collectibles",
+   "primary": "unreachable",
+   "groups": [
+    "unreachable",
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     0.0,
+     36.0,
+     -4.0
+    ]
+   ]
+  },
+  {
+   "key": "rime-3#23",
+   "course": "rime-3",
+   "cls": "idle-crush",
+   "primary": "unreachable",
+   "groups": [
+    "no-position(parseable)",
+    "needs-phase",
+    "unreachable"
+   ],
+   "stations": [
+    [
+     16.5,
+     19.6,
+     6.5
+    ],
+    [
+     21.0,
+     20.0,
+     -2.0
+    ],
+    [
+     21.0,
+     -14.88,
+     -2.0
+    ]
+   ]
+  },
+  {
+   "key": "rime-3#25",
+   "course": "rime-3",
+   "cls": "idle-crush",
+   "primary": "needs-phase",
+   "groups": [
+    "no-position(parseable)",
+    "needs-phase"
+   ],
+   "stations": [
+    [
+     16.23,
+     19.99,
+     -2.01
+    ]
+   ]
+  },
+  {
+   "key": "rime-3#26",
+   "course": "rime-3",
+   "cls": "stairs",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     13.0,
+     35.4,
+     -4.2
+    ]
+   ]
+  },
+  {
+   "key": "rime-3#27",
+   "course": "rime-3",
+   "cls": "collectibles",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     24.24,
+     13.37,
+     -17.33
+    ]
+   ]
+  },
+  {
+   "key": "verdant-1#00",
+   "course": "verdant-1",
+   "cls": "geometry",
+   "primary": "unreachable",
+   "groups": [
+    "no-position(parseable)",
+    "unreachable"
+   ],
+   "stations": [
+    [
+     0.0,
+     2.25,
+     31.34
+    ]
+   ]
+  },
+  {
+   "key": "verdant-1#02",
+   "course": "verdant-1",
+   "cls": "water/swim",
+   "primary": "battery-too-generic",
+   "groups": [
+    "battery-too-generic"
+   ],
+   "stations": [
+    [
+     0.0,
+     1.0,
+     22.0
+    ]
+   ]
+  },
+  {
+   "key": "verdant-1#03",
+   "course": "verdant-1",
+   "cls": "water/swim",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     0.9,
+     -1.55,
+     22.0
+    ]
+   ]
+  },
+  {
+   "key": "verdant-1#04",
+   "course": "verdant-1",
+   "cls": "water/swim",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     -3.0,
+     0.85,
+     22.0
+    ]
+   ]
+  },
+  {
+   "key": "verdant-1#05",
+   "course": "verdant-1",
+   "cls": "stairs",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)"
+   ],
+   "stations": [
+    [
+     -7.6,
+     9.3,
+     -19.6
+    ]
+   ]
+  },
+  {
+   "key": "verdant-1#08",
+   "course": "verdant-1",
+   "cls": "stairs",
+   "primary": "no-position",
+   "groups": [
+    "no-position",
+    "frame-claim"
+   ],
+   "stations": []
+  },
+  {
+   "key": "verdant-1#09",
+   "course": "verdant-1",
+   "cls": "water/swim",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)"
+   ],
+   "stations": [
+    [
+     0.0,
+     -30.42,
+     7.33
+    ]
+   ]
+  },
+  {
+   "key": "verdant-1#11",
+   "course": "verdant-1",
+   "cls": "pads/belts/currents",
+   "primary": "needs-phase",
+   "groups": [
+    "no-position(parseable)",
+    "needs-phase"
+   ],
+   "stations": [
+    [
+     13.0,
+     0.14,
+     -47.0
+    ]
+   ]
+  },
+  {
+   "key": "verdant-1#12",
+   "course": "verdant-1",
+   "cls": "signs/HUD",
+   "primary": "needs-phase",
+   "groups": [
+    "needs-phase",
+    "needs-2-inputs"
+   ],
+   "stations": [
+    [
+     38.0,
+     25.5,
+     -6.0
+    ]
+   ]
+  },
+  {
+   "key": "verdant-1#14",
+   "course": "verdant-1",
+   "cls": "camera",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     -2.0,
+     16.4,
+     -53.02
+    ]
+   ]
+  },
+  {
+   "key": "verdant-1#15",
+   "course": "verdant-1",
+   "cls": "collectibles",
+   "primary": "battery-too-generic",
+   "groups": [
+    "battery-too-generic"
+   ],
+   "stations": [
+    [
+     14.0,
+     12.9,
+     32.0
+    ]
+   ]
+  },
+  {
+   "key": "verdant-2#00",
+   "course": "verdant-2",
+   "cls": "stairs",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     0.0,
+     2.3,
+     53.0
+    ],
+    [
+     0.0,
+     1.55,
+     48.0
+    ]
+   ]
+  },
+  {
+   "key": "verdant-2#03",
+   "course": "verdant-2",
+   "cls": "water/swim",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)"
+   ],
+   "stations": [
+    [
+     0.0,
+     0.0,
+     43.0
+    ]
+   ]
+  },
+  {
+   "key": "verdant-2#06",
+   "course": "verdant-2",
+   "cls": "water/swim",
+   "primary": "battery-too-generic",
+   "groups": [
+    "battery-too-generic"
+   ],
+   "stations": [
+    [
+     0.0,
+     -1.4,
+     39.5
+    ],
+    [
+     34.0,
+     2.8,
+     10.0
+    ]
+   ]
+  },
+  {
+   "key": "verdant-2#09",
+   "course": "verdant-2",
+   "cls": "stairs",
+   "primary": "battery-too-generic",
+   "groups": [
+    "battery-too-generic"
+   ],
+   "stations": [
+    [
+     6.4,
+     18.7,
+     1.68
+    ]
+   ]
+  },
+  {
+   "key": "verdant-2#11",
+   "course": "verdant-2",
+   "cls": "geometry",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)"
+   ],
+   "stations": [
+    [
+     -8.0,
+     0.0,
+     25.0
+    ],
+    [
+     -16.0,
+     0.0,
+     18.0
+    ],
+    [
+     -20.0,
+     0.0,
+     6.0
+    ]
+   ]
+  },
+  {
+   "key": "verdant-2#14",
+   "course": "verdant-2",
+   "cls": "signs/HUD",
+   "primary": "behind-blocker",
+   "groups": [
+    "no-position(parseable)",
+    "behind-blocker"
+   ],
+   "stations": [
+    [
+     0.0,
+     0.0,
+     -22.5
+    ]
+   ]
+  },
+  {
+   "key": "verdant-2#17",
+   "course": "verdant-2",
+   "cls": "camera",
+   "primary": "battery-too-generic",
+   "groups": [
+    "battery-too-generic"
+   ],
+   "stations": [
+    [
+     20.02,
+     9.1,
+     0.0
+    ]
+   ]
+  },
+  {
+   "key": "verdant-2#20",
+   "course": "verdant-2",
+   "cls": "geometry",
+   "primary": "battery-too-generic",
+   "groups": [
+    "battery-too-generic"
+   ],
+   "stations": [
+    [
+     0.55,
+     19.0,
+     -7.62
+    ]
+   ]
+  },
+  {
+   "key": "verdant-2#21",
+   "course": "verdant-2",
+   "cls": "pads/belts/currents",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)"
+   ],
+   "stations": [
+    [
+     -8.0,
+     6.5,
+     24.5
+    ]
+   ]
+  },
+  {
+   "key": "verdant-2#22",
+   "course": "verdant-2",
+   "cls": "geometry",
+   "primary": "no-position",
+   "groups": [
+    "no-position",
+    "frame-claim"
+   ],
+   "stations": []
+  },
+  {
+   "key": "verdant-2#23",
+   "course": "verdant-2",
+   "cls": "signs/HUD",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     -9.58,
+     12.0,
+     -22.4
+    ]
+   ]
+  },
+  {
+   "key": "verdant-2#24",
+   "course": "verdant-2",
+   "cls": "water/swim",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     -21.7,
+     12.0,
+     -12.18
+    ]
+   ]
+  },
+  {
+   "key": "verdant-2#26",
+   "course": "verdant-2",
+   "cls": "camera",
+   "primary": "no-position(parseable)",
+   "groups": [
+    "no-position(parseable)"
+   ],
+   "stations": [
+    [
+     0.0,
+     0.0,
+     -3.0
+    ]
+   ]
+  },
+  {
+   "key": "verdant-2#28",
+   "course": "verdant-2",
+   "cls": "signs/HUD",
+   "primary": "battery-too-generic",
+   "groups": [
+    "battery-too-generic"
+   ],
+   "stations": [
+    [
+     -6.0,
+     19.0,
+     0.5
+    ],
+    [
+     -5.2,
+     20.2,
+     -6.6
+    ]
+   ]
+  },
+  {
+   "key": "verdant-2#29",
+   "course": "verdant-2",
+   "cls": "pads/belts/currents",
+   "primary": "needs-phase",
+   "groups": [
+    "needs-phase",
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     40.0,
+     20.0,
+     0.0
+    ],
+    [
+     0.0,
+     24.0,
+     -44.0
+    ]
+   ]
+  },
+  {
+   "key": "verdant-2#30",
+   "course": "verdant-2",
+   "cls": "geometry",
+   "primary": "no-position",
+   "groups": [
+    "no-position"
+   ],
+   "stations": []
+  },
+  {
+   "key": "verdant-3#00",
+   "course": "verdant-3",
+   "cls": "clock/reset",
+   "primary": "unreachable",
+   "groups": [
+    "needs-phase",
+    "unreachable",
+    "behind-blocker"
+   ],
+   "stations": [
+    [
+     0.0,
+     2.6,
+     20.4
+    ]
+   ]
+  },
+  {
+   "key": "verdant-3#03",
+   "course": "verdant-3",
+   "cls": "collectibles",
+   "primary": "unreachable",
+   "groups": [
+    "needs-phase",
+    "unreachable"
+   ],
+   "stations": [
+    [
+     5.0,
+     13.6,
+     -21.5
+    ],
+    [
+     -0.4,
+     15.2,
+     -19.6
+    ]
+   ]
+  },
+  {
+   "key": "verdant-3#06",
+   "course": "verdant-3",
+   "cls": "pads/belts/currents",
+   "primary": "no-position",
+   "groups": [
+    "no-position",
+    "needs-phase",
+    "behind-blocker"
+   ],
+   "stations": []
+  },
+  {
+   "key": "verdant-3#09",
+   "course": "verdant-3",
+   "cls": "collectibles",
+   "primary": "battery-too-generic",
+   "groups": [
+    "battery-too-generic"
+   ],
+   "stations": [
+    [
+     -14.0,
+     -3.3,
+     28.0
+    ],
+    [
+     -14.0,
+     -3.6,
+     28.0
+    ]
+   ]
+  },
+  {
+   "key": "verdant-3#11",
+   "course": "verdant-3",
+   "cls": "pads/belts/currents",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     -9.0,
+     2.75,
+     47.0
+    ],
+    [
+     -9.2,
+     45.15,
+     44.6
+    ]
+   ]
+  },
+  {
+   "key": "verdant-3#13",
+   "course": "verdant-3",
+   "cls": "clock/reset",
+   "primary": "behind-blocker",
+   "groups": [
+    "behind-blocker",
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     0.0,
+     1.9,
+     42.0
+    ],
+    [
+     0.0,
+     2.76,
+     19.03
+    ]
+   ]
+  },
+  {
+   "key": "verdant-3#14",
+   "course": "verdant-3",
+   "cls": "signs/HUD",
+   "primary": "frame-claim",
+   "groups": [
+    "frame-claim"
+   ],
+   "stations": [
+    [
+     0.0,
+     0.95,
+     32.5
+    ],
+    [
+     0.0,
+     0.95,
+     25.8
+    ]
+   ]
+  },
+  {
+   "key": "verdant-3#18",
+   "course": "verdant-3",
+   "cls": "geometry",
+   "primary": "battery-too-generic",
+   "groups": [
+    "battery-too-generic"
+   ],
+   "stations": [
+    [
+     -6.21,
+     10.05,
+     6.09
+    ]
+   ]
+  },
+  {
+   "key": "verdant-3#21",
+   "course": "verdant-3",
+   "cls": "pads/belts/currents",
+   "primary": "battery-too-generic",
+   "groups": [
+    "battery-too-generic"
+   ],
+   "stations": [
+    [
+     2.16,
+     13.6,
+     -12.99
+    ]
+   ]
+  },
+  {
+   "key": "verdant-3#22",
+   "course": "verdant-3",
+   "cls": "stairs",
+   "primary": "battery-too-generic",
+   "groups": [
+    "battery-too-generic"
+   ],
+   "stations": [
+    [
+     -0.05,
+     13.86,
+     -21.38
+    ]
+   ]
+  },
+  {
+   "key": "verdant-3#24",
+   "course": "verdant-3",
+   "cls": "stairs",
+   "primary": "needs-phase",
+   "groups": [
+    "needs-phase"
+   ],
+   "stations": [
+    [
+     -6.0,
+     13.6,
+     -22.6
+    ],
+    [
+     -6.0,
+     14.24,
+     -19.62
+    ]
+   ]
+  },
+  {
+   "key": "verdant-3#26",
+   "course": "verdant-3",
+   "cls": "camera",
+   "primary": "needs-phase",
+   "groups": [
+    "needs-phase"
+   ],
+   "stations": [
+    [
+     -6.0,
+     13.92,
+     -19.5
+    ]
+   ]
+  },
+  {
+   "key": "verdant-3#32",
+   "course": "verdant-3",
+   "cls": "stairs",
+   "primary": "unreachable",
+   "groups": [
+    "no-position(parseable)",
+    "needs-phase",
+    "unreachable"
+   ],
+   "stations": [
+    [
+     8.92,
+     18.04,
+     -29.36
+    ],
+    [
+     10.66,
+     16.38,
+     -28.48
+    ],
+    [
+     14.02,
+     13.02,
+     -22.63
+    ]
+   ]
+  },
+  {
+   "key": "verdant-3#34",
+   "course": "verdant-3",
+   "cls": "collectibles",
+   "primary": "needs-savestate",
+   "groups": [
+    "needs-savestate"
+   ],
+   "stations": [
+    [
+     17.0,
+     24.6,
+     -44.2
+    ],
+    [
+     17.0,
+     26.0,
+     -39.4
+    ]
+   ]
+  }
+ ]
+}
