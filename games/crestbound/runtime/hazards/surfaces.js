@@ -302,6 +302,16 @@ export function ice(def, ctx) { return new IceHazard(def, ctx); }
    CONVEYOR
    ====================================================================================== */
 
+/** How far a belt's COLLIDER top stands proud of its authored top (see the note at
+ *  the collider below). This is deliberately the MINIMUM that settles a tie, not a
+ *  number big enough to also lift a belt out of geometry that BURIES it: 6 mm is
+ *  60x collide.js's 1e-4 tie band and 1/75 of TUNE.stepUp. The first version used
+ *  30 mm and that was too much — it moved a knife-edge delivery (verdant-3's lower
+ *  hay belt hands the hero off its south end onto a deck whose lip is 0.30 m away,
+ *  and 30 mm of extra height carried him 0.14 m further and over the lip). A belt
+ *  that is buried under a hillside is a terrain defect and is reported as one. */
+const CONVEYOR_PROUD = 0.006;
+
 class ConveyorHazard extends Hazard {
   constructor(def, ctx) {
     super(def, ctx, 'conveyor');
@@ -333,9 +343,25 @@ class ConveyorHazard extends Hazard {
     this._buildTreads(q);
     this._buildChevrons(q);
 
+    /* THE BELT MUST WIN THE GROUND PICK IT TIES.
+       `collide.js probeDown` takes the HIGHEST surface under the feet, and breaks
+       an equal-top tie (within its 1e-4 band) by FOOTPRINT AREA. A belt is by
+       definition smaller than the deck it is laid on, so a belt authored FLUSH
+       with its floor can never be the ground the hero stands on: `player.surface`
+       stays 'normal', `carried` stays (0,0), and the belt carries nobody however
+       correct the physics is. Measured on this tree (_harness/_sf3_probe.py
+       beltcheck): azure-2's three belts all read top 0.000 / 0.000 / 9.000 against
+       decks of exactly the same top and all three were dead — the yard pair and
+       A2-12's gallery belt, whose tester wrote "stood on the conveyor's south end
+       and let it carry me".
+       CONVEYOR_PROUD lifts the COLLIDER's top (its bottom, and all of the art,
+       stay put) just far enough to settle the tie — see the constant. A belt
+       already proud of its deck keeps the behaviour it has, to the millimetre. */
+    const half = _v.copy(this.size).multiplyScalar(0.5);
+    half.y += CONVEYOR_PROUD * 0.5;
     this.collider = makeCollider({
-      center: this.center,
-      half: _v.copy(this.size).multiplyScalar(0.5),
+      center: _v2.set(this.center.x, this.center.y + CONVEYOR_PROUD * 0.5, this.center.z),
+      half,
       surface: 'conveyor',
       ref: this,
       props: {

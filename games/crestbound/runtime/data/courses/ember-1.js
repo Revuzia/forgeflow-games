@@ -862,7 +862,11 @@ export default {
     { kind: 'platform', p: [-8.0, 10.8, -35.7], s: [3.8, 9.6, 0.4], mat: 'metal', tint: 0x565b62 },   // north face
     { kind: 'platform', p: [-8.0, 9.5, -32.3], s: [3.8, 7.0, 0.4], mat: 'metal', tint: 0x565b62 },    // south face, stops at 13.00
     { kind: 'platform', p: [-9.5, 15.25, -30.6], s: [4.4, 0.3, 3.4], mat: 'grate', tint: IRON, stripe: true, edge: SAFE_EDGE },
-    { kind: 'text', p: [-10.1, 8.6, -33.4], rot: [0, 1.35, 0], text: 'KICK ONE WALL, THEN THE OTHER', size: 0.20, color: 0xd8c79a },
+    /* UI-TEXT LANE 2026-09-07 (pass 2), buried plate: 88.9 % covered by `merged_cb.metal.ember` 0.67 m in front.
+       Measured by `_harness/_ui2_boards.py` (a ray from 0.8 m in front of
+       each of 27 points on the lettering, back at the words). this 3.43 m plate is the copy every kick shaft in the game got, and a shaft is 3.4 m
+       wide: `maxW` narrows it to the wall (two lines) and it moves 0.9 m out along its normal */
+    { kind: 'text', p: [-9.2, 8.6, -33.2], rot: [0, 1.35, 0], text: 'KICK ONE WALL, THEN THE OTHER', size: 0.20, color: 0xd8c79a, maxW: 1.7 },
     { kind: 'light', p: [FLUE_C[0], 11.0, FLUE_C[1]], color: MAGMA, intensity: 6, distance: 12 },
 
     /* ========================================================================

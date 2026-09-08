@@ -698,7 +698,14 @@ export default {
     { kind: 'deco', kindOf: 'post', p: on(4.4, 39.15, 0.65), s: [0.16, 1.3, 0.16], mat: 'stone', tint: LIME_D },
     { kind: 'text', p: [4.4, 4.95, 39.6], rot: [0, 0, 0], text: 'TIDEWELL TEMPLE', size: 0.58, color: 0x1c4a58 },
     { kind: 'text', p: [4.4, 4.42, 39.6], rot: [0, 0, 0], text: 'JUMP AT THE SURFACE TO STROKE  ·  CROUCH TO SINK', size: 0.22, color: 0x2e6a78 },
-    { kind: 'text', p: [4.4, 4.05, 39.6], rot: [0, 0, 0], text: 'THE AIR RUNS OUT. THE COURSE DOES NOT.', size: 0.22, color: 0x2e6a78 },
+    /* UI-TEXT LANE 2026-09-07 (playtest azure-1 #14: "no drown, no damage, no
+       breath bar anywhere in the HUD ... the sign teaches a rule that does not
+       exist and makes every dive feel more dangerous than it is"). There is no
+       air or drowning model — CONTRACT s11 WATER has swim speeds, a stroke, a
+       sink and a surface hop, and nothing else, and `grep -n 'drown|breath|
+       oxygen' runtime/player/controller.js runtime/ui/hud.js runtime/game.js`
+       finds no mechanic. The line now teaches what the water DOES do. */
+    { kind: 'text', p: [4.4, 4.05, 39.6], rot: [0, 0, 0], text: 'THE WATER IS DEEP. YOU DO NOT DROWN.', size: 0.22, color: 0x2e6a78 },
 
     // The pedestal the HUNDRED COINS crest lands on when you finally hit 100.
     { kind: 'pedestal', p: on(-5.5, 42, 0), mat: 'stone', tint: LIME, glow: GOLD },
@@ -917,7 +924,10 @@ export default {
     { kind: 'platform', p: [0, 14.45, -32.4], s: [4.4, 0.3, 2.6], mat: 'stone', tint: LIME, stripe: true, edge: SAFE_EDGE },
     { kind: 'deco', kindOf: 'chain', p: [0, 10.0, -35.9], s: [0.16, 9.0, 0.16], mat: 'metal', tint: 0x8fa8b4 },
     { kind: 'light', p: [0, 11.0, -34.5], color: 0xbcd8f5, intensity: 6, distance: 12 },
-    { kind: 'text', p: [0, 6.6, -32.5], rot: [0, Math.PI, 0], text: 'ROUTE C  ·  KICK ONE WALL, THEN THE OTHER', size: 0.20, color: 0xd8e7ee },
+    /* UI-TEXT LANE 2026-09-07 (pass 2), buried plate: 44.4 % covered across the whole width, 0.21 m in front - the shaft wall itself.
+       Measured by `_harness/_ui2_boards.py` (a ray from 0.8 m in front of
+       each of 27 points on the lettering, back at the words). narrowed to the shaft (`maxW`) and moved 0.46 m out along its normal */
+    { kind: 'text', p: [0, 6.6, -32.96], rot: [0, Math.PI, 0], text: 'ROUTE C  ·  KICK ONE WALL, THEN THE OTHER', size: 0.20, color: 0xd8e7ee, maxW: 1.7 },
 
     /* ========================================================================
      * BEAT 9c — THE SANCTUM

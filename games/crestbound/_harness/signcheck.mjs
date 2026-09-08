@@ -91,6 +91,10 @@ function textLines(o, head) {
   const out = [];
   const size = fin(o.size) ? Math.min(4, Math.max(0.12, o.size)) : 0.42;
   const cap = head ? size * 0.72 : size * 0.95;
+  /* per-board width cap (course.js `maxW`): a board hung in a narrow place says
+     how wide it may be, and its clauses wrap to that instead of to the game's
+     widest line. */
+  const maxW = fin(o.maxW) ? Math.min(TEXT_MAX_LINE_M, Math.max(0.8, o.maxW)) : TEXT_MAX_LINE_M;
   let wrapped = 0;
   const raw = String(o.text).split('\n');
   for (const r of raw) {
@@ -100,9 +104,9 @@ function textLines(o, head) {
         if (!words.length) continue;
         const text = words.join(' ');
         const wM = lineWidthM(text, cap);
-        if (wM <= TEXT_MAX_LINE_M / TEXT_FIT_MIN) { out.push({ text, cap, head }); continue; }
+        if (wM <= maxW / TEXT_FIT_MIN) { out.push({ text, cap, head, maxW }); continue; }
         wrapped++;
-        const n = Math.ceil(wM / TEXT_MAX_LINE_M);
+        const n = Math.ceil(wM / maxW);
         const target = wM / n;
         let line = '', made = 0;
         for (let w = 0; w < words.length; w++) {
@@ -110,10 +114,10 @@ function textLines(o, head) {
           const left = words.length - w, linesLeft = n - made;
           const candW = line ? lineWidthM(cand, cap) : 0;
           if (line && linesLeft > 1 && (candW > target * 1.06 || left <= linesLeft - 1)) {
-            out.push({ text: line, cap, head }); made++; line = words[w];
+            out.push({ text: line, cap, head, maxW }); made++; line = words[w];
           } else line = cand;
         }
-        if (line) out.push({ text: line, cap, head });
+        if (line) out.push({ text: line, cap, head, maxW });
       }
     }
   }
@@ -156,7 +160,8 @@ function boardsOf(def) {
       r.lines.forEach((L, li) => {
         let w = lineWidthM(L.text, L.cap);
         let cap = L.cap;
-        if (w > TEXT_MAX_LINE_M) { cap *= TEXT_MAX_LINE_M / w; w = TEXT_MAX_LINE_M; }
+        const lim = fin(L.maxW) ? L.maxW : TEXT_MAX_LINE_M;
+        if (w > lim) { cap *= lim / w; w = lim; }
         if (w > wM) wM = w;
         hM += cap * TEXT_LINE_PITCH + (isHead ? cap * 0.42 : 0) + ((li === 0 && mi > 0 && !isHead) ? cap * TEXT_MEMBER_GAP : 0);
         lines.push(L.text);

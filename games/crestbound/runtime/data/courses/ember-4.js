@@ -1021,7 +1021,10 @@ export default {
     { kind: 'deco', kindOf: 'monolith', p: on(-35.0, -23.6, 1.5), s: [1.0, 3.2, 0.9], mat: 'stone', tint: 0x9a8f7c },
     { kind: 'deco', kindOf: 'banner', p: [-42, 5.0, -24.6], s: [0.08, 2.6, 1.3], mat: 'cloth', tint: 0x8c3a2a },
     { kind: 'light', p: [-42, 5.2, -18], color: 0xffc490, intensity: 8, distance: 26 },
-    { kind: 'text', p: on(-33.4, -14.6, 1.5), rot: [0, 0.9, 0], text: 'JUMP THE WAVE  ·  SIDESTEP THE CHARGE  ·  POUND ITS BACK', size: 0.22, color: 0x8c5a3a },
+    /* UI-TEXT LANE 2026-09-07 (pass 2), buried plate: 37 % covered (the right half, u 0..1.35) 0.65 m in front.
+       Measured by `_harness/_ui2_boards.py` (a ray from 0.8 m in front of
+       each of 27 points on the lettering, back at the words). moved 0.9 m out along its own normal */
+    { kind: 'text', p: on(-32.7, -14.04, 1.5), rot: [0, 0.9, 0], text: 'JUMP THE WAVE  ·  SIDESTEP THE CHARGE  ·  POUND ITS BACK', size: 0.22, color: 0x8c5a3a },
     // A jump pad on the plaza floor: 6.60 m of apex, which puts the plaza's
     // lip and the chute's runout back in reach without the long walk round.
     { kind: 'jumppad', p: on(-33.0, -20.0, 0.14), s: [2.8, 0.28, 2.8], power: 6.6, dir: [0, 1, 0], mat: 'rubber', tint: 0xd8a24a },

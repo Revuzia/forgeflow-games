@@ -2352,6 +2352,15 @@ export class Course {
     const size = fin(o.size) ? clamp(o.size, 0.12, 4) : 0.42;
     const color = colorOf(o.color, this.palette.accent.getHex());
     const cap = head ? size * 0.72 : size * 0.95;         // mirrors _bakeBoard's cap rule
+    /* A BOARD MAY BE NARROWER THAN THE GAME'S WIDEST LINE (`maxW`, metres).
+       TEXT_MAX_LINE_M is the widest a plate may ever be; a board hung inside a
+       3.4 m wall-kick shaft has less room than that, and a 3.43 m plate in it
+       has masonry over the ends whichever way it is slid (measured by
+       `_harness/_ui2_boards.py`: verdant-2 #28a 22 % of the lettering under
+       stone at u -0.36..0, and 22 % again at the other end after a 2 m slide).
+       An author who knows the wall gives the board its width and the wrap
+       obeys it. */
+    const maxW = fin(o.maxW) ? clamp(o.maxW, 0.8, TEXT_MAX_LINE_M) : TEXT_MAX_LINE_M;
     const raw = String(o.text).split(String.fromCharCode(10));
     for (let r = 0; r < raw.length; r++) {
       const clauses = raw[r].split(/\s+·\s+/);
@@ -2362,8 +2371,8 @@ export class Course {
           if (!words.length) continue;
           const text = words.join(' ');
           const wM = this._measureLineM(text, cap, head);
-          if (wM <= TEXT_MAX_LINE_M / TEXT_FIT_MIN) { out.push({ text, size, color }); continue; }
-          const n = Math.ceil(wM / TEXT_MAX_LINE_M);
+          if (wM <= maxW / TEXT_FIT_MIN) { out.push({ text, size, color, maxW }); continue; }
+          const n = Math.ceil(wM / maxW);
           const target = wM / n;
           let line = '';
           let made = 0;
@@ -2373,10 +2382,10 @@ export class Course {
             const linesLeft = n - made;
             const candW = line ? this._measureLineM(cand, cap, head) : 0;
             if (line && linesLeft > 1 && (candW > target * 1.06 || left <= linesLeft - 1)) {
-              out.push({ text: line, size, color }); made++; line = words[w];
+              out.push({ text: line, size, color, maxW }); made++; line = words[w];
             } else line = cand;
           }
-          if (line) out.push({ text: line, size, color });
+          if (line) out.push({ text: line, size, color, maxW });
         }
       }
     }
@@ -2490,8 +2499,9 @@ export class Course {
       const L = lines[i];
       ctx.font = fontOf(Math.round(L.fs * TEXT_PPM), L.head);
       const w = ctx.measureText(L.text).width / TEXT_PPM + L.fs * TEXT_TRACK_EM * Math.max(0, L.text.length - 1);
-      if (w > TEXT_MAX_LINE_M) {
-        const k = TEXT_MAX_LINE_M / w;
+      const lim = fin(L.maxW) ? L.maxW : TEXT_MAX_LINE_M;
+      if (w > lim) {
+        const k = lim / w;
         L.cap *= k;
         L.fs = L.cap / TEXT_CAP_EM;
         L.pitch = L.cap * TEXT_LINE_PITCH;

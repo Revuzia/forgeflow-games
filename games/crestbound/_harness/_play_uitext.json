@@ -1,6 +1,51 @@
 [
  {
   "ok": true,
+  "what": "K6 interact prompt hidden on the spawn pad",
+  "detail": "{\"show\": false, \"text\": \"\", \"sub\": \"\"} C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_uitext_keep\\01_K6_spawn.png"
+ },
+ {
+  "ok": true,
+  "what": "K5 Fen at 1.2 m (measured 1.2): prompt shown and E talks",
+  "detail": "prompt={\"show\": true, \"text\": \"OLD FEN\", \"sub\": \"TALK\"} toasts=[{\"t1\": \"OLD FEN\", \"t2\": \"Walk it first. Push the stick gently and you stroll; push it home and you run. Your boots know the difference even when you do not.\", \"cls\": \"ch-toast k-info\"}] C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_uitext_keep\\02_K5_fen_1_2m.png"
+ },
+ {
+  "ok": true,
+  "what": "K5 Fen at 2.0 m (measured 2): prompt shown and E talks",
+  "detail": "prompt={\"show\": true, \"text\": \"OLD FEN\", \"sub\": \"TALK\"} toasts=[{\"t1\": \"OLD FEN\", \"t2\": \"Land and jump again straight away, then again. Three jumps, each one taller than the last, and the third one turns you over.\", \"cls\": \"ch-toast k-info\"}] C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_uitext_keep\\03_K5_fen_2_0m.png"
+ },
+ {
+  "ok": false,
+  "what": "K5 Fen at 3.5 m (measured 2.62): no prompt outside the interact radius, E silent",
+  "detail": "prompt={\"show\": true, \"text\": \"OLD FEN\", \"sub\": \"TALK\"} talked=True C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_uitext_keep\\04_K5_fen_3_5m.png"
+ },
+ {
+  "ok": true,
+  "what": "K5 prompt gone again 27 m from Fen",
+  "detail": "{\"show\": false, \"text\": \"OLD FEN\", \"sub\": \"TALK\"}"
+ },
+ {
+  "ok": true,
+  "what": "K8 Nim visible through the UNDERCROFT plate on the grate",
+  "detail": "suit pixels 0.171 of the centre window (plate cream 0.273) C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_uitext_keep\\05_K8_grate_facing_north.png"
+ },
+ {
+  "ok": true,
+  "what": "K9 a walk 2.2 m beside the trunk passes it without climbing",
+  "detail": "climbed=False ended [-10.8, 0, 15.38] C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_uitext_keep\\06_K9_walk_beside_tree.png"
+ },
+ {
+  "ok": true,
+  "what": "K9 walking into the courtyard trunk is stopped by it (bonk or climb)",
+  "detail": "ended [-13, 4.92, 20.93] state climb (trunk at z 20)"
+ },
+ {
+  "ok": true,
+  "what": "keep: no console errors (sign shader compiled)",
+  "detail": "[]"
+ },
+ {
+  "ok": true,
   "what": "#2 the camp light has a mount",
   "detail": "[{\"mount\": \"post\", \"span\": 2.6, \"p\": [0, 4.8, 43.4]}]"
  },
@@ -12,7 +57,7 @@
  {
   "ok": true,
   "what": "#6 'LEAN WEST' shows its plate face to cp-westface",
-  "detail": "cream pixels 0.101 in the centre window C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_uitext_rime3\\04_r3_06_leanwest_from_cp.png"
+  "detail": "cream pixels 0.102 in the centre window C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_uitext_rime3\\04_r3_06_leanwest_from_cp.png"
  },
  {
   "ok": true,
@@ -23,5 +68,205 @@
   "ok": true,
   "what": "rime-3: no console errors",
   "detail": "[]"
+ },
+ {
+  "ok": true,
+  "what": "#1/#6 spawn + mesa boards: every clause is one whole line",
+  "detail": "[[\"CROUCH AT SPEED TO TUCK\", \"THE ICE KEEPS THE REST\"], [\"THE CHUTE ONLY GOES DOWN.\", \"EVERYTHING ELSE GOES UP.\"], [\"HALF WAY\", \"THE SECOND HALF IS FASTER\"]]"
+ },
+ {
+  "ok": true,
+  "what": "#0 BEAT 1 lantern light site got a fixture",
+  "detail": "[{\"mount\": \"post\", \"span\": 2.32, \"p\": [-4.2, 31.68, -22.6]}]"
+ },
+ {
+  "ok": true,
+  "what": "rime-2: no console errors",
+  "detail": "[]"
+ },
+ {
+  "ok": true,
+  "what": "#7 PRISM LINE board wholly inside the boot frame",
+  "detail": "{\"dist\": 0.15, \"corners\": [[0.27, 0.24, 0.99], [0.27, 0.24, 0.99], [0.29, 0.77, 0.99], [0.29, 0.77, 0.99], [0.69, 0.24, 0.99], [0.69, 0.24, 0.99], [0.73, 0.77, 0.99], [0.73, 0.77, 0.99]], \"allIn\": true, \"center\": [5.2, 33.54, 36.34]} C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_uitext_azure3\\01_a3_07_boot_frame.png"
+ },
+ {
+  "ok": true,
+  "what": "#0 holding R tilts the camera (pitch moves, view up) and does not restart",
+  "detail": "pitch 0.220 -> -0.550, clock 4.29 -> 5.11, restart toast False"
+ },
+ {
+  "ok": true,
+  "what": "#0 Backspace restarts the course",
+  "detail": "toasts [{\"t1\": \"COURSE RESTARTED\", \"t2\": null, \"cls\": \"ch-toast k-info\"}] clock 0.75"
+ },
+ {
+  "ok": true,
+  "what": "#0 live bindings: restart=Backspace, orbitUp=R",
+  "detail": "{\"restart\": [\"Backspace\"], \"orbitUp\": [\"KeyR\"]}"
+ },
+ {
+  "ok": false,
+  "what": "#6 boarding line: Nim visible, view north clear of the plate",
+  "detail": "suit pixels 0.015 C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_uitext_azure3\\03_a3_06_boarding_line_north.png"
+ },
+ {
+  "ok": true,
+  "what": "azure-3: no console errors",
+  "detail": "['warning: [Course azure-3] killY (8) sits at or above the lowest geometry (-0.50) \u2014 players may die standing on real ground']"
+ },
+ {
+  "ok": true,
+  "what": "#5 'WHEN THE LAVA RISES / PRESS T' board wholly inside the cp-court frame",
+  "detail": "{\"dist\": 0.14, \"corners\": [[0.03, 0.12, 0.99], [0.03, 0.12, 0.99], [0.03, 0.35, 0.99], [0.03, 0.35, 0.99], [0.32, 0.12, 0.99], [0.32, 0.12, 0.99], [0.33, 0.35, 0.99], [0.33, 0.35, 0.99]], \"allIn\": true, \"center\": [2.8, 7.7700000000000005, -13.36]} C:\\Users\\TestRun\\Claude Claw\\forgeflow-games\\games\\crestbound\\_shots\\play_uitext_ember3\\01_e3_05_cp_court_frame.png"
+ },
+ {
+  "ok": true,
+  "what": "#5 hint copy names the lava",
+  "detail": "[[\"WHEN THE LAVA RISES\", \"PRESS T\"], [\"the lava falls back when\", \"you stand on the pad\"]]"
+ },
+ {
+  "ok": true,
+  "what": "ember-3: no console errors",
+  "detail": "[]"
+ },
+ {
+  "ok": false,
+  "what": "keep: 18/18 authored lights have a fixture (sites 83, mounts {\"lantern\": 5, \"hang\": 5, \"post\": 2, \"wall\": 6})",
+  "detail": "cage-only sites [[17.2, 6.6, -9.3], [17.2, 6.6, 0], [17.2, 6.6, 9.3], [-27, 11, 8], [-17, 6, 35]] draws 190 tris 413708"
+ },
+ {
+  "ok": true,
+  "what": "keep: no console errors",
+  "detail": "[]"
+ },
+ {
+  "ok": true,
+  "what": "verdant-1: 9/9 authored lights have a fixture (sites 9, mounts {\"post\": 6, \"wall\": 1, \"lantern\": 1, \"hang\": 1})",
+  "detail": "cage-only sites [[-12, 9.6, -6]] draws 209 tris 353896"
+ },
+ {
+  "ok": true,
+  "what": "verdant-1: no console errors",
+  "detail": "[]"
+ },
+ {
+  "ok": true,
+  "what": "verdant-2: 8/8 authored lights have a fixture (sites 8, mounts {\"lantern\": 1, \"post\": 4, \"wall\": 2, \"hang\": 1})",
+  "detail": "cage-only sites [[-4.2, 5.7, 29.8]] draws 215 tris 411806"
+ },
+ {
+  "ok": true,
+  "what": "verdant-2: no console errors",
+  "detail": "[]"
+ },
+ {
+  "ok": true,
+  "what": "verdant-3: 6/6 authored lights have a fixture (sites 6, mounts {\"post\": 3, \"hang\": 1, \"lantern\": 1, \"wall\": 1})",
+  "detail": "cage-only sites [[-34, 28.6, -44]] draws 248 tris 445748"
+ },
+ {
+  "ok": true,
+  "what": "verdant-3: no console errors",
+  "detail": "[]"
+ },
+ {
+  "ok": false,
+  "what": "ember-1: 11/11 authored lights have a fixture (sites 35, mounts {\"post\": 7, \"hang\": 1, \"lantern\": 3})",
+  "detail": "cage-only sites [[0, 20, -30], [0, 8, 32], [0, 9.6, 46]] draws 180 tris 345314"
+ },
+ {
+  "ok": true,
+  "what": "ember-1: no console errors",
+  "detail": "[]"
+ },
+ {
+  "ok": true,
+  "what": "ember-2: 12/12 authored lights have a fixture (sites 12, mounts {\"lantern\": 6, \"wall\": 1, \"post\": 5})",
+  "detail": "cage-only sites [[0, 15.5, 37], [0, 15.5, 25], [0, 12.5, 15], [0, 12.5, 0], [8, 23.5, -6], [0, 14, -44]] draws 213 tris 407742"
+ },
+ {
+  "ok": true,
+  "what": "ember-2: no console errors",
+  "detail": "['warning: [Course ember-2] props.js had no entry for: girders, pipes, slabs, antennae, fins']"
+ },
+ {
+  "ok": false,
+  "what": "ember-3: 10/10 authored lights have a fixture (sites 35, mounts {\"post\": 9, \"wall\": 1})",
+  "detail": "cage-only sites [] draws 162 tris 325868"
+ },
+ {
+  "ok": true,
+  "what": "ember-3: no console errors",
+  "detail": "[]"
+ },
+ {
+  "ok": false,
+  "what": "ember-4: 9/9 authored lights have a fixture (sites 17, mounts {\"wall\": 1, \"post\": 5, \"hang\": 3})",
+  "detail": "cage-only sites [] draws 206 tris 357798"
+ },
+ {
+  "ok": true,
+  "what": "ember-4: no console errors",
+  "detail": "[]"
+ },
+ {
+  "ok": false,
+  "what": "rime-1: 11/11 authored lights have a fixture (sites 16, mounts {\"post\": 8, \"lantern\": 3})",
+  "detail": "cage-only sites [[-21, 8.6, 8], [0, 21.1, -47], [-2, 19.1, -36]] draws 212 tris 307020"
+ },
+ {
+  "ok": true,
+  "what": "rime-1: no console errors",
+  "detail": "['warning: [Course rime-1] props.js had no entry for: cart']"
+ },
+ {
+  "ok": false,
+  "what": "rime-2: 11/11 authored lights have a fixture (sites 24, mounts {\"post\": 10, \"lantern\": 1})",
+  "detail": "cage-only sites [[30.1, 16.4, 5]] draws 176 tris 273875"
+ },
+ {
+  "ok": true,
+  "what": "rime-2: no console errors",
+  "detail": "[]"
+ },
+ {
+  "ok": false,
+  "what": "rime-3: 6/6 authored lights have a fixture (sites 19, mounts {\"post\": 3, \"hang\": 3})",
+  "detail": "cage-only sites [] draws 178 tris 317606"
+ },
+ {
+  "ok": true,
+  "what": "rime-3: no console errors",
+  "detail": "[]"
+ },
+ {
+  "ok": false,
+  "what": "azure-1: 8/8 authored lights have a fixture (sites 23, mounts {\"post\": 6, \"lantern\": 1, \"hang\": 1})",
+  "detail": "cage-only sites [[0, 11, -34.5]] draws 223 tris 315402"
+ },
+ {
+  "ok": true,
+  "what": "azure-1: no console errors",
+  "detail": "[]"
+ },
+ {
+  "ok": true,
+  "what": "azure-2: 6/6 authored lights have a fixture (sites 6, mounts {\"post\": 4, \"lantern\": 2})",
+  "detail": "cage-only sites [[0, 21, 0], [0, 29.5, 0]] draws 132 tris 340864"
+ },
+ {
+  "ok": true,
+  "what": "azure-2: no console errors",
+  "detail": "[]"
+ },
+ {
+  "ok": false,
+  "what": "azure-3: 7/7 authored lights have a fixture (sites 20, mounts {\"post\": 5, \"lantern\": 2})",
+  "detail": "cage-only sites [[0, 23.6, 66], [-11, 56.8, -62]] draws 198 tris 288570"
+ },
+ {
+  "ok": true,
+  "what": "azure-3: no console errors",
+  "detail": "['warning: [Course azure-3] killY (8) sits at or above the lowest geometry (-0.50) \u2014 players may die standing on real ground']"
  }
 ]

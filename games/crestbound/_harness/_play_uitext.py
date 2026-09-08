@@ -109,6 +109,170 @@ def pixel_stats(png, box, pred):
     return hit / max(1, n)
 
 
+HEROBOX_JS = """() => {
+  const G = CRESTBOUND.game, T = CRESTBOUND.THREE, E = G.engine;
+  const cam = E.camera; cam.updateMatrixWorld(true);
+  const p = G.player, r = p.radius || 0.38, h = p.height || 1.5;
+  const W = E.renderer.domElement.clientWidth, H = E.renderer.domElement.clientHeight;
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, any = false;
+  const v = new T.Vector3();
+  for (const dx of [-r, r]) for (const dz of [-r, r]) for (const dy of [0.02, h * 0.5, h]) {
+    v.set(p.pos.x + dx, p.pos.y + dy, p.pos.z + dz).project(cam);
+    if (v.z > 1) continue;
+    any = true;
+    const sx = (v.x * 0.5 + 0.5) * W, sy = (-v.y * 0.5 + 0.5) * H;
+    if (sx < x0) x0 = sx; if (sx > x1) x1 = sx; if (sy < y0) y0 = sy; if (sy > y1) y1 = sy;
+  }
+  if (!any) return null;
+  return [Math.max(0, Math.round(x0)), Math.max(0, Math.round(y0)),
+          Math.min(W, Math.round(x1)), Math.min(H, Math.round(y1))]; }"""
+
+# Every HUD chip that is actually painting, as a screen rectangle.
+HUDRECTS_JS = """() => {
+  const out = [];
+  for (const s of ['.ch-power', '.ch-toast']) for (const n of document.querySelectorAll(s)) {
+    const cs = getComputedStyle(n);
+    if (cs.display === 'none' || cs.visibility === 'hidden' || parseFloat(cs.opacity) < 0.05) continue;
+    const b = n.getBoundingClientRect();
+    if (b.width < 2 || b.height < 2) continue;
+    out.push({ cls: n.className, r: [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom)] });
+  }
+  return out; }"""
+
+
+def hero_window(P):
+    """The hero's OWN on-screen box, padded - the window a visibility test reads.
+
+    The pass-1 stations counted suit pixels in a FIXED centre rectangle
+    (560,300)-(720,560). When the camera lane's work changed how a standing
+    hero is framed, azure-3 #6 measured 0.0150 against a > 0.0150 threshold and
+    failed a frame in which Nim is plainly visible (_shots/play_uitext_azure3/
+    03_a3_06_boarding_line_north.png). A driver whose verdict moves with
+    someone else's framing is not a gate.
+    """
+    b = P.js(HEROBOX_JS)
+    if not b:
+        return (560, 300, 720, 560)
+    x0, y0, x1, y1 = b
+    px = max(6, int((x1 - x0) * 0.12))
+    py = max(6, int((y1 - y0) * 0.06))
+    return (max(0, x0 - px), max(0, y0 - py), min(1280, x1 + px), min(720, y1 + py))
+
+
+def overlap_frac(a, b):
+    """Fraction of box a covered by box b (both [x0,y0,x1,y1])."""
+    w = max(0, min(a[2], b[2]) - max(a[0], b[0]))
+    h = max(0, min(a[3], b[3]) - max(a[1], b[1]))
+    area = max(1, (a[2] - a[0]) * (a[3] - a[1]))
+    return w * h / area
+
+
+# ── IS ANY TEXT PLATE BURIED IN THE MASONRY IT HANGS ON? ────────────────────
+# playtest verdant-2 #28a: "the wall-kick instruction sign is half-buried in the
+# turret's stone pillar - the left third of the board is inside the masonry, so
+# from the checkpoint it reads '...E WALL / ...E OTHER'". signcheck.mjs is
+# static: it knows where a board is, not what stands in front of it. This asks
+# the LIVE course. For a grid of points over the lettering it raycasts the
+# VISIBLE geometry from 0.8 m in front of each point back at it; a sample is
+# covered when the first opaque mesh in the way is not the sign itself.
+BURIED_JS = r"""() => {
+  const C = CRESTBOUND.game.course, T = CRESTBOUND.THREE;
+  const ray = new T.Raycaster(); ray.far = 60;
+  const eye = new T.Vector3(), pt = new T.Vector3(), dir = new T.Vector3();
+  /* SHORT BASELINE. A reader's-eye ray from 4 m out answers a different
+     question — what is in the ROOM between that point and the board — and the
+     answer depends entirely on where you stand: it called the Keep's 'RIME
+     SPIRE' 33 % buried from a point inside the gallery slab, while the frame
+     (01_buried_keep_301.png) shows the words whole. The defect this gate is
+     for is masonry planted ON the lettering (verdant-2 #28a "the left third of
+     the board is inside the pillar"; the quay board that the raised causeway
+     stair now stands in). So the ray starts 0.8 m in FRONT of each sample and
+     comes back at it: anything opaque it meets first, that is not the sign
+     itself, is standing on the words from every vantage. */
+  const NX = 9, NY = 3, EYE = 0.8;
+  const SIGN = /signatlas|\.sign|sign$/i;
+  /* OPAQUE WORLD GEOMETRY ONLY.
+     - a Sprite raycasts against a camera this probe does not have, and
+       Points/Lines never hide a word;
+     - a transparent mesh (the checkpoint beacon's rings, a glow shell, water)
+       is not an occluder: the first run counted the cp-hall beacon 1.5 m in
+       front of the parked eye and called the Keep's own 'THE KEEP / EVERY
+       PAINTING IS A DOOR' board 55.6 % buried while the frame shows it whole;
+     - collectibles and critters move; a board is judged against the building. */
+  const SKIP = /checkpoint|collectible|coin|sigil|crest|critter|particle|fx|beacon|glow|ring/i;
+  const meshes = [];
+  C.group.updateMatrixWorld(true);
+  C.group.traverse(o => {
+    /* NOT `o.visible`. Static chunks are culled by distance from the HERO, and
+       far-LOD stand-ins swap with them, so a run that sampled while the hero
+       stood elsewhere saw a different world: rime-2's 'THE TOP OF THE RIME
+       SPIRE' read 0 % in one run and 33.3 % in the next with nothing between
+       them but where the hero had drifted. A board is judged against the
+       geometry that exists, which is what a reader standing at it would see. */
+    if (!o.isMesh || !o.geometry) return;
+    if ((o.name || '').indexOf('.far') !== -1) return;      // the distant LOD's stand-in
+    if (o.parent && (o.parent.name || '').indexOf('.far') !== -1) return;
+    for (let a = o; a; a = a.parent) if (a.name && SKIP.test(a.name)) return;
+    const m = Array.isArray(o.material) ? o.material[0] : o.material;
+    if (!m || m.transparent === true || (m.opacity !== undefined && m.opacity < 0.99)) return;
+    if (m.depthWrite === false) return;
+    meshes.push(o);
+  });
+  const sph = new T.Vector3();
+  const rows = [];
+  for (const g of (C._textGroups || [])) {
+    const B = g.placed; if (!B) continue;
+    let n = 0, cov = 0; const who = {}; let uMin = 99, uMax = -99, dMax = 0;
+    for (let ix = 0; ix < NX; ix++) for (let iy = 0; iy < NY; iy++) {
+      /* the LETTERING, not the plate's outer edge: a cornice or a sill that
+         grazes the last centimetre of the frame is not a covered word. */
+      const u = (ix / (NX - 1) - 0.5) * 2 * (B.hw * 0.85);
+      const v = (iy / (NY - 1) - 0.5) * 2 * (B.hh * 0.55);
+      pt.set(B.cx + B.ux * u + B.nx * 0.05, B.cy + v, B.cz + B.uz * u + B.nz * 0.05);
+      eye.set(pt.x + B.nx * EYE, pt.y, pt.z + B.nz * EYE);
+      dir.set(-B.nx, 0, -B.nz);
+      ray.set(eye, dir); ray.far = EYE;
+      const hit = ray.intersectObjects(meshes, false);
+      n++;
+      for (const h of hit) {
+        if (SIGN.test(h.object.name || '')) break;        // the plate itself: clear
+        if (h.distance < EYE - 0.06) { cov++; const nm = h.object.name || h.object.type; who[nm] = (who[nm] || 0) + 1;
+          if (u < uMin) uMin = u; if (u > uMax) uMax = u;
+          const depth = (EYE - h.distance); if (depth > dMax) dMax = depth; }
+        break;
+      }
+    }
+    rows.push({ i: g.head !== undefined ? g.head : -1,
+                text: String((g.def && g.def.text) || (C.def.objects[g.head] || {}).text || '').slice(0, 42),
+                p: [+B.cx.toFixed(1), +B.cy.toFixed(1), +B.cz.toFixed(1)],
+                w: +(B.hw * 2).toFixed(2), buried: +(cov / Math.max(1, n)).toFixed(3), by: who,
+                uSpan: cov ? [+uMin.toFixed(2), +uMax.toFixed(2)] : null, depth: +dMax.toFixed(2),
+                n: [+B.nx.toFixed(2), +B.nz.toFixed(2)], u: [+B.ux.toFixed(2), +B.uz.toFixed(2)] });
+  }
+  return rows;
+}"""
+
+
+def park(P, eye, look, ms=700):
+    """Park the camera at `eye` looking at `look` and hold it there.
+
+    A reader's-eye frame cannot be taken by teleporting the hero: the spot a
+    board is read from is often open water, a 20 m drop or a 30-degree snow
+    slope, and the follow camera then photographs the moat (see
+    _shots/play_uitext_rime2/03_r2_00_lantern_post.png, where the hero slid
+    away down the mesa before the shutter). `game.cam.setCinematic` takes a
+    two-key path; give both keys the same pose and it holds. Call `park(P,
+    None, None)` to hand the camera back.
+    """
+    if eye is None:
+        P.js("() => { CRESTBOUND.game.cam.setCinematic(null); return 1; }")
+        return
+    P.js("""([e, l]) => { CRESTBOUND.game.cam.setCinematic(
+            [{ p: e, look: l, t: 0 }, { p: e, look: l, t: 30 }]); return 1; }""",
+         [list(eye), list(look)])
+    P.wait(ms)
+
+
 def is_nim(r, g, b):      # the red/orange suit (lit or in shade)
     return r > 135 and g < 140 and b < 125 and r - g > 45 and r - b > 55
 
@@ -131,22 +295,31 @@ def station_keep():
         FEN_DIST_JS = """() => { const G = CRESTBOUND.game, f = G._fen; if (!f) return null;
           const rp = f.ref && f.ref.pos; const pos = (rp && isFinite(rp.x)) ? rp : f.pos; const pp = G.player.pos;
           return { d: +Math.hypot(pp.x - pos.x, pp.z - pos.z).toFixed(2), fen: [+pos.x.toFixed(2), +pos.y.toFixed(2), +pos.z.toFixed(2)] }; }"""
-        for d in (1.2, 2.0, 3.5):
+        for d in (1.2, 2.0, 5.0):
             P.tp(17.0 + d, 6.35, -21.0); P.wait(700); P.face(17.0, -21.0); P.wait(500)
             pr = P.js(PROMPT_JS)
             fd = P.js(FEN_DIST_JS)
+            # WHAT WAS MEASURED, NOT WHAT WAS ASKED FOR. The out-of-range case
+            # used to teleport to 3.5 m and judge the prompt there; the hero
+            # settles toward Fen's nook and the run before this one read
+            # d = 2.62 m - INSIDE the 3.2 m talk radius - so a correct prompt
+            # was reported as a defect. The case is judged on `measured`, and
+            # skipped (not failed) when the placement lands in neither band.
+            measured = (fd or {}).get("d")
             before = len(P.js(TOASTS_JS))
             P.tap("E", 90); P.wait(500)
             toasts = P.js(TOASTS_JS)
             talked = any((t.get("t1") or "").upper().find("FEN") >= 0 for t in toasts[before:]) or len(toasts) > before
             png = P.shot("K5_fen_%sm" % str(d).replace(".", "_"))
-            if d <= 3.0:
-                res(pr["show"] and talked, "K5 Fen at %.1f m (measured %s): prompt shown and E talks" % (d, fd and fd["d"]),
+            if measured is not None and measured <= 3.0:
+                res(pr["show"] and talked, "K5 Fen at %.2f m (asked %.1f): prompt shown and E talks" % (measured, d),
                     "prompt=%s toasts=%s %s" % (json.dumps(pr), json.dumps(toasts[-1:]), png))
-            else:
+            elif measured is not None and measured > 3.4:
                 # prompt radius == talk radius (3.2 m): outside it NOTHING shows and E does nothing
-                res((not pr["show"]) and (not talked), "K5 Fen at %.1f m (measured %s): no prompt outside the interact radius, E silent" % (d, fd and fd["d"]),
+                res((not pr["show"]) and (not talked), "K5 Fen at %.2f m (asked %.1f): no prompt outside the interact radius, E silent" % (measured, d),
                     "prompt=%s talked=%s %s" % (json.dumps(pr), talked, png))
+            else:
+                P.say("  K5 skipped: hero settled at %s m, neither clearly in nor clearly out" % measured)
             P.wait(1200)
         P.tp(0, 0.1, -1.0); P.wait(600)
         pr = P.js(PROMPT_JS)
@@ -155,9 +328,10 @@ def station_keep():
         # K8 — the undercroft plate between the camera and the hero
         P.tp(-13.5, 0.1, 0.92); P.wait(600); P.face(-13.5, -10.0); P.wait(1400)
         st = P.state()
+        win = hero_window(P)
         png = P.shot("K8_grate_facing_north")
-        # Nim stands at the frame centre: look for his suit in the middle window
-        nim = pixel_stats(png, (560, 300, 720, 560), is_nim)
+        # his own on-screen box, not a fixed rectangle (see hero_window)
+        nim = pixel_stats(png, win, is_nim)
         cream = pixel_stats(png, (400, 250, 880, 520), is_cream)
         P.say("  K8 camDist %s nim-pixels %s cream-pixels %s" % (st["camDist"], nim, cream))
         res(nim is not None and nim > 0.015, "K8 Nim visible through the UNDERCROFT plate on the grate",
@@ -308,10 +482,11 @@ def station_azure3():
         # #6 cart sign off the cart: stand at the boarding line and look north
         P.wait(1500)
         P.tp(-11.0, 30.1, 34.6); P.wait(500); P.face(-11.0, 22.0); P.wait(800)
+        win = hero_window(P)
         png = P.shot("a3_06_boarding_line_north")
-        nim = pixel_stats(png, (560, 300, 720, 560), is_nim)
-        res(nim is not None and nim > 0.015, "#6 boarding line: Nim visible, view north clear of the plate",
-            "suit pixels %.3f %s" % (nim or -1, png))
+        nim = pixel_stats(png, win, is_nim)
+        res(nim is not None and nim > 0.05, "#6 boarding line: Nim visible, view north clear of the plate",
+            "suit pixels %.3f of his own box %s %s" % (nim or -1, win, png))
         res(not [c for c in P.console if 'error' in c.lower()], "azure-3: no console errors", str(P.console[:3]))
 
 
@@ -328,6 +503,95 @@ def station_ember3():
         res(any("PRESS T" in x for r in L for x in r["lines"]) and any("lava" in x for r in L for x in r["lines"]),
             "#5 hint copy names the lava", json.dumps([r["lines"] for r in L]))
         res(not [c for c in P.console if 'error' in c.lower()], "ember-3: no console errors", str(P.console[:3]))
+
+
+def station_hud():
+    """azure-1 #9: "the METAL bar sits across the middle of the screen covering
+    Nim from the waist down ... and the CHECKPOINT 1/4 toast lands directly
+    under it". The hero's capsule is projected to screen pixels and every
+    painting HUD chip's rectangle is read off the page: no chip may cover any
+    part of him. Measured before the fix (bottom-centre stack): toast 0.350 of
+    his box, power bar 0.112."""
+    for cid, tp in (("azure-1", (0.0, 0.9, 12.5)), ("verdant-1", None), ("keep", None)):
+        url = URL if cid == "keep" else course_url(cid)
+        with Play("uitext_hud", url=url) as P:
+            if cid == "keep":
+                P.click_title()
+            P.wait(2200)
+            if tp:
+                P.tp(*tp); P.wait(800)
+            P.js("() => { CRESTBOUND.game.__dev.power('metal', 20); return 1; }")
+            P.js("() => { CRESTBOUND.game.hud.toast('CHECKPOINT', '1 / 4', 'good'); return 1; }")
+            P.wait(700)
+            hero = P.js(HEROBOX_JS)
+            chips = P.js(HUDRECTS_JS)
+            worst = 0.0; who = None
+            for c in chips:
+                f = overlap_frac(hero, c["r"]) if hero else 0.0
+                if f > worst: worst = f; who = c
+            png = P.shot("%s_hud_over_hero" % cid)
+            res(hero is not None and worst < 0.01,
+                "%s: no HUD chip stands on the hero (worst %.3f)" % (cid, worst),
+                "hero %s chips %s %s" % (hero, json.dumps(chips), png))
+
+
+def station_boards():
+    """No text plate has masonry planted on its lettering (playtest verdant-2
+    #28a). Ray test per board — see BURIED_JS above."""
+    for cid in COURSES:
+        url = URL if cid == 'keep' else course_url(cid)
+        with Play("uitext_boards", url=url) as P:
+            if cid == 'keep':
+                P.click_title()
+            P.wait(1600)
+            rows = P.js(BURIED_JS)
+            bad = [r for r in rows if r["buried"] > 0.15]
+            warn = [r for r in rows if 0.06 < r["buried"] <= 0.15]
+            res(not bad, "%s: %d boards, none with masonry on the words" % (cid, len(rows)),
+                "over 15%%: %s ; grazed 6-15%%: %s"
+                % (json.dumps([[r["i"], r["text"], r["buried"]] for r in bad]),
+                   json.dumps([[r["i"], r["buried"]] for r in warn])))
+
+
+def station_shots():
+    """Reader's-eye frames for the things this lane moved or mounted, taken with
+    a parked camera (see `park`) so the frame is of the board, not of wherever
+    the hero fell. Nothing here passes or fails on a pixel count: they are the
+    frames a human reads."""
+    shots = []
+    with Play("uitext_shots", url=course_url("rime-2")) as P:
+        P.wait(2000)
+        # #0 the BEAT 1 lantern: it hangs on a post now (geometry lane), and the
+        # light site over it got a fixture (this lane's rule).
+        g = P.js("() => { const C = CRESTBOUND.game.course; return C.terrain && C.terrain.heightfield ? C.terrain.heightfield.heightAt(-4.2, -22.6) : null; }")
+        y = (g if g is not None else 30.0)
+        park(P, [-1.4, y + 2.6, -20.4], [-4.2, y + 1.9, -22.6])
+        shots.append(P.shot("r2_lantern_post_parked"))
+        park(P, None, None)
+    with Play("uitext_shots", url=course_url("verdant-2")) as P:
+        P.wait(2000)
+        # the quay briefing pair, moved to the top of the causeway stair
+        park(P, [-3.6, 8.6, 32.4], [-6.6, 8.4, 28.2])
+        shots.append(P.shot("v2_west_post_board_parked"))
+        # the wall-kick board, narrowed by maxW and slid clear of the pillar
+        park(P, [-6.6, 20.3, -4.4], [-4.2, 20.2, -5.35])
+        shots.append(P.shot("v2_kick_board_parked"))
+        park(P, None, None)
+    with Play("uitext_shots", url=course_url("verdant-1")) as P:
+        P.wait(2000)
+        park(P, [-5.3, 10.5, -31.3], [-6.8, 10.4, -29.5])
+        shots.append(P.shot("v1_kick_board_parked"))
+        park(P, None, None)
+    with Play("uitext_shots") as P:
+        P.click_title(); P.wait(2000)
+        # keep #13: the gallery balcony looking south at the garden loft — the
+        # banners that filled this doorway now hang on its jambs (x +-4.3)
+        park(P, [0, 7.6, 12.6], [0, 7.0, 26.0])
+        shots.append(P.shot("keep_balcony_doorway_parked"))
+        park(P, None, None)
+    for s in shots:
+        print("   read", s, flush=True)
+    res(len(shots) == 5, "evidence frames taken (%d)" % len(shots), json.dumps(shots))
 
 
 COURSES = ['keep', 'verdant-1', 'verdant-2', 'verdant-3', 'ember-1', 'ember-2', 'ember-3', 'ember-4',
@@ -354,8 +618,14 @@ def station_lights():
                 P.click_title()
             P.wait(1500)
             info = P.js(CENSUS_JS)
-            res(info["fixtures"] == info["authored"] and info["sites"] == info["authored"],
-                "%s: %d/%d authored lights have a fixture (sites %s, mounts %s)" % (cid, info["fixtures"], info["authored"], info["sites"], json.dumps(info["hist"])),
+            # `course.lights` counts every DYNAMIC light SITE - hazards, props and
+            # collectibles register their own - so it is not the number of
+            # authored {kind:'light'} objects and never was. Asserting the two
+            # were equal held only until another lane added a site: on this tree
+            # it failed 8 of 14 courses with a fixture on every authored light.
+            # What this gate is for is: no authored light is a bare ball.
+            res(info["fixtures"] == info["authored"],
+                "%s: %d/%d authored lights have a fixture (%s dynamic sites, mounts %s)" % (cid, info["fixtures"], info["authored"], info["sites"], json.dumps(info["hist"])),
                 "cage-only sites %s draws %s tris %s" % (json.dumps(info["cageOnly"]), info["draws"], info["tris"]))
             res(not [c for c in P.console if 'error' in c.lower()], "%s: no console errors" % cid, str(P.console[:3]))
 
@@ -363,7 +633,8 @@ def station_lights():
 if __name__ == "__main__":
     which = sys.argv[1] if len(sys.argv) > 1 else "all"
     stations = {"keep": station_keep, "rime3": station_rime3, "rime2": station_rime2,
-                "azure3": station_azure3, "ember3": station_ember3, "lights": station_lights}
+                "azure3": station_azure3, "ember3": station_ember3, "hud": station_hud,
+                "boards": station_boards, "shots": station_shots, "lights": station_lights}
     order = list(stations) if which == "all" else [which]
     for k in order:
         print("\n==== STATION", k, flush=True)

@@ -1030,7 +1030,10 @@ export default {
     // the exit ledge over the hollow, top EXACTLY 23.00 — the reward for four
     // clean kicks, and where cp5 and sigil 7 live.
     { kind: 'platform', p: [r2(CREV[0] + 3.4), 22.65, r2(CREV[1] + 1.0)], s: [7.6, 0.7, 5.0], mat: 'ice', tint: ICE, stripe: true, edge: SAFE_EDGE },
-    { kind: 'text', p: [r2(CREV[0] + 1.5), 16.2, r2(CREV[1] + 1.6)], rot: [0, 0, 0], text: 'KICK ONE WALL, THEN THE OTHER', size: 0.20, color: 0xd8ecff },
+    /* UI-TEXT LANE 2026-09-07 (pass 2), buried plate: 44.4 % covered by the TERRAIN 0.78 m in front - the plate is in the snow bank.
+       Measured by `_harness/_ui2_boards.py` (a ray from 0.8 m in front of
+       each of 27 points on the lettering, back at the words). narrowed to the crevasse wall (`maxW`) and moved 1.05 m out of the bank along +Z */
+    { kind: 'text', p: [r2(CREV[0] + 1.5), 16.2, r2(CREV[1] + 2.65)], rot: [0, 0, 0], text: 'KICK ONE WALL, THEN THE OTHER', size: 0.20, color: 0xd8ecff, maxW: 1.7 },
     { kind: 'light', p: [CREV[0], 19.0, CREV[1]], color: 0x9fd8ff, intensity: 6, distance: 12 },
     // and out: three seracs from the ledge (23.00) up onto the shelf (30.00),
     // 1.55 m of rise and about 0.9 m edge-to-edge each.

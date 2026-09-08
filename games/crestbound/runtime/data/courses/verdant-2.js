@@ -772,8 +772,22 @@ export default {
 
     { kind: 'deco', kindOf: 'post', p: on(-7.0, 26.5, 1.1), s: [0.34, 2.2, 0.34], mat: 'wood', tint: 0x6b4a28 },
     { kind: 'deco', kindOf: 'post', p: on(7.0, 26.5, 1.1), s: [0.34, 2.2, 0.34], mat: 'wood', tint: 0x6b4a28 },
-    { kind: 'text', p: on(0, 30.6, 1.7), rot: [0, 0, 0], text: 'POUND THE WEST POST  ·  THREE TIMES', size: 0.26, color: 0x7a2f2f },
-    { kind: 'text', p: on(0, 30.6, 1.3), rot: [0, 0, 0], text: 'they can only reach so far', size: 0.20, color: 0x4d6038 },
+    /* UI-TEXT LANE 2026-09-07 (pass 2). This pair stood at on(0, 30.6, 1.7/1.3)
+       — x 0, z 30.6, y 1.99/1.59 — dead centre of the causeway flight, and the
+       geometry lane raised that flight from y 0.25 to 0.95 (b1b5b632), so the
+       treads closed over the lettering: `_harness/_ui2_boards.py` reads the
+       board 100 % buried in `merged_cb.stone.verdant`, 0.53 m of stone in front
+       of every one of 27 samples, and a camera parked in front of it
+       photographs a staircase (_shots/play_ui2_boards/01_buried_verdant-2_21
+       .png). Moved onto the QUAY DECK (platform [12]: x -4.5..4.5, z 30.5..34.7,
+       top 1.55) south of the stair's lowest tread (z 33.19), west of the
+       flight's cheek (x -2.1) — and signcheck then FAILED it 'runs-off-frame'
+       (11 % of the cp-quay frame, 5.7 m from the lens, cut by its edge): that
+       little deck has no room for a 4.2 m plate. It now stands at the TOP of
+       the flight beside the west post it is about, angled at the player coming
+       up the causeway. */
+    { kind: 'text', p: on(-6.6, 28.2, 2.05), rot: [0, 0.35, 0], text: 'POUND THE WEST POST  ·  THREE TIMES', size: 0.26, color: 0x7a2f2f },
+    { kind: 'text', p: on(-6.6, 28.2, 1.65), rot: [0, 0.35, 0], text: 'they can only reach so far', size: 0.20, color: 0x4d6038 },
 
     // The cage, beside the causeway stair's east cheek. It only opens on the
     // 'gnasher-freed' trigger; then you pound the cage itself.
@@ -1030,7 +1044,24 @@ export default {
     // the shaft floor's centre bracket a midpoint of (−8.80, −7.40), which is
     // inside the clear interior — which is exactly where the kick ladder is.
     { kind: 'platform', p: [-10.2, 26.85, SHAFT_C[1]], s: [3.4, 0.3, 4.0], mat: 'stone', tint: STONE, stripe: true, edge: SAFE_EDGE },
-    { kind: 'text', p: [-5.2, 20.2, -6.6], rot: [0, -0.9, 0], text: 'KICK ONE WALL, THEN THE OTHER', size: 0.20, color: 0xd8c79a },
+    /* UI-TEXT LANE 2026-09-07 (playtest verdant-2 #28a "the wall-kick
+       instruction sign is half-buried in the turret's stone pillar ... it reads
+       '...E WALL / ...E OTHER'"). Measured on the current tree by
+       `_harness/_ui2_boards.py`: 22.2 % of the lettering has stone 0.58 m in
+       front of it, over the columns u -0.36..0 — the pillar stands on the
+       middle of the board, not its left third any more. Sliding it 2 m along
+       its own face only handed the other end to a different stone (22 % again,
+       u -1.46..0.73): the real fault is that a 3.43 m plate is wider than the
+       3.4 m kick shaft it hangs in. `maxW` (course.js) gives the board the
+       width of the wall it is on, so the clause wraps to two lines and the
+       plate is ~2 m wide. Narrowing alone left 66.7 % buried (the stone is
+       0.74 m in front of the board's MIDDLE at its authored spot), so the
+       narrow plate is also slid 1.6 m along its own face — both, measured.
+       After: 11 % of the lettering (one edge column of 27 samples) has the
+       mounting wall's own face 0.11 m proud of the plate there, which is a
+       graze, not a covered word: the frame from cp-court reads the whole
+       clause (_shots/play_ui2_boards/*_v2_kick_from_cp.png). */
+    { kind: 'text', p: [-4.2, 20.2, -5.35], rot: [0, -0.9, 0], text: 'KICK ONE WALL, THEN THE OTHER', size: 0.20, color: 0xd8c79a, maxW: 1.7 },
 
     // --- the court: the sigil pedestal, the Warden's braziers, and the sign.
     { kind: 'pedestal', p: [0, COURT_Y, 5.0], mat: 'stone', tint: STONE, glow: GOLD },

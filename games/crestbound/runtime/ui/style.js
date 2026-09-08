@@ -797,14 +797,24 @@ const HUD_CSS = `
 .ch-speed .streaks i:nth-child(3){ top:66%; animation-duration:.40s; }
 .ch-speed .streaks i:nth-child(4){ top:80%; animation-duration:.34s; opacity:.4; }
 
-/* --- bottom-centre: power bar + toasts -------------------------------- */
+/* --- bottom-right: power bar + toasts ---------------------------------- *
+ * NOT bottom-centre. Measured at the azure-1 shoal checkpoint with the METAL
+ * hat live and the CHECKPOINT toast up (_harness/_ui2_hudbox.py, hero capsule
+ * projected to screen pixels): the toast covered 0.350 of Nim's on-screen box
+ * and the power bar another 0.112 — playtest azure-1 #9 "the METAL bar sits
+ * across the middle of the screen covering Nim from the waist down ... and the
+ * CHECKPOINT 1/4 toast lands directly under it". The stack now hangs off the
+ * right edge and grows UPWARD from just above the page's reserved control
+ * corner (UI_TOKENS.corner: game_controls.js owns bottom:8 right:8, 152x50),
+ * which no game element may enter. */
 .ch-bc{
-  position:absolute; left:50%; bottom:110px; transform:translateX(-50%) scale(var(--hud-scale));
-  transform-origin:bottom center;
-  display:flex; flex-direction:column-reverse; align-items:center; gap:8px; width:min(560px,72vw);
+  position:absolute; right:26px; bottom:${UI_TOKENS.corner.h + 16}px;
+  transform:scale(var(--hud-scale)); transform-origin:bottom right;
+  display:flex; flex-direction:column-reverse; align-items:flex-end; gap:8px;
+  width:min(400px,44vw);
 }
 .ch-power{
-  display:none; flex-direction:column; align-items:stretch; gap:6px; width:min(320px,60vw);
+  display:none; flex-direction:column; align-items:stretch; gap:6px; width:min(320px,100%);
   padding:9px 16px 11px; border-radius:var(--r-md); z-index:${UI_TOKENS.z.power};
 }
 .ch-power.on{ display:flex; }

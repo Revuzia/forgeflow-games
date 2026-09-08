@@ -760,8 +760,15 @@ export default {
 
     // 2026-09-05: beside the pad, facing it (-X), so the plates never sit on
     // the camera axis whichever way the hero is turned at the pad.
-    { kind: 'text', p: [-32.4, 8.4, -9.0], rot: [0, -Math.PI / 2, 0], text: 'THE BRIDGE IS OLD  ·  THE PIER IS NOT', size: 0.24, color: 0x3d5b78 },
-    { kind: 'text', p: [-32.4, 8.0, -9.0], rot: [0, -Math.PI / 2, 0], text: 'falling in is a way down, not a way out', size: 0.19, color: 0x50708c },
+    /* UI-TEXT LANE 2026-09-07 (pass 2), buried plate: 22.2 % covered by the far terrain ring 0.76 m in front.
+       Measured by `_harness/_ui2_boards.py` (a ray from 0.8 m in front of
+       each of 27 points on the lettering, back at the words). moved 1.0 m out along its own normal (-X), clear of the slope */
+    { kind: 'text', p: [-33.4, 8.4, -10.4], rot: [0, -Math.PI / 2, 0], text: 'THE BRIDGE IS OLD  ·  THE PIER IS NOT', size: 0.24, color: 0x3d5b78 },
+    /* moves with its header (above): two authored boards within 0.45 m in plan
+       are ONE plate (course.js `_prepareTexts`), so moving only the header
+       splits the pair and leaves the sub-line behind in the slope - measured,
+       22.2 % of it buried, after the header moved. */
+    { kind: 'text', p: [-33.4, 8.0, -10.4], rot: [0, -Math.PI / 2, 0], text: 'falling in is a way down, not a way out', size: 0.19, color: 0x50708c },
 
     { kind: 'bridge', a: BR_A, b: BR_A_END, w: 3.0, sag: 0.24, mat: 'wood', tint: TIMBER, ropeTint: ROPE, stripe: true, edge: SAFE_EDGE },
     { kind: 'bridge', a: BR_B_START, b: BR_B, w: 3.0, sag: 0.22, mat: 'wood', tint: TIMBER, ropeTint: ROPE, stripe: true, edge: SAFE_EDGE },

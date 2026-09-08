@@ -794,7 +794,13 @@ export default {
     { kind: 'platform', p: [-7.35, 14.0, TOWER_W[1]], s: [0.4, 5.2, 1.3], mat: 'stone', tint: STONE },
     // The exit ledge over the courtyard — the reward for four clean kicks.
     { kind: 'platform', p: [TOWER_W[0], r2(SHAFT_TOP - 0.15), -29.3], s: [5.4, 0.3, 2.6], mat: 'stone', tint: STONE, stripe: true, edge: SAFE_EDGE },
-    { kind: 'text', p: [-7.0, 10.4, -30.4], rot: [0, -1.35, 0], text: 'KICK ONE WALL, THEN THE OTHER', size: 0.20, color: 0xd8c79a },
+    /* UI-TEXT LANE 2026-09-07: same class as verdant-2 #28a — a 3.43 m plate in
+       a 3.4 m kick shaft. Measured by `_harness/_ui2_boards.py`: 22.2 % of the
+       lettering had stone 0.21 m in front of it (columns u -1.09..-0.73), and
+       sliding it along its face left 11 % at the other end. `maxW` narrows the
+       board to the wall AND it moves 0.9 m along its own face, clear of the
+       bracket that stood 0.19 m in front of the left of the lettering. */
+    { kind: 'text', p: [-6.8, 10.4, -29.5], rot: [0, -1.35, 0], text: 'KICK ONE WALL, THEN THE OTHER', size: 0.20, color: 0xd8c79a, maxW: 1.7 },
 
     // --- ROUTE A: the grand stair, 18 risers of 0.30 m up the inside of the
     //     west wall, and a landing that bridges its top onto the walk.

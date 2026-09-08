@@ -525,7 +525,10 @@ export default {
     { kind: 'platform', p: deck(-5.0, WELL + 1.00, -8.5, [3.0, 1.0, 3.0]), s: [3.0, 1.0, 3.0], mat: 'metal', tint: COPPER, stripe: true, edge: SAFE_EDGE },
     { kind: 'cannon', p: [-5.0, WELL + 1.60, -8.5], yaw: 2.36, pitchDeg: 64, power: 26,
       target: [-6.0, G1 + 0.60, 0], r: 1.1, len: 3.0, mat: 'metal', tint: COPPER },
-    { kind: 'text', p: [-5.0, WELL + 3.30, -6.4], rot: [0, 2.36, 0], text: 'CLIMB IN', size: 0.24, color: 0xd8c79a },
+    /* UI-TEXT LANE 2026-09-07 (pass 2), buried plate: 22.2 % covered by the cannon's own batched mesh 0.80 m in front (the right half).
+       Measured by `_harness/_ui2_boards.py` (a ray from 0.8 m in front of
+       each of 27 points on the lettering, back at the words). moved 0.8 m out along its normal, in front of the barrel it is about */
+    { kind: 'text', p: [-4.29, WELL + 3.30, -5.69], rot: [0, 2.36, 0], text: 'CLIMB IN', size: 0.24, color: 0xd8c79a },
 
     { kind: 'pedestal', p: [0, WELL, -5.0], mat: 'stone', tint: LIME, glow: PATINA },
     { kind: 'light', p: [0, WELL + 3.6, -5], color: PATINA, intensity: 9, distance: 20 },
@@ -825,7 +828,10 @@ export default {
     // The cap ledge: 0.80 m of deck ON TOP of the shaft's south wall, at
     // EXACTLY 40.00, so the last kick lands on a lip and not on a lid.
     { kind: 'platform', p: deck(SHAFT_C[0], FACE, -4.55, [4.1, 0.3, 0.8]), s: [4.1, 0.3, 0.8], mat: 'metal', tint: BRASS, stripe: true, edge: SAFE_EDGE },
-    { kind: 'text', p: [4.9, 34.6, -6.6], rot: [0, -1.5708, 0], text: 'KICK ONE WALL, THEN THE OTHER', size: 0.20, color: 0xd8c79a },
+    /* UI-TEXT LANE 2026-09-07 (pass 2), buried plate: 100 % covered by `merged_cb.brick.azure` 0.56 m in front - the 4.14 m plate is inside the brick.
+       Measured by `_harness/_ui2_boards.py` (a ray from 0.8 m in front of
+       each of 27 points on the lettering, back at the words). narrowed to the shaft (`maxW`) and moved 0.81 m out along its normal (-X) */
+    { kind: 'text', p: [4.1, 34.6, -6.6], rot: [0, -1.5708, 0], text: 'KICK ONE WALL, THEN THE OTHER', size: 0.20, color: 0xd8c79a, maxW: 1.7 },
 
     /* ========================================================================
      * BEAT 12 — THE CLOCK FACE  (families: rotor, rings; the OPEN CREST)

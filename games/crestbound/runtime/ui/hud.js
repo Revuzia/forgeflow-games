@@ -17,7 +17,14 @@
  *   top-centre   RACE timer (big, pulses red under 10 s) · WARDEN hearts
  *   top-right    course timer + session clock (Settings.showTimer) · deaths
  *   bottom-left  coins (odometer roll-up) · 8 sigil pips · checkpoint pip
- *   bottom-ctr   POWER timer bar · queued toasts
+ *   bottom-right POWER timer bar · queued toasts, stacked upward ABOVE the page's
+ *                reserved control corner (UI_TOKENS.corner). They were bottom-
+ *                CENTRE until 2026-09-07 and stood on the hero: measured at the
+ *                azure-1 shoal checkpoint (_harness/_ui2_hudbox.py), the
+ *                CHECKPOINT toast covered 0.350 of Nim's on-screen box and the
+ *                METAL bar another 0.112 — "covers Nim from the waist down"
+ *                (playtest azure-1 #9). The middle of the screen is where the
+ *                player is; readouts live on the edges.
  *   edges        subtle speed streaks (ribbon + wind lines at long-jump/dive speed)
  *   overlays     crest ribbon · checkpoint ring · death vignette · course-clear panel
  *
@@ -257,18 +264,20 @@ export class HUD {
     this.nSpeed.appendChild(rib); this.nSpeed.appendChild(stk);
     E.appendChild(this.nSpeed);
 
-    /* --- bottom-centre: power bar + toasts ----------------------------- */
+    /* --- bottom-right: power bar + toasts (see the header note) --------- *
+     * One column, `flex-direction:column-reverse`, so the POWER bar is the
+     * lowest chip and each new toast rises above it. Both are children of the
+     * same stack: nothing here is positioned by hand any more, which is what
+     * put the bar at `left:50%` over the hero in the first place. */
+    this.nToasts = el('div', 'ch-bc');
     this.nPower = el('div', 'ch-power ch-chip');
-    this.nPower.style.cssText = 'position:absolute;left:50%;bottom:178px;transform:translateX(-50%) scale(var(--hud-scale));transform-origin:bottom center';
     const ph = el('div', 'h');
     const pk = el('span', 'k'); this.tPowerK = textNode(pk, 'POWER');
     const pv = el('span', 'v'); this.tPowerV = textNode(pv, '');
     ph.appendChild(pk); ph.appendChild(pv);
     const prail = el('div', 'rail'); this.nPowerFill = el('i'); prail.appendChild(this.nPowerFill);
     this.nPower.appendChild(ph); this.nPower.appendChild(prail);
-    E.appendChild(this.nPower);
-
-    this.nToasts = el('div', 'ch-bc');
+    this.nToasts.appendChild(this.nPower);   // first child = bottom of the reversed column
     E.appendChild(this.nToasts);
 
     /* --- overlays (siblings of .ch-play) ------------------------------- */
@@ -598,9 +607,16 @@ export class HUD {
       this.nPower.classList.toggle('on', !!pid);
       if (pid) {
         this.tPowerK.nodeValue = POWER_LABEL[pid] || pid.toUpperCase();
+        /* `animateOnce` fills BOTH, so the last keyframe's transform sticks to
+           the node for the rest of the run. It used to end on
+           `translateX(-50%) ... scale(var(--hud-scale))` — the centred layout's
+           own transform, written a second time — which after the move to the
+           right-hand stack dragged the bar 160 px (half its width) back toward
+           the middle of the screen and re-applied the HUD scale on top of the
+           stack's. The reveal is a rise and a fade; the layout does the rest. */
         animateOnce(this.nPower, [
-          { opacity: 0, transform: 'translateX(-50%) translateY(10px) scale(var(--hud-scale))' },
-          { opacity: 1, transform: 'translateX(-50%) translateY(0) scale(var(--hud-scale))' },
+          { opacity: 0, transform: 'translateY(10px)' },
+          { opacity: 1, transform: 'translateY(0)' },
         ], { duration: 320, easing: UI_TOKENS.ease.out });
       }
     }

@@ -861,7 +861,10 @@ export default {
     { kind: 'jumppad', p: [0.5, TERR_A_TOP + 0.14, -1.0], s: [2.6, 0.28, 2.6], power: 4.0, dir: [0, 0.94, -0.34], mat: 'rubber', tint: 0x54c47a },
 
     { kind: 'text', p: [0, TERR_A_TOP + 1.6, 2.4], rot: [0, 0, 0], text: 'THE BELTS RUN DOWNHILL  ·  RUN THROUGH THEM', size: 0.24, color: 0x6b5a3a },
-    { kind: 'text', p: [0.5, TERR_A_TOP + 1.3, 1.4], rot: [0, 0, 0], text: 'STAND ON IT', size: 0.22, color: 0x4d6038 },
+    /* UI-TEXT LANE 2026-09-07 (pass 2), buried plate: 100 % of the words covered, 0.60 m of geometry in front of all 27.
+       Measured by `_harness/_ui2_boards.py` (a ray from 0.8 m in front of
+       each of 27 points on the lettering, back at the words). the board moved 0.85 m out along its own normal (+Z), in front of what stood on it */
+    { kind: 'text', p: [0.5, TERR_A_TOP + 1.3, 2.25], rot: [0, 0, 0], text: 'STAND ON IT', size: 0.22, color: 0x4d6038 },
     { kind: 'deco', kindOf: 'crate', p: [3.6, TERR_A_TOP + 0.4, 1.2], s: [0.9, 0.8, 0.9], rot: [0, 0.3, 0], mat: 'wood', tint: TIMBER, count: 3, spread: 2.6, jitter: 0.3 },
     { kind: 'deco', kindOf: 'barrel', p: [-4.6, TERR_B_TOP + 0.45, -9.4], s: [0.8, 0.9, 0.8], mat: 'wood', tint: TIMBER, count: 3, spread: 2.4, jitter: 0.3 },
 
