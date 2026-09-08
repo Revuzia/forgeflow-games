@@ -1287,6 +1287,39 @@ const GN_R = 0.55;             // body radius
 const GN_LINK = 0.30;          // chain pitch (metres per link)
 const GN_TELE = 0.5, GN_RECOVER = 1.2, GN_LUNGE_SPEED = 21, GN_LUNGE_MAX_T = 0.5;
 const GN_POUNDS_TO_FREE = 3;
+/**
+ * THE POST IS THE COUNTERPLAY, SO THE POST IS SAFE (CONTRACT §23: "pounding its
+ * post 3x frees it"). A gnasher whose bite covers its own stake asks the player
+ * to do the one thing the design names and kills him for it — measured on
+ * verdant-2's GNASHER GATE (west post [-7, 5.40, 26.5], chain 5.5: "two attempts
+ * ended in death before a pound landed") and on azure-3's cloud shelf ("killed
+ * the moment I got within 1.26 m of the post"). Inside `GN_POST_SAFE` of the
+ * stake the creature thrashes at the far end of its chain instead of lunging,
+ * and its bite is disarmed. 2.60 m is TUNE.pound.shockRadius (2.20 — the reach
+ * `onPound` above answers to) plus the body radius, so every spot a pound can be
+ * landed from is inside it.
+ *
+ * AND A CHAINED GROUND CRITTER BITES AT ITS OWN LEVEL. The kill sphere sits at
+ * `groundY + GN_R` with r 0.58 and the hero's capsule is 1.5 m tall, so a hero
+ * running a deck a metre BELOW the gnasher's floor was bitten by a head he
+ * could not see telegraph (verdant-3#16: "death:gnasher fired at [-8.7, 12.6,
+ * -8.7] while running along the deck a metre below the gnasher's terrace, with
+ * no telegraph the player could act on from that height"). The bite now needs
+ * the hero's FEET inside [groundY - GN_BITE_DOWN, groundY + GN_BITE_UP]: one
+ * step down and a jump's worth up, which is exactly the band the telegraph is
+ * visible from.
+ */
+const GN_POST_SAFE = 2.60, GN_BITE_DOWN = 0.5, GN_BITE_UP = 2.2;
+/**
+ * AND IT DOES NOT BITE THROUGH A WALL. rime-1's yard post stands 0.70 m off the
+ * barn's south face, so its 5.5 m chain reached the whole INTERIOR of the barn:
+ * a hero standing on the yard flat's authored centre (-21, 5.00, 4) — inside the
+ * building — died to `gnasher` in 0.03 s of a hands-off stand, with the creature
+ * and its telegraph on the far side of a timber wall. One broadphase ray from the
+ * hero's chest to the head, only while he is inside the trigger radius, decides
+ * it; the creature's own body and post do not count as cover.
+ */
+const _gnA = new THREE.Vector3(), _gnB = new THREE.Vector3();
 
 class Gnasher extends Critter {
   constructor(def, ctx) {
@@ -1568,11 +1601,21 @@ class Gnasher extends Critter {
     const prevX = this.pos.x, prevY = this.pos.y, prevZ = this.pos.z;
     const alive = !!player && !player.dead;
     let pdx = 0, pdz = 0, pd = 1e9;
+    /* THE TWO FAIRNESS GATES (see GN_POST_SAFE above). `atPost` is "the hero is
+       close enough to the stake to be pounding it"; `inBiteBand` is "the hero is
+       on this creature's own floor". Both are pure functions of the player's
+       position, so `reset(t)` still restores the creature exactly. */
+    let atPost = false, inBiteBand = true;
     if (player) {
       const pp = player.pos || player.position;
       pdx = pp.x - this.pos.x; pdz = pp.z - this.pos.z;
       pd = Math.hypot(pdx, pdz);
+      const qx = pp.x - this.post.x, qz = pp.z - this.post.z;
+      atPost = (qx * qx + qz * qz) <= GN_POST_SAFE * GN_POST_SAFE;
+      inBiteBand = pp.y >= this.groundY - GN_BITE_DOWN && pp.y <= this.groundY + GN_BITE_UP;
     }
+    let canBite = alive && !atPost && inBiteBand;
+    if (canBite && pd < this.chainLen + 2.6) canBite = this._hasBiteLine(player.pos || player.position);
 
     switch (this.state) {
       case 'idle': {
@@ -1599,7 +1642,7 @@ class Gnasher extends Critter {
           this.pos.z = damp(this.pos.z, this.rest.z, 1.4, dt);
         }
         this._clampChain();
-        if (alive && pd < this.chainLen + 1.6 && pd > 0.5) {
+        if (canBite && pd < this.chainLen + 1.6 && pd > 0.5) {
           this.state = 'telegraph'; this.stateT = 0;
           this._sfx('gnasher_bite', this.pos, 0.55, 0.7);   // rattle
           this._playClip('telegraph');
@@ -1615,6 +1658,10 @@ class Gnasher extends Critter {
         this.pos.z += Math.cos(t * 37) * 0.012;
         this.pos.y = this.groundY + GN_R;
         if (player) this.bodyYaw = dampAngle(this.bodyYaw, Math.atan2(pdx, pdz), 14, dt);
+        /* Reached the stake (or dropped off this floor) DURING the telegraph:
+           the lunge is called off, which is what makes running in on the post a
+           real answer rather than a race the player cannot win. */
+        if (!canBite) { this.state = 'recover'; this.stateT = GN_RECOVER * 0.55; this.jaw = 0; this.kill.active = false; break; }
         if (u >= 1) {
           this.state = 'lunge'; this.stateT = 0;
           this.lungeFrom.copy(this.pos);
@@ -1638,8 +1685,12 @@ class Gnasher extends Critter {
         const u = clamp(this.stateT / GN_LUNGE_MAX_T, 0, 1);
         this.pos.y = this.groundY + GN_R + 0.5 * Math.sin(u * Math.PI);
         const taut = this._clampChain();
+        /* The KillVolume is disarmed the moment the hero is at the stake or off
+           this floor — the shipped build armed it for the whole lunge, so the
+           bite reached a player who had already earned the counterplay. */
+        this.kill.active = canBite;
         // bite check (belt and braces with the KillVolume)
-        if (alive && capsuleHitsSphere(capsuleOf(player), this.pos.x, this.pos.y, this.pos.z, GN_R * 1.02)) {
+        if (canBite && capsuleHitsSphere(capsuleOf(player), this.pos.x, this.pos.y, this.pos.z, GN_R * 1.02)) {
           if (typeof player.kill === 'function') { try { player.kill('gnasher'); } catch (e) { /* noop */ } }
         }
         if (taut || u >= 1) {
@@ -1702,6 +1753,29 @@ class Gnasher extends Critter {
     this.linVel.set((this.pos.x - prevX) / Math.max(dt, 1e-4), (this.pos.y - prevY) / Math.max(dt, 1e-4), (this.pos.z - prevZ) / Math.max(dt, 1e-4));
     this._pose();
     if (this.state !== 'gone') this._simChain(dt);
+  }
+
+  /**
+   * Line of sight from the hero's chest to this creature's head (see GN_POST_SAFE
+   * above). The ray is cast FROM the hero so the creature's own body box, which
+   * sits on the ray's origin end, cannot report itself as cover; a hit whose
+   * collider belongs to this creature is ignored for the same reason.
+   * Allocation-free; only called inside the trigger radius.
+   */
+  _hasBiteLine(pp) {
+    const w = this.world;
+    if (!w || typeof w.raycast !== 'function' || !pp) return true;
+    _gnA.set(pp.x, pp.y + 0.75, pp.z);
+    _gnB.set(this.pos.x - _gnA.x, this.pos.y - _gnA.y, this.pos.z - _gnA.z);
+    const d = _gnB.length();
+    if (d < 0.7) return true;
+    _gnB.multiplyScalar(1 / d);
+    _rayOut.t = 0; _rayOut.collider = null;
+    let hit = false;
+    try { hit = w.raycast(_gnA, _gnB, d - GN_R, _rayOut); } catch (e) { return true; }
+    if (!hit) return true;
+    const c = _rayOut.collider;
+    return !!(c && c.ref === this);
   }
 
   /** Keep the body within chain length of the anchor. Returns true when taut. */

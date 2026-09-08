@@ -864,13 +864,32 @@ export default {
      * floor and never clips through it. Opposite phases on a 3 s period: the
      * deck is never fully covered, and the count is audible before it is
      * visible — which is why sigil 7 can live between them. */
-    { kind: 'crusher', p: [10, 58.0, -62], s: [3.4, 2.4, 5.0], axis: [0, -1, 0], travel: 4.0, period: 3.0, phase: 0, dwell: 0.5, mat: 'crystal' },
-    { kind: 'crusher', p: [15, 58.0, -62], s: [3.4, 2.4, 5.0], axis: [0, -1, 0], travel: 4.0, period: 3.0, phase: 0.5, dwell: 0.5, mat: 'crystal' },
+    /* THE GAP THE SIGIL LIVES IN WAS 1.60 m WIDE. Bodies x 8.30..11.70 and
+       13.30..16.70 leave 1.60 m of standing room for a 0.76 m capsule, and
+       sigil 7 sits at x 12.50 dead in the middle of it: "crushed on arrival"
+       (playtest azure-3 #24). Pushed 0.40 m apart each way — bodies 7.90..11.30
+       and 13.90..17.30 — so the gap is 2.60 m and the sigil has 1.20 m of clear
+       floor on either side. The deck runs to x 29, so nothing is crowded. */
+    { kind: 'crusher', p: [9.6, 58.0, -62], s: [3.4, 2.4, 5.0], axis: [0, -1, 0], travel: 4.0, period: 3.0, phase: 0, dwell: 0.5, mat: 'crystal' },
+    { kind: 'crusher', p: [15.6, 58.0, -62], s: [3.4, 2.4, 5.0], axis: [0, -1, 0], travel: 4.0, period: 3.0, phase: 0.5, dwell: 0.5, mat: 'crystal' },
 
-    // The rotor: len 3.0 about x = 21 on a deck spanning x 5..29, so the lanes
-    // at x 5..18 and x 24..29 are always clear. You can wait it out; the cloud
-    // in your peripheral vision says do not.
-    { kind: 'rotor', p: [21, 53.2, -62], style: 'windmill', arms: 3, len: 3.0, period: 4.2, axis: 'y' },
+    /* The rotor. `len` 3.0 about x = 21 put the arm TIPS at exactly x 18 and
+       x 24 — the two numbers the old comment called "always clear" — and the
+       playtest died on arrival at both ("deaths 6 -> 7 at x 18 and 7 -> 8 at
+       x 24"). MEASURED on the live kill capsules (`_harness/_lf_kv.py azure-3`):
+       each arm's capsule runs from innerR 0.45 to innerR + len along the arm and
+       carries a 0.50 m radius, so the lethal reach is len + 0.95 from the pivot,
+       not len. With `len` 2.2 that is 3.15 m, i.e. x 17.85..24.15, and a 0.38 m
+       body makes the unsafe band x 17.47..24.53. THE CLEAR LANES ARE THEREFORE
+       x <= 17.40 AND x >= 24.60 — 12.4 m and 4.4 m of the 24 m deck. The arm is
+       shorter than the shipped 3.0 so the east lane is a lane and not a ledge.
+       THE HAMMERS OWN THE REST OF THE DECK, and the file has to say so: their
+       bodies cover x 7.90..11.30 and 13.90..17.30 on the beat, so the bands that
+       are clear of EVERYTHING at rest are x 5.0..7.9, x 11.3..13.9 (where sigil 7
+       stands, measured 30 s hands-off with 0 deaths) and x 24.6..29.0. Between
+       17.3 and 24.6 the crossing is a timed one — which is what a gauntlet is.
+       Every number here was read off the live kill volumes, not authored. */
+    { kind: 'rotor', p: [21, 53.2, -62], style: 'windmill', arms: 3, len: 2.2, period: 4.2, axis: 'y' },
 
     // The friendly line onto the sanctum. `power` is TARGET APEX IN METRES:
     // 5.5 clears the +1.20 m rise with room to spare against a 3.50 m gap.

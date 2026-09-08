@@ -90,8 +90,8 @@
  *   tallest REQUIRED step    1.60 m — BEAT 5, the vanish crystal stair
  *                            (single-jump apex is 1.91 m).
  *   wall-kick shaft          3.20 m clear, 8.60 m tall (limit 3.4 m wide;
- *                            1 jump + 4 kicks = feet 14.80 -> 24.31, clearing
- *                            the 23.00 exit ledge) — BEAT 6.
+ *                            1 jump + 4 kicks = feet 22.00 -> 31.51, clearing
+ *                            the 30.20 exit ledge) — BEAT 6.
  *   longest OPTIONAL gap     4.84 m at -0.90 m — the flume's GAP A. Single-safe
  *                            at -0.90 m is 4.94 m. GAP B is 4.82 m at -1.00 m
  *                            (safe 4.99) and GAP C 4.49 m at -0.90 m.
@@ -472,10 +472,24 @@ const L9 = [-4.50, 2.20, 24.00];    //  1.06  1.14  THE MOUTH, over the lake ice
     GAP C: L5 -> L6 = 4.49 m at dy -0.90 (safe 4.94 m).
     Upper flume 61.9 m + lower flume 58.0 m = about 120 m of ice.               */
 
-/* --- BEAT 6: the crevasse. Floor 14.40, exit ledge 23.00, 3.20 m clear ---- */
+/* --- BEAT 6: the crevasse. Floor 21.60, exit ledge 30.20, 3.20 m clear ----
+ * THE SHAFT USED TO BE INSIDE THE MOUNTAIN. Measured 2026-09-08
+ * (`_harness/_lf_shaft.py rime-2`): the snow heightfield at (-13, -21) reads
+ * 17.82 m and the authored floor was 14.40, so the whole lower 3.4 m of the
+ * "3.20 x 3.20 m clear well" was solid terrain. `_mv_shaftroof.py` reported the
+ * ray starting INSIDE solid over every cell of that floor, and the one open
+ * cell in the grid was (-14.20, -19.80) — exactly where the playtester stood
+ * stuck in `slopeSlide` for three runs. The flank is 53 deg, so no 3.2 m well
+ * cut into it can have a flat floor under the snow: the chimney has to STAND
+ * on the flank, not be carved into it (the lesson azure-1's tidewell records).
+ * Floor lifted to 21.60 (terrain inside the footprint tops out near 21.5), the
+ * walls keep their 8.80 m, so the climb is still the authored 8.60 m and the
+ * exit ledge rises with it to 30.20 — which is where ROUTE A was already
+ * heading (the shelf is 30.00), instead of sitting 1.5 m INSIDE the hill at
+ * (-8, -22), where the terrain is 24.54.                                     */
 const CREV = [-13.0, -21.0];
-const CREV_FLOOR = 14.40;
-const CREV_LEDGE = 23.00;
+const CREV_FLOOR = 21.60;
+const CREV_LEDGE = 30.20;
 
 /* --- BEAT 8: the peak. Plinth 34.00 -> 45.60; ROUTE A winds round it ------ */
 const PEAK = [0, -46];
@@ -613,7 +627,14 @@ export default {
     {
       id: 'boss', type: 'boss', name: 'THE WARDEN OF THE CRYSTAL CAVERN',
       hint: 'Jump the shockwave, dodge the charge, pound its back.',
-      spawnAt: [-30, r2(APRON_Y + 1.6), 4],
+      /* NOT ON THE WARDEN'S OWN SPOT. (-30, 4) is the arena centre AND the
+         middle beam lane (z = 4.0, y 13.10, radius 0.16 — chest height for a
+         hero standing on the 12.00 apron): loopcheck's 90 s sweep read "DIED
+         at +20.73 s (toxic; crushed by a WARDEN swoop)". The crest now rises
+         on the cavern floor at (-25, 10), 7.81 m from the arena centre (the
+         ring is 6.0, so no swoop reaches it) and 2.00 m off the nearest beam
+         lane, still inside the room and in the camera's line from cp5. */
+      spawnAt: [-25.0, r2(APRON_Y + 1.6), 10.0],
     },
     {
       id: 'race', type: 'race', name: 'THE LUGE',
@@ -640,7 +661,7 @@ export default {
     { p: [-13.0, -1.40, 42.0], note: '4 — the floor of the melt pool (-2.60, +1.20, 2.30 m under water)' },
     { p: [-8.0, 8.65, 20.0], note: '5 — the top of the ice fall on the lake shore (top 7.40, +1.25)' },
     { p: [-30.0, 13.40, 1.0], note: '6 — the crystal cavern, over the beam lane (floor 12.00, +1.40)' },
-    { p: [-8.8, 24.30, -20.0], note: '7 — the crevasse exit ledge (top 23.00, +1.30)' },
+    { p: [-8.8, 31.50, -20.0], note: '7 — the crevasse exit ledge (top 30.20, +1.30)' },
     { p: [0.0, 43.90, -52.0], note: '8 — the north spur behind the peak (top 42.60, +1.30)' },
   ],
 
@@ -999,20 +1020,25 @@ export default {
     /* ========================================================================
      * BEAT 6 — THE CREVASSE  (cp5)
      * Behind the cavern the west shoulder falls into a hollow at 7.70 and the
-     * spire's flank goes up out of it at 55 deg. Two ideas, in order: four
+     * spire's flank goes up out of it at 53 deg. Two ideas, in order: four
      * `vanish` SNOW BRIDGES across the hollow (an 11 m drop under them, onto
      * snow), then a WALL-KICK SHAFT — 3.20 m clear against the 3.4 m limit,
-     * floor 14.40, exit ledge 23.00. From the floor that is one jump (apex
-     * 1.91 -> feet 16.31) plus four kicks at +2.00 m each -> feet 24.31, so the
-     * ledge is cleared with 1.31 m to spare and no ceiling to bonk.
+     * floor 21.60, exit ledge 30.20. From the floor that is one jump (apex
+     * 1.91 -> feet 23.51) plus four kicks at +2.07 m each -> feet 31.79, so the
+     * ledge is cleared with 1.59 m to spare and no ceiling to bonk.
+     *
+     * The chimney STANDS on the flank (see the CREV note above); the last snow
+     * bridge tops at 20.20 and an ice APRON at 21.60 carries you off it and in
+     * through a 1.80 x 2.40 m DOORWAY in the west face — the doorway this
+     * beat's own comment always promised and the geometry never had.
      * ===================================================================== */
 
     { kind: 'vanish', p: [-23.0, 17.55, -10.0], s: [2.8, 0.5, 2.8], mode: 'cycle', cycle: { on: 3.2, off: 1.8, warn: 0.7, phase: 0.0 }, mat: 'snow', tint: SNOW, stripe: true, edge: SAFE_EDGE },
     { kind: 'vanish', p: [-21.2, 18.15, -12.6], s: [2.8, 0.5, 2.8], mode: 'cycle', cycle: { on: 3.2, off: 1.8, warn: 0.7, phase: 0.5 }, mat: 'snow', tint: SNOW, stripe: true, edge: SAFE_EDGE },
     { kind: 'vanish', p: [-19.4, 18.75, -15.2], s: [2.8, 0.5, 2.8], mode: 'cycle', cycle: { on: 3.2, off: 1.8, warn: 0.7, phase: 1.0 }, mat: 'snow', tint: SNOW, stripe: true, edge: SAFE_EDGE },
-    { kind: 'vanish', p: [-17.6, 19.35, -17.8], s: [2.8, 0.5, 2.8], mode: 'cycle', cycle: { on: 3.2, off: 1.8, warn: 0.7, phase: 1.5 }, mat: 'snow', tint: SNOW, stripe: true, edge: SAFE_EDGE },
-    // tops 17.80 / 18.40 / 19.00 / 19.60; 3.16 m centre-to-centre at +0.60 m of
-    // rise, which is 0.36 m edge-to-edge and inside a walk-off, let alone a jump.
+    { kind: 'vanish', p: [-17.6, 19.95, -17.8], s: [2.8, 0.5, 2.8], mode: 'cycle', cycle: { on: 3.2, off: 1.8, warn: 0.7, phase: 1.5 }, mat: 'snow', tint: SNOW, stripe: true, edge: SAFE_EDGE },
+    // tops 17.80 / 18.40 / 19.00 / 20.20; 3.16 m centre-to-centre, +0.60 m of rise
+    // on the first three (a walk-off) and +1.20 m onto the last (a single jump).
     // The approach ledge that feeds them:
     { kind: 'platform', p: [-25.4, 16.90, -7.8], s: [4.6, 1.4, 4.6], mat: 'ice', tint: ICE, stripe: true, edge: SAFE_EDGE },
     { kind: 'pendulum', p: [-20.2, 23.20, -13.8], len: 4.0, ampDeg: 38, period: 2.9, mode: 'axe', axis: 'x', mat: 'ice', tint: CRYSTAL },
@@ -1021,20 +1047,36 @@ export default {
     // --- THE SHAFT. Four slabs leaving a 3.20 x 3.20 m clear well from 14.40
     //     to 23.20. The south face carries a 1.30 x 2.40 m doorway under a
     //     lintel, so you can only get in at the bottom and out at the top.
-    { kind: 'platform', p: [CREV[0], 18.80, r2(CREV[1] - 1.95)], s: [4.0, 8.8, 0.7], mat: 'ice', tint: ICE_DEEP },
-    { kind: 'platform', p: [r2(CREV[0] - 1.95), 18.80, CREV[1]], s: [0.7, 8.8, 3.2], mat: 'ice', tint: ICE_DEEP },
-    { kind: 'platform', p: [r2(CREV[0] + 1.95), 18.80, CREV[1]], s: [0.7, 8.8, 3.2], mat: 'ice', tint: ICE_DEEP },
-    { kind: 'platform', p: [CREV[0], 18.80, r2(CREV[1] + 1.95)], s: [4.0, 8.8, 0.7], mat: 'ice', tint: ICE_DEEP },
-    // the shaft floor, top EXACTLY 14.40
-    { kind: 'platform', p: [CREV[0], 13.70, CREV[1]], s: [3.2, 1.4, 3.2], mat: 'ice', tint: ICE, stripe: true, edge: SAFE_EDGE },
+    // south, east and north faces: solid, y 21.60 -> 30.20. The wall tops are
+    // EXACTLY the exit ledge, so the kick that clears them puts you down on it
+    // instead of clipping a 0.20 m kerb on the way out (measured: a bail east
+    // over 8.80 m walls ended 21 m away at the bottom of the flank).
+    { kind: 'platform', p: [CREV[0], 25.90, r2(CREV[1] - 1.95)], s: [4.0, 8.6, 0.7], mat: 'ice', tint: ICE_DEEP },
+    { kind: 'platform', p: [r2(CREV[0] + 1.95), 25.90, CREV[1]], s: [0.7, 8.6, 3.2], mat: 'ice', tint: ICE_DEEP },
+    { kind: 'platform', p: [CREV[0], 25.90, r2(CREV[1] + 1.95)], s: [4.0, 8.6, 0.7], mat: 'ice', tint: ICE_DEEP },
+    // the WEST face, split round the doorway (z -21.90..-20.10, y 21.60..24.00).
+    // 1.80 m of opening for a 0.76 m capsule: rime-1's bell tower records what a
+    // 1.05 m doorway does to a running line.
+    { kind: 'platform', p: [r2(CREV[0] - 1.95), 25.90, r2(CREV[1] - 1.25)], s: [0.7, 8.6, 0.7], mat: 'ice', tint: ICE_DEEP },
+    { kind: 'platform', p: [r2(CREV[0] - 1.95), 25.90, r2(CREV[1] + 1.25)], s: [0.7, 8.6, 0.7], mat: 'ice', tint: ICE_DEEP },
+    { kind: 'platform', p: [r2(CREV[0] - 1.95), 27.10, CREV[1]], s: [0.7, 6.2, 1.8], mat: 'ice', tint: ICE_DEEP },
+    // the shaft floor, top EXACTLY 21.60
+    { kind: 'platform', p: [CREV[0], 20.90, CREV[1]], s: [3.2, 1.4, 3.2], mat: 'ice', tint: ICE, stripe: true, edge: SAFE_EDGE },
+    // THE APRON — the last snow bridge (top 20.20) steps up 1.40 m onto this and
+    // walks straight in through the doorway; its top IS the shaft floor's top.
+    { kind: 'platform', p: [-16.6, 20.85, CREV[1]], s: [4.0, 1.5, 3.2], mat: 'ice', tint: ICE, stripe: true, edge: SAFE_EDGE },
     // the exit ledge over the hollow, top EXACTLY 23.00 — the reward for four
     // clean kicks, and where cp5 and sigil 7 live.
-    { kind: 'platform', p: [r2(CREV[0] + 3.4), 22.65, r2(CREV[1] + 1.0)], s: [7.6, 0.7, 5.0], mat: 'ice', tint: ICE, stripe: true, edge: SAFE_EDGE },
+    /* WEST EDGE PULLED OFF THE SHAFT. At half extent 3.8 about CREV[0]+3.4 this
+       slab covered x -13.40..-11.40 of the well's own 3.20 m clear column — 2.0 m
+       of lid over the chimney it is the exit from, the same class as rime-3's and
+       verdant-2's. Its west face is now the shaft's east wall. */
+    { kind: 'platform', p: [-8.6, r2(CREV_LEDGE - 0.35), r2(CREV[1] + 1.0)], s: [5.6, 0.7, 5.0], mat: 'ice', tint: ICE, stripe: true, edge: SAFE_EDGE },
     /* UI-TEXT LANE 2026-09-07 (pass 2), buried plate: 44.4 % covered by the TERRAIN 0.78 m in front - the plate is in the snow bank.
        Measured by `_harness/_ui2_boards.py` (a ray from 0.8 m in front of
        each of 27 points on the lettering, back at the words). narrowed to the crevasse wall (`maxW`) and moved 1.05 m out of the bank along +Z */
-    { kind: 'text', p: [r2(CREV[0] + 1.5), 16.2, r2(CREV[1] + 2.65)], rot: [0, 0, 0], text: 'KICK ONE WALL, THEN THE OTHER', size: 0.20, color: 0xd8ecff, maxW: 1.7 },
-    { kind: 'light', p: [CREV[0], 19.0, CREV[1]], color: 0x9fd8ff, intensity: 6, distance: 12 },
+    { kind: 'text', p: [r2(CREV[0] + 1.5), 23.4, r2(CREV[1] + 2.65)], rot: [0, 0, 0], text: 'KICK ONE WALL, THEN THE OTHER', size: 0.20, color: 0xd8ecff, maxW: 1.7 },
+    { kind: 'light', p: [CREV[0], 26.2, CREV[1]], color: 0x9fd8ff, intensity: 6, distance: 12 },
     // and out: three seracs from the ledge (23.00) up onto the shelf (30.00),
     // 1.55 m of rise and about 0.9 m edge-to-edge each.
     { kind: 'platform', p: [-8.2, 23.85, -22.4], s: [3.2, 1.4, 3.2], mat: 'ice', tint: ICE, stripe: true, edge: SAFE_EDGE },

@@ -1130,10 +1130,19 @@ export default {
    * CRITTERS
    * --------------------------------------------------------------------- */
   critters: [
-    // THE GNASHER at the barn door. Post 4 m in front of the door, chain 5.5:
-    // its reach covers the door and the foot of the stair, not the fence.
+    /* THE GNASHER at the barn door. Post 4 m in front of the door; its reach
+       covers the door and the foot of the stair, not the fence.
+       CHAIN 5.5 -> 4.0. The post stands 0.70 m off the barn's south face, so a
+       5.5 m chain carried the creature THROUGH the wall and 5.02 m in, which is
+       the yard flat's authored centre (-21, 5.00, 4) — measured on a hands-off
+       stand, `gnasher` in 0.03 s with the telegraph on the far side of a timber
+       wall. critters.js now refuses a bite with a wall in the line, but a chain
+       long enough to put the creature's HEAD inside the room defeats that: the
+       fix has to be the chain. 4.0 m reaches 4.58 m with the head's own radius —
+       still past the door at 4.00 m, which is what this comment always claimed —
+       and stops 0.44 m short of the yard's centre. */
     {
-      kind: 'gnasher', p: [-19.0, BARN_Y, 8.0], chain: 5.5,
+      kind: 'gnasher', p: [-19.0, BARN_Y, 8.0], chain: 4.0,
       post: [-19.0, BARN_Y, 8.6], postHits: 3, trigger: 'gnasher-freed',
       telegraph: 0.5, tint: 0x3a4a5c,
     },

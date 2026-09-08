@@ -512,7 +512,16 @@ export default {
     {
       id: 'sigils', type: 'sigils', name: 'EIGHT SIGILS OF THE FOUNDRY',
       hint: 'Two pools, a pillar, a crag, the floor, the balcony, the tube, the chimney, the lip.',
-      spawnAt: [-6, COURT_Y + 1.45, -8],        // the court pedestal
+      /* THE COURT PEDESTAL IS INSIDE THE CHASE. `chase` covers x -15..15,
+         z -35..-5 and climbs to 32.00, so the old station at (-6, 7.45, -8)
+         was under the rising lava: loopcheck's 90 s hand-stepped sweep read
+         "DIED at +38.42 s (lava; no mover on him)". A hazard may not reach a
+         station the game asks you to stand on, and this one is a CREST
+         pedestal with a celebration to play. Moved to the gantry threshold,
+         x -17.70 — the band this course's own chase comment calls dry
+         ("the gantry stair at x -19.5..-15.5 never floods"), 2.7 m outside
+         the flood box and level with the stair's foot at 6.00. */
+      spawnAt: [-17.7, COURT_Y + 1.45, -8],     // the gantry threshold pedestal
     },
     {
       id: 'coins', type: 'coins', name: 'A HUNDRED COINS', threshold: 100,
@@ -770,7 +779,12 @@ export default {
 
     // --- the court: the pedestal the EIGHT SIGILS crest rises from, and the
     //     sign that teaches the one mechanic this course is built on.
-    { kind: 'pedestal', p: [-6, COURT_Y, -8], mat: 'obsidian', tint: BASALT, glow: GOLD },
+    // The EIGHT SIGILS pedestal stands on the gantry threshold, outside the
+    // chase box (see the crest def above); the landing under it is a 3.60 m
+    // obsidian deck whose top is the court's own 6.00 and which meets the
+    // gantry stair's foot at z -10.
+    { kind: 'platform', p: [-17.7, COURT_Y - 0.4, -8.0], s: [3.6, 0.8, 3.6], mat: 'obsidian', tint: BASALT_HI, stripe: true, edge: SAFE_EDGE },
+    { kind: 'pedestal', p: [-17.7, COURT_Y, -8], mat: 'obsidian', tint: BASALT, glow: GOLD },
     //     Inside the court, ahead-right of cp-court (0, -6) and seen through the
     //     door: at [3.4, -4] it stood 2 m BEHIND the pad, off its axis, and the
     //     follow camera framed it as a plate running off the right edge of a

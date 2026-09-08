@@ -942,7 +942,17 @@ export default {
     // slot between them (limit 3.40); the cave roof stops short of both.
     { kind: 'platform', p: [15.0, 23.60, -3.9], s: [3.0, 8.0, 0.6], mat: 'stone', tint: STONE },
     { kind: 'platform', p: [15.0, 23.60, -0.1], s: [3.0, 8.0, 0.6], mat: 'stone', tint: STONE },
-    { kind: 'platform', p: [15.0, 27.30, -2.0], s: [3.4, 0.8, 3.4], mat: 'stone', tint: STONE, stripe: true, edge: SAFE_EDGE },
+    /* THE EXIT LEDGE WAS A LID ON THE CHIMNEY IT IS THE EXIT FROM.
+       Measured 2026-09-08 (`_harness/_mv_shaftroof.py rime-3 15.2,19.75,-2.0 1.6`):
+       over every open cell of the 3.20 m slot the first solid hit going straight
+       up was 26.90 — this slab's underside — and `_untest_probe` topped the kick
+       ladder out at y 25.40, which is 26.90 minus the 1.5 m body. Same class as
+       verdant-2's rampart walkway. Moved NORTH off the mouth so the slot is open
+       sky: x unchanged, z -8.20 .. -4.20, i.e. it now starts at the outer face of
+       the north kick wall and runs toward the shrine stair, whose foot tread
+       (27.70) is flush with its top. Nothing is deleted and the landing is
+       0.6 m^2 LARGER than the lid it replaces. */
+    { kind: 'platform', p: [15.0, 27.30, -6.2], s: [3.4, 0.8, 4.0], mat: 'stone', tint: STONE, stripe: true, edge: SAFE_EDGE },
     { kind: 'text', p: [17.6, 21.2, -2.0], rot: [0, -1.5708, 0], text: 'ONE JUMP, FOUR KICKS', size: 0.21, color: 0xd8e8f6 },
     // THE ICE BLOCK on the chimney floor that sigil 6 stands over (top 20.00,
     // a 0.4 m step; the ladder above it is now 7.70 m: one jump + three kicks).
@@ -1152,9 +1162,19 @@ export default {
     // 0.5 s crouch before every lunge). Chain 5.5 m off a post 3 m inside the
     // chamber, so its reach is a disc you can pace out from the terrace before
     // you commit — and the coin line through the cave runs right through it.
+    /* THE POST WAS UNDER A CRUSHER. (21, -2) sits inside the footprints of the
+       cave's second AND third ice hammers (x 19..22 and 21.5..24.5, z -4..0), so
+       the counterplay CONTRACT §23 names — "pounding its post 3x frees it" —
+       had to be performed under a 2.6 m stroke: measured, a hands-off stand
+       1.6 m from the post died `crush` in 0.48 s. Post and creature moved out
+       to the terrace at z 0.80, 0.80 m clear of the hammers' band, so every
+       spot inside TUNE.pound.shockRadius of the stake is out from under them.
+       CHAIN 5.5 -> 4.5 so the disc still covers the cave mouth (x 15.5..24.5)
+       and the coin line through it, but stops 0.9 m short of the terrace
+       pedestal at (23, 6) that the EIGHT SIGILS crest rises from. */
     {
-      kind: 'gnasher', p: [24.0, TERRACE_Y, -2.0], chain: 5.5,
-      post: [21.0, TERRACE_Y, -2.0], postHits: 3,
+      kind: 'gnasher', p: [22.5, TERRACE_Y, 0.8], chain: 4.5,
+      post: [20.0, TERRACE_Y, 0.8], postHits: 3,
       telegraph: 0.5, tint: 0x3a4a5c,
     },
     // BUMBLERS. Side contact is knockback plus a 0.4 s stun, never a death —

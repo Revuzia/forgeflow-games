@@ -1081,9 +1081,19 @@ export default {
     // on a catwalk over a lava lake is quite bad enough.
     { kind: 'bumbler', path: [[-4, CAT_TOP, 3], [4, CAT_TOP, 3], [4, CAT_TOP, -6], [-4, CAT_TOP, -6], [-4, CAT_TOP, 3]], speed: 1.5, tint: IRON },
     { kind: 'bumbler', path: [[31, DECK_TOP, -30], [45, DECK_TOP, -30], [45, DECK_TOP, -38], [31, DECK_TOP, -38], [31, DECK_TOP, -30]], speed: 1.7, tint: RUST },
-    // This one patrols the POUR's west lane — the safe half of the level-3
-    // walk, which is exactly the half you were planning to run down.
-    { kind: 'bumbler', path: [[-11, WALK3, -30.4], [-5, WALK3, -30.4], [-11, WALK3, -30.4]], speed: 1.4, tint: IRON },
+    /* This one patrols the POUR's west lane — the safe half of the level-3
+       walk, which is exactly the half you were planning to run down.
+       ITS EAST END USED TO BE x -5, AND THE POUR'S BLOCKED BAND STARTS AT -4.4.
+       A bumbler's body is a solid `bounce` box (critters.js BM_R, props.power
+       2.2) that CARRIES whatever stands on it, so a hands-off hero left on the
+       "dry" west end was walked along by it and then bounced east: measured, a
+       30 s stand from (-8.0, 15.40, -30.4) ran -8.00 -> -9.62 -> a bounce ->
+       x -3.88, which is inside the x -3 jet's 1.4 m radius, and the next pour
+       killed him. Nothing about that is a mistake the player made.
+       The patrol now turns at x -7.5, so even a full 6 m/s knockback held for
+       the authored 0.4 s stun (2.4 m) leaves the hero at -5.1 — still outside
+       the curtain — and the lane the sign calls dry is dry. */
+    { kind: 'bumbler', path: [[-11.5, WALK3, -30.4], [-7.5, WALK3, -30.4], [-11.5, WALK3, -30.4]], speed: 1.4, tint: IRON },
     // SKITTERS: fire flies over the raft field and the crucible's mouth.
     { kind: 'skitter', p: [14, 6.4, -24], path: [[6, 6.0, -18], [26, 8.0, -32]], amp: 1.8, speed: 3.6, tint: MAGMA },
     { kind: 'skitter', p: [0, 24.0, -38], path: [[-8, 23.4, -34], [8, 25.4, -42]], amp: 2.0, speed: 3.9, tint: MAGMA },

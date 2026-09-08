@@ -302,7 +302,14 @@ export default {
       id: 'secret', type: 'secret', name: 'WHAT THE COUNTERWEIGHT HIDES',
       trigger: 'well-grate',
       hint: 'The yard has a grate in it. Grates are for pounding.',
-      spawnAt: [0, WELL + 1.40, -5.0],
+      /* NOT UNDER THE COUNTERWEIGHT. The `mover` is 3.2 m square on the SAME
+         x,z as the pedestal was, and it rides -11.00 -> 1.00: it scooped the
+         collecting hero off the crest and carried him up the shaft
+         ("y -7.66, -5.92, -5.27, -3.77..."). The counterweight has to stay
+         centred on the 6 m grate hole (x -3..3, z -8..-2) to clear it, so the
+         crest moves instead — 4.5 m south, still on the well floor, outside
+         the mover's column and in the lantern's light. */
+      spawnAt: [0, WELL + 1.40, -9.5],
     },
     {
       id: 'boss', type: 'boss', name: 'THE WARDEN OF THE BELL',
@@ -343,7 +350,7 @@ export default {
     { p: [-16.0, 3.35, 14.0], note: '2 — over the great yard cog hub cap (platform top 1.90)' },
     { p: [0, G1 + 2.00, 0], note: '3 — over the vanish cog-tooth in the gear room (top 9.60); a 9 m drop under it' },
     { p: [3.0, G2 + 2.00, 0], note: '4 — over the high end of the turning-room seesaw (top 17.60)' },
-    { p: [6.0, G3 + 2.90, 6.0], note: '5 — over the escapement hammer head at rest (crusher top 26.50)' },
+    { p: [6.0, G3 + 2.90, 6.0], note: '5 — over the escapement hammer head at rest (crusher top 27.80)' },
     { p: [-5.0, WELL + 2.40, -8.5], note: '6 — over the cannon platform in the pendulum well (top -11.00)' },
     { p: [0, 38.00, 0], note: '7 — over the bell rope platform at the top of its stroke (top 36.60)' },
     { p: [-7.5, 42.00, -7.5], note: '8 — over the XI numeral bracket on the clock face deck (top 40.60)' },
@@ -523,6 +530,16 @@ export default {
     // which is 0.60 m over GALLERY 1's west walk (top 9.00), i.e. a 21.6 m
     // rise onto a 6 m wide ring floor.
     { kind: 'platform', p: deck(-5.0, WELL + 1.00, -8.5, [3.0, 1.0, 3.0]), s: [3.0, 1.0, 3.0], mat: 'metal', tint: COPPER, stripe: true, edge: SAFE_EDGE },
+    /* THE MOUNTING STEP. The pad's top is WELL+1.00 = -11.00 and the well floor
+       is -12.00: a 1.00 m riser against TUNE.stepUp 0.45, so a hero walking at
+       the 'CLIMB IN' sign stopped dead at x -3.55 and the whole ROUTE C
+       shortcut read as unreachable (playtest azure-2 #04). Measured on the
+       current tree, a walk + a jump does board it — but a cannon with a sign on
+       it should not need a jump to approach. TWO treads of 0.33 m, because a
+       single 0.50 m tread is still over stepUp and measured exactly the same
+       bonk one riser further out (stopped at x -1.72, the tread's own face). */
+    { kind: 'platform', p: deck(-2.6, WELL + 0.34, -8.5, [1.2, 0.4, 3.0]), s: [1.2, 0.4, 3.0], mat: 'metal', tint: COPPER, stripe: true, edge: SAFE_EDGE },
+    { kind: 'platform', p: deck(-3.6, WELL + 0.67, -8.5, [1.2, 0.4, 3.0]), s: [1.2, 0.4, 3.0], mat: 'metal', tint: COPPER, stripe: true, edge: SAFE_EDGE },
     { kind: 'cannon', p: [-5.0, WELL + 1.60, -8.5], yaw: 2.36, pitchDeg: 64, power: 26,
       target: [-6.0, G1 + 0.60, 0], r: 1.1, len: 3.0, mat: 'metal', tint: COPPER },
     /* UI-TEXT LANE 2026-09-07 (pass 2), buried plate: 22.2 % covered by the cannon's own batched mesh 0.80 m in front (the right half).
@@ -530,7 +547,7 @@ export default {
        each of 27 points on the lettering, back at the words). moved 0.8 m out along its normal, in front of the barrel it is about */
     { kind: 'text', p: [-4.29, WELL + 3.30, -5.69], rot: [0, 2.36, 0], text: 'CLIMB IN', size: 0.24, color: 0xd8c79a },
 
-    { kind: 'pedestal', p: [0, WELL, -5.0], mat: 'stone', tint: LIME, glow: PATINA },
+    { kind: 'pedestal', p: [0, WELL, -9.5], mat: 'stone', tint: LIME, glow: PATINA },
     { kind: 'light', p: [0, WELL + 3.6, -5], color: PATINA, intensity: 9, distance: 20 },
     { kind: 'deco', kindOf: 'chain', p: [4.6, -6.0, -9.4], s: [0.22, 11.0, 0.22], mat: 'metal', tint: IRON, count: 3, spread: 3.6, jitter: 0.2 },
     { kind: 'deco', kindOf: 'debris', p: [3.4, WELL + 0.35, -1.0], s: [1.0, 0.6, 1.0], mat: 'stone', tint: 0x8a949a, count: 6, spread: 6.0, jitter: 0.5 },
@@ -736,12 +753,28 @@ export default {
     { kind: 'pendulum', p: [0, 32.0, 0], len: 13.0, ampDeg: 10, period: 7.0, axis: 'z', mode: 'ball',
       radius: 0.9, tint: COPPER },
 
-    { kind: 'crusher', p: deck(6.0, G3 + 1.50, 6.0, [2.4, 1.2, 2.4]), s: [2.4, 1.2, 2.4],
-      axis: [0, -1, 0], travel: 3.2, period: 4.5, dwell: 0.9, mode: 'single', mat: 'metal', tint: DANGER },
-    { kind: 'crusher', p: deck(-6.0, G3 + 1.50, 6.0, [2.4, 1.2, 2.4]), s: [2.4, 1.2, 2.4],
-      axis: [0, -1, 0], travel: 3.2, period: 4.5, phase: 0.5, dwell: 0.9, mode: 'single', mat: 'metal', tint: DANGER },
-    { kind: 'crusher', p: deck(0, G3 + 1.50, -6.0, [2.4, 1.2, 2.4]), s: [2.4, 1.2, 2.4],
-      axis: [0, -1, 0], travel: 3.2, period: 4.5, phase: 0.25, dwell: 0.9, mode: 'single', mat: 'metal', tint: DANGER },
+    /* THE HAMMERS USED TO DRIVE 2.90 m THROUGH THE FLOOR THEY REST ON.
+       Retracted top G3+1.50 = 26.50 puts the driving face at 25.30; `travel`
+       3.20 took it to 22.10, and gallery 3's walk tops at 25.00 — so a rider
+       standing on a resting pallet (which the sign next to it tells you to do)
+       was carried straight down through the deck: measured on all three,
+       "y 27.93 -> 17.20 (SE), 27.93 -> 17.00 hardLand (SW), 27.93 -> 21.42 ->
+       18.16 -> 17.00 (N)", two storeys down inside the tower.
+       A crusher's face must land ON the surface under it — the rule azure-3's
+       prism hammers already state in this repo — and PARKED it must clear a
+       standing hero, or the walk under it is lethal at rest (measured: a
+       hands-off stand at (6, 25.10, 6) died `crush` in 0.02 s, because a 1.5 m
+       hero on the 25.00 walk has his head at 26.50 and the old parked face was
+       25.30). Retracted top is now G3+2.80 = 27.80 (face 26.60, 0.10 m over the
+       head) and `travel` 1.60, so the stroke still ends EXACTLY on the 25.00
+       walk. Sigil 5 at G3+2.90 = 27.90 sits 0.10 m over the parked head — inside
+       the capsule of anyone standing on it, which is what "stand on them" means. */
+    { kind: 'crusher', p: deck(6.0, G3 + 2.80, 6.0, [2.4, 1.2, 2.4]), s: [2.4, 1.2, 2.4],
+      axis: [0, -1, 0], travel: 1.6, period: 4.5, dwell: 0.9, mode: 'single', mat: 'metal', tint: DANGER },
+    { kind: 'crusher', p: deck(-6.0, G3 + 2.80, 6.0, [2.4, 1.2, 2.4]), s: [2.4, 1.2, 2.4],
+      axis: [0, -1, 0], travel: 1.6, period: 4.5, phase: 0.5, dwell: 0.9, mode: 'single', mat: 'metal', tint: DANGER },
+    { kind: 'crusher', p: deck(0, G3 + 2.80, -6.0, [2.4, 1.2, 2.4]), s: [2.4, 1.2, 2.4],
+      axis: [0, -1, 0], travel: 1.6, period: 4.5, phase: 0.25, dwell: 0.9, mode: 'single', mat: 'metal', tint: DANGER },
 
     { kind: 'beam', a: [-8.6, G3 + 1.0, 0], b: [-3.4, G3 + 1.0, 0], mode: 'single', radius: 0.16,
       cycle: { on: 1.6, off: 2.0, warn: 0.7, phase: 0.9 }, color: DANGER },
