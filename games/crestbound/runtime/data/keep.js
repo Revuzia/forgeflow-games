@@ -124,6 +124,33 @@ function deco(kindOf, p, s, extra) {
 }
 
 /**
+ * A piece of the MODELLED architecture kit (assets/models/keep/*.glb), placed
+ * as pure art — no collider, ever. `p` is the piece's PIVOT, which for every
+ * upright in the kit is the BASE CENTRE, not the centre of the box the way
+ * `deco()` reads it: a 2.0 m column authored here sits at the floor height, not
+ * at floor + 1.0. `s` sizes it (uniformly, on the piece's own fit axis — see
+ * builders.js `kitScale`), `rot[1]` is the yaw its FRONT faces, and
+ * `repeat`/`step` stamp a run of them along local X in one object.
+ *
+ * A `kit` deco is routed to builders.js `buildKitDeco` rather than to props.js
+ * because props.js thins its whole decor set to a ~52k-triangle budget: that is
+ * right for clutter and wrong for a colonnade, which must not have holes in it.
+ * Before the GLBs land it draws nothing and is retrofitted in place; if a piece
+ * fails to load it stays empty rather than breaking the Keep.
+ */
+function kitDeco(piece, p, s, extra) {
+  const d = { kind: 'deco', kit: piece, p, s };
+  if (extra) for (const k in extra) d[k] = extra[k];
+  return d;
+}
+
+/** Yaw whose LOCAL +Z (a kit piece's front) points at a world direction. */
+const FACE_PX = Math.PI / 2;     // front looks toward +X (east)
+const FACE_NX = -Math.PI / 2;    // front looks toward -X (west)
+const FACE_PZ = 0;               // front looks toward +Z (south)
+const FACE_NZ = Math.PI;         // front looks toward -Z (north)
+
+/**
  * A practical lamp. `fixture` is course.js's light-fixture override
  * ('none' | 'post' | 'hang' | 'wall' | 'lantern'; default auto). GEOMETRY LANE
  * 2026-09-07: the auto rule (a floor within 4.8 m -> a POST) planted lamp
@@ -618,7 +645,14 @@ for (const px of [-9, 9]) {
     PILLARS.push(deco('pillar', [px, LOBBY + 7.0, pz], [1.9, 14.0, 1.9], { mat: 'stone' }));
     PILLARS.push(deco('banner', [px + (px < 0 ? 1.05 : -1.05), LOBBY + 9.1, pz], [0.14, 4.6, 2.6],
       { rot: [0, px < 0 ? EAST : WEST, 0], tint: pz < 0 ? VERDANT : AZURE }));
-    PILLARS.push(deco('torch', [px + (px < 0 ? 1.15 : -1.15), LOBBY + 3.5, pz], [0.42, 1.0, 0.42], { mat: 'copper' }));
+    /* ART LANE — a MODELLED sconce (shield plate, forged arm, twin ring holder,
+       oak torch with an ember core) instead of the procedural torch cluster.
+       Its pivot is the WALL PLATE base, which the kit manifest puts at
+       (torch centre - 0.5); it faces off the pillar face it is bolted to, and
+       it is 696 triangles against the generator's 970 — this one is cheaper
+       than what it replaces. The practical light below is unchanged. */
+    PILLARS.push(kitDeco('torch_sconce', [px + (px < 0 ? 1.15 : -1.15), LOBBY + 3.0, pz], [0.24, 1.0, 0.34],
+      { rot: [0, px < 0 ? FACE_PX : FACE_NX, 0] }));
     PILLARS.push(lamp([px + (px < 0 ? 1.25 : -1.25), LOBBY + 4.05, pz], TORCH, 5.2, 13, 0.24, 'none'));
   }
 }
@@ -702,6 +736,12 @@ const GRAND_STAIR = [
 ];
 
 for (const px of [-14.2, -9.4, -4.6, 4.6, 9.4, 14.2]) {
+  /* ART LANE — MEASURED OUT, not forgotten. Six modelled piers here cost 10.5k
+     frame triangles (the merge ORs `castShadow` across a material bucket, so
+     the 2 m piers ride the 4.8 m undercroft piers' shadow pass) and the Keep
+     has 8k of the 450k budget left. The undercroft's four 4.8 m piers are the
+     better spend of the same triangles; this arcade keeps its procedural
+     pillars until the platform art frees room. */
   GRAND_STAIR.push(deco('pillar', [px, LOBBY + 1.0, -10.6], [1.1, 2.0, 1.1], { mat: 'stone' }));
   GRAND_STAIR.push(deco('archway', [px, LOBBY + 1.05, -8.6], [4.4, 2.1, 0.5], { mat: 'stone' }));
 }
@@ -989,7 +1029,12 @@ const UNDERCROFT = [
   ...[-8.0, -3.0, 2.0, 7.0].flatMap((z) => [
     deco('archway', [-8.5, UNDER, z], [17.0, 4.8, 0.7], { mat: 'brick' }),
     deco('archway', [8.5, UNDER, z], [17.0, 4.8, 0.7], { mat: 'brick' }),
-    deco('pillar', [0, UNDER + 2.4, z], [1.15, 4.8, 1.15], { mat: 'brick' }),
+    /* `shadow: false`: the undercroft's key is torchlight, not a sun, so a
+       directional shadow map of these piers buys nothing and the shadow pass
+       is a second full draw of every caster. Now that mergeStatic buckets by
+       caster (see the CASTER SPLIT note) this actually takes effect instead of
+       being ORed back on by a neighbour sharing the same stone. */
+    kitDeco('corner_pier', [0, UNDER, z], [1.15, 4.8, 1.15], { shadow: false }),
   ]),
 
   /* the hay that catches whoever pounds the grate.

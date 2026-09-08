@@ -32,6 +32,7 @@
  */
 
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Collider, Volume } from './collider.js';
 import { TUNE } from '../core/tuning.js';
@@ -2019,6 +2020,9 @@ function decoBodyMaterial(theme) {
  * accident. Small clusters lose castShadow (see feedback_forgeflow_games_fps).
  */
 export function buildDeco(def, theme, mats) {
+  /* `{kind:'deco', kit:'<piece>'}` is a piece of the Keep's MODELLED
+     architecture rather than a procedural cluster — see buildKitDeco. */
+  if (def && typeof def.kit === 'string' && KIT_SPEC[def.kit]) return buildKitDeco(def);
   const kindOf = (def && def.kindOf) || 'rocks';
   const count = Math.max(1, Math.min(64, (def && def.count) || 6));
   const scale = (def && def.scale) || 1;
@@ -2578,11 +2582,19 @@ export function mergeStatic(meshes, opts) {
       const slice = sliceGroup(geo, g);
       if (!slice) continue;
       slice.applyMatrix4(_m2);
-      const k = ck + ' ' + mat.uuid;
+      /* THE CASTER SPLIT. The bucket key carries `castShadow`, so a merge never
+         drags a non-caster into the shadow pass.
+         MEASURED (the Keep, `_harness/_kitprobe.py`, 2026-09-08): the shadow
+         pass is 183k of the course's 414k frame triangles, and `cast` used to
+         be the OR across a whole material bucket — one 4.8 m pier put every
+         2 m pier, every sconce and every small piece sharing its stone into a
+         SECOND full draw. The cost of separating them is at most one extra
+         draw per material that holds both kinds; the Keep pays 3 and the
+         budget is 260. Nothing is deleted: a caster still casts. */
+      const k = ck + ' ' + mat.uuid + (m.castShadow ? ' c' : ' n');
       let b = buckets.get(k);
-      if (!b) { b = { mat, geos: [], cast: false, recv: false }; buckets.set(k, b); }
+      if (!b) { b = { mat, geos: [], cast: !!m.castShadow, recv: false }; buckets.set(k, b); }
       b.geos.push(slice);
-      b.cast = b.cast || m.castShadow;
       b.recv = b.recv || m.receiveShadow;
     }
   }
@@ -2613,6 +2625,10 @@ export function mergeStatic(meshes, opts) {
     }
     if (host) for (let i = 0; i < out.length; i++) host.add(out[i]);
   }
+  /* A merged source is gone: its geometry now lives inside a bucket mesh and
+     writing a kit swap onto it would change nothing and dispose nothing. The
+     retrofit window is build -> merge, and this is its close. */
+  clearKitPending();
   return out;
 }
 
@@ -3102,12 +3118,35 @@ export function buildStairs(def, theme, mats) {
   const keyMat = keylineMaterial();
 
   const D = n * run;
-  const key = GeoCache.key('stairs', w, rise, run, n, rail ? 1 : 0);
+  const PROC_SLOTS = 5;
+  const baseMats = [bodyMat, treadMat, stripeMat, railMat, keyMat];
+
+  /* ART LANE 2026-09-08 — THE FLIGHT IS MODELLED, THE CLIMB IS NOT TOUCHED.
+   *
+   * `assets/models/keep/stair_module.glb` is 4 risers of 0.30 on a 0.46 run at
+   * a 4.0 m width — keep.js's GRAND_STAIR flights exactly — with carved timber
+   * stringers, scroll bosses and brass nose inlays on its own `_stripe` slot
+   * (the leading-edge law, authored into the bake). Its manifest says to chain
+   * it every 1.84 m of run / 1.20 m of rise, which is what happens here.
+   *
+   * A flight that is not a multiple of four keeps its REMAINDER at the foot,
+   * drawn by the loop below: for the Keep's 9-riser flanking flights that is
+   * one 0.30 m step, which reads as the bottom curb a real stair has. Putting
+   * the remainder at the top instead would leave a 2.70 m marble block against
+   * the landing, and overlapping two modules to cover it would z-fight two
+   * identical treads. The colliders are untouched either way — nine steps are
+   * still nine steps.
+   */
+  const art = () => {
+  const kit = kitFor('stair_module');
+  const mods = kit ? Math.floor(n / 4) : 0;
+  const foot = n - mods * 4;                 // steps drawn procedurally, at the foot
+  const key = GeoCache.key('stairs', w, rise, run, n, rail ? 1 : 0, mods);
   const geo = GeoCache.get(key, () => {
     const parts = [];
     const push = (g, m) => parts.push({ geo: g, mat: m });
     const bev = Math.min(0.05, rise * 0.22, run * 0.18);
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < foot; i++) {
       const topY = (i + 1) * rise;
       const zc = -D * 0.5 + (i + 0.5) * run;
       // solid block from ground to this tread's top
@@ -3122,12 +3161,14 @@ export function buildStairs(def, theme, mats) {
       // the emissive stripe (see the stripeMat note above)
       push(xform(boxGeometry(w - 0.06, Math.max(0.02, rise * 0.16), 0.02, 1), 0, topY - rise * 0.10, zc - run * 0.5 - 0.004), 0);
     }
-    // stringer walls: a chamfered rail down each side, following the flight
+    // stringer walls: a chamfered rail down each side, following the flight.
+    // A kit module carries its own carved stringer, so this only runs when the
+    // flight is drawn procedurally — two stringers in the same place z-fight.
     for (const sg of [-1, 1]) {
       const x = sg * (w * 0.5 + 0.06);
       const len = Math.hypot(D, n * rise);
       const ang = Math.atan2(n * rise, D);
-      push(xform(bevelBoxGeometry(0.12, 0.26, len, 0.03, 1.0), x, (n * rise) * 0.5 + 0.06, 0, -ang, 0, 0), 0);
+      if (!mods) push(xform(bevelBoxGeometry(0.12, 0.26, len, 0.03, 1.0), x, (n * rise) * 0.5 + 0.06, 0, -ang, 0, 0), 0);
       if (rail) {
         push(xform(tubeGeometry(0.05, 0.05, len, 8, 1.2), x, (n * rise) * 0.5 + 1.0, 0, Math.PI * 0.5 - ang, 0, 0), 3);
         for (let i = 0; i <= n; i += Math.max(1, Math.round(n / 4))) {
@@ -3136,10 +3177,28 @@ export function buildStairs(def, theme, mats) {
         }
       }
     }
-    return assembleIndexed(parts, 5);
+    if (mods) {
+      /* module k covers flight steps foot+4k .. foot+4k+3. Its origin is the
+         FOOT of its own first riser on the footprint CENTRE, so it sits two
+         runs along +Z from that step's leading edge. */
+      const stamps = [];
+      for (let k = 0; k < mods; k++) {
+        const i0 = foot + 4 * k;
+        stamps.push({
+          x: 0, y: i0 * rise, z: -D * 0.5 + i0 * run + 2 * run,
+          sx: w / 4.0, sy: rise / 0.30, sz: run / 0.46,
+        });
+      }
+      kitStamp(parts, kit, PROC_SLOTS, stamps);
+    }
+    return assembleIndexed(parts, PROC_SLOTS + (kit ? kit.mats.length : 0));
   });
+  return { geometry: geo, materials: kit ? baseMats.concat(kit.mats) : baseMats };
+  };
 
-  const mesh = new THREE.Mesh(geo, [bodyMat, treadMat, stripeMat, railMat, keyMat]);
+  const dressed = art();
+  const mesh = new THREE.Mesh(dressed.geometry, dressed.materials);
+  if (!kitFor('stair_module')) registerKitArt(mesh, art);
   mesh.name = 'stairs';
   mesh.castShadow = true;
   mesh.receiveShadow = true;
@@ -4107,10 +4166,42 @@ export function buildPainting(def, theme, mats) {
   canvasMat.customProgramCacheKey = () => 'crestbound-paintsweep';
   const brassMat = emissiveMat(pal(theme, 'accent') || pal(theme, 'crest'), 0.55);
 
-  const key = GeoCache.key('painting', w, h, 2);
+  /* ART LANE 2026-09-08 — THE FRAMES ARE MODELLED.
+   *
+   * `frame_painting_s/m/l` are openings of 3.0x3.2 / 3.4x3.8 / 4.2x4.4 — the
+   * three sizes keep.js hangs, to the centimetre — with gilt moulded rails,
+   * corner rosettes and a crest pediment. Each carries a separate `canvas`
+   * node whose UVs run 0..1 and whose material is plain, exactly so the course
+   * plate can be swapped onto it: that node is mapped to slot 3, this
+   * builder's own `canvasMat`, which is what carries the shimmer sweep and
+   * `setLockedArt`. So a modelled frame keeps every live behaviour the boxed
+   * one had, and `colliders: []` / the gate Volume are untouched.
+   */
+  const PAINT_SLOTS = 5;
+  const baseMats = [giltMat, woodMat, matteMat, canvasMat, brassMat];
+  const kitPieceFor = (ww, hh) => {
+    let best = null, bestD = Infinity;
+    for (const nm of ['frame_painting_s', 'frame_painting_m', 'frame_painting_l']) {
+      const nat = KIT_SPEC[nm].nat;
+      const d = Math.abs(nat[0] - ww) + Math.abs(nat[1] - hh);
+      if (d < bestD) { bestD = d; best = nm; }
+    }
+    return best;
+  };
+  const art = () => {
+  const piece = kitPieceFor(w, h);
+  const kit = kitFor(piece);
+  const key = GeoCache.key('painting', w, h, 2, kit ? piece : 'proc');
   const geo = GeoCache.get(key, () => {
     const parts = [];
     const push = (g, m) => parts.push({ geo: g, mat: m });
+    if (kit) {
+      const nat = KIT_SPEC[piece].nat;
+      const canvasSlot = (i, m) => (/_canvas$/.test((m && m.name) || '') ? 3 : undefined);
+      kitStamp(parts, kit, PAINT_SLOTS, [{ sx: w / nat[0], sy: h / nat[1], sz: 1 }], canvasSlot);
+      for (let i = 0; i < parts.length; i++) if (parts[i].mat === 3) flipKitUvV(parts[i].geo);
+      return assembleIndexed(parts, PAINT_SLOTS + kit.mats.length);
+    }
     const fw = 0.22, fd = 0.20;
     // frame: four moulded rails, turned as lathe sections would be too heavy —
     // a chamfered rail with an inner and outer bead reads the same at 3 m
@@ -4145,8 +4236,11 @@ export function buildPainting(def, theme, mats) {
     // the crest motif the whole game is about, on the door it opens
     push(xform(bevelBoxGeometry(0.62, 0.09, fd * 0.8, 0.02, 1.6), 0, (h + fw) * 0.5 + fw * 0.5 + 0.045, 0), 0);
     push(xform(prismGeometry(0.15, 0.06, 8, 1), 0, (h + fw) * 0.5 + fw * 0.5 + 0.20, fd * 0.5 - 0.02, Math.PI * 0.5, Math.PI / 8, 0), 0);
-    return assembleIndexed(parts, 5);
+    return assembleIndexed(parts, PAINT_SLOTS);
   });
+  return { geometry: geo, materials: kit ? baseMats.concat(kit.mats) : baseMats };
+  };
+  const dressed = art();
   /* The lock sigil (ring + hasp + shackle) is its OWN child mesh so the live
    * lock state can show and hide it without rebuilding the frame. Same draw
    * count as the old baked group: one brass draw either way. */
@@ -4159,7 +4253,8 @@ export function buildPainting(def, theme, mats) {
     return assembleIndexed(parts, 1);
   });
 
-  const mesh = new THREE.Mesh(geo, [giltMat, woodMat, matteMat, canvasMat, brassMat]);
+  const mesh = new THREE.Mesh(dressed.geometry, dressed.materials);
+  if (!kitFor(kitPieceFor(w, h))) registerKitArt(mesh, art);
   mesh.name = 'painting:' + course;
   mesh.castShadow = false;
   mesh.receiveShadow = true;
@@ -4272,10 +4367,31 @@ export function buildGateDoor(def, theme, mats) {
   // ---- surround --------------------------------------------------------
   const jamb = Math.max(0.42, w * 0.16);
   const rise = Math.min(h * 0.30, w * 0.5);
-  const surroundKey = GeoCache.key('gate.sur', w, h, jamb, rise);
+  const SUR_SLOTS = 2;
+  const surMats = [stoneMat, giltMat];
+  /* ART LANE 2026-09-08 — THE SURROUND IS MODELLED.
+   *
+   * `arch_door.glb` is a two-centred pointed arch — 7 voussoirs a side, a
+   * keystone, impost and plinth mouldings, a hood moulding — authored at a
+   * 2.8 m clear opening and 4.2 m to the apex, i.e. the Keep's IRON_DOOR. A
+   * gate of another size scales it, but only while the scale stays close to
+   * ISOTROPIC: THE CRESTWAY is 6.4 x 6.4, half again as wide relative to its
+   * height as the model, and a pointed arch squashed that far stops being a
+   * pointed arch. That one keeps its voussoir ring. The two leaves, the lock
+   * sigil, the crest plate, every collider and the trigger Volume are the same
+   * objects on both paths — this swaps a mesh's geometry, nothing else.
+   */
+  const aspectOk = Math.abs((w / h) / (2.8 / 4.2) - 1) <= 0.35;
+  const surArt = () => {
+  const kit = aspectOk ? kitFor('arch_door') : null;
+  const surroundKey = GeoCache.key('gate.sur', w, h, jamb, rise, kit ? 'kit' : 'proc');
   const sGeo = GeoCache.get(surroundKey, () => {
     const parts = [];
     const push = (g, m) => parts.push({ geo: g, mat: m });
+    if (kit) {
+      kitStamp(parts, kit, SUR_SLOTS, [{ sx: w / 2.8, sy: h / 4.2, sz: 1 }]);
+      return assembleIndexed(parts, SUR_SLOTS + kit.mats.length);
+    }
     const pierH = h - rise;
     for (const sg of [-1, 1]) {
       const x = sg * (w * 0.5 + jamb * 0.5);
@@ -4302,9 +4418,13 @@ export function buildGateDoor(def, theme, mats) {
     // keystone
     push(xform(bevelBoxGeometry(0.46, 0.80, 0.98, 0.05, 1.0), 0, pierH + rise + 0.10, 0), 0);
     push(xform(ringProfileGeometry(0.16, [0.035, 0.05, 0.012], 16, 1.6), 0, pierH + rise + 0.16, 0.50, Math.PI * 0.5, 0, 0), 1);
-    return assembleIndexed(parts, 2);
+    return assembleIndexed(parts, SUR_SLOTS);
   });
-  const surround = new THREE.Mesh(sGeo, [stoneMat, giltMat]);
+  return { geometry: sGeo, materials: kit ? surMats.concat(kit.mats) : surMats };
+  };
+  const surDressed = surArt();
+  const surround = new THREE.Mesh(surDressed.geometry, surDressed.materials);
+  if (aspectOk && !kitFor('arch_door')) registerKitArt(surround, surArt);
   surround.name = 'gate.surround';
   surround.castShadow = true;
   surround.receiveShadow = true;
@@ -4541,10 +4661,31 @@ export function buildPedestal(def, theme, mats) {
    * behind it; a beacon is a thread of light, not a column) */
   const beamM = glowMat(light, { mode: 'beam', speed: 0.9, power: 1.55, gain: 0.40, near: [2.6, 7.0] });
 
-  const key = GeoCache.key('pedestal', r, h, beam ? 'b' : 'nb');
+  /* ART LANE 2026-09-08 — THE PLINTH IS MODELLED, THE BEACON IS NOT.
+   *
+   * `pedestal.glb` is r 0.95 / h 1.05 — this builder's own defaults — a fluted
+   * drum with a gilt engraved ring, a rune channel and four base runes on its
+   * `_rune` slot, and its footing ring already sits 0.08 m below y=0, which is
+   * the same "bury the base" fix ROUND 5 made below. What it does NOT carry is
+   * the crest BEACON: the glow pool, the ground skirt, the four-point sparkle
+   * and the light beam are runtime materials with live uniforms, and they are
+   * emitted on both paths (slots 3 and 4). Removing them would delete the one
+   * unmistakable silhouette the readability law is built around.
+   */
+  const PED_SLOTS = 5;
+  const pedMats = [stoneMat, giltMat, runeMat, glowM, beamM];
+  const art = () => {
+  const kit = kitFor('pedestal');
+  const key = GeoCache.key('pedestal', r, h, beam ? 'b' : 'nb', kit ? 'kit' : 'proc');
   const geo = GeoCache.get(key, () => {
     const parts = [];
     const push = (g, m) => parts.push({ geo: g, mat: m });
+    if (kit) {
+      /* the GLB's `_rune` slot is this builder's slot 2, so the pulse the
+         readability lane tuned (0.28 base / 0.14 amp) still drives it. */
+      const runeSlot = (i, m) => (/_rune$/.test((m && m.name) || '') ? 2 : undefined);
+      kitStamp(parts, kit, PED_SLOTS, [{ sx: r / 0.95, sy: h / 1.05, sz: r / 0.95 }], runeSlot);
+    } else {
     // stepped base + drum + cap, all one lathe
     /* ROUND 5 — BURY THE BASE.
      * The profile used to start at local y = 0, and every course places a
@@ -4580,6 +4721,8 @@ export function buildPedestal(def, theme, mats) {
     }
     // gilt cap ring
     push(xform(ringGeometry(r * 0.52, r * 0.78, 32, 1.4), 0, h + 0.004, 0), 1);
+    }
+    // ---- the crest BEACON: emitted on both paths ----
     // the glow pool on top (radial UV disc)
     push(xform(discGeometry(r * 0.86, 32), 0, h + 0.02, 0), 3);
     // the ground pool: the soft outer skirt of a radial disc round the footing
@@ -4604,10 +4747,14 @@ export function buildPedestal(def, theme, mats) {
       uvAttr.needsUpdate = true;
       push(xform(bg, 0, h + 0.55 + bh * 0.5, 0), 4);
     }
-    return assembleIndexed(parts, 5);
+    return assembleIndexed(parts, PED_SLOTS + (kit ? kit.mats.length : 0));
   });
+  return { geometry: geo, materials: kit ? pedMats.concat(kit.mats) : pedMats };
+  };
+  const dressed = art();
 
-  const mesh = new THREE.Mesh(geo, [stoneMat, giltMat, runeMat, glowM, beamM]);
+  const mesh = new THREE.Mesh(dressed.geometry, dressed.materials);
+  if (!kitFor('pedestal')) registerKitArt(mesh, art);
   mesh.name = 'pedestal';
   mesh.castShadow = true;
   mesh.receiveShadow = true;
@@ -5493,6 +5640,485 @@ function roofFoundry(push, W, H, D, T, STYLE) {
   return { y: H + deckH * 0.5, hx: (W + 0.6) * 0.5, hy: deckH * 0.5, hz: (D + 0.6) * 0.5 };
 }
 
+
+// ---------------------------------------------------------------------------
+// THE KEEP ARCHITECTURE KIT  (assets/models/keep/*.glb)
+// ---------------------------------------------------------------------------
+/**
+ * Eighteen modelled pieces — carved stone courses, gilt frames, real doors —
+ * built in Blender (`_tools/blender/keep/`) and authored TO THIS DATA: the
+ * stair module is 4 risers of 0.30 with a 0.46 run and a 4.0 m width, i.e.
+ * keep.js's GRAND_STAIR flights exactly; `arch_door` is 2.8 m clear and 4.2 m
+ * to the apex, i.e. the Keep's IRON_DOOR; `frame_painting_s/m/l` are openings
+ * of 3.0x3.2 / 3.4x3.8 / 4.2x4.4, i.e. the three painting sizes keep.js hangs.
+ * Nothing here rescales a piece to make it fit; it fits.
+ *
+ * THE RULES THIS SUBSYSTEM KEEPS
+ * ------------------------------
+ *  1. **The art changes what is DRAWN, never what is SOLID.** No builder's
+ *     collider list, Volume list or `userData` changes on the kit path. The
+ *     grand stair still climbs on nine 0.30 m steps whether it is drawn as
+ *     bevel boxes or as carved stone.
+ *  2. **One GLB, once, shared for the life of the page.** `_kitSrc` holds the
+ *     flattened source geometry and its materials, and every builder caches the
+ *     transform-baked composite it stamps in the SAME `GeoCache` every
+ *     procedural composite uses — so ten paintings of one size share one
+ *     buffer. A second course load, or a return to the Keep, costs no fetch, no
+ *     parse and no geometry work.
+ *  3. **Off the first-frame critical path.** Nothing here is fetched at import
+ *     (CONTRACT hard rule 6) and no builder ever waits. A builder called before
+ *     the kit is resident emits its procedural art AND registers its `art()`
+ *     closure; `applyKitArt()` re-runs those closures once the GLBs land, which
+ *     props.js does inside the course build's one existing `await` — before
+ *     `mergeStatic`, so the kit geometry merges normally and the first frame
+ *     the player sees is already the modelled Keep.
+ *  4. **Embedded lights are stripped and materials are repaired** on load
+ *     (GAME_DOCTRINE): sane metalness/roughness, emissive OFF unless the piece
+ *     authored a glow slot, colour spaces correct, `aoMap` dropped — see
+ *     `repairKitMaterial`.
+ */
+
+/** Where the kit lives, resolved against this module so a sub-path host works. */
+const KIT_URL = new URL('../../assets/models/keep/', import.meta.url).href;
+
+/**
+ * The authored facts each piece publishes (assets/models/keep/_manifest/*.json).
+ *  `nat`  natural size in metres [x, y, z] of the piece's USEFUL extent — the
+ *         thing a caller sizes against, not always the bounding box (a door's
+ *         is its clear opening, a painting's is its canvas opening).
+ *  `fit`  which axis a uniform fit measures ('y' for uprights, 'x' for runs).
+ *  `tris` triangle count, so a caller can budget without loading anything.
+ */
+const KIT_SPEC = {
+  wall_panel:        { nat: [4.0, 4.0, 0.42], fit: 'x', tris: 1976 },
+  corner_pier:       { nat: [1.0, 4.0, 1.0], fit: 'y', tris: 876 },
+  column:            { nat: [1.14, 4.0, 1.14], fit: 'y', tris: 1988 },
+  arch_door:         { nat: [2.8, 4.2, 0.86], fit: 'y', tris: 1600 },
+  arch_window:       { nat: [1.4, 3.2, 0.66], fit: 'y', tris: 2308 },
+  balustrade:        { nat: [2.0, 1.05, 0.26], fit: 'x', tris: 2220 },
+  newel:             { nat: [0.42, 1.245, 0.42], fit: 'y', tris: 944 },
+  gallery_beam:      { nat: [4.0, 0.95, 0.59], fit: 'x', tris: 864 },
+  hammer_beam_truss: { nat: [10.391, 7.548, 0.9], fit: 'x', tris: 2244 },
+  stair_module:      { nat: [4.0, 1.2, 1.84], fit: 'x', tris: 1912, rise: 0.30, run: 0.46, n: 4 },
+  frame_painting_s:  { nat: [3.0, 3.2, 0.325], fit: 'x', tris: 2084 },
+  frame_painting_m:  { nat: [3.4, 3.8, 0.325], fit: 'x', tris: 2084 },
+  frame_painting_l:  { nat: [4.2, 4.4, 0.325], fit: 'x', tris: 2084 },
+  pedestal:          { nat: [1.9, 1.05, 1.9], fit: 'y', tris: 1856 },
+  brazier:           { nat: [0.888, 1.594, 0.81], fit: 'y', tris: 1728 },
+  torch_sconce:      { nat: [0.24, 0.978, 0.331], fit: 'y', tris: 696 },
+  bench:             { nat: [2.2, 0.46, 0.48], fit: 'x', tris: 808 },
+  bookcase:          { nat: [1.9, 2.5, 0.63], fit: 'y', tris: 5004 },
+};
+
+/** Every piece name — `loadKeepKit()` with no list loads exactly these. */
+export const KIT_PIECES = Object.keys(KIT_SPEC);
+
+/**
+ * Material slots the kit AUTHORS as self-lit (manifest: `<piece>_<glow>` carries
+ * `emissiveFactor` + `KHR_materials_emissive_strength`). Every other slot has
+ * its emissive zeroed on load. The cap is the readability lane's finding, in
+ * this exact building: "the Keep is blown out" was half exposure and half a
+ * bank of self-lit bars, and a 3.2-strength caged lantern would put it straight
+ * back. The theme's light does the lighting; a glow slot only says "this is the
+ * part that is hot".
+ */
+const KIT_GLOW_SLOTS = /_(glow|ember|rune|stripe|glass_amber|glass_day)$/;
+const KIT_GLOW_CAP = 0.85;
+
+/* kit-local scratch: never the shared module scratch, which other builders
+   assume holds an identity scale. */
+const _kV = new THREE.Vector3();
+const _kQ = new THREE.Quaternion();
+const _kE = new THREE.Euler();
+const _kS = new THREE.Vector3(1, 1, 1);
+const _kM = new THREE.Matrix4();
+
+/** piece -> {geos:[BufferGeometry], mats:[Material], box:Box3} in MODEL space. */
+const _kitSrc = new Map();
+/** meshes built before the kit landed, waiting for `applyKitArt()`. */
+const _kitPending = [];
+/** the one in-flight load, memoised for the life of the page. */
+let _kitLoad = null;
+
+/** Counters the harnesses read (`CRESTBOUND.THREE` is not enough to see this). */
+export const KIT_STATS = {
+  requested: 0, loaded: 0, failed: [], bytesMs: 0, pieces: 0,
+  retrofits: 0, stamps: 0, off: false,
+};
+
+/**
+ * `?nokit=1` — the A/B lever for measuring the kit against the boxes.
+ * Resolved ONCE: `kitFor()` runs per builder call (hundreds per course build)
+ * and a query-string scan in that path is per-frame-allocation thinking applied
+ * to a build path.
+ */
+let _kitOffFlag = null;
+function kitDisabled() {
+  if (_kitOffFlag === null) {
+    _kitOffFlag = (typeof location !== 'undefined' && !!location.search
+      && location.search.indexOf('nokit=1') >= 0);
+    if (_kitOffFlag) KIT_STATS.off = true;
+  }
+  return _kitOffFlag;
+}
+
+/**
+ * Coerce one glTF mesh's geometry to the shape everything downstream assumes:
+ * NON-INDEXED with exactly {position, normal, uv}. `mergeStatic`'s `sliceGroup`
+ * keeps only those three and always de-indexes, so a kit geometry that carried
+ * `uv1`/`tangent` would lose them at merge time and sample a missing attribute
+ * — which is why `aoMap` is dropped in `repairKitMaterial` rather than left to
+ * break silently on the merged copy.
+ */
+function kitGeometryOf(src) {
+  const g = src.index ? src.toNonIndexed() : src.clone();
+  for (const k in g.attributes) {
+    if (k !== 'position' && k !== 'normal' && k !== 'uv') g.deleteAttribute(k);
+  }
+  if (!g.attributes.normal) g.computeVertexNormals();
+  if (!g.attributes.uv) {
+    g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
+  }
+  g.clearGroups();
+  return g;
+}
+
+/**
+ * Repair one kit material in place (GAME_DOCTRINE "the exporter's materials are
+ * wrong, every time" — less wrong here, because these were authored rather than
+ * generated, but the same failure modes are one bad export away).
+ */
+function repairKitMaterial(m, aniso) {
+  if (!m) return m;
+  if (m.map) { m.map.colorSpace = THREE.SRGBColorSpace; m.map.anisotropy = aniso; }
+  if (m.emissiveMap) { m.emissiveMap.colorSpace = THREE.SRGBColorSpace; m.emissiveMap.anisotropy = aniso; }
+  for (const k of ['normalMap', 'roughnessMap', 'metalnessMap', 'alphaMap']) {
+    if (m[k]) { m[k].colorSpace = THREE.NoColorSpace; m[k].anisotropy = aniso; }
+  }
+  /* aoMap samples `uv1`, and the static merge keeps only {position, normal, uv}
+     — a merged kit mesh would read an attribute that is not there. The ORM's
+     occlusion channel is a nice-to-have; the tangent normal map carries the
+     carving, which is the read that matters. */
+  if (m.aoMap) { m.aoMap = null; m.aoMapIntensity = 0; }
+  /* glTF defaults metallicFactor and roughnessFactor to 1.0 when the exporter
+     omits them; with an ORM texture bound those factors are correct (the map
+     carries the value) and must NOT be clamped. Only a FACTOR with no map can
+     be the exporter's default. */
+  if (!m.metalnessMap && m.metalness > 0.9) m.metalness = 0.0;
+  if (!m.roughnessMap && (m.roughness === undefined || m.roughness > 0.98)) m.roughness = 0.78;
+  if (KIT_GLOW_SLOTS.test(m.name || '')) {
+    const k = m.emissiveIntensity === undefined ? 1 : m.emissiveIntensity;
+    m.emissiveIntensity = Math.min(k, KIT_GLOW_CAP);
+    m.toneMapped = true;
+  } else {
+    if (m.emissive) m.emissive.setHex(0x000000);
+    m.emissiveMap = null;
+    m.emissiveIntensity = 0;
+  }
+  m.envMapIntensity = 1.0;
+  m.shadowSide = THREE.FrontSide;
+  /* a solid piece is single-sided; a face the exporter DELIBERATELY made
+     two-sided (a thin canvas, a cloth) keeps what it authored. */
+  if (m.side === undefined) m.side = THREE.FrontSide;
+  m.name = 'kit.' + (m.name || 'mat');
+  return m;
+}
+
+/** Flatten a loaded kit scene to model-space {geos, mats} pairs. */
+function flattenKit(scene, aniso) {
+  scene.updateMatrixWorld(true);
+  // strip every embedded light — theme lighting is ours, not the asset's
+  const lights = [];
+  scene.traverse((o) => { if (o.isLight) lights.push(o); });
+  for (let i = 0; i < lights.length; i++) if (lights[i].parent) lights[i].parent.remove(lights[i]);
+
+  const geos = [];
+  const mats = [];
+  const seen = new Map();
+  scene.traverse((o) => {
+    if (!o.isMesh || !o.geometry || !o.geometry.attributes || !o.geometry.attributes.position) return;
+    const srcMats = Array.isArray(o.material) ? o.material : [o.material];
+    const src = o.geometry;
+    const groups = (src.groups && src.groups.length > 1) ? src.groups.slice() : null;
+    const emit = (geo, mat) => {
+      if (!mat) return;
+      let slot = seen.get(mat.uuid);
+      if (slot === undefined) {
+        slot = mats.length;
+        seen.set(mat.uuid, slot);
+        mats.push(repairKitMaterial(mat, aniso));
+        geos.push([]);
+      }
+      geo.applyMatrix4(o.matrixWorld);
+      geos[slot].push(geo);
+    };
+    if (groups) {
+      const flat = kitGeometryOf(src);
+      /* toNonIndexed() rewrites group starts into vertex space, so slice the
+         ORIGINAL groups against the de-indexed buffer the same way. */
+      for (let gi = 0; gi < groups.length; gi++) {
+        const grp = groups[gi];
+        const sub = new THREE.BufferGeometry();
+        for (const k in flat.attributes) {
+          const a = flat.attributes[k];
+          const it = a.itemSize;
+            const dst = new Float32Array(grp.count * it);
+          dst.set(a.array.subarray(grp.start * it, (grp.start + grp.count) * it));
+          sub.setAttribute(k, new THREE.BufferAttribute(dst, it));
+        }
+        emit(sub, srcMats[grp.materialIndex] || srcMats[0]);
+      }
+      flat.dispose();
+    } else {
+      emit(kitGeometryOf(src), srcMats[0]);
+    }
+  });
+
+  const out = { geos: [], mats, box: new THREE.Box3() };
+  for (let i = 0; i < geos.length; i++) {
+    const list = geos[i];
+    let g = list.length === 1 ? list[0] : mergeGeometries(list, false);
+    if (!g) g = list[0];
+    else if (list.length > 1) for (const x of list) x.dispose();
+    g.computeBoundingBox();
+    if (g.boundingBox) out.box.union(g.boundingBox);
+    out.geos.push(g);
+  }
+  return out;
+}
+
+/**
+ * Load the kit once. Memoised: every later call — a second course, a return to
+ * the Keep, a second caller in the same build — gets the SAME promise, and an
+ * already-resolved promise is a microtask, so it never yields a frame.
+ *
+ * A piece that 404s or fails to parse is logged in `KIT_STATS.failed` and its
+ * builders keep their procedural art. The Keep is never broken by a missing file.
+ *
+ * @param {object} [opts] {renderer, base, pieces}
+ * @returns {Promise<Map>} resolves when every piece has settled (never rejects)
+ */
+export function loadKeepKit(opts) {
+  if (_kitLoad) return _kitLoad;
+  if (kitDisabled()) { KIT_STATS.off = true; _kitLoad = Promise.resolve(_kitSrc); return _kitLoad; }
+  const o = opts || {};
+  const base = o.base || KIT_URL;
+  const want = o.pieces || KIT_PIECES;
+  const renderer = o.renderer || null;
+  const aniso = (renderer && renderer.capabilities && renderer.capabilities.getMaxAnisotropy)
+    ? Math.min(8, renderer.capabilities.getMaxAnisotropy()) : 4;
+  const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  KIT_STATS.requested = want.length;
+  const loader = new GLTFLoader();
+  _kitLoad = Promise.all(want.map((name) => loader.loadAsync(base + name + '.glb')
+    .then((gltf) => {
+      const flat = flattenKit(gltf.scene, aniso);
+      if (!flat.geos.length) throw new Error('no meshes in ' + name);
+      _kitSrc.set(name, flat);
+      KIT_STATS.loaded++;
+    })
+    .catch(() => { KIT_STATS.failed.push(name); })))
+    .then(() => {
+      KIT_STATS.pieces = _kitSrc.size;
+      KIT_STATS.bytesMs = +(((typeof performance !== 'undefined' && performance.now)
+        ? performance.now() : Date.now()) - t0).toFixed(1);
+      return _kitSrc;
+    });
+  return _kitLoad;
+}
+
+/** The resident source for one piece, or null. SYNCHRONOUS — never waits. */
+export function kitFor(piece) {
+  if (kitDisabled()) return null;
+  return _kitSrc.get(piece) || null;
+}
+
+/** True once at least one piece is resident (harness / debug read). */
+export function keepKitReady() { return _kitSrc.size > 0; }
+
+/**
+ * Stamp one kit piece into a builder's `parts` list at material slots
+ * `slot0 + i`. `stamps` are placements in the BUILDER's local frame:
+ * `{x, y, z, rx, ry, rz, sx, sy, sz}` (any omitted: 0 / 0 / 1).
+ *
+ * The geometry is cloned per stamp because `assembleIndexed` merges and then
+ * owns it; the SOURCE buffers in `_kitSrc` are never mutated, so every later
+ * course reuses them. The composite that comes out is cached by the caller
+ * through GeoCache exactly like every procedural composite in this file, so
+ * ten paintings of the same size share ONE buffer.
+ */
+function kitStamp(parts, kit, slot0, stamps, slotOf) {
+  for (let s = 0; s < stamps.length; s++) {
+    const st = stamps[s];
+    _kE.set(st.rx || 0, st.ry || 0, st.rz || 0);
+    _kQ.setFromEuler(_kE);
+    _kV.set(st.x || 0, st.y || 0, st.z || 0);
+    _kS.set(st.sx === undefined ? 1 : st.sx, st.sy === undefined ? 1 : st.sy,
+      st.sz === undefined ? 1 : st.sz);
+    _kM.compose(_kV, _kQ, _kS);
+    for (let i = 0; i < kit.geos.length; i++) {
+      const g = kit.geos[i].clone();
+      g.applyMatrix4(_kM);
+      if (_kS.x * _kS.y * _kS.z < 0) g.computeVertexNormals();
+      const slot = slotOf ? slotOf(i, kit.mats[i]) : undefined;
+      parts.push({ geo: g, mat: slot === undefined ? slot0 + i : slot });
+    }
+    KIT_STATS.stamps++;
+  }
+}
+
+/**
+ * Flip V on a geometry's UVs, in place.
+ *
+ * glTF's texture origin is the TOP-left and three.js's is the BOTTOM-left;
+ * GLTFLoader reconciles that by setting `flipY = false` on the textures the
+ * file ships. A kit mesh whose material we REPLACE with one of ours — the
+ * painting canvas takes `canvasMat`, whose plate is a CanvasTexture with the
+ * default `flipY = true` — therefore samples upside down, which is what put
+ * the course plaque at the top of the frame instead of the bottom
+ * (`_shots/_cmp_kit_paint.png` against `_cmp_box_paint.png`). Flipping the
+ * geometry's V rather than the texture's `flipY` keeps the swap local: the
+ * same CanvasTexture is still shared by every painting and the lock states.
+ */
+function flipKitUvV(geo) {
+  const uv = geo.attributes && geo.attributes.uv;
+  if (!uv) return geo;
+  for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i));
+  uv.needsUpdate = true;
+  return geo;
+}
+
+/**
+ * Register a mesh whose art was built procedurally only because the kit had not
+ * landed yet. `art()` re-runs the builder's own geometry/material selection —
+ * it reads `kitFor()` fresh — so the retrofit is the exact same code path the
+ * second Keep load takes, not a parallel one that can drift.
+ */
+function registerKitArt(mesh, art) {
+  if (!mesh || typeof art !== 'function') return;
+  _kitPending.push({ mesh, art });
+}
+
+/**
+ * Swap the modelled art onto every mesh built before the kit landed.
+ *
+ * Called from props.js inside `Course._buildPropBatch`, i.e. inside the course
+ * build's ONE await, which is after every builder has run and BEFORE
+ * `_mergeStatic()` — so the merge sees kit geometry and the player's first
+ * frame is the modelled Keep. A mesh already consumed by the merge is skipped
+ * (`mergeStatic` clears the queue it consumed), and a mesh whose builder is
+ * still without its piece keeps its boxes.
+ *
+ * @returns {number} how many meshes were re-dressed
+ */
+export function applyKitArt() {
+  if (!_kitPending.length) return 0;
+  let n = 0;
+  for (let i = 0; i < _kitPending.length; i++) {
+    const rec = _kitPending[i];
+    if (!rec || !rec.mesh) continue;
+    try {
+      const a = rec.art();
+      if (!a || !a.geometry) continue;
+      if (a.geometry === rec.mesh.geometry) continue;   // still no kit for it
+      rec.mesh.geometry = a.geometry;
+      rec.mesh.material = a.materials;
+      n++;
+    } catch (e) { /* a retrofit never breaks a live course */ }
+  }
+  _kitPending.length = 0;
+  KIT_STATS.retrofits += n;
+  return n;
+}
+
+/** Drop the retrofit queue (the merge has consumed these meshes). */
+function clearKitPending() { _kitPending.length = 0; }
+
+/**
+ * Size a kit piece to an authored `s`. Uniform by the piece's own fit axis
+ * unless `mode` is 'xyz' — a column stretched only in Y grows a stretched
+ * capital, which is exactly the tell that says "this is a scaled box".
+ */
+function kitScale(piece, s, mode) {
+  const spec = KIT_SPEC[piece];
+  if (!spec || !s) return { sx: 1, sy: 1, sz: 1 };
+  const nx = s[0] / spec.nat[0], ny = s[1] / spec.nat[1], nz = s[2] / spec.nat[2];
+  if (mode === 'xyz') return { sx: nx, sy: ny, sz: nz };
+  const k = spec.fit === 'x' ? nx : ny;
+  return { sx: k, sy: k, sz: k };
+}
+
+/**
+ * A KIT DECO — one modelled architecture piece (or a run of them) placed as
+ * pure art.
+ *
+ * WHY THIS AND NOT props.js. A `deco` with `kindOf`/`model` routes to
+ * world/props.js, which is the right home for scattered clutter: it jitters
+ * scale, yaws randomly and — the part that matters here — thins itself to a
+ * decor budget of ~52k triangles for the whole course (course.js
+ * `_buildPropBatch`). That budget is correct for mushrooms and wrong for a
+ * colonnade: architecture that thins is a colonnade with holes in it, and
+ * 2000-triangle carved stone would push every other prop in the Keep out to
+ * make room. A `kit` deco goes through this builder instead, so it is placed
+ * exactly where it is authored, at the yaw it is authored at, and merges into
+ * the course's static art like every other built surface.
+ *
+ * It returns NO COLLIDERS, exactly like every other deco: the boxes keep_js
+ * already authors are what the player stands on, and this only changes what is
+ * drawn. Before the GLBs land it draws nothing at all and registers itself for
+ * `applyKitArt()`; an empty geometry is skipped by `mergeStatic`, so the
+ * retrofit lands before the merge and the piece merges normally.
+ *
+ * @param {object} def {kind:'deco', kit, p, s?, rot?, repeat?, step?, kitFit?}
+ * @returns {{mesh: THREE.Mesh, colliders: []}}
+ */
+function buildKitDeco(def) {
+  const piece = def.kit;
+  const spec = KIT_SPEC[piece];
+  const p = pos3(def);
+  const s = size3(def, spec.nat[0], spec.nat[1], spec.nat[2]);
+  const sc = kitScale(piece, s, def.kitFit);
+  const repeat = Math.max(1, Math.min(64, Math.round(def.repeat || 1)));
+  const step = (def.step === undefined) ? spec.nat[0] * sc.sx : +def.step;
+
+  const art = () => {
+    const kit = kitFor(piece);
+    const key = GeoCache.key('kitdeco', piece, sc.sx, sc.sy, sc.sz, repeat, step, kit ? 'k' : 'e');
+    const geo = GeoCache.get(key, () => {
+      if (!kit) return emptyGeometry();
+      const parts = [];
+      const stamps = [];
+      const span = (repeat - 1) * step;
+      for (let i = 0; i < repeat; i++) {
+        stamps.push({ x: -span * 0.5 + i * step, y: 0, z: 0, sx: sc.sx, sy: sc.sy, sz: sc.sz });
+      }
+      kitStamp(parts, kit, 0, stamps);
+      return assembleIndexed(parts, kit.mats.length);
+    });
+    return { geometry: geo, materials: kit ? kit.mats.slice() : [] };
+  };
+
+  const dressed = art();
+  const mesh = new THREE.Mesh(dressed.geometry, dressed.materials);
+  mesh.name = 'kit_' + piece;
+  if (!kitFor(piece)) registerKitArt(mesh, art);
+  /* THE DECOR SHADOW RULE, on the piece's own measured size. The shadow pass is
+     a SECOND full draw of every caster — measured on this course, 183k of the
+     Keep's 414k frame triangles — so decor has to earn it. 1.5 m is the number
+     course.js already uses (SHADOW_MIN_RADIUS) and props.js quotes: "big enough
+     that its shadow is a shape, not a smudge". A wall sconce and a 2 m arcade
+     pier are under it; the 4.8 m undercroft piers are over it and cast. `shadow:
+     true` in the data forces it on for a piece that must throw one. */
+  const rad = Math.max(spec.nat[0] * sc.sx, spec.nat[1] * sc.sy, spec.nat[2] * sc.sz) * 0.5;
+  mesh.castShadow = def.shadow === true || (def.shadow !== false && rad >= 1.5);
+  mesh.receiveShadow = true;
+  mesh.position.set(p[0], p[1], p[2]);
+  applyRot(mesh, def.rot);
+  mesh.updateMatrix();
+  mesh.matrixAutoUpdate = false;
+  mesh.userData.def = def;
+  return { mesh, colliders: [] };
+}
 
 // ---------------------------------------------------------------------------
 // dispatch + teardown

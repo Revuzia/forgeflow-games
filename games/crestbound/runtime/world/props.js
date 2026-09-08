@@ -33,6 +33,7 @@ import {
   bevelBoxGeometry, boxGeometry, tubeGeometry, prismGeometry,
   ringGeometry, ringProfileGeometry, discGeometry, quadGeometry,
   capsuleGeometry, latheProfileGeometry,
+  loadKeepKit, applyKitArt, KIT_STATS,
 } from './builders.js';
 import { Mats } from './materials.js';
 
@@ -2660,6 +2661,10 @@ export async function loadProps(themeId, renderer, opts) {
     }
   }
 
+  /* THE KEEP'S ARCHITECTURE KIT rides the same await as the prop GLBs — see
+     loadHubKit. Pushed into `jobs` so the two fetch sets overlap. */
+  const kitJob = loadHubKit(themeId, renderer);
+
   const jobs = wanted.map(async (spec) => {
     const url = base + themeId + '/' + spec.id + '.glb';
     try {
@@ -2674,6 +2679,7 @@ export async function loadProps(themeId, renderer, opts) {
       lazy.set(spec.id, spec);
     }
   });
+  jobs.push(kitJob);
   await Promise.all(jobs);
 
   // every procedural generator is also addressable by name, so a stage can ask
@@ -2689,6 +2695,43 @@ export async function loadProps(themeId, renderer, opts) {
   _libCache.set(themeId, lib);
   return lib;
 }
+
+/**
+ * THE KEEP ARCHITECTURE KIT, wired into the one await a course build has.
+ *
+ * WHY IT LIVES HERE. `Course._build()` is one long synchronous block with
+ * exactly one `await` in it — `_buildPropBatch`, which calls `loadProps` — and
+ * that await sits AFTER every builder has run and BEFORE `_mergeStatic()`.
+ * That is precisely the window a modelled Keep needs: the builders cannot wait
+ * for a GLB (they are synchronous by contract), and anything swapped in after
+ * the merge would be writing to a mesh that no longer exists. So the kit is
+ * fetched inside the same await the Keep's ten prop GLBs already pay for — the
+ * cost is the max of the two, not the sum — and `applyKitArt()` re-dresses
+ * every mesh whose builder ran before the files landed.
+ *
+ * On every load after the first the kit is resident, `loadKeepKit()` returns an
+ * already-resolved promise (a microtask, which does not let rAF run — see the
+ * `_shippedCache` note), the builders take the kit path synchronously, and
+ * there is nothing to retrofit.
+ *
+ * A theme that is not the Keep never touches any of this.
+ */
+async function loadHubKit(themeId, renderer) {
+  if (themeId !== 'keep') return;
+  try {
+    await loadKeepKit({ renderer });
+    applyKitArt();
+  } catch (e) {
+    /* A kit that will not load leaves the Keep exactly as it was: procedural
+       bevel-box architecture. It is never the reason a course fails to build. */
+    if (typeof console !== 'undefined' && console.warn) {
+      console.warn('[props] the Keep architecture kit did not load; keeping the procedural Keep', e);
+    }
+  }
+}
+
+/** Kit load counters, for the harnesses (`KIT_STATS` re-exported from here). */
+export { KIT_STATS };
 
 /**
  * Natural target size for a generator addressed directly by name (i.e. a stage
