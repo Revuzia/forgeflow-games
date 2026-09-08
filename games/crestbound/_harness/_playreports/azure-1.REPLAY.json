@@ -1,0 +1,309 @@
+{
+ "area": "azure-1",
+ "played": "Fifteen driver runs (_harness/_play_azure1a..o.py, all committed). Booted the shipped page at ?dev=1&quality=low&autoscale=0, clicked NEW GAME, and played TIDEWELL TEMPLE with real KeyboardEvents. Route: spawn on the shore, cp1, the coin pedestal, down the causeway (which throws you into an 11 m/s slopeSlide), off the wading shelf into the lagoon; swam the surface, dived with C, sat submerged 20 s, stroked back up, climbed back onto the shelf. Measured swim speeds off player.vel and every duration off engine.elapsed, not the wall clock. Crossed to the shoal on a single held W, took cp2, rode the geyser (7.1 m), stood on a sinking coral pad until it dropped me, dived the 5.60 m into the drowned forecourt, floated by the chained eel, walked the great stair three times from three start points, walked the terrace into its beams (they kill), pounded three urns, stood on the tide-switch pedestal and pounded it five times, walked all five lanes from the terrace to the inner court, stood in the Warden's ring for 12 s, climbed ROUTE A to the pier and the roof, bonked off the sanctum crest and then collected it by falling on it, walked onto the metal hat on the east reef, sank to the tidewell floor, pounded the coral wall with the hat live, stood on a tide stone until it vanished under me, wall-kicked the ROUTE C cistern shaft, collected sigils 2 and 4 under water, and finally entered the course properly through its own Keep glass gate with 32 crests. Screenshots at every event under _shots/play_azure1a..o/, all read.",
+ "defects": [
+  {
+   "what": "NOTHING BREAKABLE ON THIS COURSE BREAKS. A ground pound lands correctly and shatters nothing - which kills the secret crest, the whole tide-switch beat and the urn coins",
+   "where": "azure-1, all five 'breakable' objects: the terrace urns at (-7.6, 5.55, -15.4) and (7.6, 5.55, -15.4), the north urn at (-9.0, 5.55, -29.0), the tide-switch pedestal at (-4.5, 5.65, -33.4) with trigger 'tide-drawn', and the tidewell coral wall at (-32.0, -5.25, -10.2) with trigger 'coral-broken' and drop 'crest'",
+   "did": "First proved the pound itself works: on flat terrace ground, jump then tap C gives poundLand, jump then hold C gives jump1 -> poundHang -> poundLand, jump then hold Ctrl gives poundHang -> poundFall -> poundLand. Then, with hazards RUNNING, stood on top of each urn (landing at y 6.10, the urn's own top) and pounded three times each - nine pounds. Separately pounded the tide pedestal five times from on top of it, and the coral wall five times with the metal hat live (HUD showed METAL 15 s counting down to 5 s)",
+   "happened": "every one of the five breakables still reports broken=false, course._triggered is still [], the coin count never moved, and each pound at the coral wall shoved the hero about 1 m BACKWARDS away from it (z -9.52 -> -8.53 -> -7.52 -> -6.56 -> -5.56)",
+   "should": "CONTRACT 11: a pound 'breaks breakable colliders'. As shipped, the 'secret' crest WHAT THE CORAL KEPT can never be obtained, the sign 'POUND THE PEDESTAL - THE SLUICE ANSWERS' is a lie, and the urns' coins are unreachable",
+   "png": "_shots/play_azure1o/01_west_urn.png, _shots/play_azure1m/03_tide_after.png, _shots/play_azure1i/04_coral_result.png"
+  },
+  {
+   "what": "The Warden never wakes, so the boss crest is unobtainable - and the hero plays a run cycle on the spot against its body",
+   "where": "azure-1 inner court, the warden authored at (0, 1.6, -48), arena {c:[0,-48], r:7}",
+   "did": "walked in from (0, 2.0, -44) and stood in the middle of its ring for 12 s, holding W into it, sampling the critter every 300 ms",
+   "happened": "critter.state stayed 'dormant' with hp 3 and alive true for every sample; it never telegraphed, never charged, never touched me (deaths unchanged). The hero jams against its base at z -47.02 in state 'run' with speed 0.00",
+   "should": "a 3-hit mini-boss should aggro on entry, telegraph a stomp and a charge, and be poundable so the 'boss' crest spawns. Also CONTRACT 11: 'The run cycle never plays on the spot against a wall' - that should be the bonk state",
+   "png": "_shots/play_azure1g/14_07_warden_end.png"
+  },
+  {
+   "what": "The great stair only lets you out of the sea about one try in three - the other times the swimmer wedges under the treads and holding forward for 12 s does nothing",
+   "where": "azure-1, the 35-tread great stair (foot y -5.31 at z centre -4.25, top 5.61). This is the course's set piece and its required spine: you arrive here swimming, from the drowned forecourt",
+   "did": "zeroed velocity in the water on the stair's centre line at z +2.0, +0.5 and -1.0, aimed hero and camera straight up the flight, held W for 12 s each time",
+   "happened": "z +0.5 climbed out cleanly to (0, 4.99, -9.25). z +2.0 and z -1.0 both ended at (0, -0.07, -3.32) in swimIdle, floating about 0.6 m above the submerged treads with no purchase, not moving for the last 8 s. A fourth attempt from the forecourt floor (0, -4.5, -1.0) wedged at (0, -1.29, -1.85) the same way",
+   "should": "every approach along the flight's centre line should let the player climb out; a coin-flip on the only required route through the course is worse than a hard block, because the player cannot tell what he did wrong",
+   "png": "_shots/play_azure1h/12_stair0_end.png, _shots/play_azure1d/20_11_stair_top.png"
+  },
+  {
+   "what": "The camera is buried in geometry at the tide switch - you play the whole beat blind, looking at a blue blur with no hero on screen",
+   "where": "azure-1, the tide-switch pedestal on the north terrace, standing at (-4.5, 6.30, -33.40) on the crate and at (-4.5, 4.99, -33.42) beside it. cp4 is here",
+   "did": "teleported in, took a screenshot, pounded three times and took a screenshot after each",
+   "happened": "every frame is a single undifferentiated blue-teal wash filling the screen; Nim is not visible at all, the pedestal is not visible, the sign is not visible. The HUD is the only thing you can read. The state line confirms the player is alive and grounded on sand the whole time",
+   "should": "the camera should pull in or tilt to keep the hero on screen; camcheck reports 8/8 and never looks at this station",
+   "png": "_shots/play_azure1e/31_16_tideswitch_before.png, _shots/play_azure1e/35_18_tideswitch_after.png"
+  },
+  {
+   "what": "The camera does not tilt up the ROUTE C cistern shaft, so the 9.6 m climb you are being asked to make is entirely off-screen",
+   "where": "azure-1, the cistern shaft behind the temple's north face; floor 5.00, exit ledge 14.60, 3.20 m clear. The sign inside reads 'ROUTE C - KICK ONE WALL, THEN THE OTHER'",
+   "did": "walked in from the terrace at (0, 5.4, -31), then ran six laps of hold-into-the-west-wall + jump + jump, hold-into-the-east-wall + jump + jump",
+   "happened": "the camera sat at dist 3.0-4.5 behind the hero at eye level for the entire climb and never elevated; Nim fills the middle of the frame and the shaft above him is never shown. The kicks themselves DO fire (states wallslide and wallkick observed) but six laps only got from y 5.00 to y 8.05 - 3.05 m of a 9.60 m shaft",
+   "should": "CONTRACT 12 is explicit: 'A SHAFT ... is answered by TILTING, not by pulling in through the hero: over-the-head, then up-the-shaft'. Sigil 6 and the roof exit are up there",
+   "png": "_shots/play_azure1g/30_21_cistern_in.png, _shots/play_azure1h/10_shaft_end.png"
+  },
+  {
+   "what": "The camera jams into the hero on the shore slope and under the water wheels - you get a white blob or the top of Nim's helmet",
+   "where": "azure-1 two places: (a) the beach between the spawn flat 3.00 and the wading shelf 0.55, at (-1.78, 1.53, 39.44); (b) under the west water wheel in the inner court at (-8.04, 1.99, -46.28)",
+   "did": "(a) walked from the spawn down the causeway toward the wading shelf on a held W; (b) walked to the wheel and stood there",
+   "happened": "(a) the hero enters slopeSlide at 11.04 m/s and the bottom-left half of the frame becomes a solid white blob - the camera is inside him; (b) camera dist collapsed to 2.43 and the shot is the top of Nim's helmet from above and behind, no horizon, no wheel",
+   "should": "camera collision should pull in only as far as minDist and keep the hero readable; and the beach the player walks down on the way to his first swim should not be a 38-degree slide",
+   "png": "_shots/play_azure1a/06_05_shelf.png, _shots/play_azure1i/13_06_look_03.png"
+  },
+  {
+   "what": "P8 - the lagoon reads as an opaque blue slab laid on top of the beach, and the 6.4 m tidewell directly under you is completely invisible",
+   "where": "azure-1, floating over the tidewell mouth at (-32, -0.65, -6); also the shoal, the wading shelf and the great stair",
+   "did": "stood/floated at six stations round the lagoon with the camera level and screenshotted each",
+   "happened": "the water is a flat opaque plane with a hard white rim where it meets the sand, and the sand beyond the rim reads LOWER than the plane, so the sea looks like a raised sheet of blue jelly resting on the beach. There is no depth fade you can see through: the tidewell bowl, its sigil, its five coins and the coral chamber are all invisible from directly above them. Submerged structures render as flat grey rectangles pasted under the sheet with no refraction offset. The hero's body is cut by a razor-straight line at the waterline with no meniscus. With the camera straddling the surface at the great stair there is no underwater treatment at all - the top half of the frame is dry sky and the bottom half is the same flat blue",
+   "should": "three.js r172 ships Water.js / Water2.js / WaterMesh.js / Refractor.js in the same vendored version this game already imports; a player standing over a 6.4 m well should be able to see there is a well",
+   "png": "_shots/play_azure1i/08_05_water_04.png, _shots/play_azure1d/20_11_stair_top.png"
+  },
+  {
+   "what": "You cannot swim west through the reef current, and it does not push you at all if you stop swimming - both halves are backwards",
+   "where": "azure-1 lagoon, the 46 x 9 m 'current' volume centred at (0, -1.4, 24), dir +X, power 3.2 - the band between the wading shelf and the shoal",
+   "did": "four controlled runs, velocity zeroed, camera pinned, every duration taken off engine.elapsed (game time): float with no input inside the current; swim due west inside it; swim due north across it; swim due west in still water at (20, -0.6, 6) as the control",
+   "happened": "float, no input: +0.00 m/s, vel.x exactly 0 for 4.2 s. Swim WEST into it: +1.04 m/s EAST, steady vel.x +0.80. Swim NORTH across it: +2.42 m/s of sideways drift. Swim WEST in still water: -4.21 m/s, steady vel.x -4.49. So the band applies roughly +5.3 m/s of eastward push to a swimming player - well above the authored 3.2 - and nothing at all to a floating one",
+   "should": "swim speed peaks at 3.6-4.5 m/s against an authored 3.2 current, so a determined swimmer should crawl west; and a current should carry a player who lets go, which is the whole read of 'ride the currents' in the course subtitle",
+   "png": "_shots/play_azure1j/07_current_into.png, _shots/play_azure1j/06_current_float.png"
+  },
+  {
+   "what": "The sanctum crest bonks you off its pedestal and one attempt killed the hero outright - it only collects if you drop onto it from above",
+   "where": "azure-1 sanctum, the 'open' crest at (0, 16.45, -24) on the dais (dais top 15.11, roof deck 14.21)",
+   "did": "walked north at it from the roof deck in 0.75 s steps with a jump after each, six times; then teleported to (0, 18.5, -24) and let go",
+   "happened": "walking in, the hero stops dead at z -22.77 - 1.23 m short of the crest - in state 'bonk', and repeats do not get closer; on the fifth step he died at (-0.03, 14.80, -22.74) (deaths 0 -> 1) and respawned back at the shore. Dropping onto it from above collects it instantly and the course goes to state 'clear'",
+   "should": "the course's headline crest should be collectable by the route the player has (walk up the stair, walk at the crest); a pedestal that blocks the collectable it carries, and can kill, is the worst possible failure here",
+   "png": "_shots/play_azure1f/58_10_crest_08.png, _shots/play_azure1g/08_04_crest_result.png"
+  },
+  {
+   "what": "The HUD renders dead centre, on top of the hero and the ground he is standing on",
+   "where": "azure-1 everywhere - the METAL power bar and the CHECKPOINT toast",
+   "did": "picked up the metal hat and walked; took a checkpoint",
+   "happened": "the METAL bar sits across the middle of the screen covering Nim from the waist down in every frame it is up, and the CHECKPOINT 1/4 toast lands directly under it, so between them the hero and his footing are hidden. On the shoal both were up at once, over the hero AND over a sign",
+   "should": "power timers and checkpoint toasts belong in a corner or along an edge; the middle of the screen is where the player is",
+   "png": "_shots/play_azure1i/05_05_water_01.png, _shots/play_azure1i/13_06_look_03.png"
+  },
+  {
+   "what": "Two sign boards overlap on the shoal - you can read two words of the one behind",
+   "where": "azure-1, the shoal checkpoint (0, 0.74, 12.5), facing north",
+   "did": "stood on cp2, the checkpoint the course puts you on, and looked at the signs it puts in front of you",
+   "happened": "'STAND ON IT / the current below runs north whether you do or not' is about 90 percent hidden behind 'THE TIDE GAUNTLET 60s', which stands in front of it at almost the same spot. Only the words 'STAND ON IT' are legible, and the line that explains the current is not",
+   "should": "the two boards are 1-2 m apart on the same sight line from the checkpoint; separate them, or the tutorial line for the course's own hazard never gets read",
+   "png": "_shots/play_azure1i/05_05_water_01.png"
+  },
+  {
+   "what": "P6 - floating and stray geometry in the inner court, on the terrace and on the sanctum roof",
+   "where": "azure-1: (a) inner court by the Warden - a green bumbler hovers about 1.5 m above the sand with nothing under it, and a white stepped-ziggurat prop hangs in mid-air beside it; (b) terrace west flank near the ROUTE B drums - three brown plank slabs jut out at angles in mid-air at terrace height; (c) beside the terrace checkpoint at (0, 5.0, -12.5) - a pale cream panel floats at chest height with no support; (d) the sanctum roof - a wooden board stands on edge in the walking line and the hero clips half inside it",
+   "did": "walked/stood at each and screenshotted",
+   "happened": "all four read as objects that were dropped in the scene rather than placed - the owner's 'extra objects'",
+   "should": "props sit on something, or they are cut",
+   "png": "_shots/play_azure1g/14_07_warden_end.png, _shots/play_azure1i/11_06_look_01.png, _shots/play_azure1i/07_05_water_03.png, _shots/play_azure1f/55_09_roof.png"
+  },
+  {
+   "what": "P7 - hard ground seams where the sand meets the court floor and where the terrace paving meets the ground",
+   "where": "azure-1: under the west water wheel at (-8, 2.0, -46), and the terrace west flank at (-14, 4.95, -22)",
+   "did": "stood at each and looked down",
+   "happened": "the tan sand meets the dark cracked court floor along a hard jagged line with no blend, and there is a straight vertical shading seam in the sand itself around x -7. On the terrace the grey paving meets the dark green ground along a hard straight line with a streaky band",
+   "should": "the terrain blend should cross-fade the way the heightfield's slope blend does elsewhere; this is the owner's 'buggy textures on the ground where they overlap' in this course",
+   "png": "_shots/play_azure1i/13_06_look_03.png, _shots/play_azure1i/11_06_look_01.png"
+  },
+  {
+   "what": "The vanish grates in the inner court are consequence-free - they sit 45 cm above solid ground",
+   "where": "azure-1 inner court, the three 'vanish' grates at (3, 1.85, -42), (6, 1.85, -45) and (4, 1.85, -48); tops 2.05, court floor 1.60",
+   "did": "stood on grate 1 for 8.4 s and recorded y and grounded every 300 ms",
+   "happened": "y 2.05 grounded for about 4.5 s, then a 'land' at 1.60 and normal walking. Nothing at stake: the grate vanishes and you step down 45 cm onto the court",
+   "should": "the header calls them 'over the court's spillway' and 'the short way from the wheels into the Warden's ring'; as built they are decoration",
+   "png": "_shots/play_azure1e/54_26_vanish_end.png"
+  },
+  {
+   "what": "The spawn sign promises an air meter the game does not have",
+   "where": "azure-1 spawn, the big board at the shore: 'JUMP AT THE SURFACE TO STROKE / CROUCH TO SINK / THE AIR RUNS OUT. THE COURSE DOES NOT.'",
+   "did": "sank to the bottom, stayed submerged for 20 s, and read the whole HUD while under",
+   "happened": "no drown, no damage, no breath bar anywhere in the HUD (I read it: realm, course, crest pips, timer, session, coins, sigils, checkpoint - no air). The course file also calls the forecourt coin ring 'exactly one breath's worth'",
+   "should": "either put an air meter in, or stop telling the player his air runs out - as written the sign teaches a rule that does not exist and makes every dive feel more dangerous than it is",
+   "png": "_shots/play_azure1a/02_01_spawn.png"
+  },
+  {
+   "what": "__dev.unlockAll() sets the save flag but does not actually unlock a gate",
+   "where": "the Keep, the azure-1 'glass' gate at (26, 2.4, 30), requires 30 crests",
+   "did": "clicked NEW GAME, called CRESTBOUND.game.__dev.unlockAll(), then read game._gates and the save flag",
+   "happened": "save.flags.get('gateOpen:azure-1') is true, but the gate still reads unlocked=false sealed=true. Only raising the crest total past 30 (measured: still sealed at 20, open at 32) actually opened it",
+   "should": "unlockAll is the tool every playtest and harness uses to reach a late course; as it stands it silently does nothing and every agent that trusts it is testing a sealed gate",
+   "png": ""
+  },
+  {
+   "what": "The geyser jump pad reads as a black hole, not a launcher",
+   "where": "azure-1 shoal, the 'jumppad' at (3.5, 0.74, 13), power 7.0 - the course's only launcher",
+   "did": "stood on cp2 and looked at it, then stood on it",
+   "happened": "from the checkpoint it renders as a hard-edged dark ellipse on a pale slab - it reads as a hole in the ground. It does work (measured 7.1 m of launch), but nothing about its silhouette or colour says 'stand here'",
+   "should": "CONTRACT hard rule 2, readability: a launcher needs an unmistakable silhouette and a pulse",
+   "png": "_shots/play_azure1i/05_05_water_01.png"
+  },
+  {
+   "what": "The temple facade reads as blue bathroom tile and a green glass curtain wall, not sunlit limestone; the ROUTE B colonnade drums are plain untrimmed boxes",
+   "where": "azure-1, the temple's south and west faces, seen from the spawn, from the shoal and from the terrace west flank at (-14, 4.95, -22)",
+   "did": "looked at the temple from the three places the course puts the player",
+   "happened": "the biggest object in the diorama is a flat grid of blue-teal square tiles with green vertical strips; from the spawn it reads as a modern glass building. The six 'fallen capital drums' of ROUTE B are plain rectangular cuboids - dark teal checkerboard boxes plus one flat pale-blue cuboid in a different material with no trim or bevel",
+   "should": "the palette says LIME 0xcfc4a8 'warm temple limestone, sunlit'; CONTRACT hard rule 1 says no naked primitives - the drums in particular are boxes",
+   "png": "_shots/play_azure1a/02_01_spawn.png, _shots/play_azure1i/05_05_water_01.png, _shots/play_azure1i/11_06_look_01.png"
+  },
+  {
+   "what": "Walking due north from the tide switch drops you into a dark sealed pocket with no cue that it is Route C's shaft",
+   "where": "azure-1, x = 0 between the terrace (z -33) and the inner court; the player stops at (0, 5.00, -35.72)",
+   "did": "held W due north at x -12, -6, 0, +6 and +12 from the tide-switch terrace",
+   "happened": "x -12 and x -6 walk down to the inner court normally. x 0 stops in a small dark box with dark teal walls on three sides and a lit tile underfoot - the frame is unreadable and there is no visible way out. It turns out to be the ROUTE C cistern shaft, but the only sign is BEHIND you as you come in",
+   "should": "the shaft's mouth should read as a doorway you chose, not as a dead end you fell into; put the ROUTE C sign where a player walking in sees it",
+   "png": "_shots/play_azure1e/44_21_sluice_end.png, _shots/play_azure1g/30_21_cistern_in.png"
+  },
+  {
+   "what": "The sinking coral pads never sink \u2014 standing on one for 9 s does not move it",
+   "where": "azure-1 lagoon, the 'sinker' pad at (-4.5, 0.10, 28.0) (delay 1.2 s, speed 0.9, depth 4)",
+   "did": "teleported onto the pad and stood still for 9 s",
+   "happened": "the player's y only varied by 0.44 m ([-0.06, 0.32, 0.35, 0.35, 0.12, -0.06])",
+   "should": "the pad should sink under the player's weight after 1.2 s and drop him into the water",
+   "png": "_shots/play_azure1d/03_sinker_00.png"
+  },
+  {
+   "what": "Even starting on a dry tread, holding forward does not walk the great stair to the top",
+   "where": "azure-1 great stair, placed on a tread at (0, 1.2, -3.0)",
+   "did": "aimed north up the flight and held W for 14 s",
+   "happened": "ended at [0, 3, 42] in state idle",
+   "should": "0.312 m risers are well inside the 0.45 m stepUp; a held forward should walk the flight",
+   "png": "_shots/play_azure1e/08_stairC_end.png"
+  },
+  {
+   "what": "ROUTE A, the ceremonial stair to the sanctum roof, does not climb on a held forward",
+   "where": "azure-1 temple, the east ceremonial flight from the terrace at (12, 5.6, -18) toward the pier landing at 9.50 and the second flight to 14.30",
+   "did": "aimed north up the flight and held W for 14 s",
+   "happened": "ended at [12.2, 5, -28] in state idle",
+   "should": "two 15/16-tread flights of 0.30 m rise should walk up to the roof deck at 14.21; ROUTE A is the course's 'always works' line",
+   "png": "_shots/play_azure1f/08_routeA_end.png"
+  },
+  {
+   "what": "The Warden never wakes \u2014 you can stand in the middle of its arena for 12 s and it stays 'dormant', so the boss crest is unobtainable",
+   "where": "azure-1 inner court, the warden authored at (0, 1.6, -48) with arena {c:[0,-48], r:7}; walked in from (0, 2.0, -44)",
+   "did": "walked due north into the centre of the arena and stayed there for 12 s, sampling the critter's state every 300 ms",
+   "happened": "critter.state stayed 'dormant' with hp 3 for the whole approach; nothing attacked, nothing telegraphed",
+   "should": "a 3-hit mini-boss should aggro when the player enters its ring, telegraph a stomp/charge, and be poundable so the 'boss' crest can spawn",
+   "png": "_shots/play_azure1g/07_warden_end.png"
+  },
+  {
+   "what": "The metal hat on the east reef pad does not pick up when you walk onto it",
+   "where": "azure-1 east reef pad, the 'metal' power at (26, 1.85, 22), duration 20 s",
+   "did": "landed on the pad at (26, 3.0, 24) and walked south onto the hat for 4 s",
+   "happened": "game.__dev.state().power stayed null",
+   "should": "walking into a power should equip it and start its 20 s timer; the tidewell's coral wall and the secret crest depend on it",
+   "png": "_shots/play_azure1g/10_hat_after.png"
+  },
+  {
+   "what": "You cannot sink to the floor of the tidewell \u2014 crouch bottoms out 5.40 m above it",
+   "where": "azure-1 the tidewell, a bowl in the lagoon floor at (-32, -6.40, -6); entered at (-32, -1.0, -4.0) and held crouch",
+   "did": "held C for up to 9 s to sink",
+   "happened": "stopped at y -1.00 (state run)",
+   "should": "sigil 4, five coins and the coral wall all sit on the -6.40 floor; a swimmer must be able to get down there",
+   "png": "_shots/play_azure1g/13_well_bottom.png"
+  },
+  {
+   "what": "The tidewell coral wall does not break to a ground pound, so the secret crest chamber never opens",
+   "where": "azure-1 tidewell floor, the 'breakable' coral at (-32, -5.25, -10.2) with trigger 'coral-broken' and drop 'crest'",
+   "did": "floated at (-32, -5.6, -8.6) right in front of it and jumped+pounded four times",
+   "happened": "the breakable's broken flag is still false",
+   "should": "the sign there says 'TOO HEAVY TO FLOAT - HEAVY ENOUGH TO POUND'; with the metal hat on, a pound should shatter it. (Tested without the hat because the hat could not be picked up.)",
+   "png": "_shots/play_azure1g/15_coral_after.png"
+  },
+  {
+   "what": "Even with the metal hat on, the tidewell coral wall will not break to a ground pound \u2014 the secret crest is unobtainable",
+   "where": "azure-1 tidewell floor, the coral 'breakable' at (-32, -5.25, -10.2), trigger 'coral-broken', drop 'crest'; player floating at (-32, -5.8, -8.8), power 'metal' forced on for 60 s",
+   "did": "jumped and pressed C to pound, five times in a row, right in front of the wall",
+   "happened": "the breakable's broken flag stayed false every time",
+   "should": "the sign beside it reads 'TOO HEAVY TO FLOAT - HEAVY ENOUGH TO POUND'; the metal hat is the whole point of that beat",
+   "png": "_shots/play_azure1h/05_coral_hat_after.png"
+  },
+  {
+   "what": "Walking into the Keep's azure-1 gate does nothing \u2014 no course card, no load",
+   "where": "the Keep, the azure-1 gate at [26, 2.4, 30] (unlocked=False sealed=True)",
+   "did": "stood 3 m in front of it and held W into it for 8 s",
+   "happened": "ended at [25.62, 0, 32.56], game state 'keep', no card",
+   "should": "an unlocked gate should raise the course card and load TIDEWELL TEMPLE",
+   "png": "_shots/play_azure1j/04_gate_walkin.png"
+  },
+  {
+   "what": "__dev.unlockAll() does not unlock the azure-1 gate: the save flag is set but the gate still reads unlocked=false, sealed=true",
+   "where": "the Keep, the azure-1 'glass' gate at (26, 2.4, 30) (requires: null)",
+   "did": "clicked NEW GAME, called CRESTBOUND.game.__dev.unlockAll(), then read game._gates",
+   "happened": "save.flags.get('gateOpen:azure-1') = True but the gate object still says unlocked=False sealed=True",
+   "should": "unlockAll is the dev tool every playtest and harness uses to reach a late course; it must actually open the gate",
+   "png": ""
+  },
+  {
+   "what": "Even with the azure-1 gate showing unlocked, walking into it raises nothing",
+   "where": "the Keep, azure-1 'glass' gate at [26, 2.4, 30]",
+   "did": "raised the crest total until the gate read unlocked, then held W into it for 8 s from 2.6 m away",
+   "happened": "game state stayed 'keep', no course card, player at [0, -0.0, 3]",
+   "should": "an unlocked gate should raise the course card",
+   "png": "_shots/play_azure1k/05_open_walkin.png"
+  },
+  {
+   "what": "The terrace urns cannot be broken by a ground pound",
+   "where": "azure-1 temple terrace, the 'breakable' barrels at (-7.6 / 7.6, 5.55, -15.4) and (-9.0, 5.55, -29.0), all drop:'coins'",
+   "did": "froze the hazards so the terrace beam could not kill me, dropped onto the west urn from 2 m up and pounded four times",
+   "happened": "none of the urns report broken=true and the coin count stayed at 1; [{\"p\": [-7.6, 5.55, -15.4], \"broken\": false}, {\"p\": [7.6, 5.55, -15.4], \"broken\": false}]",
+   "should": "a breakable with drop:'coins' should shatter on a pound and give its coins",
+   "png": "_shots/play_azure1m/05_urn_after.png"
+  }
+ ],
+ "worked": [
+  "THE KEEP GATE IS FINE. With 32 crests the azure-1 'glass' gate reads unlocked=true sealed=false; standing on its own exit pad at (24.1, 0.05, 30) and walking 1.5 m east raises the TIDEWELL TEMPLE course card, and its ENTER button loads the course at the shore spawn (0, 3, 42). (Two earlier 'the gate does nothing' readings of mine were my driver wandering off before it reached the gate - WITHDRAWN.)",
+  "SWIMMING IS SOLID. Walking north off the wading shelf splashes you into the lagoon and puts you in 'swim'; crouch (C) sinks you; Space strokes lift you back to the surface; swimming south into the 0.55 m shelf steps you straight out onto land with no ledge-grab needed. Surface swim peaks at 3.60 m/s and submerged at 4.41 m/s (the controller documents accel/drag = 3.64 for a held stick), measured off player.vel. An earlier 2.4 m/s reading of mine was a slow-renderer artifact and is WITHDRAWN.",
+  "THE REQUIRED SPINE WORKS. Holding W due north from the wading shelf crosses 22 m of open lagoon and lands you on the shoal in 7.5 s of game time, ending 1.2 m off the centre line.",
+  "There is no drown timer at all: 20 s submerged is survivable, so the water is never a silent death. (See the defect about the sign that says otherwise.)",
+  "Checkpoints fire. cp1 on the shore, cp2 on the shoal, cp3/cp4 on the terrace and cp5 in the court all set game.cpIndex when you walk onto them, and every death respawned me at the right one with the HUD pip updated.",
+  "The shoal geyser jumppad throws you 7.1 m (0.74 -> 7.86), exactly as authored.",
+  "The sinking coral pads sink under your weight and drop you in the sea - 2.17 m of travel over 9 s on pad 1.",
+  "The tide stones behave: dropped onto tile 1 with the course clock at 0, the hero stands grounded at 0.60 for about 2.75 s, then the tile vanishes and he slides into the water. Fair and readable.",
+  "The terrace and forecourt beams do kill - I died walking through the z -14 terrace beam without meaning to, which is the right outcome.",
+  "The chained eel does not reach a player floating 5.5 m from its post - the chain length is honest.",
+  "Sigils collect under water on contact: sigil 2 on the sunken wreck at (-6.0, -0.26, 20) and sigil 4 on the tidewell floor at (-32.0, -5.05, -6.0) both took. Coins collect normally, on land and under water.",
+  "A swimmer can sink all the way to the tidewell floor (y -6.07 against a -6.40 floor) on a held crouch, so the deep beat is physically reachable.",
+  "The metal hat picks up by walking onto it at (26, 1.85, 22), turns Nim blue and shows a METAL timer in the HUD counting down from 20 s.",
+  "ROUTE A, the east ceremonial stair, climbs on a held W: from (12, 5.6, -18) the hero reached (12.00, 12.20, -29.35) and on to the roof. The 'ROUTE A - THE CEREMONIAL STAIR' sign at its foot is clear and legible. (An earlier 'ROUTE A does not climb' reading of mine was the hero running off the top and falling back to the terrace - WITHDRAWN.)",
+  "Wall kicks DO fire in the ROUTE C cistern shaft - states wallslide and wallkick both observed off the shaft walls.",
+  "The ground pound itself is healthy on all three spellings a player has: jump then tap C, jump then hold C, jump then hold Ctrl all produce poundHang / poundFall / poundLand. The P3 crouch-key work is good here.",
+  "The sanctum crest, once you land on it from above, collects instantly and takes the course to state 'clear'.",
+  "Crest gating is honest: azure-1's gate is sealed at 20 crests and open at 32, against its authored requirement of 30.",
+  "The lowest point on the terrain perimeter really is above the waterline - I could not swim off the edge of the world anywhere I tried.",
+  "Walking north off the wading shelf enters the lagoon and the player transitions to a swim state (swim) with inWater set.",
+  "Crouch (C) sinks the swimmer and Space strokes bring him back to the surface; no drown timer exists, so the water is never a silent death.",
+  "Swimming into the wading shelf steps the player straight out of the water onto land \u2014 no hop needed.",
+  "Surface swimming moves at 4.47 m/s, near the 4.5 m/s target.",
+  "A swimmer can make headway against the z=24 lagoon current (net -1.35 m over 8 s).",
+  "Surface swimming holds 4.58 m/s with a held stick \u2014 close to the documented 3.64 m/s.",
+  "Submerged swimming holds 4.55 m/s, comparable to the surface.",
+  "Holding W north from the wading shelf crosses the lagoon and lands the player on the shoal in 9 s.",
+  "The shoal checkpoint (cp2) fires when you walk onto it.",
+  "The shoal geyser jumppad launches the player 6.09 m.",
+  "The chained eel does not reach a player floating 5.5 m from its post.",
+  "The great stair climbs on a held W from the forecourt to the terrace ([0, 5, -16]).",
+  "The great stair can be climbed out of the water and walked to the terrace (ended [0, 3, 42]).",
+  "Pounding a terrace urn breaks it and drops coins (12 -> 15).",
+  "The inner court is reachable on foot from the terrace via lane(s) x=-12 (west of the sluice), x=-6 (on the west gate), x=+6 (on the east gate), x=+12 (east of the sluice).",
+  "The sanctum open crest collects and fires the clear (crests 0 -> 1, state playing).",
+  "The sanctum open crest collects (crests 0 -> 1).",
+  "The tide stones hold the player during their ON phase and drop him during OFF.",
+  "The cistern shaft wall-kicks: the hero got to y 14.60.",
+  "The great stair climbs out of the sea reliably (3 of 3 approaches).",
+  "Sigils collect on contact under water (0 -> 2).",
+  "A swimmer can make headway west against the lagoon current (-0.25 m/s).",
+  "With 40 crests the Keep's azure-1 glass gate is unlocked, walking into it raises the TIDEWELL TEMPLE card, and ENTER loads the course at its shore spawn.",
+  "Pounding the tide pedestal fires 'tide-drawn' and the sluice beat resolves.",
+  "A ground pound fires from the air with C: {\"jump then TAP C\": [[\"poundLand\", \"5.00\", \"5.00\"], [\"idle\", \"5.00\", \"5.00\"]], \"jump then HOLD C\": [[\"poundHang\", \"5.96\", \"5.96\"], [\"poundLand\", \"5.00\", \"5.00\"], [\"crouch\", \"5.00\", \"5.00\"]], \"jump then HOLD Ctrl\": [[\"poundHang\", \"5.99\", \"5.99\"], [\"poundLand\", \"5.00\", \"5.00\"], [\"crouch\", \"5.00\", \"5.00\"]]}"
+ ],
+ "blocked": [
+  "THE RACE (the 'race' crest, THE TIDE GAUNTLET, 10 rings, 60 s): standing on the authored start pad at (0, 0.60, 12) and swimming off it never started a clock - the HUD snapshot's raceMs stayed null. I could not tell whether the race arms on the start pad or only on passing ring 1, so I am reporting the observation rather than calling it a defect.",
+  "THE 'sigils' AND 'coins' CRESTS: I collected 2 of 8 sigils and 28 of 100 coins by hand; I did not have the runs left to complete either set, so I cannot say whether their crests spawn on completion.",
+  "ROUTE B, the six colonnade drums up the temple's west flank (tops 6.55 to 14.05, and sigil 7 on drum three): I looked at them and photographed them but never climbed the line, so I cannot report whether the +1.50 m hops are makeable.",
+  "RIDING THE WATER WHEELS: I dropped onto the west rotor at (-9, 6.5, -44) and slid straight off to the court floor. That may simply be bad timing on my part against an 8 s revolution - I did not get a clean landing on a bar, so I am not calling it broken.",
+  "OLD FEN: not in this course - the caretaker NPC lives in the Keep, which is another lane's area.",
+  "The exact cause of the death at the sanctum crest pedestal: I saw deaths go 0 -> 1 with the hero at (-0.03, 14.80, -22.74) in the bonk state, but my death-cause hook was installed on a later run and the repeat did not reproduce it, so I can report the death but not name what killed him.",
+  "Anything that needed more than about a minute of continuous unassisted play: the local server on 8788 died three times during this pass and the page occasionally failed to define CRESTBOUND on first load (I added a reload-and-retry in _harness/_play_azlib.py). Every number above was taken from a run that booted cleanly."
+ ]
+}

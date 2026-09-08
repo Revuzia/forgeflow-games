@@ -1,0 +1,82 @@
+[
+ {
+  "defect": "ember-4#10 / E4-11",
+  "course": "ember-4",
+  "class": "pound",
+  "severity": "blocker",
+  "what": "ember-4 BEAT 4 - the BREAKABLE glyph wall at (0, 5.50, -64.5), the trigger for the 'secret' crest WHAT THE GLYPH WALL KEEPS.",
+  "nowMeasured": "three real ground pounds (poundHang/poundFall/poundLand observed) still do not break it -- {\"i\": 2, \"p\": [0, 5.5, -64.5], \"drop\": \"crest\", \"after\": {\"broken\": false, \"cols\": 1}, \"pounded\": true, \"states\": [\"fall\", \"poundHang\", \"poundLand\", "
+ },
+ {
+  "defect": "azure-2#10 / A2-11",
+  "course": "azure-2",
+  "class": "idle-crush",
+  "severity": "CRITICAL",
+  "what": "azure-2 GALLERY 3, THE ESCAPEMENT — all three crusher hammers: (6.00, 25.90, 6.00), (-6.00, 25.90, 6.00), (0.00, 25.90, -6.00). Th",
+  "nowMeasured": "still dies at the recorded spot -- settle drift 2.50 m dy -9.33 died=True end-state idle; best walk 12.62 m (N), 0 bonk frames, states fall,hardLand,run, died=False; jump apex 1.37 m; best climb +0.02 m (E); all four headings stuck=False, w"
+ },
+ {
+  "defect": "verdant-1#10",
+  "course": "verdant-1",
+  "class": "pound",
+  "severity": "high - a sigil and six coins are behind ",
+  "what": "verdant-1 BAILEY MEADOW / BEAT 7, THE CAVE. The mossy breakable wall is at [-28, 3.60, 30.8] (a 3.0 x 2.8 doorway filling y 2.20..",
+  "nowMeasured": "three real ground pounds (poundHang/poundFall/poundLand observed) still do not break it -- {\"i\": 4, \"p\": [-28, 3.6, 30.8], \"drop\": \"coins\", \"after\": {\"broken\": false, \"cols\": 1}, \"pounded\": true, \"states\": [\"fall\", \"poundHang\", \"poundLand\","
+ },
+ {
+  "defect": "azure-3#19",
+  "course": "azure-3",
+  "class": "cannon/interact",
+  "severity": "unlabelled",
+  "what": "azure-3 BEAT 5 - the WARDEN on cannon isle 3, arena centre (30, 52, -34), r 7.0.",
+  "nowMeasured": "the warden is still a statue: 4 s standing at its authored position leaves state 'dormant', hp 3 -- {\"i\": 0, \"at\": [30, 52, -34], \"posFrom\": \"def\", \"before\": \"dormant\", \"after\": {\"state\": \"dormant\", \"hp\": 3, \"alive\": true}, \"standing\": [0, "
+ },
+ {
+  "defect": "ember-1#21 / 7",
+  "course": "ember-1",
+  "class": "clock/reset",
+  "severity": "unlabelled",
+  "what": "ember-1 BEAT 9, the slag pit, standing at (-30.84, 6.00, -34.00) - inside the Warden's 9 m arena, about 1.2 m from it and visibly ",
+  "nowMeasured": "the warden is still a statue: 4 s standing at its authored position leaves state 'dormant', hp 3 -- {\"i\": 0, \"at\": [-32, 6, -34], \"posFrom\": \"def\", \"before\": \"dormant\", \"after\": {\"state\": \"dormant\", \"hp\": 3, \"alive\": true}, \"standing\": [-32"
+ },
+ {
+  "defect": "ember-4#13 / E4-14",
+  "course": "ember-4",
+  "class": "pound",
+  "severity": "blocker",
+  "what": "ember-4 BEAT 7 - the WARDEN in the sunken plaza, standing at (-42, 1.60, -18).",
+  "nowMeasured": "the warden is still a statue: 4 s standing at its authored position leaves state 'dormant', hp 3 -- {\"i\": 0, \"at\": [-42, 1.6, -18], \"posFrom\": \"def\", \"before\": \"dormant\", \"after\": {\"state\": \"dormant\", \"hp\": 3, \"alive\": true}, \"standing\": [-"
+ },
+ {
+  "defect": "verdant-2#25 / V2-26",
+  "course": "verdant-2",
+  "class": "collectibles",
+  "severity": "BLOCKER",
+  "what": "verdant-2, THE WALL-KICK SHAFT in the keep's north-west turret, floor (-7.4, 18.60, -7.4), exit ledge 27.00 - ROUTE B to the roof ",
+  "nowMeasured": "camcheck --headless station verdant-2/@kickshaft, driving the tester's own W+Space kick loop, reports climbed_m 6.92 against the 8.40 m the ledge needs. The 'nine kicks gained NOTHING (0.16 m)' number is no longer true, but the ledge -- and"
+ },
+ {
+  "defect": "verdant-1#01",
+  "course": "verdant-1",
+  "class": "long-jump gaps",
+  "severity": "high - the owner reported this by hand a",
+  "what": "verdant-1 BAILEY MEADOW / anywhere on flat ground - LONG JUMP (crouch+jump at speed). Measured on the open meadow line x=-2, z=50 ",
+  "nowMeasured": "probe5 long-jump window, real KeyboardEvents, SPACE pressed 0 / 60 / 110 / 180 / 260 ms after the crouch key at a full 9.00 m/s: the 'longjump' state fires ONLY in the 60-110 ms band on 9 of the 10 courses where a run-up exists (rime-1 also"
+ },
+ {
+  "defect": "verdant-1#13",
+  "course": "verdant-1",
+  "class": "collectibles",
+  "severity": "high - one of the seven crests is unobta",
+  "what": "verdant-1 BAILEY MEADOW / BEAT 9, THE WARDEN, arena centred [-2, 16.40, -54] radius 7.0.",
+  "nowMeasured": "the warden is still a statue: 4 s standing at its authored position leaves state 'dormant', hp 3 -- {\"i\": 0, \"at\": [-2, 16.4, -54], \"posFrom\": \"def\", \"before\": \"dormant\", \"after\": {\"state\": \"dormant\", \"hp\": 3, \"alive\": true}, \"standing\": [-"
+ },
+ {
+  "defect": "verdant-3#07 / V3-08",
+  "course": "verdant-3",
+  "class": "key conflict",
+  "severity": "major",
+  "what": "verdant-3, the keyboard camera orbit, measured at the spawn checkpoint [0, 1.90, 42] with the hero at rest. ACTIONS orbitUp is Key",
+  "nowMeasured": "orbitUp (R) still LOWERS the camera: pitch 0.22 -> -0.55"
+ }
+]

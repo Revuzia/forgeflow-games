@@ -1,0 +1,190 @@
+{
+ "verdant-1#06": [
+  "FIXED",
+  "frame _shots/play_probe_verdant-1/04_06_0.png at (-7.60, 9.08, -20.88): the fort courtyard is a clean white/grey paved tile floor with a regular grid. No green plane, no alternating green/white stripes, no shimmer. The coplanar z-fight the tester photographed is not in the frame."
+ ],
+ "rime-3#06": [
+  "FIXED",
+  "frame _shots/play_probe_rime-3/06_06_0.png: the board is a cream plate with dark lettering and both lines read in full -- 'LEAN WEST' / 'THE LEDGES ARE CUT WIDE FOR IT'. It is not a solid black panel."
+ ],
+ "rime-3#02": [
+  "FIXED",
+  "frame _shots/play_probe_rime-3/01_00_0.png (base camp spawn): the camp light stands on a lamp POST with a visible fixture and a glass housing -- not a bare glowing ball hanging in mid-air."
+ ],
+ "rime-3#04": [
+  "FIXED",
+  "frame _shots/play_probe_rime-3/01_00_0.png: 'FOURTEEN RINGS COME DOWN HERE' reads in full with no coin in front of the lettering."
+ ],
+ "rime-3#03": [
+  "STILL REPRODUCES",
+  "frame _shots/play_probe_rime-3/01_00_0.png: both camp crest pedestals still render as near-black/maroon discs on dark legs with a black spike fan of shadow across the snow under them."
+ ],
+ "rime-3#10": [
+  "STILL REPRODUCES",
+  "frame _shots/play_probe_rime-3/06_06_0.png: a large near-black mottled navy-brown mass fills the middle of the frame and meets the white snow on a HARD boundary with no transition band -- exactly the artefact reported."
+ ],
+ "verdant-3#19": [
+  "STILL REPRODUCES",
+  "frame _shots/play_probe_verdant-3/07_04_0.png at the lower hay belt: the belt is near-black ribbed metal carrying giant lime-green chevrons -- an industrial conveyor, not hay."
+ ],
+ "verdant-3#33": [
+  "STILL REPRODUCES",
+  "frame _shots/play_probe_verdant-3/59_33_0.png at (5.23, 19.14, -29.96): the bell is a plain pale-grey crate with a yellow painted X, no brass, no bell silhouette."
+ ],
+ "verdant-3#17": [
+  "STILL REPRODUCES",
+  "frame _shots/play_probe_verdant-3/32_17_0.png: the pale sack-stair ledges hang in open air on the right of frame with nothing under or behind them."
+ ],
+ "verdant-3#20": [
+  "STILL REPRODUCES",
+  "frame _shots/play_probe_verdant-3/32_17_0.png: a dark ball and a red spiral disc still hang in mid-air over open grass west of the threshing decks with nothing beneath them."
+ ],
+ "verdant-3#29": [
+  "STILL REPRODUCES",
+  "frame _shots/play_probe_verdant-3/32_17_0.png: the millrace timber runway the hero stands on is cantilevered into open air with no pier or trestle under it, and a second slab hangs beyond it."
+ ],
+ "verdant-3#10": [
+  "STILL REPRODUCES",
+  "frame _shots/play_probe_verdant-3/19_10_0.png taken IN the river at (30.82, -0.33, 26.38): the channel is a blinding cream/white sheet with hard-edged gold-rimmed blobs across mid-channel as well as at the shore."
+ ],
+ "keep#03": [
+  "FIXED",
+  "frame _shots/play_probe_keep/05_03_0.png at the azure-1 glass gate (25.51, 0.00, 30.00): the door meets the lawn -- there is no band of blank curtain wall under it -- and the crest plate reads 'TIDEWELL TEMPLE / 30 CRESTS TO OPEN' with the sealed toast '30 MORE CRESTS 0 / 30'."
+ ],
+ "keep#12": [
+  "STILL REPRODUCES",
+  "frame _shots/play_probe_keep/15_12_0.png: the drum is LIT now (a wall lamp and a legible 'THE WYRM STAIR' board -- the 'no light' half of the complaint is answered) but the ramp still reads as a helix of separate striped slabs with no visible riser, soffit or newel between them."
+ ],
+ "azure-3#20": [
+  "FIXED",
+  "frame _shots/play_probe_azure-3/18_20_0.png at the wing pier (-26.00, 35.40, -10.00): no text board fills the bottom half of the screen; Nim stands clear centre-frame and the WING power readout sits in the bottom-right corner."
+ ],
+ "azure-3#27": [
+  "STILL REPRODUCES",
+  "frame _shots/play_probe_azure-3/18_20_0.png: two text-board BACKS render as large brown wood-grain planks -- one of them hanging in mid-air at the pier's edge with no post and no support."
+ ],
+ "verdant-2#01": [
+  "STILL REPRODUCES",
+  "frame _shots/play_probe_verdant-2/02_00_1.png from the south quay (0, 1.55, 48): the near band of the moat is still opaque chalky white/pale-cyan marbled swirl with hard edges -- it reads as poured cream, not water."
+ ],
+ "verdant-2#13": [
+  "FIXED",
+  "frame _shots/play_probe_verdant-2/16_13_0.png at the coins-crest pedestal: the gold beam is now soft-edged, translucent and tapering with visible falloff, and it does not clip through the outer-wall stonework. The hard-edged fully-opaque column is gone."
+ ],
+ "ember-1#30": [
+  "FIXED",
+  "frame _shots/play_probe_ember-1/23_30_0.png taken at exactly (0.00, 3.00, 0.00): Nim stands in full view on a clear catwalk lane with a vent basin either side. He is not hidden and the basins no longer straddle the walk."
+ ],
+ "ember-1#01": [
+  "STILL REPRODUCES",
+  "frame _shots/play_probe_ember-1/23_30_0.png: the vents are still dressed as giant stacked iron punch-bowls roughly 3-4 m across. Their PLACEMENT has moved to the deck edges (see ember-1#30) but the dressing itself is unchanged."
+ ],
+ "ember-1#09": [
+  "STILL REPRODUCES",
+  "frame _shots/play_probe_ember-1/23_30_0.png: the lava lake still reads as a bright mustard-yellow flat with dark blotches and is LIGHTER in value than the iron decks standing on it."
+ ],
+ "ember-4#16": [
+  "STILL REPRODUCES",
+  "frame _shots/play_probe_ember-4/18_16_0.png at the spawn: the sky is still a flat saturated red with only a thin horizon band, and the necropolis walls read near-black against it."
+ ],
+ "ember-1#06": [
+  "STILL REPRODUCES",
+  "frame _shots/play_probe_ember-1/08_06_0.png standing ON the quay pedestal (-6.00, 4.05, 16.00): a perfectly straight, hard-edged gold column of constant width still rises out of the top of the frame with no falloff and no cap."
+ ],
+ "ember-1#32": [
+  "STILL REPRODUCES",
+  "frame _shots/play_probe_ember-1/08_06_0.png: the GOLD beacon shaft is still a hard-edged constant-width pipe. The pale-blue one beside it now reads as a soft tapering cone, so only half the pair is answered."
+ ],
+ "azure-1#17": [
+  "STILL REPRODUCES",
+  "frame _shots/play_probe_azure-1/16_12_1.png at the temple west flank (-14.00, 4.95, -22.00): the wall is still a flat grid of blue-teal square tiles with vertical strips and reads as a glass curtain wall, not stone."
+ ],
+ "azure-1#06": [
+  "STILL REPRODUCES",
+  "frame _shots/play_probe_azure-1/16_12_1.png: the lagoon is still a flat opaque plane with a hard white rim where it meets the sand, and the beach beyond the rim reads lower than the plane."
+ ],
+ "keep#06": [
+  "FIXED",
+  "camcheck --headless station keep/@nook PASS on this build: 400 frames, heroOffscreenFrames 0, camDist floor above TUNE.cam.minDist, maxHeroFade 0 -- the lens no longer collapses into Nim's head in the reading nook."
+ ],
+ "keep#07": [
+  "FIXED",
+  "camcheck --headless station keep/@undercroft PASS: 400 frames over 4 headings, heroOffscreenFrames 0, maxHeroFade 0 -- the undercroft sign board no longer hides the hero."
+ ],
+ "verdant-1#07": [
+  "FIXED",
+  "camcheck --headless station verdant-1/@fort PASS: the fort interior holds camDist above minDist for 400 frames with heroOffscreenFrames 0 (the tester measured 0.12-2.40 m and the lens inside the hero)."
+ ],
+ "rime-1#02": [
+  "FIXED",
+  "camcheck --headless station rime-1/@belfry PASS: the bell-tower shaft holds camDist at or above TUNE.cam.minDist for the whole kick run (the tester measured 1.44-1.46 m)."
+ ],
+ "azure-1#04": [
+  "FIXED",
+  "camcheck --headless station azure-1/@cistern PASS: the cistern shaft now elevates (maxPitch above the room cap) and holds the hero on screen for 400 frames."
+ ],
+ "azure-2#01": [
+  "FIXED",
+  "camcheck --headless station azure-2/@cogdeath PASS: a real death at the great cog holds mode 'death', deadOffscreenFrames 0, deadCauseOffscreenFrames 0, minSolidClearDead 0.84 m -- the hero AND what killed him are both in frame."
+ ],
+ "azure-2#06": [
+  "FIXED",
+  "camcheck --headless station azure-2/@turning PASS: the turning room holds camDist 2.14-6.80 m, heroOffscreenFrames 0, solidViolFrames 0 across 400 frames and 4 headings."
+ ],
+ "azure-2#00": [
+  "FIXED",
+  "camcheck --headless station azure-2/@cog PASS: camDist 3.20-6.80 m, heroOffscreenFrames 0, worstVisRun 0.219 s (inside the 0.3 s occlusion budget) at the great cog."
+ ],
+ "rime-3#21": [
+  "FIXED",
+  "camcheck --headless station rime-3/@icecave PASS: the ice chamber holds camDist 2.08-3.02 m with maxPitch 0.77 and heroOffscreenFrames 0 -- no top-down snap onto the crown of Nim's head."
+ ],
+ "azure-3#01": [
+  "FIXED",
+  "camcheck --headless station azure-3/@isle PASS: the sunken isle holds camDist 6.80 m (the authored distance) with minSolidClear 3.099 m and heroOffscreenFrames 0 -- the camera is no longer under the deck with Nim out of frame."
+ ],
+ "verdant-2#27": [
+  "STILL REPRODUCES",
+  "camcheck --headless station verdant-2/@kickshaft FAIL: minDist 0.148 m at frame 191 (state 'wallkick', shaft true) against TUNE.cam.minDist 1.60, 0.30 s under the floor, maxHeroFade 1.0 and 5 offscreen frames. It is much improved -- the run climbs 6.92 m and the worst offscreen run is 0.101 s, inside the 0.3 s budget -- but the lens still collapses into the hero in this shaft."
+ ],
+ "verdant-2#25": [
+  "STILL REPRODUCES",
+  "camcheck --headless station verdant-2/@kickshaft, driving the tester's own W+Space kick loop, reports climbed_m 6.92 against the 8.40 m the ledge needs. The 'nine kicks gained NOTHING (0.16 m)' number is no longer true, but the ledge -- and the crest behind it -- is still not reached by this route."
+ ],
+ "verdant-1#01": [
+  "STILL REPRODUCES",
+  "probe5 long-jump window, real KeyboardEvents, SPACE pressed 0 / 60 / 110 / 180 / 260 ms after the crouch key at a full 9.00 m/s: the 'longjump' state fires ONLY in the 60-110 ms band on 9 of the 10 courses where a run-up exists (rime-1 also fires at 180 ms). At 0 ms and at 180 ms+ it silently downgrades to a plain jump -- verdant-1 measured 13.02/13.13 m when it fires vs 9.71/13.37 m when it does not. The narrow window the tester measured is still there, and it is global, not local to verdant-1."
+ ],
+ "verdant-2#02": [
+  "FIXED",
+  "probe5 underwater test in the verdant-2 moat (box centre 0,-3.5,0): held crouch until player.submerged is true, then read the live post chain -- engine.post._underwaterTarget 0.9995 (it read 0 for the tester). The same test reads 0.9997 on ember-2, verdant-3 and azure-1 and 0.9986 in the verdant-1 pond, so the grade now resolves and fires everywhere the hero actually goes under."
+ ],
+ "azure-3#29": [
+  "FIXED",
+  "probe5 clearcard test on all 13 courses: taking the open crest leaves game.state 'clear' with the modal up and modalOverLivePlay false -- the card is never drawn over a controllable, grounded hero in state 'playing'."
+ ],
+ "azure-1#07": [
+  "FIXED",
+  "probe5 current test on the azure-1 lagoon current (centre 0,-1.4,24, power 3.2): a hands-off float now drifts at 3.03 m/s (the tester measured 0.00) and swimming into it makes headway (madeHeadway true, 0.27 m/s net against a 3.2 m/s flow, state 'swim')."
+ ],
+ "keep#14": [
+  "STILL REPRODUCES",
+  "probe4 gates test in the Keep: __dev.unlockAll() returns without throwing, save.crestTotal() stays 0, openedBy_unlockAll is [] and all twelve sealed gates still read unlocked=false sealed=true afterwards."
+ ],
+ "azure-1#15": [
+  "STILL REPRODUCES",
+  "probe4 gates test plus the tester's own re-run driver: the gateOpen flag is set but the live gate object still reports unlocked=false sealed=true, and the azure-1 driver re-found 'Walking into the Keep's azure-1 gate does nothing' on this build."
+ ],
+ "rime-1#08": [
+  "STILL REPRODUCES",
+  "probe4 console capture on rime-1 load: '[Course rime-1] props.js had no entry for: cart' is still logged, so the sledge is still silently dropped."
+ ],
+ "azure-3#02": [
+  "STILL REPRODUCES",
+  "contrastcheck --headless: azure-3 fails the 3.5:1 readability law at 3 of its 5 gated checkpoint stations (cp1 1.25:1, cp2 1.86:1, cp3 3.48:1) with deck rgb ~[227,238,236] against fog rgb [196,215,224]. Game-wide the gate reports UNREADABLE with 40 failing stations."
+ ],
+ "verdant-3#28": [
+  "STILL REPRODUCES",
+  "contrastcheck --headless: verdant-3 fails the readability law at cp1 1.97:1, cp2 2.05:1 and cp3 1.04:1 (deck [77,134,83] vs fog [107,124,90]) -- the granary terrace band the tester photographed is one of them."
+ ]
+}
