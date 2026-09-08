@@ -20,9 +20,51 @@ METHOD, per station (the spawn and every checkpoint of every course):
      camera; offset far enough down to clear the blob shadow) and take the
      MEDIAN colour — median, not mean, so one bright stripe or a coin does not
      move the number,
-  4. sample the fog band: a horizontal strip at 55 % of frame height, on the
-     side of the frame FARTHEST from the hero, again by median,
+  4. sample the BACKGROUND BEHIND THAT DECK — see THE RULER below,
   5. WCAG contrast between the two luminances.
+
+THE RULER (rewritten 2026-09-08, readability lane).
+Until this pass step 4 was "a horizontal strip 14 % of the frame wide at 55 %
+of frame height, on the side away from the hero". That is a FIXED SCREEN
+RECTANGLE, and a fixed screen rectangle is not the background: measured on the
+shipped tree it read a cottage wall, a signboard, the HUD, or the SAME SNOW the
+hero is standing on five metres away — `rime-1 cp1` scored 1.03:1 with deck
+[165,198,235] against "fog" [161,195,233], which is the same snow twice. 40 of
+61 gated stations failed that ruler.
+
+The repaired ruler measures what is actually behind the walked surface:
+
+  a. every overlay element is hidden for the capture (`MUTE_JS`) — the HUD, the
+     dev panel and the toasts are not the world and must never enter a median;
+  b. ONE DEPTH PASS per station: `MeshDepthMaterial` (RGBA-packed) is rendered
+     over the scene into a render target the size of the screenshot and read
+     back, so every sampled pixel carries a view-space distance in metres.
+     Objects that do not write depth in the real frame (particles, glows, the
+     sky dome, blob shadows) are hidden for it, so they cannot pretend to be
+     occluders. The clear colour is WHITE, which unpacks to ~1.0 = beyond the
+     far plane, so "no geometry" reads as sky rather than as a pixel 25 cm away;
+  c. the SIGHT COLUMN: the screen region above the deck band's own projected
+     silhouette, spanning the deck's width plus `--col-pad`, is scanned on a
+     grid, and every pixel is unprojected to a WORLD POINT. A candidate is
+     BACKGROUND only if that point is at least `--min-behind` metres FROM THE
+     STATION. That is the rejection the old ruler never had: the deck's own lip,
+     the pad ring, a sign post and the fence rail are all inside that radius;
+  d. the HORIZON filter: a candidate BELOW the camera's horizon line is GROUND,
+     however far away it is — a horizontal plane under the eye can never project
+     above its own vanishing line. That is the geometric form of the old ruler's
+     second failure, "walked snow measured against snow thirty metres away": two
+     views of one material cannot be separated by any lighting or palette change,
+     so counting them measures nothing. What survives is sky, fog, distant walls,
+     buildings, hillsides and cliff faces — the fog band;
+  e. the row reports which RUNG produced the number. `far` is the normal case.
+     `enclosed` means an interior with nothing `--min-behind` past the deck, so
+     the depth margin relaxed — the far wall of a cellar IS that deck's
+     background and the law still applies to it. `ground` means no pixel above
+     the horizon was in the sight column at all (a shaft, a pit) and the HORIZON
+     filter had to be dropped.
+
+The old strip is still measured and printed as `strip` for comparison; it is
+not a pass condition any more.
 
 An all-black frame (GPU/tab contention) is evidence of nothing: it is retaken,
 and if it stays black the station prints UNMEASURABLE — deliberately distinct
@@ -159,6 +201,11 @@ async (st) => {
   const feet = project(st.p.x, st.p.y, st.p.z);
   const head = project(P.pos.x, P.pos.y + 1.5, P.pos.z);
   const heroFeet = project(P.pos.x, P.pos.y, P.pos.z);
+  /* View-space depth (metres along the camera's forward axis) — the same
+     quantity the depth pass reconstructs, so "N metres behind the deck" is a
+     comparison of like with like. */
+  const _v = new THREE.Vector3();
+  const viewDepth = (x, y, z) => -_v.set(x, y, z).applyMatrix4(cam.matrixWorldInverse).z;
 
   /* THE DECK WINDOW (critic C13). The old window was a screen rectangle just
      below the projected feet — which, through a third-person camera that sits
@@ -174,6 +221,7 @@ async (st) => {
   const rtx = Math.cos(yaw), rtz = -Math.sin(yaw);
   const RING_R = 1.42, RING_HALF = 0.20;
   const samples = [];
+  const sampleDepths = [];
   const NA = 7, NL = 13;
   for (let ia = 0; ia < NA; ia++) {
     const a = st.aheadFrom + (st.aheadTo - st.aheadFrom) * (ia / (NA - 1));
@@ -185,8 +233,12 @@ async (st) => {
       const s = project(wx, st.p.y, wz);
       if (s.behind) continue;
       samples.push([Math.round(s.x), Math.round(s.y)]);
+      sampleDepths.push(viewDepth(wx, st.p.y, wz));
     }
   }
+  const _sd = sampleDepths.slice().sort((a, b) => a - b);
+  const deckDepth = _sd.length ? _sd[_sd.length >> 1] : 0;
+  const deckDepthMax = _sd.length ? _sd[_sd.length - 1] : 0;
   /* The hero's screen box: feet to head, +-0.45 m of shoulder, so his body,
      scarf and blob shadow never land in the deck median. */
   const hb = [
@@ -204,11 +256,279 @@ async (st) => {
   return {
     ok: true,
     w: Math.round(rect.width), h: Math.round(rect.height),
-    feet, head, heroFeet, samples, heroBox, yaw,
+    feet, head, heroFeet, samples, sampleDepths, heroBox, yaw,
+    deckDepth, deckDepthMax, deckY: st.p.y,
     heroPx: Math.round(Math.abs(heroFeet.y - head.y)),
     theme: G.themeId, state: G.state,
     fog: (E.scene && E.scene.fog) ? '#' + E.scene.fog.color.getHexString() : null,
     surface: P.surface || null,
+  };
+}
+"""
+
+# --------------------------------------------------------------------------
+# Overlay mute. The screenshot must contain the WORLD and nothing else: the
+# HUD glass, the ?dev=1 panel and the checkpoint toast are DOM, they sit on top
+# of the canvas, and both the deck band and the background band can land on
+# them. Hiding them is not cosmetic — a HUD panel in a median is a fabricated
+# contrast number.
+MUTE_JS = r"""
+() => {
+  const cv = document.querySelector('canvas');
+  if (!cv) return 0;
+  const hidden = [];
+  const walk = (node) => {
+    for (const el of Array.from(node.children || [])) {
+      if (el === cv) continue;
+      if (el.contains && el.contains(cv)) { walk(el); continue; }
+      let vis = '';
+      try { vis = getComputedStyle(el).visibility; } catch (e) { vis = ''; }
+      if (vis === 'hidden') continue;
+      hidden.push([el, el.style.visibility]);
+      el.style.visibility = 'hidden';
+    }
+  };
+  walk(document.body);
+  globalThis.__ccHidden = hidden;
+  return hidden.length;
+}
+"""
+
+UNMUTE_JS = r"""
+() => {
+  const h = globalThis.__ccHidden || [];
+  for (const [el, v] of h) { try { el.style.visibility = v || ''; } catch (e) {} }
+  globalThis.__ccHidden = null;
+  return h.length;
+}
+"""
+
+# --------------------------------------------------------------------------
+# THE DEPTH PASS + THE SIGHT COLUMN.
+#
+# One `MeshDepthMaterial` override render into a render target the size of the
+# screenshot, read back in the browser (3.7 M bytes never cross the Playwright
+# bridge — only the few hundred accepted screen points do).
+#
+# Three details that decide whether the number means anything:
+#   * the CLEAR COLOUR is white. `packDepthToRGBA(1.0)` saturates to
+#     (0,0,0,255), which unpacks to 0.99609 — with near 0.05 / far 900 that is
+#     a view depth of ~13 m, so a black clear would make the SKY look like a
+#     near occluder and reject the whole background. White unpacks to 0.99999
+#     (~1800 m), i.e. "nothing here".
+#   * every object whose REAL material does not write depth (particles, glows,
+#     the sky dome, decals, the blob shadow) is hidden for the pass. Under an
+#     override material they would all write depth and pretend to occlude —
+#     rime's ambient snow alone would reject most of the frame.
+#   * depth is converted to VIEW-SPACE METRES, the same quantity POSE_JS
+#     reports for the deck, so `--min-behind` is a real distance.
+BG_JS = r"""
+(o) => {
+  const A = globalThis.CRESTBOUND, E = A.engine, THREE = A.THREE;
+  const renderer = E.renderer, scene = E.scene, cam = E.camera;
+  const w = Math.round(o.w), h = Math.round(o.h);
+  if (!(w > 0 && h > 0)) return {error: 'bad size'};
+
+  let rt = globalThis.__ccDepthRT;
+  if (!rt || rt.width !== w || rt.height !== h) {
+    if (rt) rt.dispose();
+    rt = new THREE.WebGLRenderTarget(w, h, {
+      minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter,
+      depthBuffer: true, stencilBuffer: false, generateMipmaps: false});
+    globalThis.__ccDepthRT = rt;
+  }
+  let mat = globalThis.__ccDepthMat;
+  if (!mat) {
+    mat = new THREE.MeshDepthMaterial({depthPacking: THREE.RGBADepthPacking,
+                                       side: THREE.DoubleSide});
+    globalThis.__ccDepthMat = mat;
+  }
+
+  /* hide everything that does not occlude in the real frame */
+  const hidden = [];
+  scene.traverse((ob) => {
+    if (!ob.visible) return;
+    const m = ob.material;
+    if (!m) return;
+    const list = Array.isArray(m) ? m : [m];
+    let occludes = false;
+    for (const mm of list) {
+      if (!mm) continue;
+      if (mm.depthWrite !== false && mm.depthTest !== false) occludes = true;
+    }
+    if (!occludes) { hidden.push(ob); ob.visible = false; }
+  });
+
+  const prevRT = renderer.getRenderTarget();
+  const prevOverride = scene.overrideMaterial;
+  const prevFog = scene.fog;
+  /* `scene.background` is painted by WebGLBackground BEFORE the scene and is
+     NOT covered by `overrideMaterial`, so it overwrites the white clear with
+     the theme's sky colour and every sky pixel then unpacks to the NEAR PLANE.
+     Measured: verdant-2 cp3's sight column came back 9996/12432 "bad depth",
+     raw RGBA (29,82,161) = the LINEAR value of the verdant background
+     0x5f9ad0. Null it for the pass. */
+  const prevBg = scene.background;
+  const prevClear = new THREE.Color(); renderer.getClearColor(prevClear);
+  const prevAlpha = renderer.getClearAlpha();
+  const prevVp = new THREE.Vector4(); renderer.getViewport(prevVp);
+  const prevScissor = renderer.getScissorTest();
+  const prevAutoClear = renderer.autoClear;
+  const prevShadow = renderer.shadowMap.enabled;
+
+  scene.overrideMaterial = mat;
+  scene.fog = null;
+  scene.background = null;
+  renderer.shadowMap.enabled = false;
+  renderer.setScissorTest(false);
+  renderer.autoClear = true;
+  renderer.setClearColor(0xffffff, 1);
+  renderer.setRenderTarget(rt);
+  renderer.setViewport(0, 0, w, h);
+  renderer.clear(true, true, true);
+  renderer.render(scene, cam);
+
+  const buf = new Uint8Array(w * h * 4);
+  renderer.readRenderTargetPixels(rt, 0, 0, w, h, buf);
+
+  renderer.setRenderTarget(prevRT);
+  renderer.setViewport(prevVp);
+  renderer.setScissorTest(prevScissor);
+  renderer.setClearColor(prevClear, prevAlpha);
+  renderer.autoClear = prevAutoClear;
+  renderer.shadowMap.enabled = prevShadow;
+  scene.overrideMaterial = prevOverride;
+  scene.fog = prevFog;
+  scene.background = prevBg;
+  for (const ob of hidden) ob.visible = true;
+
+  /* three r172 packing.glsl, inverted. NOTE THE ORDER: `packDepthToRGBA`
+     returns vec4(vuf*Inv255, gf*PackUpscale, bf*PackUpscale, af) and
+     UnpackFactors4 = vec4(UnpackDownscale/1, /256, /65536, 1/16777216) — R is
+     the HIGH byte and A the lowest fraction. Reading it the other way round
+     (the pre-r15x order) makes every pixel report the NEAR PLANE: measured
+     0.05 m everywhere on the first run of this pass, which rejected 10116 of
+     10791 candidates as "in front of the deck". */
+  const UD = 255 / 256;
+  const UF = [UD, UD / 256, UD / 65536, 1 / 16777216];
+  const near = cam.near, far = cam.far;
+  const depthAt = (x, y) => {
+    const i = (((h - 1 - y) * w) + x) * 4;
+    const d = (buf[i] / 255) * UF[0] + (buf[i + 1] / 255) * UF[1] +
+              (buf[i + 2] / 255) * UF[2] + (buf[i + 3] / 255) * UF[3];
+    const ndc = d * 2 - 1;
+    const den = far + near - ndc * (far - near);
+    if (den <= 1e-6) return far * 4;
+    return 2 * near * far / den;
+  };
+
+  /* the deck's own silhouette on screen */
+  const ds = (o.deckSamples || []).filter(s => s[0] >= 0 && s[0] < w && s[1] >= 0 && s[1] < h);
+  if (!ds.length) return {error: 'no on-screen deck samples'};
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const s of ds) { x0 = Math.min(x0, s[0]); x1 = Math.max(x1, s[0]);
+                        y0 = Math.min(y0, s[1]); y1 = Math.max(y1, s[1]); }
+  const pad = Math.max(o.colPadPx || 0, (x1 - x0) * (o.colPad || 0));
+  const cx0 = Math.max(0, Math.round(x0 - pad)), cx1 = Math.min(w - 1, Math.round(x1 + pad));
+  const cyTop = 0, cyBot = Math.max(0, Math.round(y0) - 2);
+
+  const hb = o.heroBox || {};
+  const inHero = (x, y) => (hb.x0 !== undefined && x >= hb.x0 && x <= hb.x1 && y >= hb.y0 && y <= hb.y1);
+
+  /* Unproject a screen pixel at view depth d back to WORLD space, so a
+     candidate can be asked what it IS, not just how far away it is. */
+  const tanHalf = Math.tan(cam.fov * Math.PI / 360);
+  const aspect = cam.aspect;
+  const _p = new THREE.Vector3();
+  const sx_ = o.station ? o.station.x : 0, sy_ = o.station ? o.station.y : 0,
+        sz_ = o.station ? o.station.z : 0;
+  /* Distance FROM THE STATION, in world metres. "Nearer than N" has to be a
+     physical distance, not a view depth: under a camera pitched down, the top
+     of a wall four metres away has a SMALLER view depth than its foot, so a
+     view-depth margin throws away the whole background of an interior and
+     leaves only whatever is visible through a doorway (measured: rime-1 cp4
+     scored 1.16:1 against the snow seen through the cottage door while the
+     dark wall it is really read against was rejected as "too near"). */
+  const distAt = (x, y, d) => {
+    const nx = (x + 0.5) / w * 2 - 1;
+    const ny = -((y + 0.5) / h * 2 - 1);
+    _p.set(nx * tanHalf * aspect * d, ny * tanHalf * d, -d).applyMatrix4(cam.matrixWorld);
+    return Math.hypot(_p.x - sx_, _p.y - sy_, _p.z - sz_);
+  };
+
+  /* THE HORIZON — the vanishing line of every horizontal plane in this camera.
+     Ground BELOW the eye can never project above it, whatever its height or
+     how far away it is, so "at or above the horizon" is the exact test for
+     "this is the fog band, not more floor". The camera has no roll (YXZ,
+     FollowCamera), so the line is flat and one number fixes it:
+        forward.y = sin(pitch);  ndcY_horizon = -tan(pitch) / tanHalfFov. */
+  const _f = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.getWorldQuaternion(new THREE.Quaternion()));
+  const pitch = Math.asin(Math.max(-1, Math.min(1, _f.y)));
+  const horizonY = (0.5 + Math.tan(pitch) / (2 * tanHalf)) * h;
+
+  const step = Math.max(1, o.step | 0);
+  const cands = [];
+  let scanned = 0, near_ = 0, hero_ = 0, bad_ = 0;
+  const rawBad = [];
+  const behind = o.minBehind || 0;
+  for (let y = cyTop; y <= cyBot; y += step) {
+    for (let x = cx0; x <= cx1; x += step) {
+      scanned++;
+      if (inHero(x, y)) { hero_++; continue; }
+      const d = depthAt(x, y);
+      if (d < 0.5) {
+        bad_++;
+        if (rawBad.length < 6) {
+          const i = (((h - 1 - y) * w) + x) * 4;
+          rawBad.push([x, y, buf[i], buf[i + 1], buf[i + 2], buf[i + 3]]);
+        }
+        continue;
+      }
+      const r = distAt(x, y, d);
+      if (r < behind) { near_++; continue; }
+      cands.push([x, y, Math.round(d * 100) / 100, Math.round(r * 10) / 10]);
+    }
+  }
+  /* VERIFY THE DECK BAND. A sample is only on the walked surface if the depth
+     buffer at that pixel agrees with the depth the projection expected. Where
+     the deck band overhangs an edge — verdant-2 cp3's rampart, whose 2 m band
+     runs off the parapet — the pixel is showing the grass sixty metres beyond,
+     and averaging that into "the deck" measures the background twice. */
+  const expect = o.deckDepths || [];
+  const deckKeep = [];
+  let deckOff = 0;
+  const dsAll = o.deckSamples || [];
+  for (let i = 0; i < dsAll.length; i++) {
+    const s = dsAll[i];
+    if (!(s[0] >= 0 && s[0] < w && s[1] >= 0 && s[1] < h)) continue;
+    if (inHero(s[0], s[1])) continue;
+    const dm = depthAt(s[0], s[1]);
+    const de = expect[i];
+    if (typeof de === 'number' && Math.abs(dm - de) > (o.deckTol || 0.35) + de * 0.03) {
+      deckOff++;
+      continue;
+    }
+    deckKeep.push([s[0], s[1]]);
+  }
+  let deckSeen = [];
+  for (const s of deckKeep) deckSeen.push(depthAt(s[0], s[1]));
+  deckSeen.sort((a, b) => a - b);
+
+  const fog = scene.fog;
+  return {
+    cands, scanned, rejectedNear: near_, rejectedHero: hero_, rejectedBadDepth: bad_, rawBad,
+    deckKeep, deckOff,
+    col: [cx0, cyTop, cx1, cyBot],
+    deckBox: [x0, y0, x1, y1],
+    near, far,
+    deckDepthMeasured: deckSeen.length ? Math.round(deckSeen[deckSeen.length >> 1] * 100) / 100 : null,
+    horizonY: Math.round(horizonY * 10) / 10, pitch: Math.round(pitch * 1000) / 1000,
+    fogColor: fog ? '#' + fog.color.getHexString() : null,
+    fogNear: (fog && fog.near !== undefined) ? fog.near : null,
+    fogFar: (fog && fog.far !== undefined) ? fog.far : null,
+    fogDensity: (fog && fog.density !== undefined) ? fog.density : null,
+    fogType: fog ? fog.type || fog.constructor.name : null,
+    hiddenForDepth: hidden.length,
   };
 }
 """
@@ -374,9 +694,73 @@ def deck_median(px, w, h, samples, hero_box, patch=2):
     return (median(rs), median(gs), median(bs)), len(rs), used, rejected
 
 
-def measure(png, info, args, crop_path=None):
+def pixel_median(px, w, h, pts):
+    rs, gs, bs = [], [], []
+    for pt in pts:
+        x, y = int(pt[0]), int(pt[1])
+        if not (0 <= x < w and 0 <= y < h):
+            continue
+        q = px[x, y]
+        rs.append(q[0]); gs.append(q[1]); bs.append(q[2])
+    if not rs:
+        return None, 0
+    return (median(rs), median(gs), median(bs)), len(rs)
+
+
+def background_band(px, w, h, cands, deck_depth, horizon_y, args):
+    """THE FOG BAND. `cands` are [x, y, viewDepth, worldY] screen points in the
+    sight column above the deck, already past the ENCLOSED depth margin. Two
+    filters, then a ladder:
+
+    DISTANCE — a pixel is background only if the world point behind it is at
+    least `--min-behind` metres FROM THE STATION. World distance, not view
+    depth: under a camera pitched down, the top of a wall four metres away has a
+    smaller view depth than its foot, so a view-depth margin throws away an
+    interior's whole background. This throws out the deck's own lip, the pad
+    ring, a sign post and the fence rail.
+
+    HORIZON — a pixel below the camera's horizon line is GROUND, however far
+    away it is: a horizontal plane under the eye can never project above its own
+    vanishing line. That is the exact, geometric form of the second failure the
+    old ruler had — "walked snow measured against snow thirty metres away" —
+    and no lighting or palette change can ever separate two views of one
+    material, so counting them measures nothing. What survives is the sky, the
+    fog, distant walls, buildings, hillsides and cliff faces: the fog band.
+
+    Ladder (first rung with enough pixels wins; the rung is reported):
+      far      — depth >= deck + --min-behind, at or above the horizon;
+      enclosed — an interior with nothing that far away: relax the depth margin
+                 to --min-behind-enclosed. The far wall of a cellar IS that
+                 deck's background and the law still applies to it;
+      ground   — no pixel above the horizon is in the sight column at all (the
+                 camera is looking down a shaft or into a pit): drop the HORIZON
+                 filter and say so in the row.
+    """
+    slack = args.horizon_slack
+    rungs = (("far", args.min_behind, True),
+             ("enclosed", args.min_behind_enclosed, True),
+             ("ground", args.min_behind, False),
+             ("ground-enclosed", args.min_behind_enclosed, False))
+    for kind, margin, above_horizon in rungs:
+        keep = [c for c in cands if c[3] >= margin]
+        if above_horizon:
+            keep = [c for c in keep if c[1] <= horizon_y + slack]
+        if len(keep) < args.min_bg_samples:
+            continue
+        rgb, n = pixel_median(px, w, h, keep)
+        if rgb is None:
+            continue
+        depths = [c[2] for c in keep]
+        return {"kind": kind, "rgb": rgb, "pixels": n,
+                "depthLo": round(min(depths), 1), "depthHi": round(max(depths), 1),
+                "depthMed": round(median(depths), 1), "pool": len(keep),
+                "pts": keep}
+    return None
+
+
+def measure(png, info, bg, args, crop_path=None):
     """Deck band (0.8-2.0 m AHEAD of the station, hero and pad ring rejected)
-    vs fog band (55 % height, far side)."""
+    vs the background actually behind it (depth-gated sight column)."""
     from PIL import Image
     im = Image.open(png).convert("RGB")
     w, h = im.size
@@ -388,7 +772,11 @@ def measure(png, info, args, crop_path=None):
 
     samples = info.get("samples") or []
     hero_box = info.get("heroBox") or {}
-    deck, npx, used, rejected = deck_median(px, w, h, samples, hero_box)
+    if not isinstance(bg, dict) or bg.get("error"):
+        return {"status": "no-depth", "detail": str((bg or {}).get("error", "depth pass failed"))[:80]}
+    verified = bg.get("deckKeep") or []
+    deck_src = verified if len(verified) >= args.min_samples else samples
+    deck, npx, used, rejected = deck_median(px, w, h, deck_src, hero_box)
     if deck is None or used < args.min_samples:
         return {"status": "no-deck-pixels", "feet": [round(fx, 1), round(fy, 1)],
                 "deckSamples": used, "heroRejected": rejected,
@@ -397,20 +785,28 @@ def measure(png, info, args, crop_path=None):
     sx0 = min(s[0] for s in onscreen); sx1 = max(s[0] for s in onscreen)
     sy0 = min(s[1] for s in onscreen); sy1 = max(s[1] for s in onscreen)
 
+    deck_depth = float(info.get("deckDepth") or 0)
+    band = background_band(px, w, h, bg.get("cands") or [], deck_depth,
+                           float(bg.get("horizonY") or 0), args)
+    if band is None:
+        return {"status": "no-background",
+                "detail": "%d of %d sight-column pixels are within %.1f m of the station"
+                          % (bg.get("rejectedNear", 0), bg.get("scanned", 0), args.min_behind_enclosed),
+                "deckRgb": [int(v) for v in deck], "deckDepth": round(deck_depth, 2)}
+
+    ld, lf = luminance(deck), luminance(band["rgb"])
+
+    # INFO ONLY: the pre-2026-09-08 ruler, a fixed strip at 55 % height on the
+    # far side of the frame. Kept so the two numbers can be compared in one
+    # table; it is not a pass condition.
     fog_y0 = int(h * (args.fog_at - 0.02))
     fog_y1 = int(h * (args.fog_at + 0.02))
     strip = max(24, int(w * 0.14))
-    # take the side of the frame farthest from the hero
     if fx > w * 0.5:
-        fog, fn = band_median(px, w, h, 0, strip, fog_y0, fog_y1)
-        side = "left"
+        old, on_ = band_median(px, w, h, 0, strip, fog_y0, fog_y1)
     else:
-        fog, fn = band_median(px, w, h, w - strip, w, fog_y0, fog_y1)
-        side = "right"
-    if fog is None or fn < 40:
-        return {"status": "no-fog-pixels"}
+        old, on_ = band_median(px, w, h, w - strip, w, fog_y0, fog_y1)
 
-    ld, lf = luminance(deck), luminance(fog)
     if crop_path:
         try:
             from PIL import ImageDraw
@@ -419,22 +815,34 @@ def measure(png, info, args, crop_path=None):
             hb = hero_box
             if hb:
                 d.rectangle([hb["x0"], hb["y0"], hb["x1"], hb["y1"]], outline=(255, 0, 0))
+            col = bg.get("col")
+            if col:
+                d.rectangle([col[0], col[1], col[2], col[3]], outline=(80, 160, 255))
+            for pt in band["pts"][::7]:
+                d.point((pt[0], pt[1]), fill=(0, 200, 255))
             for sx, sy in onscreen:
                 inside = hb and hb["x0"] <= sx <= hb["x1"] and hb["y0"] <= sy <= hb["y1"]
                 d.rectangle([sx - 1, sy - 1, sx + 1, sy + 1],
                             outline=(255, 0, 0) if inside else (0, 255, 0))
-            pad = 40
-            dbg.crop((max(0, sx0 - pad), max(0, sy0 - pad),
-                      min(w, sx1 + pad), min(h, sy1 + pad))).save(crop_path)
+            dbg.save(crop_path)
         except Exception:
             pass
     return {
         "status": "ok",
-        "deckRgb": [int(v) for v in deck], "fogRgb": [int(v) for v in fog],
+        "deckRgb": [int(v) for v in deck], "fogRgb": [int(v) for v in band["rgb"]],
         "deckLum": round(ld, 4), "fogLum": round(lf, 4),
         "ratio": round(contrast(ld, lf), 2),
+        "bgKind": band["kind"], "bgPixels": band["pixels"], "bgPool": band["pool"],
+        "bgDepth": [band["depthLo"], band["depthMed"], band["depthHi"]],
+        "deckDepth": round(deck_depth, 2),
+        "deckDepthMeasured": bg.get("deckDepthMeasured"),
+        "sightColumn": bg.get("col"), "sightScanned": bg.get("scanned"),
+        "sightRejectedNear": bg.get("rejectedNear"),
+        "sightBadDepth": bg.get("rejectedBadDepth"), "rawBad": bg.get("rawBad"),
+        "stripRgb": [int(v) for v in old] if old else None,
+        "stripRatio": round(contrast(ld, luminance(old)), 2) if old else None,
         "deckPixels": npx, "deckSamples": used, "heroRejected": rejected,
-        "fogPixels": fn, "fogSide": side,
+        "deckVerified": len(verified), "deckOffSurface": bg.get("deckOff"),
         "deckWindow": [int(sx0), int(sy0), int(sx1), int(sy1)],
         "feet": [round(fx, 1), round(fy, 1)],
     }
@@ -456,7 +864,24 @@ def main() -> int:
     ap.add_argument("--min-samples", type=int, default=20,
                     help="fewest usable deck samples (of 91) before the station is NO SAMPLE")
     ap.add_argument("--fog-at", type=float, default=0.55,
-                    help="fog band centre as a fraction of frame height")
+                    help="INFO strip centre as a fraction of frame height (the old ruler)")
+    ap.add_argument("--min-behind", type=float, default=3.5,
+                    help="world metres a pixel must be FROM THE STATION to count as background")
+    ap.add_argument("--min-behind-enclosed", type=float, default=2.0,
+                    help="relaxed radius for an interior station with nothing that far behind it")
+    ap.add_argument("--deck-tol", type=float, default=0.35,
+                    help="metres a deck sample's measured depth may differ from its projected"
+                         " depth before it is judged not to be on the walked surface")
+    ap.add_argument("--horizon-slack", type=float, default=8.0,
+                    help="pixels below the horizon line still counted as the fog band")
+    ap.add_argument("--min-bg-samples", type=int, default=60,
+                    help="fewest background pixels before the ladder relaxes")
+    ap.add_argument("--col-pad", type=float, default=0.25,
+                    help="sight column widening either side of the deck, as a fraction of its width")
+    ap.add_argument("--col-pad-px", type=float, default=40,
+                    help="minimum sight column widening in pixels")
+    ap.add_argument("--bg-step", type=int, default=4,
+                    help="sight column scan step in pixels")
     ap.add_argument("--save-crops", action="store_true")
     ap.add_argument("--headless", action="store_true")
     ap.add_argument("--json", default=os.path.join(HERE, "contrastcheck.json"))
@@ -546,7 +971,27 @@ def main() -> int:
                                  "detail": (info or {}).get("error", "?")})
                     continue
                 png = os.path.join(SHOTS, "%s_%s.png" % (cid, st["name"]))
+                # The world, and only the world: HUD, dev panel and toasts are
+                # DOM and would otherwise land in a median.
+                try:
+                    pg.evaluate(MUTE_JS)
+                except Exception:
+                    pass
                 bright, luma = snap(pg, png)
+                try:
+                    bg = pg.evaluate(BG_JS, {
+                        "deckSamples": info["samples"], "deckDepth": info["deckDepth"],
+                        "heroBox": info["heroBox"], "w": info["w"], "h": info["h"],
+                        "minBehind": args.min_behind_enclosed, "step": args.bg_step,
+                        "station": st["p"], "deckDepths": info.get("sampleDepths"),
+                        "deckTol": args.deck_tol,
+                        "colPad": args.col_pad, "colPadPx": args.col_pad_px})
+                except Exception as e:
+                    bg = {"error": str(e)[:160]}
+                try:
+                    pg.evaluate(UNMUTE_JS)
+                except Exception:
+                    pass
                 if not bright:
                     rows.append({"station": st["name"], "gates": st["gates"],
                                  "status": "unmeasurable",
@@ -555,7 +1000,7 @@ def main() -> int:
                     continue
                 crop = (os.path.join(SHOTS, "%s_%s_deck.png" % (cid, st["name"]))
                         if args.save_crops else None)
-                m = measure(png, info, args, crop)
+                m = measure(png, info, bg, args, crop)
                 m["station"] = st["name"]
                 m["gates"] = st["gates"]
                 m["shot"] = png
@@ -568,8 +1013,9 @@ def main() -> int:
     print("=" * 96)
     print("CRESTBOUND contrast check — walked surface vs the fog band, floor %.1f:1" % args.floor)
     print("-" * 96)
-    print("%-12s %-8s %-8s %-16s %-16s %7s  %s"
-          % ("course", "theme", "station", "deck rgb", "fog rgb", "ratio", "verdict"))
+    print("%-12s %-8s %-7s %-16s %-16s %7s %-9s %-13s %6s  %s"
+          % ("course", "theme", "station", "deck rgb", "background rgb", "ratio",
+             "bg", "bg depth m", "strip", "verdict"))
     print("-" * 96)
     fails = unmeasured = 0
     for cid, r in results.items():
@@ -580,24 +1026,32 @@ def main() -> int:
         theme = r.get("theme") or "?"
         for row in r.get("rows", []):
             if row.get("status") != "ok":
-                mark = "UNMEASURABLE" if row.get("status") in ("unmeasurable",) else "NO SAMPLE"
-                if row.get("status") == "unmeasurable":
+                soft = row.get("status") in ("unmeasurable", "no-background", "no-depth")
+                mark = {"unmeasurable": "UNMEASURABLE", "no-background": "NO BACKGROUND",
+                        "no-depth": "NO DEPTH"}.get(row.get("status"), "NO SAMPLE")
+                if soft:
                     unmeasured += 1
                 elif row.get("gates"):
                     fails += 1
-                print("%-12s %-8s %-8s %-16s %-16s %7s  %s (%s)"
+                print("%-12s %-8s %-7s %-16s %-16s %7s  %s (%s)"
                       % (cid, theme, row.get("station"), "-", "-", "-", mark,
-                         str(row.get("detail") or row.get("status"))[:40]))
+                         str(row.get("detail") or row.get("status"))[:56]))
                 continue
             ok = row["ratio"] >= args.floor
             gates = row.get("gates")
             if not ok and gates:
                 fails += 1
             verdict = "ok" if ok else ("FAIL" if gates else "low (spawn, not gated)")
-            print("%-12s %-8s %-8s %-16s %-16s %6.2f:1  %s"
+            d = row.get("bgDepth") or [0, 0, 0]
+            print("%-12s %-8s %-7s %-16s %-16s %5.2f:1 %-9s %5.0f-%-7.0f %6s  %s"
                   % (cid, theme, row.get("station"), str(row["deckRgb"]), str(row["fogRgb"]),
-                     row["ratio"], verdict))
+                     row["ratio"], row.get("bgKind", "?"), d[0], d[2],
+                     ("%.2f" % row["stripRatio"]) if row.get("stripRatio") else "-",
+                     verdict))
     print("-" * 96)
+    print("`strip` is the PRE-2026-09-08 ruler (a fixed 14 %-wide band at 55 % frame "
+          "height on the far\nside of the frame). It is printed for comparison only and "
+          "gates nothing.")
     print("shots in %s" % os.path.abspath(SHOTS))
     if unmeasured:
         print("%d station(s) UNMEASURABLE (contention frames) — neither pass nor fail" % unmeasured)
