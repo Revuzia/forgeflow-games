@@ -1,0 +1,62 @@
+{
+  "name": "gnasher_post",
+  "file": "gnasher_post.glb",
+  "file_bytes": 883856,
+  "tris": 1212,
+  "tris_blender": 1212,
+  "verts": 614,
+  "bones": 0,
+  "bone_names": [],
+  "clips": [],
+  "bounds": {
+    "min": [
+      -0.31,
+      0.0,
+      -0.31
+    ],
+    "max": [
+      0.31,
+      1.566,
+      0.31
+    ],
+    "height_m": 1.566
+  },
+  "pivot": [
+    0,
+    0,
+    0
+  ],
+  "forward": "+Z (glTF) \u2014 built facing Blender -Y",
+  "materials": [
+    "gnasher_post_atlas"
+  ],
+  "textures": {
+    "albedo": "textures/gnasher_post_albedo.png",
+    "normal": "textures/gnasher_post_normal.png",
+    "orm": "textures/gnasher_post_orm.png"
+  },
+  "atlas_px": 512,
+  "images_in_glb": [
+    "gnasher_post_normal",
+    "gnasher_post_orm",
+    "gnasher_post_albedo"
+  ],
+  "notes": [
+    "static; place at the gnasher's post position; ring centre at y=1.44"
+  ],
+  "kind": "prop",
+  "turntable": [
+    "_turntable/gnasher_post_tt_00.png",
+    "_turntable/gnasher_post_tt_01.png",
+    "_turntable/gnasher_post_tt_02.png",
+    "_turntable/gnasher_post_tt_03.png",
+    "_turntable/gnasher_post_tt_04.png",
+    "_turntable/gnasher_post_tt_05.png",
+    "_turntable/gnasher_post_tt_06.png",
+    "_turntable/gnasher_post_tt_07.png",
+    "_turntable/gnasher_post_closeup.png"
+  ],
+  "contact_sheet": null,
+  "bake_seconds": 10.8,
+  "build_seconds": 25.8
+}

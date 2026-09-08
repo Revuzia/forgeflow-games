@@ -1,0 +1,62 @@
+{
+  "name": "gnasher_link",
+  "file": "gnasher_link.glb",
+  "file_bytes": 263168,
+  "tris": 384,
+  "tris_blender": 384,
+  "verts": 192,
+  "bones": 0,
+  "bone_names": [],
+  "clips": [],
+  "bounds": {
+    "min": [
+      -0.097,
+      0.053,
+      -0.044
+    ],
+    "max": [
+      0.097,
+      0.247,
+      0.044
+    ],
+    "height_m": 0.194
+  },
+  "pivot": [
+    0,
+    0,
+    0
+  ],
+  "forward": "+Z (glTF) \u2014 built facing Blender -Y",
+  "materials": [
+    "gnasher_link_atlas"
+  ],
+  "textures": {
+    "albedo": "textures/gnasher_link_albedo.png",
+    "normal": "textures/gnasher_link_normal.png",
+    "orm": "textures/gnasher_link_orm.png"
+  },
+  "atlas_px": 256,
+  "images_in_glb": [
+    "gnasher_link_normal",
+    "gnasher_link_orm",
+    "gnasher_link_albedo"
+  ],
+  "notes": [
+    "one 0.30 m link along +Y (glTF); instance per GN_LINK along the chain, alternate 90 deg roll"
+  ],
+  "kind": "prop",
+  "turntable": [
+    "_turntable/gnasher_link_tt_00.png",
+    "_turntable/gnasher_link_tt_01.png",
+    "_turntable/gnasher_link_tt_02.png",
+    "_turntable/gnasher_link_tt_03.png",
+    "_turntable/gnasher_link_tt_04.png",
+    "_turntable/gnasher_link_tt_05.png",
+    "_turntable/gnasher_link_tt_06.png",
+    "_turntable/gnasher_link_tt_07.png",
+    "_turntable/gnasher_link_closeup.png"
+  ],
+  "contact_sheet": null,
+  "bake_seconds": 2.4,
+  "build_seconds": 8.1
+}

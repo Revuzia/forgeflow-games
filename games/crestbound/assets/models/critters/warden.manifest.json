@@ -1,0 +1,153 @@
+{
+  "name": "warden",
+  "file": "warden.glb",
+  "file_bytes": 6615324,
+  "tris": 7906,
+  "tris_blender": 7906,
+  "verts": 4065,
+  "bones": 21,
+  "bone_names": [
+    "root",
+    "hips",
+    "spine",
+    "chest",
+    "neck",
+    "head",
+    "lantern",
+    "shoulder_L",
+    "upperarm_L",
+    "forearm_L",
+    "hand_L",
+    "shoulder_R",
+    "upperarm_R",
+    "forearm_R",
+    "hand_R",
+    "thigh_L",
+    "shin_L",
+    "foot_L",
+    "thigh_R",
+    "shin_R",
+    "foot_R"
+  ],
+  "clips": [
+    {
+      "name": "idle",
+      "seconds": 2,
+      "frames": 49,
+      "channels": 63
+    },
+    {
+      "name": "stomp_telegraph",
+      "seconds": 0.5833,
+      "frames": 15,
+      "channels": 63
+    },
+    {
+      "name": "stomp_attack_slam",
+      "seconds": 0.5417,
+      "frames": 14,
+      "channels": 63
+    },
+    {
+      "name": "charge_telegraph",
+      "seconds": 0.7917,
+      "frames": 20,
+      "channels": 63
+    },
+    {
+      "name": "charge_run",
+      "seconds": 0.5,
+      "frames": 13,
+      "channels": 63
+    },
+    {
+      "name": "dizzy",
+      "seconds": 2.5,
+      "frames": 61,
+      "channels": 63
+    },
+    {
+      "name": "hit",
+      "seconds": 0.9167,
+      "frames": 23,
+      "channels": 63
+    },
+    {
+      "name": "roar",
+      "seconds": 1.2083,
+      "frames": 30,
+      "channels": 63
+    },
+    {
+      "name": "death",
+      "seconds": 2.5833,
+      "frames": 63,
+      "channels": 63
+    }
+  ],
+  "bounds": {
+    "min": [
+      -1.27,
+      0.0,
+      -0.63
+    ],
+    "max": [
+      1.27,
+      3.042,
+      0.5585
+    ],
+    "height_m": 3.042
+  },
+  "pivot": [
+    0,
+    0,
+    0
+  ],
+  "forward": "+Z (glTF) \u2014 built facing Blender -Y",
+  "materials": [
+    "warden_atlas",
+    "warden_gem",
+    "warden_glow"
+  ],
+  "textures": {
+    "albedo": "textures/warden_albedo.png",
+    "normal": "textures/warden_normal.png",
+    "orm": "textures/warden_orm.png"
+  },
+  "atlas_px": 2048,
+  "images_in_glb": [
+    "warden_normal",
+    "warden_orm",
+    "warden_albedo"
+  ],
+  "notes": [
+    "Runtime naturalHeight 2.70 m (lantern ring is the tallest point, ~3.0 m authored; the loader rescales).",
+    "Glow slot 'warden_glow' = eye slits + lantern glass; 'warden_gem' = the back crest gem (the pound target). Both untextured emissive; the atlas is 2K."
+  ],
+  "kind": "critter",
+  "states": {
+    "idle": "idle",
+    "roar": "roar",
+    "stompTele": "stomp_telegraph",
+    "stomp": "stomp_attack_slam",
+    "chargeTele": "charge_telegraph",
+    "charge": "charge_run",
+    "dizzy": "dizzy",
+    "hit": "hit",
+    "death": "death"
+  },
+  "turntable": [
+    "_turntable/warden_tt_00.png",
+    "_turntable/warden_tt_01.png",
+    "_turntable/warden_tt_02.png",
+    "_turntable/warden_tt_03.png",
+    "_turntable/warden_tt_04.png",
+    "_turntable/warden_tt_05.png",
+    "_turntable/warden_tt_06.png",
+    "_turntable/warden_tt_07.png",
+    "_turntable/warden_closeup.png"
+  ],
+  "contact_sheet": "_turntable/warden_clips.png",
+  "bake_seconds": 211.0,
+  "build_seconds": 230.1
+}

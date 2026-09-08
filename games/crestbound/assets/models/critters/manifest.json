@@ -1,0 +1,708 @@
+{
+  "kit": "critters",
+  "game": "crestbound",
+  "generated": "2026-09-08T12:43:54",
+  "generator": "_tools/blender/critters/build_all.py (Blender 5.1.2 headless, bpy only)",
+  "conventions": {
+    "up": "+Y",
+    "forward": "+Z",
+    "units": "metres",
+    "pivot": "feet/base at origin",
+    "clips": "NLA tracks -> glTF animations, names EXACT; clip[0] is the loop the runtime should default to",
+    "textures": "baked atlases embedded in each GLB (albedo sRGB, normal OpenGL +Y, ORM = AO/rough/metal); loose copies in textures/"
+  },
+  "budgets": {
+    "tris": [
+      {
+        "name": "bumbler",
+        "tris": 5500,
+        "limit": 8000,
+        "ok": true,
+        "atlas_px": 1024,
+        "atlas_ok": true
+      },
+      {
+        "name": "fen",
+        "tris": 6986,
+        "limit": 8000,
+        "ok": true,
+        "atlas_px": 2048,
+        "atlas_ok": true
+      },
+      {
+        "name": "gnasher",
+        "tris": 7418,
+        "limit": 8000,
+        "ok": true,
+        "atlas_px": 1024,
+        "atlas_ok": true
+      },
+      {
+        "name": "gnasher_link",
+        "tris": 384,
+        "limit": 1500,
+        "ok": true,
+        "atlas_px": 256,
+        "atlas_ok": true
+      },
+      {
+        "name": "gnasher_post",
+        "tris": 1212,
+        "limit": 1500,
+        "ok": true,
+        "atlas_px": 512,
+        "atlas_ok": true
+      },
+      {
+        "name": "skitter",
+        "tris": 7510,
+        "limit": 8000,
+        "ok": true,
+        "atlas_px": 1024,
+        "atlas_ok": true
+      },
+      {
+        "name": "warden",
+        "tris": 7906,
+        "limit": 8000,
+        "ok": true,
+        "atlas_px": 2048,
+        "atlas_ok": true
+      }
+    ],
+    "textures_mb": 20.98,
+    "textures_limit_mb": 24,
+    "textures_ok": true,
+    "glb_mb": 23.18
+  },
+  "assets": [
+    {
+      "name": "bumbler",
+      "file": "bumbler.glb",
+      "kind": "critter",
+      "tris": 5500,
+      "bones": 11,
+      "bone_names": [
+        "root",
+        "body",
+        "hat",
+        "eye_L",
+        "pupil_L",
+        "eye_R",
+        "pupil_R",
+        "arm_L",
+        "arm_R",
+        "leg_L",
+        "leg_R"
+      ],
+      "clips": [
+        {
+          "name": "waddle_walk",
+          "seconds": 1,
+          "frames": 25,
+          "channels": 33
+        },
+        {
+          "name": "squish_flat",
+          "seconds": 0.3333,
+          "frames": 9,
+          "channels": 33
+        },
+        {
+          "name": "respawn",
+          "seconds": 0.8333,
+          "frames": 21,
+          "channels": 33
+        }
+      ],
+      "bounds": {
+        "min": [
+          -0.528,
+          0.0,
+          -0.38
+        ],
+        "max": [
+          0.528,
+          1.0749,
+          0.4408
+        ],
+        "height_m": 1.0749
+      },
+      "pivot": [
+        0,
+        0,
+        0
+      ],
+      "forward": "+Z (glTF) \u2014 built facing Blender -Y",
+      "materials": [
+        "bumbler_atlas"
+      ],
+      "textures": {
+        "albedo": "textures/bumbler_albedo.png",
+        "normal": "textures/bumbler_normal.png",
+        "orm": "textures/bumbler_orm.png"
+      },
+      "atlas_px": 1024,
+      "file_bytes": 2010128,
+      "states": {
+        "walk": "waddle_walk",
+        "squish": "squish_flat",
+        "respawn": "respawn"
+      },
+      "turntable": [
+        "_turntable/bumbler_tt_00.png",
+        "_turntable/bumbler_tt_01.png",
+        "_turntable/bumbler_tt_02.png",
+        "_turntable/bumbler_tt_03.png",
+        "_turntable/bumbler_tt_04.png",
+        "_turntable/bumbler_tt_05.png",
+        "_turntable/bumbler_tt_06.png",
+        "_turntable/bumbler_tt_07.png",
+        "_turntable/bumbler_closeup.png"
+      ],
+      "contact_sheet": "_turntable/bumbler_clips.png",
+      "notes": [
+        "Runtime naturalHeight 0.924 m (BM_R 0.42 * 2.2). Hat top is the tallest point.",
+        "root = whole-body rock/bob/yaw; body = squash/stretch only; hat/eyes/arms are children of root so the squash never shears them."
+      ]
+    },
+    {
+      "name": "fen",
+      "file": "fen.glb",
+      "kind": "npc",
+      "tris": 6986,
+      "bones": 24,
+      "bone_names": [
+        "root",
+        "hips",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "hood",
+        "beard",
+        "brow_L",
+        "brow_R",
+        "eye_L",
+        "pupil_L",
+        "eye_R",
+        "pupil_R",
+        "shoulder_L",
+        "upperarm_L",
+        "forearm_L",
+        "hand_L",
+        "shoulder_R",
+        "upperarm_R",
+        "forearm_R",
+        "hand_R",
+        "staff",
+        "lantern"
+      ],
+      "clips": [
+        {
+          "name": "idle",
+          "seconds": 4,
+          "frames": 97,
+          "channels": 72
+        },
+        {
+          "name": "talk",
+          "seconds": 2,
+          "frames": 49,
+          "channels": 72
+        }
+      ],
+      "bounds": {
+        "min": [
+          -0.4764,
+          0.0,
+          -0.3792
+        ],
+        "max": [
+          0.655,
+          1.685,
+          0.775
+        ],
+        "height_m": 1.685
+      },
+      "pivot": [
+        0,
+        0,
+        0
+      ],
+      "forward": "+Z (glTF) \u2014 built facing Blender -Y",
+      "materials": [
+        "fen_atlas",
+        "fen_glow"
+      ],
+      "textures": {
+        "albedo": "textures/fen_albedo.png",
+        "normal": "textures/fen_normal.png",
+        "orm": "textures/fen_orm.png"
+      },
+      "atlas_px": 2048,
+      "file_bytes": 8998960,
+      "states": {
+        "idle": "idle",
+        "talk": "talk"
+      },
+      "turntable": [
+        "_turntable/fen_tt_00.png",
+        "_turntable/fen_tt_01.png",
+        "_turntable/fen_tt_02.png",
+        "_turntable/fen_tt_03.png",
+        "_turntable/fen_tt_04.png",
+        "_turntable/fen_tt_05.png",
+        "_turntable/fen_tt_06.png",
+        "_turntable/fen_tt_07.png",
+        "_turntable/fen_closeup.png"
+      ],
+      "contact_sheet": "_turntable/fen_clips.png",
+      "notes": [
+        "Runtime naturalHeight 1.70 m; staff knob is the tallest point (~1.69 m). Robe/beard/strap use banded soft weights.",
+        "Glow slot 'fen_glow' = lantern glass (untextured emissive). Blink = eye bone Z-scale in idle at f58."
+      ]
+    },
+    {
+      "name": "gnasher",
+      "file": "gnasher.glb",
+      "kind": "critter",
+      "tris": 7418,
+      "bones": 10,
+      "bone_names": [
+        "root",
+        "body",
+        "jaw",
+        "anchor",
+        "eye_L",
+        "pupil_L",
+        "eye_R",
+        "pupil_R",
+        "brow_L",
+        "brow_R"
+      ],
+      "clips": [
+        {
+          "name": "idle",
+          "seconds": 2,
+          "frames": 49,
+          "channels": 30
+        },
+        {
+          "name": "telegraph_windup",
+          "seconds": 0.5,
+          "frames": 13,
+          "channels": 30
+        },
+        {
+          "name": "lunge",
+          "seconds": 0.5,
+          "frames": 13,
+          "channels": 30
+        },
+        {
+          "name": "recover",
+          "seconds": 1.2083,
+          "frames": 30,
+          "channels": 30
+        },
+        {
+          "name": "freed",
+          "seconds": 1.5,
+          "frames": 37,
+          "channels": 30
+        }
+      ],
+      "bounds": {
+        "min": [
+          -0.5717,
+          0.05,
+          -0.669
+        ],
+        "max": [
+          0.5717,
+          1.2102,
+          0.53
+        ],
+        "height_m": 1.1602
+      },
+      "pivot": [
+        0,
+        0,
+        0
+      ],
+      "forward": "+Z (glTF) \u2014 built facing Blender -Y",
+      "materials": [
+        "gnasher_atlas"
+      ],
+      "textures": {
+        "albedo": "textures/gnasher_albedo.png",
+        "normal": "textures/gnasher_normal.png",
+        "orm": "textures/gnasher_orm.png"
+      },
+      "atlas_px": 1024,
+      "file_bytes": 2677892,
+      "states": {
+        "idle": "idle",
+        "telegraph": "telegraph_windup",
+        "attack": "lunge",
+        "recover": "recover",
+        "freed": "freed"
+      },
+      "turntable": [
+        "_turntable/gnasher_tt_00.png",
+        "_turntable/gnasher_tt_01.png",
+        "_turntable/gnasher_tt_02.png",
+        "_turntable/gnasher_tt_03.png",
+        "_turntable/gnasher_tt_04.png",
+        "_turntable/gnasher_tt_05.png",
+        "_turntable/gnasher_tt_06.png",
+        "_turntable/gnasher_tt_07.png",
+        "_turntable/gnasher_closeup.png"
+      ],
+      "contact_sheet": "_turntable/gnasher_clips.png",
+      "notes": [
+        "Runtime naturalHeight 1.10 m; model rest height is measured in bounds. Spikes/collars are part of the body bone.",
+        "Chain and post are SEPARATE assets (gnasher_post.glb, gnasher_link.glb) so the runtime can keep placing its own chain."
+      ]
+    },
+    {
+      "name": "gnasher_link",
+      "file": "gnasher_link.glb",
+      "kind": "prop",
+      "tris": 384,
+      "bones": 0,
+      "bone_names": [],
+      "clips": [],
+      "bounds": {
+        "min": [
+          -0.097,
+          0.053,
+          -0.044
+        ],
+        "max": [
+          0.097,
+          0.247,
+          0.044
+        ],
+        "height_m": 0.194
+      },
+      "pivot": [
+        0,
+        0,
+        0
+      ],
+      "forward": "+Z (glTF) \u2014 built facing Blender -Y",
+      "materials": [
+        "gnasher_link_atlas"
+      ],
+      "textures": {
+        "albedo": "textures/gnasher_link_albedo.png",
+        "normal": "textures/gnasher_link_normal.png",
+        "orm": "textures/gnasher_link_orm.png"
+      },
+      "atlas_px": 256,
+      "file_bytes": 263168,
+      "turntable": [
+        "_turntable/gnasher_link_tt_00.png",
+        "_turntable/gnasher_link_tt_01.png",
+        "_turntable/gnasher_link_tt_02.png",
+        "_turntable/gnasher_link_tt_03.png",
+        "_turntable/gnasher_link_tt_04.png",
+        "_turntable/gnasher_link_tt_05.png",
+        "_turntable/gnasher_link_tt_06.png",
+        "_turntable/gnasher_link_tt_07.png",
+        "_turntable/gnasher_link_closeup.png"
+      ],
+      "contact_sheet": null,
+      "notes": [
+        "one 0.30 m link along +Y (glTF); instance per GN_LINK along the chain, alternate 90 deg roll"
+      ]
+    },
+    {
+      "name": "gnasher_post",
+      "file": "gnasher_post.glb",
+      "kind": "prop",
+      "tris": 1212,
+      "bones": 0,
+      "bone_names": [],
+      "clips": [],
+      "bounds": {
+        "min": [
+          -0.31,
+          0.0,
+          -0.31
+        ],
+        "max": [
+          0.31,
+          1.566,
+          0.31
+        ],
+        "height_m": 1.566
+      },
+      "pivot": [
+        0,
+        0,
+        0
+      ],
+      "forward": "+Z (glTF) \u2014 built facing Blender -Y",
+      "materials": [
+        "gnasher_post_atlas"
+      ],
+      "textures": {
+        "albedo": "textures/gnasher_post_albedo.png",
+        "normal": "textures/gnasher_post_normal.png",
+        "orm": "textures/gnasher_post_orm.png"
+      },
+      "atlas_px": 512,
+      "file_bytes": 883856,
+      "turntable": [
+        "_turntable/gnasher_post_tt_00.png",
+        "_turntable/gnasher_post_tt_01.png",
+        "_turntable/gnasher_post_tt_02.png",
+        "_turntable/gnasher_post_tt_03.png",
+        "_turntable/gnasher_post_tt_04.png",
+        "_turntable/gnasher_post_tt_05.png",
+        "_turntable/gnasher_post_tt_06.png",
+        "_turntable/gnasher_post_tt_07.png",
+        "_turntable/gnasher_post_closeup.png"
+      ],
+      "contact_sheet": null,
+      "notes": [
+        "static; place at the gnasher's post position; ring centre at y=1.44"
+      ]
+    },
+    {
+      "name": "skitter",
+      "file": "skitter.glb",
+      "kind": "critter",
+      "tris": 7510,
+      "bones": 16,
+      "bone_names": [
+        "root",
+        "thorax",
+        "head",
+        "eye_L",
+        "pupil_L",
+        "eye_R",
+        "pupil_R",
+        "abd1",
+        "abd2",
+        "abd3",
+        "abd4",
+        "abd5",
+        "wing_FR",
+        "wing_FL",
+        "wing_BR",
+        "wing_BL"
+      ],
+      "clips": [
+        {
+          "name": "fly",
+          "seconds": 0.5,
+          "frames": 13,
+          "channels": 48
+        },
+        {
+          "name": "swoop_attack",
+          "seconds": 1.1667,
+          "frames": 29,
+          "channels": 48
+        }
+      ],
+      "bounds": {
+        "min": [
+          -0.6804,
+          -0.0028,
+          -0.7761
+        ],
+        "max": [
+          0.6804,
+          0.665,
+          0.54
+        ],
+        "height_m": 0.6678
+      },
+      "pivot": [
+        0,
+        0,
+        0
+      ],
+      "forward": "+Z (glTF) \u2014 built facing Blender -Y",
+      "materials": [
+        "skitter_atlas",
+        "skitter_wing"
+      ],
+      "textures": {
+        "albedo": "textures/skitter_albedo.png",
+        "normal": "textures/skitter_normal.png",
+        "orm": "textures/skitter_orm.png"
+      },
+      "atlas_px": 1024,
+      "file_bytes": 1729848,
+      "states": {
+        "walk": "fly",
+        "attack": "swoop_attack"
+      },
+      "turntable": [
+        "_turntable/skitter_tt_00.png",
+        "_turntable/skitter_tt_01.png",
+        "_turntable/skitter_tt_02.png",
+        "_turntable/skitter_tt_03.png",
+        "_turntable/skitter_tt_04.png",
+        "_turntable/skitter_tt_05.png",
+        "_turntable/skitter_tt_06.png",
+        "_turntable/skitter_tt_07.png",
+        "_turntable/skitter_closeup.png"
+      ],
+      "contact_sheet": "_turntable/skitter_clips.png",
+      "notes": [
+        "Runtime naturalHeight 0.60 m; rest bounds include raised wings. Wings are a separate alpha-blended slot (skitter_wing)."
+      ]
+    },
+    {
+      "name": "warden",
+      "file": "warden.glb",
+      "kind": "critter",
+      "tris": 7906,
+      "bones": 21,
+      "bone_names": [
+        "root",
+        "hips",
+        "spine",
+        "chest",
+        "neck",
+        "head",
+        "lantern",
+        "shoulder_L",
+        "upperarm_L",
+        "forearm_L",
+        "hand_L",
+        "shoulder_R",
+        "upperarm_R",
+        "forearm_R",
+        "hand_R",
+        "thigh_L",
+        "shin_L",
+        "foot_L",
+        "thigh_R",
+        "shin_R",
+        "foot_R"
+      ],
+      "clips": [
+        {
+          "name": "idle",
+          "seconds": 2,
+          "frames": 49,
+          "channels": 63
+        },
+        {
+          "name": "stomp_telegraph",
+          "seconds": 0.5833,
+          "frames": 15,
+          "channels": 63
+        },
+        {
+          "name": "stomp_attack_slam",
+          "seconds": 0.5417,
+          "frames": 14,
+          "channels": 63
+        },
+        {
+          "name": "charge_telegraph",
+          "seconds": 0.7917,
+          "frames": 20,
+          "channels": 63
+        },
+        {
+          "name": "charge_run",
+          "seconds": 0.5,
+          "frames": 13,
+          "channels": 63
+        },
+        {
+          "name": "dizzy",
+          "seconds": 2.5,
+          "frames": 61,
+          "channels": 63
+        },
+        {
+          "name": "hit",
+          "seconds": 0.9167,
+          "frames": 23,
+          "channels": 63
+        },
+        {
+          "name": "roar",
+          "seconds": 1.2083,
+          "frames": 30,
+          "channels": 63
+        },
+        {
+          "name": "death",
+          "seconds": 2.5833,
+          "frames": 63,
+          "channels": 63
+        }
+      ],
+      "bounds": {
+        "min": [
+          -1.27,
+          0.0,
+          -0.63
+        ],
+        "max": [
+          1.27,
+          3.042,
+          0.5585
+        ],
+        "height_m": 3.042
+      },
+      "pivot": [
+        0,
+        0,
+        0
+      ],
+      "forward": "+Z (glTF) \u2014 built facing Blender -Y",
+      "materials": [
+        "warden_atlas",
+        "warden_gem",
+        "warden_glow"
+      ],
+      "textures": {
+        "albedo": "textures/warden_albedo.png",
+        "normal": "textures/warden_normal.png",
+        "orm": "textures/warden_orm.png"
+      },
+      "atlas_px": 2048,
+      "file_bytes": 6615324,
+      "states": {
+        "idle": "idle",
+        "roar": "roar",
+        "stompTele": "stomp_telegraph",
+        "stomp": "stomp_attack_slam",
+        "chargeTele": "charge_telegraph",
+        "charge": "charge_run",
+        "dizzy": "dizzy",
+        "hit": "hit",
+        "death": "death"
+      },
+      "turntable": [
+        "_turntable/warden_tt_00.png",
+        "_turntable/warden_tt_01.png",
+        "_turntable/warden_tt_02.png",
+        "_turntable/warden_tt_03.png",
+        "_turntable/warden_tt_04.png",
+        "_turntable/warden_tt_05.png",
+        "_turntable/warden_tt_06.png",
+        "_turntable/warden_tt_07.png",
+        "_turntable/warden_closeup.png"
+      ],
+      "contact_sheet": "_turntable/warden_clips.png",
+      "notes": [
+        "Runtime naturalHeight 2.70 m (lantern ring is the tallest point, ~3.0 m authored; the loader rescales).",
+        "Glow slot 'warden_glow' = eye slits + lantern glass; 'warden_gem' = the back crest gem (the pound target). Both untextured emissive; the atlas is 2K."
+      ]
+    }
+  ]
+}
