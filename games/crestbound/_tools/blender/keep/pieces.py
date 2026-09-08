@@ -434,21 +434,45 @@ def gate_door():
     leafW = a - 0.03
     planks = 5
     pw = leafW / planks
+    ZB = 0.03                       # plank foot, 3 cm off the threshold
+
+    def leaf_edge(z):
+        """|x| of the door OPENING at height z: the jamb below the springing, the arch curve above."""
+        if z <= springing:
+            return a
+        dz = z - springing
+        if dz >= rise:
+            return 0.0
+        return max(0.0, sqrt(max(0.0, arch.R * arch.R - dz * dz)) - arch.c)
+
+    def plank_top(x):
+        return springing + arch.z_at(x) - 0.04
+
     for sg, vg in ((-1, 'hingeL'), (1, 'hingeR')):
         hx = sg * a                     # hinge line at the jamb
         for i in range(planks):
             xc = hx - sg * (0.02 + (i + 0.5) * pw)
-            top = springing + arch.z_at(abs(xc) + pw / 2 * 0.9) - 0.04
-            p.add(box(f'plank{i}', (pw - 0.012, 0.11, top - 0.03), at=(xc, -0.10, 0.03), bev=0.012, mat='timber', vg=vg, rnd=R.random()))
-        # strap hinges: three straps with a spear end and studs
+            x0, x1 = xc - (pw - 0.012) / 2, xc + (pw - 0.012) / 2
+            # THE PLANK TOP FOLLOWS THE ARCH. A flat-topped box per plank made a 5-step sawtooth
+            # under the arch (read off _turntable/gate_door_00.png); the top edge is now sampled
+            # off the same PointedArch the voussoirs ride, so the leaf meets the arch as one curve.
+            NT = 3
+            top = [(x0 + (x1 - x0) * k / (NT - 1), plank_top(x0 + (x1 - x0) * k / (NT - 1))) for k in range(NT)]
+            pts = [(x0, ZB), (x1, ZB)] + list(reversed(top))
+            p.add(polyplate(f'plank{i}', pts, 0.11, at=(0, -0.045, 0), bev=0.010, mat='timber', vg=vg, rnd=R.random()))
+        # strap hinges: three straps with a spear end and studs. Above the springing the leaf is
+        # NARROWER than the jamb, so a strap that starts at the jamb line hangs in the air — start
+        # every strap at the leaf's own edge at its height and cut its length to what is left.
         for zz in (0.55, 1.8, 3.05):
-            sl = leafW * 0.78
+            ex = leaf_edge(zz + 0.07)
+            sl = min(leafW * 0.78, max(0.35, ex - 0.10))
+            sx = sg * ex                 # the leaf's outer edge at this height
             pts = [(0, -0.07), (sl * 0.72, -0.07), (sl * 0.86, -0.03), (sl, 0), (sl * 0.86, 0.03), (sl * 0.72, 0.07), (0, 0.07)]
-            pts = [(hx - sg * (0.03 + x_), z_ + zz) for (x_, z_) in pts]
+            pts = [(sx - sg * (0.03 + x_), z_ + zz) for (x_, z_) in pts]
             p.add(polyplate('strap', pts, 0.035, at=(0, -0.155, 0), mat='iron', vg=vg))
             for k in range(3):
-                p.add(prism('stud', 0.028, 0.03, 5, at=(hx - sg * (0.22 + k * sl * 0.26), -0.19, zz), rot=(pi / 2, 0, 0), mat='iron', vg=vg))
-            p.add(cyl('knuckle', 0.05, 0.22, 6, at=(hx - sg * 0.02, -0.13, zz - 0.11), mat='iron', vg=vg))
+                p.add(prism('stud', 0.028, 0.03, 5, at=(sx - sg * (0.16 + k * sl * 0.28), -0.19, zz), rot=(pi / 2, 0, 0), mat='iron', vg=vg))
+            p.add(cyl('knuckle', 0.05, 0.22, 6, at=(sx - sg * 0.02, -0.13, zz - 0.11), mat='iron', vg=vg))
         # ring handle near the meeting stile
         xr = hx - sg * (leafW - 0.22)
         p.add(prism('boss', 0.07, 0.03, 6, at=(xr, -0.16, 2.0), rot=(pi / 2, 0, 0), mat='iron', vg=vg))

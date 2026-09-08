@@ -1,7 +1,7 @@
 {
  "kit": "keep",
  "title": "THE KEEP \u2014 modular castle architecture kit",
- "generated": "2026-09-08 12:34:01",
+ "generated": "2026-09-08 12:41:51",
  "generator": "Blender 5.1.2 headless (bpy) \u2014 _tools/blender/keep/{kitlib,pieces,build_kit}.py",
  "units": "1 unit = 1 metre, +Y up (export_yup), origin at the base unless the entry says otherwise, front = +Z",
  "language": "warm stone (0x9c8768 keep tint family) + amber timber (0xc09056) + gilt / iron / marble accents",
@@ -21,9 +21,9 @@
  },
  "totals": {
   "pieces": 20,
-  "bytes": 9768472,
-  "texture_bytes": 7831948,
-  "tris": 34048,
+  "bytes": 9689024,
+  "texture_bytes": 7752902,
+  "tris": 34120,
   "bones": 7,
   "clips": 2
  },
@@ -1714,8 +1714,8 @@
    "name": "gate_door",
    "file": "gate_door.glb",
    "kind": "architecture",
-   "bytes": 1528656,
-   "tris": 2864,
+   "bytes": 1449208,
+   "tris": 2936,
    "tris_budget": 3000,
    "tris_ok": true,
    "bones": 3,
@@ -1770,7 +1770,7 @@
     "meshes": [
      "gate_door"
     ],
-    "tris": 2864,
+    "tris": 2936,
     "bones": 3,
     "clips": [
      [
@@ -1800,27 +1800,27 @@
     ]
    },
    "reimport_ok": true,
-   "seconds": 79.1,
-   "texture_bytes": 1234352,
+   "seconds": 221.5,
+   "texture_bytes": 1155306,
    "images": [
     {
      "name": "gate_door_normal",
      "mime": "image/webp",
-     "bytes": 564570
+     "bytes": 519710
     },
     {
      "name": "gate_door_orm",
      "mime": "image/webp",
-     "bytes": 477450
+     "bytes": 440304
     },
     {
      "name": "gate_door_albedo",
      "mime": "image/webp",
-     "bytes": 192332
+     "bytes": 195292
     }
    ],
    "glb": {
-    "tris": 2864,
+    "tris": 2936,
     "primitives": 1,
     "materials": [
      "gate_door"

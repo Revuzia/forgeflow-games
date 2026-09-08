@@ -2,8 +2,8 @@
  "name": "gate_door",
  "file": "gate_door.glb",
  "kind": "architecture",
- "bytes": 1528656,
- "tris": 2864,
+ "bytes": 1449208,
+ "tris": 2936,
  "tris_budget": 3000,
  "tris_ok": true,
  "bones": 3,
@@ -58,7 +58,7 @@
   "meshes": [
    "gate_door"
   ],
-  "tris": 2864,
+  "tris": 2936,
   "bones": 3,
   "clips": [
    [
@@ -88,5 +88,5 @@
   ]
  },
  "reimport_ok": true,
- "seconds": 79.1
+ "seconds": 221.5
 }
