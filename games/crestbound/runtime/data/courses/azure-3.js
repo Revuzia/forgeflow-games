@@ -770,7 +770,19 @@ export default {
     { kind: 'cannon', p: [24, ISLE3_Y + 1.0, -42], target: [-8, ROAD[1].y + 0.6, -62], r: 1.1, len: 3.2, cooldown: 1.2, id: 'isle-3-road' },
 
     { kind: 'rotor', p: [46, ISLE2_Y + 0.55, -16], style: 'bar', arms: 2, len: 5.0, thick: 0.34, period: 6.0, axis: 'y' },
-    { kind: 'rotor', p: [30, ISLE3_Y + 0.9, -34], style: 'windmill', arms: 3, len: 3.4, period: 4.6, axis: 'y', phase: 0.25 },
+    /* THE WARDEN'S SPOKES ARE A WALL, NOT A BLENDER.
+     * The critter block below calls this "the wall its charge breaks on", and
+     * `hazards/rotors.js` only builds SOLID arm colliders for `bar`/`hammer`:
+     * a `windmill` is kill capsules and nothing else. So this rotor was the
+     * exact opposite of what the beat says — no wall for the charge, and three
+     * lethal `spike` capsules of radius 0.5 sweeping at y 52.90 over a deck at
+     * 52.00, i.e. through the shins of anyone standing anywhere in the 7 m boss
+     * arena, hub included. Measured 2026-09-08 (`_harness/_lc_diag2.py`):
+     * standing at (30, 52, -31.5) dies `spike` in 0.60 s, deaths +1, and
+     * loopcheck's own crest-boss station died at +4.20 s the same way — which
+     * is why nobody has ever seen this Warden move. Same style as isle 2's
+     * spinner above: a rideable solid the charge slams into. */
+    { kind: 'rotor', p: [30, ISLE3_Y + 0.9, -34], style: 'bar', arms: 3, len: 3.4, thick: 0.32, period: 4.6, axis: 'y', phase: 0.25 },
 
     { kind: 'text', p: [28, ISLE1_Y + 1.5, 5.6], rot: [0, Math.PI, 0], text: 'STEP IN THE BARREL  ·  IT AIMS ITSELF', size: 0.26, color: 0xe6f6ff },
     { kind: 'text', p: [28, ISLE1_Y + 1.1, 5.6], rot: [0, Math.PI, 0], text: 'THE SPOKES DO NOT STOP FOR A LANDING', size: 0.21, color: 0xbfe4ee },
@@ -938,8 +950,15 @@ export default {
     // SKITTERS — the prism birds. One works the void crossing, one the rings.
     { kind: 'skitter', p: [0, 36.6, 26], path: [[-8, 36.6, 30], [8, 38.4, 20]], amp: 1.8, speed: 3.6, color: 0x9f7fe0 },
     { kind: 'skitter', p: [-38, 43.0, -18], path: [[-28, 42.0, -8], [-50, 45.0, -28]], amp: 2.2, speed: 4.0, color: 0x9f7fe0 },
-    // THE WARDEN on the last isle. Three hits, arena r 7.00 about (30, -34) on
+    // THE WARDEN on the last isle. Three hits, arena r 7.00 about (30, -36) on
     // an 18 m deck; the rotor spokes above it are the wall its charge breaks on.
-    { kind: 'warden', p: [30, ISLE3_Y, -34], arena: { c: [30, -34], r: 7.0 }, color: 0x6f8fbf },
+    /* The ring is centred at z -36, not on the boss at z -34: isle 3 is the slab
+     * x 21..39 / z -45..-27, so an r 7.00 ring about (30, -34) ended EXACTLY on
+     * the deck's north lip and every charge or stomp that pushed you north
+     * pushed you off a 52 m drop. Moved 2 m south the same ring keeps 2 m of
+     * marble on all four sides (x 23..37, z -43..-29) — the boss still stands in
+     * it, and it is still the ring the sign at (33.5, -44.5) is telling you to
+     * sidestep inside. */
+    { kind: 'warden', p: [30, ISLE3_Y, -34], arena: { c: [30, -36], r: 7.0 }, color: 0x6f8fbf },
   ],
 };

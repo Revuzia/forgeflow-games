@@ -2302,6 +2302,22 @@ const WD_STOMP_TELE = 0.6, WD_STOMP_RING_T = 0.55, WD_STOMP_RING_R = 3.5;
 const WD_CHARGE_TELE = 0.8, WD_CHARGE_SPEED = 12, WD_DIZZY = 2.5;
 const WD_ROAR = 1.2, WD_IDLE = 0.8, WD_HIT = 0.9, WD_DEATH = 2.6;
 const WD_BODY_R = 0.95;
+/**
+ * THE ARENA IS A FLOOR, AND A BOSS MAY NOT SHOVE YOU OFF IT.
+ * `WD_CHARGE_STOP` is how far inside `arenaR` the charge halts — it also bounds
+ * how far the charging body can bulldoze a stunned hero, because the hero rides
+ * ahead of the solid box at `pos + bodyHalf + heroRadius`. `WD_SHOVE_KEEP` is
+ * the width of the rim band inside which a stomp/charge hit is no longer allowed
+ * to push OUTWARD at all: the outward part of the shove fades to zero across
+ * `arenaR - WD_SHOVE_KEEP`, and a shove that was purely outward is turned inward.
+ * Measured 2026-09-08 (loopcheck verdant-1 crest-boss station, hands off): the
+ * ridge is flat at 16.40 only from z -48 to -60 and then falls 47-70 deg into a
+ * void 9 m past the fence, so a hero nudged 1.5 m past z -60 slope-slid off the
+ * world — "DIED at +5.92 s (void) at -1.42,-30.28,-88.45" against a boss he
+ * never even swung at. The knockback is unchanged in strength; only its
+ * DIRECTION is bounded, and only near the rim.
+ */
+const WD_CHARGE_STOP = 2.0, WD_SHOVE_KEEP = 2.5, WD_SLEEP_SLACK = 3.0;
 
 // pose vector indices
 const P_SHL = 0, P_SHR = 1, P_ELL = 2, P_ELR = 3, P_HIPL = 4, P_HIPR = 5, P_KNL = 6, P_KNR = 7,
@@ -2685,7 +2701,17 @@ class Warden extends Critter {
     const prevX = this.pos.x, prevZ = this.pos.z;
     let pdx = 0, pdz = 0, pd = 1e9, pp = null;
     if (player) { pp = player.pos || player.position; pdx = pp.x - this.pos.x; pdz = pp.z - this.pos.z; pd = Math.hypot(pdx, pdz); }
-    const inArena = alive && Math.hypot(pp.x - this.arenaC.x, pp.z - this.arenaC.z) < this.arenaR && Math.abs(pp.y - this.groundY) < 5;
+    /* WAKE ON `arenaR`, SLEEP ONLY BEYOND `arenaR + WD_SLEEP_SLACK`.
+     * One radius for both edges meant the boss forgot you for doing what its own
+     * sign says: "SIDESTEP THE CHARGE" carries a running hero 2-3 m, and on a
+     * 6 m ring that is outside — after 2.5 s of `idle` the fight reset to
+     * `dormant` mid-bout (seen live on verdant-1's ridge, 1 hit in 150 s while
+     * the same driver took three hits off ember-1, ember-4 and azure-3). Waking
+     * is still the authored ring; only the giving-up is hysteretic. */
+    const dArena = alive ? Math.hypot(pp.x - this.arenaC.x, pp.z - this.arenaC.z) : 1e9;
+    const dyArena = alive ? Math.abs(pp.y - this.groundY) : 1e9;
+    const inArena = alive && dArena < this.arenaR && dyArena < 5;
+    const holdArena = alive && dArena < this.arenaR + WD_SLEEP_SLACK && dyArena < 5;
     const faceHero = () => { if (player) this.yaw = dampAngle(this.yaw, Math.atan2(pdx, pdz), 3.2, dt); };
 
     switch (this.state) {
@@ -2698,7 +2724,7 @@ class Warden extends Critter {
         break;
       case 'idle':
         faceHero();
-        if (!inArena) { if (this.stateT > 2.5) this._enter('dormant'); }
+        if (!holdArena) { if (this.stateT > 2.5) this._enter('dormant'); }
         else if (this.stateT >= WD_IDLE) this._nextAttack();
         break;
       case 'stompTele':
@@ -2776,8 +2802,9 @@ class Warden extends Critter {
         // arena wall
         const ax = this.pos.x - this.arenaC.x, az = this.pos.z - this.arenaC.z;
         const ad = Math.hypot(ax, az);
-        if (ad >= this.arenaR - 1.0 || this.stateT > 3.0) {
-          if (ad > 1e-6) { const f = (this.arenaR - 1.0) / ad; if (ad > this.arenaR - 1.0) { this.pos.x = this.arenaC.x + ax * f; this.pos.z = this.arenaC.z + az * f; } }
+        const stopR = Math.max(1.0, this.arenaR - WD_CHARGE_STOP);
+        if (ad >= stopR || this.stateT > 3.0) {
+          if (ad > 1e-6) { const f = stopR / ad; if (ad > stopR) { this.pos.x = this.arenaC.x + ax * f; this.pos.z = this.arenaC.z + az * f; } }
           this.kill.active = false;
           this._enter('dizzy');
           _v1.set(this.pos.x + this.chargeDir.x * 0.9, this.pos.y + 1.4, this.pos.z + this.chargeDir.z * 0.9);
@@ -2833,6 +2860,33 @@ class Warden extends Critter {
     this.linVel.set((this.pos.x - prevX) * inv, 0, (this.pos.z - prevZ) * inv);
     this.hud.hp = this.hp;
     this._pose(dt);
+  }
+
+  /**
+   * THE SHOVE IS BOUNDED BY THE ARENA (see WD_SHOVE_KEEP above).
+   * Same knockback speed, same stun, same feel in the middle of the ring; near
+   * the rim the outward component fades out and a purely outward shove is turned
+   * inward, so a stomp or a charge can corner you but can never post you over
+   * the lip of the boss's own hill. Allocation-free.
+   */
+  _hurt(player, dx, dz, knockback, stun) {
+    const pp = player && (player.pos || player.position);
+    if (pp) {
+      let rx = pp.x - this.arenaC.x, rz = pp.z - this.arenaC.z;
+      const rd = Math.hypot(rx, rz);
+      if (rd > 1e-4) {
+        rx /= rd; rz /= rd;
+        const out = dx * rx + dz * rz;                 // outward part of the shove
+        if (out > 0) {
+          const keep = Math.max(1.0, this.arenaR - WD_SHOVE_KEEP);
+          const k = clamp((keep - rd) / keep, 0, 1);   // 1 at the hub, 0 at the band
+          dx -= rx * out * (1 - k);
+          dz -= rz * out * (1 - k);
+          if (dx * dx + dz * dz < 1e-4) { dx = -rx; dz = -rz; }   // dead radial: send him IN
+        }
+      }
+    }
+    super._hurt(player, dx, dz, knockback, stun);
   }
 
   /** Pounding the exposed back while dizzy lands a hit. */

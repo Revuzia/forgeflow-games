@@ -5284,6 +5284,17 @@ export class Course {
    * nor above the head) and every critter (they judge their own radius). The collider the
    * hero stands on is skipped — the controller already notified its owner.
    * Called by Game from the player's 'poundLand' event. Allocation-free.
+   *
+   * THE LOWER LIP USED TO BE 0.6 m AND THAT IS NOT WHERE A WALL IS.  A wall panel is
+   * pounded from BESIDE it, and "beside" on a diorama usually means standing on the ledge,
+   * rock or apron that the wall's mouth opens off — i.e. with the wall's TOP below your
+   * boots.  Measured on verdant-1's cave (2026-09-08, `_harness/_lc_diag2.py`): the only
+   * spot the boulder screen lets you stand is the middle boulder's rim at y 5.62, and the
+   * mossy wall's collider tops out at y 5.00 — 0.62 m under the feet, so `b.max.y < pos.y
+   * - 0.6` threw it out by TWO CENTIMETRES and the pound that visibly landed 0.68 m from
+   * the panel did nothing.  The shock is a shock: its reach below the feet is the same
+   * `shockRadius` as its reach sideways, not a tenth of it.  (The ceiling stays at
+   * `+shockRadius` above the feet, which is what it always was.)
    */
   onPoundLand(pos, player) {
     if (!pos || !fin(pos.x) || !fin(pos.z)) return 0;
@@ -5306,7 +5317,7 @@ export class Course {
         if (!c || !c.active || c === gc) continue;
         const b = c.aabb;
         if (!b) continue;
-        if (b.max.y < pos.y - 0.6 || b.min.y > pos.y + 2.2) continue;
+        if (b.max.y < pos.y - R || b.min.y > pos.y + R) continue;
         const dx = Math.max(b.min.x - pos.x, 0, pos.x - b.max.x);
         const dz = Math.max(b.min.z - pos.z, 0, pos.z - b.max.z);
         near = dx * dx + dz * dz <= R2;

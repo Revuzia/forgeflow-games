@@ -927,10 +927,25 @@ export default {
     { kind: 'breakable', p: [-28.0, 3.60, 30.8], s: [3.0, 2.8, 0.6], mat: 'moss', tint: 0x5c7a44, drop: 'coins' },
     { kind: 'deco', kindOf: 'brazier', p: [-28.0, 3.3, 25.0], s: [0.6, 1.4, 0.6], mat: 'metal', tint: EMBER },
     { kind: 'light', p: [-28.0, 4.2, 26.6], color: EMBER, intensity: 8, distance: 12 },
-    // The boulders that hide the mouth.
+    /* The boulders that hide the mouth — a SCREEN, not a seal.
+     * They used to seal it. Measured 2026-09-08 (`_harness/_lc_diag2.py`, live
+     * broadphase): rock 7202 spanned x -26.44..-22.76 / z 30.76..34.44 and rock
+     * 7203 x -29.84..-26.96 / z 31.96..34.84, so between them and rock 7201 the
+     * pile ran unbroken from x -33.3 to -22.8 across the whole 3 m doorway. The
+     * apron in front of the wall (terrain 2.21, z 31.1..31.96) was a 0.86 m slot
+     * with no way in: walking south you climb onto 7203's rim at y 5.62 and the
+     * cave ROOF's north face (z 31.40, y 5.60..6.30) stops you dead at z 31.78 —
+     * exactly where the playtest logged "every further walk stalls, zero
+     * movement", 0.6 m ABOVE the wall you are told to pound. Sigil 6 and the six
+     * cave coins were unobtainable.
+     * 7202 moves north-east and 7203 north, which opens (a) a ground-level lane
+     * along z ~= 31.7 from the meadow at x -22 west to the doorway, and (b) a
+     * 1.36 m drop-in slot between the roof lip and 7203 for the player who
+     * climbs the pile. The mouth is still screened from every approach angle —
+     * you still have to be curious about a too-regular boulder pile. */
     { kind: 'rock', p: on(-31.6, 32.2, -0.4), r: 2.1, seed: 7201, mat: 'stone' },
-    { kind: 'rock', p: on(-24.6, 32.6, -0.4), r: 2.3, seed: 7202, mat: 'stone' },
-    { kind: 'rock', p: on(-28.4, 33.4, -0.5), r: 1.8, seed: 7203, mat: 'stone' },
+    { kind: 'rock', p: on(-23.6, 34.8, -0.4), r: 2.3, seed: 7202, mat: 'stone' },
+    { kind: 'rock', p: on(-28.4, 34.2, -0.5), r: 1.8, seed: 7203, mat: 'stone' },
     { kind: 'rock', p: on(-33.4, 29.0, -0.6), r: 2.0, seed: 7204, mat: 'stone' },
     { kind: 'rock', p: on(-22.8, 28.4, -0.6), r: 1.7, seed: 7205, mat: 'stone' },
     ...scatter(-28, 30, 3.0, 7.0, 7, 7210, (x, z, rnd) => (
@@ -1150,6 +1165,15 @@ export default {
     // THE WARDEN. Three hits, in a fenced ring on the flattest 6 m of the
     // ridge crest (EXACTLY 16.40). Its charge needs a wall to hit — the fence
     // ring is that wall.
-    { kind: 'warden', p: [-2, 16.40, -54], arena: { c: [-2, -54], r: 7.0 }, hp: 3, tint: 0x6d7a86 },
+    /* r 6.00, not 7.00: the line above already says "the flattest 6 m", and the
+     * crest really is flat at 16.40 only over z -48..-60 / x -8..+4 — measured
+     * 2026-09-08 with `_harness/_lc_arena.py` (ray down every 15 deg): floor
+     * within +-1.2 m of the boss's own level runs out at exactly 7.0 m to the
+     * south, where the ridge falls 47-70 deg into a void 9 m past the fence. An
+     * r 7.00 ring therefore had its rim ON the lip, and loopcheck's hands-off
+     * crest-boss station was posted over it — "DIED at +5.92 s (void) at
+     * -1.42,-30.28,-88.45". At 6.00 the whole ring, the charge (which halts at
+     * r - WD_CHARGE_STOP) and anyone it bulldozes stay on flat grass. */
+    { kind: 'warden', p: [-2, 16.40, -54], arena: { c: [-2, -54], r: 6.0 }, hp: 3, tint: 0x6d7a86 },
   ],
 };
