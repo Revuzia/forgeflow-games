@@ -515,7 +515,20 @@ export const THEMES = {
      * Measured before this change: keep cp1 deck [168,154,125] against a wall
      * band of [100,81,72] = 2.69:1 against a 3.5:1 law. */
     materialOverrides: {
-      stone: { tint: 0x9c8768 },
+      /* 0x9c8768 -> 0xaa9474 (readability lane, 2026-09-08). The pull-down that
+       * produced 0x9c8768 was argued from a MEASUREMENT THAT WAS WRONG: see the
+       * marble note below, "contrastcheck keep cp1 measures the band behind the
+       * hero at [113,97,96] - that band is THIS FLOOR seen 25 m away". It was
+       * not the band; the old gate sampled a fixed screen rectangle at 55 % of
+       * frame height, which at that station is the hall floor in front of the
+       * hero. The repaired sampler (contrastcheck.py, this pass) reads the
+       * background BEHIND the deck and above the horizon, so the Keep's own
+       * floor can no longer stand in for its own background and the stone is
+       * free to be the BRIGHT half of the pair the theme header promises.
+       * +23 % luminance (0.250 -> 0.309), which is what keep cp2/cp3 are short
+       * of (2.92 and 2.97 against 3.5). The walls the decks read against are
+       * `brick`, which is NOT lifted, so the pair widens instead of sliding. */
+      stone: { tint: 0xaa9474 },
       plaster: { tint: 0xa8957a },
       brick: { tint: 0x9c6f56 },
       /* ROUND 2 VISUAL — "the interior reads neutral white/grey, NOT warm stone
@@ -537,7 +550,12 @@ export const THEMES = {
        * material. Pulled down to a warm stone value — which is what the
        * contract asked for in the first place — so the lit pad, the amber
        * trim and the window light all have somewhere to read against. */
-      marble: { tint: 0xd2bf96, clearcoatRoughness: 0.06 },
+      /* 0xd2bf96 -> 0xdcc9a0 (+12 % luminance) for the same reason as `stone`
+       * above: the argument for the pull-down was the old ruler reading the
+       * floor as its own background. Only 12 %, because the round-2 note's
+       * OTHER complaint - a near-white floor reading as vinyl - was a real
+       * observation of a real frame and 0xf6f1e6 is not being restored. */
+      marble: { tint: 0xdcc9a0, clearcoatRoughness: 0.06 },
       wood: { tint: 0xc09056 },
       panel: { tint: 0x8a7d64 },
       metal: { tint: 0xb8b0a0, metalness: 0.55, env: 0.55 },
