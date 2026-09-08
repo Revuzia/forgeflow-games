@@ -1495,7 +1495,17 @@ const CHECKPOINTS = [
      and put the follow camera INSIDE the stair 0.45 m behind the hero. Now
      4.3 m off the stair's centre, 0.5 m south of the hay, facing WEST at the
      iron door and the grate — the lens sits over the open cellar floor. */
-  { id: 'cp-undercroft', name: 'THE UNDERCROFT', p: [-14.0, UNDER + 0.05, 3.2], yaw: WEST },
+  /* z 3.2 -> -3.4 (regress pass 2026-09-08, loopcheck's only failing check).
+     The pad stood at [-14.0, -7.95, 3.2] — inside the footprint of the hay
+     mound's NORTH shoulder, `box([-15.2,-11.8], [-7.8,-7.2], [2.7,3.5])`, whose
+     top face is y -7.20. A respawning hero therefore settled ON the hay, 0.75 m
+     above his own pad, against loopcheck's PAD_R of 0.6 m. Measured with
+     `_harness/_rg_cp2probe.py` (teleport to pad + 0.6 m, 1.6 s of game time):
+     authored -> settles (-14, -7.20, 3.2), d 0.750 m, FAIL; this spot ->
+     (-14, -8.00, -3.4), d 0.050 m, grounded, OK. It is 1.1 m clear of the
+     mound's south shoulder (which ends at z -2.3) and on the walking line from
+     the hay to the four EMBER paintings on the north wall. */
+  { id: 'cp-undercroft', name: 'THE UNDERCROFT', p: [-14.0, UNDER + 0.05, -3.4], yaw: WEST },
   { id: 'cp-courtyard', name: 'THE COURTYARD', p: [0.0, 0.05, 16.4], yaw: SOUTH },
   { id: 'cp-tower', name: 'THE TOWER ROOF', p: [-19.7, ROOF + 0.05, 33.0], yaw: EAST },
 ];

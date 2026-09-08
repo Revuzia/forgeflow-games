@@ -233,6 +233,7 @@ PROBE = r"""() => {
     courseId: G.courseId,
     pos: [+G.player.pos.x.toFixed(2), +G.player.pos.y.toFixed(2), +G.player.pos.z.toFixed(2)],
     near: G._gateNear,
+    nearCourse: (G._gates && G._gates[G._gateNear]) ? G._gates[G._gateNear].course : null,
     prompt: shown && el ? (el.textContent || '').trim() : '',
     promptShown: shown,
     toast: toasts,
@@ -242,9 +243,25 @@ PROBE = r"""() => {
 
 
 def walk_in(pg, course, offset, ms=WALK_MS, stop_on_card=True):
-    """Hold W with real KeyboardEvents until the game reacts or the budget runs out."""
+    """Hold W with real KeyboardEvents until the game reacts or the budget runs out.
+
+    WHAT THE GAME SAID IS EVERY FRAME OF IT, AND IT IS ATTRIBUTED.
+    This kept only the LAST non-empty prompt/toast, so a refusal that fired at
+    0.27 s was overwritten by whatever was on screen 3 s later — and a hero
+    held against a wall for the full WALK_MS budget slides along it into the
+    NEXT painting's prompt radius. Measured 2026-09-08 (`_harness/_rg_v2seal.py`,
+    the same station gatecheck failed on): verdant-2 sealed, offset -1.0 m, the
+    game printed `GNASHER FORT IS SEALED / 1 MORE CREST · 0 / 1` from 0.27 s and
+    held `_gateNear = verdant-2` for the whole 5.5 s walk, card never opened —
+    yet the harness reported it had only ever seen WINDMILL HEIGHTS text and
+    failed the check. So: accumulate every distinct line, and count only the
+    ones the game said while THIS gate was the near gate (`seenOwn`), which is
+    strictly stronger than last-wins — a neighbour's numbers can no longer
+    answer for this gate either.
+    """
     pg.keyboard.down("w")
     seen = {"prompt": "", "toast": ""}
+    own, allseen = [], []
     t0 = time.time()
     out = None
     while (time.time() - t0) * 1000 < ms:
@@ -255,6 +272,12 @@ def walk_in(pg, course, offset, ms=WALK_MS, stop_on_card=True):
             seen["prompt"] = out["prompt"]
         if out["toast"]:
             seen["toast"] = out["toast"]
+        line = ((out["prompt"] or "") + " " + (out["toast"] or "")).strip()
+        if line:
+            if line not in allseen:
+                allseen.append(line)
+            if out.get("nearCourse") == course and line not in own:
+                own.append(line)
         if stop_on_card and (out["state"] == "card" or out["cardOpen"]):
             break
     pg.keyboard.up("w")
@@ -262,6 +285,8 @@ def walk_in(pg, course, offset, ms=WALK_MS, stop_on_card=True):
     out = pg.evaluate(PROBE)
     out["seenPrompt"] = seen["prompt"]
     out["seenToast"] = seen["toast"]
+    out["seenOwn"] = "  ".join(own)
+    out["seenAll"] = "  ".join(allseen)
     return out
 
 
@@ -332,10 +357,12 @@ def check_gate(pg, g, full_enter):
             ok("%s: sealed walk-in (offset %+.1f m) refuses" % (course, a),
                r["state"] == "keep" and not r["cardOpen"],
                "state=%s cardOpen=%s" % (r["state"], r["cardOpen"]))
-            said = (r["seenPrompt"] or "") + " " + (r["seenToast"] or "")
+            said = r.get("seenOwn") or ""      # only what THIS gate said, over the whole walk
             ok("%s: sealed walk-in (offset %+.1f m) says what it needs" % (course, a),
                has_number(said, req) and ("CREST" in said.upper()),
-               "nothing readable named %d crests -- saw %r" % (req, said.strip()[:120]))
+               "nothing readable named %d crests while this gate was near -- it said %r "
+               "(everything on screen during the walk: %r)"
+               % (req, said.strip()[:160], (r.get("seenAll") or "").strip()[:200]))
 
     # ---------------- OPEN side: the requirement met -----------------------
     # The crests are written with the player STANDING IN THE KEEP and no hub

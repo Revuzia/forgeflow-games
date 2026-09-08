@@ -2315,7 +2315,25 @@ class Warden extends Critter {
     readV3(d.p, this.home = new THREE.Vector3());
     this.homeYaw = fin(d.yaw, 0);
     const ar = d.arena || {};
-    this.arenaC = ar.c ? readV3(ar.c, new THREE.Vector3()) : this.home.clone();
+    /* THE ARENA CENTRE IS AUTHORED AS [x, z], NOT [x, y, z].
+     * CONTRACT §25 spells the warden as `{kind:'warden', p, arena:{c, r}}`, and
+     * every one of the eleven authored wardens writes the ground-plane pair the
+     * way `coins:[{ring:{c, r, n, y}}]` does — `arena: { c: [-2, -54], r: 7.0 }`.
+     * `readV3` put that -54 in Y, line "arenaC.y = groundY" below then threw it
+     * away, and the ring ended up at z = 0 on EVERY course. Measured 2026-09-08
+     * (`_harness/_rg_cp2probe.py`, verdant-1): warden home (-2, 16.40, -54),
+     * arenaC (-2, 16.40, 0.00) — the wake ring 54 m from the boss, so a player
+     * standing on its toes is never `inArena`, it never leaves `dormant`, and
+     * the `boss` crest cannot be earned. That is the replay pass's cross-course
+     * "the warden is still a statue" (verdant-1, ember-1, ember-4, azure-1,
+     * azure-3 all reported it; by this mechanism 9 of 11 wardens were affected —
+     * azure-2 `c:[0,0]` and verdant-2 `c:[0,2.0]` only survived because their
+     * authored z is at or near 0). A 2-value `c` is [x, z]; a 3-value `c` keeps
+     * meaning [x, y, z] so an authored height is still honoured. */
+    this.arenaC = new THREE.Vector3();
+    if (Array.isArray(ar.c) && ar.c.length === 2) this.arenaC.set(fin(ar.c[0], this.home.x), 0, fin(ar.c[1], this.home.z));
+    else if (ar.c) readV3(ar.c, this.arenaC);
+    else this.arenaC.copy(this.home);
     this.arenaR = Math.max(4, fin(ar.r, 9));
     this.lethal = !!d.lethal;
     this.groundY = this._groundY(this.home.x, this.home.y + 0.5, this.home.z, this.home.y);

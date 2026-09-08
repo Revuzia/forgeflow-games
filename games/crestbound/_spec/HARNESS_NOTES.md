@@ -447,3 +447,132 @@ read 0.9999 / uniform 0.9934 while submerged (frame `05_keep_crouch_held_grade_
 wired.png`: blue tint, caustic light on the marble) and the verdant-2 moat frame
 in the same page read 0.998. Nothing in game.js calls it yet (grep `cam.setPost`
 = 0 hits) — camera/integration lane.
+
+## The warden's arena ring was 54 m from the warden (2026-09-08, regress pass)
+
+Every one of the eleven authored wardens writes its arena centre as the
+GROUND-PLANE PAIR the rest of the data format uses (`coins:[{ring:{c,r,n,y}}]`):
+
+    { kind: 'warden', p: [-2, 16.40, -54], arena: { c: [-2, -54], r: 7.0 }, ... }
+
+`critters.js` read it with `readV3`, so `-54` landed in **Y**, and the very next
+line (`this.arenaC.y = this.groundY`) threw it away. Measured live with
+`_harness/_rg_cp2probe.py` on verdant-1 before the fix:
+
+| | x | y | z |
+|---|---|---|---|
+| warden `home` | -2.00 | 16.40 | **-54.00** |
+| `arenaC` (the wake ring) | -2.00 | 16.40 | **0.00** |
+
+`Warden.update` wakes on `hypot(px-arenaC.x, pz-arenaC.z) < arenaR`, so a player
+standing on the boss's toes was 54 m outside its own ring: state stayed
+`dormant`, hp 3, and the `boss` crest could not be earned on ANY course. That is
+the replay pass's cross-course "the warden is still a statue" (logged separately
+against verdant-1, ember-1, ember-4, azure-1 and azure-3); 9 of the 11 wardens
+were affected — azure-2 `c:[0,0]` and verdant-2 `c:[0,2.0]` only escaped because
+their authored z is at or near 0.
+
+After (a 2-value `c` is `[x, z]`; a 3-value `c` still means `[x, y, z]`): same
+probe, `arenaC` (-2.00, 16.40, **-54.00**), and 5 s of standing in the ring runs
+`dormant -> roar -> ... -> dizzy` — the charge-into-the-wall window the design
+asks you to pound. **A wake radius that is never entered looks exactly like a
+critter with no AI; print the terms of the predicate, not the outcome.**
+
+## A respawn pad can be buried by a later lane's set dressing (2026-09-08)
+
+loopcheck's only failing check was `keep cp2 (cp-undercroft) respawn: grounded
+0.75 m from the pad` (`PAD_R` 0.6 m, a **3-D** distance). The pad was
+`[-14.0, UNDER + 0.05, 3.2]` = y -7.95; the geometry lane's hay-mound north
+shoulder, `box([-15.2,-11.8], [-7.8,-7.2], [2.7,3.5])`, covers that x/z with its
+top face at y **-7.20**. -7.20 − (-7.95) = **0.75 m** — the failure was the pad's
+own Y, not a horizontal slide. `_harness/_rg_cp2probe.py` prints the broadphase
+colliders over a candidate column and then settles the hero on each:
+
+| candidate | settles at | d | verdict |
+|---|---|---|---|
+| authored `[-14.0, -7.95, 3.2]` | (-14, **-7.20**, 3.2) | 0.750 | FAIL |
+| south of the hay `[-14.0, -7.95, -3.4]` | (-14, -8.00, -3.4) | 0.050 | OK |
+| east of the hay `[-10.6, -7.95, 2.0]` | (-10.6, -8.00, 2.0) | 0.050 | OK |
+| west of the hay `[-16.4, -7.95, 3.2]` | (-16.4, -8.00, 3.2) | 0.050 | OK |
+
+Moved to the south spot (on the walk from the hay to the four EMBER paintings,
+1.1 m clear of the mound's south shoulder). `loopcheck --courses keep` after:
+**52/52, 0 failed**, respawn median 435 ms.
+
+## gatecheck's "what the gate said" kept only the LAST frame (2026-09-08)
+
+`walk_in()` stored `seen = {prompt, toast}` and overwrote both on every 120 ms
+sample. A SEALED walk-in holds W for the full `WALK_MS` budget, and a hero held
+against a wall slides along it — so the line the harness finally reported could
+belong to the NEXT painting. Measured: gatecheck failed `verdant-2: sealed
+walk-in (offset -1.0 m) says what it needs` having seen only WINDMILL HEIGHTS
+text, while `_harness/_rg_v2seal.py` re-drove that exact station and read
+`GNASHER FORT IS SEALED / 1 MORE CREST · 0 / 1` from **0.27 s**, `_gateNear`
+pinned to verdant-2 for the whole 5.5 s walk, and the card never opened.
+`walk_in` now accumulates every distinct line and the check reads `seenOwn` —
+only what the game said while THIS gate was the near gate, which is strictly
+stronger than last-wins (a neighbour's numbers can no longer answer for it).
+Full gatecheck after: **342 passed, 0 failed** (867 s, headed).
+
+## Two things a headed play of the Keep showed that no gate looks at (2026-09-08)
+
+Driven with real KeyboardEvents, `_harness/_rg_keepplay.py` /
+`_rg_keepplay2.py`, frames in `_shots/play_rg_keep*/`:
+
+- **The courtyard signs stand between the lens and the world.** From the lawn at
+  (0, 0, 22.51) facing the Keep, the follow camera sits at dist 6.8 → z ≈ 29.3,
+  and `keep.js` hangs `sign([0, 2.5, FZ-4.6], SOUTH, 'THE PARTERRE')` and
+  `sign([0, 2.0, FZ-4.6], SOUTH, 'deep enough to swim — crouch to dive')` at
+  z 27.4 facing +Z — 1.9 m in front of the lens, facing it. Frame
+  `play_rg_keep/05_facing_the_keep.png`: the lower-left half of the frame is
+  sign lettering. `sign()` emits `{kind:'text'}`, which carries no collider, so
+  the camera's raycast pull-in never sees it. The ui-text lane's law is "signs
+  never hide Nim"; this is a sign hiding the WORLD.
+- **The painting exit spot is a 2.5 m aisle and the camera takes the shaft
+  tier.** Returning from BAILEY MEADOW puts the hero at (-18.10, 0, -6.00),
+  between the west wall (x -20) and the grand stair's west flank (x -15..-11).
+  Frame `play_rg_keep2/08_back_in_the_keep.png` is a near-top-down of Nim's
+  scalp. One step out of the aisle the pose recovers
+  (`09_keep_after_return.png`), so it is a transient, but no camcheck station
+  stands there — the Keep's interior stations are @nook, @hall and @undercroft.
+
+Also worth knowing for route probes: **a straight line from the east half of the
+lobby to the verdant paintings does not exist.** Holding W west along z = -6 from
+(13, 0, -2.6) bonks at x = -10.62 on the grand stair's west flank
+(`play_rg_keep/16_painting_standoff.png`). The west aisle (x -20..-15) is the
+route, and `spawnwalk.py` takes it.
+
+## dwm alone can hold a third of the 3D engine (2026-09-08, regress pass)
+
+The regress sweep's `perfcheck` (headed, auto tier 0.60, all 14 courses, run
+straight after 45 minutes of continuous headed browser gates) read **OVER BUDGET,
+14 of 14** — keep 42.6 fps, verdant-1 47.0, every course also OVER on warm load
+(2.0–2.9 s against 1.5 s). Against the 66.5 / 73.1 fps in the table above that
+looks like a catastrophic regression. It is not this tree.
+
+`Get-Counter '\GPU Engine(*engtype_3D)\Utilization Percentage'` **with zero
+chrome.exe processes alive**:
+
+    pid 2152  dwm       16.51 %  +  14.94 %   (two adapters)
+    pid 2080  WUDFHost   6.33 %
+    pid 21300 claude     1.28 %
+
+~38 % of the 3D engine is spoken for before the harness opens a window, and the
+owner's own Chrome was not running at all. Re-run on a settled box: keep **48.8**
+fps / p99 25.39 / warm 1322 ms, verdant-1 **54.4** / 25.58 / 1431 ms — the warm-load
+failures were entirely contention, the fps shortfall is the box.
+
+Attributed with the PAIRED run the rule above asks for (`git archive dd0d1b0d
+games/crestbound | tar -x -C games/_bisect/rgbase`, then
+`perfcheck --url .../games/_bisect/rgbase/games/crestbound/index.html`), same
+session, minutes apart:
+
+| course | dd0d1b0d (before this pass) | HEAD (after) | delta |
+|---|---|---|---|
+| keep | 47.3 fps, p99 29.05, 194 draws, 413,762 tris | **48.8**, 25.39, 194, 413,762 | +1.5 fps |
+| verdant-1 | 55.0 fps, p99 24.12, 209 draws, 354,870 tris | **54.4**, 25.58, 209, 354,872 | −0.6 fps |
+
+Draw calls and triangles are identical to the digit, so the pass cost nothing;
+the gap to the recorded 66.5 / 73.1 belongs to the machine. **Sample the counter
+and pair against a known-good commit BEFORE believing a perf regression — and
+note that "no chrome.exe" is not the same as "a quiet box".**
