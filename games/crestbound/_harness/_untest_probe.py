@@ -47,6 +47,7 @@ def batteries(d):
         b.add("camsweep")
     if re.search(r"long ?jump|\bgap\b|triple|double jump|reach|too far|short of|missed|not one landed", t) or cls == "long-jump gaps":
         b.add("jumps")
+        b.add("cross")      # when the report names BOTH ends, drive the crossing
     if re.search(r"wall ?kick|kick shaft|chimney|flue|tops? out", t):
         b.add("kickladder")
     if re.search(r"stair|tread|riser|flight|step up|climb", t) or cls == "stairs":
@@ -57,7 +58,7 @@ def batteries(d):
         b.add("pound")
     if re.search(r"\bcoin|sigil|crest|pedestal|collect|magnet", t) or cls == "collectibles":
         b.add("collect")
-    if re.search(r"\bpad\b|jumppad|speedpad|conveyor|belt|rotor|mill|gondola|mover|seesaw|cart|trolley|carr(y|ies|ied)", t) or cls == "pads/belts/currents":
+    if re.search(r"\bpad\b|jumppad|speedpad|conveyor|belt|rotor|mill|gondola|mover|seesaw|cart|trolley|carr(y|ies|ied)|current|drift|drag(s|ged)?", t) or cls == "pads/belts/currents":
         b.add("ride")
     if re.search(r"\bsign|board|text|hud|prompt|toast|letter|legib|readab|wrap", t) or cls == "signs/HUD":
         b.add("signs")
@@ -67,6 +68,9 @@ def batteries(d):
         b.add("hero")
     if re.search(r"warden|gnasher|bumbler|skitter|critter|boss", t):
         b.add("critter")
+        if re.search(r"no reaction|ran through|runs? through|as if it were not there|never (moved|attack|did)|"
+                     r"knockback|squish|statue|dormant|never wakes", t):
+            b.add("bump")
     if re.search(r"died|death|kill|crush|lethal|instant", t) or cls == "idle-crush":
         b.add("standlong")
     return b
@@ -136,7 +140,7 @@ def run_batteries(p, xyz, want, tag, stations=None):
         const consider=(kind,q)=>{ if(!q) return; const d=Math.hypot(q.x-a[0],q.y-a[1],q.z-a[2]);
           if(best===null||d<best.d) best={kind:kind,d:+d.toFixed(2)}; };
         for(const n of (G._npcs||[])) consider('npc', n.pos||n.p||(n.mesh&&n.mesh.position));
-        for(const k of ((C&&C.critters)||[])) if((k.kind||'')==='fen') consider('fen', k.mesh&&k.mesh.position);
+        for(const k of ((C&&C.critters)||[])) if((k.kind||'')==='fen' && k.mesh) consider('fen', k.mesh.getWorldPosition(new CRESTBOUND.THREE.Vector3()));
         for(const g of (G._gates||[])) consider('gate', g.pos);
         for(const rec of ((C&&C.hazards)||[])) if(rec.kind==='cannon') consider('cannon', rec.h&&rec.h.mesh&&rec.h.mesh.position);
         out.nearest=best; return out; }""", at)
@@ -395,6 +399,59 @@ def run_batteries(p, xyz, want, tag, stations=None):
         r["hero"] = {"bones": len(moved), "moved": moved,
                      "scarf": {k: v for k, v in moved.items() if "scarf" in k.lower()},
                      "still": [k for k, v in moved.items() if v < 0.001]}
+    if "bump" in want:
+        # WALK INTO IT. "the hero runs through the space it occupies as if it were
+        # not there" is a claim about contact, and only contact answers it.
+        tgt = p.js("""(a)=>{ const C=CRESTBOUND.game.course; if(!C) return null;
+            let best=null;
+            const TH=CRESTBOUND.THREE;
+            for(const k of (C.critters||[])){ if(!k.mesh) continue;
+              const q=k.mesh.getWorldPosition(new TH.Vector3());
+              const d=Math.hypot(q.x-a[0],q.y-a[1],q.z-a[2]);
+              if(best===null||d<best.d) best={kind:k.kind||(k.def&&k.def.kind),
+                d:+d.toFixed(2), p:[+q.x.toFixed(2),+q.y.toFixed(2),+q.z.toFixed(2)],
+                state:k.state||null, hp:k.hp===undefined?null:k.hp,
+                kills:(k.kills||[]).length,
+                killsActive:(k.kills||[]).filter(v=>v.active!==false).length}; }
+            return best; }""", at)
+        rb = {"target": tgt}
+        if tgt and tgt["d"] <= 30:
+            q = tgt["p"]
+            # start 4 m short of it on the line from the station
+            dx, dz = q[0] - at[0], q[2] - at[2]
+            L = max(0.001, math.hypot(dx, dz))
+            sx, sz = q[0] - 4.0 * dx / L, q[2] - 4.0 * dz / L
+            p.js("(a)=>{const G=CRESTBOUND.game; G.__dev.tp(a[0],a[1],a[2]); G.player.__test.setVel({x:0,y:0,z:0});}",
+                 [sx, q[1] + 0.2, sz])
+            p.wait(500)
+            p.face(q[0], q[2])
+            a0 = p.snap()
+            p.down("W")
+            sts, vmax = [], 0.0
+            for _ in range(14):
+                p.wait(200)
+                s = p.snap(); sts.append(s["st"]); vmax = max(vmax, s["sp"] or 0)
+                if s["deaths"] > a0["deaths"]:
+                    break
+            p.up("W"); p.wait(400)
+            b0 = p.snap()
+            after = p.js("""(a)=>{ const C=CRESTBOUND.game.course, TH=CRESTBOUND.THREE; let best=null;
+                for(const k of (C.critters||[])){ if(!k.mesh) continue;
+                  const q=k.mesh.getWorldPosition(new TH.Vector3());
+                  const d=Math.hypot(q.x-a[0],q.y-a[1],q.z-a[2]);
+                  if(best===null||d<best.d) best={kind:k.kind, d:+d.toFixed(2), state:k.state||null,
+                    hp:k.hp===undefined?null:k.hp, alive:k.alive===undefined?null:!!k.alive}; }
+                return best; }""", q)
+            rb.update({"from": [round(sx, 2), q[1] + 0.2, round(sz, 2)],
+                       "states": sorted(set(sts)), "died": b0["deaths"] > a0["deaths"],
+                       "coins": [a0["coins"], b0["coins"]],
+                       "endDist": round(math.hypot(b0["x"] - q[0], b0["z"] - q[2]), 2),
+                       "passedThrough": round(math.hypot(b0["x"] - sx, b0["z"] - sz), 2) > 5.0,
+                       "critterAfter": after,
+                       "reacted": bool(set(sts) & {"bonk", "skid", "pivot", "hardLand", "dead"})
+                                  or b0["deaths"] > a0["deaths"]
+                                  or (b0["coins"] or 0) > (a0["coins"] or 0)})
+        r["bump"] = rb
     if "critter" in want:
         p.js("(a)=>{const G=CRESTBOUND.game; G.__dev.tp(a[0],a[1],a[2]); G.player.__test.setVel({x:0,y:0,z:0});}", at)
         p.wait(400)
@@ -431,7 +488,38 @@ def run_course(course, items):
             d = IDX[key]
             t0 = time.time()
             rec = {"key": key, "cls": d.get("cls"), "batteries": sorted(batteries(d))}
+            # A station can land ON a crest: verdant-2#26's teleport put the hero
+            # on CREST ON THE FLAGPOLE, the clear card came up, and every battery
+            # after it measured a celebrating game. Put the game back in play
+            # before each defect, and say so if it had to.
+            gs = p.js("()=>CRESTBOUND.game.state")
+            if gs not in ("playing", "keep"):
+                rec["hadToResume"] = gs
+                for _ in range(8):
+                    p.js("()=>{const g=CRESTBOUND.game; try{ if(g.__dev.clearChoice) g.__dev.clearChoice('stay'); }catch(e){} "
+                         "try{ if(g.menu && g.menu.isOpen) g.menu.close(); }catch(e){} }")
+                    p.wait(400)
+                    gs = p.js("()=>CRESTBOUND.game.state")
+                    if gs in ("playing", "keep"):
+                        break
+                rec["resumedTo"] = gs
             try:
+                # C. SAVE-STATE: a defect that needs a power hat gets one before
+                #    the battery runs (the coral wall only breaks with METAL on,
+                #    and the glide only exists with WING on).
+                txt = " ".join([d.get("where") or "", d.get("did") or "", d.get("happened") or ""]).lower()
+                pw = ("metal" if re.search(r"metal (hat|power)", txt) else
+                      "wing" if re.search(r"wing (hat|power)|glide", txt) else
+                      "vanish" if re.search(r"vanish (hat|power)", txt) else None)
+                # ...unless the claim is ABOUT not having it. rime-3#01 says the
+                # rings are drawn "with the wing power NOT taken"; granting the hat
+                # to test that destroys the precondition.
+                if pw and re.search(r"not taken|without the|before (you|the player)|has the .{0,12}hat|"
+                                    r"before .{0,24}(hat|power)|no power", txt):
+                    rec["powerWithheld"] = pw
+                    pw = None
+                if pw:
+                    rec["power"] = p.set_save(power=pw, powerS=900)
                 st = resolve_stations(d, p, 3)
                 rec["stations"] = st
                 if not st:

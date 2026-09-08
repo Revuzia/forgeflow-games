@@ -87,6 +87,10 @@ TOOLBOX = r"""
       const k = list[i];
       if (!k || k.active === false || k.solid === false) continue;
       if (!k.aabb || !k.aabb.intersectsBox(box)) continue;
+      // The FLOOR intersects the body box at every station, which made the first
+      // cut report `insideFrac 1` everywhere and say nothing. Count only a box
+      // that intrudes into the body column above the feet.
+      if (!(k.aabb.max.y > y + 0.25 && k.aabb.min.y < y + 1.45)) continue;
       overl.push({ surface: k.surface || 'normal', group: k.group,
                    c: [n2(k.center.x), n2(k.center.y), n2(k.center.z)],
                    h: [n2(k.half.x), n2(k.half.y), n2(k.half.z)],
@@ -98,7 +102,21 @@ TOOLBOX = r"""
     const vv = c.volumes || [];
     for (let i = 0; i < vv.length; i++) {
       const v = vv[i];
-      try { if (v.overlapsCapsule ? v.overlapsCapsule(cap) : v.contains(cap.a)) vols.push({ kind: v.kind, props: v.props ? JSON.parse(JSON.stringify(v.props)) : null }); } catch (e) {}
+      try {
+        if (!(v.overlapsCapsule ? v.overlapsCapsule(cap) : v.contains(cap.a))) continue;
+        // Shallow-copy PRIMITIVES only. JSON.stringify on a Volume's props walks
+        // into three.js objects and makes r172 log "Unable to serialize Texture"
+        // once per property — 60 console warnings per course, all from the probe.
+        const pr = {};
+        if (v.props) for (const k of Object.keys(v.props)) {
+          const val = v.props[k];
+          const t = typeof val;
+          if (t === 'number' || t === 'string' || t === 'boolean') pr[k] = val;
+          else if (Array.isArray(val) && val.every(q => typeof q === 'number')) pr[k] = val.slice();
+          else if (val && typeof val.x === 'number' && typeof val.z === 'number') pr[k] = [n2(val.x), n2(val.y), n2(val.z)];
+        }
+        vols.push({ kind: v.kind, props: pr });
+      } catch (e) {}
     }
     out.volumes = vols;
     // ground UNDER THE FEET: a ray started well above the station finds the deck
@@ -108,9 +126,13 @@ TOOLBOX = r"""
     // headroom: the first solid surface above the head
     try {
       const TH2 = T(), c2 = g.course;
-      const o2 = new TH2.Vector3(x, y + 1.55, z), d2 = new TH2.Vector3(0, 1, 0);
+      // Cast from just above the FEET, not from head height: a ceiling that is
+      // 1.0 m over the floor (azure-2#08's bracket under gallery 2) sits BELOW
+      // a 1.5 m head, and a ray started at 1.55 m begins above it and reports
+      // 9 m of headroom.
+      const o2 = new TH2.Vector3(x, y + 0.12, z), d2 = new TH2.Vector3(0, 1, 0);
       const r2 = { t: 0, normal: new TH2.Vector3(), collider: null };
-      out.ceiling = c2.broadphase.raycast(o2, d2, 40, r2) ? +(1.55 + r2.t).toFixed(2) : null;
+      out.ceiling = c2.broadphase.raycast(o2, d2, 40, r2) ? +(0.12 + r2.t).toFixed(2) : null;
     } catch (e) { out.ceiling = null; }
     return out;
   }
@@ -254,6 +276,11 @@ TOOLBOX = r"""
       const m = Array.isArray(o.material) ? o.material[0] : o.material;
       out.push({ name: o.name || (o.parent && o.parent.name) || o.type,
                  area: +Math.min(1, area).toFixed(3), dist: n2(d), coversHead: coversHead,
+                 // World height band. A race pad on the floor projects across the
+                 // whole screen when the lens is low, and "it fills the frame" then
+                 // means nothing: a thing that HIDES something stands up in front
+                 // of you, so the rule needs to know how tall it is and where.
+                 y0: n2(box.min.y), y1: n2(box.max.y),
                  mat: m ? (m.name || m.type) : null,
                  color: m && m.color ? '#' + m.color.getHexString() : null });
     });
@@ -341,6 +368,18 @@ TOOLBOX = r"""
       v.setFromMatrixPosition(o.matrixWorld).applyMatrix4(inv);
       out.push([o.name, n3(v.x), n3(v.y), n3(v.z)]);
     });
+    // THE SCARF IS NOT A NODE. hero.js merges its geometry into `nim.body` and
+    // rewrites the vertices each frame from a Float32Array of verlet particles
+    // (`_scarfP`, 7 links = 8 particles) hung off `nim.staticBone`. Sampling
+    // Object3D positions therefore reports the scarf as perfectly still, whatever
+    // it is doing — so read the particle array itself.
+    const sp = h._scarfP;
+    if (sp && sp.length >= 6) {
+      for (let i = 0; i * 3 + 2 < sp.length; i++) {
+        v.set(sp[i * 3], sp[i * 3 + 1], sp[i * 3 + 2]).applyMatrix4(inv);
+        out.push(['scarf.p' + i, n3(v.x), n3(v.y), n3(v.z)]);
+      }
+    }
     return out;
   }
 
@@ -403,10 +442,14 @@ TOOLBOX = r"""
                         shown: pr.classList.contains('show') } : null;
     res.bodyText = (document.body.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 500);
     // critters
+    // A critter's mesh hangs off the course group, so `mesh.position` is LOCAL and
+    // reads (0, 0, 0) for most of them. World position or nothing.
+    const wp = (o) => { if (!o) return null; const v = o.getWorldPosition(new TH.Vector3());
+                        return [n2(v.x), n2(v.y), n2(v.z)]; };
     res.critters = (c.critters || []).map(k => ({
       kind: k.kind || (k.def && k.def.kind), state: k.state || null,
       hp: k.hp === undefined ? null : k.hp, alive: k.alive === undefined ? null : !!k.alive,
-      p: k.mesh && k.mesh.position ? [n2(k.mesh.position.x), n2(k.mesh.position.y), n2(k.mesh.position.z)] : null,
+      p: wp(k.mesh) || (k.def && k.def.p ? k.def.p.map(n2) : null),
       kills: (k.kills || []).length,
       killsActive: (k.kills || []).filter(v => v.active !== false).length }));
     // hazards by kind, with the flags a defect usually names
@@ -441,37 +484,48 @@ TOOLBOX = r"""
       res.surfaceCensus = { total: all.length, bySurface: surf };
     } catch (e) { res.surfaceCensus = { error: String(e).slice(0, 120) }; }
 
-    // RING / POWER OVERLAY — 'ten wing rings are drawn before you have the hat'
-    let rings = 0, ringsVisible = 0, ringY = [];
-    en.scene.traverse((o) => {
-      if (!/ring|hoop|torus/i.test(o.name || '')) return;
-      if (!(o.isMesh || o.isInstancedMesh)) return;
-      rings++;
-      let vis = o.visible, q = o.parent;
-      while (vis && q) { vis = q.visible; q = q.parent; }
-      const m = Array.isArray(o.material) ? o.material[0] : o.material;
-      if (vis && (!m || m.opacity === undefined || m.opacity > 0.02)) {
-        ringsVisible++; ringY.push(n2(o.getWorldPosition(new TH.Vector3()).y));
-      }
-    });
+    // RING / POWER OVERLAY — "ten wing rings are drawn before you have the hat".
+    // Ask the HAZARD RECORDS, not mesh names: the ring meshes are built inside a
+    // `rings` hazard and carry no 'ring' in their names, so a name scan read 0.
+    let rings = 0, ringsVisible = 0; const ringY = [];
+    for (const rec of (c.hazards || [])) {
+      if ((rec.kind || '') !== 'rings') continue;
+      const root = rec.h && rec.h.mesh;
+      if (!root) continue;
+      root.traverse((o) => {
+        if (!(o.isMesh || o.isInstancedMesh)) return;
+        rings++;
+        let vis = o.visible, q = o.parent;
+        while (vis && q) { vis = q.visible; q = q.parent; }
+        const m = Array.isArray(o.material) ? o.material[0] : o.material;
+        const op = m && m.opacity !== undefined ? m.opacity : 1;
+        if (vis && op > 0.02) { ringsVisible++; ringY.push(n2(o.getWorldPosition(new TH.Vector3()).y)); }
+      });
+    }
     res.rings = { n: rings, visible: ringsVisible, y: ringY.slice(0, 12), power: res.power };
 
-    // AMBIENT PARTICLES — 'the snow sits ON the ground instead of falling'
+    // AMBIENT PARTICLES — "the snow sits ON the ground instead of falling".
+    // Only the particle system's OWN buffers count; a name scan matched merged
+    // static meshes (`merged_cb.snow.rime`) and measured the level, not the weather.
     try {
       const ps = [];
       en.scene.traverse((o) => {
-        if (!/particle|ambient|snow|ember|mote|pollen|spray|leaves/i.test(o.name || '')) return;
+        const nm = o.name || '';
+        if (!/^fx\.|particle/i.test(nm)) return;
         if (!o.geometry || !o.geometry.attributes || !o.geometry.attributes.position) return;
-        const a = o.geometry.attributes.position, n = Math.min(a.count, 300);
-        let above = 0, below = 0, seen = 0;
+        const a = o.geometry.attributes.position, n = Math.min(a.count, 400);
+        let above = 0, below = 0, seen = 0, hi = -1e9, lo = 1e9;
         for (let i = 0; i < n; i++) {
           const px = a.getX(i), py = a.getY(i), pz = a.getZ(i);
-          if (!isFinite(py) || py === 0) continue;
+          if (!isFinite(py) || (px === 0 && py === 0 && pz === 0)) continue;
           const gr = groundAt(px, pz, py + 60);
           if (!gr || !gr.ray) continue;
-          seen++; if (py - gr.ray.y > 0.6) above++; else below++;
+          seen++; const dy = py - gr.ray.y;
+          if (dy > 0.6) above++; else below++;
+          if (dy > hi) hi = dy; if (dy < lo) lo = dy;
         }
-        if (seen) ps.push({ name: o.name, sampled: seen, aboveGround: above, atGround: below });
+        if (seen) ps.push({ name: nm, count: a.count, sampled: seen, aboveGround: above,
+                            atGround: below, dyMax: n2(hi), dyMin: n2(lo) });
       });
       res.particles = ps.slice(0, 6);
     } catch (e) { res.particles = [{ error: String(e).slice(0, 120) }]; }
@@ -715,7 +769,10 @@ _TRIPLE = re.compile(r"[\(\[]\s*" + _NUM + r"\s*,\s*" + _NUM + r"\s*,\s*" + _NUM
 _TRIPLE_ANY_Y = re.compile(r"[\(\[]\s*" + _NUM + r"\s*,\s*([^,\)\]]{1,24}?)\s*,\s*" + _NUM + r"\s*[\)\]]")
 _PAIR = re.compile(r"[\(\[]\s*" + _NUM + r"\s*,\s*" + _NUM + r"\s*[\)\]]")
 _XZ = re.compile(r"\bx\s*[=:]?\s*" + _NUM + r"\D{1,16}?\bz\s*[=:]?\s*" + _NUM)
-_HEIGHT = re.compile(r"\b(?:floor|top|deck|y|height|ground|lip|ledge)\s*(?:top\s*)?[=:]?\s*" + _NUM)
+# ...and the same pair written the other way round ("the chamber along z = -2,
+# from the terrace mouth at x 25"), which is how rime-3#23 names the crusher cave.
+_ZX = re.compile(r"\bz\s*[=:]?\s*" + _NUM + r"\D{1,42}?\bx\s*[=:]?\s*" + _NUM)
+_HEIGHT = re.compile(r"\b(?:floor|top|deck|y|height|ground|lip|ledge|rim|shelf)s?\s*(?:top\s*)?[=:]?\s*" + _NUM)
 # `x -9.50 .. -6.50, z -35.50 .. -32.50` — an authored interior, take its centre.
 _SPAN = re.compile(r"\bx\s*[=:]?\s*" + _NUM + r"\s*(?:\.\.|to|-)\s*" + _NUM + r"\D{0,18}?\bz\s*[=:]?\s*" + _NUM + r"\s*(?:\.\.|to|-)\s*" + _NUM)
 
@@ -723,53 +780,71 @@ _SPAN = re.compile(r"\bx\s*[=:]?\s*" + _NUM + r"\s*(?:\.\.|to|-)\s*" + _NUM + r"
 def stations_from_text(d, limit=3):
     """Every coordinate a human wrote in this defect, strongest first.
 
-    `where` beats `happened` beats `did`; a 3-tuple beats an (x, z) pair; a pair
-    (or a triple whose height is symbolic) is completed with the nearest
-    `floor/top/y` number in the same sentence and otherwise flagged `needsGround`
-    for the live resolver.
+    Ranking, learned from the first cut's misses: a bracketed (x, y, z) beats an
+    (x, z) pair whose height the harness has to guess; the WHERE line (the place
+    he named) beats the HAPPENED narrative (where he ended up), which beats DID
+    (where he STARTED). A pair with no height borrows one from any field of the
+    same report before falling back to the live ground.
     """
-    out = []
+    cands = []
     for field in ("where", "happened", "did", "should"):
         t = d.get(field) or ""
         for m in _TRIPLE.finditer(t):
-            v = [float(m.group(1)), float(m.group(2)), float(m.group(3))]
-            out.append({"p": v, "src": field, "kind": "triple"})
+            cands.append({"p": [float(m.group(1)), float(m.group(2)), float(m.group(3))],
+                          "src": field, "kind": "triple"})
         for m in _TRIPLE_ANY_Y.finditer(t):
             mid = m.group(2)
             if re.fullmatch(r"~?\s*-?\d+(?:\.\d+)?", mid or ""):
                 continue                      # already caught by _TRIPLE
             hy = re.search(r"-?\d+(?:\.\d+)?", mid or "")
-            out.append({"p": [float(m.group(1)), float(hy.group(0)) if hy else 0.0, float(m.group(3))],
-                        "src": field, "kind": "triple~", "needsGround": not hy})
+            cands.append({"p": [float(m.group(1)), float(hy.group(0)) if hy else 0.0, float(m.group(3))],
+                          "src": field, "kind": "triple~", "needsGround": not hy})
         for m in _SPAN.finditer(t):
-            xs = (float(m.group(1)) + float(m.group(2))) / 2.0
-            zs = (float(m.group(3)) + float(m.group(4))) / 2.0
             seg = t[max(0, m.start() - 90): m.end() + 120]
             h = _HEIGHT.search(seg)
-            out.append({"p": [round(xs, 2), float(h.group(1)) if h else 0.0, round(zs, 2)],
-                        "src": field, "kind": "span", "needsGround": not h})
-        for m in _PAIR.finditer(t):
-            x, z = float(m.group(1)), float(m.group(2))
-            seg = t[max(0, m.start() - 90): m.end() + 90]
-            h = _HEIGHT.search(seg)
-            out.append({"p": [x, float(h.group(1)) if h else 0.0, z], "src": field,
-                        "kind": "pair", "needsGround": not h})
-        for m in _XZ.finditer(t):
-            x, z = float(m.group(1)), float(m.group(2))
-            seg = t[max(0, m.start() - 90): m.end() + 90]
-            h = _HEIGHT.search(seg)
-            out.append({"p": [x, float(h.group(1)) if h else 0.0, z], "src": field,
-                        "kind": "xz", "needsGround": not h})
-        if out:
+            cands.append({"p": [round((float(m.group(1)) + float(m.group(2))) / 2.0, 2),
+                                float(h.group(1)) if h else 0.0,
+                                round((float(m.group(3)) + float(m.group(4))) / 2.0, 2)],
+                          "src": field, "kind": "span", "needsGround": not h})
+        for rx, kind, flip in ((_PAIR, "pair", False), (_XZ, "xz", False), (_ZX, "zx", True)):
+            for m in rx.finditer(t):
+                seg = t[max(0, m.start() - 90): m.end() + 120]
+                h = _HEIGHT.search(seg)
+                a, b = float(m.group(1)), float(m.group(2))
+                if flip:
+                    a, b = b, a          # the text gave z first
+                cands.append({"p": [a, float(h.group(1)) if h else 0.0, b],
+                              "src": field, "kind": kind, "needsGround": not h})
+    if not cands:
+        return []
+    # a height named ANYWHERE in the report beats a guess off the ground
+    allh = None
+    for field in ("where", "happened", "did"):
+        mm = _HEIGHT.search(d.get(field) or "")
+        if mm:
+            allh = float(mm.group(1))
             break
-    # de-dupe on a 0.5 m grid, keep authored order
+    for c in cands:
+        if c.get("needsGround") and allh is not None:
+            c["p"][1] = allh
+            c["needsGround"] = False
+            c["heightFrom"] = "another line of the same report"
+    srcRank = {"where": 0, "happened": 1, "did": 2, "should": 3}
+    kindRank = {"triple": 0, "triple~": 1, "span": 2, "pair": 2, "xz": 2, "zx": 2}
+    # SOURCE OUTRANKS FORM. rime-2#16's WHERE line names both ends of the hop as
+    # `(6.40, top 35.35, -46.00) to (5.20, top 36.80, -49.72)` while its HAPPENED
+    # line gives the MISS position `(3.88, 33.90, -47.95)` as a clean triple. Ranking
+    # by form first picked the miss position as the launch block and drove the
+    # crossing test from the wrong place.
+    cands.sort(key=lambda c: (1 if c.get("needsGround") else 0,
+                              srcRank.get(c["src"], 4), kindRank.get(c["kind"], 3)))
     seen, res = set(), []
-    for s in out:
-        k = (round(s["p"][0] * 2), round(s["p"][1] * 2), round(s["p"][2] * 2))
+    for c in cands:
+        k = (round(c["p"][0] * 2), round(c["p"][1] * 2), round(c["p"][2] * 2))
         if k in seen:
             continue
         seen.add(k)
-        res.append(s)
+        res.append(c)
         if len(res) >= limit:
             break
     return res

@@ -61,7 +61,10 @@ def station_for(d, p):
     if not st:
         return None, None
     s = st[0]
-    if s.get("needsGround") or s["p"][1] == 0.0:
+    # ONLY when the parse had no height — a y of 0.0 the tester WROTE is a real
+    # height (the Keep lobby floor is y 0), and re-resolving it puts the station
+    # on the roof. Same trap as _untest_probe.resolve_stations.
+    if s.get("needsGround"):
         g = p.cbx("groundAt", s["p"][0], s["p"][2], 400)
         y = (g or {}).get("ray", {}).get("y") if (g or {}).get("ray") else (g or {}).get("hf")
         if y is not None:
@@ -95,6 +98,12 @@ def look(p, xyz, tag, back=7.0):
         sb = p.cbx("screenBlockers", 0.03)
         try:
             fs = p.frame_stats((0.0, 0.0, 1.0, 1.0), "%s_%s" % (tag, name))
+            # the lens is aimed at the station, so the middle of the frame is the
+            # thing the tester was describing — sample it on its own.
+            mid = p.frame_stats((0.35, 0.30, 0.30, 0.35), "%s_%s_mid" % (tag, name))
+            os.remove(os.path.join(p.shotdir, os.path.basename(mid["png"])))
+            mid.pop("png", None)
+            fs["centre"] = mid
         except Exception as e:
             fs = {"error": str(e)[:120]}
         shots.append({"from": name, "at": [round(sx, 2), round(sy, 2), round(sz, 2)],

@@ -689,3 +689,146 @@ of which the measured chain already clears:
 
 Also worth a look from the reach lane: `reachcheck.mjs --require-all` passes
 verdant-2, so its model of this shaft does not see the ceiling.
+
+## More than half the defect corpus was unmeasured, and the reasons were six (2026-09-08, backlog lane)
+
+The replay pass verdicted 315 logged playtest defects and could not test 162 of
+them. Grouped by WHY (`_harness/_untest_groups.py` →
+`_playreports/_untest_groups.json`), by PRIMARY blocker at the start of the lane:
+
+| blocker | n | what the harness lacked |
+|---|---|---|
+| frame-claim | 31 | a deliberate camera and an eye |
+| no-position (parseable) | 27 | a coordinate WAS in the prose; nothing parsed it |
+| no-position | 25 | the report names a place, not a coordinate |
+| battery-too-generic | 22 | settle / walk / jump does not test the claim |
+| needs-phase | 19 | a hazard beat the driver could not wait for |
+| unreachable | 11 | the driver could not stand at the station |
+| behind-blocker | 9 | the station is past another defect's blocker |
+| needs-savestate | 8 | a crest / power / trigger precondition |
+| needs-2-inputs | 5 | a move that is two keys at once |
+
+A defect usually carries several: 58 of the 162 carry a frame claim, 50 a
+parseable position, 38 a hazard phase, 15 a save-state precondition.
+
+**After the lane: 95 of the 162 are decided (30 FIXED, 65 STILL REPRODUCES) and
+67 remain COULD NOT TEST**, every one of them now carrying a
+`stillUntestedBecause` line naming exactly what is missing. Over all 315:
+122 FIXED / 126 STILL REPRODUCES / 67 COULD NOT TEST.
+
+The new harness is `_harness/_untestlib.py` (a `Probe` on top of `_playlib.Play`:
+goto+verify with a bounded ring search, a save-state setter, a clock-advance
+phase scan, a two-input helper, a wall-kick ladder, a camera sweep, screen /
+material / frame reads and a prose station resolver), driven by
+`_untest_probe.py` (per-claim batteries), `_untest_look.py` (aimed frames for
+colour claims) and `_untest_verdict.py` (the rules).
+
+### The replay pass's camera evidence was all null
+
+`_replay_probe.py`'s `CAMV` reads `CRESTBOUND.game.cam.cam` and returns null when
+it is missing. `FollowCamera` exposes the three.js camera as **`.camera`**
+(`runtime/player/camera.js:1163  this.camera = camera`), so every camera
+measurement that pass took came back null — no `cam dist / onScreen / occluded`
+string appears in any of its 315 evidence lines.
+
+### reset(t) makes a hazard phase free — there is nothing to wait for
+
+CONTRACT §21's determinism law means a phase-dependent claim needs no wall clock.
+`__CBX.phaseScan(x, y, z, tmax, n)` walks the course clock in n steps, calls
+`reset(t)` on every hazard, refreshes the collider set, and asks whether a capsule
+at the station is inside a kill volume or a moving box at that phase, then
+restores the live clock. 49 phases over 24 s cost about 0.4 s of browser time and
+decided most of the death and idle-crush claims in this pass.
+
+### The scarf is not an Object3D, so a rig sampler reports it perfectly still
+
+`hero.js` merges the scarf's geometry into `nim.body` and rewrites its vertices
+each frame from a Float32Array of verlet particles (`_scarfP`, 7 links = 8
+particles) hung off `nim.staticBone`. A sampler that walks `hero.root` reports
+zero scarf motion whatever the scarf is doing — 30 named nodes, none a scarf link.
+Read `hero._scarfP` directly: on rime-2 the 8 links moved 0.399 m in local space
+over a 1.4 s run.
+
+### Six ways a station probe lies, all measured this pass
+
+1. **A downward ray started well above the station finds the deck ABOVE it.**
+   `groundAt(x, z, y + 60)` on ember-3's mid deck (y 22.10) returned 34.90. Ground
+   under the feet is `groundAt(x, z, y + 0.4)`.
+2. **Re-resolving a height of 0.0 moves the station to the roof.** The Keep lobby
+   floor IS y 0; treating `0.0` as "no height given" put the lobby spawn-pad
+   station at y 15.15 and keep#08's tree station 4.71 m up the tree.
+3. **A coordinate lifted out of the `did` narrative is where the tester STARTED.**
+   Station rank: WHERE and HAPPENED decide; DID, and any height the harness had to
+   resolve off the ground, report their numbers and decide nothing.
+4. **SOURCE outranks FORM.** rime-2#16's WHERE line names both ends of the hop
+   (`block 1 (6.40, top 35.35, -46.00) to block 2 (5.20, top 36.80, -49.72)`)
+   while its HAPPENED line gives the MISS position as a clean bracketed triple.
+   Ranking by form first drove the crossing test from the wrong place.
+5. **A station outside the course bounds or under `killY` is not a station.** A
+   prose parse produced (0, -30.42, 7.33) on verdant-1, 30 m under the world.
+6. **A ceiling cast from head height misses a ceiling below the head.**
+   azure-2#08 claims 1.00 m of headroom for a 1.5 m hero; a ray started at
+   feet + 1.55 m begins ABOVE that ceiling and reports 9 m of clearance. Cast from
+   feet + 0.12 m.
+
+`probePoint`'s `insideFrac` had the same shape of bug: it counted every solid
+collider whose AABB met the body box, which includes the FLOOR at every station,
+so it read 1.00 everywhere. It now counts only a box that intrudes into the body
+column (`aabb.max.y > feet + 0.25 && aabb.min.y < feet + 1.45`).
+
+### A verdict rule may only fire on the claim it measures
+
+Seven rules were written, shipped and then caught deciding the wrong claim:
+
+* keep#13 was called FIXED because the HERO was unoccluded — the tester's words
+  were that a hanging banner hid the LOFT.
+* keep#05 (an interact prompt drawn 27 m from Old Fen) was called FIXED on "a
+  collider covers the spot on 100% of the cycle", true almost everywhere.
+* ember-2#07 — "Zero deaths in 9 of 9 runs, nothing in the hall can touch a player
+  who walks a lane" — was called FIXED because the probe did not die there. The
+  ABSENCE of a kill is that tester's complaint; `tooSafe` is now its own claim
+  kind with the verdict inverted.
+* ember-1#17's complaint is a lens COLLAPSE ("a metre from his skull"); deciding
+  it on an occlusion count called it reproduced while the lens measured 2.35 m
+  out. Collapse claims go to `cam.dist`, occlusion claims to the ray.
+* rime-2#19's complaint is an un-posed slopeSlide, not the scarf.
+* verdant-3#22 is filed under `stairs` but complains about the CAMERA.
+* ember-2#10 (a wrapped sign) was decided by the POUND rule because its WHERE line
+  contains the word "grate".
+
+Every rule is now gated on a CLAIM KIND parsed from the tester's own `happened` +
+`should` — never `where`, which is a description of a place and drags in words
+("the crusher cave", "the wall-kick shaft") that would hand a rule a claim the
+tester never made.
+
+### Two guards that turn a non-measurement into an honest blank
+
+* **A crossing that never got a run-up says nothing about the gap.** On rime-2#16
+  the hero was in `slopeSlide` at the launch and all five moves left at 0.06 m/s.
+  The rule now requires one attempt to reach 2 m/s — and separately decides a
+  STEP-UP on apex alone, since a jump's height does not need horizontal speed
+  (ember-4#06: 2.20 m across at +2.07 m, best apex 1.83 m).
+* **A hero who drifts off the spot was not standing there to be killed.**
+  azure-2#16's bell-rope station drops 26 m during the 6 s stand, so "no death" is
+  a fact about wherever he landed. Drift > 3 m voids the stand.
+
+### Two probe artefacts worth knowing before reading a frame
+
+* **Repeated `__dev.tp` can latch the speed-line post effect on.** Every station
+  frame this probe took on ember-2 carries radial white speed-lines and chromatic
+  fringing with the hero idle at speed 0; the LOOK pass on the same course,
+  minutes later, shows none. Do not file it as a rendering defect, and do not read
+  colour off a station frame that shows it.
+* **A station probe collects things.** A teleport onto a crest takes it and opens
+  the clear card, and every battery after it then measures a celebrating game
+  (verdant-2#26 did exactly this). `_untest_probe.py` now resumes the game before
+  each defect and records `hadToResume` when it had to.
+
+### What the look pass still cannot do
+
+`_untest_look.py` stands 7 m off a station and aims at it, which is what a colour
+claim needs, but its standing spot is chosen by a ground raycast and is not
+verified: on ember-1 it repeatedly landed IN a flame vent (three of its frames are
+the death screen), on keep#11 it landed on a roof above Old Fen, and on elevated
+stations it often lands on the ground below the walkway. Giving `look()` the
+`goto_verify` treatment is the obvious next fix.
