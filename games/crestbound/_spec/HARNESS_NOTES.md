@@ -576,3 +576,116 @@ Draw calls and triangles are identical to the digit, so the pass cost nothing;
 the gap to the recorded 66.5 / 73.1 belongs to the machine. **Sample the counter
 and pair against a known-good commit BEFORE believing a perf regression — and
 note that "no chrome.exe" is not the same as "a quiet box".**
+
+## The long jump only existed inside a tap window (2026-09-08, moveset lane)
+
+The owner reported the long jump "barely exists" and the replay confirmed it
+(verdant-1#01). MEASURED on the pre-fix tree, `inputcheck.py --only crouch`,
+real KeyboardEvents on the C a browser player uses, engine stopped and
+`game.update(1/60)` hand-stepped:
+
+| what a hand does | speed at the press | move that came out |
+|---|---|---|
+| hold C, run 120 frames, then Space | **4.50 m/s** | `jump1` |
+| run to 9.00, press C, Space **2 frames** later | 9.00 | `longjump` |
+| run to 9.00, press C, Space **12 frames** (0.2 s) later | **4.50 m/s** | `jump1` |
+
+Two constants, and the interaction between them, not a bug in `_doLongJump`:
+`controller.js` scaled the crouched ground target by `CROUCH_SPEED_MUL` 0.5, so
+a full stick under a held crouch settled at `speedRun * 0.5` = **4.50 m/s**,
+while `TUNE.longJump.minSpeed` is **5.50**. The move was therefore reachable
+ONLY through `CROUCH_GRACE` (0.18 s of the pre-crouch speed standing in for the
+gate) — a window a hand does not hit; 0.2 s, an ordinary human beat, already
+misses it. The same fraction also had a cliff at its knee (`target > speedWalk *
+mul * 2`): a target of 3.20 stayed 3.20 while 3.21 fell to 1.61.
+
+The crouched speed is now a CAP in m/s, `CROUCH_RUN_CAP = min(speedRun,
+longJump.minSpeed + 0.9)` = **6.40 m/s**, derived from the long jump's own gate
+so the two cannot drift apart again, and taken as a `min` AFTER the situational
+dips instead of as a factor before them (the `land` dip used to stack: 4.50 x
+0.85 = 3.83 m/s, swallowing the move for the 0.05 s after every landing).
+`longJump.minSpeed` itself is untouched, and so are `vy` 8.5 / `fwd` 17.0 — the
+published distance is unchanged (`longjump_dist` 7.558 m; `reachcheck
+--require-all` 14/14 PASS after).
+
+New feelcheck rows drive the HUMAN order — hold C for 600 ms of running, then
+Space — five attempts at three approach speeds plus the sprint-then-crouch
+order: **20 of 20 fired a `longjump`** at 6.40 / 6.40 / 5.91 / 6.40 m/s,
+shortest distance 7.287 m. `crouch_run_speed` 6.400 m/s is now banded against
+`TUNE.longJump.minSpeed`, so a future crouch tweak that re-buries the move fails
+the gate instead of shipping. A crouch-WALK (low stick) is unchanged at 3.20
+m/s, so crouch+jump out of a creep is still a plain jump and at rest still a
+backflip (`backflip_C_from_rest`, `backflip_C_after_stopping` both still PASS).
+
+## verdant-2 ROUTE B: the kick chain is fine, the turret is ROOFED (2026-09-08, moveset lane)
+
+`verdant-2#25` (BLOCKER) says the NW turret's wall-kick shaft — floor 18.60,
+exit ledge 27.00, 8.40 m — cannot be climbed. Measured, and it is not the
+controller:
+
+**The chain, in a shaft of the authored width.** `feelcheck.py`'s new
+`wallkick_ladder_m` row builds the contract's own 3.20 x 3.20 m chimney on the
+test slab and climbs it with real KeyboardEvents (hold the stick into a wall,
+press Space the frame the hero is ON it and past `wallKick.minFall`, alternate
+walls): launch heights **+1.64, +3.71, +5.77, +7.84, +9.92, +11.98 m** — a flat
+**2.07 m per kick**, against the contract's certified 2.12. One jump plus four
+kicks is at +7.84 m at the fourth launch and 14.098 m at the top. The 8.40 m
+ROUTE B asks for is covered with 6 m to spare.
+
+**The same chain in verdant-2's own shaft, above the obstruction.**
+`_harness/_mv_kickladder.py verdant-2 -8.2,21.40,-8.2 27.0 x` — started on the
+rampart deck inside the turret: kicks at **22.355 -> 24.417 -> 26.492**
+(+2.06 m each), maxY **28.609**, past the 27.00 exit, 3 kicks.
+
+**The same chain from the AUTHORED floor.** `_mv_kickladder.py verdant-2
+-7.4,18.60,-7.4 27.0 x`: maxY **19.557 m**, 0.957 m of the 8.40. Kick 1 fires
+and is erased the same frame; kick 2 never gets a contact and the hero falls
+back. The SE-corner pair (`... corner`, the only walls left unroofed) is the
+same: maxY **19.547**. 19.55 + the 1.5 m body = **21.05** — the underside of a
+ceiling at 21.06.
+
+**What is over the shaft.** `_harness/_mv_shaftroof.py verdant-2
+-7.4,18.60,-7.4 1.6` casts straight up from a 0.4 m grid on the shaft floor
+(`18.75` = the ray starts INSIDE solid, i.e. no standable floor there):
+
+       z \ x  -9.00  -8.60  -8.20  -7.80  -7.40  -7.00  -6.60  -6.20  -5.80
+       -7.80  18.75  18.75  18.75  21.06  21.06  21.06  21.06  21.06  21.06
+       -7.40  18.75  18.75  18.75  21.06      -      -      -      -      -
+       -7.00  18.75  18.75  18.75  21.06      -      -      -      -  18.75
+       -6.60  18.75  18.75  18.75  21.06      -      -      -  18.75  18.75
+       -6.20  18.75  18.75  18.75  21.06      -      -  18.75  18.75  18.75
+       -5.80  18.75  18.75  18.75  21.06      -  18.75  18.75  18.75  18.75
+
+The turret is authored correctly — four 0.4 m slabs around `SHAFT_C`
+(-7.4, -7.4) leaving x, z in [-9.0, -5.8], floor 18.60, top 27.40, doorway in
+the south face. It is planted INSIDE the middle fort's own footprint
+(`{kind:'building', style:'fort', p:[0,19.30,0], s:[20,4.2,20], wall:2.0,
+rampart:true}`), and the fort builder fills it:
+
+- the CURTAIN WALL (2.0 m thick, y 17.20-21.40) occupies x [-10, -8] and
+  z [-10, -8] — one metre of the shaft's interior on the west and north sides,
+  right down to the floor;
+- the RAMPART WALKWAY slabs at y **21.06-21.40** — `[0, 21.23, -9] half
+  [10.4, 0.17, 1.4]` and `[-9, 21.23, 0] half [1.4, 0.17, 7.6]` — ROOF
+  everything with x <= -7.60 or z <= -7.60, i.e. the whole north-west L of the
+  shaft, 2.46 m above its floor;
+- something else (the keep tower's octagonal footing) cuts the south-east corner
+  diagonally at floor level, from (-5.80, -7.00) to (-7.00, -5.80).
+
+What is left of "3.20 x 3.20 m clear" is a ~1.6 x 1.6 m triangle of open sky
+whose only kickable walls are the east (x = -5.80) and south (z = -5.80) faces
+— 90 degrees apart, and a hero of radius 0.38 leaning on either one puts part of
+his capsule under the 21.06 roof. There is no opposing wall pair in the unroofed
+column, which is why both ladders top out at the same 19.55 m.
+
+**DATA OWNER'S CALL** (this lane did not edit course data). Three fixes, any one
+of which the measured chain already clears:
+1. punch the turret out of the two walkway slabs — split `[0,21.23,-9]` and
+   `[-9,21.23,0]` around x/z in [-9.4, -5.4];
+2. move `SHAFT_C` outside the fort's wall ring (it currently sits 2.6 m inside
+   the curtain's inner face);
+3. raise the shaft floor to the rampart deck at 21.40 and publish ROUTE B as
+   5.60 m / three kicks — the route `_mv_kickladder.py` already climbs.
+
+Also worth a look from the reach lane: `reachcheck.mjs --require-all` passes
+verdant-2, so its model of this shaft does not see the ceiling.

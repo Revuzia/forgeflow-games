@@ -30,9 +30,15 @@ truth. If the tuning changes, the gate moves with it.
   human_double_rate  8 honest attempts, 3 approach speeds   >= 0.95 chained
   jump_cut_ratio     50 ms tap vs full hold                <= 0.60
   longjump_dist      crouch + jump at run                  >= 6.4 m flat
+  crouch_run_speed   C HELD through a full-stick run-up    >= TUNE.longJump.minSpeed
+  human_longjump_*   hold C 600 ms, then Space; 3 approach 5 of 5 fire a longjump
+                     speeds + the sprint-then-crouch order
+  human_longjump_dist shortest human-timed long jump       >= 6.4 m flat
   backflip_apex      crouch + jump from rest               EXACT.backflipApex +/- 0.10
   sideflip_apex      stick reversal + jump at speed        EXACT.sideflipApex +/- 0.10
   wallkick_vy/away   jump into a wall, jump again          TUNE.wallKick.vy / .away
+  wallkick_ladder_m  a ladder up a 3.20 m shaft            >= 8.40 m (verdant-2 ROUTE B)
+  wallkick_ladder_kicks  presses that became a wallkick    >= 4
   dive_dist          dive at run, to the end of the slide  >= 6 m, and a slide state
   pound_hang         crouch in the air                     TUNE.pound.hang +/- 0.03
   pound_fall         peak descent during the pound         >= 35 m/s
@@ -771,6 +777,113 @@ async () => {
     allUp(); await wait(300);
   }
 
+  /* =======================================================================
+   * 3b. THE LONG JUMP A HUMAN PERFORMS  (owner report; replay verdant-1#01)
+   * ====================================================================
+   * The row above taps CROUCH and presses JUMP 30 ms later — frame-perfect,
+   * and the ONLY window in which the move used to exist: a held crouch capped
+   * the ground speed at `speedRun * 0.5` = 4.50 m/s while `longJump.minSpeed`
+   * is 5.50, so "hold crouch, run, jump" — the way the controls screen teaches
+   * it and the way a hand does it — silently produced a `jump1`.
+   *
+   * These rows drive the HUMAN order on the real KeyC a browser player uses:
+   * the crouch is held for 600 ms of running before JUMP is pressed, five
+   * attempts each, at three approach speeds, plus the reverse order (run to a
+   * full sprint FIRST, then press and HOLD crouch for 600 ms). A row that only
+   * goes green on frame-perfect timing is not evidence — every one of these
+   * has to fire five times out of five.
+   */
+  const HOLD_MS = 600;
+  const KEYC = 'KeyC';
+  /**
+   * @param mag    stick magnitude of the run-up (the approach speed)
+   * @param order  'crouch-first' = hold C THROUGH the run-up (what the owner
+   *               reported); 'run-first' = sprint, then press and hold C.
+   */
+  const humanLongJump = async (mag, order) => {
+    if (!(await reset(-50, 0))) return {err: 'not grounded on the slab'};
+    if (order === 'crouch-first') {
+      down(KEYC); await wait(80);
+      stickWorld(1, 0, mag);
+      await wait(900 + HOLD_MS);
+    } else {
+      stickWorld(1, 0, mag);
+      await wait(900);
+      down(KEYC);
+      await wait(HOLD_MS);
+    }
+    syncP();
+    const sp0 = spd(), st0 = P.state, cr0 = !!P.crouching;
+    down(JUMP);
+    const f = await observe(3000, (s) => !!s.landAt);
+    up(JUMP); up(KEYC); allUp();
+    await wait(220);
+    return {sp: +sp0.toFixed(2), st: st0, crouching: cr0, states: f.states,
+            long: f.states.indexOf('longjump') >= 0, kind: P.lastJumpKind,
+            dist: f.dist === null ? null : +f.dist.toFixed(3)};
+  };
+
+  const ljSweep = async (label, mag, order) => {
+    const tries = [], dists = [];
+    let hits = 0, speedSum = 0, speedN = 0;
+    for (let i = 0; i < 5; i++) {
+      const r = await humanLongJump(mag, order);
+      if (r.err) { tries.push('ERR ' + r.err); continue; }
+      if (r.long) hits++;
+      if (r.long && r.dist !== null) dists.push(r.dist);
+      speedSum += r.sp; speedN++;
+      tries.push((r.long ? 'longjump' : (r.kind || r.states[0] || '?')) +
+                 ' @ ' + r.sp.toFixed(2) + ' m/s (' + r.st + (r.crouching ? ', crouched' : ', STANDING') + ')');
+    }
+    return {hits: hits, tries: tries, dists: dists,
+            meanSpeed: speedN ? +(speedSum / speedN).toFixed(3) : null};
+  };
+
+  /* The held-crouch run speed itself, and the invariant that broke the move:
+     it must stay ABOVE longJump.minSpeed or the gate is unreachable by hand. */
+  if (await need('crouch_run_speed', -50, 0)) {
+    down(KEYC); await wait(80);
+    stickWorld(1, 0, 1);
+    await wait(1200);
+    let s = 0, n = 0, crouched = 0;
+    for (let i = 0; i < 20; i++) {
+      await frame(); syncP();
+      if (P.grounded) { s += spd(); n++; if (P.crouching) crouched++; }
+    }
+    up(KEYC);
+    if (n < 10) failWith('crouch_run_speed', 'left the ground during the sample');
+    else if (crouched < n) failWith('crouch_run_speed', 'not crouched for ' + (n - crouched) + ' of ' + n + ' sampled frames');
+    else record('crouch_run_speed', +(s / n).toFixed(3),
+                'C held through a full-stick run-up, state ' + P.state +
+                ' (long-jump gate ' + TUNE.longJump.minSpeed + ' m/s)');
+    allUp(); await wait(300);
+  }
+
+  {
+    const sweeps = [
+      ['human_longjump_full',  1.00, 'crouch-first'],
+      ['human_longjump_mid',   0.82, 'crouch-first'],
+      ['human_longjump_slow',  0.76, 'crouch-first'],
+      ['human_longjump_after_run', 1.00, 'run-first'],
+    ];
+    const allDists = [];
+    for (const sp of sweeps) {
+      const r = await ljSweep(sp[0], sp[1], sp[2]);
+      record(sp[0], r.hits,
+             sp[2] + ', stick ' + sp[1].toFixed(2) + ', C held ' + HOLD_MS + ' ms, mean approach ' +
+             (r.meanSpeed === null ? '?' : r.meanSpeed.toFixed(2)) + ' m/s: ' + r.tries.join(' | '));
+      for (const d of r.dists) allDists.push(d);
+    }
+    if (!allDists.length) failWith('human_longjump_dist', 'no human-timed long jump ever fired');
+    else {
+      let mn = allDists[0];
+      for (const d of allDists) if (d < mn) mn = d;
+      record('human_longjump_dist', +mn.toFixed(3),
+             'shortest of ' + allDists.length + ' human-timed long jumps (' + allDists.join(', ') + ')');
+    }
+    allUp(); await wait(300);
+  }
+
   if (await need('backflip_apex')) {
     // from (near) rest: crouch, then jump
     down(CROUCH); await wait(120); down(JUMP);
@@ -871,6 +984,84 @@ async () => {
       }
     }
     allUp(); await wait(400);
+  }
+
+  /* ---- THE KICK LADDER --------------------------------------------------
+     One kick proves the launch; a SHAFT proves the chain. verdant-2 ROUTE B
+     asks for 8.40 m of climb (floor 18.60 -> exit ledge 27.00) out of a 3.20 m
+     shaft, and the replay logged the tester gaining nothing in it — so this row
+     builds that exact shaft on the test slab (four walls, 3.20 x 3.20 m clear,
+     the contract's <= 3.4 m) and climbs it with real KeyboardEvents: hop, hold
+     the stick into a wall, press Space the frame the hero is ON it and FALLING
+     past `wallKick.minFall`, alternate walls. Nothing here reads a private
+     field: the press condition is the contract's own gate, and the lockout is
+     honoured by timing off the last kick. */
+  {
+    const CX = TEST.x - 40, CZ = TEST.z + 40, CLEAR = 3.20, WT = 0.4, SH = 8.0;
+    const inner = CLEAR / 2;
+    addCollider(V3(CX - inner - WT / 2, TEST.y + SH, CZ), V3(WT / 2, SH, inner + WT), 'stone');
+    addCollider(V3(CX + inner + WT / 2, TEST.y + SH, CZ), V3(WT / 2, SH, inner + WT), 'stone');
+    addCollider(V3(CX, TEST.y + SH, CZ - inner - WT / 2), V3(inner + WT, SH, WT / 2), 'stone');
+    addCollider(V3(CX, TEST.y + SH, CZ + inner + WT / 2), V3(inner + WT, SH, WT / 2), 'stone');
+    out.notes.kickShaft = 'clear ' + CLEAR.toFixed(2) + ' m x ' + CLEAR.toFixed(2) +
+                          ' m, ' + (SH * 2).toFixed(1) + ' m tall, centred (' + CX + ', ' + CZ + ')';
+
+    syncP(); allUp();
+    P.__test.teleport(V3(CX, TEST.y + 0.35, CZ));
+    P.__test.setVel(V3(0, 0, 0));
+    for (let i = 0; i < 120; i++) { await frame(); syncP(); if (P.grounded || P.dead) break; }
+    if (!P.grounded) failWith('wallkick_ladder_m', 'never settled on the shaft floor (state ' + P.state + ')');
+    else {
+      const y0 = P.pos.y;
+      const onWall = () => {
+        if (P.grounded) return false;
+        if (P.state === 'wallslide') return true;
+        const n = P.wallN;
+        if (!n) return false;
+        return Math.hypot(n.x, n.z) > 0.5 && Math.abs(n.y) < 0.4;
+      };
+      const DIRS = [[-1, 0], [1, 0]];
+      let side = 0, maxY = y0, kicks = 0, lastKickT = -1e9, stall = '';
+      const yAt = [];
+      /* the hop off the floor, leaning at the first wall */
+      stickWorld(DIRS[0][0], DIRS[0][1], 1);
+      for (let i = 0; i < 10; i++) { await frame(); syncP(); }
+      down(JUMP); await wait(120); up(JUMP);
+      const tEnd = simNow() + 9000, w0 = performance.now();
+      while (simNow() < tEnd && kicks < 6) {
+        if (performance.now() - w0 > 90000) { stall = 'wall-clock runaway'; break; }
+        const d = DIRS[side];
+        stickWorld(d[0], d[1], 1);
+        await frame(); syncP();
+        if (P.pos.y > maxY) maxY = P.pos.y;
+        if (P.dead) { stall = 'died in the shaft'; break; }
+        if (P.grounded && kicks > 0) { stall = 'fell back to the floor after ' + kicks + ' kick(s)'; break; }
+        if (!onWall()) continue;
+        if (P.vel.y > TUNE.wallKick.minFall) continue;
+        if (simNow() - lastKickT < TUNE.wallKick.lockout * 1000) continue;
+        const yk = P.pos.y;
+        down(JUMP);
+        let fired = false;
+        for (let i = 0; i < 4; i++) {
+          await frame(); syncP();
+          if (P.state === 'wallkick') fired = true;
+          if (P.pos.y > maxY) maxY = P.pos.y;
+        }
+        up(JUMP);
+        if (!fired) { stall = 'a press on a falling wall contact at y +' + (yk - y0).toFixed(2) + ' did not become a wallkick (state ' + P.state + ')'; break; }
+        kicks++; lastKickT = simNow(); yAt.push(+(yk - y0).toFixed(2));
+        side = 1 - side;
+      }
+      /* let the last kick arc out */
+      for (let i = 0; i < 40; i++) { await frame(); syncP(); if (P.pos.y > maxY) maxY = P.pos.y; }
+      allUp();
+      const climbed = +(maxY - y0).toFixed(3);
+      record('wallkick_ladder_m', climbed,
+             kicks + ' kick(s) in a ' + CLEAR.toFixed(2) + ' m shaft, launch heights +' +
+             (yAt.join(', +') || '-') + ' m' + (stall ? ' [' + stall + ']' : ''));
+      record('wallkick_ladder_kicks', kicks, 'presses that became a wallkick');
+    }
+    allUp(); await wait(300);
   }
 
   /* =======================================================================
@@ -1213,10 +1404,25 @@ def build_expectations(tune, exact, dive_max):
              "share of honest human attempts (120-360 ms) that chained"),
         band("jump_cut_ratio",   "max",   0.60, 0, "x",    "50 ms tap / full hold"),
         band("longjump_dist",    "min",   6.40, 0, "m",    "crouch+jump at run"),
+        # --- the long jump a HUMAN performs (owner report; replay verdant-1#01).
+        #     A held crouch used to cap the ground speed BELOW longJump.minSpeed,
+        #     so the move only existed inside a tap window no hand hits.
+        band("crouch_run_speed", "min",
+             (t.get("longJump", {}) or {}).get("minSpeed", 5.5), 0, "m/s",
+             "C held through a full-stick run-up stays above the long-jump gate"),
+        band("human_longjump_full",      "min", 5, 0, "of 5", "hold C 600 ms at a full run, then Space"),
+        band("human_longjump_mid",       "min", 5, 0, "of 5", "hold C 600 ms at stick 0.82, then Space"),
+        band("human_longjump_slow",      "min", 5, 0, "of 5", "hold C 600 ms at stick 0.76, then Space"),
+        band("human_longjump_after_run", "min", 5, 0, "of 5", "sprint, THEN hold C 600 ms, then Space"),
+        band("human_longjump_dist",      "min", 6.40, 0, "m",  "shortest human-timed long jump"),
         band("backflip_apex",    "about", e.get("backflipApex", 3.22), 0.10, "m", ""),
         band("sideflip_apex",    "about", e.get("sideflipApex", 3.00), 0.10, "m", ""),
         band("wallkick_vy",      "about", wk.get("vy", 12.0), 1.00, "m/s", ""),
         band("wallkick_away",    "about", wk.get("away", 7.5), 1.50, "m/s", ""),
+        # THE CHAIN, not one kick: verdant-2 ROUTE B is 8.40 m of a 3.20 m shaft.
+        band("wallkick_ladder_m",     "min", 8.40, 0, "m",
+             "one jump + four kicks up a 3.20 m shaft (verdant-2 ROUTE B needs 8.40 m)"),
+        band("wallkick_ladder_kicks", "min", 4, 0, "kicks", "presses that became a wallkick"),
         band("dive_dist",        "min",   dive_floor, 0, "m", "dive + belly slide"),
         band("dive_states_ok",   "true",  1, 0, "",       "dive AND slide states"),
         band("pound_hang",       "about", pound.get("hang", 0.20), 0.03, "s", ""),

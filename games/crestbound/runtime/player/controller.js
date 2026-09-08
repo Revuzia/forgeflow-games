@@ -230,8 +230,29 @@ const REVERSE_WINDOW = 0.12;
 /** Speed under which crouch+jump is a backflip rather than a normal jump (§11). */
 const BACKFLIP_MAX_SPEED = 2.0;
 
-/** Crouched ground speed as a fraction of the analog target (a creep, not a stop). */
-const CROUCH_SPEED_MUL = 0.5;
+/**
+ * CROUCHED GROUND SPEED — a crouch-RUN, not a crawl, and the reason the long
+ * jump exists at all.
+ *
+ * It used to be a FRACTION of the analog target (`target *= 0.5` above a
+ * `speedWalk * mul * 2` knee), which had two defects. The knee was a cliff —
+ * a target of 3.20 stayed 3.20 while 3.21 fell to 1.61 — and, fatally, a full
+ * stick under a held crouch settled at `speedRun * 0.5` = **4.50 m/s**, while
+ * `TUNE.longJump.minSpeed` is 5.50. So the way a player performs the move —
+ * HOLD crouch, run, press jump — could never satisfy the long jump's own gate:
+ * only a tap of crouch inside `CROUCH_GRACE` at a full run did, a window no
+ * hand hits reliably (owner report + inputcheck `longjump_C_held_through_runup`
+ * / `longjump_C_human_reaction`, both measured at 4.50 m/s -> `jump1`).
+ *
+ * It is now a CAP in m/s, applied as a `min` after the situational dips so
+ * nothing can stack under it, and DERIVED from the long jump's own gate: the
+ * crouch-run always lands above `minSpeed` with a real margin. A walk under a
+ * crouch is untouched (a low stick never reaches the cap), so the stick still
+ * chooses between a creep and a crouch-run — and crouch+jump at a creep is
+ * still an ordinary jump, at rest still a backflip.
+ */
+const CROUCH_RUN_MARGIN = 0.9;
+const CROUCH_RUN_CAP = Math.min(TUNE.speedRun, TUNE.longJump.minSpeed + CROUCH_RUN_MARGIN);
 
 /** Air-control multiplier while committed to a long jump or a dive (§11 ×0.35). */
 const COMMIT_AIR_CONTROL = 0.35;
@@ -1957,10 +1978,14 @@ export class Player {
 
     const onIce = this.surface === 'ice';
     let target = this._speedTarget(this._wmag);
-    if (this.crouching && target > TUNE.speedWalk * CROUCH_SPEED_MUL * 2) target *= CROUCH_SPEED_MUL;
     if (this._inQuicksand) target *= QUICKSAND_MOVE;
     if (this.inWater) target *= HEAVY_WATER_MOVE;          // only a hatted hero walks a bed
     if (st === 'land') target *= 0.85;          // the 0.05 s landing dip
+    /* The crouch is a CAP, and it is taken LAST of the ground terms: a dip that
+       already put the hero under it must not be multiplied by it a second time
+       (the landing dip used to drop a crouch-run to 4.50 x 0.85 = 3.83 m/s and
+       swallow the long jump for the 0.05 s after every landing). */
+    if (this.crouching && target > CROUCH_RUN_CAP) target = CROUCH_RUN_CAP;
     /* SPEED PAD HOLD (BOOST_TIME): the pad's power is the floor of the target,
        stick or no stick, easing back to a run over the last BOOST_FADE. */
     if (this._boostT > 0) {
