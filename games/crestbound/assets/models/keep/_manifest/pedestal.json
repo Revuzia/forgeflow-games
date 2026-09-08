@@ -1,0 +1,80 @@
+{
+ "name": "pedestal",
+ "file": "pedestal.glb",
+ "kind": "prop",
+ "bytes": 247004,
+ "tris": 1856,
+ "tris_budget": 3000,
+ "tris_ok": true,
+ "bones": 0,
+ "clips": [],
+ "bounds": {
+  "min": [
+   -0.969,
+   -0.08,
+   -0.969
+  ],
+  "max": [
+   0.969,
+   1.07,
+   0.969
+  ],
+  "size": [
+   1.938,
+   1.15,
+   1.938
+  ]
+ },
+ "pivot": "base centre; the footing ring sits 0.08 m below y=0 (buildPedestal buries it the same)",
+ "front": "+Z (glTF) \u2014 the face that looks into the room",
+ "materials": [
+  "pedestal",
+  "pedestal_rune"
+ ],
+ "nodes": [
+  "pedestal"
+ ],
+ "textures": {
+  "atlas": 1024,
+  "maps": [
+   "albedo (sRGB, webp)",
+   "normal (tangent, OpenGL +Y, webp)",
+   "orm (R=occlusion G=roughness B=metallic, webp)"
+  ]
+ },
+ "notes": [
+  "r 0.95, h 1.05; fluted drum; gilt engraved ring with a rune channel + 4 base runes + cap disc on the pedestal_rune slot (weak keep-gold emissive)",
+  "the runtime pool/sparkle/beam are builders.js effects, not part of the mesh"
+ ],
+ "reimport": {
+  "meshes": [
+   "pedestal"
+  ],
+  "tris": 1856,
+  "bones": 0,
+  "clips": [],
+  "images": [
+   [
+    "pedestal_albedo",
+    1024,
+    1024
+   ],
+   [
+    "pedestal_normal",
+    1024,
+    1024
+   ],
+   [
+    "pedestal_orm",
+    1024,
+    1024
+   ]
+  ],
+  "materials": [
+   "pedestal",
+   "pedestal_rune"
+  ]
+ },
+ "reimport_ok": true,
+ "seconds": 135.2
+}

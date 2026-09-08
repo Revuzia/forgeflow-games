@@ -1,0 +1,78 @@
+{
+ "name": "hammer_beam_truss",
+ "file": "hammer_beam_truss.glb",
+ "kind": "architecture",
+ "bytes": 1096540,
+ "tris": 2244,
+ "tris_budget": 3000,
+ "tris_ok": true,
+ "bones": 0,
+ "clips": [],
+ "bounds": {
+  "min": [
+   -5.195,
+   -0.2,
+   -0.45
+  ],
+  "max": [
+   5.195,
+   7.348,
+   0.45
+  ],
+  "size": [
+   10.391,
+   7.548,
+   0.9
+  ]
+ },
+ "pivot": "centre of the span at the wall-plate line (top of the wall): posts stand on y=0, the truss climbs above",
+ "front": "+Z (glTF) \u2014 the face that looks into the room",
+ "materials": [
+  "hammer_beam_truss"
+ ],
+ "nodes": [
+  "hammer_beam_truss"
+ ],
+ "textures": {
+  "atlas": 2048,
+  "maps": [
+   "albedo (sRGB, webp)",
+   "normal (tangent, OpenGL +Y, webp)",
+   "orm (R=occlusion G=roughness B=metallic, webp)"
+  ]
+ },
+ "notes": [
+  "10 m span, hammer beams 1.7 m, hammer posts, curved braces, collar, king post, 46 deg principals with a purlin seat each side",
+  "set it across the long hall (24 m wide: two trusses + a centre post) or scale X for the 8 m nook"
+ ],
+ "reimport": {
+  "meshes": [
+   "hammer_beam_truss"
+  ],
+  "tris": 2244,
+  "bones": 0,
+  "clips": [],
+  "images": [
+   [
+    "hammer_beam_truss_albedo",
+    2048,
+    2048
+   ],
+   [
+    "hammer_beam_truss_normal",
+    2048,
+    2048
+   ],
+   [
+    "hammer_beam_truss_orm",
+    2048,
+    2048
+   ]
+  ],
+  "materials": [
+   "hammer_beam_truss"
+  ]
+ },
+ "reimport_ok": true,
+ "seconds": 92.0
+}

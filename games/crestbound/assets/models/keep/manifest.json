@@ -1,7 +1,7 @@
 {
  "kit": "keep",
  "title": "THE KEEP \u2014 modular castle architecture kit",
- "generated": "2026-09-07 01:11:19",
+ "generated": "2026-09-08 12:34:01",
  "generator": "Blender 5.1.2 headless (bpy) \u2014 _tools/blender/keep/{kitlib,pieces,build_kit}.py",
  "units": "1 unit = 1 metre, +Y up (export_yup), origin at the base unless the entry says otherwise, front = +Z",
  "language": "warm stone (0x9c8768 keep tint family) + amber timber (0xc09056) + gilt / iron / marble accents",
@@ -15,17 +15,17 @@
  ],
  "budgets": {
   "architecture_tris": 3000,
-  "prop_tris": 1500,
+  "prop_tris": 3000,
   "atlas_max": 2048,
   "kit_texture_bytes": 25165824
  },
  "totals": {
-  "pieces": 5,
-  "bytes": 1726504,
-  "texture_bytes": 1258142,
-  "tris": 7704,
-  "bones": 0,
-  "clips": 0
+  "pieces": 20,
+  "bytes": 9768472,
+  "texture_bytes": 7831948,
+  "tris": 34048,
+  "bones": 7,
+  "clips": 2
  },
  "problems": [],
  "pieces": [
@@ -33,27 +33,27 @@
    "name": "arch_door",
    "file": "arch_door.glb",
    "kind": "architecture",
-   "bytes": 527364,
-   "tris": 1600,
+   "bytes": 1047972,
+   "tris": 1800,
    "tris_budget": 3000,
    "tris_ok": true,
    "bones": 0,
    "clips": [],
    "bounds": {
     "min": [
-     -1.98,
+     -1.984,
      0.0,
      -0.43
     ],
     "max": [
-     1.98,
-     4.742,
-     0.43
+     1.984,
+     4.769,
+     0.47
     ],
     "size": [
-     3.96,
-     4.742,
-     0.86
+     3.967,
+     4.769,
+     0.9
     ]
    },
    "pivot": "base centre of the opening (2.8 m clear, 4.2 m to the apex); the surround is 0.7 m deep, centred on the wall plane",
@@ -80,7 +80,7 @@
     "meshes": [
      "arch_door"
     ],
-    "tris": 1600,
+    "tris": 1800,
     "bones": 0,
     "clips": [],
     "images": [
@@ -105,27 +105,27 @@
     ]
    },
    "reimport_ok": true,
-   "seconds": 378.1,
-   "texture_bytes": 432660,
+   "seconds": 195.8,
+   "texture_bytes": 944382,
    "images": [
     {
      "name": "arch_door_normal",
      "mime": "image/webp",
-     "bytes": 74672
+     "bytes": 527546
     },
     {
      "name": "arch_door_orm",
      "mime": "image/webp",
-     "bytes": 239070
+     "bytes": 300450
     },
     {
      "name": "arch_door_albedo",
      "mime": "image/webp",
-     "bytes": 118918
+     "bytes": 116386
     }
    ],
    "glb": {
-    "tris": 1600,
+    "tris": 1800,
     "primitives": 1,
     "materials": [
      "arch_door"
@@ -156,8 +156,8 @@
    "name": "arch_window",
    "file": "arch_window.glb",
    "kind": "architecture",
-   "bytes": 299928,
-   "tris": 2308,
+   "bytes": 394188,
+   "tris": 2516,
    "tris_budget": 3000,
    "tris_ok": true,
    "bones": 0,
@@ -170,13 +170,13 @@
     ],
     "max": [
      1.15,
-     3.577,
-     0.33
+     3.602,
+     0.37
     ],
     "size": [
      2.3,
-     3.577,
-     0.66
+     3.602,
+     0.7
     ]
    },
    "pivot": "base centre of the opening (1.4 m clear, 3.2 m to the apex), sill on the floor line",
@@ -204,7 +204,7 @@
     "meshes": [
      "arch_window"
     ],
-    "tris": 2308,
+    "tris": 2516,
     "bones": 0,
     "clips": [],
     "images": [
@@ -230,27 +230,27 @@
     ]
    },
    "reimport_ok": true,
-   "seconds": 72.4,
-   "texture_bytes": 176422,
+   "seconds": 122.6,
+   "texture_bytes": 261054,
    "images": [
     {
      "name": "arch_window_normal",
      "mime": "image/webp",
-     "bytes": 13412
+     "bytes": 91032
     },
     {
      "name": "arch_window_orm",
      "mime": "image/webp",
-     "bytes": 106798
+     "bytes": 112018
     },
     {
      "name": "arch_window_albedo",
      "mime": "image/webp",
-     "bytes": 56212
+     "bytes": 58004
     }
    ],
    "glb": {
-    "tris": 2308,
+    "tris": 2516,
     "primitives": 2,
     "materials": [
      "arch_window",
@@ -289,11 +289,801 @@
    ]
   },
   {
+   "name": "balustrade",
+   "file": "balustrade.glb",
+   "kind": "architecture",
+   "bytes": 223132,
+   "tris": 2220,
+   "tris_budget": 3000,
+   "tris_ok": true,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -1.0,
+     0.0,
+     -0.13
+    ],
+    "max": [
+     1.0,
+     1.05,
+     0.13
+    ],
+    "size": [
+     2.0,
+     1.05,
+     0.26
+    ]
+   },
+   "pivot": "base centre; runs along X, 2.0 m; rails 0.22-0.26 m wide; 1.05 m tall (keep.js RAILS height)",
+   "front": "+Z (glTF) \u2014 the face that looks into the room",
+   "materials": [
+    "balustrade"
+   ],
+   "nodes": [
+    "balustrade"
+   ],
+   "textures": {
+    "atlas": 1024,
+    "maps": [
+     "albedo (sRGB, webp)",
+     "normal (tangent, OpenGL +Y, webp)",
+     "orm (R=occlusion G=roughness B=metallic, webp)"
+    ]
+   },
+   "notes": [
+    "5 turned balusters per 2.0 m; butt segments end to end, put a newel at every corner / stair foot"
+   ],
+   "reimport": {
+    "meshes": [
+     "balustrade"
+    ],
+    "tris": 2220,
+    "bones": 0,
+    "clips": [],
+    "images": [
+     [
+      "balustrade_albedo",
+      1024,
+      1024
+     ],
+     [
+      "balustrade_normal",
+      1024,
+      1024
+     ],
+     [
+      "balustrade_orm",
+      1024,
+      1024
+     ]
+    ],
+    "materials": [
+     "balustrade"
+    ]
+   },
+   "reimport_ok": true,
+   "seconds": 65.0,
+   "texture_bytes": 142082,
+   "images": [
+    {
+     "name": "balustrade_normal",
+     "mime": "image/webp",
+     "bytes": 6158
+    },
+    {
+     "name": "balustrade_orm",
+     "mime": "image/webp",
+     "bytes": 88864
+    },
+    {
+     "name": "balustrade_albedo",
+     "mime": "image/webp",
+     "bytes": 47060
+    }
+   ],
+   "glb": {
+    "tris": 2220,
+    "primitives": 1,
+    "materials": [
+     "balustrade"
+    ],
+    "nodes": [
+     "balustrade"
+    ],
+    "skins": [],
+    "animations": [],
+    "extensions": [
+     "EXT_texture_webp"
+    ],
+    "emissive": []
+   },
+   "turntable": [
+    "balustrade_00.png",
+    "balustrade_01.png",
+    "balustrade_02.png",
+    "balustrade_03.png",
+    "balustrade_04.png",
+    "balustrade_05.png",
+    "balustrade_06.png",
+    "balustrade_07.png",
+    "balustrade_closeup.png"
+   ]
+  },
+  {
+   "name": "banner_pole",
+   "file": "banner_pole.glb",
+   "kind": "prop",
+   "bytes": 366080,
+   "tris": 848,
+   "tris_budget": 3000,
+   "tris_ok": true,
+   "bones": 4,
+   "clips": [
+    {
+     "name": "sway",
+     "seconds": 3.0,
+     "frames": 72
+    }
+   ],
+   "bounds": {
+    "min": [
+     -0.82,
+     0.0,
+     -0.17
+    ],
+    "max": [
+     0.82,
+     3.62,
+     0.17
+    ],
+    "size": [
+     1.64,
+     3.62,
+     0.34
+    ]
+   },
+   "pivot": "base centre of the pole foot; pole 3.62 m to the spear tip, cloth 1.36 x 2.6 m hangs at glTF +Z 0.08",
+   "front": "+Z (glTF) \u2014 the face that looks into the room",
+   "materials": [
+    "banner_pole"
+   ],
+   "nodes": [
+    "banner_pole",
+    "banner_pole_rig"
+   ],
+   "textures": {
+    "atlas": 1024,
+    "maps": [
+     "albedo (sRGB, webp)",
+     "normal (tangent, OpenGL +Y, webp)",
+     "orm (R=occlusion G=roughness B=metallic, webp)"
+    ]
+   },
+   "notes": [
+    "cloth baked CREAM on purpose: tint banner_pole material.color per realm at runtime (keep.js banners carry a realm tint)",
+    "bones pole / cloth1 / cloth2 / cloth3; clip `sway` 3.0 s loop; gilt hexagram appliqu\u00e9 + fringe",
+    "cloth material is double-sided (no backface culling)"
+   ],
+   "reimport": {
+    "meshes": [
+     "banner_pole"
+    ],
+    "tris": 848,
+    "bones": 4,
+    "clips": [
+     [
+      "sway",
+      3.0
+     ]
+    ],
+    "images": [
+     [
+      "banner_pole_albedo",
+      1024,
+      1024
+     ],
+     [
+      "banner_pole_normal",
+      1024,
+      1024
+     ],
+     [
+      "banner_pole_orm",
+      1024,
+      1024
+     ]
+    ],
+    "materials": [
+     "banner_pole"
+    ]
+   },
+   "reimport_ok": true,
+   "seconds": 29.0,
+   "texture_bytes": 298694,
+   "images": [
+    {
+     "name": "banner_pole_normal",
+     "mime": "image/webp",
+     "bytes": 165292
+    },
+    {
+     "name": "banner_pole_orm",
+     "mime": "image/webp",
+     "bytes": 89842
+    },
+    {
+     "name": "banner_pole_albedo",
+     "mime": "image/webp",
+     "bytes": 43560
+    }
+   ],
+   "glb": {
+    "tris": 848,
+    "primitives": 1,
+    "materials": [
+     "banner_pole"
+    ],
+    "nodes": [
+     "cloth3",
+     "cloth2",
+     "cloth1",
+     "pole",
+     "banner_pole",
+     "banner_pole_rig"
+    ],
+    "skins": [
+     {
+      "joints": 4,
+      "skeleton": null
+     }
+    ],
+    "animations": [
+     {
+      "name": "sway",
+      "seconds": 3.042,
+      "channels": 12
+     }
+    ],
+    "extensions": [
+     "EXT_texture_webp"
+    ],
+    "emissive": []
+   },
+   "turntable": [
+    "banner_pole_00.png",
+    "banner_pole_01.png",
+    "banner_pole_02.png",
+    "banner_pole_03.png",
+    "banner_pole_04.png",
+    "banner_pole_05.png",
+    "banner_pole_06.png",
+    "banner_pole_07.png",
+    "banner_pole_closeup.png"
+   ]
+  },
+  {
+   "name": "bench",
+   "file": "bench.glb",
+   "kind": "prop",
+   "bytes": 142576,
+   "tris": 808,
+   "tris_budget": 3000,
+   "tris_ok": true,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -1.1,
+     0.0,
+     -0.24
+    ],
+    "max": [
+     1.1,
+     0.46,
+     0.24
+    ],
+    "size": [
+     2.2,
+     0.46,
+     0.48
+    ]
+   },
+   "pivot": "base centre; 2.2 x 0.42 m, seat at 0.46 m (keep.js bench deco 2.2 x 0.64 x 0.72 - scale to taste)",
+   "front": "+Z (glTF) \u2014 the face that looks into the room",
+   "materials": [
+    "bench"
+   ],
+   "nodes": [
+    "bench"
+   ],
+   "textures": {
+    "atlas": 512,
+    "maps": [
+     "albedo (sRGB, webp)",
+     "normal (tangent, OpenGL +Y, webp)",
+     "orm (R=occlusion G=roughness B=metallic, webp)"
+    ]
+   },
+   "notes": [
+    "refectory bench: chamfered oak top, arched trestle ends, through-pegged stretcher"
+   ],
+   "reimport": {
+    "meshes": [
+     "bench"
+    ],
+    "tris": 808,
+    "bones": 0,
+    "clips": [],
+    "images": [
+     [
+      "bench_albedo",
+      512,
+      512
+     ],
+     [
+      "bench_normal",
+      512,
+      512
+     ],
+     [
+      "bench_orm",
+      512,
+      512
+     ]
+    ],
+    "materials": [
+     "bench"
+    ]
+   },
+   "reimport_ok": true,
+   "seconds": 24.5,
+   "texture_bytes": 91690,
+   "images": [
+    {
+     "name": "bench_normal",
+     "mime": "image/webp",
+     "bytes": 42058
+    },
+    {
+     "name": "bench_orm",
+     "mime": "image/webp",
+     "bytes": 37104
+    },
+    {
+     "name": "bench_albedo",
+     "mime": "image/webp",
+     "bytes": 12528
+    }
+   ],
+   "glb": {
+    "tris": 808,
+    "primitives": 1,
+    "materials": [
+     "bench"
+    ],
+    "nodes": [
+     "bench"
+    ],
+    "skins": [],
+    "animations": [],
+    "extensions": [
+     "EXT_texture_webp"
+    ],
+    "emissive": []
+   },
+   "turntable": [
+    "bench_00.png",
+    "bench_01.png",
+    "bench_02.png",
+    "bench_03.png",
+    "bench_04.png",
+    "bench_05.png",
+    "bench_06.png",
+    "bench_07.png",
+    "bench_closeup.png"
+   ]
+  },
+  {
+   "name": "bookcase",
+   "file": "bookcase.glb",
+   "kind": "prop",
+   "bytes": 378284,
+   "tris": 1772,
+   "tris_budget": 3000,
+   "tris_ok": true,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.95,
+     0.0,
+     -0.315
+    ],
+    "max": [
+     0.95,
+     2.5,
+     0.315
+    ],
+    "size": [
+     1.9,
+     2.5,
+     0.63
+    ]
+   },
+   "pivot": "base centre of the plinth; back at glTF -Z 0.28, front at +Z 0.28 (keep.js bookcase deco 1.8 x 2.5 x 0.55)",
+   "front": "+Z (glTF) \u2014 the face that looks into the room",
+   "materials": [
+    "bookcase"
+   ],
+   "nodes": [
+    "bookcase"
+   ],
+   "textures": {
+    "atlas": 1024,
+    "maps": [
+     "albedo (sRGB, webp)",
+     "normal (tangent, OpenGL +Y, webp)",
+     "orm (R=occlusion G=roughness B=metallic, webp)"
+    ]
+   },
+   "notes": [
+    "oak carcass with cornice + plinth; 4 shelves of individually coloured books (per-book rnd -> palette)"
+   ],
+   "reimport": {
+    "meshes": [
+     "bookcase"
+    ],
+    "tris": 1772,
+    "bones": 0,
+    "clips": [],
+    "images": [
+     [
+      "bookcase_albedo",
+      1024,
+      1024
+     ],
+     [
+      "bookcase_normal",
+      1024,
+      1024
+     ],
+     [
+      "bookcase_orm",
+      1024,
+      1024
+     ]
+    ],
+    "materials": [
+     "bookcase"
+    ]
+   },
+   "reimport_ok": true,
+   "seconds": 46.5,
+   "texture_bytes": 253640,
+   "images": [
+    {
+     "name": "bookcase_normal",
+     "mime": "image/webp",
+     "bytes": 78744
+    },
+    {
+     "name": "bookcase_orm",
+     "mime": "image/webp",
+     "bytes": 119374
+    },
+    {
+     "name": "bookcase_albedo",
+     "mime": "image/webp",
+     "bytes": 55522
+    }
+   ],
+   "glb": {
+    "tris": 1772,
+    "primitives": 1,
+    "materials": [
+     "bookcase"
+    ],
+    "nodes": [
+     "bookcase"
+    ],
+    "skins": [],
+    "animations": [],
+    "extensions": [
+     "EXT_texture_webp"
+    ],
+    "emissive": []
+   },
+   "turntable": [
+    "bookcase_00.png",
+    "bookcase_01.png",
+    "bookcase_02.png",
+    "bookcase_03.png",
+    "bookcase_04.png",
+    "bookcase_05.png",
+    "bookcase_06.png",
+    "bookcase_07.png",
+    "bookcase_closeup.png"
+   ]
+  },
+  {
+   "name": "brazier",
+   "file": "brazier.glb",
+   "kind": "prop",
+   "bytes": 350664,
+   "tris": 1728,
+   "tris_budget": 3000,
+   "tris_ok": true,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.444,
+     -0.003,
+     -0.5
+    ],
+    "max": [
+     0.444,
+     1.59,
+     0.31
+    ],
+    "size": [
+     0.888,
+     1.594,
+     0.81
+    ]
+   },
+   "pivot": "base centre of the tripod (0.9 m across), 1.55 m tall",
+   "front": "+Z (glTF) \u2014 the face that looks into the room",
+   "materials": [
+    "brazier",
+    "brazier_glass_amber",
+    "brazier_ember"
+   ],
+   "nodes": [
+    "brazier"
+   ],
+   "textures": {
+    "atlas": 1024,
+    "maps": [
+     "albedo (sRGB, webp)",
+     "normal (tangent, OpenGL +Y, webp)",
+     "orm (R=occlusion G=roughness B=metallic, webp)"
+    ]
+   },
+   "notes": [
+    "standing lantern-brazier: iron tripod + bowl, caged amber glass on the brazier_glass_amber slot (emissive 3.2), ember core on brazier_ember",
+    "put the runtime point light at ~1.0 m (props.js L_TORCH y01 0.92 of 1.55 -> 1.43 m works too)"
+   ],
+   "reimport": {
+    "meshes": [
+     "brazier"
+    ],
+    "tris": 1728,
+    "bones": 0,
+    "clips": [],
+    "images": [
+     [
+      "brazier_albedo",
+      1024,
+      1024
+     ],
+     [
+      "brazier_normal",
+      1024,
+      1024
+     ],
+     [
+      "brazier_orm",
+      1024,
+      1024
+     ]
+    ],
+    "materials": [
+     "brazier",
+     "brazier_ember",
+     "brazier_glass_amber"
+    ]
+   },
+   "reimport_ok": true,
+   "seconds": 81.0,
+   "texture_bytes": 259512,
+   "images": [
+    {
+     "name": "brazier_normal",
+     "mime": "image/webp",
+     "bytes": 100320
+    },
+    {
+     "name": "brazier_orm",
+     "mime": "image/webp",
+     "bytes": 117944
+    },
+    {
+     "name": "brazier_albedo",
+     "mime": "image/webp",
+     "bytes": 41248
+    }
+   ],
+   "glb": {
+    "tris": 1728,
+    "primitives": 3,
+    "materials": [
+     "brazier",
+     "brazier_glass_amber",
+     "brazier_ember"
+    ],
+    "nodes": [
+     "brazier"
+    ],
+    "skins": [],
+    "animations": [],
+    "extensions": [
+     "KHR_materials_emissive_strength",
+     "EXT_texture_webp"
+    ],
+    "emissive": [
+     [
+      "brazier_glass_amber",
+      [
+       1,
+       0.35153260827064514,
+       0.05126945674419403
+      ],
+      3.200000047683716
+     ],
+     [
+      "brazier_ember",
+      [
+       1,
+       0.2541520893573761,
+       0.045186202973127365
+      ],
+      2.4000000953674316
+     ]
+    ]
+   },
+   "turntable": [
+    "brazier_00.png",
+    "brazier_01.png",
+    "brazier_02.png",
+    "brazier_03.png",
+    "brazier_04.png",
+    "brazier_05.png",
+    "brazier_06.png",
+    "brazier_07.png",
+    "brazier_closeup.png"
+   ]
+  },
+  {
+   "name": "column",
+   "file": "column.glb",
+   "kind": "architecture",
+   "bytes": 273012,
+   "tris": 1988,
+   "tris_budget": 3000,
+   "tris_ok": true,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.57,
+     0.0,
+     -0.57
+    ],
+    "max": [
+     0.57,
+     4.0,
+     0.57
+    ],
+    "size": [
+     1.14,
+     4.0,
+     1.14
+    ]
+   },
+   "pivot": "base centre; 4.0 m to the top of the abacus",
+   "front": "+Z (glTF) \u2014 the face that looks into the room",
+   "materials": [
+    "column"
+   ],
+   "nodes": [
+    "column"
+   ],
+   "textures": {
+    "atlas": 1024,
+    "maps": [
+     "albedo (sRGB, webp)",
+     "normal (tangent, OpenGL +Y, webp)",
+     "orm (R=occlusion G=roughness B=metallic, webp)"
+    ]
+   },
+   "notes": [
+    "fluted (12) shaft r 0.30 on a torus base; bell capital with gilt corner volutes; abacus 1.04 m square",
+    "scale Y to taller orders (the lobby pillars are 14 m) or stack a plain drum under it"
+   ],
+   "reimport": {
+    "meshes": [
+     "column"
+    ],
+    "tris": 1988,
+    "bones": 0,
+    "clips": [],
+    "images": [
+     [
+      "column_albedo",
+      1024,
+      1024
+     ],
+     [
+      "column_normal",
+      1024,
+      1024
+     ],
+     [
+      "column_orm",
+      1024,
+      1024
+     ]
+    ],
+    "materials": [
+     "column"
+    ]
+   },
+   "reimport_ok": true,
+   "seconds": 81.9,
+   "texture_bytes": 197296,
+   "images": [
+    {
+     "name": "column_normal",
+     "mime": "image/webp",
+     "bytes": 73052
+    },
+    {
+     "name": "column_orm",
+     "mime": "image/webp",
+     "bytes": 78978
+    },
+    {
+     "name": "column_albedo",
+     "mime": "image/webp",
+     "bytes": 45266
+    }
+   ],
+   "glb": {
+    "tris": 1988,
+    "primitives": 1,
+    "materials": [
+     "column"
+    ],
+    "nodes": [
+     "column"
+    ],
+    "skins": [],
+    "animations": [],
+    "extensions": [
+     "EXT_texture_webp"
+    ],
+    "emissive": []
+   },
+   "turntable": [
+    "column_00.png",
+    "column_01.png",
+    "column_02.png",
+    "column_03.png",
+    "column_04.png",
+    "column_05.png",
+    "column_06.png",
+    "column_07.png",
+    "column_closeup.png"
+   ]
+  },
+  {
    "name": "corner_pier",
    "file": "corner_pier.glb",
    "kind": "architecture",
-   "bytes": 161656,
-   "tris": 876,
+   "bytes": 379164,
+   "tris": 760,
    "tris_budget": 3000,
    "tris_ok": true,
    "bones": 0,
@@ -332,13 +1122,13 @@
     ]
    },
    "notes": [
-    "1.0 x 1.0 x 4.0 m; quoins alternate long/short every 0.48 m course; stack for taller corners"
+    "1.0 x 1.0 x 4.0 m; cross-laid quoin courses every 0.48 m (proud/recessed alternating on X and Z); stack for taller corners"
    ],
    "reimport": {
     "meshes": [
      "corner_pier"
     ],
-    "tris": 876,
+    "tris": 760,
     "bones": 0,
     "clips": [],
     "images": [
@@ -363,27 +1153,27 @@
     ]
    },
    "reimport_ok": true,
-   "seconds": 230.5,
-   "texture_bytes": 101256,
+   "seconds": 123.7,
+   "texture_bytes": 333538,
    "images": [
     {
      "name": "corner_pier_normal",
      "mime": "image/webp",
-     "bytes": 19254
+     "bytes": 246318
     },
     {
      "name": "corner_pier_orm",
      "mime": "image/webp",
-     "bytes": 53690
+     "bytes": 58740
     },
     {
      "name": "corner_pier_albedo",
      "mime": "image/webp",
-     "bytes": 28312
+     "bytes": 28480
     }
    ],
    "glb": {
-    "tris": 876,
+    "tris": 760,
     "primitives": 1,
     "materials": [
      "corner_pier"
@@ -411,12 +1201,797 @@
    ]
   },
   {
+   "name": "frame_painting_l",
+   "file": "frame_painting_l.glb",
+   "kind": "prop",
+   "bytes": 220260,
+   "tris": 2084,
+   "tris_budget": 3000,
+   "tris_ok": true,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -2.443,
+     -2.543,
+     -0.02
+    ],
+    "max": [
+     2.443,
+     2.84,
+     0.305
+    ],
+    "size": [
+     4.885,
+     5.383,
+     0.325
+    ]
+   },
+   "pivot": "centre of the canvas ON the wall plane (buildPainting p); canvas 4.04 x 4.24 m, frame 4.68 x 4.88 m",
+   "front": "+Z (glTF) \u2014 the face that looks into the room",
+   "materials": [
+    "frame_painting_l",
+    "frame_painting_l_canvas"
+   ],
+   "nodes": [
+    "frame_painting_l",
+    "canvas"
+   ],
+   "textures": {
+    "atlas": 1024,
+    "maps": [
+     "albedo (sRGB, webp)",
+     "normal (tangent, OpenGL +Y, webp)",
+     "orm (R=occlusion G=roughness B=metallic, webp)"
+    ]
+   },
+   "notes": [
+    "opening 4.2 x 4.4 m (keep.js size), gilt moulded rails, corner rosettes, crest pediment",
+    "node `canvas` is a separate mesh with UVs 0..1 and its own plain material: swap its map for the course plate"
+   ],
+   "reimport": {
+    "meshes": [
+     "canvas",
+     "frame_painting_l"
+    ],
+    "tris": 2084,
+    "bones": 0,
+    "clips": [],
+    "images": [
+     [
+      "frame_painting_l_albedo",
+      1024,
+      1024
+     ],
+     [
+      "frame_painting_l_normal",
+      1024,
+      1024
+     ],
+     [
+      "frame_painting_l_orm",
+      1024,
+      1024
+     ]
+    ],
+    "materials": [
+     "frame_painting_l",
+     "frame_painting_l_canvas"
+    ]
+   },
+   "reimport_ok": true,
+   "seconds": 31.3,
+   "texture_bytes": 112836,
+   "images": [
+    {
+     "name": "frame_painting_l_normal",
+     "mime": "image/webp",
+     "bytes": 4550
+    },
+    {
+     "name": "frame_painting_l_orm",
+     "mime": "image/webp",
+     "bytes": 60436
+    },
+    {
+     "name": "frame_painting_l_albedo",
+     "mime": "image/webp",
+     "bytes": 47850
+    }
+   ],
+   "glb": {
+    "tris": 2084,
+    "primitives": 2,
+    "materials": [
+     "frame_painting_l_canvas",
+     "frame_painting_l"
+    ],
+    "nodes": [
+     "canvas",
+     "frame_painting_l"
+    ],
+    "skins": [],
+    "animations": [],
+    "extensions": [
+     "EXT_texture_webp"
+    ],
+    "emissive": []
+   },
+   "turntable": [
+    "frame_painting_l_00.png",
+    "frame_painting_l_01.png",
+    "frame_painting_l_02.png",
+    "frame_painting_l_03.png",
+    "frame_painting_l_04.png",
+    "frame_painting_l_05.png",
+    "frame_painting_l_06.png",
+    "frame_painting_l_07.png",
+    "frame_painting_l_closeup.png"
+   ]
+  },
+  {
+   "name": "frame_painting_m",
+   "file": "frame_painting_m.glb",
+   "kind": "prop",
+   "bytes": 233828,
+   "tris": 2084,
+   "tris_budget": 3000,
+   "tris_ok": true,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -2.043,
+     -2.243,
+     -0.02
+    ],
+    "max": [
+     2.043,
+     2.54,
+     0.305
+    ],
+    "size": [
+     4.085,
+     4.783,
+     0.325
+    ]
+   },
+   "pivot": "centre of the canvas ON the wall plane (buildPainting p); canvas 3.24 x 3.64 m, frame 3.88 x 4.28 m",
+   "front": "+Z (glTF) \u2014 the face that looks into the room",
+   "materials": [
+    "frame_painting_m",
+    "frame_painting_m_canvas"
+   ],
+   "nodes": [
+    "frame_painting_m",
+    "canvas"
+   ],
+   "textures": {
+    "atlas": 1024,
+    "maps": [
+     "albedo (sRGB, webp)",
+     "normal (tangent, OpenGL +Y, webp)",
+     "orm (R=occlusion G=roughness B=metallic, webp)"
+    ]
+   },
+   "notes": [
+    "opening 3.4 x 3.8 m (keep.js size), gilt moulded rails, corner rosettes, crest pediment",
+    "node `canvas` is a separate mesh with UVs 0..1 and its own plain material: swap its map for the course plate"
+   ],
+   "reimport": {
+    "meshes": [
+     "canvas",
+     "frame_painting_m"
+    ],
+    "tris": 2084,
+    "bones": 0,
+    "clips": [],
+    "images": [
+     [
+      "frame_painting_m_albedo",
+      1024,
+      1024
+     ],
+     [
+      "frame_painting_m_normal",
+      1024,
+      1024
+     ],
+     [
+      "frame_painting_m_orm",
+      1024,
+      1024
+     ]
+    ],
+    "materials": [
+     "frame_painting_m",
+     "frame_painting_m_canvas"
+    ]
+   },
+   "reimport_ok": true,
+   "seconds": 116.4,
+   "texture_bytes": 126406,
+   "images": [
+    {
+     "name": "frame_painting_m_normal",
+     "mime": "image/webp",
+     "bytes": 4708
+    },
+    {
+     "name": "frame_painting_m_orm",
+     "mime": "image/webp",
+     "bytes": 67216
+    },
+    {
+     "name": "frame_painting_m_albedo",
+     "mime": "image/webp",
+     "bytes": 54482
+    }
+   ],
+   "glb": {
+    "tris": 2084,
+    "primitives": 2,
+    "materials": [
+     "frame_painting_m_canvas",
+     "frame_painting_m"
+    ],
+    "nodes": [
+     "canvas",
+     "frame_painting_m"
+    ],
+    "skins": [],
+    "animations": [],
+    "extensions": [
+     "EXT_texture_webp"
+    ],
+    "emissive": []
+   },
+   "turntable": [
+    "frame_painting_m_00.png",
+    "frame_painting_m_01.png",
+    "frame_painting_m_02.png",
+    "frame_painting_m_03.png",
+    "frame_painting_m_04.png",
+    "frame_painting_m_05.png",
+    "frame_painting_m_06.png",
+    "frame_painting_m_07.png",
+    "frame_painting_m_closeup.png"
+   ]
+  },
+  {
+   "name": "frame_painting_s",
+   "file": "frame_painting_s.glb",
+   "kind": "prop",
+   "bytes": 235356,
+   "tris": 2084,
+   "tris_budget": 3000,
+   "tris_ok": true,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -1.843,
+     -1.943,
+     -0.02
+    ],
+    "max": [
+     1.843,
+     2.24,
+     0.305
+    ],
+    "size": [
+     3.685,
+     4.183,
+     0.325
+    ]
+   },
+   "pivot": "centre of the canvas ON the wall plane (buildPainting p); canvas 2.84 x 3.04 m, frame 3.48 x 3.68 m",
+   "front": "+Z (glTF) \u2014 the face that looks into the room",
+   "materials": [
+    "frame_painting_s",
+    "frame_painting_s_canvas"
+   ],
+   "nodes": [
+    "frame_painting_s",
+    "canvas"
+   ],
+   "textures": {
+    "atlas": 1024,
+    "maps": [
+     "albedo (sRGB, webp)",
+     "normal (tangent, OpenGL +Y, webp)",
+     "orm (R=occlusion G=roughness B=metallic, webp)"
+    ]
+   },
+   "notes": [
+    "opening 3.0 x 3.2 m (keep.js size), gilt moulded rails, corner rosettes, crest pediment",
+    "node `canvas` is a separate mesh with UVs 0..1 and its own plain material: swap its map for the course plate"
+   ],
+   "reimport": {
+    "meshes": [
+     "canvas",
+     "frame_painting_s"
+    ],
+    "tris": 2084,
+    "bones": 0,
+    "clips": [],
+    "images": [
+     [
+      "frame_painting_s_albedo",
+      1024,
+      1024
+     ],
+     [
+      "frame_painting_s_normal",
+      1024,
+      1024
+     ],
+     [
+      "frame_painting_s_orm",
+      1024,
+      1024
+     ]
+    ],
+    "materials": [
+     "frame_painting_s",
+     "frame_painting_s_canvas"
+    ]
+   },
+   "reimport_ok": true,
+   "seconds": 37.5,
+   "texture_bytes": 127932,
+   "images": [
+    {
+     "name": "frame_painting_s_normal",
+     "mime": "image/webp",
+     "bytes": 5348
+    },
+    {
+     "name": "frame_painting_s_orm",
+     "mime": "image/webp",
+     "bytes": 70616
+    },
+    {
+     "name": "frame_painting_s_albedo",
+     "mime": "image/webp",
+     "bytes": 51968
+    }
+   ],
+   "glb": {
+    "tris": 2084,
+    "primitives": 2,
+    "materials": [
+     "frame_painting_s_canvas",
+     "frame_painting_s"
+    ],
+    "nodes": [
+     "canvas",
+     "frame_painting_s"
+    ],
+    "skins": [],
+    "animations": [],
+    "extensions": [
+     "EXT_texture_webp"
+    ],
+    "emissive": []
+   },
+   "turntable": [
+    "frame_painting_s_00.png",
+    "frame_painting_s_01.png",
+    "frame_painting_s_02.png",
+    "frame_painting_s_03.png",
+    "frame_painting_s_04.png",
+    "frame_painting_s_05.png",
+    "frame_painting_s_06.png",
+    "frame_painting_s_07.png",
+    "frame_painting_s_closeup.png"
+   ]
+  },
+  {
+   "name": "gallery_beam",
+   "file": "gallery_beam.glb",
+   "kind": "architecture",
+   "bytes": 288668,
+   "tris": 864,
+   "tris_budget": 3000,
+   "tris_ok": true,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -2.0,
+     -0.42,
+     -0.28
+    ],
+    "max": [
+     2.0,
+     0.53,
+     0.31
+    ],
+    "size": [
+     4.0,
+     0.95,
+     0.59
+    ]
+   },
+   "pivot": "underside centre of the 4.0 m beam: y=0 is the beam soffit; the corbels hang 0.42 m below",
+   "front": "+Z (glTF) \u2014 the face that looks into the room",
+   "materials": [
+    "gallery_beam"
+   ],
+   "nodes": [
+    "gallery_beam"
+   ],
+   "textures": {
+    "atlas": 1024,
+    "maps": [
+     "albedo (sRGB, webp)",
+     "normal (tangent, OpenGL +Y, webp)",
+     "orm (R=occlusion G=roughness B=metallic, webp)"
+    ]
+   },
+   "notes": [
+    "0.5 m square chamfered oak, 4.0 m; two iron straps with studs; stepped corbels each end",
+    "keep.js coffers: `beam` deco 40 x 0.7 x 0.7 \u2014 stack two modules and scale X for those"
+   ],
+   "reimport": {
+    "meshes": [
+     "gallery_beam"
+    ],
+    "tris": 864,
+    "bones": 0,
+    "clips": [],
+    "images": [
+     [
+      "gallery_beam_albedo",
+      1024,
+      1024
+     ],
+     [
+      "gallery_beam_normal",
+      1024,
+      1024
+     ],
+     [
+      "gallery_beam_orm",
+      1024,
+      1024
+     ]
+    ],
+    "materials": [
+     "gallery_beam"
+    ]
+   },
+   "reimport_ok": true,
+   "seconds": 41.0,
+   "texture_bytes": 244712,
+   "images": [
+    {
+     "name": "gallery_beam_normal",
+     "mime": "image/webp",
+     "bytes": 139722
+    },
+    {
+     "name": "gallery_beam_orm",
+     "mime": "image/webp",
+     "bytes": 74052
+    },
+    {
+     "name": "gallery_beam_albedo",
+     "mime": "image/webp",
+     "bytes": 30938
+    }
+   ],
+   "glb": {
+    "tris": 864,
+    "primitives": 1,
+    "materials": [
+     "gallery_beam"
+    ],
+    "nodes": [
+     "gallery_beam"
+    ],
+    "skins": [],
+    "animations": [],
+    "extensions": [
+     "EXT_texture_webp"
+    ],
+    "emissive": []
+   },
+   "turntable": [
+    "gallery_beam_00.png",
+    "gallery_beam_01.png",
+    "gallery_beam_02.png",
+    "gallery_beam_03.png",
+    "gallery_beam_04.png",
+    "gallery_beam_05.png",
+    "gallery_beam_06.png",
+    "gallery_beam_07.png",
+    "gallery_beam_closeup.png"
+   ]
+  },
+  {
+   "name": "gate_door",
+   "file": "gate_door.glb",
+   "kind": "architecture",
+   "bytes": 1528656,
+   "tris": 2864,
+   "tris_budget": 3000,
+   "tris_ok": true,
+   "bones": 3,
+   "clips": [
+    {
+     "name": "open",
+     "seconds": 1.5,
+     "frames": 36
+    }
+   ],
+   "bounds": {
+    "min": [
+     -1.983,
+     0.0,
+     -0.43
+    ],
+    "max": [
+     1.983,
+     4.769,
+     0.47
+    ],
+    "size": [
+     3.966,
+     4.769,
+     0.9
+    ]
+   },
+   "pivot": "base centre of the opening on the wall plane (buildGateDoor p); leaves hang 0.10 m in front (glTF +Z)",
+   "front": "+Z (glTF) \u2014 the face that looks into the room",
+   "materials": [
+    "gate_door"
+   ],
+   "nodes": [
+    "gate_door",
+    "gate_door_rig"
+   ],
+   "textures": {
+    "atlas": 2048,
+    "maps": [
+     "albedo (sRGB, webp)",
+     "normal (tangent, OpenGL +Y, webp)",
+     "orm (R=occlusion G=roughness B=metallic, webp)"
+    ]
+   },
+   "notes": [
+    "opening 2.8 x 4.2 (keep.js IRON_DOOR); surround as arch_door; leaves: 5 oak planks each, 3 spear-end strap hinges, ring handles",
+    "crest lock plate (octagon, six-bar gilt glyph, keyhole) on the right leaf",
+    "bones root / hingeL / hingeR (hinge lines at x = -+1.40, glTF); clip `open` 1.5 s swings both leaves 75 deg toward +Z",
+    "swap the leaf material tint or play `open` backward to close"
+   ],
+   "reimport": {
+    "meshes": [
+     "gate_door"
+    ],
+    "tris": 2864,
+    "bones": 3,
+    "clips": [
+     [
+      "open",
+      1.5
+     ]
+    ],
+    "images": [
+     [
+      "gate_door_albedo",
+      2048,
+      2048
+     ],
+     [
+      "gate_door_normal",
+      2048,
+      2048
+     ],
+     [
+      "gate_door_orm",
+      2048,
+      2048
+     ]
+    ],
+    "materials": [
+     "gate_door"
+    ]
+   },
+   "reimport_ok": true,
+   "seconds": 79.1,
+   "texture_bytes": 1234352,
+   "images": [
+    {
+     "name": "gate_door_normal",
+     "mime": "image/webp",
+     "bytes": 564570
+    },
+    {
+     "name": "gate_door_orm",
+     "mime": "image/webp",
+     "bytes": 477450
+    },
+    {
+     "name": "gate_door_albedo",
+     "mime": "image/webp",
+     "bytes": 192332
+    }
+   ],
+   "glb": {
+    "tris": 2864,
+    "primitives": 1,
+    "materials": [
+     "gate_door"
+    ],
+    "nodes": [
+     "hingeL",
+     "hingeR",
+     "root",
+     "gate_door",
+     "gate_door_rig"
+    ],
+    "skins": [
+     {
+      "joints": 3,
+      "skeleton": null
+     }
+    ],
+    "animations": [
+     {
+      "name": "open",
+      "seconds": 1.542,
+      "channels": 9
+     }
+    ],
+    "extensions": [
+     "EXT_texture_webp"
+    ],
+    "emissive": []
+   },
+   "turntable": [
+    "gate_door_00.png",
+    "gate_door_01.png",
+    "gate_door_02.png",
+    "gate_door_03.png",
+    "gate_door_04.png",
+    "gate_door_05.png",
+    "gate_door_06.png",
+    "gate_door_07.png",
+    "gate_door_closeup.png"
+   ]
+  },
+  {
+   "name": "hammer_beam_truss",
+   "file": "hammer_beam_truss.glb",
+   "kind": "architecture",
+   "bytes": 1096540,
+   "tris": 2244,
+   "tris_budget": 3000,
+   "tris_ok": true,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -5.195,
+     -0.2,
+     -0.45
+    ],
+    "max": [
+     5.195,
+     7.348,
+     0.45
+    ],
+    "size": [
+     10.391,
+     7.548,
+     0.9
+    ]
+   },
+   "pivot": "centre of the span at the wall-plate line (top of the wall): posts stand on y=0, the truss climbs above",
+   "front": "+Z (glTF) \u2014 the face that looks into the room",
+   "materials": [
+    "hammer_beam_truss"
+   ],
+   "nodes": [
+    "hammer_beam_truss"
+   ],
+   "textures": {
+    "atlas": 2048,
+    "maps": [
+     "albedo (sRGB, webp)",
+     "normal (tangent, OpenGL +Y, webp)",
+     "orm (R=occlusion G=roughness B=metallic, webp)"
+    ]
+   },
+   "notes": [
+    "10 m span, hammer beams 1.7 m, hammer posts, curved braces, collar, king post, 46 deg principals with a purlin seat each side",
+    "set it across the long hall (24 m wide: two trusses + a centre post) or scale X for the 8 m nook"
+   ],
+   "reimport": {
+    "meshes": [
+     "hammer_beam_truss"
+    ],
+    "tris": 2244,
+    "bones": 0,
+    "clips": [],
+    "images": [
+     [
+      "hammer_beam_truss_albedo",
+      2048,
+      2048
+     ],
+     [
+      "hammer_beam_truss_normal",
+      2048,
+      2048
+     ],
+     [
+      "hammer_beam_truss_orm",
+      2048,
+      2048
+     ]
+    ],
+    "materials": [
+     "hammer_beam_truss"
+    ]
+   },
+   "reimport_ok": true,
+   "seconds": 92.0,
+   "texture_bytes": 993514,
+   "images": [
+    {
+     "name": "hammer_beam_truss_normal",
+     "mime": "image/webp",
+     "bytes": 526074
+    },
+    {
+     "name": "hammer_beam_truss_orm",
+     "mime": "image/webp",
+     "bytes": 305630
+    },
+    {
+     "name": "hammer_beam_truss_albedo",
+     "mime": "image/webp",
+     "bytes": 161810
+    }
+   ],
+   "glb": {
+    "tris": 2244,
+    "primitives": 1,
+    "materials": [
+     "hammer_beam_truss"
+    ],
+    "nodes": [
+     "hammer_beam_truss"
+    ],
+    "skins": [],
+    "animations": [],
+    "extensions": [
+     "EXT_texture_webp"
+    ],
+    "emissive": []
+   },
+   "turntable": [
+    "hammer_beam_truss_00.png",
+    "hammer_beam_truss_01.png",
+    "hammer_beam_truss_02.png",
+    "hammer_beam_truss_03.png",
+    "hammer_beam_truss_04.png",
+    "hammer_beam_truss_05.png",
+    "hammer_beam_truss_06.png",
+    "hammer_beam_truss_07.png",
+    "hammer_beam_truss_closeup.png"
+   ]
+  },
+  {
    "name": "newel",
    "file": "newel.glb",
    "kind": "prop",
-   "bytes": 77608,
+   "bytes": 78456,
    "tris": 944,
-   "tris_budget": 1500,
+   "tris_budget": 3000,
    "tris_ok": true,
    "bones": 0,
    "clips": [],
@@ -485,23 +2060,23 @@
     ]
    },
    "reimport_ok": true,
-   "seconds": 141.5,
-   "texture_bytes": 30838,
+   "seconds": 183.7,
+   "texture_bytes": 31682,
    "images": [
     {
      "name": "newel_normal",
      "mime": "image/webp",
-     "bytes": 554
+     "bytes": 1292
     },
     {
      "name": "newel_orm",
      "mime": "image/webp",
-     "bytes": 19288
+     "bytes": 19304
     },
     {
      "name": "newel_albedo",
      "mime": "image/webp",
-     "bytes": 10996
+     "bytes": 11086
     }
    ],
    "glb": {
@@ -533,10 +2108,420 @@
    ]
   },
   {
+   "name": "pedestal",
+   "file": "pedestal.glb",
+   "kind": "prop",
+   "bytes": 247004,
+   "tris": 1856,
+   "tris_budget": 3000,
+   "tris_ok": true,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.969,
+     -0.08,
+     -0.969
+    ],
+    "max": [
+     0.969,
+     1.07,
+     0.969
+    ],
+    "size": [
+     1.938,
+     1.15,
+     1.938
+    ]
+   },
+   "pivot": "base centre; the footing ring sits 0.08 m below y=0 (buildPedestal buries it the same)",
+   "front": "+Z (glTF) \u2014 the face that looks into the room",
+   "materials": [
+    "pedestal",
+    "pedestal_rune"
+   ],
+   "nodes": [
+    "pedestal"
+   ],
+   "textures": {
+    "atlas": 1024,
+    "maps": [
+     "albedo (sRGB, webp)",
+     "normal (tangent, OpenGL +Y, webp)",
+     "orm (R=occlusion G=roughness B=metallic, webp)"
+    ]
+   },
+   "notes": [
+    "r 0.95, h 1.05; fluted drum; gilt engraved ring with a rune channel + 4 base runes + cap disc on the pedestal_rune slot (weak keep-gold emissive)",
+    "the runtime pool/sparkle/beam are builders.js effects, not part of the mesh"
+   ],
+   "reimport": {
+    "meshes": [
+     "pedestal"
+    ],
+    "tris": 1856,
+    "bones": 0,
+    "clips": [],
+    "images": [
+     [
+      "pedestal_albedo",
+      1024,
+      1024
+     ],
+     [
+      "pedestal_normal",
+      1024,
+      1024
+     ],
+     [
+      "pedestal_orm",
+      1024,
+      1024
+     ]
+    ],
+    "materials": [
+     "pedestal",
+     "pedestal_rune"
+    ]
+   },
+   "reimport_ok": true,
+   "seconds": 135.2,
+   "texture_bytes": 169360,
+   "images": [
+    {
+     "name": "pedestal_normal",
+     "mime": "image/webp",
+     "bytes": 3892
+    },
+    {
+     "name": "pedestal_orm",
+     "mime": "image/webp",
+     "bytes": 98646
+    },
+    {
+     "name": "pedestal_albedo",
+     "mime": "image/webp",
+     "bytes": 66822
+    }
+   ],
+   "glb": {
+    "tris": 1856,
+    "primitives": 2,
+    "materials": [
+     "pedestal",
+     "pedestal_rune"
+    ],
+    "nodes": [
+     "pedestal"
+    ],
+    "skins": [],
+    "animations": [],
+    "extensions": [
+     "EXT_texture_webp"
+    ],
+    "emissive": [
+     [
+      "pedestal_rune",
+      [
+       0.4481346905231476,
+       0.32918742299079895,
+       0.12507914006710052
+      ],
+      null
+     ]
+    ]
+   },
+   "turntable": [
+    "pedestal_00.png",
+    "pedestal_01.png",
+    "pedestal_02.png",
+    "pedestal_03.png",
+    "pedestal_04.png",
+    "pedestal_05.png",
+    "pedestal_06.png",
+    "pedestal_07.png",
+    "pedestal_closeup.png"
+   ]
+  },
+  {
+   "name": "stair_module",
+   "file": "stair_module.glb",
+   "kind": "architecture",
+   "bytes": 576884,
+   "tris": 1912,
+   "tris_budget": 3000,
+   "tris_ok": true,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -2.185,
+     -0.205,
+     -1.136
+    ],
+    "max": [
+     2.185,
+     1.445,
+     1.136
+    ],
+    "size": [
+     4.37,
+     1.649,
+     2.272
+    ]
+   },
+   "pivot": "centre of the XZ footprint, at the FOOT height (buildStairs p): lowest riser at glTF -Z, climbs toward +Z",
+   "front": "+Z (glTF) \u2014 the face that looks into the room",
+   "materials": [
+    "stair_module",
+    "stair_module_stripe"
+   ],
+   "nodes": [
+    "stair_module"
+   ],
+   "textures": {
+    "atlas": 2048,
+    "maps": [
+     "albedo (sRGB, webp)",
+     "normal (tangent, OpenGL +Y, webp)",
+     "orm (R=occlusion G=roughness B=metallic, webp)"
+    ]
+   },
+   "notes": [
+    "4 risers x 0.30 (< TUNE.stepUp 0.45), run 0.46, width 4.0: identical to keep.js GRAND_STAIR flights",
+    "brass nose inlays are on the stair_module_stripe material slot (weak keep-gold emissive) for the leading-edge law",
+    "timber stringers carved with scroll bosses; chain modules every 1.84 m of run / 1.20 m of rise"
+   ],
+   "reimport": {
+    "meshes": [
+     "stair_module"
+    ],
+    "tris": 1912,
+    "bones": 0,
+    "clips": [],
+    "images": [
+     [
+      "stair_module_albedo",
+      2048,
+      2048
+     ],
+     [
+      "stair_module_normal",
+      2048,
+      2048
+     ],
+     [
+      "stair_module_orm",
+      2048,
+      2048
+     ]
+    ],
+    "materials": [
+     "stair_module",
+     "stair_module_stripe"
+    ]
+   },
+   "reimport_ok": true,
+   "seconds": 124.1,
+   "texture_bytes": 481274,
+   "images": [
+    {
+     "name": "stair_module_normal",
+     "mime": "image/webp",
+     "bytes": 84998
+    },
+    {
+     "name": "stair_module_orm",
+     "mime": "image/webp",
+     "bytes": 261496
+    },
+    {
+     "name": "stair_module_albedo",
+     "mime": "image/webp",
+     "bytes": 134780
+    }
+   ],
+   "glb": {
+    "tris": 1912,
+    "primitives": 2,
+    "materials": [
+     "stair_module",
+     "stair_module_stripe"
+    ],
+    "nodes": [
+     "stair_module"
+    ],
+    "skins": [],
+    "animations": [],
+    "extensions": [
+     "EXT_texture_webp"
+    ],
+    "emissive": [
+     [
+      "stair_module_stripe",
+      [
+       0.8066424215729384,
+       0.5925373456865586,
+       0.22514244615654277
+      ],
+      null
+     ]
+    ]
+   },
+   "turntable": [
+    "stair_module_00.png",
+    "stair_module_01.png",
+    "stair_module_02.png",
+    "stair_module_03.png",
+    "stair_module_04.png",
+    "stair_module_05.png",
+    "stair_module_06.png",
+    "stair_module_07.png",
+    "stair_module_closeup.png"
+   ]
+  },
+  {
+   "name": "torch_sconce",
+   "file": "torch_sconce.glb",
+   "kind": "prop",
+   "bytes": 112380,
+   "tris": 696,
+   "tris_budget": 3000,
+   "tris_ok": true,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.12,
+     -0.058,
+     -0.0
+    ],
+    "max": [
+     0.12,
+     0.92,
+     0.331
+    ],
+    "size": [
+     0.24,
+     0.978,
+     0.331
+    ]
+   },
+   "pivot": "the wall plate: origin on the wall plane at the plate base; the torch head is 0.26 m out (glTF +Z) at 0.9 m",
+   "front": "+Z (glTF) \u2014 the face that looks into the room",
+   "materials": [
+    "torch_sconce",
+    "torch_sconce_ember"
+   ],
+   "nodes": [
+    "torch_sconce"
+   ],
+   "textures": {
+    "atlas": 512,
+    "maps": [
+     "albedo (sRGB, webp)",
+     "normal (tangent, OpenGL +Y, webp)",
+     "orm (R=occlusion G=roughness B=metallic, webp)"
+    ]
+   },
+   "notes": [
+    "shield back plate, forged arm, twin ring holder, oak torch with a crimson wrap and an ember core (torch_sconce_ember slot)",
+    "keep.js torches are 1.0 m tall decos at 2.5-3.5 m: hang this with its plate base at (torch centre - 0.5)"
+   ],
+   "reimport": {
+    "meshes": [
+     "torch_sconce"
+    ],
+    "tris": 696,
+    "bones": 0,
+    "clips": [],
+    "images": [
+     [
+      "torch_sconce_albedo",
+      512,
+      512
+     ],
+     [
+      "torch_sconce_normal",
+      512,
+      512
+     ],
+     [
+      "torch_sconce_orm",
+      512,
+      512
+     ]
+    ],
+    "materials": [
+     "torch_sconce",
+     "torch_sconce_ember"
+    ]
+   },
+   "reimport_ok": true,
+   "seconds": 38.3,
+   "texture_bytes": 75612,
+   "images": [
+    {
+     "name": "torch_sconce_normal",
+     "mime": "image/webp",
+     "bytes": 25564
+    },
+    {
+     "name": "torch_sconce_orm",
+     "mime": "image/webp",
+     "bytes": 35708
+    },
+    {
+     "name": "torch_sconce_albedo",
+     "mime": "image/webp",
+     "bytes": 14340
+    }
+   ],
+   "glb": {
+    "tris": 696,
+    "primitives": 2,
+    "materials": [
+     "torch_sconce",
+     "torch_sconce_ember"
+    ],
+    "nodes": [
+     "torch_sconce"
+    ],
+    "skins": [],
+    "animations": [],
+    "extensions": [
+     "KHR_materials_emissive_strength",
+     "EXT_texture_webp"
+    ],
+    "emissive": [
+     [
+      "torch_sconce_ember",
+      [
+       1,
+       0.2541520893573761,
+       0.045186202973127365
+      ],
+      2.4000000953674316
+     ]
+    ]
+   },
+   "turntable": [
+    "torch_sconce_00.png",
+    "torch_sconce_01.png",
+    "torch_sconce_02.png",
+    "torch_sconce_03.png",
+    "torch_sconce_04.png",
+    "torch_sconce_05.png",
+    "torch_sconce_06.png",
+    "torch_sconce_07.png",
+    "torch_sconce_closeup.png"
+   ]
+  },
+  {
    "name": "wall_panel",
    "file": "wall_panel.glb",
    "kind": "architecture",
-   "bytes": 659948,
+   "bytes": 1595368,
    "tris": 1976,
    "tris_budget": 3000,
    "tris_ok": true,
@@ -608,23 +2593,23 @@
     ]
    },
    "reimport_ok": true,
-   "seconds": 165.5,
-   "texture_bytes": 516966,
+   "seconds": 166.7,
+   "texture_bytes": 1452380,
    "images": [
     {
      "name": "wall_panel_normal",
      "mime": "image/webp",
-     "bytes": 213480
+     "bytes": 1075338
     },
     {
      "name": "wall_panel_orm",
      "mime": "image/webp",
-     "bytes": 197244
+     "bytes": 267588
     },
     {
      "name": "wall_panel_albedo",
      "mime": "image/webp",
-     "bytes": 106242
+     "bytes": 109454
     }
    ],
    "glb": {

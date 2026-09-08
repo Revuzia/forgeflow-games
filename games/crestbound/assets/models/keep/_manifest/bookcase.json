@@ -1,37 +1,37 @@
 {
- "name": "corner_pier",
- "file": "corner_pier.glb",
- "kind": "architecture",
- "bytes": 379164,
- "tris": 760,
+ "name": "bookcase",
+ "file": "bookcase.glb",
+ "kind": "prop",
+ "bytes": 378284,
+ "tris": 1772,
  "tris_budget": 3000,
  "tris_ok": true,
  "bones": 0,
  "clips": [],
  "bounds": {
   "min": [
-   -0.65,
+   -0.95,
    0.0,
-   -0.65
+   -0.315
   ],
   "max": [
-   0.65,
-   4.0,
-   0.65
+   0.95,
+   2.5,
+   0.315
   ],
   "size": [
-   1.3,
-   4.0,
-   1.3
+   1.9,
+   2.5,
+   0.63
   ]
  },
- "pivot": "base centre of the 1.0 m square footprint",
+ "pivot": "base centre of the plinth; back at glTF -Z 0.28, front at +Z 0.28 (keep.js bookcase deco 1.8 x 2.5 x 0.55)",
  "front": "+Z (glTF) \u2014 the face that looks into the room",
  "materials": [
-  "corner_pier"
+  "bookcase"
  ],
  "nodes": [
-  "corner_pier"
+  "bookcase"
  ],
  "textures": {
   "atlas": 1024,
@@ -42,36 +42,36 @@
   ]
  },
  "notes": [
-  "1.0 x 1.0 x 4.0 m; cross-laid quoin courses every 0.48 m (proud/recessed alternating on X and Z); stack for taller corners"
+  "oak carcass with cornice + plinth; 4 shelves of individually coloured books (per-book rnd -> palette)"
  ],
  "reimport": {
   "meshes": [
-   "corner_pier"
+   "bookcase"
   ],
-  "tris": 760,
+  "tris": 1772,
   "bones": 0,
   "clips": [],
   "images": [
    [
-    "corner_pier_albedo",
+    "bookcase_albedo",
     1024,
     1024
    ],
    [
-    "corner_pier_normal",
+    "bookcase_normal",
     1024,
     1024
    ],
    [
-    "corner_pier_orm",
+    "bookcase_orm",
     1024,
     1024
    ]
   ],
   "materials": [
-   "corner_pier"
+   "bookcase"
   ]
  },
  "reimport_ok": true,
- "seconds": 123.7
+ "seconds": 46.5
 }

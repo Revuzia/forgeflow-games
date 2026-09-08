@@ -1,37 +1,37 @@
 {
- "name": "corner_pier",
- "file": "corner_pier.glb",
+ "name": "column",
+ "file": "column.glb",
  "kind": "architecture",
- "bytes": 379164,
- "tris": 760,
+ "bytes": 273012,
+ "tris": 1988,
  "tris_budget": 3000,
  "tris_ok": true,
  "bones": 0,
  "clips": [],
  "bounds": {
   "min": [
-   -0.65,
+   -0.57,
    0.0,
-   -0.65
+   -0.57
   ],
   "max": [
-   0.65,
+   0.57,
    4.0,
-   0.65
+   0.57
   ],
   "size": [
-   1.3,
+   1.14,
    4.0,
-   1.3
+   1.14
   ]
  },
- "pivot": "base centre of the 1.0 m square footprint",
+ "pivot": "base centre; 4.0 m to the top of the abacus",
  "front": "+Z (glTF) \u2014 the face that looks into the room",
  "materials": [
-  "corner_pier"
+  "column"
  ],
  "nodes": [
-  "corner_pier"
+  "column"
  ],
  "textures": {
   "atlas": 1024,
@@ -42,36 +42,37 @@
   ]
  },
  "notes": [
-  "1.0 x 1.0 x 4.0 m; cross-laid quoin courses every 0.48 m (proud/recessed alternating on X and Z); stack for taller corners"
+  "fluted (12) shaft r 0.30 on a torus base; bell capital with gilt corner volutes; abacus 1.04 m square",
+  "scale Y to taller orders (the lobby pillars are 14 m) or stack a plain drum under it"
  ],
  "reimport": {
   "meshes": [
-   "corner_pier"
+   "column"
   ],
-  "tris": 760,
+  "tris": 1988,
   "bones": 0,
   "clips": [],
   "images": [
    [
-    "corner_pier_albedo",
+    "column_albedo",
     1024,
     1024
    ],
    [
-    "corner_pier_normal",
+    "column_normal",
     1024,
     1024
    ],
    [
-    "corner_pier_orm",
+    "column_orm",
     1024,
     1024
    ]
   ],
   "materials": [
-   "corner_pier"
+   "column"
   ]
  },
  "reimport_ok": true,
- "seconds": 123.7
+ "seconds": 81.9
 }

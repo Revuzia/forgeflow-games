@@ -8,7 +8,10 @@ from inspect_glb import inspect
 
 ROOT = 'C:/Users/TestRun/Claude Claw/forgeflow-games/games/crestbound'
 KIT_DIR = f'{ROOT}/assets/models/keep'
-BUDGET = {'architecture': 3000, 'prop': 1500, 'critter': 8000, 'hero': 12000}
+# THE KEEP kit budget is 3000 triangles per piece, architecture and prop alike (the owner's
+# number). The contract's 1.5k cap is the REALM-PROPS kit (a different kit, dressing dozens of
+# instances per course); a keep prop is a hero object placed once or twice in the hub.
+BUDGET = {'architecture': 3000, 'prop': 3000, 'critter': 8000, 'hero': 12000}
 KIT_TEX_BUDGET = 24 * 1024 * 1024
 
 entries = []
@@ -65,7 +68,7 @@ manifest = {
         'gate_door: bones root/hingeL/hingeR, clip open (1.5 s, 75 deg toward +Z); play backward to close',
         'set castShadow on pieces >= 0.75 m (props.js rule), strip nothing: no lights are embedded',
     ],
-    'budgets': {'architecture_tris': 3000, 'prop_tris': 1500, 'atlas_max': 2048, 'kit_texture_bytes': KIT_TEX_BUDGET},
+    'budgets': {'architecture_tris': 3000, 'prop_tris': 3000, 'atlas_max': 2048, 'kit_texture_bytes': KIT_TEX_BUDGET},
     'totals': {'pieces': len(entries), 'bytes': total_bytes, 'texture_bytes': total_tex, 'tris': sum(e['tris'] for e in entries),
                'bones': sum(e['bones'] for e in entries), 'clips': sum(len(e.get('clips', [])) for e in entries)},
     'problems': problems,

@@ -2,8 +2,8 @@
  "name": "arch_window",
  "file": "arch_window.glb",
  "kind": "architecture",
- "bytes": 299928,
- "tris": 2308,
+ "bytes": 394188,
+ "tris": 2516,
  "tris_budget": 3000,
  "tris_ok": true,
  "bones": 0,
@@ -16,13 +16,13 @@
   ],
   "max": [
    1.15,
-   3.577,
-   0.33
+   3.602,
+   0.37
   ],
   "size": [
    2.3,
-   3.577,
-   0.66
+   3.602,
+   0.7
   ]
  },
  "pivot": "base centre of the opening (1.4 m clear, 3.2 m to the apex), sill on the floor line",
@@ -50,7 +50,7 @@
   "meshes": [
    "arch_window"
   ],
-  "tris": 2308,
+  "tris": 2516,
   "bones": 0,
   "clips": [],
   "images": [
@@ -76,5 +76,5 @@
   ]
  },
  "reimport_ok": true,
- "seconds": 72.4
+ "seconds": 122.6
 }

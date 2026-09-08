@@ -2,7 +2,7 @@
  "name": "wall_panel",
  "file": "wall_panel.glb",
  "kind": "architecture",
- "bytes": 659948,
+ "bytes": 1595368,
  "tris": 1976,
  "tris_budget": 3000,
  "tris_ok": true,
@@ -74,5 +74,5 @@
   ]
  },
  "reimport_ok": true,
- "seconds": 165.5
+ "seconds": 166.7
 }

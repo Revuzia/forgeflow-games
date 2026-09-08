@@ -1026,6 +1026,31 @@ def skin(mesh_ob, arm_ob):
     return mesh_ob
 
 
+def action_fcurves(act, slot=None):
+    """Blender 4.4+ removed Action.fcurves (slotted actions): the curves live under
+    layers[].strips[].channelbag(slot).fcurves. Returns a flat list, old API or new."""
+    fcs = getattr(act, 'fcurves', None)
+    if fcs is not None:
+        return list(fcs)
+    out = []
+    slots = list(getattr(act, 'slots', []) or [])
+    for lay in act.layers:
+        for st in lay.strips:
+            if st.type != 'KEYFRAME':
+                continue
+            bags = []
+            if slot is not None:
+                bags = [st.channelbag(slot)]
+            elif hasattr(st, 'channelbags'):
+                bags = list(st.channelbags)
+            else:
+                bags = [st.channelbag(sl) for sl in slots]
+            for cb in bags:
+                if cb is not None:
+                    out.extend(cb.fcurves)
+    return out
+
+
 def key_action(arm_ob, name, keys, frame_end):
     """keys: {bone: [(frame, (rx,ry,rz))]} euler radians in the bone's local frame. Returns the action."""
     if arm_ob.animation_data is None:
@@ -1045,10 +1070,9 @@ def key_action(arm_ob, name, keys, frame_end):
         for f, rot in ks:
             pb.rotation_euler = rot
             pb.keyframe_insert('rotation_euler', frame=f)
-    if act.fcurves:
-        for fc in act.fcurves:
-            for kp in fc.keyframe_points:
-                kp.interpolation = 'BEZIER'
+    for fc in action_fcurves(act):
+        for kp in fc.keyframe_points:
+            kp.interpolation = 'BEZIER'
     act.use_frame_range = True
     act.frame_start = 1
     act.frame_end = frame_end
@@ -1184,13 +1208,29 @@ def render_turntable(objs, piece, closeup=None, frame=1):
 # GLB re-import check (fresh scene) — the independent observation
 # =============================================================================
 def reimport_check(path):
+    # Two traps here. (1) read_factory_settings does not guarantee bpy.data is empty, so snapshot
+    # first and count only what THIS import created. (2) Blender's glTF IMPORTER builds an 80-tri
+    # 'Icosphere' as the POSE-BONE CUSTOM SHAPE for every imported armature — it is not in the file
+    # (gate_door.glb has exactly one mesh and five nodes) but it lands in bpy.data, which is why
+    # every RIGGED piece reported reimport_ok false while unrigged ones passed. Exclude bone shapes.
     bpy.ops.wm.read_factory_settings(use_empty=True)
+    before = {o.name for o in bpy.data.objects}
+    before_act = {a.name for a in bpy.data.actions}
+    before_img = {i.name for i in bpy.data.images}
+    before_mat = {m.name for m in bpy.data.materials}
     bpy.ops.import_scene.gltf(filepath=path)
-    meshes = [o for o in bpy.data.objects if o.type == 'MESH']
-    arms = [o for o in bpy.data.objects if o.type == 'ARMATURE']
+    new_objs = [o for o in bpy.data.objects if o.name not in before]
+    arms = [o for o in new_objs if o.type == 'ARMATURE']
+    shapes = set()
+    for a in arms:
+        for pb in a.pose.bones:
+            if pb.custom_shape:
+                shapes.add(pb.custom_shape.name)
+    meshes = [o for o in new_objs if o.type == 'MESH' and o.name not in shapes]
     tris = sum(tri_count(o) for o in meshes)
     bones = sum(len(a.data.bones) for a in arms)
-    acts = [(a.name, round((a.frame_range[1] - a.frame_range[0]) / FPS, 3)) for a in bpy.data.actions]
-    imgs = [(i.name, i.size[0], i.size[1]) for i in bpy.data.images]
-    mats = [m.name for m in bpy.data.materials if m.users]
+    acts = [(a.name, round((a.frame_range[1] - a.frame_range[0]) / FPS, 3))
+            for a in bpy.data.actions if a.name not in before_act]
+    imgs = [(i.name, i.size[0], i.size[1]) for i in bpy.data.images if i.name not in before_img]
+    mats = [m.name for m in bpy.data.materials if m.users and m.name not in before_mat]
     return {'meshes': [o.name for o in meshes], 'tris': tris, 'bones': bones, 'clips': acts, 'images': imgs, 'materials': mats}

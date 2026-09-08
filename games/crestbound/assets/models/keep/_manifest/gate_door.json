@@ -1,0 +1,92 @@
+{
+ "name": "gate_door",
+ "file": "gate_door.glb",
+ "kind": "architecture",
+ "bytes": 1528656,
+ "tris": 2864,
+ "tris_budget": 3000,
+ "tris_ok": true,
+ "bones": 3,
+ "clips": [
+  {
+   "name": "open",
+   "seconds": 1.5,
+   "frames": 36
+  }
+ ],
+ "bounds": {
+  "min": [
+   -1.983,
+   0.0,
+   -0.43
+  ],
+  "max": [
+   1.983,
+   4.769,
+   0.47
+  ],
+  "size": [
+   3.966,
+   4.769,
+   0.9
+  ]
+ },
+ "pivot": "base centre of the opening on the wall plane (buildGateDoor p); leaves hang 0.10 m in front (glTF +Z)",
+ "front": "+Z (glTF) \u2014 the face that looks into the room",
+ "materials": [
+  "gate_door"
+ ],
+ "nodes": [
+  "gate_door",
+  "gate_door_rig"
+ ],
+ "textures": {
+  "atlas": 2048,
+  "maps": [
+   "albedo (sRGB, webp)",
+   "normal (tangent, OpenGL +Y, webp)",
+   "orm (R=occlusion G=roughness B=metallic, webp)"
+  ]
+ },
+ "notes": [
+  "opening 2.8 x 4.2 (keep.js IRON_DOOR); surround as arch_door; leaves: 5 oak planks each, 3 spear-end strap hinges, ring handles",
+  "crest lock plate (octagon, six-bar gilt glyph, keyhole) on the right leaf",
+  "bones root / hingeL / hingeR (hinge lines at x = -+1.40, glTF); clip `open` 1.5 s swings both leaves 75 deg toward +Z",
+  "swap the leaf material tint or play `open` backward to close"
+ ],
+ "reimport": {
+  "meshes": [
+   "gate_door"
+  ],
+  "tris": 2864,
+  "bones": 3,
+  "clips": [
+   [
+    "open",
+    1.5
+   ]
+  ],
+  "images": [
+   [
+    "gate_door_albedo",
+    2048,
+    2048
+   ],
+   [
+    "gate_door_normal",
+    2048,
+    2048
+   ],
+   [
+    "gate_door_orm",
+    2048,
+    2048
+   ]
+  ],
+  "materials": [
+   "gate_door"
+  ]
+ },
+ "reimport_ok": true,
+ "seconds": 79.1
+}

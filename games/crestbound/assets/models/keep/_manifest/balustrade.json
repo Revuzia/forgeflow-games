@@ -1,37 +1,37 @@
 {
- "name": "corner_pier",
- "file": "corner_pier.glb",
+ "name": "balustrade",
+ "file": "balustrade.glb",
  "kind": "architecture",
- "bytes": 379164,
- "tris": 760,
+ "bytes": 223132,
+ "tris": 2220,
  "tris_budget": 3000,
  "tris_ok": true,
  "bones": 0,
  "clips": [],
  "bounds": {
   "min": [
-   -0.65,
+   -1.0,
    0.0,
-   -0.65
+   -0.13
   ],
   "max": [
-   0.65,
-   4.0,
-   0.65
+   1.0,
+   1.05,
+   0.13
   ],
   "size": [
-   1.3,
-   4.0,
-   1.3
+   2.0,
+   1.05,
+   0.26
   ]
  },
- "pivot": "base centre of the 1.0 m square footprint",
+ "pivot": "base centre; runs along X, 2.0 m; rails 0.22-0.26 m wide; 1.05 m tall (keep.js RAILS height)",
  "front": "+Z (glTF) \u2014 the face that looks into the room",
  "materials": [
-  "corner_pier"
+  "balustrade"
  ],
  "nodes": [
-  "corner_pier"
+  "balustrade"
  ],
  "textures": {
   "atlas": 1024,
@@ -42,36 +42,36 @@
   ]
  },
  "notes": [
-  "1.0 x 1.0 x 4.0 m; cross-laid quoin courses every 0.48 m (proud/recessed alternating on X and Z); stack for taller corners"
+  "5 turned balusters per 2.0 m; butt segments end to end, put a newel at every corner / stair foot"
  ],
  "reimport": {
   "meshes": [
-   "corner_pier"
+   "balustrade"
   ],
-  "tris": 760,
+  "tris": 2220,
   "bones": 0,
   "clips": [],
   "images": [
    [
-    "corner_pier_albedo",
+    "balustrade_albedo",
     1024,
     1024
    ],
    [
-    "corner_pier_normal",
+    "balustrade_normal",
     1024,
     1024
    ],
    [
-    "corner_pier_orm",
+    "balustrade_orm",
     1024,
     1024
    ]
   ],
   "materials": [
-   "corner_pier"
+   "balustrade"
   ]
  },
  "reimport_ok": true,
- "seconds": 123.7
+ "seconds": 65.0
 }

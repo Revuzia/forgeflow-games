@@ -101,11 +101,14 @@ def corner_pier():
 # =============================================================================
 # GOTHIC ARCH — shared surround builder (door + window + the gate door use it)
 # =============================================================================
-def arch_surround(p, a, springing, rise, depth=0.7, jamb=0.5, nvous=7, hood=True, vg='root', keystone=True):
+def arch_surround(p, a, springing, rise, depth=0.7, jamb=0.5, nvous=7, hood=True, vg='root', keystone=True,
+                  mseg=2, hood_n=12):
+    """mseg = bevel segments on the marble mouldings (2 = rounded, 1 = single chamfer, 64 tris cheaper each);
+    hood_n = points per hood arc. Both are pure tessellation: the silhouette and every part survive."""
     arch = PointedArch(a, rise)
     for sg in (-1, 1):
         x = sg * (a + jamb / 2)
-        p.add(box('jplinth', (jamb + 0.16, depth + 0.12, 0.32), at=(x, 0, 0), bev=0.03, seg=2, mat='marble', vg=vg))
+        p.add(box('jplinth', (jamb + 0.16, depth + 0.12, 0.32), at=(x, 0, 0), bev=0.03, seg=mseg, mat='marble', vg=vg))
         z = 0.32
         k = 0
         while z < springing - 0.2:
@@ -113,7 +116,7 @@ def arch_surround(p, a, springing, rise, depth=0.7, jamb=0.5, nvous=7, hood=True
             p.add(box(f'jamb{k}', (jamb, depth, h - 0.02), at=(x, 0, z), bev=0.02, mat='stone', vg=vg))
             z += h
             k += 1
-        p.add(box('impost', (jamb + 0.14, depth + 0.10, 0.18), at=(x, 0, springing - 0.2), bev=0.03, seg=2, mat='marble', vg=vg))
+        p.add(box('impost', (jamb + 0.14, depth + 0.10, 0.18), at=(x, 0, springing - 0.2), bev=0.03, seg=mseg, mat='marble', vg=vg))
     # voussoirs along both arcs (outer radius = R + jamb*0.9)
     Ro = arch.R + jamb * 0.85
     arclen = Ro * arch.apex
@@ -129,11 +132,11 @@ def arch_surround(p, a, springing, rise, depth=0.7, jamb=0.5, nvous=7, hood=True
             p.add(box(f'vous{i}', (bw, depth, jamb * 0.84), at=(sg * cx, 0, cz), rot=(0, -sg * ang + (pi if sg < 0 else 0), 0),
                       bev=0.02, mat='stone', anchor='center', vg=vg))
     if keystone:
-        p.add(box('keystone', (jamb * 0.9, depth + 0.16, jamb * 1.25), at=(0, 0, springing + rise + jamb * 0.10), bev=0.03, seg=2,
+        p.add(box('keystone', (jamb * 0.9, depth + 0.16, jamb * 1.25), at=(0, 0, springing + rise + jamb * 0.10), bev=0.03, seg=mseg,
                   mat='marble', anchor='center', vg=vg))
     if hood:
         pts = []
-        n = 12
+        n = hood_n
         for sg in (-1, 1):
             seq = range(n) if sg < 0 else range(n)
             for i in seq:
@@ -236,7 +239,7 @@ def balustrade():
 
 
 def newel():
-    p = Piece('newel', kind='prop', tex=512, budget=1500)
+    p = Piece('newel', kind='prop', tex=512, budget=3000)
     p.add(box('plinth', (0.42, 0.42, 0.12), at=(0, 0, 0), bev=0.02, seg=2, mat='marble'))
     p.add(box('post', (0.30, 0.30, 0.80), at=(0, 0, 0.12), bev=0.035, seg=2, mat='marble'))
     p.add(box('band', (0.36, 0.36, 0.06), at=(0, 0, 0.52), bev=0.015, mat='marble'))
@@ -367,7 +370,7 @@ def hammer_beam_truss():
 # origin = centre of the canvas at the wall plane (buildPainting's p), front toward glTF +Z
 # =============================================================================
 def frame_painting(size_name, w, h):
-    p = Piece(f'frame_painting_{size_name}', kind='prop', tex=1024, budget=1500)
+    p = Piece(f'frame_painting_{size_name}', kind='prop', tex=1024, budget=3000)
     fw, fd = 0.24, 0.20
     ho = h / 2
     # rails (moulded: a chamfered rail + an inner bead + an outer bead)
@@ -424,7 +427,10 @@ def gate_door():
     a, H = 1.4, 4.2
     rise = 1.8
     springing = H - rise
-    arch = arch_surround(p, a, springing, rise, depth=0.7, jamb=0.5, nvous=7, hood=True, vg='root')
+    # the surround is tessellated one tier below arch_door's (mseg 1, nvous 6, hood_n 9): the gate carries
+    # 1.7k tris of leaves + iron on top of it, and every part is still here — only facet counts drop.
+    arch = arch_surround(p, a, springing, rise, depth=0.7, jamb=0.5, nvous=6, hood=True, vg='root',
+                         mseg=1, hood_n=9)
     leafW = a - 0.03
     planks = 5
     pw = leafW / planks
@@ -442,11 +448,11 @@ def gate_door():
             p.add(polyplate('strap', pts, 0.035, at=(0, -0.155, 0), mat='iron', vg=vg))
             for k in range(3):
                 p.add(prism('stud', 0.028, 0.03, 5, at=(hx - sg * (0.22 + k * sl * 0.26), -0.19, zz), rot=(pi / 2, 0, 0), mat='iron', vg=vg))
-            p.add(cyl('knuckle', 0.05, 0.22, 8, at=(hx - sg * 0.02, -0.13, zz - 0.11), mat='iron', vg=vg))
+            p.add(cyl('knuckle', 0.05, 0.22, 6, at=(hx - sg * 0.02, -0.13, zz - 0.11), mat='iron', vg=vg))
         # ring handle near the meeting stile
         xr = hx - sg * (leafW - 0.22)
-        p.add(prism('boss', 0.07, 0.03, 8, at=(xr, -0.16, 2.0), rot=(pi / 2, 0, 0), mat='iron', vg=vg))
-        p.add(torus('ring', 0.10, 0.017, 16, 6, at=(xr, -0.21, 1.9), rot=(pi / 2, 0, 0), mat='iron', vg=vg))
+        p.add(prism('boss', 0.07, 0.03, 6, at=(xr, -0.16, 2.0), rot=(pi / 2, 0, 0), mat='iron', vg=vg))
+        p.add(torus('ring', 0.10, 0.017, 14, 5, at=(xr, -0.21, 1.9), rot=(pi / 2, 0, 0), mat='iron', vg=vg))
     # crest lock plate on the RIGHT leaf at the meeting stile
     lx = a - 0.03 - leafW + 0.38
     p.add(prism('lockplate', 0.24, 0.03, 8, at=(lx, -0.155, 2.45), rot=(pi / 2, 0, pi / 8), mat='iron', vg='hingeR'))
@@ -454,7 +460,7 @@ def gate_door():
         ang = i * pi / 3
         p.add(box('glyph', (0.05, 0.03, 0.30), at=(lx + cos(ang) * 0.10, -0.20, 2.45 + sin(ang) * 0.10), rot=(0, -ang + pi / 2, 0),
                   bev=0.0, mat='gilt', vg='hingeR', anchor='center'))
-    p.add(cyl('glyphcore', 0.05, 0.035, 10, at=(lx, -0.19, 2.45), rot=(pi / 2, 0, 0), mat='gilt', vg='hingeR'))
+    p.add(cyl('glyphcore', 0.05, 0.035, 8, at=(lx, -0.19, 2.45), rot=(pi / 2, 0, 0), mat='gilt', vg='hingeR'))
     p.add(box('keyhole', (0.03, 0.02, 0.07), at=(lx, -0.20, 2.27), bev=0.0, mat='iron', vg='hingeR', anchor='center', rnd=0.0))
 
     def rig(mesh):
@@ -504,7 +510,7 @@ def gate_door():
 # PEDESTAL — buildPedestal's silhouette: stepped base, fluted drum, engraved ring, cap
 # =============================================================================
 def pedestal():
-    p = Piece('pedestal', kind='prop', tex=1024, budget=1500)
+    p = Piece('pedestal', kind='prop', tex=1024, budget=3000)
     r, h = 0.95, 1.05
     prof = [(0, -0.08), (r * 1.02, -0.08), (r, h * 0.10), (r * 0.86, h * 0.16), (r * 0.84, h * 0.22),
             (r * 0.66, h * 0.30), (r * 0.62, h * 0.72), (r * 0.74, h * 0.82), (r * 0.92, h * 0.90), (r * 0.92, h * 0.97), (r * 0.80, h), (0, h)]
@@ -528,7 +534,7 @@ def pedestal():
 # BRAZIER / STANDING LANTERN — iron tripod, bowl, caged amber glass (emissive), cap
 # =============================================================================
 def brazier():
-    p = Piece('brazier', kind='prop', tex=1024, budget=1500)
+    p = Piece('brazier', kind='prop', tex=1024, budget=3000)
     for i in range(3):
         a = pi / 2 + i * 2 * pi / 3
         pts = [(cos(a) * 0.42, sin(a) * 0.42, 0), (cos(a) * 0.34, sin(a) * 0.34, 0.45), (cos(a) * 0.22, sin(a) * 0.22, 0.62)]
@@ -555,7 +561,7 @@ def brazier():
 # BANNER + POLE — 3.2 m pole with a crossbar, cream cloth (tint at runtime), gilt crest; rigged sway
 # =============================================================================
 def banner_pole():
-    p = Piece('banner_pole', kind='prop', tex=1024, budget=1500)
+    p = Piece('banner_pole', kind='prop', tex=1024, budget=3000)
     p.add(lathe('polebase', [(0, 0), (0.16, 0), (0.17, 0.05), (0.08, 0.10), (0.05, 0.14), (0, 0.14)], 16, mat='iron', vg='pole'))
     p.add(cyl('pole', 0.035, 3.05, 12, at=(0, 0, 0.14), mat='timber', vg='pole', r2=0.03))
     p.add(lathe('spear', [(0, 3.19), (0.05, 3.19), (0.07, 3.25), (0.06, 3.30), (0.035, 3.34), (0.05, 3.42), (0.0, 3.62)], 10, mat='brass', vg='pole'))
@@ -652,7 +658,7 @@ def banner_pole():
 # TORCH SCONCE — wall bracket + torch, ember core; origin at the wall plate, front toward -Y
 # =============================================================================
 def torch_sconce():
-    p = Piece('torch_sconce', kind='prop', tex=512, budget=1500)
+    p = Piece('torch_sconce', kind='prop', tex=512, budget=3000)
     # shield back plate on the wall (y = 0 plane), bracket arm out to -Y
     pts = [(-0.10, 0.0), (-0.12, 0.22), (-0.07, 0.34), (0.0, 0.40), (0.07, 0.34), (0.12, 0.22), (0.10, 0.0), (0.0, -0.06)]
     p.add(polyplate('plate', pts, 0.02, at=(0, 0, 0.0), mat='iron', bev=0.004))
@@ -675,7 +681,7 @@ def torch_sconce():
 # BENCH — 2.2 m refectory bench: chamfered top, arched trestle ends, pegged stretcher
 # =============================================================================
 def bench():
-    p = Piece('bench', kind='prop', tex=512, budget=1500)
+    p = Piece('bench', kind='prop', tex=512, budget=3000)
     L, Hh, Dd = 2.2, 0.46, 0.42
     p.add(box('top', (L, Dd, 0.07), at=(0, 0, Hh - 0.07), bev=0.02, seg=2, mat='timber'))
     for sg in (-1, 1):
@@ -697,7 +703,7 @@ def bench():
 # BOOKCASE — 1.8 x 2.5 x 0.55, cornice, plinth, 4 shelves of books
 # =============================================================================
 def bookcase():
-    p = Piece('bookcase', kind='prop', tex=1024, budget=1500)
+    p = Piece('bookcase', kind='prop', tex=1024, budget=3000)
     W, H, D = 1.8, 2.5, 0.55
     p.add(box('plinth', (W + 0.06, D + 0.04, 0.12), at=(0, 0, 0), bev=0.015, mat='timber'))
     for sg in (-1, 1):
@@ -715,8 +721,10 @@ def bookcase():
             t = R.uniform(0.035, 0.075)
             h = R.uniform(0.22, 0.42)
             lean = R.random() < 0.08
+            # bev 0: a real book spine is square, and a 4 mm chamfer on a 3.5-7.5 cm spine cost
+            # 32 tris x 101 books = 3,232 of this piece's 5,004 for an edge nobody can resolve.
             p.add(box('book', (t, R.uniform(0.18, 0.26), h), at=(x + t / 2, -0.06, z + 0.04), rot=(0, -0.22 if lean else 0, 0),
-                      bev=0.004, mat='books', rnd=R.random()))
+                      bev=0.0, mat='books', rnd=R.random()))
             x += t + 0.004
             if R.random() < 0.12:
                 x += R.uniform(0.04, 0.1)

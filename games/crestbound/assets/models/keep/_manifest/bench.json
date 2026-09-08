@@ -1,37 +1,37 @@
 {
- "name": "newel",
- "file": "newel.glb",
+ "name": "bench",
+ "file": "bench.glb",
  "kind": "prop",
- "bytes": 78456,
- "tris": 944,
+ "bytes": 142576,
+ "tris": 808,
  "tris_budget": 3000,
  "tris_ok": true,
  "bones": 0,
  "clips": [],
  "bounds": {
   "min": [
-   -0.21,
+   -1.1,
    0.0,
-   -0.21
+   -0.24
   ],
   "max": [
-   0.21,
-   1.245,
-   0.21
+   1.1,
+   0.46,
+   0.24
   ],
   "size": [
-   0.42,
-   1.245,
-   0.42
+   2.2,
+   0.46,
+   0.48
   ]
  },
- "pivot": "base centre; 0.42 m footprint, 1.245 m tall (the keep.js post is 1.24)",
+ "pivot": "base centre; 2.2 x 0.42 m, seat at 0.46 m (keep.js bench deco 2.2 x 0.64 x 0.72 - scale to taste)",
  "front": "+Z (glTF) \u2014 the face that looks into the room",
  "materials": [
-  "newel"
+  "bench"
  ],
  "nodes": [
-  "newel"
+  "bench"
  ],
  "textures": {
   "atlas": 512,
@@ -42,36 +42,36 @@
   ]
  },
  "notes": [
-  "square newel with recessed panels, gilt collar and an acorn finial"
+  "refectory bench: chamfered oak top, arched trestle ends, through-pegged stretcher"
  ],
  "reimport": {
   "meshes": [
-   "newel"
+   "bench"
   ],
-  "tris": 944,
+  "tris": 808,
   "bones": 0,
   "clips": [],
   "images": [
    [
-    "newel_albedo",
+    "bench_albedo",
     512,
     512
    ],
    [
-    "newel_normal",
+    "bench_normal",
     512,
     512
    ],
    [
-    "newel_orm",
+    "bench_orm",
     512,
     512
    ]
   ],
   "materials": [
-   "newel"
+   "bench"
   ]
  },
  "reimport_ok": true,
- "seconds": 183.7
+ "seconds": 24.5
 }
