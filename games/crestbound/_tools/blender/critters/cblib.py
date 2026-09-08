@@ -1061,7 +1061,12 @@ class Builder:
             pass
         sc.render.resolution_x = sc.render.resolution_y = 1024
         sc.render.resolution_percentage = 100
-        sc.render.image_settings.file_format = 'PNG'
+        # WEBP, not PNG: a turntable is a REVIEW render, and the same 1024x1024 Eevee frame is
+        # 948,655 bytes as PNG against 21,262 as WebP q92 (measured, keep/arch_door_00). The four
+        # kits had put ~333 MB of turntable PNGs in the repo; as WebP the same 430 frames are 13.5 MB.
+        sc.render.image_settings.file_format = 'WEBP'
+        sc.render.image_settings.quality = 92
+        sc.render.dither_intensity = 0.0
         sc.render.image_settings.color_mode = 'RGB'
         sc.render.film_transparent = False
         try:
@@ -1142,14 +1147,14 @@ class Builder:
         t0 = time.time()
         for i in range(8):
             self._aim(c, dist, i * 45, 14, 50)
-            fp = os.path.join(tdir, "%s_tt_%02d.png" % (self.name, i))
+            fp = os.path.join(tdir, "%s_tt_%02d.webp" % (self.name, i))
             sc.render.filepath = fp
             bpy.ops.render.render(write_still=True)
             files.append(fp)
         fa = self.face_at or (c + Vector((0, 0, rad * 0.5)))
         fr = self.face_r
         self._aim(Vector(fa), fr / math.tan(2 * math.atan(36 / (2 * closeup_lens)) / 2) * 1.2, -30, 8, closeup_lens)
-        fp = os.path.join(tdir, "%s_closeup.png" % self.name)
+        fp = os.path.join(tdir, "%s_closeup.webp" % self.name)
         sc.render.filepath = fp
         bpy.ops.render.render(write_still=True)
         files.append(fp)
@@ -1210,9 +1215,9 @@ class Builder:
             os.remove(fp)
         out = bpy.data.images.new("_sheet", cols * cell, rows * cell, alpha=True)
         out.pixels.foreach_set(sheet.ravel())
-        fp = os.path.join(tdir, "%s_clips.png" % self.name)
+        fp = os.path.join(tdir, "%s_clips.webp" % self.name)
         out.filepath_raw = fp
-        out.file_format = 'PNG'
+        out.file_format = 'WEBP'
         out.save()
         sc.frame_set(0)
         self._solo(None)

@@ -1,0 +1,609 @@
+{
+ "name": "Nim",
+ "kit": "nim",
+ "file": "nim.glb",
+ "bytes": 13209880,
+ "tris": 11930,
+ "tris_by_primitive": [
+  {
+   "mesh": "nim_body",
+   "material": "nim_body",
+   "tris": 11174
+  },
+  {
+   "mesh": "nim_body",
+   "material": "nim_scarf",
+   "tris": 444
+  },
+  {
+   "mesh": "nim_lens",
+   "material": "nim_lens",
+   "tris": 312
+  }
+ ],
+ "bones": 33,
+ "bone_names": [
+  "rig",
+  "hips",
+  "spine",
+  "chest",
+  "neck",
+  "head",
+  "eyes",
+  "eyeR",
+  "pupilR",
+  "eyeL",
+  "pupilL",
+  "hairTuft",
+  "scarf1",
+  "scarf2",
+  "scarf3",
+  "scarf4",
+  "scarf5",
+  "scarf6",
+  "scarf7",
+  "shoulderR",
+  "upperArmR",
+  "lowerArmR",
+  "handR",
+  "shoulderL",
+  "upperArmL",
+  "lowerArmL",
+  "handL",
+  "upperLegR",
+  "lowerLegR",
+  "footR",
+  "upperLegL",
+  "lowerLegL",
+  "footL"
+ ],
+ "bone_parent": {
+  "rig": "nim",
+  "hips": "rig",
+  "spine": "hips",
+  "chest": "spine",
+  "neck": "chest",
+  "head": "neck",
+  "eyes": "head",
+  "eyeR": "eyes",
+  "pupilR": "eyeR",
+  "eyeL": "eyes",
+  "pupilL": "eyeL",
+  "hairTuft": "head",
+  "scarf1": "neck",
+  "scarf2": "scarf1",
+  "scarf3": "scarf2",
+  "scarf4": "scarf3",
+  "scarf5": "scarf4",
+  "scarf6": "scarf5",
+  "scarf7": "scarf6",
+  "shoulderR": "chest",
+  "upperArmR": "shoulderR",
+  "lowerArmR": "upperArmR",
+  "handR": "lowerArmR",
+  "shoulderL": "chest",
+  "upperArmL": "shoulderL",
+  "lowerArmL": "upperArmL",
+  "handL": "lowerArmL",
+  "upperLegR": "hips",
+  "lowerLegR": "upperLegR",
+  "footR": "lowerLegR",
+  "upperLegL": "hips",
+  "lowerLegL": "upperLegL",
+  "footL": "lowerLegL"
+ },
+ "bone_world_bind": {
+  "rig": [
+   0,
+   0,
+   0
+  ],
+  "hips": [
+   0,
+   0.66,
+   0
+  ],
+  "spine": [
+   0,
+   0.76,
+   0
+  ],
+  "chest": [
+   0,
+   0.94,
+   0
+  ],
+  "neck": [
+   0,
+   1.1,
+   0
+  ],
+  "head": [
+   0,
+   1.22,
+   0
+  ],
+  "eyes": [
+   0,
+   1.2552,
+   0
+  ],
+  "eyeR": [
+   0.0603,
+   1.2552,
+   -0.207
+  ],
+  "pupilR": [
+   0.0603,
+   1.2552,
+   -0.207
+  ],
+  "eyeL": [
+   -0.0603,
+   1.2552,
+   -0.207
+  ],
+  "pupilL": [
+   -0.0603,
+   1.2552,
+   -0.207
+  ],
+  "hairTuft": [
+   0,
+   1.44,
+   0
+  ],
+  "scarf1": [
+   0.07,
+   1.13,
+   0.135
+  ],
+  "scarf2": [
+   0.1015,
+   1.0723,
+   0.2169
+  ],
+  "scarf3": [
+   0.1206,
+   0.9872,
+   0.2754
+  ],
+  "scarf4": [
+   0.127,
+   0.8858,
+   0.3018
+  ],
+  "scarf5": [
+   0.1228,
+   0.781,
+   0.307
+  ],
+  "scarf6": [
+   0.1101,
+   0.6771,
+   0.2985
+  ],
+  "scarf7": [
+   0.0886,
+   0.5751,
+   0.2856
+  ],
+  "shoulderR": [
+   0.185,
+   0.995,
+   0
+  ],
+  "upperArmR": [
+   0.185,
+   0.995,
+   0
+  ],
+  "lowerArmR": [
+   0.185,
+   0.78,
+   0
+  ],
+  "handR": [
+   0.185,
+   0.585,
+   0
+  ],
+  "shoulderL": [
+   -0.185,
+   0.995,
+   0
+  ],
+  "upperArmL": [
+   -0.185,
+   0.995,
+   0
+  ],
+  "lowerArmL": [
+   -0.185,
+   0.78,
+   0
+  ],
+  "handL": [
+   -0.185,
+   0.585,
+   0
+  ],
+  "upperLegR": [
+   0.112,
+   0.62,
+   0
+  ],
+  "lowerLegR": [
+   0.112,
+   0.375,
+   0
+  ],
+  "footR": [
+   0.112,
+   0.16,
+   0
+  ],
+  "upperLegL": [
+   -0.112,
+   0.62,
+   0
+  ],
+  "lowerLegL": [
+   -0.112,
+   0.375,
+   0
+  ],
+  "footL": [
+   -0.112,
+   0.16,
+   0
+  ]
+ },
+ "bones_with_rest_rotation": [],
+ "clips": [
+  {
+   "name": "backflip",
+   "duration": 0.75,
+   "loop": false,
+   "channels": 99
+  },
+  {
+   "name": "bonk",
+   "duration": 0.9,
+   "loop": false,
+   "channels": 99
+  },
+  {
+   "name": "cannon",
+   "duration": 0.35,
+   "loop": true,
+   "channels": 99
+  },
+  {
+   "name": "climb",
+   "duration": 0.8333,
+   "loop": true,
+   "channels": 99
+  },
+  {
+   "name": "climbKick",
+   "duration": 0.3,
+   "loop": false,
+   "channels": 99
+  },
+  {
+   "name": "crouch",
+   "duration": 0.5,
+   "loop": false,
+   "channels": 99
+  },
+  {
+   "name": "crouchwalk",
+   "duration": 0.35,
+   "loop": true,
+   "channels": 99
+  },
+  {
+   "name": "dead",
+   "duration": 0.8,
+   "loop": false,
+   "channels": 99
+  },
+  {
+   "name": "dive",
+   "duration": 0.6,
+   "loop": false,
+   "channels": 99
+  },
+  {
+   "name": "fall",
+   "duration": 1.2,
+   "loop": false,
+   "channels": 99
+  },
+  {
+   "name": "fly",
+   "duration": 0.9,
+   "loop": true,
+   "channels": 99
+  },
+  {
+   "name": "hardLand",
+   "duration": 0.2,
+   "loop": false,
+   "channels": 99
+  },
+  {
+   "name": "idle",
+   "duration": 10,
+   "loop": true,
+   "channels": 99
+  },
+  {
+   "name": "jump1",
+   "duration": 0.5833,
+   "loop": false,
+   "channels": 99
+  },
+  {
+   "name": "jump2",
+   "duration": 0.6833,
+   "loop": false,
+   "channels": 99
+  },
+  {
+   "name": "jump3",
+   "duration": 0.8,
+   "loop": false,
+   "channels": 99
+  },
+  {
+   "name": "land",
+   "duration": 0.1833,
+   "loop": false,
+   "channels": 99
+  },
+  {
+   "name": "longjump",
+   "duration": 0.4333,
+   "loop": false,
+   "channels": 99
+  },
+  {
+   "name": "pivot",
+   "duration": 0.5,
+   "loop": false,
+   "channels": 99
+  },
+  {
+   "name": "poundFall",
+   "duration": 0.6,
+   "loop": false,
+   "channels": 99
+  },
+  {
+   "name": "poundHang",
+   "duration": 0.2,
+   "loop": false,
+   "channels": 99
+  },
+  {
+   "name": "poundLand",
+   "duration": 0.3,
+   "loop": false,
+   "channels": 99
+  },
+  {
+   "name": "run",
+   "duration": 0.2167,
+   "loop": true,
+   "channels": 99
+  },
+  {
+   "name": "sideflip",
+   "duration": 0.7333,
+   "loop": false,
+   "channels": 99
+  },
+  {
+   "name": "skid",
+   "duration": 0.5,
+   "loop": false,
+   "channels": 99
+  },
+  {
+   "name": "slide",
+   "duration": 0.5167,
+   "loop": true,
+   "channels": 99
+  },
+  {
+   "name": "slideRecover",
+   "duration": 0.25,
+   "loop": false,
+   "channels": 99
+  },
+  {
+   "name": "slopeSlide",
+   "duration": 1,
+   "loop": false,
+   "channels": 99
+  },
+  {
+   "name": "swim",
+   "duration": 0.9333,
+   "loop": true,
+   "channels": 99
+  },
+  {
+   "name": "swimDive",
+   "duration": 0.6,
+   "loop": true,
+   "channels": 99
+  },
+  {
+   "name": "swimIdle",
+   "duration": 4.55,
+   "loop": true,
+   "channels": 99
+  },
+  {
+   "name": "walk",
+   "duration": 0.35,
+   "loop": true,
+   "channels": 99
+  },
+  {
+   "name": "wallkick",
+   "duration": 0.3,
+   "loop": false,
+   "channels": 99
+  },
+  {
+   "name": "wallslide",
+   "duration": 1.8667,
+   "loop": true,
+   "channels": 99
+  }
+ ],
+ "clip_count": 34,
+ "bounds": {
+  "min": [
+   -0.277,
+   -0.0,
+   -0.2997
+  ],
+  "max": [
+   0.277,
+   1.4884,
+   0.3613
+  ],
+  "size": [
+   0.554,
+   1.4884,
+   0.6609
+  ]
+ },
+ "height_m": 1.4884,
+ "pivot": "origin = between the soles on the ground plane (y = 0), +Y up, -Z forward (yaw 0), +X = Nim's right; 1 unit = 1 m",
+ "textures": [
+  {
+   "file": "nim_albedo.png",
+   "bytes": 3058271,
+   "size": 2048
+  },
+  {
+   "file": "nim_normal.png",
+   "bytes": 5167528,
+   "size": 2048
+  },
+  {
+   "file": "nim_orm.png",
+   "bytes": 3354484,
+   "size": 2048
+  }
+ ],
+ "textures_bytes_on_disk": 11580283,
+ "textures_bytes_embedded": 11580283,
+ "materials": [
+  {
+   "name": "nim_body",
+   "alphaMode": "OPAQUE",
+   "baseColorTexture": true,
+   "metallicRoughnessTexture": true,
+   "normalTexture": true,
+   "occlusionTexture": true,
+   "doubleSided": false
+  },
+  {
+   "name": "nim_scarf",
+   "alphaMode": "OPAQUE",
+   "baseColorTexture": true,
+   "metallicRoughnessTexture": true,
+   "normalTexture": true,
+   "occlusionTexture": true,
+   "doubleSided": false
+  },
+  {
+   "name": "nim_lens",
+   "alphaMode": "BLEND",
+   "baseColorTexture": false,
+   "metallicRoughnessTexture": false,
+   "normalTexture": false,
+   "occlusionTexture": false,
+   "doubleSided": false
+  }
+ ],
+ "extensions": [
+  "KHR_materials_clearcoat"
+ ],
+ "draco": false,
+ "eyes": {
+  "restY": 0.03523,
+  "eyeR": [
+   0.06026,
+   1.25523,
+   -0.20703
+  ],
+  "eyeL": [
+   -0.06026,
+   1.25523,
+   -0.20703
+  ]
+ },
+ "scarf_rest": [
+  [
+   0.07,
+   1.13,
+   0.135
+  ],
+  [
+   0.10149,
+   1.07228,
+   0.21686
+  ],
+  [
+   0.12063,
+   0.9872,
+   0.27535
+  ],
+  [
+   0.12697,
+   0.88578,
+   0.30176
+  ],
+  [
+   0.12278,
+   0.78099,
+   0.307
+  ],
+  [
+   0.11006,
+   0.67711,
+   0.29852
+  ],
+  [
+   0.08859,
+   0.57514,
+   0.28564
+  ],
+  [
+   0.06019,
+   0.47464,
+   0.27472
+  ]
+ ],
+ "rig_pivot_y": 0.62,
+ "notes": [
+  "Built headless in Blender 5.1 (bpy) from the numbers in runtime/player/hero.js: proportions P, palette COL, headDirRadius skull, eye/goggle/brow/mouth constants, boot/pack/limb builders. No asset services, no Draco.",
+  "RIG: bone names and hierarchy are hero.js's exactly (rig > hips > spine > chest > neck > head; chest > shoulderR > upperArmR > lowerArmR > handR; hips > upperLegR > lowerLegR > footR; L mirrored). EVERY joint has an identity rest rotation, so bone-local axes == the rig frame: a limb runs down -Y and a +X rotation swings its tip forward (-Z), which is the convention the hero.js pose writers assume. Path (a): create hero.bones[name] from the skinned skeleton by bone name and the existing pose code drives this mesh unchanged; `rig` is the bone hero.js writes squash/flip/lean onto (rotate about RIG_PIVOT_Y 0.62 via the same T = S.p - R.S.p pivot maths).",
+  "The mesh is bound with limbs straight down (no rest A-pose); hero.js applies its own rest rotations (upperArm +-0.165 z, lowerArm 0.32 x, ...) on top, exactly as it does for its procedural parts.",
+  "Extra bones (additive, not in hero.js): eyes (blink pivot at the eye rest height: scale y), eyeR/eyeL (eyeball centres, sclera + catchlight bead), pupilR/pupilL (children at the same centres, iris caps: rotate for look-at \u2014 0.16 rad here == hero.js's 0.042 rad about the head origin), hairTuft (crown tufts), scarf1..scarf7 (the 7-link chain, chained under neck, link i starts at scarf_rest[i-1]; ring k of the ribbon is weighted 50/50 to links k and k+1).",
+  "SCARF: scarf1 head = the runtime anchor (neck + SIDE 0.07, UP 0.03, BACK 0.135). To drive it from the verlet: set each link bone's WORLD matrix = T(particle_i) * R(rest_dir_i -> current_dir_i) \u2014 rest directions are scarf_rest[i] - scarf_rest[i-1]; solve in world space per doctrine. The scarf faces are their own material (nim_scarf) sharing the atlas, so the realm tint is material.color on that primitive alone. A static wrap ring on the neck bone (nim_scarf material too) gives the tail something to hang from.",
+  "CLIPS: one per CONTRACT s11 state (+walk, +bonk) sampled at 60 fps from a pure-python port of the hero.js pose writers (_tools/blender/nim/nim_poses.py) including the cyclic layer, the driven flips (jump3 +2pi, backflip -2pi, sideflip roll, pound yaw 1 + 2.4 t turns), the rig pivot maths and a steady-state foot-plant/sole clamp on grounded states. Root motion is IN the rig bone (rotation, pivot translation, squash scale) \u2014 strip rig.scale if squash is driven procedurally. The run clip is exactly one stride (1.90 m at 9.0 m/s); loop clips are marked in `loop`. Durations are quantised to 60 fps frames.",
+  "MATERIALS: nim_body / nim_scarf = one 2K atlas (albedo sRGB, tangent normal, ORM: R = AO (baked, floored at 0.35), G = roughness, B = metallic) \u2014 glTF metallicRoughnessTexture + occlusionTexture share the ORM image. nim_lens = BLEND alpha 0.30 dome (KHR_materials_clearcoat), its own primitive so it sorts. Per doctrine, repair nothing at load: metallic/roughness factors are 1.0 with the texture carrying the values, emissive is black (lens 0.04 aside).",
+  "BUDGETS: hero <= 12k tris (measured above, lens included); atlas 2K; textures total below.",
+  "DEVIATIONS from hero.js, all deliberate: the front hairline sits at 0.87R (hero.js 0.60R put it behind the goggle lenses and it read as a brown blob through the glass); the goggle strap is an open arc that stops at the cups instead of a full band under the lenses; the scarf ribbon is 0.085/0.046 half-width (hero.js 0.105/0.050) and gets a knit wrap ring + knot on the neck; hair strands radiate from the crown.",
+  "KNOWN LIMITS (measured by the pose sweep, 2061 frames): sole penetration <= 3 mm on every grounded clip except slideRecover, where the authored scramble (rig pitch -1.5 -> -0.2 with the knees folding) swings the boots up to 0.39 m under the floor mid-transition \u2014 the runtime foot IK receives the same authored input. Loop clips whose hero.js oscillators have incommensurate periods (idle, wallslide, swimIdle) close with a small seam; crossfade them. Squash/stretch lives in rig.scale (land/hardLand/poundLand 0.85/0.79, jump family 1.12) and is volume-preserving in XZ like the runtime."
+ ]
+}

@@ -1,106 +1,106 @@
 {
-  "name": "fen",
-  "file": "fen.glb",
-  "file_bytes": 9466400,
-  "tris": 7274,
-  "tris_blender": 7274,
-  "verts": 3745,
-  "bones": 24,
-  "bone_names": [
-    "root",
-    "hips",
-    "spine",
-    "chest",
-    "neck",
-    "head",
-    "hood",
-    "beard",
-    "brow_L",
-    "brow_R",
-    "eye_L",
-    "pupil_L",
-    "eye_R",
-    "pupil_R",
-    "shoulder_L",
-    "upperarm_L",
-    "forearm_L",
-    "hand_L",
-    "shoulder_R",
-    "upperarm_R",
-    "forearm_R",
-    "hand_R",
-    "staff",
-    "lantern"
-  ],
-  "clips": [
-    {
-      "name": "idle",
-      "seconds": 4,
-      "frames": 97,
-      "channels": 72
-    },
-    {
-      "name": "talk",
-      "seconds": 2,
-      "frames": 49,
-      "channels": 72
-    }
-  ],
-  "bounds": {
-    "min": [
-      -0.4764,
-      0.0,
-      -0.3792
-    ],
-    "max": [
-      0.655,
-      1.685,
-      0.775
-    ],
-    "height_m": 1.685
+ "name": "fen",
+ "file": "fen.glb",
+ "file_bytes": 9466400,
+ "tris": 7274,
+ "tris_blender": 7274,
+ "verts": 3745,
+ "bones": 24,
+ "bone_names": [
+  "root",
+  "hips",
+  "spine",
+  "chest",
+  "neck",
+  "head",
+  "hood",
+  "beard",
+  "brow_L",
+  "brow_R",
+  "eye_L",
+  "pupil_L",
+  "eye_R",
+  "pupil_R",
+  "shoulder_L",
+  "upperarm_L",
+  "forearm_L",
+  "hand_L",
+  "shoulder_R",
+  "upperarm_R",
+  "forearm_R",
+  "hand_R",
+  "staff",
+  "lantern"
+ ],
+ "clips": [
+  {
+   "name": "idle",
+   "seconds": 4,
+   "frames": 97,
+   "channels": 72
   },
-  "pivot": [
-    0,
-    0,
-    0
+  {
+   "name": "talk",
+   "seconds": 2,
+   "frames": 49,
+   "channels": 72
+  }
+ ],
+ "bounds": {
+  "min": [
+   -0.4764,
+   0.0,
+   -0.3792
   ],
-  "forward": "+Z (glTF) \u2014 built facing Blender -Y",
-  "materials": [
-    "fen_atlas",
-    "fen_glow"
+  "max": [
+   0.655,
+   1.685,
+   0.775
   ],
-  "textures": {
-    "albedo": "textures/fen_albedo.png",
-    "normal": "textures/fen_normal.png",
-    "orm": "textures/fen_orm.png"
-  },
-  "atlas_px": 2048,
-  "images_in_glb": [
-    "fen_normal",
-    "fen_orm",
-    "fen_albedo"
-  ],
-  "notes": [
-    "Runtime naturalHeight 1.70 m; staff knob is the tallest point (~1.69 m). Robe/beard/strap use banded soft weights.",
-    "Glow slot 'fen_glow' = lantern glass (untextured emissive). Blink = eye bone Z-scale in idle at f58."
-  ],
-  "kind": "npc",
-  "states": {
-    "idle": "idle",
-    "talk": "talk"
-  },
-  "turntable": [
-    "_turntable/fen_tt_00.png",
-    "_turntable/fen_tt_01.png",
-    "_turntable/fen_tt_02.png",
-    "_turntable/fen_tt_03.png",
-    "_turntable/fen_tt_04.png",
-    "_turntable/fen_tt_05.png",
-    "_turntable/fen_tt_06.png",
-    "_turntable/fen_tt_07.png",
-    "_turntable/fen_closeup.png"
-  ],
-  "contact_sheet": "_turntable/fen_clips.png",
-  "bake_seconds": 125.7,
-  "build_seconds": 139.7
+  "height_m": 1.685
+ },
+ "pivot": [
+  0,
+  0,
+  0
+ ],
+ "forward": "+Z (glTF) \u2014 built facing Blender -Y",
+ "materials": [
+  "fen_atlas",
+  "fen_glow"
+ ],
+ "textures": {
+  "albedo": "textures/fen_albedo.png",
+  "normal": "textures/fen_normal.png",
+  "orm": "textures/fen_orm.png"
+ },
+ "atlas_px": 2048,
+ "images_in_glb": [
+  "fen_normal",
+  "fen_orm",
+  "fen_albedo"
+ ],
+ "notes": [
+  "Runtime naturalHeight 1.70 m; staff knob is the tallest point (~1.69 m). Robe/beard/strap use banded soft weights.",
+  "Glow slot 'fen_glow' = lantern glass (untextured emissive). Blink = eye bone Z-scale in idle at f58."
+ ],
+ "kind": "npc",
+ "states": {
+  "idle": "idle",
+  "talk": "talk"
+ },
+ "turntable": [
+  "_turntable/fen_tt_00.webp",
+  "_turntable/fen_tt_01.webp",
+  "_turntable/fen_tt_02.webp",
+  "_turntable/fen_tt_03.webp",
+  "_turntable/fen_tt_04.webp",
+  "_turntable/fen_tt_05.webp",
+  "_turntable/fen_tt_06.webp",
+  "_turntable/fen_tt_07.webp",
+  "_turntable/fen_closeup.webp"
+ ],
+ "contact_sheet": "_turntable/fen_clips.webp",
+ "bake_seconds": 125.7,
+ "build_seconds": 139.7
 }

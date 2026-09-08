@@ -1,7 +1,7 @@
 {
  "kit": "keep",
  "title": "THE KEEP \u2014 modular castle architecture kit",
- "generated": "2026-09-08 12:41:51",
+ "generated": "2026-09-08 13:10:33",
  "generator": "Blender 5.1.2 headless (bpy) \u2014 _tools/blender/keep/{kitlib,pieces,build_kit}.py",
  "units": "1 unit = 1 metre, +Y up (export_yup), origin at the base unless the entry says otherwise, front = +Z",
  "language": "warm stone (0x9c8768 keep tint family) + amber timber (0xc09056) + gilt / iron / marble accents",
@@ -141,15 +141,15 @@
     "emissive": []
    },
    "turntable": [
-    "arch_door_00.png",
-    "arch_door_01.png",
-    "arch_door_02.png",
-    "arch_door_03.png",
-    "arch_door_04.png",
-    "arch_door_05.png",
-    "arch_door_06.png",
-    "arch_door_07.png",
-    "arch_door_closeup.png"
+    "arch_door_00.webp",
+    "arch_door_01.webp",
+    "arch_door_02.webp",
+    "arch_door_03.webp",
+    "arch_door_04.webp",
+    "arch_door_05.webp",
+    "arch_door_06.webp",
+    "arch_door_07.webp",
+    "arch_door_closeup.webp"
    ]
   },
   {
@@ -277,15 +277,15 @@
     ]
    },
    "turntable": [
-    "arch_window_00.png",
-    "arch_window_01.png",
-    "arch_window_02.png",
-    "arch_window_03.png",
-    "arch_window_04.png",
-    "arch_window_05.png",
-    "arch_window_06.png",
-    "arch_window_07.png",
-    "arch_window_closeup.png"
+    "arch_window_00.webp",
+    "arch_window_01.webp",
+    "arch_window_02.webp",
+    "arch_window_03.webp",
+    "arch_window_04.webp",
+    "arch_window_05.webp",
+    "arch_window_06.webp",
+    "arch_window_07.webp",
+    "arch_window_closeup.webp"
    ]
   },
   {
@@ -399,15 +399,15 @@
     "emissive": []
    },
    "turntable": [
-    "balustrade_00.png",
-    "balustrade_01.png",
-    "balustrade_02.png",
-    "balustrade_03.png",
-    "balustrade_04.png",
-    "balustrade_05.png",
-    "balustrade_06.png",
-    "balustrade_07.png",
-    "balustrade_closeup.png"
+    "balustrade_00.webp",
+    "balustrade_01.webp",
+    "balustrade_02.webp",
+    "balustrade_03.webp",
+    "balustrade_04.webp",
+    "balustrade_05.webp",
+    "balustrade_06.webp",
+    "balustrade_07.webp",
+    "balustrade_closeup.webp"
    ]
   },
   {
@@ -551,15 +551,15 @@
     "emissive": []
    },
    "turntable": [
-    "banner_pole_00.png",
-    "banner_pole_01.png",
-    "banner_pole_02.png",
-    "banner_pole_03.png",
-    "banner_pole_04.png",
-    "banner_pole_05.png",
-    "banner_pole_06.png",
-    "banner_pole_07.png",
-    "banner_pole_closeup.png"
+    "banner_pole_00.webp",
+    "banner_pole_01.webp",
+    "banner_pole_02.webp",
+    "banner_pole_03.webp",
+    "banner_pole_04.webp",
+    "banner_pole_05.webp",
+    "banner_pole_06.webp",
+    "banner_pole_07.webp",
+    "banner_pole_closeup.webp"
    ]
   },
   {
@@ -673,15 +673,15 @@
     "emissive": []
    },
    "turntable": [
-    "bench_00.png",
-    "bench_01.png",
-    "bench_02.png",
-    "bench_03.png",
-    "bench_04.png",
-    "bench_05.png",
-    "bench_06.png",
-    "bench_07.png",
-    "bench_closeup.png"
+    "bench_00.webp",
+    "bench_01.webp",
+    "bench_02.webp",
+    "bench_03.webp",
+    "bench_04.webp",
+    "bench_05.webp",
+    "bench_06.webp",
+    "bench_07.webp",
+    "bench_closeup.webp"
    ]
   },
   {
@@ -795,15 +795,15 @@
     "emissive": []
    },
    "turntable": [
-    "bookcase_00.png",
-    "bookcase_01.png",
-    "bookcase_02.png",
-    "bookcase_03.png",
-    "bookcase_04.png",
-    "bookcase_05.png",
-    "bookcase_06.png",
-    "bookcase_07.png",
-    "bookcase_closeup.png"
+    "bookcase_00.webp",
+    "bookcase_01.webp",
+    "bookcase_02.webp",
+    "bookcase_03.webp",
+    "bookcase_04.webp",
+    "bookcase_05.webp",
+    "bookcase_06.webp",
+    "bookcase_07.webp",
+    "bookcase_closeup.webp"
    ]
   },
   {
@@ -944,15 +944,15 @@
     ]
    },
    "turntable": [
-    "brazier_00.png",
-    "brazier_01.png",
-    "brazier_02.png",
-    "brazier_03.png",
-    "brazier_04.png",
-    "brazier_05.png",
-    "brazier_06.png",
-    "brazier_07.png",
-    "brazier_closeup.png"
+    "brazier_00.webp",
+    "brazier_01.webp",
+    "brazier_02.webp",
+    "brazier_03.webp",
+    "brazier_04.webp",
+    "brazier_05.webp",
+    "brazier_06.webp",
+    "brazier_07.webp",
+    "brazier_closeup.webp"
    ]
   },
   {
@@ -1067,15 +1067,15 @@
     "emissive": []
    },
    "turntable": [
-    "column_00.png",
-    "column_01.png",
-    "column_02.png",
-    "column_03.png",
-    "column_04.png",
-    "column_05.png",
-    "column_06.png",
-    "column_07.png",
-    "column_closeup.png"
+    "column_00.webp",
+    "column_01.webp",
+    "column_02.webp",
+    "column_03.webp",
+    "column_04.webp",
+    "column_05.webp",
+    "column_06.webp",
+    "column_07.webp",
+    "column_closeup.webp"
    ]
   },
   {
@@ -1189,15 +1189,15 @@
     "emissive": []
    },
    "turntable": [
-    "corner_pier_00.png",
-    "corner_pier_01.png",
-    "corner_pier_02.png",
-    "corner_pier_03.png",
-    "corner_pier_04.png",
-    "corner_pier_05.png",
-    "corner_pier_06.png",
-    "corner_pier_07.png",
-    "corner_pier_closeup.png"
+    "corner_pier_00.webp",
+    "corner_pier_01.webp",
+    "corner_pier_02.webp",
+    "corner_pier_03.webp",
+    "corner_pier_04.webp",
+    "corner_pier_05.webp",
+    "corner_pier_06.webp",
+    "corner_pier_07.webp",
+    "corner_pier_closeup.webp"
    ]
   },
   {
@@ -1318,15 +1318,15 @@
     "emissive": []
    },
    "turntable": [
-    "frame_painting_l_00.png",
-    "frame_painting_l_01.png",
-    "frame_painting_l_02.png",
-    "frame_painting_l_03.png",
-    "frame_painting_l_04.png",
-    "frame_painting_l_05.png",
-    "frame_painting_l_06.png",
-    "frame_painting_l_07.png",
-    "frame_painting_l_closeup.png"
+    "frame_painting_l_00.webp",
+    "frame_painting_l_01.webp",
+    "frame_painting_l_02.webp",
+    "frame_painting_l_03.webp",
+    "frame_painting_l_04.webp",
+    "frame_painting_l_05.webp",
+    "frame_painting_l_06.webp",
+    "frame_painting_l_07.webp",
+    "frame_painting_l_closeup.webp"
    ]
   },
   {
@@ -1447,15 +1447,15 @@
     "emissive": []
    },
    "turntable": [
-    "frame_painting_m_00.png",
-    "frame_painting_m_01.png",
-    "frame_painting_m_02.png",
-    "frame_painting_m_03.png",
-    "frame_painting_m_04.png",
-    "frame_painting_m_05.png",
-    "frame_painting_m_06.png",
-    "frame_painting_m_07.png",
-    "frame_painting_m_closeup.png"
+    "frame_painting_m_00.webp",
+    "frame_painting_m_01.webp",
+    "frame_painting_m_02.webp",
+    "frame_painting_m_03.webp",
+    "frame_painting_m_04.webp",
+    "frame_painting_m_05.webp",
+    "frame_painting_m_06.webp",
+    "frame_painting_m_07.webp",
+    "frame_painting_m_closeup.webp"
    ]
   },
   {
@@ -1576,15 +1576,15 @@
     "emissive": []
    },
    "turntable": [
-    "frame_painting_s_00.png",
-    "frame_painting_s_01.png",
-    "frame_painting_s_02.png",
-    "frame_painting_s_03.png",
-    "frame_painting_s_04.png",
-    "frame_painting_s_05.png",
-    "frame_painting_s_06.png",
-    "frame_painting_s_07.png",
-    "frame_painting_s_closeup.png"
+    "frame_painting_s_00.webp",
+    "frame_painting_s_01.webp",
+    "frame_painting_s_02.webp",
+    "frame_painting_s_03.webp",
+    "frame_painting_s_04.webp",
+    "frame_painting_s_05.webp",
+    "frame_painting_s_06.webp",
+    "frame_painting_s_07.webp",
+    "frame_painting_s_closeup.webp"
    ]
   },
   {
@@ -1699,15 +1699,15 @@
     "emissive": []
    },
    "turntable": [
-    "gallery_beam_00.png",
-    "gallery_beam_01.png",
-    "gallery_beam_02.png",
-    "gallery_beam_03.png",
-    "gallery_beam_04.png",
-    "gallery_beam_05.png",
-    "gallery_beam_06.png",
-    "gallery_beam_07.png",
-    "gallery_beam_closeup.png"
+    "gallery_beam_00.webp",
+    "gallery_beam_01.webp",
+    "gallery_beam_02.webp",
+    "gallery_beam_03.webp",
+    "gallery_beam_04.webp",
+    "gallery_beam_05.webp",
+    "gallery_beam_06.webp",
+    "gallery_beam_07.webp",
+    "gallery_beam_closeup.webp"
    ]
   },
   {
@@ -1851,15 +1851,15 @@
     "emissive": []
    },
    "turntable": [
-    "gate_door_00.png",
-    "gate_door_01.png",
-    "gate_door_02.png",
-    "gate_door_03.png",
-    "gate_door_04.png",
-    "gate_door_05.png",
-    "gate_door_06.png",
-    "gate_door_07.png",
-    "gate_door_closeup.png"
+    "gate_door_00.webp",
+    "gate_door_01.webp",
+    "gate_door_02.webp",
+    "gate_door_03.webp",
+    "gate_door_04.webp",
+    "gate_door_05.webp",
+    "gate_door_06.webp",
+    "gate_door_07.webp",
+    "gate_door_closeup.webp"
    ]
   },
   {
@@ -1974,15 +1974,15 @@
     "emissive": []
    },
    "turntable": [
-    "hammer_beam_truss_00.png",
-    "hammer_beam_truss_01.png",
-    "hammer_beam_truss_02.png",
-    "hammer_beam_truss_03.png",
-    "hammer_beam_truss_04.png",
-    "hammer_beam_truss_05.png",
-    "hammer_beam_truss_06.png",
-    "hammer_beam_truss_07.png",
-    "hammer_beam_truss_closeup.png"
+    "hammer_beam_truss_00.webp",
+    "hammer_beam_truss_01.webp",
+    "hammer_beam_truss_02.webp",
+    "hammer_beam_truss_03.webp",
+    "hammer_beam_truss_04.webp",
+    "hammer_beam_truss_05.webp",
+    "hammer_beam_truss_06.webp",
+    "hammer_beam_truss_07.webp",
+    "hammer_beam_truss_closeup.webp"
    ]
   },
   {
@@ -2096,15 +2096,15 @@
     "emissive": []
    },
    "turntable": [
-    "newel_00.png",
-    "newel_01.png",
-    "newel_02.png",
-    "newel_03.png",
-    "newel_04.png",
-    "newel_05.png",
-    "newel_06.png",
-    "newel_07.png",
-    "newel_closeup.png"
+    "newel_00.webp",
+    "newel_01.webp",
+    "newel_02.webp",
+    "newel_03.webp",
+    "newel_04.webp",
+    "newel_05.webp",
+    "newel_06.webp",
+    "newel_07.webp",
+    "newel_closeup.webp"
    ]
   },
   {
@@ -2232,15 +2232,15 @@
     ]
    },
    "turntable": [
-    "pedestal_00.png",
-    "pedestal_01.png",
-    "pedestal_02.png",
-    "pedestal_03.png",
-    "pedestal_04.png",
-    "pedestal_05.png",
-    "pedestal_06.png",
-    "pedestal_07.png",
-    "pedestal_closeup.png"
+    "pedestal_00.webp",
+    "pedestal_01.webp",
+    "pedestal_02.webp",
+    "pedestal_03.webp",
+    "pedestal_04.webp",
+    "pedestal_05.webp",
+    "pedestal_06.webp",
+    "pedestal_07.webp",
+    "pedestal_closeup.webp"
    ]
   },
   {
@@ -2369,15 +2369,15 @@
     ]
    },
    "turntable": [
-    "stair_module_00.png",
-    "stair_module_01.png",
-    "stair_module_02.png",
-    "stair_module_03.png",
-    "stair_module_04.png",
-    "stair_module_05.png",
-    "stair_module_06.png",
-    "stair_module_07.png",
-    "stair_module_closeup.png"
+    "stair_module_00.webp",
+    "stair_module_01.webp",
+    "stair_module_02.webp",
+    "stair_module_03.webp",
+    "stair_module_04.webp",
+    "stair_module_05.webp",
+    "stair_module_06.webp",
+    "stair_module_07.webp",
+    "stair_module_closeup.webp"
    ]
   },
   {
@@ -2506,15 +2506,15 @@
     ]
    },
    "turntable": [
-    "torch_sconce_00.png",
-    "torch_sconce_01.png",
-    "torch_sconce_02.png",
-    "torch_sconce_03.png",
-    "torch_sconce_04.png",
-    "torch_sconce_05.png",
-    "torch_sconce_06.png",
-    "torch_sconce_07.png",
-    "torch_sconce_closeup.png"
+    "torch_sconce_00.webp",
+    "torch_sconce_01.webp",
+    "torch_sconce_02.webp",
+    "torch_sconce_03.webp",
+    "torch_sconce_04.webp",
+    "torch_sconce_05.webp",
+    "torch_sconce_06.webp",
+    "torch_sconce_07.webp",
+    "torch_sconce_closeup.webp"
    ]
   },
   {
@@ -2629,15 +2629,15 @@
     "emissive": []
    },
    "turntable": [
-    "wall_panel_00.png",
-    "wall_panel_01.png",
-    "wall_panel_02.png",
-    "wall_panel_03.png",
-    "wall_panel_04.png",
-    "wall_panel_05.png",
-    "wall_panel_06.png",
-    "wall_panel_07.png",
-    "wall_panel_closeup.png"
+    "wall_panel_00.webp",
+    "wall_panel_01.webp",
+    "wall_panel_02.webp",
+    "wall_panel_03.webp",
+    "wall_panel_04.webp",
+    "wall_panel_05.webp",
+    "wall_panel_06.webp",
+    "wall_panel_07.webp",
+    "wall_panel_closeup.webp"
    ]
   }
  ]

@@ -1,0 +1,593 @@
+{
+ "kit": "props",
+ "realm": "ember",
+ "generated": "2026-09-08T12:57:40",
+ "blender": "5.1.2",
+ "units": "metres, +Y up (glTF), origin at the base unless pivot says otherwise",
+ "atlas": {
+  "albedo_px": 2048,
+  "small_px": 1024,
+  "emissive_strength": 4.0,
+  "maps": "albedo(RGBA sRGB) normal(tangent, OpenGL +Y) orm(R=AO G=rough B=metal) emissive(sRGB)"
+ },
+ "materials": {
+  "opaque": "ember_atlas",
+  "cutout": "ember_atlas_cutout (alphaMode MASK 0.5, doubleSided)"
+ },
+ "turntable_layout": "<realm>_<prop>_turntable.png = 2048x1024 sheet, 8 yaw angles at 512 px (a0..a3 top row, a4..a7 bottom row, 45 deg steps from 30 deg, 18 deg elevation); <realm>_<prop>_close.png = 1024 px close-up (3/4 view, upper 2/3); <realm>_<prop>_lod1.png = 1024x512 LOD1 at two angles. Eevee, AgX, neutral 3-point rig.",
+ "textures": [
+  {
+   "file": "ember/textures/ember_albedo.png",
+   "px": [
+    2048,
+    2048
+   ],
+   "bytes": 2589859
+  },
+  {
+   "file": "ember/textures/ember_emissive.png",
+   "px": [
+    1024,
+    1024
+   ],
+   "bytes": 168838
+  },
+  {
+   "file": "ember/textures/ember_normal.png",
+   "px": [
+    1024,
+    1024
+   ],
+   "bytes": 1172537
+  },
+  {
+   "file": "ember/textures/ember_orm.png",
+   "px": [
+    1024,
+    1024
+   ],
+   "bytes": 812642
+  }
+ ],
+ "textures_bytes": 4743876,
+ "props": [
+  {
+   "name": "basalt_rock_a",
+   "file": "ember/basalt_rock_a.gltf",
+   "lod1": "ember/basalt_rock_a_lod1.gltf",
+   "tris": 476,
+   "tris_gltf": 476,
+   "tris_lod1": 190,
+   "verts": 252,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.6406,
+     -0.063,
+     -0.7106
+    ],
+    "max": [
+     0.7384,
+     1.319,
+     0.6592
+    ],
+    "size": [
+     1.379,
+     1.3821,
+     1.3699
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "ember_atlas",
+   "cutout": false,
+   "bytes": 37042,
+   "bytes_lod1": 21320,
+   "runtime": {
+    "id": "lavaRock",
+    "fit": "max"
+   },
+   "notes": "columnar basalt cluster (7 hex columns)",
+   "turntable": [
+    "_turntable/ember_basalt_rock_a_turntable.webp",
+    "_turntable/ember_basalt_rock_a_close.webp",
+    "_turntable/ember_basalt_rock_a_lod1.webp"
+   ]
+  },
+  {
+   "name": "basalt_rock_b",
+   "file": "ember/basalt_rock_b.gltf",
+   "lod1": "ember/basalt_rock_b_lod1.gltf",
+   "tris": 420,
+   "tris_gltf": 420,
+   "tris_lod1": 168,
+   "verts": 228,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.8127,
+     -0.1014,
+     -0.7772
+    ],
+    "max": [
+     0.9316,
+     1.8958,
+     1.0153
+    ],
+    "size": [
+     1.7443,
+     1.9972,
+     1.7924
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "ember_atlas",
+   "cutout": false,
+   "bytes": 35168,
+   "bytes_lod1": 19079,
+   "runtime": {
+    "id": "lavaRock",
+    "fit": "max"
+   },
+   "notes": "leaning basalt columns + rubble",
+   "turntable": [
+    "_turntable/ember_basalt_rock_b_turntable.webp",
+    "_turntable/ember_basalt_rock_b_close.webp",
+    "_turntable/ember_basalt_rock_b_lod1.webp"
+   ]
+  },
+  {
+   "name": "slag_chunk_a",
+   "file": "ember/slag_chunk_a.gltf",
+   "lod1": "ember/slag_chunk_a_lod1.gltf",
+   "tris": 320,
+   "tris_gltf": 320,
+   "tris_lod1": 128,
+   "verts": 168,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.4185,
+     0.0,
+     -0.3975
+    ],
+    "max": [
+     0.5132,
+     0.4295,
+     0.3652
+    ],
+    "size": [
+     0.9317,
+     0.4295,
+     0.7627
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "ember_atlas",
+   "cutout": false,
+   "bytes": 33072,
+   "bytes_lod1": 14997,
+   "runtime": {
+    "id": "lavaRock",
+    "fit": "max"
+   },
+   "notes": "obsidian slag with glowing seams (emissive)",
+   "turntable": [
+    "_turntable/ember_slag_chunk_a_turntable.webp",
+    "_turntable/ember_slag_chunk_a_close.webp",
+    "_turntable/ember_slag_chunk_a_lod1.webp"
+   ]
+  },
+  {
+   "name": "slag_chunk_b",
+   "file": "ember/slag_chunk_b.gltf",
+   "lod1": "ember/slag_chunk_b_lod1.gltf",
+   "tris": 240,
+   "tris_gltf": 240,
+   "tris_lod1": 96,
+   "verts": 126,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.5289,
+     0.0,
+     -0.5217
+    ],
+    "max": [
+     0.6328,
+     0.5759,
+     0.5012
+    ],
+    "size": [
+     1.1618,
+     0.5759,
+     1.0229
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "ember_atlas",
+   "cutout": false,
+   "bytes": 25134,
+   "bytes_lod1": 11729,
+   "runtime": {
+    "id": "lavaRock",
+    "fit": "max"
+   },
+   "notes": "",
+   "turntable": [
+    "_turntable/ember_slag_chunk_b_turntable.webp",
+    "_turntable/ember_slag_chunk_b_close.webp",
+    "_turntable/ember_slag_chunk_b_lod1.webp"
+   ]
+  },
+  {
+   "name": "catwalk_grate",
+   "file": "ember/catwalk_grate.gltf",
+   "lod1": "ember/catwalk_grate_lod1.gltf",
+   "tris": 370,
+   "tris_gltf": 370,
+   "tris_lod1": 148,
+   "verts": 212,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -1.0,
+     0.0,
+     -0.5
+    ],
+    "max": [
+     1.0,
+     0.16,
+     0.5
+    ],
+    "size": [
+     2.0,
+     0.16,
+     1.0
+    ]
+   },
+   "pivot": "deck underside centre; 2.0 (X) x 1.0 (Z) x 0.06",
+   "material": "ember_atlas_cutout",
+   "cutout": true,
+   "bytes": 20361,
+   "bytes_lod1": 12281,
+   "runtime": {
+    "kind": "deck",
+    "w": 2.0,
+    "d": 1.0
+   },
+   "notes": "iron frame + hazard kick plates; the grating is an alpha-punched card (MASK)",
+   "turntable": [
+    "_turntable/ember_catwalk_grate_turntable.webp",
+    "_turntable/ember_catwalk_grate_close.webp",
+    "_turntable/ember_catwalk_grate_lod1.webp"
+   ]
+  },
+  {
+   "name": "catwalk_rail",
+   "file": "ember/catwalk_rail.gltf",
+   "lod1": "ember/catwalk_rail_lod1.gltf",
+   "tris": 340,
+   "tris_gltf": 340,
+   "tris_lod1": 136,
+   "verts": 198,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.06,
+     0.0,
+     -1.01
+    ],
+    "max": [
+     0.06,
+     1.08,
+     2.0
+    ],
+    "size": [
+     0.12,
+     1.08,
+     3.01
+    ]
+   },
+   "pivot": "floor centre; runs +/-1.0 along Z",
+   "material": "ember_atlas",
+   "cutout": false,
+   "bytes": 18200,
+   "bytes_lod1": 10046,
+   "runtime": {
+    "kind": "rail",
+    "len": 2.0
+   },
+   "notes": "posts + 2 rails + kick plate + knee braces",
+   "turntable": [
+    "_turntable/ember_catwalk_rail_turntable.webp",
+    "_turntable/ember_catwalk_rail_close.webp",
+    "_turntable/ember_catwalk_rail_lod1.webp"
+   ]
+  },
+  {
+   "name": "furnace_vent",
+   "file": "ember/furnace_vent.gltf",
+   "lod1": "ember/furnace_vent_lod1.gltf",
+   "tris": 1452,
+   "tris_gltf": 1452,
+   "tris_lod1": 580,
+   "verts": 768,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.495,
+     0.0,
+     -0.495
+    ],
+    "max": [
+     0.495,
+     0.58,
+     0.5086
+    ],
+    "size": [
+     0.99,
+     0.58,
+     1.0036
+    ]
+   },
+   "pivot": "base centre (y=0, XZ centred)",
+   "material": "ember_atlas",
+   "cutout": false,
+   "bytes": 64894,
+   "bytes_lod1": 33297,
+   "runtime": {
+    "id": "lavavent",
+    "h": 0.55
+   },
+   "notes": "iron housing, glowing throat (emissive), grille",
+   "turntable": [
+    "_turntable/ember_furnace_vent_turntable.webp",
+    "_turntable/ember_furnace_vent_close.webp",
+    "_turntable/ember_furnace_vent_lod1.webp"
+   ]
+  },
+  {
+   "name": "pipe_elbow",
+   "file": "ember/pipe_elbow.gltf",
+   "lod1": "ember/pipe_elbow_lod1.gltf",
+   "tris": 916,
+   "tris_gltf": 916,
+   "tris_lod1": 366,
+   "verts": 484,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.2635,
+     0.0,
+     -0.2635
+    ],
+    "max": [
+     0.891,
+     1.0695,
+     0.2635
+    ],
+    "size": [
+     1.1545,
+     1.0695,
+     0.527
+    ]
+   },
+   "pivot": "bottom flange centre; rises +Y then turns +X",
+   "material": "ember_atlas",
+   "cutout": false,
+   "bytes": 43433,
+   "bytes_lod1": 22247,
+   "runtime": {
+    "id": "pipe",
+    "fit": "max"
+   },
+   "notes": "r 0.17 flanged 90\u00b0 elbow",
+   "turntable": [
+    "_turntable/ember_pipe_elbow_turntable.webp",
+    "_turntable/ember_pipe_elbow_close.webp",
+    "_turntable/ember_pipe_elbow_lod1.webp"
+   ]
+  },
+  {
+   "name": "pipe_straight",
+   "file": "ember/pipe_straight.gltf",
+   "lod1": "ember/pipe_straight_lod1.gltf",
+   "tris": 1200,
+   "tris_gltf": 1200,
+   "tris_lod1": 480,
+   "verts": 640,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.323,
+     0.0,
+     -2.365
+    ],
+    "max": [
+     0.323,
+     0.6411,
+     1.2
+    ],
+    "size": [
+     0.646,
+     0.6411,
+     3.565
+    ]
+   },
+   "pivot": "floor at the first bracket; runs +Z (glTF) 2.4 m",
+   "material": "ember_atlas",
+   "cutout": false,
+   "bytes": 60376,
+   "bytes_lod1": 29175,
+   "runtime": {
+    "id": "pipe",
+    "fit": "max"
+   },
+   "notes": "flanged run with brackets + valve wheel",
+   "turntable": [
+    "_turntable/ember_pipe_straight_turntable.webp",
+    "_turntable/ember_pipe_straight_close.webp",
+    "_turntable/ember_pipe_straight_lod1.webp"
+   ]
+  },
+  {
+   "name": "gear",
+   "file": "ember/gear.gltf",
+   "lod1": "ember/gear_lod1.gltf",
+   "tris": 1454,
+   "tris_gltf": 1454,
+   "tris_lod1": 580,
+   "verts": 763,
+   "bones": 0,
+   "clips": [
+    {
+     "name": "spin",
+     "seconds": 10.0,
+     "frames": 240,
+     "axis": "Z"
+    }
+   ],
+   "bounds": {
+    "min": [
+     -0.5917,
+     -0.5993,
+     -0.156
+    ],
+    "max": [
+     0.5917,
+     0.5993,
+     0.156
+    ],
+    "size": [
+     1.1834,
+     1.1987,
+     0.312
+    ]
+   },
+   "pivot": "AXLE centre; gear in the XY plane, spins about glTF +Z (clip \"spin\", 10 s)",
+   "material": "ember_atlas",
+   "cutout": false,
+   "bytes": 68629,
+   "bytes_lod1": 32857,
+   "runtime": {
+    "id": "gear",
+    "fit": "max"
+   },
+   "notes": "iron 14-tooth wheel, brass hub + bolts",
+   "turntable": [
+    "_turntable/ember_gear_turntable.webp",
+    "_turntable/ember_gear_close.webp",
+    "_turntable/ember_gear_lod1.webp"
+   ]
+  },
+  {
+   "name": "gear_small",
+   "file": "ember/gear_small.gltf",
+   "lod1": "ember/gear_small_lod1.gltf",
+   "tris": 1184,
+   "tris_gltf": 1184,
+   "tris_lod1": 472,
+   "verts": 614,
+   "bones": 0,
+   "clips": [
+    {
+     "name": "spin",
+     "seconds": 6.0,
+     "frames": 144,
+     "axis": "Z"
+    }
+   ],
+   "bounds": {
+    "min": [
+     -0.2919,
+     -0.2994,
+     -0.108
+    ],
+    "max": [
+     0.2919,
+     0.2994,
+     0.108
+    ],
+    "size": [
+     0.5839,
+     0.5987,
+     0.216
+    ]
+   },
+   "pivot": "AXLE centre; spins about glTF +Z (clip \"spin\", 6 s)",
+   "material": "ember_atlas",
+   "cutout": false,
+   "bytes": 54295,
+   "bytes_lod1": 25346,
+   "runtime": {
+    "id": "gear_small",
+    "fit": "max"
+   },
+   "notes": "",
+   "turntable": [
+    "_turntable/ember_gear_small_turntable.webp",
+    "_turntable/ember_gear_small_close.webp",
+    "_turntable/ember_gear_small_lod1.webp"
+   ]
+  },
+  {
+   "name": "chain",
+   "file": "ember/chain.gltf",
+   "lod1": "ember/chain_lod1.gltf",
+   "tris": 1454,
+   "tris_gltf": 1454,
+   "tris_lod1": 580,
+   "verts": 733,
+   "bones": 0,
+   "clips": [],
+   "bounds": {
+    "min": [
+     -0.093,
+     0.0116,
+     -0.093
+    ],
+    "max": [
+     0.2,
+     2.63,
+     0.093
+    ],
+    "size": [
+     0.293,
+     2.6184,
+     0.186
+    ]
+   },
+   "pivot": "hook tip (y=0); hangs UP to y 2.7 \u2014 hang it from its top shackle",
+   "material": "ember_atlas",
+   "cutout": false,
+   "bytes": 76015,
+   "bytes_lod1": 35998,
+   "runtime": {
+    "id": "chain",
+    "h": 2.8
+   },
+   "notes": "12 interlocked links + shackle + hook",
+   "turntable": [
+    "_turntable/ember_chain_turntable.webp",
+    "_turntable/ember_chain_close.webp",
+    "_turntable/ember_chain_lod1.webp"
+   ]
+  }
+ ],
+ "budgets": {
+  "prop_tris_max": 1500,
+  "architecture_tris_max": 3000,
+  "atlas_px_max": 2048
+ },
+ "over_budget": [],
+ "build_seconds": 210.5
+}

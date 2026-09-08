@@ -1114,8 +1114,13 @@ def render_turntable(objs, piece, closeup=None, frame=1):
                 setattr(sc.eevee, k, v)
     sc.render.resolution_x = sc.render.resolution_y = 1024
     sc.render.resolution_percentage = 100
-    sc.render.image_settings.file_format = 'PNG'
+    # WEBP, not PNG: a turntable is a REVIEW render, and the same 1024x1024 Eevee frame is
+    # 948,655 bytes as PNG against 21,262 as WebP q92 (measured, keep/arch_door_00). The four
+    # kits had put ~333 MB of turntable PNGs in the repo; as WebP the same 430 frames are 13.5 MB.
+    sc.render.image_settings.file_format = 'WEBP'
     sc.render.image_settings.color_mode = 'RGB'
+    sc.render.image_settings.quality = 92
+    sc.render.dither_intensity = 0.0
     sc.render.film_transparent = False
     sc.view_settings.view_transform = 'AgX' if 'AgX' in [i.identifier for i in bpy.types.ColorManagedViewSettings.bl_rna.properties['view_transform'].enum_items] else 'Filmic'
     sc.view_settings.look = 'None'
@@ -1184,7 +1189,7 @@ def render_turntable(objs, piece, closeup=None, frame=1):
         a = -pi / 2 + i * pi / 4
         cam.location = ctr + Vector((cos(a) * d * cos(elev), sin(a) * d * cos(elev), d * sin(elev)))
         _look(cam, ctr)
-        p = os.path.join(TT_DIR, f'{piece}_{i:02d}.png')
+        p = os.path.join(TT_DIR, f'{piece}_{i:02d}.webp')
         sc.render.filepath = p
         bpy.ops.render.render(write_still=True)
         out.append(p)
@@ -1194,7 +1199,7 @@ def render_turntable(objs, piece, closeup=None, frame=1):
     cd = max(d * 0.30, 0.45)
     cam.location = tgt + Vector((cos(a) * cd * cos(radians(12)), sin(a) * cd * cos(radians(12)), cd * sin(radians(12))))
     _look(cam, tgt)
-    p = os.path.join(TT_DIR, f'{piece}_closeup.png')
+    p = os.path.join(TT_DIR, f'{piece}_closeup.webp')
     sc.render.filepath = p
     bpy.ops.render.render(write_still=True)
     out.append(p)

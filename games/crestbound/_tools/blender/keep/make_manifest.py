@@ -28,7 +28,7 @@ for jp in sorted(glob.glob(os.path.join(KIT_DIR, '_manifest', '*.json'))):
     e['images'] = g['images']
     e['glb'] = {'tris': g['tris'], 'primitives': g['primitives'], 'materials': g['materials'], 'nodes': g['nodes'],
                 'skins': g['skins'], 'animations': g['animations'], 'extensions': g['extensionsUsed'], 'emissive': g['emissive']}
-    tt = sorted(os.path.basename(p) for p in glob.glob(os.path.join(KIT_DIR, '_turntable', f"{e['name']}_*.png")))
+    tt = sorted(os.path.basename(p) for p in glob.glob(os.path.join(KIT_DIR, '_turntable', f"{e['name']}_*.webp")))
     e['turntable'] = tt
     budget = BUDGET.get(e.get('kind', 'architecture'), 3000)
     e['tris_budget'] = budget

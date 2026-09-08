@@ -1,112 +1,112 @@
 {
-  "name": "gnasher",
-  "file": "gnasher.glb",
-  "file_bytes": 2677892,
-  "tris": 7418,
-  "tris_blender": 7418,
-  "verts": 3781,
-  "bones": 10,
-  "bone_names": [
-    "root",
-    "body",
-    "jaw",
-    "anchor",
-    "eye_L",
-    "pupil_L",
-    "eye_R",
-    "pupil_R",
-    "brow_L",
-    "brow_R"
-  ],
-  "clips": [
-    {
-      "name": "idle",
-      "seconds": 2,
-      "frames": 49,
-      "channels": 30
-    },
-    {
-      "name": "telegraph_windup",
-      "seconds": 0.5,
-      "frames": 13,
-      "channels": 30
-    },
-    {
-      "name": "lunge",
-      "seconds": 0.5,
-      "frames": 13,
-      "channels": 30
-    },
-    {
-      "name": "recover",
-      "seconds": 1.2083,
-      "frames": 30,
-      "channels": 30
-    },
-    {
-      "name": "freed",
-      "seconds": 1.5,
-      "frames": 37,
-      "channels": 30
-    }
-  ],
-  "bounds": {
-    "min": [
-      -0.5717,
-      0.05,
-      -0.669
-    ],
-    "max": [
-      0.5717,
-      1.2102,
-      0.53
-    ],
-    "height_m": 1.1602
+ "name": "gnasher",
+ "file": "gnasher.glb",
+ "file_bytes": 2677892,
+ "tris": 7418,
+ "tris_blender": 7418,
+ "verts": 3781,
+ "bones": 10,
+ "bone_names": [
+  "root",
+  "body",
+  "jaw",
+  "anchor",
+  "eye_L",
+  "pupil_L",
+  "eye_R",
+  "pupil_R",
+  "brow_L",
+  "brow_R"
+ ],
+ "clips": [
+  {
+   "name": "idle",
+   "seconds": 2,
+   "frames": 49,
+   "channels": 30
   },
-  "pivot": [
-    0,
-    0,
-    0
-  ],
-  "forward": "+Z (glTF) \u2014 built facing Blender -Y",
-  "materials": [
-    "gnasher_atlas"
-  ],
-  "textures": {
-    "albedo": "textures/gnasher_albedo.png",
-    "normal": "textures/gnasher_normal.png",
-    "orm": "textures/gnasher_orm.png"
+  {
+   "name": "telegraph_windup",
+   "seconds": 0.5,
+   "frames": 13,
+   "channels": 30
   },
-  "atlas_px": 1024,
-  "images_in_glb": [
-    "gnasher_normal",
-    "gnasher_orm",
-    "gnasher_albedo"
-  ],
-  "notes": [
-    "Runtime naturalHeight 1.10 m; model rest height is measured in bounds. Spikes/collars are part of the body bone.",
-    "Chain and post are SEPARATE assets (gnasher_post.glb, gnasher_link.glb) so the runtime can keep placing its own chain."
-  ],
-  "kind": "critter",
-  "states": {
-    "idle": "idle",
-    "telegraph": "telegraph_windup",
-    "attack": "lunge",
-    "recover": "recover",
-    "freed": "freed"
+  {
+   "name": "lunge",
+   "seconds": 0.5,
+   "frames": 13,
+   "channels": 30
   },
-  "turntable": [
-    "_turntable/gnasher_tt_00.png",
-    "_turntable/gnasher_tt_01.png",
-    "_turntable/gnasher_tt_02.png",
-    "_turntable/gnasher_tt_03.png",
-    "_turntable/gnasher_tt_04.png",
-    "_turntable/gnasher_tt_05.png",
-    "_turntable/gnasher_tt_06.png",
-    "_turntable/gnasher_tt_07.png",
-    "_turntable/gnasher_closeup.png"
+  {
+   "name": "recover",
+   "seconds": 1.2083,
+   "frames": 30,
+   "channels": 30
+  },
+  {
+   "name": "freed",
+   "seconds": 1.5,
+   "frames": 37,
+   "channels": 30
+  }
+ ],
+ "bounds": {
+  "min": [
+   -0.5717,
+   0.05,
+   -0.669
   ],
-  "contact_sheet": "_turntable/gnasher_clips.png",
-  "bake_seconds": 26.1,
-  "build_seconds": 37.7
+  "max": [
+   0.5717,
+   1.2102,
+   0.53
+  ],
+  "height_m": 1.1602
+ },
+ "pivot": [
+  0,
+  0,
+  0
+ ],
+ "forward": "+Z (glTF) \u2014 built facing Blender -Y",
+ "materials": [
+  "gnasher_atlas"
+ ],
+ "textures": {
+  "albedo": "textures/gnasher_albedo.png",
+  "normal": "textures/gnasher_normal.png",
+  "orm": "textures/gnasher_orm.png"
+ },
+ "atlas_px": 1024,
+ "images_in_glb": [
+  "gnasher_normal",
+  "gnasher_orm",
+  "gnasher_albedo"
+ ],
+ "notes": [
+  "Runtime naturalHeight 1.10 m; model rest height is measured in bounds. Spikes/collars are part of the body bone.",
+  "Chain and post are SEPARATE assets (gnasher_post.glb, gnasher_link.glb) so the runtime can keep placing its own chain."
+ ],
+ "kind": "critter",
+ "states": {
+  "idle": "idle",
+  "telegraph": "telegraph_windup",
+  "attack": "lunge",
+  "recover": "recover",
+  "freed": "freed"
+ },
+ "turntable": [
+  "_turntable/gnasher_tt_00.webp",
+  "_turntable/gnasher_tt_01.webp",
+  "_turntable/gnasher_tt_02.webp",
+  "_turntable/gnasher_tt_03.webp",
+  "_turntable/gnasher_tt_04.webp",
+  "_turntable/gnasher_tt_05.webp",
+  "_turntable/gnasher_tt_06.webp",
+  "_turntable/gnasher_tt_07.webp",
+  "_turntable/gnasher_closeup.webp"
+ ],
+ "contact_sheet": "_turntable/gnasher_clips.webp",
+ "bake_seconds": 26.1,
+ "build_seconds": 37.7
 }

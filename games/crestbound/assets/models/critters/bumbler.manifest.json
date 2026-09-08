@@ -1,99 +1,99 @@
 {
-  "name": "bumbler",
-  "file": "bumbler.glb",
-  "file_bytes": 2010128,
-  "tris": 5500,
-  "tris_blender": 5500,
-  "verts": 2790,
-  "bones": 11,
-  "bone_names": [
-    "root",
-    "body",
-    "hat",
-    "eye_L",
-    "pupil_L",
-    "eye_R",
-    "pupil_R",
-    "arm_L",
-    "arm_R",
-    "leg_L",
-    "leg_R"
-  ],
-  "clips": [
-    {
-      "name": "waddle_walk",
-      "seconds": 1,
-      "frames": 25,
-      "channels": 33
-    },
-    {
-      "name": "squish_flat",
-      "seconds": 0.3333,
-      "frames": 9,
-      "channels": 33
-    },
-    {
-      "name": "respawn",
-      "seconds": 0.8333,
-      "frames": 21,
-      "channels": 33
-    }
-  ],
-  "bounds": {
-    "min": [
-      -0.528,
-      0.0,
-      -0.38
-    ],
-    "max": [
-      0.528,
-      1.0749,
-      0.4408
-    ],
-    "height_m": 1.0749
+ "name": "bumbler",
+ "file": "bumbler.glb",
+ "file_bytes": 2010128,
+ "tris": 5500,
+ "tris_blender": 5500,
+ "verts": 2790,
+ "bones": 11,
+ "bone_names": [
+  "root",
+  "body",
+  "hat",
+  "eye_L",
+  "pupil_L",
+  "eye_R",
+  "pupil_R",
+  "arm_L",
+  "arm_R",
+  "leg_L",
+  "leg_R"
+ ],
+ "clips": [
+  {
+   "name": "waddle_walk",
+   "seconds": 1,
+   "frames": 25,
+   "channels": 33
   },
-  "pivot": [
-    0,
-    0,
-    0
-  ],
-  "forward": "+Z (glTF) \u2014 built facing Blender -Y",
-  "materials": [
-    "bumbler_atlas"
-  ],
-  "textures": {
-    "albedo": "textures/bumbler_albedo.png",
-    "normal": "textures/bumbler_normal.png",
-    "orm": "textures/bumbler_orm.png"
+  {
+   "name": "squish_flat",
+   "seconds": 0.3333,
+   "frames": 9,
+   "channels": 33
   },
-  "atlas_px": 1024,
-  "images_in_glb": [
-    "bumbler_normal",
-    "bumbler_orm",
-    "bumbler_albedo"
+  {
+   "name": "respawn",
+   "seconds": 0.8333,
+   "frames": 21,
+   "channels": 33
+  }
+ ],
+ "bounds": {
+  "min": [
+   -0.528,
+   0.0,
+   -0.38
   ],
-  "notes": [
-    "Runtime naturalHeight 0.924 m (BM_R 0.42 * 2.2). Hat top is the tallest point.",
-    "root = whole-body rock/bob/yaw; body = squash/stretch only; hat/eyes/arms are children of root so the squash never shears them."
+  "max": [
+   0.528,
+   1.0749,
+   0.4408
   ],
-  "kind": "critter",
-  "states": {
-    "walk": "waddle_walk",
-    "squish": "squish_flat",
-    "respawn": "respawn"
-  },
-  "turntable": [
-    "_turntable/bumbler_tt_00.png",
-    "_turntable/bumbler_tt_01.png",
-    "_turntable/bumbler_tt_02.png",
-    "_turntable/bumbler_tt_03.png",
-    "_turntable/bumbler_tt_04.png",
-    "_turntable/bumbler_tt_05.png",
-    "_turntable/bumbler_tt_06.png",
-    "_turntable/bumbler_tt_07.png",
-    "_turntable/bumbler_closeup.png"
-  ],
-  "contact_sheet": "_turntable/bumbler_clips.png",
-  "bake_seconds": 33.1,
-  "build_seconds": 47.8
+  "height_m": 1.0749
+ },
+ "pivot": [
+  0,
+  0,
+  0
+ ],
+ "forward": "+Z (glTF) \u2014 built facing Blender -Y",
+ "materials": [
+  "bumbler_atlas"
+ ],
+ "textures": {
+  "albedo": "textures/bumbler_albedo.png",
+  "normal": "textures/bumbler_normal.png",
+  "orm": "textures/bumbler_orm.png"
+ },
+ "atlas_px": 1024,
+ "images_in_glb": [
+  "bumbler_normal",
+  "bumbler_orm",
+  "bumbler_albedo"
+ ],
+ "notes": [
+  "Runtime naturalHeight 0.924 m (BM_R 0.42 * 2.2). Hat top is the tallest point.",
+  "root = whole-body rock/bob/yaw; body = squash/stretch only; hat/eyes/arms are children of root so the squash never shears them."
+ ],
+ "kind": "critter",
+ "states": {
+  "walk": "waddle_walk",
+  "squish": "squish_flat",
+  "respawn": "respawn"
+ },
+ "turntable": [
+  "_turntable/bumbler_tt_00.webp",
+  "_turntable/bumbler_tt_01.webp",
+  "_turntable/bumbler_tt_02.webp",
+  "_turntable/bumbler_tt_03.webp",
+  "_turntable/bumbler_tt_04.webp",
+  "_turntable/bumbler_tt_05.webp",
+  "_turntable/bumbler_tt_06.webp",
+  "_turntable/bumbler_tt_07.webp",
+  "_turntable/bumbler_closeup.webp"
+ ],
+ "contact_sheet": "_turntable/bumbler_clips.webp",
+ "bake_seconds": 33.1,
+ "build_seconds": 47.8
 }

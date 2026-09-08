@@ -1,97 +1,97 @@
 {
-  "name": "skitter",
-  "file": "skitter.glb",
-  "file_bytes": 1729848,
-  "tris": 7510,
-  "tris_blender": 7510,
-  "verts": 3963,
-  "bones": 16,
-  "bone_names": [
-    "root",
-    "thorax",
-    "head",
-    "eye_L",
-    "pupil_L",
-    "eye_R",
-    "pupil_R",
-    "abd1",
-    "abd2",
-    "abd3",
-    "abd4",
-    "abd5",
-    "wing_FR",
-    "wing_FL",
-    "wing_BR",
-    "wing_BL"
-  ],
-  "clips": [
-    {
-      "name": "fly",
-      "seconds": 0.5,
-      "frames": 13,
-      "channels": 48
-    },
-    {
-      "name": "swoop_attack",
-      "seconds": 1.1667,
-      "frames": 29,
-      "channels": 48
-    }
-  ],
-  "bounds": {
-    "min": [
-      -0.6804,
-      -0.0028,
-      -0.7761
-    ],
-    "max": [
-      0.6804,
-      0.665,
-      0.54
-    ],
-    "height_m": 0.6678
+ "name": "skitter",
+ "file": "skitter.glb",
+ "file_bytes": 1729848,
+ "tris": 7510,
+ "tris_blender": 7510,
+ "verts": 3963,
+ "bones": 16,
+ "bone_names": [
+  "root",
+  "thorax",
+  "head",
+  "eye_L",
+  "pupil_L",
+  "eye_R",
+  "pupil_R",
+  "abd1",
+  "abd2",
+  "abd3",
+  "abd4",
+  "abd5",
+  "wing_FR",
+  "wing_FL",
+  "wing_BR",
+  "wing_BL"
+ ],
+ "clips": [
+  {
+   "name": "fly",
+   "seconds": 0.5,
+   "frames": 13,
+   "channels": 48
   },
-  "pivot": [
-    0,
-    0,
-    0
+  {
+   "name": "swoop_attack",
+   "seconds": 1.1667,
+   "frames": 29,
+   "channels": 48
+  }
+ ],
+ "bounds": {
+  "min": [
+   -0.6804,
+   -0.0028,
+   -0.7761
   ],
-  "forward": "+Z (glTF) \u2014 built facing Blender -Y",
-  "materials": [
-    "skitter_atlas",
-    "skitter_wing"
+  "max": [
+   0.6804,
+   0.665,
+   0.54
   ],
-  "textures": {
-    "albedo": "textures/skitter_albedo.png",
-    "normal": "textures/skitter_normal.png",
-    "orm": "textures/skitter_orm.png"
-  },
-  "atlas_px": 1024,
-  "images_in_glb": [
-    "skitter_normal",
-    "skitter_orm",
-    "skitter_albedo"
-  ],
-  "notes": [
-    "Runtime naturalHeight 0.60 m; rest bounds include raised wings. Wings are a separate alpha-blended slot (skitter_wing)."
-  ],
-  "kind": "critter",
-  "states": {
-    "walk": "fly",
-    "attack": "swoop_attack"
-  },
-  "turntable": [
-    "_turntable/skitter_tt_00.png",
-    "_turntable/skitter_tt_01.png",
-    "_turntable/skitter_tt_02.png",
-    "_turntable/skitter_tt_03.png",
-    "_turntable/skitter_tt_04.png",
-    "_turntable/skitter_tt_05.png",
-    "_turntable/skitter_tt_06.png",
-    "_turntable/skitter_tt_07.png",
-    "_turntable/skitter_closeup.png"
-  ],
-  "contact_sheet": "_turntable/skitter_clips.png",
-  "bake_seconds": 21.0,
-  "build_seconds": 40.8
+  "height_m": 0.6678
+ },
+ "pivot": [
+  0,
+  0,
+  0
+ ],
+ "forward": "+Z (glTF) \u2014 built facing Blender -Y",
+ "materials": [
+  "skitter_atlas",
+  "skitter_wing"
+ ],
+ "textures": {
+  "albedo": "textures/skitter_albedo.png",
+  "normal": "textures/skitter_normal.png",
+  "orm": "textures/skitter_orm.png"
+ },
+ "atlas_px": 1024,
+ "images_in_glb": [
+  "skitter_normal",
+  "skitter_orm",
+  "skitter_albedo"
+ ],
+ "notes": [
+  "Runtime naturalHeight 0.60 m; rest bounds include raised wings. Wings are a separate alpha-blended slot (skitter_wing)."
+ ],
+ "kind": "critter",
+ "states": {
+  "walk": "fly",
+  "attack": "swoop_attack"
+ },
+ "turntable": [
+  "_turntable/skitter_tt_00.webp",
+  "_turntable/skitter_tt_01.webp",
+  "_turntable/skitter_tt_02.webp",
+  "_turntable/skitter_tt_03.webp",
+  "_turntable/skitter_tt_04.webp",
+  "_turntable/skitter_tt_05.webp",
+  "_turntable/skitter_tt_06.webp",
+  "_turntable/skitter_tt_07.webp",
+  "_turntable/skitter_closeup.webp"
+ ],
+ "contact_sheet": "_turntable/skitter_clips.webp",
+ "bake_seconds": 21.0,
+ "build_seconds": 40.8
 }
