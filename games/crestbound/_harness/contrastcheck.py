@@ -239,6 +239,23 @@ async (st) => {
   const _sd = sampleDepths.slice().sort((a, b) => a - b);
   const deckDepth = _sd.length ? _sd[_sd.length >> 1] : 0;
   const deckDepthMax = _sd.length ? _sd[_sd.length - 1] : 0;
+
+  /* FREEZE THE FRAME. Everything above settles the pose with real rAF frames;
+     from here the frame must be the SAME frame twice. The checkpoint pad
+     PULSES (CONTRACT §15 asks it to), the deck band sits partly on it, and the
+     hazards, coins and water all move — so two runs of an unedited course
+     disagreed by up to 0.73 (ember-4 cp1 read deck [81,81,89] then
+     [117,110,113], ratio 2.49 then 3.22). Stop the loop, pin both clocks to a
+     constant, and hand-step a fixed number of frames: the screenshot and the
+     depth pass then see one deterministic frame instead of two moving ones. */
+  const PHASE = 12.0, STEPS = 3, DT = 1 / 60;
+  try { if (E.running && typeof E.stop === 'function') E.stop(); } catch (e) {}
+  for (let k = 0; k < STEPS; k++) {
+    try { if (typeof E.elapsed === 'number') E.elapsed = PHASE; } catch (e) {}
+    try { if (G.course && typeof G.course.clock === 'number') G.course.clock = PHASE; } catch (e) {}
+    try { G.update(DT); } catch (e) {}
+  }
+  const frozen = !E.running;
   /* The hero's screen box: feet to head, +-0.45 m of shoulder, so his body,
      scarf and blob shadow never land in the deck median. */
   const hb = [
@@ -257,7 +274,7 @@ async (st) => {
     ok: true,
     w: Math.round(rect.width), h: Math.round(rect.height),
     feet, head, heroFeet, samples, sampleDepths, heroBox, yaw,
-    deckDepth, deckDepthMax, deckY: st.p.y,
+    deckDepth, deckDepthMax, deckY: st.p.y, frozen,
     heroPx: Math.round(Math.abs(heroFeet.y - head.y)),
     theme: G.themeId, state: G.state,
     fog: (E.scene && E.scene.fog) ? '#' + E.scene.fog.color.getHexString() : null,
@@ -291,6 +308,17 @@ MUTE_JS = r"""
   walk(document.body);
   globalThis.__ccHidden = hidden;
   return hidden.length;
+}
+"""
+
+# Hand the loop back after a frozen capture; the next station's pose needs real
+# rAF frames to settle the camera.
+RESUME_JS = r"""
+() => {
+  const A = globalThis.CRESTBOUND, E = A && A.engine, G = A && A.game;
+  if (!E || !G) return false;
+  if (!E.running && typeof E.start === 'function') { E.start((dt) => G.update(dt)); return true; }
+  return false;
 }
 """
 
@@ -607,6 +635,21 @@ def snap(pg, path):
     return False, last
 
 
+def page_url(args):
+    """REPEATABILITY. The gate used to load `?dev=1` and nothing else, so every
+    run took whatever tier `detectQuality()` picked AND let the dynamic render
+    scale controller move the resolution during the run — and `post.setSharpen`
+    is a function of `renderScale`, so the same station's pixels differ between
+    runs. Measured across two sweeps of a tree where only the Keep had changed:
+    ember-4 cp1 2.52 -> 3.13, rime-2 cp2 4.23 -> 3.77, rime-3 cp4 3.40 -> 3.65
+    (across the floor), on courses nothing had touched. Pinning the tier and
+    freezing the scale is what makes a row evidence instead of a mood."""
+    q = "?dev=1&autoscale=0"
+    if args.quality:
+        q += "&quality=" + args.quality
+    return args.url + q
+
+
 def leave_title(pg, timeout=45):
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -839,6 +882,7 @@ def measure(png, info, bg, args, crop_path=None):
         "sightColumn": bg.get("col"), "sightScanned": bg.get("scanned"),
         "sightRejectedNear": bg.get("rejectedNear"),
         "sightBadDepth": bg.get("rejectedBadDepth"), "rawBad": bg.get("rawBad"),
+        "frozen": info.get("frozen"),
         "stripRgb": [int(v) for v in old] if old else None,
         "stripRatio": round(contrast(ld, luminance(old)), 2) if old else None,
         "deckPixels": npx, "deckSamples": used, "heroRejected": rejected,
@@ -851,6 +895,8 @@ def measure(png, info, bg, args, crop_path=None):
 def main() -> int:
     ap = argparse.ArgumentParser(description="CRESTBOUND contrast check")
     ap.add_argument("--url", default=BASE)
+    ap.add_argument("--quality", default="low",
+                    help="tier pinned via ?quality= (default low, the tier the perf gate ships)")
     ap.add_argument("--courses", default="", help="comma list; default = every course on disk")
     ap.add_argument("--floor", type=float, default=FLOOR)
     ap.add_argument("--width", type=int, default=1280)
@@ -909,7 +955,7 @@ def main() -> int:
         pg = br.new_page(viewport={"width": args.width, "height": args.height})
         pg.on("pageerror", lambda e: pageerrs.append(str(e)))
         try:
-            pg.goto(args.url + "?dev=1", wait_until="load", timeout=60_000)
+            pg.goto(page_url(args), wait_until="load", timeout=60_000)
         except Exception as e:
             print("NAVIGATION FAILED: %s" % e, file=sys.stderr)
             br.close()
@@ -988,10 +1034,11 @@ def main() -> int:
                         "colPad": args.col_pad, "colPadPx": args.col_pad_px})
                 except Exception as e:
                     bg = {"error": str(e)[:160]}
-                try:
-                    pg.evaluate(UNMUTE_JS)
-                except Exception:
-                    pass
+                for js in (UNMUTE_JS, RESUME_JS):
+                    try:
+                        pg.evaluate(js)
+                    except Exception:
+                        pass
                 if not bright:
                     rows.append({"station": st["name"], "gates": st["gates"],
                                  "status": "unmeasurable",
