@@ -149,6 +149,34 @@ const HEIGHTS = {
     // The east dune crest — the far wall of the obelisk terrace. h 2.6 over an
     // 8.0 m half-width is 28.7 deg at its steepest, under the 38 deg slide.
     { a: [28, 34], b: [42, -4], w: 16, h: 2.6 },
+
+    /* THE RIM. 2026-09-08, shaft-residuals lane (ember-4 #04: "running west out
+       of the dunes leaves the heightfield at x < -72 and dies to void at
+       (-79.47, -14.26, 64.04) with no wall, fence or slide-back").
+       REPRODUCED before the fix with `_harness/_sr_rimwalk.py ember-4` — hold W
+       outward for 9 s from 16 m inside each rim: WEST ended (-79.76, -14.24,
+       -58.23) DEAD, the reported west line ended (-79.48, -14.26, 64.02) DEAD
+       (the tester's own coordinate to 2 cm), NORTH and SOUTH died to void as
+       well; only EAST held. Four of five rims dropped the player out of the
+       world.
+       The corner dunes were doing this job in four places and nowhere else, so
+       the sampler now carries a CONTINUOUS DUNE RIDGE 2 m inside each edge.
+       h 9.0 over a 10.0 m half-width is h*PI/(2*halfW) = 1.414 => 54.7 deg at
+       its steepest, comfortably over `slope.slideDeg` 38, so the last 8 m of
+       every approach is a slip face that hands the runner back to the desert
+       instead of to the void — and it is a DUNE, visible from anywhere on the
+       course, not an invisible fence. On the west, east and south rims the only
+       authored things past |58 m| are four props (two deco clusters, a text
+       board's neighbours and a rock), every one seated with `on()`/`seat()`, so
+       they ride the new ground. THE NORTH RIM IS THE EXCEPTION: the tomb-court FLAT
+       ({p:[0,-58], r:26, h:4.0}) is applied after the ridges and pins the ground
+       to 4.00 out to about |x| < 20 there, so no ridge can close it — that span
+       is closed by the mastaba's own back wall and two escarpment slabs beside
+       it (BEAT 4). */
+    { a: [-70, -72], b: [-70, 72], w: 20, h: 9.0 },   // west rim
+    { a: [70, -72], b: [70, 72], w: 20, h: 9.0 },     // east rim
+    { a: [-72, -70], b: [72, -70], w: 20, h: 9.0 },   // north rim
+    { a: [-72, 70], b: [72, 70], w: 20, h: 9.0 },     // south rim
   ],
   flats: [
     { p: [0, 50], r: 15, h: 2.0 },      // spawn camp                     (cp1)
@@ -911,6 +939,17 @@ export default {
     { kind: 'platform', p: [0, 8.30, -68.0], s: [10.6, 0.6, 7.0], mat: 'stone', tint: CORE_ST },
     { kind: 'pedestal', p: [0, TOMB_FLOOR, -68.0], mat: 'marble', tint: BONE, glow: GLYPH },
     { kind: 'light', p: [0, TOMB_FLOOR + 2.6, -68.0], color: GLYPH, intensity: 7, distance: 12 },
+
+    /* THE NORTH ESCARPMENT (ember-4 #04, and see the rim note in HEIGHTS).
+       The tomb-court flat pins the ground to 4.00 out to the heightfield's north
+       edge, so the rim dune cannot close this span and a player who walks round
+       the mastaba's shoulder used to step off the world at z < -72. Two cut
+       sandstone faces run from the mastaba's own back wall (x +-5.3) out to
+       |x| 22, where the dune ridge is back at full height. Their tops are 12.50,
+       which is 3 m over the mastaba roof, so they read as the quarry face the
+       tomb was cut into rather than as a fence. */
+    { kind: 'platform', p: [-13.6, 8.00, -71.5], s: [16.7, 9.0, 2.0], mat: 'stone', tint: CASING },
+    { kind: 'platform', p: [13.6, 8.00, -71.5], s: [16.7, 9.0, 2.0], mat: 'stone', tint: CASING },
 
     // --- the floor that is not a floor. Surface 4.20, depth 2.20.
     { kind: 'quicksand', p: [0, 3.10, -56.0], s: [13.0, 2.20, 9.5], sink: 1.2, color: 0xc8a465 },

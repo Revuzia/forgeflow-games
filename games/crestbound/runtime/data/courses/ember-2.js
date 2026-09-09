@@ -299,10 +299,22 @@ function trailCoins(pts, n, up) {
  * is at 12.40 - 0.70 = 11.70 and at full extension 11.70 - 5.20 = 6.50, i.e.
  * 0.50 m over the hall floor. A crusher is lethal ONLY on the driving face and
  * ONLY while it drives, so the parked head is a ceiling, not a threat.
+ *
+ * THE HEAD IS 6.4 m WIDE, NOT 4.8 (2026-09-08, shaft-residuals lane, ember-2 #07:
+ * "30 s hands-off in all three lanes gives 0 deaths — nothing in the hall can
+ * touch a player who walks a lane"). At 4.8 m on 7.0 m centres the row left
+ * 2.20 m of floor that NO head ever covers, so the marquee promised a machine
+ * and delivered three corridors. At 6.4 m on the centres below the widest strip
+ * any head misses is 0.40 m, narrower than the 0.76 m capsule — so there is no
+ * standing spot in a row that a stroke cannot reach, and the hall is crossed the
+ * way a press shop is crossed: UNDER A HEAD THAT IS UP, never between two heads.
+ * The four heads in a row are a quarter-cycle apart, so three of four columns
+ * are open at any instant; the 4 m breather bands between the rows are still
+ * completely clear, and that is where you choose your column.
  */
 function piston(x, z, period, phase) {
   return {
-    kind: 'crusher', p: [x, 12.40, z], s: [4.8, 1.4, 4.0],
+    kind: 'crusher', p: [x, 12.40, z], s: [6.4, 1.4, 4.0],
     axis: [0, -1, 0], travel: 5.20, period, phase, dwell: 0.55,
     mode: 'single', mat: 'metal', tint: IRON, glow: HOT,
   };
@@ -324,12 +336,17 @@ const CREST_Y = 34.90;       // the crown deck the open crest stands on
 // BEAT 2 — the hall. Shell x +-15, z 12..44; walls 1.65 m thick, so the clear
 // interior is x -13.35..13.35, z 13.65..42.35.
 const HALL_Z0 = 12, HALL_Z1 = 44;
-// Piston columns. Heads are 4.8 wide, so they occupy
-//   [-12.9,-8.1] [-5.9,-1.1] [1.1,5.9] [8.1,12.9]
-// and leave THREE lanes 2.20 m wide at x -7.0 / 0.0 / +7.0. Rows are 4.0 m
-// deep at z 37 / 29 / 21, leaving 4 m breather bands at z 31..35 and 23..27.
-const LANE = [-7.0, 0.0, 7.0];
-const PIS_X = [-10.5, -3.5, 3.5, 10.5];
+// Piston columns. Heads are 6.4 wide about these centres, so they occupy
+//   [-13.2,-6.8] [-6.6,-0.2] [0.2,6.6] [6.8,13.2]
+// and the strips no head ever covers are 0.15 / 0.20 / 0.40 / 0.20 / 0.15 m —
+// every one of them NARROWER THAN THE 0.76 m CAPSULE. There is therefore no
+// safe standing spot inside a row (ember-2 #07); the safe place is the CENTRE
+// OF A COLUMN whose head is up, 3.2 m from either neighbour, which is where the
+// coin lines run. Rows are 4.0 m deep at z 37 / 29 / 21, leaving 4 m breather
+// bands at z 31..35 and 23..27 that are clear of every head — that is where you
+// change column.
+const PIS_X = [-10.0, -3.4, 3.4, 10.0];
+const RUNLINE = PIS_X;          // the coin lines, and the lines you actually run
 const ROW_Z = [37, 29, 21];
 
 // BEAT 8 — the core. Drum p [0,15,-50] s [16,10,16]: floor 10.00, shell top
@@ -501,11 +518,14 @@ export default {
     // (metre-wide pancakes in the first frame). It now enters from the side
     // and joins the path at the pad.
     ...trailCoins([[-7, 52], [-4, 49], [-1.5, 46.5], [0, 43]], 10, 1.1),
-    // BEAT 2 — one line down each of the three piston lanes. Take a lane and
-    // commit; the coins are the only thing telling you where the lane IS. (18)
-    { line: { a: [LANE[0], 7.1, 40], b: [LANE[0], 7.1, 16], n: 6 } },
-    { line: { a: [LANE[1], 7.1, 40], b: [LANE[1], 7.1, 16], n: 6 } },
-    { line: { a: [LANE[2], 7.1, 40], b: [LANE[2], 7.1, 16], n: 6 } },
+    // BEAT 2 — one line down the CENTRE of each piston column. The coins used to
+    // run down the gaps BETWEEN the heads; the gaps are 0.40 m now and a hero
+    // standing in one is inside a stroke, so the breadcrumb has to say what the
+    // hall actually wants: run under a head, not beside it. (20)
+    { line: { a: [RUNLINE[0], 7.1, 40], b: [RUNLINE[0], 7.1, 16], n: 5 } },
+    { line: { a: [RUNLINE[1], 7.1, 40], b: [RUNLINE[1], 7.1, 16], n: 5 } },
+    { line: { a: [RUNLINE[2], 7.1, 40], b: [RUNLINE[2], 7.1, 16], n: 5 } },
+    { line: { a: [RUNLINE[3], 7.1, 40], b: [RUNLINE[3], 7.1, 16], n: 5 } },
     // BEAT 4 — along both sorter belts, against the direction of travel. (12)
     { line: { a: [-13, 7.4, 3], b: [-1, 7.4, 3], n: 6 } },
     { line: { a: [13, 7.4, -1], b: [1, 7.4, -1], n: 6 } },
@@ -576,9 +596,13 @@ export default {
      *
      * The rhythm: row 1 is a slow 3.6 s, row 2 an awkward 4.4 s, row 3 a fast
      * 2.6 s, and the four heads in each row are a quarter-cycle apart, so no
-     * lane is ever safe twice in a row and no lane is ever unsafe forever. The
-     * heads leave 2.20 m lanes at x -7 / 0 / +7 and 4 m breather bands between
-     * the rows. Nothing here needs a jump; it needs a count.
+     * column is ever safe twice in a row and no column is ever unsafe forever.
+     * The heads are 6.4 m wide on 6.6-6.8 m centres, which leaves NO standing
+     * gap between them (0.40 m at the widest, against a 0.76 m capsule): you
+     * cross a row under a head that is UP, and you change column in the 4 m
+     * breather bands, which no head reaches. Nothing here needs a jump; it needs
+     * a count. MEASURED (`_harness/_sr_e2piston.py`): 30 s hands-off anywhere in
+     * a row now dies, and a played run still crosses the hall end to end.
      * ===================================================================== */
 
     {
@@ -611,7 +635,7 @@ export default {
     // x 10.5..13.1, z 31.7..34.3). Top 7.80; sigil 1 floats 1.20 above it.
     { kind: 'platform', p: [11.8, 6.9, 33.0], s: [2.6, 1.8, 2.6], mat: 'metal', tint: SLAG, stripe: true, edge: SAFE_EDGE },
 
-    { kind: 'text', p: [-6.6, 8.4, 41.5], rot: [0, 0, 0], text: 'THREE LANES  ·  THREE COUNTS', size: 0.26, color: WARN },
+    { kind: 'text', p: [-6.6, 8.4, 41.5], rot: [0, 0, 0], text: 'RUN UNDER ONE THAT IS UP', size: 0.26, color: WARN },
     { kind: 'light', p: [0, 15.5, 37], color: EMBER, intensity: 9, distance: 26 },
     { kind: 'light', p: [0, 15.5, 25], color: EMBER, intensity: 9, distance: 26 },
     { kind: 'light', p: [0, 12.5, 15], color: HOT, intensity: 7, distance: 20 },

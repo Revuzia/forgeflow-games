@@ -127,7 +127,10 @@ const FACE = 40.00;    // the clock face deck (the roof)
 
 const WALL_TOP = 34.00;      // the tower's four walls stop here
 const SHAFT_C = [6.6, -6.6]; // the winding shaft's centre (east-north corner)
-const SHAFT_PAD = 33.30;     // its floor pad — a 0.30 m step off the bell deck
+const SHAFT_PAD = 33.06;     // its floor pad — FLUSH with the bell deck (33.00) bar a
+                             // 6 cm read lip, so the walk-in doorway has no kerb in it.
+                             // It was 33.30: a 0.30 m step, inside stepUp but pointless
+                             // once the west face carries a door you walk through.
 const HAND_Y = 41.40;        // the hour hand's axle height above the face deck
 
 /* ===========================================================================
@@ -847,17 +850,42 @@ export default {
      * BEAT 11 — THE WINDING SHAFT  (the last leg of every route)
      * A 3.30 x 3.30 m chimney in the east-north corner of the bell deck, four
      * slabs, running 33.00 -> 40.00 — 3.30 m clear against the contract's
-     * 3.4 m limit. From the pad at 33.30 the cap ledge at 40.00 is 6.70 m up:
-     * one jump (apex 1.91 m) plus three wall kicks at 2.00 m each = 7.91 m of
-     * lift, 1.21 m of margin, and no ceiling to bonk on because the face deck
-     * carries a 4.0 x 4.0 hole directly over the shaft.
+     * 3.4 m limit, WITH A DOOR IN ITS WEST FACE (see below). From the pad at
+     * 33.06 the clock face at 40.00 is 6.94 m up. MEASURED, three runs, no
+     * teleport after the bell deck (`_harness/_sr_a2shaft.py`): one jump plus
+     * THREE kicks climbed to maxY 40.21 / 40.27 / 40.28, i.e. 7.15-7.22 m, and
+     * every run ended GROUNDED AND IDLE on the 40.00 face deck. No ceiling to
+     * bonk on, because the face deck carries a 4.0 x 4.0 hole directly over the
+     * shaft. The north, south and east faces are solid floor-to-roof, so the
+     * ladder has an opposing pair whatever the hero is facing — the doorway can
+     * never leave a kick without a wall.
      * ===================================================================== */
 
     { kind: 'platform', p: deck(SHAFT_C[0], SHAFT_PAD, SHAFT_C[1], [3.3, 0.3, 3.3]), s: [3.3, 0.3, 3.3], mat: 'metal', tint: IRON, stripe: true, edge: SAFE_EDGE },
-    { kind: 'platform', p: [SHAFT_C[0], 36.5, -8.65], s: [4.1, 7.0, 0.8], mat: 'brick', tint: LIME },
-    { kind: 'platform', p: [SHAFT_C[0], 36.5, -4.55], s: [4.1, 7.0, 0.8], mat: 'brick', tint: LIME },
-    { kind: 'platform', p: [4.55, 36.5, SHAFT_C[1]], s: [0.8, 7.0, 3.3], mat: 'brick', tint: LIME },
-    { kind: 'platform', p: [8.65, 36.5, SHAFT_C[1]], s: [0.8, 7.0, 3.3], mat: 'brick', tint: LIME },
+    { kind: 'platform', p: [SHAFT_C[0], 36.5, -8.65], s: [4.1, 7.0, 0.8], mat: 'brick', tint: LIME },   // north face, solid
+    { kind: 'platform', p: [SHAFT_C[0], 36.5, -4.55], s: [4.1, 7.0, 0.8], mat: 'brick', tint: LIME },   // south face, solid
+    { kind: 'platform', p: [8.65, 36.5, SHAFT_C[1]], s: [0.8, 7.0, 3.3], mat: 'brick', tint: LIME },    // east face, solid
+    /* THE DOORWAY (2026-09-08, shaft-residuals lane — azure-2 #12, a progression
+       BLOCKER). The WEST face used to be one slab, x 4.15..4.95 by z -8.25..-4.95,
+       floor to roof: the shaft that "is the last leg of EVERY route" had no way in,
+       and every eastbound walk across the bell deck bonked on it. MEASURED before
+       the cut (`_harness/_sr_a2shaft.py before`, real KeyboardEvents): from
+       (1.5, 33.30, -6.6) the walk stopped at x 3.34, i.e. the capsule against
+       x 3.72; from (0, 33.30, -6.6) it stopped even earlier, at x 1.12, because
+       the EAST SOUNDING BEAM (the seesaw at x 1.5..7.5, z -6.5..-4.5, top 33.60)
+       is a 0.60 m wall across that line and stepUp is 0.45. So the walk-in lane
+       that exists is the one NORTH of the beam, z <= -6.9 — and the door is cut
+       there, at the west face's NORTH END, so the approach lane and the opening
+       are the same line. Same idea as rime-2's crevasse chimney (a pier and a
+       lintel round the hole); that one is centred, so it needs two posts, this
+       one runs into the north corner and needs one:
+         opening  z -8.25 .. -6.25 (2.00 m wide), y 33.00 .. 35.40 (2.40 m tall)
+         pier     z -6.25 .. -4.95, floor to roof
+       The floor inside is SHAFT_PAD 33.06, a 6 cm lip off the bell deck, so
+       nothing in the doorway is a step. Nothing is roofed: the lintel's underside
+       is 35.40, and the first jump off the floor apexes at 34.97. */
+    { kind: 'platform', p: [4.55, 36.50, -5.60], s: [0.8, 7.0, 1.3], mat: 'brick', tint: LIME },        // west pier, floor to roof
+    { kind: 'platform', p: [4.55, 37.70, -7.25], s: [0.8, 4.6, 2.0], mat: 'brick', tint: LIME },        // west lintel, over the door
     // The cap ledge: 0.80 m of deck ON TOP of the shaft's south wall, at
     // EXACTLY 40.00, so the last kick lands on a lip and not on a lid.
     { kind: 'platform', p: deck(SHAFT_C[0], FACE, -4.55, [4.1, 0.3, 0.8]), s: [4.1, 0.3, 0.8], mat: 'metal', tint: BRASS, stripe: true, edge: SAFE_EDGE },

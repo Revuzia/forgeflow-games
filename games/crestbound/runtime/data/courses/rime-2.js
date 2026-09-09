@@ -938,22 +938,55 @@ export default {
      * trusting and neither does a player who has just fallen off one.)
      * ===================================================================== */
 
-    { kind: 'platform', p: [-26.4, 2.60, 21.6], s: [3.0, 1.4, 3.0], mat: 'ice', tint: ICE, stripe: true, edge: SAFE_EDGE },
-    { kind: 'platform', p: [-27.6, 5.00, 19.0], s: [3.0, 1.4, 3.0], mat: 'ice', tint: ICE, stripe: true, edge: SAFE_EDGE },
-    { kind: 'platform', p: [-28.8, 7.40, 16.6], s: [3.0, 1.4, 3.0], mat: 'ice', tint: ICE, stripe: true, edge: SAFE_EDGE },
-    { kind: 'platform', p: [-29.8, 9.80, 14.4], s: [3.4, 1.4, 3.4], mat: 'ice', tint: ICE, stripe: true, edge: SAFE_EDGE },
-    // tops 3.30 / 5.70 / 8.10 / 10.50, then a 1.50 m step onto the apron at
-    // 12.00; gaps 2.87 / 2.68 / 2.42 m centre-to-centre at +2.40 m of rise.
-    // A single jump apexes at 1.91 m, so each of these is a DOUBLE — which is
-    // why there is a mover next to them and why the coins mark the seracs, not
-    // the lift: this is the course's one deliberate "learn the double" wall.
+    /* THE FOUR STATIC SERACS — tops 3.30 / 5.70 / 8.10 / 10.50, gaps 2.87 / 2.68 /
+       2.42 m centre-to-centre at +2.40 m of rise, then a 1.50 m step onto the
+       apron at 12.00. THEY ARE TOWERS NOW, NOT PUCKS (2026-09-08,
+       shaft-residuals lane, rime-2 #15). They were 1.4 m thick slabs floating on
+       a 60 deg wall, and MEASURED with real input (`_harness/_sr_r2serac.py`,
+       hero and camera AIMED first, Space HELD to apex — a 4-frame tap is a CUT
+       jump and measures nothing):
+         from serac 1 at 0.0 and 3.5 m/s a chained double rose 2.60 m and landed
+           on serac 2 at y 5.71 — the step IS makeable;
+         from serac 1 at 7.0 m/s the same press produced a 1.90 m JUMP 1 and the
+           hero came down at y 1.38 — IN THE LAKE, 5 m past serac 2. That is the
+           tester's "carries the hero clean past".
+       The step was therefore gated on the JUMP CHAIN being alive (jump 2 apexes
+       2.60, jump 1 only 1.91, and +2.40 needs the former), and a 3.0 m block is
+       too short to set up the landing speed the chain wants and still be on the
+       block when you press.
+       Two DATA changes, no move retuned and nothing deleted:
+       1. EVERY BLOCK'S FACE NOW REACHES BELOW THE ONE BEFORE IT. `s[1]` 1.4 -> 4.0
+          (tops unchanged, so every coin, every sigil and every authored height in
+          this file still resolves). serac 2's body is 1.70..5.70, which covers
+          serac 1's top at 3.30; serac 3's is 4.10..8.10 over serac 2's 5.70; and
+          so on. An overshoot at flight height therefore BONKS THE NEXT TOWER AND
+          DROPS BACK ONTO THE PAD BELOW instead of sailing over a 1.4 m puck into
+          the lake. A serac is an ice tower; it should never have been a coin.
+       2. A HALF-STEP TOWER IN EVERY GAP, so ONE AUTHORED MOVE — a plain single
+          jump, apex 1.91 m — lands every step of the face without needing the
+          jump chain to be alive. Tops 4.50 / 6.90 / 9.30 split the three +2.40 m
+          steps into six of +1.20 m over 1.21-1.43 m gaps. MEASURED after
+          (same tool, Space held, three approach speeds per step): shore -> 3.30,
+          3.30 -> 4.52, 4.52 -> 5.70, 5.70 -> 6.92, 6.90 -> 9.33, 8.10 -> 10.50,
+          10.50 -> 12.01, every one of them landed by a plain jump 1 (rise 1.91).
+          The +2.40 m line is still there and still a double — the same double
+          that landed on serac 2 at y 5.71 clears the 4.50 m half-step on the way,
+          so the fast line flies straight over the slow one. Beginner line and
+          expert line on the same wall. */
+    { kind: 'platform', p: [-26.4, 1.30, 21.6], s: [3.0, 4.0, 3.0], mat: 'ice', tint: ICE, stripe: true, edge: SAFE_EDGE },   // top 3.30
+    { kind: 'platform', p: [-27.0, 3.00, 20.3], s: [2.4, 3.0, 2.4], mat: 'ice', tint: ICE, stripe: true, edge: SAFE_EDGE },   // top 4.50  half-step
+    { kind: 'platform', p: [-27.6, 3.70, 19.0], s: [3.0, 4.0, 3.0], mat: 'ice', tint: ICE, stripe: true, edge: SAFE_EDGE },   // top 5.70
+    { kind: 'platform', p: [-28.2, 5.40, 17.8], s: [2.4, 3.0, 2.4], mat: 'ice', tint: ICE, stripe: true, edge: SAFE_EDGE },   // top 6.90  half-step
+    { kind: 'platform', p: [-28.8, 6.10, 16.6], s: [3.0, 4.0, 3.0], mat: 'ice', tint: ICE, stripe: true, edge: SAFE_EDGE },   // top 8.10
+    { kind: 'platform', p: [-29.3, 7.80, 15.5], s: [2.4, 3.0, 2.4], mat: 'ice', tint: ICE, stripe: true, edge: SAFE_EDGE },   // top 9.30  half-step
+    { kind: 'platform', p: [-29.8, 8.50, 14.4], s: [3.4, 4.0, 3.4], mat: 'ice', tint: ICE, stripe: true, edge: SAFE_EDGE },   // top 10.50
     {
       kind: 'mover', p: [-24.0, 2.60, 20.0], s: [3.2, 0.6, 3.2],
       motion: { type: 'linear', to: [-24.0, 12.40, 20.0], period: 7.0, phase: 0, ease: 'inout', dwell: 1.0 },
       mat: 'ice', tint: 0xbfe4f8, stripe: true, edge: SAFE_EDGE,
     },
     { kind: 'platform', p: [-25.6, 11.70, 16.8], s: [4.4, 0.6, 3.6], mat: 'ice', tint: ICE, stripe: true, edge: SAFE_EDGE },
-    { kind: 'text', p: [-24.6, 3.9, 23.4], rot: [0, 3.14, 0], text: 'LAND AND JUMP AGAIN  ·  DOUBLE JUMP', size: 0.22, color: 0x2c5878 },
+    { kind: 'text', p: [-24.6, 3.9, 23.4], rot: [0, 3.14, 0], text: 'STEP THE SMALL ONES  ·  OR DOUBLE THE BIG', size: 0.22, color: 0x2c5878 },
     { kind: 'deco', kindOf: 'icicle', p: [-30.6, 11.4, 15.4], s: [0.6, 1.4, 0.6], mat: 'ice', tint: CRYSTAL, count: 6, spread: 3.0, jitter: 0.3 },
 
     /* ========================================================================

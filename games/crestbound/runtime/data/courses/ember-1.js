@@ -510,9 +510,11 @@ export default {
     // The yard. Nothing is trying to kill you yet; this pad is here so the
     // walk back from a shore death is four seconds, not forty.
     { id: 'cp-yard', p: [0, 4.6, 41], yaw: 0, clockOffset: 0 },
-    // The quay head, BEFORE the flame catwalk. The vents run on 1.4 / 2.6
-    // (period 4.0); offset 2.0 puts every retry at the top of an off window.
-    { id: 'cp-quay', p: [0, QUAY_TOP, 15], yaw: 0, clockOffset: 2.0 },
+    // The quay head, BEFORE the flame catwalk. The vents run on 1.0 / 4.6
+    // (period 5.6) and are ALL DARK for t%5.6 in [3.0, 5.6); offset 3.0 puts
+    // every retry on the first frame of that window, so the walk back is never
+    // a wait. (It was 2.0 against the old 4.0 s period.)
+    { id: 'cp-quay', p: [0, QUAY_TOP, 15], yaw: 0, clockOffset: 3.0 },
     // The junction deck, BEFORE the raft field.
     { id: 'cp-junction', p: [0, CAT_TOP, -7.5], yaw: 0, clockOffset: 2.0 },
     // The smelter deck, BEFORE the belt and the crusher (period 4.2).
@@ -714,11 +716,35 @@ export default {
     { kind: 'deco', kindOf: 'rail', p: [2.1, 3.5, 2.0], s: [0.12, 1.0, 17.0], mat: 'metal', tint: IRON },
     { kind: 'deco', kindOf: 'rail', p: [-2.1, 3.5, 2.0], s: [0.12, 1.0, 17.0], mat: 'metal', tint: IRON },
 
-    // The three vents. The same KIND three times over — a repeated hazard kind
-    // batches, so this costs one family and very little else.
-    { kind: 'flame', p: [0, CAT_TOP + 0.05, 8.0], dir: [0, 1, 0], len: 5.0, radius: 0.9, color: MAGMA, cycle: { on: 1.4, off: 2.6, warn: 0.7, phase: 0.0 } },
-    { kind: 'flame', p: [0, CAT_TOP + 0.05, 2.0], dir: [0, 1, 0], len: 5.0, radius: 0.9, color: MAGMA, cycle: { on: 1.4, off: 2.6, warn: 0.7, phase: 1.35 } },
-    { kind: 'flame', p: [0, CAT_TOP + 0.05, -4.0], dir: [0, 1, 0], len: 5.0, radius: 0.9, color: MAGMA, cycle: { on: 1.4, off: 2.6, warn: 0.7, phase: 2.70 } },
+    /* THE THREE VENTS — RE-PHASED 2026-09-08 (shaft-residuals lane, ember-1 #29:
+       "0 of 3 timed runs crossed; the vent cycle has no safe phase").
+       The shipped cycle was on 1.4 / off 2.6 (period 4.0) at phases 0 / 1.35 /
+       2.70. `cycleState` (hazards/lasers.js) reads local = (t + phase) % period
+       and burns while local < on, and `phase` shifts a vent EARLIER — so those
+       three ON windows were
+            z  8.0   t%4 in [0.00, 1.40)
+            z -4.0   t%4 in [1.30, 2.70)
+            z  2.0   t%4 in [2.65, 4.00) U [0.00, 0.05)
+       whose UNION IS THE WHOLE PERIOD. There was never an instant with all three
+       out, and the wave also ran in the runner's own direction, so a player who
+       read the pattern perfectly still met a lit vent.
+       Now: period 5.6 (on 1.0, off 4.6), firing in a readable wave DOWN the
+       catwalk one second apart and then going dark together —
+            z  8.0 fires at t%5.6 = 0.0   -> phase 0.0
+            z  2.0 fires at t%5.6 = 1.0   -> phase 4.6   (phase = period - fire)
+            z -4.0 fires at t%5.6 = 2.0   -> phase 3.6
+            ALL THREE DARK for t%5.6 in [3.0, 5.6) — 2.60 s, every 5.6 s.
+       The quay head (z 15) to the junction (z -7.5) is 22.5 m and MEASURED at
+       2.71-3.06 s of course clock held on W, so the 2.60 s dark window carries
+       the crossing past the last vent with room and the wave carries the rest.
+       PROVEN by `_harness/_sr_e1flame.py`: the phase table (which calls reset(t)
+       on every hazard and asks whether a capsule ON each vent is inside a kill
+       volume) reads 29 of 56 sampled phases with EVERY vent out, against 0 of 56
+       before; and three crossings launched at course clock 3.04 / 14.18 / 31.18
+       all reached the junction deck, 0 deaths. */
+    { kind: 'flame', p: [0, CAT_TOP + 0.05, 8.0], dir: [0, 1, 0], len: 5.0, radius: 0.9, color: MAGMA, cycle: { on: 1.0, off: 4.6, warn: 0.8, phase: 0.0 } },
+    { kind: 'flame', p: [0, CAT_TOP + 0.05, 2.0], dir: [0, 1, 0], len: 5.0, radius: 0.9, color: MAGMA, cycle: { on: 1.0, off: 4.6, warn: 0.8, phase: 4.6 } },
+    { kind: 'flame', p: [0, CAT_TOP + 0.05, -4.0], dir: [0, 1, 0], len: 5.0, radius: 0.9, color: MAGMA, cycle: { on: 1.0, off: 4.6, warn: 0.8, phase: 3.6 } },
     { kind: 'text', p: [2.6, CAT_TOP + 1.6, 11.0], rot: [0, -0.5, 0], text: 'IT GLOWS BEFORE IT BLOWS', size: 0.22, color: 0xd8a878 },
 
     // SIGIL 1's spur — hung off the west side of the catwalk over open lava,

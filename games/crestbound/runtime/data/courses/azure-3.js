@@ -874,22 +874,39 @@ export default {
     { kind: 'crusher', p: [15.6, 58.0, -62], s: [3.4, 2.4, 5.0], axis: [0, -1, 0], travel: 4.0, period: 3.0, phase: 0.5, dwell: 0.5, mat: 'crystal' },
 
     /* The rotor. `len` 3.0 about x = 21 put the arm TIPS at exactly x 18 and
-       x 24 — the two numbers the old comment called "always clear" — and the
-       playtest died on arrival at both ("deaths 6 -> 7 at x 18 and 7 -> 8 at
-       x 24"). MEASURED on the live kill capsules (`_harness/_lf_kv.py azure-3`):
-       each arm's capsule runs from innerR 0.45 to innerR + len along the arm and
-       carries a 0.50 m radius, so the lethal reach is len + 0.95 from the pivot,
-       not len. With `len` 2.2 that is 3.15 m, i.e. x 17.85..24.15, and a 0.38 m
-       body makes the unsafe band x 17.47..24.53. THE CLEAR LANES ARE THEREFORE
-       x <= 17.40 AND x >= 24.60 — 12.4 m and 4.4 m of the 24 m deck. The arm is
-       shorter than the shipped 3.0 so the east lane is a lane and not a ledge.
+       x 24 — the two numbers the oldest comment called "always clear" — and the
+       playtest died on arrival at both. MEASURED on the live kill capsules
+       (`_harness/_sr_a3rotor.py`, which reads them off the built hazard): each
+       arm's capsule runs from innerR 0.45 to innerR + len along the arm and
+       carries a 0.50 m radius, so the LETHAL REACH IS len + 0.95 from the pivot,
+       not len.
+         `len` 2.2 -> reach 3.151 -> sweep x 17.85..24.15 -> with a 0.38 m body
+         the unsafe STANDING band is x 17.47..24.53.
+       That is what shipped, and it is still unfair in two measured ways. A 30 s
+       hands-off stand at x 24.60 survives — by 0.07 m; and x 17.40, which the
+       old comment published as clear, DIES at 0.02 s, because the east hammer's
+       body (x 13.90..17.30) shoves a 0.38 m capsule out to x 17.68, which is
+       already inside the sweep. There was no standing room at all between the
+       hammers and the arm.
+       `len` IS THEREFORE 1.3: reach 2.25, sweep x 18.75..23.25, unsafe standing
+       band x 18.37..23.63 (re-measured live after the change, see below). That
+       buys a 0.69 m rest bay at x 17.68..18.37 on the west side — the place you
+       stand to read the arm before you cross — and lifts the east lane off the
+       knife edge. Both of the tester's coordinates, x 18 and x 24, are now clear
+       with 0.37 m of margin each, and every band below survived 30 s hands-off
+       (`_harness/_sr_a3rotor.py bands`: 9 of 9 stands, 0 deaths, 0.00 m drift).
        THE HAMMERS OWN THE REST OF THE DECK, and the file has to say so: their
-       bodies cover x 7.90..11.30 and 13.90..17.30 on the beat, so the bands that
-       are clear of EVERYTHING at rest are x 5.0..7.9, x 11.3..13.9 (where sigil 7
-       stands, measured 30 s hands-off with 0 deaths) and x 24.6..29.0. Between
-       17.3 and 24.6 the crossing is a timed one — which is what a gauntlet is.
-       Every number here was read off the live kill volumes, not authored. */
-    { kind: 'rotor', p: [21, 53.2, -62], style: 'windmill', arms: 3, len: 2.2, period: 4.2, axis: 'y' },
+       bodies cover x 7.90..11.30 and 13.90..17.30 on the beat. THE PUBLISHED
+       BANDS ARE BODY-INCLUSIVE STANDING BANDS, not raw geometry edges — the old
+       ones were edges, which is why their endpoints killed:
+         x  5.38 .. 7.52   west of hammer 1
+         x 11.68 .. 13.52  the sigil-7 pocket
+         x 17.68 .. 18.37  the rest bay, west of the arm
+         x 23.63 .. 25.50  east of the arm, before the jump pad at x 25.5..28.5
+       Between 18.37 and 23.63 the crossing is a timed one — 5.26 m, which is
+       what a gauntlet is. Every number here was read off the live kill volumes
+       and confirmed by a hands-off stand, not authored. */
+    { kind: 'rotor', p: [21, 53.2, -62], style: 'windmill', arms: 3, len: 1.3, period: 4.2, axis: 'y' },
 
     // The friendly line onto the sanctum. `power` is TARGET APEX IN METRES:
     // 5.5 clears the +1.20 m rise with room to spare against a 3.50 m gap.
@@ -907,8 +924,17 @@ export default {
      * or above 50.00, which is 2.50 m clear of the parked front — see the
      * header note on why that clearance is the whole design. */
     {
+      /* `p.y` IS THE DECLARED FLOOR OF THIS OBJECT, and it used to be 0 while the
+         front's real travel is `from` 22.0 -> `to` 47.5. course.js's validator
+         takes every object's lowest point as p[1] - s[1]/2, so this one alone
+         reported -0.50 and made EVERY boot log "killY (8) sits at or above the
+         lowest geometry (-0.50) — players may die standing on real ground". The
+         cloud has no geometry down there: chase.js `_frontPoint()` OVERWRITES
+         the centre's y with the front position for axis 'y', so p[1] is inert to
+         the hazard and was only ever a lie to the validator. It now declares the
+         front's start, 22.0 (lowest 21.50), which is 13.5 m above killY. */
       kind: 'chase', axis: 'y', from: 22.0, to: CLOUD_TOP, speed: 0.45, delay: 12,
-      mat: 'void', p: [0, 0, -65], s: [110, 1, 14], color: 0x7f3fd8,
+      mat: 'void', p: [0, 22.0, -65], s: [110, 1, 14], color: 0x7f3fd8,
     },
 
     // UI lane 2026-09-07: at x -40 the stack stood 3 m BEHIND cp-gauntlet
