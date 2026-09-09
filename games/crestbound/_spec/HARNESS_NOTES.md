@@ -951,3 +951,50 @@ demand:
 The Keep is the control: not one triangle differs between those two runs and it
 still moved 2.1 fps, so +-2 fps IS the noise floor on this box — and verdant-2's
 -2.0 sits inside it, at identical draw calls. The aperture costs nothing.
+
+## The verify pass of 2026-09-09: seven residuals re-driven, and three things the sweep found
+
+Headed, one Chrome at a time, on the tree that carries the shaft-residual (ce85f569)
+and readability (e3d8e95f) lanes. Every residual was re-driven with real
+KeyboardEvents through `input.__test`, never by re-reading the lane's own claim.
+
+| defect | verdict | the measurement |
+|---|---|---|
+| azure-2 #12 winding shaft | FIXED | `_sr_a2shaft.py`: three walk-ins on foot from three bell-deck spots all ended INSIDE the shaft (x 6.42 / 6.26 / 7.85 at y 33.06) instead of bonking at x 3.77, and the ladder from where the WALK left him reached the clock face every time (maxY 40.28 / 40.23 / 40.27, 3 kicks, grounded at y 40.00) |
+| azure-3 #22 rotor bands | FIXED | live kill capsules measure reach 2.250 m (len 1.3), unsafe body-inclusive band x 18.37..23.63; 30 s hands-off at the tester's own x 18.00 and x 24.00 → 0 deaths, 0.00 m drift |
+| azure-3 #30 killY | FIXED | `_sr_warn.py azure-3` → "0 validator console line(s)" |
+| ember-4 #04 dune rim | FIXED | `_sr_rimwalk.py ember-4`: 9 of 9 outward 9 s walks held inside the heightfield, 0 deaths; the tester's own west line ends idle at (-61.91, 3.18, 60.45) instead of dying 'void' at (-79.47, -14.26, 64.04) |
+| ember-1 #29 flame catwalk | FIXED | phase table 29 of 56 sampled phases with every vent dark (was 0 of 56); 3 of 3 crossings on three different course clocks, 0 deaths |
+| ember-2 #07 piston hall (`tooSafe`) | FIXED | 21 of 21 hands-off row stands now die (0.02–2.07 s), 0 of 6 breather stands die, and a played run crossed all three rows to the north door with 0 deaths |
+| rime-2 #15 serac step | FIXED | `_vp_r2shot.py` (hops:1): 3 of 3 hops land ON the half-step (y 4.52/4.51/4.50) and 3 of 3 land ON serac 2 (y 5.70), all with a plain jump 1 of rise 1.90–1.91 |
+
+Corpus after: **157 FIXED / 88 STILL REPRODUCES / 70 COULD NOT TEST** of 315.
+
+**A probe that keeps holding W after the landing measures the NEXT platform.** The first
+frame attempt for rime-2 held W for 1200 ms across the jump; the hero landed on the
+half-step and then ran off it, ending 11 m away at (-36.36, 1.42, 16) — which reads
+exactly like "the step cannot be landed". The frame-exact driver (hold to apex, one hop,
+release) put him on the block every time. A hold that outlives the move is not a test of
+the move.
+
+**verdant-3 is 980 triangles OVER the 450k budget at its spawn, and it is not this pass.**
+bootcheck read 252 draws / **450,980** tris three times, byte-identical. The paired run
+the rules demand (`git archive 2ee15ad7 games/crestbound | tar -x -C games/_bisect/vrpbase`,
+then `bootcheck --url .../games/_bisect/vrpbase/...`) reads **450,982** on the pre-lane
+tree — two triangles MORE. The breach is inherited, deterministic (not the ±3k coin-band
+swing recorded on 2026-09-05), and 0.2 % over. Every other course is inside both budgets;
+worst draws are verdant-3's 252 of 260.
+
+**The contrast gate's instability is big enough to change a verdict.** The readability
+lane recorded ember-2 cp3 at 3.79 (a PASS). Three runs this pass — one full sweep and two
+isolated `--courses ember-2,rime-2` runs — read **2.89 / 2.71 / 2.67**, all FAIL, spread
+0.22. rime-2 cp2 likewise went from a measured 2.70 to NO EDGE (0 lines) in all three.
+So the shipped count is **8 failing gated stations, not 7**, and CONTRACT §15 now says so.
+A station within ~0.8 of the floor is not decided by one run; take three.
+
+**perfcheck was skipped, and here is the counter that decided it.**
+`Get-Counter '\GPU Engine(*engtype_3D)\Utilization Percentage'` with no harness Chrome
+alive: dwm **31.06 %** (16.56 + 14.50 across two adapters), WUDFHost **7.63 %**, claude
+1.78 % — **~40 % of the 3D engine spoken for before the window opens**. Per the rule
+above, an fps number taken there is not evidence either way; the geometry budgets in this
+note come from bootcheck's deterministic `renderer.info` instead.

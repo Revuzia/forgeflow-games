@@ -453,6 +453,18 @@ the shaft you fall down. Cross-tab over the 18 gated stations that have a measur
 (`_harness/contrastcheck.json`, 2026-09-08): **3 pass both · 8 pass edge only · 1 passes
 deck only · 6 fail both.**
 
+**CORRECTED 2026-09-09 (verify pass), because one of those numbers did not reproduce.**
+Re-run on the same tree the readability lane shipped, the cross-tab is **2 pass both ·
+8 edge only · 2 deck only · 6 fail both — 8 failing gated stations, not 7.** The station
+that moved is ember-2 cp3: the lane recorded 3.79, and three runs this pass read
+**2.89 / 2.71 / 2.67** (full sweep, then two isolated `--courses ember-2,rime-2` runs),
+every one under the 3.0 floor, spread 0.22. The lane's own note that "the contrast gate
+swung 0.73 between runs of an unedited course" is the mechanism; the consequence is that
+a station one run from the floor is not decided, and 3.79 was the outlier. RED and named
+here rather than rounded down: **verdant-1 cp3 2.33 · verdant-2 cp3 2.62 · ember-2 cp1
+1.61 · ember-2 cp3 2.89 · ember-3 cp4 2.25 · azure-2 cp1 2.66 · azure-3 cp1 1.75 ·
+azure-3 cp5 2.79.** 41 of 59 stations remain NO LIP, 10 pass.
+
 **WHAT COUNTS AS A LIP** (contrastcheck.py owns the detail; every clause below exists
 because a cruder version of it was measured and found lying):
 * one depth pass per station; scan lines walk OUT of the deck's projected footprint — up

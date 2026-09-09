@@ -66,8 +66,8 @@
   }
  },
  "totals": {
-  "fixed": 150,
-  "stillReproduces": 95,
+  "fixed": 157,
+  "stillReproduces": 88,
   "couldNotTest": 70
  },
  "byClass": {
@@ -87,18 +87,18 @@
    "COULD NOT TEST": 8
   },
   "clock/reset": {
-   "STILL REPRODUCES": 8,
+   "STILL REPRODUCES": 6,
    "COULD NOT TEST": 4,
-   "FIXED": 10
+   "FIXED": 12
   },
   "geometry": {
-   "STILL REPRODUCES": 18,
-   "FIXED": 8,
+   "STILL REPRODUCES": 16,
+   "FIXED": 10,
    "COULD NOT TEST": 11
   },
   "pads/belts/currents": {
-   "STILL REPRODUCES": 8,
-   "FIXED": 18,
+   "STILL REPRODUCES": 7,
+   "FIXED": 19,
    "COULD NOT TEST": 8
   },
   "camera": {
@@ -112,8 +112,8 @@
    "COULD NOT TEST": 3
   },
   "idle-crush": {
-   "FIXED": 9,
-   "STILL REPRODUCES": 2,
+   "FIXED": 10,
+   "STILL REPRODUCES": 1,
    "COULD NOT TEST": 2
   },
   "key conflict": {
@@ -122,8 +122,8 @@
   },
   "long-jump gaps": {
    "COULD NOT TEST": 8,
-   "STILL REPRODUCES": 2,
-   "FIXED": 2
+   "STILL REPRODUCES": 1,
+   "FIXED": 3
   },
   "pound": {
    "FIXED": 8,
@@ -890,17 +890,17 @@
    ],
    "where": "azure-2 THE WINDING SHAFT (bell deck 33.00 -> clock face 40.00), the 3.3 x 3.3 m chimney centred (6.60, -6.60). The course file calls it 'the last leg of EVERY route'.",
    "originally": "I never once got inside. Every eastbound walk stopped dead at x = 3.77 (hero radius 0.38 => the wall face is at x 4.15). That is the shaft's own west wall: platform p (4.55, 36.50, -6.60) s (0.8, 7.0, 3.3) spans x 4.15..",
-   "verdict": "STILL REPRODUCES",
-   "evidenceSource": "verify pass - real input on the current tree",
-   "evidence": "the CLIMB is fixed and the ENTRY is not. Frame-exact wall-kick ladder from the shaft floor (_mv_kickladder.py azure-2 6.6,33.00,-6.6 40.00): 33.60 -> 40.869 m, reached=true, 3 kicks at +1.17/+1.19 m - the 40.00 clock face is covered. But every walk into the shaft still bonks: from x 1.0 the hero stops at 1.12, from x 2.6 he stops at x 3.77 (the tester's own number, the west wall face at 4.15 minus the 0.38 body radius), and from the north at (6.6, -2.6) he bonks at (7.95, -3.77). There is no way in on foot.",
+   "verdict": "FIXED",
+   "evidenceSource": "verify-redeploy-push pass (2026-09-08) - re-driven with real KeyboardEvents on this tree",
+   "evidence": "the entry AND the climb both work now. `_harness/_sr_a2shaft.py` (no teleport after the start): three walk-ins on foot from three different bell-deck spots -- (0.0,-7.25), (-4.0,-7.60), (2.0,-7.00) -- all three ended INSIDE the shaft at (6.42/6.26/7.85, 33.06, -7.25/-7.24/-7.32) instead of bonking at x 3.77, and the wall-kick ladder from where the WALK left him reached the 40.00 clock face every time: maxY 40.28 / 40.23 / 40.27, reached=true, 3 kicks each, ending grounded and idle on the clock face (frame 02: pos 3.48, 40.00, 4.03, grounded true, deaths 0). The new 2.00 x 2.40 m doorway at the west face's north end and the 33.30 -> 33.06 floor pad are what changed.",
    "probeStation": [
     6.6,
     33.0,
     -6.6
    ],
-   "frame": "_shots\\play_untest_azure-2\\05_azure-2_12_0.png",
+   "frame": "_shots\\play_sr_a2shaft_vrp\\01_walkin_0.0.png + 02_clockface_0.0.png",
    "probeStationFrom": "pair / where",
-   "reMeasuredBy": "verify-redeploy-push (2026-09-08), content lock + death defect"
+   "reMeasuredBy": "verify-redeploy-push (2026-09-08), shaft-residual re-drive"
   },
   {
    "key": "azure-2#13",
@@ -1430,12 +1430,12 @@
    ],
    "where": "azure-3 BEAT 7 - the road rotor at (21, 56.4, -62), a 3-arm windmill on the east deck (x 5..29). The file says 'the lanes at x 5..18 and x 24..29 are always clear'.",
    "originally": "Killed instantly at BOTH. Deaths 6 -> 7 on arrival at x 18 and 7 -> 8 on arrival at x 24. The rotor's arms are len 3.0 about x 21, so x 18 and x 24 are exactly on the tip and the clear lanes are narrower than the file cl",
-   "verdict": "STILL REPRODUCES",
-   "evidenceSource": "verify pass - real input on the current tree",
-   "evidence": "the file no longer lies, but the two coordinates the tester named still kill. 30 s hands-off: x 24.6 (inside the course's newly published clear band 24.6-29.0) survives with 0 deaths, while x 17.4 dies at +0.02 s (crush) and the tester's own x 18 and x 24 die at +0.02 s / +0.07 s (spike). len 2.2 + the 0.95 m capsule reach still covers x 17.85..24.15.",
+   "verdict": "FIXED",
+   "evidenceSource": "verify-redeploy-push pass (2026-09-08) - re-driven with real KeyboardEvents on this tree",
+   "evidence": "both of the tester's own coordinates now survive. `_harness/_sr_a3rotor.py bands`: the live kill capsules measure a lethal reach of 2.250 m from the pivot (len 3.0 -> 1.3), so the sweep is x 18.75..23.25 and the body-inclusive unsafe band is x 18.37..23.63. 30 s hands-off at x 18.00 and x 24.00: 0 deaths, 0.00 m drift, state idle (frames 01/02, pos 18.00/24.00, 52.80, -62.00, deaths 0). Before: both died at +0.02 s / +0.07 s. RESIDUAL, measured this pass and NOT part of this defect: the ENDPOINTS of the four newly published standing bands still kill -- x 7.52 (crush 2.00 s), 11.68 (2.02), 13.52 (0.47), 17.68 (1.52) and 25.50 (spike 0.02 s) -- while their interiors (5.38, 18.37, 23.63) survive 30 s. The bands are still edges at their ends.",
    "probeStation": "22.0",
-   "frame": "_shots\\play_probe_azure-3\\19_22_0.png",
-   "reMeasuredBy": "verify-redeploy-push (2026-09-08), death defect"
+   "frame": "_shots\\play_vp_frames\\01_a3rotor_x18.png + 02_a3rotor_x24.png",
+   "reMeasuredBy": "verify-redeploy-push (2026-09-08), shaft-residual re-drive"
   },
   {
    "key": "azure-3#23",
@@ -1580,12 +1580,12 @@
    ],
    "where": "azure-3 - console at every boot of the course.",
    "originally": "Every load logs: '[Course azure-3] killY (8) sits at or above the lowest geometry (-0.50) - players may die standing on real ground'. The -0.50 comes from the chase cloud's authored p of [0, 0, -65] with s [110, 1, 14]; ",
-   "verdict": "STILL REPRODUCES",
-   "evidenceSource": "verify pass - real input on the current tree",
-   "evidence": "the console still logs it at every boot of the course: '[Course azure-3] killY (8) sits at or above the lowest geometry (-0.50) - players may die standing on real ground'.",
+   "verdict": "FIXED",
+   "evidenceSource": "verify-redeploy-push pass (2026-09-08) - re-driven with real KeyboardEvents on this tree",
+   "evidence": "`_harness/_sr_warn.py azure-3` reads the course validator's console at load: '== azure-3: 0 validator console line(s)'. The killY line ('killY (8) sits at or above the lowest geometry (-0.50)') is gone -- the chase cloud declares p.y 22.0 (its front's true start) instead of 0, so course.js no longer reads -0.50 as the lowest geometry. bootcheck azure-3 also BOOTS CLEAN with 0 console errors.",
    "probeStation": null,
-   "frame": null,
-   "reMeasuredBy": "verify-redeploy-push (2026-09-08), death defect"
+   "frame": "console read (no frame claim in the defect)",
+   "reMeasuredBy": "verify-redeploy-push (2026-09-08), shaft-residual re-drive"
   },
   {
    "key": "ember-1#00",
@@ -2196,12 +2196,12 @@
    ],
    "where": "ember-1 BEAT 2, the flame catwalk, three timed runs from the quay at (0, 3.2, 12.5) to the junction",
    "originally": "one run in three crossed. The t 2.6 start crossed clean to z -9.37 in about 2.5 s; the t 1.5 start died at z 2.40 (vent 2, clock 3.03) and the t 3.4 start died at z 8.03 (vent 1, clock 4.23), both cause 'lava', both card",
-   "verdict": "STILL REPRODUCES",
-   "evidenceSource": "verify pass - real input on the current tree",
-   "evidence": "0 of 3 timed runs crossed the flame catwalk from the quay at (0, 3.40, 12.5) holding W: clock 1.5 died to lava at z 2.40, clock 2.6 died at z 8.40, clock 3.4 died at z 8.40. The tester got 1 in 3; this pass got 0 in 3.",
+   "verdict": "FIXED",
+   "evidenceSource": "verify-redeploy-push pass (2026-09-08) - re-driven with real KeyboardEvents on this tree",
+   "evidence": "there is a readable safe phase now, and three crossings used it. `_harness/_sr_e1flame.py`: the phase table (hazard reset(t) at 56 sampled phases) shows every vent dark at 29 of 56 phases -- t 0.0, 1.0, 2.0 and the whole 3.0..5.5 window -- against 0 of 56 before; each vent is lethal for only 0.9 s of the 5.6 s period, one second apart. Three crossings on three different course clocks (0.4, 12.7, 31.1), quay (0,3.00,15) -> junction (0,3.00,-7.5) on held W: 3 of 3 arrived, 0 deaths. Re-driven in `_vp_frames.py` it arrived at (0, 3.00, -8.37) and took CHECKPOINT 2/4 with deaths 0.",
    "probeStation": "29.0",
-   "frame": "_shots\\play_probe_ember-1\\22_29_0.png",
-   "reMeasuredBy": "verify-redeploy-push (2026-09-08), death defect"
+   "frame": "_shots\\play_vp_frames\\04_e1_junction.png",
+   "reMeasuredBy": "verify-redeploy-push (2026-09-08), shaft-residual re-drive"
   },
   {
    "key": "ember-1#30",
@@ -2492,17 +2492,17 @@
    ],
    "where": "ember-2 BEAT 2 - the piston hall, the three lanes at x -7 / 0 / +7 between z 41 and 15",
    "originally": "Zero deaths in 9 of 9 runs. The 4.8 m heads on 7 m centres leave 2.20 m lanes that are clear on EVERY phase, so nothing in the hall can touch a player who walks a lane. The marquee outside says 'EVERY PISTON KEEPS ITS OW",
-   "verdict": "STILL REPRODUCES",
-   "evidenceSource": "verify pass - real input on the current tree",
-   "evidence": "the complaint is the ABSENCE of danger and the absence is still there: 30 s hands-off in each of the three piston-hall lanes (x -7, 0, +7 at y 6.20, z 28.0) - 0 deaths, drift 0.00 m, state idle in every lane.",
+   "verdict": "FIXED",
+   "evidenceSource": "verify-redeploy-push pass (2026-09-08) - re-driven with real KeyboardEvents on this tree",
+   "evidence": "the absence of danger is gone and the hall is still crossable -- both halves measured. `_harness/_sr_e2piston.py both`: 21 of 21 30 s hands-off stands inside the three rows (z 37 / 29 / 21, at the old lanes x -7 / 0 / +7 and the four column centres) now DIE, at 0.02-2.07 s, against 0 of 9 before; the six breather stands (z 33 / 25) still survive. A played run then crossed all three rows by waiting in the breather for a retracted column and holding W, ending at the north door (0.00, 6.00, 8.40) with 0 deaths. Re-driven in `_vp_frames.py`: the tester's own centre lane (0, 6.05, 29) dies at 0.02 s, cause crush. The heads are 6.4 m wide on re-spaced centres, so the widest strip any head misses is 0.40 m against a 0.76 m capsule. NOTED, not the defect: three of the 21 row deaths read cause 'void' rather than 'crush' (x -3.4 at z 37, x +10 at z 29 and z 21), and the z 25 breather stands drift 4.85-18.76 m on the belt, so their survival is a fact about where the belt took them.",
    "probeStation": [
     0.0,
     6.0,
     28.0
    ],
-   "frame": "_shots\\play_untest_ember-2\\05_ember-2_07_0.png",
+   "frame": "_shots\\play_vp_frames\\05_e2_row_from_breather.png + 06_e2_after_lane_stand.png",
    "probeStationFrom": "handmap / course data (hand-resolved)",
-   "reMeasuredBy": "verify-redeploy-push (2026-09-08), death defect"
+   "reMeasuredBy": "verify-redeploy-push (2026-09-08), shaft-residual re-drive"
   },
   {
    "key": "ember-2#08",
@@ -2811,12 +2811,12 @@
    ],
    "where": "ember-4 BEAT 1 - running west out of the dunes; died at (-73.67, -0.04, 64.46).",
    "originally": "I ran clean over the corner dune, off the edge of the heightfield at x < -72, and fell out of the world to a killY death. No wall, no fence, no slide-back slope, no warning.",
-   "verdict": "STILL REPRODUCES",
-   "evidenceSource": "verify pass - real input on the current tree",
-   "evidence": "holding W west out of the dunes from (-62, 1.60, 64.0) still runs off the edge of the heightfield and dies: 'void' at (-79.47, -14.26, 64.04). No wall, no fence, no slide-back.",
+   "verdict": "FIXED",
+   "evidenceSource": "verify-redeploy-push pass (2026-09-08) - re-driven with real KeyboardEvents on this tree",
+   "evidence": "`_harness/_sr_rimwalk.py ember-4`: nine outward rim walks, each settled 16 m inside the rim and then held W with real KeyboardEvents for 9 s -- 9 of 9 held inside the heightfield, 0 deaths. The tester's own line ('west-reported', from (-56.0, 64.0) west) ended at (-61.91, 3.18, 60.45) idle instead of dying 'void' at (-79.47, -14.26, 64.04); re-driven a second time in `_vp_frames.py` it ended (-61.89, 3.17, 60.36), idle, surface sand, deaths 0. The new dune ridge 2 m inside each edge (54.7 deg at its steepest) is what stops him.",
    "probeStation": "04.0",
-   "frame": "_shots\\play_probe_ember-4\\05_04_0.png",
-   "reMeasuredBy": "verify-redeploy-push (2026-09-08), death defect"
+   "frame": "_shots\\play_vp_frames\\03_e4_west_rim.png",
+   "reMeasuredBy": "verify-redeploy-push (2026-09-08), shaft-residual re-drive"
   },
   {
    "key": "ember-4#05",
@@ -4132,17 +4132,17 @@
    ],
    "where": "rime-2 BEAT 4, the west ice face - serac 1 (-26.4, top 3.30, 21.6) to serac 2 (-27.6, top 5.70, 19.0): 2.87 m across, +2.40 m of rise, blocks 3.0 m square, 2 m of air below",
    "originally": "not one landed on serac 2. The step is caught between two moves: a single jump apexes at 1.91 m and cannot make the 2.40 m of rise at all, while a double (apex 2.60 m) can make the height but carried the hero 4.5 to 7.6 ",
-   "verdict": "STILL REPRODUCES",
-   "evidenceSource": "verify pass - real input on the current tree",
-   "evidence": "the height is there and the carry is not: a double jump off serac 1 (-26.4, top 3.30, 21.6) apexes +2.76 m against the 2.40 m rise, but with the stick held it carries the hero clean past serac 2 - end (-51.47, 2.74, -2.74), grounded, not one landing on the 3.0 m block. Exactly the tester's 'a double can make the height but carried the hero 4.5 to 7.6 m past'.",
+   "verdict": "FIXED",
+   "evidenceSource": "verify-redeploy-push pass (2026-09-08) - re-driven with real KeyboardEvents on this tree",
+   "evidence": "the +2.40 m step is now two +1.20 m steps and a plain jump 1 lands both. `_harness/_vp_r2shot.py` (the frame-exact driver from `_sr_r2serac.py`, hops:1, real KeyboardEvents held to apex): serac 1 (top 3.30) -> half-step m1 (top 4.50) landed ON the block at all three approach speeds (rise 1.90/1.91, ends y 4.52/4.51/4.50, grounded), and m1 -> serac 2 (top 5.70) landed ON serac 2 at all three (ends y 5.70/5.70/5.70, grounded, frame 04: pos -28.09, 5.70, 19.56, deaths 0). Aiming the old direct s1 -> s2 line now lands on the half-step (y 4.51) instead of falling: the seracs are 4.0 m towers, so an overshoot bonks and drops back to the pad below rather than into the lake. `_sr_r2serac.py` walks the whole face the same way, every step landed by a jump 1.",
    "probeStation": [
     -26.4,
     3.3,
     21.6
    ],
-   "frame": "_shots\\play_untest_rime-2\\10_rime-2_15_0.png",
+   "frame": "_shots\\play_vp_r2shot\\04_m1_run0.png",
    "probeStationFrom": "triple~ / where",
-   "reMeasuredBy": "verify-redeploy-push (2026-09-08), content lock"
+   "reMeasuredBy": "verify-redeploy-push (2026-09-08), shaft-residual re-drive"
   },
   {
    "key": "rime-2#16",
@@ -6711,6 +6711,79 @@
     }
    ],
    "harnessLesson": "A BLIND ALTERNATING LADDER IS NOT EVIDENCE ABOUT A SHAFT. The lane drivers press Space on a wall-clock schedule; on rime-1, rime-2, rime-3 and azure-2 that produced peaks of 16.7 / 23.2 / 21.9 / 34.8 m and 0-2 kicks, i.e. 'the chimney does not climb'. The frame-exact driver - press only when the hero is ON the wall and FALLING past TUNE.wallKick.minFall, honour the lockout - climbed all four on the same build, same minute: 24.383 / 30.894 / 28.962 / 40.869 m, every one past its exit. feelcheck's own wallkick_ladder_m read 14.252 m with 6 kicks in the contract's 3.20 m shaft, which is what said the moveset was innocent before any geometry was blamed."
+  },
+  {
+   "pass": "verify-redeploy-push",
+   "date": "2026-09-08",
+   "harness": [
+    "_sr_a2shaft.py - walk into the winding shaft on foot from three bell-deck spots, then climb it",
+    "_sr_a3rotor.py bands - read the rotor's live kill capsules, then 30 s hands-off stands",
+    "_sr_warn.py - the course validator's console lines at load",
+    "_sr_rimwalk.py - hold W outward at every terrain rim for 9 s",
+    "_sr_e1flame.py - the vent phase table + three timed crossings on three course clocks",
+    "_sr_e2piston.py both - 27 hands-off stands + a played crossing of all three rows",
+    "_vp_r2shot.py / _sr_r2serac.py - the west ice face, one hop per run, held to apex",
+    "_vp_frames.py - a screenshot on the deciding beat of the five numeric re-drives"
+   ],
+   "reMeasured": 7,
+   "outcome": {
+    "FIXED": 7,
+    "STILL REPRODUCES": 0,
+    "COULD NOT TEST": 0
+   },
+   "changed": [
+    {
+     "key": "azure-2#12",
+     "was": "STILL REPRODUCES",
+     "now": "FIXED"
+    },
+    {
+     "key": "azure-3#22",
+     "was": "STILL REPRODUCES",
+     "now": "FIXED"
+    },
+    {
+     "key": "azure-3#30",
+     "was": "STILL REPRODUCES",
+     "now": "FIXED"
+    },
+    {
+     "key": "ember-1#29",
+     "was": "STILL REPRODUCES",
+     "now": "FIXED"
+    },
+    {
+     "key": "ember-2#07",
+     "was": "STILL REPRODUCES",
+     "now": "FIXED"
+    },
+    {
+     "key": "ember-4#04",
+     "was": "STILL REPRODUCES",
+     "now": "FIXED"
+    },
+    {
+     "key": "rime-2#15",
+     "was": "STILL REPRODUCES",
+     "now": "FIXED"
+    }
+   ],
+   "gates": {
+    "box": "NOT QUIET. Get-Counter '\\GPU Engine(*engtype_3D)\\Utilization Percentage' with no harness Chrome alive: dwm 31.06 % (16.56 + 14.50, two adapters), WUDFHost 7.63 %, claude 1.78 % = ~40 % of the 3D engine already spoken for. The owner's own Chrome (24 processes) was alive and left alone.",
+    "modulecheck": "66 modules, 0 failing",
+    "physcheck": "176 checks, 0 failing",
+    "reachcheck --require-all": "14 authored, 0 failing, RESULT OK (3 INFO orphans: ember-1 rock#90, azure-3 crusher#45/#46)",
+    "gatecheck": "342 passed, 0 failed (958 s, headed)",
+    "spawnwalk": "12 of 12 routable gates walked from the authored Keep spawn (verdant-1 raised the course card; the other 11 reached a sealed gate whose toast named it)",
+    "inputcheck --headed": "0 of 37 failing",
+    "bootcheck": "14 of 14 BOOT CLEAN, 0 console / page / window / shader errors. Geometry: worst draws 252 of 260 (verdant-3); worst triangles 450,980 of 450,000 (verdant-3) - 980 OVER, deterministic over three samples and inherited: the same station on 2ee15ad7 reads 450,982.",
+    "loopcheck": "1119/1119 passed, 0 failed, 0 warnings, all 14 courses; respawn medians 418-445 ms against a 700 ms budget",
+    "feelcheck": "FEEL OK, 0 failing",
+    "camcheck": "CAMERA OK, 0 failing (26 stations incl. every interior one)",
+    "contrastcheck": "KNOWN RED - 8 failing gated stations under the EDGE law (3.0 median / 1.6 p20): verdant-1 cp3 2.33, verdant-2 cp3 2.62, ember-2 cp1 1.61, ember-2 cp3 2.89, ember-3 cp4 2.25, azure-2 cp1 2.66, azure-3 cp1 1.75, azure-3 cp5 2.79. 10 pass, 41 of 59 are NO LIP. The readability lane's count of 7 did not reproduce: its ember-2 cp3 3.79 reads 2.89 / 2.71 / 2.67 in three runs here.",
+    "perfcheck": "SKIPPED - the fps verdict is not evidence on a box holding ~40 % foreign 3D busy; geometry budgets taken from bootcheck instead.",
+    "deploy": "pipeline/deploy_game.py --game-dir games/crestbound --slug crestbound --no-portal: 12 of 13,484 files uploaded (12,561 dev-only withheld), cache purged, Supabase row still 'unpublished'. bootcheck --headless against https://forgeflow-games-cdn.isimcha85.workers.dev/crestbound/index.html?dev=1: BOOTS CLEAN, 0 errors, 179 draws / 440,812 tris, boot.js?v=193 live."
+   }
   }
  ]
 }
