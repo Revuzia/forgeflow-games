@@ -363,7 +363,7 @@ UNMUTE_JS = r"""
 #     reports for the deck, so `--min-behind` is a real distance.
 BG_JS = r"""
 (o) => {
-  const A = globalThis.CRESTBOUND, E = A.engine, THREE = A.THREE;
+  const A = globalThis.CRESTBOUND, E = A.engine, THREE = A.THREE, G_ = A.game;
   const renderer = E.renderer, scene = E.scene, cam = E.camera;
   const w = Math.round(o.w), h = Math.round(o.h);
   if (!(w > 0 && h > 0)) return {error: 'bad size'};
@@ -553,6 +553,298 @@ BG_JS = r"""
   for (const s of deckKeep) deckSeen.push(depthAt(s[0], s[1]));
   deckSeen.sort((a, b) => a - b);
 
+  /* ==================================================================
+     THE SILHOUETTE EDGE — the quantity a player actually uses.
+     ------------------------------------------------------------------
+     The deck-vs-fog-band ruler asks "is the floor a different tone from
+     the far distance". That is not the judgement a jump needs. A jump
+     needs "WHERE DOES THIS SURFACE STOP", and that is a LOCAL question:
+     the eye finds the boundary between the last deck pixel and the first
+     pixel of whatever lies beyond or below it, and reads the step across
+     it. CONTRACT hard rule 2 names the other half of the same mechanism
+     — "bright leading-edge stripes on jump-critical surfaces" (§17:
+     every landable surface gets `edgeStripe` in `palette.safeEdge`).
+
+     Both are measured here, off the SAME frozen frame and the SAME depth
+     pass, so no new source of truth is invented:
+
+       * walk out from the deck's projected footprint (UP the screen for
+         the far lip, LEFT and RIGHT for the lateral lips) one pixel at a
+         time, reading the depth buffer;
+       * the first place view depth JUMPS AWAY by more than
+         max(edgeJumpAbs, edgeJumpRel * d) is the silhouette edge: the
+         surface ended and something much further (or nothing at all —
+         sky reads as ~1800 m) is behind it;
+       * a jump TOWARD the camera is an occluder rising in front of the
+         deck (a wall, a post, a crate). That scan line has no measurable
+         lip and says so — it is not counted as a pass or a fail;
+       * around the edge, three windows of pixels are handed to Python,
+         which owns the colour: DECK (just inside the lip, past a 1 px
+         anti-alias guard), BEYOND (just outside it), and LIP (the first
+         `edgeLip` pixels inside — where a leading-edge stripe would be).
+         Each window is depth-verified, so a "deck" sample that is really
+         sky cannot enter the median.
+
+     Python turns those into contrast ratios. Nothing here decides a
+     verdict; this function only says which pixels are where. */
+  /* THE SILHOUETTE, FOUND BY TRACKING THE SURFACE — two wrong rulers first.
+     ------------------------------------------------------------------------
+     v1 called ANY per-pixel view-depth jump a lip. It fired all over open
+     ground, because a surface seen at a grazing angle puts metres between
+     adjacent pixels near its vanishing line (keep/cp3 "found" 66 lips at a
+     median cue of 1.57 — grass measured against grass).
+     v2 predicted the depth of the horizontal plane y = the station's y and
+     called a lip a jump PAST it. That is exact on a flat deck and wrong
+     everywhere else: a hillside, a ramp or a stair is not that plane, so
+     verdant-1's terrain stations and the whole Keep interior returned
+     "no lip" (0 of 84 scan lines on four Keep stations).
+
+     v3 tracks the SURFACE the hero is standing on, whatever its shape. Walk
+     outward one pixel at a time; keep an EMA of the per-pixel depth slope; the
+     lip is where depth leaps past the surface's OWN continuation:
+
+         dPred = prev + slope        (the surface, carried on one more pixel)
+         lip   <=> d - dPred > max(jumpAbs, jumpRel * prev)
+
+     Grazing ground is handled because the slope term IS the grazing. Three
+     stops keep the number honest:
+       * `slope > maxSlopeFrac * prev` — one pixel now spans a quarter of the
+         surface's distance. Nobody reads an edge off ground that foreshortened,
+         and neither should the gate;
+       * `prev > edgeMaxDepth` — a lip 60 m away is not a jump decision;
+       * a leap TOWARD the camera is an occluder rising in front (a wall, a
+         post, a crate). That line has no readable lip and is reported as
+         `occluded` — neither a pass nor a fail;
+       * the tracked surface CLIMBS more than `edgeMaxRise` above the station.
+         A vertical face has almost constant view depth, so a scan line walking
+         up one registers neither a jump nor an occluder: measured on ember-3
+         cp2, lines that started on the ash plain walked up the spiral tower's
+         front face and reported its SKYLINE as the lip (frame
+         `_shots/contrast/ember-3_cp2_deck.png`, beyond samples on the red sky
+         at the tower's crest, cue 1.74). That is a silhouette, but not of
+         anything the hero can walk off. A surface a metre over his boots is a
+         wall. */
+  const eStride = Math.max(1, o.edgeStride | 0);
+  const eGap = Math.max(0, o.edgeGap | 0);
+  const eSpan = Math.max(2, o.edgeSpan | 0);
+  const eLip = Math.max(2, o.edgeLip | 0);
+  const eJumpAbs = o.edgeJumpAbs || 0.4;
+  const eJumpRel = o.edgeJumpRel || 0.06;
+  const eMaxWalk = Math.max(8, o.edgeMaxWalk | 0);
+  const eMaxDepth = o.edgeMaxDepth || 60;
+  const eMaxSlope = o.edgeMaxSlopeFrac || 0.25;
+  const eStartTol = o.edgeStartTol || 0.6;
+  const eMinGap = o.edgeMinGap || 1.5;
+  const eMaxRise = o.edgeMaxRise || 1.0;
+  const skyD = far * 0.5;
+
+  /* A DEPTH JUMP IS NOT YET A LIP. verdant-1's instanced grass writes depth,
+     and a blade tip against the hillside behind it is a metre-scale jump at a
+     grazing angle: cp1 "found" 31 lips whose beyond samples sit on grass
+     (frame `_shots/contrast/verdant-1_cp1_deck.png`) and scored 1.11 — grass
+     against grass, the same fiction the old fog-band ruler told. A real lip
+     puts real space between the last pixel of the surface and the first pixel
+     past it, so the two are unprojected to WORLD points and the gap between
+     them must clear `--edge-min-gap`. Sky always clears it. */
+  const _wA = new THREE.Vector3(), _wB = new THREE.Vector3();
+  const worldAt = (x, y, d, out) => {
+    const nx = (x + 0.5) / w * 2 - 1;
+    const ny = -((y + 0.5) / h * 2 - 1);
+    return out.set(nx * tanHalf * aspect * d, ny * tanHalf * d, -d).applyMatrix4(cam.matrixWorld);
+  };
+
+  /* ...AND A GAP IS NOT YET A FALL. A rolling hill has silhouettes too: past a
+     convex break the next VISIBLE ground is metres further and metres lower,
+     which clears any purely optical test, and verdant-1 cp1 went on scoring
+     1.25 on grass-over-grass with 23 such "lips". But a player cannot fall off
+     a hill, and the readability law exists so a player can see WHERE THE
+     PLATFORM ENDS — an edge with no fall behind it is not a jump decision and
+     must not be gated as one.
+
+     So the candidate is put to the game's own physics. `Broadphase.raycast`
+     (CONTRACT §9 — boxes AND heightfields) probes the ground a short step
+     PAST the lip, along the outward ground direction of the very ray that
+     found it. Missing ground, or ground more than `edgeFallM` below over
+     `edgeProbeM` of horizontal travel (a ~63 deg face, well past the
+     `slope.slideDeg` 38 the controller still lets you walk), is a fall.
+     Anything gentler is walkable ground and the scan carries on looking. */
+  const _bp = (G_ && G_.course) ? G_.course.broadphase : null;
+  const _ro = new THREE.Vector3(), _rdn = new THREE.Vector3(0, -1, 0);
+  const _rout = {t: 0, normal: new THREE.Vector3(), collider: null, heightfield: null};
+  const eProbe = o.edgeProbeM || 0.7, eFall = o.edgeFallM || 1.4;
+  const isFall = (nx_, ny_, nz_, hx, hz) => {
+    if (!_bp || typeof _bp.raycast !== 'function') return true;   /* no physics: do not invent one */
+    for (let i = 1; i <= 2; i++) {
+      const s = eProbe * i, drop = eFall * i;
+      _ro.set(nx_ + hx * s, ny_ + 0.6, nz_ + hz * s);
+      const hitOk = _bp.raycast(_ro, _rdn, 0.6 + drop, _rout);
+      if (!hitOk) return true;                       /* nothing under the step: a void */
+      if (ny_ - (_ro.y - _rout.t) >= drop) return true;
+    }
+    return false;
+  };
+
+  /* The walked plane, used ONLY to choose a start pixel that is really on the
+     surface the hero stands on (a prop or the pad ring inside the deck box
+     would otherwise seed the walk). */
+  const _camPos = new THREE.Vector3().setFromMatrixPosition(cam.matrixWorld);
+  const _rd = new THREE.Vector3();
+  const deckY = sy_;
+  const planeDepthAt = (x, y) => {
+    const nx = (x + 0.5) / w * 2 - 1, ny = -((y + 0.5) / h * 2 - 1);
+    _rd.set(nx * tanHalf * aspect, ny * tanHalf, -1).transformDirection(cam.matrixWorld);
+    if (_rd.y >= -1e-4) return Infinity;
+    const t = (deckY - _camPos.y) / _rd.y;
+    if (!(t > 0)) return Infinity;
+    const vd = t * (_rd.x * _f.x + _rd.y * _f.y + _rd.z * _f.z);
+    return vd > 0 ? vd : Infinity;
+  };
+  const startOk = (x, y) => {
+    const d = depthAt(x, y);
+    if (!(d > 0.5) || inHero(x, y)) return 0;
+    const pd = planeDepthAt(x, y);
+    if (!isFinite(pd)) return 0;
+    return Math.abs(d - pd) <= Math.max(eStartTol, pd * 0.06) ? d : 0;
+  };
+
+  /* One scan line. (sx, sy) is a seed inside the deck's footprint; (dx, dy)
+     is OUTWARD; the seed search walks INWARD for a pixel really on the
+     surface. Returns null for "no measurable lip on this line". */
+  const scanEdge = (sx, sy, dx, dy) => {
+    let bx = sx, by = sy, d0 = 0;
+    for (let t = 0; t < 14; t++) {
+      const x = sx - dx * t, y = sy - dy * t;
+      if (x < 0 || x >= w || y < 0 || y >= h) break;
+      const d = startOk(x, y);
+      if (d) { bx = x; by = y; d0 = d; break; }
+    }
+    if (!d0) return null;
+    const at = (k) => [bx + dx * k, by + dy * k];
+
+    let prev = d0, slope = 0, have = 0;
+    let hit = -1, dNear = d0, dFar = 0;
+    for (let k = 1; k <= eMaxWalk; k++) {
+      const p = at(k);
+      if (p[0] < 0 || p[0] >= w || p[1] < 0 || p[1] >= h) return null;
+      if (inHero(p[0], p[1])) return null;               /* the hero is not a lip */
+      const d = depthAt(p[0], p[1]);
+      if (!(d > 0.5)) return null;
+      const thr = Math.max(eJumpAbs, eJumpRel * prev);
+      if (have >= 2) {
+        const dPred = prev + slope;
+        if (d - dPred > thr) {
+          const q = at(k - 1);
+          worldAt(q[0], q[1], prev, _wA);
+          let ok = d > skyD;                          /* sky is always a gap */
+          if (!ok) { worldAt(p[0], p[1], d, _wB); ok = _wA.distanceTo(_wB) >= eMinGap; }
+          if (ok) {
+            /* the outward GROUND direction of the ray that found the lip */
+            const nx2 = (p[0] + 0.5) / w * 2 - 1, ny2 = -((p[1] + 0.5) / h * 2 - 1);
+            _rd.set(nx2 * tanHalf * aspect, ny2 * tanHalf, -1).transformDirection(cam.matrixWorld);
+            const hl = Math.hypot(_rd.x, _rd.z) || 1;
+            if (isFall(_wA.x, _wA.y, _wA.z, _rd.x / hl, _rd.z / hl)) {
+              hit = k; dNear = prev; dFar = d; break;
+            }
+          }
+          /* a blade, a pebble, a seam, or a hillside that rolls away: not a
+             lip. Carry on along the surface, re-seeding the slope beyond it. */
+          slope = 0; have = 1; prev = d;
+          if (prev > eMaxDepth) return null;
+          continue;
+        }
+        if (dPred - d > thr) return {occluded: true};
+      }
+      worldAt(p[0], p[1], d, _wB);
+      if (_wB.y > sy_ + eMaxRise) return {occluded: true}; /* a wall, not the deck */
+      const s = d - prev;
+      slope = have ? slope * 0.5 + s * 0.5 : s;
+      have++;
+      prev = d;
+      if (prev > eMaxDepth) return null;                  /* too far to be a jump decision */
+      if (slope > eMaxSlope * prev) return null;          /* too foreshortened to read */
+    }
+    if (hit < 0) return null;
+
+    const near = [], beyond = [], lip = [];
+    const nearTol = Math.max(0.35, dNear * 0.06);
+    const farLo = dNear + Math.max(eJumpAbs, eJumpRel * dNear);
+    for (let k = 0; k < eSpan; k++) {
+      const p = at(hit - 1 - eGap - k);                    /* inward: still the surface */
+      if (p[0] < 0 || p[0] >= w || p[1] < 0 || p[1] >= h) break;
+      if (inHero(p[0], p[1])) continue;
+      if (Math.abs(depthAt(p[0], p[1]) - dNear) <= nearTol) near.push(p);
+    }
+    for (let k = 0; k < eSpan; k++) {
+      const p = at(hit + eGap + k);                        /* outward: past the lip */
+      if (p[0] < 0 || p[0] >= w || p[1] < 0 || p[1] >= h) break;
+      if (inHero(p[0], p[1])) continue;
+      const d = depthAt(p[0], p[1]);
+      if (d >= farLo || d > skyD) beyond.push(p);
+    }
+    for (let k = 0; k < eLip; k++) {
+      const p = at(hit - 1 - k);                           /* the lip band itself */
+      if (p[0] < 0 || p[0] >= w || p[1] < 0 || p[1] >= h) break;
+      if (inHero(p[0], p[1])) continue;
+      if (Math.abs(depthAt(p[0], p[1]) - dNear) <= nearTol) lip.push(p);
+    }
+    if (near.length < 2 || beyond.length < 2) return null;
+    return {x: at(hit)[0], y: at(hit)[1], dNear: Math.round(dNear * 100) / 100,
+            dFar: dFar > skyD ? null : Math.round(dFar * 100) / 100,
+            sky: dFar > skyD, near, beyond, lip};
+  };
+
+  /* WHAT IS THE LIP MADE OF? A diagnostic, not a gate input. Two rounds of
+     palette guesses (a light-rig sweep, then a `faceInject` sweep over every
+     deck material) moved the failing stations by hundredths, because neither
+     guess had ever asked the engine WHICH MATERIAL is on each side of the
+     boundary. `--edge-names` raycasts the live scene through the first few
+     lip points and prints the mesh + material names for the surface and for
+     what lies beyond it, so a palette fix can be aimed instead of sprayed. */
+  const nameAt = (x, y) => {
+    if (!globalThis.__ccRay) globalThis.__ccRay = new THREE.Raycaster();
+    const rc = globalThis.__ccRay;
+    rc.setFromCamera(new THREE.Vector2((x + 0.5) / w * 2 - 1, -((y + 0.5) / h * 2 - 1)), cam);
+    const hits = rc.intersectObjects(scene.children, true);
+    for (const it of hits) {
+      const ob = it.object;
+      if (!ob || !ob.visible) continue;
+      let m = ob.material;
+      if (Array.isArray(m)) m = m[it.face && typeof it.face.materialIndex === 'number'
+                                  ? it.face.materialIndex : 0] || m[0];
+      /* the same rule the depth pass uses: a material that writes no depth is
+         not an occluder, and a raycaster that stops on one reports the pad
+         glow or a beam sprite instead of the deck (measured: every sample on
+         ember-3 cp4 came back `Mesh:ShaderMaterial@8.8` on BOTH sides). */
+      if (!m || m.depthWrite === false || m.depthTest === false) continue;
+      const nm = (ob.name || ob.type || '?');
+      const mn = (m && (m.name || m.type)) || '?';
+      const col = (m && m.color) ? '#' + m.color.getHexString() : '';
+      const em = (m && m.emissive && m.emissiveIntensity) ?
+                 ('/em#' + m.emissive.getHexString() + 'x' + m.emissiveIntensity.toFixed(2)) : '';
+      return nm + ':' + mn + (col ? '(' + col + ')' : '') + em + '@' + it.distance.toFixed(1);
+    }
+    return 'none';
+  };
+
+  const edges = [];
+  let edgeLines = 0, edgeOccluded = 0, edgeNone = 0;
+  const ebx0 = Math.max(0, Math.round(x0)), ebx1 = Math.min(w - 1, Math.round(x1));
+  const eby0 = Math.max(0, Math.round(y0)), eby1 = Math.min(h - 1, Math.round(y1));
+  const push = (r, side) => {
+    if (!r) { edgeNone++; return; }
+    if (r.occluded) { edgeOccluded++; return; }
+    r.side = side; edges.push(r);
+  };
+  /* FAR lip: up the screen from the nearest deck row. */
+  for (let x = ebx0; x <= ebx1; x += eStride) { edgeLines++; push(scanEdge(x, eby1, 0, -1), 'far'); }
+  /* LATERAL lips: out from the deck's own mid column, both ways. */
+  const emx = (ebx0 + ebx1) >> 1;
+  for (let y = eby0; y <= eby1; y += eStride) {
+    edgeLines += 2;
+    push(scanEdge(emx, y, -1, 0), 'left');
+    push(scanEdge(emx, y, 1, 0), 'right');
+  }
+
   const fog = scene.fog;
   return {
     cands, scanned, rejectedNear: near_, rejectedHero: hero_, rejectedBadDepth: bad_, rawBad,
@@ -568,6 +860,14 @@ BG_JS = r"""
     fogDensity: (fog && fog.density !== undefined) ? fog.density : null,
     fogType: fog ? fog.type || fog.constructor.name : null,
     hiddenForDepth: hidden.length,
+    edges, edgeLines, edgeOccluded, edgeNone,
+    edgeNames: o.edgeNames ? edges.slice(0, 40).filter((e, i) => i % 5 === 0).map(e => ({
+      side: e.side, d: e.dNear, sky: !!e.sky,
+      near: e.near.length ? nameAt(e.near[0][0], e.near[0][1]) : '-',
+      beyond: e.beyond.length ? nameAt(e.beyond[0][0], e.beyond[0][1]) : '-',
+      lip: e.lip.length ? nameAt(e.lip[0][0], e.lip[0][1]) : '-',
+    })) : null,
+    deckBoxPx: [Math.round(x0), Math.round(y0), Math.round(x1), Math.round(y1)],
   };
 }
 """
@@ -761,6 +1061,111 @@ def pixel_median(px, w, h, pts):
     return (median(rs), median(gs), median(bs)), len(rs)
 
 
+def pctile(xs, q):
+    """q in 0..1, linear interpolation. `xs` need not be sorted."""
+    if not xs:
+        return None
+    v = sorted(xs)
+    if len(v) == 1:
+        return v[0]
+    i = q * (len(v) - 1)
+    lo = int(i)
+    hi = min(lo + 1, len(v) - 1)
+    return v[lo] + (v[hi] - v[lo]) * (i - lo)
+
+
+def edge_readability(px, w, h, bg, args):
+    """EDGE READABILITY — the boundary, not the backdrop.
+
+    `bg['edges']` is one entry per scan line that found a silhouette lip: the
+    pixels just INSIDE the walked surface (`near`), the pixels just OUTSIDE it
+    (`beyond`), and the lip band where CONTRACT §17's `edgeStripe` lives
+    (`lip`). All three are depth-verified in the browser; this function only
+    reads their colour off the same frozen screenshot the deck ruler uses.
+
+    Per scan line:
+      step        = WCAG(deck just inside the lip, whatever is beyond it)
+      lipVsBeyond = WCAG(the lip band's strongest excursion, beyond)
+      lipVsDeck   = WCAG(that same excursion, the deck just inside) -- "is there
+                    a drawn line at the lip at all", the presence test for §17
+      cue         = max(step, lipVsBeyond) -- the strongest luminance boundary a
+                    player's eye can land on at that point of the lip.
+
+    BOTH ENDS OF THE LIP BAND COUNT. themes.js states the mechanism: "leading-
+    edge stripes are flanked by near-black keylines (builders.js), so safeEdge
+    reads as a DRAWN LINE on any deck value ... the keyline, not the luminance
+    step, carries the separation at the lip." A ruler that only looked for the
+    BRIGHT pixel would therefore miss half the drawn lines the art actually
+    uses -- a dark keyline against a bright sea is exactly as legible as a
+    bright stripe against a black void. So the lip band contributes its
+    brightest AND its darkest pixel, and whichever separates further from what
+    lies beyond is the one the eye would use.
+
+    Station level: the MEDIAN cue over the scan lines (a player reads the whole
+    lip, not one pixel of it) and the 20th percentile (its worst stretch)."""
+    edges = (bg or {}).get("edges") or []
+    lines = int((bg or {}).get("edgeLines") or 0)
+    if not edges:
+        return {"edgeLines": lines, "edgeFound": 0,
+                "edgeOccluded": (bg or {}).get("edgeOccluded"),
+                "edgeNone": (bg or {}).get("edgeNone")}
+    steps, cues, lipD, lipB, sides, dists = [], [], [], [], {}, []
+    sky = 0
+    for e in edges:
+        n_rgb, n_px = pixel_median(px, w, h, e.get("near") or [])
+        b_rgb, b_px = pixel_median(px, w, h, e.get("beyond") or [])
+        if n_rgb is None or b_rgb is None:
+            continue
+        ln, lb = luminance(n_rgb), luminance(b_rgb)
+        st = contrast(ln, lb)
+        hi = lo = None
+        for pt in (e.get("lip") or []):
+            x, y = int(pt[0]), int(pt[1])
+            if not (0 <= x < w and 0 <= y < h):
+                continue
+            l = luminance(px[x, y])
+            if hi is None or l > hi:
+                hi = l
+            if lo is None or l < lo:
+                lo = l
+        if hi is None:
+            lvb, lvd = st, 1.0
+        else:
+            lvb = max(contrast(hi, lb), contrast(lo, lb))
+            lvd = max(contrast(hi, ln), contrast(lo, ln))
+        steps.append(st)
+        lipB.append(lvb)
+        lipD.append(lvd)
+        cues.append(max(st, lvb))
+        sides[e.get("side", "?")] = sides.get(e.get("side", "?"), 0) + 1
+        if isinstance(e.get("dNear"), (int, float)):
+            dists.append(e["dNear"])
+        if e.get("sky"):
+            sky += 1
+    if not cues:
+        return {"edgeLines": lines, "edgeFound": 0,
+                "edgeOccluded": (bg or {}).get("edgeOccluded"),
+                "edgeNone": (bg or {}).get("edgeNone")}
+    striped = sum(1 for v in lipD if v >= args.stripe_floor)
+    return {
+        "edgeLines": lines, "edgeFound": len(cues),
+        "edgeOccluded": (bg or {}).get("edgeOccluded"),
+        "edgeNone": (bg or {}).get("edgeNone"),
+        "edgeCue": round(median(cues), 2),
+        "edgeCueP20": round(pctile(cues, 0.20), 2),
+        "edgeCueMin": round(min(cues), 2),
+        "edgeStep": round(median(steps), 2),
+        "edgeStepP20": round(pctile(steps, 0.20), 2),
+        "stripeVsDeck": round(median(lipD), 2),
+        "stripeVsBeyond": round(median(lipB), 2),
+        "stripeFrac": round(striped / float(len(lipD)), 2),
+        "edgeSides": sides, "edgeSky": sky, "edgeNames": (bg or {}).get("edgeNames"),
+        "edgeDepth": round(median(dists), 1) if dists else None,
+        "edgeDepthMin": round(min(dists), 1) if dists else None,
+        "edgeDepthMax": round(max(dists), 1) if dists else None,
+    }
+
+
 def background_band(px, w, h, cands, deck_depth, horizon_y, args):
     """THE FOG BAND. `cands` are [x, y, viewDepth, worldY] screen points in the
     sight column above the deck, already past the ENCLOSED depth margin. Two
@@ -849,6 +1254,7 @@ def measure(png, info, bg, args, crop_path=None):
                 "deckRgb": [int(v) for v in deck], "deckDepth": round(deck_depth, 2)}
 
     ld, lf = luminance(deck), luminance(band["rgb"])
+    edge = edge_readability(px, w, h, bg, args)
 
     # INFO ONLY: the pre-2026-09-08 ruler, a fixed strip at 55 % height on the
     # far side of the frame. Kept so the two numbers can be compared in one
@@ -878,6 +1284,10 @@ def measure(png, info, bg, args, crop_path=None):
                 inside = hb and hb["x0"] <= sx <= hb["x1"] and hb["y0"] <= sy <= hb["y1"]
                 d.rectangle([sx - 1, sy - 1, sx + 1, sy + 1],
                             outline=(255, 0, 0) if inside else (0, 255, 0))
+            for e in (bg.get("edges") or []):
+                d.point((e["x"], e["y"]), fill=(255, 0, 255))
+                for pt in (e.get("beyond") or []):
+                    d.point((pt[0], pt[1]), fill=(255, 220, 0))
             dbg.save(crop_path)
         except Exception:
             pass
@@ -900,6 +1310,7 @@ def measure(png, info, bg, args, crop_path=None):
         "deckVerified": len(verified), "deckOffSurface": bg.get("deckOff"),
         "deckWindow": [int(sx0), int(sy0), int(sx1), int(sy1)],
         "feet": [round(fx, 1), round(fy, 1)],
+        **edge,
     }
 
 
@@ -939,6 +1350,55 @@ def main() -> int:
                     help="minimum sight column widening in pixels")
     ap.add_argument("--bg-step", type=int, default=4,
                     help="sight column scan step in pixels")
+    ap.add_argument("--law", default="edge", choices=("edge", "deck", "both"),
+                    help="which measurement GATES (CONTRACT §15). 'edge' = the silhouette-lip"
+                         " cue, the shipped law since 2026-09-08; 'deck' = the old"
+                         " deck-vs-fog-band ratio; 'both' = a station must clear both.")
+    ap.add_argument("--edge-floor", type=float, default=3.0,
+                    help="minimum MEDIAN edge cue over a station's scan lines")
+    ap.add_argument("--edge-floor-p20", type=float, default=1.6,
+                    help="minimum 20th-percentile edge cue (the lip's worst stretch)")
+    ap.add_argument("--stripe-floor", type=float, default=1.5,
+                    help="lip-vs-deck ratio above which a scan line counts as STRIPED")
+    ap.add_argument("--edge-stride", type=int, default=4,
+                    help="pixels between silhouette scan lines")
+    ap.add_argument("--edge-gap", type=int, default=1,
+                    help="anti-alias guard pixels skipped on each side of the lip")
+    ap.add_argument("--edge-span", type=int, default=6,
+                    help="pixels sampled either side of the lip")
+    ap.add_argument("--edge-lip", type=int, default=10,
+                    help="pixels inside the lip searched for a leading-edge stripe")
+    ap.add_argument("--edge-jump-abs", type=float, default=0.4,
+                    help="metres of per-pixel view-depth jump that can start a silhouette edge")
+    ap.add_argument("--edge-jump-rel", type=float, default=0.06,
+                    help="...or this fraction of the current depth, whichever is larger")
+    ap.add_argument("--edge-max-slope-frac", type=float, default=0.25,
+                    help="stop a scan line once one pixel spans this fraction of the"
+                         " surface's distance: ground that foreshortened has no readable lip")
+    ap.add_argument("--edge-start-tol", type=float, default=0.6,
+                    help="metres a seed pixel may differ from the walked plane's own depth")
+    ap.add_argument("--edge-probe-m", type=float, default=0.7,
+                    help="horizontal metres past the lip the ground probe steps")
+    ap.add_argument("--edge-fall-m", type=float, default=1.4,
+                    help="metres the ground must be missing or below over that step for the"
+                         " lip to be a FALL (0.7/1.4 = a ~63 deg face)")
+    ap.add_argument("--edge-max-rise", type=float, default=1.0,
+                    help="metres a tracked surface may climb above the station before the"
+                         " scan line calls it a wall rather than the walked deck")
+    ap.add_argument("--edge-min-gap", type=float, default=1.5,
+                    help="world metres between the last surface pixel and the first pixel"
+                         " past it before the jump counts as a lip (sky always counts)")
+    ap.add_argument("--edge-max-depth", type=float, default=60.0,
+                    help="stop a scan line once the walked plane is this far away: a lip"
+                         " beyond it is not a jump decision")
+    ap.add_argument("--edge-max-walk", type=int, default=600,
+                    help="pixels a scan line walks before giving up on finding a lip")
+    ap.add_argument("--min-edge-lines", type=int, default=8,
+                    help="fewest scan lines with a measurable lip before the station is"
+                         " NO EDGE (neither pass nor fail)")
+    ap.add_argument("--edge-names", action="store_true",
+                    help="raycast the live scene through a sample of lips and print what"
+                         " material is on each side (diagnostic; costs a raycast per sample)")
     ap.add_argument("--save-crops", action="store_true")
     ap.add_argument("--headless", action="store_true")
     ap.add_argument("--json", default=os.path.join(HERE, "contrastcheck.json"))
@@ -1042,7 +1502,18 @@ def main() -> int:
                         "minBehind": args.min_behind_enclosed, "step": args.bg_step,
                         "station": st["p"], "deckDepths": info.get("sampleDepths"),
                         "deckTol": args.deck_tol,
-                        "colPad": args.col_pad, "colPadPx": args.col_pad_px})
+                        "colPad": args.col_pad, "colPadPx": args.col_pad_px,
+                        "edgeStride": args.edge_stride, "edgeGap": args.edge_gap,
+                        "edgeSpan": args.edge_span, "edgeLip": args.edge_lip,
+                        "edgeJumpAbs": args.edge_jump_abs, "edgeJumpRel": args.edge_jump_rel,
+                        "edgeMaxSlopeFrac": args.edge_max_slope_frac,
+                        "edgeStartTol": args.edge_start_tol,
+                        "edgeMinGap": args.edge_min_gap,
+                        "edgeProbeM": args.edge_probe_m, "edgeFallM": args.edge_fall_m,
+                        "edgeMaxRise": args.edge_max_rise,
+                        "edgeNames": bool(args.edge_names),
+                        "edgeMaxDepth": args.edge_max_depth,
+                        "edgeMaxWalk": args.edge_max_walk})
                 except Exception as e:
                     bg = {"error": str(e)[:160]}
                 for js in (UNMUTE_JS, RESUME_JS):
@@ -1068,17 +1539,20 @@ def main() -> int:
             results[cid] = {"theme": meta.get("theme"), "name": meta.get("name"), "rows": rows}
         br.close()
 
-    print("=" * 96)
-    print("CRESTBOUND contrast check — walked surface vs the fog band, floor %.1f:1" % args.floor)
-    print("-" * 96)
-    print("%-12s %-8s %-7s %-16s %-16s %7s %-9s %-13s %6s  %s"
-          % ("course", "theme", "station", "deck rgb", "background rgb", "ratio",
-             "bg", "bg depth m", "strip", "verdict"))
-    print("-" * 96)
+    print("=" * 118)
+    print("CRESTBOUND readability gate — gating law: %s (edge floor %.1f median / %.1f p20, "
+          "deck floor %.1f:1)" % (args.law.upper(), args.edge_floor, args.edge_floor_p20,
+                                  args.floor))
+    print("-" * 118)
+    print("%-11s %-7s %-7s %7s %6s %6s %6s %6s %5s %5s  %s"
+          % ("course", "theme", "station", "deck:bg", "edge", "p20", "step", "stripe",
+             "str%", "lines", "verdict"))
+    print("-" * 118)
     fails = unmeasured = 0
+    xt = {"both": [], "edge-only": [], "deck-only": [], "neither": []}
     for cid, r in results.items():
         if r.get("error"):
-            print("%-12s ERROR: %s" % (cid, str(r["error"])[:70]))
+            print("%-11s ERROR: %s" % (cid, str(r["error"])[:70]))
             fails += 1
             continue
         theme = r.get("theme") or "?"
@@ -1091,28 +1565,68 @@ def main() -> int:
                     unmeasured += 1
                 elif row.get("gates"):
                     fails += 1
-                print("%-12s %-8s %-7s %-16s %-16s %7s  %s (%s)"
-                      % (cid, theme, row.get("station"), "-", "-", "-", mark,
-                         str(row.get("detail") or row.get("status"))[:56]))
+                print("%-11s %-7s %-7s %7s  %s (%s)"
+                      % (cid, theme, row.get("station"), "-", mark,
+                         str(row.get("detail") or row.get("status"))[:60]))
                 continue
-            ok = row["ratio"] >= args.floor
             gates = row.get("gates")
-            if not ok and gates:
-                fails += 1
-            verdict = "ok" if ok else ("FAIL" if gates else "low (spawn, not gated)")
-            d = row.get("bgDepth") or [0, 0, 0]
-            print("%-12s %-8s %-7s %-16s %-16s %5.2f:1 %-9s %5.0f-%-7.0f %6s  %s"
-                  % (cid, theme, row.get("station"), str(row["deckRgb"]), str(row["fogRgb"]),
-                     row["ratio"], row.get("bgKind", "?"), d[0], d[2],
-                     ("%.2f" % row["stripRatio"]) if row.get("stripRatio") else "-",
-                     verdict))
-    print("-" * 96)
-    print("`strip` is the PRE-2026-09-08 ruler (a fixed 14 %-wide band at 55 % frame "
-          "height on the far\nside of the frame). It is printed for comparison only and "
-          "gates nothing.")
+            deck_ok = row["ratio"] >= args.floor
+            n_lines = int(row.get("edgeFound") or 0)
+            has_edge = n_lines >= args.min_edge_lines
+            edge_ok = (has_edge
+                       and (row.get("edgeCue") or 0) >= args.edge_floor
+                       and (row.get("edgeCueP20") or 0) >= args.edge_floor_p20)
+            row["deckPass"] = deck_ok
+            row["edgePass"] = edge_ok if has_edge else None
+            if gates and has_edge:
+                key = ("both" if (deck_ok and edge_ok) else
+                       "edge-only" if edge_ok else
+                       "deck-only" if deck_ok else "neither")
+                xt[key].append("%s/%s" % (cid, row.get("station")))
+            if args.law == "deck":
+                ok = deck_ok
+            elif args.law == "both":
+                ok = deck_ok and (edge_ok or not has_edge)
+            else:
+                ok = edge_ok if has_edge else True
+            if not has_edge and args.law != "deck":
+                verdict = "NO EDGE (%d lines, %d occluded) — not gated" % (
+                    n_lines, row.get("edgeOccluded") or 0)
+                if gates:
+                    unmeasured += 1
+            else:
+                if not ok and gates:
+                    fails += 1
+                verdict = "ok" if ok else ("FAIL" if gates else "low (spawn, not gated)")
+            print("%-11s %-7s %-7s %6.2f:1 %6s %6s %6s %6s %5s %5d  %s"
+                  % (cid, theme, row.get("station"), row["ratio"],
+                     row.get("edgeCue", "-"), row.get("edgeCueP20", "-"),
+                     row.get("edgeStep", "-"), row.get("stripeVsDeck", "-"),
+                     row.get("stripeFrac", "-"), n_lines, verdict))
+            for nm in (row.get("edgeNames") or []):
+                print("      lip %-5s %5.1f m  surface %-46s beyond %-46s lip %s"
+                      % (nm.get("side"), nm.get("d") or 0, str(nm.get("near"))[:46],
+                         ("SKY" if nm.get("sky") else str(nm.get("beyond"))[:46]),
+                         str(nm.get("lip"))[:46]))
+    print("-" * 118)
+    print("edge   = MEDIAN edge cue over the station's silhouette scan lines: per line,")
+    print("         max(deck-just-inside vs beyond, brightest lip pixel vs beyond).")
+    print("p20    = the same cue at the 20th percentile — the lip's worst stretch.")
+    print("step   = median deck-vs-beyond alone (no stripe credit).")
+    print("stripe = median lip-vs-deck (CONTRACT §17 leading-edge stripe presence);")
+    print("         str%% = fraction of scan lines whose stripe clears %.1f." % args.stripe_floor)
+    print("deck:bg = the 2026-09-08 fog-band ruler, retained as a REPORTED signal.")
+    print("-" * 118)
+    print("CROSS-TAB (gated stations with a measurable lip) — deck-vs-fog-band %.1f:1 "
+          "x edge %.1f/%.1f" % (args.floor, args.edge_floor, args.edge_floor_p20))
+    print("  pass both          : %3d" % len(xt["both"]))
+    print("  edge only (deck X) : %3d   %s" % (len(xt["edge-only"]), ", ".join(xt["edge-only"])))
+    print("  deck only (edge X) : %3d   %s" % (len(xt["deck-only"]), ", ".join(xt["deck-only"])))
+    print("  fail both          : %3d   %s" % (len(xt["neither"]), ", ".join(xt["neither"])))
+    print("-" * 118)
     print("shots in %s" % os.path.abspath(SHOTS))
     if unmeasured:
-        print("%d station(s) UNMEASURABLE (contention frames) — neither pass nor fail" % unmeasured)
+        print("%d station(s) UNMEASURABLE / NO EDGE — neither pass nor fail" % unmeasured)
     if pageerrs:
         print("page errors (%d):" % len(pageerrs))
         for e in pageerrs[:8]:
@@ -1120,12 +1634,14 @@ def main() -> int:
     if args.json:
         try:
             with open(args.json, "w", encoding="utf-8") as f:
-                json.dump({"floor": args.floor, "results": results, "pageErrors": pageerrs},
+                json.dump({"floor": args.floor, "law": args.law,
+                           "edgeFloor": args.edge_floor, "edgeFloorP20": args.edge_floor_p20,
+                           "crosstab": xt, "results": results, "pageErrors": pageerrs},
                           f, indent=2)
         except Exception:
             pass
-    print("VERDICT: %s (%d failing checkpoint stations)"
-          % ("READABLE" if fails == 0 else "UNREADABLE", fails))
+    print("VERDICT: %s (%d failing checkpoint stations under the %s law)"
+          % ("READABLE" if fails == 0 else "UNREADABLE", fails, args.law.upper()))
     print("RESULT: %s" % ("OK" if fails == 0 else "FAIL"))
     return 0 if fails == 0 else 1
 

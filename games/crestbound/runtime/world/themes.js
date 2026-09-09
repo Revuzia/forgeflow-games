@@ -528,7 +528,17 @@ export const THEMES = {
        * +23 % luminance (0.250 -> 0.309), which is what keep cp2/cp3 are short
        * of (2.92 and 2.97 against 3.5). The walls the decks read against are
        * `brick`, which is NOT lifted, so the pair widens instead of sliding. */
-      stone: { tint: 0xaa9474 },
+      /* 0xaa9474 -> 0xbca480 (readability lane round 2, 2026-09-08). The
+       * previous lift was aimed at keep cp2/cp3 and left them at 2.92 and
+       * 2.97 against the 3.5:1 fog-band law; the per-station arithmetic says
+       * they are +0.037 and +0.031 of RELATIVE LUMINANCE short, which is
+       * x1.27 and x1.26 in linear terms = x1.11 in sRGB. This is that lift and
+       * nothing more. Neither station carries a gated LIP (the courtyard and
+       * the undercroft have no fall edge in frame — contrastcheck reports both
+       * NO LIP), so this moves the REPORTED deck-vs-fog-band signal, which is
+       * what the brief asked for, and cannot move the gate either way. The
+       * walls they read against are `brick`, still not lifted. */
+      stone: { tint: 0xbca480 },
       plaster: { tint: 0xa8957a },
       brick: { tint: 0x9c6f56 },
       /* ROUND 2 VISUAL — "the interior reads neutral white/grey, NOT warm stone
@@ -956,7 +966,25 @@ export const THEMES = {
       wood: { tint: 0xd8a868 },
       bark: { tint: 0xb09878 },
       leaves: { tint: 0xa8d878 },
-      grass: { tint: 0xc8e89a },
+      /* 0xc8e89a -> 0xaacc78 (readability lane, 2026-09-08). MEASURED, not
+       * chosen: contrastcheck's `--edge-names` probe names both sides of every
+       * failing lip, and verdant-2 cp3's rampart is
+       *   surface `cb.stone.verdant (#f2e8c8)` | beyond `terrain_grass (#c8e89a)`
+       * on 8 of 9 sampled scan lines — a pale limestone walk 7.6 m above a
+       * grass field that the theme had bleached to nearly the same value
+       * (edge step 1.44). Verdant commits to BRIGHT sunlit stone decks (see
+       * this file's header); the half of the pair that has to move is
+       * therefore the grass, -16 % sRGB, which is also a morning meadow
+       * rather than a blown one.
+       *
+       * A SECOND step to 0x86a854 was measured and REJECTED: it bought
+       * verdant-2 cp3 +0.31 (2.53 -> 2.84, still under the 3.0 floor) while
+       * costing verdant-1 cp3 0.15, and it moves a signature realm colour a
+       * third of the way to olive for a station it still does not save. That
+       * is tuning art to a number; the remaining shortfall at cp3 is a missing
+       * §17 lip stripe (stripeVsDeck 1.41, str%% 0.45) and belongs to the
+       * course-data lane. */
+      grass: { tint: 0xaacc78 },
       dirt: { tint: 0xc8a884 },
       moss: { tint: 0x9fd88a },
       rope: { tint: 0xe8d0a4 },
@@ -1153,7 +1181,15 @@ export const THEMES = {
       gold: { env: 1.05 },
       rope: { tint: 0x8a7458 },
       cloth: { tint: 0x9fb4c4 },
-      obsidian: { tint: 0x4a4644, env: 0.14, clearcoat: 0.18,
+      /* 0x4a4644 -> 0x332f2e (readability lane, 2026-09-08). `--edge-names`
+       * on ember-3 cp4: the pixels just inside the lip are the deck's amber
+       * accent rail (`em_effb44a` at 0.10) and the pixels just past it are
+       * `cb.obsidian.ember (#4a4644)` — the drop below. Edge step 1.37: a dim
+       * amber rail over a MID-GREY floor. Obsidian is volcanic glass; 0x4a4644
+       * was never its albedo, and taking it to a real black glass value is
+       * both truer and the half of this pair that may move (the foundry's
+       * decks are cold steel wearing a cyan lip and must stay the light half). */
+      obsidian: { tint: 0x232120, env: 0.14, clearcoat: 0.18,
                   clearcoatRoughness: 0.58, specularIntensity: 0.12 },
       ice: { tint: 0xffd6b8, transmission: 0.18, env: 0.20 },
       glass: { tint: 0xffd8bc, env: 0.35 },
@@ -1497,7 +1533,17 @@ export const THEMES = {
       sand: { tint: 0xf0dcb0 },
       plaster: { tint: 0xf4e8cc },
       marble: { tint: 0xf8f4ea, clearcoat: 0.70, clearcoatRoughness: 0.10 },
-      brick: { tint: 0xe0b08c },
+      /* 0xe0b08c -> 0xa87a5c (readability lane, 2026-09-08). `--edge-names`
+       * on azure-2 cp1 and cp3: EVERY sampled lip is
+       *   surface `em_e3fe0d8` (the teal accent rail, 0.10 emissive)
+       *   beyond  `cb.brick.azure (#e0b08c)`
+       * — the gearheart tower's own wall, seen across the shaft the player
+       * would fall down. A sunlit-tan brick is what an OUTDOOR temple wall
+       * wants; azure-2 is an interior with no key on that face, and the tan
+       * puts the wall at the same rendered value as the rail in front of it
+       * (edge step 2.15). -25 % sRGB. azure-1's temple brick is lit and keeps
+       * its warmth against the sand. */
+      brick: { tint: 0x8a6248 },
       panel: { tint: 0xe4d4b0 },
       metal: { tint: 0xe8e8e0, metalness: 0.18, env: 0.42 },
       grate: { tint: 0xd8d8cc },

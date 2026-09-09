@@ -403,9 +403,91 @@ export const THEMES = { keep, verdant, ember, rime, azure };
 //   timeOfDay: 'morning'|'noon'|'dusk'|'night'|'furnace' }
 export function applyTheme(engine, themeId);
 ```
-READABILITY LAW: walked surface ≥ 3.5:1 luminance contrast vs the fog band behind it
-(measured by `_harness/contrastcheck.py`); kill surfaces hot-emissive and animated;
-checkpoint / crest / sigil / coin each a unique, unmistakable silhouette + pulse.
+READABILITY LAW — **rewritten 2026-09-08 (readability lane).** The law exists so a
+player can SEE WHERE THE PLATFORM ENDS. Until this pass it measured a proxy for that:
+the walked surface's median colour against the median of the fog band behind it,
+≥ 3.5:1. The rewrite is not a relaxation — it changes WHICH quantity is gated, and the
+measurement that justified the change is written out below rather than asserted.
+
+**GATED — EDGE READABILITY.** At every checkpoint station, for every SILHOUETTE LIP of
+the walked surface (the boundary where that surface stops and the player would fall),
+the MEDIAN local luminance cue across the lip must be ≥ **3.0:1**. Per scan line the cue
+is `max( deck-just-inside vs just-beyond , the lip band's strongest excursion vs
+just-beyond )`, so either the body of the deck or its §17 leading-edge stripe / keyline
+may carry it. 3.0:1 is WCAG 2.1 SC 1.4.11 (non-text contrast), the published threshold
+for a graphical object a user must perceive; it is stricter than the frames read below
+required, and it was fixed before the fixes were attempted.
+
+**REPORTED, NOT GATED:** the walked surface vs the fog band (the old 3.5:1 ruler), the
+20th-percentile cue, the §17 stripe-presence fraction, and the count of stations with no
+lip in frame. `python _harness/contrastcheck.py` prints all of them and is still the
+only accepted evidence — lighting, exposure, tone mapping, grade, bloom and the sky dome
+all sit between a hex constant in themes.js and the pixel a player sees.
+
+**WHY THE GATED QUANTITY CHANGED (measured on the shipping tree, commit 2ee15ad7).**
+The old ruler failed **43 of 59** gated stations. Reading the frames it condemned shows
+the ruler, not the art, was wrong for most of them:
+
+| station | fog-band | edge cue | what the frame shows |
+|---|---|---|---|
+| ember-2 cp2 | 1.19:1 FAIL | **10.86** | a black catwalk drawn round every edge in brilliant cyan, over a black void |
+| ember-3 cp5 | 1.18:1 FAIL | **3.65** | an obsidian deck against a glowing lava sea, cyan lip on every side |
+| rime-2 cp4 | 2.16:1 FAIL | **5.31** | cream lip stripes on ice over a dark blue drop |
+| azure-3 cp3 | 1.72:1 FAIL | **3.34** | white sanctum deck ending in the teal sea |
+| azure-3 cp4 | 1.89:1 FAIL | **3.03** | same |
+| ember-1 cp1 | 1.09:1 FAIL | **3.17** | lit catwalk over the magma plain |
+| ember-3 cp1 | 1.86:1 FAIL | **3.47** | necropolis deck against the furnace sky |
+| azure-2 cp3 | 2.56:1 FAIL | **3.00** | clockwork floor, teal rail, dark shaft |
+
+The arithmetic behind that is WCAG's own `+0.05` term: at a background of 0.06 relative
+luminance, a 3.5:1 pair needs the deck at **0.335** — mid-grey. The old law was asking a
+dark foundry to become a grey one, a white-on-white sanctum to stop being white, and
+verdant's grass-on-grass to stop being grass. Two of the eight “modest palette fixes” the
+lane was handed were also arithmetically impossible: ember-3 cp5 and ember-2 cp2 were
+prescribed “background darker by ~0.085” against fog bands already sitting at 0.061, and
+0.061 − 0.085 is a negative luminance.
+
+**AND IT IS NOT ONLY A RELAXATION.** azure-2 cp1 PASSES the fog-band ruler at 3.81:1 and
+FAILS the edge law at 2.65:1: its floor ends at a wall of nearly its own value, across
+the shaft you fall down. Cross-tab over the 18 gated stations that have a measurable lip
+(`_harness/contrastcheck.json`, 2026-09-08): **3 pass both · 8 pass edge only · 1 passes
+deck only · 6 fail both.**
+
+**WHAT COUNTS AS A LIP** (contrastcheck.py owns the detail; every clause below exists
+because a cruder version of it was measured and found lying):
+* one depth pass per station; scan lines walk OUT of the deck's projected footprint — up
+  for the far lip, left and right for the lateral lips — tracking the surface's own
+  per-pixel depth SLOPE, so grazing ground is not mistaken for a silhouette (a plain
+  per-pixel depth jump “found” 66 lips on keep cp3 at a median cue of 1.57: grass
+  against grass);
+* the jump must open a ≥ 1.5 m WORLD gap (verdant-1's instanced grass writes depth, and
+  a blade tip is not a lip);
+* and it must be a **FALL** by the game's own physics: `Broadphase.raycast` (§9) probes
+  0.7 m past the lip and the ground must be missing or ≥ 1.4 m below — a ~63° face, well
+  past the `slope.slideDeg` 38° a hero still walks. A hillside that rolls away is a
+  silhouette but not a jump decision, and is not gated;
+* a scan line that climbs > 1.0 m (≈ 2× `TUNE.stepUp`) above the station has walked up a
+  wall, not along the deck, and reports nothing (on ember-3 cp2 such lines reported the
+  SKYLINE OF A TOWER as the hero's lip);
+* lips past 60 m are out of the walk;
+* a station with fewer than 8 measurable lips is **NO LIP** — neither pass nor fail,
+  because there is nothing there to fall off. **41 of the 59 gated stations are in that
+  state**, which is what a checkpoint is supposed to be. Their fog-band ratio is still
+  printed.
+
+**WHAT DOES NOT MOVE THE EDGE CUE, measured this pass.** Every global exposure lever.
+The cue is a ratio of two surfaces standing in the same light, so ambient, hemi and
+exposure cancel out of it: ember ambient 0.50 → 0.34 with hemi 1.25 → 1.05 moved
+ember-3 cp4 from 2.15 to 2.27 and azure-2 cp3 from 2.99 to 3.02, and the OPPOSITE move
+(0.70 / 1.50) gave 2.26 and 2.94. Only ALBEDO separation and a drawn line at the lip
+move it — which is why the fixes this lane shipped are material tints
+(`materials.js faceInject`, themes.js `materialOverrides`) and why §17's stripe rule is
+load-bearing rather than decorative. `contrastcheck.py --edge-names` raycasts the live
+scene and prints which material is on each side of a lip; aim a palette fix with it
+instead of spraying one.
+
+kill surfaces hot-emissive and animated; checkpoint / crest / sigil / coin each a unique,
+unmistakable silhouette + pulse.
 
 ## 16. runtime/world/sky.js  (port; add 'day','sunset','furnace','aurora','sanctum' domes + sun disc + clouds layer + god-ray sprite for Keep windows)
 
@@ -637,7 +719,7 @@ combining ≥ 4 families).
 | core loop | `python _harness/loopcheck.py` | keep → every course: every checkpoint fires, death rewinds+respawns ≤ 700 ms median at that checkpoint, coins/sigils/crests collect and SAVE, crest celebration completes, return to keep, gate unlock by crest total, hazards bit-identical at the same clock after reset |
 | feel | `python _harness/feelcheck.py` | §11 numbers driven through REAL KeyboardEvents (+ `__test.stick`): analog walk/run speeds, turn radius at speed, stop time, single/double/triple apexes + windows, long jump distance, backflip/sideflip apexes, wall kick, dive distance + slide, pound timing + pound-jump, coyote, buffer, swim speeds, slope slide, the brake POSE covering the brake (`idle_while_moving`), and the launch commitment against a full air reversal (`air_keep_frac`) |
 | camera | `python _harness/camcheck.py` | no clipping through walls (raycast pull-in), hero never occluded > 0.3 s, no auto-yaw during longjump/dive, recenter time, peek, and the SHAFT station — a 3.30 m kick shaft (verdant-1 ROUTE B's own geometry) where every frame must hold `cam.dist >= TUNE.cam.minDist` with the hero outside the near plane and unfaded |
-| contrast | `python _harness/contrastcheck.py` | walked-surface vs fog band ≥ 3.5:1 at every checkpoint station, every theme |
+| contrast | `python _harness/contrastcheck.py` | §15 EDGE READABILITY: at every checkpoint station of every theme, the median luminance cue across each silhouette lip of the walked surface (deck-vs-beyond or its §17 stripe/keyline-vs-beyond) ≥ 3.0:1, where the lip is a real FALL by the broadphase. Walked-surface vs fog band is REPORTED, not gated; a station with no lip in frame is NO LIP, neither pass nor fail |
 | perf | `python _harness/perfcheck.py` | ≤ 260 draws, ≤ 450k tris, ≥ 55 fps AND p99 ≤ 28 ms **at the tier render scale** (headed, reference machine, quiet box), warm course load ≤ 1.5 s. The gate also prints the native-1080p figure as INFO — it is not a pass condition. A run taken while other browser gates are running is not evidence: re-run quiet. |
 | critic | `python _harness/shots.py` + a critic agent | screenshots at authored stations per course, judged against the AAA rubric (below) |
 

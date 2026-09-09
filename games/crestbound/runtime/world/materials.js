@@ -1551,6 +1551,36 @@ function bakeStone() {
   }, 0.72, macroInject(9.0, 0.17, 0.075, 0.35, detailInject(4.7, 0.42, faceInject(0.180))));
 }
 
+/* WHY EVERY DECK MATERIAL NOW CARRIES `faceInject` (readability lane, 2026-09-08).
+ *
+ * CONTRACT §15's gated quantity is now the LIP: the luminance step across the
+ * boundary between the walked surface and whatever is beyond or below it
+ * (`_harness/contrastcheck.py`, the edge scan). Two things were measured while
+ * settling that law and both point at this term.
+ *
+ * 1. THE LIP CUE IS A RATIO OF TWO SURFACES IN THE SAME LIGHT, so every global
+ *    exposure lever cancels out of it. Tested on the shipping tree: ember
+ *    ambient 0.50 -> 0.34 with hemi 1.25 -> 1.05 moved ember-3 cp4 from
+ *    2.15 to 2.27 and azure-2 cp3 from 2.99 to 3.02; the OPPOSITE move
+ *    (ambient 0.70, hemi 1.50) landed on 2.26 and 2.94. Neither direction is
+ *    worth a decimal. Light does not separate a lip; ALBEDO does.
+ * 2. `faceInject` is the only term in the engine that separates a wall from a
+ *    floor of the same material (see the stone note above), and it was applied
+ *    to five materials out of thirty: stone 0.180, plaster 0.29, brick 0.31,
+ *    marble 0.38, panel 0.62. Every metal, grate, checker, conveyor and
+ *    obsidian VERTICAL face therefore rendered at exactly the albedo weight of
+ *    a HORIZONTAL one — which is precisely the foundry and the clockwork
+ *    tower, the two realms whose lips the gate could not read.
+ *
+ * The values below are chosen inside the family the five existing ones
+ * already define (0.18 - 0.38), not invented: cold-rolled metal and grate
+ * 0.46 (they are the most specular, so their walls keep an env term the
+ * diffuse multiplier does not touch), obsidian 0.38 with marble, checker 0.34
+ * between plaster and marble, and panel pulled from its outlying 0.62 to 0.36.
+ * A floor still sees the whole sky and a wall a sliver of it, which is also
+ * what makes an interior read as a room with depth instead of a single-value
+ * box. */
+
 /* -------------------------------------------------------------- 4.2 panel */
 /** Brushed technical panel: recessed seams, corner screws, worn edges. */
 function bakePanel() {
@@ -1622,7 +1652,7 @@ function bakePanel() {
   return assemble('panel', maps, {
     color: 0xffffff, roughness: 1, metalness: 1,
     normalScale: new THREE.Vector2(1.0, 1.0), envMapIntensity: 1.0,
-  }, 0.5, faceInject(0.62));
+  }, 0.5, faceInject(0.36));
 }
 
 /* -------------------------------------------------------------- 4.3 metal */
@@ -1664,7 +1694,7 @@ function bakeMetal() {
   return assemble('metal', maps, {
     color: 0xffffff, roughness: 1, metalness: 1,
     normalScale: new THREE.Vector2(0.8, 0.8), envMapIntensity: 1.25,
-  }, 0.5);
+  }, 0.5, faceInject(0.46));
 }
 
 /* -------------------------------------------------------------- 4.4 grate */
@@ -1716,7 +1746,7 @@ function bakeGrate() {
     color: 0xffffff, roughness: 1, metalness: 1,
     alphaTest: 0.5, transparent: false, side: THREE.DoubleSide,
     normalScale: new THREE.Vector2(1.0, 1.0), envMapIntensity: 1.1,
-  }, 1.0);
+  }, 1.0, faceInject(0.46));
 }
 
 /* ---------------------------------------------------------------- 4.5 ice */
@@ -1940,7 +1970,7 @@ function bakeObsidian() {
     clearcoat: 1.0, clearcoatRoughness: 0.045,
     specularIntensity: 1.0, envMapIntensity: 1.8,
     normalScale: new THREE.Vector2(0.9, 0.9),
-  }, 0.35);
+  }, 0.35, faceInject(0.38));
 }
 
 /* ------------------------------------------------------------ 4.9 crystal */
@@ -2347,7 +2377,7 @@ function bakeChecker() {
   return assemble('checker', maps, {
     color: 0xffffff, roughness: 1, metalness: 1,
     normalScale: new THREE.Vector2(0.9, 0.9), envMapIntensity: 0.8,
-  }, 0.5);
+  }, 0.5, faceInject(0.34));
 }
 
 /* ----------------------------------------------------------- 4.17 emissive */
