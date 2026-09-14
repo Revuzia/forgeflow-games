@@ -1770,6 +1770,21 @@ function decoBodyMaterial(theme) {
  * with NO colliders — decoration must never be something you can stand on by
  * accident. Small clusters lose castShadow (see feedback_forgeflow_games_fps).
  */
+/**
+ * How far a `solid` decoration's collider is extended ABOVE its visible tip.
+ *
+ * The brief is BLOCKING ONLY: an ice massif must stop you walking into it and
+ * must NOT become a platform. This engine decides "ground" purely from surface
+ * normal (collide.js:105, GROUND_NY 0.5), so an upright box is standable no
+ * matter how it is flagged, and there is no non-standable collider type. The
+ * honest fix within that constraint is to put the top face out of reach: the
+ * jump apex is 2.09 m at full hold and the player is 1.80 m tall, so 4.0 m of
+ * extension means the top cannot be gained from the ground the cluster sits on.
+ * Anything this would wrongly roof is caught by geomcheck's HEADROOM and
+ * ROOFED JUMP tests, which is why those gates are re-run after setting `solid`.
+ */
+const DECO_NOCLIMB_UP = 4.0;
+
 export function buildDeco(def, theme, mats) {
   const kindOf = (def && def.kindOf) || 'rocks';
   const count = Math.max(1, Math.min(64, (def && def.count) || 6));
@@ -1808,6 +1823,7 @@ export function buildDeco(def, theme, mats) {
   const geo = GeoCache.get(key, () => {
     const rnd = rngFrom(Math.imul(seed | 0, 2654435761));
     const parts = [];
+    const boxes = [];   // per-piece blockers, local space — see DECO_NOCLIMB_UP
     const push = (g, m) => parts.push({ geo: g, mat: m });
     for (let i = 0; i < count; i++) {
       let x, z;
@@ -1856,6 +1872,8 @@ export function buildDeco(def, theme, mats) {
         push(xform(tubeGeometry(rB * 0.34, rB, hgt, 5, 1.2), x, by + hgt * 0.45, z, leanX, yaw, leanZ), 0);
         push(xform(tubeGeometry(rB * 0.32, rB * 0.55, hgt * 0.55, 5, 1.6),
           x + 0.14 * sc, by + hgt * 0.22, z - 0.10 * sc, leanX * 1.6, yaw, leanZ * 1.6), 2);
+        // Base-anchored, slightly wider than the shaft so the lean stays inside it.
+        boxes.push({ x: x, y: by, z: z, hx: rB * 1.20, hz: rB * 1.20, h: hgt });
       } else if (kindOf === 'antennae') {
         const hgt = 2.4 * sc * (0.7 + rnd() * 0.6);
         push(xform(tubeGeometry(0.018 * sc, 0.06 * sc, hgt, 6, 1.0), x, by + hgt * 0.5, z, 0, yaw, 0), 0);
@@ -1879,7 +1897,11 @@ export function buildDeco(def, theme, mats) {
         }
       }
     }
-    return assembleIndexed(parts, 3);
+    const g = assembleIndexed(parts, 3);
+    // Ride along on the cached geometry: an identical cluster elsewhere skips
+    // this callback entirely, so the boxes have to be cached with it.
+    if (g) g.userData.decoBoxes = boxes;
+    return g;
   });
 
   const mesh = new THREE.Mesh(geo, [bodyMat, trimMat, emMat]);
@@ -1892,7 +1914,30 @@ export function buildDeco(def, theme, mats) {
   applyRot(mesh, def && def.rot);
   mesh.updateMatrix();
   mesh.matrixAutoUpdate = false;
-  return { mesh, colliders: [] };
+
+  /* Opt-in collision. Decoration is collider-free by default and must stay that
+     way (see the note above buildDeco); `solid: true` is for the big ice that
+     reads as a wall and was being walked straight through. */
+  const colliders = [];
+  const solidBoxes = (def && def.solid && geo.userData) ? geo.userData.decoBoxes : null;
+  if (Array.isArray(solidBoxes) && solidBoxes.length) {
+    const q = rotQuat(def && def.rot, new THREE.Quaternion());
+    const ident = new THREE.Quaternion();
+    const off = new THREE.Vector3();
+    for (let i = 0; i < solidBoxes.length; i++) {
+      const b = solidBoxes[i];
+      off.set(b.x, 0, b.z).applyQuaternion(q);
+      const baseY = p[1] + b.y;
+      const topY = baseY + b.h + DECO_NOCLIMB_UP;
+      const dc = makeCollider(
+        p[0] + off.x, (baseY + topY) * 0.5, p[2] + off.z,
+        b.hx, (topY - baseY) * 0.5, b.hz,
+        ident, 'normal', null, null);
+      dc.decoSolid = true;   // tagged so gates and probes can find exactly these
+      colliders.push(dc);
+    }
+  }
+  return { mesh, colliders };
 }
 
 // ---------------------------------------------------------------------------

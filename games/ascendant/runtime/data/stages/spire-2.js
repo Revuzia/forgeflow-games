@@ -259,7 +259,7 @@ export default {
     { kind: 'deco', model: 'spire/torch', p: [31.8, 1.88, 6.0], count: 1, spread: 0, scale: 1.5, seed: 9111 },
     { kind: 'deco', model: 'spire/rubble', p: [52.7, 3.85, 3.4], count: 5, spread: 2.2, scale: 1.2, seed: 9112 },
     { kind: 'deco', kindOf: 'spires', p: [30.0, 0.6, 9.4], count: 7, spread: 4.2, scale: 2.4, seed: 9113, mat: 'crystal' },
-    { kind: 'deco', kindOf: 'crystals', p: [26.0, 0.0, -8.0], count: 7, spread: 4.0, scale: 2.0, seed: 9114, mat: 'crystal' },
+    { kind: 'deco', kindOf: 'crystals', solid: true, p: [26.0, 0.0, -8.0], count: 7, spread: 4.0, scale: 2.0, seed: 9114, mat: 'crystal' },
     { kind: 'light', p: [27.0, 3.2, 0], color: ICE, intensity: 8, distance: 26 },
 
     /* ============================================================================ */
@@ -386,7 +386,7 @@ export default {
 
     { kind: 'deco', model: 'spire/coil', p: [151.4, 6.65, -3.4], count: 1, spread: 0, scale: 1.3, seed: 9142 },
     { kind: 'deco', model: 'spire/rope', p: [142.0, 6.65, 2.4], count: 1, spread: 0, scale: 1.3, seed: 9143 },
-    { kind: 'deco', kindOf: 'crystals', p: [146.0, 1.6, -8.4], count: 7, spread: 4.4, scale: 2.2, seed: 9144, mat: 'crystal' },
+    { kind: 'deco', kindOf: 'crystals', solid: true, p: [146.0, 1.6, -8.4], count: 7, spread: 4.4, scale: 2.2, seed: 9144, mat: 'crystal' },
     { kind: 'light', p: [140.0, 8.4, 0], color: HOT, intensity: 9, distance: 20, flicker: 0.12 },
 
     /* ============================================================================ */
@@ -524,7 +524,7 @@ export default {
     { kind: 'deco', model: 'spire/rubble', p: [244.0, 9.5, 2.0], count: 5, spread: 1.8, scale: 1.2, seed: 9164 },
     { kind: 'deco', model: 'spire/coil', p: [249.6, 9.5, -2.0], count: 1, spread: 0, scale: 1.3, seed: 9165 },
     { kind: 'deco', kindOf: 'girders', p: [246.8, 17.4, 0], count: 6, spread: 2.8, scale: 2.2, seed: 9166, mat: 'metal' },
-    { kind: 'deco', kindOf: 'crystals', p: [246.8, 17.9, 0], count: 5, spread: 2.2, scale: 1.8, seed: 9167, mat: 'crystal' },
+    { kind: 'deco', kindOf: 'crystals', solid: true, p: [246.8, 17.9, 0], count: 5, spread: 2.2, scale: 1.8, seed: 9167, mat: 'crystal' },
     { kind: 'light', p: [247.0, 12.8, 0], color: ICE, intensity: 13, distance: 20 },
     { kind: 'light', p: [255.0, 17.2, 0], color: GOLD, intensity: 11, distance: 24 },
 
@@ -550,7 +550,7 @@ export default {
     { kind: 'deco', model: 'spire/rope', p: [250.2, 16.0, 5.8], count: 1, spread: 0, scale: 1.6, seed: 9169 },
     { kind: 'deco', model: 'spire/coil', p: [252.4, 15.7, 5.8], count: 1, spread: 0, scale: 1.4, seed: 9170 },
     { kind: 'deco', model: 'spire/crate', p: [247.6, 9.55, 5.4], count: 2, spread: 1.2, scale: 1.1, seed: 9171 },
-    { kind: 'deco', kindOf: 'crystals', p: [252.0, 7.4, 10.2], count: 7, spread: 4.0, scale: 2.2, seed: 9172, mat: 'crystal' },
+    { kind: 'deco', kindOf: 'crystals', solid: true, p: [252.0, 7.4, 10.2], count: 7, spread: 4.0, scale: 2.2, seed: 9172, mat: 'crystal' },
 
     /* ============================================================================ */
     /* BEAT 9 — THE ANTECHAMBER AND THE TRAM                                        */
@@ -755,8 +755,8 @@ export default {
     { kind: 'deco', kindOf: 'spires', p: [230, -8, -36], count: 9, spread: 28, scale: 11, seed: 1504, mat: 'obsidian' },
     { kind: 'deco', kindOf: 'spires', p: [330, 2, 34], count: 8, spread: 26, scale: 10, seed: 1806, mat: 'obsidian' },
     { kind: 'deco', kindOf: 'spires', p: [360, 0, -34], count: 8, spread: 26, scale: 10, seed: 1809, mat: 'obsidian' },
-    { kind: 'deco', kindOf: 'crystals', p: [150, 2, 24], count: 12, spread: 16, scale: 5, seed: 1605, mat: 'crystal' },
-    { kind: 'deco', kindOf: 'crystals', p: [290, 8, -26], count: 12, spread: 16, scale: 5, seed: 1706, mat: 'crystal' },
+    { kind: 'deco', kindOf: 'crystals', solid: true, p: [150, 2, 24], count: 12, spread: 16, scale: 5, seed: 1605, mat: 'crystal' },
+    { kind: 'deco', kindOf: 'crystals', solid: true, p: [290, 8, -26], count: 12, spread: 16, scale: 5, seed: 1706, mat: 'crystal' },
     { kind: 'deco', kindOf: 'rocks', p: [180, -26, 0], count: 16, spread: 60, scale: 8, seed: 1807, mat: 'obsidian' },
 
     // Route lights, one per beat, so the line reads from the far end of the glacier.
