@@ -655,6 +655,31 @@ export default {
     /* 56 */ { kind: 'pendulum', p: [313.0, 21.70, 0], len: 3.4, amp: 0.55, period: 2.8, phase: 0, axis: [0, 0, 1], blade: { w: 3.0, h: 2.4, d: 0.24 } },
     /* 57 */ { kind: 'pendulum', p: [319.6, 21.70, 0], len: 3.4, amp: 0.50, period: 3.4, phase: 1.05, axis: [0, 0, 1], blade: { w: 3.0, h: 2.4, d: 0.24 } },
 
+    /* THE STEP-OUT — one tile to the RIGHT, so a blade can be dodged, not just timed. */
+    /*                                                                              */
+    /* The glass bridge is 1.4 m wide (z[-0.70,0.70]) and both blades hang at z 0    */
+    /* swinging ALONG it, so the bridge gives you no sideways room: the only line    */
+    /* was to read both arcs and thread the 3.2 m dead zone between their reaches    */
+    /* (blade 56 sweeps x[311.2,314.8], blade 57 x[318.0,321.2]). This is somewhere  */
+    /* to stand while one goes past.                                                 */
+    /*                                                                              */
+    /* Clear by geometry, not timing. pendulum.js:533/536 give the kill capsules a   */
+    /* half-span of w*0.34 = 1.02 across local Z and a radius of max(d*1.15,h*0.30)  */
+    /* = 0.72, so a blade kills out to |z| 1.74; with the player's 0.35 radius       */
+    /* nothing survives inside |z| 2.09. This tile is z[2.20,4.20] — its NEAR EDGE   */
+    /* clears by 0.11 m and its centre by 1.11 m. Measured: 0 deaths in 8 stands     */
+    /* across both blade periods, against 7 of 8 for the same stand on the bridge.   */
+    /*                                                                              */
+    /* Same tile as the plank you crossed to get here (obj 54): same 4.0 x 2.0 deck, */
+    /* same 0.5 thickness, same ice, same 2.6/0.6/1.6 blink — so it reads as the     */
+    /* thing you already know, and it is 3.20 s solid then 1.60 s of nothing. You    */
+    /* cannot camp on it. Top 15.80 is LEVEL with the bridge and the step across is  */
+    /* 1.50 m; the exit onto the ice bridge is 3.10 m with a 0.30 m rise, both well  */
+    /* inside the 4.4 m run budget.                                                  */
+    /* 57a */ { kind: 'vanish', p: [318.5, 15.55, 3.2], s: [4.0, 0.5, 2.0], mat: 'ice', mode: 'cycle', cycle: { on: 2.6, warn: 0.6, off: 1.6, phase: 0 } }, // x[316.5,320.5] z[2.2,4.2] top 15.80
+    { kind: 'light', p: [318.5, 16.8, 3.2], color: ICE, intensity: 7, distance: 14 },
+    { kind: 'text', p: [311.0, 17.0, 2.4], rot: [0, -Math.PI / 2, 0], text: 'STEP OUT  ·  the tile blinks', size: 0.34, color: ICE },
+
     /* 58 */ { kind: 'ice', p: [328.4, 15.7, 0], s: [9.6, 0.8, 4.6] },   // gap 1.90, dy +0.30, x[323.6,333.2] top 16.10
     /* 59 */ { kind: 'rotor', p: [328.4, 16.55, 0], style: 'bar', arms: 3, len: 2.6, thick: 0.32, period: 3.6, phase: 0, axis: [0, 1, 0] },
 
