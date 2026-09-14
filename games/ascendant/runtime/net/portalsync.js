@@ -31,7 +31,13 @@ import { Save } from '../core/save.js';
 
 const SLOT = 1;
 const PUSH_DEBOUNCE_MS = 1500;
-const LOAD_TIMEOUT_MS = 8000;
+/* A cold boot straight after a deploy re-downloads every asset with the CDN
+   cache just purged, which is exactly when this read is slowest — 8 s was not
+   enough, and a read that misses its window used to leave the game free to
+   overwrite the account. Longer, and retried. */
+const LOAD_TIMEOUT_MS = 12000;
+const PULL_RETRY_MS = 4000;
+const PULL_MAX_RETRIES = 3;
 
 const IS_BROWSER = typeof window !== 'undefined';
 
@@ -42,6 +48,17 @@ function embedded() {
 }
 
 export const PortalSync = {
+  /**
+   * Has a read actually told us what the account holds THIS SESSION?
+   *
+   * A push REPLACES the account record — the portal upserts by replacement —
+   * so this is the permission slip for every push. It starts false and only a
+   * read we understood (or one that confirmed the cloud is genuinely empty)
+   * sets it. A TIMEOUT never does.
+   */
+  _readOk: false,
+  _pullTries: 0,
+
   /** 'off' until start() finds a parent frame; then 'idle' | 'loading' | 'synced'. */
   status: 'off',
   /** Set when a cloud record has been folded in — for the dev overlay. */
@@ -102,6 +119,8 @@ export const PortalSync = {
       }, false);
     } catch (e) { /* ignore */ }
 
+    this._readOk = false;
+    this._pullTries = 0;
     return this.pull();
   },
 
@@ -162,11 +181,33 @@ export const PortalSync = {
        would delete a real account's progress. An unreadable record is the one
        case where doing nothing is the only safe move — a later genuine clear
        still pushes through schedulePush() on the save event. */
-    if (!timedOut && (readable || !data)) this.schedulePush();
+    /* THE permission slip. Previously this expression gated only THIS push,
+       while push() itself was ungated — so after a timed-out read the next
+       clear, or merely hiding the tab (flush() on visibilitychange), shipped a
+       local-only snapshot that REPLACED a real account's record. That is how a
+       signed-in player lost their unlocks after a deploy: unlocks are derived
+       from the per-stage `cleared` flags, and the replacement dropped them. */
+    this._readOk = !timedOut && (readable || !data);
+    if (this._readOk) { this._pullTries = 0; this.schedulePush(); }
+    else if (timedOut) this._retryPull();
     if (res.changed && typeof this.onMerged === 'function') {
       try { this.onMerged(this.lastMerge); } catch (e) { /* never break a sync */ }
     }
     p.resolve({ synced: !timedOut, merged: !!res.changed, stages: res.stages | 0 });
+  },
+
+  /**
+   * A timed-out read is not a verdict, just a slow frame. Retry with backoff so
+   * a slow post-deploy boot recovers the account instead of spending the whole
+   * session unable to push. If every attempt fails, _readOk stays false and the
+   * session is read-only — progress still saves locally and nothing is lost.
+   */
+  _retryPull() {
+    if (!this._on || !embedded()) return;
+    if (this._pullTries >= PULL_MAX_RETRIES) return;
+    this._pullTries++;
+    const wait = PULL_RETRY_MS * Math.pow(2, this._pullTries - 1);
+    setTimeout(() => { if (!this._readOk && !this._pending) this.pull(); }, wait);
   },
 
   /** Debounced push. Cheap to call on every clear. */
@@ -179,6 +220,8 @@ export const PortalSync = {
   /** Send the current progress snapshot now. Silent on every failure. */
   push() {
     if (!this._on || !embedded()) return false;
+    /* Never overwrite an account we have not read. See _readOk. */
+    if (!this._readOk) return false;
     let payload = null;
     try { payload = Save.exportProgress(); } catch (e) { return false; }
     if (!payload) return false;
