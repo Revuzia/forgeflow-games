@@ -12,6 +12,7 @@
  * Portal listens and routes to the appropriate Supabase table.
  */
 
+import { mergePreservingKeys, REPLACE_MARKER } from "./saveMerge";
 import { supabase } from "./supabase";
 import { addXP, setOnlineStatus, submitScore, addRecentlyPlayed, getCurrentSeasonWeek } from "./auth";
 // addXP is still imported because unlockAchievement() inside this file
@@ -229,11 +230,46 @@ async function unlockAchievement(userId: string, achievementId: number) {
   await addXP(userId, xpGain, `achievement_${achievementId}`);
 }
 
+/**
+ * Write a cloud save WITHOUT ever losing what is already there.
+ *
+ * This used to be a bare upsert, i.e. blind replacement: whatever a game sent
+ * became the record. A signed-in Ascendant player lost every unlock that way —
+ * the game's read of the account timed out on a post-deploy cold boot, it then
+ * pushed a fresh browser's snapshot, and the four cleared stages it did not
+ * know about were simply gone. The game-side hole is fixed too (portalsync now
+ * refuses to push before a successful read), but that is one game. This is the
+ * guarantee for EVERY game, including ones not written yet: a save merges, so
+ * a thin or stale payload can no longer delete progress.
+ *
+ * A game that genuinely means "wipe it" — a Reset Progress button — sends
+ * `__replace: true` and gets the old behaviour, minus the marker.
+ */
 async function saveGameData(userId: string, gameId: number, data: any, slot: number) {
+  let next = data;
+
+  if (data && typeof data === "object" && (data as any)[REPLACE_MARKER] === true) {
+    next = { ...(data as any) };
+    delete (next as any)[REPLACE_MARKER];
+  } else {
+    // Read-modify-write. A failed read must NOT downgrade this to a blind
+    // replace: if we cannot see the current record we are not entitled to
+    // overwrite it, so the safe move is to leave it alone.
+    const { data: row, error } = await supabase
+      .from("game_saves")
+      .select("save_data")
+      .eq("user_id", userId)
+      .eq("game_id", gameId)
+      .eq("slot", slot)
+      .maybeSingle();
+    if (error) return;
+    next = mergePreservingKeys(row?.save_data, data);
+  }
+
   await supabase.from("game_saves").upsert({
     user_id: userId,
     game_id: gameId,
-    save_data: data,
+    save_data: next,
     slot,
     updated_at: new Date().toISOString(),
   }, { onConflict: "user_id,game_id,slot" });
