@@ -520,27 +520,50 @@ export function showMenu(W, startMatch) {
   // a merge must never lose local progress. Guests/standalone no-op.
   if (!W._cloudLoadAsked && window.parent && window.parent !== window) {
     W._cloudLoadAsked = true;
-    try {
-      const reqId = "lcload1";
+    /* WRITE LOCK. Until the account has actually answered, this device must not
+       push: the portal merge preserves KEYS but incoming still wins on VALUES,
+       so a fresh machine pushing level 1 would flatten a level 40 account. A
+       timeout is not an answer — it only schedules another attempt. */
+    W._cloudReadOk = false;
+    let attempt = 0, settled = false;
+
+    const settle = (cloudProgress) => {
+      if (settled) return;
+      settled = true;
+      if (cloudProgress && typeof cloudProgress.level === "number") {
+        const before = JSON.stringify(W.progress);
+        const merged = mergeProgressRecords(W.progress, cloudProgress);
+        merged.career = newCareer(merged.career);
+        W.progress = merged;
+        saveProgress(W.progress);
+        if (JSON.stringify(W.progress) !== before) flashMsg("CAREER SYNCED FROM CLOUD");
+      }
+      W._cloudReadOk = true;   // an EMPTY account is a real answer: safe to write
+    };
+
+    const ask = () => {
+      attempt++;
+      const reqId = "lcload" + attempt;
       const onSaveLoaded = (me) => {
         if (me.source !== window.parent) return;
         const d = me.data;
         if (!d || d.type !== "forgeflow:save_loaded" || d._reqId !== reqId) return;
         window.removeEventListener("message", onSaveLoaded);
-        const cp = d.data && d.data.progress;
-        if (!cp || typeof cp.level !== "number") return;
-        const lp = W.progress;
-        const cloudAhead = cp.level > lp.level || (cp.level === lp.level && (cp.xp || 0) > (lp.xp || 0));
-        if (cloudAhead) {
-          W.progress = Object.assign({ level: 1, xp: 0, lastPlayedDay: null, dayStreak: 0 }, cp);
-          W.progress.career = newCareer(cp.career);
-          saveProgress(W.progress);
-          flashMsg("CAREER RESTORED FROM CLOUD");
-        }
+        settle(d.data && d.data.progress);
       };
       window.addEventListener("message", onSaveLoaded);
-      window.parent.postMessage({ type: "forgeflow:load", slot: 1, _reqId: reqId }, "*");
-    } catch (e) {}
+      try {
+        window.parent.postMessage({ type: "forgeflow:load", slot: 1, _reqId: reqId }, "*");
+      } catch (e) { /* standalone */ }
+      setTimeout(() => {
+        if (settled) return;
+        window.removeEventListener("message", onSaveLoaded);
+        if (attempt < 3) ask();          // 12 s, then 12 s, then 12 s
+        // after that: no answer, so the session stays READ-ONLY. Local play is
+        // still saved to localStorage; the account is simply left alone.
+      }, 12000);
+    };
+    try { ask(); } catch (e) {}
   }
   // player.js reads lc_skin straight out of localStorage, so keep the stored
   // value honest here rather than teaching it about unlocks (and importing hud)
@@ -1418,6 +1441,61 @@ function newCareer(stored) {
   c.killsByCls = Object.assign({}, c.killsByCls);
   return c;
 }
+/**
+ * Merge two career records. NEITHER is authoritative — the account is the
+ * player's, not the device's, so this takes the best of each rather than
+ * picking a winner and discarding the loser.
+ *
+ * Counters take the MAX, not the sum: the cloud record already contains what
+ * this device contributed on an earlier session, so adding would double-count.
+ * bestPlacement is the exception twice over — lower is better, and 0 means
+ * "never placed", so it must not win a min().
+ */
+export function mergeCareers(a, b) {
+  const ca = newCareer(a), cb = newCareer(b), out = newCareer(null);
+  for (const k of Object.keys(CAREER0)) {
+    const va = ca[k], vb = cb[k];
+    if (k === "mapWins" || k === "killsByCls") {
+      const m = {};
+      for (const kk of Object.keys(va || {})) m[kk] = Math.max(va[kk] | 0, (vb && vb[kk]) | 0);
+      for (const kk of Object.keys(vb || {})) if (!(kk in m)) m[kk] = vb[kk] | 0;
+      out[k] = m;
+    } else if (k === "bestPlacement") {
+      out[k] = !va ? (vb || 0) : !vb ? va : Math.min(va, vb);
+    } else {
+      out[k] = Math.max(+va || 0, +vb || 0);
+    }
+  }
+  return out;
+}
+
+/**
+ * Merge a cloud progress record with the local one.
+ *
+ * The old rule was "adopt the cloud only when it is AHEAD (level, then xp)",
+ * which silently threw away everything the cloud held whenever local happened
+ * to be one level further on — map wins and class kills earned on another
+ * machine among them. Level and xp still come from whichever record is
+ * further along; the career is merged field by field.
+ */
+export function mergeProgressRecords(local, cloud) {
+  if (!cloud) return local;
+  if (!local) return cloud;
+  const cloudAhead = (cloud.level | 0) > (local.level | 0) ||
+    ((cloud.level | 0) === (local.level | 0) && (cloud.xp || 0) > (local.xp || 0));
+  const hi = cloudAhead ? cloud : local;
+  const out = Object.assign({ level: 1, xp: 0, lastPlayedDay: null, dayStreak: 0 },
+    cloudAhead ? local : cloud, hi);
+  out.level = Math.max(local.level | 0, cloud.level | 0, 1);
+  out.xp = hi.xp || 0;
+  out.dayStreak = Math.max(local.dayStreak | 0, cloud.dayStreak | 0);
+  // dayKey() is YYYY-MM-DD, so a plain string compare IS a date compare.
+  const la = local.lastPlayedDay || "", lb = cloud.lastPlayedDay || "";
+  out.lastPlayedDay = (la > lb ? la : lb) || null;
+  out.career = mergeCareers(local.career, cloud.career);
+  return out;
+}
+
 function loadProgress() {
   try {
     const p = Object.assign({ level: 1, xp: 0, lastPlayedDay: null, dayStreak: 0 }, JSON.parse(localStorage.getItem("lc_progress") || "{}"));
@@ -2955,7 +3033,11 @@ export function showPostMatch(W, res) {
         W.hooks.score((res.kills || 0) * 100 + Math.round(res.damage || 0)
           + Math.max(0, total - (res.placement || total)) * 25 + (res.victory ? 1000 : 0));
       }
-      if (W.hooks.save) W.hooks.save({ progress: W.progress, skin: getChosenSkin() });
+      // Never push before the account has been read — see the WRITE LOCK in
+      // showMenu(). Undefined means standalone/not embedded, where save is a no-op.
+      if (W.hooks.save && W._cloudReadOk !== false) {
+        W.hooks.save({ progress: W.progress, skin: getChosenSkin() });
+      }
       if (W.hooks.achievement) {
         if (res.victory) W.hooks.achievement("first_win");
         if ((res.kills || 0) >= 5) W.hooks.achievement("five_kill_game");
