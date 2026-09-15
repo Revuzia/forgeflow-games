@@ -1223,9 +1223,9 @@ export function showLobby(W, onDone) {
     L.remove(); R.lobby = null;
     onDone();
   }
-  // e.repeat is rejected: a held ENTER auto-repeats at ~30 ms, and the drop-select
-  // screen this hands off to arms its own ENTER listener — so a player who simply
-  // leant on the key would skip straight past choosing a landing zone.
+  // e.repeat is rejected so a held ENTER cannot double-fire the hand-off. (It
+  // originally guarded the drop-select screen's own ENTER listener; that screen
+  // is no longer shown — the lobby now hands straight to the drop.)
   const onKey = (e) => { if (!e.repeat && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); finishLobby(); } };
   // Offline ONLY. Online keeps the fixed timer because guests have to leave this
   // screen on the same clock as the host.
@@ -1240,7 +1240,11 @@ export function showLobby(W, onDone) {
   }
 }
 
-// ═══ DROP SELECT ═════════════════════════════════════════════════════════════
+// ═══ DROP SELECT — DISABLED 2026-09-15 ═══════════════════════════════════════
+// NOT CALLED ANY MORE. Owner direction: no landing-zone map, drop straight in.
+// ffg_royale3d.js now picks the zone with playerMod.autoDropTarget (the quietest
+// POI — the same choice this screen made when its timer ran out). Kept intact so
+// the screen can be restored by calling it again from that one branch.
 // Every bot picks a named POI to land at (bots.assignDrops runs before the
 // lobby) while the human was dumped over a random ground point — the worst loot
 // odds on the field, and it skipped the decision every battle royale opens

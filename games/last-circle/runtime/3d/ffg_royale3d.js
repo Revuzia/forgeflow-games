@@ -451,11 +451,21 @@ register3d("royale", async function (kernel, content) {
         audioMod.startMatchMusic(W);
         if (W.net) netMod.onMatchStart(W);
       };
-      // glider modes get the landing-zone map; it auto-locks on a fixed timer
-      // so online clients leave the screen together
+      // NO LANDING-ZONE MAP (owner direction 2026-09-15: "i dont want the MAP to
+      // come up ... I want to just drop straight in when joining a match"). The
+      // glide is untouched — you still steer the whole way down — only the
+      // pick-a-spot screen is gone. The zone is chosen for you by
+      // playerMod.autoDropTarget, which is exactly what the old screen did when
+      // its timer expired: the quietest named POI. hudMod.showDropSelect is left
+      // defined but UNCALLED so the screen can be restored by reinstating this
+      // one branch.
       if (modeK.drop === "glider" && W.mode !== "practice") {
-        hudMod.showDropSelect(W, (t) => { playerMod.setDropTarget(W, t); begin(); });
-      } else { W.dropTarget = null; begin(); }   // ground modes: no LZ marker
+        const lz = playerMod.autoDropTarget(W);
+        if (lz) playerMod.setDropTarget(W, lz); else W.dropTarget = null;
+      } else {
+        W.dropTarget = null;                     // ground modes: no LZ marker
+      }
+      begin();
     });
   }
 

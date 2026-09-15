@@ -639,6 +639,59 @@ export function setDropTarget(W, t) {
   W.dropTarget = { x: a.pos.x, z: a.pos.z, name: t.name || "" };
 }
 
+/** Landing zone chosen FOR the player, now that the drop-select map is gone
+ *  (owner direction 2026-09-15: "I want to just drop straight in when joining a
+ *  match"). Same idea the old screen used when its timer ran out — the quietest
+ *  named POI, scored off the bots' own declared drop targets (bots.assignDrops
+ *  runs before this) — so the player still lands somewhere with loot instead of
+ *  the random ground point spawnAll hands out.
+ *
+ *  MUST BE DRY. Some POIs are water by design: on isla_viva, Shipwreck Cove
+ *  (-5.3 m) and Lagoon Docks (-4.5 m) both have an underwater centre and zero
+ *  land on a ring around them, so "quietest" alone auto-dropped the player into
+ *  open sea on 2 of 8 zones. Candidates therefore need a dry centre AND mostly
+ *  dry ground on a 35 m ring — 35 m because the canopy glide carries you ~25 m
+ *  past the marker even with no steering input. Quietest wins, most-land breaks
+ *  the tie, and the match seed breaks what is left so repeat matches on one map
+ *  don't always funnel to the same corner. */
+export function autoDropTarget(W) {
+  const pois = (W.map && W.map.pois) || [];
+  if (!pois.length) return null;
+  const wy = W.map.waterY;
+  const dryness = (p) => {
+    if (W.map.heightAt(p.x, p.z) <= wy + 0.5) return 0;   // wet centre disqualifies
+    let n = 0;
+    for (let i = 0; i < 8; i++) {
+      const th = (i / 8) * Math.PI * 2;
+      if (W.map.heightAt(p.x + Math.cos(th) * 35, p.z + Math.sin(th) * 35) > wy + 0.5) n++;
+    }
+    return n;
+  };
+  const cand = pois.map((p) => {
+    let heat = 0;
+    for (const a of W.actors) {
+      const t = a.brain && a.brain.bb && a.brain.bb.dropTarget;
+      if (!t) continue;
+      const dx = t.x - p.x, dz = t.z - p.z;
+      if (dx * dx + dz * dz <= (p.r * 1.35) * (p.r * 1.35)) heat++;
+    }
+    return { p, heat, land: dryness(p) };
+  });
+  // prefer solidly dry zones; fall back to merely-dry before giving up
+  let pool = cand.filter((c) => c.land >= 5);
+  if (!pool.length) pool = cand.filter((c) => c.land > 0);
+  if (!pool.length) return null;                 // no dry POI — spawnAll's point stands
+  let minHeat = Infinity;
+  for (const c of pool) if (c.heat < minHeat) minHeat = c.heat;
+  const tied = pool.filter((c) => c.heat === minHeat);
+  let maxLand = 0;
+  for (const c of tied) if (c.land > maxLand) maxLand = c.land;
+  const finalists = tied.filter((c) => c.land === maxLand);
+  const rng = K.mulberry32(((W.seed >>> 0) ^ 0xd0d0) >>> 0);
+  const c = finalists[Math.floor(rng() * finalists.length) % finalists.length];
+  return { x: c.p.x, z: c.p.z, name: c.p.name || "" };
+}
+
 // ── human input ──────────────────────────────────────────────────────────────
 function installHumanInput(W) {
   const dom = W.kernel.renderer.domElement;
