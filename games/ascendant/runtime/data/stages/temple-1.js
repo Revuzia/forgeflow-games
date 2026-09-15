@@ -646,12 +646,25 @@ export default {
 
     // The bell itself. It has no collider anywhere — it is the thing you go round and
     // through, not a thing you land on, and nothing about it carries a stripe.
-    { kind: 'deco', kindOf: 'fins', p: [294.0, 19.6, 0], count: 26, spread: 8.6, scale: 6.0, seed: 1601, mat: 'metal' }, // the skirt, lip at 19.6
-    { kind: 'deco', kindOf: 'fins', p: [294.0, 24.4, 0], count: 20, spread: 6.4, scale: 5.0, seed: 1602, mat: 'metal' }, // the waist
-    { kind: 'deco', kindOf: 'slabs', p: [294.0, 28.6, 0], count: 12, spread: 3.4, scale: 4.0, seed: 1603, mat: 'metal' }, // the crown
-    { kind: 'deco', kindOf: 'pipes', p: [294.0, 31.4, 0], count: 6, spread: 1.2, scale: 4.0, seed: 1604, mat: 'metal' }, // the yoke it hangs from
-    { kind: 'deco', kindOf: 'girders', p: [294.0, 33.6, 0], count: 10, spread: 9.0, scale: 5.0, seed: 1605, mat: 'metal' }, // the rock arch's iron
-    { kind: 'light', p: [294.0, 26.0, 0], color: GOLD, intensity: 26, distance: 44 },
+    /* THE BELL, moved off the walkway and its splay brought in.
+       It has no collider and never did, so it was not blocking the JUMP — it was
+       blocking the VIEW, which is worse: from the deck at z -7.2 you could not
+       see the next deck, the blade over it, or the deck after.
+       Cause was the splay, not the position. The skirt was count 26 at spread
+       8.6 and the arch iron spread 9.0, both centred on z 0, so they reached to
+       z -8.6 and -9.0 — a curtain hung straight across a route that runs
+       z -7.2 -> -8.4 -> -4.6.
+       Centre moved to z +4.0 and the two widest tiers brought in (8.6 -> 6.0,
+       9.0 -> 6.5). Nearest reach is now z -2.5 against a sightline whose nearest
+       point is z -4.6: 2.1 m of daylight, with the bell still 12 m across and
+       still the landmark at the top of the climb. You now pass BESIDE its skirt
+       instead of under it. */
+    { kind: 'deco', kindOf: 'fins', p: [294.0, 19.6, 4.0], count: 26, spread: 6.0, scale: 6.0, seed: 1601, mat: 'metal' }, // the skirt, lip at 19.6
+    { kind: 'deco', kindOf: 'fins', p: [294.0, 24.4, 4.0], count: 20, spread: 5.0, scale: 5.0, seed: 1602, mat: 'metal' }, // the waist
+    { kind: 'deco', kindOf: 'slabs', p: [294.0, 28.6, 4.0], count: 12, spread: 3.4, scale: 4.0, seed: 1603, mat: 'metal' }, // the crown
+    { kind: 'deco', kindOf: 'pipes', p: [294.0, 31.4, 4.0], count: 6, spread: 1.2, scale: 4.0, seed: 1604, mat: 'metal' }, // the yoke it hangs from
+    { kind: 'deco', kindOf: 'girders', p: [294.0, 33.6, 4.0], count: 10, spread: 6.5, scale: 5.0, seed: 1605, mat: 'metal' }, // the rock arch's iron
+    { kind: 'light', p: [294.0, 26.0, 4.0], color: GOLD, intensity: 26, distance: 44 },
     { kind: 'light', p: [276.2, 24.4, 0], color: GOLD, intensity: 12, distance: 28 },
     { kind: 'light', p: [296.0, 25.4, -8.4], color: 0xffe6bf, intensity: 11, distance: 24 },
     { kind: 'light', p: [311.0, 24.0, 0], color: VIOLET, intensity: 12, distance: 26 },
