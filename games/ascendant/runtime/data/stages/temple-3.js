@@ -1012,5 +1012,22 @@ export default {
     { kind: 'light', p: [288, 4.6, 0], color: HOT, intensity: 9, distance: 20, flicker: 0.2 },
     { kind: 'light', p: [340, 12.6, 0], color: GOLD, intensity: 10, distance: 24 },
     { kind: 'light', p: [394, 22.6, 0], color: VIOLET, intensity: 12, distance: 26 },
+
+    /* THE SIDE LEDGE at the first censer — the visible way around.
+       The re-tuned swing is fair (8/12 blind dash phases cross, live-measured)
+       but it is not LEGIBLE: from the beam the censer just looks like death
+       pacing a corridor, and the owner asked twice for the thing that worked
+       at spire-2's chandelier — a platform beside the lane you can SEE.
+       Appended at the array tail so every existing object index stays stable.
+       Clearances copied from the chandelier ledge that measured 0 deaths in 8
+       stands: near edge z 2.2 against a sideways kill reach of 1.88 here
+       (chandelier: 2.09 against the same edge — this one is strictly safer).
+       Top 2.70, LEVEL with the beam; 1.7 m flat hop out, and the far corner
+       returns to the beam's exit-safe end [101.8..103.6] in a 3.7 m flat jump.
+       Solid on purpose: you arrive here off four vanishing panels, and the
+       ledge is where you stand still and finally READ the swing. */
+    { kind: 'platform', p: [99.4, 2.45, 3.4], s: [3.4, 0.5, 2.4], mat: 'stone', glow: STONE, stripe: true }, // x[97.7,101.1] z[2.2,4.6] top 2.70
+    { kind: 'light', p: [99.4, 4.2, 3.4], color: GOLD, intensity: 6, distance: 14 },
+    { kind: 'text', p: [95.9, 4.1, 2.4], rot: [0, -Math.PI / 2, 0], text: 'OR STEP ASIDE  ·  the censer cannot follow', size: 0.30, color: GOLD },
   ],
 };
