@@ -2245,10 +2245,16 @@ export function update(W, dt) {
   // Show the OS cursor whenever the mouse is NOT captured: a hidden cursor with
   // no pointer lock is the worst of both worlds — you cannot see where the mouse
   // is and the camera will not turn.
-  const wantCursor = p.alive && !W.paused && locked ? "none" : "";
+  // `p` is W._camFocus — while SPECTATING that is the live player you are
+  // watching, not you. Both of these are about YOUR controls, so they read
+  // W.player directly: gating them on p.alive left "CLICK TO LOOK AROUND"
+  // sitting over the elimination panel of a dead player who cannot look around
+  // at all (A/D switches who you watch instead).
+  const meAlive = !!(W.player && W.player.alive);
+  const wantCursor = meAlive && !W.paused && locked ? "none" : "";
   if (dom.style.cursor !== wantCursor) dom.style.cursor = wantCursor;
   if (R.lookHint) {
-    const wantHint = !locked && p.alive && !W.paused && W.phase !== "menu";
+    const wantHint = !locked && meAlive && !W.paused && W.phase !== "menu";
     const d2 = wantHint ? "block" : "none";
     if (R.lookHint.style.display !== d2) R.lookHint.style.display = d2;
   }
