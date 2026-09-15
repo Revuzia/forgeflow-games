@@ -1647,27 +1647,6 @@ function pickChallenges(W) {
   return pick.map((c) => Object.assign({}, c, { done: false, awarded: false }));
 }
 
-// compass ribbon — scrolling cardinal heading from the camera's facing
-const _cmpDir = new THREE.Vector3();
-function drawCompass(W, ctx, wpx) {
-  // The backing store is wpx*dpr (see showHUD); scale so every coordinate below
-  // stays in logical px. Derived from the canvas rather than read fresh off
-  // window.devicePixelRatio, so it can never disagree with the buffer we have.
-  const dpr = ctx.canvas.width / wpx || 1;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const H = 18; ctx.clearRect(0, 0, wpx, H);
-  if (!W.player || !W.camera) return;
-  W.camera.getWorldDirection(_cmpDir);
-  const bearing = (Math.atan2(_cmpDir.x, _cmpDir.z) * 180 / Math.PI + 360) % 360;   // 0 = +Z (N)
-  const cx = wpx / 2, pxPerDeg = wpx / 130;
-  ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(0, 0, wpx, H);
-  ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.strokeStyle = "rgba(255,255,255,0.22)"; ctx.lineWidth = 1;
-  for (let deg = 0; deg < 360; deg += 15) { const d = ((deg - bearing + 540) % 360) - 180; if (Math.abs(d) > 64) continue; const x = cx + d * pxPerDeg; ctx.beginPath(); ctx.moveTo(x, H - 4); ctx.lineTo(x, H); ctx.stroke(); }
-  const marks = [["N", 0], ["NE", 45], ["E", 90], ["SE", 135], ["S", 180], ["SW", 225], ["W", 270], ["NW", 315]];
-  for (const m of marks) { const d = ((m[1] - bearing + 540) % 360) - 180; if (Math.abs(d) > 64) continue; const x = cx + d * pxPerDeg; ctx.font = m[0].length === 1 ? "bold 12px sans-serif" : "10px sans-serif"; ctx.fillStyle = m[0].length === 1 ? "#ffffff" : "#9fb6cc"; ctx.fillText(m[0], x, H / 2 + 1); }
-  ctx.fillStyle = "#ffd873"; ctx.beginPath(); ctx.moveTo(cx - 5, 0); ctx.lineTo(cx + 5, 0); ctx.lineTo(cx, 6); ctx.closePath(); ctx.fill();
-}
 
 // ═══ HUD ═════════════════════════════════════════════════════════════════════
 export function showHUD(W) {
@@ -1725,13 +1704,15 @@ export function showHUD(W) {
   R.slotsRow = h("div", { display: "flex", gap: "6px" }, null, br);
   R.ammoText = h("div", { fontSize: "22px", fontWeight: "900", textShadow: "0 2px 4px #000" }, "", br);
 
-  // compass ribbon (very top center) — cardinal heading like the reference
-  const cmpWrap = h("div", { position: "absolute", top: "4px", left: "50%", transform: "translateX(-50%)", width: "320px", height: "18px" }, null, L);
-  R.compass = h("canvas", { display: "block", borderRadius: "4px", width: "320px", height: "18px" }, null, cmpWrap);
-  R.compass.width = Math.round(320 * HUD_DPR); R.compass.height = Math.round(18 * HUD_DPR);
+  // (The old canvas compass ribbon that used to live here is GONE — owner:
+  // "there are 2 compasses, one above the other". The DOM heading strip built
+  // further down is the surviving one; it carries the degree readout and
+  // cardinal ruler that match the reference.)
 
   // top center: storm timer + alive
-  const tc = h("div", { position: "absolute", top: "28px", left: "50%", transform: "translateX(-50%)", display: "flex", gap: "18px", alignItems: "center", background: "rgba(0,0,0,0.4)", padding: "6px 18px", borderRadius: "10px" }, null, L);
+  // top 56, not 28: the compass strip above measures 48 px tall, so at 28 it
+  // buried the storm clock, alive count and kill count under the ruler.
+  const tc = h("div", { position: "absolute", top: "56px", left: "50%", transform: "translateX(-50%)", display: "flex", gap: "18px", alignItems: "center", background: "rgba(0,0,0,0.4)", padding: "6px 18px", borderRadius: "10px" }, null, L);
   R.stormIcon = h("div", { fontSize: "15px" }, "⛈", tc);
   R.stormTimer = h("div", { fontSize: "17px", fontWeight: "800", minWidth: "72px" }, "", tc);
   h("div", { width: "1px", height: "18px", background: "rgba(255,255,255,0.25)" }, null, tc);
@@ -1745,9 +1726,11 @@ export function showHUD(W) {
   W.daily = loadDaily();
   W._challenges = pickChallenges(W).concat(dailyChallenges(W));
   W._chalIdx = 0; W._xpDirty = true; W._chalXp = 0; W._elimXp = 0;
-  const meta = h("div", { position: "absolute", top: "66px", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", width: "352px" }, null, L);
+  const meta = h("div", { position: "absolute", top: "94px", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", width: "352px" }, null, L);
   const xpRow = h("div", { display: "flex", alignItems: "center", gap: "8px", width: "100%", background: "rgba(0,0,0,0.42)", padding: "4px 10px", borderRadius: "8px" }, null, meta);
-  R.xpLevel = h("div", { fontSize: "12px", fontWeight: "900", color: "#ffd873", minWidth: "48px", textShadow: "0 1px 2px #000" }, "LVL 1", xpRow);
+  // 13px to match R.chalLabel below (owner: "make the lvl 5 the same size as
+  // the quests like 'deal 1000 damage'")
+  R.xpLevel = h("div", { fontSize: "13px", fontWeight: "900", color: "#ffd873", minWidth: "48px", textShadow: "0 1px 2px #000" }, "LVL 1", xpRow);
   const xpBarWrap = h("div", { flex: "1", height: "10px", background: "rgba(0,0,0,0.55)", borderRadius: "5px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)" }, null, xpRow);
   R.xpFill = h("div", { width: "0%", height: "100%", background: "linear-gradient(90deg,#4aa8ff,#7ad0ff)", transition: "width .3s" }, null, xpBarWrap);
   R.xpText = h("div", { fontSize: "10px", fontWeight: "700", opacity: "0.85", minWidth: "74px", textAlign: "right" }, "", xpRow);
@@ -1780,7 +1763,7 @@ export function showHUD(W) {
   // Built once (720 deg of ticks so the wrap never shows a seam), moved with
   // one transform per frame.
   const COMP_PPD = 2.2;                 // px per degree
-  const compWrap = h("div", { position: "absolute", left: "50%", top: "6px", transform: "translateX(-50%)", width: "300px", textAlign: "center", pointerEvents: "none" }, null, L);
+  const compWrap = h("div", { position: "absolute", left: "50%", top: "4px", transform: "translateX(-50%)", width: "300px", textAlign: "center", pointerEvents: "none" }, null, L);
   R.compassNum = h("div", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "17px", fontWeight: "900", letterSpacing: "1px", textShadow: "0 2px 8px rgba(0,0,0,0.9)" }, "0", compWrap);
   const compBand = h("div", { position: "relative", width: "300px", height: "26px", overflow: "hidden", marginTop: "1px", WebkitMask: "linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent)", mask: "linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent)" }, null, compWrap);
   R.compassRuler = h("div", { position: "absolute", left: "0", top: "0", height: "26px", width: (720 * COMP_PPD) + "px", willChange: "transform" }, null, compBand);
@@ -2149,7 +2132,6 @@ export function update(W, dt) {
   // changes with every mouse move — so sampling it at 10Hz made it judder while
   // you turned. It is a 320x18 canvas with a handful of strokes, next to nothing
   // beside the 180x180 minimap's drawImage of a 512x512 source.
-  if (R.compass) drawCompass(W, R.compass.getContext("2d"), 320);
   mmT += dt;
   if (mmT > 0.1) { mmT = 0; drawMinimap(W, R.mmCanvas.getContext("2d"), 180, false); }
 
