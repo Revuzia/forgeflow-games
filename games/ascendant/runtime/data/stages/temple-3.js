@@ -1029,5 +1029,26 @@ export default {
     { kind: 'platform', p: [99.4, 2.45, 3.4], s: [3.4, 0.5, 2.4], mat: 'stone', glow: STONE, stripe: true }, // x[97.7,101.1] z[2.2,4.6] top 2.70
     { kind: 'light', p: [99.4, 4.2, 3.4], color: GOLD, intensity: 6, distance: 14 },
     { kind: 'text', p: [95.9, 4.1, 2.4], rot: [0, -Math.PI / 2, 0], text: 'OR STEP ASIDE  ·  the censer cannot follow', size: 0.30, color: GOLD },
+
+    /* FLANK LEDGES for the cross-swinging censers, alternating sides per the
+       owner's call: obj52's ledge sits RIGHT, so obj175 goes LEFT and obj215
+       goes RIGHT. A cross-swinger cannot take a lane-parallel ledge (the arc
+       IS the crossing), so these loop AROUND the arc's measured reach instead:
+         obj175 blade covers z[-13.11,-4.89] -> ledge z[-15.7,-13.3], 2.8 m hop
+         obj215 blade covers z[-12.47,-6.33] -> ledge z[-6.0,-3.6],   2.1 m hop
+       obj65's catwalk is 1.2 m wide with the arc sweeping 4.4 m past each rail
+       — a ledge there means building a bridge, and the catwalk BEFORE the
+       plane is already all-phase safe, so it gets a sign, not furniture.
+       obj196 and obj237 already own all-phase-safe edge corridors (measured
+       0.8-1.1 m by _staging.mjs); they get signs naming the safe edge. */
+    { kind: 'platform', p: [290.6, 0.35, -14.5], s: [3.4, 0.5, 2.4], mat: 'stone', glow: STONE, stripe: true }, // obj175 LEFT loop, top 0.60
+    { kind: 'light', p: [290.6, 2.1, -14.5], color: GOLD, intensity: 6, distance: 14 },
+    { kind: 'text', p: [288.4, 2.7, -11.8], rot: [0, -Math.PI / 2, 0], text: 'OR ROUND THE LEFT  ·  past its reach', size: 0.30, color: GOLD },
+    { kind: 'platform', p: [348.0, 13.55, -4.8], s: [3.4, 0.5, 2.4], mat: 'stone', glow: STONE, stripe: true }, // obj215 RIGHT loop, top 13.80
+    { kind: 'light', p: [348.0, 15.3, -4.8], color: GOLD, intensity: 6, distance: 14 },
+    { kind: 'text', p: [345.9, 15.7, -7.2], rot: [0, -Math.PI / 2, 0], text: 'OR ROUND THE RIGHT  ·  past its reach', size: 0.30, color: GOLD },
+    { kind: 'text', p: [117.6, 3.9, 7.6], rot: [0, -Math.PI / 2, 0], text: 'HOLD THE MOUTH  ·  dash when it swings wide', size: 0.28, color: GOLD },
+    { kind: 'text', p: [318.4, 4.7, -1.5], rot: [0, -Math.PI / 2, 0], text: 'THE LEFT EDGE IS SAFE', size: 0.28, color: GOLD },
+    { kind: 'text', p: [391.2, 21.5, 1.0], rot: [0, -Math.PI / 2, 0], text: 'EITHER EDGE IS SAFE', size: 0.28, color: GOLD },
   ],
 };
