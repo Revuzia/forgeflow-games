@@ -67,9 +67,30 @@ DEV_ONLY_DIRS = {
     # and `_spec` is the internal module contract.
     "_harness", "_shots", "_spec", "_tools", "_wip", "_attic", "_turntable", "_manifest", "_work",
     ".playwright-mcp", ".grokui-inbox",
+    # Found shipping publicly 2026-09-14: last-circle was serving AAA_ROADMAP.md,
+    # AGENTS.md, AUDIT_16LENS.md and BENCHMARK_SCORECARD.md off the CDN, and two
+    # games were uploading their whole node_modules.
+    "node_modules", "_reports", "_design", "docs", "tests", ".vscode", ".github",
 }
 # Individual dev artefacts that can sit at a game's root.
-DEV_ONLY_NAMES = {".gitignore", ".DS_Store", "Thumbs.db"}
+DEV_ONLY_NAMES = {
+    ".gitignore", ".DS_Store", "Thumbs.db",
+    "package.json", "package-lock.json", "tsconfig.json", "requirements.txt",
+    "Makefile", ".npmrc", ".env", ".env.local", ".editorconfig",
+}
+
+# Internal prose and scripts. A game is HTML/JS/CSS/assets — none of this is
+# fetched at runtime (verified by grepping every game for a fetch/import/src of
+# a .md), so publishing it only exposes our notes. `.txt` is deliberately NOT
+# here: assets/props/CREDITS.txt and friends are asset ATTRIBUTION and shipping
+# them is a licence obligation.
+DEV_ONLY_DOC_SUFFIXES = {
+    ".md", ".py", ".sh", ".ps1", ".bat", ".sql", ".log",
+    ".yml", ".yaml", ".toml", ".ini", ".pyc",
+}
+# ...but a licence or attribution file keeps its right to ship whatever its
+# extension. Matched on the STEM, so LICENSE.md and NOTICE.md still go out.
+LEGAL_STEMS = {"license", "licence", "notice", "credits", "attribution", "copyright", "third_party", "third-party"}
 # Backup suffixes left by asset-migration passes (e.g. *.pre_draco.bak,
 # *.pre_mixamo.bak, *.openhands.bak) — never ship these to the CDN.
 DEV_ONLY_SUFFIXES = {".bak"}
@@ -78,6 +99,9 @@ DEV_ONLY_SUFFIXES = {".bak"}
 def _is_dev_only(relative):
     """True if this game-relative path is a dev artefact, not a shipped file."""
     if relative.suffix.lower() in DEV_ONLY_SUFFIXES:
+        return True
+    if (relative.suffix.lower() in DEV_ONLY_DOC_SUFFIXES
+            and relative.stem.lower() not in LEGAL_STEMS):
         return True
     parts = relative.parts
     if parts and parts[0] in DEV_ONLY_DIRS:
