@@ -407,6 +407,24 @@ def insert_game_metadata(slug: str, metadata: dict):
         "tags": metadata.get("tags", []),
     }
 
+    # CACHE-BUST STAMP — fixed 2026-09-15. The portal builds its iframe URL as
+    #     ?v=<build_version || updated_at || "1">-<per-mount nonce>
+    # (src/components/game/GamePlayer.tsx), and its own comment says
+    # build_version is the half that "captures intentional deploys". Nothing
+    # ever wrote it: build_version was NULL for every game, and updated_at was
+    # frozen at row creation because its DEFAULT now() fires on INSERT only and
+    # there is no update trigger — last-circle still read 2026-07-05 after a
+    # dozen deploys. That left the mount nonce carrying the entire cache-bust
+    # alone, so the moment anyone removed it every deploy would serve stale
+    # HTML. A deploy is by definition new bytes, so the stamp is per-deploy —
+    # unlike the thumbnail above, which hashes its own bytes because a cover
+    # image usually does NOT change between deploys.
+    # It also repairs updated_at as real data for "recently updated" ordering.
+    import datetime as _dt
+    _now = _dt.datetime.now(_dt.timezone.utc)
+    row["build_version"] = metadata.get("build_version") or _now.strftime("%Y%m%dT%H%M%SZ")
+    row["updated_at"] = metadata.get("updated_at") or _now.isoformat().replace("+00:00", "Z")
+
     # Publish control = the portal toggle, not the deploy. Preserve published
     # state across deploys so a bug-fix re-deploy never silently re-publishes a
     # game the owner toggled off:
@@ -503,7 +521,8 @@ def refresh_portal_prerender():
     return False
 
 
-def deploy_one(game_dir, slug, metadata_path=None, dry_run=False, force=False, refresh_portal=True):
+def deploy_one(game_dir, slug, metadata_path=None, dry_run=False, force=False, refresh_portal=True,
+               status=None):
     """Deploy a single game: optional cover-gen, R2 upload, Supabase upsert,
     then a portal prerender refresh (pass refresh_portal=False to skip, e.g.
     when batch-deploying — run deploy_portal.py once at the end instead).
@@ -542,6 +561,18 @@ def deploy_one(game_dir, slug, metadata_path=None, dry_run=False, force=False, r
         metadata = json.loads(Path(metadata_path).read_text(encoding="utf-8"))
     elif (game_dir / "game_meta.json").exists():
         metadata = json.loads((game_dir / "game_meta.json").read_text(encoding="utf-8"))
+
+    # PUBLISH STATE IS NOT THE FILE'S TO SET (fixed 2026-09-15). game_meta.json
+    # ships a "status" field, and insert_game_metadata treats any metadata
+    # status as a deliberate override — so a stale file silently reverted the
+    # portal toggle on EVERY deploy. last-circle was published by the owner and
+    # the next routine deploy pushed it straight back to "draft", which is the
+    # precise failure the comment in insert_game_metadata says it prevents.
+    # The file is ignored now; --status is the deliberate path.
+    if status:
+        metadata["status"] = status
+    else:
+        metadata.pop("status", None)
 
     total = sum(1 for _ in game_dir.rglob("*") if _.is_file())
     print(f"Deploying game: {slug}\n  Source: {game_dir}\n  Files: {total}")
@@ -618,6 +649,9 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--force", action="store_true", help="re-upload ALL files incl. static assets — rarely needed now: default incremental mode uploads new/changed assets via the local manifest")
     parser.add_argument("--seed-manifest", action="store_true", help="record the current local tree as already-uploaded (no uploads) — run once after a verified-synced state")
+    parser.add_argument("--status", choices=["draft", "unpublished", "published"],
+                        help="deliberately set publish status. Without it a deploy NEVER changes "
+                             "the status of an existing game — the portal toggle owns that.")
     parser.add_argument("--no-portal", action="store_true", help="skip the portal prerender refresh after publish (batch deploys: run pipeline/deploy_portal.py once at the end instead)")
     args = parser.parse_args()
     if getattr(args, "seed_manifest", False):
@@ -638,7 +672,8 @@ def main():
         raise SystemExit(0)
     ensure_cf_env()
     res = deploy_one(args.game_dir, args.slug, metadata_path=args.metadata, dry_run=args.dry_run,
-                     force=args.force, refresh_portal=not args.no_portal)
+                     force=args.force, refresh_portal=not args.no_portal,
+                     status=args.status)
     sys.exit(0 if res.get("ok") or res.get("dry") else 1)
 
 
