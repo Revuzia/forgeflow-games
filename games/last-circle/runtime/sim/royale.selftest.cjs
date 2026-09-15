@@ -139,6 +139,39 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
     ok(R.WEAPONS.pistol.headMult <= 1.75, "ladder: pistol head bonus ≤ 1.75 (laser first-shot accuracy pays the FN 2.0 back)");
   }
   ok(R.hitDamage("ar", 4, 10, false) === Math.round(30 * 1.32), "damage: legendary AR +32%");
+  // ── DAMAGE RANGE (owner 2026-09-15: "damage ... is within a RANGE of damage,
+  // which makes sense for that specific weapon") ────────────────────────────
+  {
+    // omitting the roll must stay EXACTLY nominal — every legacy caller and the
+    // assertions above depend on it
+    ok(R.hitDamage("ar", 0, 10, false) === R.hitDamage("ar", 0, 10, false, 0.5),
+       "dmg range: no roll == the midpoint roll (nominal is the centre)");
+    const lo = R.hitDamage("ar", 0, 10, false, 0);
+    const hi = R.hitDamage("ar", 0, 10, false, 1);
+    ok(lo < 30 && hi > 30 && lo === Math.round(30 * 0.92) && hi === Math.round(30 * 1.08),
+       "dmg range: AR swings +/-8% (" + lo + "-" + hi + ")");
+    // the spread must READ as the weapon: a sniper is a precision instrument,
+    // a shotgun is the loosest thing in the game
+    ok(R.DMG_SPREAD.sniper < R.DMG_SPREAD.ar, "dmg range: sniper tighter than AR");
+    ok(R.DMG_SPREAD.ar < R.DMG_SPREAD.smg, "dmg range: AR tighter than SMG");
+    ok(R.DMG_SPREAD.smg < R.DMG_SPREAD.shotgun, "dmg range: SMG tighter than shotgun");
+    // every weapon still ranges, and never collapses to zero on a graze
+    let allRange = true, everZero = false;
+    for (const id of R.WEAPON_IDS) {
+      const a = R.hitDamage(id, 0, 0, false, 0), b = R.hitDamage(id, 0, 0, false, 1);
+      if (!(b > a)) allRange = false;
+      for (let r = 0; r <= 1.0001; r += 0.1) {
+        if (R.hitDamage(id, 0, 9999, false, r) < 1) everZero = true;
+      }
+    }
+    ok(allRange, "dmg range: every weapon has a real min<max band");
+    ok(!everZero, "dmg range: a hit that connects never rounds down to 0 damage");
+    // rolls stay inside the band no matter what is passed in
+    const clampedLo = R.hitDamage("ar", 0, 10, false, -5);
+    const clampedHi = R.hitDamage("ar", 0, 10, false, 99);
+    ok(clampedLo === lo && clampedHi === hi, "dmg range: out-of-range rolls clamp to the band");
+  }
+
   const far = R.hitDamage("ar", 0, 120, false);
   ok(far === Math.round(30 * 0.4), "damage: AR at max falloff = 40% floor");
   const mid = R.hitDamage("ar", 0, 90, false);

@@ -466,7 +466,25 @@
   // ═══════════════════════════════════════════════════════════════════════════
 
   /** Effective damage for one hit. */
-  function hitDamage(weaponId, rarityTier, distM, isHead) {
+  // Damage is a RANGE, not a constant (owner direction 2026-09-15: "damage of
+  // attack weapons isnt always the same, rather it is within a RANGE of damage,
+  // which makes sense for that specific weapon"). This is the +/- fraction of
+  // nominal a single hit can swing, chosen per weapon so the spread reads as
+  // that weapon's character: a sniper is a precision instrument and barely
+  // varies, a cheap SMG sprays, a shotgun is the loosest thing in the game.
+  var DMG_SPREAD = {
+    sniper: 0.04,      // 101-109 at base 105
+    ar:     0.08,      // 28-32 at base 30
+    pistol: 0.10,      // 18-22 at base 20
+    glauncher: 0.10,   // variable explosive yield
+    smg:    0.12,      // 15-19 at base 17
+    shotgun: 0.15,     // per PELLET, on top of how many pellets land
+  };
+
+  /** `roll` is an optional [0,1) sample. Omit it for the NOMINAL value — every
+   *  pre-existing caller and the selftest's exact-value assertions rely on that
+   *  — pass one per shot to get the weapon's damage range. */
+  function hitDamage(weaponId, rarityTier, distM, isHead, roll) {
     var w = WEAPONS[weaponId];
     if (!w) return 0;
     var dmg = w.damage * (RARITY_DMG_MULT[rarityTier || 0] || 1);
@@ -475,7 +493,12 @@
       if (distM > f0) dmg *= lerp(1, 0.4, clamp((distM - f0) / Math.max(1, f1 - f0), 0, 1));
     }
     if (isHead) dmg *= w.headMult;
-    return Math.round(dmg);
+    if (roll != null) {
+      var sp = DMG_SPREAD[weaponId] != null ? DMG_SPREAD[weaponId] : 0.08;
+      dmg *= 1 + (clamp(roll, 0, 1) * 2 - 1) * sp;
+    }
+    // a hit that connects always registers — never round a graze down to zero
+    return Math.max(1, Math.round(dmg));
   }
 
   /** Shield-first application. Returns { shield, hp, dealt, broke, dead, toShield, toHp }. */
@@ -616,7 +639,7 @@
     mulberry32: mulberry32, clamp: clamp, dist2d: dist2d, lerp: lerp,
     RARITY: RARITY, RARITY_COLOR: RARITY_COLOR, RARITY_DMG_MULT: RARITY_DMG_MULT, RARITY_SPREAD_MULT: RARITY_SPREAD_MULT,
     WEAPONS: WEAPONS, WEAPON_IDS: WEAPON_IDS, WEAPON_NAMES: WEAPON_NAMES, weaponName: weaponName, gunScore: gunScore, AMMO: AMMO, CONSUMABLES: CONSUMABLES, START_LOADOUT: START_LOADOUT,
-    MOVE: MOVE, PLAYERK: PLAYERK, CROUCH: CROUCH, HEAL: HEAL, effectiveSpread: effectiveSpread,
+    MOVE: MOVE, PLAYERK: PLAYERK, CROUCH: CROUCH, HEAL: HEAL, DMG_SPREAD: DMG_SPREAD, effectiveSpread: effectiveSpread,
     actorHeight: actorHeight, actorEyeY: actorEyeY, moveBasis: moveBasis,
     segmentBox: segmentBox, rampTopAt: rampTopAt, segmentRamp: segmentRamp,
     segmentColliders: segmentColliders,

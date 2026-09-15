@@ -272,6 +272,7 @@ export function aimDir(a, out) {
  *  module-level, so without this rounds fired in one match kept flying in the
  *  next one — and their meshes stayed parented to a cleared group. */
 export function reset(W) {
+  W._dmgRng = null;               // fresh damage-roll stream per match
   for (const p of projectiles) {
     if (p.m && p.m.parent) p.m.parent.remove(p.m);
     p.dead = true;
@@ -578,6 +579,15 @@ function segPointDist(ax, ay, az, bx, by, bz, cx, cy, cz, out) {
   return Math.hypot(out.x - cx, out.y - cy, out.z - cz);
 }
 
+/** One [0,1) sample per damaging hit, for the weapon damage RANGE in
+ *  K.hitDamage. Seeded off the match so offline play and the harness reproduce
+ *  exactly; in multiplayer the SHOOTER computes the number and ships it in the
+ *  "hitYou" packet (net.js), so the two clients never have to agree on a roll. */
+function dmgRoll(W) {
+  if (!W._dmgRng) W._dmgRng = K.mulberry32((((W.seed >>> 0) ^ 0xda4a) >>> 0));
+  return W._dmgRng();
+}
+
 function spawnProjectile(W, o) {
   const p = POOL.pop() || {};
   Object.assign(p, o);
@@ -702,7 +712,7 @@ function testSegment(W, p, ax, ay, az, bx, by, bz) {
       // registration on the line above is deliberately left as forgiving as it
       // was; only the multiplier tightens, to a 0.4 m band in the top 14%.
       const isHead = py > feetY + (headY - feetY) * 0.86 && dh < 0.2;
-      const dmg = K.hitDamage(p.weaponId, p.rarity, distFromOrigin, isHead);
+      const dmg = K.hitDamage(p.weaponId, p.rarity, distFromOrigin, isHead, dmgRoll(W));
       if (t.netRemote && !t.isDummy) {
         // remote-owned actor: its client (or the host, for bots) applies damage.
         // The owner id has to ride along: without it net.js stamped every hit as
@@ -805,7 +815,7 @@ function explode(W, x, y, z, weaponId, rarity, ownerId, depth) {
     const d = Math.hypot(t.pos.x - x, (t.pos.y + 0.9) - y, t.pos.z - z);
     const k = K.splashScale(d, R + 0.8);
     if (k > 0) {
-      const dmg = Math.round(K.hitDamage(weaponId, rarity, 0, false) * k);
+      const dmg = Math.round(K.hitDamage(weaponId, rarity, 0, false, dmgRoll(W)) * k);
       if (t.netRemote && !t.isDummy) {
         // remote-owned actor: its own client is authoritative over its HP — route
         // splash through the same path as direct hits so it isn't double-counted.

@@ -466,6 +466,10 @@ function act(W, b, dt) {
   const _wasStuckPos = _v.copy(bb.lastPos);
   bb.lastPos.copy(a.pos);
 
+  // Being shot outranks whatever the brain had planned. This may flip b.state to
+  // ENGAGE, so it runs BEFORE the dispatch below and the fight starts this frame.
+  const answering = underFire(W, b, dt);
+
   switch (b.state) {
     case "ENGAGE": actEngage(W, b, dt); break;
     case "FLEE": actMove(W, b, dt, true); fireOnTheMove(W, b, dt); break;
@@ -484,7 +488,7 @@ function act(W, b, dt) {
 
   // suppression reflex: shot recently by someone unseen → sprint to lateral
   // cover instead of standing there soaking damage
-  if (W.t - a.lastDamageT < 0.9 && W.t >= (bb.coverReflexUntil || 0) && b.state !== "ENGAGE") {
+  if (!answering && W.t - a.lastDamageT < 0.9 && W.t >= (bb.coverReflexUntil || 0) && b.state !== "ENGAGE") {
     const att = a.lastAttacker && W.actorById.get(a.lastAttacker);
     if (att) {
       const ang = Math.atan2(a.pos.x - att.pos.x, a.pos.z - att.pos.z) + (Math.random() < 0.5 ? 1 : -1) * 1.2;
@@ -494,6 +498,47 @@ function act(W, b, dt) {
       bb.coverReflexUntil = W.t + 1.5;
     }
   }
+}
+
+/** UNDER FIRE (owner 2026-09-15: "make sure enemies can spot where attacks are
+ *  coming from and fight in that direction"). A hit is itself a sighting: the
+ *  bot freezes the bearing the shot came from, whips round to face it, and — if
+ *  it can actually answer — commits to the fight instead of trotting away while
+ *  being shot in the back. It does NOT live-track an unseen shooter: the bearing
+ *  is snapshotted at the moment of the hit, so moving after you fire still jukes
+ *  it, exactly like a player who only saw your muzzle flash. Turn speed scales
+ *  with tier, so a tier-1 is visibly slower to react than a tier-5.
+ *  Returns true when the bot is answering; false means it cannot, and the
+ *  break-for-cover reflex in act() takes over. */
+function underFire(W, b, dt) {
+  const a = b.actor, bb = b.bb;
+  if (W.t - a.lastDamageT > 1.6) return false;
+  const att = a.lastAttacker && W.actorById.get(a.lastAttacker);
+  if (!att || !att.alive || att === a) return false;
+  // freeze the bearing on the first frame of this burst
+  if (bb.threatFor !== a.lastAttacker || (W.t - (bb.threatT || -99)) > 2.5) {
+    bb.threatFor = a.lastAttacker;
+    bb.threatT = W.t;
+    bb.threatAt = { x: att.pos.x, z: att.pos.z };
+  }
+  const tp = bb.threatAt;
+  steerYaw(a, Math.atan2(-(tp.x - a.pos.x), -(tp.z - a.pos.z)), dt, 4 + (a.tier || 3) * 1.6);
+  // can this actually be answered — gun, ammo, reach, and a clear line?
+  const slot = a.inventory.slots[a.inventory.active];
+  const def = K.WEAPONS[a.weapon && a.weapon.id];
+  if (!def || !slot || slotAmmo(a, slot) <= 0) return false;
+  const dist = Math.hypot(att.pos.x - a.pos.x, att.pos.z - a.pos.z);
+  if (dist > (def.falloff ? def.falloff[1] * 1.2 : 40)) return false;
+  const eye = eyePos(a);
+  if (W.map.losBlocked(eye.x, eye.y, eye.z, att.pos.x, att.pos.y + 1.2, att.pos.z)) return false;
+  // answer it. Clearing avoidId matters: fight-fatigue may have just blacklisted
+  // this very actor, which would otherwise make the bot ignore the man shooting it.
+  if (bb.avoidId === att.id) { bb.avoidId = null; bb.avoidUntil = 0; }
+  if (bb.target !== att.id) { bb.target = att.id; bb.acquireT = W.t; bb.fightT = 0; }
+  bb.targetSeenT = W.t;
+  bb.targetPos = { x: att.pos.x, y: att.pos.y, z: att.pos.z };
+  if (b.state !== "ENGAGE") { b.state = "ENGAGE"; b.nextThink = 0; }
+  return true;
 }
 
 function steerYaw(a, want, dt, speed) {
