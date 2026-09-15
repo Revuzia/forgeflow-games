@@ -69,6 +69,10 @@ export function init(W) {
 // the old actor objects and keep thinking/acting into them forever otherwise
 export function resetBrains() { brains.length = 0; }
 
+/** Test hook: the live brain list, for _harness/botcheck.py. Read-only by
+ *  convention — the harness measures, it never steers. */
+export function debugBrains() { return brains; }
+
 export function attachBrain(W, actor) {
   // tier/personality assignment from the seeded mix
   const rng = K.mulberry32((W.seed ^ 0xb0b) + W.actors.length * 31);
@@ -212,8 +216,18 @@ function think(W, b) {
   s.HEAL = (a.hp < 45 || (a.shield < 30 && a.hp < 80)) && healOk && !bb.target ? 75 : (a.hp < 60 && healOk && W.t - a.lastDamageT > 6 ? 45 : 0);
   s.LOOT = !upgraded ? 64 : (W.t < 120 ? 35 : 20) + (a.personality === "loot_goblin" ? 25 : 0);
   if (!hasFirepower) {
-    s.LOOT = Math.max(s.LOOT, 78);                              // ammo hunt beats everything but a pressing storm
-    if (bb.target) s.FLEE = Math.max(s.FLEE || 0, 84);          // and break contact while dry
+    /* A dry bot's JOB is to get ammo. The previous pass set LOOT 78 here and
+       then FLEE 84 on the very next line, so FLEE won every time a target
+       existed — and in a 50-player lobby one almost always does. Measured
+       (_harness/botdiag.py): dry bots spent 1066 and 1414 samples in FLEE
+       against 81 and 24 in LOOT, and 9 of 16 dry episodes ended in DEATH
+       rather than resupply, one after 73.6 s of running around empty.
+
+       Fleeing is how a dry bot survives the next few seconds, not a plan for
+       the match. So it only outranks the ammo hunt while the threat is close
+       enough to kill it right now; past that the bot goes and gets a gun. */
+    s.LOOT = Math.max(s.LOOT, 88);
+    if (bb.target && tDist < 18) s.FLEE = Math.max(s.FLEE || 0, 92);
   }
   // BATTLE-ROYALE PRIORITY MODEL (owner: "run from storms but FIGHT once
   // safe"): rotation urgency = how far past safety you are vs time left.
@@ -289,7 +303,12 @@ function onEnter(W, b, state) {
   const a = b.actor, bb = b.bb;
   const rng = Math.random;
   if (state === "LOOT") {
-    const near = W.nearbyLoot(a.pos, 90);
+    let near = W.nearbyLoot(a.pos, 90);
+    if (bb.badLoot) {                       // skip what this bot has failed to reach
+      const bad = bb.badLoot;
+      for (const k in bad) if (bad[k] <= W.t) delete bad[k];
+      near = near.filter((n) => !(bad[n.id] > W.t));
+    }
     const pick = pickLoot(W, a, near);
     bb.lootId = pick ? pick.id : null;
     bb.lootType = pick ? pick.type : null;
@@ -593,6 +612,33 @@ function requestPath(W, b, tx, tz) {
 
 function moveToward(W, b, tx, tz, dt, sprint) {
   const a = b.actor, inp = a.input, bb = b.bb;
+  /* PROGRESS stuck, as opposed to FROZEN stuck.
+     The speed test at the top of act() only accumulates bb.stuckT when the bot
+     moves less than 0.02 m in a frame — i.e. pinned solid. A bot grinding along
+     a wall, or circling a building it cannot enter, moves at full speed and
+     never trips it, so none of the recovery below ever ran. Measured
+     (_harness/stuckdiag.py): 3.6% / 3.3% of goal-seeking samples had the goal
+     distance refuse to fall for 4 s, one bot parked 3.0 m from a loot pickup.
+     So watch the GOAL, not the legs: if the distance has not improved by half a
+     metre in 3 s, declare hard-stuck and let the pathfinder take over. */
+  if (!bb.progGoal || Math.hypot(tx - bb.progGoal.x, tz - bb.progGoal.z) > 4) {
+    bb.progGoal = { x: tx, z: tz }; bb.progBest = null; bb.progT = 0;
+  }
+  const goalD = Math.hypot(tx - a.pos.x, tz - a.pos.z);
+  if (bb.progBest == null || goalD < bb.progBest - 0.5) { bb.progBest = goalD; bb.progT = 0; }
+  else bb.progT = (bb.progT || 0) + dt;
+  if (bb.progT > 3.0 && goalD > 2.0) {
+    bb.stuckT = Math.max(bb.stuckT || 0, 2.3);   // trip the hard-stuck branch
+    bb.progT = 0; bb.progBest = null;
+    /* And stop choosing the thing it cannot reach. onEnter('LOOT') re-picked
+       the SAME item every time, so the bot escaped the wall and walked straight
+       back into it. Park this id for 30 s and let it pick something else. */
+    if (bb.lootId) {
+      if (!bb.badLoot) bb.badLoot = {};
+      bb.badLoot[bb.lootId] = W.t + 30;
+      bb.lootId = null; bb.moveTo = null; b.nextThink = 0;
+    }
+  }
   // PATH FOLLOW: an active A* waypoint chain overrides the direct line.
   // Drop the plan when the caller's goal has moved well away from the one the
   // path was computed for (a re-planned rotation, a moving target).
@@ -667,7 +713,19 @@ function fireOnTheMove(W, b, dt) {
   if (!t || !t.alive || W.t - bb.targetSeenT > 0.4) return;
   if (W.t - bb.acquireT < b.tierK.reactionMs / 1000) return;
   const def = K.WEAPONS[a.weapon ? a.weapon.id : "pistol"] || K.WEAPONS.pistol;
-  if (a.weapon && (a.weapon.state === "reloading" || a.weapon.magAmmo === 0)) { inp.reload = true; return; }
+  if (a.weapon && (a.weapon.state === "reloading" || a.weapon.magAmmo === 0)) {
+    /* An empty mag is only a reload if there is something to reload FROM.
+       weapons.js:381 refuses the reload when the matching reserve is 0, so a
+       bot whose gun and reserve were both empty sat here setting inp.reload
+       every frame and pulling a dead trigger — aiming perfectly, never firing.
+       ensureGunOut swaps to a loaded slot, but think() only runs it on the
+       brain cadence, which is far too slow inside a firefight. */
+    const slot = a.inventory.slots[a.inventory.active];
+    const dryNow = slot && slot.kind === "weapon" && slotAmmo(a, slot) <= 0;
+    if (dryNow) { ensureGunOut(W, a); b.nextThink = 0; return; }
+    inp.reload = true;
+    return;
+  }
   const dist = Math.hypot(t.pos.x - a.pos.x, t.pos.z - a.pos.z);
   if (dist > (def.falloff ? def.falloff[1] * 1.15 : 30)) return;
   // capture the state's move intent as a WORLD direction before touching yaw

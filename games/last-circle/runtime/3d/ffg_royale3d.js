@@ -603,6 +603,8 @@ register3d("royale", async function (kernel, content) {
   const controller = {
     W,
     startMatch,
+    // test hook: bot brains (state, target, moveTo) for _harness/botcheck.py
+    brains: () => (botsMod.debugBrains ? botsMod.debugBrains() : []),
     state: () => ({
       phase: W.phase, t: W.t, alive: W.match ? W.match.aliveCount() : 0,
       player: W.player ? { hp: W.player.hp, shield: W.player.shield, pos: { x: W.player.pos.x, y: W.player.pos.y, z: W.player.pos.z }, weapon: W.player.weapon && W.player.weapon.id } : null,
