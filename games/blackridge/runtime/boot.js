@@ -150,6 +150,12 @@ try {
   }
   const spawnsMod = await importIfPresent("./core/match/spawns.js", "../core/match/spawns.js");
 
+  // [multi-arena amendment] the persisted MAP choice. Imported WITHOUT the ?v=
+  // suffix on purpose: core/hud/menu.js's own `import "./mode_select.js"` has
+  // no suffix either, so this resolves to the SAME module instance the MAP row
+  // writes through (the value itself lives in localStorage, like difficulty).
+  const { loadMap } = await import("../core/hud/mode_select.js");
+
   // -------------------------------------------------------------------------
   // Phase 3 — building world.
   // -------------------------------------------------------------------------
@@ -356,14 +362,44 @@ try {
   // harness callers, six of them aim-wave probes, keep the exact semantics
   // they were written against).
   let defaultModeId = "tdm";
+
+  // [multi-arena amendment] content.json now carries BOTH an arena REGISTRY
+  // (content.arenas[<id>] = {arena, spawnPoints, clusters, flags}, written by
+  // tools/probe_arena.mjs --emit) and the FLAT keys content.arena/.clusters/
+  // .spawnPoints/.flags. The flat keys are the "currently selected arena", and
+  // they stay the ONLY thing core/match/{contract,match}.js and modes/ctf.js
+  // read — those three consumers are deliberately untouched. Selecting an
+  // arena therefore means copying its registry block onto the flat keys
+  // BEFORE createSim, so the contract gate validates the arena the player
+  // picked against the geometry setWorldMap is about to build.
+  const FLAT_KEYS = ["arena", "spawnPoints", "clusters", "flags"];
+  function snapshotFlat() {
+    const o = {};
+    for (const k of FLAT_KEYS) o[k] = content[k];
+    return o;
+  }
+  function restoreFlat(snap) {
+    for (const k of FLAT_KEYS) if (snap[k] !== undefined) content[k] = snap[k];
+  }
+  function selectArena(id) {
+    const blk = content.arenas && content.arenas[id];
+    if (!blk) return false; // registry-less content (or a map not probed yet):
+    for (const k of FLAT_KEYS) if (blk[k] !== undefined) content[k] = blk[k];
+    return true;          // leave the flat keys alone and let setWorldMap rule
+  }
+
   async function startMatch(opts = {}) {
     const modeId = opts.mode || defaultModeId;
     const prevMap = getActiveMap();
-    const arenaId = (content.arena && content.arena.id) || "lanternwalk";
+    const arenaId = opts.map || (content.arena && content.arena.id) || "lanternwalk";
+    const prevFlat = snapshotFlat();
     try {
-      // The match plays on the arena the content declares — swap the live
-      // world (layout/colliders/nav/level/props) BEFORE creating the sim so
-      // match.start's contract gate validates against matching geometry.
+      // Point the flat "currently selected arena" view at this match's arena,
+      // then swap the live world (layout/colliders/nav/level/props) BEFORE
+      // creating the sim so match.start's contract gate validates against
+      // matching geometry. An id with no registry block and no registered
+      // layout throws out of setWorldMap into the catch below.
+      selectArena(arenaId);
       await setWorldMap(arenaId);
       const newSim = createSim({
         content, colliders, nav, weapons: WEAPONS,
@@ -392,6 +428,9 @@ try {
       // a missing mode lane (W5/W8/W9 not landed) or a contract-gate failure
       // is a reported error, never a page crash (arch 1.6 rule 5)
       console.error("[boot] startMatch failed:", e && e.message);
+      // roll back BOTH halves: the built world AND the flat arena view, or the
+      // next start would validate the failed arena's data against prevMap.
+      restoreFlat(prevFlat);
       try { await setWorldMap(prevMap); } catch (_) { /* keep the page alive */ }
       return false;
     }
@@ -508,7 +547,16 @@ try {
 
   // Test surface + global — assigned at the END of phase 6 (§6).
   ctx.startMission = startMission;
-  ctx.startMatch = startMatch; // W6's mode-select menu calls this
+  // [multi-arena amendment] W6's mode-select owns the MAP row and persists the
+  // choice under "blackridge.map.v1"; its CALLERS (core/hud/menu.js startMatch,
+  // core/hud/scoreboard.js rematch) still pass only {mode, difficulty}. Rather
+  // than edit those two files, the arena rides the SAME localStorage channel
+  // the difficulty row already uses to reach the campaign briefing (mode_select
+  // H2): ctx.startMatch fills opts.map from loadMap(content.arenas) whenever
+  // the caller omits it, and an explicit opts.map always wins. __test and any
+  // future caller that passes `map` are unaffected.
+  ctx.startMatch = (opts = {}) =>
+    startMatch("map" in opts ? opts : Object.assign({}, opts, { map: loadMap(content.arenas) }));
   ctx.stepFrames = stepFrames;
   ctx.pauseCtl = pauseCtl;
   const scenarios = createScenarios(ctx);

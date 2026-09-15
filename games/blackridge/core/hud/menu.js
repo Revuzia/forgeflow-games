@@ -275,7 +275,7 @@ Full per-asset provenance: CREDITS.md</pre></div>`;
     }
     matchStarting = true;
     renderNav("modeselect");
-    Promise.resolve(ctx.startMatch({ mode, difficulty: modeSelect.difficulty }))
+    Promise.resolve(ctx.startMatch({ mode, difficulty: modeSelect.difficulty, map: modeSelect.map }))
       .then((ok) => {
         matchStarting = false;
         if (!ok && menu._screen === "modeselect") {

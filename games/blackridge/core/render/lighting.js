@@ -1231,10 +1231,12 @@ export function createLights(ctx) {
     syncReflectableSlots("bind");
 
     // W11: the lighting profile follows the bound MAP (boot re-binds on every
-    // world swap). Lanternwalk is the only PVP arena; every other map keeps
-    // the campaign baseline bit-for-bit.
+    // world swap). AMENDED (multi-arena): the test is inverted — meridian_ward
+    // is THE campaign map and keeps the campaign baseline bit-for-bit; every
+    // other registered map is a PVP arena and gets the PVP profile. The old
+    // `=== "lanternwalk"` form silently gave each NEW arena campaign lighting.
     const mapId = ctx.layout && ctx.layout.mapId;
-    applyProfile(mapId === "lanternwalk" ? "pvp" : "campaign");
+    applyProfile(mapId === "meridian_ward" ? "campaign" : "pvp");
 
     const ratio = api.keyAmbientRatio();
     console.log(`[lights] pool 1 dir + 1 hemi + ${SPOT_COUNT} spot + ${POINT_COUNT} point; ` +

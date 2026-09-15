@@ -1,17 +1,29 @@
-// tools/probe_arena.mjs [W4] — LANTERNWALK arena acceptance gates G-A…G-K
+// tools/probe_arena.mjs [W4] — PVP arena acceptance gates G-A…G-K
 // (PVP_BUILD_PLAN Part 4.1 row W4; arena.md Part 6). THREE-free, Node.
 //
 // Promotion of _design/pvp/arena_probe.mjs: measures the BUILT arena
-// (core/level/maps/lanternwalk.js via buildCollidersFor) instead of an inline
+// (core/level/maps/<mapId>.js via buildCollidersFor) instead of an inline
 // edit list, gates every measurement, and exits non-zero on any FAIL.
 //
-//   node tools/probe_arena.mjs           → run gates, exit 0/1
-//   node tools/probe_arena.mjs --emit    → gates green ⇒ write the MEASURED
-//     spawnPoints / clusters / flags / arena blocks into content.json
+//   node tools/probe_arena.mjs                      → lanternwalk, gates, 0/1
+//   node tools/probe_arena.mjs --map=switchyard     → any registered arena
+//   node tools/probe_arena.mjs --map=<id> --emit    → gates green ⇒ write the
+//     MEASURED spawnPoints / clusters / flags / arena blocks into
+//     content.json, under content.arenas[<id>] AND (when <id> is the arena
+//     the flat keys currently hold, or the only arena in the registry) the
+//     flat content.arena/clusters/spawnPoints/flags the match layer reads
 //     (Part 4.2: spawn data is PROBE-EMITTED, never hand-copied — C7b
 //     happened once already). Emit is refused while any gate fails.
 //
-// Also validates the lane graph (core/level/lanes/lanternwalk.js) against the
+// [multi-arena amendment] The probe used to hardcode LANTERNWALK three ways:
+// buildCollidersFor("lanternwalk"), a static lane-graph import, and three
+// top-level data constants (CLUSTER_META, the ~50 spawn seeds, FLAG_WEST/
+// FLAG_EAST). All three are now map-driven: the geometry and lane graph come
+// from <mapId>, and the data constants come from the ARENA_SPEC export the
+// map module owns (core/level/maps/lanternwalk.js, bottom of file). Every
+// gate's logic and thresholds are unchanged — only their INPUTS moved.
+//
+// Also validates the lane graph (core/level/lanes/<mapId>.js) against the
 // five Part 3.9 contract properties — the graph is W4 data, so its gate lives
 // with W4's probe.
 
@@ -20,15 +32,80 @@ import path from "node:path";
 import url from "node:url";
 import { spawnSync } from "node:child_process";
 import { buildCollidersFor } from "../core/level/colliders.js";
-import LANES from "../core/level/lanes/lanternwalk.js";
 
 const HERE = path.dirname(url.fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
-const EMIT = process.argv.includes("--emit");
+const ARGV = process.argv.slice(2);
+const EMIT = ARGV.includes("--emit");
+// --map=<id> (default lanternwalk, so every existing invocation is unchanged)
+const MAP_ID = (ARGV.find((a) => a.startsWith("--map=")) || "--map=lanternwalk").slice(6);
+if (!MAP_ID) { console.error("usage: node tools/probe_arena.mjs [--map=<id>] [--emit]"); process.exit(2); }
 
-const C = buildCollidersFor("lanternwalk", 1);
+// Map module + lane graph are dynamic: which arena runs is an argument now.
+// A missing module is a HARD stop with the reason named — the probe measures
+// a real build or it measures nothing (arch 1.6 rule: fail loudly, not empty).
+let MAPMOD, LANES;
+try {
+  MAPMOD = await import(`../core/level/maps/${MAP_ID}.js`);
+} catch (e) {
+  console.error(`probe_arena: cannot load core/level/maps/${MAP_ID}.js — ${(e && e.message) || e}`);
+  process.exit(2);
+}
+try {
+  LANES = (await import(`../core/level/lanes/${MAP_ID}.js`)).default;
+} catch (e) {
+  console.error(`probe_arena: cannot load core/level/lanes/${MAP_ID}.js — ${(e && e.message) || e}`);
+  process.exit(2);
+}
+const SPEC = MAPMOD.ARENA_SPEC;
+if (!SPEC || !SPEC.clusterMeta || !SPEC.spawnSeeds || !SPEC.flagWest || !SPEC.flagEast) {
+  console.error(`probe_arena: core/level/maps/${MAP_ID}.js exports no usable ARENA_SPEC ` +
+    `{id, clusterMeta, spawnSeeds, flagWest, flagEast, vetoOverrides} — see lanternwalk.js for the shape`);
+  process.exit(2);
+}
+
+const C = buildCollidersFor(MAP_ID, 1);
 const boxes = C.boxes;
 const AB = { x0: C.bounds.min[0], x1: C.bounds.max[0], z0: C.bounds.min[2], z1: C.bounds.max[2] };
+
+// ===========================================================================
+// MAP-SPECIFIC INPUTS — everything below this block is generic measurement.
+// The four required fields come straight off ARENA_SPEC; the optional `gates`
+// / `flagMeta` fields carry the handful of constants that used to be written
+// into the gate bodies as LANTERNWALK literals. Each has a generic fallback so
+// a new arena's spec can omit it, but an arena whose gate numbers were tuned
+// against a specific value should state it (lanternwalk does).
+// ===========================================================================
+const ALL = ["tdm", "ctf", "ffa"];
+const CLUSTER_META = SPEC.clusterMeta;
+const SP = SPEC.spawnSeeds;              // [id, x, z, clusterId, modes|null]
+const FLAG_WEST = SPEC.flagWest, FLAG_EAST = SPEC.flagEast;
+const VETO = SPEC.vetoOverrides || { v1M: 12.0, v2LosM: 25.0, v3ConeM: 20.0 };
+const G = SPEC.gates || {};
+// bounds centre — the fallback "somewhere in the middle" for maps that do not
+// pin their own. Never used by lanternwalk (its spec pins both).
+const CENTRE = [(AB.x0 + AB.x1) / 2, (AB.z0 + AB.z1) / 2];
+// flood-fill origin: the traversal ORDER of the walkable component seeds
+// G-C/G-D's `sample()` and G-E's PRNG walk, so it is pinned per map, not
+// derived — moving it re-orders `reach` and moves every downstream number.
+const NAV_SEED = G.navSeed || G.mid || CENTRE;
+// "middle of the arena": G-I P3's path origin and the inward-yaw target for
+// side:"mid" clusters (which have inward:null).
+const MID = G.mid || CENTRE;
+// surface the 0.5 m GROUND grid cannot see (arena.md §4.1 — lanternwalk's
+// arcade balcony ring ≈250 m²). Added to G-B's per-actor surface.
+const BALCONY_M2 = G.balconyAreaM2 != null ? G.balconyAreaM2 : 0;
+// CTF halves, derived from each cluster's own `side` — no map-specific list.
+const WSIDE = Object.keys(CLUSTER_META).filter((k) => CLUSTER_META[k].side === "west");
+const ESIDE = Object.keys(CLUSTER_META).filter((k) => CLUSTER_META[k].side === "east");
+// TDM home clusters (G-J parity). Fallback = each side's whole cluster set.
+const TDM_HOME_W = G.tdmHomeWest || WSIDE;
+const TDM_HOME_E = G.tdmHomeEast || ESIDE;
+// flag identity half; the home position always comes from flagWest/flagEast.
+const FLAG_META = SPEC.flagMeta || [
+  { id: "flag_amber", team: 0, node: (CLUSTER_META[WSIDE[0]] || {}).node || null, standR: 1.2, standH: 2.5 },
+  { id: "flag_slate", team: 1, node: (CLUSTER_META[ESIDE[0]] || {}).node || null, standR: 1.2, standH: 2.5 },
+];
 
 // ------------------------------------------------------------ gate ledger
 let anyFail = false;
@@ -78,7 +155,8 @@ for (let x = AB.x0 + CELL / 2; x < AB.x1; x += CELL)
     if (walkable(x, z)) pts.push([x, z]);
 const key = (x, z) => `${Math.round((x - AB.x0) / CELL)},${Math.round((z - AB.z0) / CELL)}`;
 const set = new Map(); for (const p of pts) set.set(key(p[0], p[1]), p);
-const seedPt = pts.reduce((a, p) => (Math.hypot(p[0] + 5, p[1]) < Math.hypot(a[0] + 5, a[1]) ? p : a), pts[0]);
+const seedPt = pts.reduce((a, p) =>
+  (Math.hypot(p[0] - NAV_SEED[0], p[1] - NAV_SEED[1]) < Math.hypot(a[0] - NAV_SEED[0], a[1] - NAV_SEED[1]) ? p : a), pts[0]);
 const seen = new Set([key(seedPt[0], seedPt[1])]); const q = [seedPt];
 while (q.length) {
   const [x, z] = q.pop();
@@ -176,78 +254,11 @@ function pathLen(distField, to) {
 }
 
 // ===========================================================================
-// SPAWN SET — candidates from arena.md §2.2 as amended by C7b (five points
-// inside their own flag room lose CTF; +3 CTF-only Lantern approaches and
-// +2 market-pocket points keep every cluster ≥6 per mode inside the 50 cap).
-// The probe REPAIRS (≤4 m nudge), re-takes yaw inside the cluster's ±60°
-// inward cone, and EMITS — hand transcription is how C7b happened.
+// SPAWN SET — the seeds live on the map module's ARENA_SPEC (see the
+// MAP-SPECIFIC INPUTS block above). The probe REPAIRS each seed (≤4 m
+// nudge), re-takes yaw inside the cluster's ±60° inward cone, and EMITS —
+// hand transcription is how C7b happened.
 // ===========================================================================
-const FLAG_WEST = [-33.5, 0, 12.0], FLAG_EAST = [6.5, 0, -30.0];
-const ALL = ["tdm", "ctf", "ffa"];
-const CLUSTER_META = {
-  SC_WEST:    { inward: 0, node: "alley_mid", side: "west" },       // +X
-  SC_ARCADE:  { inward: 0, node: "arcade_lightwell", side: "west" },
-  SC_LANTERN: { inward: 0.7854, node: "lantern_yard", side: "west" }, // NE-ish (+X,−Z) → yaw −π/4? see yawFor
-  SC_NORTH:   { inward: Math.PI, node: "cs1_mid", side: "east" },   // +Z (south)
-  SC_MARKET:  { inward: Math.PI, node: "street_mouth", side: "east" },
-  SC_GALLERY: { inward: Math.PI / 2, node: "gallery_mid", side: "east" }, // −X
-  SC_PLAZA:   { inward: null, node: "plaza_center", side: "mid", modes: ["ffa"] },
-};
-// forward = (−sin yaw, −cos yaw). inward yaw values:
-//   +X → −π/2 ·· −X → +π/2 ·· +Z(south) → π ·· −Z(north) → 0
-CLUSTER_META.SC_WEST.inward = -Math.PI / 2;
-CLUSTER_META.SC_ARCADE.inward = -Math.PI / 2;
-CLUSTER_META.SC_LANTERN.inward = -Math.PI / 4;   // (+X,−Z) blend
-CLUSTER_META.SC_GALLERY.inward = Math.PI / 2;
-
-const SP = [
-  // id, x, z, cluster, modes (null = all three)
-  ["sp_w1", -44.5, -28.0, "SC_WEST", null], ["sp_w2", -46.5, -24.0, "SC_WEST", null],
-  ["sp_w3", -43.5, -19.0, "SC_WEST", null], ["sp_w6", -43.0, -6.0, "SC_WEST", null],
-  ["sp_w7", -43.5, -3.0, "SC_WEST", null], ["sp_w8", -45.5, 6.0, "SC_WEST", null],
-
-  ["sp_a1", -36.0, -16.0, "SC_ARCADE", null], ["sp_a2", -27.5, -16.5, "SC_ARCADE", null],
-  ["sp_a3", -28.0, -8.0, "SC_ARCADE", null], ["sp_a4", -37.5, -2.0, "SC_ARCADE", null],
-  ["sp_a5", -33.5, 2.5, "SC_ARCADE", null], ["sp_a7", -32.0, -8.5, "SC_ARCADE", null],
-
-  // C7b: sp_l1/l2/l3 sit inside (or stare into) their own flag room — CTF off
-  ["sp_l1", -32.0, 12.5, "SC_LANTERN", ["tdm", "ffa"]],
-  ["sp_l2", -39.5, 11.5, "SC_LANTERN", ["tdm", "ffa"]],
-  ["sp_l3", -33.0, 9.5, "SC_LANTERN", ["tdm", "ffa"]],
-  // sp_l4 sits in the D1 mouth with direct LOS to its own stand (V9) — CTF off
-  ["sp_l4", -26.0, 13.0, "SC_LANTERN", ["tdm", "ffa"]],
-  ["sp_l5", -17.5, 7.0, "SC_LANTERN", null],
-  ["sp_l6", -23.0, 2.0, "SC_LANTERN", null], ["sp_l7", -12.0, 11.5, "SC_LANTERN", null],
-  // C7b: +3 CTF-only on the Lantern Yard's plaza approaches (plaza SW/W —
-  // the dense western edge is wall/prop-crowded below the 1.5 m clearance bar)
-  ["sp_lc1", -16.0, 0.5, "SC_LANTERN", ["ctf"]],
-  ["sp_lc2", -14.0, 6.0, "SC_LANTERN", ["ctf"]],
-  ["sp_lc3", -19.5, -3.0, "SC_LANTERN", ["ctf"]],
-
-  ["sp_n1", -38.0, -26.5, "SC_NORTH", null], ["sp_n2", -31.5, -22.5, "SC_NORTH", null],
-  ["sp_n3", -27.0, -26.0, "SC_NORTH", null], ["sp_n4", -22.5, -22.0, "SC_NORTH", null],
-  ["sp_n5", -17.0, -25.5, "SC_NORTH", null], ["sp_n6", -14.5, -21.0, "SC_NORTH", null],
-  ["sp_n7", -23.5, -19.0, "SC_NORTH", null],
-
-  ["sp_m1", -12.0, -25.5, "SC_MARKET", null], ["sp_m2", -4.0, -28.5, "SC_MARKET", null],
-  ["sp_m3", -9.5, -21.0, "SC_MARKET", null], ["sp_m4", -0.5, -21.5, "SC_MARKET", null],
-  ["sp_m6", 11.0, -22.5, "SC_MARKET", null],
-  // C7b: ExH room points — CTF off
-  ["sp_m7", 6.5, -32.0, "SC_MARKET", ["tdm", "ffa"]],
-  ["sp_m8", 4.0, -27.5, "SC_MARKET", ["tdm", "ffa"]],
-  // C7b: +2 CTF-only in the market-street pocket
-  ["sp_mc1", -2.0, -24.5, "SC_MARKET", ["ctf"]],
-  ["sp_mc2", 6.0, -21.5, "SC_MARKET", ["ctf"]],
-
-  ["sp_g1", 20.0, -29.0, "SC_GALLERY", null], ["sp_g3", 21.0, -13.0, "SC_GALLERY", null],
-  ["sp_g4", 19.5, -6.0, "SC_GALLERY", null], ["sp_g5", 20.5, 4.5, "SC_GALLERY", null],
-  ["sp_g6", 19.5, 10.5, "SC_GALLERY", null], ["sp_g7", 10.5, -17.5, "SC_GALLERY", null],
-
-  ["sp_p1", -17.0, -14.0, "SC_PLAZA", ["ffa"]], ["sp_p2", -8.0, -3.0, "SC_PLAZA", ["ffa"]],
-  ["sp_p3", 0.0, -17.5, "SC_PLAZA", ["ffa"]], ["sp_p4", 12.5, -3.0, "SC_PLAZA", ["ffa"]],
-  ["sp_p5", -2.0, 9.0, "SC_PLAZA", ["ffa"]], ["sp_p6", -12.0, 0.0, "SC_PLAZA", ["ffa"]],
-];
-
 function clearance(x, z) {
   let best = 99;
   for (let a = 0; a < 32; a++) {
@@ -261,8 +272,9 @@ function clearance(x, z) {
 function inwardYawFor(cluster, x, z) {
   const meta = CLUSTER_META[cluster];
   if (meta.inward != null) return meta.inward;
-  // SC_PLAZA: inward = toward the plaza centre from the point
-  const dx = -5 - x, dz = -2 - z;
+  // side:"mid" cluster (lanternwalk SC_PLAZA): inward = toward the arena
+  // middle from the point (gates.mid; bounds centre when a spec omits it)
+  const dx = MID[0] - x, dz = MID[1] - z;
   return Math.atan2(-dx, -dz);
 }
 function normAng(a) { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; }
@@ -306,11 +318,11 @@ for (const [id, x0, z0, cluster, modes] of SP) {
   const clash = points.find((p) => Math.hypot(p.x - got.x, p.z - got.z) < 3.0);
   if (clash) { unplaced.push(`${id} (spacing vs ${clash.id}@${clash.x},${clash.z} got ${got.x},${got.z})`); continue; }
   const cov = Math.round((1 - profile([[got.x, got.z]], 1.0, 16).all.filter((d) => d > 4).length / 16) * 10) / 10;
-  points.push({ id, cluster, modes: modes || ALL.slice(), x: got.x, z: got.z, yaw: Math.round(got.yaw * 100) / 100, clear: got.clear, view: got.view, cover: Math.min(0.9, Math.max(0.1, cov)) });
+  points.push({ id, cluster, modes: modes || ALL.slice(), x: got.x, z: got.z, yaw: Math.round(got.yaw * 100) / 100, clear: got.clear, view: got.view, longest: got.longest, cover: Math.min(0.9, Math.max(0.1, cov)) });   // `longest` carried so G-D's spawn clause MEASURES (it was dropped here, making that clause structurally vacuous)
 }
 
 // ===========================================================================
-console.log("=== LANTERNWALK ARENA GATES (G-A…G-K) ===");
+console.log(`=== ${MAP_ID.toUpperCase()} ARENA GATES (G-A…G-K) ===`);
 console.log(`bounds X[${AB.x0},${AB.x1}] Z[${AB.z0},${AB.z1}]  boxes ${boxes.length}  walkable cells ${pts.length} (reach ${reach.length})`);
 
 // ---- G-A walkable area + connectivity
@@ -318,8 +330,8 @@ gate("G-A", groundArea >= 2400 && groundArea <= 2800 && strayArea <= 60,
   `walkable ground ${groundArea.toFixed(0)} m² (target 2400–2800), disconnected stray ${strayArea.toFixed(0)} m² (≤60)`);
 
 // ---- G-B per-actor surface
-const perActor = (groundArea + 250) / 10; // + measured balcony ring ≈250 m²
-gate("G-B", perActor >= 250 && perActor <= 320, `per-actor surface ${perActor.toFixed(0)} m² (target 250–320, incl. ~250 m² balcony)`);
+const perActor = (groundArea + BALCONY_M2) / 10; // + measured off-grid surface (gates.balconyAreaM2)
+gate("G-B", perActor >= 250 && perActor <= 320, `per-actor surface ${perActor.toFixed(0)} m² (target 250–320, incl. ~${BALCONY_M2} m² balcony)`);
 
 // ---- sightline profile (G-C, G-D)
 const S = sample(reach, 900);
@@ -459,14 +471,14 @@ gate("G-D", ge55 < 0.05 && ge40 <= 1.5 && spawnLong.length === 0,
 
 // ---- G-I CTF parity
 {
-  const dPlaza = bfs(snap([-5, -2]));
+  const dPlaza = bfs(snap(MID));
   const p3w = pathLen(dPlaza, [FLAG_WEST[0], FLAG_WEST[2]]);
   const p3e = pathLen(dPlaza, [FLAG_EAST[0], FLAG_EAST[2]]);
   const p3d = (Math.abs(p3w - p3e) / ((p3w + p3e) / 2)) * 100;
   // P4 semantics: attacker spawn → enemy flag, as the MEAN path length over
-  // each side's whole CTF spawn distribution (three clusters per side) — the
-  // expected respawn-to-attack distance, not a centroid proxy.
-  const WSIDE = ["SC_LANTERN", "SC_ARCADE", "SC_WEST"], ESIDE = ["SC_MARKET", "SC_GALLERY", "SC_NORTH"];
+  // each side's whole CTF spawn distribution (WSIDE/ESIDE — every cluster
+  // whose clusterMeta.side names that half) — the expected respawn-to-attack
+  // distance, not a centroid proxy.
   const dFromE = bfs(snap([FLAG_EAST[0], FLAG_EAST[2]]));
   const dFromW = bfs(snap([FLAG_WEST[0], FLAG_WEST[2]]));
   const wPts = points.filter((p) => WSIDE.includes(p.cluster) && p.modes.includes("ctf"));
@@ -487,8 +499,8 @@ gate("G-D", ge55 < 0.05 && ge40 <= 1.5 && spawnLong.length === 0,
 // ---- G-J TDM parity (home centroid → walkable centroid ±8%)
 {
   // TDM parity measures the TDM spawn distribution — tdm-eligible points only
-  const homeW = points.filter((p) => (p.cluster === "SC_LANTERN" || p.cluster === "SC_ARCADE") && p.modes.includes("tdm"));
-  const homeE = points.filter((p) => (p.cluster === "SC_MARKET" || p.cluster === "SC_GALLERY") && p.modes.includes("tdm"));
+  const homeW = points.filter((p) => TDM_HOME_W.includes(p.cluster) && p.modes.includes("tdm"));
+  const homeE = points.filter((p) => TDM_HOME_E.includes(p.cluster) && p.modes.includes("tdm"));
   const cw = [mean(homeW.map((p) => p.x)), mean(homeW.map((p) => p.z))];
   const ce = [mean(homeE.map((p) => p.x)), mean(homeE.map((p) => p.z))];
   const centroid = snap([mean(reach.map((p) => p[0])), mean(reach.map((p) => p[1]))]);
@@ -523,6 +535,8 @@ gate("G-D", ge55 < 0.05 && ge40 <= 1.5 && spawnLong.length === 0,
     }
     if (ln.a === ln.b && ln.throughGoing !== false) fails.push(`${ln.id}: self-loop must be throughGoing:false`);
   }
+  // Named-lane rule, generic by construction: a map with no L_BALCONY has
+  // nothing to find, so this is a no-op there rather than a false FAIL.
   if (LANES.lanes.find((l) => l.id === "L_BALCONY" && l.throughGoing !== false)) fails.push("L_BALCONY must be throughGoing:false (V8)");
   // cycle: |edges| ≥ |nodes| on the connected component ⇒ at least one cycle
   const nEdges = LANES.lanes.filter((l) => l.a !== l.b).length;
@@ -533,10 +547,10 @@ gate("G-D", ge55 < 0.05 && ge40 <= 1.5 && spawnLong.length === 0,
   gate("G-LANES", fails.length === 0, fails.length ? fails.join(" | ") : `${Object.keys(J).length} junctions, ${LANES.lanes.length} lanes, cycle ok, waypoints on nav`);
 }
 
-// ---- G-K prop placement gate (probe_props against the lanternwalk map)
+// ---- G-K prop placement gate (probe_props against the ACTIVE map)
 {
   const r = spawnSync(process.execPath, [path.join(ROOT, "tools", "probe_props.mjs")], {
-    cwd: ROOT, env: Object.assign({}, process.env, { BLACKRIDGE_MAP: "lanternwalk" }),
+    cwd: ROOT, env: Object.assign({}, process.env, { BLACKRIDGE_MAP: MAP_ID }),
     encoding: "utf8", timeout: 120000,
   });
   const out = (r.stdout || "") + (r.stderr || "");
@@ -571,22 +585,52 @@ if (EMIT) {
     if (meta.modes) clusters[cid].modes = meta.modes.slice();
   }
 
-  content.arena = {
-    id: "lanternwalk",
+  const arena = {
+    id: MAP_ID,
     bounds: { min: C.bounds.min.slice(), max: C.bounds.max.slice() },
-    vetoOverrides: { v1M: 12.0, v2LosM: 25.0, v3ConeM: 20.0 },
+    vetoOverrides: { v1M: VETO.v1M, v2LosM: VETO.v2LosM, v3ConeM: VETO.v3ConeM },
     _comment: "PROBE-EMITTED by tools/probe_arena.mjs --emit (measured geometry; PVP_BUILD_PLAN Part 4.2). Do not hand-edit spawnPoints/clusters/flags.",
   };
-  content.clusters = clusters;
-  content.spawnPoints = points.map((p) => ({
+  const spawnPoints = points.map((p) => ({
     id: p.id, pos: [p.x, 0, p.z], yaw: p.yaw, cluster: p.cluster,
     cover: p.cover, modes: p.modes, zoneHint: CLUSTER_META[p.cluster].node,
   }));
-  content.flags = [
-    { id: "flag_amber", team: 0, home: FLAG_WEST.slice(), node: "lantern_yard", standR: 1.2, standH: 2.5 },
-    { id: "flag_slate", team: 1, home: FLAG_EAST.slice(), node: "exchange_house", standR: 1.2, standH: 2.5 },
-  ];
+  const flags = [FLAG_WEST, FLAG_EAST].map((home, i) => {
+    const m = FLAG_META[i] || {};
+    return {
+      id: m.id, team: m.team != null ? m.team : i, home: home.slice(),
+      node: m.node, standR: m.standR != null ? m.standR : 1.2,
+      standH: m.standH != null ? m.standH : 2.5,
+    };
+  });
+
+  // [multi-arena amendment] content.json carries BOTH shapes:
+  //   content.arenas[<id>]  the REGISTRY — one measured block per arena, and
+  //                         the only thing this emit is allowed to overwrite
+  //                         for <id>. Another map's block is never touched.
+  //   content.arena / .clusters / .spawnPoints / .flags
+  //                         the FLAT "currently selected arena" view. It stays
+  //                         the live surface core/match/{contract,match}.js and
+  //                         modes/ctf.js read (unchanged consumers — C19/R9);
+  //                         boot.js's startMatch re-points it at the chosen
+  //                         arena before createSim.
+  // The flat view is refreshed only when it already holds THIS map (or the
+  // registry has nothing else) — emitting switchyard must not silently move a
+  // lanternwalk session onto switchyard geometry.
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const arenas = content.arenas || (content.arenas = {});
+  arenas[MAP_ID] = { arena, spawnPoints, clusters, flags };
+  const flatId = content.arena && content.arena.id;
+  const only = Object.keys(arenas).length === 1;
+  const refreshFlat = !flatId || flatId === MAP_ID || only;
+  if (refreshFlat) {
+    content.arena = clone(arena);
+    content.clusters = clone(clusters);
+    content.spawnPoints = clone(spawnPoints);
+    content.flags = clone(flags);
+  }
 
   fs.writeFileSync(file, JSON.stringify(content, null, 2) + "\n");
-  console.log(`emitted spawnPoints[${points.length}] / clusters[${Object.keys(clusters).length}] / flags[2] / arena → content.json`);
+  console.log(`emitted spawnPoints[${points.length}] / clusters[${Object.keys(clusters).length}] / flags[${flags.length}] / arena ` +
+    `→ content.arenas.${MAP_ID}${refreshFlat ? " + the flat keys" : ` (flat keys left on '${flatId}')`} in content.json`);
 }

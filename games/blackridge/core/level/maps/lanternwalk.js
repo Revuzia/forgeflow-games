@@ -433,3 +433,122 @@ export function buildLayout(seed = 1) {
     mapId: "lanternwalk",
   };
 }
+
+// ===========================================================================
+// ARENA_SPEC [multi-arena amendment] — the PROBE's map-specific input set.
+//
+// tools/probe_arena.mjs used to carry LANTERNWALK's CLUSTER_META / spawn
+// seeds / flag homes as its own top-level constants, which made the probe a
+// single-arena tool. It is now `probe_arena.mjs --map=<id>` and reads those
+// constants from the map module that owns them. The values below are MOVED
+// verbatim out of the probe — including the four post-assignment inward-yaw
+// overrides (SC_WEST/SC_ARCADE −π/2, SC_LANTERN −π/4, SC_GALLERY +π/2), which
+// are folded into the literal here so there is exactly one place to read.
+//
+// forward = (−sin yaw, −cos yaw). inward yaw values:
+//   +X → −π/2 ·· −X → +π/2 ·· +Z(south) → π ·· −Z(north) → 0
+//
+// NOTHING here is consumed at runtime: buildLayout() above is the geometry,
+// this block is probe INPUT and the probe's --emit turns it into the
+// content.json arena block. Never hand-copy the emitted numbers back here.
+// ===========================================================================
+export const ARENA_SPEC = {
+  id: "lanternwalk",
+
+  // 7 clusters (arena.md §2.2). node = the NODES key a spawn in this cluster
+  // hints at; side = CTF half ("mid" = neither, FFA-only by construction).
+  clusterMeta: {
+    SC_WEST:    { inward: -Math.PI / 2, node: "alley_mid", side: "west" },        // +X
+    SC_ARCADE:  { inward: -Math.PI / 2, node: "arcade_lightwell", side: "west" }, // +X
+    SC_LANTERN: { inward: -Math.PI / 4, node: "lantern_yard", side: "west" },     // (+X,−Z) blend
+    SC_NORTH:   { inward: Math.PI, node: "cs1_mid", side: "east" },               // +Z (south)
+    SC_MARKET:  { inward: Math.PI, node: "street_mouth", side: "east" },          // +Z (south)
+    SC_GALLERY: { inward: Math.PI / 2, node: "gallery_mid", side: "east" },       // −X
+    SC_PLAZA:   { inward: null, node: "plaza_center", side: "mid", modes: ["ffa"] },
+  },
+
+  // SPAWN SEEDS — candidates from arena.md §2.2 as amended by C7b (five points
+  // inside their own flag room lose CTF; +3 CTF-only Lantern approaches and
+  // +2 market-pocket points keep every cluster ≥6 per mode inside the 50 cap).
+  // The probe REPAIRS (≤4 m nudge), re-takes yaw inside the cluster's ±60°
+  // inward cone, and EMITS — hand transcription is how C7b happened.
+  //   [id, x, z, clusterId, modes | null (null = all three)]
+  spawnSeeds: [
+    ["sp_w1", -44.5, -28.0, "SC_WEST", null], ["sp_w2", -46.5, -24.0, "SC_WEST", null],
+    ["sp_w3", -43.5, -19.0, "SC_WEST", null], ["sp_w6", -43.0, -6.0, "SC_WEST", null],
+    ["sp_w7", -43.5, -3.0, "SC_WEST", null], ["sp_w8", -45.5, 6.0, "SC_WEST", null],
+
+    ["sp_a1", -36.0, -16.0, "SC_ARCADE", null], ["sp_a2", -27.5, -16.5, "SC_ARCADE", null],
+    ["sp_a3", -28.0, -8.0, "SC_ARCADE", null], ["sp_a4", -37.5, -2.0, "SC_ARCADE", null],
+    ["sp_a5", -33.5, 2.5, "SC_ARCADE", null], ["sp_a7", -32.0, -8.5, "SC_ARCADE", null],
+
+    // C7b: sp_l1/l2/l3 sit inside (or stare into) their own flag room — CTF off
+    ["sp_l1", -32.0, 12.5, "SC_LANTERN", ["tdm", "ffa"]],
+    ["sp_l2", -39.5, 11.5, "SC_LANTERN", ["tdm", "ffa"]],
+    ["sp_l3", -33.0, 9.5, "SC_LANTERN", ["tdm", "ffa"]],
+    // sp_l4 sits in the D1 mouth with direct LOS to its own stand (V9) — CTF off
+    ["sp_l4", -26.0, 13.0, "SC_LANTERN", ["tdm", "ffa"]],
+    ["sp_l5", -17.5, 7.0, "SC_LANTERN", null],
+    ["sp_l6", -23.0, 2.0, "SC_LANTERN", null], ["sp_l7", -12.0, 11.5, "SC_LANTERN", null],
+    // C7b: +3 CTF-only on the Lantern Yard's plaza approaches (plaza SW/W —
+    // the dense western edge is wall/prop-crowded below the 1.5 m clearance bar)
+    ["sp_lc1", -16.0, 0.5, "SC_LANTERN", ["ctf"]],
+    ["sp_lc2", -14.0, 6.0, "SC_LANTERN", ["ctf"]],
+    ["sp_lc3", -19.5, -3.0, "SC_LANTERN", ["ctf"]],
+
+    ["sp_n1", -38.0, -26.5, "SC_NORTH", null], ["sp_n2", -31.5, -22.5, "SC_NORTH", null],
+    ["sp_n3", -27.0, -26.0, "SC_NORTH", null], ["sp_n4", -22.5, -22.0, "SC_NORTH", null],
+    ["sp_n5", -17.0, -25.5, "SC_NORTH", null], ["sp_n6", -14.5, -21.0, "SC_NORTH", null],
+    ["sp_n7", -23.5, -19.0, "SC_NORTH", null],
+
+    ["sp_m1", -12.0, -25.5, "SC_MARKET", null], ["sp_m2", -4.0, -28.5, "SC_MARKET", null],
+    ["sp_m3", -9.5, -21.0, "SC_MARKET", null], ["sp_m4", -0.5, -21.5, "SC_MARKET", null],
+    ["sp_m6", 11.0, -22.5, "SC_MARKET", null],
+    // C7b: ExH room points — CTF off
+    ["sp_m7", 6.5, -32.0, "SC_MARKET", ["tdm", "ffa"]],
+    ["sp_m8", 4.0, -27.5, "SC_MARKET", ["tdm", "ffa"]],
+    // C7b: +2 CTF-only in the market-street pocket
+    ["sp_mc1", -2.0, -24.5, "SC_MARKET", ["ctf"]],
+    ["sp_mc2", 6.0, -21.5, "SC_MARKET", ["ctf"]],
+
+    ["sp_g1", 20.0, -29.0, "SC_GALLERY", null], ["sp_g3", 21.0, -13.0, "SC_GALLERY", null],
+    ["sp_g4", 19.5, -6.0, "SC_GALLERY", null], ["sp_g5", 20.5, 4.5, "SC_GALLERY", null],
+    ["sp_g6", 19.5, 10.5, "SC_GALLERY", null], ["sp_g7", 10.5, -17.5, "SC_GALLERY", null],
+
+    ["sp_p1", -17.0, -14.0, "SC_PLAZA", ["ffa"]], ["sp_p2", -8.0, -3.0, "SC_PLAZA", ["ffa"]],
+    ["sp_p3", 0.0, -17.5, "SC_PLAZA", ["ffa"]], ["sp_p4", 12.5, -3.0, "SC_PLAZA", ["ffa"]],
+    ["sp_p5", -2.0, 9.0, "SC_PLAZA", ["ffa"]], ["sp_p6", -12.0, 0.0, "SC_PLAZA", ["ffa"]],
+  ],
+
+  // CTF stand homes. flagWest is team 0's, flagEast is team 1's (arena.md §3.2).
+  flagWest: [-33.5, 0, 12.0],
+  flagEast: [6.5, 0, -30.0],
+
+  // Spawn-director veto overrides (arena.md §2.4) — emitted into content.arena.
+  vetoOverrides: { v1M: 12.0, v2LosM: 25.0, v3ConeM: 20.0 },
+
+  // OPTIONAL probe extensions. Each has a generic fallback in probe_arena.mjs;
+  // LANTERNWALK states them explicitly because its gate numbers were measured
+  // against these exact values and must not drift when the probe generalises.
+  //   flagMeta  — the emitted flag records' identity half (the home position
+  //               comes from flagWest/flagEast above).
+  //   gates.navSeed        — flood-fill origin for the walkable component; the
+  //                          traversal ORDER seeds G-C/G-D sampling and G-E's
+  //                          PRNG draws, so it is pinned, not derived.
+  //   gates.mid            — "middle of the arena": G-I P3's path origin and
+  //                          the inward-yaw target for side:"mid" clusters.
+  //   gates.balconyAreaM2  — surface the 0.5 m GROUND grid cannot see (arena.md
+  //                          §4.1: the arcade balcony ring), added to G-B.
+  //   gates.tdmHomeWest/East — the TDM home clusters G-J measures parity on.
+  flagMeta: [
+    { id: "flag_amber", team: 0, node: "lantern_yard", standR: 1.2, standH: 2.5 },
+    { id: "flag_slate", team: 1, node: "exchange_house", standR: 1.2, standH: 2.5 },
+  ],
+  gates: {
+    navSeed: [-5, 0],
+    mid: [-5, -2],
+    balconyAreaM2: 250,
+    tdmHomeWest: ["SC_LANTERN", "SC_ARCADE"],
+    tdmHomeEast: ["SC_MARKET", "SC_GALLERY"],
+  },
+};

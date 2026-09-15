@@ -43,9 +43,21 @@ const NODE_KEY_SETS = {
     "corridor_mid", "cut_mouth", "gallery_north", "gallery_mid",
     "gallery_south", "lantern_yard", "exchange_house",
   ],
+  switchyard: [
+    "yard_west", "yard_east", "yard_north", "yard_south", "yard_ne", "yard_sw",
+    "shed_west", "shed_east", "shed_centre", "shed_north", "shed_south",
+    "apron_west", "apron_east", "platform_west", "platform_east",
+    "hall_west", "hall_east", "lane_west", "lane_east",
+  ],
+  saltmarket: [
+    "hall_center", "hall_north", "hall_south", "hall_west", "hall_east",
+    "gallery_north", "gallery_south", "band_north", "band_south",
+    "rows_west_n", "rows_west_s", "rows_east_n", "rows_east_s",
+    "dock_west", "dock_east", "salt_store", "weigh_house",
+  ],
 };
-const SEED_NODE = { meridian_ward: "dock_spawn", lanternwalk: "plaza_center" };
-const EXPECT_BOT_SPAWNS = { meridian_ward: 44, lanternwalk: 0 };
+const SEED_NODE = { meridian_ward: "dock_spawn", lanternwalk: "plaza_center", switchyard: "shed_centre", saltmarket: "hall_center" };
+const EXPECT_BOT_SPAWNS = { meridian_ward: 44, lanternwalk: 0, switchyard: 0, saltmarket: 0 };
 
 let failures = 0;
 const fail = (msg) => { failures++; console.error(`FAIL  ${msg}`); };
@@ -356,9 +368,14 @@ function checkStandpoint(label, pos) {
 // 9. groundY sanity
 {
   if (C.groundY(0, 0) !== 0) fail("groundY: base is not 0");
-  if (C.groundY(0, 55) !== -1.5) fail("groundY: canal height wrong");
+  // The canal is WARD terrain. Its z is map data, not a constant: an arena that pushes
+  // the canal out of play (saltmarket, zMin 400) still declares one, so sampling a
+  // hardcoded z=55 asserted the WRONG place and failed a correct map. Probe the canal
+  // where the layout actually puts it.
+  const canal = L.terrain && L.terrain.canal;
+  if (canal && C.groundY(0, canal.zMin + 1) !== canal.y) fail("groundY: canal height wrong");
   if (typeof C.spawns.playerYaw !== "number") fail("spawns: playerYaw missing");
-  info(`groundY/spawns: base 0, canal −1.5, playerYaw ${C.spawns.playerYaw.toFixed(3)}`);
+  info(`groundY/spawns: base 0, canal ${canal ? canal.y : "n/a"}, playerYaw ${C.spawns.playerYaw.toFixed(3)}`);
 }
 
 // 10. ray-vs-silhouette gate (owner report 2026-08: campaign truck collided

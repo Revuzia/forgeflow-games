@@ -113,6 +113,24 @@ function buildGraph(mod) {
 }
 
 const GRAPHS = { lanternwalk: buildGraph(LANTERNWALK), _stub: buildGraph(STUB) };
+
+// [multi-arena amendment] SWITCHYARD / SALTMARKET lane graphs are authored in
+// CONCURRENT lanes. Same defensive registration as core/level/layout.js, and
+// for the same reason: laneGraphFor() is called from the commander pass (hot,
+// synchronous), so the registry is populated ONCE at module init via top-level
+// await and never lazily. A graph whose file is absent stays unregistered and
+// laneGraphFor falls back to _stub (Part 4.2) — the arena is then playable with
+// a degraded commander instead of not playable at all, and the warn names it.
+for (const id of ["switchyard", "saltmarket"]) {
+  try {
+    const mod = await import(`../level/lanes/${id}.js`);
+    if (mod && mod.junctions && mod.lanes) GRAPHS[id] = buildGraph(mod);
+    else console.warn(`[objective] lane graph '${id}' loaded but has no {junctions, lanes} — _stub will be used`);
+  } catch (e) {
+    console.warn(`[objective] lane graph '${id}' not registered — _stub will be used (${(e && e.message) || e})`);
+  }
+}
+
 export function laneGraphFor(arenaId) {
   return GRAPHS[arenaId] || GRAPHS._stub; // Part 4.2 — _stub fallback
 }

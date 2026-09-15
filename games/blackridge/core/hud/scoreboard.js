@@ -113,6 +113,7 @@ export function createScoreboard(ctx) {
     end: false,           // end board shown
     lastMode: "tdm",
     lastDifficulty: "standard",
+    lastMap: null,        // arena of the live match; a rematch replays it (null → boot falls back to the persisted pick)
     endTimer: null,       // 3 s banner → board
     autoAt: 0,            // auto-advance deadline (wall clock)
     autoIv: null,
@@ -254,7 +255,7 @@ export function createScoreboard(ctx) {
     if (shell.matchHud) shell.matchHud.hide();
     st.live = false;
     Promise.resolve(ctx.startMatch
-      ? ctx.startMatch({ mode: st.lastMode, difficulty: st.lastDifficulty })
+      ? ctx.startMatch({ mode: st.lastMode, difficulty: st.lastDifficulty, map: st.lastMap })
       : false)
       .then((ok) => {
         st.starting = false;
@@ -281,6 +282,7 @@ export function createScoreboard(ctx) {
     st.live = true;
     st.lastMode = (d && d.mode) || st.lastMode;
     st.lastDifficulty = (d && d.difficulty) || st.lastDifficulty;
+    st.lastMap = (d && d.map) || st.lastMap;
   }
 
   function onMissionEnd(d) {

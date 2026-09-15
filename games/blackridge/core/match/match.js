@@ -376,7 +376,16 @@ export function makeMatch(content, emit, opts = {}) {
     if (actor.kind === "human") {
       const p = sim.state.player;
       p.pos = pick.pos.slice();
-      p.pos[1] = sim.world.sphereGround(p.pos[0], p.pos[2]);
+      // Snap to the support surface nearest the AUTHORED spawn height, NOT the
+      // topmost box: sphereGround returns the highest top at (x,z), so any spawn
+      // point under a roof slab put the player ON THE ROOF (switchyard's east car
+      // hall, feet at y 5.35 over an authored y 0 — the whole arena read as an
+      // empty plain from up there). This is the same defect mission.js v2.2 fixed
+      // for campaign checkpoints under the arcade roof; the match path never got
+      // it. supportAt clamps to tops within STEP_UP of the authored y, else terrain.
+      p.pos[1] = typeof sim.world.supportAt === "function"
+        ? sim.world.supportAt(p.pos[0], p.pos[2], pick.pos[1] || 0, 0.4)
+        : sim.world.sphereGround(p.pos[0], p.pos[2]);
       p.yaw = pick.yaw; p.pitch = 0;
       p.vel = [0, 0, 0];
       p.hp = sim.tuning ? sim.tuning.maxHp : 100;
@@ -598,6 +607,7 @@ export function makeMatch(content, emit, opts = {}) {
 
       emit("match:start", {
         matchId: ms.matchId, mode: modeId, difficulty: opts.difficulty || "standard",
+        map: (content.arena && content.arena.id) || null,   // which arena this match is on (rematch replays it)
         teams: ms.roster.teams.map((t) => ({ id: t.id, name: t.name, tint: t.tint })),
         seed: ms.seed, epoch: sim.epoch || 0,
       });

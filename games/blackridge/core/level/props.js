@@ -1036,7 +1036,17 @@ export function buildProps(layout, ctx) {
           const sub = proto.geo.clone();
           // keep only this material's group range
           const g0 = proto.geo.groups[gi];
-          const idx = proto.geo.index.array.slice(g0.start, g0.start + g0.count);
+          // NON-INDEXED protos are legal (the jersey-barrier extrusion is one): for those a
+          // group's start/count address the position attribute directly, so a sequential
+          // index over the range is the exact equivalent. Reading `.index.array` blindly
+          // threw on any multi-material, non-indexed prop that took the STATIC-MERGE path —
+          // i.e. fewer than 3 of them in a map (`instanced = list.length >= 3`). Lanternwalk
+          // ships 3 barriers and switchyard 4, so both instanced and this never fired;
+          // saltmarket ships 2 and crashed the whole props build.
+          const srcIdx = proto.geo.index;
+          const idx = srcIdx
+            ? srcIdx.array.slice(g0.start, g0.start + g0.count)
+            : Array.from({ length: g0.count }, (_, n) => g0.start + n);
           sub.setIndex(Array.from(idx));
           sub.clearGroups();
           sub.applyMatrix4(mtx);
