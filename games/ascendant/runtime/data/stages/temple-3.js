@@ -301,10 +301,25 @@ export default {
     { kind: 'vanish', p: [86.8, 3.0, 1.6], s: [3.2, 1, 3.0], mat: 'panel', cycle: { on: 1.8, off: 1.2, warn: 0.35, phase: 0.44 } }, // gap 3.24, +1.1 — the high tile
     { kind: 'vanish', p: [93.0, 1.4, -0.6], s: [3.4, 1, 3.4], mat: 'panel', cycle: { on: 1.8, off: 1.2, warn: 0.35, phase: 0.66 } }, // gap 2.90, -1.6 off the back
 
+    /* CENSER SWINGS — RE-TUNED. Two faults compounded here.
+       (1) Every blade was authored w/d SWAPPED against the rest of the game
+           (w 0.44, d 3.0 where every other axe is w 2.8, d 0.26). pendulum.js
+           takes the kill radius from d, so a "3.0 deep censer" became a 3.45 m
+           lethal sphere over a 1 m beam.
+       (2) The amplitudes were then tuned against that broken shape, and landed
+           in the worst possible band: wide enough to sweep the WHOLE deck, low
+           enough to stay at body height for the entire arc. Four of the six
+           passed BELOW the walking surface at the bottom. Measured: of 60
+           timed sprint attempts across the first beam, 58 died and the only 2
+           survivors started past the middle — i.e. unreachable.
+       Blades corrected to the house shape, and amplitudes raised so the censer
+       RISES CLEAR of a standing 1.8 m player at its extremes. That is the
+       classic beat: it scythes down through the middle, and you cross while it
+       is up. Bigger swing, more drama, and an actual window. */
     { kind: 'beam', p: [100.2, 2.4, 0], s: [6.8, 0.6, 1.0], mat: 'metal' }, // gap 2.10, +0.8, top 2.70
     // A censer over the beam, swinging ACROSS it rather than along it — the first
     // pendulum in the game whose arc crosses your line instead of running down it.
-    { kind: 'pendulum', p: [100.2, 7.0, 0], len: 3.4, amp: 0.75, period: 2.4, phase: 0.00, axis: [0, 0, 1], blade: { w: 0.44, h: 1.4, d: 3.0 } },
+    { kind: 'pendulum', p: [100.2, 7.0, 0], len: 3.4, amp: 1.13, period: 2.4, phase: 0.00, axis: [0, 0, 1], blade: { w: 3.0, h: 1.4, d: 0.44 } },
     { kind: 'platform', p: [109.4, 2.4, 0], s: [6.4, 1, 7.2], mat: 'stone', glow: STONE, stripe: true }, // gap 2.60 — CP2
 
     { kind: 'deco', kindOf: 'monolith', p: [84.0, -12.0, 12.0], s: [5.0, 22.0, 5.0], mat: 'stone', tint: STONE },
@@ -366,7 +381,7 @@ export default {
        at the shuttle's home pose. It skips the rack and the sweep entirely and pays
        for it with a 2.2 s censer swinging ACROSS the beam, which is 1.2 m wide. */
     { kind: 'beam', p: [121.0, 1.5, 7.6], s: [5.0, 0.6, 1.2], mat: 'metal' }, // 3.50 m out, -1.6
-    { kind: 'pendulum', p: [121.0, 5.4, 7.6], len: 2.8, amp: 1.15, period: 2.2, phase: 0.30, axis: [0, 0, 1], blade: { w: 0.5, h: 1.2, d: 2.4 } }, // sweeps ACROSS the catwalk
+    { kind: 'pendulum', p: [121.0, 5.4, 7.6], len: 2.8, amp: 1.28, period: 2.2, phase: 0.30, axis: [0, 0, 1], blade: { w: 2.4, h: 1.2, d: 0.5 } }, // sweeps ACROSS the catwalk
     { kind: 'platform', p: [127.2, 2.6, 7.6], s: [3.0, 1, 3.0], mat: 'panel', glow: HOT, stripe: true }, // gap 2.20, +1.3 — COIN 2
 
     { kind: 'text', p: [113.6, 5.0, 0], rot: [0, -Math.PI / 2, 0], text: 'THE LANTERN BRIDGE', size: 0.5, color: GOLD },
@@ -447,7 +462,7 @@ export default {
     /* the landing ledge is the smallest surface in it.                              */
     /* ---------------------------------------------------------------------------- */
 
-    { kind: 'pendulum', p: [167.0, 9.40, 0], len: 4.6, amp: 1.00, period: 3.2, phase: 0.00, axis: [1, 0, 0], blade: { w: 0.40, h: 1.6, d: 3.4 } },
+    { kind: 'pendulum', p: [167.0, 9.40, 0], len: 4.6, amp: 1.00, period: 3.2, phase: 0.00, axis: [1, 0, 0], blade: { w: 3.4, h: 1.6, d: 0.40 } },
     { kind: 'platform', p: [170.8, 2.9, -1.8], s: [4.4, 1, 3.4], mat: 'panel', glow: GOLD, stripe: true }, // gap 4.30, -1.3, top 3.40
     { kind: 'platform', p: [180.4, 3.4, 0], s: [8.4, 1, 8.6], mat: 'stone', glow: STONE, stripe: true }, // gap 3.20, +0.5 — CP4
 
@@ -546,7 +561,7 @@ export default {
       motion: { type: 'circle', radius: 3.2, axis: 'y', period: 4.6, phase: 0 },
     }, // ORBIT CENTRE — boardable at x 223.8 / 230.2 and z 1.2 / 7.6, top 4.90
 
-    { kind: 'pendulum', p: [227.0, 10.20, 4.4], len: 3.8, amp: 0.60, period: 3.6, phase: 0.30, axis: [1, 0, 0], blade: { w: 0.34, h: 1.3, d: 2.8 } },
+    { kind: 'pendulum', p: [227.0, 10.20, 4.4], len: 3.8, amp: 0.60, period: 3.6, phase: 0.30, axis: [1, 0, 0], blade: { w: 2.8, h: 1.3, d: 0.34 } },
     { kind: 'deco', kindOf: 'ring', p: [227.0, 4.5, 4.4], s: [7.0, 0.14, 7.0], mat: 'emissive', tint: GOLD },
     { kind: 'deco', kindOf: 'cable', p: [227.0, 8.6, 4.4], s: [0.06, 5.6, 0.06], mat: 'metal', tint: DUSK },
     { kind: 'deco', kindOf: 'pillar', p: [227.0, -1.0, 4.4], s: [1.2, 10.0, 1.2], mat: 'stone', tint: STONE },
@@ -658,7 +673,7 @@ export default {
 
     { kind: 'platform', p: [287.0, -1.1, -5.4], s: [3.2, 1, 3.4], mat: 'metal', glow: EMBER, stripe: true }, // COIN 4 gallery, 4.10 m out and -2.5 ★
     { kind: 'platform', p: [290.6, 0.1, -9.0], s: [3.0, 1, 3.0], mat: 'metal', glow: EMBER, stripe: true }, // 0.64 m corner step, +1.2 — COIN 4
-    { kind: 'pendulum', p: [290.6, 4.60, -9.0], len: 2.6, amp: 1.20, period: 2.0, phase: 0.15, axis: [0, 0, 1], blade: { w: 0.46, h: 1.1, d: 2.2 } }, // the fastest blade on the stage, over the greedy line
+    { kind: 'pendulum', p: [290.6, 4.60, -9.0], len: 2.6, amp: 1.11, period: 2.0, phase: 0.15, axis: [0, 0, 1], blade: { w: 2.2, h: 1.1, d: 0.46 } }, // the fastest blade on the stage, over the greedy line
 
     { kind: 'deco', kindOf: 'ring', p: [290.6, 2.2, -9.0], s: [0.12, 2.2, 2.2], rot: [0, Math.PI / 2, 0], mat: 'emissive', tint: HOT },
     { kind: 'deco', kindOf: 'grate', p: [288.4, -1.4, 2.6], s: [6.0, 0.3, 6.0], mat: 'grate', tint: DUSK },
@@ -713,7 +728,7 @@ export default {
 
     { kind: 'platform', p: [311.6, 1.0, 2.4], s: [5.0, 1, 4.8], mat: 'stone', glow: STONE, stripe: true }, // gap 1.50 off the belt, +1.2 — CP9
     { kind: 'crusher', p: [317.4, 1.0, 2.4], s: [3.4, 1, 4.2], axis: [0, 1, 0], travel: 3.0, period: 3.4, phase: 0.00, dwell: 0.8, mat: 'metal' }, // gap 1.60, cap 1.50 parked
-    { kind: 'pendulum', p: [321.2, 6.60, 1.4], len: 2.9, amp: 0.90, period: 2.8, phase: 0.50, axis: [1, 0, 0], blade: { w: 0.42, h: 1.5, d: 3.2 } },
+    { kind: 'pendulum', p: [321.2, 6.60, 1.4], len: 2.9, amp: 1.25, period: 2.8, phase: 0.50, axis: [1, 0, 0], blade: { w: 3.2, h: 1.5, d: 0.42 } },
     { kind: 'platform', p: [322.0, 2.4, 0.6], s: [5.6, 1, 4.8], mat: 'stone', glow: STONE, stripe: true }, // gap 0.10 off the piston cap, +1.4, top 2.90
 
     { kind: 'risinglava', p: [305.0, -8.5, 0], s: [42, 3, 22], rising: { from: -7.0, to: -1.0, speed: 0.10, delay: 132 } }, // x 284..326; `from` matches p.y + s.y/2, and `to` parks 0.4 m under the gallery floor
@@ -817,7 +832,7 @@ export default {
        under a blade, then 3.55 m back to the runway. Taken well it costs four
        seconds; taken badly it costs the checkpoint. */
     { kind: 'platform', p: [348.0, 13.3, -9.4], s: [2.6, 1, 2.6], mat: 'panel', glow: HOT, stripe: true },
-    { kind: 'pendulum', p: [348.0, 17.20, -9.4], len: 2.6, amp: 0.80, period: 2.6, phase: 0.10, axis: [1, 0, 0], blade: { w: 0.38, h: 1.2, d: 2.6 } },
+    { kind: 'pendulum', p: [348.0, 17.20, -9.4], len: 2.6, amp: 1.28, period: 2.6, phase: 0.10, axis: [1, 0, 0], blade: { w: 2.6, h: 1.2, d: 0.38 } },
 
     { kind: 'deco', kindOf: 'ring', p: [348.0, 15.4, -9.4], s: [0.12, 2.2, 2.2], rot: [0, Math.PI / 2, 0], mat: 'emissive', tint: HOT },
     { kind: 'deco', kindOf: 'pillar', p: [348.0, 7.4, -9.4], s: [1.2, 11.0, 1.2], mat: 'stone', tint: STONE },
@@ -909,7 +924,7 @@ export default {
 
     { kind: 'platform', p: [395.6, 19.4, 3.0], s: [5.6, 1, 5.6], mat: 'panel', glow: GOLD, stripe: true }, // gap 2.83, +1.5, top 19.90
     { kind: 'jumppad', p: [396.2, 19.98, 3.0], s: [3.0, 0.16, 3.0], power: 5.5, dir: [0, 1, 0] },
-    { kind: 'pendulum', p: [396.2, 23.90, 3.0], len: 2.8, amp: 0.70, period: 2.8, phase: 0.40, axis: [1, 0, 0], blade: { w: 0.40, h: 1.4, d: 3.0 } }, // guards the last pad; lowest 20.40, clear of the pad's 20.06 cap
+    { kind: 'pendulum', p: [396.2, 23.90, 3.0], len: 2.8, amp: 1.13, period: 2.8, phase: 0.40, axis: [1, 0, 0], blade: { w: 3.0, h: 1.4, d: 0.40 } }, // guards the last pad; lowest 20.40, clear of the pad's 20.06 cap
 
     { kind: 'platform', p: [402.6, 23.7, 0], s: [8.0, 1, 10.0], mat: 'obsidian', glow: VIOLET, stripe: true }, // top 24.20 — FINISH
 
