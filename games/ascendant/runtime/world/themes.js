@@ -763,8 +763,8 @@ export const THEMES = {
          * silver band at the horizon is the "light after" itself. horizonGlow
          * wears the world accent — nothing landable is magenta-pink in any
          * theme, so the tinted horizon can never impersonate a deck. */
-        top: 0x120e22, mid: 0x2c2344, horizon: 0x8d84a8, bottom: 0x4a4060,
-        horizonGlow: 0xff7ad9, glowPower: 5.0, glowStrength: 0.50,
+        top: 0x120e22, mid: 0x241d3a, horizon: 0x4e4868, bottom: 0x2c2740,
+        horizonGlow: 0xff7ad9, glowPower: 9.0, glowStrength: 0.42,
         /* Compact low sun, clean white-gold — spire's lesson: a small disc
          * whose core alone crosses the bloom threshold gives a glint, not a
          * frame flood (spire ships 0.0022 @ 1.8; this one is dimmer air). */
@@ -773,9 +773,9 @@ export const THEMES = {
         /* The storm the light comes after: silver-topped cloud sea over a
          * genuinely dark floor, same lit-vs-shadow recipe temple proved. */
         cloudY: -62, cloudScale: 0.018, cloudSpeed: 0.012, cloudCoverage: 0.55,
-        cloudLit: 0xd8d4e8, cloudShadow: 0x2e2a44, cloudFade: 950, cloudSharp: 2.2,
+        cloudLit: 0x8b86a6, cloudShadow: 0x262238, cloudFade: 950, cloudSharp: 2.2,
         starDensity: 0.30, starBrightness: 0.35, dither: 1.0,
-        sunPower: 100, haze: 0.65, intensity: 1.05,
+        sunPower: 100, haze: 0.50, intensity: 1.05,
       },
     },
 

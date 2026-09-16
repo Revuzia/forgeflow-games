@@ -255,7 +255,7 @@ export function prismgate(def, ctx) {
   };
 
   const matDark = getMat(ctx, 'obsidian');
-  const latticeMat = glowMat(ctx, BAND_HEX[seq[0]], 3.2, ownMats, { base: 0x0a0812 });
+  const latticeMat = glowMat(ctx, BAND_HEX[seq[0]], 4.2, ownMats, { base: 0x0a0812 });
   const coreMat = glowMat(ctx, HOT, 3.6, ownMats, { base: 0x06080c, metalness: 0.5 });
   const ivoryMat = glowMat(ctx, IVORY, 2.4, ownMats, { base: 0x0d0c0a });
   const pipMats = [];
@@ -302,7 +302,10 @@ export function prismgate(def, ctx) {
 
   // HOT core: 0.10 m deep in x so it pokes through both faces of the 0.07 m
   // filament — the kill colour reads from either approach direction.
-  const coreGeo = new THREE.BoxGeometry(0.10, 1, 0.030);
+  // 0.030 m HOT threads were subpixel past ~8 m — the kill colour vanished at
+  // exactly the range where a player commits. 0.06 m stays well inside the
+  // 0.1 m filament budget and reads at court distance.
+  const coreGeo = new THREE.BoxGeometry(0.10, 1, 0.06);
   D.push(coreGeo);
   const coreMesh = new THREE.InstancedMesh(coreGeo, coreMat, SEGS);
   coreMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -439,6 +442,11 @@ export function prismgate(def, ctx) {
     // ---- presentation -------------------------------------------------------
     apGroup.position.set(0, (apY0 + apY1) / 2, apZc);
     latticeMat.emissive.setHex(BAND_HEX[seq[k]]);            // hue = current stop
+    // Cool bands (blue/indigo/violet) sit near the dusk sky's own hue; without a
+    // floor the whole lattice faded into the horizon on those stops — an
+    // invisible kill wall, seen live from 7 m. 5.4x for cool, 4.2x warm keeps
+    // every stop inside the 3-8x source-luminance law.
+    latticeMat.emissiveIntensity = seq[k] >= 4 ? 5.4 : 4.2;
     latticeMat.emissiveIntensity = 3.2 + Math.sin(t * 6.1) * 0.25;
     ivoryMat.emissiveIntensity = 2.4 + (f < tf ? 1.2 : 0);   // frame flares while travelling
 
