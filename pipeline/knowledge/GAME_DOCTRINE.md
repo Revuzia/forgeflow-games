@@ -267,11 +267,14 @@ keep every line load-bearing.
   `allow-same-origin` is REQUIRED too: without it the frame's origin goes
   opaque and localStorage throws, wiping every game's save. Same-origin
   frames lock without any token, so local dev never catches a missing one:
-  verify pointer lock ON THE PORTAL, not just the CDN URL. If a correctly
-  tokened frame ever rejects with `WrongDocumentError` ("root document …
-  not valid for pointer lock"), suspect a stale element across an iframe
-  remount/src swap — one session observed it live and it vanished on retest;
-  it is a diagnostic signature, not the steady state.
+  verify pointer lock ON THE PORTAL, not just the CDN URL. Two distinct
+  failure modes — do not conflate them: a missing token fails LOUDLY
+  ("Blocked pointer lock … permission is not set") and the token fixes it;
+  a correctly tokened frame rejecting SILENTLY with `WrongDocumentError`
+  ("root document … not valid for pointer lock") was observed live once,
+  vanished on retest, and its cause is UNIDENTIFIED (stale-element-across-
+  remount was proposed and ruled out — static frames hit it too). If seen,
+  re-test clean before trusting any diagnosis.
 - A mouse-look game must TELL the player when lock is refused: after 2+
   `pointerlockerror`s with zero successful locks ever, swap the resume prompt
   for "MOUSE CAPTURE BLOCKED — reload the page" (ascendant game.js pattern).
