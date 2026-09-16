@@ -1,4 +1,5 @@
 import * as THREE from "three";
+
 /**
  * royale/hud.js — every screen and overlay: main menu (map/mode select),
  * lobby fill, in-game HUD (bars, slots, mats, minimap w/ storm rings, kill
@@ -9,6 +10,11 @@ import * as THREE from "three";
  * All DOM (crisp text > canvas). Dynamic values only touch the DOM when they
  * change; the minimap canvas redraws at ~10Hz.
  */
+// Neutral starting skill rating: mid-low, so a brand-new account is challenged
+// but not slaughtered, and converges from there within a few matches. Declared
+// at module top because loadProgress()/mergeProgressRecords() both read it.
+const SKILL_NEUTRAL = 0.35;
+
 
 let R = {};            // element registry
 let K = null;
@@ -1497,15 +1503,22 @@ export function mergeProgressRecords(local, cloud) {
   const la = local.lastPlayedDay || "", lb = cloud.lastPlayedDay || "";
   out.lastPlayedDay = (la > lb ? la : lb) || null;
   out.career = mergeCareers(local.career, cloud.career);
+  // The skill rating must NOT go through mergeCareers: that merges counters by
+  // MAX, and a MAX'd rating only ever ratchets upward — a player who got worse
+  // (or was having an off week) would be permanently stuck against the hardest
+  // lobbies. Take it from whichever record has actually played more matches.
+  const lm = (local.career && local.career.matches) | 0, cm = (cloud.career && cloud.career.matches) | 0;
+  const pick = cm > lm ? cloud : local;
+  out.skill = typeof pick.skill === "number" ? pick.skill : SKILL_NEUTRAL;
   return out;
 }
 
 function loadProgress() {
   try {
-    const p = Object.assign({ level: 1, xp: 0, lastPlayedDay: null, dayStreak: 0 }, JSON.parse(localStorage.getItem("lc_progress") || "{}"));
+    const p = Object.assign({ level: 1, xp: 0, lastPlayedDay: null, dayStreak: 0, skill: SKILL_NEUTRAL }, JSON.parse(localStorage.getItem("lc_progress") || "{}"));
     p.career = newCareer(p.career);
     return p;
-  } catch (e) { return { level: 1, xp: 0, lastPlayedDay: null, dayStreak: 0, career: newCareer(null) }; }
+  } catch (e) { return { level: 1, xp: 0, lastPlayedDay: null, dayStreak: 0, skill: SKILL_NEUTRAL, career: newCareer(null) }; }
 }
 /** YYYY-MM-DD in LOCAL time. A UTC stamp rolls the day over mid-evening for
  *  anyone west of Greenwich, which would break the streak of a player who did
@@ -1516,10 +1529,54 @@ function dayKey(d) {
 }
 function saveProgress(p) { try { localStorage.setItem("lc_progress", JSON.stringify(p)); } catch (e) {} }
 // fold a finished match into the lifetime record (best placement = LOWEST number)
+// ── HIDDEN SKILL RATING ────────────────────────────────────────────────────
+// ONE number per account, 0-1. It picks the bot difficulty band today and is the
+// same number that will drive human matchmaking when MP lands — deliberately not
+// a bot-only dial, so the MP work does not throw this away.
+//
+// It is a SERVO, not a skill meter: we choose opponents from it, then re-estimate
+// it from how the player did against those opponents. A closed loop like that has
+// to be damped, so the update is a bounded sign step toward "finishing mid-pack",
+// not a proportional error term. That also makes it robust to one lucky match.
+
+/** Per-match performance, 0-1. Placement dominates — that is what Fortnite's SBMM
+ *  keys on, and it is the one signal that cannot be farmed by a lucky third-party
+ *  kill. Log-scaled because 5th vs 10th is a far bigger gap in skill than 45th vs
+ *  50th. */
+function matchPerf(res) {
+  const pl = Math.max(1, Math.min(50, res.placement || 50));
+  const pn = 1 - Math.log(pl) / Math.log(50);
+  const kn = Math.min(1, (res.kills || 0) / 6);
+  const dn = Math.min(1, (res.damage || 0) / 900);
+  return 0.7 * pn + 0.2 * kn + 0.1 * dn;
+}
+
+/** The performance we EXPECT from a correctly-rated player against this lobby.
+ *  Single swap point for MP: against humans, expected placement is mid-pack by
+ *  definition, so this becomes a constant and nothing else in the servo changes. */
+function expectedPerf(W) {
+  const r = typeof W.botMixRating === "number" ? W.botMixRating : 0.5;
+  // A harder lobby should lower the bar: surviving longer against better
+  // opponents is worth more.
+  return 0.42 - (r - 0.5) * 0.12;
+}
+
 function recordMatch(W, res) {
   if (W.mode === "practice") return null;   // sandbox stats are not a career
   const p = W.progress; if (!p) return null;
   const c = p.career || (p.career = newCareer(null));
+  // Skill only moves on OFFLINE matches for now: online placement is decided by
+  // other humans, not by the bot band we chose, so folding it in would corrupt
+  // the servo. W.matchWasNet is captured at match start, before a host takeover
+  // can null W.net.
+  if (!W.matchWasNet) {
+    const cur = typeof p.skill === "number" ? p.skill : SKILL_NEUTRAL;
+    // Step size decays with experience: a new account converges in ~5 matches,
+    // a veteran's rating stops twitching on one bad game.
+    const g = Math.max(0.03, 0.12 / (1 + c.matches / 4));
+    const dir = matchPerf(res) > expectedPerf(W) ? 1 : -1;
+    p.skill = Math.max(0.05, Math.min(0.98, cur + dir * g));
+  }
   c.matches++;
   if (res.victory) c.wins++;
   c.kills += res.kills || 0;

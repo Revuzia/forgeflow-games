@@ -338,7 +338,64 @@
     { reactionMs: 300, aimErrDeg: 1.8 },
     { reactionMs: 210, aimErrDeg: 0.9 },
   ];
-  var BOT_TIER_MIX = { standard: [8, 12, 14, 10, 5], quick: [6, 10, 14, 12, 7] };
+  // Difficulty BANDS, indexed by the account skill rating (see hud.js `skill`).
+  // Every band sums to 49 (the lobby is always modeK.players and the local player
+  // takes one slot). >=69% of every band sits in tiers 3-5, per the owner's call:
+  // this is a bot-only opposition, not Fortnite-style filler beside real humans,
+  // so it needs a real difficulty curve rather than a farmable floor.
+  //
+  // Tier 1 is near-eliminated on MEASURED grounds, not taste: a tier-1 bot scored
+  // a 0% kill rate (0/54) in the audit while still consuming a lobby slot. It is a
+  // wasted opponent, not a gentle one. The soft end is carried by tier 2-3.
+  var BOT_TIER_BANDS = [
+    [1, 14, 22,  9,  3],   // B0  mean tier 2.98
+    [0, 10, 22, 12,  5],   // B1  3.24
+    [0,  6, 20, 15,  8],   // B2  3.51
+    [0,  3, 17, 19, 10],   // B3  3.73
+    [0,  1, 13, 21, 14],   // B4  3.98
+  ];
+
+  /** Blend the two adjacent bands for a skill in [0,1]. The rounding remainder is
+   *  pushed into the largest bucket so the result ALWAYS sums to 49 — the draw and
+   *  the shipped selftest both depend on that invariant. */
+  function skillMix(s01) {
+    var s = clamp(s01, 0, 1) * (BOT_TIER_BANDS.length - 1);
+    var i = Math.min(BOT_TIER_BANDS.length - 2, Math.floor(s));
+    var f = s - i, a = BOT_TIER_BANDS[i], b = BOT_TIER_BANDS[i + 1];
+    var out = [], sum = 0, big = 0;
+    for (var k = 0; k < 5; k++) {
+      out[k] = Math.round(a[k] + (b[k] - a[k]) * f);
+      sum += out[k];
+      if (out[k] > out[big]) big = k;
+    }
+    out[big] += 49 - sum;
+    return out;
+  }
+
+  /** Mean tier of a mix, as a 0-1 scalar. This is the "how hard was that lobby"
+   *  number the rating servo compares against — it is what lets ONE rating drive
+   *  bots today and human matchmaking later. */
+  function mixRating(mix) {
+    var n = 0, w = 0;
+    for (var i = 0; i < 5; i++) { n += mix[i]; w += mix[i] * (i + 1); }
+    return n ? clamp((w / n - 1) / 4, 0, 1) : 0.5;
+  }
+
+  /** BOT_TIERS holds 5 discrete rows, but the in-match ramp produces FRACTIONAL
+   *  tiers. Interpolating keeps a bot from snapping a whole tier sharper at a
+   *  phase boundary, which is what would read as rubber-banding. */
+  function interpTierK(tier) {
+    var t = clamp(tier, 1, 5) - 1;
+    var i = Math.min(3, Math.floor(t)), f = t - i;
+    var a = BOT_TIERS[i], b = BOT_TIERS[i + 1];
+    return {
+      reactionMs: a.reactionMs + (b.reactionMs - a.reactionMs) * f,
+      aimErrDeg: a.aimErrDeg + (b.aimErrDeg - a.aimErrDeg) * f,
+    };
+  }
+
+  // Back-compat: the shipped selftest asserts both of these sum to 49.
+  var BOT_TIER_MIX = { standard: BOT_TIER_BANDS[2], quick: skillMix(0.65) };
   var BOT_PERSONALITIES = ["rusher", "flanker", "camper", "loot_goblin", "rotator", "sniper"];
 
   var BOT_NAMES = [
@@ -645,6 +702,8 @@
     segmentColliders: segmentColliders,
     STORM_PHASES: STORM_PHASES, MODE: MODE, LOOT_WEIGHTS: LOOT_WEIGHTS,
     BOT_TIERS: BOT_TIERS, BOT_TIER_MIX: BOT_TIER_MIX, BOT_PERSONALITIES: BOT_PERSONALITIES, BOT_NAMES: BOT_NAMES,
+    BOT_TIER_BANDS: BOT_TIER_BANDS, skillMix: skillMix, mixRating: mixRating, interpTierK: interpTierK,
+    clamp: clamp,
     Storm: Storm, Match: Match,
     hitDamage: hitDamage, applyDamage: applyDamage, splashScale: splashScale,
     weightedIndex: weightedIndex, rollRarity: rollRarity, rollFloorItem: rollFloorItem, rollChest: rollChest, rollSupplyDrop: rollSupplyDrop,

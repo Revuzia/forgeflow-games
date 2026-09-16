@@ -29,7 +29,13 @@ const brains = [];
 // recordMatch on the post-match screen, so practice and abandoned matches don't
 // spend one). Offline only: bots simulate on the authority in online play, and a
 // per-client skew would desync the roster.
-const ROOKIE_TIER_MIX = [18, 16, 10, 4, 1];
+// SUPERSEDED 2026-09-15 by the skill-banded mixes in royale.js (BOT_TIER_BANDS).
+// Kept, not deleted, because it records a real decision. Two reasons it went:
+// it scaled difficulty DOWN only and never ran online (it was gated !W.net), and
+// 34 of its 49 bots sit at 700ms/7.5deg and 500ms/4.5deg — the audit measured a
+// tier-1 bot at a 0% kill rate, so that is 34 whiffing statues, not a gentle
+// lobby. The soft end is now band B0, which keeps 69% of the lobby in tiers 3-5.
+const ROOKIE_TIER_MIX = [18, 16, 10, 4, 1];   // eslint-disable-line no-unused-vars
 
 export function init(W) {
   K = W.SIM;
@@ -73,20 +79,76 @@ export function resetBrains() { brains.length = 0; }
  *  convention — the harness measures, it never steers. */
 export function debugBrains() { return brains; }
 
-export function attachBrain(W, actor) {
-  // tier/personality assignment from the seeded mix
-  const rng = K.mulberry32((W.seed ^ 0xb0b) + W.actors.length * 31);
-  const rookie = !W.net && W.mode !== "practice" && W.progress && W.progress.career && W.progress.career.matches < 3;
-  const mix = rookie ? ROOKIE_TIER_MIX : (K.BOT_TIER_MIX[W.mode] || K.BOT_TIER_MIX.standard);
-  // draw tier ∝ remaining mix
-  const assigned = brains.length;
-  let tier = 3, acc = 0;
-  const r = (assigned + rng() * 0.99) / 49 * mix.reduce((a, b) => a + b, 0);
-  for (let i = 0; i < 5; i++) { acc += mix[i]; if (r <= acc) { tier = i + 1; break; } }
+/**
+ * Decide the lobby's difficulty ONCE, at match start, before any brain attaches.
+ *
+ * This has to live outside attachBrain for three separate reasons, all of them
+ * real code paths:
+ *  - ffg_royale3d.js guests never call attachBrain at all (the bots are remote),
+ *    so anything memoized inside it is never populated on a guest;
+ *  - net.js hostLost() schedules attachBrain via an async import().then() AFTER
+ *    it has already synchronously set W.net = null, so a `W.net` test inside
+ *    attachBrain reads the wrong value on host takeover;
+ *  - PLAY AGAIN re-enters startMatch, so the read must happen after recordMatch
+ *    has updated the rating, not before.
+ * Reading it once here makes all three correct by construction.
+ */
+export function setLobbySkill(W) {
+  W.matchWasNet = !!W.net;          // captured BEFORE a takeover nulls W.net
+  W.matchSkill = readSkill(W);
+  // Quick mode is the short, hot format — nudge it up a little.
+  const s = W.mode === "quick" ? Math.min(1, W.matchSkill + 0.15) : W.matchSkill;
+  W.botMix = K.skillMix(s);
+  W.botMixRating = K.mixRating(W.botMix);
+  return W.botMix;
+}
+
+/** The account's hidden skill rating, 0-1. Defaults mid-low so a brand-new
+ *  account starts challenged-but-not-slaughtered and converges from there. */
+export function readSkill(W) {
+  const p = W.progress;
+  const v = p && typeof p.skill === "number" ? p.skill : NaN;
+  return Number.isFinite(v) ? Math.min(0.98, Math.max(0.05, v)) : 0.35;
+}
+
+export function attachBrain(W, actor, nBots) {
+  // Seed off the SLOT, not brains.length/W.actors.length: on the hostLost path the
+  // roster is already fully built when brains are attached, so a length-derived
+  // seed hands every converted bot the same rng stream (46 identical bots). Slot
+  // ids are "s<i>", and slot-seeding also makes host and guest agree per slot.
+  const slot = parseInt(String(actor.id).slice(1), 10) || 0;
+  const rng = K.mulberry32((W.seed ^ 0xb0b) + (slot + 1) * 31);
+  const mix = W.botMix || K.BOT_TIER_MIX[W.mode] || K.BOT_TIER_MIX.standard;
+  const total = nBots || 49;
+
+  // An IID draw, not the old quota walk. The old form was
+  //   r = (assigned + rng()*0.99) / 49 * sum(mix)
+  // which (a) made tier monotone in slot index — not random per bot at all — and
+  // (b) divided by the LITERAL 49 regardless of how many bots actually exist, so
+  // every human who joined silently deleted a top-tier bot (a 4-stack faced 2
+  // tier-5s instead of 5). weightedIndex has no quota, so neither bug can recur.
+  let tier = K.weightedIndex(rng, mix) + 1;
+
+  // Variance rails. An IID draw can roll a freak lobby; these bound the top end
+  // without reintroducing a quota. Counted off `brains` rather than module
+  // counters on purpose: resetBrains() only empties that array, so counters would
+  // survive into the next match and cap every later lobby into the soft tiers.
+  let n5 = 0, n45 = 0;
+  for (const x of brains) { if (x.tier0 === 5) n5++; if (x.tier0 >= 4) n45++; }
+  const cap5 = Math.ceil(total * mix[4] / 49 * 1.6) + 1;
+  const cap45 = Math.ceil(total * (mix[3] + mix[4]) / 49 * 1.35) + 1;
+  if (tier === 5 && n5 >= cap5) tier = 4;
+  if (tier >= 4 && n45 >= cap45) tier = 3;
+
   actor.tier = tier;
   actor.personality = K.BOT_PERSONALITIES[Math.floor(rng() * K.BOT_PERSONALITIES.length)];
   const brain = {
     W, actor,
+    tier0: tier,                  // the DRAWN tier; the rails count this
+    tierNow: tier,                // the live, possibly fractional, ramped tier
+    // How far this bot climbs by the final circle. Random per bot, per the
+    // owner's call: some opponents grow into the endgame, some don't.
+    ramp: rng() < 0.5 ? 1 : (rng() < 0.6 ? 0 : 2),
     tierK: K.BOT_TIERS[tier - 1],
     state: "DROP",
     nextThink: 0,
@@ -132,6 +194,11 @@ export function assignDrops(W) {
 // ═════════════════════════════════════════════════════════════════════════════
 export function update(W, dt) {
   if (!brains.length) return;
+  // Cover scans are the one genuinely expensive thing a brain can do, so they are
+  // rationed GLOBALLY rather than per-bot: 2 full scans per frame across all 49
+  // brains. With ~24 bots fighting at once every fighter still gets a slot about
+  // every 12 frames (~0.2s), far more often than the re-plan interval needs.
+  _coverBudget = 2;
   const now = W.t;
   const pp = W.player ? W.player.pos : null;
   for (const b of brains) {
@@ -166,6 +233,33 @@ function think(W, b) {
     Math.hypot(a.pos.x - (st.nextCenter ? st.nextCenter.x : st.center.x), a.pos.z - (st.nextCenter ? st.nextCenter.z : st.center.z)) > st.nextRadius * 0.9;
   const alive = W.match.aliveCount();
   const endgame = alive <= 10;
+
+  // ── IN-MATCH DIFFICULTY RAMP ─────────────────────────────────────────────
+  // Survivors get sharper as the lobby thins, so the last few opponents are the
+  // hardest fight of the match — which is what a BR player expects and what this
+  // game did NOT deliver (tier was fixed at spawn and never touched think()).
+  //
+  // Two deliberate constraints:
+  //  - CALM-GATED. A bot that gets better while you are shooting at it reads as
+  //    cheating, not skill. It only re-tiers when it has not been hit and has not
+  //    seen its target for 2.5s.
+  //  - CONTINUOUS, not per-storm-phase. Keyed to a smooth p01 so a bot that
+  //    fought through three phases catches up gradually instead of jumping three
+  //    tiers at once.
+  // It moves reaction time and aim error ONLY — never damage, HP or speed. That
+  // line is what keeps this "smart" rather than "cheap".
+  if (b.ramp) {
+    const p01 = K.clamp((50 - alive) / 44, 0, 1);       // saturates at 6 alive
+    const calm = W.t - a.lastDamageT > 2.5 && (!bb.target || W.t - bb.targetSeenT > 2.5);
+    if (calm) {
+      const want = Math.min(5, b.tier0 + b.ramp * p01);
+      if (Math.abs(want - (b.tierNow || b.tier0)) > 0.02) {
+        b.tierNow = want;
+        b.tierK = K.interpTierK(want);
+        a.tier = Math.round(want);                       // caps at 5 -> HEAD_CHANCE cap holds
+      }
+    }
+  }
   // everyone spawns with a pistol; "upgraded" = anything beyond it
   const upgraded = a.inventory.slots.some((s2, i) => s2 && s2.kind === "weapon" && !(i === 0 && s2.id === "pistol" && s2.rarity === 0));
   // "Do I want to heal" and "can I actually heal" MUST agree, or the machine
@@ -941,6 +1035,119 @@ function actCamp(W, b, dt) {
 // sniper head hit is 105 * 2.5 = 262 damage, straight through a full 100+100 bar.
 const HEAD_CHANCE = [0, 0, 0.1, 0.2, 0.25];
 
+// ── OCCLUSION-AWARE COVER ──────────────────────────────────────────────────
+// The brain could always SEE line-of-sight (perceive() and the return-fire check
+// both call losBlocked), but nothing ever asked whether a DESTINATION broke it.
+// obstacleAt/cellBlocked test WALKABILITY, not occlusion, so bots pathed AROUND
+// walls and never BEHIND them — they fought every duel standing in the open.
+// This is that missing half: pick a nearby spot that breaks the target's line,
+// go to it, hold briefly, then peek back out.
+let _coverBudget = 2;
+
+const COVER_HOLD = 0.9;        // seconds behind cover before peeking back out
+const COVER_FAIL_MEMO = 3.0;   // after a failed scan, don't re-scan for this long
+const COVER_ARRIVE = 1.8;      // metres: close enough to count as "in cover"
+
+/**
+ * Returns TRUE when cover owns locomotion this frame (caller must not write
+ * inp.mx/mz/sprint afterwards), FALSE to let normal engage movement run.
+ *
+ * Deliberately uses `tp` (the last KNOWN target position) rather than the live
+ * target position: a bot must not get unperceivable knowledge out of this.
+ */
+function coverStep(W, b, dt, tp, seen, dist) {
+  const a = b.actor, bb = b.bb, inp = a.input;
+
+  // ── already committed: run the state machine, no search ──
+  if (bb.coverState === "MOVING") {
+    const cp = bb.coverPt;
+    if (!cp || W.t > (bb.coverGiveUp || 0)) { bb.coverState = "NONE"; return false; }
+    const d = Math.hypot(cp.x - a.pos.x, cp.z - a.pos.z);
+    if (d < COVER_ARRIVE) {
+      bb.coverState = "IN";
+      // Tier-scaled: a sharper bot spends less time hiding and more time shooting.
+      bb.coverUntil = W.t + COVER_HOLD * (1.35 - (b.tierNow || a.tier || 3) * 0.09);
+      return true;
+    }
+    moveToward(W, b, cp.x, cp.z, dt, d > 6);
+    return true;
+  }
+  if (bb.coverState === "IN") {
+    if (W.t > (bb.coverUntil || 0)) {
+      // PEEK: drop back to normal engage. Without this a bot that found cover
+      // would turtle there forever — unkillable and boring, which is worse than
+      // one that stands in the open.
+      bb.coverState = "NONE";
+      bb.coverFailUntil = W.t + 1.2;      // don't instantly re-hide
+      return false;
+    }
+    // reload and heal while the wall is doing the work
+    inp.mx = 0; inp.mz = 0; inp.sprint = false;
+    steerYaw(a, Math.atan2(-(tp.x - a.pos.x), -(tp.z - a.pos.z)), dt, 6);
+    return true;
+  }
+
+  // ── should we even look? cheapest tests first ──
+  if (W.t < (bb.coverFailUntil || 0)) return false;
+  const reloading = !!(a.weapon && a.weapon.state === "reloading");
+  const hurt = (a.hp + a.shield) < 70;
+  const shotAt = W.t - a.lastDamageT < 1.5;
+  if (!reloading && !hurt && !shotAt) return false;     // no reason to break off
+  if (dist < 6) return false;                           // point-blank: fight, don't hide
+  if (_coverBudget <= 0) return false;
+
+  // Open terrain is the common case and must cost almost nothing: one cheap
+  // collider query rejects it before any raycast.
+  const near = W.map.queryColliders(a.pos.x, a.pos.z, 16);
+  if (!near || !near.length) { bb.coverFailUntil = W.t + COVER_FAIL_MEMO; return false; }
+
+  _coverBudget--;
+  const found = findCover(W, a, tp);
+  if (!found) { bb.coverFailUntil = W.t + COVER_FAIL_MEMO; return false; }
+  bb.coverPt = found;
+  bb.coverState = "MOVING";
+  bb.coverGiveUp = W.t + 3.5;             // never chase a cover point forever
+  return true;
+}
+
+/** 12 candidates = 6 bearings x 2 radii. Each is prefiltered on walkability and
+ *  height before it is allowed to cost a ray. */
+function findCover(W, a, tp) {
+  const gy = W.map.heightAt(a.pos.x, a.pos.z);
+  const toT = Math.atan2(tp.x - a.pos.x, tp.z - a.pos.z);
+  let best = null, bestScore = -1e9;
+  for (let ri = 0; ri < 2; ri++) {
+    const r = ri === 0 ? 7 : 14;
+    for (let i = 0; i < 6; i++) {
+      // bias the ring AWAY from the target: cover is behind you, not past them
+      const ang = toT + Math.PI + (i - 2.5) * 0.62;
+      const x = a.pos.x + Math.sin(ang) * r, z = a.pos.z + Math.cos(ang) * r;
+      if (Math.abs(x) > W.map.half - 4 || Math.abs(z) > W.map.half - 4) continue;
+      if (cellBlocked(W, x, z)) continue;
+      const h = W.map.heightAt(x, z);
+      if (h < W.map.waterY + 0.4) continue;             // never "take cover" in water
+      if (Math.abs(h - gy) > 3) continue;               // not a cliff we can't climb
+      if (!losTruncated(W, x, h, z, tp)) continue;      // must actually break the line
+      // prefer close cover, and prefer keeping some distance from the target
+      const score = -r + Math.min(20, Math.hypot(x - tp.x, z - tp.z)) * 0.35;
+      if (score > bestScore) { bestScore = score; best = { x, z }; }
+    }
+  }
+  return best;
+}
+
+/** Cast only the FIRST 12m of the candidate->target line. Casting the whole line
+ *  would make a 200m sniper duel cost ~9 collider sweeps and 60 terrain samples
+ *  PER CANDIDATE — and it would be wrong as well as slow, since a ridge 80m
+ *  downrange is not cover the target cannot simply walk around. */
+function losTruncated(W, x, h, z, tp) {
+  const ex = x, ey = h + 1.5, ez = z;
+  const dx = tp.x - ex, dz = tp.z - ez;
+  const len = Math.hypot(dx, dz) || 1;
+  const f = Math.min(1, 12 / len);
+  return W.map.losBlocked(ex, ey, ez, ex + dx * f, (tp.y || h) + 1.2, ez + dz * f);
+}
+
 function actEngage(W, b, dt) {
   const a = b.actor, bb = b.bb, inp = a.input;
   const t = bb.target && W.actorById.get(bb.target);
@@ -977,6 +1184,12 @@ function actEngage(W, b, dt) {
     bb.strafeT = 0.5 + Math.random() * 0.9;
     bb.strafeDir = a.personality === "flanker" ? (bb.strafeDir || 1) : (Math.random() < 0.5 ? -1 : 1);
   }
+  // Cover owns locomotion when it returns true. It MUST be hooked above the
+  // reloading branch below: that branch ends in a bare `return`, so anything
+  // placed after it can never run while reloading — which is one of the exact
+  // moments a bot most needs to break line of sight.
+  if (coverStep(W, b, dt, tp, seen, dist)) return;
+
   // RELOADING = break for lateral cover, don't stand in the open trading nothing
   if (a.weapon && a.weapon.state === "reloading") {
     inp.mx = bb.strafeDir;
@@ -1060,7 +1273,11 @@ function actEngage(W, b, dt) {
       bb.burstPause -= dt;
     } else if (def.cls === "sniper") {
       // only when still-ish
-      if (Math.hypot(a.vel.x, a.vel.z) < 1.5) { inp.fire = true; inp.mx = 0; inp.mz = 0; inp.crouch = true; }
+      // NOTE: coverStep owns inp.mx/mz when it is active — only fire+crouch here.
+      if (Math.hypot(a.vel.x, a.vel.z) < 1.5) {
+        inp.fire = true; inp.crouch = true;
+        if (bb.coverState === "NONE" || !bb.coverState) { inp.mx = 0; inp.mz = 0; }
+      }
     } else {
       inp.fire = true;
     }
@@ -1069,8 +1286,10 @@ function actEngage(W, b, dt) {
   if (a.weapon && a.weapon.magAmmo === 0) inp.reload = true;
   if (!canSee && a.weapon && def.mag > 0 && a.weapon.magAmmo < def.mag * 0.4) inp.reload = true;
 
-  // search last-known if lost
-  if (!seen && bb.targetPos) {
+  // Search last-known if lost. Guarded on coverState: `seen` goes false the
+  // instant LOS breaks, which is exactly what coverStep just achieved — ungated,
+  // this walks the bot straight back out of the cover it reached.
+  if (!seen && bb.targetPos && (bb.coverState === "NONE" || !bb.coverState)) {
     moveToward(W, b, bb.targetPos.x, bb.targetPos.z, dt, false);
   }
 }

@@ -358,6 +358,8 @@ register3d("royale", async function (kernel, content) {
     W.actors.length = 0; W.actorById.clear();
     W.rangeDummies = null;          // stale refs into the cleared roster
     botsMod.resetBrains();
+    // Decide lobby difficulty ONCE, before any brain attaches (see setLobbySkill).
+    botsMod.setLobbySkill(W);
     weaponsMod.reset(W);            // live rounds otherwise fly on into the next match
     fxMod.reset();                  // damage numbers are DOM nodes; they outlive the match
     if (W.resetInputState) W.resetInputState();
@@ -409,7 +411,7 @@ register3d("royale", async function (kernel, content) {
         const bot = playerMod.createActor(W, { id: "s" + i, name: names[i % names.length], isBot: true });
         // bots simulate on the authority only; on guest clients they're remote
         if (opts.guestOf) bot.netRemote = true;
-        else botsMod.attachBrain(W, bot);
+        else botsMod.attachBrain(W, bot, total - humans.length);
       }
       W.match.register("s" + i);
     }

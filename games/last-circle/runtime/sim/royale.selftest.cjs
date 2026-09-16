@@ -248,6 +248,49 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
   ok(R.BOT_TIERS.length === 5 && R.BOT_TIERS[4].aimErrDeg < R.BOT_TIERS[0].aimErrDeg, "bots: higher tier = better aim");
 }
 
+// ── Skill bands + fractional tiers ───────────────────────────────────────────
+// The lobby's difficulty is picked from the account skill rating. Every band has
+// to sum to 49 (the draw and the lobby size both depend on it), the bands have to
+// be strictly ordered, and the ramp's fractional tiers have to interpolate rather
+// than snap.
+{
+  const sum = (a) => a.reduce((x, c) => x + c, 0);
+  let bandsOk = true, orderOk = true, softOk = true, last = -1;
+  for (let i = 0; i < R.BOT_TIER_BANDS.length; i++) {
+    const b = R.BOT_TIER_BANDS[i];
+    if (sum(b) !== 49) bandsOk = false;
+    const mean = R.mixRating(b);
+    if (mean <= last) orderOk = false;
+    last = mean;
+    // the owner's call: most of every lobby sits in tiers 3-5
+    if (sum(b.slice(2)) / 49 < 0.65) softOk = false;
+  }
+  ok(bandsOk, "bots: every skill band sums to 49");
+  ok(orderOk, "bots: skill bands are strictly ordered easy -> hard");
+  ok(softOk, "bots: even the softest band keeps >=65% of the lobby in tiers 3-5");
+
+  let mixSumOk = true, mixOrderOk = true, prev = -1;
+  for (let i = 0; i <= 10; i++) {
+    const m = R.skillMix(i / 10);
+    if (sum(m) !== 49) mixSumOk = false;
+    const r = R.mixRating(m);
+    if (r < prev - 1e-9) mixOrderOk = false;
+    prev = r;
+  }
+  ok(mixSumOk, "bots: skillMix always sums to 49 across the whole 0-1 range");
+  ok(mixOrderOk, "bots: skillMix difficulty rises monotonically with skill");
+
+  const mid = R.interpTierK(3.5);
+  ok(mid.aimErrDeg < R.BOT_TIERS[2].aimErrDeg && mid.aimErrDeg > R.BOT_TIERS[3].aimErrDeg,
+     "bots: fractional tier interpolates aim error between table rows");
+  ok(mid.reactionMs < R.BOT_TIERS[2].reactionMs && mid.reactionMs > R.BOT_TIERS[3].reactionMs,
+     "bots: fractional tier interpolates reaction time between table rows");
+  // the ramp rounds to an int tier, which indexes HEAD_CHANCE — it must never
+  // reach a 6th row that does not exist
+  ok(Math.round(R.interpTierK(5).aimErrDeg * 100) === Math.round(R.BOT_TIERS[4].aimErrDeg * 100),
+     "bots: tier 5 is the ceiling — interpolation never runs past the table");
+}
+
 // ── Movement basis ───────────────────────────────────────────────────────────
 // The glide derived its strafe axis inline as (cos, +sin) against a ground basis
 // of (cos, -sin): not perpendicular, so A/D under the parachute pulled the wrong
