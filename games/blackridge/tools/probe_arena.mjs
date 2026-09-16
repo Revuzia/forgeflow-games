@@ -7,6 +7,12 @@
 //
 //   node tools/probe_arena.mjs                      → lanternwalk, gates, 0/1
 //   node tools/probe_arena.mjs --map=switchyard     → any registered arena
+//   node tools/probe_arena.mjs --map=<id> --gen=2   → the GEN-2 threshold set
+//     (doubled-density arenas — see THRESHOLD TABLE below). GEN-1 is the
+//     DEFAULT and stays the certification gate until every map is migrated.
+//     --emit must be run under the SAME --gen the map is certified at: the
+//     spawn search itself reads gen-scoped numbers (spawnLongestM), so the
+//     emitted spawn table is gen-specific.
 //   node tools/probe_arena.mjs --map=<id> --emit    → gates green ⇒ write the
 //     MEASURED spawnPoints / clusters / flags / arena blocks into
 //     content.json, under content.arenas[<id>] AND (when <id> is the arena
@@ -37,9 +43,19 @@ const HERE = path.dirname(url.fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
 const ARGV = process.argv.slice(2);
 const EMIT = ARGV.includes("--emit");
+const numArg = (name, dflt) => {
+  const a = ARGV.find((v) => v.startsWith(`--${name}=`));
+  return a ? Number(a.split("=")[1]) : dflt;
+};
+const LOS_TRIALS = numArg("losTrials", 24000);
+const LOS_SEED = numArg("losSeed", 12345);
 // --map=<id> (default lanternwalk, so every existing invocation is unchanged)
 const MAP_ID = (ARGV.find((a) => a.startsWith("--map=")) || "--map=lanternwalk").slice(6);
-if (!MAP_ID) { console.error("usage: node tools/probe_arena.mjs [--map=<id>] [--emit]"); process.exit(2); }
+if (!MAP_ID) { console.error("usage: node tools/probe_arena.mjs [--map=<id>] [--gen=1|2] [--emit]"); process.exit(2); }
+// --gen=<1|2> selects the threshold set. Default 1 — the shipped arenas are
+// certified against it and it must stay the default until every map migrates.
+const GEN = Number((ARGV.find((a) => a.startsWith("--gen=")) || "--gen=1").slice(6));
+if (GEN !== 1 && GEN !== 2) { console.error(`probe_arena: --gen=${GEN} unknown (1 or 2)`); process.exit(2); }
 
 // Map module + lane graph are dynamic: which arena runs is an argument now.
 // A missing module is a HARD stop with the reason named — the probe measures
@@ -107,6 +123,256 @@ const FLAG_META = SPEC.flagMeta || [
   { id: "flag_slate", team: 1, node: (CLUSTER_META[ESIDE[0]] || {}).node || null, standR: 1.2, standH: 2.5 },
 ];
 
+// ===========================================================================
+// ACTOR COUNT — read from the ROSTER, never a literal.
+// ===========================================================================
+// G-B used to divide by a hardcoded 10, which made it "G-A ÷ 10" and therefore
+// structurally incapable of failing anything G-A already passed. The divisor
+// is the match's actual actor count: every bot in content.botRoster plus the
+// human (core/match/roster.js — "The human is always actorId 0"), and
+// core/match/contract.js:54 hard-fails any content whose botRoster.length !==
+// 9, so a repo where this read fails is a repo whose match content is already
+// invalid. Hard stop with the reason named rather than a silent fallback to
+// 10 — the silent 10 IS the defect being removed here.
+let ACTORS;
+{
+  let roster = null;
+  try {
+    roster = JSON.parse(fs.readFileSync(path.join(ROOT, "content.json"), "utf8")).botRoster;
+  } catch (e) {
+    console.error(`probe_arena: cannot read content.json for the bot roster — ${(e && e.message) || e}`);
+    process.exit(2);
+  }
+  if (!Array.isArray(roster) || roster.length === 0) {
+    console.error("probe_arena: content.botRoster missing or empty — G-B's per-actor divisor has no source " +
+      "(core/match/contract.js requires botRoster.length === 9)");
+    process.exit(2);
+  }
+  ACTORS = roster.length + 1; // + the human (roster.js: actorId 0 is always the player)
+}
+
+// ===========================================================================
+// THRESHOLD TABLE — GEN-1 (shipped, DEFAULT) and GEN-2 (doubled density).
+// ===========================================================================
+// Both sets live here so the old numbers stay auditable next to the new ones.
+// GEN-1 is byte-for-byte the set the three shipped arenas were certified
+// against; nothing in it moved. GEN-2 is the doubled-density set — it is NOT
+// yet the default and no map passes it today (that is the point: its failures
+// are the work order).
+//
+// MEASURED GEN-1 BASELINE (this probe, 2026-09-16, all three arenas PASS every
+// GEN-1 gate — the numbers every threshold below is argued from):
+//
+//                           lanternwalk  switchyard   saltmarket
+//   walkable ground            2570        2730        2488   m²
+//   per-actor (incl. balcony)   282         273         283   m²
+//   AABB                     73.0×49.1    74×50       66×50
+//   <6 m rays                  48.2%       46.9%       48.4%
+//   <15 m rays                 80.0%       82.1%       77.0%
+//   15–40 m rays               19.2%       17.5%       21.7%
+//   ≥40 m rays                 0.77%       0.45%       1.24%
+//   ≥55 m rays                0.028%      0.020%      0.020%
+//   longest sampled ray        65.8 m      72.0 m      61.3 m
+//   nearest-of-9 p10            3.54 m      3.61 m      3.20 m
+//   nearest-of-9 med/p90    9.7/18.6 m  9.5/19.9 m  8.9/17.1 m
+//   P(≥1 of 9 in LOS)          75.9%       72.6%       74.1%
+//   largest open region        42.2%       45.7%       53.4%  of floor
+//   spawn points                 50          50          50   (gen-1 CEILING)
+//
+// THE SHAPE OF THE GEN-1 SET, AND WHY IT CANNOT BE SCALED NAIVELY
+// Every gen-1 distance clause is ONE-SIDED, and the two sides point the same
+// way: G-C is floors only (≥40% of rays under 6 m, ≥70% under 15 m) and G-E is
+// ceilings only (nearest-of-9 median ≤12, p90 ≤22) plus a FLOOR on being seen
+// (P(≥1 in LOS) ≥70%). A phone booth satisfies all five by construction, and
+// nothing in gen-1 can fail a map for being too cramped or too exposed. GEN-2
+// turns each of those one-sided clauses into a BAND.
+//
+// THE LINEAR SCALE. GEN-2 targets 5500–6300 m² of ground against gen-1's
+// 2400–2800: the area ratio is ~2.3× at the midpoints, and √2 ≈ 1.414 is the
+// LINEAR scale of a doubled area. Distances that are properties of the MAP's
+// size (sightline tails, nearest-enemy spreads) are scaled by it and say so.
+// Distances that are properties of a WEAPON's range (the 6 m / 15 m / 40 m
+// engagement bands in G-C) are NOT scaled — a rifle does not know how big the
+// map is — so those band edges are identical in both sets and only their
+// required SHARES move.
+const THRESHOLDS = {
+  1: {
+    label: "GEN-1 (shipped arenas — certification default)",
+    // G-A — unchanged: the three shipped arenas measure 2488–2730 m².
+    groundMin: 2400, groundMax: 2800,
+    // scale-free, and the only clause that catches a walled-off region.
+    strayMax: 60,
+    // G-B — unchanged band; the divisor is now the roster (10), same value.
+    perActorMin: 250, perActorMax: 320,
+    // G-C — floors only. Shipped: 46.9–48.4% under 6 m, 77.0–82.1% under 15 m.
+    u6Min: 40, u6Max: null, u15Min: 70, u15Max: null, midMin: null,
+    // G-D — ray cap 90 m clears switchyard's 89.3 m AABB diagonal by 0.6 m.
+    rayCapM: 90,
+    // tails, longest-first. `note` reproduces arena.md's R3 convention.
+    dTails: [
+      { m: 55, max: 0.05, cmp: "<", dp: 3, note: ", R3 keyholes accepted" },
+      { m: 40, max: 1.5, cmp: "≤", dp: 2 },
+    ],
+    longestMaxM: null,          // no clause — and the 90 m ray cap could not measure one
+    spawnLongestM: 40,          // placePoint rejects any candidate with a ≥40 m ray
+    spawnLongMax: 0,            // …and G-D requires zero survivors
+    spawnRelaxFallback: false,  // no candidate ⇒ unplaced (G-G fails)
+    // G-E — ceilings on distance, FLOOR on being seen. Shipped: 72.6–75.9%.
+    eP10Min: null, eMedMin: null, eMedMax: 12, eP90Max: 22,
+    ePlMin: 70, ePlMax: null,
+    // G-G — shipped arenas all sit AT the 50 ceiling.
+    spawnMin: 40, spawnMax: 50, clusterBboxMin: 110, clusterPairMin: 14,
+    // G-HUB — not gated in gen-1 (measured: 42.2 / 45.7 / 53.4%).
+    hubShareMin: null, hubOpenR: 1.5, hubDominance: null,
+  },
+  2: {
+    label: "GEN-2 (doubled density — not yet the default)",
+    // ---- G-A ---------------------------------------------------------
+    // Owner target. 5500–6300 m² is >2× the largest shipped arena (2730) and
+    // lands per-actor in CS2-Dust2 territory rather than CoD-Shipment's.
+    groundMin: 5500, groundMax: 6300,
+    // UNCHANGED ON PURPOSE: stray area is scale-free (it is an absolute m² of
+    // unreachable floor, not a share), and it is the only clause that catches
+    // a walled-off region — precisely the failure an expansion invents.
+    strayMax: 60,
+    // ---- G-B ---------------------------------------------------------
+    // Owner target. This is NOT G-A ÷ ACTORS: the two bands bite at different
+    // corners, because G-B adds the off-grid elevated surface and divides by
+    // the real roster. Worked corners at ACTORS=10: ground 6300 + 700 m² of
+    // balcony passes G-A and fails G-B at 700; ground 5500 with no balcony
+    // passes G-A and fails G-B at 550. A roster change (11 actors) moves G-B
+    // and leaves G-A untouched — that is the independence gen-1 lacked.
+    perActorMin: 560, perActorMax: 700,
+    // ---- G-C ---------------------------------------------------------
+    // Band edges NOT scaled (weapon ranges, not map sizes); shares rebalanced.
+    // <6 m becomes a BAND: the gen-1 ≥40% floor with no ceiling literally
+    // reads "make it bigger and equally cramped". 25% floor keeps room-fighting
+    // real; the 45% ceiling sits below all three shipped maps (46.9/48.4) so a
+    // doubled map that kept today's mix fails it.
+    u6Min: 25, u6Max: 45,
+    // <15 m flips from a ≥70% floor to a 50–70% band — 70 is now the CEILING
+    // it used to be the floor of. Shipped maps run 77.0–82.1%, i.e. four rays
+    // in five die inside 15 m; that is the shooting gallery in raw form.
+    u15Min: 50, u15Max: 70,
+    // the layer all three maps lack: 15–40 m measures 17.5–21.7% today.
+    // 28% floor is arithmetically reachable with the two bands above (e.g.
+    // u6 30 + 6–15 m 32 + mid 34 + tail 4 = 100), and ~+7 pts on the best
+    // shipped map — a real mid-range layer, not a rounding of today's.
+    midMin: 28, midLoM: 15, midHiM: 40,
+    // ---- G-D ---------------------------------------------------------
+    // 140 m ray cap. NON-OPTIONAL: gen-1's cap is 90 m, a 2× map's AABB
+    // diagonal is ~124 m (e.g. 103×69), so under the old cap every long
+    // diagonal would SATURATE at 90 and both the 78 m tail clause and the
+    // 95 m ceiling below would be unfalsifiable. 140 > any 2× diagonal.
+    rayCapM: 140,
+    // The two tail distances are map-size properties ⇒ ×1.414: 40→55, 55→78.
+    // Their ALLOWANCES are unchanged because they are tail FRACTIONS, not
+    // areas. Third clause is new: ≥40 m ≤8% is the explicit ceiling on the
+    // long-lane layer that the scaled tails no longer supply (a doubled map
+    // may legitimately run ~1 ray in 12 out to 40–55 m; 1 in 5 is a field).
+    dTails: [
+      { m: 78, max: 0.05, cmp: "<", dp: 3, note: ", R3 keyholes accepted" },
+      { m: 55, max: 1.5, cmp: "≤", dp: 2 },
+      { m: 40, max: 8.0, cmp: "≤", dp: 2 },
+    ],
+    // hard ceiling on the LONGEST ray anywhere (owner: "around 95"). Shipped
+    // maps measure 61.3–72.0 m; a 2× map whose diagonal is ~124 m must break
+    // every line before 95 m or it is a sniper alley regardless of the tails.
+    longestMaxM: 95,
+    // ---- spawn exposure: the clause that fights the expansion -----------
+    // placePoint (see below) REJECTS any spawn candidate whose longest ray
+    // reaches spawnLongestM. At 40 m on a doubled map that rejects most of the
+    // map and drives every spawn back into the cramped pockets the expansion
+    // exists to escape — the gate would manufacture the defect it grades. Two
+    // changes: the limit scales with everything else (40→55), and a candidate
+    // that fails ONLY this test is no longer discarded — the least-exposed one
+    // is kept (spawnRelaxFallback) so the failure surfaces as a NAMED spawn in
+    // G-D instead of an "unplaced" in G-G, which is a usable work order.
+    spawnLongestM: 55,
+    // ≤2 of a 70–100 point set (≈3%) is the same "keyholes are exceptional,
+    // not forbidden" convention G-D's ≥78 m clause already runs on. A hard
+    // zero plus a 4 m nudge budget is what forces spawns into caves.
+    spawnLongMax: 2,
+    spawnRelaxFallback: true,
+    // ---- G-E — the central fix -----------------------------------------
+    // P(≥1 of 9 in LOS) becomes a BAND. The gen-1 ≥70% floor certifies that
+    // 70%+ of the time you stand anywhere, someone can see you — the owner
+    // complaint written as a requirement. Where the band comes from: with 9
+    // opponents, P(≥1 seen) = 1−(1−p)⁹ for pairwise visibility p. The shipped
+    // maps average 74.2% ⇒ p ≈ 0.140. Pairwise visibility falls roughly with
+    // the area you are NOT in, so doubling the floor halves p ⇒ p ≈ 0.070 ⇒
+    // P ≈ 48%. So a FAITHFUL 2× expansion of today's geometry measures ~48%:
+    // the 35–60 band brackets that with ±13 points of authoring room, ten
+    // times the gate's own ±1.2-point Monte-Carlo SE (saltmarket.js:38-42).
+    // 35 is the ghost-town floor (someone in LOS every ~3 respawns), 60 is
+    // 12+ points under every shipped map, so all three fail the ceiling.
+    ePlMin: 35, ePlMax: 60,
+    // FLOOR on nearest-enemy distance — gen-1 has none, so nothing can fail
+    // the 3.2–3.6 m p10 the shipped maps measure (1 respawn in 10 puts the
+    // nearest enemy inside 3.5 m). Derivation: for 10 uniform actors on area
+    // A, P(nearest-of-9 > r) = (1 − πr²/A)⁹, giving p10 = 4.7 m / med = 11.8 m
+    // / p90 = 20.6 m at A = 5900 m². The shipped maps run 1.15× / 1.25× /
+    // 1.37× their own uniform prediction (walls and elongation), so a 2× map
+    // of the same style lands at p10 ≈ 5.4, med ≈ 14.7, p90 ≈ 28.2 m.
+    // Thresholds are set just outside those: a 5.0 m p10 floor fails only a
+    // map that re-created today's pockets, and it is ~1 s of sprint — the
+    // shortest distance at which a respawn is survivable.
+    eP10Min: 5.0,
+    // median becomes a BAND: the ≤12 ceiling is kept in spirit at 18 (12 ×
+    // 1.414 ≈ 17), and the new floor of 10 fails a map whose actors are
+    // jammed into a fraction of the floor it claims to have.
+    eMedMin: 10, eMedMax: 18,
+    // p90 ceiling scaled: 22 × 1.414 ≈ 31, rounded to 32 over the 28.2 m
+    // prediction. Still a real ceiling — it is what keeps the map from going
+    // dead now that the LOS floor no longer does that job.
+    eP90Max: 32,
+    // ---- G-G ---------------------------------------------------------
+    // All three arenas sit AT gen-1's ceiling of 50 with zero headroom, so
+    // gen-1 literally cannot accept a map with more territory to spawn in.
+    // 70 floor = ~7 per cluster across a 7+ cluster map (gen-1's 40 was ~6);
+    // 100 ceiling = 2× gen-1's, and the ceiling now sits 43% above the floor
+    // instead of gen-1's 25%, which is where the headroom for new territory
+    // comes from. The per-mode ≥6-per-cluster rule is deliberately NOT
+    // scaled — it is a mode-eligibility minimum (the C7b regression stopper),
+    // not a density number.
+    spawnMin: 70, spawnMax: 100,
+    // cluster spread scales with the map: 110 m² → 220 m² (area ×2), 14 m →
+    // 20 m (14 × 1.414). A cluster that stays 14 m wide on a doubled map is a
+    // pocket, and a pocket is exactly what spawn-camping wants.
+    clusterBboxMin: 220, clusterPairMin: 20,
+    // ---- G-HUB (new) --------------------------------------------------
+    // core/level/maps/saltmarket.js:24-31 states the mechanism: "the
+    // mutual-visibility probability between two random points scales with the
+    // SQUARE of the largest open region's share of the floor", and records
+    // that the first (warren) build of that map measured P(≥1 in LOS) 36.1%
+    // until a dominant 53.8% hall was put in. Doubling the floor is the single
+    // most likely way to turn a map back into a warren — twice the corridors,
+    // no bigger room — and because the relationship is SQUARED, a share that
+    // slips from 45% to 30% costs more than half the mutual visibility.
+    // MEASURE: cells whose distance to the nearest blocker is ≥1.5 m (the same
+    // clearance the spawn placer demands), 4-connected, largest component as a
+    // share of walkable floor. Validation that this measures what the author
+    // meant: it returns 1328 m² / 53.4% on saltmarket against that file's own
+    // "1339 of 2488 m², 53.8%" — the same hall, independently measured.
+    hubOpenR: 1.5,
+    // 40% floor = the WEAKEST shipped map (lanternwalk 42.2%, and it is the
+    // one that clears G-E most comfortably at 75.9%). Asking a doubled map for
+    // no less than the weakest proven map catches warren-ification without
+    // demanding more than a shipped map delivers; at a 5500–6300 m² floor it
+    // also means ≥2200 m² of genuinely open room, ≈ today's ENTIRE arena.
+    hubShareMin: 40,
+    // "DOMINANT", not merely "large": two equal halls of share s/2 deliver
+    // 2·(s/2)² = s²/2 — half the mutual visibility of one hall of share s.
+    // Shipped maps clear this by 8.7× / 39× / 64×, so it only ever bites the
+    // split-the-map-in-two expansion, which is the expansion under discussion.
+    hubDominance: 2.0,
+  },
+};
+const T = THRESHOLDS[GEN];
+// band text: renders one-sided bands exactly as the gen-1 gate lines did.
+const band = (lo, hi) => (lo == null ? `≤${hi}` : hi == null ? `≥${lo}` : `${lo}–${hi}`);
+const inBand = (v, lo, hi) => (lo == null || v >= lo) && (hi == null || v <= hi);
+
 // ------------------------------------------------------------ gate ledger
 let anyFail = false;
 function gate(id, ok, detail) {
@@ -171,7 +437,10 @@ const groundArea = reach.length * CELL * CELL;
 const strayArea = (pts.length - reach.length) * CELL * CELL;
 
 // -------------------------------------------------------------- raycasting
-function ray(x, z, dx, dz, y, cap = 90) {
+// cap comes from the threshold table: gen-1's 90 m clears switchyard's 89.3 m
+// AABB diagonal, but a 2× map's diagonal is ~124 m and would silently SATURATE
+// at 90, hiding every long ray behind the instrument (gen-2 uses 140).
+function ray(x, z, dx, dz, y, cap = T.rayCapM) {
   const step = 0.25;
   for (let t = step; t <= cap; t += step) {
     const px = x + dx * t, pz = z + dz * t;
@@ -290,8 +559,21 @@ function coneYaw(x, z, cluster) {
   return [by, bv];
 }
 // repair: nudge ≤4 m to a walkable spot with clearance ≥1.5 and coned view ≥8,
-// and (G-D clause 3) no ray ≥40 m from the point.
+// and (G-D clause 3) no ray ≥ T.spawnLongestM from the point.
+//
+// The exposure limit is a TABLE value, read by this search and by G-D's clause
+// from the same field, so the two can no longer drift (they were two separate
+// literal 40s that merely happened to agree).
+//
+// GEN-2 also relaxes the FAILURE MODE. Rejecting outright is safe while 40 m
+// is long relative to the map; on a doubled map most of the floor can see
+// 40 m+, so an outright reject drives every spawn into the cramped pockets the
+// expansion exists to remove — the gate would manufacture the defect it grades.
+// With spawnRelaxFallback the least-exposed otherwise-valid candidate is kept
+// and reported, so the result is a NAMED over-exposed spawn in G-D rather than
+// a vanished one in G-G. Gen-1 leaves the flag false and behaves identically.
 function placePoint(id, x0, z0, cluster) {
+  let fallback = null;
   for (let r = 0; r <= 4.01; r += 0.5) {
     for (let a = 0; a < (r === 0 ? 1 : 24); a++) {
       const th = (a / 24) * Math.PI * 2;
@@ -302,11 +584,16 @@ function placePoint(id, x0, z0, cluster) {
       const [yaw, view] = coneYaw(x, z, cluster);
       if (view < 8.0) continue;
       const pr = profile([[x, z]]);
-      if (pr.maxes[0] >= 40.0) continue; // G-D: no keyhole originates at a spawn
+      if (pr.maxes[0] >= T.spawnLongestM) { // G-D: no keyhole originates at a spawn
+        if (T.spawnRelaxFallback && (fallback === null || pr.maxes[0] < fallback.longest)) {
+          fallback = { x, z, yaw, clear: cr, view, longest: pr.maxes[0], relaxed: true };
+        }
+        continue;
+      }
       return { x, z, yaw, clear: cr, view, longest: pr.maxes[0] };
     }
   }
-  return null;
+  return fallback; // always null in gen-1 (spawnRelaxFallback === false)
 }
 
 const points = [];
@@ -318,39 +605,95 @@ for (const [id, x0, z0, cluster, modes] of SP) {
   const clash = points.find((p) => Math.hypot(p.x - got.x, p.z - got.z) < 3.0);
   if (clash) { unplaced.push(`${id} (spacing vs ${clash.id}@${clash.x},${clash.z} got ${got.x},${got.z})`); continue; }
   const cov = Math.round((1 - profile([[got.x, got.z]], 1.0, 16).all.filter((d) => d > 4).length / 16) * 10) / 10;
-  points.push({ id, cluster, modes: modes || ALL.slice(), x: got.x, z: got.z, yaw: Math.round(got.yaw * 100) / 100, clear: got.clear, view: got.view, longest: got.longest, cover: Math.min(0.9, Math.max(0.1, cov)) });   // `longest` carried so G-D's spawn clause MEASURES (it was dropped here, making that clause structurally vacuous)
+  points.push({ id, cluster, modes: modes || ALL.slice(), x: got.x, z: got.z, yaw: Math.round(got.yaw * 100) / 100, clear: got.clear, view: got.view, longest: got.longest, relaxed: !!got.relaxed, cover: Math.min(0.9, Math.max(0.1, cov)) });   // `longest` carried so G-D's spawn clause MEASURES (it was dropped here, making that clause structurally vacuous); `relaxed` names a gen-2 fallback placement
 }
 
 // ===========================================================================
-console.log(`=== ${MAP_ID.toUpperCase()} ARENA GATES (G-A…G-K) ===`);
+console.log(GEN === 1
+  ? `=== ${MAP_ID.toUpperCase()} ARENA GATES (G-A…G-K) ===`
+  : `=== ${MAP_ID.toUpperCase()} ARENA GATES (G-A…G-K, G-HUB) — ${T.label} ===`);
 console.log(`bounds X[${AB.x0},${AB.x1}] Z[${AB.z0},${AB.z1}]  boxes ${boxes.length}  walkable cells ${pts.length} (reach ${reach.length})`);
 
 // ---- G-A walkable area + connectivity
-gate("G-A", groundArea >= 2400 && groundArea <= 2800 && strayArea <= 60,
-  `walkable ground ${groundArea.toFixed(0)} m² (target 2400–2800), disconnected stray ${strayArea.toFixed(0)} m² (≤60)`);
+gate("G-A", inBand(groundArea, T.groundMin, T.groundMax) && strayArea <= T.strayMax,
+  `walkable ground ${groundArea.toFixed(0)} m² (target ${band(T.groundMin, T.groundMax)}), disconnected stray ${strayArea.toFixed(0)} m² (≤${T.strayMax})`);
 
 // ---- G-B per-actor surface
-const perActor = (groundArea + BALCONY_M2) / 10; // + measured off-grid surface (gates.balconyAreaM2)
-gate("G-B", perActor >= 250 && perActor <= 320, `per-actor surface ${perActor.toFixed(0)} m² (target 250–320, incl. ~${BALCONY_M2} m² balcony)`);
+// divisor = the real roster (botRoster + the human), never a literal 10.
+const perActor = (groundArea + BALCONY_M2) / ACTORS; // + measured off-grid surface (gates.balconyAreaM2)
+gate("G-B", inBand(perActor, T.perActorMin, T.perActorMax),
+  `per-actor surface ${perActor.toFixed(0)} m² (target ${band(T.perActorMin, T.perActorMax)}, incl. ~${BALCONY_M2} m² balcony)` +
+  (GEN === 1 ? "" : `, ÷${ACTORS} actors from content.botRoster`));
 
 // ---- sightline profile (G-C, G-D)
 const S = sample(reach, 900);
 const P = profile(S);
 const bandPct = (lo, hi) => (P.all.filter((d) => d >= lo && d < hi).length / P.all.length) * 100;
 const under6 = bandPct(0, 6), under15 = bandPct(0, 15);
-gate("G-C", under6 >= 40 && under15 >= 70, `band mix <6 m ${under6.toFixed(1)}% (≥40), <15 m ${under15.toFixed(1)}% (≥70)`);
-const ge55 = bandPct(55, 999), ge40 = bandPct(40, 999);
-const spawnLong = points.filter((p) => p.longest >= 40);
+// gen-2 adds the mid-range clause: a floor on the 15–40 m layer all three
+// shipped maps lack (17.5–21.7%), so "bigger" cannot mean "bigger and equally
+// cramped". The 6/15/40 m edges are weapon ranges and never scale.
+const mid = T.midMin == null ? null : bandPct(T.midLoM, T.midHiM);
+gate("G-C", inBand(under6, T.u6Min, T.u6Max) && inBand(under15, T.u15Min, T.u15Max) &&
+  (mid == null || mid >= T.midMin),
+  `band mix <6 m ${under6.toFixed(1)}% (${band(T.u6Min, T.u6Max)}), <15 m ${under15.toFixed(1)}% (${band(T.u15Min, T.u15Max)})` +
+  (mid == null ? "" : `, ${T.midLoM}–${T.midHiM} m ${mid.toFixed(1)}% (≥${T.midMin})`));
+
+// ---- --bandMap: WHERE G-C's short rays come from.
+// G-C reports one band mix for the arena; this bins the SAME rays by 8 m tile
+// so de-cluttering targets the ground that is actually short-sighted, rather
+// than whichever corner looks busy. Diagnostic only.
+if (ARGV.includes("--bandMap")) {
+  const TILE = 8, tiles = new Map();
+  for (const [x, z] of S) {
+    let u15 = 0, m = 0;
+    for (let i = 0; i < 72; i++) {
+      const a = (i / 72) * Math.PI * 2;
+      const d = ray(x, z, Math.cos(a), Math.sin(a), 1.6);
+      if (d < 15) u15++; else if (d < 40) m++;
+    }
+    const k = `${Math.floor(x / TILE)},${Math.floor(z / TILE)}`;
+    const t = tiles.get(k) || { tx: Math.floor(x / TILE), tz: Math.floor(z / TILE), n: 0, u: 0, m: 0 };
+    t.n++; t.u += u15 / 72; t.m += m / 72;
+    tiles.set(k, t);
+  }
+  const rows = [...tiles.values()].filter((t) => t.n >= 3)
+    .map((t) => ({ ...t, u15: t.u / t.n * 100, mid: t.m / t.n * 100 }))
+    .sort((a, b) => b.u15 - a.u15);
+  console.log(`
+--bandMap  ${S.length} cells, TILE ${TILE} m — arena <15 m ${under15.toFixed(1)}%, 15-40 m ${(mid || 0).toFixed(1)}%`);
+  console.log("  tile x,z (m)        cells    <15 m    15-40 m");
+  for (const r of rows.slice(0, 16))
+    console.log(`  [${String(r.tx * TILE).padStart(4)},${String(r.tz * TILE).padStart(4)}]`.padEnd(22) +
+      `${String(r.n).padStart(4)}   ${r.u15.toFixed(1).padStart(6)}%   ${r.mid.toFixed(1).padStart(6)}%`);
+}
+// tail clauses, longest-first, straight off the table (gen-1: 55/40 m;
+// gen-2: 78/55/40 m — the two size-driven distances scaled by √2, allowances
+// unchanged because they are tail FRACTIONS, not areas).
+const tails = T.dTails.map((t) => Object.assign({}, t, { pctv: bandPct(t.m, 99999) }));
+const tailsOk = tails.every((t) => (t.cmp === "<" ? t.pctv < t.max : t.pctv <= t.max));
+const longestRay = P.all[P.all.length - 1];
+const longestOk = T.longestMaxM == null || longestRay <= T.longestMaxM;
+const spawnLong = points.filter((p) => p.longest >= T.spawnLongestM);
 // "0.0% ≥ 55 m" is arena.md's own measurement convention: its twelve accepted
 // 55–67 m keyholes (§4.4, residual R3) existed while it reported 0.0%, so the
 // gate is <0.05% (rounds to 0.0), not literal zero.
-gate("G-D", ge55 < 0.05 && ge40 <= 1.5 && spawnLong.length === 0,
-  `rays ≥55 m ${ge55.toFixed(3)}% (<0.05, R3 keyholes accepted), ≥40 m ${ge40.toFixed(2)}% (≤1.5), spawns with a ≥40 m ray: ${spawnLong.length}`);
+gate("G-D", tailsOk && longestOk && spawnLong.length <= T.spawnLongMax,
+  `rays ${tails.map((t) => `≥${t.m} m ${t.pctv.toFixed(t.dp)}% (${t.cmp}${t.max}${t.note || ""})`).join(", ")}` +
+  (T.longestMaxM == null ? "" : `, longest sampled ray ${longestRay.toFixed(1)} m (≤${T.longestMaxM})`) +
+  `, spawns with a ≥${T.spawnLongestM} m ray: ${spawnLong.length}` +
+  (T.spawnLongMax > 0 ? ` (≤${T.spawnLongMax})` : ""));
+if (GEN !== 1) for (const p of spawnLong) note(`G-D: ${p.id} @(${p.x},${p.z}) longest ray ${p.longest.toFixed(1)} m${p.relaxed ? " [relaxed placement — no candidate under the limit within 4 m]" : ""}`);
 
 // ---- G-E 10-actor occupancy
 {
-  let rs = 12345; const rnd = () => (rs = (rs * 1664525 + 1013904223) >>> 0) / 4294967296;
-  const TR = 1500; const nearest = []; let anyLos = 0;
+  // G-E is a Monte Carlo, so its own sampling noise is part of the reading.
+  // At p ~= 0.6, TR = 1500 gives a standard error of +-1.26 pp — wider than
+  // the gate band itself, so a map could pass or fail on the draw rather than
+  // on its geometry. TR = 24000 puts the s.e. at +-0.32 pp. Both are
+  // overridable so the reading can be audited across seeds.
+  let rs = LOS_SEED; const rnd = () => (rs = (rs * 1664525 + 1013904223) >>> 0) / 4294967296;
+  const TR = LOS_TRIALS; const nearest = []; let anyLos = 0;
   for (let t = 0; t < TR; t++) {
     const me = reach[Math.floor(rnd() * reach.length)];
     let nd = 1e9, seenN = 0;
@@ -363,9 +706,120 @@ gate("G-D", ge55 < 0.05 && ge40 <= 1.5 && spawnLong.length === 0,
     nearest.push(nd); if (seenN > 0) anyLos++;
   }
   nearest.sort((a, b) => a - b);
-  const med = pct(nearest, 0.5), p90 = pct(nearest, 0.9), pl = (anyLos / TR) * 100;
-  gate("G-E", med <= 12 && p90 <= 22 && pl >= 70,
-    `nearest-of-9 median ${med.toFixed(1)} m (≤12), p90 ${p90.toFixed(1)} m (≤22), P(≥1 in LOS) ${pl.toFixed(1)}% (≥70)`);
+  const p10 = pct(nearest, 0.1), med = pct(nearest, 0.5), p90 = pct(nearest, 0.9), pl = (anyLos / TR) * 100;
+  // gen-1: ceilings on distance + a FLOOR on being seen — a phone booth passes.
+  // gen-2: a BAND on P(≥1 in LOS) (neither shooting gallery nor ghost town),
+  // plus the p10 FLOOR gen-1 never had. See the threshold table for both
+  // derivations (1−(1−p)⁹ for the band, (1−πr²/A)⁹ for the distances).
+  gate("G-E", inBand(p10, T.eP10Min, null) && inBand(med, T.eMedMin, T.eMedMax) &&
+    p90 <= T.eP90Max && inBand(pl, T.ePlMin, T.ePlMax),
+    (T.eP10Min == null ? "nearest-of-9" : `nearest-of-9 p10 ${p10.toFixed(1)} m (≥${T.eP10Min}),`) +
+    ` median ${med.toFixed(1)} m (${band(T.eMedMin, T.eMedMax)}), p90 ${p90.toFixed(1)} m (≤${T.eP90Max}), ` +
+    `P(≥1 in LOS) ${pl.toFixed(1)}% (${band(T.ePlMin, T.ePlMax)})`);
+}
+
+// ---- --losMap: WHERE the mutual visibility lives.
+// G-E reports one number for the whole arena, which tells you a map is too
+// open but not which square metres are doing it. This buckets each sampled
+// reachable cell by the fraction of other cells it can see and prints the
+// worst tiles, so occluders go where they actually buy G-E instead of where
+// they look right. Diagnostic only — prints nothing unless asked.
+if (ARGV.includes("--losMap")) {
+  const TILE = 8;
+  const NS = numArg("losMapSamples", 700);
+  const S = sample(reach, NS);
+  const vis = new Array(S.length).fill(0);
+  for (let i = 0; i < S.length; i++)
+    for (let j = i + 1; j < S.length; j++)
+      if (los(S[i], S[j])) { vis[i]++; vis[j]++; }
+  const tiles = new Map();
+  for (let i = 0; i < S.length; i++) {
+    const tx = Math.floor(S[i][0] / TILE), tz = Math.floor(S[i][1] / TILE);
+    const k = `${tx},${tz}`;
+    const t = tiles.get(k) || { tx, tz, n: 0, v: 0 };
+    t.n++; t.v += vis[i] / (S.length - 1);
+    tiles.set(k, t);
+  }
+  const rows = [...tiles.values()].filter((t) => t.n >= 3)
+    .map((t) => ({ ...t, mean: t.v / t.n, load: t.v }))
+    .sort((a, b) => b.load - a.load);
+  const overall = vis.reduce((a, b) => a + b, 0) / (S.length * (S.length - 1));
+  console.log(`
+--losMap  ${S.length} cells, TILE ${TILE} m — mean pairwise LOS ${(overall * 100).toFixed(2)}%`);
+  console.log("  tile x,z (m)        cells   mean LOS   share of total");
+  const total = rows.reduce((a, r) => a + r.load, 0);
+  for (const r of rows.slice(0, 14))
+    console.log(`  [${String(r.tx * TILE).padStart(4)},${String(r.tz * TILE).padStart(4)}]`.padEnd(22) +
+      `${String(r.n).padStart(4)}   ${(r.mean * 100).toFixed(1).padStart(6)}%   ${(r.load / total * 100).toFixed(1).padStart(5)}%`);
+}
+
+// ---- G-HUB dominant open region (GEN-2 only — the anti-warren clause)
+// WHY THIS GATE EXISTS: core/level/maps/saltmarket.js:24-31 records the
+// mechanism from that map's own build — "the mutual-visibility probability
+// between two random points scales with the SQUARE of the largest open
+// region's share of the floor". Its first build was a pure lattice of aisles
+// and measured P(≥1 of 9 in LOS) 36.1%; the fix was not more cover but ONE
+// dominant open room. Doubling a map's floor is the most likely way to
+// re-create that lattice (twice the corridors, no bigger room), and because
+// the relation is squared, a share sliding 45%→30% costs more than half the
+// mutual visibility. G-E measures the symptom; this measures the cause, and
+// unlike G-E it is not a 1500-trial Monte Carlo — it is exact on the grid.
+//
+// MEASURE: 0.5 m cells whose distance to the nearest blocker is ≥ hubOpenR
+// (1.5 m — the same clearance the spawn placer demands), 4-connected, largest
+// component ÷ walkable floor. Cross-check that this measures the room a map
+// author would point at: it returns 53.4% on saltmarket against that file's
+// own "1339 of 2488 m², 53.8%" measurement of its hall.
+if (T.hubShareMin != null) {
+  const ki = (p) => Math.round((p[0] - AB.x0) / CELL), kj = (p) => Math.round((p[1] - AB.z0) / CELL);
+  let W = 0, H = 0;
+  for (const p of pts) { if (ki(p) + 2 > W) W = ki(p) + 2; if (kj(p) + 2 > H) H = kj(p) + 2; }
+  const gi = (i, j) => j * W + i;
+  const D = new Float32Array(W * H); // 0 everywhere = "blocked"; walkable set below
+  for (const p of pts) D[gi(ki(p), kj(p))] = 1e9;
+  const O = CELL, Q = CELL * Math.SQRT2;   // octile chamfer costs, in metres
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+    let v = D[gi(i, j)]; if (v === 0) continue;
+    if (i > 0) v = Math.min(v, D[gi(i - 1, j)] + O);
+    if (j > 0) v = Math.min(v, D[gi(i, j - 1)] + O);
+    if (i > 0 && j > 0) v = Math.min(v, D[gi(i - 1, j - 1)] + Q);
+    if (i < W - 1 && j > 0) v = Math.min(v, D[gi(i + 1, j - 1)] + Q);
+    D[gi(i, j)] = v;
+  }
+  for (let j = H - 1; j >= 0; j--) for (let i = W - 1; i >= 0; i--) {
+    let v = D[gi(i, j)]; if (v === 0) continue;
+    if (i < W - 1) v = Math.min(v, D[gi(i + 1, j)] + O);
+    if (j < H - 1) v = Math.min(v, D[gi(i, j + 1)] + O);
+    if (i < W - 1 && j < H - 1) v = Math.min(v, D[gi(i + 1, j + 1)] + Q);
+    if (i > 0 && j < H - 1) v = Math.min(v, D[gi(i - 1, j + 1)] + Q);
+    D[gi(i, j)] = v;
+  }
+  const open = new Uint8Array(W * H);
+  for (const p of reach) if (D[gi(ki(p), kj(p))] >= T.hubOpenR) open[gi(ki(p), kj(p))] = 1;
+  const lab = new Uint8Array(W * H);
+  const sizes = [];
+  for (let s0 = 0; s0 < W * H; s0++) {
+    if (!open[s0] || lab[s0]) continue;
+    let n = 0; const st = [s0]; lab[s0] = 1;
+    while (st.length) {
+      const c = st.pop(); n++;
+      const i = c % W, j = (c - i) / W;
+      for (const [a, b] of [[i - 1, j], [i + 1, j], [i, j - 1], [i, j + 1]]) {
+        if (a < 0 || b < 0 || a >= W || b >= H) continue;
+        const k2 = gi(a, b);
+        if (open[k2] && !lab[k2]) { lab[k2] = 1; st.push(k2); }
+      }
+    }
+    sizes.push(n);
+  }
+  sizes.sort((a, b) => b - a);
+  const hubCells = sizes[0] || 0, secondCells = sizes[1] || 0;
+  const hubArea = hubCells * CELL * CELL, secondArea = secondCells * CELL * CELL;
+  const hubShare = (hubCells / reach.length) * 100;
+  const dom = secondCells ? hubCells / secondCells : Infinity;
+  gate("G-HUB", hubShare >= T.hubShareMin && dom >= T.hubDominance,
+    `largest open region (≥${T.hubOpenR} m clearance) ${hubArea.toFixed(0)} m² = ${hubShare.toFixed(1)}% of floor (≥${T.hubShareMin}), ` +
+    `dominance vs 2nd (${secondArea.toFixed(0)} m²) ${dom === Infinity ? "∞" : dom.toFixed(1)}× (≥${T.hubDominance})`);
 }
 
 // ---- G-F loop probe: every spawn ↔ every spawn + both flags; no dead-end rects
@@ -398,7 +852,7 @@ gate("G-D", ge55 < 0.05 && ge40 <= 1.5 && spawnLong.length === 0,
 // ---- G-G spawn validity (incl. the C7b per-mode cluster counts)
 {
   let fails = [];
-  if (points.length < 40 || points.length > 50) fails.push(`count ${points.length} outside 40–50`);
+  if (!inBand(points.length, T.spawnMin, T.spawnMax)) fails.push(`count ${points.length} outside ${band(T.spawnMin, T.spawnMax)}`);
   if (unplaced.length) fails.push(`unplaced: ${unplaced.join(",")}`);
   for (const p of points) {
     if (!walkable(p.x, p.z)) fails.push(`${p.id} not walkable`);
@@ -414,8 +868,8 @@ gate("G-D", ge55 < 0.05 && ge40 <= 1.5 && spawnLong.length === 0,
     const area = (Math.max(...xs) - Math.min(...xs)) * (Math.max(...zs) - Math.min(...zs));
     let maxPair = 0;
     for (const a of ps) for (const b of ps) maxPair = Math.max(maxPair, Math.hypot(a.x - b.x, a.z - b.z));
-    if (area < 110) fails.push(`${cid} bbox ${area.toFixed(0)} m² < 110`);
-    if (maxPair < 14) fails.push(`${cid} max pair separation ${maxPair.toFixed(1)} m < 14`);
+    if (area < T.clusterBboxMin) fails.push(`${cid} bbox ${area.toFixed(0)} m² < ${T.clusterBboxMin}`);
+    if (maxPair < T.clusterPairMin) fails.push(`${cid} max pair separation ${maxPair.toFixed(1)} m < ${T.clusterPairMin}`);
   }
   // per-mode counts — the C7b regression stopper
   for (const mode of ALL) {
@@ -436,7 +890,10 @@ gate("G-D", ge55 < 0.05 && ge40 <= 1.5 && spawnLong.length === 0,
     if (d < 6) fails.push(`${p.id} V8: ${d.toFixed(1)} m from own flag`);
     if (d < 10 && los([p.x, p.z], [own[0], own[2]])) fails.push(`${p.id} V9: LOS to own stand at ${d.toFixed(1)} m`);
   }
-  gate("G-G", fails.length === 0, fails.length ? fails.join(" | ") : `${points.length} points, 7 clusters, per-mode counts ≥6, yaw cones ok`);
+  // cluster count is MEASURED, not the literal 7 this line used to print —
+  // every shipped map has 7, so gen-1's text is unchanged, but a gen-2 map
+  // with more clusters would have been misreported as 7.
+  gate("G-G", fails.length === 0, fails.length ? fails.join(" | ") : `${points.length} points, ${Object.keys(byCluster).length} clusters, per-mode counts ≥6, yaw cones ok`);
 }
 
 // ---- G-H boundary probe — no invisible walls
@@ -559,6 +1016,59 @@ gate("G-D", ge55 < 0.05 && ge40 <= 1.5 && spawnLong.length === 0,
 }
 
 // ===========================================================================
+// ---- --payers: which OCCLUDER earns its keep, and which does not.
+// G-C and G-E move in opposite directions for almost any single edit, so the
+// only way to satisfy both is to make the SWAP asymmetric: drop occluders that
+// cost many short rays per pair of sightlines they break, and add ones that
+// cost few. This credits every blocked pair and every sub-15 m ray to the box
+// that actually stopped it, and ranks by pairs-per-short-ray. (The same
+// attribution the switchyard notes quote as "34 pairs per m² vs 233".)
+if (ARGV.includes("--payers")) {
+  const boxAt = (x, z, y) => {
+    for (const b of buckets[bidx(x, z)])
+      if (x >= b.min[0] && x <= b.max[0] && z >= b.min[2] && z <= b.max[2] &&
+          b.min[1] <= y && b.max[1] >= y) return b;
+    return null;
+  };
+  const firstHit = (a, b, y = 1.6) => {
+    const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz);
+    const st = 0.25, n = Math.ceil(L / st);
+    for (let i = 1; i < n; i++) {
+      const t = i / n, hb = boxAt(a[0] + dx * t, a[1] + dz * t, y);
+      if (hb) return hb;
+    }
+    return null;
+  };
+  const stat = new Map();
+  const bump = (b, k) => {
+    if (!b) return;
+    const id = b.id || `${b.kind || "?"}@${b.min[0].toFixed(0)},${b.min[2].toFixed(0)}`;
+    const e = stat.get(id) || { id, kind: b.kind || "", pairs: 0, short: 0 };
+    e[k]++; stat.set(id, e);
+  };
+  const SP = sample(reach, numArg("payerSamples", 420));
+  for (let i = 0; i < SP.length; i++)
+    for (let j = i + 1; j < SP.length; j++) bump(firstHit(SP[i], SP[j]), "pairs");
+  for (const [x, z] of SP)
+    for (let i = 0; i < 72; i++) {
+      const a = (i / 72) * Math.PI * 2, c = Math.cos(a), sn = Math.sin(a);
+      const d = ray(x, z, c, sn, 1.6);
+      if (d < 15) bump(boxAt(x + c * (d + 0.13), z + sn * (d + 0.13), 1.6), "short");
+    }
+  const rows = [...stat.values()].filter((e) => e.short + e.pairs >= 12)
+    .map((e) => ({ ...e, r: e.pairs / Math.max(1, e.short) }))
+    .sort((a, b) => a.r - b.r);
+  console.log(`
+--payers  ${SP.length} cells — pairs blocked per sub-15 m ray cost (low = bad payer)`);
+  console.log("  WORST payers (candidates to remove/lower)");
+  for (const e of rows.slice(0, 12))
+    console.log(`    ${e.id.padEnd(16)}${e.kind.padEnd(14)} pairs ${String(e.pairs).padStart(5)}  short ${String(e.short).padStart(4)}  ratio ${e.r.toFixed(2)}`);
+  console.log("  BEST payers (the device to copy)");
+  for (const e of rows.slice(-8).reverse())
+    console.log(`    ${e.id.padEnd(16)}${e.kind.padEnd(14)} pairs ${String(e.pairs).padStart(5)}  short ${String(e.short).padStart(4)}  ratio ${e.r.toFixed(2)}`);
+}
+
+
 if (anyFail) {
   console.log("\nRESULT: FAIL");
   process.exit(1);
@@ -589,7 +1099,8 @@ if (EMIT) {
     id: MAP_ID,
     bounds: { min: C.bounds.min.slice(), max: C.bounds.max.slice() },
     vetoOverrides: { v1M: VETO.v1M, v2LosM: VETO.v2LosM, v3ConeM: VETO.v3ConeM },
-    _comment: "PROBE-EMITTED by tools/probe_arena.mjs --emit (measured geometry; PVP_BUILD_PLAN Part 4.2). Do not hand-edit spawnPoints/clusters/flags.",
+    _comment: "PROBE-EMITTED by tools/probe_arena.mjs --emit (measured geometry; PVP_BUILD_PLAN Part 4.2). Do not hand-edit spawnPoints/clusters/flags." +
+      (GEN === 1 ? "" : ` Certified under ${T.label}.`),
   };
   const spawnPoints = points.map((p) => ({
     id: p.id, pos: [p.x, 0, p.z], yaw: p.yaw, cluster: p.cluster,

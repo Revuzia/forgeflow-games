@@ -64,7 +64,9 @@ export const PUBLIC_FACTS = Object.freeze({
   leaderMarker: Object.freeze({ atScore: 15, orLeadBy: 5 }),
 });
 
-// band → scoreboard/killfeed label (C11: bands are printed, never hidden)
+// band → label. NOTE (owner 2026-09-16): bands and BOT chips are NO LONGER shown
+// to the player anywhere in the UI — opponents must read as people, not NPCs.
+// This table is retained for logs/telemetry only.
 export const BAND_LABEL = Object.freeze({
   recruit: "RECRUIT", regular: "REGULAR", hardened: "HARDENED", veteran: "VETERAN",
 });
@@ -87,6 +89,14 @@ body.match-live #killfeed{display:none;}
    hud.js state is untouched and scoreboard.js still drives the debrief's own
    "Return to base" path for the shell exit. */
 body.match-live #a10-debrief{display:none !important;}
+/* THE KILL-CAM SHIP BLOCKER. hud.js:1195 ramps the full-screen #a10-fade to
+   0.9 black whenever player.alive is false and HOLDS it — written for the
+   campaign's 1.2 s fade-to-checkpoint (R22). In a match that same window IS
+   the kill cam, so 90% black hides the shot the cam exists to show. Capped,
+   not removed: enough to sell the death, little enough to watch it. An author
+   !important beats hud.js's per-frame INLINE opacity, which is the same
+   mechanism the #a10-debrief rule above relies on. */
+body.mh-dead #a10-fade{opacity:.34 !important;}
 #mhud{position:fixed;inset:0;z-index:35;pointer-events:none;overflow:hidden;
   font-family:var(--a10-hud-font,system-ui);color:var(--a10-ink,#e8e8e4);
   text-shadow:0 1px 2px rgba(0,0,0,.6);-webkit-user-select:none;user-select:none;display:none;}
@@ -125,6 +135,14 @@ body.match-live #a10-debrief{display:none !important;}
   text-align:center;}
 #mh-respawn{font-size:17px;letter-spacing:.2em;display:none;}
 #mh-respawn .n{color:var(--a10-amber,#d9a441);}
+/* kill-cam nameplate — sits above the respawn countdown while the cam runs.
+   The name comes from actorName(), which never marks a bot (owner rule: a
+   player must not be able to tell an NPC from a human). */
+#mh-killcam{display:none;margin-bottom:10px;}
+#mh-killcam .lbl{font-size:10px;letter-spacing:.34em;opacity:.55;}
+#mh-killcam .who{font-size:23px;letter-spacing:.14em;margin-top:3px;
+  color:var(--a10-amber,#d9a441);}
+#mh-killcam .hs{font-size:10px;letter-spacing:.28em;opacity:.8;margin-top:3px;}
 #mh-protect{font-size:11px;letter-spacing:.26em;opacity:.7;display:none;margin-top:6px;}
 #mh-teach{font-size:14px;letter-spacing:.2em;color:var(--a10-amber,#d9a441);
   display:none;margin-top:10px;}
@@ -185,7 +203,7 @@ export function createMatchHud(ctx) {
     `<div id="mh-flags"></div>` +
     `<div id="mh-feed"></div>` +
     `<div id="mh-banner"></div>` +
-    `<div id="mh-center"><div id="mh-respawn"></div><div id="mh-protect"></div><div id="mh-teach"></div></div>` +
+    `<div id="mh-center"><div id="mh-killcam"></div><div id="mh-respawn"></div><div id="mh-protect"></div><div id="mh-teach"></div></div>` +
     `<div id="mh-warmup" style="display:none"><div class="mode"></div><div class="rules"></div><div class="count"></div></div>` +
     `<div id="mh-result"><h1></h1><div class="why"></div></div>` +
     `<div id="mh-pips"></div>`;
@@ -195,6 +213,7 @@ export function createMatchHud(ctx) {
   const scoreEl = el("mh-score"), clockEl = el("mh-clock"), flagsEl = el("mh-flags");
   const feedEl = el("mh-feed"), bannerEl = el("mh-banner");
   const respawnEl = el("mh-respawn"), protectEl = el("mh-protect"), teachEl = el("mh-teach");
+  const killcamEl = el("mh-killcam");
   const warmEl = el("mh-warmup"), resultEl = el("mh-result"), pipsEl = el("mh-pips");
   // the result banner escapes #mhud's stacking context (z-35) so it can sit
   // at z-68 above the campaign debrief (z-65) — see the style block note.
@@ -228,6 +247,8 @@ export function createMatchHud(ctx) {
     teachT: -9,
     teachLastT: -9,
     marked: false,
+    killedBy: null,          // actorId of whoever killed US — kill-cam nameplate
+    killedByHs: false,
     collapse: null,          // {armed, radius}
     pressure: false,
     resultShown: false,
@@ -347,11 +368,20 @@ export function createMatchHud(ctx) {
     const kMe = kA === 0, vMe = vA === 0;
     const kHtml = kA == null
       ? `<span style="opacity:.5">—</span>`
-      : `<span class="${kMe ? "me" : ""}">${esc(actorName(kA))}</span>${kBot ? `<span class="bg">BOT</span>` : ""}`;
+      : `<span class="${kMe ? "me" : ""}">${esc(actorName(kA))}</span>`;
     const vHtml =
-      `<span class="${vMe ? "med" : ""}">${esc(actorName(vA))}</span>${vBot ? `<span class="bg">BOT</span>` : ""}`;
+      `<span class="${vMe ? "med" : ""}">${esc(actorName(vA))}</span>`;
     slot.el.innerHTML = kHtml + GLYPH_SVG + vHtml;
+    // remember our own killer for the kill-cam nameplate. kA === vA (or null)
+    // means a suicide / zone death: the cam orbits the death spot and the
+    // nameplate stays hidden rather than reading "KILLED BY YOU".
+    if (vMe) st.killedBy = (kA != null && kA !== vA) ? kA : null;
+    if (vMe) st.killedByHs = !!d.headshot;
     reflow();
+    // Paint immediately on OUR death: renderCenter otherwise only runs on the
+    // 150 ms interval, so both the nameplate and the .mh-dead fade cap would
+    // land late — the player would watch the screen go 90% black and then lift.
+    if (vMe) renderCenter();
   }
   function reflow() {
     const live = feedRows.filter((r) => r.live).sort((a, b) => a.t - b.t);
@@ -381,6 +411,18 @@ export function createMatchHud(ctx) {
       respawnEl.innerHTML = `<span style="opacity:.75">NO RESPAWNS IN OVERTIME</span>`;
       respawnEl.style.display = "block";
     } else respawnEl.style.display = "none";
+    // The kill cam runs for exactly as long as we are dead in a non-ended
+    // phase; .mh-dead carries that window to the CSS above so the death fade
+    // is capped for precisely the same frames and not one more.
+    const camWindow = !!(you && !you.alive) && m.phase !== "ended";
+    document.body.classList.toggle("mh-dead", camWindow);
+    // kill-cam nameplate — same window, but only when we know who did it.
+    if (camWindow && st.killedBy != null) {
+      killcamEl.innerHTML = `<div class="lbl">KILLED BY</div>` +
+        `<div class="who">${esc(actorName(st.killedBy))}</div>` +
+        (st.killedByHs ? `<div class="hs">HEADSHOT</div>` : "");
+      killcamEl.style.display = "block";
+    } else killcamEl.style.display = "none";
     // spawn protection
     if (you && you.alive && you.protectedUntilT >= 0 && t < you.protectedUntilT && m.phase !== "warmup") {
       protectEl.textContent = `SPAWN PROTECTION ${Math.max(0, you.protectedUntilT - t).toFixed(1)}s`;
@@ -479,6 +521,8 @@ export function createMatchHud(ctx) {
     warmEl.style.display = "none";
     respawnEl.style.display = "none";
     protectEl.style.display = "none";
+    killcamEl.style.display = "none";
+    document.body.classList.remove("mh-dead");
     bannerEl.style.display = "none";
     // the end-of-match scoreboard (scoreboard.js) takes over 3 s later and
     // hides this banner itself via shell handoff (modes.md §6.1).
@@ -521,6 +565,8 @@ export function createMatchHud(ctx) {
     st.teams = d && d.teams;
     st.banner = null; st.teachT = -9; st.teachLastT = -9;
     st.marked = false; st.collapse = null; st.pressure = false; st.resultShown = false;
+    st.killedBy = null; st.killedByHs = false;
+    document.body.classList.remove("mh-dead");
     for (const r of feedRows) { r.live = false; r.el.style.opacity = "0"; }
     resultEl.style.display = "none";
     root.style.display = "block";
@@ -583,7 +629,12 @@ export function createMatchHud(ctx) {
       bridge.register("match:state", onMatchState);
       bridge.register("match:score", () => { if (st.active) renderScore(); });
       bridge.register("death", onDeath);
-      bridge.register("respawn", () => { if (st.active) renderCenter(); });
+      bridge.register("respawn", (d) => {
+        // clear the kill-cam nameplate the moment WE come back, so it can
+        // never outlive the cam or bleed into the next life.
+        if (!d || d.who === "P" || d.actorId === 0) { st.killedBy = null; st.killedByHs = false; }
+        if (st.active) renderCenter();
+      });
       bridge.register("flag", onFlag);
       bridge.register("pressure", onPressure);
       bridge.register("collapse", onCollapse);

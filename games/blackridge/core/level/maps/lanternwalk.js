@@ -18,11 +18,110 @@
 // flood-fill never reaches them).
 //
 // Coordinate convention unchanged: +X east, +Z south, Y up, metres.
-// Arena bounds: X ∈ [−48.5, +24.5], Z ∈ [−34.5, +14.6].
+// Arena bounds: X ∈ [−58, +46], Z ∈ [−52, +42].
+//
+// ===========================================================================
+// GEN-2 EXPANSION (2026-09-16) — THE FENCES MOVED, THE CITY DID NOT CHANGE
+// ===========================================================================
+// The gen-1 carve fenced a 73 × 49 m pocket out of a ward that was already
+// built and already walkable, and measured 2570 m² of floor — 282 m² per
+// actor, CoD-Shipment density. tools/probe_arena.mjs --gen=2 asks for
+// 5500–6300 m² and 560–700 m²/actor (CS2-Dust2 class), and turns gen-1's
+// one-sided clauses into BANDS: a map can now fail for being too cramped
+// (<6 m rays ≤45%, <15 m ≤70%, 15–40 m ≥28%, nearest-of-9 p10 ≥5 m,
+// P(≥1 enemy in LOS) ≤60%) as well as for being too empty.
+//
+// This generation moves the boundary walls OUTWARD onto ward geometry that
+// already exists — no invented city. Annexed, west to east:
+//   • the Tannery Alley's full width X[−58,−41] and its south dog-leg up to
+//     the quay hoarding (the 7 m artery becomes a 17 m two-lane yard);
+//   • a service passage carved through bld_s1 (alley ⇄ plaza ramp), which is
+//     what stops the southern territory being three cul-de-sacs;
+//   • the plaza ramp X[−14,−6] and the plaza's own south 4 m (the B2 market
+//     hoarding is gone — the hub must grow WITH the map, see G-HUB);
+//   • a dog-legged passage carved through bld_s3 (plaza south ⇄ boulevard);
+//   • the NE cut's east end and the Storm Gallery's east door, reopened, plus
+//     two shop units carved through bld_ge_c — four rungs between gallery and
+//     boulevard, so the east flank is a LADDER and the boulevard is not a
+//     60 m spur;
+//   • Kirov Boulevard X[+28,+46] entire, with three staggered transverse
+//     breaks (tram stop Z+6, collapsed awning Z−20, skip line Z+26) — an
+//     86 m straight canyon is a sniper alley and would have run the longest
+//     sampled ray past the 95 m ceiling;
+//   • the customs yard clipped at Z−52, reached by the market street (the B3
+//     barricade is gone) and by the CYE gate lane into the boulevard.
+// The QUAY (w_quay, 116 × 12) is deliberately EXCLUDED: it would hit the area
+// target on its own but it is a 116 m straight corridor, ~20 m past the
+// longest-ray ceiling. Its mouths are closed by the Z+42 hoarding run
+// instead (G-H raycasts the AABB edge every 2 m and wants geometry within
+// 0.5 m of every sample, so the hoarding is three real boxes, not a limit).
+//
+// Ward walls the gen-1 carve dropped and this generation KEEPS, because the
+// fence line moved onto them: per_w (the ward's west perimeter is now the
+// arena's west fence), wall_ce_parapet (the customs yard's east wall) and the
+// tram platform mass plat_deck/plat_canopy/plat_post_* (its stair and ramp
+// stay dropped, so the deck is a solid cap on the boulevard's north end and
+// not a 4.5 m firing step over an 86 m street).
+
+// ===========================================================================
+// GEN-2b (2026-09-16) — THE BAND-MIX PASS
+// ===========================================================================
+// The first gen-2 build hit the area and density targets (G-A/G-B) but failed
+// G-C, G-HUB, G-G, G-I, G-J and G-K. Measured then / now:
+//
+//                       first gen-2   this pass   gen-2 target
+//   walkable ground        5979         6245       5500-6300
+//   per-actor               623          650         560-700
+//   <6 m rays              39.9%        37.4%         25-45
+//   <15 m rays             75.5%        71.7%         50-70   (still over)
+//   15-40 m rays           22.9%        26.2%          >=28   (still under)
+//   longest sampled ray    86.5 m       85.0 m         <=95
+//   P(>=1 of 9 in LOS)     55.9%        58.8%          35-60
+//   dominant open region   39.1%        48.0%          >=40
+//   spawn points             50           82          70-100
+//
+// WHAT MOVED THE BAND MIX
+//  1. MORE WARD FLOOR, spent on DEPTH rather than length. bld_nw2 + bld_gna
+//     are carved from the north so the customs yard is 16 m deep instead of
+//     12; bld_nbw the same for CS1 (10 -> 15); bld_nea widens the market
+//     street (12.5 -> 16.5); the S1 hall grows to 18 x 15 and the plaza ramp
+//     to 18 m. A room only produces a 15 m+ ray if its DIAGONAL clears 30 m,
+//     so four metres of depth is worth more than forty of corridor.
+//  2. WAIST-HIGH INSTEAD OF FULL-HEIGHT in the annexes. The probe casts at
+//     y 1.6, and walkable() rejects anything spanning 0.42-1.7, so a 1.4 m
+//     container still stops movement and still gives crouch cover while the
+//     sightline passes over it. aw_skip / aw_van / aw_cont, cu_line_n/s,
+//     bv_skip_1/2, ps_skip, rp_cont and the north artery's n_van / n_boxvan
+//     went down to 1.4; the tall breaks that remain are the ones that cap a
+//     40 m+ run, not the ones that were chopping 20 m ones.
+//  3. KIROV BOULEVARD REBUILT AROUND BAND LENGTH. The first build put six
+//     breaks in an 86 m street at Z -36/-31/-20/+6.5/+14.5/+34: five of its
+//     six bands were under 9 m, which is why an 18 m street measured 24.2%
+//     mid-range. They are now two SEALED PAIRS (Z -23/-18 and Z +9/+14, each
+//     pair overlapping ~5 m in x with the movement gap on alternating sides)
+//     leaving three bands of 21, 27 and 27 m. Boulevard mid-range 24.2% ->
+//     29.9% with NO measured cost to G-E - the single biggest win in the pass.
+//  4. The bld_w3 slot was deleted: a 7 x 5 dead-end niche measuring 0%
+//     mid-range while eating 35 m2 of the G-A budget.
+//
+// WHAT IS STILL OPEN (G-C). <15 m sits at 71.7% against a 70% ceiling and
+// 15-40 m at 26.2% against a 28% floor. G-C and G-E pull against each other
+// on this footprint: over ~60 measured builds the frontier ran
+//   mid 28.5% / <15 67.9% <-> P(LOS) 70.0%
+//   mid 27.5% / <15 70.3% <-> P(LOS) 60.7%
+//   mid 26.2% / <15 71.7% <-> P(LOS) 58.8%   (this build)
+// because P(>=1 in LOS) is driven by E[r^2] over the ray profile, and every
+// metre of sightline bought for the 15-40 m band is also a metre of mutual
+// visibility. Closing G-C from here needs floor this AABB does not contain
+// (the quay is the only candidate and it is a 116 m corridor) or a gen-2
+// threshold pair that admits a solution. cu_baffle and ms_baffle are the two
+// walls holding G-E inside its band; removing them returns ~1.1 points of
+// mid-range and puts P(LOS) over 60.
+// ===========================================================================
 
 import { buildLayout as buildWard } from "./meridian_ward.js";
 
-const BOUNDS = { min: [-48.5, -2, -34.5], max: [24.5, 14, 14.6] };
+const BOUNDS = { min: [-58, -2, -52], max: [46, 14, 42] };
 
 // ---------------------------------------------------------------- helpers
 function wbox(id, kind, x0, x1, y0, y1, z0, z1, surface = "concrete", matClass = "hard") {
@@ -112,23 +211,76 @@ const CUTS = [
   V(15.5, 17, 0, 2.4, -6, -2),       // L2 mid-gallery door (splits gal_w_2)
   V(-41, -39, 0, 2.4, -17, -13),     // L3 alley ⇄ arcade north door
   V(-41, -39, 4.2, 6.4, -12, -9.3),  // L4 upper door onto arc_slab_wa
+
+  V(-25, -12.5, 0, 3.4, -40, -36),
+  V(15, 24, 0, 3.4, -40, -36),
+  V(-40, -26, 0, 3.4, -33, -28),
+  V(0, 4, 0, 3.4, -40, -31),
+  // ---- GEN-2 voids -------------------------------------------------------
+  // WHY THESE ARE ROOMS AND NOT CORRIDORS. The first gen-2 build carved the
+  // new links as 4–5 m passages and measured <15 m rays at 79% against a 70%
+  // ceiling: a corridor's perpendicular ray is its width, so 5 m of new
+  // corridor buys area and LOSES band mix. Every void below is therefore as
+  // WIDE as the block it is cut from allows. Measured per region on that
+  // build: a 5 m passage ran 93.5% under 15 m, the 40 × 36 m plaza 67.7%.
+  //
+  // S1 LOADING HALL (bld_s1) — the single most important addition. Without a
+  // link here the alley's south dog-leg and the plaza ramp are two dead-end
+  // limbs hanging off the Z+42 hoarding; with it they are one rotation route
+  // (plaza → ramp → hall → alley → arcade/plaza). An 18 × 12 m hall with a
+  // door at each end, not a bore: the doors are the fight, the hall is room.
+  V(-41, -36, 0, 3.4, 24, 29),       // S1 west door ← the alley
+  V(-36, -18, 0, 3.4, 21, 36),       // S1 the hall itself
+  V(-18, -14, 0, 3.4, 26, 31),       // S1 east door → the plaza ramp
+  // RAMP WIDENING (bld_s2) — the ward's plaza ramp is an 8 m slot; at 8 m it
+  // measured 91.5% under 15 m. Taking bld_s2's west five metres makes it a
+  // 13 m yard for its whole length and keeps the quay mouth at 8 m, so the
+  // Z+42 hoarding run still closes it.
+  V(-6, 4, 0, 3.4, 20, 40),
+  // S3 MARKET PASSAGE (bld_s3) — plaza south ⇄ boulevard, dog-legged so the
+  // plaza's 40 m south edge does not become a 71 m line into the boulevard.
+  V(15, 22, 0, 3.4, 13, 19),         // S3a
+  V(20, 28, 0, 3.4, 16, 21),         // S3b
+  // THE GALLERY'S SOUTH HALF, OPENED (gal_e_3 + bld_ge_c, Z[−18,+13]).
+  // The Storm Gallery keeps its covered north half — the cut still crosses
+  // it, the east door still tunnels through bld_ge_a/b — but south of the NE
+  // cut its east wall and the shop row behind it are gone, and the gallery
+  // (6 m), the GE strip (3.5 m) and Kirov Boulevard (18 m) read as ONE 29 m
+  // wide room 31 m deep. That room is what carries the band mix and the
+  // G-HUB dominant-open-region share; four narrow rungs could not.
+  V(23, 28, 0, 8, -18, 13),
 ];
 
 // Buildings the carve excavates — their masses return as wall pieces.
-const CARVED_BUILDINGS = new Set(["bld_nea", "bld_neb", "bld_m1"]);
+// GEN-2 adds the three south/east blocks the new passages bore through.
+const CARVED_BUILDINGS = new Set([
+  "bld_nea", "bld_neb", "bld_m1",
+  "bld_s1", "bld_s2", "bld_s3", "bld_ge_c", "bld_nw2", "bld_gna", "bld_nbw",
+]);
 
-// Walls deleted outright (outside the arena / superseded — arena.md §5.1)
-const WALL_DROP_PREFIX = ["per_", "plat_", "hdr_ge_"];
-const WALL_DROP = new Set(["canal_edge", "wall_ce_parapet"]);
+// Walls deleted outright (outside the arena / superseded — arena.md §5.1).
+// GEN-2: the fence line moved outward onto ward geometry, so "per_" and
+// "plat_" are no longer blanket drops — per_w IS the west boundary now and
+// plat_deck IS the boulevard's north cap. Only the platform's stair and ramp
+// go, which is what turns the deck from an overlook into a solid mass.
+const WALL_DROP_PREFIX = ["plat_stair", "plat_ramp"];
+const WALL_DROP = new Set([
+  "canal_edge", "per_n_w", "per_gate9", "per_n_e", "per_e",
+]);
 
 // Props deleted explicitly (E16 in-arena entries; out-of-arena props are
 // auto-dropped by the bounds filter below)
 const PROP_DROP = new Set([
   "arc_stall_2", "arc_stall_5", "pl_car_5", "al_scaf_2", "arc_table",
   "ms_barrier_1", "ms_barrier_2",
+  "al_van", "al_scaf_1",
+  "arc_stall_1", "arc_stall_3", "arc_stall_4", "arc_stall_6",
   "ms_car_1",   // overlapped the new n_kiosk artery blocker (probe_props clip)
   "al_dump_5",  // its crouch node landed inside the new a_container_1
   "al_trash_6", // its footprint landed inside the new a_pallets
+  // GEN-2: one of the customs yard's twelve jerseys sits exactly where the
+  // transverse container line has to cross the jersey line. Twelve → eleven.
+  "cu_jersey_5", "pf_bin_2", "pf_nest_front", "bl_bench",
 ]);
 // Prop moves (E17 + carve de-clip: probe_props gates zero overlaps)
 const PROP_MOVE = {
@@ -137,6 +289,19 @@ const PROP_MOVE = {
   arc_kiosk: [-1.8, 0, 0],  // clear of arc_part_2
   arc_stall_6: [0.9, 0, 0], // clear of arc_part_2
   ms_car_2: [-1, 0, 2.5],   // clear of n_kiosk (and of the sp_m4 bubble)
+  // ---- GEN-2 de-clips (all three are 0-overlap fixes, not design moves) --
+  cu_jersey_10: [0, 0, 3],  // straddled the Z−52 customs fence
+  cu_sand_3: [-3, 0, 0],    // clear of cu_line_n
+  bl_car_1: [0, 0, -6],     // clear of the re-sited tram-stop rows
+  // ---- GEN-2b de-clips against the new hoarding walls ------------------
+  cu_sand_2: [0, 0, 1.6],   // its crouch node hung outside the Z-52 fence
+  cu_sand_4: [0, 0, 1.6],   // crouch node was inside pvp_bnd_customs_e
+  bl_car_4: [0, 0, 8],      // crouch node was inside the re-sited ba_awn_2
+  pl_trash_2: [-6, 0, -4],  // corner was inside ps_container
+  pl_trash_4: [-3, 0, -2],  // corner was inside ps_stall
+  bl_car_5: [0, 0, -6],     // crouch node was inside the re-sited ba_awn_1
+  bl_car_7: [5, 0, -4],     // it bridged the skip line's west gap and cut the
+                            // boulevard's south end out of the G-HUB component
 };
 
 // ---------------------------------------------------------------- export
@@ -166,26 +331,64 @@ export function buildLayout(seed = 1) {
     walls = next;
   }
 
-  // ---- additions: boundary B1–B5, partitions, piers, stair --------------
+  // ---- additions: the GEN-2 boundary run, partitions, piers, stair -------
   // (E2, E8, L1 piers, L4 — arena.md §1.1–1.3)
+  //
+  // THE FENCE LINE. Gen-1's five boundary walls (B1 alley container stack,
+  // B2 market hoarding, B3/B3b customs barricade, B4 collapsed tram gantry,
+  // B5 welded fire door) are GONE — every one of them fenced off ward floor
+  // this generation annexes. Their replacements sit on the new AABB edge,
+  // and the rest of that edge is ward mass that was already there (per_w on
+  // the west; bld_e1/bld_e2 on the east; bld_cw / wall_ce_parapet / plat_deck
+  // on the north; bld_w1 / bld_s1 / bld_s2 / bld_s3 on the south). G-H
+  // samples the AABB edge every 2 m and wants geometry within 0.5 m of each
+  // sample, so every gap in that ring is a real box below.
   walls.push(
-    wbox("pvp_bnd_alley_w", "wall", -48.5, -48, 0, 7, -30, 14),      // B1 container stack line
-    wbox("pvp_bnd_plaza_s", "wall", -25, 15, 0, 6, 14, 14.6),        // B2 market hoarding
-    wbox("pvp_bnd_street_n", "wall", -12.5, 0, 0, 6, -30.6, -30),    // B3 customs barricade
-    // B4/B5 fill the door voids BELOW the existing GE headers (hdr_gal_e_cut
-    // y≥2.6, hdr_gal_e_door y≥2.4) — full-height boxes would double the mass.
-    wbox("pvp_bnd_cut_e", "wall", 23, 24.5, 0, 2.6, -22, -18),       // B4 collapsed tram gantry
-    wbox("pvp_bnd_galdoor_e", "wall", 23, 24.5, 0, 2.4, -32, -28),   // B5 welded fire door
-    // B3b — north cap of the market-street pocket (the strip behind the B3
-    // barricade stays playable as ExH D2's back approach; its far end must be
-    // geometry, not the arena AABB — no invisible walls, G-H)
-    wbox("pvp_bnd_street_n2", "wall", -12.5, 0, 0, 6, -34.5, -34),
-    wbox("arc_part_1", "wall", -33.5, -32.5, 0, 3.6, -19, -12),      // arcade shop-unit partitions
-    wbox("arc_part_2", "wall", -31.5, -30.5, 0, 3.6, -1.5, 5),
-    wbox("arc_part_3", "wall", -36.5, -35.5, 0, 3.6, -9, -4),
-    wbox("arc_part_4", "wall", -30, -29, 0, 3.6, -16.5, -13.6),
+    // Q1–Q3 — THE QUAY HOARDING at Z+42. The quay itself stays out (116 m
+    // corridor); these three boxes close its three mouths: the alley mouth,
+    // the plaza ramp head and the boulevard mouth.
+    wbox("pvp_bnd_quay_w", "wall", -48, -41, 0, 6, 42, 42.5),
+    wbox("pvp_bnd_quay_m", "wall", -14, -6, 0, 6, 42, 42.5),
+    wbox("pvp_bnd_quay_e", "wall", 28, 46, 0, 6, 42, 42.5),
+    // N1/N2 — customs yard north fence at Z−52. Split around bld_gatehouse
+    // (x[5,11], z[−55,−50]), which is kept: it fills that span of the edge
+    // itself and pushes 2 m of Gate 9 mass into the yard as a real blocker.
+    wbox("pvp_bnd_customs_w", "wall", -18, 5, 0, 6, -52, -51.5),
+    wbox("pvp_bnd_customs_e", "wall", 11, 24, 0, 6, -52, -51.5),
+    // N3 — the tram ramp's slot, filled. plat_ramp is dropped (no stair up to
+    // the deck), so without this the boulevard's north end would end in a
+    // 1.5 m × 8 m dead slit against the AABB.
+    wbox("pvp_bnd_plat_e", "wall", 44.5, 46, 0, 5, -52, -44),
+    wbox("arc_part_1", "wall", -33.5, -32.5, 0, 3.6, -19, -17.5),      // arcade shop-unit partitions
+    wbox("arc_part_2", "wall", -31.5, -30.5, 0, 3.6, 1.5, 5),
+    wbox("arc_part_3", "wall", -36.5, -35.5, 0, 3.6, -9, -8),
+    wbox("arc_part_4", "wall", -30, -29, 0, 3.6, -17, -11.3),
     wbox("corr_pier_a", "wall", 5, 6.5, 0, 3.4, -25, -22),           // L1 structural piers (S-bend)
     wbox("corr_pier_b", "wall", 8, 9.5, 0, 3.4, -23, -20),
+    wbox("ge_hoard_n", "wall", 23, 28, 0, 2.8, -14.4, -13.6, "concrete", "hard"),
+    wbox("ge_hoard_s", "wall", 23, 28, 0, 2.8, 3.6, 4.4, "concrete", "hard"),
+    wbox("aw_hoard_s", "wall", -49, -41, 0, 2.8, 29.6, 30.4, "concrete", "hard"),
+    wbox("n_hoard_w", "wall", -25, -21.5, 0, 2.8, -20.9, -20.1, "concrete", "hard"),
+    wbox("n_hoard_e", "wall", -18, -12.5, 0, 2.8, -23.9, -23.1, "concrete", "hard"),
+    wbox("ms_hoard_w", "wall", -12.5, -7.5, 0, 2.8, -23.4, -22.6, "concrete", "hard"),
+    wbox("ms_hoard_e", "wall", -4.5, -0.5, 0, 2.8, -27.4, -26.6, "concrete", "hard"),
+    wbox("n_pier_a", "wall", -34, -33, 0, 3.4, -33, -29.5),
+    wbox("n_pier_b", "wall", -30, -29, 0, 3.4, -31.5, -28),
+    wbox("cut_hoard", "wall", 17.5, 20.5, 0, 2.8, -20.4, -19.6, "concrete", "hard"),
+    wbox("cye_hoard", "wall", 30, 40, 0, 2.8, -41.4, -40.6, "concrete", "hard"),
+    // P5 parity screen: without it the Exchange House stand shoots 52 m east
+    // through the D3 tunnel, the gallery and the east door into Kirov
+    // Boulevard, against the Lantern Yard stand's 28 m (G-I wants Delta<=10).
+    wbox("gal_screen", "wall", 18.5, 22.5, 0, 2.8, -32, -29.5, "concrete", "hard"),
+    // market-street baffle, paired with cu_baffle: the widened street runs
+    // 23 m from the plaza into the customs yard, and the two of them are
+    // what keeps that line off G-E's mutual-visibility term.
+    wbox("ms_baffle", "wall", -12, -5, 0, 2.8, -33.4, -32.6, "concrete", "hard"),
+    // customs-yard baffle: the yard is 42 m across and its south mouth
+    // opens straight down the market street, which is where G-E's
+    // mutual-visibility term was coming from. Movement passes either side.
+    wbox("cu_baffle", "wall", -12, -2, 0, 2.8, -42.4, -41.6, "concrete", "hard"),
+
   );
   // L4 alley scaffold stair — identical cadence to arc_stair_nw (landing +
   // 13 × 0.30 m risers, yBase 0.3); tops out at 4.2 = the upper door sill.
@@ -222,11 +425,11 @@ export function buildLayout(seed = 1) {
   const add = (...a) => props.push(prop(...a));
 
   // E11 — north artery blockers (staggered, alternating sides)
-  add("n_skip", "container", -31, -26.75, 0, 4.0, 2.5, 2.6, "metal", "metal_thin",
+  add("n_skip", "container", -31, -26.75, 0, 4.0, 2.5, 1.4, "metal", "metal_thin",
     { cover: { ...E, height: "high" } });
-  add("n_van", "van", -37, -22.3, 1.2, 2.2, 5.2, 2.4, "metal", "metal_thin",
+  add("n_van", "van", -37, -22.3, 1.2, 2.2, 5.2, 1.4, "metal", "metal_thin",
     { cover: { ...E, height: "high" } });
-  add("n_boxvan", "van", -18, -20.5, 1.35, 2.2, 5.2, 2.4, "metal", "metal_thin",
+  add("n_boxvan", "van", -18, -20.5, 1.35, 2.2, 5.2, 1.4, "metal", "metal_thin",
     { cover: { ...Wd, height: "high" } });
   add("n_kiosk", "kiosk", -6, -24.75, 0, 4.0, 2.5, 2.4, "wood", "soft",
     { cover: { ...Wd, height: "high" } });
@@ -234,9 +437,9 @@ export function buildLayout(seed = 1) {
     { cover: { ...E, height: "low" } });
 
   // E12 — alley breakers + cover
-  add("a_container_1", "container", -46.25, -5.5, 0, 3.5, 3.0, 2.6, "metal", "metal_thin",
+  add("a_container_1", "container", -46.25, -5.5, 0, 3.5, 3.0, 1.4, "metal", "metal_thin",
     { cover: { ...N, height: "high" } });
-  add("a_container_2", "container", -42.5, 4.5, 0, 3.0, 3.0, 2.6, "metal", "metal_thin",
+  add("a_container_2", "container", -42.5, 4.5, 0, 3.0, 3.0, 1.4, "metal", "metal_thin",
     { cover: { ...S, height: "high" } });
   add("a_dump_1", "dumpster", -46, -22, 0, 1.8, 1.2, 1.25, "metal", "metal_thin",
     { cover: { ...N, height: "high" } });
@@ -246,17 +449,17 @@ export function buildLayout(seed = 1) {
     { cover: { ...N, height: "low" } });
 
   // E13 — plaza cover uplift (11 → 17 pieces) + the R1 parity stall
-  add("pk_kiosk_6", "kiosk", -18, -8, 0, 2.6, 2.6, 2.3, "wood", "soft",
+  add("pk_kiosk_6", "kiosk", -18, -8, 0, 2.6, 2.6, 1.5, "wood", "soft",
     { cover: { ...N, height: "high" } });
-  add("pk_kiosk_7", "kiosk", 6, 6, 0, 2.6, 2.6, 2.3, "wood", "soft",
+  add("pk_kiosk_7", "kiosk", 6, 6, 0, 2.6, 2.6, 1.5, "wood", "soft",
     { cover: { ...S, height: "high" } });
-  add("pk_stall_1", "stall", -12, 4, 0, 2.2, 1.6, 2.4, "wood", "soft",
+  add("pk_stall_1", "stall", -12, 4, 0, 2.2, 1.6, 1.5, "wood", "soft",
     { cover: { ...S, height: "high" } });
   add("pk_planter_4", "planter", 8, -10, 0, 2.0, 0.8, 0.9, "concrete", "hard",
     { cover: { ...N, height: "low" } });
   add("pk_container", "container", -2, -13, 0, 6.0, 2.4, 2.6, "metal", "metal_thin",
     { cover: { ...N, height: "high" } });
-  add("pk_van", "van", 2, 8, 0, 2.2, 5.2, 2.4, "metal", "metal_thin",
+  add("pk_van", "van", 2, 8, 0, 2.2, 5.2, 1.4, "metal", "metal_thin",
     { cover: { ...E, height: "high" } });
   // R1 fix (arena.md §6.3): screens LY D1's plaza approach so the two flag
   // sites' longest sightlines land inside the ±10 m parity contract. Cover
@@ -288,6 +491,78 @@ export function buildLayout(seed = 1) {
   add("ex_c3", "container", 9.25, -28.0, 0, 1.5, 3.0, 3.4, "metal", "metal_thin",
     { cover: { ...Wd, height: "high" } });
   add("ex_c4", "stall", 2.8, -29.7, 0, 1.2, 2.2, 2.2, "wood", "soft",
+    { cover: { ...E, height: "high" } });
+
+  // =======================================================================
+  // GEN-2 — TRANSVERSE BREAKS IN THE ANNEXED GROUND
+  // =======================================================================
+  // This map's idiom for a long artery is a STAGGERED line of tall solids
+  // (n_skip / n_van / n_boxvan / n_kiosk / n_barrier on the north artery).
+  // The annexed ground needs it more than the artery did: Kirov Boulevard is
+  // an 86 m canyon 18 m wide, the widened alley a 64 m one, and the customs
+  // yard 42 m across. Everything below is ≥2.4 m tall on purpose — the ray
+  // profile is cast at y 1.6, so a 1.1 m jersey barrier is cover that stops
+  // movement and NOT a sightline break (which is exactly why the boulevard's
+  // own bl_barr line at Z+38 does not count as one of these).
+  //
+  // BOULEVARD — three breaks, staggered so no column of the street is clear
+  // end to end: the tram stop closes X[28,40], the collapsed awning X[34,46],
+  // the skip line X[33.5,46]. Longest surviving run ≈50 m (X[28,33.5],
+  // Z[−44,+6]), against a 95 m ceiling and an 83 m open canyon without them.
+  add("bv_tram_1", "container", 40.5, 9, 0, 11.0, 2.6, 2.8, "metal", "metal_thin",
+    { cover: { ...S, height: "high" } });
+  add("bv_tram_2", "container", 33.5, 14, 0, 11.0, 2.6, 2.8, "metal", "metal_thin",
+    { cover: { ...N, height: "high" } });
+  add("ba_awn_1", "container", 33.5, -23, 0, 11.0, 2.6, 2.8, "metal", "metal_thin",
+    { cover: { ...N, height: "high" } });
+  add("ba_awn_2", "container", 40.5, -18, 0, 11.0, 2.6, 2.8, "metal", "metal_thin",
+    { cover: { ...S, height: "high" } });
+  add("bv_skip_1", "container", 36.5, 26, 0, 6.0, 2.6, 1.4, "metal", "metal_thin",
+    { cover: { ...N, height: "high" } });
+  add("bv_skip_2", "container", 42.75, 26, 0, 6.5, 2.6, 1.4, "metal", "metal_thin",
+    { cover: { ...S, height: "high" } });
+
+  // CUSTOMS YARD — the transverse line at X+3, in two pieces with a 2 m slip
+  // between them, crossing the jersey line rather than running beside it.
+  add("cu_line_n", "container", 3, -49, 0, 2.4, 5.0, 1.4, "metal", "metal_thin",
+    { cover: { ...E, height: "high" } });
+  add("cu_line_s", "container", 3, -42.5, 0, 2.4, 4.0, 1.4, "metal", "metal_thin",
+    { cover: { ...Wd, height: "high" } });
+  // CYE gate lane — without this the yard, the gate lane and the boulevard
+  // line up into a single 64 m east–west shot. It also dog-legs the lane.
+  add("cye_container", "container", 25, -42, 0, 2.0, 4.0, 1.4, "metal", "metal_thin",
+    { cover: { ...Wd, height: "high" } });
+
+  // ALLEY WEST STRIP — three staggered blockers in the newly opened half, so
+  // the 17 m yard reads as two lanes with crossings rather than one canyon.
+  add("aw_skip", "container", -50, -16, 0, 5.0, 2.6, 1.4, "metal", "metal_thin",
+    { cover: { ...N, height: "high" } });
+  add("aw_van", "van", -54.5, 2, 1.5708, 2.2, 5.2, 1.4, "metal", "metal_thin",
+    { cover: { ...N, height: "high" } });
+  add("aw_cont", "container", -53.5, 24, 0, 9.0, 2.6, 1.4, "metal", "metal_thin",
+    { cover: { ...N, height: "high" } });
+
+  // PLAZA SOUTH — the B2 hoarding is gone, so the plaza's south 4 m is open
+  // floor; these keep it from becoming a 61 m east–west line that would run
+  // the S3 passage straight through the LY D1 door into the west flag room
+  // (and blow G-I's P5 longest-into-site parity).
+  add("ps_skip", "container", -21, 16, 0, 4.0, 2.4, 1.4, "metal", "metal_thin",
+    { cover: { ...N, height: "high" } });
+  add("ps_container", "container", -9, 15.4, 0, 4.0, 2.4, 2.6, "metal", "metal_thin",
+    { cover: { ...N, height: "high" } });
+  add("ps_stall", "stall", 4, 16, 0, 2.2, 1.6, 1.5, "wood", "soft",
+    { cover: { ...N, height: "high" } });
+
+  // PLAZA RAMP + S1 SERVICE PASSAGE — cover on the new rotation route.
+  add("rp_cont", "container", -12, 24, 0, 2.4, 6.0, 1.4, "metal", "metal_thin",
+    { cover: { ...Wd, height: "high" } });
+  add("rp_dump", "dumpster", -8, 32, 0, 1.7, 1.1, 1.25, "metal", "metal_thin",
+    { cover: { ...N, height: "high" } });
+  add("rp_crate", "crate", -12.5, 36, 0, 1.8, 1.8, 1.2, "wood", "soft",
+    { cover: { ...Wd, height: "low" } });
+  add("sp_crate_1", "crate", -33, 24.5, 0, 1.8, 1.8, 1.2, "wood", "soft",
+    { cover: { ...N, height: "low" } });
+  add("sp_dump", "dumpster", -28, 30, 0, 1.1, 1.7, 1.25, "metal", "metal_thin",
     { cover: { ...E, height: "high" } });
 
   // Boundary dressing (B2/B3 read as objects, not limits — carve rule 1).
@@ -324,13 +599,31 @@ export function buildLayout(seed = 1) {
     player: { pos: [-23, 0, 2], yaw: -Math.PI / 2 }, // plaza west, faces east
   };
 
-  // Walkable-region rectangles (arena.md §5.1 WALK_RECTS row)
+  // Walkable-region rectangles (arena.md §5.1 WALK_RECTS row).
+  // GEN-2: w_alley/w_street/w_plaza/w_cut GREW (the fence that clipped each
+  // of them is gone) and eleven rects are new. Union semantics — a rect may
+  // span solid mass; the solids subtract. G-F requires every ground rect to
+  // touch ≥2 others, which is the dead-end clause: each new rect below names
+  // its two neighbours.
   const WALK_RECTS = [
-    { id: "w_alley", min: [-48, -30], max: [-41, 14], y: 0 },
-    { id: "w_cs1a", min: [-41, -28], max: [-25, -20], y: 0 },
+    { id: "w_alley", min: [-58, -30], max: [-41, 42], y: 0 },
+    { id: "w_cs1a", min: [-41, -33], max: [-25, -20], y: 0 },
     { id: "w_cs1b", min: [-25, -28], max: [-12.5, -18], y: 0 },
-    { id: "w_street", min: [-12.5, -30], max: [0, -18], y: 0 },
-    { id: "w_plaza", min: [-25, -18], max: [15, 14], y: 0 },
+    { id: "w_street", min: [-12.5, -41], max: [0, -18], y: 0 },
+    { id: "w_plaza", min: [-25, -18], max: [15, 18], y: 0 },
+    // ---- GEN-2 annexations ----------------------------------------------
+    { id: "w_customs", min: [-18, -52], max: [24, -36], y: 0 },   // w_street, w_cye
+    { id: "w_cye", min: [24, -44], max: [46, -39], y: 0 },        // w_customs, w_blvd
+    { id: "w_blvd", min: [28, -44], max: [46, 42], y: 0 },        // w_cye, w_cut, …
+    { id: "w_gal_edoor", min: [23, -32], max: [28, -28], y: 0 },  // w_gallery, w_blvd
+    { id: "w_ge_shop_a", min: [23, -12], max: [28, -8], y: 0 },   // w_gallery, w_blvd
+    { id: "w_ge_shop_b", min: [23, 4], max: [28, 8], y: 0 },      // w_gallery, w_blvd
+    { id: "w_s3_pass_a", min: [15, 14], max: [22, 18], y: 0 },    // w_plaza, w_s3_pass_b
+    { id: "w_s3_pass_b", min: [21, 17], max: [28, 21], y: 0 },    // w_s3_pass_a, w_blvd
+    { id: "w_ramp", min: [-14, 18], max: [4, 42], y: 0 },        // w_plaza, w_s1_pass_c
+    { id: "w_s1_pass_a", min: [-41, 22], max: [-26, 27], y: 0 },  // w_alley, w_s1_pass_b
+    { id: "w_s1_pass_b", min: [-30, 26], max: [-26, 33], y: 0 },  // w_s1_pass_a, _c
+    { id: "w_s1_pass_c", min: [-36, 33], max: [-14, 38], y: 0 },  // w_s1_pass_b, w_ramp
     { id: "w_arc_ground", min: [-39, -19], max: [-26, 5], y: 0 },
     { id: "w_arc_wdoor", min: [-41, -4], max: [-39, 0], y: 0 },
     { id: "w_arc_wdoor_n", min: [-41, -17], max: [-39, -13], y: 0 },
@@ -340,7 +633,7 @@ export function buildLayout(seed = 1) {
     { id: "w_gallery", min: [17, -33], max: [23, 13], y: 0 },
     { id: "w_gal_wdoor", min: [15, 8], max: [17, 12], y: 0 },
     { id: "w_gal_middoor", min: [15, -6], max: [17, -2], y: 0 },
-    { id: "w_cut", min: [13, -22], max: [23, -18], y: 0 },
+    { id: "w_cut", min: [13, -22], max: [28, -18], y: 0 },
     { id: "w_corridor", min: [0, -25], max: [13, -20], y: 0 },
     { id: "w_exh", min: [1, -34], max: [12, -26], y: 0 },
     { id: "w_exh_tunnel", min: [12, -31], max: [17, -27], y: 0 },
@@ -353,24 +646,36 @@ export function buildLayout(seed = 1) {
     { id: "w_alley_stair", min: [-42.6, -13.2], max: [-41, -9.1], y: 0 },
   ];
 
-  // POI zones (arena.md §5.1 ZONES row; ZONE_BASE entries are W3's edit)
+  // POI zones (arena.md §5.1 ZONES row; ZONE_BASE entries are W3's edit).
+  // GEN-2 adds the three annexed districts as their own POIs — the zone set
+  // is what the spawn director and the commander read as "regions of the
+  // map", so new territory with no zone reads as nowhere.
   const ZONES = {
-    poi_alleys: { min: [-48.5, -30], max: [-41, 14] },
+    poi_alleys: { min: [-58, -30], max: [-41, 42] },
     poi_arcade: { min: [-41, -20], max: [-25, 6] },
-    poi_plaza: { min: [-25, -18], max: [15, 14] },
+    poi_plaza: { min: [-25, -18], max: [15, 18] },
     poi_gallery: { min: [15.5, -34], max: [24.5, 14] },
     poi_lanternyard: { min: [-39, 8], max: [-28, 16] },
     poi_exchange: { min: [1, -34], max: [12, -26] },
     poi_corridor: { min: [0, -25], max: [13, -20] },
+    poi_blvd: { min: [28, -44], max: [46, 42] },
+    poi_customs: { min: [-18, -52], max: [24, -40] },
+    poi_ramp: { min: [-30, 18], max: [-6, 42] },
   };
 
-  // Ground paint (drives the PBR sets — trimmed to the arena + 3 new rooms)
+  // Ground paint (drives the PBR sets — the arena + 3 new rooms + gen-2)
   const ROADS = [
-    { id: "r_alley", kind: "asphalt_worn", min: [-48.5, -30], max: [-41, 14] },
+    { id: "r_alley", kind: "asphalt_worn", min: [-58, -30], max: [-41, 42] },
     { id: "r_cs1", kind: "asphalt_worn", min: [-41, -28], max: [-12.5, -18] },
-    { id: "r_street", kind: "asphalt", min: [-12.5, -34.5], max: [0, -18] },
-    { id: "r_plaza", kind: "plaza_cobble", min: [-25, -18], max: [15, 14] },
-    { id: "r_cut", kind: "asphalt_worn", min: [13, -22], max: [24.5, -18] },
+    { id: "r_street", kind: "asphalt", min: [-12.5, -41], max: [0, -18] },
+    { id: "r_plaza", kind: "plaza_cobble", min: [-25, -18], max: [15, 18] },
+    { id: "r_cut", kind: "asphalt_worn", min: [13, -22], max: [28, -18] },
+    { id: "r_blvd", kind: "asphalt_tram", min: [28, -44], max: [46, 42] },
+    { id: "r_cye", kind: "asphalt_worn", min: [24, -44], max: [46, -39] },
+    { id: "r_customs", kind: "concrete_yard", min: [-18, -52], max: [24, -40] },
+    { id: "r_ramp", kind: "asphalt", min: [-14, 18], max: [-6, 42] },
+    { id: "r_s1pass", kind: "concrete_interior", min: [-41, 22], max: [-14, 38] },
+    { id: "r_s3pass", kind: "concrete_interior", min: [15, 14], max: [28, 21] },
     { id: "r_gallery", kind: "concrete_interior", min: [15.5, -34], max: [24.5, 14] },
     { id: "r_arcade", kind: "tile_interior", min: [-39, -19], max: [-26, 5] },
     { id: "r_corridor", kind: "concrete_interior", min: [0, -25], max: [13, -20] },
@@ -389,6 +694,12 @@ export function buildLayout(seed = 1) {
     { id: "L_ARCADE_SKY", pos: [-32, 7.8, -8], color: "#7c8fb8", kind: "skylight", real: true, aim: [-32, 0, -8], cone: 35, godRay: true },
     { id: "L_CORRIDOR", pos: [3.5, 3.2, -22.5], color: "#cfe0d8", kind: "fluorescent", real: true, aim: [3.5, 0, -22.5], cone: 70 },
     { id: "L_GALLERY", pos: [20, 4.4, -6], color: "#ff9a3c", kind: "sodium", real: true, aim: [20, 0, -8], cone: 60 },
+    // GEN-2 — two of the three unused keySpot leases go to the annexed
+    // districts (pool is 8; this map now runs 7 real, one still spare).
+    // An 18 m × 86 m street and a 42 m yard lit only by neighbours would
+    // read as off-map, which is the one thing a doubled arena cannot afford.
+    { id: "L_BLVD", pos: [36, 7.0, 2], color: "#ff9a3c", kind: "sodium", real: true, aim: [36, 0, 2], cone: 50 },
+    { id: "L_CUSTOMS", pos: [2, 9.0, -45], color: "#dce8ff", kind: "flood", real: true, aim: [2, 2, -45], cone: 40, godRay: true },
     // Fakes (emissive head + cone card + pool decal — zero real lights):
     // the two alley sodium heads backlight the arena's long-axis keyholes
     // (arena.md §4.4) and the checkpoint flood dresses B3.
@@ -402,6 +713,14 @@ export function buildLayout(seed = 1) {
     // lanternwalk render ("Cannot read properties of undefined (reading '0')").
     // aim mirrors pos at ground level, like every sibling entry.
     { id: "fake_checkpoint", pos: [-6, 5, -29.7], color: "#dce8ff", kind: "flood", real: false, aim: [-6, 0, -29.7] },
+    // GEN-2 fakes (emissive head + cone card + pool decal — zero real lights)
+    { id: "fake_blvd_n", pos: [36, 7, -30], color: "#ff9a3c", kind: "sodium", real: false },
+    { id: "fake_blvd_s", pos: [36, 7, 30], color: "#ff9a3c", kind: "sodium", real: false },
+    { id: "fake_customs_w", pos: [-12, 6, -46], color: "#dce8ff", kind: "flood", real: false, aim: [-12, 0, -46] },
+    { id: "fake_customs_e", pos: [18, 6, -46], color: "#dce8ff", kind: "flood", real: false, aim: [18, 0, -46] },
+    { id: "fake_alley_s", pos: [-52, 5.5, 20], color: "#ff9a3c", kind: "sodium", real: false },
+    { id: "fake_ramp", pos: [-10, 6, 30], color: "#ff9a3c", kind: "sodium", real: false },
+    { id: "fake_s1_pass", pos: [-28, 3.2, 30], color: "#cfe0d8", kind: "fluorescent", real: false },
     { id: "neon_club", pos: [15.4, 6, -12], color: "#e83ea8", kind: "neon", real: false, sign: "ЗАРОВ НОЧЬ" },
     { id: "neon_meridian", pos: [15.4, 5, -6], color: "#38d8d0", kind: "neon", real: false, sign: "MERIDIAN 24" },
     { id: "neon_noodle", pos: [15.4, 4.5, 0], color: "#ff4040", kind: "neon", real: false, sign: "ЛАПША ДОМ" },
@@ -474,50 +793,71 @@ export const ARENA_SPEC = {
   // inward cone, and EMITS — hand transcription is how C7b happened.
   //   [id, x, z, clusterId, modes | null (null = all three)]
   spawnSeeds: [
-    ["sp_w1", -44.5, -28.0, "SC_WEST", null], ["sp_w2", -46.5, -24.0, "SC_WEST", null],
-    ["sp_w3", -43.5, -19.0, "SC_WEST", null], ["sp_w6", -43.0, -6.0, "SC_WEST", null],
-    ["sp_w7", -43.5, -3.0, "SC_WEST", null], ["sp_w8", -45.5, 6.0, "SC_WEST", null],
+    // ---- SC_WEST — the Tannery Alley, now its full 17 m width and 68 m run.
+    ["sp_w1", -55.0, -28.0, "SC_WEST", null], ["sp_w2", -48.0, -27.0, "SC_WEST", null],
+    ["sp_w3", -55.0, -23.0, "SC_WEST", null], ["sp_w4", -45.0, -21.0, "SC_WEST", null],
+    ["sp_w5", -56.0, -17.0, "SC_WEST", null], ["sp_w6", -44.0, -13.0, "SC_WEST", null],
+    ["sp_w7", -55.0, -10.0, "SC_WEST", null], ["sp_w8", -49.0, -3.0, "SC_WEST", null],
+    ["sp_w9", -45.0, 2.0, "SC_WEST", null], ["sp_w10", -54.0, 9.0, "SC_WEST", null],
+    ["sp_w11", -46.0, 24.0, "SC_WEST", null], ["sp_w12", -50.0, 30.0, "SC_WEST", null],
+    ["sp_w13", -45.0, 37.0, "SC_WEST", null],
 
-    ["sp_a1", -36.0, -16.0, "SC_ARCADE", null], ["sp_a2", -27.5, -16.5, "SC_ARCADE", null],
-    ["sp_a3", -28.0, -8.0, "SC_ARCADE", null], ["sp_a4", -37.5, -2.0, "SC_ARCADE", null],
-    ["sp_a5", -33.5, 2.5, "SC_ARCADE", null], ["sp_a7", -32.0, -8.5, "SC_ARCADE", null],
+    // ---- SC_ARCADE — the arcade hall plus both its alley doors (the bbox the
+    // gen-1 set failed was 185 m²; corner-to-corner here it is ~290).
+    ["sp_a1", -37.0, -18.0, "SC_ARCADE", null], ["sp_a2", -29.0, -18.0, "SC_ARCADE", null],
+    ["sp_a3", -40.0, -15.0, "SC_ARCADE", null], ["sp_a4", -36.0, -13.0, "SC_ARCADE", null],
+    ["sp_a5", -28.0, -11.0, "SC_ARCADE", null], ["sp_a6", -35.0, -8.0, "SC_ARCADE", null],
+    ["sp_a7", -29.0, -7.0, "SC_ARCADE", null], ["sp_a8", -37.0, -3.0, "SC_ARCADE", null],
+    ["sp_a9", -28.0, -3.0, "SC_ARCADE", null], ["sp_a11", -40.0, -2.0, "SC_ARCADE", null],
+    // the LY D2 door stares into the west stand from 6 m — V8/V9, so CTF off
+    ["sp_a10", -32.0, 6.0, "SC_ARCADE", ["tdm", "ffa"]],
 
-    // C7b: sp_l1/l2/l3 sit inside (or stare into) their own flag room — CTF off
-    ["sp_l1", -32.0, 12.5, "SC_LANTERN", ["tdm", "ffa"]],
-    ["sp_l2", -39.5, 11.5, "SC_LANTERN", ["tdm", "ffa"]],
-    ["sp_l3", -33.0, 9.5, "SC_LANTERN", ["tdm", "ffa"]],
-    // sp_l4 sits in the D1 mouth with direct LOS to its own stand (V9) — CTF off
-    ["sp_l4", -26.0, 13.0, "SC_LANTERN", ["tdm", "ffa"]],
-    ["sp_l5", -17.5, 7.0, "SC_LANTERN", null],
-    ["sp_l6", -23.0, 2.0, "SC_LANTERN", null], ["sp_l7", -12.0, 11.5, "SC_LANTERN", null],
-    // C7b: +3 CTF-only on the Lantern Yard's plaza approaches (plaza SW/W —
-    // the dense western edge is wall/prop-crowded below the 1.5 m clearance bar)
-    ["sp_lc1", -16.0, 0.5, "SC_LANTERN", ["ctf"]],
-    ["sp_lc2", -14.0, 6.0, "SC_LANTERN", ["ctf"]],
-    ["sp_lc3", -19.5, -3.0, "SC_LANTERN", ["ctf"]],
+    // ---- SC_LANTERN — the yard, the plaza's west third and the plaza ramp.
+    // The four yard points sit inside (or in the mouth of) their own flag room.
+    ["sp_l1", -36.0, 10.0, "SC_LANTERN", ["tdm", "ffa"]],
+    ["sp_l2", -30.0, 14.0, "SC_LANTERN", ["tdm", "ffa"]],
+    ["sp_l3", -37.0, 15.0, "SC_LANTERN", ["tdm", "ffa"]],
+    ["sp_l4", -25.0, 10.0, "SC_LANTERN", ["tdm", "ffa"]],
+    ["sp_l5", -22.0, 8.0, "SC_LANTERN", null], ["sp_l6", -17.0, 2.0, "SC_LANTERN", null],
+    ["sp_l7", -13.0, 12.0, "SC_LANTERN", null], ["sp_l8", -21.0, -5.0, "SC_LANTERN", null],
+    ["sp_l10", -12.0, -8.0, "SC_LANTERN", null],
+    ["sp_l11", -8.0, 24.0, "SC_LANTERN", null], ["sp_l12", -11.0, 32.0, "SC_LANTERN", null],
 
-    ["sp_n1", -38.0, -26.5, "SC_NORTH", null], ["sp_n2", -31.5, -22.5, "SC_NORTH", null],
-    ["sp_n3", -27.0, -26.0, "SC_NORTH", null], ["sp_n4", -22.5, -22.0, "SC_NORTH", null],
-    ["sp_n5", -17.0, -25.5, "SC_NORTH", null], ["sp_n6", -14.5, -21.0, "SC_NORTH", null],
-    ["sp_n7", -23.5, -19.0, "SC_NORTH", null],
+    // ---- SC_NORTH — the CS1 service street (now 15 m deep) and the customs
+    // yard's west half, which the gen-1 set could not reach at all.
+    ["sp_n1", -38.0, -30.0, "SC_NORTH", null], ["sp_n2", -31.0, -30.0, "SC_NORTH", null],
+    ["sp_n3", -36.0, -25.0, "SC_NORTH", null], ["sp_n4", -28.0, -22.0, "SC_NORTH", null],
+    ["sp_n5", -22.0, -25.0, "SC_NORTH", null], ["sp_n6", -16.0, -21.0, "SC_NORTH", null],
+    ["sp_n7", -24.0, -19.0, "SC_NORTH", null], ["sp_n8", -15.0, -47.0, "SC_NORTH", null],
+    ["sp_n9", -8.0, -43.0, "SC_NORTH", null], ["sp_n10", -14.0, -39.0, "SC_NORTH", null],
+    ["sp_n11", -2.0, -48.0, "SC_NORTH", null], ["sp_n12", -11.0, -45.0, "SC_NORTH", null],
 
-    ["sp_m1", -12.0, -25.5, "SC_MARKET", null], ["sp_m2", -4.0, -28.5, "SC_MARKET", null],
-    ["sp_m3", -9.5, -21.0, "SC_MARKET", null], ["sp_m4", -0.5, -21.5, "SC_MARKET", null],
-    ["sp_m6", 11.0, -22.5, "SC_MARKET", null],
-    // C7b: ExH room points — CTF off
-    ["sp_m7", 6.5, -32.0, "SC_MARKET", ["tdm", "ffa"]],
-    ["sp_m8", 4.0, -27.5, "SC_MARKET", ["tdm", "ffa"]],
-    // C7b: +2 CTF-only in the market-street pocket
-    ["sp_mc1", -2.0, -24.5, "SC_MARKET", ["ctf"]],
-    ["sp_mc2", 6.0, -21.5, "SC_MARKET", ["ctf"]],
+    // ---- SC_MARKET — the market street, the Exchange House and the customs
+    // yard's east half. The ExH points are inside the east stand's room.
+    ["sp_m1", -10.0, -30.0, "SC_MARKET", null], ["sp_m2", -4.0, -34.0, "SC_MARKET", null],
+    ["sp_m3", -8.0, -24.0, "SC_MARKET", null], ["sp_m4", 2.0, -22.0, "SC_MARKET", null],
+    ["sp_m5", 10.0, -22.0, "SC_MARKET", null],
+    ["sp_m6", 6.0, -32.0, "SC_MARKET", ["tdm", "ffa"]],
+    ["sp_m7", 3.0, -28.0, "SC_MARKET", ["tdm", "ffa"]],
+    ["sp_m9", 14.0, -29.0, "SC_MARKET", ["tdm", "ffa"]], ["sp_m10", 16.0, -46.0, "SC_MARKET", null],
+    ["sp_m11", 20.0, -43.0, "SC_MARKET", null], ["sp_m12", 12.0, -45.0, "SC_MARKET", null],
 
-    ["sp_g1", 20.0, -29.0, "SC_GALLERY", null], ["sp_g3", 21.0, -13.0, "SC_GALLERY", null],
-    ["sp_g4", 19.5, -6.0, "SC_GALLERY", null], ["sp_g5", 20.5, 4.5, "SC_GALLERY", null],
-    ["sp_g6", 19.5, 10.5, "SC_GALLERY", null], ["sp_g7", 10.5, -17.5, "SC_GALLERY", null],
+    // ---- SC_GALLERY — the Storm Gallery, the GE strip and the whole of Kirov
+    // Boulevard + the CYE gate lane (68 m of new territory).
+    ["sp_g1", 20.0, -31.0, "SC_GALLERY", null], ["sp_g2", 20.0, -24.0, "SC_GALLERY", null],
+    ["sp_g3", 21.0, -14.0, "SC_GALLERY", null], ["sp_g4", 19.0, -4.0, "SC_GALLERY", null],
+    ["sp_g5", 20.0, 5.0, "SC_GALLERY", null], ["sp_g6", 19.0, 11.0, "SC_GALLERY", null],
+    ["sp_g7", 26.0, -8.0, "SC_GALLERY", null], ["sp_g8", 26.0, 7.0, "SC_GALLERY", null],
+    ["sp_g9", 32.0, -40.0, "SC_GALLERY", null], ["sp_g10", 36.0, -24.0, "SC_GALLERY", null],
+    ["sp_g11", 43.0, -16.0, "SC_GALLERY", null], ["sp_g12", 33.0, 0.0, "SC_GALLERY", null],
+    ["sp_g13", 42.0, 10.0, "SC_GALLERY", ["tdm", "ffa"]], ["sp_g14", 34.0, 20.0, "SC_GALLERY", null],
+    ["sp_g15", 40.0, 32.0, "SC_GALLERY", ["tdm", "ffa"]], ["sp_g16", 24.0, 18.0, "SC_GALLERY", null],
 
-    ["sp_p1", -17.0, -14.0, "SC_PLAZA", ["ffa"]], ["sp_p2", -8.0, -3.0, "SC_PLAZA", ["ffa"]],
-    ["sp_p3", 0.0, -17.5, "SC_PLAZA", ["ffa"]], ["sp_p4", 12.5, -3.0, "SC_PLAZA", ["ffa"]],
-    ["sp_p5", -2.0, 9.0, "SC_PLAZA", ["ffa"]], ["sp_p6", -12.0, 0.0, "SC_PLAZA", ["ffa"]],
+    // ---- SC_PLAZA — FFA only by construction (side "mid").
+    ["sp_p1", -20.0, -12.0, "SC_PLAZA", ["ffa"]], ["sp_p2", -14.0, -2.0, "SC_PLAZA", ["ffa"]],
+    ["sp_p3", -2.0, -8.0, "SC_PLAZA", ["ffa"]], ["sp_p4", 8.0, -14.0, "SC_PLAZA", ["ffa"]],
+    ["sp_p5", 11.0, 2.0, "SC_PLAZA", ["ffa"]], ["sp_p6", 2.0, 12.0, "SC_PLAZA", ["ffa"]],
+    ["sp_p7", -8.0, 4.0, "SC_PLAZA", ["ffa"]], ["sp_p8", 6.0, -2.0, "SC_PLAZA", ["ffa"]],
   ],
 
   // CTF stand homes. flagWest is team 0's, flagEast is team 1's (arena.md §3.2).
@@ -548,7 +888,7 @@ export const ARENA_SPEC = {
     navSeed: [-5, 0],
     mid: [-5, -2],
     balconyAreaM2: 250,
-    tdmHomeWest: ["SC_LANTERN", "SC_ARCADE"],
+    tdmHomeWest: ["SC_LANTERN", "SC_ARCADE", "SC_WEST"],
     tdmHomeEast: ["SC_MARKET", "SC_GALLERY"],
   },
 };

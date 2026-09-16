@@ -26,6 +26,17 @@
 // .enableAll() at pool creation) or the vm camera collects zero lights and
 // the gun renders black — flagged in needsElsewhere.
 //
+// TICK INTERPOLATION (skating fix): update(dt, alpha) takes the frame's
+// interpolation factor and builds the camera's BASE position by lerping the
+// player's last two SIM TICKS — boot.js owns that history (a render-only ring
+// captured inside its single sim.step() call site) and hands the lerped point
+// back through ctx.playerRenderPos(alpha, out). Only POSITION is interpolated:
+// yaw/pitch stay raw off input.state, because interpolating look would trade
+// smoothness for input latency. Every offset below — eye height, crouch lerp,
+// bob, landing dip, recoil/ADS — is applied ON TOP of that base, in the order
+// it always was. With no history (before the first tick of a fresh sim) or an
+// omitted alpha, the base is the raw current p.pos, i.e. the old behaviour.
+//
 // CAMERA RIG OWNERSHIP: no other lane drives the world camera from sim state
 // (verified: boot sets it once at (0,1.7,0)). This module owns the
 // first-person camera per architecture §3.4 ("the camera renders from sim
@@ -203,6 +214,48 @@ function damp(cur, target, tau, dt) {
 }
 function smoothstep(t) { t = Math.min(1, Math.max(0, t)); return t * t * (3 - 2 * t); }
 
+// ---- WRIST RIG ------------------------------------------------------------
+// The arms are STATIC, NON-SKINNED meshes: all four shipped GLBs report
+// skins 0 / animations 0, attributes [NORMAL, POSITION, TANGENT, TEXCOORD_0],
+// no JOINTS_0/WEIGHTS_0. So no finger or forearm DEFORMATION is reachable from
+// code — that needs a Blender rebuild and is out of scope. What IS reachable
+// is each arm node's own transform, and that node's origin is the WRIST, so a
+// small rotation on it is an anatomically correct wrist flex.
+//
+// Without this the hands are welded rigidly to the gun: every recoil kick and
+// every fast turn moves hands and weapon as one solid lump, which is the
+// clearest "not AAA" tell left once the material is right. Real hands ABSORB
+// the kick — the muzzle climbs against a wrist that gives.
+//
+// SAFETY: the rest pose is cached per NODE in userData, and every frame
+// composes an ABSOLUTE rotation from that rest. It never accumulates onto the
+// live value, because loadWeaponGLB caches prototypes and re-equipping the
+// same weapon returns the SAME nodes — an accumulating rig would drift a
+// little further every equip and end up with the hands on backwards.
+const ARM_RE = /^arms?_/;
+const ARM = {
+  kickRoll: 0.55,    // share of the gun's kick roll the wrist gives back
+  kickPitch: 0.42,   // ...and of the muzzle climb
+  swayLead: 0.30,    // hands trail the gun on a fast turn
+  maxRad: 0.20,      // hard clamp — a wrist, not a rag doll
+  tau: 0.06,
+};
+function armNodes(group) {
+  if (!group) return null;
+  if (group.userData._armNodes) return group.userData._armNodes;
+  const out = [];
+  try {
+    group.traverse((o) => {
+      if (!ARM_RE.test(o.name || "")) return;
+      // snapshot the authored rest ONCE, on the node itself
+      if (!o.userData._restQ) o.userData._restQ = o.quaternion.clone();
+      out.push(o);
+    });
+  } catch (e) { return null; }
+  group.userData._armNodes = out;
+  return out;
+}
+
 export function createViewmodel(ctx) {
   const camera = ctx.camera;
   camera.rotation.order = "YXZ";
@@ -269,6 +322,9 @@ export function createViewmodel(ctx) {
   // ---- state ---------------------------------------------------------------
   let visible = true;
   let current = null;        // { id, w, group }
+  let armRoll = 0, armPitch = 0, armLead = 0;   // wrist rig, damped
+  const _armE = new THREE.Euler();
+  const _armQ = new THREE.Quaternion();
   let equipEpoch = 0;
   let raiseClock = Infinity; // seconds since last equip swap (raise anim)
 
@@ -314,6 +370,21 @@ export function createViewmodel(ctx) {
 
   const _v = new THREE.Vector3();
   const _q = new THREE.Quaternion();
+
+  // Interpolated camera base position (see the TICK INTERPOLATION note in the
+  // header). Scratch array, refilled every frame — never retained.
+  const _base = [0, 0, 0];
+  function basePos(p, alpha) {
+    const f = ctx.playerRenderPos;
+    if (f) {
+      const o = f(alpha, _base);
+      if (o) return o; // lerp of the last two sim ticks
+    }
+    // No history yet (first tick after a startMission/startMatch swap), or a
+    // caller that predates the alpha argument: use the raw current tick.
+    _base[0] = p.pos[0]; _base[1] = p.pos[1]; _base[2] = p.pos[2];
+    return _base;
+  }
 
   function setLayersDeep(o) {
     o.traverse((n) => n.layers.set(VM_LAYER));
@@ -437,8 +508,13 @@ export function createViewmodel(ctx) {
   }
 
   // ---- update ---------------------------------------------------------------
-  function update(dt) {
+  function update(dt, alpha) {
     if (!(dt > 0)) dt = 1 / 60;
+    // Default 1 = "render the tick that just ran", which is bit-for-bit the
+    // pre-interpolation behaviour. boot's stepFrames path passes exactly that,
+    // so every harness capture and battery frame is unchanged.
+    if (!(alpha >= 0)) alpha = 1; // covers undefined and NaN
+    else if (alpha > 1) alpha = 1;
     const S = ctx.settings;
     const sim = ctx.sim && ctx.sim();
     const st = sim && sim.state;
@@ -582,11 +658,16 @@ export function createViewmodel(ctx) {
         if (breathMeter >= SWAY.breath.meterS * SWAY.breath.windedRefillFrac) winded = false;
       }
 
-      // position + rotation
+      // position + rotation. The BASE is the player's last two sim ticks lerped
+      // by this frame's alpha (header: TICK INTERPOLATION) — the raw 60 Hz
+      // position held still for 2-3 frames at 144 Hz and then jumped, which is
+      // the skating read. eyeH / bob / dip ride ON TOP, unchanged and in the
+      // same order. Rotation below is untouched: raw input.state, zero latency.
+      const bp = basePos(p, alpha);
       camera.position.set(
-        p.pos[0] + camBobX * Math.cos(input.state.yaw),
-        p.pos[1] + eyeH + camBobY + dipY,
-        p.pos[2] - camBobX * Math.sin(input.state.yaw),
+        bp[0] + camBobX * Math.cos(input.state.yaw),
+        bp[1] + eyeH + camBobY + dipY,
+        bp[2] - camBobX * Math.sin(input.state.yaw),
       );
       // VT §7 fire response, camera share: pitch punch + roll + yaw, all
       // RENDER-ONLY (input.state is recoil.js's alone), so the burst reads as
@@ -834,6 +915,26 @@ export function createViewmodel(ctx) {
       rz + swayYaw * 0.35 * (1 - adsEase) + K.rotZ.x,
       "YXZ",
     );
+
+    // ---- wrist rig: the hands give against what the gun does ---------------
+    // Composed ABSOLUTELY from each node's cached rest quaternion (see the
+    // ARM block at the top of this file) so re-equipping a cached prototype
+    // can never accumulate drift.
+    {
+      const nodes = current && current.group ? armNodes(current.group) : null;
+      if (nodes && nodes.length) {
+        const cl = (v) => Math.max(-ARM.maxRad, Math.min(ARM.maxRad, v));
+        armRoll = damp(armRoll, cl(-K.rotZ.x * ARM.kickRoll), ARM.tau, dt);
+        armPitch = damp(armPitch, cl(-K.rotX.x * ARM.kickPitch), ARM.tau, dt);
+        armLead = damp(armLead, cl(-swayYaw * ARM.swayLead), ARM.tau, dt);
+        _armE.set(armPitch, armLead, armRoll, "YXZ");
+        _armQ.setFromEuler(_armE);
+        for (const n of nodes) {
+          const rest = n.userData._restQ;
+          if (rest) n.quaternion.copy(rest).multiply(_armQ);
+        }
+      }
+    }
   }
 
   // ---- sockets ---------------------------------------------------------------

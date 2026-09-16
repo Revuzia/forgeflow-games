@@ -80,7 +80,7 @@ export function validateMatchContent(content, opts = {}) {
     }
   }
 
-  // spawn points: cluster exists, no dup ids, 40–50 points, ≥6/cluster/mode
+  // spawn points: cluster exists, no dup ids, 40–110 points, ≥6/cluster/mode
   const seen = new Set();
   for (const p of points) {
     if (seen.has(p.id)) errors.push(`spawnPoints: duplicate id '${p.id}'`);
@@ -88,8 +88,14 @@ export function validateMatchContent(content, opts = {}) {
     if (!clusters[p.cluster]) errors.push(`spawnPoint ${p.id}: cluster '${p.cluster}' unknown`);
     if (!Array.isArray(p.pos) || p.pos.length !== 3) errors.push(`spawnPoint ${p.id}: bad pos`);
   }
-  if (points.length < 40 || points.length > 50) {
-    errors.push(`spawnPoints count ${points.length} outside 40–50`);
+  // The ceiling was 50, written when every arena was a ~2600 m² gen-1 carve.
+  // A gen-2 arena is DOUBLE that ground and needs roughly double the stands —
+  // saltmarket's probe emit is 94 — so the old bound rejected a correctly
+  // emitted arena and took the whole match start down with it. This is a
+  // sanity range, not a design constraint: the real spawn-quality assertion is
+  // the ≥6-per-cluster-per-mode clause below, plus probe_arena's G-G/G-F.
+  if (points.length < 40 || points.length > 110) {
+    errors.push(`spawnPoints count ${points.length} outside 40–110`);
   }
   // C7b: the per-mode cluster count assertion — ≥6 eligible per cluster per
   // mode (a point with no `modes` field is eligible in every mode).

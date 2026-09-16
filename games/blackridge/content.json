@@ -1798,7 +1798,7 @@
       "pos": [
         -18.7,
         0,
-        -4.0
+        -4
       ],
       "radius": 1.2,
       "respawnS": 20,
@@ -1821,7 +1821,7 @@
       "pos": [
         -17.3,
         0,
-        -4.0
+        -4
       ],
       "radius": 1.2,
       "respawnS": 20,
@@ -1844,7 +1844,7 @@
       "pos": [
         7.3,
         0,
-        0.0
+        0
       ],
       "radius": 1.2,
       "respawnS": 20,
@@ -1867,7 +1867,7 @@
       "pos": [
         8.7,
         0,
-        0.0
+        0
       ],
       "radius": 1.2,
       "respawnS": 20,
@@ -1888,9 +1888,9 @@
         "ffa"
       ],
       "pos": [
-        7.0,
+        7,
         0,
-        11.0
+        11
       ],
       "radius": 1.2,
       "respawnS": 45,
@@ -1913,7 +1913,7 @@
       "pos": [
         -16.7,
         0,
-        -8.0
+        -8
       ],
       "radius": 1.2,
       "respawnS": 20,
@@ -1936,7 +1936,7 @@
       "pos": [
         -15.3,
         0,
-        -8.0
+        -8
       ],
       "radius": 1.2,
       "respawnS": 20,
@@ -1959,7 +1959,7 @@
       "pos": [
         5.3,
         0,
-        4.0
+        4
       ],
       "radius": 1.2,
       "respawnS": 20,
@@ -1982,7 +1982,7 @@
       "pos": [
         6.7,
         0,
-        4.0
+        4
       ],
       "radius": 1.2,
       "respawnS": 20,
@@ -2003,9 +2003,9 @@
         "ffa"
       ],
       "pos": [
-        -5.0,
+        -5,
         0,
-        -14.0
+        -14
       ],
       "radius": 1.2,
       "respawnS": 45,
@@ -5726,36 +5726,37 @@
         "id": "saltmarket",
         "bounds": {
           "min": [
-            -38,
+            -55,
             -2,
-            -27
+            -41
           ],
           "max": [
-            28,
+            45,
             14,
-            23
+            37
           ]
         },
         "vetoOverrides": {
-          "v1M": 12,
-          "v2LosM": 25,
-          "v3ConeM": 20
+          "v1M": 17,
+          "v2LosM": 35,
+          "v3ConeM": 28
         },
-        "_comment": "PROBE-EMITTED by tools/probe_arena.mjs --emit (measured geometry; PVP_BUILD_PLAN Part 4.2). Do not hand-edit spawnPoints/clusters/flags."
+        "_comment": "PROBE-EMITTED by tools/probe_arena.mjs --emit (measured geometry; PVP_BUILD_PLAN Part 4.2). Do not hand-edit spawnPoints/clusters/flags. Certified under GEN-2 (doubled density — not yet the default)."
       },
       "spawnPoints": [
         {
           "id": "sp_ss1",
           "pos": [
-            -33,
+            -40,
             0,
-            -4.5
+            -11
           ],
-          "yaw": -1.92,
+          "yaw": -1.66,
           "cluster": "SC_SALT",
-          "cover": 0.5,
+          "cover": 0.4,
           "modes": [
             "tdm",
+            "ctf",
             "ffa"
           ],
           "zoneHint": "salt_store"
@@ -5763,15 +5764,16 @@
         {
           "id": "sp_ss2",
           "pos": [
-            -34.5,
+            -40,
             0,
-            0.5
+            -5
           ],
-          "yaw": -0.79,
+          "yaw": -1.4,
           "cluster": "SC_SALT",
-          "cover": 0.9,
+          "cover": 0.3,
           "modes": [
             "tdm",
+            "ctf",
             "ffa"
           ],
           "zoneHint": "salt_store"
@@ -5779,11 +5781,11 @@
         {
           "id": "sp_ss3",
           "pos": [
-            -32,
+            -40,
             0,
-            18
+            1
           ],
-          "yaw": -2.01,
+          "yaw": -0.7,
           "cluster": "SC_SALT",
           "cover": 0.3,
           "modes": [
@@ -5796,13 +5798,13 @@
         {
           "id": "sp_ss4",
           "pos": [
-            -33,
+            -40,
             0,
-            -21.5
+            7
           ],
-          "yaw": -2.01,
+          "yaw": -0.52,
           "cluster": "SC_SALT",
-          "cover": 0.3,
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -5813,13 +5815,13 @@
         {
           "id": "sp_ss5",
           "pos": [
-            -34.5,
+            -34,
             0,
-            10
+            -11
           ],
-          "yaw": -1.13,
+          "yaw": -1.66,
           "cluster": "SC_SALT",
-          "cover": 0.6,
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -5830,13 +5832,13 @@
         {
           "id": "sp_ss6",
           "pos": [
-            -32.5,
+            -34,
             0,
-            -13
+            -5
           ],
-          "yaw": -2.36,
+          "yaw": -0.61,
           "cluster": "SC_SALT",
-          "cover": 0.5,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -5847,13 +5849,13 @@
         {
           "id": "sp_ss7",
           "pos": [
-            -35.5,
+            -34,
             0,
-            -17
+            1
           ],
-          "yaw": -2.36,
+          "yaw": -2.18,
           "cluster": "SC_SALT",
-          "cover": 0.8,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -5864,11 +5866,79 @@
         {
           "id": "sp_ss8",
           "pos": [
-            -32.5,
+            -34,
             0,
-            13.5
+            7
           ],
-          "yaw": -2.62,
+          "yaw": -0.52,
+          "cluster": "SC_SALT",
+          "cover": 0.5,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "salt_store"
+        },
+        {
+          "id": "sp_ss9",
+          "pos": [
+            -28,
+            0,
+            -11
+          ],
+          "yaw": -1.75,
+          "cluster": "SC_SALT",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "salt_store"
+        },
+        {
+          "id": "sp_ss10",
+          "pos": [
+            -28,
+            0,
+            -5
+          ],
+          "yaw": -1.05,
+          "cluster": "SC_SALT",
+          "cover": 0.1,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "salt_store"
+        },
+        {
+          "id": "sp_ss11",
+          "pos": [
+            -28,
+            0,
+            1
+          ],
+          "yaw": -0.52,
+          "cluster": "SC_SALT",
+          "cover": 0.1,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "salt_store"
+        },
+        {
+          "id": "sp_ss12",
+          "pos": [
+            -28,
+            0,
+            7
+          ],
+          "yaw": -0.52,
           "cluster": "SC_SALT",
           "cover": 0.6,
           "modes": [
@@ -5879,15 +5949,49 @@
           "zoneHint": "salt_store"
         },
         {
+          "id": "sp_ss13",
+          "pos": [
+            -24,
+            0,
+            -8
+          ],
+          "yaw": -1.48,
+          "cluster": "SC_SALT",
+          "cover": 0.3,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "salt_store"
+        },
+        {
+          "id": "sp_ss14",
+          "pos": [
+            -26,
+            0,
+            4
+          ],
+          "yaw": -0.52,
+          "cluster": "SC_SALT",
+          "cover": 0.3,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "salt_store"
+        },
+        {
           "id": "sp_dw1",
           "pos": [
-            -9,
+            -50.5,
             0,
-            -11
+            -36.5
           ],
-          "yaw": -1.57,
+          "yaw": -1.75,
           "cluster": "SC_DOCK_W",
-          "cover": 0.1,
+          "cover": 0.6,
           "modes": [
             "tdm",
             "ctf",
@@ -5898,13 +6002,13 @@
         {
           "id": "sp_dw2",
           "pos": [
-            -20.5,
+            -48.5,
             0,
-            -17
+            -28.5
           ],
-          "yaw": -2.01,
+          "yaw": -1.31,
           "cluster": "SC_DOCK_W",
-          "cover": 0.3,
+          "cover": 0.2,
           "modes": [
             "tdm",
             "ctf",
@@ -5915,11 +6019,11 @@
         {
           "id": "sp_dw3",
           "pos": [
-            -12.5,
+            -50,
             0,
-            -12.5
+            -21
           ],
-          "yaw": -2.53,
+          "yaw": -1.83,
           "cluster": "SC_DOCK_W",
           "cover": 0.1,
           "modes": [
@@ -5932,13 +6036,13 @@
         {
           "id": "sp_dw4",
           "pos": [
-            -9.5,
+            -42.5,
             0,
-            -19.5
+            -36
           ],
-          "yaw": -2.36,
+          "yaw": -1.75,
           "cluster": "SC_DOCK_W",
-          "cover": 0.6,
+          "cover": 0.2,
           "modes": [
             "tdm",
             "ctf",
@@ -5949,13 +6053,13 @@
         {
           "id": "sp_dw5",
           "pos": [
-            -26.5,
+            -43,
             0,
-            -8.5
+            -28
           ],
-          "yaw": 2.88,
+          "yaw": -2.44,
           "cluster": "SC_DOCK_W",
-          "cover": 0.8,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -5966,13 +6070,13 @@
         {
           "id": "sp_dw6",
           "pos": [
-            -27,
+            -43,
             0,
-            -19.5
+            -20
           ],
-          "yaw": -2.44,
+          "yaw": -1.92,
           "cluster": "SC_DOCK_W",
-          "cover": 0.6,
+          "cover": 0.1,
           "modes": [
             "tdm",
             "ctf",
@@ -5983,13 +6087,115 @@
         {
           "id": "sp_dw7",
           "pos": [
-            -28,
+            -35.5,
             0,
-            -24.5
+            -35
           ],
-          "yaw": -1.57,
+          "yaw": -1.92,
           "cluster": "SC_DOCK_W",
-          "cover": 0.8,
+          "cover": 0.2,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "dock_west"
+        },
+        {
+          "id": "sp_dw8",
+          "pos": [
+            -36,
+            0,
+            -28
+          ],
+          "yaw": -2.79,
+          "cluster": "SC_DOCK_W",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "dock_west"
+        },
+        {
+          "id": "sp_dw9",
+          "pos": [
+            -25,
+            0,
+            -36
+          ],
+          "yaw": 3.05,
+          "cluster": "SC_DOCK_W",
+          "cover": 0.3,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "dock_west"
+        },
+        {
+          "id": "sp_dw10",
+          "pos": [
+            -27,
+            0,
+            -29
+          ],
+          "yaw": 3.05,
+          "cluster": "SC_DOCK_W",
+          "cover": 0.5,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "dock_west"
+        },
+        {
+          "id": "sp_dw11",
+          "pos": [
+            -17.5,
+            0,
+            -35
+          ],
+          "yaw": -2.62,
+          "cluster": "SC_DOCK_W",
+          "cover": 0.1,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "dock_west"
+        },
+        {
+          "id": "sp_dw12",
+          "pos": [
+            -18,
+            0,
+            -21
+          ],
+          "yaw": -2.01,
+          "cluster": "SC_DOCK_W",
+          "cover": 0.1,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "dock_west"
+        },
+        {
+          "id": "sp_dw13",
+          "pos": [
+            -11,
+            0,
+            -29
+          ],
+          "yaw": -2.79,
+          "cluster": "SC_DOCK_W",
+          "cover": 0.2,
           "modes": [
             "tdm",
             "ctf",
@@ -6000,13 +6206,13 @@
         {
           "id": "sp_rw1",
           "pos": [
-            -17.5,
+            -50.5,
             0,
-            7.5
+            31.5
           ],
-          "yaw": -0.87,
+          "yaw": -1.31,
           "cluster": "SC_ROWS_W",
-          "cover": 0.1,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -6017,11 +6223,11 @@
         {
           "id": "sp_rw2",
           "pos": [
-            -9.5,
+            -50,
             0,
-            13
+            25
           ],
-          "yaw": -0.79,
+          "yaw": -1.66,
           "cluster": "SC_ROWS_W",
           "cover": 0.1,
           "modes": [
@@ -6034,13 +6240,13 @@
         {
           "id": "sp_rw3",
           "pos": [
-            -26.5,
+            -50,
             0,
-            16.5
+            17
           ],
-          "yaw": -0.09,
+          "yaw": -1.83,
           "cluster": "SC_ROWS_W",
-          "cover": 0.6,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -6051,9 +6257,43 @@
         {
           "id": "sp_rw4",
           "pos": [
-            -21.5,
+            -43,
             0,
-            7.5
+            32
+          ],
+          "yaw": -1.13,
+          "cluster": "SC_ROWS_W",
+          "cover": 0.2,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "rows_west_s"
+        },
+        {
+          "id": "sp_rw5",
+          "pos": [
+            -43,
+            0,
+            24
+          ],
+          "yaw": -1.75,
+          "cluster": "SC_ROWS_W",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "rows_west_s"
+        },
+        {
+          "id": "sp_rw6",
+          "pos": [
+            -43,
+            0,
+            16
           ],
           "yaw": -1.22,
           "cluster": "SC_ROWS_W",
@@ -6066,31 +6306,82 @@
           "zoneHint": "rows_west_s"
         },
         {
-          "id": "sp_rw5",
+          "id": "sp_rw7",
           "pos": [
-            -14.5,
+            -37,
             0,
-            9
-          ],
-          "yaw": -0.7,
-          "cluster": "SC_ROWS_W",
-          "cover": 0.1,
-          "modes": [
-            "tdm",
-            "ctf",
-            "ffa"
-          ],
-          "zoneHint": "rows_west_s"
-        },
-        {
-          "id": "sp_rw6",
-          "pos": [
-            -9,
-            0,
-            9.5
+            32
           ],
           "yaw": -0.87,
           "cluster": "SC_ROWS_W",
+          "cover": 0.3,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "rows_west_s"
+        },
+        {
+          "id": "sp_rw8",
+          "pos": [
+            -35.5,
+            0,
+            25
+          ],
+          "yaw": -1.83,
+          "cluster": "SC_ROWS_W",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "rows_west_s"
+        },
+        {
+          "id": "sp_rw9",
+          "pos": [
+            -23.5,
+            0,
+            33.5
+          ],
+          "yaw": -0.26,
+          "cluster": "SC_ROWS_W",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "rows_west_s"
+        },
+        {
+          "id": "sp_rw10",
+          "pos": [
+            -27,
+            0,
+            25
+          ],
+          "yaw": -0.61,
+          "cluster": "SC_ROWS_W",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "rows_west_s"
+        },
+        {
+          "id": "sp_rw11",
+          "pos": [
+            -18,
+            0,
+            32
+          ],
+          "yaw": -0.09,
+          "cluster": "SC_ROWS_W",
           "cover": 0.1,
           "modes": [
             "tdm",
@@ -6100,15 +6391,32 @@
           "zoneHint": "rows_west_s"
         },
         {
-          "id": "sp_rw7",
+          "id": "sp_rw12",
           "pos": [
-            -26.5,
+            -18,
             0,
-            11.5
+            17
           ],
-          "yaw": -0.44,
+          "yaw": -0.17,
           "cluster": "SC_ROWS_W",
-          "cover": 0.7,
+          "cover": 0.1,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "rows_west_s"
+        },
+        {
+          "id": "sp_rw13",
+          "pos": [
+            -11,
+            0,
+            25
+          ],
+          "yaw": -0.35,
+          "cluster": "SC_ROWS_W",
+          "cover": 0.1,
           "modes": [
             "tdm",
             "ctf",
@@ -6119,15 +6427,16 @@
         {
           "id": "sp_wh1",
           "pos": [
-            23,
+            30,
             0,
-            0.5
+            7
           ],
-          "yaw": 1.22,
+          "yaw": 1.48,
           "cluster": "SC_WEIGH",
-          "cover": 0.5,
+          "cover": 0.4,
           "modes": [
             "tdm",
+            "ctf",
             "ffa"
           ],
           "zoneHint": "weigh_house"
@@ -6135,15 +6444,16 @@
         {
           "id": "sp_wh2",
           "pos": [
-            24.5,
+            30,
             0,
-            -4.5
+            1
           ],
-          "yaw": 2.36,
+          "yaw": 1.75,
           "cluster": "SC_WEIGH",
-          "cover": 0.9,
+          "cover": 0.3,
           "modes": [
             "tdm",
+            "ctf",
             "ffa"
           ],
           "zoneHint": "weigh_house"
@@ -6151,11 +6461,11 @@
         {
           "id": "sp_wh3",
           "pos": [
-            22,
+            30,
             0,
-            -22
+            -5
           ],
-          "yaw": 1.13,
+          "yaw": 2.44,
           "cluster": "SC_WEIGH",
           "cover": 0.3,
           "modes": [
@@ -6168,13 +6478,13 @@
         {
           "id": "sp_wh4",
           "pos": [
-            23,
+            30,
             0,
-            17.5
+            -11
           ],
-          "yaw": 1.13,
+          "yaw": 2.62,
           "cluster": "SC_WEIGH",
-          "cover": 0.3,
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -6185,13 +6495,13 @@
         {
           "id": "sp_wh5",
           "pos": [
-            24.5,
+            24,
             0,
-            -14
+            7
           ],
-          "yaw": 2.01,
+          "yaw": 1.48,
           "cluster": "SC_WEIGH",
-          "cover": 0.6,
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -6202,13 +6512,13 @@
         {
           "id": "sp_wh6",
           "pos": [
-            22.5,
+            24,
             0,
-            9
+            1
           ],
-          "yaw": 0.79,
+          "yaw": 2.53,
           "cluster": "SC_WEIGH",
-          "cover": 0.5,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -6219,13 +6529,13 @@
         {
           "id": "sp_wh7",
           "pos": [
-            25.5,
+            24,
             0,
-            13
+            -5
           ],
-          "yaw": 0.79,
+          "yaw": 0.96,
           "cluster": "SC_WEIGH",
-          "cover": 0.8,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -6236,11 +6546,79 @@
         {
           "id": "sp_wh8",
           "pos": [
-            22.5,
+            24,
             0,
-            -17.5
+            -11
           ],
-          "yaw": 0.52,
+          "yaw": 2.62,
+          "cluster": "SC_WEIGH",
+          "cover": 0.5,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "weigh_house"
+        },
+        {
+          "id": "sp_wh9",
+          "pos": [
+            18,
+            0,
+            7
+          ],
+          "yaw": 1.4,
+          "cluster": "SC_WEIGH",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "weigh_house"
+        },
+        {
+          "id": "sp_wh10",
+          "pos": [
+            18,
+            0,
+            1
+          ],
+          "yaw": 2.09,
+          "cluster": "SC_WEIGH",
+          "cover": 0.1,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "weigh_house"
+        },
+        {
+          "id": "sp_wh11",
+          "pos": [
+            18,
+            0,
+            -5
+          ],
+          "yaw": 2.62,
+          "cluster": "SC_WEIGH",
+          "cover": 0.1,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "weigh_house"
+        },
+        {
+          "id": "sp_wh12",
+          "pos": [
+            18,
+            0,
+            -11
+          ],
+          "yaw": 2.62,
           "cluster": "SC_WEIGH",
           "cover": 0.6,
           "modes": [
@@ -6251,15 +6629,49 @@
           "zoneHint": "weigh_house"
         },
         {
+          "id": "sp_wh13",
+          "pos": [
+            14,
+            0,
+            4
+          ],
+          "yaw": 1.66,
+          "cluster": "SC_WEIGH",
+          "cover": 0.3,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "weigh_house"
+        },
+        {
+          "id": "sp_wh14",
+          "pos": [
+            16,
+            0,
+            -8
+          ],
+          "yaw": 2.62,
+          "cluster": "SC_WEIGH",
+          "cover": 0.3,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "weigh_house"
+        },
+        {
           "id": "sp_de1",
           "pos": [
-            -1,
+            40.5,
             0,
-            7
+            32.5
           ],
-          "yaw": 1.57,
+          "yaw": 1.4,
           "cluster": "SC_DOCK_E",
-          "cover": 0.1,
+          "cover": 0.6,
           "modes": [
             "tdm",
             "ctf",
@@ -6270,13 +6682,13 @@
         {
           "id": "sp_de2",
           "pos": [
-            10.5,
+            38.5,
             0,
-            13
+            24.5
           ],
-          "yaw": 1.13,
+          "yaw": 1.83,
           "cluster": "SC_DOCK_E",
-          "cover": 0.3,
+          "cover": 0.2,
           "modes": [
             "tdm",
             "ctf",
@@ -6287,11 +6699,11 @@
         {
           "id": "sp_de3",
           "pos": [
-            2.5,
+            40,
             0,
-            8.5
+            17
           ],
-          "yaw": 0.61,
+          "yaw": 1.31,
           "cluster": "SC_DOCK_E",
           "cover": 0.1,
           "modes": [
@@ -6304,13 +6716,13 @@
         {
           "id": "sp_de4",
           "pos": [
-            -0.5,
+            32.5,
             0,
-            15.5
+            32.5
           ],
-          "yaw": 0.79,
+          "yaw": 1.31,
           "cluster": "SC_DOCK_E",
-          "cover": 0.6,
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -6321,13 +6733,13 @@
         {
           "id": "sp_de5",
           "pos": [
-            16.5,
+            33,
             0,
-            4.5
+            24
           ],
-          "yaw": -0.26,
+          "yaw": 0.7,
           "cluster": "SC_DOCK_E",
-          "cover": 0.8,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -6338,13 +6750,13 @@
         {
           "id": "sp_de6",
           "pos": [
-            17,
+            33,
             0,
-            15.5
+            16
           ],
-          "yaw": 0.7,
+          "yaw": 1.22,
           "cluster": "SC_DOCK_E",
-          "cover": 0.6,
+          "cover": 0.1,
           "modes": [
             "tdm",
             "ctf",
@@ -6355,13 +6767,115 @@
         {
           "id": "sp_de7",
           "pos": [
-            18,
+            25.5,
             0,
-            20.5
+            31
           ],
-          "yaw": 1.57,
+          "yaw": 1.22,
           "cluster": "SC_DOCK_E",
-          "cover": 0.8,
+          "cover": 0.2,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "dock_east"
+        },
+        {
+          "id": "sp_de8",
+          "pos": [
+            26,
+            0,
+            24
+          ],
+          "yaw": 0.35,
+          "cluster": "SC_DOCK_E",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "dock_east"
+        },
+        {
+          "id": "sp_de9",
+          "pos": [
+            15,
+            0,
+            32
+          ],
+          "yaw": -0.09,
+          "cluster": "SC_DOCK_E",
+          "cover": 0.3,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "dock_east"
+        },
+        {
+          "id": "sp_de10",
+          "pos": [
+            17,
+            0,
+            25
+          ],
+          "yaw": -0.09,
+          "cluster": "SC_DOCK_E",
+          "cover": 0.5,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "dock_east"
+        },
+        {
+          "id": "sp_de11",
+          "pos": [
+            9,
+            0,
+            32
+          ],
+          "yaw": 0.52,
+          "cluster": "SC_DOCK_E",
+          "cover": 0.2,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "dock_east"
+        },
+        {
+          "id": "sp_de12",
+          "pos": [
+            8,
+            0,
+            17
+          ],
+          "yaw": 1.13,
+          "cluster": "SC_DOCK_E",
+          "cover": 0.1,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "dock_east"
+        },
+        {
+          "id": "sp_de13",
+          "pos": [
+            1,
+            0,
+            25
+          ],
+          "yaw": 0.35,
+          "cluster": "SC_DOCK_E",
+          "cover": 0.2,
           "modes": [
             "tdm",
             "ctf",
@@ -6372,13 +6886,13 @@
         {
           "id": "sp_re1",
           "pos": [
-            7.5,
+            40.5,
             0,
-            -11.5
+            -35.5
           ],
-          "yaw": 2.27,
+          "yaw": 1.83,
           "cluster": "SC_ROWS_E",
-          "cover": 0.1,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -6389,11 +6903,11 @@
         {
           "id": "sp_re2",
           "pos": [
-            -0.5,
+            40,
             0,
-            -17
+            -29
           ],
-          "yaw": 2.36,
+          "yaw": 1.48,
           "cluster": "SC_ROWS_E",
           "cover": 0.1,
           "modes": [
@@ -6406,13 +6920,13 @@
         {
           "id": "sp_re3",
           "pos": [
-            16.5,
+            40,
             0,
-            -20.5
+            -21
           ],
-          "yaw": 3.05,
+          "yaw": 1.31,
           "cluster": "SC_ROWS_E",
-          "cover": 0.6,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -6423,9 +6937,43 @@
         {
           "id": "sp_re4",
           "pos": [
-            11.5,
+            33,
             0,
-            -11.5
+            -36
+          ],
+          "yaw": 2.01,
+          "cluster": "SC_ROWS_E",
+          "cover": 0.2,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "rows_east_n"
+        },
+        {
+          "id": "sp_re5",
+          "pos": [
+            33,
+            0,
+            -28
+          ],
+          "yaw": 1.4,
+          "cluster": "SC_ROWS_E",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "rows_east_n"
+        },
+        {
+          "id": "sp_re6",
+          "pos": [
+            33,
+            0,
+            -20
           ],
           "yaw": 1.92,
           "cluster": "SC_ROWS_E",
@@ -6438,31 +6986,82 @@
           "zoneHint": "rows_east_n"
         },
         {
-          "id": "sp_re5",
+          "id": "sp_re7",
           "pos": [
-            4.5,
+            27,
             0,
-            -13
-          ],
-          "yaw": 2.44,
-          "cluster": "SC_ROWS_E",
-          "cover": 0.1,
-          "modes": [
-            "tdm",
-            "ctf",
-            "ffa"
-          ],
-          "zoneHint": "rows_east_n"
-        },
-        {
-          "id": "sp_re6",
-          "pos": [
-            -1,
-            0,
-            -13.5
+            -36
           ],
           "yaw": 2.27,
           "cluster": "SC_ROWS_E",
+          "cover": 0.3,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "rows_east_n"
+        },
+        {
+          "id": "sp_re8",
+          "pos": [
+            25.5,
+            0,
+            -29
+          ],
+          "yaw": 1.31,
+          "cluster": "SC_ROWS_E",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "rows_east_n"
+        },
+        {
+          "id": "sp_re9",
+          "pos": [
+            16.5,
+            0,
+            -34.5
+          ],
+          "yaw": 2.71,
+          "cluster": "SC_ROWS_E",
+          "cover": 0.5,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "rows_east_n"
+        },
+        {
+          "id": "sp_re10",
+          "pos": [
+            17,
+            0,
+            -29
+          ],
+          "yaw": 2.53,
+          "cluster": "SC_ROWS_E",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "rows_east_n"
+        },
+        {
+          "id": "sp_re11",
+          "pos": [
+            8,
+            0,
+            -36
+          ],
+          "yaw": 3.05,
+          "cluster": "SC_ROWS_E",
           "cover": 0.1,
           "modes": [
             "tdm",
@@ -6472,15 +7071,32 @@
           "zoneHint": "rows_east_n"
         },
         {
-          "id": "sp_re7",
+          "id": "sp_re12",
           "pos": [
-            16.5,
+            8,
             0,
-            -15.5
+            -21
           ],
-          "yaw": 2.71,
+          "yaw": 2.97,
           "cluster": "SC_ROWS_E",
-          "cover": 0.7,
+          "cover": 0.1,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "rows_east_n"
+        },
+        {
+          "id": "sp_re13",
+          "pos": [
+            1,
+            0,
+            -29
+          ],
+          "yaw": 2.79,
+          "cluster": "SC_ROWS_E",
+          "cover": 0.1,
           "modes": [
             "tdm",
             "ctf",
@@ -6493,11 +7109,11 @@
           "pos": [
             -17,
             0,
-            -3
+            -9.5
           ],
-          "yaw": -1.04,
+          "yaw": 3.11,
           "cluster": "SC_HALL",
-          "cover": 0.1,
+          "cover": 0.6,
           "modes": [
             "ffa"
           ],
@@ -6506,13 +7122,13 @@
         {
           "id": "sp_h2",
           "pos": [
-            7,
+            -16,
             0,
-            -1
+            -2
           ],
-          "yaw": 2.1,
+          "yaw": -1.92,
           "cluster": "SC_HALL",
-          "cover": 0.1,
+          "cover": 0.4,
           "modes": [
             "ffa"
           ],
@@ -6521,13 +7137,13 @@
         {
           "id": "sp_h3",
           "pos": [
-            -6,
+            -17.5,
             0,
-            -1.5
+            5
           ],
-          "yaw": -0.58,
+          "yaw": -1.58,
           "cluster": "SC_HALL",
-          "cover": 0.1,
+          "cover": 0.3,
           "modes": [
             "ffa"
           ],
@@ -6536,13 +7152,13 @@
         {
           "id": "sp_h4",
           "pos": [
-            0.5,
+            -11,
             0,
-            0.5
+            -9.5
           ],
-          "yaw": 1.06,
+          "yaw": -2.21,
           "cluster": "SC_HALL",
-          "cover": 0.1,
+          "cover": 0.6,
           "modes": [
             "ffa"
           ],
@@ -6553,9 +7169,9 @@
           "pos": [
             -11,
             0,
-            -5
+            -2
           ],
-          "yaw": -2.12,
+          "yaw": -1.13,
           "cluster": "SC_HALL",
           "cover": 0.1,
           "modes": [
@@ -6566,13 +7182,133 @@
         {
           "id": "sp_h6",
           "pos": [
-            -14.5,
+            -10.5,
             0,
-            2.5
+            5.5
           ],
-          "yaw": -2,
+          "yaw": -1.59,
+          "cluster": "SC_HALL",
+          "cover": 0.2,
+          "modes": [
+            "ffa"
+          ],
+          "zoneHint": "hall_center"
+        },
+        {
+          "id": "sp_h7",
+          "pos": [
+            -5,
+            0,
+            -9.5
+          ],
+          "yaw": 2.62,
+          "cluster": "SC_HALL",
+          "cover": 0.2,
+          "modes": [
+            "ffa"
+          ],
+          "zoneHint": "hall_center"
+        },
+        {
+          "id": "sp_h8",
+          "pos": [
+            -5,
+            0,
+            5.5
+          ],
+          "yaw": -0.52,
+          "cluster": "SC_HALL",
+          "cover": 0.2,
+          "modes": [
+            "ffa"
+          ],
+          "zoneHint": "hall_center"
+        },
+        {
+          "id": "sp_h9",
+          "pos": [
+            1.5,
+            0,
+            -9
+          ],
+          "yaw": 1.52,
           "cluster": "SC_HALL",
           "cover": 0.1,
+          "modes": [
+            "ffa"
+          ],
+          "zoneHint": "hall_center"
+        },
+        {
+          "id": "sp_h10",
+          "pos": [
+            1,
+            0,
+            -2
+          ],
+          "yaw": 2.01,
+          "cluster": "SC_HALL",
+          "cover": 0.1,
+          "modes": [
+            "ffa"
+          ],
+          "zoneHint": "hall_center"
+        },
+        {
+          "id": "sp_h11",
+          "pos": [
+            1,
+            0,
+            5.5
+          ],
+          "yaw": 0.94,
+          "cluster": "SC_HALL",
+          "cover": 0.6,
+          "modes": [
+            "ffa"
+          ],
+          "zoneHint": "hall_center"
+        },
+        {
+          "id": "sp_h12",
+          "pos": [
+            7.5,
+            0,
+            -9
+          ],
+          "yaw": 1.56,
+          "cluster": "SC_HALL",
+          "cover": 0.3,
+          "modes": [
+            "ffa"
+          ],
+          "zoneHint": "hall_center"
+        },
+        {
+          "id": "sp_h13",
+          "pos": [
+            6.5,
+            0,
+            -1
+          ],
+          "yaw": 1.13,
+          "cluster": "SC_HALL",
+          "cover": 0.6,
+          "modes": [
+            "ffa"
+          ],
+          "zoneHint": "hall_center"
+        },
+        {
+          "id": "sp_h14",
+          "pos": [
+            7,
+            0,
+            5.5
+          ],
+          "yaw": -0.04,
+          "cluster": "SC_HALL",
+          "cover": 0.6,
           "modes": [
             "ffa"
           ],
@@ -6582,9 +7318,9 @@
       "clusters": {
         "SC_SALT": {
           "anchor": [
-            -33,
+            -32.5,
             0,
-            -1.5
+            -2
           ],
           "node": "salt_store",
           "inwardYaw": -1.57,
@@ -6592,9 +7328,9 @@
         },
         "SC_DOCK_W": {
           "anchor": [
-            -19,
+            -34,
             0,
-            -16
+            -29
           ],
           "node": "dock_west",
           "inwardYaw": -2.36,
@@ -6602,9 +7338,9 @@
         },
         "SC_ROWS_W": {
           "anchor": [
-            -17.5,
+            -34.5,
             0,
-            11
+            26
           ],
           "node": "rows_west_s",
           "inwardYaw": -0.79,
@@ -6612,9 +7348,9 @@
         },
         "SC_WEIGH": {
           "anchor": [
-            23.5,
+            23,
             0,
-            -2
+            -1.5
           ],
           "node": "weigh_house",
           "inwardYaw": 1.57,
@@ -6622,9 +7358,9 @@
         },
         "SC_DOCK_E": {
           "anchor": [
-            9.5,
+            25,
             0,
-            12.5
+            26
           ],
           "node": "dock_east",
           "inwardYaw": 0.79,
@@ -6632,9 +7368,9 @@
         },
         "SC_ROWS_E": {
           "anchor": [
-            8,
+            25,
             0,
-            -14.5
+            -29.5
           ],
           "node": "rows_east_n",
           "inwardYaw": 2.36,
@@ -6642,9 +7378,9 @@
         },
         "SC_HALL": {
           "anchor": [
-            -6.5,
+            -4.5,
             0,
-            -1
+            -1.5
           ],
           "node": "hall_center",
           "inwardYaw": null,
@@ -6659,9 +7395,9 @@
           "id": "flag_amber",
           "team": 0,
           "home": [
-            -34,
+            -49.5,
             0,
-            -0.5
+            1
           ],
           "node": "salt_store",
           "standR": 1.2,
@@ -6671,9 +7407,9 @@
           "id": "flag_slate",
           "team": 1,
           "home": [
-            24,
+            39.5,
             0,
-            -3.5
+            -5
           ],
           "node": "weigh_house",
           "standR": 1.2,

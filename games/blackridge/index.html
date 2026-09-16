@@ -214,13 +214,13 @@
     </div>
 
 <!--
-  ORDER IS LOAD-BEARING. game_controls.js wraps the Audio / AudioContext
+  ORDER IS LOAD-BEARING. game_controls.js?v=1789530264 wraps the Audio / AudioContext
   constructors at load time — that wrap is the page-level Mute mechanism.
   Every context this game constructs goes through globalThis.AudioContext
   AFTER this script, so Mute reaches them all (driftwake convention).
   Classic parser-inserted script, never injected, so ordering is guaranteed.
 -->
-<script src="./game_controls.js"></script>
+<script src="./game_controls.js?v=1789530264"></script>
 
 <script>
 /*
@@ -285,7 +285,7 @@
 
     var s = document.createElement("script");
     s.type = "module";
-    s.src = "./runtime/boot.js?v=116";   /* ?v=N — BUMP EVERY ITERATION */
+    s.src = "./runtime/boot.js?v=118";   /* ?v=N — BUMP EVERY ITERATION */
     document.body.appendChild(s);
 })();
 </script>

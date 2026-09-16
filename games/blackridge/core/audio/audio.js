@@ -29,12 +29,64 @@ import { makeAmbience } from "./ambience.js";
 import { makeMusic } from "./music.js";
 
 // combat_spec §7.3 — synthesized impulse recipes (no IR files).
+//
+// `wet` = the zone's fixed listener-side reverb-return level. `pre` = predelay,
+// which is the PRIMARY size cue — a listener reads room size from the gap before
+// the first reflection far more than from RT60 — and which also decides how much
+// reverb energy lands ON the transient rather than after it.
+//
+// RT60s are deliberately UNCHANGED by the 2026-09-16 tail retune. Three of the
+// four already sit at or below the realistic floor for the space they model
+// (a real corridor is ≈2 s against our 0.50; an empty industrial hall is 2–6 s
+// against our 1.10), so the tails in this game are too LOUD, too FLAT and too
+// UNDIFFERENTIATED BY DISTANCE — not too long. Lengthening a tail in response to
+// "the echo is too loud" would be the wrong knob, and every extra 100 ms of RT60
+// is extra accumulation under automatic fire. The RT60 recommendations that were
+// deliberately NOT applied are in the lane report.
 const ZONES = {
-  exterior:   { rt60: 0.25, pre: 0.090, wet: 0.14, slap: true },
-  warehouse:  { rt60: 1.10, pre: 0.018, wet: 0.30, slap: false },
+  // exterior.wet 0.14 → 0.12 (−1.3 dB). Paired on purpose with the impulse fix
+  //   in makeImpulse() below: that removes 24.0% of this zone's impulse energy,
+  //   and ConvolverNode normalisation (`normalize` defaults true) therefore lifts
+  //   whatever is left by about +1.1 dB. The pair nets ≈ −0.2 dB for a DISTANT
+  //   shooter — the exterior space is preserved, which is the brief — while the
+  //   player's OWN weapon drops a further 3.9 dB from losing its double-feed in
+  //   sfx.js. That asymmetry is the entire point.
+  //   NOT taken to 0.08 as an unqualified level cut would suggest: measured, the
+  //   exterior convolver branch sits 38–44 dB under the direct report and a full
+  //   render differs from a reverb-killed render by ≤0.3 dB in this zone. Cutting
+  //   it hard would buy nothing audible and would cost the distant-shooter reads.
+  exterior:   { rt60: 0.25, pre: 0.090, wet: 0.12, slap: true },
+  // warehouse.pre 0.018 → 0.030 (+12 ms). 18 ms is a 3.1 m first reflection,
+  //   which reads as a medium ROOM; 30 ms is ≈5 m, which reads as a hall. Moving
+  //   the reflection later also moves reverb energy off the muzzle transient, so
+  //   the dry crack stays dry: the size cue improves and the "wet" impression
+  //   drops at the same time, with no change to level and no change to RT60.
+  //   wet stays 0.30 — interiors are SUPPOSED to have more tail than the street,
+  //   and that ordering (0.30 > 0.26 > 0.22 > 0.12) is now wider, not flatter.
+  warehouse:  { rt60: 1.10, pre: 0.030, wet: 0.30, slap: false },
   corridor:   { rt60: 0.50, pre: 0.008, wet: 0.26, flutter: true },
   small_room: { rt60: 0.35, pre: 0.005, wet: 0.22, slap: false },
 };
+
+// ---- §7.3 tail duck: reverb-return compression, keyed off the shots ---------
+// Standard practice for gunfire is a compressor on the reverb RETURN, side-
+// chained from the dry weapon bus: ≈6:1, 1–3 ms attack, 90–140 ms release, tuned
+// for 5–8 dB of gain reduction on a single shot. Web Audio has no side-chain, so
+// the same shape is scheduled directly onto the zone's wet gain by the shot that
+// causes it (sfx.js bang() calls env.tailDuck once per gunshot).
+//
+// Why it is needed, measured on this graph: overlapping incoherent tails sum at
+// 10·log10(N). A 30-round warden mag (750 rpm) fired in exterior raised the
+// inter-shot noise floor from −35.9 dBFS before round 2 to −10.4 dBFS before
+// round 29 — +25.5 dB of build-up, i.e. by the end of a magazine the space
+// BETWEEN rounds sat only ~9 dB under the rounds themselves. That is the mush,
+// and it is the one part of the complaint a static level cut cannot fix: the
+// tail is not too loud on shot one, it is too loud on shot twenty. A return
+// compressor is exactly the tool for "loud once is fine, loud twenty times is
+// not".
+const TAIL_DUCK_ONE = 0.50;    // one shot → −6 dB on that zone's return
+const TAIL_DUCK_FLOOR = 0.32;  // sustained fire bottoms out at −10 dB, never more
+const TAIL_DUCK_TAU = 0.25;    // heat decay: ≈4 rounds at 750 rpm reaches the floor
 
 export function createAudio(ctx) {
   let ac = null;                  // AudioContext, constructed at unlock
@@ -54,6 +106,7 @@ export function createAudio(ctx) {
   let tinnitusLast = -100;        // sim-clock guard (max once / 20 s)
   let slideGain = null, slideSrc = null; // §7.4 slide scrape loop
   let muffleOpen = true;
+  const duckHeat = {};            // zone → {h, t} for the §7.3 tail duck
   // H1 (2026-08-25, owner request): laboured-breathing loop at CRITICAL hp.
   // No breathing take exists in the CC0 set (assets/audio audited: steps/
   // impacts/shots/ui/thunder/cloth only) — synthesized: bandpass noise with
@@ -97,7 +150,21 @@ export function createAudio(ctx) {
       if (spec.slap) {
         // exterior night: sparse early burst + ONE discrete slap echo at the
         // predelay, short decay — "0.25 s slap, 90 ms single echo".
-        for (let i = 0; i < sr * 0.02; i++) d[i] = (rngS() * 2 - 1) * 0.5 * (1 - i / (sr * 0.02));
+        //
+        // 2026-09-16: this leading burst ran at amplitude 0.5, which put 24.0% of
+        // the whole impulse's energy into a 20 ms noise wash at ZERO predelay —
+        // glued to the muzzle transient instead of arriving after it. Energy
+        // check, from these two loops: the t=0 burst integrates to
+        // (1/3)(0.5²)(0.02/3) = 5.56e-4 and the 250 ms slap cluster below to
+        // (1/3)(0.35²)(0.25/5.8) = 1.76e-3, so 5.56/23.16 = 24.0%. Audibly that
+        // is not an echo at all — it is mud ON the attack, and it is why your own
+        // shot reads as a WET crack rather than a dry crack followed by a space.
+        // No amount of send trimming could remove it, because it lives inside the
+        // impulse, ahead of the predelay the zone is supposed to have.
+        // OLD 0.5 → NEW 0.12 (−12.4 dB): the wash falls to 1.8% of the impulse
+        // and the crack reads dry, while the 90 ms slap that actually gives this
+        // zone its "night slap, single echo" character is left alone.
+        for (let i = 0; i < sr * 0.02; i++) d[i] = (rngS() * 2 - 1) * 0.12 * (1 - i / (sr * 0.02));
         for (let i = 0; i < sr * spec.rt60; i++) {
           const k = preN + i;
           if (k >= len) break;
@@ -162,6 +229,40 @@ export function createAudio(ctx) {
       if (!zones) return null;
       const z = zones[zoneName] || zones[defaultZone] || zones.exterior;
       return z ? z.conv : null;
+    },
+    // Reverb-return duck (see the TAIL_DUCK_* block above ZONES for the measured
+    // reason this exists). sfx.js calls it once per gunshot with the SHOOTER's
+    // zone — every zone's wet feeds the sfx bus regardless of where the camera
+    // is, so ducking the shooter's zone ducks exactly the return that shot is
+    // about to bloom. `when` is the shot's scheduled arrival (dist/343), so a
+    // distant shot ducks when its sound lands, not when it was fired, and
+    // `weight` is 1 for the player and the shot's distance gain for anyone else
+    // — a 250 m shot barely keys the duck at all, which is correct: it is not
+    // what is building up in your ears.
+    //
+    // No reset hook is needed. `heat` decays against wall time and the release
+    // target is always scheduled alongside the duck, so a mission ending mid
+    // burst restores the zone's wet level on its own within ~150 ms.
+    tailDuck(zoneName, when, weight) {
+      if (!ac || !zones) return;
+      const z = zones[zoneName] || zones[defaultZone] || zones.exterior;
+      if (!z) return;
+      const w = Math.min(1, Math.max(0, fin(weight, 1)));
+      if (w < 0.05) return;
+      const spec = ZONES[zoneName] || ZONES[defaultZone] || ZONES.exterior;
+      const t = ac.currentTime + Math.max(0, fin(when, 0));
+      const s = duckHeat[zoneName] || (duckHeat[zoneName] = { h: 0, t });
+      s.h = s.h * Math.exp(-Math.max(0, t - s.t) / TAIL_DUCK_TAU) + w;
+      s.t = t;
+      // one shot → −6 dB; four or more overlapping → the −10 dB floor
+      const k = Math.min(1, Math.max(0, (s.h - 1) / 3));
+      const depth = TAIL_DUCK_ONE - (TAIL_DUCK_ONE - TAIL_DUCK_FLOOR) * k;
+      try {
+        const g = z.wet.gain;
+        g.cancelScheduledValues(t);
+        g.setTargetAtTime(gclamp(spec.wet * (1 - (1 - depth) * w)), t, 0.008); // ≈2 ms attack
+        g.setTargetAtTime(gclamp(spec.wet), t + 0.040, 0.05);                  // ≈110 ms release
+      } catch (e) { err(e, "tailDuck"); }
     },
     // HRTF panner + tuned distance curve. Returns a GainNode wired into sfxDry
     // (with .__d = distance) or null when out of earshot / non-finite (skip,

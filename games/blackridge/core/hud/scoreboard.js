@@ -124,14 +124,16 @@ export function createScoreboard(ctx) {
   const M = () => { const s = sim(); return s && s.state.match ? s.state.match : null; };
 
   // ------------------------------------------------------------- render
+  // OPPONENTS READ AS PEOPLE (owner 2026-09-16). The scoreboard used to print each
+  // bot's difficulty BAND and stamp a "BOT" chip on its name, which tells the player
+  // outright that every opponent is an NPC and how hard it is set. Both are withheld
+  // now — every row renders identically, so a bot is indistinguishable from a human.
+  // C11's "bands are printed, never hidden" is superseded by this owner ruling.
   function bandCell(a) {
-    return a.kind === "bot"
-      ? `<span class="band">${esc(BAND_LABEL[a.band] || a.band || "")}</span>`
-      : `<span class="band">—</span>`;
+    return `<span class="band">—</span>`;
   }
   function nameCell(a) {
-    return `${esc(a.kind === "human" ? "YOU" : a.name)}` +
-      (a.kind === "bot" ? `<span class="bg">BOT</span>` : "");
+    return `${esc(a.kind === "human" ? "YOU" : a.name)}`;
   }
 
   function render() {

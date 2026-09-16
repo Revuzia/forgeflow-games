@@ -2912,8 +2912,11 @@ export async function buildLevel(ctx) {
         break;
       }
       case "flood": {
-        // towers are props; lighting.js draws the head glow — pools only here
-        addPool(lp.aim[0], lp.aim[2], 5.0, lp.color, false);
+        // towers are props; lighting.js draws the head glow — pools only here.
+        // aim is OPTIONAL (the "sodium" case above already treats it so): fall
+        // back to the pole's own footing rather than throwing out of buildLevel
+        // and taking the entire match start down with it.
+        addPool(lp.aim ? lp.aim[0] : x, lp.aim ? lp.aim[2] : z, 5.0, lp.color, false);
         break;
       }
       case "skylight": {

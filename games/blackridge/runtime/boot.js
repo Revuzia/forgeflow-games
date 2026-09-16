@@ -256,6 +256,13 @@ try {
   lights.bindStatic(levelOut.staticLightSpecs);
   const weather = createWeather(ctx);
   const reflect = createReflect(ctx);
+  // Kill cam — owns the camera ONLY during the respawn wait, a window the
+  // viewmodel rig already leaves unowned (it stops driving once p.alive is
+  // false). Imported on its own rather than taking a slot in the positional
+  // destructure above: that list is index-matched to its Promise.all, and a
+  // miscount there cross-wires two modules silently.
+  const { createKillCam } = await import(`../core/render/killcam.js${V}`);
+  const killcam = createKillCam(ctx);
 
   // Menu-state sim: exists from boot so __FPS__.sim is truthy for the ready
   // expression; startMission() replaces it with a fresh epoch.
@@ -317,6 +324,10 @@ try {
         recoil.kick(d.weaponId); vm.kick(d.weaponId);
       }
     });
+    // bridge.clear() wipes handlers on every match start, so the kill cam
+    // re-registers here with everything else rather than once at boot.
+    killcam.reset();
+    killcam.attach(bridge);
   }
   attachAll();
 
@@ -427,7 +438,9 @@ try {
     } catch (e) {
       // a missing mode lane (W5/W8/W9 not landed) or a contract-gate failure
       // is a reported error, never a page crash (arch 1.6 rule 5)
-      console.error("[boot] startMatch failed:", e && e.message);
+      // keep the STACK: message-only made a spawn-table indexing bug in one
+      // arena un-localizable (it reports as a bare "reading '0'").
+      console.error("[boot] startMatch failed:", e && e.message, e && e.stack);
       // roll back BOTH halves: the built world AND the flat arena view, or the
       // next start would validate the failed arena's data against prevMap.
       restoreFlat(prevFlat);
@@ -447,10 +460,100 @@ try {
   let acc = 0;
   let last = performance.now();
   let simStepsDropped = 0; // C27 counter — perf gate AC-48 reads it via stats()
+  let renderAlpha = 0;     // last LIVE interpolation factor (see frame(), pause)
+
+  // ---- PLAYER CAMERA TICK HISTORY (RENDER-ONLY) -----------------------------
+  // The sim is a fixed 60 Hz lockstep; the display is not. Bot bodies have
+  // always lerped their last two ticks by the frame's `alpha`
+  // (core/chars/soldiers.js, "interpolated position reads"), but the
+  // first-person camera was written straight off the CURRENT tick —
+  // viewmodel.js `camera.position.set(p.pos[0] + …, p.pos[1] + eyeH + …, …)` —
+  // so on a 144 Hz panel it held one world position for 2-3 frames and then
+  // jumped, in an uneven 1-2-1-1-2 pattern, while mouse-look stayed perfectly
+  // smooth and raw. Even rotation over uneven translation is the perceptual
+  // signature of gliding/skating, and it is the dominant cause of it here.
+  //
+  // WHERE THE HISTORY LIVES, AND WHY IT CANNOT TOUCH DETERMINISM: a view-side
+  // 2-slot ring in THIS closure, not sim state. Nothing writes back into the
+  // sim, nothing here is read by sim.step, serialised, checkpointed or sent to
+  // a peer — the sim cannot observe it at all, so the tick is byte-identical
+  // and lockstep is untouched. The alternative — parking prev/curr on
+  // state.player — would add a field to the object the sim owns and
+  // checkpoints, which every restore and every peer would then have to keep
+  // consistent; that is exactly the class of change the brief rules out.
+  //
+  // It is filled by stepSim(), which is now the ONLY place sim.step() is
+  // called (both the rAF loop and the synchronous stepFrames path). That makes
+  // "captured exactly once per SIM TICK" structural rather than a convention
+  // two call sites have to remember — and it cannot drift the way a per-frame
+  // sampler keyed on st.tick does when a frame takes 2-3 catch-up steps.
+  const camHist = {
+    prev: [0, 0, 0],
+    curr: [0, 0, 0],
+    have: false,  // no sample yet — first tick of a fresh sim
+    owner: null,  // the sim INSTANCE these samples belong to
+    out: [0, 0, 0],
+  };
+  // One tick of legitimate locomotion cannot approach this. The fastest ground
+  // speed in the sim is MOVE.SLIDE_ENTRY 7.8 m/s = 0.130 m/tick, and free-fall
+  // (MOVE.GRAV -20, no terminal clamp) would need 60 m/s — a ~90 m drop — to
+  // cover 1.0 m inside 1/60 s. Both teleport paths jump the body far further
+  // AND zero p.vel on the way: sim.teleport() (core/sim/sim.js, the scenario
+  // and harness path) and match.js spawnActor's respawn (`p.pos =
+  // pick.pos.slice()`). Lerping across either would smear the camera across
+  // the map for a frame, so they snap instead.
+  const TELEPORT_M2 = 1.0 * 1.0;
+
+  function captureTick() {
+    const p = sim && sim.state && sim.state.player;
+    if (!p || !p.pos) { camHist.have = false; camHist.owner = sim; return; }
+    // A new sim instance (startMission / startMatch) shares no history with the
+    // old one, so its first tick is a teleport by definition.
+    const fresh = !camHist.have || camHist.owner !== sim;
+    const c = camHist.curr, pv = camHist.prev;
+    pv[0] = c[0]; pv[1] = c[1]; pv[2] = c[2];
+    // COPY, never alias: player.js reassigns `p.pos = res.pos` every tick.
+    c[0] = p.pos[0]; c[1] = p.pos[1]; c[2] = p.pos[2];
+    const dx = c[0] - pv[0], dy = c[1] - pv[1], dz = c[2] - pv[2];
+    if (fresh || dx * dx + dy * dy + dz * dz > TELEPORT_M2) {
+      pv[0] = c[0]; pv[1] = c[1]; pv[2] = c[2]; // snap — never lerp across a jump
+    }
+    camHist.have = true;
+    camHist.owner = sim;
+  }
+
+  // THE one sim.step() call site. input.buildCmd() carries edge latches that
+  // survive "until buildCmd() has carried it" (core/input.js), so it must run
+  // exactly once per tick — another reason the tick lives in one function.
+  function stepSim() {
+    bus.now = sim.state.time;
+    sim.step(input.buildCmd()); // sim.step ticks sim.mission internally (v2.2)
+    captureTick();
+  }
+
+  // Render-time player position: the last two ticks lerped by this frame's
+  // alpha. Returns null before the live sim's first tick — viewmodel.js then
+  // falls back to the raw current position, i.e. exactly today's behaviour.
+  ctx.playerRenderPos = function playerRenderPos(alpha, out) {
+    if (!camHist.have || camHist.owner !== sim) return null;
+    const a = alpha >= 0 ? (alpha <= 1 ? alpha : 1) : 0; // also traps NaN
+    const o = out || camHist.out;
+    const pv = camHist.prev, c = camHist.curr;
+    o[0] = pv[0] + (c[0] - pv[0]) * a;
+    o[1] = pv[1] + (c[1] - pv[1]) * a;
+    o[2] = pv[2] + (c[2] - pv[2]) * a;
+    return o;
+  };
 
   function viewUpdates(dt, alpha) {
     recoil.update(dt);
-    vm.update(dt);
+    vm.update(dt, alpha); // alpha drives the camera's POSITION only — never
+    // yaw/pitch, which stay raw off input.state (interpolating look would buy
+    // smoothness with input latency, which is the worse trade).
+    // AFTER vm.update: while you are dead the rig early-outs without touching
+    // the camera, so this writes into a genuinely free slot rather than
+    // overwriting the rig's work every frame.
+    killcam.update(dt);
     soldiers.update(dt, alpha);
     fx.update(dt);
     hud.update(dt);
@@ -467,9 +570,10 @@ try {
     const t0 = performance.now();
     for (let i = 0; i < n; i++) {
       renderer.info.reset();
-      bus.now = sim.state.time;
-      sim.step(input.buildCmd()); // sim.step ticks sim.mission internally (v2.2)
+      stepSim();
       bridge.dispatch(bus.drain());
+      // alpha 1 = the tick just stepped, so the interpolated base position is
+      // IDENTICAL to p.pos and every captured battery frame is unchanged.
       viewUpdates(dtStep, 1);
       post.render(scene, camera);
     }
@@ -504,8 +608,7 @@ try {
       // 3 gives one step of catch-up headroom; 5 permitted a 2.5× sim burst
       // on any hitch, which is how a hitch spirals into a stall.
       while (acc >= DT && steps < 3) {
-        bus.now = sim.state.time;
-        sim.step(input.buildCmd()); // sim.step ticks sim.mission internally (v2.2)
+        stepSim(); // steps the sim AND captures the camera's tick history
         acc -= DT;
         steps++;
       }
@@ -516,7 +619,15 @@ try {
     }
 
     bridge.dispatch(bus.drain());
-    const alpha = acc / DT;
+    // PAUSE: the branch above discards the accumulator (doctrine §5), so
+    // acc/DT reads 0 while paused — which would yank every interpolated view
+    // back a full tick on the frame the menu opens (up to 13 cm of camera at
+    // slide speed, and the same backward hop the bot bodies already take
+    // today). Nothing is stepping, so holding the last LIVE factor is exactly
+    // "freeze the frame". The sim is untouched either way: alpha is a render
+    // input only, and no sim step happens while paused.
+    if (!pauseCtl.active) renderAlpha = acc / DT;
+    const alpha = renderAlpha;
     viewUpdates(dt, alpha);
     dynres.update();
     post.render(scene, camera);

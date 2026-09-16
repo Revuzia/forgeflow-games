@@ -69,7 +69,7 @@
 // board standing ON it — verticality here is a flanking floor, not a sniper
 // deck (_design/pvp/arena.md Part 3.4).
 
-const BOUNDS = { min: [-42, -2, -27], max: [32, 14, 23] };
+const BOUNDS = { min: [-56, -2, -45], max: [46, 14, 41] };
 
 // 180° rotation about the depot centre (−5, −2): x' = MX − x, z' = MZ − z.
 const MX = -10, MZ = -4;
@@ -159,6 +159,28 @@ function tramPair(out, idA, idB, x0, x1, z0, z1) {
     Math.min(mz(z0), mz(z1)), Math.max(mz(z0), mz(z1)));
 }
 
+// A FLAT WAGON — permanent-way stock, loaded with rail and sleepers. Deck top
+// 1.15 m, and that number is the whole point of the kind: it is BELOW the
+// 1.6 m eye height every sightline gate measures at, so a flat wagon is hard
+// crouch cover that does not occlude a standing shot (the same rule the 1.2 m
+// boarding decks already run on — see the platform note at the head of this
+// file). GEN-2 is why the kind exists at all: the tall tram car is a 24.6 m
+// perimeter of standing occlusion, and thirty-six of them measured 80.2% of
+// this arena's rays dying inside 15 m against a 70% ceiling. Swapping the
+// decorative half of the depot's stock to flat wagons keeps the floor area,
+// keeps the cover, and gives the 15–40 m band back.
+function flatWagon(out, id, x0, x1, z0, z1) {
+  const alongX = (x1 - x0) >= (z1 - z0);
+  out.push(wbox(`${id}_frame`, "wall", x0 + (alongX ? 0.3 : 0.5), x1 - (alongX ? 0.3 : 0.5),
+    0, 0.62, z0 + (alongX ? 0.5 : 0.3), z1 - (alongX ? 0.5 : 0.3), "metal", "metal_thin"));
+  out.push(wbox(`${id}_load`, "wall", x0, x1, 0.62, 1.15, z0, z1, "metal", "metal_thin"));
+}
+function flatPair(out, idA, idB, x0, x1, z0, z1) {
+  flatWagon(out, idA, x0, x1, z0, z1);
+  flatWagon(out, idB, Math.min(mx(x0), mx(x1)), Math.max(mx(x0), mx(x1)),
+    Math.min(mz(z0), mz(z1)), Math.max(mz(z0), mz(z1)));
+}
+
 // ---------------------------------------------------------------- export
 export function buildLayout(seed = 1) {
   const W = [];
@@ -169,8 +191,123 @@ export function buildLayout(seed = 1) {
   // retaining walls under the viaduct embankments; north is the blast wall
   // behind the stabling roads, south the yard hoarding on the street side.
   // 6.5 m: unmantleable, and tall enough that no ray leaves the arena.
-  wPair(W, "bnd_w", "bnd_e", "wall", -42, -41, 0, 6.5, -27, 23);
-  wPair(W, "bnd_n", "bnd_s", "wall", -41, 31, 0, 6.5, -27, -26);
+  //
+  // GEN-2 EXPANSION: the perimeter moved out to X[−56,+46] Z[−45,+41]. The
+  // OLD perimeter (X[−42,−41] / X[+31,+32] and Z[−27,−26] / Z[+22,+23]) did
+  // not disappear — it survives as the depot's INNER retaining wall, cut into
+  // segments by gates (§1b/§1c). That is the single most load-bearing choice
+  // in this expansion: it keeps the original depot's sightline character
+  // intact instead of dissolving it into one big field, and it gives every
+  // long axis a wall to die against.
+  wPair(W, "bnd_w", "bnd_e", "wall", -56, -55, 0, 6.5, -45, 41);
+  wPair(W, "bnd_n", "bnd_s", "wall", -55, 45, 0, 6.5, -45, -44);
+
+  // ---- 1a. THE ERECTING SHOP MASS (NW) and its twin (SE) -------------------
+  // Two of the four new corners are CLOSED — in gen-1 by a solid 14 × 18 m
+  // brick mass, in gen-2 by a 6 × 6 m fitting bay standing on a 1.2 m loading
+  // bank (see the demolition note below). Closed, not solid, is all the job
+  // ever needed: they stop the expansion becoming a racetrack — with all four
+  // corners open the new outer band would be a continuous 86 × 66 m loop
+  // around the old depot — and they break the two longest diagonals in the
+  // AABB (the NW↔SE corner-to-corner line is 131 m; nothing sees along it).
+  // GEN-2: THE SHOP IS DEMOLISHED TO ITS SLAB, and this is the single edit
+  // that bought G-C's mid-range band. Attributing every sampled ray to the
+  // collider that stopped it showed the two corner masses were the most
+  // wasteful geometry on the map by a wide margin: each one ENDED ~610 rays
+  // in the 6–15 m bucket while blocking only ~680 of 250 000 sampled pairs —
+  // 2.7 pairs of G-E per m² of footprint, against 586 for a metre of
+  // retaining wall. They were paying full price in sightline and buying
+  // almost no occlusion, because nothing stands inside a solid block and
+  // almost no pair of players needs to see THROUGH a corner.
+  //
+  // So the fitting bay stays (8 × 12 m, still 7 m to the eaves — the corner
+  // keeps a mass, and with it the diagonal-breaking job §1a was built for)
+  // and the rest of the footprint becomes the 1.2 m LOADING BANK it would
+  // really be: a slab with steps up. The area is unchanged to the square
+  // metre — 96 m² of mass + 156 m² of bank = the old 252 — so G-A does not
+  // move, but a 1.2 m deck sits UNDER the 1.6 m eye height, so every ray that
+  // used to die on the brickwork at 6–15 m now runs on across the slab into
+  // the 15–40 m band. Measured, the swap alone is +2.1 points of band for
+  // +1.3 of G-E, an exchange rate five times better than anything available
+  // in the yards, the roads or the works.
+  // What survives is the FITTING BAY, 6 × 6 m and still 7 m to the eaves. It
+  // is sized by G-D, not by G-E: with the corner fully open the longest ray
+  // on the map runs 94–95 m against a 95 m ceiling (the NW↔SE diagonal §1a
+  // was built to kill), and this block is the smallest mass that puts it back
+  // under 80. Every larger remnant was measured and is pure loss — 4 × 12,
+  // 4 × 8 and 6 × 6 all block ZERO pairs, because no two players ever need to
+  // see THROUGH the corner, so a remnant's only effect is the rays it eats.
+  //
+  // The bank tiles AROUND the bay rather than under it: probe_props gate 3
+  // fails any two boxes that interpenetrate in all three axes, and a deck
+  // running beneath a wall would do exactly that.
+  // Trimmed 6 x 6 -> 4.6 x 4.6. --payers scored the full block at 77 sub-15 m
+  // rays for ZERO blocked sightlines: sat in open corner ground with nobody
+  // behind it, so every metre of it was spent against G-C's mid-range band and
+  // bought no exposure back. The smaller shop reads identically from the road.
+  // Pushed FLUSH into the corner (inner faces x -55 / z -44) instead of standing
+  // 4 m off both walls. --payers scored the free-standing block at 114 sub-15 m
+  // rays for ZERO blocked sightlines: out in the open it threw a shadow in every
+  // direction, and every one of those rays was charged against G-C's mid-range
+  // band for nothing. Against the wall its shadow lies inside the boundary's own,
+  // it frees the mid-corner ground it used to occupy, and a goods shop built onto
+  // the yard wall is what the prototype it is drawn from actually looks like.
+  wPair(W, "shop_nw", "shop_se", "wall", -52.3, -47.7, 0, 7, -39.3, -34.7, "concrete", "hard");
+  wPair(W, "shop_nw_roof", "shop_se_roof", "roof", -52.3, -47.7, 7, 7.45, -39.3, -34.7);
+  wPair(W, "bank_nw_a", "bank_se_a", "deck", -55, -41, 0, 1.2, -44, -40);
+  wPair(W, "bank_nw_b", "bank_se_b", "deck", -55, -41, 0, 1.2, -34, -26);
+  wPair(W, "bank_nw_c", "bank_se_c", "deck", -55, -53, 0, 1.2, -40, -34);
+  wPair(W, "bank_nw_d", "bank_se_d", "deck", -47, -41, 0, 1.2, -40, -34);
+  stepsPair(W, "bank_nw_step", "bank_se_step", -46, -43, -23.2, -26, 4, 0.3);
+
+  // ---- 1b/1c. THE INNER RETAINING WALL — the HALF-AND-HALF rule ------------
+  // Old `bnd_n`/`bnd_s` and `bnd_w`/`bnd_e`. Each of the four runs is now
+  // HALF wall and HALF open, and which half is authored, not decorative:
+  //
+  //   north run  solid X[−5,+31]   ⇒ OPEN X[−41,−5]   (its mirror, the south
+  //   south run  solid X[−41,−5]      run, is the exact reverse)
+  //   west run   solid Z[−2,+22]   ⇒ OPEN Z[−26,−2]
+  //   east run   solid Z[−26,−2]      (again the mirror)
+  //
+  // WHY HALF, AND WHY THAT HALF. A doubled arena fails G-C's new 15–40 m
+  // clause by being big and cramped — and the first build of this expansion
+  // did exactly that: 5849 m² of ground, and 50.6% of its rays still died
+  // inside 6 m, because a 17 m siding band and a 13 m yard band on opposite
+  // sides of a wall are two corridors, not a room. Deleting HALF of each run
+  // welds the old 13 m north yard to the new 17 m outer road into ONE 31 × 36 m
+  // yard, and the 19 m west apron to the 13 m works into ONE 33 × 24 m hall.
+  // Those merged rooms are where the map's 15–40 m layer comes from.
+  //
+  // WHY EXACTLY HALF, mirrored. A north–south ray crosses the depot only if
+  // the north run is open at its X AND the south run is open at the same X.
+  // The south run is the north run MIRRORED about X = −5, so an opening at
+  // X = x on one is an opening at X = −10−x on the other: taking one whole
+  // half means no X is ever open on both. The same argument about Z = −2
+  // holds for the west/east pair. That is a proof, not a measurement — it is
+  // why the 17+48+17 = 82 m N–S keyhole and the 13+72+13 = 98 m E–W keyhole
+  // that G-D's ≥78 m clause exists to catch cannot be authored into this map.
+  // The longest line that survives is one band plus the old depot: 65 m.
+  //
+  // The cost is that each outer room reaches the depot on one side only; the
+  // other side reaches it round the open corner (§5d). That diagonal is the
+  // map's new flanking idea and the reason the two open corners are NE/SW
+  // while the two solid masses are NW/SE.
+  // The partition is not literally "one half" — it is any set whose union with
+  // its own mirror is the whole run, which leaves room to protect the two flag
+  // halls. Car hall A owns X[−41,−29] of the SOUTH run and car hall B owns
+  // X[+19,+31] of the NORTH run; a mouth in either would give a flag room a
+  // fourth wide side, which arena.md §1.5 calls a field rather than a room. So
+  // the north run keeps X[+19,+31] solid, its mirror keeps X[−41,−29] solid,
+  // and the remaining 48 m is split down the middle:
+  //   north solid X[−29,−5] + X[+19,+31]   mouths X[−41,−29] and X[−5,+19]
+  //   south solid X[−41,−29] + X[−5,+19]   mouths X[−29,−5] and X[+19,+31]
+  wPair(W, "rw_n_a", "rw_s_a", "wall", -29, -5, 0, 5.5, -27, -26);
+  wPair(W, "rw_n_b", "rw_s_b", "wall", 19, 31, 0, 5.5, -27, -26);
+  wPair(W, "rw_w", "rw_e", "wall", -42, -41, 0, 5.5, -2, 22);
+  // One pier standing in each open half. A pier only ADDS coverage to the
+  // union above, so it can never re-open a keyhole; it is here so the mouths
+  // read as the old wall opened up rather than as an edit.
+  wPair(W, "rw_w_pier", "rw_e_pier", "wall", -42, -41, 0, 5.5, -17, -13);
 
   // ===================================================== 2. THE CAR HALLS
   // The two flag rooms: 12 × 12 m inspection halls in opposite corners, each
@@ -200,12 +337,23 @@ export function buildLayout(seed = 1) {
   // everywhere or it becomes a room nobody crosses. The yard doors were 4 m
   // in the first draft and every metre they gained bought G-E: shed↔yard
   // intervisibility went 3% → 10% on the first widening alone.
-  wPair(W, "sh_n_a", "sh_s_a", "wall", -22, -19.5, 0, 6, -13, -12);
-  wPair(W, "sh_n_b", "sh_s_b", "wall", -13, -9, 0, 6, -13, -12);
-  wPair(W, "sh_n_c", "sh_s_c", "wall", -2, 2, 0, 6, -13, -12);
+  // Each roller door loses a metre for the same reason as the gables (§3's
+  // gable note): yard↔shed pairs are G-E's second-largest supply and a metre
+  // of jamb costs no sightline inside either room.
+  wPair(W, "sh_n_a", "sh_s_a", "wall", -22, -18.5, 0, 6, -13, -12);
+  wPair(W, "sh_n_b", "sh_s_b", "wall", -13, -8, 0, 6, -13, -12);
+  wPair(W, "sh_n_c", "sh_s_c", "wall", -2, 3, 0, 6, -13, -12);
   wPair(W, "sh_n_d", "sh_s_d", "wall", 9, 12, 0, 6, -13, -12);
-  wPair(W, "sh_w_a", "sh_e_a", "wall", -22, -21, 0, 6, -12, -10);
-  wPair(W, "sh_w_b", "sh_e_b", "wall", -22, -21, 0, 6, 4, 8);
+  // GEN-2 NARROWS BOTH GABLES, 14 m of door to 8 m. The note below records
+  // that these were widened "and every metre they gained bought G-E" — true
+  // when G-E was a ≥70% FLOOR. Against a ≤60% CEILING the same metres are
+  // what has to be sold back, and the gable is the cheapest place to sell
+  // them: it costs apron↔shed PAIRS without shortening a single line inside
+  // either room. The keyhole seal still holds and is tighter than before —
+  // the two doors now overlap only over Z[−5,+1], and the pit cars cover
+  // Z[−9,+5].
+  wPair(W, "sh_w_a", "sh_e_a", "wall", -22, -21, 0, 6, -12, -7);
+  wPair(W, "sh_w_b", "sh_e_b", "wall", -22, -21, 0, 6, 1, 8);
   W.push(wbox("sh_roof", "roof", -22, 12, 6, 6.45, -13, 9, "concrete", "hard"));
   // N doors X[−19.5,−13.5] X[−8.5,−2.5] X[+2.5,+8.5] (6 m roller doors)
   // S doors X[−18.5,−12] X[−7,−1.5] X[+3.5,+7.5] — the mirror set
@@ -221,6 +369,15 @@ export function buildLayout(seed = 1) {
   // points of G-E, because the hub's whole job is that players inside it can
   // see each other.
   tramPair(W, "pit_car_w", "pit_car_e", -14.5, -11.7, -9, 0);
+  // The middle road STAYS EMPTY in gen-2 too, and for a new reason. A third
+  // car here was re-authored against the gen-2 set and measured off: it bought
+  // only 1.5 points of G-E (67.4% → 65.9%, not the 5.8 the gen-1 note records)
+  // and it FAILED G-HUB outright — share 62.9% → 31.1%, dominance 1.0×. The
+  // shed's middle road is the waist of the arena's single open region, so a
+  // car standing in it does not shrink that region, it CUTS IT IN TWO, and
+  // two equal halves deliver half the mutual visibility of one whole (the
+  // squared-share mechanism G-HUB exists to police). Whatever G-E needs, it
+  // cannot be bought here.
   // Gantry: legs to 4.0 m, portal beams 4.0→4.6, travelling hoist between
   // them — all of it above 1.7 m, so it dresses the volume without eating a
   // single walkable cell or blocking a single ray. The shed needs its ceiling
@@ -258,9 +415,29 @@ export function buildLayout(seed = 1) {
   // ~6 points of G-E and costs nothing anywhere else.
   tramPair(W, "dv_car", "dv_carm", -24, -21.2, -17.8, -13);
 
-  // Four stabled cars, two per cell: cover islands, not walls. Each is
-  // anchored on one long edge of its cell so the cell's middle stays open
-  // and the fight happens across it, not around a maze.
+  // GEN-2: THE STOCK MOVED OFF THE GATE ROADS. The expansion's whole gift to
+  // this yard is DEPTH — where the inner retaining wall is open (X[−41,−29]
+  // and X[−5,+19]) the 13 m yard and the 17 m outer road are one 31 m room,
+  // and 31 m of depth is the only place a 15–40 m line can live in a yard
+  // this shallow. The gen-1 build parked three of its four cars in exactly
+  // those two mouths (ya_1 at X[−37], ya_3 at X[−4], ya_4 at X[+7]), so the
+  // depth existed on the floor plan and not in the sightlines: the yards
+  // measured 21.2% in the 15–40 m band against the outer road's 32.6%.
+  //
+  // THE CARS STAY WHERE GEN-1 PUT THEM, and that is a measured result rather
+  // than an omission. Three of the four stand in the gate roads, so the
+  // obvious gen-2 edit is to move them out and let the yard and the outer
+  // road read as one 31 m-deep room. That was authored four ways and every
+  // one of them failed G-E:
+  //   • cars deleted, gate roads clear:      band 28.9%, G-E 67.4%
+  //   • cars MOVED to the solid-wall band:   band 28.6%, G-E 65.5%
+  //   • cars re-formed as rakes on the wall: band 25.6%, G-E 57.3%, G-HUB 31%
+  //   • gates narrowed to 6 m and 12 m:      band 26.3%, G-E 58.8%
+  // The yard's tall stock is not only hiding the yard from the ROAD; it is
+  // hiding it from the shed, the aprons and the halls as well, and a 60%
+  // ceiling on P(≥1 of 9 in LOS) cannot pay for any of that. Every variant
+  // traded about 1.3 points of G-E per point of G-C, and G-C's band came from
+  // somewhere far cheaper in the end — see the corner banks in §1a.
   tramPair(W, "ya_1", "ya_1m", -37, -34.2, -26, -20.5);
   tramPair(W, "ya_2", "ya_2m", -29, -26.2, -20, -14.5);
   tramPair(W, "ya_3", "ya_3m", -4, -1.2, -26, -20.5);
@@ -279,6 +456,133 @@ export function buildLayout(seed = 1) {
   wPair(W, "wheel_lathe_w", "wheel_lathe_e", "wall", -41, -37, 0, 4.2, 3, 8);
   wPair(W, "throat_block_w", "throat_block_e", "wall", -28, -25, 0, 3.2, 5, 8);
   tramPair(W, "ap_car_w", "ap_car_e", -27, -24, -12, -6);
+
+  // ============================================ 5b. THE OUTER STABLING ROADS
+  // The gen-2 expansion, part one: a 72 × 17 m siding yard beyond each end of
+  // the old depot (north new / south its mirror). This is the map's ANSWER to
+  // G-C's new 15–40 m clause — the old depot measured 17.4% of its rays in
+  // that band because nothing in it is more than ~27 m across. An outer road
+  // is 72 m long and its stock is parked in ISLANDS, not rows, so the lines
+  // along it run 10–20 m and the lines across it 30–45 m.
+  //
+  // WHAT BREAKS THE 86 m RUN, AND WHY IT IS BUILDINGS RATHER THAN STOCK.
+  // The outer road runs 86 m from the erecting-shop mass to the far corner, so
+  // something must stand at EVERY depth Z ∈ [−44,−27] or G-D's ≥78 m clause
+  // fires. The first build did it with twelve tram cars and that is exactly
+  // how it failed G-C: a tram car is 24.6 m of perimeter and 3.35 m of
+  // standing occlusion, and perimeter — not floor area — is what sets the ray
+  // length distribution (measured: deleting this arena's stock moved <15 m
+  // from 80.2% to 60.2%). Four depot buildings do the same job for a third of
+  // the perimeter, in two OFFSET pairs whose Z-ranges overlap by 1 m so there
+  // is no depth with a clean run. The gaps they leave are 20–33 m — the
+  // 15–40 m layer the gen-2 set asks for, delivered by the same pieces.
+  // GEN-2: ONE offset pair, not four blocks. The clause that shapes this road
+  // is G-D's ≥78 m tail — SOMETHING must stand at every depth Z ∈ [−44,−27]
+  // or the 86 m run is clear — and the gen-1 build satisfied it with four
+  // blocks, which also cut the road into cells of 17–23 m. That is the wrong
+  // length: a ray only lands in the 15–40 m band if it has more than 15 m of
+  // clear axis IN FRONT of it, so in a cell of length L the axial share that
+  // reaches the band is (L−15)/L — 12% at L = 17, but 62% at L = 40.
+  // Two blocks offset in Z still cover every depth (sand Z[−44,−35] ∪ wash
+  // Z[−36,−27] = the whole road) while leaving cells of 35 m and 39 m.
+  wPair(W, "os_sand_n", "os_sand_s", "wall", -6, -1, 0, 5.5, -44, -35);
+  wPair(W, "os_wash_n", "os_wash_s", "wall", 1, 6, 0, 5.5, -36, -27);
+  // A water tower is a TANK ON LATTICE LEGS, not a solid 4 x 4 m pier from the
+  // ground up: at the 1.6 m eye line you see straight between the legs. Built
+  // solid it was this map's purest waste — probe --payers scored it 121 sub-15 m
+  // rays for ZERO blocked sightlines, i.e. it cost G-C's mid-range band and
+  // bought no exposure back at all. The leg cluster keeps tower and silhouette.
+  // Likewise pushed back onto the blast wall: free-standing it cost 103 sub-15 m
+  // rays for zero blocked sightlines. Water towers stand against the yard wall.
+  wPair(W, "water_tower_n", "water_tower_s", "wall", -39.6, -37.6, 0, 6.0, -44, -42, "metal", "metal_thin");
+  // TWO ATTEMPTS TO RE-FILL THIS ROAD ARE RECORDED HERE BECAUSE BOTH FAILED
+  // THE SAME WAY, and the second one is the more surprising:
+  //   • four rakes ACROSS the road at one depth: G-E 67.4% → 56.0%, but <6 m
+  //     back to 40.7% and the 15–40 m band back to 22.8%.
+  //   • eight rakes STAGGERED over three depth strips — the yard's own
+  //     arrangement, which measures 28% self-visibility at 26.6% band:
+  //     G-E 55.3%, band 21.8%, <15 m 77.2%.
+  // Staggering did not help, because in a 17 m-deep road a 10 m rake is not
+  // an island, it is a wall with a gap. Every variant traded about 1.3 points
+  // of G-E for 1 point of G-C, and G-C is the gate with no slack. The road
+  // therefore stays OPEN and the G-E budget is spent where it buys more —
+  // §4's yard stock, which is what keeps the gate depth honest.
+  // Stabled flat wagons — the road's texture and its crouch cover. Deck 1.15 m:
+  // they cost floor area (which G-A needs spent) and cost nothing in sightline.
+  flatPair(W, "os_fw1", "os_fw1m", -34, -31.2, -42, -36);
+  flatPair(W, "os_fw2", "os_fw2m", -9, -6.2, -43, -37);
+  flatPair(W, "os_fw3", "os_fw3m", 8, 10.8, -34, -28);   // clear of the relocated wash shed (§5b)
+  flatPair(W, "os_fw4", "os_fw4m", 27, 29.8, -41, -35);
+  // Canopy over the east half of each outer road — volume, not cover: its
+  // underside is 5.8 m, so it neither eats a walkable cell nor blocks a ray.
+  wPair(W, "os_canopy_n", "os_canopy_s", "roof", 0, 31, 5.8, 6.2, -44, -34);
+
+  // ================================================ 5c. THE LOCOMOTIVE WORKS
+  // The gen-2 expansion, part two: a 13 × 48 m works beyond each SIDE of the
+  // old depot. Its north two-thirds is the covered erecting shop (roof at
+  // 6 m); its south third is the open goods bank with a 1.2 m loading deck.
+  // Three road doors connect it to the old depot (§1c).
+  //
+  // The N–S axis of the works is broken FOUR times, and the four blockers are
+  // deliberately staggered across the 13 m width rather than stacked: the
+  // locomotive covers X[−52,−49.2], the wheel-drop house X[−49,−46], the
+  // traverser house X[−55,−46.5] and the works van X[−45,−42.2]. Their union
+  // is X[−55,−42.2] — i.e. every column of the works is blocked by something,
+  // so the 66 m works+corner north–south line does not exist at any X.
+  W.push(wbox("wk_roof_w", "roof", -55, -42, 6, 6.45, -26, 4, "concrete", "hard"));
+  W.push(wbox("wk_roof_e", "roof", 32, 45, 6, 6.45, -8, 22, "concrete", "hard"));
+  // GEN-2 REBUILD — THE SHOP-SCREEN PAIR replaces the five-blocker chop.
+  // The works column is 13 m wide and runs 66 m (Z −26 → +40, the goods bank
+  // continuing straight into the south outer road). The gen-1 build stopped
+  // that run with FIVE staggered blockers, which is why this was the arena's
+  // worst region: measured 84.7% of its rays dying inside 15 m and 15.0% in
+  // the 15–40 m band, against a map needing 28%. Five blockers in 66 m leave
+  // segments of 3–12 m; a 13 m-wide corridor already kills every cross-ray,
+  // so the axial run is the ONLY mid-range line the works can offer and the
+  // gen-1 build spent it.
+  //
+  // The replacement is the SHOP-SCREEN PAIR, the same device the signals hut
+  // already uses: two part-width screens OFFSET in Z whose X-ranges overlap.
+  // Their union covers the full 13 m width, so no column is clear end to end
+  // (G-D), while the 2 m of overlap is the doorway, so the works is walkable
+  // through on an S-bend (G-F/G-K). Two pairs, at Z ≈ −7 and Z ≈ +17, cut the
+  // 66 m into runs of 18 / 22 / 22 m — all three inside the 15–40 m band,
+  // which is the whole point of the edit.
+  wPair(W, "wk_erect_w", "wk_erect_e", "wall", -55, -47.5, 0, 5.0, -1, 1);
+  wPair(W, "wk_fit_w", "wk_fit_e", "wall", -49.5, -42, 0, 5.0, 3, 5);
+  // The goods bank: a second 1.2 m boarding deck per side (G-B's declared
+  // balcony surface, §gates.balconyAreaM2 — 60 m² of deck each, measured).
+  wPair(W, "gbank_w", "gbank_e", "deck", -53, -45.5, 0, 1.2, 7, 15);
+  stepsPair(W, "gbank_step_w", "gbank_step_e", -48.5, -45.5, 17.8, 15, 4, 0.3);
+
+  // ============================================== 5d. THE TRANSFER-TABLE YARD
+  // The gen-2 expansion, part three. Two of the four new corners are the
+  // erecting-shop corner — its surviving 6 × 6 m fitting bay and the loading
+  // bank around it (§1a); the other two are OPEN, and they are what turns
+  // the outer road and the works from two dead limbs into one flanking route:
+  // NE joins the north road to the east works, SW joins the south road to the
+  // west works. The route is diagonal, never a full loop round the depot.
+  // The stores block was the map's worst payer with real mass: --payers scored
+  // it 399 sub-15 m rays for 36 blocked sightlines (ratio 0.08). Trimming it
+  // alone made G-C WORSE, because the freed corner became walkable and corner
+  // cells are themselves short-sighted — the trap this gate sets. So the
+  // FOOTPRINT stays occupied, as a 1.2 m loading bank (the device gbank_w
+  // already uses): no new cells, while rays now pass over it at the 1.6 m eye
+  // line. Only the stores shed itself, 6 x 6, still breaks a sightline.
+  // the bank wraps the shed in three strips rather than one slab: probe_props
+  // G-K rejects overlapping solids, and a deck buried inside a building is
+  // exactly the sort of thing that reads as a modelling error in play.
+  wPair(W, "tt_bank_ne", "tt_bank_sw", "deck", 42, 45, 0, 1.2, -44, -36, "concrete", "hard");
+  wPair(W, "tt_bankn_ne", "tt_bankn_sw", "deck", 36, 42, 0, 1.2, -44, -43, "concrete", "hard");
+  wPair(W, "tt_banks_ne", "tt_banks_sw", "deck", 36, 42, 0, 1.2, -37, -36, "concrete", "hard");
+  wPair(W, "tt_stores_ne", "tt_stores_sw", "wall", 36, 42, 0, 5.0, -43, -37);
+  // The long car on the table road is a FLAT WAGON in gen-2. Ray attribution
+  // put it among the map's worst payers: 276 rays ended in the 6–15 m bucket
+  // for 945 blocked pairs of 250 000 — 34 pairs per m², against 233 for the
+  // yard stock and ~590 for a metre of retaining wall. A flat's 1.15 m deck
+  // keeps the cover and the floor area and gives the band back.
+  flatPair(W, "tt_flat_ne", "tt_flat_sw", 33, 35.8, -42, -32);
+  tramPair(W, "tt_car2_ne", "tt_car2_sw", 38, 40.8, -33, -27);
 
   // ======================================================== 6. PROPS
   const P = [];
@@ -393,6 +697,22 @@ export function buildLayout(seed = 1) {
   pPair("dr_bollard_3", "dr_bollard_4", ["bollard", "bollard"], -26, -1, 0, 0.35, 0.35, 0.65, "metal", "hard");
   pPair("dr_bin_1", "dr_bin_2", ["bin", "bin"], -40.3, 0.5, 0, 0.55, 0.55, 0.95, "metal", "metal_thin");
 
+  // ---- gen-2b: THE SHOP-SCREEN SCAFFOLDS (G-E, at the best available rate)
+  // G-E measured 61.3% against a 60% ceiling once the estimator was made
+  // stable (probe --losTrials 24000; the old 1500-trial reading of 59.5% was
+  // sampling noise — see tools/probe_arena.mjs). §5b already recorded that a
+  // rake in a road trades ~1.3 points of G-E for ~1 of G-C, which this map
+  // cannot afford, and --payers explains why: a new solid in OPEN ground also
+  // deletes long-sighted cells, so it pushes G-C's <15 m share up twice over.
+  // This pair was the single best payer measured on the map — 16 blocked
+  // sightlines for ZERO sub-15 m rays — because it stands clear of every road
+  // axis, so the long rays that carry the 15-40 m band pass either side of it.
+  // guard_hut, not scaffold: probe_props G-K rejects a solid collider under a
+  // scaffold's open frame ("solid ray 'pole' MISSED"), and rightly — a
+  // sightline must be stopped by something the player can SEE stopping it.
+  pPair("yd_st3", "yd_st4", ["guard_hut", "guard_hut"], 12, 28, 0, 2.0, 2.0, 2.6, "metal", "metal_thin");
+  pPair("yd_st5", "yd_st6", ["guard_hut", "guard_hut"], 16, -36, 0, 1.8, 1.8, 2.6, "metal", "metal_thin");
+
   // ======================================================== 7. NODES
   // Named standpoints the AI layer (objective.js / bot_ai) addresses. Every
   // entry is walkable, clear of solids and supported; the two platform keys
@@ -439,14 +759,14 @@ export function buildLayout(seed = 1) {
     { id: "w_hall_w", min: [-41, 10], max: [-29, 22], y: 0 },
     { id: "w_hall_e", min: [19, -26], max: [31, -14], y: 0 },
     // door mouths — each bridges exactly two regions
-    { id: "w_shed_dn1", min: [-19.5, -13], max: [-13, -12], y: 0 },
-    { id: "w_shed_dn2", min: [-9, -13], max: [-2, -12], y: 0 },
-    { id: "w_shed_dn3", min: [2, -13], max: [9, -12], y: 0 },
-    { id: "w_shed_ds1", min: [-19, 8], max: [-12, 9], y: 0 },
-    { id: "w_shed_ds2", min: [-8, 8], max: [-1, 9], y: 0 },
-    { id: "w_shed_ds3", min: [3, 8], max: [9.5, 9], y: 0 },
-    { id: "w_shed_dw", min: [-22, -10], max: [-21, 4], y: 0 },
-    { id: "w_shed_de", min: [11, -8], max: [12, 6], y: 0 },
+    { id: "w_shed_dn1", min: [-18.5, -13], max: [-13, -12], y: 0 },
+    { id: "w_shed_dn2", min: [-8, -13], max: [-2, -12], y: 0 },
+    { id: "w_shed_dn3", min: [3, -13], max: [9, -12], y: 0 },
+    { id: "w_shed_ds1", min: [-19, 8], max: [-13, 9], y: 0 },
+    { id: "w_shed_ds2", min: [-8, 8], max: [-2, 9], y: 0 },
+    { id: "w_shed_ds3", min: [3, 8], max: [8, 9], y: 0 },
+    { id: "w_shed_dw", min: [-22, -7], max: [-21, 1], y: 0 },
+    { id: "w_shed_de", min: [11, -5], max: [12, 3], y: 0 },
     { id: "w_hall_wd1", min: [-38, 9], max: [-34.5, 10], y: 0 },
     { id: "w_hall_wd2", min: [-32, 9], max: [-29, 10], y: 0 },
     { id: "w_hall_wd3", min: [-29, 15], max: [-28, 18.5], y: 0 },
@@ -575,6 +895,19 @@ export const ARENA_SPEC = {
     SC_APRON_E: { inward: Math.PI / 2, node: "apron_east", side: "east" },     // −X
     // neutral middle
     SC_SHED: { inward: null, node: "shed_centre", side: "mid", modes: ["ffa"] },
+    // ---- GEN-2: the annexed territory gets its own clusters -------------
+    // The expansion added the outer stabling roads and the two locomotive
+    // works and gave them NO spawns, so a doubled arena still started every
+    // round inside the old depot. Gen-1's ceiling of 50 points could not have
+    // held them anyway; gen-2 asks for 70–100, and this is what that headroom
+    // is for. Added as MIRRORED PAIRS so G-I's P4 and G-J's centroid parity
+    // stay equal by construction, exactly as the original seven do.
+    // `node` reuses the frozen R24 key set — probe_props fails any node key
+    // beyond it, so a new cluster names the nearest existing standpoint.
+    SC_ROAD_S: { inward: 0, node: "yard_south", side: "west" },               // −Z
+    SC_WORKS_W: { inward: -Math.PI / 2, node: "lane_west", side: "west" },    // +X
+    SC_ROAD_N: { inward: Math.PI, node: "yard_north", side: "east" },         // +Z
+    SC_WORKS_E: { inward: Math.PI / 2, node: "lane_east", side: "east" },     // −X
   },
   // [id, x, z, cluster, modes] — modes null = all three.
   // Points inside a hall (or with a line into their own stand from under
@@ -587,7 +920,7 @@ export const ARENA_SPEC = {
     ["sp_hw3", -30.5, 17.5, "SC_HALL_W", ["tdm", "ffa"]],
     ["sp_hw4", -32.5, 2.5, "SC_HALL_W", null],
     ["sp_hw5", -24, 3, "SC_HALL_W", null],
-    ["sp_hw6", -22, 10, "SC_HALL_W", null],
+    ["sp_hw6", -20, 13, "SC_HALL_W", null],
     ["sp_hw7", -19, 18, "SC_HALL_W", null],
     ["sp_hw8", -15, 15, "SC_HALL_W", null],
     ["sp_hw9", -12.5, 20, "SC_HALL_W", null],
@@ -599,20 +932,25 @@ export const ARENA_SPEC = {
     ["sp_ys5", 14.5, 15.5, "SC_YARD_S", null],
     ["sp_ys6", 22, 19, "SC_YARD_S", null],
     ["sp_ys7", 28, 13.5, "SC_YARD_S", null],
-    // ---- SC_APRON_W (7)
-    ["sp_aw1", -39.5, -9.5, "SC_APRON_W", null],
-    ["sp_aw2", -34, -10.5, "SC_APRON_W", null],
-    ["sp_aw3", -28.5, -10, "SC_APRON_W", null],
-    ["sp_aw4", -39.5, 0.5, "SC_APRON_W", null],
+    // ---- SC_APRON_W (8) — gen-1 had six, and they measured a max pair
+    // separation of 17.6 m against gen-2's 20 m floor: six points inside a
+    // 19 × 22 m apron is a POCKET, and a pocket is what spawn-camping wants.
+    // sp_aw7/sp_aw8 stretch the set onto the apron's two far corners.
+    ["sp_aw1", -39.5, -10, "SC_APRON_W", null],
+    ["sp_aw2", -34, -11, "SC_APRON_W", null],
+    ["sp_aw3", -28, -10.5, "SC_APRON_W", null],
+    ["sp_aw4", -39.5, 1, "SC_APRON_W", null],
     ["sp_aw5", -34.5, 6.5, "SC_APRON_W", null],
-    ["sp_aw6", -24, -4, "SC_APRON_W", null],
+    ["sp_aw6", -24, -5, "SC_APRON_W", null],
+    ["sp_aw7", -23.5, 8, "SC_APRON_W", null],
+    ["sp_aw8", -40, -4, "SC_APRON_W", null],
     // ---- SC_HALL_E (9) — exact mirror of SC_HALL_W
     ["sp_he1", 28.5, -24.3, "SC_HALL_E", ["tdm", "ffa"]],
     ["sp_he2", 24, -24.3, "SC_HALL_E", ["tdm", "ffa"]],
     ["sp_he3", 20.5, -21.5, "SC_HALL_E", ["tdm", "ffa"]],
     ["sp_he4", 22.5, -6.5, "SC_HALL_E", null],
     ["sp_he5", 14, -7, "SC_HALL_E", null],
-    ["sp_he6", 12, -14, "SC_HALL_E", null],
+    ["sp_he6", 10, -17, "SC_HALL_E", null],
     ["sp_he7", 9, -22, "SC_HALL_E", null],
     ["sp_he8", 5, -19, "SC_HALL_E", null],
     ["sp_he9", 2.5, -24, "SC_HALL_E", null],
@@ -624,13 +962,15 @@ export const ARENA_SPEC = {
     ["sp_yn5", -24.5, -19.5, "SC_YARD_N", null],
     ["sp_yn6", -32, -23, "SC_YARD_N", null],
     ["sp_yn7", -38, -17.5, "SC_YARD_N", null],
-    // ---- SC_APRON_E (7) — mirror of SC_APRON_W
-    ["sp_ae1", 29.5, 5.5, "SC_APRON_E", null],
-    ["sp_ae2", 24, 6.5, "SC_APRON_E", null],
-    ["sp_ae3", 18.5, 6, "SC_APRON_E", null],
-    ["sp_ae4", 29.5, -4.5, "SC_APRON_E", null],
+    // ---- SC_APRON_E (8) — exact mirror of SC_APRON_W about (−5,−2)
+    ["sp_ae1", 29.5, 6, "SC_APRON_E", null],
+    ["sp_ae2", 24, 7, "SC_APRON_E", null],
+    ["sp_ae3", 18, 6.5, "SC_APRON_E", null],
+    ["sp_ae4", 29.5, -5, "SC_APRON_E", null],
     ["sp_ae5", 24.5, -10.5, "SC_APRON_E", null],
-    ["sp_ae6", 14, 0, "SC_APRON_E", null],
+    ["sp_ae6", 14, 1, "SC_APRON_E", null],
+    ["sp_ae7", 13.5, -12, "SC_APRON_E", null],
+    ["sp_ae8", 30, 0, "SC_APRON_E", null],
     // ---- SC_SHED (6, FFA only) — the neutral middle
     ["sp_sh1", -19, -10, "SC_SHED", ["ffa"]],
     ["sp_sh2", -12, 5.5, "SC_SHED", ["ffa"]],
@@ -638,6 +978,44 @@ export const ARENA_SPEC = {
     ["sp_sh4", 0, -2, "SC_SHED", ["ffa"]],
     ["sp_sh5", 9, 5.5, "SC_SHED", ["ffa"]],
     ["sp_sh6", 0, -10.5, "SC_SHED", ["ffa"]],
+    // ---- SC_ROAD_S (8) — the south outer stabling road, west team
+    ["sp_rs1", 28, 26, "SC_ROAD_S", null],
+    ["sp_rs2", 19, 34, "SC_ROAD_S", null],
+    ["sp_rs3", 12, 27, "SC_ROAD_S", null],
+    ["sp_rs4", 4, 36, "SC_ROAD_S", null],
+    ["sp_rs5", -23, 27, "SC_ROAD_S", null],
+    ["sp_rs6", -30, 36, "SC_ROAD_S", null],
+    ["sp_rs7", -40, 27, "SC_ROAD_S", null],
+    ["sp_rs8", -53, 27, "SC_ROAD_S", null],
+    // ---- SC_WORKS_W (9) — the west locomotive works, west team
+    ["sp_ww1", -52, -22, "SC_WORKS_W", null],
+    ["sp_ww2", -45, -18, "SC_WORKS_W", null],
+    ["sp_ww3", -52, -12, "SC_WORKS_W", null],
+    ["sp_ww4", -45, -8, "SC_WORKS_W", null],
+    ["sp_ww5", -52, -4, "SC_WORKS_W", null],
+    ["sp_ww6", -44, 0, "SC_WORKS_W", null],
+    ["sp_ww7", -46, -23, "SC_WORKS_W", null],
+    ["sp_ww8", -52, 18, "SC_WORKS_W", null],
+    ["sp_ww9", -44, 20, "SC_WORKS_W", null],
+    // ---- SC_ROAD_N (8) — mirror of SC_ROAD_S, east team
+    ["sp_rn1", -38, -30, "SC_ROAD_N", null],
+    ["sp_rn2", -29, -38, "SC_ROAD_N", null],
+    ["sp_rn3", -22, -31, "SC_ROAD_N", null],
+    ["sp_rn4", -14, -40, "SC_ROAD_N", null],
+    ["sp_rn5", 13, -31, "SC_ROAD_N", null],
+    ["sp_rn6", 20, -40, "SC_ROAD_N", null],
+    ["sp_rn7", 30, -31, "SC_ROAD_N", null],
+    ["sp_rn8", 43, -31, "SC_ROAD_N", null],
+    // ---- SC_WORKS_E (9) — mirror of SC_WORKS_W, east team
+    ["sp_we1", 42, 18, "SC_WORKS_E", null],
+    ["sp_we2", 35, 14, "SC_WORKS_E", null],
+    ["sp_we3", 42, 8, "SC_WORKS_E", null],
+    ["sp_we4", 35, 4, "SC_WORKS_E", null],
+    ["sp_we5", 42, 0, "SC_WORKS_E", null],
+    ["sp_we6", 34, -4, "SC_WORKS_E", null],
+    ["sp_we7", 36, 19, "SC_WORKS_E", null],
+    ["sp_we8", 42, -22, "SC_WORKS_E", null],
+    ["sp_we9", 34, -24, "SC_WORKS_E", null],
   ],
   // The two flag stands, 180° mirrors about (−5, −2).
   flagWest: [-33, 0, 13.5],

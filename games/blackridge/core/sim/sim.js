@@ -290,8 +290,12 @@ export function createSim(opts = {}) {
       return id;
     },
 
-    damage(who, amount, src = "test") {
-      applyDamage(sim, who, amount, null, "body", src); // routes through damage.js
+    // `attacker` is optional and defaults to null (an environment/zone kill).
+    // It exists so a harness can stage a death WITH a killer — the kill cam
+    // frames sim.match's attacker actor, and with no way to name one from the
+    // test surface that path could only ever be exercised by hand.
+    damage(who, amount, src = "test", attacker = null) {
+      applyDamage(sim, who, amount, attacker, "body", src); // routes through damage.js
     },
 
     teleport(who, x, y, z) {

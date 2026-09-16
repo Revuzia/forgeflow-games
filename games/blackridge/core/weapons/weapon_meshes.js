@@ -87,11 +87,26 @@ const repaired = new WeakSet();
 // Doctrine §1 defensive repair + light strip + shadow discipline.
 function repair(group) {
   const doomedLights = [];
+  const armMeshes = [];
   group.traverse((o) => {
     if (o.isLight) { doomedLights.push(o); return; } // NEVER a light outside the pool
     if (o.isMesh) {
+      if (/^arms?_/.test(o.name || "")) armMeshes.push(o);
       o.castShadow = false;    // viewmodel never casts into the world
-      o.receiveShadow = false; // and never samples the 1024 moon map at 30 cm
+      // ...but it DOES receive. The old comment conflated the two: what is too
+      // coarse at 30 cm is the viewmodel CASTING into the moon's 1024 map, and
+      // that stays off above. RECEIVING is a different question, because the
+      // occluders already printed into that map are buildings and awnings,
+      // which resolve at ~0.088 m/texel (lighting.js SHADOW_HALF 45 over
+      // mapSize 1024, camera-following). With this off, your hands stayed lit
+      // by the moon while you stood under an awning — the single loudest
+      // "pasted-on viewmodel" tell in the night scenes. Costs zero shader
+      // programs: in the vendored three r172 receiveShadow is a UNIFORM, not a
+      // define ("p_uniforms.setValue( _gl, 'receiveShadow', object.receiveShadow )"),
+      // consumed as `( directLight.visible && receiveShadow ) ? getShadow(...) : 1.0`.
+      // Buys world-shadow reception only — nothing on VM_LAYER casts, so there
+      // is still no self-shadowing of gun onto hands.
+      o.receiveShadow = true;
       o.frustumCulled = false; // camera-space rig; bounds vs frustum lie
       const mats = Array.isArray(o.material) ? o.material : [o.material];
       for (const m of mats) {
@@ -191,15 +206,49 @@ function repair(group) {
         };
         setAniso(m.map); setAniso(m.normalMap);
         setAniso(m.roughnessMap); setAniso(m.metalnessMap);
-        if (m.normalScale) m.normalScale.multiplyScalar(0.5);
+        // THE GLOVE IS NOT METAL. Both treatments below were written for
+        // parkerised steel — a TIGHT specular lobe with restrained relief —
+        // and both were reaching br_glove, which is a nomex knit whose entire
+        // visual identity is a BROAD lobe plus surface relief.
+        //   * normalScale x0.5 ran here, two lines ABOVE where `glove` was
+        //     computed, so it was unconditional: it halved the glove's
+        //     authored normalTexture.scale 1.15 -> 0.575, discarding 43% of
+        //     the only detail channel the glove has (the pads, the ripstop
+        //     weave, the stitching and the cuff all live in that map).
+        //   * roughness x0.58 sat above the `if (!glove)` gate. br_glove ships
+        //     NO roughnessFactor, so GLTFLoader defaults it to 1.0 and this
+        //     took it to 0.58. Against an ORM green channel measured on the
+        //     shipped warden.glb at mean 0.885 / min 0.302, that rendered
+        //     five-sixths of the glove at GGX roughness ~0.51 and the knuckle
+        //     pads at ~0.175 — moulded plastic, not fabric. That single
+        //     multiplier is the largest contributor to the "one smooth
+        //     injection-moulded mitten" read the owner reported, which is why
+        //     earlier albedo and lighting passes never shifted it.
+        // Leaving the glove's roughness at the glTF default 1.0 makes the
+        // AUTHORED map authoritative, which is what we want.
+        const glove = /glove/i.test(m.name || "");
+        if (m.normalScale && !glove) m.normalScale.multiplyScalar(0.5);
+        if (glove) {
+          // br_glove ships no metallicFactor either, so GLTFLoader defaults
+          // metalness to 1.0 — the glove is saved from rendering as a chrome
+          // mitten ONLY by its ORM blue channel measuring all-zero. Pin it, so
+          // a future ORM regen with any blue data cannot silently turn both
+          // hands into mirrors with no diffuse term and no obvious cause.
+          m.metalness = 0.0;
+          m.metalnessMap = null;          // all-zero: a dead sampler read
+          // Never written by GLTFLoader, and the `m.envMapIntensity = 1.0`
+          // below is inside `if (!glove)` — so without this the glove silently
+          // inherits three's constructor default. A dielectric fabric should
+          // take less ambient specular than wet parkerised steel.
+          m.envMapIntensity = 0.75;
+        }
         if (m.color) {
-          const glove = /glove/i.test(m.name || "");
           m.color.setScalar(1.0);
           // Scale the authored roughness FACTOR, never replace it: the
           // per-part multipliers the build tool ships (grip 1.06, receiver
           // 0.70 over one shared map) are the "distinct roughness per part"
           // VT §3 asks for, and they survive a uniform scale.
-          if (m.roughnessMap) m.roughness = Math.max(0.06, m.roughness * 0.58);
+          if (m.roughnessMap && !glove) m.roughness = Math.max(0.06, m.roughness * 0.58);
           if (!glove) {
             // W1 (iter05): 1.15 was not "sheen" — with metalness-1 barrel and
             // sight hardware it mirrored the sky PMREM and rendered them as
@@ -231,6 +280,42 @@ function repair(group) {
       }
     }
   });
+  // ---- GLOVE SHEEN -------------------------------------------------------
+  // The last thing separating the hands from fabric. A MeshStandardMaterial
+  // has one GGX lobe, so a knit can only ever be "rougher plastic"; real cloth
+  // adds a wide retroreflective rim where fibres catch light at grazing
+  // angles, which is exactly the read you get on a glove backlit by a street
+  // lamp. three exposes it as the sheen term on MeshPhysicalMaterial.
+  //
+  // CONSTRUCTED EXPLICITLY, NEVER pm.copy(m). MeshPhysicalMaterial.copy in the
+  // vendored three r172 runs clearcoatNormalScale.copy(source.clearcoatNormalScale),
+  // sheenColor.copy(source.sheenColor) and [ ...source.iridescenceThicknessRange ]
+  // — all undefined on a MeshStandardMaterial — so copy() throws a TypeError,
+  // loadWeaponGLB's catch fires, and the weapon ships as the magenta
+  // placeholder. Wrapped as well, so a future three bump degrades to the
+  // standard material rather than losing the whole weapon.
+  try {
+    if (armMeshes.length) {
+      const src = armMeshes[0].material;
+      if (src && src.isMeshStandardMaterial && !src.isMeshPhysicalMaterial &&
+          armMeshes.every((a) => a.material === src)) {
+        const pm = new THREE.MeshPhysicalMaterial({
+          name: src.name, map: src.map, normalMap: src.normalMap,
+          normalScale: src.normalScale ? src.normalScale.clone() : undefined,
+          roughnessMap: src.roughnessMap, roughness: src.roughness,
+          metalness: src.metalness, envMapIntensity: src.envMapIntensity,
+          side: src.side, transparent: src.transparent, alphaTest: src.alphaTest,
+          sheen: 1.0,
+          sheenRoughness: 0.75,               // broad — knit, not satin
+          sheenColor: new THREE.Color(0.36, 0.34, 0.32), // warm dust, not white
+        });
+        for (const a of armMeshes) a.material = pm;
+        src.dispose();
+      }
+    }
+  } catch (e) {
+    console.warn("[weapon_meshes] glove sheen skipped:", e && e.message);
+  }
   for (const l of doomedLights) l.parent && l.parent.remove(l);
 }
 
@@ -255,7 +340,9 @@ function makePlaceholder(id) {
   const grip = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.12, 0.05), mat);
   grip.position.set(0, -0.05, -0.02);
   g.add(body, grip);
-  g.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; o.frustumCulled = false; } });
+  // receiveShadow matches repair() above so the dev placeholder does not
+  // diverge from a real weapon in how it takes world shadow.
+  g.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; o.frustumCulled = false; } });
   const view = (WEAPONS[id] && WEAPONS[id].view) || {};
   g.userData.muzzleOffset = (view.muzzle || [0, 0.05, -0.5]).slice();
   g.userData.ejectOffset = (view.eject || [0.03, 0.05, -0.1]).slice();

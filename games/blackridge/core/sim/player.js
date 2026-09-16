@@ -36,6 +36,63 @@ export const MOVE = {
   GRENADE_FUSE_S: 3.8, GRENADE_THROW_V: 22,
 };
 
+// §7.4 footstep cadence — DISTANCE-based gait.
+//
+// WAS: a fixed Hz per movement state (walk 1.85 / sprint 2.6 / crouch 1.2),
+// advanced on a time phase. At MOVE.WALK 4.6 m/s that is 2.49 m of ground per
+// footfall — roughly double a human foot-plant — so the feet audibly slide
+// under the body, and during the 0.25 s accel ramp and 0.15 s decel the phase
+// ran at the FULL state rate while the body was near zero speed.
+//
+// NOW: a footfall fires every strideLength() metres of ground ACTUALLY
+// travelled (post-collision displacement), so cadence = speed / stride falls
+// out of the movement solver instead of being hardcoded per state. The cadence
+// ramps in with the accel and dies with the decel; ADS-walk, back-pedal and
+// strafe all get their own honest rate for free, with no state discontinuity
+// between them.
+//
+// Stride grows with speed the way a real gait does — people lengthen the step
+// before they quicken it — then takes a stance multiplier (a crouched gait is
+// short and choppy, a sprint over-extends). Fit to human gait data
+// (1.4 m/s → 0.75 m, 4.5 m/s → 1.40 m, 6.5 m/s → 1.75 m), evaluated at THIS
+// game's speeds (MEASURED off the live sim, not derived — see the lane
+// report's probe; "was" is the old fixed-Hz model at the same speed):
+//
+//   crouch   2.40 m/s → 0.82 m → 2.94 Hz   (was 2.00 m → 1.20 Hz)
+//   ADS walk 2.53 m/s → 1.04 m → 2.43 Hz   (was 1.37 m → 1.85 Hz)  per-weapon
+//   back     3.50 m/s → 1.21 m → 2.88 Hz   (was 1.89 m → 1.85 Hz)
+//   strafe   4.14 m/s → 1.33 m → 3.12 Hz   (was 2.24 m → 1.85 Hz)
+//   walk     4.60 m/s → 1.40 m → 3.28 Hz   (was 2.49 m → 1.85 Hz)
+//   sprint   6.40 m/s → 1.81 m → 3.54 Hz   (was 2.46 m → 2.60 Hz)
+//   tac      7.30 m/s → 1.97 m → 3.70 Hz   (was 2.81 m → 2.60 Hz)
+//
+// A FIXED ~1.0 m stride was the brief's starting point; it is right at the
+// slow end (crouch/ADS land on it) but it cannot hold at run speed — 1.0 m at
+// 7.3 m/s is 7.3 footfalls/s, ~440 steps/min, a cadence no body produces. The
+// affine model keeps every speed inside the 0.8-1.5 m human foot-plant band at
+// walk pace and the 1.7-2.0 m band at sprint pace, which is what real gait
+// does. Tune BASE/PER_SPEED here; nothing downstream hardcodes a rate.
+export const STRIDE = {
+  BASE: 0.60,          // m — stride intercept (the standing-start short step)
+  PER_SPEED: 0.175,    // m per (m/s) — how fast the step lengthens with pace
+  MIN: 0.55, MAX: 2.10,
+  CROUCH_MULT: 0.80,   // crouched gait is short and choppy
+  SPRINT_MULT: 1.05,   // a sprint over-extends the step
+  MIN_SPEED: 0.8,      // below this it is not a gait — accumulator is parked
+  PRIME_M: 0.55,       // preload so the first footfall off a standing start
+                       // lands ~0.2 m in instead of a full stride later
+};
+
+// Pure: speed + stance -> stride length in metres. Exported so the viewmodel
+// can derive the same bob frequency the footsteps run at (combat_spec §1.6
+// "phase-locked to footstep events").
+export function strideLength(hspeed, stance, sprinting) {
+  const mult = sprinting ? STRIDE.SPRINT_MULT
+    : stance === "crouch" ? STRIDE.CROUCH_MULT : 1;
+  const s = (STRIDE.BASE + STRIDE.PER_SPEED * hspeed) * mult;
+  return Math.max(STRIDE.MIN, Math.min(STRIDE.MAX, s));
+}
+
 // §1.8 sprint-out per weapon class [normal, tac-sprint]
 export const SPRINT_OUT_S = {
   smg: [0.160, 0.240], pistol: [0.130, 0.195],
@@ -58,7 +115,7 @@ function initM(time) {
     mantle: null, mantleRaiseUntil: -9,
     lastGroundedT: time, fallPeakY: 0, landPenaltyUntil: -9,
     fireToSprintLockUntil: -9, lastShotT: -9, lastMovedT: -9,
-    stepPhase: 0,
+    stepDist: STRIDE.PRIME_M, stepFoot: "R", // §7.4 distance-based gait
     cooking: false, grenFuseLeft: 0,
     dryAt: -9, autoReloadAt: 1e9, // sentinel, JSON-safe (never Infinity in state)
   };
@@ -304,6 +361,7 @@ export function stepPlayer(state, cmd, world, weapons, dt, sim) {
   if (!p.grounded) m.fallPeakY = Math.max(m.fallPeakY, p.pos[1]);
   else { m.fallPeakY = p.pos[1]; m.airEntrySpeed = Math.max(hlen(p.vel), MOVE.WALK); }
   p.vel[1] += MOVE.GRAV * dt;
+  const preX = p.pos[0], preZ = p.pos[2]; // §7.4 gait: ground ACTUALLY covered
   const res = world.moveCapsule(p.pos, p.vel, dt, MOVE.CAPSULE_R, capsuleH);
   p.pos = res.pos;
   p.vel = res.vel;
@@ -319,16 +377,40 @@ export function stepPlayer(state, cmd, world, weapons, dt, sim) {
   }
 
   // ---- footsteps (§7.4 cadence; audio keys on surface vocabulary)
+  // Distance-based (see STRIDE above): accumulate the horizontal distance the
+  // capsule ACTUALLY moved this tick — measured post-collision off p.pos, not
+  // |vel|·dt — and fire a footfall each time it crosses the stride. (Measured:
+  // today's world.moveCapsule zeroes or projects velocity on contact, so the
+  // two agree to 0.0% both head-on into a wall and sliding along an angled
+  // one; displacement is used because it is the quantity the feet are actually
+  // supposed to track, and it stays correct if the solver ever clips without
+  // zeroing.) The "step" event carries the gait state the view layer needs to
+  // phase-lock bob to it (combat_spec §1.6: a step SOUND lands on a bob
+  // TROUGH). Pure function of tick state: everything lives in p._m.
   const hspeed = hlen(p.vel);
-  if (p.grounded && hspeed > 0.8 && !m.sliding) {
-    const hz = m.sprintState !== "none" ? 2.6 : p.stance === "crouch" ? 1.2 : 1.85;
-    m.stepPhase += hz * dt;
-    if (m.stepPhase >= 1) {
-      m.stepPhase -= 1;
+  const sprinting = m.sprintState !== "none";
+  if (p.grounded && hspeed > STRIDE.MIN_SPEED && !m.sliding) {
+    const stride = strideLength(hspeed, p.stance, sprinting);
+    m.stepDist += Math.hypot(p.pos[0] - preX, p.pos[2] - preZ);
+    if (m.stepDist >= stride) {
+      m.stepDist -= stride;
+      // one footfall per tick max: a 60 Hz tick covers ≤ 0.13 m, far under any
+      // stride, so this only ever trips if dt is abused by a headless probe.
+      if (m.stepDist >= stride) m.stepDist = 0;
+      m.stepFoot = m.stepFoot === "L" ? "R" : "L";
       const groundHit = world.raycast([p.pos[0], p.pos[1] + 0.3, p.pos[2]], [0, -1, 0], 1.0);
-      sim.emit("step", { who: "P", surface: groundHit ? groundHit.surface : "concrete", sprint: m.sprintState !== "none" });
+      sim.emit("step", {
+        who: "P",
+        surface: groundHit ? groundHit.surface : "concrete",
+        sprint: sprinting,
+        foot: m.stepFoot,          // "L"/"R" — alternating, for gait-side cues
+        stance: p.stance,
+        speed: hspeed,             // m/s at the moment of the foot-plant
+        stride,                    // m of ground this footfall represents
+        hz: hspeed / stride,       // instantaneous cadence, footfalls/s
+      });
     }
-  } else m.stepPhase = 0.7; // primed so the first step lands quickly
+  } else m.stepDist = STRIDE.PRIME_M; // primed so the first step lands quickly
 
   if (hspeed > 0.5 || !p.grounded) m.lastMovedT = t;
   p.speedNorm = Math.min(1, hspeed / MOVE.SPRINT);
@@ -629,20 +711,41 @@ export function stepBotLocomotion(sim, bot, dt) {
   }
   bot.vel[1] += MOVE.GRAV * dt;
   const h = bot.stance === "crouch" ? MOVE.CROUCH_H : MOVE.STAND_H;
+  const preX = bot.pos[0], preZ = bot.pos[2];
   const res = world.moveCapsule(bot.pos, bot.vel, dt, MOVE.CAPSULE_R, h);
   bot.pos = res.pos;
   bot.vel = res.vel;
   bot.grounded = res.grounded;
 
-  // footsteps for audible bots (§5.2 hearing uses these too, via A5)
-  if (!bot._stepPhase) bot._stepPhase = 0;
-  const hspeed = Math.hypot(bot.vel[0], bot.vel[2]);
-  if (res.grounded && hspeed > 0.8) {
-    const hz = cmd.sprint ? 2.6 : bot.stance === "crouch" ? 1.2 : 1.85;
-    bot._stepPhase += hz * dt;
-    if (bot._stepPhase >= 1) {
-      bot._stepPhase -= 1;
-      sim.emit("step", { who: bot.id, surface: "concrete", sprint: !!cmd.sprint });
-    }
+  // footsteps for audible bots — the SAME distance-based gait as the player,
+  // so a bot you hear crossing a room is running at a cadence that matches the
+  // ground it covers. (§5.2 hearing reads bot.vel directly in perception.js
+  // and is untouched by this; this drives the audible cue only.)
+  if (bot._stepPrime == null) {
+    // Deterministic per-bot gait offset. Bots given the same order move at the
+    // same speed from the same tick, so without this they foot-plant on the
+    // SAME tick and their steps stack into one loud thump instead of reading
+    // as a crowd (measured before this line: 11 of 18 footfall ticks carried
+    // two or more bots). Golden-ratio low-discrepancy on bot.id spreads them
+    // evenly — no RNG is drawn, so lockstep/replay determinism is untouched.
+    const frac = ((bot.id * 0.6180339887498949) % 1 + 1) % 1;
+    bot._stepPrime = STRIDE.PRIME_M + frac * 0.9;
+    bot._stepFoot = frac < 0.5 ? "R" : "L";
+    bot._stepDist = bot._stepPrime;
   }
+  const hspeed = Math.hypot(bot.vel[0], bot.vel[2]);
+  if (res.grounded && hspeed > STRIDE.MIN_SPEED) {
+    const stride = strideLength(hspeed, bot.stance, !!cmd.sprint);
+    bot._stepDist += Math.hypot(bot.pos[0] - preX, bot.pos[2] - preZ);
+    if (bot._stepDist >= stride) {
+      bot._stepDist -= stride;
+      if (bot._stepDist >= stride) bot._stepDist = 0;
+      bot._stepFoot = bot._stepFoot === "L" ? "R" : "L";
+      sim.emit("step", {
+        who: bot.id, surface: "concrete", sprint: !!cmd.sprint,
+        foot: bot._stepFoot, stance: bot.stance,
+        speed: hspeed, stride, hz: hspeed / stride,
+      });
+    }
+  } else bot._stepDist = bot._stepPrime; // re-prime keeps this bot's offset
 }

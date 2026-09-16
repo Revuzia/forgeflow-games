@@ -28,6 +28,29 @@
 // arena's DMR band), the west/east margin lanes and the signals-hut crossing
 // are tight and covered, the yards are in between.
 // band is the engagement band [min,max] metres a fight on the lane produces.
+//
+// ── GEN-2: THE ANNEXED TERRITORY ──────────────────────────────────────────
+// The 2× expansion added four regions and this graph covered NONE of them:
+// the two outer stabling roads (Z[−44,−27] and its mirror), the two
+// locomotive works (X[−55,−42] and its mirror), the two transfer-table yard
+// corners and the two 1.2 m loading banks. 3 500 m² — more than HALF the
+// arena's floor — had no junction, no lane and therefore no patrol, so bots
+// kept crowding the old depot and a doubled map played smaller than its
+// gen-1 self. Fourteen junctions and eleven lane pairs are added below.
+//
+// The new half-graph is a RING, not a set of spurs: works → outer road →
+// transfer-table corner → back into the works, with three separate ties into
+// the old depot (the yard's west gate, the yard's east gate and the west
+// margin lane). A bot rotating from the flag hall to the far corner now has
+// two routes of comparable length instead of one, which is the property the
+// commander's routeScore needs to have a choice at all.
+//
+// The only DEAD END in the graph is L_BANK_NW/SE, the spur onto the corner
+// loading bank, and it is marked throughGoing:false. Its deck waypoints carry
+// y = 1.2 and the stair waypoint y = 0.6: the probe skips the ground-nav test
+// for anything above 0.5 m, which is correct here — those points are not on
+// the ground grid at all, they are on the slab above it. The 0.3 m risers are
+// inside the sim capsule's step-up budget, so it stays botTraversable.
 
 const MX = -10, MZ = -4;                       // x' = MX − x, z' = MZ − z
 const mp = (p) => [MX - p[0], p[1], MZ - p[2]];
@@ -55,6 +78,22 @@ export const junctions = {
   J_YARD_SE: [21, 0, 17],
   J_YARD_NE: [-1, 0, -18],
   J_HUT_N:   [-11, 0, -21.5],   // inside the north signals hut
+  // ---- GEN-2 annexed territory, west/south half -------------------------
+  J_WORKS_NW: [-48, 0, -20],    // west works, north end (open, 13 m wide)
+  J_WORKS_SW: [-44, 0, 19],     // west works, south end, east of the goods bank
+  J_ROAD_SW:  [-34, 0, 31],     // south outer stabling road, west cell
+  J_ROAD_SC:  [6, 0, 33],       // south outer road, centre (past the shop pair)
+  J_ROAD_SE:  [26, 0, 27],      // south outer road, east cell
+  J_TT_SW:    [-52, 0, 27],     // south-west transfer-table corner
+  J_BANK_SE:  [34, 1.2, 32],    // the SE loading bank deck (+1.2 m)
+  // ---- their 180° twins, north/east half --------------------------------
+  J_WORKS_SE: [38, 0, 16],
+  J_WORKS_NE: [34, 0, -23],
+  J_ROAD_NE:  [24, 0, -35],
+  J_ROAD_NC:  [-16, 0, -37],
+  J_ROAD_NW:  [-36, 0, -31],
+  J_TT_NE:    [42, 0, -31],
+  J_BANK_NW:  [-44, 1.2, -36],
 };
 
 // The twin of every junction (the map's own 180° symmetry, by name). Written
@@ -65,6 +104,10 @@ const TWIN_PAIRS = {
   J_HALL_W: "J_HALL_E", J_LANE_W: "J_LANE_E", J_APRON_W: "J_APRON_E",
   J_PLAT_W: "J_PLAT_E", J_YARD_NW: "J_YARD_SE", J_YARD_SW: "J_YARD_NE",
   J_HUT_S: "J_HUT_N", J_SHED_W: "J_SHED_E", J_SHED_N: "J_SHED_S",
+  // gen-2 annexed territory
+  J_WORKS_NW: "J_WORKS_SE", J_WORKS_SW: "J_WORKS_NE",
+  J_ROAD_NW: "J_ROAD_SE", J_ROAD_NC: "J_ROAD_SC", J_ROAD_NE: "J_ROAD_SW",
+  J_TT_NE: "J_TT_SW", J_BANK_NW: "J_BANK_SE",
 };
 const TWIN = { J_SHED_C: "J_SHED_C" };
 for (const [a, b] of Object.entries(TWIN_PAIRS)) { TWIN[a] = b; TWIN[b] = a; }
@@ -134,21 +177,99 @@ const WEST = [
   { id: "L_SHED_W_C", a: "J_SHED_W", b: "J_SHED_C", twin: "L_SHED_C_E",
     wp: [[-19, 0, -2], [-17, 0, 0.5], [-15, 0, 2], [-11, 0, 1.5], [-8, 0, 0], [-5, 0, -2]],
     band: [8, 32], exposure: 0.6, cover: 0.45 },
+
+  // ===== GEN-2: the locomotive works ======================================
+  // The works is 13 m wide and runs 45 m from the loading bank to the goods
+  // bank, and the shop-screen pair (maps/switchyard.js §5c) makes the run an
+  // S-bend rather than a corridor: east of the erecting screen at Z≈0, west
+  // of the fitting screen at Z≈4, then back east into the 3.5 m aisle that
+  // squeezes between the goods-bank deck and the retaining wall. The dog-leg
+  // is the reason this lane is worth choosing — nothing can be shot down it
+  // end to end, so it is the quiet north–south route on the whole west flank.
+  { id: "L_WORKS_SPINE", a: "J_WORKS_NW", b: "J_WORKS_SW", twin: "L_WORKS_SPINE_E",
+    wp: [[-48, 0, -20], [-45, 0, -12], [-45, 0, -4], [-45, 0, 0], [-51, 0, 2],
+      [-51, 0, 6], [-48, 0, 6], [-44, 0, 8], [-44, 0, 14], [-44, 0, 19]],
+    band: [6, 24], exposure: 0.3, cover: 0.6 },
+  // Into the yard's west cell through the retaining wall's north gate.
+  { id: "L_WORKS_YARD", a: "J_WORKS_NW", b: "J_YARD_NW", twin: "L_WORKS_YARD_E",
+    wp: [[-48, 0, -20], [-44, 0, -20], [-38, 0, -20], [-33, 0, -20.5], [-31, 0, -21]],
+    band: [8, 26], exposure: 0.55, cover: 0.45 },
+  // Into the west margin lane through the gate at Z[−13,−2]: the works' tie
+  // into the old depot's flank, and the shortest works→flag route there is.
+  { id: "L_WORKS_LANE", a: "J_WORKS_NW", b: "J_LANE_W", twin: "L_WORKS_LANE_E",
+    wp: [[-48, 0, -20], [-45, 0, -14], [-45, 0, -8], [-43, 0, -6], [-40, 0, -4], [-38.5, 0, -2]],
+    band: [6, 20], exposure: 0.35, cover: 0.55 },
+
+  // ===== GEN-2: the outer stabling road ===================================
+  // 86 m long, 17 m deep, two cells split by the sand/wash shop pair. It is
+  // the arena's most open ground — the 15–40 m band lives here — so both road
+  // lanes are authored high-exposure and low-cover: a commander that sends a
+  // bot down one is choosing speed over safety, which is exactly the trade
+  // the route layer exists to make.
+  { id: "L_ROAD_W", a: "J_ROAD_NW", b: "J_ROAD_NC", twin: "L_ROAD_E",
+    wp: [[-36, 0, -31], [-30, 0, -33], [-24, 0, -35], [-20, 0, -37], [-16, 0, -37]],
+    band: [12, 35], exposure: 0.75, cover: 0.3 },
+  // Threads the shop pair: south of the sand house, through the 2 m slot at
+  // X[−1,+1], then north of the wash house. The one place on the road where a
+  // fight is forced to short range.
+  { id: "L_ROAD_C", a: "J_ROAD_NC", b: "J_ROAD_NE", twin: "L_ROAD_C_S",
+    wp: [[-16, 0, -37], [-12, 0, -33], [-4, 0, -31], [0, 0, -33], [0, 0, -38],
+      [4, 0, -40], [12, 0, -38], [18, 0, -36], [24, 0, -35]],
+    band: [8, 30], exposure: 0.6, cover: 0.45 },
+  // The road's two ties into the yard, one per gate in the retaining wall.
+  { id: "L_ROAD_YARD_W", a: "J_ROAD_NW", b: "J_YARD_NW", twin: "L_ROAD_YARD_E",
+    wp: [[-36, 0, -31], [-35, 0, -28], [-33, 0, -25], [-32, 0, -23], [-31, 0, -21]],
+    band: [8, 28], exposure: 0.6, cover: 0.4 },
+  { id: "L_ROAD_YARD_N", a: "J_ROAD_NE", b: "J_YARD_NE", twin: "L_ROAD_YARD_S",
+    wp: [[24, 0, -35], [18, 0, -32], [12, 0, -30], [12, 0, -27], [10, 0, -24],
+      [5, 0, -22], [0, 0, -20], [-1, 0, -18]],
+    band: [10, 31], exposure: 0.65, cover: 0.4 },
+
+  // ===== GEN-2: the transfer-table corner =================================
+  // The open corner that turns the road and the works from two dead limbs
+  // into one ring (maps/switchyard.js §5d). Diagonal, never a full loop.
+  { id: "L_ROAD_TT", a: "J_ROAD_NE", b: "J_TT_NE", twin: "L_ROAD_TT_S",
+    wp: [[24, 0, -35], [30, 0, -33], [34, 0, -30], [38, 0, -26], [42, 0, -28], [42, 0, -31]],
+    band: [8, 26], exposure: 0.5, cover: 0.5 },
+  { id: "L_TT_WORKS", a: "J_TT_SW", b: "J_WORKS_SW", twin: "L_TT_WORKS_N",
+    wp: [[-52, 0, 27], [-50, 0, 22], [-46, 0, 20], [-44, 0, 19]],
+    band: [6, 22], exposure: 0.4, cover: 0.55 },
+  // Works ↔ road, closing the ring at its southern end.
+  { id: "L_WORKS_ROAD", a: "J_WORKS_SW", b: "J_ROAD_SW", twin: "L_WORKS_ROAD_N",
+    wp: [[-44, 0, 19], [-44, 0, 24], [-40, 0, 27], [-36, 0, 29], [-34, 0, 31]],
+    band: [8, 28], exposure: 0.55, cover: 0.45 },
+
+  // ===== GEN-2: the loading bank ==========================================
+  // The one dead end in the graph, and the only vertical route outside the
+  // boarding platforms. The bank is a 1.2 m slab — BELOW the 1.6 m eye height
+  // every sightline gate measures at — so standing on it is a firing step
+  // over the outer road, not a sniper deck. throughGoing:false because the
+  // stair is its only way on or off.
+  { id: "L_BANK", a: "J_WORKS_NW", b: "J_BANK_NW", twin: "L_BANK_SE",
+    wp: [[-48, 0, -20], [-46, 0, -22.5], [-44.5, 0.6, -24.5], [-44.5, 1.2, -27],
+      [-44, 1.2, -31], [-44, 1.2, -36]],
+    band: [6, 25], exposure: 0.7, cover: 0.3, vertical: true, throughGoing: false },
 ];
 
+// `throughGoing` is carried through both constructors rather than hardcoded
+// true: the gen-2 loading-bank spur is a genuine dead end, and a mirror that
+// silently re-declared it through-going would be a lie the probe cannot catch
+// (it only force-checks self-loops and the named L_BALCONY).
 function mirrorLane(l) {
   return {
     id: l.twin, a: TWIN[l.a] || l.a, b: TWIN[l.b] || l.b,
     wp: l.wp.map(mp),
     band: l.band.slice(), exposure: l.exposure, cover: l.cover,
-    vertical: !!l.vertical, botTraversable: true, throughGoing: true,
+    vertical: !!l.vertical, botTraversable: true,
+    throughGoing: l.throughGoing !== false,
   };
 }
 function westLane(l) {
   return {
     id: l.id, a: l.a, b: l.b, wp: l.wp.map((p) => p.slice()),
     band: l.band.slice(), exposure: l.exposure, cover: l.cover,
-    vertical: !!l.vertical, botTraversable: true, throughGoing: true,
+    vertical: !!l.vertical, botTraversable: true,
+    throughGoing: l.throughGoing !== false,
   };
 }
 
