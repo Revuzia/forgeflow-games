@@ -22,21 +22,54 @@ export default function GamePlayer({ game }: Props) {
   // 2026-07-10 — Portal-level fullscreen button REMOVED (owner): every game's
   // own bottom-right controls bar (game_controls.js) is the single fullscreen
   // entry point; the iframe carries allow="fullscreen" so it works from inside.
-  // 2026-09-16 — sandbox= REMOVED so mouse-look games can lock the cursor.
-  // Measured on Chrome 152 with real clicks (scratch lockprobe, three legs +
-  // controls): a cross-origin iframe with ANY sandbox attribute cannot
-  // pointer-lock — without allow-pointer-lock Chrome logs "Blocked pointer
-  // lock on a sandboxed iframe", and WITH it the request still dies, silently,
-  // as "WrongDocumentError: The root document of this element is not valid
-  // for pointer lock". The same frame with NO sandbox locks on the first
-  // click (the itch.io/CrazyGames-normal shape). Same-origin frames lock
-  // either way, which is why local dev never showed it. So every mouse-look
-  // game (ascendant, blackridge, last-circle, neon-veil, ember-sanctum...)
-  // sat on a dead "CLICK TO RESUME" on the portal while its CDN URL worked.
-  // The games are first-party content from our own CDN worker, and the
-  // sandbox granted allow-scripts + allow-same-origin + allow-popups anyway;
-  // keep allow= (pointer-lock there is spec-correct for other engines —
-  // Chrome 152 just warns "Unrecognized feature" and ignores it).
+  // 2026-09-16 — MOUSE-LOOK ON THE PORTAL. Two changes, in order:
+  //
+  //  (a) sandbox= was removed entirely, because every mouse-look game
+  //      (ascendant, blackridge, last-circle, neon-veil, ember-sanctum...) sat
+  //      on a dead "CLICK TO RESUME" on the portal while its CDN URL worked.
+  //      The diagnosis at the time was that a cross-origin iframe with ANY
+  //      sandbox attribute cannot pointer-lock.
+  //
+  //  (b) sandbox= RESTORED, here, with allow-pointer-lock added. The broader
+  //      claim does not hold, and the real rule is narrower: a sandboxed frame
+  //      needs the allow-pointer-lock TOKEN. The sandbox this component shipped
+  //      before (a) was "allow-scripts allow-same-origin allow-popups" — it
+  //      never carried that token, which is the whole bug.
+  //
+  //      Measured two ways on Chrome 152 with REAL mouse clicks (synthetic
+  //      dispatch does not grant user activation, so it cannot test this):
+  //
+  //      1. Controlled two-origin matrix (127.0.0.1:8798 framing :8799, a
+  //         genuine cross-origin pair):
+  //           no sandbox ................................. LOCKS
+  //           allow-scripts+same-origin+pointer-lock ..... LOCKS
+  //           allow-scripts+pointer-lock ................. LOCKS
+  //           allow-scripts+same-origin (no PL token) .... BLOCKED, and Chrome
+  //             says exactly why: "Blocked pointer lock on an element because
+  //             the element's frame is sandboxed and the 'allow-pointer-lock'
+  //             permission is not set."
+  //      2. End-to-end on the LIVE portal framing the LIVE CDN build of
+  //         last-circle, driven into an actual match: cursor hidden, the game's
+  //         own unlocked-state hint ("CLICK TO LOOK AROUND", which renders only
+  //         while unlocked) absent, and zero pointer-lock/sandbox console
+  //         errors. Pointer lock is held WITH the sandbox below applied.
+  //
+  //      Why restore it: dropping sandbox also hands the framed document
+  //      top-level navigation and popups. The games are first-party, so the
+  //      risk is low — but a game bug or a compromised CDN object could then
+  //      redirect the whole portal, and that is a real loss of defence in depth
+  //      on a public site. Separate origin + sandbox with explicit tokens is
+  //      the shape itch.io and the other portals use, so it is what we use.
+  //
+  //      NOTE allow-scripts + allow-same-origin together is safe HERE and only
+  //      here: that pair lets a frame remove its own sandbox only when the
+  //      frame is SAME-origin with this page. The game is served cross-origin
+  //      from the CDN worker, so it cannot. allow-same-origin is required —
+  //      without it the frame gets an opaque origin and localStorage throws,
+  //      which would wipe every game's save (last-circle's lc_progress, and the
+  //      new per-account skill rating with it).
+  //      "allow-fullscreen" is NOT a sandbox flag — fullscreen is granted by
+  //      allow= below; Chrome rejects it as an invalid sandbox token.
 
   // Listen for PostMessage from game iframe (ad triggers, analytics)
   useEffect(() => {
@@ -141,6 +174,7 @@ export default function GamePlayer({ game }: Props) {
             // cleared their browser cache.
             src={`${game.game_url}${game.game_url.includes("?") ? "&" : "?"}v=${encodeURIComponent(game.build_version || game.updated_at || "1")}-${mountNonce.current}${typeof window !== "undefined" && new URLSearchParams(window.location.search).get("room") ? `&room=${encodeURIComponent(new URLSearchParams(window.location.search).get("room") || "")}` : ""}`}
             className="w-full h-full border-0"
+            sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-popups allow-modals allow-forms"
             allow="autoplay; fullscreen; gamepad; pointer-lock"
             onLoad={() => setIsLoading(false)}
             title={game.title}
