@@ -11,13 +11,24 @@
  * rainbow-3, executed verbatim; white = all seven colours = all five worlds).
  *
  * SHAPE      Measured by `node _harness/reachcheck.mjs rainbow-3`, not
- *            estimated: 413.3 m of travel, 116 gameplay objects, 87 landable
- *            surfaces, 12 checkpoints (cp0..cp11), 3 coins, 67 dynamic hazards
+ *            estimated: 415 m of travel, 104 gameplay objects, 75 landable
+ *            surfaces, 12 checkpoints (cp0..cp11), 3 coins, 64 dynamic hazards
  *            across 17 families. The 3 reported "orphan" surfaces are the
  *            three crusher HEADS — parked iron nothing can or should stand on
- *            (temple-3 ships the same two). Mix:
+ *            (temple-3 ships the same two).
  *
- *              prismgate 9 · bloom 7 (4 low / 3 high) · vanish 8 · laser 5 ·
+ *            DIFFICULTY PASS 2026-09-15 (owner: "a little TOO easy... TOO many
+ *            platforms"): the sub-2.5 m hop carpet was deleted or pulled apart
+ *            and every oversized deck shrunk, benchmarked past temple-3 on
+ *            _harness/gapstats.mjs — gap p50 3.00 / p75 4.00 (temple-3 2.90 /
+ *            3.31), trivial hops 25% (40%), demanding >=4.4 m hops 20% (12%,
+ *            the finale tops the whole game), deck area p50 16.0 / p75 33.9.
+ *            No prismgate, bloom, laser or other hazard def was touched; every
+ *            gate keeps >= 1.8 m of staging before its plane; no required hop
+ *            exceeds 7.0 m and every route jump stays in the safe envelope
+ *            (reachcheck: zero warnings). Three vanish tiles deleted. Mix:
+ *
+ *              prismgate 9 · bloom 7 (4 low / 3 high) · vanish 5 · laser 5 ·
  *              lasergrid 2 · risinglava 1 · crusher 3 · saw 2 · rotor 5 ·
  *              pendulum 4 · ice 6 · wind 3 · mover 6 · conveyor 2 ·
  *              jumppad 2 · speedpad 1 · chase 1 (Y-axis)
@@ -87,12 +98,15 @@
  *   dark volumetric smoke body — never a lit plane (deco at the coda).
  *
  * REACH BUDGET USED (safe limits, CONTRACT §0): stair rises are 1.25–1.4 over
- *   gaps 0.1–1.2 (comfortably inside the +0.9/3.87 house pair); the two
- *   required SPRINTS both launch from runways >= 8 m (II: 9.6 m runway, 5.6 m
- *   flat gap; V: the 10 m cp11 step under gate 6, gap-free — the sprint there
- *   is against the LIGHT, not a gap). Jump pads copy rainbow-1's proven
- *   numbers: power 5.0, dy 3.4, landing decks swallow the whole walk..sprint
- *   band (spans quoted at BEAT 15 and BEAT 21).
+ *   gaps 2.6–3.2 since the difficulty pass — each checked against the
+ *   dy-adjusted run-safe reach (3.51 m at +1.4), never the flat number; the
+ *   descending 4.2–4.5 m leaps in I sit inside run-safe at their drops, and
+ *   the long flats (5.5–6.4 m in I/II/V) are sprint-class with the drop or a
+ *   runway paying for them (II: 9.6 m runway, 5.6 m flat gap; V: the 11.1 m
+ *   landing runway, 5.9 m near-flat gap; the 8.8 m cp11 step under gate 6
+ *   stays gap-free — the sprint there is against the LIGHT). Jump pads copy
+ *   rainbow-1's proven numbers: power 5.0, dy 3.4, landing decks swallow the
+ *   whole walk..sprint band (spans quoted at BEAT 15 and BEAT 21).
  *
  * HEIGHT LADDER: 6.0 (spawn) -> 2.0 (rain-glass descent, DOWN — Neon's stair
  *   shatters under you) -> 1.6..3.4 (tide islands) -> 3.4..8.0 (wind arc) ->
@@ -100,13 +114,13 @@
  *   20.7 (seventh step) -> 22.0 (summit) -> 23.3 (White Gate) -> 24.5 (finish).
  *
  * RHYTHM — measured, not intended (`node _harness/geomcheck.mjs rainbow-3`):
- *   56 distinct platform footprints, gap coefficient of variation 0.56, no two
- *   identical obstacles in a row, longest run without a height change over
- *   0.75 m = 26.8 m (was 47.4 across the tide basin on the first pass — the
- *   BEAT 7 shelf now breaks it at +1.3). Zero problems on both gates; the one
- *   surviving warning is the cp8->cp9 arc crossing the parting-stamp crusher,
- *   which is the intended timed gate: period 4.0 s, head parked clear for
- *   ~3 s of it, and the hop under it is 1.0 m.
+ *   48 distinct platform footprints, gap coefficient of variation 0.44, no
+ *   run of identical obstacles past 2, longest run without a height change
+ *   over 0.75 m = 35.6 m (the BEAT 7 shelf still breaks the tide basin at
+ *   +1.3). Zero problems on both gates; the one surviving warning is the
+ *   cp8->cp9 arc crossing the parting-stamp crusher, which is the intended
+ *   timed gate: period 4.0 s, head parked clear for ~3 s of it, and the hop
+ *   under it is 1.0 m.
  *
  * VALIDATOR PROOF (run this session, not assumed): all 67 hazard defs pass
  *   hazards/index.js REQUIRED + SEMANTIC (16 prismgate/bloom among them);
@@ -193,8 +207,8 @@ export default {
     /* ============================================================================ */
 
     /* BEAT 1 — THE THRESHOLD. Solid ground, the name, the whole spire visible. */
-    { kind: 'platform', p: [-3.4, 5.3, 0], s: [4.0, 1, 7.2], mat: 'stone', glow: SLATE }, // back apron, top 5.8
-    { kind: 'platform', p: [2, 5.5, 0], s: [12, 1, 10], mat: 'stone', glow: SLATE }, // spawn deck, top 6.0
+    { kind: 'platform', p: [-3.4, 5.3, 0], s: [4.0, 1, 4.0], mat: 'stone', glow: SLATE }, // back apron, top 5.8
+    { kind: 'platform', p: [1.2, 5.5, 0], s: [7.6, 1, 4.6], mat: 'stone', glow: SLATE }, // spawn deck, top 6.0 — a threshold, not a plaza: the exam starts at the edge
 
     { kind: 'text', p: [-3.4, 8.6, 0], rot: [0, -Math.PI / 2, 0], text: 'WHITE LIGHT', size: 0.86, color: GOLD },
     { kind: 'text', p: [-3.4, 7.9, 0], rot: [0, -Math.PI / 2, 0], text: 'PRISM CROWN  ·  III', size: 0.28, color: DUSK },
@@ -206,16 +220,17 @@ export default {
     { kind: 'text', p: [8.4, 8.2, -3.2], rot: [0, -Math.PI / 2, 0], text: 'NEON REMEMBERED', size: 0.44, color: GOLD },
     { kind: 'text', p: [8.4, 7.65, -3.2], rot: [0, -Math.PI / 2, 0], text: 'the stair shatters  ·  it always did', size: 0.22, color: DUSK },
 
-    /* BEAT 2 — THE RAIN-GLASS DESCENT. Six cycle tiles stepping DOWN 0.3-0.5 a
-       tile (cycle 3.5 s = on 2.1 + off 1.0 + warn 0.4 — warn is still solid,
-       law 3), with the neon dojo's own light between them: a bar to jump at
-       +0.55 and a bar to crouch at +1.75, both on the same 3.0/3.5 s duty the
-       tiles keep. No new verbs yet — this is the alphabet check. */
-    { kind: 'platform', p: [11.4, 4.7, 1.2], s: [3.6, 1, 4.6], mat: 'panel', glow: SLATE, stripe: true }, // gap 1.40, -0.3, top 5.2 — the last solid step
-    { kind: 'vanish', p: [16.6, 4.2, 2.0], s: [3.0, 1, 3.2], mat: 'panel', cycle: { on: 2.1, off: 1.0, warn: 0.4, phase: 0 } }, // gap 1.60, -0.5, top 4.7
-    { kind: 'laser', a: [19.9, 5.3, -0.4], b: [19.9, 5.3, 3.6], radius: 0.12, color: HOT, cycle: { on: 1.7, off: 1.4, warn: 0.4, phase: 0.3 } }, // 0.55 over v2's approach — jump it mid-gap
-    { kind: 'vanish', p: [21.6, 3.8, 0.6], s: [2.8, 1, 3.0], mat: 'panel', cycle: { on: 2.1, off: 1.0, warn: 0.4, phase: 0.35 } }, // gap 2.10, -0.4, top 4.3
-    { kind: 'vanish', p: [26.6, 3.4, -0.8], s: [3.2, 1, 3.4], mat: 'panel', cycle: { on: 2.1, off: 1.0, warn: 0.4, phase: 0.7 } }, // gap 2.20, -0.4, top 3.9
+    /* BEAT 2 — THE RAIN-GLASS DESCENT. The stepping-stone stair is gone: three
+       shattering tiles now hang a real jump apart (3.9 / 4.0 / 4.5 m, all
+       descending, all inside the run-safe envelope), with the neon dojo's own
+       light between them: a bar to jump at +0.55 over the second tile and a
+       bar to crouch at +1.75 on the third, both on the tiles' 3.0/3.5 s duty.
+       The alphabet check now costs commitment — miss a beat and the glass is
+       gone before the next leap. */
+    { kind: 'platform', p: [10.6, 4.7, 1.2], s: [3.4, 1, 3.8], mat: 'panel', glow: SLATE, stripe: true }, // gap 3.90 off the spawn deck, -0.8, top 5.2 — the last solid step
+    { kind: 'vanish', p: [18.3, 4.2, 1.6], s: [4.0, 1, 3.2], mat: 'panel', cycle: { on: 2.1, off: 1.0, warn: 0.4, phase: 0 } }, // gap 4.00, -0.5, top 4.7
+    { kind: 'laser', a: [19.9, 5.3, -0.4], b: [19.9, 5.3, 3.6], radius: 0.12, color: HOT, cycle: { on: 1.7, off: 1.4, warn: 0.4, phase: 0.3 } }, // 0.55 over v2's deck — jump the bar on the tile
+    { kind: 'vanish', p: [26.6, 3.4, -0.8], s: [3.6, 1, 3.4], mat: 'panel', cycle: { on: 2.1, off: 1.0, warn: 0.4, phase: 0.7 } }, // gap 4.50, -0.8, top 3.9
     { kind: 'laser', a: [28.2, 5.65, -2.5], b: [28.2, 5.65, 0.9], radius: 0.12, color: HOT, cycle: { on: 2.0, off: 1.5, warn: 0.4, phase: 0.6 } }, // 1.75 over v3 — crouch on the blink
     {
       kind: 'mover',
@@ -232,7 +247,7 @@ export default {
        6.27 m/s, under the 6.4 law. Sill = court top 3.2 (p.y 5.2 = 3.2 + 2.0).
        Whole court before the plane is all-phase-safe staging; flank ledge
        right, outside the lattice edge z 5.5. CP1 on the staging deck. */
-    { kind: 'platform', p: [44.6, 2.7, 0], s: [10.0, 1, 10.4], mat: 'stone', glow: SLATE }, // gap 0.70 off the mover's far pose — gate court, top 3.2
+    { kind: 'platform', p: [43.9, 2.7, 0], s: [10.2, 1, 10.4], mat: 'stone', glow: SLATE }, // flush with the mover's far pose — gate court, top 3.2
     { kind: 'prismgate', p: [47.2, 5.2, 0], s: [0.4, 4.0, 11.0], seq: [6, 4, 2, 0], dwell: 1.85, travel: 1.65, period: 14 },
     { kind: 'text', p: [42.0, 5.6, -3.6], rot: [0, -Math.PI / 2, 0], text: 'THE SPECTRUM RUNS DOWN', size: 0.36, color: GOLD },
     { kind: 'text', p: [42.0, 5.05, -3.6], rot: [0, -Math.PI / 2, 0], text: 'violet high  ·  red low  ·  same door', size: 0.22, color: DUSK },
@@ -250,10 +265,12 @@ export default {
     { kind: 'deco', kindOf: 'rail', p: [42.6, 5.90, 6.6], s: [0.14, 0.08, 0.44], mat: 'emissive', tint: B_INDIGO },
     { kind: 'deco', kindOf: 'rail', p: [42.6, 6.35, 6.6], s: [0.14, 0.08, 0.44], mat: 'emissive', tint: B_VIOLET },
 
-    /* BEAT 4 — OUT OF THE GLASS. One more shattering tile, a two-beam crouch
-       rack (the dojo's parting shot), two brisk tiles and the last bar. */
-    { kind: 'vanish', p: [53.4, 2.4, 1.6], s: [2.8, 1, 3.0], mat: 'panel', cycle: { on: 2.1, off: 1.0, warn: 0.4, phase: 0.25 } }, // gap 1.60, -0.3, top 2.9
-    { kind: 'platform', p: [58.8, 1.9, 1.0], s: [4.6, 1, 4.6], mat: 'stone', glow: SLATE, stripe: true }, // gap 1.90, -0.5 — the rack landing, top 2.4
+    /* BEAT 4 — OUT OF THE GLASS. One shattering tile a 4.3 m leap off the
+       court, the two-beam crouch rack (the dojo's parting shot), then the
+       long way out: a 5.6 m sprint to the last tile and a bar jumped
+       mid-flight on the 4.2 m exit. The brisk-tile carpet is gone. */
+    { kind: 'vanish', p: [54.5, 2.4, 1.6], s: [2.4, 1, 3.0], mat: 'panel', cycle: { on: 2.1, off: 1.0, warn: 0.4, phase: 0.25 } }, // gap 4.30, -0.3, top 2.9
+    { kind: 'platform', p: [58.8, 1.9, 1.0], s: [4.2, 1, 3.8], mat: 'stone', glow: SLATE, stripe: true }, // gap 1.00 — the rack landing, top 2.4
     {
       kind: 'lasergrid',
       a: [58.6, 4.15, -1.4],
@@ -266,12 +283,11 @@ export default {
       color: HOT,
       cycle: { on: 1.6, off: 1.5, warn: 0.4, phase: 0.2 },
     },
-    { kind: 'vanish', p: [64.4, 1.6, -0.6], s: [3.0, 1, 3.2], mat: 'panel', cycle: { on: 2.1, off: 1.0, warn: 0.4, phase: 0.5 } }, // gap 1.70, -0.3, top 2.1
-    { kind: 'vanish', p: [69.6, 1.4, 0.8], s: [2.6, 1, 2.8], mat: 'panel', cycle: { on: 2.1, off: 1.0, warn: 0.4, phase: 0 } }, // gap 1.90, -0.2, top 1.9
-    { kind: 'laser', a: [72.6, 2.45, -1.0], b: [72.6, 2.45, 2.6], radius: 0.12, color: HOT, cycle: { on: 1.7, off: 1.4, warn: 0.4, phase: 0 } }, // 0.55 over v6's exit lip — jump out
+    { kind: 'vanish', p: [68.0, 1.4, 0.8], s: [3.0, 1, 2.8], mat: 'panel', cycle: { on: 2.1, off: 1.0, warn: 0.4, phase: 0 } }, // gap 5.60 sprint out of the rack, -0.5, top 1.9
+    { kind: 'laser', a: [72.6, 2.45, -1.0], b: [72.6, 2.45, 2.6], radius: 0.12, color: HOT, cycle: { on: 1.7, off: 1.4, warn: 0.4, phase: 0 } }, // 0.55 over the exit line, mid-gap — jump out THROUGH the blink
 
     /* BEAT 5 — THE BASIN RIM (CP2). The glass ends on stone; below, the flood. */
-    { kind: 'platform', p: [77.0, 1.5, 0], s: [8.0, 1, 8.4], mat: 'stone', glow: SLATE, stripe: true }, // gap 3.30, +0.1 — CP2, top 2.0
+    { kind: 'platform', p: [77.5, 1.5, 0], s: [7.6, 1, 4.4], mat: 'stone', glow: SLATE, stripe: true }, // gap 4.20, +0.1 — CP2, top 2.0
     { kind: 'text', p: [74.2, 4.2, -3.4], rot: [0, -Math.PI / 2, 0], text: 'THE RISING TIDE', size: 0.44, color: GOLD },
     { kind: 'text', p: [74.2, 3.65, -3.4], rot: [0, -Math.PI / 2, 0], text: 'the tide sets the pace  ·  the rings set the feet', size: 0.22, color: DUSK },
     { kind: 'light', p: [77.0, 4.4, 0], color: MINT, intensity: 9, distance: 16 },
@@ -296,23 +312,25 @@ export default {
     { kind: 'platform', p: [85.4, 1.1, 1.0], s: [6.4, 1, 6.0], mat: 'stone', glow: SLATE, stripe: true }, // gap 1.20, -0.4, top 1.6
     { kind: 'bloom', p: [85.4, 1.6, 1.0], rmax: 3.2, band: 3, period: 6.0 },
 
-    /* BEAT 7 — GLASS OVER THE FLOOD. A stone hop, one shattering tile (the two
-       quotes overlap for exactly one beat), then the second ring — blue this
-       time (3.0 m/s), half a phase against the green: one clock, two speeds. */
-    { kind: 'platform', p: [92.6, 2.4, -1.8], s: [4.4, 1, 4.6], mat: 'panel', glow: SLATE, stripe: true }, // gap 1.60, +1.3 — the shelf that keeps the basin from reading flat, top 2.9
-    { kind: 'vanish', p: [98.2, 2.0, -0.6], s: [3.0, 1, 3.0], mat: 'panel', cycle: { on: 1.9, off: 0.9, warn: 0.4, phase: 0 } }, // gap 1.60, +0.3, top 2.5
-    { kind: 'platform', p: [105.2, 1.3, 0.6], s: [7.6, 1, 7.2], mat: 'stone', glow: SLATE }, // gap 2.00, -0.7 — bloom island 2, top 1.8
-    { kind: 'bloom', p: [105.2, 1.8, 0.6], rmax: 3.5, band: 4, period: 6.0, phase: 0.5 }, // circle 101.7..108.7 in deck 101.4..109.0
+    /* BEAT 7 — GLASS OVER THE FLOOD. A 3.1 m hop up to the shelf, then the
+       shelf's whole reason to exist: a 6.4 m falling sprint clean over the
+       water onto the second ring's island — blue this time (3.0 m/s), half a
+       phase against the green: one clock, two speeds, and the tide under the
+       whole flight. The shattering stepping tile between them is gone. */
+    { kind: 'platform', p: [93.5, 2.4, -1.8], s: [3.6, 1, 3.6], mat: 'panel', glow: SLATE, stripe: true }, // gap 3.10, +1.3 — the shelf that keeps the basin from reading flat, top 2.9
+    { kind: 'platform', p: [105.2, 1.3, 0.6], s: [7.0, 1, 7.0], mat: 'stone', glow: SLATE }, // gap 6.40 sprint, -1.1 — bloom island 2, top 1.8
+    { kind: 'bloom', p: [105.2, 1.8, 0.6], rmax: 3.5, band: 4, period: 6.0, phase: 0.5 }, // circle 101.7..108.7 = the deck exactly
 
     /* BEAT 8 — GLAZED + COIN 1. The ice shelf beside the second ring; the coin
        perch hangs off its south rail over the tide — two ring-reads out and
        two back, and the tide underneath the whole errand. */
-    { kind: 'ice', p: [111.8, 2.1, 2.4], s: [4.8, 1, 4.4] }, // gap 1.40, +0.8, top 2.6
+    { kind: 'ice', p: [113.8, 2.1, 2.4], s: [3.6, 1, 3.8] }, // gap 3.30, +0.8, top 2.6
     { kind: 'platform', p: [112.6, 0.85, 7.0], s: [2.6, 0.7, 2.6], mat: 'panel', glow: SLATE, stripe: true }, // COIN 1 perch, top 1.2 — walk off the ice rail, jump back up
     { kind: 'text', p: [109.2, 4.4, 2.4], rot: [0, -Math.PI / 2, 0], text: 'GLAZED', size: 0.32, color: FROST },
 
-    /* BEAT 9 — THE REST (CP3), then the shuttle over the widest water. */
-    { kind: 'platform', p: [118.6, 1.9, 0.4], s: [5.6, 1, 6.2], mat: 'stone', glow: SLATE, stripe: true }, // gap 1.60, -0.2 — CP3, top 2.4
+    /* BEAT 9 — THE REST (CP3), barely: a perch, not a plaza. A 2.9 m hop
+       boards the shuttle over the widest water. */
+    { kind: 'platform', p: [118.4, 1.9, 0.4], s: [3.2, 1, 3.6], mat: 'stone', glow: SLATE, stripe: true }, // gap 1.20 off the ice, -0.2 — CP3, top 2.4
     {
       kind: 'mover',
       p: [124.4, 2.0, -1.2],
@@ -324,14 +342,14 @@ export default {
     /* BEAT 10 — THE THIRD RING, UP A SHELF. Green again but the island sits
        0.9 above the ferry — the height jolt that keeps the basin from reading
        as a corridor. Circle x 133.2..140.0 in deck 132.9..140.3. */
-    { kind: 'platform', p: [136.6, 2.8, 0.2], s: [7.4, 1, 7.0], mat: 'stone', glow: SLATE }, // gap 1.90, +0.4 off the ferry, top 3.3
+    { kind: 'platform', p: [136.6, 2.8, 0.2], s: [6.8, 1, 6.8], mat: 'stone', glow: SLATE }, // ride the ferry to its far pose, then hop +0.4 — top 3.3, deck = the ring's circle exactly
     { kind: 'bloom', p: [136.6, 3.3, 0.2], rmax: 3.4, band: 3, period: 6.0, phase: 0.25 }, // life 0.810 s
     { kind: 'text', p: [133.0, 5.6, -3.0], rot: [0, -Math.PI / 2, 0], text: 'ONE CLOCK  ·  THREE RINGS', size: 0.30, color: GOLD },
 
     /* BEAT 11 — THE SPRINT SHELF. One shattering tile down, then the movement's
        required sprint: a 9.6 m runway and a 5.6 m FLAT gap (sprint safe 6.4,
        runway law >= 8 m). The tide below is the reason to commit. */
-    { kind: 'vanish', p: [141.9, 2.5, -2.0], s: [2.8, 1, 3.0], mat: 'panel', cycle: { on: 1.9, off: 0.9, warn: 0.4, phase: 0.5 } }, // gap 0.20, -0.3, top 3.0
+    { kind: 'vanish', p: [144.4, 2.5, -1.2], s: [2.8, 1, 3.0], mat: 'panel', cycle: { on: 1.9, off: 0.9, warn: 0.4, phase: 0.5 } }, // gap 3.00, -0.3, top 3.0 — lands flush on the runway's lip
     { kind: 'platform', p: [149.4, 2.7, 0.6], s: [9.6, 1, 5.4], mat: 'stone', glow: SLATE, stripe: true }, // gap 1.40, +0.2 — THE RUNWAY, top 3.2
     { kind: 'text', p: [146.2, 5.0, -2.6], rot: [0, -Math.PI / 2, 0], text: 'RUN THE LIGHT OUT', size: 0.34, color: GOLD },
     { kind: 'platform', p: [163.4, 2.9, 0], s: [7.2, 1, 8.6], mat: 'stone', glow: SLATE }, // SPRINT gap 5.60 flat — CP4 court, top 3.4
@@ -347,14 +365,16 @@ export default {
 
     /* BEAT 12 — THE ARC. Five glazed slabs curving z +2.4 -> +5.2 -> +1.0 while
        the shear shoves +z for the first half and -z for the second — the sign
-       says which half you are in; the curve is the second channel. */
+       says which half you are in; the curve is the second channel. Every slab
+       is a pane now, not a landing: ~3 m wide, a full 2.9-3.2 m rising jump
+       apart, in wind, on ice, under the censers. */
     { kind: 'text', p: [166.6, 6.4, -3.6], rot: [0, -Math.PI / 2, 0], text: 'THE SPIRE WIND', size: 0.44, color: GOLD },
     { kind: 'text', p: [166.6, 5.85, -3.6], rot: [0, -Math.PI / 2, 0], text: 'the wind flips at the crown of the arc', size: 0.22, color: DUSK },
-    { kind: 'ice', p: [169.0, 3.6, 2.4], s: [4.6, 1, 4.4] }, // gap 2.00, +0.7, top 4.1
-    { kind: 'ice', p: [175.4, 4.4, 4.6], s: [4.2, 1, 4.0] }, // gap 2.10, +0.8, top 4.9
-    { kind: 'ice', p: [181.6, 5.2, 5.2], s: [4.4, 1, 4.2] }, // gap 2.00, +0.8, top 5.7
-    { kind: 'ice', p: [187.6, 6.0, 3.6], s: [4.0, 1, 4.0] }, // gap 1.90, +0.8, top 6.5
-    { kind: 'ice', p: [193.2, 6.7, 1.0], s: [4.6, 1, 4.4] }, // gap 1.60, +0.7, top 7.2
+    { kind: 'ice', p: [169.4, 3.6, 2.4], s: [3.2, 1, 3.6] }, // gap 0.80, +0.7, top 4.1
+    { kind: 'ice', p: [175.4, 4.4, 4.6], s: [3.0, 1, 3.4] }, // gap 2.90, +0.8, top 4.9
+    { kind: 'ice', p: [181.6, 5.2, 5.2], s: [3.0, 1, 3.4] }, // gap 3.20, +0.8, top 5.7
+    { kind: 'ice', p: [187.6, 6.0, 3.6], s: [2.8, 1, 3.2] }, // gap 3.10, +0.8, top 6.5
+    { kind: 'ice', p: [193.6, 6.7, 1.0], s: [2.8, 1, 3.2] }, // gap 3.20, +0.7, top 7.2
     { kind: 'wind', p: [174.0, 7.6, 3.0], s: [16, 5, 12], dir: [0, 0, 1], power: 10, color: FROST }, // x 166..182 — shoves OUT (+z)
     { kind: 'wind', p: [190.0, 8.4, 3.0], s: [14, 5, 12], dir: [0, 0, -1], power: 12, color: FROST }, // x 183..197 — shoves BACK (-z), harder
 
@@ -372,7 +392,7 @@ export default {
        dy 3.24 to the gallery; walk entry lands 4.11 m out, held-sprint 9.93 m;
        the gallery spans 3.95..11.85 m from the launch lip. No entry speed
        misses. The lift is the patient line on the same wall. */
-    { kind: 'platform', p: [198.5, 7.5, 0], s: [8.0, 1, 7.6], mat: 'stone', glow: SLATE, stripe: true }, // gap 1.30, +0.8 — CP5, top 8.0
+    { kind: 'platform', p: [200.2, 7.5, 0.3], s: [6.8, 1, 5.0], mat: 'stone', glow: SLATE, stripe: true }, // gap 1.80, +0.8 — CP5, top 8.0
     { kind: 'jumppad', p: [202.2, 8.08, 1.4], s: [2.6, 0.16, 2.6], power: 5.0, dir: [0, 1, 0] },
     {
       kind: 'mover',
@@ -382,7 +402,7 @@ export default {
       motion: { type: 'elevator', to: [208.8, 10.9, -2.4], speed: 2.0, dwell: 0.4, hold: 2.0 },
     }, // board at top 8.4, ride to 11.4 — the patient line
     { kind: 'wind', p: [209.0, 13.4, 1.2], s: [7, 8, 6], dir: [0, 1, 0], power: 9, color: FROST }, // the updraft that fills the shaft
-    { kind: 'platform', p: [208.45, 10.9, 1.4], s: [7.9, 1, 4.6], mat: 'stone', glow: SLATE, stripe: true }, // THE GALLERY, top 11.4 — spans 3.95..11.85 from the pad lip, swallows the 4.11..9.93 entry band
+    { kind: 'platform', p: [208.45, 10.9, 1.4], s: [7.9, 1, 4.0], mat: 'stone', glow: SLATE, stripe: true }, // THE GALLERY, top 11.4 — spans 3.95..11.85 from the pad lip, swallows the 4.11..9.93 entry band
 
     /* BEAT 14 — THE CLIMBING DOOR, EXAM TEMPO (slots:'y'). Same grammar as
        rainbow-1 BEAT 17 — seq [1,3,5] climbs the ladder, period 10.2 s — but
@@ -395,7 +415,7 @@ export default {
 
     /* BEAT 15 — DOWN TO THE ENGINE. A panel step, then twin counter-phased
        shuttles (pick a lane — they land either side of the Engine's door). */
-    { kind: 'platform', p: [222.9, 11.4, -0.6], s: [3.6, 1, 4.0], mat: 'panel', glow: SLATE, stripe: true }, // gap 2.00, -0.4, top 11.9
+    { kind: 'platform', p: [224.0, 11.4, -0.6], s: [3.2, 1, 3.6], mat: 'panel', glow: SLATE, stripe: true }, // gap 3.20, -0.4, top 11.9
     {
       kind: 'mover',
       p: [228.6, 10.6, -0.6],
@@ -420,8 +440,9 @@ export default {
     /* Court clock: LCM(3, 1.5, 4, 2, 6) = 12.0 s.                                  */
     /* ============================================================================ */
 
-    /* BEAT 16 — THE ENGINE DOOR (CP6). */
-    { kind: 'platform', p: [242, 10.1, 0], s: [8.0, 1, 9.0], mat: 'stone', glow: SLATE }, // gap 1.00 off either shuttle — CP6, top 10.6
+    /* BEAT 16 — THE ENGINE DOOR (CP6) — a landing pad, then a 3.0 m flat jump
+       onto the helpful belt: the Engine takes no walk-ins. */
+    { kind: 'platform', p: [240.7, 10.1, 0], s: [5.4, 1, 5.0], mat: 'stone', glow: SLATE }, // gap 1.00 off either shuttle — CP6, top 10.6
     { kind: 'text', p: [239.0, 13.3, -3.8], rot: [0, -Math.PI / 2, 0], text: 'THE TEMPLE ENGINE', size: 0.44, color: GOLD },
     { kind: 'text', p: [239.0, 12.75, -3.8], rot: [0, -Math.PI / 2, 0], text: 'four things here can kill you  ·  all four glow', size: 0.22, color: DUSK },
     { kind: 'light', p: [242.0, 13.6, 0], color: MINT, intensity: 9, distance: 18 },
@@ -430,7 +451,7 @@ export default {
        is the trap), a prayer bar, a saw through a slot, a windmill. */
     { kind: 'conveyor', p: [249.4, 10.1, 0.4], s: [6.0, 1, 4.8], dir: [1, 0, 0], power: 3, mat: 'conveyor' }, // gap 0.40, flat, top 10.6 — the helpful belt
     { kind: 'rotor', p: [250.4, 11.9, 0.4], style: 'bar', arms: 2, len: 2.2, thick: 0.4, period: 3.0, phase: 0, axis: [0, 1, 0] }, // bar 1.3 over the belt — jump it as it comes round
-    { kind: 'platform', p: [257.9, 9.7, 0.4], s: [9.0, 1, 4.8], mat: 'metal', glow: SLATE }, // gap 0.10, -0.4 — the machine deck sags under its own iron, top 10.2
+    { kind: 'platform', p: [258.7, 9.7, 0.4], s: [7.4, 1, 4.4], mat: 'metal', glow: SLATE }, // gap 2.60, -0.4 — the machine deck sags under its own iron, top 10.2
     { kind: 'saw', p: [255.8, 9.1, 0.4], style: 'saw', len: 1.9, thick: 0.26, period: 1.5, phase: 0, axis: [0, 0, 1], mount: 0 }, // 0.8 m of tooth up through the flagstones
     { kind: 'rotor', p: [259.0, 15.4, 0.4], style: 'windmill', arms: 2, len: 4.4, thick: 0.4, period: 4.0, phase: 0.25, axis: [0, 0, 1] }, // lowest 10.8 — 0.6 over the deck, 0.8 clear of the crusher block
     { kind: 'speedpad', p: [261.4, 10.28, 0.4], s: [2.4, 0.16, 2.4], dir: [1, 0, 0], power: 4 }, // the launch INTO the backward belt
@@ -447,7 +468,7 @@ export default {
     /* BEAT 19 — THE DIP. A saw guards the hop off the belt; the deck drops to
        9.4 under a flat hammer disc (duck), and the only way back up is light. */
     { kind: 'saw', p: [275.8, 9.1, 0.4], style: 'saw', len: 1.9, thick: 0.26, period: 2.0, phase: 0.4, axis: [0, 0, 1], mount: 0 }, // teeth to 11.0, in the gap itself
-    { kind: 'platform', p: [278.8, 8.9, 0], s: [7.0, 1, 5.2], mat: 'stone', glow: SLATE, stripe: true }, // gap 1.40, -0.8 — the dip, top 9.4
+    { kind: 'platform', p: [278.9, 8.9, 0], s: [7.2, 1, 4.6], mat: 'stone', glow: SLATE, stripe: true }, // gap 1.40, -0.8 — the dip, top 9.4
     { kind: 'rotor', p: [280.6, 11.0, 0], style: 'hammer', arms: 1, len: 2.0, thick: 0.5, period: 4.0, phase: 0.5, axis: [0, 1, 0] }, // disc 10.75..11.25 — crouch head 10.45 clears by 0.30
     { kind: 'jumppad', p: [283.6, 9.48, 0], s: [2.8, 0.16, 2.8], power: 5.0, dir: [0, 1, 0] }, // the way up: dy 3.24 to the bloom court
 
@@ -477,13 +498,14 @@ export default {
     }, // orbit centre — near pass at z 6.4, 0.9 m off the court's NE corner
     { kind: 'deco', kindOf: 'ring', p: [300.6, 12.4, 8.4], s: [4.6, 0.12, 4.6], mat: 'emissive', tint: GOLD }, // the lit orbit track
 
-    /* BEAT 21 — OUT OF THE ENGINE: two steps down under the last blades and a
-       two-beam rack, ending short of x 319 — the White Gate's footprint
+    /* BEAT 21 — OUT OF THE ENGINE: three narrow slats down under the last
+       blades and the two-beam rack — each a real 2.6-3.0 m jump, none wider
+       than a doorstep — ending short of x 319, so the White Gate's footprint
        (x 321..412) cannot reach anything in this movement. */
-    { kind: 'platform', p: [301.8, 12.0, -0.8], s: [4.4, 1, 5.0], mat: 'panel', glow: SLATE, stripe: true }, // gap 1.20, -0.3, top 12.5
+    { kind: 'platform', p: [302.4, 12.0, -0.8], s: [2.8, 1, 4.0], mat: 'panel', glow: SLATE, stripe: true }, // gap 2.60, -0.3, top 12.5
     { kind: 'laser', a: [301.8, 13.05, -3.3], b: [301.8, 13.05, 1.7], radius: 0.12, color: HOT, cycle: { on: 1.6, off: 1.4, warn: 0.4, phase: 0.2 } }, // 0.55 over the step — jump
     { kind: 'rotor', p: [305.2, 17.1, -0.8], style: 'windmill', arms: 3, len: 4.2, thick: 0.4, period: 4.0, phase: 0, axis: [0, 0, 1] }, // lowest 12.7 — 0.2 over the step
-    { kind: 'platform', p: [308.6, 11.6, 0.8], s: [4.0, 1, 4.6], mat: 'panel', glow: SLATE, stripe: true }, // gap 2.40, -0.4, top 12.1
+    { kind: 'platform', p: [308.4, 11.6, 0.8], s: [3.2, 1, 4.0], mat: 'panel', glow: SLATE, stripe: true }, // gap 3.00, -0.4, top 12.1
     {
       kind: 'lasergrid',
       a: [308.6, 13.85, -1.5],
@@ -496,7 +518,7 @@ export default {
       color: HOT,
       cycle: { on: 1.5, off: 1.5, warn: 0.4, phase: 0.5 },
     },
-    { kind: 'platform', p: [313.6, 11.2, 0], s: [4.6, 1, 5.4], mat: 'stone', glow: SLATE, stripe: true }, // gap 1.00, -0.4, top 11.7 — ends x 315.9, 5.1 short of the footprint
+    { kind: 'platform', p: [314.4, 11.2, 0], s: [3.6, 1, 4.4], mat: 'stone', glow: SLATE, stripe: true }, // gap 2.60, -0.4, top 11.7 — ends x 316.2, 4.8 short of the footprint
     { kind: 'crusher', p: [313.6, 15.0, 0], s: [3.0, 1.2, 4.6], axis: [0, -1, 0], travel: 2.6, period: 4.0, phase: 0.25, dwell: 0.5, mat: 'metal' }, // the Engine's parting stamp — strikes to 11.8, 0.1 over the step
 
     /* ============================================================================ */
@@ -506,15 +528,18 @@ export default {
     /* spectrum one band at a time, home through green-adjacent 3 — dwell 1.2,      */
     /* travel 0.8, phases stepping 1.4/16 so each gate's window opens 0.6 s after   */
     /* its predecessor's (overlap 0.6 >= 0.4). Worst hop 3 slots = 5.00 m / 0.8 s   */
-    /* = 6.25 m/s. Every step's front half is staging. (Gate flank ledges were   */
+    /* = 6.25 m/s. Every step's front 1.8 m is staging; since the difficulty     */
+    /* pass the steps are 3.9-4.0 m slivers a 2.6-3.2 m rising jump apart, so    */
+    /* the climb is jumped, never walked. (Gate flank ledges were                */
     /* removed on the owner's call 2026-09-16 — the sevenstair is climbed THROUGH */
     /* its windows, or not at all.)                                                */
     /* ledge outside the lattice (z +/-5.8), sides alternating. Blooms on the       */
     /* landing and summit run period 8 — court superperiod exactly 16 s.            */
     /* ============================================================================ */
 
-    /* BEAT 22 — THE STAIR BASE (CP9) + the second metronome tower. */
-    { kind: 'platform', p: [321, 11.0, 0], s: [8.0, 1, 10.0], mat: 'stone', glow: SLATE }, // gap 1.10, -0.2 — CP9, top 11.5
+    /* BEAT 22 — THE STAIR BASE (CP9) + the second metronome tower. A ledge,
+       not a court: the stair starts with a 3.2 m rising jump off it. */
+    { kind: 'platform', p: [321.1, 11.0, 0], s: [4.6, 1, 6.0], mat: 'stone', glow: SLATE }, // gap 2.60, -0.2 — CP9, top 11.5
     { kind: 'text', p: [318.0, 14.6, -4.2], rot: [0, -Math.PI / 2, 0], text: 'THE SEVEN STAIR', size: 0.5, color: GOLD },
     { kind: 'text', p: [318.0, 14.0, -4.2], rot: [0, -Math.PI / 2, 0], text: 'one band a step  ·  the window climbs with you', size: 0.24, color: DUSK },
     { kind: 'deco', kindOf: 'post', p: [319.6, 13.7, 4.4], s: [0.5, 3.4, 0.5], mat: 'obsidian' },
@@ -528,39 +553,42 @@ export default {
     { kind: 'light', p: [321.0, 14.8, 0], color: MINT, intensity: 10, distance: 20 },
 
     /* BEAT 23 — STEPS ONE TO THREE (RED, ORANGE, YELLOW). Rises 1.4/1.35/1.25
-       over gaps 0.1-1.2; the dwell chain runs g0 -> g1 -> g2 at 0.6 s spacing
-       for the line that rides it. Flank ledges: right, left, right. */
-    { kind: 'platform', p: [328.4, 12.4, 0], s: [6.6, 1, 9.4], mat: 'stone', glow: SLATE, stripe: true }, // step 1, top 12.9, gap 0.10
+       over REAL gaps now — 3.2/2.6/2.6 m, each step a 3.9-4.0 m sliver with
+       exactly 1.8 m of staging before its plane — so every handoff in the
+       dwell chain (g0 -> g1 -> g2 at 0.6 s spacing) is bought with a rising
+       jump, not a stroll. */
+    { kind: 'platform', p: [328.55, 12.4, 0], s: [3.9, 1, 8.7], mat: 'stone', glow: SLATE, stripe: true }, // step 1, top 12.9, gap 3.20 +1.4
     { kind: 'prismgate', p: [328.4, 15.15, 0], s: [0.4, 4.5, 11.6], seq: [0, 1, 2, 3, 4, 5, 6, 3], dwell: 1.1, travel: 0.9, period: 16, phase: 0, window: { w: 1.6, h: 2.6 }, relay: { group: 'sevenstair', index: 0 } },
-    { kind: 'platform', p: [334.9, 13.75, 0.2], s: [6.2, 1, 9.0], mat: 'stone', glow: SLATE, stripe: true }, // step 2, top 14.25, gap 0.10
+    { kind: 'platform', p: [335.05, 13.75, 0.2], s: [3.9, 1, 8.7], mat: 'stone', glow: SLATE, stripe: true }, // step 2, top 14.25, gap 2.60 +1.35
     { kind: 'prismgate', p: [334.9, 16.5, 0.2], s: [0.4, 4.5, 11.6], seq: [0, 1, 2, 3, 4, 5, 6, 3], dwell: 1.1, travel: 0.9, period: 16, phase: 1.4 / 16, window: { w: 1.6, h: 2.6 }, relay: { group: 'sevenstair', index: 1 } },
-    { kind: 'platform', p: [341.4, 15.0, -0.2], s: [6.0, 1, 9.6], mat: 'stone', glow: SLATE, stripe: true }, // step 3, top 15.5, gap 0.40
+    { kind: 'platform', p: [341.6, 15.0, -0.2], s: [4.0, 1, 8.7], mat: 'stone', glow: SLATE, stripe: true }, // step 3, top 15.5, gap 2.60 +1.25
     { kind: 'prismgate', p: [341.4, 17.75, -0.2], s: [0.4, 4.5, 11.6], seq: [0, 1, 2, 3, 4, 5, 6, 3], dwell: 1.1, travel: 0.9, period: 16, phase: 2.8 / 16, window: { w: 1.6, h: 2.6 }, relay: { group: 'sevenstair', index: 2 } },
 
     /* BEAT 24 — THE MID-RELAY LANDING (CP10) + the HIGH ring that guards it.
        Indigo, rmax 3.4, period 8 (half the relay: the court repeats every
        16 s exactly). Circle x 349..355.8 / z -2..4.8, inside the landing;
        CP10 at 5.37 m >= 3.4 + 1.7. COIN 3 hangs UNDER the south rail. */
-    { kind: 'platform', p: [350.9, 16.1, 0], s: [11.0, 1, 10.4], mat: 'stone', glow: SLATE }, // THE LANDING, top 16.6, gap 1.00
+    { kind: 'platform', p: [351.95, 16.1, 0.1], s: [11.1, 1, 9.4], mat: 'stone', glow: SLATE }, // THE LANDING, top 16.6, gap 2.80 +1.1
     { kind: 'bloom', p: [352.4, 16.6, 1.4], rmax: 3.4, band: 5, period: 8.0, ring: 'high' }, // ON the landing top 16.6 (band 1.25..2.75 over deck) — duck it mid-relay, life 1.133 s
     { kind: 'text', p: [347.2, 19.4, -4.4], rot: [0, -Math.PI / 2, 0], text: 'HALF THE CLIMB  ·  ALL THE CLOCK', size: 0.30, color: GOLD },
-    { kind: 'platform', p: [348.2, 14.65, -7.2], s: [3.0, 0.5, 2.4], mat: 'panel', glow: SLATE, stripe: true }, // coin stair, top 14.9 — walk off the south rail
-    { kind: 'platform', p: [352.8, 13.65, -7.6], s: [3.0, 0.5, 2.4], mat: 'panel', glow: SLATE, stripe: true }, // COIN 3 ledge, top 13.9 — the relay thunders overhead
+    { kind: 'platform', p: [347.9, 14.65, -7.2], s: [2.6, 0.5, 2.2], mat: 'panel', glow: SLATE, stripe: true }, // coin stair, top 14.9 — walk off the south rail
+    { kind: 'platform', p: [353.6, 13.65, -7.6], s: [2.6, 0.5, 2.2], mat: 'panel', glow: SLATE, stripe: true }, // COIN 3 ledge, top 13.9, a 3.1 m falling jump on — the relay thunders overhead
     { kind: 'light', p: [350.9, 19.6, 0], color: 0xfff0d0, intensity: 8, distance: 22 },
 
     /* BEAT 25 — THE SPRINT AND STEPS FOUR TO SEVEN (GREEN, BLUE, INDIGO,
-       VIOLET). The landing is an 11 m runway; the 5.7 m gap to step 4 is the
-       stage's second required sprint, FLAT (+0.2). Then the last four gates,
-       cp11 on the 10 m violet runway 5.8 m before gate 6's plane — the race
-       is pinned there and the White Gate arms 8 s later. */
-    { kind: 'platform', p: [365.2, 16.3, 0.4], s: [6.0, 1, 9.2], mat: 'stone', glow: SLATE, stripe: true }, // step 4, top 16.8 — SPRINT gap 5.70 flat
+       VIOLET). The landing is an 11.1 m runway; the 5.9 m gap to step 4 is
+       the stage's second required sprint, near-FLAT (+0.2). Then the last
+       four gates on 3.9 m slivers 2.8 m apart, cp11 on the 8.8 m violet
+       runway 5.8 m before gate 6's plane — the race is pinned there and the
+       White Gate arms 8 s later. */
+    { kind: 'platform', p: [365.35, 16.3, 0.4], s: [3.9, 1, 8.7], mat: 'stone', glow: SLATE, stripe: true }, // step 4, top 16.8 — SPRINT gap 5.90 flat
     { kind: 'prismgate', p: [365.2, 19.05, 0.4], s: [0.4, 4.5, 11.6], seq: [0, 1, 2, 3, 4, 5, 6, 3], dwell: 1.1, travel: 0.9, period: 16, phase: 4.2 / 16, window: { w: 1.6, h: 2.6 }, relay: { group: 'sevenstair', index: 3 } },
-    { kind: 'platform', p: [371.9, 17.6, -0.4], s: [5.8, 1, 9.8], mat: 'stone', glow: SLATE, stripe: true }, // step 5, top 18.1, gap 0.80
+    { kind: 'platform', p: [372.05, 17.6, -0.4], s: [3.9, 1, 8.7], mat: 'stone', glow: SLATE, stripe: true }, // step 5, top 18.1, gap 2.80 +1.3
     { kind: 'prismgate', p: [371.9, 20.35, -0.4], s: [0.4, 4.5, 11.6], seq: [0, 1, 2, 3, 4, 5, 6, 3], dwell: 1.1, travel: 0.9, period: 16, phase: 5.6 / 16, window: { w: 1.6, h: 2.6 }, relay: { group: 'sevenstair', index: 4 } },
-    { kind: 'platform', p: [380.6, 18.9, 0], s: [10.0, 1, 9.6], mat: 'stone', glow: SLATE }, // step 6 — the CP11 runway, top 19.4, gap 0.80
+    { kind: 'platform', p: [381.2, 18.9, 0], s: [8.8, 1, 8.7], mat: 'stone', glow: SLATE }, // step 6 — the CP11 runway, top 19.4, gap 2.80 +1.3
     { kind: 'prismgate', p: [383.8, 21.65, 0], s: [0.4, 4.5, 11.6], seq: [0, 1, 2, 3, 4, 5, 6, 3], dwell: 1.1, travel: 0.9, period: 16, phase: 7.0 / 16, window: { w: 1.6, h: 2.6 }, relay: { group: 'sevenstair', index: 5 } },
     { kind: 'text', p: [377.0, 22.8, -4.2], rot: [0, -Math.PI / 2, 0], text: 'THE LIGHT CLIMBS — SO DO YOU', size: 0.36, color: GOLD },
-    { kind: 'platform', p: [388.9, 20.2, 0.2], s: [6.4, 1, 9.0], mat: 'stone', glow: SLATE, stripe: true }, // step 7, top 20.7, gap 0.30
+    { kind: 'platform', p: [389.05, 20.2, 0.2], s: [3.9, 1, 8.7], mat: 'stone', glow: SLATE, stripe: true }, // step 7, top 20.7, gap 1.50
     { kind: 'prismgate', p: [388.9, 22.95, 0.2], s: [0.4, 4.5, 11.6], seq: [0, 1, 2, 3, 4, 5, 6, 3], dwell: 1.1, travel: 0.9, period: 16, phase: 8.4 / 16, window: { w: 1.6, h: 2.6 }, relay: { group: 'sevenstair', index: 6 } },
 
     /* ============================================================================ */
@@ -593,15 +621,16 @@ export default {
     /* BEAT 26 — THE SUMMIT. The last HIGH ring (violet — the slowest, deepest
        band) guards the approach: crouch under it with the light rising at
        your back. Circle x 392.5..399.7 / z -3.6..3.6, inside the court. */
-    { kind: 'platform', p: [396.1, 21.5, 0], s: [7.6, 1, 10.0], mat: 'stone', glow: SLATE }, // THE SUMMIT, top 22.0, gap 0.10
+    { kind: 'platform', p: [396.1, 21.5, 0], s: [7.2, 1, 7.2], mat: 'stone', glow: SLATE }, // THE SUMMIT, top 22.0, gap 1.50 — deck = the violet ring's circle exactly
     { kind: 'bloom', p: [396.1, 22.0, 0], rmax: 3.6, band: 6, period: 8.0, phase: 0.5, ring: 'high' }, // ON the summit top 22.0 (band 1.25..2.75 over deck) — life 1.2 s, duck the deepest colour
     { kind: 'text', p: [393.2, 25.0, -4.4], rot: [0, -Math.PI / 2, 0], text: 'WHITE IS ALL SEVEN', size: 0.36, color: GOLD },
 
-    /* BEAT 27 — THE WHITE GATE ITSELF. One step up, one last light to jump —
-       and the door is just a door: IVORY frame, HOT thread, dark smoke body.
-       Step through white into the violet finish. */
-    { kind: 'platform', p: [403.3, 22.8, 0], s: [6.6, 1, 9.0], mat: 'stone', glow: SLATE, stripe: true }, // THE WHITE GATE floor, top 23.3, gap 0.10, +1.3
-    { kind: 'laser', a: [401.2, 23.85, -4.0], b: [401.2, 23.85, 4.4], radius: 0.12, color: HOT, cycle: { on: 1.6, off: 1.4, warn: 0.4, phase: 0 } }, // 0.55 over the floor — the first light you ever jumped, one last time
+    /* BEAT 27 — THE WHITE GATE ITSELF. A 2.6 m rising leap off the summit,
+       THROUGH the last light's blink mid-gap — and the door is just a door:
+       IVORY frame, HOT thread, dark smoke body. Step through white into the
+       violet finish. */
+    { kind: 'platform', p: [404.6, 22.8, 0], s: [4.6, 1, 6.4], mat: 'stone', glow: SLATE, stripe: true }, // THE WHITE GATE floor, top 23.3, gap 2.60, +1.3
+    { kind: 'laser', a: [401.2, 23.85, -4.0], b: [401.2, 23.85, 4.4], radius: 0.12, color: HOT, cycle: { on: 1.6, off: 1.4, warn: 0.4, phase: 0 } }, // 0.55 over the floor's plane, hanging in the gap — the first light you ever jumped, one last time, jumped in flight
     { kind: 'deco', kindOf: 'screen', p: [404.6, 26.4, -5.6], s: [0.5, 6.0, 2.0], mat: 'obsidian', tint: SMOKE }, // dark volumetric body, south rib
     { kind: 'deco', kindOf: 'screen', p: [404.6, 26.4, 5.6], s: [0.5, 6.0, 2.0], mat: 'obsidian', tint: SMOKE }, // north rib
     { kind: 'deco', kindOf: 'arch', p: [404.6, 28.6, 0], s: [1.6, 1.2, 12.0], mat: 'obsidian', tint: SMOKE }, // the smoke lintel
@@ -610,7 +639,7 @@ export default {
     { kind: 'text', p: [400.6, 25.6, 0], rot: [0, -Math.PI / 2, 0], text: 'THE WHITE GATE', size: 0.5, color: IVORY },
 
     /* BEAT 28 — FINISH. Violet 0xd9b6ff, used for nothing else all game. */
-    { kind: 'platform', p: [409.9, 24.0, 0], s: [6.0, 1, 9.4], mat: 'obsidian', glow: FINISH, stripe: true }, // gap 0.30, +1.2 — FINISH, top 24.5
+    { kind: 'platform', p: [411.6, 24.0, 0], s: [4.2, 1, 5.6], mat: 'obsidian', glow: FINISH, stripe: true }, // gap 2.60, +1.2 — FINISH, top 24.5: the last jump of the game is a real one
     { kind: 'deco', kindOf: 'pillar', p: [409.9, 27.4, 4.9], s: [1.5, 6.0, 1.5], mat: 'obsidian' },
     { kind: 'deco', kindOf: 'pillar', p: [409.9, 27.4, -4.9], s: [1.5, 6.0, 1.5], mat: 'obsidian' },
     { kind: 'deco', kindOf: 'beacon', p: [413.2, 26.9, 0], s: [0.7, 3.2, 0.7], mat: 'emissive', tint: FINISH },
