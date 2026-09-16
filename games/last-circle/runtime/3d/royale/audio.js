@@ -87,6 +87,41 @@ const SFX = {
   ui_err:        ["ui_error_001"],
 };
 const sfxBuf = {};       // filename -> AudioBuffer
+const sfxSlice = {};     // filename -> {off, dur} — see oneShotSlice()
+
+/**
+ * Find the ONE report inside a gunshot file.
+ *
+ * Three of the thirteen shipped gunshot samples (shot_ar_0, shot_smg_1,
+ * shot_smg_2) are not single shots at all: they are three-round BURSTS with
+ * ~250-290ms of leading silence, and the 2nd and 3rd reports sit at 79-93% of
+ * the file's peak. Played as a one-shot cue, one trigger pull fired three
+ * reports — which is what "the echo after firing is louder than the shot"
+ * actually was. There was never an echo; there were extra gunshots in the asset.
+ *
+ * Fixing the three files by hand would leave the next bad file to rediscover
+ * this, so the trim is computed from the audio: start at the real onset, end
+ * before the next transient. A clean single-shot file is unaffected (no second
+ * transient is found, so it plays to its natural end).
+ */
+function oneShotSlice(buf) {
+  try {
+    const d = buf.getChannelData(0), sr = buf.sampleRate, n = d.length;
+    let peak = 0;
+    for (let i = 0; i < n; i++) { const v = Math.abs(d[i]); if (v > peak) peak = v; }
+    if (peak <= 0) return { off: 0, dur: buf.duration };
+    let on = 0;
+    for (let i = 0; i < n; i++) { if (Math.abs(d[i]) > peak * 0.05) { on = i; break; } }
+    // Look for a SECOND transient at least 40ms after the first. 40ms is shorter
+    // than any real weapon's cycle here (the SMG's 720rpm is 83ms), so a genuine
+    // follow-up round is caught while the first shot's own decay is not.
+    const gap = Math.floor(sr * 0.04);
+    let next = -1;
+    for (let i = on + gap; i < n; i++) { if (Math.abs(d[i]) > peak * 0.35) { next = i; break; } }
+    const endI = next > 0 ? Math.max(on + gap, next - Math.floor(sr * 0.005)) : n;
+    return { off: on / sr, dur: (endI - on) / sr };
+  } catch (e) { return { off: 0, dur: buf.duration }; }
+}
 let sfxReady = false;
 
 /** Decode the pack once, after the context exists. Failures are silent by
@@ -101,6 +136,7 @@ async function loadSfx(W) {
       const r = await fetch(W.assetBase + "assets/audio/sfx/" + n + ".ogg");
       if (!r.ok) return;
       sfxBuf[n] = await ctx.decodeAudioData(await r.arrayBuffer());
+      if (n.indexOf("shot_") === 0) sfxSlice[n] = oneShotSlice(sfxBuf[n]);
     } catch (e) { /* fall back to synth */ }
   }));
 }
@@ -141,7 +177,17 @@ function sample(key, pos, gain, maxD, rate) {
   } else {
     src.connect(g); g.connect(out);
   }
-  src.start();
+  const sl = sfxSlice[pick];
+  if (sl && sl.dur > 0.01) {
+    // Taper the last 6ms: the cut lands in the first shot's decay, not at a zero
+    // crossing, so an abrupt stop would add a click of its own.
+    const t0 = ctx.currentTime, end = t0 + sl.dur / src.playbackRate.value;
+    g.gain.setValueAtTime(g.gain.value, Math.max(t0, end - 0.006));
+    g.gain.linearRampToValueAtTime(0.0001, end);
+    src.start(t0, sl.off, sl.dur);
+  } else {
+    src.start();
+  }
   return true;
 }
 
