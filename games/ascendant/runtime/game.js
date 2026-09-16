@@ -76,6 +76,16 @@ const PORTAL_ENTER_DWELL = 0.28;          // seconds inside ENTER_R to trigger
 const HUB_ID = 'hub';
 const RESUME_PROMPT = 'CLICK TO RESUME';
 const RESUME_SUB = 'pointer released';
+/* Shown INSTEAD of CLICK TO RESUME when the browser has refused pointer lock
+ * twice and it has never once succeeded this session: telling the player to
+ * keep clicking would be a lie — the refusal is environmental (an embedding
+ * page without iframe allow-pointer-lock/sandbox allow-pointer-lock, an
+ * extension, a browser setting), and only a reload / different page can fix
+ * it. First hit for real on forgeflowgames.com, whose game iframe lacked both
+ * attributes: the game sat on CLICK TO RESUME with a working-looking, dead
+ * mouse and no clue for the player (owner: "it should be clear"). */
+const LOCKBLOCK_PROMPT = 'MOUSE CAPTURE BLOCKED';
+const LOCKBLOCK_SUB = 'the browser refused the pointer — reload the page';
 const ACTION_COOLDOWN = 380;              // ms — de-dupes key + event paths
 
 /* Dev free-fly, anchored to the real sprint speed so it stays proportionate
@@ -563,6 +573,14 @@ export class Game {
       if (this.__dev) return;
       if (this._isLive() && this._deathT < 0) this.pause('unlock');
     });
+    /* Blocked-lock legibility (see LOCKBLOCK_PROMPT). 'lockerror' is the DOM
+       pointerlockerror event only — a genuine browser refusal, not the
+       unadjustedMovement fallback (that path retries in-line without raising
+       it). Any real acquisition resets the count, so a transient refusal
+       (ESC cooldown) never sticks: lockCount stays 0 only when lock has NEVER
+       worked, which is the one case the player cannot fix by clicking. */
+    bindEvent(inp, 'lockerror', () => { this._lockErrN = (this._lockErrN | 0) + 1; });
+    bindEvent(inp, 'lock', () => { this._lockErrN = 0; });
   }
 
   _bindWindow() {
@@ -2176,8 +2194,13 @@ export class Game {
     if (this._portalNear !== -1) return;
     const inp = this.input;
     const wantResume = !!inp && !inp.locked && !inp.hasTouch && this._deathT < 0 && this._introT < 0;
-    if (wantResume) this._setPrompt(RESUME_PROMPT, RESUME_SUB, true);
-    else if (this._pT === RESUME_PROMPT) this._setPrompt('', '');
+    if (wantResume) {
+      const blocked = (this._lockErrN | 0) >= 2 && inp.lockCount === 0;
+      if (blocked) this._setPrompt(LOCKBLOCK_PROMPT, LOCKBLOCK_SUB, true);
+      else this._setPrompt(RESUME_PROMPT, RESUME_SUB, true);
+    } else if (this._pT === RESUME_PROMPT || this._pT === LOCKBLOCK_PROMPT) {
+      this._setPrompt('', '');
+    }
   }
 
   _showCont(text) {

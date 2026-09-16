@@ -22,6 +22,21 @@ export default function GamePlayer({ game }: Props) {
   // 2026-07-10 — Portal-level fullscreen button REMOVED (owner): every game's
   // own bottom-right controls bar (game_controls.js) is the single fullscreen
   // entry point; the iframe carries allow="fullscreen" so it works from inside.
+  // 2026-09-16 — sandbox= REMOVED so mouse-look games can lock the cursor.
+  // Measured on Chrome 152 with real clicks (scratch lockprobe, three legs +
+  // controls): a cross-origin iframe with ANY sandbox attribute cannot
+  // pointer-lock — without allow-pointer-lock Chrome logs "Blocked pointer
+  // lock on a sandboxed iframe", and WITH it the request still dies, silently,
+  // as "WrongDocumentError: The root document of this element is not valid
+  // for pointer lock". The same frame with NO sandbox locks on the first
+  // click (the itch.io/CrazyGames-normal shape). Same-origin frames lock
+  // either way, which is why local dev never showed it. So every mouse-look
+  // game (ascendant, blackridge, last-circle, neon-veil, ember-sanctum...)
+  // sat on a dead "CLICK TO RESUME" on the portal while its CDN URL worked.
+  // The games are first-party content from our own CDN worker, and the
+  // sandbox granted allow-scripts + allow-same-origin + allow-popups anyway;
+  // keep allow= (pointer-lock there is spec-correct for other engines —
+  // Chrome 152 just warns "Unrecognized feature" and ignores it).
 
   // Listen for PostMessage from game iframe (ad triggers, analytics)
   useEffect(() => {
@@ -124,10 +139,9 @@ export default function GamePlayer({ game }: Props) {
             // Without this, players who'd already loaded an old version of
             // the game would keep seeing the pre-deploy build until they
             // cleared their browser cache.
-            src={`${game.game_url}${game.game_url.includes("?") ? "&" : "?"}v=${encodeURIComponent(game.build_version || game.updated_at || "1")}-${mountNonce.current}`}
+            src={`${game.game_url}${game.game_url.includes("?") ? "&" : "?"}v=${encodeURIComponent(game.build_version || game.updated_at || "1")}-${mountNonce.current}${typeof window !== "undefined" && new URLSearchParams(window.location.search).get("room") ? `&room=${encodeURIComponent(new URLSearchParams(window.location.search).get("room") || "")}` : ""}`}
             className="w-full h-full border-0"
-            allow="autoplay; fullscreen; gamepad"
-            sandbox="allow-scripts allow-same-origin allow-popups"
+            allow="autoplay; fullscreen; gamepad; pointer-lock"
             onLoad={() => setIsLoading(false)}
             title={game.title}
           />
