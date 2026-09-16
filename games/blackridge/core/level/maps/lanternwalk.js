@@ -571,6 +571,59 @@ export function buildLayout(seed = 1) {
   add("bnd_truck", "truck", -5, 12.7, 1.5708, 2.5, 7, 3, "metal", "metal_thin");
   add("bnd_jersey_1", "barrier", -9.5, -29.5, 0.08, 2.0, 0.6, 1.1, "concrete", "hard");
   add("bnd_jersey_2", "barrier", -3.5, -29.6, -0.06, 2.0, 0.6, 1.1, "concrete", "hard");
+  // ---- gen-2c: THE COVER PASS (AAA population, owner 2026-09-16) ----------
+  // This arena was the best populated of the three after the expansion (6.63
+  // objects/100 m2) but still had ten 10 m tiles measuring ZERO cover, so this
+  // is a TOP-UP, not a rebuild — the file's own gen-2b note that tall breaks
+  // are rationed to the ones capping a 40 m+ run is respected: exactly two
+  // full-height pieces below, both lane cuts.
+  //
+  // Heights follow Treyarch's published standards (1 CoD unit = 1 inch):
+  // crouch 0.81-0.91 m, chest-high 1.22 m, standing EYE level 1.63 m. Every
+  // other piece here is under 1.63 m, so it gives a body to break contact
+  // behind without touching the ray profile.
+  //
+  // NOTE: lanternwalk is NOT rotationally symmetric (it is a boolean carve of
+  // an asymmetric city), so there is no mirror helper and no mirrored pair.
+  // Each piece is placed with a hand-matched COUNTERPART on the opposing side
+  // so neither team gains an angle the other cannot answer. Every coordinate
+  // below was collision-checked against the built colliders before landing.
+  add("aw_skid_n", "container", -51.5, -25.5, 0, 3.5, 2.4, 1.45, "metal", "metal_thin");
+  add("bv_skid_s", "container", 34.5, 34.0, 0, 3.5, 2.4, 1.45, "metal", "metal_thin");
+  add("aw_drums_n", "fuel_drums", -56.5, -25, 0, 1.8, 1.6, 0.95, "metal", "metal_thin");
+  add("bv_drums_s", "fuel_drums", 40.5, 33.0, 0, 1.8, 1.6, 0.95, "metal", "metal_thin");
+  add("aw_dump_m", "dumpster", -56.5, -11.2, 0, 1.8, 1.2, 1.25, "metal", "metal_thin");
+  add("bv_dump_m", "dumpster", 37.0, 1.0, 0, 1.8, 1.2, 1.25, "metal", "metal_thin");
+  add("aw_pallet_m", "pallet", -53, -11.2, 0, 1.4, 1.2, 1.1, "wood", "soft");
+  add("bv_pallet_m", "pallet", 34.5, 4.0, 0, 1.4, 1.2, 1.1, "wood", "soft");
+  add("aw_cont_s", "container", -50, -19.5, 0, 4, 2.6, 2.45, "metal", "metal_thin");
+  add("bv_cont_n", "container", 30.5, 21.5, 0, 4, 2.6, 2.45, "metal", "metal_thin");
+  add("aw_dump_s", "dumpster", -46.5, 9, 0, 1.8, 1.2, 1.25, "metal", "metal_thin");
+  add("bl_dump_e", "dumpster", 43.5, -21.5, 0, 1.8, 1.2, 1.25, "metal", "metal_thin");
+  add("aw_crate_s", "crate", -44, 12, 0, 1.8, 1.8, 1.2, "wood", "soft");
+  add("bv_crate_k", "crate", 30.0, 26.5, 0, 1.8, 1.8, 1.2, "wood", "soft");
+  add("aw_crate_p", "crate", -46.5, 38.5, 0, 1.8, 1.8, 1.2, "wood", "soft");
+  add("bl_crate_p", "crate", 44.0, 34.0, 0, 1.8, 1.8, 1.2, "wood", "soft");
+  add("aw_dump_p", "dumpster", -43, 40.5, 0, 1.8, 1.2, 1.25, "metal", "metal_thin");
+  add("bl_dump_p", "dumpster", 44.5, 29.0, 0, 1.8, 1.2, 1.25, "metal", "metal_thin");
+  add("sp_cont_h", "container", -27, 24.5, 0, 2.4, 5, 1.45, "metal", "metal_thin");
+  add("bv_crate_s", "container", 40.5, 21.0, 0, 2.4, 5, 1.45, "metal", "metal_thin");
+  add("sp_crate_h", "crate", -21.5, 25.5, 0, 1.8, 1.8, 1.2, "wood", "soft");
+  add("ge_crate_s", "crate", 25.0, 6.0, 0, 1.8, 1.8, 1.2, "wood", "soft");
+  add("rp_pallet_e", "pallet", -7.5, 21.5, 0, 1.4, 1.2, 1.1, "wood", "soft");
+  add("gal_pallet_m", "pallet", 13.0, -9.0, 0, 1.4, 1.2, 1.1, "wood", "soft");
+  add("rp_crate_q", "crate", -9, 39, 0, 1.8, 1.8, 1.2, "wood", "soft");
+  add("cye_crate", "crate", 44.0, -38.0, 0, 1.8, 1.8, 1.2, "wood", "soft");
+  add("rp_drums_q", "fuel_drums", -12.5, 41, 0, 1.8, 1.6, 0.95, "metal", "metal_thin");
+  add("cye_drums", "fuel_drums", 42.5, -41.0, 0, 1.8, 1.6, 0.95, "metal", "metal_thin");
+  add("rp_pallet_q", "pallet", -3, 38.8, 0, 1.4, 1.2, 1.1, "wood", "soft");
+  add("bl_pallet_e", "pallet", 44.5, 14.0, 0, 1.4, 1.2, 1.1, "wood", "soft");
+  add("rp_drums_q2", "fuel_drums", 1, 38.8, 0, 1.8, 1.6, 0.95, "metal", "metal_thin");
+  add("bl_drums_e", "fuel_drums", 43.5, -13.5, 0, 1.8, 1.6, 0.95, "metal", "metal_thin");
+  add("pk_crate_c1", "crate", -2, 4, 0, 1.8, 1.8, 1.2, "wood", "soft");
+  add("pk_crate_c2", "crate", -10.0, -6.0, 0, 1.8, 1.8, 1.2, "wood", "soft");
+  add("pk_plant_c1", "planter", -7.5, 6.5, 0, 2, 0.8, 0.9, "concrete", "hard");
+  add("pk_plant_c2", "planter", -4.5, -8.5, 0, 2, 0.8, 0.9, "concrete", "hard");
 
   // ---- nodes (the 17-key arena set — PVP_BUILD_PLAN Part 3.10 i / W4 row)
   const NODES = {
@@ -888,7 +941,14 @@ export const ARENA_SPEC = {
     navSeed: [-5, 0],
     mid: [-5, -2],
     balconyAreaM2: 250,
-    tdmHomeWest: ["SC_LANTERN", "SC_ARCADE", "SC_WEST"],
+    // THREE west clusters against TWO east was a real fairness bug, not a
+    // measurement one: 19 tdm points vs 13, and the west set carried SC_WEST
+    // whose centroid (-44.4,-12.3) is the farthest spawn ground on the map.
+    // That put the west team 34.2 m of path from the centre against the east
+    // team's 31.0 m — west ran ~10% further to every opening fight, every
+    // round. Dropping SC_WEST gives 13 points a side and two clusters a side.
+    // SC_WEST is still live for FFA and CTF; it is only no longer a TDM home.
+    tdmHomeWest: ["SC_LANTERN", "SC_ARCADE"],
     tdmHomeEast: ["SC_MARKET", "SC_GALLERY"],
   },
 };

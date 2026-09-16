@@ -36,7 +36,17 @@ import { mulberry32 } from "../rng.js";
 export const SCORE_WEIGHTS = {
   team: {
     safety: 40, safetySatM: 55,        // 40 * min(1, dNearestEnemy/55)
-    friendly: 22, friendlySatM: 35,    // 22 * (1 - min(1, dNearestFriendly/35))
+    friendly: 22, friendlySatM: 35,    // cohesion reward, peaks at friendlyMinM
+    // COHESION NEEDS A FLOOR. The friendly term used to be pure proximity —
+    // 22 * (1 - d/35), i.e. MAXIMAL at d = 0 — so with spawn points only 3-6 m
+    // apart inside a cluster, the highest-scoring point for the 5th player on a
+    // team was the one standing on top of the 4th. Measured nearest-neighbour
+    // separation at spawn: tdm 4.5-6.0 m and ctf 4.1-5.5 m on ALL THREE arenas
+    // (ffa was fine at 10-19 m, because ffa safety is crowd repulsion). Squad
+    // cohesion is correct AAA behaviour; materialising inside a team-mate is
+    // not. Below friendlyMinM the term is a PENALTY, above it the old reward.
+    friendlyMinM: 9,                   // crowding radius
+    friendlyCrowd: 34,                 // penalty at zero separation
     influence: 18,                     // signed grid, spawner's team positive
     modeBias: 14,                      // mode.spawnBias(m, actor, p) 0..1
     cover: 10,
@@ -399,7 +409,12 @@ export function makeSpawns(arena, opts = {}) {
     for (const e of enemies) { const ep = mPosOf(m, e); if (ep) { const d = distH(ep, p.pos); if (d < dE) dE = d; } }
     for (const f of friends) { const fp = mPosOf(m, f); if (fp) { const d = distH(fp, p.pos); if (d < dF) dF = d; } }
     const safety = W.safety * Math.min(1, (dE === Infinity ? W.safetySatM : dE) / W.safetySatM);
-    const friendly = dF === Infinity ? 0 : W.friendly * (1 - Math.min(1, dF / W.friendlySatM));
+    // attract at range, repel up close (see SCORE_WEIGHTS.team.friendlyMinM)
+    const fMin = W.friendlyMinM || 0;
+    const friendly = dF === Infinity ? 0
+      : dF < fMin
+        ? -(W.friendlyCrowd || 0) * (1 - dF / Math.max(1e-3, fMin))
+        : W.friendly * (1 - Math.min(1, (dF - fMin) / Math.max(1e-3, W.friendlySatM - fMin)));
     const bias = m.mode && m.mode.spawnBias ? W.modeBias * (m.mode.spawnBias(m, actor, p) || 0) : 0;
     return safety + friendly
       + W.influence * gridTeam.at(p.pos, actor.team)

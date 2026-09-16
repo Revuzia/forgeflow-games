@@ -711,6 +711,67 @@ export function buildLayout(seed = 1) {
   // scaffold's open frame ("solid ray 'pole' MISSED"), and rightly — a
   // sightline must be stopped by something the player can SEE stopping it.
   pPair("yd_st3", "yd_st4", ["guard_hut", "guard_hut"], 12, 28, 0, 2.0, 2.0, 2.6, "metal", "metal_thin");
+  // ---- gen-2c: THE COVER PASS (AAA population, owner 2026-09-16) ----------
+  // The gen-2 expansion doubled this arena's floor (2733 -> 6235 m2) but added
+  // only FOUR props, so cover density fell 2.85 -> 1.32 objects/100 m2 and
+  // whole 90 m2 tiles measured ZERO cover. Bigger, but emptier: the owner's
+  // 'populated and extended, not stretched' note is exactly this.
+  //
+  // Cadence and heights follow Treyarch's own published mapping standards
+  // (1 CoD unit = 1 inch): crouch cover 0.81-0.91 m, chest-high 1.22 m,
+  // standing EYE level 1.63 m -- anything shorter than that does NOT break a
+  // sightline, which is why most of this pass is deliberately 0.9-1.25 m and
+  // keeps the lane reads intact. Hard cover every 6-8 m so no floor is more
+  // than ~4 m from something to get behind, mixed roughly 2:1 crouch to
+  // full-height -- all crouch is a shooting gallery, all tall is a maze.
+  // Mirrored via pPair so G-I cover parity holds piece for piece.
+  pPair("wk_c1", "wk_c1m", "guard_hut", -49, -22.5, 0, 2, 2, 2.6, "metal", "metal_thin");
+  pPair("wk_c2", "wk_c2m", ["fuel_drums","crate"], -54.2, -19.5, 0, 1.6, 1.6, 0.95, "metal", "metal_thin");
+  pPair("wk_c3", "wk_c3m", ["pallet","crate"], -44, -21, 0, 1.2, 1, 1.1, "wood", "soft");
+  pPair("wk_c4", "wk_c4m", "shelving", -48.5, -16.5, 0, 0.5, 2.4, 1.9, "metal", "metal_thin");
+  pPair("wk_c5", "wk_c5m", "sandbags", -54, -14.5, 0, 2, 1, 1.05, "dirt", "soft");
+  pPair("wk_c6", "wk_c6m", "dumpster", -44.6, -13.5, 0, 1.7, 1.1, 1.25, "metal", "metal_thin");
+  pPair("wk_c7", "wk_c7m", "guard_hut", -48.8, -9.5, 0, 2, 2, 2.6, "metal", "metal_thin");
+  pPair("wk_c8", "wk_c8m", ["fuel_drums","crate"], -54.2, -8, 0, 1.6, 1.6, 0.95, "metal", "metal_thin");
+  pPair("wk_c9", "wk_c9m", "barrier", -44.3, -4.5, 0, 2, 0.6, 1.1, "concrete", "hard");
+  pPair("wk_c10", "wk_c10m", "sandbags", -52, 3.5, 0, 2, 1, 1.05, "dirt", "soft");
+  // on TOP of the goods bank (gbank_w/e is a 1.2 m deck): placed at ground
+  // level these two sat inside it — probe_props G-K "corner inside solid".
+  pPair("wk_c11", "wk_c11m", ["pallet","crate"], -51.5, 9.5, 0, 1.2, 1, 1.1, "wood", "soft", { y0: 1.2 });
+  pPair("wk_c12", "wk_c12m", ["fuel_drums","crate"], -47.5, 12.5, 0, 1.6, 1.6, 0.95, "metal", "metal_thin", { y0: 1.2 });
+  pPair("wk_c13", "wk_c13m", "bench", -43.75, 9, 0, 1.8, 0.5, 0.9, "wood", "soft");
+  pPair("wk_c14", "wk_c14m", "guard_hut", -48, 20, 0, 2, 2, 2.6, "metal", "metal_thin");
+  pPair("os_c1", "os_c1m", "sandbags", -38, -33.5, 0, 2, 1, 1.05, "dirt", "soft");
+  pPair("os_c2", "os_c2m", "pallet", -36.5, -38.5, 0, 1.2, 1, 1.1, "wood", "soft");
+  pPair("os_c3", "os_c3m", "pallet", -33, -32, 0, 1.2, 1, 1.1, "wood", "soft");
+  pPair("os_c4", "os_c4m", "guard_hut", -29, -33, 0, 2.4, 2.4, 2.6, "metal", "metal_thin");
+  pPair("os_c5", "os_c5m", ["crate","fuel_drums"], -28.5, -41, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  pPair("os_c6", "os_c6m", ["crate","fuel_drums"], -25.5, -29.5, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  pPair("os_c7", "os_c7m", "barrier", -24, -41.5, 0, 2, 0.6, 1.1, "concrete", "hard");
+  pPair("os_c8", "os_c8m", "sandbags", -22.5, -37.5, 0, 2, 1, 1.05, "dirt", "soft");
+  pPair("os_c9", "os_c9m", ["shelving","pallet"], -19.5, -39.5, 0, 0.5, 2.4, 1.9, "metal", "metal_thin");
+  pPair("os_c10", "os_c10m", "dumpster", -18.5, -29.5, 0, 1.7, 1.1, 1.25, "metal", "metal_thin");
+  pPair("os_c11", "os_c11m", "dumpster", -17, -38, 0, 1.7, 1.1, 1.25, "metal", "metal_thin");
+  pPair("os_c12", "os_c12m", "guard_hut", -12.5, -35.5, 0, 2, 2, 2.6, "metal", "metal_thin");
+  pPair("os_c13", "os_c13m", "sandbags", -12, -31.5, 0, 2, 1, 1.05, "dirt", "soft");
+  pPair("os_c14", "os_c14m", "barrier", -11, -41.5, 0, 2, 0.6, 1.1, "concrete", "hard");
+  pPair("os_c15", "os_c15m", ["crate","fuel_drums"], -8, -30.5, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  pPair("os_c16", "os_c16m", "pallet", -2.5, -31.5, 0, 1.2, 1, 1.1, "wood", "soft");
+  pPair("os_c17", "os_c17m", ["crate","fuel_drums"], 2, -39.5, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  pPair("os_c18", "os_c18m", "sandbags", 6, -41, 0, 2, 1, 1.05, "dirt", "soft");
+  pPair("os_c19", "os_c19m", "guard_hut", 10.5, -39.5, 0, 2.4, 2.4, 2.6, "metal", "metal_thin");
+  pPair("os_c20", "os_c20m", "barrier", 13.2, -34.5, 0, 2, 0.6, 1.1, "concrete", "hard");
+  pPair("os_c21", "os_c21m", ["crate","fuel_drums"], 14.5, -41.8, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  pPair("os_c22", "os_c22m", ["crate","fuel_drums"], 17.5, -41.2, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  pPair("os_c23", "os_c23m", ["shelving","pallet"], 17, -31.5, 0, 0.5, 2.4, 1.9, "metal", "metal_thin");
+  pPair("os_c24", "os_c24m", "pallet", 19, -30, 0, 1.2, 1, 1.1, "wood", "soft");
+  pPair("os_c25", "os_c25m", "guard_hut", 22.5, -33.5, 0, 2, 2, 2.6, "metal", "metal_thin");
+  pPair("os_c26", "os_c26m", "guard_hut", 23.5, -41.3, 0, 2, 2, 2.6, "metal", "metal_thin");
+  pPair("os_c27", "os_c27m", "sandbags", 24.5, -37.5, 0, 2, 1, 1.05, "dirt", "soft");
+  pPair("os_c28", "os_c28m", "dumpster", 25, -30, 0, 1.7, 1.1, 1.25, "metal", "metal_thin");
+  pPair("os_c29", "os_c29m", ["crate","fuel_drums"], -16.5, -41.8, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  pPair("yd_c1", "yd_c1m", ["crate","fuel_drums"], 12, -21.5, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  pPair("yd_c2", "yd_c2m", ["crate","pallet"], -25.5, -23, 0, 1.2, 1, 1.1, "wood", "soft");
   pPair("yd_st5", "yd_st6", ["guard_hut", "guard_hut"], 16, -36, 0, 1.8, 1.8, 2.6, "metal", "metal_thin");
 
   // ======================================================== 7. NODES

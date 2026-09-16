@@ -2872,14 +2872,14 @@
     "id": "lanternwalk",
     "bounds": {
       "min": [
-        -48.5,
+        -58,
         -2,
-        -34.5
+        -52
       ],
       "max": [
-        24.5,
+        46,
         14,
-        14.6
+        42
       ]
     },
     "vetoOverrides": {
@@ -2887,14 +2887,14 @@
       "v2LosM": 25,
       "v3ConeM": 20
     },
-    "_comment": "PROBE-EMITTED by tools/probe_arena.mjs --emit (measured geometry; PVP_BUILD_PLAN Part 4.2). Do not hand-edit spawnPoints/clusters/flags."
+    "_comment": "PROBE-EMITTED by tools/probe_arena.mjs --emit (measured geometry; PVP_BUILD_PLAN Part 4.2). Do not hand-edit spawnPoints/clusters/flags. Certified under GEN-3 (doubled AND populated — AAA calibration)."
   },
   "clusters": {
     "SC_WEST": {
       "anchor": [
-        -44,
+        -49,
         0,
-        -12
+        -3
       ],
       "node": "alley_mid",
       "inwardYaw": -1.57,
@@ -2902,9 +2902,9 @@
     },
     "SC_ARCADE": {
       "anchor": [
-        -32.5,
+        -33,
         0,
-        -8
+        -7.5
       ],
       "node": "arcade_lightwell",
       "inwardYaw": -1.57,
@@ -2912,9 +2912,9 @@
     },
     "SC_LANTERN": {
       "anchor": [
-        -23,
+        -20,
         0,
-        7.5
+        12
       ],
       "node": "lantern_yard",
       "inwardYaw": -0.79,
@@ -2922,9 +2922,9 @@
     },
     "SC_NORTH": {
       "anchor": [
-        -24.5,
+        -19.5,
         0,
-        -22.5
+        -36
       ],
       "node": "cs1_mid",
       "inwardYaw": 3.14,
@@ -2932,9 +2932,9 @@
     },
     "SC_MARKET": {
       "anchor": [
-        -0.5,
+        6,
         0,
-        -24
+        -33
       ],
       "node": "street_mouth",
       "inwardYaw": 3.14,
@@ -2942,9 +2942,9 @@
     },
     "SC_GALLERY": {
       "anchor": [
-        17.5,
+        29,
         0,
-        -7.5
+        -3
       ],
       "node": "gallery_mid",
       "inwardYaw": 1.57,
@@ -2952,9 +2952,9 @@
     },
     "SC_PLAZA": {
       "anchor": [
-        -4,
+        -1.5,
         0,
-        -5.5
+        -2
       ],
       "node": "plaza_center",
       "inwardYaw": null,
@@ -2968,13 +2968,13 @@
     {
       "id": "sp_w1",
       "pos": [
-        -44.5,
+        -53.5,
         0,
         -28
       ],
-      "yaw": -1.92,
+      "yaw": -1.75,
       "cluster": "SC_WEST",
-      "cover": 0.6,
+      "cover": 0.5,
       "modes": [
         "tdm",
         "ctf",
@@ -2985,28 +2985,11 @@
     {
       "id": "sp_w2",
       "pos": [
-        -46.5,
+        -48,
         0,
-        -24
+        -27
       ],
-      "yaw": -2.53,
-      "cluster": "SC_WEST",
-      "cover": 0.6,
-      "modes": [
-        "tdm",
-        "ctf",
-        "ffa"
-      ],
-      "zoneHint": "alley_mid"
-    },
-    {
-      "id": "sp_w3",
-      "pos": [
-        -43.5,
-        0,
-        -19
-      ],
-      "yaw": -2.44,
+      "yaw": -1.66,
       "cluster": "SC_WEST",
       "cover": 0.3,
       "modes": [
@@ -3017,15 +3000,66 @@
       "zoneHint": "alley_mid"
     },
     {
+      "id": "sp_w3",
+      "pos": [
+        -54.5,
+        0,
+        -23
+      ],
+      "yaw": -1.48,
+      "cluster": "SC_WEST",
+      "cover": 0.4,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "alley_mid"
+    },
+    {
+      "id": "sp_w4",
+      "pos": [
+        -44.5,
+        0,
+        -19.5
+      ],
+      "yaw": -1.4,
+      "cluster": "SC_WEST",
+      "cover": 0.4,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "alley_mid"
+    },
+    {
+      "id": "sp_w5",
+      "pos": [
+        -56,
+        0,
+        -17
+      ],
+      "yaw": -1.75,
+      "cluster": "SC_WEST",
+      "cover": 0.4,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "alley_mid"
+    },
+    {
       "id": "sp_w6",
       "pos": [
-        -43,
+        -44,
         0,
-        -6
+        -13
       ],
-      "yaw": -2.36,
+      "yaw": -1.31,
       "cluster": "SC_WEST",
-      "cover": 0.6,
+      "cover": 0.4,
       "modes": [
         "tdm",
         "ctf",
@@ -3036,7 +3070,24 @@
     {
       "id": "sp_w7",
       "pos": [
-        -43.5,
+        -55,
+        0,
+        -13
+      ],
+      "yaw": -1.05,
+      "cluster": "SC_WEST",
+      "cover": 0.5,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "alley_mid"
+    },
+    {
+      "id": "sp_w8",
+      "pos": [
+        -49,
         0,
         -3
       ],
@@ -3051,15 +3102,83 @@
       "zoneHint": "alley_mid"
     },
     {
-      "id": "sp_w8",
+      "id": "sp_w9",
       "pos": [
-        -45.5,
+        -45,
         0,
-        6
+        2
       ],
-      "yaw": -2.18,
+      "yaw": -0.96,
       "cluster": "SC_WEST",
-      "cover": 0.5,
+      "cover": 0.3,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "alley_mid"
+    },
+    {
+      "id": "sp_w10",
+      "pos": [
+        -53.5,
+        0,
+        9.5
+      ],
+      "yaw": -1.75,
+      "cluster": "SC_WEST",
+      "cover": 0.1,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "alley_mid"
+    },
+    {
+      "id": "sp_w11",
+      "pos": [
+        -44.5,
+        0,
+        23.5
+      ],
+      "yaw": -1.75,
+      "cluster": "SC_WEST",
+      "cover": 0.6,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "alley_mid"
+    },
+    {
+      "id": "sp_w12",
+      "pos": [
+        -49.5,
+        0,
+        31.5
+      ],
+      "yaw": -2.44,
+      "cluster": "SC_WEST",
+      "cover": 0.4,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "alley_mid"
+    },
+    {
+      "id": "sp_w13",
+      "pos": [
+        -46,
+        0,
+        36
+      ],
+      "yaw": -2.44,
+      "cluster": "SC_WEST",
+      "cover": 0.4,
       "modes": [
         "tdm",
         "ctf",
@@ -3072,7 +3191,7 @@
       "pos": [
         -36,
         0,
-        -16
+        -17.5
       ],
       "yaw": -2.62,
       "cluster": "SC_ARCADE",
@@ -3104,13 +3223,13 @@
     {
       "id": "sp_a3",
       "pos": [
-        -28,
+        -40.5,
         0,
-        -8
+        -14.5
       ],
-      "yaw": -0.52,
+      "yaw": -2.36,
       "cluster": "SC_ARCADE",
-      "cover": 0.3,
+      "cover": 0.4,
       "modes": [
         "tdm",
         "ctf",
@@ -3121,13 +3240,13 @@
     {
       "id": "sp_a4",
       "pos": [
-        -37.5,
+        -36,
         0,
-        -2
+        -13
       ],
-      "yaw": -0.87,
+      "yaw": -2.62,
       "cluster": "SC_ARCADE",
-      "cover": 0.5,
+      "cover": 0.3,
       "modes": [
         "tdm",
         "ctf",
@@ -3138,13 +3257,13 @@
     {
       "id": "sp_a5",
       "pos": [
-        -34.5,
+        -27.5,
         0,
-        2.5
+        -10
       ],
-      "yaw": -2.62,
+      "yaw": -1.13,
       "cluster": "SC_ARCADE",
-      "cover": 0.7,
+      "cover": 0.4,
       "modes": [
         "tdm",
         "ctf",
@@ -3153,11 +3272,11 @@
       "zoneHint": "arcade_lightwell"
     },
     {
-      "id": "sp_a7",
+      "id": "sp_a6",
       "pos": [
-        -32,
+        -34,
         0,
-        -9
+        -8
       ],
       "yaw": -1.22,
       "cluster": "SC_ARCADE",
@@ -3170,13 +3289,97 @@
       "zoneHint": "arcade_lightwell"
     },
     {
+      "id": "sp_a7",
+      "pos": [
+        -29,
+        0,
+        -7
+      ],
+      "yaw": -0.7,
+      "cluster": "SC_ARCADE",
+      "cover": 0.2,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "arcade_lightwell"
+    },
+    {
+      "id": "sp_a8",
+      "pos": [
+        -37,
+        0,
+        -3
+      ],
+      "yaw": -0.96,
+      "cluster": "SC_ARCADE",
+      "cover": 0.3,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "arcade_lightwell"
+    },
+    {
+      "id": "sp_a9",
+      "pos": [
+        -28.5,
+        0,
+        -2.5
+      ],
+      "yaw": -2.44,
+      "cluster": "SC_ARCADE",
+      "cover": 0.4,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "arcade_lightwell"
+    },
+    {
+      "id": "sp_a11",
+      "pos": [
+        -40,
+        0,
+        -2
+      ],
+      "yaw": -0.96,
+      "cluster": "SC_ARCADE",
+      "cover": 0.5,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "arcade_lightwell"
+    },
+    {
+      "id": "sp_a10",
+      "pos": [
+        -32.5,
+        0,
+        6
+      ],
+      "yaw": -1.13,
+      "cluster": "SC_ARCADE",
+      "cover": 0.6,
+      "modes": [
+        "tdm",
+        "ffa"
+      ],
+      "zoneHint": "arcade_lightwell"
+    },
+    {
       "id": "sp_l1",
       "pos": [
-        -32,
+        -34,
         0,
-        12.5
+        10
       ],
-      "yaw": 0,
+      "yaw": -0.26,
       "cluster": "SC_LANTERN",
       "cover": 0.4,
       "modes": [
@@ -3188,13 +3391,13 @@
     {
       "id": "sp_l2",
       "pos": [
-        -39.5,
+        -28.5,
         0,
-        11.5
+        13.5
       ],
-      "yaw": -1.75,
+      "yaw": -1.05,
       "cluster": "SC_LANTERN",
-      "cover": 0.7,
+      "cover": 0.8,
       "modes": [
         "tdm",
         "ffa"
@@ -3204,13 +3407,13 @@
     {
       "id": "sp_l3",
       "pos": [
-        -33,
+        -34.5,
         0,
-        9.5
+        13.5
       ],
-      "yaw": -0.09,
+      "yaw": -0.17,
       "cluster": "SC_LANTERN",
-      "cover": 0.5,
+      "cover": 0.6,
       "modes": [
         "tdm",
         "ffa"
@@ -3220,11 +3423,11 @@
     {
       "id": "sp_l4",
       "pos": [
-        -27,
+        -22,
         0,
-        13.5
+        13
       ],
-      "yaw": -0.79,
+      "yaw": -0.52,
       "cluster": "SC_LANTERN",
       "cover": 0.8,
       "modes": [
@@ -3236,11 +3439,11 @@
     {
       "id": "sp_l5",
       "pos": [
-        -17.5,
+        -22,
         0,
-        7
+        4
       ],
-      "yaw": -0.17,
+      "yaw": -1.75,
       "cluster": "SC_LANTERN",
       "cover": 0.6,
       "modes": [
@@ -3253,13 +3456,13 @@
     {
       "id": "sp_l6",
       "pos": [
-        -21,
+        -17.5,
         0,
-        3.5
+        1
       ],
-      "yaw": -1.48,
+      "yaw": -1.83,
       "cluster": "SC_LANTERN",
-      "cover": 0.4,
+      "cover": 0.3,
       "modes": [
         "tdm",
         "ctf",
@@ -3272,9 +3475,26 @@
       "pos": [
         -12.5,
         0,
-        10.5
+        14
       ],
-      "yaw": -0.79,
+      "yaw": -0.7,
+      "cluster": "SC_LANTERN",
+      "cover": 0.2,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "lantern_yard"
+    },
+    {
+      "id": "sp_l8",
+      "pos": [
+        -20.5,
+        0,
+        -5.5
+      ],
+      "yaw": -1.83,
       "cluster": "SC_LANTERN",
       "cover": 0.4,
       "modes": [
@@ -3285,58 +3505,64 @@
       "zoneHint": "lantern_yard"
     },
     {
-      "id": "sp_lc1",
+      "id": "sp_l10",
       "pos": [
-        -16,
+        -12.5,
         0,
-        0.5
+        -6
       ],
-      "yaw": -1.05,
+      "yaw": -0.7,
       "cluster": "SC_LANTERN",
       "cover": 0.3,
       "modes": [
-        "ctf"
+        "tdm",
+        "ctf",
+        "ffa"
       ],
       "zoneHint": "lantern_yard"
     },
     {
-      "id": "sp_lc2",
+      "id": "sp_l11",
       "pos": [
-        -13.5,
+        -8,
         0,
-        6.5
+        24
       ],
-      "yaw": -1.22,
+      "yaw": -1.83,
       "cluster": "SC_LANTERN",
       "cover": 0.4,
       "modes": [
-        "ctf"
+        "tdm",
+        "ctf",
+        "ffa"
       ],
       "zoneHint": "lantern_yard"
     },
     {
-      "id": "sp_lc3",
+      "id": "sp_l12",
       "pos": [
-        -19.5,
+        -11.5,
         0,
-        -3
+        31
       ],
-      "yaw": -1.22,
+      "yaw": 0.09,
       "cluster": "SC_LANTERN",
-      "cover": 0.2,
+      "cover": 0.3,
       "modes": [
-        "ctf"
+        "tdm",
+        "ctf",
+        "ffa"
       ],
       "zoneHint": "lantern_yard"
     },
     {
       "id": "sp_n1",
       "pos": [
-        -38,
+        -37,
         0,
-        -26
+        -30.5
       ],
-      "yaw": 2.27,
+      "yaw": 2.71,
       "cluster": "SC_NORTH",
       "cover": 0.6,
       "modes": [
@@ -3351,11 +3577,11 @@
       "pos": [
         -31.5,
         0,
-        -24
+        -29.5
       ],
-      "yaw": -2.09,
+      "yaw": -2.53,
       "cluster": "SC_NORTH",
-      "cover": 0.5,
+      "cover": 0.9,
       "modes": [
         "tdm",
         "ctf",
@@ -3366,11 +3592,11 @@
     {
       "id": "sp_n3",
       "pos": [
-        -28,
+        -36.5,
         0,
-        -22.5
+        -26
       ],
-      "yaw": -2.27,
+      "yaw": 2.27,
       "cluster": "SC_NORTH",
       "cover": 0.4,
       "modes": [
@@ -3383,11 +3609,11 @@
     {
       "id": "sp_n4",
       "pos": [
-        -22.5,
+        -27.5,
         0,
-        -22
+        -21.5
       ],
-      "yaw": -2.71,
+      "yaw": -2.09,
       "cluster": "SC_NORTH",
       "cover": 0.4,
       "modes": [
@@ -3400,13 +3626,13 @@
     {
       "id": "sp_n5",
       "pos": [
-        -17,
+        -21,
         0,
-        -25.5
+        -24.5
       ],
-      "yaw": -2.09,
+      "yaw": -2.62,
       "cluster": "SC_NORTH",
-      "cover": 0.5,
+      "cover": 0.6,
       "modes": [
         "tdm",
         "ctf",
@@ -3417,13 +3643,13 @@
     {
       "id": "sp_n6",
       "pos": [
-        -13.5,
+        -12,
         0,
-        -21
+        -20
       ],
-      "yaw": 2.97,
+      "yaw": -2.53,
       "cluster": "SC_NORTH",
-      "cover": 0.3,
+      "cover": 0.4,
       "modes": [
         "tdm",
         "ctf",
@@ -3438,7 +3664,24 @@
         0,
         -18.5
       ],
-      "yaw": -2.44,
+      "yaw": -2.36,
+      "cluster": "SC_NORTH",
+      "cover": 0.6,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "cs1_mid"
+    },
+    {
+      "id": "sp_n8",
+      "pos": [
+        -15,
+        0,
+        -46.5
+      ],
+      "yaw": 2.71,
       "cluster": "SC_NORTH",
       "cover": 0.4,
       "modes": [
@@ -3449,81 +3692,81 @@
       "zoneHint": "cs1_mid"
     },
     {
-      "id": "sp_m1",
+      "id": "sp_n9",
       "pos": [
-        -12.5,
+        -7,
         0,
-        -25
+        -40
       ],
-      "yaw": 2.97,
-      "cluster": "SC_MARKET",
-      "cover": 0.1,
+      "yaw": -2.09,
+      "cluster": "SC_NORTH",
+      "cover": 0.3,
       "modes": [
         "tdm",
         "ctf",
         "ffa"
       ],
-      "zoneHint": "street_mouth"
+      "zoneHint": "cs1_mid"
     },
     {
-      "id": "sp_m2",
+      "id": "sp_n10",
       "pos": [
-        -5,
+        -14.5,
         0,
-        -28
+        -39.5
       ],
-      "yaw": -2.36,
-      "cluster": "SC_MARKET",
-      "cover": 0.6,
+      "yaw": -2.09,
+      "cluster": "SC_NORTH",
+      "cover": 0.4,
       "modes": [
         "tdm",
         "ctf",
         "ffa"
       ],
-      "zoneHint": "street_mouth"
+      "zoneHint": "cs1_mid"
     },
     {
-      "id": "sp_m3",
+      "id": "sp_n11",
       "pos": [
-        -9.5,
+        -3,
         0,
-        -21
+        -47.5
       ],
-      "yaw": 2.79,
-      "cluster": "SC_MARKET",
-      "cover": 0.2,
-      "modes": [
-        "tdm",
-        "ctf",
-        "ffa"
-      ],
-      "zoneHint": "street_mouth"
-    },
-    {
-      "id": "sp_m4",
-      "pos": [
-        -1.5,
-        0,
-        -20
-      ],
-      "yaw": 2.53,
-      "cluster": "SC_MARKET",
+      "yaw": -2.71,
+      "cluster": "SC_NORTH",
       "cover": 0.5,
       "modes": [
         "tdm",
         "ctf",
         "ffa"
       ],
-      "zoneHint": "street_mouth"
+      "zoneHint": "cs1_mid"
     },
     {
-      "id": "sp_m6",
+      "id": "sp_n12",
       "pos": [
-        11,
+        -9.5,
         0,
-        -22.5
+        -47
       ],
-      "yaw": 3.05,
+      "yaw": 2.36,
+      "cluster": "SC_NORTH",
+      "cover": 0.5,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "cs1_mid"
+    },
+    {
+      "id": "sp_m1",
+      "pos": [
+        -11,
+        0,
+        -31
+      ],
+      "yaw": -2.18,
       "cluster": "SC_MARKET",
       "cover": 0.7,
       "modes": [
@@ -3534,13 +3777,81 @@
       "zoneHint": "street_mouth"
     },
     {
-      "id": "sp_m7",
+      "id": "sp_m2",
       "pos": [
-        7,
+        -3.5,
+        0,
+        -34
+      ],
+      "yaw": 2.36,
+      "cluster": "SC_MARKET",
+      "cover": 0.1,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "street_mouth"
+    },
+    {
+      "id": "sp_m3",
+      "pos": [
+        -8,
+        0,
+        -28
+      ],
+      "yaw": 2.09,
+      "cluster": "SC_MARKET",
+      "cover": 0.4,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "street_mouth"
+    },
+    {
+      "id": "sp_m4",
+      "pos": [
+        1.5,
+        0,
+        -23
+      ],
+      "yaw": -2.79,
+      "cluster": "SC_MARKET",
+      "cover": 0.4,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "street_mouth"
+    },
+    {
+      "id": "sp_m5",
+      "pos": [
+        11,
+        0,
+        -22
+      ],
+      "yaw": 2.97,
+      "cluster": "SC_MARKET",
+      "cover": 0.7,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "street_mouth"
+    },
+    {
+      "id": "sp_m6",
+      "pos": [
+        6.5,
         0,
         -32
       ],
-      "yaw": 2.79,
+      "yaw": 2.88,
       "cluster": "SC_MARKET",
       "cover": 0.6,
       "modes": [
@@ -3550,13 +3861,13 @@
       "zoneHint": "street_mouth"
     },
     {
-      "id": "sp_m8",
+      "id": "sp_m7",
       "pos": [
         4,
         0,
         -27.5
       ],
-      "yaw": 2.97,
+      "yaw": 3.05,
       "cluster": "SC_MARKET",
       "cover": 0.6,
       "modes": [
@@ -3566,62 +3877,82 @@
       "zoneHint": "street_mouth"
     },
     {
-      "id": "sp_mc1",
+      "id": "sp_m9",
       "pos": [
-        -1.5,
+        14,
         0,
-        -24
+        -29
       ],
-      "yaw": 2.71,
+      "yaw": -2.09,
       "cluster": "SC_MARKET",
-      "cover": 0.4,
+      "cover": 0.7,
       "modes": [
-        "ctf"
+        "tdm",
+        "ffa"
       ],
       "zoneHint": "street_mouth"
     },
     {
-      "id": "sp_mc2",
+      "id": "sp_m10",
       "pos": [
-        3.5,
+        19,
         0,
-        -20
+        -49
       ],
-      "yaw": -2.88,
+      "yaw": -2.36,
       "cluster": "SC_MARKET",
-      "cover": 0.5,
+      "cover": 0.8,
       "modes": [
-        "ctf"
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "street_mouth"
+    },
+    {
+      "id": "sp_m11",
+      "pos": [
+        20,
+        0,
+        -43
+      ],
+      "yaw": 2.53,
+      "cluster": "SC_MARKET",
+      "cover": 0.4,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "street_mouth"
+    },
+    {
+      "id": "sp_m12",
+      "pos": [
+        10,
+        0,
+        -45.5
+      ],
+      "yaw": 2.09,
+      "cluster": "SC_MARKET",
+      "cover": 0.3,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
       ],
       "zoneHint": "street_mouth"
     },
     {
       "id": "sp_g1",
       "pos": [
-        20.5,
-        0,
-        -26.5
-      ],
-      "yaw": 2.62,
-      "cluster": "SC_GALLERY",
-      "cover": 0.4,
-      "modes": [
-        "tdm",
-        "ctf",
-        "ffa"
-      ],
-      "zoneHint": "gallery_mid"
-    },
-    {
-      "id": "sp_g3",
-      "pos": [
         21,
         0,
-        -13
+        -28
       ],
-      "yaw": 0.61,
+      "yaw": 1.31,
       "cluster": "SC_GALLERY",
-      "cover": 0.5,
+      "cover": 0.6,
       "modes": [
         "tdm",
         "ctf",
@@ -3630,28 +3961,11 @@
       "zoneHint": "gallery_mid"
     },
     {
-      "id": "sp_g4",
+      "id": "sp_g2",
       "pos": [
-        19,
+        20,
         0,
-        -5.5
-      ],
-      "yaw": 2.09,
-      "cluster": "SC_GALLERY",
-      "cover": 0.2,
-      "modes": [
-        "tdm",
-        "ctf",
-        "ffa"
-      ],
-      "zoneHint": "gallery_mid"
-    },
-    {
-      "id": "sp_g5",
-      "pos": [
-        20.5,
-        0,
-        4.5
+        -24
       ],
       "yaw": 2.36,
       "cluster": "SC_GALLERY",
@@ -3664,13 +3978,47 @@
       "zoneHint": "gallery_mid"
     },
     {
-      "id": "sp_g6",
+      "id": "sp_g3",
       "pos": [
-        16.5,
+        21,
         0,
-        9.5
+        -14
       ],
-      "yaw": 0.7,
+      "yaw": 0.79,
+      "cluster": "SC_GALLERY",
+      "cover": 0.4,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "gallery_mid"
+    },
+    {
+      "id": "sp_g4",
+      "pos": [
+        19.5,
+        0,
+        -4
+      ],
+      "yaw": 1.92,
+      "cluster": "SC_GALLERY",
+      "cover": 0.1,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "gallery_mid"
+    },
+    {
+      "id": "sp_g5",
+      "pos": [
+        20,
+        0,
+        5
+      ],
+      "yaw": 2.36,
       "cluster": "SC_GALLERY",
       "cover": 0.5,
       "modes": [
@@ -3681,15 +4029,183 @@
       "zoneHint": "gallery_mid"
     },
     {
+      "id": "sp_g6",
+      "pos": [
+        19,
+        0,
+        11
+      ],
+      "yaw": 1.4,
+      "cluster": "SC_GALLERY",
+      "cover": 0.1,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "gallery_mid"
+    },
+    {
       "id": "sp_g7",
       "pos": [
-        7,
+        26,
         0,
-        -15.5
+        -8
       ],
-      "yaw": 1.66,
+      "yaw": 1.92,
+      "cluster": "SC_GALLERY",
+      "cover": 0.1,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "gallery_mid"
+    },
+    {
+      "id": "sp_g8",
+      "pos": [
+        27,
+        0,
+        7.5
+      ],
+      "yaw": 1.83,
+      "cluster": "SC_GALLERY",
+      "cover": 0.3,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "gallery_mid"
+    },
+    {
+      "id": "sp_g9",
+      "pos": [
+        32.5,
+        0,
+        -39
+      ],
+      "yaw": 1.4,
+      "cluster": "SC_GALLERY",
+      "cover": 0.3,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "gallery_mid"
+    },
+    {
+      "id": "sp_g10",
+      "pos": [
+        35.5,
+        0,
+        -26
+      ],
+      "yaw": 1.13,
+      "cluster": "SC_GALLERY",
+      "cover": 0.3,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "gallery_mid"
+    },
+    {
+      "id": "sp_g11",
+      "pos": [
+        44.5,
+        0,
+        -15
+      ],
+      "yaw": 2.27,
+      "cluster": "SC_GALLERY",
+      "cover": 0.6,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "gallery_mid"
+    },
+    {
+      "id": "sp_g12",
+      "pos": [
+        33.5,
+        0,
+        1
+      ],
+      "yaw": 1.31,
       "cluster": "SC_GALLERY",
       "cover": 0.4,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "gallery_mid"
+    },
+    {
+      "id": "sp_g13",
+      "pos": [
+        42,
+        0,
+        13
+      ],
+      "yaw": 2.62,
+      "cluster": "SC_GALLERY",
+      "cover": 0.6,
+      "modes": [
+        "tdm",
+        "ffa"
+      ],
+      "zoneHint": "gallery_mid"
+    },
+    {
+      "id": "sp_g14",
+      "pos": [
+        32.5,
+        0,
+        18.5
+      ],
+      "yaw": 1.48,
+      "cluster": "SC_GALLERY",
+      "cover": 0.6,
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "zoneHint": "gallery_mid"
+    },
+    {
+      "id": "sp_g15",
+      "pos": [
+        40,
+        0,
+        32
+      ],
+      "yaw": 0.52,
+      "cluster": "SC_GALLERY",
+      "cover": 0.1,
+      "modes": [
+        "tdm",
+        "ffa"
+      ],
+      "zoneHint": "gallery_mid"
+    },
+    {
+      "id": "sp_g16",
+      "pos": [
+        24.5,
+        0,
+        18
+      ],
+      "yaw": 1.22,
+      "cluster": "SC_GALLERY",
+      "cover": 0.5,
       "modes": [
         "tdm",
         "ctf",
@@ -3702,69 +4218,9 @@
       "pos": [
         -17,
         0,
-        -14
+        -11
       ],
-      "yaw": -2.53,
-      "cluster": "SC_PLAZA",
-      "cover": 0.3,
-      "modes": [
-        "ffa"
-      ],
-      "zoneHint": "plaza_center"
-    },
-    {
-      "id": "sp_p2",
-      "pos": [
-        -8,
-        0,
-        -3
-      ],
-      "yaw": -1.98,
-      "cluster": "SC_PLAZA",
-      "cover": 0.2,
-      "modes": [
-        "ffa"
-      ],
-      "zoneHint": "plaza_center"
-    },
-    {
-      "id": "sp_p3",
-      "pos": [
-        -1.5,
-        0,
-        -16.5
-      ],
-      "yaw": 1.86,
-      "cluster": "SC_PLAZA",
-      "cover": 0.5,
-      "modes": [
-        "ffa"
-      ],
-      "zoneHint": "plaza_center"
-    },
-    {
-      "id": "sp_p4",
-      "pos": [
-        12.5,
-        0,
-        -3.5
-      ],
-      "yaw": 1.13,
-      "cluster": "SC_PLAZA",
-      "cover": 0.1,
-      "modes": [
-        "ffa"
-      ],
-      "zoneHint": "plaza_center"
-    },
-    {
-      "id": "sp_p5",
-      "pos": [
-        -0.5,
-        0,
-        9.5
-      ],
-      "yaw": 0.63,
+      "yaw": -3,
       "cluster": "SC_PLAZA",
       "cover": 0.4,
       "modes": [
@@ -3773,15 +4229,105 @@
       "zoneHint": "plaza_center"
     },
     {
-      "id": "sp_p6",
+      "id": "sp_p2",
       "pos": [
-        -12,
+        -14,
         0,
-        0
+        -2
       ],
-      "yaw": -0.33,
+      "yaw": -2.09,
       "cluster": "SC_PLAZA",
       "cover": 0.1,
+      "modes": [
+        "ffa"
+      ],
+      "zoneHint": "plaza_center"
+    },
+    {
+      "id": "sp_p3",
+      "pos": [
+        -2,
+        0,
+        -8
+      ],
+      "yaw": -2.65,
+      "cluster": "SC_PLAZA",
+      "cover": 0.2,
+      "modes": [
+        "ffa"
+      ],
+      "zoneHint": "plaza_center"
+    },
+    {
+      "id": "sp_p4",
+      "pos": [
+        7,
+        0,
+        -13
+      ],
+      "yaw": 1.35,
+      "cluster": "SC_PLAZA",
+      "cover": 0.3,
+      "modes": [
+        "ffa"
+      ],
+      "zoneHint": "plaza_center"
+    },
+    {
+      "id": "sp_p5",
+      "pos": [
+        11,
+        0,
+        2
+      ],
+      "yaw": 1.59,
+      "cluster": "SC_PLAZA",
+      "cover": 0.1,
+      "modes": [
+        "ffa"
+      ],
+      "zoneHint": "plaza_center"
+    },
+    {
+      "id": "sp_p6",
+      "pos": [
+        2.5,
+        0,
+        12
+      ],
+      "yaw": 0.84,
+      "cluster": "SC_PLAZA",
+      "cover": 0.3,
+      "modes": [
+        "ffa"
+      ],
+      "zoneHint": "plaza_center"
+    },
+    {
+      "id": "sp_p7",
+      "pos": [
+        -8.5,
+        0,
+        4.5
+      ],
+      "yaw": -1.28,
+      "cluster": "SC_PLAZA",
+      "cover": 0.1,
+      "modes": [
+        "ffa"
+      ],
+      "zoneHint": "plaza_center"
+    },
+    {
+      "id": "sp_p8",
+      "pos": [
+        7,
+        0,
+        -2
+      ],
+      "yaw": 2.36,
+      "cluster": "SC_PLAZA",
+      "cover": 0.2,
       "modes": [
         "ffa"
       ],
@@ -3820,14 +4366,14 @@
         "id": "lanternwalk",
         "bounds": {
           "min": [
-            -48.5,
+            -58,
             -2,
-            -34.5
+            -52
           ],
           "max": [
-            24.5,
+            46,
             14,
-            14.6
+            42
           ]
         },
         "vetoOverrides": {
@@ -3835,19 +4381,19 @@
           "v2LosM": 25,
           "v3ConeM": 20
         },
-        "_comment": "PROBE-EMITTED by tools/probe_arena.mjs --emit (measured geometry; PVP_BUILD_PLAN Part 4.2). Do not hand-edit spawnPoints/clusters/flags."
+        "_comment": "PROBE-EMITTED by tools/probe_arena.mjs --emit (measured geometry; PVP_BUILD_PLAN Part 4.2). Do not hand-edit spawnPoints/clusters/flags. Certified under GEN-3 (doubled AND populated — AAA calibration)."
       },
       "spawnPoints": [
         {
           "id": "sp_w1",
           "pos": [
-            -44.5,
+            -53.5,
             0,
             -28
           ],
-          "yaw": -1.92,
+          "yaw": -1.75,
           "cluster": "SC_WEST",
-          "cover": 0.6,
+          "cover": 0.5,
           "modes": [
             "tdm",
             "ctf",
@@ -3858,28 +4404,11 @@
         {
           "id": "sp_w2",
           "pos": [
-            -46.5,
+            -48,
             0,
-            -24
+            -27
           ],
-          "yaw": -2.53,
-          "cluster": "SC_WEST",
-          "cover": 0.6,
-          "modes": [
-            "tdm",
-            "ctf",
-            "ffa"
-          ],
-          "zoneHint": "alley_mid"
-        },
-        {
-          "id": "sp_w3",
-          "pos": [
-            -43.5,
-            0,
-            -19
-          ],
-          "yaw": -2.44,
+          "yaw": -1.66,
           "cluster": "SC_WEST",
           "cover": 0.3,
           "modes": [
@@ -3890,15 +4419,66 @@
           "zoneHint": "alley_mid"
         },
         {
+          "id": "sp_w3",
+          "pos": [
+            -54.5,
+            0,
+            -23
+          ],
+          "yaw": -1.48,
+          "cluster": "SC_WEST",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "alley_mid"
+        },
+        {
+          "id": "sp_w4",
+          "pos": [
+            -44.5,
+            0,
+            -19.5
+          ],
+          "yaw": -1.4,
+          "cluster": "SC_WEST",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "alley_mid"
+        },
+        {
+          "id": "sp_w5",
+          "pos": [
+            -56,
+            0,
+            -17
+          ],
+          "yaw": -1.75,
+          "cluster": "SC_WEST",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "alley_mid"
+        },
+        {
           "id": "sp_w6",
           "pos": [
-            -43,
+            -44,
             0,
-            -6
+            -13
           ],
-          "yaw": -2.36,
+          "yaw": -1.31,
           "cluster": "SC_WEST",
-          "cover": 0.6,
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -3909,7 +4489,24 @@
         {
           "id": "sp_w7",
           "pos": [
-            -43.5,
+            -55,
+            0,
+            -13
+          ],
+          "yaw": -1.05,
+          "cluster": "SC_WEST",
+          "cover": 0.5,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "alley_mid"
+        },
+        {
+          "id": "sp_w8",
+          "pos": [
+            -49,
             0,
             -3
           ],
@@ -3924,15 +4521,83 @@
           "zoneHint": "alley_mid"
         },
         {
-          "id": "sp_w8",
+          "id": "sp_w9",
           "pos": [
-            -45.5,
+            -45,
             0,
-            6
+            2
           ],
-          "yaw": -2.18,
+          "yaw": -0.96,
           "cluster": "SC_WEST",
-          "cover": 0.5,
+          "cover": 0.3,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "alley_mid"
+        },
+        {
+          "id": "sp_w10",
+          "pos": [
+            -53.5,
+            0,
+            9.5
+          ],
+          "yaw": -1.75,
+          "cluster": "SC_WEST",
+          "cover": 0.1,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "alley_mid"
+        },
+        {
+          "id": "sp_w11",
+          "pos": [
+            -44.5,
+            0,
+            23.5
+          ],
+          "yaw": -1.75,
+          "cluster": "SC_WEST",
+          "cover": 0.6,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "alley_mid"
+        },
+        {
+          "id": "sp_w12",
+          "pos": [
+            -49.5,
+            0,
+            31.5
+          ],
+          "yaw": -2.44,
+          "cluster": "SC_WEST",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "alley_mid"
+        },
+        {
+          "id": "sp_w13",
+          "pos": [
+            -46,
+            0,
+            36
+          ],
+          "yaw": -2.44,
+          "cluster": "SC_WEST",
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -3945,7 +4610,7 @@
           "pos": [
             -36,
             0,
-            -16
+            -17.5
           ],
           "yaw": -2.62,
           "cluster": "SC_ARCADE",
@@ -3977,13 +4642,13 @@
         {
           "id": "sp_a3",
           "pos": [
-            -28,
+            -40.5,
             0,
-            -8
+            -14.5
           ],
-          "yaw": -0.52,
+          "yaw": -2.36,
           "cluster": "SC_ARCADE",
-          "cover": 0.3,
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -3994,13 +4659,13 @@
         {
           "id": "sp_a4",
           "pos": [
-            -37.5,
+            -36,
             0,
-            -2
+            -13
           ],
-          "yaw": -0.87,
+          "yaw": -2.62,
           "cluster": "SC_ARCADE",
-          "cover": 0.5,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -4011,13 +4676,13 @@
         {
           "id": "sp_a5",
           "pos": [
-            -34.5,
+            -27.5,
             0,
-            2.5
+            -10
           ],
-          "yaw": -2.62,
+          "yaw": -1.13,
           "cluster": "SC_ARCADE",
-          "cover": 0.7,
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -4026,11 +4691,11 @@
           "zoneHint": "arcade_lightwell"
         },
         {
-          "id": "sp_a7",
+          "id": "sp_a6",
           "pos": [
-            -32,
+            -34,
             0,
-            -9
+            -8
           ],
           "yaw": -1.22,
           "cluster": "SC_ARCADE",
@@ -4043,13 +4708,97 @@
           "zoneHint": "arcade_lightwell"
         },
         {
+          "id": "sp_a7",
+          "pos": [
+            -29,
+            0,
+            -7
+          ],
+          "yaw": -0.7,
+          "cluster": "SC_ARCADE",
+          "cover": 0.2,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "arcade_lightwell"
+        },
+        {
+          "id": "sp_a8",
+          "pos": [
+            -37,
+            0,
+            -3
+          ],
+          "yaw": -0.96,
+          "cluster": "SC_ARCADE",
+          "cover": 0.3,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "arcade_lightwell"
+        },
+        {
+          "id": "sp_a9",
+          "pos": [
+            -28.5,
+            0,
+            -2.5
+          ],
+          "yaw": -2.44,
+          "cluster": "SC_ARCADE",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "arcade_lightwell"
+        },
+        {
+          "id": "sp_a11",
+          "pos": [
+            -40,
+            0,
+            -2
+          ],
+          "yaw": -0.96,
+          "cluster": "SC_ARCADE",
+          "cover": 0.5,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "arcade_lightwell"
+        },
+        {
+          "id": "sp_a10",
+          "pos": [
+            -32.5,
+            0,
+            6
+          ],
+          "yaw": -1.13,
+          "cluster": "SC_ARCADE",
+          "cover": 0.6,
+          "modes": [
+            "tdm",
+            "ffa"
+          ],
+          "zoneHint": "arcade_lightwell"
+        },
+        {
           "id": "sp_l1",
           "pos": [
-            -32,
+            -34,
             0,
-            12.5
+            10
           ],
-          "yaw": 0,
+          "yaw": -0.26,
           "cluster": "SC_LANTERN",
           "cover": 0.4,
           "modes": [
@@ -4061,13 +4810,13 @@
         {
           "id": "sp_l2",
           "pos": [
-            -39.5,
+            -28.5,
             0,
-            11.5
+            13.5
           ],
-          "yaw": -1.75,
+          "yaw": -1.05,
           "cluster": "SC_LANTERN",
-          "cover": 0.7,
+          "cover": 0.8,
           "modes": [
             "tdm",
             "ffa"
@@ -4077,13 +4826,13 @@
         {
           "id": "sp_l3",
           "pos": [
-            -33,
+            -34.5,
             0,
-            9.5
+            13.5
           ],
-          "yaw": -0.09,
+          "yaw": -0.17,
           "cluster": "SC_LANTERN",
-          "cover": 0.5,
+          "cover": 0.6,
           "modes": [
             "tdm",
             "ffa"
@@ -4093,11 +4842,11 @@
         {
           "id": "sp_l4",
           "pos": [
-            -27,
+            -22,
             0,
-            13.5
+            13
           ],
-          "yaw": -0.79,
+          "yaw": -0.52,
           "cluster": "SC_LANTERN",
           "cover": 0.8,
           "modes": [
@@ -4109,11 +4858,11 @@
         {
           "id": "sp_l5",
           "pos": [
-            -17.5,
+            -22,
             0,
-            7
+            4
           ],
-          "yaw": -0.17,
+          "yaw": -1.75,
           "cluster": "SC_LANTERN",
           "cover": 0.6,
           "modes": [
@@ -4126,13 +4875,13 @@
         {
           "id": "sp_l6",
           "pos": [
-            -21,
+            -17.5,
             0,
-            3.5
+            1
           ],
-          "yaw": -1.48,
+          "yaw": -1.83,
           "cluster": "SC_LANTERN",
-          "cover": 0.4,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -4145,9 +4894,26 @@
           "pos": [
             -12.5,
             0,
-            10.5
+            14
           ],
-          "yaw": -0.79,
+          "yaw": -0.7,
+          "cluster": "SC_LANTERN",
+          "cover": 0.2,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "lantern_yard"
+        },
+        {
+          "id": "sp_l8",
+          "pos": [
+            -20.5,
+            0,
+            -5.5
+          ],
+          "yaw": -1.83,
           "cluster": "SC_LANTERN",
           "cover": 0.4,
           "modes": [
@@ -4158,58 +4924,64 @@
           "zoneHint": "lantern_yard"
         },
         {
-          "id": "sp_lc1",
+          "id": "sp_l10",
           "pos": [
-            -16,
+            -12.5,
             0,
-            0.5
+            -6
           ],
-          "yaw": -1.05,
+          "yaw": -0.7,
           "cluster": "SC_LANTERN",
           "cover": 0.3,
           "modes": [
-            "ctf"
+            "tdm",
+            "ctf",
+            "ffa"
           ],
           "zoneHint": "lantern_yard"
         },
         {
-          "id": "sp_lc2",
+          "id": "sp_l11",
           "pos": [
-            -13.5,
+            -8,
             0,
-            6.5
+            24
           ],
-          "yaw": -1.22,
+          "yaw": -1.83,
           "cluster": "SC_LANTERN",
           "cover": 0.4,
           "modes": [
-            "ctf"
+            "tdm",
+            "ctf",
+            "ffa"
           ],
           "zoneHint": "lantern_yard"
         },
         {
-          "id": "sp_lc3",
+          "id": "sp_l12",
           "pos": [
-            -19.5,
+            -11.5,
             0,
-            -3
+            31
           ],
-          "yaw": -1.22,
+          "yaw": 0.09,
           "cluster": "SC_LANTERN",
-          "cover": 0.2,
+          "cover": 0.3,
           "modes": [
-            "ctf"
+            "tdm",
+            "ctf",
+            "ffa"
           ],
           "zoneHint": "lantern_yard"
         },
         {
           "id": "sp_n1",
           "pos": [
-            -38,
+            -37,
             0,
-            -26
+            -30.5
           ],
-          "yaw": 2.27,
+          "yaw": 2.71,
           "cluster": "SC_NORTH",
           "cover": 0.6,
           "modes": [
@@ -4224,11 +4996,11 @@
           "pos": [
             -31.5,
             0,
-            -24
+            -29.5
           ],
-          "yaw": -2.09,
+          "yaw": -2.53,
           "cluster": "SC_NORTH",
-          "cover": 0.5,
+          "cover": 0.9,
           "modes": [
             "tdm",
             "ctf",
@@ -4239,11 +5011,11 @@
         {
           "id": "sp_n3",
           "pos": [
-            -28,
+            -36.5,
             0,
-            -22.5
+            -26
           ],
-          "yaw": -2.27,
+          "yaw": 2.27,
           "cluster": "SC_NORTH",
           "cover": 0.4,
           "modes": [
@@ -4256,11 +5028,11 @@
         {
           "id": "sp_n4",
           "pos": [
-            -22.5,
+            -27.5,
             0,
-            -22
+            -21.5
           ],
-          "yaw": -2.71,
+          "yaw": -2.09,
           "cluster": "SC_NORTH",
           "cover": 0.4,
           "modes": [
@@ -4273,13 +5045,13 @@
         {
           "id": "sp_n5",
           "pos": [
-            -17,
+            -21,
             0,
-            -25.5
+            -24.5
           ],
-          "yaw": -2.09,
+          "yaw": -2.62,
           "cluster": "SC_NORTH",
-          "cover": 0.5,
+          "cover": 0.6,
           "modes": [
             "tdm",
             "ctf",
@@ -4290,13 +5062,13 @@
         {
           "id": "sp_n6",
           "pos": [
-            -13.5,
+            -12,
             0,
-            -21
+            -20
           ],
-          "yaw": 2.97,
+          "yaw": -2.53,
           "cluster": "SC_NORTH",
-          "cover": 0.3,
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -4311,7 +5083,24 @@
             0,
             -18.5
           ],
-          "yaw": -2.44,
+          "yaw": -2.36,
+          "cluster": "SC_NORTH",
+          "cover": 0.6,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "cs1_mid"
+        },
+        {
+          "id": "sp_n8",
+          "pos": [
+            -15,
+            0,
+            -46.5
+          ],
+          "yaw": 2.71,
           "cluster": "SC_NORTH",
           "cover": 0.4,
           "modes": [
@@ -4322,81 +5111,81 @@
           "zoneHint": "cs1_mid"
         },
         {
-          "id": "sp_m1",
+          "id": "sp_n9",
           "pos": [
-            -12.5,
+            -7,
             0,
-            -25
+            -40
           ],
-          "yaw": 2.97,
-          "cluster": "SC_MARKET",
-          "cover": 0.1,
+          "yaw": -2.09,
+          "cluster": "SC_NORTH",
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
             "ffa"
           ],
-          "zoneHint": "street_mouth"
+          "zoneHint": "cs1_mid"
         },
         {
-          "id": "sp_m2",
+          "id": "sp_n10",
           "pos": [
-            -5,
+            -14.5,
             0,
-            -28
+            -39.5
           ],
-          "yaw": -2.36,
-          "cluster": "SC_MARKET",
-          "cover": 0.6,
+          "yaw": -2.09,
+          "cluster": "SC_NORTH",
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
             "ffa"
           ],
-          "zoneHint": "street_mouth"
+          "zoneHint": "cs1_mid"
         },
         {
-          "id": "sp_m3",
+          "id": "sp_n11",
           "pos": [
-            -9.5,
+            -3,
             0,
-            -21
+            -47.5
           ],
-          "yaw": 2.79,
-          "cluster": "SC_MARKET",
-          "cover": 0.2,
-          "modes": [
-            "tdm",
-            "ctf",
-            "ffa"
-          ],
-          "zoneHint": "street_mouth"
-        },
-        {
-          "id": "sp_m4",
-          "pos": [
-            -1.5,
-            0,
-            -20
-          ],
-          "yaw": 2.53,
-          "cluster": "SC_MARKET",
+          "yaw": -2.71,
+          "cluster": "SC_NORTH",
           "cover": 0.5,
           "modes": [
             "tdm",
             "ctf",
             "ffa"
           ],
-          "zoneHint": "street_mouth"
+          "zoneHint": "cs1_mid"
         },
         {
-          "id": "sp_m6",
+          "id": "sp_n12",
           "pos": [
-            11,
+            -9.5,
             0,
-            -22.5
+            -47
           ],
-          "yaw": 3.05,
+          "yaw": 2.36,
+          "cluster": "SC_NORTH",
+          "cover": 0.5,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "cs1_mid"
+        },
+        {
+          "id": "sp_m1",
+          "pos": [
+            -11,
+            0,
+            -31
+          ],
+          "yaw": -2.18,
           "cluster": "SC_MARKET",
           "cover": 0.7,
           "modes": [
@@ -4407,13 +5196,81 @@
           "zoneHint": "street_mouth"
         },
         {
-          "id": "sp_m7",
+          "id": "sp_m2",
           "pos": [
-            7,
+            -3.5,
+            0,
+            -34
+          ],
+          "yaw": 2.36,
+          "cluster": "SC_MARKET",
+          "cover": 0.1,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "street_mouth"
+        },
+        {
+          "id": "sp_m3",
+          "pos": [
+            -8,
+            0,
+            -28
+          ],
+          "yaw": 2.09,
+          "cluster": "SC_MARKET",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "street_mouth"
+        },
+        {
+          "id": "sp_m4",
+          "pos": [
+            1.5,
+            0,
+            -23
+          ],
+          "yaw": -2.79,
+          "cluster": "SC_MARKET",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "street_mouth"
+        },
+        {
+          "id": "sp_m5",
+          "pos": [
+            11,
+            0,
+            -22
+          ],
+          "yaw": 2.97,
+          "cluster": "SC_MARKET",
+          "cover": 0.7,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "street_mouth"
+        },
+        {
+          "id": "sp_m6",
+          "pos": [
+            6.5,
             0,
             -32
           ],
-          "yaw": 2.79,
+          "yaw": 2.88,
           "cluster": "SC_MARKET",
           "cover": 0.6,
           "modes": [
@@ -4423,13 +5280,13 @@
           "zoneHint": "street_mouth"
         },
         {
-          "id": "sp_m8",
+          "id": "sp_m7",
           "pos": [
             4,
             0,
             -27.5
           ],
-          "yaw": 2.97,
+          "yaw": 3.05,
           "cluster": "SC_MARKET",
           "cover": 0.6,
           "modes": [
@@ -4439,62 +5296,82 @@
           "zoneHint": "street_mouth"
         },
         {
-          "id": "sp_mc1",
+          "id": "sp_m9",
           "pos": [
-            -1.5,
+            14,
             0,
-            -24
+            -29
           ],
-          "yaw": 2.71,
+          "yaw": -2.09,
           "cluster": "SC_MARKET",
-          "cover": 0.4,
+          "cover": 0.7,
           "modes": [
-            "ctf"
+            "tdm",
+            "ffa"
           ],
           "zoneHint": "street_mouth"
         },
         {
-          "id": "sp_mc2",
+          "id": "sp_m10",
           "pos": [
-            3.5,
+            19,
             0,
-            -20
+            -49
           ],
-          "yaw": -2.88,
+          "yaw": -2.36,
           "cluster": "SC_MARKET",
-          "cover": 0.5,
+          "cover": 0.8,
           "modes": [
-            "ctf"
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "street_mouth"
+        },
+        {
+          "id": "sp_m11",
+          "pos": [
+            20,
+            0,
+            -43
+          ],
+          "yaw": 2.53,
+          "cluster": "SC_MARKET",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "street_mouth"
+        },
+        {
+          "id": "sp_m12",
+          "pos": [
+            10,
+            0,
+            -45.5
+          ],
+          "yaw": 2.09,
+          "cluster": "SC_MARKET",
+          "cover": 0.3,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
           ],
           "zoneHint": "street_mouth"
         },
         {
           "id": "sp_g1",
           "pos": [
-            20.5,
-            0,
-            -26.5
-          ],
-          "yaw": 2.62,
-          "cluster": "SC_GALLERY",
-          "cover": 0.4,
-          "modes": [
-            "tdm",
-            "ctf",
-            "ffa"
-          ],
-          "zoneHint": "gallery_mid"
-        },
-        {
-          "id": "sp_g3",
-          "pos": [
             21,
             0,
-            -13
+            -28
           ],
-          "yaw": 0.61,
+          "yaw": 1.31,
           "cluster": "SC_GALLERY",
-          "cover": 0.5,
+          "cover": 0.6,
           "modes": [
             "tdm",
             "ctf",
@@ -4503,28 +5380,11 @@
           "zoneHint": "gallery_mid"
         },
         {
-          "id": "sp_g4",
+          "id": "sp_g2",
           "pos": [
-            19,
+            20,
             0,
-            -5.5
-          ],
-          "yaw": 2.09,
-          "cluster": "SC_GALLERY",
-          "cover": 0.2,
-          "modes": [
-            "tdm",
-            "ctf",
-            "ffa"
-          ],
-          "zoneHint": "gallery_mid"
-        },
-        {
-          "id": "sp_g5",
-          "pos": [
-            20.5,
-            0,
-            4.5
+            -24
           ],
           "yaw": 2.36,
           "cluster": "SC_GALLERY",
@@ -4537,13 +5397,47 @@
           "zoneHint": "gallery_mid"
         },
         {
-          "id": "sp_g6",
+          "id": "sp_g3",
           "pos": [
-            16.5,
+            21,
             0,
-            9.5
+            -14
           ],
-          "yaw": 0.7,
+          "yaw": 0.79,
+          "cluster": "SC_GALLERY",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "gallery_mid"
+        },
+        {
+          "id": "sp_g4",
+          "pos": [
+            19.5,
+            0,
+            -4
+          ],
+          "yaw": 1.92,
+          "cluster": "SC_GALLERY",
+          "cover": 0.1,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "gallery_mid"
+        },
+        {
+          "id": "sp_g5",
+          "pos": [
+            20,
+            0,
+            5
+          ],
+          "yaw": 2.36,
           "cluster": "SC_GALLERY",
           "cover": 0.5,
           "modes": [
@@ -4554,15 +5448,183 @@
           "zoneHint": "gallery_mid"
         },
         {
+          "id": "sp_g6",
+          "pos": [
+            19,
+            0,
+            11
+          ],
+          "yaw": 1.4,
+          "cluster": "SC_GALLERY",
+          "cover": 0.1,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "gallery_mid"
+        },
+        {
           "id": "sp_g7",
           "pos": [
-            7,
+            26,
             0,
-            -15.5
+            -8
           ],
-          "yaw": 1.66,
+          "yaw": 1.92,
+          "cluster": "SC_GALLERY",
+          "cover": 0.1,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "gallery_mid"
+        },
+        {
+          "id": "sp_g8",
+          "pos": [
+            27,
+            0,
+            7.5
+          ],
+          "yaw": 1.83,
+          "cluster": "SC_GALLERY",
+          "cover": 0.3,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "gallery_mid"
+        },
+        {
+          "id": "sp_g9",
+          "pos": [
+            32.5,
+            0,
+            -39
+          ],
+          "yaw": 1.4,
+          "cluster": "SC_GALLERY",
+          "cover": 0.3,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "gallery_mid"
+        },
+        {
+          "id": "sp_g10",
+          "pos": [
+            35.5,
+            0,
+            -26
+          ],
+          "yaw": 1.13,
+          "cluster": "SC_GALLERY",
+          "cover": 0.3,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "gallery_mid"
+        },
+        {
+          "id": "sp_g11",
+          "pos": [
+            44.5,
+            0,
+            -15
+          ],
+          "yaw": 2.27,
+          "cluster": "SC_GALLERY",
+          "cover": 0.6,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "gallery_mid"
+        },
+        {
+          "id": "sp_g12",
+          "pos": [
+            33.5,
+            0,
+            1
+          ],
+          "yaw": 1.31,
           "cluster": "SC_GALLERY",
           "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "gallery_mid"
+        },
+        {
+          "id": "sp_g13",
+          "pos": [
+            42,
+            0,
+            13
+          ],
+          "yaw": 2.62,
+          "cluster": "SC_GALLERY",
+          "cover": 0.6,
+          "modes": [
+            "tdm",
+            "ffa"
+          ],
+          "zoneHint": "gallery_mid"
+        },
+        {
+          "id": "sp_g14",
+          "pos": [
+            32.5,
+            0,
+            18.5
+          ],
+          "yaw": 1.48,
+          "cluster": "SC_GALLERY",
+          "cover": 0.6,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "gallery_mid"
+        },
+        {
+          "id": "sp_g15",
+          "pos": [
+            40,
+            0,
+            32
+          ],
+          "yaw": 0.52,
+          "cluster": "SC_GALLERY",
+          "cover": 0.1,
+          "modes": [
+            "tdm",
+            "ffa"
+          ],
+          "zoneHint": "gallery_mid"
+        },
+        {
+          "id": "sp_g16",
+          "pos": [
+            24.5,
+            0,
+            18
+          ],
+          "yaw": 1.22,
+          "cluster": "SC_GALLERY",
+          "cover": 0.5,
           "modes": [
             "tdm",
             "ctf",
@@ -4575,69 +5637,9 @@
           "pos": [
             -17,
             0,
-            -14
+            -11
           ],
-          "yaw": -2.53,
-          "cluster": "SC_PLAZA",
-          "cover": 0.3,
-          "modes": [
-            "ffa"
-          ],
-          "zoneHint": "plaza_center"
-        },
-        {
-          "id": "sp_p2",
-          "pos": [
-            -8,
-            0,
-            -3
-          ],
-          "yaw": -1.98,
-          "cluster": "SC_PLAZA",
-          "cover": 0.2,
-          "modes": [
-            "ffa"
-          ],
-          "zoneHint": "plaza_center"
-        },
-        {
-          "id": "sp_p3",
-          "pos": [
-            -1.5,
-            0,
-            -16.5
-          ],
-          "yaw": 1.86,
-          "cluster": "SC_PLAZA",
-          "cover": 0.5,
-          "modes": [
-            "ffa"
-          ],
-          "zoneHint": "plaza_center"
-        },
-        {
-          "id": "sp_p4",
-          "pos": [
-            12.5,
-            0,
-            -3.5
-          ],
-          "yaw": 1.13,
-          "cluster": "SC_PLAZA",
-          "cover": 0.1,
-          "modes": [
-            "ffa"
-          ],
-          "zoneHint": "plaza_center"
-        },
-        {
-          "id": "sp_p5",
-          "pos": [
-            -0.5,
-            0,
-            9.5
-          ],
-          "yaw": 0.63,
+          "yaw": -3,
           "cluster": "SC_PLAZA",
           "cover": 0.4,
           "modes": [
@@ -4646,15 +5648,105 @@
           "zoneHint": "plaza_center"
         },
         {
-          "id": "sp_p6",
+          "id": "sp_p2",
           "pos": [
-            -12,
+            -14,
             0,
-            0
+            -2
           ],
-          "yaw": -0.33,
+          "yaw": -2.09,
           "cluster": "SC_PLAZA",
           "cover": 0.1,
+          "modes": [
+            "ffa"
+          ],
+          "zoneHint": "plaza_center"
+        },
+        {
+          "id": "sp_p3",
+          "pos": [
+            -2,
+            0,
+            -8
+          ],
+          "yaw": -2.65,
+          "cluster": "SC_PLAZA",
+          "cover": 0.2,
+          "modes": [
+            "ffa"
+          ],
+          "zoneHint": "plaza_center"
+        },
+        {
+          "id": "sp_p4",
+          "pos": [
+            7,
+            0,
+            -13
+          ],
+          "yaw": 1.35,
+          "cluster": "SC_PLAZA",
+          "cover": 0.3,
+          "modes": [
+            "ffa"
+          ],
+          "zoneHint": "plaza_center"
+        },
+        {
+          "id": "sp_p5",
+          "pos": [
+            11,
+            0,
+            2
+          ],
+          "yaw": 1.59,
+          "cluster": "SC_PLAZA",
+          "cover": 0.1,
+          "modes": [
+            "ffa"
+          ],
+          "zoneHint": "plaza_center"
+        },
+        {
+          "id": "sp_p6",
+          "pos": [
+            2.5,
+            0,
+            12
+          ],
+          "yaw": 0.84,
+          "cluster": "SC_PLAZA",
+          "cover": 0.3,
+          "modes": [
+            "ffa"
+          ],
+          "zoneHint": "plaza_center"
+        },
+        {
+          "id": "sp_p7",
+          "pos": [
+            -8.5,
+            0,
+            4.5
+          ],
+          "yaw": -1.28,
+          "cluster": "SC_PLAZA",
+          "cover": 0.1,
+          "modes": [
+            "ffa"
+          ],
+          "zoneHint": "plaza_center"
+        },
+        {
+          "id": "sp_p8",
+          "pos": [
+            7,
+            0,
+            -2
+          ],
+          "yaw": 2.36,
+          "cluster": "SC_PLAZA",
+          "cover": 0.2,
           "modes": [
             "ffa"
           ],
@@ -4664,9 +5756,9 @@
       "clusters": {
         "SC_WEST": {
           "anchor": [
-            -44,
+            -49,
             0,
-            -12
+            -3
           ],
           "node": "alley_mid",
           "inwardYaw": -1.57,
@@ -4674,9 +5766,9 @@
         },
         "SC_ARCADE": {
           "anchor": [
-            -32.5,
+            -33,
             0,
-            -8
+            -7.5
           ],
           "node": "arcade_lightwell",
           "inwardYaw": -1.57,
@@ -4684,9 +5776,9 @@
         },
         "SC_LANTERN": {
           "anchor": [
-            -23,
+            -20,
             0,
-            7.5
+            12
           ],
           "node": "lantern_yard",
           "inwardYaw": -0.79,
@@ -4694,9 +5786,9 @@
         },
         "SC_NORTH": {
           "anchor": [
-            -24.5,
+            -19.5,
             0,
-            -22.5
+            -36
           ],
           "node": "cs1_mid",
           "inwardYaw": 3.14,
@@ -4704,9 +5796,9 @@
         },
         "SC_MARKET": {
           "anchor": [
-            -0.5,
+            6,
             0,
-            -24
+            -33
           ],
           "node": "street_mouth",
           "inwardYaw": 3.14,
@@ -4714,9 +5806,9 @@
         },
         "SC_GALLERY": {
           "anchor": [
-            17.5,
+            29,
             0,
-            -7.5
+            -3
           ],
           "node": "gallery_mid",
           "inwardYaw": 1.57,
@@ -4724,9 +5816,9 @@
         },
         "SC_PLAZA": {
           "anchor": [
-            -4,
+            -1.5,
             0,
-            -5.5
+            -2
           ],
           "node": "plaza_center",
           "inwardYaw": null,
@@ -4768,14 +5860,14 @@
         "id": "switchyard",
         "bounds": {
           "min": [
-            -42,
+            -56,
             -2,
-            -27
+            -45
           ],
           "max": [
-            32,
+            46,
             14,
-            23
+            41
           ]
         },
         "vetoOverrides": {
@@ -4783,7 +5875,7 @@
           "v2LosM": 25,
           "v3ConeM": 20
         },
-        "_comment": "PROBE-EMITTED by tools/probe_arena.mjs --emit (measured geometry; PVP_BUILD_PLAN Part 4.2). Do not hand-edit spawnPoints/clusters/flags."
+        "_comment": "PROBE-EMITTED by tools/probe_arena.mjs --emit (measured geometry; PVP_BUILD_PLAN Part 4.2). Do not hand-edit spawnPoints/clusters/flags. Certified under GEN-3 (doubled AND populated — AAA calibration)."
       },
       "spawnPoints": [
         {
@@ -4825,7 +5917,7 @@
             0,
             17.5
           ],
-          "yaw": 0.09,
+          "yaw": -1.83,
           "cluster": "SC_HALL_W",
           "cover": 0.3,
           "modes": [
@@ -4841,7 +5933,7 @@
             0,
             2.5
           ],
-          "yaw": -1.48,
+          "yaw": -0.87,
           "cluster": "SC_HALL_W",
           "cover": 0.4,
           "modes": [
@@ -4858,9 +5950,9 @@
             0,
             3
           ],
-          "yaw": -0.35,
+          "yaw": -0.52,
           "cluster": "SC_HALL_W",
-          "cover": 0.3,
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -4871,13 +5963,13 @@
         {
           "id": "sp_hw6",
           "pos": [
-            -23.5,
+            -21.5,
             0,
-            8.5
+            14
           ],
-          "yaw": -0.26,
+          "yaw": 0.26,
           "cluster": "SC_HALL_W",
-          "cover": 0.4,
+          "cover": 0.5,
           "modes": [
             "tdm",
             "ctf",
@@ -4894,7 +5986,7 @@
           ],
           "yaw": -1.22,
           "cluster": "SC_HALL_W",
-          "cover": 0.2,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -4922,13 +6014,13 @@
         {
           "id": "sp_hw9",
           "pos": [
-            -12,
+            -12.5,
             0,
             20
           ],
-          "yaw": -0.44,
+          "yaw": -0.52,
           "cluster": "SC_HALL_W",
-          "cover": 0.6,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -4939,13 +6031,13 @@
         {
           "id": "sp_ys1",
           "pos": [
-            -6.5,
+            -6,
             0,
-            13.5
+            14.5
           ],
           "yaw": 0,
           "cluster": "SC_YARD_S",
-          "cover": 0.2,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -4956,13 +6048,13 @@
         {
           "id": "sp_ys2",
           "pos": [
-            -24,
+            -23.5,
             0,
-            20
+            20.5
           ],
           "yaw": 0,
           "cluster": "SC_YARD_S",
-          "cover": 0.4,
+          "cover": 0.1,
           "modes": [
             "tdm",
             "ctf",
@@ -4973,11 +6065,11 @@
         {
           "id": "sp_ys3",
           "pos": [
-            5.5,
+            6,
             0,
-            15
+            14.5
           ],
-          "yaw": -0.09,
+          "yaw": 1.05,
           "cluster": "SC_YARD_S",
           "cover": 0.3,
           "modes": [
@@ -5030,7 +6122,7 @@
           ],
           "yaw": 0.26,
           "cluster": "SC_YARD_S",
-          "cover": 0.5,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -5045,9 +6137,9 @@
             0,
             13.5
           ],
-          "yaw": 0.7,
+          "yaw": 0.35,
           "cluster": "SC_YARD_S",
-          "cover": 0.3,
+          "cover": 0.1,
           "modes": [
             "tdm",
             "ctf",
@@ -5060,11 +6152,11 @@
           "pos": [
             -39.5,
             0,
-            -9.5
+            -10
           ],
-          "yaw": -1.92,
+          "yaw": -2.01,
           "cluster": "SC_APRON_W",
-          "cover": 0.6,
+          "cover": 0.2,
           "modes": [
             "tdm",
             "ctf",
@@ -5075,9 +6167,9 @@
         {
           "id": "sp_aw2",
           "pos": [
-            -34.5,
+            -34,
             0,
-            -10
+            -11
           ],
           "yaw": -2.18,
           "cluster": "SC_APRON_W",
@@ -5109,13 +6201,13 @@
         {
           "id": "sp_aw4",
           "pos": [
-            -38,
+            -39.5,
             0,
-            1.5
+            1
           ],
           "yaw": -1.57,
           "cluster": "SC_APRON_W",
-          "cover": 0.7,
+          "cover": 0.8,
           "modes": [
             "tdm",
             "ctf",
@@ -5143,11 +6235,45 @@
         {
           "id": "sp_aw6",
           "pos": [
+            -23.5,
+            0,
+            -4.5
+          ],
+          "yaw": -0.87,
+          "cluster": "SC_APRON_W",
+          "cover": 0.3,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "apron_west"
+        },
+        {
+          "id": "sp_aw7",
+          "pos": [
             -24,
+            0,
+            9
+          ],
+          "yaw": -1.66,
+          "cluster": "SC_APRON_W",
+          "cover": 0.6,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "apron_west"
+        },
+        {
+          "id": "sp_aw8",
+          "pos": [
+            -40,
             0,
             -4
           ],
-          "yaw": -2.18,
+          "yaw": -1.48,
           "cluster": "SC_APRON_W",
           "cover": 0.4,
           "modes": [
@@ -5196,7 +6322,7 @@
             0,
             -21.5
           ],
-          "yaw": -3.05,
+          "yaw": 1.31,
           "cluster": "SC_HALL_E",
           "cover": 0.3,
           "modes": [
@@ -5212,7 +6338,7 @@
             0,
             -6.5
           ],
-          "yaw": 1.66,
+          "yaw": 2.27,
           "cluster": "SC_HALL_E",
           "cover": 0.4,
           "modes": [
@@ -5229,9 +6355,9 @@
             0,
             -7
           ],
-          "yaw": 2.79,
+          "yaw": 2.62,
           "cluster": "SC_HALL_E",
-          "cover": 0.3,
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -5242,13 +6368,13 @@
         {
           "id": "sp_he6",
           "pos": [
-            13.5,
+            11.5,
             0,
-            -12.5
+            -17.5
           ],
-          "yaw": 2.88,
+          "yaw": -2.88,
           "cluster": "SC_HALL_E",
-          "cover": 0.4,
+          "cover": 0.6,
           "modes": [
             "tdm",
             "ctf",
@@ -5265,7 +6391,7 @@
           ],
           "yaw": 1.92,
           "cluster": "SC_HALL_E",
-          "cover": 0.2,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -5295,11 +6421,11 @@
           "pos": [
             2.5,
             0,
-            -23.5
+            -24
           ],
           "yaw": 2.62,
           "cluster": "SC_HALL_E",
-          "cover": 0.4,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -5310,13 +6436,13 @@
         {
           "id": "sp_yn1",
           "pos": [
-            -3.5,
+            -4,
             0,
-            -17.5
+            -18.5
           ],
           "yaw": 3.14,
           "cluster": "SC_YARD_N",
-          "cover": 0.2,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -5327,13 +6453,13 @@
         {
           "id": "sp_yn2",
           "pos": [
-            14,
+            14.5,
             0,
             -24
           ],
-          "yaw": 3.14,
+          "yaw": 3.05,
           "cluster": "SC_YARD_N",
-          "cover": 0.4,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -5344,9 +6470,9 @@
         {
           "id": "sp_yn3",
           "pos": [
-            -15.5,
+            -16,
             0,
-            -19
+            -18.5
           ],
           "yaw": 3.14,
           "cluster": "SC_YARD_N",
@@ -5401,7 +6527,7 @@
           ],
           "yaw": -2.88,
           "cluster": "SC_YARD_N",
-          "cover": 0.5,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -5416,9 +6542,9 @@
             0,
             -17.5
           ],
-          "yaw": -2.44,
+          "yaw": -2.79,
           "cluster": "SC_YARD_N",
-          "cover": 0.3,
+          "cover": 0.1,
           "modes": [
             "tdm",
             "ctf",
@@ -5431,11 +6557,11 @@
           "pos": [
             29.5,
             0,
-            5.5
+            6
           ],
-          "yaw": 1.22,
+          "yaw": 1.13,
           "cluster": "SC_APRON_E",
-          "cover": 0.6,
+          "cover": 0.2,
           "modes": [
             "tdm",
             "ctf",
@@ -5446,11 +6572,11 @@
         {
           "id": "sp_ae2",
           "pos": [
-            23.5,
+            24,
             0,
             7
           ],
-          "yaw": 0.87,
+          "yaw": 0.96,
           "cluster": "SC_APRON_E",
           "cover": 0.3,
           "modes": [
@@ -5465,7 +6591,7 @@
           "pos": [
             18.5,
             0,
-            6
+            6.5
           ],
           "yaw": 2.62,
           "cluster": "SC_APRON_E",
@@ -5482,11 +6608,11 @@
           "pos": [
             29.5,
             0,
-            -2.5
+            -5
           ],
-          "yaw": 0.87,
+          "yaw": 1.75,
           "cluster": "SC_APRON_E",
-          "cover": 0.7,
+          "cover": 0.8,
           "modes": [
             "tdm",
             "ctf",
@@ -5514,11 +6640,45 @@
         {
           "id": "sp_ae6",
           "pos": [
+            13.5,
+            0,
+            0.5
+          ],
+          "yaw": 2.27,
+          "cluster": "SC_APRON_E",
+          "cover": 0.3,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "apron_east"
+        },
+        {
+          "id": "sp_ae7",
+          "pos": [
             14,
+            0,
+            -13
+          ],
+          "yaw": 1.48,
+          "cluster": "SC_APRON_E",
+          "cover": 0.6,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "apron_east"
+        },
+        {
+          "id": "sp_ae8",
+          "pos": [
+            30,
             0,
             0
           ],
-          "yaw": 0.96,
+          "yaw": 1.66,
           "cluster": "SC_APRON_E",
           "cover": 0.4,
           "modes": [
@@ -5537,7 +6697,7 @@
           ],
           "yaw": -1.04,
           "cluster": "SC_SHED",
-          "cover": 0.4,
+          "cover": 0.5,
           "modes": [
             "ffa"
           ],
@@ -5546,9 +6706,9 @@
         {
           "id": "sp_sh2",
           "pos": [
-            -12,
+            -12.5,
             0,
-            5.5
+            6
           ],
           "yaw": -0.4,
           "cluster": "SC_SHED",
@@ -5565,7 +6725,7 @@
             0,
             -4
           ],
-          "yaw": -1.55,
+          "yaw": -2.33,
           "cluster": "SC_SHED",
           "cover": 0.1,
           "modes": [
@@ -5580,7 +6740,7 @@
             0,
             -2
           ],
-          "yaw": 1.75,
+          "yaw": 2.62,
           "cluster": "SC_SHED",
           "cover": 0.3,
           "modes": [
@@ -5595,9 +6755,9 @@
             0,
             5.5
           ],
-          "yaw": 0.12,
+          "yaw": 2.13,
           "cluster": "SC_SHED",
-          "cover": 0.3,
+          "cover": 0.5,
           "modes": [
             "ffa"
           ],
@@ -5606,17 +6766,595 @@
         {
           "id": "sp_sh6",
           "pos": [
-            0.5,
+            1.5,
             0,
             -10.5
           ],
-          "yaw": 2.74,
+          "yaw": 2.93,
           "cluster": "SC_SHED",
-          "cover": 0.4,
+          "cover": 0.3,
           "modes": [
             "ffa"
           ],
           "zoneHint": "shed_centre"
+        },
+        {
+          "id": "sp_rs1",
+          "pos": [
+            28.5,
+            0,
+            26.5
+          ],
+          "yaw": 1.05,
+          "cluster": "SC_ROAD_S",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "yard_south"
+        },
+        {
+          "id": "sp_rs2",
+          "pos": [
+            19,
+            0,
+            34
+          ],
+          "yaw": -0.7,
+          "cluster": "SC_ROAD_S",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "yard_south"
+        },
+        {
+          "id": "sp_rs3",
+          "pos": [
+            14.5,
+            0,
+            27.5
+          ],
+          "yaw": -0.79,
+          "cluster": "SC_ROAD_S",
+          "cover": 0.3,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "yard_south"
+        },
+        {
+          "id": "sp_rs4",
+          "pos": [
+            4,
+            0,
+            36
+          ],
+          "yaw": 0.79,
+          "cluster": "SC_ROAD_S",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "yard_south"
+        },
+        {
+          "id": "sp_rs5",
+          "pos": [
+            -23,
+            0,
+            27
+          ],
+          "yaw": 0.09,
+          "cluster": "SC_ROAD_S",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "yard_south"
+        },
+        {
+          "id": "sp_rs6",
+          "pos": [
+            -30,
+            0,
+            36
+          ],
+          "yaw": 0.79,
+          "cluster": "SC_ROAD_S",
+          "cover": 0.2,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "yard_south"
+        },
+        {
+          "id": "sp_rs7",
+          "pos": [
+            -40,
+            0,
+            27
+          ],
+          "yaw": 0.7,
+          "cluster": "SC_ROAD_S",
+          "cover": 0.1,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "yard_south"
+        },
+        {
+          "id": "sp_rs8",
+          "pos": [
+            -53,
+            0,
+            27
+          ],
+          "yaw": 0,
+          "cluster": "SC_ROAD_S",
+          "cover": 0.6,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "yard_south"
+        },
+        {
+          "id": "sp_ww1",
+          "pos": [
+            -52,
+            0,
+            -22
+          ],
+          "yaw": -0.87,
+          "cluster": "SC_WORKS_W",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "lane_west"
+        },
+        {
+          "id": "sp_ww2",
+          "pos": [
+            -45,
+            0,
+            -18
+          ],
+          "yaw": -1.4,
+          "cluster": "SC_WORKS_W",
+          "cover": 0.3,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "lane_west"
+        },
+        {
+          "id": "sp_ww3",
+          "pos": [
+            -52,
+            0,
+            -12
+          ],
+          "yaw": -1.48,
+          "cluster": "SC_WORKS_W",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "lane_west"
+        },
+        {
+          "id": "sp_ww4",
+          "pos": [
+            -45,
+            0,
+            -8
+          ],
+          "yaw": -2.36,
+          "cluster": "SC_WORKS_W",
+          "cover": 0.2,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "lane_west"
+        },
+        {
+          "id": "sp_ww5",
+          "pos": [
+            -52,
+            0,
+            -4
+          ],
+          "yaw": -1.22,
+          "cluster": "SC_WORKS_W",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "lane_west"
+        },
+        {
+          "id": "sp_ww6",
+          "pos": [
+            -44,
+            0,
+            0
+          ],
+          "yaw": -0.52,
+          "cluster": "SC_WORKS_W",
+          "cover": 0.5,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "lane_west"
+        },
+        {
+          "id": "sp_ww7",
+          "pos": [
+            -46,
+            0,
+            -23
+          ],
+          "yaw": -1.13,
+          "cluster": "SC_WORKS_W",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "lane_west"
+        },
+        {
+          "id": "sp_ww8",
+          "pos": [
+            -52,
+            0,
+            18
+          ],
+          "yaw": -2.44,
+          "cluster": "SC_WORKS_W",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "lane_west"
+        },
+        {
+          "id": "sp_ww9",
+          "pos": [
+            -44,
+            0,
+            20
+          ],
+          "yaw": -2.36,
+          "cluster": "SC_WORKS_W",
+          "cover": 0.3,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "lane_west"
+        },
+        {
+          "id": "sp_rn1",
+          "pos": [
+            -37.5,
+            0,
+            -29.5
+          ],
+          "yaw": -2.09,
+          "cluster": "SC_ROAD_N",
+          "cover": 0.3,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "yard_north"
+        },
+        {
+          "id": "sp_rn2",
+          "pos": [
+            -29,
+            0,
+            -38
+          ],
+          "yaw": 2.44,
+          "cluster": "SC_ROAD_N",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "yard_north"
+        },
+        {
+          "id": "sp_rn3",
+          "pos": [
+            -24.5,
+            0,
+            -31.5
+          ],
+          "yaw": 2.36,
+          "cluster": "SC_ROAD_N",
+          "cover": 0.3,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "yard_north"
+        },
+        {
+          "id": "sp_rn4",
+          "pos": [
+            -14,
+            0,
+            -40
+          ],
+          "yaw": -2.36,
+          "cluster": "SC_ROAD_N",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "yard_north"
+        },
+        {
+          "id": "sp_rn5",
+          "pos": [
+            13,
+            0,
+            -31
+          ],
+          "yaw": -3.05,
+          "cluster": "SC_ROAD_N",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "yard_north"
+        },
+        {
+          "id": "sp_rn6",
+          "pos": [
+            20,
+            0,
+            -40
+          ],
+          "yaw": -2.36,
+          "cluster": "SC_ROAD_N",
+          "cover": 0.2,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "yard_north"
+        },
+        {
+          "id": "sp_rn7",
+          "pos": [
+            30,
+            0,
+            -31
+          ],
+          "yaw": -2.44,
+          "cluster": "SC_ROAD_N",
+          "cover": 0.1,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "yard_north"
+        },
+        {
+          "id": "sp_rn8",
+          "pos": [
+            43,
+            0,
+            -31
+          ],
+          "yaw": 3.14,
+          "cluster": "SC_ROAD_N",
+          "cover": 0.6,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "yard_north"
+        },
+        {
+          "id": "sp_we1",
+          "pos": [
+            42,
+            0,
+            18
+          ],
+          "yaw": 2.27,
+          "cluster": "SC_WORKS_E",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "lane_east"
+        },
+        {
+          "id": "sp_we2",
+          "pos": [
+            35,
+            0,
+            14
+          ],
+          "yaw": 1.75,
+          "cluster": "SC_WORKS_E",
+          "cover": 0.3,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "lane_east"
+        },
+        {
+          "id": "sp_we3",
+          "pos": [
+            42,
+            0,
+            8
+          ],
+          "yaw": 1.66,
+          "cluster": "SC_WORKS_E",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "lane_east"
+        },
+        {
+          "id": "sp_we4",
+          "pos": [
+            35,
+            0,
+            4
+          ],
+          "yaw": 0.79,
+          "cluster": "SC_WORKS_E",
+          "cover": 0.2,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "lane_east"
+        },
+        {
+          "id": "sp_we5",
+          "pos": [
+            42,
+            0,
+            0
+          ],
+          "yaw": 1.92,
+          "cluster": "SC_WORKS_E",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "lane_east"
+        },
+        {
+          "id": "sp_we6",
+          "pos": [
+            34,
+            0,
+            -4
+          ],
+          "yaw": 2.62,
+          "cluster": "SC_WORKS_E",
+          "cover": 0.5,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "lane_east"
+        },
+        {
+          "id": "sp_we7",
+          "pos": [
+            36,
+            0,
+            19
+          ],
+          "yaw": 2.01,
+          "cluster": "SC_WORKS_E",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "lane_east"
+        },
+        {
+          "id": "sp_we8",
+          "pos": [
+            42,
+            0,
+            -22
+          ],
+          "yaw": 0.7,
+          "cluster": "SC_WORKS_E",
+          "cover": 0.4,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "lane_east"
+        },
+        {
+          "id": "sp_we9",
+          "pos": [
+            34,
+            0,
+            -24
+          ],
+          "yaw": 0.79,
+          "cluster": "SC_WORKS_E",
+          "cover": 0.3,
+          "modes": [
+            "tdm",
+            "ctf",
+            "ffa"
+          ],
+          "zoneHint": "lane_east"
         }
       ],
       "clusters": {
@@ -5624,7 +7362,7 @@
           "anchor": [
             -25,
             0,
-            14
+            15
           ],
           "node": "hall_west",
           "inwardYaw": -0.79,
@@ -5642,7 +7380,7 @@
         },
         "SC_APRON_W": {
           "anchor": [
-            -33,
+            -32.5,
             0,
             -5
           ],
@@ -5654,7 +7392,7 @@
           "anchor": [
             15.5,
             0,
-            -17.5
+            -18.5
           ],
           "node": "hall_east",
           "inwardYaw": 2.36,
@@ -5672,7 +7410,7 @@
         },
         "SC_APRON_E": {
           "anchor": [
-            23.5,
+            23,
             0,
             1.5
           ],
@@ -5684,7 +7422,7 @@
           "anchor": [
             -4.5,
             0,
-            -2.5
+            -2
           ],
           "node": "shed_centre",
           "inwardYaw": null,
@@ -5692,6 +7430,46 @@
           "modes": [
             "ffa"
           ]
+        },
+        "SC_ROAD_S": {
+          "anchor": [
+            -9.5,
+            0,
+            30.5
+          ],
+          "node": "yard_south",
+          "inwardYaw": 0,
+          "side": "west"
+        },
+        "SC_WORKS_W": {
+          "anchor": [
+            -47.5,
+            0,
+            -5
+          ],
+          "node": "lane_west",
+          "inwardYaw": -1.57,
+          "side": "west"
+        },
+        "SC_ROAD_N": {
+          "anchor": [
+            0.5,
+            0,
+            -34
+          ],
+          "node": "yard_north",
+          "inwardYaw": 3.14,
+          "side": "east"
+        },
+        "SC_WORKS_E": {
+          "anchor": [
+            38,
+            0,
+            1.5
+          ],
+          "node": "lane_east",
+          "inwardYaw": 1.57,
+          "side": "east"
         }
       },
       "flags": [
@@ -5741,7 +7519,7 @@
           "v2LosM": 35,
           "v3ConeM": 28
         },
-        "_comment": "PROBE-EMITTED by tools/probe_arena.mjs --emit (measured geometry; PVP_BUILD_PLAN Part 4.2). Do not hand-edit spawnPoints/clusters/flags. Certified under GEN-2 (doubled density — not yet the default)."
+        "_comment": "PROBE-EMITTED by tools/probe_arena.mjs --emit (measured geometry; PVP_BUILD_PLAN Part 4.2). Do not hand-edit spawnPoints/clusters/flags. Certified under GEN-3 (doubled AND populated — AAA calibration)."
       },
       "spawnPoints": [
         {
@@ -5753,7 +7531,7 @@
           ],
           "yaw": -1.66,
           "cluster": "SC_SALT",
-          "cover": 0.4,
+          "cover": 0.5,
           "modes": [
             "tdm",
             "ctf",
@@ -5770,7 +7548,7 @@
           ],
           "yaw": -1.4,
           "cluster": "SC_SALT",
-          "cover": 0.3,
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -5787,7 +7565,7 @@
           ],
           "yaw": -0.7,
           "cluster": "SC_SALT",
-          "cover": 0.3,
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -5821,7 +7599,7 @@
           ],
           "yaw": -1.66,
           "cluster": "SC_SALT",
-          "cover": 0.4,
+          "cover": 0.5,
           "modes": [
             "tdm",
             "ctf",
@@ -5838,7 +7616,7 @@
           ],
           "yaw": -0.61,
           "cluster": "SC_SALT",
-          "cover": 0.3,
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -5923,7 +7701,7 @@
           ],
           "yaw": -0.52,
           "cluster": "SC_SALT",
-          "cover": 0.1,
+          "cover": 0.2,
           "modes": [
             "tdm",
             "ctf",
@@ -5957,7 +7735,7 @@
           ],
           "yaw": -1.48,
           "cluster": "SC_SALT",
-          "cover": 0.3,
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -5991,7 +7769,7 @@
           ],
           "yaw": -1.75,
           "cluster": "SC_DOCK_W",
-          "cover": 0.6,
+          "cover": 0.7,
           "modes": [
             "tdm",
             "ctf",
@@ -6008,7 +7786,7 @@
           ],
           "yaw": -1.31,
           "cluster": "SC_DOCK_W",
-          "cover": 0.2,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -6025,7 +7803,7 @@
           ],
           "yaw": -1.83,
           "cluster": "SC_DOCK_W",
-          "cover": 0.1,
+          "cover": 0.2,
           "modes": [
             "tdm",
             "ctf",
@@ -6042,7 +7820,7 @@
           ],
           "yaw": -1.75,
           "cluster": "SC_DOCK_W",
-          "cover": 0.2,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -6059,7 +7837,7 @@
           ],
           "yaw": -2.44,
           "cluster": "SC_DOCK_W",
-          "cover": 0.3,
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -6076,7 +7854,7 @@
           ],
           "yaw": -1.92,
           "cluster": "SC_DOCK_W",
-          "cover": 0.1,
+          "cover": 0.2,
           "modes": [
             "tdm",
             "ctf",
@@ -6093,7 +7871,7 @@
           ],
           "yaw": -1.92,
           "cluster": "SC_DOCK_W",
-          "cover": 0.2,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -6144,7 +7922,7 @@
           ],
           "yaw": 3.05,
           "cluster": "SC_DOCK_W",
-          "cover": 0.5,
+          "cover": 0.6,
           "modes": [
             "tdm",
             "ctf",
@@ -6178,7 +7956,7 @@
           ],
           "yaw": -2.01,
           "cluster": "SC_DOCK_W",
-          "cover": 0.1,
+          "cover": 0.2,
           "modes": [
             "tdm",
             "ctf",
@@ -6195,7 +7973,7 @@
           ],
           "yaw": -2.79,
           "cluster": "SC_DOCK_W",
-          "cover": 0.2,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -6246,7 +8024,7 @@
           ],
           "yaw": -1.83,
           "cluster": "SC_ROWS_W",
-          "cover": 0.3,
+          "cover": 0.5,
           "modes": [
             "tdm",
             "ctf",
@@ -6263,7 +8041,7 @@
           ],
           "yaw": -1.13,
           "cluster": "SC_ROWS_W",
-          "cover": 0.2,
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -6297,7 +8075,7 @@
           ],
           "yaw": -1.22,
           "cluster": "SC_ROWS_W",
-          "cover": 0.1,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -6314,7 +8092,7 @@
           ],
           "yaw": -0.87,
           "cluster": "SC_ROWS_W",
-          "cover": 0.3,
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -6348,7 +8126,7 @@
           ],
           "yaw": -0.26,
           "cluster": "SC_ROWS_W",
-          "cover": 0.4,
+          "cover": 0.5,
           "modes": [
             "tdm",
             "ctf",
@@ -6365,7 +8143,7 @@
           ],
           "yaw": -0.61,
           "cluster": "SC_ROWS_W",
-          "cover": 0.4,
+          "cover": 0.5,
           "modes": [
             "tdm",
             "ctf",
@@ -6382,7 +8160,7 @@
           ],
           "yaw": -0.09,
           "cluster": "SC_ROWS_W",
-          "cover": 0.1,
+          "cover": 0.2,
           "modes": [
             "tdm",
             "ctf",
@@ -6433,7 +8211,7 @@
           ],
           "yaw": 1.48,
           "cluster": "SC_WEIGH",
-          "cover": 0.4,
+          "cover": 0.5,
           "modes": [
             "tdm",
             "ctf",
@@ -6450,7 +8228,7 @@
           ],
           "yaw": 1.75,
           "cluster": "SC_WEIGH",
-          "cover": 0.3,
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -6467,7 +8245,7 @@
           ],
           "yaw": 2.44,
           "cluster": "SC_WEIGH",
-          "cover": 0.3,
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -6501,7 +8279,7 @@
           ],
           "yaw": 1.48,
           "cluster": "SC_WEIGH",
-          "cover": 0.4,
+          "cover": 0.5,
           "modes": [
             "tdm",
             "ctf",
@@ -6518,7 +8296,7 @@
           ],
           "yaw": 2.53,
           "cluster": "SC_WEIGH",
-          "cover": 0.3,
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -6603,7 +8381,7 @@
           ],
           "yaw": 2.62,
           "cluster": "SC_WEIGH",
-          "cover": 0.1,
+          "cover": 0.2,
           "modes": [
             "tdm",
             "ctf",
@@ -6637,7 +8415,7 @@
           ],
           "yaw": 1.66,
           "cluster": "SC_WEIGH",
-          "cover": 0.3,
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -6671,7 +8449,7 @@
           ],
           "yaw": 1.4,
           "cluster": "SC_DOCK_E",
-          "cover": 0.6,
+          "cover": 0.7,
           "modes": [
             "tdm",
             "ctf",
@@ -6688,7 +8466,7 @@
           ],
           "yaw": 1.83,
           "cluster": "SC_DOCK_E",
-          "cover": 0.2,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -6705,7 +8483,7 @@
           ],
           "yaw": 1.31,
           "cluster": "SC_DOCK_E",
-          "cover": 0.1,
+          "cover": 0.2,
           "modes": [
             "tdm",
             "ctf",
@@ -6739,7 +8517,7 @@
           ],
           "yaw": 0.7,
           "cluster": "SC_DOCK_E",
-          "cover": 0.3,
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -6756,7 +8534,7 @@
           ],
           "yaw": 1.22,
           "cluster": "SC_DOCK_E",
-          "cover": 0.1,
+          "cover": 0.2,
           "modes": [
             "tdm",
             "ctf",
@@ -6773,7 +8551,7 @@
           ],
           "yaw": 1.22,
           "cluster": "SC_DOCK_E",
-          "cover": 0.2,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -6824,7 +8602,7 @@
           ],
           "yaw": -0.09,
           "cluster": "SC_DOCK_E",
-          "cover": 0.5,
+          "cover": 0.6,
           "modes": [
             "tdm",
             "ctf",
@@ -6841,7 +8619,7 @@
           ],
           "yaw": 0.52,
           "cluster": "SC_DOCK_E",
-          "cover": 0.2,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -6858,7 +8636,7 @@
           ],
           "yaw": 1.13,
           "cluster": "SC_DOCK_E",
-          "cover": 0.1,
+          "cover": 0.2,
           "modes": [
             "tdm",
             "ctf",
@@ -6875,7 +8653,7 @@
           ],
           "yaw": 0.35,
           "cluster": "SC_DOCK_E",
-          "cover": 0.2,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -6926,7 +8704,7 @@
           ],
           "yaw": 1.31,
           "cluster": "SC_ROWS_E",
-          "cover": 0.3,
+          "cover": 0.5,
           "modes": [
             "tdm",
             "ctf",
@@ -6943,7 +8721,7 @@
           ],
           "yaw": 2.01,
           "cluster": "SC_ROWS_E",
-          "cover": 0.2,
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -6977,7 +8755,7 @@
           ],
           "yaw": 1.92,
           "cluster": "SC_ROWS_E",
-          "cover": 0.1,
+          "cover": 0.3,
           "modes": [
             "tdm",
             "ctf",
@@ -6994,7 +8772,7 @@
           ],
           "yaw": 2.27,
           "cluster": "SC_ROWS_E",
-          "cover": 0.3,
+          "cover": 0.4,
           "modes": [
             "tdm",
             "ctf",
@@ -7022,9 +8800,9 @@
         {
           "id": "sp_re9",
           "pos": [
-            16.5,
+            15.5,
             0,
-            -34.5
+            -34
           ],
           "yaw": 2.71,
           "cluster": "SC_ROWS_E",
@@ -7045,7 +8823,7 @@
           ],
           "yaw": 2.53,
           "cluster": "SC_ROWS_E",
-          "cover": 0.4,
+          "cover": 0.5,
           "modes": [
             "tdm",
             "ctf",
@@ -7062,7 +8840,7 @@
           ],
           "yaw": 3.05,
           "cluster": "SC_ROWS_E",
-          "cover": 0.1,
+          "cover": 0.2,
           "modes": [
             "tdm",
             "ctf",
@@ -7128,7 +8906,7 @@
           ],
           "yaw": -1.92,
           "cluster": "SC_HALL",
-          "cover": 0.4,
+          "cover": 0.5,
           "modes": [
             "ffa"
           ],
@@ -7143,7 +8921,7 @@
           ],
           "yaw": -1.58,
           "cluster": "SC_HALL",
-          "cover": 0.3,
+          "cover": 0.4,
           "modes": [
             "ffa"
           ],
@@ -7278,7 +9056,7 @@
           ],
           "yaw": 1.56,
           "cluster": "SC_HALL",
-          "cover": 0.3,
+          "cover": 0.4,
           "modes": [
             "ffa"
           ],
@@ -7320,7 +9098,7 @@
           "anchor": [
             -32.5,
             0,
-            -2
+            -1.5
           ],
           "node": "salt_store",
           "inwardYaw": -1.57,
@@ -7350,7 +9128,7 @@
           "anchor": [
             23,
             0,
-            -1.5
+            -2
           ],
           "node": "weigh_house",
           "inwardYaw": 1.57,

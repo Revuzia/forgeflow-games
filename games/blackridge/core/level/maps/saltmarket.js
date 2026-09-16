@@ -644,6 +644,65 @@ export function buildLayout(seed = 1) {
   p("ye_trash_1", "trash_bags", 30.0, -31.0, 0.4, 1.0, 1.0, 0.6, "wood", "soft",
     { solid: false });
   p("ye_rope_1", "rope", 41.0, -24.0, 0.6, 0.8, 0.8, 0.3, "wood", "soft", { solid: false });
+  // ---- gen-2c: THE COVER PASS (AAA population, owner 2026-09-16) ----------
+  // This arena's floor grew 2528 -> 6205 m2 (+145%) while its wall count stayed
+  // IDENTICAL at 101 and its collider count actually FELL 293 -> 271: the new
+  // ground was bare. Cover density had dropped 5.22 -> 2.26 objects/100 m2, the
+  // worst regression of the three arenas.
+  //
+  // Heights follow Treyarch's published standards (1 CoD unit = 1 inch):
+  // crouch 0.81-0.91 m, chest-high 1.22 m, standing EYE level 1.63 m. Almost
+  // everything here is deliberately BELOW 1.63 m, so it gives a body to hide
+  // behind without closing the market's sightlines or turning the rows into a
+  // maze. Coordinates are LOCAL like every other p() call; section 7 emits each
+  // one twice, so every piece lands as a parity-exact <id>/m_<id> pair.
+  p("yd_crate_2", "crate", -44, -24, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  p("yd_sand_2", "sandbags", -40.5, -15.5, 0, 2.2, 0.9, 1.05, "dirt", "soft");
+  p("yd_pallet_2", "pallet", -29.5, -15, 0, 1.2, 1, 1.1, "wood", "soft");
+  p("yd_dump_3", "dumpster", -47.5, -36.5, 0, 1.7, 1.1, 1.25, "metal", "metal_thin");
+  p("yd_pallet_6", "pallet", -47, -22, 0, 1.2, 1, 1.1, "wood", "soft");
+  p("yd_crate_8", "crate", -34, -36, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  p("yd_crate_9", "crate", -33.5, -19, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  p("yd_pallet_7", "pallet", -28, -18.5, 0, 1.2, 1, 1.1, "wood", "soft");
+  p("yd_pallet_8", "pallet", -38.5, -29, 0, 1.2, 1, 1.1, "wood", "soft");
+  p("mk_crate_5", "crate", -22.2, -23.5, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  p("mk_pallet_2", "pallet", -5.2, -34.2, 0, 1.2, 1, 1.1, "wood", "soft"); // clear of mn_vent_1
+  p("mk_sand_2", "sandbags", -12, -27.5, 0, 2.2, 0.9, 1.05, "dirt", "soft");
+  p("mk_crate_6", "crate", -17, -34, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  p("mk_crate_8", "crate", -12.5, -15.5, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  p("mk_crate_10", "crate", -9.5, -27, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  p("mk_sand_5", "sandbags", -5, -16, 0, 2.2, 0.9, 1.05, "dirt", "soft");
+  p("mk_crate_11", "crate", -7.5, -34, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  p("mk_crate_13", "crate", -27.5, -34.5, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  p("mk_shelf_2", "shelving", 22.8, -33.5, 0, 0.6, 2.6, 1.9, "metal", "metal_thin");
+  p("mk_crate_7", "crate", 6, -31, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  p("mk_sand_3", "sandbags", 7.5, -16, 0, 2.2, 0.9, 1.05, "dirt", "soft");
+  p("mk_pallet_3", "pallet", 22.6, -25, 0, 1.2, 1, 1.1, "wood", "soft");
+  p("mk_barrier_2", "barrier", 16, -36.5, 0, 2, 0.6, 1.1, "concrete", "hard");
+  p("mk_barrier_3", "barrier", 21.5, -15.5, 0, 2, 0.6, 1.1, "concrete", "hard");
+  p("mk_crate_9", "crate", 3.5, -24.5, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  p("mk_crate_12", "crate", 13, -16.5, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  p("mk_crate_14", "crate", 13, -24, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  p("yd_crate_4", "crate", 41, -21, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  p("yd_pallet_4", "pallet", 28, -22, 0, 1.2, 1, 1.1, "wood", "soft");
+  p("yd_barrier_3", "barrier", 47, -21, 0, 2, 0.6, 1.1, "concrete", "hard");
+  p("yd_crate_5", "crate", 40.5, -35.5, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  p("yd_sand_4", "sandbags", 35, -16, 0, 2.2, 0.9, 1.05, "dirt", "soft");
+  p("yd_crate_10", "crate", 32, -20, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  p("yd_pallet_5", "pallet", 34, -34, 0, 1.2, 1, 1.1, "wood", "soft");
+  p("yd_crate_11", "crate", 37, -36.5, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  p("yd_crate_6", "crate", -47, 16, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  p("yd_crate_7", "crate", 28, -33, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  p("pr_crate_4", "crate", -26, -6, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  p("pr_sand_2", "sandbags", -35.5, -6, 0, 2.2, 0.9, 1.05, "dirt", "soft");
+  p("pr_crate_5", "crate", -34, 6, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  p("pr_drums_2", "fuel_drums", -24.5, 5.5, 0, 1.4, 1.4, 1, "metal", "metal_thin");
+  p("pr_crate_6", "crate", -18.5, -2, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  p("pr_pallet_3", "pallet", -18.6, -9.6, 0, 1.2, 1, 1.1, "wood", "soft");
+  // clear of ss_rope_1, ss_pallet_1 AND the L_SALT_N lane waypoint at (-51,-3)
+  p("ss_crate_4", "crate", -46.25, -3.03, 0, 1.4, 1.2, 1.25, "wood", "soft");
+  p("h_planter_2", "planter", 8.5, -5, 0, 2, 0.8, 0.9, "concrete", "hard");
+  p("h_pallet_2", "pallet", -12, 4, 0, 1.2, 1, 1.1, "wood", "soft");
 
   // ================================================== 7. EMIT (half ×2)
   const localWalls = [];
