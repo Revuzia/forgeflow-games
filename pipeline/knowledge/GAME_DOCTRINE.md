@@ -257,16 +257,21 @@ keep every line load-bearing.
 - Store copy is a CONTRACT: never advertise a mode that does not exist in the
   code (Colosseum shipped "mounted jousting" with zero joust code; it took a
   full sim+view build to make the page honest).
-- **The portal game iframe carries NO sandbox attribute** (measured Chrome 152,
-  real clicks + controls, 2026-09-16): a CROSS-origin iframe with ANY sandbox
-  — even `allow-pointer-lock` — cannot pointer-lock; with the token the
-  refusal is a silent `WrongDocumentError`, so mouse-look games sit on a dead
-  "CLICK TO RESUME". Same-origin frames lock either way, which is why local
-  dev never catches it: verify pointer lock ON THE PORTAL, not just the CDN
-  URL. Trade-off accepted: no sandbox returns top-navigation/popups to the
-  frame — fine for first-party games only; if third-party games are ever
-  embedded, sandbox cannot come back without killing mouse-look, so that
-  needs a same-origin embed (sandbox+lock coexist there) or other containment.
+- **The portal game iframe's sandbox MUST carry `allow-pointer-lock`**
+  (measured Chrome 152, real clicks + controls, 2026-09-16, two sessions
+  independently): a sandboxed frame without that token cannot pointer-lock
+  ("Blocked pointer lock … 'allow-pointer-lock' permission is not set"), and
+  mouse-look games sit on a dead "CLICK TO RESUME". WITH the token a
+  cross-origin sandboxed frame locks fine, so keep the sandbox — it is the
+  containment (`allow-top-navigation` deliberately NOT granted).
+  `allow-same-origin` is REQUIRED too: without it the frame's origin goes
+  opaque and localStorage throws, wiping every game's save. Same-origin
+  frames lock without any token, so local dev never catches a missing one:
+  verify pointer lock ON THE PORTAL, not just the CDN URL. If a correctly
+  tokened frame ever rejects with `WrongDocumentError` ("root document …
+  not valid for pointer lock"), suspect a stale element across an iframe
+  remount/src swap — one session observed it live and it vanished on retest;
+  it is a diagnostic signature, not the steady state.
 - A mouse-look game must TELL the player when lock is refused: after 2+
   `pointerlockerror`s with zero successful locks ever, swap the resume prompt
   for "MOUSE CAPTURE BLOCKED — reload the page" (ascendant game.js pattern).
