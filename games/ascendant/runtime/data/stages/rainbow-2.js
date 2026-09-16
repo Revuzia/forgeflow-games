@@ -58,7 +58,10 @@
  * PRISM GATE LAW (§4, quoted so the numbers read as decisions): period ==
  *   seq.length*(dwell+travel) to 1e-6; window >= 1.6 x 2.2; worst cyclic slot
  *   pitch / travel <= 6.4 m/s; s[0] <= 0.5. Sill = deck top (p.y = top + s[1]/2).
- *   Every gate has an all-phase-safe staging deck before its plane plus a flank
+ *   Every gate has an all-phase-safe staging deck before its plane. (The flank
+ *   walk-around ledges that shipped with the first cut were REMOVED on the
+ *   owner's call 2026-09-16 — the gates are mandatory; staging stays.) Old text:
+ *   ...plus a flank
  *   ledge OUTSIDE its lattice span.
  *
  * COLOUR BLOOM LAW (§5): band = hue = speed (SPEED_BY_BAND: red/orange 6.0,
@@ -269,7 +272,6 @@ export default {
        already taught the low hop). Landing raised +0.6 so the exit reads. */
     { kind: 'conveyor', p: [69.5, 1.9, 0.6], s: [9, 1, 4.4], dir: [1, 0, 0], power: 4.5, mat: 'conveyor' }, // top 2.4, gap 1.00
     { kind: 'prismgate', p: [75.5, 4.4, 0.6], s: [0.4, 4.0, 10.0], seq: [1, 2, 3, 2], dwell: 2.0, travel: 1.0, period: 12, window: { w: 1.6, h: 3.0 } },
-    { kind: 'platform', p: [75.5, 2.15, 7.4], s: [3.2, 0.5, 2.2], mat: 'stone', glow: SLATE, stripe: true }, // flank ledge, z 6.3 clears lattice edge 5.6
     { kind: 'deco', kindOf: 'rail', p: [77.6, 2.46, 0.6], s: [0.1, 0.06, 8.6], mat: 'emissive', tint: IVORY }, // exit edge strip — the side you aim for
     { kind: 'platform', p: [79, 2.5, 0.6], s: [6, 1, 9], mat: 'stone', glow: SLATE, stripe: true }, // top 3.0, gap 2.00 THROUGH the window, +0.6
 
@@ -302,7 +304,6 @@ export default {
        the dwell tier is still the teaching 2.0 here. */
     { kind: 'platform', p: [121, 2.9, 0], s: [12, 1, 12], mat: 'stone', glow: SLATE, stripe: true }, // top 3.4, gap 2.00, +1.2 — gate-A court, CP4 east of the plane
     { kind: 'prismgate', p: [119, 5.4, 0], s: [0.4, 4.0, 12.6], seq: [0, 1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1], dwell: 2.0, travel: 0.5, period: 30 },
-    { kind: 'platform', p: [119, 3.15, 7.6], s: [3.2, 0.5, 2.4], mat: 'stone', glow: SLATE, stripe: true }, // flank ledge, z 6.4 clears lattice edge 6.3
     { kind: 'text', p: [116.2, 5.6, -4.6], rot: [0, -Math.PI / 2, 0], text: 'ALL SEVEN STOPS', size: 0.38, color: GOLD },
     { kind: 'text', p: [116.2, 5.05, -4.6], rot: [0, -Math.PI / 2, 0], text: 'red far left · violet far right · it never skips', size: 0.22, color: DUSK },
 
@@ -321,7 +322,6 @@ export default {
        is the tightening, not a handoff. */
     { kind: 'platform', p: [134, 3.7, 0], s: [10, 1, 11], mat: 'stone', glow: SLATE, stripe: true }, // top 4.2, gap 2.00, +0.8 — gate-B court
     { kind: 'prismgate', p: [133.5, 6.2, 0], s: [0.4, 4.0, 12.0], seq: [0, 1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1], dwell: 1.6, travel: 0.5, period: 25.2 },
-    { kind: 'platform', p: [133.5, 3.95, -7.3], s: [3.2, 0.5, 2.2], mat: 'stone', glow: SLATE, stripe: true }, // flank ledge LEFT this time, z -6.2 clears lattice edge -6.0
     { kind: 'text', p: [130.5, 6.4, 4.6], rot: [0, -Math.PI / 2, 0], text: 'THE LADDER TIGHTENS', size: 0.34, color: GOLD },
     { kind: 'light', p: [126, 6.0, 0], color: 0xfff0d0, intensity: 8, distance: 22 },
     { kind: 'platform', p: [142, 3.7, -1.2], s: [4, 1, 5], mat: 'panel', glow: SLATE, stripe: true }, // top 4.2, gap 1.00 — the terrace lip
@@ -402,7 +402,6 @@ export default {
        9.1..12.7 swallows the whole arc: full-hold head peaks 12.69 at the
        plane). Aperture 1.8 m/s vertical — slower than the lift. */
     { kind: 'prismgate', p: [231.5, 10.9, 1.6], s: [0.4, 7.0, 6.0], slots: 'y', seq: [1, 3, 5], dwell: 2.0, travel: 1.0, period: 9, window: { w: 1.6, h: 3.6 } },
-    { kind: 'platform', p: [231.5, 8.55, 6.2], s: [3.0, 0.5, 2.4], mat: 'stone', glow: SLATE, stripe: true }, // flank ledge, z 5.0 clears lattice edge 4.6
     { kind: 'platform', p: [234.3, 9.2, 1.6], s: [3.8, 1, 3.8], mat: 'panel', glow: SLATE, stripe: true }, // top 9.7, gap 3.40 at +0.9 THROUGH the middle window
     { kind: 'text', p: [228.4, 12.4, -1.6], rot: [0, -Math.PI / 2, 0], text: 'THE DOOR CLIMBS — MEET IT MID-LADDER', size: 0.30, color: GOLD },
     { kind: 'light', p: [226, 10.4, 1.6], color: FROST, intensity: 8, distance: 22 },
@@ -494,7 +493,6 @@ export default {
     { kind: 'platform', p: [331.6, 7.3, 0.4], s: [3.4, 1, 4.6], mat: 'panel', glow: SLATE, stripe: true }, // top 7.8, gap 1.00, +0.9
     { kind: 'platform', p: [336.4, 8.1, 0], s: [4.8, 1, 5], mat: 'stone', glow: SLATE, stripe: true }, // THE APEX, top 8.6, gap 0.70, +0.8
     { kind: 'prismgate', p: [337.4, 10.6, 0], s: [0.4, 4.0, 9.0], seq: [2, 3, 4, 3], dwell: 2.0, travel: 1.0, period: 12 },
-    { kind: 'platform', p: [337.4, 8.35, 5.8], s: [3.0, 0.5, 2.2], mat: 'stone', glow: SLATE, stripe: true }, // flank ledge, z 4.7 clears lattice edge 4.5
     { kind: 'platform', p: [342.2, 7.3, 0], s: [5, 1, 7], mat: 'stone', glow: SLATE, stripe: true }, // east deck, top 7.8, gap 0.90, -0.8
     { kind: 'bloom', p: [342.2, 7.8, 0], rmax: 3.0, band: 4, period: 6.0, phase: 0.5 }, // D2 — the second ring-jump, and the window opens as you land
 

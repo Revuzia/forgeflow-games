@@ -43,6 +43,11 @@
  *   s[0] <= 0.5. Sill of a slots:'z' gate IS its deck: p.y = deckTop + s[1]/2.
  *   Every gate here has an all-phase-safe staging deck BEFORE its plane plus a
  *   flank ledge OUTSIDE its lattice span (contract law 2 house language).
+ *   OWNER'S CALL 2026-09-16: every gate walk-around ledge REMOVED, all three
+ *   stages. "I especially love your jumping through laser fields - remove the
+ *   platform to go around, makes it too easy." The gates are mandatory now;
+ *   the all-phase-safe staging decks BEFORE each plane remain (law 2 is about
+ *   reading the hazard, not skipping it). Coin V moved onto the relay line.
  *
  * COLOUR BLOOM LAW (§5): band = hue = speed (SPEED_BY_BAND: red/orange 6.0,
  *   yellow/green 4.2, blue+ 3.0 m/s). All five emitters here are band 4 BLUE,
@@ -143,7 +148,7 @@ export default {
   coins: [
     { p: [107.4, 3.2, 9.8] }, // II  — satellite orbit, both rings out of phase
     { p: [204.0, 4.2, 8.0] }, // IV  — breather perch beside the HIGH ring
-    { p: [273.6, 10.9, 6.6] }, // V   — far end of the hall's flank ledge
+    { p: [267.0, 11.1, 0.2] }, // V   — mid-hall, between gates 2 and 3, ON the relay line
   ],
 
   objects: [
@@ -197,8 +202,6 @@ export default {
        outside the lattice, visible from the staging deck. */
     { kind: 'platform', p: [38.6, 0.9, 0], s: [10.0, 1, 10.0], mat: 'stone', glow: SLATE }, // gap 1.00 — the gate court
     { kind: 'prismgate', p: [38.6, 3.4, 0], s: [0.4, 4.0, 9.0], seq: [1, 3, 5], dwell: 2.3, travel: 0.9, period: 9.6 },
-    { kind: 'platform', p: [38.6, 1.15, 6.6], s: [3.4, 0.5, 2.4], mat: 'stone', glow: SLATE, stripe: true }, // flank ledge, top 1.40 — z 5.4 clears lattice edge 4.5
-    { kind: 'text', p: [37.0, 3.0, 6.6], rot: [0, -Math.PI / 2, 0], text: 'OR ROUND THE RIGHT  ·  past the light', size: 0.28, color: GOLD },
     { kind: 'deco', kindOf: 'rail', p: [43.2, 1.46, 0], s: [0.1, 0.06, 9.6], mat: 'emissive', tint: IVORY }, // exit edge strip, 0.1 m — the side you aim for
 
     /* BEAT 4 — GATE 2: SAME VERB, FIVE STOPS. Dwell 2.0, travel 1.0 (period 15):
@@ -209,7 +212,6 @@ export default {
     { kind: 'platform', p: [46.8, 1.7, -1.2], s: [4.0, 1, 5.0], mat: 'panel', glow: SLATE, stripe: true }, // gap 1.20, +0.8
     { kind: 'platform', p: [53.8, 1.7, 0], s: [10.0, 1, 10.0], mat: 'stone', glow: SLATE }, // gap 1.00 — gate-2 court, top 2.2
     { kind: 'prismgate', p: [53.8, 4.2, 0], s: [0.4, 4.0, 11.0], seq: [1, 2, 3, 4, 5], dwell: 1.9, travel: 1.1, period: 15 },
-    { kind: 'platform', p: [53.8, 1.95, -6.9], s: [3.4, 0.5, 2.4], mat: 'stone', glow: SLATE, stripe: true }, // flank ledge LEFT, top 2.2 — z -5.7 clears lattice edge -5.5
     { kind: 'text', p: [50.4, 4.4, -4.2], rot: [0, -Math.PI / 2, 0], text: 'COUNT THE PIPS', size: 0.40, color: GOLD },
     { kind: 'text', p: [50.4, 3.9, -4.2], rot: [0, -Math.PI / 2, 0], text: 'the next slot brightens before the slide', size: 0.22, color: DUSK },
     { kind: 'light', p: [53.8, 5.2, 0], color: 0xfff0d0, intensity: 8, distance: 20 },
@@ -284,7 +286,6 @@ export default {
     { kind: 'platform', p: [131.8, 1.3, 0.8], s: [6.0, 1, 7.0], mat: 'stone', glow: SLATE, stripe: true }, // gap 1.20, +1.5 up out of the low road — CP4
     { kind: 'platform', p: [140.8, 1.3, 0.8], s: [8.0, 1, 11.6], mat: 'stone', glow: SLATE }, // gap 2.00, flat — gate-3 court
     { kind: 'prismgate', p: [140.8, 3.8, 0.8], s: [0.4, 4.0, 11.0], seq: [0, 2, 4, 6], dwell: 1.45, travel: 1.65, period: 12.4 },
-    { kind: 'platform', p: [140.8, 1.55, 8.0], s: [3.4, 0.5, 2.4], mat: 'stone', glow: SLATE, stripe: true }, // flank ledge, z 6.8 clears lattice edge 6.3
     { kind: 'text', p: [136.4, 4.6, -3.4], rot: [0, -Math.PI / 2, 0], text: 'READ THE RAINBOW', size: 0.40, color: GOLD },
     { kind: 'text', p: [136.4, 4.05, -3.4], rot: [0, -Math.PI / 2, 0], text: 'red rides far left  ·  violet far right', size: 0.22, color: DUSK },
 
@@ -309,7 +310,6 @@ export default {
       mat: 'metal',
       motion: { type: 'linear', to: [155.2, 2.1, -7.8], period: 6.2, phase: 0.5, ease: 'sine', dwell: 0.5 },
     }, // SOUTH lane — rides AROUND the lattice, counter-phased with centre
-    { kind: 'platform', p: [151.4, 2.35, -7.0], s: [3.4, 0.5, 2.4], mat: 'stone', glow: SLATE, stripe: true }, // bailout ledge under the south lane, top 2.6
     { kind: 'vanish', p: [148.6, 1.7, 7.6], s: [2.8, 1, 3.0], mat: 'panel', cycle: { on: 1.9, off: 0.8, warn: 0.4, phase: 0 } }, // NORTH lane — gap 2.40, +0.4
     { kind: 'vanish', p: [153.4, 1.9, 8.4], s: [2.8, 1, 3.0], mat: 'panel', cycle: { on: 1.9, off: 0.8, warn: 0.4, phase: 0.5 } }, // gap 2.00, +0.2
     { kind: 'vanish', p: [158.6, 2.1, 3.0], s: [2.8, 1, 3.0], mat: 'panel', cycle: { on: 1.9, off: 0.8, warn: 0.4, phase: 0.25 } }, // gap 3.39 diagonal, +0.2, back to the axis
@@ -331,7 +331,6 @@ export default {
     { kind: 'vanish', p: [177.8, 2.9, 1.8], s: [2.8, 1, 3.0], mat: 'panel', cycle: { on: 1.9, off: 0.8, warn: 0.4, phase: 0.5 } }, // gap 2.30, +0.4
     { kind: 'vanish', p: [183.0, 3.3, 0.4], s: [2.6, 1, 2.8], mat: 'panel', cycle: { on: 3.6, off: 2.0, warn: 0.6, phase: 1.0 / 6.2 } }, // THE PAUSE ISLAND — warn 4.6..5.2 s = gate 5's dwell open
     { kind: 'prismgate', p: [185.6, 6.3, 0.4], s: [0.4, 5.0, 7.0], seq: [4, 3, 2, 3], dwell: 1.6, travel: 1.5, period: 12.4, window: { w: 1.6, h: 3.0 } },
-    { kind: 'platform', p: [185.6, 3.55, 5.9], s: [3.4, 0.5, 2.4], mat: 'stone', glow: SLATE, stripe: true }, // flank ledge, z 4.7 clears lattice edge 3.9
     { kind: 'platform', p: [189.6, 3.3, 0.4], s: [6.0, 1, 7.0], mat: 'stone', glow: SLATE, stripe: true }, // landing — gap 2.30 flat through the window
     { kind: 'text', p: [180.4, 5.8, -2.2], rot: [0, -Math.PI / 2, 0], text: 'BLINKING IS STILL SOLID', size: 0.36, color: GOLD },
     { kind: 'text', p: [180.4, 5.3, -2.2], rot: [0, -Math.PI / 2, 0], text: 'stand the warn  ·  hop low through the door', size: 0.22, color: DUSK },
@@ -391,7 +390,6 @@ export default {
        Flank ledge rides the shaft wall at z 4.3..6.9, outside the wall's
        z -1.8..4.2. */
     { kind: 'prismgate', p: [233.2, 10.2, 1.2], s: [0.4, 7.0, 6.0], slots: 'y', seq: [1, 3, 5], dwell: 2.25, travel: 1.15, period: 10.2, window: { w: 1.6, h: 3.6 } },
-    { kind: 'platform', p: [233.2, 7.7, 5.6], s: [3.0, 0.5, 2.6], mat: 'stone', glow: SLATE, stripe: true }, // flank ledge around the wall
     { kind: 'platform', p: [236.2, 8.4, 1.2], s: [3.2, 1, 3.2], mat: 'panel', glow: SLATE, stripe: true }, // gap 3.40, +0.9 THROUGH the middle window
     { kind: 'platform', p: [239.8, 9.3, -1.0], s: [3.0, 1, 3.0], mat: 'panel', glow: SLATE, stripe: true }, // gap 0.50, +0.9, off-axis
     { kind: 'text', p: [230.0, 11.6, -1.8], rot: [0, -Math.PI / 2, 0], text: 'THE DOOR CLIMBS  ·  MEET IT MID-LADDER', size: 0.30, color: GOLD },
@@ -412,7 +410,6 @@ export default {
     { kind: 'prismgate', p: [258.0, 11.8, 0.2], s: [0.4, 4.0, 9.0], seq: [2, 3, 4, 3], dwell: 2.0, travel: 1.0, period: 12, phase: 0, relay: { group: 'refraction', index: 0 } },
     { kind: 'prismgate', p: [264.0, 11.8, 0.2], s: [0.4, 4.0, 9.0], seq: [2, 3, 4, 3], dwell: 2.0, travel: 1.0, period: 12, phase: 1.6 / 12, relay: { group: 'refraction', index: 1 } }, // opens 0.6 s before gate 0 closes
     { kind: 'prismgate', p: [270.0, 11.8, 0.2], s: [0.4, 4.0, 9.0], seq: [2, 3, 4, 3], dwell: 2.0, travel: 1.0, period: 12, phase: 3.2 / 12, relay: { group: 'refraction', index: 2 } }, // and 0.6 s again
-    { kind: 'platform', p: [264.0, 9.55, 6.6], s: [22.0, 0.5, 2.2], mat: 'stone', glow: SLATE, stripe: true }, // full-length flank ledge, z 5.5 clears lattice edge 4.7
     { kind: 'text', p: [252.4, 12.6, -3.8], rot: [0, -Math.PI / 2, 0], text: 'THE REFRACTION HALL', size: 0.50, color: GOLD },
     { kind: 'text', p: [252.4, 12.0, -3.8], rot: [0, -Math.PI / 2, 0], text: 'one line threads all three  ·  walk with the light', size: 0.24, color: DUSK },
 

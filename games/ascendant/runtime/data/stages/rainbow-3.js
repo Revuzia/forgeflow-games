@@ -234,7 +234,6 @@ export default {
        right, outside the lattice edge z 5.5. CP1 on the staging deck. */
     { kind: 'platform', p: [44.6, 2.7, 0], s: [10.0, 1, 10.4], mat: 'stone', glow: SLATE }, // gap 0.70 off the mover's far pose — gate court, top 3.2
     { kind: 'prismgate', p: [47.2, 5.2, 0], s: [0.4, 4.0, 11.0], seq: [6, 4, 2, 0], dwell: 1.85, travel: 1.65, period: 14 },
-    { kind: 'platform', p: [47.2, 2.95, 7.4], s: [3.4, 0.5, 2.4], mat: 'stone', glow: SLATE, stripe: true }, // flank ledge, top 3.2 — inner 6.2 clears lattice edge 5.5
     { kind: 'text', p: [42.0, 5.6, -3.6], rot: [0, -Math.PI / 2, 0], text: 'THE SPECTRUM RUNS DOWN', size: 0.36, color: GOLD },
     { kind: 'text', p: [42.0, 5.05, -3.6], rot: [0, -Math.PI / 2, 0], text: 'violet high  ·  red low  ·  same door', size: 0.22, color: DUSK },
     { kind: 'light', p: [44.6, 6.0, 0], color: MINT, intensity: 9, distance: 18 },
@@ -391,7 +390,6 @@ export default {
        3.4 m at +0.9 through the MIDDLE window (h 3.6 swallows the whole arc).
        Flank ledge rides the shaft wall outside the lattice (z 5.6). */
     { kind: 'prismgate', p: [213.6, 13.9, 1.4], s: [0.4, 7.0, 6.0], slots: 'y', seq: [1, 3, 5], dwell: 2.4, travel: 1.0, period: 10.2, window: { w: 1.6, h: 3.6 } },
-    { kind: 'platform', p: [213.6, 11.15, 6.4], s: [3.0, 0.5, 2.6], mat: 'stone', glow: SLATE, stripe: true }, // flank ledge, top 11.4 — inner 5.1 clears lattice edge 4.4
     { kind: 'platform', p: [217.5, 11.8, 1.4], s: [3.4, 1, 3.4], mat: 'panel', glow: SLATE, stripe: true }, // gap 3.40, +0.9 THROUGH the middle window, top 12.3
     { kind: 'text', p: [210.4, 15.4, -1.6], rot: [0, -Math.PI / 2, 0], text: 'THE DOOR STILL CLIMBS', size: 0.30, color: GOLD },
 
@@ -508,7 +506,9 @@ export default {
     /* spectrum one band at a time, home through green-adjacent 3 — dwell 1.2,      */
     /* travel 0.8, phases stepping 1.4/16 so each gate's window opens 0.6 s after   */
     /* its predecessor's (overlap 0.6 >= 0.4). Worst hop 3 slots = 5.00 m / 0.8 s   */
-    /* = 6.25 m/s. Every step's front half is staging; every gate has a flank      */
+    /* = 6.25 m/s. Every step's front half is staging. (Gate flank ledges were   */
+    /* removed on the owner's call 2026-09-16 — the sevenstair is climbed THROUGH */
+    /* its windows, or not at all.)                                                */
     /* ledge outside the lattice (z +/-5.8), sides alternating. Blooms on the       */
     /* landing and summit run period 8 — court superperiod exactly 16 s.            */
     /* ============================================================================ */
@@ -532,13 +532,10 @@ export default {
        for the line that rides it. Flank ledges: right, left, right. */
     { kind: 'platform', p: [328.4, 12.4, 0], s: [6.6, 1, 9.4], mat: 'stone', glow: SLATE, stripe: true }, // step 1, top 12.9, gap 0.10
     { kind: 'prismgate', p: [328.4, 15.15, 0], s: [0.4, 4.5, 11.6], seq: [0, 1, 2, 3, 4, 5, 6, 3], dwell: 1.1, travel: 0.9, period: 16, phase: 0, window: { w: 1.6, h: 2.6 }, relay: { group: 'sevenstair', index: 0 } },
-    { kind: 'platform', p: [328.4, 12.65, 7.6], s: [3.0, 0.5, 2.4], mat: 'stone', glow: SLATE, stripe: true }, // flank R, top 12.9 — inner face 6.4 clears lattice edge 5.8
     { kind: 'platform', p: [334.9, 13.75, 0.2], s: [6.2, 1, 9.0], mat: 'stone', glow: SLATE, stripe: true }, // step 2, top 14.25, gap 0.10
     { kind: 'prismgate', p: [334.9, 16.5, 0.2], s: [0.4, 4.5, 11.6], seq: [0, 1, 2, 3, 4, 5, 6, 3], dwell: 1.1, travel: 0.9, period: 16, phase: 1.4 / 16, window: { w: 1.6, h: 2.6 }, relay: { group: 'sevenstair', index: 1 } },
-    { kind: 'platform', p: [334.9, 14.0, -7.4], s: [3.0, 0.5, 2.4], mat: 'stone', glow: SLATE, stripe: true }, // flank L — inner -6.2 clears lattice edge -5.6
     { kind: 'platform', p: [341.4, 15.0, -0.2], s: [6.0, 1, 9.6], mat: 'stone', glow: SLATE, stripe: true }, // step 3, top 15.5, gap 0.40
     { kind: 'prismgate', p: [341.4, 17.75, -0.2], s: [0.4, 4.5, 11.6], seq: [0, 1, 2, 3, 4, 5, 6, 3], dwell: 1.1, travel: 0.9, period: 16, phase: 2.8 / 16, window: { w: 1.6, h: 2.6 }, relay: { group: 'sevenstair', index: 2 } },
-    { kind: 'platform', p: [341.4, 15.25, 7.4], s: [3.0, 0.5, 2.4], mat: 'stone', glow: SLATE, stripe: true }, // flank R — inner 6.2 clears lattice edge 5.6
 
     /* BEAT 24 — THE MID-RELAY LANDING (CP10) + the HIGH ring that guards it.
        Indigo, rmax 3.4, period 8 (half the relay: the court repeats every
@@ -558,17 +555,13 @@ export default {
        is pinned there and the White Gate arms 8 s later. */
     { kind: 'platform', p: [365.2, 16.3, 0.4], s: [6.0, 1, 9.2], mat: 'stone', glow: SLATE, stripe: true }, // step 4, top 16.8 — SPRINT gap 5.70 flat
     { kind: 'prismgate', p: [365.2, 19.05, 0.4], s: [0.4, 4.5, 11.6], seq: [0, 1, 2, 3, 4, 5, 6, 3], dwell: 1.1, travel: 0.9, period: 16, phase: 4.2 / 16, window: { w: 1.6, h: 2.6 }, relay: { group: 'sevenstair', index: 3 } },
-    { kind: 'platform', p: [365.2, 16.55, -7.2], s: [3.0, 0.5, 2.4], mat: 'stone', glow: SLATE, stripe: true }, // flank L — inner -6.0 clears lattice edge -5.4
     { kind: 'platform', p: [371.9, 17.6, -0.4], s: [5.8, 1, 9.8], mat: 'stone', glow: SLATE, stripe: true }, // step 5, top 18.1, gap 0.80
     { kind: 'prismgate', p: [371.9, 20.35, -0.4], s: [0.4, 4.5, 11.6], seq: [0, 1, 2, 3, 4, 5, 6, 3], dwell: 1.1, travel: 0.9, period: 16, phase: 5.6 / 16, window: { w: 1.6, h: 2.6 }, relay: { group: 'sevenstair', index: 4 } },
-    { kind: 'platform', p: [371.9, 17.85, 7.2], s: [3.0, 0.5, 2.4], mat: 'stone', glow: SLATE, stripe: true }, // flank R — inner 6.0 clears lattice edge 5.4
     { kind: 'platform', p: [380.6, 18.9, 0], s: [10.0, 1, 9.6], mat: 'stone', glow: SLATE }, // step 6 — the CP11 runway, top 19.4, gap 0.80
     { kind: 'prismgate', p: [383.8, 21.65, 0], s: [0.4, 4.5, 11.6], seq: [0, 1, 2, 3, 4, 5, 6, 3], dwell: 1.1, travel: 0.9, period: 16, phase: 7.0 / 16, window: { w: 1.6, h: 2.6 }, relay: { group: 'sevenstair', index: 5 } },
-    { kind: 'platform', p: [383.8, 19.15, -7.6], s: [3.0, 0.5, 2.4], mat: 'stone', glow: SLATE, stripe: true }, // flank L — inner -6.4 clears lattice edge -5.8
     { kind: 'text', p: [377.0, 22.8, -4.2], rot: [0, -Math.PI / 2, 0], text: 'THE LIGHT CLIMBS — SO DO YOU', size: 0.36, color: GOLD },
     { kind: 'platform', p: [388.9, 20.2, 0.2], s: [6.4, 1, 9.0], mat: 'stone', glow: SLATE, stripe: true }, // step 7, top 20.7, gap 0.30
     { kind: 'prismgate', p: [388.9, 22.95, 0.2], s: [0.4, 4.5, 11.6], seq: [0, 1, 2, 3, 4, 5, 6, 3], dwell: 1.1, travel: 0.9, period: 16, phase: 8.4 / 16, window: { w: 1.6, h: 2.6 }, relay: { group: 'sevenstair', index: 6 } },
-    { kind: 'platform', p: [388.9, 20.45, 7.8], s: [3.0, 0.5, 2.4], mat: 'stone', glow: SLATE, stripe: true }, // flank R, inner 6.6 clears lattice edge 6.0 — the last bailout in the game
 
     /* ============================================================================ */
     /* CODA — THE WHITE GATE (x 392-413)                                            */
