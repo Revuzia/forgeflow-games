@@ -32,6 +32,13 @@ import * as vanishMod from './vanish.js';
 import * as crushersMod from './crushers.js';
 import * as pendulumMod from './pendulum.js';
 
+// WORLD 5 (PRISM CROWN) light traps. Same namespace-import discipline as the
+// kinetic modules: a missing export becomes a precise build-time message via
+// resolve(), never a hard link error. bloom.js also owns SPEED_BY_BAND — the
+// game-wide band->speed LAW that SEMANTIC.bloom enforces (brief §5/§6-3).
+import * as prismgateMod from './prismgate.js';
+import * as bloomMod from './bloom.js';
+
 /* ======================================================================================
    FACTORY RESOLUTION
    ====================================================================================== */
@@ -42,6 +49,8 @@ const MODULE_FILES = new Map([
   [vanishMod, './vanish.js'],
   [crushersMod, './crushers.js'],
   [pendulumMod, './pendulum.js'],
+  [prismgateMod, './prismgate.js'],
+  [bloomMod, './bloom.js'],
 ]);
 
 /** First function matching any of `names` across `mods` (checking a default-export map too). */
@@ -86,6 +95,8 @@ const vanish = bind('vanish', [vanishMod], ['vanish', 'makeVanish', 'vanishing',
 const rotor = bind('rotor', [rotorsMod], ['rotor', 'makeRotor', 'createRotor']);
 const pendulum = bind('pendulum', [pendulumMod], ['pendulum', 'makePendulum', 'createPendulum']);
 const crusher = bind('crusher', [crushersMod], ['crusher', 'makeCrusher', 'createCrusher']);
+const prismgate = bind('prismgate', [prismgateMod], ['prismgate', 'makePrismgate', 'createPrismgate']);
+const bloom = bind('bloom', [bloomMod], ['bloom', 'makeBloom', 'createBloom']);
 
 // `saw` is a rotor style in CONTRACT section 18 (`rotor.style: 'saw'`), so if rotors.js does not
 // export a dedicated factory the rotor factory is driven with the style forced — a real
@@ -129,6 +140,12 @@ export const HAZARDS = {
   spikes: spikesMod.spikes,
   chase: chaseMod.chase,
 
+  // light traps — WORLD 5 PRISM CROWN (prismgate.js / bloom.js). Adding them
+  // here routes them automatically via KIND_ROUTE — they can never be
+  // silently unreachable (brief §8-2).
+  prismgate,
+  bloom,
+
   // surfaces
   ice: surfacesMod.ice,
   conveyor: surfacesMod.conveyor,
@@ -164,6 +181,12 @@ export const HAZARD_META = {
   risinglava: { label: 'Rising Lava',      killer: true,  solid: false, telegraph: true },
   spikes:     { label: 'Spikes',           killer: true,  solid: true,  telegraph: true },
   chase:      { label: 'Chase Wall',       killer: true,  solid: false, telegraph: true },
+
+  // WORLD 5 light traps — killer + solid:false ON PURPOSE: a failed read is a
+  // death, never a wall-bonk ambiguity, and reachcheck's LANDABLE set stays
+  // untouched (neither contributes standable surface — brief §8-1).
+  prismgate:  { label: 'Prism Gate',       killer: true,  solid: false, telegraph: true },
+  bloom:      { label: 'Colour Bloom',     killer: true,  solid: false, telegraph: true },
 
   ice:        { label: 'Ice',              killer: false, solid: true,  telegraph: false },
   conveyor:   { label: 'Conveyor',         killer: false, solid: true,  telegraph: false },
@@ -266,6 +289,14 @@ const REQUIRED = {
   risinglava: { p: 'vec3', s: 'vec3' },
   spikes:     { p: 'vec3', s: 'vec3' },
   chase:      { from: 'number', to: 'number', speed: 'number' },
+
+  // WORLD 5 light traps. `seq` (prismgate) and `gaps` (bloom) are ARRAYS, and
+  // this table's 'object' check is isObj(), which REJECTS arrays (see line
+  // ~381 below) — so they validate in SEMANTIC, never here (brief §4, graft
+  // J1-5: requiring them here would drop every gate the way REQUIRED.amp once
+  // dropped four shipped pendulums).
+  prismgate:  { p: 'vec3', s: 'vec3', period: 'number' },
+  bloom:      { p: 'vec3', rmax: 'number', period: 'number' },
 
   ice:        { p: 'vec3', s: 'vec3' },
   conveyor:   { p: 'vec3', s: 'vec3', dir: 'vec3', power: 'number' },
@@ -375,7 +406,119 @@ const SEMANTIC = {
     // surfaces.js:859 defaults `power` to the sprint speed; only a PRESENT power can be wrong.
     if (def.power !== undefined && !(isNum(def.power) && def.power > 0)) fail(`'power' must be > 0, got ${brief(def.power)}`);
   },
+  // WORLD 5 §4 — every law here is a fairness bound with a measured number
+  // behind it; see prismgate.js header for the update(t) maths they protect.
+  prismgate(def, fail) {
+    const seq = def.seq;
+    if (!Array.isArray(seq) || seq.length === 0) {
+      fail("'seq' must be a non-empty array of slot/band indices 0..6 — arrays cannot pass REQUIRED's isObj check, so seq is validated here (graft J1-5)");
+    }
+    for (let i = 0; i < seq.length; i++) {
+      if (!Number.isInteger(seq[i]) || seq[i] < 0 || seq[i] > 6) {
+        fail(`'seq[${i}]' must be an integer 0..6 (slot index = hue = position), got ${brief(seq[i])}`);
+      }
+    }
+    const dwell = def.dwell === undefined ? 2.4 : def.dwell;
+    const travel = def.travel === undefined ? 0.5 : def.travel;
+    if (!(isNum(dwell) && dwell > 0)) fail(`'dwell' must be > 0, got ${brief(def.dwell)}`);
+    if (!(isNum(travel) && travel > 0)) fail(`'travel' must be > 0, got ${brief(def.travel)}`);
+    const w = def.window && def.window.w !== undefined ? def.window.w : 1.6;
+    const h = def.window && def.window.h !== undefined ? def.window.h : 2.2;
+    if (!(isNum(w) && w >= 1.6)) fail(`'window.w' must be >= 1.6 (player r 0.35 — a narrower window silently demands pixel-perfect lines), got ${brief(w)}`);
+    if (!(isNum(h) && h >= 2.2)) fail(`'window.h' must be >= 2.2 (player h 1.8 — crouch is never silently required), got ${brief(h)}`);
+    if (def.slots !== undefined && def.slots !== 'y' && def.slots !== 'z') fail("'slots' must be 'y' or 'z'");
+    const d = vecAt(def.s, 0);
+    if (!(isNum(d) && d > 0 && d <= 0.5)) fail(`'s[0]' (lattice thickness) must be 0 < d <= 0.5, got ${brief(d)}`);
+    const span = vecAt(def.s, def.slots === 'y' ? 1 : 2);
+    if (!(isNum(span) && span > w)) fail(`slot span ${brief(span)} must exceed 'window.w' ${brief(w)} — the aperture has to fit inside the lattice`);
+    // the window is always chaseable AT PEAK, not on average: prismgate.js
+    // update() slides the aperture with smoothstep (lerp(prev, cur,
+    // smooth01(f/tf))), whose max slope is s'(0.5) = 1.5 — the slide PEAKS at
+    // 1.5x the pitch/travel average. The old average-only bound (<= 6.4 m/s)
+    // admitted peaks up to 9.6 > run 8.6: rainbow-1 gate 1's wrap 5->1
+    // averaged 6.17 m/s but peaked 9.25, and live probes killed the 8.6 m/s
+    // chaser at the 0.45 m tracking boundary (w/2 - r = 0.80 - 0.35) from a
+    // ~0.25 m slip — 2 of 8 wrap chases died under 40-55 ms frames, while
+    // in-sequence slides survived 8/8 with err <= 0.054 m. Law: peak
+    // 1.5*pitch/travel <= run 8.6, i.e. average <= 5.73 m/s. Cyclic — the
+    // wrap from seq's last stop back to its first is a real slide too.
+    let maxStep = 0;
+    for (let i = 0; i < seq.length; i++) {
+      const dS = Math.abs(seq[i] - seq[(i - 1 + seq.length) % seq.length]);
+      if (dS > maxStep) maxStep = dS;
+    }
+    const pitch = maxStep * (span - w) / 6;
+    const peak = 1.5 * pitch / travel; // smoothstep peak dc/dt, NOT the average
+    if (peak > 8.6 + 1e-9) {
+      fail(`peak aperture speed ${peak.toFixed(2)} m/s exceeds run 8.6 (worst cyclic slot pitch ${pitch.toFixed(2)} m per ${travel} s smoothstep travel = ${(pitch / travel).toFixed(2)} m/s average x 1.5 peak) — the window must stay chaseable at PEAK speed, not on average`);
+    }
+    const want = seq.length * (dwell + travel);
+    if (!isNum(def.period) || Math.abs(def.period - want) > 1e-6) {
+      fail(`'period' must equal seq.length*(dwell+travel) = ${want} to 1e-6, got ${brief(def.period)} — the clock must never drift against the stop table`);
+    }
+    if (def.phase !== undefined && !(isNum(def.phase) && def.phase >= 0 && def.phase <= 1)) fail("'phase' must be 0..1 (a fraction of the period)");
+    const rel = def.relay;
+    if (rel !== undefined && rel !== null) {
+      if (!isObj(rel)) fail("'relay' must be an object {group, index}");
+      if (typeof rel.group !== 'string' || rel.group.length === 0) fail("'relay.group' must be a non-empty string");
+      if (!Number.isInteger(rel.index) || rel.index < 0) fail("'relay.index' must be an integer >= 0");
+    }
+  },
+  // WORLD 5 §5 — every threshold in SECONDS (the metres/seconds mixup both
+  // judges flagged is dead: period >= rmax/speed + quiet compares s to s).
+  bloom(def, fail) {
+    const SBB = bloomSpeedTable();
+    if (!Number.isInteger(def.band) || def.band < 0 || def.band > 6) {
+      fail(`'band' must be an integer 0..6 (hue AND speed class in one field), got ${brief(def.band)}`);
+    }
+    if (def.speed !== undefined || def.speeds !== undefined || def.speedByBand !== undefined) {
+      fail("band->speed is the game-wide SPEED_BY_BAND law (bloom.js) — a per-def override is refused (graft J2-3)");
+    }
+    const ring = def.ring === undefined ? 'low' : def.ring;
+    if (ring !== 'low' && ring !== 'high') fail("'ring' must be 'low' (jump it) or 'high' (duck it)");
+    if (ring === 'high' && def.ringH !== undefined) {
+      fail("HIGH rings are fixed geometry (band 1.25..2.75 m, spheres r 0.75 at deck+2.00) — 'ringH' is refused");
+    }
+    if (ring === 'low') {
+      const rh = def.ringH === undefined ? 1.0 : def.ringH;
+      if (!(isNum(rh) && rh > 0 && rh <= 1.1)) {
+        fail(`'ringH' must be 0 < ringH <= 1.1 (band top 1.1 vs full-hold apex 2.09 = the >= 0.9 m jump guarantee), got ${brief(def.ringH)}`);
+      }
+    }
+    if (def.ringW !== undefined && !(isNum(def.ringW) && def.ringW > 0)) fail(`'ringW' must be > 0, got ${brief(def.ringW)}`);
+    const quiet = def.quiet === undefined ? 1.2 : def.quiet;
+    if (!(isNum(quiet) && quiet >= 0)) fail(`'quiet' must be a finite number >= 0, got ${brief(def.quiet)}`);
+    if (!(isNum(def.rmax) && def.rmax > 0)) fail(`'rmax' must be > 0, got ${brief(def.rmax)}`);
+    const speed = SBB[def.band];
+    const life = def.rmax / speed;
+    if (!isNum(def.period) || def.period < life + quiet - 1e-9) {
+      fail(`'period' ${brief(def.period)} s < rmax/SPEED_BY_BAND[band] + quiet = ${(life + quiet).toFixed(3)} s — one emitter must never stack two live rings`);
+    }
+    if (life < 0.74 - 1e-9) {
+      fail(`ring life rmax/speed = ${life.toFixed(3)} s < 0.74 s (1.2x the 0.615 s airtime) — the edge must stay jumpable`);
+    }
+    if (def.gaps !== undefined) {
+      if (!Array.isArray(def.gaps)) {
+        fail("'gaps' must be an array of {fromDeg, toDeg} shadow sectors — arrays cannot pass REQUIRED's isObj check, so gaps are validated here");
+      }
+      for (let i = 0; i < def.gaps.length; i++) {
+        const g = def.gaps[i];
+        if (!isObj(g) || !isNum(g.fromDeg) || !isNum(g.toDeg)) fail(`'gaps[${i}]' must be an object {fromDeg, toDeg}`);
+        if (g.fromDeg < 0 || g.toDeg > 360 || g.toDeg <= g.fromDeg) fail(`'gaps[${i}]' must satisfy 0 <= fromDeg < toDeg <= 360 (non-inverted)`);
+      }
+    }
+    if (def.phase !== undefined && !(isNum(def.phase) && def.phase >= 0 && def.phase <= 1)) fail("'phase' must be 0..1 (a fraction of the period)");
+  },
 };
+
+/** The single game-wide band->speed table, or a loud failure if bloom.js lost it. */
+function bloomSpeedTable() {
+  const t = bloomMod && Array.isArray(bloomMod.SPEED_BY_BAND) ? bloomMod.SPEED_BY_BAND : null;
+  if (!t || t.length !== 7) {
+    throw new HazardDefError("bloom.js must export SPEED_BY_BAND[7] — the game-wide band->speed law (WORLD 5 §6-3) is missing", null);
+  }
+  return t;
+}
 
 function isNum(v) { return typeof v === 'number' && Number.isFinite(v); }
 function isObj(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
@@ -474,6 +617,119 @@ export function validateHazardDef(def, ctx) {
   const extra = SEMANTIC[kind];
   if (extra) extra(def, fail);
   return true;
+}
+
+/* ======================================================================================
+   SHARED-CLOCK LAWS — WORLD 5 §6 (group-level, so they cannot live in SEMANTIC's
+   one-def-at-a-time view; the staging pass calls this with every def that shares
+   one space: a relay group, a bloom pair, a gate court).
+   ====================================================================================== */
+
+function gcdInt(x, y) { while (y) { const t = x % y; x = y; y = t; } return x; }
+function lcmInt(x, y) { return x / gcdInt(x, y) * y; }
+
+/** Every dwell-open time (stage seconds, within [0, period)) for one prismgate def. */
+function gateDwellOpens(def) {
+  const seq = Array.isArray(def.seq) && def.seq.length ? def.seq : [0];
+  const n = seq.length;
+  const dwell = def.dwell === undefined ? 2.4 : def.dwell;
+  const travel = def.travel === undefined ? 0.5 : def.travel;
+  const P = def.period;
+  const tfrac = travel / (dwell + travel);
+  const phase = isNum(def.phase) ? def.phase : 0;
+  const opens = [];
+  // stop k spans u in [k/n, (k+1)/n); travel is the first tfrac of it, so the
+  // dwell opens at u = (k + tfrac)/n, i.e. t = ((u - phase) mod 1) * P
+  for (let k = 0; k < n; k++) {
+    opens.push((((k + tfrac) / n - phase) % 1 + 1) % 1 * P);
+  }
+  return { opens, dwell, P };
+}
+
+/**
+ * Law §6-2 dwellOverlap: the longest lead with which SOME dwell of gate `b`
+ * opens before SOME dwell of gate `a` closes while still being open AT that
+ * close (lead <= b.dwell) — i.e. the best guaranteed handoff for riding the
+ * window a -> b. Gates share `period` (checked by the caller), so one cycle
+ * covers every alignment.
+ */
+export function relayDwellOverlap(a, b) {
+  const A = gateDwellOpens(a);
+  const B = gateDwellOpens(b);
+  const P = A.P;
+  let best = 0;
+  for (let i = 0; i < A.opens.length; i++) {
+    const closeA = A.opens[i] + A.dwell;
+    for (let j = 0; j < B.opens.length; j++) {
+      // shift b's open onto the cycle so it lands in (closeA - P, closeA]
+      let o = B.opens[j];
+      while (o > closeA) o -= P;
+      while (o <= closeA - P) o += P;
+      const lead = closeA - o;
+      if (lead > 0 && lead <= B.dwell + 1e-9 && lead > best) best = lead;
+    }
+  }
+  return best;
+}
+
+/**
+ * WORLD 5 §6 shared-clock laws over one court's defs.
+ *   §6-1 rational superperiod (WARN): the composite pattern of every `period`
+ *        in the court must repeat within 16 s (LCM at 1 ms resolution), or the
+ *        compound rhythm is not learnable from one staging-deck observation.
+ *   §6-2 relay spill (ERROR): consecutive gates in a relay.group share
+ *        `period` to 1e-6 and hand off with dwellOverlap >= 0.4 s — riding the
+ *        window through a relay is guaranteed walkable by DATA, never
+ *        hand-tuned.
+ *   (§6-3, the SPEED_BY_BAND override refusal, is per-def and lives in
+ *   SEMANTIC.bloom; §6-4 warn-is-still-solid is vanish.js's own convention.)
+ * @param {object[]} defs every hazard def sharing one space
+ * @returns {{ok:boolean, errors:string[], warnings:string[]}}
+ */
+export function validateSharedClockLaws(defs) {
+  const errors = [];
+  const warnings = [];
+  const list = Array.isArray(defs) ? defs.filter((d) => d && typeof d === 'object') : [];
+
+  // --- §6-1: superperiod <= 16 s, LCM over periods rounded to 1 ms ----------
+  const ms = [];
+  for (const d of list) if (isNum(d.period) && d.period > 0) ms.push(Math.max(1, Math.round(d.period * 1000)));
+  if (ms.length > 1) {
+    let l = ms[0];
+    for (let i = 1; i < ms.length && l <= 16000; i++) l = lcmInt(l, ms[i]);
+    if (l > 16000) {
+      warnings.push(`superperiod ${l > 1e7 ? '>10000' : (l / 1000).toFixed(1)} s exceeds 16 s — the compound rhythm cannot be learned from one observation at the staging deck (law §6-1)`);
+    }
+  }
+
+  // --- §6-2: relay spill ------------------------------------------------------
+  const groups = new Map();
+  for (const d of list) {
+    if (d.kind !== 'prismgate' || !d.relay || typeof d.relay.group !== 'string') continue;
+    let g = groups.get(d.relay.group);
+    if (!g) { g = []; groups.set(d.relay.group, g); }
+    g.push(d);
+  }
+  groups.forEach((gates, name) => {
+    gates.sort((a, b) => (a.relay.index || 0) - (b.relay.index || 0));
+    for (let i = 1; i < gates.length; i++) {
+      const a = gates[i - 1], b = gates[i];
+      if (b.relay.index === a.relay.index) {
+        errors.push(`relay '${name}': two gates share index ${a.relay.index}`);
+        continue;
+      }
+      if (!isNum(a.period) || !isNum(b.period) || Math.abs(a.period - b.period) > 1e-6) {
+        errors.push(`relay '${name}': gates ${a.relay.index} and ${b.relay.index} must share 'period' to 1e-6 (got ${brief(a.period)} vs ${brief(b.period)})`);
+        continue;
+      }
+      const ov = relayDwellOverlap(a, b);
+      if (ov + 1e-9 < 0.4) {
+        errors.push(`relay '${name}': dwellOverlap(gate ${a.relay.index} -> ${b.relay.index}) = ${ov.toFixed(3)} s < 0.4 s — the next window must open >= 0.4 s before the previous closes (law §6-2)`);
+      }
+    }
+  });
+
+  return { ok: errors.length === 0, errors, warnings };
 }
 
 /* ======================================================================================

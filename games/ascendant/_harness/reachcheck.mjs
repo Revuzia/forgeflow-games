@@ -104,8 +104,16 @@ function padSpan(a, b) {
 // ── surface extraction ────────────────────────────────────────────────────────
 const LANDABLE = new Set(['platform', 'beam', 'mover', 'vanish', 'ice', 'conveyor',
   'jumppad', 'speedpad', 'sticky', 'crusher', 'elevator']);
+// HAZARD_KINDS feeds hazardCount and the distinct-family content floor only —
+// membership never adds surfaces. 'lasergrid'/'lasersweep' have shipped since
+// neon-3 (x7) and temple-3 (x3) and are registered in hazards/index.js:124-125,
+// but were missing here, so both stages under-read their hazard mix. 'prismgate'
+// and 'bloom' are the world-5 archetypes (killer:true, solid:false): they count
+// as hazard families but stay OUT of LANDABLE above — neither has a standable
+// surface, so rectsFor() ignores them and the reach graph is untouched.
 const HAZARD_KINDS = new Set(['mover', 'vanish', 'rotor', 'pendulum', 'crusher', 'laser',
-  'lava', 'risinglava', 'spikes', 'jumppad', 'speedpad', 'conveyor', 'ice', 'wind', 'chase', 'saw']);
+  'lava', 'risinglava', 'spikes', 'jumppad', 'speedpad', 'conveyor', 'ice', 'wind', 'chase', 'saw',
+  'lasergrid', 'lasersweep', 'prismgate', 'bloom']);
 
 const v3 = (a, d = 0) => (Array.isArray(a) ? [+a[0] || 0, +a[1] || 0, +a[2] || 0] : [d, d, d]);
 

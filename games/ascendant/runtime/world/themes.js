@@ -2,7 +2,7 @@
  * ASCENDANT — runtime/world/themes.js
  * CONTRACT section 9.
  *
- * Five complete dioramas. Each one is a different *place*, not a hue shift: its
+ * Six complete dioramas. Each one is a different *place*, not a hue shift: its
  * own key-light direction and colour, its own bounce, its own fog density, its
  * own exposure, grade and bloom curve, its own air (embers / snow / motes) and
  * its own sky shader. Swapping themes should feel like walking outdoors.
@@ -49,7 +49,7 @@
  * Kill separation. Every `kill` is saturation >= 0.87 in the 330-40 deg hot
  * band, and is >= 45 deg of hue from `safe`, `safeEdge`, `checkpointOn` and
  * `finish` in every theme:
- *   neon 347deg  foundry 15deg  spire 352deg  temple 347deg  hub 0deg
+ *   neon 347deg  foundry 15deg  spire 352deg  temple 347deg  rainbow 347deg  hub 0deg
  * Foundry is the one theme whose *decor* shares the hot band — the whole place
  * is orange — so there the discriminator is carried by emission and motion
  * instead: hazards are the only orange things that are self-lit AND animated,
@@ -714,6 +714,190 @@ export const THEMES = {
     shadow: { mapSize: 2048, extent: 48, bias: -0.00065, normalBias: 0.028 },
   },
 
+  /* --------------------------------------------------------------- RAINBOW */
+  /* PRISM CROWN — the light after the storm. A dark storm-violet sky clearing
+   * over a cloud sea, walked on matte white-stone (OPAL) causeways so the
+   * course is the one bright thing in a dark-adapted scene. Structure is dark
+   * cloudglass (SMOKE). The SPECTRUM lives only on trim, filaments and light —
+   * base is neutral, hue is trim (brief §3) — so this block ships no band hue
+   * on any face; stage data carries the band tints on strips <= 0.3 m.
+   *
+   * HUE-COLLISION LEDGER (brief §3, ships with this block — every band hue vs
+   * the colour it could be mistaken for, and the resolution):
+   *   band-red    0xff5a4d vs HOT kill      0xff1044 — vermilion, deliberately
+   *               held off HOT; every LETHAL element carries a HOT core, so
+   *               red-band trim without a HOT core is dressing.
+   *   band-violet 0x9a5cff vs finish        0x9e85ba — hue-adjacent (265 vs
+   *               268 deg) since the glare pass dimmed the finish, so the
+   *               separation is carried by saturation + value (vivid full-V
+   *               band vs dim pastel lavender) AND by form: bands are strips
+   *               <= 0.3 m, the finish is the arch+beacon set-piece; lavender
+   *               stays finish-only in every theme.
+   *   band-orange 0xffa03c vs foundry accent 0xff8a3c — pip/strip only, never
+   *               furnace light; no orange plane or beacon form here.
+   *   band-yellow 0xf5e63d vs GOLD signage  0xffc35c — lemon; GOLD stays
+   *               text-on-post form, so SHAPE disambiguates at any distance.
+   *   band-green  0x3ddc84 vs MINT checkpoints 0x18d69a — trim strips only,
+   *               never beacon/pillar forms; MINT keeps its unique armed-pad
+   *               ring+glyph+beam form (checkpointOn below is MINT, untouched).
+   */
+  rainbow: {
+    id: 'rainbow',
+    name: 'PRISM CROWN',
+    bg: 0x1a1526,
+    exposure: 1.02,
+    envIntensity: 0.95,
+
+    /* Dark world, bright decks: the OPAL course must silhouette BRIGHT against
+     * the storm haze, so the fog stays deep slate-violet — the same
+     * figure-bright/ground-dark polarity neon proved. Only
+     * `python _harness/contrastcheck.py` numbers may testify about the render
+     * (see the readability law at the top of this file). */
+    fog: { color: 0x2a2340, near: 18, far: 210, density: 0.0060, type: 'exp2' },
+
+    sky: {
+      type: 'cloudsea',
+      params: {
+        /* Post-storm clearing: near-black violet zenith so the seven-band trim
+         * (and the hub's distant deco rainbow) reads dark-adapted; a pale
+         * silver band at the horizon is the "light after" itself. horizonGlow
+         * wears the world accent — nothing landable is magenta-pink in any
+         * theme, so the tinted horizon can never impersonate a deck. */
+        top: 0x120e22, mid: 0x2c2344, horizon: 0x8d84a8, bottom: 0x4a4060,
+        horizonGlow: 0xff7ad9, glowPower: 5.0, glowStrength: 0.50,
+        /* Compact low sun, clean white-gold — spire's lesson: a small disc
+         * whose core alone crosses the bloom threshold gives a glint, not a
+         * frame flood (spire ships 0.0022 @ 1.8; this one is dimmer air). */
+        sunDir: [-0.48, 0.16, 0.64], sunColor: 0xfff4dc, sunSize: 0.012,
+        sunIntensity: 2.4, sunHalo: 0.40,
+        /* The storm the light comes after: silver-topped cloud sea over a
+         * genuinely dark floor, same lit-vs-shadow recipe temple proved. */
+        cloudY: -62, cloudScale: 0.018, cloudSpeed: 0.012, cloudCoverage: 0.55,
+        cloudLit: 0xd8d4e8, cloudShadow: 0x2e2a44, cloudFade: 950, cloudSharp: 2.2,
+        starDensity: 0.30, starBrightness: 0.35, dither: 1.0,
+        sunPower: 100, haze: 0.65, intensity: 1.05,
+      },
+    },
+
+    lights: {
+      /* Clean silver key — the OPAL decks do their brightness with albedo
+       * under a white light, not with emission (§3: walking surfaces are
+       * emissive 0). Violet fill + a warm low-sun rim for the ice/glass
+       * glints; ambient/hemi held low so the scene stays dark-adapted. */
+      key: { color: 0xf0f4ff, intensity: 2.20, dir: [-0.48, 0.72, 0.50] },
+      fill: { color: 0x8f9fd6, intensity: 1.05, dir: [0.42, 0.55, -0.55] },
+      rim: { color: 0xffe8c0, intensity: 1.70, dir: [0.66, 0.14, -0.74] },
+      ambient: { color: 0x2a2436, intensity: 0.40 },
+      hemi: { skyColor: 0x6f7fae, groundColor: 0x2e2a3c, intensity: 0.65 },
+    },
+
+    grade: {
+      lift: [0.006, 0.004, 0.014], gamma: [1.00, 1.00, 0.99], gain: [1.02, 1.00, 1.05],
+      /* saturation stays moderate: the seven band hues are authored saturated
+       * at the data level; pushing them further in the grade is how a trim
+       * strip becomes a glare bar. */
+      saturation: 1.10, vignette: 0.32, chroma: 0.0010,
+      tint: [0.98, 0.99, 1.04],
+    },
+    /* Dark-world bloom follows neon's round-4 lesson: threshold above every
+     * trim emissive in this theme (all <= 1.40 below), so only HOT hazard
+     * cores, lava and the sun ever bloom — the strips read as lit strips with
+     * no halo in a dark-adapted eye. */
+    bloom: { strength: 0.45, radius: 0.58, threshold: 1.06 },
+
+    palette: {
+      /* safe tracks materialOverrides.stone — OPAL, the walked white-stone. */
+      safe: 0xe9e6f0, safeEdge: 0xfff8e6,
+      /* HOT is THE kill colour (§3): every lethal prismgate thread and bloom
+       * leading edge carries this core whatever band it wears. 347deg, sat
+       * 0.94 — inside the 330-40deg hot band, >= 45deg from every landable
+       * identity here (MINT 160deg, finish 270deg, IVORY/OPAL near-neutral). */
+      kill: 0xff1044, killGlow: 0xff5a7a,
+      /* checkpointOn is MINT — the one world that keeps the game-wide
+       * checkpoint colour verbatim (§3 "checkpoints (untouched)"): band-green
+       * is banned from beacon/pillar forms instead. 5.1:1 vs off (constant
+       * arithmetic on the two hexes, which this file's law permits). */
+      checkpoint: 0x2e4a42, checkpointOn: 0x18d69a,
+      /* FINISH VALUE IS THE BEACON DIAL (glare pass 2026-09-15). stage.js
+       * builds the whole finish set-piece off this hex — arch trim x1.5,
+       * beacon peak x2.3, portal/vortex/base ring straight multiples — with a
+       * house uGain (0.62 built, 0.55+0.55*power per frame) and NO per-theme
+       * intensity input, so this hex's VALUE is the only per-theme
+       * finish/beacon intensity there is. The house lavender 0xd9b6ff was
+       * tuned for brighter worlds: over rainbow's dark-adapted scene the
+       * arch+beacon measured blob p95 = 20.1x deck p50 (shaft 12.8x) from r1
+       * cp8 and apex 9.3x from r2 cp9 — law 5 holds 3-8x — because the
+       * x1.5/x2.3 multiples pushed every finish emitter past the 1.06 bloom
+       * threshold above, and the gate drowned in its own halo. Same hue
+       * (~268 deg, still the finish-only lavender), HALF the linear energy:
+       * 0x9e85ba decodes to 0.47-0.50x 0xd9b6ff per channel after sRGB
+       * decode, so the trim (x1.5 -> 0.74 peak) and the idle beacon
+       * (x2.3 x ~0.79 runtime gain -> ~0.9) sit UNDER 1.06 and stop feeding
+       * bloom. Measured post-fix (re-shot r2 cp9, 1280x720, linear Rec.709
+       * luma): blob p95 = 6.9x deck p50, beacon shaft p95 = 5.5x, pure-white
+       * 0.13% — in band, aperture lattice readable in front of the glow. r1
+       * cp8 wears the same emitters at 55.6 m vs r2's 62.4 m, same dial. */
+      finish: 0x9e85ba, accent: 0xff7ad9, deco: 0x4a4258,
+      /* pad rides the IVORY safe-aim identity, NOT the accent: magenta-pink
+       * sits ~30deg from HOT (foundry's amber-pad lesson — a self-lit pulsing
+       * pad near the kill hue reads as a hazard). IVORY is already "the frame
+       * you aim for" on prismgates, so pads speak the same word. */
+      pad: 0xfff8e6,
+    },
+
+    /* Post-storm air: fine drifting mist motes, faint and cool, sinking
+     * slightly — rate between temple's 34 and hub's 18 so the air never
+     * competes with the band trim for the eye. */
+    particles: { type: 'mote', rate: 24, color: 0xcfd8f0, size: 0.050, drift: [0.08, -0.10, 0.04] },
+
+    /* OPAL walking surfaces / SMOKE structure (§3). The walked family is pale
+     * with ZERO emissive — brightness comes from albedo under the silver key,
+     * so the decks can never join the bloom feed. The structural darks give
+     * up their env mirror (foundry/temple lesson: at walking incidence
+     * Fresnel repaints any dark top with the sky behind it). */
+    materialOverrides: {
+      stone: { tint: 0xe9e6f0 },
+      panel: { tint: 0xd4d0de },
+      metal: { tint: 0xc8c4d4, metalness: 0.12, env: 0.12 },
+      grate: { tint: 0xbcb8ca, metalness: 0.12, env: 0.12 },
+      checker: { tint: 0xd0ccdc },
+      /* walked ice (rainbow-1 II, rainbow-2 BLUE): pale frost to match the
+       * OPAL decks — this is the one theme where the course is the BRIGHT
+       * side — but the transmission/coat/spec mirror is cut exactly like
+       * spire's, so the slab reads as a deck, not a skylight. */
+      ice: { tint: 0xd8e8f4, transmission: 0.05, env: 0.08,
+             clearcoat: 0.12, clearcoatRoughness: 0.60, specularIntensity: 0.08 },
+      glass: { tint: 0x8d84b0, transmission: 0.10, env: 0.08,
+               clearcoat: 0.10, clearcoatRoughness: 0.55, specularIntensity: 0.08 },
+      /* SMOKE cloudglass — the dark structure the causeways float through. */
+      obsidian: { tint: 0x241f2e, env: 0.10, clearcoat: 0.12,
+                  clearcoatRoughness: 0.60, specularIntensity: 0.08 },
+      crystal: { emissive: 0xff7ad9, attenuationColor: 0x7a2a5a },
+      /* Trim emissives all sit under the 1.06 bloom threshold (neon round-4
+       * recipe): lit strips, never lamps. `neon` is the IVORY chevron/edge
+       * voice; `emissive` defaults to the accent for arch panels and world
+       * furniture — band-hue strips are stage-data tints on top of these. */
+      neon: { emissive: 0xfff8e6, emissiveIntensity: 1.40 },
+      emissive: { emissive: 0xff7ad9, emissiveIntensity: 1.35 },
+      hazard: { emissive: 0xff1044, emissiveIntensity: 2.2 },
+      /* the ORANGE-terrace belt is a CHOICE, not a hazard: IVORY chevrons,
+       * cool and un-hot, per the ledger's band-orange row. */
+      conveyor: { emissive: 0xfff8e6 },
+      /* risinglava quote in rainbow-3 II: clamped where the hue survives
+       * tone-mapping, same reasoning as foundry's 2.4. */
+      lava: { emissiveIntensity: 2.4 },
+      rubber: { tint: 0xb4b0c0 },
+      wood: { tint: 0x9a9088 },
+      sand: { tint: 0xd8d2c8 },
+      cloud: { tint: 0xd8d4e8 },
+    },
+
+    heat: 0,   // -> Post.setHeat() via engine.setTheme()
+    music: { key: 'G', scale: 'lydian', bpm: 108, mood: 'prismatic afterglow' },
+    effects: { heatShimmer: false, grain: 0.022, snowWind: 0 },
+    shadow: { mapSize: 2048, extent: 44, bias: -0.00060, normalBias: 0.030 },
+  },
+
   /* ------------------------------------------------------------------- HUB */
   /* A calm neutral observatory. Balanced three-point light, a subtle
    * blue-violet fill, low fog, still air. Deliberately the least dramatic
@@ -805,7 +989,7 @@ export const THEMES = {
 };
 
 /** stable ordering for menus / stage select */
-export const THEME_ORDER = ['hub', 'neon', 'foundry', 'spire', 'temple'];
+export const THEME_ORDER = ['hub', 'neon', 'foundry', 'spire', 'temple', 'rainbow'];
 
 /* ========================================================================== *
  * applyTheme                                                                 *

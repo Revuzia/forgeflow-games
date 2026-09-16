@@ -2,7 +2,7 @@
  * ASCENDANT — WORLD REGISTRY
  * runtime/data/index.js
  *
- * The single index of every playable place in the game: the four worlds, the twelve
+ * The single index of every playable place in the game: the five worlds, the fifteen
  * stages inside them, and the HUB. Nothing here touches Three.js — this module is pure
  * data plus a lazy loader, so it is safe to import from the UI, the harness or Node.
  *
@@ -204,6 +204,15 @@ export const WORLDS = [
     blurb: 'Everything the dojo taught you, asked for all at once.',
     stages: ['temple-1', 'temple-2', 'temple-3'],
   },
+  {
+    id: 'rainbow',
+    name: 'PRISM CROWN',
+    subtitle: 'THE LIGHT AFTER THE STORM',
+    theme: 'rainbow',
+    accent: 0xff7ad9, // magenta-pink — distinct from all four accents, from HOT 0xff1044 and from finish 0xd9b6ff (brief §1)
+    blurb: 'The bridge the storm left behind. Every lesson, in every colour, one last time.',
+    stages: ['rainbow-1', 'rainbow-2', 'rainbow-3'],
+  },
 ];
 
 /** The lobby. Re-exported from ./stages/hub.js so there is exactly one definition. */
@@ -216,7 +225,7 @@ export const HUB = HUB_DEF;
 /** Every playable stage id, in global play order. Does not include 'hub'. */
 export const ALL_STAGE_IDS = WORLDS.flatMap((w) => w.stages);
 
-/** Total playable stages (12). The hub is not counted — it is never "cleared". */
+/** Total playable stages (15). The hub is not counted — it is never "cleared". */
 export const STAGE_COUNT = ALL_STAGE_IDS.length;
 
 /** id -> world def, built once. */
@@ -305,6 +314,9 @@ const STAGE_LOADERS = {
   'temple-1': () => import('./stages/temple-1.js'),
   'temple-2': () => import('./stages/temple-2.js'),
   'temple-3': () => import('./stages/temple-3.js'),
+  'rainbow-1': () => import('./stages/rainbow-1.js'),
+  'rainbow-2': () => import('./stages/rainbow-2.js'),
+  'rainbow-3': () => import('./stages/rainbow-3.js'),
 };
 
 /** Resolved defs, so a re-entry to a stage costs nothing. */

@@ -32,8 +32,10 @@ const SCHEMA_VERSION = 1;
 const WRITE_DEBOUNCE_MS = 320;
 const DEFAULT_STAGES_PER_WORLD = 3;
 
-/** Fallback world order — matches contract §22. `registerWorlds` overrides it. */
-const DEFAULT_WORLD_ORDER = ['neon', 'foundry', 'spire', 'temple'];
+/** Fallback world order — matches contract §22. `registerWorlds` overrides it.
+ * 'rainbow' (world 5, PRISM CROWN) appended 2026-09-15: sequential unlock after
+ * ALL of temple is cleared — the same world-N-1 rule already enforced below. */
+const DEFAULT_WORLD_ORDER = ['neon', 'foundry', 'spire', 'temple', 'rainbow'];
 
 const IS_BROWSER = typeof window !== 'undefined';
 

@@ -412,7 +412,7 @@ function noticeSaveRecovery(rec) {
 function noticeBadStage(id) {
   showNotice('asc-param-notice', 'Unknown stage in the link',
     '"' + String(id).slice(0, 48) + '" is not a stage id, so it was ignored. PLAY starts from the sanctum as usual.',
-    'valid ids look like neon-1 … temple-3 (or hub)', 10000);
+    'valid ids look like neon-1 … rainbow-3 (or hub)', 10000);
   if (typeof console !== 'undefined' && console.warn) {
     console.warn('[ascendant] ?stage=' + id + ' is not a stage id — ignored.');
   }

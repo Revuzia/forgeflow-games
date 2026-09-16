@@ -22,9 +22,9 @@
     "The orbs are never on the main route. If a coin looks easy, you are on the wrong line."
   ],
   "credits": {
-    "worlds": "Four hand-authored worlds — Neon Dojo, Lava Foundry, Frozen Spire, Sky Temple — each with its own lighting, sky, materials and music bed",
+    "worlds": "Five hand-authored worlds — Neon Dojo, Lava Foundry, Frozen Spire, Sky Temple, Prism Crown — each with its own lighting, sky, materials and music bed",
     "art": "Procedural PBR material library (albedo/roughness/metalness/normal generated at runtime), procedural skies, plus CC0 prop models from the ForgeFlow asset library (attribution in assets/props/CREDITS.txt)",
-    "audio": "Fully procedural Web Audio — five generative music beds and every sound effect synthesised at runtime, no sample files",
+    "audio": "Fully procedural Web Audio — six generative music beds and every sound effect synthesised at runtime, no sample files",
     "engine": "Three.js r172, ES modules, no build step"
   }
 }
