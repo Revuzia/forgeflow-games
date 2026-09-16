@@ -453,7 +453,6 @@ export default {
     { kind: 'pendulum', p: [260.5, 14.15, 0], len: 3.6, amp: 0.54, period: 3.0, phase: 0, axis: [1, 0, 0], blade: { w: 2.8, h: 2.6, d: 0.26 } },
     { kind: 'pendulum', p: [264.5, 14.15, 0], len: 3.6, amp: 0.54, period: 3.0, phase: (Math.PI * 2) / 3, axis: [1, 0, 0], blade: { w: 2.8, h: 2.6, d: 0.26 } },
     { kind: 'pendulum', p: [268.5, 14.15, 0], len: 3.6, amp: 0.54, period: 3.0, phase: (Math.PI * 4) / 3, axis: [1, 0, 0], blade: { w: 2.8, h: 2.6, d: 0.26 } },
-    { kind: 'platform', p: [264, 8.45, 4.4], s: [6, 0.5, 1.8], mat: 'stone', glow: SLATE, stripe: true }, // bailout ledge, z 3.5 clears the 3.25 m swing reach
     { kind: 'deco', kindOf: 'post', p: [257.8, 11.4, -2.2], s: [0.4, 4.4, 0.4], mat: 'obsidian' }, // gallery frame
     { kind: 'deco', kindOf: 'post', p: [270.2, 11.4, -2.2], s: [0.4, 4.4, 0.4], mat: 'obsidian' },
 
@@ -461,7 +460,7 @@ export default {
        jump-beat across the whole terrace. The court is trimmed INSIDE the
        circle: N2's head-height rings overhang both lips, so the hop in and
        the 3.7 m jump out both pass through the duck-beat's reach. */
-    { kind: 'platform', p: [274.5, 8.9, 0.4], s: [5.8, 1, 6.0], mat: 'stone', glow: SLATE }, // top 9.4, gap 1.10 in, +0.2 — rings overhang 0.4-0.5 on every side
+    { kind: 'platform', p: [274.5, 10.1, 0.4], s: [5.8, 1, 6.0], mat: 'stone', glow: SLATE }, // +0.9 raised 2026-09-16: with the blade-court side rail deleted (owner: remove the thin platform right of the three axes) this deck is the corridor's height break. Top 10.60: geomcheck's flat-run walk anchors at the LAST >0.75 m step (x 234.1, y 9.70), so the break must clear THAT anchor, not the neighbour — 10.30 read as flat, 10.60 splits the 72 m window at both its edges
     { kind: 'bloom', p: [274.5, 9.4, 0.4], rmax: 3.4, band: 5, period: 6.0, phase: 0.5, ring: 'high' },
     { kind: 'platform', p: [282.4, 9.1, -0.8], s: [2.6, 1, 3.4], mat: 'panel', glow: SLATE, stripe: true }, // top 9.6, gap 3.70, +0.2 — terrace lip
 
