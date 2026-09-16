@@ -507,11 +507,62 @@ export function makeSpawns(arena, opts = {}) {
       }
     }
     const c = cid ? clusters[cid] : null;
-    const pos = c ? [c.centroid[0], c.centroid[1], c.centroid[2]] : [0, 0, 0];
-    let yaw = 0, bestD = Infinity;
-    if (c) for (const p of c.points) { const d = distH(p.pos, pos); if (d < bestD) { bestD = d; yaw = p.yaw; } }
+    // SCATTER THE LAST RESORT — but never past a hard veto.
+    // Returning the bare centroid put the entire team on ONE point: measured
+    // 30 of 30 CTF respawns at 0.0 m from a living team-mate on all three
+    // arenas. CTF locks every respawn to the single home cluster, so when the
+    // team dies together the ladder exhausts for all of them at once (recency
+    // plus the nearby-death veto take out every candidate) and all five actors
+    // landed on clusters[home].centroid — switchyard's is exactly
+    // (22.94,-1.06), the centroid of SC_APRON_E.
+    // A last resort still has to put people in DIFFERENT places, so spread over
+    // the cluster's own points, which are known-good ground. Two rules hold:
+    //   * V5 is NEVER relaxed — a point with a live grenade or a fresh
+    //     explosion within 12 m is excluded here exactly as in the ladder.
+    //   * with fewer than two usable points there is nothing to spread across,
+    //     so the centroid stands and pointId stays null (the never-fail
+    //     contract the selftest pins).
+    let pos = c ? [c.centroid[0], c.centroid[1], c.centroid[2]] : [0, 0, 0];
+    let yaw = 0, pickedId = null;
+    if (c && c.points.length >= 2) {
+      const v5 = VETOES.team.v5;
+      const hot = (q) => {
+        for (const g of mGrenades(m)) { const gp = g.pos || g.p; if (gp && distH(gp, q) <= v5) return true; }
+        for (let i2 = explosions.length - 1; i2 >= 0; i2--) {
+          const e = explosions[i2];
+          if (t - e.t > 1.5) break;
+          if (distH(e.pos, q) <= v5) return true;
+        }
+        return false;
+      };
+      const living = livingOthers(m, actor, null);
+      let best = null, bestScore = -Infinity;
+      for (const q of c.points) {
+        if (q.modes.indexOf(modeId) < 0) continue;
+        if (hot(q.pos)) continue;
+        let dMin = Infinity;
+        for (const o of living) {
+          const op = mPosOf(m, o);
+          if (op) { const dd2 = distH(op, q.pos); if (dd2 < dMin) dMin = dd2; }
+        }
+        const score = (dMin === Infinity ? 30 : Math.min(dMin, 30))
+          - (t - q.lastUsedT < RECENT_S ? 14 : 0);
+        if (score > bestScore) { bestScore = score; best = q; }
+      }
+      if (best) {
+        pos = [best.pos[0], best.pos[1], best.pos[2]];
+        yaw = best.yaw; pickedId = best.id;
+        best.lastUsedT = t;
+        best.lastUsedTeam = actor.team != null ? actor.team : -1;
+        best.lastUsedActor = actor.actorId != null ? actor.actorId : -1;
+      }
+    }
+    if (!pickedId && c) {
+      let bestD = Infinity;
+      for (const q of c.points) { const d2 = distH(q.pos, pos); if (d2 < bestD) { bestD = d2; yaw = q.yaw; } }
+    }
     record(m, actor, null, t, ffa, st, cid, pos);
-    return { pointId: null, pos, yaw, stress, protectS: 3.0, fallback: true };
+    return { pointId: pickedId, pos, yaw, stress, protectS: 3.0, fallback: true };
   }
 
   function record(m, actor, p, t, ffa, st, clusterId, pos) {
