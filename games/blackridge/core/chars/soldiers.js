@@ -477,6 +477,12 @@ export function createSoldiers(ctx) {
 
   function spawnActor(d) {
     if (actors.has(d.botId)) return;
+    // `sim` is needed by BOTH the rim-tint block and the live-weapon lookup below.
+    // It used to be declared inside the rim block's braces, so the weapon lookup at
+    // the end of this function threw `ReferenceError: sim is not defined` on EVERY
+    // bot spawn — and because the throw lands before attachWeapon(), bots spawned
+    // with no gun model at all. One death in a 10-player match produced ~240 of them.
+    const sim = ctx.sim();
     const bodyName = archBody(d.archetype);
     const proto = protos[bodyName] || null;
     const actor = createActor(proto);
@@ -497,7 +503,6 @@ export function createSoldiers(ctx) {
     // ≥0.35 intensity per §3.1; tints from the match's own team table when
     // it is the two-team shape, else the C2 constants.
     {
-      const sim = ctx.sim();
       const ms = sim && sim.state && sim.state.match;
       if (ms) {
         const b = sim.state.bots.find((x) => x.id === d.botId);
