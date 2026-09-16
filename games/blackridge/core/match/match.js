@@ -95,6 +95,31 @@ function readMagsPerKill(content, modeId) {
 // "ammo_rule", emptyDryS/emptyCooldownS/emptyMags, modes[]); defaults below.
 const EMPTY_TRICKLE_DEFAULTS = { dryS: 10, cooldownS: 30, mags: 1 };
 
+// ------------------------------------------------------ [RACKS] weapon pads
+// PVP is a PISTOL START (content.pvp.loadout): every combatant spawns with the
+// Pike and the three primaries are fought over on the map. These are the racks.
+//
+// kind is "weapon_pad", NOT "weapon", and that is load-bearing. The campaign's
+// checkPickups (mission.js) matches on `pk.kind !== "weapon"` and reads neither
+// `modes` nor `arenas`, so a "weapon" entry here would arm itself in the
+// campaign at mission second zero. A distinct kind means the campaign's two
+// crates (pk_vesper_crate, pk_corvus_nest) keep working with zero edits to
+// mission.js.
+//
+// The filter is opt-IN, the opposite of the ammo_rule readers above: those treat
+// a MISSING modes[] as "every mode", which for a rack would make the campaign
+// crates live in all three arenas.
+function readRacks(content, modeId, arenaId) {
+  const out = [];
+  for (const pk of (content && content.pickups) || []) {
+    if (!pk || pk.kind !== "weapon_pad" || !pk.weapon) continue;
+    if (!Array.isArray(pk.modes) || !pk.modes.includes(modeId)) continue;
+    if (!Array.isArray(pk.arenas) || !pk.arenas.includes(arenaId)) continue;
+    out.push(pk);
+  }
+  return out;
+}
+
 function readEmptyTrickle(content, modeId) {
   const r = Object.assign({}, EMPTY_TRICKLE_DEFAULTS);
   for (const pk of (content && content.pickups) || []) {
@@ -212,6 +237,8 @@ export function makeMatch(content, emit, opts = {}) {
     lastPointByActor: new Array(10).fill(null),
     drySince: new Array(10).fill(-1),        // [F2] t the actor's total ammo hit zero (-1 = not dry)
     trickleLastT: new Array(10).fill(-1),    // [F2] last trickle grant per actor (-1 = never)
+    racks: [],                               // [RACKS] weapon pads for this mode+arena
+    rackUntil: {},                           // rack id -> t it becomes available again
     damageRings: [],         // per actorId: [{attacker, amount, t}] (bounded)
     roster: null,            // {teams, actors, squadIdOf}
     seed: opts.seed != null ? opts.seed : 0,
@@ -393,6 +420,28 @@ export function makeMatch(content, emit, opts = {}) {
       p.lastDamageT = -999;
       p.weapon.state = "idle"; p.weapon.stateT = 0; p.weapon.ads = false;
       p.weapon.adsT = 0; p.weapon.recoilIndex = 0;
+      // FULL AMMO ON RESPAWN (owner 2026-09-16). spawnActor restored hp/alive/weapon-state
+      // but never ammo, so you came back holding exactly the empty mag you died with —
+      // and with kill-resupply being the PVP ammo economy, a death could leave you unable
+      // to fight at all. Refill the carried weapon AND every slot from the weapon table.
+      {
+        const wTab = (sim.weapons) || {};
+        const cur = wTab[p.weapon.id];
+        if (cur) { p.weapon.mag = cur.mag; p.weapon.reserve = cur.reserve; }
+        if (p._slotAmmo) {
+          for (const sId of Object.keys(p._slotAmmo)) {
+            const st = wTab[sId];
+            if (st) p._slotAmmo[sId] = { mag: st.mag, reserve: st.reserve };
+          }
+        }
+      }
+      // LOADOUT RESET. This branch used to reset position, health and weapon
+      // STATE but never weapon.id / slots / _slotAmmo / mag / reserve, so a
+      // picked-up weapon survived death and every later life — a permanent,
+      // human-only upgrade. Bots never had the bug: their branch calls
+      // spawnBotFromSpec, which rebuilds the weapon from scratch. With map racks
+      // as the PVP weapon economy this asymmetry would decide matches.
+      if (typeof sim.resetBodyLoadout === "function") sim.resetBodyLoadout(p);
       if (p._m) p._m = null;
       bindBody(actor, p);
     } else {
@@ -549,6 +598,9 @@ export function makeMatch(content, emit, opts = {}) {
     start(sim) {
       SIM = sim;
       if (!arena) synthFallbackArena(sim);
+      // [RACKS] resolve the weapon pads for THIS mode + arena, once.
+      ms.racks = readRacks(content, modeId, (arena && arena.id) || (content.arena && content.arena.id) || "lanternwalk");
+      ms.rackUntil = {};
       if (!director && opts.spawnDirectorFactory) {
         try {
           director = opts.spawnDirectorFactory(arena, { rng: rngSpawn, mode: modeId });
@@ -713,6 +765,35 @@ export function makeMatch(content, emit, opts = {}) {
           ms.drySince[aid] = -1;
           ms.trickleLastT[aid] = t;
           emit("resupply", { who: a.who, mags: trickle.mags, reason: "trickle" });
+        }
+      }
+
+      // -- 3b. WEAPON RACKS (walkover, all ten bodies)
+      // A world rule applied identically to every combatant, not an AI goal:
+      // objective.js is forbidden from granting ammunition, and a bot "fetch"
+      // goal would have to outscore the mode objective (a bot must not abandon
+      // a flag to fetch a rifle). Bots take racks by walking over them in the
+      // course of normal play; the human takes them on purpose. That asymmetry
+      // is intent, which is the human's legitimate edge.
+      if (ms.racks && ms.racks.length) {
+        for (const rk of ms.racks) {
+          const until = ms.rackUntil[rk.id] || 0;
+          if (t < until) continue;                       // still respawning
+          const rad = typeof rk.radius === "number" ? rk.radius : 1.2;
+          for (const a of ms.roster.actors) {
+            if (!a.alive) continue;
+            const b = bodyByWho.get(a.who);
+            if (!b || !b.pos) continue;
+            if (b.weapon && b.weapon.id === rk.weapon) continue;   // already holding it
+            const dx = b.pos[0] - rk.pos[0], dz = b.pos[2] - rk.pos[2];
+            if (dx * dx + dz * dz > rad * rad) continue;
+            if (Math.abs((b.pos[1] || 0) - (rk.pos[1] || 0)) > 2.0) continue;  // wrong floor
+            const opts = typeof rk.reserve === "number" ? { reserve: rk.reserve } : null;
+            if (!SIM.giveBodyWeapon(b, rk.weapon, opts, a.who)) continue;
+            ms.rackUntil[rk.id] = t + (typeof rk.respawnS === "number" ? rk.respawnS : 25);
+            emit("pad", { who: a.who, id: rk.id, weapon: rk.weapon, respawnS: rk.respawnS });
+            break;                                        // one taker per tick
+          }
         }
       }
 

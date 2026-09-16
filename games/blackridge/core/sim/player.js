@@ -410,6 +410,22 @@ function stepPlayerWeaponVerbs(state, cmd, world, weapons, dt, sim, mantling) {
 }
 
 // The SHARED weapon state machine (player + bots). vc = verb context.
+/**
+ * Turn an input intent into a weapon id.
+ *
+ * input.js emits the LITERAL strings "slot1"/"slot2" for the 1 and 2 keys
+ * (input.js:250-251), but nothing in the codebase ever mapped them to a weapon.
+ * Both guards here — `slots.indexOf(switchTo)` and `weapons[switchTo]` — were
+ * therefore false forever, so pressing 1 or 2 has never switched weapons in any
+ * shipped build, despite the on-screen "1/2 weapons" hint. Bots pass real
+ * weapon ids and are unaffected.
+ */
+function resolveSwitch(actor, want) {
+  if (want === "slot1") return (actor.slots || [])[0] || null;
+  if (want === "slot2") return (actor.slots || [])[1] || null;
+  return want;
+}
+
 export function stepActorWeapon(sim, who, vc, dt) {
   const state = sim.state;
   const t = state.time;
@@ -450,11 +466,13 @@ export function stepActorWeapon(sim, who, vc, dt) {
       w._shotCount = 0;
     }
   } else if (vc.switchBufferedT != null && t - vc.switchBufferedT <= MOVE.BUFFER_S && vc.switchTo &&
-             vc.switchTo !== w.id && (isP ? (actor.slots || []).indexOf(vc.switchTo) >= 0 : true) &&
-             weapons[vc.switchTo]) {
+             resolveSwitch(actor, vc.switchTo) && resolveSwitch(actor, vc.switchTo) !== w.id &&
+             (isP ? (actor.slots || []).indexOf(resolveSwitch(actor, vc.switchTo)) >= 0 : true) &&
+             weapons[resolveSwitch(actor, vc.switchTo)]) {
+    const wantId = resolveSwitch(actor, vc.switchTo);
     vc.consumeSwitch && vc.consumeSwitch();
     cancelReloadForSwitch(sim, who, actor, w);
-    const to = vc.switchTo;
+    const to = wantId;                    // resolved: "slot2" -> the actual id
     w.state = "switching";
     w.stateT = 0;
     w._switchTo = to;

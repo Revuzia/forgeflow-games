@@ -510,11 +510,20 @@ export function createSoldiers(ctx) {
         actor.setRim(rimHex, 0.4);
       }
     }
-    const kind = archWpnKind(d.archetype);
+    // Resolve the gun model from the bot's LIVE weapon, falling back to the
+    // archetype. spawnActor runs once at spawn, so an archetype-only lookup
+    // froze the model for the actor's whole life — with PVP weapon racks a bot
+    // that picked up a Corvus would keep rendering its spawn pistol. swapWeapon
+    // below re-attaches when the held id changes.
+    const liveBot = sim && sim.state && sim.state.bots
+      ? sim.state.bots.find((x) => x.id === d.botId) : null;
+    const heldId = liveBot && liveBot.weapon ? liveBot.weapon.id : null;
+    const kind = (heldId && WPN_KIND[heldId]) || archWpnKind(d.archetype);
     let wpn = null;
     if (wpnProtos[kind]) {
       wpn = wpnProtos[kind].clone(true); // shares geometry+materials — cheap
       actor.attachWeapon(wpn, "R");
+      actor._wpnKind = kind;
     }
     // Model faces +Z locally; sim forward for yaw ψ is (-sin ψ, -cos ψ), so
     // the THREE root yaw is ψ + π (verified against sim.aimAt's convention).
@@ -725,6 +734,16 @@ export function createSoldiers(ctx) {
         const bot = botIndex.get(rec.botId);
         if (!bot) { removeActor(rec.botId); continue; } // checkpoint restore reap
         const actor = rec.actor;
+
+        // ---- held-weapon model follows the sim (PVP racks change it mid-life)
+        if (bot.weapon && bot.weapon.id) {
+          const want = WPN_KIND[bot.weapon.id] || null;
+          if (want && want !== actor._wpnKind && wpnProtos[want]) {
+            const nw = wpnProtos[want].clone(true);
+            actor.attachWeapon(nw, "R");
+            actor._wpnKind = want;
+          }
+        }
 
         // ---- interpolated position reads (alpha between the last two ticks)
         if (st.tick !== rec.lastTick) {

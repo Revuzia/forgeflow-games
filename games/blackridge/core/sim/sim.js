@@ -69,7 +69,15 @@ export function createSim(opts = {}) {
   // bit-identical to the untuned WEAPONS export (pvp_design §4.5).
   const weapons = applyTuning(weaponsIn, tun);
 
-  const loadoutSlots = (content && content.mission && content.mission.loadout && content.mission.loadout.slots)
+  // PVP and the campaign no longer share one loadout. The campaign keeps
+  // mission.loadout (["warden","pike"]) — RAVEN 2-1 is designed around it and
+  // mission.js validates it. PVP reads content.pvp.loadout, which is a PISTOL
+  // START: every combatant spawns with the Pike and the three primaries are
+  // fought over on the map (see the weapon_pad racks in content.json). Falling
+  // back to mission.loadout means an absent pvp block changes nothing.
+  const pvpLoadout = (content && content.pvp && content.pvp.loadout) || null;
+  const loadoutSlots = (mode && pvpLoadout && pvpLoadout.slots)
+    || (content && content.mission && content.mission.loadout && content.mission.loadout.slots)
     || ["warden", "pike"];
   const primary = loadoutSlots[0];
   const wTable = weapons[primary] || { mag: 30, reserve: 120 };
@@ -231,7 +239,14 @@ export function createSim(opts = {}) {
     spawnBotFromSpec(spec) {
       const id = nextBotId++;
       const arch = (content && content.archetypes && content.archetypes[spec.archetype]) || null;
-      const weaponId = arch ? arch.weapon : (weapons.warden ? "warden" : Object.keys(weapons)[0]);
+      // SPAWN SYMMETRY. In PVP every combatant starts on the same weapon as the
+      // player. Without this the human spawns with a Pike while nine bots spawn
+      // with Wardens/Vespers/Corvuses off their archetype, which is not a
+      // difficulty setting, it is an unwinnable match. The archetype still
+      // drives BEHAVIOUR (rifleman/cqb/marksman positioning) — only the starting
+      // gun is equalised, and bots pick up racks by walkover like anyone else.
+      const startWeapon = (mode && pvpLoadout && pvpLoadout.slots && pvpLoadout.slots[0]) || null;
+      const weaponId = startWeapon || (arch ? arch.weapon : (weapons.warden ? "warden" : Object.keys(weapons)[0]));
       const wt = weapons[weaponId] || { mag: 30, reserve: 90 };
       const bot = {
         id,
@@ -265,6 +280,10 @@ export function createSim(opts = {}) {
           id: weaponId, mag: wt.mag, reserve: wt.reserve, state: "idle",
           ads: false, adsT: 0, recoilIndex: 0, stateT: 0, lastShotT: -9,
         },
+        // Bots carry slots too now, so a rack pickup has somewhere to land and
+        // giveBodyWeapon can treat every combatant identically. Campaign bots get
+        // their archetype weapon in slot 0 exactly as before.
+        slots: startWeapon ? [startWeapon, null] : [weaponId, null],
       };
       state.bots.push(bot);
       sim.emit("spawn", { botId: id, archetype: bot.archetype, pos: bot.pos.slice(), yaw: bot.yaw });
@@ -300,24 +319,74 @@ export function createSim(opts = {}) {
     setNoTarget(on) { sim.flags.noTarget = !!on; },
 
     // ---- private helpers for pickups / test surface (A11: give/setAmmo)
-    givePlayerWeapon(id) {
-      const p = state.player;
-      const wt = weapons[id];
-      if (!wt) return;
-      const w = p.weapon;
-      if (!p._slotAmmo) p._slotAmmo = {};
-      p._slotAmmo[w.id] = { mag: w.mag, reserve: w.reserve };
-      let idx = p.slots.indexOf(w.id);
-      if (idx < 0) idx = 0;
-      const from = w.id;
-      p.slots[idx] = id;
-      p._slotAmmo[id] = { mag: wt.mag, reserve: wt.reserve };
-      w.id = id;
-      w.mag = wt.mag;
-      w.reserve = wt.reserve;
+    givePlayerWeapon(id, opts) { return sim.giveBodyWeapon(state.player, id, opts, "P"); },
+
+    /** Rebuild a body's starting loadout — used on respawn so a picked-up
+     *  weapon does not persist across lives. */
+    resetBodyLoadout(body) {
+      if (!body) return;
+      const slots = loadoutSlots.slice(0, 2);
+      const id = slots[0];
+      const wt = weapons[id] || { mag: 30, reserve: 120 };
+      body.slots = slots.length > 1 ? slots.slice() : [id, null];
+      body._slotAmmo = {};
+      for (const sId of body.slots) {
+        if (!sId) continue;
+        const t2 = weapons[sId];
+        if (t2) body._slotAmmo[sId] = { mag: t2.mag, reserve: t2.reserve };
+      }
+      const w = body.weapon;
+      w.id = id; w.mag = wt.mag; w.reserve = wt.reserve;
       w.state = "idle"; w.stateT = 0; w.ads = false; w.adsT = 0;
       w.recoilIndex = 0; w._shotCount = 0;
-      sim.emit("switch", { who: "P", from, to: id });
+    },
+
+    /**
+     * Put weapon `id` in `body`'s hands. Works for the player and for a bot, so
+     * a map rack is one world rule applied to all ten combatants rather than a
+     * player-only privilege.
+     *
+     * Fixes two defects the old player-only version had:
+     *  - SLOT CLOBBER. It did `idx = slots.indexOf(heldId); if (idx<0) idx=0;
+     *    slots[idx] = id` with no check that `id` was ALREADY in the other slot.
+     *    Holding warden with slots ["warden","pike"], granting pike produced
+     *    ["pike","pike"] and orphaned _slotAmmo.warden for the rest of the life.
+     *    It never fired in the campaign because neither crate weapon is in the
+     *    campaign loadout — with racks as the PVP weapon economy it would have
+     *    fired constantly.
+     *  - Unconditional full mag+reserve, which strictly dominated the tuned kill
+     *    refill. Racks now pass their own `reserve`.
+     */
+    giveBodyWeapon(body, id, opts, whoTag) {
+      if (!body) return false;
+      const wt = weapons[id];
+      if (!wt) return false;
+      const w = body.weapon;
+      const from = w.id;
+      if (from === id) return false;                  // already holding it
+      if (!body.slots) body.slots = [from, null];
+      if (!body._slotAmmo) body._slotAmmo = {};
+      body._slotAmmo[from] = { mag: w.mag, reserve: w.reserve };   // stow what we hold
+
+      // Prefer an empty slot, then the slot this weapon already occupies, then
+      // the slot we are holding. Never write the same id into both slots.
+      let idx = body.slots.indexOf(id);
+      if (idx < 0) idx = body.slots.indexOf(null);
+      if (idx < 0) idx = body.slots.indexOf(from);
+      if (idx < 0) idx = 0;
+      const dropped = body.slots[idx];
+      if (dropped && dropped !== id && dropped !== from) delete body._slotAmmo[dropped];
+      body.slots[idx] = id;
+
+      const reserve = opts && typeof opts.reserve === "number" ? opts.reserve : wt.reserve;
+      body._slotAmmo[id] = { mag: wt.mag, reserve };
+      w.id = id;
+      w.mag = wt.mag;
+      w.reserve = reserve;
+      w.state = "idle"; w.stateT = 0; w.ads = false; w.adsT = 0;
+      w.recoilIndex = 0; w._shotCount = 0;
+      sim.emit("switch", { who: whoTag || (body === state.player ? "P" : body.id), from, to: id });
+      return true;
     },
 
     grantAmmoMag(cls) {

@@ -1667,6 +1667,351 @@
       "emptyCooldownS": 30,
       "emptyMags": 1,
       "_comment": "[F2] PVP empty-ammo floor — a living actor whose held weapon sits at TOTAL zero (mag+reserve) for emptyDryS consecutive seconds is granted emptyMags magazine(s), at most once per emptyCooldownS per actor. Closes the kill-only-resupply dead end (zero kills = zero ammo forever). Consumed by core/match/match.js readEmptyTrickle. MATCHES ONLY — campaign keeps walkover."
+    },
+    {
+      "id": "rk_lw_warden_w",
+      "kind": "weapon_pad",
+      "weapon": "warden",
+      "arenas": [
+        "lanternwalk"
+      ],
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "pos": [
+        -45.2,
+        0,
+        -14.5
+      ],
+      "radius": 1.2,
+      "respawnS": 20,
+      "reserve": 60,
+      "label": "M-72 Warden - rack",
+      "_comment": "Mirror pair with the opposite side: the baseline primary must be equally fast to reach from either half, or the pistol start becomes a team subsidy. Offset 0.7m inside the measured 3.00m clear radius."
+    },
+    {
+      "id": "rk_lw_vesper_w",
+      "kind": "weapon_pad",
+      "weapon": "vesper",
+      "arenas": [
+        "lanternwalk"
+      ],
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "pos": [
+        -43.8,
+        0,
+        -14.5
+      ],
+      "radius": 1.2,
+      "respawnS": 20,
+      "reserve": 32,
+      "label": "KS-23 Vesper - rack",
+      "_comment": "Paired with the Warden rack so each half of the map offers a choice of primary rather than one dictated gun."
+    },
+    {
+      "id": "rk_lw_warden_e",
+      "kind": "weapon_pad",
+      "weapon": "warden",
+      "arenas": [
+        "lanternwalk"
+      ],
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "pos": [
+        5.8,
+        0,
+        -9.5
+      ],
+      "radius": 1.2,
+      "respawnS": 20,
+      "reserve": 60,
+      "label": "M-72 Warden - rack",
+      "_comment": "Mirror pair with the opposite side: the baseline primary must be equally fast to reach from either half, or the pistol start becomes a team subsidy. Offset 0.7m inside the measured 3.00m clear radius."
+    },
+    {
+      "id": "rk_lw_vesper_e",
+      "kind": "weapon_pad",
+      "weapon": "vesper",
+      "arenas": [
+        "lanternwalk"
+      ],
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "pos": [
+        7.2,
+        0,
+        -9.5
+      ],
+      "radius": 1.2,
+      "respawnS": 20,
+      "reserve": 32,
+      "label": "KS-23 Vesper - rack",
+      "_comment": "Paired with the Warden rack so each half of the map offers a choice of primary rather than one dictated gun."
+    },
+    {
+      "id": "rk_lw_corvus",
+      "kind": "weapon_pad",
+      "weapon": "corvus",
+      "arenas": [
+        "lanternwalk"
+      ],
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "pos": [
+        -13.5,
+        0,
+        -4.5
+      ],
+      "radius": 1.2,
+      "respawnS": 45,
+      "reserve": 15,
+      "label": "LR-1 Corvus - rack",
+      "_comment": "NEUTRAL power weapon on a long fixed timer -- the Halo/Quake convention: a learnable respawn turns map control into weapon advantage. Measured west/east nav bias under 2.2m on all three arenas."
+    },
+    {
+      "id": "rk_sy_warden_w",
+      "kind": "weapon_pad",
+      "weapon": "warden",
+      "arenas": [
+        "switchyard"
+      ],
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "pos": [
+        -18.7,
+        0,
+        -4.0
+      ],
+      "radius": 1.2,
+      "respawnS": 20,
+      "reserve": 60,
+      "label": "M-72 Warden - rack",
+      "_comment": "Mirror pair with the opposite side: the baseline primary must be equally fast to reach from either half, or the pistol start becomes a team subsidy. Offset 0.7m inside the measured 3.00m clear radius."
+    },
+    {
+      "id": "rk_sy_vesper_w",
+      "kind": "weapon_pad",
+      "weapon": "vesper",
+      "arenas": [
+        "switchyard"
+      ],
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "pos": [
+        -17.3,
+        0,
+        -4.0
+      ],
+      "radius": 1.2,
+      "respawnS": 20,
+      "reserve": 32,
+      "label": "KS-23 Vesper - rack",
+      "_comment": "Paired with the Warden rack so each half of the map offers a choice of primary rather than one dictated gun."
+    },
+    {
+      "id": "rk_sy_warden_e",
+      "kind": "weapon_pad",
+      "weapon": "warden",
+      "arenas": [
+        "switchyard"
+      ],
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "pos": [
+        7.3,
+        0,
+        0.0
+      ],
+      "radius": 1.2,
+      "respawnS": 20,
+      "reserve": 60,
+      "label": "M-72 Warden - rack",
+      "_comment": "Mirror pair with the opposite side: the baseline primary must be equally fast to reach from either half, or the pistol start becomes a team subsidy. Offset 0.7m inside the measured 3.00m clear radius."
+    },
+    {
+      "id": "rk_sy_vesper_e",
+      "kind": "weapon_pad",
+      "weapon": "vesper",
+      "arenas": [
+        "switchyard"
+      ],
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "pos": [
+        8.7,
+        0,
+        0.0
+      ],
+      "radius": 1.2,
+      "respawnS": 20,
+      "reserve": 32,
+      "label": "KS-23 Vesper - rack",
+      "_comment": "Paired with the Warden rack so each half of the map offers a choice of primary rather than one dictated gun."
+    },
+    {
+      "id": "rk_sy_corvus",
+      "kind": "weapon_pad",
+      "weapon": "corvus",
+      "arenas": [
+        "switchyard"
+      ],
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "pos": [
+        7.0,
+        0,
+        11.0
+      ],
+      "radius": 1.2,
+      "respawnS": 45,
+      "reserve": 15,
+      "label": "LR-1 Corvus - rack",
+      "_comment": "NEUTRAL power weapon on a long fixed timer -- the Halo/Quake convention: a learnable respawn turns map control into weapon advantage. Measured west/east nav bias under 2.2m on all three arenas."
+    },
+    {
+      "id": "rk_sm_warden_w",
+      "kind": "weapon_pad",
+      "weapon": "warden",
+      "arenas": [
+        "saltmarket"
+      ],
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "pos": [
+        -16.7,
+        0,
+        -8.0
+      ],
+      "radius": 1.2,
+      "respawnS": 20,
+      "reserve": 60,
+      "label": "M-72 Warden - rack",
+      "_comment": "Mirror pair with the opposite side: the baseline primary must be equally fast to reach from either half, or the pistol start becomes a team subsidy. Offset 0.7m inside the measured 3.00m clear radius."
+    },
+    {
+      "id": "rk_sm_vesper_w",
+      "kind": "weapon_pad",
+      "weapon": "vesper",
+      "arenas": [
+        "saltmarket"
+      ],
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "pos": [
+        -15.3,
+        0,
+        -8.0
+      ],
+      "radius": 1.2,
+      "respawnS": 20,
+      "reserve": 32,
+      "label": "KS-23 Vesper - rack",
+      "_comment": "Paired with the Warden rack so each half of the map offers a choice of primary rather than one dictated gun."
+    },
+    {
+      "id": "rk_sm_warden_e",
+      "kind": "weapon_pad",
+      "weapon": "warden",
+      "arenas": [
+        "saltmarket"
+      ],
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "pos": [
+        5.3,
+        0,
+        4.0
+      ],
+      "radius": 1.2,
+      "respawnS": 20,
+      "reserve": 60,
+      "label": "M-72 Warden - rack",
+      "_comment": "Mirror pair with the opposite side: the baseline primary must be equally fast to reach from either half, or the pistol start becomes a team subsidy. Offset 0.7m inside the measured 3.00m clear radius."
+    },
+    {
+      "id": "rk_sm_vesper_e",
+      "kind": "weapon_pad",
+      "weapon": "vesper",
+      "arenas": [
+        "saltmarket"
+      ],
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "pos": [
+        6.7,
+        0,
+        4.0
+      ],
+      "radius": 1.2,
+      "respawnS": 20,
+      "reserve": 32,
+      "label": "KS-23 Vesper - rack",
+      "_comment": "Paired with the Warden rack so each half of the map offers a choice of primary rather than one dictated gun."
+    },
+    {
+      "id": "rk_sm_corvus",
+      "kind": "weapon_pad",
+      "weapon": "corvus",
+      "arenas": [
+        "saltmarket"
+      ],
+      "modes": [
+        "tdm",
+        "ctf",
+        "ffa"
+      ],
+      "pos": [
+        -5.0,
+        0,
+        -14.0
+      ],
+      "radius": 1.2,
+      "respawnS": 45,
+      "reserve": 15,
+      "label": "LR-1 Corvus - rack",
+      "_comment": "NEUTRAL power weapon on a long fixed timer -- the Halo/Quake convention: a learnable respawn turns map control into weapon advantage. Measured west/east nav bias under 2.2m on all three arenas."
     }
   ],
   "reverbZones": {
@@ -6335,6 +6680,16 @@
           "standH": 2.5
         }
       ]
+    }
+  },
+  "pvp": {
+    "loadout": {
+      "slots": [
+        "pike",
+        null
+      ],
+      "grenades": 1,
+      "_comment": "PISTOL START. Every PVP combatant (human and bot) spawns with the GS-9 Pike; the Warden, Vesper and Corvus are fought over on the map as weapon_pad racks. The campaign keeps mission.loadout [warden,pike] -- sim.js only reads this block when opts.mode is set."
     }
   }
 }
