@@ -54,6 +54,10 @@
 import * as THREE from "three";
 import { WEAPONS, SWAY, VIEWMODEL, FEEL } from "./weapon_data.js";
 import { loadWeaponGLB, loadedPrototypes } from "./weapon_meshes.js";
+// The SAME stride model the footsteps run on. player.js exports it for exactly
+// this ("Exported so the viewmodel can derive the same bob frequency the
+// footsteps run at", player.js §1.6) and, until now, nothing imported it.
+import { strideLength } from "../sim/player.js";
 
 export const VM_LAYER = 2;
 
@@ -579,7 +583,26 @@ export function createViewmodel(ctx) {
       const targetAmpL = moving && stateRow ? stateRow.l * adsBobMult : 0;
       bobAmpV = damp(bobAmpV, targetAmpV, 0.12, dt);
       bobAmpL = damp(bobAmpL, targetAmpL, 0.12, dt);
-      if (moving && stateRow) bobPhase += 2 * Math.PI * stateRow.hz * dt;
+      // BOB FREQUENCY IS DISTANCE-BASED, NOT A CLOCK.
+      // This used to advance at stateRow.hz — a FIXED rate per stance — while
+      // the footsteps had already been moved onto a distance accumulator
+      // (player.js: one footfall per strideLength() of ground covered). The two
+      // never agreed. Measured against the shipped constants:
+      //   walk   4.6 m/s / 1.41 m stride = 3.27 steps/s vs BOB.hz 2.1  (64%)
+      //   sprint 6.4      / 1.81         = 3.54         vs      2.6   (73%)
+      //   tac    7.3      / 1.97         = 3.70         vs      2.9   (78%)
+      //   crouch 2.4      / 0.82         = 2.94         vs      1.5   (51%)
+      // so the view rhythm ran at half to three-quarters of the player's real
+      // cadence and, being a constant, did not change AT ALL through the 0.25 s
+      // accel ramp or the 0.15 s decel. Feet said running, the camera said
+      // gliding — the "sliding rather than running" report.
+      // One stride of ground = one bob cycle, at every speed, always.
+      if (moving && stateRow) {
+        const hs = Math.hypot(p.vel[0], p.vel[2]);
+        const stride = Math.max(0.3, strideLength(hs, p.stance, sprintState !== "none"));
+        bobPhase += 2 * Math.PI * (hs * dt) / stride;
+        if (bobPhase > 1e6) bobPhase %= 2 * Math.PI; // never let it drift huge
+      }
       const bobSlider = S && S.bob != null ? S.bob : 1; // camera share only
       const camBobY = Math.sin(bobPhase) * bobAmpV * bobSlider;
       const camBobX = Math.sin(bobPhase * 0.5) * bobAmpL * bobSlider;
@@ -982,6 +1005,21 @@ export function createViewmodel(ctx) {
     ejectWorld,
     // iter10 A/B seam — see zoomShareOverride above.
     setAdsZoomShareOverride(v) { zoomShareOverride = (v == null ? null : +v); },
+    // combat_spec §1.6: "a step SOUND lands on a bob TROUGH". The frequency
+    // above already matches the gait; this keeps the PHASE honest so the plant
+    // and the lowest point of the head coincide instead of slowly sliding past
+    // each other. Nudged, not snapped — a hard set would show as a hitch if the
+    // phase had drifted. boot.js registers this on the "step" event.
+    onStep(d) {
+      if (!d || d.who !== "P") return;
+      const TROUGH = 3 * Math.PI / 2;        // sin() minimum
+      const TWO_PI = 2 * Math.PI;
+      const cur = ((bobPhase % TWO_PI) + TWO_PI) % TWO_PI;
+      let delta = TROUGH - cur;
+      if (delta > Math.PI) delta -= TWO_PI;
+      if (delta < -Math.PI) delta += TWO_PI;
+      bobPhase += delta * 0.35;
+    },
     setAdsStandoffOverride(v) { standoffOverride = (v == null ? null : +v); },
     renderPass: vmRenderPass,
     get camera() { return vmCamera; },

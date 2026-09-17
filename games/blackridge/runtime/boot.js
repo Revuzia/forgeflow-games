@@ -324,6 +324,10 @@ try {
         recoil.kick(d.weaponId); vm.kick(d.weaponId);
       }
     });
+    // combat_spec §1.6 phase-lock: the footfall pulls the head-bob to its
+    // trough. The "step" event has always carried the gait data the view layer
+    // needs (foot, stride, hz) and nothing consumed it until now.
+    bridge.register("step", (d) => { if (vm.onStep) vm.onStep(d); });
     // bridge.clear() wipes handlers on every match start, so the kill cam
     // re-registers here with everything else rather than once at boot.
     killcam.reset();
