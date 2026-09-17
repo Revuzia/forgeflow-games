@@ -229,6 +229,40 @@ function repair(group) {
         const glove = /glove/i.test(m.name || "");
         if (m.normalScale && !glove) m.normalScale.multiplyScalar(0.5);
         if (glove) {
+          // THE GLOVE TEXTURE IS NOT A GLOVE TEXTURE.
+          // Dumped from the shipped GLB this session: a 1024x1024 sheet whose
+          // TOP half is clean woven olive fabric and whose BOTTOM half is the
+          // same weave overprinted with a band of black ragged blotches and
+          // vertical drips — a generic grunge swatch, with no knuckle pads, no
+          // finger seams and no palm anywhere on it.
+          // The hands' UVs land in the BOTTOM half: arms_R occupies
+          // u[0.008,0.492] v[0.508,0.992] and arms_L u[0.508,0.992] v the same.
+          // So every finger was being painted with random black tatters, which
+          // over curled digits reads as bark. That is the owner's "it looks
+          // like ROOTS" report, and no amount of roughness/metalness tuning
+          // could touch it because the defect is in the pixels.
+          // The CLEAN weave is already in the file, half a texture away, so
+          // sample that instead. Textures are CLONED first: the map objects can
+          // be shared with other materials in the same GLB and an offset on a
+          // shared texture would drag the weapon's own surfaces with it.
+          const shiftToCleanHalf = (t) => {
+            if (!t) return t;
+            const c = t.clone();
+            c.wrapS = THREE.RepeatWrapping; c.wrapT = THREE.RepeatWrapping;
+            c.offset = new THREE.Vector2(t.offset.x, t.offset.y - 0.5);
+            c.needsUpdate = true;
+            return c;
+          };
+          m.map = shiftToCleanHalf(m.map);
+          m.normalMap = shiftToCleanHalf(m.normalMap);
+          m.roughnessMap = shiftToCleanHalf(m.roughnessMap);
+          // ...and ease the relief. 1.15 over a weave this tight reads as
+          // craggy stone at viewmodel range rather than fabric; measured A/B
+          // this session at 1.15 / 0.55 / 0.25, 0.45 keeps the weave legible
+          // without the crags. (The earlier pass raised this from 0.575 to
+          // 1.15 to undo a metal-oriented halving — correct in principle, but
+          // it was tuned against the blotched half of the sheet.)
+          if (m.normalScale) m.normalScale.set(0.45, 0.45);
           // br_glove ships no metallicFactor either, so GLTFLoader defaults
           // metalness to 1.0 — the glove is saved from rendering as a chrome
           // mitten ONLY by its ORM blue channel measuring all-zero. Pin it, so
