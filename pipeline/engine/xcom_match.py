@@ -11,7 +11,7 @@ Scheduler / cron (the nightly autopipe), never inside an interactive session.
     python xcom_match.py            # full run (starts a server, captures, claude -p)
     python xcom_match.py --dry      # capture + print the claude -p command, no model call
 """
-import json, subprocess, sys, time, socket
+import json, os, subprocess, sys, time, socket
 from pathlib import Path
 
 ENGINE = Path(__file__).resolve().parent
@@ -19,8 +19,21 @@ ROOT = ENGINE.parent.parent  # forgeflow-games
 GATES = ENGINE / "gates"
 REPORT = ENGINE / "xcom_match_report.json"
 SLUG = "void-skirmish-3d"
-TG_TOKEN = "8725965467:AAFNoygGflWdwoCA_aidViGWFAR74HI04Sc"
-TG_CHAT = "8770010305"
+
+
+def _telegram_creds():
+    """env → api_config.json (never hardcode a live token in this file -- it's public)."""
+    cfg = {}
+    try:
+        cfg = json.loads((Path.home() / "AppData/Roaming/Nomi/api_config.json").read_text(encoding="utf-8")).get("telegram", {})
+    except Exception:
+        pass
+    token = os.environ.get("TELEGRAM_BOT_TOKEN") or cfg.get("bot_token", "")
+    chat = os.environ.get("TELEGRAM_CHAT_ID") or cfg.get("chat_id", "")
+    return token, chat
+
+
+TG_TOKEN, TG_CHAT = _telegram_creds()
 
 PROMPT = (
     "You are a strict art director comparing a low-poly BROWSER tactics game to the XCOM-2 "

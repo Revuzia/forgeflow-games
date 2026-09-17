@@ -23,15 +23,28 @@ NON-INTERACTIVE ONLY — claude -p holds the OAuth lock. Run from Task Scheduler
     python xcom_autopipe.py --game void-skirmish-3d,nightfall-tactics
     python xcom_autopipe.py --no-regression-guard # skip the re-score (cheaper, less safe)
 """
-import json, subprocess, sys, time, socket
+import json, os, subprocess, sys, time, socket
 from pathlib import Path
 
 ENGINE = Path(__file__).resolve().parent
 ROOT = ENGINE.parent.parent
 REPORT = ENGINE / "xcom_match_report.json"
 LOG = ENGINE / "xcom_autopipe_log.jsonl"
-TG_TOKEN = "8725965467:AAFNoygGflWdwoCA_aidViGWFAR74HI04Sc"
-TG_CHAT = "8770010305"
+
+
+def _telegram_creds():
+    """env → api_config.json (never hardcode a live token in this file -- it's public)."""
+    cfg = {}
+    try:
+        cfg = json.loads((Path.home() / "AppData/Roaming/Nomi/api_config.json").read_text(encoding="utf-8")).get("telegram", {})
+    except Exception:
+        pass
+    token = os.environ.get("TELEGRAM_BOT_TOKEN") or cfg.get("bot_token", "")
+    chat = os.environ.get("TELEGRAM_CHAT_ID") or cfg.get("chat_id", "")
+    return token, chat
+
+
+TG_TOKEN, TG_CHAT = _telegram_creds()
 REGRESSION_TOL = 2  # a re-scored total may dip this many points (vision noise) without rollback
 
 # Default target games. A tactics game's renderer + sim live at these conventional
