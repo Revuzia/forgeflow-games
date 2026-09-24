@@ -64,3 +64,7 @@ games/neon-veil/dist-rebuild/
 games/blocktooth/_shots/
 games/blocktooth/_harness/_reports/
 games/blocktooth/_harness/__pycache__/
+games/blocktooth/_harness/scratch/**/*.png
+games/blocktooth/_harness/scratch/**/*.txt
+games/blocktooth/_harness/scratch/**/__pycache__/
+games/blocktooth/_harness/scratch/**/*.log
