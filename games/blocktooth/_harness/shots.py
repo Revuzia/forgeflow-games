@@ -485,6 +485,13 @@ class Battery:
                     sess.release_all()
                     okf, fv = sess.bt_call("freeze", True)
                     time.sleep(0.4)
+                    if sess.screen() != "play":
+                        # a level-up draft opened between the observation and the freeze (the sim
+                        # froze on the granting tick and the report opens a frame later): this frame
+                        # would show the MUTATION REPORT, not the tell — unfreeze, clear it, retry
+                        if okf:
+                            sess.bt_call("freeze", False)
+                        continue
                     self.shot("boss_%s_%s" % (boss, safe_name(attack)), "boss", bossId=boss, attack=attack,
                               telegraph=tg, frozen=okf, phase=(bo or sb or {}).get("phase"))
                     if okf:

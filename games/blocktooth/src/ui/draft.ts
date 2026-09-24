@@ -95,15 +95,7 @@ export class DraftScreen {
     this.select(0);
 
     this.layer.classList.remove('bt-hidden');
-    const reduced = flashesReduced();
-    this.cards.forEach((c, i) => pulse(c, reduced
-      ? [{ opacity: 0 }, { opacity: 1 }]
-      : [
-        { transform: `translateY(60%) rotate(${(i - 1) * 9}deg) scale(.8)`, opacity: 0 },
-        { transform: `translateY(-4%) rotate(${(i - 1) * -1.5}deg) scale(1.02)`, opacity: 1, offset: 0.7 },
-        { transform: 'translateY(0) rotate(0) scale(1)', opacity: 1 },
-      ], 420 + i * 90));
-    pulse(this.head, [{ transform: 'translateY(-60%)', opacity: 0 }, { transform: 'translateY(0)', opacity: 1 }], 380);
+    DraftScreen.animateIn(this.cards, this.head, flashesReduced());
 
     const { promise, session } = runModal<DraftResult>(this.layer, this.input, (p, s) => this.onPress(p, s), {
       armMs: 260,
@@ -112,6 +104,21 @@ export class DraftScreen {
     });
     this.session = session;
     return promise;
+  }
+
+  /** The deal-in animation of the cards + header. The app's compositor pre-warm replays it on a
+   *  detached copy: a warm-up with a generic fade/scale left the first real draft compiling 9–10 new
+   *  Skia raster programs in one 50–80 ms GPU-process flush (draft frame #4); replaying exactly this
+   *  animation leaves 3, none in a slow flush (Chrome trace, GrShaderCache::store). */
+  static animateIn(cards: readonly HTMLElement[], head: HTMLElement | null, reduced: boolean): void {
+    cards.forEach((c, i) => pulse(c, reduced
+      ? [{ opacity: 0 }, { opacity: 1 }]
+      : [
+        { transform: `translateY(60%) rotate(${(i - 1) * 9}deg) scale(.8)`, opacity: 0 },
+        { transform: `translateY(-4%) rotate(${(i - 1) * -1.5}deg) scale(1.02)`, opacity: 1, offset: 0.7 },
+        { transform: 'translateY(0) rotate(0) scale(1)', opacity: 1 },
+      ], 420 + i * 90));
+    if (head) pulse(head, [{ transform: 'translateY(-60%)', opacity: 0 }, { transform: 'translateY(0)', opacity: 1 }], 380);
   }
 
   // ─────────────────────────────── internals ───────────────────────────────

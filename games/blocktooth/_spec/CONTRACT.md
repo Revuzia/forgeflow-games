@@ -111,11 +111,16 @@ things puff into dust, bolts and springs.
 
 | Rank | H (m) | mass to next | hp× | dmg× | flattens on contact | camera D (m) | pitch |
 |---|---|---|---|---|---|---|---|
-| I | 1.2 | 40 | 1.0 | 1 | tier 0 (cars, kiosks, hydrants, lamps, trees) | 17.2 | 36° |
-| II | 5 | 300 | 1.8 | 3 | ≤1 (shops, buses, trucks, containers) | 62.2 | 38° |
-| III | 14 | 1300 | 3.2 | 8 | ≤2 (midrise corners, sheds, tanks) | 153.7 | 40° |
-| IV | 32 | 4200 | 5.5 | 20 | ≤3 (office blocks, towers) | 314.3 | 42° |
+| I | 1.2 | 95 | 1.0 | 1 | tier 0 (cars, kiosks, hydrants, lamps, trees) | 17.2 | 36° |
+| II | 5 | 600 | 1.8 | 3 | ≤1 (shops, buses, trucks, containers) | 62.2 | 38° |
+| III | 14 | 9 000 | 3.2 | 8 | ≤2 (midrise corners, sheds, tanks) | 153.7 | 40° |
+| IV | 32 | 70 000 | 5.5 | 20 | ≤3 (office blocks, towers) | 314.3 | 42° |
 | V | 60 | — | 9.0 | 45 | ≤4 (megatowers) + fights bosses | 533.2 | 44° |
+
+> **Balance pass (2026-09-23/24):** mass thresholds above are the tuned values. The full economy
+> and threat model (per-rank XP scale, snack fall-off, kill-mass multipliers, enemy HP/damage/reach
+> scaling, director budget, boss HP/damage/fatigue) lives in the comment table at the top of
+> `src/core/config.ts` — that file is the source of truth; this table only mirrors it.
 
 * `titan.height = titanHeight(rank, progressInRank)` (up to +12 % swell before the next rank).
   During a rank-up the sim eases height from the old value to the new rank's base over
@@ -460,6 +465,18 @@ walks in from the city edge (CAISSON-4 wades in from the harbour side in LOCKWAT
 66 % hp, phase 3 at 33 % (`bossPhase` + alert). Meter (0..1): damage to high-`strainMul`
 parts fills it; full → 5 s stagger (2× damage taken, `bossStagger`), meter resets.
 Nameplate subtitle = the active attack's subtitle, else the default mechanic hint.
+
+> **Superseded sizes (2026-09-24).** The metre sizes below were the first design. At Size V they were
+> smaller than the titan itself (radius ~25 m, ~53 m/s), so attacks were trivially stepped out of and
+> read as tiny rings on its back. Every boss attack shape is now sized in **titan heights** (`bossH(w,b)`
+> = titan height locked at spawn, re-locked on a mid-fight rank-up) and every windup is computed by
+> `fairWindup()` = 0.35 s reaction + 0.15 s acceleration + walk-out distance ÷ the titan's current max
+> speed × ESCAPE_K[phase]. Examples: CAISSON-4 hookDrop r 0.55H, hookLane w 0.5H, winch oval
+> 1.4H × 1.0H pulling 0.4H/s, boomSweep reach 2.6H; IRON GULLY coneBreath reach 3.0H, pawSlam rings
+> 0–1.1H and 1.1–2.0H, plates r 0.4H, ridge charge lane w 0.7H. Both bosses answer dash-spam with a
+> readable drop at the dash end (`watchDash`). Boss HP now `BossDef.hp × BOSS_HP_SCALE` (1.15 at
+> Size V), a per-hit cap of 0.55 × titan max HP, and structural fatigue after 90 s. Source of truth:
+> `src/ai/bosses/{index,caisson4,irongully}.ts` + the BOSS rows of the config.ts table.
 
 **CAISSON-4** (hp 150 000, height 75 m + boom) — four-legged harbour crane-mech: gantry body,
 cab with lamp "eyes", 4 articulated legs, boom with trolley + hook on a cable, hazard stripes.

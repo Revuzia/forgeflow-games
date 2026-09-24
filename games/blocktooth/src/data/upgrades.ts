@@ -5,6 +5,9 @@
 //   * stat effects: final = (base + Σ add·stacks) × Π(1 + mul·stacks)          (upgrades/stats.ts)
 //   * trigger magnitudes scale with stacks: p.dmg, p.amount, p.dps, p.mul × stacks
 //     (shown as "(+N per stack)"); chance, icd, radius, duration, count and `every` do not.
+//   * 'dashRefund' p.frac = share of ONE charge's recharge time paid back (default 1 = a whole charge;
+//     not stack-scaled). Refunds are recharge, not free charges — whole-charge refunds on dash/hook let
+//     VOLT-KITE out-dash every boss tell (config.ts BOSS rows, "DASH ECONOMY").
 //   * trigger damage is a BASE number → × titanDamage (rank dmg× · damage stat · frenzy).
 //   * radii (p.r, p.aoe) are in titan body-heights (H) × the area stat.
 //   * 'mass' / 'xp' amounts are "floors' worth": amount × TIERS[t].floorMass / floorXp where t is the
@@ -120,7 +123,7 @@ function actionText(action: TriggerAction, p: Record<string, number | string>, s
       return `gain ${stacking ? `+${pct(P(p, 'mul'))} (+${pct(P(p, 'mul'))} per stack)` : `+${pct(P(p, 'mul'))}`} ${STAT_TEXT[k] ? STAT_TEXT[k].label : k} for ${fmtNum(P(p, 'dur'))} s`;
     }
     case 'cdReduce': return `cut the hook cooldown by ${per(P(p, 'amount'), ' s')}`;
-    case 'dashRefund': return 'refund a dash charge';
+    case 'dashRefund': { const f = P(p, 'frac', 1); return f >= 1 ? 'refund a dash charge' : `recharge ${pct(f)} of a dash charge`; }
     case 'meteor': return `drop a debris meteor (${fmtNum(P(p, 'aoe'))}-body-height blast) on a foe within ${fmtNum(P(p, 'r'))} body-heights for ${per(P(p, 'dmg'), ' dmg')}`;
     case 'arc': return `arc to the ${fmtNum(P(p, 'count', 1))} nearest foe${P(p, 'count', 1) === 1 ? '' : 's'} for ${per(P(p, 'dmg'), ' dmg')}`;
     case 'magma': return `leave a ${fmtNum(P(p, 'r'))}-body-height magma pool for ${fmtNum(P(p, 'dur'))} s at ${per(P(p, 'dps'), ' dmg/s')}`;
@@ -218,7 +221,7 @@ const GROWTH_MOBILITY: UpgradeDef[] = [
   U('road_diet', 'Road Diet', 'rare', 3, ['mobility', 'growth'], [mul('moveSpeed', 0.1), mul('massGain', 0.05)]),
   U('expedited_review', 'Expedited Review', 'epic', 2, ['growth'], [mul('xpGain', 0.15), add('luck', 1)]),
   U('speed_bump_waiver', 'Speed Bump Waiver', 'common', 4, ['mobility'], [mul('dashDistance', 0.1), mul('moveSpeed', 0.04)]),
-  U('peak_commute', 'Peak Commute', 'rare', 2, ['mobility', 'trigger'], [mul('dashCooldown', -0.05), on('kill', 0.1, 2, 'dashRefund')]),
+  U('peak_commute', 'Peak Commute', 'rare', 2, ['mobility', 'trigger'], [mul('dashCooldown', -0.05), on('kill', 0.1, 2, 'dashRefund', { frac: 0.5 })]),
   U('oversize_load_permit', 'Oversize Load Permit', 'rare', 3, ['growth'], [mul('massGain', 0.1), mul('moveSpeed', -0.03)]),
   U('turn_lane_extension', 'Turn Lane Extension', 'epic', 1, ['mobility'], [add('dashCharges', 1), mul('dashDistance', 0.2)]),
   U('lost_and_found', 'Lost and Found', 'common', 4, ['growth', 'trigger'], [mul('xpGain', 0.04), on('crush', 0.25, 0.3, 'xp', { amount: 0.5 })]),
@@ -317,13 +320,13 @@ const VOLTKITE: UpgradeDef[] = [
   U('vk_surge_protector', 'Surge Protector', 'rare', 3, ['kit', 'survival'], [mul('wireDamage', 0.1), add('armor', 4)], T_VK),
   U('vk_power_strip_splitter', 'Power Strip Splitter', 'rare', 3, ['kit', 'offense'], [add('arcForks', 1), mul('chainRange', 0.1)], T_VK),
   U('vk_static_cling', 'Static Cling', 'rare', 3, ['kit', 'mobility', 'trigger'], [mul('wireDamage', 0.05), on('dash', 1, 0.5, 'arc', { count: 2, dmg: 8 })], T_VK),
-  U('vk_tripwire_ordinance', 'Tripwire Ordinance', 'epic', 2, ['kit', 'hook', 'mobility', 'trigger'], [add('wireDuration', 1), on('ability', 0.5, 3, 'dashRefund')], T_VK),
+  U('vk_tripwire_ordinance', 'Tripwire Ordinance', 'epic', 2, ['kit', 'hook', 'mobility', 'trigger'], [add('wireDuration', 1), on('ability', 0.5, 3, 'dashRefund', { frac: 0.2 })], T_VK),
   U('vk_tripped_breaker', 'Tripped Breaker', 'common', 4, ['kit', 'offense'], [add('arcForks', 1), mul('damage', 0.04)], T_VK),
   U('vk_rolling_blackout', 'Rolling Blackout', 'common', 4, ['kit', 'mobility'], [mul('dashCooldown', -0.08), add('wireDuration', 0.5)], T_VK),
   U('vk_ground_fault', 'Ground Fault', 'rare', 3, ['kit', 'offense', 'trigger'], [mul('wireDamage', 0.12), on('kill', 0.1, 0.5, 'spark', { dmg: 6, chains: 2 })], T_VK),
   U('vk_meter_reader', 'Meter Reader', 'rare', 3, ['kit', 'hook', 'mobility', 'trigger'], [add('wireDuration', 0.5), on('ability', 1, 3, 'frenzy', { stat: 'moveSpeed', mul: 0.2, dur: 2 })], T_VK),
   U('vk_overhead_lines', 'Overhead Lines', 'legendary', 1, ['kit', 'mutation', 'offense'], [add('arcForks', 3), mul('attackRate', -0.12)], T_VK),
-  U('vk_jumper_cables', 'Jumper Cables', 'epic', 2, ['kit', 'mobility', 'trigger'], [add('wireDuration', 0.5), on('dash', 0.35, 2, 'dashRefund')], T_VK),
+  U('vk_jumper_cables', 'Jumper Cables', 'epic', 2, ['kit', 'mobility', 'trigger'], [add('wireDuration', 0.5), on('dash', 0.35, 2, 'dashRefund', { frac: 0.2 })], T_VK),
   U('vk_transformer_bank', 'Transformer Bank', 'epic', 2, ['kit', 'hook'], [mul('wireDamage', 0.25), mul('abilityPower', 0.1)], T_VK),
   U('vk_mane_static', 'Mane Static', 'rare', 3, ['kit', 'offense'], [add('arcForks', 1), add('critChance', 0.03)], T_VK),
   U('vk_fuse_box', 'Fuse Box', 'common', 4, ['kit', 'mobility'], [add('wireDuration', 0.5), mul('wireDamage', 0.08), mul('dashDistance', 0.08)], T_VK),

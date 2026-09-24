@@ -69,8 +69,11 @@ titan on resume; the Space/Enter/digit that closed the screen never leaks into p
 | `?autostart=1` | skip title + select and go straight to loading → slate (defaults: molo / grideast / random seed) |
 | `?noslate=1` | skip the open slate (also skipped on retry) |
 | `?quality=0\|1\|2` | quality for this session only (low: DPR 1, no shadows · med: DPR ≤ 1.25 · high: DPR ≤ 1.5) |
-| `?dev=1` | enables `window.__BT__.cheat.*` |
-| `?dynres=0` | pins the drawing buffer at the quality DPR (adaptive render scale off; see below) |
+| `?dev=1` | enables `window.__BT__.cheat.*` (and `?rscale=`) |
+| `?dynres=0` | adaptive render scale off: the drawing buffer stays at the quality DPR (see below) |
+| `?rscale=0.3…1` | with `?dev=1` only: pins the render scale at this value (no adaptation; perf attribution) |
+| `?prof=1` | frame profiler (`render/frameprof.ts`, `window.__BTPROF__`): per-section wall ms, GPU timer, LoAF, worst 50 frames |
+| `?warmui=0` | skips the one-time compositor pre-warm of the MUTATION REPORT during loading (A/B only) |
 
 ## Screens
 
@@ -82,19 +85,31 @@ boot → title → select (titan, then biome) → loading → slate → play ⇄
 ```
 
 * **Loading**: `createWorld`, mount every view, then warm the shaders (`compileAsync` with a render
-  target bound, then once more for the canvas) before the first visible frame.
+  target bound, then once more for the canvas) before the first visible frame. Once per page it
+  also replays the real draft deal-in animation on a near-transparent copy of the MUTATION REPORT,
+  so the browser compiles its compositor shaders during loading and not in the first draft.
 * **Slate**: one frame is rendered and the sim is frozen. The WARD-7 freeze-frame lower third
   (`UNIDENTIFIED MASS — …`) waits for any key.
 * **Draft**: when a level-up (or an elite's chest) is owed, the sim freezes inside that same tick.
-  The 3-card report then repeats until no draft is owed.
+  The frame that froze it draws the world; the MUTATION REPORT opens one frame later (`draftArmed`),
+  and that frame keeps the last picture instead of redrawing, so the DOM build and the world draw
+  never share a frame. The 3-card report then repeats until no draft is owed.
+* **Frame hold** (`holdCanvas`, draft and pause): the views are frozen, so the canvas is not redrawn
+  under the modal; it keeps showing the last live frame. It redraws once only if the canvas size,
+  DPR or shadow setting changes while the modal is open (settings in the pause menu).
 * **Rank-up**: hit-stop (sim time × 0.15 for 0.25 s; HOOK/DASH presses stay buffered across the
   slowed ticks), a camera punch + zoom-out, the full-width **MASS BREACH** banner, a shockwave ring,
   and a roar + news sting. A level-up owed in the same moment waits until the sting has played
   (2.3 s, play continues meanwhile), then the draft opens.
-* **Adaptive render scale** (`DynRes`, `game.ts`): in live play, every 1-s window with ≥ 10 % of
-  frames slower than 1.5 × the display interval lowers the drawing-buffer scale by 0.1 (floor 0.6);
-  6 s with < 3 % misses raises it again (a level that fails within 4 s of a step up is locked out
-  for 20 s). `__BT__.state().renderScale` and `.dynres` expose it.
+* **Adaptive render scale** (`DynRes`, `game.ts`; live play only): the display interval is the
+  fastest 1-s p10 frame time seen this session. Each 1-s window counts missed vsyncs, meaning frames
+  slower than 1.5 × that interval whose previous frame's main-thread work stayed under 0.75 × the
+  interval (resolution cannot fix a CPU-bound frame). At ≥ 3 % misses the scale drops by 0.1 (0.2 at
+  ≥ 6 %, 0.3 at ≥ 15 %; floor 0.6). After 30 s of windows under 1 % it rises by 0.1
+  (`UP_CLEAN_S = 30`, because every step reallocates the MSAA buffer, a 50–65 ms stall). The 0.75 s after a step
+  is not judged. A level that fails within 6 s of a step up is locked out for 60 s. The scale
+  multiplies only the drawing-buffer DPR; the CSS size stays the same. `__BT__.state().renderScale`
+  and `.dynres` expose it.
 * **Run end**: the sim stops. After a 2.5 s aftermath (dust still settling, hostile telegraphs
   fading out), one frame is rendered and captured as the tabloid's front-page photo; telegraphs and
   hazard paint are left out of that photo so the subject is the titan.
@@ -189,6 +204,23 @@ near/far = max(0.1, 0.02 D) / 6 D + 400
 shake  : trauma model (amplitude², decay 1.6/s), off when Settings → screen shake is off
 ```
 
+### Bosses: sized in titan heights
+
+The metre sizes in CONTRACT §10 were the first design. At Size V they were smaller than the titan,
+so they have been replaced. Every boss tell is authored in **titan heights**. `bossH(w, b)` in
+`ai/bosses/index.ts` is the titan height latched at spawn, and it is latched again if the titan
+ranks up mid-fight. Current shapes:
+
+* CAISSON-4: hook drop r 0.55 H, hook lane w 0.5 H, winch oval 1.4 H × 1.0 H, boom sweep 2.6 H, leg stomp rig + 1.0 H
+* IRON GULLY: cone breath 3.0 H, paw-slam rings 0–1.1 H and 1.1–2.0 H, plates r 0.4 H, ridge-charge lane w 0.7 H
+
+Every windup comes from `fairWindup()`: 0.35 s reaction + 0.15 s acceleration + the walk-out
+distance ÷ the titan's current top speed × `ESCAPE_K` (1.1 / 1.0 / 0.9 for phases 1 / 2 / 3).
+`watchDash` answers dash-spam with a walkable drop at the dash end. HP is `BossDef.hp × BOSS_HP_SCALE`
+(1.15 at Size V). No single hit deals more than 55 % of the titan's max HP, and structural fatigue
+starts after 90 s. Dash-refund cards pay back recharge time, not whole charges (VOLT-KITE cards 20 %,
+Peak Commute 50 %). The measured numbers are in the `config.ts` BOSS rows.
+
 ## Test surface and harness
 
 With the dev server up, `window.__BT__` exposes:
@@ -207,16 +239,23 @@ The dev server also accepts `POST /__report/<name>` (JSON), which it writes to `
 ### Gates (CONTRACT §15): a build is done only when all of these pass, observed
 
 ```bash
-npx tsc --noEmit -p tsconfig.json                          # 1. 0 type errors
-node _harness/probe_sim.ts                                 # 2. 4 titans × 3 biomes: no NaN/throw, deterministic, pacing bands
-python _harness/bootcheck.py                               # 3. autostart → slate (titan ON a zebra) → real key → play, 0 errors
-python _harness/playtest.py --titan molo --biome grideast  # 4. real keys from the title: menus, slate, move, eat, draft, hook, dash
-python _harness/perfcheck.py                               # 5. Size V + 250 enemies: p99 ≤ 22 ms, ≤ 450 draw calls
-python _harness/shots.py                                   # 6. screenshot battery for the visual critic pass
+npx tsc --noEmit -p tsconfig.json          # 1. 0 type errors
+node _harness/probe_sim.ts --det 2         # 2. 4 titans × 3 biomes: no NaN/throw, determinism, pacing bands → "GATE 2: PASS"
+for p in ai city combat econ titan upgrades; do node _harness/probe_$p.ts; done   #    lane probes (all must exit 0)
+python _harness/bootcheck.py --titan T --biome B   # 3. autostart → slate (baby titan ON a zebra) → real key → play, 0 errors (run all 12)
+python _harness/playtest.py --matrix       # 4. real keys from the title (4 titan/biome pairs): menus, slate, move, eat, draft, HOOK, DASH
+python _harness/perfcheck.py               # 5. Size V + 250 enemies: p99 ≤ 22 ms, ≤ 450 draws. Run it ALONE, nothing else on the GPU
+python _harness/shots.py                   # 6. screenshot battery (_shots/) for the visual critic pass
+python _harness/scratch/final/leakcheck.py # newRun ×7: geometries / textures / programs come back to the same values
+python _harness/scratch/final/blankprobe.py   # setQuality after a render never shows a blank canvas (0 blank frames)
 ```
 
-The browser gates start `npx vite` themselves when :5178 is not already serving. `--headless`
-runs them without a window, using the same GPU flags.
+Start the server once as `BT_FROZEN=1 npx vite --port 5178 --strictPort`, with no HMR and no file
+watching, so an edit cannot reload a page mid-test. Otherwise the browser gates start `npx vite`
+themselves when :5178 is not serving (`--no-serve` turns that off). `--headless` runs a gate without
+a window, using the same GPU flags; gate 5 is only valid headed. Perf attribution:
+`python _harness/scratch/perfprof.py` (perfcheck with `?prof=1`), then `profsum.py` / `profcat.py`
+on the JSON it writes. Boss threat (node only): `node _harness/scratch/boss_threat_pool.ts`.
 
 ## Credits and licences
 

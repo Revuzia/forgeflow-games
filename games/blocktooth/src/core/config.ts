@@ -58,6 +58,16 @@
 //     P2+ every dash out of live boss paint too (bosses/index.ts watchDash).
 //     Measured (fullrun-policy bot port, god, 5 seeds): tells landed VOLT / MOLO — CAISSON LV 8 10.3 / 15.5 %,
 //     LV 34 3.8 / 11.4 %; IRON GULLY LV 34 4.3 / 10.8 %. Before: 1–4 % / 3–10 %.
+//   DASH ECONOMY vs bosses (2026-09-24): late-run VOLT-KITE dodged ~94 % of tells because its refund cards
+//     (Tripwire Ordinance, Jumper Cables, Peak Commute) handed out WHOLE charges on hook/dash/kill — the pool
+//     never ran dry, so the dash-follow answers never landed. Refunds now pay recharge time (engine
+//     'dashRefund' p.frac → titansim refundDash): VOLT cards 20 %, Peak Commute 50 %, Emergency Exit Plan
+//     (hurt, 12 s) a whole charge. Measured NOT to be the lever (VOLT LV 34 stayed 5–8 %): capping dash
+//     charges at 2, move speed at 1.15, dash distance at 2.2; dash i-frames 0.3 → 0.22 changed no hit count.
+//     Measured (_harness/scratch/boss_threat_pool.ts, human policy, god, 32 seeds, no adds / with adds):
+//       VOLT LV 34  CAISSON 6.5 → 9.7 % / 4.8 → 9.2 % · IRON GULLY 6.7 → 12.0 % / 6.2 → 11.1 %
+//       VOLT LV 8   CAISSON 12.3 → 14.3 % · IRON GULLY 13.2 → 15.5 %
+//       MOLO / HEARTHBACK / BRIARWICK: identical hit counts without adds (MOLO LV 34 13.3 % / 10.3 %).
 //   cadence: attack gap CAISSON 2.6/2.0/1.9 s, IRON GULLY 2.8/2.1/2.0 s (P3 × 0.7/0.75)
 //   past its 60–120 m band the rig closes at up to 0.6 × the titan's walk speed (bosses/index.ts keepRange)
 //   measured (36 runs): fight 71–172 s (median ≈ 120); deaths 6/36 (seed 1337: 2 of 12; seeds 7/99: 3/1) —

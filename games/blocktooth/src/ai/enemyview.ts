@@ -25,7 +25,7 @@ import { ENEMY_KINDS } from '../core/types.ts';
 import { CITY, SIM_DT } from '../core/config.ts';
 import { BIOMES } from '../data/biomes.ts';
 import type { FrameInfo, ViewCtx, ViewModule } from '../render/viewtypes.ts';
-import { addOutline } from '../render/materials.ts';
+import { addOutline, indexGeometry } from '../render/materials.ts';
 import { buildFoeFar, buildFoeModel, disposeFoeModel, makeFoeMaterial, PIV_STRIDE } from './foemodels.ts';
 import type { FoeMaterial, FoeModel, FoePart } from './foemodels.ts';
 
@@ -169,6 +169,13 @@ export class EnemyView implements ViewModule {
   private buildBatch(kind: EnemyKind): KindBatch {
     const model = buildFoeModel(kind);
     const capEnemies = CITY.maxEnemies;
+    // far LOD built from the model as authored, then every part welded + indexed (indexGeometry: same
+    // picture, fewer vertex-shader runs — the frame is vertex-bound at Size V on the reference GPU)
+    const farGeo = indexGeometry(buildFoeFar(model, FAR_CELLS));
+    for (const part of model.parts) {
+      const ig = indexGeometry(part.geo);
+      if (ig !== part.geo) { part.geo.dispose(); part.geo = ig; }
+    }
     const parts: PartBatch[] = [];
     const pw: THREE.Matrix4[][] = [];
     for (const part of model.parts) {
@@ -197,7 +204,6 @@ export class EnemyView implements ViewModule {
     }
     // far LOD: one merged, decimated mesh per kind; no ink hull (it only draws when a unit is a
     // few px tall, where INK_MIN_RATIO has already dropped the hulls of every far kind)
-    const farGeo = buildFoeFar(model, FAR_CELLS);
     const fFlash = new THREE.InstancedBufferAttribute(new Float32Array(capEnemies), 1);
     fFlash.setUsage(THREE.DynamicDrawUsage);
     farGeo.setAttribute('instFlash', fFlash);

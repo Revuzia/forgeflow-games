@@ -92,6 +92,7 @@ const SQUASH_AMP = 0.06;                 // 6 % landing squash
 const SQUASH_T = 0.26;
 const SINK_T = 0.6;                      // collapse: remaining stack sinks into the footprint
 const RISE_T = 0.5;                      // rubble heap rise
+const IMP_CHUNK = 2;                     // impostor culling chunk (blocks per side; 1: a live block is not drawn at all)
 const IMP_BLOCKS_PER_FRAME = 4;          // impostor slot rewrites per frame (queued blocks)
 const SWEEP_PER_FRAME = 96;              // consistency sweep: buildings + props checked per frame
 
@@ -818,47 +819,103 @@ function makeImpostorMaterial(L: ImpLook): THREE.MeshToonMaterial {
   return m;
 }
 
-/** One shared dynamic buffer; every block owns a fixed vertex slot [start, start + cap). */
+/** One shared dynamic buffer; every block owns a fixed vertex slot [start, start + cap).
+ *  Slots are laid out CHUNK by chunk (IMP_CHUNK × IMP_CHUNK blocks), and every chunk is its own
+ *  mesh (+ ink hull, + shadow caster) over the SAME BufferAttributes (one GPU buffer set, one upload
+ *  path) with its own drawRange and bounding sphere, so three's frustum culling drops the chunks
+ *  that are off screen / outside the shadow box. At Size V the live set covers the view: before the
+ *  split ~91 % of the 2 × 48 k impostor triangles (+ its shadow pass) were vertex-shaded off screen
+ *  every frame (the GPU is vertex-bound on the reference Intel UHD: ~10 ms per million triangles). */
 class Impostors {
   readonly W: ImpWriter;
-  readonly geo: THREE.BufferGeometry;
-  readonly mesh: THREE.Mesh;
+  readonly geos: THREE.BufferGeometry[] = [];
+  readonly meshes: THREE.Mesh[] = [];
   readonly mat: THREE.MeshToonMaterial;
   readonly start: Int32Array;
   readonly cap: Int32Array;
   readonly used: Int32Array;
+  /** chunk of each block, and each chunk's vertex range [c0, c1) */
+  private readonly chunkOf: Int32Array;
+  private readonly c0: number[] = [];
+  private readonly c1: number[] = [];
+  /** chunk → its mesh (null when the chunk has no slot), and the vertices currently written per chunk */
+  private readonly meshOf: (THREE.Mesh | null)[] = [];
+  private readonly chunkUsed: Int32Array;
   private attrs: THREE.BufferAttribute[];
-  constructor(caps: Int32Array, look: ImpLook, parent: THREE.Object3D) {
+  constructor(caps: Int32Array, blocksX: number, look: ImpLook, parent: THREE.Object3D) {
     const n = caps.length;
     this.cap = caps;
     this.start = new Int32Array(n);
     this.used = new Int32Array(n);
+    this.chunkOf = new Int32Array(n);
+    const bz = Math.max(1, Math.ceil(n / Math.max(1, blocksX)));
+    const cX = Math.max(1, Math.ceil(blocksX / IMP_CHUNK)), cZ = Math.max(1, Math.ceil(bz / IMP_CHUNK));
+    const nC = cX * cZ;
+    this.chunkUsed = new Int32Array(nC);
+    for (let i = 0; i < n; i++) {
+      const x = i % blocksX, z = Math.floor(i / blocksX);
+      this.chunkOf[i] = Math.floor(x / IMP_CHUNK) + Math.floor(z / IMP_CHUNK) * cX;
+    }
     let total = 0;
-    for (let i = 0; i < n; i++) { this.start[i] = total; total += caps[i]; }
+    for (let c = 0; c < nC; c++) {
+      this.c0.push(total);
+      for (let i = 0; i < n; i++) if (this.chunkOf[i] === c) { this.start[i] = total; total += caps[i]; }
+      this.c1.push(total);
+    }
     total = Math.max(3, total);
     this.W = new ImpWriter(total);
-    const g = new THREE.BufferGeometry();
     const mk = (arr: Float32Array, size: number): THREE.BufferAttribute => {
       const a = new THREE.BufferAttribute(arr, size); a.setUsage(THREE.DynamicDrawUsage); return a;
     };
     const aPos = mk(this.W.pos, 3), aNrm = mk(this.W.nrm, 3), aCol = mk(this.W.col, 3), aOnr = mk(this.W.onr, 3), aImp = mk(this.W.imp, 4);
-    g.setAttribute('position', aPos);
-    g.setAttribute('normal', aNrm);
-    g.setAttribute('color', aCol);
-    g.setAttribute('outlineNormal', aOnr);
-    g.setAttribute('aImp', aImp);
-    g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e6);
     this.attrs = [aPos, aNrm, aCol, aOnr, aImp];
-    this.geo = g;
     this.mat = makeImpostorMaterial(look);
-    const m = new THREE.Mesh(g, this.mat);
-    m.name = 'city:impostors';
-    m.frustumCulled = false;
-    m.castShadow = true;
-    m.receiveShadow = true;
-    addOutline(m, INK_PX);
-    parent.add(m);
-    this.mesh = m;
+    for (let c = 0; c < nC; c++) {
+      this.meshOf.push(null);
+      if (this.c1[c] <= this.c0[c]) continue;
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', aPos);
+      g.setAttribute('normal', aNrm);
+      g.setAttribute('color', aCol);
+      g.setAttribute('outlineNormal', aOnr);
+      g.setAttribute('aImp', aImp);
+      g.setDrawRange(this.c0[c], this.c1[c] - this.c0[c]);
+      g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e6);   // fitted by fitBounds()
+      const m = new THREE.Mesh(g, this.mat);
+      m.name = 'city:impostors';
+      m.frustumCulled = true;
+      m.castShadow = true;
+      m.receiveShadow = true;
+      m.userData.impChunk = c;
+      m.visible = false;                      // until something is written into the chunk
+      addOutline(m, INK_PX);
+      parent.add(m);
+      this.meshOf[c] = m;
+      this.geos.push(g);
+      this.meshes.push(m);
+    }
+  }
+  /** Fit every chunk's bounding sphere to what is written now (call after the initial full write:
+   *  impostors only ever get LOWER — floors break, buildings collapse into lower mounds — so the
+   *  full-height bounds stay conservative for the whole run). Zeroed (degenerate) vertices skipped. */
+  fitBounds(): void {
+    const P = this.W.pos;
+    for (const g of this.geos) {
+      const a = g.drawRange.start, b = a + g.drawRange.count;
+      let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+      for (let v = a; v < b; v++) {
+        const x = P[v * 3], y = P[v * 3 + 1], z = P[v * 3 + 2];
+        if (x === 0 && y === 0 && z === 0) continue;
+        if (x < x0) x0 = x; if (x > x1) x1 = x;
+        if (y < y0) y0 = y; if (y > y1) y1 = y;
+        if (z < z0) z0 = z; if (z > z1) z1 = z;
+      }
+      const bs = g.boundingSphere!;
+      if (!(x1 >= x0)) { bs.center.set(0, -1e5, 0); bs.radius = 0; continue; }
+      bs.center.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+      // + a few metres for the mound (it can be wider than the tower's footprint) and the ink hull
+      bs.radius = 0.5 * Math.hypot(x1 - x0, y1 - y0, z1 - z0) + 8;
+    }
   }
   /** Begin writing block `bi`: returns the writer positioned at the block's slot. */
   begin(bi: number): ImpWriter {
@@ -875,11 +932,21 @@ class Impostors {
     if (prev > nowUsed) this.zeroRange(s + nowUsed, prev - nowUsed);
     this.used[bi] = nowUsed;
     this.markRange(s, Math.max(prev, nowUsed));
+    this.setChunkUsed(bi, nowUsed - prev);
   }
   clear(bi: number): void {
     const s = this.start[bi], u = this.used[bi];
     if (u > 0) { this.zeroRange(s, u); this.markRange(s, u); }
     this.used[bi] = 0;
+    this.setChunkUsed(bi, -u);
+  }
+  /** a chunk with nothing written (all its blocks live, or empty) is not drawn at all — its zeroed
+   *  slots would still be vertex-shaded as degenerate triangles */
+  private setChunkUsed(bi: number, delta: number): void {
+    const c = this.chunkOf[bi];
+    this.chunkUsed[c] += delta;
+    const m = this.meshOf[c];
+    if (m) m.visible = this.chunkUsed[c] > 0;
   }
   private zeroRange(v0: number, nv: number): void {
     const W = this.W;
@@ -891,7 +958,7 @@ class Impostors {
     if (nv <= 0) return;
     for (const a of this.attrs) { a.addUpdateRange(v0 * a.itemSize, nv * a.itemSize); a.needsUpdate = true; }
   }
-  dispose(): void { this.geo.dispose(); this.mat.dispose(); }
+  dispose(): void { for (const g of this.geos) g.dispose(); this.mat.dispose(); }
 }
 
 // ─────────────────────────────── instanced batch ───────────────────────────────
@@ -1372,8 +1439,9 @@ export class CityView implements ViewModule {
       writeMound(probe, b, ap, tint, look);
       caps[b.block] += Math.max(full, probe.v);
     }
-    this.impostors = new Impostors(caps, look, root);
+    this.impostors = new Impostors(caps, city.blocksX, look, root);
     for (let bi = 0; bi < this.nBlocks; bi++) this.writeBlockImpostor(bi);
+    this.impostors.fitBounds();
 
     // ── initial live set ──
     this.liveKX = NaN; this.liveKZ = NaN; this.liveRank = -1;

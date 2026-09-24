@@ -244,7 +244,7 @@ section('A. DATA');
         const v = g.p[k];
         if (typeof v === 'number') { numChecks++; ok(u.desc.includes(fmtNum(v)), `${u.id}: desc shows p.${k}=${v}`); }
       }
-      for (const k of ['amount', 'mul']) {
+      for (const k of g.action === 'dashRefund' ? ['amount', 'mul', 'frac'] : ['amount', 'mul']) {
         const v = g.p[k];
         if (typeof v === 'number') {
           numChecks++;
@@ -595,6 +595,12 @@ const NOOP = { stat: 'luck', mul: 0, dur: 0.05 };   // frenzy that changes nothi
     (w) => near(w.titan.abilityCd, 3) ? null : `abilityCd ${w.titan.abilityCd}`);
   runAction('molo', 'dashRefund', {}, (w) => { w.titan.dashCharges = 0; },
     (w) => w.titan.dashCharges === 1 ? null : `charges ${w.titan.dashCharges}`);
+  // p.frac pays that share of one charge's recharge time (VOLT-KITE's cards: recharge, not free charges)
+  runAction('voltkite', 'dashRefund', { frac: 0.2 }, (w) => { w.titan.dashCharges = 0; w.titan.dashRecharge = 0; },
+    (w) => {
+      const per = 3 * Math.max(0.35, stat(w, 'dashCooldown'));
+      return w.titan.dashCharges === 0 && near(w.titan.dashRecharge, 0.2 * per) ? null : `charges ${w.titan.dashCharges} recharge ${w.titan.dashRecharge} (want 0 / ${0.2 * per})`;
+    });
   runAction('molo', 'meteor', { r: 4, dmg: 30, aoe: 0.6 }, (w) => ringEnemies(w, 'android', 3, ENEMY_R),
     (w) => w.projectiles.some((q) => q.alive && q.lob && q.owner === 'titan') ? null : 'no lobbed meteor');
   runAction('molo', 'arc', { count: 3, dmg: 20 }, (w) => ringEnemies(w, 'android', 5, ENEMY_R),

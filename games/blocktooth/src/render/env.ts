@@ -268,6 +268,8 @@ void main() {
 // ─────────────────────────────── EnvView ───────────────────────────────
 /** clouds keep out of the inner frame: |ndc| < BAND_INNER on both axes (outer ~12 % band) */
 const BAND_INNER = 0.76;
+/** outskirt tower sector (blocks per side) — one frustum-culled skyline mesh per sector */
+const SKY_CHUNK = 3;
 /** keep-clear screen circles tracked per frame (titan + boss + hostile telegraphs) */
 const KEEP_CLEAR_MAX = 40;
 
@@ -290,7 +292,7 @@ export class EnvView implements ViewModule {
   /** particles drawn per quality level (the buffer holds the level-2 count; instanceCount follows
    *  the LIVE quality.level every frame, so a settings change applies without a remount) */
   private weatherCounts: readonly number[] = [0, 0, 0];
-  private skyline: THREE.Mesh | null = null;
+  private skyline: THREE.Object3D | null = null;
   private clouds: THREE.InstancedMesh | null = null;
   private cloudSeeds: CloudSeed[] = [];
   private readonly _m = new THREE.Matrix4();
@@ -380,8 +382,9 @@ export class EnvView implements ViewModule {
   }
 
   // ─────────────────────────────── builders ───────────────────────────────
-  private keep<G extends THREE.BufferGeometry, M extends THREE.Material>(g: G, m: M): void {
-    this.owned.geo.push(g); this.owned.mat.push(m);
+  private keep(g: THREE.BufferGeometry | null, m: THREE.Material | null): void {
+    if (g) this.owned.geo.push(g);
+    if (m) this.owned.mat.push(m);
   }
 
   private buildSky(b: BiomeDef): void {
@@ -613,7 +616,12 @@ export class EnvView implements ViewModule {
     const neonA = atLuminance(p.sign, Math.max(0.03, lum(bodies[0]) * 5));
     const neonB = atLuminance(p.signB, Math.max(0.03, lum(bodies[0]) * 5));
     const SHADE = [1.0, 1.0, 0.72, 0.84, 0.72] as const;       // top, +x (sun-ish), −x, +z, −z
-    const bld = new Builder();
+    // Towers are built into per-sector builders (SKY_CHUNK × SKY_CHUNK outskirt blocks), one mesh
+    // each, so three's frustum culling drops the sectors off screen: the far ring is ~49 k triangles
+    // and from the Size IV–V camera (pitch 42–44°, no horizon in frame) NONE of it is on screen —
+    // it was vertex-shaded every frame for nothing (the reference GPU is vertex-bound).
+    const sectors = new Map<number, Builder>();
+    let bld = new Builder();
     const c0 = new THREE.Color(), c1 = new THREE.Color(), c2 = new THREE.Color(), c3 = new THREE.Color();
     const cInk = new THREE.Color(), cTrim = new THREE.Color(), cRoof = new THREE.Color(), cBand = new THREE.Color();
     const cT = [new THREE.Color(), new THREE.Color(), new THREE.Color(), new THREE.Color()];
@@ -724,6 +732,12 @@ export class EnvView implements ViewModule {
     for (let bi = -RINGS; bi < city.blocksX + RINGS; bi++) {
       for (let bj = -RINGS; bj < city.blocksZ + RINGS; bj++) {
         if (bi >= 0 && bi < city.blocksX && bj >= 0 && bj < city.blocksZ) continue;   // the city itself
+        {
+          const key = (Math.floor(bi / SKY_CHUNK) + 64) * 256 + (Math.floor(bj / SKY_CHUNK) + 64);
+          let sb = sectors.get(key);
+          if (!sb) { sb = new Builder(); sectors.set(key, sb); }
+          bld = sb;
+        }
         const cxB = city.originX + (bi + 0.5) * P, czB = city.originZ + (bj + 0.5) * P;
         const ring = Math.max(bi < 0 ? -bi : bi - city.blocksX + 1, bj < 0 ? -bj : bj - city.blocksZ + 1, 1);
         // LOCKWATER: open harbour close in; only a far shore past ~520 m of water
@@ -775,15 +789,23 @@ export class EnvView implements ViewModule {
       this.root.add(mesh);
     }
 
-    const geo = bld.geometry();
     const mat = new THREE.MeshBasicMaterial({ vertexColors: true, fog: true });
     mat.name = 'env:skyline';
-    const m = new THREE.Mesh(geo, mat);
-    m.name = 'env:skyline';
-    m.castShadow = false; m.receiveShadow = false;
-    this.keep(geo, mat);
-    this.skyline = m;
-    this.root.add(m);
+    this.keep(null, mat);
+    const group = new THREE.Group();
+    group.name = 'env:skyline';
+    for (const sb of sectors.values()) {
+      if (!sb.pos.length) continue;
+      const geo = sb.geometry();
+      const m = new THREE.Mesh(geo, mat);
+      m.name = 'env:skyline';
+      m.castShadow = false; m.receiveShadow = false;
+      m.frustumCulled = true;
+      this.keep(geo, null);
+      group.add(m);
+    }
+    this.skyline = group;
+    this.root.add(group);
   }
 
   private buildWeather(b: BiomeDef): void {

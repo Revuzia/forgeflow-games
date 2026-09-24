@@ -58,7 +58,7 @@ import { findTarget, targetPos, hitTarget } from '../combat/targeting.ts';
 import { spawnProjectile } from '../combat/projectiles.ts';
 import { spawnHazard } from '../combat/hazards.ts';
 import { magnetAll } from '../combat/pickups.ts';
-import { healTitan, gainMass, gainXp } from '../titans/titansim.ts';
+import { healTitan, gainMass, gainXp, refundDash } from '../titans/titansim.ts';
 
 // ─────────────────────────────── tuning ───────────────────────────────
 /** Max recursion depth for proc → events → other procs within one tick. */
@@ -532,12 +532,9 @@ function execute(w: World, en: Entry, x: number, z: number, evTier = -1): boolea
       return true;
     }
 
-    case 'dashRefund': {
-      const cap = Math.floor(stat(w, 'dashCharges'));
-      if (T.dashCharges >= cap) return false;
-      T.dashCharges = Math.min(cap, T.dashCharges + 1);
-      return true;
-    }
+    case 'dashRefund':
+      // p.frac = share of one charge's recharge paid back (default 1 = a whole charge); not stack-scaled
+      return refundDash(w, Math.max(0, Math.min(1, num(p, 'frac', 1))));
 
     case 'meteor':
       return doMeteor(w, x, z, num(p, 'r', 4) * H, sc('dmg', 16), Math.max(0.2, num(p, 'aoe', 0.5)) * H * area, en.id);

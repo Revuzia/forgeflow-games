@@ -244,7 +244,10 @@ export class DynRes {
   static readonly DOWN_MISS = 0.03;
   /** step up only after UP_CLEAN_S of windows with fewer misses than this */
   static readonly CLEAN_MISS = 0.01;
-  static readonly UP_CLEAN_S = 10;
+  /** 30 s (was 10): every step reallocates the MSAA drawing buffer — a 50–65 ms main-thread stall
+   *  on the reference Intel UHD (?prof=1 `resize=` notes) — and with the Size V load now mostly
+   *  resolution-independent (vertex-bound) an early step up bought little picture for a certain hitch */
+  static readonly UP_CLEAN_S = 30;
   static readonly LOCK_S = 60;
   static readonly SETTLE_S = 0.75;
 
@@ -437,6 +440,8 @@ export class App {
   private musicAcc = 0;
   private lowHpArmed = true;
   private wantDraft = false;
+  /** the draft owed now opens on the NEXT frame (see afterFrame): this frame drew the world */
+  private draftArmed = false;
   private draftSuppressTick = -1;
   private ending = false;
   private endT = 0;
@@ -856,13 +861,16 @@ export class App {
       });
     }
     this.uiRoot.appendChild(box);
-    // the real open animates the cards + header on the compositor (transform / opacity layers)
+    // replay the REAL deal-in (DraftScreen.animateIn) and then the pick classes. New Skia raster
+    // programs compiled by the first real draft (Chrome trace, GrShaderCache::store): no warm-up 30;
+    // the old generic fade/scale warm-up 11–12, all in one 50–80 ms flush on draft frame #4; this 3.
+    const cards = Array.from(box.querySelectorAll<HTMLElement>('.bt-dossier'));
+    try { DraftScreen.animateIn(cards, box.querySelector<HTMLElement>('.bt-draft-head'), false); } catch { /* no WAAPI */ }
     try {
-      const kf = [{ transform: 'translateY(30%) rotate(6deg) scale(.8)', opacity: 0 }, { transform: 'none', opacity: 1 }];
-      box.querySelectorAll('.bt-dossier, .bt-draft-head').forEach((e) => { (e as HTMLElement).animate(kf, { duration: 160, fill: 'both' }); });
-    } catch { /* no WAAPI */ }
-    try {
-      for (let i = 0; i < 8; i++) await yieldFrame();
+      for (let i = 0; i < 12; i++) await yieldFrame();
+      // then the pick: FILED stamp on one card, the others dropped (their own transitions + opacity)
+      cards.forEach((c, i) => c.classList.add(i === 0 ? 'is-picked' : 'is-dropped'));
+      for (let i = 0; i < 12; i++) await yieldFrame();
     } finally {
       box.remove();
     }
@@ -896,6 +904,7 @@ export class App {
     this.musicAcc = 0;
     this.lowHpArmed = true;
     this.wantDraft = false;
+    this.draftArmed = false;
     this.draftSuppressTick = -1;
     this.ending = false;
     this.endT = 0;
@@ -1039,6 +1048,7 @@ export class App {
     this.endResult = result;
     this.endT = END_DELAY_S;
     this.wantDraft = false;
+    this.draftArmed = false;
     this.loop.simEnabled = false;
     this.loop.timeScale = 1;
     this.hitStopT = 0;
@@ -1253,6 +1263,9 @@ export class App {
    */
   private holdCanvas(): boolean {
     const s = this._screen;
+    // the frame between the tick that froze the sim for a draft and the draft opening (afterFrame):
+    // the world cannot move, the last picture is the right one
+    if (s === 'play' && this.draftArmed && !this.loop.simEnabled && !this.ending && !this._testFrozen) return true;
     if ((s !== 'draft' && s !== 'pause') || this.loop.simEnabled || this.ending || this._testFrozen) {
       this.heldFrames = 0;
       this.heldKey = '';
@@ -1338,6 +1351,12 @@ export class App {
       return;
     }
     if (this.wantDraft && this._screen === 'play' && !this._testFrozen && !(this.sizeUpHoldT > 0)) {
+      // One frame later: the frame that froze the sim has just drawn the world (full GPU load); the
+      // MUTATION REPORT's DOM build + style/layout/paint (4–7 ms of main thread) and its raster then
+      // land on the next frame, whose world draw is held (holdCanvas) — on the reference Intel UHD
+      // the two together in one frame were the most common draft-open vsync miss (?prof=1).
+      if (!this.draftArmed) { this.draftArmed = true; return; }
+      this.draftArmed = false;
       this.wantDraft = false;
       void this.runDraft();
     }

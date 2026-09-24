@@ -17,7 +17,7 @@ import { BOT_TUNE, botInput, botPickUpgrade } from '../bot.ts';
 const [titan, biome, seedS, phaseSS, policy] = process.argv.slice(2);
 const seed = Number(seedS ?? 7), phaseS = Number(phaseSS ?? 45);
 const w: World = createWorld({ titan: titan as TitanId, biome: biome as BiomeId, seed });
-w.cheats.god = !process.env.NOGOD; w.cheats.noSpawns = true;
+w.cheats.god = !process.env.NOGOD; w.cheats.noSpawns = !process.env.ADDS;
 if (policy === 'bot') { BOT_TUNE.lapseP = 0; BOT_TUNE.reactionScale = 0.6; }
 
 const drafts = () => { let g = 0; while (hasPendingDraft(w) && g++ < 200) { const o = w.upgrades.offer?.length ? w.upgrades.offer : rollOffer(w, w.upgrades.chestDrafts > 0); if (!o.length) break; pickUpgrade(w, botPickUpgrade(w, o)); } };
@@ -29,6 +29,7 @@ const LV = Number(process.env.LV ?? 0);
 for (let g = 0; g < 400 && w.titan.level < LV; g++) { gainXp(w, 50); drafts(); }
 for (let i = 0; i < 60; i++) { drafts(); stepWorld(w, NO); }
 if (process.env.STATS) { const st = (k: string) => +(stat(w, k as never) as number).toFixed(2); console.error(JSON.stringify({ lv: w.titan.level, H: +w.titan.height.toFixed(1), maxSp: +titanMaxSpeed(w).toFixed(1), moveSpeed: st('moveSpeed'), dashCharges: st('dashCharges'), dashCooldown: st('dashCooldown'), dashDistance: st('dashDistance'), maxHp: Math.round(w.titan.maxHp), cards: Object.keys(w.upgrades.owned ?? {}).length })); }
+if (process.env.CARDS) console.error('CARDS ' + JSON.stringify(w.upgrades.owned));
 spawnBoss(w, BIOMES[biome as BiomeId].boss);
 
 const REACH: Record<string, number> = { molo: 0.75, voltkite: 2.6, hearthback: 2.0, briarwick: 2.1 };
@@ -90,6 +91,8 @@ function keys(dx: number, dz: number): [number, number] {
 const seen = new Map<number, number>();
 const tagOf = new Map<number, string>();
 const res: Record<string, [number, number]> = {};
+// DIAG: per boss tell, did the titan dash between the paint appearing and the fire? (hit/miss × dashed/walked)
+let dashN = 0; const dashAt = new Map<number, number>(); const diag = { hitDash: 0, hitWalk: 0, missDash: 0, missWalk: 0, landed: 0 };
 let lastDash = -9, lastSpace = -9, strafeT = 0, mx = 0, mz = -1;
 let phaseT = 0, lastPhase = 1, fights = 0;
 for (let i = 0; i < 30 * phaseS * 3.6 && w.boss && w.boss.alive; i++) {
@@ -145,8 +148,13 @@ for (let i = 0; i < 30 * phaseS * 3.6 && w.boss && w.boss.alive; i++) {
     const sh = tg.shape as { x: number; z: number; r?: number }; const T2 = w.titan;
     if (Math.round(tg.t * 30) % 6 === 0 || tg.t + w.dt >= tg.windup) console.log(`  #${tg.id} t ${tg.t.toFixed(2)}/${tg.windup.toFixed(2)} d ${Math.hypot(T2.x - sh.x, T2.z - sh.z).toFixed(0)} reach ${((sh.r ?? 0) + T2.radius).toFixed(0)} sp ${T2.speed.toFixed(0)} dashT ${T2.dashT.toFixed(2)} ch ${T2.dashCharges} mv ${mx.toFixed(2)},${mz.toFixed(2)} vx ${T2.vx.toFixed(0)},${T2.vz.toFixed(0)}`);
   }
+  for (const ev of w.events) if (ev.type === 'dash') dashN++;
+  for (const tg of w.telegraphs) if (tg.owner === 'boss' && !dashAt.has(tg.id)) dashAt.set(tg.id, dashN);
   for (const ev of w.events) if (ev.type === 'telegraphFire' && ev.owner === 'boss') {
     const k = tagOf.get(ev.id) ?? '?'; const a = res[k] ?? (res[k] = [0, 0]); a[0]++; if (ev.hit) a[1]++;
+    const dashed = dashN > (dashAt.get(ev.id) ?? dashN);
+    if (ev.hit) { if (dashed) diag.hitDash++; else diag.hitWalk++; if (w.titan.iframeT <= 0) diag.landed++; }
+    else if (dashed) diag.missDash++; else diag.missWalk++;
   }
   if (!w.boss) break;
   if (w.boss.phase !== lastPhase) { lastPhase = w.boss.phase; phaseT = 0; }
@@ -160,4 +168,4 @@ for (let i = 0; i < 30 * phaseS * 3.6 && w.boss && w.boss.alive; i++) {
 }
 let n = 0, h = 0; const out: Record<string, string> = {};
 for (const [k, [a, b]] of Object.entries(res).sort()) { n += a; h += b; out[k] = `${b}/${a}`; }
-console.log(JSON.stringify({ titan, biome, seed, policy: policy ?? 'human', t: Math.round(w.t), alive: w.titan.alive, hp: Math.round(w.titan.hp) + '/' + Math.round(w.titan.maxHp), lv: w.titan.level, total: `${h}/${n} (${Math.round(100 * h / Math.max(1, n))}%)`, by: out, dmgTaken: Math.round(w.titan.damageTaken) }));
+console.log(JSON.stringify({ titan, biome, seed, policy: policy ?? 'human', t: Math.round(w.t), alive: w.titan.alive, hp: Math.round(w.titan.hp) + '/' + Math.round(w.titan.maxHp), lv: w.titan.level, total: `${h}/${n} (${Math.round(100 * h / Math.max(1, n))}%)`, by: out, diag, dashes: dashN, dmgTaken: Math.round(w.titan.damageTaken) }));

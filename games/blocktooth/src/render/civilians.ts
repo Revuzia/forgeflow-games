@@ -33,7 +33,7 @@ import * as THREE from 'three';
 import type { BiomeId, World } from '../core/types.ts';
 import { CITY, PARCEL_HALF } from '../core/config.ts';
 import { PROP_INFO, harbourWaterZ } from '../city/citygen.ts';
-import { INK, addOutline, bakeOutlineNormals, facet, makeOutlineMaterial, makeToon } from './materials.ts';
+import { INK, addOutline, bakeOutlineNormals, facet, indexGeometry, makeOutlineMaterial, makeToon } from './materials.ts';
 import type { FrameInfo, ViewCtx, ViewModule } from './viewtypes.ts';
 
 const CAP = 640;
@@ -236,8 +236,11 @@ class Fig {
     g.dispose();
     g = f;
     bakeOutlineNormals(g);
-    g.computeBoundingSphere();
-    return g;
+    // welded + indexed (materials.ts indexGeometry): same picture, fewer vertex-shader runs
+    const ig = indexGeometry(g);
+    if (ig !== g) g.dispose();
+    ig.computeBoundingSphere();
+    return ig;
   }
 }
 
@@ -1023,8 +1026,9 @@ export function civArchetypeStats(): Record<string, number> {
     const f = new Fig(); ARCH[id].build(f);
     out[id] = f.pos.length / 9;
   }
-  const g = buildLod(); out.lod = g.getAttribute('position').count / 3; g.dispose();
-  const m = buildMid(); out.mid = m.getAttribute('position').count / 3; m.dispose();
+  const tris = (g: THREE.BufferGeometry): number => (g.index ? g.index.count : g.getAttribute('position').count) / 3;
+  const g = buildLod(); out.lod = tris(g); g.dispose();
+  const m = buildMid(); out.mid = tris(m); m.dispose();
   return out;
 }
 
@@ -1270,7 +1274,7 @@ export class CivilianView implements ViewModule {
       return this.makeBatch('civ:' + a.id, f.geometry(), toon, ink);
     });
     const midGeo = buildMid();
-    this.midTris = midGeo.getAttribute('position').count / 3;
+    this.midTris = (midGeo.index ? midGeo.index.count : midGeo.getAttribute('position').count) / 3;
     this.mid = this.makeBatch('civ:mid', midGeo, toon, ink);
     this.lod = this.makeBatch('civ:lod', buildLod(), toon, null);
 

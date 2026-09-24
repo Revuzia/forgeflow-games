@@ -369,7 +369,7 @@ export type TriggerAction =
   | 'rubbleShot'  // throw p.count rubble chunks at nearest enemies: p.dmg
   | 'frenzy'      // temp buff: stat p.stat × (1+p.mul) for p.dur seconds
   | 'cdReduce'    // reduce hook cooldown by p.amount seconds
-  | 'dashRefund'  // refund one dash charge
+  | 'dashRefund'  // recharge p.frac of one dash charge's recharge time (default 1 = a whole charge)
   | 'meteor'      // drop a debris meteor on a random enemy within p.r titan-heights: p.dmg, p.aoe
   | 'arc'         // lightning arc from the titan to p.count nearest enemies: p.dmg
   | 'magma'       // spawn a magma pool at the event point: p.r, p.dps, p.dur

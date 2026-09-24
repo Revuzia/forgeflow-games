@@ -141,6 +141,35 @@ export function titanMaxSpeed(w: World): number {
   return titanSpeed(T.height) * Math.max(0.1, Number.isFinite(ms) ? ms : 1) * RANKS[T.rank].speedMul;
 }
 
+/** Seconds one dash charge takes to recharge right now (DASH_RECHARGE_S × dashCooldown, floored). */
+export function dashRechargeS(w: World): number {
+  const cd = stat(w, 'dashCooldown');
+  return DASH_RECHARGE_S * Math.max(COOLDOWN_FLOOR, Number.isFinite(cd) ? cd : 1);
+}
+
+/** Bank every whole charge the recharge counter has earned (the remainder keeps counting). */
+function settleRecharge(w: World, maxCharges: number): void {
+  const T = w.titan, per = dashRechargeS(w);
+  while (T.dashRecharge >= per && T.dashCharges < maxCharges) { T.dashCharges += 1; T.dashRecharge -= per; }
+  if (T.dashCharges >= maxCharges) T.dashRecharge = 0;
+}
+
+/**
+ * Upgrade dash refund (engine 'dashRefund'): pays `frac` of one charge's recharge time into the
+ * recharge counter (frac 1 = a whole charge). Refunds are recharge, not free charges: a card that
+ * handed out whole charges on every dash/hook let VOLT-KITE dash out of every boss tell and every
+ * dash-follow answer for the whole fight (the charges never ran dry — see config.ts BOSS rows).
+ * Returns false (nothing happened) when the pool is already full.
+ */
+export function refundDash(w: World, frac = 1): boolean {
+  const T = w.titan;
+  const maxCharges = Math.max(0, Math.floor(stat(w, 'dashCharges')));
+  if (!T.alive || T.dashCharges >= maxCharges || !(frac > 0)) return false;
+  T.dashRecharge += Math.min(1, frac) * dashRechargeS(w);
+  settleRecharge(w, maxCharges);
+  return true;
+}
+
 /** 0..1 progress through the current rank's mass bar (Size V: toward its extra swell). */
 function rankProgress(T: TitanState): number {
   if (T.rank >= 4) return clamp((T.mass - RANK_START[4]) / RANK_V_SWELL_MASS, 0, 1);
@@ -175,12 +204,8 @@ export function stepTitan(w: World): void {
   const maxCharges = Math.max(0, Math.round(stat(w, 'dashCharges')));
   if (T.dashCharges > maxCharges) T.dashCharges = maxCharges;
   if (T.dashCharges < maxCharges) {
-    const per = DASH_RECHARGE_S * Math.max(COOLDOWN_FLOOR, stat(w, 'dashCooldown'));
-    T.dashRecharge += dt;                          // counts UP toward `per`
-    if (T.dashRecharge >= per) {
-      T.dashCharges = Math.min(maxCharges, T.dashCharges + 1);
-      T.dashRecharge = T.dashCharges < maxCharges ? T.dashRecharge - per : 0;
-    }
+    T.dashRecharge += dt;                          // counts UP toward dashRechargeS(w)
+    settleRecharge(w, maxCharges);
   } else T.dashRecharge = 0;
 
   // ── body size (grow tween + in-rank swell) ──

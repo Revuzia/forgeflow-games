@@ -23,6 +23,7 @@
 // is a child with an identity transform, so it inherits visibility and the world matrix.
 
 import * as THREE from 'three';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /** Ink colour for every outline in the game. */
 export const INK = '#1b1426';
@@ -105,6 +106,30 @@ export function facet(geo: THREE.BufferGeometry): THREE.BufferGeometry {
   const g = geo.index ? geo.toNonIndexed() : geo.clone();
   if (g.getAttribute('normal')) g.deleteAttribute('normal');
   g.computeVertexNormals();          // non-indexed → each triangle gets its own face normal
+  return g;
+}
+
+/**
+ * Indexed copy of a finished (faceted, outline-baked) geometry: vertices identical in EVERY attribute
+ * (position, face normal, colour, outlineNormal, …) are welded and an index is built — a pure
+ * performance transform, the picture is unchanged. Faceted geometry is built as independent
+ * triangles, so a quad face costs 6 vertex-shader runs non-indexed and 4 indexed (a box: 36 → 24).
+ * At Size V the frame is vertex-bound on the reference Intel UHD (~10 ms per million triangles);
+ * an in-page A/B that welded every static mesh (scratch/gpubench.py MERGE: 4.0 M → 2.1 M vertices)
+ * cut the frame's GPU time 9.65 → 8.08 ms at render scale 0.6. Name, userData and bounds carry over.
+ * Instanced / morph attributes are not supported (index before adding per-instance attributes).
+ */
+export function indexGeometry(geo: THREE.BufferGeometry): THREE.BufferGeometry {
+  if (geo.index || Object.keys(geo.morphAttributes).length) return geo;
+  const pos = geo.getAttribute('position');
+  if (!pos || pos.count < 6) return geo;
+  for (const k of Object.keys(geo.attributes)) if ((geo.attributes[k] as THREE.InstancedBufferAttribute).isInstancedBufferAttribute) return geo;
+  const g = mergeVertices(geo, 1e-5);
+  if (!g.index || g.getAttribute('position').count >= pos.count) { g.dispose(); return geo; }
+  g.name = geo.name;
+  g.userData = geo.userData;
+  g.computeBoundingBox();
+  g.computeBoundingSphere();
   return g;
 }
 

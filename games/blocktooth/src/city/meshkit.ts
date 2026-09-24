@@ -66,7 +66,7 @@
 import * as THREE from 'three';
 import type { BiomeDef, BiomePalette, BuildingArchetype, PropKind } from '../core/types.ts';
 import { hashStr, mulberry32 } from '../core/rng.ts';
-import { bakeOutlineNormals, makeToon } from '../render/materials.ts';
+import { bakeOutlineNormals, indexGeometry, makeToon } from '../render/materials.ts';
 
 // ─────────────────────────────── public contract (CONTRACT §6) ───────────────────────────────
 export interface ArchMeshes {
@@ -2683,7 +2683,10 @@ export function buildCityKit(b: BiomeDef): CityKit {
 
   const arch: Record<string, ArchMeshes> = {};
   for (const a of b.archetypes) {
-    const g = buildArch(a, b, st);
+    const g0 = buildArch(a, b, st);
+    // welded + indexed (render/materials.ts indexGeometry): same picture, ~⅓ fewer vertex-shader runs
+    const g = { base: indexGeometry(g0.base), floor: indexGeometry(g0.floor), roof: indexGeometry(g0.roof) };
+    for (const k of ['base', 'floor', 'roof'] as const) if (g[k] !== g0[k]) g0[k].dispose();
     g.base.name = a.id + ':base'; g.floor.name = a.id + ':floor'; g.roof.name = a.id + ':roof';
     geos.push(g.base, g.floor, g.roof);
     arch[a.id] = { base: g.base, floor: g.floor, roof: g.roof, material: facade };
@@ -2692,20 +2695,26 @@ export function buildCityKit(b: BiomeDef): CityKit {
   const pc = propCtx(b, st);
   const props = {} as Record<PropKind, PropMesh>;
   for (const kind of PROP_KINDS) {
-    const geo = buildProp(kind, pc).build();
+    const raw = buildProp(kind, pc).build();
+    const geo = indexGeometry(raw);
+    if (geo !== raw) raw.dispose();
     geo.name = 'prop:' + kind;
     geos.push(geo);
     props[kind] = { geo, material: propMat, height: geo.boundingBox ? geo.boundingBox.max.y : 1 };
     const lmb = buildPropLod(kind, pc);
     if (lmb) {
-      const lod = lmb.build();
+      const rawLod = lmb.build();
+      const lod = indexGeometry(rawLod);
+      if (lod !== rawLod) rawLod.dispose();
       lod.name = 'prop:' + kind + ':lod';
       geos.push(lod);
       props[kind].lod = lod;
     }
   }
 
-  const rubble = fitUnitHeight(buildRubble(b, st).build());
+  const rubbleRaw = fitUnitHeight(buildRubble(b, st).build());
+  const rubble = indexGeometry(rubbleRaw);
+  if (rubble !== rubbleRaw) rubbleRaw.dispose();
   rubble.name = 'rubble';
   geos.push(rubble);
 
