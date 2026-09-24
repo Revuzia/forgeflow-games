@@ -56,6 +56,11 @@ export function init(): Record<string, number> {
   return { wires: 0, arcHits: 0 };
 }
 
+/** Auto-attack reach (m) right now — pickups.ts latches drops inside ~1.2 × this (kits/index kitReach). */
+export function reach(w: World): number {
+  return VOLT.arcRangeH * w.titan.height * Math.max(0.1, S(w, 'attackRange'));
+}
+
 export function step(w: World): void {
   const T = w.titan, K = T.kit;
   K.wires = titanHazards(w, 'wire', hazBuf).length;

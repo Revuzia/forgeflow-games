@@ -149,7 +149,10 @@ export function createRenderCore(canvas: HTMLCanvasElement, quality: Quality): R
         if (Array.isArray(m)) { for (const mm of m) mm.needsUpdate = true; } else m.needsUpdate = true;
       });
     }
-    resize();
+    // No resize() here: setSize() clears the drawing buffer, and DynRes calls setQuality AFTER the
+    // frame rendered (and settings call it while paused), so an immediate resize presented an empty
+    // canvas for a frame (navy flash). render() sees effectiveDpr(q) !== lastDpr and resizes right
+    // before it draws.
   }
 
   const out: RenderStats = { draws: 0, tris: 0, programs: 0, geometries: 0, textures: 0 };

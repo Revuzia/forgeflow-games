@@ -139,6 +139,9 @@ export default defineConfig({
     port: 5178,
     strictPort: true,
     headers: { 'Cache-Control': 'no-store' },
+    // BT_FROZEN=1 (set by harness runs while other agents edit src/): no HMR and no file watching,
+    // so a concurrent edit can never hot-reload a page mid-test and bounce it back to the title.
+    ...(process.env.BT_FROZEN === '1' ? { hmr: false, watch: null } : {}),
     fs: { strict: true },
   },
   preview: {

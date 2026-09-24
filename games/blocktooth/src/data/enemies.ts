@@ -21,7 +21,7 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
     hp: 8, speed: 3.8, radius: 0.45, height: 1.8, flies: false,
     dmg: 2, range: 12, fireCd: 2.4, xp: 2, mass: 0.5, cost: 1, minRank: 0, crushable: true,
   },
-  // Circles at altitude (4 m → 0.8 H), dive-bombs behind a small 0.6 s circle tell.
+  // Circles at altitude (4 m → 0.8 H), dive-bombs behind a small 0.85 s circle tell.
   // Flying: never stepped on (it is above the titan's feet).
   drone: {
     kind: 'drone', name: 'GNAT',

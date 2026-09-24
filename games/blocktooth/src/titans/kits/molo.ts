@@ -71,6 +71,11 @@ export function massMul(w: World): number {
   return kv(w, 'vacuumT') > 0 || kv(w, 'vacAfterT') > 0 ? MOLO.vacMassMul : 1;
 }
 
+/** Auto-attack reach (m) right now — pickups.ts latches drops inside ~1.2 × this (kits/index kitReach). */
+export function reach(w: World): number {
+  return MOLO.biteRangeH * w.titan.height * Math.max(0.1, S(w, 'attackRange'));
+}
+
 export function step(w: World): void {
   const T = w.titan, K = T.kit;
   K.vacAfterT = Math.max(0, kv(w, 'vacAfterT') - w.dt);

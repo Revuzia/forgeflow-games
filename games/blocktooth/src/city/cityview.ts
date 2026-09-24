@@ -48,6 +48,14 @@
 //   camera-scaled radius (interpolated from px/pz/pheading with f.alpha). The kit paints cars/drums/
 //   boats per gl_InstanceID, so prop instances live in STABLE SLOTS (free-list) — a visible car never
 //   changes colour when others come and go. Destroyed props are hidden at once (fx does the burst).
+//   Far LOD (camera ≥ PROP_LOD_D, Size IV–V): vehicles swap to the kit's low-poly `lod` mesh, ink
+//   hulls + shadows drop, sub-pixel furniture (hydrants, benches, bollards…) is not drawn.
+//
+// ── See-through ──
+//   Live buildings cutting a sight line camera→titan draw their storeys up to the highest one the
+//   lines cross as a flat-coloured screen-door ghost (GHOST_KEEP 0.22, no ink); storeys above stay
+//   solid. A building that just lost a floor ghosts only for the head/crown lines (pancake reads).
+//   At Size I–II, vehicles/kiosks/vending/containers/trees that hide the titan ghost the same way.
 //
 // Draw budget at Size V (measured by _harness/scratch/city-view/probe_cityview.ts): ≈ 6/archetype
 // + 3/prop kind + rubble 3 + impostor 3 + ground ≈ 120–150 incl. the shadow pass.
@@ -451,7 +459,9 @@ const _c4: RGB[] = [WHITE, WHITE, WHITE, WHITE];
 const _cs: RGB[] = [WHITE, WHITE, WHITE, WHITE];
 const _ks: number[] = [0, 0, 0, 0];
 
-const _sight = new Float64Array(12);
+/** sight points on the titan (6 × xyz): chest, head, two shoulders, crown, feet — see updateOccluders */
+const SIGHT_N = 18;
+const _sight = new Float64Array(SIGHT_N);
 /** does segment a→b cross the axis-aligned box? (slab test, t ∈ [0, 1]; allocation-free) */
 const _slab = [0, 1];
 function slab(o: number, d: number, lo: number, hi: number): boolean {
@@ -722,6 +732,11 @@ const IMP_FRAG_MAIN = /* glsl */ `
 		float vm = vImpW.y - fl * fh;
 		float pxm = max( max( fwidth( along ), fwidth( vImpW.y ) ), 1e-4 );
 		float aa = pxm * 0.75;
+		// vertical metres per pixel: storey BANDS survive after the window columns average out, so a
+		// distant tower keeps its floor lines (Size IV–V) instead of reading as a flat slab
+		float pxv = max( fwidth( vImpW.y ), 1e-4 );
+		float aaV = pxv * 0.75;
+		float lod2 = smoothstep( fh * 0.3, fh * 0.45, pxv );
 		vec3 wallC = diffuseColor.rgb;
 		float cwT = kind == 5.0 ? 1.6 : kind == 2.0 ? 1.9 : kind == 3.0 ? 1.3 : kind == 8.0 ? 3.6 : 3.0;
 		float n = max( 1.0, floor( fw / cwT + 0.5 ) );
@@ -735,24 +750,34 @@ const IMP_FRAG_MAIN = /* glsl */ `
 		else if ( kind == 3.0 ) { hw = cw * 0.5 - 0.07; y0 = fh * 0.64; y1 = fh * 0.86; }
 		else if ( kind == 8.0 ) { hw = min( 1.15, cw * 0.34 ); y0 = fh * 0.17; y1 = fh * 0.9; }
 		else { hw = min( 0.8, cw * 0.27 ); y0 = fh * 0.3; y1 = fh * 0.8; }
-		float seed = impHash( vec2( vImpA.z * 0.173 + ( alongZ ? 5.1 : 0.0 ), fl * 1.37 + vImpA.w * 0.61 ) );
-		float h = impHash( vec2( col * 0.731 + seed * 17.0, seed * 3.1 - col * 0.117 ) );
-		float win = impIn( abs( x ), hw + 0.1, aa ) * impBand( vm, y0 - 0.1, y1 + 0.06, aa );
-		float pane = impIn( abs( x ), hw, aa ) * impBand( vm, y0, y1, aa );
-		float vv = clamp( ( vm - y0 ) / max( y1 - y0, 0.01 ), 0.0, 1.0 );
-		vec3 glass = uImpGlass * ( 0.78 + 0.34 * h );
-		glass = mix( glass, uImpSky, clamp( 0.1 + 0.28 * vv, 0.0, 0.8 ) );
-		float lit = step( 1.0 - uImpLit, fract( h * 13.7 + seed * 3.3 ) );
-		vec3 paneC = mix( glass, uImpGlassLit * ( 0.72 + 0.3 * h ), lit );
 		vec3 baseC = kind == 5.0 ? mix( uImpFrame, wallC, 0.4 ) : wallC;
-		vec3 detail = mix( baseC, uImpFrame, win );
-		detail = mix( detail, paneC, pane );
-		float cov = clamp( ( 2.0 * hw / cw ) * ( ( y1 - y0 ) / fh ), 0.0, 1.0 );
+		float hc = clamp( 2.0 * hw / cw, 0.0, 1.0 );
+		float cov = clamp( hc * ( ( y1 - y0 ) / fh ), 0.0, 1.0 );
 		vec3 gAvg = mix( uImpGlass * 0.95, uImpGlassLit * 0.8, uImpLit );
-		vec3 avg = mix( baseC, mix( uImpFrame, gAvg, 0.75 ), cov );
+		vec3 winAvg = mix( uImpFrame, gAvg, 0.75 );
+		vec3 avg = mix( baseC, winAvg, cov );
 		float lod = smoothstep( cw * 0.1, cw * 0.26, pxm );
-		diffuseColor.rgb = mix( detail, avg, lod );
-		impEmit = uImpGlassLit * uImpWinGlow * mix( lit * pane * ( 0.75 + 0.35 * h ), uImpLit * cov * 0.7, lod );
+		float bandH = hc * impBand( vm, y0, y1, aaV );
+		vec3 far = mix( mix( baseC, winAvg, bandH ), avg, lod2 );
+		vec3 eFar = uImpGlassLit * uImpWinGlow * uImpLit * 0.7 * mix( bandH, cov, lod2 );
+		if ( lod > 0.999 ) {
+			diffuseColor.rgb = far;
+			impEmit = eFar;
+		} else {
+			float seed = impHash( vec2( vImpA.z * 0.173 + ( alongZ ? 5.1 : 0.0 ), fl * 1.37 + vImpA.w * 0.61 ) );
+			float h = impHash( vec2( col * 0.731 + seed * 17.0, seed * 3.1 - col * 0.117 ) );
+			float win = impIn( abs( x ), hw + 0.1, aa ) * impBand( vm, y0 - 0.1, y1 + 0.06, aa );
+			float pane = impIn( abs( x ), hw, aa ) * impBand( vm, y0, y1, aa );
+			float vv = clamp( ( vm - y0 ) / max( y1 - y0, 0.01 ), 0.0, 1.0 );
+			vec3 glass = uImpGlass * ( 0.78 + 0.34 * h );
+			glass = mix( glass, uImpSky, clamp( 0.1 + 0.28 * vv, 0.0, 0.8 ) );
+			float lit = step( 1.0 - uImpLit, fract( h * 13.7 + seed * 3.3 ) );
+			vec3 paneC = mix( glass, uImpGlassLit * ( 0.72 + 0.3 * h ), lit );
+			vec3 detail = mix( baseC, uImpFrame, win );
+			detail = mix( detail, paneC, pane );
+			diffuseColor.rgb = mix( detail, far, lod );
+			impEmit = mix( uImpGlassLit * uImpWinGlow * lit * pane * ( 0.75 + 0.35 * h ), eFar, lod );
+		}
 	}
 `;
 
@@ -778,7 +803,7 @@ function makeImpostorMaterial(L: ImpLook): THREE.MeshToonMaterial {
       .replace('#include <color_fragment>', '#include <color_fragment>\n' + IMP_FRAG_MAIN)
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += impEmit;');
   };
-  m.customProgramCacheKey = () => 'blocktooth-cityview-impostor-v2';
+  m.customProgramCacheKey = () => 'blocktooth-cityview-impostor-v3';
   return m;
 }
 
@@ -868,13 +893,15 @@ class InstBatch {
   /** the ink hull child (null when built without ink) — its own `visible` is the ink LOD switch */
   hull: THREE.Mesh | null = null;
   private inkOn = true;
+  /** far LOD: the whole batch is skipped (sub-pixel street furniture at Size IV–V) */
+  private hidden = false;
   cap = 0;
   n = 0;
   touched = false;
   readonly max: number;
   private readonly parent: THREE.Object3D;
   private readonly name: string;
-  private readonly geo: THREE.BufferGeometry;
+  private geo: THREE.BufferGeometry;
   private readonly mat: THREE.Material;
   private readonly cast: boolean;
   private used: Uint8Array = new Uint8Array(0);
@@ -904,7 +931,7 @@ class InstBatch {
       (m.instanceMatrix.array as Float32Array).set((old.instanceMatrix.array as Float32Array).subarray(0, k * 16));
       (ic.array as Float32Array).set((old.instanceColor!.array as Float32Array).subarray(0, k * 3));
       m.count = Math.min(old.count, cap);
-      m.visible = old.visible;
+      m.visible = old.visible && !this.hidden;
       this.parent.remove(old);
       old.dispose();
     } else {
@@ -918,6 +945,18 @@ class InstBatch {
     if (this.used.length < cap) { const u = new Uint8Array(cap); u.set(this.used); this.used = u; }
     this.cap = cap;
     this.dLo = Infinity; this.dHi = -1;       // a fresh GPU buffer uploads whole on first use
+  }
+  /** geometry LOD swap (the ink hull follows the source geometry; survives buffer growth) */
+  setGeometry(g: THREE.BufferGeometry): void {
+    if (this.geo === g) return;
+    this.geo = g;
+    this.mesh.geometry = g;
+  }
+  /** far LOD: skip drawing the whole batch (slots stay allocated and keep updating) */
+  setHidden(on: boolean): void {
+    if (this.hidden === on) return;
+    this.hidden = on;
+    this.mesh.visible = !on && this.mesh.count > 0;
   }
   /** ink LOD: show/hide the outline hull (survives buffer growth) */
   setInk(on: boolean): void {
@@ -949,7 +988,7 @@ class InstBatch {
   }
   end(): void {
     this.mesh.count = this.n;
-    this.mesh.visible = this.n > 0;
+    this.mesh.visible = this.n > 0 && !this.hidden;
     if (this.n > 0) { this.dLo = 0; this.dHi = Math.max(this.dHi, this.n - 1); }
     this.flush();
   }
@@ -980,7 +1019,7 @@ class InstBatch {
   commit(): void {
     this.touched = false;
     this.mesh.count = this.hi;
-    this.mesh.visible = this.hi > 0;
+    this.mesh.visible = this.hi > 0 && !this.hidden;
     this.flush();
   }
   private flush(): void {
@@ -1011,10 +1050,15 @@ const GHOST_PARS = /* glsl */ `
 float cgB2( vec2 p ) { p = mod( p, 2.0 ); return p.x < 0.5 ? ( p.y < 0.5 ? 0.0 : 0.5 ) : ( p.y < 0.5 ? 0.75 : 0.25 ); }
 float cgB4( vec2 p ) { p = floor( p ); return cgB2( p ) + cgB2( floor( p * 0.5 ) ) * 0.25; }
 `;
-/** screen-door keep fraction for see-through occluders (ordered 4×4 dither; no sorting, no blending) */
-const GHOST_KEEP = 0.42;
+/** screen-door keep fraction for see-through occluders (ordered 4×4 dither; no sorting, no blending).
+ *  0.42 kept the facade grid at full contrast over the titan (a muddy, ink-broken titan behind every
+ *  ghost); 0.22 + a flat body colour reads as a pale veil. Overlapping ghosts share the same dither
+ *  cells, so two ghost towers never stack darker than one. */
+const GHOST_KEEP = 0.22;
 /** Clone of a kit material whose fragments are screen-door dithered. The kit's own onBeforeCompile runs
- *  first (same facade shader + shared uniforms), then the discard is prepended. */
+ *  first (same facade shader + shared uniforms), then the discard is prepended and BK_FLAT drops the
+ *  facade pattern (windows, bands, lit-window glow): a ghost is a flat vertex-coloured body. Ghost
+ *  batches are built without ink hulls. */
 function makeGhostMaterial(src: THREE.Material): THREE.Material {
   const g = src.clone();
   g.name = (src.name || 'kit') + ':ghost';
@@ -1022,7 +1066,7 @@ function makeGhostMaterial(src: THREE.Material): THREE.Material {
   const key = src.customProgramCacheKey();
   g.onBeforeCompile = (shader, renderer) => {
     srcCompile(shader, renderer);
-    shader.fragmentShader = shader.fragmentShader
+    shader.fragmentShader = '#define BK_FLAT\n' + shader.fragmentShader
       .replace('#include <common>', '#include <common>\n' + GHOST_PARS)
       .replace('void main() {', 'void main() {\n\tif ( cgB4( gl_FragCoord.xy ) >= ' + GHOST_KEEP.toFixed(3) + ' ) discard;');
   };
@@ -1030,10 +1074,27 @@ function makeGhostMaterial(src: THREE.Material): THREE.Material {
   return g;
 }
 const GHOST_HOLD_S = 0.3;
+/** a building that just lost a floor stays SOLID this long (the pancake drop + squash must read),
+ *  unless it hides the titan's head */
+const PANCAKE_SOLID_S = 1.5;
 /** camera distance (m) beyond which street props and traffic stop casting shadows (Size IV–V framing) */
 const TRAFFIC_SHADOW_MAX_D = 240;
 /** camera distance (m) beyond which street props / vehicles drop their ink hull (Size IV–V framing) */
-const PROP_INK_MAX_D = 240;                // a building stays see-through this long after it stops occluding
+const PROP_INK_MAX_D = 240;
+/** camera distance (m) beyond which vehicles draw their far LOD (kit PropMesh.lod, ~1/7 of the
+ *  triangles): Size IV-V framing, where ~680 traffic vehicles are 10-20 px long */
+const PROP_LOD_D = 240;
+/** Street furniture that is under ~2 px at Size IV–V framing (hydrants 0.9 m, benches, bollards, drums,
+ *  barriers, sign posts): not drawn beyond PROP_LOD_D — at that scale they only add speckle, draws and
+ *  vertex work (~45k triangles at Size V in GRID-EAST). */
+const PROP_FAR_HIDDEN_KINDS: ReadonlySet<PropKind> = new Set<PropKind>(['hydrant', 'bench', 'bollard', 'drum', 'barrier', 'signpost']);
+/** Street props that can hide a small titan (Size I-II). Thin furniture (lamps, posts, hydrants,
+ *  bollards, benches, barriers, drums) never hides one. */
+const PROP_OCCLUDER_KINDS: ReadonlySet<PropKind> = new Set<PropKind>(['car', 'taxi', 'van', 'bus', 'truck', 'kiosk', 'vending', 'container', 'forklift', 'tree', 'boat', 'snowbank']);
+/** a prop counts as an occluder when it is at least this fraction of the titan's height */
+const PROP_OCCLUDE_H = 0.6;
+/** highest rank index whose titan can hide behind street props (Size II) */
+const PROP_OCCLUDE_MAX_RANK = 1;
 
 // ─────────────────────────────── static ground geometry ───────────────────────────────
 class GB {
@@ -1134,6 +1195,9 @@ export class CityView implements ViewModule {
   private animFlag = new Uint8Array(0);
   private anim: number[] = [];
   private ghostT = new Float32Array(0);      // > 0 while the building is drawn see-through (s left)
+  private breakT = new Float32Array(0);      // > 0 for PANCAKE_SOLID_S after a floorBreak (never ghosted)
+  private ghostS0 = new Int16Array(0);       // see-through storey band [S0, S1] (stack index j, 0 = bottom shown)
+  private ghostS1 = new Int16Array(0);
   private ghostMats: THREE.Material[] = [];
   private rubble: InstBatch | null = null;
   private rubbleDirty = true;
@@ -1146,6 +1210,14 @@ export class CityView implements ViewModule {
   private propY = new Float32Array(0);
   private traffic: number[] = [];
   private propTouched: InstBatch[] = [];      // prop batches with slot writes this frame (commit list)
+  private propLod = new Map<PropKind, { full: THREE.BufferGeometry; lod: THREE.BufferGeometry }>();
+  // see-through street props (Size I-II): dithered twin batch per occluder kind
+  private propGhost = new Map<PropKind, InstBatch>();
+  private propGSlot = new Int32Array(0);      // slot in the ghost twin (-1 none)
+  private propGT = new Float32Array(0);       // > 0 while the prop is drawn see-through (s left)
+  private propGList: number[] = [];           // props with propGT > 0 or a ghost slot
+  private propGFlag = new Uint8Array(0);      // membership of propGList
+  private propBox = new Map<PropKind, THREE.Box3>();
 
   private impostors: Impostors | null = null;
   private readonly _tintRGB: RGB = [1, 1, 1];
@@ -1194,8 +1266,15 @@ export class CityView implements ViewModule {
     this.tint = new Float32Array(nB * 3);
     this.animFlag = new Uint8Array(nB);
     this.ghostT = new Float32Array(nB);
+    this.breakT = new Float32Array(nB);
+    this.ghostS0 = new Int16Array(nB);
+    this.ghostS1 = new Int16Array(nB).fill(-1);
     this.anim = [];
     this.propSlot = new Int32Array(nP).fill(-1);
+    this.propGSlot = new Int32Array(nP).fill(-1);
+    this.propGT = new Float32Array(nP);
+    this.propGFlag = new Uint8Array(nP);
+    this.propGList = [];
     this.propY = new Float32Array(nP);
     this.traffic = [];
 
@@ -1252,6 +1331,14 @@ export class CityView implements ViewModule {
       const pm = kit.props[kind];
       if (!pm) continue;
       this.propBatch.set(kind, new InstBatch(root, 'city:prop:' + kind, pm.geo, pm.material, Math.min(n, 32), n, true));
+      if (pm.lod) this.propLod.set(kind, { full: pm.geo, lod: pm.lod });
+      if (PROP_OCCLUDER_KINDS.has(kind)) {
+        let gm = ghostOf.get(pm.material);
+        if (!gm) { gm = makeGhostMaterial(pm.material); ghostOf.set(pm.material, gm); this.ghostMats.push(gm); }
+        this.propGhost.set(kind, new InstBatch(root, 'city:prop:' + kind + ':ghost', pm.geo, gm, 4, n, true, false));
+        if (!pm.geo.boundingBox) pm.geo.computeBoundingBox();
+        this.propBox.set(kind, pm.geo.boundingBox!.clone());
+      }
     }
     for (const p of city.props) {
       if (p.lane >= 0) this.traffic.push(p.id);
@@ -1321,10 +1408,15 @@ export class CityView implements ViewModule {
     // The same framing drops street-furniture/vehicle shadows (1–2 px at Size V, a full extra pass).
     const propInk = f.camDist < PROP_INK_MAX_D;
     const propCast = f.camDist < TRAFFIC_SHADOW_MAX_D;
-    for (const pb of this.propBatch.values()) {
+    const propFar = f.camDist >= PROP_LOD_D;
+    for (const [kind, pb] of this.propBatch) {
       pb.setInk(propInk);
       if (pb.mesh.castShadow !== propCast) pb.mesh.castShadow = propCast;
+      const l = this.propLod.get(kind);
+      if (l) pb.setGeometry(propFar ? l.lod : l.full);
+      if (PROP_FAR_HIDDEN_KINDS.has(kind)) pb.setHidden(propFar);
     }
+    this.updatePropOccluders(world, city, tx, tz, f, Math.min(0.1, Math.max(0, f.dt)));
     this.updateTraffic(city, tx, tz, f);
     for (let i = 0; i < this.propTouched.length; i++) this.propTouched[i].commit();
     this.propTouched.length = 0;
@@ -1354,6 +1446,11 @@ export class CityView implements ViewModule {
     this.rubble = null;
     for (const pb of this.propBatch.values()) pb.dispose();
     this.propBatch.clear();
+    for (const pb of this.propGhost.values()) pb.dispose();
+    this.propGhost.clear();
+    this.propLod.clear();
+    this.propBox.clear();
+    this.propGList = [];
     this.propTouched.length = 0;
     this.impostors?.dispose();
     this.impostors = null;
@@ -1551,14 +1648,8 @@ export class CityView implements ViewModule {
     // static props of the block
     for (const id of city.blockProps[bi]) {
       const p = city.props[id];
-      if (p.lane >= 0 || !p.alive || this.propSlot[id] >= 0) continue;
-      const pb = this.propBatch.get(p.kind);
-      if (!pb) continue;
-      const s = pb.alloc();
-      if (s < 0) continue;
-      this.propSlot[id] = s;
-      pb.set(s, p.x, this.propY[id], p.z, Math.sin(p.heading), Math.cos(p.heading), 1, 1, 1);
-      this.touch(pb);
+      if (p.lane >= 0 || !p.alive || this.propSlot[id] >= 0 || this.propGSlot[id] >= 0) continue;
+      this.placeProp(id, p.kind, p.x, this.propY[id], p.z, p.heading);
     }
   }
 
@@ -1568,13 +1659,8 @@ export class CityView implements ViewModule {
     for (const id of city.blockBuildings[bi]) this.snapBuilding(city.buildings[id]);
     this.writeBlockImpostor(bi);
     for (const id of city.blockProps[bi]) {
-      const p = city.props[id];
-      if (p.lane >= 0) continue;
-      const s = this.propSlot[id];
-      if (s < 0) continue;
-      const pb = this.propBatch.get(p.kind);
-      if (pb) { pb.free(s); this.touch(pb); }
-      this.propSlot[id] = -1;
+      if (city.props[id].lane >= 0) continue;
+      this.dropProp(id);
     }
   }
 
@@ -1626,6 +1712,7 @@ export class CityView implements ViewModule {
     const old = this.vAlive[id];
     const k = old - remaining;
     if (k <= 0) return;
+    this.breakT[id] = PANCAKE_SOLID_S;
     const ab = this.arches[this.archOf[id]];
     if (remaining > 0) {
       this.vAlive[id] = remaining;
@@ -1678,13 +1765,47 @@ export class CityView implements ViewModule {
   }
 
   private hideProp(id: number): void {
-    const city = this.city!;
-    const p = city.props[id];
+    if (!this.city!.props[id]) return;
+    this.dropProp(id);
+  }
+
+  /** Draw prop `id` at (x, y, z, heading) in its normal batch, or in the see-through twin while it
+   *  hides a small titan; migrates the slot between the two when that state flips. */
+  private placeProp(id: number, kind: PropKind, x: number, y: number, z: number, h: number): void {
+    const pb = this.propBatch.get(kind);
+    if (!pb) return;
+    const gb = this.propGhost.get(kind);
+    const sn = Math.sin(h), cs = Math.cos(h);
+    if (gb && this.propGT[id] > 0) {
+      if (this.propSlot[id] >= 0) { pb.free(this.propSlot[id]); this.propSlot[id] = -1; this.touch(pb); }
+      let s = this.propGSlot[id];
+      if (s < 0) { s = gb.alloc(); if (s < 0) return; this.propGSlot[id] = s; }
+      gb.set(s, x, y, z, sn, cs, 1, 1, 1);
+      this.touch(gb);
+    } else {
+      if (gb && this.propGSlot[id] >= 0) { gb.free(this.propGSlot[id]); this.propGSlot[id] = -1; this.touch(gb); }
+      let s = this.propSlot[id];
+      if (s < 0) { s = pb.alloc(); if (s < 0) return; this.propSlot[id] = s; }
+      pb.set(s, x, y, z, sn, cs, 1, 1, 1);
+      this.touch(pb);
+    }
+  }
+
+  /** Remove prop `id` from whichever batch draws it. */
+  private dropProp(id: number): void {
+    const kind = this.city!.props[id].kind;
     const s = this.propSlot[id];
-    if (!p || s < 0) return;
-    const pb = this.propBatch.get(p.kind);
-    if (pb) { pb.free(s); this.touch(pb); }
-    this.propSlot[id] = -1;
+    if (s >= 0) {
+      const pb = this.propBatch.get(kind);
+      if (pb) { pb.free(s); this.touch(pb); }
+      this.propSlot[id] = -1;
+    }
+    const g = this.propGSlot[id];
+    if (g >= 0) {
+      const gb = this.propGhost.get(kind);
+      if (gb) { gb.free(g); this.touch(gb); }
+      this.propGSlot[id] = -1;
+    }
   }
 
   private sweep(city: CityLayout): void {
@@ -1713,7 +1834,7 @@ export class CityView implements ViewModule {
     const nP = city.props.length;
     for (let k = 0; k < SWEEP_PER_FRAME && nP > 0; k++) {
       const id = this.sweepP++ % nP;
-      if (this.propSlot[id] >= 0 && !city.props[id].alive) this.hideProp(id);
+      if ((this.propSlot[id] >= 0 || this.propGSlot[id] >= 0) && !city.props[id].alive) this.hideProp(id);
     }
   }
 
@@ -1819,11 +1940,12 @@ export class CityView implements ViewModule {
     const i0 = F - shown;
     const sx = b.w * sxz, sz = b.d * sxz, h = fh * sy;
     const ghost = this.ghostT[id] > 0;
+    const g0 = this.ghostS0[id], g1 = this.ghostS1[id];
     for (let i = i0; i < F; i++) {
       const j = i - i0;
       const y = (j * fh + Math.max(0, yOff)) * sy + Math.min(0, yOff);
       const pc = pieceOf(i, F);
-      const batch = ghost
+      const batch = ghost && j >= g0 && j <= g1
         ? (pc === 0 ? ab.gBase : pc === 1 ? ab.gFloor : ab.gRoof)
         : (pc === 0 ? ab.base : pc === 1 ? ab.floor : ab.roof);
       batch.push(b.x, y, b.z, 0, 1, sx, h, sz, r, g, bl);
@@ -1832,7 +1954,10 @@ export class CityView implements ViewModule {
 
   // ─────────────────────────────── occluders ───────────────────────────────
   /** Live buildings whose box cuts a sight line from the camera to the titan (chest, head, both
-   *  shoulders) are drawn see-through (dithered twin batches) until GHOST_HOLD_S after they clear. */
+   *  shoulders, crown, feet) are drawn see-through (dithered twin batches) until GHOST_HOLD_S after
+   *  they clear — but only up to the highest STOREY those sight lines cross: storeys above that are
+   *  drawn solid, so a tall tower never turns into one big ghost and a building being eaten keeps
+   *  its falling, squashing top in plain view. */
   private updateOccluders(world: World, tx: number, tz: number, dt: number): void {
     const city = this.city!;
     const cam = this.ctx.camera.position;
@@ -1847,22 +1972,119 @@ export class CityView implements ViewModule {
     px[3] = tx + fx * r * 0.5; px[4] = H * 0.92; px[5] = tz + fz * r * 0.5;
     px[6] = tx + rx * r * 0.8 + fx * r * 0.5; px[7] = H * 0.45; px[8] = tz + rz * r * 0.8 + fz * r * 0.5;
     px[9] = tx - rx * r * 0.8 + fx * r * 0.5; px[10] = H * 0.45; px[11] = tz - rz * r * 0.8 + fz * r * 0.5;
+    px[12] = tx + fx * r * 0.3; px[13] = H * 1.04; px[14] = tz + fz * r * 0.3;
+    px[15] = tx + fx * r; px[16] = H * 0.08; px[17] = tz + fz * r;
     for (const ab of this.arches) {
       for (const id of ab.ids) {
         const b = city.buildings[id];
         let hit = false;
+        let hi = -Infinity;
         const shown = this.vAlive[id];
+        const chewed = this.breakT[id] > 0;
+        if (chewed) this.breakT[id] = Math.max(0, this.breakT[id] - dt);
         if (shown > 0 && !b.collapsed) {
           const top = (shown + 0.3) * b.floorH;
           const x0 = b.x - b.w / 2, x1 = b.x + b.w / 2, z0 = b.z - b.d / 2, z1 = b.z + b.d / 2;
-          for (let k = 0; k < 12 && !hit; k += 3) hit = segHitsBox(cam.x, cam.y, cam.z, px[k], px[k + 1], px[k + 2], x0, 0, z0, x1, top, z1);
+          // being eaten: only the head + crown lines count, so the pancake reads unless the head hides
+          for (let k = chewed ? 3 : 0; k < SIGHT_N; k += 3) {
+            if (chewed && k !== 3 && k !== 12) continue;
+            if (!segHitsBox(cam.x, cam.y, cam.z, px[k], px[k + 1], px[k + 2], x0, 0, z0, x1, top, z1)) continue;
+            hit = true;
+            const dy = px[k + 1] - cam.y;
+            const ya = cam.y + dy * _slab[0], yb = cam.y + dy * _slab[1];
+            hi = Math.max(hi, ya, yb);
+          }
         }
         const was = this.ghostT[id] > 0;
-        if (hit) this.ghostT[id] = GHOST_HOLD_S;
-        else if (was) this.ghostT[id] = Math.max(0, this.ghostT[id] - dt);
+        if (hit) {
+          this.ghostT[id] = GHOST_HOLD_S;
+          // see-through from the ground up to the highest storey a sight line crosses (+ a quarter
+          // storey of margin). Never a floating band: storey pieces are open tubes, and a solid storey
+          // BELOW a ghost band would show its hollow inside (inverted ink hulls) through the dither.
+          // Solid storeys ABOVE the band are safe — sight lines descend, so they never see an underside.
+          const fh = b.floorH;
+          const s0 = 0, s1 = clamp(Math.floor(hi / fh + 0.25), 0, shown - 1);
+          if (s0 !== this.ghostS0[id] || s1 !== this.ghostS1[id]) {
+            this.ghostS0[id] = s0; this.ghostS1[id] = s1; ab.dirty = true;
+          }
+        } else if (was) this.ghostT[id] = Math.max(0, this.ghostT[id] - dt);
         if (was !== (this.ghostT[id] > 0)) ab.dirty = true;
       }
     }
+  }
+
+  /** Size I-II: street props (vehicles, kiosks, vending machines, containers, trees...) that cut a
+   *  sight line from the camera to the titan are drawn see-through like buildings. Uses the sight
+   *  points updateOccluders() just wrote into _sight. Static props migrate here; traffic migrates
+   *  when updateTraffic() places it this frame (placeProp reads propGT). */
+  private updatePropOccluders(world: World, city: CityLayout, tx: number, tz: number, f: FrameInfo, dt: number): void {
+    const T = world.titan;
+    const active = T.rank <= PROP_OCCLUDE_MAX_RANK && this.propGhost.size > 0;
+    const list = this.propGList;
+    // 1. decay every flagged prop
+    for (let i = 0; i < list.length; i++) { const id = list[i]; if (this.propGT[id] > 0) this.propGT[id] = Math.max(0, this.propGT[id] - dt); }
+    // 2. flag props that hide the titan now
+    if (active) {
+      const cam = this.ctx.camera.position;
+      const H = Math.max(0.5, T.height);
+      const minH = H * PROP_OCCLUDE_H;
+      const reach = 6 + 3 * H;                 // props farther than this from the titan cannot cut the sight lines
+      const reach2 = reach * reach;
+      const a = f.alpha;
+      const px = _sight;
+      const test = (id: number, kind: PropKind, x: number, y: number, z: number, h: number): void => {
+        const bb = this.propBox.get(kind);
+        if (!bb || bb.max.y < minH) return;
+        const dx = x - tx, dz = z - tz;
+        if (dx * dx + dz * dz > reach2) return;
+        // sight segments into the prop's local frame (instance matrix = translate * rotY(h))
+        const sn = Math.sin(h), cs = Math.cos(h);
+        const ox = cam.x - x, oz = cam.z - z;
+        const cx = cs * ox - sn * oz, cz = sn * ox + cs * oz, cy = cam.y - y;
+        let hit = false;
+        for (let k = 0; k < SIGHT_N && !hit; k += 3) {
+          const qx = px[k] - x, qz = px[k + 2] - z;
+          hit = segHitsBox(cx, cy, cz, cs * qx - sn * qz, px[k + 1] - y, sn * qx + cs * qz,
+            bb.min.x, bb.min.y, bb.min.z, bb.max.x, bb.max.y, bb.max.z);
+        }
+        if (!hit) return;
+        this.propGT[id] = GHOST_HOLD_S;
+        if (!this.propGFlag[id]) { this.propGFlag[id] = 1; list.push(id); }
+      };
+      // static props of the titan's block and its 8 neighbours
+      const fx = Math.floor((tx - city.originX) / P), fz = Math.floor((tz - city.originZ) / P);
+      for (let bz = fz - 1; bz <= fz + 1; bz++) for (let bx = fx - 1; bx <= fx + 1; bx++) {
+        if (bx < 0 || bz < 0 || bx >= city.blocksX || bz >= city.blocksZ) continue;
+        for (const id of city.blockProps[bx + bz * city.blocksX]) {
+          const p = city.props[id];
+          if (p.lane >= 0 || !p.alive || !this.propGhost.has(p.kind)) continue;
+          test(id, p.kind, p.x, this.propY[id], p.z, p.heading);
+        }
+      }
+      // traffic near the titan (interpolated exactly as updateTraffic draws it)
+      for (let i = 0; i < this.traffic.length; i++) {
+        const id = this.traffic[i];
+        const p = city.props[id];
+        if (!p.alive || !this.propGhost.has(p.kind)) continue;
+        const x = p.px + (p.x - p.px) * a, z = p.pz + (p.z - p.pz) * a;
+        const dx = x - tx, dz = z - tz;
+        if (dx * dx + dz * dz > reach2) continue;
+        test(id, p.kind, x, p.kind === 'boat' ? BOAT_Y : 0, z, p.pheading + wrapAngle(p.heading - p.pheading) * a);
+      }
+    }
+    // 3. static props whose state flipped move between batches now; drop settled entries
+    let w = 0;
+    for (let i = 0; i < list.length; i++) {
+      const id = list[i];
+      const p = city.props[id];
+      const want = this.propGT[id] > 0;
+      const inGhost = this.propGSlot[id] >= 0;
+      if (p.lane < 0 && p.alive && want !== inGhost && (this.propSlot[id] >= 0 || inGhost)) {
+        this.placeProp(id, p.kind, p.x, this.propY[id], p.z, p.heading);
+      }
+      if (want || this.propGSlot[id] >= 0) list[w++] = id; else this.propGFlag[id] = 0;
+    }
+    list.length = w;
   }
 
   // ─────────────────────────────── traffic ───────────────────────────────
@@ -1880,21 +2102,18 @@ export class CityView implements ViewModule {
       const p = city.props[id];
       const pb = this.propBatch.get(p.kind);
       if (!pb) continue;
-      let s = this.propSlot[id];
       if (!p.alive) {
-        if (s >= 0) { pb.free(s); this.propSlot[id] = -1; this.touch(pb); }
+        this.dropProp(id);
         continue;
       }
       const x = p.px + (p.x - p.px) * a, z = p.pz + (p.z - p.pz) * a;
       const dx = x - tx, dz = z - tz;
       if (dx * dx + dz * dz > R2) {
-        if (s >= 0) { pb.free(s); this.propSlot[id] = -1; this.touch(pb); }
+        this.dropProp(id);
         continue;
       }
-      if (s < 0) { s = pb.alloc(); if (s < 0) continue; this.propSlot[id] = s; }
       const h = p.pheading + wrapAngle(p.heading - p.pheading) * a;
-      pb.set(s, x, p.kind === 'boat' ? BOAT_Y : 0, z, Math.sin(h), Math.cos(h), 1, 1, 1);
-      this.touch(pb);
+      this.placeProp(id, p.kind, x, p.kind === 'boat' ? BOAT_Y : 0, z, h);
     }
   }
 }

@@ -12,10 +12,12 @@
 //     rescale) + d-pad. A = confirm (ui) / HOOK (game); B = back (ui) / DASH (game); RB = dash;
 //     Start = pause; X = reroll.
 //   * Gameplay actions (ability, dash, stick/move) read false / zero while mode === 'ui'.
-//   * Flipping `mode` clears every edge + buffer, and every key/button held at the flip is
-//     DEAD until physically released (the stick until it recentres) — so the Space/Enter
-//     that confirmed a menu can never leak into the first gameplay tick, and a held direction
-//     can never navigate the menu that just opened.
+//   * Flipping `mode` clears every edge + buffer. game → ui: every key/button held at the flip
+//     is DEAD until physically released (the stick until it recentres), so a held direction can
+//     never navigate the menu that just opened. ui → game: only movement (WASD / arrows / d-pad /
+//     stick) held through the screen stays live — the titan keeps walking without a re-press —
+//     while the Space/Enter/digit that confirmed the menu stays dead and can never leak into the
+//     first gameplay tick.
 //   * Keys shared by gameplay and UI (Space, pad A, pad B) do not CONFIRM/BACK for
 //     `sharedKeyGuardS` after a game → ui flip, so mashing the hook when a draft pops up
 //     cannot pick a card blind. Enter / 1 / 2 / 3 / R / Esc are never guarded.
@@ -92,11 +94,17 @@ const SHARED_KEY_CODES: ReadonlySet<string> = new Set(['Space']);
 const MOVE_CODES = {
   up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'],
 } as const;
+/** every movement key code (live across a ui → game flip; see the mode setter) */
+const MOVE_CODE_SET: ReadonlySet<string> = new Set<string>([
+  ...MOVE_CODES.up, ...MOVE_CODES.down, ...MOVE_CODES.left, ...MOVE_CODES.right,
+]);
 
 // ─────────────────────────────── gamepad map (standard mapping) ───────────────────────────────
 const PAD_BUTTONS = 17;
 const PAD_A = 0, PAD_B = 1, PAD_X = 2, PAD_Y = 3, PAD_RB = 5, PAD_SELECT = 8, PAD_START = 9;
 const PAD_UP = 12, PAD_DOWN = 13, PAD_LEFT = 14, PAD_RIGHT = 15;
+/** d-pad buttons: movement in play (live across a ui → game flip, like the movement keys) */
+const PAD_MOVE_BUTTONS: readonly number[] = [PAD_UP, PAD_DOWN, PAD_LEFT, PAD_RIGHT];
 /** buttons that count for "press any key" */
 const PAD_ANY: readonly number[] = [PAD_A, PAD_B, PAD_X, PAD_Y, PAD_START, PAD_SELECT, PAD_UP, PAD_DOWN, PAD_LEFT, PAD_RIGHT];
 
@@ -157,6 +165,12 @@ export function actionLabel(a: Action, device: InputDevice = 'keyboard'): string
 export class Input {
   /** after a game → ui flip, Space / pad A / pad B do not confirm/back for this long (s). 0 disables. */
   sharedKeyGuardS = SHARED_KEY_GUARD_S;
+  /**
+   * How long a buffered HOOK / DASH press waits for a sim tick to consume it (s). The app widens
+   * it while the sim runs slowed (rank-up hit-stop: one tick per SIM_DT / timeScale of real time),
+   * so a press between two slowed ticks is never dropped. Never below INPUT_BUFFER_S.
+   */
+  bufferS = INPUT_BUFFER_S;
 
   private readonly win: Window;
   private _mode: InputMode = 'ui';
@@ -221,11 +235,29 @@ export class Input {
     if (m !== 'ui' && m !== 'game') return;
     if (m === this._mode) return;
     this._mode = m;
-    // everything held across the flip is dead until released / recentred
-    for (const c of this.keysDown) this.keysDead.add(c);
-    this.keysDown.clear();
-    for (let i = 0; i < PAD_BUTTONS; i++) if (this.padDown[i]) this.padDead[i] = true;
-    if (this.padRawMag >= STICK_DEADZONE) this.stickDead = true;
+    if (m === 'ui') {
+      // game → ui: everything held across the flip is dead until released / recentred, so a held
+      // direction cannot navigate (and a held Space cannot confirm) the screen that just opened
+      for (const c of this.keysDown) this.keysDead.add(c);
+      this.keysDown.clear();
+      for (let i = 0; i < PAD_BUTTONS; i++) if (this.padDown[i]) this.padDead[i] = true;
+      if (this.padRawMag >= STICK_DEADZONE) this.stickDead = true;
+    } else {
+      // ui → game: MOVEMENT held through a draft / pause / slate stays (or comes back) live, so the
+      // titan keeps walking without a re-press — moving cannot leak a menu action. Every other held
+      // key / button (Space, Enter, Esc, digits, R, Shift, pad A/B/X/Start) stays dead until released.
+      for (const c of this.keysDead) if (MOVE_CODE_SET.has(c)) this.keysDown.add(c);
+      for (const c of this.keysDown) {
+        if (MOVE_CODE_SET.has(c)) { this.keysDead.delete(c); continue; }
+        this.keysDead.add(c);
+      }
+      for (const c of this.keysDead) this.keysDown.delete(c);
+      for (let i = 0; i < PAD_BUTTONS; i++) {
+        if (PAD_MOVE_BUTTONS.includes(i)) { this.padDead[i] = false; continue; }
+        if (this.padDown[i]) this.padDead[i] = true;
+      }
+      this.stickDead = false;
+    }
     this.navOn.up = this.navOn.down = this.navOn.left = this.navOn.right = false;
     this.clearEdges();
     this.uiSince = m === 'ui' ? clockNow() : -Infinity;
@@ -300,7 +332,7 @@ export class Input {
     const s = this.stick();
     const m = screenToWorld(s.x, s.y);
     const now = clockNow();
-    const win = INPUT_BUFFER_S * 1000;
+    const win = Math.max(INPUT_BUFFER_S, Number.isFinite(this.bufferS) ? this.bufferS : 0) * 1000;
     let ability = false, dash = false;
     if (this.abilityAt > -Infinity) {
       ability = now - this.abilityAt <= win;

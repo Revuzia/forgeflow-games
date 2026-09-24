@@ -36,6 +36,21 @@ const CAP_SPRITE = [140, 240, 340] as const;
 // Burst words on screen at once. 10 at high buried CAISSON-4's hook-lane paint under five overlapping
 // words at Size V (boot-integration shot boss_caisson4_hookLane.png); telegraphs must stay readable.
 const CAP_WORDS = [3, 4, 5] as const;
+// ...and at Size IV-V / during a boss fight even that buried CAISSON-4 and IRON GULLY's lanes (critic
+// shots boss_caisson4_hookLane, boss_c4lw_intro, boss_igws_P2_ridgeCharge): each word is sized as a
+// fraction of the SCREEN, so at Size V three of them cover the fight. While BUSY (boss alive or rank >= IV):
+const BUSY_WORD_CAP = 2;            // live words on screen
+const BUSY_SHRINK = 0.6;            // secondary (env / foe / pickup) words shrink to this
+const BUSY_ENV_CD = 0.9;            // min cooldown per env word key while a boss is alive (s)
+const WORD_DEDUPE_S = 1.2;          // the same word text never repeats within this (s)
+/** env/secondary words: dropped when no clear spot exists while busy (never cover the boss or its paint) */
+const DROP_WORDS = new Set(['smash', 'propDestroyed', 'floorBreak', 'buildingCollapse', 'bump', 'crush', 'enemyKilled', 'explosion', 'pickup']);
+/** words shrunk while busy (full size stays for titan attacks, hooks, rankUp and boss beats) */
+const SHRINK_WORDS = new Set([...DROP_WORDS, 'bossHit', 'chest', 'titanHurt', 'levelUp']);
+/** max blocker rects (titan + boss + hostile telegraphs) per frame */
+const MAX_BLOCK = 24;
+/** word placement: side offsets tried, as a fraction of the screen height (world m at the target) */
+const WORD_OFFSETS = [0.13, 0.24, 0.36] as const;
 const RIBBON_QUADS = 4096;
 
 /** local fallback burst words (ORIGINAL — used only if data/strings.ts lacks a key) */
@@ -44,6 +59,10 @@ const FALLBACK_WORDS: Record<string, string[]> = {
   buildingCollapse: ['THOOM!', 'WHUMP!'], bump: ['BONK!'], crush: ['SPLNT!', 'CLANK-BOING!'], enemyKilled: ['POP!', 'KLUNK!'],
   bite: ['CHOMP!'], arc: ['BZZAK!'], wireDetonate: ['ZAPPOW!'], pulse: ['WHUMP!'], stomp: ['THOOM!'], vent: ['FWASH!'],
   vine: ['THWAPP!'], spore: ['POOF!'], bloomSpawn: ['SPROING!'], dash: ['FWOOSH!'], ability: ['FWASH!'],
+  // per-titan HOOK words (one shared list made MOLO's vacuum shout HEARTHBACK's vent word). Keyed
+  // 'ability_<titanId>'; data/strings.ts may override any of them under the same key.
+  ability_molo: ['SHLUUURP!', 'GLRRRK!', 'SHOOMP!'], ability_voltkite: ['ZAPPOW!', 'KZZZAK!'],
+  ability_hearthback: ['FWASH!', 'KA-FWOOM!'], ability_briarwick: ['SPROING!', 'FWUMPH!', 'KA-BLOOM!'],
   explosion: ['KA-BLAM!'], titanHurt: ['OOF!'], levelUp: ['DING!'], rankUp: ['BIGGER!'], bossHit: ['KLANNG!'],
   bossStagger: ['WOBBLE!'], bossDefeated: ['KRASSSH!'], pickup: ['TINK!'], chest: ['KA-CHUNK!'], generic: ['WHUMP!'],
 };
@@ -69,6 +88,10 @@ const WORD_STYLE: Record<string, WordStyle> = {
   bloomSpawn:       { fill: '#ff9ec7', back: '#5e8f3a', size: 0.06, prio: 1, cd: 1.2 },
   dash:             { fill: '#ffffff', back: '#44d2c2', size: 0.06, prio: 1, cd: 1.4 },
   ability:          { fill: '#ffffff', back: '#b98bff', size: 0.09, prio: 3, cd: 0.6 },
+  ability_molo:     { fill: '#e8ffd8', back: '#2f8f5a', size: 0.09, prio: 3, cd: 0.6 },
+  ability_voltkite: { fill: '#6ff3ff', back: '#3b3f9e', size: 0.09, prio: 3, cd: 0.6 },
+  ability_hearthback: { fill: '#ffe08a', back: '#ff5a2e', size: 0.09, prio: 3, cd: 0.6 },
+  ability_briarwick: { fill: '#ff9ec7', back: '#5e8f3a', size: 0.09, prio: 3, cd: 0.6 },
   explosion:        { fill: '#ffd166', back: '#e84a3c', size: 0.075, prio: 2, cd: 0.45 },
   titanHurt:        { fill: '#ffffff', back: '#e84a3c', size: 0.065, prio: 2, cd: 1.6 },
   levelUp:          { fill: '#fff27a', back: '#5b7cff', size: 0.075, prio: 3, cd: 0.5 },
@@ -79,6 +102,10 @@ const WORD_STYLE: Record<string, WordStyle> = {
   pickup:           { fill: '#fff27a', back: '#ff9f43', size: 0.045, prio: 0, cd: 2.5 },
   chest:            { fill: '#ffd166', back: '#ff9f43', size: 0.09, prio: 4, cd: 0.5 },
   generic:          { fill: '#ffffff', back: '#ff6f5e', size: 0.07, prio: 1, cd: 0.5 },
+};
+
+const ABILITY_KEY: Record<string, string> = {
+  molo: 'ability_molo', voltkite: 'ability_voltkite', hearthback: 'ability_hearthback', briarwick: 'ability_briarwick',
 };
 
 // atlas icons (row after the words)
@@ -437,6 +464,7 @@ class SpriteBatch {
   private readonly aUV: THREE.InstancedBufferAttribute;
   private readonly aFill: THREE.InstancedBufferAttribute;
   private readonly aBack: THREE.InstancedBufferAttribute;
+  private readonly attrs: THREE.InstancedBufferAttribute[];   // cached: no per-frame array literal
   readonly cap: number;
   n = 0;
   constructor(cap: number, mat: THREE.ShaderMaterial, name: string) {
@@ -450,6 +478,7 @@ class SpriteBatch {
     this.aPos = mk(3); this.aSize = mk(3); this.aUV = mk(4); this.aFill = mk(4); this.aBack = mk(3);
     g.setAttribute('aPos', this.aPos); g.setAttribute('aSize', this.aSize); g.setAttribute('aUV', this.aUV);
     g.setAttribute('aFill', this.aFill); g.setAttribute('aBack', this.aBack);
+    this.attrs = [this.aPos, this.aSize, this.aUV, this.aFill, this.aBack];
     g.instanceCount = 0;
     this.geo = g;
     this.mesh = new THREE.Mesh(g, mat);
@@ -475,7 +504,7 @@ class SpriteBatch {
     this.geo.instanceCount = this.n;
     this.mesh.visible = this.n > 0;
     if (this.n === 0) return;
-    for (const a of [this.aPos, this.aSize, this.aUV, this.aFill, this.aBack]) {
+    for (const a of this.attrs) {
       a.clearUpdateRanges();
       a.addUpdateRange(0, this.n * a.itemSize);
       a.needsUpdate = true;
@@ -520,6 +549,17 @@ export class FxView implements ViewModule {
   private night = false;
   private wordCd = new Map<string, number>();
   private wordTokens = 4;
+  // burst-word layout (screen space, NDC): titan / boss / hostile-telegraph rects words must not cover
+  private busy = false;
+  private bossLive = false;
+  private bossSx = 0;                               // boss centre NDC x (words go to the other side)
+  private readonly vp = new THREE.Matrix4();
+  private readonly clip = new THREE.Vector4();
+  private readonly blk = new Float32Array(MAX_BLOCK * 4);
+  private nBlk = 0;
+  private readonly titanR = new Float32Array(4);
+  private readonly cand = new Float32Array(4);
+  private readonly cellShown = new Float64Array(512);
   private healAcc = 0;
   private healCd = 0;
   private pickupCd = 0;
@@ -679,6 +719,7 @@ export class FxView implements ViewModule {
 
     this.wordCd.clear();
     this.wordTokens = 4;
+    this.cellShown.fill(-99);
     this.healAcc = 0; this.healCd = 0; this.pickupCd = 0; this.vacSpawnAcc = 0; this.vacRingCd = 0;
     this.enemyMapTick = -1;
     this.ctx.scene.add(this.root);
@@ -710,6 +751,7 @@ export class FxView implements ViewModule {
     this.lastTime = f.time;
     this.minShard = f.camDist * K_VIEW * 0.0035;
     this.maxPuff = f.camDist * K_VIEW * 0.1;
+    this.layoutBlockers(w);
     if (!f.frozen) {
       this.wordTokens = Math.min(4, this.wordTokens + dt * 4.5);
       for (const [k, v] of this.wordCd) { if (v > 0) this.wordCd.set(k, v - dt); }
@@ -872,7 +914,7 @@ export class FxView implements ViewModule {
         const g = this.glow;
         this.ring(e.x, e.z, T.radius * 0.6, T.radius * 3, 0.45, g, 0.9, H * 0.14);
         if (e.titan === 'molo') this.vacRingCd = 0;
-        if (e.titan !== 'voltkite' && e.titan !== 'hearthback') this.word('ability', e.x, H * 1.2, e.z, f);
+        if (e.titan !== 'voltkite' && e.titan !== 'hearthback') this.word(ABILITY_KEY[e.titan] ?? 'ability', e.x, H * 1.2, e.z, f);
         break;
       }
       case 'vent': {
@@ -1248,6 +1290,156 @@ export class FxView implements ViewModule {
     lin('#6fae45', b.core, 0); lin('#3d6b2a', b.glow, 0);
   }
 
+  // ─────────────────────────────── burst-word layout ───────────────────────────────
+  /** world point → clip space (this.clip); false when behind the camera */
+  private toClip(x: number, y: number, z: number): boolean {
+    this.clip.set(x, y, z, 1).applyMatrix4(this.vp);
+    return this.clip.w > 1e-3;
+  }
+
+  /** grow NDC rect i (in this.blk) by a projected world point padded by padM metres */
+  private growPt(i: number, x: number, y: number, z: number, padM: number): void {
+    if (!this.toClip(x, y, z)) return;
+    const c = this.clip, iw = 1 / c.w, e = this.vp.elements;
+    const nx = c.x * iw, ny = c.y * iw;
+    const py = padM * iw * Math.abs(e[5]), pxx = padM * iw * Math.abs(e[0]);
+    const b = this.blk, o = i * 4;
+    if (nx - pxx < b[o]) b[o] = nx - pxx;
+    if (nx + pxx > b[o + 2]) b[o + 2] = nx + pxx;
+    if (ny - py < b[o + 1]) b[o + 1] = ny - py;
+    if (ny + py > b[o + 3]) b[o + 3] = ny + py;
+  }
+
+  private openRect(): number {
+    if (this.nBlk >= MAX_BLOCK) return -1;
+    const o = this.nBlk * 4;
+    this.blk[o] = this.blk[o + 1] = Infinity; this.blk[o + 2] = this.blk[o + 3] = -Infinity;
+    return this.nBlk;
+  }
+
+  /** keep rect i only if it is valid and touches the screen */
+  private closeRect(i: number): void {
+    const b = this.blk, o = i * 4;
+    if (b[o] < b[o + 2] && b[o + 1] < b[o + 3] && b[o + 2] > -1.1 && b[o] < 1.1 && b[o + 3] > -1.1 && b[o + 1] < 1.1) this.nBlk++;
+  }
+
+  /**
+   * Once per frame: the screen rects burst words keep clear of — the titan (rect 0, kept in titanR),
+   * the boss (projected part cylinders) and every live hostile telegraph (projected ground bounds).
+   */
+  private layoutBlockers(w: World): void {
+    const cam = this.camera();
+    cam.updateMatrixWorld();
+    this.vp.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    this.nBlk = 0;
+    const T = w.titan;
+    const b = w.boss;
+    this.bossLive = !!(b && b.alive);
+    this.busy = this.bossLive || T.rank >= 3;
+    // rect 0: the titan (always slot 0, even when off-screen, so overlap() can skip it by index)
+    this.blk[0] = this.blk[1] = Infinity; this.blk[2] = this.blk[3] = -Infinity;
+    // radius = 0.42 H understates the long bodies (MOLO's snout-to-tail, VOLT-KITE's wings): the
+    // rect spans ±2.2 radii along the heading (snout / tail) and 1.3 radii of padding around that
+    {
+      const L = T.radius * 2.2, hx = Math.sin(T.heading) * L, hz = Math.cos(T.heading) * L, pad = T.radius * 1.3;
+      for (let k = -1; k <= 1; k += 2) {
+        this.growPt(0, T.x + hx * k, 0, T.z + hz * k, pad);
+        this.growPt(0, T.x + hx * k, T.height * 1.1, T.z + hz * k, pad);
+      }
+    }
+    for (let k = 0; k < 4; k++) this.titanR[k] = this.blk[k];
+    this.nBlk = 1;
+    if (b && b.alive) {
+      const i = this.openRect();
+      if (i >= 0) {
+        for (const p of b.parts) {
+          this.growPt(i, p.x, p.y0, p.z, p.r * 1.15);
+          this.growPt(i, p.x, p.y1, p.z, p.r * 1.15);
+        }
+        this.bossSx = (this.blk[i * 4] + this.blk[i * 4 + 2]) * 0.5;
+        this.closeRect(i);
+      }
+    }
+    for (const tg of w.telegraphs) {
+      if (!tg.alive || tg.owner === 'titan') continue;
+      const i = this.openRect();
+      if (i < 0) break;
+      const s = tg.shape;
+      switch (s.k) {
+        case 'circle': case 'ring': case 'oval': {
+          const R = s.k === 'circle' ? s.r : s.k === 'ring' ? s.r1 : Math.max(s.rx, s.rz);
+          this.growPt(i, s.x - R, 0, s.z - R, 0); this.growPt(i, s.x + R, 0, s.z - R, 0);
+          this.growPt(i, s.x - R, 0, s.z + R, 0); this.growPt(i, s.x + R, 0, s.z + R, 0);
+          break;
+        }
+        case 'cone': {
+          this.growPt(i, s.x, 0, s.z, 0);
+          const n = s.half > 1.2 ? 6 : 3;
+          for (let k = 0; k <= n; k++) {
+            const a = s.dir - s.half + (2 * s.half * k) / n;
+            this.growPt(i, s.x + Math.sin(a) * s.r, 0, s.z + Math.cos(a) * s.r, 0);
+          }
+          break;
+        }
+        case 'lane': {
+          const sx = Math.sin(s.dir), cz = Math.cos(s.dir), hw = s.w * 0.5;
+          const ex = s.x + sx * s.len, ez = s.z + cz * s.len;
+          this.growPt(i, s.x + cz * hw, 0, s.z - sx * hw, 0); this.growPt(i, s.x - cz * hw, 0, s.z + sx * hw, 0);
+          this.growPt(i, ex + cz * hw, 0, ez - sx * hw, 0); this.growPt(i, ex - cz * hw, 0, ez + sx * hw, 0);
+          break;
+        }
+        case 'capsule':
+          this.growPt(i, s.x0, 0, s.z0, s.r); this.growPt(i, s.x1, 0, s.z1, s.r);
+          break;
+      }
+      this.closeRect(i);
+    }
+  }
+
+  /** NDC rect of a word centred at (x,y,z), world height h → this.cand; false when behind the camera */
+  private wordRect(x: number, y: number, z: number, h: number, aspect: number): boolean {
+    if (!this.toClip(x, y, z)) return false;
+    const c = this.clip, iw = 1 / c.w, e = this.vp.elements;
+    const nx = c.x * iw, ny = c.y * iw;
+    const hh = 0.5 * h * 1.12 * iw * Math.abs(e[5]);          // +12 %: the pop overshoot
+    const hw = 0.5 * h * aspect * 1.12 * iw * Math.abs(e[0]);
+    const rise = h * 0.35 * iw * Math.abs(e[5]);                // words drift up over their life
+    const r = this.cand;
+    r[0] = nx - hw; r[1] = ny - hh; r[2] = nx + hw; r[3] = ny + hh + rise;
+    return true;
+  }
+
+  /** overlap area (NDC²) of this.cand with rect (x0,y0)-(x1,y1) */
+  private ov(x0: number, y0: number, x1: number, y1: number): number {
+    const r = this.cand;
+    const w = Math.min(r[2], x1) - Math.max(r[0], x0), h = Math.min(r[3], y1) - Math.max(r[1], y0);
+    return w > 0 && h > 0 ? w * h : 0;
+  }
+
+  /** how badly this.cand is placed: overlap with boss / hostile paint / live words (+ titan), off-screen area */
+  private badness(avoidTitan: boolean, self: Word | null): number {
+    const r = this.cand, b = this.blk;
+    let a = 0;
+    for (let i = 1; i < this.nBlk; i++) a += this.ov(b[i * 4], b[i * 4 + 1], b[i * 4 + 2], b[i * 4 + 3]);
+    if (avoidTitan) a += this.ov(this.titanR[0], this.titanR[1], this.titanR[2], this.titanR[3]);
+    // a word half out of frame (or under the top HUD band) is as bad as a covered one
+    if (r[0] < -0.97) a += (-0.97 - r[0]) * (r[3] - r[1]);
+    if (r[2] > 0.97) a += (r[2] - 0.97) * (r[3] - r[1]);
+    if (r[3] > 0.72) a += (r[3] - 0.72) * (r[2] - r[0]);
+    if (r[1] < -0.95) a += (-0.95 - r[1]) * (r[2] - r[0]);
+    const at = this.atlas;
+    for (const o of this.words.items) {
+      if (o === self || o.t >= o.life) continue;
+      if (!this.toClip(o.x, o.y, o.z)) continue;
+      const c = this.clip, iw = 1 / c.w, e = this.vp.elements;
+      const asp = at ? (at.cells[o.cell * 5 + 4] || 3.4) : 3.4;
+      const nx = c.x * iw, ny = c.y * iw;
+      const hh = 0.5 * o.h * iw * Math.abs(e[5]), hw = 0.5 * o.h * asp * iw * Math.abs(e[0]);
+      a += this.ov(nx - hw, ny - hh, nx + hw, ny + hh + o.h * 0.35 * iw * Math.abs(e[5]));
+    }
+    return a;
+  }
+
   private word(key: string, x: number, y: number, z: number, f: FrameInfo, force = false): void {
     if (!this.atlas) return;
     const st = WORD_STYLE[key] ?? WORD_STYLE.generic;
@@ -1256,38 +1448,73 @@ export class FxView implements ViewModule {
       if (cd > 0) return;
       if (this.wordTokens < 1 && st.prio < 4) return;
     }
+    const busy = this.busy;
+    const droppable = DROP_WORDS.has(key);
     // keep titan-scale words near the action (a 100 m tower's collapse word must not fly off-screen)
     y = Math.min(y, f.camDist * K_VIEW * 0.28 + 1);
     const list = this.atlas.lists[key] ?? this.atlas.lists.generic;
     if (!list || list.length === 0) return;
-    // capacity: steal the lowest-priority / oldest word when full
-    let slot: Word | null = null;
+    // capacity: BUSY_WORD_CAP live words while busy (else the whole pool); a full screen only yields
+    // its lowest-priority / oldest word to a HIGHER-priority one (or a forced beat)
+    const cap = busy ? BUSY_WORD_CAP : this.words.items.length;
+    let live = 0;
+    let free: Word | null = null, worstLive: Word | null = null;
     let worst = Infinity;
     for (const wd of this.words.items) {
-      if (wd.t >= wd.life) { slot = wd; worst = -Infinity; break; }
+      if (wd.t >= wd.life) { if (!free) free = wd; continue; }
+      live++;
       const score = wd.prio * 10 - wd.t;
-      if (score < worst) { worst = score; slot = wd; }
+      if (score < worst) { worst = score; worstLive = wd; }
     }
+    let slot: Word | null = null;
+    if (live < cap && free) slot = free;
+    else if (worstLive && (force || worstLive.prio < st.prio)) slot = worstLive;
     if (!slot) return;
-    if (slot.t < slot.life && slot.prio > st.prio && !force) return;
-    this.wordCd.set(key, st.cd);
-    this.wordTokens = Math.max(0, this.wordTokens - 1);
-    const hScreen = f.camDist * K_VIEW;
-    const side = (Math.random() < 0.5 ? -1 : 1) * rnd(0.09, 0.17) * hScreen;
-    slot.x = x + this.camRight.x * side; slot.y = y; slot.z = z + this.camRight.z * side;
-    slot.h = st.size * hScreen * (this.ctx.quality.level === 0 ? 0.9 : 1);
-    slot.cell = list[rndi(list.length)];
-    lin(st.fill, slot.fill, 0); lin(st.back, slot.back, 0);
-    // don't stack on a live word: nudge up until clear (≤ 3 tries)
-    for (let k = 0; k < 3; k++) {
-      let hit = false;
-      for (const o of this.words.items) {
-        if (o === slot || o.t >= o.life) continue;
-        if (Math.abs(o.y - slot.y) < (o.h + slot.h) * 0.5 && Math.hypot(o.x - slot.x, o.z - slot.z) < (o.h + slot.h) * 1.6) { hit = true; break; }
-      }
-      if (!hit) break;
-      slot.y += slot.h * 1.05;
+    // dedupe: never the same text twice within WORD_DEDUPE_S, nor one still on screen
+    const now = this.lastTime;
+    let cell = -1;
+    const n = list.length, k0 = rndi(n);
+    for (let k = 0; k < n; k++) {
+      const c = list[(k0 + k) % n];
+      if (c < this.cellShown.length && now - this.cellShown[c] < WORD_DEDUPE_S) continue;
+      let onScreen = false;
+      for (const o of this.words.items) if (o !== slot && o.t < o.life && o.cell === c) { onScreen = true; break; }
+      if (!onScreen) { cell = c; break; }
     }
+    if (cell < 0) { if (!force) return; cell = list[k0]; }
+    const hScreen = f.camDist * K_VIEW;
+    let size = st.size;
+    if (busy && SHRINK_WORDS.has(key)) size *= BUSY_SHRINK;
+    const h = size * hScreen * (this.ctx.quality.level === 0 ? 0.9 : 1);
+    const aspect = this.atlas.cells[cell * 5 + 4] || 3.4;
+    // placement: beside the event, on the screen side AWAY from the boss, stepping further out until
+    // the word clears the boss, every hostile telegraph, live words and (secondary words while busy)
+    // the titan. Env words that find no clear spot while busy are dropped.
+    let pref = Math.random() < 0.5 ? -1 : 1;
+    if (this.bossLive && this.toClip(x, y, z)) pref = this.clip.x / this.clip.w >= this.bossSx ? 1 : -1;
+    const avoidTitan = busy && !force && SHRINK_WORDS.has(key);
+    let bestA = Infinity, bx = 0, bz = 0;
+    for (let oi = 0; oi < WORD_OFFSETS.length && bestA > 1e-6; oi++) {
+      for (let si = 0; si < 2; si++) {
+        const side = (si === 0 ? pref : -pref) * (WORD_OFFSETS[oi] + rnd(0, 0.03)) * hScreen;
+        const cx = x + this.camRight.x * side, cz = z + this.camRight.z * side;
+        if (!this.wordRect(cx, y, cz, h, aspect)) continue;
+        const a = this.badness(avoidTitan, slot);
+        if (a < bestA) { bestA = a; bx = cx; bz = cz; }
+        if (a <= 1e-6) break;
+      }
+    }
+    if (bestA === Infinity) return;                       // behind the camera
+    if (bestA > 1e-6 && busy && droppable && !force) return;
+    let kcd = st.cd;
+    if (this.bossLive && droppable) kcd = Math.max(kcd, BUSY_ENV_CD);
+    this.wordCd.set(key, kcd);
+    this.wordTokens = Math.max(0, this.wordTokens - 1);
+    if (cell < this.cellShown.length) this.cellShown[cell] = now;
+    slot.x = bx; slot.y = y; slot.z = bz;
+    slot.h = h;
+    slot.cell = cell;
+    lin(st.fill, slot.fill, 0); lin(st.back, slot.back, 0);
     slot.rot = rnd(-0.22, 0.22);
     slot.prio = st.prio;
     slot.life = st.prio >= 5 ? 1.35 : 0.95;

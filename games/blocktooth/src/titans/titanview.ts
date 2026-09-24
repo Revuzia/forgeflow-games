@@ -12,10 +12,31 @@ import { lerpPose } from '../render/viewtypes.ts';
 import { clamp, lerpAngle, wrapAngle } from '../core/math.ts';
 import { SIM_DT } from '../core/config.ts';
 import { titanMaxSpeed } from './titansim.ts';
-import { applyGlow, buildTitanModel } from './models.ts';
+import { applyGlow, buildTitanModel, setTitanFill, setTitanRim } from './models.ts';
+import { BIOMES } from '../data/biomes.ts';
 import type { TitanModel } from './models.ts';
 import { TitanAnimator } from './anim.ts';
 import type { AnimState } from './anim.ts';
+
+/**
+ * Night look (LOCKWATER). The navy street (#0d1a26) and the #1b1426 ink leave a dark hide with no
+ * value to read against (F07 / PC-05: VOLT-KITE's indigo body measured 45.9 mean luma on a 48.0
+ * street at Size I — invisible). Two titan-only terms on the body material, no bloom:
+ *   fill — a character light: + fill × painted albedo (diffuse value lift, toon steps kept);
+ *   rim  — a stepped fresnel edge band tinted palette.rim (magenta neon) so the silhouette gets a
+ *          bright edge for the ink line to sit against.
+ * Per titan because the hides differ: MOLO's jade already reads (111 vs 47), HEARTHBACK's basalt
+ * must stay the darkest hide (its magma seams are its identity — lifted, not washed out),
+ * VOLT-KITE's indigo needs the most. Tuned with _harness/scratch/titans/rimprobe.py.
+ */
+const NIGHT_LOOK: Record<TitanId, { fill: number; rim: number }> = {
+  molo: { fill: 0, rim: 0.26 },
+  voltkite: { fill: 1.1, rim: 0.5 },
+  hearthback: { fill: 0.5, rim: 0.45 },
+  briarwick: { fill: 0.12, rim: 0.3 },
+};
+/** fresnel band edges (1 − |n·v|) for the in-game rim: wider than the portrait's hero rim */
+const NIGHT_RIM_BAND = [0.46, 0.58] as const;
 
 /** how long a pose timer keeps counting after its event (s) — longer than every pose it drives */
 const TIMER_MAX = 3;
@@ -70,6 +91,7 @@ export class TitanView implements ViewModule {
     this.lastTick = w.tick;
     this.hPrev = this.hCur = T.height;
     this.applyShadows(this.ctx.quality.shadows);
+    this.applyBiomeRim(w);
     // place + settle one frame so the first rendered frame is already posed
     this.placeRoot(w, 1);
     s.kit = T.kit;
@@ -199,6 +221,15 @@ export class TitanView implements ViewModule {
       }
       default: break;
     }
+  }
+
+  private applyBiomeRim(w: World): void {
+    const model = this.model!;
+    const b = BIOMES[w.biomeId];
+    if (!b || b.time !== 'night') { setTitanRim(model, '#ffffff', 0); setTitanFill(model, 0); return; }
+    const look = NIGHT_LOOK[w.titanId];
+    setTitanRim(model, b.palette.rim ?? b.palette.sign, look.rim, NIGHT_RIM_BAND[0], NIGHT_RIM_BAND[1]);
+    setTitanFill(model, look.fill);
   }
 
   private applyShadows(on: boolean): void {

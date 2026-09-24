@@ -55,7 +55,9 @@ blank canvas. If boot fails, a "TECHNICAL DIFFICULTIES" card shows the error.
 | draft: pick card / reroll | 1 / 2 / 3 (or ←→ + Enter) · R | A · X |
 | debug overlay | F1 | — |
 
-The game also auto-pauses when the tab is hidden.
+The game also auto-pauses when the tab is hidden or the window loses focus (alt-tab, another monitor,
+the page around an embedding iframe). Movement keys held through a pause or a draft keep walking the
+titan on resume; the Space/Enter/digit that closed the screen never leaks into play.
 
 ## URL parameters
 
@@ -68,6 +70,7 @@ The game also auto-pauses when the tab is hidden.
 | `?noslate=1` | skip the open slate (also skipped on retry) |
 | `?quality=0\|1\|2` | quality for this session only (low: DPR 1, no shadows · med: DPR ≤ 1.25 · high: DPR ≤ 1.5) |
 | `?dev=1` | enables `window.__BT__.cheat.*` |
+| `?dynres=0` | pins the drawing buffer at the quality DPR (adaptive render scale off; see below) |
 
 ## Screens
 
@@ -84,10 +87,17 @@ boot → title → select (titan, then biome) → loading → slate → play ⇄
   (`UNIDENTIFIED MASS — …`) waits for any key.
 * **Draft**: when a level-up (or an elite's chest) is owed, the sim freezes inside that same tick.
   The 3-card report then repeats until no draft is owed.
-* **Rank-up**: hit-stop (sim time × 0.15 for 0.25 s), a camera punch + zoom-out, the full-width
-  **MASS BREACH** banner, a shockwave ring, and a roar + news sting.
-* **Run end**: the sim stops. After a 2.5 s aftermath (dust still settling), one frame is rendered
-  and captured as the tabloid's front-page photo.
+* **Rank-up**: hit-stop (sim time × 0.15 for 0.25 s; HOOK/DASH presses stay buffered across the
+  slowed ticks), a camera punch + zoom-out, the full-width **MASS BREACH** banner, a shockwave ring,
+  and a roar + news sting. A level-up owed in the same moment waits until the sting has played
+  (2.3 s, play continues meanwhile), then the draft opens.
+* **Adaptive render scale** (`DynRes`, `game.ts`): in live play, every 1-s window with ≥ 10 % of
+  frames slower than 1.5 × the display interval lowers the drawing-buffer scale by 0.1 (floor 0.6);
+  6 s with < 3 % misses raises it again (a level that fails within 4 s of a step up is locked out
+  for 20 s). `__BT__.state().renderScale` and `.dynres` expose it.
+* **Run end**: the sim stops. After a 2.5 s aftermath (dust still settling, hostile telegraphs
+  fading out), one frame is rendered and captured as the tabloid's front-page photo; telegraphs and
+  hazard paint are left out of that photo so the subject is the titan.
 
 ## Project layout
 

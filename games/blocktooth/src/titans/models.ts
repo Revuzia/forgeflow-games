@@ -49,6 +49,9 @@ export interface TitanModel {
   glowColors: THREE.Color[];
   /** footprint extents in height-1 units (x = width, z = nose-to-tail length, zMin/zMax) */
   size: { width: number; length: number; zMin: number; zMax: number };
+  /** stepped fresnel rim + self fill on the body material (uniform objects — change them, never
+   *  recompile). strength / fill 0 = off (day biomes); set with `setTitanRim` / `setTitanFill`. */
+  rim: { color: THREE.Color; strength: { value: number }; band: { value: THREE.Vector2 }; fill: { value: number } };
 }
 
 export interface BuildOpts {
@@ -76,6 +79,55 @@ export function applyGlow(model: TitanModel, level: number, index = -1): void {
     const m = model.glow[i] as THREE.MeshBasicMaterial;
     m.color.copy(model.glowColors[i]).multiplyScalar(k);
   }
+}
+
+/**
+ * Set the body's stepped fresnel rim: a comic edge-light band on the facets that turn away from
+ * the camera. Night biomes use it (tinted palette.rim) so a dark titan separates from a dark street
+ * without bloom; portraits use it for their hero light. `lo`/`hi` = the fresnel band edges
+ * (1 − |n·v|): lower = a wider band. Strength is additive light (× colour, linear), kept small so the
+ * rim sits at a few × the body's own luminance (glare bar, CONTRACT §6.1).
+ */
+export function setTitanRim(model: TitanModel, color: THREE.ColorRepresentation, strength: number, lo = 0.58, hi = 0.66): void {
+  model.rim.color.set(color);
+  model.rim.strength.value = Math.max(0, strength);
+  model.rim.band.value.set(lo, Math.max(lo + 0.01, hi));
+}
+
+/**
+ * Self fill: adds `fill` × the painted albedo to the body (a titan-only character light — the
+ * diffuse term, NOT an emissive trim). Night biomes lift a dark hide with it so the body's VALUE
+ * reads against a navy street while the toon bands keep their steps.
+ */
+export function setTitanFill(model: TitanModel, fill: number): void {
+  model.rim.fill.value = Math.max(0, fill);
+}
+
+/** Shared source for the rim injection — ONE program key for every titan (warmup compiles it once;
+ *  uniforms are per material, so switching biome / strength never recompiles). */
+const RIM_FRAG = `{
+    vec3 rimV = normalize( -vViewPosition );
+    float rimF = 1.0 - clamp( abs( dot( rimV, normal ) ), 0.0, 1.0 );
+    gl_FragColor.rgb += diffuseColor.rgb * uRimFill
+      + uRimColor * ( smoothstep( uRimBand.x, uRimBand.y, rimF ) * uRimStrength );
+  }
+  #include <tonemapping_fragment>`;
+
+const RIM_DECL = `uniform vec3 uRimColor;
+uniform float uRimStrength;
+uniform vec2 uRimBand;
+uniform float uRimFill;
+`;
+
+function installRim(mat: THREE.MeshToonMaterial, rim: TitanModel['rim']): void {
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uRimColor = { value: rim.color };
+    sh.uniforms.uRimStrength = rim.strength;
+    sh.uniforms.uRimBand = rim.band;
+    sh.uniforms.uRimFill = rim.fill;
+    sh.fragmentShader = RIM_DECL + sh.fragmentShader.replace('#include <tonemapping_fragment>', RIM_FRAG);
+  };
+  mat.customProgramCacheKey = () => 'titanSkinRim2';
 }
 
 // ─────────────────────────────── vector helpers (build time only) ───────────────────────────────
@@ -690,6 +742,8 @@ function finalize(P: Parts, opts: BuildOpts): TitanModel {
   root.name = 'titan:' + P.id;
   const skinMat = makeToon({ vertexColors: true });
   skinMat.name = 'titanSkin:' + P.id;
+  const rim: TitanModel['rim'] = { color: new THREE.Color(1, 1, 1), strength: { value: 0 }, band: { value: new THREE.Vector2(0.58, 0.66) }, fill: { value: 0 } };
+  installRim(skinMat, rim);
   const eyeMat = new THREE.MeshBasicMaterial({ vertexColors: true });
   eyeMat.name = 'titanEyes:' + P.id;
   const glowMats = P.glow.map((_, i) => {
@@ -738,7 +792,7 @@ function finalize(P: Parts, opts: BuildOpts): TitanModel {
   const glowColors = glowMats.map(() => new THREE.Color(1, 1, 1));
   const model: TitanModel = {
     root, joints, glow: glowMats, id: P.id, rest, legs: P.legs, tail: P.tail, meshes,
-    skin: skinMat, glowColors,
+    skin: skinMat, glowColors, rim,
     size: { width: (maxX - minX) * k, length: (maxZ - minZ) * k, zMin: minZ * k, zMax: maxZ * k },
     dispose(): void {
       for (const m of meshes) m.geometry.dispose();

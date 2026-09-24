@@ -58,6 +58,8 @@ export interface BtState {
   fps: number; draws: number; tris: number; programs: number;
   /** adaptive render scale applied to the quality DPR (1 = full resolution) */
   renderScale: number;
+  /** DynRes internals: estimated display interval (ms), last live window's missed-frame %, steps taken */
+  dynres: { intervalMs: number; lastMissPct: number; down: number; up: number };
 }
 
 export interface BtPerf { fps: number; p50: number; p99: number; max: number; simMs: number; simTickMs: number; samples: number }
@@ -151,6 +153,11 @@ export function installTestSurface(app: App): BtSurface {
       fps: Math.round(fs.fps * 10) / 10,
       draws: rs.draws, tris: rs.tris, programs: rs.programs,
       renderScale: app.dynres.scale,
+      dynres: {
+        intervalMs: Math.round(app.dynres.displayInterval * 10000) / 10,
+        lastMissPct: app.dynres.lastMiss < 0 ? -1 : Math.round(app.dynres.lastMiss * 1000) / 10,
+        down: app.dynres.steps.down, up: app.dynres.steps.up,
+      },
     };
     if (!w) {
       return {

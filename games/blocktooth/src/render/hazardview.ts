@@ -575,6 +575,10 @@ interface HzRec {
   h: number;                     // bloom: titan height at spawn
   cd: number; spore: number;     // bloom: last seen data
   fireAt: number; sporeAt: number;
+  /** bloom: the last cooldown re-arm came from a REAL shot (not a no-target retry) */
+  armed: boolean;
+  /** bloom: last seen h.data.shots (−1 = the kit does not publish a shot counter) */
+  shots: number;
   seen: boolean;
   goneAt: number;
   seed: number;
@@ -584,7 +588,7 @@ function newRec(): HzRec {
   return {
     id: -1, kind: 'fire', owner: 'titan', k: 'circle', x: 0, z: 0, rot: 0, p0: 0, p1: 0, p2: 0, p3: 0,
     x0: 0, z0: 0, x1: 0, z1: 0, t: 0, life: 1, size: 1, h: 1, cd: 1, spore: 4, fireAt: -99, sporeAt: -99,
-    seen: false, goneAt: -1, seed: 0,
+    armed: false, shots: -1, seen: false, goneAt: -1, seed: 0,
   };
 }
 
@@ -641,6 +645,8 @@ export class HazardView implements ViewModule {
   private readonly pool: HzRec[] = [];
   private readonly doomed: number[] = [];
   private mounted = false;
+  /** highest projectile id already checked for bloom seeds (seed shots → petal recoil) */
+  private lastProjId = -1;
 
   // scratch
   private readonly m4 = new THREE.Matrix4();
@@ -731,6 +737,7 @@ export class HazardView implements ViewModule {
 
   mount(world: World): void {
     this.clearRecs();
+    this.lastProjId = -1;
     const hex = BIOMES[world.biomeId]?.palette?.telegraph ?? PINK_FALLBACK;
     for (const m of this.decalMats.values()) (m.uniforms.uPink.value as THREE.Color).set(hex);
     if (!this.mounted) { this.ctx.scene.add(this.root); this.mounted = true; }
@@ -790,13 +797,14 @@ export class HazardView implements ViewModule {
       let r = this.recs.get(h.id);
       if (!r) {
         r = this.pool.pop() ?? newRec();
-        r.id = h.id; r.goneAt = -1; r.fireAt = -99; r.sporeAt = -99;
+        r.id = h.id; r.goneAt = -1; r.fireAt = -99; r.sporeAt = -99; r.armed = false; r.shots = -1;
         r.seed = ((h.id * 2654435761) >>> 0) / 4294967296;
         r.cd = h.data.cd ?? 1; r.spore = h.data.spore ?? 4;
         this.recs.set(h.id, r);
       }
       this.sync(r, h, back, now);
     }
+    this.matchSeeds(w, now);
     this.doomed.length = 0;
     for (const r of this.recs.values()) {
       if (!r.seen && r.goneAt < 0) r.goneAt = now;
@@ -842,9 +850,18 @@ export class HazardView implements ViewModule {
     if (h.kind === 'bloom') {
       const hh = h.data.h;
       r.h = hh !== undefined && hh > 0 ? hh : Math.max(0.5, r.size / 0.3);
+      // Shot detection. The kit re-arms the SAME cooldown field when it finds no target (seedRetryS),
+      // so a cooldown jump is NOT a shot (that made idle pods recoil ~4x/s with no seed fired). A real
+      // shot is either a change of h.data.shots (when the kit publishes a counter) or a new 'seed'
+      // projectile leaving this pod (matchSeeds, after the sync loop).
+      const shots = h.data.shots;
+      if (shots !== undefined) {
+        if (r.shots >= 0 && shots !== r.shots) { r.fireAt = now; r.armed = true; }
+        r.shots = shots;
+      }
       const cd = h.data.cd;
       if (cd !== undefined) {
-        if (cd > r.cd + 0.15) r.fireAt = now;           // cooldown re-armed → a seed just left the pod
+        if (cd > r.cd + 0.15 && now - r.fireAt > 0.05) r.armed = false;   // re-armed without a shot: retry
         r.cd = cd;
       }
       const sp = h.data.spore;
@@ -853,6 +870,36 @@ export class HazardView implements ViewModule {
         r.spore = sp;
       }
     }
+  }
+
+  /**
+   * New titan 'seed' projectiles → the pod that fired them (seeds spawn at the pod centre and fly
+   * straight: the pod lies on the seed's back-ray). Sets that pod's fireAt (petal-open + recoil).
+   */
+  private matchSeeds(w: World, now: number): void {
+    const ps = w.projectiles;
+    let maxId = this.lastProjId;
+    for (let i = 0; i < ps.length; i++) {
+      const p = ps[i];
+      if (p.id <= this.lastProjId) continue;
+      if (p.id > maxId) maxId = p.id;
+      if (!p.alive || p.owner !== 'titan' || p.kind !== 'seed') continue;
+      const sp = Math.hypot(p.vx, p.vz);
+      if (sp < 1e-4) continue;
+      const ux = p.vx / sp, uz = p.vz / sp;
+      let best: HzRec | null = null, bestD = Infinity;
+      for (const r of this.recs.values()) {
+        if (r.kind !== 'bloom' || r.goneAt >= 0 || r.shots >= 0) continue;
+        const dx = r.x - p.x, dz = r.z - p.z;
+        const along = dx * ux + dz * uz;                 // ≤ 0: the pod is behind the seed
+        const tol = Math.max(0.5, r.size);
+        if (along > tol || -along > sp * 0.3 + tol) continue;
+        const perp = Math.abs(dx * uz - dz * ux);
+        if (perp < tol && perp < bestD) { bestD = perp; best = r; }
+      }
+      if (best) { best.fireAt = now; best.armed = true; }
+    }
+    this.lastProjId = maxId;
   }
 
   /** 0..1 visibility: grow-in, tail fade over the end of life, early-removal fade */
@@ -1021,7 +1068,8 @@ export class HazardView implements ViewModule {
     // petal state
     const sinceFire = now - r.fireAt;
     let open = sinceFire >= 0 && sinceFire < 0.55 ? (sinceFire < 0.07 ? sinceFire / 0.07 : 1 - (sinceFire - 0.07) / 0.48) : 0;
-    if (r.cd >= 0 && r.cd < 0.3) open = Math.max(open, ((0.3 - r.cd) / 0.3) * 0.3);
+    // anticipation only for a pod that is actually shooting (a no-target retry cycles cd every 0.25 s)
+    if (r.armed && r.cd >= 0 && r.cd < 0.3) open = Math.max(open, ((0.3 - r.cd) / 0.3) * 0.3);
     open = Math.max(open, 0.08 + 0.05 * Math.sin(now * 1.3 + phase));
     open *= 1 - wither * 0.7;
     const sinceSpore = now - r.sporeAt;

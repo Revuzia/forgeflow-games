@@ -11,7 +11,7 @@
 import * as THREE from 'three';
 import type { TitanId } from '../core/types.ts';
 import { TITAN_IDS } from '../core/types.ts';
-import { applyGlow, buildTitanModel } from './models.ts';
+import { applyGlow, buildTitanModel, setTitanRim } from './models.ts';
 import type { TitanModel } from './models.ts';
 import { TitanAnimator } from './anim.ts';
 import type { AnimState } from './anim.ts';
@@ -112,24 +112,9 @@ const toSrgb = (c: number) => {
   return v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
 };
 
-/** portrait-only stepped fresnel rim on the (per-model) body material */
+/** portrait hero rim: the model's own stepped fresnel rim (models.ts setTitanRim), full band */
 function addRim(model: TitanModel, rim: string): void {
-  const mat = model.skin;
-  const col = new THREE.Color(rim);
-  mat.onBeforeCompile = (sh) => {
-    sh.uniforms.uRimColor = { value: col };
-    sh.fragmentShader = 'uniform vec3 uRimColor;\n' + sh.fragmentShader.replace(
-      '#include <tonemapping_fragment>',
-      `{
-        vec3 vdir = normalize( -vViewPosition );
-        float fr = 1.0 - clamp( abs( dot( vdir, normalize( vNormal ) ) ), 0.0, 1.0 );
-        float band = smoothstep( 0.58, 0.66, fr );
-        gl_FragColor.rgb += uRimColor * band * 0.45;
-      }
-      #include <tonemapping_fragment>`);
-  };
-  mat.customProgramCacheKey = () => 'titanPortraitRim';
-  mat.needsUpdate = true;
+  setTitanRim(model, rim, 0.45, 0.58, 0.66);
 }
 
 function heroState(): AnimState {

@@ -522,6 +522,12 @@ export class ProjectileView implements ViewModule {
   private readonly geos: THREE.BufferGeometry[] = [];
   private readonly mats: THREE.Material[] = [];
   private readonly kinds = new Map<ProjectileKind, KindMesh>();
+  /**
+   * Kinds the contract declares but no sim emitter spawns yet ('turretBolt', 'ember'): built on
+   * FIRST USE instead of at construction (two 200-cap instanced meshes + ink hulls + a warm-up
+   * compile for nothing). If an emitter is wired later they still render.
+   */
+  private readonly lazyKinds = new Map<ProjectileKind, () => KindMesh>();
   private readonly flame: KindMesh;
   private readonly cable: KindMesh;
   private readonly puffs: KindMesh;
@@ -591,13 +597,13 @@ export class ProjectileView implements ViewModule {
     this.kinds.set('rocket', mk('rocket', rocketGeo(), toon, 160, 1.8));
     this.kinds.set('shell', mk('shell', shellGeo(), toon, 160, 1.6));
     this.kinds.set('mortar', mk('mortar', mortarGeo(), toon, 160, 1.8));
-    this.kinds.set('turretBolt', mk('turretBolt', boltGeo(), basic, 200, 1.4));
+    this.lazyKinds.set('turretBolt', () => mk('turretBolt', boltGeo(), basic, 64, 1.4));
     this.kinds.set('plate', mk('plate', plateGeo(), toon, 64, 2.0));
     this.kinds.set('hookDrop', mk('hookDrop', hookGeo(), toon, 16, 2.2));
     this.kinds.set('seed', mk('seed', seedGeo(), toon, 200, 1.5));
     this.kinds.set('rubbleShot', mk('rubbleShot', rubbleGeo(), toon, 200, 1.6));
     this.kinds.set('spark', mk('spark', sparkGeo(), basic, 200, 0));
-    this.kinds.set('ember', mk('ember', emberGeo(), basic, 200, 1.4));
+    this.lazyKinds.set('ember', () => mk('ember', emberGeo(), basic, 64, 1.4));
     this.flame = mk('flame', flameGeo(), basic, 160, 0);
     this.cable = mk('cable', cableGeo(), toon, 16, 0);
     const pm = mk('puff', puffGeo(), puffMat, this.puffCap, 1.3);
@@ -701,7 +707,11 @@ export class ProjectileView implements ViewModule {
 
   private drawOne(p: Projectile, alpha: number, px: number, time: number): void {
     const L = LOOK[p.kind];
-    const km = this.kinds.get(p.kind);
+    let km = this.kinds.get(p.kind);
+    if (!km) {
+      const make = this.lazyKinds.get(p.kind);
+      if (make) { km = make(); this.kinds.set(p.kind, km); this.lazyKinds.delete(p.kind); }
+    }
     if (!L || !km) return;
     // interpolated position
     const x = p.px + (p.x - p.px) * alpha;

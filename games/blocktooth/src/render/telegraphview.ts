@@ -53,6 +53,12 @@ const FLASH_S = 0.32;
 const FADE_S = 0.16;
 /** pop-in (s) */
 const POP_S = 0.14;
+/** run end: every telegraph fades out over this long (the tabloid photo is taken ~2.5 s later) */
+const END_FADE_S = 0.6;
+/** a hostile shape counts as COVERED (tooth crown + strong x-ray) below this × titan radius */
+const COVER_LO = 1.2, COVER_HI = 1.8;
+/** lanes are never drawn narrower than this many CSS px (visual pad only; the hit lane is unchanged) */
+const LANE_MIN_PX = 18;
 /** decal plane height (m); depth ordering against curbs / sidewalks / flood water comes from the
  *  view-ray pull below, so the plane itself stays near the ground (no parallax at Size I) */
 const DECAL_Y0 = 0.03;
@@ -110,6 +116,7 @@ uniform float uFlashMax;
 uniform vec3 uHBase; uniform vec3 uHFill; uniform vec3 uHRim; uniform vec3 uHFront;
 uniform vec3 uWBase; uniform vec3 uWFill; uniform vec3 uWRim; uniform vec3 uWFront;
 uniform vec3 uInk;
+uniform float uHatchInk;   // 0 dark ground (light hatch lines) .. 1 bright ground (ink hatch lines)
 varying vec2 vL;
 varying vec4 vB;
 varying vec4 vD;
@@ -185,7 +192,8 @@ float pattern(vec2 L, float q, float sp, float t) {
   lane: /* glsl */ `
 float pattern(vec2 L, float q, float sp, float t) {
   float w = max(vB.y, 1e-3);
-  float s = max(sp * 1.6, w * 0.22);
+  // chevron period: never under ~24 CSS px, or the pattern mushes into the rim at Size IV-V
+  float s = max(max(sp * 1.6, w * 0.22), uPx * 24.0);
   return stripe((L.y + abs(L.x) * 0.95) / s - t * 1.3, 0.2);
 }`,
   ring: /* glsl */ `
@@ -239,10 +247,24 @@ void main() {
   shapeEval(L, sd, q, per);
   float aa = max(fwidth(sd), 1e-4);
   float rimW = min(max(3.2 * aa, uPx * 3.0), sizeRef * 0.3);
-  float inkW = max(2.2 * aa, uPx * 2.1);
+  // hostile shapes carry a heavier (~3 px) ink band: the edge must survive greyscale on bright snow
+  float inkW = max(2.2 * aa, uPx * mix(3.0, 2.1, warm));
   float inside = 1.0 - smoothstep(-aa, aa, sd);
   float rimM = inside * smoothstep(-rimW - aa, -rimW + aa, sd);
   float inkM = (1.0 - inside) * (1.0 - smoothstep(inkW - aa, inkW + aa, sd));
+  // COVERED hostile shapes (smaller than ~1.5x the titan that stands in them): a crown of
+  // outward-pointing teeth just outside the ink band — "this edge, get past it", not a reticle
+  float cover = (vShape < 4.5 && vF.w > 0.0 && vF.w < 1.5) ? vF.w * (1.0 - warm) : 0.0;
+  float toothM = 0.0;
+  if (cover > 0.0) {
+    float bw = uPx * 9.0;
+    float u = (sd - inkW) / bw;                       // 0 at the ink band → 1 at the tooth tips
+    float tw = 0.36 * (1.0 - clamp(u, 0.0, 1.0));     // tapering half-width → triangles
+    float per2 = per / max(sp * 2.2, uPx * 26.0) - t * 0.25;
+    float dper = abs(fract(per2 + 0.5) - 0.5);
+    float fwp = max(fwidth(per2), 1e-4);
+    toothM = cover * step(0.0, u) * step(u, 1.0) * (1.0 - smoothstep(tw - fwp, tw + fwp, dper));
+  }
   // chain joints: interior link caps carry no rim/ink and half weight (the neighbour segment overlaps)
   float joint = 0.0;
   if (vShape > 4.5 && vF.w > 3.5) {
@@ -253,7 +275,7 @@ void main() {
     rimM *= 1.0 - joint;
     inkM *= 1.0 - joint;
   }
-  if (inside + inkM < 0.003) discard;
+  if (inside + inkM + toothM < 0.003) discard;
 
   vec3 cBase = mix(uHBase, uWBase, warm);
   vec3 cFill = mix(uHFill, uWFill, warm);
@@ -267,8 +289,14 @@ void main() {
   float frontM = (act > 0.5 || prog > 0.998) ? 0.0 : (1.0 - smoothstep(fq * 1.3, fq * 2.8, abs(q - prog))) * started;
 
   // interior: tint + hatch (unfilled) / solid fill with darker hatch (filled)
-  vec3 colU = mix(cBase, mix(cBase, cRim, 0.35), pat);
-  float aU = mix(0.13, 0.55, pat);
+  // hatch LINES: lighter pink on dark ground; on bright ground (snow, day plazas) they lean to ink,
+  // so the pattern keeps its luminance contrast in greyscale (a light-pink line on snow vanishes)
+  float hInk = uHatchInk * (1.0 - warm);
+  vec3 hatchCol = mix(mix(cBase, cRim, 0.35), uInk, 0.55 * hInk);
+  vec3 colU = mix(cBase, hatchCol, pat);
+  // unfilled tint: stronger once the camera is far out (Size IV-V), or the zone reads as an outline only
+  float far = smoothstep(0.07, 0.2, uPx) * (1.0 - warm);
+  float aU = mix(mix(0.13, 0.28, far), mix(0.55, 0.62, hInk), pat);
   vec3 colF = mix(cFill, cFill * 0.52, pat);
   float aF = mix(0.46, 0.7, pat);
   if (act > 0.5) {
@@ -297,13 +325,28 @@ void main() {
   inkM *= dashes;
   col = mix(col, uInk, inkM);
   a = mix(a, 0.85, inkM);
+  vec3 toothCol = mix(cRim, vec3(1.0), 0.25);
+  col = mix(col, toothCol, toothM);
+  a = mix(a, 0.92, toothM);
   a *= 1.0 - 0.5 * joint;
 
 #ifdef XRAY
-  // drawn only where something stands between the camera and the decal: rim + front line + a whisper of fill
-  // friendly (titan-owned) telegraphs skip the x-ray: the hero is not striped by its own stomps
-  float xr = max(max(rimM * dashes, frontM), flash * inside) * 0.6 + inside * (0.05 + 0.07 * fillM);
-  a = xr * (1.0 - warm);
+  // drawn only where something stands between the camera and the decal (a tower, the titan's own body).
+  // Hostile paint must stay a ZONE there, not a hairline: hatch at >= 0.35, the rim, a solid ink band
+  // and (covered shapes) the tooth crown. Hatch lines are lightened pink here (they sit on bodies and
+  // walls, not on the ground). Friendly (titan-owned) telegraphs skip the x-ray: the hero is not
+  // striped by its own stomps.
+  float hatchX = 0.35 + 0.1 * cover;
+  vec3 xc = mix(cBase, mix(cBase, cRim, 0.55), pat);
+  float xa = inside * (0.08 + 0.1 * fillM + pat * hatchX);
+  xc = mix(xc, cFill, fillM * (1.0 - pat) * 0.5);
+  xc = mix(xc, cFront, frontM); xa = max(xa, frontM * 0.85);
+  xc = mix(xc, rimCol, rimM * dashes); xa = max(xa, rimM * dashes * 0.85);
+  xc = mix(xc, vec3(1.0), flash); xa = max(xa, flash * inside * 0.6);
+  xc = mix(xc, uInk, inkM); xa = max(xa, inkM * 0.85);
+  xc = mix(xc, toothCol, toothM); xa = max(xa, toothM * 0.9);
+  col = xc;
+  a = xa * (1.0 - warm) * (1.0 - 0.5 * joint);
 #endif
   gl_FragColor = vec4(col, a * fade);
   #include <tonemapping_fragment>
@@ -471,6 +514,10 @@ export class TelegraphView implements ViewModule {
   private readonly pool: TgRec[] = [];
   private readonly doomed: number[] = [];
   private mounted = false;
+  /** real time of the runEnd event (−1 = run live) */
+  private endAt = -1;
+  /** titan circle this frame (cover test) */
+  private tx = 0; private tz = 0; private tr = 1;
 
   constructor(ctx: ViewCtx) {
     this.ctx = ctx;
@@ -508,6 +555,7 @@ export class TelegraphView implements ViewModule {
         uWRim: { value: new THREE.Color('#ffd166') },
         uWFront: { value: new THREE.Color('#fff3c4') },
         uInk: { value: new THREE.Color(INK) },
+        uHatchInk: { value: 0 },
       },
       vertexShader: VERT,
       fragmentShader: FRAG_COMMON + PATTERN[style] + FRAG_MAIN,
@@ -524,19 +572,30 @@ export class TelegraphView implements ViewModule {
 
   /** hostile palette from the biome's telegraph pink (fill deeper, rim bright) */
   private applyPalette(w: World): void {
-    const hex = BIOMES[w.biomeId]?.palette?.telegraph ?? PINK_FALLBACK;
+    const pal = BIOMES[w.biomeId]?.palette;
+    const hex = pal?.telegraph ?? PINK_FALLBACK;
     const base = new THREE.Color(hex);
+    // ground brightness decides the hatch-line ink (snow / day plazas → ink lines; night port → light lines)
+    const lum = (h: string | undefined) => {
+      if (!h) return 0.5;
+      const c = new THREE.Color(h);              // linear working space
+      return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+    };
+    const gl = pal ? (lum(pal.ground) + lum(pal.sidewalk)) * 0.5 : 0.5;
+    const hatchInk = Math.min(1, Math.max(0, (gl - 0.12) / 0.5));
     const fill = base.clone().lerp(new THREE.Color('#c8105a'), 0.35);
     const rim = base.clone().lerp(new THREE.Color('#ffffff'), 0.58);
     for (const m of this.allMats()) {
       (m.uniforms.uHBase.value as THREE.Color).copy(base);
       (m.uniforms.uHFill.value as THREE.Color).copy(fill);
       (m.uniforms.uHRim.value as THREE.Color).copy(rim);
+      m.uniforms.uHatchInk.value = hatchInk;
     }
   }
 
   mount(world: World): void {
     this.clearRecs();
+    this.endAt = -1;
     this.applyPalette(world);
     if (!this.mounted) { this.ctx.scene.add(this.root); this.mounted = true; }
     for (const b of this.batches.values()) { b.begin(); b.end(); }
@@ -588,6 +647,8 @@ export class TelegraphView implements ViewModule {
     for (const m of this.xmats.values()) this.setFrameUniforms(m, now, px, y, pull, flashMax);
 
     for (const r of this.recs.values()) r.seen = false;
+    const T = w.titan;
+    this.tx = T.x; this.tz = T.z; this.tr = Math.max(0.1, T.radius);
 
     // fire events first (a telegraph can fire and be compacted between two frames)
     const ev = f.events;
@@ -596,7 +657,7 @@ export class TelegraphView implements ViewModule {
       if (e.type === 'telegraphFire') {
         const r = this.recs.get(e.id);
         if (r && r.firedAt < 0) { r.fired = true; r.firedAt = now; r.prog = 1; }
-      }
+      } else if (e.type === 'runEnd' && this.endAt < 0) this.endAt = now;
     }
 
     // sync with the sim
@@ -642,6 +703,8 @@ export class TelegraphView implements ViewModule {
     // emit instances
     for (const b of this.batches.values()) b.begin();
     this.doomed.length = 0;
+    // run over: clear the stage for the aftermath + the tabloid freeze-frame (the subject must be findable)
+    const endK = this.endAt >= 0 ? Math.max(0, 1 - (now - this.endAt) / END_FADE_S) : 1;
     for (const r of this.recs.values()) {
       let fade = 1;
       let flash = 0;
@@ -668,6 +731,8 @@ export class TelegraphView implements ViewModule {
       const scale = (0.86 + 0.14 * easeOut(pop)) * (1 + 0.05 * flash);
       const urg = !r.fired && r.prog > 0.75 ? (r.prog - 0.75) / 0.25 : 0;
       const warm = r.owner === 'titan' ? 1 : 0;
+      fade *= endK;
+      if (fade <= 0.002) continue;
       this.emit(r, px, fade, flash, warm, active, scale, urg);
     }
     for (let i = 0; i < this.doomed.length; i++) {
@@ -690,7 +755,7 @@ export class TelegraphView implements ViewModule {
   private emit(r: TgRec, px: number, fade: number, flash: number, warm: number, active: number, scale: number, urg: number): void {
     const b = this.batches.get(r.style);
     if (!b) return;
-    const ink = px * 6 + 0.02;   // box padding: rim + ink + AA, foreshortening-safe
+    const ink = px * 14 + 0.02;  // box padding: rim + ink + tooth crown + AA, foreshortening-safe
     if (r.style === 'chain' && r.chain) {
       const pts = r.chain;
       const R = chainRadius(r);
@@ -734,9 +799,10 @@ export class TelegraphView implements ViewModule {
         break;
       }
       case 'lane': {
-        const hw = r.p1 * 0.5 * scale + pad;
-        this.write(b, r.x, r.z, r.rot, enum_SHAPE.lane, r.p0, r.p1, 0, 0, -hw, hw, -pad, r.p0 * scale + pad, r, px, fade, flash, warm, active, scale, urg,
-          Math.min(r.p0, r.p1 * 0.5));
+        const lw = Math.max(r.p1, px * LANE_MIN_PX);
+        const hw = lw * 0.5 * scale + pad;
+        this.write(b, r.x, r.z, r.rot, enum_SHAPE.lane, r.p0, lw, 0, 0, -hw, hw, -pad, r.p0 * scale + pad, r, px, fade, flash, warm, active, scale, urg,
+          Math.min(r.p0, lw * 0.5));
         break;
       }
       case 'oval': {
@@ -753,6 +819,24 @@ export class TelegraphView implements ViewModule {
     }
   }
 
+  /** 0..1: how much a hostile shape is a small zone the titan stands in (tooth crown + strong x-ray) */
+  private cover(r: TgRec, warm: number): number {
+    if (warm > 0.5 || r.style === 'chain') return 0;
+    let ext = 0, cx = r.x, cz = r.z;
+    switch (r.k) {
+      case 'circle': ext = r.p0; break;
+      case 'ring': ext = r.p1; break;
+      case 'oval': ext = Math.max(r.p0, r.p1); break;
+      case 'cone': ext = r.p0 * 0.5; cx += Math.sin(r.rot) * r.p0 * 0.5; cz += Math.cos(r.rot) * r.p0 * 0.5; break;
+      case 'lane': ext = Math.max(r.p0, r.p1) * 0.5; cx += Math.sin(r.rot) * r.p0 * 0.5; cz += Math.cos(r.rot) * r.p0 * 0.5; break;
+      default: return 0;
+    }
+    const k = ext / this.tr;
+    if (k >= COVER_HI) return 0;
+    if (Math.hypot(cx - this.tx, cz - this.tz) > ext + this.tr) return 0;   // not under the titan
+    return k <= COVER_LO ? 1 : 1 - (k - COVER_LO) / (COVER_HI - COVER_LO);
+  }
+
   private write(b: DecalBatch, x: number, z: number, rot: number, mode: number,
     p0: number, p1: number, p2: number, p3: number,
     umin: number, umax: number, vmin: number, vmax: number,
@@ -766,7 +850,8 @@ export class TelegraphView implements ViewModule {
     d[o + 8] = umin; d[o + 9] = umax; d[o + 10] = vmin; d[o + 11] = vmax;
     d[o + 12] = r.prog; d[o + 13] = flash; d[o + 14] = warm; d[o + 15] = fade;
     d[o + 16] = r.seed; d[o + 17] = active; d[o + 18] = scale; d[o + 19] = sp;
-    d[o + 20] = sizeRef; d[o + 21] = urg; d[o + 22] = r.style === 'chain' ? chainRadius(r) : 0; d[o + 23] = 0;
+    d[o + 20] = sizeRef; d[o + 21] = urg; d[o + 22] = r.style === 'chain' ? chainRadius(r) : 0;
+    d[o + 23] = mode === enum_SHAPE.capsule ? 0 : this.cover(r, warm);   // chain links overwrite this with their flags
   }
 
   /** number of telegraph decals drawn last frame (debug / tests) */

@@ -6,7 +6,9 @@
 //     two-bone stilt legs with foot pads (IK keeps planted pads on the ground while the body
 //     bobs, rises for LEG STOMP, sags in a stagger), a hook on a cable that visibly drops for
 //     HOOK DROP (following the sim's hookDrop lobs), is flung down the HOOK LANE, lassos during
-//     the WINCH windup and runs a taut cable to the titan while the leash holds.
+//     the WINCH windup and runs a taut cable to the titan while the leash holds (plus an x-ray
+//     hazard-banded line, always visible, whose bands march toward the boom — WINCH LEASH reads
+//     even when the titan's body hides the real cable).
 //   * IRON GULLY — pale ridge-backed quadruped (~70 m): heavy barrel torso with a frost-caked
 //     hide, beaked head with a hinged lower beak and icy eyes, a tall SAIL of riveted scrap
 //     plates on bony spines along the spine, a thick two-part tail, four IK legs with clawed paws.
@@ -21,7 +23,7 @@ import { SIM_DT } from '../core/config.ts';
 import { clamp, easeInCubic, easeOutCubic, lerp, smoothstep, wrapAngle } from '../core/math.ts';
 import { BIOMES } from '../data/biomes.ts';
 import type { FrameInfo, ViewCtx, ViewModule } from '../render/viewtypes.ts';
-import { addOutline } from '../render/materials.ts';
+import { addOutline, INK } from '../render/materials.ts';
 import { FOE_PAL, Facet, M, makeFoeMaterial, ngon, rect } from './foemodels.ts';
 import type { FoeMaterial } from './foemodels.ts';
 
@@ -799,6 +801,50 @@ const C4_PLAIN = ['body', 'boom', 'legFL', 'legFR', 'legBL', 'legBR'] as const;
 const GU_PLAIN = ['body', 'sail', 'legFL', 'legFR', 'legBL', 'legBR'] as const;
 const HOOK_HANG = 20;           // m of cable under the boom tip at rest
 const CABLE_T = 1.1;            // cable thickness (m) — the 3 px hull carries it at Size V zoom
+/** WINCH LEASH x-ray cable: constant on-screen width (px) of the hazard core and of its ink rim. */
+const LEASH_CORE_PX = 5, LEASH_INK_PX = 3;
+/** hazard band length (m) along the leash and its march speed toward the boom (m/s) — the reel direction */
+const LEASH_BAND_M = 7, LEASH_FLOW = 16;
+
+/**
+ * The WINCH LEASH cable drawn as an always-visible x-ray line (depthTest off, drawn last): a taut
+ * amber/ink hazard-banded core whose bands march toward the boom (the pull direction) inside an
+ * ink sleeve — so the cable reads even where the titan's body or the rig hides the real cable.
+ * Shape + motion coded (banded moving line), not colour-only.
+ */
+function makeLeashXray(): { ink: THREE.Mesh; core: THREE.Mesh; u: { uLen: { value: number }; uTime: { value: number } } } {
+  const geo = new THREE.CylinderGeometry(0.5, 0.5, 1, 8, 1, true);
+  geo.translate(0, 0.5, 0);
+  const inkMat = new THREE.MeshBasicMaterial({
+    color: INK, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95, fog: false, toneMapped: false,
+  });
+  const u = { uLen: { value: 1 }, uTime: { value: 0 } };
+  const coreMat = new THREE.ShaderMaterial({
+    name: 'bossLeashXray',
+    uniforms: { uLen: u.uLen, uTime: u.uTime, uA: { value: new THREE.Color(P.amber) }, uB: { value: new THREE.Color(INK) } },
+    vertexShader: 'varying float vS;\nvoid main(){ vS = position.y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: [
+      '#include <common>',
+      'uniform float uLen; uniform float uTime; uniform vec3 uA; uniform vec3 uB; varying float vS;',
+      'void main(){',
+      `  float s = (vS * uLen - uTime * ${LEASH_FLOW.toFixed(1)}) / ${LEASH_BAND_M.toFixed(1)};`,
+      '  float f = fract(s);',
+      '  float band = smoothstep(0.62, 0.66, f) * (1.0 - smoothstep(0.96, 1.0, f));',
+      '  gl_FragColor = vec4(mix(uA, uB, band), 1.0);',
+      '  #include <colorspace_fragment>',
+      '}',
+    ].join('\n'),
+    depthTest: false, depthWrite: false, transparent: true, fog: false, toneMapped: false,
+  });
+  const ink = new THREE.Mesh(geo, inkMat);
+  const core = new THREE.Mesh(geo, coreMat);
+  for (const m of [ink, core]) {
+    m.matrixAutoUpdate = false; m.frustumCulled = false; m.castShadow = false; m.receiveShadow = false; m.visible = false;
+  }
+  ink.name = 'c4:leashXray:ink'; core.name = 'c4:leashXray';
+  ink.renderOrder = 60; core.renderOrder = 61;
+  return { ink, core, u };
+}
 
 export class BossView implements ViewModule {
   private ctx: ViewCtx;
@@ -831,10 +877,14 @@ export class BossView implements ViewModule {
   private mk = 0.5;
   private fa = 0.5;
   private fdt = 0.5;
+  private xray = makeLeashXray();
+  /** seconds since the winch caught (thickness pop on the catch) */
+  private leashT = -1;
 
   constructor(ctx: ViewCtx) {
     this.ctx = ctx;
     this.world.name = 'bosses';
+    this.world.add(this.xray.ink, this.xray.core);
   }
 
   private rig(id: BossId): BossRig {
@@ -863,6 +913,7 @@ export class BossView implements ViewModule {
         if (!on) for (const k of ['w1', 'w2', 'cable1', 'cable2', 'cable3']) x.joints[k].visible = false;
       }
     }
+    if (!r) { this.xray.ink.visible = false; this.xray.core.visible = false; this.leashT = -1; }
     this.active = r;
   }
 
@@ -897,6 +948,9 @@ export class BossView implements ViewModule {
       for (const k in r.groups) r.groups[k].mat.dispose();
       delete this.rigs[id];
     }
+    this.xray.ink.geometry.dispose();
+    (this.xray.ink.material as THREE.Material).dispose();
+    (this.xray.core.material as THREE.Material).dispose();
   }
 
   private resetRun(): void {
@@ -968,6 +1022,7 @@ export class BossView implements ViewModule {
 
     this.applyPose(r);
     if (b.id === 'caisson4') this.updateHook(w, b, r);
+    else if (this.xray.core.visible) { this.xray.ink.visible = false; this.xray.core.visible = false; this.leashT = -1; }
   }
 
   // ─────────────────────────────── windup lookup ───────────────────────────────
@@ -1306,9 +1361,9 @@ export class BossView implements ViewModule {
     const leashed = !!T.leash && (b.data.leash ?? 0) > 0 && b.alive;
     let scripted = false;
     if (leashed) {
-      // the hook is on the titan: taut cable from the boom tip to its chest
+      // the hook bites the titan's back: taut cable from the boom tip (x-ray line below)
       const tx = T.px + (T.x - T.px) * a, tz = T.pz + (T.z - T.pz) * a;
-      hp.set(tx, T.height * 0.55, tz); hv.set(0, 0, 0); scripted = true;
+      hp.set(tx, T.height * 0.6, tz); hv.set(0, 0, 0); scripted = true;
     } else if (this.drops[0]) {
       hp.copy(this.drops[0]); hv.set(0, 0, 0); scripted = true;
     } else if (b.alive && b.attack === 'hookLane') {
@@ -1372,10 +1427,34 @@ export class BossView implements ViewModule {
       J.drum.getWorldPosition(_v1);
       this.cable(lc, hp, _v1, true);
     } else lc.visible = false;
+    this.updateLeashXray(leashed, hp, tip);
+  }
+
+  /** Always-visible WINCH LEASH line from the hook on the titan's back to the boom tip. */
+  private updateLeashXray(on: boolean, A: THREE.Vector3, B: THREE.Vector3): void {
+    const X = this.xray;
+    if (!on) {
+      if (X.core.visible) { X.core.visible = false; X.ink.visible = false; }
+      this.leashT = -1;
+      return;
+    }
+    this.leashT = this.leashT < 0 ? 0 : this.leashT + this.fdt;
+    // constant pixel width: metres per CSS pixel at the cable's midpoint
+    const cam = this.ctx.camera;
+    _v2.addVectors(A, B).multiplyScalar(0.5);
+    const d = Math.max(1, _v2.distanceTo(cam.position));
+    const hPx = Math.max(200, this.ctx.renderer.domElement.clientHeight || 720);
+    const mpp = (d * 2 * Math.tan((cam.fov * PI) / 360)) / hPx;
+    const pop = 1 + 0.6 * Math.exp(-this.leashT * 7);                  // the catch snaps taut
+    const core = LEASH_CORE_PX * mpp * pop;
+    this.cable(X.core, A, B, true, core);
+    this.cable(X.ink, A, B, true, core + 2 * LEASH_INK_PX * mpp);
+    X.u.uLen.value = A.distanceTo(B);
+    X.u.uTime.value = this.time;
   }
 
   /** Stretch a unit cable between two world points. */
-  private cable(m: THREE.Mesh, A: THREE.Vector3, B: THREE.Vector3, on: boolean): void {
+  private cable(m: THREE.Mesh, A: THREE.Vector3, B: THREE.Vector3, on: boolean, thick = CABLE_T): void {
     m.visible = on;
     if (!on) return;
     _y.subVectors(B, A);
@@ -1386,7 +1465,7 @@ export class BossView implements ViewModule {
     if (zl < 1e-6) { _z.set(1 - _y.x * _y.x, -_y.x * _y.y, -_y.x * _y.z); zl = _z.x * _z.x + _z.y * _z.y + _z.z * _z.z; }
     _z.multiplyScalar(1 / Math.sqrt(zl));
     _x.crossVectors(_y, _z);
-    _x.multiplyScalar(CABLE_T); _z.multiplyScalar(CABLE_T); _y.multiplyScalar(L);
+    _x.multiplyScalar(thick); _z.multiplyScalar(thick); _y.multiplyScalar(L);
     m.matrix.makeBasis(_x, _y, _z).setPosition(A);
     m.matrixWorldNeedsUpdate = true;
   }

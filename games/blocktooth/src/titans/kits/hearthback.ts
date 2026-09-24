@@ -41,7 +41,18 @@ export const HEARTH = {
   ventPerStored: 2.5,      // per stored point (rank-normalized: stored ÷ RANKS[rank].hpMul, then × titanDamage)
   ventHealFrac: 0.15,
   ventKnock: 2.0,
+  // Size I only (PC-07): CROSSING WARDENs hold ~9 m (7.5 H) off the titan's surface, so a 2.5 H
+  // stomp at a 1.2 m titan almost never reached a foe (1 kill in the first 58 s, a 50 s level gap).
+  // The hatchling's stomp reaches further, splashes wider and comes round faster.
+  size1RangeMul: 2.2,
+  size1RMul: 1.15,
+  size1EveryMul: 0.85,
 };
+
+/** Size-I multiplier for a HEARTH knob (1 from Size II on). */
+function s1(w: World, mul: number): number {
+  return w.titan.rank === 0 ? mul : 1;
+}
 
 const enemyBuf: Enemy[] = [];
 const aim = { x: 0, z: 0 };
@@ -64,6 +75,11 @@ export function onHurt(w: World, dmg: number): number {
   return dmg;
 }
 
+/** Auto-attack reach (m) right now — pickups.ts latches drops inside ~1.2 × this (kits/index kitReach). */
+export function reach(w: World): number {
+  return HEARTH.stompRangeH * s1(w, HEARTH.size1RangeMul) * w.titan.height * Math.max(0.1, S(w, 'attackRange'));
+}
+
 export function step(w: World): void {
   const T = w.titan, K = T.kit;
   const cap = shellCap(w);
@@ -81,7 +97,7 @@ export function step(w: World): void {
   // ── auto: MAGMA STOMP ──
   if (T.autoCd > 0) return;
   const H = T.height;
-  const range = HEARTH.stompRangeH * H * Math.max(0.1, S(w, 'attackRange'));
+  const range = reach(w);
   const t = findTarget(w, T.x, T.z, range, true);
   let x: number, z: number;
   if (t) {
@@ -92,7 +108,7 @@ export function step(w: World): void {
     z = T.z + Math.cos(T.heading) * HEARTH.stompAheadH * H;
   } else { idleAuto(w); return; }
 
-  const r = HEARTH.stompRH * H * Math.max(0.1, S(w, 'area'));
+  const r = HEARTH.stompRH * s1(w, HEARTH.size1RMul) * H * Math.max(0.1, S(w, 'area'));
   const windup = Math.max(HEARTH.stompMinWindupS, S(w, 'stompDelay'));
   spawnTelegraph(w, {
     owner: 'titan', style: 'circle',
@@ -107,7 +123,7 @@ export function step(w: World): void {
   const dir = headingOf(x - T.x, z - T.z);
   emitAttack(w, 'magmaStomp', x, z, dir, r, 0);
   faceToward(w, dir);
-  rearmAuto(w, autoInterval(w, HEARTH.stompEveryS));
+  rearmAuto(w, autoInterval(w, HEARTH.stompEveryS * s1(w, HEARTH.size1EveryMul)));
 }
 
 /** Telegraph onFire (damage already applied by the telegraph system): knockback, eruption fx, magma pool. */

@@ -14,8 +14,8 @@ export const BOSSES: Record<BossId, BossDef> = {
     height: 75,
     attacks: [
       { id: 'hookLane', name: 'HOOK LANE', subtitle: 'HOOK LANE — STEP OUT OF THE PAINT', phase: 1 },
-      { id: 'hookDrop', name: 'HOOK DROP', subtitle: 'HOOK DROP — MIND THE SHADOW', phase: 1 },
-      { id: 'winchLeash', name: 'WINCH LEASH', subtitle: 'WINCH LEASH — LEAVE THE OVAL', phase: 2 },
+      { id: 'hookDrop', name: 'HOOK DROP', subtitle: 'HOOK DROP — STEP OFF THE SHADOW LINE', phase: 1 },
+      { id: 'winchLeash', name: 'WINCH LEASH', subtitle: 'WINCH LEASH — DASH OUT WHEN IT LOCKS', phase: 2 },
       { id: 'boomSweep', name: 'BOOM SWEEP', subtitle: 'BOOM SWEEP — GET BEHIND THE CRANE', phase: 2 },
       { id: 'legStomp', name: 'LEG STOMP', subtitle: 'LEG STOMP — CLEAR THE RING', phase: 3 },
     ],

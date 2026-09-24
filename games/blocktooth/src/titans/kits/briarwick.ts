@@ -69,6 +69,11 @@ export function init(): Record<string, number> {
   return { turrets: 0, sowT: 0 };
 }
 
+/** Auto-attack reach (m) right now — pickups.ts latches drops inside ~1.2 × this (kits/index kitReach). */
+export function reach(w: World): number {
+  return BRIAR.vineLenH * w.titan.height * Math.max(0.1, S(w, 'vineLength')) * Math.max(0.1, S(w, 'attackRange'));
+}
+
 export function step(w: World): void {
   const T = w.titan, K = T.kit;
   K.sowT = Math.max(0, kv(w, 'sowT') - w.dt);
@@ -109,7 +114,7 @@ function spawnTurret(w: World, x: number, z: number): void {
     shape: { k: 'circle', x, z, r: BRIAR.bloomRH * T.height },
     life: BRIAR.bloomLifeS,
     dps: 0,
-    data: { cd: BRIAR.bloomFirstShotS, spore: BRIAR.sporeEveryS, h: T.height },
+    data: { cd: BRIAR.bloomFirstShotS, spore: BRIAR.sporeEveryS, h: T.height, shots: 0 },
   });
   w.events.push({ type: 'bloomSpawn', id: h.id, x, z });
 }
@@ -165,7 +170,9 @@ function stepTurrets(w: World): void {
     d.cd = (d.cd ?? 0) - dt;
     if (d.cd <= 0) {
       const e = nearestEnemy(w, hx, hz, range);
-      if (e) { fireSeed(w, hx, hz, e, range); d.cd = BRIAR.seedEveryS / rate; }
+      // d.shots counts seeds actually fired: the view keys the pod's petal-open/recoil off it (A1) —
+      // a no-target retry re-arms d.cd too, so a cooldown jump alone is not a shot
+      if (e) { fireSeed(w, hx, hz, e, range); d.cd = BRIAR.seedEveryS / rate; d.shots = (d.shots ?? 0) + 1; }
       else d.cd = BRIAR.seedRetryS;
     }
     d.spore = (d.spore ?? BRIAR.sporeEveryS) - dt;

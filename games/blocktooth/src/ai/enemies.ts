@@ -5,7 +5,7 @@
 // Every kind has a distinct, readable behaviour (state names are what the foes-view animates):
 //   android  enter → advance → hold (strafe at range) → aim → (pellet) → hold
 //   squad    enter → advance (leader) / form (followers in a wedge) → hold → aim → volley ×3 → …
-//   drone    enter → orbit (altitude 4 m → 0.8 H) → lock → dive (0.6 s circle tell) → climb → orbit
+//   drone    enter → orbit (altitude 4 m → 0.8 H) → lock → dive (0.85 s circle tell) → climb → orbit
 //   buggy    enter → drive (road grid) → strafe (circles via streets, rockets = 1.1 s circle tell)
 //   apc      enter → drive → hold (pellet turret) → deploy (PICKET SQUAD, max 2) → hold | evade
 //   tank     enter → crawl → hold → aim → tell (1.4 s lane) → reload → hold
@@ -32,7 +32,10 @@ import { damageTitanArea } from '../combat/damage.ts';
 const REACT_MIN = 0.3, REACT_SPAN = 0.5;          // 300–800 ms reaction (§9)
 const PELLET_SPEED: Record<string, number> = { android: 10, squad: 12, apc: 13 };
 const VOLLEY_ROUNDS = 3, VOLLEY_GAP_S = 0.18;
-const DRONE_TELL_S = 0.6;
+/** GNAT dive tell (s). Was 0.6 s: a 0.25 s-reaction player on a slow titan could not step out of
+ *  a lead-aimed circle in the 0.35 s left, so 51 % of dives landed on HEARTHBACK — paint noise, not
+ *  a readable threat (PC-06). 0.85 s leaves ~0.6 s to walk the ~0.6 H it takes to clear. */
+const DRONE_TELL_S = 0.85;
 const ROCKET_TELL_S = 1.1, ROCKET_R = 3;
 const TANK_TELL_S = 1.4, TANK_LANE_W = 2.5, TANK_RELOAD_S = 0.8;
 const MORTAR_TELL_S = 1.8, MORTAR_R = 6, MORTAR_SHOTS = 3, MORTAR_GAP_S = 0.35;

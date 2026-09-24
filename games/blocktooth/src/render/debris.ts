@@ -161,6 +161,13 @@ export class DebrisView implements ViewModule {
   private readonly zeroM = new THREE.Matrix4().makeScale(0, 0, 0);
   private readonly eul = new THREE.Euler();
   private readonly grav = { x: 0, y: -9.81, z: 0 };
+  // Rapier pose read-back targets: rapier 0.20's translation/rotation/linvel(target) fill these in
+  // place (the no-argument getters allocate a fresh Vector/Quaternion per call — ~45 KB/frame with
+  // a busy debris field; CONTRACT §0.7: no per-frame allocation in hot loops)
+  private readonly rT = { x: 0, y: 0, z: 0 };
+  private readonly rQ = { x: 0, y: 0, z: 0, w: 1 };
+  private readonly rV = { x: 0, y: 0, z: 0 };
+  private frameNo = 0;
   private readonly colDirty = [false, false];
 
   constructor(ctx: ViewCtx) { this.ctx = ctx; }
@@ -247,6 +254,7 @@ export class DebrisView implements ViewModule {
       this.reqPool.push(r);
     }
     // 3) physics (paused while frozen)
+    let stepped = 0;
     if (!f.frozen && (this.awake > 0 || n > 0)) {
       // bigger titans = bigger, heavier-looking world: a touch more gravity so chunks don't float
       const gMul = Math.min(2.2, Math.max(1, 1 + (H - 1.2) * 0.03));
@@ -255,7 +263,7 @@ export class DebrisView implements ViewModule {
       const lu = Math.min(5, Math.max(1, H * 0.08));
       if (Math.abs(this.world.lengthUnit - lu) > 0.05) this.world.lengthUnit = lu;
       this.acc = Math.min(this.acc + f.dt, PHYS_DT * MAX_SUBSTEPS);
-      while (this.acc >= PHYS_DT) { this.world.step(); this.acc -= PHYS_DT; }
+      while (this.acc >= PHYS_DT) { this.world.step(); this.acc -= PHYS_DT; stepped++; }
     } else if (f.frozen) {
       this.acc = 0;
     }
@@ -264,21 +272,24 @@ export class DebrisView implements ViewModule {
     const settleV2 = SETTLE_V * SETTLE_V * Math.max(1, H * 0.8);
     let dirty0 = false, dirty1 = false;
     let live = 0, awake = 0;
+    this.frameNo++;
     for (let i = 0; i < this.slots.length; i++) {
       const s = this.slots[i];
       if (!s.active) continue;
       s.age += dt;
       const b = s.body;
-      if (!s.settled) {
+      // poses only change when the world stepped this frame (a 120/144 Hz display skips steps)
+      if (!s.settled && stepped > 0) {
         if (b.isSleeping()) { s.settled = true; b.setEnabled(false); }
         else {
-          const t = b.translation(); const r = b.rotation();
+          const t = b.translation(this.rT as RAPIER.Vector); const r = b.rotation(this.rQ as RAPIER.Rotation);
           s.px = t.x; s.py = t.y; s.pz = t.z; s.qx = r.x; s.qy = r.y; s.qz = r.z; s.qw = r.w;
           if (s.py < -20) s.fade = FADE_S;         // fell out of the world (should not happen)
-          // landed + slow for a moment → freeze it in place (no more solver cost)
-          if (s.py < Math.max(s.sx, s.sy, s.sz) * 0.9 && s.age > 0.3) {
-            const v = b.linvel();
-            if (v.x * v.x + v.y * v.y + v.z * v.z < settleV2) { s.slow += dt; if (s.slow > SETTLE_S) { s.settled = true; b.setEnabled(false); } }
+          // landed + slow for a moment → freeze it in place (no more solver cost). The settle test
+          // samples every other frame per slot (staggered): SETTLE_S is 0.25 s, so this is plenty
+          if (s.py < Math.max(s.sx, s.sy, s.sz) * 0.9 && s.age > 0.3 && ((this.frameNo + i) & 1) === 0) {
+            const v = b.linvel(this.rV as RAPIER.Vector);
+            if (v.x * v.x + v.y * v.y + v.z * v.z < settleV2) { s.slow += dt * 2; if (s.slow > SETTLE_S) { s.settled = true; b.setEnabled(false); } }
             else s.slow = 0;
           }
         }

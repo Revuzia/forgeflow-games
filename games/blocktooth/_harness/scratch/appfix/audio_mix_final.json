@@ -1,0 +1,19 @@
+{
+ "tag": "final",
+ "n": 267,
+ "idle_music_mean": 0.0235,
+ "idle_sfx_mean": 0.0108,
+ "busy_music_mean": 0.0398,
+ "busy_sfx_mean": 0.071,
+ "busy_sfx_pre_glue_mean": 0.1176,
+ "busy_music_over_sfx_median": 0.492,
+ "busy_frac_sfx_5x_music": 0.045,
+ "busy_music_p10_p90": [
+  0.0193,
+  0.082
+ ],
+ "busy_sfx_p10_p90": [
+  0.042,
+  0.0987
+ ]
+}

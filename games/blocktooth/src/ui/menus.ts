@@ -114,7 +114,9 @@ export class TitleScreen {
     onTap(L, () => this.go());
 
     const lower = div('bt-title-lower', L);
-    div('bt-title-legal', lower, STR.title.legal);
+    // the legal line sits on its own navy strip so it never reads over the painted lane dashes
+    const legal = div('bt-title-legal', lower);
+    legal.appendChild(el('span', '', STR.title.legal));
     const tk = div('bt-ticker bt-title-ticker', lower);
     div('bt-ticker-label', tk, STR.title.standby);
     const win = div('bt-ticker-win', tk);

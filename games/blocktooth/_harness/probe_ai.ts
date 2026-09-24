@@ -240,6 +240,7 @@ function bossFight(w: World, L: RunLog): void {
     if (w.tick % 30 === 0) distLog.push(Math.hypot(b.x - w.titan.x, b.z - w.titan.z));
     check(b.x >= B.minX - 0.01 && b.x <= B.maxX + 0.01 && b.z >= B.minZ - 0.01 && b.z <= B.maxZ + 0.01, `${b.id}: out of bounds`);
   }
+  console.log(`fight loop ended at +${fmt(w.t - t0)} s · boss ${b.alive ? 'alive' : 'defeated'} (hp ${fmt(100 * b.hp / b.maxHp)} %, phase ${b.phase}) · run ${w.run.result ?? 'on'}`);
   console.log('attack histogram per phase:');
   for (const p of [1, 2, 3]) console.log(`  P${p}: ` + (Object.entries(hist[p]).map(([k, n]) => `${k} ${n}`).join(' · ') || '—'));
   console.log(`boss tell styles: ${Object.entries(styles).map(([k, n]) => `${k} ${n}`).join(' · ')} · leash on/off ${leashOn}/${leashOff} · phase events ${phaseEv.join(',')} · titanHurt ${hurt} · stacked-tell frames ${maxStack}`);

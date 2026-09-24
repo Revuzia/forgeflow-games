@@ -21,7 +21,7 @@
 
 import type { AlertKey, BiomeId, RankIndex, SimEvent, TitanId, TitanInput, World } from './core/types.ts';
 import { BIOME_IDS, TITAN_IDS } from './core/types.ts';
-import { BUDGET } from './core/config.ts';
+import { BUDGET, INPUT_BUFFER_S, SIM_DT } from './core/config.ts';
 import { createWorld, stepWorld } from './core/world.ts';
 import { GameLoop, frameStats } from './core/loop.ts';
 import { Input } from './core/input.ts';
@@ -95,13 +95,26 @@ export interface RunRequest {
 
 export type FatalHandler = (title: string, err: unknown) => void;
 
+/** the one Object3D field the photo hides/restores (no three import needed in the app) */
+type THREE_Object = { visible: boolean };
+
 // ─────────────────────────────── tuning ───────────────────────────────
 
 /** rank-up hit-stop (CONTRACT §3): sim time scale and real-time duration */
 const HITSTOP_SCALE = 0.15;
 const HITSTOP_S = 0.25;
+/** while hit-stop slows the sim, a buffered HOOK/DASH press must outlive one slowed tick (see Input.bufferS) */
+const HITSTOP_BUFFER_S = Math.max(INPUT_BUFFER_S, SIM_DT / HITSTOP_SCALE + 0.02);
+/**
+ * A level-up owed in the same moment as a rank-up waits this long (real s) so the MASS BREACH
+ * sting (broadcast SIZEUP_MS = 2.3 s: sweep in, hold, sweep out) is seen in full instead of being
+ * frozen half-drawn under the MUTATION REPORT. The sim keeps running meanwhile.
+ */
+const SIZEUP_DRAFT_HOLD_S = 2.3;
 /** real seconds between the runEnd event and the freeze-frame photo / tabloid */
 const END_DELAY_S = 2.5;
+/** scene roots hidden for the tabloid photo (live hostile warnings would bury the subject) */
+const PHOTO_HIDDEN_ROOTS = ['view:telegraphs', 'view:hazards'] as const;
 /** sim-event ring for __BT__.events(n) */
 export const EVENT_RING = 400;
 /** low-HP broadcast alert: fire below, re-arm above (fractions of max HP) */
@@ -181,7 +194,7 @@ export function parseParams(search: string): AppParams {
  * halves (measured on the reference Intel UHD: Size V + 250 foes ≈ 22–28 ms of GPU per frame at
  * 1280×720 → a 25 Hz cadence on a 50 Hz panel). Every second of live play the controller counts
  * frames slower than 1.5× the display interval (the interval = the fastest 1-s p10 seen this session,
- * i.e. measured on cheap menu frames). ≥ 20 % misses → scale −0.1 (floor 0.7); 6 s clean
+ * i.e. measured on cheap menu frames). ≥ 10 % misses → scale −0.1 (floor 0.6); 6 s clean
  * (< 3 % misses) → +0.1 back toward 1. A level that fails within 4 s of a step up is locked out for
  * 20 s so the scale never oscillates. The scale multiplies the quality DPR (drawing buffer only; the
  * CSS size and every layout stay unchanged).
@@ -192,11 +205,23 @@ export class DynRes {
   private n = 0;
   private acc = 0;
   private interval = 0;          // estimated display interval (s); 0 = unknown
+  /** last decision window's missed-frame fraction (−1 = no live window yet) — test surface */
+  lastMiss = -1;
+  /** decisions taken (down / up steps) — test surface */
+  steps = { down: 0, up: 0 };
+  get displayInterval(): number { return this.interval; }
   private clean = 0;
   private t = 0;
   private lastUpT = -1e9;
   private lockUntil = 0;
-  static readonly MIN = 0.7;
+  /** floor: 0.6 × the quality DPR (1280×720 → 768×432 drawing buffer on the reference Intel UHD) */
+  static readonly MIN = 0.6;
+  /** step down when at least this fraction of a live 1-s window missed vsync. 0.2 was too lax for the
+   *  p99 gate: windows sat at 10–19 % misses (p99 = 2 intervals = 40 ms at 50 Hz) and never stepped. */
+  static readonly DOWN_MISS = 0.1;
+  /** step up only after UP_CLEAN_S of windows with fewer misses than this */
+  static readonly CLEAN_MISS = 0.03;
+  static readonly UP_CLEAN_S = 6;
 
   /** Feed every rendered frame's dt (s). `live` = the sim is running (only live play adapts).
    *  Returns true when `scale` changed. */
@@ -218,17 +243,20 @@ export class DynRes {
       let miss = 0;
       for (let i = 0; i < n; i++) if (this.win[i] > lim) miss++;
       const frac = miss / n;
-      if (frac >= 0.2) {
+      this.lastMiss = frac;
+      if (frac >= DynRes.DOWN_MISS) {
         this.clean = 0;
         if (this.scale > DynRes.MIN + 1e-3) {
           if (this.t - this.lastUpT < 4) this.lockUntil = this.t + 20;
           this.scale = Math.max(DynRes.MIN, Math.round((this.scale - 0.1) * 10) / 10);
+          this.steps.down++;
           changed = true;
         }
-      } else if (frac < 0.03) {
+      } else if (frac < DynRes.CLEAN_MISS) {
         this.clean += this.acc;
-        if (this.clean >= 6 && this.scale < 1 - 1e-3 && this.t >= this.lockUntil) {
+        if (this.clean >= DynRes.UP_CLEAN_S && this.scale < 1 - 1e-3 && this.t >= this.lockUntil) {
           this.scale = Math.min(1, Math.round((this.scale + 0.1) * 10) / 10);
+          this.steps.up++;
           this.lastUpT = this.t;
           this.clean = 0;
           changed = true;
@@ -364,6 +392,8 @@ export class App {
 
   // run-scoped app state
   private hitStopT = 0;
+  /** real seconds left in which a newly owed draft waits for the MASS BREACH sting (0 = none) */
+  private sizeUpHoldT = 0;
   /** adaptive render scale (see DynRes) */
   readonly dynres = new DynRes();
   private stingT = 0;
@@ -758,6 +788,8 @@ export class App {
 
   private resetRunState(): void {
     this.hitStopT = 0;
+    this.sizeUpHoldT = 0;
+    this.input.bufferS = INPUT_BUFFER_S;
     this.stingT = 0;
     this.musicAcc = 0;
     this.lowHpArmed = true;
@@ -908,6 +940,8 @@ export class App {
     this.loop.simEnabled = false;
     this.loop.timeScale = 1;
     this.hitStopT = 0;
+    this.sizeUpHoldT = 0;
+    this.input.bufferS = INPUT_BUFFER_S;
     this.input.mode = 'ui';
     this.music.setIntensity(result === 'clear' ? 1 : 0.15);
     const w = this._world;
@@ -920,11 +954,20 @@ export class App {
     if (!w) return;
     const ep = this.epoch;
     let photo = '';
+    // the front-page photo is of the SUBJECT: live hostile telegraphs (and their x-ray pass) and
+    // hazard paint are left out of it (the telegraph view has also faded them during the aftermath)
+    const hidden: THREE_Object[] = [];
+    for (const name of PHOTO_HIDDEN_ROOTS) {
+      const o = this.core.scene.getObjectByName(name) as THREE_Object | undefined;
+      if (o && o.visible) { o.visible = false; hidden.push(o); }
+    }
     try {
       this.core.render();                               // the photo is THIS render
       photo = this.core.renderer.domElement.toDataURL('image/jpeg', 0.9);
     } catch (e) {
       console.error('[blocktooth] freeze-frame photo failed', e);
+    } finally {
+      for (const o of hidden) o.visible = true;
     }
     this.setScreen('end');
     this.hud.show(false);
@@ -987,12 +1030,14 @@ export class App {
       return;
     }
     const ev = w.events;
-    for (let i = 0; i < ev.length; i++) this.pushEvent(ev[i]);
+    for (let i = 0; i < ev.length; i++) this.pushEvent(ev[i]);   // a rankUp here arms sizeUpHoldT
     if (w.run.result) {
       this.loop.simEnabled = false;                      // run over: nothing more to simulate
     } else if (w.tick > this.draftSuppressTick && hasPendingDraft(w)) {
-      this.loop.simEnabled = false;                      // freeze INSIDE the tick that granted it
       this.wantDraft = true;
+      // freeze INSIDE the tick that granted it — unless the MASS BREACH sting is on screen: then
+      // play runs on and the draft opens when the sting is over (afterFrame)
+      if (!(this.sizeUpHoldT > 0) || this._testFrozen) this.loop.simEnabled = false;
     }
   };
 
@@ -1084,6 +1129,7 @@ export class App {
     if (!this.ending && this._screen === 'play' && !this._testFrozen) {
       this.loop.timeScale = HITSTOP_SCALE;
       this.hitStopT = HITSTOP_S;
+      this.input.bufferS = HITSTOP_BUFFER_S;
     }
     this.broadcast.sizeUp(rank);
     this.stingT = Math.max(this.stingT, 4);
@@ -1094,8 +1140,9 @@ export class App {
   private afterFrame(w: World, dt: number): void {
     if (this.hitStopT > 0) {
       this.hitStopT -= dt;
-      if (this.hitStopT <= 0) { this.hitStopT = 0; this.loop.timeScale = 1; }
+      if (this.hitStopT <= 0) { this.hitStopT = 0; this.loop.timeScale = 1; this.input.bufferS = INPUT_BUFFER_S; }
     }
+    if (this.sizeUpHoldT > 0) this.sizeUpHoldT = Math.max(0, this.sizeUpHoldT - dt);
     if (this.stingT > 0) this.stingT = Math.max(0, this.stingT - dt);
 
     if (this._screen === 'play' && !this.ending) {
@@ -1114,7 +1161,7 @@ export class App {
       }
       return;
     }
-    if (this.wantDraft && this._screen === 'play' && !this._testFrozen) {
+    if (this.wantDraft && this._screen === 'play' && !this._testFrozen && !(this.sizeUpHoldT > 0)) {
       this.wantDraft = false;
       void this.runDraft();
     }
@@ -1151,6 +1198,8 @@ export class App {
   // ─────────────────────────────── events plumbing ───────────────────────────────
 
   private pushEvent(e: SimEvent): void {
+    // a rank-up (from a tick or a mutate()) holds any draft owed right now until the sting is seen
+    if (e.type === 'rankUp' && !this._testFrozen && !this.ending) this.sizeUpHoldT = SIZEUP_DRAFT_HOLD_S;
     this.evA.push(e);
     this.ring[this.ringHead] = e;
     this.ringHead = (this.ringHead + 1) % EVENT_RING;
@@ -1186,6 +1235,11 @@ export class App {
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) this.pause();
     });
+    // …and when the window loses focus (alt-tab, another monitor, the portal page around the
+    // iframe): Input already releases every held key on blur, so without this an unattended
+    // titan stood still while the sim kept running and died in ~25–45 s. pause() is a no-op
+    // outside live play (menus, drafts, the tabloid, the run-end aftermath).
+    window.addEventListener('blur', () => this.pause());
     // first user gesture unlocks audio (the engine also listens; this covers ?autostart pages)
     const unlock = () => {
       void this.audio.unlock();

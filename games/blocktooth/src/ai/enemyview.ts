@@ -15,6 +15,8 @@
 //     multiplicative with the painted vertex colours and cannot reach white on navy, so it
 //     carries the veteran gold / frost-slow tint instead);
 //   * spawn pop-in (easeOutBack on sim time since spawnT), death → hidden (fx does the puff).
+//   * distance LOD: shadows off past ENEMY_SHADOW_MAX_D, ink hulls off below INK_MIN_RATIO, and
+//     below FAR_RATIO a kind swaps to its merged, decimated far mesh (one instance per enemy).
 // Zero per-frame allocation: scratch math objects + pooled per-enemy view records.
 
 import * as THREE from 'three';
@@ -24,7 +26,7 @@ import { CITY, SIM_DT } from '../core/config.ts';
 import { BIOMES } from '../data/biomes.ts';
 import type { FrameInfo, ViewCtx, ViewModule } from '../render/viewtypes.ts';
 import { addOutline } from '../render/materials.ts';
-import { buildFoeModel, disposeFoeModel, makeFoeMaterial, PIV_STRIDE } from './foemodels.ts';
+import { buildFoeFar, buildFoeModel, disposeFoeModel, makeFoeMaterial, PIV_STRIDE } from './foemodels.ts';
 import type { FoeMaterial, FoeModel, FoePart } from './foemodels.ts';
 
 /** CONTRACT §6.1: enemies / vehicles 2.0 px ink. */
@@ -39,6 +41,16 @@ const TELEPORT_M = 25;
 const ENEMY_SHADOW_MAX_D = 240;
 /** a kind keeps its ink hull while model height / camera distance ≥ this (≈ 4 px at 720p) */
 const INK_MIN_RATIO = 0.0045;
+/**
+ * Far LOD: a kind whose on-screen height ratio (model height / camera distance) is below this
+ * (≈ 11 px at 720p) draws its merged, decimated far mesh (foemodels buildFoeFar) — one instance
+ * per enemy, root pose only — instead of its animated multi-part near model. It returns to the
+ * near model above FAR_RATIO × FAR_HYST (hysteresis: the camera spring never makes it flicker).
+ * Size IV–V: troopers, drones, buggies, APCs, tanks go far; walkers and the elite stay near.
+ */
+const FAR_RATIO = 0.0085, FAR_HYST = 1.15;
+/** far-mesh cluster grid (cells across the model's largest extent) */
+const FAR_CELLS = 14;
 
 // ─────────────────────────────── per-enemy view record (pooled) ───────────────────────────────
 interface Vis {
@@ -89,10 +101,22 @@ function markRange(attr: THREE.BufferAttribute, r: Range, count: number): void {
   if (ur.length !== 1 || ur[0] !== r) { ur.length = 0; ur.push(r); }
   attr.needsUpdate = true;
 }
+interface FarBatch {
+  mesh: THREE.InstancedMesh;
+  flash: THREE.InstancedBufferAttribute;
+  color: THREE.InstancedBufferAttribute;
+  rM: Range; rF: Range; rC: Range;
+  cap: number;
+  n: number;
+}
 interface KindBatch {
   kind: EnemyKind;
   model: FoeModel;
   parts: PartBatch[];
+  /** merged decimated far-LOD batch (one instance per enemy) */
+  far: FarBatch;
+  /** this frame draws the far batch instead of the parts */
+  useFar: boolean;
   /** scratch world matrices of the CURRENT enemy: [part][pivot] */
   pw: THREE.Matrix4[][];
   /** max enemies of this kind drawable this frame */
@@ -168,7 +192,27 @@ export class EnemyView implements ViewModule {
       for (let k = 0; k < part.count; k++) m.push(new THREE.Matrix4());
       pw.push(m);
     }
-    return { kind, model, parts, pw, capEnemies, drawn: 0 };
+    // far LOD: one merged, decimated mesh per kind; no ink hull (it only draws when a unit is a
+    // few px tall, where INK_MIN_RATIO has already dropped the hulls of every far kind)
+    const farGeo = buildFoeFar(model, FAR_CELLS);
+    const fFlash = new THREE.InstancedBufferAttribute(new Float32Array(capEnemies), 1);
+    fFlash.setUsage(THREE.DynamicDrawUsage);
+    farGeo.setAttribute('instFlash', fFlash);
+    const fMesh = new THREE.InstancedMesh(farGeo, this.mat, capEnemies);
+    fMesh.name = `foe:${kind}:far`;
+    fMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    const fColor = new THREE.InstancedBufferAttribute(new Float32Array(capEnemies * 3).fill(1), 3);
+    fColor.setUsage(THREE.DynamicDrawUsage);
+    fMesh.instanceColor = fColor;
+    fMesh.count = 0;
+    fMesh.visible = false;
+    fMesh.frustumCulled = false;
+    fMesh.matrixAutoUpdate = false;
+    fMesh.castShadow = true;
+    fMesh.receiveShadow = true;
+    this.root.add(fMesh);
+    const far: FarBatch = { mesh: fMesh, flash: fFlash, color: fColor, rM: { start: 0, count: 0 }, rF: { start: 0, count: 0 }, rC: { start: 0, count: 0 }, cap: capEnemies, n: 0 };
+    return { kind, model, parts, far, useFar: false, pw, capEnemies, drawn: 0 };
   }
 
   mount(world: World): void {
@@ -177,20 +221,30 @@ export class EnemyView implements ViewModule {
     const time = BIOMES[world.biomeId]?.time ?? 'day';
     // lamps / visors: ~3–6× the surface they sit on (glare bar), a little hotter at night
     this.mat.userData.bt.uGlowMul.value = time === 'night' ? 1.7 : time === 'overcast' ? 1.15 : 0.95;
-    for (const b of this.batchList) for (const p of b.parts) { p.mesh.count = 0; p.mesh.visible = false; }
+    for (const b of this.batchList) {
+      for (const p of b.parts) { p.mesh.count = 0; p.mesh.visible = false; }
+      b.far.mesh.count = 0; b.far.mesh.visible = false; b.useFar = false;
+    }
     this.root.updateMatrixWorld(true);
   }
 
   unmount(): void {
     if (this.mounted) { this.ctx.scene.remove(this.root); this.mounted = false; }
-    for (const b of this.batches.values()) for (const p of b.parts) { p.mesh.count = 0; p.mesh.visible = false; }
+    for (const b of this.batches.values()) {
+      for (const p of b.parts) { p.mesh.count = 0; p.mesh.visible = false; }
+      b.far.mesh.count = 0; b.far.mesh.visible = false;
+    }
     this.clearVis();
   }
 
   /** Release GPU resources (page teardown; not part of the per-run cycle). */
   dispose(): void {
     this.unmount();
-    for (const b of this.batches.values()) { for (const p of b.parts) p.mesh.dispose(); disposeFoeModel(b.model); }
+    for (const b of this.batches.values()) {
+      for (const p of b.parts) p.mesh.dispose();
+      b.far.mesh.geometry.dispose(); b.far.mesh.dispose();
+      disposeFoeModel(b.model);
+    }
     this.mat.dispose();
   }
 
@@ -225,7 +279,7 @@ export class EnemyView implements ViewModule {
     }
 
     const BL = this.batchList;
-    for (let bi = 0; bi < BL.length; bi++) { const b = BL[bi]; b.drawn = 0; for (let pi = 0; pi < b.parts.length; pi++) b.parts[pi].n = 0; }
+    for (let bi = 0; bi < BL.length; bi++) { const b = BL[bi]; b.drawn = 0; b.far.n = 0; for (let pi = 0; pi < b.parts.length; pi++) b.parts[pi].n = 0; }
 
     // Distance LOD (integration perf fix): at Size IV–V framing a trooper is a few pixels tall, yet
     // 250 of them cost ~3k triangles each × (main + ink + shadow). Past ENEMY_SHADOW_MAX_D they stop
@@ -233,9 +287,14 @@ export class EnemyView implements ViewModule {
     // INK_MIN_RATIO loses its ink hull (a 2 px hull round a 5 px unit is just a blob).
     const cd = f.camDist > 1 ? f.camDist : 1;
     const shadowOn = cd < ENEMY_SHADOW_MAX_D;
+    // A/B switch for perf attribution probes (window.__BT_FOE_NEAR__ = true forces the near models)
+    const forceNear = (globalThis as { __BT_FOE_NEAR__?: boolean }).__BT_FOE_NEAR__ === true;
     for (let bi = 0; bi < BL.length; bi++) {
       const b = BL[bi];
-      const inkOn = b.model.height / cd >= INK_MIN_RATIO;
+      const ratio = b.model.height / cd;
+      const inkOn = ratio >= INK_MIN_RATIO;
+      b.useFar = !forceNear && (b.useFar ? ratio < FAR_RATIO * FAR_HYST : ratio < FAR_RATIO);
+      if (b.far.mesh.castShadow !== shadowOn) b.far.mesh.castShadow = shadowOn;
       for (let pi = 0; pi < b.parts.length; pi++) {
         const pb = b.parts[pi];
         const cast = pb.part.shadow && shadowOn;
@@ -272,6 +331,14 @@ export class EnemyView implements ViewModule {
         markRange(p.mesh.instanceMatrix, p.rM, n * 16);
         markRange(p.flash, p.rF, n);
         markRange(p.color, p.rC, n * 3);
+      }
+      const F = b.far, fn = F.n;
+      F.mesh.count = fn;
+      F.mesh.visible = fn > 0;
+      if (fn > 0) {
+        markRange(F.mesh.instanceMatrix, F.rM, fn * 16);
+        markRange(F.flash, F.rF, fn);
+        markRange(F.color, F.rC, fn * 3);
       }
     }
 
@@ -372,6 +439,19 @@ export class EnemyView implements ViewModule {
     if (vet) { cr = 1.1; cg = 0.94; cb = 0.62; }
     if (e.slowT > 0) { cr *= 0.74; cg *= 0.9; cb *= 1.28; }
     const flash = v.flash;
+
+    if (b.useFar) {
+      // far LOD: the merged rest-pose mesh on the root pose (pop-in, veteran size, hover bank and
+      // stun wobble all live in _root); per-part animation is below a pixel at this framing
+      const F = b.far, n = F.n;
+      if (n >= F.cap) return;
+      F.mesh.setMatrixAt(n, _root);
+      F.flash.array[n] = flash;
+      const ca = F.color.array as Float32Array;
+      ca[n * 3] = cr; ca[n * 3 + 1] = cg; ca[n * 3 + 2] = cb;
+      F.n = n + 1;
+      return;
+    }
 
     // biped gait terms (shared by body + limbs of this enemy)
     const mkr = v.speed / Math.max(0.5, m.stride * 1.1);

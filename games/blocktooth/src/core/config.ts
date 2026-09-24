@@ -45,7 +45,9 @@
 //   STRAIN/FRACTURE meter fills from dealt × strainMul / (0.45 × maxHp) (bosses/index.ts) → 5 s stagger, ×2 dmg
 //   STRUCTURAL FATIGUE [BOSS_FATIGUE]: after 90 s the rig sheds 0.022 %·s⁻² × (t−90) of max HP/s (cap 1.5 %/s)
 //   hit = §10 dmg × [BOSS_DMG_MUL 2.0] × phase [BOSS_PHASE_DMG_MUL .9/1.05/1.35] × hpMul 9 →
-//     hookLane 972/1134/1458 · hookDrop 810/945/1215 · boomSweep –/1040/1337 · legStomp –/–/1701 ·
+//     CAISSON-4 (re-tuned for PC-02, capped at 55 % of the titan's max HP per hit — caisson4.ts HIT_CAP):
+//     hookLane 486/567/729 · P1 hookDrop 486 · trolley drop –/265/340 · dash-follow –/208/267 ·
+//     boomSweep –/643/826 · legStomp –/–/1021 · IRON GULLY:
 //     paw slam 972 (inner) · plate 486/567/729 · ridge charge –/1323/1701   (titan V hp: VOLT 810 · BRIAR 1080 ·
 //     MOLO 1260 (armor 10) · HEARTH 1530 (armor 20), before upgrades)
 //   cadence: attack gap CAISSON 2.6/2.0/1.9 s, IRON GULLY 2.8/2.1/2.0 s (P3 × 0.7/0.75); windups × 1/.8/.68

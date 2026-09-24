@@ -52,8 +52,11 @@
 //   from (modelMatrix · instanceMatrix) columns, so a window column is always ~3 m wide and one
 //   row is drawn per storey (derived from the unit-space y and the instance's y scale = floorH).
 //   Columns are corner-aligned per face. Per-window variation (blinds, tint, lit/unlit) hashes the
-//   instance origin + storey index. Distant windows fade to the facade's average colour (fwidth
-//   LOD) so Size-V zoom-outs never shimmer. LOCKWATER lights a subset of windows with glassLit
+//   instance origin + storey index. Distant windows fade in two steps (fwidth LOD) so Size-V
+//   zoom-outs never shimmer: first the window COLUMNS average into one band per storey (the
+//   per-floor band pattern stays until a storey is ~2 px tall, so big towers keep their floor lines),
+//   then the bands average into the flat facade colour; fully-far fragments skip the per-window
+//   detail entirely. BK_FLAT (see-through ghost twins) skips the pattern. LOCKWATER lights a subset of windows with glassLit
 //   and makes neon/sign trims emissive at 3–8× the surface luminance (glare bar; no bloom).
 //   Car paint / drum / container colours are picked per instance (gl_InstanceID for props,
 //   instance origin for containers) from biome lists — no per-instance bookkeeping in the view.
@@ -78,6 +81,9 @@ export interface PropMesh {
   material: THREE.Material;
   /** authored height of the prop (m) — top of its bounding box */
   height: number;
+  /** far LOD (vehicles only): same silhouette, paint slots, glass and lamps in ~1/7 of the
+   *  triangles — the view swaps it in at Size IV–V framing, where a car is ~10–20 px long */
+  lod?: THREE.BufferGeometry;
 }
 
 export interface CityKit {
@@ -141,9 +147,21 @@ class MB {
   private M: THREE.Matrix4 | null = null;
   private NM = new THREE.Matrix3();
 
+  /** vertex ranges [start, end) whose ink hull is suppressed (zero outlineNormal → no extrusion) */
+  private noInk: number[] = [];
+
   constructor(seed: number) { this.rnd = mulberry32(seed >>> 0); }
 
   get tris(): number { return this.P.length / 9; }
+
+  /** Primitives emitted inside `fn` get NO ink hull (thin detail whose 1.6 px outline would turn it
+   *  into a black scribble at distance — e.g. rubble rebar). */
+  inkless(fn: () => void): void {
+    const v0 = this.P.length / 3;
+    fn();
+    const v1 = this.P.length / 3;
+    if (v1 > v0) this.noInk.push(v0, v1);
+  }
 
   plain(): void { this.fac = [0, 0, 1, 2]; }
   kind(code: number, axis = 2, centre = 0, width = 1): void { this.fac = [code, centre, width, axis]; }
@@ -381,10 +399,21 @@ class MB {
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.C, 3));
     g.setAttribute('aFac', new THREE.Float32BufferAttribute(this.F, 4));
     bakeOutlineNormals(g);
+    if (this.noInk.length) { g.userData.noInk = this.noInk.slice(); zeroInk(g); }
     g.computeBoundingBox();
     g.computeBoundingSphere();
     return g;
   }
+}
+
+/** Zero the outlineNormal of the geometry's `userData.noInk` vertex ranges (the outline shader skips
+ *  extrusion for a zero normal, so those faces draw no ink). Re-apply after every re-bake. */
+function zeroInk(g: THREE.BufferGeometry): void {
+  const r = g.userData.noInk as number[] | undefined;
+  const on = g.getAttribute('outlineNormal') as THREE.BufferAttribute | undefined;
+  if (!r || !on) return;
+  for (let k = 0; k + 1 < r.length; k += 2) for (let i = r[k]; i < r[k + 1] && i < on.count; i++) on.setXYZ(i, 0, 0, 0);
+  on.needsUpdate = true;
 }
 
 function cross(a: V3, b: V3): V3 { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
@@ -521,6 +550,7 @@ vec3 bkGlassC( float h, float vv, float xx ) {
 
 const FAC_FRAG_MAIN = /* glsl */ `
 	vec3 bkEmit = vec3( 0.0 );
+	#ifndef BK_FLAT
 	{
 		float kind = vBkA.x;
 		if ( kind == 4.0 ) {
@@ -534,6 +564,13 @@ const FAC_FRAG_MAIN = /* glsl */ `
 			float seed = vBkB.y;
 			float pxm = max( max( fwidth( along ), fwidth( vm ) ), 1e-4 );
 			float aa = pxm * 0.75;
+			// vertical metres per pixel: the per-storey window BANDS stay resolvable long after the
+			// window columns average out (Size IV–V towers keep their floor lines instead of turning
+			// into flat slabs); lod2 then fades the bands into the flat average once a storey is only
+			// a few pixels tall.
+			float pxv = max( fwidth( vm ), 1e-4 );
+			float aaV = pxv * 0.75;
+			float lod2 = smoothstep( fh * 0.3, fh * 0.45, pxv );
 			vec3 c = wallC;
 			vec3 e = vec3( 0.0 );
 			if ( kind == 9.0 ) {
@@ -564,6 +601,15 @@ const FAC_FRAG_MAIN = /* glsl */ `
 				float hw = ind ? min( 1.15, cw * 0.34 ) : min( 0.8, cw * 0.27 );
 				float y0 = fh * ( ind ? 0.17 : 0.3 );
 				float y1 = fh * ( ind ? 0.9 : 0.8 );
+				float cov = ( 2.0 * hw / cw ) * ( ( y1 - y0 ) / fh );
+				vec3 gAvg = mix( uBkGlass * 0.95, uBkGlassLit * 0.8, uBkLit );
+				vec3 winAvg = mix( uBkFrame, gAvg, 0.75 );
+				vec3 avg = mix( wallC, winAvg, cov );
+				float lod = smoothstep( cw * 0.1, cw * 0.26, pxm );
+				float bandH = ( 2.0 * hw / cw ) * bkBand( vm, y0, y1, aaV );
+				vec3 far = mix( mix( wallC, winAvg, bandH ), avg, lod2 );
+				vec3 eFar = uBkGlassLit * uBkWinGlow * uBkLit * 0.7 * mix( bandH, cov, lod2 );
+				if ( lod > 0.999 ) { c = far; e = eFar; } else {
 				float h = bkHash( vec2( col * 0.731 + seed * 17.0, seed * 3.1 - col * 0.117 ) );
 				float win = bkIn( ax, hw, aa ) * bkBand( vm, y0, y1, aa );
 				float pane = bkIn( ax, hw - 0.1, aa ) * bkBand( vm, y0 + 0.1, y1 - 0.1, aa );
@@ -592,12 +638,9 @@ const FAC_FRAG_MAIN = /* glsl */ `
 				detail = mix( detail, uBkSill, sill );
 				detail = mix( detail, uBkFrame, win );
 				detail = mix( detail, paneC, pane * ( 1.0 - bars ) );
-				float cov = ( 2.0 * hw / cw ) * ( ( y1 - y0 ) / fh );
-				vec3 gAvg = mix( uBkGlass * 0.95, uBkGlassLit * 0.8, uBkLit );
-				vec3 avg = mix( wallC, mix( uBkFrame, gAvg, 0.75 ), cov );
-				float lod = smoothstep( cw * 0.1, cw * 0.26, pxm );
-				c = mix( detail, avg, lod );
-				e = uBkGlassLit * uBkWinGlow * mix( lit * pane * ( 1.0 - bars ) * ( 0.75 + 0.35 * h ), uBkLit * cov * 0.7, lod );
+				c = mix( detail, far, lod );
+				e = mix( uBkGlassLit * uBkWinGlow * lit * pane * ( 1.0 - bars ) * ( 0.75 + 0.35 * h ), eFar, lod );
+				}
 			} else if ( kind == 2.0 ) {
 				float n = max( 1.0, floor( fw / 1.9 + 0.5 ) );
 				float cw = fw / n;
@@ -607,6 +650,16 @@ const FAC_FRAG_MAIN = /* glsl */ `
 				float ax = abs( x );
 				float y0 = 0.42;
 				float y1 = fh * 0.64;
+				float litF = min( 1.0, uBkLit * 2.0 );
+				float cov = ( y1 - y0 ) / fh * 0.85;
+				vec3 shopA = mix( wallC, uBkFrame, 0.4 );
+				vec3 shopG = mix( uBkGlass, uBkGlassLit, litF );
+				vec3 avg = mix( shopA, shopG, cov );
+				float lod = smoothstep( cw * 0.12, cw * 0.3, pxm );
+				float bandH = 0.85 * bkBand( vm, y0, y1, aaV );
+				vec3 far = mix( mix( shopA, shopG, bandH ), avg, lod2 );
+				vec3 eFar = uBkGlassLit * uBkWinGlow * litF * mix( bandH, cov, lod2 );
+				if ( lod > 0.999 ) { c = far; e = eFar; } else {
 				float isDoor = step( abs( col - floor( n * 0.5 ) ), 0.1 ) * step( 2.5, n );
 				float gy0 = mix( y0, 0.05, isDoor );
 				float glassM = bkIn( ax, cw * 0.5 - 0.08, aa ) * bkBand( vm, gy0, y1, aa );
@@ -616,15 +669,12 @@ const FAC_FRAG_MAIN = /* glsl */ `
 				vec3 glass = bkGlassC( h, vv, x / ( cw * 0.5 ) );
 				float goods = ( 1.0 - isDoor ) * ( 1.0 - smoothstep( y0 + 0.9 - aa, y0 + 0.9 + aa, vm ) );
 				glass = mix( glass, mix( uBkGlassLit, wallC, 0.5 ) * ( 0.45 + 0.3 * h ), 0.35 * goods );
-				float litF = min( 1.0, uBkLit * 2.0 );
 				float lit = step( 1.0 - litF, fract( h * 7.7 + seed ) );
 				vec3 detail = mix( wallC, uBkFrame, frameM );
 				detail = mix( detail, mix( glass, uBkGlassLit * 0.9, lit ), glassM );
-				float cov = ( y1 - y0 ) / fh * 0.85;
-				vec3 avg = mix( mix( wallC, uBkFrame, 0.4 ), mix( uBkGlass, uBkGlassLit, litF ), cov );
-				float lod = smoothstep( cw * 0.12, cw * 0.3, pxm );
-				c = mix( detail, avg, lod );
-				e = uBkGlassLit * uBkWinGlow * mix( lit * glassM, litF * cov, lod );
+				c = mix( detail, far, lod );
+				e = mix( uBkGlassLit * uBkWinGlow * lit * glassM, eFar, lod );
+				}
 			} else if ( kind == 5.0 ) {
 				float n = max( 1.0, floor( fw / 1.6 + 0.5 ) );
 				float cw = fw / n;
@@ -634,6 +684,16 @@ const FAC_FRAG_MAIN = /* glsl */ `
 				float ax = abs( x );
 				float y0 = fh * 0.22;
 				float y1 = fh * 0.96;
+				float cov = ( y1 - y0 ) / fh * 0.9;
+				vec3 cwA = mix( uBkFrame, wallC, 0.6 );
+				vec3 cwG = mix( uBkGlass * 1.05, uBkGlassLit * 0.85, uBkLit );
+				vec3 avg = mix( cwA, cwG, cov );
+				float lod = smoothstep( cw * 0.14, cw * 0.36, pxm );
+				// spandrel band per storey: a curtain-wall tower keeps its floor lines at Size IV–V
+				float bandH = 0.9 * bkBand( vm, y0, y1, aaV );
+				vec3 far = mix( mix( cwA, cwG, bandH ), avg, lod2 );
+				vec3 eFar = uBkGlassLit * uBkWinGlow * uBkLit * 0.8 * mix( bandH, cov, lod2 );
+				if ( lod > 0.999 ) { c = far; e = eFar; } else {
 				float inP = bkIn( ax, cw * 0.5 - 0.07, aa );
 				float glassM = inP * bkBand( vm, y0, y1, aa );
 				float h = bkHash( vec2( col * 0.53 + seed * 19.0, seed * 2.7 ) );
@@ -644,11 +704,9 @@ const FAC_FRAG_MAIN = /* glsl */ `
 				vec3 detail = uBkFrame;
 				detail = mix( detail, wallC, inP * bkBand( vm, 0.05, y0 - 0.05, aa ) );
 				detail = mix( detail, mix( glass, uBkGlassLit * ( 0.68 + 0.3 * h ), lit ), glassM );
-				float cov = ( y1 - y0 ) / fh * 0.9;
-				vec3 avg = mix( mix( uBkFrame, wallC, 0.6 ), mix( uBkGlass * 1.05, uBkGlassLit * 0.85, uBkLit ), cov );
-				float lod = smoothstep( cw * 0.14, cw * 0.36, pxm );
-				c = mix( detail, avg, lod );
-				e = uBkGlassLit * uBkWinGlow * mix( lit * glassM, uBkLit * cov * 0.8, lod );
+				c = mix( detail, far, lod );
+				e = mix( uBkGlassLit * uBkWinGlow * lit * glassM, eFar, lod );
+				}
 			} else {
 				// corrugated family: 3 clerestory strip, 6 corrugated, 7 container
 				bool doorFace = kind == 7.0 && vBkB.z < 0.5;
@@ -674,9 +732,12 @@ const FAC_FRAG_MAIN = /* glsl */ `
 					detail = mix( detail, mix( bkGlassC( hh, 0.5, px / pcw ), uBkGlassLit * 0.8, lit ), pane );
 					float lod = smoothstep( pcw * 0.15, pcw * 0.4, pxm );
 					float cov = ( y1 - y0 ) / fh;
-					vec3 avg = mix( wallC * 0.95, mix( uBkFrame, uBkGlass, 0.6 ), cov );
-					detail = mix( detail, avg, lod );
-					e = uBkGlassLit * uBkWinGlow * mix( lit * pane, min( 1.0, uBkLit * 1.6 ) * cov * 0.6, lod );
+					vec3 stripC = mix( uBkFrame, uBkGlass, 0.6 );
+					vec3 avg = mix( wallC * 0.95, stripC, cov );
+					float bandH = bkBand( vm, y0, y1, aaV );
+					vec3 far = mix( mix( wallC * 0.95, stripC, bandH ), avg, lod2 );
+					detail = mix( detail, far, lod );
+					e = uBkGlassLit * uBkWinGlow * mix( lit * pane, min( 1.0, uBkLit * 1.6 ) * 0.6 * mix( bandH, cov, lod2 ), lod );
 				}
 				c = detail;
 			}
@@ -684,6 +745,7 @@ const FAC_FRAG_MAIN = /* glsl */ `
 			bkEmit = e;
 		}
 	}
+	#endif
 `;
 
 interface FacadeUniforms {
@@ -733,7 +795,7 @@ function makeKitMaterial(U: FacadeUniforms, name: string): THREE.MeshToonMateria
       .replace('#include <color_fragment>', '#include <color_fragment>\n' + FAC_FRAG_MAIN)
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += bkEmit;');
   };
-  m.customProgramCacheKey = () => 'blocktooth-citykit-facade-v2';
+  m.customProgramCacheKey = () => 'blocktooth-citykit-facade-v3';
   return m;
 }
 
@@ -790,7 +852,9 @@ const GND_FRAG_MAIN = /* glsl */ `
 		float aa = pxm * 0.7;
 		float det = 1.0 - smoothstep( 0.06, 0.3, pxm );
 		float n1 = bgNoise( q * 0.09 );
-		float n2 = bgNoise( q * 0.8 + 17.0 );
+		// the fine grain octave (1.25 m period) is under 2 px beyond det's range: use its mean (0.5)
+		// instead of sparkling — and skip its four hashes on the Size IV–V full-screen ground
+		float n2 = pxm < 0.6 ? mix( 0.5, bgNoise( q * 0.8 + 17.0 ), 1.0 - smoothstep( 0.3, 0.6, pxm ) ) : 0.5;
 		float n3 = bgNoise( q * 0.23 + 41.0 );
 		vec3 c = uBgA;
 		float wetM = 0.0;
@@ -901,7 +965,7 @@ function makeGround(b: BiomeDef, st: Style, kind: GroundKind): THREE.MeshToonMat
       .replace('#include <color_fragment>', '#include <color_fragment>\n' + GND_FRAG_MAIN)
       .replace('#include <emissivemap_fragment>', GND_FRAG_EMIT);
   };
-  m.customProgramCacheKey = () => 'blocktooth-citykit-ground-v2';
+  m.customProgramCacheKey = () => 'blocktooth-citykit-ground-v3';
   return m;
 }
 
@@ -2344,6 +2408,86 @@ function buildProp(kind: PropKind, pc: PC): MB {
   }
 }
 
+// ─────────────────────────────── vehicle far LODs ───────────────────────────────
+// Same footprint, profile, paint kinds (PAINT+TINT → identical per-slot colours), glass and lamp
+// colours as the full models; wheels collapse into one dark undercarriage box, trim and pillars go.
+function lodUnder(mb: MB, pc: PC, hw: number, z0: number, z1: number, y1: number): void {
+  mb.plain();
+  mb.box(-hw + 0.1, 0, z0, hw - 0.1, y1, z1, pc.tyre, pc.tyre, 'yY');
+}
+function lodLamps(mb: MB, pc: PC, len: number, hw: number, yh: number, yt: number): void {
+  mb.kind(K.GLOW);
+  mb.quad([-hw + 0.1, yh, len / 2 + 0.03], [hw - 0.1, yh, len / 2 + 0.03], [hw - 0.1, yh + 0.14, len / 2 + 0.03], [-hw + 0.1, yh + 0.14, len / 2 + 0.03], pc.head, [0, 0, 1], 0);
+  mb.quad([-hw + 0.1, yt, -len / 2 - 0.03], [hw - 0.1, yt, -len / 2 - 0.03], [hw - 0.1, yt + 0.14, -len / 2 - 0.03], [-hw + 0.1, yt + 0.14, -len / 2 - 0.03], pc.tail, [0, 0, -1], 0);
+  mb.plain();
+}
+function lodCar(pc: PC, taxi: boolean): MB {
+  const mb = newPropMB(pc, (taxi ? 'taxi' : 'car') + ':lod');
+  const L = taxi ? 4.4 : 4.2, hw = 0.9;
+  const paint = taxi ? lin('#ffc93c') : PAINT_BASE;
+  mb.kind(taxi ? K.PLAIN : K.PAINT + TINT);
+  mb.extrudeX([[-L / 2, 0.32], [L / 2, 0.32], [L / 2, 0.72], [L / 2 - 0.25, 0.86], [-L / 2 + 0.2, 0.9], [-L / 2, 0.74]], -hw, hw, paint, paint);
+  const cz0 = -1.45, cz1 = taxi ? 0.95 : 1.0;
+  mb.plain();
+  mb.extrudeX([[cz0, 0.88], [cz1, 0.88], [cz1 - 0.55, 1.42], [cz0 + 0.4, 1.42]], -hw + 0.1, hw - 0.1, pc.glassD, pc.glassD);
+  mb.kind(taxi ? K.PLAIN : K.PAINT + TINT);
+  mb.quad([-hw + 0.1, 1.43, cz0 + 0.4], [hw - 0.1, 1.43, cz0 + 0.4], [hw - 0.1, 1.43, cz1 - 0.55], [-hw + 0.1, 1.43, cz1 - 0.55], paint, [0, 1, 0], 0);
+  lodUnder(mb, pc, hw, -L / 2 + 0.45, L / 2 - 0.45, 0.33);
+  lodLamps(mb, pc, L, hw, 0.58, 0.6);
+  return mb;
+}
+function lodVan(pc: PC): MB {
+  const mb = newPropMB(pc, 'van:lod');
+  const L = 5.0, hw = 1.0;
+  mb.kind(K.PAINT + TINT);
+  mb.extrudeX([[-L / 2, 0.36], [L / 2, 0.36], [L / 2, 0.92], [L / 2 - 0.55, 1.22], [L / 2 - 1.05, 2.1], [-L / 2, 2.16]], -hw, hw, PAINT_BASE, PAINT_BASE);
+  mb.plain();
+  mb.quad([-hw + 0.1, 1.26, L / 2 - 0.57], [hw - 0.1, 1.26, L / 2 - 0.57], [hw - 0.1, 2.0, L / 2 - 1.02], [-hw + 0.1, 2.0, L / 2 - 1.02], pc.glassD, [0, 0.9, 0.5], 0);
+  lodUnder(mb, pc, hw, -L / 2 + 0.5, L / 2 - 0.5, 0.37);
+  lodLamps(mb, pc, L, hw, 0.68, 0.75);
+  return mb;
+}
+function lodBus(pc: PC): MB {
+  const mb = newPropMB(pc, 'bus:lod');
+  const L = 11, hw = 1.3;
+  const body = pc.st.night ? lin(pc.pal.bodyB) : pc.st.snow ? lin('#d98a2b') : pc.cream;
+  const stripe = pc.st.night ? pc.sign : pc.st.snow ? pc.st.ink : pc.sign;
+  mb.extrudeX([[-L / 2, 0.42], [L / 2, 0.42], [L / 2, 2.75], [L / 2 - 0.3, 3.05], [-L / 2 + 0.15, 3.05], [-L / 2, 2.9]], -hw, hw, body, body);
+  for (const s of [-1, 1]) {
+    const x = s * (hw + 0.005);
+    mb.quad([x, 1.4, -L / 2 + 0.5], [x, 1.4, L / 2 - 0.4], [x, 2.5, L / 2 - 0.4], [x, 2.5, -L / 2 + 0.5], pc.glassD, [s, 0, 0], 0);
+    mb.quad([s * (hw + 0.008), 0.72, -L / 2 + 0.2], [s * (hw + 0.008), 0.72, L / 2 - 0.2], [s * (hw + 0.008), 1.05, L / 2 - 0.2], [s * (hw + 0.008), 1.05, -L / 2 + 0.2], stripe, [s, 0, 0], 0);
+  }
+  mb.quad([-hw + 0.12, 1.1, L / 2 + 0.005], [hw - 0.12, 1.1, L / 2 + 0.005], [hw - 0.12, 2.6, L / 2 + 0.005], [-hw + 0.12, 2.6, L / 2 + 0.005], pc.glassD, [0, 0, 1], 0);
+  lodUnder(mb, pc, hw, -L / 2 + 1.6, L / 2 - 1.6, 0.43);
+  lodLamps(mb, pc, L, hw, 0.8, 0.9);
+  return mb;
+}
+function lodTruck(pc: PC): MB {
+  const mb = newPropMB(pc, 'truck:lod');
+  const L = 8, hw = 1.25;
+  const cz0 = L / 2 - 2.3;
+  mb.kind(K.PAINT + TINT);
+  mb.extrudeX([[cz0, 0.55], [L / 2, 0.55], [L / 2, 1.5], [L / 2 - 0.35, 2.85], [cz0, 2.95]], -hw, hw, PAINT_BASE, PAINT_BASE);
+  mb.plain();
+  mb.quad([-hw + 0.12, 1.65, L / 2 - 0.02], [hw - 0.12, 1.65, L / 2 - 0.02], [hw - 0.12, 2.7, L / 2 - 0.31], [-hw + 0.12, 2.7, L / 2 - 0.31], pc.glassD, [0, 0.3, 1], 0);
+  const boxC = pc.st.night ? lin('#7f8896') : lin('#f2f0ea');
+  mb.box(-hw, 0.9, -L / 2, hw, 3.4, cz0 - 0.15, boxC, boxC, 'y');
+  lodUnder(mb, pc, hw, -L / 2 + 0.4, L / 2 - 0.4, 0.9);
+  lodLamps(mb, pc, L, hw, 0.95, 1.0);
+  return mb;
+}
+function buildPropLod(kind: PropKind, pc: PC): MB | null {
+  switch (kind) {
+    case 'car': return lodCar(pc, false);
+    case 'taxi': return lodCar(pc, true);
+    case 'van': return lodVan(pc);
+    case 'bus': return lodBus(pc);
+    case 'truck': return lodTruck(pc);
+    default: return null;
+  }
+}
+
 // ─────────────────────────────── rubble (unit heap) ───────────────────────────────
 function buildRubble(b: BiomeDef, st: Style): MB {
   const p = b.palette;
@@ -2357,7 +2501,9 @@ function buildRubble(b: BiomeDef, st: Style): MB {
   const concrete = mix(dust, WHITE, st.night ? 0.06 : 0.16);
   const bodies = [lin(p.bodyA), lin(p.bodyB), lin(p.bodyC)];
   const trim = lin(p.trimA), glass = lin(p.glass);
-  const rebar = lin('#6a4432');
+  // rust, not near-black: at Size IV–V a rebar stick is 1–2 px and must read as rusty steel in the
+  // heap, never as an ink stroke (it is also drawn without an ink hull, see below)
+  const rebar = lin(st.night ? '#8a5a44' : '#b0694a');
   const r = mb.rnd;
   // ── craggy heap: a jittered height field made of three overlapping mounds, zero at the rim ──
   const N = 6;
@@ -2411,33 +2557,39 @@ function buildRubble(b: BiomeDef, st: Style): MB {
     const col = plate ? (k % 2 ? concrete : mix(concrete, dust, 0.5)) : bodies[k % 3];
     mb.kind(plate ? 0 : TINT);
     mb.withM(trs(x, y, z, 1, 1, 1, ry, rx, rz), () => {
-      mb.box(-sx / 2, -sy / 2, -sz / 2, sx / 2, sy / 2, sz / 2, col, mix(col, WHITE, 0.1), 'y');
+      // thin floor plates (0.14–0.3 m thick at typical pile heights) are INKLESS: at Size IV–V a
+      // 1.6 px hull on each side of a sub-pixel slab drew every heap as black spider legs
+      if (plate) mb.inkless(() => mb.box(-sx / 2, -sy / 2, -sz / 2, sx / 2, sy / 2, sz / 2, col, mix(col, WHITE, 0.1), 'y'));
+      else mb.box(-sx / 2, -sy / 2, -sz / 2, sx / 2, sy / 2, sz / 2, col, mix(col, WHITE, 0.1), 'y');
       if (!plate) {
         mb.plain();
-        mb.box(-sx * 0.22, -sy * 0.2, sz / 2, sx * 0.22, sy * 0.3, sz / 2 + 0.004, mix(glass, st.ink, 0.35), undefined, 'yz');
-        mb.box(-sx * 0.3, -sy * 0.34, sz / 2, sx * 0.3, -sy * 0.2, sz / 2 + 0.006, trim, undefined, 'yz');
+        mb.inkless(() => {
+          mb.box(-sx * 0.22, -sy * 0.2, sz / 2, sx * 0.22, sy * 0.3, sz / 2 + 0.004, mix(glass, st.ink, 0.35), undefined, 'yz');
+          mb.box(-sx * 0.3, -sy * 0.34, sz / 2, sx * 0.3, -sy * 0.2, sz / 2 + 0.006, trim, undefined, 'yz');
+        });
       }
     });
   }
   mb.plain();
-  // column stubs standing out of the heap
-  for (let k = 0; k < 3; k++) {
+  // column stubs standing out of the heap (inkless for the same reason as the plates)
+  mb.inkless(() => { for (let k = 0; k < 3; k++) {
     const x = (r() - 0.5) * 0.5, z = (r() - 0.5) * 0.5;
     const y0 = Math.max(0.04, heightAt(x, z) * 0.7);
     mb.withM(trs(x, y0, z, 1, 1, 1, r() * 3, (r() - 0.5) * 0.5, (r() - 0.5) * 0.5), () =>
       mb.box(-0.025, 0, -0.025, 0.025, 0.12 + r() * 0.12, 0.025, concrete, mix(concrete, WHITE, 0.1), 'y'));
-  }
-  // rebar sticking out in bent pairs
-  for (let k = 0; k < 5; k++) {
+  } });
+  // rebar sticking out in bent pairs — inkless: a 1.6 px hull around a sub-pixel stick drew every
+  // distant heap as a grey dome covered in black spider legs
+  mb.inkless(() => { for (let k = 0; k < 5; k++) {
     const x = (r() - 0.5) * 0.56, z = (r() - 0.5) * 0.56;
     const y = Math.max(0.03, heightAt(x, z) * 0.8);
     const a = r() * Math.PI * 2, tilt = 0.25 + r() * 0.6, len = 0.14 + r() * 0.16;
     const mid: V3 = [x + Math.sin(a) * Math.sin(tilt) * len * 0.6, y + Math.cos(tilt) * len * 0.8, z + Math.cos(a) * Math.sin(tilt) * len * 0.6];
     const tip: V3 = [mid[0] + Math.sin(a + 0.9) * len * 0.45, Math.min(0.97, mid[1] + len * 0.25), mid[2] + Math.cos(a + 0.9) * len * 0.45];
     const cl = (v: number) => Math.max(-0.48, Math.min(0.48, v));
-    mb.beam([x, y, z], [cl(mid[0]), Math.min(0.97, mid[1]), cl(mid[2])], 0.012, rebar);
-    mb.beam([cl(mid[0]), Math.min(0.97, mid[1]), cl(mid[2])], [cl(tip[0]), tip[1], cl(tip[2])], 0.012, rebar);
-  }
+    mb.beam([x, y, z], [cl(mid[0]), Math.min(0.97, mid[1]), cl(mid[2])], 0.02, rebar);
+    mb.beam([cl(mid[0]), Math.min(0.97, mid[1]), cl(mid[2])], [cl(tip[0]), tip[1], cl(tip[2])], 0.02, rebar);
+  } });
   return mb;
 }
 
@@ -2459,6 +2611,7 @@ function fitUnitHeight(g: THREE.BufferGeometry): THREE.BufferGeometry {
   nrm.needsUpdate = true;
   g.deleteAttribute('outlineNormal');
   bakeOutlineNormals(g);
+  zeroInk(g);
   g.computeBoundingBox();
   g.computeBoundingSphere();
   return g;
@@ -2488,6 +2641,13 @@ export function buildCityKit(b: BiomeDef): CityKit {
     geo.name = 'prop:' + kind;
     geos.push(geo);
     props[kind] = { geo, material: propMat, height: geo.boundingBox ? geo.boundingBox.max.y : 1 };
+    const lmb = buildPropLod(kind, pc);
+    if (lmb) {
+      const lod = lmb.build();
+      lod.name = 'prop:' + kind + ':lod';
+      geos.push(lod);
+      props[kind].lod = lod;
+    }
   }
 
   const rubble = fitUnitHeight(buildRubble(b, st).build());

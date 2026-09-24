@@ -16,6 +16,8 @@ interface KitModule {
   init?(): Record<string, number>;
   /** multiplier on mass gained right now (MOLO "raw mass" while vacuuming) */
   massMul?(w: World): number;
+  /** the auto attack's current reach (m) */
+  reach?(w: World): number;
 }
 
 const KITS: Record<TitanId, KitModule> = { molo, voltkite, hearthback, briarwick };
@@ -56,4 +58,11 @@ export function kitMassMul(w: World): number {
   if (!k.massMul) return 1;
   const m = k.massMul(w);
   return m > 0 && Number.isFinite(m) ? m : 1;
+}
+
+/** Current auto-attack reach of the active kit (m; lane-internal, used by combat/pickups). */
+export function kitReach(w: World): number {
+  const k = KITS[w.titan.id];
+  const r = k && k.reach ? k.reach(w) : 0;
+  return r > 0 && Number.isFinite(r) ? r : 0;
 }

@@ -151,18 +151,18 @@ export class Hud {
     this.chipsList = div('bt-chips-list', this.chipsWrap);
 
     // ── status card (bottom-left)
-    const card = this.card = div('bt-card', L);
-    const head = div('bt-card-head', card);
-    this.nameT = new TextSlot(el('span', 'bt-card-name'));
+    const card = this.card = div('bt-status', L);
+    const head = div('bt-status-head', card);
+    this.nameT = new TextSlot(el('span', 'bt-status-name'));
     head.appendChild(this.nameT.node);
-    this.roleT = new TextSlot(el('span', 'bt-card-role'));
+    this.roleT = new TextSlot(el('span', 'bt-status-role'));
     head.appendChild(this.roleT.node);
-    this.lvBox = div('bt-card-lv', head);
+    this.lvBox = div('bt-status-lv', head);
     this.lvBox.appendChild(el('small', '', STR.hud.lv));
     this.lvT = new TextSlot(el('b', ''));
     this.lvBox.appendChild(this.lvT.node);
 
-    const body = div('bt-card-body', card);
+    const body = div('bt-status-body', card);
     this.sizeBox = div('bt-size', body);
     div('bt-size-lbl', this.sizeBox, STR.hud.size);
     this.sizeT = new TextSlot(div('bt-size-num', this.sizeBox, 'I'));
@@ -197,11 +197,14 @@ export class Hud {
     this.shellOn = new ClassSlot(this.shellRow, 'on');
     this.cardLow = new ClassSlot(card, 'lowhp');
 
-    const foot = div('bt-card-foot', card);
+    const foot = div('bt-status-foot', card);
+    // label line carries the key chip ("DASH [SHIFT]" over the pips, "HOOK [SPACE]" over the
+    // hook name) so a long hook name can never push a chip out of the card
     const dash = div('bt-dash', foot);
-    div('bt-foot-lbl', dash, STR.hud.dash);
+    const dl = div('bt-foot-line', dash);
+    div('bt-foot-lbl', dl, STR.hud.dash);
+    dl.appendChild(keyChip(STR.hud.keyDash));
     this.pipsBox = div('bt-pips', dash);
-    dash.appendChild(keyChip(STR.hud.keyDash));
 
     const hook = this.hookBox = div('bt-hook', foot);
     const dial = div('bt-dial', hook);
@@ -209,9 +212,10 @@ export class Hud {
     this.hookCdT = new TextSlot(div('bt-dial-cd', dial));
     this.hookReady = new ClassSlot(hook, 'ready');
     const htxt = div('bt-hook-txt', hook);
-    div('bt-foot-lbl', htxt, STR.hud.hook);
+    const hl = div('bt-foot-line', htxt);
+    div('bt-foot-lbl', hl, STR.hud.hook);
+    hl.appendChild(keyChip(STR.hud.keyHook));
     this.hookName = new TextSlot(div('bt-hook-name', htxt));
-    hook.appendChild(keyChip(STR.hud.keyHook));
 
     this.lvFlash = div('bt-lvflash', card, STR.hud.levelUp);
 

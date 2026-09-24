@@ -8,20 +8,25 @@
 // (step 1 → resolves null) · click a card to choose it, click it again (or the bar) to confirm.
 
 import type { Input } from '../core/input.ts';
-import type { BiomeDef, BiomeId, TitanDef, TitanId } from '../core/types.ts';
+import type { BiomeDef, BiomeId, EnemyKind, TitanDef, TitanId } from '../core/types.ts';
 import { BIOME_IDS, TITAN_IDS } from '../core/types.ts';
+import { bestKey, loadBest } from '../core/save.ts';
 import { TITANS } from '../data/titans.ts';
 import { BIOMES } from '../data/biomes.ts';
 import { BOSSES } from '../data/bosses.ts';
+import { ENEMIES } from '../data/enemies.ts';
 import { STR } from '../data/strings.ts';
 import {
-  type ModalSession, type UiPress, clearEl, cosmeticRng, div, el, fmt, keyChip, onTap, pulse, runModal, wrapIndex,
+  type ModalSession, type UiPress, clearEl, cosmeticRng, div, el, fmt, fmtInt, fmtTime, keyChip, onTap, pulse, roman, runModal, wrapIndex,
   flashesReduced,
 } from './dom.ts';
 import { buildBug, wallClock } from './menus.ts';
 
 type SelectResult = { titan: TitanId; biome: BiomeId } | null;
 type Step = 1 | 2;
+
+/** The regular HALVARD roster in escalation order (the elite RAMROD is announced separately). */
+const RESPONSE_KINDS: readonly EnemyKind[] = ['android', 'squad', 'drone', 'buggy', 'apc', 'tank', 'walker'];
 
 export class SelectScreen {
   private readonly input: Input;
@@ -43,6 +48,9 @@ export class SelectScreen {
   private ti = 0;
   private bi = 0;
   private session: ModalSession<SelectResult> | null = null;
+  /** Focus at the moment select was backed out of (ESC at step 1): the next open resumes there
+   *  instead of snapping back to the app's last-run choice. Consumed by the next run(). */
+  private resume: { titan: TitanId; biome: BiomeId } | null = null;
 
   constructor(root: HTMLElement, input: Input) {
     this.input = input;
@@ -106,8 +114,10 @@ export class SelectScreen {
   run(portraits: Record<TitanId, string>, initial?: { titan?: TitanId; biome?: BiomeId }): Promise<SelectResult> {
     if (this.session && !this.session.done) this.session.abort();
     this.buildTitanCards(portraits || ({} as Record<TitanId, string>));
-    this.ti = Math.max(0, TITAN_IDS.indexOf(initial?.titan ?? TITAN_IDS[0]));
-    this.bi = Math.max(0, BIOME_IDS.indexOf(initial?.biome ?? BIOME_IDS[0]));
+    const from = this.resume ?? initial;
+    this.resume = null;
+    this.ti = Math.max(0, TITAN_IDS.indexOf(from?.titan ?? TITAN_IDS[0]));
+    this.bi = Math.max(0, BIOME_IDS.indexOf(from?.biome ?? BIOME_IDS[0]));
     this.clock.textContent = wallClock();
     this.layer.classList.remove('bt-hidden');
     this.setStep(1, false);
@@ -155,6 +165,7 @@ export class SelectScreen {
     }
     const card = this.biomeCards[this.bi];
     if (card) card.classList.add('is-picked');
+    this.resume = null;
     s.finish({ titan: TITAN_IDS[this.ti], biome: BIOME_IDS[this.bi] }, flashesReduced() ? 80 : 280);
   }
 
@@ -162,6 +173,7 @@ export class SelectScreen {
     const s = this.session;
     if (!s || s.done) return;
     if (this.step === 2) { this.setStep(1, true); return; }
+    this.resume = { titan: TITAN_IDS[this.ti], biome: BIOME_IDS[this.bi] };
     s.finish(null, 0);
   }
 
@@ -265,6 +277,7 @@ export class SelectScreen {
     const ul = el('ul', 'bt-lore-lines');
     for (const line of def.lore.slice(0, 3)) ul.appendChild(el('li', '', line));
     L.appendChild(ul);
+    this.vitals(L, def);
     const kit = div('bt-lore-kit', L);
     const row = (tag: string, name: string, desc: string, key?: string) => {
       const r = div('bt-kit-row', kit);
@@ -277,6 +290,7 @@ export class SelectScreen {
     row(STR.select.auto, def.auto.name, def.auto.desc);
     row(STR.select.hook, def.hook.name, def.hook.desc, STR.hud.keyHook);
     row(STR.select.dash, def.dash.name, def.dash.desc, STR.hud.keyDash);
+    this.recordFooter(L, TITAN_IDS.map(() => def.id), BIOME_IDS.slice());
     pulse(L, [{ opacity: 0.2, transform: 'translateX(2%)' }, { opacity: 1, transform: 'none' }], 200);
   }
 
@@ -340,6 +354,20 @@ export class SelectScreen {
     const ul = el('ul', 'bt-lore-lines');
     for (const line of def.lore.slice(0, 3)) ul.appendChild(el('li', '', line));
     L.appendChild(ul);
+    // HALVARD response profile: the director's per-zone enemy weights (BiomeDef.enemyBias)
+    const resp = div('bt-lore-resp', L);
+    const rh = div('bt-lore-resp-head', resp);
+    rh.appendChild(el('span', 'bt-kit-tag', STR.select.response));
+    rh.appendChild(el('small', '', STR.select.responseSub));
+    const grid = div('bt-lore-resp-grid', resp);
+    for (const k of RESPONSE_KINDS) {
+      const bias = def.enemyBias[k] ?? 1;
+      const lvl = Math.max(1, Math.min(5, Math.round(bias * 3)));
+      const r = div(`bt-resp-row${bias >= 1.3 ? ' heavy' : bias <= 0.8 ? ' light' : ''}`, grid);
+      r.appendChild(el('span', 'nm', ENEMIES[k] ? ENEMIES[k].name : k.toUpperCase()));
+      const m = div('bt-resp-meter', r);
+      for (let i = 1; i <= 5; i++) div(i <= lvl ? 'on' : '', m);
+    }
     const boss = BOSSES[def.boss];
     const kit = div('bt-lore-kit', L);
     const r = div('bt-kit-row boss', kit);
@@ -347,11 +375,86 @@ export class SelectScreen {
     h.appendChild(el('span', 'bt-kit-tag', STR.select.containment));
     h.appendChild(el('b', 'bt-kit-name', boss ? boss.name : def.boss.toUpperCase()));
     div('bt-kit-desc', r, boss ? `${boss.title}. ${STR.select.meterHint} ${boss.meterName}.` : '');
+    if (boss && boss.attacks.length) {
+      const pr = div('bt-lore-procs', r);
+      for (const ph of [1, 2, 3] as const) {
+        const names = boss.attacks.filter((a) => a.phase === ph).map((a) => a.name);
+        if (!names.length) continue;
+        const line = div('bt-lore-proc', pr);
+        line.appendChild(el('b', '', fmt(STR.select.phase, { n: ph })));
+        line.appendChild(el('span', '', names.join(' · ')));
+      }
+    }
     const c = div('bt-kit-row', kit);
     const ch = div('bt-kit-head', c);
     ch.appendChild(el('span', 'bt-kit-tag', STR.select.conditions));
     ch.appendChild(el('b', 'bt-kit-name', STR.select.zoneNote[def.id] ?? ''));
+    this.recordFooter(L, TITAN_IDS.slice(), BIOME_IDS.map(() => def.id));
     pulse(L, [{ opacity: 0.2, transform: 'translateX(2%)' }, { opacity: 1, transform: 'none' }], 200);
+  }
+
+  /** VITALS: the four base stats that actually differ between titans, as 5-step meters scaled
+   *  across the roster (TitanDef.base), each with its real figure. */
+  private vitals(L: HTMLElement, def: TitanDef): void {
+    const all = TITAN_IDS.map((id) => TITANS[id].base);
+    const rows: [string, (b: TitanDef['base']) => number, (b: TitanDef['base']) => string][] = [
+      [STR.select.vHull, (b) => b.maxHp, (b) => fmtInt(b.maxHp)],
+      [STR.select.vPlate, (b) => b.armor, (b) => fmtInt(b.armor)],
+      [STR.select.vStride, (b) => b.moveSpeed, (b) => `${b.moveSpeed.toFixed(2)}×`],
+      // dash readiness = charges per recharge second (the HUD's recharge is 3 s × max(.35, dashCooldown))
+      [STR.select.vDash, (b) => b.dashCharges / Math.max(0.35, b.dashCooldown), (b) => `${b.dashCharges} / ${(3 * Math.max(0.35, b.dashCooldown)).toFixed(1)}s`],
+    ];
+    const box = div('bt-lore-vitals', L);
+    const head = div('bt-lore-resp-head', box);
+    head.appendChild(el('span', 'bt-kit-tag', STR.select.vitals));
+    head.appendChild(el('small', '', STR.select.vitalsSub));
+    const grid = div('bt-lore-resp-grid', box);
+    for (const [label, get, show] of rows) {
+      const vals = all.map(get);
+      const lo = Math.min(...vals), hi = Math.max(...vals);
+      const lvl = hi > lo ? 1 + Math.round(4 * (get(def.base) - lo) / (hi - lo)) : 3;
+      const r = div('bt-resp-row', grid);
+      const nm = el('span', 'nm', label);
+      nm.appendChild(el('i', '', show(def.base)));
+      r.appendChild(nm);
+      const m = div('bt-resp-meter', r);
+      for (let i = 1; i <= 5; i++) div(i <= lvl ? 'on' : '', m);
+    }
+  }
+
+  /**
+   * DESK RECORD footer: the personal bests (core/save.ts, written by the app at every run end)
+   * over the given titan × biome pairs — a titan's file spans every zone, a zone's file every
+   * titan. Pinned to the foot of the dossier; hidden again if it would not fit.
+   */
+  private recordFooter(L: HTMLElement, titans: readonly TitanId[], biomes: readonly BiomeId[]): void {
+    const best = loadBest();
+    let tons = -1, rank = -1, clear = Infinity;
+    const pairs = new Set<string>();
+    for (const t of titans) for (const b of biomes) pairs.add(t + '|' + b);
+    for (const pr of pairs) {
+      const [t, b] = pr.split('|');
+      const tn = best[bestKey(t, b, 'tonnage')], rk = best[bestKey(t, b, 'peakRank')], cs = best[bestKey(t, b, 'clearS')];
+      if (tn !== undefined) tons = Math.max(tons, tn);
+      if (rk !== undefined) rank = Math.max(rank, rk);
+      if (cs !== undefined) clear = Math.min(clear, cs);
+    }
+    const f = div('bt-lore-rec', L);
+    f.appendChild(el('span', 'bt-kit-tag', STR.select.record));
+    if (tons < 0 && rank < 0) {
+      f.appendChild(el('span', 'bt-lore-rec-none', STR.select.recordNone));
+    } else {
+      const cell = (k: string, v: string) => {
+        const c = div('bt-lore-rec-cell', f);
+        c.appendChild(el('small', '', k));
+        c.appendChild(el('b', '', v));
+      };
+      cell(STR.select.recTons, tons >= 0 ? `${fmtInt(tons)} T` : '—');
+      cell(STR.select.recSize, rank >= 0 ? roman(rank) : '—');
+      cell(STR.select.recClear, Number.isFinite(clear) ? fmtTime(clear) : '—');
+    }
+    // never let the footer push dossier text out of the (overflow: hidden) column
+    if (L.scrollHeight > L.clientHeight + 1) f.remove();
   }
 }
 

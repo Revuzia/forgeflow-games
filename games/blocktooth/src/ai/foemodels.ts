@@ -1052,3 +1052,87 @@ export function buildFoeModel(kind: EnemyKind): FoeModel { return BUILDERS[kind]
 
 /** Dispose every geometry of a model. */
 export function disposeFoeModel(m: FoeModel): void { for (const p of m.parts) p.geo.dispose(); }
+
+// ─────────────────────────────── far LOD (merged, decimated) ───────────────────────────────
+/**
+ * Far-distance LOD for a kind: every part pivot baked at its REST pose into ONE geometry, then
+ * decimated by vertex clustering on a grid of `largest extent / cells` (each cell's vertices collapse to
+ * their mean; triangles that fold into a line/point go, duplicates go; each surviving triangle
+ * keeps its own painted colour + glow, so the silhouette and the orange/navy/off-white read stay).
+ * At Size IV–V framing a 1.8 m trooper is 5–8 px tall: 1 400 faceted triangles in 5 instanced
+ * parts collapse to one draw of ~370 triangles (14 cells) that reads the same at that size. Generated from the
+ * same parts the near model draws, so a model edit updates its far LOD for free.
+ */
+export function buildFoeFar(m: FoeModel, cells = 14): THREE.BufferGeometry {
+  const world: THREE.Matrix4[][] = [];
+  const local = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
+  const pos = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1);
+  const TP: number[] = [], TC: number[] = [], TG: number[] = [];
+  const v = new THREE.Vector3();
+  for (let pi = 0; pi < m.parts.length; pi++) {
+    const part = m.parts[pi];
+    const mats: THREE.Matrix4[] = [];
+    for (let k = 0; k < part.count; k++) {
+      const o = k * PIV_STRIDE;
+      pos.set(part.piv[o], part.piv[o + 1], part.piv[o + 2]);
+      q.setFromEuler(e.set(0, part.piv[o + 3], 0, 'YXZ'));
+      local.compose(pos, q, one);
+      const parent = part.parent < 0 ? null : world[part.parent][m.parts[part.parent].count === part.count ? k : 0];
+      mats.push(parent ? new THREE.Matrix4().multiplyMatrices(parent, local) : local.clone());
+    }
+    world.push(mats);
+    const P = part.geo.getAttribute('position'), C = part.geo.getAttribute('color'), G = part.geo.getAttribute('glow');
+    for (const W of mats) {
+      for (let i = 0; i < P.count; i++) {
+        v.fromBufferAttribute(P, i).applyMatrix4(W);
+        TP.push(v.x, v.y, v.z);
+        TC.push(C ? C.getX(i) : 1, C ? C.getY(i) : 1, C ? C.getZ(i) : 1);
+        TG.push(G ? G.getX(i) : 0);
+      }
+    }
+  }
+  // vertex clustering
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < TP.length; i += 3) for (let a = 0; a < 3; a++) { lo[a] = Math.min(lo[a], TP[i + a]); hi[a] = Math.max(hi[a], TP[i + a]); }
+  const cell = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2], 1e-3) / Math.max(2, cells);
+  // X grid centred on x = 0 (every model is mirror-symmetric about it: both tracks / wheels / arms
+  // collapse the same way); Y / Z grids start at the model's bounds
+  const key = (i: number) =>
+    Math.floor(TP[i * 3] / cell + 0.5) + ',' + Math.floor((TP[i * 3 + 1] - lo[1]) / cell) + ',' + Math.floor((TP[i * 3 + 2] - lo[2]) / cell);
+  const cid = new Map<string, number>();
+  const sum: number[] = [];
+  const vc = new Int32Array(TP.length / 3);
+  for (let i = 0; i < vc.length; i++) {
+    const k = key(i);
+    let c = cid.get(k);
+    if (c === undefined) { c = cid.size; cid.set(k, c); sum.push(0, 0, 0, 0); }
+    vc[i] = c;
+    sum[c * 4] += TP[i * 3]; sum[c * 4 + 1] += TP[i * 3 + 1]; sum[c * 4 + 2] += TP[i * 3 + 2]; sum[c * 4 + 3]++;
+  }
+  const seen = new Set<string>();
+  const OP: number[] = [], OC: number[] = [], OG: number[] = [];
+  for (let t = 0; t < vc.length; t += 3) {
+    const a = vc[t], b = vc[t + 1], c = vc[t + 2];
+    if (a === b || b === c || a === c) continue;
+    // oriented dedupe (rotate the smallest id first, keep the winding: both faces of a thin plate stay)
+    const r = a < b && a < c ? [a, b, c] : b < c ? [b, c, a] : [c, a, b];
+    const sk = r[0] + ',' + r[1] + ',' + r[2];
+    if (seen.has(sk)) continue;
+    seen.add(sk);
+    let cr = 0, cg = 0, cb = 0, gl = 0;
+    for (let j = 0; j < 3; j++) {
+      const i = t + j, cl = vc[i], n = sum[cl * 4 + 3];
+      OP.push(sum[cl * 4] / n, sum[cl * 4 + 1] / n, sum[cl * 4 + 2] / n);
+      cr += TC[i * 3]; cg += TC[i * 3 + 1]; cb += TC[i * 3 + 2]; gl = Math.max(gl, TG[i]);
+    }
+    for (let j = 0; j < 3; j++) { OC.push(cr / 3, cg / 3, cb / 3); OG.push(gl); }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(OP, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(OC, 3));
+  geo.setAttribute('glow', new THREE.Float32BufferAttribute(OG, 1));
+  geo.computeVertexNormals();
+  geo.computeBoundingSphere();
+  geo.computeBoundingBox();
+  return geo;
+}

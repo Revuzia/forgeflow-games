@@ -3,14 +3,19 @@
 //              WARD-7 • LIVE bug, big lower third (BREAKING · biome slate · titan sighting line),
 //              PRESS ANY KEY — resolves on any key / click / pad button.
 //   sizeUp     full-width MASS BREACH banner sweep (~2.2 s, non-blocking) + rank sub-line.
-//   alert      full-width WARD-7 ALERT banner (queued, non-blocking, deduped, urgent keys first).
+//   alert      WARD-7 ALERT (queued, non-blocking, deduped, urgent keys first): boss / elite /
+//              phase keys = a content-sized strap across the upper third; the rest = a compact
+//              toast under the bug.
 //   tabloid    THE WARD SEVEN WITNESS front page: masthead, date line, THE CITY GOT SMALLER.,
-//              the freeze-frame photo, stats, RETRY / CHANGE TITAN / TITLE.
+//              the freeze-frame photo, stats (+ NEW RECORD stamps), the record book,
+//              RETRY / CHANGE TITAN / TITLE.
 //   clear      drop every banner/queue and close an open slate (resolved) or tabloid (abandoned).
 // Deferred work is guarded by an epoch (doctrine §4): a timer from a cleared run no-ops.
 
 import type { Input } from '../core/input.ts';
 import type { AlertKey, BiomeDef, RankIndex, TitanDef, World } from '../core/types.ts';
+import { bestKey, loadBest } from '../core/save.ts';
+import { BIOMES } from '../data/biomes.ts';
 import { BOSSES } from '../data/bosses.ts';
 import { TITANS } from '../data/titans.ts';
 import { ALERTS, RANK_SUBS, STR } from '../data/strings.ts';
@@ -23,6 +28,7 @@ import { buildBug } from './menus.ts';
 type TabloidChoice = 'retry' | 'select' | 'title';
 
 const ALERT_MS = 2900;
+const TOAST_MS = 3600;          // a toast is small and carries a how-to line: it stays a little longer
 const ALERT_GAP_MS = 260;
 const SIZEUP_MS = 2300;
 const ALERT_QUEUE_MAX = 4;
@@ -71,6 +77,9 @@ export class Broadcast {
   private readonly tabButtons: HTMLButtonElement[] = [];
   private tabSel = 0;
   private tabSession: ModalSession<TabloidChoice> | null = null;
+  /** Personal bests as they stood BEFORE the current run (snapshot at clear(), which the app
+   *  calls on every run start; the app records the new bests at runEnd, before the tabloid). */
+  private bestSnap: Record<string, number> | null = null;
 
   constructor(root: HTMLElement, input?: Input) {
     this.root = root;
@@ -300,21 +309,38 @@ export class Broadcast {
     this.alTitle.textContent = a.title;
     this.alSub.textContent = a.sub;
     this.alertBox.dataset.tone = ALERT_TONE[key] ?? 'navy';
+    // urgent (boss / elite / phase) = content-sized strap across the upper third; the rest = a
+    // compact toast under the bug. Both are content-sized, so no empty slab ever crosses the
+    // screen: the strap wipes in from the left and collapses to its centre line on exit.
+    const urgent = URGENT.has(key);
+    this.alertBox.classList.toggle('urgent', urgent);
+    this.alertBox.classList.toggle('toast', !urgent);
     this.alertBox.classList.add('on');
     const reduced = flashesReduced();
-    const anim = this.alertBox.animate(reduced
+    const frames: Keyframe[] = reduced
       ? [{ opacity: 0 }, { opacity: 1, offset: 0.08 }, { opacity: 1, offset: 0.9 }, { opacity: 0 }]
-      : [
-        { transform: 'translateX(100%)', opacity: 1 },
-        { transform: 'translateX(-1.5%)', offset: 0.09 },
-        { transform: 'translateX(0)', offset: 0.13 },
-        { transform: 'translateX(0)', offset: 0.9 },
-        { transform: 'translateX(-100%)', opacity: 1 },
-      ], { duration: ALERT_MS, easing: 'cubic-bezier(.55,0,.35,1)', fill: 'both' });
+      : urgent
+        ? [
+          { clipPath: 'inset(0 100% 0 0)', transform: 'translateX(-3%)', opacity: 1 },
+          { clipPath: 'inset(0 0% 0 0)', transform: 'translateX(0.6%)', opacity: 1, offset: 0.09 },
+          { clipPath: 'inset(0 0% 0 0)', transform: 'translateX(0)', opacity: 1, offset: 0.13 },
+          { clipPath: 'inset(0 0% 0 0)', transform: 'scaleY(1)', opacity: 1, offset: 0.9 },
+          { clipPath: 'inset(50% 0% 50% 0)', transform: 'scaleY(0.2)', opacity: 0.6 },
+        ]
+        : [
+          { opacity: 0, transform: 'translateY(-35%)', clipPath: 'inset(0 100% 0 0)' },
+          { opacity: 1, transform: 'translateY(0)', clipPath: 'inset(0 0% 0 0)', offset: 0.07 },
+          { opacity: 1, transform: 'translateY(0)', clipPath: 'inset(0 0% 0 0)', offset: 0.9 },
+          { opacity: 0, transform: 'translateY(-20%)', clipPath: 'inset(0 0% 0 0)' },
+        ];
+    const anim = this.alertBox.animate(frames, {
+      duration: urgent ? ALERT_MS : TOAST_MS, easing: 'cubic-bezier(.55,0,.35,1)', fill: 'both',
+    });
     this.alertAnim = anim;
     anim.onfinish = () => {
       if (ep !== this.epoch || this.alertAnim !== anim) return;
       this.alertBox.classList.remove('on');
+      anim.cancel();              // drop the fill: a finished toast must not leave opacity 0 under the next banner
       this.alertAnim = null;
       this.showing = null;
       setTimeout(() => { if (ep === this.epoch) this.pumpAlerts(); }, ALERT_GAP_MS);
@@ -441,24 +467,49 @@ export class Broadcast {
       const pct = boss.maxHp > 0 ? Math.max(0, Math.ceil((boss.hp / boss.maxHp) * 100)) : 0;
       bossLine = !boss.alive || boss.hp <= 0 ? fmt(STR.tabloid.bossBeaten, { boss: bossName }) : fmt(STR.tabloid.bossStanding, { boss: bossName, pct });
     }
-    const rows: [string, string][] = [
-      [L.time, fmtTime(endT)],
-      [L.size, `${STR.sizeUp.size} ${roman(w.run.peakRank)}`],
-      [L.level, String(T.level)],
-      [L.tonnage, `${fmtInt(w.run.tonnage)} T`],
-      [L.floors, fmtInt(T.floorsEaten)],
-      [L.buildings, fmtInt(T.buildingsLeveled)],
-      [L.blocks, fmtInt(w.run.blocksLeveled)],
-      [L.crushed, fmtInt(T.crushed)],
-      [L.kills, fmtInt(T.kills)],
+    const rec = this.records(w, result);
+    const rows: [string, string, string][] = [
+      [L.time, fmtTime(endT), result === 'clear' ? 'clearS' : 'survivedS'],
+      [L.size, `${STR.sizeUp.size} ${roman(w.run.peakRank)}`, 'peakRank'],
+      [L.level, String(T.level), 'level'],
+      [L.tonnage, `${fmtInt(w.run.tonnage)} T`, 'tonnage'],
+      [L.floors, fmtInt(T.floorsEaten), ''],
+      [L.buildings, fmtInt(T.buildingsLeveled), ''],
+      [L.blocks, fmtInt(w.run.blocksLeveled), 'blocks'],
+      [L.crushed, fmtInt(T.crushed), ''],
+      [L.kills, fmtInt(T.kills), 'kills'],
     ];
     const tbl = div('bt-np-stats', nums);
-    for (const [k, v] of rows) {
+    for (const [k, v, key] of rows) {
       const r = div('bt-np-stat', tbl);
       r.appendChild(el('span', 'k', k));
+      if (key && rec.fell.has(key)) r.appendChild(el('span', 'bt-np-new', STR.tabloid.record.newTag));
       r.appendChild(el('span', 'dots'));
       r.appendChild(el('span', 'v', v));
     }
+
+    // record book: the bests on file for this titan + zone, this run's broken ones stamped
+    const book = div('bt-np-record', nums);
+    const bh = div('bt-np-record-head', book);
+    bh.appendChild(el('b', '', STR.tabloid.record.title));
+    bh.appendChild(el('span', '', fmt(STR.tabloid.record.sub, { name, biome: BIOMES[w.biomeId]?.name ?? w.biomeId.toUpperCase() })));
+    const RR = STR.tabloid.record.rows;
+    const timeKey = result === 'clear' || rec.now.clearS !== undefined ? 'clearS' : 'survivedS';
+    const bookRows: [string, string][] = [
+      ['tonnage', RR.tonnage], ['blocks', RR.blocks], ['peakRank', RR.peakRank], ['kills', RR.kills],
+      [timeKey, timeKey === 'clearS' ? RR.clearS : RR.survivedS],
+    ];
+    for (const [key, label] of bookRows) {
+      const r = div('bt-np-record-row', book);
+      r.appendChild(el('span', 'k', label));
+      r.appendChild(el('span', 'dots'));
+      const val = rec.now[key];
+      r.appendChild(el('span', 'v', val === undefined ? STR.tabloid.record.none : fmtRecord(key, val)));
+      if (rec.fell.has(key)) { r.classList.add('fell'); r.appendChild(el('span', 'bt-np-new sm', STR.tabloid.record.newShort)); }
+    }
+    div('bt-np-record-note', book, rec.first ? STR.tabloid.record.first
+      : rec.fell.size === 0 ? STR.tabloid.record.held
+        : rec.fell.size === 1 ? STR.tabloid.record.fellOne : fmt(STR.tabloid.record.fell, { n: rec.fell.size }));
     const bl = div(`bt-np-boss ${boss && (!boss.alive || boss.hp <= 0) ? 'beaten' : ''}`, nums);
     bl.appendChild(el('small', '', L.boss));
     bl.appendChild(el('b', '', bossLine));
@@ -467,8 +518,14 @@ export class Broadcast {
     const story = div('bt-np-story', grid);
     div('bt-np-byline', story, STR.tabloid.byline);
     const body = result === 'clear' ? STR.tabloid.bodyClear : STR.tabloid.bodyDead;
+    const blocksN = w.run.blocksLeveled, tonsN = Math.round(w.run.tonnage);
+    const alt = STR.tabloid.bodyAlt;
     body.forEach((p, i) => {
-      const para = el('p', i === 0 ? 'lead' : '', fmt(p, vars));
+      // a figure that would read wrong ("0 blocks can be listed as a view") swaps its whole line
+      let tpl: string = p;
+      if (tpl.includes('{blocks}') && blocksN <= 1) tpl = blocksN === 1 ? alt.blocks1 : alt.blocks0;
+      else if (tpl.includes('{tons}') && tonsN < 1) tpl = alt.tons0;
+      const para = el('p', i === 0 ? 'lead' : '', fmt(tpl, vars));
       story.appendChild(para);
     });
 
@@ -484,11 +541,43 @@ export class Broadcast {
     for (const s of STR.tabloid.sidebar) side.appendChild(el('span', '', s));
   }
 
+  /**
+   * This run's figures against the bests on file before it. Mirrors App.recordBests (game.ts):
+   * higher wins, except clearS (lower wins, clears only). `now` = the record after this run.
+   */
+  private records(w: World, result: 'clear' | 'dead'): { now: Record<string, number>; fell: Set<string>; first: boolean } {
+    const t = w.titanId, b = w.biomeId;
+    const known = this.bestSnap !== null;
+    const prev = this.bestSnap ?? loadBest();
+    const run: Record<string, number> = {
+      tonnage: Math.round(w.run.tonnage), blocks: w.run.blocksLeveled, kills: w.titan.kills, level: w.titan.level,
+      peakRank: w.run.peakRank, survivedS: Math.round(w.t),
+    };
+    if (result === 'clear') run.clearS = Math.round(w.t * 10) / 10;
+    const now: Record<string, number> = {};
+    const fell = new Set<string>();
+    let any = false;
+    for (const k of ['tonnage', 'blocks', 'kills', 'level', 'peakRank', 'survivedS', 'clearS']) {
+      const p = prev[bestKey(t, b, k)];
+      const v = run[k];
+      if (p !== undefined) any = true;
+      if (v === undefined || !Number.isFinite(v)) { if (p !== undefined) now[k] = p; continue; }
+      const lower = k === 'clearS';
+      const better = p === undefined || (lower ? v < p : v > p);
+      now[k] = better ? v : p;
+      // stamp only when a record that EXISTED fell (the first broadcast sets records, it breaks none);
+      // a clear is timed by clearS, so its survivedS is kept but never stamped (it is not on the page)
+      if (known && p !== undefined && better && (lower || v > 0) && !(result === 'clear' && k === 'survivedS')) fell.add(k);
+    }
+    return { now, fell, first: known && !any };
+  }
+
   // ─────────────────────────────── clear / dismiss ───────────────────────────────
 
   /** Drop banners + queue; close an open slate (resolved) and an open tabloid (abandoned). */
   clear(): void {
     this.epoch++;
+    this.bestSnap = loadBest();
     this.clearBanners();
     window.clearInterval(this.slateTimer);
     if (this.slateSession && !this.slateSession.done) this.slateSession.finish(undefined, 0);
@@ -516,6 +605,13 @@ export class Broadcast {
     this.sizeBox.classList.remove('on');
     this.sizeUntil = 0;
   }
+}
+
+function fmtRecord(key: string, v: number): string {
+  if (key === 'peakRank') return `${STR.sizeUp.size} ${roman(Math.max(0, Math.min(4, Math.round(v))))}`;
+  if (key === 'survivedS' || key === 'clearS') return fmtTime(v);
+  if (key === 'tonnage') return `${fmtInt(v)} T`;
+  return fmtInt(v);
 }
 
 /** "WEDNESDAY, SEPTEMBER 23" (cosmetic; UI may read the clock). */

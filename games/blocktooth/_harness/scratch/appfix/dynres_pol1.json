@@ -1,0 +1,284 @@
+{
+ "tag": "pol1",
+ "p99_all": 60,
+ "p99_2nd_half": 40.4,
+ "miss%_2nd_half": 9.7,
+ "scale_trace": [
+  [
+   0.0,
+   0.8,
+   "play",
+   {
+    "intervalMs": 19.6,
+    "lastMissPct": 6.5,
+    "down": 2,
+    "up": 0
+   }
+  ],
+  [
+   1.26,
+   0.7,
+   "play",
+   {
+    "intervalMs": 19.6,
+    "lastMissPct": 23.1,
+    "down": 3,
+    "up": 0
+   }
+  ],
+  [
+   2.38,
+   0.6,
+   "play",
+   {
+    "intervalMs": 19.6,
+    "lastMissPct": 15.9,
+    "down": 4,
+    "up": 0
+   }
+  ],
+  [
+   3.45,
+   0.6,
+   "play",
+   {
+    "intervalMs": 19.6,
+    "lastMissPct": 4.3,
+    "down": 4,
+    "up": 0
+   }
+  ],
+  [
+   4.72,
+   0.6,
+   "play",
+   {
+    "intervalMs": 19.6,
+    "lastMissPct": 4.3,
+    "down": 4,
+    "up": 0
+   }
+  ],
+  [
+   5.78,
+   0.6,
+   "play",
+   {
+    "intervalMs": 19.6,
+    "lastMissPct": 50,
+    "down": 4,
+    "up": 0
+   }
+  ],
+  [
+   6.83,
+   0.6,
+   "play",
+   {
+    "intervalMs": 19.6,
+    "lastMissPct": 4.1,
+    "down": 4,
+    "up": 0
+   }
+  ],
+  [
+   8.05,
+   0.6,
+   "draft",
+   {
+    "intervalMs": 19.6,
+    "lastMissPct": 4.1,
+    "down": 4,
+    "up": 0
+   }
+  ],
+  [
+   9.39,
+   0.6,
+   "draft",
+   {
+    "intervalMs": 19.6,
+    "lastMissPct": 4.1,
+    "down": 4,
+    "up": 0
+   }
+  ],
+  [
+   10.55,
+   0.6,
+   "draft",
+   {
+    "intervalMs": 19.6,
+    "lastMissPct": 24.4,
+    "down": 4,
+    "up": 0
+   }
+  ],
+  [
+   11.79,
+   0.6,
+   "play",
+   {
+    "intervalMs": 19.6,
+    "lastMissPct": 24.4,
+    "down": 4,
+    "up": 0
+   }
+  ],
+  [
+   12.84,
+   0.6,
+   "play",
+   {
+    "intervalMs": 19.6,
+    "lastMissPct": 11.1,
+    "down": 4,
+    "up": 0
+   }
+  ],
+  [
+   13.89,
+   0.6,
+   "play",
+   {
+    "intervalMs": 19.6,
+    "lastMissPct": 2,
+    "down": 4,
+    "up": 0
+   }
+  ],
+  [
+   15.14,
+   0.6,
+   "play",
+   {
+    "intervalMs": 19.6,
+    "lastMissPct": 21.4,
+    "down": 4,
+    "up": 0
+   }
+  ],
+  [
+   16.19,
+   0.6,
+   "play",
+   {
+    "intervalMs": 19.6,
+    "lastMissPct": 0,
+    "down": 4,
+    "up": 0
+   }
+  ],
+  [
+   17.24,
+   0.6,
+   "play",
+   {
+    "intervalMs": 19.6,
+    "lastMissPct": 2,
+    "down": 4,
+    "up": 0
+   }
+  ],
+  [
+   18.51,
+   0.6,
+   "play",
+   {
+    "intervalMs": 19.6,
+    "lastMissPct": 2,
+    "down": 4,
+    "up": 0
+   }
+  ],
+  [
+   19.71,
+   0.6,
+   "play",
+   {
+    "intervalMs": 19.6,
+    "lastMissPct": 2,
+    "down": 4,
+    "up": 0
+   }
+  ]
+ ],
+ "per_second": [
+  {
+   "p99": 199.8,
+   "miss%": 26.5
+  },
+  {
+   "p99": 59.9,
+   "miss%": 6.4
+  },
+  {
+   "p99": 40.1,
+   "miss%": 4.2
+  },
+  {
+   "p99": 399.9,
+   "miss%": 40.9
+  },
+  {
+   "p99": 79.7,
+   "miss%": 41.9
+  },
+  {
+   "p99": 40.6,
+   "miss%": 2.0
+  },
+  {
+   "p99": 60,
+   "miss%": 11.1
+  },
+  {
+   "p99": 40.4,
+   "miss%": 38.9
+  },
+  {
+   "p99": 59.9,
+   "miss%": 45.7
+  },
+  {
+   "p99": 40.4,
+   "miss%": 18.6
+  },
+  {
+   "p99": 40.5,
+   "miss%": 27.5
+  },
+  {
+   "p99": 40.4,
+   "miss%": 6.1
+  },
+  {
+   "p99": 20.5,
+   "miss%": 0.0
+  },
+  {
+   "p99": 40.3,
+   "miss%": 6.2
+  },
+  {
+   "p99": 40.4,
+   "miss%": 15.9
+  },
+  {
+   "p99": 20.6,
+   "miss%": 0.0
+  },
+  {
+   "p99": 40.4,
+   "miss%": 4.2
+  },
+  {
+   "p99": 40.4,
+   "miss%": 24.4
+  },
+  {
+   "p99": 40.3,
+   "miss%": 28.2
+  }
+ ]
+}

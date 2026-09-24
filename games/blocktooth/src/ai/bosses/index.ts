@@ -49,6 +49,11 @@ interface BossModule {
   create(w: World): BossState;
   step(w: World, b: BossState): void;
   onDamage?(w: World, b: BossState, part: number, dmg: number): void;
+  /** Hard keep-out (m, centre to centre) the titan can never be inside; 0/absent = body only. */
+  keepOut?(w: World, b: BossState): number;
+  /** Hard keep-out for the titan's NOSE: its snout point (`noseReach` m ahead along the heading)
+   *  can never be closer than this to the boss centre (0/absent = off). */
+  noseOut?(w: World, b: BossState): { reach: number; min: number } | null;
 }
 const MODS: Record<BossId, BossModule> = { caisson4, irongully };
 
@@ -349,11 +354,39 @@ function settleTitan(w: World): void {
   T.z = clamp(T.z, B.minZ, B.maxZ);
 }
 
-/** The titan cannot stand inside the boss's body (parts[0]); eased push-out. */
-function pushTitanOut(w: World, b: BossState): void {
+/**
+ * The titan cannot stand inside the boss's body (parts[0]); eased push-out. A module keep-out
+ * (`keep` > 0, centre to centre) is a HARD wall instead: the titan is projected straight back onto
+ * it every tick, so a Size V body never ends up standing inside the rig (F10).
+ */
+function pushTitanOut(w: World, b: BossState, keep: number, nose: { reach: number; min: number } | null): void {
   const T = w.titan;
   const p = b.parts[0];
   if (!p || !T.alive) return;
+  if (keep > 0) {
+    let moved = false;
+    const dx = T.x - b.x, dz = T.z - b.z, d = Math.hypot(dx, dz);
+    if (d < keep) {
+      if (d > 1e-4) { T.x = b.x + (dx / d) * keep; T.z = b.z + (dz / d) * keep; }
+      else { T.x = b.x + Math.sin(b.heading) * keep; T.z = b.z + Math.cos(b.heading) * keep; }
+      moved = true;
+    }
+    // the snout: a long-bodied titan facing the rig still reaches far past its collision circle
+    // (MOLO's nose is 1.11 H ahead of its centre vs a 0.42 H radius) — translate the whole titan so
+    // its nose point stays outside `min` as well
+    if (nose && nose.reach > 0 && nose.min > 0) {
+      const nx = T.x + Math.sin(T.heading) * nose.reach - b.x, nz = T.z + Math.cos(T.heading) * nose.reach - b.z;
+      const nd = Math.hypot(nx, nz);
+      if (nd < nose.min) {
+        const push = nose.min - nd;
+        if (nd > 1e-4) { T.x += (nx / nd) * push; T.z += (nz / nd) * push; }
+        else { T.x -= Math.sin(T.heading) * push; T.z -= Math.cos(T.heading) * push; }
+        moved = true;
+      }
+    }
+    if (moved) settleTitan(w);
+    return;
+  }
   const rr = p.r + T.radius * 0.7;
   const dx = T.x - p.x, dz = T.z - p.z, d = Math.hypot(dx, dz);
   if (d >= rr) return;
@@ -492,7 +525,7 @@ export function stepBoss(w: World): void {
   if (!Number.isFinite(b.x) || !Number.isFinite(b.z)) { b.x = b.px; b.z = b.pz; }
   if (!Number.isFinite(b.heading)) b.heading = b.pheading;
   refreshParts(b);
-  if (T.alive) pushTitanOut(w, b);
+  if (T.alive) pushTitanOut(w, b, mod.keepOut ? mod.keepOut(w, b) : 0, mod.noseOut ? mod.noseOut(w, b) : null);
   crushUnder(w, b);
   b.subtitle = bossSubtitle(b.id, b.attack);
 }

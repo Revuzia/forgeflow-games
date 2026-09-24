@@ -5,11 +5,22 @@
 // Lifecycle: spawn → short ballistic burst (lands in ~0.5 s) → rests → once inside the magnet radius
 // (stats.pickupRadius × H + 2 m) it latches `magnet` and homes on the titan, accelerating up to at
 // least 1.6 × the titan's max speed so it always catches up → collected at the titan's radius.
+//
+// Economy guards (PC-01: a ranged kit's kills left value outside its magnet, the ground filled to
+// CITY.maxPickups, and every later drop — even from buildings the titan was chewing — merged into a
+// far-away pickup it never passed, freezing mass income for minutes):
+//   * rubble/scrap landing within LATCH_REACH_MUL × the kit's auto-attack reach (or the magnet
+//     radius, whichever is larger) latches `magnet` the moment it lands — the titan's own kills
+//     come home even when the kit hits from 3 H away;
+//   * over the cap, new value merges into the mergeable pickup nearest the TITAN (not the spawn);
+//   * rubble/scrap resting longer than DRIFT_AFTER_S crawls toward the titan (ramping to
+//     DRIFT_SPEED_MUL × its max speed), so nothing is stranded and the cap drains.
 
 import type { Pickup, PickupKind, World } from '../core/types.ts';
 import { CITY, RANKS } from '../core/config.ts';
 import { clamp } from '../core/math.ts';
 import { gainMass, gainXp, healTitan, titanMaxSpeed } from '../titans/titansim.ts';
+import { kitReach } from '../titans/kits/index.ts';
 import { stat } from '../upgrades/stats.ts';
 
 // ─────────────────────────────── tuning (lane-local) ───────────────────────────────
@@ -27,13 +38,21 @@ const PULL_ACCEL_RATE = 4;
 const COLLECT_PAD = 0.25;
 /** Heal pickups restore this fraction of maxHp. */
 const HEAL_FRAC = 0.1;
-/** Merge search radius when over the cap (m, × scale). Falls back to the nearest mergeable anywhere. */
-const MERGE_R = 12;
 /** A pickup must be this old (s) before it can be collected (so the burst reads). */
 const MIN_COLLECT_AGE = 0.1;
+/** Rubble/scrap landing within this × the kit's auto-attack reach latches the magnet on landing. */
+const LATCH_REACH_MUL = 1.2;
+/** Resting rubble/scrap older than this (s) starts crawling toward the titan… */
+const DRIFT_AFTER_S = 8;
+/** …ramping over this many seconds… */
+const DRIFT_RAMP_S = 6;
+/** …up to this × the titan's max speed (slower than the titan: it closes while the titan eats). */
+const DRIFT_SPEED_MUL = 0.35;
 
 // ─────────────────────────────── per-world bookkeeping ───────────────────────────────
 interface PickBook { alive: number; }
+/** Pickups that latch `magnet` as soon as their burst lands (spawned inside the kit's reach). */
+const latchOnLand = new WeakSet<Pickup>();
 const books = new WeakMap<World, PickBook>();
 function bookOf(w: World): PickBook {
   let b = books.get(w);
@@ -62,28 +81,33 @@ function scaleOf(w: World): number {
 
 const mergeable = (k: PickupKind): boolean => k === 'rubble' || k === 'scrap';
 
-function mergeTarget(w: World, x: number, z: number): Pickup | null {
-  const r = MERGE_R * scaleOf(w);
+/**
+ * Over-cap merge target: the mergeable pickup nearest the TITAN (a magnetised one first), so value
+ * dropped while the ground is full stays collectable — merging into the pickup nearest the spawn
+ * point parked it on far-off heaps the titan never passes (PC-01). Ties → lower id.
+ */
+function mergeTarget(w: World): Pickup | null {
+  const T = w.titan;
   let best: Pickup | null = null, bestD = Infinity;
-  let near: Pickup | null = null, nearD = r * r;
+  let mag: Pickup | null = null, magD = Infinity;
   const ps = w.pickups;
   for (let i = 0; i < ps.length; i++) {
     const p = ps[i];
     if (!p.alive || !mergeable(p.kind)) continue;
-    const dx = p.x - x, dz = p.z - z;
+    const dx = p.x - T.x, dz = p.z - T.z;
     const d = dx * dx + dz * dz;
-    if (d <= nearD && (near === null || d < nearD || p.id < near.id)) { near = p; nearD = d; }
-    if (d < bestD) { best = p; bestD = d; }
+    if (p.magnet && (d < magD || (d === magD && mag !== null && p.id < mag.id))) { mag = p; magD = d; }
+    if (d < bestD || (d === bestD && best !== null && p.id < best.id)) { best = p; bestD = d; }
   }
-  return near ?? best;
+  return mag ?? best;
 }
 
 // ─────────────────────────────── contract exports ───────────────────────────────
 
 /**
  * Spawn a pickup bursting outward from (x, z) (lands in ~0.5 s). Over CITY.maxPickups a rubble/scrap
- * pickup merges its xp/mass into the nearest existing rubble/scrap pickup instead (totals conserved);
- * heal/chest pickups always spawn.
+ * pickup merges its xp/mass into the rubble/scrap pickup nearest the titan instead (totals conserved);
+ * heal/chest pickups always spawn. Rubble/scrap spawned inside the kit's reach latches on landing.
  */
 export function spawnPickup(w: World, kind: PickupKind, x: number, z: number, xp: number, mass: number): void {
   if (!Number.isFinite(x) || !Number.isFinite(z)) return;
@@ -92,7 +116,7 @@ export function spawnPickup(w: World, kind: PickupKind, x: number, z: number, xp
   if (mergeable(kind) && xpv === 0 && mv === 0) return;
   const book = bookOf(w);
   if (book.alive >= CITY.maxPickups && mergeable(kind)) {
-    const t = mergeTarget(w, x, z);
+    const t = mergeTarget(w);
     if (t) { t.xp += xpv; t.mass += mv; return; }
   }
   const id = w.nextId++;   // same semantics as core/world.ts newId
@@ -115,6 +139,11 @@ export function spawnPickup(w: World, kind: PickupKind, x: number, z: number, xp
   };
   w.pickups.push(p);
   book.alive++;
+  if (mergeable(kind) && T.alive) {
+    const H = T.height;
+    const R = LATCH_REACH_MUL * Math.max(kitReach(w), Math.max(0, stat(w, 'pickupRadius')) * H + 2);
+    if (td <= R) latchOnLand.add(p);
+  }
 }
 
 /** Magnet, homing, burst physics and collection. Called once per tick by stepWorld. */
@@ -131,6 +160,7 @@ export function stepPickups(w: World): void {
   const maxPull = Math.max(PULL_SPEED_MIN, PULL_SPEED_MUL * titanMaxSpeed(w));
   const collectR = T.radius + COLLECT_PAD;
   const carryY = H * 0.35;
+  const driftMax = DRIFT_SPEED_MUL * titanMaxSpeed(w);
   let alive = 0;
   const n = ps.length;
   for (let i = 0; i < n; i++) {
@@ -170,7 +200,19 @@ export function stepPickups(w: World): void {
       p.x += p.vx * dt; p.z += p.vz * dt;
       p.vy -= g * dt;
       p.y += p.vy * dt;
-      if (p.y <= 0) { p.y = 0; p.vy = 0; p.vx = 0; p.vz = 0; }
+      if (p.y <= 0) {
+        p.y = 0; p.vy = 0; p.vx = 0; p.vz = 0;
+        if (T.alive && latchOnLand.has(p)) p.magnet = true;   // home from the next tick
+      }
+    } else if (T.alive && p.t > DRIFT_AFTER_S && mergeable(p.kind)) {
+      // stale heap: crawl toward the titan (never outruns it; the magnet takes over inside magnetR)
+      const dx = T.x - p.x, dz = T.z - p.z, d = Math.hypot(dx, dz);
+      const sp = driftMax * clamp((p.t - DRIFT_AFTER_S) / DRIFT_RAMP_S, 0, 1);
+      if (d > 1e-6 && sp > 0) {
+        const step = Math.min(d, sp * dt);
+        p.vx = (dx / d) * sp; p.vz = (dz / d) * sp;
+        p.x += (dx / d) * step; p.z += (dz / d) * step;
+      }
     } else if (p.vx !== 0 || p.vz !== 0) {
       p.vx = 0; p.vz = 0;
     }

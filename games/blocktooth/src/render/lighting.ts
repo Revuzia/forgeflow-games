@@ -28,6 +28,13 @@ const K = 2 * Math.tan((CAMERA.fovDeg * Math.PI) / 360);
 const CASTER_TOP = 190;
 /** quantisation step for the shadow box half-size */
 const HALF_STEP = 1.06;
+/** From this camera distance (Size IV: D* = 314 m) the shadow map re-renders every OTHER frame.
+ *  The sun pass re-draws every caster (the city's instanced floors are one draw each and are never
+ *  culled per instance), and GPU timer queries at Size V + 250 foes put it at ≈2–3 ms of a ≈22 ms
+ *  frame. A skipped frame keeps the previous map AND its matrix (three only recomputes
+ *  shadow.matrix when the map renders), so the lookup stays self-consistent; the only artefact is a
+ *  moving caster's shadow trailing by one frame — at this zoom < 1 screen px. */
+const HALF_RATE_D = 250;
 
 interface TimeLook {
   sun: number;          // × π
@@ -40,6 +47,23 @@ interface TimeLook {
                         // ≈2.3 screen px at EVERY rank: 1.6 → a ≈7 px penumbra (crisp comic edge, no stair-steps)
   shadowIntensity: number;
 }
+
+/** Night close-up lift (LOCKWATER at Size I–II). At street level the view is mostly navy asphalt
+ *  (#0d1a26 — so dark that no light level makes it bright) and a small indigo titan: the frame read
+ *  ~28–37 mean luma and the #1b1426 ink outline vanished. So while the camera is close, the fill
+ *  lights come up and the hemisphere's GROUND term turns into a neon bounce (palette.rim, the wet
+ *  street's magenta glow). Up-facing ground only ever sees the hemisphere's SKY term, so that bounce
+ *  lands on the titan's flanks / belly and on walls — a lift that separates the body from the street
+ *  instead of brightening both equally. Cast shadows also ease off a little so the titan never
+ *  vanishes into a tower's moon-shadow. Eases out between Size II and Size III (camera D 62 → 154 m),
+ *  where the lit windows and neon already carry the frame (Size V measured 62.6 mean luma). */
+const NIGHT_LIFT = {
+  dFull: 62, dNone: 154,
+  sun: 0.24, hemi: 0.50, ambient: 0.22,
+  bounceRim: 0.70,      // hemisphere ground colour → this much palette.rim (magenta bounce)
+  bounceGain: 3.2,      // …at this brightness (× the base 0.72 bounce level)
+  shadow: 0.72,         // shadow intensity at full lift
+} as const;
 
 const LOOK: Record<BiomeDef['time'], TimeLook> = {
   day:      { sun: 0.34, hemi: 0.50, ambient: 0.20, tintSat: 0.12, fogNear: 1.35, fogFar: 3.6, shadowRadius: 1.6, shadowIntensity: 1.0 },
@@ -73,6 +97,12 @@ export class Lighting {
   private readonly ly = new THREE.Vector3();
   private readonly lz = new THREE.Vector3();
   private lastHalf = -1;
+  private shadowParity = 0;
+  private night = false;
+  /** current night lift weight (−1 = not yet applied for this biome) */
+  private lift = -1;
+  private readonly baseBounce = new THREE.Color();
+  private readonly liftBounce = new THREE.Color();
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -143,6 +173,13 @@ export class Lighting {
     this.hemi.intensity = Math.PI * L.hemi;
     lightTint(p.ambient, L.tintSat * 0.8, this.ambient.color);
     this.ambient.intensity = Math.PI * L.ambient;
+    // night close-up lift targets (applied per frame in update(), weighted by the zoom)
+    this.night = b.time === 'night';
+    this.baseBounce.copy(this.hemi.groundColor);
+    lightTint(p.rim ?? p.sign, 0.75, this.liftBounce);
+    this.liftBounce.lerp(this.baseBounce.clone().multiplyScalar(1 / 0.72), 1 - NIGHT_LIFT.bounceRim)
+      .multiplyScalar(0.72 * NIGHT_LIFT.bounceGain);
+    this.lift = -1;
 
     // fog + background (the sky dome in env.ts paints over the background when mounted)
     this.fog.color.set(p.fog);
@@ -163,6 +200,21 @@ export class Lighting {
     // ── fog scales with the zoom (the game spans a 30× camera range) ──
     this.fog.near = D * this.look.fogNear;
     this.fog.far = D * this.look.fogFar;
+
+    // ── night close-up lift (see NIGHT_LIFT) — only re-written when the weight moves ──
+    if (this.night) {
+      const t = Math.min(1, Math.max(0, (D - NIGHT_LIFT.dFull) / (NIGHT_LIFT.dNone - NIGHT_LIFT.dFull)));
+      const k = 1 - t * t * (3 - 2 * t);
+      if (Math.abs(k - this.lift) > 1e-3) {
+        const L = this.look;
+        this.sun.intensity = Math.PI * (L.sun + NIGHT_LIFT.sun * k);
+        this.hemi.intensity = Math.PI * (L.hemi + NIGHT_LIFT.hemi * k);
+        this.ambient.intensity = Math.PI * (L.ambient + NIGHT_LIFT.ambient * k);
+        this.hemi.groundColor.copy(this.baseBounce).lerp(this.liftBounce, k);
+        this.sun.shadow.intensity = L.shadowIntensity + (NIGHT_LIFT.shadow - L.shadowIntensity) * k;
+        this.lift = k;
+      }
+    }
 
     // ── shadow box ──
     let half = 0.9 * D * K * aspect;
@@ -196,11 +248,22 @@ export class Lighting {
     this.sun.updateMatrixWorld();
     this.sun.target.updateMatrixWorld();
 
-    if (half !== this.lastHalf || cam.far !== depth) {
+    // (a new far plane alone needs no forced re-render: a skipped frame keeps the old map AND the
+    // old shadow.matrix together; only a new texel size — `half` stepping — forces one)
+    const refit = half !== this.lastHalf;
+    if (refit || cam.far !== depth) {
       cam.left = -half; cam.right = half; cam.top = half; cam.bottom = -half;
       cam.near = 0.5; cam.far = depth;
       cam.updateProjectionMatrix();
       this.lastHalf = half;
+    }
+    // half-rate shadow map at the big ranks (see HALF_RATE_D); always re-render on a texel step
+    if (D >= HALF_RATE_D) {
+      sh.autoUpdate = false;
+      this.shadowParity ^= 1;
+      if (this.shadowParity === 1 || refit) sh.needsUpdate = true;
+    } else if (!sh.autoUpdate) {
+      sh.autoUpdate = true;
     }
     // bias in world units, re-expressed per frame: depth bias ≈ 0.25 texel along the light,
     // normal bias ≈ 1.1 texel (toon + low sun: kills acne on the ground and grazing walls)

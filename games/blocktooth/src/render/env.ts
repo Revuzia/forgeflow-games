@@ -1,8 +1,9 @@
 // BLOCKTOOTH — environment view (CONTRACT.md §6, §6.1, §6.2). render-core lane.
 //
 // Everything that is NOT the city grid itself:
-//   * sky dome   — unlit gradient (sky → horizon → fog), follows the camera, drawn first,
-//                  never fogged; faint stars + a soft moon/sun disc (glare-bar safe).
+//   * sky dome   — unlit gradient (sky → horizon → fog), follows the camera, drawn after the
+//                  opaques behind everything (depth-tested, so it costs no fill where the city
+//                  covers it), never fogged; faint stars + a soft moon/sun disc (glare-bar safe).
 //   * ground     — out-of-city patchwork plane (biome ground colour; WHITE STACKS = snow),
 //                  toon-lit, receives shadows, sits 3 cm under y = 0 with polygonOffset so the
 //                  city's own road/lot planes always win.
@@ -14,12 +15,15 @@
 //                  world-anchored wrap inside a box around the look target, box + particle size
 //                  + fall speed all ∝ the view extent so it reads identically at Size I and V;
 //                  count by quality.level.
-//   * skyline    — a ring of distant low-poly tower silhouettes beyond the bounds (merged, one
-//                  draw, unlit painted faces, fogged — they surface only at the big ranks).
-//                  Heights are capped so no silhouette can ever sit between camera and titan.
+//   * outskirts  — the street grid continues past the bounds (fading lit roads, one draw) with
+//                  fogged low-poly towers on its parcels (merged, one unlit draw: facade hues,
+//                  window bands, parapet caps, ink cornice + edges) — they surface only at the
+//                  big ranks. Camera-side heights are capped so no silhouette can ever sit
+//                  between camera and titan.
 //   * clouds     — GRID-EAST: soft faceted toon clouds with ink outlines that appear BELOW the
-//                  camera once the titan outgrows the cloud deck (Size IV–V); they part around the
-//                  screen centre so they never hide the titan.
+//                  camera once the titan outgrows the cloud deck (Size IV–V); they never cover the
+//                  play space: they live in the outer ~12 % frame band and part around the titan,
+//                  the boss and every live hostile telegraph (screen-space keep-clear circles).
 //
 // Heights are exported so city-view can agree on them: GROUND_Y (−0.03) and FLOOD_Y (0.06).
 
@@ -27,10 +31,10 @@ import * as THREE from 'three';
 import type { BiomeDef, CityLayout, World } from '../core/types.ts';
 import type { FrameInfo, ViewCtx, ViewModule } from './viewtypes.ts';
 import { BIOMES } from '../data/biomes.ts';
-import { CAMERA } from '../core/config.ts';
+import { CAMERA, PARCEL_HALF } from '../core/config.ts';
 import { mulberry32 } from '../core/rng.ts';
 import { harbourWaterZ } from '../city/citygen.ts';
-import { addOutline, bakeOutlineNormals, facet, makeToon, OUTLINE_PX } from './materials.ts';
+import { addOutline, bakeOutlineNormals, facet, INK, makeToon, OUTLINE_PX } from './materials.ts';
 
 /** out-of-city ground height (m) — a hair under the city's y = 0 planes */
 export const GROUND_Y = -0.03;
@@ -38,6 +42,8 @@ export const GROUND_Y = -0.03;
 export const FLOOD_Y = 0.06;
 
 const K = 2 * Math.tan((CAMERA.fovDeg * Math.PI) / 360);
+/** buildable half-size of a city block (m) — the outskirts reuse it for their parcels */
+const PARCEL_HALF_M = PARCEL_HALF;
 const YAW = (CAMERA.yawDeg * Math.PI) / 180;
 /** camera forward on the ground plane (constant yaw) */
 const FWD_X = -Math.sin(YAW), FWD_Z = -Math.cos(YAW);
@@ -260,6 +266,11 @@ void main() {
 }`;
 
 // ─────────────────────────────── EnvView ───────────────────────────────
+/** clouds keep out of the inner frame: |ndc| < BAND_INNER on both axes (outer ~12 % band) */
+const BAND_INNER = 0.76;
+/** keep-clear screen circles tracked per frame (titan + boss + hostile telegraphs) */
+const KEEP_CLEAR_MAX = 40;
+
 interface CloudSeed { u: number; v: number; s: number; rot: number; sx: number; sz: number; }
 
 export class EnvView implements ViewModule {
@@ -288,6 +299,9 @@ export class EnvView implements ViewModule {
   private readonly _s = new THREE.Vector3();
   private readonly _e = new THREE.Euler();
   private readonly _fwd = new THREE.Vector3();
+  /** keep-clear circles for the cloud deck: [ndcX·aspect, ndcY, radius, margin] × KEEP_CLEAR_MAX */
+  private readonly keepClear = new Float32Array(KEEP_CLEAR_MAX * 4);
+  private keepN = 0;
 
   constructor(ctx: ViewCtx) {
     this.ctx = ctx;
@@ -323,7 +337,7 @@ export class EnvView implements ViewModule {
     // sky dome follows the camera, radius inside the far plane
     if (this.sky) {
       this.sky.position.copy(cam.position);
-      this.sky.scale.setScalar(cam.far * 0.6);
+      this.sky.scale.setScalar(cam.far * 0.9);   // inside the far plane (32×16 chords sag < 1 %)
     }
     // water: animate + scale the streak cells with the view
     const streak = 1 - 0.8 * smooth(30, 150, ext);     // reflections matter most down at street level
@@ -350,7 +364,7 @@ export class EnvView implements ViewModule {
       u.uNear.value = D * 0.5;
       void ty;
     }
-    if (this.clouds) this.updateClouds(tx, tz, D, ext, t);
+    if (this.clouds) this.updateClouds(_world, tx, tz, D, ext, t);
   }
 
   unmount(): void {
@@ -389,13 +403,16 @@ export class EnvView implements ViewModule {
       fragmentShader: SKY_FRAG,
       side: THREE.BackSide,
       depthWrite: false,
-      depthTest: false,
+      // drawn LAST among the opaques with the depth test on: it only shades pixels nothing else
+      // covered (in the 36–44° gameplay view that is none — the old first-drawn, depth-test-off dome
+      // was a full-screen pass that the ground and city then painted over every frame)
+      depthTest: true,
       fog: false,
       toneMapped: false,
     });
     const m = new THREE.Mesh(geo, mat);
     m.name = 'env:sky';
-    m.renderOrder = -1000;
+    m.renderOrder = 1000;
     m.frustumCulled = false;
     m.castShadow = false; m.receiveShadow = false;
     m.raycast = () => { /* never picked */ };
@@ -452,6 +469,10 @@ export class EnvView implements ViewModule {
     mat.polygonOffset = true; mat.polygonOffsetFactor = 1; mat.polygonOffsetUnits = 4;
     const m = new THREE.Mesh(geo, mat);
     m.name = 'env:ground';
+    // drawn after the city's opaques (only transparents come later — no opaque ground decal relies
+    // on it being underneath): early-z then rejects every pixel the city's own road/lot planes
+    // already covered, instead of running the toon + PCF-shadow shader under the whole city first
+    m.renderOrder = 900;
     m.receiveShadow = true; m.castShadow = false;
     m.frustumCulled = false;
     this.keep(geo, mat);
@@ -555,6 +576,17 @@ export class EnvView implements ViewModule {
     }
   }
 
+  /**
+   * The world edge: the city's street grid runs on past the bounds as OUTSKIRTS — fading roads
+   * (a lit toon mesh just above the ground) and, on the parcels between them, fogged low-poly
+   * towers (one unlit merged draw) in the city's own kit language: a per-tower facade hue from the
+   * palette, window bands, a parapet cap, a dark ink cornice and ink corner edges, the odd rooftop
+   * plant box / setback crown / mast. Aerial perspective is baked into the vertex colours on top of
+   * the real fog and grows ring by ring, so the outskirts dissolve into the horizon instead of
+   * ending in a flat field of blank slabs. Camera-side towers (+X / +Z) keep the sight-line cap
+   * (h ≤ 0.77 × distance past the bounds): no silhouette can stand between the camera and a titan
+   * hugging the edge. Far-side (−X / −Z) towers sit BEHIND the city in the fixed 45° view.
+   */
   private buildSkyline(b: BiomeDef, city: CityLayout): void {
     const p = b.palette;
     const bd = city.bounds;
@@ -562,95 +594,187 @@ export class EnvView implements ViewModule {
     const night = b.time === 'night';
     const snow = b.id === 'whitestacks';
     const fog = new THREE.Color(p.fog);
-    // Distant-silhouette paint: the city's own hues pushed hard toward the fog (aerial perspective
-    // baked into the vertex colours, on top of the real distance fog), misty at the base.
-    const body = new THREE.Color(night ? '#141b36' : snow ? p.bodyC : p.roofB);
-    const topCol = night ? body.clone() : body.clone().lerp(fog, snow ? 0.42 : 0.4);
-    const baseCol = night ? body.clone().lerp(fog, 0.35) : body.clone().lerp(fog, snow ? 0.8 : 0.78);
-    const roof = night ? new THREE.Color(p.roofA).lerp(fog, 0.3) : snow ? new THREE.Color(p.roofA) : topCol.clone().multiplyScalar(1.06);
-    const band = night ? body.clone() : new THREE.Color(p.glass).lerp(fog, snow ? 0.55 : 0.5);
-    const lit = atLuminance(p.glassLit, Math.max(0.03, lum(body) * 6));
-    const neonA = atLuminance(p.sign, Math.max(0.03, lum(body) * 5));
-    const neonB = atLuminance(p.signB, Math.max(0.03, lum(body) * 5));
+    const P = city.pitch, RH = city.roadW / 2;
+    const W = city.blocksX * P, Dz = city.blocksZ * P;
+    const waterZ = harbourWaterZ(city);
+    const RINGS = 7;
+
+    // ── paints ──
+    const bodies = night
+      ? ['#141b36', '#18203c', '#1d1b38'].map((h) => new THREE.Color(h))
+      : [p.bodyA, p.bodyB, p.bodyC, p.roofB].map((h) => new THREE.Color(h));
+    const airTop = night ? 0.12 : 0.2, airBase = night ? 0.36 : 0.44;    // aerial mix at ring 1
+    const airRing = night ? 0.05 : 0.075;                                  // + per extra ring
+    const inkBase = new THREE.Color(INK);
+    const trimBase = new THREE.Color(p.trimA);
+    const roofBase = new THREE.Color(p.roofA);
+    const glassBase = new THREE.Color(p.glass);
+    const litBase = atLuminance(p.glassLit, Math.max(0.03, lum(bodies[0]) * 6));
+    const neonA = atLuminance(p.sign, Math.max(0.03, lum(bodies[0]) * 5));
+    const neonB = atLuminance(p.signB, Math.max(0.03, lum(bodies[0]) * 5));
     const SHADE = [1.0, 1.0, 0.72, 0.84, 0.72] as const;       // top, +x (sun-ish), −x, +z, −z
     const bld = new Builder();
-    const waterZ = harbourWaterZ(city);
-    const bandC = new THREE.Color();
+    const c0 = new THREE.Color(), c1 = new THREE.Color(), c2 = new THREE.Color(), c3 = new THREE.Color();
+    const cInk = new THREE.Color(), cTrim = new THREE.Color(), cRoof = new THREE.Color(), cBand = new THREE.Color();
+    const cT = [new THREE.Color(), new THREE.Color(), new THREE.Color(), new THREE.Color()];
 
-    /** ox = distance beyond the bounds (m) */
-    const perim: { x: number; z: number; ox: number; side: number }[] = [];
-    const sides = [
-      { ax: bd.minX, bx: bd.maxX, fixed: bd.minZ, isX: true, out: -1, id: 0 },   // −Z (far side)
-      { ax: bd.minX, bx: bd.maxX, fixed: bd.maxZ, isX: true, out: 1, id: 1 },    // +Z (camera side)
-      { ax: bd.minZ, bx: bd.maxZ, fixed: bd.minX, isX: false, out: -1, id: 2 },  // −X (far side)
-      { ax: bd.minZ, bx: bd.maxZ, fixed: bd.maxX, isX: false, out: 1, id: 3 },   // +X (camera side)
-    ];
-    for (const s of sides) {
-      const len = s.bx - s.ax + 1200;
-      const count = Math.round(len / 20);
-      for (let i = 0; i < count; i++) {
-        const along = s.ax - 600 + rng() * len;
-        const off = 55 + Math.pow(rng(), 1.5) * 720;       // dense just past the bounds, thinning out
-        const x = s.isX ? along : s.fixed + s.out * off;
-        const z = s.isX ? s.fixed + s.out * off : along;
-        perim.push({ x, z, ox: off, side: s.id });
+    // ── roads (lit toon, one mesh, drawn after the city so it only shades what the city leaves) ──
+    const road = new THREE.Color(p.road), ground = new THREE.Color(p.ground), pad = new THREE.Color(p.sidewalk);
+    const rpos: number[] = [], rcol: number[] = [];
+    const RY = GROUND_Y + 0.015;
+    const fadeAt = (x: number, z: number, base: THREE.Color, out: THREE.Color): THREE.Color => {
+      const dx = Math.max(0, bd.minX - x, x - bd.maxX), dz = Math.max(0, bd.minZ - z, z - bd.maxZ);
+      return out.copy(base).lerp(ground, 0.12 + 0.72 * smooth(0, RINGS * P, Math.max(dx, dz)));
+    };
+    const rquad = (xa: number, za: number, xb: number, zb: number, base: THREE.Color = road): void => {
+      const ca = fadeAt(xa, za, base, c0), cb = fadeAt(xb, za, base, c1), cc = fadeAt(xb, zb, base, c2), cd = fadeAt(xa, zb, base, c3);
+      rpos.push(xa, RY, za, xa, RY, zb, xb, RY, zb, xa, RY, za, xb, RY, zb, xb, RY, za);
+      rcol.push(ca.r, ca.g, ca.b, cd.r, cd.g, cd.b, cc.r, cc.g, cc.b, ca.r, ca.g, ca.b, cc.r, cc.g, cc.b, cb.r, cb.g, cb.b);
+    };
+    const inCity = (x: number, z: number): boolean =>
+      x > city.originX - RH - 0.01 && x < city.originX + W + RH + 0.01 && z > city.originZ - RH - 0.01 && z < city.originZ + Dz + RH + 0.01;
+    const wet = (z: number): boolean => waterZ !== null && z < waterZ;
+    // one segment per block span, so the vertex colours can fade out ring by ring
+    for (let i = -RINGS; i <= city.blocksX + RINGS; i++) {
+      const x = city.originX + i * P;
+      for (let j = -RINGS; j < city.blocksZ + RINGS; j++) {
+        const za = city.originZ + j * P, zb = za + P, zm = (za + zb) / 2;
+        if (inCity(x, zm) || wet(zm)) continue;
+        rquad(x - RH, za, x + RH, zb);
       }
     }
-    for (const t of perim) {
-      // LOCKWATER: open harbour close in; only a far shore past ~520 m of water
-      if (waterZ !== null && t.z < waterZ && t.z > waterZ - 520) continue;
-      // Camera side (+X / +Z rings): the camera sits at +X+Z of the titan, so these can stand
-      // between it and a titan hugging the bounds. The sight line to the titan's FEET rises
-      // ≥ tan(36°)·s over a horizontal run s ≥ off·√2, so capping h at 0.75·tan(36°)·√2·off
-      // (≈ 0.77·off, measured from the tower's near face) keeps every rank's view clear.
-      const near = t.side === 1 || t.side === 3;
-      const wide = rng() < 0.28;                              // low long blocks between the towers
-      const w = wide ? 40 + rng() * 50 : 16 + rng() * 30;
-      const d = wide ? 30 + rng() * 40 : 16 + rng() * 30;
-      const hCap = near ? Math.min(110, 0.77 * (t.ox - Math.max(w, d) / 2)) : 165;
-      if (hCap < 16) continue;
-      const h = wide ? 12 + rng() * Math.min(26, hCap - 12) : 20 + Math.pow(rng(), 1.5) * Math.max(0, hCap - 20);
-      const x0 = t.x - w / 2, x1 = t.x + w / 2, z0 = t.z - d / 2, z1 = t.z + d / 2;
-      const yRef = 170;
-      bld.boxGrad(x0, 0, z0, x1, h, z1, baseCol, topCol, roof, yRef, SHADE);
-      // setback crown + mast on tall ones
-      if (!wide && h > 70 && rng() < 0.65) {
-        const f = 0.55 + rng() * 0.2, hh = h * (0.1 + rng() * 0.14);
-        const cw = (w * f) / 2, cd = (d * f) / 2;
-        bld.boxGrad(t.x - cw, h, t.z - cd, t.x + cw, h + hh, t.z + cd, baseCol, topCol, roof, yRef, SHADE);
-        if (rng() < 0.5) {
-          const aw = 0.7, ah = hh * 1.4 + 8;
-          bld.boxGrad(t.x - aw, h + hh, t.z - aw, t.x + aw, h + hh + ah, t.z + aw, baseCol, topCol, roof, yRef, SHADE);
-        }
+    for (let j = -RINGS; j <= city.blocksZ + RINGS; j++) {
+      const z = city.originZ + j * P;
+      if (wet(z)) continue;
+      for (let i = -RINGS; i < city.blocksX + RINGS; i++) {
+        const xa = city.originX + i * P + RH, xb = city.originX + (i + 1) * P - RH;
+        if (inCity((xa + xb) / 2, z)) continue;
+        rquad(xa, z - RH, xb, z + RH);
       }
-      // floor bands on the two camera-facing faces: day = faint glass stripes, night = lit windows
-      const rows = Math.floor(h / 7);
+    }
+    // ── towers on the outskirt parcels ──
+    const PH = PARCEL_HALF_M;
+    const tower = (x0: number, z0: number, x1: number, z1: number, h: number, ring: number, crown: boolean): void => {
+      const w = x1 - x0, d = z1 - z0;
+      const air = Math.min(0.9, (ring - 1) * airRing);
+      const bc = bodies[Math.floor(rng() * bodies.length)];
+      const topCol = c0.copy(bc).lerp(fog, Math.min(0.95, airTop + air));
+      const baseCol = c1.copy(bc).lerp(fog, Math.min(0.97, airBase + air));
+      cRoof.copy(roofBase).lerp(fog, Math.min(0.9, (snow ? 0.08 : 0.3) + air));
+      cTrim.copy(trimBase).lerp(fog, Math.min(0.9, (night ? 0.25 : 0.42) + air));
+      cInk.copy(inkBase).lerp(fog, Math.min(0.9, (night ? 0.12 : 0.22) + air));
+      const yRef = 150;
+      bld.boxGrad(x0, 0, z0, x1, h, z1, baseCol, topCol, cRoof, yRef, SHADE);
+      // parapet cap: roof colour on top, trim sides (the building's "hat")
+      const e = 0.45, ph = 1.2 + Math.min(1.4, h * 0.012);
+      for (let k = 0; k < 4; k++) cT[k].copy(cTrim).multiplyScalar(SHADE[k + 1]);
+      bld.box(x0 - e, h, z0 - e, x1 + e, h + ph, z1 + e, cRoof, cT[0], cT[1], cT[2], cT[3]);
+      // ink: cornice line under the parapet + the three camera-visible vertical edges
+      const o = 0.3, lw = Math.max(0.6, Math.min(1.6, h * 0.012));
+      bld.quad([x1 + o, h - lw, z1], [x1 + o, h - lw, z0], [x1 + o, h, z0], [x1 + o, h, z1], cInk);
+      bld.quad([x0, h - lw, z1 + o], [x1, h - lw, z1 + o], [x1, h, z1 + o], [x0, h, z1 + o], cInk);
+      bld.quad([x1 + o, 0, z1], [x1 + o, 0, z1 - lw], [x1 + o, h, z1 - lw], [x1 + o, h, z1], cInk);
+      bld.quad([x1 - lw, 0, z1 + o], [x1, 0, z1 + o], [x1, h, z1 + o], [x1 - lw, h, z1 + o], cInk);
+      bld.quad([x1 + o, 0, z0 + lw], [x1 + o, 0, z0], [x1 + o, h, z0], [x1 + o, h, z0 + lw], cInk);
+      bld.quad([x0, 0, z1 + o], [x0 + lw, 0, z1 + o], [x0 + lw, h, z1 + o], [x0, h, z1 + o], cInk);
+      // window bands on the two camera-facing faces
+      const pitch = 4.2, bh = 1.7, m = 1.4, eb = 0.22;
+      const rows = Math.floor((h - 3) / pitch);
       for (let r = 1; r < rows; r++) {
-        const yy = r * 7 + 2.4, hh = 1.7;
-        const fade = Math.min(1, yy / yRef);
+        const yy = r * pitch + 1.0;
         if (night) {
-          if (rng() < 0.4) continue;
+          if (rng() < 0.35) continue;
           const segs = 2 + Math.floor(rng() * 4);
           for (let sgi = 0; sgi < segs; sgi++) {
             if (rng() < 0.45) continue;
             const a0 = 0.1 + (sgi / segs) * 0.8, a1 = a0 + (0.8 / segs) * 0.7;
-            bld.quad([x1 + 0.3, yy, z1 - a0 * d], [x1 + 0.3, yy, z1 - a1 * d], [x1 + 0.3, yy + hh, z1 - a1 * d], [x1 + 0.3, yy + hh, z1 - a0 * d], lit);
-            bld.quad([x0 + a0 * w, yy, z1 + 0.3], [x0 + a1 * w, yy, z1 + 0.3], [x0 + a1 * w, yy + hh, z1 + 0.3], [x0 + a0 * w, yy + hh, z1 + 0.3], lit);
+            bld.quad([x1 + eb, yy, z1 - a0 * d], [x1 + eb, yy, z1 - a1 * d], [x1 + eb, yy + bh, z1 - a1 * d], [x1 + eb, yy + bh, z1 - a0 * d], litBase);
+            bld.quad([x0 + a0 * w, yy, z1 + eb], [x0 + a1 * w, yy, z1 + eb], [x0 + a1 * w, yy + bh, z1 + eb], [x0 + a0 * w, yy + bh, z1 + eb], litBase);
           }
         } else {
-          bandC.copy(band).lerp(baseCol, 1 - fade * 0.8);
-          const e = 0.25, m = 1.2;
-          bld.quad([x1 + e, yy, z1 - m], [x1 + e, yy, z0 + m], [x1 + e, yy + hh, z0 + m], [x1 + e, yy + hh, z1 - m], bandC);
-          _col.copy(bandC).multiplyScalar(SHADE[3]);
-          bld.quad([x0 + m, yy, z1 + e], [x1 - m, yy, z1 + e], [x1 - m, yy + hh, z1 + e], [x0 + m, yy + hh, z1 + e], _col);
+          const fy = Math.min(1, yy / yRef);
+          cBand.copy(glassBase).lerp(fog, Math.min(0.95, 0.8 * (airBase + air - (airBase - airTop) * fy)));
+          bld.quad([x1 + eb, yy, z1 - m], [x1 + eb, yy, z0 + m], [x1 + eb, yy + bh, z0 + m], [x1 + eb, yy + bh, z1 - m], cBand);
+          c2.copy(cBand).multiplyScalar(SHADE[3]);
+          bld.quad([x0 + m, yy, z1 + eb], [x1 - m, yy, z1 + eb], [x1 - m, yy + bh, z1 + eb], [x0 + m, yy + bh, z1 + eb], c2);
         }
       }
-      if (night && h > 60 && rng() < 0.3) {
+      if (night && h > 45 && rng() < 0.3) {
         const nc = rng() < 0.5 ? neonA : neonB;
-        bld.quad([x0, h - 3, z1 + 0.4], [x1, h - 3, z1 + 0.4], [x1, h - 1.5, z1 + 0.4], [x0, h - 1.5, z1 + 0.4], nc);
-        bld.quad([x1 + 0.4, h - 3, z1], [x1 + 0.4, h - 3, z0], [x1 + 0.4, h - 1.5, z0], [x1 + 0.4, h - 1.5, z1], nc);
+        bld.quad([x0, h - 3.2, z1 + 0.4], [x1, h - 3.2, z1 + 0.4], [x1, h - 1.8, z1 + 0.4], [x0, h - 1.8, z1 + 0.4], nc);
+        bld.quad([x1 + 0.4, h - 3.2, z1], [x1 + 0.4, h - 3.2, z0], [x1 + 0.4, h - 1.8, z0], [x1 + 0.4, h - 1.8, z1], nc);
+      }
+      // rooftop: a setback crown (+ mast) on tall ones, else a plant room / tank box
+      const top = h + ph;
+      if (crown && h > 60) {
+        const f = 0.55 + rng() * 0.2, hh = h * (0.08 + rng() * 0.12);
+        const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, cw = (w * f) / 2, cd = (d * f) / 2;
+        bld.boxGrad(cx - cw, top, cz - cd, cx + cw, top + hh, cz + cd, topCol, topCol, cRoof, yRef, SHADE);
+        if (rng() < 0.5) {
+          const aw = 0.6, ah = hh * 1.3 + 6;
+          bld.box(cx - aw, top + hh, cz - aw, cx + aw, top + hh + ah, cz + aw, cTrim, cT[0], cT[1], cT[2], cT[3]);
+        }
+      } else if (rng() < 0.7) {
+        const bw = w * (0.18 + rng() * 0.18), bdp = d * (0.18 + rng() * 0.18), bhh = 2 + rng() * 3.5;
+        const bx = x0 + w * (0.2 + rng() * 0.45), bz = z0 + d * (0.2 + rng() * 0.45);
+        bld.box(bx, top, bz, bx + bw, top + bhh, bz + bdp, cRoof, cT[0], cT[1], cT[2], cT[3]);
+      }
+    };
+
+    for (let bi = -RINGS; bi < city.blocksX + RINGS; bi++) {
+      for (let bj = -RINGS; bj < city.blocksZ + RINGS; bj++) {
+        if (bi >= 0 && bi < city.blocksX && bj >= 0 && bj < city.blocksZ) continue;   // the city itself
+        const cxB = city.originX + (bi + 0.5) * P, czB = city.originZ + (bj + 0.5) * P;
+        const ring = Math.max(bi < 0 ? -bi : bi - city.blocksX + 1, bj < 0 ? -bj : bj - city.blocksZ + 1, 1);
+        // LOCKWATER: open harbour close in; only a far shore past ~520 m of water
+        if (waterZ !== null && czB < waterZ && czB > waterZ - 520) continue;
+        if (rng() > 0.92 - ring * 0.05) continue;                  // thinning out with distance
+        // sight-line cap for the camera-side rings (distance of the parcel's near face past the bounds)
+        const offX = cxB - PH - bd.maxX, offZ = czB - PH - bd.maxZ;
+        const camSide = offX > 0 || offZ > 0;
+        const hCap = camSide ? Math.min(95, 0.77 * Math.max(offX, offZ)) : Math.min(135, 38 + ring * 16);
+        if (hCap < 9) continue;
+        // a developed parcel: sidewalk-coloured lot under the buildings (empty blocks stay green)
+        const LH = P / 2 - RH;
+        rquad(cxB - LH, czB - LH, cxB + LH, czB + LH, pad);
+        const layout = rng();
+        if (layout < 0.4) {
+          // one big slab / tower
+          const hw = PH * (0.62 + rng() * 0.3), hd = PH * (0.62 + rng() * 0.3);
+          const jx = (PH - hw) * (rng() * 2 - 1), jz = (PH - hd) * (rng() * 2 - 1);
+          const h = Math.min(hCap, 18 + Math.pow(rng(), 1.6) * Math.max(0, hCap - 18));
+          tower(cxB + jx - hw, czB + jz - hd, cxB + jx + hw, czB + jz + hd, h, ring, true);
+        } else {
+          // two to four smaller buildings on a 2×2 sub-grid
+          const q = PH / 2;
+          for (let k = 0; k < 4; k++) {
+            if (rng() < 0.3) continue;
+            const qx = cxB + (k & 1 ? q : -q), qz = czB + (k & 2 ? q : -q);
+            const hw = q * (0.6 + rng() * 0.3), hd = q * (0.6 + rng() * 0.3);
+            const h = 0.8 * Math.min(hCap, 9 + Math.pow(rng(), 1.6) * Math.max(0, hCap - 9));
+            tower(qx - hw, qz - hd, qx + hw, qz + hd, h, ring, false);
+          }
+        }
       }
     }
+    if (rpos.length) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(rpos, 3));
+      g.setAttribute('color', new THREE.Float32BufferAttribute(rcol, 3));
+      const nrm = new Float32Array(rpos.length);
+      for (let k = 1; k < nrm.length; k += 3) nrm[k] = 1;
+      g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
+      g.computeBoundingSphere();
+      const m = makeToon({ vertexColors: true });
+      m.name = 'env:outskirtRoads';
+      const mesh = new THREE.Mesh(g, m);
+      mesh.name = 'env:outskirtRoads';
+      mesh.receiveShadow = true; mesh.castShadow = false;
+      mesh.renderOrder = 900;
+      this.keep(g, m);
+      this.root.add(mesh);
+    }
+
     const geo = bld.geometry();
     const mat = new THREE.MeshBasicMaterial({ vertexColors: true, fog: true });
     mat.name = 'env:skyline';
@@ -779,12 +903,72 @@ export class EnvView implements ViewModule {
     this.root.add(im);
   }
 
-  private updateClouds(tx: number, tz: number, D: number, ext: number, t: number): void {
+  /** Everything the cloud deck must never cover, as screen circles (NDC, y units: the frame is 2
+   *  tall): the titan, the boss (every part, full height) and every live hostile telegraph. */
+  private gatherKeepClear(w: World): number {
+    this.keepN = 0;
+    const T = w.titan;
+    if (T) this.pushKeep(T.x, T.height * 0.5, T.z, Math.max(T.radius, T.height * 0.6), 0.34);
+    const b = w.boss;
+    if (b && b.alive) {
+      let r = 12, top = 20;
+      for (const p of b.parts) {
+        r = Math.max(r, Math.hypot(p.x - b.x, p.z - b.z) + p.r);
+        top = Math.max(top, p.y1);
+      }
+      this.pushKeep(b.x, top * 0.5, b.z, Math.max(r, top * 0.5), 0.14);
+    }
+    for (const tg of w.telegraphs) {
+      if (!tg.alive || tg.owner === 'titan') continue;
+      if (tg.fired && tg.t > tg.windup + tg.active) continue;
+      const s = tg.shape;
+      let x = 0, z = 0, r = 0;
+      if (tg.chain && tg.chain.length >= 4) {
+        let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+        for (let i = 0; i + 1 < tg.chain.length; i += 2) {
+          x0 = Math.min(x0, tg.chain[i]); x1 = Math.max(x1, tg.chain[i]);
+          z0 = Math.min(z0, tg.chain[i + 1]); z1 = Math.max(z1, tg.chain[i + 1]);
+        }
+        x = (x0 + x1) / 2; z = (z0 + z1) / 2; r = Math.hypot(x1 - x0, z1 - z0) / 2 + 4;
+      } else {
+        switch (s.k) {
+          case 'circle': x = s.x; z = s.z; r = s.r; break;
+          case 'ring': x = s.x; z = s.z; r = s.r1; break;
+          case 'cone': x = s.x; z = s.z; r = s.r; break;
+          case 'oval': x = s.x; z = s.z; r = Math.max(s.rx, s.rz); break;
+          case 'lane': x = s.x + Math.sin(s.dir) * s.len / 2; z = s.z + Math.cos(s.dir) * s.len / 2; r = Math.hypot(s.len / 2, s.w / 2); break;
+          case 'capsule': x = (s.x0 + s.x1) / 2; z = (s.z0 + s.z1) / 2; r = Math.hypot(s.x1 - s.x0, s.z1 - s.z0) / 2 + s.r; break;
+        }
+      }
+      this.pushKeep(x, 0, z, r, 0.1);
+    }
+    return this.keepN;
+  }
+
+  private pushKeep(x: number, y: number, z: number, r: number, margin: number): void {
+    if (this.keepN >= KEEP_CLEAR_MAX) return;
+    const cam = this.ctx.camera;
+    this._p.set(x, y, z);
+    const dist = Math.max(1, this._p.distanceTo(cam.position));
+    this._p.project(cam);
+    if (this._p.z > 1) return;                                     // behind the camera
+    const o = this.keepN * 4, kc = this.keepClear;
+    kc[o] = this._p.x * cam.aspect; kc[o + 1] = this._p.y;         // isotropic: x scaled by aspect
+    kc[o + 2] = r / (dist * Math.tan((cam.fov * Math.PI) / 360)); kc[o + 3] = margin;
+    this.keepN++;
+  }
+
+  private updateClouds(w: World, tx: number, tz: number, D: number, ext: number, t: number): void {
     const im = this.clouds!;
     const cam = this.ctx.camera;
     const camY = cam.position.y;
     const alt = Math.max(150, camY * 0.5);
     if (camY < alt * 1.3) { im.count = 0; return; }
+    cam.updateMatrixWorld();
+    const nKeep = this.gatherKeepClear(w);
+    const kc = this.keepClear;
+    const aspect = cam.aspect || 16 / 9;
+    const tanH = Math.tan((cam.fov * Math.PI) / 360);
     // k = how much a cloud-deck offset from the camera magnifies when projected to the ground;
     // tile + size shrink by 2/k so the deck reads the same on screen at Size IV and V
     const k = camY / Math.max(1e-3, camY - alt);
@@ -803,11 +987,31 @@ export class EnvView implements ViewModule {
       // where this cloud lands on screen: ray camera → cloud, extended to the ground
       const gx = cx + (wx - cx) * k, gz = cz + (wz - cz) * k;
       const full = ext * 0.06 * sc * s.s;          // deck-space size before parting
-      // screen-space clearance from the look target, measured from the cloud's projected EDGE
+      // ground clearance from the look target, measured from the cloud's projected EDGE: the deck
+      // opens a wide hole (0.45–0.7 ext) over the play space around the titan
       const dG = (Math.hypot(gx - tx, gz - tz) - full * s.sx * 0.9 * k) / ext;
-      let vis = smooth(0.26, 0.48, dG);            // parts around the titan, never covers it
+      let vis = smooth(0.45, 0.7, dG);
+      if (vis < 0.02) continue;
       const dc = Math.hypot(wx - cx, alt - camY, wz - cz);
       vis *= smooth(0.12 * D, 0.25 * D, dc);
+      if (vis < 0.02) continue;
+      // screen space: the cloud (full size, conservative) as an NDC circle, y units
+      this._p.set(wx, alt + full * 0.3, wz).project(cam);
+      if (this._p.z > 1) continue;
+      const cxN = this._p.x * aspect, cyN = this._p.y;
+      const rN = (1.3 * full * Math.max(s.sx, s.sz)) / (Math.max(1, dc) * tanH);
+      // (1) frame band: clouds live in the outer ~12 % of the frame. Intrusion of the cloud's box
+      //     into the inner rectangle (|x|,|y| < 0.76), in NDC-y units
+      const inX = BAND_INNER * aspect - (Math.abs(cxN) - rN);
+      const inY = BAND_INNER - (Math.abs(cyN) - rN);
+      if (inX > 0 && inY > 0) vis *= 1 - smooth(0.0, 0.16, Math.min(inX, inY));
+      if (vis < 0.02) continue;
+      // (2) never over the titan, the boss or a live hostile telegraph
+      for (let j = 0; j < nKeep && vis >= 0.02; j++) {
+        const o = j * 4;
+        const gap = Math.hypot(cxN - kc[o], cyN - kc[o + 1]) - rN - kc[o + 2];
+        vis *= smooth(0, kc[o + 3], gap);
+      }
       if (vis < 0.02) continue;
       const size = full * (0.35 + 0.65 * vis);
       this._p.set(wx, alt, wz);

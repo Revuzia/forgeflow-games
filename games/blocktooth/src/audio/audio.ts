@@ -6,11 +6,17 @@
 //
 // Graph (built once per context):
 //
-//   voices ─┬─────────────────────────────► sfxBus (sfx volume) ─┐
-//           └─► sfxVerb ─► convolver A ──────┘                   │
-//   music  ─┬─────────────────────────────► musicBus (music vol) ─► duck ─┤
-//           └─► musicVerb ─► convolver B ────┘                           ▼
+//   voices ─┬─────────────────────────────► sfxBus (sfx volume) ─► shelf ─► glue ─► sfxOut ─┐
+//           └─► sfxVerb ─► convolver A ──────┘                                            │
+//   music  ─┬─────────────────────────────► musicBus (music vol) ─► duck ────────────────┤
+//           └─► musicVerb ─► convolver B ────┘                                            ▼
 //                                            master (master vol) ─► compressor ─► ×0.5 ─► soft clip ─► out
+//
+// Mix balance (PC-11): measured on busy play the music bus sat ~16 dB under the SFX bus (median
+// music/sfx RMS 0.15). The SFX bus now has its own gentle glue compressor (dense crunch/debris
+// stacks are levelled BEFORE they hit the shared master compressor, so they stop pumping the
+// music down with them) and a −3 dB high shelf that takes the fizz off stacked debris voices;
+// the music bus runs hotter (MUSIC_BUS_GAIN).
 //
 // Doctrine (GAME_DOCTRINE + the §13 note): exponentialRampToValueAtTime toward ~0 and non-finite
 // values thrown into AudioParams both throw — this file only ever uses setValueAtTime +
@@ -23,6 +29,15 @@
 
 /** Hard cap on simultaneous SFX voices (the Sfx voice limiter steals above this). */
 export const MAX_VOICES = 24;
+/** music bus gain at music volume 1 (× vol²); was 0.8 — the score sat ~16 dB under busy SFX */
+const MUSIC_BUS_GAIN = 1.6;
+/**
+ * WebAudio's DynamicsCompressorNode adds its own automatic makeup gain (Blink/WebKit/Gecko share the
+ * algorithm). Measured in Chrome for the SFX glue below (thr −22 dB, knee 10, ratio 2.5): +6.15 dB on
+ * every below-threshold signal (_harness/scratch/appfix/comp_makeup.py). sfxOut undoes it, so quiet
+ * SFX pass at unity and only dense stacks come down (≈ −0.1 dB at −23 dBFS, ≈ −3.8 dB at −13.5 dBFS).
+ */
+const SFX_GLUE_MAKEUP_DB = 6.15;
 
 // ─────────────────────────────── finite-safe param helpers ───────────────────────────────
 
@@ -411,7 +426,7 @@ export class AudioEngine {
       linTo(g.gain, v, t + ramp);
     };
     set(this._master, taper(this._vol.master) * 1.0);
-    set(this._music, taper(this._vol.music) * 0.8);
+    set(this._music, taper(this._vol.music) * MUSIC_BUS_GAIN);
     set(this._sfx, taper(this._vol.sfx) * 1.0);
   }
 
@@ -432,7 +447,18 @@ export class AudioEngine {
     const sfx = mkGain(ac, 1);
     const music = mkGain(ac, 1);
     const duck = mkGain(ac, 1);
-    sfx.connect(master);
+    const sfxOut = mkGain(ac, Math.pow(10, -SFX_GLUE_MAKEUP_DB / 20));
+    // SFX bus glue: a slow-ish, gentle compressor that only works when many voices stack (single
+    // hits sit under the threshold and keep their transient), after a high shelf that softens the
+    // stacked crunch / debris fizz
+    const shelf = mkFilter(ac, 'highshelf', 5200, 0.707, -3);
+    const glue = ac.createDynamicsCompressor();
+    glue.threshold.value = -22;
+    glue.knee.value = 10;   // SFX_GLUE_MAKEUP_DB was measured for exactly these settings
+    glue.ratio.value = 2.5;
+    glue.attack.value = 0.008;
+    glue.release.value = 0.3;
+    sfx.connect(shelf); shelf.connect(glue); glue.connect(sfxOut); sfxOut.connect(master);
     music.connect(duck); duck.connect(master);
 
     const ir = makeImpulse(ac, 2.4, 2.6);

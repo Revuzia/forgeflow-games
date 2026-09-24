@@ -1,0 +1,18 @@
+{
+ "tag": "after",
+ "n": 252,
+ "idle_music_mean": 0.0231,
+ "idle_sfx_mean": 0.0224,
+ "busy_music_mean": 0.0372,
+ "busy_sfx_mean": 0.1287,
+ "busy_music_over_sfx_median": 0.239,
+ "busy_frac_sfx_5x_music": 0.357,
+ "busy_music_p10_p90": [
+  0.0173,
+  0.0809
+ ],
+ "busy_sfx_p10_p90": [
+  0.0632,
+  0.1906
+ ]
+}
