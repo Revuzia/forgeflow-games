@@ -109,6 +109,16 @@ export const STR = {
     runPrefix: 'T+',
     keyHook: 'SPACE',
     keyDash: 'SHIFT',
+    /** SIZE progress bar (level-driven growth): label + "levels gained / levels in this Size → next" */
+    grow: 'GROW',
+    growVal: '{n}/{of} LV → {size}',
+    /** camera zoom key hints (bottom-right) */
+    zoom: 'ZOOM',
+    keyZoomWheel: 'WHEEL',
+    keyZoomIn: '+',
+    keyZoomOut: '−',
+    keyZoomReset: 'Z',
+    zoomReset: 'RESET',
     /** live wire items the HUD inserts into the crawl when things happen */
     wire: {
       rankUp: 'SIZE {size} CONFIRMED BY THE WARD-7 SIZE DESK',

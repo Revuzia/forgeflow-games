@@ -11,7 +11,7 @@
 import type { EnemyKind, World } from './types.ts';
 import { ENEMY_KINDS } from './types.ts';
 import type { RenderStats } from '../render/renderer.ts';
-import { RANKS } from './config.ts';
+import { RANKS, RANK_LEVELS, levelsToNextSize, sizeProgress } from './config.ts';
 import { frameStats, frameTimeHistory } from './loop.ts';
 
 /** what the app passes per frame — `frameStats()` from loop.ts satisfies it */
@@ -44,7 +44,7 @@ type RowKey =
 
 const ROWS: readonly [RowKey, string][] = [
   ['frame', 'FRAME'], ['sim', 'SIM'], ['gpu', 'GPU'],
-  ['titan', 'TITAN'], ['mass', 'MASS'], ['hp', 'HP'], ['pose', 'POSE'],
+  ['titan', 'TITAN'], ['mass', 'GROW'], ['hp', 'HP'], ['pose', 'POSE'],
   ['enemies', 'FOES'], ['combat', 'LIVE'], ['director', 'DIRECTOR'], ['boss', 'BOSS'],
   ['run', 'RUN'], ['drafts', 'DRAFTS'],
 ];
@@ -234,12 +234,10 @@ export class DebugOverlay {
     this.set('titan', `${w.titanId.toUpperCase()} · SIZE ${rank.name} · H ${f2(T.height)} m · r ${f2(T.radius)} · LV ${T.level} · xp ${f1(T.xp)}/${i0(T.xpToNext)}` +
       (T.growT > 0 ? ' · GROWING' : ''));
 
-    let base = 0;
-    for (let i = 0; i < T.rank; i++) base += RANKS[i].massToNext;
     const next = RANKS[T.rank + 1];
     this.set('mass', next
-      ? `${f1(T.mass)} · ${f1(T.mass - base)}/${i0(rank.massToNext)} to ${next.name}`
-      : `${f1(T.mass)} · max size`);
+      ? `${f1(100 * sizeProgress(T.rank, T.level, T.xp))} % · ${levelsToNextSize(T.rank, T.level)} LV to ${next.name} (LV ${RANK_LEVELS[T.rank + 1]})`
+      : 'max size');
 
     const hpPct = T.maxHp > 0 ? (100 * T.hp) / T.maxHp : 0;
     const hpExtra = (w.upgrades.shield > 0 ? ` · shield ${f1(w.upgrades.shield)}` : '') +

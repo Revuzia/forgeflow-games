@@ -14,7 +14,7 @@ interface KitModule {
   onDash?(w: World, x0: number, z0: number, x1: number, z1: number): void;
   /** initial numeric kit state (the view may read these keys from frame 1) */
   init?(): Record<string, number>;
-  /** multiplier on mass gained right now (MOLO "raw mass" while vacuuming) */
+  /** multiplier on growth XP gained right now (MOLO +25 % while vacuuming) */
   massMul?(w: World): number;
   /** the auto attack's current reach (m) */
   reach?(w: World): number;
@@ -52,7 +52,7 @@ export function initKit(id: TitanId): Record<string, number> {
   return k.init ? k.init() : {};
 }
 
-/** Mass multiplier from the kit (lane-internal; used by gainMass). */
+/** Growth-XP multiplier from the kit (lane-internal; used by titansim gainXp — MOLO's vacuum). */
 export function kitMassMul(w: World): number {
   const k = KITS[w.titan.id];
   if (!k.massMul) return 1;

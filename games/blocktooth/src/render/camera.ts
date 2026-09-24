@@ -1,12 +1,22 @@
-// BLOCKTOOTH — camera rig (CONTRACT.md §4, implemented exactly). render-core lane.
+// BLOCKTOOTH — camera rig (CONTRACT.md §4 + the 2026-09-24 GROW-INTO-THE-FRAME framing). render-core lane.
 //
 //   k      = 2·tan(fov/2), fov = 30°
-//   D*(H,r)= cameraDistance(H, rank)                     (config.ts)
+//   D*(H,r)= cameraDistance(H, rank)  (config.ts FRAMING — this file only springs toward it):
+//            D*(H, r) = H0[r] / (FRAMING.startFrac[r]·k) · (H / H0[r])^kr,   H0 = RANKS[r].height
+//            The distance is keyed to the rank's START height and follows H only with an exponent
+//            well below 1, so the body GROWS INTO THE FRAME level by level (screen fraction
+//            = startFrac·(H/H0)^(1−k)); a rank-up (new H0, small startFrac again) pulls the camera
+//            back so the new, bigger world fits — the "grow, then the world pulls back" rhythm.
+//            The SIM's spawn ring reads the same cameraDistance (zoom excluded — deterministic).
 //   D      ← critically-damped spring toward D*, ω = 4/s (solved in closed form per frame, so a
 //            long frame cannot overshoot or explode)
+//   zoom   : player zoom MULTIPLIER on D (wheel / = - / pad right stick; Z resets; reset on a new
+//            run). log-space target, smoothed at CAMERA_ZOOM.omega; clamped to [min, max] and
+//            to the absolute distance band [dAbsMin, dAbsMax] (perf / "the whole city fits").
+//            View-only: the sim never reads it.
 //   punch  : on rankUp, rendered D × (1 − 0.08·(1 − easeOutCubic(τ/1.2))), τ ∈ [0, 1.2] s
 //   target = titanPos(interp) + lead + up·(H·0.45), lead → v·0.25 s smoothed at ω = 6/s
-//   pitch  → RANKS[rank].pitchDeg at ω = 3/s; yaw fixed 45°
+//   pitch  → RANKS[rank].pitchDeg (54° at every Size) at ω = 3/s; yaw fixed 45°
 //   camPos = target + D·(cos p·sin yaw, sin p, cos p·cos yaw)
 //   near/far = cameraClip(D)
 //   shake  : trauma model — trauma ∈ [0,1] decays 1.6/s, displacement ∝ trauma² × titan height;
@@ -21,7 +31,7 @@
 import type * as THREE from 'three';
 import type { World, SimEvent, RankIndex } from '../core/types.ts';
 import type { FrameInfo, Quality } from './viewtypes.ts';
-import { CAMERA, RANKS, cameraDistance, cameraClip } from '../core/config.ts';
+import { CAMERA, CAMERA_ZOOM, RANKS, cameraClip, cameraDistance } from '../core/config.ts';
 import { easeOutCubic } from '../core/math.ts';
 
 const DEG = Math.PI / 180;
@@ -39,6 +49,17 @@ const SHAKE_MAX_H = 0.16;
 const SHAKE_MAX_ROLL = 0.018;
 /** the lead never pushes the titan further than this fraction of the vertical view extent */
 const LEAD_MAX_FRAC = 0.22;
+
+// ─────────────────────────────── framing + zoom (constants live in core/config.ts) ───────────────────────────────
+/** The AUTO distance is config.ts cameraDistance (FRAMING: the body grows into the frame level by
+ *  level; each breach pulls back). Re-exported under the view lane's names for the harnesses. */
+export const autoDistance = cameraDistance;
+export { FRAMING, CAMERA_ZOOM, autoFrameFrac, framingTable } from '../core/config.ts';
+export const ZOOM_MIN = CAMERA_ZOOM.min;
+export const ZOOM_MAX = CAMERA_ZOOM.max;
+export const D_ABS_MIN = CAMERA_ZOOM.dAbsMin;
+export const D_ABS_MAX = CAMERA_ZOOM.dAbsMax;
+const ZOOM_OMEGA = CAMERA_ZOOM.omega;
 
 /** Trauma added per event (before distance attenuation). Metres-of-amplitude from CONTRACT §4
  *  ("heavy footstep adds H·0.02·heavy") are converted: trauma = metres / (SHAKE_MAX_H·H). */
@@ -60,10 +81,14 @@ export class CameraRig {
   quality: Quality | null;
   /** hard switch for shake, ANDed with quality.screenShake */
   shakeEnabled = true;
+  /** dev/probe: extra pitch (deg) on top of the framing table (0 in play) */
+  pitchProbeDeg = 0;
 
-  private d = 17.2;          // spring state (m)
+  private d = 17.2;          // spring state (m) — the AUTO distance, zoom not applied
   private dv = 0;            // spring velocity (m/s)
-  private dRender = 17.2;    // after punch
+  private dRender = 17.2;    // after zoom + punch (the actual camera distance)
+  private zoomLog = 0;       // smoothed ln(zoom multiplier)
+  private zoomLogT = 0;      // target ln(zoom multiplier)
   private pitch = RANKS[0].pitchDeg * DEG;
   private leadX = 0; private leadZ = 0;
   private tx = 0; private ty = 0; private tz = 0;
@@ -78,8 +103,28 @@ export class CameraRig {
     this.quality = quality ?? null;
   }
 
-  /** Current camera distance to the look target (m), including the rank-up punch. */
+  /** Current camera distance to the look target (m), including the player zoom and the rank-up
+   *  punch — the ACTUAL distance every LOD / fog / shadow consumer must follow. */
   get distance(): number { return this.dRender; }
+
+  /** The automatic (spring) distance before the player zoom and the punch (m). */
+  get autoDist(): number { return this.d; }
+
+  /** Current (smoothed) player zoom multiplier; > 1 = pulled back. */
+  get zoom(): number { return Math.exp(this.zoomLog); }
+
+  /** Target player zoom multiplier (where the smoothing is heading). */
+  get zoomTarget(): number { return Math.exp(this.zoomLogT); }
+
+  /** Zoom by a log step (+ = out / see more, − = in). Clamped to [ZOOM_MIN, ZOOM_MAX] and the
+   *  absolute distance band. View-only. */
+  zoomBy(dLog: number): void {
+    if (!Number.isFinite(dLog) || dLog === 0) return;
+    this.zoomLogT = this.clampZoomLog(this.zoomLogT + dLog, this.d);
+  }
+
+  /** Back to the automatic framing (the zoom eases home). */
+  resetZoom(): void { this.zoomLogT = 0; }
 
   /** Current look target (world, m). The returned object is live — copy it if you keep it. */
   get target(): { x: number; y: number; z: number } {
@@ -100,10 +145,11 @@ export class CameraRig {
   reset(w: World): void {
     const T = w.titan;
     const H = Math.max(0.1, T.height);
-    this.d = cameraDistance(H, T.rank);
+    this.d = autoDistance(H, T.rank);
     this.dv = 0;
+    this.zoomLog = this.zoomLogT = 0;            // a new run starts at the automatic framing
     this.dRender = this.d;
-    this.pitch = RANKS[T.rank].pitchDeg * DEG;
+    this.pitch = this.pitchFor(T.rank);
     this.leadX = 0; this.leadZ = 0;
     this.tx = T.x; this.tz = T.z; this.ty = H * CAMERA.targetYFrac;
     this.punchT = -1;
@@ -127,7 +173,7 @@ export class CameraRig {
     }
 
     // ── distance: critically damped spring toward D*, exact solution over dt ──
-    const dStar = cameraDistance(H, rank);
+    const dStar = autoDistance(H, rank);
     const om = CAMERA.zoomOmega;
     if (dt > 0) {
       const x0 = this.d - dStar;
@@ -145,7 +191,12 @@ export class CameraRig {
       if (tau >= 1) this.punchT = -1;
       else punch = 1 - CAMERA.punchFrac * (1 - easeOutCubic(tau));
     }
-    this.dRender = this.d * punch;
+    // ── player zoom: log-space, smoothed, re-clamped every frame (the band is absolute metres,
+    //    so a rank-up can tighten the allowed multiplier) ──
+    this.zoomLogT = this.clampZoomLog(this.zoomLogT, this.d);
+    this.zoomLog += (this.zoomLogT - this.zoomLog) * (1 - Math.exp(-ZOOM_OMEGA * dt));
+    if (Math.abs(this.zoomLogT - this.zoomLog) < 1e-4) this.zoomLog = this.zoomLogT;
+    this.dRender = this.d * Math.exp(this.zoomLog) * punch;
 
     // ── look target: interpolated titan + smoothed velocity lead + height ──
     const a = f.alpha;
@@ -163,7 +214,7 @@ export class CameraRig {
     this.ty = H * CAMERA.targetYFrac;
 
     // ── pitch ──
-    const pTarget = RANKS[rank].pitchDeg * DEG;
+    const pTarget = this.pitchFor(rank);
     this.pitch += (pTarget - this.pitch) * (1 - Math.exp(-PITCH_OMEGA * dt));
 
     // ── shake ──
@@ -183,6 +234,20 @@ export class CameraRig {
   }
 
   // ─────────────────────────────── internals ───────────────────────────────
+  /** ln(zoom) limited to [ZOOM_MIN, ZOOM_MAX] and to D_ABS_MIN ≤ dAuto·zoom ≤ D_ABS_MAX. The auto
+   *  framing itself is never pushed (at 1× the camera sits wherever the framing wants it). */
+  private clampZoomLog(z: number, dAuto: number): number {
+    const d = Math.max(1e-3, dAuto);
+    const lo = Math.min(0, Math.max(Math.log(ZOOM_MIN), Math.log(D_ABS_MIN / d)));
+    const hi = Math.max(0, Math.min(Math.log(ZOOM_MAX), Math.log(D_ABS_MAX / d)));
+    return z < lo ? lo : z > hi ? hi : z;
+  }
+
+  /** target pitch (rad) for a rank: RANKS[rank].pitchDeg (+ the dev probe offset) */
+  private pitchFor(rank: RankIndex): number {
+    return (RANKS[rank].pitchDeg + this.pitchProbeDeg) * DEG;
+  }
+
   private shakeOn(): boolean {
     if (!this.shakeEnabled) return false;
     const q = this.quality ?? (this.camera.userData.quality as Quality | undefined) ?? null;

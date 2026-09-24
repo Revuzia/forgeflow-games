@@ -572,8 +572,9 @@ const NOOP = { stat: 'luck', mul: 0, dur: 0.05 };   // frenzy that changes nothi
     (w, b) => near(w.titan.hp - b.hp, 0.1 * w.titan.maxHp) ? null : `healed ${w.titan.hp - b.hp}`);
   runAction('molo', 'shield', { amount: 0.1 }, () => {},
     (w) => near(w.upgrades.shield, 0.1 * w.titan.maxHp) ? null : `shield ${w.upgrades.shield}`);
-  runAction('molo', 'mass', { amount: 2 }, () => {},
-    (w, b) => w.titan.mass - b.mass >= 2 * CFG.TIERS[0].floorMass - 1e-9 ? null : `mass +${w.titan.mass - b.mass}`);
+  // 'mass' = "grow": an exact share of the CURRENT level's XP bar (SIZE is level-driven)
+  runAction('molo', 'mass', { amount: 0.5 }, () => {},
+    (w, b) => near(w.titan.xp + w.titan.level * 1e6 - b.xp, 0.5 * w.titan.xpToNext) ? null : `xp +${w.titan.xp + w.titan.level * 1e6 - b.xp} (want ${0.5 * w.titan.xpToNext})`);
   runAction('molo', 'xp', { amount: 2 }, () => {},
     (w, b) => w.titan.xp + w.titan.level * 1e6 > b.xp ? null : 'no xp');
   runAction('molo', 'magnet', { r: 10 }, (w) => {
@@ -633,23 +634,32 @@ const NOOP = { stat: 'luck', mul: 0, dur: 0.05 };   // frenzy that changes nothi
   ok(ALL_ACTIONS.every((a) => covered.has(a)), 'all 16 TriggerActions exercised');
 }
 
-// ── 'mass' / 'xp' pricing: triggering building's tier, capped at canFlatten; else canFlatten ──
+// ── 'xp' pricing: triggering building's tier, capped at canFlatten; else canFlatten ·
+//    'mass' (grow): a share of the current level's bar at any tier, no multipliers ──
 {
   const w = fresh('molo', 61);
   (w.titan as { rank: RankIndex }).rank = 2;          // canFlatten 2 (no rankUp event → stats untouched)
-  const id = synth('__massprice', 'collapse', 'mass', { amount: 1 });
-  const lv = synth('__massprice_lv', 'levelUp', 'mass', { amount: 1 });
+  const id = synth('__xpprice', 'collapse', 'xp', { amount: 1 });
+  const lv = synth('__xpprice_lv', 'levelUp', 'xp', { amount: 1 });
   w.upgrades.owned[id] = 1; w.upgrades.owned[lv] = 1;
-  const gm = stat(w, 'massGain');
-  const gain = (ev: SimEvent): number => { const m0 = w.titan.mass; w.events.length = 0; w.events.push(ev); processTriggers(w); return w.titan.mass - m0; };
+  const gm = stat(w, 'xpGain') * stat(w, 'massGain');   // gainXp multipliers (kit 1, pace band 1 at t 0)
+  const total = (): number => w.titan.xp + CFG.cumXpAt(w.titan.level);
+  const gain = (ev: SimEvent): number => { const x0 = total(); w.events.length = 0; w.events.push(ev); processTriggers(w); return total() - x0; };
   const g1 = gain({ type: 'buildingCollapse', id: 1, x: 0, z: 0, tier: 1, w: 8, d: 8, h: 8 });
   const g4 = gain({ type: 'buildingCollapse', id: 2, x: 0, z: 0, tier: 4, w: 8, d: 8, h: 8 });
   const gl = gain({ type: 'levelUp', level: 5 });
-  console.log(`mass pricing @Size III: tier-1 collapse +${g1.toFixed(2)} · tier-4 collapse (capped) +${g4.toFixed(2)} · level-up +${gl.toFixed(2)} (massGain ${gm})`);
-  // priced like one floor of that tier at this rank (config lootMass: table value × the snack rule)
-  ok(near(g1, CFG.lootMass(1, 2) * gm) && near(g4, CFG.lootMass(2, 2) * gm) && near(gl, CFG.lootMass(2, 2) * gm),
-    'mass proc priced by the event tier (capped at canFlatten), else canFlatten');
+  console.log(`xp pricing @Size III: tier-1 collapse +${g1.toFixed(2)} · tier-4 collapse (capped) +${g4.toFixed(2)} · level-up +${gl.toFixed(2)} (xp × ${gm})`);
+  // priced like one floor of that tier at this rank (config lootXp: table value × xpScale × the snack rule)
+  ok(near(g1, CFG.lootXp(1, 2) * gm) && near(g4, CFG.lootXp(2, 2) * gm) && near(gl, CFG.lootXp(2, 2) * gm),
+    'xp proc priced by the event tier (capped at canFlatten), else canFlatten');
   delete w.upgrades.owned[id]; delete w.upgrades.owned[lv];
+  const gr = synth('__grow', 'collapse', 'mass', { amount: 0.25 });
+  w.upgrades.owned[gr] = 1;
+  const bar = w.titan.xpToNext;
+  const gg = gain({ type: 'buildingCollapse', id: 3, x: 0, z: 0, tier: 4, w: 8, d: 8, h: 8 });
+  console.log(`grow @Size III: tier-4 collapse +${gg.toFixed(2)} (0.25 × bar ${bar})`);
+  ok(near(gg, 0.25 * bar), "'mass' (grow) = amount × the current level's XP bar, exact");
+  delete w.upgrades.owned[gr];
 }
 
 // ── self-retrigger guard + cross-feeding ──

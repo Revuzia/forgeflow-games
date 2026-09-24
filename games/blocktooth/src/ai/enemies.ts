@@ -44,8 +44,11 @@ const RAM_TELL_S = 1.6, RAM_LEN = 80, RAM_W = 8, RAM_SPEED = 30, RAM_RECOVER_S =
 const APC_DEPLOY_EVERY = 12, APC_DEPLOY_S = 1.2, APC_MAX_SQUADS = 2, SQUAD_SIZE = 5;
 /** BULWARK deployments stop while this many squad members are already on the field (all sources). */
 const SQUAD_FIELD_MAX = 90;
-/** Enemies farther than this × the spawn ring are recycled back onto the ring (§9). */
-const RECYCLE_MUL = 2.4;
+/** Enemies farther than this × the spawn ring are recycled back onto the ring (§9). The ring is one
+ *  view height D·k (2026-09-24) and ringPoint lands spawns at ≤ (1.37 + 0.12) × 1.2 ≈ 1.79 D·k (the
+ *  far screen corners), so 1.9 recycles only what the titan has left behind off-screen. (2.4 × the old
+ *  0.55 D·k ring — at Size IV/V that was past the city edge, so nothing was ever recycled.) */
+const RECYCLE_MUL = 1.9;
 /** Knockback velocity decay (1/s, CONTRACT Enemy.kx comment: ~8/s). */
 const KNOCK_DECAY = 8;
 /** opts.elite on a regular kind (a "veteran"): hp multiplier. */
@@ -113,13 +116,40 @@ function leadPt(w: World, windup: number): { x: number; z: number } {
 }
 
 // ─────────────────────────────── spawn ring + street helpers ───────────────────────────────
-/** Spawn ring radius (m) = max(14, 0.55 × camera vertical extent at the current D) (§9). */
+/** Spawn ring radius (m): one view height D·k at the AUTO camera distance (config cameraDistance —
+ *  the view's framing, zoom excluded so the sim stays deterministic), min 14 m. This is the nominal
+ *  ring (director HUD data, recycle distance × RECYCLE_MUL); ringPoint shapes it to the screen. */
 export function ringRadius(w: World): number {
   const T = w.titan;
-  const k = 2 * Math.tan((CAMERA.fovDeg * Math.PI) / 360);
-  const D = cameraDistance(T.height, T.rank);
-  const r = 0.55 * D * k;
+  const r = RING_VIEW_MUL * cameraDistance(T.height, T.rank) * CAM_K;
   return Number.isFinite(r) ? Math.max(14, r) : 14;
+}
+const CAM_K = 2 * Math.tan((CAMERA.fovDeg * Math.PI) / 360);
+const RING_VIEW_MUL = 1.0;
+/** margin (× D·k) added past the screen edge: covers the camera's velocity lead (≤ 0.22 D·k) */
+const RING_EDGE_MARGIN = 0.12;
+const FP = { rank: -1, n: 0, f: 0, hn: 0, hf: 0, s: 0 };
+/** Distance (in units of D·k) from the look target to the edge of the visible ground along world
+ *  heading `a`, for the rank's camera pitch at a 16:9 screen (config RANKS.pitchDeg, CAMERA yaw) —
+ *  the view footprint is a trapezoid: near edge ≈ 0.52, far edge ≈ 0.77, half-widths 0.74 / 1.10 at 54°. */
+function footprintEdge(rank: number, a: number): number {
+  if (FP.rank !== rank) {
+    const al = (CAMERA.fovDeg * Math.PI) / 360, p = (RANKS[rank].pitchDeg * Math.PI) / 180, A = 16 / 9;
+    const h = Math.sin(p), b = Math.cos(p), tw = A * Math.tan(al) * Math.cos(al);
+    FP.n = (b - h / Math.tan(p + al)) / CAM_K;
+    FP.f = (p - al > 0.05 ? h / Math.tan(p - al) - b : 4) / CAM_K;
+    FP.hn = (h / Math.sin(p + al)) * tw / CAM_K;
+    FP.hf = (p - al > 0.05 ? (h / Math.sin(p - al)) * tw : 4) / CAM_K;
+    FP.s = (FP.hf - FP.hn) / (FP.n + FP.f);
+    FP.rank = rank;
+  }
+  const yaw = (CAMERA.yawDeg * Math.PI) / 180, sa = Math.sin(a), ca = Math.cos(a);
+  const v = -(sa * Math.sin(yaw) + ca * Math.cos(yaw));        // + = toward the top of the screen
+  const u = Math.abs(sa * Math.cos(yaw) - ca * Math.sin(yaw));  // across the screen
+  let t = v > 1e-6 ? FP.f / v : v < -1e-6 ? FP.n / -v : Infinity;
+  const den = u - FP.s * v;
+  if (den > 1e-6) t = Math.min(t, (FP.hn + FP.s * FP.n) / den);
+  return Number.isFinite(t) ? t : FP.f;
 }
 
 function roadIdx(v: number, origin: number, pitch: number, n: number): number {
@@ -149,6 +179,7 @@ function snapToStreet(c: CityLayout, x: number, z: number, vehicle: boolean, r01
 export function ringPoint(w: World, kind: EnemyKind, out: { x: number; z: number }): boolean {
   const T = w.titan, c = w.city, B = c.bounds, def = ENEMIES[kind];
   const R = ringRadius(w), rs = w.rng.spawn;
+  const Dk = cameraDistance(T.height, T.rank) * CAM_K;
   const vehicle = isVehicle(kind);
   const moving = T.speed > 0.5;
   const vh = headingOf(T.vx, T.vz);
@@ -157,7 +188,9 @@ export function ringPoint(w: World, kind: EnemyKind, out: { x: number; z: number
   let ok = false;
   for (let tries = 0; tries < 12 && !ok; tries++) {
     const a = moving && rs() < 0.35 ? vh + (rs() - 0.5) * 2.2 : rs() * TAU;
-    const rr = R * (1.02 + 0.18 * rs());
+    // just past the screen edge in this direction (§9 "spawn off-screen"), at least the 14 m ring
+    const edge = Math.max(14, (footprintEdge(T.rank, a) + RING_EDGE_MARGIN) * Dk);
+    const rr = edge * (1.02 + 0.18 * rs());
     let x = T.x + Math.sin(a) * rr, z = T.z + Math.cos(a) * rr;
     if (!def.flies) { snapToStreet(c, x, z, vehicle, rs(), out); x = out.x; z = out.z; }
     if (x < B.minX + m || x > B.maxX - m || z < B.minZ + m || z > B.maxZ - m) {
@@ -166,7 +199,7 @@ export function ringPoint(w: World, kind: EnemyKind, out: { x: number; z: number
     }
     const d = dist(x, z, T.x, T.z);
     if (d > bestD) { bestD = d; bestX = x; bestZ = z; }
-    if (d >= R * 0.75) ok = true;
+    if (d >= edge * 0.75) ok = true;
   }
   if (!Number.isFinite(bestX)) { bestX = clamp(T.x, B.minX + m, B.maxX - m); bestZ = clamp(T.z, B.minZ + m, B.maxZ - m); }
   out.x = bestX; out.z = bestZ;

@@ -56,6 +56,11 @@ export interface AnimState {
   hero?: number;
   /** yaw (rad, titan-relative, + = left) the head should look toward, e.g. the auto-attack aim */
   aim?: number;
+  /** seconds since the last LEVEL-UP grow step (undefined / < 0 = none): the grow-pop — a quick
+   *  squash, a springy stretch and a proud head lift, riding the sim's per-level height tween */
+  popT?: number;
+  /** grow-pop strength (1 = a level-up, ~1.5 = the level-up that breaches a Size) */
+  popAmt?: number;
 }
 
 interface GaitCfg {
@@ -118,6 +123,8 @@ const frac = (v: number) => v - Math.floor(v);
 /** finite or default */
 const fin = (v: number | undefined, d: number) => (v !== undefined && Number.isFinite(v) ? v : d);
 const EMPTY_KIT: Record<string, number> = {};
+/** level-up grow-pop (popPose): vertical amplitude, spring period / decay (s, 1/s), length counter-scale */
+const POP = { amp: 0.2, period: 0.34, decay: 5.5, easeIn: 0.05, lengthK: 0.4, dur: 0.9 } as const;
 /** attack envelope: 0 before a, rises to 1 at b, holds to c, falls to 0 at d */
 function env(t: number, a: number, b: number, c: number, d: number): number {
   if (t < a || t > d) return 0;
@@ -243,7 +250,7 @@ export class TitanAnimator {
   /** sanitised copy of the caller's AnimState (reused every frame, never reallocated) */
   private readonly s: AnimState & { speedH: number; hurtAmt: number; deadT: number; hero: number; aim: number; downSide: number; clearT: number } = {
     speed01: 0, moving: false, turn: 0, attack: null, attackT: -1, dashT: -1, hurtT: -1, abilityT: -1, growT: -1, t: 0, kit: {},
-    speedH: 0, hurtAmt: 0.6, noFlash: false, deadT: -1, hero: 0, aim: 0, downSide: 1, clearT: -1,
+    speedH: 0, hurtAmt: 0.6, noFlash: false, deadT: -1, hero: 0, aim: 0, downSide: 1, clearT: -1, popT: -1, popAmt: 1,
   };
   /** half the footprint width (height-1 units): the topple pivots on that foot edge */
   private readonly halfW: number;
@@ -384,6 +391,7 @@ export class TitanAnimator {
     this.dashPose(a);
     this.abilityPose(a, kit);
     this.growPose(a);
+    this.popPose(a);
     this.hurtPose(a);
     if (a.hero && a.hero > 0) this.heroPose(a.hero);
     if (fin(a.clearT, -1) >= 0 && !dead) this.victoryPose(a.clearT!);
@@ -417,6 +425,8 @@ export class TitanAnimator {
     s.clearT = timer(a.clearT);
     s.hero = fin(a.hero, 0);
     s.aim = a.aim !== undefined && Number.isFinite(a.aim) ? a.aim : fin(s.kit.headTurn, 0);
+    s.popT = timer(a.popT);
+    s.popAmt = Math.max(0, Math.min(2, fin(a.popAmt, 1)));
     return s;
   }
 
@@ -643,6 +653,25 @@ export class TitanAnimator {
     c.crater *= 1 + 0.3 * roar;
     c.tailLift += 0.15 * roar;
     c.eyeClose = Math.max(c.eyeClose, 0.5 * roar);
+  }
+
+  /** LEVEL-UP grow-pop: y(t) = −A·cos(2πt/P)·e^(−λt) eased in over 50 ms — a squash on the
+   *  level-up frame, a springy stretch ~0.17 s later, settled by ~0.8 s; plus a proud head lift. */
+  private popPose(a: AnimState): void {
+    const t = a.popT ?? -1;
+    if (t < 0 || t > POP.dur) return;
+    const c = this.ch;
+    const amt = a.popAmt ?? 1;
+    const y = -POP.amp * amt * Math.cos((2 * Math.PI * t) / POP.period) * Math.exp(-POP.decay * t) * Math.min(1, t / POP.easeIn);
+    c.sq *= 1 + y;
+    c.st *= 1 - POP.lengthK * y;
+    const proud = env(t, 0.06, 0.16, 0.38, 0.7) * Math.min(1.3, amt);
+    c.headPitch -= 0.28 * proud;
+    c.neckPitch -= 0.1 * proud;
+    c.jaw += 0.3 * proud;
+    c.mane *= 1 + 0.35 * proud;
+    c.ruff *= 1 + 0.2 * proud;
+    c.tailLift += 0.12 * proud;
   }
 
   private heroPose(h: number): void {

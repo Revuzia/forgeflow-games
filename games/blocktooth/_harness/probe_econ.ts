@@ -4,7 +4,7 @@
 //
 // Runs the same deterministic bot + draft path as probe_sim.ts and accounts, PER SIZE RANK:
 // time in rank, nominal XP/mass DROPPED by source (props t0/t1, floors by tier, collapse
-// bonus by tier, enemy kills), mass/XP actually GAINED, levels, floors/props per second,
+// bonus by tier, enemy kills; mass only sizes pickup meshes since SIZE became level-driven), XP GAINED, levels, floors/props per second,
 // damage taken, min HP fraction and the peak enemy count. This is how the economy table at
 // the top of src/core/config.ts was derived. performance.now() is not used.
 
@@ -94,8 +94,8 @@ export function runEcon(titan: TitanId, biome: BiomeId, seed: number, minutes: n
     console.log(`\n${titan}/${biome} seed ${seed}: result ${w.run.result ?? 'timeout'} @ ${w.t.toFixed(0)} s · Size ${['I', 'II', 'III', 'IV', 'V'][w.titan.rank]} · LV ${w.titan.level} · boss ${w.boss ? `${w.boss.id} hp ${(w.boss.hp / w.boss.maxHp * 100).toFixed(0)}%` : '—'}`);
     accs.forEach((a, r) => {
       const dt = Math.max(1e-6, a.t1 - a.t0);
-      console.log(`  Size ${['I', 'II', 'III', 'IV', 'V'][r]}  ${a.t0.toFixed(0)}→${a.t1.toFixed(0)} s (${dt.toFixed(0)} s)  LV ${a.lv0}→${a.lv1} drafts ${a.drafts}  mass +${a.massGain.toFixed(0)} (${(a.massGain / dt).toFixed(1)}/s)  xp +${a.xpGain.toFixed(0)} (${(a.xpGain / dt).toFixed(1)}/s)  kills ${a.kills}  dmgTaken ${a.dmgTaken.toFixed(0)}  minHp ${(a.minHp * 100).toFixed(0)}%  peakE ${a.peakE}`);
-      const keys = Object.keys(a.src).sort((p, q) => a.src[q].mass - a.src[p].mass);
+      console.log(`  Size ${['I', 'II', 'III', 'IV', 'V'][r]}  ${a.t0.toFixed(0)}→${a.t1.toFixed(0)} s (${dt.toFixed(0)} s)  LV ${a.lv0}→${a.lv1} drafts ${a.drafts}  xp +${a.xpGain.toFixed(0)} (${(a.xpGain / dt).toFixed(1)}/s)  kills ${a.kills}  dmgTaken ${a.dmgTaken.toFixed(0)}  minHp ${(a.minHp * 100).toFixed(0)}%  peakE ${a.peakE}`);
+      const keys = Object.keys(a.src).sort((p, q) => a.src[q].xp - a.src[p].xp);
       console.log(`      hurt by: ${Object.entries(a.hurt).map(([k, v]) => `${k} ${v.toFixed(0)}`).join(' · ') || '—'}  | hostile paint hit ${a.paint.hit}/${a.paint.fired}  | boss attacks: ${Object.entries(a.boss).map(([k, v]) => `${k}×${v}`).join(' ') || '—'}`);
       console.log('      ' + keys.map((k) => `${k}: n${a.src[k].n} m${a.src[k].mass.toFixed(0)} x${a.src[k].xp.toFixed(0)}`).join(' · '));
     });

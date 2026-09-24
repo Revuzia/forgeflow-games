@@ -8,7 +8,7 @@
 //   __BT__.step(n, input?)         n sim ticks synchronously — ONLY while frozen (freeze(true) first)
 //   __BT__.freeze(on)              freeze / unfreeze the sim in play (views keep idling)
 //   __BT__.dismiss()               close the slate / draft / tabloid / pause through its own path
-//   __BT__.cheat.*                 dev only (?dev=1): xp mass rank god spawn boss killAll noSpawns heal time
+//   __BT__.cheat.*                 dev only (?dev=1): xp mass rank level god spawn boss killAll noSpawns heal time
 //   __BT__.shot(name)              render a frame, POST the PNG to /__shot/<name>, resolve the saved path
 //   __BT__.perf()                  frame-time ring stats {fps, p50, p99, max, simMs}
 //   __BT__.events(n)               the last n sim events (ring of 400)
@@ -21,13 +21,12 @@
 import type { App, Screen } from './game.ts';
 import type { BiomeId, EnemyKind, RunStats, SimEvent, TitanId, TitanInput, World } from './core/types.ts';
 import { BIOME_IDS, ENEMY_KINDS, TITAN_IDS } from './core/types.ts';
-import { CITY, RANKS } from './core/config.ts';
+import { CAMERA, CITY, cameraDistance, rankForLevel } from './core/config.ts';
 import { frameStats } from './core/loop.ts';
 import type * as THREE from 'three';
 import type { RenderCore } from './render/renderer.ts';
-import { gainMass, gainXp, healTitan } from './titans/titansim.ts';
+import { gainGrowth, gainXp, growToRank, healTitan } from './titans/titansim.ts';
 import { spawnEnemy } from './ai/enemies.ts';
-import { spawnRing } from './ai/director.ts';
 import { spawnBoss } from './ai/bosses/index.ts';
 import { killEnemy } from './combat/damage.ts';
 import { BIOMES } from './data/biomes.ts';
@@ -66,8 +65,11 @@ export interface BtPerf { fps: number; p50: number; p99: number; max: number; si
 
 export interface BtCheats {
   xp(n?: number): number;
+  /** @deprecated SIZE comes from LEVEL now: grows by n % of the current level's XP bar (gainGrowth). */
   mass(n?: number): number;
   rank(r: number | string): number;
+  /** jump to LEVEL n (and the Size it implies) — real level/rank-ups, no drafts queued. */
+  level(n: number): number;
   god(on?: boolean): boolean;
   spawn(kind: EnemyKind, n?: number): number;
   boss(): string | null;
@@ -206,14 +208,17 @@ export function installTestSurface(app: App): BtSurface {
       app.mutate((ww) => gainXp(ww, amount));
       return w.titan.level;
     },
+    /** @deprecated (SIZE is level-driven): n % of the current level's XP bar via the sim's own
+     *  gainGrowth (the 'grow' upgrade action) — may level/rank up and owes drafts like real XP. */
     mass(n = 100) {
       const w = devOnly('mass');
-      const amount = Math.max(0, num(n, 100));
-      app.mutate((ww) => gainMass(ww, amount));
-      return w.titan.mass;
+      const frac = Math.max(0, num(n, 100)) / 100;
+      app.mutate((ww) => gainGrowth(ww, frac));
+      return w.titan.level;
     },
     /** Grow to RankIndex r (0..4; a roman numeral string also works). Never shrinks. Goes through
-     *  the sim's own rank-up (gainMass), so the grow tween, stats and rankUp events are real. */
+     *  the sim's own rank-up (growToRank: level = RANK_LEVELS[r], stats, rankUp events, the MASS
+     *  BREACH tween) and queues NO drafts. */
     rank(r) {
       const w = devOnly('rank');
       const key = typeof r === 'string' ? r.trim().toUpperCase() : '';
@@ -221,14 +226,17 @@ export function installTestSurface(app: App): BtSurface {
       const want = Math.max(0, Math.min(4, target));
       const T = w.titan;
       if (want <= T.rank || !T.alive) return T.rank;
-      let start = 0;
-      for (let i = 0; i < want; i++) start += RANKS[i].massToNext;
-      app.mutate((ww) => {
-        if (ww.titan.mass < start) ww.titan.mass = start - 1e-6;
-        // any positive gain crosses the threshold; gainMass applies the rank-ups (one per rank)
-        gainMass(ww, 1);
-      });
+      app.mutate((ww) => { growToRank(ww, want); });
       return T.rank;
+    },
+    /** Jump to LEVEL n (never down): the Size it implies (rankForLevel) through the real rank-ups,
+     *  then the per-level grow tween; empty XP bar; NO drafts queued. */
+    level(n) {
+      const w = devOnly('level');
+      const L = Math.max(1, Math.min(200, Math.floor(num(n, 1))));
+      if (!w.titan.alive || L <= w.titan.level) return w.titan.level;
+      app.mutate((ww) => { growToRank(ww, rankForLevel(L), L); });
+      return w.titan.level;
     },
     god(on = true) {
       const w = devOnly('god');
@@ -244,7 +252,9 @@ export function installTestSurface(app: App): BtSurface {
       for (const e of w.enemies) if (e.alive) alive++;
       let made = 0;
       app.mutate((ww) => {
-        const R = spawnRing(ww);
+        // 0.55 × the AUTO view height: inside the frame (the perf gate's "250 enemies in view"
+        // load; the sim's own spawn ring sits past the screen edge — enemies.ts ringPoint)
+        const R = Math.max(14, 0.55 * cameraDistance(T.height, T.rank) * 2 * Math.tan((CAMERA.fovDeg * Math.PI) / 360));
         for (let i = 0; i < count && alive < CITY.maxEnemies; i++) {
           // cosmetic placement randomness is app-side; spawnEnemy clamps + pushes out of buildings
           const a = Math.random() * Math.PI * 2;

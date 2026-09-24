@@ -3,13 +3,13 @@
 //   top-left   WARD-7 • LIVE bug (pulsing red dot) + broadcast clock + run timer
 //   top-right  TONNAGE / BLOCKS / CRUSHED counters, upgrade chips column below
 //   bottom-left cream status card: titan, HP (+damage trail, shield), LV, big roman SIZE +
-//              mass bar, XP bar, dash pips, hook cooldown dial with key hint
+//              GROW bar (sizeProgress: levels to the next Size), XP bar, dash pips, hook cooldown dial with key hint
 //   bottom     WARD-7 WIRE ticker crawl (live items injected on big moments)
 //   overlay    low-HP vignette pulse, hurt edge flash, pickup / level flashes
 // update() is change-only: every DOM write goes through TextSlot / VarSlot / ClassSlot.
 
 import type { SimEvent, World } from '../core/types.ts';
-import { RANKS } from '../core/config.ts';
+import { RANK_LEVELS, sizeProgress } from '../core/config.ts';
 import { TITANS } from '../data/titans.ts';
 import { UPGRADE_BY_ID } from '../data/upgrades.ts';
 import { BOSSES } from '../data/bosses.ts';
@@ -24,6 +24,7 @@ const TRAIL_HOLD_S = 0.4;
 const TRAIL_RATE = 0.9;          // fraction of max HP per second the trail drains
 const MAX_CHIPS = 14;
 const WIRE_CAP = 6;              // VOLT-KITE live-wire cap (CONTRACT §8)
+const ZOOM_HINT_BRIGHT_S = 20;   // the zoom key hint is at full strength for this long into a run
 
 /** CSS unit (--u) in px, mirrored from styles.css: max(8px, min(1vw, 1.7778vh)). */
 function unitPx(): number { return Math.max(8, Math.min(window.innerWidth / 100, (window.innerHeight * 1.7778) / 100)); }
@@ -68,6 +69,9 @@ export class Hud {
   private readonly hpBar: HTMLElement;
   private readonly massFill: VarSlot;
   private readonly massVal: TextSlot;
+  private readonly massBar: HTMLElement;
+  private readonly zoomHint: HTMLElement;
+  private readonly zoomDim: ClassSlot;
   private readonly xpFill: VarSlot;
   private readonly xpBar: HTMLElement;
   private readonly shellRow: HTMLElement;
@@ -98,6 +102,7 @@ export class Hud {
   private lastLevel = -1;
   private lastPickupFx = 0;
   private lastHurtFx = 0;
+  private tickSpan = -1;
 
   // ticker
   private readonly tkWin: HTMLElement;
@@ -182,8 +187,12 @@ export class Hud {
     this.hpFill = new VarSlot(div('bt-bar-fill', hp.track), '--p');
     div('bt-bar-ticks', hp.track);
     this.hpVal = new TextSlot(hp.val);
-    const ms = bar('bt-bar-mass', STR.hud.mass);
+    // SIZE progress by LEVEL (growth is level-driven): fill = XP toward the next Size's level,
+    // value = levels gained / levels in this Size → the next Size
+    const ms = bar('bt-bar-mass', STR.hud.grow);
+    this.massBar = ms.row;
     this.massFill = new VarSlot(div('bt-bar-fill', ms.track), '--p');
+    div('bt-bar-lvticks', ms.track);
     this.massVal = new TextSlot(ms.val);
     const xp = bar('bt-bar-xp', STR.hud.xp);
     this.xpBar = xp.row;
@@ -218,6 +227,17 @@ export class Hud {
     this.hookName = new TextSlot(div('bt-hook-name', htxt));
 
     this.lvFlash = div('bt-lvflash', card, STR.hud.levelUp);
+
+    // ── camera zoom key hints (bottom-right, above the ticker)
+    const zh = this.zoomHint = div('bt-zoomhint', L);
+    div('bt-zoomhint-lbl', zh, STR.hud.zoom);
+    zh.appendChild(keyChip(STR.hud.keyZoomWheel));
+    zh.appendChild(keyChip(STR.hud.keyZoomIn));
+    zh.appendChild(keyChip(STR.hud.keyZoomOut));
+    div('bt-zoomhint-gap', zh);
+    zh.appendChild(keyChip(STR.hud.keyZoomReset));
+    div('bt-zoomhint-lbl', zh, STR.hud.zoomReset);
+    this.zoomDim = new ClassSlot(zh, 'dim');
 
     // ── ticker (bottom)
     const tk = div('bt-ticker', L);
@@ -290,18 +310,21 @@ export class Hud {
     this.lowHpOn.set(T.alive && hpF < LOW_HP);
     this.cardLow.set(T.alive && hpF < LOW_HP);
 
-    // mass progress through the current rank (mass is cumulative across ranks)
-    const R = RANKS[T.rank];
-    if (Number.isFinite(R.massToNext)) {
-      let base = 0;
-      for (let i = 0; i < T.rank; i++) base += RANKS[i].massToNext;
-      const p = Math.max(0, Math.min(1, (T.mass - base) / R.massToNext));
-      this.massFill.set(p);
-      this.massVal.set(`${Math.floor(p * 100)}% → ${roman(T.rank + 1)}`);
+    // SIZE progress by level: XP toward the level that breaches the next Size
+    if (T.rank < 4) {
+      const L0 = RANK_LEVELS[T.rank], L1 = RANK_LEVELS[T.rank + 1];
+      const span = Math.max(1, L1 - L0);
+      this.massFill.set(sizeProgress(T.rank, T.level, T.xp));
+      this.massVal.set(fmt(STR.hud.growVal, { n: Math.max(0, Math.min(span, T.level - L0)), of: span, size: roman(T.rank + 1) }));
+      if (span !== this.tickSpan) { this.tickSpan = span; this.massBar.style.setProperty('--lvticks', String(span)); }
     } else {
       this.massFill.set(1);
       this.massVal.set(STR.hud.massMax);
+      if (this.tickSpan !== 0) { this.tickSpan = 0; this.massBar.style.setProperty('--lvticks', '1'); }
     }
+
+    // zoom hint: full strength for the first seconds of a run, then it steps back
+    this.zoomDim.set(w.t > ZOOM_HINT_BRIGHT_S);
 
     // XP
     this.xpFill.set(T.xpToNext > 0 ? Math.max(0, Math.min(1, T.xp / T.xpToNext)) : 0);
@@ -352,6 +375,7 @@ export class Hud {
           }
           break;
         case 'levelUp':
+          pulse(this.massBar, [{ filter: 'brightness(1.6) saturate(1.3)', transform: 'scaleY(1.25)' }, { filter: 'none', transform: 'none' }], 520);
           pulse(this.lvBox, [{ transform: 'scale(1.6)', color: '#ff6f5e' }, { transform: 'scale(1)' }], 520);
           pulse(this.lvFlash, [
             { opacity: 0, transform: 'translate(-50%, 30%) scale(.6) rotate(-6deg)' },
@@ -393,12 +417,12 @@ export class Hud {
     this.card.style.setProperty('--titan-2', def ? def.colors.secondary : '#1f6f55');
     this.trail = 1; this.trailHold = 0; this.lastHpFrac = 1;
     this.hookMax = 1; this.lastHookCd = 0; this.kitKind = '';
-    this.lastRank = -1; this.lastLevel = -1; this.lastBlocks = -1; this.lastCrushed = -1;
+    this.lastRank = -1; this.lastLevel = -1; this.lastBlocks = -1; this.lastCrushed = -1; this.tickSpan = -1;
     this.tonsShown = Math.max(0, w.run.tonnage);
     this.chipSig = '#';
     for (const s of [this.clock, this.runT, this.tonsVal, this.blocksVal, this.crushVal, this.lvT, this.sizeT, this.hpVal, this.massVal, this.hookCdT, this.shellLbl, this.shellVal]) s.reset();
     for (const v of [this.hpFill, this.hpTrail, this.hpShield, this.massFill, this.xpFill, this.shellFill, this.hookDial]) v.reset();
-    for (const c of [this.lowHpOn, this.shellOn, this.hookReady, this.cardLow]) c.reset();
+    for (const c of [this.lowHpOn, this.shellOn, this.hookReady, this.cardLow, this.zoomDim]) c.reset();
     this.pips = [];
     clearEl(this.pipsBox);
     this.tkLive = [];

@@ -46,8 +46,8 @@ export const MOLO = {
   vacShieldBase: 0.04,     // × maxHp
   vacShieldPer: 0.002,     // × maxHp per pickup vacuumed
   vacShieldCap: 0.4,
-  vacMassMul: 1.25,        // "raw mass"
-  vacAfterS: 0.75,         // raw-mass window after release (pickups still in flight)
+  vacMassMul: 1.25,        // × growth XP while inhaling (SIZE is level-driven since 2026-09-24)
+  vacAfterS: 0.75,         // the +XP window after release (pickups still in flight)
   vacMoveMul: 0.5,         // MOLO plants its feet while inhaling
 };
 

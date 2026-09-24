@@ -47,6 +47,19 @@ const NIGHT_RIM_BAND = [0.46, 0.58] as const;
 
 /** how long a pose timer keeps counting after its event (s) — longer than every pose it drives */
 const TIMER_MAX = 3;
+/**
+ * Level-up ground ring (the grow-pop's footprint): a flat cream band that races out from under the
+ * titan and fades. Radii in body heights at the START and END of the ring's life; the level-up that
+ * breaches a Size gets the big one (MASS BREACH keeps its own shockwave + banner on top).
+ */
+const POP_RING = {
+  level: { r0: 0.45, r1: 1.9, life: 0.6, alpha: 1 },
+  breach: { r0: 0.6, r1: 3.4, life: 0.95, alpha: 1 },
+  inner: 0.74,              // inner radius / outer radius of the band
+  color: '#ffe7a3',         // warm cream: reads on navy asphalt, snow and night water alike
+} as const;
+/** grow-pop strength (anim popAmt) for a plain level-up / a Size breach */
+const POP_AMT_LEVEL = 1, POP_AMT_BREACH = 1.5;
 
 /** advance a "seconds since" pose timer; < 0 = inactive, expires after TIMER_MAX */
 function advT(v: number, dt: number): number { return v >= 0 ? (v + dt > TIMER_MAX ? -1 : v + dt) : v; }
@@ -93,6 +106,10 @@ export class TitanView implements ViewModule {
   private glowOut = 1;
   private aimYaw = 0;
   private shadowsOn = true;
+  // level-up ground ring
+  private ring: THREE.Mesh | null = null;
+  private ringT = -1;
+  private ringBig = false;
 
   constructor(ctx: ViewCtx) {
     this.ctx = ctx;
@@ -110,9 +127,12 @@ export class TitanView implements ViewModule {
     }
     if (this.model.root.parent !== this.ctx.scene) this.ctx.scene.add(this.model.root);
     this.ensureDust(w);
+    this.ensureRing();
+    this.ringT = -1;
+    if (this.ring) this.ring.visible = false;
     const s = this.st;
     s.attack = null; s.attackT = -1; s.dashT = -1; s.hurtT = -1; s.abilityT = -1; s.growT = -1; s.deadT = -1;
-    s.clearT = -1; s.downSide = 1;
+    s.clearT = -1; s.downSide = 1; s.popT = -1; s.popAmt = POP_AMT_LEVEL;
     this.lift = 0; this.dustDone = false; this.dustLive = 0;
     for (const p of this.puffs) p.t = p.life;
     if (this.dust) { this.dust.count = 0; this.dust.visible = false; }
@@ -152,6 +172,7 @@ export class TitanView implements ViewModule {
     s.hurtT = advT(s.hurtT, dt);
     s.abilityT = advT(s.abilityT, dt);
     s.growT = advT(s.growT, dt);
+    s.popT = advT(s.popT ?? -1, dt);
     if (!T.alive) {
       if (s.deadT! < 0) {
         // land on the flank that turns the belly to the camera (camera yaw 45°: it sits at +X+Z).
@@ -185,10 +206,18 @@ export class TitanView implements ViewModule {
     if (s.deadT! >= 0) this.groundClamp(s.deadT!);
     this.driveGlow(w, dt);
     this.updateDust(w, dt);
+    this.updateRing(w, f.alpha, dt);
   }
 
   unmount(): void {
     this.disposeModel();
+    if (this.ring) {
+      this.ring.removeFromParent();
+      this.ring.geometry.dispose();
+      (this.ring.material as THREE.Material).dispose();
+      this.ring = null;
+    }
+    this.ringT = -1;
     if (this.dust) {
       this.dust.removeFromParent();
       this.dust.dispose();
@@ -283,6 +312,45 @@ export class TitanView implements ViewModule {
   }
 
   /** the private DEFEAT dust pool (faceted toon puffs + ink hull, like the fx dust), built once */
+  private ensureRing(): void {
+    if (this.ring) {
+      if (this.ring.parent !== this.ctx.scene) this.ctx.scene.add(this.ring);
+      return;
+    }
+    const g = new THREE.RingGeometry(POP_RING.inner, 1, 64, 1);
+    g.rotateX(-Math.PI / 2);
+    const mat = new THREE.MeshBasicMaterial({
+      color: POP_RING.color, transparent: true, opacity: 0, depthWrite: false,
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4, fog: false,
+    });
+    const m = new THREE.Mesh(g, mat);
+    m.name = 'titan:growRing';
+    m.renderOrder = 3;
+    m.castShadow = false; m.receiveShadow = false;
+    m.visible = false;
+    this.ring = m;
+    this.ctx.scene.add(m);
+  }
+
+  /** the level-up ground ring: expands (easeOutCubic) under the titan and fades out */
+  private updateRing(w: World, alpha: number, dt: number): void {
+    const m = this.ring;
+    if (!m) return;
+    if (this.ringT < 0) { if (m.visible) m.visible = false; return; }
+    const P = this.ringBig ? POP_RING.breach : POP_RING.level;
+    this.ringT += dt;
+    const u = this.ringT / P.life;
+    if (u >= 1) { this.ringT = -1; m.visible = false; return; }
+    const T = w.titan;
+    const H = Math.max(0.05, lerpPose(this.hPrev, this.hCur, clamp(alpha, 0, 1)));
+    const e = 1 - Math.pow(1 - u, 3);
+    const r = H * (P.r0 + (P.r1 - P.r0) * e);
+    m.position.set(lerpPose(T.px, T.x, alpha), 0.04 + 0.004 * H, lerpPose(T.pz, T.z, alpha));
+    m.scale.set(r, 1, r);
+    (m.material as THREE.MeshBasicMaterial).opacity = P.alpha * (1 - u) * (1 - u);
+    m.visible = true;
+  }
+
   private ensureDust(w: World): void {
     const col = w.biomeId === 'whitestacks' ? '#f3f5f8' : w.biomeId === 'lockwater' ? '#b7b2c8' : '#f1e6cf';
     if (!this.dust) {
@@ -370,6 +438,19 @@ export class TitanView implements ViewModule {
 
   private onEvents(w: World, events: readonly SimEvent[]): void {
     const s = this.st, T = w.titan;
+    // grow-pop: one per frame's batch; a batch that also breaches a Size gets the big one
+    let lv = false, breach = false;
+    for (let i = 0; i < events.length; i++) {
+      const t = events[i].type;
+      if (t === 'levelUp') lv = true;
+      else if (t === 'rankUp') breach = true;
+    }
+    if (lv || breach) {
+      s.popT = 0;
+      s.popAmt = breach ? POP_AMT_BREACH : POP_AMT_LEVEL;
+      this.ringT = 0;
+      this.ringBig = breach;
+    }
     for (let i = 0; i < events.length; i++) {
       const ev = events[i];
       switch (ev.type) {

@@ -2,6 +2,14 @@
 // THREE-free, DOM-free, deterministic (no Math.random / clocks; randomness only via world.rng).
 //
 // Contract exports: createTitan, stepTitan, hurtTitan, healTitan, gainXp, gainMass, titanMaxSpeed.
+// Lane extras: gainGrowth (the 'mass' upgrade action), growToRank (dev cheat), paceMul, refundDash,
+// dashRechargeS.
+//
+// GROWTH (2026-09-24): SIZE is driven by LEVEL. gainXp is the only growth path — every level-up
+// steps the body up (config titanHeightAt, tweened over LEVEL_GROW_S) and reaching RANK_LEVELS[r]
+// is the MASS BREACH (rankUp, GROW_TWEEN_S). The pacing rubber band (catch-up + Size V governor)
+// acts on growth XP. gainMass is retired (kept as a no-op export for the pickup lane); titan.mass
+// is a mirror of SIZE progress (config sizeMassMirror) for views that still read it.
 //
 // Sim-private per-titan state lives in titan.kit under `sim_*` keys (plain numbers, so it is part of
 // the deterministic state and visible to debug tools). Kits may WRITE two hint keys that this module
@@ -10,8 +18,9 @@
 
 import type { DamageKind, DamageOpts, Enemy, TitanDef, TitanState, Tier, World } from '../core/types.ts';
 import {
-  AHEAD_FROM_RANK, AHEAD_GRACE_S, AHEAD_MIN, AHEAD_PER_MIN, CATCHUP_MAX, CATCHUP_PER_MIN, CRUSH_RATIO, GROW_TWEEN_S, RANKS, RANK_SCHEDULE_S, SMASH_MIN_SPEED_FRAC,
-  SMASH_SLOW, TIERS, TITAN, TITAN_RADIUS_PER_H, titanHeight, titanSpeed, xpToNext,
+  AHEAD_FROM_RANK, AHEAD_GRACE_S, AHEAD_MIN, AHEAD_PER_MIN, CATCHUP_MAX, CATCHUP_PER_MIN, CRUSH_RATIO, GROW_TWEEN_S, LEVEL_GROW_S,
+  RANKS, RANK_LEVELS, RANK_SCHEDULE_S, SMASH_MIN_SPEED_FRAC, SMASH_SLOW, TIERS, TITAN, TITAN_RADIUS_PER_H, cumXpAt, sizeMassMirror,
+  titanHeightAt, titanSpeed, xpToNext,
 } from '../core/config.ts';
 import { clamp, easeOutBack, headingOf, segDist, turnToward, wrapAngle } from '../core/math.ts';
 import { buildingsInRect, damageBuilding, damageProp, propsInRect, resolveCircleVsCity } from '../city/citysim.ts';
@@ -63,10 +72,9 @@ const LEASH_OWN_SPEED_MUL = 0.55;
 const LEASH_RESIST_MIN = 1.15;
 /** rank-up: current hp keeps its ratio, then heals this fraction of the new max */
 const RANKUP_HEAL_FRAC = 0.15;
-/** in-rank swell eases toward its target at this rate (1/s) */
+/** outside a tween the body eases toward its target at this rate (1/s) — only a safety net: every
+ *  height change (level-up, rank-up) starts a tween */
 const HEIGHT_EASE_RATE = 5;
-/** Size V has no next rank: it keeps swelling (up to SWELL) over this much extra mass */
-const RANK_V_SWELL_MASS = 6000;
 /** safety caps */
 const MAX_SUBSTEPS = 8;
 /** Wedge escape: a titan that wants to move but has not budged (< PIN_MOVE_FRAC of its walk
@@ -77,13 +85,6 @@ const MAX_SUBSTEPS = 8;
 const PIN_S = 0.5, PIN_MOVE_FRAC = 0.05, PIN_SQUEEZE = 0.7, SQUEEZE_S = 1.5;
 const MAX_LEVELUPS_PER_CALL = 60;
 
-/** cumulative mass at the start of each rank: [0, 40, 340, 1640, 5840] */
-const RANK_START: number[] = (() => {
-  const out: number[] = [0];
-  for (let i = 1; i < RANKS.length; i++) out.push(out[i - 1] + RANKS[i - 1].massToNext);
-  return out;
-})();
-
 // scratch (no per-tick allocation)
 const idBuf: number[] = [];
 const enemyBuf: Enemy[] = [];
@@ -92,13 +93,14 @@ const SMASH_OPTS: DamageOpts = { src: 'titan', kind: 'smash' };
 
 // ─────────────────────────────── construction ───────────────────────────────
 export function createTitan(def: TitanDef, spawn: { x: number; z: number; heading: number }): TitanState {
-  const h = titanHeight(0, 0);
+  const h = titanHeightAt(0, 1);
   const kit: Record<string, number> = {
     sim_vx: 0, sim_vz: 0,                 // own (input-driven) velocity, before leash/collision
     sim_plowT: 0, sim_pressT: 0,          // >0 while grinding flattenable / pressing oversize buildings
     sim_steps: 0,                         // cumulative footsteps (MOLO foot-pulse reads it)
     sim_sinceHurt: 99,                    // seconds since the last damage (regen gate)
     sim_growFrom: h,                      // height at the start of the running grow tween
+    sim_growDur: GROW_TWEEN_S,            // length of the running grow tween (rank-up or level-up)
     sim_smashCd: 0, sim_bumpCd: 0, sim_bumping: 0,
     sim_dashX0: spawn.x, sim_dashZ0: spawn.z, sim_dashSp: 0, sim_dashLeft: 0,
     sim_leashX: 0, sim_leashZ: 0,
@@ -112,7 +114,7 @@ export function createTitan(def: TitanDef, spawn: { x: number; z: number; headin
     vx: 0, vz: 0, speed: 0, moving: false,
     hp: def.base.maxHp, maxHp: def.base.maxHp,
     level: 1, xp: 0, xpToNext: xpToNext(1),
-    mass: 0,
+    mass: sizeMassMirror(0, 1, 0),        // mirror of SIZE progress (config sizeMassMirror)
     rank: 0,
     height: h,
     radius: h * TITAN_RADIUS_PER_H,
@@ -170,12 +172,6 @@ export function refundDash(w: World, frac = 1): boolean {
   return true;
 }
 
-/** 0..1 progress through the current rank's mass bar (Size V: toward its extra swell). */
-function rankProgress(T: TitanState): number {
-  if (T.rank >= 4) return clamp((T.mass - RANK_START[4]) / RANK_V_SWELL_MASS, 0, 1);
-  return clamp((T.mass - RANK_START[T.rank]) / RANKS[T.rank].massToNext, 0, 1);
-}
-
 function num(v: number | undefined, d: number): number { return v === undefined || !Number.isFinite(v) ? d : v; }
 
 // ─────────────────────────────── the tick ───────────────────────────────
@@ -208,7 +204,7 @@ export function stepTitan(w: World): void {
     settleRecharge(w, maxCharges);
   } else T.dashRecharge = 0;
 
-  // ── body size (grow tween + in-rank swell) ──
+  // ── body size (level-up / rank-up grow tween) ──
   updateHeight(w, dt);
   const H = T.height;
   const rank = T.rank;
@@ -390,10 +386,12 @@ export function stepTitan(w: World): void {
 // ─────────────────────────────── movement helpers ───────────────────────────────
 function updateHeight(w: World, dt: number): void {
   const T = w.titan, K = T.kit;
-  const target = titanHeight(T.rank, rankProgress(T));
+  const target = titanHeightAt(T.rank, T.level);
+  T.mass = sizeMassMirror(T.rank, T.level, T.xp);
   if (T.growT > 0) {
     T.growT = Math.max(0, T.growT - dt);
-    const u = 1 - T.growT / GROW_TWEEN_S;
+    const dur = Math.max(1e-3, num(K.sim_growDur, GROW_TWEEN_S));
+    const u = clamp(1 - T.growT / dur, 0, 1);
     const from = num(K.sim_growFrom, target);
     T.height = from + (target - from) * easeOutBack(u);
   } else {
@@ -500,10 +498,85 @@ function crush(w: World): void {
 }
 
 // ─────────────────────────────── growth ───────────────────────────────
+/**
+ * Pacing rubber band on growth XP (config RANK_SCHEDULE_S / CATCHUP_* / AHEAD_*): × up to
+ * CATCHUP_MAX while the run is behind the next Size rank's scheduled time; × down to AHEAD_MIN when
+ * the XP rate since entering this rank projects the next breach more than AHEAD_GRACE_S[next] early.
+ * 1 otherwise (and at Size V).
+ */
+export function paceMul(w: World): number {
+  const T = w.titan;
+  const next = T.rank + 1;
+  if (next >= RANK_SCHEDULE_S.length) return 1;
+  if (w.t > RANK_SCHEDULE_S[next]) {
+    const behindMin = (w.t - RANK_SCHEDULE_S[next]) / 60;
+    return Math.min(CATCHUP_MAX, 1 + CATCHUP_PER_MIN * behindMin);
+  }
+  if (next >= AHEAD_FROM_RANK) {
+    const inRank = w.t - num(T.kit.sim_rankT0, 0);
+    const now = cumXpAt(T.level) + T.xp;
+    const got = now - cumXpAt(RANK_LEVELS[T.rank]), need = cumXpAt(RANK_LEVELS[next]) - now;
+    if (inRank > 5 && got > 0 && need > 0) {
+      const eta = w.t + (need * inRank) / got;
+      const earlyMin = (RANK_SCHEDULE_S[next] - (AHEAD_GRACE_S[next] ?? 0) - eta) / 60;
+      if (earlyMin > 0) return Math.max(AHEAD_MIN, 1 - AHEAD_PER_MIN * earlyMin);
+    }
+  }
+  return 1;
+}
+
+/**
+ * Growth XP → the titan. × xpGain × massGain (the "growth" stat) × the kit's growth multiplier (MOLO
+ * GULLET VACUUM) × the pacing rubber band (paceMul). Every level-up owes a draft, emits `levelUp` and
+ * steps the body up; reaching RANK_LEVELS[r] is the Size-r MASS BREACH (rankUp).
+ */
 export function gainXp(w: World, xp: number): void {
   const T = w.titan;
   if (!T.alive || !(xp > 0)) return;
-  T.xp += xp * Math.max(0, stat(w, 'xpGain'));
+  const mul = Math.max(0, stat(w, 'xpGain')) * Math.max(0, stat(w, 'massGain')) * kitMassMul(w) * paceMul(w);
+  addXp(w, xp * mul);
+}
+
+/** Upgrade 'mass' action ("grow"): `frac` of the CURRENT level's XP bar, exactly — no multipliers and
+ *  no rubber band, so the card text is the effect at every size. May level up (and rank up). */
+export function gainGrowth(w: World, frac: number): void {
+  const T = w.titan;
+  if (!T.alive || !(frac > 0) || !Number.isFinite(frac)) return;
+  addXp(w, frac * T.xpToNext);
+}
+
+/** RETIRED (2026-09-24): SIZE comes from LEVEL now, so loot mass grows nothing. Kept (a no-op) because
+ *  the pickup lane's collect() still calls it; loot mass only sizes the pickup meshes (config lootMass,
+ *  KILL_MASS_RANK_MUL). titan.mass is written by updateHeight as a SIZE-progress mirror. */
+export function gainMass(_w: World, _mass: number): void {
+  // intentionally empty
+}
+
+/**
+ * Dev cheat (testsurface cheat.rank): jump straight to Size `rank` (and at least `level`, e.g. a fully
+ * grown Size V body). The level becomes max(level, RANK_LEVELS[rank], minLevel) with an empty XP bar
+ * and NO drafts are owed (a cheat must not queue thirty draft screens); every rank on the way goes
+ * through the real rankUp (stats, heal, `rankUp` events, the MASS BREACH tween). Never shrinks.
+ * Returns the rank after the call.
+ */
+export function growToRank(w: World, rank: number, minLevel = 0): number {
+  const T = w.titan;
+  const want = clamp(Math.floor(Number.isFinite(rank) ? rank : 0), 0, 4);
+  const lv = Math.max(T.level, RANK_LEVELS[want], Number.isFinite(minLevel) ? Math.floor(minLevel) : 0);
+  if (!T.alive || (want <= T.rank && lv <= T.level)) return T.rank;
+  const r0 = T.rank;
+  T.level = lv;
+  T.xp = 0;
+  T.xpToNext = xpToNext(T.level);
+  grow(w, r0);
+  return T.rank;
+}
+
+function addXp(w: World, amount: number): void {
+  const T = w.titan;
+  if (!(amount > 0) || !Number.isFinite(amount)) return;
+  const lv0 = T.level, r0 = T.rank;
+  T.xp += amount;
   let n = 0;
   while (T.xp >= T.xpToNext && n++ < MAX_LEVELUPS_PER_CALL) {
     T.xp -= T.xpToNext;
@@ -513,38 +586,27 @@ export function gainXp(w: World, xp: number): void {
     w.events.push({ type: 'levelUp', level: T.level });
   }
   if (T.xp >= T.xpToNext) T.xp = T.xpToNext - 1e-6;
+  if (T.level !== lv0) grow(w, r0);
 }
 
-export function gainMass(w: World, mass: number): void {
-  const T = w.titan;
-  if (!T.alive || !(mass > 0)) return;
-  let mul = Math.max(0, stat(w, 'massGain')) * kitMassMul(w);
-  const next = T.rank + 1;
-  if (next < RANK_SCHEDULE_S.length && w.t > RANK_SCHEDULE_S[next]) {
-    const behindMin = (w.t - RANK_SCHEDULE_S[next]) / 60;
-    mul *= Math.min(CATCHUP_MAX, 1 + CATCHUP_PER_MIN * behindMin);
-  } else if (next >= AHEAD_FROM_RANK && next < RANK_SCHEDULE_S.length) {
-    // pace governor (config AHEAD_*): project the breach from this rank's average mass rate so far;
-    // only a titan on course to breach more than AHEAD_GRACE_S before schedule is slowed
-    const inRank = w.t - num(T.kit.sim_rankT0, 0);
-    const got = T.mass - RANK_START[T.rank], need = RANK_START[next] - T.mass;
-    if (inRank > 5 && got > 0 && need > 0) {
-      const eta = w.t + (need * inRank) / got;
-      const earlyMin = (RANK_SCHEDULE_S[next] - AHEAD_GRACE_S - eta) / 60;
-      if (earlyMin > 0) mul *= Math.max(AHEAD_MIN, 1 - AHEAD_PER_MIN * earlyMin);
-    }
-  }
-  T.mass += mass * mul;
+/** After the level changed: rank up through every RANK_LEVELS threshold reached, then start the grow
+ *  tween toward titanHeightAt(rank, level) — the long MASS BREACH tween when the rank changed, the
+ *  short level step otherwise. A running breach tween is never cut short by a level step. */
+function grow(w: World, r0: number): void {
+  const T = w.titan, K = T.kit;
   let guard = 0;
-  while (T.rank < 4 && T.mass >= RANK_START[T.rank + 1] && guard++ < 5) rankUp(w);
+  while (T.rank < 4 && T.level >= RANK_LEVELS[T.rank + 1] && guard++ < 5) rankUp(w);
+  const dur = Math.max(T.rank !== r0 ? GROW_TWEEN_S : LEVEL_GROW_S, T.growT);
+  K.sim_growFrom = T.height;
+  K.sim_growDur = dur;
+  T.growT = dur;
+  T.mass = sizeMassMirror(T.rank, T.level, T.xp);
 }
 
 function rankUp(w: World): void {
   const T = w.titan, K = T.kit;
   const ratio = T.maxHp > 0 ? clamp(T.hp / T.maxHp, 0, 1) : 1;
-  K.sim_growFrom = T.height;
   T.rank = (T.rank + 1) as TitanState['rank'];
-  T.growT = GROW_TWEEN_S;
   K.sim_rankT0 = w.t;
   recomputeStats(w);
   T.hp = Math.min(T.maxHp, ratio * T.maxHp + RANKUP_HEAL_FRAC * T.maxHp);

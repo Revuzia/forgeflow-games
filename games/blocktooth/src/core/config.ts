@@ -2,23 +2,34 @@
 // THREE-FREE. This is the single source of truth for every number another module
 // would otherwise hard-code. Tune HERE (the pacing probe reads the same table).
 //
-// ═══════════════════════════ ECONOMY + THREAT TABLE (balance pass, 2026-09-23) ═══════════════════════════
+// ═══════════════════════════ ECONOMY + THREAT TABLE (balance pass 2026-09-23; growth → LEVEL 2026-09-24) ═══════════════════════════
 // Every number below is either a constant in this file (name in brackets) or MEASURED with the gate bot
-// (_harness/bot.ts; 36-run sweep = 12 titan×biome × seeds 1337/7/99, _harness/scratch/balance_multi.sh).
+// (_harness/bot.ts; 36-run sweep = 12 titan×biome × seeds 1337/7/99, _harness/probe_sim.ts --seed N).
+//
+// GROWTH (2026-09-24): SIZE is driven by LEVEL — one currency (XP). Every level-up steps the body up
+// (titanHeightAt, LEVEL_GROW_S tween); RANK_LEVELS[r] is the MASS BREACH (GROW_TWEEN_S). Mass is retired:
+// loot still carries it for the pickup meshes, titan.mass is a legacy mirror of SIZE progress (sizeMassMirror); the HUD / debug read sizeProgress().
 //
 // ECONOMY (per Size rank)                      I        II        III        IV         V
-//   massToNext [RANKS]                         95       600       9 000      70 000     —
-//   cumulative mass to reach the rank           0        95        695        9 695      79 695
+//   reached at LV [RANK_LEVELS]                 1        7         16         27         35
+//   cumulative XP to reach it [cumXpAt]          0        254       1 719      5 851      10 763
+//   body H on entry → last level before breach 1.2→2.66 5→9.89    14→24.2    32→47.3    60→63.5→67.2
+//   per-level step [BREACH_JUMP]                +17 %    +8.9 %    +5.6 %     +5.7 %     +5.8 % (2 levels)
 //   schedule [RANK_SCHEDULE_S] / gate band      0        90/60–150 210/150–300 360/280–450 480/400–560
 //   canFlatten (matched tier eaten on contact)  t0       t1        t2         t3         t4
-//   matched-tier floor loot mass / xp          1 / 1    5 / 3     16 / 3     55 / 1.8   170 / 0.75
-//     [lootMass/lootXp = TIERS × xpScale 1/1/.5/.15/.03; SNACK_FALLOFF 0.35 per tier BELOW canFlatten]
-//   kill mass × [KILL_MASS_RANK_MUL]            1        1         3          25         30
-//   (tank kill at IV = 6×25 = 150 mass ≈ 3 tier-3 floors: fighting the army feeds growth, it is not a detour)
-//   rubber band: catch-up × min(3, 1 + 2.0·minBehind) after the scheduled time [CATCHUP_*]; Size V only:
-//     pace governor × max(0.35, 1 − 1.2·minEarly) when the projected breach is > 40 s early [AHEAD_*]
-//   measured: time in rank (s, mean)           100      115       158        113        (boss)
-//             LV at Size II/III/IV/V ≈ 5 / 12 / 22 / 33 · early draft gap median 13–25 s
+//   matched-tier floor loot xp (mass = mesh)   1 (1)    3 (5)     3 (16)     1.8 (55)   0.75 (170)
+//     [lootXp = TIERS × xpScale 1/1/.5/.15/.03; SNACK_FALLOFF 0.35 per tier BELOW canFlatten]
+//   growth XP × xpGain × massGain ("growth" stat) × kit (MOLO vacuum 1.25) × rubber band [paceMul]:
+//     catch-up × min(3, 1 + 2.0·minBehind) after the next rank's scheduled time [CATCHUP_*];
+//     Size V breach only: pace governor × max(0.35, 1 − 1.2·minEarly) when the projected breach is
+//     more than 40 s early [AHEAD_*]
+//   measured (seed 1337, rubber band on): Size-up s  II 70–121 · III 191–247 · IV 329–388 · V 413–483
+//             ungoverned LV at 90/210/360/480 s = 6/15/26/37 (median, _harness/scratch/level_pace.ts;
+//             5/14/24/34 under the mass economy)
+//             early draft gap median 11.9–17.3 s · drafts per run 39–44 · LV at boss 36–37
+//   36-run sweep: clears 29/36, deaths 7/36, every seed passes GATE 2 (mass economy: 28/36, 8/36, and
+//     seed 99 failed the II–IV bands on VOLT-KITE/LOCKWATER) — VOLT-KITE and WHITE STACKS
+//     are still where runs die (the elite window and the boss fight)
 //
 // THREAT (per Size rank)                       I        II        III        IV         V
 //   titan hp× / dmg× [RANKS]                   1 / 1    1.8 / 3   3.2 / 8    5.5 / 20   9 / 45
@@ -87,15 +98,26 @@ export const MAX_STEPS_PER_FRAME = 5;
 export const INPUT_BUFFER_S = 0.2;
 
 // ─────────────────────────────── size ranks ───────────────────────────────
+// SIZE is driven by LEVEL (2026-09-24, owner feedback: "the monster grows as it levels up"). XP is the
+// one growth currency: every level-up raises the body a visible step (titanHeightAt), and reaching
+// RANK_LEVELS[r] is the MASS BREACH into Size r. The old MASS resource no longer drives anything —
+// titan.mass is kept only as a mirror of SIZE progress in the legacy units (sizeMassMirror) so a HUD
+// that still reads it shows the right bar; new code reads sizeProgress().
 export interface RankDef {
   name: 'I' | 'II' | 'III' | 'IV' | 'V';
-  height: number;          // body height (m) at the start of the rank
-  massToNext: number;      // mass needed (from the start of this rank) to reach the next
+  height: number;          // body height (m) on entering the rank (the MASS BREACH tween lands here)
+  /** @deprecated display units only: the legacy SIZE bar length (see sizeMassMirror). Progression
+   *  ignores it — ranks come from RANK_LEVELS. */
+  massToNext: number;
   hpMul: number;           // × TitanDef.base.maxHp
   dmgMul: number;          // × every titan damage number (so kill times survive growth)
   speedMul: number;        // × base move speed (see titanSpeed)
-  frameFrac: number;       // fraction of screen height the titan occupies (camera formula)
-  pitchDeg: number;        // camera pitch at this rank
+  /** camera pitch (deg) at this rank. 2026-09-24: 36/38/40/42/44 → 54° at every Size with the wider
+   *  GROW-INTO-THE-FRAME framing (a 38° camera at the wide Size II view sat at tower height and a
+   *  foreground tower filled ~40 % of the frame; the steeper view reads the street grid + rooftops).
+   *  Size I was 46° in the view lane; integration set it to 54° too (A/B at LV 1: at 46° the corner
+   *  facade crowds the frame, 54° reads the zebra + the baby titan) — no pitch swing at the first breach. */
+  pitchDeg: number;
   canFlatten: Tier;        // highest tier flattened on contact
   /** × the XP of city loot (floors, props, collapse bonus) while at this rank — a Size V titan
    *  levels up from the fight, not from eating a skyline it pops 20 floors a second of */
@@ -103,26 +125,67 @@ export interface RankDef {
 }
 
 export const RANKS: readonly RankDef[] = [
-  { name: 'I',   height: 1.2, massToNext: 95,       hpMul: 1.0, dmgMul: 1.0,  speedMul: 1, frameFrac: 0.13, pitchDeg: 36, canFlatten: 0, xpScale: 1 },
-  { name: 'II',  height: 5.0, massToNext: 600,      hpMul: 1.8, dmgMul: 3.0,  speedMul: 1, frameFrac: 0.15, pitchDeg: 38, canFlatten: 1, xpScale: 1 },
-  { name: 'III', height: 14,  massToNext: 9000,     hpMul: 3.2, dmgMul: 8.0,  speedMul: 1, frameFrac: 0.17, pitchDeg: 40, canFlatten: 2, xpScale: 0.5 },
-  { name: 'IV',  height: 32,  massToNext: 70000,    hpMul: 5.5, dmgMul: 20,   speedMul: 1, frameFrac: 0.19, pitchDeg: 42, canFlatten: 3, xpScale: 0.15 },
-  { name: 'V',   height: 60,  massToNext: Infinity, hpMul: 9.0, dmgMul: 45,   speedMul: 1, frameFrac: 0.21, pitchDeg: 44, canFlatten: 4, xpScale: 0.03 },
+  { name: 'I',   height: 1.2, massToNext: 95,       hpMul: 1.0, dmgMul: 1.0,  speedMul: 1, pitchDeg: 54, canFlatten: 0, xpScale: 1 },
+  { name: 'II',  height: 5.0, massToNext: 600,      hpMul: 1.8, dmgMul: 3.0,  speedMul: 1, pitchDeg: 54, canFlatten: 1, xpScale: 1 },
+  { name: 'III', height: 14,  massToNext: 9000,     hpMul: 3.2, dmgMul: 8.0,  speedMul: 1, pitchDeg: 54, canFlatten: 2, xpScale: 0.5 },
+  { name: 'IV',  height: 32,  massToNext: 70000,    hpMul: 5.5, dmgMul: 20,   speedMul: 1, pitchDeg: 54, canFlatten: 3, xpScale: 0.15 },
+  { name: 'V',   height: 60,  massToNext: Infinity, hpMul: 9.0, dmgMul: 45,   speedMul: 1, pitchDeg: 54, canFlatten: 4, xpScale: 0.03 },
 ];
 
-/** In-rank swell: the body grows up to +SWELL of its rank height as mass fills toward the next rank. */
-export const SWELL = 0.12;
-/** Rank-up grow tween duration (s). Height eases (out-back) from old to new over this time. */
+/** LEVEL at which each Size rank is reached (index = rank; Size I is where the run starts). Tuned so
+ *  the XP economy lands each breach on RANK_SCHEDULE_S with the rubber band idle: the body now grows
+ *  inside every rank and a bigger body eats and kills faster, so the gate bot's ungoverned level at
+ *  90 / 210 / 360 / 480 s is 6 / 15 / 26 / 37 (median of 12 runs; it was 5 / 14 / 24 / 34 under the
+ *  old mass economy). First draft of 5 / 12 / 22 / 32 put Size II–IV 40–45 % early (II at 36–67 s). */
+export const RANK_LEVELS: readonly number[] = [1, 7, 16, 27, 35];
+/** Per-level growth inside a rank is geometric from RANKS[r].height toward RANKS[r+1].height ÷
+ *  BREACH_JUMP[r+1]; the MASS BREACH (rank-up) is one more step × BREACH_JUMP — the level-up that
+ *  crosses a rank is the biggest jump of that stretch. Index = the rank being entered.
+ *  Per-level step: Size I +17.3 % · II +8.9 % · III +5.6 % · IV +5.7 % · V +5.8 % (2 levels);
+ *  breach step: → II ×1.88 · → III ×1.42 · → IV ×1.32 · → V ×1.27. */
+export const BREACH_JUMP: readonly number[] = [1, 1.6, 1.3, 1.25, 1.2];
+/** Size V has no next rank: the body keeps growing up to +RANK_V_GROWTH over RANK_V_GROWTH_LEVELS
+ *  more levels (60 → 63.5 → 67.2 m). The bosses were tuned against a 67.2 m body (the old mass swell
+ *  filled in ~10 s at Size V) and arrive 20 s after the breach, 1–2 levels later. Measured over
+ *  36 runs (seeds 1337/7/99): spreading it over 5 levels cost 3 clears (26/36 vs 29/36). */
+export const RANK_V_GROWTH = 0.12;
+export const RANK_V_GROWTH_LEVELS = 2;
+/** Rank-up (MASS BREACH) grow tween duration (s). Height eases (out-back) from old to new. */
 export const GROW_TWEEN_S = 0.9;
+/** Level-up grow tween duration (s): the per-level step, same easing. */
+export const LEVEL_GROW_S = 0.45;
 /** Titan collision radius as a fraction of body height. */
 export const TITAN_RADIUS_PER_H = 0.42;
 /** Enemies whose height < titan.height * CRUSH_RATIO are crushed on contact while the titan moves. */
 export const CRUSH_RATIO = 0.45;
 
-/** Body height (m) for a rank + progress through it (0..1). */
+/** Size rank for a level (the highest rank whose RANK_LEVELS threshold the level has reached). */
+export function rankForLevel(level: number): RankIndex {
+  let r = 0;
+  while (r < 4 && level >= RANK_LEVELS[r + 1]) r++;
+  return r as RankIndex;
+}
+
+/** Body height (m) for a titan at `rank` and `level` (the settled value; the sim tweens toward it).
+ *  LV 1 1.2 · 2 1.41 · 3 1.65 · 4 1.94 · 5 2.27 · 6 2.66 → LV 7 (Size II) 5.0 · LV 15 9.89 →
+ *  LV 16 (III) 14 · LV 26 24.2 → LV 27 (IV) 32 · LV 34 47.3 → LV 35 (V) 60 · 36 63.5 · 37+ 67.2 m. */
+export function titanHeightAt(rank: RankIndex, level: number): number {
+  const H0 = RANKS[rank].height;
+  if (rank >= 4) {
+    const u = Math.min(1, Math.max(0, (level - RANK_LEVELS[4]) / RANK_V_GROWTH_LEVELS));
+    return H0 * Math.pow(1 + RANK_V_GROWTH, u);
+  }
+  const H1 = RANKS[rank + 1].height / BREACH_JUMP[rank + 1];
+  const L0 = RANK_LEVELS[rank], L1 = RANK_LEVELS[rank + 1];
+  const u = Math.min(1, Math.max(0, (level - L0) / (L1 - L0)));
+  return H0 * Math.pow(H1 / H0, u);
+}
+
+/** @deprecated (scratch view harnesses) body height for a rank + 0..1 progress through its levels. */
 export function titanHeight(rank: RankIndex, progress01: number): number {
   const p = Math.min(1, Math.max(0, progress01));
-  return RANKS[rank].height * (1 + SWELL * p);
+  const L0 = RANK_LEVELS[rank], L1 = rank < 4 ? RANK_LEVELS[rank + 1] : L0 + RANK_V_GROWTH_LEVELS;
+  return titanHeightAt(rank, L0 + p * (L1 - L0 - (rank < 4 ? 1 : 0)));
 }
 
 /** Base move speed (m/s) for a body height: heavier = slower on screen, faster in metres.
@@ -131,32 +194,65 @@ export function titanSpeed(height: number): number {
   return 3.2 + 1.9 * Math.pow(height, 0.8);
 }
 
-/** Pacing schedule (s since run start) the rubber-band targets. Mass gain gets a catch-up
- *  multiplier when the run is behind: mul = 1 + CATCHUP_PER_MIN * minutesBehind (cap CATCHUP_MAX). */
-export const RANK_SCHEDULE_S: readonly number[] = [0, 90, 210, 360, 480];
-export const CATCHUP_PER_MIN = 2.0;
-export const CATCHUP_MAX = 3;
-/** The other half of the rubber band, for the late ranks only (next rank ≥ AHEAD_FROM_RANK, i.e. the
- *  Size V breach): a pace governor projects the breach from the average mass rate since entering the
- *  current rank; a titan on course to breach more than AHEAD_GRACE_S before RANK_SCHEDULE_S[next]
- *  banks mass at max(AHEAD_MIN, 1 − AHEAD_PER_MIN × minutesEarly) — slow eaters are never touched.
- *  Size IV mass rates spread 3× across titan × city layouts (measured 440–1100 mass/s), which put some Size V breaches before the 400 s
- *  floor of the pacing band while others were late; the catch-up already compresses the late side. */
-export const AHEAD_FROM_RANK = 4;
-export const AHEAD_GRACE_S = 40;
-export const AHEAD_PER_MIN = 1.2;
-export const AHEAD_MIN = 0.35;
-
 /** XP curve: xpToNext(level) — level starts at 1. Target ≈ LV 28–34 by the boss (~8.5 min). */
 export function xpToNext(level: number): number {
   return Math.round(8 + 6 * Math.pow(level, 1.35));
 }
 
+/** Total XP banked from LV 1 to the START of `level` (Σ xpToNext over the levels below it). */
+const CUM_XP: number[] = [0, 0];
+export function cumXpAt(level: number): number {
+  const L = Math.max(1, Math.min(10000, Math.floor(level)));
+  while (CUM_XP.length <= L) { const l = CUM_XP.length - 1; CUM_XP.push(CUM_XP[l] + xpToNext(l)); }
+  return CUM_XP[L];
+}
+
+/** 0..1 progress toward the next Size rank, in XP (what the HUD SIZE bar should show). Size V: 1. */
+export function sizeProgress(rank: RankIndex, level: number, xp: number): number {
+  if (rank >= 4) return 1;
+  const a = cumXpAt(RANK_LEVELS[rank]), b = cumXpAt(RANK_LEVELS[rank + 1]);
+  return Math.min(1, Math.max(0, (cumXpAt(level) + Math.max(0, xp) - a) / Math.max(1, b - a)));
+}
+
+/** Levels still to gain before the next Size rank (0 at Size V). */
+export function levelsToNextSize(rank: RankIndex, level: number): number {
+  return rank >= 4 ? 0 : Math.max(0, RANK_LEVELS[rank + 1] - level);
+}
+
+/** Legacy mirror the sim writes into titan.mass every tick: Σ massToNext of the ranks below +
+ *  sizeProgress × this rank's massToNext. A view that still computes (mass − Σ massToNext) /
+ *  massToNext therefore shows the level-driven SIZE bar. @deprecated read sizeProgress() instead. */
+export function sizeMassMirror(rank: RankIndex, level: number, xp: number): number {
+  let base = 0;
+  for (let i = 0; i < rank; i++) base += RANKS[i].massToNext;
+  const span = RANKS[rank].massToNext;
+  return Number.isFinite(span) ? base + sizeProgress(rank, level, xp) * span : base;
+}
+
+/** Pacing schedule (s since run start) the rubber band targets: when each Size rank is due. Growth
+ *  XP gets a catch-up multiplier while the run is behind the NEXT rank's time:
+ *  mul = 1 + CATCHUP_PER_MIN × minutesBehind (cap CATCHUP_MAX). */
+export const RANK_SCHEDULE_S: readonly number[] = [0, 90, 210, 360, 480];
+export const CATCHUP_PER_MIN = 2.0;
+export const CATCHUP_MAX = 3;
+/** The other half of the rubber band (next rank ≥ AHEAD_FROM_RANK, i.e. the Size V breach): a pace
+ *  governor projects the next breach from the average XP rate since entering the current rank; a
+ *  titan on course to breach more than AHEAD_GRACE_S[next] before RANK_SCHEDULE_S[next] banks XP at
+ *  max(AHEAD_MIN, 1 − AHEAD_PER_MIN × minutesEarly) — slow eaters are never touched. It slows DRAFTS
+ *  too now (XP is the only currency), so it stays on the last breach only, as before: with
+ *  RANK_LEVELS tuned the ungoverned Size II–IV times sit inside their bands, and AHEAD_FROM_RANK = 1
+ *  (graces below, each inside its gate band's floor II 60 · III 150 · IV 280 s) changed nothing in the
+ *  36-run sweep. It is the lever if a faster eater ever breaks the II–IV floors. */
+export const AHEAD_FROM_RANK = 4;
+export const AHEAD_GRACE_S: readonly number[] = [0, 20, 35, 45, 40];
+export const AHEAD_PER_MIN = 1.2;
+export const AHEAD_MIN = 0.35;
+
 // ─────────────────────────────── destruction tiers ───────────────────────────────
 export interface TierDef {
   floorHp: number;         // HP per floor (props: HP of the prop)
   floorXp: number;         // XP dropped per floor broken
-  floorMass: number;       // mass dropped per floor broken
+  floorMass: number;       // mass on the rubble per floor broken — sizes the pickup meshes only (SIZE is level-driven)
   collapseBonus: number;   // extra XP+mass multiplier burst when the building collapses (× floors)
   tonsPerFloor: number;    // cosmetic tabloid tonnage
 }
@@ -178,7 +274,8 @@ export function lootXp(tier: Tier, rank: RankIndex): number {
   return TIERS[tier].floorXp * RANKS[rank].xpScale * (below > 0 ? Math.pow(SNACK_FALLOFF, below) : 1);
 }
 
-/** Mass one floor / prop of `tier` drops for a titan at `rank` (table value × the snack rule). */
+/** Mass one floor / prop of `tier` drops for a titan at `rank` (table value × the snack rule). Since
+ *  2026-09-24 it grows nothing (titansim gainMass is retired); the pickup view sizes chunks by it. */
 export function lootMass(tier: Tier, rank: RankIndex): number {
   const below = RANKS[rank].canFlatten - tier;
   return TIERS[tier].floorMass * (below > 0 ? Math.pow(SNACK_FALLOFF, below) : 1);
@@ -224,13 +321,69 @@ export const CAMERA = {
   shakePerH: 0.02,
 } as const;
 
-/** Camera distance D (m) from look target for a body height at a rank:
- *  D = H / (frameFrac(rank) · 2·tan(fov/2))
- *  → I 17.2 · II 62.2 · III 153.7 · IV 314.3 · V 533.2 m (at the rank's base height) */
+// ── auto framing: the titan GROWS INTO THE FRAME level by level (2026-09-24, owner feedback) ──
+/**
+ * Auto framing per Size rank, as SCREEN FRACTIONS of one body height H (vertical extent D·k):
+ *   startFrac[r] — on entering the rank (H0 = titanHeightAt(r, RANK_LEVELS[r]) = RANKS[r].height)
+ *   endFrac[r]   — at the rank's last level before the next breach (Size V: its growth cap)
+ * D*(H, r) = H0 / (startFrac·k) · (H/H0)^kr, with kr solved at module load from the sim's own growth
+ * curve (titanHeightAt at the rank's first and last level), so the body grows on screen whatever
+ * per-level step RANK_LEVELS / BREACH_JUMP give; each breach resets to the next rank's small startFrac
+ * — the camera pulls back so the new, bigger world fits. kr comes out NEGATIVE on the current curve (I −0.33 · II −0.30 · III −0.37 · IV −0.29 · V +0.39)
+ * (an in-rank height ratio of 1.1–2.2× cannot reach 4.5–8.5 % → 13–19 % with any 0 < k < 1): the camera eases
+ * in slightly while the body grows. Late ranks start bigger on purpose: Size IV–V framing is bounded by
+ * the perf gate (Size V + 250 enemies at p99 ≤ 22 ms); Size V keeps the old 533 m distance.
+ *   D (m) / body share of the view height at a rank's first → last level (framing_table.ts prints every level):
+ *   I LV 1→6 49.8 → 38.2 m, 4.5 → 13 % · II LV 7→15 133 → 109 m, 7 → 17 % · III LV 16→26 307 → 251 m,
+ *   8.5 → 18 % · IV LV 27→34 519 → 464 m, 11.5 → 19 % · V LV 35→37 533 → 557 m, 21 → 22.5 %.
+ *   Size I starts WIDE (a whole intersection, the titan tiny on its zebra — the reference's opening).
+ */
+export const FRAMING = {
+  startFrac: [0.045, 0.070, 0.085, 0.115, 0.210] as readonly number[],
+  endFrac:   [0.130, 0.170, 0.180, 0.190, 0.225] as readonly number[],
+} as const;
+/** Player zoom (view-only; the sim never reads it): a multiplier on the auto distance, clamped to
+ *  [ZOOM_MIN, ZOOM_MAX] and to the absolute band D_ABS_MIN ≤ D ≤ D_ABS_MAX (m). The far end is where
+ *  the whole city already fits and the frame budget still holds (perfcheck --zoom max). */
+export const CAMERA_ZOOM = {
+  min: 0.55, max: 2.0,
+  dAbsMin: 12, dAbsMax: 880,
+  /** smoothing rate of ln(zoom) (1/s) — quick but not a snap */
+  omega: 11,
+} as const;
+
+const CAM_K = 2 * Math.tan((CAMERA.fovDeg * Math.PI) / 360);
+/** in-rank framing exponent limits (k < 0 = the camera eases IN while the body grows) */
+const FRAME_K_MIN = -1.2, FRAME_K_MAX = 1;
+/** Per-rank {H0, k} derived from FRAMING and the sim's growth curve (see FRAMING). */
+const RANK_FRAME: readonly { H0: number; k: number }[] = RANKS.map((R, r) => {
+  const L0 = RANK_LEVELS[r] ?? 1;
+  const L1 = r < 4 ? (RANK_LEVELS[r + 1] ?? L0 + 1) - 1 : L0 + RANK_V_GROWTH_LEVELS;
+  const H0 = titanHeightAt(r as RankIndex, L0) || R.height;
+  const H1 = titanHeightAt(r as RankIndex, Math.max(L0, L1)) || H0;
+  const g = H1 / H0;
+  const f = FRAMING.endFrac[r] / FRAMING.startFrac[r];
+  const k = g > 1.02 ? 1 - Math.log(f) / Math.log(g) : 1;
+  return { H0, k: Math.max(FRAME_K_MIN, Math.min(FRAME_K_MAX, k)) };
+});
+
+/** AUTO camera distance D* (m) from the look target for a body height at a rank (no player zoom, no
+ *  punch) — see FRAMING. The camera rig springs toward it; the SIM's enemy spawn ring reads it too
+ *  (ai/enemies.ts ringRadius), so foes still walk in from off-screen at the default zoom. */
 export function cameraDistance(height: number, rank: RankIndex): number {
-  const k = 2 * Math.tan((CAMERA.fovDeg * Math.PI) / 360);
-  return height / (RANKS[rank].frameFrac * k);
+  const r = Math.max(0, Math.min(RANKS.length - 1, rank | 0));
+  const F = RANK_FRAME[r];
+  const H = Math.max(0.05, Number.isFinite(height) ? height : F.H0);
+  return F.H0 / (FRAMING.startFrac[r] * CAM_K) * Math.pow(H / F.H0, F.k);
 }
+
+/** Screen-height fraction a body height H occupies at the AUTO distance (no zoom, no punch). */
+export function autoFrameFrac(height: number, rank: RankIndex): number {
+  return height / (cameraDistance(height, rank) * CAM_K);
+}
+
+/** The derived per-rank framing (H0, k) — for probes / the debug overlay. */
+export function framingTable(): readonly { H0: number; k: number }[] { return RANK_FRAME; }
 
 /** Near/far planes that keep depth precision sane across a 30× zoom range. */
 export function cameraClip(distance: number): { near: number; far: number } {
@@ -271,9 +424,9 @@ export const ENEMY_DMG_RANK_MUL: readonly number[] = [1, 1, 1, 1.8, 1.8];
 export const ENEMY_REACH_H: Readonly<Record<string, number>> = {
   android: 0.15, squad: 0.2, drone: 0, buggy: 0.5, apc: 0.8, tank: 1.3, walker: 1.2, elite: 0.8,
 };
-/** × the MASS an enemy kill drops, by the titan's rank. Kills feed growth: at Size IV–V the army is
- *  most of what the titan fights, and a titan that stops to fight a tank line should not fall off
- *  the growth schedule (measured before: kills were < 1 % of the mass banked in Size IV). */
+/** × the MASS an enemy kill drops, by the titan's rank. Since 2026-09-24 mass grows nothing (SIZE is
+ *  level-driven; kills feed growth through their XP, which city loot's xpScale does not cut), so this
+ *  only sizes the scrap meshes and splits the drop into 1–4 chunks (combat/damage.ts killEnemy). */
 export const KILL_MASS_RANK_MUL: readonly number[] = [1, 1, 3, 25, 30];
 /** Aim lead by titan rank: heavier tells (tank lanes, rockets, mortar barrages, dives, the RAMROD
  *  lane) are painted where the titan WILL be after this fraction of the tell's windup at its current

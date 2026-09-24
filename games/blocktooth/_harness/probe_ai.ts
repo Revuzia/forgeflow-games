@@ -19,8 +19,8 @@
 import type { BiomeId, BossState, Enemy, EnemyKind, SimEvent, Telegraph, World } from '../src/core/types.ts';
 import { ENEMY_KINDS } from '../src/core/types.ts';
 import { NO_INPUT, createWorld, stepWorld } from '../src/core/world.ts';
-import { CITY, ENEMY_HP_PER_MIN, RANKS } from '../src/core/config.ts';
-import { gainMass } from '../src/titans/titansim.ts';
+import { CITY, ENEMY_HP_PER_MIN, RANK_LEVELS, RANK_V_GROWTH_LEVELS } from '../src/core/config.ts';
+import { growToRank } from '../src/titans/titansim.ts';
 import { ENEMIES } from '../src/data/enemies.ts';
 import { BOSSES } from '../src/data/bosses.ts';
 import { spawnRing } from '../src/ai/director.ts';
@@ -37,7 +37,9 @@ const RANK_AT = [0, 90, 210, 360, 480];
 const HZ = 30;
 
 function forceRank(w: World, r: number): void {
-  for (let g = 0; g < 200 && w.titan.rank < r; g++) gainMass(w, RANKS[w.titan.rank].massToNext * 1.2 + 10);
+  // the sim's real rank-ups (SIZE is level-driven: level → RANK_LEVELS[r]); Size V = the fully grown
+  // 67.2 m body the bosses are tuned against (what the old mass cheat produced)
+  growToRank(w, r, r >= 4 ? RANK_LEVELS[4] + RANK_V_GROWTH_LEVELS : 0);
 }
 
 const TMP = { x: 0, z: 0, bumpTier: -1 };
@@ -338,7 +340,9 @@ function unitBlock(): void {
   forceRank(w, 3);
   const T = w.titan;
   const seen: Record<string, Set<string>> = {};
-  const R = spawnRing(w);
+  // engagement distance, not the spawn ring: since 2026-09-24 the ring sits past the (wider) screen
+  // edge (Size IV ≈ 280–370 m) and a 60 s window would be spent walking in. 92 m = the old ring.
+  const R = Math.min(spawnRing(w), 92);
   const kinds: EnemyKind[] = ['android', 'drone', 'buggy', 'apc', 'tank', 'walker', 'elite'];
   kinds.forEach((k, i) => {
     const a = (i / kinds.length) * Math.PI * 2;

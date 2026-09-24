@@ -72,6 +72,9 @@ def main() -> int:
     ap.add_argument("--p99-ms", type=float, default=22.0)
     ap.add_argument("--draws-max", type=int, default=450)
     ap.add_argument("--shot", default=os.path.join(SHOTS, "perfcheck.png"))
+    ap.add_argument("--zoom", choices=("auto", "max"), default="auto",
+                    help="player camera zoom during the window: auto framing (1x) or held at the max zoom-OUT "
+                         "(real mouse-wheel notches; the rig clamps it to CAMERA_ZOOM.max / dAbsMax)")
     args = ap.parse_args()
 
     url = build_url(args.base, autostart=1, dev=1, noslate=1, titan=args.titan, biome=args.biome, seed=args.seed,
@@ -100,6 +103,7 @@ def main() -> int:
     st_end = None
     tick0 = tick1 = None
     overlays = {}
+    zoom_info = {}
     try:
         log("open %s" % url)
         sess.goto(url)
@@ -131,6 +135,20 @@ def main() -> int:
             time.sleep(0.5)
             s = sess.state() or {}
             log("after spawn: Size %s · enemies %s · draws %s" % (s.get("rank"), s.get("enemies"), s.get("draws")))
+            if args.zoom == "max":
+                # real wheel events over the canvas (+deltaY = zoom OUT); the rig clamps at its max
+                vp = sess.page.viewport_size or {"width": 1280, "height": 720}
+                sess.page.mouse.move(vp["width"] / 2, vp["height"] / 2)
+                for _ in range(24):
+                    sess.page.mouse.wheel(0, 120)
+                    time.sleep(0.04)
+                time.sleep(1.0)                                     # ln-zoom smoothing (ω 11/s)
+                cam = sess.safe_js("() => { const c = window.__BTCAM__; return c ? {zoom: c.zoom, target: c.zoomTarget, "
+                                   "d: c.distance, auto: c.autoDist} : null; }")
+                log("zoom held at max-out: %s" % json.dumps(cam))
+                zoom_info["start"] = cam
+                if not cam or not (cam.get("zoom", 1) > 1.2):
+                    fatal = "zoom max-out not applied (%s)" % json.dumps(cam)
             # warm-up drive (compiles, pools, debris)
             t_w = time.time()
             i = 0
@@ -175,6 +193,7 @@ def main() -> int:
                     clear_overlay(sess, s.get("screen"))
                 time.sleep(0.25)
             ft = sess.ft_stop()
+            zoom_info["end"] = sess.safe_js("() => { const c = window.__BTCAM__; return c ? {zoom: c.zoom, d: c.distance, auto: c.autoDist} : null; }")
             perf_bt = sess.perf()
             st_end = sess.state() or {}
             prog1 = st_end.get("programs")
@@ -238,6 +257,7 @@ def main() -> int:
           " · overlays cleared %s" % (
               ROMAN[ranks[-1]] if ranks and 0 <= ranks[-1] <= 4 else "?", mean_en, min(enemies) if enemies else None,
               max(enemies) if enemies else None, top_ups, sim_ticks, want_ticks, json.dumps(overlays)))
+    print("camera    : zoom %s · start %s · end %s" % (args.zoom, json.dumps(zoom_info.get("start")), json.dumps(zoom_info.get("end"))))
     print("end state : %s" % json.dumps(compact_state(st_end))[:600])
     print_diagnostics(diag, limit=10)
 
@@ -256,8 +276,12 @@ def main() -> int:
         problems.append("load not reached: mean live enemies %.0f < 80%% of %d" % (mean_en, args.enemies))
     if sim_ticks is None or sim_ticks < want_ticks:
         problems.append("the sim was not running for the window (ticks %s < %.0f) — frozen by an overlay?" % (sim_ticks, want_ticks))
+    if args.zoom == "max":
+        ze = zoom_info.get("end") or {}
+        if not (isinstance(ze.get("zoom"), (int, float)) and ze["zoom"] > 1.2):
+            problems.append("zoom max-out was not held through the window (%s)" % json.dumps(ze))
     passed = not problems
-    rep = {"url": url, "titan": args.titan, "biome": args.biome, "seed": args.seed, "headless": args.headless,
+    rep = {"url": url, "zoom": args.zoom, "zoomInfo": zoom_info, "titan": args.titan, "biome": args.biome, "seed": args.seed, "headless": args.headless,
            "frames": len(ft), "fps": fps, "p50": p50, "p99": p99, "max": mx, "over": over, "missedVsyncs": missed, "perfBT": perf_bt,
            "drawsMax": draws_max, "drawsP50": percentile(draws, 50), "trisMax": max(tris) if tris else None,
            "programs": [prog0, prog1], "meanEnemies": mean_en, "samples": samples, "topUps": top_ups,

@@ -10,10 +10,14 @@
 //     VOLT-KITE out-dash every boss tell (config.ts BOSS rows, "DASH ECONOMY").
 //   * trigger damage is a BASE number → × titanDamage (rank dmg× · damage stat · frenzy).
 //   * radii (p.r, p.aoe) are in titan body-heights (H) × the area stat.
-//   * 'mass' / 'xp' amounts are "floors' worth": amount × TIERS[t].floorMass / floorXp where t is the
-//     triggering building's tier for floor/collapse/smash events (props = tier 0; capped at what the
-//     titan can flatten) and the biggest flattenable tier otherwise — relevant at every size, but a
-//     tiny shop collapsing under a Size IV foot is priced as a tiny shop.
+//   * SIZE is driven by LEVEL (config RANK_LEVELS / titanHeightAt), so every growth card is XP:
+//     'massGain' is the "growth" stat, a × on all XP next to 'xpGain' (titansim gainXp).
+//   * 'mass' ("grow") p.amount is a share of the CURRENT level's XP bar, exact at every size
+//     (titansim gainGrowth: no multipliers, no rubber band).
+//   * 'xp' amounts are "floors' worth": amount × lootXp(t) where t is the triggering building's tier
+//     for floor/collapse/smash events (props = tier 0; capped at what the titan can flatten) and the
+//     biggest flattenable tier otherwise — a tiny shop collapsing under a Size IV foot is priced as a
+//     tiny shop.
 // Names: original civic / monster-humour register (building codes, municipal forms, traffic,
 // plumbing, zoning, appetite). None from CONTRACT §1's forbidden list.
 
@@ -50,7 +54,7 @@ const STAT_TEXT: Record<StatKey, StatText> = {
   dashCooldown: { label: 'dash recharge time' },
   dashDistance: { label: 'dash distance' },
   pickupRadius: { label: 'pickup reach' },
-  massGain: { label: 'mass gain' },
+  massGain: { label: 'growth XP' },
   xpGain: { label: 'XP gain' },
   luck: { label: 'luck' },
   rerolls: { label: 'reroll per draft', add: (a) => `${sgn(a)}${fmtNum(Math.abs(a))} reroll${Math.abs(a) === 1 ? '' : 's'} per draft` },
@@ -114,7 +118,7 @@ function actionText(action: TriggerAction, p: Record<string, number | string>, s
     case 'shockwave': return `release a ${fmtNum(P(p, 'r'))}-body-height shockwave for ${per(P(p, 'dmg'), ' dmg')}`;
     case 'heal': return P(p, 'frac') ? `heal ${perPct(P(p, 'amount'), ' max HP')}` : `heal ${per(P(p, 'amount'), ' HP')}`;
     case 'shield': return `gain a shield of ${perPct(P(p, 'amount'), ' max HP')}`;
-    case 'mass': return `gain ${per(P(p, 'amount'), '')} floors' worth of mass`;
+    case 'mass': return `gain ${perPct(P(p, 'amount'), " of a level's XP")}`;
     case 'xp': return `gain ${per(P(p, 'amount'), '')} floors' worth of XP`;
     case 'magnet': return `pull every pickup within ${fmtNum(P(p, 'r'))} body-heights`;
     case 'rubbleShot': return `hurl ${fmtNum(P(p, 'count', 1))} rubble chunk${P(p, 'count', 1) === 1 ? '' : 's'} for ${per(P(p, 'dmg'), ' dmg')}`;
@@ -216,7 +220,7 @@ const GROWTH_MOBILITY: UpgradeDef[] = [
   U('sinkhole_stride', 'Sinkhole Stride', 'rare', 3, ['mobility', 'trigger'], [on('dash', 1, 1, 'shockwave', { r: 1, dmg: 8 })]),
   U('jaywalkers_rhythm', "Jaywalker's Rhythm", 'common', 3, ['mobility', 'trigger'], [on('dash', 1, 4, 'frenzy', { stat: 'moveSpeed', mul: 0.15, dur: 2.5 })]),
   U('downspout_suction', 'Downspout Suction', 'rare', 3, ['growth', 'trigger'], [mul('pickupRadius', 0.1), on('interval', 1, 0, 'magnet', { r: 8, every: 10 })]),
-  U('growth_spurt_memo', 'Growth Spurt Memo', 'epic', 2, ['growth', 'trigger'], [on('levelUp', 1, 0, 'mass', { amount: 1 })]),
+  U('growth_spurt_memo', 'Growth Spurt Memo', 'epic', 2, ['growth', 'trigger'], [on('levelUp', 1, 0, 'mass', { amount: 0.1 })]),
   U('bulk_rate_postage', 'Bulk Rate Postage', 'rare', 3, ['growth', 'trigger'], [on('pickup', 0.05, 0.5, 'xp', { amount: 1 })]),
   U('road_diet', 'Road Diet', 'rare', 3, ['mobility', 'growth'], [mul('moveSpeed', 0.1), mul('massGain', 0.05)]),
   U('expedited_review', 'Expedited Review', 'epic', 2, ['growth'], [mul('xpGain', 0.15), add('luck', 1)]),
@@ -262,7 +266,7 @@ const SMASH: UpgradeDef[] = [
   U('faulty_wiring', 'Faulty Wiring', 'rare', 3, ['smash'], [add('sparkChance', 0.06)]),
   U('loose_masonry', 'Loose Masonry', 'rare', 3, ['smash', 'trigger'], [on('floorBreak', 0.15, 0.5, 'rubbleShot', { count: 2, dmg: 6 })]),
   U('eminent_domain', 'Eminent Domain', 'epic', 2, ['smash', 'trigger'], [on('collapse', 1, 0.5, 'shockwave', { r: 1.5, dmg: 18 })], { minRank: 1 }),
-  U('salvage_rights', 'Salvage Rights', 'common', 3, ['smash', 'growth', 'trigger'], [on('collapse', 0.5, 0, 'mass', { amount: 1 })], { minRank: 1 }),
+  U('salvage_rights', 'Salvage Rights', 'common', 3, ['smash', 'growth', 'trigger'], [on('collapse', 0.5, 0, 'xp', { amount: 1 })], { minRank: 1 }),
   U('scrap_dividend', 'Scrap Dividend', 'common', 4, ['smash', 'growth', 'trigger'], [on('floorBreak', 0.1, 0.2, 'xp', { amount: 1 })]),
   U('gas_main_rupture', 'Gas Main Rupture', 'rare', 3, ['smash', 'trigger'], [on('collapse', 0.35, 4, 'magma', { r: 0.8, dps: 6, dur: 4 })], { minRank: 1 }),
   U('community_garden', 'Community Garden', 'rare', 3, ['smash', 'trigger'], [mul('buildingDamage', 0.05), on('collapse', 0.3, 3, 'bloom', { dur: 16 })], { minRank: 1 }),

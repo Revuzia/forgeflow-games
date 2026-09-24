@@ -57,7 +57,7 @@ export const TITANS: Record<TitanId, TitanDef> = {
     hook: {
       id: 'gulletVacuum',
       name: 'GULLET VACUUM',
-      desc: '1.2 s inhale over 6 body-heights: pickups fly in at triple speed, small foes are dragged to the jaws for 12 dmg/s. On release: a shield of 4% max HP + 0.2% per pickup swallowed (max 40%). Swallowed rubble gives +25% mass. 9 s cooldown.',
+      desc: '1.2 s inhale over 6 body-heights: pickups fly in at triple speed, small foes are dragged to the jaws for 12 dmg/s. On release: a shield of 4% max HP + 0.2% per pickup swallowed (max 40%). Everything swallowed during the inhale gives +25% XP. 9 s cooldown.',
     },
     dash: {
       name: 'LOW TACKLE',

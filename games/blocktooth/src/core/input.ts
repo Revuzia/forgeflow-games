@@ -25,6 +25,9 @@
 //     first titanInput() call inside that window — exactly once, however many sim ticks run in
 //     the frame (a press between two 30 Hz ticks is never lost, never doubled).
 //   * Window blur / hidden tab releases everything.
+//   * Camera ZOOM (view-only, never reaches the sim): mouse wheel, '=' / '-' (and numpad + / -) held,
+//     gamepad right stick vertical; Z / pad R3 resets. zoomInput(dt) returns this frame's ln-zoom
+//     delta (+ = pull back / see more). All zero in ui mode (a wheel over a menu scrolls the menu).
 
 import type { TitanInput } from './types.ts';
 import { INPUT_BUFFER_S, screenToWorld } from './config.ts';
@@ -33,10 +36,12 @@ export type Action =
   | 'up' | 'down' | 'left' | 'right'
   | 'confirm' | 'back' | 'pause' | 'debug'
   | 'ability' | 'dash'
-  | 'pick1' | 'pick2' | 'pick3' | 'reroll';
+  | 'pick1' | 'pick2' | 'pick3' | 'reroll'
+  | 'zoomIn' | 'zoomOut' | 'zoomReset';
 
 export const ACTIONS: readonly Action[] = [
   'up', 'down', 'left', 'right', 'confirm', 'back', 'pause', 'debug', 'ability', 'dash', 'pick1', 'pick2', 'pick3', 'reroll',
+  'zoomIn', 'zoomOut', 'zoomReset',
 ];
 
 export type InputMode = 'ui' | 'game';
@@ -53,6 +58,14 @@ const NAV_REPEAT_DELAY_MS = 380;
 const NAV_REPEAT_EVERY_MS = 110;
 /** default guard for shared gameplay/UI keys after a game → ui flip (s) */
 export const SHARED_KEY_GUARD_S = 0.35;
+/** zoom: ln-zoom per wheel notch (≈ ×1.13), per second of a held key, per second of full right stick */
+export const ZOOM_WHEEL_STEP = 0.12;
+export const ZOOM_KEY_RATE = 1.35;
+export const ZOOM_PAD_RATE = 1.5;
+/** right-stick deadzone for zoom (vertical axis only) */
+const ZOOM_PAD_DEADZONE = 0.25;
+/** most notches one frame may apply (a free-spinning wheel / trackpad fling) */
+const ZOOM_WHEEL_MAX_NOTCHES = 6;
 
 // ─────────────────────────────── keyboard map ───────────────────────────────
 const KEYMAP: Readonly<Record<string, readonly Action[]>> = {
@@ -69,6 +82,9 @@ const KEYMAP: Readonly<Record<string, readonly Action[]>> = {
   Digit1: ['pick1'], Digit2: ['pick2'], Digit3: ['pick3'],
   Numpad1: ['pick1'], Numpad2: ['pick2'], Numpad3: ['pick3'],
   KeyR: ['reroll'],
+  Equal: ['zoomIn'], NumpadAdd: ['zoomIn'],
+  Minus: ['zoomOut'], NumpadSubtract: ['zoomOut'],
+  KeyZ: ['zoomReset'],
 };
 
 /** reverse map: action → key codes */
@@ -88,6 +104,8 @@ const MODIFIER_CODES: ReadonlySet<string> = new Set([
   'CapsLock', 'Tab', 'F1', 'OSLeft', 'OSRight', 'ContextMenu',
 ]);
 const GAMEPLAY: ReadonlySet<Action> = new Set<Action>(['ability', 'dash']);
+/** camera actions: like GAMEPLAY they only exist in 'game' mode, but they are never buffered */
+const VIEW: ReadonlySet<Action> = new Set<Action>(['zoomIn', 'zoomOut', 'zoomReset']);
 const NAV: readonly Action[] = ['up', 'down', 'left', 'right'];
 /** keys that mean something in gameplay AND in menus (guarded after game → ui) */
 const SHARED_KEY_CODES: ReadonlySet<string> = new Set(['Space']);
@@ -101,7 +119,7 @@ const MOVE_CODE_SET: ReadonlySet<string> = new Set<string>([
 
 // ─────────────────────────────── gamepad map (standard mapping) ───────────────────────────────
 const PAD_BUTTONS = 17;
-const PAD_A = 0, PAD_B = 1, PAD_X = 2, PAD_Y = 3, PAD_RB = 5, PAD_SELECT = 8, PAD_START = 9;
+const PAD_A = 0, PAD_B = 1, PAD_X = 2, PAD_Y = 3, PAD_RB = 5, PAD_SELECT = 8, PAD_START = 9, PAD_R3 = 11;
 const PAD_UP = 12, PAD_DOWN = 13, PAD_LEFT = 14, PAD_RIGHT = 15;
 /** d-pad buttons: movement in play (live across a ui → game flip, like the movement keys) */
 const PAD_MOVE_BUTTONS: readonly number[] = [PAD_UP, PAD_DOWN, PAD_LEFT, PAD_RIGHT];
@@ -142,6 +160,9 @@ export function actionLabel(a: Action, device: InputDevice = 'keyboard'): string
       case 'dash': return 'B';
       case 'pick1': case 'pick2': case 'pick3': return 'A';
       case 'reroll': return 'X';
+      case 'zoomIn': return 'R-STICK UP';
+      case 'zoomOut': return 'R-STICK DOWN';
+      case 'zoomReset': return 'R3';
     }
   }
   switch (a) {
@@ -159,6 +180,9 @@ export function actionLabel(a: Action, device: InputDevice = 'keyboard'): string
     case 'pick2': return '2';
     case 'pick3': return '3';
     case 'reroll': return 'R';
+    case 'zoomIn': return '=';
+    case 'zoomOut': return '-';
+    case 'zoomReset': return 'Z';
   }
 }
 
@@ -198,6 +222,8 @@ export class Input {
   private padRawMag = 0;
   private padSX = 0;                     // deadzoned stick, screen space (x right, y up)
   private padSY = 0;
+  private padRY = 0;                     // right stick vertical, deadzoned (down = +)
+  private wheelNotches = 0;              // queued wheel notches (+ = zoom out), game mode only
   private stickDead = false;             // held across a mode flip: ignored until it recentres
   private readonly navOn: Record<'up' | 'down' | 'left' | 'right', boolean> = { up: false, down: false, left: false, right: false };
   private readonly navNext: Record<'up' | 'down' | 'left' | 'right', number> = { up: 0, down: 0, left: 0, right: 0 };
@@ -206,6 +232,7 @@ export class Input {
   private readonly onKeyUp: (e: KeyboardEvent) => void;
   private readonly onBlur: () => void;
   private readonly onVisibility: () => void;
+  private readonly onWheel: (e: WheelEvent) => void;
 
   constructor(win: Window) {
     this.win = win;
@@ -213,9 +240,11 @@ export class Input {
     this.onKeyUp = (e) => this.keyUp(e);
     this.onBlur = () => this.releaseAll();
     this.onVisibility = () => { if (this.win.document && this.win.document.hidden) this.releaseAll(); };
+    this.onWheel = (e) => this.wheel(e);
     win.addEventListener('keydown', this.onKeyDown);
     win.addEventListener('keyup', this.onKeyUp);
     win.addEventListener('blur', this.onBlur);
+    win.addEventListener('wheel', this.onWheel, { passive: false });
     if (win.document) win.document.addEventListener('visibilitychange', this.onVisibility);
   }
 
@@ -224,6 +253,7 @@ export class Input {
     this.win.removeEventListener('keydown', this.onKeyDown);
     this.win.removeEventListener('keyup', this.onKeyUp);
     this.win.removeEventListener('blur', this.onBlur);
+    this.win.removeEventListener('wheel', this.onWheel);
     if (this.win.document) this.win.document.removeEventListener('visibilitychange', this.onVisibility);
     this.releaseAll();
   }
@@ -285,13 +315,13 @@ export class Input {
 
   /** true for the frame an action was pressed (gameplay actions: game mode only). */
   pressed(a: Action): boolean {
-    if (GAMEPLAY.has(a) && this._mode !== 'game') return false;
+    if ((GAMEPLAY.has(a) || VIEW.has(a)) && this._mode !== 'game') return false;
     return this.edges.has(a);
   }
 
   /** true while an action is held (gameplay actions: game mode only). */
   held(a: Action): boolean {
-    if (GAMEPLAY.has(a) && this._mode !== 'game') return false;
+    if ((GAMEPLAY.has(a) || VIEW.has(a)) && this._mode !== 'game') return false;
     const codes = ACTION_CODES[a];
     for (let i = 0; i < codes.length; i++) if (this.keysDown.has(codes[i])) return true;
     return this.padHeld(a);
@@ -320,6 +350,25 @@ export class Input {
     const m = Math.hypot(x, y);
     if (m > 1) { x /= m; y /= m; }
     return { x, y };
+  }
+
+  /**
+   * This frame's camera zoom request as a ln-zoom delta (+ = pull back / see more): wheel notches
+   * queued since the last call + held '=' / '-' + the right stick, over `dt` seconds. Call ONCE per
+   * rendered frame. Always 0 in ui mode (and the wheel queue is dropped there). View-only.
+   */
+  zoomInput(dt: number): number {
+    const notches = this.wheelNotches;
+    this.wheelNotches = 0;
+    if (this._mode !== 'game') return 0;
+    const d = Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0));
+    let z = Math.max(-ZOOM_WHEEL_MAX_NOTCHES, Math.min(ZOOM_WHEEL_MAX_NOTCHES, notches)) * ZOOM_WHEEL_STEP;
+    let keys = 0;
+    if (this.held('zoomOut')) keys += 1;
+    if (this.held('zoomIn')) keys -= 1;
+    z += keys * ZOOM_KEY_RATE * d;
+    if (!this.stickDead) z += this.padRY * ZOOM_PAD_RATE * d;
+    return z;
   }
 
   /**
@@ -353,6 +402,21 @@ export class Input {
     this.pendingAny = false;
     this.abilityAt = -Infinity;
     this.dashAt = -Infinity;
+    this.wheelNotches = 0;
+  }
+
+  // ─────────────────────────────── wheel (camera zoom) ───────────────────────────────
+  private wheel(e: WheelEvent): void {
+    if (this._mode !== 'game' || e.ctrlKey) return;      // menus scroll; ctrl+wheel = browser zoom
+    if (isTextEntry(e.target)) return;
+    const dy = Number.isFinite(e.deltaY) ? e.deltaY : 0;
+    if (dy === 0) return;
+    e.preventDefault();                                   // never scroll the page / portal under play
+    this._lastDevice = 'keyboard';
+    // normalise to notches: pixel mode ≈ 100 px per notch (trackpads send small fractions), line
+    // mode 3 lines, page mode 1 page
+    const n = e.deltaMode === 1 ? dy / 3 : e.deltaMode === 2 ? dy : dy / 100;
+    this.wheelNotches += n;
   }
 
   // ─────────────────────────────── keyboard ───────────────────────────────
@@ -378,6 +442,10 @@ export class Input {
     if (!MODIFIER_CODES.has(code) && !guarded) this.pendingAny = true;
     if (!acts) return;
     for (const a of acts) {
+      if (VIEW.has(a)) {
+        if (this._mode === 'game') this.pending.add(a);
+        continue;
+      }
       if (GAMEPLAY.has(a)) {
         if (this._mode === 'game') {
           this.pending.add(a);
@@ -458,7 +526,7 @@ export class Input {
   private pollPads(now: number): void {
     const pads = this.readPads();
     for (let i = 0; i < PAD_BUTTONS; i++) { this.padPrev[i] = this.padDown[i]; this.padDown[i] = false; }
-    let ax = 0, ay = 0, best = 0;
+    let ax = 0, ay = 0, best = 0, ry = 0;
     for (let p = 0; p < pads.length; p++) {
       const pad = pads[p];
       if (!pad || !pad.connected) continue;
@@ -471,7 +539,13 @@ export class Input {
       const y = pad.axes.length > 1 ? pad.axes[1] : 0;
       const mag = Math.hypot(x, y);
       if (Number.isFinite(mag) && mag > best) { best = mag; ax = x; ay = y; }
+      const r = pad.axes.length > 3 ? pad.axes[3] : 0;
+      if (Number.isFinite(r) && Math.abs(r) > Math.abs(ry)) ry = r;
     }
+    // right stick vertical → zoom (down = pull back); deadzone with rescale
+    const ra = Math.abs(ry);
+    this.padRY = ra < ZOOM_PAD_DEADZONE ? 0 : Math.sign(ry) * (Math.min(1, ra) - ZOOM_PAD_DEADZONE) / (1 - ZOOM_PAD_DEADZONE);
+    if (this.padRY !== 0) this._lastDevice = 'gamepad';
 
     // stick: radial deadzone with rescale; screen y is up (pad axis 1 is down-positive)
     this.padRawMag = best;
@@ -507,6 +581,7 @@ export class Input {
           if (game) { this.edges.add('dash'); this.dashAt = now; }
           break;
         case PAD_START: this.edges.add('pause'); break;
+        case PAD_R3: if (game) this.edges.add('zoomReset'); break;
         case PAD_X: this.edges.add('reroll'); break;
         default: break;
       }

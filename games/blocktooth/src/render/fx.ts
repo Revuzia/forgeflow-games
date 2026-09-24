@@ -27,6 +27,8 @@ import type { FrameInfo, ViewCtx, ViewModule } from './viewtypes.ts';
 // ─────────────────────────────── constants ───────────────────────────────
 /** 2·tan(fov/2) for the 30° camera: screen height in metres at distance D = D · K_VIEW */
 const K_VIEW = 2 * Math.tan((30 * Math.PI) / 360);
+/** at most this many enemy arrival puffs per frame (fx 'enemySpawn') */
+const SPAWN_FX_PER_FRAME = 6;
 const Q_MUL = [0.45, 0.75, 1] as const;
 const CAP_DECAL = [32, 48, 64] as const;
 const CAP_DUST = [160, 300, 440] as const;
@@ -565,6 +567,9 @@ export class FxView implements ViewModule {
   private pickupCd = 0;
   private vacSpawnAcc = 0;
   private vacRingCd = 0;
+  /** enemy arrival puffs left this frame (a cheat/perf burst of 250 spawns must not flood the pools) */
+  private spawnFxLeft = 0;
+  private readonly spawnV = new THREE.Vector3();
   private lastTime = 0;
   private readonly enemyMap = new Map<number, Enemy>();
   private enemyMapTick = -1;
@@ -758,6 +763,7 @@ export class FxView implements ViewModule {
       this.healCd = Math.max(0, this.healCd - dt);
       this.pickupCd = Math.max(0, this.pickupCd - dt);
       this.vacRingCd = Math.max(0, this.vacRingCd - dt);
+      this.spawnFxLeft = SPAWN_FX_PER_FRAME;
       for (let i = 0; i < f.events.length; i++) this.onEvent(w, f.events[i], f);
       this.stepVacuum(w, f, dt);
     }
@@ -976,6 +982,21 @@ export class FxView implements ViewModule {
         const sz = en ? Math.max(en.height, 0.6) : 1;
         this.sparks(e.x, y, e.z, e.crit ? 6 : 2, sz * 3.5, '#ffffff', e.crit ? '#ffd166' : '#fff4dc', sz);
         if (e.crit) this.spritePart(e.x, y, e.z, 0, 0, 0, Math.max(sz * 1.4, f.camDist * K_VIEW * 0.03), IC_STAR8, rf ? '#ffb347' : '#ffd166', '#ffffff', 0.14, 0, 0);
+        break;
+      }
+      case 'enemySpawn': {
+        // Arrival beat. At the AUTO framing the sim spawns just past the screen edge (CONTRACT §4), so
+        // this only shows when the player has zoomed OUT and can see the spawn ring: a dust kick and a
+        // thin ground ring under enemyview's pop-in, so a foe lands instead of blinking into the street.
+        if (this.spawnFxLeft <= 0) break;
+        const p = this.spawnV.set(e.x, 0, e.z).project(this.camera());
+        if (p.z > 1 || Math.abs(p.x) > 1.05 || Math.abs(p.y) > 1.05) break;
+        this.spawnFxLeft--;
+        const en = this.enemy(w, e.id);
+        const r = en ? Math.max(0.4, en.radius) : 0.6, h = en ? en.height : 1.8;
+        const flier = !!en && en.y > 0.5;
+        this.ring(e.x, e.z, r * 0.5, r * 2.6, 0.45, this.dustCol, flier ? 0.3 : 0.55, Math.max(0.12, r * 0.22));
+        if (!flier) this.dustBurst(e.x, e.z, r * 1.3, Math.round(2 * qm) + 1, Math.max(0.35, Math.min(h * 0.18, r * 1.2)), 0.45);
         break;
       }
       case 'enemyKilled': {

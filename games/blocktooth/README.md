@@ -50,10 +50,16 @@ blank canvas. If boot fails, a "TECHNICAL DIFFICULTIES" card shows the error.
 | move | WASD / arrow keys (screen-relative) | left stick / d-pad |
 | **HOOK** (titan ability) | Space | A |
 | **DASH** | Shift | B / RB |
+| **zoom** the camera out / in (see more of the city) | mouse wheel · `-` / `=` (numpad `−` / `+`) held | right stick down / up |
+| reset the zoom to the automatic framing | Z | R3 (right-stick click) |
 | pause (never ends a run) | Esc / P | Start |
 | menus: move / confirm / back | arrows · Enter · Esc | d-pad · A · B |
 | draft: pick card / reroll | 1 / 2 / 3 (or ←→ + Enter) · R | A · X |
 | debug overlay | F1 | — |
+
+The zoom is a multiplier on the automatic framing (0.55× to 2×, and never past 12 m or 880 m of camera
+distance). It stays through Size breaches, resets on Z and at the start of every run, and only works in
+play: over a menu the wheel scrolls the menu. It is view-only, so the simulation never sees it.
 
 The game also auto-pauses when the tab is hidden or the window loses focus (alt-tab, another monitor,
 the page around an embedding iframe). Movement keys held through a pause or a draft keep walking the
@@ -176,33 +182,58 @@ of its target).
 
 ### Size and camera formulas
 
-`src/core/config.ts` is the source of truth. The balance pass tunes the mass thresholds; the
-values below are the current ones.
+`src/core/config.ts` is the source of truth (the growth rows of its economy table, `RANK_LEVELS`,
+`titanHeightAt`, `FRAMING`, `CAMERA_ZOOM`, `cameraDistance`). **SIZE is driven by LEVEL**: XP is the
+one progression currency, every level-up makes the body bigger, and reaching `RANK_LEVELS[r]` is the
+**MASS BREACH** into Size r. (Mass is retired: loot still carries it, but only to size the pickup
+meshes; `titan.mass` is a legacy mirror of the SIZE bar. The HUD and debug overlay read
+`sizeProgress()` / `levelsToNextSize()`.)
 
-| Size | body height H | mass to next | hp× | dmg× | flattens on contact | camera D | pitch | view height D·k |
-|---|---|---|---|---|---|---|---|---|
-| I | 1.2 m | 95 | 1.0 | 1 | tier 0 (cars, kiosks, lamps, trees) | 17.2 m | 36° | 9.2 m |
-| II | 5 m | 600 | 1.8 | 3 | ≤ 1 (shops, buses, containers) | 62.2 m | 38° | 33.3 m |
-| III | 14 m | 9 000 | 3.2 | 8 | ≤ 2 (midrise, sheds, tanks) | 153.7 m | 40° | 82.4 m |
-| IV | 32 m | 70 000 | 5.5 | 20 | ≤ 3 (office blocks, towers) | 314.3 m | 42° | 168.4 m |
-| V | 60 m | — | 9.0 | 45 | ≤ 4 (megatowers) + the boss | 533.2 m | 44° | 285.7 m |
+| Size | reached at | body H on entry → last level | per-level step | hp× | dmg× | flattens on contact | auto D, first → last level | body share of the view height | pitch |
+|---|---|---|---|---|---|---|---|---|---|
+| I | LV 1 | 1.2 → 2.66 m | +17 % | 1.0 | 1 | tier 0 (cars, kiosks, lamps, trees) | 49.8 → 38.2 m | 4.5 → 13 % | 54° |
+| II | LV 7 | 5 → 9.89 m | +8.9 % | 1.8 | 3 | ≤ 1 (shops, buses, containers) | 133 → 109 m | 7 → 17 % | 54° |
+| III | LV 16 | 14 → 24.2 m | +5.6 % | 3.2 | 8 | ≤ 2 (midrise, sheds, tanks) | 307 → 251 m | 8.5 → 18 % | 54° |
+| IV | LV 27 | 32 → 47.3 m | +5.7 % | 5.5 | 20 | ≤ 3 (office blocks, towers) | 519 → 464 m | 11.5 → 19 % | 54° |
+| V | LV 35 | 60 → 63.5 → 67.2 m (2 levels) | +5.8 % | 9.0 | 45 | ≤ 4 (megatowers) + the boss | 533 → 557 m | 21 → 22.5 % | 54° |
 
-* `H = RANKS[r].height × (1 + 0.12 × progressInRank)` (in-rank swell). On a rank-up the height
-  eases from the old value to the new base over 0.9 s (easeOutBack). Collision radius = 0.42 H.
+* `H = titanHeightAt(rank, level)`: geometric across a Size's levels, and the breach level is one
+  more step × `BREACH_JUMP` (→ II ×1.88, → III ×1.42, → IV ×1.32, → V ×1.27). A level-up tweens the
+  body over `LEVEL_GROW_S` = 0.45 s, a breach over `GROW_TWEEN_S` = 0.9 s (easeOutBack); the view adds a
+  squash-and-stretch pop and a ground ring. Collision radius = 0.42 H.
 * Titan ability radii and ranges are given in **titan heights**, so every kit scales with growth.
-* Camera (`render/camera.ts`):
+* Camera (`config.ts cameraDistance` + `FRAMING`; `render/camera.ts` springs toward it):
 
 ```
 k      = 2·tan(fov/2), fov = 30°
-D*     = H / (frameFrac[r] · k)          frameFrac = .13 .15 .17 .19 .21
+D*     = H0[r] / (startFrac[r]·k) · (H / H0[r])^kr      (config.ts cameraDistance, FRAMING)
+         H0 = height on entering the Size; startFrac = .045 .070 .085 .115 .210 of the screen height;
+         kr is solved from the sim's own growth curve (titanHeightAt at the rank's first and last level)
+         so the body reaches endFrac = .130 .170 .180 .190 .225 at the rank's last level. The titan
+         GROWS INTO THE FRAME level by level; each breach resets to the small startFrac, so the camera
+         pulls back to fit the new, bigger world. Size I starts wide: a whole intersection, the baby
+         titan tiny on its zebra.
 D      → critically damped spring toward D*, ω = 4/s
+zoom   : × player zoom (wheel / - = / right stick; Z resets), ln-smoothed ω = 11/s,
+         clamped to CAMERA_ZOOM 0.55×…2× and 12 m ≤ D ≤ 880 m (perfcheck --zoom max holds p99 ≤ 22 ms)
 punch  : on rankUp, D × (1 − 0.08·(1 − easeOutCubic(τ/1.2))), τ ∈ [0, 1.2] s
 target = titan (interpolated) + v·0.25 s (smoothed, ω = 6/s) + up·0.45 H
-pitch  → RANKS[r].pitchDeg (ω = 3/s); yaw fixed 45°
+pitch  → RANKS[r].pitchDeg = 54° at every Size (ω = 3/s); yaw fixed 45°
 camPos = target + D·(cos p·sin yaw, sin p, cos p·cos yaw)
 near/far = max(0.1, 0.02 D) / 6 D + 400
 shake  : trauma model (amplitude², decay 1.6/s), off when Settings → screen shake is off
 ```
+
+* **Spawn ring** (`ai/enemies.ts`): the sim reads the same auto `cameraDistance` (never the player
+  zoom, so it stays deterministic). New enemies appear just past the edge of the visible ground in
+  their direction: the view footprint at 54° and 16:9 is a trapezoid (near edge 0.52·D·k, far edge
+  0.77·D·k, half-widths 0.74 / 1.10·D·k), plus 0.12·D·k for the camera's lead. Enemies more than
+  1.9 × D·k away are recycled back onto the ring.
+  Measured (`_harness/scratch/view/spawnvis.py`, 20 s per level at the auto framing): 0 of 6 / 6 / 19 /
+  21 / 28 / 34 new enemies first appeared on screen at LV 1 / 5 / 7 / 16 / 27 / 35. Zoomed out to 2×
+  the spawns are on screen by design (`scratch/final/spawnzoom.py`); they arrive with enemyview's
+  0.32 s pop-in plus an fx arrival beat (`enemySpawn`: a dust kick and a thin ground ring, only when
+  the spawn point is in view, at most 6 per frame — `scratch/final/spawnpop.py` shows it).
 
 ### Bosses: sized in titan heights
 
@@ -228,7 +259,9 @@ With the dev server up, `window.__BT__` exposes:
 * `state()`: screen, titan/biome/seed, tick, rank, HP, position, drafts, boss, run and renderer counters
 * `world`: the live world, read-only
 * `newRun({titan, biome, seed, skipSlate})`, `freeze(on)`, `step(n, input)` (only while frozen), `dismiss()`
-* `cheat.{xp, mass, rank, god, spawn, boss, killAll, noSpawns, heal, time}` (only with `?dev=1`)
+* `cheat.{xp, level, rank, mass, god, spawn, boss, killAll, noSpawns, heal, time}` (only with `?dev=1`). `level(n)` and
+  `rank(r)` go through the sim's real level/rank-ups (`growToRank`) and queue no drafts; `mass(n)` is deprecated
+  (n % of the current level's XP bar)
 * `shot(name)`: saves the canvas to `_shots/<name>.png` via `POST /__shot/<name>`
 * `perf()`, `events(n)`
 
@@ -243,11 +276,15 @@ npx tsc --noEmit -p tsconfig.json          # 1. 0 type errors
 node _harness/probe_sim.ts --det 2         # 2. 4 titans × 3 biomes: no NaN/throw, determinism, pacing bands → "GATE 2: PASS"
 for p in ai city combat econ titan upgrades; do node _harness/probe_$p.ts; done   #    lane probes (all must exit 0)
 python _harness/bootcheck.py --titan T --biome B   # 3. autostart → slate (baby titan ON a zebra) → real key → play, 0 errors (run all 12)
-python _harness/playtest.py --matrix       # 4. real keys from the title (4 titan/biome pairs): menus, slate, move, eat, draft, HOOK, DASH
+python _harness/playtest.py --matrix       # 4. real keys from the title (4 titan/biome pairs): menus, slate, move, eat, draft, HOOK, DASH,
+                                           #    camera zoom (real wheel out, '=' held in, Z reset)
 python _harness/perfcheck.py               # 5. Size V + 250 enemies: p99 ≤ 22 ms, ≤ 450 draws. Run it ALONE, nothing else on the GPU
+python _harness/perfcheck.py --zoom max    #    the same with the camera held at its max zoom-out (real wheel; D = 880 m at Size V)
 python _harness/shots.py                   # 6. screenshot battery (_shots/) for the visual critic pass
 python _harness/scratch/final/leakcheck.py # newRun ×7: geometries / textures / programs come back to the same values
 python _harness/scratch/final/blankprobe.py   # setQuality after a render never shows a blank canvas (0 blank frames)
+python _harness/scratch/final/growthseq.py --out DIR --real-max 12   # real-play shots up to LV 12 (+ cheat.level 15…32): the titan grows on screen
+python _harness/scratch/view/spawnvis.py --level L   # new enemies first seen INSIDE the viewport at the auto framing (must be 0)
 ```
 
 Start the server once as `BT_FROZEN=1 npx vite --port 5178 --strictPort`, with no HMR and no file

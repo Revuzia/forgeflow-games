@@ -48,7 +48,7 @@
 import type {
   Enemy, Hazard, HazardKind, Shape, SimEvent, StatKey, Tier, TriggerOn, UpgradeDef, UpgradeEffect, World,
 } from '../core/types.ts';
-import { RANKS, lootMass, lootXp } from '../core/config.ts';
+import { RANKS, lootXp } from '../core/config.ts';
 import { dist2 } from '../core/math.ts';
 import { UPGRADE_BY_ID, STACK_SCALED_KEYS } from '../data/upgrades.ts';
 import { recomputeStats, stat, STAT_KEYS } from './stats.ts';
@@ -58,7 +58,7 @@ import { findTarget, targetPos, hitTarget } from '../combat/targeting.ts';
 import { spawnProjectile } from '../combat/projectiles.ts';
 import { spawnHazard } from '../combat/hazards.ts';
 import { magnetAll } from '../combat/pickups.ts';
-import { healTitan, gainMass, gainXp, refundDash } from '../titans/titansim.ts';
+import { healTitan, gainGrowth, gainXp, refundDash } from '../titans/titansim.ts';
 
 // ─────────────────────────────── tuning ───────────────────────────────
 /** Max recursion depth for proc → events → other procs within one tick. */
@@ -449,7 +449,7 @@ let LINGER = 0;
  *  right before fire(), consumed (and reset) by fire(). */
 let EV_TIER = -1;
 
-/** Tier whose floor value prices a 'mass' / 'xp' proc: the triggering building's own tier when the
+/** Tier whose floor value prices an 'xp' proc: the triggering building's own tier when the
  *  event has one (never above what the titan can flatten), else the biggest tier it can flatten. */
 function valueTier(w: World, evTier: number): number {
   const cf = RANKS[w.titan.rank]?.canFlatten ?? 0;
@@ -498,9 +498,12 @@ function execute(w: World, en: Entry, x: number, z: number, evTier = -1): boolea
     }
 
     case 'mass': {
-      const m = sc('amount') * lootMass(valueTier(w, evTier) as Tier, w.titan.rank);
-      if (m <= 0) return false;
-      gainMass(w, m);
+      // "grow": p.amount (× stacks) of the CURRENT level's XP bar, exactly (titansim gainGrowth) —
+      // SIZE is driven by level, so this is growth at every size (a floors'-worth price would be
+      // ×0.03 at Size V and do nothing)
+      const f = sc('amount');
+      if (!(f > 0)) return false;
+      gainGrowth(w, f);
       return true;
     }
 

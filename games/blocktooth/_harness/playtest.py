@@ -124,6 +124,41 @@ OBS_JS = r"""
 """
 
 
+CAM_JS = "() => { const c = window.__BTCAM__; return c ? {d: c.distance, auto: c.autoDist, zoom: c.zoom, zt: c.zoomTarget} : null; }"
+
+
+def zoom_check(sess, log):
+    """Camera zoom with REAL input events (view-only; observed through the dev camera handle
+    __BTCAM__, ?dev=1): 6 wheel notches out over the canvas → the actual camera distance grows vs the
+    auto distance; '=' held 1.2 s → back in below 1×; Z → the zoom target returns to 1×.
+    Returns (ok, detail) or (None, reason) when it cannot be observed (no dev handle)."""
+    c0 = sess.safe_js(CAM_JS)
+    if not c0:
+        return None, "no __BTCAM__ (needs ?dev=1)"
+    vp = sess.page.viewport_size or {"width": 1280, "height": 720}
+    sess.page.mouse.move(vp["width"] / 2, vp["height"] / 2)
+    for _ in range(6):
+        sess.page.mouse.wheel(0, 120)
+        time.sleep(0.05)
+    time.sleep(0.8)
+    c1 = sess.safe_js(CAM_JS) or {}
+    sess.page.keyboard.down("Equal")
+    time.sleep(1.2)
+    sess.page.keyboard.up("Equal")
+    time.sleep(0.6)
+    c2 = sess.safe_js(CAM_JS) or {}
+    sess.press("KeyZ")
+    time.sleep(0.9)
+    c3 = sess.safe_js(CAM_JS) or {}
+    out_ok = c1.get("zoom", 1) > 1.3 and c1.get("d", 0) > 1.3 * c1.get("auto", 1e9)
+    in_ok = c2.get("zoom", 9) < c1.get("zoom", 0) and c2.get("zt", 9) < 1.0
+    reset_ok = abs(c3.get("zt", 0) - 1.0) < 1e-3 and abs(c3.get("zoom", 0) - 1.0) < 0.05
+    detail = ("wheel out ×6: zoom %.2f (D %.1f / auto %.1f) · '=' held: zoom %.2f · Z: zoom %.3f target %.3f" % (
+        c1.get("zoom", -1), c1.get("d", -1), c1.get("auto", -1), c2.get("zoom", -1), c3.get("zoom", -1), c3.get("zt", -1)))
+    log("zoom check: %s → %s" % (detail, "OK" if (out_ok and in_ok and reset_ok) else "FAIL"))
+    return (out_ok and in_ok and reset_ok), detail
+
+
 def run_one(args, titan, biome, seed):
     tag = "%s/%s" % (titan, biome)
     shot_dir = os.path.join(args.out_dir, "playtest")
@@ -153,6 +188,7 @@ def run_one(args, titan, biome, seed):
     fatal = None
     nav_ok = False
     play_ok = False
+    zoom_ok, zoom_detail = None, "not reached"
     ev = {}
     try:
         log("open %s" % url)
@@ -185,6 +221,7 @@ def run_one(args, titan, biome, seed):
         if not fatal:
             sess.release_all()
             time.sleep(0.4)
+            zoom_ok, zoom_detail = zoom_check(sess, log)
             fatal = steer(sess, args, titan, biome, m, shots, shot_dir, log)
         ev = sess.event_counts()
         rep["eventPolls"] = sess.event_polls()
@@ -218,6 +255,8 @@ def run_one(args, titan, biome, seed):
          dash_ev >= 1 or m["dashConfirmedByCharges"] >= 1),
         ("0 console/page/window errors, 0 shader diagnostics, 0 failed requests", not diag_problems(diag)),
     ]
+    if zoom_ok is not None or not args.no_dev:
+        checks.append(("camera zoom by real wheel / '=' / Z (%s)" % zoom_detail, bool(zoom_ok)))
     if fatal:
         checks.insert(0, ("no fatal harness stop (%s)" % fatal, False))
     passed = all(ok for _, ok in checks)
@@ -234,7 +273,7 @@ def run_one(args, titan, biome, seed):
     for name, ok in checks:
         print("  [%s] %s" % ("PASS" if ok else "FAIL", name))
     print("RESULT %s: %s" % (tag, "PASS" if passed else "FAIL"))
-    rep.update({"pass": passed, "fatal": fatal, "metrics": m, "events": ev, "checks": [[n, ok] for n, ok in checks],
+    rep.update({"pass": passed, "fatal": fatal, "zoom": {"ok": zoom_ok, "detail": zoom_detail}, "metrics": m, "events": ev, "checks": [[n, ok] for n, ok in checks],
                 "shots": shots, "diagnostics": diag, "log": log_lines})
     rep["finalState"] = compact_state(rep.get("finalState"))
     print("report  : %s" % save_report("playtest_%s_%s" % (titan, biome), rep, args.base, args.report_dir))

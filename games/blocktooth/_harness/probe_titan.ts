@@ -3,8 +3,9 @@
 // nearest flattenable food (cars/kiosks → shops as it grows), dashes, and presses the hook, for 60 s of
 // ticks. Prints distance moved, props/floors eaten, xp/level/mass/rank, an events histogram, attack and
 // ability counts, kit-specific counters; asserts no NaN in titan state, same-seed determinism and that
-// every kit's auto / passive / hook actually produced its events. Then a unit block exercising gainXp,
-// gainMass (rank-up, catch-up), hurtTitan (armor, iframes, shield, god, death), healTitan, dash charges,
+// every kit's auto / passive / hook actually produced its events. Then a unit block exercising gainXp
+// (level steps, the level-driven rank-up, catch-up), gainGrowth, the retired gainMass, growToRank,
+// hurtTitan (armor, iframes, shield, god, death), healTitan, dash charges,
 // the CAISSON-4 winch leash (pull + resisting it), the HEARTHBACK shell store and acceleration feel.
 //
 // Parallel-build fallback: if (and only if) a module another lane owns does not exist on disk yet, a
@@ -273,38 +274,75 @@ console.log('\n[unit] growth / damage API');
   const w = WM.createWorld({ titan: 'molo', biome: 'grideast', seed: 11 });
   const T = w.titan;
   console.log(`  createTitan: LV ${T.level} rank ${T.rank} H ${T.height} r ${T.radius.toFixed(3)} hp ${T.hp}/${T.maxHp} dash ${T.dashCharges}`);
-  if (T.level !== 1 || T.rank !== 0 || Math.abs(T.height - CFG.titanHeight(0, 0)) > 1e-9 || T.hp !== T.maxHp || T.maxHp !== 140) fail('createTitan initial state');
+  if (T.level !== 1 || T.rank !== 0 || Math.abs(T.height - CFG.titanHeightAt(0, 1)) > 1e-9 || T.hp !== T.maxHp || T.maxHp !== 140) fail('createTitan initial state');
+  w.cheats.noSpawns = true;
+  const idleN = (n: number): number => { let pk = 0; for (let i = 0; i < n; i++) { WM.stepWorld(w, WM.NO_INPUT); pk = Math.max(pk, T.height); } return pk; };
+  // SIZE is driven by LEVEL: every level-up steps the body up; RANK_LEVELS[1] is the Size II breach
   const lv0 = T.level;
-  TM.gainXp(w, 500);
+  const toLv3 = CFG.cumXpAt(3) - CFG.cumXpAt(1) + 1;
+  TM.gainXp(w, toLv3);
   const lvEv = w.events.filter((e) => e.type === 'levelUp').length;
-  console.log(`  gainXp(500): LV ${lv0} → ${T.level}, pendingDrafts ${w.upgrades.pendingDrafts}, levelUp events ${lvEv}`);
-  if (T.level <= lv0 || w.upgrades.pendingDrafts !== T.level - lv0 || lvEv !== T.level - lv0) fail('gainXp level/draft/event mismatch');
+  console.log(`  gainXp(${toLv3}): LV ${lv0} → ${T.level}, pendingDrafts ${w.upgrades.pendingDrafts}, levelUp events ${lvEv}, rank ${T.rank}, growT ${T.growT.toFixed(2)}`);
+  if (T.level !== 3 || w.upgrades.pendingDrafts !== T.level - lv0 || lvEv !== T.level - lv0) fail('gainXp level/draft/event mismatch');
+  if (T.rank !== 0 || !(Math.abs(T.growT - CFG.LEVEL_GROW_S) < 1e-9)) fail('a level-up inside Size I must start the level grow tween, not a rank-up');
+  idleN(Math.ceil(CFG.LEVEL_GROW_S * 30) + 2);
+  console.log(`  level step: H ${CFG.titanHeightAt(0, 1).toFixed(3)} → ${T.height.toFixed(3)} (expect titanHeightAt(I, 3) = ${CFG.titanHeightAt(0, 3).toFixed(3)})`);
+  if (Math.abs(T.height - CFG.titanHeightAt(0, 3)) > 1e-6) fail('height after a level-up must settle at titanHeightAt(rank, level)');
+  if (!(CFG.titanHeightAt(0, 3) > CFG.titanHeightAt(0, 1) * 1.1)) fail('each Size I level must be a visible step (> +5 % per level)');
 
   w.events.length = 0;
+  w.upgrades.pendingDrafts = 0;
   const hpMax0 = T.maxHp;
   T.hp = hpMax0 * 0.5;
-  const m1 = CFG.RANKS[0].massToNext;              // the economy table in config.ts owns this number
-  TM.gainMass(w, m1);
+  const toII = CFG.cumXpAt(CFG.RANK_LEVELS[1]) - (CFG.cumXpAt(T.level) + T.xp) + 0.01;   // exactly reaches the Size II level
+  TM.gainXp(w, toII);
   const ru = w.events.filter((e) => e.type === 'rankUp').length;
-  console.log(`  gainMass(${m1}): rank ${T.rank}, growT ${T.growT.toFixed(2)}, maxHp ${hpMax0} → ${T.maxHp.toFixed(1)}, hp ${T.hp.toFixed(1)} (expect 65 % of max), rankUp events ${ru}`);
-  if (T.rank !== 1 || ru !== 1) fail(`gainMass(${m1}) should rank up exactly once`);
+  console.log(`  gainXp(${toII.toFixed(2)}) → LV ${T.level}: rank ${T.rank}, growT ${T.growT.toFixed(2)}, maxHp ${hpMax0} → ${T.maxHp.toFixed(1)}, hp ${T.hp.toFixed(1)} (expect 65 % of max), rankUp events ${ru}`);
+  if (T.level !== CFG.RANK_LEVELS[1] || T.rank !== 1 || ru !== 1) fail(`reaching LV ${CFG.RANK_LEVELS[1]} should rank up to Size II exactly once`);
+  if (!(Math.abs(T.growT - CFG.GROW_TWEEN_S) < 1e-9)) fail('a rank-up must run the full MASS BREACH tween');
   if (Math.abs(T.hp / T.maxHp - 0.65) > 0.01) fail('rank-up hp should keep ratio then +15 %');
-  let peak = 0;
-  w.cheats.noSpawns = true;
-  for (let i = 0; i < 40; i++) { WM.stepWorld(w, WM.NO_INPUT); peak = Math.max(peak, T.height); }
+  const peak = idleN(40);
   console.log(`  grow tween: peak H ${peak.toFixed(3)} (easeOutBack overshoot), settled H ${T.height.toFixed(3)}, radius ${T.radius.toFixed(3)}`);
-  if (!(T.height >= 5 && T.height < 5 * 1.13)) fail('height after grow tween out of range');
+  if (!(Math.abs(T.height - CFG.RANKS[1].height) < 1e-6)) fail('height after the breach tween must be the Size II base height');
   if (!(peak > 5.0)) fail('grow tween never reached rank II height');
 
-  // catch-up rubber band: 1 min behind the rank III schedule → × 1.6
-  const m0 = T.mass;
-  const tSave = w.t;
+  // catch-up rubber band: 1 min behind the rank III schedule → growth XP × 1.6
+  w.upgrades.pendingDrafts = 0;
+  const xp0 = T.xp, tSave = w.t;
   w.t = CFG.RANK_SCHEDULE_S[2] + 60;
-  TM.gainMass(w, 10);
-  const got = T.mass - m0;
+  const pm = TM.paceMul(w);
+  TM.gainXp(w, 5);
+  const got = T.xp - xp0;
   w.t = tSave;
-  console.log(`  catch-up: gainMass(10) at 1 min behind → +${got.toFixed(2)} (expect ${(10 * Math.min(CFG.CATCHUP_MAX, 1 + CFG.CATCHUP_PER_MIN)).toFixed(2)})`);
-  if (Math.abs(got - 10 * Math.min(CFG.CATCHUP_MAX, 1 + CFG.CATCHUP_PER_MIN)) > 1e-6) fail('catch-up multiplier');
+  const want = 5 * Math.min(CFG.CATCHUP_MAX, 1 + CFG.CATCHUP_PER_MIN);
+  console.log(`  catch-up: gainXp(5) at 1 min behind → +${got.toFixed(2)} (expect ${want.toFixed(2)}; paceMul ${pm.toFixed(2)})`);
+  if (Math.abs(got - want) > 1e-6) fail('catch-up multiplier');
+
+  // 'mass' upgrade action → gainGrowth: an exact share of the current level's bar, no multipliers
+  const xp1 = T.xp, bar = T.xpToNext, lv1 = T.level;
+  w.t = CFG.RANK_SCHEDULE_S[2] + 60;                       // the rubber band must NOT apply to it
+  TM.gainGrowth(w, 0.25);
+  w.t = tSave;
+  console.log(`  gainGrowth(0.25): xp ${xp1.toFixed(2)} → ${T.xp.toFixed(2)} of ${bar} (expect +${(0.25 * bar).toFixed(2)}), LV ${lv1} → ${T.level}`);
+  if (T.level !== lv1 || Math.abs(T.xp - xp1 - 0.25 * bar) > 1e-6) fail('gainGrowth share of the bar');
+
+  // gainMass is retired: no size, no XP; titan.mass stays the SIZE-progress mirror
+  const snap = [T.level, T.xp, T.rank, T.height];
+  TM.gainMass(w, 1e6);
+  idleN(1);
+  console.log(`  gainMass(1e6) (retired): LV ${T.level} xp ${T.xp.toFixed(2)} rank ${T.rank} · mass mirror ${T.mass.toFixed(1)} (expect ${CFG.sizeMassMirror(T.rank, T.level, T.xp).toFixed(1)})`);
+  if (T.level !== snap[0] || T.xp !== snap[1] || T.rank !== snap[2]) fail('gainMass must no longer grow the titan');
+  if (Math.abs(T.mass - CFG.sizeMassMirror(T.rank, T.level, T.xp)) > 1e-6) fail('titan.mass must mirror SIZE progress');
+
+  // dev cheat growToRank: straight to Size V through the real rank-ups, no drafts owed
+  w.events.length = 0;
+  w.upgrades.pendingDrafts = 0;
+  const rr = TM.growToRank(w, 4);
+  const ru4 = w.events.filter((e) => e.type === 'rankUp').length;
+  idleN(40);
+  console.log(`  growToRank(4): rank ${rr} LV ${T.level} rankUp events ${ru4} drafts owed ${w.upgrades.pendingDrafts} H ${T.height.toFixed(2)}`);
+  if (rr !== 4 || T.level !== CFG.RANK_LEVELS[4] || ru4 !== 3 || w.upgrades.pendingDrafts !== 0 || Math.abs(T.height - CFG.RANKS[4].height) > 1e-6) fail('growToRank');
+  w.cheats.noSpawns = false;
 
   w.events.length = 0;
   w.upgrades.shield = 0;
@@ -375,9 +413,8 @@ for (const [rank, strength] of [[0, 3], [2, 12], [4, 12]] as const) {
   w.cheats.noSpawns = true;
   const T = w.titan;
   const idle: TitanInput = { mx: 0, mz: 0, ability: false, abilityHeld: false, dash: false };
-  // enough mass to reach `rank` from Size I (cumulative config massToNext, +5 %), at t = 0
-  const toRank = CFG.RANKS.slice(0, rank).reduce((a, r) => a + r.massToNext, 0) * 1.05;
-  if (rank > 0) { TM.gainMass(w, rank === 4 ? 1e6 : toRank); for (let i = 0; i < 40; i++) WM.stepWorld(w, idle); }
+  // straight to `rank` through the sim's real rank-ups (titansim growToRank), at t = 0
+  if (rank > 0) { TM.growToRank(w, rank); for (let i = 0; i < 40; i++) WM.stepWorld(w, idle); }
   const fx = Math.sin(T.heading), fz = Math.cos(T.heading);
   const ax = T.x + fx * 400, az = T.z + fz * 400;                 // anchor far ahead
   const dAnchor = () => Math.hypot(ax - T.x, az - T.z);
@@ -422,7 +459,7 @@ for (const [rank, strength] of [[0, 3], [2, 12], [4, 12]] as const) {
     const w = WM.createWorld({ titan: 'voltkite', biome: 'grideast', seed: 3 });
     w.cheats.noSpawns = true;
     const T = w.titan;
-    if (rank === 4) { TM.gainMass(w, 1e6); for (let i = 0; i < 60; i++) WM.stepWorld(w, WM.NO_INPUT); }
+    if (rank === 4) { TM.growToRank(w, 4); for (let i = 0; i < 60; i++) WM.stepWorld(w, WM.NO_INPUT); }
     const inp: TitanInput = { mx: Math.sin(T.heading), mz: Math.cos(T.heading), ability: false, abilityHeld: false, dash: false };
     const max = TM.titanMaxSpeed(w);
     const sp: number[] = [];

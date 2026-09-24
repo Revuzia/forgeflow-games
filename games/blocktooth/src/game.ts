@@ -473,6 +473,8 @@ export class App {
     const level = params.quality ?? this.settings.quality;
     this.core = createRenderCore(canvas, qualityFor(level, this.settings));
     this.rig = new CameraRig(this.core.camera);
+    // dev probes (?dev=1): the live rig (distance / auto distance / zoom) for the camera harness
+    if (params.dev) (window as unknown as { __BTCAM__?: CameraRig }).__BTCAM__ = this.rig;
     this.lighting = new Lighting(this.core.scene);
 
     // every run-scoped view, constructed ONCE (CONTRACT §6); mount/unmount per run
@@ -1166,6 +1168,12 @@ export class App {
       this.input.update();
       if (this.input.pressed('debug')) this.debug.toggle();
       if (this._screen === 'play' && !this.ending && this.input.pressed('pause')) this.pause();
+      // camera zoom (view-only; zoomInput is 0 while a screen owns input, and drains the wheel queue)
+      const zin = this.input.zoomInput(dt);
+      if (this._screen === 'play') {
+        if (zin !== 0) this.rig.zoomBy(zin);
+        if (this.input.pressed('zoomReset')) this.rig.resetZoom();
+      }
       const w = this._world;
       if (w && this.live) {
         if (this.holdCanvas()) {

@@ -23,7 +23,7 @@
 
 import type { BiomeId, SimEvent, TitanId, World } from '../src/core/types.ts';
 import { BIOME_IDS, TITAN_IDS } from '../src/core/types.ts';
-import { BUDGET, SIM_HZ } from '../src/core/config.ts';
+import { BUDGET, SIM_HZ, cumXpAt } from '../src/core/config.ts';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
@@ -150,7 +150,9 @@ interface RunResult {
   titan: TitanId; biome: BiomeId; seed: number;
   rankT: number[];                 // index = rank; NaN = not reached
   levelAtRank: number[];           // titan level when each rank was reached (pacing diagnosis)
-  massAtRank: number[];            // cumulative titan mass when each rank was reached (economy diagnosis)
+  xpAtRank: number[];              // cumulative titan XP (from LV 1) when each rank was reached (economy diagnosis)
+  heightAtRank: number[];          // body height once the MASS BREACH tween settled (observed, m)
+  heightAtLevel: number[];         // body height once each level's grow tween settled (index = level; observed, m)
   pickupsByKind: Record<string, number>; // pickups collected per kind
   paintFired: number; paintHit: number;  // hostile telegraphs that fired / landed on the titan (bot dodge rate)
   xpByPickup: Record<string, number>;   // XP collected per pickup kind (from 'pickup' events)
@@ -188,7 +190,8 @@ function pct(sorted: Float64Array, p: number): number {
 
 function runOne(titan: TitanId, biome: BiomeId, seed: number, maxTicks: number, quiet: boolean, tag: string): RunResult {
   const r: RunResult = {
-    titan, biome, seed, rankT: [0, NaN, NaN, NaN, NaN], levelAtRank: [1, NaN, NaN, NaN, NaN], massAtRank: [0, NaN, NaN, NaN, NaN],
+    titan, biome, seed, rankT: [0, NaN, NaN, NaN, NaN], levelAtRank: [1, NaN, NaN, NaN, NaN], xpAtRank: [0, NaN, NaN, NaN, NaN],
+    heightAtRank: [NaN, NaN, NaN, NaN, NaN], heightAtLevel: [],
     pickupsByKind: {}, xpByPickup: {}, paintFired: 0, paintHit: 0,
     levelAtBoss: NaN, bossT: NaN,
     drafts: 0, draftTimes: [], result: 'timeout', endT: NaN, floors: 0, buildings: 0, props: 0,
@@ -206,6 +209,8 @@ function runOne(titan: TitanId, biome: BiomeId, seed: number, maxTicks: number, 
   const tickMs = new Float64Array(maxTicks);
   const ckEvery = 60 * SIM_HZ;
   let i = 0;
+  r.heightAtRank[0] = w.titan.height; r.heightAtLevel[1] = w.titan.height;
+  let growLv = 0, growRank = -1;       // level / rank whose grow tween is still settling
   let lastLog = 0;
   try {
     for (; i < maxTicks && !w.run.result; i++) {
@@ -235,13 +240,18 @@ function runOne(titan: TitanId, biome: BiomeId, seed: number, maxTicks: number, 
       for (let k = 0; k < evs.length; k++) {
         const ev = evs[k];
         r.events[ev.type] = (r.events[ev.type] ?? 0) + 1;
-        if (ev.type === 'rankUp') { if (Number.isNaN(r.rankT[ev.rank])) { r.rankT[ev.rank] = w.t; r.levelAtRank[ev.rank] = w.titan.level; r.massAtRank[ev.rank] = w.titan.mass; } }
+        if (ev.type === 'rankUp') { if (Number.isNaN(r.rankT[ev.rank])) { r.rankT[ev.rank] = w.t; r.levelAtRank[ev.rank] = w.titan.level; r.xpAtRank[ev.rank] = cumXpAt(w.titan.level) + w.titan.xp; growRank = ev.rank; } }
+        else if (ev.type === 'levelUp') growLv = Math.max(growLv, ev.level);
         else if (ev.type === 'pickup') {
           r.xpByPickup[ev.kind] = (r.xpByPickup[ev.kind] ?? 0) + ev.xp;
           r.pickupsByKind[ev.kind] = (r.pickupsByKind[ev.kind] ?? 0) + 1;
         }
         else if (ev.type === 'telegraphFire' && ev.owner !== 'titan') { r.paintFired++; if (ev.hit) r.paintHit++; }
         else if (ev.type === 'bossSpawn') { if (Number.isNaN(r.bossT)) { r.bossT = w.t; r.levelAtBoss = w.titan.level; } }
+      }
+      if ((growLv > 0 || growRank >= 0) && !(w.titan.growT > 0)) {
+        if (growLv > 0) { r.heightAtLevel[growLv] = w.titan.height; growLv = 0; }
+        if (growRank >= 0) { r.heightAtRank[growRank] = w.titan.height; growRank = -1; }
       }
       let alive = 0;
       for (let k = 0; k < w.enemies.length; k++) if (w.enemies[k].alive) alive++;
@@ -255,7 +265,7 @@ function runOne(titan: TitanId, biome: BiomeId, seed: number, maxTicks: number, 
         lastLog = w.t;
         const T = w.titan;
         let pk = 0; for (const p of w.pickups) if (p.alive) pk++;
-        console.log(`  ${tag} t=${w.t.toFixed(0).padStart(4)}s  Size ${ROMAN[T.rank]}  LV ${T.level}  hp ${T.hp.toFixed(0)}/${T.maxHp.toFixed(0)}  mass ${T.mass.toFixed(0)}  enemies ${alive}  pickups ${pk}  floors ${T.floorsEaten}  kills ${T.kills}  ${w.boss ? `boss ${w.boss.id} p${w.boss.phase} ${(100 * w.boss.hp / w.boss.maxHp).toFixed(0)}%` : ''}`);
+        console.log(`  ${tag} t=${w.t.toFixed(0).padStart(4)}s  Size ${ROMAN[T.rank]}  LV ${T.level}  H ${T.height.toFixed(1)}  hp ${T.hp.toFixed(0)}/${T.maxHp.toFixed(0)}  enemies ${alive}  pickups ${pk}  floors ${T.floorsEaten}  kills ${T.kills}  ${w.boss ? `boss ${w.boss.id} p${w.boss.phase} ${(100 * w.boss.hp / w.boss.maxHp).toFixed(0)}%` : ''}`);
       }
     }
   } catch (e) {
@@ -414,15 +424,20 @@ async function main(): Promise<number> {
     const xp = Object.keys(r.xpByPickup).sort().map((k) => `${k} ${r.xpByPickup[k].toFixed(0)}`).join(' · ');
     console.log(`  ${pad('', 24)} LV at Size II/III/IV/V ${r.levelAtRank.slice(1).map((l) => (Number.isNaN(l) ? '—' : String(l))).join('/')}` +
       `  xp by pickup: ${xp || '—'}  kills ${r.kills} (crushed ${r.crushed})`);
-    // economy: mass banked per second inside each rank (what the rank bands are really measuring)
+    // economy: growth XP banked per second inside each rank (SIZE is level-driven: this is what the
+    // rank bands are really measuring)
     const rate: string[] = [];
     for (let k = 1; k <= 4; k++) {
-      const t0 = r.rankT[k - 1], t1 = r.rankT[k], m0 = r.massAtRank[k - 1], m1 = r.massAtRank[k];
+      const t0 = r.rankT[k - 1], t1 = r.rankT[k], m0 = r.xpAtRank[k - 1], m1 = r.xpAtRank[k];
       rate.push(Number.isNaN(t1) || Number.isNaN(t0) || t1 <= t0 ? '—' : `${((m1 - m0) / (t1 - t0)).toFixed(1)}`);
     }
     const pk = Object.keys(r.pickupsByKind).sort().map((k) => `${k} ${r.pickupsByKind[k]}`).join(' · ');
-    console.log(`  ${pad('', 24)} mass at Size II/III/IV/V ${r.massAtRank.slice(1).map((m) => (Number.isNaN(m) ? '—' : m.toFixed(0))).join('/')}` +
-      `  mass/s in Size I/II/III/IV ${rate.join('/')}  pickups ${pk || '—'}`);
+    console.log(`  ${pad('', 24)} XP/s in Size I/II/III/IV ${rate.join('/')}  pickups ${pk || '—'}`);
+    const hr = [1, 2, 3, 4].map((k) => (Number.isNaN(r.rankT[k]) ? `${ROMAN[k]} —` : `${ROMAN[k]} LV ${r.levelAtRank[k]} H ${Number.isNaN(r.heightAtRank[k]) ? '?' : r.heightAtRank[k].toFixed(2)}`));
+    console.log(`  ${pad('', 24)} size-ups: ${hr.join(' · ')}`);
+    const hl: string[] = [];
+    for (let L = 1; L <= 11; L++) hl.push(`${L}:${r.heightAtLevel[L] === undefined ? '·' : r.heightAtLevel[L].toFixed(2)}`);
+    console.log(`  ${pad('', 24)} settled H by level (m): ${hl.join(' ')}`);
   }
   console.log('');
   console.log('determinism:');

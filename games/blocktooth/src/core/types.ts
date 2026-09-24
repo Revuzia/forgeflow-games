@@ -163,13 +163,13 @@ export interface TitanState {
   moving: boolean;         // input magnitude > 0.1
   hp: number; maxHp: number;
   level: number; xp: number; xpToNext: number;
-  mass: number;            // cumulative mass (size progress)
+  mass: number;            // @deprecated mirror of SIZE progress (config sizeMassMirror); SIZE is level-driven — read sizeProgress()
   rank: RankIndex;
   /** current body height (m) incl. in-rank swell and the rank-up grow tween */
   height: number;
   /** collision radius (m) = height * TITAN_RADIUS_PER_H */
   radius: number;
-  growT: number;           // >0 while the rank-up grow tween runs (s remaining)
+  growT: number;           // >0 while a grow tween runs (s remaining): MASS BREACH on rank-up, a short step on level-up
   dashCharges: number; dashRecharge: number; dashT: number; dashDirX: number; dashDirZ: number;
   iframeT: number;
   abilityCd: number;       // seconds until the hook is ready
@@ -315,7 +315,7 @@ export interface Pickup {
   px: number; pz: number; py: number;
   vx: number; vz: number; vy: number;
   xp: number;              // XP granted
-  mass: number;            // size-mass granted
+  mass: number;            // loot mass: sizes the pickup mesh only (grows nothing since SIZE became level-driven)
   t: number;               // age (s)
   magnet: boolean;         // being pulled to the titan
 }
@@ -363,7 +363,7 @@ export type TriggerAction =
   | 'shockwave'   // ring damage around event point: p.r (× titan height), p.dmg
   | 'heal'        // heal p.amount (fraction of maxHp if p.frac)
   | 'shield'      // temporary damage absorb p.amount (fraction of maxHp)
-  | 'mass'        // bonus mass p.amount
+  | 'mass'        // "grow": p.amount × the current level's XP bar (titansim gainGrowth)
   | 'xp'          // bonus xp p.amount
   | 'magnet'      // pull every pickup within p.r titan-heights
   | 'rubbleShot'  // throw p.count rubble chunks at nearest enemies: p.dmg

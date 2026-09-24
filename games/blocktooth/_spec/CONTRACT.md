@@ -109,28 +109,37 @@ things puff into dust, bolts and springs.
 
 ## §3 Size ranks & growth
 
-| Rank | H (m) | mass to next | hp× | dmg× | flattens on contact | camera D (m) | pitch |
-|---|---|---|---|---|---|---|---|
-| I | 1.2 | 95 | 1.0 | 1 | tier 0 (cars, kiosks, hydrants, lamps, trees) | 17.2 | 36° |
-| II | 5 | 600 | 1.8 | 3 | ≤1 (shops, buses, trucks, containers) | 62.2 | 38° |
-| III | 14 | 9 000 | 3.2 | 8 | ≤2 (midrise corners, sheds, tanks) | 153.7 | 40° |
-| IV | 32 | 70 000 | 5.5 | 20 | ≤3 (office blocks, towers) | 314.3 | 42° |
-| V | 60 | — | 9.0 | 45 | ≤4 (megatowers) + fights bosses | 533.2 | 44° |
+**SIZE is driven by LEVEL** (2026-09-24, owner feedback: "the monster grows as it levels up"). XP is the
+one progression currency: every level-up makes the body bigger, and reaching `RANK_LEVELS[r]` is the
+**MASS BREACH** into Size r. `src/core/config.ts` is the source of truth (economy table at its top); this
+table mirrors it.
 
-> **Balance pass (2026-09-23/24):** mass thresholds above are the tuned values. The full economy
-> and threat model (per-rank XP scale, snack fall-off, kill-mass multipliers, enemy HP/damage/reach
-> scaling, director budget, boss HP/damage/fatigue) lives in the comment table at the top of
-> `src/core/config.ts` — that file is the source of truth; this table only mirrors it.
+| Rank | reached at LV | H on entry → last level (m) | per-level step | hp× | dmg× | flattens on contact | auto camera D, first → last level (m) | pitch |
+|---|---|---|---|---|---|---|---|---|
+| I | 1 | 1.2 → 2.66 | +17 % | 1.0 | 1 | tier 0 (cars, kiosks, hydrants, lamps, trees) | 49.8 → 38.2 | 54° |
+| II | 7 | 5 → 9.89 | +8.9 % | 1.8 | 3 | ≤1 (shops, buses, trucks, containers) | 133 → 109 | 54° |
+| III | 16 | 14 → 24.2 | +5.6 % | 3.2 | 8 | ≤2 (midrise corners, sheds, tanks) | 307 → 251 | 54° |
+| IV | 27 | 32 → 47.3 | +5.7 % | 5.5 | 20 | ≤3 (office blocks, towers) | 519 → 464 | 54° |
+| V | 35 | 60 → 63.5 → 67.2 (2 levels) | +5.8 % | 9.0 | 45 | ≤4 (megatowers) + fights bosses | 533 → 557 | 54° |
 
-* `titan.height = titanHeight(rank, progressInRank)` (up to +12 % swell before the next rank).
-  During a rank-up the sim eases height from the old value to the new rank's base over
-  `GROW_TWEEN_S` (easeOutBack) and emits `rankUp`. `radius = height × 0.42`.
-* **Mass** comes from pickups (rubble/scrap). `gainMass(w, m)` applies `stats.massGain` and the
-  pacing catch-up: if `w.t > RANK_SCHEDULE_S[rank+1]` the gain is multiplied by
-  `min(CATCHUP_MAX, 1 + CATCHUP_PER_MIN × minutesBehind)`.
-* **XP** comes from the same pickups; `xpToNext(level)`; each level-up increments
-  `upgrades.pendingDrafts` and emits `levelUp`. Rank-up also recomputes stats
-  (`recomputeStats`) — maxHp scales by hp×, current hp keeps its ratio then +15 % heal.
+* `titan.height` tweens toward `titanHeightAt(rank, level)`: geometric from `RANKS[r].height` toward
+  `RANKS[r+1].height ÷ BREACH_JUMP[r+1]` across the rank's levels; the breach level is one more step
+  × `BREACH_JUMP` (→ II ×1.88 · → III ×1.42 · → IV ×1.32 · → V ×1.27). Size V grows `RANK_V_GROWTH` 12 %
+  over `RANK_V_GROWTH_LEVELS` 2 more levels. A level-up tweens over `LEVEL_GROW_S` 0.45 s, a rank-up over
+  `GROW_TWEEN_S` 0.9 s (easeOutBack); a running breach tween is never cut short. `radius = height × 0.42`.
+* **XP** comes from pickups (rubble/scrap/chests). `gainXp(w, xp)` applies `stats.xpGain` ×
+  `stats.massGain` (the "growth XP" stat) × the kit multiplier (MOLO vacuum 1.25) × the pacing rubber
+  band `paceMul`: catch-up × `min(CATCHUP_MAX, 1 + CATCHUP_PER_MIN × minutesBehind)` once `w.t` passes
+  `RANK_SCHEDULE_S[rank+1]`; for the Size V breach only, a pace governor × `max(AHEAD_MIN, 1 −
+  AHEAD_PER_MIN × minutesEarly)` when the projected breach is more than `AHEAD_GRACE_S` early.
+  `xpToNext(level)`; each level-up increments `upgrades.pendingDrafts`, emits `levelUp` and steps the
+  body up; crossing `RANK_LEVELS[r]` emits `rankUp` and recomputes stats (`recomputeStats`) — maxHp
+  scales by hp×, current hp keeps its ratio then +15 % heal. The upgrade action `'mass'` ("grow") is
+  `gainGrowth(w, frac)`: exactly `frac` of the current level's XP bar.
+* **Mass is retired.** Loot still carries `mass` (it sizes the pickup meshes and splits scrap into
+  chunks); `gainMass` is a no-op kept for the pickup lane; `titan.mass` is written every tick as a
+  legacy mirror of SIZE progress (`sizeMassMirror`). Views read `sizeProgress(rank, level, xp)` and
+  `levelsToNextSize(rank, level)` — nothing reads `titan.mass` for size.
 * **Flatten rule**: a building/prop with `tier ≤ RANKS[rank].canFlatten` is smashed by contact
   while `speed ≥ SMASH_MIN_SPEED_FRAC × maxSpeed` (and always during a dash), and does not block
   movement (the titan plows through at `SMASH_SLOW` speed). `tier > canFlatten` BLOCKS movement
@@ -141,28 +150,48 @@ things puff into dust, bolts and springs.
   per second (a matched-tier floor pops every ~0.17 s; smaller things pop instantly).
 * **Crush**: enemies with `crushable` and `height < titan.height × CRUSH_RATIO` whose circle
   overlaps the titan while it moves are killed instantly (`enemyKilled.crushed = true`).
-* Rank-up presentation: sim tween + `rankUp` event → camera punch + zoom-out, full-width
-  `MASS BREACH` banner, ground shockwave ring, roar + news sting, app hit-stop 0.25 s.
+* Level-up presentation: grow tween + squash-and-stretch pop + a cream ground ring (0.45H → 1.9H);
+  the HUD GROW bar (`sizeProgress`, one notch per level of the Size) pulses.
+* Rank-up presentation: sim tween + `rankUp` event → camera punch + pull-back to the new Size's
+  framing, full-width `MASS BREACH` banner, ground shockwave ring, roar + news sting, app hit-stop 0.25 s.
 
-## §4 Camera (render/camera.ts implements exactly this)
+## §4 Camera (config.ts owns the formula; render/camera.ts springs toward it)
 
 ```
 k      = 2·tan(fov/2),  fov = 30°
-D*(H,r)= H / (frameFrac[r] · k)                      // cameraDistance() in config.ts
+D*(H,r)= H0[r] / (startFrac[r]·k) · (H / H0[r])^kr     // cameraDistance() in config.ts (FRAMING)
+         H0[r] = titanHeightAt(r, RANK_LEVELS[r]); startFrac = .045 .070 .085 .115 .210;
+         kr solved at load from titanHeightAt at the rank's first + last level so the body reaches
+         endFrac = .130 .170 .180 .190 .225 of the view height at the rank's last level
+         (kr = −0.33 / −0.30 / −0.37 / −0.29 / +0.39): the titan GROWS INTO THE FRAME level by level,
+         each breach resets to the small startFrac → the camera pulls back to the new, bigger world.
 D     ← critically-damped spring toward D*, ω = 4/s   // x'' = ω²(D*−x) − 2ω x'
+zoom   : player multiplier on D (view-only; the sim never reads it): wheel notch ±0.12 ln, '=' / '-'
+         (numpad + / −) held 1.35 ln/s, gamepad right stick 1.5 ln/s, Z / R3 reset; ln-smoothed
+         ω = CAMERA_ZOOM.omega 11/s; clamped to CAMERA_ZOOM.min 0.55 … max 2.0 and to
+         dAbsMin 12 m ≤ D ≤ dAbsMax 880 m; kept through breaches, reset on a new run; ignored in 'ui' mode
 punch  : on rankUp, D is multiplied by (1 − 0.08·(1 − easeOutCubic(τ/1.2))) for τ∈[0,1.2] s
 target = titanPos(interp) + v·0.25 s + up·(H·0.45)   // lead along velocity, smoothed (ω = 6/s)
-pitch  = lerp toward RANKS[r].pitchDeg (ω = 3/s)
+pitch  = lerp toward RANKS[r].pitchDeg = 54° at every Size (ω = 3/s)
 yaw    = 45° fixed
 camPos = target + D·(cos pitch·sin yaw, sin pitch, cos pitch·cos yaw)
-near/far = cameraClip(D)  → near = max(0.1, 0.02D), far = 6D + 400
+near/far = cameraClip(D)  → near = max(0.1, 0.02D), far = 6D + 400   (D = the ACTUAL distance incl. zoom)
 shake  : trauma model (amplitude² falloff 1.6/s); heavy footstep adds H·0.02·heavy, collapse
          adds per tier, boss slams add more; disabled by settings.screenShake
 ```
-Worked numbers at each rank's base height: D = 17.2 / 62.2 / 153.7 / 314.3 / 533.2 m.
-Vertical view extent = D·k = 9.2 / 33.3 / 82.4 / 168.4 / 285.7 m.
+Worked numbers (auto, first → last level of each Size): D = 49.8→38.2 / 133→109 / 307→251 / 519→464 /
+533→557 m; vertical view extent D·k = 26.7→20.5 / 71.4→58.2 / 165→135 / 278→249 / 286→299 m.
+Every LOD / fog / shadow / traffic / civilian consumer follows the ACTUAL distance (`rig.distance`,
+`FrameInfo.camDist`: zoom + punch included).
 Shadow camera (lighting.ts): orthographic box centred on the look target, half-size
-= 0.9·D·k·(aspect) clamped, depth = 3·D, re-fit every frame, texel-snapped to kill shimmer.
+= 0.9·D·k·(aspect) clamped ≤ 860 m, depth = 3·D, re-fit every frame, texel-snapped to kill shimmer.
+**Spawn ring** (sim, `ai/enemies.ts`): reads the AUTO `cameraDistance` (zoom excluded — deterministic).
+New enemies appear just past the visible-ground edge in their direction (the 54°, 16:9 view footprint:
+near edge 0.52·D·k, far edge 0.77·D·k, half-widths 0.74 / 1.10·D·k, + 0.12·D·k for the lead) ×
+1.02–1.20; nominal ring `ringRadius` = max(14, D·k); recycled beyond 1.9 × the ring.
+At the player's zoom-out the spawns are visible by design (the sim never reads the zoom): enemyview
+pops them in (0.32 s easeOutBack) and fx answers `enemySpawn` with a dust kick + a thin ground ring,
+only when the spawn point projects inside the view, at most 6 per frame.
 
 ---
 

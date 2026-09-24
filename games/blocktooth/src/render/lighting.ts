@@ -218,7 +218,7 @@ export class Lighting {
 
     // ── shadow box ──
     let half = 0.9 * D * K * aspect;
-    half = Math.min(760, Math.max(6, half));
+    half = Math.min(860, Math.max(6, half));   // 860: covers the zoomed-out Size V view (D ≤ camera D_ABS_MAX 880 m)
     half = Math.pow(HALF_STEP, Math.ceil(Math.log(half) / Math.log(HALF_STEP)));
     const sh = this.sun.shadow;
     const cam = sh.camera;
