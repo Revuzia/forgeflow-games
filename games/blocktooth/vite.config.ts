@@ -156,7 +156,7 @@ export default defineConfig({
     target: 'es2022',
     outDir: 'dist',
     emptyOutDir: true,
-    sourcemap: true,
+    sourcemap: false,          // never ship .map files (they embed the full TS source) to the public CDN
     assetsInlineLimit: 4096,
     // Rapier's compat build inlines its WASM (~2 MB of base64) and three is ~0.7 MB minified: big
     // vendor chunks by nature. The default 500 kB warning would fire on every build and bury real

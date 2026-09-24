@@ -1,0 +1,23 @@
+{
+  "title": "BLOCKTOOTH",
+  "short_description": "BLOCKTOOTH — an isometric kaiju survivor-like. Wake up in a crosswalk as a tiny monster, eat the parked cars, outgrow the shops, then the offices, then the skyline, while the city's civil defense and a panicking news desk try to keep up.",
+  "description": "WARD-7 SPECIAL REPORT. An unidentified mass has been sighted in a zebra crossing. It is roughly the size of a mailbox. Residents are advised that this will not last.\n\nBLOCKTOOTH is a single-player survivor-like seen from an isometric three-quarter view. You start small enough to be stepped on and you grow by eating: parked hatchbacks, kiosks, lamp posts, then the shops, the midrises, the office blocks and finally the towers. Five SIZE ranks take you from street level to skyline, and every rank-up is a MASS BREACH — the camera pulls back, the city shrinks, and things that used to be scenery are now lunch.\n\nPick one of four titans, each with its own automatic attack, a signature ability on SPACE and a dash on SHIFT:\n• MOLO, the smash tank — a squat jade monitor that inhales everything in reach.\n• VOLT-KITE, the chain assassin — lightning that forks between targets and live wires left on the pavement.\n• HEARTHBACK, the eruption fortress — a walking caldera that stores the damage it takes and vents it back.\n• BRIARWICK, area control — a horned garden-beast that turns rubble into seed-spitting turrets.\n\nLevel up and a three-card MUTATION REPORT opens: 158 upgrades in total, including titan-locked cards and legendary mutations, with a reroll when the hand is wrong. Three cities to flatten: GRID-EAST (daytime commercial blocks), WHITE STACKS (a snowed-in industrial park) and LOCKWATER (a flooded container port at night).\n\nHALVARD CIVIL DEFENSE answers with androids, drones, buggies, APCs, tanks and artillery walkers, then an elite breach-dozer, and at the end a boss: CAISSON-4, a four-legged harbour crane rig built for exactly one job, or IRON GULLY, a pale ridge-backed beast the size of a tower. Their heavy hits — rockets, tank shells, mortar shells, the breach-dozer's charge and every boss attack — are painted on the ground before they land: step out of the paint or dash through it.\n\nA run lasts roughly 8 to 12 minutes and ends on the front page of THE WARD SEVEN WITNESS. The city gets smaller either way.\n\nNo gore: whatever gets stepped on puffs into dust, bolts and springs. Keyboard or gamepad.",
+  "genre": "action",
+  "sub_genre": "kaiju-survivor-like",
+  "difficulty": "medium",
+  "controls_keyboard": "WASD / arrow keys move · SPACE signature ability (HOOK) · SHIFT dash · 1 / 2 / 3 pick a mutation card (or ←/→ + ENTER) · R reroll the draft · ESC / P pause · ENTER confirm in menus · F1 debug overlay · Gamepad (standard mapping): left stick / d-pad move · A ability / confirm · B or RB dash · X reroll · START pause",
+  "tags": [
+    "survivor-like",
+    "kaiju",
+    "roguelite",
+    "isometric",
+    "action",
+    "3d",
+    "singleplayer",
+    "arena",
+    "upgrades",
+    "gamepad",
+    "comedy"
+  ],
+  "art_direction": "Saturday-morning monster comic built as a clean 3D diorama, seen from a high isometric three-quarter view. Faceted low-poly shapes, toon-ramp shading, thick black ink outlines, painted flat palettes and long soft shadows. A chunky, cute-but-menacing kaiju (e.g. MOLO: squat jade-green monitor lizard with a sawtooth back-fin, cream belly, gold eyes) stomping through a toy-like city block of shops, office towers and parked cars, with tiny civil-defense tanks and drones swarming it. Palette: navy #14213d, cream #f4ecd8, coral #ff6f5e, signal red #e63946, gold #ffd166, jade #3fae7f. Retro TV-news framing (red LIVE bug, lower-third banner, halftone and scanline texture) and tabloid-headline energy. Bold condensed poster lettering (Anton-style) for the BLOCKTOOTH wordmark. No gore; destruction reads as dust, bolts and springs."
+}
