@@ -1,0 +1,38 @@
+{
+  "_doc": "Crews. id is the byte stored in the paint atlas (0 = neutral). side A spawns at maps[].spawns.A. Colors are sRGB hex. 'mark' is the colorblind-safe SHAPE shown with every team color (crests, minimap, kill feed, HUD).",
+  "neutral": { "id": 0, "name": "NEUTRAL" },
+  "teams": [
+    {
+      "id": 1,
+      "key": "sun",
+      "side": "A",
+      "name": "SUNCREW",
+      "dye": "#FF8A1F",
+      "dyeDeep": "#D9570A",
+      "dyeGloss": "#FFD08A",
+      "ui": "#FFA84A",
+      "uiInk": "#2A1300",
+      "mark": "sun-disc",
+      "markGlyph": "◉"
+    },
+    {
+      "id": 2,
+      "key": "gulf",
+      "side": "B",
+      "name": "GULF CREW",
+      "dye": "#5B4BF0",
+      "dyeDeep": "#3423B8",
+      "dyeGloss": "#B7AEFF",
+      "ui": "#8A7CFF",
+      "uiInk": "#0E0833",
+      "mark": "wave-peak",
+      "markGlyph": "▲"
+    }
+  ],
+  "colorblind": {
+    "_doc": "Settings → Colorblind marks. Swaps to a max-separation pair and adds a diagonal hatch to GULF CREW dye in the surface shader.",
+    "sun": { "dye": "#FFB000", "ui": "#FFC233" },
+    "gulf": { "dye": "#1F6BFF", "ui": "#5C95FF" },
+    "gulfHatch": true
+  }
+}

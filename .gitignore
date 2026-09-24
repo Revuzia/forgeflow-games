@@ -68,3 +68,16 @@ games/blocktooth/_harness/scratch/**/*.png
 games/blocktooth/_harness/scratch/**/*.txt
 games/blocktooth/_harness/scratch/**/__pycache__/
 games/blocktooth/_harness/scratch/**/*.log
+
+# 2026-09-24 — DYEFIELD (games/dyefield): Vite/TS source game + Blender-authored art (art/gltf GLBs
+# ARE tracked). node_modules, dist, shots, reports, python caches and scratch are not.
+games/dyefield/node_modules/
+games/dyefield/dist/
+games/dyefield/_shots/
+games/dyefield/_harness/_reports/
+games/dyefield/_harness/__pycache__/
+games/dyefield/_harness/scratch/
+games/dyefield/art/__pycache__/
+games/dyefield/art/blender/__pycache__/
+games/dyefield/art/renders/_wip/
+games/dyefield/art/renders/*.png

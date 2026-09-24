@@ -1,0 +1,155 @@
+{
+  "_doc": "Data-driven kits. Adding a 5th kit = a new entry here + a model in art/gltf (model hook = 'model'). Units: metres, seconds, tank percent (0-100), damage vs 100 HP. 'stats' are the 0-10 loadout bars (Range / Damage / Fire rate / Mobility / Coverage). Numbers are phase-4/6 starting values; tuning truth moves here, never into code.",
+  "hp": 100,
+  "respawnSeconds": 3,
+  "kits": [
+    {
+      "id": "mist-rasp",
+      "name": "MIST-RASP",
+      "role": "SHOOTER",
+      "blurb": "Fast stream, mid range, high coverage, low burst.",
+      "model": "kit_mist_rasp",
+      "sub": "jelly-charge",
+      "special": "cloudburst",
+      "stats": { "range": 5, "damage": 4, "fireRate": 8, "mobility": 7, "coverage": 8 },
+      "fire": {
+        "type": "stream",
+        "shotsPerSecond": 8.5,
+        "tankPerShot": 0.9,
+        "damage": 34,
+        "projectileSpeed": 26,
+        "straightTime": 0.2,
+        "gravity": 24,
+        "spreadDeg": 4.5,
+        "jumpSpreadDeg": 10,
+        "maxRange": 13,
+        "paint": { "impactRadius": 0.95, "dripEvery": 0.14, "dripRadius": 0.5 },
+        "moveSpeedWhileFiring": 0.82
+      }
+    },
+    {
+      "id": "sheet-drum",
+      "name": "SHEET-DRUM",
+      "role": "ROLLER",
+      "blurb": "Wide floor coat while walking. Roll over a foe to flatten them.",
+      "model": "kit_sheet_drum",
+      "sub": "jelly-charge",
+      "special": "wellspring",
+      "stats": { "range": 3, "damage": 9, "fireRate": 3, "mobility": 5, "coverage": 10 },
+      "fire": {
+        "type": "roll",
+        "rollWidth": 2.1,
+        "rollSpeed": 4.4,
+        "tankPerMetre": 0.85,
+        "flattenDamage": 140,
+        "flattenReach": 0.55,
+        "flick": {
+          "windup": 0.28,
+          "cooldown": 0.62,
+          "tankCost": 9,
+          "splats": 6,
+          "reach": 7.5,
+          "damageNear": 70,
+          "damageFar": 30,
+          "paintRadius": 0.8
+        }
+      }
+    },
+    {
+      "id": "needle-glint",
+      "name": "NEEDLE-GLINT",
+      "role": "CHARGER",
+      "blurb": "Hold to charge a glint line. Release for a long splat line.",
+      "model": "kit_needle_glint",
+      "sub": "jelly-charge",
+      "special": "cloudburst",
+      "stats": { "range": 10, "damage": 10, "fireRate": 2, "mobility": 3, "coverage": 4 },
+      "fire": {
+        "type": "charge",
+        "chargeSeconds": 1.0,
+        "minRange": 12,
+        "maxRange": 30,
+        "damageMin": 40,
+        "damageFull": 140,
+        "tankFull": 18,
+        "tankMin": 4,
+        "moveSpeedWhileCharging": 0.35,
+        "glintVisibleToEnemies": true,
+        "paint": { "lineSpacing": 0.8, "lineRadius": 0.55, "endRadius": 1.15 }
+      }
+    },
+    {
+      "id": "pop-well",
+      "name": "POP-WELL",
+      "role": "BLASTER",
+      "blurb": "Slow airborne bursts. A direct hit deletes; paint per shot is poor.",
+      "model": "kit_pop_well",
+      "sub": "jelly-charge",
+      "special": "wellspring",
+      "stats": { "range": 5, "damage": 10, "fireRate": 3, "mobility": 6, "coverage": 3 },
+      "fire": {
+        "type": "burst",
+        "shotsPerSecond": 1.35,
+        "tankPerShot": 8,
+        "projectileSpeed": 18,
+        "maxRange": 9,
+        "airburstAtMaxRange": true,
+        "directDamage": 125,
+        "splashDamage": 55,
+        "splashRadius": 2.2,
+        "paint": { "impactRadius": 1.1, "airburstRadius": 0.6 }
+      }
+    }
+  ],
+  "subs": [
+    {
+      "id": "jelly-charge",
+      "name": "JELLY CHARGE",
+      "blurb": "Arc throw. Lands as a jelly puddle, then pops.",
+      "model": "sub_jelly_charge",
+      "tankCost": 70,
+      "throwSpeed": 13,
+      "gravity": 18,
+      "puddleFuse": 0.8,
+      "blastRadius": 3.0,
+      "damageCenter": 180,
+      "damageEdge": 30,
+      "paintRadius": 3.2
+    }
+  ],
+  "specials": [
+    {
+      "id": "cloudburst",
+      "name": "CLOUDBURST",
+      "blurb": "Throw a rain cell that soaks a disk of turf.",
+      "model": "special_cloudburst",
+      "chargePoints": 190,
+      "throwRange": 20,
+      "hoverHeight": 2.8,
+      "duration": 6.0,
+      "soakRadius": 5.0,
+      "dropsPerSecond": 30,
+      "dropPaintRadius": 0.55,
+      "damagePerSecond": 8
+    },
+    {
+      "id": "wellspring",
+      "name": "WELLSPRING",
+      "blurb": "Jump and slam: paints a ring and knocks foes back.",
+      "model": "special_wellspring",
+      "chargePoints": 180,
+      "leapHeight": 3.2,
+      "ringRadius": 6.0,
+      "ringWidth": 1.4,
+      "coreDamage": 60,
+      "coreRadius": 3.0,
+      "knockback": 9
+    }
+  ],
+  "specialCharge": {
+    "_doc": "Points toward the equipped special: 1 point per weighted m² of turf newly dyed, +20 per wash. Meter keeps 50% on being washed.",
+    "pointsPerSquareMetre": 1,
+    "pointsPerWash": 20,
+    "keepOnWashed": 0.5
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "dyefield",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "DYEFIELD — Harbor Cup 4 v 4 turf-paint arena. Three.js + TypeScript + Vite runtime, Blender-authored art. `npm install && npm run dev`.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "probe": "node _harness/probe_paint.ts && node _harness/probe_move.ts",
+    "check": "npm run typecheck && npm run probe",
+    "art": "python art/build.py all"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "0.20.0",
+    "@fontsource/lilita-one": "^5.2.0",
+    "@fontsource/nunito": "^5.2.0",
+    "three": "0.186.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/three": "0.186.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.0"
+  }
+}
