@@ -29,7 +29,7 @@ import { damageTitanArea } from '../../combat/damage.ts';
 // ─────────────────────────────── tuning ───────────────────────────────
 const WALK = 9, INTRO_WALK = 20, TURN = 0.9, AIM_TURN = 1.4;
 const MIN_D = 50, MAX_D = 80;
-const GAP = [0, 2.6, 1.5, 1.3] as const;
+const GAP = [0, 2.8, 2.1, 2.0] as const;
 const P3_CADENCE = 0.75;
 
 const BREATH = { half: (28 * Math.PI) / 180, r: 140, windup: 1.8, active: 1.2, dps: 50, recover: 0.6, frostLife: 7 };

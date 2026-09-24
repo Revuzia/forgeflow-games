@@ -1,0 +1,84 @@
+BLOCKTOOTH probe_sim — 12 run(s) × 13 sim-min, seed 1337, 30 Hz
+[1/12 molo/grideast] clear @ 536 s · Size V LV 35 · drafts 36 · 6.0 s wall
+[2/12 molo/whitestacks] clear @ 589 s · Size V LV 39 · drafts 39 · 2.6 s wall
+[3/12 molo/lockwater] dead @ 576 s · Size V LV 39 · drafts 40 · 2.6 s wall
+[4/12 voltkite/grideast] dead @ 662 s · Size V LV 40 · drafts 41 · 5.9 s wall
+[5/12 voltkite/whitestacks] clear @ 626 s · Size V LV 40 · drafts 41 · 2.7 s wall
+[6/12 voltkite/lockwater] clear @ 586 s · Size V LV 37 · drafts 38 · 2.2 s wall
+[7/12 hearthback/grideast] clear @ 667 s · Size V LV 37 · drafts 38 · 6.7 s wall
+[8/12 hearthback/whitestacks] clear @ 633 s · Size V LV 38 · drafts 39 · 2.8 s wall
+[9/12 hearthback/lockwater] clear @ 638 s · Size V LV 35 · drafts 36 · 3.1 s wall
+[10/12 briarwick/grideast] clear @ 690 s · Size V LV 38 · drafts 39 · 6.6 s wall
+[11/12 briarwick/whitestacks] clear @ 667 s · Size V LV 41 · drafts 42 · 2.8 s wall
+[12/12 briarwick/lockwater] clear @ 633 s · Size V LV 36 · drafts 36 · 2.7 s wall
+
+titan      biome         II  III   IV    V  LVboss bossT drafts result   endT floors bldgs props kills crush dmgTaken peakE  ms avg/p99
+---------------------------------------------------------------------------------------------------------------------------------------
+molo       grideast     101  184  324  444      32  464     36 clear    536   2361   422  4527  1573    48       58    63  0.33/1.19
+molo       whitestacks   96  197  370  465      36  485     39 clear    589   2420   488  4767  1403    52       83    48  0.13/0.38
+molo       lockwater     96  188  298  425      35  445     40 dead     576   3087   616  4642  1717    34     1567    68  0.13/0.34
+voltkite   grideast      88  216  393  494      35  514     41 dead     662   2645   470  4897  2125   143     1950    57  0.26/0.68
+voltkite   whitestacks   97  222  384  488      35  508     41 clear    626   2499   500  4593  1579   144      364    51  0.12/0.37
+voltkite   lockwater     96  197  292  425      33  445     38 clear    586   3242   648  4723  1712    91      683    51  0.10/0.34
+hearthback grideast     141  253  395  505      33  525     38 clear    667   2449   413  4284  1754    66     2026    99  0.30/0.66
+hearthback whitestacks   98  251  405  497      34  517     39 clear    633   2152   407  3928  1497    65     1635    57  0.12/0.31
+hearthback lockwater    135  239  385  503      32  523     36 clear    638   2542   458  3809  1874    67     1529   103  0.14/0.35
+briarwick  grideast     110  230  385  510      33  530     39 clear    690   2409   407  4119  1897    49     3147    64  0.28/0.57
+briarwick  whitestacks   96  226  394  497      36  517     42 clear    667   2308   456  4274  1712    75     1405    63  0.12/0.29
+briarwick  lockwater    106  202  376  495      32  516     36 clear    633   2411   430  3460  1976    58      409    56  0.12/0.30
+
+  molo/grideast            early draft gap median 13.1 s (11 in 180 s)  hooks 61  dashes 152  hurt 22  collapses 424  paint dodged 284/360  boss hp left 0%  sim max 11.2 ms
+                           LV at Size II/III/IV/V 5/12/22/30  xp by pickup: chest 0 · heal 0 · rubble 3219 · scrap 7313  kills 1573 (crushed 48)
+                           mass at Size II/III/IV/V 96/695/9736/79698  mass/s in Size I/II/III/IV 1.0/7.2/64.4/581.7  pickups chest 2 · heal 74 · rubble 8003 · scrap 6589
+  molo/whitestacks         early draft gap median 13.1 s (12 in 180 s)  hooks 69  dashes 173  hurt 26  collapses 492  paint dodged 353/442  boss hp left 0%  sim max 2.8 ms
+                           LV at Size II/III/IV/V 5/13/26/34  xp by pickup: chest 0 · heal 0 · rubble 2845 · scrap 7650  kills 1403 (crushed 52)
+                           mass at Size II/III/IV/V 96/699/9718/79697  mass/s in Size I/II/III/IV 1.0/6.0/52.1/740.5  pickups chest 1 · heal 79 · rubble 9544 · scrap 7455
+  molo/lockwater           early draft gap median 18.1 s (11 in 180 s)  hooks 58  dashes 202  hurt 28  collapses 620  paint dodged 411/472  boss hp left 14%  sim max 2.7 ms
+                           LV at Size II/III/IV/V 5/13/22/34  xp by pickup: chest 0 · heal 0 · rubble 4720 · scrap 8131  kills 1717 (crushed 34)
+                           mass at Size II/III/IV/V 95/695/9695/79944  mass/s in Size I/II/III/IV 1.0/6.5/81.8/554.9  pickups chest 2 · heal 113 · rubble 10676 · scrap 10370
+  voltkite/grideast        early draft gap median 16.6 s (11 in 180 s)  hooks 135  dashes 306  hurt 57  collapses 474  paint dodged 263/269  boss hp left 23%  sim max 2.7 ms
+                           LV at Size II/III/IV/V 5/14/25/33  xp by pickup: chest 0 · heal 0 · rubble 3807 · scrap 9593  kills 2125 (crushed 143)
+                           mass at Size II/III/IV/V 95/695/10488/79814  mass/s in Size I/II/III/IV 1.1/4.7/55.1/686.6  pickups chest 2 · heal 99 · rubble 6101 · scrap 4813
+  voltkite/whitestacks     early draft gap median 14.6 s (10 in 180 s)  hooks 122  dashes 358  hurt 53  collapses 500  paint dodged 270/273  boss hp left 0%  sim max 3.7 ms
+                           LV at Size II/III/IV/V 5/13/24/33  xp by pickup: chest 0 · heal 0 · rubble 3918 · scrap 8075  kills 1579 (crushed 144)
+                           mass at Size II/III/IV/V 95/730/9717/79998  mass/s in Size I/II/III/IV 1.0/5.1/55.4/671.9  pickups chest 2 · heal 94 · rubble 5452 · scrap 4532
+  voltkite/lockwater       early draft gap median 15.1 s (11 in 180 s)  hooks 111  dashes 352  hurt 25  collapses 648  paint dodged 127/133  boss hp left 0%  sim max 2.8 ms
+                           LV at Size II/III/IV/V 5/12/20/32  xp by pickup: chest 0 · heal 0 · rubble 4340 · scrap 7969  kills 1712 (crushed 91)
+                           mass at Size II/III/IV/V 95/698/9748/79757  mass/s in Size I/II/III/IV 1.0/6.0/94.8/525.6  pickups chest 2 · heal 92 · rubble 1996 · scrap 2105
+  hearthback/grideast      early draft gap median 12.9 s (7 in 180 s)  hooks 24  dashes 147  hurt 148  collapses 417  paint dodged 405/484  boss hp left 0%  sim max 3.9 ms
+                           LV at Size II/III/IV/V 4/12/22/31  xp by pickup: chest 0 · heal 0 · rubble 3476 · scrap 8890  kills 1754 (crushed 66)
+                           mass at Size II/III/IV/V 96/697/9752/79952  mass/s in Size I/II/III/IV 0.7/5.4/63.6/639.3  pickups chest 2 · heal 93 · rubble 9456 · scrap 7710
+  hearthback/whitestacks   early draft gap median 15.4 s (10 in 180 s)  hooks 17  dashes 135  hurt 173  collapses 409  paint dodged 303/342  boss hp left 0%  sim max 2.4 ms
+                           LV at Size II/III/IV/V 4/14/23/31  xp by pickup: chest 0 · heal 0 · rubble 2490 · scrap 8232  kills 1497 (crushed 65)
+                           mass at Size II/III/IV/V 95/695/9697/79808  mass/s in Size I/II/III/IV 1.0/3.9/58.5/761.8  pickups chest 2 · heal 70 · rubble 2398 · scrap 2732
+  hearthback/lockwater     early draft gap median 22.0 s (8 in 180 s)  hooks 25  dashes 143  hurt 152  collapses 459  paint dodged 443/529  boss hp left 0%  sim max 2.3 ms
+                           LV at Size II/III/IV/V 4/12/21/30  xp by pickup: chest 0 · heal 0 · rubble 2967 · scrap 7964  kills 1874 (crushed 67)
+                           mass at Size II/III/IV/V 96/695/9724/80162  mass/s in Size I/II/III/IV 0.7/5.7/62.1/592.7  pickups chest 2 · heal 79 · rubble 2755 · scrap 3068
+  briarwick/grideast       early draft gap median 16.3 s (9 in 180 s)  hooks 61  dashes 176  hurt 104  collapses 408  paint dodged 315/350  boss hp left 0%  sim max 1.9 ms
+                           LV at Size II/III/IV/V 4/13/22/32  xp by pickup: chest 0 · heal 0 · rubble 3570 · scrap 9727  kills 1897 (crushed 49)
+                           mass at Size II/III/IV/V 96/695/9701/79710  mass/s in Size I/II/III/IV 0.9/5.0/58.0/562.8  pickups chest 2 · heal 96 · rubble 9123 · scrap 7706
+  briarwick/whitestacks    early draft gap median 16.2 s (10 in 180 s)  hooks 55  dashes 178  hurt 103  collapses 456  paint dodged 324/365  boss hp left 0%  sim max 1.8 ms
+                           LV at Size II/III/IV/V 5/13/25/34  xp by pickup: chest 0 · heal 0 · rubble 3360 · scrap 9387  kills 1712 (crushed 75)
+                           mass at Size II/III/IV/V 95/695/9705/79870  mass/s in Size I/II/III/IV 1.0/4.6/53.7/680.6  pickups chest 2 · heal 95 · rubble 8721 · scrap 7160
+  briarwick/lockwater      early draft gap median 16.3 s (9 in 180 s)  hooks 53  dashes 164  hurt 65  collapses 430  paint dodged 286/320  boss hp left 0%  sim max 1.2 ms
+                           LV at Size II/III/IV/V 5/12/21/30  xp by pickup: chest 0 · heal 0 · rubble 3210 · scrap 8491  kills 1976 (crushed 58)
+                           mass at Size II/III/IV/V 96/698/9697/86376  mass/s in Size I/II/III/IV 0.9/6.3/51.6/643.6  pickups chest 1 · heal 91 · rubble 1955 · scrap 2381
+
+determinism:
+  molo/grideast: DETERMINISTIC over 16069 ticks (8 checkpoints, final f1c86fcd)
+  molo/whitestacks: DETERMINISTIC over 17671 ticks (9 checkpoints, final 2306b5d7)
+  molo/lockwater: DETERMINISTIC over 17281 ticks (9 checkpoints, final e2e56725)
+  voltkite/grideast: DETERMINISTIC over 19850 ticks (11 checkpoints, final 84e36851)
+  voltkite/whitestacks: DETERMINISTIC over 18771 ticks (10 checkpoints, final 886a0c62)
+  voltkite/lockwater: DETERMINISTIC over 17594 ticks (9 checkpoints, final a9cfefbc)
+  hearthback/grideast: DETERMINISTIC over 19997 ticks (11 checkpoints, final 5e74f478)
+  hearthback/whitestacks: DETERMINISTIC over 19003 ticks (10 checkpoints, final 3281ae18)
+  hearthback/lockwater: DETERMINISTIC over 19149 ticks (10 checkpoints, final 87fbaaa0)
+  briarwick/grideast: DETERMINISTIC over 20689 ticks (11 checkpoints, final 0d88431c)
+  briarwick/whitestacks: DETERMINISTIC over 20002 ticks (11 checkpoints, final 953784a1)
+  briarwick/lockwater: DETERMINISTIC over 18983 ticks (10 checkpoints, final d8b3d096)
+
+clears 10/12 (in 8–12 min: 10) · deaths 2 · timeouts 0
+wall 91.2 s
+
+GATE 2: PASS

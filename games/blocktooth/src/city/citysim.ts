@@ -12,7 +12,7 @@
 //   * resolveCircleVsCity writes the RESOLVED circle centre into out.x/out.z (unchanged
 //     position when nothing blocks) and out.bumpTier = highest blocking tier touched (−1 none).
 
-import type { Building, CityLayout, DamageOpts, PickupKind, Tier, World } from '../core/types.ts';
+import type { Building, CityLayout, DamageOpts, PickupKind, SimEvent, Tier, World } from '../core/types.ts';
 import { TIERS, lootMass, lootXp } from '../core/config.ts';
 import { clamp } from '../core/math.ts';
 import { rInt } from '../core/rng.ts';
@@ -175,6 +175,14 @@ export function nearestRubble(city: CityLayout, x: number, z: number, r: number,
 function creditsTitan(opts: DamageOpts): boolean {
   return opts.src === 'titan' || opts.src === 'hazard';
 }
+/** City events caused by a hostile (a boss leg, a RAMROD) carry `noCredit: true` (an extra field
+ *  on the event object, outside the SimEvent type) so the upgrade engine does not fire the titan's
+ *  smash/floorBreak/collapse triggers for them — before, CAISSON-4's own footsteps detonated the
+ *  titan's EMINENT DOMAIN shockwaves under its legs (up to 40 % of a boss fight's damage). */
+function push(w: World, ev: SimEvent, credit: boolean): void {
+  if (!credit) (ev as SimEvent & { noCredit?: boolean }).noCredit = true;
+  w.events.push(ev);
+}
 
 /** Rubble for one broken floor: TIERS[tier] floorXp/floorMass split into 1–3 pickups at the
  *  footprint edge point (ex,ez) nearest the titan, nudged outward. */
@@ -204,7 +212,7 @@ function collapseBuilding(w: World, b: Building, credit: boolean): void {
   b.collapsed = true;
   b.alive = 0;
   b.floorHp = 0;
-  w.events.push({ type: 'buildingCollapse', id: b.id, x: b.x, z: b.z, tier: b.tier, w: b.w, d: b.d, h: b.floors * b.floorH });
+  push(w, { type: 'buildingCollapse', id: b.id, x: b.x, z: b.z, tier: b.tier, w: b.w, d: b.d, h: b.floors * b.floorH }, credit);
   // collapse bonus: collapseBonus × floors worth of floor loot, scattered over the footprint
   const td = TIERS[b.tier];
   const bonus = td.collapseBonus * b.floors;
@@ -215,7 +223,9 @@ function collapseBuilding(w: World, b: Building, credit: boolean): void {
     const z = b.z + (loot() - 0.5) * b.d * 0.8;
     spawnPickup(w, 'rubble', x, z, bxp / n, bmass / n);
   }
-  if (b.tier >= 2 && loot() < COLLAPSE_HEAL_CHANCE) spawnPickup(w, 'heal', b.x, b.z, 0, 0);
+  // street-food heals only come out of buildings the TITAN brings down (a boss stamping the city
+  // flat is not a vending machine for the player fighting it)
+  if (b.tier >= 2 && loot() < COLLAPSE_HEAL_CHANCE && credit) spawnPickup(w, 'heal', b.x, b.z, 0, 0);
   if (credit) w.titan.buildingsLeveled++;
   // blocks leveled (incremental; stepCity re-derives it every second)
   idx.blockLive[b.block] = Math.max(0, idx.blockLive[b.block] - 1);
@@ -247,14 +257,14 @@ export function damageBuilding(w: World, id: number, amount: number, opts: Damag
     left -= b.floorHp;
     b.alive--;
     broken++;
-    w.events.push({ type: 'floorBreak', id: b.id, remaining: b.alive, x: b.x, z: b.z, tier: b.tier });
+    push(w, { type: 'floorBreak', id: b.id, remaining: b.alive, x: b.x, z: b.z, tier: b.tier }, credit);
     dropFloorRubble(w, b, ex, ez);
     w.run.tonnage += TIERS[b.tier].tonsPerFloor;
     if (credit) T.floorsEaten++;
     if (b.alive === 0) { collapseBuilding(w, b, credit); break; }
     b.floorHp = b.floorHpMax;
   }
-  if (broken > 0 && opts.kind === 'smash') w.events.push({ type: 'smash', x: ex, z: ez, tier: b.tier });
+  if (broken > 0 && opts.kind === 'smash') push(w, { type: 'smash', x: ex, z: ez, tier: b.tier }, credit);
   return broken;
 }
 
@@ -274,7 +284,7 @@ export function damageProp(w: World, id: number, amount: number, opts: DamageOpt
   p.speed = 0;
   p.scared = 0;
   const crushed = opts.kind === 'smash';
-  w.events.push({ type: 'propDestroyed', id: p.id, kind: p.kind, x: p.x, z: p.z, crushed });
+  push(w, { type: 'propDestroyed', id: p.id, kind: p.kind, x: p.x, z: p.z, crushed }, creditsTitan(opts));
   const info = PROP_INFO[p.kind];
   const td = TIERS[p.tier];
   const loot = w.rng.loot;

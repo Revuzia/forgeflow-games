@@ -26,7 +26,7 @@ import { spawnProjectile } from '../../combat/projectiles.ts';
 // ─────────────────────────────── tuning ───────────────────────────────
 const WALK = 6, INTRO_WALK = 16, TURN = 0.7, AIM_TURN = 1.1;
 const MIN_D = 60, MAX_D = 120;
-const GAP = [0, 2.4, 1.4, 1.2] as const;          // base seconds between attacks per phase
+const GAP = [0, 2.6, 2.0, 1.9] as const;          // base seconds between attacks per phase (melee titans need a window to bite)
 const P3_CADENCE = 0.7;                            // "cycle 30 % faster"
 
 const HOOK_LANE = { len: 170, w: 26, windup: 1.8, dmg: 60, recover: 0.7, second: 0.3 };
@@ -112,7 +112,7 @@ function decide(w: World, b: BossState): void {
     d < 75 ? 1.4 : 1.0,                             // hookDrop (punishes hugging the legs)
     P >= 2 ? (d > 80 ? 1.0 : 0.45) : 0,             // winchLeash (reels a kiting titan in)
     P >= 2 ? (d < BOOM.r + 10 ? 1.1 : 0.2) : 0,     // boomSweep
-    P >= 3 ? (d < STOMP.r + T.radius + 25 ? 1.8 : 0) : 0,   // legStomp (anti-melee)
+    P >= 3 ? (d < STOMP.r + T.radius + 25 ? 1.2 : 0) : 0,   // legStomp (anti-melee; not every beat, or melee titans never land a bite)
   ];
   for (let i = 0; i < wts.length; i++) wts[i] *= repeatMul(b, ATTACKS[i]);
   const id = pickWeighted(w, ATTACKS, wts) ?? 'hookLane';

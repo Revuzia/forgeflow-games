@@ -10,7 +10,7 @@
 
 import type { DamageKind, DamageOpts, Enemy, TitanDef, TitanState, Tier, World } from '../core/types.ts';
 import {
-  CATCHUP_MAX, CATCHUP_PER_MIN, CRUSH_RATIO, GROW_TWEEN_S, RANKS, RANK_SCHEDULE_S, SMASH_MIN_SPEED_FRAC,
+  AHEAD_FROM_RANK, AHEAD_GRACE_S, AHEAD_MIN, AHEAD_PER_MIN, CATCHUP_MAX, CATCHUP_PER_MIN, CRUSH_RATIO, GROW_TWEEN_S, RANKS, RANK_SCHEDULE_S, SMASH_MIN_SPEED_FRAC,
   SMASH_SLOW, TIERS, TITAN, TITAN_RADIUS_PER_H, titanHeight, titanSpeed, xpToNext,
 } from '../core/config.ts';
 import { clamp, easeOutBack, headingOf, segDist, turnToward, wrapAngle } from '../core/math.ts';
@@ -69,6 +69,12 @@ const HEIGHT_EASE_RATE = 5;
 const RANK_V_SWELL_MASS = 6000;
 /** safety caps */
 const MAX_SUBSTEPS = 8;
+/** Wedge escape: a titan that wants to move but has not budged (< PIN_MOVE_FRAC of its walk
+ *  distance) for PIN_S while buildings push it — e.g. it swelled inside a crack between three
+ *  towers it cannot flatten yet — squeezes: city collision uses radius × PIN_SQUEEZE until it has
+ *  moved one body radius or SQUEEZE_S passes. (Measured: a Size III VOLT-KITE sat wedged for 18 s
+ *  under tank fire and died — the only death before the elite window in a 36-run sweep.) */
+const PIN_S = 0.5, PIN_MOVE_FRAC = 0.05, PIN_SQUEEZE = 0.7, SQUEEZE_S = 1.5;
 const MAX_LEVELUPS_PER_CALL = 60;
 
 /** cumulative mass at the start of each rank: [0, 40, 340, 1640, 5840] */
@@ -267,6 +273,8 @@ export function stepTitan(w: World): void {
 
   // ── integrate with city collision (substepped so fast dashes never tunnel) ──
   const x0 = T.x, z0 = T.z;
+  const squeezing = num(K.sim_squeezeT, 0) > 0;
+  const colR = squeezing ? T.radius * PIN_SQUEEZE : T.radius;
   const dx = (vx + lpx) * dt, dz = (vz + lpz) * dt;
   const len = Math.hypot(dx, dz);
   const n = Math.max(1, Math.min(MAX_SUBSTEPS, Math.ceil(len / Math.max(0.05, T.radius * 0.5))));
@@ -274,7 +282,7 @@ export function stepTitan(w: World): void {
   for (let i = 0; i < n; i++) {
     T.x += dx / n; T.z += dz / n;
     pushOut.x = T.x; pushOut.z = T.z; pushOut.bumpTier = -1;
-    if (resolveCircleVsCity(w.city, T.x, T.z, T.radius, canFlatten, pushOut)) {
+    if (resolveCircleVsCity(w.city, T.x, T.z, colR, canFlatten, pushOut)) {
       if (Number.isFinite(pushOut.x) && Number.isFinite(pushOut.z)) {
         pushX += pushOut.x - T.x; pushZ += pushOut.z - T.z;
         T.x = pushOut.x; T.z = pushOut.z;
@@ -293,6 +301,15 @@ export function stepTitan(w: World): void {
     if (vn < 0 && !dashing) { vx -= nx * vn; vz -= nz * vn; }
   }
   K.sim_vx = vx; K.sim_vz = vz;
+  // wedge detector (see PIN_S)
+  if (squeezing) {
+    K.sim_squeezeT = num(K.sim_squeezeT, 0) - dt;
+    if (Math.hypot(T.x - num(K.sim_pinX, T.x), T.z - num(K.sim_pinZ, T.z)) >= T.radius) K.sim_squeezeT = 0;
+    K.sim_pinT = 0;
+  } else if (T.moving && !dashing && pl > 1e-6 && Math.hypot(T.x - x0, T.z - z0) < PIN_MOVE_FRAC * maxSp * dt) {
+    K.sim_pinT = num(K.sim_pinT, 0) + dt;
+    if (K.sim_pinT >= PIN_S) { K.sim_squeezeT = SQUEEZE_S; K.sim_pinX = T.x; K.sim_pinZ = T.z; K.sim_pinT = 0; }
+  } else K.sim_pinT = 0;
   T.vx = (T.x - x0) / dt; T.vz = (T.z - z0) / dt;
   T.speed = Math.hypot(T.vx, T.vz);
 
@@ -481,6 +498,16 @@ export function gainMass(w: World, mass: number): void {
   if (next < RANK_SCHEDULE_S.length && w.t > RANK_SCHEDULE_S[next]) {
     const behindMin = (w.t - RANK_SCHEDULE_S[next]) / 60;
     mul *= Math.min(CATCHUP_MAX, 1 + CATCHUP_PER_MIN * behindMin);
+  } else if (next >= AHEAD_FROM_RANK && next < RANK_SCHEDULE_S.length) {
+    // pace governor (config AHEAD_*): project the breach from this rank's average mass rate so far;
+    // only a titan on course to breach more than AHEAD_GRACE_S before schedule is slowed
+    const inRank = w.t - num(T.kit.sim_rankT0, 0);
+    const got = T.mass - RANK_START[T.rank], need = RANK_START[next] - T.mass;
+    if (inRank > 5 && got > 0 && need > 0) {
+      const eta = w.t + (need * inRank) / got;
+      const earlyMin = (RANK_SCHEDULE_S[next] - AHEAD_GRACE_S - eta) / 60;
+      if (earlyMin > 0) mul *= Math.max(AHEAD_MIN, 1 - AHEAD_PER_MIN * earlyMin);
+    }
   }
   T.mass += mass * mul;
   let guard = 0;
@@ -493,6 +520,7 @@ function rankUp(w: World): void {
   K.sim_growFrom = T.height;
   T.rank = (T.rank + 1) as TitanState['rank'];
   T.growT = GROW_TWEEN_S;
+  K.sim_rankT0 = w.t;
   recomputeStats(w);
   T.hp = Math.min(T.maxHp, ratio * T.maxHp + RANKUP_HEAL_FRAC * T.maxHp);
   w.events.push({ type: 'rankUp', rank: T.rank });

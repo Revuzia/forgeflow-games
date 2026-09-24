@@ -13,7 +13,7 @@
 // Every number the titan deals is a BASE number passed through titanDamage() by the caller.
 
 import type { DamageKind, DamageOpts, Enemy, Prop, Shape, SimEvent, World } from '../core/types.ts';
-import { OVERSIZE_DAMAGE_MUL, RANKS } from '../core/config.ts';
+import { KILL_MASS_RANK_MUL, OVERSIZE_DAMAGE_MUL, RANKS } from '../core/config.ts';
 import { circleInShape, clamp, rectInShape, shapeBounds } from '../core/math.ts';
 import { enemiesInShape, nearestEnemy } from './spatial.ts';
 import { spawnPickup } from './pickups.ts';
@@ -347,7 +347,7 @@ export function killEnemy(w: World, e: Enemy, crushed: boolean): void {
   e.kx = 0; e.kz = 0;
   const def = ENEMIES[e.kind];
   const xp = def ? def.xp : 1;
-  const mass = def ? def.mass : 1;
+  const mass = (def ? def.mass : 1) * (KILL_MASS_RANK_MUL[w.titan.rank] ?? 1);
   const n = mass >= 40 ? 4 : mass >= 8 ? 3 : mass >= 3 ? 2 : 1;
   for (let i = 0; i < n; i++) spawnPickup(w, 'scrap', e.x, e.z, xp / n, mass / n);
   const elite = e.elite || e.kind === 'elite';

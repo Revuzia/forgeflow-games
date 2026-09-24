@@ -283,10 +283,11 @@ console.log('\n[unit] growth / damage API');
   w.events.length = 0;
   const hpMax0 = T.maxHp;
   T.hp = hpMax0 * 0.5;
-  TM.gainMass(w, 40);
+  const m1 = CFG.RANKS[0].massToNext;              // the economy table in config.ts owns this number
+  TM.gainMass(w, m1);
   const ru = w.events.filter((e) => e.type === 'rankUp').length;
-  console.log(`  gainMass(40): rank ${T.rank}, growT ${T.growT.toFixed(2)}, maxHp ${hpMax0} → ${T.maxHp.toFixed(1)}, hp ${T.hp.toFixed(1)} (expect 65 % of max), rankUp events ${ru}`);
-  if (T.rank !== 1 || ru !== 1) fail('gainMass(40) should rank up exactly once');
+  console.log(`  gainMass(${m1}): rank ${T.rank}, growT ${T.growT.toFixed(2)}, maxHp ${hpMax0} → ${T.maxHp.toFixed(1)}, hp ${T.hp.toFixed(1)} (expect 65 % of max), rankUp events ${ru}`);
+  if (T.rank !== 1 || ru !== 1) fail(`gainMass(${m1}) should rank up exactly once`);
   if (Math.abs(T.hp / T.maxHp - 0.65) > 0.01) fail('rank-up hp should keep ratio then +15 %');
   let peak = 0;
   w.cheats.noSpawns = true;
@@ -374,7 +375,9 @@ for (const [rank, strength] of [[0, 3], [2, 12], [4, 12]] as const) {
   w.cheats.noSpawns = true;
   const T = w.titan;
   const idle: TitanInput = { mx: 0, mz: 0, ability: false, abilityHeld: false, dash: false };
-  if (rank > 0) { TM.gainMass(w, rank === 4 ? 1e6 : 400); for (let i = 0; i < 40; i++) WM.stepWorld(w, idle); }
+  // enough mass to reach `rank` from Size I (cumulative config massToNext, +5 %), at t = 0
+  const toRank = CFG.RANKS.slice(0, rank).reduce((a, r) => a + r.massToNext, 0) * 1.05;
+  if (rank > 0) { TM.gainMass(w, rank === 4 ? 1e6 : toRank); for (let i = 0; i < 40; i++) WM.stepWorld(w, idle); }
   const fx = Math.sin(T.heading), fz = Math.cos(T.heading);
   const ax = T.x + fx * 400, az = T.z + fz * 400;                 // anchor far ahead
   const dAnchor = () => Math.hypot(ax - T.x, az - T.z);

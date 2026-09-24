@@ -18,7 +18,7 @@
 //     a new tell that would land on the same spot within 0.45 s of a pending one.
 
 import type { BossId, BossPart, BossState, DamageOpts, Shape, Telegraph, Tier, World } from '../../core/types.ts';
-import { BOSS_HP_SCALE, RANKS, titanSpeed } from '../../core/config.ts';
+import { BOSS_DMG_MUL, BOSS_FATIGUE, BOSS_HP_SCALE, BOSS_KIND_MUL, BOSS_PHASE_DMG_MUL, RANKS, titanSpeed } from '../../core/config.ts';
 import { clamp, dist, shapeCenter, turnToward, wrapAngle } from '../../core/math.ts';
 import { BOSSES, bossSubtitle } from '../../data/bosses.ts';
 import { spawnTelegraph } from '../../combat/telegraphs.ts';
@@ -31,7 +31,7 @@ import * as irongully from './irongully.ts';
 export const INTRO_S = 4;
 export const STAGGER_S = 5;
 /** Meter gained = dealt × strainMul / (METER_HP_FRAC × maxHp). */
-const METER_HP_FRAC = 0.25;
+const METER_HP_FRAC = 0.45;
 /** Meter bleeds off after this long without gain, at METER_DECAY per second. */
 const METER_IDLE_S = 4, METER_DECAY = 0.03;
 /** Titan shove decay (1/s). */
@@ -40,6 +40,8 @@ const SHOVE_DECAY = 5;
 const CRUSH_EVERY = 0.3, CRUSH_FLOORS = 2.5;
 /** Pending boss tells closer than this × their radius and firing within STACK_DT s are "stacked". */
 const STACK_FRAC = 0.6, STACK_DT = 0.45;
+/** Past its range band the boss closes at up to this × the titan's walk speed (see keepRange). */
+const BOSS_CLOSE_FRAC = 0.6;
 /** Boss entry: preferred distance from the titan (m) and minimum room. */
 const ENTRY_D = 230, ENTRY_MIN = 160;
 
@@ -72,16 +74,14 @@ export function leadPoint(w: World, b: BossState, windup: number, out: { x: numb
 
 /** × every telegraph/lob windup by phase: the boss gets quicker as it breaks down (a P3 hook
  *  drop paints for 1.1 s instead of 1.5 s — still ≥ 2 × a player's reaction time). */
-const WINDUP_MUL: readonly number[] = [1, 1, 0.85, 0.72];
+const WINDUP_MUL: readonly number[] = [1, 1, 0.8, 0.68];
 export function bossWindupMul(b: BossState): number { return WINDUP_MUL[b.phase] ?? 1; }
 
 /** Hostile damage scaled by the titan's rank HP multiplier (§5.4). */
 export function bossHostile(w: World, base: number): number {
-  return base * BOSS_DMG_MUL * RANKS[w.titan.rank].hpMul;
+  const ph = w.boss ? w.boss.phase : 1;
+  return base * BOSS_DMG_MUL * (BOSS_PHASE_DMG_MUL[ph] ?? 1) * RANKS[w.titan.rank].hpMul;
 }
-/** × every boss attack's §10 damage (balance gate: at ×1 a Size V titan shrugged off the rare hit
- *  a competent player takes; at ×1.4 two clean hits take ~70–90 % of a glass cannon's HP). */
-const BOSS_DMG_MUL = 1.6;
 
 export function makePart(name: string, ox: number, oz: number, r: number, y0: number, y1: number, hpMul = 1, strainMul = 0.3): BossPart {
   return { name, ox, oz, r, y0, y1, hpMul, strainMul, x: 0, z: 0 };
@@ -272,7 +272,13 @@ export function keepRange(w: World, b: BossState, minD: number, maxD: number, sp
   const nx = dx / d, nz = dz / d;
   turnBoss(b, Math.atan2(dx, dz), turn, dt);
   let vx = 0, vz = 0;
-  if (d > maxD) { vx = nx * speed; vz = nz * speed; }
+  if (d > maxD) {
+    // a Size V titan runs 50+ m/s: past the band the rig strides to close (ramping with the gap)
+    // instead of ambling at its §10 walk speed while the fight drifts off-screen
+    const over = clamp((d - maxD) / maxD, 0, 1);
+    const sp = Math.max(speed, over * BOSS_CLOSE_FRAC * titanSpeed(T.height));
+    vx = nx * sp; vz = nz * sp;
+  }
   else if (d < minD) { vx = -nx * speed; vz = -nz * speed; }
   else {
     if (!(b.data.side === 1 || b.data.side === -1)) b.data.side = w.rng.boss() < 0.5 ? -1 : 1;
@@ -463,6 +469,17 @@ export function stepBoss(w: World): void {
   }
 
   applyShove(w, b);
+  // structural fatigue (config BOSS_FATIGUE): the long fight wears the rig down
+  if (T.alive && b.introT <= 0) {
+    b.data.fightT = (b.data.fightT ?? 0) + dt;
+    const over = b.data.fightT - BOSS_FATIGUE.startS;
+    const rate = over > 0 ? Math.min(BOSS_FATIGUE.maxPerS, BOSS_FATIGUE.rampPerS * over) : 0;
+    b.data.fatigue = rate;
+    if (rate > 0) {
+      b.hp -= rate * b.maxHp * dt;
+      if (b.hp <= 1e-6) { defeat(w, b); return; }
+    }
+  }
   checkPhase(w, b);
 
   // meter bleed when the player stops working the weak points
@@ -493,7 +510,7 @@ export function damageBoss(w: World, part: number, dmg: number, opts: DamageOpts
   const pi = part >= 0 && part < b.parts.length ? part : 0;
   const p = b.parts[pi];
   if (!p) return;
-  let d = dmg * p.hpMul * (b.staggerT > 0 ? 2 : 1);
+  let d = dmg * (BOSS_KIND_MUL[opts.kind] ?? 1) * p.hpMul * (b.staggerT > 0 ? 2 : 1);
   if (d > b.hp) d = b.hp;
   b.hp -= d;
   b.data.flash = 0.12;

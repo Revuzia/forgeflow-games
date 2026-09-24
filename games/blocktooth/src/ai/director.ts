@@ -18,7 +18,7 @@
 //     budget does not bank; timers keep running so switching it off resumes the schedule.
 
 import type { DirectorState, EnemyKind, World } from '../core/types.ts';
-import { BOSS_AT_S, CITY, ELITE_AT_S } from '../core/config.ts';
+import { BOSS_AT_S, CITY, DIRECTOR_BUDGET_RANK_MUL, ELITE_AT_S } from '../core/config.ts';
 import { TAU, clamp } from '../core/math.ts';
 import { BIOMES } from '../data/biomes.ts';
 import { ENEMIES } from '../data/enemies.ts';
@@ -30,7 +30,7 @@ const FIRST_WAVE_S = 2.5;
 const FIRST_BUDGET = 3;
 const WAVE_MIN_S = 6, WAVE_SPAN_S = 3;           // 6–9 s between waves (§9)
 const SQUAD_AFTER_S = 45;                         // PICKET SQUADs join from 45 s (§9 table)
-const BOSS_SPAWN_MUL = 0.3;                       // regular spawns during the boss (§9)
+const BOSS_SPAWN_MUL = 0.5;                       // regular spawns during the boss (§9 said 30 %; balance: the adds are what drain dash charges)
 const BANK_WAVES = 2.5;                           // unspent budget carries, capped at this × one wave
 const MAX_PER_WAVE = 48;                          // bodies per wave (keeps the ring from flooding)
 const ELITE_AFTER_RANK_IV_S = 30;
@@ -61,12 +61,19 @@ const CAP: Record<EnemyKind, readonly number[]> = {
   squad: [5, 15, 70, 70, 70],
   drone: [0, 12, 44, 44, 44],
   buggy: [0, 12, 16, 16, 16],
-  apc: [0, 0, 6, 6, 6],
-  tank: [0, 0, 10, 10, 10],
-  walker: [0, 0, 0, 5, 5],
+  apc: [0, 0, 6, 8, 8],
+  tank: [0, 0, 10, 12, 14],
+  walker: [0, 0, 0, 6, 8],
   elite: [0, 0, 2, 2, 2],
 };
 const capOf = (w: World, k: EnemyKind) => CAP[k][w.titan.rank];
+
+/** Pick weights while the boss is on the field: the adds are the artillery that paints the ground
+ *  around the fight (tank lanes, mortar barrages, dives) — not chaff that soaks the titan's
+ *  auto-attacks (which target enemies before boss parts) and stretches the fight. */
+const BOSS_MIX: Record<EnemyKind, number> = {
+  android: 0.2, squad: 0.4, drone: 1.6, buggy: 1.0, apc: 0.6, tank: 3.2, walker: 3.0, elite: 0,
+};
 
 /** Group size range per kind (bodies per pick). */
 const GROUP: Record<EnemyKind, readonly [number, number]> = {
@@ -122,12 +129,12 @@ function kindAllowed(w: World, k: EnemyKind): boolean {
 function weightOf(w: World, k: EnemyKind): number {
   const bias = BIOMES[w.biomeId].enemyBias[k];
   const b = bias !== undefined && Number.isFinite(bias) ? Math.max(0, bias) : 1;
-  return MIX[k][w.titan.rank] * b;
+  return (w.boss && w.boss.alive ? BOSS_MIX[k] : MIX[k][w.titan.rank]) * b;
 }
 
 /** Budget points per second at the current time/rank (§9). */
 export function budgetRate(w: World): number {
-  const r = 1.2 + (0.9 * Math.min(w.t, 600)) / 60 + 0.6 * w.titan.rank;
+  const r = (1.2 + (0.9 * Math.min(w.t, 600)) / 60 + 0.6 * w.titan.rank) * (DIRECTOR_BUDGET_RANK_MUL[w.titan.rank] ?? 1);
   return w.boss && w.boss.alive ? r * BOSS_SPAWN_MUL : r;
 }
 

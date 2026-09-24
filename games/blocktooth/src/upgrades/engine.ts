@@ -344,16 +344,21 @@ export function processTriggers(w: World): void {
   if (a < n0) runRange(w, ix, a, n0, null, 0);
 }
 
+/** citysim tags city events caused by hostiles with `noCredit` (see citysim push()). */
+const noCredit = (e: SimEvent): boolean => (e as SimEvent & { noCredit?: boolean }).noCredit === true;
+
 function runRange(w: World, ix: TrigIndex, a: number, b: number, exclude: string[] | null, depth: number): void {
   const ev = w.events;
   // smash de-dupe: a `smash` beat only counts when nothing in this batch was actually destroyed
   let destroyed = false;
   for (let i = a; i < b; i++) {
     const t = ev[i].type;
-    if (t === 'floorBreak' || t === 'propDestroyed') { destroyed = true; break; }
+    if ((t === 'floorBreak' || t === 'propDestroyed') && !noCredit(ev[i])) { destroyed = true; break; }
   }
   for (let i = a; i < b; i++) {
     const e = ev[i];
+    // city damage done by a hostile (boss legs, a RAMROD charge) never fires the titan's triggers
+    if (noCredit(e)) continue;
     switch (e.type) {
       case 'propDestroyed': EV_TIER = 0; fire(w, ix, 'smash', e.x, e.z, exclude, depth); onSmash(w, e.x, e.z, exclude, depth); break;
       case 'floorBreak':

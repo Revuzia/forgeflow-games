@@ -640,7 +640,8 @@ const NOOP = { stat: 'luck', mul: 0, dur: 0.05 };   // frenzy that changes nothi
   const g4 = gain({ type: 'buildingCollapse', id: 2, x: 0, z: 0, tier: 4, w: 8, d: 8, h: 8 });
   const gl = gain({ type: 'levelUp', level: 5 });
   console.log(`mass pricing @Size III: tier-1 collapse +${g1.toFixed(2)} · tier-4 collapse (capped) +${g4.toFixed(2)} · level-up +${gl.toFixed(2)} (massGain ${gm})`);
-  ok(near(g1, CFG.TIERS[1].floorMass * gm) && near(g4, CFG.TIERS[2].floorMass * gm) && near(gl, CFG.TIERS[2].floorMass * gm),
+  // priced like one floor of that tier at this rank (config lootMass: table value × the snack rule)
+  ok(near(g1, CFG.lootMass(1, 2) * gm) && near(g4, CFG.lootMass(2, 2) * gm) && near(gl, CFG.lootMass(2, 2) * gm),
     'mass proc priced by the event tier (capped at canFlatten), else canFlatten');
   delete w.upgrades.owned[id]; delete w.upgrades.owned[lv];
 }

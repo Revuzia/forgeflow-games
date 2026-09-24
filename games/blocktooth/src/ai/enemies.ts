@@ -18,8 +18,8 @@
 // Ground units never tunnel through buildings: they route along the street grid and are pushed
 // out of every standing building (resolveCircleVsCity with canFlatten −1).
 
-import type { CityLayout, Enemy, EnemyKind, Telegraph, Tier, World } from '../core/types.ts';
-import { CAMERA, CITY, ENEMY_HP_PER_MIN, RANKS, cameraDistance } from '../core/config.ts';
+import type { CityLayout, Enemy, EnemyDef, EnemyKind, Telegraph, Tier, World } from '../core/types.ts';
+import { CAMERA, CITY, ENEMY_AIM_LEAD, ENEMY_DMG_RANK_MUL, ENEMY_HP_PER_MIN, ENEMY_HP_RANK_MUL, ENEMY_REACH_H, RANKS, cameraDistance, titanSpeed } from '../core/config.ts';
 import { TAU, clamp, dist, easeInCubic, headingOf, lerp, turnToward, wrapAngle } from '../core/math.ts';
 import { newId } from '../core/world.ts';
 import { ENEMIES } from '../data/enemies.ts';
@@ -90,7 +90,24 @@ function mem(e: Enemy): AiMem {
 }
 
 const isVehicle = (k: EnemyKind) => k === 'buggy' || k === 'apc' || k === 'tank' || k === 'elite';
-const hostile = (w: World, base: number) => base * RANKS[w.titan.rank].hpMul;
+const hostile = (w: World, base: number) => base * RANKS[w.titan.rank].hpMul * (ENEMY_DMG_RANK_MUL[w.titan.rank] ?? 1);
+/** Engagement range from the titan's SURFACE (m): the §9 range + ENEMY_REACH_H × titan height. */
+const reach = (w: World, def: EnemyDef) => def.range + (ENEMY_REACH_H[def.kind] ?? 0) * w.titan.height;
+/** Ground tells grow with the titan so they stay readable at the Size V camera (§9 honesty). */
+const tellScale = (w: World, perH: number) => 1 + perH * w.titan.height;
+const LEADP = { x: 0, z: 0 };
+/** Where the titan will be after ENEMY_AIM_LEAD[rank] × `windup` seconds at its current velocity
+ *  (capped at its walk speed so a dash never throws the aim), clamped to the city. */
+function leadPt(w: World, windup: number): { x: number; z: number } {
+  const T = w.titan, B = w.city.bounds;
+  let vx = Number.isFinite(T.vx) ? T.vx : 0, vz = Number.isFinite(T.vz) ? T.vz : 0;
+  const sp = Math.hypot(vx, vz), cap = 1.1 * titanSpeed(T.height);
+  if (sp > cap) { vx *= cap / sp; vz *= cap / sp; }
+  const s = (ENEMY_AIM_LEAD[T.rank] ?? 0) * Math.max(0, windup);
+  LEADP.x = clamp(T.x + vx * s, B.minX, B.maxX);
+  LEADP.z = clamp(T.z + vz * s, B.minZ, B.maxZ);
+  return LEADP;
+}
 
 // ─────────────────────────────── spawn ring + street helpers ───────────────────────────────
 /** Spawn ring radius (m) = max(14, 0.55 × camera vertical extent at the current D) (§9). */
@@ -412,7 +429,7 @@ export function spawnEnemy(w: World, kind: EnemyKind, x: number, z: number, opts
   const def = ENEMIES[kind];
   const T = w.titan, B = w.city.bounds, r = w.rng.ai;
   const elite = kind === 'elite' || opts?.elite === true;
-  let hp = def.hp * (1 + ENEMY_HP_PER_MIN * Math.max(0, w.t) / 60);
+  let hp = def.hp * (1 + ENEMY_HP_PER_MIN * Math.max(0, w.t) / 60) * (ENEMY_HP_RANK_MUL[T.rank] ?? 1);
   if (elite && kind !== 'elite') hp *= VETERAN_HP_MUL;
   if (!Number.isFinite(x) || !Number.isFinite(z)) { x = T.x; z = T.z; }
   const P = { x, z };
@@ -477,12 +494,12 @@ function stepAndroid(w: World, e: AiEnemy, sp: number, dt: number): void {
     case 'advance':
       nav(w, e, T.x, T.z); walk(e, WP.x, WP.z, sp, dt);
       e.aimX = T.x; e.aimZ = T.z;
-      if (sd <= def.range * 0.9) setState(e, 'hold');
+      if (sd <= reach(w, def) * 0.9) setState(e, 'hold');
       break;
     case 'hold':
-      holdRing(w, e, sp, def.range, dt);
+      holdRing(w, e, sp, reach(w, def), dt);
       e.aimX = T.x; e.aimZ = T.z;
-      if (sd > def.range * 1.25) setState(e, 'advance');
+      if (sd > reach(w, def) * 1.25) setState(e, 'advance');
       else if (e.cd <= 0) { startReact(w, e); setState(e, 'aim'); }
       break;
     case 'aim':
@@ -526,12 +543,12 @@ function stepSquad(w: World, e: AiEnemy, sp: number, dt: number): void {
   }
   // movement: the leader advances/holds like a warden; followers keep their wedge slot
   if (leader) {
-    if (sd > def.range * 0.9) {
+    if (sd > reach(w, def) * 0.9) {
       if (e.state !== 'advance') setState(e, 'advance');
       nav(w, e, T.x, T.z); walk(e, WP.x, WP.z, sp * 0.85, dt);
     } else {
       if (e.state !== 'hold') setState(e, 'hold');
-      holdRing(w, e, sp * 0.8, def.range, dt);
+      holdRing(w, e, sp * 0.8, reach(w, def), dt);
     }
   } else if (L) {
     const lh = L.heading;
@@ -552,7 +569,7 @@ function stepSquad(w: World, e: AiEnemy, sp: number, dt: number): void {
     }
   }
   // every member fires its own 3-round volley, staggered by slot
-  if (sd <= def.range * 1.15 && e.cd <= 0) {
+  if (sd <= reach(w, def) * 1.15 && e.cd <= 0) {
     startReact(w, e);
     ai.react += (e.slot % SQUAD_SIZE) * 0.12;
     setState(e, 'aim');
@@ -583,7 +600,8 @@ function stepDrone(w: World, e: AiEnemy, sp: number, dt: number): void {
       orbit(sp * 0.5); e.y += clamp(alt - e.y, -climb, climb);
       face(e, T.x, T.z, 8, dt);
       if (e.t >= ai.react) {
-        ai.tx = T.x + ai.jx * 0.5; ai.tz = T.z + ai.jz * 0.5;
+        const L = leadPt(w, DRONE_TELL_S);
+        ai.tx = L.x + ai.jx * 0.5; ai.tz = L.z + ai.jz * 0.5;
         ai.sx = e.x; ai.sz = e.z; ai.sy = e.y;
         const r = 2 + 0.12 * T.height;
         const tg = spawnTelegraph(w, {
@@ -639,10 +657,10 @@ function stepBuggy(w: World, e: AiEnemy, sp: number, dt: number): void {
       return;
     case 'drive':
       nav(w, e, T.x, T.z); drive(e, WP.x, WP.z, sp, 3.2, dt);
-      if (sd <= def.range) { setState(e, 'strafe'); ai.side = w.rng.ai() < 0.5 ? -1 : 1; ai.sideT = 5 + 3 * w.rng.ai(); }
+      if (sd <= reach(w, def)) { setState(e, 'strafe'); ai.side = w.rng.ai() < 0.5 ? -1 : 1; ai.sideT = 5 + 3 * w.rng.ai(); }
       break;
     case 'strafe': {
-      const want = T.radius + def.range * 0.75;
+      const want = T.radius + reach(w, def) * 0.75;
       const ang = Math.atan2(e.x - T.x, e.z - T.z) + ai.side * 1.2;
       nav(w, e, T.x + Math.sin(ang) * want, T.z + Math.cos(ang) * want);
       drive(e, WP.x, WP.z, sp, 3.2, dt);
@@ -650,14 +668,15 @@ function stepBuggy(w: World, e: AiEnemy, sp: number, dt: number): void {
       if (m < minV) { e.vx = Math.sin(e.heading) * minV; e.vz = Math.cos(e.heading) * minV; }
       ai.sideT -= dt;
       if (ai.sideT <= 0) { ai.side = -ai.side; ai.sideT = 5 + 3 * w.rng.ai(); }
-      if (sd > def.range * 1.7) setState(e, 'drive');
+      if (sd > reach(w, def) * 1.7) setState(e, 'drive');
       break;
     }
     default: setState(e, 'drive');
   }
   e.aimX = T.x; e.aimZ = T.z;
-  if (armTick(w, e, sd <= def.range * 1.3, dt)) {
-    fireLob(w, e, 'rocket', def.dmg, T.x + ai.jx, T.z + ai.jz, ROCKET_R, ROCKET_TELL_S);
+  if (armTick(w, e, sd <= reach(w, def) * 1.3, dt)) {
+    const L = leadPt(w, ROCKET_TELL_S);
+    fireLob(w, e, 'rocket', def.dmg, L.x + ai.jx, L.z + ai.jz, ROCKET_R * tellScale(w, 0.04), ROCKET_TELL_S);
     e.cd = def.fireCd * (0.9 + 0.2 * w.rng.ai());
   }
 }
@@ -673,12 +692,12 @@ function stepApc(w: World, e: AiEnemy, sp: number, dt: number): void {
       return;
     case 'drive':
       nav(w, e, T.x, T.z); drive(e, WP.x, WP.z, sp, 1.8, dt);
-      if (sd <= def.range * 0.9) setState(e, 'hold');
+      if (sd <= reach(w, def) * 0.9) setState(e, 'hold');
       break;
     case 'hold': {
       halt(e);
-      if (sd > def.range * 1.35) { setState(e, 'drive'); break; }
-      if (sd < def.range * 0.35) {
+      if (sd > reach(w, def) * 1.35) { setState(e, 'drive'); break; }
+      if (sd < def.range * 0.35) {               // minimum standoff is the §9 range's, not the reach's
         const dx = e.x - T.x, dz = e.z - T.z, d = Math.hypot(dx, dz) || 1;
         ai.tx = e.x + (dx / d) * 45; ai.tz = e.z + (dz / d) * 45;
         setState(e, 'evade'); break;
@@ -708,7 +727,7 @@ function stepApc(w: World, e: AiEnemy, sp: number, dt: number): void {
       break;
     default: setState(e, 'drive');
   }
-  if (armTick(w, e, sd <= def.range * 1.2, dt)) {
+  if (armTick(w, e, sd <= reach(w, def) * 1.2, dt)) {
     firePellet(w, e, 'pellet', PELLET_SPEED.apc, def.dmg, T.x + ai.jx, T.z + ai.jz);
     e.cd = def.fireCd * (0.9 + 0.2 * w.rng.ai());
   }
@@ -743,22 +762,23 @@ function stepTank(w: World, e: AiEnemy, sp: number, dt: number): void {
       break;
     case 'crawl':
       nav(w, e, T.x, T.z); drive(e, WP.x, WP.z, sp, 1.1, dt); track();
-      if (sd <= def.range * 0.8) setState(e, 'hold');
+      if (sd <= reach(w, def) * 0.8) setState(e, 'hold');
       break;
     case 'hold':
       halt(e); track();
-      if (sd > def.range * 0.95) setState(e, 'crawl');
+      if (sd > reach(w, def) * 0.95) setState(e, 'crawl');
       else if (e.cd <= 0) { startReact(w, e); setState(e, 'aim'); }
       break;
     case 'aim':
       halt(e); track();
       if (e.t >= ai.react) {
-        const dir = headingOf(T.x + ai.jx - e.x, T.z + ai.jz - e.z);
+        const L = leadPt(w, TANK_TELL_S);
+        const dir = headingOf(L.x + ai.jx - e.x, L.z + ai.jz - e.z);
         const mx = e.x + Math.sin(dir) * e.radius, mz = e.z + Math.cos(dir) * e.radius;
         ai.dir = dir;
         const tank = e;
         const tg = spawnTelegraph(w, {
-          owner: 'enemy', style: 'lane', shape: { k: 'lane', x: mx, z: mz, dir, len: def.range, w: TANK_LANE_W },
+          owner: 'enemy', style: 'lane', shape: { k: 'lane', x: mx, z: mz, dir, len: reach(w, def) + 2 * T.radius, w: TANK_LANE_W * tellScale(w, 0.035) },
           windup: TANK_TELL_S, dmg: hostile(w, def.dmg), kind: 'shell', tag: 'tortoiseShell',
           onFire: (w2, t2) => {
             if (!tank.alive) return;
@@ -767,7 +787,7 @@ function stepTank(w: World, e: AiEnemy, sp: number, dt: number): void {
           },
         });
         holdTelegraph(w, e, tg);
-        e.aimX = mx + Math.sin(dir) * def.range; e.aimZ = mz + Math.cos(dir) * def.range;
+        e.aimX = mx + Math.sin(dir) * (reach(w, def) + 2 * T.radius); e.aimZ = mz + Math.cos(dir) * (reach(w, def) + 2 * T.radius);
         setState(e, 'tell');
       }
       break;
@@ -794,7 +814,7 @@ function stepWalker(w: World, e: AiEnemy, sp: number, dt: number): void {
       break;
     case 'walk':
       nav(w, e, T.x, T.z); walk(e, WP.x, WP.z, sp, dt, 2);
-      if (sd <= def.range * 0.85) setState(e, 'plant');
+      if (sd <= reach(w, def) * 0.85) setState(e, 'plant');
       break;
     case 'plant':
       halt(e); face(e, T.x, T.z, 1.5, dt);
@@ -802,8 +822,8 @@ function stepWalker(w: World, e: AiEnemy, sp: number, dt: number): void {
       break;
     case 'hold':
       halt(e); face(e, T.x, T.z, 1.5, dt);
-      if (sd > def.range * 1.1) { ai.sub = 0; setState(e, 'unplant'); }
-      else if (sd < def.range * 0.35) { ai.sub = 1; setState(e, 'unplant'); }
+      if (sd > reach(w, def) * 1.1) { ai.sub = 0; setState(e, 'unplant'); }
+      else if (sd < def.range * 0.35) { ai.sub = 1; setState(e, 'unplant'); }   // min range: the §9 range's
       else if (e.cd <= 0) { startReact(w, e); setState(e, 'aim'); }
       break;
     case 'aim':
@@ -812,6 +832,10 @@ function stepWalker(w: World, e: AiEnemy, sp: number, dt: number): void {
         ai.tx = T.x + ai.jx; ai.tz = T.z + ai.jz;
         ai.dir = w.rng.ai() * TAU;
         ai.shots = MORTAR_SHOTS; ai.shotT = 0;
+        // creeping barrage: a moving titan gets its shells walked along the predicted path
+        const L = leadPt(w, MORTAR_TELL_S);
+        ai.sx = L.x - T.x; ai.sz = L.z - T.z;
+        ai.sy = Math.hypot(ai.sx, ai.sz) > Math.max(4, 0.5 * T.radius) ? 1 : 0;
         setState(e, 'barrage');
       }
       break;
@@ -820,9 +844,15 @@ function stepWalker(w: World, e: AiEnemy, sp: number, dt: number): void {
       ai.shotT -= dt;
       if (ai.shotT <= 0 && ai.shots > 0) {
         const k = MORTAR_SHOTS - ai.shots;
-        const spread = Math.max(7, 0.5 * T.radius);
-        const a = ai.dir + (k * TAU) / MORTAR_SHOTS;
-        fireLob(w, e, 'mortar', def.dmg, ai.tx + Math.sin(a) * spread, ai.tz + Math.cos(a) * spread, MORTAR_R, MORTAR_TELL_S);
+        const mr = MORTAR_R * tellScale(w, 0.02);
+        if (ai.sy > 0) {
+          const f = 0.5 + 0.5 * k;                       // 0.5 · 1.0 · 1.5 of the lead vector
+          fireLob(w, e, 'mortar', def.dmg, ai.tx + ai.sx * f, ai.tz + ai.sz * f, mr, MORTAR_TELL_S);
+        } else {
+          const spread = Math.max(7, 0.5 * T.radius);
+          const a = ai.dir + (k * TAU) / MORTAR_SHOTS;
+          fireLob(w, e, 'mortar', def.dmg, ai.tx + Math.sin(a) * spread, ai.tz + Math.cos(a) * spread, mr, MORTAR_TELL_S);
+        }
         ai.shots--; ai.shotT = MORTAR_GAP_S;
       }
       if (ai.shots <= 0) { e.cd = def.fireCd * (0.9 + 0.2 * w.rng.ai()); setState(e, 'hold'); }
@@ -858,20 +888,22 @@ function stepElite(w: World, e: AiEnemy, sp: number, spMul: number, dt: number):
     case 'approach':
       nav(w, e, T.x, T.z); drive(e, WP.x, WP.z, sp, 1.5, dt);
       e.aimX = T.x; e.aimZ = T.z;
-      if (e.cd <= 0 && sd <= RAM_LEN * 0.75 && ai.navClear) { startReact(w, e); setState(e, 'aim'); }
+      if (e.cd <= 0 && sd <= reach(w, def) * 0.75 && ai.navClear) { startReact(w, e); setState(e, 'aim'); }
       break;
     case 'aim':
       halt(e); face(e, T.x, T.z, 3, dt);
       e.aimX = T.x; e.aimZ = T.z;
       if (e.t >= ai.react) {
-        const dir = headingOf(T.x + ai.jx * 0.3 - e.x, T.z + ai.jz * 0.3 - e.z);
+        const L = leadPt(w, RAM_TELL_S);
+        const dir = headingOf(L.x + ai.jx * 0.3 - e.x, L.z + ai.jz * 0.3 - e.z);
         ai.dir = dir; e.heading = dir;
+        ai.tx = RAM_LEN + (ENEMY_REACH_H.elite ?? 0) * T.height;   // latched charge length
         const tg = spawnTelegraph(w, {
-          owner: 'enemy', style: 'lane', shape: { k: 'lane', x: e.x, z: e.z, dir, len: RAM_LEN, w: RAM_W },
+          owner: 'enemy', style: 'lane', shape: { k: 'lane', x: e.x, z: e.z, dir, len: ai.tx, w: RAM_W * tellScale(w, 0.02) },
           windup: RAM_TELL_S, dmg: 0, kind: 'ram', tag: 'ramrodLane',
         });
         holdTelegraph(w, e, tg);
-        e.aimX = e.x + Math.sin(dir) * RAM_LEN; e.aimZ = e.z + Math.cos(dir) * RAM_LEN;
+        e.aimX = e.x + Math.sin(dir) * ai.tx; e.aimZ = e.z + Math.cos(dir) * ai.tx;
         e.cd = def.fireCd;
         setState(e, 'tell');
       }
@@ -902,7 +934,7 @@ function stepElite(w: World, e: AiEnemy, sp: number, spMul: number, dt: number):
         if (p && p.alive && dist(p.x, p.z, e.x, e.z) <= r) damageProp(w, p.id, 1e6, { src: 'enemy', kind: 'ram', noCrit: true });
       }
       propBuf.length = 0;
-      if (ai.hit || ai.travel >= RAM_LEN) { halt(e); setState(e, 'recover'); }
+      if (ai.hit || ai.travel >= (ai.tx > 0 ? ai.tx : RAM_LEN)) { halt(e); setState(e, 'recover'); }
       break;
     }
     case 'recover':
