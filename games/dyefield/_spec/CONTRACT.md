@@ -147,8 +147,13 @@ in the data and the fixup is gone. The rebuilt `map_pier18.glb` is byte-identica
     playback to speed.
 - Budget: ≤ 12k triangles, flat materials and vertex colors (no image textures needed).
 - Kit: `art/gltf/kit_mist_rasp.glb`, built facing Blender −Y (barrel along −Y) with the grip at
-  the origin. It has a node **`muzzle`** (empty) at the nozzle and is ~0.45 m long. Materials
-  use the same naming; team-tinted parts use `M_kit_dye`.
+  the origin. It has a node **`muzzle`** (empty) at the nozzle and is ~0.5–0.55 m long.
+  Materials use the same naming; team-tinted parts use `M_kit_dye`.
+  `CHANGED(orchestrator, fix round 1)`: the kit is 0.536 m and chunkier, with no `M_glass`, so it
+  reads in hand at gameplay distance. Its rear end, rear cap and canister dome are `M_kit_dye`,
+  because the follow camera sees the kit's rear in every pose. The crest tip sits at 1.271 m
+  (the "≈ 1.25 m" target above is approximate): the crest is now one big swept `M_crest` mass
+  (fringe → crown → nape ducktail), and `M_hair` is only the undercut.
 - QA outputs: `art/renders/hero_turntable.png` (front / ¾ / side / back on one sheet),
   `hero_clips.png` (a key pose from each clip) and `hero_with_kit.png`.
 
@@ -415,6 +420,25 @@ high-frequency procedural noise; there are no blocky texel edges at 2 m viewing 
 - `game.ts` owns the fixed-step loop and `window.__PAUSE__ = { pause, resume, toggle }` (ESC
   pauses; the pause gates the step function itself). `input.ts` holds an action map
   (`move*/jump/fire/slick/sub/special/pause/debug/map`) ready for remapping.
+
+### §5.2 Added in fix round 1 (APP lane; additive, no existing signature changed)
+```ts
+// view/renderer.ts — adaptive render resolution (ResolutionGovernor)
+export type RenderQuality = 'auto' | 'high' | 'low';
+export function createRenderer(canvas: HTMLCanvasElement, toneMap?: string /*'neutral'*/, quality?: RenderQuality /*'auto'*/): RendererRig;
+// RendererRig gains setQuality(q), frame-time stats, and stats().scale. The pixel ratio floats
+// between max(0.75, 0.6·DPR) and min(1.5, DPR). Decisions use the p90 frame time over 1 s
+// windows, with hysteresis and undo-on-cost probes; nothing scales in the first 2 s of play.
+// view/mapview.ts — loadMapView(loader, def, dye, onProgress?, options?: { mergeStatic?: boolean /*true*/ })
+// Static solid_/deco_ meshes that share a material and layout are merged (never paint_,
+// skinned, transparent or multi-material meshes). Small props outside the court don't cast shadows.
+// game.ts — Game.settings.quality + Game.setQuality(q); query ?quality=auto|high|low; ?merge=0 disables merging.
+```
+Look harnesses pin `&quality=high` so a review shot is never taken at a reduced scale.
+`_harness/perfcheck.py` (headless or headed) refuses to run while another automated Chrome is
+alive, and marks a run CONTAMINATED if one appears. In headed runs, `bootcheck.py` uses an OS
+foreground watch to tell focus theft by another window (NOTE + one real re-click) apart from a
+game-caused pointer-lock loss (FAIL).
 
 ## §6 Test surface — `window.__DF__` (lane RUNTIME)
 

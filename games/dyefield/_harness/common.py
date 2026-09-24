@@ -90,19 +90,65 @@ INIT_JS = r"""
   window.__H_FRAMES__ = 0;
   const tick = () => { window.__H_FRAMES__++; requestAnimationFrame(tick); };
   requestAnimationFrame(tick);
-  // pointer-lock observations (did a real click capture the mouse?)
-  window.__H_LOCK__ = { changes: 0, errors: 0, locked: false };
-  document.addEventListener('pointerlockchange', () => { window.__H_LOCK__.changes++; window.__H_LOCK__.locked = !!document.pointerLockElement; });
-  document.addEventListener('pointerlockerror', () => { window.__H_LOCK__.errors++; });
   // timeline: why did a lock drop? (another app's window taking OS activation is the usual cause)
   window.__H_EV__ = []; const t0 = performance.now();
-  const ev = (m) => window.__H_EV__.push(((performance.now() - t0) / 1000).toFixed(2) + 's ' + m);
-  document.addEventListener('pointerlockchange', () => ev('pointerlock ' + (document.pointerLockElement ? 'ON' : 'OFF')));
+  window.__H_T0_EPOCH__ = performance.timeOrigin + t0;   // page t=0 as epoch ms (maps page times to the OS log)
+  const now = () => (performance.now() - t0) / 1000;
+  const ev = (m) => window.__H_EV__.push(now().toFixed(2) + 's ' + m);
+  // pointer-lock observations (did a real click capture the mouse? why did a lock drop?)
+  // Every lock LOSS is recorded with the focus evidence at that moment: document.hasFocus(), the
+  // visibility, the last window blur / focus times, and (filled in later) a blur that arrives just
+  // after it — Chrome does not promise which of blur / pointerlockchange it dispatches first when
+  // another window takes OS activation.
+  const L = window.__H_LOCK__ = { changes: 0, errors: 0, locked: false, lastOn: null, lastBlur: null, lastFocus: null, losses: [] };
+  document.addEventListener('pointerlockchange', () => {
+    L.changes++; L.locked = !!document.pointerLockElement;
+    const t = now();
+    if (L.locked) { L.lastOn = t; return; }
+    L.losses.push({ t, hasFocus: document.hasFocus(), visibility: document.visibilityState,
+                    lastOn: L.lastOn, lastBlur: L.lastBlur, lastFocus: L.lastFocus, blurAfter: null });
+  });
+  document.addEventListener('pointerlockerror', () => { L.errors++; });
+  addEventListener('blur', () => {
+    const t = now(); L.lastBlur = t; ev('window blur');
+    const last = L.losses[L.losses.length - 1];
+    if (last && last.blurAfter === null && t - last.t <= 0.6) last.blurAfter = t;
+  });
+  addEventListener('focus', () => { L.lastFocus = now(); ev('window focus'); });
+  document.addEventListener('pointerlockchange', () => ev('pointerlock ' + (document.pointerLockElement ? 'ON' : 'OFF')
+    + (document.pointerLockElement ? '' : ' (hasFocus ' + document.hasFocus() + ')')));
   document.addEventListener('pointerlockerror', () => ev('pointerlockerror'));
-  addEventListener('blur', () => ev('window blur')); addEventListener('focus', () => ev('window focus'));
   document.addEventListener('visibilitychange', () => ev('visibility ' + document.visibilityState));
 })();
 """
+
+
+def lock_loss_cause(loss, os_foreign=None):
+    """Classify one recorded pointer-lock loss (see INIT_JS). Returns (kind, why):
+    kind 'focus' = environmental focus theft: the page had lost focus (document.hasFocus() false or the
+    page hidden at the loss, or a window blur between the lock and the loss, or a blur arriving within
+    0.6 s after it) OR the OS foreground switched to another window around the loss (`os_foreign`:
+    ForegroundWatch.foreign_switches over [loss − 1.0 s, loss + 0.8 s]; needed because Playwright
+    emulates page focus, so under automation the page itself never sees hasFocus() false or a blur);
+    kind 'game' = the lock dropped while the page and its window still had focus."""
+    if not isinstance(loss, dict):
+        return "game", "no loss record"
+    t = loss.get("t") or 0.0
+    if os_foreign:
+        e = os_foreign[0]
+        return "focus", "the OS foreground went to %s (pid %s%s)" % (
+            e.get("exe") or "another process", e.get("pid"), (", '%s'" % e["title"][:60]) if e.get("title") else "")
+    if loss.get("hasFocus") is False:
+        return "focus", "document.hasFocus() was false at the loss"
+    if loss.get("visibility") == "hidden":
+        return "focus", "the page was hidden at the loss"
+    lb, lf, lo = loss.get("lastBlur"), loss.get("lastFocus"), loss.get("lastOn")
+    if isinstance(lb, (int, float)) and lb <= t and (lo is None or lb >= lo) and not (isinstance(lf, (int, float)) and lb < lf <= t):
+        return "focus", "a window blur at t=%.2fs came before the loss" % lb
+    ba = loss.get("blurAfter")
+    if isinstance(ba, (int, float)):
+        return "focus", "a window blur followed %.2f s after the loss" % (ba - t)
+    return "game", "the page still had focus (hasFocus true, no blur around the loss)"
 
 
 class HarnessError(RuntimeError):
@@ -139,6 +185,179 @@ def url_reachable(url, timeout=2.0):
         return e.code < 500
     except Exception:
         return False
+
+
+# ─────────────────────────────── other automated Chromes ───────────────────────────────
+_PS_SCAN = (
+    "[Console]::OutputEncoding=[Text.Encoding]::UTF8; "
+    "@(Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | ForEach-Object { [pscustomobject]@{ "
+    "pid=$_.ProcessId; ppid=$_.ParentProcessId; "
+    "created=$(if ($_.CreationDate) { $_.CreationDate.ToString('yyyy-MM-dd HH:mm:ss') } else { '' }); "
+    "cmd=[string]$_.CommandLine } }) | ConvertTo-Json -Compress -Depth 2"
+)
+
+
+def _arg_value(cmd, name):
+    i = cmd.find(name + "=")
+    if i < 0:
+        return None
+    rest = cmd[i + len(name) + 1:]
+    if rest.startswith('"'):
+        j = rest.find('"', 1)
+        return rest[1:j] if j > 0 else rest[1:]
+    return rest.split(" ", 1)[0]
+
+
+def automated_chromes(exclude=()):
+    """Other automated Chrome BROWSER processes alive right now (the orchestrator's rule): chrome.exe
+    whose command line carries --remote-debugging-pipe or --enable-automation and no --type= (so
+    renderer / GPU / utility children are not counted twice). Returns (list, error_or_None); each item
+    is {pid, ppid, created, headless, profile}. A headed one of these steals OS focus when it opens a
+    window (pointer lock drops, the game pauses) and shares the GPU (perf numbers are contaminated)."""
+    if os.name != "nt":
+        try:
+            out = subprocess.run(["ps", "-eo", "pid=,ppid=,args="], capture_output=True, text=True,
+                                 encoding="utf-8", errors="replace", timeout=20).stdout
+        except Exception as e:
+            return [], "process scan failed: %s" % e
+        rows = []
+        for ln in out.splitlines():
+            parts = ln.strip().split(None, 2)
+            if len(parts) == 3 and "chrome" in parts[2].split(" ", 1)[0].lower():
+                rows.append({"pid": int(parts[0]), "ppid": int(parts[1]), "created": "", "cmd": parts[2]})
+    else:
+        try:
+            r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", _PS_SCAN],
+                               capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
+            txt = (r.stdout or "").strip()
+            rows = json.loads(txt) if txt else []
+            if isinstance(rows, dict):
+                rows = [rows]
+        except Exception as e:
+            return [], "process scan failed: %s" % str(e).splitlines()[0][:200]
+    found = []
+    for p in rows:
+        cmd = p.get("cmd") or ""
+        if "--type=" in cmd:
+            continue
+        if "--remote-debugging-pipe" not in cmd and "--enable-automation" not in cmd:
+            continue
+        if p.get("pid") in exclude:
+            continue
+        found.append({"pid": p.get("pid"), "ppid": p.get("ppid"), "created": p.get("created") or "",
+                      "headless": "--headless" in cmd, "profile": _arg_value(cmd, "--user-data-dir") or ""})
+    return found, None
+
+
+def own_browser_pids():
+    """PIDs of the Chrome browser process(es) THIS Python process launched through Playwright
+    (python → playwright driver node.exe → chrome.exe without --type=). Windows only."""
+    if os.name != "nt":
+        return set()
+    cmd = ("$me=%d; $d=@(Get-CimInstance Win32_Process -Filter \"ParentProcessId=$me\" | ForEach-Object { $_.ProcessId }); "
+           "@(Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | Where-Object { $d -contains $_.ParentProcessId "
+           "-and ([string]$_.CommandLine) -notmatch '--type=' } | ForEach-Object { $_.ProcessId }) -join ','") % os.getpid()
+    try:
+        r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", cmd], capture_output=True,
+                           text=True, encoding="utf-8", errors="replace", timeout=60)
+        return {int(x) for x in (r.stdout or "").strip().split(",") if x.strip().isdigit()}
+    except Exception:
+        return set()
+
+
+class ForegroundWatch:
+    """OS-level focus evidence (Windows): a thread polls GetForegroundWindow() every 25 ms and logs
+    every change as {ms (epoch), pid, exe, title}. Playwright emulates page focus, so under automation
+    a page never sees document.hasFocus() false or a blur when another window takes activation — the
+    OS foreground log is what tells focus theft apart from a game bug."""
+
+    def __init__(self, own_pids, period=0.025):
+        import threading
+        self.own = set(own_pids)
+        self.period = period
+        self.log = []
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, name="fgwatch", daemon=True)
+        self._exe_cache = {}
+
+    def start(self):
+        self._thread.start()
+        return self
+
+    def stop(self):
+        self._stop.set()
+        try:
+            self._thread.join(timeout=1.0)
+        except Exception:
+            pass
+
+    def _exe(self, pid):
+        if pid in self._exe_cache:
+            return self._exe_cache[pid]
+        name = None
+        try:
+            import ctypes
+            from ctypes import wintypes
+            k = ctypes.windll.kernel32
+            h = k.OpenProcess(0x1000, False, pid)            # PROCESS_QUERY_LIMITED_INFORMATION
+            if h:
+                buf = ctypes.create_unicode_buffer(1024)
+                n = wintypes.DWORD(1024)
+                if k.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(n)):
+                    name = os.path.basename(buf.value)
+                k.CloseHandle(h)
+        except Exception:
+            name = None
+        self._exe_cache[pid] = name
+        return name
+
+    def _run(self):
+        import ctypes
+        from ctypes import wintypes
+        u = ctypes.windll.user32
+        last = None
+        while not self._stop.is_set():
+            try:
+                hwnd = u.GetForegroundWindow()
+                pid = wintypes.DWORD(0)
+                u.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                key = (hwnd, pid.value)
+                if key != last:
+                    last = key
+                    title = ""
+                    if hwnd:
+                        buf = ctypes.create_unicode_buffer(256)
+                        u.GetWindowTextW(hwnd, buf, 256)
+                        title = buf.value
+                    self.log.append({"ms": time.time() * 1000.0, "pid": pid.value, "exe": self._exe(pid.value),
+                                     "title": title, "own": pid.value in self.own})
+            except Exception:
+                pass
+            self._stop.wait(self.period)
+
+    def foreign_switches(self, a_ms, b_ms):
+        """Foreground SWITCHES to a window that is not ours during (a_ms, b_ms]. A static foreign
+        foreground is not evidence: measured here, Chrome grants (and keeps) pointer lock to this
+        window while another app's window stays the OS foreground — what drops the lock is the
+        activation change itself."""
+        return [e for e in self.log if a_ms < e["ms"] <= b_ms and not e["own"]]
+
+
+def describe_chromes(found, err=None):
+    if err:
+        return "UNKNOWN (%s)" % err
+    if not found:
+        return "none"
+    return "; ".join("pid %s %s started %s profile %s" % (
+        c["pid"], "HEADLESS" if c["headless"] else "HEADED", c["created"] or "?",
+        os.path.basename(c["profile"]) if c["profile"] else "?") for c in found)
+
+
+def preflight_chromes(label="pre-flight"):
+    """Print one line listing the other automated Chromes (before this harness launches its own)."""
+    found, err = automated_chromes()
+    print("%-13s: other automated Chrome processes: %s" % (label, describe_chromes(found, err)))
+    return found, err
 
 
 # ─────────────────────────────── dev server ───────────────────────────────
@@ -251,6 +470,8 @@ def add_common_args(ap: argparse.ArgumentParser):
     ap.add_argument("--width", type=int, default=1280)
     ap.add_argument("--height", type=int, default=720)
     ap.add_argument("--no-serve", action="store_true", help="never auto-start the dev server")
+    ap.add_argument("--chrome-arg", action="append", default=[], metavar="SWITCH",
+                    help="extra Chrome switch for experiments (repeatable), e.g. --chrome-arg=--force_high_performance_gpu")
     return ap
 
 
@@ -285,7 +506,13 @@ class Session:
         from playwright.sync_api import sync_playwright
         self._pw = sync_playwright().start()
         headless = bool(getattr(self.args, "headless", False))
-        self.browser = self._pw.chromium.launch(channel="chrome", headless=headless, args=FLAGS)
+        extra = [a for a in (getattr(self.args, "chrome_arg", None) or []) if a]
+        self.browser = self._pw.chromium.launch(channel="chrome", headless=headless, args=FLAGS + extra)
+        self.fg = None
+        if not headless and os.name == "nt":
+            own = own_browser_pids()
+            if own:
+                self.fg = ForegroundWatch(own).start()
         self.context = self.browser.new_context(
             viewport={"width": self.args.width, "height": self.args.height}, device_scale_factor=1)
         self.page = self.context.new_page()
@@ -295,12 +522,18 @@ class Session:
         self.page.on("pageerror", lambda e: self.page_errors.append(str(e)))
         self.page.on("requestfailed", self._on_reqfail)
         self.page.on("response", self._on_response)
+        # NB Playwright emulates page focus: document.hasFocus() stays true and no blur fires when another
+        # window takes OS activation (measured: minimizing this window dropped the lock with hasFocus true
+        # and no blur, and Emulation.setFocusEmulationEnabled(false) from a second CDP session did not
+        # change that). The OS evidence comes from self.fg (ForegroundWatch, headed runs on Windows).
 
     def close(self):
         try:
             self.release_all()
         except Exception:
             pass
+        if getattr(self, "fg", None):
+            self.fg.stop()
         for obj, meth in ((self.browser, "close"), (self._pw, "stop")):
             try:
                 if obj:
@@ -424,6 +657,75 @@ class Session:
 
     def lock_info(self):
         return self.safe_js("() => window.__H_LOCK__ || null", default=None)
+
+    def lock_losses(self):
+        return (self.lock_info() or {}).get("losses") or []
+
+    def lock_guard(self, where, notes, problems):
+        """Strict about the game, tolerant of the environment. Looks at the pointer-lock losses recorded
+        since the last call (INIT_JS) and classifies each with lock_loss_cause():
+
+          * focus theft (the page had lost focus) → re-acquire the lock with ONE real click on RESUME
+            and print 'NOTE: focus stolen by another window at t=..s; re-locked with a real click';
+          * a loss while the page still had focus → a PROBLEM (a game bug); the one real click still
+            re-locks so the remaining checks can run, but the verdict is NOT CLEAN.
+
+        Returns 'ok' (no new loss) · 'relocked' (focus theft, recovered) · 'game' (a game-caused loss
+        was recorded) · 'failed' (the one click did not re-lock)."""
+        losses = self.lock_losses()
+        seen = getattr(self, "_losses_seen", 0)
+        new = losses[seen:]
+        self._losses_seen = len(losses)
+        ph = self.phase()
+        if not new:
+            if ph == "paused":
+                problems.append("%s: the game is paused but no pointer-lock loss was recorded" % where)
+                return "game"
+            return "ok"
+        # evidence that follows the loss (a blur ≤ 0.6 s after it, an OS foreground switch ≤ 0.8 s after
+        # it) needs time to land
+        time.sleep(0.9)
+        new = self.lock_losses()[seen:] or new
+        self._losses_seen = seen + len(new)
+        kinds = []
+        t0 = self.safe_js("() => window.__H_T0_EPOCH__", default=None)
+        for loss in new:
+            foreign = None
+            if getattr(self, "fg", None) and isinstance(t0, (int, float)):
+                at = t0 + (loss.get("t") or 0.0) * 1000.0
+                foreign = self.fg.foreign_switches(at - 1000.0, at + 800.0)
+            kind, why = lock_loss_cause(loss, foreign)
+            kinds.append((kind, loss, why))
+            if kind == "game":
+                problems.append("%s: pointer lock lost at t=%.2fs while the page still had focus (%s) — "
+                                "a game bug, not focus theft" % (where, loss.get("t") or 0.0, why))
+        if self.phase() != "play":
+            try:
+                self.page.bring_to_front()
+            except Exception:
+                pass
+            box = None
+            try:
+                box = self.page.locator(".df-pause .df-btn").first.bounding_box(timeout=2000)
+            except Exception:
+                box = None
+            x, y = ((box["x"] + box["width"] / 2, box["y"] + box["height"] / 2) if box
+                    else (self.args.width / 2, self.args.height / 2))
+            self.page.mouse.move(x, y)
+            self.page.mouse.click(x, y)
+            ok, ph2 = self.wait_phase("play", 4.0)
+            if not ok:
+                problems.append("%s: pointer lock lost at t=%s and ONE real click on RESUME did not re-lock (phase %r)" % (
+                    where, ", ".join("%.2fs" % (l.get("t") or 0.0) for _, l, _ in kinds), ph2))
+                return "failed"
+            self._losses_seen = len(self.lock_losses())
+            time.sleep(0.4)
+        for kind, loss, why in kinds:
+            if kind == "focus":
+                msg = "focus stolen by another window at t=%.2fs; re-locked with a real click" % (loss.get("t") or 0.0)
+                print("NOTE: " + msg)
+                notes.append("%s: %s (%s)" % (where, msg, why))
+        return "game" if any(k == "game" for k, _, _ in kinds) else "relocked"
 
     def timeline(self):
         return self.safe_js("() => window.__H_EV__ || []", default=[]) or []

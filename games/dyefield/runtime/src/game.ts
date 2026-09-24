@@ -8,6 +8,9 @@
 //     pauses; RESUME re-captures the mouse.
 //   * the view reads the sim, never writes gameplay: paint flows sim → Painter → (dirty rows) →
 //     PaintTexture.upload → GPU, and Painter.onFlip → MinimapRaster.apply → HUD canvas.
+//   * adaptive render resolution: every frame interval is fed to the renderer rig's governor while
+//     in play (view/renderer.ts); entering play (re)starts its 2 s no-scaling grace. Settings hook:
+//     settings.quality 'auto' | 'high' | 'low' → setQuality() (no UI this phase; ?quality= sets it).
 
 import * as THREE from 'three';
 import { TICK, MAX_STEPS_PER_FRAME, MOVE } from './core/config.ts';
@@ -19,7 +22,7 @@ import type { Painter } from './core/paint/painter.ts';
 import type { MinimapRaster } from './core/paint/minimap.ts';
 import type { PhysicsWorld } from './core/physics.ts';
 import { angleDelta, type Player } from './core/player.ts';
-import type { RendererRig } from './view/renderer.ts';
+import type { RendererRig, RenderQuality } from './view/renderer.ts';
 import type { FollowCamera } from './view/camera.ts';
 import type { SkyRig } from './view/sky.ts';
 import type { WaterRig } from './view/water.ts';
@@ -71,8 +74,14 @@ export interface GameParts {
   input: Input;
 }
 
+/** player-facing settings (hooks only this phase — no settings UI yet) */
+export interface GameSettings {
+  quality: RenderQuality;
+}
+
 export class Game {
   readonly p: GameParts;
+  readonly settings: GameSettings;
   tick = 0;
   fps = 0;
   frames = 0;
@@ -93,8 +102,9 @@ export class Game {
   private lockReq = 0;
   private lockSeq = 0;
 
-  constructor(parts: GameParts) {
+  constructor(parts: GameParts, settings: Partial<GameSettings> = {}) {
     this.p = parts;
+    this.settings = { quality: settings.quality ?? parts.rig.adaptive().quality };
     const { input, hud, canvas } = parts;
     input.onUi((a) => {
       if (a === 'debug') hud.toggleDebug();
@@ -186,6 +196,13 @@ export class Game {
     }
   }
 
+  /** Settings hook: render quality 'auto' (adaptive resolution) · 'high' (DPR cap) · 'low' (floor). */
+  setQuality(q: RenderQuality): void {
+    this.settings.quality = q;
+    this.p.rig.setQuality(q);
+    if (this.phase === 'play') this.p.rig.graceFor(2);
+  }
+
   /** dev-only (__DF__.start): enter play without pointer lock */
   devStart(): void {
     if (this.phase === 'ready' || this.phase === 'paused') this.enterPlay('dev-start');
@@ -198,6 +215,7 @@ export class Game {
     this.p.input.releaseAll();
     this.p.input.live = true;
     this.phase = 'play';
+    this.p.rig.graceFor(2);                       // never rescale in the first 2 s of play
     this.p.boot.hide();
     this.p.hud.setPaused(false);
     this.p.hud.show(true);
@@ -238,8 +256,10 @@ export class Game {
 
   frame(now: number): void {
     const p = this.p;
-    let dt = this.last < 0 ? 1 / 60 : (now - this.last) / 1000;
+    const rawMs = this.last < 0 ? 0 : now - this.last;
+    let dt = this.last < 0 ? 1 / 60 : rawMs / 1000;
     this.last = now;
+    p.rig.frameTime(rawMs, this.phase === 'play');
     if (!(dt >= 0)) dt = 0;
     dt = Math.min(dt, 0.25);
     this.frames++;
@@ -323,6 +343,7 @@ export class Game {
     const p = this.p;
     const pl = p.player;
     const st = p.rig.stats();
+    const ad = p.rig.adaptive();
     return {
       coverage: p.painter.coverage(), tank: pl.tank, mapId: p.def.id, fps: this.fps, state: pl.state, grounded: pl.grounded,
       atlasSize: p.atlas.size, atlasCount: p.atlas.count, overlaps: p.atlas.overlaps,
@@ -330,6 +351,8 @@ export class Game {
       x: pl.x, y: pl.y, z: pl.z, flips: p.painter.flips, speed: pl.speed,
       anim: `${p.hero.baseRole}${p.hero.brushWeight > 0.05 ? ` + brush ${(p.hero.brushWeight * 100).toFixed(0)}%` : ''}`,
       pointerLock: document.pointerLockElement === p.canvas,
+      scale: ad.scale, scaleMin: ad.min, scaleMax: ad.max, quality: ad.quality,
+      buffer: [p.canvas.width, p.canvas.height], p90: ad.p90, targetMs: ad.targetMs,
     };
   }
 }

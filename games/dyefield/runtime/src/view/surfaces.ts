@@ -19,7 +19,9 @@
 //                                                              base (last): bump from dfH
 //   emissive    after  #include <emissivemap_fragment>         base: += dfEmit
 //   lightsPars  after  #include <lights_physical_pars_fragment> base: RE_Direct wrapper (coat lobe)
-//   postLights  after  #include <lights_fragment_end>          base: analytic sky reflection, sparkle
+//   postLights  after  #include <lights_fragment_end>          base (only when asked): analytic sky
+//                                                              reflection, sparkle, dye wet streaks +
+//                                                              rim, dye saturation protection
 //
 // The surface patch always runs before the dye patch, whatever order materialFor()/applyDye()
 // were called in, so the dye reads the finished surface and overrides it where painted.
@@ -133,6 +135,20 @@ float dfNoise3( vec3 p ) {
 float dfFbm3( vec3 p ) {
 	return dfNoise3( p ) * 0.55 + dfNoise3( p * 2.03 + vec3( 17.1, 3.3, 9.2 ) ) * 0.3 + dfNoise3( p * 4.11 + vec3( 3.7, 11.9, 1.3 ) ) * 0.15;
 }
+// value noise that repeats every 'per' (a whole number) cells in x: seamless around a circle when
+// x = turns * per (the dye's reflection streaks are keyed on the reflected ray's azimuth)
+float dfNoise2Px( vec2 p, float per ) {
+	vec2 i = floor( p );
+	vec2 f = p - i;
+	vec2 u = f * f * ( 3.0 - 2.0 * f );
+	float x0 = mod( i.x, per );
+	float x1 = mod( i.x + 1.0, per );
+	float a = dfHash12( vec2( x0, i.y ) );
+	float b = dfHash12( vec2( x1, i.y ) );
+	float c = dfHash12( vec2( x0, i.y + 1.0 ) );
+	float d = dfHash12( vec2( x1, i.y + 1.0 ) );
+	return mix( mix( a, b, u.x ), mix( c, d, u.x ), u.y );
+}
 `;
 
 /** Sky uniforms (SURFACE_ENV) + the analytic sky. Requires <common> (saturate) and NOISE_GLSL. */
@@ -245,14 +261,17 @@ float dfEnvW;      // weight of the analytic sky reflection
 float dfEnvF0;     // its fresnel floor
 float dfEnvMax;    // its fresnel ceiling (dye keeps its crew colour at grazing angles)
 vec3 dfEnvCol;     // its tint (white; the dye tints it toward its gloss colour so a wet sheen keeps the crew hue)
+float dfEnvLum;    // 0..1: reflect the sky's LUMINANCE only (then dfEnvCol tints it) — dye never reflects a blue/white film
 float dfCoat;      // extra clear-coat lobe weight (friendly dye)
 float dfCoatRough; // its roughness
 vec3 dfCoatTint;   // its tint
 float dfH;         // bump height in metres (surface detail, then dye), applied once
 vec3 dfEmit;       // extra emissive radiance (linear)
 float dfSpark;     // sparkle-fleck strength (dye)
-float dfSheen;     // stylized wet-sheen strength (friendly dye): view-relative toon highlight
-vec3 dfSheenCol;   // its tint
+float dfSheen;     // wet-streak strength (friendly dye): reflected sky/sun streaks stretched along the view
+vec3 dfSheenCol;   // streak + rim tint (the crew's gloss colour)
+float dfRim;       // raised-rim highlight weight (friendly dye; a resolution-independent bead just inside the edge)
+float dfSatLock;   // 0..1: saturation protection — where coloured light drained the albedo's chroma, restore its hue
 // planar coordinates in metres: floors → world XZ, walls → (horizontal tangent, world Y)
 vec2 dfPlanar( vec3 w, vec3 n ) {
 	if ( abs( n.y ) > 0.6 ) return w.xz;
@@ -290,8 +309,8 @@ vec3 dfPerturb( vec3 pos, vec3 n, float h, float fd ) {
 `;
 
 const BASE_FRAG_INIT = /* glsl */ `
-	dfEnvW = 0.0; dfEnvF0 = 0.04; dfEnvMax = 0.7; dfEnvCol = vec3( 1.0 ); dfCoat = 0.0; dfCoatRough = 0.1; dfCoatTint = vec3( 1.0 );
-	dfH = 0.0; dfEmit = vec3( 0.0 ); dfSpark = 0.0; dfSheen = 0.0; dfSheenCol = vec3( 1.0 );
+	dfEnvW = 0.0; dfEnvF0 = 0.04; dfEnvMax = 0.7; dfEnvCol = vec3( 1.0 ); dfEnvLum = 0.0; dfCoat = 0.0; dfCoatRough = 0.1; dfCoatTint = vec3( 1.0 );
+	dfH = 0.0; dfEmit = vec3( 0.0 ); dfSpark = 0.0; dfSheen = 0.0; dfSheenCol = vec3( 1.0 ); dfRim = 0.0; dfSatLock = 0.0;
 `;
 
 const BASE_FRAG_ALBEDO_PRE = /* glsl */ `
@@ -332,34 +351,91 @@ void RE_Direct_DF( const in IncidentLight directLight, const in vec3 geometryPos
 #undef RE_Direct
 #define RE_Direct RE_Direct_DF
 `;
+// Everything here is skipped unless a block asked for it (no derivatives inside: the branch is
+// safe): plain surfaces (tile, wood, concrete…) and UNPAINTED dyed fragments pay nothing.
 const BASE_FRAG_POST_LIGHTS = /* glsl */ `
-{
+if ( dfEnvW > 0.0 || dfSpark > 0.0 || dfSheen > 0.0 || dfRim > 0.0 || dfSatLock > 0.0 ) {
+	const vec3 dfLuma = vec3( 0.2126, 0.7152, 0.0722 );
 	vec3 dfNw = transformNormalByInverseViewMatrix( normal, viewMatrix );
 	vec3 dfVw = normalize( cameraPosition - vDfWorld );
 	float dfNdV = saturate( dot( dfNw, dfVw ) );
 	vec3 dfRw = reflect( - dfVw, dfNw );
-	float dfFr = dfEnvF0 + ( 1.0 - dfEnvF0 ) * pow( 1.0 - dfNdV, 4.0 );
+	float dfG = 1.0 - dfNdV;
+	float dfG2 = dfG * dfG;
+	float dfFr = dfEnvF0 + ( 1.0 - dfEnvF0 ) * dfG2 * dfG2;
+	vec3 dfSky = dfSkyRadiance( dfRw );
+	float dfSkyL = dot( dfSky, dfLuma );
 	vec3 dfEnvTint = mix( vec3( 1.0 ), diffuseColor.rgb, metalnessFactor );
-	reflectedLight.indirectSpecular += dfSkyRadiance( dfRw ) * dfEnvTint * dfEnvCol * ( min( dfFr, dfEnvMax ) * dfEnvW );
+	vec3 dfRefl = mix( dfSky, vec3( dfSkyL ), dfEnvLum );
+	reflectedLight.indirectSpecular += dfRefl * dfEnvTint * dfEnvCol * ( min( dfFr, dfEnvMax ) * dfEnvW );
 	#if NUM_DIR_LIGHTS > 0
 		vec3 dfSunL = directLight.color;      // last directional light = the sun, shadow applied
 	#else
 		vec3 dfSunL = uDfSunColor;
 	#endif
-	float dfAl = pow( saturate( dot( dfRw, uDfSunDir ) ), 10.0 );
-	reflectedLight.directSpecular += dfSunL * ( dfSpark * ( 0.035 + 1.1 * dfAl ) );
-	// wet sheen (stylized, sun-independent): a crisp lobe around a virtual light a few degrees
-	// above the flat surface's mirror direction. A flat patch sits just outside the lobe; the
-	// dye's undulation tilts some lobes toward the viewer into it -> blobby wet highlights from
-	// any camera, any preset (the noon sun sits behind the default follow camera).
-	vec3 dfNg = normalize( vDfWorldN ) * faceDirection;
-	vec3 dfLs = normalize( reflect( - dfVw, dfNg ) + dfNg * 0.3 );
-	float dfNh = dot( dfNw, normalize( dfLs + dfVw ) );
-	float dfShW = fwidth( dfNh ) + 2e-4;
-	float dfSh = smoothstep( 0.9962 - dfShW, 0.9992 + dfShW, dfNh );
-	// it stands for reflected sky: lit by the preset's horizon colour, so a dim / interior sky
-	// dims it instead of the sheen glowing on its own
-	reflectedLight.indirectSpecular += dfSheenCol * mix( uDfSkyHorizon, vec3( 1.0 ), 0.4 ) * ( dfSh * dfSheen );
+	if ( dfSpark > 0.0 ) {
+		float dfAl = pow( saturate( dot( dfRw, uDfSunDir ) ), 10.0 );
+		reflectedLight.directSpecular += dfSunL * ( dfSpark * ( 0.035 + 1.1 * dfAl ) );
+	}
+	if ( dfSheen > 0.0 || dfRim > 0.0 ) {
+		// Wet streaks. On a glossy film, bright sky features smear ALONG the view: the reflected
+		// ray's elevation changes slowly across the floor at grazing angles, its azimuth fast. So the
+		// streak field is keyed on the reflected direction, fine in azimuth (periodic, seamless) and
+		// coarse in elevation: vertical, soft-edged smears of many widths that slide like real
+		// reflections, bend with the film's ripples, and cannot alias with distance (their angular
+		// size is fixed). Brightness = the sky's luminance there (sun glow included, capped), so a
+		// dim sky dims them; the tint is the crew gloss, so they read as lighter DYE, never as tile.
+		float dfAz = atan( dfRw.z, dfRw.x + 1e-6 ) * 0.15915494;
+		float dfS1 = dfNoise2Px( vec2( dfAz * 80.0, dfRw.y * 4.5 ), 80.0 );
+		float dfS2 = dfNoise2Px( vec2( dfAz * 208.0 + 0.5, dfRw.y * 12.0 + 7.3 ), 208.0 );
+		float dfStreak = smoothstep( 0.5, 0.95, dfS1 )
+			+ smoothstep( 0.56, 0.96, dfS2 ) * ( 0.2 + 0.8 * smoothstep( 0.3, 0.7, dfS1 ) ) * 0.6;
+		float dfGraze = saturate( 0.1 + 1.6 * dfG2 * dfG );
+		// what the film reflects: the sky there, but never darker than the preset's bright horizon
+		// band (clouds / haze are what a wet floor mirrors at these angles), sun glow capped
+		float dfLit = min( max( dfSkyL, 0.85 * dot( uDfSkyHorizon, dfLuma ) ), 1.3 );
+		reflectedLight.indirectSpecular += dfSheenCol * ( dfLit * (
+			dfSheen * dfGraze * ( 0.12 + 3.0 * dfStreak )         // fresnel sheen + streaks
+			+ dfRim * ( 0.35 + 0.6 * dfG ) ) );                     // raised rim catching the sky
+		// fresnel energy split: what the film reflects at grazing no longer enters it, so the
+		// friendly body deepens there — the dark between the streaks that makes a film read WET
+		float dfSplit = 1.0 - 0.35 * saturate( dfSheen ) * min( dfFr, dfEnvMax );
+		reflectedLight.directDiffuse *= dfSplit;
+		reflectedLight.indirectDiffuse *= dfSplit;
+		// the sun's glint on friendly dye is crew-gold, not a white disc (dielectric F0 is white)
+		float dfW = saturate( dfSheen + dfRim );
+		vec3 dfGlintT = dfSheenCol / max( max( dfSheenCol.r, dfSheenCol.g ), max( dfSheenCol.b, 1e-3 ) );
+		reflectedLight.directSpecular *= mix( vec3( 1.0 ), dfGlintT, dfW );
+		// soft ceiling on the dye's total specular (knee at half the cap, asymptote = 1.3 tints):
+		// SUNCREW orange has no red headroom, so a hotter core could only drift to peach / white
+		// after tone mapping — highlights top out at a light crew colour instead
+		vec3 dfSpec = reflectedLight.directSpecular + reflectedLight.indirectSpecular;
+		float dfSL = dot( dfSpec, dfLuma );
+		float dfCapM = 1.3 * dot( dfSheenCol, dfLuma );
+		float dfKnee = 0.5 * dfCapM;
+		float dfSLc = dfSL <= dfKnee ? dfSL : dfKnee + ( dfSL - dfKnee ) / ( 1.0 + ( dfSL - dfKnee ) / ( dfCapM - dfKnee ) );
+		float dfK = mix( 1.0, dfSLc / max( dfSL, 1e-5 ), dfW );
+		reflectedLight.directSpecular *= dfK;
+		reflectedLight.indirectSpecular *= dfK;
+	}
+	if ( dfSatLock > 0.0 ) {
+		// saturation protection: where a coloured light has DRAINED the dye's chroma (GULF violet
+		// under an orange sunset turns to mud), restore the albedo's hue at the same luminance. Where
+		// the light ADDS chroma (orange sun on SUNCREW orange) it stays off: measured in golden, a
+		// forced lock pulled the dye onto the orange-lit tile's hue (dye-vs-tile ΔE76 42.9 → 35.2).
+		vec3 dfAlb = diffuseColor.rgb;
+		vec3 dfDd = reflectedLight.directDiffuse;
+		vec3 dfId = reflectedLight.indirectDiffuse;
+		vec3 dfDs = dfDd + dfId;
+		float dfMxA = max( max( dfAlb.r, dfAlb.g ), dfAlb.b );
+		float dfMxL = max( max( dfDs.r, dfDs.g ), dfDs.b );
+		float dfSatA = ( dfMxA - min( min( dfAlb.r, dfAlb.g ), dfAlb.b ) ) / max( dfMxA, 1e-4 );
+		float dfSatL = ( dfMxL - min( min( dfDs.r, dfDs.g ), dfDs.b ) ) / max( dfMxL, 1e-4 );
+		float dfLk = dfSatLock * smoothstep( 0.0, 0.08, dfSatA - dfSatL );
+		float dfAL = max( dot( dfAlb, dfLuma ), 1e-3 );
+		reflectedLight.directDiffuse = mix( dfDd, dfAlb * ( dot( dfDd, dfLuma ) / dfAL ), dfLk );
+		reflectedLight.indirectDiffuse = mix( dfId, dfAlb * ( dot( dfId, dfLuma ) / dfAL ), dfLk );
+	}
 }
 `;
 
@@ -546,7 +622,9 @@ const TILE_GLSL = /* glsl */ `
 	float h1 = dfHash12( cell );
 	float h2 = dfHash12( cell + vec2( 37.0, 11.0 ) );
 	vec3 c = mix( uTileA, uTileB, h1 ) * ( 0.95 + 0.08 * h2 );
-	float sp = dfNoise2( p * 23.0 );
+	// the 23/m speckle is faded out by 'detail' on far tiles: skip its noise there
+	float sp = 0.5;
+	if ( detail > 0.0 ) sp = dfNoise2( p * 23.0 );
 	float wash = dfNoise2( p * 0.21 + vec2( 5.3, 1.7 ) );
 	c *= 0.96 + 0.07 * ( sp - 0.5 ) * detail + 0.08 * ( wash - 0.5 );
 	float bevel = smoothstep( gw, gw + 0.05, e );
@@ -578,9 +656,15 @@ const CONCRETE_GLSL = /* glsl */ `
 	float detail = 1.0 - smoothstep( 0.015, 0.07, fw );
 	float big = dfNoise2( p * 0.33 + vec2( 11.0, 3.0 ) );
 	float mid = dfNoise2( p * 2.1 + vec2( 3.0, 8.0 ) );
-	float fine = dfNoise2( p * 29.0 );
-	float spD = smoothstep( 0.8, 0.86, dfNoise2( p * 53.0 + vec2( 9.0, 2.0 ) ) ) * detail;
-	float spL = smoothstep( 0.84, 0.9, dfNoise2( p * 41.0 + vec2( 21.0, 5.0 ) ) ) * detail;
+	// fine grain + specks only exist where 'detail' > 0: far concrete skips those 3 noises
+	float fine = 0.5;
+	float spD = 0.0;
+	float spL = 0.0;
+	if ( detail > 0.0 ) {
+		fine = dfNoise2( p * 29.0 );
+		spD = smoothstep( 0.8, 0.86, dfNoise2( p * 53.0 + vec2( 9.0, 2.0 ) ) ) * detail;
+		spL = smoothstep( 0.84, 0.9, dfNoise2( p * 41.0 + vec2( 21.0, 5.0 ) ) ) * detail;
+	}
 	vec3 c = uConcBase * ( 0.93 + 0.1 * big + 0.05 * ( mid - 0.5 ) + 0.05 * ( fine - 0.5 ) * detail );
 	c = mix( c, c * 0.7, spD * 0.55 );
 	c = mix( c, min( c * 1.2, vec3( 1.0 ) ), spL * 0.45 );
@@ -623,8 +707,13 @@ const BOARDWALK_GLSL = /* glsl */ `
 	float butt = 1.0 - smoothstep( 0.004 - aa, 0.004 + aa, dL );
 	float g = max( gap, butt ) * mix( 0.5, 1.0, detail );
 	float grain = dfNoise2( vec2( p.x * 55.0 + id * 13.0, p.y * 2.6 ) );
-	float grain2 = dfNoise2( vec2( p.x * 160.0 + id * 3.0, p.y * 8.0 ) );
-	float figure = sin( p.x * 80.0 + dfNoise2( vec2( p.x * 6.0, p.y * 0.9 ) + id * 5.0 ) * 7.0 ) * 0.5 + 0.5;
+	// fine grain + figure are faded by 'detail': far planks skip those 2 noises
+	float grain2 = 0.5;
+	float figure = 0.5;
+	if ( detail > 0.0 ) {
+		grain2 = dfNoise2( vec2( p.x * 160.0 + id * 3.0, p.y * 8.0 ) );
+		figure = sin( p.x * 80.0 + dfNoise2( vec2( p.x * 6.0, p.y * 0.9 ) + id * 5.0 ) * 7.0 ) * 0.5 + 0.5;
+	}
 	vec3 wood = mix( uWoodA, uWoodB, id );
 	wood *= 0.9 + 0.14 * grain + ( 0.07 * ( grain2 - 0.5 ) + 0.05 * ( figure - 0.5 ) ) * detail;
 	float edge = 1.0 - smoothstep( 0.0, 0.025, min( dA, dL ) );
@@ -979,7 +1068,10 @@ function glossOf(c: THREE.Color): THREE.Color { return c.clone().lerp(new THREE.
  * One shared uniform set per map. Team colours come from data/teams.json. APP sets
  * `uViewerTeam.value` (1 | 2; 0 = spectator, both crews look friendly), `uColorblind.value`
  * (0 | 1) and `uTime.value` (seconds; it is the same object as SURFACE_ENV.uDfTime, which
- * water.update(t) also writes). Extra tunables: uDyeBump, uDyeEnv, uDyeSparkle (default 1).
+ * water.update(t) also writes). Extra tunables: uDyeBump, uDyeEnv, uDyeSparkle, uDyeGlow (default 1:
+ * scales the dye's self-illumination floor) and uDyeHueLock (default 0.8: saturation-protection
+ * strength — where a coloured preset light drained the dye's chroma, its diffuse light gets the
+ * albedo's hue back at the same luminance; it never engages where the light adds chroma).
  */
 export function createDyeUniforms(paint: PaintTexture): DyeUniforms {
   const sun = teamById(1);
@@ -1000,6 +1092,8 @@ export function createDyeUniforms(paint: PaintTexture): DyeUniforms {
     uDyeBump: U(1),
     uDyeEnv: U(1),
     uDyeSparkle: U(1),
+    uDyeHueLock: U(0.8),
+    uDyeGlow: U(1),
   };
 }
 
@@ -1035,6 +1129,8 @@ uniform vec3 uDyeGulfCBGloss;
 uniform float uDyeBump;
 uniform float uDyeEnv;
 uniform float uDyeSparkle;
+uniform float uDyeHueLock;
+uniform float uDyeGlow;
 varying vec2 vDfUv1;
 // cubic B-spline reconstruction of the atlas from 4 bilinear taps: smooth, round iso-contours
 // (bilinear alone leaves rounded-rectangle texel steps). Reach is ±2 texels: the atlas gutter.
@@ -1060,89 +1156,135 @@ vec4 dfDyeTexel( vec2 uv ) {
 }
 `;
 
-// normal slot: runs after the surface block, before the base bump. Every derivative is taken in
-// uniform control flow (no branches in this block).
+// normal slot: runs after the surface block, before the base bump.
+// Every derivative is taken in UNIFORM control flow at the top of the block; the branches below
+// only skip noise (a fragment whose 4x4-texel footprint holds no paint does no noise at all).
+//
+// Cost per dyed fragment (hash evals: dfNoise2 = 4, dfNoise3 = 8; see the LOOK-FIX report):
+//   before: 4 taps + 6 dfNoise3 + 2 dfNoise2 + 1 dfHash13 (+ 1 dfNoise2 in the base sky, every
+//           fragment) = 9 noise calls / 61 hash evals on EVERY dyed fragment, painted or not
+//   now:    4 taps; unpainted 0 noise calls; painted friendly ≤ 5 dfNoise2 + 2 dfNoise2Px
+//           + 1 dfHash12 (≤ 29 hash evals, fewer with distance); painted enemy ≤ 5 dfNoise2
 const DYE_FRAG_NORMAL = /* glsl */ `
 {
+	// ── the paint field, B-spline filtered BEFORE any threshold (4 bilinear taps) ──
 	vec4 dyeT = dfDyeTexel( vDfUv1 );
 	vec3 dyeW = vDfWorld;
-	// atlas texels per pixel: fade sub-texel noise when the atlas is minified (no mipmaps)
-	float dyeTpp = max( length( fwidth( vDfUv1 * uDyeSize.x ) ), 1e-5 );
-	float dyeHfA = 1.0 - smoothstep( 0.35, 1.25, dyeTpp );
-	float dyeHf = dfNoise3( dyeW * 9.0 + vec3( 2.0, 5.0, 11.0 ) ) * 0.45 + dfNoise3( dyeW * 23.0 ) * 0.35
-		+ dfNoise3( dyeW * 61.0 + vec3( 7.0, 3.0, 1.0 ) ) * 0.2;
+	vec2 dyeP = dfPlanar( dyeW, dfN );                    // surface metres (floors: xz, walls: tangent, y)
+	vec2 dyeDp = fwidth( dyeP );
+	float dyeMpp = max( max( dyeDp.x, dyeDp.y ), 1e-5 ); // metres per pixel (the long footprint axis)
 	float dyeValid = smoothstep( 0.3, 0.7, dyeT.a );
-	// organic edge: B-spline amount + B-channel texel noise + texel-scale / high-frequency world noise
 	float dyeAmt = ( dyeT.r + dyeT.g ) * dyeValid;
-	float dyeEdgeZone = 1.0 - smoothstep( 0.82, 1.0, dyeAmt );
-	float dyeJ = ( ( dyeT.b - 0.5 ) * 0.34 + ( dyeHf - 0.5 ) * 0.44 * dyeHfA ) * dyeEdgeZone;
-	float dyeV = dyeAmt + dyeJ;
-	float dyeAA = clamp( fwidth( dyeV ) * 0.85, 0.015, 0.5 );
+	// edge noise: each octave fades out before its period drops to ~3 px, so a far edge never
+	// aliases into texel-like stair steps (the old 61/m and 23/m octaves stayed on at 6-8 m, where
+	// a pixel is ~9 x 27 mm of floor)
+	float dyeF1 = 1.0 - smoothstep( 0.022, 0.045, dyeMpp );   // 9/m octave (11 cm)
+	float dyeF2 = 1.0 - smoothstep( 0.007, 0.014, dyeMpp );   // 27/m octave (3.7 cm)
+	float dyeN1 = 0.5;
+	float dyeN2 = 0.5;
+	if ( dyeAmt > 0.003 ) {
+		if ( dyeF1 > 0.0 ) dyeN1 = dfNoise2( dyeP * 9.0 + vec2( 2.0, 5.0 ) );
+		if ( dyeF2 > 0.0 ) dyeN2 = dfNoise2( dyeP * 27.0 + vec2( 7.0, 3.0 ) );
+	}
+	float dyeHf = ( dyeN1 - 0.5 ) * dyeF1 * 0.62 + ( dyeN2 - 0.5 ) * dyeF2 * 0.38;
+	// organic edge: amount + B-channel texel noise + the faded world octaves, thresholded with a
+	// width from the field's own screen-space derivative (≈ 1 px at any distance / resolution)
+	float dyeEdgeZone = 1.0 - smoothstep( 0.8, 1.0, dyeAmt );
+	float dyeV = dyeAmt + ( ( dyeT.b - 0.5 ) * 0.32 + dyeHf * 0.5 ) * dyeEdgeZone;
+	float dyeFw = fwidth( dyeV );
+	float dyeAA = clamp( dyeFw * 0.75, 0.01, 0.5 );
 	float dyeCover = smoothstep( 0.5 - dyeAA, 0.5 + dyeAA, dyeV ) * dyeValid;
+	// raised rim: a bead just inside the edge, never thinner than ~2 px (no quad-sized steps)
+	float dyeRimW = max( 0.16, dyeFw * 2.5 );
+	float dyeRimB = dyeCover * ( 1.0 - smoothstep( 0.5 + dyeRimW * 0.35, 0.5 + dyeRimW, dyeV ) );
 	// which crew: GULF share of the paint present, with its own wiggle (no seam where crews meet)
 	float dyeGf = dyeT.g / max( dyeT.r + dyeT.g, 1e-3 );
-	float dyeGv = dyeGf + ( dyeHf - 0.5 ) * 0.44 * dyeHfA + ( dyeT.b - 0.5 ) * 0.16;
-	float dyeAA2 = clamp( fwidth( dyeGv ) * 0.85, 0.015, 0.5 );
+	float dyeGv = dyeGf + dyeHf * 0.5 + ( dyeT.b - 0.5 ) * 0.16;
+	float dyeAA2 = clamp( fwidth( dyeGv ) * 0.75, 0.01, 0.5 );
 	float dyeGulf = smoothstep( 0.5 - dyeAA2, 0.5 + dyeAA2, dyeGv );
 	float dyeViewGulf = step( 1.5, uViewerTeam );
 	float dyeSpect = 1.0 - step( 0.5, uViewerTeam );
 	float dyeFriendT = max( mix( 1.0 - dyeGulf, dyeGulf, dyeViewGulf ), dyeSpect );
 	float dyeFriend = dyeCover * dyeFriendT;
+	float dyeEnemy = dyeCover * ( 1.0 - dyeFriendT );
 	// palette (colour-blind mode swaps to the max-separation pair)
 	float dyeCb = step( 0.5, uColorblind );
 	vec3 dyeCol = mix( mix( uDyeSun, uDyeSunCB, dyeCb ), mix( uDyeGulf, uDyeGulfCB, dyeCb ), dyeGulf );
 	vec3 dyeDeep = mix( mix( uDyeSunDeep, uDyeSunCBDeep, dyeCb ), mix( uDyeGulfDeep, uDyeGulfCBDeep, dyeCb ), dyeGulf );
 	vec3 dyeGloss = mix( mix( uDyeSunGloss, uDyeSunCBGloss, dyeCb ), mix( uDyeGulfGloss, uDyeGulfCBGloss, dyeCb ), dyeGulf );
-	// friendly: saturated, a little deeper where thick, mottled so big pools are not flat
-	float dyeMott = dfNoise3( dyeW * 1.6 + vec3( 3.0, 1.0, 9.0 ) );
-	float dyeThick = smoothstep( 0.55, 1.0, dyeV );
-	vec3 dyeFriendCol = mix( dyeCol, dyeDeep, 0.1 + 0.22 * dyeThick * dyeMott );
-	dyeFriendCol = mix( dyeFriendCol, dyeGloss, 0.12 * ( 1.0 - dyeThick ) );
-	// enemy: deeper and darker, matte, with stringy / tacky streaks
-	vec2 dyeP = dfPlanar( dyeW, dfN );
-	float dyeStr = dfNoise2( vec2( dyeP.x * 1.4 + dyeP.y * 0.5, dyeP.y * 12.0 - dyeP.x * 3.0 ) );
-	float dyeStr2 = dfNoise2( vec2( dyeP.x * 8.0 - dyeP.y * 2.5, dyeP.y * 1.3 + dyeP.x * 0.6 ) * 2.2 );
-	float dyeTack = dyeStr * 0.6 + dyeStr2 * 0.4;
-	vec3 dyeEnemyCol = mix( dyeDeep, dyeCol, 0.3 ) * ( 0.6 + 0.26 * dyeTack );
-	vec3 dyeAlb = mix( dyeEnemyCol, dyeFriendCol, dyeFriendT );
-	// colour-blind hatch on GULF CREW dye (diagonal, ~7 stripes per metre)
+	// colour-blind hatch on GULF CREW dye (diagonal, ~7 stripes per metre); its AA width comes from
+	// dyeDp (fwidth of a sum ≤ sum of fwidths), so no extra derivative
 	float dyeHs = ( dyeP.x + dyeP.y ) * 7.0;
-	float dyeHaa = fwidth( dyeHs ) * 0.75 + 1e-4;
+	float dyeHaa = ( dyeDp.x + dyeDp.y ) * 5.25 + 1e-4;
 	float dyeHatch = ( 1.0 - smoothstep( 0.17 - dyeHaa, 0.17 + dyeHaa, abs( fract( dyeHs ) - 0.5 ) ) ) * dyeCb * dyeGulf;
+	// ── body: only where paint shows (no derivatives below this line) ──
+	float dyeRise = smoothstep( 0.5, 0.9, dyeV );            // 0 at the edge → 1 a few cm inside
+	float dyeBody = smoothstep( 0.55, 1.0, dyeAmt );         // the unjittered B-spline: ~15 cm ramp
+	vec3 dyeAlb = dyeCol;
+	float dyeHeight = 0.0;
+	float dyeTack = 0.5;
+	if ( dyeCover > 0.0 ) {
+		vec3 dyeFriendCol = dyeCol;
+		float dyeFriendH = 0.0;
+		if ( dyeFriend > 0.0 ) {
+			// friendly: saturated crew colour; the thick interior sits a touch deeper ("depth"),
+			// broad slow lobes keep big pools from reading flat, the rim bead is lighter
+			float dyeMott = dfNoise2( dyeP * 1.35 + vec2( 3.0, 9.0 ) );
+			dyeFriendCol = mix( dyeCol, dyeDeep, dyeBody * ( 0.12 + 0.2 * dyeMott ) );
+			dyeFriendCol = mix( dyeFriendCol, dyeGloss, 0.3 * dyeRimB );
+			// height: a 2.5 mm raised film with a soft rim, a gentle undulation (≤ ~2° of tilt)
+			// that bends the reflected streaks, and a faint ripple that fades with distance
+			dyeFriendH = 0.0025 * dyeRise + dyeBody * 0.012 * ( dyeMott - 0.5 ) + 0.0004 * dyeHf;
+		}
+		vec3 dyeEnemyCol = dyeFriendCol;
+		float dyeEnemyH = dyeFriendH;
+		if ( dyeEnemy > 0.0 ) {
+			// enemy: deeper and darker, matte, with stringy / tacky streaks
+			float dyeStr = dfNoise2( vec2( dyeP.x * 1.4 + dyeP.y * 0.5, dyeP.y * 12.0 - dyeP.x * 3.0 ) );
+			dyeTack = dyeStr * 0.65 + dyeN1 * 0.35;
+			dyeEnemyCol = mix( dyeDeep, dyeCol, 0.3 ) * ( 0.6 + 0.26 * dyeTack );
+			dyeEnemyH = dyeRise * ( 2.0 - dyeRise ) * 0.0035 + 0.0012 * dyeTack;
+		}
+		dyeAlb = mix( dyeEnemyCol, dyeFriendCol, dyeFriendT );
+		dyeHeight = mix( dyeEnemyH, dyeFriendH, dyeFriendT );
+	}
 	dyeAlb = mix( dyeAlb, dyeAlb * 0.5, dyeHatch );
 	diffuseColor.rgb = mix( diffuseColor.rgb, dyeAlb, dyeCover );
-	roughnessFactor = mix( roughnessFactor, mix( 0.72 + 0.1 * dyeTack, 0.15, dyeFriendT ), dyeCover );
+	// friendly base lobe stays broad and dim (0.35): the sharp, crew-tinted clear coat carries the
+	// sun glint, so a sun in view never paints a big pale blob on the dye
+	roughnessFactor = mix( roughnessFactor, mix( 0.72 + 0.1 * dyeTack, 0.35, dyeFriendT ), dyeCover );
 	metalnessFactor = mix( metalnessFactor, 0.0, dyeCover );
-	// soft height: raised puddle with an ease-out rim (friendly), low and tacky (enemy)
-	float dyeRise = smoothstep( 0.5, 0.95, dyeV );
-	float dyeProfile = dyeRise * ( 2.0 - dyeRise );
-	// friendly pools undulate in broad, slowly drifting lobes (a "virtual" 2.2 cm, i.e. a few
-	// degrees of normal tilt): at the follow camera's grazing angle the fresnel reflection then
-	// breaks into wet highlights instead of one flat film. Ramped by the rim profile, so the
-	// undulation never adds a height step at the paint edge.
-	float dyeUnd = dfNoise3( dyeW * 1.9 + vec3( 0.0, uTime * 0.07, 0.0 ) ) * 0.42
-		+ dfNoise3( dyeW * 4.6 + vec3( 5.0, 1.0 - uTime * 0.05, 3.0 ) ) * 0.58;
-	float dyeHeight = dyeProfile * mix( 0.0035, 0.009 + 0.03 * dyeUnd, dyeFriendT )
-		+ dyeCover * 0.0012 * dyeTack * ( 1.0 - dyeFriendT );
 	dfH = mix( dfH, dyeHeight * uDyeBump, dyeCover );
-	// clear-coat lobe + sky reflection + sparkle flecks (applied by the base lighting hooks).
-	// The sky reflection is tinted toward the crew's gloss colour: an untinted near-white sky
-	// sheen at grazing angles washed SUNCREW orange out to salmon (integrator measurement).
-	dfCoat = dyeFriend;
-	dfCoatRough = 0.09;
-	dfCoatTint = mix( vec3( 1.0 ), dyeGloss, 0.35 );
-	dfEnvW = mix( dfEnvW, mix( 0.25, 0.75, dyeFriendT ) * uDyeEnv, dyeCover );
-	dfEnvF0 = mix( dfEnvF0, mix( 0.03, 0.06, dyeFriendT ), dyeCover );
-	dfEnvMax = mix( dfEnvMax, 0.5, dyeCover );
-	dfEnvCol = mix( dfEnvCol, mix( vec3( 1.0 ), dyeGloss, 0.7 ), dyeCover );
-	float dyeSh = dfHash13( floor( dyeW * 64.0 ) );
-	float dyeFleck = step( 0.992, dyeSh ) * ( 0.45 + 0.55 * sin( uTime * 2.7 + dyeSh * 60.0 ) );
-	float dyeNear = 1.0 - smoothstep( 3.5, 12.0, length( cameraPosition - dyeW ) );
-	dfSpark = max( dyeFleck, 0.0 ) * dyeNear * dyeFriend * dyeRise * uDyeSparkle;
-	// wet sheen on friendly pools; fades out by ~30 m where the lobes would shrink below a pixel
-	float dyeFar = 1.0 - smoothstep( 14.0, 30.0, length( cameraPosition - dyeW ) );
-	dfSheen = dyeFriend * dyeRise * dyeFar * 0.8 * uDyeEnv;
-	dfSheenCol = mix( vec3( 1.0 ), dyeGloss, 0.2 );
+	// readable in every preset: a small constant self-illumination floor of the dye colour, and
+	// saturation protection (base post-lights) wherever a coloured light drains the dye's chroma
+	dfEmit = mix( dfEmit, dyeAlb * ( mix( 0.06, 0.1, dyeFriendT ) * uDyeGlow ), dyeCover );
+	dfSatLock = uDyeHueLock * dyeCover;
+	// clear-coat lobe (sun glint) + sky reflection. The reflection is the sky's LUMINANCE tinted to
+	// the crew sheen colour: fresnel-strong at grazing angles yet never a pale blue/white film
+	// (an untinted sky sheen washed SUNCREW orange out to salmon — integrator measurement).
+	vec3 dyeSheenC = mix( dyeCol, dyeGloss, 0.45 );
+	dfCoat = dyeFriend * 0.7;
+	dfCoatRough = 0.1;
+	dfCoatTint = mix( vec3( 1.0 ), dyeGloss, 0.8 );
+	dfEnvW = mix( dfEnvW, mix( 0.25, 1.0, dyeFriendT ) * uDyeEnv, dyeCover );
+	dfEnvF0 = mix( dfEnvF0, mix( 0.03, 0.045, dyeFriendT ), dyeCover );
+	dfEnvMax = mix( dfEnvMax, mix( 0.35, 0.45, dyeFriendT ), dyeCover );
+	dfEnvLum = mix( dfEnvLum, 1.0, dyeCover );
+	dfEnvCol = mix( dfEnvCol, mix( dyeDeep, dyeSheenC, dyeFriendT ), dyeCover );
+	// wet streaks + raised-rim highlight (friendly only; the enemy stays matte)
+	dfSheen = dyeFriend * uDyeEnv;
+	dfSheenCol = dyeSheenC;
+	dfRim = dyeRimB * dyeFriendT * uDyeEnv;
+	// droplet glints: round, sparse, near the camera only, twinkling toward the sun
+	float dyeFleckA = dyeFriend * dyeRise * ( 1.0 - smoothstep( 0.004, 0.008, dyeMpp ) ) * uDyeSparkle;
+	if ( dyeFleckA > 0.0 ) {
+		vec2 dyeFc = dyeP * 42.0;
+		vec2 dyeFi = floor( dyeFc );
+		float dyeFh = dfHash12( dyeFi + vec2( 13.0, 71.0 ) );
+		float dyeFd = length( dyeFc - dyeFi - 0.5 );
+		dfSpark = step( 0.986, dyeFh ) * ( 1.0 - smoothstep( 0.12, 0.3, dyeFd ) )
+			* ( 0.55 + 0.45 * sin( uTime * 2.7 + dyeFh * 60.0 ) ) * dyeFleckA;
+	}
 }
 `;
 

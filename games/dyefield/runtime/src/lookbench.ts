@@ -9,10 +9,10 @@
 // updateRanges path is exercised every frame.
 //
 // Query:  ?preset=noon|golden   ?tm= (or ?tonemap=) split|agx|neutral|aces (default split: AgX left, Neutral right)
-//         ?cam=player|close|wide|wall|low|top   ?viewer=1|2|0   ?cb=0|1   ?live=1|0
+//         ?cam=player|close|wide|wall|low|top|dye   ?viewer=1|2|0   ?cb=0|1   ?live=1|0
 //         ?freeze=1 (fixed clock, no live brush: deterministic shots)   ?ui=0   ?hero=1
-// Keys:   1-6 camera · T viewer crew · C colour-blind · P preset · M tone mapping · L live brush · H hud
-// Test:   window.__LOOK__ = { ready, frames, errors, info(), set(opts), shot(name) }
+// Keys:   1-7 camera · T viewer crew · C colour-blind · P preset · M tone mapping · L live brush · H hud
+// Test:   window.__LOOK__ = { ready, frames, errors, info(), set(opts), shot(name) }   (set({ dye: { uDyeHueLock: 0 } }) A/Bs dye tunables)
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -28,7 +28,7 @@ import { createWater, type WaterRig } from './view/water.ts';
 type V3 = THREE.Vector3;
 type Team = 0 | 1 | 2;
 type ToneMode = 'split' | 'agx' | 'neutral' | 'aces';
-type CamName = 'player' | 'close' | 'wide' | 'wall' | 'low' | 'top';
+type CamName = 'player' | 'close' | 'wide' | 'wall' | 'low' | 'top' | 'dye';
 
 const Q = new URLSearchParams(typeof location !== 'undefined' ? location.search : '');
 const qs = (k: string, d: string): string => Q.get(k) ?? d;
@@ -385,6 +385,12 @@ function camPose(name: CamName): { pos: V3; target: V3 } {
     case 'wall': return { pos: vec(7.4, 1.5, -0.4), target: vec(8.0, 0.7, 3.7) };
     case 'low': return { pos: vec(-3.0, 0.9, 1.6), target: vec(1.0, 0, -3.4) };
     case 'top': return { pos: vec(0, 34, -0.01), target: vec(0, 0, 0) };
+    case 'dye': {
+      // dye close-up: 2 m from a point in the SUNCREW puddle, looking down 35° (LOOK-FIX review framing)
+      const pitch = THREE.MathUtils.degToRad(35);
+      const target = vec(0.6, 0, -4.6);
+      return { pos: target.clone().add(vec(0, Math.sin(pitch) * 2, -Math.cos(pitch) * 2)), target };
+    }
     case 'player':
     default: {
       // DESIGN §2 follow cam: pivot 1.35 m, distance 4.3 m, shoulder 0.42 m right, rest pitch −14°;
@@ -449,7 +455,7 @@ function main(): void {
   const state = {
     preset: qs('preset', 'noon'),
     tone: (['split', 'agx', 'neutral', 'aces'].includes(qs('tm', qs('tonemap', 'split'))) ? qs('tm', qs('tonemap', 'split')) : 'split') as ToneMode,
-    cam: (['player', 'close', 'wide', 'wall', 'low', 'top'].includes(qs('cam', 'player')) ? qs('cam', 'player') : 'player') as CamName,
+    cam: (['player', 'close', 'wide', 'wall', 'low', 'top', 'dye'].includes(qs('cam', 'player')) ? qs('cam', 'player') : 'player') as CamName,
     viewer: ([0, 1, 2].includes(Number(qs('viewer', '1'))) ? Number(qs('viewer', '1')) : 1) as Team,
     cb: qs('cb', '0') === '1',
     live: qs('live', '1') !== '0' && qs('freeze', '0') !== '1',
@@ -590,10 +596,10 @@ function main(): void {
   resize();
 
   // ── keys ──
-  const CAMS: CamName[] = ['player', 'close', 'wide', 'wall', 'low', 'top'];
+  const CAMS: CamName[] = ['player', 'close', 'wide', 'wall', 'low', 'top', 'dye'];
   window.addEventListener('keydown', (e) => {
     const k = e.key.toLowerCase();
-    const ci = '123456'.indexOf(k);
+    const ci = '1234567'.indexOf(k);
     if (ci >= 0) setCam(CAMS[ci]);
     else if (k === 't') state.viewer = (state.viewer === 1 ? 2 : state.viewer === 2 ? 0 : 1) as Team;
     else if (k === 'c') state.cb = !state.cb;
@@ -604,7 +610,7 @@ function main(): void {
   });
 
   // ── loop ──
-  const clock = new THREE.Clock();
+  const timer = new THREE.Timer();   // THREE.Clock is deprecated in r186
   let time = state.freeze ? 12 : 0;
   let frames = 0;
   let lastRows = 0;
@@ -631,7 +637,8 @@ function main(): void {
   }
 
   function frame(): void {
-    const dt = Math.min(0.1, clock.getDelta());
+    timer.update();
+    const dt = Math.min(0.1, timer.getDelta());
     if (!state.freeze) time += dt;
     controls.update();
 
@@ -666,7 +673,7 @@ function main(): void {
         + `viewer crew <b>${state.viewer === 1 ? 'SUNCREW' : state.viewer === 2 ? 'GULF CREW' : 'spectator'}</b> · colour-blind <b>${state.cb ? 'on' : 'off'}</b> · live brush <b>${state.live ? 'on' : 'off'}</b>\n`
         + `atlas ${S}² · ${atlas.count.toLocaleString()} surface texels · rows uploaded this frame ${lastRows} · flips ${painter.flips}\n`
         + `programs ${renderer.info.programs?.length ?? 0} · calls ${renderer.info.render.calls} · tris ${renderer.info.render.triangles.toLocaleString()}\n`
-        + `keys: 1-6 camera · T crew · C colour-blind · P preset · M tone · L brush · H hud · drag to orbit`;
+        + `keys: 1-7 camera · T crew · C colour-blind · P preset · M tone · L brush · H hud · drag to orbit`;
     }
     if (frames === 3) {
       look.ready = true;
@@ -680,7 +687,8 @@ function main(): void {
   interface LookSurface {
     ready: boolean; frames: number; errors: string[];
     info(): Record<string, unknown>;
-    set(o: { preset?: string; tone?: ToneMode; cam?: CamName; viewer?: Team; cb?: boolean; live?: boolean; ui?: boolean }): void;
+    /** `dye` sets dye tunables by name, e.g. { uDyeHueLock: 0, uDyeGlow: 1 } (A/B from the harness) */
+    set(o: { preset?: string; tone?: ToneMode; cam?: CamName; viewer?: Team; cb?: boolean; live?: boolean; ui?: boolean; dye?: Record<string, number> }): void;
     shot(name: string): Promise<{ ok: boolean; path?: string; error?: string }>;
   }
   const look: LookSurface = {
@@ -700,6 +708,9 @@ function main(): void {
       if (o.cb !== undefined) state.cb = o.cb;
       if (o.live !== undefined) state.live = o.live;
       if (o.ui !== undefined) state.ui = o.ui;
+      for (const [k, v] of Object.entries(o.dye ?? {})) {
+        if (dye[k] && typeof dye[k].value === 'number' && Number.isFinite(v)) dye[k].value = v;
+      }
     },
     shot: async (name: string) => {
       try {

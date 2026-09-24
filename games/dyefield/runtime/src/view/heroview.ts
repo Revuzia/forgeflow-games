@@ -31,6 +31,15 @@ const UPPER_BONES = ['spine', 'chest', 'neck', 'head', 'shoulder.L', 'upper_arm.
   'shoulder.R', 'upper_arm.R', 'forearm.R', 'hand.R'];
 const TEAM_MATERIALS = new Set(['M_crest', 'M_top_trim', 'M_shorts_stripe', 'M_sole', 'M_tank_dye', 'M_band', 'M_kit_dye']);
 const CREST_BONES = ['crest_1', 'crest_2', 'crest_3'];
+/**
+ * Parts that do not cast into the sun's shadow map (perf: each caster is one more draw call in the
+ * shadow pass). All are tiny, inside, or a thin skin layer on another caster: eyes, mouth, visor glass,
+ * the dye inside the tank shell, the soles under the shoes, and trim bands a few mm proud of the top,
+ * shorts and arms. The shadow map is 1024² over 48 m (~4.7 cm a texel), so their shadows were already
+ * inside the casters' own. They still RECEIVE shadows.
+ */
+const NO_SHADOW_MATERIALS = new Set(['M_eye_white', 'M_eye_dark', 'M_mouth', 'M_glass', 'M_tank_dye', 'M_sole',
+  'M_shorts_stripe', 'M_top_trim', 'M_band']);
 
 export interface HeroAssets {
   hero: GLTF;
@@ -249,7 +258,8 @@ export class HeroView {
       root.traverse((o) => {
         const m = o as THREE.Mesh;
         if (!m.isMesh) return;
-        m.castShadow = true;
+        const mats = Array.isArray(m.material) ? m.material : [m.material];
+        m.castShadow = !mats.every((mm) => NO_SHADOW_MATERIALS.has(mm.name));
         m.receiveShadow = true;
         if ((m as THREE.SkinnedMesh).isSkinnedMesh) m.frustumCulled = false;
         m.material = Array.isArray(m.material) ? m.material.map(tint) : tint(m.material);

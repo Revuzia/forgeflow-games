@@ -98,11 +98,36 @@ See `_spec/DESIGN.md` for the IP lock, the map thumbnails and the coverage + swi
 
 | phase | scope | status |
 |---|---|---|
-| 0 | stack decision + repo that boots | in progress |
-| 1 | athlete moving on Pier 18 | in progress |
-| 2 | coverage buffer + paint write + live minimap | in progress |
+| 0 | stack decision + repo that boots | done: `npm install && npm run dev` boots clean |
+| 1 | athlete moving on Pier 18 | done: Blender-authored tide-runner (26 bones, 14 clips) walks, jumps and climbs ramps on the Blender-built Pier 18 (Rapier KCC) |
+| 2 | coverage buffer + paint write + live minimap | done: hold LMB to dye the tiles under your feet; the CPU atlas is the truth; glossy dye shader, coverage bar and minimap update live |
 | 3 | swim / slog / tank drink | next |
 | 4–11 | kits, match, bots, Lockwell, Cinder, lobby, juice, harden | planned |
+
+**What is better BECAUSE of the chosen stack (phases 0–2):**
+- **Phase 0:** one command runs the game, and the whole paint and movement sim runs under plain
+  `node`, so gates G1/G2 are exit-code probes that take about 1 s (73 paint checks, 11 movement
+  checks).
+- **Phase 1:** the Blender-authored rig and clips load straight into three's `AnimationMixer`
+  (the upper-body `brush` layers over locomotion). Rapier's kinematic controller gives autostep,
+  slope limits and snap-to-ground on the authored trimesh without hand-written collision.
+- **Phase 2:** the paint atlas is *one* TypeScript module shared by the Node probe, the sim and
+  the browser. Its GPU mirror uploads only dirty rows (`Texture.addUpdateRange`). On Pier 18 the
+  atlas is 1024², 412k surface texels, and builds in about 0.15 s; a 1 m splat costs about
+  0.05 ms.
+
+## Controls (phase 2)
+
+| action | key |
+|---|---|
+| move / look | WASD / mouse (click to capture) |
+| jump | SPACE |
+| dye the tiles under your feet (phase-2 brush; the MIST-RASP kit replaces it in phase 4) | hold LMB |
+| debug panel (coverage %, tank, map, fps, move state, atlas, render scale) | F1 |
+| pause | ESC |
+
+Dev query params: `?map=pier18`, `?preset=noon|golden`, `?quality=auto|high|low`, `?dev=1`
+(test hooks on `window.__DF__`).
 
 ## Credits
 

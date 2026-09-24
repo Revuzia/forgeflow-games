@@ -16,6 +16,13 @@ Flow (real input at the player's layer):
      (SUNCREW), coverage.sun > 0, and the DOM minimap canvas pixel under the runner is SUNCREW;
   6. a short brushed strafe (LMB + A) for the picture, then _shots/boot_painted.png;
   7. F1 → _shots/boot_debug.png (debug panel on), F1 again.
+Pointer lock (strict about the game, tolerant of the environment): another session's headed Chrome
+opening a window takes OS activation and drops the lock (the game then pauses by design). Every lock
+loss is recorded in the page with its focus evidence (common.INIT_JS). A loss while the page had LOST
+focus (document.hasFocus() false, or a window blur around the loss) is focus theft: the check
+re-acquires the lock with ONE real click on RESUME, prints 'NOTE: focus stolen by another window at
+t=..s; re-locked with a real click', and repeats the interrupted step once. A loss while the page
+still had focus is a FAILURE (a game bug). A pre-flight line lists any other automated Chrome.
 VERDICT "BOOTS CLEAN" only when all hold AND 0 console errors, 0 page/window errors, 0 shader/GL
 errors, 0 failed requests, frames + sim ticks advancing. Shader compiler WARNINGS (a program info log
 holding only "warning X…" lines) are printed for the material's owner but do not gate (G4 says
@@ -31,7 +38,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import (SHOTS, HarnessError, Session, add_common_args, build_url, diag_problems,  # noqa: E402
-                    fmt, print_diagnostics, save_report)
+                    fmt, preflight_chromes, print_diagnostics, save_report)
 
 
 def dist_xz(a, b):
@@ -92,6 +99,11 @@ def main() -> int:
     df_shot = None
     shots = {}
     st_final = None
+
+    others, scan_err = preflight_chromes("pre-flight")
+    report["otherAutomatedChrome"] = others
+    if others:
+        notes.append("another automated Chrome was alive at start (%d): a headed one may steal focus mid-run" % len(others))
 
     sess = Session(args, "bootcheck")
     try:
@@ -163,41 +175,62 @@ def main() -> int:
             tick_a = s0.get("tick")
             shots["spawn"] = sess.screenshot(shot_spawn)
 
-            # ── 4. real W hold 1.5 s (in play: a lost lock pauses the game, so recover first, recorded)
-            sess.resume_if_paused(notes, "before the W hold")
-            p0 = (sess.state() or {}).get("player") or {}
-            sess.page.keyboard.down("KeyW")
-            time.sleep(1.5)
-            sess.page.keyboard.up("KeyW")
-            time.sleep(0.4)
-            p1 = (sess.state() or {}).get("player") or {}
-            d = dist_xz(p0, p1) if p0 and p1 else 0.0
-            walk = {"from": p0, "to": p1, "metres": d, "phaseAfter": sess.phase()}
-            if not (d > 3.0):
-                problems.append("a real 1.5 s W hold moved the runner only %.2f m (need > 3 m; phase after: %s)" % (d, walk["phaseAfter"]))
+            # ── 4. real W hold 1.5 s. Each timed step is guarded: a lock loss caused by focus theft is
+            #       re-locked with one real click and the step runs once more; a loss with focus fails.
+            def do_walk():
+                p0 = (sess.state() or {}).get("player") or {}
+                sess.page.keyboard.down("KeyW")
+                time.sleep(1.5)
+                sess.page.keyboard.up("KeyW")
+                time.sleep(0.4)
+                p1 = (sess.state() or {}).get("player") or {}
+                d = dist_xz(p0, p1) if p0 and p1 else 0.0
+                return {"from": p0, "to": p1, "metres": d, "phaseAfter": sess.phase()}
+
+            for attempt in range(2):
+                sess.lock_guard("before the W hold", notes, problems)
+                walk = do_walk()
+                g = sess.lock_guard("during the W hold", notes, problems)
+                if g == "relocked" and attempt == 0:
+                    notes.append("the W hold was interrupted by focus theft → repeated once")
+                    continue
+                break
+            if not (walk["metres"] > 3.0):
+                problems.append("a real 1.5 s W hold moved the runner only %.2f m (need > 3 m; phase after: %s)" % (
+                    walk["metres"], walk["phaseAfter"]))
 
             # ── 5. real LMB hold 1.2 s while standing
-            sess.resume_if_paused(notes, "before the LMB hold")
-            before_under = sess.df("teamUnderFeet")[1]
-            flips0 = sess.df("flips")[1]
-            sess.page.mouse.down(button="left")
-            time.sleep(1.2)
-            sess.page.mouse.up(button="left")
-            time.sleep(0.35)
-            st = sess.state() or {}
-            under = sess.df("teamUnderFeet")[1]
-            flips1 = sess.df("flips")[1]
-            cov = st.get("coverage") or {}
-            ok_px, px = sess.df("minimapPixel")
-            label, px_detail = classify_minimap(px if ok_px else None)
-            brush = {"underBefore": before_under, "underAfter": under, "coverage": cov, "flips": [flips0, flips1],
-                     "minimap": px, "minimapLabel": label, "minimapDetail": px_detail, "player": st.get("player")}
+            def do_brush():
+                before_under = sess.df("teamUnderFeet")[1]
+                flips0 = sess.df("flips")[1]
+                sess.page.mouse.down(button="left")
+                time.sleep(1.2)
+                sess.page.mouse.up(button="left")
+                time.sleep(0.35)
+                st = sess.state() or {}
+                under = sess.df("teamUnderFeet")[1]
+                flips1 = sess.df("flips")[1]
+                cov = st.get("coverage") or {}
+                ok_px, px = sess.df("minimapPixel")
+                label, px_detail = classify_minimap(px if ok_px else None)
+                return {"underBefore": before_under, "underAfter": under, "coverage": cov, "flips": [flips0, flips1],
+                        "minimap": px, "minimapLabel": label, "minimapDetail": px_detail, "player": st.get("player")}
+
+            for attempt in range(2):
+                sess.lock_guard("before the LMB hold", notes, problems)
+                brush = do_brush()
+                g = sess.lock_guard("during the LMB hold", notes, problems)
+                if g == "relocked" and attempt == 0:
+                    notes.append("the LMB hold was interrupted by focus theft → repeated once")
+                    continue
+                break
+            under, cov, label = brush["underAfter"], brush["coverage"], brush["minimapLabel"]
             if under != 1:
                 problems.append("after a real 1.2 s LMB hold teamUnderFeet() = %r (want 1 = SUNCREW)" % (under,))
             if not (isinstance(cov.get("sun"), (int, float)) and cov["sun"] > 0):
                 problems.append("coverage.sun = %r after the brush (want > 0)" % (cov.get("sun"),))
             if label != "sun":
-                problems.append("minimap pixel under the runner is %s, not SUNCREW (%s)" % (label, px_detail))
+                problems.append("minimap pixel under the runner is %s, not SUNCREW (%s)" % (label, brush["minimapDetail"]))
 
             # ── 6. a brushed strafe for the picture, then the painted shot
             sess.page.mouse.down(button="left")
@@ -212,16 +245,19 @@ def main() -> int:
             sess.page.keyboard.up("KeyA")
             sess.page.mouse.up(button="left")
             time.sleep(0.6)
+            sess.lock_guard("during the brushed strafe", notes, problems)
             shots["painted"] = sess.screenshot(shot_painted)
             ok_s, df_shot = sess.df("shot", "boot_canvas")
 
             # ── 7. F1 debug panel
             sess.press("F1", 80)
             time.sleep(0.6)
+            sess.lock_guard("before the F1 shot", notes, problems)
             shots["debug"] = sess.screenshot(shot_debug)
             sess.press("F1", 80)
 
             adv = sess.frames_advancing(3.0)
+            sess.lock_guard("before the final sample", notes, problems)
             st_final = sess.state() or {}
             tick_b = st_final.get("tick")
             ok_r, render = sess.df("render")

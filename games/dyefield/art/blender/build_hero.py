@@ -652,9 +652,11 @@ def _lash(mb, pts, nrm, widths):
 
 
 # ================================================================================ hair + crest
+# The dark M_hair cap is only the undercut: the sides, the temples and the nape underlayer. The
+# team-tinted crest (build_crest_mass) covers the fringe, the crown and the back of the head.
 HAIRLINE = [(0.0, 0.46), (0.55, 0.44), (0.95, 0.34), (1.18, 0.06), (1.30, -0.20), (1.42, -0.05),
             (1.62, 0.04), (1.92, -0.08), (2.35, -0.34), (2.80, -0.50), (pi, -0.56)]
-BANG_TIPS = [-0.97, -0.60, -0.23, 0.23, 0.60, 0.97]
+BANG_TIPS = [-0.97, 0.97]              # temple points only; the fringe itself is the crest
 NAPE_TIPS = [pi - 0.42, pi, -pi + 0.42]
 
 
@@ -717,72 +719,212 @@ def build_hair(mb):
     fan(mb, top, rows[-1], "M_hair", False)
 
 
-# swept locks that break the helmet silhouette: (az, el, sweep dir (world), length, width)
-HAIR_SPIKES = [
-    (2.05, 0.30, (0.10, 1.0, 0.02), 0.095, 0.036),
-    (2.35, -0.02, (0.20, 1.0, -0.40), 0.100, 0.036),
-    (2.78, -0.30, (0.10, 0.75, -1.0), 0.080, 0.034),
-]
+# ---------------------------------------------------------------------------------------- crest
+# The crest is THE silhouette read (DESIGN §1 line 2, CONTRACT §3.2) and it must read from the
+# gameplay camera, which sits behind and above the runner (4.3 m boom, ~19 deg down onto the head):
+# from there the back and the top of the head are what shows. So the crest is ONE bold, swept,
+# team-tinted mass: a fringe wave rises at the brow (swept toward the runner's left), rides over the
+# crown as a raised ridge, runs down the back of the head with swept side locks, and flicks out of
+# the nape as a fin-like tail. Single mass, no strands or tendrils: not a squid or octopus shape.
+#
+# Authoring frame: a loft along the head's mid-sagittal meridian psi (0 = straight forward,
+# pi/2 = crown, pi = straight back). A cross-section spans v in [-1, 1] across the skull as a
+# great-circle offset phi = phi_c + v * half_width (radians) toward +X. Its underside hugs the hair
+# surface (the skin at the fringe); its top is the hair surface + a lens thickness + a ridge bump.
+CM_PSI0, CM_PSI1 = 0.36, 3.25          # centre of the fringe edge .. the nape (psi = pi is straight back)
+CM_NU = 30                             # rings over the skull (tooth rings and the tail come on top)
+CM_NV = 11                             # top-surface samples across a section (the underside has 3)
+CM_EDGE = 0.006                        # lens thickness at the side edges (m, above the hair surface)
+CM_WIDTH = [(0.0, 0.58), (0.10, 0.76), (0.28, 0.88), (0.50, 0.90), (0.70, 0.84), (0.88, 0.60), (1.0, 0.34)]
+CM_THICK = [(0.0, 0.026), (0.25, 0.028), (0.60, 0.026), (1.0, 0.020)]
+# The ridge on top is three swept locks laid back like wave crests: each rises from its root to a
+# sharp tip swept backward that overhangs the root of the next. The fringe lock leans to the runner's
+# left, the crown lock to the right, the nape lock is central and flows into the tail.
+#   (u at the tip, tip height over the band (m), tip sweep toward the back (m), lateral centre v at the tip)
+CM_LOCKS = [(1.0 / 3.0, 0.088, 0.062, 0.38),
+            (2.0 / 3.0, 0.092, 0.076, -0.30),
+            (1.0, 0.060, 0.030, 0.0)]
+CM_LOCK_H0 = 0.035                     # ridge height where a lock starts (under the previous tip)
+CM_RIDGE_W0, CM_RIDGE_W1 = 0.78, 0.30  # ridge half-width (in v) at a lock's root .. tip
+CM_TEETH = (0.24, 0.90, 4, 0.22)       # swept side locks: u range, count, amplitude (width fraction)
+CM_TAIL = 7                            # tail rings (the tip is a pole)
 
 
-def build_hair_spikes(mb):
-    mb.begin("hair_spikes")
-    for az0, el, sw, L, r in HAIR_SPIKES:
-        for s in (1, -1):
-            az = az0 * s
-            n = head_nrm(az, el)
-            d = Vector((sw[0] * s, sw[1], sw[2]))
-            d = (d - n * n.dot(d)).normalized()          # tangent sweep: the lock lies on the hair
-            base = head_pt(az, el, hair_off(az, el) - 0.020)
-            p1 = base + n * 0.012 + d * (L * 0.30)
-            p2 = p1 + (d * 0.92 + n * 0.08).normalized() * (L * 0.38)
-            p3 = p2 + (d * 0.9 + n * 0.1 + Vector((0, 0, -0.12))).normalized() * (L * 0.34)
-            tube(mb, [base, p1, p2], [(r * 0.40, r), (r * 0.36, r * 0.86), (r * 0.22, r * 0.50)], 6,
-                 lambda i, j, p: "head", "M_hair", hint=n, cap1=p3,
-                 colfn=lambda i, j, p: gray(lerp(0.8, 1.0, i / 2.0)))
+def cm_psi(u, v):
+    """meridian angle of section u at v: the fringe edge is a swept arch (lowest at the centre,
+    the runner's left side (+v) starting further forward than the right)."""
+    p0 = CM_PSI0 + 0.10 * v * v - 0.06 * v
+    return p0 + (CM_PSI1 - p0) * u
 
 
-# crest: side-view top edge (y, z) - a wave-like fin sweeping from the brow over the crown to a swept tip
+def cm_surf(psi, phi, off):
+    """hair-surface point (+ off along the head normal) and that normal, at (psi, phi)."""
+    d = Vector((0.0, -cos(psi), sin(psi))) * cos(phi) + Vector((1.0, 0.0, 0.0)) * sin(phi)
+    az = atan2(d.x, -d.y)
+    el = math.asin(clamp(d.z, -1.0, 1.0))
+    return head_pt(az, el, hair_off(az, el) + off), head_nrm(az, el), az, el
+
+
+def cm_under(psi, phi):
+    """underside point: 8 mm inside the dark hair; at the fringe (below the hairline) it drops onto
+    the forehead so the wave sits on the skin instead of floating."""
+    p, n, az, el = cm_surf(psi, phi, -0.008)
+    skin = head_pt(az, el, 0.004)
+    return skin.lerp(p, sstep(0.40, 0.62, psi))
+
+
+def cm_teeth(u):
+    u0, u1, n, amp = CM_TEETH
+    if u <= u0 or u >= u1:
+        return 1.0
+    f = (u - u0) / (u1 - u0) * n
+    f -= math.floor(f)
+    env = sstep(u0, u0 + 0.05, u) * sstep(u1, u1 - 0.05, u)
+    return 1.0 + amp * env * (f ** 1.7 - 0.37)       # slow swell, sharp snap: tips point backward
+
+
+def cm_frame(u):
+    """section centre data: phi_c, half-width, thickness, ridge displacement, ridge width, centre point,
+    normal and tangent (toward the back)."""
+    phic = 0.10 * (1.0 - sstep(0.0, 0.32, u))
+    hw = table(CM_WIDTH, u) * cm_teeth(u)
+    th = table(CM_THICK, u)
+    psc = cm_psi(u, 0.0)
+    pc, nc, _, _ = cm_surf(psc, phic, th)
+    pa, _, _, _ = cm_surf(psc + 0.01, phic, th)
+    tc = pa - pc
+    tc = (tc - nc * nc.dot(tc)).normalized()
+    i, f = cm_lock(u)
+    _, ht, dt, vt = CM_LOCKS[i]
+    disp = nc * (CM_LOCK_H0 + (ht - CM_LOCK_H0) * f ** 1.5) + tc * lerp(-0.005, dt, f ** 1.8)
+    return phic, hw, th, disp, (lerp(CM_RIDGE_W0, CM_RIDGE_W1, f ** 1.2), vt * (0.35 + 0.65 * f)), pc, nc, tc
+
+
+def cm_lock(u):
+    """(lock index, phase in [0, 1]) of section u; a lock's tip (phase 1) is at its end u."""
+    u0 = 0.0
+    for i, (u1, _, _, _) in enumerate(CM_LOCKS):
+        if u <= u1 + 1e-9:
+            return i, clamp((u - u0) / (u1 - u0), 0.0, 1.0)
+        u0 = u1
+    return len(CM_LOCKS) - 1, 1.0
+
+
+def cm_bump(v, ridge):
+    rw, vc = ridge
+    d = abs(v - vc)
+    return max(0.0, 1.0 - (d / rw) ** 2) ** 1.5 if d < rw else 0.0
+
+
+def cm_ridge_point(u, frac):
+    """a point inside the ridge at section u (frac 0 = band top, 1 = ridge crest): crest joints."""
+    phic, hw, th, disp, rw, pc, nc, tc = cm_frame(u)
+    return pc + disp * frac
+
+
+def cm_weights(u, k):
+    """k = share of the crest chain (0 = rides the skull with 'head'); the chain bone follows u."""
+    w1 = 1.0 - sstep(0.30, 0.345, u)              # each lock rides its own chain bone
+    w3 = sstep(0.64, 0.68, u)
+    w2 = max(0.0, 1.0 - w1 - w3)
+    return wn({"head": 1.0 - k, "crest_1": w1 * k, "crest_2": w2 * k, "crest_3": w3 * k})
+
+
+def cm_section(u):
+    """one closed ring: underside v = +1, 0, -1 then top v = -1 .. +1 (CCW about +u, i.e. outward).
+    Returns [(point, weights, colour)]."""
+    phic, hw, th, disp, rw, pc, nc, tc = cm_frame(u)
+    ring = []
+    for v in (1.0, 0.0, -1.0):
+        ring.append((cm_under(cm_psi(u, v), phic + v * hw), {"head": 1.0}, gray(0.62)))
+    for k in range(CM_NV):
+        v = -1.0 + 2.0 * k / (CM_NV - 1)
+        thick = CM_EDGE + (th - CM_EDGE) * max(0.0, 1.0 - v * v) ** 0.55
+        p, _, _, _ = cm_surf(cm_psi(u, v), phic + v * hw, thick)
+        b = cm_bump(v, rw)
+        ring.append((p + disp * b, cm_weights(u, 0.9 * b), gray(0.82 + 0.18 * (0.3 + 0.7 * b) * (1.0 - 0.3 * abs(v)))))
+    return ring
+
+
+def cm_u_samples():
+    us = [k / CM_NU for k in range(CM_NU + 1)]
+    u0, u1, n, _ = CM_TEETH
+    snaps = []
+    for k in range(1, n):
+        ub = u0 + (u1 - u0) * k / n
+        snaps += [ub - 0.006, ub]                  # a side lock's tip, then the snap back
+    for ub, _, _, _ in CM_LOCKS[:-1]:
+        snaps += [ub, ub + 0.005]                  # a ridge lock's tip, then the next lock's root
+    us = [u for u in us if all(abs(u - s) > 0.008 for s in snaps)] + snaps
+    return sorted(us)
+
+
+def build_crest_mass(mb):
+    mb.begin("crest")
+    rings = [cm_section(u) for u in cm_u_samples()]
+    # the fin-like tail: the nape section carried down and out over the nape (a pointed ducktail with
+    # the nape lock's keel on top), narrowing to a point; its top keeps facing outward as the frame turns
+    phic, hw, th, disp, rw, c1n, N1, T1 = cm_frame(1.0)
+    root = rings[-1]
+    C1 = root[1][0]                               # underside centre at the nape
+    X1 = T1.cross(N1).normalized()
+    loc = [((p - C1).dot(X1), (p - C1).dot(N1), (p - C1).dot(T1)) for p, _, _ in root]
+    P0, P1, P2 = C1, C1 + T1 * 0.050 + N1 * 0.020, C1 + T1 * 0.095 + N1 * 0.085
+
+    def spine(t):
+        return P0 * (1 - t) ** 2 + P1 * (2 * t * (1 - t)) + P2 * (t * t)
+
+    tail = []
+    for k in range(1, CM_TAIL):
+        t = k / CM_TAIL
+        S = spine(t)
+        Tt = (spine(min(1.0, t + 0.01)) - spine(max(0.0, t - 0.01))).normalized()
+        Nt = X1.cross(Tt).normalized()
+        ws, hs = (1.0 - t) ** 1.3, 1.0 - 0.6 * t
+        kt = sstep(0.0, 0.45, t)
+        ring = []
+        for (a, b, c), (_, w, col) in zip(loc, root):
+            p = S + X1 * (a * ws) + Nt * (b * hs) + Tt * (c * hs)
+            ww = {bn: x * (1.0 - kt) for bn, x in w.items()}
+            ww["crest_3"] = ww.get("crest_3", 0.0) + kt
+            ring.append((p, wn(ww), col))
+        tail.append(ring)
+    rows = []
+    for ring in rings + tail:
+        rows.append([mb.v(p, w, c) for p, w, c in ring])
+    grid(mb, rows, "M_crest")
+    # front cap (the fringe face) and the tail tip
+    front = [Vector(mb.V[q]) for q in rows[0]]
+    cen = sum(front, Vector()) / len(front)
+    phic0, _, _, _, _, _, n0, t0 = cm_frame(0.0)
+    fan(mb, mb.v(cen - t0 * 0.006, cm_weights(0.0, 0.4), gray(0.9)), rows[0], "M_crest", start=True)
+    fan(mb, mb.v(P2, {"crest_3": 1.0}, gray(1.0)), rows[-1], "M_crest", start=False)
+
+
+# ---------------------------------------------------------------------------------------- slick fin
+# The swim-form fin (CONTRACT §3.2 slick_fin): a swept wave-fin loft between a base curve and a top
+# curve with a lens cross-section. Side-view top edge (y, z) of the fin as it rides the dye.
 CREST_TOP = [(-0.198, 1.048), (-0.222, 1.108), (-0.196, 1.162), (-0.118, 1.186), (-0.010, 1.203),
              (0.105, 1.224), (0.212, 1.246), (0.312, 1.252), (0.262, 1.178), (0.228, 1.066),
              (0.207, 0.948), (0.182, 0.852)]
 CREST_W = [(0.0, 0.020), (0.15, 0.028), (0.38, 0.038), (0.60, 0.037), (0.82, 0.028), (1.0, 0.020)]
 CREST_H = [0.0, 0.20, 0.40, 0.58, 0.74, 0.87, 0.955, 1.0]
-PSI0, PSI1 = 0.56, 3.66
-
-
-def crest_base(s):
-    psi = lerp(PSI0, PSI1, s)
-    if psi <= pi / 2:
-        az, el = 0.0, psi
-    else:
-        az, el = pi, pi - psi
-    return head_pt(az, el, hair_off(az, el) - 0.014)
 
 
 def crest_top(s):
     return spline_pts([Vector((0.0, y, z)) for y, z in CREST_TOP], s)
 
 
-def crest_point(s, h, side, base_fn=None, top_fn=None):
+def fin_point(s, h, side, base_fn, top_fn):
     """side in {-1, 0, +1} (x offset direction); h in [0, 1]."""
-    B = (base_fn or crest_base)(s)
-    T = (top_fn or crest_top)(s)
+    B = base_fn(s)
+    T = top_fn(s)
     C = B.lerp(T, h)
     w = table(CREST_W, s) * (max(0.0, 1.0 - h) ** 0.62) * (1.0 + 0.18 * sin(pi * min(h, 1.0)) * (1 - h))
     return C + Vector((w * side, 0.0, 0.0))
 
 
-def crest_weight(s, h):
-    wc1 = 1.0 - sstep(0.20, 0.38, s)
-    wc3 = sstep(0.50, 0.66, s)
-    wc2 = max(0.0, 1.0 - wc1 - wc3)
-    head = 1.0 - sstep(0.06, 0.34, h)
-    k = 1.0 - head
-    return wn({"head": head, "crest_1": wc1 * k, "crest_2": wc2 * k, "crest_3": wc3 * k})
-
-
-def build_crest(mb, wfn=crest_weight, xform=None, ns=20, label="crest", base_fn=None, top_fn=None):
+def build_fin(mb, wfn, base_fn, top_fn, ns=20, label="fin"):
     mb.begin(label)
     rows = []
     H = CREST_H
@@ -792,9 +934,7 @@ def build_crest(mb, wfn=crest_weight, xform=None, ns=20, label="crest", base_fn=
         # ring runs: right side up (x<0), top, left side down -> CCW about +s (backward)
         seq = [(h, -1) for h in H[:-1]] + [(1.0, 0)] + [(h, 1) for h in reversed(H[:-1])]
         for h, side in seq:
-            p = crest_point(s, h, side, base_fn, top_fn)
-            if xform:
-                p = xform(p)
+            p = fin_point(s, h, side, base_fn, top_fn)
             c = gray(lerp(0.80, 1.0, sstep(0.0, 0.85, h)))
             ring.append(mb.v(p, wfn(s, h), c))
         rows.append(ring)
@@ -802,10 +942,8 @@ def build_crest(mb, wfn=crest_weight, xform=None, ns=20, label="crest", base_fn=
     for k, (ring, sgn) in enumerate(((rows[0], -1), (rows[-1], 1))):
         cen = sum((Vector(mb.V[q]) for q in ring), Vector()) / len(ring)
         s = 0.0 if k == 0 else 1.0
-        ax = (crest_point(min(s + 0.02, 1), 0.3, 0, base_fn, top_fn) -
-              crest_point(max(s - 0.02, 0), 0.3, 0, base_fn, top_fn)).normalized()
-        if xform:
-            pass
+        ax = (fin_point(min(s + 0.02, 1), 0.3, 0, base_fn, top_fn) -
+              fin_point(max(s - 0.02, 0), 0.3, 0, base_fn, top_fn)).normalized()
         pole = mb.v(cen + ax * (0.008 * sgn), wfn(s, 0.3), gray(0.9))
         fan(mb, pole, ring, "M_crest", start=(k == 0))
 
@@ -1372,7 +1510,7 @@ def build_slick_fin(mb):
         t = crest_top(s)
         z = max(t.z - 1.000, 0.045 + 0.02 * sin(pi * s))
         return Vector((0.0, t.y - 0.030, z))
-    build_crest(mb, wfn=lambda s, h: "root", ns=12, label="slick_crest", base_fn=base, top_fn=top)
+    build_fin(mb, lambda s, h: "root", base, top, ns=12, label="slick_crest")
     # wake: two ripples fanning back from the fin across the hump
     mb.begin("slick_wake")
     for sx in (1, -1):
@@ -2546,7 +2684,7 @@ def do_renders(arm, meta, which, socket, extra_hide, body_objs=()):
     cache = {}
     for o in extra_hide:
         o.hide_render = True
-    kit_objs = import_kit(socket) if any(w in which for w in ("clips", "strip", "kit")) else []
+    kit_objs = import_kit(socket) if any(w in which for w in ("clips", "strip", "kit", "gamecam")) else []
 
     def show_kit(flag):
         for o in kit_objs:
@@ -2638,10 +2776,93 @@ def do_renders(arm, meta, which, socket, extra_hide, body_objs=()):
             render_to(p)
             paths.append(p)
         compose(paths, 4, os.path.join(REN_DIR, "hero_with_kit.png"))
+    if "gamecam" in which:
+        render_gamecam(arm, meta, show_kit, cache)
     try:
         os.rmdir(tmp)
     except Exception:
         pass
+
+
+# the gameplay follow camera at rest (runtime/src/core/config.ts CAMERA, view/camera.ts)
+GAMECAM = dict(fov_y_deg=68.0, pivot=1.35, boom=4.3, shoulder=0.42, pitch_deg=-14.0, res=(1600, 900))
+
+
+def render_gamecam(arm, meta, show_kit, cache):
+    """art/renders/hero_gamecam.png: the hero exactly as the player sees it in play - the follow camera
+    at rest behind the runner (pivot over the feet, right-shoulder offset, boom back along the look
+    direction), 16:9, vertical FOV 68 deg; 'idle' holding the kit, on a light court-tile floor with
+    1 m grout lines. SUNCREW (left) and GULF CREW (right) panels share the exact same camera."""
+    scn = bpy.context.scene
+    g = GAMECAM
+    cam = scn.camera
+    fwd = Vector((0.0, -1.0, 0.0))                 # the runner faces Blender -Y (glTF +Z)
+    right = Vector((-1.0, 0.0, 0.0))               # character right = -X
+    p = radians(g["pitch_deg"])
+    look = (fwd * cos(p) + Vector((0.0, 0.0, 1.0)) * sin(p)).normalized()
+    shoulder = Vector((0.0, 0.0, g["pivot"])) + right * g["shoulder"]
+    cam.data.type = 'PERSP'
+    cam.data.sensor_fit = 'VERTICAL'
+    cam.data.angle_y = radians(g["fov_y_deg"])
+    cam.data.clip_start = 0.08
+    cam.data.clip_end = 200.0
+    cam.location = shoulder - look * g["boom"]
+    cam.rotation_euler = look.to_track_quat('-Z', 'Y').to_euler()
+    lb = bpy.data.objects.get("QA_label")
+    if lb:
+        lb.hide_render = True
+    floor = bpy.data.objects.get("QA_floor")
+    if floor:
+        floor.hide_render = True
+    tile = bpy.data.objects.get("QA_tiles")
+    if tile is None:
+        me = bpy.data.meshes.new("QA_tiles")
+        R = 40.0
+        me.from_pydata([(-R, -R, -0.0005), (R, -R, -0.0005), (R, R, -0.0005), (-R, R, -0.0005)], [], [(0, 1, 2, 3)])
+        m = make_material("QA_tile", "#EADBBE", 0.62)
+        nt = m.node_tree
+        b = principled(m)
+        tc = nt.nodes.new('ShaderNodeTexCoord')
+        br = nt.nodes.new('ShaderNodeTexBrick')
+        br.offset = 0.0
+        br.squash = 1.0
+        br.inputs['Scale'].default_value = 1.0
+        br.inputs['Brick Width'].default_value = 1.0
+        br.inputs['Row Height'].default_value = 1.0
+        br.inputs['Mortar Size'].default_value = 0.018
+        br.inputs['Mortar Smooth'].default_value = 0.2
+        br.inputs['Color1'].default_value = (*hex_lin("#EADBBE"), 1.0)
+        br.inputs['Color2'].default_value = (*hex_lin("#E4D3B3"), 1.0)
+        br.inputs['Mortar'].default_value = (*hex_lin("#BDAE93"), 1.0)
+        nt.links.new(tc.outputs['Object'], br.inputs['Vector'])
+        nt.links.new(br.outputs['Color'], b.inputs['Base Color'])
+        me.materials.append(m)
+        tile = bpy.data.objects.new("QA_tiles", me)
+        bpy.data.collections["QA"].objects.link(tile)
+    tile.hide_render = False
+    show_kit(True)
+    fr = int(round(0.25 * meta["idle"]["frames"]))
+    set_clip(arm, "idle", fr)
+    res_old = (scn.render.resolution_x, scn.render.resolution_y)
+    scn.render.resolution_x, scn.render.resolution_y = g["res"]
+    tmp = os.path.join(REN_DIR, "_tmp")
+    os.makedirs(tmp, exist_ok=True)
+    paths = []
+    for team in (1, 2):
+        render_materials(team, cache)
+        pth = os.path.join(tmp, "gamecam_%d.png" % team)
+        render_to(pth)
+        paths.append(pth)
+    compose(paths, 2, os.path.join(REN_DIR, "hero_gamecam.png"))
+    tile.hide_render = True
+    if floor:
+        floor.hide_render = False
+    if lb:
+        lb.hide_render = False
+    cam.data.sensor_fit = 'AUTO'
+    scn.render.resolution_x, scn.render.resolution_y = res_old
+    log("gamecam: camera at", tuple(round(c, 3) for c in cam.location), "look", tuple(round(c, 4) for c in look),
+        "fov_y 68, idle frame", fr)
 
 
 # ================================================================================ main
@@ -2669,8 +2890,7 @@ def main():
     build_head(body)
     build_face(body)
     build_hair(body)
-    build_hair_spikes(body)
-    build_crest(body)
+    build_crest_mass(body)
     build_neck(body)
     build_torso(body)
     build_tank_top(body)
@@ -2686,12 +2906,19 @@ def main():
     fin = MB("slick_fin")
     build_slick_fin(fin)
     total = body.tris() + dye.tris() + fin.tris()
+    for k, (label, f0, v0) in enumerate(body.parts):
+        if label == "crest":
+            v1 = body.parts[k + 1][2] if k + 1 < len(body.parts) else len(body.V)
+            cz = [body.V[i] for i in range(v0, v1)]
+            log("crest extent: top z %.3f m, y %.3f .. %.3f, half-width %.3f m" % (
+                max(p[2] for p in cz), min(p[1] for p in cz), max(p[1] for p in cz), max(abs(p[0]) for p in cz)))
     for label, tris, vol in body.part_report() + dye.part_report() + fin.part_report():
         log("part %-14s tris %5d  signed-vol %+.6f" % (label, tris, vol))
     log("TOTAL tris (pre-export):", total)
 
-    crest_joints = {"crest_1": crest_point(0.16, 0.30, 0), "crest_2": crest_point(0.40, 0.34, 0),
-                    "crest_3": crest_point(0.60, 0.40, 0)}
+    # the spring chain runs along the ridge: fringe wave -> crown -> back of the head (the tail rides crest_3)
+    crest_joints = {"crest_1": cm_ridge_point(0.20, 0.45), "crest_2": cm_ridge_point(0.52, 0.45),
+                    "crest_3": cm_ridge_point(0.85, 0.40)}
     arm = build_armature(coll, crest_joints)
     arm["df_run_stride"] = round(RUN_SPEED * 0.4, 4)
     arm["df_run_speed"] = RUN_SPEED
@@ -2733,7 +2960,7 @@ def main():
         raise SystemExit(1)
     if arg_flag("--no-render"):
         return
-    which = (arg_val("--only") or "turntable,clips,strip,slick,kit").split(",")
+    which = (arg_val("--only") or "turntable,clips,strip,slick,kit,gamecam").split(",")
     do_renders(arm, meta, which, sock, [fin_ob], body_objs=[body_ob, dye_ob])
 
 

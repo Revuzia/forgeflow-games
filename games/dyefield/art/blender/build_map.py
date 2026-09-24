@@ -45,7 +45,8 @@ import common as C  # noqa: E402
 import deco_assets as D  # noqa: E402
 
 DF_VERSION = 1
-PLATE_BOTTOM = -0.6          # pier slab underside (fascia depth); pilings carry it to the sea
+# The pier slab underside (fascia depth) is the plate brush's min.y in data/maps.json - the data is
+# the single truth (plate_bottom() below); the pilings carry it down to the sea.
 ARCH_BEVEL = 0.045
 PAD_POCKET = 0.3
 ARCH_MATS = ["M_tile", "M_concrete", "M_boardwalk", "M_chevron", "M_hazard"]
@@ -59,6 +60,11 @@ BUOYS = {"pier18": [("red", -39.0, -24.0), ("red", 40.0, 30.0), ("yellow", -41.0
 NOSING = {"base_deck": ("+z", "-x", "+x"), "side_deck": ("+x", "-z", "+z"), "buoy_block": ("+z", "-z", "+x", "-x")}
 NOSING_W = 0.35
 GRID = 4                     # court floor tessellation (m)
+# Team pennants flank each base end (deco only; not in maps.json, no gameplay effect). They stand
+# this far outboard of the base backwall ends, on the back edge of the pier, and the flag streams
+# outboard, so from the court they sit beside - not in front of - the over-water billboard
+# lettering behind that end (pennant_clearance() measures it on every build).
+PENNANT_OUTSET = 10.0
 ARCH_IDX = {"tile": 0, "concrete": 1, "boardwalk": 2, "chevron": 3, "hazard": 4}
 
 # Geometry fix-ups applied to brushes BEFORE mirroring. Each one is reported with the exact
@@ -119,6 +125,26 @@ def expand_brushes(mdef: dict) -> tuple[list[dict], list[str]]:
     return out, notes
 
 
+def plate_bottom(brushes: list[dict]) -> float:
+    """Pier slab underside = the plate brush's min.y (data/maps.json is the single truth)."""
+    plate = next(b for b in brushes if b["id"] == "plate")
+    y0, y1 = float(plate["min"][1]), float(plate["max"][1])
+    if not y0 < y1:
+        raise ValueError(f"plate brush min.y {y0} must be below its top {y1} (it is the slab underside)")
+    return y0
+
+
+def ground_y(brushes: list[dict], x: float, z: float) -> float:
+    """Top of the highest axis-aligned box/curb brush over (x, z) (the plate counts); ramps ignored."""
+    y = None
+    for b in brushes:
+        if b["kind"] in ("box", "curb") and "min" in b:
+            (x0, _, z0), (x1, y1, z1) = b["min"], b["max"]
+            if x0 - 1e-6 <= x <= x1 + 1e-6 and z0 - 1e-6 <= z <= z1 + 1e-6:
+                y = y1 if y is None else max(y, y1)
+    return 0.0 if y is None else float(y)
+
+
 def aabb_of(b: dict):
     if "min" in b:
         return b["min"], b["max"]
@@ -151,7 +177,7 @@ def validate_brushes(brushes: list[dict]) -> list[str]:
 # ── architecture ─────────────────────────────────────────────────────────────────────────────────
 def _box_bm(b, plate=False):
     mn, mx = b["min"], b["max"]
-    y0 = PLATE_BOTTOM if plate else mn[1]
+    y0 = mn[1]                   # the plate's min.y IS the slab underside (plate_bottom())
     bm = bmesh.new()
     faces = C.bm_box(bm, (mn[0], -mx[2], y0), (mx[0], -mn[2], mx[1]), ARCH_IDX[b.get("mat", "concrete")])
     bm.normal_update()
@@ -232,6 +258,7 @@ def _nosed_box_bms(b):
 def build_architecture(brushes, mdef):
     log("architecture: building solids")
     plate = next(b for b in brushes if b["id"] == "plate")
+    log(f"architecture: pier slab underside y = {plate_bottom(brushes)} (plate brush min.y, data/maps.json)")
     base = C.mesh_object_from_bm("arch", _box_bm(plate, plate=True), ARCH_MATS)
     ops = []
     for b in brushes:
@@ -366,16 +393,16 @@ def build_props(brushes, mdef, geos):
         team = b["team"]
         g = D.spawn_pad(team, b["radius"], PAD_POCKET + 0.02)
         bucket(f"solid_pad_{team}").extend(g, C.place_matrix(b["center"], spawns[team]["yaw"]))
-    # team pennants on the base backwalls (deco only; not in maps.json, no gameplay effect)
+    # team pennants flanking each base end, PENNANT_OUTSET outboard of the backwall ends, flags
+    # streaming outboard (pennant() streams toward local +X: yaw 0 -> +x, yaw 180 -> -x)
     for b in brushes:
         if b["_base"] == "base_backwall":
             (x0, y0, z0), (x1, y1, z1) = b["min"], b["max"]
             team = "A" if (z0 + z1) < 0 else "B"
-            yaw = spawns[team]["yaw"]
-            for fx in (0.14, 0.86):
-                x = x0 + (x1 - x0) * fx
-                pos = [x, y1, (z0 + z1) / 2]
-                bucket("deco_flags").extend(D.pennant(team, f"{b['id']}_{fx}"), C.place_matrix(pos, yaw))
+            zc = (z0 + z1) / 2
+            for tag, x, yaw in (("w", x0 - PENNANT_OUTSET, 180.0), ("e", x1 + PENNANT_OUTSET, 0.0)):
+                pos = [x, ground_y(brushes, x, zc), zc]
+                bucket("deco_flags").extend(D.pennant(team, f"{b['id']}_{tag}"), C.place_matrix(pos, yaw))
     for k, (kind, x, z) in enumerate(BUOYS.get(mdef["id"], [])):
         bucket("deco_buoys").extend(D.buoy(kind, f"{mdef['id']}_{k}"), C.place_matrix([x, water_z, z], 0.0))
     # deco assets
@@ -399,7 +426,7 @@ def build_props(brushes, mdef, geos):
                 bucket("deco_ropes").extend(D.rope_coil_and_line(neck, out_b, water_z, b["id"]))
         elif a == "pilings":
             hx, hy = (bx1 - bx0) / 2, (bz1 - bz0) / 2
-            bucket("deco_pilings").extend(D.pilings(hx, hy, PLATE_BOTTOM, water_z),
+            bucket("deco_pilings").extend(D.pilings(hx, hy, plate_bottom(brushes), water_z),
                                           Matrix.Translation(C.g2b((bx0 + bx1) / 2, 0, (bz0 + bz1) / 2)))
         elif a == "billboard":
             key = "deco_board_" + ("cup" if "CUP" in b["text"] else "tide")
@@ -427,6 +454,72 @@ def build_props(brushes, mdef, geos):
         else:
             raise ValueError(f"unknown deco asset {a!r} ({b['id']})")
     return geos
+
+
+def pennant_clearance(geos, brushes, mdef, step: float = 2.0) -> dict:
+    """QA: do the team pennant flags cover a billboard's lettering from the player's camera?
+
+    Follow-camera poses (config.ts CAMERA: pivot 1.35 m, boom 4.3 m, 0.42 m right shoulder) are
+    sampled over the walkable pier on a `step` grid, aimed at each billboard at four pitches
+    (-24, -14, -6, +2 deg). Every flag vertex in front of the camera is projected onto the
+    lettering's front plane; a sample counts when one lands inside the lettering box (+0.3 m).
+    Uses the built geometry (M_sign_text faces of deco_board_*, M_pad_* faces of deco_flags)."""
+    def verts_of(g, pred):
+        idx = {i for f, m in zip(g.faces, g.fmat) if pred(m) for i in f}
+        return [C.b2g(g.verts[i]) for i in sorted(idx)]
+    flags = verts_of(geos["deco_flags"], lambda m: m.startswith("M_pad_")) if "deco_flags" in geos else []
+    (bx0, _, bz0), (bx1, _, bz1) = next(b for b in brushes if b["id"] == "plate")["min"], \
+        next(b for b in brushes if b["id"] == "plate")["max"]
+    feet = []
+    x = bx0 + step / 2
+    while x < bx1:
+        z = bz0 + step / 2
+        while z < bz1:
+            feet.append((x, ground_y(brushes, x, z), z))
+            z += step
+        x += step
+    out = {}
+    for key in sorted(k for k in geos if k.startswith("deco_board_")):
+        let = verts_of(geos[key], lambda m: m == "M_sign_text")
+        if not let:
+            continue
+        lx0, lx1 = min(v[0] for v in let), max(v[0] for v in let)
+        ly0, ly1 = min(v[1] for v in let), max(v[1] for v in let)
+        zs = [v[2] for v in let]
+        zc = sum(zs) / len(zs)
+        zf = min(zs) if zc > 0 else max(zs)            # the lettering's court-facing plane
+        tx = (lx0 + lx1) / 2
+        ty = (ly0 + ly1) / 2
+        n = hit = 0
+        worst = None
+        for (fx, fy, fz) in feet:
+            yaw = math.atan2(tx - fx, zc - fz)
+            for pd in (-24.0, -14.0, -6.0, 2.0):
+                p = math.radians(pd)
+                d = (math.sin(yaw) * math.cos(p), math.sin(p), math.cos(yaw) * math.cos(p))
+                rx, rz = -math.cos(yaw), math.sin(yaw)
+                cx = fx + rx * 0.42 - d[0] * 4.3
+                cy = max(fy + 0.3, fy + 1.35 - d[1] * 4.3)
+                cz = fz + rz * 0.42 - d[2] * 4.3
+                n += 1
+                for (vx, vy, vz) in flags:
+                    a, bpl = vz - cz, zf - cz
+                    if abs(a) < 1e-6 or a * bpl <= 0 or abs(bpl) < abs(a):
+                        continue                      # flag behind the camera or beyond the board
+                    t = bpl / a
+                    X, Y = cx + (vx - cx) * t, cy + (vy - cy) * t
+                    if lx0 - 0.3 <= X <= lx1 + 0.3 and ly0 - 0.3 <= Y <= ly1 + 0.3:
+                        hit += 1
+                        worst = (round(cx, 1), round(cy, 1), round(cz, 1))
+                        break
+        out[key] = {"lettering_box": [round(lx0, 2), round(lx1, 2), round(ly0, 2), round(ly1, 2), round(zf, 2)],
+                    "camera_samples": n, "flag_over_lettering": hit,
+                    "pct": round(100.0 * hit / max(n, 1), 2), "example_camera": worst}
+        log(f"pennant clearance {key}: flags over the lettering from {hit}/{n} camera samples "
+            f"({out[key]['pct']}%)" + (f", e.g. camera at {worst}" if worst else ""))
+        if out[key]["pct"] > 2.0:
+            log(f"WARN pennant clearance {key}: {out[key]['pct']}% > 2% - move the pennants clear of the lettering")
+    return out
 
 
 # ── atlas ────────────────────────────────────────────────────────────────────────────────────────
@@ -1022,6 +1115,7 @@ def main():
 
     geos = build_architecture(brushes, mdef)
     geos = build_props(brushes, mdef, geos)
+    clearance = pennant_clearance(geos, brushes, mdef)
 
     coll = C.new_collection("map_" + mdef["id"])
     objs = {}
@@ -1092,7 +1186,7 @@ def main():
     info["df_atlas_margin_px"] = int(margin_used)
     info["df_atlas_overlap_texels"] = int(st["overlap_texels"])
     info["df_paint_tris"] = int(st["tris"])
-    info["df_plate_bottom"] = PLATE_BOTTOM
+    info["df_plate_bottom"] = plate_bottom(brushes)
     for side in ("A", "B"):
         sp = mdef["spawns"][side]
         e = bpy.data.objects.new(f"spawn_{side}", None)
@@ -1113,6 +1207,7 @@ def main():
         "map": mdef["id"], "glb": out, "glb_mb": round(os.path.getsize(out) / 1e6, 3),
         "tris_total": tri_total, "tris_paint": tri_paint, "objects": sorted(objs),
         "atlas": st, "fixups": notes, "version": DF_VERSION,
+        "plate_bottom": plate_bottom(brushes), "pennant_clearance": clearance,
     }
     with open(os.path.join(C.RENDER_DIR, f"map_{mdef['id']}_stats.json"), "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=1)

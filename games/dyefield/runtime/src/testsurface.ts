@@ -4,7 +4,9 @@
 //   version · state() · teamUnderFeet() · paintHash() · flips() · shot(name)
 //   dev-only (?dev=1): teleport(x, y, z, yaw?) · splat(x, y, z, r, team) · start()
 //   extra (harness read-backs, not in the contract): minimapPixel() — the DOM minimap canvas pixel
-//   under the runner plus the team colors to compare against; render() — renderer counters.
+//   under the runner plus the team colors to compare against; render() — renderer counters plus the
+//   adaptive render scale (quality, scale, floor / cap, drawing buffer, p90 vs target) and the static
+//   map merge report.
 
 import type { AppStatus } from './game.ts';
 import type { Coverage, MoveState, TeamId } from './core/types.ts';
@@ -111,7 +113,15 @@ export function installTestSurface(app: AppStatus): void {
     render(): Record<string, unknown> | null {
       const game = g();
       if (!game) return null;
-      return { ...game.p.rig.stats(), gpu: game.p.rig.gpu(), fps: game.fps, frames: game.frames };
+      const ad = game.p.rig.adaptive();
+      const c = game.p.canvas;
+      return {
+        ...game.p.rig.stats(), gpu: game.p.rig.gpu(), fps: game.fps, frames: game.frames,
+        // adaptive render resolution (view/renderer.ts)
+        quality: ad.quality, scale: ad.scale, scaleMin: ad.min, scaleMax: ad.max, buffer: [c.width, c.height],
+        targetMs: ad.targetMs, p90: ad.p90, clockMs: ad.clockMs, scaleChanges: ad.changes, scaleLast: ad.last,
+        mapMerge: game.p.map.merge,
+      };
     },
     /** dev-only live handles for console debugging (renderer, scene, game parts) */
     get dev(): Record<string, unknown> | null {

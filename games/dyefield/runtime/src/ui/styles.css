@@ -43,7 +43,7 @@ html, body {
 .df-hud.on { opacity: 1; }
 
 /* coverage bar — top centre */
-.df-cov { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); width: min(620px, 64vw);
+.df-cov { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); width: min(780px, 60vw);
   display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; }
 .df-cov-team { display: flex; align-items: center; gap: 8px; padding: 5px 14px 5px 8px; border-radius: 999px;
   font-family: var(--display); font-size: 18px; letter-spacing: .03em; line-height: 1; white-space: nowrap;
@@ -61,10 +61,21 @@ html, body {
 .df-cov-bar::after { /* glossy toy highlight */
   content: ''; position: absolute; left: 8px; right: 8px; top: 3px; height: 5px; border-radius: 99px;
   background: rgba(255,255,255,.55); pointer-events: none; }
-.df-cov-fill { position: absolute; top: 0; bottom: 0; transition: width .18s ease-out; }
-.df-cov-fill.sun { left: 0; background: linear-gradient(180deg, #ffb35c, var(--sun-dye)); }
-.df-cov-fill.gulf { right: 0; background: linear-gradient(180deg, #7e70ff, var(--gulf-dye)); }
-.df-cov-mid { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 3px; margin-left: -1.5px; background: var(--ink); opacity: .55; }
+/* tug-of-war: SUNCREW fills from the left, GULF CREW from the right, the unpainted middle stays
+   neutral (widths from hud.ts coverageBar(): team ratio exact, combined length ∛painted) */
+.df-cov-fill { position: absolute; z-index: 1; top: 0; bottom: 0; width: 0; overflow: hidden; transition: width .18s ease-out; }
+.df-cov-fill::before { /* the fills carry their own gloss, under the mark */
+  content: ''; position: absolute; left: 4px; right: 4px; top: 3px; height: 5px; border-radius: 99px; background: rgba(255,255,255,.4); }
+.df-cov-fill.sun { left: 0; background: linear-gradient(180deg, #ffb35c, var(--sun-dye));
+  box-shadow: inset -2px 0 0 rgba(20,32,58,.55); }
+.df-cov-fill.gulf { right: 0; background: linear-gradient(180deg, #7e70ff, var(--gulf-dye));
+  box-shadow: inset 2px 0 0 rgba(20,32,58,.55); }
+.df-cov-fill .tip { position: absolute; top: 50%; margin-top: -8px; height: 16px; line-height: 16px; font-size: 13px;
+  color: var(--cream); text-shadow: 0 1px 0 var(--ink), 0 0 2px var(--ink); opacity: 0; transition: opacity .15s ease; }
+.df-cov-fill.sun .tip { right: 5px; }
+.df-cov-fill.gulf .tip { left: 5px; }
+.df-cov-fill.wide .tip { opacity: 1; }
+.df-cov-mid { position: absolute; z-index: 2; left: 50%; top: -2px; bottom: -2px; width: 3px; margin-left: -1.5px; background: var(--ink); opacity: .35; }
 
 /* minimap — bottom left */
 .df-mini { position: absolute; left: 22px; bottom: 22px; padding: 8px; border-radius: 22px; background: var(--cream);

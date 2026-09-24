@@ -26,7 +26,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import (SHOTS, Session, add_common_args, build_url, diag_problems, ensure_server,  # noqa: E402
-                    print_diagnostics, save_report, stop_server)
+                    preflight_chromes, print_diagnostics, save_report, stop_server)
 
 DEG = 3.141592653589793 / 180.0
 
@@ -65,9 +65,10 @@ def enter_play(s, notes):
     return "__DF__.start() fallback" if ok else None
 
 
-def ensure_play(s, notes, where):
-    """see common.Session.resume_if_paused"""
-    return s.resume_if_paused(notes, where)
+def ensure_play(s, notes, where, problems):
+    """common.Session.lock_guard: focus theft by another window → ONE real click re-locks (NOTE);
+    a lock lost while the page still had focus → a problem (a game bug)."""
+    return s.lock_guard(where, notes, problems) != "failed"
 
 
 def wait_warm(s, notes, where, min_fps=24.0, budget_s=25.0):
@@ -138,6 +139,7 @@ def main() -> int:
     shot = lambda n: os.path.join(SHOTS, "%s_%s.png" % (P, n))
     rep = {"size": [args.width, args.height], "shots": {}, "notes": []}
     problems = []
+    rep["otherAutomatedChrome"] = preflight_chromes("pre-flight")[0]
     server = ensure_server(args.base, not args.no_serve)     # one dev server for all three sessions
     try:
         return run(args, P, shot, rep, problems)
@@ -173,7 +175,7 @@ def run(args, P, shot, rep, problems) -> int:
         samples = []
         for _ in range(40):
             if s.phase() != "play":
-                ensure_play(s, rep["notes"], "fps sampling at spawn")
+                ensure_play(s, rep["notes"], "fps sampling at spawn", problems)
                 time.sleep(2.0)
                 continue
             samples.append((debug_fps(s), (s.state() or {}).get("fps")))
@@ -187,7 +189,7 @@ def run(args, P, shot, rep, problems) -> int:
         time.sleep(0.4)
 
         # the trail: real W off the pad (down the base-deck edge onto the court), then W + LMB
-        ensure_play(s, rep["notes"], "before the trail")
+        ensure_play(s, rep["notes"], "before the trail", problems)
         wait_warm(s, rep["notes"], "noon trail")
         tr = paint_trail(s, 1.6, 1.2)
         rep["trail"] = tr
@@ -205,7 +207,7 @@ def run(args, P, shot, rep, problems) -> int:
         time.sleep(0.3)
 
         # stations (dev teleport only to reach them)
-        ensure_play(s, rep["notes"], "before the stations")
+        ensure_play(s, rep["notes"], "before the stations", problems)
         station(s, 0.0, 1.45, 0.0, 0.0)          # buoy block top = mid-court, facing +Z (GULF base)
         rep["midcourt"] = (s.state() or {}).get("player")
         rep["shots"]["midcourt"] = s.screenshot(shot("midcourt"))
@@ -233,7 +235,7 @@ def run(args, P, shot, rep, problems) -> int:
         if not enter_play(s, rep["notes"]):
             raise RuntimeError("golden: could not enter play")
         time.sleep(1.0)
-        ensure_play(s, rep["notes"], "golden: before the trail")
+        ensure_play(s, rep["notes"], "golden: before the trail", problems)
         wait_warm(s, rep["notes"], "golden trail")
         rep["goldenTrail"] = paint_trail(s, 1.6, 0.9)
         if not (rep["goldenTrail"]["trailMetres"] > 3.0):

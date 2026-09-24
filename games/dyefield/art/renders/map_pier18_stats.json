@@ -61,5 +61,42 @@
   "blender_select_overlap_faces": 24
  },
  "fixups": [],
- "version": 1
+ "version": 1,
+ "plate_bottom": -0.6,
+ "pennant_clearance": {
+  "deco_board_cup": {
+   "lettering_box": [
+    -10.48,
+    10.48,
+    6.48,
+    8.72,
+    51.46
+   ],
+   "camera_samples": 4704,
+   "flag_over_lettering": 14,
+   "pct": 0.3,
+   "example_camera": [
+    30.5,
+    3.1,
+    39.2
+   ]
+  },
+  "deco_board_tide": {
+   "lettering_box": [
+    -10.48,
+    10.48,
+    5.89,
+    9.31,
+    -51.46
+   ],
+   "camera_samples": 4704,
+   "flag_over_lettering": 15,
+   "pct": 0.32,
+   "example_camera": [
+    31.1,
+    1.2,
+    -37.6
+   ]
+  }
+ }
 }

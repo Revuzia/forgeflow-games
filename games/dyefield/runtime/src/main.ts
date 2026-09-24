@@ -1,6 +1,8 @@
 // DYEFIELD — boot: params → WebGL2 check → loading card → parallel loads (Rapier, map geometry +
 // paint atlas, map GLB view, tide-runner + kit) → shader pre-warm → CLICK TO PLAY → play.
 // Query params (CONTRACT §6): ?map=pier18 · ?dev=1 · ?preset=noon|golden · ?seed=N
+// plus ?quality=auto|high|low (the render-quality settings hook; default auto = adaptive resolution)
+// and, dev-only, ?merge=0 (keep static map meshes unmerged — perf A/B) and ?tonemap=…
 // Any failure lands on the error card with the message (never a blank canvas).
 
 /// <reference types="vite/client" />
@@ -22,7 +24,7 @@ import { Painter } from './core/paint/painter.ts';
 import { MinimapRaster } from './core/paint/minimap.ts';
 import { loadRapier, PhysicsWorld } from './core/physics.ts';
 import { Player } from './core/player.ts';
-import { createRenderer, hasWebGL2 } from './view/renderer.ts';
+import { createRenderer, hasWebGL2, isRenderQuality, type RenderQuality } from './view/renderer.ts';
 import { FollowCamera } from './view/camera.ts';
 import { createSky } from './view/sky.ts';
 import { createWater } from './view/water.ts';
@@ -109,7 +111,9 @@ async function boot(): Promise<void> {
     };
     report('Loading Pier 18…');
 
-    const rig = createRenderer(canvas, (app.dev && params.get('tonemap')) || 'neutral');
+    const qp = params.get('quality');
+    const quality: RenderQuality = isRenderQuality(qp) ? qp : 'auto';
+    const rig = createRenderer(canvas, (app.dev && params.get('tonemap')) || 'neutral', quality);
     const renderer = rig.renderer;
     const scene = new THREE.Scene();
     const cam = new FollowCamera(canvas.clientWidth / Math.max(1, canvas.clientHeight));
@@ -144,7 +148,8 @@ async function boot(): Promise<void> {
     const viewer = dye.uViewerTeam;
     if (viewer) viewer.value = 1;
 
-    const map = await loadMapView(loader, def, dye, (f) => { prog.map = f; report(); });
+    const map = await loadMapView(loader, def, dye, (f) => { prog.map = f; report(); },
+      { mergeStatic: !(app.dev && params.get('merge') === '0') });
     prog.map = 1;
     scene.add(map.root);
     const sky = createSky(scene, renderer, preset);
@@ -173,7 +178,7 @@ async function boot(): Promise<void> {
 
     const game = new Game({
       app, def, canvas, rig, scene, cam, sky, water, map, geo, atlas, painter, minimap, paint, dye, physics, player, hero, hud, boot: bootUi, input,
-    });
+    }, { quality });
     app.game = game;
 
     // shader pre-warm (doctrine §3): compile every program before frame 1, then one real frame
@@ -187,7 +192,9 @@ async function boot(): Promise<void> {
     report('Ready');
 
     console.info(`[dyefield] ${VERSION} map ${def.id}: atlas ${atlas.size}² · ${atlas.count} texels · overlaps ${atlas.overlaps} · built in ${atlasMs.toFixed(0)} ms; `
-      + `map ${map.triangles} tris (${map.paintTriangles} paint); physics ${physics.triangles} tris; hero ${Math.round(heroAssets.tris)} tris; gpu ${rig.gpu()}`);
+      + `map ${map.triangles} tris (${map.paintTriangles} paint); static meshes ${map.merge.before} → ${map.merge.after} `
+      + `(${map.merge.sources} merged into ${map.merge.merged}; casters ${map.merge.castersBefore} → ${map.merge.castersAfter}); `
+      + `physics ${physics.triangles} tris; hero ${Math.round(heroAssets.tris)} tris; quality ${quality}; gpu ${rig.gpu()}`);
     for (const w of [...map.warnings, ...heroAssets.warnings]) console.warn('[dyefield]', w);
 
     app.phase = 'ready';

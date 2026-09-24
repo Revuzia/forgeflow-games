@@ -1,5 +1,5 @@
 // DYEFIELD — HUD (CONTRACT §5.1 ui/hud.ts). Chunky toy-bright DOM over the canvas:
-//   top centre   coverage bar  ◉ SUNCREW % | ▲ GULF CREW %
+//   top centre   coverage bar  ◉ SUNCREW % | tug-of-war bar | ▲ GULF CREW %  (see coverageBar())
 //   bottom left  minimap canvas (MinimapRaster.rgba → putImageData only when dirty) + player arrow
 //   centre       reticle + tank pipette
 //   bottom centre the phase-2 dev hint
@@ -20,6 +20,31 @@ export interface HudDebug {
   atlasSize: number; atlasCount: number; overlaps: number; calls: number; triangles: number;
   programs: number; tick: number; x: number; y: number; z: number; flips: number; speed: number;
   anim: string; pointerLock: boolean;
+  /** adaptive render resolution (view/renderer.ts) */
+  scale: number; scaleMin: number; scaleMax: number; quality: string; buffer: [number, number];
+  p90: number; targetMs: number;
+}
+
+/**
+ * Tug-of-war widths (fractions of the bar) for the weighted coverage fractions. SUNCREW fills from
+ * the left, GULF CREW from the right, the unpainted middle stays neutral. The two fills keep the
+ * exact ratio of the teams' coverage (the comparison stays honest); their combined length is the
+ * cube root of the painted fraction, so small coverage is still visible (one 6 m brushed trail ≈ 0.35 %
+ * painted → 15 % of the bar, 1 % → 22 %, 10 % → 46 %, 50 % → 79 %, all painted → the full bar) and the
+ * neutral middle keeps shrinking visibly through a whole match. Any non-zero team gets at least 2 %.
+ */
+export function coverageBar(sun: number, gulf: number): { sun: number; gulf: number } {
+  const s = Math.max(0, sun), g = Math.max(0, gulf);
+  const painted = s + g;
+  if (!(painted > 0)) return { sun: 0, gulf: 0 };
+  const total = Math.min(1, Math.cbrt(Math.min(1, painted)));
+  let ws = total * (s / painted), wg = total * (g / painted);
+  const MIN = 0.02;
+  if (s > 0 && ws < MIN) ws = MIN;
+  if (g > 0 && wg < MIN) wg = MIN;
+  const over = ws + wg - 1;
+  if (over > 0) { if (ws >= wg) ws -= over; else wg -= over; }
+  return { sun: ws, gulf: wg };
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
@@ -59,6 +84,7 @@ export class Hud {
   private readonly gulfPct: HTMLElement;
   private readonly sunFill: HTMLElement;
   private readonly gulfFill: HTMLElement;
+  private readonly covBar: HTMLElement;
   private readonly tankFill: HTMLElement;
   private readonly tankBox: HTMLElement;
   private readonly ret: HTMLElement;
@@ -87,8 +113,16 @@ export class Hud {
     this.gulfPct = el('span', 'pct', '0%');
     gulfTag.append(gulfMark, el('span', 'name', gulf.name), this.gulfPct);
     const bar = el('div', 'df-cov-bar');
+    bar.setAttribute('role', 'img');
+    bar.setAttribute('aria-label', `${sun.name} 0% · ${gulf.name} 0%`);
+    this.covBar = bar;
     this.sunFill = el('div', 'df-cov-fill sun');
     this.gulfFill = el('div', 'df-cov-fill gulf');
+    // the crews' shape marks ride the leading edge of each fill (colorblind-safe: shape + color)
+    const sunTip = el('span', 'tip', sun.markGlyph); sunTip.setAttribute('aria-hidden', 'true');
+    const gulfTip = el('span', 'tip', gulf.markGlyph); gulfTip.setAttribute('aria-hidden', 'true');
+    this.sunFill.append(sunTip);
+    this.gulfFill.append(gulfTip);
     bar.append(this.sunFill, this.gulfFill, el('div', 'df-cov-mid'));
     cov.append(sunTag, bar, gulfTag);
 
@@ -178,8 +212,13 @@ export class Hud {
       this.lastCov = key;
       this.sunPct.textContent = pct(c.sun);
       this.gulfPct.textContent = pct(c.gulf);
-      this.sunFill.style.width = `${(Math.max(0, c.sun) * 100).toFixed(2)}%`;
-      this.gulfFill.style.width = `${(Math.max(0, c.gulf) * 100).toFixed(2)}%`;
+      const w = coverageBar(c.sun, c.gulf);
+      this.sunFill.style.width = `${(w.sun * 100).toFixed(2)}%`;
+      this.gulfFill.style.width = `${(w.gulf * 100).toFixed(2)}%`;
+      // the mark shows once its fill is wide enough to hold it
+      this.sunFill.classList.toggle('wide', w.sun >= 0.07);
+      this.gulfFill.classList.toggle('wide', w.gulf >= 0.07);
+      this.covBar.setAttribute('aria-label', `${teamById(1).name} ${pct(c.sun)} · ${teamById(2).name} ${pct(c.gulf)}`);
     }
     const tank = Math.round(Math.max(0, Math.min(100, s.tank)));
     if (tank !== this.lastTank) { this.lastTank = tank; this.tankFill.style.height = `${tank}%`; }
@@ -227,6 +266,8 @@ export class Hud {
       ['tank', `${d.tank.toFixed(0)} / 100`],
       ['map', d.mapId],
       ['fps', d.fps.toFixed(0)],
+      ['render scale', `${d.scale.toFixed(2)}× ${d.quality} (${d.scaleMin.toFixed(2)}–${d.scaleMax.toFixed(2)}) · ${d.buffer[0]}×${d.buffer[1]}`],
+      ['frame p90', d.p90 > 0 ? `${d.p90.toFixed(1)} ms · target ${d.targetMs.toFixed(1)} ms` : `— · target ${d.targetMs.toFixed(1)} ms`],
       ['move', `${d.state}${d.grounded ? ' · grounded' : ''} · ${d.speed.toFixed(1)} m/s`],
       ['anim', d.anim],
       ['atlas', `${d.atlasSize}² · ${d.atlasCount.toLocaleString('en-US')} texels`],
