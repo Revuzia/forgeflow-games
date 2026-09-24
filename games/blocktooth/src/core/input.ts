@@ -1,0 +1,506 @@
+// BLOCKTOOTH — keyboard + gamepad input (CONTRACT.md §14).
+//
+// App-side module (it listens to DOM events and polls the Gamepad API). The SIM never sees
+// this class — it only receives the latched, world-space `TitanInput` built by titanInput().
+//
+// Model
+//   * Keyboard by `event.code` (layout-independent). Key events only QUEUE edges; update()
+//     (once per rendered frame) latches them, so pressed(a) is true for exactly the frame
+//     after the press. update() is idempotent within one animation frame (keyed on
+//     document.timeline.currentTime), so the app loop and a UI screen may both call it.
+//   * Gamepads (standard mapping) are polled in update(): left stick (radial deadzone 0.2 with
+//     rescale) + d-pad. A = confirm (ui) / HOOK (game); B = back (ui) / DASH (game); RB = dash;
+//     Start = pause; X = reroll.
+//   * Gameplay actions (ability, dash, stick/move) read false / zero while mode === 'ui'.
+//   * Flipping `mode` clears every edge + buffer, and every key/button held at the flip is
+//     DEAD until physically released (the stick until it recentres) — so the Space/Enter
+//     that confirmed a menu can never leak into the first gameplay tick, and a held direction
+//     can never navigate the menu that just opened.
+//   * Keys shared by gameplay and UI (Space, pad A, pad B) do not CONFIRM/BACK for
+//     `sharedKeyGuardS` after a game → ui flip, so mashing the hook when a draft pops up
+//     cannot pick a card blind. Enter / 1 / 2 / 3 / R / Esc are never guarded.
+//   * ability / dash presses are additionally BUFFERED for INPUT_BUFFER_S and consumed by the
+//     first titanInput() call inside that window — exactly once, however many sim ticks run in
+//     the frame (a press between two 30 Hz ticks is never lost, never doubled).
+//   * Window blur / hidden tab releases everything.
+
+import type { TitanInput } from './types.ts';
+import { INPUT_BUFFER_S, screenToWorld } from './config.ts';
+
+export type Action =
+  | 'up' | 'down' | 'left' | 'right'
+  | 'confirm' | 'back' | 'pause' | 'debug'
+  | 'ability' | 'dash'
+  | 'pick1' | 'pick2' | 'pick3' | 'reroll';
+
+export const ACTIONS: readonly Action[] = [
+  'up', 'down', 'left', 'right', 'confirm', 'back', 'pause', 'debug', 'ability', 'dash', 'pick1', 'pick2', 'pick3', 'reroll',
+];
+
+export type InputMode = 'ui' | 'game';
+export type InputDevice = 'keyboard' | 'gamepad';
+
+// ─────────────────────────────── tuning ───────────────────────────────
+/** radial stick deadzone (magnitude), rescaled so the live range starts at 0 */
+export const STICK_DEADZONE = 0.2;
+/** stick → menu navigation: engage above, release below (hysteresis) */
+const NAV_PRESS = 0.55;
+const NAV_RELEASE = 0.35;
+/** gamepad menu auto-repeat (keyboard uses the OS key-repeat) */
+const NAV_REPEAT_DELAY_MS = 380;
+const NAV_REPEAT_EVERY_MS = 110;
+/** default guard for shared gameplay/UI keys after a game → ui flip (s) */
+export const SHARED_KEY_GUARD_S = 0.35;
+
+// ─────────────────────────────── keyboard map ───────────────────────────────
+const KEYMAP: Readonly<Record<string, readonly Action[]>> = {
+  KeyW: ['up'], ArrowUp: ['up'],
+  KeyS: ['down'], ArrowDown: ['down'],
+  KeyA: ['left'], ArrowLeft: ['left'],
+  KeyD: ['right'], ArrowRight: ['right'],
+  Space: ['ability', 'confirm'],
+  Enter: ['confirm'], NumpadEnter: ['confirm'],
+  ShiftLeft: ['dash'], ShiftRight: ['dash'],
+  Escape: ['back', 'pause'],
+  KeyP: ['pause'],
+  F1: ['debug'],
+  Digit1: ['pick1'], Digit2: ['pick2'], Digit3: ['pick3'],
+  Numpad1: ['pick1'], Numpad2: ['pick2'], Numpad3: ['pick3'],
+  KeyR: ['reroll'],
+};
+
+/** reverse map: action → key codes */
+const ACTION_CODES: Record<Action, string[]> = (() => {
+  const out = {} as Record<Action, string[]>;
+  for (const a of ACTIONS) out[a] = [];
+  for (const code of Object.keys(KEYMAP)) for (const a of KEYMAP[code]) out[a].push(code);
+  return out;
+})();
+
+/** default browser behaviour suppressed for these (page scroll, focus hop, help, sticky keys) */
+const PREVENT_CODES: ReadonlySet<string> = new Set([
+  'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight', 'F1', 'Tab',
+]);
+const MODIFIER_CODES: ReadonlySet<string> = new Set([
+  'ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight',
+  'CapsLock', 'Tab', 'F1', 'OSLeft', 'OSRight', 'ContextMenu',
+]);
+const GAMEPLAY: ReadonlySet<Action> = new Set<Action>(['ability', 'dash']);
+const NAV: readonly Action[] = ['up', 'down', 'left', 'right'];
+/** keys that mean something in gameplay AND in menus (guarded after game → ui) */
+const SHARED_KEY_CODES: ReadonlySet<string> = new Set(['Space']);
+const MOVE_CODES = {
+  up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'],
+} as const;
+
+// ─────────────────────────────── gamepad map (standard mapping) ───────────────────────────────
+const PAD_BUTTONS = 17;
+const PAD_A = 0, PAD_B = 1, PAD_X = 2, PAD_Y = 3, PAD_RB = 5, PAD_SELECT = 8, PAD_START = 9;
+const PAD_UP = 12, PAD_DOWN = 13, PAD_LEFT = 14, PAD_RIGHT = 15;
+/** buttons that count for "press any key" */
+const PAD_ANY: readonly number[] = [PAD_A, PAD_B, PAD_X, PAD_Y, PAD_START, PAD_SELECT, PAD_UP, PAD_DOWN, PAD_LEFT, PAD_RIGHT];
+
+function clockNow(): number {
+  return typeof performance !== 'undefined' ? performance.now() : 0;
+}
+
+/** True when a key event targets a text-entry element (let the user type; do not steal keys). */
+function isTextEntry(target: EventTarget | null): boolean {
+  const el = target as { tagName?: string; type?: string; isContentEditable?: boolean } | null;
+  if (!el || typeof el.tagName !== 'string') return false;
+  if (el.isContentEditable) return true;
+  const tag = el.tagName.toUpperCase();
+  if (tag === 'TEXTAREA') return true;
+  if (tag === 'INPUT') {
+    const t = (el.type || 'text').toLowerCase();
+    return t !== 'range' && t !== 'checkbox' && t !== 'radio' && t !== 'button' && t !== 'submit' && t !== 'reset' && t !== 'color';
+  }
+  return false;
+}
+
+/** Short on-screen key hint for an action ('SPACE', 'SHIFT', 'ENTER', 'A', …). */
+export function actionLabel(a: Action, device: InputDevice = 'keyboard'): string {
+  if (device === 'gamepad') {
+    switch (a) {
+      case 'up': return 'D-PAD UP';
+      case 'down': return 'D-PAD DOWN';
+      case 'left': return 'D-PAD LEFT';
+      case 'right': return 'D-PAD RIGHT';
+      case 'confirm': return 'A';
+      case 'back': return 'B';
+      case 'pause': return 'START';
+      case 'debug': return 'F1';
+      case 'ability': return 'A';
+      case 'dash': return 'B';
+      case 'pick1': case 'pick2': case 'pick3': return 'A';
+      case 'reroll': return 'X';
+    }
+  }
+  switch (a) {
+    case 'up': return 'W';
+    case 'down': return 'S';
+    case 'left': return 'A';
+    case 'right': return 'D';
+    case 'confirm': return 'ENTER';
+    case 'back': return 'ESC';
+    case 'pause': return 'ESC';
+    case 'debug': return 'F1';
+    case 'ability': return 'SPACE';
+    case 'dash': return 'SHIFT';
+    case 'pick1': return '1';
+    case 'pick2': return '2';
+    case 'pick3': return '3';
+    case 'reroll': return 'R';
+  }
+}
+
+export class Input {
+  /** after a game → ui flip, Space / pad A / pad B do not confirm/back for this long (s). 0 disables. */
+  sharedKeyGuardS = SHARED_KEY_GUARD_S;
+
+  private readonly win: Window;
+  private _mode: InputMode = 'ui';
+  private _lastDevice: InputDevice = 'keyboard';
+  private uiSince = -Infinity;          // clock (ms) of the last game → ui flip
+
+  // keyboard
+  private readonly keysDown = new Set<string>();
+  private readonly keysDead = new Set<string>();   // held across a mode flip / blur: ignored until released
+  private readonly pending = new Set<Action>();    // queued by key events, latched by update()
+  private pendingAny = false;
+  // latched for this frame
+  private readonly edges = new Set<Action>();
+  private anyEdge = false;
+  private lastFrameKey: number | null = null;
+
+  // ability / dash buffers (clock ms of the unconsumed press, or -Infinity)
+  private abilityAt = -Infinity;
+  private dashAt = -Infinity;
+
+  // gamepad
+  private readonly padDown: boolean[] = new Array<boolean>(PAD_BUTTONS).fill(false);
+  private readonly padPrev: boolean[] = new Array<boolean>(PAD_BUTTONS).fill(false);
+  private readonly padDead: boolean[] = new Array<boolean>(PAD_BUTTONS).fill(false);
+  private padRawMag = 0;
+  private padSX = 0;                     // deadzoned stick, screen space (x right, y up)
+  private padSY = 0;
+  private stickDead = false;             // held across a mode flip: ignored until it recentres
+  private readonly navOn: Record<'up' | 'down' | 'left' | 'right', boolean> = { up: false, down: false, left: false, right: false };
+  private readonly navNext: Record<'up' | 'down' | 'left' | 'right', number> = { up: 0, down: 0, left: 0, right: 0 };
+
+  private readonly onKeyDown: (e: KeyboardEvent) => void;
+  private readonly onKeyUp: (e: KeyboardEvent) => void;
+  private readonly onBlur: () => void;
+  private readonly onVisibility: () => void;
+
+  constructor(win: Window) {
+    this.win = win;
+    this.onKeyDown = (e) => this.keyDown(e);
+    this.onKeyUp = (e) => this.keyUp(e);
+    this.onBlur = () => this.releaseAll();
+    this.onVisibility = () => { if (this.win.document && this.win.document.hidden) this.releaseAll(); };
+    win.addEventListener('keydown', this.onKeyDown);
+    win.addEventListener('keyup', this.onKeyUp);
+    win.addEventListener('blur', this.onBlur);
+    if (win.document) win.document.addEventListener('visibilitychange', this.onVisibility);
+  }
+
+  /** Detach every listener (page teardown / tests). */
+  dispose(): void {
+    this.win.removeEventListener('keydown', this.onKeyDown);
+    this.win.removeEventListener('keyup', this.onKeyUp);
+    this.win.removeEventListener('blur', this.onBlur);
+    if (this.win.document) this.win.document.removeEventListener('visibilitychange', this.onVisibility);
+    this.releaseAll();
+  }
+
+  // ─────────────────────────────── mode ───────────────────────────────
+  /** 'ui' while any screen owns input (title/select/slate/draft/pause/tabloid); 'game' in play. */
+  get mode(): InputMode { return this._mode; }
+  set mode(m: InputMode) {
+    if (m !== 'ui' && m !== 'game') return;
+    if (m === this._mode) return;
+    this._mode = m;
+    // everything held across the flip is dead until released / recentred
+    for (const c of this.keysDown) this.keysDead.add(c);
+    this.keysDown.clear();
+    for (let i = 0; i < PAD_BUTTONS; i++) if (this.padDown[i]) this.padDead[i] = true;
+    if (this.padRawMag >= STICK_DEADZONE) this.stickDead = true;
+    this.navOn.up = this.navOn.down = this.navOn.left = this.navOn.right = false;
+    this.clearEdges();
+    this.uiSince = m === 'ui' ? clockNow() : -Infinity;
+  }
+
+  /** the device that produced the most recent press ('keyboard' | 'gamepad') — for key hints */
+  get lastDevice(): InputDevice { return this._lastDevice; }
+
+  // ─────────────────────────────── per frame ───────────────────────────────
+  /** Latch queued key edges + poll gamepads. Call once per rendered frame (extra calls in the
+   *  same animation frame are ignored). */
+  update(): void {
+    const key = this.frameKey();
+    if (key !== null) {
+      if (key === this.lastFrameKey) return;
+      this.lastFrameKey = key;
+    }
+    this.edges.clear();
+    for (const a of this.pending) this.edges.add(a);
+    this.pending.clear();
+    this.anyEdge = this.pendingAny;
+    this.pendingAny = false;
+    this.pollPads(clockNow());
+  }
+
+  /** true for the frame an action was pressed (gameplay actions: game mode only). */
+  pressed(a: Action): boolean {
+    if (GAMEPLAY.has(a) && this._mode !== 'game') return false;
+    return this.edges.has(a);
+  }
+
+  /** true while an action is held (gameplay actions: game mode only). */
+  held(a: Action): boolean {
+    if (GAMEPLAY.has(a) && this._mode !== 'game') return false;
+    const codes = ACTION_CODES[a];
+    for (let i = 0; i < codes.length; i++) if (this.keysDown.has(codes[i])) return true;
+    return this.padHeld(a);
+  }
+
+  /** true for the frame any key / pad button was freshly pressed ("PRESS ANY KEY"). */
+  anyPressed(): boolean { return this.anyEdge; }
+
+  /** Screen-space move vector (x right, y up), |v| ≤ 1: keys + stick + d-pad. Zero in ui mode. */
+  stick(): { x: number; y: number } {
+    if (this._mode !== 'game') return { x: 0, y: 0 };
+    let x = 0, y = 0;
+    // keyboard
+    if (this.anyDown(MOVE_CODES.right)) x += 1;
+    if (this.anyDown(MOVE_CODES.left)) x -= 1;
+    if (this.anyDown(MOVE_CODES.up)) y += 1;
+    if (this.anyDown(MOVE_CODES.down)) y -= 1;
+    const km = Math.hypot(x, y);
+    if (km > 1) { x /= km; y /= km; }
+    // gamepad stick + d-pad
+    if (!this.stickDead) { x += this.padSX; y += this.padSY; }
+    if (this.padLive(PAD_RIGHT)) x += 1;
+    if (this.padLive(PAD_LEFT)) x -= 1;
+    if (this.padLive(PAD_UP)) y += 1;
+    if (this.padLive(PAD_DOWN)) y -= 1;
+    const m = Math.hypot(x, y);
+    if (m > 1) { x /= m; y /= m; }
+    return { x, y };
+  }
+
+  /**
+   * The latched per-tick command for the sim, move already in WORLD space (screenToWorld).
+   * Call once per sim tick. Buffered ability/dash presses are consumed by the first call within
+   * INPUT_BUFFER_S of the press — exactly once. All zero/false in ui mode.
+   */
+  titanInput(): TitanInput {
+    if (this._mode !== 'game') return { mx: 0, mz: 0, ability: false, abilityHeld: false, dash: false };
+    const s = this.stick();
+    const m = screenToWorld(s.x, s.y);
+    const now = clockNow();
+    const win = INPUT_BUFFER_S * 1000;
+    let ability = false, dash = false;
+    if (this.abilityAt > -Infinity) {
+      ability = now - this.abilityAt <= win;
+      this.abilityAt = -Infinity;
+    }
+    if (this.dashAt > -Infinity) {
+      dash = now - this.dashAt <= win;
+      this.dashAt = -Infinity;
+    }
+    return { mx: m.mx, mz: m.mz, ability, abilityHeld: this.held('ability'), dash };
+  }
+
+  /** Forget this frame's edges, queued edges and the ability/dash buffers (a screen consumed them). */
+  clearEdges(): void {
+    this.edges.clear();
+    this.pending.clear();
+    this.anyEdge = false;
+    this.pendingAny = false;
+    this.abilityAt = -Infinity;
+    this.dashAt = -Infinity;
+  }
+
+  // ─────────────────────────────── keyboard ───────────────────────────────
+  private keyDown(e: KeyboardEvent): void {
+    if (isTextEntry(e.target)) return;
+    const code = e.code;
+    if (PREVENT_CODES.has(code)) e.preventDefault();
+    this._lastDevice = 'keyboard';
+    const acts = KEYMAP[code];
+
+    if (e.repeat) {
+      // OS auto-repeat: never a new press. Menus get navigation repeat from live (not dead) keys.
+      if (acts && this._mode === 'ui' && this.keysDown.has(code)) {
+        for (const a of acts) if (NAV.includes(a)) this.pending.add(a);
+      }
+      return;
+    }
+
+    // a fresh press revives a key that was dead across a flip/blur
+    this.keysDead.delete(code);
+    this.keysDown.add(code);
+    const guarded = this.inSharedGuard() && SHARED_KEY_CODES.has(code);
+    if (!MODIFIER_CODES.has(code) && !guarded) this.pendingAny = true;
+    if (!acts) return;
+    for (const a of acts) {
+      if (GAMEPLAY.has(a)) {
+        if (this._mode === 'game') {
+          this.pending.add(a);
+          if (a === 'ability') this.abilityAt = clockNow();
+          else this.dashAt = clockNow();
+        }
+        continue;
+      }
+      if (guarded && (a === 'confirm' || a === 'back')) continue;
+      this.pending.add(a);
+    }
+  }
+
+  private keyUp(e: KeyboardEvent): void {
+    const code = e.code;
+    if (PREVENT_CODES.has(code) && !isTextEntry(e.target)) e.preventDefault();
+    this.keysDown.delete(code);
+    this.keysDead.delete(code);
+  }
+
+  /** Blur / hidden tab: drop every held key, edge and buffer; pad buttons held now are dead. */
+  private releaseAll(): void {
+    this.keysDown.clear();
+    this.keysDead.clear();
+    for (let i = 0; i < PAD_BUTTONS; i++) if (this.padDown[i]) this.padDead[i] = true;
+    if (this.padRawMag >= STICK_DEADZONE) this.stickDead = true;
+    this.navOn.up = this.navOn.down = this.navOn.left = this.navOn.right = false;
+    this.clearEdges();
+  }
+
+  private anyDown(codes: readonly string[]): boolean {
+    for (let i = 0; i < codes.length; i++) if (this.keysDown.has(codes[i])) return true;
+    return false;
+  }
+
+  private inSharedGuard(): boolean {
+    return this._mode === 'ui' && this.sharedKeyGuardS > 0 && clockNow() - this.uiSince < this.sharedKeyGuardS * 1000;
+  }
+
+  /** document.timeline.currentTime is constant inside one animation frame → once-per-frame key. */
+  private frameKey(): number | null {
+    try {
+      const doc = this.win.document as (Document & { timeline?: { currentTime: unknown } }) | undefined;
+      const ct = doc && doc.timeline ? doc.timeline.currentTime : null;
+      return typeof ct === 'number' && Number.isFinite(ct) ? ct : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // ─────────────────────────────── gamepad ───────────────────────────────
+  private padLive(i: number): boolean { return this.padDown[i] && !this.padDead[i]; }
+
+  private padHeld(a: Action): boolean {
+    const game = this._mode === 'game';
+    switch (a) {
+      case 'up': case 'down': case 'left': case 'right': return this.navOn[a];
+      case 'confirm': return !game && this.padLive(PAD_A);
+      case 'back': return !game && this.padLive(PAD_B);
+      case 'ability': return game && this.padLive(PAD_A);
+      case 'dash': return game && (this.padLive(PAD_B) || this.padLive(PAD_RB));
+      case 'pause': return this.padLive(PAD_START);
+      case 'reroll': return this.padLive(PAD_X);
+      default: return false;
+    }
+  }
+
+  private readPads(): readonly (Gamepad | null)[] {
+    try {
+      const nav = this.win.navigator as Navigator | undefined;
+      if (!nav || typeof nav.getGamepads !== 'function') return [];
+      return nav.getGamepads() || [];
+    } catch {
+      return [];   // permissions-policy / insecure context
+    }
+  }
+
+  private pollPads(now: number): void {
+    const pads = this.readPads();
+    for (let i = 0; i < PAD_BUTTONS; i++) { this.padPrev[i] = this.padDown[i]; this.padDown[i] = false; }
+    let ax = 0, ay = 0, best = 0;
+    for (let p = 0; p < pads.length; p++) {
+      const pad = pads[p];
+      if (!pad || !pad.connected) continue;
+      const n = Math.min(pad.buttons.length, PAD_BUTTONS);
+      for (let i = 0; i < n; i++) {
+        const b = pad.buttons[i];
+        if (b && (b.pressed || b.value > 0.5)) this.padDown[i] = true;
+      }
+      const x = pad.axes.length > 0 ? pad.axes[0] : 0;
+      const y = pad.axes.length > 1 ? pad.axes[1] : 0;
+      const mag = Math.hypot(x, y);
+      if (Number.isFinite(mag) && mag > best) { best = mag; ax = x; ay = y; }
+    }
+
+    // stick: radial deadzone with rescale; screen y is up (pad axis 1 is down-positive)
+    this.padRawMag = best;
+    if (best < STICK_DEADZONE) {
+      this.padSX = 0; this.padSY = 0;
+      this.stickDead = false;                       // recentred → alive again
+    } else {
+      const k = (Math.min(best, 1) - STICK_DEADZONE) / (1 - STICK_DEADZONE) / best;
+      this.padSX = ax * k;
+      this.padSY = -ay * k;
+      if (!this.stickDead) this._lastDevice = 'gamepad';
+    }
+
+    // button edges (dead buttons revive once released)
+    const game = this._mode === 'game';
+    const guard = this.inSharedGuard();
+    for (let i = 0; i < PAD_BUTTONS; i++) {
+      if (this.padDead[i] && !this.padDown[i]) this.padDead[i] = false;
+      if (!this.padDown[i] || this.padPrev[i] || this.padDead[i]) continue;
+      this._lastDevice = 'gamepad';
+      const shared = i === PAD_A || i === PAD_B || i === PAD_RB;
+      if (PAD_ANY.includes(i) && !(guard && shared)) this.anyEdge = true;
+      switch (i) {
+        case PAD_A:
+          if (game) { this.edges.add('ability'); this.abilityAt = now; }
+          else if (!guard) this.edges.add('confirm');
+          break;
+        case PAD_B:
+          if (game) { this.edges.add('dash'); this.dashAt = now; }
+          else if (!guard) this.edges.add('back');
+          break;
+        case PAD_RB:
+          if (game) { this.edges.add('dash'); this.dashAt = now; }
+          break;
+        case PAD_START: this.edges.add('pause'); break;
+        case PAD_X: this.edges.add('reroll'); break;
+        default: break;
+      }
+    }
+
+    // navigation (d-pad OR dominant stick axis, hysteresis), with menu auto-repeat
+    const sx = this.stickDead ? 0 : this.padSX, sy = this.stickDead ? 0 : this.padSY;
+    const horiz = Math.abs(sx) >= Math.abs(sy);
+    this.navDir('up', this.padLive(PAD_UP), sy, !horiz, now);
+    this.navDir('down', this.padLive(PAD_DOWN), -sy, !horiz, now);
+    this.navDir('right', this.padLive(PAD_RIGHT), sx, horiz, now);
+    this.navDir('left', this.padLive(PAD_LEFT), -sx, horiz, now);
+  }
+
+  private navDir(d: 'up' | 'down' | 'left' | 'right', dpad: boolean, comp: number, dominant: boolean, now: number): void {
+    const was = this.navOn[d];
+    const stickOn = was ? comp > NAV_RELEASE : (comp > NAV_PRESS && dominant);
+    const on = dpad || stickOn;
+    this.navOn[d] = on;
+    if (!on) return;
+    if (!was) {
+      this.edges.add(d);
+      this.navNext[d] = now + NAV_REPEAT_DELAY_MS;
+    } else if (this._mode === 'ui' && now >= this.navNext[d]) {
+      this.edges.add(d);
+      this.navNext[d] = now + NAV_REPEAT_EVERY_MS;
+    }
+  }
+}

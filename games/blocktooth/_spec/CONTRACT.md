@@ -1,0 +1,613 @@
+# BLOCKTOOTH — Build Contract
+
+Read §0 and your lane's sections before writing a line. Shared code that already exists
+and is **owned by the orchestrator** (do not edit; propose changes in your report instead):
+`src/core/types.ts`, `src/core/config.ts`, `src/core/rng.ts`, `src/core/math.ts`,
+`src/core/world.ts`, `src/render/viewtypes.ts`, this file.
+
+---
+
+## §0 Lane rules (every agent)
+
+1. **Own only your files** (§16). Never create or edit a file another lane owns. If you need
+   something from another lane, code against the export named in §5/§6 and note the
+   dependency in your report. If the contract is missing something you need, add a clearly
+   marked local helper inside YOUR files and report it as a contract gap.
+2. **TypeScript, erasable syntax only**: no `enum`, no `namespace`, no constructor parameter
+   properties, no decorators. Imports use explicit `.ts` extensions
+   (`import { clamp } from '../core/math.ts'`). Type-only imports use `import type`.
+   (Sim files must run under plain `node` with type stripping — Node 22.20 here.)
+3. **Sim is THREE-free and deterministic** (`src/core`, `src/city/citygen.ts`,
+   `src/city/citysim.ts`, `src/city/traffic.ts`, `src/titans/titansim.ts`, `src/titans/kits/*`,
+   `src/combat/*`, `src/ai/enemies.ts`, `src/ai/director.ts`, `src/ai/bosses/*` except views,
+   `src/upgrades/*`, `src/data/*`). No `three` import, no DOM, no `Math.random`, no clocks.
+   Randomness only from `world.rng.<stream>`. Views/UI/audio may use `Math.random` for cosmetics.
+4. **Typecheck** your files: `npx tsc --noEmit -p tsconfig.json 2>&1 | grep -E "src/<your paths>"`.
+   Errors that are only "Cannot find module" for another lane's not-yet-written file are
+   expected during the parallel build; every other error in your files must be zero.
+   **`node --check` is NOT a gate** (it passes broken ESM). For sim files also run a node
+   probe that imports your module (`node -e "import('./src/x/y.ts')"` or a scratch probe).
+5. **Lane scratch previews (visual lanes)**: you MAY look at your own work. Put a page at
+   `_harness/scratch/<lane>/index.html` that imports ONLY your modules + `three` + orchestrator
+   files, serve with `npx vite --config _harness/scratch/vite.scratch.config.ts --port <yours>
+   --strictPort` (run it in the background; kill it when done), and capture with
+   `python _harness/scratch/snap.py <url> _shots/scratch_<lane>_<n>.png --wait 8` (headless
+   Chrome on the real GPU; set `window.__SNAP_READY__ = true` after a few frames). Then READ the
+   PNG and judge it harshly. Ports: render-core 5181, city-kit 5182, titan-view 5183,
+   foes-view 5184, combat-view 5185, fx 5186, ui 5187, city-view 5188.
+6. **No primitive hero assets.** Titans, enemies, bosses, vehicles are MULTI-PART low-poly
+   anatomy with real (procedural) animation — never a lone cube/sphere/capsule standing in for
+   a character. Buildings/props are procedural kitbash geometry (allowed by doctrine behind the
+   visual gate). "Faceted low poly" = custom BufferGeometry / merged parts with flat normals and
+   painted vertex colours, NOT default `BoxGeometry` people.
+7. **Performance is a feature**: instancing for anything repeated, merge static parts, no
+   per-frame allocation in hot loops (reuse scratch vectors/arrays), never add/remove THREE
+   lights after first render (fixed light pool), no per-frame `new THREE.*`.
+8. Report honestly: what you built, what you verified (paste the command + output tail), what
+   is stubbed, and every contract gap. A stub must be named as a stub.
+
+---
+
+## §1 IP lock (originality is a hard requirement)
+
+BLOCKTOOTH is an original IP. **Forbidden anywhere in code, copy, or asset names:** any
+existing kaiju/film/game proper noun or silhouette — Godzilla, Gojira, Kong, Gamera, Mothra,
+Rodan, Ghidorah, Mechagodzilla, Anguirus, Ultraman, Jaeger, Pacific Rim, Rampage (the game's
+characters George/Lizzie/Ralph), Kaiju No. 8, Colossal Kaiju Combat, Dawn of the Monsters, any
+real TV network/callsign (NHK, CNN, BBC, Fox…), and any survivor-like upgrade name from
+Vampire Survivors / Brotato / Halls of Torment / Hades / Risk of Rain (e.g. "Spinach",
+"Hollow Heart", "Empty Tome", "Clover", "Attractorb", "Candelabrador"). "Kaiju" as a genre word
+is allowed in docs only, never on screen. No upright dinosaur-with-dorsal-plates silhouettes:
+MOLO is a LOW, SPRAWLING quadruped monitor; IRON GULLY is a beaked, ridge-backed QUADRUPED
+with a scrap-plate sail.
+
+**Name bible (use exactly these):**
+
+| Thing | Name | Notes |
+|---|---|---|
+| Game | **BLOCKTOOTH** | "You eat the street. You outgrow the block." |
+| Network | **WARD-7** ("Ward Seven Municipal Alert") | bug: `WARD-7 • LIVE` |
+| Open slate | `UNIDENTIFIED MASS — DOWNTOWN GRID` (GRID-EAST) · `UNIDENTIFIED MASS — WHITE STACKS` · `UNIDENTIFIED MASS — LOCKWATER` | freeze-frame lower third |
+| Size-up sting | `MASS BREACH` | + sub-line per rank (§12) |
+| Run-end tabloid | `THE CITY GOT SMALLER.` | masthead: **THE WARD SEVEN WITNESS** |
+| Titan 1 | **MOLO** — squat jade monitor, sawtooth back-fin | SMASH TANK |
+| Titan 2 | **VOLT-KITE** — lean indigo jackal-drake, static mane | CHAIN ASSASSIN |
+| Titan 3 | **HEARTHBACK** — walking caldera, obsidian dome shell | ERUPTION FORTRESS |
+| Titan 4 | **BRIARWICK** — horned garden-beast, seed ruff | AREA CONTROL |
+| Biome 1 | **GRID-EAST** — daytime commercial blocks, zebra crossings, toy traffic | boss CAISSON-4 |
+| Biome 2 | **WHITE STACKS** — snowed industrial park, dishes, tanks | boss IRON GULLY |
+| Biome 3 | **LOCKWATER** — flooded container port at night | boss CAISSON-4 |
+| Boss A | **CAISSON-4** — four-legged harbor crane-mech | meter **STRAIN** |
+| Boss B | **IRON GULLY** — pale ridge-backed titan, beaked head, scrap-plate sail | meter **FRACTURE** |
+| Enemies | CROSSING WARDEN (android) · PICKET SQUAD · GNAT (drone) · HOPPER (buggy) · BULWARK (APC) · TORTOISE (tank) · STILT MORTAR (walker) · RAMROD (elite breach-dozer) | contractor: **HALVARD CIVIL DEFENSE** |
+| Tabloid masthead | THE WARD SEVEN WITNESS | |
+
+Tone: Saturday-morning monster comic + a panicking municipal news desk. Deadpan civic
+language ("ZONING NO LONGER APPLIES", "RESIDENTS ADVISED TO BE ELSEWHERE"). No gore: stepped-on
+things puff into dust, bolts and springs.
+
+---
+
+## §2 Conventions
+
+* 1 unit = 1 m. Y up. Sim is planar XZ. Ground is y = 0 everywhere (no terrain).
+* **Heading θ** → direction `(sin θ, cos θ)`; θ = 0 faces +Z. Models are authored FACING +Z,
+  so `object.rotation.y = heading` is always correct. Use `headingOf(dx,dz)` from core/math.
+* Camera yaw 45°: the camera sits at +X+Z of its target looking toward −X−Z. Screen-up in
+  world = (−0.707, −0.707). Input conversion is `screenToWorld()` in config.ts (constant yaw).
+* Sim ticks at 30 Hz (`SIM_DT`). Views interpolate with `alpha`. All entity records carry
+  `px/pz/pheading` (set by world.ts at tick start).
+* Entity ids come from `newId(w)` (core/world.ts). Views track entities by id (Map), never by
+  array index — world.ts compacts arrays every 30 ticks.
+* Events (`SimEvent`) are the only sim→view channel besides reading state.
+* Titan-relative sizes: radii/ranges of titan abilities are expressed in **titan heights (H)**
+  and multiplied by `titan.height` at use time, so every kit scales with growth automatically.
+* Titan damage numbers are **base numbers** multiplied by `titanDamage(w, base)` (combat/damage.ts)
+  = base × `RANKS[rank].dmgMul` × `stats.damage` × active frenzy buffs.
+
+---
+
+## §3 Size ranks & growth
+
+| Rank | H (m) | mass to next | hp× | dmg× | flattens on contact | camera D (m) | pitch |
+|---|---|---|---|---|---|---|---|
+| I | 1.2 | 40 | 1.0 | 1 | tier 0 (cars, kiosks, hydrants, lamps, trees) | 17.2 | 36° |
+| II | 5 | 300 | 1.8 | 3 | ≤1 (shops, buses, trucks, containers) | 62.2 | 38° |
+| III | 14 | 1300 | 3.2 | 8 | ≤2 (midrise corners, sheds, tanks) | 153.7 | 40° |
+| IV | 32 | 4200 | 5.5 | 20 | ≤3 (office blocks, towers) | 314.3 | 42° |
+| V | 60 | — | 9.0 | 45 | ≤4 (megatowers) + fights bosses | 533.2 | 44° |
+
+* `titan.height = titanHeight(rank, progressInRank)` (up to +12 % swell before the next rank).
+  During a rank-up the sim eases height from the old value to the new rank's base over
+  `GROW_TWEEN_S` (easeOutBack) and emits `rankUp`. `radius = height × 0.42`.
+* **Mass** comes from pickups (rubble/scrap). `gainMass(w, m)` applies `stats.massGain` and the
+  pacing catch-up: if `w.t > RANK_SCHEDULE_S[rank+1]` the gain is multiplied by
+  `min(CATCHUP_MAX, 1 + CATCHUP_PER_MIN × minutesBehind)`.
+* **XP** comes from the same pickups; `xpToNext(level)`; each level-up increments
+  `upgrades.pendingDrafts` and emits `levelUp`. Rank-up also recomputes stats
+  (`recomputeStats`) — maxHp scales by hp×, current hp keeps its ratio then +15 % heal.
+* **Flatten rule**: a building/prop with `tier ≤ RANKS[rank].canFlatten` is smashed by contact
+  while `speed ≥ SMASH_MIN_SPEED_FRAC × maxSpeed` (and always during a dash), and does not block
+  movement (the titan plows through at `SMASH_SLOW` speed). `tier > canFlatten` BLOCKS movement
+  (circle push-out) and takes only `OVERSIZE_DAMAGE_MUL` (25 %) from attacks — the titan can
+  still chew the bottom floors and pancake it slowly. First bump into an oversized tier emits
+  `bump` (camera nudge + "too big" beat).
+* Contact smash DPS against flattenable buildings = `TIERS[canFlatten].floorHp × 6 × stats.smashDamage`
+  per second (a matched-tier floor pops every ~0.17 s; smaller things pop instantly).
+* **Crush**: enemies with `crushable` and `height < titan.height × CRUSH_RATIO` whose circle
+  overlaps the titan while it moves are killed instantly (`enemyKilled.crushed = true`).
+* Rank-up presentation: sim tween + `rankUp` event → camera punch + zoom-out, full-width
+  `MASS BREACH` banner, ground shockwave ring, roar + news sting, app hit-stop 0.25 s.
+
+## §4 Camera (render/camera.ts implements exactly this)
+
+```
+k      = 2·tan(fov/2),  fov = 30°
+D*(H,r)= H / (frameFrac[r] · k)                      // cameraDistance() in config.ts
+D     ← critically-damped spring toward D*, ω = 4/s   // x'' = ω²(D*−x) − 2ω x'
+punch  : on rankUp, D is multiplied by (1 − 0.08·(1 − easeOutCubic(τ/1.2))) for τ∈[0,1.2] s
+target = titanPos(interp) + v·0.25 s + up·(H·0.45)   // lead along velocity, smoothed (ω = 6/s)
+pitch  = lerp toward RANKS[r].pitchDeg (ω = 3/s)
+yaw    = 45° fixed
+camPos = target + D·(cos pitch·sin yaw, sin pitch, cos pitch·cos yaw)
+near/far = cameraClip(D)  → near = max(0.1, 0.02D), far = 6D + 400
+shake  : trauma model (amplitude² falloff 1.6/s); heavy footstep adds H·0.02·heavy, collapse
+         adds per tier, boss slams add more; disabled by settings.screenShake
+```
+Worked numbers at each rank's base height: D = 17.2 / 62.2 / 153.7 / 314.3 / 533.2 m.
+Vertical view extent = D·k = 9.2 / 33.3 / 82.4 / 168.4 / 285.7 m.
+Shadow camera (lighting.ts): orthographic box centred on the look target, half-size
+= 0.9·D·k·(aspect) clamped, depth = 3·D, re-fit every frame, texel-snapped to kill shimmer.
+
+---
+
+## §5 Sim architecture (exact exports — the imports in `src/core/world.ts` are law)
+
+### 5.1 World
+`createWorld(opts)` / `stepWorld(w, input)` / `stepN` / `newId` / `NO_INPUT` live in
+`src/core/world.ts` (orchestrator-owned). World fields: see `World` in types.ts.
+
+### 5.2 Tick order (stepWorld)
+`events cleared → snapshot prev poses → tick/t++ → stepCity → rebuildEnemyGrid → stepTitan →
+stepDirector → stepEnemies → stepBoss → rebuildEnemyGrid → stepProjectiles → stepTelegraphs →
+stepHazards → stepPickups → stepUpgrades → processTriggers → peakRank → checkRunEnd → compact/30`.
+The run ends (sim stops) on titan death or boss defeat (`runEnd` event).
+
+### 5.3 Module export table
+
+| Module (lane) | Exports (exact) |
+|---|---|
+| `data/titans.ts` (titan-sim) | `TITANS: Record<TitanId, TitanDef>` |
+| `data/biomes.ts` (city-sim) | `BIOMES: Record<BiomeId, BiomeDef>` |
+| `data/enemies.ts` (ai) | `ENEMIES: Record<EnemyKind, EnemyDef>` |
+| `data/bosses.ts` (ai) | `BOSSES: Record<BossId, BossDef>` |
+| `data/upgrades.ts` (upgrades) | `UPGRADES: UpgradeDef[]`, `UPGRADE_BY_ID: Record<string, UpgradeDef>` |
+| `data/strings.ts` (ui) | `STR` (see §12), `ALERTS: Record<AlertKey, {title: string; sub: string}>`, `TICKER: string[]`, `RANK_SUBS: string[]` (5), `BURST_WORDS: Record<string, string[]>` |
+| `city/citygen.ts` (city-sim) | `generateCity(biome: BiomeDef, seed: number, rng: () => number): CityLayout` |
+| `city/citysim.ts` (city-sim) | `stepCity(w)`, `buildingsInRect(city, minX, minZ, maxX, maxZ, out: number[]): number[]`, `propsInRect(city, minX, minZ, maxX, maxZ, out: number[]): number[]`, `damageBuilding(w, id, amount, opts: DamageOpts): number` (floors broken), `damageProp(w, id, amount, opts: DamageOpts): boolean` (destroyed), `resolveCircleVsCity(city, x, z, r, canFlatten: Tier, out: {x: number; z: number; bumpTier: number}): boolean` (true if pushed), `blockOf(city, x, z): number` (−1 outside), `buildingById(city, id): Building`, `nearestRubble(city, x, z, r, max: number, out: number[]): number[]` (ids of collapsed buildings) |
+| `city/traffic.ts` (city-sim) | `stepTraffic(w)` (called by stepCity) |
+| `titans/titansim.ts` (titan-sim) | `createTitan(def: TitanDef, spawn: {x,z,heading}): TitanState`, `stepTitan(w)`, `hurtTitan(w, dmg, kind: DamageKind, x, z): number` (dmg actually taken), `healTitan(w, amount): void`, `gainXp(w, xp): void`, `gainMass(w, mass): void`, `titanMaxSpeed(w): number` |
+| `titans/kits/index.ts` (titan-sim) | `stepKit(w)`, `kitOnHurt(w, dmg): number` (returns dmg after kit absorption), `kitOnDash(w, x0, z0, x1, z1): void` |
+| `titans/kits/{molo,voltkite,hearthback,briarwick}.ts` | each: `step(w)`, optional `onHurt(w, dmg): number`, optional `onDash(w, x0,z0,x1,z1)` |
+| `combat/spatial.ts` (combat) | `rebuildEnemyGrid(w)`, `enemiesInCircle(w, x, z, r, out: Enemy[]): Enemy[]`, `enemiesInShape(w, s: Shape, out: Enemy[]): Enemy[]`, `nearestEnemy(w, x, z, r, filter?: (e: Enemy) => boolean): Enemy \| null`, `nearestEnemies(w, x, z, r, n, out: Enemy[]): Enemy[]` |
+| `combat/damage.ts` (combat) | `titanDamage(w, base): number`, `rollCrit(w, dmg): {dmg: number; crit: boolean}`, `damageArea(w, s: Shape, dmg, opts: DamageOpts): number` (hits), `damageEnemy(w, e, dmg, opts): boolean` (killed), `killEnemy(w, e, crushed: boolean): void`, `damageTitanArea(w, s: Shape, dmg, kind): boolean` (hostile → titan; true if hit) |
+| `combat/targeting.ts` (combat) | `type Target = {kind: 'enemy', e: Enemy} \| {kind: 'boss', part: number} \| {kind: 'building', id: number} \| {kind: 'prop', id: number}`; `findTarget(w, x, z, range, preferEnemies = true): Target \| null`; `targetPos(w, t: Target): {x: number; z: number}`; `hitTarget(w, t: Target, dmg, opts): void` |
+| `combat/projectiles.ts` (combat) | `spawnProjectile(w, p: ProjectileSpawn): Projectile`, `stepProjectiles(w)`; `ProjectileSpawn = Partial<Projectile> & {owner, kind, x, z, vx, vz, dmg}` (lob: set `lob`, `tx`, `tz`, `aoe`, `life` → auto circle telegraph) |
+| `combat/telegraphs.ts` (combat) | `spawnTelegraph(w, t: TelegraphSpawn): Telegraph`, `stepTelegraphs(w)`, `TelegraphSpawn = {owner, style, shape, windup, dmg, kind, active?, onFire?, chain?, tag?}` — titan-owned telegraphs damage enemies/boss/city via damageArea; hostile ones damage the titan via damageTitanArea (once per telegraph unless `active` > 0 → 5 Hz ticks) |
+| `combat/hazards.ts` (combat) | `spawnHazard(w, h: HazardSpawn): Hazard`, `stepHazards(w)`; `HazardSpawn = {owner, kind, shape, life, dps?, data?}`. Generic: dps to the opposing side at 5 Hz, lifetime, `frost` slows enemies (or the titan if hostile) 40 %. Kit-specific behaviour (bloom firing, wire detonation) lives in the kits. |
+| `combat/pickups.ts` (combat) | `spawnPickup(w, kind: PickupKind, x, z, xp, mass): void` (burst outward with vy; merge into a nearby pickup when over `CITY.maxPickups`), `stepPickups(w)` (magnet radius = `stats.pickupRadius × H + 2`, pull speed ∝ titan speed, collect → gainXp/gainMass, heal → healTitan 10 % maxHp, chest → `upgrades.chestDrafts++` + `chest` event), `magnetAll(w, radius): number` |
+| `ai/enemies.ts` (ai) | `spawnEnemy(w, kind: EnemyKind, x, z, opts?: {squad?: number; slot?: number; elite?: boolean}): Enemy`, `stepEnemies(w)` |
+| `ai/director.ts` (ai) | `createDirector(): DirectorState`, `stepDirector(w)`, `spawnRing(w): number` (spawn radius, m) |
+| `ai/bosses/index.ts` (ai) | `spawnBoss(w, id: BossId): void`, `stepBoss(w)`, `damageBoss(w, part: number, dmg, opts: DamageOpts): void` |
+| `ai/bosses/{caisson4,irongully}.ts` | each: `create(w): BossState`, `step(w, b: BossState)`, optional `onDamage(w, b, part, dmg)` |
+| `upgrades/stats.ts` (upgrades) | `createUpgradeState(): UpgradeState`, `recomputeStats(w)`, `stat(w, key: StatKey): number` (incl. frenzy buffs), `baseStatBlock(): StatBlock` (defaults every key) |
+| `upgrades/engine.ts` (upgrades) | `applyUpgrade(w, id): void`, `stepUpgrades(w)`, `processTriggers(w)` |
+| `upgrades/draft.ts` (upgrades) | `rollOffer(w, chest?: boolean): string[]` (3 ids, deterministic via rng.loot), `pickUpgrade(w, id): void` (applies, consumes one pending/chest draft, clears offer), `rerollOffer(w): string[] \| null`, `hasPendingDraft(w): boolean` |
+
+### 5.4 Damage flow
+* Titan-side damage → `damageArea` / `hitTarget` → enemies (`damageEnemy`), boss (`damageBoss`
+  per part: circle-vs-shape against `boss.parts`), city (`damageBuilding` / `damageProp`
+  × `buildingMul` × `stats.buildingDamage` × oversize rule). Crits via `rollCrit` (rng.combat).
+  Emits `enemyHit`/`bossHit`; lifesteal = `stats.lifesteal` × dealt (enemies/boss only), capped
+  at 2 % maxHp per tick.
+* Hostile damage → `damageTitanArea` / projectile hit → `hurtTitan` (armor: ×100/(100+armor);
+  iframes; `kitOnHurt`; shield pool absorbs first; god cheat). Hostile damage is multiplied by
+  `RANKS[titan.rank].hpMul` at spawn time (so threat scales with the titan's HP).
+* Kills → `killEnemy` → pickups (`ENEMIES[kind].xp/mass`, split into 1–4 pickups), counters,
+  `enemyKilled`. Elite death also drops a `chest` pickup.
+* Floor break → `damageBuilding` emits `floorBreak` (+`smash` for contact), spawns rubble pickups
+  worth `TIERS[tier].floorXp/floorMass` split into 1–3 pickups at the footprint edge nearest the
+  titan; on the last floor: `buildingCollapse` + bonus (`collapseBonus × floors`) + titan
+  counters + `run.tonnage`. Blocks whose buildings are all collapsed increment `run.blocksLeveled`.
+
+### 5.5 Upgrades math
+`final(stat) = (base + Σ add·stacks) × Π(1 + mul·stacks)` then × frenzy buffs for `stat(w,k)`.
+`abilityCooldown` and `dashCooldown` are MULTIPLIERS on cooldown time (upgrades use negative
+`mul`; floor at 0.35×). Triggers fire from `processTriggers` reading `w.events` of the tick, with
+`chance` (× (1 + 0.1·luck) capped 1) and per-upgrade `icd`; trigger-caused damage carries
+`fromUpgrade` so it cannot re-trigger itself. Actions: see `TriggerAction` in types.ts.
+
+---
+
+## §6 View architecture
+
+`render/viewtypes.ts` (orchestrator-owned) defines `ViewModule { mount; update; unmount }`,
+`ViewCtx`, `FrameInfo`, `Quality`. Every view class: `export class XView implements ViewModule`,
+constructed once as `new XView(ctx: ViewCtx)`.
+
+| Module (lane) | Exports |
+|---|---|
+| `render/renderer.ts` (render-core) | `createRenderCore(canvas: HTMLCanvasElement, quality: Quality): RenderCore` — `RenderCore = { renderer, scene, camera, quality, resize(): void, render(): void, setQuality(q: Quality): void, stats(): RenderStats }`; `RenderStats = {draws, tris, programs, geometries, textures}` (info.autoReset=false, reset per frame) ; `defaultQuality(): Quality` |
+| `render/camera.ts` (render-core) | `class CameraRig { constructor(camera); reset(w: World): void; update(w, f: FrameInfo): void; shake(amount: number): void; get distance(): number; get target(): {x,y,z} }` (§4) |
+| `render/materials.ts` (render-core) | `toonRamp(): THREE.Texture`; `makeToon(opts: {color?: THREE.ColorRepresentation; vertexColors?: boolean; emissive?; emissiveIntensity?; flat?: boolean}): THREE.MeshToonMaterial`; `bakeOutlineNormals(geo: THREE.BufferGeometry): THREE.BufferGeometry` (adds smooth `outlineNormal` attribute; welds by position); `makeOutlineMaterial(opts?: {widthPx?: number; color?; instanced?: boolean}): THREE.ShaderMaterial` (inverted hull, BackSide, clip-space extrusion so width is constant in pixels, respects instanceMatrix); `addOutline(mesh: THREE.Mesh \| THREE.InstancedMesh, widthPx?: number): THREE.Mesh` (adds a hull child sharing the geometry/instanceMatrix, renderOrder −1) ; `INK = '#1b1426'` |
+| `render/lighting.ts` (render-core) | `class Lighting { constructor(scene); applyBiome(b: BiomeDef): void; update(w, rig: CameraRig): void }` — fixed pool: 1 DirectionalLight (sun, shadows) + 1 HemisphereLight + 1 AmbientLight, created at construction, re-coloured per biome, never added/removed later; fog per biome |
+| `render/env.ts` (render-core) | `class EnvView implements ViewModule` — sky dome gradient, out-of-city ground/harbour water, LOCKWATER flooded-street water surface + neon reflections, weather (snow/rain particles around the camera, count scaled by quality), distant skyline silhouettes beyond bounds, day clouds |
+| `render/warmup.ts` (render-core) | `warmup(renderer, scene, camera): Promise<void>` — compileAsync with a HalfFloat RT bound then the canvas; force-visible traverse incl. hidden children |
+| `city/meshkit.ts` (city-kit) | `buildCityKit(b: BiomeDef): CityKit`; `CityKit = { arch: Record<string, ArchMeshes>; props: Record<PropKind, PropMesh>; rubble: THREE.BufferGeometry; facade: THREE.Material; ground: Record<'road'\|'sidewalk'\|'plaza'\|'lot', THREE.Material>; dispose(): void }`; `ArchMeshes = { base: THREE.BufferGeometry; floor: THREE.BufferGeometry; roof: THREE.BufferGeometry; material: THREE.Material }` — UNIT geometry: x,z ∈ [−0.5, 0.5], y ∈ [0, 1] (one floor); the view scales by (w, floorH, d); `PropMesh = { geo: THREE.BufferGeometry; material: THREE.Material; height: number }` (authored in metres, facing +Z, vertex-coloured) |
+| `city/cityview.ts` (city-view) | `class CityView implements ViewModule` — roads/sidewalks/crosswalks/lane markings, instanced floors per archetype for LIVE blocks, pancake animation, rubble piles, merged impostors for non-live blocks, traffic + static props |
+| `titans/models.ts` (titan-view) | `buildTitanModel(id: TitanId): TitanModel`; `TitanModel = { root: THREE.Group; joints: Record<string, THREE.Object3D>; glow: THREE.Material[]; dispose(): void }` — authored at height 1.0, facing +Z, feet at y = 0 |
+| `titans/anim.ts` (titan-view) | `class TitanAnimator { constructor(model: TitanModel, id: TitanId); update(a: AnimState, dt: number): void }`; `AnimState = { speed01; moving; turn; attack: string \| null; attackT; dashT; hurtT; abilityT; growT; t; kit: Record<string, number> }` |
+| `titans/titanview.ts` (titan-view) | `class TitanView implements ViewModule` |
+| `titans/portraits.ts` (titan-view) | `renderPortraits(renderer: THREE.WebGLRenderer, size?: number): Promise<Record<TitanId, string>>` (PNG data URLs, 3/4 hero pose on a transparent background) |
+| `ai/enemyview.ts` (foes-view) | `class EnemyView implements ViewModule` |
+| `ai/bossview.ts` (foes-view) | `class BossView implements ViewModule` |
+| `render/telegraphview.ts` (combat-view) | `class TelegraphView implements ViewModule` |
+| `render/projectileview.ts` (combat-view) | `class ProjectileView implements ViewModule` |
+| `render/hazardview.ts` (combat-view) | `class HazardView implements ViewModule` |
+| `render/fx.ts` (fx) | `class FxView implements ViewModule` |
+| `render/debris.ts` (fx) | `class DebrisView implements ViewModule` (Rapier; `await RAPIER.init()` inside mount) |
+| `render/civilians.ts` (fx) | `class CivilianView implements ViewModule` |
+| `render/pickupview.ts` (fx) | `class PickupView implements ViewModule` |
+
+Render budgets: ≤ 450 draw calls at Size V with 250 enemies; DPR ≤ 1.5; 1 shadow-casting
+light; `renderer.info.autoReset = false`. Doctrine: compile-warm with an RT bound; fixed
+light pool; no lights added after first render; `frustumCulled` sane on instanced meshes
+(compute bounding spheres after instance updates or disable culling per batch).
+
+### 6.1 Look ("Saturday-morning kaiju comic as a clean 3D diorama")
+* `MeshToonMaterial` + 3-band ramp (`toonRamp`), painted vertex colours. **three r186's
+  MeshToonMaterial has NO `flatShading` property** (verified: it warns and ignores it) — facet BY
+  CONSTRUCTION: non-indexed geometry with per-face normals (`geo = geo.toNonIndexed();
+  geo.computeVertexNormals()`), then `bakeOutlineNormals` for the smooth hull normals.
+  Roughness look is irrelevant (toon). Soft LONG shadows: low sun (~28–35° elevation).
+* **Ink outlines**: inverted hull, constant pixel width: titans/bosses 3.0 px, enemies/vehicles
+  2.0 px, buildings/props 1.6 px, ink `#1b1426`. Hulls use `outlineNormal` (smooth), so faceted
+  hard edges don't split the silhouette.
+* Tone mapping: `THREE.NeutralToneMapping`, exposure ~1.0, sRGB output — palette hex values must
+  read true on screen.
+* **Glare bar** (owner rule, repeated across many games): emissive trims/neon/lit windows sit at
+  3–8× the luminance of the surface they decorate, never 50×; no bloom pass. Readability comes
+  from contrast + outline, not raw output.
+* Telegraphs are pink (`palette.telegraph`) AND shape-coded with a hatch pattern + animated fill
+  (never colour-only): cone = radial stripes, oval = concentric rings, lane = marching chevrons,
+  ring = dashed band, circle = cross-hatch, chain = segmented links.
+
+### 6.2 Palettes (city-sim writes these into `BIOMES[*].palette`; views read them)
+* **GRID-EAST (day)** — sky `#9fd8f0`→ horizon `#fbe9d2`, road `#2f7f86` (teal asphalt),
+  roadLine `#f4ecd8`, sidewalk `#d9d2c3`, curb `#b9b2a3`, crosswalk `#f6f0e0`, bodyA `#f1e4c8`
+  (cream), bodyB `#e8d5b0`, bodyC `#cfe3df`, trim `#a8876a`/`#6f8f8c`, roof `#c9b79a`/`#8fa7a3`,
+  glass `#5f9fb3`, sign `#ff6f5e` (coral), signB `#ffd166`, foliage `#f7a8c4` (pink blossom),
+  foliageB `#e98bb0`, sun `#fff1dc`, ambient `#9ec9d9`, rim `#ffd6e6`, telegraph `#ff4fa0`.
+* **WHITE STACKS (overcast)** — sky `#c9d3dc`→`#eef2f5`, ground/snow `#eef2f6`, road `#5d6670`,
+  roadLine `#e8d36a`, bodyA brick `#8e4a3a`, bodyB `#a65a44`, bodyC steel `#9aa4ad`, roof white
+  `#f4f6f8`/`#dfe6ec`, trim `#3f454c`, glass `#7d93a6`, sign `#ffb347`, signB `#e84a3c`, foliage
+  `#5c7a6b` (snowy pines), water `#6f8797`, sun `#e9f1ff` (cool, low), ambient `#b8c6d4`.
+* **LOCKWATER (night)** — sky `#0b1022`→`#1c2140`, water/road `#0d1a26`, waterGlow `#1f4a66`,
+  roadLine `#3ff0ff` (dim), sidewalk `#2a2f3a`, bodyA rust `#9c4a2c`, bodyB `#3b6e8f`, bodyC
+  `#c7a13a` (containers), trim `#1e242e`, roof `#39404d`, glass `#1b2a3a`, glassLit `#ffcf7a`,
+  sign `#ff3fa4` (magenta neon), signB `#3ff0ff` (cyan neon), sun = moon `#8fa8ff` (low, cold),
+  ambient `#2a3558`, rim `#ff3fa4`. Rain.
+
+---
+
+## §7 City
+
+### 7.1 Generation (`generateCity`) — deterministic from (biome, seed)
+* Grid of `blocks[0] × blocks[1]` blocks (GRID-EAST 14×14, WHITE STACKS 12×12, LOCKWATER 12×14),
+  centred on the origin. Road centrelines at `origin + i·pitch` for i = 0..blocks. Block (bx,bz)
+  cell centre = `origin + (b + 0.5)·pitch`; curb box ±29 m; parcel area ±26 m (`PARCEL_HALF`).
+* **Downtown**: a seeded centre point; `u = dist/maxDist` (0 centre … 1 edge). Tier weights for a
+  parcel = lerp(`tierCentre`, `tierEdge`, u) with noise; LOCKWATER's harbour edge (one side)
+  becomes quay + water (no buildings, cranes/gantries + container stacks along it).
+* **Parcels**: each block is split by recursive seeded bisection into 2–7 parcels (min side
+  12 m); corner parcels prefer taller tiers. A parcel hosts one building (footprint = parcel
+  minus a 1–2 m setback, clamped to the archetype's footprint range) or a plaza/lot with props.
+  ~8 % of blocks are parks/plazas (trees, benches, kiosks — GRID-EAST pink trees).
+* **Floors**: `floors ∈ archetype.floors`, `floorH` per archetype (shops 4 m, offices 3.5 m,
+  towers 3.6 m, tanks = rings of 3 m, containers 2.6 m per layer). `floorHpMax = TIERS[tier].floorHp`.
+* **Props**: sidewalk props (hydrant, lamp, kiosk, bench, vending, signpost, trees) on the
+  sidewalk ring; parked cars along curbs; biome extras (drums, forklifts, containers, bollards,
+  pylons, snowbanks, boats on LOCKWATER water). Ids are dense (index = id) for props and buildings.
+* **Traffic lanes**: one closed loop per block (driving on the right, 1.75 m inside the lane
+  edge) + a few long arterial lanes; `trafficPerLane` cars per loop. Cars are Props with
+  `lane ≥ 0`.
+* **Crosswalks**: zebra at every side of every intersection (`Crosswalk` records, stripes
+  across the road, 4 m deep).
+* **Spawn**: a crosswalk near (not at) downtown: titan stands in the middle of the zebra,
+  heading along the crossing, with ≥ 2 parked cars and a kiosk within 8 m (the "baby titan in a
+  crosswalk" opening frame must have food in reach). Verify this in your probe.
+
+### 7.2 City sim
+* Building index: per-block lists (`blockBuildings/blockProps`); rect queries walk the block
+  cells overlapped by the rect ±1.
+* `damageBuilding`: damage applies to the lowest standing floor; overflow carries into the next
+  floor up to 4 floors per call (a huge hit pancakes several); each broken floor → `floorBreak`
+  event + rubble pickups; when `alive` hits 0 → `collapsed = true`, `buildingCollapse`.
+* `resolveCircleVsCity`: pushes a circle out of every non-collapsed building AABB (and tier-1
+  props) with `tier > canFlatten`; returns the push. Collapsed buildings/rubble never block.
+* Traffic (`stepTraffic`): cars follow their lane at 8–12 m/s; brake/`scared` when the titan is
+  within 3H + 6 m ahead of them, reverse-flee when very close; stop at 0 when blocked by a
+  stationary car ahead (simple gap check along laneS). Destroyed cars leave the lane.
+* `stepCity` also refreshes `run.blocksLeveled` incrementally (on collapse events).
+
+### 7.3 City view
+* Ground: one road plane (teal asphalt etc.), sidewalks + curbs as merged meshes per block
+  row, lane markings + zebra stripes as instanced quads (polygonOffset, no z-fight),
+  parcel lots/plazas as merged tiles.
+* LIVE blocks (Chebyshev radius `liveRadiusByRank[rank]` around the titan, hysteresis 0.5
+  block): every building = instances of its archetype's `base` (floor 0), `floor` (1..n−2) and
+  `roof` (top) pieces in per-archetype `InstancedMesh`es (+ outline hulls), instanceColor for
+  palette variation. NON-live blocks: one merged, vertex-coloured impostor mesh per block
+  (current alive heights; no outline or a cheap one), rebuilt only when the block's state changes
+  or it leaves the live set.
+* **Pancake**: on `floorBreak`, the broken floor vanishes with a dust ring and debris; every
+  piece above it DROPS one floor height over 0.28 s (easeInCubic) and lands with a 6 % squash
+  bounce; roofs ride the stack. On `buildingCollapse` the remaining pieces sink + a rubble pile
+  (rubble geometry scaled to footprint, height ∝ floors) appears with a dust plume.
+* Props: instanced per kind; traffic interpolated from `px/pz/pheading`; destroyed props hide
+  (fx handles the burst).
+
+---
+
+## §8 Titans (titan-sim implements; numbers are starting points — the balance gate tunes)
+
+**Canonical titan colours** (models.ts AND data/titans.ts `colors` use exactly these):
+MOLO primary `#3fae7f` jade · secondary `#1f6f55` · belly `#cfe8b8` · accent (fin tips) `#f1e4c8` ·
+glow `#9dffcf` · eye `#ffd166`. VOLT-KITE primary `#3b3f9e` indigo · secondary `#23255e` · belly
+`#8f94d9` · accent (static mane) `#6ff3ff` · glow `#6ff3ff` · eye `#fff27a`. HEARTHBACK primary
+`#2a2433` obsidian · secondary `#4a3f52` basalt · belly `#7a5c4f` · accent (magma seams) `#ff7a2e` ·
+glow `#ffb13b` · eye `#ffd166`. BRIARWICK primary `#5e8f3a` moss · secondary `#6b4a2f` bark · belly
+`#c9d98f` · accent (blossoms) `#ff9ec7` · glow `#d8ff7a` (spores) · eye `#fff3b0` · horns `#e8dcc0`.
+
+Common: WASD/stick move; **Space** = HOOK; **Shift** = DASH (distance `dashDistance × H` in
+0.22 s, i-frames 0.3 s, 2× contact smash, charges recharge `3 s × dashCooldown` each). Turn
+rate 10 rad/s at Size I easing to 5 rad/s at V. Regen `regen × hp×` per second after 3 s
+without damage. Auto-attack aims at `findTarget` (enemies first, then boss parts, then
+flattenable-or-not buildings/props) within range; with no target it idles (no wasted swings
+at air), except MOLO whose bite also snaps at buildings in front while plowing.
+
+Base stat defaults (`baseStatBlock`): maxHp 100, regen 0.5, armor 0, iframes 0, thorns 0,
+lifesteal 0, rubbleHeal 0, moveSpeed 1, dashCharges 1, dashCooldown 1, dashDistance 2.2,
+pickupRadius 1.6, massGain 1, xpGain 1, luck 0, rerolls 1, damage 1, attackRate 1, attackRange 1,
+area 1, critChance 0.05, critMult 1.6, knockback 1, chains 0, chainRange 1, projectiles 0,
+buildingDamage 1, smashDamage 1, smashRadius 1, sparkChance 0, abilityCooldown 1, abilityPower 1,
+biteCleave 0, pulseEvery 4, vacuumRadius 1, arcForks 3, wireDuration 4, wireDamage 1,
+shellCapacity 1, stompDelay 0.6, magmaDuration 0, turretCap 4, turretRate 1, sporeHeal 1, vineLength 1.
+
+**MOLO — SMASH TANK** (maxHp 140, armor 10, moveSpeed 0.95)
+* Auto **CURB BITE** — every 0.75 s ÷ attackRate: cone r = 0.9H × attackRange, half-angle 50° +
+  10°·biteCleave, dmg 10, aimed at the target if within ±70° of heading (head turns), else ahead.
+* **Foot-pulse** — every `pulseEvery` footsteps: ring damage r = 1.4H × area, dmg 6, `pulse` event.
+* HOOK **GULLET VACUUM** (cd 9 s): 1.2 s channel. All pickups within 6H × vacuumRadius × area
+  magnetize at 3× speed; crushable enemies within that radius are dragged toward the mouth at
+  1.5H/s and take 12 dmg/s; on release gain a shield of 4 % maxHp + 0.2 % per pickup vacuumed
+  (cap 40 %) × abilityPower. "Raw mass" — vacuumed pickups give +25 % mass.
+
+**VOLT-KITE — CHAIN ASSASSIN** (maxHp 90, moveSpeed 1.15, dashCharges 2, dashCooldown 0.75)
+* Auto **FORK-ARC** — every 0.9 s ÷ attackRate: arc to a target within 3.2H × attackRange, then
+  jumps up to `arcForks + chains` more targets within 1.6H × chainRange of the previous
+  (enemies first, then buildings/props), dmg 12 with ×0.85 falloff per jump. `arc` event.
+* **LIVE WIRE** — every dash leaves a `wire` hazard (capsule r 0.25H × area along the dash
+  path) for `wireDuration` s dealing 10 × wireDamage dps to enemies (5 Hz). Cap 6 wires.
+* HOOK **RECAST: DETONATE** (cd 1.5 s): every live wire explodes along its capsule (r 0.8H × area,
+  dmg 40 × abilityPower + 6 per remaining second), wires removed, `wireDetonate` event. No wires →
+  a static burst around the titan (r 1.2H, dmg 15) so the button is never dead.
+
+**HEARTHBACK — ERUPTION FORTRESS** (maxHp 170, armor 20, moveSpeed 0.85, dashCooldown 1.35)
+* Auto **MAGMA STOMP** — every 1.3 s ÷ attackRate: titan-owned `circle` telegraph r 1.1H × area
+  at the target (≤ 2.5H × attackRange) or 1H ahead; windup `stompDelay` (0.6 s); fires dmg 30,
+  knock, `stomp`-style `explosion` event; `magmaDuration > 0` leaves a `magma` hazard.
+* **SHELL** (passive) — stores 60 % of damage taken (post-armor) + 1 per floor broken, up to
+  `shellCapacity × 0.5 × maxHp`. Kit state `kit.stored`, view reads `kit.stored/kit.cap` for the
+  caldera glow.
+* HOOK **SHELL VENT** (cd 6 s): ring burst r = (1.5 + 2.5·fill)H × area, dmg (20 + 2.5 × stored)
+  × abilityPower, heals 15 % of stored, resets store, `vent` event.
+
+**BRIARWICK — AREA CONTROL** (maxHp 120, armor 5)
+* Auto **VINE LASH** — every 1.0 s ÷ attackRate: `lane` from the titan toward the target, len
+  2.6H × vineLength × attackRange, width 0.35H × area, dmg 14, hits everything in the lane.
+* **BLOOM TURRETS** (passive) — each floorBreak/buildingCollapse within 3H has a 35 % chance
+  (collapse: 100 %) to root a `bloom` hazard turret on the rubble (cap `turretCap`, oldest
+  replaced, life 20 s): fires a `seed` projectile at the nearest enemy within 3.5H every
+  1.2 s ÷ turretRate, dmg 8; every 4 s pulses spores — titan within 2H heals 1 % maxHp × sporeHeal.
+* HOOK **SOW** (cd 10 s): up to 3 nearest collapsed-building rubble sites within 5H sprout
+  turrets immediately; spore cloud r 2.5H heals 8 % maxHp × sporeHeal over 3 s and slows
+  enemies 40 % (`spore` event + `frost`-style slow hazard owned by the titan).
+
+---
+
+## §9 Enemies & director (ai lane)
+
+| kind | name | hp | spd | r | h | dmg | range | cd | xp | mass | cost | minRank | notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| android | CROSSING WARDEN | 6 | 3.4 | .45 | 1.8 | 3 | 9 | 1.6 | 2 | 1 | 1 | I | walks in, stops at range, pellet (slow, readable) |
+| squad | PICKET SQUAD | 8 | 3.8 | .45 | 1.8 | 2×3 | 12 | 2.4 | 2 | 1 | 1 | I (after 45 s) | groups of 5 in a wedge; 3-round volleys |
+| drone | GNAT | 5 | 7 | .6 | .5 | 4 | dive | 3 | 2 | 1 | 1.5 | II | flies y 4 → 0.8H, circles, dive-bombs (small circle tell 0.6 s) |
+| buggy | HOPPER | 40 | 11 | 1.6 | 1.8 | 8 | 25 | 3.5 | 6 | 4 | 5 | II | drives on roads, strafes, rocket = circle tell r 3, 1.1 s |
+| apc | BULWARK | 160 | 7 | 2.4 | 2.6 | 3 | 30 | 1.2 | 15 | 12 | 14 | III | deploys a PICKET SQUAD every 12 s (max 2), pellet turret |
+| tank | TORTOISE | 320 | 4.5 | 2.8 | 2.8 | 26 | 45 | 5 | 25 | 20 | 24 | III | shell = lane tell (w 2.5, len 45, 1.4 s) |
+| walker | STILT MORTAR | 700 | 3 | 3 | 12 | 30 | 90 | 6 | 60 | 60 | 55 | IV | 3 lobbed shells, circle tells r 6, 1.8 s |
+| elite | RAMROD | 2400 | 6 (charge 30) | 5 | 6 | 45 | 80 | 7 | 250 | 200 | — | III | lane-tell charge (len 80, w 8, 1.6 s); never crushable; drops a CHEST |
+
+* HP × (1 + 0.18·minutes) at spawn; hostile dmg × `RANKS[titan.rank].hpMul`.
+* Spawn ring radius = `spawnRing(w)` = max(14, 0.55 × camera vertical extent at the current D)
+  so spawns happen just off-screen; vehicles snap to the nearest road lane; drones anywhere.
+  Enemies farther than 2.4× the ring are recycled back onto the ring.
+* **Director**: spawn budget accrues `1.2 + 0.9·min(t,600)/60 + 0.6·rank` per second; a wave every
+  6–9 s (rng.spawn) spends it on kinds allowed at the current rank with biome bias; caps per kind
+  and `CITY.maxEnemies`. First appearance of a category raises an alert (`contractors`, `squads`,
+  `drones`, `vehicles`, `armor`, `artillery`). Elite at `min(ELITE_AT_S, t(rank IV)+30)` →
+  `alert elite`, run.phase `elite`. Boss at `min(BOSS_AT_S, t(rank V)+20)` → `alert boss`,
+  `spawnBoss(w, biome.boss)`, run.phase `boss`, regular spawns drop to 30 %.
+* Enemy AI honesty (doctrine §2): roll reactions once per incoming event and latch; 300–800 ms
+  reaction delay + aim jitter; every hostile attack is telegraphed (pellets are slow and visible;
+  everything heavier paints the ground first).
+
+## §10 Bosses (ai lane: sim; foes-view lane: models)
+
+Boss HP = `BossDef.hp × BOSS_HP_SCALE[titan.rank]`. Entrance: 4 s intro (invulnerable) —
+walks in from the city edge (CAISSON-4 wades in from the harbour side in LOCKWATER). Phase 2 at
+66 % hp, phase 3 at 33 % (`bossPhase` + alert). Meter (0..1): damage to high-`strainMul`
+parts fills it; full → 5 s stagger (2× damage taken, `bossStagger`), meter resets.
+Nameplate subtitle = the active attack's subtitle, else the default mechanic hint.
+
+**CAISSON-4** (hp 150 000, height 75 m + boom) — four-legged harbour crane-mech: gantry body,
+cab with lamp "eyes", 4 articulated legs, boom with trolley + hook on a cable, hazard stripes.
+Keeps 60–120 m from the titan, walks 6 m/s. Parts: body r18, 4 legs r7 (strainMul 2.5), boom
+r8 (hpMul 0.5), cab r6 (hpMul 1.5).
+* P1 `hookLane` — "HOOK LANE — STEP OUT OF THE PAINT": lane from boss to titan (len 160, w 14),
+  1.8 s, dmg 60 + knock. `hookDrop` — "HOOK DROP — MIND THE SHADOW": circle r 16 at the titan, 1.5 s, dmg 50.
+* P2 + `winchLeash` — "WINCH LEASH — LEAVE THE OVAL": oval (rx 26, rz 18, rot toward boss)
+  around the titan, 2.2 s; if the titan is inside on fire → `titan.leash` for 3 s pulling it
+  toward the boss at 12 m/s (`leash` event, cable drawn); moving against the pull fills STRAIN
+  0.12/s. `boomSweep` — "BOOM SWEEP — GET BEHIND THE CRANE": cone half 35°, r 110, 1.6 s, dmg 55.
+* P3 + `legStomp` — "LEG STOMP — CLEAR THE RING": ring 0–50 m around the boss, 1.2 s, dmg 70;
+  cycle 30 % faster; `hookLane` ×2 back-to-back.
+* Default subtitle: "BREAK THE LEGS — BUILD STRAIN".
+
+**IRON GULLY** (hp 170 000, height 70 m) — pale ridge-backed quadruped titan, beaked head,
+a SAIL of riveted scrap plates along the spine, frost-caked hide. Closes to 50–80 m, 9 m/s.
+Parts: body r20, head r8 (hpMul 1.6, strainMul 2.0), sail r10 (strainMul 2.5), 4 legs r6.
+* P1 `coneBreath` — "CONE BREATH — GET OUT OF ITS SIGHTLINE": cone half 28°, r 140, 1.8 s windup
+  then 1.2 s active (dps), leaves `frost` hazards (slow). `pawSlam` — "PAW SLAM — DASH THROUGH THE
+  RING": ring 0–60 m at 1.3 s then a second ring 60–110 m 0.5 s later (dash i-frames or stand in
+  the gap).
+* P2 + `plateVolley` — "SCRAP PLATES — WATCH THE SHADOWS": 6–10 lobbed `plate` projectiles
+  with circle tells r 12 around the titan, 1.6 s. `ridgeCharge` — "RIDGE CHARGE — SIDESTEP THE
+  LANE": lane len 180, w 30, 1.5 s, then it charges along it.
+* P3: breath→slam combo; plate volley density ×2.
+* Default subtitle: "CRACK THE SAIL — BUILD FRACTURE".
+
+---
+
+## §11 Upgrades (upgrades lane)
+
+* **≥ 120** `UpgradeDef`s, data-driven: ≥ 64 generic (≥ 16 each in survival, growth/mobility,
+  offense, smash/city) + ≥ 14 per titan (titan-locked, reading the kit stats) + a handful of
+  legendary "mutations" (big trade-offs). Every entry: original civic/monster-humour name
+  (e.g. style: "Zoning Variance", "Rebar Molars", "Eminent Domain", "Load-Bearing Gut",
+  "Sinkhole Stride", "Permit Denied"), a one-line description with real per-stack numbers,
+  rarity, maxStacks (1–5), tags, effects. No two names alike; none from §1's forbidden list.
+* Every stat in `StatKey` must be touched by ≥ 1 upgrade; every `TriggerAction` used by ≥ 1.
+* Rarity weights common 60 / rare 28 / epic 10 / legendary 2, × (1 + luck·[0, .5, 1, 1.5]).
+  Offer = 3 distinct eligible ids (titan filter, minRank, not maxed). Chest drafts: rare+ only.
+  `rerolls` stat = rerolls per draft.
+* Engine: stat recompute on apply/rank-up; triggers per §5.5; `frenzy` buffs; `shield` pool;
+  `interval` triggers use `p.every` seconds.
+
+## §12 UI (ui lane) — HTML/CSS overlay, broadcast first, game HUD second
+
+* Fonts via npm `@fontsource/*` (OFL): a heavy condensed display face (Anton), a condensed UI face
+  (Barlow Condensed), a mono for tickers/numbers (Space Mono). Import the CSS in `ui/styles.css`
+  or main.ts. No network font loads at runtime.
+* **Layout rhythm**: corner CREAM status card (bottom-left: titan name, HP bar, `LV n`,
+  big roman `SIZE` numeral with mass bar, XP bar, dash pips, hook cooldown dial);
+  `WARD-7 • LIVE` bug top-left with a pulsing red dot + broadcast clock + run timer; ticker crawl
+  along the bottom; tonnage/blocks/crushed counters top-right; upgrade chips column right;
+  occasional FULL-WIDTH alert banner sweeping across the upper third; boss nameplate top-centre
+  (`CAISSON-4 / PHASE n / STRAIN ▮▮▮▯▯` + subtitle); low-HP vignette.
+* **Screens** (all keyboard + mouse + gamepad; each sets `input.mode = 'ui'` while open):
+  Title ("BLOCKTOOTH" logo, "a WARD-7 special report", PRESS ENTER) → Select Step 1 TITAN (four
+  live portraits, lore column: name/species/role/tagline/lore/auto/hook/dash/difficulty, confirm
+  bar) → Step 2 BIOME (three cards + lore column, confirm bar "DROP IN") → Open slate
+  (freeze-frame, halftone + scanlines over the paused scene, lower third
+  `UNIDENTIFIED MASS — …`, a sub-line, "PRESS ANY KEY") → HUD → Draft ("MUTATION REPORT": 3
+  dossier cards, rarity frames, 1/2/3/click, R reroll) → Pause ("WE'LL BE RIGHT BACK" test-card:
+  Resume / Settings / Retry / Quit) → Run end tabloid (THE WARD SEVEN WITNESS masthead,
+  `THE CITY GOT SMALLER.`, the freeze-frame photo, stats columns, RETRY / CHANGE TITAN / TITLE).
+  Settings: master/music/sfx volume, quality (low/med/high), screen shake, reduce flashing.
+* `data/strings.ts` holds ALL copy (network, slates, rank subs e.g. II "SIZE II CONFIRMED —
+  ZONING NO LONGER APPLIES", ticker headlines ×24+, alerts, tabloid sub-heads for clear/dead,
+  burst words "KRUNCH!" "THOOM!" "SKRAKK!" "BZZAK!" "FWASH!" "SPLNT!" "WHUMP!"). Original only.
+* UI classes (ui lane) — exact exports:
+  `ui/hud.ts`: `class Hud { constructor(root: HTMLElement); show(on: boolean): void; update(w: World, dt: number): void; onEvents(w: World, ev: readonly SimEvent[]): void }`
+  `ui/broadcast.ts`: `class Broadcast { constructor(root: HTMLElement); openSlate(biome: BiomeDef, titan: TitanDef): Promise<void>; sizeUp(rank: RankIndex): void; alert(key: AlertKey): void; tabloid(w: World, photo: string): Promise<'retry' | 'select' | 'title'>; clear(): void }`
+  `ui/bossbar.ts`: `class BossBar { constructor(root: HTMLElement); show(def: BossDef): void; update(b: BossState | null): void; hide(): void }`
+  `ui/select.ts`: `class SelectScreen { constructor(root: HTMLElement, input: Input); run(portraits: Record<TitanId, string>, initial?: {titan?: TitanId; biome?: BiomeId}): Promise<{titan: TitanId; biome: BiomeId} | null> }`
+  `ui/draft.ts`: `class DraftScreen { constructor(root: HTMLElement, input: Input); open(w: World, offer: string[], rerollsLeft: number): Promise<{pick: string} | {reroll: true}> }`
+  `ui/menus.ts`: `class TitleScreen { constructor(root, input); run(): Promise<void> }`, `class PauseMenu { constructor(root, input); open(): Promise<'resume' | 'retry' | 'quit'> }`, `class SettingsPanel { constructor(root, input); open(s: Settings): Promise<Settings> }`
+  `ui/dom.ts`: helpers (`el(tag, cls, text?)`, etc.). `ui/styles.css`.
+
+## §13 Audio (audio lane) — procedural WebAudio only (no duplicate/shared music files)
+
+`audio/audio.ts`: `class AudioEngine { unlock(): Promise<void>; setVolumes(master, music, sfx): void; readonly ctx: AudioContext | null; readonly sfxBus: GainNode | null; readonly musicBus: GainNode | null }`
+(unlock on the first user gesture; master limiter/compressor; safe when AudioContext is missing).
+`audio/sfx.ts`: `class Sfx { constructor(engine: AudioEngine); onEvents(w: World, ev: readonly SimEvent[], camX: number, camZ: number): void; ui(kind: 'move' | 'confirm' | 'back' | 'draft' | 'pick' | 'slate' | 'print'): void }`
+— footsteps pitched by 1/height, crunch/metal/glass for props, concrete crack + rumble for floors/collapses, per-kit attack voices (bite snap, arc crackle, magma whoomp, vine whip), dash whoosh, hook voices (vacuum suck, thunderclap, eruption, bloom chime), toy "pew" → rocket hiss → tank boom → mortar thunk, crush "clank-boing", titan hurt grunt, pickup ticks (rate-limited, pitch climbs with combo), level chime, MASS BREACH brass stab + roar, telegraph warning beeps by style, news alert jingle, boss siren/phase sting/stagger groan. Voice-limited (max ~24 simultaneous), distance-attenuated from the camera target.
+`audio/music.ts`: `class Music { constructor(engine: AudioEngine); play(track: 'title' | 'select' | BiomeId | 'boss' | 'tabloid'): void; stop(): void; setIntensity(x01: number): void }`
+— GRID-EAST city-pop/funk (major, 118 bpm), WHITE STACKS industrial minor (96 bpm, metallic percussion), LOCKWATER night synthwave (phrygian, 104 bpm, rain bed), boss 140 bpm, title/select news theme (dorian brass/synth stabs). Look-ahead scheduler; linear ramps; finite-clamped params (doctrine: exponential ramps to ~0 throw).
+
+## §14 App, test surface, dev server (app lane)
+
+* `src/main.ts` boots `App` from `src/game.ts`. **State machine**: boot → title → select →
+  loading (createWorld, mount views, warmup) → slate (one frame rendered, sim frozen) → play ⇄
+  draft / pause → end (tabloid). Retry = same titan+biome, new seed.
+* `core/loop.ts`: `class GameLoop { constructor(onStep: () => void, onFrame: (alpha: number, dt: number, time: number) => void); start(): void; stop(): void; simEnabled: boolean; timeScale: number; stepSync(n: number): void }` (fixed accumulator, `MAX_STEPS_PER_FRAME`, accumulator DISCARDED when sim is disabled — doctrine §5).
+* `core/input.ts`: `class Input { constructor(win: Window); mode: 'ui' | 'game'; update(): void; pressed(a: Action): boolean; held(a: Action): boolean; stick(): {x: number; y: number}; titanInput(): TitanInput; clearEdges(): void }`, `type Action = 'up' | 'down' | 'left' | 'right' | 'confirm' | 'back' | 'pause' | 'debug' | 'ability' | 'dash' | 'pick1' | 'pick2' | 'pick3' | 'reroll'`. Keyboard (WASD/arrows, Space, Shift, Enter, Esc/P, F1, 1/2/3, R) + Gamepad API. Gameplay actions read as false while `mode === 'ui'` (no title-screen input leak). Edge presses buffered `INPUT_BUFFER_S` for ability/dash. `titanInput()` returns world-space move via `screenToWorld`.
+* `core/debug.ts`: `class DebugOverlay { constructor(root: HTMLElement); toggle(): void; visible: boolean; update(w: World | null, r: RenderStats, frame: {fps: number; p99: number; simMs: number}): void }` — F1.
+* `core/save.ts`: `type Settings = {master: number; music: number; sfx: number; quality: 0 | 1 | 2; screenShake: boolean; reduceFlashing: boolean}`; `loadSettings(): Settings`; `saveSettings(s)`; `loadBest(): Record<string, number>`; `saveBest(...)` — all try/catch.
+* `window.__PAUSE__ = { pause, resume, toggle }` (portal contract). ESC pauses, never destroys.
+  Auto-pause on `visibilitychange` hidden.
+* **URL params**: `?seed=`, `?titan=`, `?biome=`, `?autostart=1` (skip title+select, go straight to
+  loading→slate), `?dev=1` (cheats + debug), `?quality=0|1|2`, `?noslate=1`.
+* **Test surface** `window.__BT__` (src/testsurface.ts):
+  `version`, `state()` → `{screen, titan, biome, seed, t, tick, rank, height, level, xp, hp, maxHp, mass, x, z, heading, enemies, pickups, floorsEaten, buildingsLeveled, propsEaten, kills, crushed, drafts: {pending, offer}, owned, boss: {id, phase, hp, maxHp, meter, attack} | null, run, fps, draws, tris, programs}`;
+  `newRun({titan, biome, seed, skipSlate?}): Promise<void>`; `step(n, input?)` (sync, only while frozen);
+  `freeze(on)`; `dismiss()` (dismiss slate/draft/tabloid programmatically — harness convenience, playtests must use keys);
+  `cheat.{xp(n), mass(n), rank(r), god(on), spawn(kind, n), boss(), killAll(), noSpawns(on), heal(), time(sec)}` (dev only);
+  `shot(name): Promise<string>` (renders a frame, POSTs PNG to `/__shot/<name>`, returns the saved path);
+  `perf()` → frame-time ring stats `{fps, p50, p99, max, simMs}`; `events(n)` → last n sim events.
+* `vite.config.ts`: port 5178 `strictPort`, `server.headers` no-store, plugin: `POST /__shot/<name>`
+  (body = PNG data URL) → `_shots/<name>.png`; `POST /__report/<name>` (JSON) → `_harness/_reports/<name>.json`.
+
+## §15 Gates (a build is DONE only when all pass, observed)
+
+1. `npx tsc --noEmit -p tsconfig.json` → 0 errors.
+2. `node _harness/probe_sim.ts` — headless bot, all 4 titans × 3 biomes: no NaN/throw; deterministic
+   (same seed ⇒ identical state hash); pacing bands: rank II 60–150 s, III 150–300 s, IV 280–450 s,
+   V 400–560 s; boss spawns ≤ 560 s; a competent bot clears ≥ 8 of 12 runs in 8–12 min and dies in
+   some (it is not a walkover); drafts every ~10–25 s early.
+3. `python _harness/bootcheck.py` (headed Chrome, `?autostart=1`): 0 console/page errors, 0 shader
+   errors, reaches `play`, frames rendering, screenshot shows the baby titan ON a zebra crossing.
+4. `python _harness/playtest.py --titan X --biome Y` with REAL keyboard input from the title
+   screen: navigates menus, dismisses slate, moves (> 20 m), eats props/floors, levels, drafts via
+   keys, uses Space + Shift, observes effects in state; one per titan and per biome.
+5. `python _harness/perfcheck.py`: Size V + 250 enemies, p99 frame ≤ 22 ms on this box (headed),
+   draws ≤ 450.
+6. Shots battery + a harsh visual critic pass (titan close-ups at every rank, each biome, bosses,
+   telegraph readability, HUD/slate/draft/tabloid).
+
+## §16 Lane ownership
+
+| Lane | Files |
+|---|---|
+| core | `src/core/loop.ts`, `src/core/input.ts`, `src/core/debug.ts`, `src/core/save.ts` |
+| city-sim | `src/data/biomes.ts`, `src/city/citygen.ts`, `src/city/citysim.ts`, `src/city/traffic.ts`, `_harness/probe_city.ts` |
+| titan-sim | `src/data/titans.ts`, `src/titans/titansim.ts`, `src/titans/kits/*.ts`, `_harness/probe_titan.ts` |
+| combat | `src/combat/*.ts`, `_harness/probe_combat.ts` |
+| ai | `src/data/enemies.ts`, `src/data/bosses.ts`, `src/ai/enemies.ts`, `src/ai/director.ts`, `src/ai/bosses/index.ts`, `src/ai/bosses/caisson4.ts`, `src/ai/bosses/irongully.ts`, `_harness/probe_ai.ts` |
+| upgrades | `src/upgrades/*.ts`, `src/data/upgrades.ts`, `_harness/probe_upgrades.ts` |
+| render-core | `src/render/renderer.ts`, `camera.ts`, `materials.ts`, `lighting.ts`, `env.ts`, `warmup.ts` |
+| city-kit | `src/city/meshkit.ts` |
+| city-view | `src/city/cityview.ts` |
+| titan-view | `src/titans/models.ts`, `anim.ts`, `titanview.ts`, `portraits.ts` |
+| foes-view | `src/ai/enemyview.ts`, `src/ai/bossview.ts`, `src/ai/foemodels.ts` |
+| combat-view | `src/render/telegraphview.ts`, `projectileview.ts`, `hazardview.ts` |
+| fx | `src/render/fx.ts`, `debris.ts`, `civilians.ts`, `pickupview.ts` |
+| ui | `src/ui/*`, `src/data/strings.ts`, font deps |
+| audio | `src/audio/*.ts` |
+| app | `src/main.ts`, `src/game.ts`, `src/testsurface.ts`, `index.html`, `vite.config.ts`, `README.md` |
+| harness | `_harness/*.py`, `_harness/probe_sim.ts`, `_harness/bot.ts` |
+
+Orchestrator-owned (read-only for lanes): `src/core/types.ts`, `config.ts`, `rng.ts`, `math.ts`,
+`world.ts`, `src/render/viewtypes.ts`, `_spec/*`.

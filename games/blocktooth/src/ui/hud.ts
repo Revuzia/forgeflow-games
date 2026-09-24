@@ -1,0 +1,522 @@
+// BLOCKTOOTH — in-play HUD (CONTRACT.md §12). ui lane.
+// A local-TV broadcast package first, a game HUD second:
+//   top-left   WARD-7 • LIVE bug (pulsing red dot) + broadcast clock + run timer
+//   top-right  TONNAGE / BLOCKS / CRUSHED counters, upgrade chips column below
+//   bottom-left cream status card: titan, HP (+damage trail, shield), LV, big roman SIZE +
+//              mass bar, XP bar, dash pips, hook cooldown dial with key hint
+//   bottom     WARD-7 WIRE ticker crawl (live items injected on big moments)
+//   overlay    low-HP vignette pulse, hurt edge flash, pickup / level flashes
+// update() is change-only: every DOM write goes through TextSlot / VarSlot / ClassSlot.
+
+import type { SimEvent, World } from '../core/types.ts';
+import { RANKS } from '../core/config.ts';
+import { TITANS } from '../data/titans.ts';
+import { UPGRADE_BY_ID } from '../data/upgrades.ts';
+import { BOSSES } from '../data/bosses.ts';
+import { STR, TICKER, RANK_SUBS } from '../data/strings.ts';
+import {
+  ClassSlot, TextSlot, VarSlot, clearEl, div, el, fmt, fmtClock, fmtInt, fmtTime, flashesReduced,
+  keyChip, pulse, roman,
+} from './dom.ts';
+
+const LOW_HP = 0.3;
+const TRAIL_HOLD_S = 0.4;
+const TRAIL_RATE = 0.9;          // fraction of max HP per second the trail drains
+const MAX_CHIPS = 14;
+
+/** CSS unit (--u) in px, mirrored from styles.css: max(8px, min(1vw, 1.7778vh)). */
+function unitPx(): number { return Math.max(8, Math.min(window.innerWidth / 100, (window.innerHeight * 1.7778) / 100)); }
+
+interface TickerItem { node: HTMLElement; w: number; }
+
+export class Hud {
+  private readonly root: HTMLElement;
+  private readonly layer: HTMLDivElement;
+  private world: World | null = null;
+  private shown = false;
+
+  // bug
+  private readonly clock: TextSlot;
+  private readonly runT: TextSlot;
+  // counters
+  private readonly tonsVal: TextSlot;
+  private readonly blocksVal: TextSlot;
+  private readonly crushVal: TextSlot;
+  private readonly tonsBox: HTMLElement;
+  private readonly blocksBox: HTMLElement;
+  private readonly crushBox: HTMLElement;
+  private tonsShown = 0;
+  private lastBlocks = -1;
+  private lastCrushed = -1;
+  // chips
+  private readonly chipsWrap: HTMLElement;
+  private readonly chipsList: HTMLElement;
+  private chipSig = '';
+  // status card
+  private readonly card: HTMLElement;
+  private readonly nameT: TextSlot;
+  private readonly roleT: TextSlot;
+  private readonly lvT: TextSlot;
+  private readonly lvBox: HTMLElement;
+  private readonly sizeT: TextSlot;
+  private readonly sizeBox: HTMLElement;
+  private readonly hpFill: VarSlot;
+  private readonly hpTrail: VarSlot;
+  private readonly hpShield: VarSlot;
+  private readonly hpVal: TextSlot;
+  private readonly hpBar: HTMLElement;
+  private readonly massFill: VarSlot;
+  private readonly massVal: TextSlot;
+  private readonly xpFill: VarSlot;
+  private readonly xpBar: HTMLElement;
+  private readonly shellRow: HTMLElement;
+  private readonly shellFill: VarSlot;
+  private readonly shellOn: ClassSlot;
+  private readonly pipsBox: HTMLElement;
+  private pips: { node: HTMLElement; fill: VarSlot; full: ClassSlot }[] = [];
+  private readonly hookDial: VarSlot;
+  private readonly hookCdT: TextSlot;
+  private readonly hookReady: ClassSlot;
+  private readonly hookName: TextSlot;
+  private readonly hookBox: HTMLElement;
+  private readonly lvFlash: HTMLElement;
+  private readonly lowHpOn: ClassSlot;
+  private readonly vignette: HTMLElement;
+  private readonly hurtFlash: HTMLElement;
+
+  // derived state
+  private trail = 1;
+  private trailHold = 0;
+  private lastHpFrac = 1;
+  private hookMax = 1;
+  private lastHookCd = 0;
+  private lastDashRe = 0;
+  private dashCounting: 'down' | 'up' = 'down';
+  private lastRank = -1;
+  private lastLevel = -1;
+  private lastPickupFx = 0;
+  private lastHurtFx = 0;
+
+  // ticker
+  private readonly tkWin: HTMLElement;
+  private readonly tkStrip: HTMLElement;
+  private tkItems: TickerItem[] = [];
+  private tkOffset = 0;
+  private tkWidth = 0;
+  private tkDeck: string[] = [];
+  private tkLive: string[] = [];
+  private u = unitPx();
+
+  constructor(root: HTMLElement) {
+    this.root = root;
+    const L = this.layer = div('bt-layer bt-hud bt-hidden', root);
+
+    this.vignette = div('bt-vignette', L);
+    this.hurtFlash = div('bt-hurtflash', L);
+    this.lowHpOn = new ClassSlot(this.vignette, 'on');
+
+    // ── bug (top-left)
+    const bug = div('bt-bug', L);
+    const net = div('bt-bug-net', bug);
+    div('bt-dot', net);
+    net.appendChild(el('b', '', STR.network));
+    net.appendChild(el('i', '', '•'));
+    net.appendChild(el('span', '', STR.live));
+    const clk = div('bt-bug-clock', bug);
+    this.clock = new TextSlot(el('span', 'bt-clock'));
+    clk.appendChild(this.clock.node);
+    this.runT = new TextSlot(el('span', 'bt-runt'));
+    clk.appendChild(this.runT.node);
+
+    // ── counters (top-right)
+    const ctr = div('bt-counters', L);
+    const mk = (label: string, unit?: string) => {
+      const box = div('bt-counter', ctr);
+      box.appendChild(el('span', 'bt-counter-lbl', label));
+      const v = el('span', 'bt-counter-val', '0');
+      box.appendChild(v);
+      if (unit) box.appendChild(el('span', 'bt-counter-unit', unit));
+      return { box, slot: new TextSlot(v) };
+    };
+    const t = mk(STR.hud.tonnage, STR.hud.tons); this.tonsBox = t.box; this.tonsVal = t.slot;
+    const b = mk(STR.hud.blocks); this.blocksBox = b.box; this.blocksVal = b.slot;
+    const c = mk(STR.hud.crushed); this.crushBox = c.box; this.crushVal = c.slot;
+
+    // ── upgrade chips (right column)
+    this.chipsWrap = div('bt-chips bt-hidden', L);
+    div('bt-chips-head', this.chipsWrap, STR.hud.mutations);
+    this.chipsList = div('bt-chips-list', this.chipsWrap);
+
+    // ── status card (bottom-left)
+    const card = this.card = div('bt-card', L);
+    const head = div('bt-card-head', card);
+    this.nameT = new TextSlot(el('span', 'bt-card-name'));
+    head.appendChild(this.nameT.node);
+    this.roleT = new TextSlot(el('span', 'bt-card-role'));
+    head.appendChild(this.roleT.node);
+    this.lvBox = div('bt-card-lv', head);
+    this.lvBox.appendChild(el('small', '', STR.hud.lv));
+    this.lvT = new TextSlot(el('b', ''));
+    this.lvBox.appendChild(this.lvT.node);
+
+    const body = div('bt-card-body', card);
+    this.sizeBox = div('bt-size', body);
+    div('bt-size-lbl', this.sizeBox, STR.hud.size);
+    this.sizeT = new TextSlot(div('bt-size-num', this.sizeBox, 'I'));
+
+    const bars = div('bt-bars', body);
+    const bar = (cls: string, label: string) => {
+      const row = div(`bt-bar ${cls}`, bars);
+      div('bt-bar-lbl', row, label);
+      const track = div('bt-bar-track', row);
+      const val = div('bt-bar-val', row);
+      return { row, track, val };
+    };
+    const hp = bar('bt-bar-hp', STR.hud.hp);
+    this.hpBar = hp.row;
+    this.hpShield = new VarSlot(div('bt-bar-shield', hp.track), '--p');
+    this.hpTrail = new VarSlot(div('bt-bar-trail', hp.track), '--p');
+    this.hpFill = new VarSlot(div('bt-bar-fill', hp.track), '--p');
+    div('bt-bar-ticks', hp.track);
+    this.hpVal = new TextSlot(hp.val);
+    const ms = bar('bt-bar-mass', STR.hud.mass);
+    this.massFill = new VarSlot(div('bt-bar-fill', ms.track), '--p');
+    this.massVal = new TextSlot(ms.val);
+    const xp = bar('bt-bar-xp', STR.hud.xp);
+    this.xpBar = xp.row;
+    this.xpFill = new VarSlot(div('bt-bar-fill', xp.track), '--p');
+    xp.val.remove();
+    const sh = bar('bt-bar-shell', STR.hud.shell);
+    this.shellRow = sh.row;
+    this.shellFill = new VarSlot(div('bt-bar-fill', sh.track), '--p');
+    sh.val.remove();
+    this.shellOn = new ClassSlot(this.shellRow, 'on');
+
+    const foot = div('bt-card-foot', card);
+    const dash = div('bt-dash', foot);
+    div('bt-foot-lbl', dash, STR.hud.dash);
+    this.pipsBox = div('bt-pips', dash);
+    dash.appendChild(keyChip(STR.hud.keyDash));
+
+    const hook = this.hookBox = div('bt-hook', foot);
+    const dial = div('bt-dial', hook);
+    this.hookDial = new VarSlot(dial, '--p', 0.005);
+    this.hookCdT = new TextSlot(div('bt-dial-cd', dial));
+    this.hookReady = new ClassSlot(hook, 'ready');
+    const htxt = div('bt-hook-txt', hook);
+    div('bt-foot-lbl', htxt, STR.hud.hook);
+    this.hookName = new TextSlot(div('bt-hook-name', htxt));
+    hook.appendChild(keyChip(STR.hud.keyHook));
+
+    this.lvFlash = div('bt-lvflash', card, STR.hud.levelUp);
+
+    // ── ticker (bottom)
+    const tk = div('bt-ticker', L);
+    div('bt-ticker-label', tk, STR.hud.tickerLabel);
+    this.tkWin = div('bt-ticker-win', tk);
+    this.tkStrip = div('bt-ticker-strip', this.tkWin);
+
+    window.addEventListener('resize', () => { this.u = unitPx(); this.remeasureTicker(); });
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => this.remeasureTicker()).catch(() => {});
+  }
+
+  show(on: boolean): void {
+    this.shown = on;
+    this.layer.classList.toggle('bt-hidden', !on);
+  }
+
+  // ─────────────────────────────── per frame ───────────────────────────────
+
+  update(w: World, dt: number): void {
+    if (w !== this.world) this.bind(w);
+    if (!this.shown) return;
+    const T = w.titan;
+    const d = Math.min(0.1, Math.max(0, dt || 0));
+
+    // bug
+    this.clock.set(fmtClock((STR.clockStart[w.biomeId] ?? 14 * 60) + w.t / 60));
+    this.runT.set(STR.hud.runPrefix + fmtTime(w.t));
+
+    // counters
+    const tons = Math.max(0, w.run.tonnage);
+    if (Math.abs(tons - this.tonsShown) < 0.5) this.tonsShown = tons;
+    else this.tonsShown += (tons - this.tonsShown) * Math.min(1, d * 7);
+    this.tonsVal.set(fmtInt(this.tonsShown));
+    if (w.run.blocksLeveled !== this.lastBlocks) {
+      if (this.lastBlocks >= 0 && w.run.blocksLeveled > this.lastBlocks) {
+        pulse(this.blocksBox, [{ transform: 'scale(1.18)' }, { transform: 'scale(1)' }], 380);
+        this.pushWire(fmt(STR.hud.wire.block, { n: w.run.blocksLeveled }));
+      }
+      this.lastBlocks = w.run.blocksLeveled;
+      this.blocksVal.set(fmtInt(w.run.blocksLeveled));
+    }
+    if (T.crushed !== this.lastCrushed) {
+      if (this.lastCrushed >= 0 && T.crushed > this.lastCrushed) pulse(this.crushBox, [{ transform: 'scale(1.12)' }, { transform: 'scale(1)' }], 260);
+      this.lastCrushed = T.crushed;
+      this.crushVal.set(fmtInt(T.crushed));
+    }
+
+    // level + size
+    if (T.level !== this.lastLevel) { this.lastLevel = T.level; this.lvT.set(String(T.level)); }
+    if (T.rank !== this.lastRank) {
+      const grew = this.lastRank >= 0 && T.rank > this.lastRank;
+      this.lastRank = T.rank;
+      this.sizeT.set(roman(T.rank));
+      this.sizeBox.dataset.rank = String(T.rank);
+      if (grew) pulse(this.sizeBox, [{ transform: 'scale(1.45) rotate(-4deg)' }, { transform: 'scale(0.94)' }, { transform: 'scale(1)' }], 700);
+    }
+
+    // HP + trail + shield
+    const maxHp = Math.max(1, T.maxHp);
+    const hpF = Math.max(0, Math.min(1, T.hp / maxHp));
+    if (hpF >= this.trail) { this.trail = hpF; this.trailHold = 0; }
+    else if (this.trailHold > 0) this.trailHold -= d;
+    else this.trail = Math.max(hpF, this.trail - TRAIL_RATE * d);
+    if (hpF < this.lastHpFrac - 1e-4) this.trailHold = Math.max(this.trailHold, TRAIL_HOLD_S);
+    this.lastHpFrac = hpF;
+    this.hpFill.set(hpF);
+    this.hpTrail.set(this.trail);
+    this.hpShield.set(Math.max(0, Math.min(1, (w.upgrades.shield || 0) / maxHp)));
+    this.hpVal.set(`${Math.ceil(Math.max(0, T.hp))} / ${Math.round(maxHp)}`);
+    this.lowHpOn.set(T.alive && hpF < LOW_HP);
+
+    // mass progress through the current rank (mass is cumulative across ranks)
+    const R = RANKS[T.rank];
+    if (Number.isFinite(R.massToNext)) {
+      let base = 0;
+      for (let i = 0; i < T.rank; i++) base += RANKS[i].massToNext;
+      const p = Math.max(0, Math.min(1, (T.mass - base) / R.massToNext));
+      this.massFill.set(p);
+      this.massVal.set(`${Math.floor(p * 100)}% → ${roman(T.rank + 1)}`);
+    } else {
+      this.massFill.set(1);
+      this.massVal.set(STR.hud.massMax);
+    }
+
+    // XP
+    this.xpFill.set(T.xpToNext > 0 ? Math.max(0, Math.min(1, T.xp / T.xpToNext)) : 0);
+
+    // HEARTHBACK shell (kit.stored / kit.cap), hidden for other titans
+    const cap = T.kit ? T.kit.cap : undefined;
+    if (cap !== undefined && cap > 0) {
+      this.shellOn.set(true);
+      this.shellFill.set(Math.max(0, Math.min(1, (T.kit.stored || 0) / cap)));
+    } else this.shellOn.set(false);
+
+    // dash pips
+    this.updatePips(w);
+
+    // hook dial: learn the cooldown length from the value it jumps to
+    const cd = Math.max(0, T.abilityCd || 0);
+    if (cd > this.lastHookCd + 0.05) this.hookMax = Math.max(0.1, cd);
+    if (cd <= 0 && this.lastHookCd > 0) pulse(this.hookBox, [{ transform: 'scale(1.2)' }, { transform: 'scale(1)' }], 320);
+    this.lastHookCd = cd;
+    this.hookDial.set(cd <= 0 ? 1 : 1 - Math.min(1, cd / this.hookMax));
+    this.hookCdT.set(cd <= 0 ? '' : cd >= 10 ? String(Math.ceil(cd)) : cd.toFixed(1));
+    this.hookReady.set(cd <= 0);
+
+    // chips (signature changes only on drafts)
+    this.updateChips(w);
+
+    // ticker crawl
+    this.stepTicker(d);
+  }
+
+  onEvents(w: World, ev: readonly SimEvent[]): void {
+    if (w !== this.world) this.bind(w);
+    const now = performance.now();
+    for (const e of ev) {
+      switch (e.type) {
+        case 'titanHurt':
+          if (now - this.lastHurtFx > 120 && e.dmg > 0) {
+            this.lastHurtFx = now;
+            const big = e.dmg > w.titan.maxHp * 0.08;
+            pulse(this.card, big
+              ? [{ transform: 'translate(0,0)' }, { transform: 'translate(-6px,3px)' }, { transform: 'translate(5px,-2px)' }, { transform: 'translate(-2px,1px)' }, { transform: 'translate(0,0)' }]
+              : [{ transform: 'translate(0,0)' }, { transform: 'translate(-3px,1px)' }, { transform: 'translate(0,0)' }], big ? 320 : 180);
+            const peak = flashesReduced() ? 0.18 : big ? 0.75 : 0.4;
+            pulse(this.hurtFlash, [{ opacity: peak }, { opacity: 0 }], big ? 420 : 260, 'ease-out');
+          }
+          break;
+        case 'pickup':
+          if (e.kind === 'heal') pulse(this.hpBar, [{ filter: 'brightness(1.8) saturate(1.4)' }, { filter: 'none' }], 500);
+          else if (now - this.lastPickupFx > 90) {
+            this.lastPickupFx = now;
+            pulse(this.xpBar, [{ filter: 'brightness(1.7)' }, { filter: 'none' }], 220);
+          }
+          break;
+        case 'levelUp':
+          pulse(this.lvBox, [{ transform: 'scale(1.6)', color: '#ff6f5e' }, { transform: 'scale(1)' }], 520);
+          pulse(this.lvFlash, [
+            { opacity: 0, transform: 'translate(-50%, 30%) scale(.6) rotate(-6deg)' },
+            { opacity: 1, transform: 'translate(-50%, -20%) scale(1.08) rotate(-4deg)', offset: 0.2 },
+            { opacity: 1, transform: 'translate(-50%, -30%) scale(1) rotate(-4deg)', offset: 0.75 },
+            { opacity: 0, transform: 'translate(-50%, -70%) scale(1) rotate(-4deg)' },
+          ], 1100);
+          break;
+        case 'rankUp':
+          this.pushWire(fmt(STR.hud.wire.rankUp, { size: roman(e.rank) }) + ' — ' + (RANK_SUBS[e.rank] ?? '').replace(/^SIZE [IV]+ CONFIRMED — /, ''));
+          break;
+        case 'eliteSpawn':
+          this.pushWire(STR.hud.wire.elite);
+          break;
+        case 'bossSpawn': {
+          const def = BOSSES[e.boss];
+          this.pushWire(fmt(STR.hud.wire.boss, { boss: def ? def.name : e.boss.toUpperCase() }));
+          break;
+        }
+        case 'chest':
+          this.pushWire(STR.hud.wire.chest);
+          break;
+        default:
+          break;
+      }
+    }
+  }
+
+  // ─────────────────────────────── internals ───────────────────────────────
+
+  /** New run (or first frame): reset every cache so nothing from the last run leaks. */
+  private bind(w: World): void {
+    this.world = w;
+    const def = TITANS[w.titanId];
+    this.nameT.set(def ? def.name : w.titanId.toUpperCase());
+    this.roleT.set(def ? def.role : '');
+    this.hookName.set(def ? def.hook.name : STR.hud.hook);
+    this.card.style.setProperty('--titan', def ? def.colors.primary : '#3fae7f');
+    this.card.style.setProperty('--titan-2', def ? def.colors.secondary : '#1f6f55');
+    this.trail = 1; this.trailHold = 0; this.lastHpFrac = 1;
+    this.hookMax = 1; this.lastHookCd = 0; this.lastDashRe = 0;
+    this.lastRank = -1; this.lastLevel = -1; this.lastBlocks = -1; this.lastCrushed = -1;
+    this.tonsShown = Math.max(0, w.run.tonnage);
+    this.chipSig = '#';
+    for (const s of [this.clock, this.runT, this.tonsVal, this.blocksVal, this.crushVal, this.lvT, this.sizeT, this.hpVal, this.massVal, this.hookCdT]) s.reset();
+    for (const v of [this.hpFill, this.hpTrail, this.hpShield, this.massFill, this.xpFill, this.shellFill, this.hookDial]) v.reset();
+    for (const c of [this.lowHpOn, this.shellOn, this.hookReady]) c.reset();
+    this.pips = [];
+    clearEl(this.pipsBox);
+    this.tkLive = [];
+    this.resetTicker();
+  }
+
+  private updatePips(w: World): void {
+    const T = w.titan;
+    const max = Math.max(1, Math.round(T.stats ? T.stats.dashCharges : 1));
+    if (this.pips.length !== max) {
+      clearEl(this.pipsBox);
+      this.pips = [];
+      for (let i = 0; i < max; i++) {
+        const n = div('bt-pip', this.pipsBox);
+        const f = div('bt-pip-fill', n);
+        this.pips.push({ node: n, fill: new VarSlot(f, '--p', 0.01), full: new ClassSlot(n, 'full') });
+      }
+    }
+    const have = Math.max(0, Math.min(max, Math.floor(T.dashCharges + 1e-6)));
+    // recharge progress of the next pip; the sim may count dashRecharge up or down — infer it
+    const total = 3 * Math.max(0.05, T.stats ? T.stats.dashCooldown : 1);
+    const re = Math.max(0, T.dashRecharge || 0);
+    if (re > this.lastDashRe + 1e-4) this.dashCounting = re > total * 0.5 && this.lastDashRe === 0 ? 'down' : 'up';
+    else if (re < this.lastDashRe - 1e-4) this.dashCounting = 'down';
+    this.lastDashRe = re;
+    let partial = this.dashCounting === 'down' ? 1 - re / total : re / total;
+    partial = Math.max(0, Math.min(1, partial));
+    for (let i = 0; i < max; i++) {
+      const p = this.pips[i];
+      if (i < have) { p.full.set(true); p.fill.set(1); }
+      else if (i === have) { p.full.set(false); p.fill.set(re > 0 ? partial : 0); }
+      else { p.full.set(false); p.fill.set(0); }
+    }
+  }
+
+  private updateChips(w: World): void {
+    const U = w.upgrades;
+    let sig = '';
+    for (const id of U.order) sig += id + ':' + (U.owned[id] || 0) + '|';
+    if (sig === this.chipSig) return;
+    const prev = this.chipSig;
+    this.chipSig = sig;
+    clearEl(this.chipsList);
+    const ids = U.order.filter((id, i) => U.order.indexOf(id) === i);
+    this.chipsWrap.classList.toggle('bt-hidden', ids.length === 0);
+    const shown = ids.slice(-MAX_CHIPS);
+    if (ids.length > shown.length) div('bt-chip bt-chip-more', this.chipsList, `+${ids.length - shown.length}`);
+    for (const id of shown) {
+      const def = UPGRADE_BY_ID[id];
+      const name = def ? def.name : id;
+      const chip = div(`bt-chip r-${def ? def.rarity : 'common'}`, this.chipsList);
+      chip.appendChild(el('span', 'bt-chip-ab', abbrev(name)));
+      chip.appendChild(el('span', 'bt-chip-nm', name.toUpperCase()));
+      const st = U.owned[id] || 1;
+      chip.appendChild(el('span', 'bt-chip-st', st > 1 ? `×${st}` : ''));
+      if (prev !== '#' && !prev.includes(id + ':' + st + '|')) {
+        pulse(chip, [{ transform: 'translateX(40%)', opacity: 0 }, { transform: 'translateX(-6%)', opacity: 1 }, { transform: 'translateX(0)' }], 420);
+      }
+    }
+  }
+
+  // ── ticker: JS crawl (one transform write per frame), items appended/recycled as they scroll
+
+  private resetTicker(): void {
+    clearEl(this.tkStrip);
+    this.tkItems = [];
+    this.tkOffset = 0;
+    this.tkWidth = 0;
+    this.tkDeck = [];
+  }
+
+  private remeasureTicker(): void {
+    let sum = 0;
+    for (const it of this.tkItems) { it.w = it.node.offsetWidth; sum += it.w; }
+    this.tkWidth = sum;
+  }
+
+  private pushWire(text: string): void {
+    if (this.tkLive.length < 6) this.tkLive.push(text);
+  }
+
+  private nextHeadline(): { text: string; live: boolean } {
+    if (this.tkLive.length) return { text: this.tkLive.shift() as string, live: true };
+    if (!this.tkDeck.length) {
+      this.tkDeck = TICKER.slice();
+      for (let i = this.tkDeck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const t = this.tkDeck[i]; this.tkDeck[i] = this.tkDeck[j]; this.tkDeck[j] = t;
+      }
+    }
+    return { text: this.tkDeck.pop() as string, live: false };
+  }
+
+  private appendTickerItem(): void {
+    const { text, live } = this.nextHeadline();
+    const n = el('span', live ? 'bt-tk-item live' : 'bt-tk-item');
+    n.appendChild(el('i', 'bt-tk-sep', '◆'));
+    if (live) n.appendChild(el('b', 'bt-tk-live', STR.hud.tickerLive));
+    n.appendChild(document.createTextNode(text));
+    this.tkStrip.appendChild(n);
+    const w = n.offsetWidth;
+    this.tkItems.push({ node: n, w });
+    this.tkWidth += w;
+  }
+
+  private stepTicker(dt: number): void {
+    const winW = this.tkWin.clientWidth || window.innerWidth;
+    let guard = 0;
+    while (this.tkOffset + this.tkWidth < winW * 1.4 && guard++ < 12) this.appendTickerItem();
+    this.tkOffset -= this.u * 5.5 * dt;
+    // recycle items that have fully left the window
+    while (this.tkItems.length && this.tkOffset + this.tkItems[0].w < 0) {
+      const it = this.tkItems.shift() as TickerItem;
+      this.tkOffset += it.w;
+      this.tkWidth -= it.w;
+      it.node.remove();
+    }
+    this.tkStrip.style.transform = `translate3d(${this.tkOffset.toFixed(1)}px,0,0)`;
+  }
+}
+
+/** "Rebar Molars" → "RM"; single word → first two letters. */
+function abbrev(name: string): string {
+  const words = name.replace(/[^A-Za-z0-9 \-]/g, '').split(/[\s\-]+/).filter(Boolean);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  return (words[0] || '?').slice(0, 2).toUpperCase();
+}

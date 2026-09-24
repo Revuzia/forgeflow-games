@@ -58,3 +58,9 @@ asset_gen/
 # bundle (games/neon-veil/assets/index-*.js/.css) IS tracked and must stay.
 games/neon-veil/node_modules/
 games/neon-veil/dist-rebuild/
+
+# 2026-09-22 — BLOCKTOOTH (games/blocktooth): Vite/TS source game. node_modules + dist are
+# covered above; keep screenshots, scratch output and harness reports out of git.
+games/blocktooth/_shots/
+games/blocktooth/_harness/_reports/
+games/blocktooth/_harness/__pycache__/
