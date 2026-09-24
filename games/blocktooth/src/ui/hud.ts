@@ -23,6 +23,7 @@ const LOW_HP = 0.3;
 const TRAIL_HOLD_S = 0.4;
 const TRAIL_RATE = 0.9;          // fraction of max HP per second the trail drains
 const MAX_CHIPS = 14;
+const WIRE_CAP = 6;              // VOLT-KITE live-wire cap (CONTRACT §8)
 
 /** CSS unit (--u) in px, mirrored from styles.css: max(8px, min(1vw, 1.7778vh)). */
 function unitPx(): number { return Math.max(8, Math.min(window.innerWidth / 100, (window.innerHeight * 1.7778) / 100)); }
@@ -72,6 +73,9 @@ export class Hud {
   private readonly shellRow: HTMLElement;
   private readonly shellFill: VarSlot;
   private readonly shellOn: ClassSlot;
+  private readonly shellLbl: TextSlot;
+  private readonly shellVal: TextSlot;
+  private readonly cardLow: ClassSlot;
   private readonly pipsBox: HTMLElement;
   private pips: { node: HTMLElement; fill: VarSlot; full: ClassSlot }[] = [];
   private readonly hookDial: VarSlot;
@@ -90,8 +94,6 @@ export class Hud {
   private lastHpFrac = 1;
   private hookMax = 1;
   private lastHookCd = 0;
-  private lastDashRe = 0;
-  private dashCounting: 'down' | 'up' = 'down';
   private lastRank = -1;
   private lastLevel = -1;
   private lastPickupFx = 0;
@@ -106,6 +108,7 @@ export class Hud {
   private tkDeck: string[] = [];
   private tkLive: string[] = [];
   private u = unitPx();
+  private tkWinW = 0;
 
   constructor(root: HTMLElement) {
     this.root = root;
@@ -189,8 +192,10 @@ export class Hud {
     const sh = bar('bt-bar-shell', STR.hud.shell);
     this.shellRow = sh.row;
     this.shellFill = new VarSlot(div('bt-bar-fill', sh.track), '--p');
-    sh.val.remove();
+    this.shellLbl = new TextSlot(sh.row.firstElementChild as HTMLElement);
+    this.shellVal = new TextSlot(sh.val);
     this.shellOn = new ClassSlot(this.shellRow, 'on');
+    this.cardLow = new ClassSlot(card, 'lowhp');
 
     const foot = div('bt-card-foot', card);
     const dash = div('bt-dash', foot);
@@ -216,7 +221,7 @@ export class Hud {
     this.tkWin = div('bt-ticker-win', tk);
     this.tkStrip = div('bt-ticker-strip', this.tkWin);
 
-    window.addEventListener('resize', () => { this.u = unitPx(); this.remeasureTicker(); });
+    window.addEventListener('resize', () => { this.u = unitPx(); this.tkWinW = 0; this.remeasureTicker(); });
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => this.remeasureTicker()).catch(() => {});
   }
 
@@ -279,6 +284,7 @@ export class Hud {
     this.hpShield.set(Math.max(0, Math.min(1, (w.upgrades.shield || 0) / maxHp)));
     this.hpVal.set(`${Math.ceil(Math.max(0, T.hp))} / ${Math.round(maxHp)}`);
     this.lowHpOn.set(T.alive && hpF < LOW_HP);
+    this.cardLow.set(T.alive && hpF < LOW_HP);
 
     // mass progress through the current rank (mass is cumulative across ranks)
     const R = RANKS[T.rank];
@@ -296,12 +302,8 @@ export class Hud {
     // XP
     this.xpFill.set(T.xpToNext > 0 ? Math.max(0, Math.min(1, T.xp / T.xpToNext)) : 0);
 
-    // HEARTHBACK shell (kit.stored / kit.cap), hidden for other titans
-    const cap = T.kit ? T.kit.cap : undefined;
-    if (cap !== undefined && cap > 0) {
-      this.shellOn.set(true);
-      this.shellFill.set(Math.max(0, Math.min(1, (T.kit.stored || 0) / cap)));
-    } else this.shellOn.set(false);
+    // kit meter: HEARTHBACK shell (kit.stored / kit.cap) · VOLT-KITE live wires · BRIARWICK blooms
+    this.updateKitRow(w);
 
     // dash pips
     this.updatePips(w);
@@ -386,13 +388,13 @@ export class Hud {
     this.card.style.setProperty('--titan', def ? def.colors.primary : '#3fae7f');
     this.card.style.setProperty('--titan-2', def ? def.colors.secondary : '#1f6f55');
     this.trail = 1; this.trailHold = 0; this.lastHpFrac = 1;
-    this.hookMax = 1; this.lastHookCd = 0; this.lastDashRe = 0;
+    this.hookMax = 1; this.lastHookCd = 0; this.kitKind = '';
     this.lastRank = -1; this.lastLevel = -1; this.lastBlocks = -1; this.lastCrushed = -1;
     this.tonsShown = Math.max(0, w.run.tonnage);
     this.chipSig = '#';
-    for (const s of [this.clock, this.runT, this.tonsVal, this.blocksVal, this.crushVal, this.lvT, this.sizeT, this.hpVal, this.massVal, this.hookCdT]) s.reset();
+    for (const s of [this.clock, this.runT, this.tonsVal, this.blocksVal, this.crushVal, this.lvT, this.sizeT, this.hpVal, this.massVal, this.hookCdT, this.shellLbl, this.shellVal]) s.reset();
     for (const v of [this.hpFill, this.hpTrail, this.hpShield, this.massFill, this.xpFill, this.shellFill, this.hookDial]) v.reset();
-    for (const c of [this.lowHpOn, this.shellOn, this.hookReady]) c.reset();
+    for (const c of [this.lowHpOn, this.shellOn, this.hookReady, this.cardLow]) c.reset();
     this.pips = [];
     clearEl(this.pipsBox);
     this.tkLive = [];
@@ -412,20 +414,42 @@ export class Hud {
       }
     }
     const have = Math.max(0, Math.min(max, Math.floor(T.dashCharges + 1e-6)));
-    // recharge progress of the next pip; the sim may count dashRecharge up or down — infer it
-    const total = 3 * Math.max(0.05, T.stats ? T.stats.dashCooldown : 1);
+    // titansim: dashRecharge counts UP toward DASH_RECHARGE_S (3 s) × max(0.35, dashCooldown)
+    const total = 3 * Math.max(0.35, T.stats ? T.stats.dashCooldown : 1);
     const re = Math.max(0, T.dashRecharge || 0);
-    if (re > this.lastDashRe + 1e-4) this.dashCounting = re > total * 0.5 && this.lastDashRe === 0 ? 'down' : 'up';
-    else if (re < this.lastDashRe - 1e-4) this.dashCounting = 'down';
-    this.lastDashRe = re;
-    let partial = this.dashCounting === 'down' ? 1 - re / total : re / total;
-    partial = Math.max(0, Math.min(1, partial));
+    const partial = Math.max(0, Math.min(1, re / total));
     for (let i = 0; i < max; i++) {
       const p = this.pips[i];
       if (i < have) { p.full.set(true); p.fill.set(1); }
       else if (i === have) { p.full.set(false); p.fill.set(re > 0 ? partial : 0); }
       else { p.full.set(false); p.fill.set(0); }
     }
+  }
+
+  private kitKind = '';
+
+  private updateKitRow(w: World): void {
+    const T = w.titan, K = T.kit || {};
+    let kind = '', frac = 0, val = '';
+    if (w.titanId === 'hearthback' && (K.cap || 0) > 0) {
+      kind = 'shell'; frac = (K.stored || 0) / K.cap; val = `${Math.floor(Math.max(0, Math.min(1, frac)) * 100)}%`;
+    } else if (w.titanId === 'voltkite') {
+      const n = Math.max(0, Math.round(K.wires || 0));
+      kind = 'wires'; frac = n / WIRE_CAP; val = `${n}/${WIRE_CAP}`;
+    } else if (w.titanId === 'briarwick') {
+      const cap = Math.max(1, Math.round(T.stats ? T.stats.turretCap : 4));
+      const n = Math.max(0, Math.round(K.turrets || 0));
+      kind = 'blooms'; frac = n / cap; val = `${n}/${cap}`;
+    }
+    this.shellOn.set(kind !== '');
+    if (!kind) return;
+    if (kind !== this.kitKind) {
+      this.kitKind = kind;
+      this.shellLbl.set(kind === 'shell' ? STR.hud.shell : kind === 'wires' ? STR.hud.wires : STR.hud.blooms);
+      this.shellRow.dataset.kit = kind;
+    }
+    this.shellFill.set(Math.max(0, Math.min(1, frac)));
+    this.shellVal.set(val);
   }
 
   private updateChips(w: World): void {
@@ -499,7 +523,8 @@ export class Hud {
   }
 
   private stepTicker(dt: number): void {
-    const winW = this.tkWin.clientWidth || window.innerWidth;
+    if (this.tkWinW <= 0) this.tkWinW = this.tkWin.clientWidth || window.innerWidth;   // cached; reset on resize
+    const winW = this.tkWinW;
     let guard = 0;
     while (this.tkOffset + this.tkWidth < winW * 1.4 && guard++ < 12) this.appendTickerItem();
     this.tkOffset -= this.u * 5.5 * dt;

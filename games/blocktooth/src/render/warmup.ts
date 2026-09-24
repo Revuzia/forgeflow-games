@@ -9,7 +9,8 @@
 //      warm frame draws (and shadow-casts) EVERYTHING, not just what the boot camera sees;
 //   2. compileAsync with a HalfFloat RT bound, then RENDER one frame into it (links the
 //      shadow-depth variants of every caster and uploads every texture/geometry/instance buffer);
-//   3. compileAsync again for the canvas (sRGB + tone-mapping variants);
+//   3. compileAsync again for the canvas (sRGB + tone-mapping variants) and draw one canvas frame
+//      (ANGLE finishes a program's link on its first real draw, not at compile);
 //   4. restore visibility / counts / culling / render target / autoClear exactly.
 // Outline hulls (addOutline) mirror their source's count + frustumCulled by accessor, so they
 // are skipped (their setters are no-ops by design).
@@ -49,6 +50,12 @@ export async function warmup(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
     // 2) canvas variants (sRGB + tone mapping)
     renderer.setRenderTarget(null);
     await renderer.compileAsync(scene, camera);
+    // ...and DRAW them once. Compiling is not enough on ANGLE/D3D11: the first real draw of a
+    // program still pays its deferred link (getProgramInfoLog blocked 65 ms for the foe material and
+    // 11 ms for fxDecal the first time an enemy / a rank-up ring appeared, measured with a CPU
+    // profile + a getProgramInfoLog hook). The loading card covers the canvas, and the slate frame
+    // overwrites this one.
+    renderer.render(scene, camera);
   } finally {
     renderer.setRenderTarget(prevTarget);
     renderer.autoClear = prevAutoClear;

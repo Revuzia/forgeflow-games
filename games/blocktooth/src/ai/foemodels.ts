@@ -314,6 +314,12 @@ export class Facet {
 
 // ─────────────────────────────── the foe material ───────────────────────────────
 export interface FoeUniforms { uFlash: { value: number }; uGlowMul: { value: number } }
+/**
+ * A float uniform holder with its OWN hidden class: `{ value }` object literals share a V8 map with
+ * three's colour/texture uniforms, so their `value` field is tagged and every per-frame float write
+ * boxes a new HeapNumber. A class instance keeps an unboxed double field → zero-allocation writes.
+ */
+class FloatU { value = 0.5; constructor(v: number) { this.value = v; } }
 export type FoeMaterial = THREE.MeshToonMaterial & { userData: { bt: FoeUniforms } };
 
 /**
@@ -327,7 +333,7 @@ export type FoeMaterial = THREE.MeshToonMaterial & { userData: { bt: FoeUniforms
  */
 export function makeFoeMaterial(instanced: boolean): FoeMaterial {
   const mat = makeToon({ color: '#ffffff', vertexColors: true }) as FoeMaterial;
-  const u: FoeUniforms = { uFlash: { value: 0 }, uGlowMul: { value: 1 } };
+  const u: FoeUniforms = { uFlash: new FloatU(0), uGlowMul: new FloatU(1) };
   mat.userData.bt = u;
   if (instanced) mat.defines = { ...(mat.defines ?? {}), BT_INST_FLASH: '' };
   const prev = mat.onBeforeCompile;

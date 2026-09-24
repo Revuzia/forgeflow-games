@@ -6,9 +6,15 @@
 // Why UiKeys reads DOM keydown + navigator.getGamepads() itself instead of polling
 // Input.pressed(): modal screens are awaited Promises and nothing in the contract says who
 // calls Input.update() while they are open. Reading the raw devices makes the screens work
-// whether or not the app's frame loop is running. Screens still set `input.mode = 'ui'`
-// (gameplay actions read false) and call `input.clearEdges()` on close, so a key used to
-// dismiss a screen never leaks into gameplay as a hook/dash/pause edge.
+// whether or not the app's frame loop is running.
+//
+// Leak-proofing (a key that closes a screen must never become a gameplay edge):
+//   * screens set `input.mode = 'ui'` while open (gameplay actions read false);
+//   * UiKeys does NOT stop propagation — the app's own listeners (audio unlock on the first
+//     gesture, Input's key tracking) still see every key;
+//   * a screen CLOSES on a macrotask (`later()`), i.e. after the closing key has finished
+//     dispatching to Input in 'ui' mode; the restore fn then polls Input once, flips the mode
+//     back (Input marks every held key/button dead until released) and clears all edges.
 
 import type { Input } from '../core/input.ts';
 import type { Settings } from '../core/save.ts';
@@ -163,7 +169,8 @@ export function flashesReduced(): boolean {
 
 // ─────────────────────────────── modal plumbing ───────────────────────────────
 
-/** Put the Input layer in UI mode; returns a restore fn (previous mode + cleared edges). */
+/** Put the Input layer in UI mode; returns a restore fn (poll once, previous mode, cleared edges).
+ *  Call the restore fn from `later()` so the key that closed the screen has fully dispatched. */
 export function enterUiMode(input: Input | null | undefined): () => void {
   if (!input) return () => {};
   const prev = input.mode;
@@ -173,10 +180,15 @@ export function enterUiMode(input: Input | null | undefined): () => void {
   return () => {
     if (done) return;
     done = true;
+    // one fresh poll so a pad button still held from the menu is known-down (→ dead) at the flip
+    try { input.update(); } catch { /* ignore */ }
     input.mode = prev;
     try { input.clearEdges(); } catch { /* ignore */ }
   };
 }
+
+/** Run `fn` after the current event has finished dispatching (macrotask). */
+export function later(fn: () => void): void { setTimeout(fn, 0); }
 
 /** Remember the focused element; the returned fn restores it (if it is still in the page). */
 export function saveFocus(): () => void {
@@ -253,8 +265,8 @@ const PAD_MAP: Record<number, UiAct> = {
 
 /**
  * Keyboard + gamepad navigation for one modal screen. Keydown is taken in the CAPTURE phase on
- * window and stopped there, so gameplay listeners never see keys meant for the menu (F-keys,
- * Tab and modifiers pass through). Gamepad buttons are edge-detected against a snapshot taken
+ * window (so it runs before gameplay listeners) but NOT stopped (F-keys, Tab and modifiers are
+ * ignored entirely). Gamepad buttons are edge-detected against a snapshot taken
  * at start(), so a button still held from gameplay is not a press. Left stick auto-repeats.
  */
 export class UiKeys {
@@ -278,8 +290,9 @@ export class UiKeys {
     const k = e.key.toLowerCase();
     if (PASS_THROUGH.has(k) || /^f\d{1,2}$/.test(k) || e.ctrlKey || e.metaKey || e.altKey) return;
     const act = mapKey(e, this.opts.spaceConfirms);
+    // no default page behaviour (scroll, button activation) for keys a screen owns; propagation is
+    // left alone on purpose (see header) — Input sees the key in 'ui' mode and ignores gameplay
     e.preventDefault();
-    e.stopPropagation();
     if (performance.now() < this.armAt) return;
     const isNav = act === 'up' || act === 'down' || act === 'left' || act === 'right';
     if (e.repeat && !isNav) return;
@@ -362,3 +375,76 @@ export class UiKeys {
 
 /** Wrap an index into [0, n). */
 export function wrapIndex(i: number, n: number): number { return ((i % n) + n) % n; }
+
+// ─────────────────────────────── modal sessions ───────────────────────────────
+
+/** One open modal screen: finish() closes it exactly once. */
+export interface ModalSession<T> {
+  readonly done: boolean;
+  /** Close the screen: keys stop now; mode/focus restore + resolve happen on a macrotask after `holdMs`. */
+  finish(value: T, holdMs?: number): void;
+  /** Abandon without resolving (the screen was superseded / cleared). */
+  abort(): void;
+}
+
+export interface ModalOpts extends UiKeysOpts {
+  /** runs right before the promise resolves (hide the layer, drop listeners) */
+  onClose?: () => void;
+}
+
+/**
+ * Shared plumbing for every awaited screen: input.mode = 'ui' while open, focus parked on the
+ * layer (restored on close), UiKeys running, and a leak-proof close (see file header).
+ */
+export function runModal<T>(
+  layer: HTMLElement,
+  input: Input | null | undefined,
+  onPress: (p: UiPress, s: ModalSession<T>) => void,
+  opts: ModalOpts = {},
+): { promise: Promise<T>; session: ModalSession<T> } {
+  let resolveFn: (v: T) => void = () => {};
+  const promise = new Promise<T>((r) => { resolveFn = r; });
+  const restoreMode = enterUiMode(input);
+  const restoreFocus = saveFocus();
+  let done = false;
+  const session: ModalSession<T> = {
+    get done() { return done; },
+    finish(value: T, holdMs = 0) {
+      if (done) return;
+      done = true;
+      keys.stop();
+      setTimeout(() => {
+        restoreMode();
+        if (opts.onClose) opts.onClose();
+        restoreFocus();
+        resolveFn(value);
+      }, Math.max(0, holdMs));
+    },
+    abort() {
+      if (done) return;
+      done = true;
+      keys.stop();
+      restoreMode();
+      if (opts.onClose) opts.onClose();
+      restoreFocus();
+    },
+  };
+  const keys = new UiKeys((p) => { if (!done) onPress(p, session); }, opts);
+  if (layer.tabIndex < 0 || !layer.hasAttribute('tabindex')) layer.tabIndex = -1;
+  keys.start();
+  focusEl(layer);
+  return { promise, session };
+}
+
+/** Wire a pointer-activated control (mouse/touch). Keyboard activation goes through UiKeys, so
+ *  synthetic keyboard clicks (detail 0) are ignored — a key never activates a control twice. */
+export function onTap(e: HTMLElement, fn: (ev: MouseEvent) => void): void {
+  e.addEventListener('mousedown', (ev) => ev.preventDefault());   // do not steal focus
+  e.addEventListener('click', (ev) => {
+    if (ev.detail === 0 && (ev as PointerEvent).pointerType !== 'mouse') {
+      // keyboard-synthesised click on a focused button: UiKeys already handled the key
+      if (document.activeElement === e) return;
+    }
+    fn(ev);
+  });
+}

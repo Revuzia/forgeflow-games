@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BLOCKTOOTH</title>
+<meta name="description" content="BLOCKTOOTH — a tiny monster in a crosswalk eats the street, outgrows the block and levels the city. An isometric survivor-like from a WARD-7 special report.">
+<meta name="theme-color" content="#14213d">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='3' y='3' width='58' height='58' rx='12' fill='%231b1426'/%3E%3Cpath d='M9 12h46v27l-5.75 7-5.75-7-5.75 7-5.75-7-5.75 7-5.75-7L9 46z' fill='%233fae7f'/%3E%3Cpath d='M9 12h46v8H9z' fill='%239dffcf' opacity='.55'/%3E%3Cpath d='M9 46l5.75-7 5.75 7 5.75-7 5.75 7 5.75-7 5.75 7 5.75-7L55 46v6H9z' fill='%23f1e4c8'/%3E%3Ccircle cx='44' cy='24' r='4.5' fill='%23ffd166'/%3E%3Ccircle cx='44' cy='24' r='2' fill='%231b1426'/%3E%3Cpath d='M48 3h13v13a14 14 0 0 1-13-13z' fill='%23ff6f5e'/%3E%3C/svg%3E">
+<style>
+  /* Page shell only — every game screen is styled by src/ui/styles.css (ui lane). */
+  :root { color-scheme: dark; --navy: #14213d; --navy3: #0c1426; --cream: #f4ecd8; --coral: #ff6f5e; --red: #e63946; --gold: #ffd166; --ink: #1b1426; --jade: #3fae7f; }
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--navy3); }
+  body { overscroll-behavior: none; touch-action: none; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
+  #game { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; outline: none; background: var(--navy3); }
+  #ui { position: fixed; inset: 0; z-index: 10; pointer-events: none; overflow: hidden; }
+
+  /* ── boot / loading card (also reused between runs as the "patching in" card) ── */
+  #boot {
+    position: fixed; inset: 0; z-index: 900; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2.2vh; background: radial-gradient(120% 90% at 50% 40%, #1f3057 0%, var(--navy) 55%, var(--navy3) 100%);
+    color: var(--cream); font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; text-transform: uppercase;
+    transition: opacity .35s ease, visibility 0s linear .35s; opacity: 1; visibility: visible; pointer-events: auto;
+  }
+  #boot.gone { opacity: 0; visibility: hidden; pointer-events: none; }
+  #boot::before { /* halftone */
+    content: ''; position: absolute; inset: 0; pointer-events: none; opacity: .16;
+    background-image: radial-gradient(circle, var(--cream) 1.1px, transparent 1.6px); background-size: 9px 9px;
+    -webkit-mask-image: radial-gradient(90% 70% at 50% 45%, transparent 30%, #000 100%); mask-image: radial-gradient(90% 70% at 50% 45%, transparent 30%, #000 100%);
+  }
+  #boot::after { /* scanlines */
+    content: ''; position: absolute; inset: 0; pointer-events: none; opacity: .22;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,.55) 0 1px, transparent 1px 3px);
+  }
+  .bt-boot-bug { position: absolute; left: 3vw; top: 3.2vh; display: flex; align-items: center; gap: .5em; font-family: 'Anton', Impact, sans-serif;
+    font-size: clamp(14px, 1.6vw, 26px); letter-spacing: .08em; background: var(--ink); padding: .25em .6em; border-left: .3em solid var(--red); }
+  .bt-boot-bug i { width: .6em; height: .6em; border-radius: 50%; background: var(--red); box-shadow: 0 0 .6em var(--red); animation: btBootDot 1.1s steps(2, jump-none) infinite; }
+  .bt-boot-bug span { font-family: 'Space Mono', Consolas, monospace; font-size: .6em; letter-spacing: .12em; color: var(--gold); }
+  .bt-boot-band { background: var(--red); color: var(--cream); font-family: 'Anton', Impact, sans-serif; letter-spacing: .3em; padding: .3em 1.4em .25em;
+    font-size: clamp(12px, 1.25vw, 20px); box-shadow: .25em .25em 0 var(--ink); transform: skewX(-8deg); }
+  .bt-boot-mark { position: relative; font-family: 'Anton', Impact, 'Arial Narrow Bold', sans-serif; font-size: clamp(56px, 10.5vw, 190px); line-height: .9;
+    letter-spacing: .02em; color: var(--cream); text-shadow: .045em .045em 0 var(--ink), .09em .09em 0 var(--jade);
+    -webkit-mask-image: radial-gradient(circle at 100% 0%, transparent 0 .34em, #000 .35em); mask-image: radial-gradient(circle at 100% 0%, transparent 0 .34em, #000 .35em); }
+  .bt-boot-sub { font-weight: 600; font-style: italic; letter-spacing: .35em; font-size: clamp(12px, 1.3vw, 22px); color: var(--gold); text-transform: none; }
+  .bt-boot-bar { position: relative; width: min(46vw, 640px); height: clamp(10px, 1.2vh, 16px); background: var(--ink); border: 2px solid var(--cream); box-shadow: .3em .3em 0 var(--ink); overflow: hidden; margin-top: 1.4vh; }
+  .bt-boot-bar b { position: absolute; inset: 0 auto 0 0; width: 6%; transition: width .3s ease;
+    background: repeating-linear-gradient(-45deg, var(--coral) 0 10px, var(--gold) 10px 20px); background-size: 28px 28px; animation: btBootMarch .7s linear infinite; }
+  .bt-boot-status { font-family: 'Space Mono', Consolas, monospace; font-size: clamp(11px, .95vw, 15px); letter-spacing: .14em; color: var(--cream); opacity: .85; min-height: 1.3em; }
+  @keyframes btBootDot { 50% { opacity: .15; } }
+  @keyframes btBootMarch { to { background-position: 28px 0; } }
+  @media (prefers-reduced-motion: reduce) { .bt-boot-bug i, .bt-boot-bar b { animation: none; } }
+
+  /* ── no-WebGL2 card and the fatal "technical difficulties" card ── */
+  .bt-card-shell { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 4vh 4vw;
+    background: repeating-linear-gradient(90deg, #c9c9c9 0 14.28%, #d8c64a 14.28% 28.57%, #4fb3b0 28.57% 42.85%, #3fae7f 42.85% 57.14%, #b04fa6 57.14% 71.42%, #c0463f 71.42% 85.71%, #3b3f9e 85.71% 100%);
+    font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; color: var(--cream); pointer-events: auto; -webkit-user-select: text; user-select: text; }
+  .bt-card-shell[hidden] { display: none; }
+  .bt-card { max-width: min(760px, 92vw); max-height: 88vh; overflow: auto; background: var(--navy); border: 4px solid var(--cream); box-shadow: .7em .7em 0 var(--ink); padding: 2.2em 2.4em; }
+  .bt-card h1 { margin: 0 0 .15em; font-family: 'Anton', Impact, sans-serif; font-weight: 400; font-size: clamp(34px, 4.6vw, 64px); letter-spacing: .04em; line-height: 1; text-transform: uppercase; }
+  .bt-card h2 { margin: 0 0 1em; font-size: clamp(15px, 1.4vw, 21px); letter-spacing: .22em; color: var(--gold); text-transform: uppercase; font-weight: 700; }
+  .bt-card p { font-size: clamp(15px, 1.25vw, 19px); line-height: 1.35; margin: 0 0 .8em; }
+  .bt-card pre { white-space: pre-wrap; word-break: break-word; font-family: 'Space Mono', Consolas, monospace; font-size: 12.5px; line-height: 1.45; background: var(--ink); color: #ffd9d4;
+    padding: 1em 1.1em; border-left: 4px solid var(--red); max-height: 38vh; overflow: auto; margin: 0 0 1.2em; }
+  .bt-card button { font: inherit; font-family: 'Anton', Impact, sans-serif; font-size: clamp(16px, 1.4vw, 22px); letter-spacing: .12em; cursor: pointer;
+    background: var(--coral); color: var(--ink); border: 3px solid var(--ink); padding: .4em 1.4em; box-shadow: .25em .25em 0 var(--ink); }
+  .bt-card button:hover, .bt-card button:focus-visible { background: var(--gold); outline: none; }
+</style>
+</head>
+<body>
+<canvas id="game" tabindex="-1" aria-label="BLOCKTOOTH — game view"></canvas>
+<div id="ui"></div>
+
+<div id="boot" role="status" aria-live="polite" aria-label="Loading BLOCKTOOTH">
+  <div class="bt-boot-bug"><i></i>WARD-7 <span>• LIVE</span></div>
+  <div class="bt-boot-band">SPECIAL REPORT</div>
+  <div class="bt-boot-mark">BLOCKTOOTH</div>
+  <div class="bt-boot-sub">a WARD-7 special report</div>
+  <div class="bt-boot-bar"><b id="boot-fill"></b></div>
+  <div class="bt-boot-status" id="boot-status">PATCHING INTO WARD-7…</div>
+</div>
+
+<div id="nogpu" class="bt-card-shell" hidden role="alertdialog" aria-labelledby="nogpu-title">
+  <div class="bt-card">
+    <h1 id="nogpu-title">NO SIGNAL</h1>
+    <h2>WARD-7 cannot reach your graphics card</h2>
+    <p>BLOCKTOOTH is broadcast in 3D and needs <b>WebGL 2</b>. This browser, or its current settings, does not offer it.</p>
+    <p>Try an up-to-date Chrome, Edge, Firefox or Safari, switch on <b>hardware acceleration</b> in the browser settings, and reload.</p>
+    <button type="button" onclick="location.reload()">RELOAD</button>
+  </div>
+</div>
+
+<div id="fatal" class="bt-card-shell" hidden role="alertdialog" aria-labelledby="fatal-title">
+  <div class="bt-card">
+    <h1 id="fatal-title">TECHNICAL DIFFICULTIES</h1>
+    <h2 id="fatal-sub">WARD-7 has lost the feed</h2>
+    <pre id="fatal-msg"></pre>
+    <button type="button" onclick="location.reload()">RELOAD THE BROADCAST</button>
+  </div>
+</div>
+
+<script>
+  // Boot guard (classic script, runs before the module graph): if the module graph fails to
+  // load or throws before src/main.ts takes over, show the fatal card instead of a dead page.
+  (function () {
+    var done = false;
+    function show(title, detail) {
+      if (done) return;
+      done = true;
+      var f = document.getElementById('fatal'), m = document.getElementById('fatal-msg'), s = document.getElementById('fatal-sub');
+      if (s && title) s.textContent = title;
+      if (m) m.textContent = String(detail || 'unknown error');
+      if (f) f.hidden = false;
+      var b = document.getElementById('boot'); if (b) b.classList.add('gone');
+    }
+    function onErr(e) { show('the broadcast failed to start', (e && e.error && e.error.stack) || (e && e.message) || e); }
+    function onRej(e) { var r = e && e.reason; show('the broadcast failed to start', (r && r.stack) || r); }
+    window.addEventListener('error', onErr);
+    window.addEventListener('unhandledrejection', onRej);
+    window.__BT_BOOT__ = {
+      /** main.ts calls this once it owns error reporting */
+      handoff: function () { window.removeEventListener('error', onErr); window.removeEventListener('unhandledrejection', onRej); clearTimeout(timer); },
+      fail: show,
+    };
+    var timer = setTimeout(function () {
+      if (!window.__BT_MAIN__) show('the broadcast did not start', 'src/main.ts never ran (60 s). Is the dev server up? Run: npm install && npm run dev');
+    }, 60000);
+  })();
+</script>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -96,6 +96,8 @@ export const STR = {
     ready: 'READY',
     shield: 'SHIELD',
     shell: 'SHELL',
+    wires: 'WIRES',
+    blooms: 'BLOOMS',
     tonnage: 'TONNAGE',
     tons: 'T',
     blocks: 'BLOCKS',
@@ -121,6 +123,7 @@ export const STR = {
     phase: 'PHASE',
     staggered: 'STAGGERED — DOUBLE DAMAGE',
     approaching: 'APPROACHING — CONTAINMENT IN PROGRESS',
+    defeated: 'CONTAINMENT ASSET DECOMMISSIONED — PLEASE STAND BACK FROM THE PARTS',
     contractor: 'HALVARD CIVIL DEFENSE',
   },
 
@@ -147,6 +150,13 @@ export const STR = {
     weather: { none: 'CLEAR', snow: 'SNOW', rain: 'RAIN' } as Record<string, string>,
     blocks: '{x} × {z} BLOCKS',
     noPortrait: 'NO PHOTO ON FILE',
+    selected: 'ON AIR',
+    meterHint: 'WEAK POINTS BUILD',
+    zoneNote: {
+      grideast: 'TOY TRAFFIC · ZEBRA CROSSINGS · BLOSSOM SEASON',
+      whitestacks: 'DRIFTS · TANK FARMS · SATELLITE DISHES',
+      lockwater: 'FLOODED STREETS · NEON · STACKED FREIGHT',
+    } as Record<BiomeId, string>,
   },
 
   draft: {
@@ -155,6 +165,7 @@ export const STR = {
     level: 'LEVEL {n} FILING',
     crate: 'RECOVERED HALVARD CRATE — NOTABLE OR BETTER',
     pick: 'FILE ONE',
+    choose: 'REVIEW',
     reroll: 'REROLL',
     rerollLeft: '{n} LEFT',
     noReroll: 'NO REROLLS LEFT',
@@ -202,6 +213,14 @@ export const STR = {
     vol: 'VOL. 77 · NO. {n}',
     price: 'ONE TOKEN',
     headline: 'THE CITY GOT SMALLER.',
+    onlyPaper: "WARD SEVEN'S ONLY SURVIVING NEWSPAPER",
+    stampClear: 'SUBJECT PREVAILS',
+    stampDead: 'SUBJECT DOWN',
+    weather: [
+      'WEATHER: FOOTSTEPS, CLEARING LATER',
+      'WEATHER: OVERCAST WITH SCATTERED ROOFS',
+      'WEATHER: DUSTY, THEN DUSTIER',
+    ],
     extra: 'EXTRA!',
     subClear: [
       'CONTAINMENT ASSET "FULLY DECOMMISSIONED," CONFIRMS NOBODY AT HALVARD',
@@ -228,10 +247,22 @@ export const STR = {
     ],
     sidebar: [
       'LETTERS: "MY BALCONY WAS A SNACK" — P. 4',
-      'WEATHER: FOOTSTEPS, CLEARING LATER',
+      'OBITUARIES: 5TH & WHOLESALE (INTERSECTION) — P. 9',
       'CLASSIFIEDS: SLIGHTLY CHEWED BUS, OBO',
     ],
     numbersTitle: 'BY THE NUMBERS',
+    quotes: [
+      { q: 'I WENT OUT FOR BREAD. THE BAKERY WAS ALSO OUT.', who: 'A RESIDENT OF WHAT WAS 5TH STREET' },
+      { q: 'WE ISSUED IT A PERMIT AT SIZE II. IN HINDSIGHT, THAT WAS ENCOURAGING IT.', who: 'WARD SEVEN ZONING OFFICE' },
+      { q: 'IT LOOKED RIGHT AT ME, THEN AT MY CAR. MOSTLY AT MY CAR.', who: 'FORMER CAR OWNER' },
+      { q: 'ON BEHALF OF HALVARD, WE WOULD LIKE TO THANK THE TAXPAYERS FOR THEIR PATIENCE AND THEIR BUILDINGS.', who: 'HALVARD CIVIL DEFENSE' },
+    ] as readonly { q: string; who: string }[],
+    insideTitle: 'INSIDE TODAY',
+    inside: [
+      'HOW TO FILE A CLAIM FOR A FLOOR YOU NO LONGER HAVE — P. 3',
+      'MAP: WHERE THE STREETS USED TO GO — P. 6',
+      'PUZZLES: CONNECT THE FOOTPRINTS — P. 12',
+    ] as readonly string[],
     stats: {
       time: 'TIME ON AIR',
       size: 'PEAK SIZE',

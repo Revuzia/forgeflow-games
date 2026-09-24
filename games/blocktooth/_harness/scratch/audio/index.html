@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="data:,">
+<title>audio scratch — offline render report</title>
+<style>
+  html, body { margin: 0; background: #14111c; color: #eee; font: 11px/1.25 monospace; }
+  #head { padding: 6px 10px; font-size: 13px; white-space: pre; }
+  #grid { display: grid; grid-template-columns: repeat(8, 172px); gap: 4px; padding: 4px 10px; }
+  .t { background: #1e1a2a; border: 1px solid #332c44; padding: 2px; }
+  .t.bad { border-color: #ff4f6a; background: #3a1420; }
+  .t canvas { display: block; width: 166px; height: 44px; }
+  .n { color: #ffd166; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .m { color: #9fd8f0; white-space: nowrap; }
+  h3 { margin: 8px 10px 2px; color: #3ff0ff; font-size: 12px; }
+</style>
+</head>
+<body>
+<div id="head">rendering…</div>
+<h3>SFX (each through its own OfflineAudioContext, full volume, real AudioEngine master chain)</h3>
+<div id="grid"></div>
+<h3>MUSIC (8 s per track at intensity 1, driven by the real look-ahead scheduler via suspend())</h3>
+<div id="grid2" style="display:grid;grid-template-columns:repeat(4,344px);gap:4px;padding:4px 10px"></div>
+<script type="module" src="./main.ts"></script>
+</body>
+</html>
