@@ -14,7 +14,7 @@
 // Everything no-ops before AudioEngine.unlock() and without an AudioContext.
 
 import type {
-  AlertKey, BossId, EnemyKind, PropKind, SimEvent, TelegraphStyle, TitanId, World,
+  AlertKey, BossId, DamageKind, EnemyKind, ProjectileKind, PropKind, SimEvent, TelegraphStyle, TitanId, World,
 } from '../core/types.ts';
 import type { AudioEngine } from './audio.ts';
 import {
@@ -291,6 +291,18 @@ const GAP: Record<string, number> = {
   bossAtk: 0.4, bossHit: 0.07, stagger: 1.5, bossDown: 5, leash: 0.3, proc: 0.12, end: 5,
   ui_move: 0.03, ui_confirm: 0.05, ui_back: 0.05, ui_draft: 0.2, ui_pick: 0.15, ui_slate: 0.5, ui_print: 0.5,
 };
+
+/**
+ * Music ducking — ONLY the big stings pull the band down ([depth 0..0.95, hold s, release s]);
+ * ordinary combat voices never duck (the busy-play balance is the bus levels, not a pumping
+ * side-chain). MASS BREACH adds 0.2 s of hold per rank on top of its base hold.
+ */
+const STING_DUCK = {
+  breach: [0.65, 1.6, 1.2],     // rank-up brass + roar
+  siren: [0.45, 2.4, 1.0],      // boss arrives (the music is crossfading to the boss track underneath)
+  phase: [0.4, 1.0, 0.8],       // boss phase brass sting
+  bossDown: [0.55, 2.2, 1.5],   // boss collapse
+} as const;
 
 /** Low-priority (≤ 1) voices allowed per onEvents call. */
 const FRAME_BUDGET = 4;
@@ -1080,7 +1092,7 @@ export class Sfx {
     const tv = TITAN_VOICE[this.titan] ?? TITAN_VOICE.molo;
     const roarDur = 1.3 + 0.28 * r;
     const b = this.voice('rank', 4, 0.4 + roarDur + 0.6, 0.85, 0, 0.3); if (!b) return;
-    this.eng.duck(0.65, 1.6 + 0.2 * r, 1.2);
+    this.eng.duck(STING_DUCK.breach[0], STING_DUCK.breach[1] + 0.2 * r, STING_DUCK.breach[2]);
     const t = b.t;
     const root = 50;   // D
     brass(b, b.o, t, [root, root + 7, root + 12, root + 15], 0.14, 0.55, 1);
@@ -1162,10 +1174,10 @@ export class Sfx {
     }
   }
 
-  private projectileHit(kind: string, x: number, z: number): void {
+  private projectileHit(kind: ProjectileKind, x: number, z: number): void {
     const s = this.spatial(x, z);
     switch (kind) {
-      case 'pellet': case 'volley': case 'turretBolt': {
+      case 'pellet': case 'volley': {
         const b = this.voice('pj', 0, 0.12, s.g * 0.42, s.pan, 0.03); if (!b) return;
         burst(b, b.o, b.t, 'white', 'bandpass', 2000, 1.2, 0.001, 0.035, 0.8);
         blip(b, b.o, b.t, 'sine', 900, 0.03, 0.3, 500);
@@ -1176,7 +1188,7 @@ export class Sfx {
         blip(b, b.o, b.t, 'sine', 500, 0.06, 0.7, 200); burst(b, b.o, b.t, 'pink', 'bandpass', 1200, 1.5, 0.002, 0.05, 0.5);
         return;
       }
-      case 'spark': case 'ember': {
+      case 'spark': {
         const b = this.voice('pj', 0, 0.15, s.g * 0.36, s.pan, 0.05); if (!b) return;
         crackle(b, b.o, b.t, 0.08, 7, 4500, 1, 0.8);
         return;
@@ -1188,7 +1200,7 @@ export class Sfx {
     }
   }
 
-  private explosion(kind: string, r: number, x: number, z: number, now: number): void {
+  private explosion(kind: DamageKind, r: number, x: number, z: number, now: number): void {
     const s = this.spatial(x, z);
     switch (kind) {
       case 'stomp': {   // HEARTHBACK magma whoomp
@@ -1221,7 +1233,7 @@ export class Sfx {
         boom(b, b.o, b.t, 0.6, 0.6);
         return;
       }
-      case 'seed': case 'rubble': case 'spark': case 'ember': {
+      case 'seed': case 'rubble': case 'spark': {
         if (!this.gate('pjHit', now)) return;
         const b = this.voice('pj', 1, 0.3, s.g * 0.25, s.pan, 0.08); if (!b) return;
         boom(b, b.o, b.t, 0.25, 0.6);
@@ -1279,12 +1291,14 @@ export class Sfx {
 
   private bossSiren(): void {
     const b = this.voice('siren', 4, 3.8, 0.45, 0, 0.35); if (!b) return;
+    this.eng.duck(STING_DUCK.siren[0], STING_DUCK.siren[1], STING_DUCK.siren[2]);
     siren(b, b.o, b.t, 3.4, 190, 640, 0.55);
     rumble(b, b.o, b.t, 0.8, 1.6, 1.2, 180, 60, 0.35);
   }
 
   private phaseSting(phase: number): void {
     const b = this.voice('phase', 4, 1.8, 0.6, 0, 0.35); if (!b) return;
+    this.eng.duck(STING_DUCK.phase[0], STING_DUCK.phase[1], STING_DUCK.phase[2]);
     const t = b.t;
     burst(b, b.o, t, 'white', 'highpass', 2500, 0.7, 0.38, 0.02, 0.3, 7000, 1);    // reverse swell
     const root = phase >= 3 ? 48 : 45;
@@ -1396,6 +1410,7 @@ export class Sfx {
   private bossDown(x: number, z: number): void {
     const s = this.spatial(x, z);
     const b = this.voice('bossDown', 4, 4.2, Math.max(0.6, s.g) * 0.8, s.pan, 0.45); if (!b) return;
+    this.eng.duck(STING_DUCK.bossDown[0], STING_DUCK.bossDown[1], STING_DUCK.bossDown[2]);
     const t = b.t;
     if (this.bossId === 'irongully') {
       creature(b, b.o, t, 2.2, [[0, 90], [0.3, 110], [2.2, 38]], 'a', 0.8, { growl: 0.45, growlHz: 16, breath: 0.6, fscale: 0.6 });

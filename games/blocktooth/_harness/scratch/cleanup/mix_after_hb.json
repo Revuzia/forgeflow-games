@@ -1,0 +1,29 @@
+{
+ "tag": "after_hb",
+ "titan": "hearthback",
+ "biome": "grideast",
+ "rank": 2,
+ "n": 208,
+ "seconds": 20,
+ "music_mean_rms": 0.0526,
+ "sfx_mean_rms": 0.0651,
+ "music_energy_rms": 0.0558,
+ "sfx_energy_rms": 0.0696,
+ "music_dbfs": -25.1,
+ "sfx_dbfs": -23.1,
+ "sfx_over_music_energy": 1.25,
+ "music_over_sfx_median": 0.783,
+ "frac_sfx_5x_music": 0.01,
+ "music_p10_p90": [
+  0.0289,
+  0.0799
+ ],
+ "sfx_p10_p90": [
+  0.0333,
+  0.1
+ ],
+ "music_predk_mean": 0.0541,
+ "sfx_preglue_mean": 0.1051,
+ "master_mean": 0.0547,
+ "diag_errors": []
+}

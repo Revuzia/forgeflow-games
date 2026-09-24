@@ -38,6 +38,36 @@ const ALERT_TONE: Partial<Record<AlertKey, string>> = {
 };
 const TABLOID_ITEMS: readonly TabloidChoice[] = ['retry', 'select', 'title'];
 
+// ─────────────────────────────── run figures (one generator) ───────────────────────────────
+
+/** The personal-best stats a run files, in `bestKey(titan, biome, <stat>)` terms. */
+export const BEST_STATS = ['tonnage', 'blocks', 'kills', 'level', 'peakRank', 'survivedS', 'clearS'] as const;
+
+/**
+ * Seconds on air, the ONE rounding rule for every time the paper prints: whole seconds, floored
+ * (the broadcast clock never shows a second that has not finished). TIME ON AIR and the record
+ * book's LONGEST ON AIR both come from here, so the same run can never read 0:18 and 0:19.
+ */
+export function onAirSeconds(w: World): number {
+  const t = w.run.endT >= 0 ? w.run.endT : w.t;
+  return Math.max(0, Math.floor(Number.isFinite(t) ? t : 0));
+}
+
+/**
+ * This run's record figures — the single source for what the app SAVES (game.ts recordBests)
+ * and what the tabloid COMPARES and PRINTS. clearS keeps tenths (a tie-break between clears) but
+ * is floored too, so it always prints the same m:ss as TIME ON AIR.
+ */
+export function runFigures(w: World, result: 'clear' | 'dead'): Record<string, number> {
+  const t = w.run.endT >= 0 ? w.run.endT : w.t;
+  const out: Record<string, number> = {
+    tonnage: Math.round(w.run.tonnage), blocks: w.run.blocksLeveled, kills: w.titan.kills, level: w.titan.level,
+    peakRank: w.run.peakRank, survivedS: onAirSeconds(w),
+  };
+  if (result === 'clear') out.clearS = Math.floor((Number.isFinite(t) ? t : 0) * 10) / 10;
+  return out;
+}
+
 export class Broadcast {
   private readonly root: HTMLElement;
   private readonly input: Input | null;
@@ -77,8 +107,8 @@ export class Broadcast {
   private readonly tabButtons: HTMLButtonElement[] = [];
   private tabSel = 0;
   private tabSession: ModalSession<TabloidChoice> | null = null;
-  /** Personal bests as they stood BEFORE the current run (snapshot at clear(), which the app
-   *  calls on every run start; the app records the new bests at runEnd, before the tabloid). */
+  /** Personal bests as they stood BEFORE the current run: handed over by the app at runEnd
+   *  (`priorBests`, read right before it saves this run's figures); cleared with every run. */
   private bestSnap: Record<string, number> | null = null;
 
   constructor(root: HTMLElement, input?: Input) {
@@ -411,7 +441,7 @@ export class Broadcast {
     const result = w.run.result === 'clear' ? 'clear' : 'dead';
     P.dataset.result = result;
     const seed = (w.seed >>> 0) + w.tick;
-    const endT = w.run.endT >= 0 ? w.run.endT : w.t;
+    const endT = onAirSeconds(w);
     const boss = w.boss;
     const bossName = boss ? (BOSSES[boss.id]?.name ?? boss.id.toUpperCase()) : (BOSSES[w.biomeId === 'whitestacks' ? 'irongully' : 'caisson4']?.name ?? '');
     const vars = {
@@ -547,17 +577,15 @@ export class Broadcast {
    */
   private records(w: World, result: 'clear' | 'dead'): { now: Record<string, number>; fell: Set<string>; first: boolean } {
     const t = w.titanId, b = w.biomeId;
+    // without the app's hand-over (a harness calling tabloid() directly) the stored bests already
+    // include this run: print them, but no record can be called broken
     const known = this.bestSnap !== null;
     const prev = this.bestSnap ?? loadBest();
-    const run: Record<string, number> = {
-      tonnage: Math.round(w.run.tonnage), blocks: w.run.blocksLeveled, kills: w.titan.kills, level: w.titan.level,
-      peakRank: w.run.peakRank, survivedS: Math.round(w.t),
-    };
-    if (result === 'clear') run.clearS = Math.round(w.t * 10) / 10;
+    const run = runFigures(w, result);
     const now: Record<string, number> = {};
     const fell = new Set<string>();
     let any = false;
-    for (const k of ['tonnage', 'blocks', 'kills', 'level', 'peakRank', 'survivedS', 'clearS']) {
+    for (const k of BEST_STATS) {
       const p = prev[bestKey(t, b, k)];
       const v = run[k];
       if (p !== undefined) any = true;
@@ -574,10 +602,19 @@ export class Broadcast {
 
   // ─────────────────────────────── clear / dismiss ───────────────────────────────
 
+  /**
+   * The app hands over the personal bests as they stood BEFORE this run (read at runEnd right
+   * before it files the run's figures), so the tabloid can stamp exactly the records that fell.
+   * Not a CONTRACT §12 export — an app ↔ broadcast hand-off inside the ui/app lanes.
+   */
+  priorBests(prev: Record<string, number>): void {
+    this.bestSnap = { ...prev };
+  }
+
   /** Drop banners + queue; close an open slate (resolved) and an open tabloid (abandoned). */
   clear(): void {
     this.epoch++;
-    this.bestSnap = loadBest();
+    this.bestSnap = null;
     this.clearBanners();
     window.clearInterval(this.slateTimer);
     if (this.slateSession && !this.slateSession.done) this.slateSession.finish(undefined, 0);

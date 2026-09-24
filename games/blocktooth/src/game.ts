@@ -26,13 +26,14 @@ import { createWorld, stepWorld } from './core/world.ts';
 import { GameLoop, frameStats } from './core/loop.ts';
 import { Input } from './core/input.ts';
 import { DebugOverlay } from './core/debug.ts';
-import { bestKey, loadSettings, saveBest, type Settings } from './core/save.ts';
+import { bestKey, loadBest, loadSettings, saveBest, type Settings } from './core/save.ts';
 
 import { createRenderCore, defaultQuality, type RenderCore, type RenderStats } from './render/renderer.ts';
 import { CameraRig } from './render/camera.ts';
 import { Lighting } from './render/lighting.ts';
 import { EnvView } from './render/env.ts';
 import { warmup } from './render/warmup.ts';
+import { FrameProf } from './render/frameprof.ts';
 import type { FrameInfo, Quality, ViewCtx, ViewModule } from './render/viewtypes.ts';
 import { CityView } from './city/cityview.ts';
 import { TitanView } from './titans/titanview.ts';
@@ -48,7 +49,7 @@ import { CivilianView } from './render/civilians.ts';
 import { PickupView } from './render/pickupview.ts';
 
 import { Hud } from './ui/hud.ts';
-import { Broadcast } from './ui/broadcast.ts';
+import { Broadcast, runFigures } from './ui/broadcast.ts';
 import { BossBar } from './ui/bossbar.ts';
 import { SelectScreen } from './ui/select.ts';
 import { DraftScreen } from './ui/draft.ts';
@@ -61,6 +62,7 @@ import { Music } from './audio/music.ts';
 import { TITANS } from './data/titans.ts';
 import { BIOMES } from './data/biomes.ts';
 import { BOSSES } from './data/bosses.ts';
+import { UPGRADES, UPGRADE_BY_ID } from './data/upgrades.ts';
 import { hasPendingDraft, pickUpgrade, rerollOffer, rollOffer } from './upgrades/draft.ts';
 
 // ─────────────────────────────── types ───────────────────────────────
@@ -84,6 +86,8 @@ export interface AppParams {
   noslate: boolean;
   /** adaptive render scale (default on; `?dynres=0` pins the drawing buffer at the quality DPR) */
   dynres: boolean;
+  /** frame profiler (perf attribution; `?prof=1`, exposed as window.__BTPROF__) */
+  prof: boolean;
 }
 
 export interface RunRequest {
@@ -103,6 +107,12 @@ type THREE_Object = { visible: boolean };
 /** rank-up hit-stop (CONTRACT §3): sim time scale and real-time duration */
 const HITSTOP_SCALE = 0.15;
 const HITSTOP_S = 0.25;
+/** frames drawn after a frozen modal's canvas changes size / quality before the picture is held
+ *  again. On OPEN nothing is redrawn: the frame that opened the modal already drew the world at the
+ *  tick it froze on (the only difference to a redraw is sub-tick interpolation, invisible under the
+ *  modal's blurred, ~85 % opaque backdrop). The opening frames are when the GPU rasterises the modal's
+ *  new DOM (three cards): ?prof=1 runs with 3 redrawn frames missed vsync on draft frames #2–#4. */
+const HOLD_DRAWN = 1;
 /** while hit-stop slows the sim, a buffered HOOK/DASH press must outlive one slowed tick (see Input.bufferS) */
 const HITSTOP_BUFFER_S = Math.max(INPUT_BUFFER_S, SIM_DT / HITSTOP_SCALE + 0.02);
 /**
@@ -186,22 +196,35 @@ export function parseParams(search: string): AppParams {
     quality,
     noslate: flag('noslate'),
     dynres: q.get('dynres') === null ? true : flag('dynres'),
+    prof: flag('prof'),
   };
 }
 
 /**
  * Adaptive render scale. On integrated GPUs a GPU-bound frame misses vsync and the frame rate
- * halves (measured on the reference Intel UHD: Size V + 250 foes ≈ 22–28 ms of GPU per frame at
- * 1280×720 → a 25 Hz cadence on a 50 Hz panel). Every second of live play the controller counts
- * frames slower than 1.5× the display interval (the interval = the fastest 1-s p10 seen this session,
- * i.e. measured on cheap menu frames). ≥ 10 % misses → scale −0.1 (floor 0.6); 6 s clean
- * (< 3 % misses) → +0.1 back toward 1. A level that fails within 4 s of a step up is locked out for
- * 20 s so the scale never oscillates. The scale multiplies the quality DPR (drawing buffer only; the
- * CSS size and every layout stay unchanged).
+ * halves. Measured on the reference Intel UHD at Size V + 250 foes, 1280×720, render scale PINNED
+ * (?rscale=, 12 s perfcheck window): 1.0 → 5.6 % of frames miss vsync (p99 40 ms); 0.8 → 0.8 %;
+ * 0.7 → 0.3 %; 0.6 → 0.2 %. The WebGL work itself barely scales with resolution (GPU timer 15.4 →
+ * 14.0 ms from 1.0 to 0.6) — the pixel-bound part is the MSAA resolve + compositing of the canvas,
+ * outside the timer — so the controller watches missed vsyncs, not the timer.
+ *
+ * Every second of live play it counts frames slower than 1.5× the display interval (the interval =
+ * the fastest 1-s p10 seen this session, i.e. measured on cheap menu frames), IGNORING misses that
+ * followed a frame whose main-thread work (sim + views + UI, excluding the render call) already ate
+ * most of the interval — resolution cannot fix those. A p99 ≤ 22 ms budget allows < 1 % misses, so
+ * ≥ 3 % in a window steps down: −0.1, or −0.2 at ≥ 6 %, −0.3 at ≥ 15 % (one step instead of three:
+ * every step reallocates the drawing buffer, which stalls 55–75 ms while the GPU queue is full).
+ * After a step the next 0.75 s is not judged (the step's own stall is not evidence). Up: +0.1 after
+ * UP_CLEAN_S of windows with < 1 % misses; a level that fails within 6 s of a step up is locked
+ * out for 60 s so the scale never oscillates. The scale multiplies the quality DPR (drawing buffer
+ * only; the CSS size and every layout stay unchanged).
  */
 export class DynRes {
   scale = 1;
+  /** dev/perf attribution: `?rscale=0.7` pins the scale (no adaptation) */
+  pinned = false;
   private readonly win = new Float32Array(240);
+  private readonly cpu = new Float32Array(240);
   private n = 0;
   private acc = 0;
   private interval = 0;          // estimated display interval (s); 0 = unknown
@@ -214,21 +237,24 @@ export class DynRes {
   private t = 0;
   private lastUpT = -1e9;
   private lockUntil = 0;
+  private settleUntil = 0;
   /** floor: 0.6 × the quality DPR (1280×720 → 768×432 drawing buffer on the reference Intel UHD) */
   static readonly MIN = 0.6;
-  /** step down when at least this fraction of a live 1-s window missed vsync. 0.2 was too lax for the
-   *  p99 gate: windows sat at 10–19 % misses (p99 = 2 intervals = 40 ms at 50 Hz) and never stepped. */
-  static readonly DOWN_MISS = 0.1;
+  /** step down when at least this fraction of a live 1-s window missed vsync (GPU-side misses) */
+  static readonly DOWN_MISS = 0.03;
   /** step up only after UP_CLEAN_S of windows with fewer misses than this */
-  static readonly CLEAN_MISS = 0.03;
-  static readonly UP_CLEAN_S = 6;
+  static readonly CLEAN_MISS = 0.01;
+  static readonly UP_CLEAN_S = 10;
+  static readonly LOCK_S = 60;
+  static readonly SETTLE_S = 0.75;
 
   /** Feed every rendered frame's dt (s). `live` = the sim is running (only live play adapts).
+   *  `prevCpu` = main-thread seconds of the frame BEFORE this gap (render call excluded).
    *  Returns true when `scale` changed. */
-  frame(dt: number, live: boolean): boolean {
-    if (!(dt > 0)) return false;
+  frame(dt: number, live: boolean, prevCpu = 0): boolean {
+    if (!(dt > 0) || this.pinned) return false;
     this.t += dt;
-    if (this.n < this.win.length) this.win[this.n++] = dt;
+    if (this.n < this.win.length) { this.win[this.n] = dt; this.cpu[this.n] = prevCpu; this.n++; }
     this.acc += dt;
     if (this.acc < 1) return false;
     // one decision window per second
@@ -238,18 +264,20 @@ export class DynRes {
     const p10 = a[Math.floor(n * 0.1)] ?? 0;
     if (n >= 20 && p10 > 0.004 && (this.interval === 0 || p10 < this.interval)) this.interval = Math.min(p10, 1 / 24);
     let changed = false;
-    if (live && n >= 10 && this.interval > 0) {
-      const lim = this.interval * 1.5;
+    if (live && n >= 10 && this.interval > 0 && this.t >= this.settleUntil) {
+      const lim = this.interval * 1.5, cpuLim = this.interval * 0.75;
       let miss = 0;
-      for (let i = 0; i < n; i++) if (this.win[i] > lim) miss++;
+      for (let i = 0; i < n; i++) if (this.win[i] > lim && this.cpu[i] < cpuLim) miss++;
       const frac = miss / n;
       this.lastMiss = frac;
       if (frac >= DynRes.DOWN_MISS) {
         this.clean = 0;
         if (this.scale > DynRes.MIN + 1e-3) {
-          if (this.t - this.lastUpT < 4) this.lockUntil = this.t + 20;
-          this.scale = Math.max(DynRes.MIN, Math.round((this.scale - 0.1) * 10) / 10);
+          if (this.t - this.lastUpT < 6) this.lockUntil = this.t + DynRes.LOCK_S;
+          const step = frac >= 0.15 ? 0.3 : frac >= 0.06 ? 0.2 : 0.1;
+          this.scale = Math.max(DynRes.MIN, Math.round((this.scale - step) * 10) / 10);
           this.steps.down++;
+          this.settleUntil = this.t + DynRes.SETTLE_S;
           changed = true;
         }
       } else if (frac < DynRes.CLEAN_MISS) {
@@ -258,6 +286,7 @@ export class DynRes {
           this.scale = Math.min(1, Math.round((this.scale + 0.1) * 10) / 10);
           this.steps.up++;
           this.lastUpT = this.t;
+          this.settleUntil = this.t + DynRes.SETTLE_S;
           this.clean = 0;
           changed = true;
         }
@@ -396,6 +425,14 @@ export class App {
   private sizeUpHoldT = 0;
   /** adaptive render scale (see DynRes) */
   readonly dynres = new DynRes();
+  /** wall ms inside core.render() this frame, and the previous frame's main-thread s without it (DynRes) */
+  private renderMs = 0;
+  private prevCpuS = 0;
+  /** frames drawn since a frozen modal (draft / pause) opened, and the canvas key they were drawn at */
+  private heldFrames = 0;
+  private heldKey = '';
+  /** ?prof=1 frame profiler (null otherwise) */
+  readonly prof: FrameProf | null = null;
   private stingT = 0;
   private musicAcc = 0;
   private lowHpArmed = true;
@@ -469,6 +506,21 @@ export class App {
     this.music = new Music(this.audio);
 
     this.loop = new GameLoop(this.onStep, this.onFrame);
+    const rs = Number(new URLSearchParams(location.search).get('rscale'));
+    if (params.dev && rs >= 0.3 && rs <= 1) { this.dynres.scale = rs; this.dynres.pinned = true; this.core.setQuality(this.currentQuality()); }
+    if (params.prof) {
+      this.prof = new FrameProf(this.core.renderer);
+      (window as unknown as { __BTPROF__?: FrameProf }).__BTPROF__ = this.prof;
+      // shadow-pass attribution: wall ms of three's WebGLShadowMap.render per frame
+      const sm = this.core.renderer.shadowMap as unknown as { render: (...a: unknown[]) => void; __ms?: number; __n?: number };
+      const orig = sm.render.bind(sm);
+      sm.render = (...a: unknown[]) => {
+        const t0 = performance.now(), prevNeeds = (this.lighting as unknown as { sun?: { shadow: { needsUpdate: boolean; autoUpdate: boolean } } }).sun?.shadow;
+        const will = !!prevNeeds && (prevNeeds.autoUpdate || prevNeeds.needsUpdate);
+        orig(...a);
+        if (will) { sm.__ms = (sm.__ms ?? 0) + performance.now() - t0; sm.__n = (sm.__n ?? 0) + 1; }
+      };
+    }
     this.applySettings(this.settings, false);
     this.installDomHooks();
   }
@@ -757,6 +809,8 @@ export class App {
     if (ep !== this.epoch) return false;
     await warmup(this.core.renderer, this.core.scene, this.core.camera);
     if (ep !== this.epoch) return false;
+    await this.warmCompositor();
+    if (ep !== this.epoch) return false;
 
     this.live = true;
     this.splash.set(LOADING.live, 1);
@@ -764,6 +818,54 @@ export class App {
     this.drawWorld(w, 1, 0, this.time, this.noEvents, false);
     this.splash.hide();
     return true;
+  }
+
+  /**
+   * Compositor pre-warm (once per page). The FIRST draft of a session stalled the GPU process for
+   * 240–280 ms with no script running (LoAF: 253 ms frame, 0 ms script) — the browser compiling
+   * its filter shaders for the MUTATION REPORT backdrop (backdrop-filter blur + saturate) and the
+   * dimmed cards (filter saturate + brightness) on the d3d11 ANGLE backend. Later drafts were
+   * clean. Painting a tiny, near-transparent sample of those exact classes above the loading card
+   * for a few frames moves that one-time compile into the load.
+   */
+  private compositorWarm = false;
+  private async warmCompositor(): Promise<void> {
+    if (this.compositorWarm || new URLSearchParams(location.search).get('warmui') === '0') return;
+    const w = this._world;
+    const layer = this.uiRoot.querySelector('.bt-draft');
+    if (!w || !layer) return;
+    this.compositorWarm = true;
+    // a detached copy of the real MUTATION REPORT (backdrop, header, footer) + one real card per
+    // rarity built by the draft screen itself, so every paint shader the first draft needs is seen
+    const box = layer.cloneNode(true) as HTMLElement;
+    box.classList.remove('bt-hidden');
+    box.setAttribute('aria-hidden', 'true');
+    box.style.cssText = 'z-index:901;opacity:.02;pointer-events:none';
+    const cardsBox = box.querySelector('.bt-draft-cards');
+    const build = (this.draftScreen as unknown as { buildCard?: (w: World, id: string, def: unknown, i: number) => HTMLElement }).buildCard;
+    if (cardsBox && typeof build === 'function') {
+      const seen = new Set<string>();
+      const ids: string[] = [];
+      for (const u of UPGRADES) if (!seen.has(u.rarity)) { seen.add(u.rarity); ids.push(u.id); }
+      ids.forEach((id, i) => {
+        try {
+          const card = build.call(this.draftScreen, w, id, UPGRADE_BY_ID[id], i);
+          if (i === 0) card.classList.add('is-sel');
+          cardsBox.appendChild(card);
+        } catch { /* warm only */ }
+      });
+    }
+    this.uiRoot.appendChild(box);
+    // the real open animates the cards + header on the compositor (transform / opacity layers)
+    try {
+      const kf = [{ transform: 'translateY(30%) rotate(6deg) scale(.8)', opacity: 0 }, { transform: 'none', opacity: 1 }];
+      box.querySelectorAll('.bt-dossier, .bt-draft-head').forEach((e) => { (e as HTMLElement).animate(kf, { duration: 160, fill: 'both' }); });
+    } catch { /* no WAAPI */ }
+    try {
+      for (let i = 0; i < 8; i++) await yieldFrame();
+    } finally {
+      box.remove();
+    }
   }
 
   /** Unmount everything run-scoped and drop the world. Safe to call repeatedly. */
@@ -988,18 +1090,20 @@ export class App {
     else void this.goTitle();
   }
 
+  /**
+   * File this run's personal bests (core/save.ts). The figures come from broadcast.runFigures —
+   * the same generator the tabloid prints and compares with — and the bests as they stood BEFORE
+   * this run are handed to the broadcast first, so its record book stamps exactly what fell.
+   */
   private recordBests(w: World, result: 'clear' | 'dead'): void {
     try {
-      const T = w.titan, t = w.titanId, b = w.biomeId;
-      saveBest({
-        [bestKey(t, b, 'tonnage')]: Math.round(w.run.tonnage),
-        [bestKey(t, b, 'blocks')]: w.run.blocksLeveled,
-        [bestKey(t, b, 'kills')]: T.kills,
-        [bestKey(t, b, 'level')]: T.level,
-        [bestKey(t, b, 'peakRank')]: w.run.peakRank,
-        [bestKey(t, b, 'survivedS')]: Math.round(w.t),
-      });
-      if (result === 'clear') saveBest(bestKey(t, b, 'clearS'), Math.round(w.t * 10) / 10, true);
+      const t = w.titanId, b = w.biomeId;
+      this.broadcast.priorBests(loadBest());
+      const fig = runFigures(w, result);
+      const higher: Record<string, number> = {};
+      for (const k in fig) if (k !== 'clearS') higher[bestKey(t, b, k)] = fig[k];
+      saveBest(higher);
+      if (fig.clearS !== undefined) saveBest(bestKey(t, b, 'clearS'), fig.clearS, true);   // lower wins
     } catch { /* storage blocked — bests are a nicety */ }
   }
 
@@ -1044,23 +1148,45 @@ export class App {
   /** One rendered frame. */
   private readonly onFrame = (alpha: number, dt: number, time: number): void => {
     this.time = time;
+    const f0 = performance.now();
+    this.renderMs = 0;
+    const P = this.prof;
+    if (P) P.begin();
     try {
       this.input.update();
       if (this.input.pressed('debug')) this.debug.toggle();
       if (this._screen === 'play' && !this.ending && this.input.pressed('pause')) this.pause();
       const w = this._world;
       if (w && this.live) {
-        const events = this.swapEvents();
-        this.drawWorld(w, alpha, dt, time, events, true);
-        this.afterFrame(w, dt);
+        if (this.holdCanvas()) {
+          // frozen modal (draft / pause): the world does not move, so the picture under the
+          // (near-opaque, blurred) modal is held instead of redrawn — events keep collecting for
+          // the first live frame; timers still run
+          if (P) { P.mark('input'); P.annotate('held'); }
+          this.afterFrame(w, dt);
+          if (P) P.mark('afterFrame');
+        } else {
+          const events = this.swapEvents();
+          if (P) P.mark('input');
+          this.drawWorld(w, alpha, dt, time, events, true);
+          this.afterFrame(w, dt);
+          if (P) P.mark('afterFrame');
+        }
       }
       if (this.params.dynres) {
         const live = !!w && this.live && this._screen === 'play' && this.loop.simEnabled && !this.ending && !this._testFrozen;
-        if (this.dynres.frame(dt, live)) this.core.setQuality(this.currentQuality());
+        if (this.dynres.frame(dt, live, this.prevCpuS)) { this.core.setQuality(this.currentQuality()); if (P) P.annotate('dynres->' + this.dynres.scale); }
+        if (P) P.mark('dynres');
       }
       this.frameErrStreak = 0;
     } catch (e) {
       this.frameError(e);
+    }
+    this.prevCpuS = (performance.now() - f0 - this.renderMs + this.loop.lastSimMs) / 1000;
+    if (P) {
+      const L = this.loop;
+      P.scale = this.dynres.scale;
+      P.end(L.lastRawMs, L.lastTicks, L.lastSimMs, this.core.renderer.info, this._screen);
     }
     if (this.debug.visible) {
       try { this.debug.update(this._world, this.core.stats(), frameStats()); } catch { /* debug only */ }
@@ -1079,20 +1205,70 @@ export class App {
     f.events = events;
     f.frozen = this.viewsFrozen();
     f.camDist = this.rig.distance;
+    const P = react ? this.prof : null;
     this.rig.update(w, f);
     f.camDist = this.rig.distance;
+    if (P) P.mark('camera');
     this.lighting.update(w, this.rig);
+    if (P) P.mark('lighting');
     const views = this.mounted;
-    for (let i = 0; i < views.length; i++) views[i].update(w, f);
+    for (let i = 0; i < views.length; i++) {
+      views[i].update(w, f);
+      if (P) P.mark(views[i].constructor.name);
+    }
     if (react) {
       this.hud.update(w, dt);
       if (events.length) this.hud.onEvents(w, events);
       this.bossbar.update(w.boss);
+      if (P) P.mark('hud');
       const tg = this.rig.target;
       this.sfx.onEvents(w, events, tg.x, tg.z);
+      if (P) P.mark('sfx');
       if (events.length) this.appEvents(events);
+      if (P) { P.mark('appEvents'); for (let i = 0; i < events.length; i++) if (events[i].type === 'rankUp' || events[i].type === 'levelUp') P.annotate(events[i].type); }
     }
-    if (render) this.core.render();
+    if (render) {
+      if (P) P.gpuBegin();
+      const r0 = performance.now();
+      this.core.render();
+      this.renderMs += performance.now() - r0;
+      if (P) {
+        P.gpuEnd(); P.mark('render');
+        const R = this.core.renderer as unknown as { __resizeMs?: number };
+        const SM = this.core.renderer.shadowMap as unknown as { __ms?: number; __n?: number };
+        if (SM.__n) { P.annotate('sh' + (SM.__ms ?? 0).toFixed(1)); SM.__ms = 0; SM.__n = 0; }
+        if (R.__resizeMs !== undefined) { P.annotate('resize=' + R.__resizeMs.toFixed(1) + 'ms'); R.__resizeMs = undefined; }
+      }
+    }
+  }
+
+  /**
+   * true = skip this frame's world draw and keep the last presented picture. Only while a frozen
+   * modal (draft / pause) is up: views are frozen there (viewsFrozen), so the picture cannot change,
+   * yet the GPU kept redrawing ~1M triangles every frame under the modal while also compositing it.
+   * On the reference Intel UHD at Size V that made 19 % of draft frames miss vsync (?prof=1, perfcheck
+   * window: 29 of 154 draft frames > 30 ms; after the hold: 4 of 160). A canvas that is not drawn keeps
+   * showing its last frame (preserveDrawingBuffer only matters for reads). Redrawn if the canvas box,
+   * DPR or shadow setting changes while the modal is open (settings in the pause menu).
+   */
+  private holdCanvas(): boolean {
+    const s = this._screen;
+    if ((s !== 'draft' && s !== 'pause') || this.loop.simEnabled || this.ending || this._testFrozen) {
+      this.heldFrames = 0;
+      this.heldKey = '';
+      return false;
+    }
+    const c = this.canvas, q = this.core.quality;
+    const key = c.clientWidth + 'x' + c.clientHeight + '@' + q.dpr + (q.shadows ? 's' : '') + q.level;
+    if (this.heldKey === '') {
+      this.heldKey = key;                       // just opened: the canvas holds the last live frame
+      this.heldFrames = HOLD_DRAWN;
+    } else if (key !== this.heldKey) {
+      this.heldKey = key;                       // resized / quality changed while open: redraw
+      this.heldFrames = 0;
+    }
+    if (this.heldFrames < HOLD_DRAWN) { this.heldFrames++; return false; }
+    return true;
   }
 
   /** Views idle (no sim-driven motion) everywhere except live play and the run-end aftermath. */

@@ -41,20 +41,18 @@ function defaultRadius(k: ProjectileKind): number {
     case 'rocket': return 0.6;
     case 'shell': return 0.8;
     case 'mortar': return 1.0;
-    case 'turretBolt': return 0.4;
     case 'plate': return 2.5;
     case 'hookDrop': return 3;
     case 'seed': return 0.5;
     case 'rubbleShot': return 0.8;
     case 'spark': return 0.5;
-    case 'ember': return 0.6;
   }
   return 0.5;
 }
 
 export function projectileDamageKind(k: ProjectileKind): DamageKind {
   switch (k) {
-    case 'pellet': case 'volley': case 'turretBolt': return 'bullet';
+    case 'pellet': case 'volley': return 'bullet';
     case 'rocket': return 'rocket';
     case 'shell': return 'shell';
     case 'mortar': return 'mortar';
@@ -63,7 +61,6 @@ export function projectileDamageKind(k: ProjectileKind): DamageKind {
     case 'seed': return 'seed';
     case 'rubbleShot': return 'rubble';
     case 'spark': return 'spark';
-    case 'ember': return 'magma';
   }
   return 'generic';
 }

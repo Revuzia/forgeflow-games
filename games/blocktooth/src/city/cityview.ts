@@ -52,9 +52,11 @@
 //   hulls + shadows drop, sub-pixel furniture (hydrants, benches, bollards…) is not drawn.
 //
 // ── See-through ──
-//   Live buildings cutting a sight line camera→titan draw their storeys up to the highest one the
-//   lines cross as a flat-coloured screen-door ghost (GHOST_KEEP 0.22, no ink); storeys above stay
-//   solid. A building that just lost a floor ghosts only for the head/crown lines (pancake reads).
+//   Live buildings cutting a sight line camera→titan (chest, head, crown, shoulders, feet, plus the
+//   snout and tail reach of the titan's own silhouette) draw EVERY storey as a flat-coloured
+//   screen-door ghost (GHOST_KEEP 0.22, no ink) — the whole occluding piece ghosts, never a solid
+//   crown floating over a ghosted base. A building that lost a floor in the last PANCAKE_SOLID_S
+//   never ghosts (the pancake drop + squash is the payoff and must read).
 //   At Size I–II, vehicles/kiosks/vending/containers/trees that hide the titan ghost the same way.
 //
 // Draw budget at Size V (measured by _harness/scratch/city-view/probe_cityview.ts): ≈ 6/archetype
@@ -459,8 +461,17 @@ const _c4: RGB[] = [WHITE, WHITE, WHITE, WHITE];
 const _cs: RGB[] = [WHITE, WHITE, WHITE, WHITE];
 const _ks: number[] = [0, 0, 0, 0];
 
-/** sight points on the titan (6 × xyz): chest, head, two shoulders, crown, feet — see updateOccluders */
-const SIGHT_N = 18;
+/** sight points on the titan (9 × xyz): chest, head, two shoulders, crown, feet, snout, muzzle
+ *  root, tail — see updateOccluders */
+const SIGHT_N = 27;
+/** Silhouette reach along the titan's heading in body heights: [nose (+), tail (−)]. Mirrors
+ *  titans/models.ts TitanModel.size.zMax / zMin (measured by _harness/scratch/titan_extent.ts:
+ *  molo 1.11/−1.92, voltkite 0.75/−1.50, hearthback 0.80/−0.76, briarwick 0.91/−0.95). MOLO's snout
+ *  sits 2.6 radii ahead of its centre, far outside the radius-based sight points (critic F04). */
+const TITAN_REACH: Readonly<Record<string, readonly [number, number]>> = {
+  molo: [1.11, -1.92], voltkite: [0.75, -1.5], hearthback: [0.8, -0.76], briarwick: [0.91, -0.95],
+};
+const REACH_DEFAULT: readonly [number, number] = [0.8, -0.8];
 const _sight = new Float64Array(SIGHT_N);
 /** does segment a→b cross the axis-aligned box? (slab test, t ∈ [0, 1]; allocation-free) */
 const _slab = [0, 1];
@@ -1196,8 +1207,6 @@ export class CityView implements ViewModule {
   private anim: number[] = [];
   private ghostT = new Float32Array(0);      // > 0 while the building is drawn see-through (s left)
   private breakT = new Float32Array(0);      // > 0 for PANCAKE_SOLID_S after a floorBreak (never ghosted)
-  private ghostS0 = new Int16Array(0);       // see-through storey band [S0, S1] (stack index j, 0 = bottom shown)
-  private ghostS1 = new Int16Array(0);
   private ghostMats: THREE.Material[] = [];
   private rubble: InstBatch | null = null;
   private rubbleDirty = true;
@@ -1267,8 +1276,6 @@ export class CityView implements ViewModule {
     this.animFlag = new Uint8Array(nB);
     this.ghostT = new Float32Array(nB);
     this.breakT = new Float32Array(nB);
-    this.ghostS0 = new Int16Array(nB);
-    this.ghostS1 = new Int16Array(nB).fill(-1);
     this.anim = [];
     this.propSlot = new Int32Array(nP).fill(-1);
     this.propGSlot = new Int32Array(nP).fill(-1);
@@ -1940,12 +1947,11 @@ export class CityView implements ViewModule {
     const i0 = F - shown;
     const sx = b.w * sxz, sz = b.d * sxz, h = fh * sy;
     const ghost = this.ghostT[id] > 0;
-    const g0 = this.ghostS0[id], g1 = this.ghostS1[id];
     for (let i = i0; i < F; i++) {
       const j = i - i0;
       const y = (j * fh + Math.max(0, yOff)) * sy + Math.min(0, yOff);
       const pc = pieceOf(i, F);
-      const batch = ghost && j >= g0 && j <= g1
+      const batch = ghost
         ? (pc === 0 ? ab.gBase : pc === 1 ? ab.gFloor : ab.gRoof)
         : (pc === 0 ? ab.base : pc === 1 ? ab.floor : ab.roof);
       batch.push(b.x, y, b.z, 0, 1, sx, h, sz, r, g, bl);
@@ -1954,10 +1960,12 @@ export class CityView implements ViewModule {
 
   // ─────────────────────────────── occluders ───────────────────────────────
   /** Live buildings whose box cuts a sight line from the camera to the titan (chest, head, both
-   *  shoulders, crown, feet) are drawn see-through (dithered twin batches) until GHOST_HOLD_S after
-   *  they clear — but only up to the highest STOREY those sight lines cross: storeys above that are
-   *  drawn solid, so a tall tower never turns into one big ghost and a building being eaten keeps
-   *  its falling, squashing top in plain view. */
+   *  shoulders, crown, feet, and the snout / muzzle / tail reach along the heading) are drawn
+   *  see-through — EVERY storey, via the dithered twin batches — until GHOST_HOLD_S after they clear.
+   *  The whole occluding piece ghosts: a band that stopped at the highest crossed storey left a
+   *  chimney's solid upper storeys over MOLO's snout while its base was ghosted (critic F04).
+   *  A building that lost a floor in the last PANCAKE_SOLID_S never ghosts: the pancake drop, squash
+   *  and roof riding the stack are the payoff and must read in full. */
   private updateOccluders(world: World, tx: number, tz: number, dt: number): void {
     const city = this.city!;
     const cam = this.ctx.camera.position;
@@ -1967,6 +1975,10 @@ export class CityView implements ViewModule {
     const rx = Math.SQRT1_2, rz = -Math.SQRT1_2;
     let fx = cam.x - tx, fz = cam.z - tz;
     const fl = Math.hypot(fx, fz) || 1; fx /= fl; fz /= fl;
+    // heading (model +Z = world (sin h, cos h)) and the titan's own nose / tail reach
+    const hx = Math.sin(T.heading), hz = Math.cos(T.heading);
+    const reach = TITAN_REACH[T.id] ?? REACH_DEFAULT;
+    const nose = Math.max(r, reach[0] * H), tail = Math.min(-r, reach[1] * H);
     const px = _sight;
     px[0] = tx + fx * r; px[1] = H * 0.55; px[2] = tz + fz * r;
     px[3] = tx + fx * r * 0.5; px[4] = H * 0.92; px[5] = tz + fz * r * 0.5;
@@ -1974,40 +1986,27 @@ export class CityView implements ViewModule {
     px[9] = tx - rx * r * 0.8 + fx * r * 0.5; px[10] = H * 0.45; px[11] = tz - rz * r * 0.8 + fz * r * 0.5;
     px[12] = tx + fx * r * 0.3; px[13] = H * 1.04; px[14] = tz + fz * r * 0.3;
     px[15] = tx + fx * r; px[16] = H * 0.08; px[17] = tz + fz * r;
+    px[18] = tx + hx * nose * 0.92; px[19] = H * 0.7; px[20] = tz + hz * nose * 0.92;     // snout tip
+    px[21] = tx + hx * nose * 0.55; px[22] = H * 0.88; px[23] = tz + hz * nose * 0.55;    // muzzle root / brow
+    px[24] = tx + hx * tail * 0.75; px[25] = H * 0.22; px[26] = tz + hz * tail * 0.75;    // tail
     for (const ab of this.arches) {
       for (const id of ab.ids) {
         const b = city.buildings[id];
         let hit = false;
-        let hi = -Infinity;
         const shown = this.vAlive[id];
         const chewed = this.breakT[id] > 0;
         if (chewed) this.breakT[id] = Math.max(0, this.breakT[id] - dt);
-        if (shown > 0 && !b.collapsed) {
+        if (!chewed && shown > 0 && !b.collapsed) {
           const top = (shown + 0.3) * b.floorH;
           const x0 = b.x - b.w / 2, x1 = b.x + b.w / 2, z0 = b.z - b.d / 2, z1 = b.z + b.d / 2;
-          // being eaten: only the head + crown lines count, so the pancake reads unless the head hides
-          for (let k = chewed ? 3 : 0; k < SIGHT_N; k += 3) {
-            if (chewed && k !== 3 && k !== 12) continue;
-            if (!segHitsBox(cam.x, cam.y, cam.z, px[k], px[k + 1], px[k + 2], x0, 0, z0, x1, top, z1)) continue;
-            hit = true;
-            const dy = px[k + 1] - cam.y;
-            const ya = cam.y + dy * _slab[0], yb = cam.y + dy * _slab[1];
-            hi = Math.max(hi, ya, yb);
+          for (let k = 0; k < SIGHT_N && !hit; k += 3) {
+            hit = segHitsBox(cam.x, cam.y, cam.z, px[k], px[k + 1], px[k + 2], x0, 0, z0, x1, top, z1);
           }
         }
         const was = this.ghostT[id] > 0;
-        if (hit) {
-          this.ghostT[id] = GHOST_HOLD_S;
-          // see-through from the ground up to the highest storey a sight line crosses (+ a quarter
-          // storey of margin). Never a floating band: storey pieces are open tubes, and a solid storey
-          // BELOW a ghost band would show its hollow inside (inverted ink hulls) through the dither.
-          // Solid storeys ABOVE the band are safe — sight lines descend, so they never see an underside.
-          const fh = b.floorH;
-          const s0 = 0, s1 = clamp(Math.floor(hi / fh + 0.25), 0, shown - 1);
-          if (s0 !== this.ghostS0[id] || s1 !== this.ghostS1[id]) {
-            this.ghostS0[id] = s0; this.ghostS1[id] = s1; ab.dirty = true;
-          }
-        } else if (was) this.ghostT[id] = Math.max(0, this.ghostT[id] - dt);
+        if (hit) this.ghostT[id] = GHOST_HOLD_S;
+        else if (chewed) this.ghostT[id] = 0;                 // pancake: solid at once, every storey
+        else if (was) this.ghostT[id] = Math.max(0, this.ghostT[id] - dt);
         if (was !== (this.ghostT[id] > 0)) ab.dirty = true;
       }
     }

@@ -156,6 +156,8 @@ interface Song {
   wet: number;             // reverb send
   echoSends: readonly number[];   // per layer → dotted-8th echo
   levels: readonly number[];      // per layer trim
+  /** whole-track loudness trim on top of TRACK_GAIN (tracks are matched in busy play, PC-11) */
+  gain?: number;
   start?(p: Player, t: number): void;
   step(p: Player, s: number, t: number): void;
 }
@@ -579,6 +581,9 @@ function songLockwater(): Song {
   const arpShape = [0, 2, 4, 7, 4, 2, 0, 2];
   return {
     id: 'lockwater', bpm, swing: 0, wet: 0.34, echoSends: [0, 0, 0, 0.45, 0.4], levels: [1, 1, 1, 1, 1],
+    // sparse night synthwave measured ~2 dB under GRID-EAST / WHITE STACKS in busy Size III play
+    // (music energy RMS 0.045 vs 0.056–0.059 at the same SFX load): lifted to match
+    gain: 1.25,
     start(p, t) {
       // rain bed: pink noise through a wide band, slowly breathing
       const n = mkNoise(p.ac, 'pink', t, t + 86400);
@@ -864,7 +869,7 @@ export class Music {
       const p = new Player(ac, bus, this.engine.musicVerb, song, track, now + 0.06);
       const fadeIn = cur ? XFADE_S : 0.4;
       setAt(p.out.gain, 0, now);
-      linTo(p.out.gain, TRACK_GAIN, now + fadeIn);
+      linTo(p.out.gain, TRACK_GAIN * clampf(song.gain ?? 1, 0.25, 2), now + fadeIn);
       this.applyLayers(p, now, 0.05);
       if (song.start) { try { song.start(p, now + 0.06); } catch { /* ignore */ } }
       this.cur = p;

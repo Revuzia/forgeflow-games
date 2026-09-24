@@ -19,11 +19,12 @@
 
 import type { BossId, BossPart, BossState, DamageOpts, Shape, Telegraph, Tier, World } from '../../core/types.ts';
 import { BOSS_DMG_MUL, BOSS_FATIGUE, BOSS_HP_SCALE, BOSS_KIND_MUL, BOSS_PHASE_DMG_MUL, RANKS, titanSpeed } from '../../core/config.ts';
-import { clamp, dist, shapeCenter, turnToward, wrapAngle } from '../../core/math.ts';
+import { circleInShape, clamp, dist, shapeCenter, turnToward, wrapAngle } from '../../core/math.ts';
 import { BOSSES, bossSubtitle } from '../../data/bosses.ts';
 import { spawnTelegraph } from '../../combat/telegraphs.ts';
 import type { TelegraphSpawn } from '../../combat/telegraphs.ts';
 import { buildingsInRect, damageBuilding, damageProp, propsInRect, resolveCircleVsCity } from '../../city/citysim.ts';
+import { titanMaxSpeed } from '../../titans/titansim.ts';
 import * as caisson4 from './caisson4.ts';
 import * as irongully from './irongully.ts';
 
@@ -60,8 +61,101 @@ const MODS: Record<BossId, BossModule> = { caisson4, irongully };
 // ─────────────────────────────── toolkit (used by the boss modules) ───────────────────────────────
 /** Aim lead per phase, as a fraction of the attack's windup: the paint is laid where the titan
  *  WILL be if it keeps its current heading (the paint is on the ground for the whole windup, so it
- *  stays an honest tell — the player must read it and turn, not just keep strafing). */
-const LEAD_FRAC: readonly number[] = [0, 0.5, 0.65, 0.8];
+ *  stays an honest tell — the player must read it and turn, not just keep strafing). P1 leads too
+ *  (PC-02): a Size V titan crosses its own body length in under a second, so paint laid where it
+ *  stands was out-walked without ever being read. */
+const LEAD_FRAC: readonly number[] = [0, 0.35, 0.6, 0.75];
+
+// ─────────────────── attack geometry in TITAN HEIGHTS + fair windups (PC-02) ───────────────────
+// §10 authored every boss shape in metres (hook drop r 16, hook lane w 14, winch oval 26×18) — sizes
+// for a titan a quarter the height. A Size V titan is 60 m tall, r ≈ 25 m and walks ≈ 53 m/s, so every
+// tell was smaller than the body and was stepped out of without being read (the play critic measured
+// VOLT-KITE hit by 1.1 % of boss tells). Boss modules now author shapes as multiples of H (bossH) and
+// derive windups from the walk-out distance of that shape for THIS titan (fairWindup): a readable
+// tell that a 0.35 s reaction + the body's acceleration can always walk out of (P1/P2), with P3 a
+// little tighter (k < 1 from dead centre: read it early or keep a dash).
+/** Human reaction to a new tell (s). */
+export const REACT_S = 0.35;
+/** Time lost to acceleration from rest (Size V reaches full speed in 0.3 s → half of it is lost). */
+export const ACCEL_LOSS_S = 0.15;
+/** Walk-time multiplier per phase (1 = exactly walkable from the worst spot after REACT_S). */
+export const ESCAPE_K: readonly number[] = [1, 1.1, 1.0, 0.9];
+
+/** The titan height boss geometry is authored in: latched at spawn, re-latched if the titan ranks up
+ *  mid-fight (a Size IV titan that breaches during the fight gets Size V paint). */
+export function bossH(w: World, b: BossState): number {
+  const T = w.titan;
+  if (!(b.data.H > 0) || b.data.Hrank !== T.rank) {
+    b.data.H = Math.max(Number.isFinite(T.height) ? T.height : 0, RANKS[T.rank].height);
+    b.data.Hrank = T.rank;
+  }
+  return b.data.H;
+}
+
+/** The titan's current top walk speed (m/s, stats + upgrades), never below 1. */
+export function titanWalk(w: World): number {
+  const v = titanMaxSpeed(w);
+  return Number.isFinite(v) && v > 1 ? v : 1;
+}
+
+/**
+ * Windup (s) for a tell the titan has to walk `escapeM` metres to leave: reaction + acceleration +
+ * walk time × ESCAPE_K[phase] (or `kFixed`), clamped to [min, max]. Already phase-scaled — spawn it with
+ * bossTelegraph(w, spec, false) so WINDUP_MUL is not applied twice.
+ */
+export function fairWindup(w: World, b: BossState, escapeM: number, min: number, max: number, kFixed = 0): number {
+  const k = kFixed > 0 ? kFixed : (ESCAPE_K[b.phase] ?? 1);
+  const e = Math.max(0, Number.isFinite(escapeM) ? escapeM : 0);
+  return clamp(REACT_S + ACCEL_LOSS_S + (e / titanWalk(w)) * k, min, max);
+}
+
+// ─────────────────── dash watch (shared anti dash-spam trigger) ───────────────────
+/** A dash adds 1 heat; heat bleeds at DASH_HEAT_DECAY /s. P1 answers only a hot dash (a second dash
+ *  inside ≈ 2.5 s, i.e. dash-spam); P2+ answers any dash once its cooldown is up. The cooldown is
+ *  divided by the heat (≤ 2×): a player who dashes out of every answer gets answered again sooner, until the
+ *  charges run dry — walking out of the (fair) shadow is the way to stop the chain. */
+const DASH_HEAT_DECAY = 0.25, DASH_HEAT_P1 = 1.35;
+/** The cooldown shrinks with heat down to cd / this (a VOLT-KITE lunging every beat is answered
+ *  every 2.5–4 s, not every dash). */
+const DASH_HEAT_DIV_MAX = 2;
+/** Minimum spacing (s) between two answers to escape dashes (dashes that start inside live boss paint). */
+const ESCAPE_ANSWER_GAP = 0.8;
+/** Did a dash starting at (x, z) leave a live, unfired boss tell the titan's body overlapped? */
+function dashFromPaint(w: World, x: number, z: number): boolean {
+  const r = w.titan.radius;
+  for (let i = 0; i < w.telegraphs.length; i++) {
+    const t = w.telegraphs[i];
+    if (t.alive && !t.fired && t.owner === 'boss' && t.tag !== 'winch' && circleInShape(t.shape, x, z, r)) return true;
+  }
+  return false;
+}
+/** The dash duration the paint has to cover before the titan can react (TITAN.dashS). */
+export const DASH_S = 0.22;
+/**
+ * Watches this tick's `dash` events and returns the one the boss should answer (null = none): P1 only
+ * a hot dash, P2+ any dash, never inside `cd[phase]` s of the last answer. Call once per tick.
+ */
+export function watchDash(w: World, b: BossState, cd: readonly number[]): { x0: number; z0: number; x1: number; z1: number } | null {
+  const heat0 = Math.max(0, (b.data.dashHeat ?? 0) - DASH_HEAT_DECAY * w.dt);
+  b.data.dashHeat = heat0;
+  if (b.staggerT > 0 || b.introT > 0 || !w.titan.alive) return null;
+  for (let i = 0; i < w.events.length; i++) {
+    const e = w.events[i];
+    if (e.type !== 'dash') continue;
+    const heat = heat0 + 1;
+    b.data.dashHeat = heat;
+    // P2+: a dash OUT OF LIVE BOSS PAINT is always answered (≥ ESCAPE_ANSWER_GAP apart) — the dash buys
+    // you out of the tell, then you walk off the hook; dash out of that too and the next one follows,
+    // until the charges run dry. A player who walks out of tells never starts the chain.
+    const escape = b.phase >= 2 && dashFromPaint(w, e.x0, e.z0) && w.t >= (b.data.followLast ?? -1e9) + ESCAPE_ANSWER_GAP;
+    if (!escape && w.t < (b.data.followAt ?? 0)) return null;
+    if (b.phase < 2 && heat < DASH_HEAT_P1) return null;
+    b.data.followAt = w.t + (cd[b.phase] ?? 5) / clamp(heat, 1, DASH_HEAT_DIV_MAX);
+    b.data.followLast = w.t;
+    return e;
+  }
+  return null;
+}
 /** Velocity used for the lead is capped at this × the body's walk speed (a dash never throws it). */
 const LEAD_SPEED_CAP = 1.2;
 
@@ -183,10 +277,11 @@ function spotRadius(s: Shape): number {
  * same spot and would fire within STACK_DT of this one, this tell is pushed back so the two read
  * as a sequence (never an unreadable stack).
  */
-export function bossTelegraph(w: World, spec: Omit<TelegraphSpawn, 'owner'>): Telegraph {
-  // later phases paint faster (the winch oval and the charge lane keep their scripted timing)
+export function bossTelegraph(w: World, spec: Omit<TelegraphSpawn, 'owner'>, phaseScale = true): Telegraph {
+  // later phases paint faster (the winch oval and the charge lane keep their scripted timing; a
+  // fairWindup is already phase-scaled → phaseScale false)
   const b = w.boss;
-  const scale = b && spec.tag !== 'winch' && spec.tag !== 'ridgeCharge' ? bossWindupMul(b) : 1;
+  const scale = b && phaseScale && spec.tag !== 'winch' && spec.tag !== 'ridgeCharge' ? bossWindupMul(b) : 1;
   let windup = spec.windup * scale;
   const c = shapeCenter(spec.shape), r = spotRadius(spec.shape);
   for (let guard = 0; guard < 4; guard++) {
@@ -468,6 +563,8 @@ export function spawnBoss(w: World, id: BossId): void {
   b.phase = 1; b.meter = 0; b.staggerT = 0; b.attack = null; b.attackT = 0;
   b.introT = INTRO_S;
   b.subtitle = bossSubtitle(id, null);
+  b.data.H = 0;
+  bossH(w, b);                               // attack geometry is authored in this titan height
   refreshParts(b);
   w.boss = b;
   const D = w.director;

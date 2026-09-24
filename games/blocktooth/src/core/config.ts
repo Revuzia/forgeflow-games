@@ -45,12 +45,20 @@
 //   STRAIN/FRACTURE meter fills from dealt × strainMul / (0.45 × maxHp) (bosses/index.ts) → 5 s stagger, ×2 dmg
 //   STRUCTURAL FATIGUE [BOSS_FATIGUE]: after 90 s the rig sheds 0.022 %·s⁻² × (t−90) of max HP/s (cap 1.5 %/s)
 //   hit = §10 dmg × [BOSS_DMG_MUL 2.0] × phase [BOSS_PHASE_DMG_MUL .9/1.05/1.35] × hpMul 9 →
-//     CAISSON-4 (re-tuned for PC-02, capped at 55 % of the titan's max HP per hit — caisson4.ts HIT_CAP):
-//     hookLane 486/567/729 · P1 hookDrop 486 · trolley drop –/265/340 · dash-follow –/208/267 ·
+//     every hit capped at 55 % of the titan's max HP (caisson4.ts / irongully.ts HIT_CAP). CAISSON-4:
+//     hookLane 486/567/729 · P1 hookDrop 486 · trolley drop –/265/340 · dash-follow 130/151/194 ·
 //     boomSweep –/643/826 · legStomp –/–/1021 · IRON GULLY:
-//     paw slam 972 (inner) · plate 486/567/729 · ridge charge –/1323/1701   (titan V hp: VOLT 810 · BRIAR 1080 ·
-//     MOLO 1260 (armor 10) · HEARTH 1530 (armor 20), before upgrades)
-//   cadence: attack gap CAISSON 2.6/2.0/1.9 s, IRON GULLY 2.8/2.1/2.0 s (P3 × 0.7/0.75); windups × 1/.8/.68
+//     paw slam 972 (inner) · plate 486/567/729 · scrap flick 130/151/194 · ridge charge –/1323/1701
+//     (titan V hp: VOLT 810 · BRIAR 1080 · MOLO 1260 (armor 10) · HEARTH 1530 (armor 20), before upgrades)
+//   GEOMETRY (PC-02): every boss tell is authored in TITAN HEIGHTS H (bosses/index.ts bossH), not §10's
+//     metres — hook drop r .55H · hook lane w .5H · winch oval 1.4H×1.0H · boom 2.6H · stomp rig+1.0H ·
+//     paw rings 1.1H/2.0H · breath 3.0H · plates r .4H · charge lane w .7H. Windups are fairWindup:
+//     0.35 s reaction + 0.15 s accel + walk-out ÷ the titan's walk speed × ESCAPE_K 1.1/1.0/0.9 per phase.
+//     Anti dash-spam: a dash is answered by a drop just past its end (walkable, k 1) — P1 only a hot dash;
+//     P2+ every dash out of live boss paint too (bosses/index.ts watchDash).
+//     Measured (fullrun-policy bot port, god, 5 seeds): tells landed VOLT / MOLO — CAISSON LV 8 10.3 / 15.5 %,
+//     LV 34 3.8 / 11.4 %; IRON GULLY LV 34 4.3 / 10.8 %. Before: 1–4 % / 3–10 %.
+//   cadence: attack gap CAISSON 2.6/2.0/1.9 s, IRON GULLY 2.8/2.1/2.0 s (P3 × 0.7/0.75)
 //   past its 60–120 m band the rig closes at up to 0.6 × the titan's walk speed (bosses/index.ts keepRange)
 //   measured (36 runs): fight 71–172 s (median ≈ 120); deaths 6/36 (seed 1337: 2 of 12; seeds 7/99: 3/1) —
 //     all in the boss fight or the elite window, none before 480 s. By titan: VOLT-KITE 4/9, MOLO 2/9 (the

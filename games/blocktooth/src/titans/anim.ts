@@ -45,8 +45,13 @@ export interface AnimState {
   hurtAmt?: number;
   /** settings.reduceFlashing: no white flash */
   noFlash?: boolean;
-  /** seconds since death (undefined / < 0 = alive) */
+  /** seconds since death (undefined / < 0 = alive) — drives the DEFEAT pose: stagger, topple onto
+   *  the side (see `downSide`), bounce, eyes shut, legs out stiff (cartoon, never gory) */
   deadT?: number;
+  /** which flank the defeated titan lands on: +1 = its right (-X, the default), -1 = its left */
+  downSide?: number;
+  /** seconds since the run was CLEARED (undefined / < 0 = no) — the victory roar (rear up, jaw wide, crest flared) */
+  clearT?: number;
   /** 0..1 portrait hero pose */
   hero?: number;
   /** yaw (rad, titan-relative, + = left) the head should look toward, e.g. the auto-attack aim */
@@ -132,6 +137,23 @@ const _v0 = new THREE.Vector3(), _w0 = new THREE.Vector3(), _v1 = new THREE.Vect
 const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _qf = new THREE.Quaternion();
 const _eu = new THREE.Euler(0, 0, 0, 'YXZ');
 const X_AXIS = new THREE.Vector3(1, 0, 0);
+/** topple transform (model space) applied to the leg IK targets so the legs go down WITH the body */
+const _topM = new THREE.Matrix4(), _topR = new THREE.Matrix4();
+
+/**
+ * DEFEAT timeline (seconds since death). The app photographs the aftermath at END_DELAY_S = 2.5 s
+ * (game.ts), so the whole fall — stagger, topple, bounce, settle — must land well before that.
+ */
+export const DEFEAT = {
+  /** knees buckle + dizzy wobble */
+  staggerEnd: 0.4,
+  /** the topple starts (overlaps the end of the stagger) */
+  toppleStart: 0.32,
+  /** flank hits the ground — the view kicks its dust skirt here */
+  impact: 0.9,
+  /** resting roll (rad): on the flank, belly turned up a little, legs out */
+  roll: 1.42,
+} as const;
 
 /** rotation that carries the frame (u0, p0⊥u0) onto (u1, p1⊥u1) */
 function basisRot(u0: THREE.Vector3, p0: THREE.Vector3, u1: THREE.Vector3, p1: THREE.Vector3, out: THREE.Quaternion): THREE.Quaternion {
@@ -170,6 +192,8 @@ interface Channels {
   sq: number; st: number;
   frontLift: number; frontReach: number; hindLift: number; hindReach: number; feetOut: number;
   eyeClose: number; breath: number; throat: number;
+  /** DEFEAT topple: roll (rad) about the model's forward axis, pivoting on the down-side foot edge */
+  topple: number;
   mane: number; ears: number; wings: number;
   shellY: number; shellPitch: number; shellRoll: number; shellScale: number; crater: number;
   ruff: number; flash: number;
@@ -182,6 +206,7 @@ function zeroChannels(c: Channels): void {
   c.sq = 1; c.st = 1;
   c.frontLift = 0; c.frontReach = 0; c.hindLift = 0; c.hindReach = 0; c.feetOut = 0;
   c.eyeClose = 0; c.breath = 0; c.throat = 1;
+  c.topple = 0;
   c.mane = 1; c.ears = 0; c.wings = 0;
   c.shellY = 0; c.shellPitch = 0; c.shellRoll = 0; c.shellScale = 1; c.crater = 1;
   c.ruff = 1; c.flash = 0;
@@ -216,10 +241,12 @@ export class TitanAnimator {
   private flinchSign = 1;
   private lastHurtT = -1;
   /** sanitised copy of the caller's AnimState (reused every frame, never reallocated) */
-  private readonly s: AnimState & { speedH: number; hurtAmt: number; deadT: number; hero: number; aim: number } = {
+  private readonly s: AnimState & { speedH: number; hurtAmt: number; deadT: number; hero: number; aim: number; downSide: number; clearT: number } = {
     speed01: 0, moving: false, turn: 0, attack: null, attackT: -1, dashT: -1, hurtT: -1, abilityT: -1, growT: -1, t: 0, kit: {},
-    speedH: 0, hurtAmt: 0.6, noFlash: false, deadT: -1, hero: 0, aim: 0,
+    speedH: 0, hurtAmt: 0.6, noFlash: false, deadT: -1, hero: 0, aim: 0, downSide: 1, clearT: -1,
   };
+  /** half the footprint width (height-1 units): the topple pivots on that foot edge */
+  private readonly halfW: number;
 
   constructor(model: TitanModel, id: TitanId) {
     this.model = model;
@@ -228,6 +255,7 @@ export class TitanAnimator {
     let s = 0x9e3779b9;
     for (let i = 0; i < id.length; i++) s = Math.imul(s ^ id.charCodeAt(i), 0x01000193) >>> 0;
     this.seed = s || 1;
+    this.halfW = Math.max(0.1, (model.size?.width ?? 0.6) * 0.5);
     for (const name in model.joints) {
       const b = model.joints[name] as THREE.Bone;
       this.bone[name] = b;
@@ -358,6 +386,7 @@ export class TitanAnimator {
     this.growPose(a);
     this.hurtPose(a);
     if (a.hero && a.hero > 0) this.heroPose(a.hero);
+    if (fin(a.clearT, -1) >= 0 && !dead) this.victoryPose(a.clearT!);
     if (dead) this.deathPose(a.deadT ?? 0);
 
     // ── write bones ──
@@ -384,6 +413,8 @@ export class TitanAnimator {
     s.hurtAmt = fin(a.hurtAmt, 0.6);
     s.noFlash = a.noFlash === true;
     s.deadT = timer(a.deadT);
+    s.downSide = fin(a.downSide, 1) < 0 ? -1 : 1;
+    s.clearT = timer(a.clearT);
     s.hero = fin(a.hero, 0);
     s.aim = a.aim !== undefined && Number.isFinite(a.aim) ? a.aim : fin(s.kit.headTurn, 0);
     return s;
@@ -629,20 +660,90 @@ export class TitanAnimator {
     c.eyeClose = 0;
   }
 
+  /**
+   * DEFEAT (F18): the knees buckle and the head wobbles (dizzy, eyes half shut), then the titan
+   * topples onto its flank (accelerating, like a felled tree), lands with a bounce the view dusts
+   * over (DEFEAT.impact), and lies there legs-out and stiff, eyes shut, jaw slack, crest deflated,
+   * with one comic tail twitch. Cartoon — nothing breaks, nothing bleeds.
+   */
   private deathPose(t: number): void {
+    const c = this.ch, D = DEFEAT;
+    const side = this.s.downSide;
+    // 1. stagger
+    const k1 = smooth(t / D.staggerEnd);
+    const wob = Math.sin(t * 15) * (1 - smooth((t - 0.1) / 0.5)) * k1;
+    c.bodyY -= 0.07 * k1;
+    c.sq *= 1 - 0.07 * k1;
+    c.bodyRoll += 0.09 * wob;
+    c.headRoll += 0.3 * wob;
+    c.headPitch += 0.22 * k1;
+    c.neckPitch += 0.18 * k1;
+    c.jaw += 0.3 * k1;
+    c.eyeClose = Math.max(c.eyeClose, 0.55 * k1);
+    c.ears += 0.5 * k1;              // ears droop
+    // 2. topple: accelerate over (impact - start), then a damped bounce off the flank
+    let roll: number;
+    if (t < D.toppleStart) roll = 0;
+    else if (t < D.impact) { const u = (t - D.toppleStart) / (D.impact - D.toppleStart); roll = D.roll * u * u * (1.35 - 0.35 * u); }
+    else { const a = t - D.impact; roll = D.roll * (1 - 0.1 * Math.abs(Math.sin(a * 8.5)) * Math.exp(-a * 5)); }
+    c.topple = roll * side;
+    const down = sat(roll / D.roll);
+    // 3. limp: legs out stiff and splayed, head lolls to the ground, tail flat, crest deflated
+    c.feetOut += 0.07 * down;
+    c.frontReach += 0.09 * down;
+    c.hindReach -= 0.08 * down;
+    c.frontLift += 0.03 * down;
+    c.neckPitch += 0.12 * down;
+    c.headPitch += 0.1 * down;
+    c.headRoll += 0.25 * down * side;
+    c.jaw += 0.12 * down;
+    c.tailLift -= 0.12 * down;
+    c.tailStiff = Math.max(c.tailStiff, down);
+    c.eyeClose = Math.max(c.eyeClose, t >= D.impact ? 1 : 0.55 + 0.45 * down);
+    // one comic twitch of the tail and front feet after the dust settles
+    const tw = env(t, 1.65, 1.72, 1.8, 1.95);
+    c.tailLift += 0.35 * tw;
+    c.frontLift += 0.06 * tw;
+    c.mane *= 1 - 0.45 * down;
+    c.ruff *= 1 - 0.25 * down;
+    c.crater *= 1 - 0.35 * down;
+    c.wings = c.wings * (1 - down) - 0.15 * down;
+    c.breath *= 1 - down;
+  }
+
+  /**
+   * CLEAR: the victory roar. A short gather (crouch), then the titan rears up on its hind legs,
+   * throws its head back with the jaw wide and every crest flared (mane / ruff / crater / wings),
+   * tail up — and HOLDS it with a roaring quiver through the aftermath, so the front-page photo
+   * (taken 2.5 s in) catches the roar. After ~4 s it settles into the proud hero stance.
+   */
+  private victoryPose(t: number): void {
     const c = this.ch;
-    const k = smooth(t / 0.7);
-    c.bodyY -= 0.12 * k;
-    c.bodyRoll += 0.18 * k;
-    c.headPitch += 0.35 * k;
-    c.neckPitch += 0.25 * k;
-    c.jaw += 0.3 * k;
-    c.eyeClose = Math.max(c.eyeClose, k);
-    c.tailLift -= 0.15 * k;
-    c.feetOut += 0.08 * k;
-    c.mane *= 1 - 0.4 * k;
-    c.ruff *= 1 - 0.2 * k;
-    c.crater *= 1 - 0.3 * k;
+    const gather = env(t, 0, 0.18, 0.24, 0.42);
+    const rear = t < 4 ? smooth((t - 0.22) / 0.4) : 1 - smooth((t - 4) / 0.8);
+    const quiver = t > 0.55 ? Math.sin(t * 38) * 0.5 + Math.sin(t * 23 + 1) * 0.5 : 0;
+    c.bodyY -= 0.05 * gather;
+    c.sq *= 1 - 0.08 * gather;
+    c.bodyPitch -= 0.3 * rear;
+    c.bodyY += 0.05 * rear;
+    c.bodyZ -= 0.03 * rear;
+    c.frontLift += 0.22 * rear;
+    c.frontReach += 0.06 * rear;
+    c.feetOut += 0.03 * rear;
+    c.neckPitch -= 0.28 * rear;
+    c.headPitch -= 0.42 * rear;
+    c.headRoll += 0.03 * quiver * rear;
+    c.jaw += (0.88 + 0.07 * quiver) * rear;
+    c.throat *= 1 + 0.08 * rear;
+    c.mane *= 1 + 0.75 * rear;
+    c.ruff *= 1 + 0.4 * rear;
+    c.crater *= 1 + 0.4 * rear;
+    c.wings += 0.85 * rear;
+    c.ears -= 0.8 * rear;
+    c.tailLift += 0.3 * rear;
+    c.tailCurl += 0.35 * rear;
+    c.eyeClose = Math.max(c.eyeClose * (1 - rear), 0.35 * rear);   // squinting into the roar, not blinking
+    if (t >= 4) this.heroPose(smooth((t - 4) / 0.8));
   }
 
   // ─────────────── bone writers ───────────────
@@ -660,7 +761,16 @@ export class TitanAnimator {
     // base: squash & stretch around the feet
     const sq = clamp(c.sq, 0.6, 1.5), st = clamp(c.st, 0.7, 1.5);
     const sx = 1 / Math.sqrt(sq * st);          // keep volume: squash widens, stretch thins
-    this.setBone('base', 0, 0, 0, 0, 0, 0, sx, sq, st);
+    // DEFEAT topple: roll about the model's forward (Z) axis, pivoting near the down-side foot edge
+    // (x = -side * 0.6 halfW), so the titan tips over its own feet instead of spinning in place
+    const tp = c.topple;
+    if (tp !== 0) {
+      const px = (tp > 0 ? -this.halfW : this.halfW) * 0.6;   // near the foot edge: tips over, does not slide off
+      const cs = Math.cos(tp), sn = Math.sin(tp);
+      this.setBone('base', px - px * cs, -px * sn, 0, 0, 0, tp, sx, sq, st);
+    } else {
+      this.setBone('base', 0, 0, 0, 0, 0, 0, sx, sq, st);
+    }
     this.setBone('body', c.bodyX, c.bodyY, c.bodyZ, c.bodyPitch, c.bodyYaw, c.bodyRoll);
     const bs = 1 + c.breath;
     this.setBone('chest', 0, 0, 0, c.chestPitch, c.chestYaw, 0, bs, bs, 1 + c.breath * 0.4);
@@ -719,6 +829,14 @@ export class TitanAnimator {
     const lift = this.g.lift * gw * (dashing ? 0.3 : 1);
     void cyc;
     let lastParent: THREE.Bone | null = null;
+    const toppled = c.topple !== 0;
+    if (toppled) {
+      // base's transform without its squash scale: T(base.position - rest) * R(topple)
+      const base = this.bone.base;
+      const r = base ? this.restPos.get(base) : undefined;
+      _topR.makeRotationZ(c.topple);
+      _topM.makeTranslation(base && r ? base.position.x - r.x : 0, base && r ? base.position.y - r.y : 0, 0).multiply(_topR);
+    }
     for (const L of this.legs) {
       if (L.parent !== lastParent) {
         this.modelMatrix(L.parent, _m);
@@ -744,6 +862,7 @@ export class TitanAnimator {
       _t.y += up + (front ? c.frontLift : c.hindLift);
       _t.z += fwd + (front ? c.frontReach : c.hindReach);
       if (_t.y < L.ankle.y) _t.y = L.ankle.y;
+      if (toppled) _t.applyMatrix4(_topM);     // the legs go down WITH the body
       L.target.copy(_t);
       // → parent space
       _t.applyMatrix4(_inv);

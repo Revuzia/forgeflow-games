@@ -131,7 +131,11 @@ export function createRenderCore(canvas: HTMLCanvasElement, quality: Quality): R
     // cheap per-frame check instead of a ResizeObserver: handles CSS layout changes,
     // fullscreen toggles and DPR changes (window dragged to another monitor) alike
     const w = canvas.clientWidth, h = canvas.clientHeight;
-    if ((w > 0 && h > 0 && (w !== lastW || h !== lastH)) || effectiveDpr(q) !== lastDpr) resize();
+    if ((w > 0 && h > 0 && (w !== lastW || h !== lastH)) || effectiveDpr(q) !== lastDpr) {
+      const t0 = performance.now();
+      resize();
+      (renderer as unknown as { __resizeMs?: number }).__resizeMs = performance.now() - t0;
+    }
     renderer.info.reset();
     renderer.render(scene, camera);
   }

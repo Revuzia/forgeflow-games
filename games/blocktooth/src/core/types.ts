@@ -246,8 +246,8 @@ export interface DamageOpts {
 }
 
 export type ProjectileKind =
-  | 'pellet' | 'volley' | 'rocket' | 'shell' | 'mortar' | 'turretBolt' | 'plate' | 'hookDrop'   // hostile
-  | 'seed' | 'rubbleShot' | 'spark' | 'ember';                                               // titan-owned
+  | 'pellet' | 'volley' | 'rocket' | 'shell' | 'mortar' | 'plate' | 'hookDrop'   // hostile
+  | 'seed' | 'rubbleShot' | 'spark';                                          // titan-owned
 
 export interface Projectile {
   id: number;

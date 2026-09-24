@@ -2477,8 +2477,63 @@ function lodTruck(pc: PC): MB {
   lodLamps(mb, pc, L, hw, 0.95, 1.0);
   return mb;
 }
+// ─────────────────────────────── street-furniture far LODs ───────────────────────────────
+// Size IV–V framing (cityview PROP_LOD_D): a tree is ~15–20 px, a lamp a ~1 px line with a lit head.
+// Same silhouettes / palette / glow kinds as the full models at ~1/3 of the triangles: at Size V
+// GRID-EAST draws ~370 trees (138 → 44 tris) and ~340 lamps (86 → 26 tris). Measured on the
+// reference Intel UHD (saturated-GPU bench, ?rscale=0.6): hiding all trees saves ≈ 0.5 ms/frame and
+// lamps+vending+kiosks ≈ 0.55 ms — most of that is these small instanced meshes' vertex work.
+function lodTree(pc: PC): MB {
+  const mb = newPropMB(pc, 'tree:lod');
+  const st = pc.st, pal = pc.pal;
+  if (st.snow) {
+    const s = 1.05, g2 = lin(pal.foliageB), snow = st.snowC;
+    const sn = mb.snow; mb.snow = null;
+    mb.prism(0, 0, 0, 0.9 * s, 0.16 * s, 0.13 * s, 4, lin('#5a4336'), null);
+    mb.prism(0, 0, 0.7 * s, 2.9 * s, 1.25 * s, 0.62 * s, 6, mb.shade(g2, 0.05), g2, true, 0.2);
+    mb.prism(0, 0, 2.6 * s, 4.5 * s, 0.9 * s, 0.08 * s, 6, snow, null, false, 0.2);
+    mb.snow = sn;
+  } else if (st.night) {
+    // dock palm: straight ringless trunk + 5 two-sided fronds
+    const fr = lin(pal.foliage), frB = lin(pal.foliageB);
+    mb.prism(0, 0, 0, 4.6, 0.2, 0.12, 4, lin('#5b4a3c'), null);
+    const top: V3 = [0, 4.6, 0];
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + 0.3;
+      const dx = Math.sin(a), dz = Math.cos(a);
+      const L = 2.0 + (i % 3) * 0.25;
+      const mid: V3 = [dx * L * 0.55, top[1] + 0.35, dz * L * 0.55];
+      const tip: V3 = [dx * L, top[1] - 0.7, dz * L];
+      const sx = -dz * 0.45, sz = dx * 0.45;
+      const col = i % 2 ? fr : frB;
+      mb.tri(top, [mid[0] + sx, mid[1], mid[2] + sz], tip, col, [0, 1, 0]);
+      mb.tri(top, tip, [mid[0] - sx, mid[1], mid[2] - sz], col, [0, 1, 0]);
+      mb.tri(top, tip, [mid[0] + sx, mid[1] - 0.05, mid[2] + sz], mul(col, 0.7), [0, -1, 0]);
+      mb.tri(top, [mid[0] - sx, mid[1] - 0.05, mid[2] - sz], tip, mul(col, 0.7), [0, -1, 0]);
+    }
+  } else {
+    // blossom: one trunk + two canopy lumps covering the full canopy's extent
+    const pinkA = lin(pal.foliage), pinkB = lin(pal.foliageB), pinkC = mix(lin(pal.foliage), WHITE, 0.35);
+    mb.prism(0, 0, 0, 2.2, 0.17, 0.12, 4, lin('#7a5a4a'), null);
+    mb.blob(0.1, 2.7, 0.05, 1.55, 1.15, 1.45, [pinkA, pinkB, pinkC], 0.18);
+    mb.blob(-0.2, 3.25, -0.25, 0.85, 0.7, 0.85, [pinkA, pinkB, pinkC], 0.18);
+  }
+  return mb;
+}
+function lodLamp(pc: PC): MB {
+  const mb = newPropMB(pc, 'lamp:lod');
+  mb.prism(0, 0, 0, 5.95, 0.12, 0.07, 3, pc.pole, null);
+  mb.box(-0.26, 5.82, 0.0, 0.26, 6.02, 1.55, pc.pole, mul(pc.pole, 1.1), 'y');
+  mb.kind(K.GLOW);
+  mb.box(-0.2, 5.78, 1.0, 0.2, 5.83, 1.5, pc.lit, pc.lit, 'Y');
+  mb.plain();
+  return mb;
+}
+
 function buildPropLod(kind: PropKind, pc: PC): MB | null {
   switch (kind) {
+    case 'tree': return lodTree(pc);
+    case 'lamp': return lodLamp(pc);
     case 'car': return lodCar(pc, false);
     case 'taxi': return lodCar(pc, true);
     case 'van': return lodVan(pc);

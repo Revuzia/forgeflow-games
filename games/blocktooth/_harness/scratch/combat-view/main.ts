@@ -192,10 +192,10 @@ const projs: Projectile[] = [];
 interface PMove { vx: number; vy: number; vz: number; x0: number; y0: number; z0: number; lob: boolean; T: number; tx: number; tz: number; apex: number; }
 const moves: PMove[] = [];
 if (show === 'proj' || show === 'all') {
-  const kinds: ProjectileKind[] = ['pellet', 'volley', 'rocket', 'shell', 'mortar', 'turretBolt', 'plate', 'hookDrop', 'seed', 'rubbleShot', 'spark', 'ember'];
+  const kinds: ProjectileKind[] = ['pellet', 'volley', 'rocket', 'shell', 'mortar', 'plate', 'hookDrop', 'seed', 'rubbleShot', 'spark'];
   kinds.forEach((k, i) => {
     const c = show === 'all' ? cell(i % 4, Math.floor(i / 4) % 2) : cell(i % 6, Math.floor(i / 6), 6, 2);
-    const titanSide = k === 'seed' || k === 'rubbleShot' || k === 'spark' || k === 'ember';
+    const titanSide = k === 'seed' || k === 'rubbleShot' || k === 'spark';
     const lob = k === 'mortar' || k === 'plate' || k === 'hookDrop' || k === 'rocket' || k === 'rubbleShot';
     const sp = cellW * 0.8;
     const r = titanSide ? Math.max(0.3, 0.12 * H) : 0.5;

@@ -172,6 +172,10 @@ export class GameLoop {
   private tickCount = 0;
   private droppedTicks = 0;
   private wasFrozen = false;
+  /** the current frame's rAF gap (ms), sim ticks and sim wall ms — read by the ?prof=1 profiler */
+  lastRawMs = 0;
+  lastTicks = 0;
+  lastSimMs = 0;
 
   constructor(onStep: () => void, onFrame: (alpha: number, dt: number, time: number) => void) {
     this.onStep = onStep;
@@ -274,6 +278,7 @@ export class GameLoop {
       this.curAlpha = a < 0 ? 0 : a > 1 ? 1 : a;
     }
 
+    this.lastRawMs = rawMs; this.lastTicks = ticks; this.lastSimMs = simMs;
     const c0 = wallNow();
     try {
       this.onFrame(this.curAlpha, dt, now / 1000);

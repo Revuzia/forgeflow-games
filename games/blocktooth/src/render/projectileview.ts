@@ -8,13 +8,11 @@
 //   rocket      cream body, red nose, fins + tail flame + puffy smoke trail (HOPPER)
 //   shell       brass slug + long tracer                      (TORTOISE)
 //   mortar      olive finned round on its arc + thin smoke    (STILT MORTAR)
-//   turretBolt  red diamond bolt + streak
 //   plate       riveted scrap plate tumbling on its arc       (IRON GULLY)
 //   hookDrop    hazard-striped crane hook on a cable          (CAISSON-4)
 //   seed        green spinning pods with a blossom tip        (BRIARWICK bloom turrets)
 //   rubbleShot  tumbling faceted concrete chunks              (upgrades)
 //   spark       twinkling pale star + streak                  (upgrades)
-//   ember       crusted magma blob with glowing facets + trail (upgrades)
 // Every projectile also casts a soft ground shadow blob (lobbed ones: it tightens and darkens as
 // the round comes down, so the landing spot reads even without the painted telegraph).
 //
@@ -35,8 +33,8 @@ import { addOutline, bakeOutlineNormals, INK, makeToon } from './materials.ts';
 // ─────────────────────────────── constants ───────────────────────────────
 const K_VIEW = 2 * Math.tan((CAMERA.fovDeg * Math.PI) / 360);
 const KINDS: readonly ProjectileKind[] = [
-  'pellet', 'volley', 'rocket', 'shell', 'mortar', 'turretBolt', 'plate', 'hookDrop',
-  'seed', 'rubbleShot', 'spark', 'ember',
+  'pellet', 'volley', 'rocket', 'shell', 'mortar', 'plate', 'hookDrop',
+  'seed', 'rubbleShot', 'spark',
 ];
 const SHADOW_Y0 = 0.035;
 const SHADOW_PULL0 = 0.28;
@@ -196,12 +194,6 @@ function mortarGeo(): THREE.BufferGeometry {
   return g.build(true);
 }
 
-function boltGeo(): THREE.BufferGeometry {
-  const g = new Geo();
-  g.lathe([0, -0.5, 0.22, -0.08, 0, 0.5], 4, (ring) => (ring === 0 ? '#ff5a3c' : '#ffb08a'), Math.PI / 4);
-  return g.build(true);
-}
-
 function plateGeo(): THREE.BufferGeometry {
   const g = new Geo();
   // irregular riveted plate in XZ (≈ 2 m across at unit scale), thickness 0.12 along Y
@@ -296,16 +288,6 @@ function sparkGeo(): THREE.BufferGeometry {
   g.lathe([0, -0.5, 0.2, 0, 0, 0.5], 4, (ring) => (ring === 0 ? '#fff6b0' : '#ffffff'));
   g.lathe([0, -0.28, 0.5, 0, 0, 0.28], 4, () => '#9ff6ff', Math.PI / 4);
   return g.build(false);
-}
-
-function emberGeo(): THREE.BufferGeometry {
-  const g = new Geo();
-  g.rock(1, 1, 0.18, 3, (nx, ny, nz, i) => {
-    const h = Math.sin(i * 12.9898) * 43758.5453;
-    const r = h - Math.floor(h);
-    return r < 0.55 ? (ny > 0 ? '#3a2a2e' : '#2a2033') : r < 0.8 ? '#ff7a2e' : '#ffb13b';
-  });
-  return g.build(true);
 }
 
 function puffGeo(): THREE.BufferGeometry {
@@ -493,7 +475,7 @@ interface Look {
   rMul: number;
   halo: string | null; haloK: number; haloA: number;
   streak: string | null; streakK: number; streakW: number; streakA: number;
-  puff: 0 | 1 | 2 | 3;          // 0 none · 1 rocket smoke · 2 thin mortar smoke · 3 dark ember smoke
+  puff: 0 | 1 | 2;              // 0 none · 1 rocket smoke · 2 thin mortar smoke
   orient: 'vel' | 'upright' | 'tumble' | 'spin';
 }
 const LOOK: Record<ProjectileKind, Look> = {
@@ -502,13 +484,11 @@ const LOOK: Record<ProjectileKind, Look> = {
   rocket:     { len: 1.4, minPx: 18, rMul: 0, halo: '#ffc86a', haloK: 0.32, haloA: 0.5, streak: null, streakK: 0, streakW: 0, streakA: 0, puff: 1, orient: 'vel' },
   shell:      { len: 0.9, minPx: 11, rMul: 0, halo: '#fff1a8', haloK: 0.55, haloA: 0.45, streak: '#fff1a8', streakK: 11, streakW: 0.12, streakA: 0.85, puff: 0, orient: 'vel' },
   mortar:     { len: 1.6, minPx: 15, rMul: 0, halo: null, haloK: 0, haloA: 0, streak: null, streakK: 0, streakW: 0, streakA: 0, puff: 2, orient: 'vel' },
-  turretBolt: { len: 1.0, minPx: 12, rMul: 0, halo: '#ff6a4a', haloK: 0.7, haloA: 0.45, streak: '#ff5a3c', streakK: 4, streakW: 0.16, streakA: 0.7, puff: 0, orient: 'vel' },
   plate:      { len: 6.0, minPx: 20, rMul: 0, halo: null, haloK: 0, haloA: 0, streak: null, streakK: 0, streakW: 0, streakA: 0, puff: 0, orient: 'tumble' },
   hookDrop:   { len: 12, minPx: 26, rMul: 0, halo: null, haloK: 0, haloA: 0, streak: null, streakK: 0, streakW: 0, streakA: 0, puff: 0, orient: 'upright' },
   seed:       { len: 0.8, minPx: 10, rMul: 2.6, halo: '#d8ff7a', haloK: 0.6, haloA: 0.28, streak: '#a8e05a', streakK: 3, streakW: 0.22, streakA: 0.5, puff: 0, orient: 'spin' },
   rubbleShot: { len: 1.2, minPx: 11, rMul: 2.0, halo: null, haloK: 0, haloA: 0, streak: '#d9d2c3', streakK: 2.2, streakW: 0.3, streakA: 0.35, puff: 0, orient: 'tumble' },
   spark:      { len: 0.7, minPx: 9, rMul: 1.2, halo: '#9ff6ff', haloK: 1.3, haloA: 0.5, streak: '#dffcff', streakK: 5, streakW: 0.18, streakA: 0.75, puff: 0, orient: 'tumble' },
-  ember:      { len: 1.0, minPx: 10, rMul: 1.8, halo: '#ffb13b', haloK: 1.2, haloA: 0.42, streak: '#ff7a2e', streakK: 3.5, streakW: 0.3, streakA: 0.6, puff: 3, orient: 'tumble' },
 };
 
 interface KindMesh { mesh: THREE.InstancedMesh; cap: number; n: number; }
@@ -522,12 +502,6 @@ export class ProjectileView implements ViewModule {
   private readonly geos: THREE.BufferGeometry[] = [];
   private readonly mats: THREE.Material[] = [];
   private readonly kinds = new Map<ProjectileKind, KindMesh>();
-  /**
-   * Kinds the contract declares but no sim emitter spawns yet ('turretBolt', 'ember'): built on
-   * FIRST USE instead of at construction (two 200-cap instanced meshes + ink hulls + a warm-up
-   * compile for nothing). If an emitter is wired later they still render.
-   */
-  private readonly lazyKinds = new Map<ProjectileKind, () => KindMesh>();
   private readonly flame: KindMesh;
   private readonly cable: KindMesh;
   private readonly puffs: KindMesh;
@@ -550,7 +524,7 @@ export class ProjectileView implements ViewModule {
   private readonly pRot = new Float32Array(384);
   private readonly pTint = new Uint8Array(384);
   private readonly puffTints: THREE.Color[] = [
-    new THREE.Color('#f4f1ea'), new THREE.Color('#d8d4cc'), new THREE.Color('#5a4d52'),
+    new THREE.Color('#f4f1ea'), new THREE.Color('#d8d4cc'),
   ];
   private mounted = false;
   private now = 0;
@@ -597,13 +571,11 @@ export class ProjectileView implements ViewModule {
     this.kinds.set('rocket', mk('rocket', rocketGeo(), toon, 160, 1.8));
     this.kinds.set('shell', mk('shell', shellGeo(), toon, 160, 1.6));
     this.kinds.set('mortar', mk('mortar', mortarGeo(), toon, 160, 1.8));
-    this.lazyKinds.set('turretBolt', () => mk('turretBolt', boltGeo(), basic, 64, 1.4));
     this.kinds.set('plate', mk('plate', plateGeo(), toon, 64, 2.0));
     this.kinds.set('hookDrop', mk('hookDrop', hookGeo(), toon, 16, 2.2));
     this.kinds.set('seed', mk('seed', seedGeo(), toon, 200, 1.5));
     this.kinds.set('rubbleShot', mk('rubbleShot', rubbleGeo(), toon, 200, 1.6));
     this.kinds.set('spark', mk('spark', sparkGeo(), basic, 200, 0));
-    this.lazyKinds.set('ember', () => mk('ember', emberGeo(), basic, 64, 1.4));
     this.flame = mk('flame', flameGeo(), basic, 160, 0);
     this.cable = mk('cable', cableGeo(), toon, 16, 0);
     const pm = mk('puff', puffGeo(), puffMat, this.puffCap, 1.3);
@@ -707,11 +679,7 @@ export class ProjectileView implements ViewModule {
 
   private drawOne(p: Projectile, alpha: number, px: number, time: number): void {
     const L = LOOK[p.kind];
-    let km = this.kinds.get(p.kind);
-    if (!km) {
-      const make = this.lazyKinds.get(p.kind);
-      if (make) { km = make(); this.kinds.set(p.kind, km); this.lazyKinds.delete(p.kind); }
-    }
+    const km = this.kinds.get(p.kind);
     if (!L || !km) return;
     // interpolated position
     const x = p.px + (p.x - p.px) * alpha;
@@ -764,7 +732,7 @@ export class ProjectileView implements ViewModule {
 
     // body transform (unit geometries: elongated ones span z −0.5…0.5; round ones radius 1)
     let sx: number, sy: number, sz: number;
-    const round = p.kind === 'pellet' || p.kind === 'volley' || p.kind === 'rubbleShot' || p.kind === 'ember';
+    const round = p.kind === 'pellet' || p.kind === 'volley' || p.kind === 'rubbleShot';
     if (round) { sx = sy = sz = len * 0.5; }
     else if (p.kind === 'plate') { sx = sy = sz = len * 0.5; }
     else if (p.kind === 'hookDrop') { sx = sy = sz = len; }
@@ -811,7 +779,7 @@ export class ProjectileView implements ViewModule {
       let hx = x, hy = y, hz = z;
       if (p.kind === 'rocket') { hx -= dx * len * 0.62; hy -= dy * len * 0.62; hz -= dz * len * 0.62; }
       this.col.set(L.halo);
-      const flick = p.kind === 'rocket' || p.kind === 'ember' ? 0.85 + 0.15 * Math.sin(time * 37 + seed * 11) : 1;
+      const flick = p.kind === 'rocket' ? 0.85 + 0.15 * Math.sin(time * 37 + seed * 11) : 1;
       d[o] = hx; d[o + 1] = hy; d[o + 2] = hz; d[o + 3] = Math.max(len * L.haloK, 4 * px) * flick;
       d[o + 4] = this.col.r; d[o + 5] = this.col.g; d[o + 6] = this.col.b; d[o + 7] = L.haloA;
     }
@@ -870,7 +838,7 @@ export class ProjectileView implements ViewModule {
       this.pLife[i] = type === 1 ? 0.8 + rnd * 0.5 : type === 2 ? 0.55 + rnd * 0.25 : 0.45 + rnd * 0.2;
       this.pSize[i] = len * (type === 1 ? 0.4 : type === 2 ? 0.26 : 0.26) * (0.65 + rnd2 * 0.7);
       this.pRot[i] = rnd * 6.28;
-      this.pTint[i] = type === 3 ? 2 : type === 2 ? 1 : (rnd < 0.5 ? 0 : 1);
+      this.pTint[i] = type === 2 ? 1 : (rnd < 0.5 ? 0 : 1);
     }
   }
 

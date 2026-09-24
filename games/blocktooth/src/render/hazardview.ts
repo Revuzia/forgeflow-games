@@ -17,7 +17,10 @@
 // Hostile hazards (boss frost, any non-titan owner) add a dashed telegraph-pink rim: pink always
 // means "this hurts YOU" (CONTRACT §6.1).
 // Lifetime: fade/grow in over the first ~0.3 s, fade out over the tail of `life`; hazards removed
-// early (turret cap, wire detonation) fade over 0.2 s instead of popping.
+// early (turret cap, wire detonation) fade over 0.2 s instead of popping. Run end: the sim stops
+// with hazards still alive, so every hazard (paint + dressing) fades out over END_FADE_S from the
+// runEnd event — same curve as the telegraph view — clearing the stage for the aftermath and the
+// tabloid freeze-frame (which hides this root anyway: no pop at the photo).
 // Tracked by hazard id (Map), never by array index. Decals: plane at y ≈ 0.025 slid toward the eye
 // along the view ray (same pixels, nearer depth: beats curbs / sidewalks / flood water, still hidden
 // by buildings) by slightly less than the telegraph pull, renderOrder 2 — telegraphs always paint
@@ -40,6 +43,8 @@ const DECAL_Y_PER_M = 0.00004;
 const PULL0 = 0.26;
 const PULL_PER_M = 0.0019;
 const GONE_FADE_S = 0.22;
+/** run end: every hazard fades out over this long (matches telegraphview END_FADE_S) */
+const END_FADE_S = 0.6;
 const PINK_FALLBACK = '#ff4fa0';
 const SHAPE_ID = { circle: 0, ring: 1, cone: 2, lane: 3, oval: 4, capsule: 5 } as const;
 const MAX_TURRETS = 32;
@@ -647,6 +652,10 @@ export class HazardView implements ViewModule {
   private mounted = false;
   /** highest projectile id already checked for bloom seeds (seed shots → petal recoil) */
   private lastProjId = -1;
+  /** real time of the runEnd event (−1 = run live) */
+  private endAt = -1;
+  /** 1 while the run is live, → 0 over END_FADE_S after runEnd (dressing that ignores the tail fade) */
+  private endK = 1;
 
   // scratch
   private readonly m4 = new THREE.Matrix4();
@@ -738,6 +747,7 @@ export class HazardView implements ViewModule {
   mount(world: World): void {
     this.clearRecs();
     this.lastProjId = -1;
+    this.endAt = -1;
     const hex = BIOMES[world.biomeId]?.palette?.telegraph ?? PINK_FALLBACK;
     for (const m of this.decalMats.values()) (m.uniforms.uPink.value as THREE.Color).set(hex);
     if (!this.mounted) { this.ctx.scene.add(this.root); this.mounted = true; }
@@ -788,6 +798,12 @@ export class HazardView implements ViewModule {
       m.uniforms.uTime.value = now; m.uniforms.uPx.value = px; m.uniforms.uY.value = y; m.uniforms.uPull.value = pull;
     }
     const back = f.frozen ? 0 : SIM_DT * (1 - Math.min(1, Math.max(0, f.alpha)));
+    const ev = f.events;
+    for (let i = 0; i < ev.length; i++) {
+      if (ev[i].type === 'runEnd' && this.endAt < 0) { this.endAt = now; break; }
+    }
+    // run over: the sim is stopped with hazards still alive — fade the whole stage out
+    const endK = this.endK = this.endAt >= 0 ? clamp01(1 - (now - this.endAt) / END_FADE_S) : 1;
 
     for (const r of this.recs.values()) r.seen = false;
     const list = w.hazards;
@@ -822,7 +838,7 @@ export class HazardView implements ViewModule {
     const lvl = this.ctx.quality.level;
     let turrets = 0;
     for (const r of this.recs.values()) {
-      const fade = this.fadeOf(r, now);
+      const fade = this.fadeOf(r, now) * endK;
       if (fade <= 0.001) continue;
       this.decal(r, fade, px);
       switch (r.kind) {
@@ -1061,7 +1077,7 @@ export class HazardView implements ViewModule {
     const wither = clamp01((3 - remaining) / 3);
     const sink = clamp01((0.45 - remaining) / 0.45);
     const grow = clamp01(r.t / 0.6);
-    const g = (grow < 1 ? easeOutBack(grow) : 1) * (1 - sink) * (r.goneAt >= 0 ? fade : 1);
+    const g = (grow < 1 ? easeOutBack(grow) : 1) * (1 - sink) * (r.goneAt >= 0 ? fade : this.endK);
     if (g <= 0.001) return;
     const sc = S * g;
     const phase = r.seed * 6.2832;
@@ -1174,7 +1190,7 @@ export class HazardView implements ViewModule {
     const n = lvl === 0 ? 5 : lvl === 1 ? 7 : 10;
     const grow = clamp01(r.t / 0.4);
     const melt = clamp01((1.0 - (r.life - r.t)) / 1.0);
-    const g = easeOutBack(grow) * (1 - melt) * (r.goneAt >= 0 ? fade : 1);
+    const g = easeOutBack(grow) * (1 - melt) * (r.goneAt >= 0 ? fade : this.endK);
     if (g <= 0.001) return;
     for (let i = 0; i < n; i++) {
       const ang = h3(r.id, i, 31) * Math.PI * 2;

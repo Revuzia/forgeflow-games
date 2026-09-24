@@ -100,7 +100,7 @@ const hz: Hazard[] = styles.map((k, i) => ({ id: id++, alive: true, owner: k ===
   shape: k === 'wire' ? { k: 'capsule', x0: x, z0: z, x1: x + 12, z1: z + 3, r: 1.2 } : { k: 'circle', x: x + i * 5, z, r: 4 },
   t: 0.5, life: 6, dps: 0, tickT: 0, data: k === 'bloom' ? { cd: 0.4, spore: 4, h: 14 } : {} } as Hazard));
 w2.hazards = hz;
-const kinds: ProjectileKind[] = ['pellet', 'volley', 'rocket', 'shell', 'mortar', 'turretBolt', 'plate', 'hookDrop', 'seed', 'rubbleShot', 'spark', 'ember'];
+const kinds: ProjectileKind[] = ['pellet', 'volley', 'rocket', 'shell', 'mortar', 'plate', 'hookDrop', 'seed', 'rubbleShot', 'spark'];
 const pr: Projectile[] = [];
 for (const k of kinds) for (let j = 0; j < 3; j++) {
   pr.push({ id: id++, alive: true, owner: 'enemy', kind: k, x: x + j, z, y: 3, px: x + j - 0.5, pz: z, py: 3.2, vx: 15, vz: 0, vy: -1,

@@ -49,8 +49,11 @@ const INK_MIN_RATIO = 0.0045;
  * Size IV–V: troopers, drones, buggies, APCs, tanks go far; walkers and the elite stay near.
  */
 const FAR_RATIO = 0.0085, FAR_HYST = 1.15;
-/** far-mesh cluster grid (cells across the model's largest extent) */
-const FAR_CELLS = 14;
+/** far-mesh cluster grid (cells across the model's largest extent). The far mesh only draws below
+ *  FAR_RATIO (≤ ~7 px tall at 720p), where 9 cells are still ≥ 1 cell per pixel; 14 cells left ~370
+ *  triangles per trooper — ~160k triangles for 250 foes at Size V, the second-largest vertex load
+ *  after the city on the reference Intel UHD. */
+const FAR_CELLS = 9;
 
 // ─────────────────────────────── per-enemy view record (pooled) ───────────────────────────────
 interface Vis {
