@@ -14,6 +14,12 @@ programs) every 250 ms.
 
 PASS iff: frame p99 ≤ --p99-ms (22) AND max draws ≤ --draws-max (450) AND the load was real
 (titan at Size V and mean live enemies ≥ 80 % of --enemies).
+
+FEATURES_V2 §15.4 scenario (a): --v2 adds 3 objectives + 3 power-ups (topped up when taken or expired)
+and fires ONE UPROAR with a real E inside the window; the p99 of the UPROAR window alone (E press →
+phase back to idle + 0.5 s) must meet the same budget. --prof adds ?prof=1 and prints the per-lane
+median main-thread ms of the frameprof marks (§4.7: L6 views ≤ 0.3, L7 BossView ≤ 0.3, HUD DOM ≤ 0.2
+over the v1 hud baseline). Run the p99 gate WITHOUT --prof (the marks + GPU timer queries cost time).
 Exit: 0 pass · 1 fail (or the load could not be reached) · 2 setup failed (server/browser/__BT__/cheats).
 """
 import argparse
@@ -30,6 +36,21 @@ from common import (BIOMES, TITANS, HarnessError, Session, add_common_args, buil
 MIX = [("android", 0.30), ("squad", 0.20), ("drone", 0.18), ("buggy", 0.10), ("apc", 0.06),
        ("tank", 0.08), ("walker", 0.07), ("elite", 0.01)]
 CIRCLE = [{"KeyW"}, {"KeyW", "KeyD"}, {"KeyD"}, {"KeyD", "KeyS"}, {"KeyS"}, {"KeyS", "KeyA"}, {"KeyA"}, {"KeyA", "KeyW"}]
+
+
+V2_OBJ = ["overloadSite", "reliefDepot", "recordsAnnex"]
+V2_PU = ["demolition", "redLight", "cleanup", "rushHour", "backPay"]
+# per-mark MEDIAN (and p90) of the frameprof ring over the play-screen frames (a frame without a mark = 0 ms)
+PROF_JS = r"""() => { const p = window.__BTPROF__; if (!p) return null; const ring = p.ring || [];
+  const by = {}; let n = 0;
+  for (const f of ring) { if (!f || f.screen !== 'play') continue; n++;
+    for (const k in f.sec) (by[k] = by[k] || []).push(f.sec[k]); }
+  const q = (a, x) => { const s = a.slice().sort((u, v) => u - v); return s[Math.min(s.length - 1, Math.floor(x * s.length))]; };
+  const median = {}, p90 = {}, mean = {};
+  for (const k in by) { const a = by[k]; while (a.length < n) a.push(0);
+    median[k] = Math.round(q(a, 0.5) * 1000) / 1000; p90[k] = Math.round(q(a, 0.9) * 1000) / 1000;
+    mean[k] = Math.round(a.reduce((u, v) => u + v, 0) / Math.max(1, a.length) * 1000) / 1000; }
+  return { frames: n, median, p90, mean }; }"""
 
 
 def spawn_mix(sess, n, log):
@@ -74,6 +95,12 @@ def main() -> int:
     ap.add_argument("--boss", default=None,
                     help="v2 scenario (b): spawn this boss (e.g. parkade6) at Size V before the enemies, so the "
                          "window measures a live boss fight; pair with --enemies 150 (FEATURES_V2 §15.4)")
+    ap.add_argument("--v2", action="store_true",
+                    help="v2 scenario (a): 3 objectives + 3 power-ups on the map and one UPROAR fired (real E) in "
+                         "the window; also reports the UPROAR-window p99 (FEATURES_V2 §15.4)")
+    ap.add_argument("--ult-at", type=float, default=4.0, help="--v2: seconds into the window to fire the UPROAR")
+    ap.add_argument("--prof", action="store_true",
+                    help="add ?prof=1 and print per-lane median ms of the frameprof marks (§4.7); not for the p99 gate")
     ap.add_argument("--shot", default=os.path.join(SHOTS, "perfcheck.png"))
     ap.add_argument("--zoom", choices=("auto", "max"), default="auto",
                     help="player camera zoom during the window: auto framing (1x) or held at the max zoom-OUT "
@@ -81,7 +108,7 @@ def main() -> int:
     args = ap.parse_args()
 
     url = build_url(args.base, autostart=1, dev=1, noslate=1, titan=args.titan, biome=args.biome, seed=args.seed,
-                    quality=args.quality)
+                    quality=args.quality, prof=(1 if args.prof else None))
     logs = []
 
     def log(msg):
@@ -107,6 +134,35 @@ def main() -> int:
     tick0 = tick1 = None
     overlays = {}
     zoom_info = {}
+    v2 = {"objPlaced": 0, "puPlaced": 0, "objTopUps": 0, "puTopUps": 0, "ult": None, "ultPolls": [], "frames": []}
+    pu_cycle = [0]
+    last_v2_top = [0.0]
+
+    def v2_counts(st):
+        vv = (st or {}).get("v2") or {}
+        return len(vv.get("objectives") or []), len(vv.get("powerups") or [])
+
+    def v2_top_up(st, force=False):
+        """Keep 3 objectives + 3 power-ups on the map (cheats only SET UP state, §13.3)."""
+        now = time.time()
+        if not force and now - last_v2_top[0] < 2.0:
+            return
+        last_v2_top[0] = now
+        no, npu = v2_counts(st)
+        for k in range(max(0, 3 - no)):
+            kind = V2_OBJ[(no + k) % len(V2_OBJ)]
+            ok, v = sess.cheat("objective", kind)
+            if not ok or v is None:
+                ok, v = sess.cheat("objective", kind, 60 + 40 * k)
+            if ok and v is not None:
+                v2["objPlaced" if force else "objTopUps"] += 1
+        for _ in range(max(0, 3 - npu)):
+            kind = V2_PU[pu_cycle[0] % len(V2_PU)]
+            pu_cycle[0] += 1
+            ok, v = sess.cheat("powerup", kind)
+            if ok and v is not None:
+                v2["puPlaced" if force else "puTopUps"] += 1
+
     try:
         log("open %s" % url)
         sess.goto(url)
@@ -146,6 +202,17 @@ def main() -> int:
             time.sleep(0.5)
             s = sess.state() or {}
             log("after spawn: Size %s · enemies %s · draws %s" % (s.get("rank"), s.get("enemies"), s.get("draws")))
+            if args.v2:
+                v2_top_up(s, force=True)
+                time.sleep(0.3)
+                s = sess.state() or {}
+                no, npu = v2_counts(s)
+                u = ((s.get("v2") or {}).get("ult") or {})
+                log("v2 (a): objectives %d %s · power-ups %d %s · ult %s" % (
+                    no, [o.get("kind") for o in (s.get("v2") or {}).get("objectives") or []], npu,
+                    [o.get("kind") for o in (s.get("v2") or {}).get("powerups") or []], json.dumps(u)))
+                if no < 3 or npu < 3:
+                    log("WARNING: v2 (a) load short after placement (objectives %d, power-ups %d)" % (no, npu))
             if args.zoom == "max":
                 # real wheel events over the canvas (+deltaY = zoom OUT); the rig clamps at its max
                 vp = sess.page.viewport_size or {"width": 1280, "height": 720}
@@ -174,12 +241,24 @@ def main() -> int:
                 cur = s.get("enemies") or 0
                 if cur < 0.9 * args.enemies:
                     spawn_mix(sess, args.enemies - cur, log)
+                if args.v2:
+                    v2_top_up(s)
             s = sess.state() or {}
             prog0 = s.get("programs")
             tick0 = s.get("tick")
             # sampling window
+            if args.v2:
+                # timestamped rAF recorder (the UPROAR window is cut from it by page time)
+                sess.safe_js("() => { window.__G3_TS__ = []; window.__G3_ON__ = true; if (!window.__G3_LOOP__) {"
+                             " window.__G3_LOOP__ = true; const f = (ts) => { if (window.__G3_ON__) window.__G3_TS__.push(ts);"
+                             " requestAnimationFrame(f); }; requestAnimationFrame(f); } }")
+            if args.prof:
+                sess.safe_js("() => { const p = window.__BTPROF__; if (p) p.reset(); }")
             sess.ft_start()
             t0 = time.time()
+            ult_state = "pending" if args.v2 else "off"
+            ult_press_pt = ult_idle_pt = None
+            fired0 = None
             next_dir = t0
             while time.time() - t0 < args.seconds:
                 now = time.time()
@@ -187,9 +266,37 @@ def main() -> int:
                     sess.hold(CIRCLE[i % len(CIRCLE)])
                     i += 1
                     next_dir = now + 0.35
+                if ult_state == "pending" and now - t0 >= args.ult_at:
+                    st_u = sess.state() or {}
+                    fired0 = (((st_u.get("v2") or {}).get("ult") or {}).get("fired"))
+                    sess.cheat("ult", 100)
+                    time.sleep(0.15)
+                    ult_press_pt = sess.safe_js("() => performance.now()")
+                    sess.press("KeyE", 90)                       # real E (§3.2)
+                    ult_state = "live"
+                    t_live = time.time()
+                    while time.time() - t_live < 8.0:            # poll the phase at ~10 Hz until idle
+                        r = sess.safe_js("() => { const s = window.__BT__.state(); const u = s.v2 && s.v2.ult;"
+                                         " return [performance.now(), u ? u.phase : null, u ? u.fired : null, s.screen]; }")
+                        if isinstance(r, list):
+                            v2["ultPolls"].append(r)
+                            if (r[1] == "idle" and isinstance(r[2], (int, float)) and isinstance(fired0, (int, float))
+                                    and r[2] > fired0):
+                                ult_idle_pt = r[0]
+                                break
+                            if r[3] not in ("play", None):
+                                clear_overlay(sess, r[3])
+                        time.sleep(0.1)
+                    ult_state = "done"
+                    sess.hold(CIRCLE[i % len(CIRCLE)])
+                    continue
                 s = sess.state() or {}
+                if args.v2:
+                    v2_top_up(s)
                 bs = s.get("boss") if isinstance(s.get("boss"), dict) else None
+                no_, npu_ = v2_counts(s)
                 samples.append({"t": round(now - t0, 2), "draws": s.get("draws"), "tris": s.get("tris"),
+                                "objs": no_, "pus": npu_,
                                 "boss": (bs.get("id") if bs and bs.get("alive") else None),
                                 "programs": s.get("programs"), "enemies": s.get("enemies"), "fps": s.get("fps"),
                                 "rank": s.get("rank"), "screen": s.get("screen"),
@@ -206,6 +313,12 @@ def main() -> int:
                     clear_overlay(sess, s.get("screen"))
                 time.sleep(0.25)
             ft = sess.ft_stop()
+            if args.v2:
+                v2["frames"] = sess.safe_js("() => { window.__G3_ON__ = false; return window.__G3_TS__.slice(); }",
+                                            default=[]) or []
+                v2["ult"] = {"pressPt": ult_press_pt, "idlePt": ult_idle_pt, "fired0": fired0, "state": ult_state}
+            if args.prof:
+                v2["prof"] = sess.safe_js(PROF_JS)
             zoom_info["end"] = sess.safe_js("() => { const c = window.__BTCAM__; return c ? {zoom: c.zoom, d: c.distance, auto: c.autoDist} : null; }")
             perf_bt = sess.perf()
             st_end = sess.state() or {}
@@ -298,12 +411,52 @@ def main() -> int:
         print("boss      : %s alive in %d / %d samples" % (args.boss, live, len(samples)))
         if live < 0.9 * max(1, len(samples)):
             problems.append("scenario (b) not held: %s alive in only %d / %d samples" % (args.boss, live, len(samples)))
+    ult_rep = None
+    if args.v2:
+        objs = [x["objs"] for x in samples if isinstance(x.get("objs"), int)]
+        pus = [x["pus"] for x in samples if isinstance(x.get("pus"), int)]
+        mo = (sum(objs) / len(objs)) if objs else 0
+        mp = (sum(pus) / len(pus)) if pus else 0
+        print("v2 (a)    : objectives mean %.2f / min %s · power-ups mean %.2f / min %s · top-ups obj %d pu %d" % (
+            mo, min(objs) if objs else None, mp, min(pus) if pus else None, v2["objTopUps"], v2["puTopUps"]))
+        if mo < 2.5:
+            problems.append("scenario (a) not held: objectives mean %.2f < 2.5" % mo)
+        if mp < 2.5:
+            problems.append("scenario (a) not held: power-ups mean %.2f < 2.5" % mp)
+        u = v2.get("ult") or {}
+        ts = [x for x in v2.get("frames") or [] if isinstance(x, (int, float))]
+        if u.get("pressPt") is None or u.get("idlePt") is None:
+            problems.append("UPROAR not observed through the window (press %s · back to idle %s · polls %d)" % (
+                u.get("pressPt"), u.get("idlePt"), len(v2["ultPolls"])))
+            print("UPROAR    : NOT OBSERVED %s" % json.dumps(u))
+        else:
+            a, b = u["pressPt"], u["idlePt"] + 500.0
+            win = [ts[k] - ts[k - 1] for k in range(1, len(ts)) if a <= ts[k] <= b]
+            phases = [p[1] for p in v2["ultPolls"]]
+            up99, up50, umx = percentile(win, 99), percentile(win, 50), (max(win) if win else None)
+            ult_rep = {"windowMs": round(b - a), "frames": len(win), "p50": up50, "p99": up99, "max": umx,
+                       "phasesSeen": sorted(set(x for x in phases if x)), "fired0": u.get("fired0")}
+            print("UPROAR    : window %.0f ms (E press → idle + 0.5 s) · %d frames · p50 %s · p99 %s · max %s · phases seen %s" % (
+                b - a, len(win), fmt(up50, 2), fmt(up99, 2), fmt(umx, 2), ult_rep["phasesSeen"]))
+            if up99 is None or up99 > args.p99_ms:
+                problems.append("UPROAR-window p99 %s ms > %.1f ms" % (fmt(up99, 2), args.p99_ms))
+    if args.prof:
+        pr = v2.get("prof") or {}
+        med = pr.get("median") or {}
+        print("frameprof : %s play frames · per-mark median ms: %s" % (pr.get("frames"), json.dumps(med, sort_keys=True)))
+        mn = pr.get("mean") or {}
+        print("frameprof : per-mark MEAN ms (performance.now is 0.1 ms-coarse, so sub-0.1 medians read 0): %s" % json.dumps(mn, sort_keys=True))
+        for tag, src in (("median", med), ("mean", mn)):
+            lanes = {"L6 views": sum(src.get(k, 0) for k in ("UltView", "ObjectiveView", "PowerupView", "MarkerView")),
+                     "L7 BossView": src.get("BossView", 0), "hud (v1 + v2)": src.get("hud", 0)}
+            print("lanes/%-6s: %s" % (tag, " · ".join("%s %.3f ms" % (k, v) for k, v in lanes.items())))
+        ult_rep = dict(ult_rep or {}, prof=pr)
     passed = not problems
     rep = {"url": url, "zoom": args.zoom, "zoomInfo": zoom_info, "titan": args.titan, "biome": args.biome, "seed": args.seed, "headless": args.headless,
            "frames": len(ft), "fps": fps, "p50": p50, "p99": p99, "max": mx, "over": over, "missedVsyncs": missed, "perfBT": perf_bt,
            "drawsMax": draws_max, "drawsP50": percentile(draws, 50), "trisMax": max(tris) if tris else None,
            "programs": [prog0, prog1], "meanEnemies": mean_en, "samples": samples, "topUps": top_ups,
-           "simTicks": sim_ticks, "overlays": overlays,
+           "simTicks": sim_ticks, "overlays": overlays, "v2": args.v2, "uproar": ult_rep,
            "problems": problems, "pass": passed, "log": logs, "diagnostics": diag}
     print("report    : %s" % save_report("perfcheck", rep, args.base, args.report_dir))
     print("PERF GATE: %s" % ("PASS" if passed else "FAIL"))

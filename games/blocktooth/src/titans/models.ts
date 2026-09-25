@@ -12,7 +12,7 @@
 // Authored facing +Z, feet on y = 0, normalised so the tallest point is exactly y = 1.0.
 
 import * as THREE from 'three';
-import type { TitanId } from '../core/types.ts';
+import type { TitanId, TitanPalette } from '../core/types.ts';
 import { addOutline, makeToon } from '../render/materials.ts';
 
 // ─────────────────────────────── public types ───────────────────────────────
@@ -57,7 +57,12 @@ export interface TitanModel {
 export interface BuildOpts {
   /** ink outline width for the body (CSS px). Titans are 3.0 (CONTRACT §6.1); portraits pass more. */
   outlinePx?: number;
+  /** v2 (FEATURES_V2 §8.6, lane L10): an alternate palette (data/palettes.ts); absent = canonical colours */
+  colors?: TitanPalette;
 }
+
+/** The colour fields a builder paints from (a TITAN_COLORS entry or a TitanPalette). */
+type TitanColors = { primary: string; secondary: string; belly: string; accent: string; glow: string; eye: string; extra?: string };
 
 /** Canonical titan colours (CONTRACT §8 — identical to data/titans.ts `colors`). */
 export const TITAN_COLORS: Record<TitanId, { primary: string; secondary: string; belly: string; accent: string; glow: string; eye: string; extra?: string }> = {
@@ -611,6 +616,49 @@ function buildEye(ge: Geo, rig: Rig, bone: string, c: V3, look: V3, r: number, s
   for (let i = 0; i < g2.si.length; i++) { ge.si.push(g2.si[i]); ge.sw.push(g2.sw[i]); }
 }
 
+/**
+ * v2 eyelids (FEATURES_V2 §11.4, lane L10). Every titan gets one skin-coloured lid per eye: a spherical
+ * shell 1.13 x the eyeball's radius, bound to its own joint (lidL / lidR, child of the head) whose rest
+ * frame is (X = up x look, Y = up, Z = look). Built OPEN: the shell runs from 58 deg above the look axis
+ * over the top of the eye and down its back (inside the skull), so at rest only a lid fold shows above
+ * the iris. Closing = a rotation about the joint's local X by LID_SWEEP x eyeClose, which sweeps the
+ * lower edge down over the whole front of the eye (anim.ts writes it; idle blinks, the DEFEAT shut eyes
+ * and the cinematic BLINK all drive it). No extra draw call: the lid is body geometry.
+ */
+export const LID = { openEdgeDeg: 58, closedEdgeDeg: -84, spanDeg: 152, latDeg: 86, grow: 1.13 } as const;
+/** closing rotation (rad) about the lid joint's local X */
+export const LID_SWEEP = (LID.openEdgeDeg - LID.closedEdgeDeg) * Math.PI / 180;
+function buildLid(g: Geo, rig: Rig, bone: string, c: V3, look: V3, r: number, squash: number, color: THREE.Color): void {
+  const L = norm(look);
+  const U = norm(sub([0, 1, 0], mul(L, dot([0, 1, 0], L))));
+  const X = norm(cross(U, L));                     // right-handed: X = U x L, Y = U, Z = L
+  rig.add(bone, 'head', c);
+  const b = rig.bones[rig.idx[bone]];
+  b.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(
+    new THREE.Vector3(X[0], X[1], X[2]), new THREE.Vector3(U[0], U[1], U[2]), new THREE.Vector3(L[0], L[1], L[2])));
+  const R = r * LID.grow;
+  const d2r = Math.PI / 180;
+  const nPsi = 10, nLat = 8;
+  const at = (psi: number, beta: number): V3 => {
+    const cp = Math.cos(psi), sp = Math.sin(psi), cb = Math.cos(beta), sb = Math.sin(beta);
+    return add(c, add(mul(X, R * sb), add(mul(L, R * cb * cp), mul(U, R * cb * sp * squash))));
+  };
+  const sk = rig.s(bone);
+  const jit = g.jitter;
+  g.jitter = 0.02;
+  for (let i = 0; i < nPsi; i++) {
+    const p0 = (LID.openEdgeDeg + (LID.spanDeg * i) / nPsi) * d2r, p1 = (LID.openEdgeDeg + (LID.spanDeg * (i + 1)) / nPsi) * d2r;
+    for (let j = 0; j < nLat; j++) {
+      const b0 = (-LID.latDeg + (2 * LID.latDeg * j) / nLat) * d2r, b1 = (-LID.latDeg + (2 * LID.latDeg * (j + 1)) / nLat) * d2r;
+      const a = at(p0, b0), bb = at(p0, b1), cc = at(p1, b1), dd = at(p1, b0);
+      const cen = mul(add(add(a, bb), add(cc, dd)), 0.25);
+      // the first row (the lid's free edge) is a shade darker: a comic lid line over the iris
+      g.quad(a, bb, cc, dd, i === 0 ? shade(color, 0.72) : color, norm(sub(cen, c)), sk, sk, sk, sk);
+    }
+  }
+  g.jitter = jit;
+}
+
 interface LegSpec {
   name: 'legFL' | 'legFR' | 'legBL' | 'legBR';
   parent: string;
@@ -807,8 +855,7 @@ function finalize(P: Parts, opts: BuildOpts): TitanModel {
 }
 
 // ─────────────────────────────── MOLO — squat jade monitor, sawtooth back-fin ───────────────────────────────
-function buildMolo(): Parts {
-  const K = TITAN_COLORS.molo;
+function buildMolo(K: TitanColors = TITAN_COLORS.molo): Parts {
   const P = C(K.primary), S2 = C(K.secondary), B = C(K.belly), A = C(K.accent), G = C(K.glow);
   const mouth = C('#7c3048'), tongue = C('#d4587a'), tooth = C('#fff6e2'), lipC = mix(B, P, 0.25);
   const rig = new Rig();
@@ -924,6 +971,8 @@ function buildMolo(): Parts {
   const eyeStyle: EyeStyle = { sclera: '#fffaf0', iris: K.eye, pupil: '#1b1426', iris01: 0.95, pupil01: 0.52 };
   buildEye(eyes, rig, 'eyeL', rig.rest.eyeL, [0.55, 0.3, 0.8], 0.09, eyeStyle);
   buildEye(eyes, rig, 'eyeR', rig.rest.eyeR, [-0.55, 0.3, 0.8], 0.09, eyeStyle);
+  buildLid(body, rig, 'lidL', rig.rest.eyeL, [0.55, 0.3, 0.8], 0.09, 1, S2);
+  buildLid(body, rig, 'lidR', rig.rest.eyeR, [-0.55, 0.3, 0.8], 0.09, 1, S2);
 
   // sawtooth back-fin: alternating tall/short plates, dark jade with cream tips, spine → tail
   const topAt = (z: number): number => {
@@ -974,10 +1023,10 @@ function buildMolo(): Parts {
 
 
 // ─────────────────────────────── VOLT-KITE — lean indigo jackal-drake, static mane ───────────────────────────────
-function buildVoltkite(): Parts {
-  const K = TITAN_COLORS.voltkite;
+function buildVoltkite(K: TitanColors = TITAN_COLORS.voltkite, custom = false): Parts {
   const P = C(K.primary), S2 = C(K.secondary), B = C(K.belly), G = C(K.glow);
-  const nose = C('#14152e'), mouth = C('#4a2352'), tooth = C('#f4f2ff'), claw = C('#dfe3ff'), innerEar = C('#c9b8f2');
+  const nose = C('#14152e'), mouth = C('#4a2352'), tooth = C('#f4f2ff'), claw = C('#dfe3ff');
+  const innerEar = custom ? mix(B, C('#ffffff'), 0.3) : C('#c9b8f2');
   const tipC = mix(G, C('#ffffff'), 0.6);
   const rig = new Rig();
   const body = new Geo(), eyes = new Geo(), mane = new Geo(), kite = new Geo();
@@ -1058,6 +1107,8 @@ function buildVoltkite(): Parts {
   const eyeStyle: EyeStyle = { sclera: '#f6f7ff', iris: K.eye, pupil: '#1b1426', iris01: 0.92, pupil01: 0.5 };
   buildEye(eyes, rig, 'eyeL', rig.rest.eyeL, [0.62, 0.26, 0.74], 0.046, eyeStyle);
   buildEye(eyes, rig, 'eyeR', rig.rest.eyeR, [-0.62, 0.26, 0.74], 0.046, eyeStyle);
+  buildLid(body, rig, 'lidL', rig.rest.eyeL, [0.62, 0.26, 0.74], 0.046, 1, S2);
+  buildLid(body, rig, 'lidR', rig.rest.eyeR, [-0.62, 0.26, 0.74], 0.046, 1, S2);
 
   // tall ears / fins (pale inner ear, dark tips)
   for (const sd of [1, -1] as const) {
@@ -1134,8 +1185,7 @@ function buildVoltkite(): Parts {
 }
 
 // ─────────────────────────────── HEARTHBACK — walking caldera, obsidian dome shell ───────────────────────────────
-function buildHearthback(): Parts {
-  const K = TITAN_COLORS.hearthback;
+function buildHearthback(K: TitanColors = TITAN_COLORS.hearthback, custom = false): Parts {
   const P = C(K.primary), S2 = C(K.secondary), B = C(K.belly), A = C(K.accent), G = C(K.glow);
   const nail = C('#cdbfa8'), tusk = C('#f1e4c8'), mouth = C('#3a1a1c'), hot = C('#fff0c2');
   const rig = new Rig();
@@ -1299,9 +1349,13 @@ function buildHearthback(): Parts {
     { sides: 6, cap0: 0.01, cap1: 0.01, paint: P, up: [0, 1, 0] });
   // nostril ember vents
   for (const sd of [1, -1]) blob(seams, [0.034 * sd, 0.29, 0.775], [0, 0.3, 1], 0.01, 0.014, 5, 3, A, rig.s('head'));
-  const eyeStyle: EyeStyle = { sclera: '#ffd27a', iris: '#ff9a3c', pupil: '#2a1208', iris01: 0.8, pupil01: 0.44, squash: 0.85 };
+  const eyeStyle: EyeStyle = custom
+    ? { sclera: K.eye, iris: K.accent, pupil: '#2a1208', iris01: 0.8, pupil01: 0.44, squash: 0.85 }
+    : { sclera: '#ffd27a', iris: '#ff9a3c', pupil: '#2a1208', iris01: 0.8, pupil01: 0.44, squash: 0.85 };
   buildEye(eyes, rig, 'eyeL', rig.rest.eyeL, [0.55, 0.22, 0.8], 0.044, eyeStyle);
   buildEye(eyes, rig, 'eyeR', rig.rest.eyeR, [-0.55, 0.22, 0.8], 0.044, eyeStyle);
+  buildLid(body, rig, 'lidL', rig.rest.eyeL, [0.55, 0.22, 0.8], 0.044, 0.85, P);
+  buildLid(body, rig, 'lidR', rig.rest.eyeR, [-0.55, 0.22, 0.8], 0.044, 0.85, P);
 
   // stubby tail
   sweep(body, tubeRings([[0, 0.27, -0.44], [0, 0.24, -0.52], [0, 0.19, -0.62], [0, 0.15, -0.68]], [[0.09, 0.08], [0.075, 0.065], [0.05, 0.045], [0.03, 0.028]], 6,
@@ -1321,10 +1375,14 @@ function buildHearthback(): Parts {
 }
 
 // ─────────────────────────────── BRIARWICK — horned garden-beast, seed ruff ───────────────────────────────
-function buildBriarwick(): Parts {
-  const K = TITAN_COLORS.briarwick;
+function buildBriarwick(K: TitanColors = TITAN_COLORS.briarwick, custom = false): Parts {
   const P = C(K.primary), S2 = C(K.secondary), B = C(K.belly), A = C(K.accent), G = C(K.glow), HORN = C(K.extra ?? '#e8dcc0');
-  const mossL = C('#7fae4a'), leafC = C('#9ccf5a'), pod = C('#b4c25e'), podDark = C('#7d8a3a'), nose = C('#3a2618'), claw = C('#efe4c8');
+  // canonical moss / leaf / pod greens; an alternate palette derives them from its own colours
+  const mossL = custom ? mix(shade(P, 1.12), G, 0.18) : C('#7fae4a');
+  const leafC = custom ? mix(P, G, 0.4) : C('#9ccf5a');
+  const pod = custom ? mix(G, B, 0.45) : C('#b4c25e');
+  const podDark = custom ? shade(pod, 0.7) : C('#7d8a3a');
+  const nose = C('#3a2618'), claw = C('#efe4c8');
   const bloomC = C('#ffd166');
   const rig = new Rig();
   const body = new Geo(), eyes = new Geo(), spores = new Geo();
@@ -1388,6 +1446,8 @@ function buildBriarwick(): Parts {
   const eyeStyle: EyeStyle = { sclera: '#fffbe8', iris: '#5a3a1e', pupil: '#1b1426', iris01: 0.86, pupil01: 0.5 };
   buildEye(eyes, rig, 'eyeL', rig.rest.eyeL, [0.55, 0.3, 0.78], 0.043, eyeStyle);
   buildEye(eyes, rig, 'eyeR', rig.rest.eyeR, [-0.55, 0.3, 0.78], 0.043, eyeStyle);
+  buildLid(body, rig, 'lidL', rig.rest.eyeL, [0.55, 0.3, 0.78], 0.043, 1, S2);
+  buildLid(body, rig, 'lidR', rig.rest.eyeR, [-0.55, 0.3, 0.78], 0.043, 1, S2);
   // brow ridges
   for (const sd of [1, -1]) {
     sweep(body, tubeRings([[0.035 * sd, 0.665, 0.715], [0.09 * sd, 0.675, 0.69], [0.135 * sd, 0.652, 0.64]], [[0.02, 0.018], [0.025, 0.02], [0.018, 0.016]], 5, () => rig.s('head')),
@@ -1485,10 +1545,14 @@ function buildBriarwick(): Parts {
 }
 
 // ─────────────────────────────── public entry ───────────────────────────────
-const BUILDERS: Record<TitanId, () => Parts> = { molo: buildMolo, voltkite: buildVoltkite, hearthback: buildHearthback, briarwick: buildBriarwick };
+const BUILDERS: Record<TitanId, (K?: TitanColors, custom?: boolean) => Parts> = {
+  molo: (K) => buildMolo(K), voltkite: buildVoltkite, hearthback: buildHearthback, briarwick: buildBriarwick,
+};
 
-/** Build a fresh, independent titan model (own geometry, materials and skeleton). */
+/** Build a fresh, independent titan model (own geometry, materials and skeleton). `opts.colors` = an
+ *  alternate palette (FEATURES_V2 §8.6): every painted colour derives from it; absent = canonical. */
 export function buildTitanModel(id: TitanId, opts: BuildOpts = {}): TitanModel {
-  const parts = BUILDERS[id]();
+  const pal = opts.colors;
+  const parts = pal ? BUILDERS[id](pal, true) : BUILDERS[id]();
   return finalize(parts, opts);
 }

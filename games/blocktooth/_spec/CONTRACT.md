@@ -680,3 +680,26 @@ Parts: body r20, head r8 (hpMul 1.6, strainMul 2.0), sail r10 (strainMul 2.5), 4
 
 Orchestrator-owned (read-only for lanes): `src/core/types.ts`, `config.ts`, `rng.ts`, `math.ts`,
 `world.ts`, `src/render/viewtypes.ts`, `_spec/*`.
+
+### v2 lane ownership (FEATURES_V2 §15.2; built C0–C4, 2026-09-24/25)
+
+| Lane | Owns (new files) | Edited in existing files (only the named part) |
+|---|---|---|
+| L0 skeleton | the §2.6 stubs, `src/v2types.ts`, `_harness/bot_ult.ts` / `bot_draft.ts` / `bot_map.ts` stubs | `core/types.ts`, `config.ts`, `rng.ts`, `world.ts`, `input.ts`, `save.ts` (settings + profile stubs); the §2.7.3 hooks in `damage.ts`, `director.ts`, `enemies.ts`, `projectiles.ts`, `telegraphs.ts`, `titansim.ts`, `bosses/index.ts`, `data/upgrades.ts` (V2 append block); `game.ts`, `testsurface.ts`, `bot.ts`, `probe_sim.ts` (`--meta`, §0.6 lines), `probe_upgrades.ts` (`EXPECT`); `ai/bossview.ts` (rig exports, parkade6 placeholder); v2 signatures in `ui/menus.ts`, `select.ts`, `draft.ts`, `broadcast.ts` |
+| L1 ult-sim | `src/meta/ultimate.ts`, `src/data/ultimates.ts`, `_harness/bot_ult.ts`, `_harness/probe_ult.ts` | — |
+| L2 draft/evo-sim | `src/data/upgrades_v2.ts`, `src/data/evolutions.ts`, `_harness/bot_draft.ts`, `_harness/probe_evolutions.ts` | `upgrades/draft.ts` (eligibility, evo offers, banish / lock, reroll held slot), `upgrades/engine.ts` (`ultCharge`), `probe_upgrades.ts` (v2 rules) |
+| L3 boss3-sim | `src/ai/bosses/parkade6.ts`, `_harness/probe_boss3.ts` | `data/bosses.ts` (parkade6), `data/biomes.ts` (`grideast.boss`) |
+| L4 map-sim | `src/meta/objectives.ts`, `src/meta/powerups.ts`, `src/data/objectives.ts`, `src/data/powerups.ts`, `_harness/bot_map.ts`, `_harness/probe_map.ts` | — |
+| L5 meta/endless-sim | `src/meta/tally.ts`, `endless.ts`, `perks.ts`, `goals.ts`, `profile.ts`, `src/data/goals.ts`, `perks.ts`, `palettes.ts`, `_harness/probe_meta.ts`, `_harness/probe_endless.ts` | `core/save.ts` (`loadProfile` / `saveProfile`) |
+| L6 fx+audio-views | `src/render/ultview.ts`, `objectiveview.ts`, `powerupview.ts`, `markerview.ts` | `audio/sfx.ts` (v2 events + `ui()` kinds), `render/camera.ts` (`punch`), `titans/anim.ts` + `titanview.ts` (`ultimate` clip) |
+| L7 parkade-view | `src/ai/foemodels_parkade.ts` | `ai/bossview.ts` (PARKADE-6 rig, pose, tow chain), `render/projectileview.ts` (`LOOK.carLob`), `audio/sfx.ts` (PARKADE voice) |
+| L8 hud | `src/ui/icons.ts`, `abilitybar.ts`, `tracker.ts`, `markers.ts`, `toast.ts`, `hud_v2.css`, `src/data/strings_hud.ts`, `_harness/probe_icons.ts` | `ui/hud.ts` (chips column + hook dial removed, zoom hint moved, SHELL bar in the ACTIVE panel; `data-v2` hooks) |
+| L9 screens | `src/ui/goals.ts`, `screens_v2.css`, `src/data/strings_screens.ts` | `ui/select.ts` (rows, NEXT PERMIT PENDING, perk + palette rows, G), `ui/menus.ts` (title G, GOALS chip, pause LOADOUT, settings rows), `ui/draft.ts` (banish / lock / evolution / NEW), `ui/broadcast.ts` (KEEP GOING + K, endless tabloid, NEW ON THE RECORD) |
+| L10 cinematic | `src/render/cinecam.ts`, `src/ui/cine.ts`, `src/data/cine.ts` | `titans/titanview.ts` (`faceAnchor`, `setCine`, and the in-game model built in `w.meta.palette`), `titans/anim.ts` (`cine` channels), `titans/models.ts` (palette param, lids), `titans/portraits.ts` (palette arg), `_harness/bootcheck.py` + `playtest.py` (cinematic-aware), `_harness/shots.py` (group `cine`) |
+| orchestrator (gates G1–G3 + final) | `_harness/playtest_v2.py`, `_harness/scratch/g3/perfquiet.py` | `game.ts` / `testsurface.ts` cross-lane wires (e.g. `cheat.objective(kind, ahead)`), `_harness/perfcheck.py` (`--v2`, `--ult-at`, `--prof`; scenario (b) runs the existing `--boss` with `parkade6 --enemies 150`), `_harness/shots.py` (groups `screens` and `parkade`, ported from the L9 / L7 scratch flows), `_harness/scratch/final/leakcheck.py` (`--cine`), `README.md`, this table |
+
+Notes: `game.ts` and `testsurface.ts` stay orchestrator-only after C0; `ui/dom.ts` was edited by no v2 lane.
+Two ownership gaps were closed by the lane that found them and are recorded here: nobody owned the in-game
+palette (`w.meta.palette`, FEATURES_V2 §8.6), so L10 builds the in-game model in it in `titanview.mount()`;
+and §15.4 asks every view lane for shots in `_harness/shots.py` although §15.2 lists the file for no lane
+(L10 added `cine`; the orchestrator added `screens` and `parkade`).

@@ -25,8 +25,10 @@ Steps (§15.4):
   8  HUD DOM vs state: barSlots, badges (§4.2 / §4.3), activeCdText, meterPct
   9  gamepad: pad Y in play → ult.fired + 1; draft hold Y 0.6 s → banish, tap Y → none, LB → lock;
      pad X on the title → goals
- 10  settings Opening OFF / SHORT / Reduce motion  (needs the C4 cinematic; PENDING until it lands)
- 11  cinematic dismissed by a real key + zebra check   (needs the C4 cinematic; PENDING until it lands)
+ 10  settings (pause → SETTINGS, real keys): Opening OFF → the legacy freeze-frame slate; SHORT →
+     the v2.cine shot sequence lasts ≤ 3.2 s; Reduce motion ON (+ FULL) → no `crane` shot
+ 11  the default opening is the cinematic; a real Enter dismisses it; the first play frame passes the
+     zebra check (bootcheck CROSSWALK_JS) and v2.cine is null in play
 
 A PENDING step is neither PASS nor FAIL: the result line says so, and the run is `PASS (steps 1-9)`
 only; `ALL 11 PASS` needs 10 and 11 to pass too. Exit: 0 = every non-pending step passed · 1 = a
@@ -45,6 +47,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import (BIOMES, SHOTS, TITANS, TITAN_NAMES, HarnessError, Session, add_common_args,  # noqa: E402
                     build_url, detect_focus, diag_problems, dismiss_slate, menus_to_slate, navigate_cards,
                     owned_total, print_diagnostics, save_report, world_to_keys, xp_to_next)
+from bootcheck import CROSSWALK_JS  # noqa: E402  (step 11: zebra check on the first play frame)
 
 # Standard-mapping gamepad stub, installed before any page script runs. The game polls it through
 # navigator.getGamepads() exactly like a real pad; the harness flips buttons with __HPAD_SET__.
@@ -102,6 +105,19 @@ HUD_JS = r"""
   return { order: W ? W.upgrades.order.slice() : [], owned: s.owned, abilityCd: s.abilityCd,
            charge: s.v2 && s.v2.ult ? s.v2.ult.charge : null, dom: s.v2dom, screen: s.screen };
 }
+"""
+
+
+# Steps 10/11 (read-only DOM / module reads).
+FREEZE_JS = r"""
+() => { const e = document.querySelector('.bt-slate'); const f = document.querySelector('.bt-slate-freeze');
+        return !!(e && f && !e.classList.contains('bt-hidden') && getComputedStyle(e).display !== 'none'); }
+"""
+SETTINGS_VIS_JS = r"""
+() => { const e = document.querySelector('.bt-settings'); return !!(e && !e.classList.contains('bt-hidden')); }
+"""
+SETTINGS_READ_JS = r"""
+async () => { const m = await import('/src/core/save.ts'); return m.loadSettings(); }
 """
 
 
@@ -592,37 +608,152 @@ class V2Playtest:
         self.check(7, "g_first_broadcast" in done1, "after location.reload(): v2.profile.done has g_first_broadcast (%d goals: %s)" % (
             len(done1), ",".join(sorted(done1))[:200]))
 
-    def cine_available(self):
-        """Is the C4 cinematic in? Start a run with ?cine=2 and look for a v2.cine shot."""
-        s = self.sess
-        url = build_url(self.args.base, dev=1, seed=self.args.seed + 1, cine=2, quality=self.args.quality)
-        s.goto(url)
-        if not s.wait_bt(60):
-            return None, "no __BT__"
-        s.wait_screen(("title",), 60)
-        s.bt_call("newRun", {"titan": self.args.titan, "biome": self.args.biome, "seed": self.args.seed + 1})
-        seen = None
-        deadline = time.time() + 6
-        scr = None
-        while time.time() < deadline:
+    # ── steps 10 / 11 (C4 cinematic; orchestrator, final battery) ──
+    def watch_opening(self, max_s=12.0, dismiss_after=None):
+        """On the slate screen: sample state().v2.cine every ~40 ms until play (or max_s). With
+        dismiss_after, press a REAL Enter after that many seconds. Returns a dict: shots (ordered
+        distinct), wall seconds from the first observed shot to the last, play reached, and whether
+        the legacy freeze-frame DOM was visible."""
+        shots, t_first, t_last, freeze = [], None, None, False
+        t0 = time.time()
+        pressed = False
+        while time.time() - t0 < max_s:
             st = self.st()
             scr = st.get("screen")
             c = (st.get("v2") or {}).get("cine")
-            if c:
-                seen = c
+            if c and c.get("shot"):
+                now = time.time()
+                if t_first is None:
+                    t_first = now
+                t_last = now
+                if not shots or shots[-1] != c.get("shot"):
+                    shots.append(c.get("shot"))
+            if scr == "slate" and not freeze:
+                freeze = bool(self.sess.safe_js(FREEZE_JS, default=False))
+            if scr == "play":
                 break
-            time.sleep(0.1)
-        return bool(seen), "screen %s, v2.cine %s" % (scr, seen)
+            if dismiss_after is not None and not pressed and time.time() - t0 >= dismiss_after:
+                self.sess.press("Enter")
+                pressed = True
+            time.sleep(0.04)
+        return {"shots": shots, "span": (t_last - t_first) if t_first else 0.0, "play": self.sess.screen() == "play",
+                "freeze": freeze, "pressed": pressed}
+
+    def settings_rows(self, changes):
+        """From play: real Esc → pause, ↓ Enter → SETTINGS, then `changes` = list of (rowIndex, keys);
+        Esc closes the panel (saved). Returns the saved settings read back through core/save.ts."""
+        self.to_play()
+        self.sess.release_all()
+        self.sess.press("Escape")
+        ok, _ = self.wait(lambda q: q.get("screen") == "pause", 4.0)
+        if not ok:
+            raise HarnessError("real Esc did not open the pause menu (screen=%s)" % self.sess.screen())
+        time.sleep(0.5)
+        self.sess.press("ArrowDown")
+        time.sleep(0.25)
+        self.sess.press("Enter")
+        time.sleep(0.7)
+        if not self.sess.safe_js(SETTINGS_VIS_JS, default=False):
+            raise HarnessError("pause → SETTINGS did not open the settings panel")
+        row = 0
+        for idx, keys in changes:
+            while row < idx:
+                self.sess.press("ArrowDown")
+                time.sleep(0.15)
+                row += 1
+            for k in keys:
+                self.sess.press(k)
+                time.sleep(0.2)
+        self.snap("step10_settings_%d" % len(self.shots))
+        self.sess.press("Escape")                     # SettingsPanel: back = done (saved by the pause menu)
+        time.sleep(0.8)
+        saved = self.sess.safe_js(SETTINGS_READ_JS, default={})
+        return saved or {}
+
+    def quit_to_title_and_run(self):
+        """Real keys: Esc → pause, ↓↓↓ QUIT, Enter Enter (confirm) → title → the menus to the slate."""
+        self.to_play()
+        self.sess.release_all()
+        self.sess.press("Escape")
+        ok, _ = self.wait(lambda q: q.get("screen") == "pause", 4.0)
+        if not ok:
+            raise HarnessError("real Esc did not open the pause menu")
+        time.sleep(0.5)
+        for _ in range(3):
+            self.sess.press("ArrowDown")
+            time.sleep(0.2)
+        self.sess.press("Enter")
+        time.sleep(0.4)
+        self.sess.press("Enter")
+        ok, scr = self.sess.wait_screen(("title",), 20)
+        if not ok:
+            raise HarnessError("pause QUIT did not reach the title (screen=%s)" % scr)
+        ok, nav = menus_to_slate(self.sess, self.args.titan, self.args.biome, log=self.log, timeout_s=90)
+        if not ok:
+            raise HarnessError("menus → slate failed: %s" % nav.get("error"))
 
     def steps10_11(self):
-        avail, why = self.cine_available()
-        if not avail:
-            for st in (10, 11):
-                self.results[st] = ("PENDING", "C4 cinematic not landed (?cine=2 run: %s)" % why)
-                self.log("  step %d: PENDING — C4 cinematic not landed (%s)" % (st, why))
-            return
-        for st in (10, 11):
-            self.check(st, False, "cinematic present but step %d is not written yet — C4/orchestrator must extend playtest_v2" % st)
+        # a fresh page load, no ?cine= override: the opening comes from Settings (default FULL = 2)
+        self.sess.release_all()
+        self.sess.goto(self.url)
+        if not self.sess.wait_bt(60):
+            raise HarnessError("__BT__ not back for steps 10/11")
+        # ── 11: the default opening is the cinematic; a REAL key dismisses it; zebra on the first play frame
+        ok, nav = menus_to_slate(self.sess, self.args.titan, self.args.biome, log=self.log, timeout_s=90)
+        if not ok:
+            raise HarnessError("menus → slate failed: %s" % nav.get("error"))
+        time.sleep(0.2)
+        self.snap("step11_cinematic")
+        w = self.watch_opening(max_s=10.0, dismiss_after=1.2)
+        self.check(11, len(w["shots"]) >= 1, "the opening is the cinematic (v2.cine shots before the key: %s)" % " → ".join(w["shots"]))
+        ok, _ = self.wait(lambda q: q.get("screen") == "play", 4.0)
+        self.check(11, ok and w["pressed"], "a real Enter dismissed the cinematic → play (screen %s, %.2f s of shots seen)" % (
+            self.sess.screen(), w["span"]))
+        zebra = self.sess.safe_js(CROSSWALK_JS, 0.25, default={"ok": False, "reason": "crosswalk eval failed"})
+        self.check(11, bool((zebra or {}).get("ok")), "first play frame passes the zebra check (%s)" % (
+            "ON ZEBRA" if (zebra or {}).get("ok") else json.dumps(zebra)[:240]))
+        time.sleep(0.35)
+        self.snap("step11_firstplay")
+        cine = self.sess.safe_js("() => { const s = window.__BT__.state(); return s.v2 ? s.v2.cine : 'no v2'; }", default="err")
+        self.check(11, cine is None, "v2.cine is null in play (camera handed back): %s" % (cine,))
+        self.cheat("god", True)
+
+        # ── 10a: Opening OFF (settings row 7, ← ←) → the legacy freeze-frame slate
+        saved = self.settings_rows([(7, ["ArrowLeft", "ArrowLeft"])])
+        self.check(10, saved.get("cinematic") == 0, "settings: Opening → OFF by real ← keys (saved cinematic=%s)" % saved.get("cinematic"))
+        self.quit_to_title_and_run()
+        w = self.watch_opening(max_s=2.5)
+        self.snap("step10_off_slate")
+        self.check(10, self.sess.screen() == "slate" and not w["shots"] and w["freeze"],
+                   "OFF → legacy slate: screen %s, v2.cine shots %s, freeze-frame DOM visible %s" % (
+                       self.sess.screen(), w["shots"] or "none", w["freeze"]))
+        ok, scr = dismiss_slate(self.sess, 20, "Enter")
+        if not ok:
+            raise HarnessError("legacy slate did not give way to play (screen=%s)" % scr)
+        self.cheat("god", True)
+
+        # ── 10b: Opening SHORT (→ once) → the cinematic's shot sequence lasts ≤ 3.2 s
+        saved = self.settings_rows([(7, ["ArrowRight"])])
+        self.check(10, saved.get("cinematic") == 1, "settings: Opening → SHORT by a real → key (saved cinematic=%s)" % saved.get("cinematic"))
+        self.quit_to_title_and_run()
+        w = self.watch_opening(max_s=10.0)
+        self.check(10, bool(w["shots"]) and w["play"] and w["span"] <= 3.2,
+                   "SHORT → shots %s over %.2f s wall (≤ 3.2 s), then play %s with no key" % (
+                       " → ".join(w["shots"]) or "none", w["span"], w["play"]))
+        self.cheat("god", True)
+
+        # ── 10c: Reduce motion ON (row 6, Enter) + Opening FULL (row 7, →) → no crane shot
+        saved = self.settings_rows([(6, ["Enter"]), (7, ["ArrowRight"])])
+        self.check(10, saved.get("reduceMotion") is True and saved.get("cinematic") == 2,
+                   "settings: Reduce motion ON + Opening FULL by real keys (saved reduceMotion=%s, cinematic=%s)" % (
+                       saved.get("reduceMotion"), saved.get("cinematic")))
+        self.quit_to_title_and_run()
+        time.sleep(0.3)
+        self.snap("step10_reduced")
+        w = self.watch_opening(max_s=12.0)
+        self.check(10, bool(w["shots"]) and "crane" not in w["shots"] and w["play"],
+                   "Reduce motion → shots %s (no crane) over %.2f s, then play %s" % (
+                       " → ".join(w["shots"]) or "none", w["span"], w["play"]))
 
     # ── driver ──
     def run(self):

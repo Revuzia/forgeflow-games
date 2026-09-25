@@ -11,6 +11,13 @@ titan stands inside a zebra crossing (`__BT__.world.city.crosswalks`, read-only)
 to dismiss the slate, waits for `play`, lets the game run N seconds, screenshots, and prints the
 state + renderer stats + fps.
 
+v2 (FEATURES_V2 §11, lane L10) — cinematic-aware. The opening is the WARD-7 STREET CAM cinematic
+whenever `state().v2.cine` is set on the slate screen (Settings.cinematic 1/2, the default for a fresh
+profile); otherwise the legacy freeze-frame slate. For the cinematic the check lets it run ~1.2 s,
+screenshots it (bootcheck_slate.png = a cinematic frame), dismisses it with a REAL key, and runs the
+zebra check on the FIRST PLAY FRAME (the camera is handed back there; the titan has not moved) plus
+a screenshot of it (bootcheck_firstplay.png). `--cine 0|1|2` forces the opening through ?cine=.
+
 VERDICT is "BOOTS CLEAN" only when ALL hold:
   * 0 console errors, 0 page errors, 0 window errors / unhandled rejections,
     0 shader/GL diagnostics, 0 failed requests;
@@ -116,11 +123,15 @@ def main() -> int:
     ap.add_argument("--no-crosswalk-assert", action="store_true",
                     help="do not fail when the titan-on-crosswalk check cannot run / fails")
     ap.add_argument("--out-dir", default=SHOTS)
+    ap.add_argument("--cine", type=int, choices=(0, 1, 2), default=None,
+                    help="force the opening: 0 legacy slate, 1 short, 2 full cinematic (?cine=)")
     args = ap.parse_args()
 
+    extra = {} if args.cine is None else {"cine": args.cine}
     url = build_url(args.base, autostart=1, dev=1, titan=args.titan, biome=args.biome, seed=args.seed,
-                    quality=args.quality)
+                    quality=args.quality, **extra)
     shot_slate = os.path.join(args.out_dir, "bootcheck_slate.png")
+    shot_first = os.path.join(args.out_dir, "bootcheck_firstplay.png")
     shot_play = os.path.join(args.out_dir, "bootcheck_play.png")
     report = {"url": url, "headless": args.headless, "titan": args.titan, "biome": args.biome, "seed": args.seed}
     problems = []
@@ -133,6 +144,8 @@ def main() -> int:
     render = None
     t_boot = None
     overlays = {}
+    opening = None          # 'cinematic' | 'slate'
+    cine_seen = []          # distinct shot ids observed before the key
 
     sess = Session(args, "bootcheck")
     try:
@@ -158,9 +171,26 @@ def main() -> int:
             elif scr == "play":
                 problems.append("autostart skipped the slate (went straight to play) — slate not verified")
         if not fatal and sess.screen() == "slate":
-            time.sleep(1.2)                               # slate fade-in / halftone settle
+            # v2: which opening is this? (the cinematic publishes its shot through state().v2.cine)
+            t_c = time.time()
+            while time.time() - t_c < 1.2:
+                st = sess.state() or {}
+                c = (st.get("v2") or {}).get("cine")
+                if c and c.get("shot") and c.get("shot") not in cine_seen:
+                    cine_seen.append(c.get("shot"))
+                time.sleep(0.05)
+            opening = "cinematic" if cine_seen else "slate"
             state_slate = sess.state()
             sess.screenshot(shot_slate)
+            if opening == "cinematic":
+                # dismiss by a REAL key; the zebra check runs on the first play frame
+                ok, scr = dismiss_slate(sess, 20, "Enter")
+                reached_play = ok
+                if not ok:
+                    problems.append("a real key press did not dismiss the cinematic (screen=%r)" % (scr,))
+                else:
+                    time.sleep(0.35)                      # the 0.25 s skip blend lands on the gameplay pose
+                    sess.screenshot(shot_first)
             cw = sess.safe_js(CROSSWALK_JS, 0.25, default={"ok": False, "reason": "crosswalk eval failed"})
             if not (cw or {}).get("ok"):
                 msg = "titan is NOT on a zebra crossing" if (cw or {}).get("count") is not None else \
@@ -174,10 +204,11 @@ def main() -> int:
                     print("note (not gating): " + msg)
                 else:
                     problems.append(msg)
-            ok, scr = dismiss_slate(sess, 20, "Enter")
-            reached_play = ok
-            if not ok:
-                problems.append("a real key press did not dismiss the slate (screen=%r)" % (scr,))
+            if opening != "cinematic":
+                ok, scr = dismiss_slate(sess, 20, "Enter")
+                reached_play = ok
+                if not ok:
+                    problems.append("a real key press did not dismiss the slate (screen=%r)" % (scr,))
         elif not fatal:
             reached_play = sess.screen() == "play"
 
@@ -215,7 +246,10 @@ def main() -> int:
     print("URL         : %s" % url)
     print("mode        : %s" % ("headless Chrome (d3d11)" if args.headless else "headed Chrome (d3d11)"))
     print("boot → slate: %s" % ("%.1f s" % t_boot if t_boot is not None else "—"))
+    print("opening     : %s%s" % (opening or "—", ("  (shots seen before the key: %s; zebra checked on the first play frame)" % " → ".join(cine_seen)) if cine_seen else ""))
     print("slate shot  : %s" % (shot_slate if state_slate else "—"))
+    if opening == "cinematic":
+        print("first play  : %s" % shot_first)
     if cw is not None:
         n = cw.get("nearest") or {}
         print("crosswalk   : %s  (%s crosswalks; nearest #%s axis %s len %s width %s, %.2f m from titan; primary=%s swapped=%s; heading-along=%s)" % (
@@ -248,7 +282,7 @@ def main() -> int:
     print_diagnostics(diag)
     print("=" * 78)
 
-    report.update({"bootS": t_boot, "stateSlate": state_slate, "statePlay": state_play, "crosswalk": cw,
+    report.update({"opening": opening, "cineShots": cine_seen, "bootS": t_boot, "stateSlate": state_slate, "statePlay": state_play, "crosswalk": cw,
                    "reachedPlay": reached_play, "framesAdvancing": adv[0], "simAdvancing": sim_adv,
                    "render": render, "diagnostics": diag, "fatal": fatal, "overlays": overlays})
 

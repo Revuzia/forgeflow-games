@@ -14,6 +14,7 @@ def main():
     ap = argparse.ArgumentParser()
     add_common_args(ap)
     ap.add_argument("--v2", type=int, default=1, help="1 = also exercise the v2 views each cycle (default)")
+    ap.add_argument("--cine", type=int, default=0, help="1 = each newRun plays the cinematic opening (no skipSlate); a real Enter dismisses it after ~1.5 s")
     args = ap.parse_args()
     combos = [("molo", "grideast"), ("voltkite", "lockwater"), ("hearthback", "whitestacks"),
               ("briarwick", "grideast"), ("molo", "grideast"), ("voltkite", "lockwater"),
@@ -24,9 +25,19 @@ def main():
         s.wait_bt(90)
         s.wait_screen(("play", "slate"), 90)
         for i, (t, b) in enumerate(combos):
-            ok, v = s.bt_call("newRun", {"titan": t, "biome": b, "seed": 100 + i, "skipSlate": True})
+            ok, v = s.bt_call("newRun", {"titan": t, "biome": b, "seed": 100 + i, "skipSlate": not args.cine})
             if not ok:
                 print("newRun failed", v); return 2
+            cine_shots = []
+            if args.cine:
+                s.wait_screen(("slate", "play"), 60)
+                t0 = time.time()
+                while time.time() - t0 < 1.5:
+                    c = ((s.state() or {}).get("v2") or {}).get("cine")
+                    if c and c.get("shot") and c.get("shot") not in cine_shots:
+                        cine_shots.append(c.get("shot"))
+                    time.sleep(0.05)
+                s.press("Enter")
             s.wait_screen(("play",), 60)
             s.cheat("rank", 2)
             if args.v2:
@@ -41,7 +52,7 @@ def main():
             v2 = st.get("v2") or {}
             rows.append({"i": i, "titan": t, "biome": b, **(m or {}), "screen": st.get("screen"), "rank": st.get("rank"),
                          "ultFired": (v2.get("ult") or {}).get("fired"), "objs": len(v2.get("objectives") or []),
-                         "pus": len(v2.get("powerups") or [])})
+                         "pus": len(v2.get("powerups") or []), **({"cine": cine_shots} if args.cine else {})})
             print(json.dumps(rows[-1]), flush=True)
         errs = [c for c in s.console if c[0] == "error"] + s.page_errors
         print("errors:", len(errs), errs[:5])

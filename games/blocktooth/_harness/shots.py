@@ -14,7 +14,7 @@ Groups (all by default, in this order):
            first titan of each biome also captures that biome's open slate
   hud      HUD mid-fight (Size II, a spawned mix, real keys driving), a MUTATION REPORT draft,
            the MASS BREACH size-up sting
-  bosses   CAISSON-4 (GRID-EAST) and IRON GULLY (WHITE STACKS): the entrance, then up to
+  bosses   every city boss (PARKADE-6 GRID-EAST, IRON GULLY WHITE STACKS, CAISSON-4 LOCKWATER): the entrance, then up to
            --boss-shots distinct attacks frozen MID-TELEGRAPH (sim frozen via __BT__.freeze while
            the paint is 30–85 % through its windup)
   tabloid  a run-end tabloid (a Size I titan left standing in front of a boss)
@@ -24,6 +24,17 @@ Groups (all by default, in this order):
   v2hud    (FEATURES_V2 §4.1 / §15.4, lane L8) the v2 HUD at 1280×720 and 1920×1080 (abilitybar_1280 /
            abilitybar_1920): a full ability bar + `+N`, UPROAR meter, ACTIVE panel, tracker rows, one
            broadcast toast alert and one v2 GOAL MET toast live together
+  cine     (FEATURES_V2 §11 / §15.4, lane L10) the WARD-7 STREET CAM opening, FULL variant, one titan
+           per biome (GRID-EAST MOLO · WHITE STACKS VOLT-KITE · LOCKWATER HEARTHBACK, or --titans in
+           order): S1 street cam after the crash zoom, S2 low-angle close-up mid-SNARL, S3 mid-crane
+           (cine_<biome>_s1 / _s2 / _s3). The profile's cineSeen is cleared first so the FULL cut plays.
+  screens  (FEATURES_V2 §15.4, lane L9 flows) with a crafted profile + bests in localStorage (removed
+           again afterwards): goals_screen (real G on the title), select_next_unlock (NEXT PERMIT
+           PENDING slip), draft_evo_banish_lock (an evolution offered, then real X + C),
+           tabloid_endless (clear → real K → a death → the EXTENDED COVERAGE EDITION)
+  parkade  (FEATURES_V2 §15.4, lane L7 flow) PARKADE-6 vs MOLO at Size V in GRID-EAST, the sim frozen
+           and stepped to each beat: parkade_intro / ramp / barrier / tow / deckdrop / collapse /
+           till_open / jammed
 
 Output: _shots/battery/<name>.png, _shots/battery/manifest.json (one entry per shot: group, kind,
 titan, biome, rank, screen, state summary, capture method, ok) and labelled contact sheets
@@ -46,9 +57,9 @@ from common import (BIOME_BOSS, BIOME_NAMES, BIOMES, ROMAN, ROOT, SHOTS, TITAN_N
                     diag_problems, ensure_play, navigate_cards, print_diagnostics, save_report, set_rank,
                     world_to_keys, xp_to_next)
 
-GROUPS = ("menus", "titans", "hud", "bosses", "tabloid", "v2fx", "v2hud")
+GROUPS = ("menus", "titans", "hud", "bosses", "tabloid", "v2fx", "v2hud", "cine", "screens", "parkade")
 RANK_ARG = {"I": 0, "II": 1, "III": 2, "IV": 3, "V": 4}
-BOSS_NAMES = {"caisson4": "CAISSON-4", "irongully": "IRON GULLY"}
+BOSS_NAMES = {"caisson4": "CAISSON-4", "irongully": "IRON GULLY", "parkade6": "PARKADE-6"}
 
 # Boss paint in flight (read-only world): the boss's current attack + its un-fired telegraphs.
 BOSS_TG_JS = r"""
@@ -514,7 +525,7 @@ class Battery:
     def g_tabloid(self):
         self.group = "tabloid"
         a, sess = self.args, self.sess
-        self.log("tabloid: a Size I %s left standing in front of %s" % (TITAN_NAMES[a.hud_titan], BOSS_NAMES["caisson4"]))
+        self.log("tabloid: a Size I %s left standing in front of %s" % (TITAN_NAMES[a.hud_titan], BOSS_NAMES[BIOME_BOSS["grideast"]]))
         ok, scr = self.start_run(a.hud_titan, "grideast", a.seed + 200, False)
         if not ok or not ensure_play(sess, 20, self.olog)[0]:
             self.miss("tabloid", "run did not start (%s)" % (scr,))
@@ -701,6 +712,293 @@ class Battery:
         finally:
             sess.page.set_viewport_size(base_vp)
 
+    # (shot id, t into that shot) for S1 / S2 / S3 of the FULL cut (data/cine.ts CINE_TIMING / CINE_BEATS:
+    # the crash zoom lands 1.5 s into the street shot; the SNARL starts 1.35 s into the close-up)
+    CINE_AT = (("s1", "street", 1.65), ("s2", "closeup", 1.45), ("s3", "crane", 0.75))
+    CINE_TITANS = {"grideast": "molo", "whitestacks": "voltkite", "lockwater": "hearthback"}
+    CINE_UNSEE_JS = r"""
+() => { try { const k = 'blocktooth.profile.v1'; const p = JSON.parse(localStorage.getItem(k) || 'null');
+  if (p && p.cineSeen) { p.cineSeen = {}; localStorage.setItem(k, JSON.stringify(p)); return 'cleared'; } return 'none'; }
+  catch (e) { return String(e); } }
+"""
+
+    def g_cine(self):
+        """FEATURES_V2 §11: the cinematic opening, S1 / S2 / S3 per biome (the FULL cut)."""
+        self.group = "cine"
+        a, sess = self.args, self.sess
+        for i, biome in enumerate(a.biomes):
+            titan = self.CINE_TITANS.get(biome, a.titans[i % len(a.titans)])
+            if titan not in a.titans:
+                titan = a.titans[i % len(a.titans)]
+            if sess.page:
+                sess.safe_js(self.CINE_UNSEE_JS)
+            url = build_url(a.base, autostart=1, dev=1, titan=titan, biome=biome, seed=a.seed + 700 + i, cine=2,
+                            quality=a.quality)
+            try:
+                sess.goto(url)
+            except Exception as e:
+                for tag, _, _ in self.CINE_AT:
+                    self.miss("cine_%s_%s" % (biome, tag), "navigation failed: %s" % str(e).splitlines()[0])
+                continue
+            sess.wait_bt(90)
+            sess.safe_js(self.CINE_UNSEE_JS)
+            ok, scr = sess.wait_screen(("slate", "play"), 90)
+            want = list(self.CINE_AT)
+            seen = []
+            deadline = time.time() + 15
+            while want and time.time() < deadline:
+                st = sess.state() or {}
+                c = (st.get("v2") or {}).get("cine")
+                if st.get("screen") == "play":
+                    break
+                if c and c.get("shot"):
+                    if c["shot"] not in seen:
+                        seen.append(c["shot"])
+                    tag, sid, tt = want[0]
+                    order = [x[1] for x in self.CINE_AT]
+                    if c["shot"] == sid and c.get("t", 0) >= tt:
+                        self.shot("cine_%s_%s" % (biome, tag), "cine", titan=titan, biome=biome, cine=c)
+                        want.pop(0)
+                    elif c["shot"] in order and order.index(c["shot"]) > order.index(sid):
+                        self.miss("cine_%s_%s" % (biome, tag), "the %s shot passed before the capture (seen %s)" % (sid, seen))
+                        want.pop(0)
+                time.sleep(0.02)
+            for tag, sid, _ in want:
+                self.miss("cine_%s_%s" % (biome, tag), "no %s shot observed (screen=%r, shots seen %s)" % (
+                    sid, (sess.state() or {}).get("screen"), seen))
+            ensure_play(sess, 15, self.olog)
+
+    # ─────────────────────────────── v2 screens (lane L9 flows, orchestrator port) ───────────────────────────────
+    # FEATURES_V2 §15.4: goals_screen, select_next_unlock, draft_evo_banish_lock, tabloid_endless. Real keys drive
+    # every screen (G, Esc, Enter, X, C, K); cheats only set up state. A crafted profile + bests are written to
+    # localStorage first so FILED rows, the NEXT PERMIT PENDING slip and YOUR BEST ON FILE have content (the
+    # same data as scratch/l9/l9shots.py).
+    V2_NOW = int(time.time() * 1000)
+    V2_PROFILE = {
+        "v": 1,
+        "done": {"g_first_broadcast": V2_NOW - 86400000 * 3, "g_zoning_change": V2_NOW - 86400000 * 2,
+                 "g_city_got_smaller": V2_NOW - 86400000, "g_molo_curbside_pickup": V2_NOW - 3600000,
+                 "g_paperwork": V2_NOW - 7200000, "g_molo_bite_sized": V2_NOW - 5000000},
+        "best": {"g_crowd_control": 412, "g_live_coverage": 7, "g_molo_speed_bump": 188, "g_urban_renewal": 19,
+                 "g_lw_early_closing": 611},
+        "life": {"runs": 6, "clears": 1, "banishes": 5, "evolutions": 0,
+                 "clearedBy": {"molo": ["grideast"], "voltkite": [], "hearthback": [], "briarwick": []},
+                 "bossKills": {"parkade6": 1}},
+        "perk": "perk_red_tape", "palette": {"molo": 1, "voltkite": 0, "hearthback": 0, "briarwick": 0},
+        "cineSeen": {}, "newUnlocks": ["u_block_captain", "u_sidewalk_sale"],
+    }
+    V2_BESTS = {
+        "molo.grideast.level": 31, "molo.grideast.peakRank": 4, "molo.grideast.clearS": 552.4,
+        "molo.grideast.survivedS": 552, "molo.grideast.tonnage": 81234, "molo.grideast.endlessS": 204,
+        "molo.grideast.endlessScore": 48210, "molo.lockwater.level": 18, "molo.lockwater.peakRank": 2,
+        "molo.lockwater.survivedS": 301, "voltkite.whitestacks.level": 12, "voltkite.whitestacks.peakRank": 1,
+        "voltkite.whitestacks.survivedS": 190,
+    }
+    V2_SEED_JS = """([p, b]) => { try { localStorage.setItem('blocktooth.profile.v1', JSON.stringify(p));
+      localStorage.setItem('blocktooth.best.v1', JSON.stringify(b)); return true; } catch (e) { return String(e); } }"""
+    V2_CARDS_JS = "() => [...document.querySelectorAll('.bt-draft .bt-dossier')].map((e) => e.dataset.card)"
+
+    def v2_vis(self, sel):
+        return self.sess.safe_js("(s) => { const e = document.querySelector(s); if (!e) return false; const r = e.getBoundingClientRect();"
+                                 " return r.width > 0 && r.height > 0 && getComputedStyle(e).display !== 'none'; }", sel, default=False)
+
+    def v2_run(self, titan, biome, seed, **extra):
+        sess = self.sess
+        sess.release_all()
+        sess.goto(build_url(self.args.base, dev=1, noslate=1, autostart=1, titan=titan, biome=biome, seed=seed,
+                            quality=self.args.quality, **extra))
+        sess.wait_bt(90)
+        return sess.wait_screen(("play", "draft"), 90)
+
+    V2_UNSEED_JS = """() => { try { localStorage.removeItem('blocktooth.profile.v1'); localStorage.removeItem('blocktooth.best.v1');
+      return true; } catch (e) { return String(e); } }"""
+
+    def g_screens(self):
+        """The crafted profile is removed again afterwards, so later groups see the canonical palettes."""
+        try:
+            self._g_screens()
+        finally:
+            try:
+                self.sess.goto(build_url(self.args.base, dev=1, noslate=1, quality=self.args.quality))
+                self.sess.wait_bt(60)
+                self.sess.js(self.V2_UNSEED_JS)
+            except Exception as e:
+                self.log("    could not remove the crafted profile: %s" % str(e).splitlines()[0][:200])
+
+    def _g_screens(self):
+        self.group = "screens"
+        a, sess = self.args, self.sess
+        # goals_screen + select_next_unlock: title → real G → goals; Esc → title; Enter → select
+        sess.goto(build_url(a.base, dev=1, noslate=1, quality=a.quality))
+        sess.wait_bt(90)
+        sess.js(self.V2_SEED_JS, [self.V2_PROFILE, self.V2_BESTS])
+        sess.goto(build_url(a.base, dev=1, noslate=1, quality=a.quality))
+        sess.wait_bt(90)
+        ok, scr = sess.wait_screen(("title",), 60)
+        if not ok:
+            self.miss("goals_screen", "title not reached (screen=%r)" % (scr,))
+            self.miss("select_next_unlock", "title not reached")
+        else:
+            time.sleep(0.8)
+            sess.press("KeyG")
+            time.sleep(0.8)
+            if self.v2_vis(".bt2-goals:not(.bt-hidden)"):
+                self.shot("goals_screen", "screen", via="real G on the title")
+            else:
+                self.miss("goals_screen", "real G did not open the goals screen (screen=%r)" % sess.screen())
+            sess.press("Escape")
+            sess.wait_screen(("title",), 8)
+            time.sleep(0.6)
+            sess.press("Enter")
+            ok, scr = sess.wait_screen(("select",), 30)
+            time.sleep(1.4)
+            if ok and self.v2_vis(".bt2-permit"):
+                self.shot("select_next_unlock", "screen",
+                          permit=sess.safe_js("() => document.querySelector('.bt2-permit').textContent", default=None))
+            else:
+                self.miss("select_next_unlock", "select / NEXT PERMIT PENDING slip not visible (screen=%r)" % (scr,))
+        # draft_evo_banish_lock: an evolution offered in a level-up draft, then real X (banish) + real C (lock)
+        name = "draft_evo_banish_lock"
+        ok, scr = self.v2_run("molo", "grideast", 1337, meta="full")
+        if not ok:
+            self.miss(name, "run did not start (%s)" % (scr,))
+        else:
+            self.cheats_on(True, True)
+            sess.cheat("evolveReady", "evo_full_block_bite")
+            ids = []
+            got = False
+            for _ in range(10):
+                sess.cheat("xp", 5000)
+                okd, _ = sess.wait_screen(("draft",), 8)
+                if not okd:
+                    continue
+                time.sleep(1.0)
+                ids = sess.safe_js(self.V2_CARDS_JS, default=[]) or []
+                if any(x and str(x).startswith("evo_") for x in ids):
+                    got = True
+                    break
+                sess.press("Digit1")
+                time.sleep(0.8)
+            if not got:
+                self.miss(name, "no evolution offered in 10 drafts (last offer %s)" % ids)
+            else:
+                d0 = ((sess.state() or {}).get("v2") or {}).get("draft") or {}
+                time.sleep(0.7)
+                sess.press("KeyX")
+                time.sleep(1.4)
+                sess.press("KeyC")
+                time.sleep(1.0)
+                d1 = ((sess.state() or {}).get("v2") or {}).get("draft") or {}
+                ids1 = sess.safe_js(self.V2_CARDS_JS, default=[]) or []
+                if d1.get("banishLeft") == (d0.get("banishLeft") or 0) - 1 and d1.get("locked"):
+                    self.shot(name, "screen", offerBefore=ids, offerAfter=ids1, draft=d1)
+                else:
+                    self.miss(name, "real X / C did not banish + lock (before %s, after %s)" % (d0, d1))
+                sess.press("Digit2")
+                time.sleep(0.8)
+        # tabloid_endless: clear → real K → EXTENDED COVERAGE → a death → the endless edition
+        name = "tabloid_endless"
+        ok, scr = self.v2_run("molo", "grideast", 1337)
+        if not ok:
+            self.miss(name, "run did not start (%s)" % (scr,))
+            return
+        self.cheats_on(True, False)
+        sess.cheat("level", 12)
+        sess.cheat("boss")
+        time.sleep(0.5)
+        sess.js("() => { const w = window.__H_W__(); const b = w.boss; if (b) { b.introT = 0; b.hp = 0; b.alive = false; } }")
+        ok, scr = sess.wait_screen(("end",), 40)
+        if not ok:
+            self.miss(name, "clear tabloid not reached (screen=%r)" % (scr,))
+            return
+        time.sleep(2.2)
+        sess.press("KeyK")
+        ok, scr = sess.wait_screen(("play",), 12)
+        st = sess.state() or {}
+        if not ok or (st.get("v2") or {}).get("endless") is None:
+            self.miss(name, "real K did not start EXTENDED COVERAGE (screen=%r)" % (scr,))
+            return
+        time.sleep(2.0)
+        sess.cheat("god", False)
+        sess.js("() => { const w = window.__H_W__(); w.titan.hp = 0; w.titan.alive = false; }")
+        ok, scr = sess.wait_screen(("end",), 40)
+        time.sleep(2.4)
+        if ok and self.v2_vis(".bt2-np-endless"):
+            self.shot(name, "screen", endless=(sess.state() or {}).get("v2", {}).get("endless"))
+        else:
+            self.miss(name, "endless tabloid not up (screen=%r)" % (scr,))
+
+    # ─────────────────────────────── PARKADE-6 (lane L7 flow, orchestrator port) ───────────────────────────────
+    # FEATURES_V2 §15.4: parkade_intro/ramp/barrier/tow/deckdrop/collapse/till_open/jammed. MOLO at Size V in
+    # GRID-EAST, cheat.bossSpawn('parkade6'); the sim is frozen and stepped (__BT__.step, frozen only) to the
+    # wanted beat (same stepping as scratch/parkade-view/game_shots.py), then the views idle 1.2 s and the frame
+    # is captured at the gameplay framing.
+    PARKADE_AT = (("intro", "intro", 1.3, 1), ("ramp", "rampLaunch", 0.45, 1), ("barrier", "barrierSwing", -0.05, 1),
+                  ("tow", "towChain", 0.6, 2), ("deckdrop", "deckDrop", 0.12, 2), ("collapse", "levelCollapse", 0.75, 3),
+                  ("till_open", "rampLaunch", 1.1, 1), ("jammed", "jammed", 1.2, 1))
+    PARKADE_STEP_JS = r"""
+async ([mode, want, tStop, phase, maxTicks]) => {
+  const B = window.__BT__; const W = B.world; if (!W) return { err: 'no world' };
+  B.freeze(true);
+  const tele = (tag) => W.telegraphs.find((t) => t.alive && t.owner === 'boss' && t.tag === tag);
+  let n = 0, stag = false;
+  for (; n < maxTicks; n++) {
+    const b = W.boss; if (!b) return { err: 'no boss', n };
+    if (mode === 'intro') { if (b.introT > 0 && b.introT < 4 - tStop) break; }
+    else if (mode === 'jammed') {
+      if (b.introT <= 0 && !stag) { b.staggerT = 5; b.attack = null; b.data.tillOpen = 5; stag = true; }
+      if (stag && b.staggerT > 0 && b.staggerT < 5 - tStop) break;
+    } else {
+      if (b.introT <= 0 && b.phase < phase) b.phase = phase;
+      if (b.attack === want) {
+        if (tStop < 0) {
+          const tg = tele(want);
+          if (tg && tg.windup - tg.t <= -tStop) break;
+        } else if (want === 'towChain' || want === 'deckDrop' || want === 'levelCollapse') {
+          const tag = want === 'levelCollapse' ? 'levelCollapse:A' : want;
+          const tg = tele(tag);
+          if (tg) b.data.__wu = tg.windup;
+          const wu = b.data.__wu;
+          if (wu !== undefined && b.attackT >= wu + tStop) break;
+        } else if (b.attackT >= tStop) break;
+      }
+    }
+    B.step(1);
+  }
+  const b = W.boss;
+  return { n, reached: n < maxTicks, attack: b && b.attack, attackT: b && +b.attackT.toFixed(2), phase: b && b.phase,
+    introT: b && +b.introT.toFixed(2), till: b && +(b.data.tillOpen || 0).toFixed(2), staggerT: b && +b.staggerT.toFixed(2) };
+}
+"""
+
+    def g_parkade(self):
+        self.group = "parkade"
+        a, sess = self.args, self.sess
+        for tag, want, t_stop, phase in self.PARKADE_AT:
+            name = "parkade_%s" % tag
+            ok, scr = self.v2_run("molo", "grideast", 7)
+            if not ok or not ensure_play(sess, 20, self.olog)[0]:
+                self.miss(name, "run did not start (%s)" % (scr,))
+                continue
+            self.cheats_on(True, True)
+            sess.cheat("killAll")
+            sess.cheat("level", 35)
+            time.sleep(3.2)                               # let the MASS BREACH banner (2.3 s sting) finish its exit
+            ensure_play(sess, 10, self.olog)
+            okb, v = sess.cheat("bossSpawn", "parkade6")
+            if not okb:
+                self.miss(name, "cheat.bossSpawn('parkade6') failed: %s" % v)
+                continue
+            mode = "intro" if tag == "intro" else ("jammed" if tag == "jammed" else "attack")
+            r = sess.js(self.PARKADE_STEP_JS, [mode, want, t_stop, phase, 30 * 240]) or {}
+            if r.get("err") or not r.get("reached"):
+                sess.bt_call("freeze", False)
+                self.miss(name, "the %s beat was not reached (%s)" % (want, json.dumps(r)[:200]))
+                continue
+            time.sleep(1.2)                               # frozen: the views keep idling, the pose settles
+            self.shot(name, "boss", parkade=r)
+            sess.bt_call("freeze", False)
+
     # ─────────────────────────────── contact sheets ───────────────────────────────
     def contact_sheets(self):
         try:
@@ -765,8 +1063,8 @@ def main() -> int:
     ap.add_argument("--hud-titan", default="molo", choices=TITANS)
     ap.add_argument("--hud-biome", default="grideast", choices=BIOMES)
     ap.add_argument("--boss-titan", default="hearthback", choices=TITANS)
-    ap.add_argument("--boss-biomes", default="grideast,whitestacks",
-                    help="one boss run per biome (grideast/lockwater → CAISSON-4, whitestacks → IRON GULLY)")
+    ap.add_argument("--boss-biomes", default="grideast,whitestacks,lockwater",
+                    help="one boss run per biome (grideast → PARKADE-6, whitestacks → IRON GULLY, lockwater → CAISSON-4)")
     ap.add_argument("--boss-shots", type=int, default=3, help="distinct attacks to freeze per boss")
     ap.add_argument("--boss-seconds", type=float, default=50.0)
     ap.add_argument("--tabloid-seconds", type=float, default=90.0)

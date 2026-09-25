@@ -15,6 +15,8 @@
 import * as THREE from 'three';
 import type { TitanId } from '../core/types.ts';
 import type { LegDef, TitanModel } from './models.ts';
+import { LID_SWEEP } from './models.ts';
+import type { CineChannels } from '../v2types.ts';
 
 export interface AnimState {
   /** 0..1 of the titan's current top speed */
@@ -68,6 +70,11 @@ export interface AnimState {
   ultRoar?: number;
   /** BLAST length (s) of the titan's ultimate (data/ultimates.ts blastS) */
   ultBlast?: number;
+  /** v2 cinematic opening (FEATURES_V2 §11.4, lane L10): blend channels layered over idle, null = off.
+   *  look is SIGNED (−1..1): + = turn the head toward the titan's left (+X, where the lens stands),
+   *  − = toward its right; blink / snarl are 0..1. While set, the random idle look-around and the
+   *  random blinks hold off, so the only blink on camera is the scripted one. */
+  cine?: CineChannels | null;
 }
 
 interface GaitCfg {
@@ -254,6 +261,11 @@ export class TitanAnimator {
   private windup = 0.6;
   private flinchSign = 1;
   private lastHurtT = -1;
+  /** v2 eyelid joints (models.ts buildLid) and their rest orientation (captured before the Euler order flip) */
+  private readonly lids: { b: THREE.Bone; q: THREE.Quaternion }[] = [];
+  /** sanitised cinematic channels (null = off) */
+  private cine: CineChannels | null = null;
+  private readonly cineBuf: CineChannels = { look: 0, blink: 0, snarl: 0 };
   /** sanitised copy of the caller's AnimState (reused every frame, never reallocated) */
   private readonly s: AnimState & { speedH: number; hurtAmt: number; deadT: number; hero: number; aim: number; downSide: number; clearT: number } = {
     speed01: 0, moving: false, turn: 0, attack: null, attackT: -1, dashT: -1, hurtT: -1, abilityT: -1, growT: -1, t: 0, kit: {},
@@ -271,6 +283,10 @@ export class TitanAnimator {
     for (let i = 0; i < id.length; i++) s = Math.imul(s ^ id.charCodeAt(i), 0x01000193) >>> 0;
     this.seed = s || 1;
     this.halfW = Math.max(0.1, (model.size?.width ?? 0.6) * 0.5);
+    for (const n of ['lidL', 'lidR']) {
+      const b = model.joints[n] as THREE.Bone | undefined;
+      if (b) this.lids.push({ b, q: b.quaternion.clone() });
+    }
     for (const name in model.joints) {
       const b = model.joints[name] as THREE.Bone;
       this.bone[name] = b;
@@ -355,8 +371,10 @@ export class TitanAnimator {
     const br = Math.sin(t * 2 * Math.PI / 3.1);
     c.breath = br * g.breath;
     c.bodyY += br * g.breath * 0.25;
+    const cine = this.cine;
     this.lookT -= dt;
-    if (this.lookT <= 0) {
+    if (cine) { this.lookYaw = 0; this.lookPitch = 0; this.lookT = Math.max(this.lookT, 0.8); }
+    else if (this.lookT <= 0) {
       this.lookT = 1.4 + this.rand() * 2.8;
       this.lookYaw = (this.rand() - 0.5) * 0.7;
       this.lookPitch = (this.rand() - 0.5) * 0.18;
@@ -371,7 +389,7 @@ export class TitanAnimator {
     c.headPitch += this.lookPitchS * idleW;
     c.tailYaw += Math.sin(t * 0.9) * 0.1 * (0.4 + 0.6 * idleW);
     // blinks (occasionally double)
-    this.blinkIn -= dt;
+    if (!cine) this.blinkIn -= dt;
     if (this.blinkIn <= 0 && this.blinkT < 0) {
       this.blinkT = 0;
       this.blinkDouble = this.rand() < 0.25;
@@ -405,6 +423,7 @@ export class TitanAnimator {
     if (a.hero && a.hero > 0) this.heroPose(a.hero);
     if (fin(a.clearT, -1) >= 0 && !dead) this.victoryPose(a.clearT!);
     if (dead) this.deathPose(a.deadT ?? 0);
+    if (cine && !dead) this.cinePose(cine);
 
     // ── write bones ──
     this.writeSpine(cyc, gw);
@@ -439,7 +458,41 @@ export class TitanAnimator {
     s.ultT = timer(a.ultT);
     s.ultRoar = clamp(fin(a.ultRoar, 0.5), 0.1, 2);
     s.ultBlast = clamp(fin(a.ultBlast, 0.8), 0.1, 3);
+    const cc = a.cine;
+    if (cc && typeof cc === 'object') {
+      const b = this.cineBuf;
+      b.look = clamp(fin(cc.look, 0), -1, 1); b.blink = sat(fin(cc.blink, 0)); b.snarl = sat(fin(cc.snarl, 0));
+      this.cine = b;
+    } else this.cine = null;
     return s;
+  }
+
+  /**
+   * v2 cinematic performance (FEATURES_V2 §11.2, lane L10), layered over idle: LOOK turns the head
+   * (and a little of the neck) toward the lens but keeps the three-quarter; BLINK closes the lids;
+   * SNARL = jaw 35 % open, a 4 deg head recoil, a squint, flared crest / ruff / mane and ears pinned back.
+   * (The models carry no separate lip or snout joint: the lip curl reads through the jaw + squint.)
+   */
+  private cinePose(k: CineChannels): void {
+    const c = this.ch;
+    c.headYaw += 0.09 * k.look;            // ~7 deg toward the lens: it stays a three-quarter
+    c.neckYaw += 0.035 * k.look;
+    c.headPitch -= 0.03 * Math.abs(k.look);
+    c.eyeClose = Math.max(c.eyeClose, k.blink);
+    const sn = k.snarl;
+    if (sn > 0) {
+      c.jaw += 0.35 * sn;
+      c.headPitch -= 0.07 * sn;            // recoil ~4 deg
+      c.neckZ -= 0.02 * sn;
+      c.bodyZ -= 0.01 * sn;
+      c.eyeClose = Math.max(c.eyeClose, 0.3 * sn);
+      c.throat *= 1 + 0.06 * sn;
+      c.mane *= 1 + 0.3 * sn;
+      c.ruff *= 1 + 0.15 * sn;
+      c.crater *= 1 + 0.15 * sn;
+      c.ears -= 0.6 * sn;
+      c.tailStiff = Math.max(c.tailStiff, 0.4 * sn);
+    }
   }
 
   // ─────────────── overlays ───────────────
@@ -922,9 +975,16 @@ export class TitanAnimator {
     this.setBone('neck', 0, 0, c.neckZ, c.neckPitch, c.neckYaw, 0, th, th, 1);
     this.setBone('head', 0, 0, 0, c.headPitch, c.headYaw, c.headRoll, 1 / Math.sqrt(th), 1 / Math.sqrt(th), 1);
     this.setBone('jaw', 0, 0, 0, clamp(c.jaw, 0, 1.0), 0, 0);
-    const eye = 1 - 0.9 * sat(c.eyeClose);
+    // v2 lids (models.ts buildLid): the lid sweeps down over the eye; the eyeball only squints a little
+    const close = sat(c.eyeClose);
+    const eye = this.lids.length ? 1 - 0.3 * close : 1 - 0.9 * close;
     this.setBone('eyeL', 0, 0, 0, 0, 0, 0, 1, eye, 1);
     this.setBone('eyeR', 0, 0, 0, 0, 0, 0, 1, eye, 1);
+    for (let i = 0; i < this.lids.length; i++) {
+      const L = this.lids[i];
+      _qf.setFromAxisAngle(X_AXIS, LID_SWEEP * close);
+      L.b.quaternion.copy(L.q).multiply(_qf);
+    }
     // tail: wave travels toward the tip, amplitude grows along it; stiffness damps it
     const n = this.tail.length;
     const loose = 1 - sat(c.tailStiff);

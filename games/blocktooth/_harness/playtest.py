@@ -18,6 +18,10 @@ PASS (gate 4) needs every check: menus navigated by keys to the requested titan+
 dismissed by a key · moved > 20 m · ate props/floors (≥ --min-eaten) · levelled up · ≥ 1 draft
 taken with 1/2/3 (owned count grew) · Space produced a hook effect · Shift produced a dash effect ·
 0 console/page/window errors, 0 shader diagnostics, 0 failed requests.
+v2 (FEATURES_V2 §11, lane L10) — cinematic-aware: when the opening is the WARD-7 STREET CAM cinematic
+(`state().v2.cine` set on the slate screen; the default for a fresh profile) it is dismissed with a
+REAL key like the slate, and the FIRST PLAY FRAME must pass the zebra check (bootcheck CROSSWALK_JS:
+the titan stands inside a crosswalk, read from `__BT__.world`) — an extra gated check.
 Exit: 0 pass · 1 fail · 2 could not start (server/browser/__BT__).
 """
 import argparse
@@ -31,6 +35,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import (BIOMES, ROMAN, SHOTS, TITANS, HarnessError, Session, add_common_args, build_url,  # noqa: E402
                     compact_state, diag_problems, dismiss_slate, menus_to_slate, owned_total,
                     print_diagnostics, save_report, world_to_keys)
+from bootcheck import CROSSWALK_JS  # noqa: E402  (v2: zebra check on the first play frame)
 
 # Every matrix row: all 4 titans AND all 3 biomes are covered.
 MATRIX = [("molo", "grideast"), ("voltkite", "whitestacks"), ("hearthback", "lockwater"), ("briarwick", "grideast")]
@@ -189,6 +194,9 @@ def run_one(args, titan, biome, seed):
     nav_ok = False
     play_ok = False
     zoom_ok, zoom_detail = None, "not reached"
+    opening = None
+    cine_seen = []
+    zebra = None
     ev = {}
     try:
         log("open %s" % url)
@@ -210,12 +218,25 @@ def run_one(args, titan, biome, seed):
                 fatal = nav.get("error", "menu navigation failed")
         if not fatal:
             if sess.screen() == "slate":
-                time.sleep(1.0)
+                t_c = time.time()
+                while time.time() - t_c < 1.0:
+                    c = ((sess.state() or {}).get("v2") or {}).get("cine")
+                    if c and c.get("shot") and c.get("shot") not in cine_seen:
+                        cine_seen.append(c.get("shot"))
+                    time.sleep(0.05)
+                opening = "cinematic" if cine_seen else "slate"
                 p = os.path.join(shot_dir, "%s_%s_slate.png" % (titan, biome))
                 if sess.screenshot(p):
                     shots.append(p)
             play_ok, scr = dismiss_slate(sess, 20, "Enter")
-            log("slate dismissed by Enter: %s (screen=%s)" % (play_ok, scr))
+            log("%s dismissed by Enter: %s (screen=%s)" % (opening or "slate", play_ok, scr))
+            if play_ok and opening == "cinematic":
+                zebra = sess.safe_js(CROSSWALK_JS, 0.25, default={"ok": False, "reason": "crosswalk eval failed"})
+                log("first play frame zebra check: %s" % ("ON ZEBRA" if (zebra or {}).get("ok") else json.dumps(zebra)[:300]))
+                time.sleep(0.35)
+                p = os.path.join(shot_dir, "%s_%s_firstplay.png" % (titan, biome))
+                if sess.screenshot(p):
+                    shots.append(p)
             if not play_ok:
                 fatal = "slate did not give way to play (screen=%r)" % (scr,)
         if not fatal:
@@ -244,7 +265,7 @@ def run_one(args, titan, biome, seed):
     eaten = m["props"] + m["floors"]
     checks = [
         ("menus navigated by keys to %s + %s" % (titan, biome), nav_ok),
-        ("slate dismissed by a real key", play_ok),
+        ("%s dismissed by a real key" % ("cinematic (%s)" % " → ".join(cine_seen) if opening == "cinematic" else "slate"), play_ok),
         ("moved > 20 m (%.1f m)" % m["moved"], m["moved"] > 20),
         ("ate props/floors ≥ %d (props %d, floors %d)" % (args.min_eaten, m["props"], m["floors"]), eaten >= args.min_eaten),
         ("levelled up (LV %d)" % m["level"], m["level"] >= 2),
@@ -255,6 +276,8 @@ def run_one(args, titan, biome, seed):
          dash_ev >= 1 or m["dashConfirmedByCharges"] >= 1),
         ("0 console/page/window errors, 0 shader diagnostics, 0 failed requests", not diag_problems(diag)),
     ]
+    if opening == "cinematic":
+        checks.append(("first play frame after the cinematic passes the zebra check", bool((zebra or {}).get("ok"))))
     if zoom_ok is not None or not args.no_dev:
         checks.append(("camera zoom by real wheel / '=' / Z (%s)" % zoom_detail, bool(zoom_ok)))
     if fatal:
@@ -273,7 +296,7 @@ def run_one(args, titan, biome, seed):
     for name, ok in checks:
         print("  [%s] %s" % ("PASS" if ok else "FAIL", name))
     print("RESULT %s: %s" % (tag, "PASS" if passed else "FAIL"))
-    rep.update({"pass": passed, "fatal": fatal, "zoom": {"ok": zoom_ok, "detail": zoom_detail}, "metrics": m, "events": ev, "checks": [[n, ok] for n, ok in checks],
+    rep.update({"opening": opening, "cineShots": cine_seen, "zebraFirstPlay": zebra, "pass": passed, "fatal": fatal, "zoom": {"ok": zoom_ok, "detail": zoom_detail}, "metrics": m, "events": ev, "checks": [[n, ok] for n, ok in checks],
                 "shots": shots, "diagnostics": diag, "log": log_lines})
     rep["finalState"] = compact_state(rep.get("finalState"))
     print("report  : %s" % save_report("playtest_%s_%s" % (titan, biome), rep, args.base, args.report_dir))

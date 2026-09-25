@@ -125,16 +125,28 @@ function heroState(): AnimState {
 }
 
 /**
- * v2 (FEATURES_V2 §8.6, RenderPortraitFn): one titan's portrait in a palette (null = canonical colours).
- * ── L0 SKELETON STUB ── returns the CANONICAL portrait for any palette; lane L10 renders the palette.
+ * v2 (FEATURES_V2 §8.6, RenderPortraitFn; lane L10): one titan's portrait in a palette (null = the
+ * canonical colours). Same stage, pose, framing and tone mapping as renderPortraits; the model is built
+ * with `colors: palette` and the hero rim takes the palette's glow (lifted toward white).
  * game.ts caches the result per titan × palette (palette 0 never calls this).
  */
-export async function renderPortrait(renderer: THREE.WebGLRenderer, id: TitanId, size: number, _palette: TitanPalette | null): Promise<string> {
-  const all = await renderPortraits(renderer, size);
-  return all[id] ?? '';
+export async function renderPortrait(renderer: THREE.WebGLRenderer, id: TitanId, size: number, palette: TitanPalette | null): Promise<string> {
+  const out = await renderSet(renderer, size, [id], palette ? { [id]: palette } : {});
+  return out[id] ?? '';
 }
 
 export async function renderPortraits(renderer: THREE.WebGLRenderer, size = 256): Promise<Record<TitanId, string>> {
+  return renderSet(renderer, size, TITAN_IDS, {});
+}
+
+/** the hero rim colour for a palette: its glow, lifted halfway to white (the canonical rims are pale tints) */
+function paletteRim(p: TitanPalette): string {
+  const c = new THREE.Color(p.glow).lerp(new THREE.Color('#ffffff'), 0.45);
+  return '#' + c.getHexString();
+}
+
+async function renderSet(renderer: THREE.WebGLRenderer, size: number, ids: readonly TitanId[],
+  palettes: Partial<Record<TitanId, TitanPalette>>): Promise<Record<TitanId, string>> {
   const S = Math.max(32, Math.min(1024, Math.round(size)));
   const out = {} as Record<TitanId, string>;
 
@@ -174,11 +186,13 @@ export async function renderPortraits(renderer: THREE.WebGLRenderer, size = 256)
   const pts: THREE.Vector3[] = [];
 
   try {
-    for (const id of TITAN_IDS) {
+    for (const id of ids) {
       const fr = FRAMING[id];
-      const model = buildTitanModel(id, { outlinePx: Math.max(3, S / 90) });
-      addRim(model, fr.rim);
-      rimL.color.set(fr.rim);
+      const pal = palettes[id];
+      const rimC = pal ? paletteRim(pal) : fr.rim;
+      const model = buildTitanModel(id, pal ? { outlinePx: Math.max(3, S / 90), colors: pal } : { outlinePx: Math.max(3, S / 90) });
+      addRim(model, rimC);
+      rimL.color.set(rimC);
       model.root.rotation.y = fr.heading;
       scene.add(model.root);
       const anim = new TitanAnimator(model, id);

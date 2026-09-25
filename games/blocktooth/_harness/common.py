@@ -51,7 +51,7 @@ TITANS = ["molo", "voltkite", "hearthback", "briarwick"]
 BIOMES = ["grideast", "whitestacks", "lockwater"]
 TITAN_NAMES = {"molo": "MOLO", "voltkite": "VOLT-KITE", "hearthback": "HEARTHBACK", "briarwick": "BRIARWICK"}
 BIOME_NAMES = {"grideast": "GRID-EAST", "whitestacks": "WHITE STACKS", "lockwater": "LOCKWATER"}
-BIOME_BOSS = {"grideast": "caisson4", "whitestacks": "irongully", "lockwater": "caisson4"}
+BIOME_BOSS = {"grideast": "parkade6", "whitestacks": "irongully", "lockwater": "caisson4"}   # v2: data/biomes.ts (GRID-EAST = PARKADE-6)
 ENEMY_KINDS = ["android", "squad", "drone", "buggy", "apc", "tank", "walker", "elite"]
 ROMAN = ["I", "II", "III", "IV", "V"]
 

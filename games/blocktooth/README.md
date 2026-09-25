@@ -6,9 +6,11 @@
 zebra crossing, eats parked cars and kiosks, outgrows the shops, then the offices, then the
 skyline. It gets through five **SIZE** ranks while a municipal news desk (WARD-7, "Ward Seven Municipal
 Alert") panics on air. HALVARD CIVIL DEFENSE sends androids, drones, buggies, APCs, tanks and
-artillery walkers, then an elite breach-dozer, and finally a containment god-machine
-(**CAISSON-4** or **IRON GULLY**). Level-ups open 3-card **MUTATION REPORT** drafts. The run ends
-on the front page of *THE WARD SEVEN WITNESS*: **THE CITY GOT SMALLER.**
+artillery walkers, then an elite breach-dozer, and finally each city's own containment boss:
+**PARKADE-6** (a walking multi-storey car park, GRID-EAST), **IRON GULLY** (WHITE STACKS) or
+**CAISSON-4** (LOCKWATER). Level-ups open 3-card **MUTATION REPORT** drafts. The run ends on the
+front page of *THE WARD SEVEN WITNESS*: **THE CITY GOT SMALLER.** A clear can be pushed on into
+**EXTENDED COVERAGE** (endless).
 
 The look is a Saturday-morning monster comic built as a clean 3D diorama: faceted low-poly shapes,
 toon ramps, thick ink outlines, painted palettes and long soft shadows. Everything is procedural:
@@ -19,8 +21,16 @@ and springs.
   fortress), **BRIARWICK** (area control)
 * 3 cities: **GRID-EAST** (day, commercial blocks), **WHITE STACKS** (snowed industrial park),
   **LOCKWATER** (flooded container port at night)
-* 158 data-driven upgrades (currently): generic cards, 64 titan-locked cards and 13 legendary
-  mutations
+* 201 data-driven card definitions (currently): generic cards, 72 titan-locked cards, 30 cards
+  that unlock through goals, and 15 **evolutions** (RESTRUCTURED cards: a maxed base card plus its
+  partner, offered in a draft, never rolled)
+
+v2 (`_spec/FEATURES_V2.md`) adds: the charged ultimate **UPROAR** (one per titan), the ability bar +
+ACTIVE panel + UPROAR meter + objective tracker HUD, map objectives (**OVERLOAD SITE**, **RELIEF
+DEPOT**, **RECORDS ANNEX**), map power-ups (**RED LIGHT**, **RUSH HOUR**, **BACK PAY**, **CLEANUP
+CREW**, **DEMOLITION NOTICE**), draft **BANISH** / **LOCK**, 40 goals with unlocks, starting perks and
+titan palettes (**GOALS & RECORDS**), the unique GRID-EAST boss PARKADE-6, the endless mode, and a
+cinematic opening (the **WARD-7 STREET CAM**).
 
 ---
 
@@ -52,9 +62,16 @@ blank canvas. If boot fails, a "TECHNICAL DIFFICULTIES" card shows the error.
 | **DASH** | Shift | B / RB |
 | **zoom** the camera out / in (see more of the city) | mouse wheel · `-` / `=` (numpad `−` / `+`) held | right stick down / up |
 | reset the zoom to the automatic framing | Z | R3 (right-stick click) |
+| **UPROAR** (charged ultimate; fires when the meter is full) | E | Y / RT |
 | pause (never ends a run) | Esc / P | Start |
 | menus: move / confirm / back | arrows · Enter · Esc | d-pad · A · B |
 | draft: pick card / reroll | 1 / 2 / 3 (or ←→ + Enter) · R | A · X |
+| draft: **BANISH** the focused card (removed for the run; the slot refills) | X | hold Y 0.6 s (a tap does nothing) |
+| draft: **LOCK** / unlock the focused card (held into the next draft) | C | LB |
+| title / select: open **GOALS & RECORDS** | G | X |
+| goals screen: tabs / rows / back | ← → · ↑ ↓ · Esc | d-pad · B |
+| clear front page: **KEEP GOING** (endless) | K | focus it + A |
+| skip the cinematic opening | any key | any button |
 | debug overlay | F1 | — |
 
 The zoom is a multiplier on the automatic framing (0.55× to 2×, and never past 12 m or 880 m of camera
@@ -81,22 +98,53 @@ titan on resume; the Space/Enter/digit that closed the screen never leaks into p
 | `?rscale=0.3…1` | with `?dev=1` only: pins the render scale at this value (no adaptation; perf attribution) |
 | `?prof=1` | frame profiler (`render/frameprof.ts`, `window.__BTPROF__`): per-section wall ms, GPU timer, LoAF, worst 50 frames |
 | `?warmui=0` | skips the one-time compositor pre-warm of the MUTATION REPORT during loading (A/B only) |
+| `?cine=0\|1\|2` | v2: this session's opening: 0 = the legacy freeze-frame slate · 1 = SHORT cinematic · 2 = FULL cinematic (overrides Settings → Opening; `?noslate=1` still skips both) |
+| `?meta=fresh\|full` | v2, with `?dev=1` only: an in-memory profile, nothing unlocked (`fresh`) or everything unlocked (`full`); saved storage is untouched |
+| `?perk=<PerkId>` | v2, with `?dev=1` only: the starting perk for the run (`perk_petty_cash`, `perk_red_tape`, `perk_warm_mic`, `perk_safety_inspection`, `perk_stay_of_demolition`, `perk_tip_line`) |
+| `?endless=1` | v2, with `?dev=1` only: the clear front page picks KEEP GOING by itself (harness runs) |
 
 ## Screens
 
 ```
-boot → title → select (titan, then biome) → loading → slate → play ⇄ draft / pause → end (tabloid)
-                                                                                     ├ RETRY  (same titan + biome, new seed)
-                                                                                     ├ CHANGE TITAN (select)
-                                                                                     └ TITLE
+boot → title ⇄ GOALS & RECORDS
+         └→ select (titan · perk · palette, then biome) ⇄ GOALS & RECORDS
+              └→ loading → opening (cinematic, or the legacy slate) → play ⇄ draft / pause → end (tabloid)
+                                                                                 ├ KEEP GOING (clear only → endless play)
+                                                                                 ├ RETRY  (same titan + biome, new seed)
+                                                                                 ├ CHANGE TITAN (select)
+                                                                                 └ TITLE
 ```
 
 * **Loading**: `createWorld`, mount every view, then warm the shaders (`compileAsync` with a render
   target bound, then once more for the canvas) before the first visible frame. Once per page it
   also replays the real draft deal-in animation on a near-transparent copy of the MUTATION REPORT,
   so the browser compiles its compositor shaders during loading and not in the first draft.
-* **Slate**: one frame is rendered and the sim is frozen. The WARD-7 freeze-frame lower third
-  (`UNIDENTIFIED MASS — …`) waits for any key.
+* **Opening** (v2, FEATURES_V2 §11): the **WARD-7 STREET CAM** cinematic. FULL (6.85 s): a signal
+  cut, a street-level news-cam shot with a crash zoom onto the Size I titan, a close-up with a blink
+  and a snarl, then a crane up and back into the gameplay camera, which starts play. SHORT (≈ 3 s:
+  close-up, crane, hand-off) plays on RETRY, for a titan × city pair already seen in full, and when
+  Settings → Opening is SHORT. With **Reduce motion** on, the REDUCED cut has no crane (close-up, then
+  the hand-off). Any key or button skips it (0.25 s blend to the gameplay pose). The sim stays frozen
+  and `screen` stays `'slate'` throughout. Settings → Opening OFF, `?cine=0`, or no camera-safe
+  close-up pose (`CineCam.plan()` returns null) plays the legacy **slate** instead: one rendered
+  frame, the sim frozen, the WARD-7 freeze-frame lower third (`UNIDENTIFIED MASS — …`) waiting for
+  any key.
+* **GOALS & RECORDS** (v2, from the title or select with G / pad X): tabs GENERAL, one per titan,
+  CITIES and RECORDS (a 4 × 3 table of bests). Each goal row shows its progress, a FILED stamp when
+  done and what it unlocks. Esc returns to the same screen, step and titan.
+* **Select** (v2): the titan card shows YOUR BEST ON FILE, the NEXT PERMIT PENDING slip names the
+  closest unlock, and two more rows under the titans pick the **starting perk** (one per run, `none`
+  always available) and the titan's **palette** (the portrait re-renders in it).
+* **Draft** (v2 additions): an evolution appears as a RESTRUCTURED card when its recipe is ready;
+  BANISH (X) removes the focused card for the rest of the run and refills the slot, LOCK (C) holds it
+  into the next draft; the charges left are shown in the header, new cards carry a NEW ribbon.
+* **Pause** (v2): the LOADOUT panel lists every owned card with its glyph, stacks and text, the
+  perk, and the banish / lock charges left. **Settings** gained *Reduce motion* and
+  *Opening: OFF / SHORT / FULL*.
+* **Front page** (v2): after a clear, KEEP GOING (K) undoes the ending and continues as
+  **EXTENDED COVERAGE**: escalating waves and boss rematches, scored separately (best time and
+  score per titan × city). The run then ends on the EXTENDED COVERAGE EDITION (*IT WOULD NOT
+  LEAVE.*). NEW ON THE RECORD lists the goals met during the run.
 * **Draft**: when a level-up (or an elite's chest) is owed, the sim freezes inside that same tick.
   The frame that froze it draws the world; the MUTATION REPORT opens one frame later (`draftArmed`),
   and that frame keeps the last picture instead of redrawing, so the DOM build and the world draw
@@ -132,19 +180,26 @@ src/
   testsurface.ts        window.__BT__ (gates/harness) + window.__PAUSE__ (portal)
   core/                 types, config (tuning + size/camera formulas), math, rng, world (tick order),
                         loop (fixed-step GameLoop), input (keys + gamepad), debug (F1), save
-  data/                 titans, biomes, enemies, bosses, upgrades, strings (all copy)
+  data/                 titans, biomes, enemies, bosses, upgrades, strings (all copy); v2: upgrades_v2,
+                        evolutions, ultimates, objectives, powerups, goals, perks, palettes, cine,
+                        strings_hud, strings_screens
+  meta/                 v2 sim: ultimate (UPROAR), objectives, powerups, tally, goals, perks, profile, endless
   city/                 citygen, citysim, traffic (sim) · meshkit, cityview (view)
   titans/               titansim + kits/* (sim) · models, anim, titanview, portraits (view)
   combat/               spatial, damage, targeting, projectiles, telegraphs, hazards, pickups (sim)
-  ai/                   enemies, director, bosses/* (sim) · enemyview, bossview, foemodels (view)
+  ai/                   enemies, director, bosses/* incl. parkade6 (sim) · enemyview, bossview, foemodels,
+                        foemodels_parkade (view)
   upgrades/             stats, engine (triggers, frenzy, shield), draft (3-card offers)
   render/               renderer, camera, materials, lighting, env, warmup,
-                        telegraphview, projectileview, hazardview, fx, debris (Rapier), civilians, pickupview
+                        telegraphview, projectileview, hazardview, fx, debris (Rapier), civilians, pickupview;
+                        v2: ultview, objectiveview, powerupview, markerview, cinecam
   ui/                   hud, broadcast (slate, MASS BREACH, alerts, tabloid), bossbar, select, draft,
-                        menus (title, pause, settings), dom helpers, styles.css
+                        menus (title, pause, settings), dom helpers, styles.css; v2: abilitybar, icons,
+                        tracker, markers, toast, goals, cine (overlay), hud_v2.css, screens_v2.css
   audio/                audio (engine, limiter, buses), sfx (procedural voices), music (procedural score)
 _harness/               probes (node), bot, and the browser gates (bootcheck, playtest, perfcheck, shots)
 _spec/CONTRACT.md       the build contract (names, exports, numbers, file ownership)
+_spec/FEATURES_V2.md    the v2 feature contract (owner items 2–8) + features_v2_types.ts
 ```
 
 ## Architecture
@@ -301,6 +356,18 @@ With the dev server up, `window.__BT__` exposes:
   (n % of the current level's XP bar)
 * `shot(name)`: saves the canvas to `_shots/<name>.png` via `POST /__shot/<name>`
 * `perf()`, `events(n)`
+* v2 (FEATURES_V2 §13.3): `newRun({…, meta?})` takes a `RunMeta`; `state().v2` =
+  `{ult: {charge, phase, fired, ready, r, invulnT}, objectives: [{id, kind, x, z, t, life, target, targetId}],
+  powerups: [{id, kind, x, z, t}], power: {redLightT, rushHourT}, endless, tally: {ults, objectives, powerups,
+  evolutions, banishes, locks, rerolls}, map: {overloadsDone, reliefsDone, annexesDone}, meta, cine: {shot, t} | null,
+  draft: {banishLeft, lockLeft, locked, banished} | null, profile: {done, newUnlocks}}`. `cine` is set only while
+  the cinematic opening plays (`shot` = `signal | street | closeup | crane | handoff`).
+* `state().v2dom`, a read-only DOM snapshot for real-input checks, read from fixed `data-v2` attributes:
+  `{barSlots, barBadges, activeCdText, meterPct, trackerRows, markers, toasts}`
+* v2 dev cheats (`?dev=1`; they only set up state, every acceptance action is a real key, button or walk):
+  `cheat.ult(points = 100)`, `cheat.powerup(kind)` (3 H ahead), `cheat.objective(kind, ahead?)`,
+  `cheat.endless(autoPick = true)` (fields and kills the city's boss; `false` leaves KEEP GOING to a real K),
+  `cheat.evolveReady(evoId)`, `cheat.bossSpawn(id)` (any boss incl. `parkade6`), `cheat.tillOpen(s)` (PARKADE-6)
 
 `window.__PAUSE__ = {pause, resume, toggle}` is the portal contract.
 
@@ -326,6 +393,26 @@ python _harness/scratch/view/spawnvis.py --level L   # new enemies first seen IN
 python _harness/scratch/view/spawnvis2.py --level L  #    the same, split into ring spawns (must be 0) and BULWARK drops
 python _harness/scratch/view/bossframe.py --out DIR  # boss attacks frozen late in the windup: boss + every boss tell in frame
 node _harness/scratch/view/framing_table.ts          # D and the share per level (must be monotonic)
+```
+
+v2 (FEATURES_V2 §15.5) adds to that battery:
+
+```bash
+node _harness/probe_sim.ts --det 2 --meta fresh   # GATE 2 with nothing unlocked, and again with
+node _harness/probe_sim.ts --det 2 --meta full    #   everything unlocked; both print the §0.6 lines (deaths ≥ 1)
+for p in ult evolutions boss3 map meta endless icons; do node _harness/probe_$p.ts; done   # the 7 v2 probes (exit 0)
+python _harness/bootcheck.py --titan T --biome B [--cine 0|1|2]   # cinematic-aware: a real key skips it, the zebra
+                                                                  #   check runs on the FIRST play frame
+python _harness/playtest_v2.py --require-all  # real-input v2 playtest, 11 steps: G goals, E UPROAR, power-up and
+                                              #   objective walk-ins, X banish / C lock, K endless, profile across a
+                                              #   reload, HUD DOM vs state, gamepad (stubbed standard pad),
+                                              #   Settings → Opening OFF / SHORT / Reduce motion, cinematic skip + zebra
+python _harness/perfcheck.py --v2             # perf (a): Size V + 250 enemies + 3 objectives + 3 power-ups + one
+                                              #   UPROAR in the window; also the p99 over the UPROAR window alone
+python _harness/perfcheck.py --boss parkade6 --enemies 150   # perf (b): the PARKADE-6 fight; both ALONE, p99 ≤ 22 ms, ≤ 450 draws
+python _harness/scratch/g3/perfquiet.py --n 5 --out DIR --extra=--v2   # perfcheck only in GPU-quiet windows (shared box)
+python _harness/scratch/final/leakcheck.py --cine 1   # the newRun ×7 leak check through the cinematic opening
+python _harness/shots.py --groups v2fx,v2hud,cine,screens,parkade   # the v2 shot additions (§15.4)
 ```
 
 Start the server once as `BT_FROZEN=1 npx vite --port 5178 --strictPort`, with no HMR and no file

@@ -26,6 +26,8 @@ import { addOutline, bakeOutlineNormals, makeToon } from '../render/materials.ts
 import type { AnimState } from './anim.ts';
 import type { CineChannels, FaceAnchor } from '../v2types.ts';
 import { ULTS } from '../data/ultimates.ts';
+import { TITAN_PALETTES } from '../data/palettes.ts';
+import { CINE } from '../data/cine.ts';
 
 /**
  * Night look (LOCKWATER). The navy street (#0d1a26) and the #1b1426 ink leave a dark hide with no
@@ -116,6 +118,13 @@ export class TitanView implements ViewModule {
   private ring: THREE.Mesh | null = null;
   private ringT = -1;
   private ringBig = false;
+  // v2 (lane L10): the palette the model was built in (0 = canonical), the cinematic channels and the
+  // WHITE STACKS breath puffs at the snarl (two puffs from the dust pool)
+  private palette = 0;
+  private readonly cineCh = { look: 0, blink: 0, snarl: 0 };
+  private cineOn = false;
+  private breath = false;
+  private breathDone = false;
 
   constructor(ctx: ViewCtx) {
     this.ctx = ctx;
@@ -125,12 +134,18 @@ export class TitanView implements ViewModule {
   get object(): THREE.Object3D | null { return this.model ? this.model.root : null; }
 
   mount(w: World): void {
-    if (!this.model || this.id !== w.titanId) {
+    // v2 (FEATURES_V2 §8.6): the run's cosmetic palette (w.meta.palette; 0 = canonical colours)
+    const palN = w.meta && Number.isFinite(w.meta.palette) ? Math.max(0, Math.min(2, Math.floor(w.meta.palette))) : 0;
+    if (!this.model || this.id !== w.titanId || this.palette !== palN) {
       this.disposeModel();
-      this.model = buildTitanModel(w.titanId);
+      const pal = palN > 0 ? TITAN_PALETTES[w.titanId]?.[palN - 1] : undefined;
+      this.model = buildTitanModel(w.titanId, pal ? { colors: pal } : {});
       this.id = w.titanId;
+      this.palette = palN;
       this.anim = new TitanAnimator(this.model, this.id);
     }
+    this.cineOn = false; this.st.cine = null;
+    this.breath = !!CINE[w.biomeId]?.breath; this.breathDone = false;
     if (this.model.root.parent !== this.ctx.scene) this.ctx.scene.add(this.model.root);
     this.ensureDust(w);
     this.ensureRing();
@@ -214,17 +229,69 @@ export class TitanView implements ViewModule {
     anim.update(s, dt);
     if (s.deadT! >= 0) this.groundClamp(s.deadT!);
     this.driveGlow(w, dt);
+    if (this.cineOn && this.breath && !this.breathDone && this.cineCh.snarl > 0.5) { this.breathDone = true; this.kickBreath(w); }
     this.updateDust(w, dt);
     this.updateRing(w, f.alpha, dt);
   }
 
-  // ── v2 cinematic hooks (FEATURES_V2 §11.4, TitanViewAdd) — L0 SKELETON STUBS; lane L10 fills them ──
-  /** Fill the head joint's world position + unit forward + titan height. STUB: false (→ legacy slate). */
-  faceAnchor(_out: FaceAnchor): boolean {
-    return false;
+  /** WHITE STACKS (FEATURES_V2 §11.3): two breath puffs from the nostrils at the cinematic SNARL */
+  private kickBreath(w: World): void {
+    const model = this.model;
+    if (!model) return;
+    const H = Math.max(0.01, this.hCur);
+    const T = w.titan;
+    const hx = Math.sin(T.heading), hz = Math.cos(T.heading);
+    const rx = hz, rz = -hx;
+    const nose = model.size.zMax * H * 0.97;
+    const eL = model.rest.eyeL;
+    const y = (eL ? eL.y - 0.08 : 0.5) * H;
+    for (let i = 0; i < 2; i++) {
+      const p = this.puffs[i];
+      if (!p) break;
+      const side = i === 0 ? 1 : -1;
+      p.x = T.x + hx * nose + rx * side * 0.05 * H;
+      p.z = T.z + hz * nose + rz * side * 0.05 * H;
+      p.y = y;
+      const sp = 0.35 * H;
+      p.vx = hx * sp + rx * side * 0.08 * H; p.vz = hz * sp + rz * side * 0.08 * H; p.vy = 0.12 * H;
+      p.s = 0.045 * H;
+      p.t = 0; p.life = 0.8; p.rot = i * 1.3;
+    }
   }
-  /** Cinematic blend channels layered over idle (null = off). STUB: no-op. */
-  setCine(_ch: CineChannels | null): void { /* L10 */ }
+
+  // ── v2 cinematic hooks (FEATURES_V2 §11.4, TitanViewAdd; lane L10) ──
+  /**
+   * The face for the cinematic planner: the midpoint of the two eye joints in their REST pose (the
+   * cinematic holds the idle look-around off, so the head sits at rest on camera), the head's rest
+   * forward (the body heading: the head joint is authored facing +Z) and the titan height. World space,
+   * THREE-free. False while no model is built (→ CineCam.plan is not called → legacy slate).
+   */
+  faceAnchor(out: FaceAnchor): boolean {
+    const m = this.model;
+    if (!m) return false;
+    const root = m.root;
+    root.updateMatrixWorld(true);
+    const eL = m.rest.eyeL, eR = m.rest.eyeR, hd = m.rest.head;
+    if (eL && eR) _cv.set((eL.x + eR.x) * 0.5, (eL.y + eR.y) * 0.5, (eL.z + eR.z) * 0.5);
+    else if (hd) _cv.copy(hd);
+    else return false;
+    _cv.applyMatrix4(root.matrixWorld);
+    const h = root.rotation.y;
+    const H = root.scale.y;
+    if (!Number.isFinite(_cv.x + _cv.y + _cv.z + h + H) || !(H > 0)) return false;
+    out.x = _cv.x; out.y = _cv.y; out.z = _cv.z;
+    out.fx = Math.sin(h); out.fy = 0; out.fz = Math.cos(h);
+    out.h = H;
+    return true;
+  }
+  /** Cinematic blend channels layered over idle (null = off); read by the animator next update. */
+  setCine(ch: CineChannels | null): void {
+    if (!ch) { this.cineOn = false; this.st.cine = null; return; }
+    const c = this.cineCh;
+    c.look = ch.look; c.blink = ch.blink; c.snarl = ch.snarl;
+    this.cineOn = true;
+    this.st.cine = c;
+  }
 
   unmount(): void {
     this.disposeModel();
