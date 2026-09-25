@@ -53,6 +53,14 @@ question of shaders and art direction, not engine features. Three.js lets the pa
 **one TypeScript module**, and that module is the source of truth everywhere. The Node probe,
 the bots and the browser renderer all read the same texels.
 
+**Re-scored 2026-09-24 after Godot 4.7.2 became available on the build machine** (owner-installed;
+editor present, web export templates not yet installed). Godot moves from 4 to 5 on criterion 5,
+for a total of ≈ 41. Its web export still runs the Compatibility (GL ES 3) renderer, re-uploads the
+whole `ImageTexture` on update, and cannot use C# on the web. The brief also forbids changing
+engines mid-project unless the current one physically cannot do the paint buffer, and phase 2
+proved that Three.js can. **The decision stands.** The ship target for every option is the web
+build.
+
 **What Blender authors** (headless `bpy` scripts in `art/blender/`, committed as the source of
 truth; outputs in `art/gltf/`):
 - the tide-runner hero: mesh, rig, the hair-crest bone chain and every animation clip;

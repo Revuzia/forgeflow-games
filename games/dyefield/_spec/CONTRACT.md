@@ -491,3 +491,217 @@ add an explicit "own pad counts as own dye" rule in the sim, not make the pad pa
 | **LOOK** | `runtime/src/view/{sky,water,surfaces,paintlayer}.ts` |
 | **APP** (a.k.a. RUNTIME) | `runtime/index.html`, `runtime/src/{main,game,input,testsurface}.ts`, `runtime/src/core/{config,physics,player}.ts`, `runtime/src/view/{renderer,mapview,heroview,camera}.ts`, `runtime/src/ui/*`, `_harness/{common.py,bootcheck.py,probe_move.ts}` |
 | orchestrator | this file, `DESIGN.md`, `README.md`, `package.json`, `tsconfig.json`, `vite.config.ts`, `data/*`, `art/build.py`, `runtime/src/core/{types,data}.ts` |
+
+
+---
+
+# PART II — phases 3–5 (swim / MIST-RASP / 3:00 match with 7 bots)
+
+## §10 Match simulation (THREE-free, deterministic, runs in node)
+
+### §10.1 Rules, from the brief and DESIGN §4 (numbers live in `config.ts` / `data/*.json`)
+- **Movement states:**
+  - WALK on neutral dye.
+  - SLOG on enemy dye: 2.0 m/s, jump 3.8, **cannot slick**, no refill.
+  - SLICK: SHIFT held on own dye. 8.4 m/s, jump 7.0, capsule shrinks, tank refills 36 %/s, no firing.
+  - WALL-SLICK: SHIFT held while pushing into an own-dyed wall (the texel at the contact within
+    0.5 m). Climbs at 5.2 m/s with gravity off, and pops onto the ledge at the top. A wall losing
+    its dye under you drops you.
+  - AIR.
+  - Releasing SHIFT surfaces in ~0.12 s.
+  - Neutral and enemy dye never refill; there is **no passive regen**.
+- **Own spawn pad counts as own dye** (slick and refill work on it). An **enemy** entering your
+  pad radius is pushed back out (no spawn camping).
+- **Hidden:** a SLICK runner who is not moving faster than 1.5 m/s is invisible to enemy bots
+  beyond 3 m. The view shows enemies the same way (only a faint ripple). Moving slickers leave a
+  wake that is visible at any range.
+- **Tank 0–100.** Firing with too little tank does not fire: it emits a `dry` event with a
+  click, no paint, no damage, and a 0.25 s cooldown. At tank ≤ 20 % the `tankLow` event fires
+  (once per dip).
+- **HP 100**, with no regen for 1.2 s after taking a hit, then +40 HP/s. At 0 HP the runner is
+  WASHED: a `washed` event naming the attacker (or the sea / a sub / a special), then
+  `respawnSeconds` (3) dead, then a respawn at the team pad with a tank of 100. Falling below
+  `killY` is WASHED with cause `sea`. **No friendly fire.**
+- **MIST-RASP (phase 4):** `data/weapons.json` kits[mist-rasp].fire. The tank cost applies per
+  shot. A projectile flies straight for `straightTime`, then falls with `gravity`; it has a
+  spread cone (wider while airborne). On impact with the map it splats `impactRadius` at the hit
+  point with the hit normal; drips paint `dripRadius` every `dripEvery` s under the flight path
+  (a raycast down). A hit on a runner capsule (radius 0.42 m, height 1.2 m; SLICK capsule
+  0.5 m tall) deals `damage` and splats a small puddle under the victim. Projectiles are swept
+  per tick (a segment test vs the map through Rapier, and segment vs capsule for runners), so
+  nothing tunnels.
+- **Match:** a `countdownS` (3 s) countdown with inputs frozen, then `live` for 180 s, then
+  `ended`. `horn` events at start, at 60 s left, at 10 s left (the final countdown) and at the
+  end. The result is the weighted coverage per team (`Painter.coverage()`); the winner is the
+  larger share, with a strict comparison (equal = draw). No input is accepted after the end.
+
+### §10.2 Modules and exact signatures
+```ts
+// core/match/roster.ts
+export type BotSkill = 'chill' | 'fresh' | 'fierce';
+export interface RosterEntry { id: number; name: string; team: TeamId; kit: string; bot: boolean; skill: BotSkill }
+/** id 0 = the human on SUNCREW; ids 1-3 SUNCREW bots; ids 4-7 GULF CREW bots. Names are drawn
+ *  deterministically from an ORIGINAL pool (never Suki/Coral/Kelp/Juno/Riptide/Zest/Inky Vee or
+ *  any Nintendo name), e.g. Brine, Pip, Marlo, Tully, Sable, Wren, Dune, Quill, Skerry, Fathom,
+ *  Lark, Moss, Bex, Rook, Tamsin. */
+export function defaultRoster(o: { humanKit: string; humanName?: string; seed: number; skill: BotSkill; botKits?: string[] }): RosterEntry[];
+
+// core/match/events.ts
+export type MatchPhase = 'countdown' | 'live' | 'ended';
+export type SimEvent =
+  | { t: 'shot'; pid: number; kit: string; x: number; y: number; z: number; dx: number; dy: number; dz: number }
+  | { t: 'dry'; pid: number }
+  | { t: 'splat'; x: number; y: number; z: number; r: number; team: TeamId; nx: number; ny: number; nz: number; flips: number }
+  | { t: 'hit'; victim: number; by: number; dmg: number; x: number; y: number; z: number }
+  | { t: 'washed'; victim: number; by: number | null; cause: 'dye' | 'sea' | 'sub' | 'special' }
+  | { t: 'respawn'; pid: number }
+  | { t: 'slick'; pid: number; on: boolean; wall: boolean }
+  | { t: 'jump'; pid: number }
+  | { t: 'land'; pid: number; hard: boolean }
+  | { t: 'tankLow'; pid: number }
+  | { t: 'special'; pid: number; id: string; phase: 'ready' | 'start' | 'end'; x: number; y: number; z: number }
+  | { t: 'sub'; pid: number; id: string; phase: 'throw' | 'land' | 'pop'; x: number; y: number; z: number }
+  | { t: 'horn'; kind: 'start' | 'minute' | 'final10' | 'end' }
+  | { t: 'phase'; phase: MatchPhase };
+
+// core/runner.ts  (replaces core/player.ts's Player; keep player.ts as a re-export shim until nothing imports it)
+export class Runner {
+  readonly id: number; readonly name: string; readonly team: TeamId; readonly side: Side; readonly kit: string; readonly bot: boolean;
+  x: number; y: number; z: number; vx: number; vy: number; vz: number; yaw: number;   // feet, velocity, body yaw
+  px: number; py: number; pz: number; pyaw: number;                                    // previous tick (interpolation)
+  aimYaw: number; aimPitch: number;                                                    // current aim (view: upper body + kit)
+  state: MoveState; grounded: boolean; tank: number; hp: number; alive: boolean; respawnT: number;
+  hidden: boolean;          // SLICK + still-ish (see §10.1): enemies can't see beyond 3 m
+  special: number;          // 0..1 meter (phase 6 uses it; phases 4-5 fill it per specialCharge)
+  firing: boolean;          // fired this tick or holding fire with tank (view: aim pose + muzzle FX)
+  lastAttacker: number;     // runner id or -1
+  lastHitT: number;         // seconds since last damage taken
+  washes: number; washedCount: number; painted: number;   // stats (painted = weighted m²)
+  landings: number; jumps: number;                          // counters the view watches
+}
+
+// core/combat/projectiles.ts
+export class ProjectilePool {           // struct-of-arrays, fixed capacity (512), no per-shot allocation
+  count: number;
+  x: Float32Array; y: Float32Array; z: Float32Array; px: Float32Array; py: Float32Array; pz: Float32Array;  // current + previous tick
+  team: Uint8Array; kind: Uint8Array; owner: Int16Array;   // kind 0 = MIST-RASP droplet (phase 6 adds kinds)
+}
+
+// core/match/world.ts
+export interface MatchOptions {
+  def: MapDef; geo: MapGeometry; physics: PhysicsWorld; painter: Painter; roster: RosterEntry[];
+  seed: number; durationS?: number /*180*/; countdownS?: number /*3*/;
+}
+export interface MatchResult { sun: number; gulf: number; neutral: number; winner: TeamId }
+export class MatchWorld {
+  readonly runners: Runner[]; readonly projectiles: ProjectilePool; readonly painter: Painter; readonly physics: PhysicsWorld;
+  readonly def: MapDef; readonly seed: number;
+  phase: MatchPhase; tick: number; timeLeft: number; countdown: number; result: MatchResult | null;
+  constructor(o: MatchOptions);
+  /** advance exactly one TICK. intents[i] belongs to runners[i] (human and bot alike). */
+  step(intents: readonly PlayerIntent[]): void;
+  /** move queued events into out (append); returns the count. */
+  drainEvents(out: SimEvent[]): number;
+  onOwnPad(r: Runner): boolean;
+  /** can `viewer` currently see `target` (alive, not hidden beyond 3 m, line of sight via physics raycast) */
+  canSee(viewer: Runner, target: Runner): boolean;
+  hash(): string;     // painter.hash() + runner states → determinism probes
+}
+
+// core/bots/nav.ts
+export interface NavGraph {
+  nodes: number;
+  x: Float32Array; y: Float32Array; z: Float32Array;   // node positions (walkable floor points, ~1 m grid, multi-level)
+  edgeStart: Int32Array; edgeTo: Int32Array; edgeCost: Float32Array; edgeKind: Uint8Array; // CSR; kind 0 walk, 1 drop, 2 jump, 3 wall-slick climb
+  nearest(x: number, y: number, z: number): number;          // node id or -1
+  path(from: number, to: number, out: number[]): boolean;     // A*, deterministic tie-breaks
+}
+export function buildNav(geo: MapGeometry, physics: PhysicsWorld, def: MapDef): NavGraph;
+
+// core/bots/director.ts
+export class BotDirector {
+  constructor(world: MatchWorld, nav: NavGraph, seed: number);
+  /** fill intents[i] for every bot runner i (humans untouched). Bots think on their own clock (~10 Hz)
+   *  with per-bot mulberry32 streams; reaction delay + aim jitter by skill (doctrine §2 fairness). */
+  think(intents: PlayerIntent[]): void;
+}
+```
+
+### §10.3 Bot behavior (acceptance, measured by `_harness/probe_bots.ts`)
+- **Paint-hungry:** a bot picks the goals with the most neutral or enemy floor area nearby,
+  sampled from the atlas, not random wandering. It sweeps fire across the floor while moving.
+- **Peeks cover:** it holds behind crates and walls when an enemy is visible and out of range,
+  and strafes when engaged.
+- **Flees when tank < 20 %:** it goes to the nearest own dye (or its pad), slicks and refills,
+  then returns.
+- **Chases its last attacker for ~2 s**, then gives up.
+- **Uses SLICK** to travel through its own dye.
+- **Fairness:** reaction delay 300–800 ms by skill, aim jitter ~0.018 rad × a skill factor, and
+  it rolls its reactions once per stimulus.
+- **Deterministic:** the same seed gives the same `world.hash()` after a full match.
+- **Probe gates:** a full 180 s 8-bot match (the human slot is a bot too) on Pier 18, run
+  headless in node, must show:
+  - both teams cover > 15 %, the neutral share < 55 %, and ≥ 6 washes in total;
+  - no bot stuck (displacement < 1 m over any 6 s window while alive and not deliberately
+    holding);
+  - ≥ 20 slick entries in total and ≥ 4 refills from < 20 %;
+  - an identical hash across 2 runs with the same seed and different hashes with different
+    seeds;
+  - the whole match simulates in < 20 s of wall time.
+
+## §11 View / app for phases 3–5 (`three` + DOM)
+
+- `view/players.ts` shows 8 runners from one `HeroAssets`. The runtime **merges each hero's
+  primitives into one skinned geometry**: vertex color from the material colors, plus a
+  per-vertex team-mask attribute; one custom `MeshStandardMaterial` with a team-color uniform. So
+  each runner is ≤ 2 draw calls (body, plus the kit if it is not merged).
+  - Interpolated pose; locomotion and upper-body layers as in phase 2 (`aim` while firing).
+  - SLICK: the body is hidden and `slick_fin` is shown with a dye ripple/wake. Enemies' hidden
+    slickers are drawn as a faint ripple only.
+  - Name tags above allies always and above enemies only when visible.
+  - WASHED: a dye burst, then the body is hidden until respawn. Respawn is a tide-spout drop onto
+    the pad (~0.6 s).
+- `view/fx.ts`: instanced projectile droplets (one draw call), splat particles (pooled instanced
+  quads), hit sparks, muzzle mist, the dry-click puff, slick splash rings and wakes, and the
+  washed burst. There are no per-event allocations; each pool has a fixed size.
+- `view/camera.ts`: SLICK tucks the camera (`slickPivotY`, `slickDistance`), with a smooth blend.
+- **HUD, from the brief's rhythm.** Use ONLY the brief's strings for these UI elements.
+  - A top-center **timer pill** (3:00 → 0:00, pulsing in the final 10).
+  - **4 + 4 crests** (◉ / ▲ shapes in team color; a downed crest shows ✕ plus its respawn
+    count).
+  - A top-right **special gauge**.
+  - A **kill feed** top-right using exactly `{A} washed {B}`. A sea death shows `{B}` with a wave
+    icon.
+  - The reticle plus the **tank pipette**.
+  - The low-tank toast **`Tank low — hold SHIFT on your color to drink`**.
+  - The death slate **`WASHED BY {name}`** with a 3 s countdown ring. A sea death shows the wave
+    icon and "the sea".
+  - A countdown `3 · 2 · 1`.
+  - The victory slate **`THE HARBOR CHOSE A COLOR.`** with both percentages and the winning
+    crew's mark.
+  - The minimap with ally dots and seen-enemy dots.
+- `game.ts` owns a `MatchWorld` and a `BotDirector`. Human input becomes `intents[0]`, with the
+  aim point from a camera raycast (`physics.raycast` from the camera through the reticle, max
+  60 m). The bots fill the rest. It drains events into fx / players / hud every frame.
+  Queries: `?kit=`, `?bots=chill|fresh|fierce`, `?seed=`, `?matchSeconds=` (dev only), and
+  `?autostart=1` (skip to the match).
+- `window.__DF__` additions: `match()` (phase, timeLeft, runners[] {id, name, team, state, hp,
+  tank, alive, x, y, z, hidden}, result, coverage) and `events(n)`. Dev-only extras:
+  `setTimeLeft(s)`, `damage(pid, n)`, `setTank(pid, v)`.
+
+## §12 Gates for phases 3–5
+| gate | command | pass |
+|---|---|---|
+| G6 swim | `node _harness/probe_swim.ts` | SLICK only on own dye or own pad; speed ≈ 8.4; refill from 0 to 100 in 2.6–3.0 s; SLOG ≈ 2.0 on enemy dye; wall-slick climbs an own-dyed side-deck wall to the deck top (y ≈ 2.0) and cannot climb an undyed or enemy-dyed one; releasing SHIFT surfaces; hidden rules |
+| G7 combat | `node _harness/probe_combat.ts` | MIST-RASP: rate 8.5 ± 0.5/s; tank drops 0.9/shot; an empty tank dry-clicks (no projectile, no paint); impact splats at the hit point; drips land; 3 hits wash (34 × 3 ≥ 100); no friendly fire; no tunnelling through a 0.6 m wall at point blank; respawn after 3 s at the pad with a full tank; the sea washes |
+| G8 bots | `node _harness/probe_nav.ts && node _harness/probe_bots.ts` | §10.3 |
+| G9 match (browser) | `python _harness/playtest.py` | real keys and mouse in headed Chrome: countdown → live; the human shoots and dyes; slicks in own dye and refills; the HUD crests/timer/tank update; bots move and fight; a dev `?matchSeconds=20` match reaches the victory slate with sane percentages; 0 errors; fps logged |
+| G0–G5 | as before | still green |
+
+## §13 Lanes for phases 3–5
+| lane | owns |
+|---|---|
+| **SIM** | `core/runner.ts`, `core/player.ts` (shim), `core/config.ts`, `core/physics.ts`, `core/match/*`, `core/combat/*`, `_harness/probe_swim.ts`, `probe_combat.ts`, `probe_move.ts` (update for Runner), `probe_match.ts` |
+| **BOTS** | `core/bots/*`, `_harness/probe_nav.ts`, `probe_bots.ts` |
+| **FRONT** (view + app) | `runtime/src/{main,game,input,testsurface}.ts`, `view/{players,fx,camera,heroview,renderer,mapview}.ts`, `ui/*`, `_harness/{common.py,bootcheck.py,playtest.py,lookshots.py,perfcheck.py}` |
+| LOOK (unchanged owner) | `view/{sky,water,surfaces,paintlayer}.ts` (FRONT may call `surfaces.ts` exports; changes to it go through the integrator) |

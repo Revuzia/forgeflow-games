@@ -38,10 +38,21 @@ export interface PlayerIntent {
   slick: boolean;
   sub: boolean;
   special: boolean;
+  /**
+   * World-space point the shot should travel toward (the reticle's raycast hit for a human, the
+   * target for a bot). When hasAim is false the sim aims along yaw/pitch.
+   */
+  hasAim: boolean;
+  aimX: number;
+  aimY: number;
+  aimZ: number;
 }
 
 export function emptyIntent(): PlayerIntent {
-  return { moveX: 0, moveZ: 0, yaw: 0, pitch: 0, jump: false, fire: false, slick: false, sub: false, special: false };
+  return {
+    moveX: 0, moveZ: 0, yaw: 0, pitch: 0, jump: false, fire: false, slick: false, sub: false, special: false,
+    hasAim: false, aimX: 0, aimY: 0, aimZ: 0,
+  };
 }
 
 /** Coverage fractions of the weighted paintable total (sum = 1). */
